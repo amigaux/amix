@@ -6,7 +6,7 @@ cd . || exit 9
 export AMIX_PASS=REDACTED
 GRIM=../grimoire-amix
 SH="python3 $GRIM/tools/host-net/amixsh.py"
-SYNC="python3 tools/amixsync.py"
+SYNC="python3 ../amix-kerntools/tools/amixsync.py"
 clean(){ sed 's/\r$//' | grep -vE 'DONE_|amixsh|^======|echo D'; }
 
 echo "### push + build updated gsio"

@@ -7,7 +7,7 @@ cd . || exit 9
 export AMIX_PASS=REDACTED
 GRIM=../grimoire-amix
 SH="python3 $GRIM/tools/host-net/amixsh.py"
-SYNC="python3 tools/amixsync.py"
+SYNC="python3 ../amix-kerntools/tools/amixsync.py"
 g(){ $SH "/root/a4091/gsio $* 2>&1" 2>&1 | sed 's/\r$//' | grep -iE 'okay|status=|first longword'; }
 
 echo "### push + build WRITE-capable gsio"

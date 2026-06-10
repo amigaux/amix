@@ -23,7 +23,7 @@ T=$(up_wait 300) || { echo "RESULT: FATAL box wont come up at all"; exit 1; }
 echo "box up (${T}s)"
 
 echo "### [2] push $SRC -> a4091.c"
-python3 tools/amixsync.py push "$SRC" /usr/sys/amiga/alien/a4091.c 2>&1 | grep -i push
+python3 ../amix-kerntools/tools/amixsync.py push "$SRC" /usr/sys/amiga/alien/a4091.c 2>&1 | grep -i push
 
 echo "### [3] clean rebuild + install (background; trailing echo avoids '& ;' syntax error from amixsh sentinel)"
 $SH 'cd /usr/sys/amiga/alien && rm -f a4091.o exp; cd /usr/sys && rm -f relocunix unix amiga/exp amiga/config/unix.o; nohup make install > /tmp/inst.log 2>&1 & echo BG_PID_$!' 2>&1 | grep -i BG_PID_
