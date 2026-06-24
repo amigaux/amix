@@ -1,0 +1,11 @@
+hdf/
+*.hdf
+work/
+tmp/
+build/
+core
+*~
+.DS_Store
+.claude/
+configs/
+__pycache__/

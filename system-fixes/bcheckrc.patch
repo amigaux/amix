@@ -1,0 +1,55 @@
+--- etc/bcheckrc.orig	2026-06-22 09:42:42.656557363 +0300
++++ etc/bcheckrc	2026-06-22 09:42:42.655582175 +0300
+@@ -1,23 +1,17 @@
+-#	Copyright (c) 1984, 1986, 1987, 1988, 1989 AT&T
+-#	  All Rights Reserved
+-#	THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF AT&T
+-#ident	"@(#)initpkg:./bcheckrc.sh	1.5.12.1"
++#ident	"@(#)initpkg:./bcheckrc.sh	1.5.12.1 +amix-remount"
+ #
+-# EXTRACTED 2026-06-17 from amix-kerntools/hdf/Amix-golden-raw.hdf (/sbin/bcheckrc).
+-# Previously "not in any repo, only inside the HDF" (FSCK-ANALYSIS-AND-PLAN.md §6.3) -> captured here.
+-# This is the GOLDEN/stock copy (verbatim, minus the `fi` that `strings` dropped between the
+-# else-branch and the fsck line; re-add it when reconstructing). The fix variant is bcheckrc.fixed.
++# PROPOSED fix of /sbin/bcheckrc (diff vs bcheckrc.golden): in the fsck-success case (0|40),
++# REMOUNT the repaired root and continue (uadmin 4 0) instead of REBOOTING (uadmin 1 1).
++# Saves one reboot per dirty boot. COSMETIC ONLY — it does NOT fix the cold-power-cut content
++# corruption that causes the post-login panics (see boot-fix/README.md). NEEDS HW VALIDATION:
++# SVR4.0 root-remount (uadmin 4 0) semantics on this Amix are unverified (memory amix-boot-fsck-broken
++# notes "SVR4.0 can't remount root RO"); if uadmin 4 0 misbehaves, keep the golden uadmin 1 1 reboot.
++# Apply by booting the image (Amiberry/WinUAE) + replacing /sbin/bcheckrc, or via amixsync FTP.
+ #
+-# This file has those commands necessary to check the file
+-# system, date, and anything else that should be done before mounting
+-# the file systems.
+ set -- `/etc/devnm /`
+ rootfs=$1
+ rrootfs=`echo $1 | sed -e 's:/dsk/:/rdsk/:'`
+ vfstab=/etc/vfstab
+-# Try to get the file system type for root.  If this fails,
+-# it will be set to null.  In that case, we hope that vfstab
+-# is around so that fsck will use it for the type.
+ set `/sbin/df -n /` > /dev/null
+ if [ "$3" = "" ]
+ then
+@@ -31,11 +25,9 @@
+ 	echo "The root file system (${rrootfs}) is being checked."
+ 	/sbin/fsck $fstyp -y ${rrootfs}
+ 	case $? in
+-	  0|40)	# remount the root file system
+-		echo "  *** REBOOTING SYSTEM ***"
+-		/sbin/uadmin 1 1
+-#		echo "  *** ROOT REMOUNTED ***"
+-#		/sbin/uadmin 4 0
++	  0|40)	# root repaired -> remount and continue (was: uadmin 1 1 reboot)
++		echo "  *** ROOT REMOUNTED ***"
++		/sbin/uadmin 4 0
+ 		;;
+ 	  39)	# couldn't fix root - enter a shell
+ 		echo "  *** ROOT COULD NOT BE REPAIRED - Entering shell"
+@@ -51,4 +43,4 @@
+ fi
+ # put root into mount table
+ echo "${rootfs} /" | /sbin/setmnt
+-# ... (continues: mount /proc, /dev/fd, then the vfstab loop for /stand,/var) ...
++# ... (rest identical to golden: mount /proc, /dev/fd, vfstab loop for /stand,/var) ...
