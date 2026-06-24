@@ -13,17 +13,16 @@ contract and [`REPOS.md`](REPOS.md) for the ecosystem map.
 
 ## The driver ecosystem
 
-This hub combines the sibling driver repos into one kernel. Each is independent and MIT-licensed:
+This hub combines the sibling driver repos into one kernel. Each driver is independent and
+MIT-licensed; `Z3660-amix` is the firmware/emulator that owns the protocol the drivers follow
+(reference — not built here):
 
-| Driver repo | Hardware | Kind |
+| Repo | What | Kind |
 |---|---|---|
-| [`amix-a4091`](https://github.com/jusii/amix-a4091) | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI |
-| [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) | Z3660 (PiStorm piscsi mailbox) | SCSI |
-| [`amix-z3660net`](https://github.com/jusii/amix-z3660net) | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | Net |
-
-The Z3660 drivers re-implement against the protocol spec owned by the firmware/emulator repo
-[`Z3660-amix`](https://github.com/jusii/Z3660-amix) (the Z3660 fork that adds 68030 PMMU emulation so a
-Z3660 can boot Amix) — not built here, but the rest of the index for the project.
+| [`amix-a4091`](https://github.com/jusii/amix-a4091) | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver |
+| [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) | Z3660 (PiStorm piscsi mailbox) | SCSI driver |
+| [`amix-z3660net`](https://github.com/jusii/amix-z3660net) | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | net driver |
+| [`Z3660-amix`](https://github.com/jusii/Z3660-amix) | Z3660 firmware + emulator — owns the piscsi / ethernet protocol the drivers re-implement against (fork of `shanshe/Z3660`) | firmware |
 
 Clone the whole ecosystem as siblings (the hub finds the drivers by relative path — no submodules):
 
