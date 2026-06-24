@@ -17,18 +17,16 @@ This hub combines the sibling driver repos into one kernel. Each is independent 
 
 | Driver repo | Hardware | Kind |
 |---|---|---|
-| `amix-a4091` | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI |
-| `amix-z3660scsi` | Z3660 (PiStorm piscsi mailbox) | SCSI |
-| `amix-z3660net` | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | Net |
+| [`amix-a4091`](https://github.com/jusii/amix-a4091) | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI |
+| [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) | Z3660 (PiStorm piscsi mailbox) | SCSI |
+| [`amix-z3660net`](https://github.com/jusii/amix-z3660net) | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | Net |
 
-Place the driver repos as siblings of this one; the hub finds them by relative path (no
-submodules):
+Clone the whole ecosystem as siblings (the hub finds the drivers by relative path — no submodules):
 
-```
-amix-kerntools/   this repo (harness + tools)
-amix-a4091/       A4091 (NCR 53C710) SCSI driver
-amix-z3660scsi/   Z3660 piscsi SCSI driver
-amix-z3660net/    Z3660 ethernet driver
+```sh
+for r in amix-kerntools amix-a4091 amix-z3660scsi amix-z3660net; do
+  git clone https://github.com/jusii/$r; done
+cd amix-kerntools && ./amix-build --list
 ```
 
 ## Prerequisites — bring your own Amix
