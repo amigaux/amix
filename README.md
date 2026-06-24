@@ -21,6 +21,10 @@ This hub combines the sibling driver repos into one kernel. Each is independent 
 | [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) | Z3660 (PiStorm piscsi mailbox) | SCSI |
 | [`amix-z3660net`](https://github.com/jusii/amix-z3660net) | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | Net |
 
+The Z3660 drivers re-implement against the protocol spec owned by the firmware/emulator repo
+[`Z3660-amix`](https://github.com/jusii/Z3660-amix) (the Z3660 fork that adds 68030 PMMU emulation so a
+Z3660 can boot Amix) — not built here, but the rest of the index for the project.
+
 Clone the whole ecosystem as siblings (the hub finds the drivers by relative path — no submodules):
 
 ```sh

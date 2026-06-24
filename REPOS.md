@@ -17,10 +17,13 @@ cd amix-kerntools && ./amix-build --list
 | **[amix-a4091](https://github.com/jusii/amix-a4091)** | The Amix **SCSI** driver for the Commodore A4091 / A4092 / A4770 (NCR 53C710). | driver (SCSI) |
 | **[amix-z3660scsi](https://github.com/jusii/amix-z3660scsi)** | The Amix **SCSI** driver for the Z3660 PiStorm `piscsi` mailbox. | driver (SCSI) |
 | **[amix-z3660net](https://github.com/jusii/amix-z3660net)** | The Amix **ethernet** driver for the Z3660 (`z3660eth`, STREAMS/DLPI). | driver (net) |
+| **[Z3660-amix](https://github.com/jusii/Z3660-amix)** | The Z3660 **firmware + emulator** (Zynq ARM firmware, 68030 PMMU + emulated A3000 SCSI so a Z3660 can boot Amix). Owns the piscsi / ethernet **protocol spec** the `z3660*` drivers re-implement against. Fork of `shanshe/Z3660`. | firmware |
 
 Each driver repo is independently MIT-licensed and ships only its `driver.conf` + its own `src/` +
 `kernel-patches/` (unified diffs against stock Amix files) — never any full Amix source, and never
-the generated `sd.c` / kernel `Makefile`.
+the generated `sd.c` / kernel `Makefile`. The `amix-z3660scsi` / `amix-z3660net` drivers re-implement
+against [`Z3660-amix`](https://github.com/jusii/Z3660-amix)'s protocol headers (citation discipline —
+no shared include tree).
 
 ## How they connect — the `driver.conf` contract
 
