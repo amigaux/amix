@@ -49,11 +49,13 @@
 #define	R_SSTAT0	0x0E
 #define	R_DSTAT		0x0F
 #define	R_DSA		0x10		/* 32-bit */
+#define	R_CTEST1	0x16		/* ro: FIFO flags (FMT high nibble = DMA FIFO empty) */
 #define	R_CTEST0	0x17
 #define	R_CTEST7	0x18
 #define	R_TEMP		0x1C		/* 32-bit */
-#define	R_CTEST8	0x21		/* high nibble = chip rev */
+#define	R_CTEST8	0x21		/* high nibble = chip rev; SM/CLF FIFO controls */
 #define	R_ISTAT		0x22
+#define	R_DFIFO		0x23		/* rw: DMA FIFO byte-offset counter (low 7 bits) */
 #define	R_DBC		0x24		/* 32-bit DCMD:DBC; byte count = low 24 bits */
 #define	R_DSP		0x2C		/* 32-bit; writing it starts SCRIPTS */
 #define	R_DSPS		0x30		/* 32-bit; INT code lands here */
@@ -69,7 +71,12 @@
 #define	ISTAT_SIP	0x02
 #define	ISTAT_DIP	0x01
 #define	DSTAT_SIR	0x04		/* SCRIPTS INT instruction */
+#define	SSTAT0_M_A	0x80		/* phase mismatch (or ATN active) (siopreg.h:402) */
 #define	SSTAT0_STO	0x20		/* selection timeout */
+#define	SSTAT1_ORF	0x40		/* output reg (sodr) still full (siopreg.h:425) */
+#define	SSTAT1_OLF	0x20		/* output latch (sodl) still full (siopreg.h:426) */
+#define	CTEST1_FMT	0xf0		/* DMA FIFO "byte empty" flags; ==0xf0 -> empty (siopreg.h:483) */
+#define	CTEST8_CLF	0x04		/* clear DMA + SCSI FIFOs (not self-clearing) (siopreg.h:595) */
 
 #define	HOST_ID		7
 
@@ -99,34 +106,48 @@ static long		board_phys;	/* current card: board phys base                    */
 #define	WR32(r,v)	(*(volatile ulong *)(siop + (r) + WRSHADOW) = (ulong)(v))
 
 /*
- * The minimal table-indirect INQUIRY SCRIPTS (assembled by ncr53cxxx from
- * reference/scripts/inq.ss; 17 instructions / 136 bytes).  DSPS result vectors:
+ * The minimal table-indirect INQUIRY SCRIPTS (based on reference/scripts/inq-wr.ss,
+ * assembled by ncr53cxxx; now 23 instructions / 184 bytes).  DSPS result vectors:
  * ok=0xff00, err5(unexpected phase)=0xff05, seltimeout=0xff10.  Static array =>
  * lives in kernel .data => bus address == &inq_script[0] (TT0 identity).
+ *
+ * The phase-dispatch block at byte offset SCRIPT_DISPATCH (0x30, just after the
+ * CMD MOVE) fans out on the LIVE bus phase.  It is ALSO the re-entry point the
+ * DATA_IN short-read recovery re-launches (see a4091queue): re-dispatching there
+ * on the live phase drains STATUS + MSG_IN to a clean INT 0xff00.
+ *
+ * NOTE: hand-patched relative to the generated reference/scripts/inq-wr.out to add
+ * a "JUMP msgin, WHEN MSG_IN" dispatch case (a non-STATUS post-data phase must not
+ * fall to err_phase on real HW).  reference/scripts/inq-wr.ss is now stale and
+ * should be regenerated to match in a follow-up (out of scope here).  All relative
+ * displacements below were recomputed for the +1-instruction (8-byte) insertion.
  */
+#define	SCRIPT_DISPATCH	0x30		/* byte offset of the phase-dispatch block */
+
 static ulong inq_script[] = {		/* READ+WRITE: DATA phase dispatches on live bus phase */
-	0x47000000, 0x000000a0,		/* SELECT ATN FROM ds_Device, REL(seltimeout)   */
-	0x86830000, 0x00000090,		/* JUMP err_phase, WHEN NOT MSG_OUT             */
-	0x1e000004, 0x00000004,		/* MOVE FROM ds_MsgOut, WHEN MSG_OUT (IDENTIFY) */
-	0x82830000, 0x00000080,		/* JUMP err_phase, WHEN NOT CMD                 */
-	0x60000008, 0x00000000,		/* CLEAR ATN                                    */
-	0x1a00000c, 0x0000000c,		/* MOVE FROM ds_Cmd, WHEN CMD                   */
-	0x808b0000, 0x00000018,		/* JUMP dataout, WHEN DATA_OUT  (write)         */
-	0x818b0000, 0x00000020,		/* JUMP datain,  WHEN DATA_IN   (read)          */
-	0x838b0000, 0x00000020,		/* JUMP status,  WHEN STATUS    (no data)       */
-	0x80880000, 0x00000050,		/* JUMP err_phase               (unexpected)    */
-	0x1800003c, 0x0000003c,		/* dataout: MOVE FROM ds_Data1, WHEN DATA_OUT   */
-	0x80880000, 0x00000008,		/* JUMP status_phase                            */
-	0x1900003c, 0x0000003c,		/* datain:  MOVE FROM ds_Data1, WHEN DATA_IN    */
-	0x83830000, 0x00000030,		/* status_phase: JUMP err_phase, WHEN NOT STATUS*/
-	0x1b000014, 0x00000014,		/* MOVE FROM ds_Status, WHEN STATUS             */
-	0x87830000, 0x00000020,		/* JUMP err_phase, WHEN NOT MSG_IN              */
-	0x1f00001c, 0x0000001c,		/* MOVE FROM ds_Msg, WHEN MSG_IN                */
-	0x60000040, 0x00000000,		/* CLEAR ACK                                    */
-	0x48000000, 0x00000000,		/* WAIT DISCONNECT                              */
-	0x98080000, 0x0000ff00,		/* INT ok                                       */
-	0x98080000, 0x0000ff05,		/* err_phase: INT err5                          */
-	0x98080000, 0x0000ff10,		/* seltimeout: INT 0xff10                       */
+	0x47000000, 0x000000a8,		/* 0x00 SELECT ATN FROM ds_Device, REL(seltimeout) */
+	0x86830000, 0x00000098,		/* 0x08 JUMP err_phase, WHEN NOT MSG_OUT           */
+	0x1e000004, 0x00000004,		/* 0x10 MOVE FROM ds_MsgOut, WHEN MSG_OUT (IDENTIFY)*/
+	0x82830000, 0x00000088,		/* 0x18 JUMP err_phase, WHEN NOT CMD               */
+	0x60000008, 0x00000000,		/* 0x20 CLEAR ATN                                  */
+	0x1a00000c, 0x0000000c,		/* 0x28 MOVE FROM ds_Cmd, WHEN CMD                 */
+	0x808b0000, 0x00000020,		/* 0x30 datadisp: JUMP dataout, WHEN DATA_OUT (wr) */
+	0x818b0000, 0x00000028,		/* 0x38 JUMP datain,  WHEN DATA_IN   (read)        */
+	0x838b0000, 0x00000028,		/* 0x40 JUMP status_phase, WHEN STATUS (no data)   */
+	0x878b0000, 0x00000030,		/* 0x48 JUMP msgin,   WHEN MSG_IN (non-STATUS drain)*/
+	0x80880000, 0x00000050,		/* 0x50 JUMP err_phase               (unexpected)  */
+	0x1800003c, 0x0000003c,		/* 0x58 dataout: MOVE FROM ds_Data1, WHEN DATA_OUT */
+	0x80880000, 0x00000008,		/* 0x60 JUMP status_phase                          */
+	0x1900003c, 0x0000003c,		/* 0x68 datain:  MOVE FROM ds_Data1, WHEN DATA_IN  */
+	0x83830000, 0x00000030,		/* 0x70 status_phase: JUMP err_phase, WHEN NOT STATUS*/
+	0x1b000014, 0x00000014,		/* 0x78 MOVE FROM ds_Status, WHEN STATUS           */
+	0x87830000, 0x00000020,		/* 0x80 msgin: JUMP err_phase, WHEN NOT MSG_IN     */
+	0x1f00001c, 0x0000001c,		/* 0x88 MOVE FROM ds_Msg, WHEN MSG_IN              */
+	0x60000040, 0x00000000,		/* 0x90 CLEAR ACK                                  */
+	0x48000000, 0x00000000,		/* 0x98 WAIT DISCONNECT                            */
+	0x98080000, 0x0000ff00,		/* 0xa0 INT ok                                     */
+	0x98080000, 0x0000ff05,		/* 0xa8 err_phase: INT err5                        */
+	0x98080000, 0x0000ff10,		/* 0xb0 seltimeout: INT 0xff10                     */
 };
 
 /*
@@ -155,6 +176,7 @@ static uchar	msg_buf[8];
 
 /* last-transaction diagnostics (data path goes straight to cp->addr now) */
 ulong	a4091_dsps;
+ulong	a4091_resid;		/* DATA_IN short-read FIFO/odd-byte residue (real HW; 0 in emu) */
 uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 
 /*
@@ -242,7 +264,7 @@ struct sdcom	*cp;
 {
 	ulong	dsps, poll;
 	uchar	istat, dstat, sstat0;
-	int	e, i, rc, target, cmdlen;
+	int	e, i, rc, target, cmdlen, recovered;
 
 	if (e = a4091map( cp->card)) {
 		cp->status = 0xff; cp->okay = FALSE;
@@ -276,6 +298,7 @@ struct sdcom	*cp;
 	ds.data2len = 0;     ds.data2buf  = 0;
 
 	/* launch */
+	recovered = 0;
 	WR32( R_TEMP, 0);
 	WR8 ( R_SBCL, 0);
 	WR32( R_DSA, (ulong)&ds);
@@ -306,6 +329,99 @@ struct sdcom	*cp;
 	else if ((dstat & DSTAT_SIR) && dsps == 0xff00) rc = 0;
 	else                                            rc = -3;
 
+	/*
+	 * DATA_IN phase-mismatch / short-read recovery.
+	 *
+	 * A SCSI tape READ that short-reads at a filemark / archive-member boundary
+	 * makes the target leave DATA_IN for STATUS (or MSG_IN) before our DATA_IN
+	 * MOVE has moved the full requested count.  The 53C710 then raises a phase-
+	 * mismatch interrupt (SSTAT0 M_A) and aborts SCRIPTS mid-MOVE -- which the
+	 * ladder above (no INT ran, so no DSTAT_SIR/0xff00) classified rc=-3.  That is
+	 * NOT an error: the bytes the target DID send are already DMA'd into cp->addr;
+	 * we must land them, drain the bus, and return the real STATUS byte.
+	 *
+	 * Gate = M_A phase mismatch (SSTAT0 M_A) on a transaction that programmed a
+	 * data transfer (cp->nbyte > 0), i.e. an active DATA_IN that ended short.  An
+	 * exact-length DISK read never phase-mismatches: its MOVE's DBC reaches 0
+	 * exactly as the target leaves DATA_IN, so the SCRIPTS falls through to STATUS
+	 * with M_A CLEAR and rc already 0 -- the disk/mkfs path provably cannot enter
+	 * this branch.  Disconnect/reselect is a separate, later real-HW step and is
+	 * deliberately NOT handled here (the emulated A4091 never disconnects).
+	 */
+	if (rc == -3 && (sstat0 & SSTAT0_M_A) && cp->nbyte > 0) {
+		ulong	resume;
+
+		/*
+		 * (a) REAL-HW ONLY -- NOT EXERCISED UNDER EMULATION.
+		 * Account for and drain any DATA_IN bytes still parked in the 53C710
+		 * DMA FIFO / odd-byte latches when the MOVE was cut short, so every
+		 * received byte reaches memory before we complete.  Mirrors siop.c's
+		 * phase-mismatch residue math (siop.c:1472 -- (dfifo-(dbc&0x7f))&0x7f,
+		 * +1 per ORF/OLF) and its per-interrupt DMA-FIFO clear (siop.c:1273-1296).
+		 * We deliberately do NOT compute siop.c's iob_curbuf/iob_curlen data-
+		 * pointer continuation math: we COMPLETE the short transfer, we do not
+		 * continue it, and sdcom has no residual field (the ct driver derives the
+		 * residual from REQUEST SENSE when status==CHECK CONDITION).
+		 * Under Amiberry the DMA is instantaneous: dfifo/ORF/OLF read 0, the
+		 * residue is 0, and CTEST1 FMT is already 0xF0 -- so this whole block is
+		 * a no-op in emulation.
+		 */
+		{
+			uchar	dfifo, sstat1;
+			int	adjust;
+			ulong	g;
+
+			dfifo  = RD8(R_DFIFO);
+			sstat1 = RD8(R_SSTAT1);
+			adjust = (dfifo - (int)(RD32(R_DBC) & 0x7f)) & 0x7f;
+			if (sstat1 & SSTAT1_ORF) adjust = adjust + 1;
+			if (sstat1 & SSTAT1_OLF) adjust = adjust + 1;
+			a4091_resid = (ulong)adjust;		/* diagnostic only; 0 in emu */
+
+			WR8( R_CTEST8, RD8(R_CTEST8) | CTEST8_CLF);	/* clear DMA+SCSI FIFO */
+			g = 0;
+			while (g < 100000) {			/* bounded: never hang */
+				if ((RD8(R_CTEST1) & CTEST1_FMT) == CTEST1_FMT) break;
+				g = g + 1;
+			}
+			WR8( R_CTEST8, RD8(R_CTEST8) & ~CTEST8_CLF);	/* CLF is not self-clr */
+		}
+
+		/*
+		 * (b) Re-launch SCRIPTS at the phase-dispatch block (SCRIPT_DISPATCH) so
+		 * it re-dispatches on the LIVE bus phase: STATUS for the short read (also
+		 * MSG_IN, via the hand-added dispatch case) drains to a clean INT 0xff00.
+		 * The SSTAT0 read above already cleared the SCSI (M_A) interrupt as the
+		 * chip requires; DSA still points at ds, so no re-init.  Writing DSP
+		 * starts SCRIPTS (DMODE MAN=0).
+		 */
+		WR32( R_DSP, (ulong)inq_script + SCRIPT_DISPATCH);
+
+		/* (c) re-poll for the resumed completion (same bounded cc-safe form) */
+		{
+			ulong	limit;
+			limit = 8000000;
+			istat = 0;
+			resume = 0;
+			while (resume < limit) {
+				istat = RD8(R_ISTAT);
+				if (istat & (ISTAT_SIP | ISTAT_DIP)) break;
+				resume = resume + 1;
+			}
+		}
+		sstat0 = (istat & ISTAT_SIP) ? RD8(R_SSTAT0) : 0;
+		dstat  = (istat & ISTAT_DIP) ? RD8(R_DSTAT)  : 0;
+		dsps   = RD32(R_DSPS);
+
+		if (!(istat & (ISTAT_SIP | ISTAT_DIP)))         rc = -2;
+		else if (sstat0 & SSTAT0_STO)                   rc = -1;
+		else if ((dstat & DSTAT_SIR) && dsps == 0xff00) rc = 0;
+		else                                            rc = -3;
+
+		poll = poll + resume;		/* keep the slow-path diagnostic live */
+		recovered = 1;
+	}
+
 	/* stash diagnostics (data already DMA'd into cp->addr) */
 	a4091_rc = (uchar)rc;  a4091_dsps = dsps;
 	a4091_istat = istat;   a4091_dstat = dstat;  a4091_stat = status_buf[0];
@@ -319,7 +435,7 @@ struct sdcom	*cp;
 	 * DSP = terminal SCRIPTS pointer; DBC = residual DMA byte count; DSPS is the
 	 * captured value that drove rc.
 	 */
-	if (poll > 0 || rc != 0) {
+	if (poll > 0 || rc != 0 || recovered) {
 		uchar	di, dd, d0, d1, d2;
 		ulong	dp, db;
 		di = RD8(R_ISTAT);
@@ -329,8 +445,20 @@ struct sdcom	*cp;
 		d2 = RD8(R_SSTAT2);
 		dp = RD32(R_DSP);
 		db = RD32(R_DBC) & 0x00ffffff;
-		printf("A4091 slow: poll=%d rc=%d istat=%x dstat=%x sstat0=%x sstat1=%x sstat2=%x dsp=%lx dbc=%lx dsps=%lx\n",
-		    (int)poll, rc, di, dd, d0, d1, d2, dp, db, dsps);
+		/*
+		 * The Amix native K&R printf has no %l length modifier -- "%lx" renders a
+		 * literal 'x', so the 32-bit dsp/dbc/dsps were unreadable.  Print each as
+		 * two %x halves "hi:lo" (hi = bits 31..16, lo = bits 15..0; reconstruct as
+		 * hi<<16 | lo, lo zero-padded to 4 hex digits).  rec=1 => short-read
+		 * recovery ran; sts = the resumed STATUS byte (2 = CHECK CONDITION at a
+		 * tape filemark).
+		 */
+		printf("A4091 slow: poll=%d rc=%d rec=%d istat=%x dstat=%x sstat0=%x sstat1=%x sstat2=%x dsp=%x:%x dbc=%x:%x dsps=%x:%x sts=%x\n",
+		    (int)poll, rc, recovered, di, dd, d0, d1, d2,
+		    (int)((dp >> 16) & 0xffff),   (int)(dp & 0xffff),
+		    (int)((db >> 16) & 0xffff),   (int)(db & 0xffff),
+		    (int)((dsps >> 16) & 0xffff), (int)(dsps & 0xffff),
+		    status_buf[0]);
 	}
 
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
