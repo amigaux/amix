@@ -44,6 +44,8 @@
 #define	R_SCNTL0	0x03
 #define	R_SCID		0x07
 #define	R_SBCL		0x08
+#define	R_SSTAT2	0x0C		/* ro; low bits = live SCSI phase (MSG/CD/IO) */
+#define	R_SSTAT1	0x0D		/* ro: SCSI status reg 1 (FIFO flags/parity) */
 #define	R_SSTAT0	0x0E
 #define	R_DSTAT		0x0F
 #define	R_DSA		0x10		/* 32-bit */
@@ -52,6 +54,7 @@
 #define	R_TEMP		0x1C		/* 32-bit */
 #define	R_CTEST8	0x21		/* high nibble = chip rev */
 #define	R_ISTAT		0x22
+#define	R_DBC		0x24		/* 32-bit DCMD:DBC; byte count = low 24 bits */
 #define	R_DSP		0x2C		/* 32-bit; writing it starts SCRIPTS */
 #define	R_DSPS		0x30		/* 32-bit; INT code lands here */
 #define	R_SCRATCH	0x34		/* 32-bit scratch (for write self-test) */
@@ -225,15 +228,19 @@ a4091init()
  * cp->nbyte, cp->addr) through the 53C710 SCRIPTS -- mirrors a3091queue.  CDB
  * length is derived from the opcode group code; data DMAs straight into cp->addr
  * (identity VA==PA).  READ path (DATA_IN) only; writes (DATA_OUT) need a SCRIPTS
- * branch (deferred).  Still 'nopoll' (single ISTAT read): the emulated target
- * answers instantly, and a poll loop currently breaks the kernel boot (NOTES S12).
+ * branch (deferred).  Completion is now a BOUNDED ISTAT poll (a finite spin that
+ * still exits for a silent/absent target -- this path is shared with the boot-time
+ * SCSI bus scan, so it must not hang on an empty id).  The old "a poll loop breaks
+ * the kernel boot" claim is retired: NOTES.md S18 traced the boot-breaker to an
+ * intermittent (~70%) ld file-write corruption, independent of the poll loop and
+ * mitigated by a build-until-stable clean gate.
  */
 bool
 a4091queue( c, cp)
 int		c;
 struct sdcom	*cp;
 {
-	ulong	dsps;
+	ulong	dsps, poll;
 	uchar	istat, dstat, sstat0;
 	int	e, i, rc, target, cmdlen;
 
@@ -274,8 +281,22 @@ struct sdcom	*cp;
 	WR32( R_DSA, (ulong)&ds);
 	WR32( R_DSP, (ulong)inq_script);
 
-	/* nopoll completion -- single ISTAT read (emulated target instant) */
-	istat = RD8(R_ISTAT);
+	/* bounded-poll completion -- spin on ISTAT until SIP|DIP or the bound.
+	 * cc-safe while-form (bound in a local, poll = poll + 1; NOT for/++/helper):
+	 * copied from a4091-pollfix.c:242, codegen rationale at a4091-pollfix.c:189.
+	 * The bound still exits for a silent/absent target so the boot bus scan
+	 * cannot hang on an empty SCSI id. */
+	{
+		ulong	limit;
+		limit = 8000000;
+		istat = 0;
+		poll  = 0;
+		while (poll < limit) {
+			istat = RD8(R_ISTAT);
+			if (istat & (ISTAT_SIP | ISTAT_DIP)) break;
+			poll = poll + 1;
+		}
+	}
 	sstat0 = (istat & ISTAT_SIP) ? RD8(R_SSTAT0) : 0;
 	dstat  = (istat & ISTAT_DIP) ? RD8(R_DSTAT)  : 0;
 	dsps   = RD32(R_DSPS);
@@ -288,6 +309,29 @@ struct sdcom	*cp;
 	/* stash diagnostics (data already DMA'd into cp->addr) */
 	a4091_rc = (uchar)rc;  a4091_dsps = dsps;
 	a4091_istat = istat;   a4091_dstat = dstat;  a4091_stat = status_buf[0];
+
+	/*
+	 * Slow/failing path ONLY (instant disk I/O -- poll==0 && rc==0 -- stays
+	 * silent so per-block disk traffic can't flood the install console).  Dump
+	 * the terminal 53C710 state read fresh from the chip: for the rc=-2 tape
+	 * hang (no SIP/DIP) the rc-ladder above skipped SSTAT0/DSTAT, so this is the
+	 * only look at the real DSTAT/SSTAT0/phase.  SSTAT2 low bits = SCSI phase;
+	 * DSP = terminal SCRIPTS pointer; DBC = residual DMA byte count; DSPS is the
+	 * captured value that drove rc.
+	 */
+	if (poll > 0 || rc != 0) {
+		uchar	di, dd, d0, d1, d2;
+		ulong	dp, db;
+		di = RD8(R_ISTAT);
+		dd = RD8(R_DSTAT);
+		d0 = RD8(R_SSTAT0);
+		d1 = RD8(R_SSTAT1);
+		d2 = RD8(R_SSTAT2);
+		dp = RD32(R_DSP);
+		db = RD32(R_DBC) & 0x00ffffff;
+		printf("A4091 slow: poll=%d rc=%d istat=%x dstat=%x sstat0=%x sstat1=%x sstat2=%x dsp=%lx dbc=%lx dsps=%lx\n",
+		    (int)poll, rc, di, dd, d0, d1, d2, dp, db, dsps);
+	}
 
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
 	cp->okay   = (rc == 0) ? TRUE : FALSE;
