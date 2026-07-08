@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-08
+
+- **kernel-patches: `scsi.c.patch` — enlarge the GSIO passthrough bounce buffer
+  1 KB → 64 KB.** `gsioctl()` in `amiga/alien/scsi.c` bounces every `/dev/scsi`
+  GSIO transfer through a single static `iobuf[]` and rejects `nbyte > sizeof
+  iobuf`; at 1024 bytes a 2048-byte CD-ROM READ(10) data block cannot pass,
+  blocking any CD/optical-filesystem GSIO consumer. Grow `iobuf` to 65536 so a
+  2048-byte block and multi-sector chunks fit in one GSIO call, with both existing
+  guards kept (the `nbyte % DMA_GRANULARITY` alignment check — DMA_GRANULARITY is
+  4, and 2048/65536 are multiples; and the `nbyte > sizeof iobuf` bounds clamp,
+  now 64 KB). Static kernel BSS only — no allocation path, real-HW-safe. Shipped as
+  a `patch -p0` diff (target `amiga/alien/scsi.c`); the kerntools patch-application
+  wiring is a separate change. **Proven on-box (2026-07-08):** in a native-built
+  a4091 kernel (with this patch) under Amiberry-A4091, the `amix-cdfs`
+  SCSI-passthrough backend reads a genuine 2048-byte CD end-to-end —
+  `imgls`/`imgcat`/`imginfo` byte-exact vs host, including a multi-sector
+  (102000-byte / 50-sector) read across the 32 KB chunk boundary, plus Rock Ridge
+  long names, symlinks, and multi-level paths.
+
 ## 2026-07-06
 
 - **a4091-wr: real SCSI tape-read support — DATA_IN phase-mismatch / filemark
