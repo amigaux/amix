@@ -1,0 +1,114 @@
+Give the A3000 internal-SCSI driver the same chip-mem DMA bounce the A2091
+card driver already has, so boot-time reads into high Fast-RAM buffers land.
+
+amiga/alien/a3091.c drives the A3000 onboard "super-DMAC" + WD33C93 (autocon
+0x0202F003 @ 0xDD0000).  Its startdma() programmed the caller's buffer address
+straight into the DMAC's SAC register and fired the transfer with no bounce:
+
+	device->sac = cp->addr + cp->nbyte - n;
+	device->sdma = TRUE;
+
+The super-DMAC cannot reliably reach an arbitrary 32-bit Fast-RAM address.  When
+the buffer physical address falls outside what the DMAC can drive, the transfer
+silently completes having moved nothing -- no bus error, no status bit, just
+zeros left in the target buffer.  This is the "phantom-A3000 fastmem" hazard in
+its DMA form: the register write succeeds but the data never lands.
+
+It bites at boot.  getrdb() reads the Rigid Disk Block into a single static BSS
+buffer (union block in sdpart.c).  While the buffer happened to sit at a low
+enough address the DMA worked; once the kernel grew (~64 KB, from adding the
+cdfs filesystem) the buffer moved up into a region the super-DMAC does not
+reach, so getrdb() saw an all-zero block, found no RDSK, and sdopen() returned
+ENXIO.  Root mount then failed:
+
+	s5mountroot VOP_OPEN error 6
+	PANIC: vfs_mountroot: cannot mount root: errno 30
+
+A section-matched but code-inert cdfs stub (zero cdfs code, identical size)
+reproduced the panic identically, proving the trigger is purely the buffer's
+address, not any cdfs code.
+
+The A2091 card driver (amiga/alien/a2091.c) never had this problem because its
+startdma()/stopdma() already bounce through chip RAM for any buffer at or above
+0x1000000: it AllocMem(MEMF_CHIP)s a scratch buffer, copies the caller's data
+out before a write, points the DMAC at the chip buffer, and copies back in after
+a read (freeing the buffer in stopdma).  Chip RAM is always DMA-reachable, so
+the bounce is always safe.
+
+This patch ports that bounce into a3091.c, adapted to its structures (global
+`device`, `curunitp`, the local transfer count `n = tc0<<16|tc1<<8|tc2`, and
+`cp->reading`/`cp->addr`/`cp->nbyte`).  Because a3091 keeps no per-card struct,
+two file statics carry the in-flight allocation across the startdma->stopdma
+lifecycle: `chipaddr` (the chip buffer, 0 when none) and `dma_tc` (its byte
+count).  Copy directions mirror a2091 exactly:
+
+  * write (cp->reading == FALSE): bcopy caller -> chip before starting DMA;
+    the DMAC then reads out of chip RAM.
+  * read  (cp->reading == TRUE): DMA fills the chip buffer, then stopdma
+    bcopies chip -> caller once the transfer flushes.
+
+The buffer is allocated in startdma and freed in stopdma on every path that
+stops a DMA (completion, abort, disconnect/reselect), matching a2091's certified
+lifecycle -- the same `unless (dma_on) return;` early-out still guards stopdma,
+and the copy-back/FreeMem run only when `chipaddr` is non-zero, so the untouched
+"no DMA started" and direct (low-address) paths free nothing.  The threshold is
+a2091's proven `>= (caddr_t)0x1000000`; buffers below it still go direct.
+
+Cost is a transient MEMF_CHIP allocation of exactly the transfer size for the
+duration of each high-buffer DMA.  Boot getrdb() reads are a single RDB block
+(tiny), so chip-mem pressure is negligible; if chip RAM were ever exhausted the
+driver panics with a clear "a3091: no chip mem" rather than corrupting data --
+same failure mode as a2091.
+
+Apply against a stock Amix 2.1 source tree:
+    cd /usr/sys && patch -p0 < a3091.c.patch      # target: amiga/alien/a3091.c
+
+--- amiga/alien/a3091.c.orig	2026-07-09 23:31:35.614383950 +0300
++++ amiga/alien/a3091.c	2026-07-09 23:32:23.616349127 +0300
+@@ -7,6 +7,7 @@
+  */
+
+ #include	"sys/types.h"
++#include	"memory.h"
+ #include	"rico.h"
+ #include	"sd.h"
+
+@@ -143,6 +144,8 @@
+ static uint		istate,
+ 			startcom	= 0x09;
+ static bool		dma_on;
++static uint		*chipaddr,	/* chip-mem bounce buffer, 0 if none */
++			dma_tc;		/* byte count of the in-flight DMA */
+
+
+ a3091queue( con, cp)
+@@ -334,7 +337,16 @@
+ 		device->cntr = 1<<3 | 1<<2;
+ 	else
+ 		device->cntr = 1<<3 | 1<<2 | 1<<1;
+-	device->sac = cp->addr + cp->nbyte - n;
++	dma_tc = n;
++	if (cp->addr >= (caddr_t)0x1000000) {
++		unless (chipaddr = AllocMem( n, MEMF_CHIP))
++			panic( "a3091: no chip mem");
++		unless (cp->reading)
++			bcopy( cp->addr+cp->nbyte-n, chipaddr, n);
++		device->sac = chipaddr;
++	}
++	else
++		device->sac = cp->addr + cp->nbyte - n;
+ 	device->sdma = TRUE;
+ 	dma_on = TRUE;
+ }
+@@ -352,6 +364,13 @@
+ 	device->cint = TRUE;
+ 	device->srst = TRUE;
+ 	dma_on = FALSE;
++	if (chipaddr) {
++		volatile struct sdcom	*cp = curunitp->comhead;
++		if (cp->reading)
++			bcopy( chipaddr, cp->addr+cp->nbyte-dma_tc, dma_tc);
++		FreeMem( chipaddr, dma_tc);
++		chipaddr = 0;
++	}
+ }
