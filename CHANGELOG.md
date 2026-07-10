@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-07-10
+
+- **kernel-patches: `a3091.c.patch` — chip-mem DMA bounce for the A3000
+  internal-SCSI super-DMAC (fixes the a4091+cdfs boot panic).** The A3000 onboard
+  SCSI driver `amiga/alien/a3091.c` (super-DMAC + WD33C93 @ 0xDD0000) programmed the
+  caller's full 32-bit Fast-RAM buffer address straight into the DMAC
+  (`device->sac = cp->addr`) with no bounce — unlike its A2091-card sibling
+  `a2091.c`, which bounces any buffer ≥ `0x1000000` through `AllocMem(MEMF_CHIP)`.
+  The super-DMAC cannot reach an arbitrary high Fast-RAM address, so once the kernel
+  grew (adding the in-kernel `cdfs` filesystem, ~64 KB) `getrdb()`'s static RDB
+  buffer (`union block` in `sdpart.c`) moved past the DMAC's reach: the root-device
+  read returned all-zeros → `sdopen()` ENXIO → `s5mountroot VOP_OPEN error 6` /
+  `PANIC vfs_mountroot errno 30`. Root-caused by an Amiberry-savestate differential
+  (booting golden vs panicking cdfs kernel: `queue[0].f` populated in both, but the
+  RDB buffer held a valid `UNIX_Root` PART block in golden vs all-zeros in the
+  panic). Fix ports a2091's bounce into a3091: for buffers ≥ `0x1000000`,
+  `AllocMem(cp->tc, MEMF_CHIP)` a chip scratch, copy caller→chip before a write /
+  chip→caller after a read, `FreeMem` in `stopdma` — the direct (low-address) path
+  is unchanged. Shipped as a `patch -p0` diff (target `amiga/alien/a3091.c`).
+  **Proven on-box (2026-07-10):** with it the a4091+cdfs kernel boots warm AND cold,
+  `cdfs` registers live (`sysfs(GETFSIND,"cdfs")==12`), and `mount -F cdfs 1,3
+  /cdrom` reads a genuine Rock Ridge CD byte-exact (on-box `sum` == host `sum -s`;
+  UTF-8 names, long names, symlinks, multi-level paths). NB: characterizing the
+  super-DMAC's exact reach limit (to raise/remove the ≥ 16 MB bounce threshold) is a
+  follow-up.
+
 ## 2026-07-08
 
 - **kernel-patches: `scsi.c.patch` — enlarge the GSIO passthrough bounce buffer
