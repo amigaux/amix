@@ -31,17 +31,17 @@ Apply against a stock Amix 2.1 source tree:
 +		unsigned short vposr = *(volatile unsigned short *)0xDFF004;
 +
 +		if ((((int)vposr >> 8) & 0x7F) < 0x22) {	/* A3000-class, not AGA/A4000 */
-+			/* write/readback the WD33C93 Timeout-Period register via its
-+			 * indirect SASR/SCMD ports (harmless; chip is reset later). */
++			/* Two-register anti-alias probe via the indirect SASR/SCMD
++			 * ports (harmless scratch regs; chip is reset later). */
 +			volatile unsigned char *sasr = (unsigned char *)0xDD0041;
 +			volatile unsigned char *scmd = (unsigned char *)0xDD0043;
 +
-+			*sasr = 0x02; *scmd = 0x55;
-+			*sasr = 0x02;
-+			if (*scmd == 0x55) {
-+				*sasr = 0x02; *scmd = 0xAA;
-+				*sasr = 0x02;
-+				if (*scmd == 0xAA)
++			*sasr = 0x02; *scmd = 0x55;	/* WD33C93 reg 0x02 <- 0x55 */
++			*sasr = 0x03; *scmd = 0xAA;	/* reg 0x03 <- 0xAA via same data port */
++			*sasr = 0x02;			/* re-select reg 0x02 */
++			if (*scmd == 0x55) {		/* real chip keeps reg2==0x55; open bus */
++				*sasr = 0x03;		/* aliases 0xDD0043 to the last write 0xAA */
++				if (*scmd == 0xAA)	/* both regs distinct => a real WD33C93 */
 +					a3kscsi = 1;
 +			}
 +		}
