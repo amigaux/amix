@@ -1,71 +1,67 @@
-Give the A3000 internal-SCSI driver the same chip-mem DMA bounce the A2091
-card driver already has, so boot-time reads into high Fast-RAM buffers land.
+Make the A3000 internal-SCSI chip-mem DMA bounce PER-UNIT, so concurrent
+transfers to different targets can no longer copy a bounce buffer back to the
+wrong unit.
 
 amiga/alien/a3091.c drives the A3000 onboard "super-DMAC" + WD33C93 (autocon
-0x0202F003 @ 0xDD0000).  Its startdma() programmed the caller's buffer address
-straight into the DMAC's SAC register and fired the transfer with no bounce:
+0x0202F003 @ 0xDD0000).  The super-DMAC cannot reach Fast RAM at or above
+0x1000000, so any caller buffer there must be bounced through chip RAM: on a
+write, copy the caller's data into a chip buffer and point the DMAC at it; on a
+read, DMA into the chip buffer and copy it back to the caller when the transfer
+stops.  Chip RAM is always DMA-reachable, so the bounce is always safe.  (This
+is the same bounce the A2091 card driver has always carried; see a2091.c.patch.)
 
-	device->sac = cp->addr + cp->nbyte - n;
-	device->sdma = TRUE;
+The FIRST cut of this bounce (commit e70c1d7) kept the in-flight bounce state in
+two FILE STATICS -- `chipaddr` (the chip buffer, 0 when none) and `dma_tc` (its
+byte count).  That is safe for a single stream but WRONG for this driver, which
+is multi-target: the WD33C93 runs a disconnect/reselect DFA (a3091intr) and the
+driver already keeps the saved SCSI transfer count PER UNIT (units[].tc0/tc1/tc2)
+precisely because targets interleave on the bus.  A target can disconnect
+mid-transfer and another reselect before the first completes; case 2/3 of the
+DFA switch `curunitp` from one units[] entry to another and re-arm the DMAC for
+the newly reselected unit.  The bounce buffer pointer and its copy-back length
+have exactly the same lifetime requirement as tc0/1/2 -- they must survive an
+excursion to another target -- but as file statics there was only ONE copy for
+all eight units.  stopdma() copies `dma_tc` bytes from `chipaddr` to
+`curunitp->comhead->addr + nbyte - dma_tc`; once a reselect has moved curunitp
+to unit B while the single chipaddr/dma_tc still describe unit A's transfer (or
+B's startdma has overwritten them under A's still-pending copy-back), the three
+operands no longer name one unit.  The copy-back then writes one unit's buffer
+to another unit's address with a mismatched length: `addr + nbyte - dma_tc`
+lands outside the target buffer -> wild write -> `hat_pt2ptdat` panic /
+`User BUS ERROR`.  Reproduced by `dd if=/dev/rdsk/c5d0s1 of=/dev/null` (unit 5)
+looped while `cp` writes DH0 (unit 6); either stream alone is clean.
 
-The super-DMAC cannot reliably reach an arbitrary 32-bit Fast-RAM address.  When
-the buffer physical address falls outside what the DMAC can drive, the transfer
-silently completes having moved nothing -- no bus error, no status bit, just
-zeros left in the target buffer.  This is the "phantom-A3000 fastmem" hazard in
-its DMA form: the register write succeeds but the data never lands.
+Fix: move the bounce state into the per-unit `struct unit`, exactly like
+tc0/1/2.  Each unit gets its own `chipaddr` (the buffer in use for THIS unit's
+in-flight bounced DMA, 0 otherwise) and `dma_tc` (that DMA's byte count).
+startdma(up) writes up->chipaddr/up->dma_tc; stopdma() reads them back through
+curunitp -- so source buffer, destination address and length are structurally
+the same unit's, and no reselect that flips curunitp between units[] can ever
+cross them.  Walk the path: startdma(A) sets A->chipaddr/A->dma_tc; a reselect
+to B (case 2 stopdma -> case 3) copies A's buffer back to A using A's own
+chipaddr/dma_tc, then startdma(B) sets B->chipaddr/B->dma_tc; B's later stopdma
+copies B's buffer using B's own state.  A and B never touch each other's bounce.
 
-It bites at boot.  getrdb() reads the Rigid Disk Block into a single static BSS
-buffer (union block in sdpart.c).  While the buffer happened to sit at a low
-enough address the DMA worked; once the kernel grew (~64 KB, from adding the
-cdfs filesystem) the buffer moved up into a region the super-DMAC does not
-reach, so getrdb() saw an all-zero block, found no RDSK, and sdopen() returned
-ENXIO.  Root mount then failed:
-
-	s5mountroot VOP_OPEN error 6
-	PANIC: vfs_mountroot: cannot mount root: errno 30
-
-A section-matched but code-inert cdfs stub (zero cdfs code, identical size)
-reproduced the panic identically, proving the trigger is purely the buffer's
-address, not any cdfs code.
-
-The A2091 card driver (amiga/alien/a2091.c) never had this problem because its
-startdma()/stopdma() already bounce through chip RAM for any buffer at or above
-0x1000000: it AllocMem(MEMF_CHIP)s a scratch buffer, copies the caller's data
-out before a write, points the DMAC at the chip buffer, and copies back in after
-a read (freeing the buffer in stopdma).  Chip RAM is always DMA-reachable, so
-the bounce is always safe.
-
-This patch ports that bounce into a3091.c, adapted to its structures (global
-`device`, `curunitp`, the local transfer count `n = tc0<<16|tc1<<8|tc2`, and
-`cp->reading`/`cp->addr`/`cp->nbyte`).  Because a3091 keeps no per-card struct,
-two file statics carry the in-flight allocation across the startdma->stopdma
-lifecycle: `chipaddr` (the chip buffer, 0 when none) and `dma_tc` (its byte
-count).  Copy directions mirror a2091 exactly:
-
-  * write (cp->reading == FALSE): bcopy caller -> chip before starting DMA;
-    the DMAC then reads out of chip RAM.
-  * read  (cp->reading == TRUE): DMA fills the chip buffer, then stopdma
-    bcopies chip -> caller once the transfer flushes.
-
-The buffer is allocated in startdma and freed in stopdma on every path that
-stops a DMA (completion, abort, disconnect/reselect), matching a2091's certified
-lifecycle -- the same `unless (dma_on) return;` early-out still guards stopdma,
-and the copy-back/FreeMem run only when `chipaddr` is non-zero, so the untouched
-"no DMA started" and direct (low-address) paths free nothing.  The threshold is
-a2091's proven `>= (caddr_t)0x1000000`; buffers below it still go direct.
-
-Cost is a transient MEMF_CHIP allocation of exactly the transfer size for the
-duration of each high-buffer DMA.  Boot getrdb() reads are a single RDB block
-(tiny), so chip-mem pressure is negligible; if chip RAM were ever exhausted the
-driver panics with a clear "a3091: no chip mem" rather than corrupting data --
-same failure mode as a2091.
+The buffer is also now a PERSISTENT per-unit chip buffer allocated ONCE in
+initialize() rather than AllocMem'd/FreeMem'd inside startdma()/stopdma() on
+every high-buffer DMA.  Those routines run in the a3091intr (INT2) handler, and
+allocating from the interrupt is itself fragile; a fixed buffer removes it.  The
+buffer is sized BOUNCESZ = one page (0x1000): amiga_dma_pageio() chunks every
+block/raw disk and tape transfer to a page, and the only larger consumer
+(scsi.c GSIO, <=64 KB) bounces through a low kernel iobuf that never trips the
+>=0x1000000 test, so nothing above a page ever reaches this path.  A guard
+(`if (n > BOUNCESZ) panic`) fails loud rather than overrunning the buffer should
+that ever change.  Eight units * one page = 32 KB of chip RAM reserved for the
+life of the driver -- negligible on any A3000.  The `>= 0x1000000` bounce
+trigger and the chip-RAM semantics are unchanged; buffers below it still go
+direct (up->chipaddr = 0, so stopdma copies nothing back).
 
 Apply against a stock Amix 2.1 source tree:
     cd /usr/sys && patch -p0 < a3091.c.patch      # target: amiga/alien/a3091.c
 
---- amiga/alien/a3091.c.orig	2026-07-09 23:31:35.614383950 +0300
-+++ amiga/alien/a3091.c	2026-07-09 23:32:23.616349127 +0300
-@@ -7,6 +7,7 @@
+--- amiga/alien/a3091.c.orig
++++ amiga/alien/a3091.c
+@@ -7,9 +7,19 @@
   */
 
  #include	"sys/types.h"
@@ -73,42 +69,73 @@ Apply against a stock Amix 2.1 source tree:
  #include	"rico.h"
  #include	"sd.h"
 
-@@ -143,6 +144,8 @@
- static uint		istate,
- 			startcom	= 0x09;
- static bool		dma_on;
-+static uint		*chipaddr,	/* chip-mem bounce buffer, 0 if none */
-+			dma_tc;		/* byte count of the in-flight DMA */
++/*
++ * Largest transfer that can reach the chip-mem bounce path (a caller buffer at
++ * or above 0x1000000).  amiga_dma_pageio() chunks all block/raw disk & tape
++ * I/O to one page, and the only larger consumer (scsi.c GSIO, <=64 KB) bounces
++ * through a low kernel iobuf that never trips the >=0x1000000 test.  A guard in
++ * startdma() panics rather than overrun the buffer should that ever change.
++ */
++#define	BOUNCESZ	0x1000		/* NBPP: one 68030 page */
++
+
+ static volatile struct hardware *device;
+
+@@ -71,6 +81,9 @@
+ 	uchar		tc0,
+ 			tc1,
+ 			tc2;
++	uint		*bounce,	/* persistent MEMF_CHIP bounce buffer */
++			*chipaddr;	/* == bounce while a bounced DMA runs, else 0 */
++	uint		dma_tc;		/* byte count of this unit's bounced DMA */
+ };
 
 
- a3091queue( con, cp)
-@@ -334,7 +337,16 @@
+@@ -334,7 +347,19 @@
  		device->cntr = 1<<3 | 1<<2;
  	else
  		device->cntr = 1<<3 | 1<<2 | 1<<1;
 -	device->sac = cp->addr + cp->nbyte - n;
-+	dma_tc = n;
++	up->dma_tc = n;
 +	if (cp->addr >= (caddr_t)0x1000000) {
-+		unless (chipaddr = AllocMem( n, MEMF_CHIP))
-+			panic( "a3091: no chip mem");
++		if (n > BOUNCESZ)
++			panic( "a3091: DMA too big");
++		up->chipaddr = up->bounce;
 +		unless (cp->reading)
-+			bcopy( cp->addr+cp->nbyte-n, chipaddr, n);
-+		device->sac = chipaddr;
++			bcopy( cp->addr+cp->nbyte-n, up->chipaddr, n);
++		device->sac = up->chipaddr;
 +	}
-+	else
++	else {
++		up->chipaddr = 0;
 +		device->sac = cp->addr + cp->nbyte - n;
++	}
  	device->sdma = TRUE;
  	dma_on = TRUE;
  }
-@@ -352,6 +364,13 @@
+@@ -352,6 +377,13 @@
  	device->cint = TRUE;
  	device->srst = TRUE;
  	dma_on = FALSE;
-+	if (chipaddr) {
++	if (curunitp->chipaddr) {
 +		volatile struct sdcom	*cp = curunitp->comhead;
 +		if (cp->reading)
-+			bcopy( chipaddr, cp->addr+cp->nbyte-dma_tc, dma_tc);
-+		FreeMem( chipaddr, dma_tc);
-+		chipaddr = 0;
++			bcopy( curunitp->chipaddr,
++			       cp->addr+cp->nbyte-curunitp->dma_tc, curunitp->dma_tc);
++		curunitp->chipaddr = 0;
 +	}
  }
+
+
+@@ -377,6 +409,12 @@
+ 		startcom = 0x08;
+ 	setreg( SI, ER);
+ 	setreg( TP, 0xFF);
++	{
++		int	u;
++		for (u = 0; u < SDUNITS; ++u)
++			unless (units[u].bounce = AllocMem( BOUNCESZ, MEMF_CHIP))
++				panic( "a3091: no chip mem");
++	}
+ }
+
+

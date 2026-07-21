@@ -1,0 +1,153 @@
+Make the A2091 card's chip-mem DMA bounce PER-UNIT, closing the same
+cross-unit-reselect aliasing that a3091.c.patch fixes on the A3000.
+
+amiga/alien/a2091.c drives the A2091/A590 DMAC (rev. D) + WD33C93.  Like the
+A3000, its DMAC cannot reach Fast RAM at or above 0x1000000, so a caller buffer
+there is bounced through chip RAM: write copies caller->chip before the DMAC
+reads it; read DMAs into chip then copies chip->caller when the transfer stops.
+
+The stock driver keeps a `struct card` per host adapter and, correctly, a saved
+SCSI transfer count PER UNIT (units[].tc0/tc1/tc2) because the WD33C93 runs a
+disconnect/reselect DFA (service()) and targets interleave on the bus.  But the
+bounce state -- the chip buffer pointer `chipaddr` and the copy-back length
+`tc` -- lived in `struct card`, i.e. ONE copy shared by all eight units on the
+card.  stopdma() copies `cp->tc` bytes from `cp->chipaddr` to
+`cp->curunitp->comhead->addr + nbyte - cp->tc`.  case 2/3 of the DFA switch
+`cp->curunitp` from one units[] entry to the reselected one and re-arm the DMAC;
+once curunitp names unit B while the shared chipaddr/tc still describe unit A's
+transfer (or B's startdma has overwritten them while A's copy-back is still
+owed), the three operands no longer name one unit.  The copy-back then writes
+one unit's buffer to another unit's address with a mismatched length, so
+`addr + nbyte - tc` lands outside the target buffer -> wild write ->
+`hat_pt2ptdat` panic / `User BUS ERROR`.  This is the identical latent defect
+proven on the A3000's a3091.c (concurrent `dd` of one unit while `cp` writes
+another); it bites the A2091 for any transfer to a buffer at or above 0x1000000.
+
+Fix (mirrors a3091.c.patch): move the bounce state into the per-unit
+`struct unit`, exactly like tc0/1/2.  Each unit gets its own `chipaddr` (the
+buffer in use for THIS unit's in-flight bounced DMA, 0 otherwise) and `dma_tc`
+(that DMA's byte count); the shared `struct card` fields are dropped.
+startdma(cp, up) writes up->chipaddr/up->dma_tc; stopdma() reads them back
+through cp->curunitp, so source buffer, destination address and length are
+structurally the same unit's and no reselect that flips curunitp between units[]
+can cross them.  Walk the path: startdma(A) sets A->chipaddr/A->dma_tc; a
+reselect to B (case 2 stopdma -> case 3) copies A's buffer back to A using A's
+own state, then startdma(B) sets B->chipaddr/B->dma_tc; B's later stopdma copies
+B's buffer using B's own state.  (`cp->tc` stays in struct card unchanged as the
+card-level "a DMA is running" guard the certified stop sequence relies on; it is
+no longer used as a copy-back length.)
+
+The buffer is also now a PERSISTENT per-unit chip buffer allocated ONCE per card
+in initialize() instead of AllocMem'd in startdma() and FreeMem'd in stopdma()
+on every high-buffer DMA -- both of which run in the a2091intr (INT2) handler,
+where allocating is fragile.  It is sized BOUNCESZ = one page (0x1000):
+amiga_dma_pageio() chunks every block/raw disk and tape transfer to a page, and
+the only larger consumer (scsi.c GSIO, <=64 KB) bounces through a low kernel
+iobuf that never trips the >=0x1000000 test, so nothing above a page reaches the
+bounce; a `if (cp->tc > BOUNCESZ) panic` guard fails loud rather than
+overrunning.  The `>= 0x1000000` trigger and chip-RAM semantics are unchanged;
+buffers below it still go direct (up->chipaddr = 0).
+
+NOTE: the current bench has no emulated A2091 card, so unlike a3091.c this change
+is BUILD-VALIDATED ONLY (cross-compiles clean; not exercised on hardware).  It is
+included because a2091.c is the reference template a3091.c derives from and it
+carries the identical bug for >=16 MB buffers; keeping the two in lockstep avoids
+a latent trap for anyone who runs Amix on a real A2091/A590.
+
+Apply against a stock Amix 2.1 source tree:
+    cd /usr/sys && patch -p0 < a2091.c.patch      # target: amiga/alien/a2091.c
+
+--- amiga/alien/a2091.c.orig
++++ amiga/alien/a2091.c
+@@ -12,6 +12,15 @@
+ #include	"rico.h"
+ #include	"sd.h"
+
++/*
++ * Largest transfer that can reach the chip-mem bounce path (a caller buffer at
++ * or above 0x1000000).  amiga_dma_pageio() chunks all block/raw disk & tape
++ * I/O to one page, and the only larger consumer (scsi.c GSIO, <=64 KB) bounces
++ * through a low kernel iobuf that never trips the >=0x1000000 test.  A guard in
++ * startdma() panics rather than overrun the buffer should that ever change.
++ */
++#define	BOUNCESZ	0x1000		/* NBPP: one 68030 page */
++
+
+ struct device {
+ 	uchar		xxxxxxx0[0x40];
+@@ -69,6 +78,9 @@
+ 	uchar		tc0,
+ 			tc1,
+ 			tc2;
++	ushort		*bounce,	/* persistent MEMF_CHIP bounce buffer */
++			*chipaddr;	/* == bounce while a bounced DMA runs, else 0 */
++	uint		dma_tc;		/* byte count of this unit's bounced DMA */
+ };
+ struct card {
+ 	volatile struct device	*device;
+@@ -79,7 +91,6 @@
+ 	uint		istate,
+ 			tc,
+ 			startcom;
+-	ushort		*chipaddr;
+ 	bool		initialized;
+ 	char		xxxxxxxx[30];
+ };
+@@ -356,15 +367,19 @@
+ 		dp->cntr = 1<<5 | 1<<4;
+ 	else
+ 		dp->cntr = 1<<5 | 1<<4 | 1<<3;
++	up->dma_tc = cp->tc;
+ 	if (rp->addr >= (caddr_t)0x1000000) {
+-		unless (cp->chipaddr = AllocMem( cp->tc, MEMF_CHIP))
+-			panic( "a2091: no chip mem");
++		if (cp->tc > BOUNCESZ)
++			panic( "a2091: DMA too big");
++		up->chipaddr = up->bounce;
+ 		unless (rp->reading)
+-			bcopy( rp->addr+rp->nbyte-cp->tc, cp->chipaddr, cp->tc);
+-		dp->sac = cp->chipaddr;
++			bcopy( rp->addr+rp->nbyte-cp->tc, up->chipaddr, cp->tc);
++		dp->sac = up->chipaddr;
+ 	}
+-	else
++	else {
++		up->chipaddr = 0;
+ 		dp->sac = rp->addr + rp->nbyte - cp->tc;
++	}
+ 	dp->st_dma = TRUE;
+ }
+
+@@ -383,12 +398,15 @@
+ 		;
+ 	dp->clr_int = TRUE;
+ 	dp->sp_dma = TRUE;
+-	if (cp->chipaddr) {
+-		volatile struct sdcom *rp = cp->curunitp->comhead;
+-		if (rp->reading)
+-			bcopy( cp->chipaddr, rp->addr+rp->nbyte-cp->tc, cp->tc);
+-		FreeMem( cp->chipaddr, cp->tc);
+-		cp->chipaddr = 0;
++	{
++		volatile struct unit	*up = cp->curunitp;
++		if (up->chipaddr) {
++			volatile struct sdcom	*rp = up->comhead;
++			if (rp->reading)
++				bcopy( up->chipaddr,
++				       rp->addr+rp->nbyte-up->dma_tc, up->dma_tc);
++			up->chipaddr = 0;
++		}
+ 	}
+ }
+
+@@ -417,6 +435,12 @@
+ 	setreg( dp, CON, DM2|EDI|IDI);
+ 	setreg( dp, SI, ER);
+ 	setreg( dp, TP, 0xFF);
++	{
++		int	u;
++		for (u = 0; u < SDUNITS; ++u)
++			unless (cp->units[u].bounce = AllocMem( BOUNCESZ, MEMF_CHIP))
++				panic( "a2091: no chip mem");
++	}
+ }
