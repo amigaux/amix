@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-07-21
+
+- **kernel-patches: per-unit DMA bounce state — `a3091.c.patch` rewritten + `a2091.c.patch`
+  (new). Fixes cross-unit disconnect/reselect aliasing.** (`791a117`) The chip-mem DMA bounce
+  kept its in-flight buffer pointer + byte count in single **file-static** (a3091) / **per-card**
+  (a2091) state, but both WD33C93 drivers are multi-target: they run a disconnect/reselect DFA
+  and already keep the saved SCSI transfer count **per unit** (`units[].tc0/tc1/tc2`) precisely
+  because targets interleave on the bus. `stopdma()` copies `dma_tc` bytes from `chipaddr` to
+  `curunitp->comhead->addr + nbyte − dma_tc`; when a reselect flips `curunitp` between `units[]`
+  while the shared bounce state still names another unit, source/destination/length stop
+  describing one unit → the copy-back lands outside the target buffer → stray write
+  (`hat_pt2ptdat` panic / `User BUS ERROR`). Reproduced by `dd if=/dev/rdsk/c5d0s1 of=/dev/null`
+  (unit 5) looped while `cp` writes DH0 (unit 6); either stream alone is clean. The fix moves the
+  bounce buffer pointer + byte count into per-unit `struct unit` (mirroring `tc0/1/2`), so
+  `stopdma()` reads source, destination and length all from one unit through `curunitp` — no
+  reselect can cross them — and replaces the per-DMA interrupt-context `AllocMem`/`FreeMem` with
+  a **persistent per-unit chip buffer** allocated once in `initialize()` (`BOUNCESZ` = one
+  68030 page; a guard panics rather than overrun). The `≥0x1000000` bounce trigger and chip-RAM
+  semantics are unchanged. Proven on the bench (kernel rebuilt with the fix, sum-r 42265):
+  the exact cross-unit repro runs clean — no panic, byte-integrity `bad=0` across all completed
+  transfers. `a2091.c.patch` applies the identical fix to the reference template (same latent
+  defect for ≥16 MB buffers); **build-validated only** — a2091 is not exercised on the current
+  bench (no emulated A2091 card). Both apply cleanly to stock Amix 2.1 and cross-compile clean.
+  (Note: this corrects a real latent aliasing defect; how much it vs. the concurrent 8 MB
+  bench under-provisioning drove any specific originally-observed crash is entangled — the fix
+  is correct on its own terms and the cross-unit repro is clean with it.)
+
 ## 2026-07-10
 
 - **kernel-patches: `a3091.c.patch` — chip-mem DMA bounce for the A3000
