@@ -6,7 +6,7 @@
 IP=192.0.2.39
 MASK=255.255.255.0
 GW=192.0.2.1
-MAJOR=48
+MAJOR=51
 
 # 1. device node (persists on the on-disk root -- only needed once)
 [ -c /dev/zen0 ] || mknod /dev/zen0 c $MAJOR 0
