@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-08
+
+- **kernel-patches: start-queue lifecycle fixed across disconnect/reselect — `a3091.c.patch` +
+  `a2091.c.patch` revised** (`be2f5e3`). Latent since STOCK in both WD33C93 drivers (a2091.c is
+  the template); found 2026-08-07 by instruction-level analysis during the P5.4 cdfs root-cause
+  hunt. DFA case 2 requeues a preempted unit on the start queue and falls into case 3, which
+  resumes it WITHOUT unlinking — the drained unit's stale queue link survives and the next
+  `startany()` derefs a NULL `comhead` → garbage `device->sac` → wild DMA. Second shape found
+  en route: `uqueue()`'s unconditional `up->next = 0` truncates the queue when re-linking an
+  already-linked unit. Fix (both drivers, lockstep): new `unqueue()` on reselect-resume restores
+  "linked on the start queue XOR active on the chip"; `uqueue()` refuses to double-link;
+  `startany()` skips drained entries. Disjoint from the 07-21 per-unit bounce fix. Validated:
+  `-F0` clean vs both stock trees, warning-parity cross-compile, relsim 0, **bench-smoke --deep
+  PASS 7/7** through the patched-a3091 root path (doubling as the 07-21 regression proof), and
+  the July repro's cross-unit dd+cp soak clean (10/10 sums identical, no panic). No before-arm
+  repro (the interleave is not deterministically forceable on the bench) — structural argument +
+  clean after-arm. kpatch re-applies automatically via the content-derived revision stamp. Metal
+  A3000 re-run owed whenever such a session happens.
+
 ## 2026-07-21
 
 - **kernel-patches: per-unit DMA bounce state — `a3091.c.patch` rewritten + `a2091.c.patch`
