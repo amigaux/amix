@@ -1,5 +1,9 @@
-Make the A2091 card's chip-mem DMA bounce PER-UNIT, closing the same
-cross-unit-reselect aliasing that a3091.c.patch fixes on the A3000.
+Two fixes to the A2091 card driver, amiga/alien/a2091.c, keeping it in
+lockstep with a3091.c.patch: make the chip-mem DMA bounce PER-UNIT, closing
+the same cross-unit-reselect aliasing (first section), and repair the start-
+queue lifecycle across disconnect/reselect (second section).
+
+FIRST fix -- per-unit chip-mem DMA bounce:
 
 amiga/alien/a2091.c drives the A2091/A590 DMAC (rev. D) + WD33C93.  Like the
 A3000, its DMAC cannot reach Fast RAM at or above 0x1000000, so a caller buffer
@@ -48,11 +52,39 @@ bounce; a `if (cp->tc > BOUNCESZ) panic` guard fails loud rather than
 overrunning.  The `>= 0x1000000` trigger and chip-RAM semantics are unchanged;
 buffers below it still go direct (up->chipaddr = 0).
 
+SECOND fix -- start-queue lifecycle across disconnect/reselect (the same
+defect fixed in a3091.c.patch, which inherited this driver's DFA skeleton;
+found 2026-08-07 by instruction-level analysis of the a3091 interrupt path,
+then confirmed here line-for-line):
+
+Each card keeps a queue of units waiting to be (re)started (cp->starthead/
+starttail, linked through unit.next).  service() case 2 -- a reselection
+arriving while another unit's select-and-transfer is still STARTING --
+correctly requeues the preempted unit (uqueue) and falls into case 3 to resume
+the reselecting unit; but case 3 resumes `cp->units[reg(SI)]` WITHOUT removing
+it from the start queue, and nothing else ever does.  If SI resolves to a unit
+still linked there -- in particular the very unit case 2 just requeued -- that
+unit is simultaneously ACTIVE (curunitp, RESUMING) and QUEUED; when its command
+chain drains (case 0, no successor), the stale link survives and the next
+startany() pops it: `rp = up->comhead` == 0, the CDB is fetched through the
+null pointer and `dp->sac` is computed from garbage -- a wild DMA.  uqueue()'s
+unconditional `up->next = 0` adds a second shape: re-linking an already-linked
+unit truncates the queue and strands every unit behind it.  Only real
+disconnect/reselect traffic (concurrent multi-unit I/O) can reach this.
+
+Fix (identical to a3091.c.patch, parameterized by card): unqueue(cp, up) on the
+reselect-resume path restores the invariant "linked on the start queue XOR
+active on the chip" (no-op for the normal disconnected-unqueued reselector);
+uqueue() refuses to double-link (new unit.onq membership flag); startany()
+skips a popped entry whose comhead has drained instead of dereferencing it.
+Normal-path behavior, the resume sequence (CP=0x44, saved tc0/1/2) and the
+per-unit bounce state above are all untouched.
+
 NOTE: the current bench has no emulated A2091 card, so unlike a3091.c this change
 is BUILD-VALIDATED ONLY (cross-compiles clean; not exercised on hardware).  It is
 included because a2091.c is the reference template a3091.c derives from and it
-carries the identical bug for >=16 MB buffers; keeping the two in lockstep avoids
-a latent trap for anyone who runs Amix on a real A2091/A590.
+carries the identical bugs; keeping the two in lockstep avoids a latent trap for
+anyone who runs Amix on a real A2091/A590.
 
 Apply against a stock Amix 2.1 source tree:
     cd /usr/sys && patch -p0 < a2091.c.patch      # target: amiga/alien/a2091.c
@@ -62,7 +94,7 @@ Apply against a stock Amix 2.1 source tree:
 @@ -12,6 +12,15 @@
  #include	"rico.h"
  #include	"sd.h"
-
+ 
 +/*
 + * Largest transfer that can reach the chip-mem bounce path (a caller buffer at
 + * or above 0x1000000).  amiga_dma_pageio() chunks all block/raw disk & tape
@@ -72,20 +104,21 @@ Apply against a stock Amix 2.1 source tree:
 + */
 +#define	BOUNCESZ	0x1000		/* NBPP: one 68030 page */
 +
-
+ 
  struct device {
  	uchar		xxxxxxx0[0x40];
-@@ -69,6 +78,9 @@
+@@ -69,6 +78,10 @@
  	uchar		tc0,
  			tc1,
  			tc2;
 +	ushort		*bounce,	/* persistent MEMF_CHIP bounce buffer */
 +			*chipaddr;	/* == bounce while a bounced DMA runs, else 0 */
 +	uint		dma_tc;		/* byte count of this unit's bounced DMA */
++	bool		onq;		/* linked on the card's start queue */
  };
  struct card {
  	volatile struct device	*device;
-@@ -79,7 +91,6 @@
+@@ -79,7 +92,6 @@
  	uint		istate,
  			tc,
  			startcom;
@@ -93,7 +126,83 @@ Apply against a stock Amix 2.1 source tree:
  	bool		initialized;
  	char		xxxxxxxx[30];
  };
-@@ -356,15 +367,19 @@
+@@ -179,6 +191,9 @@
+ volatile struct unit	*up;
+ {
+ 
++	if (up->onq)			/* already linked: re-linking would */
++		return;			/* clobber ->next and truncate the queue */
++	up->onq = TRUE;
+ 	up->next = 0;
+ 	if (cp->starthead) {
+ 		cp->starttail->next = up;
+@@ -192,6 +207,36 @@
+ }
+ 
+ 
++/*
++ * Unlink a unit from the card's start queue if it is on it.  Called on the
++ * reselect-resume path (case 3): a unit that case 2 just requeued can be
++ * the very unit now reselecting, and resuming it while it stays linked
++ * lets a later startany() restart it after its command chain has drained
++ * (comhead == 0 -> CDB fetched through a null pointer, wild DMA address).
++ */
++static
++unqueue( cp, up)
++volatile struct card	*cp;
++volatile struct unit	*up;
++{
++	volatile struct unit	*p;
++
++	unless (up->onq)
++		return;
++	up->onq = FALSE;
++	if (cp->starthead == up)
++		cp->starthead = up->next;
++	else
++		for (p = cp->starthead; p; p = p->next)
++			if (p->next == up) {
++				unless (p->next = up->next)
++					cp->starttail = p;
++				break;
++			}
++	up->next = 0;
++}
++
++
+ static
+ startany( cp)
+ volatile struct card	*cp;
+@@ -201,11 +246,16 @@
+ 	volatile struct device	*dp;
+ 	uint		i;
+ 
+-	unless ((cp->istate == IDLE)
+-	and (up = cp->starthead))
++	unless (cp->istate == IDLE)
+ 		return;
+-	cp->starthead = up->next;
+-	rp = up->comhead;
++	for (;;) {			/* skip entries drained while queued */
++		unless (up = cp->starthead)
++			return;
++		cp->starthead = up->next;
++		up->onq = FALSE;
++		if (rp = up->comhead)
++			break;
++	}
+ 	cp->curunitp = up;
+ 	dp = cp->device;
+ 	for (i=0; i<nel( rp->cdb); ++i)
+@@ -270,6 +320,7 @@
+ 		uqueue( cp, cp->curunitp);
+ 	case 3:
+ 		up = &cp->units[reg( dp, SI)&SDUNITS-1];
++		unqueue( cp, up);	/* resuming: it must not stay startable */
+ 		unless (rp = up->comhead) {
+ 			cp->istate = badhardware( ss, cp);
+ 			break;
+@@ -356,15 +407,19 @@
  		dp->cntr = 1<<5 | 1<<4;
  	else
  		dp->cntr = 1<<5 | 1<<4 | 1<<3;
@@ -117,8 +226,8 @@ Apply against a stock Amix 2.1 source tree:
 +	}
  	dp->st_dma = TRUE;
  }
-
-@@ -383,12 +398,15 @@
+ 
+@@ -383,12 +438,15 @@
  		;
  	dp->clr_int = TRUE;
  	dp->sp_dma = TRUE;
@@ -139,8 +248,8 @@ Apply against a stock Amix 2.1 source tree:
 +		}
  	}
  }
-
-@@ -417,6 +435,12 @@
+ 
+@@ -417,6 +475,12 @@
  	setreg( dp, CON, DM2|EDI|IDI);
  	setreg( dp, SI, ER);
  	setreg( dp, TP, 0xFF);
@@ -151,3 +260,5 @@ Apply against a stock Amix 2.1 source tree:
 +				panic( "a2091: no chip mem");
 +	}
  }
+ 
+ 
