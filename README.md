@@ -107,20 +107,39 @@ the A4091 disk. (None of these are in this repo — see Legal.) The companion
 [grimoire-amix](https://github.com/jusii/grimoire-amix) repos provide the harness; clone them as
 siblings of this repo and `set AMIX_HOST`/`AMIX_USER`/`AMIX_PASS` for your box.
 
+The sample `.uae` configs here were captured on **Amiberry 8.1.6** (`config_version=8.1.6`, line 4 of
+each file); a newer Amiberry loads them and renumbers the version when it saves.
+
 1. **Reach the box.** Files go over FTP (Amix is NFSv2-only):
-   `../amix-kerntools/tools/amixsync.py push <file>` (the path is the sibling clone). Commands go over
-   scripted telnet: `../grimoire-amix/tools/host-net/amixsh.py '<cmd>'`.
-2. **Install the driver + patch** into your Amix source tree:
-   - Push the driver as the `alien` source:
-     `amixsync.py push src/a4091-wr.c /usr/sys/amiga/alien/a4091.c`
-   - Apply the auto-detection patch (idempotent — Amix 2.1 is a single frozen version, so it applies
-     cleanly; re-applying is detected and skipped):
-     ```sh
-     cd /usr/sys && patch -p0 < support.c.patch     # amiga/kernel/support.c
-     ```
-   - The `amix-kerntools` harness reads [`driver.conf`](driver.conf) and **generates** the
-     `amiga/alien/sd.c` registration rows + `sdcardbase()` and the `alien` Makefile `OBJ` entries —
-     you do not write those by hand.
+   `../amix-kerntools/tools/amixsync.py push <local> <remote>` (the path is the sibling clone).
+   Push a whole directory in one call where you can — each invocation is a fresh FTP login and Amix's
+   `inetd` terminates any `nowait` service after 40 logins in 60 s, so a shell loop over 40+ files
+   kills port 21 for ten minutes. Commands go over scripted telnet:
+   `../grimoire-amix/tools/host-net/amixsh.py '<cmd>'`.
+2. **Install the driver + patches** into your Amix source tree. The `amix-kerntools` harness does all
+   of this for you and is the supported path:
+   - it stages the driver source named in [`driver.conf`](driver.conf) as `amiga/alien/a4091.c`, and
+     **generates** the `amiga/alien/sd.c` registration rows + `sdcardbase()` and the `alien` Makefile
+     `OBJ` entries — you do not write those by hand;
+   - it applies **every** patch in [`src/kernel-patches/`](src/kernel-patches/) through its `kpatch`
+     pipeline (see `amix-kerntools/kernel-patches.conf`): verify-then-apply against a vendored
+     pristine stock tree, with a content-derived revision stamp per patch, so a patch that has been
+     *revised* is re-applied rather than skipped as already-present.
+
+   **Manual fallback** (no harness — you then also write the `sd.c` rows and Makefile `OBJ` entries
+   yourself). All four patches are `patch -p0` diffs against stock Amix 2.1; Amix 2.1 is a single
+   frozen version, so they apply cleanly:
+   ```sh
+   amixsync.py push src/a4091-wr.c /usr/sys/amiga/alien/a4091.c
+   cd /usr/sys
+   patch -p0 < support.c.patch    # amiga/kernel/support.c
+   patch -p0 < scsi.c.patch       # amiga/alien/scsi.c
+   patch -p0 < a3091.c.patch      # amiga/alien/a3091.c
+   patch -p0 < a2091.c.patch      # amiga/alien/a2091.c
+   ```
+   Apply **all four**, not just the auto-detection one: `a3091.c.patch` is not optional on a machine
+   with an A3000 internal controller — without it, concurrent I/O to two SCSI targets can copy a DMA
+   bounce buffer back over the wrong unit's memory.
 3. **Build a clean kernel** — never trust a single `make`; the `amix-kerntools` clean-gate relinks until
    the output checksum recurs (== the clean kernel) to defeat the `D245` boot-breaker.
 4. **Install onto a throwaway/clone disk's boot partition** — *never* `make install` onto your working
@@ -170,8 +189,9 @@ A4000 + A4091.
 Amix, its HDF/ADF disk images, Kickstart ROMs and manuals are **proprietary Commodore software**
 (abandonware, not licensed for redistribution) and are **not** included here — the relevant paths are
 git-ignored. You must supply your own legally-obtained copies. The kernel changes are shipped as
-**patches** against the stock Amix source, so this repo contains only the original contribution, not
-Commodore/AT&T source. The A4091 autoboot ROM and the `ncr53cxxx` SCRIPTS assembler come from the
+**patches** against the stock Amix source, so this repo contains the original contribution plus only
+the minimal diff context a patch needs in order to apply — no stock Amix source file is reproduced
+here. The A4091 autoboot ROM and the `ncr53cxxx` SCRIPTS assembler come from the
 open-source [a4091-software](https://github.com/A4091/a4091-software) project.
 
 The original code in this repository (driver, patches, tooling, SCRIPTS) is the author's own work and is
