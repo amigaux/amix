@@ -1,8 +1,15 @@
+# A4091 / 53C710 research notes — archived 2026-06
+
+Five research passes (register map, init sequence, SCRIPTS encodings, the AmigaOS ROM cold-boot crash,
+and the reference build tooling), concatenated below under `# ===== SECTION =====` banners and kept
+verbatim for their derivations and their file:line citations into the `a4091-software` firmware and
+NetBSD `siop`. They were written against the `src/a4091.c` detection driver and landed here on
+2026-06-04 (`f219049`), so they address that driver in the second person; everything the register-map
+pass proposes for it was superseded by the production driver
+[`src/a4091-wr.c`](../src/a4091-wr.c). Read this as background, not as instructions.
 
 
 # ===== REGISTER_MAP =====
-
-I have everything needed. Here is the deliverable.
 
 ---
 
@@ -492,8 +499,6 @@ INQUIRY data byte 0 low 5 bits = peripheral device type (0x00 = direct-access di
 
 # ===== ROM_BOOTCRASH =====
 
-I have a complete analysis. Here is the deliverable.
-
 ---
 
 # A4091 cold-boot crash analysis: Guru `0xD2454C41`, Task `0x07803248`
@@ -560,8 +565,6 @@ Key file refs: `rom.S:171-191` (mouse skip), `rom.S:199-227` (/CDH probe → no_
 
 
 # ===== BUILD_TOOLS =====
-
-I have everything. Here is the deliverable.
 
 ---
 
