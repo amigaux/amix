@@ -16,7 +16,6 @@ amiberry.cd_path=/path/to/Amiberry/CDROMs/
 ; host-specific
 amiberry.middle_mouse=true
 amiberry.soundcard=0
-amiberry.soundcardname=AD104 High Definition Audio Controller Digital Stereo (HDMI)
 amiberry.expansion_gui_page=a4091
 ; common
 use_gui=no
