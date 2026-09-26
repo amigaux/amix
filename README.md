@@ -91,6 +91,7 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
 | [`tools/`](tools/) | Host-side test tooling: `bisect-boot.sh`, `gsio-test.sh`, `gsio-wtest.sh`, `measure-corruption.sh`, `parse_rdb.py`. |
 | [`docs/`](docs/) | The 53C710 register / SCRIPTS reference. |
 | `*.uae` | Sample Amiberry configs for the A3000/ECS, A4000/AGA and build environments (edit the placeholder paths). |
+| [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) | MIT licence for the original work; `NOTICE` lists the third-party material and its provenance (stock Amix patch context, NetBSD `ncr53cxxx` output, `a4091-software`). |
 | `hdf/`, `tmp/`, `build/`, ROMs | **git-ignored** — proprietary disk images, ROMs and scratch (see Legal). |
 
 The build harness, clean-gate, the FTP/telnet bridges and the golden build image live in the companion
@@ -186,16 +187,23 @@ A4000 + A4091.
 
 ## Legal
 
-Amix, its HDF/ADF disk images, Kickstart ROMs and manuals are **proprietary Commodore software**
-(abandonware, not licensed for redistribution) and are **not** included here — the relevant paths are
-git-ignored. You must supply your own legally-obtained copies. The kernel changes are shipped as
-**patches** against the stock Amix source, so this repo contains the original contribution plus only
-the minimal diff context a patch needs in order to apply — no stock Amix source file is reproduced
-here. The A4091 autoboot ROM and the `ncr53cxxx` SCRIPTS assembler come from the
-open-source [a4091-software](https://github.com/A4091/a4091-software) project.
+Amix (Commodore Amiga UNIX, System V Release 4 2.1), its HDF/ADF disk images, Kickstart ROMs and
+manuals are **proprietary Commodore software**. On 2026-09-19 (confirmed by email on 2026-09-23) Mike
+Battilana, CEO of Amiga Corporation, approved this project distributing the Commodore Amiga
+binaries, and the project owner rules that this lifts the earlier restriction on releasing Amiga UNIX
+material (recorded in the Amix workspace `CLAUDE.md`, section "Licensing outcome (owner,
+2026-09-23)"). This repository still ships no disk images, ROMs or manuals — those paths stay
+git-ignored, so supply your own copies. The kernel changes are shipped as **patches** against the
+stock Amix source, so no stock Amix source file is reproduced here: the four patches carry only the
+minimal stock context a patch needs in order to apply — 135 unchanged context lines plus the 25 stock
+lines they replace, 160 verbatim lines in all. That stock text is Commodore- and AT&T/USL-derived, is
+redistributed under the 2026-09-23 approval, and is **not** covered by this repository's MIT licence.
+The A4091 autoboot ROM and the `ncr53cxxx` SCRIPTS assembler come from the open-source
+[a4091-software](https://github.com/A4091/a4091-software) project, under its own licences. Every
+third-party provenance is listed in [`NOTICE`](NOTICE).
 
-The original code in this repository (driver, patches, tooling, SCRIPTS) is the author's own work and is
-released under the **MIT License** — see [`LICENSE`](LICENSE).
+The original code in this repository (driver, the added lines of the patches, tooling, SCRIPTS) is the
+author's own work and is released under the **MIT License** — see [`LICENSE`](LICENSE).
 
 ## Credits
 
