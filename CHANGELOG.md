@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-26
+
+- **Legal + NOTICE: the Amix release restriction is lifted** (`2008597`). README no longer describes
+  Amix as unlicensed abandonware; it records Amiga Corporation's approval (Mike Battilana, 2026-09-19,
+  confirmed 2026-09-23) and the owner's ruling. The four patches carry 160 verbatim stock lines (135
+  context + 25 replaced), Commodore/AT&T-USL-derived and not under this repo's MIT licence. New
+  `NOTICE` lists the four provenances: the MIT original work, the stock patch context, the NetBSD
+  ncr53cxxx notice behind `reference/scripts/*.out`, and the per-file licences of the git-ignored
+  a4091-software checkout. Before any push: the README's citation of the workspace CLAUDE.md is
+  replaced by the amigaux.org disclaimer page.
+
 ## 2026-09-01
 
 - **docs: README, `reference/a4091-study.md` and the sample configs brought up to the shipped
