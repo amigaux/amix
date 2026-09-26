@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-01
+
+- **docs: README, `reference/a4091-study.md` and the sample configs brought up to the shipped
+  state** (`bf389b5`, `75938db`, `486f602`, `1de3759`). README's last content commit was `fd7c852`
+  (2026-07-08) — one day before the first of four undocumented kernel-patch changes landed — so it
+  under-reported the repo in four ways, all now fixed. `src/kernel-patches/` ships **four** patches,
+  not two: `a3091.c.patch` (`e70c1d7`) and `a2091.c.patch` (`791a117`) were invisible in the layout
+  table and are now listed with their targets and with the fact that they fix latent defects in
+  **stock** Amix. "What works" stopped at the 2026-06-05 universal-kernel milestone and now covers
+  the tape DATA_IN phase-mismatch / filemark recovery (`e2976aa`), the GSIO iobuf 1 KB → 64 KB
+  enlargement that unblocked the cdfs optical reads (`fd7c852`), the two stock-driver WD33C93 fixes
+  (`791a117`, `be2f5e3`), and A4092/A4770 support, which shipped in `0a0b436` but was never claimed
+  anywhere a reader would see it. Build & run step 2 told the reader to hand-apply exactly **one**
+  patch, so anyone following it under-patched their kernel and inherited the a3091 cross-unit
+  DMA-bounce defect; it now describes the amix-kerntools kpatch pipeline that applies all four
+  (verify-then-apply against a vendored pristine stock tree, content-derived revision stamps) and
+  keeps a labelled hand-apply fallback listing all four target paths. Smaller corrections:
+  `amixsync.py push` takes `<local> <remote>`, not one argument; the Status table gains CD/optical,
+  tape and A3000-multi-target rows; the closing paragraph describes the two-register anti-alias
+  probe instead of its superseded single-register form; the Amiberry version the sample configs were
+  captured on (8.1.6) is stated for the first time; and Legal now reads "the original contribution
+  plus only the minimal diff context a patch needs" — the four patches carry ~152 verbatim stock
+  context lines, so the old absolute claim was falsifiable in thirty seconds.
+  `reference/a4091-study.md` gains a header framing it as archived 2026-06 research notes written
+  against the `src/a4091.c` detection driver and superseded by `a4091-wr.c`, loses its three
+  conversational preambles, and is now listed in the README layout table. The eight sample `.uae`
+  configs no longer carry `amiberry.soundcardname=AD104 …`, the capture machine's audio hardware.
+
 ## 2026-08-08
 
 - **kernel-patches: start-queue lifecycle fixed across disconnect/reselect — `a3091.c.patch` +
@@ -45,6 +73,26 @@
   (Note: this corrects a real latent aliasing defect; how much it vs. the concurrent 8 MB
   bench under-provisioning drove any specific originally-observed crash is entangled — the fix
   is correct on its own terms and the cross-unit repro is clean with it.)
+
+## 2026-07-13
+
+- **kernel-patches: `support.c.patch` — WD33C93 probe hardened against an open-bus alias**
+  (`adf3875`). The chipset-gated A3000 SCSI probe wrote 0x55 then 0xAA to the **same** WD33C93
+  register (0x02) and read each back. Amiberry's open bus at `0xDD0000` echoes writes (per-address
+  latch), so the readback always matched → false positive on ECS even with `scsi_a3000=false`. That
+  synthesized a phantom A3000 at `0xDD0000`; `sd.c` `init()`/`insert()` sorts cards by base address
+  (`0xDD0000 < 0x40000000`), pushing the A4091 to card1. The floppy install kernel's disk scan
+  (`open c6d0s0` = card0/unit6) then dispatched target 6 to the non-existent A3000 (`a3091queue`)
+  instead of the A4091, so the blank A4091 install target at SCSI id 6 (really `c14d0s0`) reported
+  **"No hard disks are attached."** Fix: a **two-register anti-alias** probe — write 0x55 to reg
+  0x02 and 0xAA to reg 0x03 through the shared data port, then re-select reg 0x02 and read. A real
+  WD33C93 keeps the registers distinct (reg2==0x55); a per-address open-bus latch holds only the
+  last write to `0xDD0043` (0xAA), so reg2 != 0x55 → absent. **Correct on metal with no metal
+  behaviour change** (A3000 detected, A4000 skipped via the VPOSR gate, A2500/ECS-without-SCSI
+  absent): it removes only the emulation false positive, so the ECS install config also resolves the
+  A4091 as card0. End-to-end validation still owed — rebuild the `fd0unix` kernel (kerntools) and
+  re-run the ECS install config. (Because this marker cannot distinguish the patch revisions, the
+  kerntools `.kprev` revision stamp is what re-establishes an old box from pristine stock.)
 
 ## 2026-07-10
 
@@ -110,3 +158,38 @@
   single ISTAT read (which assumed instantaneous target completion) with a bounded
   poll loop — needed for real-HW non-instant completion, harmless under emulation —
   and add gated 53C710-register diagnostics for tape-read debugging.
+
+## 2026-06 — initial public release
+
+The changelog itself starts at 2026-07-06 (`09f4226`); this section backfills the milestones that
+came before it, `17c635f` (2026-06-03) through `e98b997` (2026-06-24).
+
+- **Zorro III reached from an SVR4 68030 kernel** (`65b449d`, 2026-06-03). The A4091 lives at
+  physical `0x40000000`, inside the unmapped gap between the 68030's two transparent-translation
+  windows, so a stock Zorro II driver cannot touch its registers. The driver page-maps the board
+  with `sptalloc(1, PG_V, phystopfn(base), 0)` instead (`a4091-wr.c`:203-204); DMA still lands in
+  low RAM, so bus mastering is unaffected.
+- **A real 53C710 SCSI transaction, then a block device** (`f219049`, `40e4bce`, `6c1cbfd`,
+  2026-06-04). Table-indirect SCRIPTS identify the disk behind the card; then `READ(10)` end-to-end
+  to `/dev/dsk/c8d0s0` through a generic `a4091queue`; then `WRITE(10)` — one SCRIPTS program doing
+  both by dispatching on the live SCSI bus phase. `mkfs ufs` + `mount` follow (`e058037` era): the
+  A4091 disk is a fully usable Amix filesystem, files persist across boots.
+- **Root, swap and filesystem on the A4091** (`e058037`, `7299271`, 2026-06-04/05). The "can't boot
+  from the A4091" panic was a device-*dispatch* bug, not a driver bug: a phantom A3000 SCSI,
+  hardcoded whenever RAM > 7 MB, stole card 0 and sent the root read to hardware that was not there.
+  With it fixed, Amix boots to multi-user login in ~160 s including fsck, with the A3000's own SCSI
+  switched off.
+- **The D245 boot-breaker root-caused** (`7299271`, 2026-06-04). Relinking the Amix kernel under
+  emulation hits an intermittent (~70%) `ld` write corruption that Guru-Meditates the bootstrap
+  relocator — not the poll-loop bug and not the relocator bug the first two hypotheses claimed. The
+  amix-kerntools clean-gate defeats it by relinking until the output checksum recurs. This one bites
+  anyone who relinks an Amix kernel, A4091 or not.
+- **One universal auto-detecting kernel** (`1190fd2`, 2026-06-05). The same binary boots an A3000 on
+  its own WD33C93 with the A4091 coexisting as a second card, and an A4000 + A4091 with root on the
+  A4091 — a chipset gate (VPOSR) plus a WD33C93 probe in `autocon()`, not a hardcoded assumption.
+- **Public release** (`0a0b436`, `e3a3276`, `f8e0da8`, `e98b997`, 2026-06-24). MIT licence in plain
+  form so GitHub detects it; kernel changes shipped as patches only, with the `sd.c` rows and
+  Makefile `OBJ` entries generated by kerntools from `driver.conf` rather than shipped; private lab
+  data scrubbed and the lab notebook untracked; and `driver.conf` gains the A4092 (`0xc0de0001`) and
+  A4770 (`0xc0de0002`) identities beside the A4091's `0x02020054`, answering the A4092 developer's
+  2026-06-22 request.
