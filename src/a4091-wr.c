@@ -33,7 +33,7 @@
  * (sdcardbase() returns the recorded base, no 0x40000000 fallback); both pages
  * are mapped with dev_kvmap(.., 0x1000, NCS, NOSLEEP) (sptalloc would give a
  * cacheable page there); a dead window or a NULL map is a clean "no board";
- * every transfer goes through the D42 prepare/complete seam (a4091_dma040.h,
+ * every transfer goes through the D42 prepare/complete seam (a4091_dmarec.h,
  * docs/D42-CALL-SHAPE.md); a4091_bytewrite_probe (off by default) measures U77.
  *
  * Refs: reference/a4091-study.md (init recipe, SCRIPTS, DSA layout, done-detection),
@@ -46,7 +46,7 @@
 #include	"sd.h"
 #ifdef	A4091_KVA
 #include	"sys/inline.h"		/* _spl7()/splx(): the bprobe windows */
-#include	"a4091_dma040.h"	/* the D42 seam: record + prepare/complete */
+#include	"a4091_dmarec.h"	/* the D42 seam: record + prepare/complete */
 #endif
 
 #define	A4091_PROD	0x02020054	/* AutoConfig: Commodore(0x0202) product 0x54 */
@@ -222,17 +222,17 @@ extern int	bprobe();
  *                          once per card on the next I/O if poked at runtime).
  *                          OFF by default: a refused write that the line's
  *                          u_nofault pad does not catch is a panic.
- *   a4091_dma040_off       nonzero: the D42 service sees off != 0 in the record,
+ *   a4091_dma_off       nonzero: the D42 service sees off != 0 in the record,
  *                          counts, and does no cache op (DL-02's control arm).
  */
 long	a4091_bytewrite_probe = 0;
-long	a4091_dma040_off = 0;
+long	a4091_dma_off = 0;
 
 /*
  * The per-controller D42 record: owned by THIS object (D42 as amended), one per
- * sd card, filled in at attach.  Layout and field ownership: a4091_dma040.h.
+ * sd card, filled in at attach.  Layout and field ownership: a4091_dmarec.h.
  */
-struct dma040_rec	a4091_dmarec[SDCARDS];
+struct dma_rec	a4091_dmarec[SDCARDS];
 
 /*
  * Driver-side counters, kmem-readable, magic first ("A4K1").  Never panic:
@@ -242,7 +242,7 @@ struct dma040_rec	a4091_dmarec[SDCARDS];
  */
 struct a4091_kstat {
 	ulong	magic;			/* 0x41344b31 "A4K1", static                */
-	ulong	d42_linked;		/* 0 = local stubs, 1 = dma040_* linked      */
+	ulong	d42_linked;		/* 0 = local stubs, 1 = dma_* linked      */
 	ulong	nobase;			/* sdcardbase() == 0: autocon found nothing  */
 	ulong	mapfail;		/* dev_kvmap() returned NULL                 */
 	ulong	deadwin;		/* first-touch read of the 53C710 faulted    */
@@ -277,8 +277,8 @@ static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
  * says so once at attach.
  */
 static int
-dma040_prepare( r, pa, len, dir)
-struct dma040_rec	*r;
+dma_prepare( r, pa, len, dir)
+struct dma_rec	*r;
 ulong	pa, len;
 int	dir;
 {
@@ -287,8 +287,8 @@ int	dir;
 }
 
 static void
-dma040_complete( r, pa, len, dir)
-struct dma040_rec	*r;
+dma_complete( r, pa, len, dir)
+struct dma_rec	*r;
 ulong	pa, len;
 int	dir;
 {
@@ -308,16 +308,16 @@ int	card;
 ulong	pa, len;
 int	dir;
 {
-	struct dma040_rec	*r;
+	struct dma_rec	*r;
 
 	r = &a4091_dmarec[card];
 	if (len == 0) {
 		r->drv_zero++;
 		return;
 	}
-	r->off = (ulong)a4091_dma040_off;
+	r->off = (ulong)a4091_dma_off;
 	r->drv_prep++;
-	(void)dma040_prepare( r, pa, len, dir);
+	(void)dma_prepare( r, pa, len, dir);
 }
 
 static void
@@ -326,13 +326,13 @@ int	card;
 ulong	pa, len;
 int	dir;
 {
-	struct dma040_rec	*r;
+	struct dma_rec	*r;
 
 	r = &a4091_dmarec[card];
 	if (len == 0)
 		return;
 	r->drv_cmpl++;
-	dma040_complete( r, pa, len, dir);
+	dma_complete( r, pa, len, dir);
 }
 
 /*
@@ -419,7 +419,7 @@ int	card;
 {
 	long	base;
 	volatile uchar	*a, *s;
-	struct dma040_rec	*r;
+	struct dma_rec	*r;
 
 	if (a4091_nobrd[card])
 		return ENXIO;
@@ -468,11 +468,11 @@ int	card;
 
 	/* the D42 record: identity fields now, before the first transfer */
 	r = &a4091_dmarec[card];
-	r->magic   = DMA040_MAGIC;
-	r->version = DMA040_VERSION;
+	r->magic   = DMA_REC_MAGIC;
+	r->version = DMA_REC_VERSION;
 	r->ctlid   = A4091_PROD;	/* the driver family's id, not the board's */
 	r->unit    = (ulong)card;
-	r->off     = (ulong)a4091_dma040_off;
+	r->off     = (ulong)a4091_dma_off;
 
 	acfg_tbl[card] = a;
 	siop_tbl[card] = s;
@@ -618,7 +618,7 @@ struct sdcom	*cp;
 #ifdef	A4091_KVA
 	/* D42 prepare: after the DSA table is final, before the DSP write arms the
 	 * chip.  The recovery re-launch below moves no new segment: this covers it. */
-	dmadir = cp->reading ? DMA040_FROM_DEVICE : DMA040_TO_DEVICE;
+	dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	a4091_dma_prepare( (int)cp->card, (ulong)cp->addr, (ulong)cp->nbyte, dmadir);
 #endif
 

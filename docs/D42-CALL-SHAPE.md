@@ -1,6 +1,6 @@
 # D42: how the A4091 calls the DMA-coherence service
 
-Status: **proposal**, 2026-09-28. This is the text we send before the final code. Nothing here is agreed yet. The service side does not exist. The A4091 side is written against it and links with local stubs today (`src/a4091_dma040.h`, `src/a4091-wr.c` under `-DA4091_KVA`).
+Status: **agreed contract**, 2026-09-28. Names, magic, offsets, cache ops and edge policy are the port author's D42 decisions (letter 04, answering our proposal). The service side (`src/dma_cache040.s` in the port) is not written yet; the A4091 side is written against this contract and links with local stubs until it is (`src/a4091_dmarec.h`, `src/a4091-wr.c` under `-DA4091_KVA`). The port will carry the same offsets table under its `docs/contracts/`.
 
 ## The cut (D42 as amended, 2026-09-27)
 
@@ -10,14 +10,14 @@ Status: **proposal**, 2026-09-28. This is the text we send before the final code
 
 ## Entry points
 
-Plain C calling convention: arguments on the stack, right to left. `d0/d1/a0/a1` are scratch. Every other register is preserved.
+The names follow the kernel's DMA family (`dma_a3091_startdma`, `dma_cmpl_noprep`, `dma_magic`): a bare `dma_`, no `040` suffix. Plain C calling convention: arguments on the stack, right to left. `d0/d1/a0/a1` are scratch. Every other register is preserved.
 
 ```c
-int  dma040_prepare (struct dma040_rec *r, ulong pa, ulong len, int dir);
-void dma040_complete(struct dma040_rec *r, ulong pa, ulong len, int dir);
+int  dma_prepare (struct dma_rec *r, ulong pa, ulong len, int dir);
+void dma_complete(struct dma_rec *r, ulong pa, ulong len, int dir);
 
-#define DMA040_TO_DEVICE    0   /* device reads RAM  (SCSI write) */
-#define DMA040_FROM_DEVICE  1   /* device writes RAM (SCSI read)  */
+#define DMA_TO_DEVICE    0   /* device reads RAM  (SCSI write) */
+#define DMA_FROM_DEVICE  1   /* device writes RAM (SCSI read)  */
 ```
 
 Both entry points have the same contract:
@@ -28,13 +28,14 @@ Both entry points have the same contract:
 
 **`prepare`** is called after the driver has built everything the device will read, and before the write that arms the device. On the A4091 that write is `DSP`, which starts SCRIPTS.
 
-- It takes ownership of `[pa, pa+len)` and pushes the CPU's dirty lines over it.
+- It takes ownership of `[pa, pa+len)`, rounded outward to 16-byte lines, and runs `cpushl dc` then `cinvl dc` on each line (see Cache ops).
+- For `FROM_DEVICE` it counts `edge_shared` when `pa` or `pa + len` is not 16-byte aligned (see Edge lines).
 - It returns `0` when the record is `PREPARED`, and nonzero when it is not (the record is off, a segment is still owned, or the range is bad).
 - The driver arms either way. It keeps no state of its own about the result.
 
 **`complete`** is called after the device has stopped touching the segment, and before the driver's completion callback. On the A4091 that callback is `sdcom.intr`, which may re-enter the driver for the next request.
 
-- For `FROM_DEVICE` it invalidates the owned lines. For `TO_DEVICE` it does no cache op.
+- For `FROM_DEVICE` it runs `cinvl dc` over the owned lines, and nothing else: no second push of the edge lines. For `TO_DEVICE` it does no cache op.
 - It consumes the record: the state goes to `EMPTY`.
 - The `(pa, len, dir)` passed to it are the same as the ones passed to `prepare`. That lets the service count a mismatch without trusting either side.
 
@@ -42,14 +43,14 @@ Both entry points have the same contract:
 
 ## The record
 
-`struct dma040_rec` is 0x5c bytes. Every field is a longword, so the service can reach each one with `movel d16(a0)`. The offsets are the contract.
+`struct dma_rec` is **0x60** bytes. Every field is a longword, so the service can reach each one with `movel d16(a0)`. The offsets are the contract. All service fields are contiguous at `0x14..0x4c`, so one `kpeek` reads the whole service state; all driver fields are at `0x50..0x5c`.
 
 In the "who" column, D means the driver writes the field and the service only reads it. S means the service writes the field and the driver only reads it, for diagnostics.
 
 | off | field | who | meaning |
 |---|---|---|---|
-| 0x00 | `magic` | D | `0x44343252` "D42R". Static; proves the address to a kmem reader |
-| 0x04 | `version` | D | layout version, 1 |
+| 0x00 | `magic` | D | `0x444D4152` "DMAR". Static; proves the address to a kmem reader |
+| 0x04 | `version` | D | layout version, **2** (1 was the 0x5c proposal without `edge_shared`) |
 | 0x08 | `ctlid` | D | driver family: the AutoConfig id (A4091: `0x02020054`) |
 | 0x0c | `unit` | D | controller instance (sd card number) |
 | 0x10 | `off` | D | nonzero means the seam is **off**: the service counts the call, does no cache op and takes no ownership |
@@ -66,22 +67,24 @@ In the "who" column, D means the driver writes the field and the service only re
 | 0x3c | `cmpl_noprep` | S | complete with no PREPARED record: no cache op |
 | 0x40 | `cmpl_mismatch` | S | complete whose `(pa,len,dir)` differs from the owned segment: the service uses the **owned** one |
 | 0x44 | `range_ovf` | S | `pa + len` wrapped: refused, no ownership |
-| 0x48 | `off_n` | S | calls seen while `off != 0` |
-| 0x4c | `drv_prep` | D | prepare calls the driver made |
-| 0x50 | `drv_cmpl` | D | complete calls the driver made |
-| 0x54 | `drv_zero` | D | zero-length transfers: the driver made no call |
-| 0x58 | `drv_quiesce` | D | completes that followed a forced quiesce (see below) |
+| 0x48 | `edge_shared` | S | FROM_DEVICE prepares whose `pa` or `pa + len` is not on a 16-byte boundary (see Edge lines) |
+| 0x4c | `off_n` | S | calls seen while `off != 0` |
+| 0x50 | `drv_prep` | D | prepare calls the driver made |
+| 0x54 | `drv_cmpl` | D | complete calls the driver made |
+| 0x58 | `drv_zero` | D | zero-length transfers: the driver made no call |
+| 0x5c | `drv_quiesce` | D | completes that followed a forced quiesce (see below) |
 
 **Who owns the record.** The controller object owns it. The A4091 keeps one record per sd card in `a4091_dmarec[SDCARDS]`, a global the service or a kmem reader can find by name. The driver fills the identity fields (magic, version, ctlid, unit, off) at attach, before the first transfer. That is the `hat_cm_fb` registration contract: register before first use, never removed. The service never allocates or frees a record.
 
-**The off switch.** The driver copies its patchable knob `a4091_dma040_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is DL-02's control arm: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate.
+**The off switch.** The driver copies its patchable knob `a4091_dma_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is DL-02's control arm: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate.
 
 **Acceptance invariants** (read by kmem; none of them panics):
 
 - `drv_prep == drv_cmpl` (every prepare is paired).
 - With `off == 0` throughout: `prep_to + prep_from + prep_owned + range_ovf == drv_prep`, and `cmpl_to + cmpl_from + cmpl_noprep == drv_cmpl`.
 - When idle: `seq == cmpl_to + cmpl_from`.
-- `prep_owned == cmpl_noprep == cmpl_mismatch == range_ovf == 0`.
+- `prep_owned == cmpl_noprep == cmpl_mismatch == range_ovf == edge_shared == 0`.
+- `edge_shared <= prep_from` (only FROM_DEVICE prepares are counted).
 - With `off != 0`: `off_n` grows by one per call, and nothing else in the S fields moves.
 
 ## When the A4091 calls them
@@ -100,16 +103,42 @@ At most one segment is owned per record at any time. The sd layer issues one com
 
 **Direction** comes from `sdcom.reading`. `dd.c` and `ct.c` set it. GSIO (`/dev/scsi`) takes it from the caller. A GSIO read labelled as a write would get no invalidate. GSIO is at most 1 KB on the driver line.
 
-## What we ask of the service
+## Cache ops (agreed)
 
-- **Prepare by range, not whole-cache.** The pilot `cpusha dc` stays correct, since it writes dirty data back rather than discarding it. But the B2 note "the A3091 is the only host-RAM DMA owner" no longer holds with an A4091 (and the Z3660 piscsi) in the machine. A per-range `cpushl` over the owned lines is what several owners want.
-- **Invalidate after a push on the 060.** `cpushl` invalidates only with CACR.DPI clear. z3660scsi pairs every `cpushl` with a `cinvl`. U56 is whether `cpusha dc` behaves as B2 assumes with DPI clear, and our LC060 + A4091 run (MD-1) should isolate that number.
-- **Edge lines.** The service rounds the range outward to 16-byte lines. sd transfers are block-aligned. A misaligned GSIO buffer shares its edge lines with unrelated data. B2's rule (the CPU must not touch the owned rounded range until complete) holds on the A4091 path because the driver runs synchronously. Interrupt code that dirties a shared edge line mid-transfer would lose that write to the completing `cinvl`. Say whether you want the edges pushed again at complete, before the invalidate.
-- **Names.** `dma040_prepare` / `dma040_complete` / `struct dma040_rec` are placeholders. We will take whatever names and offsets you choose, and the magic, before the final code.
+- **Per range, not whole-cache.** The pilot's whole-cache `cpusha dc` was justified by "the A3091 is the only host-RAM DMA owner"; an A4091 (or the Z3660 piscsi) removes that premise. Whole-cache push was never unsafe, only imprecise. The per-range loop is the existing `cinvl` loop with `cpushl dc,(a0)` (`0xf468`). The A3091's B2 wrappers keep their `cpusha`.
+- **`cpushl` paired with `cinvl`, per line, at prepare.** Correct in all cases without depending on CACR.DPI, which the unit neither owns nor can see (exception and FP paths reload CACR):
+
+| | `cpushl` | the `cinvl` after it |
+|---|---|---|
+| 68040 | pushes and invalidates | no-op |
+| 68060, DPI clear | pushes and invalidates | no-op |
+| 68060, DPI set | pushes, line stays valid | invalidates |
+
+## Edge lines (agreed)
+
+The owned range is rounded outward to 16-byte lines. A `FROM_DEVICE` range whose `pa` or `pa + len` is not on a 16-byte boundary shares its first or last line with unrelated bytes. The 68040/060 writes a dirty line back whole, so once such a line is dirtied mid-transfer data is lost whatever complete does: `cinvl` loses the CPU's write, a re-push loses the device's freshly written bytes. **Complete therefore does not re-push.** Instead the service counts the range in `edge_shared` and the acceptance invariant requires zero, in the same family as `prep_owned`/`cmpl_noprep`/`cmpl_mismatch`/`range_ovf`: the unit names the violation rather than papering over it. Scope: `FROM_DEVICE` only; `TO_DEVICE` does no cache op at complete, so no edge arises.
+
+B2's rule still holds: the CPU must not touch the owned rounded range until complete. The A4091 driver runs synchronously, so its own code cannot; the exposure is interrupt code, or another context, writing a neighbour of the buffer.
+
+## GSIO alignment
+
+The port author asked whether GSIO can actually hand the A4091 a misaligned buffer. **Yes, and it is not the only path that does.** Sources are the Model-B sysroot the 040 arm builds against (`amix-040-060-port/build/sysroot-modelb/usr/sys/amiga/alien/`).
+
+1. **GSIO never passes a user buffer.** `scsi.c:gsioctl` copies the caller's data into a static kernel buffer and hands the driver that: `static uchar iobuf[1024]` (`scsi.c:22`), `sdcom.addr = iobuf` (`scsi.c:40`), copyin before / copyout after (`scsi.c:37`, `:51`). So user-buffer alignment is irrelevant, but:
+   - **length** is checked only as `nbyte % DMA_GRANULARITY` with `DMA_GRANULARITY 4` (`scsi.c:10`, `:32`) and `nbyte <= 1024` (`scsi.c:33`; `scsi.o` compares `#1024`). An INQUIRY of 36 bytes ends at `iobuf + 0x24`, not on a line boundary.
+   - **start**: `iobuf` sits at `.bss + 0x28` of `scsi.o` (after the static `sdcom`, 0x28 bytes; `.bss` aligned 2**2). The kernel's `.bss` is aligned 2**3 (`unix-040-fpe` relocatable), so `iobuf` is 8-aligned at best, 16-aligned only by luck of the final load address.
+   - Neighbours: the tail edge line holds `iobuf`'s own unused bytes; the head edge line (when misaligned) holds the tail of the static `sdcom` (`addr`, `nbyte`, `card`, `unit`, `intr` at +0x14..+0x27). Nothing writes those during the transfer: `gsioctl` sleeps, and the A4091 writes `cp->status`/`cp->okay` (+0x06/+0x05, a different line) only **after** `dma_complete` (`a4091-wr.c`, the `A4091_KVA` block before `(*cp->intr)(cp)`). So the edge is benign in fact, but `edge_shared` counts it.
+2. **dd's REQUEST SENSE is misaligned by layout.** `dd.c:getsense` reads 16 bytes FROM_DEVICE into `dp->sense` (`dd.c:272-280`). `sense[16]` sits at +0x34 in `struct dd` (`dd.o`: `pea %a2@(52)`), and `ddtab[SDCARDS][SDUNITS]` has a 0x44 stride (`dd.o` `.bss` 0x440 = 2 x 8 x 0x44). 0x44 is 4 mod 16, so the sense buffer's alignment cycles through four residues across units: at most one unit in four is line-aligned. The tail edge line holds the **next** unit's `state`/`bhead`/`btail`, which `ddstrategy` and `ihandle` write; for `ddtab[0][7]` that is card 1's unit 0, which another controller's completion can reach from interrupt context. This is the one real exposure found.
+3. **Block and raw I/O are aligned.** `dd.c:startio` sends `bp->b_bcount` (whole 512-byte blocks, `dd.c:255-258`). Raw character I/O does not reach the driver with user pages: `uiophysio -> breakup -> amiga_dma_pageio` (`dd.c:83`, `:137`) stages each chunk through a kernel buffer from `ngeteblk( NBPP)` (`physdsk.c:43`, copyout/copyin at `:75`, `:84`), so no user alignment reaches the driver. The start alignment of that buffer, and of buffer-cache buffers, comes from the kernel allocator and is not audited here; lengths are whole blocks.
+
+**Consequence.** As stated, `edge_shared == 0` cannot hold on this line: every sense on most units and every GSIO transfer whose length is not a multiple of 16 (INQUIRY, 36 bytes) counts. Options on our side, for the port author to choose with us:
+
+- **Driver bounce for small FROM_DEVICE ranges** (proposed): when a FROM_DEVICE range fails the 16-byte test and `len <= 1024` (GSIO's ceiling; sense is 16), the A4091 DMAs into a driver-owned, 16-aligned 1 KB buffer and copies out after `dma_complete`. The sd layer and the service contract are unchanged, `edge_shared` stays zero, the cost is a copy of at most 1 KB on paths that are never hot. Not implemented yet.
+- **Or** keep the counter as a diagnostic only and scope the zero invariant to block transfers.
 
 ## Today, until the service exists
 
 - Without `-DA4091_D42`, `a4091-wr.c` defines both entry points as **local stubs**. They do no cache maintenance and leave the service fields untouched. They count `a4091_kstat.stub_prep` / `stub_cmpl`.
 - Attach prints `D42 seam STUB (no cache maintenance)`. A stub kernel is coherent only with the data cache off, which is every emulated cell today. **It must not be taken to metal with a live data cache as a coherence candidate.**
-- With `-DA4091_D42` the object imports `dma040_prepare` and `dma040_complete`. `tools/build-a4091-040.sh --d42` gates that import set.
+- With `-DA4091_D42` the object imports `dma_prepare` and `dma_complete`. `tools/build-a4091-040.sh --d42` gates that import set.
 - A coherence verdict comes only from metal (MD-1/MD-4). The emulator shows at most a missing CPUSH/CINV, with the cache kept live (AB-03).

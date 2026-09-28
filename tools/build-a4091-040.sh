@@ -5,7 +5,7 @@
 # sdcardbase() shim, loop bound, switch rows, init hook, devkvmap040.o) is the port's PO-04
 # (relink-040-a4091.sh in amix-040-060-port); nothing here touches that repository.
 #
-#   sh tools/build-a4091-040.sh [--d42]        # --d42: import dma040_prepare/_complete
+#   sh tools/build-a4091-040.sh [--d42]        # --d42: import dma_prepare/dma_complete
 #                                              # instead of the local stubs
 # Environment (defaults in brackets):
 #   GCC_CROSS_ENV   gcc-cross-amix build/env.sh  [../gcc-cross-amix/build/env.sh]
@@ -56,7 +56,7 @@ python3 "$HERE/tools/a4091-widths.py" "$O" > /dev/null || { echo "[FAIL] widths"
 
 echo "[*] imports"
 WANT="bprobe dev_kvmap dev_kvunmap printf sdcardbase"
-[ -n "$D42" ] && WANT="bprobe dev_kvmap dev_kvunmap dma040_complete dma040_prepare printf sdcardbase"
+[ -n "$D42" ] && WANT="bprobe dev_kvmap dev_kvunmap dma_complete dma_prepare printf sdcardbase"
 GOT=$(m68k-linux-gnu-nm "$O" | awk '$1=="U"{print $2}' | sort | tr '\n' ' ' | sed 's/ $//')
 echo "    $GOT"
 [ "$GOT" = "$WANT" ] || { echo "[FAIL] imports differ from: $WANT"; exit 1; }
