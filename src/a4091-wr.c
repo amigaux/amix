@@ -21,9 +21,20 @@
  *   - SCID is a one-hot id bitmask (1<<7 = 0x80 for host id 7).
  *   - DMODE=0xE0 (burst8|FC2, A4091), DCNTL=0x00 (Zorro, CF=SCLK/2 @50MHz).
  *   - CTEST8 |= SM(0x01) bus-arbitration errata workaround (A4091-specific).
- * DMA model on Amix: kvtop()==identity (kernel VA==PA via 68030 TT0), data cache
- * off (Amiberry cpu_data_cache=false), so a static array's address is the bus
- * address the chip DMAs to -- no translation, no cache flush (matches a2091.c).
+ * DMA model on the 68030 line, AS MEASURED IN EMULATION ONLY: kvtop()==identity
+ * (kernel VA==PA via 68030 TT0), data cache off (Amiberry cpu_data_cache=false),
+ * so a static array's address is the bus address the chip DMAs to -- no
+ * translation, no cache flush (matches a2091.c).  That "no flush" holds for the
+ * 030 build under emulation; it has never run on real hardware, and it is NOT the
+ * 040/060 rule.
+ *
+ * 040/060 ARM (-DA4091_KVA, the driver line; the 030 build is byte-identical
+ * without it): the board is found only through autocon() via the sd.c rows
+ * (sdcardbase() returns the recorded base, no 0x40000000 fallback); both pages
+ * are mapped with dev_kvmap(.., 0x1000, NCS, NOSLEEP) (sptalloc would give a
+ * cacheable page there); a dead window or a NULL map is a clean "no board";
+ * every transfer goes through the D42 prepare/complete seam (a4091_dma040.h,
+ * docs/D42-CALL-SHAPE.md); a4091_bytewrite_probe (off by default) measures U77.
  *
  * Refs: reference/a4091-study.md (init recipe, SCRIPTS, DSA layout, done-detection),
  *       reference/a4091-software/siop.c + siop_script.ss (53C710 / ARCH_710).
@@ -33,6 +44,10 @@
 #include	"sys/errno.h"
 #include	"rico.h"
 #include	"sd.h"
+#ifdef	A4091_KVA
+#include	"sys/inline.h"		/* _spl7()/splx(): the bprobe windows */
+#include	"a4091_dma040.h"	/* the D42 seam: record + prepare/complete */
+#endif
 
 #define	A4091_PROD	0x02020054	/* AutoConfig: Commodore(0x0202) product 0x54 */
 #define	SIOP_OFF	0x00800000	/* 53C710 register block within the board window */
@@ -179,6 +194,296 @@ ulong	a4091_dsps;
 ulong	a4091_resid;		/* DATA_IN short-read FIFO/odd-byte residue (real HW; 0 in emu) */
 uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 
+#ifdef	A4091_KVA
+/*
+ * ---------------------------------------------------------------------------
+ * 040/060 driver-line arm.  Nothing below exists in the 030 build.
+ * ---------------------------------------------------------------------------
+ *
+ * Provided by the port's relink, not by stock AMIX:
+ *   dev_kvmap(phys, nbytes, cm, flags) / dev_kvunmap(kva, nbytes)
+ *                    -- src/devkvmap040.s; cm 0x40 = NCS, flags bit 0 = NOSLEEP.
+ *   sdcardbase(card) -- the sd.c shim PO-04 adds: the base autocon() recorded.
+ * Stock:
+ *   bprobe(addr, v)  -- one byte through u_nofault: v < 0 reads, else writes
+ *                       the low byte of v; 0 = no fault, 1 = bus error caught.
+ */
+extern char	*dev_kvmap();
+extern void	dev_kvunmap();
+extern int	bprobe();
+
+#define	A4091_CM_NCS	0x40		/* noncacheable, serialised: control registers */
+#define	A4091_NOSLEEP	1		/* runs from the boot-time sd bus scan */
+#define	A4091_MAPLEN	0x1000		/* one page each: AutoConfig page, 53C710 page */
+
+/*
+ * Patchable knobs (.data; poke the kernel image before boot, or /dev/kmem).
+ *   a4091_bytewrite_probe  nonzero: run the U77 byte-write probe at attach (and
+ *                          once per card on the next I/O if poked at runtime).
+ *                          OFF by default: a refused write that the line's
+ *                          u_nofault pad does not catch is a panic.
+ *   a4091_dma040_off       nonzero: the D42 service sees off != 0 in the record,
+ *                          counts, and does no cache op (DL-02's control arm).
+ */
+long	a4091_bytewrite_probe = 0;
+long	a4091_dma040_off = 0;
+
+/*
+ * The per-controller D42 record: owned by THIS object (D42 as amended), one per
+ * sd card, filled in at attach.  Layout and field ownership: a4091_dma040.h.
+ */
+struct dma040_rec	a4091_dmarec[SDCARDS];
+
+/*
+ * Driver-side counters, kmem-readable, magic first ("A4K1").  Never panic:
+ * every refusal on this arm lands here and in one console line.
+ *   bw_mask[card]: 0x80000000 = probe ran; bits 0-3 write fault per SCRATCH lane,
+ *                  bits 4-7 read fault, bits 8-11 read-back mismatch.
+ */
+struct a4091_kstat {
+	ulong	magic;			/* 0x41344b31 "A4K1", static                */
+	ulong	d42_linked;		/* 0 = local stubs, 1 = dma040_* linked      */
+	ulong	nobase;			/* sdcardbase() == 0: autocon found nothing  */
+	ulong	mapfail;		/* dev_kvmap() returned NULL                 */
+	ulong	deadwin;		/* first-touch read of the 53C710 faulted    */
+	ulong	attached;		/* cards mapped and accepted                 */
+	ulong	stub_prep;		/* stub prepare calls (no cache op!)         */
+	ulong	stub_cmpl;		/* stub complete calls (no cache op!)        */
+	ulong	bw_runs;		/* U77 probe runs                            */
+	ulong	bw_ok;			/* lanes written + read back equal           */
+	ulong	bw_wfault;		/* lanes whose byte WRITE faulted            */
+	ulong	bw_rfault;		/* lanes whose byte READ faulted             */
+	ulong	bw_mismatch;		/* lanes read back different                 */
+	ulong	bw_refused;		/* attaches refused on a failed probe        */
+	ulong	bw_mask[SDCARDS];	/* per card, see above                       */
+};
+struct a4091_kstat	a4091_kstat = {
+	0x41344b31,
+#ifdef	A4091_D42
+	1,
+#else
+	0,
+#endif
+};
+
+static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
+
+#ifndef	A4091_D42
+/*
+ * STUBS until the collaborator's side of the seam exists (docs/D42-CALL-SHAPE.md).
+ * They do NO cache maintenance and leave the record's service fields alone; they
+ * only count, so the call sites are exercised and visible.  A kernel carrying
+ * them is coherent only with the data cache off (every emulated cell today) and
+ * says so once at attach.
+ */
+static int
+dma040_prepare( r, pa, len, dir)
+struct dma040_rec	*r;
+ulong	pa, len;
+int	dir;
+{
+	a4091_kstat.stub_prep++;
+	return 1;			/* not PREPARED: nothing owns the segment */
+}
+
+static void
+dma040_complete( r, pa, len, dir)
+struct dma040_rec	*r;
+ulong	pa, len;
+int	dir;
+{
+	a4091_kstat.stub_cmpl++;
+}
+#endif	/* !A4091_D42 */
+
+/*
+ * The two call sites, by physical line.  sdcom.addr is physical by contract on
+ * this line; the direction is the sd client's `reading` flag (dd.c/ct.c set it,
+ * GSIO takes it from the caller).  A zero-length transfer (TEST UNIT READY) moves
+ * no data: no call, one count.
+ */
+static void
+a4091_dma_prepare( card, pa, len, dir)
+int	card;
+ulong	pa, len;
+int	dir;
+{
+	struct dma040_rec	*r;
+
+	r = &a4091_dmarec[card];
+	if (len == 0) {
+		r->drv_zero++;
+		return;
+	}
+	r->off = (ulong)a4091_dma040_off;
+	r->drv_prep++;
+	(void)dma040_prepare( r, pa, len, dir);
+}
+
+static void
+a4091_dma_complete( card, pa, len, dir)
+int	card;
+ulong	pa, len;
+int	dir;
+{
+	struct dma040_rec	*r;
+
+	r = &a4091_dmarec[card];
+	if (len == 0)
+		return;
+	r->drv_cmpl++;
+	dma040_complete( r, pa, len, dir);
+}
+
+/*
+ * One byte through bprobe's u_nofault pad.  u_nofault belongs to the u-area, and
+ * interrupt code runs on the same u-area: an interrupt taking a legitimate fault
+ * inside the window would land on OUR pad.  So the window is masked (IPL 7; a
+ * handful of instructions).  1 = the access faulted.
+ */
+static int
+a4091_probe8( a, v)
+volatile uchar	*a;
+int	v;
+{
+	int	s, f;
+
+	s = _spl7();
+	f = bprobe( (caddr_t)a, v);
+	splx( s);
+	return f;
+}
+
+/*
+ * U77 -- can this board, through this bridge, take a single-byte WRITE at an odd
+ * offset of a Zorro III register window?  ISSUE-65 (port) saw a byte write to a
+ * Zorro III register window refused at an odd address and never settled board
+ * firmware vs bridge; the 53C710 is byte-addressed and this driver writes odd
+ * registers (SCNTL0 0x03, SCID 0x07, DWT 0x39, DMODE 0x3B, ...) on every I/O.
+ * The probe writes each byte lane of SCRATCH (0x34-0x37: two even, two odd; no
+ * side effect while SCRIPTS is idle) through the write shadow, reads it back
+ * through the read side, every access through bprobe, and records the lanes.
+ * Returns the number of failed lanes.
+ */
+static int
+a4091_bwprobe( card, s)
+int	card;
+volatile uchar	*s;
+{
+	int	b, bad;
+	uchar	v, r;
+	ulong	m;
+	volatile uchar	*rd;
+
+	a4091_kstat.bw_runs++;
+	bad = 0;
+	m = 0x80000000;
+	for (b = 0; b < 4; ++b) {
+		rd = s + R_SCRATCH + b;
+		v  = (uchar)(0xA5 ^ (b << 4) ^ b);	/* distinct per lane */
+		if (a4091_probe8( rd + WRSHADOW, (int)v)) {
+			a4091_kstat.bw_wfault++;
+			m |= (ulong)1 << b;
+			bad++;
+			continue;
+		}
+		if (a4091_probe8( rd, -1)) {
+			a4091_kstat.bw_rfault++;
+			m |= (ulong)1 << (4 + b);
+			bad++;
+			continue;
+		}
+		r = *rd;
+		if (r != v) {
+			a4091_kstat.bw_mismatch++;
+			m |= (ulong)1 << (8 + b);
+			bad++;
+			continue;
+		}
+		a4091_kstat.bw_ok++;
+	}
+	a4091_kstat.bw_mask[card] = m;
+	printf("a4091: card %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n",
+	    card, 4 - bad, (int)m);
+	return bad;
+}
+
+/*
+ * First map of a card on the driver line.  0 = mapped and accepted, ENXIO = no
+ * board (latched: later calls return ENXIO without a word).  Nothing here may
+ * panic: the sd bus scan calls this for every card slot at boot.
+ */
+static int
+a4091attach( card)
+int	card;
+{
+	long	base;
+	volatile uchar	*a, *s;
+	struct dma040_rec	*r;
+
+	if (a4091_nobrd[card])
+		return ENXIO;
+
+	/* D49: autocon() via the sd.c row is the ONLY discovery; no fixed address */
+	base = (long)sdcardbase( card);
+	if (base == 0) {
+		a4091_kstat.nobase++;
+		a4091_nobrd[card] = 1;
+		printf("a4091: card %d: no board (autocon recorded no base)\n", card);
+		return ENXIO;
+	}
+
+	/* permanent NCS pages, like va2000_map_regs: never sptalloc on this line */
+	a = (volatile uchar *)dev_kvmap( base, A4091_MAPLEN, A4091_CM_NCS, A4091_NOSLEEP);
+	s = (volatile uchar *)dev_kvmap( base + SIOP_OFF, A4091_MAPLEN, A4091_CM_NCS, A4091_NOSLEEP);
+	if (a == 0 || s == 0) {
+		if (a) dev_kvunmap( (char *)a, A4091_MAPLEN);
+		if (s) dev_kvunmap( (char *)s, A4091_MAPLEN);
+		a4091_kstat.mapfail++;
+		a4091_nobrd[card] = 1;
+		printf("a4091: card %d: cannot map board at 0x%x: no board\n", card, (int)base);
+		return ENXIO;
+	}
+
+	/* first touch of the window: ISTAT (no read side effect) through u_nofault;
+	 * a dead window must degrade to "no board", not a kernel bus error (U62) */
+	if (a4091_probe8( s + R_ISTAT, -1)) {
+		dev_kvunmap( (char *)a, A4091_MAPLEN);
+		dev_kvunmap( (char *)s, A4091_MAPLEN);
+		a4091_kstat.deadwin++;
+		a4091_nobrd[card] = 1;
+		printf("a4091: card %d: bus error at 0x%x: no board\n", card, (int)(base + SIOP_OFF));
+		return ENXIO;
+	}
+
+	/* U77, before anything else writes a byte to the chip */
+	if (a4091_bytewrite_probe && a4091_bwprobe( card, s) != 0) {
+		dev_kvunmap( (char *)a, A4091_MAPLEN);
+		dev_kvunmap( (char *)s, A4091_MAPLEN);
+		a4091_kstat.bw_refused++;
+		a4091_nobrd[card] = 1;
+		printf("a4091: card %d: byte writes refused: board not usable\n", card);
+		return ENXIO;
+	}
+
+	/* the D42 record: identity fields now, before the first transfer */
+	r = &a4091_dmarec[card];
+	r->magic   = DMA040_MAGIC;
+	r->version = DMA040_VERSION;
+	r->ctlid   = A4091_PROD;	/* the driver family's id, not the board's */
+	r->unit    = (ulong)card;
+	r->off     = (ulong)a4091_dma040_off;
+
+	acfg_tbl[card] = a;
+	siop_tbl[card] = s;
+	phys_tbl[card] = base;
+	a4091_kstat.attached++;
+	printf("a4091: card %d: board at 0x%x, NCS pages, D42 seam %s\n", card, (int)base,
+	    a4091_kstat.d42_linked ? "linked" : "STUB (no cache maintenance)");
+	return 0;
+}
+#endif	/* A4091_KVA */
+
 /*
  * Map one card's two safe sub-regions (AutoConfig page + 53C710 window) into
  * kernel VA and select it as the current card.  Each card is mapped once and
@@ -196,6 +501,15 @@ int	card;
 	if (card < 0 || card >= SDCARDS)
 		return ENXIO;
 
+#ifdef	A4091_KVA
+	if (siop_tbl[card] == 0) {		/* first request for this card: attach it */
+		int	e;
+
+		if (e = a4091attach( card))
+			return e;
+	} else if (a4091_bytewrite_probe && a4091_kstat.bw_mask[card] == 0)
+		(void)a4091_bwprobe( card, siop_tbl[card]);	/* poked at runtime: record only */
+#else
 	if (siop_tbl[card] == 0) {		/* first request for this card: map it */
 		base = (long)sdcardbase( card);
 		if (base == 0)
@@ -209,6 +523,7 @@ int	card;
 		}
 		phys_tbl[card] = base;
 	}
+#endif
 
 	/* select this card as current for the RD/WR macros + SCRIPTS launch */
 	acfg = acfg_tbl[card];
@@ -265,6 +580,9 @@ struct sdcom	*cp;
 	ulong	dsps, poll;
 	uchar	istat, dstat, sstat0;
 	int	e, i, rc, target, cmdlen, recovered;
+#ifdef	A4091_KVA
+	int	dmadir;
+#endif
 
 	if (e = a4091map( cp->card)) {
 		cp->status = 0xff; cp->okay = FALSE;
@@ -296,6 +614,13 @@ struct sdcom	*cp;
 	ds.synmsglen = 1;    ds.synmsgbuf = &msg_buf[3];
 	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)cp->addr;	/* DMA -> caller buf */
 	ds.data2len = 0;     ds.data2buf  = 0;
+
+#ifdef	A4091_KVA
+	/* D42 prepare: after the DSA table is final, before the DSP write arms the
+	 * chip.  The recovery re-launch below moves no new segment: this covers it. */
+	dmadir = cp->reading ? DMA040_FROM_DEVICE : DMA040_TO_DEVICE;
+	a4091_dma_prepare( (int)cp->card, (ulong)cp->addr, (ulong)cp->nbyte, dmadir);
+#endif
 
 	/* launch */
 	recovered = 0;
@@ -460,6 +785,21 @@ struct sdcom	*cp;
 		    (int)((dsps >> 16) & 0xffff), (int)(dsps & 0xffff),
 		    status_buf[0]);
 	}
+
+#ifdef	A4091_KVA
+	/*
+	 * D42 complete: the chip must have stopped touching the segment first.  On
+	 * the poll bound (rc -2) SCRIPTS may still be running -- quiesce it (abort +
+	 * soft reset, the same sequence the next I/O starts with) AFTER the
+	 * diagnostics above have read the live state, then complete.  Always before
+	 * the sd callback, which may re-enter this driver for the next request.
+	 */
+	if (rc == -2) {
+		a4091init();
+		a4091_dmarec[cp->card].drv_quiesce++;
+	}
+	a4091_dma_complete( (int)cp->card, (ulong)cp->addr, (ulong)cp->nbyte, dmadir);
+#endif
 
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
 	cp->okay   = (rc == 0) ? TRUE : FALSE;
