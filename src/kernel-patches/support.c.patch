@@ -6,6 +6,12 @@ read VPOSR to skip the probe on AGA/A4000, and write/readback-probe the WD33C93
 on ECS/OCS A3000-class machines. This lets one kernel boot both an A3000 (own
 SCSI) and an A4000 (no built-in SCSI; root on the A4091).
 
+Chipset gate: VPOSR (0xDFF004) bits 8..14 are the Agnus/Alice id --
+0x00/0x10 OCS NTSC/PAL, 0x20/0x30 ECS PAL/NTSC, 0x22/0x23/0x32/0x33 AGA
+Alice. AGA is identified by the id's LOW NIBBLE >= 2, not by id >= 0x22
+(which would misread an NTSC ECS Agnus, 0x30, as AGA and skip an NTSC
+A3000's internal SCSI).
+
 Apply against a stock Amix 2.1 source tree:
     cd /usr/sys && patch -p0 < support.c.patch       # target: amiga/kernel/support.c
 
@@ -24,13 +30,13 @@ Apply against a stock Amix 2.1 source tree:
 +	 * detect it instead of assuming it from RAM size.  An A4000 (AGA) has
 +	 * none -- and we must NOT touch 0xDD0000 there -- so gate the probe on
 +	 * the chipset: only A3000-class (ECS/OCS) machines have it.  VPOSR bits
-+	 * 8..14 (mask LOF): AGA Alice is >= 0x22, ECS/OCS Agnus is < 0x22.
++	 * 8..14 (mask LOF) = Agnus/Alice id; AGA iff low nibble >= 2 (ids below).
 +	 */
 +	if (index==0 && (pc==0x0202F003)) {
 +		int a3kscsi = 0;
 +		unsigned short vposr = *(volatile unsigned short *)0xDFF004;
 +
-+		if ((((int)vposr >> 8) & 0x7F) < 0x22) {	/* A3000-class, not AGA/A4000 */
++		if ((((int)vposr >> 8) & 0x0F) < 2) {	/* A3000-class, not AGA/A4000 */
 +			/* Two-register anti-alias probe via the indirect SASR/SCMD
 +			 * ports (harmless scratch regs; chip is reset later). */
 +			volatile unsigned char *sasr = (unsigned char *)0xDD0041;

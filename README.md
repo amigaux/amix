@@ -187,7 +187,8 @@ each file); a newer Amiberry loads them and renumbers the version when it saves.
 | 68040/68060 arm (`-DA4091_KVA`) | 🟡 object built and gated; not booted | 🟡 pending (the metal gate MD-1) |
 
 The chipset gate reads VPOSR (always-present, bus-safe) and skips the A3000 SCSI probe entirely on an
-A4000. Where the gate *does* let the probe run, it is a **two-register anti-alias** test: write `0x55`
+A4000: AGA is identified by the Agnus/Alice id's low nibble >= 2 (ids 0x00/0x10 OCS, 0x20/0x30 ECS
+PAL/NTSC, 0x22/0x23/0x32/0x33 AGA), so an NTSC ECS Agnus (0x30) is not mistaken for AGA. Where the gate *does* let the probe run, it is a **two-register anti-alias** test: write `0x55`
 to WD33C93 register 0x02 and `0xAA` to register 0x03 through the shared data port, then re-select
 register 0x02 and read it back. A real chip keeps the two registers distinct; an emulator's
 per-address open-bus latch returns only its own last write, which is why the earlier single-register

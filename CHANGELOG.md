@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-29 — support.c.patch: AGA by the Agnus id low nibble (NTSC ECS is not AGA)
+
+The chipset gate tested `id >= 0x22`, which misread an NTSC ECS Agnus (0x30) as AGA and would skip an NTSC A3000's internal SCSI probe (losing its root). It now tests `(id & 0x0F) >= 2`. Found by Emre Bastuz's amix-gayle-ide review; the same fix landed in kerntools' W-D7 probe (KT-09b) and amix-z3660scsi (ZS-03).
+
 ## 2026-09-28 — A4-11: the 040/060 arm
 
 a4091-wr.c gains the 040/060 arm behind -DA4091_KVA (dev_kvmap NCS register pages, autocon via sdcardbase(), D42 record + local stubs, U77 byte-write probe off by default); the 030 build is byte-identical. tools/build-a4091-040.sh builds and gates the object (a4091_040.o c869795f, scan060 CLEAN, G2 2/2). docs/D42-CALL-SHAPE.md is the DMA call-shape proposal sent to the upstream port author. Built, not yet booted.
