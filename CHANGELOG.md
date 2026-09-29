@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-29 — A4-18/A4-19: the 040/060 bounce; A4-20 docs
+
+The 040/060 arm bounces any misaligned FROM_DEVICE read ≤ 1 KB (GSIO iobuf, dd sense) through a static
+16-aligned buffer and copies out after dma_complete; a longer one is refused (bounce_toolong). Counters
+bounce_n/bounce_toolong in the kstat block, magic "A4K2" (A4-18). The service is handed the bounced range with a
+length rounded up to 16 bytes and the bounce is zeroed before prepare, so edge_shared == 0 holds by construction and a
+no-data command copies out zeros (A4-19; objects stub 4641f912, --d42 e07c7619; 030 byte-identical). Docs: the 64 KB
+GSIO patch is 030-only; stock iobuf has no alignment guarantee (A4-20).
+
 ## 2026-09-29 — the D42 contract, the chipset gate, the card-order fact
 
 support.c.patch detects AGA by the Agnus id low nibble (NTSC ECS is not AGA; found by the amix-gayle-ide review). The 040/060 arm follows the D42 contract agreed upstream (`dma_prepare`/`dma_complete`, `struct dma_rec`, "DMAR", 0x60, `edge_shared`; the GSIO/sense alignment answer in docs/D42-CALL-SHAPE.md). README: root on the A4091 is an A4000 shape; on an A3000 the A4091 is card 1.
