@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-29 — the D42 contract, the chipset gate, the card-order fact
+
+support.c.patch detects AGA by the Agnus id low nibble (NTSC ECS is not AGA; found by the amix-gayle-ide review). The 040/060 arm follows the D42 contract agreed upstream (`dma_prepare`/`dma_complete`, `struct dma_rec`, "DMAR", 0x60, `edge_shared`; the GSIO/sense alignment answer in docs/D42-CALL-SHAPE.md). README: root on the A4091 is an A4000 shape; on an A3000 the A4091 is card 1.
+
 ## 2026-09-29 — support.c.patch: AGA by the Agnus id low nibble (NTSC ECS is not AGA)
 
 The chipset gate tested `id >= 0x22`, which misread an NTSC ECS Agnus (0x30) as AGA and would skip an NTSC A3000's internal SCSI probe (losing its root). It now tests `(id & 0x0F) >= 2`. Found by Emre Bastuz's amix-gayle-ide review; the same fix landed in kerntools' W-D7 probe (KT-09b) and amix-z3660scsi (ZS-03).
