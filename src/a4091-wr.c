@@ -284,6 +284,8 @@ static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
  * copy-out finishes before the sd callback can re-enter.
  */
 #define	A4091_BOUNCE_MAX	1024		/* GSIO's ceiling; sense is 16 */
+/* +16: room to start on a 16-byte line AND to round the service length up to
+ * whole lines (<= 15 + 1024 bytes used). */
 static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 
 #ifndef	A4091_D42
@@ -600,7 +602,7 @@ struct sdcom	*cp;
 	int	e, i, rc, target, cmdlen, recovered;
 #ifdef	A4091_KVA
 	int	dmadir, bounced;
-	ulong	dpa;
+	ulong	dpa, dlen;
 #endif
 
 	if (e = a4091map( cp->card)) {
@@ -614,6 +616,7 @@ struct sdcom	*cp;
 	 * FROM_DEVICE range.  TO_DEVICE never bounces (no op at complete, no edge). */
 	dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	dpa = (ulong)cp->addr;
+	dlen = (ulong)cp->nbyte;
 	bounced = 0;
 	if (dmadir == DMA_FROM_DEVICE && cp->nbyte > 0
 	    && ((dpa | (dpa + (ulong)cp->nbyte)) & 15) != 0) {
@@ -626,6 +629,24 @@ struct sdcom	*cp;
 			return TRUE;
 		}
 		dpa = ((ulong)a4091_bounce + 15) & ~(ulong)15;
+		/* Service length rounded UP to whole lines: both edges then sit on
+		 * our own aligned buffer, so edge_shared cannot count.  The SCSI
+		 * length (ds.data1len) stays the caller's.  Clear it first: the
+		 * prepare's cpushl writes the zeros back, so a command that moves
+		 * fewer bytes than asked (TUR via GSIO) copies out zeros, never a
+		 * previous command's bytes.  The exact count is not known here. */
+		dlen = ((ulong)cp->nbyte + 15) & ~(ulong)15;
+		{
+			uchar	*bz;
+			ulong	bi;
+
+			bz = (uchar *)dpa;
+			bi = 0;
+			while (bi < dlen) {
+				bz[bi] = 0;
+				bi = bi + 1;
+			}
+		}
 		bounced = 1;
 		a4091_kstat.bounce_n++;
 	}
@@ -663,7 +684,7 @@ struct sdcom	*cp;
 #ifdef	A4091_KVA
 	/* D42 prepare: after the DSA table is final, before the DSP write arms the
 	 * chip.  The recovery re-launch below moves no new segment: this covers it. */
-	a4091_dma_prepare( (int)cp->card, dpa, (ulong)cp->nbyte, dmadir);
+	a4091_dma_prepare( (int)cp->card, dpa, dlen, dmadir);
 #endif
 
 	/* launch */
@@ -842,7 +863,7 @@ struct sdcom	*cp;
 		a4091init();
 		a4091_dmarec[cp->card].drv_quiesce++;
 	}
-	a4091_dma_complete( (int)cp->card, dpa, (ulong)cp->nbyte, dmadir);
+	a4091_dma_complete( (int)cp->card, dpa, dlen, dmadir);
 	if (bounced) {			/* after complete, before the callback */
 		uchar	*bs, *bd;
 		ulong	bn;
