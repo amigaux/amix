@@ -34,7 +34,9 @@
  * are mapped with dev_kvmap(.., 0x1000, NCS, NOSLEEP) (sptalloc would give a
  * cacheable page there); a dead window or a NULL map is a clean "no board";
  * every transfer goes through the D42 prepare/complete seam (a4091_dmarec.h,
- * docs/D42-CALL-SHAPE.md); a4091_bytewrite_probe (off by default) measures U77.
+ * docs/D42-CALL-SHAPE.md); a misaligned FROM_DEVICE range of at most 1 KB is
+ * bounced through a 16-aligned driver buffer (D42 "Bounce"); a4091_bytewrite_probe
+ * (off by default) measures U77.
  *
  * Refs: reference/a4091-study.md (init recipe, SCRIPTS, DSA layout, done-detection),
  *       reference/a4091-software/siop.c + siop_script.ss (53C710 / ARCH_710).
@@ -235,13 +237,14 @@ long	a4091_dma_off = 0;
 struct dma_rec	a4091_dmarec[SDCARDS];
 
 /*
- * Driver-side counters, kmem-readable, magic first ("A4K1").  Never panic:
+ * Driver-side counters, kmem-readable, magic first ("A4K2"; "A4K1" had no bounce
+ * fields).  Never panic:
  * every refusal on this arm lands here and in one console line.
  *   bw_mask[card]: 0x80000000 = probe ran; bits 0-3 write fault per SCRATCH lane,
  *                  bits 4-7 read fault, bits 8-11 read-back mismatch.
  */
 struct a4091_kstat {
-	ulong	magic;			/* 0x41344b31 "A4K1", static                */
+	ulong	magic;			/* 0x41344b32 "A4K2", static                */
 	ulong	d42_linked;		/* 0 = local stubs, 1 = dma_* linked      */
 	ulong	nobase;			/* sdcardbase() == 0: autocon found nothing  */
 	ulong	mapfail;		/* dev_kvmap() returned NULL                 */
@@ -256,9 +259,11 @@ struct a4091_kstat {
 	ulong	bw_mismatch;		/* lanes read back different                 */
 	ulong	bw_refused;		/* attaches refused on a failed probe        */
 	ulong	bw_mask[SDCARDS];	/* per card, see above                       */
+	ulong	bounce_n;		/* FROM_DEVICE transfers bounced (misaligned) */
+	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
 };
 struct a4091_kstat	a4091_kstat = {
-	0x41344b31,
+	0x41344b32,
 #ifdef	A4091_D42
 	1,
 #else
@@ -267,6 +272,19 @@ struct a4091_kstat	a4091_kstat = {
 };
 
 static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
+
+/*
+ * The bounce (docs/D42-CALL-SHAPE.md "Bounce").  A FROM_DEVICE range whose pa or
+ * pa+len is off a 16-byte line shares an edge line with unrelated bytes; such a
+ * range (GSIO's iobuf, dd's 16-byte sense) is DMA'd here instead and copied out
+ * after dma_complete.  Static .bss in this object, never a stack buffer; its
+ * address is its bus address by the same kernel-.data identity the DSA table
+ * (&ds) already relies on.  One buffer serves every card: a4091queue runs one
+ * command at a time to completion (polled, no sleep, shared ds/cdb_buf) and the
+ * copy-out finishes before the sd callback can re-enter.
+ */
+#define	A4091_BOUNCE_MAX	1024		/* GSIO's ceiling; sense is 16 */
+static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 
 #ifndef	A4091_D42
 /*
@@ -581,7 +599,8 @@ struct sdcom	*cp;
 	uchar	istat, dstat, sstat0;
 	int	e, i, rc, target, cmdlen, recovered;
 #ifdef	A4091_KVA
-	int	dmadir;
+	int	dmadir, bounced;
+	ulong	dpa;
 #endif
 
 	if (e = a4091map( cp->card)) {
@@ -589,6 +608,28 @@ struct sdcom	*cp;
 		(*cp->intr)( cp);
 		return TRUE;
 	}
+
+#ifdef	A4091_KVA
+	/* The DMA target: the caller's buffer, or the bounce for a misaligned
+	 * FROM_DEVICE range.  TO_DEVICE never bounces (no op at complete, no edge). */
+	dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+	dpa = (ulong)cp->addr;
+	bounced = 0;
+	if (dmadir == DMA_FROM_DEVICE && cp->nbyte > 0
+	    && ((dpa | (dpa + (ulong)cp->nbyte)) & 15) != 0) {
+		if ((ulong)cp->nbyte > A4091_BOUNCE_MAX) {
+			a4091_kstat.bounce_toolong++;
+			printf("A4091 c%d: misaligned read of %d bytes refused (bounce max %d)\n",
+			    (int)cp->card, (int)cp->nbyte, A4091_BOUNCE_MAX);
+			cp->status = 0xff; cp->okay = FALSE;
+			(*cp->intr)( cp);
+			return TRUE;
+		}
+		dpa = ((ulong)a4091_bounce + 15) & ~(ulong)15;
+		bounced = 1;
+		a4091_kstat.bounce_n++;
+	}
+#endif
 
 	a4091init();
 
@@ -612,14 +653,17 @@ struct sdcom	*cp;
 	ds.msginlen = 1;     ds.msginbuf  = &msg_buf[1];
 	ds.extmsglen = 1;    ds.extmsgbuf = &msg_buf[2];
 	ds.synmsglen = 1;    ds.synmsgbuf = &msg_buf[3];
+#ifdef	A4091_KVA
+	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)dpa;	/* caller buf or bounce */
+#else
 	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)cp->addr;	/* DMA -> caller buf */
+#endif
 	ds.data2len = 0;     ds.data2buf  = 0;
 
 #ifdef	A4091_KVA
 	/* D42 prepare: after the DSA table is final, before the DSP write arms the
 	 * chip.  The recovery re-launch below moves no new segment: this covers it. */
-	dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
-	a4091_dma_prepare( (int)cp->card, (ulong)cp->addr, (ulong)cp->nbyte, dmadir);
+	a4091_dma_prepare( (int)cp->card, dpa, (ulong)cp->nbyte, dmadir);
 #endif
 
 	/* launch */
@@ -798,7 +842,19 @@ struct sdcom	*cp;
 		a4091init();
 		a4091_dmarec[cp->card].drv_quiesce++;
 	}
-	a4091_dma_complete( (int)cp->card, (ulong)cp->addr, (ulong)cp->nbyte, dmadir);
+	a4091_dma_complete( (int)cp->card, dpa, (ulong)cp->nbyte, dmadir);
+	if (bounced) {			/* after complete, before the callback */
+		uchar	*bs, *bd;
+		ulong	bn;
+
+		bs = (uchar *)dpa;
+		bd = (uchar *)cp->addr;
+		bn = 0;
+		while (bn < (ulong)cp->nbyte) {
+			bd[bn] = bs[bn];
+			bn = bn + 1;
+		}
+	}
 #endif
 
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;

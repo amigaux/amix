@@ -63,7 +63,9 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
   relink. The board is found only through `autocon()`, with no fixed-address fallback. Both register
   pages are mapped non-cacheable (`dev_kvmap`, NCS), because on that line `sptalloc()` gives a
   cacheable page. A dead window is a clean "no board". Every transfer goes through a DMA-coherence
-  seam ([`docs/D42-CALL-SHAPE.md`](docs/D42-CALL-SHAPE.md); stubs until the kernel side exists). An
+  seam ([`docs/D42-CALL-SHAPE.md`](docs/D42-CALL-SHAPE.md); stubs until the kernel side exists). A
+  misaligned read of at most 1 KB (GSIO's buffer, dd's sense) is bounced through a 16-byte-aligned
+  driver buffer so no DMA line is shared; a longer one is refused. An
   optional byte-write probe measures whether the Zorro III path accepts odd-offset byte writes. It
   is built and gated only ([`tools/build-a4091-040.sh`](tools/build-a4091-040.sh)): not yet booted.
 - ✅ **A fix for the kernel "boot-breaker"** — relinking the Amix kernel hits an intermittent (~70%)
