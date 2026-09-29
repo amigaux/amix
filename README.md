@@ -186,6 +186,8 @@ each file); a newer Amiberry loads them and renumbers the version when it saves.
 | A4092 / A4770 boards | 🟡 code path only | 🟡 no hardware |
 | 68040/68060 arm (`-DA4091_KVA`) | 🟡 object built and gated; not booted | 🟡 pending (the metal gate MD-1) |
 
+Root on the A4091 is an A4000 (AGA) shape. On an A3000 the internal SCSI is detected as card 0 and the A4091 is card 1 (`c14d0`..), so a `c6d0s1` root kernel cannot mount root there; boot the A3000 from its own SCSI.
+
 The chipset gate reads VPOSR (always-present, bus-safe) and skips the A3000 SCSI probe entirely on an
 A4000: AGA is identified by the Agnus/Alice id's low nibble >= 2 (ids 0x00/0x10 OCS, 0x20/0x30 ECS
 PAL/NTSC, 0x22/0x23/0x32/0x33 AGA), so an NTSC ECS Agnus (0x30) is not mistaken for AGA. Where the gate *does* let the probe run, it is a **two-register anti-alias** test: write `0x55`
