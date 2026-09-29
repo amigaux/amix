@@ -67,7 +67,11 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
   misaligned read of at most 1 KB (GSIO's buffer, dd's sense) is bounced through a 16-byte-aligned
   driver buffer so no DMA line is shared (the coherence service gets the length rounded up to
   whole lines; the buffer is cleared first, so a short or empty transfer copies out zeros, never
-  stale bytes); a longer one is refused. An
+  stale bytes); a longer one is refused. The 64 KB GSIO buffer of `scsi.c.patch` is only in
+  the 030 links that include this repo; the 040/060 port relinks the stock `scsi.o` (`iobuf[1024]`),
+  so the 1 KB bounce limit and the 64 KB buffer never meet in one kernel (by build recipe, not
+  design). Stock `iobuf` has no alignment by construction: measured 4 mod 16 in the shipped KD060-Z,
+  8 in the p15 D42 link, 0 in p16/p17, so the bounce covers a real case. An
   optional byte-write probe measures whether the Zorro III path accepts odd-offset byte writes. It
   is built and gated only ([`tools/build-a4091-040.sh`](tools/build-a4091-040.sh)): not yet booted.
 - ✅ **A fix for the kernel "boot-breaker"** — relinking the Amix kernel hits an intermittent (~70%)
