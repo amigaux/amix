@@ -566,8 +566,8 @@ int	card;
 
 /*
  * 53C710 soft reset + minimal polled-mode init (subset of siopreset, siop.c:800-826).
- * No SCSI/DMA interrupts (we poll).  No bus reset / 250ms settle for the emulated
- * target -- add them if SELECT times out on real hardware.
+ * No SCSI/DMA interrupts (we poll).  The SCSI bus reset is a4091_busreset(), once
+ * per card (A4-22).
  */
 static void
 a4091init()
@@ -590,6 +590,80 @@ a4091init()
 	{ uchar i = RD8(R_ISTAT);			/* clear stale latched ints */
 	  if (i & ISTAT_SIP) (void)RD8(R_SSTAT0);
 	  if (i & ISTAT_DIP) (void)RD8(R_DSTAT); }
+}
+
+/*
+ * SCSI bus reset, once per card, before its first command (A4-22).  The board's
+ * AmigaOS ROM may have negotiated synchronous transfer with a target (A4091/A4092
+ * DIP SW6 Off); a target keeps that agreement until a bus reset, while this
+ * driver always runs asynchronous (SXFER never written, no SDTR).  The soft reset
+ * in a4091init() resets the chip only, not the bus.
+ *
+ * Timed by the beam counter, not a CPU loop: the high byte of VHPOSR (0xDFF006)
+ * changes once per scanline (63.5 us NTSC, 64 us PAL) on every CPU, while the
+ * stock drv_usecwait is a dbf loop sized for the 030.  RST is held for 2 line
+ * changes (>= 1 full line, > the 25 us minimum), then 4000 line changes give
+ * >= 254 ms (> the 250 ms reset-to-selection time).  Each wait is bounded in
+ * reads so a stuck counter cannot hang the boot (a4091_busreset_to counts it).
+ * The first command to each target afterwards gets CHECK CONDITION / UNIT
+ * ATTENTION (6/29): dd senses and retries once (one "blk" console line), ct's
+ * open starts with REQUEST SENSE, GSIO returns status 2 once to its caller.
+ *   a4091_busreset     patchable; 0 skips the reset (the pre-A4-22 behaviour)
+ *   a4091_busreset_n   resets done;  a4091_busreset_to  line waits that timed out
+ */
+#define	SCNTL1_ESR	0x20		/* enable selection/reselection */
+#define	SCNTL1_RST	0x08		/* assert SCSI RST (siopreg.h:278) */
+#define	VHPOSR		0xDFF006	/* custom: V7..V0 in the high byte */
+#define	RST_HOLD_LINES	2
+#define	RST_SETTLE_LINES 4000
+#define	LINE_READ_BOUND	200000		/* reads per line change before giving up */
+
+long	a4091_busreset = 1;
+ulong	a4091_busreset_n;
+ulong	a4091_busreset_to;
+static uchar	a4091_rstdone[SDCARDS];
+
+static void
+a4091_lines( n)
+ulong	n;
+{
+	ulong	seen, reads;
+	uchar	v, w;
+
+	seen = 0;
+	v = (uchar)(*(volatile ushort *)VHPOSR >> 8);
+	while (seen < n) {
+		reads = 0;
+		w = v;
+		while (w == v && reads < LINE_READ_BOUND) {
+			w = (uchar)(*(volatile ushort *)VHPOSR >> 8);
+			reads = reads + 1;
+		}
+		if (w == v) {
+			a4091_busreset_to++;
+			return;
+		}
+		v = w;
+		seen = seen + 1;
+	}
+}
+
+static void
+a4091_busreset_card( card)
+int	card;
+{
+	a4091_rstdone[card] = 1;
+	if (!a4091_busreset)
+		return;
+	a4091init();
+	WR8( R_SCNTL1, SCNTL1_ESR | SCNTL1_RST);
+	a4091_lines( (ulong)RST_HOLD_LINES);
+	WR8( R_SCNTL1, SCNTL1_ESR);
+	a4091_lines( (ulong)RST_SETTLE_LINES);
+	{ uchar i = RD8(R_ISTAT);			/* the RST raised SSTAT0 RST */
+	  if (i & ISTAT_SIP) (void)RD8(R_SSTAT0);
+	  if (i & ISTAT_DIP) (void)RD8(R_DSTAT); }
+	a4091_busreset_n++;
 }
 
 /*
@@ -622,6 +696,8 @@ struct sdcom	*cp;
 		(*cp->intr)( cp);
 		return TRUE;
 	}
+	if (!a4091_rstdone[cp->card])
+		a4091_busreset_card( (int)cp->card);
 
 #ifdef	A4091_KVA
 	/* The DMA target: the caller's buffer, or the bounce for a misaligned
