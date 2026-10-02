@@ -118,7 +118,23 @@ stalled on a hung cycle, not just on "the wrong chip".
      preset 5 (A4kOS323, no NCR init): a hang there means the init is what opens the window.
   Record per read: address, width, answered/hung, value, plus the Kickstart, the preset and the scsi.device version.
 - **Open lead for bringing auto-detection back: Gary's bus-timeout registers `$DE0000`/`$DE0001`** (from the Z3660
-  station). On the A3000 these are documented as timeout enable and mode. The questions:
+  station).
+  - **The model:** WinUAE/Amiberry `gayle.cpp` `mbres_write`/`mbres_read` and `memory.cpp` `gary_nonrange`/`dummy_put`.
+    This is an emulator's behavioural model, not Commodore documentation [S-emu].
+    - `$DE0001` bit 7 = **TOENB**: an access to a Gary "non-range" address raises a bus error. The non-range includes
+      `$DD0000`-`$DDFFFF`.
+    - `$DE0000` bit 7 = **TIMEOUT**: a wait/DSACK-timeout mode.
+    - `$DE0002` bit 7 = COLDBOOT.
+    - The low 7 bits read 1.
+  - **The A4000D matches that read-back** [M, Bench 3a, BenchOS, byte reads]: `$DE0000` = `FF` then `7F`, and
+    `$DE0001` = `7F` `7F`, so TOENB = 0 and the timeout is off. Both reads terminated with no fault.
+  - **The cell (3b), on the A4000D:**
+    1. Write `$DE0001` = `0x80` (TOENB on) immediately before ONE byte read of `$DD0000`. Nothing else runs in
+       between.
+    2. Expect either a bus-error Guru (80000002), meaning the lead works and the probe could use it, or a hang,
+       meaning it does not.
+    3. A reset clears TOENB in the model. Power-cycle either way.
+  The questions:
   - Do the A4000D's motherboard chips and the ReAmiga 4000T implement a timeout for `$D80000`-`$DFFFFF`?
   - If so, does enabling it around the probe (enable, G1, restore) turn a dead `$DD` window into a fault that
     `bprobe` catches?

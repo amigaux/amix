@@ -172,19 +172,24 @@ What the first metal runs show, and what they do not:
   is in kvseg (`0x402BD000`-`0x40363000`, `b_bufsize` 8192). kvseg pages are managed RAM, so their leaf PTEs get
   `hat_cm_ram` (0x20, copyback) through the HAT's cache-class selector (port hat040.s `Lcm_sel`: segu → NC, no page
   → NCS, else `hat_cm_ram`). The staging buffer **is** copyback-cached.
-- **The likely reason instead: eviction** [I]. The counters give 2 KB per segment (68 MiB / 34,816), so each
-  `read()` was a single chunk. Every request took a fresh buffer from the free list, which rotates through at least
-  18 × 8 KB, far more than the 060's 8 KB data cache. By the time a buffer came round again, its lines were long
-  evicted. No buffer was ever DMA'd into while it still held lines from its previous copyout.
-- **The read-only discriminator: force reuse inside one request.** Use `dd bs=64k` with the seam off. Each `read()`
-  then runs many chunks through the **same** staging buffer, with a copyout between DMAs, so stale lines are likely
-  to be hit. A mismatch against host truth means the seam is load-bearing on the raw read path. A clean result, with
-  the seam-on run also clean, would point at something other than eviction.
+- **Not eviction either.** The control arm's 32 MiB passes used `dd bs=64k`, so each `read()` ran 32 × 2 KB chunks
+  through the **same** staging buffer, with a copyout between DMAs. 2 KB of source plus 2 KB of destination fits an
+  8 KB 4-way cache with nothing evicted, so stale lines should have been hit. They were not.
+- **The answer: hardware snooping on the Z3660** [S, Z3660 `CPLD/DMA _WIP/z3660.vhd:459`]:
+  `nSNOOP <= '0' when DMA_BUSY='1' or nBG_ARM='0'`. The DMA_WIP CPLD (jed 222B6735, both boxes) asserts the 060's
+  SNOOP input on every Amiga-side DMA cycle into the card's memory, and on every ARM bus access. With SNOOP asserted
+  the 060 invalidates any data-cache line that an alternate master's write hits, but it does not supply dirty data
+  on an alternate master's read [I, MC68060 user's manual, bus snooping; verify]. So:
+  - **FROM_DEVICE (complete's `cinvl`) is redundant on this platform.** The hardware already does it. It is harmless
+    and stays, for accelerators without snoop.
+  - **TO_DEVICE (prepare's `cpushl`) is not covered.** Dirty lines are not supplied to the DMA read, so the push half
+    is load-bearing. Only a write cell can show it.
+  - **No raw read can discriminate here**, with a C reader or otherwise. The read half is coherent in hardware.
 - **What the seam is for on this line:** every DMA into managed RAM, since all of it is copyback through some VA. That
   covers the raw staging buffer (in kvseg), the page cache (segmap and user mmap), and anonymous pages on swap. The raw
   WRITE path is the most sensitive push-half test: copyin dirties the staging buffer microseconds before the
   TO_DEVICE DMA, so the lines are still dirty in the cache when the device reads RAM.
 - **Consequence for the claim.** These runs prove the data path and Zorro III DMA reach into the Z3660's DDR, and
   that the record stays self-consistent under copyback. They do **not** yet test coherence; the seam has not been
-  load-bearing in any metal run. The coherence verdict needs the `bs=64k` seam-off read (read-only), then a raw
-  write cell on a scratch disk, seam on vs off.
+  load-bearing in any metal run. On the Z3660 the read half is hardware-coherent (SNOOP); the verdict that
+  matters is the push half, and only a raw write cell on a scratch disk, seam on vs off, can give it.
