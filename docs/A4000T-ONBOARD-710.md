@@ -102,11 +102,14 @@ stalled on a hung cycle, not just on "the wrong chip".
     gates its decode) in a state where `+0x40` answers, then KD060-ZT = GD + "the ROM has initialised the chip",
     and G1-G3 run as written. It also keeps the boot route (b) of §6 open. **Open:** which state the ROM leaves the
     chip in, and whether a `+0x40` read answers after it (T0 variant 3).
-  - **(b) Gary's timeout lead** (below). If a probe-scoped timeout turns the hang into a fault, G1 becomes safe again
-    and auto-detection can return. The Bench measures `$DE0000`/`$DE0001` on the A4000D.
+  - **(b) Gary's timeout lead: CLOSED NEGATIVE** (below, 3b). It was meant to turn the hang into a fault, so G1
+    would be safe again. With TOENB set, the A4000D still froze on the same read.
   - **(c) No auto-detection at all.** KD060-ZT = declaration plus the ROM-initialised path only. Without an A4000T
     Kickstart that has initialised the chip, the onboard 710 is unsupported: the driver never touches it and says so
     once on the console.
+- **Design state:** (a) + (c). The board is known by declaration (GD), and its 710 is touched only after an A4000T
+  Kickstart has initialised it. T0 variant 3 decides whether even the ROM-initialised window answers. If it does not,
+  the onboard 710 is unsupported on Z3660 machines.
 - **T0 variant 3, the next run** (A4000T, preset 7, read-only, one read at a time, a hang costs a power-cycle):
   1. Boot AmigaOS on the A4000T ROM. Record that its scsi.device really ran: the resident/device list, its version,
      and the units it found if a drive is on the onboard bus (none is needed).
@@ -134,12 +137,15 @@ stalled on a hung cycle, not just on "the wrong chip".
     2. Expect either a bus-error Guru (80000002), meaning the lead works and the probe could use it, or a hang,
        meaning it does not.
     3. A reset clears TOENB in the model. Power-cycle either way.
-  The questions:
-  - Do the A4000D's motherboard chips and the ReAmiga 4000T implement a timeout for `$D80000`-`$DFFFFF`?
-  - If so, does enabling it around the probe (enable, G1, restore) turn a dead `$DD` window into a fault that
-    `bprobe` catches?
-  Until that is measured on both boxes, GD stays the first gate. A system-wide timeout change is not an option
-  either way: it would touch every slow motherboard device. Only a probe-scoped enable and restore is.
+  - **Result: CLOSED NEGATIVE on a Z3660 box** [M, Bench 3b, A4000D, BenchOS, 2026-10-02, tmp/2026-10-02-a4092-card2/gary/gary-3b.txt].
+    1. Before: `$DE0000` = `FF`, `$DE0001` = `7F` (TOENB 0).
+    2. `ddpoke $DE0001` = `$80` was written, and read back `FF` (TOENB set, per the model).
+    3. One byte read of `$DD0000` immediately after **froze the box exactly like T0**, with no Guru. It was
+       power-cycled.
+  - So even with Gary's timeout enabled, no fault reaches the 060. Either the Z3660's cycle into `$DDxxxx` never
+    reaches Gary's timeout logic, or the resulting BERR is not forwarded for local I/O. The Z3660 station's BERR
+    answer covers Zorro III via Buster; local-I/O BERR from Gary is a separate question, open with them.
+  - **Auto-detection by CPU probing of `$DD00xx` is out** on Z3660 machines.
 - **U62 still holds for Zorro III.** A dead Zorro III window gets Buster's timeout, which reaches the 060 as a
   fault, so `bprobe` catches it after about 280 ms and the attach degrades to "no board". The hang is specific to
   undecoded local I/O space.
