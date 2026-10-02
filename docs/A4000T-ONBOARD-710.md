@@ -68,14 +68,19 @@ G2 is only frozen once those four readings exist.
 | Box | Read | Result |
 |---|---|---|
 | A4000D, Z3660 (060), no 53C710 | `ddpeek-t` at `$DD0000`, first longword pass | **froze at the first read**: no reply, no network, hard power-off [M tmp/2026-10-02-a4092-card2/t0/frozen-screen.jpg]. The exact address is unnamed (the DB25 tap carries no bytes), but it is at or near `$DD0000`, before any `+0x40` register |
-| A4000T (ReAmiga), Z3660 (060), 53C710 | the same dump | **hangs** [M, Z3660 station]. Address pending a run with a working tap, then a second run starting at `$DD0040` |
+| A4000T (ReAmiga), Z3660 (060), 53C710 | the same dump | **hangs at the first read, `$00DD0000`** [M, Z3660 station trace]. An A4000D Kickstart ran in MAPROM, and no 710 driver had touched the chip. A second run starting at `$DD0040` is queued |
 
-The A4000D has no chip at `$DD0000`. The common factor is therefore the CPU path, not the 710. A motherboard cycle
-that nothing decodes should end in a bus error, and under the Z3660 it never reaches the 060 as BERR. The read
-waits forever and no fault handler can run. That matches the earlier note that "BERR is invisible" on this card [I,
-pending the Z3660 station's answer on whether the firmware/CPLD forwards BERR at all]. It also re-explains MG8: the
-stock a3091 pokes `$DD0041`/`$DD0043` on an A4000T without W-D7, and the boot stalled on a hung cycle, not just on
-"the wrong chip".
+**Mechanism** [M, Z3660 station answer, 2026-10-02]:
+- **The Z3660 CPLD does forward Amiga /BERR to the 060.** On the real-CPU path, P119 → nRBERR, and in BUSCON
+  state Z/SB it drives nTEA (P13) while the 060 owns the bus. Proof: the 2026-09-30 A4092 ROM-cycle hang came back
+  as a format-$4 access fault after Buster's Zorro III timeout of about 280 ms.
+- **The card has no cycle timeout of its own.** TERM.vhd waits for DSACK, AVEC or BERR indefinitely.
+- **So a read hangs only where the motherboard never terminates it.** Zorro III space gets Buster's timeout. Local
+  I/O space, `$D80000`-`$DFFFFF`, evidently gets none on either box, so an undecoded `$DD00xx` cycle waits forever
+  and no fault handler can run.
+
+This also re-explains MG8: the stock a3091 poked `$DD0041`/`$DD0043` on an A4000T without W-D7, and the boot
+stalled on a hung cycle, not just on "the wrong chip".
 
 **Consequences:**
 - **G1 cannot be the first gate.** `bprobe` catches a bus error; it cannot catch a cycle that never ends.
@@ -85,11 +90,16 @@ stock a3091 pokes `$DD0041`/`$DD0043` on an A4000T without W-D7, and the boot st
 - **G1-G3 still run after GD,** as a check of a declared board. They touch only `+0x40` onwards, never
   `$DD0000`-`$DD003F`, and only after the A4000T half of T0 shows that the 710 window itself answers on that board
   (reading (i) of the A4000T question). If the 710 window also hangs, A1 waits on the board, not on code.
-- **Auto-detection could come back** only if the Z3660 firmware/CPLD delivers BERR (or another bus-timeout) for an
-  undecoded motherboard cycle. That is the Z3660 station's question.
-- **The same premise sits under U62** (a dead Zorro III window degrading to "no board"). On the Z3660 a dead window
-  hangs instead. That is harmless in practice: attach probes only boards autocon reported, and a present board
-  answers (A1-dl4, 2026-10-02). But the "degrades without panic" claim holds only where BERR is delivered.
+- **Open lead for bringing auto-detection back: Gary's bus-timeout registers `$DE0000`/`$DE0001`** (from the Z3660
+  station). On the A3000 these are documented as timeout enable and mode. The questions:
+  - Do the A4000D's motherboard chips and the ReAmiga 4000T implement a timeout for `$D80000`-`$DFFFFF`?
+  - If so, does enabling it around the probe (enable, G1, restore) turn a dead `$DD` window into a fault that
+    `bprobe` catches?
+  Until that is measured on both boxes, GD stays the first gate. A system-wide timeout change is not an option
+  either way: it would touch every slow motherboard device. Only a probe-scoped enable and restore is.
+- **U62 still holds for Zorro III.** A dead Zorro III window gets Buster's timeout, which reaches the 060 as a
+  fault, so `bprobe` catches it after about 280 ms and the attach degrades to "no board". The hang is specific to
+  undecoded local I/O space.
 - **W-D7 is unaffected.** On AGA it reads only VPOSR and never touches `$DD0000`.
 
 **The phantom must not claim `$DD0000`.** That is W-D7's job and it is already a rule. Stock autocon() synthesises the
