@@ -12,12 +12,17 @@ Alice. AGA is identified by the id's LOW NIBBLE >= 2, not by id >= 0x22
 (which would misread an NTSC ECS Agnus, 0x30, as AGA and skip an NTSC
 A3000's internal SCSI).
 
+Also fixes the board search: stock autocon() compares er_Manufacturer with
+pc>>16 where pc is a signed long, so the shift sign-extends and no board with
+a manufacturer id >= 0x8000 (e.g. the A4092/A4770's 0xC0DE) is ever found.
+The shift is done unsigned.
+
 Apply against a stock Amix 2.1 source tree:
     cd /usr/sys && patch -p0 < support.c.patch       # target: amiga/kernel/support.c
 
---- amiga/kernel/support.c.orig	2026-06-24 13:06:37.503297920 +0300
-+++ amiga/kernel/support.c	2026-06-24 13:06:37.506131770 +0300
-@@ -302,9 +302,39 @@
+--- amiga/kernel/support.c.orig
++++ amiga/kernel/support.c
+@@ -302,16 +302,49 @@
  {
  	register int i;
  
@@ -60,3 +65,14 @@ Apply against a stock Amix 2.1 source tree:
  	}
  
  	/*
+ 	 * Search the autoconfig table for the specified board.
+ 	 */
+ 	for (i=0; i<NAUTO; ++i) {
+-		if (bootinfo.autocon[i].er_Manufacturer != (pc>>16))
++		/* pc is a signed long: a plain pc>>16 sign-extends, so stock
++		 * autocon never matched a manufacturer id >= 0x8000 (e.g. the
++		 * A4092's 0xC0DE).  Shift it unsigned. */
++		if (bootinfo.autocon[i].er_Manufacturer != ((unsigned long)pc>>16))
+ 			continue;
+ 		if (bootinfo.autocon[i].er_Product != (pc&0xffff))
+ 			continue;
