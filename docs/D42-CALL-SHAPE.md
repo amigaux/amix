@@ -167,14 +167,24 @@ What the first metal runs show, and what they do not:
   request through ONE buffer from `ngeteblk(NBPP)` (= `getfreeblk`, a buffer-cache buffer). It DMAs into it, then
   copyouts from its kernel VA, chunk after chunk. A copyback-cached VA would hand chunk N+1 chunk N's lines. 32 MiB
   host-true with the seam off therefore says that VA is not cached.
-- **The likely reason** [I, to be confirmed by a read of `bfreelist`]: the buffer's kernel VA is below 1 GB, inside
-  DTT0 (`0x003fc060`: logical 0-1 GB, S = 10 = both modes, CM = cache-inhibited; pstart040.s). `hat_cm_ram` only
-  governs PTE-mapped VAs: kernel region 1 (`0x40000000`-`0x7FFFFFFF`: kvseg, segmap) and user space (from
-  `0x80000000`).
-- **What the seam is for on this line, then:** DMA into a physical page that the CPU also reaches through a high VA.
-  That means the page cache (UFS page-in/page-out: segmap and user mmap), anonymous pages on swap, and anything else
-  `B_PAGEIO`. The A4092's only disk holds AmigaOS, so none of that has run through this driver yet.
+- **Why it did not fail. The first guess was wrong.** The guess was that the buffer's VA lies in DTT0's uncached
+  identity window. C1 (a `bfreelist` walk on the running kernel, 2026-10-02) refutes it: every free buffer's `b_addr`
+  is in kvseg (`0x402BD000`-`0x40363000`, `b_bufsize` 8192). kvseg pages are managed RAM, so their leaf PTEs get
+  `hat_cm_ram` (0x20, copyback) through the HAT's cache-class selector (port hat040.s `Lcm_sel`: segu → NC, no page
+  → NCS, else `hat_cm_ram`). The staging buffer **is** copyback-cached.
+- **The likely reason instead: eviction** [I]. The counters give 2 KB per segment (68 MiB / 34,816), so each
+  `read()` was a single chunk. Every request took a fresh buffer from the free list, which rotates through at least
+  18 × 8 KB, far more than the 060's 8 KB data cache. By the time a buffer came round again, its lines were long
+  evicted. No buffer was ever DMA'd into while it still held lines from its previous copyout.
+- **The read-only discriminator: force reuse inside one request.** Use `dd bs=64k` with the seam off. Each `read()`
+  then runs many chunks through the **same** staging buffer, with a copyout between DMAs, so stale lines are likely
+  to be hit. A mismatch against host truth means the seam is load-bearing on the raw read path. A clean result, with
+  the seam-on run also clean, would point at something other than eviction.
+- **What the seam is for on this line:** every DMA into managed RAM, since all of it is copyback through some VA. That
+  covers the raw staging buffer (in kvseg), the page cache (segmap and user mmap), and anonymous pages on swap. The raw
+  WRITE path is the most sensitive push-half test: copyin dirties the staging buffer microseconds before the
+  TO_DEVICE DMA, so the lines are still dirty in the cache when the device reads RAM.
 - **Consequence for the claim.** These runs prove the data path and Zorro III DMA reach into the Z3660's DDR, and
   that the record stays self-consistent under copyback. They do **not** yet test coherence; the seam has not been
-  load-bearing in any metal run. The coherence verdict needs the page-cache cell on a scratch UFS (write half first:
-  CPU-dirtied page-cache pages written out by DMA, seam on vs off).
+  load-bearing in any metal run. The coherence verdict needs the `bs=64k` seam-off read (read-only), then a raw
+  write cell on a scratch disk, seam on vs off.
