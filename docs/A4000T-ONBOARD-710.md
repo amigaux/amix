@@ -63,6 +63,35 @@ The thresholds in G2 are **calibrated, not guessed**. Cell T0 (§9) dumps `$DD00
 A4000D and on the A4000T under AmigaOS, and Amiberry gives the A4000 / A4000T / three `unmapped_address_space` rows.
 G2 is only frozen once those four readings exist.
 
+### T0 result (2026-10-02): the G1 premise fails under the Z3660
+
+| Box | Read | Result |
+|---|---|---|
+| A4000D, Z3660 (060), no 53C710 | `ddpeek-t` at `$DD0000`, first longword pass | **froze at the first read**: no reply, no network, hard power-off [M tmp/2026-10-02-a4092-card2/t0/frozen-screen.jpg]. The exact address is unnamed (the DB25 tap carries no bytes), but it is at or near `$DD0000`, before any `+0x40` register |
+| A4000T (ReAmiga), Z3660 (060), 53C710 | the same dump | **hangs** [M, Z3660 station]. Address pending a run with a working tap, then a second run starting at `$DD0040` |
+
+The A4000D has no chip at `$DD0000`. The common factor is therefore the CPU path, not the 710. A motherboard cycle
+that nothing decodes should end in a bus error, and under the Z3660 it never reaches the 060 as BERR. The read
+waits forever and no fault handler can run. That matches the earlier note that "BERR is invisible" on this card [I,
+pending the Z3660 station's answer on whether the firmware/CPLD forwards BERR at all]. It also re-explains MG8: the
+stock a3091 pokes `$DD0041`/`$DD0043` on an A4000T without W-D7, and the boot stalled on a hung cycle, not just on
+"the wrong chip".
+
+**Consequences:**
+- **G1 cannot be the first gate.** `bprobe` catches a bus error; it cannot catch a cycle that never ends.
+- **New gate GD, presence by declaration, before G1.** The kernel touches `$DD00xx` only when the build says the
+  board is an A4000T. That means a patchable `.data` knob, `a4091_a4kt` (default 0), set to 1 only by the
+  KD060-ZT / A4000T media stamp (kerntools). Without it, `a4ktpresent()` returns "absent" without a single access.
+- **G1-G3 still run after GD,** as a check of a declared board. They touch only `+0x40` onwards, never
+  `$DD0000`-`$DD003F`, and only after the A4000T half of T0 shows that the 710 window itself answers on that board
+  (reading (i) of the A4000T question). If the 710 window also hangs, A1 waits on the board, not on code.
+- **Auto-detection could come back** only if the Z3660 firmware/CPLD delivers BERR (or another bus-timeout) for an
+  undecoded motherboard cycle. That is the Z3660 station's question.
+- **The same premise sits under U62** (a dead Zorro III window degrading to "no board"). On the Z3660 a dead window
+  hangs instead. That is harmless in practice: attach probes only boards autocon reported, and a present board
+  answers (A1-dl4, 2026-10-02). But the "degrades without panic" claim holds only where BERR is delivered.
+- **W-D7 is unaffected.** On AGA it reads only VPOSR and never touches `$DD0000`.
+
 **The phantom must not claim `$DD0000`.** That is W-D7's job and it is already a rule. Stock autocon() synthesises the
 A3000 SDMAC at `$DD0000` (id `0x0202F003`) unless the support.c probe rejects it. On an A4000T without W-D7, the stock
 a3091 then pokes the 710's address space and the boot stalls [M review/D-1 2026-09-28 MG8, 2/2 cold boots]. W-D7 skips
@@ -81,8 +110,8 @@ The onboard 710 is not an AutoConfig board, so it reuses the **Gayle IDE glue pa
 
 - `a4kt_sd_rows`: the base's table with every existing row (by relocation), plus **one row** carrying an id no board
   has. I propose `0x0710a400`.
-- `a4kt_sd_glue040.s` wraps init()'s single `jsr autocon`. That id is answered by `a4ktpresent(&base)`, the G0-G3
-  probe, which lives **in the a4091 object**. Every other id goes to autocon unchanged.
+- `a4kt_sd_glue040.s` wraps init()'s single `jsr autocon`. That id is answered by `a4ktpresent(&base)`, the GD + G0-G3
+  gates (§2), which live **in the a4091 object**. Every other id goes to autocon unchanged.
 - **Sort key, not bus address.** As with `ide_sd_key`, the glue hands insert() a rank:
   - default `0xffffffe0`: sorts after every real board and before IDE's `0xfffffff0`. So the **Z3660 stays card 0
     and the onboard 710 is card 1**, the shape the brief asks for.
@@ -179,7 +208,7 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 | N12a probe matrix | A4000T config / A4000 AGA config / A3000 ECS / A4000 under the three `unmapped_address_space` settings | found / absent with no fault / G0 skip with the A3000 SCSI boot undisturbed (the DL-08 shape) / absent on all three |
 | N12b data | A4000T + 060 (+ R-060Z Z3660 for card 0) | GSIO INQUIRY then READ(10), raw dd and a UFS tree equal to host truth, D42 invariants, Z3660 = card 0 and 710 = card 1; the key-0 variant roots on the 710 as card 0 |
 | N12c order | the A4092 + 710 rows; the chained IDE + 710 glue | the drop rule as §3 predicts; both glue ids answer |
-| T0 metal | A4000D and A4000T under AmigaOS | read-only dump of `$DD0000`-`$DD00FF`, which calibrates G2 |
+| T0 metal | A4000D and A4000T under AmigaOS | read-only dump of `$DD0000`-`$DD00FF`. **A4000D: hang at first touch; A4000T: hang, address pending** (§2, T0 result). Next: the A4000T from `$DD0040`, with a working tap |
 | T1 metal | A4000T, KD060-ZT, Z3660 root, ZuluSCSI on the onboard bus | attach line, probe answer, data equal to host truth |
 | T2 metal | as T1, copyback (`hat_cm_ram 0x20`) | coherence digest for the motherboard-master path into `$08xxxxxx` |
 | T3 metal | A4000T Kickstart with scsi.device (or `scsi710.kick`) | route (b): root on the onboard bus |
@@ -196,7 +225,7 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 
 **Total: M-L, about 4-5 station-days**, matching P-15 K5.
 
-The critical path is T0 (calibrates G2), then the a4091 code, then the port glue, then kerntools, then N12, then
+The critical path is T0 (now: does the A4000T's 710 window answer from `$DD0040`, and does the Z3660 deliver BERR at all), then the a4091 code, then the port glue, then kerntools, then N12, then
 T1-T3.
 
 **Open owner decisions:**
