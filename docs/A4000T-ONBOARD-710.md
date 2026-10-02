@@ -70,12 +70,31 @@ G2 is only frozen once those four readings exist.
 | A4000D, Z3660 (060), no 53C710 | `ddpeek-t` at `$DD0000`, first longword pass | **froze at the first read**: no reply, no network, hard power-off [M tmp/2026-10-02-a4092-card2/t0/frozen-screen.jpg]. The exact address is unnamed (the DB25 tap carries no bytes), but it is at or near `$DD0000`, before any `+0x40` register |
 | A4000T (ReAmiga), Z3660 (060), 53C710, run 1 | the same dump | **hangs at the first read, `$00DD0000`** [M, Z3660 station trace] |
 | A4000T, run 2 | `ddpeek-t2` starting at `$DD0040` (longword, the 710 register base), after Bench-Halt | **hangs at the first read, `$00DD0040`** [M, tmp/2026-10-02-t0-dd0000/]. No address answered in either run |
+| A4000T, variant 3 | bench OS on Kickstart A4000T 47.115 (`.d6`) + the normal `kick060_scsi` shim, so `NCR scsi.device 47.4` ran (no device on the onboard bus). After Bench-Halt: table-driven supervisor reads, byte and long, each DB25-traced first, no writes | **all 21 reads answered**, zero faults, box up [M, tmp/2026-10-02-t0-dd0000/v3-table.md] |
 
-On both A4000T runs the Kickstart was A4kOS323, the A4000D ROM in MAPROM, with no NCR scsi.device. The bench OS
-loads none either, so nothing had initialised the chip. **On the ReAmiga 4000T, the uninitialised onboard 710 window
-does not answer CPU reads at all, not even at `+0x40`.** Possible causes [I]: the chip or its bus interface held in
-reset or not decoded until a driver sets it up; a longword-width problem; or an open build item on the board. The
-next T0 variant (below) separates the first from the other two.
+In runs 1 and 2 the Kickstart was A4kOS323, the A4000D ROM in MAPROM, with no NCR scsi.device, and the bench OS
+loads none either. **So on the ReAmiga 4000T the onboard 710 window hangs while uninitialised, and answers byte and
+longword reads once the A4000T ROM's NCR driver has initialised it** (variant 3). Reading (ii) holds, and it is the
+init that opens the window. Width is not the problem (iii is ruled out).
+
+**Variant 3 values** (the first real-chip calibration of G2; register names per our A4091 map, which this dump
+confirms):
+
+| Read | Value | Reading |
+|---|---|---|
+| ISTAT `$DD0062` (byte) | `00` | idle, reserved bits clear |
+| DSTAT `$DD004F` (byte) | `80` | DFE: DMA FIFO empty |
+| CTEST8 `$DD0061` (byte) | `20` | chip revision 2 |
+| SSTAT0 `$DD004E` (byte) | `00` | |
+| SCRATCH `$DD0074` (long) | `00000000` | |
+| `$DD0040` (long) | `AF4020D4` | SIEN `AF` (**left enabled**), SDID `40`, SCNTL1 `20`, SCNTL0 `D4` |
+| `$DD0044` (long) | `00000080` | SCID `80` = host ID 7 |
+| `$DD0050` / `$DD005C` | `0800BF38` / `0800BFE8` | DSA / TEMP point into Z3660 RAM (`0x0800xxxx`) |
+| `$DD0064` / `$DD006C` | `54000000` / `0800C274` | DCMD:DBC / DSP: SCRIPTS in Z3660 RAM |
+| `$DD0070` | `00000468` | DSPS |
+| `$DD0078` (long) | `21003DE0` | DCNTL `21` (**EA set**, as §1 says), DWT `00`, DIEN `3D` (**left enabled**), DMODE `E0` |
+| `$DD0060` (long) | `FFFF02FF` | differs from the byte reads of CTEST8/ISTAT (`20`/`00`). The longword read of this byte-register group is not trustworthy, or ISTAT latched between reads. **Use byte reads for byte registers**, as the driver already does (the widths gate) |
+
 
 **Mechanism** [M, Z3660 station answer, 2026-10-02]:
 - **The Z3660 CPLD does forward Amiga /BERR to the 060.** On the real-CPU path, P119 → nRBERR, and in BUSCON
@@ -107,10 +126,13 @@ stalled on a hung cycle, not just on "the wrong chip".
   - **(c) No auto-detection at all.** KD060-ZT = declaration plus the ROM-initialised path only. Without an A4000T
     Kickstart that has initialised the chip, the onboard 710 is unsupported: the driver never touches it and says so
     once on the console.
-- **Design state:** (a) + (c). The board is known by declaration (GD), and its 710 is touched only after an A4000T
-  Kickstart has initialised it. T0 variant 3 decides whether even the ROM-initialised window answers. If it does not,
-  the onboard 710 is unsupported on Z3660 machines.
-- **T0 variant 3, the next run** (A4000T, preset 7, read-only, one read at a time, a hang costs a power-cycle):
+- **Design state, after variant 3: (a) + (c), confirmed.** The presence rule is GD (declaration) **and** "the
+  A4000T ROM's NCR init has run". G1-G3 then run at `+0x40` as written, with byte reads for byte registers. Without
+  the ROM init, the onboard 710 is unsupported on Z3660 machines. The driver never touches it and says so once.
+  - **How "the ROM init has run" is known** (design choice, open): the boot loader passes it in, from AmigaOS, which
+    sees `NCR scsi.device` in its device list; or the media stamp declares it, A4000T Kickstart required. I lean to
+    the stamp plus a documented requirement. A boot-loader hand-over is port work.
+- **T0 variant 3 (done 2026-10-02, result above).** The recipe as run (with the normal `kick060_scsi` shim; `kick060_z3660scsi_noncr` would have displaced the NCR driver):
   1. Boot AmigaOS on the A4000T ROM. Record that its scsi.device really ran: the resident/device list, its version,
      and the units it found if a drive is on the onboard bus (none is needed).
   2. Read **one byte**: ISTAT at `$DD0062` (`+0x40 + 0x22`). Record answered/hung and the value.
@@ -200,8 +222,8 @@ The onboard 710 is not an AutoConfig board, so it reuses the **Gayle IDE glue pa
 
 The driver stays **polled**, like the rest of the KD line: `a4091queue` polls ISTAT under a bound, and `a4091intr`
 is empty. SIEN and DIEN stay 0. One addition: **quiesce at attach**. Write SIEN = 0 and DIEN = 0 right after G3,
-before anything else, and clear latched SIP/DIP the way a4091init already does. An A4000T Kickstart scsi.device may
-leave the 710's interrupts enabled at handover, and an unclaimed level on the 710's interrupt line would repeat until
+before anything else, and clear latched SIP/DIP the way a4091init already does. The A4000T Kickstart's NCR scsi.device **does**
+leave them enabled (variant 3: SIEN `AF`, DIEN `3D`), and an unclaimed level on the 710's interrupt line would repeat until
 the first I/O reaches a4091init. I believe that line is INT2 (PORTS) [I], but polling makes the answer irrelevant
 once the chip is quiesced. The same applies in principle to the A4091/A4092 ROM's handover [I]; it is low risk on an
 idle chip, and the metal cells will show it.
@@ -215,6 +237,8 @@ idle chip, and the metal cells will show it.
 - **The A4092 cells answer the other question** (Zorro III through Buster, A4000D), so their result does not transfer
   either way. **The onboard case needs its own coherence cell (T2).** Once the Bench station's A4092 DMA reading lands
   (tmp/2026-10-02-a4092-metal, question 2), record it next to T2 as the Buster data point.
+- **The ROM driver already aims the onboard 710 at Z3660 RAM** [M, variant 3]. DSA, TEMP and DSP hold `0x0800xxxx`.
+  Whether its DMA **lands** there is the next cell (T0b, §8), and it needs a SCSI device on the A4000T's onboard bus.
 - **The data path is unchanged.** `sdcom.addr` is physical, the 710 drives 32-bit addresses, and the D42 seam, the
   bounce and the invariants apply as on the A4092 (one record per card).
 - **Box caveat.** The A4000T is a ReAmiga reproduction with **open build items, including the stage-13 termination
@@ -268,6 +292,7 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 | N12b data | A4000T + 060 (+ R-060Z Z3660 for card 0) | GSIO INQUIRY then READ(10), raw dd and a UFS tree equal to host truth, D42 invariants, Z3660 = card 0 and 710 = card 1; the key-0 variant roots on the 710 as card 0 |
 | N12c order | the A4092 + 710 rows; the chained IDE + 710 glue | the drop rule as §3 predicts; both glue ids answer |
 | T0 metal | A4000D and A4000T under AmigaOS | read-only dump of `$DD0000`-`$DD00FF`. **A4000D: hang at first touch; A4000T: hang at `$DD0000` and at `$DD0040`, chip uninitialised** (§2, T0 result). Next: variant 3, preset 7 (A4000T ROM init), one byte at `$DD0062` |
+| T0b metal, AmigaOS | A4000T, preset with the A4000T ROM (47.115 + `kick060_scsi`), a SCSI disk on the onboard bus (owner hardware; a ZuluSCSI with a known image is ideal), termination settled | the NCR scsi.device lists the unit. Copy a known file or region off it (e.g. a 32 MiB `dd`-style read through the device, or a file whose host checksum is known) and compare with host truth. Record DSA/DNAD after the transfer (byte/long reads at `+0x40`, read-only), to see the `0x08xxxxxx` targets. **Shows: onboard-710 DMA reach into the Z3660 DDR as a motherboard master.** No Amix needed |
 | T1 metal | A4000T, KD060-ZT, Z3660 root, ZuluSCSI on the onboard bus | attach line, probe answer, data equal to host truth |
 | T2 metal | as T1, copyback (`hat_cm_ram 0x20`) | coherence digest for the motherboard-master path into `$08xxxxxx` |
 | T3 metal | A4000T Kickstart with scsi.device (or `scsi710.kick`) | route (b): root on the onboard bus |
@@ -284,7 +309,7 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 
 **Total: M-L, about 4-5 station-days**, matching P-15 K5.
 
-The critical path is T0 (now: does the A4000T's 710 window answer after the A4000T ROM's NCR init, variant 3; and Gary's timeout), then the a4091 code, then the port glue, then kerntools, then N12, then
+T0 is done (the window answers after the A4000T ROM's NCR init; Gary is closed negative). The critical path is the owner's A1 decisions, then T0b (needs onboard-bus hardware), then the a4091 code, then the port glue, then kerntools, then N12, then
 T1-T3.
 
 **Open owner decisions:**
