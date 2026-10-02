@@ -196,6 +196,18 @@ ulong	a4091_dsps;
 ulong	a4091_resid;		/* DATA_IN short-read FIFO/odd-byte residue (real HW; 0 in emu) */
 uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 
+/*
+ * "A4091 slow" console threshold, in ISTAT polls (A4-21).  Under emulation the
+ * DMA is instant (poll == 0), but on metal every command spins while the chip
+ * works, so the old poll > 0 gate printed one line per I/O.  The default is 1/8
+ * of the 8,000,000 poll bound: one Zorro III ISTAT read costs roughly 0.3-1 us,
+ * so it fires only past ~0.3-1 s, far above a healthy command (a few ms, a few
+ * thousand polls).  Patchable (.data / kmem); 0 restores the poll > 0 gate.
+ * a4091_maxpoll is the high-water poll count, kmem-readable, to calibrate it.
+ */
+ulong	a4091_slow_poll = 1000000;
+ulong	a4091_maxpoll;
+
 #ifdef	A4091_KVA
 /*
  * ---------------------------------------------------------------------------
@@ -816,16 +828,19 @@ struct sdcom	*cp;
 	a4091_rc = (uchar)rc;  a4091_dsps = dsps;
 	a4091_istat = istat;   a4091_dstat = dstat;  a4091_stat = status_buf[0];
 
+	if (poll > a4091_maxpoll)
+		a4091_maxpoll = poll;
+
 	/*
-	 * Slow/failing path ONLY (instant disk I/O -- poll==0 && rc==0 -- stays
-	 * silent so per-block disk traffic can't flood the install console).  Dump
+	 * Slow/failing path ONLY (a successful command within a4091_slow_poll
+	 * polls stays silent so per-block disk traffic can't flood the console).  Dump
 	 * the terminal 53C710 state read fresh from the chip: for the rc=-2 tape
 	 * hang (no SIP/DIP) the rc-ladder above skipped SSTAT0/DSTAT, so this is the
 	 * only look at the real DSTAT/SSTAT0/phase.  SSTAT2 low bits = SCSI phase;
 	 * DSP = terminal SCRIPTS pointer; DBC = residual DMA byte count; DSPS is the
 	 * captured value that drove rc.
 	 */
-	if (poll > 0 || rc != 0 || recovered) {
+	if (poll > a4091_slow_poll || rc != 0 || recovered) {
 		uchar	di, dd, d0, d1, d2;
 		ulong	dp, db;
 		di = RD8(R_ISTAT);
