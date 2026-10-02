@@ -153,3 +153,28 @@ The 040/060 arm (`-DA4091_KVA` only; the 030 build is byte-identical) bounces mi
 - Attach prints `D42 seam STUB (no cache maintenance)`. A stub kernel is coherent only with the data cache off, which is every emulated cell today. **It must not be taken to metal with a live data cache as a coherence candidate.**
 - With `-DA4091_D42` the object imports `dma_prepare` and `dma_complete`. `tools/build-a4091-040.sh --d42` gates that import set.
 - A coherence verdict comes only from metal (MD-1/MD-4). The emulator shows at most a missing CPUSH/CINV, with the cache kept live (AB-03).
+
+## Metal, 2026-10-02 (A4000D, Z3660 060, A4092 card 1, KD060-ZA dl4)
+
+What the first metal runs show, and what they do not:
+
+| Run | Seam | Result |
+|---|---|---|
+| A1-dl4, raw reads of LBA 0, 4 MiB and 32 MiB, two boots, copyback (`hat_cm_ram 0x20`) | on | host-true (`sum -r` identical, LBA 0 byte-identical); 38,913 + 4,097 segments, every invariant holds, `edge_shared 0` |
+| control arm, the same reads | **off** (`a4091_dma_off 1`) | **also host-true**; `off_n` = 2 × `drv_prep`, the S fields did not move |
+
+- **Why the control arm cannot fail on the raw path.** `amiga_dma_pageio` (physdsk.c) stages every chunk of a raw
+  request through ONE buffer from `ngeteblk(NBPP)` (= `getfreeblk`, a buffer-cache buffer). It DMAs into it, then
+  copyouts from its kernel VA, chunk after chunk. A copyback-cached VA would hand chunk N+1 chunk N's lines. 32 MiB
+  host-true with the seam off therefore says that VA is not cached.
+- **The likely reason** [I, to be confirmed by a read of `bfreelist`]: the buffer's kernel VA is below 1 GB, inside
+  DTT0 (`0x003fc060`: logical 0-1 GB, S = 10 = both modes, CM = cache-inhibited; pstart040.s). `hat_cm_ram` only
+  governs PTE-mapped VAs: kernel region 1 (`0x40000000`-`0x7FFFFFFF`: kvseg, segmap) and user space (from
+  `0x80000000`).
+- **What the seam is for on this line, then:** DMA into a physical page that the CPU also reaches through a high VA.
+  That means the page cache (UFS page-in/page-out: segmap and user mmap), anonymous pages on swap, and anything else
+  `B_PAGEIO`. The A4092's only disk holds AmigaOS, so none of that has run through this driver yet.
+- **Consequence for the claim.** These runs prove the data path and Zorro III DMA reach into the Z3660's DDR, and
+  that the record stays self-consistent under copyback. They do **not** yet test coherence; the seam has not been
+  load-bearing in any metal run. The coherence verdict needs the page-cache cell on a scratch UFS (write half first:
+  CPU-dirtied page-cache pages written out by DMA, seam on vs off).
