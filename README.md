@@ -12,10 +12,11 @@ A2090/A2091/A3000 drivers, and Amix boots with **root, swap and filesystem entir
 which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI at all.
 
 > Status: **proven in emulation (Amiberry) on both an A3000 (ECS) and an A4000 (AGA) profile, from one
-> kernel binary, on the 68030 line.** It has never run on real hardware. A **68040/68060 arm** for the
-> collaborator's 040/060 kernel line exists as a cross-built, gated object (2026-09-28); it has not
-> been booted yet, even in emulation. Confidence tags (✅ reproduced / 🟡 emulation-only or less) are
-> used below.
+> kernel binary, on the 68030 line.** The 68030 line has never run on real hardware. The **68040/68060 arm**
+> for the collaborator's 040/060 kernel line has: on an A4000D with a Z3660 (68060) and an A4092 as card
+> 1, it carried the root filesystem through two full boots (2026-10-03). Raw reads matched the disk image
+> with the data cache in copyback (2026-10-02). Confidence tags (✅ reproduced / 🟡 emulation-only or
+> less) are used below.
 
 ---
 
@@ -73,7 +74,7 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
   design). Stock `iobuf` has no alignment by construction: measured 4 mod 16 in the shipped KD060-Z,
   8 in the p15 D42 link, 0 in p16/p17, so the bounce covers a real case. An
   optional byte-write probe measures whether the Zorro III path accepts odd-offset byte writes. It
-  is built and gated only ([`tools/build-a4091-040.sh`](tools/build-a4091-040.sh)): not yet booted.
+  is built and gated by [`tools/build-a4091-040.sh`](tools/build-a4091-040.sh), and has run on metal (A4092, see Status). The byte-write probe is off by default and has not been run.
 - ✅ **A fix for the kernel "boot-breaker"** — relinking the Amix kernel hits an intermittent (~70%)
   `ld` write corruption that Guru-Meditates the relocator (`D245`). The build harness (in the companion
   **amix-kerntools** repo) defeats it by relinking until the output checksum is stable. This bug bites
@@ -191,8 +192,8 @@ each file); a newer Amiberry loads them and renumbers the version when it saves.
 | CD / optical read through the `/dev/scsi` GSIO passthrough | ✅ | 🟡 pending |
 | SCSI tape read, incl. the short read at a filemark | ✅ | 🟡 pending |
 | A3000 internal SCSI: concurrent multi-target I/O | ✅ | 🟡 pending |
-| A4092 / A4770 boards | 🟡 code path only | 🟡 no hardware |
-| 68040/68060 arm (`-DA4091_KVA`) | 🟡 object built and gated; not booted | 🟡 pending (the metal gate MD-1) |
+| A4092 / A4770 boards | 🟡 code path only | ✅ A4092 on the 68060 line (A4000D + Z3660): root filesystem, raw I/O equal to the disk image; A4770 untested |
+| 68040/68060 arm (`-DA4091_KVA`) | ✅ | ✅ MD-1: root on the A4092 (card 1), two boots, D42 record balanced |
 
 Root on the A4091 is an A4000 (AGA) shape. On an A3000 the internal SCSI is detected as card 0 and the A4091 is card 1 (`c14d0`..), so a `c6d0s1` root kernel cannot mount root there; boot the A3000 from its own SCSI.
 

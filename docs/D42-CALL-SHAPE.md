@@ -162,6 +162,8 @@ What the first metal runs show, and what they do not:
 |---|---|---|
 | A1-dl4, raw reads of LBA 0, 4 MiB and 32 MiB, two boots, copyback (`hat_cm_ram 0x20`) | on | host-true (`sum -r` identical, LBA 0 byte-identical); 38,913 + 4,097 segments, every invariant holds, `edge_shared 0` |
 | control arm, the same reads | **off** (`a4091_dma_off 1`) | **also host-true**; `off_n` = 2 × `drv_prep`, the S fields did not move |
+| MD-1 (2026-10-03): KD060-ZA-c1-u6, root `/dev/dsk/ced0s1` on a ZuluSCSI at id 6 behind the A4092, a full first boot and a clean second boot | on | booted to multi-user both times; prep = cmpl per arm (`0x6EB`/`0xA05`, then `0x382`/`0x7A4`), `drv_prep == drv_cmpl`, `edge_shared` and every must-be-zero counter 0, bus reset 1/0 |
+| WRITE cell 1 (2026-10-03): raw writes of a 1 MiB self-locating pattern, region 1 seam on, three regions seam off | on / **off** | all four regions byte-identical on read-back. `dd` never makes the staging buffer's lines resident before `copyin` writes them, so nothing was dirty to push. Cell 2 (a read then a write of different data per chunk, `src/d42wcell.c`) is the discriminating run |
 
 - **Why the control arm cannot fail on the raw path.** `amiga_dma_pageio` (physdsk.c) stages every chunk of a raw
   request through ONE buffer from `ngeteblk(NBPP)` (= `getfreeblk`, a buffer-cache buffer). It DMAs into it, then
