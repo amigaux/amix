@@ -163,7 +163,8 @@ What the first metal runs show, and what they do not:
 | A1-dl4, raw reads of LBA 0, 4 MiB and 32 MiB, two boots, copyback (`hat_cm_ram 0x20`) | on | host-true (`sum -r` identical, LBA 0 byte-identical); 38,913 + 4,097 segments, every invariant holds, `edge_shared 0` |
 | control arm, the same reads | **off** (`a4091_dma_off 1`) | **also host-true**; `off_n` = 2 × `drv_prep`, the S fields did not move |
 | MD-1 (2026-10-03): KD060-ZA-c1-u6, root `/dev/dsk/ced0s1` on a ZuluSCSI at id 6 behind the A4092, a full first boot and a clean second boot | on | booted to multi-user both times; prep = cmpl per arm (`0x6EB`/`0xA05`, then `0x382`/`0x7A4`), `drv_prep == drv_cmpl`, `edge_shared` and every must-be-zero counter 0, bus reset 1/0 |
-| WRITE cell 1 (2026-10-03): raw writes of a 1 MiB self-locating pattern, region 1 seam on, three regions seam off | on / **off** | all four regions byte-identical on read-back. `dd` never makes the staging buffer's lines resident before `copyin` writes them, so nothing was dirty to push. Cell 2 (a read then a write of different data per chunk, `src/d42wcell.c`) is the discriminating run |
+| WRITE cell 1 (2026-10-03): raw writes of a 1 MiB self-locating pattern, region 1 seam on, three regions seam off | on / **off** | all four regions byte-identical on read-back. `dd` never makes the staging buffer's lines resident before `copyin` writes them, so nothing was dirty to push. Cell 2 (a read then a write of different data per chunk, `src/d42wcell.c`) was to be the discriminating run |
+| WRITE cell 2, Part A (2026-10-03): read-only PTE walk of the staging buffers (`kroot040` → VA `0x402BD000` and two neighbours) | n/a | **PTE `0x0FF18019`: CM = 00, write-through** (phys `0x0FF18000`, the pool cell 1's DMA addresses landed in). Neighbours `0x0FF1B019`, `0x0FF91019`, also write-through. Part B was not run, because write-through cannot hold a dirty line |
 
 - **Why the control arm cannot fail on the raw path.** `amiga_dma_pageio` (physdsk.c) stages every chunk of a raw
   request through ONE buffer from `ngeteblk(NBPP)` (= `getfreeblk`, a buffer-cache buffer). It DMAs into it, then
@@ -171,9 +172,12 @@ What the first metal runs show, and what they do not:
   host-true with the seam off therefore says that VA is not cached.
 - **Why it did not fail. The first guess was wrong.** The guess was that the buffer's VA lies in DTT0's uncached
   identity window. C1 (a `bfreelist` walk on the running kernel, 2026-10-02) refutes it: every free buffer's `b_addr`
-  is in kvseg (`0x402BD000`-`0x40363000`, `b_bufsize` 8192). kvseg pages are managed RAM, so their leaf PTEs get
-  `hat_cm_ram` (0x20, copyback) through the HAT's cache-class selector (port hat040.s `Lcm_sel`: segu → NC, no page
-  → NCS, else `hat_cm_ram`). The staging buffer **is** copyback-cached.
+  is in kvseg (`0x402BD000`-`0x40363000`, `b_bufsize` 8192). The next guess, that kvseg pages get `hat_cm_ram`
+  (copyback), was **also wrong.** That class is applied by the HAT's leaf constructors (hat040.s `Lcm_sel`), but
+  kernel-heap pages are built by `segkmem_alloc`/`segkmem_mapin`, which **keep building CM = 00 write-through PTEs**
+  [S, port `src/segkmem040.s` header NOTE: "segkmem_alloc / segkmem_mapin leaf CONSTRUCTORS keep building CM=00
+  writethrough PTEs ... their B2 stage-class (CB) conversion ... belong to the B2 delta"]. Cell 2's Part A measured
+  exactly that (CM = 00). The staging buffer is **write-through**.
 - **Not eviction either.** The control arm's 32 MiB passes used `dd bs=64k`, so each `read()` ran 32 × 2 KB chunks
   through the **same** staging buffer, with a copyout between DMAs. 2 KB of source plus 2 KB of destination fits an
   8 KB 4-way cache with nothing evicted, so stale lines should have been hit. They were not.
@@ -187,11 +191,22 @@ What the first metal runs show, and what they do not:
   - **TO_DEVICE (prepare's `cpushl`) is not covered.** Dirty lines are not supplied to the DMA read, so the push half
     is load-bearing. Only a write cell can show it.
   - **No raw read can discriminate here**, with a C reader or otherwise. The read half is coherent in hardware.
-- **What the seam is for on this line:** every DMA into managed RAM, since all of it is copyback through some VA. That
-  covers the raw staging buffer (in kvseg), the page cache (segmap and user mmap), and anonymous pages on swap. The raw
-  WRITE path is the most sensitive push-half test: copyin dirties the staging buffer microseconds before the
-  TO_DEVICE DMA, so the lines are still dirty in the cache when the device reads RAM.
-- **Consequence for the claim.** These runs prove the data path and Zorro III DMA reach into the Z3660's DDR, and
-  that the record stays self-consistent under copyback. They do **not** yet test coherence; the seam has not been
-  load-bearing in any metal run. On the Z3660 the read half is hardware-coherent (SNOOP); the verdict that
-  matters is the push half, and only a raw write cell on a scratch disk, seam on vs off, can give it.
+- **Verdict (2026-10-03): on this port today, the seam is defensive. No A4092 path on the Z3660 needs it.**
+
+  | Path | Why it is coherent without the seam |
+  |---|---|
+  | Reads into RAM | the CPLD's SNOOP invalidates hit lines |
+  | Raw writes | the staging buffer is write-through, so RAM is already current when the 710 reads it (cell 1, and cell 2's PTE) |
+  | Page-cache I/O (B_PAGEIO) | `bp_map040.s` ends every mapin with `cpusha bc`, a whole-cache push |
+  | GSIO `iobuf` and dd sense | uncached identity memory (DTT0) |
+
+  The seam ran balanced through every run, including MD-1's root filesystem, so it costs nothing and breaks nothing.
+- **Why it stays.** It becomes load-bearing as soon as any of those conditions change:
+  - the port's planned B2 conversion of `segkmem_alloc` to copyback, which would make the raw staging buffer
+    copyback-dirty at DMA time;
+  - a narrower `bp_map` push;
+  - an accelerator without SNOOP;
+  - a 68040.
+
+  At that point it is the only thing standing between copyback and the disk. **Note for the port:** the segkmem B2
+  conversion and the D42 push half belong together.
