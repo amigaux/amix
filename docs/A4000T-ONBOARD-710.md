@@ -297,6 +297,73 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 | T2 metal | as T1, copyback (`hat_cm_ram 0x20`) | coherence digest for the motherboard-master path into `$08xxxxxx` |
 | T3 metal | A4000T Kickstart with scsi.device (or `scsi710.kick`) | route (b): root on the onboard bus |
 
+### 8a. Decoding the T0b reads (for the Z3660 station)
+
+**(1) The lane rule.** The 710 sits big-endian at `$DD0040`. A longword read at `$DD0040 + N` (N a multiple of 4)
+returns the registers at byte offsets N, N+1, N+2, N+3 in bits 31:24, 23:16, 15:8, 7:0. The 32-bit registers (DSA,
+TEMP, DNAD, DSP, DSPS, SCRATCH, ADDER) read as their natural value. Offsets are from the reference siopreg.h (ARCH_710),
+and the variant 3 dump confirms them (`$DD0044` = `00000080`: SCID `80`; `$DD0078` = `21003DE0`: DCNTL `21`,
+DIEN `3D`, DMODE `E0`).
+
+| Long at | bits 31:24 | 23:16 | 15:8 | 7:0 |
+|---|---|---|---|---|
+| `$DD0040` | SIEN | SDID | SCNTL1 | SCNTL0 |
+| `$DD0044` | SOCL | SODL | **SXFER** | SCID |
+| `$DD0048` | SBCL | SBDL | SIDL | SFBR |
+| `$DD004C` | SSTAT2 | SSTAT1 | SSTAT0 | DSTAT |
+| `$DD0050` | **DSA** (32-bit) | | | |
+| `$DD0054` | CTEST3 | CTEST2 | CTEST1 | CTEST0 |
+| `$DD0058` | CTEST7 | CTEST6 | CTEST5 | CTEST4 |
+| `$DD005C` | **TEMP** (32-bit) | | | |
+| `$DD0060` | LCRC | CTEST8 | ISTAT | DFIFO |
+| `$DD0064` | DCMD | DBC (24-bit) | | |
+| `$DD0068` | **DNAD** (32-bit) | | | |
+| `$DD006C` | **DSP** (32-bit) | | | |
+| `$DD0070` | **DSPS** (32-bit) | | | |
+| `$DD0074` | SCRATCH (32-bit) | | | |
+| `$DD0078` | DCNTL | DWT | DIEN | DMODE |
+| `$DD007C` | ADDER (32-bit) | | | |
+
+Corrections to the staged read list:
+- `$DD005C` is **TEMP**, not DNAD. DNAD is `$DD0068`.
+- `$DD006C` is **DSP**, and DSPS is `$DD0070`.
+- Read byte registers with **byte** reads; the variant 3 long at `$DD0060` disagreed with the byte reads. The 32-bit
+  registers read cleanly as longs.
+
+**(2) SXFER** (byte at `$DD0046`, or bits 15:8 of `$DD0044`). On the 710 [S siopreg.h:321-328]: bit 7 DHP, bits 6:4
+TP = sync period code, bits 3:0 MO = sync offset (maximum 8). **Offset 0 means asynchronous; a non-zero offset means
+synchronous was negotiated.** SXFER is reloaded at every selection from the driver's per-target value, so it shows
+the last selected target. With one unit on the bus, that unit.
+
+**(3) What to expect after a completed READ through the ROM driver.** Z3660 DDR here is `$08000000`-`$0FFFFFFF`
+(cpu_ram 128 MB at `$08000000`). The A4000T also has **motherboard fast RAM at `$07000000`-`$077FFFFF`**, and chip RAM
+is below `$00200000`.
+- **DSA and DSP/DSPS:** the ROM driver's command table and its RAM copy of SCRIPTS. Variant 3 already showed
+  `$0800xxxx` (DSA `0800BF38`, DSP `0800C274`, DSPS `00000468` = the last INT code). Expect DSA/DSP in the same area
+  after the run.
+- **TEMP:** the SCRIPTS call-return address, also in the SCRIPTS area.
+- **DNAD after completion is NOT the data buffer.** It is the next address of the last DMA move, usually a SCRIPTS
+  fetch or the status/message byte. In variant 3 it equalled DSP. A post-run DNAD therefore proves nothing about where
+  the data landed.
+- **Stale or garbage looks like:** `00000000` or `FFFFFFFF` in DSA/DSP after a successful transfer; addresses outside
+  any RAM (e.g. `$40xxxxxx` Zorro III, `$00Dxxxxx` I/O); lane patterns like the `$DD0060` anomaly (re-read as bytes);
+  or a DSA/DSP that does not move between two different commands, when the driver allocates per command.
+
+**(4) The pass criterion for T0b** ("onboard-710 DMA reaches the Z3660 DDR as a motherboard master"):
+1. All netdd pieces read through `scsi.device` unit 0 match the truth image `ec8d8d24…` per piece, except a piece the
+   station names in advance as liable to drift (the root block).
+2. **The data buffers were in DDR.** Sample DNAD **during** the transfer: a second task loops read-only longs at
+   `$DD0068` while netdd runs. Most of the time is data phase, so most samples are data-buffer addresses. At least
+   one, and preferably most, samples must fall in `$08000000`-`$0FFFFFFF`.
+3. DSA/DSP stay in RAM (no garbage per (3)).
+
+**The caveat, the ROM driver's bounce:** a scsi.device may DMA into its own chip-RAM or motherboard-fast-RAM buffer
+and then copy to the caller. The registers show it. Data-phase DNAD samples in `$00000000`-`$001FFFFF` (chip) or
+`$07000000`-`$077FFFFF` (motherboard fast) mean the 710 never wrote the DDR. In that case T0b is **inconclusive**,
+not failed. Rerun with netdd's buffer forced into DDR (AllocMem from the DDR range), or log netdd's buffer address,
+and check whether DNAD follows it. Also log netdd's buffer address in every run, so the samples can be matched to
+it.
+
 ## 9. Effort
 
 | Piece | Estimate |
