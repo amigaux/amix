@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-03 — A4-21/A4-22/A4-23, the A4000T onboard-710 note, D42 on metal (062e514..eaaa66f)
+
+A4-21: the "A4091 slow" print is gated on a poll threshold (a4091_slow_poll; a4091_maxpoll high-water). A4-22: one SCSI
+bus reset per card before its first command, closing the ROM-driver SYNC hazard (a4091_busreset_n/_to). A4-23: unsigned
+manufacturer shift in support.c.patch (stock autocon never matched ids >= 0x8000). Docs: the A4000T onboard-710 design
+note (T0 series: an uninitialised 53C710 window hangs the CPU under the Z3660; presence = declaration + ROM initialisation;
+T0b decoding with the lane rule, the SXFER byte and the pass criteria); D42-CALL-SHAPE metal section: the DMA_WIP CPLD
+asserts SNOOP, so DMA into Z3660 RAM is read-coherent in hardware and only the write half can show the seam; A1 GREEN on
+metal with a byte-exact 32 MiB compare against host truth and the control arm.
+
 ## 2026-09-29 — A4-18/A4-19: the 040/060 bounce; A4-20 docs
 
 The 040/060 arm bounces any misaligned FROM_DEVICE read ≤ 1 KB (GSIO iobuf, dd sense) through a static
