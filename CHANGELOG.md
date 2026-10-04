@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-04 — D42 on metal: defensive today, load-bearing after B2; d42wcell (9f6a5ab..cdfbfbb)
+
+D42 on metal: the verdict is "defensive on the Z3660 today" (SNOOP, write-through staging, bp_map push) with the
+conditions that make it load-bearing; tool src/d42wcell.c; the 68040/68060 arm carried a root filesystem on an
+A4092.
+
 ## 2026-10-03 — A4-21/A4-22/A4-23, the A4000T onboard-710 note, D42 on metal (062e514..eaaa66f)
 
 A4-21: the "A4091 slow" print is gated on a poll threshold (a4091_slow_poll; a4091_maxpoll high-water). A4-22: one SCSI
