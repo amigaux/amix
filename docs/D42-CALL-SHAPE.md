@@ -210,3 +210,11 @@ What the first metal runs show, and what they do not:
 
   At that point it is the only thing standing between copyback and the disk. **Note for the port:** the segkmem B2
   conversion and the D42 push half belong together.
+- **Accepted upstream (2026-10-04, the port author's letters 16 and 17).**
+  - The v2 record evidence (about 80k segments at version 2, invariants held) and the ISSUE-76 autocon patch are
+    recorded in the service record and the issue as accepted on our hardware, with the platform named. No run on his
+    exact tree is needed.
+  - The verdict above (snoop, write-through staging, `bp_map` push) is recorded as written, and the seam stays.
+  - `src/d42wcell.c` is the first cell to run when the segkmem B2 conversion moves.
+  - The snoop reading extends to the A3091's SDMAC: its bus grant reaches the CPU-slot card on the common net (A3000
+    schematic), so the A3091 FROM_DEVICE invalidates are defensive too.
