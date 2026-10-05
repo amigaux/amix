@@ -610,9 +610,11 @@ a4091init()
  * open starts with REQUEST SENSE, GSIO returns status 2 once to its caller.
  *   a4091_busreset     patchable; 0 skips the reset (the pre-A4-22 behaviour)
  *   a4091_busreset_n   resets done;  a4091_busreset_to  line waits that timed out
+ *   a4091_rearm_n      resets re-armed by a stuck command (see a4091queue)
  */
 #define	SCNTL1_ESR	0x20		/* enable selection/reselection */
 #define	SCNTL1_RST	0x08		/* assert SCSI RST (siopreg.h:278) */
+#define	SBCL_BSY	0x20		/* live SCSI BSY (siopreg.h:367) */
 #define	VHPOSR		0xDFF006	/* custom: V7..V0 in the high byte */
 #define	RST_HOLD_LINES	2
 #define	RST_SETTLE_LINES 4000
@@ -621,6 +623,7 @@ a4091init()
 long	a4091_busreset = 1;
 ulong	a4091_busreset_n;
 ulong	a4091_busreset_to;
+ulong	a4091_rearm_n;
 static uchar	a4091_rstdone[SDCARDS];
 
 static void
@@ -940,6 +943,20 @@ struct sdcom	*cp;
 		    (int)((db >> 16) & 0xffff),   (int)(db & 0xffff),
 		    (int)((dsps >> 16) & 0xffff), (int)(dsps & 0xffff),
 		    status_buf[0]);
+	}
+
+	/*
+	 * Stuck-bus guard.  A target with more data than nbyte (a 512-byte dd
+	 * request to a 2048-byte CD unit) is still in its data phase holding BSY
+	 * when the MOVE ends: err_phase gives rc -3, and every later SELECT on
+	 * this card would run out the poll bound until a bus reset.  On rc -3 with
+	 * BSY still up (any phase holds the bus the same way), or on the poll
+	 * bound itself (rc -2), re-arm the once-per-card bus reset so the next
+	 * command clears the bus first.  Read before the quiesce below.
+	 */
+	if (rc == -2 || (rc == -3 && (RD8(R_SBCL) & SBCL_BSY))) {
+		a4091_rstdone[cp->card] = 0;
+		a4091_rearm_n++;
 	}
 
 #ifdef	A4091_KVA
