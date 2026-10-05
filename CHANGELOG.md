@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-05 — A4-24: re-arm the bus reset after a stuck command (a0c99a6)
+
+A4-24: after a stuck command (poll-bound timeout, or err_phase with the target still holding BSY, e.g. a 512-byte dd
+against a 2048-byte CD unit) the driver re-arms its once-per-card SCSI bus reset, so the next command clears the bus
+instead of the card staying wedged; counter a4091_rearm_n. Objects 030 b5042e96, 040 c9f0e467, 040 --d42 7d75ab42.
+
 ## 2026-10-04 — D42 on metal: defensive today, load-bearing after B2; d42wcell (9f6a5ab..cdfbfbb)
 
 D42 on metal: the verdict is "defensive on the Z3660 today" (SNOOP, write-through staging, bp_map push) with the
