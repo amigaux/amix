@@ -1,0 +1,12 @@
+--- lib/savedir.c	2001-03-04 07:33:12.000000000 +0200
++++ lib/savedir.c	2026-08-30 15:15:36.996247121 +0300
+@@ -69,6 +69,9 @@
+ #include <fnmatch.h>
+ #include "savedir.h"
+ 
++/* isdir() is defined in isdir.c; grep never declared it for this TU. */
++extern int isdir (char const *);
++
+ char *path;
+ size_t pathlen;
+ 

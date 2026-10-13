@@ -1,0 +1,36 @@
+--- gzip.h	2007-03-20 07:09:51.000000000 +0200
++++ gzip.h	2026-08-30 15:08:22.326595605 +0300
+@@ -47,6 +47,33 @@
+ #include <stdio.h>
+ #include <sys/types.h> /* for off_t */
+ #include <time.h>
++
++/* --- Amix (SVR4.0/m68k, 1992) compatibility ------------------------------
++   The cross wrapper prepends -I<sysroot>/usr/include ahead of the package own
++   -I./lib, so gnulib replacement <fcntl.h>/<time.h> headers never shadow the
++   system ones -- gzip sees a pure 1992 SVR4 libc.  Provide the four gaps that
++   opens directly, rather than through the bypassed gnulib wrappers. */
++#ifndef _STRUCT_TIMESPEC
++# define _STRUCT_TIMESPEC
++struct timespec { time_t tv_sec; long tv_nsec; }; /* SVR4 carries only timestruc_t */
++#endif
++#ifndef O_BINARY
++# define O_BINARY 0        /* no text/binary open() distinction on Unix */
++#endif
++#ifndef O_NOFOLLOW
++# define O_NOFOLLOW 0      /* HAVE_WORKING_O_NOFOLLOW is 0; the branch is dead */
++#endif
++#ifndef S_IRWXUGO
++# include <sys/stat.h>
++# define S_IRWXUGO (S_IRWXU | S_IRWXG | S_IRWXO)
++#endif
++/* fileno is real in libc.so.1 but hidden by the __STDC__ gate in <stdio.h>;
++   fchmod is real in libc.so.1 but declared by no SVR4 header at all.  Declare
++   both so the build has zero implicit declarations -- each truly returns int. */
++#ifndef fileno
++extern int fileno(FILE *);
++#endif
++extern int fchmod(int, mode_t);
+ #if defined HAVE_STRING_H || defined STDC_HEADERS
+ #  include <string.h>
+ #  if !defined STDC_HEADERS && defined HAVE_MEMORY_H && !defined __GNUC__

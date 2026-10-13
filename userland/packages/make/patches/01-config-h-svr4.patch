@@ -1,0 +1,28 @@
+--- config.h.in	2006-04-01 09:40:00.000000000 +0300
++++ config.h.in	2026-09-26 10:03:47.963405972 +0300
+@@ -437,3 +437,25 @@
+ 
+ /* Define as `fork' if `vfork' does not work. */
+ #undef vfork
++
++/* Amix (SVR4.0, 1992) -- appended by amix-packages recipes/make.  The build
++   compiles with -D_POSIX_SOURCE, the one key of the __STDC__ header gate that
++   opens sigset_t/sigaction/sigprocmask/kill and keeps gcc's ANSI <stdarg.h>
++   (PORTING.md 2.4.1).  What that key closes, or no header ever declared: */
++#ifdef _POSIX_SOURCE
++/* in libc.so.1; <string.h>:59 hides it from every ANSI or POSIX compile */
++extern char *strdup (const char *);
++#endif
++/* in libc.so.1; <sys/resource.h> declares them only under _KERNEL */
++struct rlimit;
++extern int getrlimit (int, struct rlimit *);
++extern int setrlimit (int, const struct rlimit *);
++/* sys/signal.h:93 defines SA_RESTART only outside _POSIX_SOURCE; it is a
++   kernel ABI value, honoured whatever view the header was compiled with. */
++#if defined HAVE_SA_RESTART && !defined SA_RESTART
++# define SA_RESTART 0x00000004
++#endif
++/* libc.so.1 exports only _environ; plain environ exists only in the static
++   libc.a (PORTING.md 3.1).  The platform's own idiom, as <rpc/types.h>:82
++   does for gettimeofday. */
++#define environ _environ

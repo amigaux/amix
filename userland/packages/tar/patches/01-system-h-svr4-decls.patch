@@ -1,0 +1,23 @@
+--- src/system.h	2004-05-11 11:11:49.000000000 +0300
++++ src/system.h	2026-09-26 09:52:33.779040222 +0300
+@@ -521,3 +521,20 @@
+ #if XENIX
+ # include <sys/inode.h>
+ #endif
++
++/* Amix (SVR4.0, 1992): libc.so.1 exports all five of these, but their
++   declarations sit behind the __STDC__ header gate (stdio.h:208, string.h:59,
++   signal.h:25, time.h:58) and gcc compiles as ANSI, so every call would be an
++   implicit int-returning declaration -- fdopen and strdup return pointers.
++   -U__STDC__ would open the gate but breaks gcc's own <stdarg.h>, and
++   -D_POSIX_SOURCE hides lstat/mknod (sys/stat.h), which tar cannot lose
++   (PORTING.md 2.4.1).  So declare exactly what tar calls.  */
++#if defined __STDC__ && __STDC__ - 0 != 0 && !defined _POSIX_SOURCE
++FILE *fdopen (int, const char *);
++# ifndef fileno
++int fileno (FILE *);
++# endif
++char *strdup (const char *);
++int kill (pid_t, int);
++void tzset (void);
++#endif

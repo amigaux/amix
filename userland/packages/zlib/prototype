@@ -1,0 +1,62 @@
+#
+# prototype -- zlib 1.2.13's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, and carrying no host paths: build.sh runs
+# `pkgmk -r <destroot>`, which resolves each path below against the staged tree.
+# pkgproto could not have produced this anyway -- it silently omits symlinks and
+# cannot know the modes a package wants.
+#
+# PREFIX: /opt/amix (COEXISTENCE.md, ROADMAP D11).  One shared
+# /opt/amix/{bin,lib,man,doc} for the whole add-on userland, never a per-package
+# /opt/<pkg> subtree.  Nothing here lands outside /opt/amix, so the pkgadd
+# conflict machinery never fires -- there is no stock file under /opt/amix to
+# clash with.  The one declared shared parent is /opt itself, which the stock
+# contents DB already co-owns (core), exactly as the patch recipe declares
+# /usr/local.  We do NOT re-declare it as owned solely by us; SVR4's contents DB
+# records a directory owned by more than one package.
+#
+# NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object: a pure file
+# payload, because SVR4 install scripts have never been run on Amix's 1992
+# pre-POSIX /bin/sh (D9).
+#
+# NO STOCK-OWNED PATH, NO SYMLINK INTO /usr/bin.  Unlike the /usr/local-era
+# patch recipe, nothing here reaches back into a stock tree: /opt/amix/bin is
+# put on PATH by a documented one-line edit (COEXISTENCE.md 3), not by a package
+# side effect.  A library has nothing a symlink would help anyway.
+#
+# Every basename below is <= 14 bytes (s5 dirent limit); pkgroll re-checks it.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the static library and its headers ------------------------------------
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libz.a 0644 root bin
+d none /opt/amix/include 0755 root sys
+f none /opt/amix/include/zlib.h 0644 root bin
+f none /opt/amix/include/zconf.h 0644 root bin
+#
+# --- the on-box acceptance test, shipped on purpose ------------------------
+#
+# Like libacompat's acompat-test: installing files proves the packaging worked;
+# a binary linked against exactly this package's libz.a and run on the box
+# proves the PAYLOAD works, with this libc and this code generator.
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/zlib-test 0755 root bin
+#
+# --- manual page -----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man3 0755 root sys
+f none /opt/amix/man/man3/zlib.3 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------
+#
+# The zlib licence is permissive (SPDX Zlib); its text travels with the package.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/zlib 0755 root sys
+f none /opt/amix/doc/zlib/LICENSE 0644 root bin
+f none /opt/amix/doc/zlib/README 0644 root bin
+f none /opt/amix/doc/zlib/ChangeLog 0644 root bin

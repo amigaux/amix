@@ -1,0 +1,12 @@
+PKG=make
+NAME=GNU make 3.81
+ARCH=Amiga
+VERSION=3.81-2
+CATEGORY=development
+CLASSES=none
+VENDOR=amix-packages
+# Authored PSTAMP -- an unset one leaks the build host into a distributed file.
+PSTAMP=amix-packages-make-3.81-2
+# Coexists with stock: the AT&T/SVR4 make is /usr/ccs/bin/make, owned by core,
+# which this package does NOT touch.  Ours is /opt/amix/bin/make and wins by PATH.
+DESC=GNU make 3.81 beside the stock SVR4 make, which it does NOT replace (stock /usr/ccs/bin/make is untouched; ours wins by PATH). Pattern rules, VPATH, $(shell), $(eval), order-only prerequisites, -j with the jobserver. make -l only warns (no load average on Amix). Installs /opt/amix/bin/make; add /opt/amix/bin to PATH.

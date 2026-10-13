@@ -1,0 +1,6 @@
+less on-box smoke fixture.
+Line 2: the quick brown fox.
+Line 3: 0123456789.
+Line 4: Amiga Unix (Amix) SVR4.0 / m68k.
+Line 5: backward scroll and incremental search.
+Line 6: end of fixture.

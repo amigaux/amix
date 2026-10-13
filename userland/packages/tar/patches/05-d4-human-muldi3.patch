@@ -1,0 +1,36 @@
+--- lib/human.c	2026-09-26 09:58:37.650976065 +0300
++++ lib/human.c	2026-09-26 09:58:47.600598337 +0300
+@@ -47,6 +47,15 @@
+ #include <error.h>
+ #include <xstrtol.h>
+ 
++/* Amix D4 (68LC060): gcc 2.7.2.3 at -m68020 open-codes a uintmax_t product as
++   MULU.L <reg>,Dh:Dl, which the 68060 does not implement and the kernel's
++   vector-61 handler does not emulate (it takes only the #imm source form), so
++   the process is SIGKILLed.  libgcc's __muldi3 is built from 32-bit multiplies
++   only; route the two variable 64-bit products through it.  Low 64 bits are
++   the same for signed and unsigned operands.  */
++long long __muldi3 (long long, long long);
++#define AMIX_UMUL(a, b) ((uintmax_t) __muldi3 ((long long) (a), (long long) (b)))
++
+ /* The maximum length of a suffix like "KiB".  */
+ #define HUMAN_READABLE_SUFFIX_LENGTH_MAX 3
+ 
+@@ -219,7 +228,7 @@
+       if (from_block_size % to_block_size == 0)
+ 	{
+ 	  uintmax_t multiplier = from_block_size / to_block_size;
+-	  amt = n * multiplier;
++	  amt = AMIX_UMUL (n, multiplier);
+ 	  if (amt / multiplier == n)
+ 	    {
+ 	      tenths = 0;
+@@ -384,7 +393,7 @@
+ 	{
+ 	  uintmax_t power;
+ 	  exponent = 0;
+-	  for (power = 1; power < to_block_size; power *= base)
++	  for (power = 1; power < to_block_size; power = AMIX_UMUL (power, base))
+ 	    if (++exponent == exponent_max)
+ 	      break;
+ 	}

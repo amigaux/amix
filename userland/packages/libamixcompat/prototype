@@ -1,0 +1,53 @@
+#
+# prototype -- libacompat's installed layout.
+#
+# AUTHORED, NOT GENERATED.  pkgproto silently omits symlinks and cannot know
+# what modes a package wants, so a generated prototype is a starting point at
+# best.  This file carries no host paths at all: build.sh runs
+# `pkgmk -r <destroot>`, which resolves each path below against the staged tree,
+# so what is committed here is exactly the package's installed layout and
+# nothing about anybody's home directory.
+#
+# PREFIX: /usr/local.  Argued in recipes/README.md -- the short version is that
+# it is where a Unix user looks for third-party software, and that /usr/apkg is
+# already taken by the package manager's own parallel prefix.
+#
+# NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object, and not a
+# single preinstall/postinstall/request/class-action script.  SVR4 install
+# scripts have never been run on Amix under its 1992 pre-POSIX /bin/sh -- the
+# packagemanager repo still tags that path unrun -- so a package needing one is
+# doing something nobody here has proved works.  This is a pure file payload.
+#
+# THE ARCHIVE IS libacompat.a AND NOT libamixcompat.a.  The root filesystem is
+# s5, whose directory entries truncate at 14 bytes; "libamixcompat.a" is 15, so
+# it would install under the name "libamixcompat." and no -l flag would ever
+# find it.  Every basename below is <= 14 bytes, and build.sh re-checks that
+# mechanically rather than trusting this note.
+#
+i pkginfo
+#
+# --- the library and its headers -------------------------------------------
+d none /usr/local 0755 root sys
+d none /usr/local/lib 0755 root sys
+f none /usr/local/lib/libacompat.a 0644 root sys
+d none /usr/local/include 0755 root sys
+f none /usr/local/include/amixcompat.h 0644 root sys
+f none /usr/local/include/stdint.h 0644 root sys
+f none /usr/local/include/strings.h 0644 root sys
+#
+# --- the acceptance test, shipped on purpose -------------------------------
+#
+# A package that installs files proves the packaging worked.  Shipping the test
+# binary means `pkgadd` can be followed by one command that proves the PAYLOAD
+# works -- on this box, with this libc, with this code generator -- which is a
+# different and much more useful claim.  It is linked against exactly the
+# archive in this package, and prints that archive's version string first so a
+# stale copy cannot pass for a fresh one.
+d none /usr/local/bin 0755 root sys
+f none /usr/local/bin/acompat-test 0755 root sys
+#
+# --- licence and notes ------------------------------------------------------
+d none /usr/local/doc 0755 root sys
+d none /usr/local/doc/acompat 0755 root sys
+f none /usr/local/doc/acompat/LICENSE 0644 root sys
+f none /usr/local/doc/acompat/README 0644 root sys

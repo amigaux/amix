@@ -1,0 +1,28 @@
+--- src/system.h	2001-02-08 19:01:32.000000000 +0200
++++ src/system.h	2026-08-30 15:15:36.991369495 +0300
+@@ -109,6 +109,11 @@
+ # define S_ISREG(Mode) (((Mode) & S_IFMT) == S_IFREG)
+ #endif
+ 
++/* Amix (SVR4.0, 1992): S_ISSOCK is undefined although S_IFSOCK (0xC000) is. */
++#if !defined(S_ISSOCK) && defined(S_IFSOCK)
++# define S_ISSOCK(Mode) (((Mode) & S_IFMT) == S_IFSOCK)
++#endif
++
+ #ifdef STDC_HEADERS
+ # include <stdlib.h>
+ #else
+@@ -156,6 +161,13 @@
+ # undef memcpy
+ # define memcpy(d, s, n) bcopy (s, d, n)
+ #endif
++
++/* Amix (SVR4.0): strcasecmp is provided by libacompat and declared by no system
++   header (absent from libc, present only in the networking archives -- see
++   libamixcompat/include/amixcompat.h).  grep only uses strcasecmp. */
++#ifndef HAVE_STRINGS_H
++int strcasecmp (char const *, char const *);
++#endif
+ #ifndef HAVE_MEMCHR
+ ptr_t memchr();
+ #endif

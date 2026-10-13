@@ -1,0 +1,46 @@
+#
+# prototype -- GNU grep 2.5.1a's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it.
+#
+# ★ COEXISTENCE, THE WORKED CASE.  Stock ships /usr/bin/grep (-> /sbin/grep),
+# owned by `core`.  This package deliberately does NOT claim, overwrite, or
+# symlink that path -- our grep is /opt/amix/bin/grep and wins for interactive
+# users purely by PATH order, while stock scripts that hard-code /usr/bin/grep
+# keep stock behaviour (COEXISTENCE.md 2-3).  So there is nothing here outside
+# /opt/amix, the pkgadd conflict machinery never fires, and a stock pkgrm can
+# never take our binary with it.
+#
+# NO INSTALL SCRIPTS (D9).  egrep/fgrep are grep's own /bin/sh wrappers
+# (`exec /opt/amix/bin/grep -E|-F ...`), shipped as ordinary files -- their exec
+# target was rewritten to the absolute path so they work regardless of PATH
+# (build.sh step 5).  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the programs ----------------------------------------------------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/grep 0755 root bin
+f none /opt/amix/bin/egrep 0755 root bin
+f none /opt/amix/bin/fgrep 0755 root bin
+#
+# --- manual pages ----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/grep.1 0644 root bin
+f none /opt/amix/man/man1/egrep.1 0644 root bin
+f none /opt/amix/man/man1/fgrep.1 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------
+#
+# GPL-2.0-or-later: the COPYING text (GPLv2) travels with the binary.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/grep 0755 root sys
+f none /opt/amix/doc/grep/COPYING 0644 root bin
+f none /opt/amix/doc/grep/NEWS 0644 root bin
+f none /opt/amix/doc/grep/README 0644 root bin

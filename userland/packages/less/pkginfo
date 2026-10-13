@@ -1,0 +1,14 @@
+PKG=less
+NAME=less 704 - the backward-scrolling pager
+ARCH=Amiga
+VERSION=704-2
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+# Authored PSTAMP -- an unset one leaks the build host into a distributed file.
+PSTAMP=amix-packages-less-704-2
+# Fills a genuine gap: stock Amix pagers are more/pg/page only.  less adds
+# backward scroll, incremental search and no-write paging.  Regex is the SVR4
+# regcmp backend (libgen); terminal control is the termcap API via libcurses,
+# which on SVR4 reads the terminfo database.
+DESC=less 704, the pager with backward scroll and incremental search -- stock Amix has only more/pg/page. Installs /opt/amix/bin/{less,lesskey,lessecho}. Uses the SVR4 regcmp regex (libgen) and the termcap API via libcurses; links nothing outside the stock system libraries. Add /opt/amix/bin to PATH to use it.

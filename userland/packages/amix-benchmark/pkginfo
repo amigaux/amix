@@ -1,0 +1,21 @@
+PKG=amixbench
+NAME=amix-benchmark 1.3 - CPU/FP/memory/VM/disk benchmark suite
+ARCH=Amiga
+VERSION=1.3
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+# Authored PSTAMP -- an unset one leaks the build host into a distributed file.
+PSTAMP=amix-packages-amixbench-1.3
+# The SVR4 PKG instance is `amixbench` (<= 9 chars; stock pkgadd silently drops
+# a longer name).  The catalog/apkg name is the owner's choice `amix-benchmark`
+# -- gen-catalog.py carries both (name|...|pkginst|...), so the long, readable
+# name is what a user sees and `amixbench` is the on-box instance.
+#
+# APKG_DESC is the catalog's description column (what apkg list/search/info and
+# the installer menu show); keep it one line.
+APKG_DESC=amix-bench benchmark suite: run 'amix-bench' for the safe default (CPU/Dhrystone, floating point, memory bandwidth, VM); add --read-target for the iobench disk rows. Five prebuilt m68k binaries + the runbench driver under /opt/amix; the fpu.whet row reports skipped (whet omitted for licence).
+# This is OUR OWN tool -- no stock equivalent, nothing to coexist with or shadow.
+# Installs only under /opt/amix (entry command /opt/amix/bin/amix-bench; the kit
+# in /opt/amix/lib/amix-bench).  Add /opt/amix/bin to PATH to use it.
+DESC=The amix-bench standard benchmark matrix for Amix: Dhrystone 2.1 CPU, an FP-only loop plus Whetstone and an FP paranoia check, memory bandwidth, three VM rows (fork/context-switch/page-fault) and the iobench disk speedtest (seq/rand x read/write). Run 'amix-bench' with no arguments for the safe default suite (no disk write; there is no default disk target on purpose). The five packaged benchmark binaries are prebuilt m68k SVR4, shipped verbatim from the validated fieldkit and linked only against the box libc; the runbench.sh driver self-locates them. The suite's sixth binary, whet (Whetstone), is deliberately NOT included: it statically links the stock SVR4 libm, so the fpu.whet row reports status=skipped by design. See /opt/amix/lib/amix-bench/PROVENANCE for the exact toolchain and checksums.

@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# amix-cpp -- a C preprocessor for the Amix cross target, for autoconf's CPP.
+#
+#     CPP="$REPO/recipes/common/amix-cpp" ./configure --host=m68k-cbm-sysv4 ...
+#
+# ---------------------------------------------------------------------------
+# WHY THIS EXISTS: THE WORST CROSS-CONFIGURE TRAP FOUND SO FAR
+#
+# `m68k-cbm-sysv4-gcc` is the fix_asm wrapper, and the wrapper does not
+# implement -E.  It has cases for -c and -S; -E falls through to the catch-all
+# that treats an unrecognised dash-argument as an *ld* flag, so
+# `m68k-cbm-sysv4-gcc -E foo.c` COMPILES AND LINKS foo.c instead of
+# preprocessing it -- and, having no main(), exits 0 with a linker complaint on
+# stderr and nothing on stdout.
+#
+# Autoconf's "checking how to run the C preprocessor" test asks $CC -E to
+# preprocess a trivial file and rejects it when that produces junk.  Having
+# rejected it, autoconf falls back down its candidate list to **/lib/cpp** --
+# THE BUILD HOST'S PREPROCESSOR.  From that point every AC_CHECK_HEADER
+# "presence" test reads the HOST's /usr/include.
+#
+# That is not a cosmetic wrong answer.  Autoconf 2.5x resolves a
+# presence/usability disagreement by *trusting the preprocessor*:
+#
+#     checking wchar.h usability... no
+#     checking wchar.h presence... yes
+#     configure: WARNING: wchar.h: present but cannot be compiled
+#     configure: WARNING: wchar.h: proceeding with the preprocessor's result
+#     checking for wchar.h... yes
+#
+# -- and config.h then said HAVE_WCHAR_H 1 for a header Amix does not have, at
+# which point the build failed with "wchar.h: No such file or directory" in a
+# translation unit far away from anything that mentions cross-compiling.  It
+# failed loudly this time.  The same mechanism sets HAVE_ for functions and
+# headers that merely *look* present on a modern Linux host, and most of those
+# fail quietly.
+#
+# ---------------------------------------------------------------------------
+# WHY IT CALLS gcc.real
+#
+# Normally calling gcc.real is forbidden -- it is the path that loses fix_asm's
+# six miscompile repairs.  Preprocessing is the one exception that is safe by
+# construction: fix_asm post-processes ASSEMBLY, and -E never produces any.  No
+# code is generated here, so there is nothing for the wrapper to repair.
+#
+# The sysroot include directory is added explicitly because that is what the
+# wrapper adds for a compile (its common_cflags), and a preprocessor that
+# searched a different set of directories than the compiler would reintroduce
+# exactly the disagreement this script exists to remove.
+
+: "${AMIX_CROSS_PREFIX:=$HOME/opt/amix-cross}"
+: "${AMIX_CROSS_TARGET:=m68k-cbm-sysv4}"
+: "${AMIX_SYSROOT:=$AMIX_CROSS_PREFIX/$AMIX_CROSS_TARGET/sysroot}"
+
+REAL="$AMIX_CROSS_PREFIX/bin/$AMIX_CROSS_TARGET-gcc.real"
+if [ ! -x "$REAL" ]; then
+	echo "amix-cpp: $REAL not found" >&2
+	exit 1
+fi
+
+exec "$REAL" -E -I"$AMIX_SYSROOT/usr/include" "$@"

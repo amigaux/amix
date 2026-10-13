@@ -1,0 +1,12 @@
+--- lesskey.h	2026-05-31 02:55:07.000000000 +0300
++++ lesskey.h	2026-08-30 15:37:17.990470396 +0300
+@@ -1,3 +1,9 @@
++/* Amix (SVR4.0): strdup is real in libc but hidden by the strict-ANSI header
++   gate; lesskey_parse.c does not include less.h where it is otherwise declared. */
++#ifndef _AMIX_STRDUP_DECL
++#define _AMIX_STRDUP_DECL
++extern char *strdup(const char *);
++#endif
+ /*
+  * Copyright (C) 1984-2026  Mark Nudelman
+  *

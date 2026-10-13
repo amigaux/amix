@@ -1,0 +1,10 @@
+--- lib/exclude.c	2003-10-27 10:41:23.000000000 +0200
++++ lib/exclude.c	2026-09-26 09:52:33.784307555 +0300
+@@ -38,6 +38,7 @@
+ 
+ #include "exclude.h"
+ #include "fnmatch.h"
++#include "strcase.h"  /* Amix: strcasecmp/strncasecmp are declared by no SVR4 header */
+ #include "unlocked-io.h"
+ #include "xalloc.h"
+ 

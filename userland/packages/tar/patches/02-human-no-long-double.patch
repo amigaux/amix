@@ -1,0 +1,64 @@
+--- lib/human.c	2004-03-31 10:25:19.000000000 +0300
++++ lib/human.c	2026-09-26 09:52:33.777040182 +0300
+@@ -64,11 +64,16 @@
+ };
+ 
+ 
++/* Amix (m68k-cbm-sysv4, gcc 2.7.2.3): long double is the 68881 96-bit
++   extended type, and this libgcc has no __fixunsxfdi to convert it to
++   uintmax_t -- the link fails.  Plain double (with %f, not %Lf) is exact
++   to 2^53, which is more than a human-readable size ever shows.  */
++
+ /* If INEXACT_STYLE is not human_round_to_nearest, and if easily
+    possible, adjust VALUE according to the style.  */
+ 
+-static long double
+-adjust_value (int inexact_style, long double value)
++static double
++adjust_value (int inexact_style, double value)
+ {
+   /* Do not use the floorl or ceill functions, as that would mean
+      checking for their presence and possibly linking with the
+@@ -239,20 +244,20 @@
+        or from_block_size is zero.  Fall back on floating point.
+        FIXME: This can yield answers that are slightly off.  */
+ 
+-    long double dto_block_size = to_block_size;
+-    long double damt = n * (from_block_size / dto_block_size);
++    double dto_block_size = to_block_size;
++    double damt = n * (from_block_size / dto_block_size);
+     size_t buflen;
+     size_t nonintegerlen;
+ 
+     if (! (opts & human_autoscale))
+       {
+-	sprintf (buf, "%.0Lf", adjust_value (inexact_style, damt));
++	sprintf (buf, "%.0f", adjust_value (inexact_style, damt));
+ 	buflen = strlen (buf);
+ 	nonintegerlen = 0;
+       }
+     else
+       {
+-	long double e = 1;
++	double e = 1;
+ 	exponent = 0;
+ 
+ 	do
+@@ -264,7 +269,7 @@
+ 
+ 	damt /= e;
+ 
+-	sprintf (buf, "%.1Lf", adjust_value (inexact_style, damt));
++	sprintf (buf, "%.1f", adjust_value (inexact_style, damt));
+ 	buflen = strlen (buf);
+ 	nonintegerlen = decimal_pointlen + 1;
+ 
+@@ -272,7 +277,7 @@
+ 	    || ((opts & human_suppress_point_zero)
+ 		&& buf[buflen - 1] == '0'))
+ 	  {
+-	    sprintf (buf, "%.0Lf",
++	    sprintf (buf, "%.0f",
+ 		     adjust_value (inexact_style, damt * 10) / 10);
+ 	    buflen = strlen (buf);
+ 	    nonintegerlen = 0;

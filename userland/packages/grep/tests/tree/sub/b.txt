@@ -1,0 +1,4 @@
+another line
+color me impressed
+ERROR: nested failure
+gamma ray
