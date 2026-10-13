@@ -36,11 +36,10 @@ Commodore's port of AT&T / UNIX System Laboratories (USL) SVR4. That text is
 Commodore- and AT&T/USL-derived. It is redistributed here under the approval
 Mike Battilana, CEO of Amiga Corporation, gave this project on 2026-09-19
 (confirmed by email 2026-09-23) to distribute the Commodore Amiga binaries,
-which the project owner rules lifts the earlier restriction on releasing
-Amiga UNIX material (recorded in the Amix workspace CLAUDE.md, section
-"Licensing outcome (owner, 2026-09-23)"). It is NOT relicensed: the MIT
-licence in LICENSE does not apply to it, and all rights in it remain with
-their holders.
+which the project reads as lifting the earlier restriction on releasing
+Amiga UNIX material (see the disclaimer at https://amigaux.org/about/). It
+is NOT relicensed: the MIT licence in LICENSE does not apply to it, and all
+rights in it remain with their holders.
 
 No stock Amix source file, disk image, ROM or manual is included in this
 repository.
@@ -111,3 +110,18 @@ file (as of upstream commit 3428168c, 2026-04-30):
     salvador, ODFileSystem, TinySetPatch) each carry their own LICENSE.
 
 Consult the upstream repository for the authoritative terms.
+
+
+5. Trademarks
+-------------
+
+The wording Amiga Corporation asked us to carry:
+
+This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
+
+This project is likewise not affiliated with, endorsed by, or sponsored by
+Commodore or any other trademark holder. AmigaOS and Amiga UNIX are
+trademarks of their respective owners; UNIX is a registered trademark of
+The Open Group. Amiga UNIX is Commodore's port of AT&T UNIX System V
+Release 4; portions are copyright AT&T, UNIX System Laboratories and their
+successors. This repository ships no Amiga or Amiga UNIX binaries.

@@ -1,6 +1,6 @@
 # D42: how the A4091 calls the DMA-coherence service
 
-Status: **agreed contract**, 2026-09-28. Names, magic, offsets, cache ops and edge policy are the port author's D42 decisions (letter 04, answering our proposal). The service side (`src/dma_cache040.s` in the port) is not written yet; the A4091 side is written against this contract and links with local stubs until it is (`src/a4091_dmarec.h`, `src/a4091-wr.c` under `-DA4091_KVA`). The port will carry the same offsets table under its `docs/contracts/`.
+Status: **agreed contract**, 2026-09-28. Names, magic, offsets, cache ops and edge policy are the port author's D42 decisions, answering our proposal. The service side (`src/dma_cache040.s` in the port) is not written yet; the A4091 side is written against this contract and links with local stubs until it is (`src/a4091_dmarec.h`, `src/a4091-wr.c` under `-DA4091_KVA`). The port will carry the same offsets table under its `docs/contracts/`.
 
 ## The cut (D42 as amended, 2026-09-27)
 
@@ -131,7 +131,7 @@ The port author asked whether GSIO can actually hand the A4091 a misaligned buff
 2. **dd's REQUEST SENSE is misaligned by layout.** `dd.c:getsense` reads 16 bytes FROM_DEVICE into `dp->sense` (`dd.c:272-280`). `sense[16]` sits at +0x34 in `struct dd` (`dd.o`: `pea %a2@(52)`), and `ddtab[SDCARDS][SDUNITS]` has a 0x44 stride (`dd.o` `.bss` 0x440 = 2 x 8 x 0x44). 0x44 is 4 mod 16, so the sense buffer's alignment cycles through four residues across units: at most one unit in four is line-aligned. The tail edge line holds the **next** unit's `state`/`bhead`/`btail`, which `ddstrategy` and `ihandle` write; for `ddtab[0][7]` that is card 1's unit 0, which another controller's completion can reach from interrupt context. This is the one real exposure found.
 3. **Block and raw I/O are aligned.** `dd.c:startio` sends `bp->b_bcount` (whole 512-byte blocks, `dd.c:255-258`). Raw character I/O does not reach the driver with user pages: `uiophysio -> breakup -> amiga_dma_pageio` (`dd.c:83`, `:137`) stages each chunk through a kernel buffer from `ngeteblk( NBPP)` (`physdsk.c:43`, copyout/copyin at `:75`, `:84`), so no user alignment reaches the driver. The start alignment of that buffer, and of buffer-cache buffers, comes from the kernel allocator and is not audited here; lengths are whole blocks.
 
-**Consequence.** Unbounced, `edge_shared == 0` could not hold on this line: every sense on most units and every GSIO transfer whose length is not a multiple of 16 (INQUIRY, 36 bytes) would count. The owner chose the driver bounce (A4-18, 2026-09-29), below.
+**Consequence.** Unbounced, `edge_shared == 0` could not hold on this line: every sense on most units and every GSIO transfer whose length is not a multiple of 16 (INQUIRY, 36 bytes) would count. The driver bounces instead (A4-18, 2026-09-29), below.
 
 ## Bounce (A4-18, implemented)
 
@@ -210,7 +210,7 @@ What the first metal runs show, and what they do not:
 
   At that point it is the only thing standing between copyback and the disk. **Note for the port:** the segkmem B2
   conversion and the D42 push half belong together.
-- **Accepted upstream (2026-10-04, the port author's letters 16 and 17).**
+- **Accepted upstream (2026-10-04, by the port author).**
   - The v2 record evidence (about 80k segments at version 2, invariants held) and the ISSUE-76 autocon patch are
     recorded in the service record and the issue as accepted on our hardware, with the platform named. No run on his
     exact tree is needed.

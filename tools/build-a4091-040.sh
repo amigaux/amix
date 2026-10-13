@@ -40,7 +40,7 @@ echo "[*] cc: $CF -DA4091_KVA $D42"
 m68k-cbm-sysv4-gcc $CF -DA4091_KVA $D42 -I"$ALIEN" -I"$HERE/src" -c "$HERE/src/a4091-wr.c" -o "$O"
 sha256sum "$O" | sed 's/^/    /'
 
-echo "[*] T-9 G1/G2"
+echo "[*] spl-gate G1/G2"
 python3 "$PORT_DIR/tools/spl-gate.py" --object "$O" --source "$HERE/src/a4091-wr.c" --cflags "$CF" \
 	-- -DA4091_KVA $D42 -I"$ALIEN" -I"$HERE/src"
 

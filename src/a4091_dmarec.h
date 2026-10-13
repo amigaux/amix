@@ -3,7 +3,7 @@
  * a4091_dmarec.h -- the D42 DMA-coherence seam as the A4091 calls it (040/060
  * driver line only; included by a4091-wr.c under -DA4091_KVA).
  *
- * D42 as agreed with the port author (letter 04, 2026-09-28): ONE protocol and
+ * D42 as agreed with the port author (2026-09-28): ONE protocol and
  * state machine, in the port's src/dma_cache040.s; the per-controller RECORD
  * lives in each controller's own object.  Names, magic and offsets below are
  * the agreed ones (docs/D42-CALL-SHAPE.md).  The service is not written yet, so

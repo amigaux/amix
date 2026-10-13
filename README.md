@@ -119,6 +119,10 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
 The build harness, clean-gate, the FTP/telnet bridges and the golden build image live in the companion
 **[amix-kerntools](https://github.com/jusii/amix-kerntools)** repo; the host network bridge lives in
 **[grimoire-amix](https://github.com/jusii/grimoire-amix)**. Clone them as siblings of this repo.
+The 040/060 arm (`tools/build-a4091-040.sh`) also expects
+[amix-040-060-port](https://github.com/asokero/amix-040-060-port) and the
+[gcc-cross-amix](https://github.com/jusii/gcc-cross-amix) toolchain as siblings. Kernel family names in the
+docs (`KD060-ZA`, `KD060-ZT`, …), the `KT-nn` gates and `W-D7` are labels of the amix-kerntools build hub.
 
 ---
 
@@ -216,9 +220,8 @@ A4000 + A4091.
 Amix (Commodore Amiga UNIX, System V Release 4 2.1), its HDF/ADF disk images, Kickstart ROMs and
 manuals are **proprietary Commodore software**. On 2026-09-19 (confirmed by email on 2026-09-23) Mike
 Battilana, CEO of Amiga Corporation, approved this project distributing the Commodore Amiga
-binaries, and the project owner rules that this lifts the earlier restriction on releasing Amiga UNIX
-material (recorded in the Amix workspace `CLAUDE.md`, section "Licensing outcome (owner,
-2026-09-23)"). This repository still ships no disk images, ROMs or manuals — those paths stay
+binaries, and the project reads this as lifting the earlier restriction on releasing Amiga UNIX
+material (see the disclaimer on the [amigaux.org About page](https://amigaux.org/about/)). This repository still ships no disk images, ROMs or manuals — those paths stay
 git-ignored, so supply your own copies. The kernel changes are shipped as **patches** against the
 stock Amix source, so no stock Amix source file is reproduced here: the four patches carry only the
 minimal stock context a patch needs in order to apply — 135 unchanged context lines plus the 25 stock
@@ -230,6 +233,13 @@ third-party provenance is listed in [`NOTICE`](NOTICE).
 
 The original code in this repository (driver, the added lines of the patches, tooling, SCRIPTS) is the
 author's own work and is released under the **MIT License** — see [`LICENSE`](LICENSE).
+
+The wording Amiga Corporation asked us to carry:
+
+> This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
+
+AmigaOS and Amiga UNIX are trademarks of their respective owners; UNIX is a registered trademark of The
+Open Group. The full trademark notes are in [`NOTICE`](NOTICE).
 
 ## Credits
 

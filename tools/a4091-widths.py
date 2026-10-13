@@ -2,9 +2,9 @@
 """a4091-widths.py -- access widths of every 53C710 register access in a compiled a4091 object.
 
 The 53C710 on the A4091 takes 8- and 32-bit accesses only, never 16-bit, and its 32-bit
-registers (DSA, TEMP, DBC, DSP, DSPS, SCRATCH) must be written as one longword. T-9 showed
-that -traditional once turned 32-bit MMIO reads into byte reads by erasing `volatile`; this
-checks the compiled bytes, not the source.
+registers (DSA, TEMP, DBC, DSP, DSPS, SCRATCH) must be written as one longword. An earlier
+build showed that -traditional once turned 32-bit MMIO reads into byte reads by erasing
+`volatile`; this checks the compiled bytes, not the source.
 
 Method: `objdump -dr`; a register loaded from the `siop` symbol (the current-card 53C710
 view) is followed until it is overwritten; every `%aN@(d)` access through it is classified by

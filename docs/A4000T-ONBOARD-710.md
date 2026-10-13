@@ -38,7 +38,7 @@ Out of scope: the reproduction boards' 53C770 (`A4000T770`, registers at `$DD000
 
 VPOSR cannot separate the A4000D from the A4000T: both are AGA Alice [S 040-support-c-d7.md §6c]. The Kickstart
 cannot be the discriminator either. The A4000T box boots A4kOS323 through `.d6` today, which has no NCR driver
-[S tmp/2026-10-02-a4092-metal/Z3660-T-vs-D-diff.md §4], and a user may run any ROM. So presence is decided by asking
+[S, bench comparison of the two boxes, 2026-10-02], and a user may run any ROM. So presence is decided by asking
 the chip, in this order. Each step only runs if the previous one said "maybe":
 
 - **G0, the chipset gate.** VPOSR (`$DFF004`) bits 8..14, low nibble ≥ 2 means AGA. This is the same expression as the
@@ -67,10 +67,10 @@ G2 is only frozen once those four readings exist.
 
 | Box | Read | Result |
 |---|---|---|
-| A4000D, Z3660 (060), no 53C710 | `ddpeek-t` at `$DD0000`, first longword pass | **froze at the first read**: no reply, no network, hard power-off [M tmp/2026-10-02-a4092-card2/t0/frozen-screen.jpg]. The exact address is unnamed (the DB25 tap carries no bytes), but it is at or near `$DD0000`, before any `+0x40` register |
-| A4000T (ReAmiga), Z3660 (060), 53C710, run 1 | the same dump | **hangs at the first read, `$00DD0000`** [M, Z3660 station trace] |
-| A4000T, run 2 | `ddpeek-t2` starting at `$DD0040` (longword, the 710 register base), after Bench-Halt | **hangs at the first read, `$00DD0040`** [M, tmp/2026-10-02-t0-dd0000/]. No address answered in either run |
-| A4000T, variant 3 | bench OS on Kickstart A4000T 47.115 (`.d6`) + the normal `kick060_scsi` shim, so `NCR scsi.device 47.4` ran (no device on the onboard bus). After Bench-Halt: table-driven supervisor reads, byte and long, each DB25-traced first, no writes | **all 21 reads answered**, zero faults, box up [M, tmp/2026-10-02-t0-dd0000/v3-table.md] |
+| A4000D, Z3660 (060), no 53C710 | `ddpeek-t` at `$DD0000`, first longword pass | **froze at the first read**: no reply, no network, hard power-off [M, 2026-10-02]. The exact address is unnamed (the DB25 tap carries no bytes), but it is at or near `$DD0000`, before any `+0x40` register |
+| A4000T (ReAmiga), Z3660 (060), 53C710, run 1 | the same dump | **hangs at the first read, `$00DD0000`** [M, Z3660 firmware trace] |
+| A4000T, run 2 | `ddpeek-t2` starting at `$DD0040` (longword, the 710 register base), after halting the OS | **hangs at the first read, `$00DD0040`** [M, 2026-10-02]. No address answered in either run |
+| A4000T, variant 3 | bench OS on Kickstart A4000T 47.115 (`.d6`) + the normal `kick060_scsi` shim, so `NCR scsi.device 47.4` ran (no device on the onboard bus). After halting the OS: table-driven supervisor reads, byte and long, each DB25-traced first, no writes | **all 21 reads answered**, zero faults, box up [M, 2026-10-02] |
 
 In runs 1 and 2 the Kickstart was A4kOS323, the A4000D ROM in MAPROM, with no NCR scsi.device, and the bench OS
 loads none either. **So on the ReAmiga 4000T the onboard 710 window hangs while uninitialised, and answers byte and
@@ -96,7 +96,7 @@ confirms):
 | `$DD0060` (long) | `FFFF02FF` | differs from the byte reads of CTEST8/ISTAT (`20`/`00`). The longword read of this byte-register group is not trustworthy, or ISTAT latched between reads. **Use byte reads for byte registers**, as the driver already does (the widths gate) |
 
 
-**Mechanism** [M, Z3660 station answer, 2026-10-02]:
+**Mechanism** [M, from the Z3660 firmware side, 2026-10-02]:
 - **The Z3660 CPLD does forward Amiga /BERR to the 060.** On the real-CPU path, P119 → nRBERR, and in BUSCON
   state Z/SB it drives nTEA (P13) while the 060 owns the bus. Proof: the 2026-09-30 A4092 ROM-cycle hang came back
   as a format-$4 access fault after Buster's Zorro III timeout of about 280 ms.
@@ -143,7 +143,7 @@ stalled on a hung cycle, not just on "the wrong chip".
      preset 5 (A4kOS323, no NCR init): a hang there means the init is what opens the window.
   Record per read: address, width, answered/hung, value, plus the Kickstart, the preset and the scsi.device version.
 - **Open lead for bringing auto-detection back: Gary's bus-timeout registers `$DE0000`/`$DE0001`** (from the Z3660
-  station).
+  firmware side).
   - **The model:** WinUAE/Amiberry `gayle.cpp` `mbres_write`/`mbres_read` and `memory.cpp` `gary_nonrange`/`dummy_put`.
     This is an emulator's behavioural model, not Commodore documentation [S-emu].
     - `$DE0001` bit 7 = **TOENB**: an access to a Gary "non-range" address raises a bus error. The non-range includes
@@ -151,7 +151,7 @@ stalled on a hung cycle, not just on "the wrong chip".
     - `$DE0000` bit 7 = **TIMEOUT**: a wait/DSACK-timeout mode.
     - `$DE0002` bit 7 = COLDBOOT.
     - The low 7 bits read 1.
-  - **The A4000D matches that read-back** [M, Bench 3a, BenchOS, byte reads]: `$DE0000` = `FF` then `7F`, and
+  - **The A4000D matches that read-back** [M, cell 3a, AmigaOS, byte reads]: `$DE0000` = `FF` then `7F`, and
     `$DE0001` = `7F` `7F`, so TOENB = 0 and the timeout is off. Both reads terminated with no fault.
   - **The cell (3b), on the A4000D:**
     1. Write `$DE0001` = `0x80` (TOENB on) immediately before ONE byte read of `$DD0000`. Nothing else runs in
@@ -159,14 +159,14 @@ stalled on a hung cycle, not just on "the wrong chip".
     2. Expect either a bus-error Guru (80000002), meaning the lead works and the probe could use it, or a hang,
        meaning it does not.
     3. A reset clears TOENB in the model. Power-cycle either way.
-  - **Result: CLOSED NEGATIVE on a Z3660 box** [M, Bench 3b, A4000D, BenchOS, 2026-10-02, tmp/2026-10-02-a4092-card2/gary/gary-3b.txt].
+  - **Result: CLOSED NEGATIVE on a Z3660 box** [M, cell 3b, A4000D, AmigaOS, 2026-10-02].
     1. Before: `$DE0000` = `FF`, `$DE0001` = `7F` (TOENB 0).
     2. `ddpoke $DE0001` = `$80` was written, and read back `FF` (TOENB set, per the model).
     3. One byte read of `$DD0000` immediately after **froze the box exactly like T0**, with no Guru. It was
        power-cycled.
   - So even with Gary's timeout enabled, no fault reaches the 060. Either the Z3660's cycle into `$DDxxxx` never
-    reaches Gary's timeout logic, or the resulting BERR is not forwarded for local I/O. The Z3660 station's BERR
-    answer covers Zorro III via Buster; local-I/O BERR from Gary is a separate question, open with them.
+    reaches Gary's timeout logic, or the resulting BERR is not forwarded for local I/O. The Z3660 firmware side's
+    BERR answer covers Zorro III via Buster; local-I/O BERR from Gary is a separate, open question.
   - **Auto-detection by CPU probing of `$DD00xx` is out** on Z3660 machines.
 - **U62 still holds for Zorro III.** A dead Zorro III window gets Buster's timeout, which reaches the 060 as a
   fault, so `bprobe` catches it after about 280 ms and the attach degrades to "no board". The hang is specific to
@@ -175,7 +175,7 @@ stalled on a hung cycle, not just on "the wrong chip".
 
 **The phantom must not claim `$DD0000`.** That is W-D7's job and it is already a rule. Stock autocon() synthesises the
 A3000 SDMAC at `$DD0000` (id `0x0202F003`) unless the support.c probe rejects it. On an A4000T without W-D7, the stock
-a3091 then pokes the 710's address space and the boot stalls [M review/D-1 2026-09-28 MG8, 2/2 cold boots]. W-D7 skips
+a3091 then pokes the 710's address space and the boot stalls [M, 2026-09-28 MG8, 2/2 cold boots]. W-D7 skips
 `$DD0000` on AGA. The onboard row (§3) has its own id, so the 710 is never registered as the phantom, and the phantom
 never as the 710. **KD060-ZT must carry W-D7**, which the media gate already enforces ("wd7 required").
 
@@ -186,7 +186,7 @@ and every answer goes to `insert()`. `insert()` keeps **SDCARDS = 2** slots sort
 newcomer once both slots are full [S amix-040-060-port src/ide_sd_glue040.s header; kerntools 040-support-c-d7.md §5b].
 The card number is therefore the rank by address.
 
-The onboard 710 is not an AutoConfig board, so it reuses the **Gayle IDE glue pattern** (P-15 P2, port
+The onboard 710 is not an AutoConfig board, so it reuses the **Gayle IDE glue pattern** (port
 `src/ide_sd_rows.py` + `src/ide_sd_glue040.s`):
 
 - `a4kt_sd_rows`: the base's table with every existing row (by relocation), plus **one row** carrying an id no board
@@ -195,7 +195,7 @@ The onboard 710 is not an AutoConfig board, so it reuses the **Gayle IDE glue pa
   gates (§2), which live **in the a4091 object**. Every other id goes to autocon unchanged.
 - **Sort key, not bus address.** As with `ide_sd_key`, the glue hands insert() a rank:
   - default `0xffffffe0`: sorts after every real board and before IDE's `0xfffffff0`. So the **Z3660 stays card 0
-    and the onboard 710 is card 1**, the shape the brief asks for.
+    and the onboard 710 is card 1**, the intended shape.
   - key `0`: rank by the real base `$DD0000`, so the onboard 710 is **card 0**. This is the shape for a stock
     A4000T rooting on its own SCSI, with no Z3660.
 - **Driver side.** `sdcardbase(card)` then returns the key. The driver owns the key in `.data` as `a4091_a4kt_key`,
@@ -231,12 +231,12 @@ idle chip, and the metal cells will show it.
 ## 5. DMA reach into Z3660 DDR
 
 - **The A4000T's 710 is a motherboard master**, like the A3000 SDMAC, not a Zorro III master through Buster like the
-  A4092 [I]. Antti's letter 11 shows the motherboard case working: A3000 SDMAC DMA into a Z3660's CPU-local
-  `$08000000` aperture, 6147 segments, all must-stay-zero counters 0 [M review/D-1 2026-10-01]. Separately, AmigaOS
-  has booted from this A4000T's onboard 710 on its real 060 [M review/P-4, 2026-09-25].
+  A4092 [I]. The port author's measurement shows the motherboard case working: A3000 SDMAC DMA into a Z3660's CPU-local
+  `$08000000` aperture, 6147 segments, all must-stay-zero counters 0 [M, 2026-10-01]. Separately, AmigaOS
+  has booted from this A4000T's onboard 710 on its real 060 [M, 2026-09-25].
 - **The A4092 cells answer the other question** (Zorro III through Buster, A4000D), so their result does not transfer
-  either way. **The onboard case needs its own coherence cell (T2).** Once the Bench station's A4092 DMA reading lands
-  (tmp/2026-10-02-a4092-metal, question 2), record it next to T2 as the Buster data point.
+  either way. **The onboard case needs its own coherence cell (T2).** Once the A4092 DMA reading lands, record it next
+  to T2 as the Buster data point.
 - **The ROM driver already aims the onboard 710 at Z3660 RAM** [M, variant 3]. DSA, TEMP and DSP hold `0x0800xxxx`.
   Whether its DMA **lands** there is the next cell (T0b, §8), and it needs a SCSI device on the A4000T's onboard bus.
 - **The data path is unchanged.** `sdcom.addr` is physical, the 710 drives 32-bit addresses, and the D42 seam, the
@@ -280,7 +280,7 @@ call, later.
 
 ## 8. Test plan: emulator first (N12), then the A4000T
 
-T-13 records N12 as blocked because "amiberry does not model the $DD0000 onboard 53C710". That is **superseded**: the
+An earlier plan recorded N12 as blocked because "amiberry does not model the $DD0000 onboard 53C710". That is **superseded**: the
 model is in the fork [S amiberry src/gayle.cpp:647-745, ncr_scsi.cpp `ncr710_io_bget_a4000t`]. It is enabled by
 `chipset_compatible=A4000T` (`cs_mbdmac == 2` adds ROMTYPE_SCSI_A4000T, cfgfile.cpp:7044-7060) or by
 `scsi_a4000t=true`, with units via `scsi<N>_a4000t`, and an A4000T Kickstart taken from roms/ by id (R075 or R076).
@@ -292,12 +292,12 @@ Amiberry's DIP bank reads `0xff`, so host ID 7.
 | N12b data | A4000T + 060 (+ R-060Z Z3660 for card 0) | GSIO INQUIRY then READ(10), raw dd and a UFS tree equal to host truth, D42 invariants, Z3660 = card 0 and 710 = card 1; the key-0 variant roots on the 710 as card 0 |
 | N12c order | the A4092 + 710 rows; the chained IDE + 710 glue | the drop rule as §3 predicts; both glue ids answer |
 | T0 metal | A4000D and A4000T under AmigaOS | read-only dump of `$DD0000`-`$DD00FF`. **A4000D: hang at first touch; A4000T: hang at `$DD0000` and at `$DD0040`, chip uninitialised** (§2, T0 result). Next: variant 3, preset 7 (A4000T ROM init), one byte at `$DD0062` |
-| T0b metal, AmigaOS | A4000T, preset with the A4000T ROM (47.115 + `kick060_scsi`), a SCSI disk on the onboard bus (owner hardware; a ZuluSCSI with a known image is ideal), termination settled | the NCR scsi.device lists the unit. Copy a known file or region off it (e.g. a 32 MiB `dd`-style read through the device, or a file whose host checksum is known) and compare with host truth. Record DSA/DNAD after the transfer (byte/long reads at `+0x40`, read-only), to see the `0x08xxxxxx` targets. **Shows: onboard-710 DMA reach into the Z3660 DDR as a motherboard master.** No Amix needed |
+| T0b metal, AmigaOS | A4000T, preset with the A4000T ROM (47.115 + `kick060_scsi`), a SCSI disk on the onboard bus (a ZuluSCSI with a known image is ideal), termination settled | the NCR scsi.device lists the unit. Copy a known file or region off it (e.g. a 32 MiB `dd`-style read through the device, or a file whose host checksum is known) and compare with host truth. Record DSA/DNAD after the transfer (byte/long reads at `+0x40`, read-only), to see the `0x08xxxxxx` targets. **Shows: onboard-710 DMA reach into the Z3660 DDR as a motherboard master.** No Amix needed |
 | T1 metal | A4000T, KD060-ZT, Z3660 root, ZuluSCSI on the onboard bus | attach line, probe answer, data equal to host truth |
 | T2 metal | as T1, copyback (`hat_cm_ram 0x20`) | coherence digest for the motherboard-master path into `$08xxxxxx` |
 | T3 metal | A4000T Kickstart with scsi.device (or `scsi710.kick`) | route (b): root on the onboard bus |
 
-### 8a. Decoding the T0b reads (for the Z3660 station)
+### 8a. Decoding the T0b reads
 
 **(1) The lane rule.** The 710 sits big-endian at `$DD0040`. A longword read at `$DD0040 + N` (N a multiple of 4)
 returns the registers at byte offsets N, N+1, N+2, N+3 in bits 31:24, 23:16, 15:8, 7:0. The 32-bit registers (DSA,
@@ -350,8 +350,8 @@ is below `$00200000`.
   or a DSA/DSP that does not move between two different commands, when the driver allocates per command.
 
 **(4) The pass criterion for T0b** ("onboard-710 DMA reaches the Z3660 DDR as a motherboard master"):
-1. All netdd pieces read through `scsi.device` unit 0 match the truth image `ec8d8d24…` per piece, except a piece the
-   station names in advance as liable to drift (the root block).
+1. All netdd pieces read through `scsi.device` unit 0 match the truth image `ec8d8d24…` per piece, except a piece named
+   in advance as liable to drift (the root block).
 2. **The data buffers were in DDR.** Sample DNAD **during** the transfer: a second task loops read-only longs at
    `$DD0068` while netdd runs. Most of the time is data phase, so most samples are data-buffer addresses. At least
    one, and preferably most, samples must fall in `$08000000`-`$0FFFFFFF`.
@@ -368,18 +368,18 @@ it.
 
 | Piece | Estimate |
 |---|---|
-| a4091: the onboard mode (per-card offsets, DCNTL, key translation, G0-G3 probe, DIP host ID, attach quiesce, ctlid), both builds, gates | 1-1.5 station-days (S-M) |
+| a4091: the onboard mode (per-card offsets, DCNTL, key translation, G0-G3 probe, DIP host ID, attach quiesce, ctlid), both builds, gates | 1-1.5 days (S-M) |
 | port: rows + glue, chained IDE + 710 glue (mostly ide_sd_* reuse) | about 1 day (M) |
 | kerntools: KD060-ZT family, stamps, gates | 0.5-1 day |
 | amiberry rig + N12a-c | about 1 day, if the model behaves as read |
 | metal T0-T3 | about 1 bench day; T0 can run any time, read-only |
 
-**Total: M-L, about 4-5 station-days**, matching P-15 K5.
+**Total: M-L, about 4-5 days.**
 
-T0 is done (the window answers after the A4000T ROM's NCR init; Gary is closed negative). The critical path is the owner's A1 decisions, then T0b (needs onboard-bus hardware), then the a4091 code, then the port glue, then kerntools, then N12, then
+T0 is done (the window answers after the A4000T ROM's NCR init; Gary is closed negative). The critical path is the open A1 decisions, then T0b (needs onboard-bus hardware), then the a4091 code, then the port glue, then kerntools, then N12, then
 T1-T3.
 
-**Open owner decisions:**
+**Open decisions:**
 1. Sort key: default (710 = card 1) vs 0 (710 = card 0).
 2. Row order against an A4092 in the same box.
 3. Whether a KD040-T sibling is wanted.
