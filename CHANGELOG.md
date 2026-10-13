@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-13 — Publication scrub before the first push since August (05dffa2)
+
+NOTICE and README carry the Amiga Corporation trademark wording and point at amigaux.org/about/ instead of an
+internal file (the 2026-09-26 "before any push" to-do below is done). Docs and tools: evidence paths, report ids,
+letter numbers and process wording made generic; README names the sibling repos the 040/060 build expects.
+Objects unchanged (030 b5042e96, 040 c9f0e467, 040 --d42 7d75ab42).
+
 ## 2026-10-05 — A4-24: re-arm the bus reset after a stuck command (a0c99a6)
 
 A4-24: after a stuck command (poll-bound timeout, or err_phase with the target still holding BSY, e.g. a 512-byte dd
