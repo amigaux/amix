@@ -1,0 +1,146 @@
+# setclk-y2k.patch -- the two community Y2K fixes to the stock Amix 2.1 setclk.c,
+# consolidated into one diff against the stock source (amigasrc-2.1 package,
+# /usr/amiga/src/cmd/setclk/setclk.c, 7076 B, sha256
+# 03a00a434cff9137eaca276dab073cacd1003c0a0e2eff9493c058086b104901).
+#
+#   Piru (2006): the year field outgrows two digits in 2000 (convert_time counts
+#     years from 1900, so 2026 is "126"): the three 11-byte buffers become 12, and
+#     read_clock's sscanf takes the year as %03d.
+#   a_petri (2007): the rc path hands date(1) a 4-digit year -- "1YY" becomes "20YY"
+#     -- and tmpbuf is sized for it (supersedes Piru's "MMDDhhmmYYY").
+#
+#   amix-installng (IN-rtc, 2026-09-29): a plausibility gate on the rc path -- an RTC
+#     reading outside 1992..2037 leaves the system clock alone (a clock set back past
+#     root's password age makes every login "expired", grimoire quirk 20; past 2037 a
+#     32-bit time_t overflows) -- and one console line on either path (stderr, since
+#     /etc/sysinit sends setclk's stdout to /dev/null). The hardware clock is never
+#     written.
+#
+#   amix-installng (IN-rtc-2, 2026-09-29): the rc path sets the clock to the SECOND.
+#     date(1) takes no seconds (the box booted up to 59 s slow), so the RTC's wall
+#     time is read in the /etc/clkzone zone with mktime() and set with stime();
+#     no date(1), no shell. This libc's mktime() treats tm_isdst -1 as standard
+#     time (measured), so summer time is detected with localtime() and re-read.
+#
+# Source: https://www.amigaunix.com/doku.php/y2k-dst (amiga.org thread, 2007:
+# Failure, Piru, a_petri). The hunks land at Piru's own line numbers, which is the
+# evidence this is the source they patched. The wiki's prebuilt binary (8564 B,
+# sha256 6022274f128c54d1e5e4e240a5451990bb5add9cc4e1a17634b6c5dd5438af82) is kept
+# only as the behavioural reference; tools/build-setclk.sh builds ours from this.
+--- a/setclk.c
++++ b/setclk.c
+@@ -5,6 +5,7 @@
+ #include <string.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <unistd.h>
+ #include <fcntl.h>
+ #include <errno.h>
+ 
+@@ -51,7 +52,7 @@
+ 
+     if (!strcmp(*argv, "getclk"))
+     {
+-	char buffer[11];
++	char buffer[12];
+ 
+ 	retval = read_clock(buffer);
+ 
+@@ -80,7 +81,9 @@
+     if (argc == 1)
+     {
+ 	time_t thetime = read_from_clock_device();
+-	char buffer[BUFSIZ*2], tmpbuf[sizeof("MMDDhhmmYY")];
++	char tmpbuf[sizeof("MMDDhhmmYYYY")];
++	struct tm tm;
++	time_t utc;
+ 
+ 	/*
+ 	** Set the system time to what the hardware thinks is correct.
+@@ -95,8 +98,57 @@
+ 	}
+ 
+ 	convert_time(thetime, tmpbuf);
+-	sprintf(buffer, "%s /usr/bin/date %s", bexleyTZ, tmpbuf);
+-	system(buffer);
++	if (tmpbuf[8] == '1')
++	{
++	    tmpbuf[12] = tmpbuf[11];
++	    tmpbuf[11] = tmpbuf[10];
++	    tmpbuf[10] = tmpbuf[9];
++	    tmpbuf[9] = '0';
++	    tmpbuf[8] = '2';
++	}
++	/*
++	** Plausibility gate (amix-installng IN-rtc): a dead or unset battery
++	** clock must not drag the system clock backwards past the password
++	** ages (an SVR4 login then says "expired" forever) or into years a
++	** 32-bit time_t cannot hold. Outside 1992..2037 the system clock is
++	** left alone. The hardware clock is never written here. One console
++	** line either way (stderr: sysinit sends stdout to /dev/null).
++	*/
++	if (thetime < 694224000L || thetime > 2145916799L)
++	{
++	    fprintf(stderr, "%s: RTC reads %.2s/%.2s %.2s:%.2s %s%s -- not plausible (1992..2037), clock left alone\n",
++		    progname, tmpbuf, tmpbuf + 2, tmpbuf + 4, tmpbuf + 6,
++		    tmpbuf[8] == '2' ? "" : "19", tmpbuf + 8);
++	    return 0;
++	}
++	/*
++	** IN-rtc-2: set the clock to the SECOND. date(1) takes no seconds, so
++	** the RTC's wall time (thetime, broken down as if GMT) is read in the
++	** /etc/clkzone zone with mktime() and handed to the kernel with stime().
++	** This libc's mktime() takes tm_isdst -1 as 0 (standard time) but does
++	** honour 1 (measured on the box), so read it as standard time first and,
++	** if that instant falls in summer time, again as summer time.
++	*/
++	putenv(bexleyTZ);
++	tzset();
++	tm = *gmtime(&thetime);
++	tm.tm_isdst = 0;
++	utc = mktime(&tm);
++	if (utc != (time_t) -1 && daylight && localtime(&utc)->tm_isdst > 0)
++	{
++	    tm = *gmtime(&thetime);
++	    tm.tm_isdst = 1;
++	    utc = mktime(&tm);
++	}
++	if (utc == (time_t) -1 || stime(&utc) != 0)
++	{
++	    fprintf(stderr, "%s: cannot set the system clock (%s)\n",
++		    progname, strerror(errno));
++	    return 1;
++	}
++	fprintf(stderr, "%s: RTC %.2s/%.2s %.2s:%.2s:%02d %s (%s) -> system clock set\n",
++		progname, tmpbuf, tmpbuf + 2, tmpbuf + 4, tmpbuf + 6,
++		(int) (thetime % 60), tmpbuf + 8, bexley);
+ 
+ 	return 0;
+     }
+@@ -138,7 +190,7 @@
+ 
+     if (set_clock)
+     {
+-	char buffer[11];
++	char buffer[12];
+ 	struct tm *tm;
+ 	time_t thetime;
+ 
+@@ -175,7 +227,7 @@
+ 
+     if (display_clock)
+     {
+-	char buffer[11];
++	char buffer[12];
+ 
+ 	retval = read_clock(buffer);
+ 
+@@ -299,7 +351,7 @@
+ 	return FALSE;
+     }
+ 
+-    if (sscanf(buffer, "%02d%02d%02d%02d%02d", &month, &days, &hours, &mins,
++    if (sscanf(buffer, "%02d%02d%02d%02d%03d", &month, &days, &hours, &mins,
+ 	       &year) != 5)
+     {
+ 	(void) fprintf(stderr, "%s: Bad date format \"%s\"\n", progname,

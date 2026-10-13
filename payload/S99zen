@@ -1,0 +1,192 @@
+#!/bin/sh
+# S99zen -- bring up the Z3660 native ethernet (zen0) at boot, at the address
+# this CARD owns: zen0's MAC (read by /usr/amiga/bin/zenmac) is looked up in
+# /etc/inet/zen.conf, so one image serves every machine listed there
+# (docs/address-by-card.md). A matched row also sets the nodename and rewrites
+# this box's own row in /etc/inet/hosts. No zen.conf = the laydown address
+# below, exactly as before the table existed.
+# Laid onto the target root by src/installer/install.sh for zen0 (metal) profiles
+# only: a driver-written ADDITIVE file, NOT a package member (like S16firstboot
+# and updbootpart). The FALLBACK/NETMASK/GATEWAY/DOMAIN values are the profile's
+# FB_IP/FB_NETMASK/FB_GATEWAY/FB_DOMAIN, parameterized at laydown (the tracked
+# master carries placeholders the installer-selftest drift-lock resolves).
+# z3660eth cdevsw major = 51, so /dev/zen0 is c 51 0 (self-healed by mknod below).
+# Media mastered from this tree REQUIRE kernels that register z3660eth at 51.
+#
+# The bring-up proper is BACKGROUNDED so a datapath fault can never hang the boot
+# (the box still reaches login). Learned on real HW (z3660net 2026-06-21):
+#  * run a bare slink FIRST to link the base inet STREAMS, THEN slink addaen in a
+#    retry loop (addaen can race ahead of the base plumbing on a fast clean boot).
+#  * ifconfig takes a LITERAL IP, never `uname -n` -- on SVR4.0 the name path
+#    triggers a boot-stalling DNS lookup when the resolver cannot be reached.
+# Verbs besides start (tools/zen-conf-selftest.sh drives them on the host):
+#   lookup MAC [CONF]      print "ADDR NAME HOW" for MAC (HOW = card|default|none)
+#   hosts FILE IP NAME OLD [DOMAIN]   print FILE with this box's own row rewritten
+#   mkconf MAC=ADDR=NAME ...          print a zen.conf holding those rows
+FALLBACK=@FB_IP@
+NETMASK=@FB_NETMASK@
+GATEWAY=@FB_GATEWAY@
+DOMAIN=@FB_DOMAIN@
+CONF=/etc/inet/zen.conf
+HOSTS=/etc/inet/hosts
+ZENMAC=/usr/amiga/bin/zenmac
+
+# zen_row KEY FILE -- the first row whose first field is KEY (case-insensitive),
+# printed as "ADDR NAME" (NAME "-" when absent); status 1 when there is none.
+zen_row()
+{
+	r=`sed -e 's/#.*//' "$2" | grep -i "^[ 	]*$1[ 	]" | sed -n 1p`
+	[ -n "$r" ] || return 1
+	set -- $r
+	expr "$2" : '[0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]*$' > /dev/null || return 1
+	echo "$2 ${3:--}"
+}
+
+# zen_pick MAC FILE -- set ADDR NAME HOW: the MAC's own row (HOW=card), else the
+# "default" row (HOW=default), else FALLBACK (HOW=none).
+zen_pick()
+{
+	r=
+	HOW=none
+	if [ -f "$2" ]; then
+		if [ -n "$1" ]; then
+			r=`zen_row "$1" "$2"`
+		fi
+		if [ -n "$r" ]; then
+			HOW=card
+		else
+			r=`zen_row default "$2"`
+			if [ -n "$r" ]; then
+				HOW=default
+			fi
+		fi
+	fi
+	if [ -n "$r" ]; then
+		set -- $r
+		ADDR=$1
+		NAME=$2
+	else
+		ADDR=$FALLBACK
+		NAME=-
+	fi
+}
+
+# zen_hosts FILE IP NAME OLD DOMAIN -- print FILE without any row for IP and
+# without the aliases NAME/OLD (bare or dotted), then "IP NAME NAME.DOMAIN".
+zen_hosts()
+{
+	awk '
+	/^[ 	]*#/ || NF == 0 { print; next }
+	$1 == ip { next }
+	{
+		keep = ""
+		drop = 0
+		for (i = 2; i <= NF; i++) {
+			f = $i
+			if (substr(f, 1, 1) == "#") {
+				for (; i <= NF; i++)
+					keep = keep " " $i
+				break
+			}
+			if (f == nm || f == old || index(f, nm ".") == 1 || (old != "" && index(f, old ".") == 1)) {
+				drop++
+				continue
+			}
+			keep = keep " " f
+		}
+		if (drop == 0)
+			print
+		else if (keep != "" && substr(keep, 2, 1) != "#")
+			print $1 "	" substr(keep, 2)
+	}
+	END {
+		row = ip "	" nm
+		if (dom != "")
+			row = row " " nm "." dom
+		print row
+	}' ip="$2" nm="$3" old="$4" dom="$5" "$1"
+}
+
+# zen_mkconf MAC=ADDR=NAME ... -- a zen.conf holding those rows.
+zen_mkconf()
+{
+	echo '# /etc/inet/zen.conf -- the zen0 address of each Z3660 card, read by'
+	echo '# /etc/rc2.d/S99zen at every boot (docs/address-by-card.md).'
+	echo '#   <MAC as the driver sees it>  <address>  <short-name>'
+	echo '# Key on the EFFECTIVE MAC (/usr/amiga/bin/zenmac prints it): the Z3660'
+	echo '# firmware mis-parses hex letters in z3660cfg.txt, so a configured'
+	echo '# 00:80:1A:.. appears as 00:80:51:.. on the wire and to the driver.'
+	echo '# The short-name becomes the nodename; "-" keeps the installed one.'
+	echo '# A "default" row is used for a card not listed (with a console warning).'
+	for w
+	do
+		echo "$w" | sed -e 's/=/  /g'
+	done
+}
+
+VERB=$1
+case "$VERB" in
+lookup)
+	zen_pick "$2" "${3:-$CONF}"
+	echo "$ADDR $NAME $HOW"
+	exit 0
+	;;
+hosts)
+	zen_hosts "$2" "$3" "$4" "$5" "$6"
+	exit $?
+	;;
+mkconf)
+	shift
+	zen_mkconf "$@"
+	exit 0
+	;;
+start|"")
+	;;
+*)
+	echo "usage: S99zen [start | lookup MAC [CONF] | hosts FILE IP NAME OLD [DOMAIN] | mkconf MAC=ADDR=NAME ...]" >&2
+	exit 1
+	;;
+esac
+
+[ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0
+
+ADDR=$FALLBACK
+if [ -f $CONF ]; then
+	MAC=`$ZENMAC 2>/dev/null`
+	expr "$MAC" : '[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]$' > /dev/null || MAC=
+	zen_pick "$MAC" $CONF
+	if [ $HOW = card ]; then
+		echo "S99zen: zen0 card $MAC -> $ADDR ($NAME)"
+	else
+		echo "S99zen: WARNING: zen0 card MAC ${MAC:-unreadable} is not in $CONF -- using $ADDR"
+	fi
+	OLD=`uname -n`
+	NEW=$OLD
+	if [ "$NAME" != - ] && expr "$NAME" : '[A-Za-z0-9][-A-Za-z0-9]*$' > /dev/null; then
+		NEW=$NAME
+	fi
+	if [ "$NEW" != "$OLD" ]; then
+		uname -S "$NEW" && echo "$NEW" > /etc/nodename && echo "S99zen: nodename $OLD -> $NEW"
+	fi
+	if [ -f $HOSTS ]; then
+		zen_hosts $HOSTS "$ADDR" "$NEW" "$OLD" "$DOMAIN" > $HOSTS.zn$$
+		if cmp -s $HOSTS $HOSTS.zn$$; then
+			rm -f $HOSTS.zn$$
+		else
+			mv $HOSTS.zn$$ $HOSTS && chmod 444 $HOSTS && echo "S99zen: $HOSTS own row -> $ADDR $NEW"
+		fi
+	fi
+fi
+(
+  sleep 5
+  /usr/sbin/slink
+  i=0
+  while [ $i -lt 20 ]; do
+    /usr/sbin/slink addaen /dev/zen0 zen0 && break
+    sleep 3
+    i=`expr $i + 1`
+  done
+  /usr/sbin/ifconfig zen0 $ADDR netmask $NETMASK up -trailers
+  /usr/sbin/route add default $GATEWAY 1
+  /usr/sbin/ifconfig zen0
+) > /tmp/zen-bringup.log 2>&1 &

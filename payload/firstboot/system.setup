@@ -1,0 +1,6 @@
+#!/bin/sh
+# system.setup -- ENTRY POINT for the first-boot configuration dialog (W5).
+# Written into the stock slot by src/installer/install.sh when the profile says
+# FIRSTBOOT_DIALOG=y; /etc/sysinit runs it iff it is executable, and the dialog
+# takes the exec bit off THIS file at the clean end of its summary loop.
+exec /sbin/sh /var/adm/firstboot/firstboot.sh --dialog

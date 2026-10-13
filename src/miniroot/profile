@@ -1,0 +1,641 @@
+#	/etc/profile -- the Amiga UNIX install script, Installer-NG (wave W4).
+#
+# REPLACES the stock 19,351-byte /etc/profile on the install miniroot. The
+# console login shell SOURCES it, so it runs single-user with nothing mounted,
+# and it carries ONLY what must happen before an install source exists:
+#	1. the stock banner + the stock Ctrl-C trap (installed FIRST -- every
+#	   prompt below has to be escapable before it can be trusted);
+#	2. the keymap menu (you must be able to TYPE before anything is asked,
+#	   and the answer is what the target gets baked with);
+#	3. "Do you want to install or repair?" -- repair is stock's repairdisk;
+#	4. the source auto-probe: find the CD or the source disk, mount /cdrom;
+#	5. exec sh /cdrom/install/bin/setup.sh -- the interview, ON THE MEDIUM.
+# Destination, sizes, packages and verbose are setup.sh's questions, not this
+# file's. That split is why the miniroot shrank instead of growing.
+# WHY the probe order is hardcoded here: it cannot come from the medium it is
+# looking for. The medium's per-rig keys refine things only AFTER a mount.
+# Full rationale: docs/miniroot.md, docs/installer.md.
+#
+# PRE-POSIX SVR4 /bin/sh (1991) + the miniroot tool allowlist -- the same hard
+# rules src/installer/{install,setup}.sh carry, audited by the same greps
+# (installer-selftest.py A/B/G/H/I/T, extended to this file in W4), and more
+# binding here: nothing is mounted, so the only tools are the miniroot's own.
+#	* NO $(...) -- `backticks`;  NO $(( )) -- `expr`;  NO [[ ]];  no `local`
+#	* NO `export VAR=val` -- assign, then `export VAR`
+#	* NO sed/grep/basename/touch/date/wc/tr -- the miniroot has NONE
+#	* `echo` is the SVR4 BUILTIN (\n, \c): the only way to prompt
+#	* NEVER `: > file` inside a loop (a function called from a loop IS a loop
+#	  body) -- create with `cp /dev/null`
+#	* `while read ... done < FILE` is a SUBSHELL: values come back via FILES
+#	* `set -- \`cat FILE\`` on an EMPTY file is a NO-OP on $@, so every such
+#	  count is [ -s ]-guarded first
+#
+# STOCK PROVENANCE -- quoted, not imitated. The banner, the trap, readask(), the
+# restart idiom, the keymap menu, the install-or-repair question, the disk and
+# partition questions and repairdisk() are the stock script's own words, from
+# floppies/orig/amix_21_root.adf: /etc/profile (19,351 B, md5 97f800ec7bcd627b
+# fed2322fdc19f86b) and /etc/id_kmap (834 B, md5 4bdbe25645cccd0c64e8fdbee5aca
+# 5a1). installer-selftest audit Y checks every quoted string byte-for-byte
+# against that image and DECLARES each place stock parameterised what we resolve.
+# * The ONE deliberate change to stock's data is keymap entry 11's LABEL:
+# "Suomi / Svenska". The map is still `s` -- no Finnish keymap exists in Amix 2.1
+# (15 ship, 14 are offered) and for this era FI == SE, one Nordic SKU. Numbering,
+# defaults and every other label are stock's, Latin-1 bytes included; the stock
+# artifacts themselves are never edited.
+
+echo "Amiga UNIX install script"
+
+trap '	echo "Running interactive shell..."
+	exec /bin/sh -i' 2
+
+CDROM=/cdrom
+SETUP=$CDROM/install/bin/setup.sh
+KMAPDIR=/etc/kmap
+KMAPFILE=/tmp/kmap
+HITS=/tmp/src.hits
+BLK0=/tmp/mr.blk0
+UNATT_MARK=$CDROM/install/UNATTENDED
+UNATT_OK=/tmp/mr.unatt
+DEFKMAP=12
+# ROOT_FSYS -- the filesystem the repair path mounts+fscks the target root as.
+# s5 is the SOURCE default (030 line); build-miniroot BAKES this to the build's
+# fstype ($FSTYPE), so a ufs (040/060) miniroot repairs a ufs root, an s5 miniroot
+# an s5 root. Keep the literal "s5" here -- build-miniroot seds exactly it.
+ROOT_FSYS=s5
+
+# The SCSI ids this miniroot can address at all. /dev/dsk/c4d0* is deliberately
+# ABSENT from miniroot.proto -- stock reserved id 4 for the tape drive -- so that
+# refusal is structural here too, exactly as it is in setup.sh.
+SCAN_IDS="0 1 2 3 5 6"
+
+# * THE SOURCE PROBE ORDER (hardcoded -- see the header), and it is ORDERED BY
+# WHAT CAN BE TESTED SAFELY FIRST.
+#
+# A RAW payload slice is a block device, so its existence can be settled by ONE
+# bounded 512-byte read before anything is mounted -- the same probe the
+# interview's disk scan uses, and the only kind of probe on this miniroot that is
+# known to be harmless. A self-booting installation DISK is therefore looked for
+# first: on the metal source rig it answers immediately and NO cdfs probe ever
+# runs.
+#   /dev/dsk/c0d0s4  the 5-slice self-booting METAL source disk (slice 4 is the
+#                    payload -- the very disk this miniroot booted from)
+#   /dev/dsk/c5d0s1  the 2-slice bench RAW source disk
+# A CD cannot be tested that way: cdfs addresses the drive as <card>,<unit> and
+# never traverses /dev, so the only way to ask is to mount.
+#   1,3  A3000+A4091 bench + any A4091-carried drive behind a card-0 WD
+#   0,3  the A4091 (or an A2091/WD) as card 0: an A4000/030 with the A4091 as its
+#        only HBA. The W2 "card index 1 even as the only HBA" finding was stock
+#        support.c's phantom A3000 card 0; the VPOSR-gated probe (K030-U) removes
+#        it on AGA machines (P-15 I1, E20b)
+#   0,2  the A4000+Z3660 rig (profiles/metal-a4000-z3660.profile CD_SPEC)
+#   1,2  a second-HBA drive at unit 2
+# RAW_CANDIDATES -- the source-disk slice-4 devices the auto-probe reads, in
+# order. It is MEDIUM-SPECIFIC, not a fixed order, because a card-0 device may not
+# be safe to touch: on the real 68060 (amix_mode NO) SCSI card 0 is the phantom
+# A3091, and an open() of it reaches sdopen->getrdb->initialize(), which is FATAL
+# on that metal (FPE-R7-METAL 3.1: "never call it"). So a card-1-rooted 040/060
+# medium bakes ONLY its own device (e.g. /dev/dsk/ced0s4) into
+# /etc/install-src-candidates at miniroot-build time, and this probe never names
+# card 0. The hardcoded default below is the LEGACY 030 list, used only when no
+# baked file is present -- so the 030 bench miniroot is byte-unchanged.
+RAW_CANDIDATES="/dev/dsk/c0d0s4 /dev/dsk/c5d0s1 /dev/dsk/c5d0s4"
+if [ -f /etc/install-src-candidates ]
+then
+	# A baked list REPLACES the legacy default outright (blank it FIRST, so an
+	# empty/unreadable file yields an empty list -- "source not found" -- and can
+	# NEVER fall back to the card-0 string, which is fatal to touch on the real 060.
+	RAW_CANDIDATES=`cat /etc/install-src-candidates`
+fi
+
+# The interview's disk scan (setup.sh) and this miniroot's repair path both open
+# /dev/dsk/c<i>d0s0 for every i in $SCAN_IDS. On a card-1 medium that MUST list
+# card-1 ids ONLY: opening any c0..c7 node reaches the phantom A3091 and is FATAL
+# on the real 060 (pc=0x800D578), the same rule as the source probe above. Derive
+# the scan from the SAME baked candidates as the source probe: each names its card
+# via the controller letter c<X>d0 (X = card<<3 | unit), and any X in 8..f means
+# card 1. Absent a baked file (the 030 line) SCAN_IDS keeps the card-0 default set
+# at the top -- so the 030 bench miniroot is byte-unchanged.
+_c1=
+for _cand in $RAW_CANDIDATES
+do
+	_x=`expr "$_cand" : '.*/c\(.\)d0'`
+	case "$_x" in [89aAbBcCdDeEfF]) _c1=1 ;; esac
+done
+[ -n "$_c1" ] && SCAN_IDS="8 9 a b c d e f"
+CD_CANDIDATES="1,3 0,3 0,2 1,2"
+
+# ---------------------------------------------------------------------------
+# stock helpers, verbatim
+# ---------------------------------------------------------------------------
+readask()
+{
+	echo "$*\c"
+	read ask ||
+	{
+		echo "\nRunning interactive shell..."
+		exec /bin/sh -i
+	}
+}
+
+# restart -- the stock dead-end idiom. Stock printed exactly this and `exit 99`d;
+# init respawns the console shell, which sources this file again from the top.
+# Every dead end below ends here, so no failure ever leaves the operator staring
+# at a prompt that cannot go anywhere.
+restart()
+{
+	readask "\nPress RETURN to restart the installation script. "
+	/etc/umount /mnt > /dev/null 2>&1
+	/etc/umount $CDROM > /dev/null 2>&1
+	exit 99
+}
+
+# ---------------------------------------------------------------------------
+# 1. THE KEYBOARD MAP   (stock /etc/id_kmap, inlined; entry 11 relabelled)
+# ---------------------------------------------------------------------------
+# Inlined rather than sourced: stock's /etc/id_kmap stays on the miniroot
+# BYTE-UNTOUCHED (miniroot.proto still sources it from the stock image) and the
+# one label we change lives in OUR file, where it can be audited. `usa` leaves
+# $KMAP UNSET and calls `sioc 5` with no argument: the American map is compiled
+# into the kernel, so "usa" means "link nothing" -- exactly what the driver's
+# FB_KMAP bake reproduces on the target. usa1 is excluded, as in stock's menu.
+ask_kmap()
+{
+	echo "\nAvailable key mappings are:
+
+ 1)	cdn	Canadien Français
+ 2)	ch1	Suisse
+ 3)	ch2	Schweiz
+ 4)	d	Deutsch
+ 5)	dk	Dansk
+ 6)	e	Español
+ 7)	f	Français
+ 8)	gb	British
+ 9)	i	Italiano
+10)	n	Norsk
+11)	s	Suomi / Svenska
+12)	usa	American
+13)	usa0	American 1.0
+14)	usa2	American Dvorak
+"
+	unset KMAP
+	while [ "$KMAP" = "" ]
+	do
+		readask "\nWhich keyboard are you using? [$DEFKMAP] "
+		if [ "$ask" = "" ]
+		then
+			ask="$DEFKMAP"
+		fi
+		case $ask in
+			1)	KMAP=cdn	;;
+			2)	KMAP=ch1	;;
+			3)	KMAP=ch2	;;
+			4)	KMAP=d		;;
+			5)	KMAP=dk		;;
+			6)	KMAP=e		;;
+			7)	KMAP=f		;;
+			8)	KMAP=gb		;;
+			9)	KMAP=i		;;
+			10)	KMAP=n		;;
+			11)	KMAP=s		;;
+			12)	KMAP=usa	;;
+			13)	KMAP=usa0	;;
+			14)	KMAP=usa2	;;
+		esac
+	done
+
+	if [ "$KMAP" = "usa" ]
+	then
+		unset KMAP
+		/etc/sioc 5
+	else
+		/etc/sioc 5 $KMAPDIR/$KMAP
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# 2. REPAIR MODE   (stock's repairdisk, restored)
+# ---------------------------------------------------------------------------
+# Stock reached repairdisk through the same partition state machine the install
+# path used; here it gets its own small chooser, because the install path's scan
+# lives on the MEDIUM (setup.sh) and repair must work with nothing mounted. The
+# chooser is the same ONE bounded 512-byte read per id the interview uses --
+# NEVER /etc/ddsize, which wedged the install on the bench a3091 path (matrix run
+# 20260811-094255-cd) and cannot be bounded on a miniroot with no timeout tool.
+repairdisk()
+{
+	/etc/mount $UPART /mnt 0 ${ROOT_FSYS}
+	if [ "$?" = "0" ]
+	then
+		echo "\n$UPART mounted on /mnt"
+		MOUNT=y
+	else
+		DO_FSCK=
+		while [ "$DO_FSCK" = "" ]
+		do
+			readask "\nDo you want to fsck $UPART? [y] "
+			case $ask in
+			[yY]|[yY][eE][sS] )
+				DO_FSCK="yes"
+				;;
+			[nN]|[nN][oO] )
+				DO_FSCK="no"
+				;;
+			"" )
+				DO_FSCK="yes"
+			esac
+		done
+
+		if [ "$DO_FSCK" = "yes" ]
+		then
+			# fsck the installed root's OWN filesystem. ROOT_FSYS is baked to this
+			# miniroot's line by build-miniroot (ufs on the 040/060 line, s5 on the
+			# 030 line) and the mounts above already use it -- so fsck MUST match, or
+			# a ufs root gets fsck'd as s5 ("not an s5 file system") and the repair
+			# drops to a shell without mounting (metal-found on v7, 2026-09-15). Each
+			# arm names a LITERAL fsck_ufs / fsck_s5 -- NOT fsck_${ROOT_FSYS} -- so the
+			# tool-allowlist audit can resolve it (both are miniroot.proto members).
+			if [ "$ROOT_FSYS" = ufs ]
+			then
+				fsck_ufs -y $UPART
+			else
+				fsck_s5 -y $UPART
+			fi
+			/etc/mount $UPART /mnt 0 ${ROOT_FSYS} > /dev/null 2>&1
+			if [ "$?" = "0" ]
+			then
+				echo "\n$UPART mounted on /mnt"
+				MOUNT=y
+				TMPDIR=/mnt/tmp
+				EXINIT="set dir=/mnt/tmp"
+				export TMPDIR EXINIT
+			else
+				echo "\nMount of $UPART failed"
+			fi
+		fi
+	fi
+
+	echo "\nRunning interactive shell..."
+	echo "Logout with ctrl-D when you are finished"
+
+	(
+		PATH=/etc:/bin:/mnt/usr/bin:/mnt/usr/sbin:/mnt/usr/amiga/bin:/mnt/usr/ccs/bin
+		TERM=amiga
+		export PATH TERM
+		/bin/sh -i
+	)
+	echo "\nShutting down, please wait...\n"
+	cd /
+	sync
+	sync
+	/etc/umount /mnt > /dev/null 2>&1
+	/etc/uadmin 2 0
+}
+
+# scan_ids -- one row per id that answers a bounded read of block 0, into $HITS.
+# `dd` rc answers "is there a disk at this id"; nothing here interprets the data.
+scan_ids()
+{
+	cp /dev/null $HITS
+	for i in $SCAN_IDS
+	do
+		dd if=/dev/dsk/c${i}d0s0 of=$BLK0 bs=512 count=1 2>/dev/null
+		if [ "$?" = 0 ] && [ -s $BLK0 ]
+		then
+			echo "$i" >> $HITS
+		fi
+	done
+	rm -f $BLK0
+	[ -s $HITS ]
+}
+
+repair()
+{
+	echo "\nScanning SCSI bus for hard disks..."
+	scan_ids
+	if [ -s $HITS ]
+	then
+		set -- `cat $HITS`
+	else
+		echo "\nNo hard disks are attached to this system."
+		restart
+	fi
+	DEVS="$*"
+	echo "\nHard disks attached to this system:\n\n$DEVS"
+
+	SCSI=
+	while [ "$SCSI" = "" ]
+	do
+		readask "\nWhat is the SCSI id of the disk you want to repair? "
+		for i in $DEVS
+		do
+			if [ "$ask" = "$i" ]
+			then
+				SCSI="$i"
+			fi
+		done
+		if [ "$SCSI" = "" ]
+		then
+			echo "\nChoose one of the following:\n$DEVS"
+		fi
+	done
+
+	DISK=/dev/dsk/c${SCSI}d0s0
+	/etc/rdb $DISK > /dev/null 2>&1
+	if [ "$?" != "0" ]
+	then
+		echo "Can't find rigid disk block on $DISK"
+		echo "\nRunning interactive shell..."
+		exec /bin/sh -i
+	fi
+
+	echo ""
+	/etc/rdb -V $DISK
+	ROOTPART=
+	while [ "$ROOTPART" = "" ]
+	do
+		readask "\nWhich partition has the root filesystem? "
+		case "$ask" in
+			[1-9] )
+				ROOTPART="$ask"
+				/etc/rdb -p $ROOTPART $DISK > /dev/null 2>&1
+				if [ "$?" != "0" ]
+				then
+					echo "\nNo such partition is defined."
+					ROOTPART=
+				fi
+		esac
+	done
+
+	UPART=/dev/dsk/c${SCSI}d0s${ROOTPART}
+	repairdisk
+	exit 99
+}
+
+# ---------------------------------------------------------------------------
+# 3. THE INSTALLATION-SOURCE PROBE
+# ---------------------------------------------------------------------------
+# A candidate ANSWERS when, once mounted at /cdrom, it presents the installer:
+# $SETUP. Content, never a mount return code -- a cdfs mount can come up rc=0
+# and EMPTY (the stale-mount field observation the driver already carries), and
+# a mount over an already-mounted /cdrom returns EBUSY while the source below it
+# is perfectly readable. Only what is READABLE decides.
+#
+# ** ONE ATTEMPT PER ADDRESS, AND STOP AT THE FIRST ANSWER. BENCH-MEASURED
+# 2026-08-11 (lab-C, the cd-interactive run that found it): a SECOND cdfs mount
+# attempt on a unit that is NOT THERE panics the kernel --
+#
+#     cdfs: mount 0,2 on /cdrom failed: errno 5
+#     umount: unmount of /cdrom failed: Invalid argument
+#     TRAP ... PANIC: KERNEL FAULT psw=0x2204, pc=0x70002E8, vector=0x2 (Bus Error)
+#
+# -- and an absent unit fails with the SAME errno 5 a real media-change
+# unit-attention gives, so the two cannot be told apart from sh. The retry that
+# recovers a media change is therefore the retry that kills the box, and this
+# script does not do it. The media-change retry lives where it is safe instead:
+# in the operator's own RETURN at the restart prompt, which re-runs the whole
+# probe -- one attempt per address per pass, stock's own "insert it and press
+# RETURN" affordance, and never a second attempt on an address that did not
+# answer.
+#
+# The first candidate that answers is KEPT MOUNTED and the walk stops there.
+# Nothing probes past a working source: on this hardware every extra probe of an
+# address that is not there is a poke at a driver error path (the A4091 answers
+# a missing unit with a `slow: poll=0 rc=-1 ...` recovery line), for no gain --
+# any candidate that answers carries the same /install tree.
+
+# probe_cdfs SPEC -- ONE mount attempt at a CD address, then the content check.
+probe_cdfs()
+{
+	/usr/lib/fs/cdfs/mount "$1" $CDROM 2>/dev/null
+	[ -f $SETUP ]
+}
+
+# disk_present DEV -- is this block device really there? ONE bounded 512-byte
+# read, exactly what the interview's disk scan does and the only probe on this
+# miniroot proven harmless against absent hardware. An absent disk (or an absent
+# SLICE on a disk that is there) fails at open().
+disk_present()
+{
+	dd if="$1" of=$BLK0 bs=512 count=1 2>/dev/null
+	if [ "$?" = 0 ] && [ -s $BLK0 ]
+	then
+		rm -f $BLK0
+		return 0
+	fi
+	rm -f $BLK0
+	return 1
+}
+
+# probe_raw DEV -- mount an s5 payload slice at /cdrom, then the content check.
+# Only ever called on a device disk_present() has already answered for.
+probe_raw()
+{
+	/etc/mount "$1" $CDROM 0 s5 2>/dev/null
+	[ -f $SETUP ]
+}
+
+drop_source()
+{
+	/etc/umount $CDROM > /dev/null 2>&1
+}
+
+source_label()
+{
+	case "$1" in
+		cdfs)	echo "the CD-ROM drive at $2" ;;
+		*)	echo "the installation disk at $2" ;;
+	esac
+}
+
+# unattended_check -- if a self-booting RAW demo card carries the unattended marker
+# AND its on-slice base profile declares INSTALL_UNATTENDED=yes (both written ONLY
+# by an --unattended build), auto-run the proven install.sh path then halt. Probes
+# ONLY the RAW payload candidates (bounded read, then ONE mount) -- never cdfs, so
+# the second-mount panic class cannot arise. On any miss it umounts and returns and
+# the interview runs exactly as today.
+unattended_check()
+{
+	for d in $RAW_CANDIDATES
+	do
+		disk_present "$d" || continue
+		if probe_raw "$d"
+		then
+			if [ -f "$UNATT_MARK" ]
+			then
+				UPROF=
+				read UPROF < $CDROM/install/profiles/BASE
+				rm -f $UNATT_OK
+				if [ -n "$UPROF" ] && [ -f "$CDROM/install/profiles/$UPROF.profile" ]
+				then
+					while read kline
+					do
+						case "$kline" in
+						INSTALL_UNATTENDED=yes)	cp /dev/null $UNATT_OK ;;
+						esac
+					done < $CDROM/install/profiles/$UPROF.profile
+				fi
+				if [ -f $UNATT_OK ]
+				then
+					rm -f $UNATT_OK
+					unattended_run "$UPROF" "$d"
+				fi
+				rm -f $UNATT_OK
+			fi
+			drop_source
+			return
+		fi
+		drop_source
+	done
+}
+
+# unattended_run -- run the driver from the mounted payload, then halt (success) or
+# drop to a shell (failure). NOTE: on the DEMO card install.sh's non-blank guard is
+# DELIBERATELY DISABLED -- the demo profiles set TARGET_ERASE_OK=yes (Preset A IS
+# the intended "reinstall over this disk" action) and the guard fires only on the
+# unattended path anyway. So a second power-on with the INSTALL preset RE-WIPES the
+# target BY DESIGN; the safety is the two-preset flow + the operator, not a gate
+# here (the card's operator runbook, kept with the card master, is the authority). No countdown/
+# interrupt: the 1991 sh has no `read` timeout, the miniroot has no sleep/line, and
+# Ctrl-C is blocked on the KVM.
+unattended_run()
+{
+	echo "\n"
+	echo "############################################################"
+	echo "#  UNATTENDED INSTALL  (demo card)"
+	echo "#"
+	echo "#  profile : $1"
+	echo "#  source  : $2  (mounted at $CDROM)"
+	echo "#  This ERASES the destination disk and installs Amix onto it."
+	echo "#  No input is needed; it runs to completion, then HALTS."
+	echo "############################################################"
+	echo "\n"
+	sh $CDROM/install/bin/install.sh "$1" < /dev/null
+	rc=$?
+	if [ "$rc" = 0 ]
+	then
+		echo "\n\n"
+		echo "############################################################"
+		echo "#  INSTALL COMPLETE -- halting."
+		echo "#  Set the installed-disk preset and power-cycle to boot it."
+		echo "############################################################"
+		echo "\n"
+		sync
+		sync
+		/etc/uadmin 2 0
+	fi
+	echo "\n\n"
+	echo "############################################################"
+	echo "#  INSTALL FAILED (rc=$rc) -- NOT halting."
+	echo "#  The destination was NOT armed. Console left for inspection."
+	echo "############################################################"
+	echo "\n"
+	exec /bin/sh
+}
+
+# find_source -- leaves an installation source MOUNTED at /cdrom and sets
+# SRC_KIND + SRC_SPEC, or ends at the restart idiom. The first candidate that
+# answers wins and is left mounted: there is no separate "mount the winner" step
+# to get wrong, and no address is touched twice.
+find_source()
+{
+	# Already mounted (the boot-time mount, or an operator who mounted it from
+	# the Ctrl-C shell): take it and probe nothing. Unmounting a working source
+	# to go looking for it would be its own bug.
+	if [ -f $SETUP ]
+	then
+		echo "\nThe installation source is already mounted on $CDROM."
+		SRC_KIND=mounted
+		SRC_SPEC=$CDROM
+		return 0
+	fi
+
+	echo "\nSearching for the installation source..."
+	SRC_KIND=
+	SRC_SPEC=
+
+	# 1. a self-booting installation DISK, existence-gated (see disk_present).
+	for d in $RAW_CANDIDATES
+	do
+		disk_present "$d" || continue
+		if probe_raw "$d"
+		then
+			SRC_KIND=raw
+			SRC_SPEC="$d"
+			break
+		fi
+		drop_source
+	done
+
+	# 2. a CD. Only reachable by mounting, so one attempt each, in order.
+	if [ "$SRC_KIND" = "" ]
+	then
+		for s in $CD_CANDIDATES
+		do
+			if probe_cdfs "$s"
+			then
+				SRC_KIND=cdfs
+				SRC_SPEC="$s"
+				break
+			fi
+			drop_source
+		done
+	fi
+
+	if [ "$SRC_KIND" = "" ]
+	then
+		echo "\nNo installation CD or installation disk was found."
+		echo "Insert the installation CD and press RETURN to try again."
+		restart
+	fi
+
+	echo "\nInstalling from `source_label "$SRC_KIND" "$SRC_SPEC"`."
+	return 0
+}
+
+#############################################################################
+#
+#	Beginning of real code
+#
+#############################################################################
+
+/etc/umount /mnt > /dev/null 2>&1	# in case we were restarted
+
+# UNATTENDED demo-card branch: auto-run the proven install path + halt on a gated
+# unattended medium; falls through to the interview otherwise (see unattended_check).
+unattended_check
+
+ask_kmap
+
+# The chosen map has to reach the TARGET: the driver bakes it with stock's own
+# one hard link (FB_KMAP -> /usr/amiga/lib/kmap/default.kmap, which /etc/sysinit
+# loads on every boot). Two channels, because both survive different things: the
+# EXPORT survives the exec chain below (profile -> setup.sh -> install.sh), and
+# the FILE survives a Ctrl-C to an interactive shell and back. An EMPTY file is
+# not "no answer" -- it is the answer `usa`, which means link nothing.
+echo "$KMAP" > $KMAPFILE
+export KMAP
+
+MODE=
+while [ "$MODE" = "" ]
+do
+	readask "\nDo you want to install or repair? [install] "
+
+	case $ask in
+		"install")	MODE="install"	;;
+		"repair")	MODE="repair"	;;
+		"")		MODE="install"	;;
+	esac
+done
+
+if [ "$MODE" = "repair" ]
+then
+	repair
+fi
+
+find_source
+
+# The interview lives on the medium and takes it from here: destination, sizes,
+# packages, verbose, confirmation -- and then it execs the driver itself, with
+# stdin from /dev/null (METAL-FIX.3). No argument: the medium declares its own
+# base profile in /install/profiles/BASE.
+exec sh $SETUP
