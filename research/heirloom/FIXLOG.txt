@@ -1,0 +1,147 @@
+Heirloom-pkgtools build fix log — Ubuntu host, gcc 15.2.0, GNU make 4.4.1, 2026-07-04
+Tree: aflat github mirror of heirloom-pkgtools-070227 (single commit, "tweaked for modern tools" = CentOS 6.6 vintage)
+Each entry: WHAT failed -> WHY -> FIX (minimal)
+
+[0] Pre-flight observations
+  - mk.config:73-91 hardcodes -m32 in CFLAGS/CPPFLAGS/LDFLAGS; host has no 32-bit
+    glibc dev files (link of trivial main fails: "cannot find Scrt1.o").
+    FIX: mk.config is the documented config file -> removed -m32 (build x86-64).
+  - libadm/Makefile.mk:2 hardcodes -I/usr/lib/x86_64-redhat-linux5E/include
+    (CentOS compat-glibc for stropts.h). Directory doesn't exist here; gcc
+    silently ignores missing -I dirs, so left in place.
+  - libadm/getpass.c:43 includes <stropts.h>; glibc removed it in 2.30 (2019).
+    Expected to fail; will fix when hit.
+
+[1] libadm/getpass.c — FAILED: fatal error: stropts.h (then termio.h) not found.
+    glibc removed <stropts.h> in 2.30 and <termio.h> in 2.42.
+    FIX: dropped stropts include; converted struct termio + ioctl(TCGETA/
+    TCSETAF/TCSETAW) to POSIX termios tcgetattr/tcsetattr (5-line change).
+    NOTE: original code is the NATIVE form on SVR4 — Amix has termio.h and
+    ioctl(TCGETA); zero friction expected there. Host-only fix.
+
+[2] libpkg/dbsql.c:2780 — FAILED: "int true = 1;" — 'true' is a C23 keyword;
+    gcc 15 defaults to -std=gnu23.
+    FIX: added -std=gnu89 to CFLAGS in mk.config (matches the target dialect
+    anyway). After this, ALL ~330 .c files compile under gnu89 with no errors
+    — the tree really is C89 + GNU-isms only (long long, etc.).
+
+[3] libpkg/p12lib.h:84 — FAILED: DECLARE_STACK_OF(EVP_PKEY) + SKM_sk_* macros
+    were removed in OpenSSL 1.1.0 (host has 3.x); cascading parse errors in
+    keystore.c, security.c, pkgweb.c (the only 3 users).
+    FIX: version guard — OPENSSL_VERSION_NUMBER >= 0x10100000L uses
+    DEFINE_STACK_OF(EVP_PKEY), else original block. ~6 lines.
+    NOTE: actual SSL *calls* are already compiled out via the (undefined)
+    USE_KEYSTORE macro (e.g. libpkg/security.c:80, keystore.c:88 etc.) —
+    that is Gunnar's stock neutralization; only headers are needed.
+    For an Amix port you would excise keystore.c/security.c/pkgweb.c +
+    the p12lib.h include instead of installing OpenSSL headers.
+
+[4] libpkg/verify.c — FAILED at link: undefined makedev/major/minor.
+    glibc 2.28 removed them from <sys/types.h> (now <sys/sysmacros.h>).
+    Only this one file was missing the include (dstream.c, devtab.c etc.
+    already have it). FIX: added guarded #include <sys/sysmacros.h>.
+    NOTE: host-only; SVR4 sysmacros.h has these natively.
+
+[5] pkgcmds/installf — FAILED at link: multiple definition of 'eptnum'
+    (installf/main.o vs libinst/pkgobjmap.o): tentative-definition collision;
+    gcc 10+ defaults to -fno-common.
+    FIX: added -fcommon to CFLAGS. NOTE: gcc 2.7.2.3 (Amix target) has
+    common-model behavior by default; host-only fix.
+
+RESULT: full tree builds, exit 0, in 11.5 s wall (sequential make, x86-64).
+All 13 pkgcmds binaries + 12 valtools + 5 static libs built.
+Build prerequisites on host: gcc, flex (as 'lex'), libfl-dev (for -ll),
+OpenSSL headers only (no SSL libs linked; verified link lines).
+158 warnings: 59 deprecated (sigrelse/sighold/sigset — SVR4 signal API,
+native on Amix), 34 unused-result, 3 discarded-qualifiers,
+2 pointer-to-int-cast, 2 pointer-compare (pkgops.c:1354 char vs ptr),
+2 format-security.
+
+[6] Runtime config for smoke tests: rebuilt with PREFIX/VAR pointing into a
+    scratch prefix (mk.config knobs), because PKGBIN (hdrs/pkglocs.h:44)
+    = SADMDIR "/install/bin" is compiled in and pkgadd execs
+    $PKGBIN/pkginstall. Not a source fix — documented config behaviour.
+
+[7] RUNTIME: pkgtrans/pkginfo/pkgadd exec BINDIR "/cpio" (libpkg/dstream.c:76,
+    pkgtrans.c:87) with SVR4 flags: -oc/-ocL/-icdum[D]/-ict[D] -C 512, -pudm
+    (pkgtrans.c:1151-1168,1367; dstream.c:499,673,724). The -D variants are
+    #ifndef SUNOS41 (i.e. Solaris cpio extension). GNU cpio is NOT compatible
+    (-c means odc, no -D). FIX (host harness only): installed a translating
+    shim script at <prefix>/usr/5bin/cpio mapping to GNU cpio -H newc.
+    Also symlinked rm rmdir ls dd cp mail into 5bin: rrmdir() execs
+    BINDIR"/rm" and BINDIR"/rmdir" (libpkg/rrmdir.c:80-87). This is the
+    "Heirloom toolchest required at runtime" dependency from the README.
+    ON AMIX: native SVR4 cpio/rm/rmdir exist; -D must be dropped (build with
+    the SUNOS41 variant or patch the strings) — SVR4.0 cpio has no -D.
+
+[8] BUG (pre-existing, latent): fixed 128-byte path buffers overflow with
+    install roots/prefixes > ~110 chars. glibc _FORTIFY_SOURCE aborts pkgadd
+    in fpkginst(): libadm/pkginfo.c:285 "char path[128]" + sprintf at :300
+    "%s/%s.name" with get_PKGOLD() (= <root>/usr/options). pkgchk has a
+    similar (unidentified) narrower buffer that aborts even with short -R
+    when compiled-in VSADMDIR is long. Workaround: short paths. On Amix all
+    real paths are short, so latent — but a port should sweep sprintf into
+    fixed buffers.
+
+[9] BUG (error path): when the exec'd cpio fails, pkginfo -d/pkgtrans die
+    with glibc "free(): double free detected in tcache 2" (abort) after
+    printing the real error — double-free in the datastream error path.
+    Not triggered on success paths.
+
+SMOKE TEST RESULTS (all with scratch-prefix build, PATH=<prefix>/usr/5bin):
+  pkgmk from prototype:        OK (tolerates missing VERSION with WARNING,
+                               auto-fills "Dev Release 07/04/2026")
+  pkgtrans dir->datastream:    OK; header "# PaCkAgE DaTaStReAm/JUTOY 1 60";
+                               embedded cpio is 070701 newc at offset 512
+                               (= Amix native cpio -c format)
+  pkginfo -d dir/stream:       OK
+  pkgtrans stream->dir:        OK, byte-identical round trip (diff -r clean)
+  pkgadd -R <root> -n -a adm:  OK; wrote /var/sadm/install/contents +
+                               pkg/JUTOY/{pkginfo,install,save/pspool}
+  contents grammar written (matches Amix bench ground truth exactly):
+    d: path d class mode owner group pkg
+    f: path f class mode owner group size cksum modtime pkg
+    e: path e class mode owner group size cksum modtime pkg
+    s: path=target s class pkg
+    + trailing "# Last modified by pkgadd for X package" comment lines
+  pkginfo/pkgparam -R queries: OK
+  pkgrm -n -R:                 OK; files removed, contents rewritten empty,
+                               pkg dir removed
+  CORRUPT AMIX RECORD TEST (factory contents line 26966 with space in
+  filename injected): pkginfo -l -R fails "bad entry read in contents file /
+  pathname: /usr/x11r5/fonts/server/MacFS/TrueType / problem: unknown ftype";
+  pkgrm fails word-for-word like stock Amix pkgrm. Heirloom does NOT cure
+  the corrupt-record problem; parser (srchcfile) behaviour identical.
+  AMIX-FACTORY-STYLE PACKAGE (no VERSION in pkginfo, hand-written pkgmap):
+  pkgadd REFUSES: "VERSION parameter is not defined" —
+  pkgcmds/pkginstall/pkgenv.c:115 makes VERSION mandatory (PKG, NAME, ARCH,
+  VERSION, CATEGORY all enforced). Amix factory media would need VERSION
+  injected, or that check relaxed (1 line).
+
+C89/PORTABILITY PROBES:
+  - whole tree compiles with -std=gnu89: yes (that IS how it built)
+  - // comments: 0 files; C99 variadic macros: 0; inline: 0
+  - declarations after statement: 0 warnings tree-wide
+    (-Wdeclaration-after-statement full rebuild: "ISO C90 forbids mixed
+    declarations" count = 0)
+  - long long: 7 files (libpkg/pkgtrans.c, dstream.c, pkgstr.c, pkglib.h,
+    pkgweb.c, libinst/sml.c, hdrs/pkgdev.h); %llx printf only in
+    libinst/sml.c:1808-1878 — gcc 2.7.2.3 supports long long; SVR4 libc
+    printf lacks %ll (needs vendored snprintf anyway)
+  - snprintf/vsnprintf callers: 69 .c files (confirms prior research)
+  - fnmatch: only pkginstall/special.c, pkgremove/special.c (+ pkgadm/lock.c,
+    not built) — vendor a small fnmatch or stub
+  - LFS64 (stat64/statvfs64/dirent64): 13 files incl. hdrs — compat-map to
+    plain stat/statvfs/dirent on Amix
+  - deprecated sigrelse/sighold/sigset (59 warnings on glibc): NATIVE on SVR4
+
+VERSION NOTE: version/version.c id = "@(#)pkgtools.sl 1.12 (gritter) 6/27/09"
+— the aflat mirror carries the FINAL 2009 heirloom state, not the 070227
+tarball.
+
+Binaries (x86-64, stripped with strip -s):
+  pkgadd 257456  pkgrm 211696  pkginfo 186816  pkgparam 174528
+  pkgtrans 149808  pkginstall 383824  pkgremove 268704  pkgchk 252304
+  pkgmk 203120  pkgproto 55480  installf(+removef) 162248  pkgname 14544
+  cmdexec 14472  valtools 14-39k each
+Total build time (clean, sequential make, x86-64): 11.5 s wall.

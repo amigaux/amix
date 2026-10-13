@@ -1,0 +1,3 @@
+/dev/console c none ? ? 0620 root tty core
+/dev/dsk/c0d0s2 b none 18 2 0600 root root core
+/dev/null c none 40 2 0666 root root core

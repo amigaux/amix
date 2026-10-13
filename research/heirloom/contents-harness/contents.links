@@ -1,0 +1,4 @@
+/bin=./usr/bin s none SUAScore
+/etc/rc.d d none 0755 root sys SUAScore
+/opt/weird=name f none 0644 root sys 10 20 679609720 FOO
+/usr/lib/sendmail l none 1 root mail 12345 111 679609720 SUAScore

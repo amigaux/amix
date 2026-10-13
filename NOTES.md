@@ -1,0 +1,3001 @@
+# amix-packagemanager — lab notes
+
+## 2026-10-06 — APKGENG 1.12.3: plain pkgchk is clean after a keep; installf refuses spaced paths (minted, NOT published)
+
+**Decision** ("make clean now"): a plain `pkgchk APKG` must be rc 0 after
+`i.apkgconf` keeps `/etc/apkg.conf`. For r6 (release rule: ship the latest of our own components).
+
+**What the stock tools do** (read from the Amix 2.1 binaries on the tape, `m68k-linux-gnu-objdump`):
+
+- **Stock `pkginstall` records the package's values too.** Its `endofclass()` (text
+  `0x80005370`, the function that prints `[ verifying class <%s> ]`) reads the merged entry back
+  from `contents`, calls `finalck(ept, attrchg, ckflag ? contchg : -1)` on the extlist copy, and
+  uses the result only for the status byte (`!` or none) before `putcfile()`. No size, cksum or
+  mtime goes from the extlist copy into the entry. So stock and heirloom 1.12.2 behave the same:
+  a kept `e` file is recorded with the package's size and checksum.
+- **Stock `pkgchk` checks `e` contents even with `-n`.** In its entry check (text `0x800029e0`):
+  `if (cflag && strchr("fev", ftype) && (!nflag || ftype != 'v')) cverify(...)`; the getopt
+  table sends `n` to that flag (`0x80001d16`). `-n` skips only `v`. Heirloom's `-n` skips `e` and
+  `v` (Sun bug 1082144). The stock usage line is just `[-l|vqacnxf]`; the "do not check volatile
+  or editable files" wording written below on 2026-10-06 is heirloom's man page, not stock's.
+
+So under stock tools a kept or edited `e` file fails both plain and `-n` pkgchk. Neither option in
+the brief is literally "what stock does". Recording the bytes on disk is the option under which
+the two engines agree: after a heirloom `pkgadd`, stock `pkgchk` (plain or `-n`) and heirloom
+`pkgchk` are both clean. Changing `pkgchk` instead would leave the DB with the package's values,
+and stock `pkgchk` would still flag the file. It is also what upstream already half-does:
+`endofclass()` passes `contchg = -1` for a class with a script precisely so that `finalck()`
+re-reads size, cksum and mtime from disk (`BADCONT`), but those values were dropped.
+
+**The change** (`heirloom/pkgcmds/pkginstall/instvol.c` `endofclass()`, AMIX PORT): for a class
+with a class action script (`ckflag == 0`), an `e` or `v` object whose `finalck()` passed, copy
+the re-read size, cksum and mtime into the contents entry before it is written. `f` objects keep
+the pkgmap's values, because their bytes are the package's by definition, so a corrupted `f` is
+still reported. `pkgchk` is not changed (dynamic and static `pkgchk` bytes identical to 1.12.2),
+so `-n` behaves as before. An edit made after the install is still reported by a plain
+`pkgchk`, as SVR4 `e` semantics require. A box installed with the **stock** `pkgadd` (the recovery
+recipe) still records the package's values; that cannot be changed from here.
+
+**Host scenarios** (APKG 0.2.3 `db67f4ba…`, `fakeroot pkgadd -R`, the same script against the
+1.12.2-source host engine and this one):
+
+| scenario | 1.12.2 plain `pkgchk APKG` | 1.12.3 plain `pkgchk APKG` | `-n`, both |
+|---|---|---|---|
+| (a) fresh install | 0 | **0** | 0 |
+| (b) 0.2.2, conf edited, upgrade to 0.2.3 | 1 (conf: size 5988 expected, 6031 actual) | **0**, DB `6031 51934` = disk | 0 |
+| (b2) 0.2.3, conf edited, re-add | 1 | **0** | 0 |
+| (b3) unedited 0.2.2 → 0.2.3 | 0 | 0 | 0 |
+| (c) installer conf written before pkgadd | 1 | **0**, DB `87 7931` = disk | 0 |
+| (d) then `apkg.1` (an `f`) corrupted | 1 (conf + apkg.1) | **1, apkg.1 only** | 1, apkg.1 |
+| (e) conf edited AFTER pkgadd (installng's order today) | 1 | 1 (correct: edited after install) | 0 |
+
+The plain runs are real plain `pkgchk` (attributes too), not `-c`: the host `pkgchk`'s `stat()`
+is not faked by fakeroot, so each test root carries an `/etc/passwd` and `/etc/group` that name
+`root` and `sys` as the invoking user. Two harness traps found on the way: a fakeroot state shared
+across roots reported a newly written conf as a directory (stale inode), making `pkgadd` partially
+fail; one state per root fixes it. And `$?` read after a `$(...)` in the same `echo` is the
+substitution's status.
+
+**installf and white space** (installng's second finding, 2026-10-06): the golden 030 box's
+`contents` holds the factory record `/usr/x11r5/fonts/server/MacFS/TrueType Fonts f none 0444 x
+sys … X11R5 X11R5`. It is not something heirloom wrote. The tape's factory DB (tape file `01`)
+carries the line raw, next to a different file named just `TrueType`. SVR4.0 `contents(4)` has no
+quoting or escape. Stock tools write such a name verbatim and then cannot read it back (the stock
+full parsers split at the space; `docs/stock-pkg-system.md` §6). No stock-readable form exists,
+so the engine must never write one. Our pkgmaps cannot carry one (whitespace-delimited, and
+`repackage-stock.py` excludes the file). But heirloom `installf` could: `installf -R r APKG "/opt/a b" f
+0644 root sys` wrote `/opt/a b f none …`, and its own `installf -f` then failed on the DB ("bad
+entry read"). 1.12.3's `installf` refuses a pathname with a space, tab or newline: "pathname <…>
+contains white space, which the contents file cannot record", rc 1. The heirloom readers stay
+tolerant, so a box carrying the factory record keeps working with our tools. **Repair for an
+existing DB is the existing tool:**
+`/usr/apkg/bin/contents-fsck -r -s -b /var/sadm/install/contents`, then
+`cp /var/sadm/install/contents.fixed /var/sadm/install/contents`. `-s` drops the spaced record and
+names the file. Rename or remove it if stock tools must own it again. Without the record the file is
+just unregistered, and `pkgrm X11R5` leaves it. Verified on a copy of the factory line pair: the
+spaced record is dropped, the plain `TrueType` record is kept, and `[dup-pkg]` is reported. Run this
+before handing a heirloom-engine box to the stock tools.
+
+**installng's stock `pkgadd` rc 5 on the golden 030 box** (APKG 0.2.2 → 0.2.3, "already installed
+… being used by another package … suspended (interaction required)"):
+
+- Not the package. Across every `.pkg` under `build/` (44 distinct files), the only paths APKG
+  0.2.3 shares with another package are the directories `/usr/apkg`, `/usr/apkg/bin`,
+  `/usr/apkg/man` and `/usr/apkg/man/man1`. Those are delivered by APKGENG 1.12.0–1.12.3 (and
+  `/usr/apkg` by AMIXDEMO), all `d none 0755 root sys`, the same as in APKG. `/usr/apkg/lib` is
+  delivered by APKG only. No APKG 0.2.4.
+- Stock `pkginstall`'s conflict check (text `0x80002dec`) returns at once when the admin
+  `conflict` value is `nochange` (sets `nocnflct`) or `nocheck`. It prints that message only for
+  any other value. So the stock `pkginstall` on that run did not see `conflict=nocheck`, whatever
+  the files say. Most likely the `-a` it got was not the file that was checked: stock looks a name
+  without a `/` up under `/var/sadm/install/admin/`, where the stock `default` says
+  `conflict=ask`. The other candidate is a parse of that admin file that differs from ours. Needed
+  from the fresh-box re-run: the exact command line, the `-a` argument as typed, a `cat` of that
+  file, and the file list the message printed.
+
+**The mint.** `build/repo-staging-apkgeng1123/base/APKGENG-1.12.3.pkg`:
+
+- **md5 `88a177e5248b7c94ed8109c98e399da6`**, sha256
+  `23af9cb602289c50e0ec3d07d346e76750c96422c70dfb632df6590d3f7027ab`, **2364416 B**, mode 444,
+  sidecar `.md5`; `PSTAMP=lucifer20261006140646`;
+- built twice through the installed wrapper (md5 `83db23cb…`, gcc-cross-amix `2ab2b22` era),
+  byte-identical. Against 1.12.2 only two binaries differ: `installf` (= `removef`)
+  `0355fad2…` → `d4d803dfc81ec5b393291546356b3b2b`, 157676 B (+120), and `pkginstall`
+  `1f920bf6…` → `1185a5b172b46798577a589e9e544cd4`, 360796 B (+96). The other nine are
+  byte-identical, `pkgchk` among them;
+- pkgmap path/type/class/mode/owner/group identical to 1.12.2 (55 lines);
+- host `fakeroot pkgadd -R`: rc 0, 55 contents records, plain `pkgchk APKGENG` rc 0;
+- `apkg_vercmp("1.12.3", x)` = 1 for x = 1.12.2, 1.12.1, 1.12.0;
+- scan060 0 hits (11 ELFs, and 7 in the static set); licence gate rc 0 (11 stripped UNKNOWN, as
+  every APKGENG); `--scan-private` OK;
+- no qemu probe: no source with a multiply or divide changed. The edits add three assignments,
+  three compares and a `strpbrk()` call.
+
+**The static set** is in `heirloom/build-amix-static-1.12.3/` (`STATIC_OUT=`). Two builds are
+byte-identical. `build-amix-static/`, `-1.12.1/` and `-1.12.2/` were not touched.
+
+| static 1.12.3 | md5 | bytes | vs 1.12.2 |
+|---|---|---|---|
+| bin/apkg | `e67475625b6c27fbaa6d38619866f478` | 52632 | **moved**: one byte, the version string 0.2.2 → 0.2.3 (HEAD `src/apkg`) |
+| bin/contents-fsck | `43684b68e8143af94a78f8bf194bd4b2` | 29468 | same |
+| bin/pkgadd | `ccf305dd77015ed090fdcf01ccced61b` | 267640 | same |
+| bin/pkgchk | `9120ebb14283f242d658836febb19383` | 265996 | same |
+| bin/pkginfo | `7aa88507df54511e235d664e2ce51b8e` | 210636 | same |
+| bin/pkgtrans | `cc5f9031e26664da09f85d985d9c7ca6` | 172924 | same |
+| sadm-helpers/pkginstall | `73e310d56b420241123120aedb9bfb37` | 402476 | **moved** (the fix) |
+
+sha256 of the two that moved: apkg
+`2cfda2d635d72873d211d1be9bf1239bc5ed7bdcf8a7c95c597f7e3b6729d6e0`, pkginstall
+`95002d54ded85a7626d7d8561c5cbbddf742553bf1c51591f338d6749567edd1`.
+
+**Suites:** repo tools 315/0 (T23 rewritten: plain `pkgchk` clean after every keep, the DB carries
+the kept file's size and cksum, and a corrupted `f` is still named; T24 new: `installf` refuses a
+spaced path). Against the 1.12.2-source engine the same suite fails 12 checks: 7 in T23 and 5 in
+T24. Also apkg 223/0, nohttp 20/0, contents-fsck 19/0.
+
+**Owed** (amix-installng, emulated 060):
+
+1. Fresh install whose media carries APKGENG 1.12.3 + the 1.12.3 static set + APKG 0.2.3:
+   `/usr/apkg/bin/pkgchk APKG` rc 0. installng writes its conf after `pkgadd` today (row e).
+   Write it before `pkgadd` (row c), or the plain check flags the conf as edited after install.
+2. Upgrade over an edited conf: `echo timeout=301 >> /etc/apkg.conf`, then the 0.2.3 `pkgadd`
+   (recipe in the 0.2.3 section below), then plain `/usr/apkg/bin/pkgchk APKG` rc 0.
+3. The publish (a separate, approved step).
+
+## 2026-10-06 — APKG 0.2.3: an upgrade keeps /etc/apkg.conf (minted, NOT published)
+
+**Finding** (amix-installng, emulated LC060): `apkg upgrade apkg` 0.2 → 0.2.2 works (rc 0) but
+replaces `/etc/apkg.conf` with the package default (5988 B). An edited `repo=` or any other key is
+lost and the box goes back to pkg.amigaux.org. The pkgmap line was `e none`, not `f`. SVR4
+`pkgadd` treats an `e` object in class `none` exactly like `f`: it copies the package file over
+whatever is there. Reproduced host-side: 0.2.2 re-added over an edited conf resets it.
+
+**Mechanism.** `/etc/apkg.conf` is now `e apkgconf` (`CLASSES=none apkgconf`), installed by the
+class action script `src/apkg/i.apkgconf`. pkgadd hands the script `src dst` pairs; it copies the
+default only when `dst` is absent and otherwise leaves the file alone. The same default also ships
+as the plain file `/usr/apkg/lib/apkg.conf`. Every key in it is also apkg's built-in default, so a
+key that a kept file does not name still has its documented value.
+
+Why a class action script and not the alternatives:
+
+- **Both engines run it.** Heirloom: `find_CAS()` looks for `<instdir>/install/i.<class>` and
+  `instvol.c` runs it under `/sbin/sh` with the pair list (host run, below). Stock Amix 2.1
+  `pkginstall` (tape 02, `usr/sadm/install/bin/pkginstall`) carries the same strings:
+  `%s/install/i.%s`, `ENDOFCLASS`, `/sbin/sh`, "class action script did not complete
+  successfully". No stock package ships one (`docs/stock-pkg-system.md` §7), so the stock run is
+  owed on a box (below).
+- **`v` instead of `e`** changes nothing: with class `none` it is copied over the same way.
+- **No package object, written by a postinstall** would keep plain `pkgchk` quiet. But the 0.2.2
+  record would go away on the upgrade, an unowned conf survives `pkgrm`, and registering it needs
+  `installf`, which the miniroot's static set lacks and which faults on the 060 in its stock form.
+- The script uses only `cp`, `cmp` (for the message only) and sh builtins: it also runs from the
+  installer's miniroot under `pkgadd -R`.
+
+**What `pkgchk` says.** The heirloom engine records the **package's** size and checksum for an
+object installed by a class action script, not the bytes on disk (`endofclass()` writes the DB
+entry, and `finalck()` updates only the extlist copy). So:
+
+| box state after `pkgadd` of 0.2.3 | plain `pkgchk APKG` | `pkgchk -n APKG` |
+|---|---|---|
+| fresh install, no conf before | clean | clean |
+| 0.2.2 with the **unedited** default, upgraded | clean: same bytes, and pkgadd resets the kept file's mtime to the pkgmap's | clean |
+| conf edited, or written by the installer (before or after pkgadd) | flags `/etc/apkg.conf`, nothing else | clean |
+
+*(Superseded by APKGENG 1.12.3, above: the DB now records the kept file, so the last row is
+clean with plain `pkgchk` too when the conf existed before `pkgadd`. Also corrected there: the
+stock usage line carries no such wording, and stock `pkgchk -n` still checks `e` contents.)*
+
+The last row is SVR4 `e` semantics, not a defect: `pkgchk -n` ("do not check volatile or
+editable files", in the stock usage line too) is the post-install check. The same row was true
+for 0.2.2; that is why `pkgchk APKG` returned 1 on installng's fresh installs. Getting plain
+`pkgchk` clean after a keep needs an engine change (record what is on disk for `e`/`v` objects a
+class action script installed). That is an APKGENG decision, not part of this change.
+
+The default's **bytes are 0.2.2's** (md5 `8dada8d9fd5da9cced27ac3bf18e85a9`, 5988 B), on purpose.
+That is what keeps an unedited 0.2.2 box clean after the upgrade. Changing the template later gives
+that up for every box still on an older default. Repo-tools T23 pins the md5 as a speed bump.
+
+**The mint.** `build/repo-staging-apkg023/base/APKG-0.2.3.pkg` (own staging dir; `build/repo-staging`,
+the live mirror, K1 media and APKGENG were not touched):
+
+- **md5 `db67f4bacb2a6b20c33a66d70490e154`**, sha256
+  `8bbff4da6c0d13c0b40a4760afbcdae1a9f51d921378e82740eb06acd7cbfab8`, **154624 B**, mode 444,
+  sidecar `.md5`;
+- `PSTAMP=lucifer20261006074828`; source commit `0d6c1ee`;
+- `apkg.amix` built twice through the installed wrapper (md5 `83db23cb…`, gcc-cross-amix
+  `2ab2b22` era): **`e776ce81878453330b2afcac7e2dc234`, 78045 B**. Two bytes differ from 0.2.2's
+  `83fb1920…`, both the version string (`0.2.2` → `0.2.3`). scan060: 0 hits;
+- payload against 0.2.2: `contents-fsck` (`7305529b…`), `amix-sadm-migrate` and `/var/apkg/admin`
+  byte-identical, and so is `/etc/apkg.conf`. New: `/usr/apkg/lib/` + `apkg.conf`, and
+  `install/i.apkgconf` (md5 `1a37dcb3…`). `apkg.1` documents the keep;
+- pkgmap: 16 objects + `i i.apkgconf` + `i pkginfo` (0.2.2: 14 + `i pkginfo`). The only changed
+  line for an existing path is `/etc/apkg.conf`'s class column;
+- gates: link gate OK (1 link); `payload-licence-gate` OK (2 ELFs; the usual `libnsl.so` note);
+  `--scan-private` OK; scan060 0 hits in 2 ELFs;
+- `apkg_vercmp("0.2.3", x)` = 1 for x = `0.2.2`, `0.2.1`, `0.2`, `0.1`.
+
+**Host test against the minted file** (heirloom `pkgadd -R` + `pkgchk -c`, one fakeroot session):
+
+| case | result |
+|---|---|
+| A: 0.2.2, `repo=` edited, add 0.2.3 | rc 0, "kept as it is", `repo=` still the edit, VERSION 0.2.3, plain `pkgchk -c` flags the conf only, `-n -c` rc 0 |
+| B: 0.2.2 unedited, add 0.2.3 | conf md5 `8dada8d9…`, plain `pkgchk -c` rc 0 |
+| C: installer's 154-byte conf written first, add 0.2.3 | kept (154 B), plain rc 1 (conf), `-n` rc 0 |
+| D: add 0.2.3, then the installer's conf (today's order) | plain rc 1 (conf), `-n` rc 0 |
+| E: fresh 0.2.3 | both rc 0 |
+| `pkgrm APKG` | rc 0, conf and `/usr/apkg` removed |
+
+Host limit: the host `pkgchk` attribute check reports every object as owned by the invoking user
+under fakeroot (12 errors on a plain 0.2.2 install too), although `lstat` in the same session sees
+`0 3`. Hence `-c` here, and an `lstat` check of the conf's mode and owner in T23. On a box,
+`pkgchk` runs as real root.
+
+**Suites:** repo tools 303/0 (T23 new: 27 checks, among them the 0.2.2-resets-the-edit check
+that shows the defect), apkg 223/0, nohttp 20/0.
+
+**Operator notes.**
+
+- APKG now carries a script. Stock `pkgadd` with the stock default admin (`action=ask`) asks
+  "Do you want to continue with the installation". `/var/apkg/admin` and the installer's
+  admin already say `action=nocheck`. A recovery admin for stock pkgadd needs
+  `instance=overwrite` and `action=nocheck`.
+- `/var/apkg/admin` stays `e none`, so an upgrade still replaces an edited admin file. Its bytes
+  are the same in 0.2.2 and 0.2.3 (159 B). Follow-up: the same class if anyone edits it.
+
+**Owed** (no guest path in this repo; the 060 guests are run from amix-installng):
+
+1. **Heirloom engine on an 060 guest** with APKG 0.2.2 + APKGENG 1.12.2, conf edited
+   (`echo timeout=301 >> /etc/apkg.conf; sum /etc/apkg.conf`), the 0.2.3 file FTPed to
+   `/var/tmp`, then:
+   `sed 's/^instance=.*/instance=overwrite/' /var/apkg/admin > /var/tmp/admin.ow`;
+   `/usr/apkg/bin/pkgadd -n -a /var/tmp/admin.ow -d /var/tmp/APKG-0.2.3.pkg APKG`.
+   Expect rc 0, the "kept as it is" line, `sum` unchanged, `pkginfo -l APKG` VERSION 0.2.3,
+   `apkg version` 0.2.3, `/usr/apkg/bin/pkgchk -n APKG` rc 0, and plain `pkgchk APKG` naming
+   only `/etc/apkg.conf`. Repeat on an unedited 0.2.2 box: plain `pkgchk APKG` rc 0.
+2. **Stock engine, on a 030 guest only** (stock pkgtools are not run on 040/060): the same with
+   `/usr/sbin/pkgadd`, plus `grep apkg.conf /var/sadm/install/contents` (package record or bytes
+   on disk?) and `/usr/sbin/pkgchk -n APKG`.
+3. The publish (a separate, approved step). 0.2.2 was chosen for r6 on 2026-10-06, so 0.2.3 is a
+   proposal for after r6.
+
+**Follow-up, NOT fixed here: the failed-upgrade leftovers.** In the same run, a failed engine
+upgrade left `/var/sadm/pkg/.save.APKGENG` and a `/var/sadm/install/.lockfile`, while apkg said
+"the installed … is untouched". My reading:
+
+- `.save.<inst>` is heirloom `pkginstall`'s own rollback copy: `cp_pkgdirs()` (main.c:2771) runs
+  `cp -r` of the pkg dir before an overwrite, and `quit()` (quit.c:365) either renames it back or
+  removes it. A pkginstall killed by a signal (for example the pre-1.12.1 engine on the 060)
+  never reaches `quit()`.
+- `.lockfile` is `lockinst()`'s `lockf()` file. Once created it stays; it blocks only while a
+  live process holds the lock.
+- The fix belongs in apkg, `src/apkg/install.c` `cmd_upgrade()`: its failure branch prints
+  "untouched" for every non-zero `run_pkgadd()`. It should tell a clean refusal apart from an
+  abnormal end (`run_cmd()` returns -1 on a signal). After a failure it should look for
+  `<root>/var/sadm/pkg/.save.<pkginst>` and re-read the installed version, then say what it
+  found: name the leftover and the recovery (`mv .save.X X` when `X` is missing or partial)
+  instead of claiming untouched. `cmd_install()`'s instance=overwrite path (`-f`) has the same
+  shape.
+
+## 2026-10-05 — APKGENG 1.12.2: the multiply expansion moves into the toolchain (minted, NOT published)
+
+**Why.** gcc-cross-amix `2ab2b22` put the 68060 multiply expansion into the wrapper's `fix_asm`
+(rule 11, on by default), and the installed wrapper was refreshed (md5 `83db23cb…`). That version
+also preserves X: it saves the CCR before its first add and restores it after the last. The
+`amix-cc` copy that made 1.12.1 did not: its adds set X, the hardware instruction leaves X
+alone. Harmless for gcc output (gcc never reads X after a multiply), but the 1.12.1 notes said
+"X untouched", which was wrong (corrected above).
+
+**One implementation.** `amix-cc` already runs the wrapper's `fix_asm` (extracted at runtime),
+so its own rewrite had become a no-op. Removed. Proof: the whole dynamic set built with the
+1.12.1 `amix-cc` over the new wrapper is byte-identical to the one built with the trimmed
+`amix-cc`. `amix-cc` keeps the gate: any leftover 64-bit mul/div/`tdiv` fails the compile, so a
+wrapper older than `2ab2b22`, or `AMIX_MUL64=keep`, fails instead of shipping. Removing the copy
+breaks no build path:
+
+- every heirloom compile goes through `amix-cc` → `fix_asm`;
+- the static `apkg` and `contents-fsck` objects go through the wrapper's own `-c`;
+- `src/apkg` `make amix` goes through the wrapper's `-c`.
+
+`src/contents-fsck` `make amix` (the APKG payload) never used either: it runs `gcc.real -S` →
+its own `tools/asmfix.pl` → `as`. It has no multiply sites, so it is clean, and `gate_060` on
+the APKG mint guards it.
+
+**Bytes.** The new sequence is 8 bytes longer per site (`mov.w %cc,20(%sp)` + `mov.w 20(%sp),%cc`).
+The 11 engine binaries grow by 904 B = 113 sites × 8, matching the 113 sites counted in r3.
+Every APKGENG binary and the five static engine tools change. Static `apkg` and `contents-fsck`
+do not, and neither do `src/apkg` `apkg.amix` (`83fb1920…`) and `contents-fsck.amix`
+(`7305529b…`): both are byte-identical to the APKG 0.2.2 payload. **APKG stays 0.2.2**, no
+re-mint. Two dynamic rebuilds are byte-identical.
+
+**The mint.** `build/repo-staging-apkgeng1122/base/APKGENG-1.12.2.pkg`:
+
+- **md5 `f585809421e8cbc2a02ccc7d9ea11ce7`**, sha256 `7de1f188…f5134154`, 2364416 B;
+- `PSTAMP=lucifer20261005202907`;
+- payload byte-identical to `heirloom/build-amix/`;
+- pkgmap path/type/mode/owner/group set identical to 1.12.1 (55 lines, 54 entries + `i pkginfo`);
+  only the 11 binary sizes differ;
+- host `fakeroot pkgadd -R`: rc 0, 55 contents records;
+- `apkg_vercmp("1.12.2","1.12.1")` = 1, `("1.12.2","1.12.0")` = 1;
+- licence gate rc 0 (11 stripped UNKNOWN, as every APKGENG); `--scan-private` OK;
+- scan060: 0 hits in the package (11) and the static set (7).
+
+**The static set** is built into `heirloom/build-amix-static-1.12.2/`
+(`STATIC_OUT=` in `build-amix-static.sh`, new). The in-place `heirloom/build-amix-static/`
+was **not touched**: it still holds the 1.12.1-era set (32798b6), which is what
+amix-installng's `build-install-iso.sh` takes when `STATIC=` is unset. A frozen copy of that
+set is at `heirloom/build-amix-static-1.12.1/`, byte-identical to installng's pinned
+copy. A pin names the versioned dir.
+
+| static 1.12.2 | md5 |
+|---|---|
+| bin/apkg | `9ebeb857…` (= 1.12.1) |
+| bin/contents-fsck | `43684b68…` (= 1.12.1) |
+| bin/pkgadd | `ccf305dd77015ed090fdcf01ccced61b` |
+| bin/pkgchk | `9120ebb14283f242d658836febb19383` |
+| bin/pkginfo | `7aa88507df54511e235d664e2ce51b8e` |
+| bin/pkgtrans | `cc5f9031e26664da09f85d985d9c7ca6` |
+| sadm-helpers/pkginstall | `4ab504fa302e4fe48743269a9d8fec2c` |
+
+**Proof off-metal** (qemu-m68k; "old" = gcc's 64-bit form, built with `AMIX_MUL64=keep`):
+
+| harness | old on 060 | new on 020 and 060 |
+|---|---|---|
+| the 1.12.1 divide/modulo/`(u64)a*b` harness, `-O0` and `-O` | SIGILL | `bead3ab7 8f2f86d2`, = old on 020 and = 1.12.1 |
+| real `compat/snprintf.c` + `di_ops.c` (objects byte-identical to the ones linked into 1.12.2) | SIGILL | `f5341335`, = old on 020 and = 1.12.1 |
+| gcc-cross-amix `tests/mul64` probe (results + CCR incl. X), `-O0`/`-O`/`-O2` | SIGILL | `89d09b77`, = old on 020; `amix-cc` object = wrapper object |
+
+The 1.12.1 `amix-cc` rewrite over the old wrapper gives `415faba7` on that last probe. With X
+masked out of the CCR fold both give `2d54fcd7`: the only difference is X.
+
+**Superseded.** APKGENG **1.12.1** (`19905d2a…`, `build/repo-staging-apkgeng1121/`) was minted
+and never published. It is superseded by 1.12.2 and is not to be published. Its bytes stay
+where they are, for the installng trial that measured it (`minimal-060-eng1121`).
+
+**Suites:** repo tools 276/0, apkg 223/0, nohttp 20/0.
+
+**Owed:** the 060 guest install and the engine-upgrade test on 1.12.2 (amix-installng); the
+publish (a separate, approved step).
+
+## 2026-10-05 — installf killed on the 68060: APKGENG 1.12.1 (minted, NOT published)
+
+**Finding** (amix-installng cell cd1-emu, emulated LC060, first boot): `u_trap WARNING: SIGKILL
+sent to pid 84 (/usr/apkg/bin/installf -f core) because of vector 0xF4, pc=0x80015714`, leaving
+`/stand/unix f none 0644 root root ? ? ? +core` in the contents DB.
+
+**Not an APKG 0.2 → 0.2.2 regression.** `installf` ships in **APKGENG**, not APKG; both APKG
+mints carry only `apkg` + `contents-fsck`, and both scan clean. What moved was the engine:
+
+| medium | APKGENG-1.12.0.pkg md5 | engine built |
+|---|---|---|
+| this run's ISO (staged from the 0.2.2 publish root) = **pkg.amigaux.org** | `fb2f08f4…` | 2026-07-05, **before** gcc-cross-amix `984192a` |
+| K1 r5 / v7.1 staging, `build/repo-staging` | `4ba15121…` | 2026-08-06 r3 re-mint |
+
+The number 1.12.0 names both. **The live repository still serves the July engine**: the r3
+re-mint never reached the host.
+
+**The faulting instruction.** installf is dynamic, text at 0x80000000, so the pc is installf's own
+text (file offset 0x15714), not a shared library. `4c6e 1c02 0010` = `divs.l 16(%fp),%d2:%d1`, the
+64-bit-dividend form (ext SIZE bit set), in `heirloom/libpkg/nhash.c` `HASH()` (`hv % hsz`).
+This is AMIX-PORT item 0: GNU as 2.8.1 assembled gcc's SGS `tdivs.l` as 64-bit. On the 030 it
+gives a wrong remainder; on the 060 it is vector 61. The r3 build has `divsll` (32-bit) there.
+
+**r3 is clean only by luck of the path.** It still carries the other vector-61 form: 8–16 per
+binary of `muls.l/mulu.l <ea>,%dH:%dL`. gcc 2.7.2.3 emits these for every divide or modulo by a
+constant (`/10` in `rpl_vsnprintf`, `/3` in `fmtint`, `/1000` in `pkgdbmerg`, `installf()`,
+`quit()`, `printmenu`, `tputcfent`) and for `(u64)a*b` (`strtoull`). `installf -f core` misses
+them; an `snprintf("%d")` does not. No compiler switch avoids them (`-O0` included); a toolchain knob
+is proposed.
+
+**Fix, local to this repo:** `heirloom/amix-cc` expands each 64-bit multiply into an equivalent
+16x16 `mulu.w` sequence. The rewrite:
+
+- evaluates `<ea>` once, first;
+- writes only `%dH:%dL` and leaves every other register as it was;
+- sets N/Z/V/C as the hardware does (N = bit 63, Z = 64-bit zero, V = C = 0).
+  *(Corrected in 1.12.2, below: this copy did NOT preserve X, as first written here. Its adds
+  set X; the hardware instruction leaves X alone.)*
+- nets the stack to zero.
+
+Any 64-bit mul or div, or a `tdiv`, left after the rewrite fails the compile.
+`tools/repo/scan060.py` decides from the encoding and skips gcc switch tables: before that skip,
+every `movep` it reported was a table entry. It gates the APKG and APKGENG mints
+(`build-packages.sh` `gate_060`) and the static build. Repo-tools test T22.
+
+**Proof off-metal** (`qemu-m68k -cpu m68060` raises SIGILL on the 64-bit forms; `-cpu m68020`
+executes them). The objects ran under it linked into Linux harnesses:
+
+| harness | old object on 060 | rewritten object, 020 and 060 |
+|---|---|---|
+| divide/modulo by 7, 10, 1000, 3, −60, 86400, 10⁶, signed and unsigned; `(u64)a*b`, `(s64)a*b`, u64×u64; flag test; register-pressure loops; 60,000 vectors; `-O0` and `-O` | SIGILL | checksum `bead3ab7 8f2f86d2`, identical to the old object on 020 |
+| real `compat/snprintf.c` + `di_ops.c`, 40,000 integer `rpl_snprintf` calls | SIGILL | hash `f5341335`, identical |
+
+**Rebuild.** Deterministic: two rebuilds are byte-identical. The changed binaries are exactly
+those that had mul64 sites. Static `apkg` (`673daf79…`) and `contents-fsck` are byte-identical
+to 2026-10-02.
+
+| scan (`scan060.py`) | 64-bit div | 64-bit mul |
+|---|---|---|
+| published APKGENG 1.12.0 (`fb2f08f4`), 11 binaries | 2–4 each (26) | 8–16 each (113) |
+| r3 APKGENG 1.12.0 (`4ba15121`) | 0 | 8–16 each (113) |
+| **APKGENG 1.12.1**, `build-amix-static/` (7), APKG 0.2.2, cdfs | **0** | **0** |
+| stock `libc.so.1`, `libnsl.so`, `libc.a` (417 members) — not ours | 0 | 0 |
+
+**The mint.** `build/repo-staging-apkgeng1121/base/APKGENG-1.12.1.pkg`:
+
+- **md5 `19905d2a7066e3e15ed838a9e899a168`**, sha256 `5c6ab637…66727214`, 2363392 B;
+- `PSTAMP=lucifer20261005150155`;
+- payload binaries byte-identical to `heirloom/build-amix/`;
+- pkgmap path/mode/owner set identical to r3 (54 entries);
+- host `fakeroot pkgadd -R`: rc 0, 55 contents records;
+- `apkg_vercmp("1.12.1","1.12.0")` = 1;
+- licence gate rc 0 (11 stripped UNKNOWN, as every APKGENG); `--scan-private` OK.
+
+A separate dir, so `build/repo-staging` (installng's default) is untouched. **APKG is not
+re-minted**: its binaries did not change.
+
+**Suites:** repo tools 276/0 (T22 new), apkg 223/0, nohttp 20/0.
+
+**Owed:**
+
+- **The 060 run.** First boot of an LC060 install whose media carries APKGENG 1.12.1:
+  `/usr/apkg/bin/installf core /stand/unix f 0644 root root && /usr/apkg/bin/installf -f core`,
+  then no `? ? ?` row.
+- **The publish** (a separate, approved step) and a re-attestation of installng's set digests: the engine
+  sizes move.
+
+## 2026-10-02 — static apkg rebuilt: the retired URL is off the install media; amix-cc fcmp double swap
+
+**Why.** `heirloom/build-amix-static/bin/apkg` (the binary `amix-installng`'s
+`build-install-iso.sh` copies to `/install/bin/apkg`) was the 2026-07-24 build and still carried
+the retired LAN-mirror URL as its compiled-in default. Inert there (no HTTP in the static
+build), but it grepped off public disk images. Source was already right (`DEF_REPO` =
+`http://pkg.amigaux.org` since `dcece20`, see 2026-09-18); only the artefact was stale.
+
+**Rebuild blocker.** `build-amix-static.sh` failed in `compat/snprintf.c`: gas `operands mismatch`
+on `fcmp.d %fpN,&imm`. The toolchain wrapper's `fix_asm` now swaps `fcmp` itself (gcc-cross-amix
+`8dbc8d7`), so `amix-cc`'s own fcmp swap undid it — rejected for immediates and a silent sense
+INVERSION for reg-reg compares. `amix-cc` now skips its swap when the extracted `fix_asm` mentions
+`fcmp`. Proof: the regenerated dynamic `build-amix/` set is byte-identical to the 2026-08-14 one.
+
+**Result.** Static apkg 52632 B, sha256 `673daf79d2a42583178b4296c24c7bc29b371d32f19f5dc3a56cc18ee63422f1`;
+`strings` shows `http://pkg.amigaux.org`, not the retired URL. Static pkgadd/pkgtrans/pkginfo/
+pkgchk/contents-fsck byte-identical to July; static `pkginstall` +120 B (picks up `76b7145`, the
+14-char mkstemp fix the dynamic set already had). Tests: 223/0 and nohttp 20/0. Not re-run on a box.
+
+## 2026-09-26 — PUBLISH LOG: batch-2 is live (grep refresh, + gtar, + make; 39 → 41)
+
+**Published 2026-09-26, ~12:20 EEST.** Root `build/publish-20260926-batch2/` (gitignored), prepared by the sibling `amix-packages`
+repo: a grep 2.5.1a-2 refresh plus two new add-on packages, GNU tar (PKG `gtar`, catalog name
+`tar`) and GNU make (PKG `make`).
+
+`tools/repo/publish.sh --dry-run build/publish-20260926-batch2` listed exactly
+`extra/grep-2.5.1a-2.pkg`, `extra/gtar-1.14.pkg`, `extra/make-3.81.pkg`, `catalog`, `catalog.md5`
+(plus rsync's directory-traversal lines) — no `"deleting"` line, i.e. nothing else on the host
+moved. The real run transferred the same set.
+
+| catalog | md5 | entries |
+|---|---|---|
+| before (step-2 APKG 0.2.2, see below) | `282cc289d68e79492da7e0e8cf9978c3` | 39 |
+| **after batch-2** | **`203085471a251fe5e8e7744adccaed5d`** | **41** |
+
+Diff against `282cc289…`, exactly three lines: the `grep` line moves `2.5.1a → 2.5.1a-2`
+(new md5/size, same pkginst), plus two new lines — `make|3.81|make|…` and `tar|1.14|gtar|…` (the
+first package whose catalog name comes from `tools/repo/names.conf` since `amix-benchmark`).
+
+**Verified from outside** (`curl -0 -H 'Host: pkg.amigaux.org' ...`, the way the client fetches),
+independently of the publish run's own output:
+
+| file | size | md5 |
+|---|---|---|
+| `extra/grep-2.5.1a-2.pkg` | 139264 B | `e84604a13e73c67141e376d3e187a72e` |
+| `extra/gtar-1.14.pkg` | 225792 B | `968a7ac283804953dc758b85f6591a77` |
+| `extra/make-3.81.pkg` | 252416 B | `572f299885374f62d0810d59e20f00be` |
+
+`extra/grep-2.5.1a.pkg` (the old version) is still served, HTTP 200 — decatalogued, not deleted,
+same posture as every earlier superseded package on this host (`APKG-0.1.pkg`, `APKG-0.2.pkg`).
+
+Re-fetched `/catalog` read-only once more while writing this record: still `203085471a251fe5e8e7744adccaed5d`, 42 lines (`#apkg-catalog 1` header + 41 entries).
+
+### ★ The lesson: a curl-mirrored staging root carries fresh mtimes
+
+The staging root for this batch was assembled by curl-mirroring the live host rather than
+`rsync -a` from it (the amix-packages repo's own tooling), so every unchanged file's mtime was
+"now", not the timestamp it carries on the host. `rsync`'s default quick-check compares size *and*
+mtime, so left as mirrored, the dry run would have proposed re-sending every one of the 38
+unchanged packages alongside the 3 real changes — indistinguishable from an actual mass update in
+the dry-run listing, and a much larger, harder-to-audit real transfer.
+
+The fix applied before the dry run: for every file confirmed byte-identical (`cmp`) to its
+counterpart in the previous publish root, `touch -r <previous-root-file>` to restore its mtime, so
+rsync's quick-check sees "unchanged" and skips it. Done this time **by hand**, 41 files
+aligned. With that done, the dry run listed only the 5 genuinely new/changed files (3 `.pkg` +
+`catalog` + `catalog.md5`) — the diff above. **Any future publish staged by curl-mirroring must
+repeat this mtime-alignment step before trusting a dry run's transfer list**; an `rsync -a` staging
+copy does not have this failure mode because it preserves source mtimes itself.
+
+### Open items
+
+* **A bench disk's `/var/sadm/install/contents` was found garbled** after a round of `apkg`
+  install/remove runs, discovered in the `amix-packages` repo and kept at
+  `amix-packages/build/bench/dh0.hdf.contents-damaged-20260926` (not this repo's tree — a sibling
+  repo's evidence copy). Likeliest cause an unsynced emulator kill mid-write; **an apkg/pkgrm
+  write-path fault is not ruled out**. This is an investigation item for this repo — **not started**.
+
+## 2026-09-26 — APKG 0.2.2 minted from master; PUBLISH LOG: PUBLISHED (step 2 of 2)
+
+**Published 2026-09-26, ~10:37 EEST**, after step 1 below. `tools/repo/publish.sh --dry-run build/publish-20260926-apkg022` listed
+exactly `base/APKG-0.2.2.pkg`, `catalog`, `catalog.md5` (plus rsync directory lines), no
+`"deleting"` line; the real run exited rc 0 with `publish: OK -- served catalog matches staging
+(md5 282cc289d68e79492da7e0e8cf9978c3)`. Verified from outside afterward
+(`curl -0 -H 'Host: pkg.amigaux.org' ...`): `/catalog` md5 `282cc289d68e79492da7e0e8cf9978c3`;
+`/pkgs/base/APKG-0.2.2.pkg` = 144896 B, md5 `feb57752e2309e7dc8c79c4d0416855d`;
+`/pkgs/base/APKG-0.2.pkg` still HTTP 200 (decatalogued, still served); the catalog carries
+`apkg|0.2.2|APKG|base/APKG-0.2.2.pkg|feb57752e2309e7dc8c79c4d0416855d|144896|...`. Re-confirmed
+again while writing this record: live `/catalog` md5 still `282cc289d68e79492da7e0e8cf9978c3`.
+The prepared sequence below is kept as the exact record of what was run.
+
+Decision: the release minted from master is **0.2.2** — master's whole `src/apkg`, i.e.
+the canonical `pkg.amigaux.org` compiled-in default (`dcece20`), the blocked-SIGALRM fix
+(`unblock_alarm()`) and the stub DNS resolver (`eed3210`). **0.2.1 was minted but never
+published and is superseded by 0.2.2** — it names the hotfix tree (`d73ecbc` + one function,
+`build/repo-staging-apkg021/base/APKG-0.2.1.pkg`, md5 `d69db8aaf22b3f4a4d4600f70f09e0f0`), so
+the number is retired with it; `docs/apkg-0.2.1-hotfix.md` now says so at the top. This resolves
+the "master says 0.2.1 but is not the minted 0.2.1" item in the merge section below.
+
+*(As first written, before either step ran: nothing was published, `publish.sh` had not been run
+(not even `--dry-run`), and the live catalog was re-fetched read-only at the end, still
+`f0ed2ca1fcefe3f45c2c02f28f3c7f7a`; `/pkgs/base/APKG-0.2.2.pkg` was a 404 on the host. The prepared
+cats root `build/publish-20260926-cats/` was not touched at that point — catalog still `a6d2d6bf…`;
+its path/size/mtime fingerprint identical before and after that day's mint work. Both steps have
+since been published, in order — see the note above and the sequence's own section below.)*
+
+### The mint
+
+Version bump in `src/apkg/apkg.h` (`APKG_VERSION`) and `tools/repo/build-packages.sh`
+(`VER_APKG`), committed **before** the mint so the package is built from a committed tree.
+
+| item | value |
+|---|---|
+| `apkg.amix` (clean `make amix`, twice) | md5 `83fb19200fab9ec3220739788668bd53`, **78045 B** — deterministic across both builds. Same size as the merge-day master build (`c13a5a1a…`, 78045 B): the only source delta is the version string. `DT_NEEDED` = `libnsl.so` + `/usr/lib/libc.so.1` only |
+| **`build/repo-staging-apkg022/base/APKG-0.2.2.pkg`** | **md5 `feb57752e2309e7dc8c79c4d0416855d`, 144896 B**, mode 444, sidecar `APKG-0.2.2.pkg.md5`. `build/` is gitignored and the datastream is not byte-reproducible (PSTAMP, mtimes): **this file is the artefact — do not re-mint it** |
+| binary inside the package | `pkgtrans`-extracted `/usr/apkg/bin/apkg` = **`83fb1920…`, 78045 B — byte-identical to the fresh master build** |
+| `pkginfo` | `VERSION=0.2.2`, `PSTAMP=lucifer20260926100438`, all else as 0.2/0.2.1 |
+| mint gates | `pkgmap-symlink-gate.py`: `link gate OK (1 link entry checked)`; newc magic verified; `s none /usr/bin/apkg=/usr/apkg/bin/apkg` absolute |
+
+Payload vs the 0.2.1 mint: **three files differ, all expected** — `/usr/apkg/bin/apkg`;
+`/etc/apkg.conf` (4262 → **5988 B**, md5 `8dada8d9fd5da9cced27ac3bf18e85a9`: exactly the
+`eed3210` name-resolution block `nameserver=` / `dns_timeout=5` / `dns_retries=2` appended;
+`repo=http://pkg.amigaux.org` and `rcvbuf=0` unchanged at lines 2 and 73); and `apkg.1`
+(`eed3210`'s man page, md5 `e948247b…`). `contents-fsck`, `amix-sadm-migrate` and
+`/var/apkg/admin` are byte-identical. `contents-fsck.amix` was re-proven current rather than
+assumed: a fresh build from a `git archive HEAD` copy gives the same md5 `7305529b…` as the
+in-tree binary that went in.
+
+Host alt-root install (`fakeroot` heirloom `pkgadd -R`, pre-made `/usr/bin`, nocheck admin):
+rc 0, `Installation of <APKG> was successful`, 14 `APKG` contents lines,
+`/usr/bin/apkg -> /usr/apkg/bin/apkg`, installed binary md5 `83fb1920…`. Upgrade ordering under
+the client's own `apkg_vercmp`: `0.2.2 > 0.2`, `> 0.2.1`, `> 0.1` (all `1`), so a 0.2 box's
+`apkg upgrade apkg` engages. The 0.1 self-brick warning (the `descs.conf` text on the `apkg`
+line) still applies and still rides on the line.
+
+### Suites and gates (on the bumped tree)
+
+| check | result |
+|---|---|
+| `src/apkg/tests/run-tests.sh` | **223 passed, 0 failed** |
+| `src/apkg/tests/nohttp-variant.sh` | **20 passed, 0 failed** |
+| `tools/repo/tests/run-tests.sh` | **267 passed, 0 failed** |
+| `payload-licence-gate.py APKG-0.2.2.pkg` | `OK (2 ELF(s) inspected; no embedded foreign object code)`, rc 0; `libnsl.so` NEEDED is the usual informational note. Both ELFs unstripped, so this is a real reading, not UNKNOWN |
+| `gen-catalog.py --scan-private build/repo-staging-apkg022` | `OK (1 package(s) scanned, 0 unparseable; none carry the kernel-package markers)`, rc 0 |
+| both gates on the step-2 root (41 `.pkg`) | payload gate rc 0, 0 refusals (27 stock skipped by provenance, the usual 19 UNKNOWN stripped add-on binaries); scan-private `OK (41 package(s) scanned…)` |
+
+### The step-2 publish root
+
+`build/publish-20260926-apkg022/` (gitignored) — the state the host should be in after step 1,
+plus 0.2.2:
+
+1. Full `cp -a` of `build/publish-20260926-cats/` (a copy, not hardlinks: the cats root stays
+   untouchable). Its reference files removed; `catalog.after-cats-a6d2d6bf` kept as the expected
+   live catalog before step 2 (not transferred — `publish.sh` rsyncs only `*.pkg`, `catalog`,
+   `catalog.md5`).
+2. `APKG-0.2.2.pkg` added to `base/` (mode 644, like its siblings). The four staged `.conf`
+   files are byte-identical to `tools/repo/`.
+3. **The trap:** `base/APKG-0.1.pkg` **and** `base/APKG-0.2.pkg` moved aside, `gen-catalog.py`
+   run (`39 package(s), 0 skipped`), both moved back. With either present it would sort first and
+   take the `apkg` name. 41 `.pkg` in the root.
+4. Reproduced in an independent scratch root (symlinks, both old APKGs absent): byte-identical.
+5. `DO-NOT-REGENERATE.txt` in the root says all of this.
+
+| catalog | md5 | bytes | entries |
+|---|---|---|---|
+| live today | `f0ed2ca1fcefe3f45c2c02f28f3c7f7a` | 5647 | 39 |
+| after step 1 (cats) | `a6d2d6bf58785732962b8d540351a988` | 5775 | 39 |
+| **after step 2 (APKG 0.2.2)** | **`282cc289d68e79492da7e0e8cf9978c3`** | **5779** | **39** |
+
+Step 2 changes **exactly one catalog line** against step 1:
+
+```
+- apkg|0.2|APKG|base/APKG-0.2.pkg|8289178ca832f0ea67ecd7445f512978|133632|apkgeng|system|…
++ apkg|0.2.2|APKG|base/APKG-0.2.2.pkg|feb57752e2309e7dc8c79c4d0416855d|144896|apkgeng|system|…
+```
+
+(description column unchanged — the `descs.conf` 0.1 upgrade-trap text, carried from step 1).
+
+### ▶ The publish sequence — PUBLISHED 2026-09-26 (in this order)
+
+**Step 1 — the cats + descs publish first**, exactly as prepared in the section below
+("the taxonomy goes live"):
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh --dry-run build/publish-20260926-cats
+# expect: no .pkg transferred, NO "deleting" line, then only: catalog, catalog.md5
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh build/publish-20260926-cats
+# expect: publish: OK -- served catalog matches staging (md5 a6d2d6bf58785732962b8d540351a988)
+```
+
+**Ran exactly as prepared, 2026-09-26 ~10:35 EEST:** dry run rsynced only `catalog` +
+`catalog.md5`, no `"deleting"` line; the real run exited rc 0 with `publish: OK -- served catalog
+matches staging (md5 a6d2d6bf58785732962b8d540351a988)`.
+
+**Gate between the steps** — the host must now serve step 1's catalog, or step 2's root is stale:
+
+```
+curl -s -0 -H 'Host: pkg.amigaux.org' http://pkg.amigaux.org/catalog | md5sum
+# must print a6d2d6bf58785732962b8d540351a988 -- anything else: STOP, re-derive step 2
+```
+
+**Gate confirmed** — live catalog md5 `a6d2d6bf58785732962b8d540351a988` before step 2 proceeded.
+
+**Step 2 — APKG 0.2.2:**
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh --dry-run build/publish-20260926-apkg022
+# expect: exactly base/APKG-0.2.2.pkg, catalog, catalog.md5 (plus rsync's directory lines);
+#         NO "deleting" line -- one means the host moved; stop and re-derive
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh build/publish-20260926-apkg022
+# expect: publish: OK -- served catalog matches staging (md5 282cc289d68e79492da7e0e8cf9978c3)
+```
+
+**Ran exactly as prepared, 2026-09-26 ~10:37 EEST:** dry run listed exactly
+`base/APKG-0.2.2.pkg`, `catalog`, `catalog.md5`, no `"deleting"` line; the real run exited rc 0
+with `publish: OK -- served catalog matches staging (md5 282cc289d68e79492da7e0e8cf9978c3)`.
+
+**After step 2, verified** from outside, the way the client fetches (`curl -0`,
+`Host: pkg.amigaux.org`): `/pkgs/base/APKG-0.2.2.pkg` = 144896 B, md5
+`feb57752e2309e7dc8c79c4d0416855d`; `/pkgs/base/APKG-0.2.pkg` and `/pkgs/base/APKG-0.1.pkg` still
+HTTP 200 (decatalogued but served, for manual recovery fetches); the catalog line reads
+`apkg|0.2.2|APKG|base/APKG-0.2.2.pkg|feb57752e2309e7dc8c79c4d0416855d|144896|...`. On a 0.2 box:
+`apkg update`, `apkg upgrade apkg`, `apkg version` → `apkg 0.2.2` (not separately re-run against
+the live box for this record; the catalog and package fetch above are the evidence).
+
+**If step 2 must be re-derived** (the host moved, or step 1 was not published as prepared): stage
+from the live host, never from a local tree (`rsync -a <user>@<host>:<docroot>/
+<root>/`, `md5sum -c catalog.md5`, verify every package against its catalog md5+size), copy in
+`APKG-0.2.2.pkg` from `build/repo-staging-apkg022/base/` **and** the four `tools/repo/*.conf`
+(the host does not carry them), move **every** older `APKG-*.pkg` aside, generate, move them
+back, and diff against the live catalog: exactly the one `apkg` line may differ.
+
+**Not covered by publishing:** demo cards and install media already written carry whatever APKG
+bytes they were built with. Re-carding against 0.2.2 is `amix-installng` work, not a step
+here (same judgement as `docs/apkg-0.2.1-hotfix.md` section 6).
+
+## 2026-09-26 — PUBLISH LOG: PUBLISHED — the taxonomy goes live; the stock 27 were already listed
+
+Two decisions from the 2026-09-26 consolidation review: `cats.conf` goes live at the
+next publish, and the 27 stock Amix 2.1 packages are listed (licensing lifted 2026-09-23). This
+section is the step, and it has run: **published 2026-09-26, ~10:35 EEST**, as step 1 of the
+sequence in the section above.
+`publish.sh --dry-run` first showed no `.pkg` transferred and no `"deleting"` line, only `catalog`
++ `catalog.md5`; the real run exited rc 0 with `publish: OK -- served catalog matches staging
+(md5 a6d2d6bf58785732962b8d540351a988)`. *(As first written, before the publish ran: nothing was
+published, `publish.sh` had not been run — not even `--dry-run`, which opens an ssh session to the
+host — and the live catalog was re-fetched read-only at the end, still
+`f0ed2ca1fcefe3f45c2c02f28f3c7f7a`.)*
+
+### ★ The stock packages were never unlisted in the CATALOG — the count stays 39
+
+The brief expected 39 + 27 = 66. The real count is **39**, and it does not move: all 27 stock
+packages have been catalog entries since the first `pkg.amigaux.org` publish (2026-09-14). The live
+catalog today is **27 stock + 12 ours** (`apkg`, `apkgeng`, `cdfs`, `amixdemo`, `demolib`, the six
+BATCH-1 packages, `amix-benchmark`). "Unlisted" was the **host's exposure posture**, not the
+catalog: no directory index (`Options -Indexes`), `robots.txt` `Disallow: /`, nothing linking to the
+host, no announcement (`amigaux-org/DESIGN.md`, *Exposure posture*). That posture is the
+`amigaux-org` repo's to relax (a link from the site, a permissive `robots.txt`); **there is no
+catalog change that "lists" them**, because they already are.
+
+What this repo *can* do for them at publish time, and now does:
+
+* **Names** — correct with no `names.conf` entry. Every stock pkginst fits in 9 characters, so the
+  default (the pkginst, lowercased: `X11r5src` → `x11r5src`, `Cdev` → `cdev`) is the catalog name,
+  and it is byte-identical to what the live catalog already serves. Verified: columns 1–7
+  (name … deps) of the staged catalog are **identical** to live for all 39 lines.
+* **Descriptions** — correct from their own pkginfo (`<NAME> (Amix 2.1 stock)`), unchanged.
+  `descs.conf` stays ours-only (T18 pins that); nothing stock needed an override.
+* **Categories** — this is the real change: `cats.conf` moves 21 of the 27 off the factory
+  `CATEGORY=system` (below).
+* **Gates** — both licensing gates see them as stock *by provenance*, out loud:
+  `payload-licence-gate.py` prints `scope skipping 27 vendor package(s) under stock/ -- factory Amix
+  content, governed by its own licensing decision` (rc 0, 0 refusals, the usual 19 UNKNOWN stripped
+  binaries in our add-on set). `gen-catalog.py --scan-private`: `OK (40 package(s) scanned, 0
+  unparseable; none carry the kernel-package markers)` — stock `core`'s `/stand/unix` passes because
+  the scan keys on our kernel mints' markers, not pathnames. The payload gate's comment block said
+  stock was "demo-only, revisited after 2026-09-19"; it now records the 2026-09-23 outcome.
+
+### What the next publish changes: 23 catalog lines, 0 packages
+
+| now | lines (was) |
+|---|---|
+| `network` | net, uucp (system) |
+| `text` | text (system) |
+| `documentation` | man (system) |
+| `development` | cdev, conf (system) |
+| `x11` | xbasic, xcore, xdev, xtras (system) |
+| `openlook` | olcore, oldev (system) |
+| `emacs` | emacs (system) |
+| `games` | games (system) |
+| `source` | amigasrc, emacsrc, gnusrc, gnusrc2, pubsrc, x11r5src, xsource (system) |
+| `system` | apkg, apkgeng (application) |
+
+Stay `system`: core, bsd, lp, public, sysadm, terminfo. Everything else we mint already carried
+the category `cats.conf` assigns. **Plus one description:** the `apkg` line gains the `descs.conf`
+0.1 upgrade-trap warning — the operator note that was written after APKG 0.2 published and has
+been "still owed" since the 2026-09-16 publish log. It lands on a line that changes anyway. If the
+two are wanted apart after all, the cats-only variant is prepared too (below).
+
+No `.pkg` byte moves: the staging root is the live tree verbatim, so the dry run should transfer
+**zero packages** and exactly `catalog` + `catalog.md5`.
+
+The two `test`-category fixtures (`amixdemo`, `demolib`) draw a gen-catalog *warning* now that the
+vocabulary is closed and staged (`CATEGORY='test' is not a declared cats.conf group`). That is
+expected and deliberate — `cats.conf` leaves them out so they stay distinguishable as fixtures —
+not a defect; they catalog as `test`, unchanged.
+
+### The staging root, and how it was built without tripping the regenerate trap
+
+`build/publish-20260926-cats/` (gitignored), 40 `.pkg`:
+
+1. Copied from `build/publish-20260916-amixbench/` — the root the current live catalog was
+   published from. **Verified before use, not trusted:** the live catalog fetched over plain HTTP,
+   and **39/39** entries matched a file in the copy on md5 **and** size. `base/APKG-0.1.pkg`
+   (decatalogued, still served) also matched the host: HTTP 200, 115200 B, md5
+   `ea72218a454ae57700d254b16e1540b8` both sides.
+2. Staged the current `tools/repo/{deps,descs,names,cats}.conf` — exactly what `build-packages.sh`
+   now stages (commit "stage cats.conf").
+3. **`base/APKG-0.1.pkg` moved OUT of the root, `gen-catalog.py` run, 0.1 moved back** — the
+   2026-09-16 trap (0.1 and 0.2 both map to `apkg`, sorting makes 0.1 win). Result: `39 package(s),
+   0 skipped`.
+4. Reproducible: regenerated independently in a hardlinked scratch root (0.1 absent) —
+   byte-identical, same md5. The scratch root was removed.
+5. `DO-NOT-REGENERATE.txt` in the root says all of this; `catalog.live-f0ed2ca1` (the pre-publish
+   reference) and `catalog.variant-cats-only` sit beside it and are not transferred.
+
+| catalog | md5 | bytes | entries |
+|---|---|---|---|
+| live today | `f0ed2ca1fcefe3f45c2c02f28f3c7f7a` | 5647 | 39 |
+| **prepared (cats + descs)** | **`a6d2d6bf58785732962b8d540351a988`** | **5775** | **39** |
+| variant: cats only, no `descs.conf` | `62c6685a1ed78a116f6cf8628695d86c` | 5644 | 39 |
+
+### ▶ The publish step — PUBLISHED 2026-09-26, ~10:35 EEST
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh --dry-run build/publish-20260926-cats
+# expect: no .pkg transferred, NO "deleting" line, then only: catalog, catalog.md5
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh build/publish-20260926-cats
+# expect: publish: OK -- served catalog matches staging (md5 a6d2d6bf58785732962b8d540351a988)
+```
+
+Expected **new catalog md5 `a6d2d6bf58785732962b8d540351a988`** (5775 B, 39 entries). A
+`deleting …` line in the dry run means the host has moved since 2026-09-26 — stop and re-derive.
+The cats-only variant instead: in the root, `cp catalog.variant-cats-only catalog && md5sum catalog
+> catalog.md5` (expect `62c6685a…`) — never by re-running `gen-catalog.py` there.
+
+**Invalidated by any APKG mint.** If 0.2.1/0.2.2 publishes first, this staging must be re-derived
+(new `.pkg` in `base/`, and **every** older APKG — 0.1 *and* 0.2 — must be moved aside for the
+generation, since all of them sort before the new one and would win the `apkg` name).
+*(Resolved the same day: the order is fixed as **this cats publish first, then APKG 0.2.2** — see
+the "APKG 0.2.2" section above. This root stays valid as step 1; 0.2.1 is never published.)*
+
+After publishing: re-fetch `/catalog` with `curl -0 -H 'Host: pkg.amigaux.org'` and check one
+re-categorised line (`net|…|network|…`); on a box, `apkg update` then `apkg list` shows the new
+groups. No client change is needed — the category field is a free token to apkg.
+
+**Ran and verified.** Dry run transferred zero `.pkg`, no `"deleting"` line, only `catalog` +
+`catalog.md5`; the real run exited rc 0 with `publish: OK -- served catalog matches staging (md5
+a6d2d6bf58785732962b8d540351a988)` — this was step 1 of the sequence recorded in the "APKG 0.2.2"
+section above, immediately followed there by step 2 (APKG 0.2.2). Re-fetched live afterward: the
+`net` line reads `net|2.1|net|stock/net-2.1.pkg|707070fd37ca42c48930876e758b6d0c|3042816|none|
+network|Networking commands and daemons (Amix 2.1 stock)` — `network`, as expected. (The live
+catalog has since moved on to step 2's md5, `282cc289d68e79492da7e0e8cf9978c3`, which carries this
+same re-categorisation plus the one `apkg` line change — see above.)
+
+### Design pointer — installng "install directly from the network" (not implemented)
+
+The next large installer feature: the catalog + the (now listed) stock packages as an
+**install source**, so a box installs from `pkg.amigaux.org` instead of tape/CD. Most of the client
+side already exists; what is missing is the installer's network bring-up. Pointers, not a design:
+
+* **apkg already has the arms.** `src/apkg/source.h`: `SRC_HTTP` beside `SRC_FILE` (the CD path
+  installng uses today) and `SRC_RAW`; `pkgadd -R <target>` is threaded through (`README.md`
+  "-R"). A network install is the CD install with `repo=http://pkg.amigaux.org`.
+* **Selection is already authored:** `sets.conf`/`sets.py` (named install sets: minimal, standard, developer, x11, full, extra),
+  `deps.conf` (core-first; `core-first-gate.sh`), and now the categories for the menu.
+* **The miniroot must carry the network:** a NIC driver (z3660eth / a2065), `S99zen`-style literal
+  `ifconfig`/`route`, and **no DNS** — a `/etc/inet/hosts` line `52.59.174.203 pkg.amigaux.org`
+  (the host is a name-based vhost: bare-IP requests 404; see README.md), plus apkg, the heirloom
+  engine and `libnsl.so`.
+* **Where the bytes land:** the HTTP arm double-materialises (cache file + pkgadd's `TMPDIR`
+  spool; see the 2026-09-16 RAM correction). `x11r5src` is 62.9 MB — the spool must be on the target disk,
+  not a RAM-backed miniroot.
+* **Still unproven and on the critical path:** a full base-set `pkgadd -R` on metal (CONTRIBUTING.md
+  constraint 3), and the ~110-char alt-root path limit (constraint 2).
+* Ownership: the installer is `amix-installng`'s; this repo owns the client, catalog and gates.
+
+## 2026-09-26 — `apkg-0.2.1-hotfix` merged into master; master's source is NOT the minted 0.2.1
+
+Decision of the consolidation review. `--no-ff` merge of `4c3bfc3` + `708ae70`. There was nothing to resolve: the
+branch had taken `unblock_alarm()` **verbatim** from master's `eed3210`, so util.c, http.c, the
+apkg.h extern and the retries=1 regression test merged as the same hunks. Master has **one**
+`unblock_alarm()` (util.c:76) and its three call sites (http.c once, dns.c twice). What the merge
+brought over: `APKG_VERSION`/`VER_APKG` **0.2 → 0.2.1**, the 0.2.1 mint note in
+`build-packages.sh`, and `docs/apkg-0.2.1-hotfix.md`. Suites on the merged tree: apkg host
+**223/0**, nohttp variant **20/0**, repo tools **256/0**. Branch deleted.
+
+**The minted artefact does not match master.** `build/repo-staging-apkg021/base/APKG-0.2.1.pkg`
+is intact (md5 `d69db8aaf22b3f4a4d4600f70f09e0f0`, 133632 B, mode 444) and its binary is still
+`b84b6be1b3531604f45d62fddc95cfde`, 71525 B — built from **d73ecbc + one function**. `make amix` on
+merged master gives `c13a5a1a8821ba0e8303aa9e561ec6be`, **78045 B**: master also carries the stub
+DNS resolver and everything since the 0.2 mint. So "0.2.1" now names two different trees — the
+minted hotfix and master's source. **Do not mint from master under 0.2.1** without deciding which
+0.2.1 is meant; the re-mint (0.2.1 vs 0.2.2) is a separate decision.
+
+## 2026-09-18 — the default repo was already canonical; what was missing was a test that says so
+
+Re-asked question: does apkg's compiled-in default still point at the retired
+the retired LAN-mirror URL? **No.** `DEF_REPO` in `src/apkg/conf.c:92` and the
+`/etc/apkg.conf` template `build-packages.sh` mints (`tools/repo/build-packages.sh:202`) have both
+read `http://pkg.amigaux.org` since **2026-09-14, commit `dcece20`** — the same commit that moved
+`publish.sh`'s defaults. A full grep of the tracked tree finds the retired host in **prose only**
+(`NOTES.md`, `CHANGELOG.md`, the maintainer notes, `docs/requirements.md`, a `publish.sh` comment), every
+occurrence correctly worded as history. `apkg.1`, `src/apkg/README.md` and `docs/design.md` already
+document the canonical default. **No source or doc change was needed.**
+
+The real finding is why the question could be asked at all: **nothing in 223 tests read the
+default.** Every functional test supplies its own `repo=` pointing at the localhost fixture server,
+so the one string a box with no `repo=` in `/etc/apkg.conf` actually talks to was the single
+config value the suite never observed — invisible precisely because it is the fallback. It had
+already been wrong once (pre-`dcece20`) and no test noticed then either.
+
+Three pins added to `src/apkg/tests/run-tests.sh` (220 → 223):
+
+- a config naming **no** `repo=` must resolve to `http://pkg.amigaux.org` — read off the binary's
+  own `-v` `config:` line, not grepped out of `conf.c`, so it pins behaviour rather than spelling;
+- the shipped template's `repo=` must be that same canonical URL;
+- template and binary must agree — a template that drifts hands the two halves of one box two
+  different repositories.
+
+Still strictly localhost: `list` reads the cached catalog and the repo URL is only ever touched by
+the fetch path, so the pin sends no packet.
+
+**The pins were proven to bite, not just to pass.** Flipping `DEF_REPO` back to the retired host
+fails 2 (`221 passed, 2 failed`); flipping the template line back fails a different 2. A green pin
+that cannot go red is decoration.
+
+**Nothing was published and nothing re-minted.** The live catalog and the published `APKG 0.2`
+(`apkg.amix` built before `dcece20`) are untouched and still carry the retired host as their
+compiled-in fallback — harmless while `/etc/apkg.conf` names the repo, which the installer writes.
+The deferred rebuild from `dcece20` still stands: the next mint picks the canonical default up and
+changes the binary, hence a new `.pkg` md5 and a new APKG version.
+
+## 2026-09-16 — the gate that would have caught the 1.2 defect, and the four ways it was wrong first
+
+`tools/repo/payload-licence-gate.py`, wired into `publish.sh` as a second, independent licensing
+gate. It answers the question the existing one does not: **does a package carry somebody else's
+object code?** `gen-catalog.py --scan-private` answers "is this one of OUR private kernel
+packages" — different property, and the `amixbench-1.2` withdrawal proved a package can pass the
+first while failing the second. Two properties, two files, deliberately not merged: an overloaded
+gate is one whose failure nobody can reason about.
+
+**What refuses.** libm object code statically linked into a payload binary, detected by the
+`STT_FILE` source names the link leaves behind (`whet` carried `atan.c exp.c log.c matherr.c
+reduce.c sin.c sqrt.c`). REFUSE is fatal in `publish.sh` (exit 5, no `--force`, same posture as
+the kernel gate) because this DEST is public and the mistake is not retractable once fetched.
+
+### The four times it was wrong before it was right
+
+Written down because each one is a way a gate can look healthy while being useless, and three of
+the four *printed a pass* while doing it.
+
+1. **It refused the published APKG 0.2.** The first draft also refused on any `DT_NEEDED` beyond
+   `libc.so.1`, and apkg legitimately needs `libnsl.so` for sockets. But a `NEEDED` is *dynamic
+   linkage against a library that lives on the box* — it redistributes none of the vendor's code,
+   which is the exact opposite of embedding `libm.a`. Wired as drafted it would have blocked the
+   next APKG publish with a bogus licensing accusation. The `NEEDED` list is now informational.
+2. **It would have refused an honest `log.c`.** The detector reads source-file names *inside*
+   ELFs, and `log.c`/`exp.c` are ordinary filenames in ordinary projects. A refusal now needs a
+   **distinctive SVR4 marker** (`matherr.c`, `reduce.c` — neither appears by accident) or **≥3
+   libm names co-occurring**. The real `whet` trips both, so the tightening cost no sensitivity.
+3. **★ Pointed at a staging root it inspected NOTHING and said OK** — including for the
+   *contaminated* staging. A `.pkg` datastream does not start with ELF magic, so the directory
+   walk found zero binaries and reported a clean bill. This is precisely the failure the tool's
+   own header warns about, and it walked into it. Directory mode now descends into every package,
+   and **a scan that read no files at all is an error, not a pass**.
+4. **Then it refused all 39 stock X11 binaries** — correctly, and that is the point. `pkgs/stock/`
+   is Commodore's own code; of course it contains SVR4 libm. Whether it may be served is a
+   **separate, explicit licensing decision** (demo-only, revisited after 2026-09-19), not one this
+   gate is entitled to re-answer. So `stock/` is skipped **by provenance path and out loud** (the
+   skip prints; `--include-stock` scans it anyway). Scope is what we build, because that is what
+   we can accidentally contaminate.
+
+That the detector lights up on genuine SVR4 X11 binaries it was never tuned against is the best
+evidence we have that it works.
+
+### The blindness, stated where it is claimed
+
+The test reads a **symbol table**, so a **stripped binary hides from it**. That is not a corner
+case: **7 of the 13 packages we ship are stripped** (APKGENG, acompat, grep, gzip, less, patch,
+zlib). Those report **UNKNOWN**, never "clean", and the summary says so in words — "UNKNOWN means
+UNTESTED, not clean". A clean bill means "no foreign object code that a symbol table would
+reveal", which for a stripped binary is no statement at all. `--strict` promotes UNKNOWN to a
+refusal for a caller that wants the strong reading; the honest fix is upstream (ship unstripped,
+as our own mints do, or attest the link line in the recipe). **The add-on set is therefore not
+yet provably clean — it is un-refuted.**
+
+Current state of the 13: **6 OK, 7 UNKNOWN (stripped), 0 REFUSE.**
+
+### Tests, and the quarantine
+
+T19, 15 checks. Every one is paired — the detector must **fire** on the known positive as well as
+pass the negatives, because a gate that matches nothing prints what a healthy one prints. It also
+asserts `publish.sh` actually calls it and treats a refusal as fatal: a gate nobody runs is not a
+gate.
+
+The withdrawn `amixbench-1.2.pkg` was the known positive, and **it has been deleted** — T19 pins
+its signature directly, so the capability outlived the file. The amix-packages repo had already removed
+its copy, making ours the last instance of that proprietary object code; keeping vendor `libm`
+around as a test fixture would have been a small version of the very thing the gate exists to
+prevent.
+
+## 2026-09-16 — PUBLISH LOG: `amix-benchmark` 1.3 is live (38 → 39), and the first name/pkginst split
+
+Approved after the 1.3 metal pass and **published by hand, as a separate step** — see "who ran
+it" below. The first package in the catalog whose name is not its pkginst, and the first one
+withdrawn mid-publish for a licensing defect.
+
+| | before | after |
+|---|---|---|
+| catalog md5 | **`7b16464b55a85d6a908b2b4f1ac9a27d`** | **`f0ed2ca1fcefe3f45c2c02f28f3c7f7a`** |
+| catalog entries | 38 | **39** |
+| catalog bytes | 5247 | 5647 |
+| `.pkg` files on the host | 39 | **40** |
+
+The metal gate that released it (real 68LC060 A4000D): install / `pkgchk` /
+`--help` all pass, and the **default suite completed bounded in 369 s** — `cpu.dhry` 70,051
+dhrystones/s, `fpu.dhry`, `fpu.paranoia` 24/24, `mem`, all three `vm` rows ok,
+**`fpu.whet` skipped by design**, the `iobench` read row, then `pkgrm`. That is the 1.2 defect
+(the default suite stopping after `fpu.dhry` on soft-FPU hardware) proven fixed, on the kit that
+actually shipped.
+
+### ★ Who ran it, and why that is not a footnote
+
+The publish was run **by hand, by the maintainer**, separately from the staging. Staging stopped
+at a finished, verified root, and nothing reassembled the publish out of a bare `rsync`.
+
+That is worth writing down as a property rather than an incident: **staging can be automated,
+mutating the public host is not.** Everything up to the catalog is reproducible, checkable and
+cheap to throw away; the publish is none of those. Approving the *task* is not approving the
+publish, and the two must not be allowed to substitute for each other.
+
+### The package
+
+The package is the sibling `amix-packages` repo's mint of **our own** amix-bench suite
+(`build/pkg/amixbench-1.3.pkg`, 132608 B, md5 `8f055b9d98dbf3abc8cd18aabf3bd64d`, amix-packages
+`d29ebde`). It was published **as built** and never re-minted here: pkgmk stamps the `i pkginfo`
+member's mtime, so a fresh build moves the `.pkg` md5 — which is the md5 this file, the catalog and
+every gate result quote.
+
+### ★ 1.2 was WITHDRAWN before publish — it carried proprietary object code
+
+The first candidate, `amixbench-1.2.pkg` (148992 B, md5 `b462c7d06732714c847a2172eac2bef1`), was
+staged, gated green, and then **withdrawn unpublished**. Its `whet` (Whetstone) binary
+**statically embeds the stock SVR4 `/usr/ccs/lib/libm.a`** — Commodore/AT&T object code. The public
+repository carries only our own builds, so it could never go up.
+
+It was caught by a human reading the recipe, **not by a gate**, and that is the part worth keeping:
+
+> **`gen-catalog.py --scan-private` does not catch this class, and cannot.** It keys on the
+> `KSUM_R`/`BOOT2_SHA` pkginfo markers that *our kernel mints* carry. A third-party `.a` linked
+> into a payload binary carries no marker, so **1.2 passed the private-content gate clean.** The
+> gate's contract is "our kernel packages never leave"; "no foreign object code in a payload" is a
+> different property that nothing currently checks.
+
+Scope was established before trusting the withdrawal. Extracting 1.2 and scanning per binary, the
+contamination is **isolated to `whet`**: it carries exactly seven libm `STT_FILE` names
+(`atan exp log matherr reduce sin sqrt`) beside its own `whetstone.c`, while `dhry`, `fpbench`,
+`iobench`, `membench` and `vmbench` each carry only their own source name. **`fpbench` is clean** —
+the FP benchmark pulls no libm — so dropping `whet` costs only the `fpu.whet` row.
+
+The same screen was run over **all twelve of our published packages** (`base/`, `extra/`, `test/`):
+**all clean**, so the live host has no existing breach of this class. Stated honestly, the screen
+keys on `STT_FILE` names and `gzip`, `less`, `AMIXDEMO` and `DEMOLIB` carry none at all, so for
+those four it is *blind*, not passing; `gzip` and `less` are stripped but every ELF in them declares
+`NEEDED /usr/lib/libc.so.1` only, with no libm linkage and no plausible math call-site. Negligible
+risk, not proof. (Stock `pkgs/stock/` is Commodore's own content under its separate
+demo-only exception, and is a different question.)
+
+A real payload screen — libm `STT_FILE` names plus any `NEEDED` beyond `libc.so.1`, with the
+stripped-binary caveat answered — is **owed as its own follow-up**, deliberately not folded into
+this publish.
+
+### 1.3 = 1.2 minus `whet`, and the gates that prove it
+
+The five surviving binaries and the driver are **byte-identical** to the withdrawn 1.2 mint, so the
+measurement story is untouched and results stay comparable across kit versions. Four checks were
+derived from the 1.2 extraction **before** 1.3 existed, so they could not be retrofitted to it:
+
+| gate | 1.2 | 1.3 |
+|---|---|---|
+| `whet` present in payload | yes | **absent** |
+| libm `STT_FILE` names in payload | **7** | **0** |
+| pkgmap payload pathnames | 22 | **21** |
+| `dhry`/`fpbench`/`iobench`/`membench`/`vmbench`/`runbench.sh`/wrapper sha256 | — | **all byte-identical** |
+
+`runbench.sh` is `924eff39…`, unchanged, built from kerntools' committed `937b4b9`; its `run_whet`
+degrades by design and prints `TEST fpu.whet status=skipped reason=no-whet-in-this-kit`, with the
+header's `tools=` line recording what the kit carried.
+
+**One caution on that last string as a gate:** it is *already* in the 1.2 driver and it is generic
+(there is a `no-fpbench-in-this-kit`, a `no-membench-in-this-kit`, and so on). It proves the degrade
+path exists; it **cannot** distinguish 1.3 from 1.2, and it is subsumed by the driver sha256 anyway.
+The checks that actually fail on 1.2 and pass on 1.3 are the four in the table.
+
+`PROVENANCE` and `amix-bench.1` are the only two payload files that legitimately change: a version
+bump, `whet`'s line dropped from the checksum manifest, and new "WHY THERE IS NO 'whet'" /
+"NO WHETSTONE" sections. Both were diffed rather than assumed. The `APKG_DESC` the amix-packages repo
+shipped in 1.3 states the omission, so the catalog description carries it to every `apkg list`.
+
+### ★ The first package whose catalog name is not its pkginst — `tools/repo/names.conf`
+
+`amix-benchmark` is **14 characters** and the SVR4 `PKG` instance may not exceed **9** (CONTRIBUTING.md
+constraint 1: stock Amix `pkgadd` *silently drops* a longer one). So the instance is `amixbench`
+and the name a user types is `amix-benchmark`. Every earlier package in the catalog fit in 9
+characters, so the two strings had never had to differ.
+
+`gen-catalog.py` has supported a `names.conf` (`<PKGINST>: <catalog-name>`) since the beginning and
+**nothing in this repo had ever written one** — the default is the pkginst lowercased. Without it
+the entry would have come out named `amixbench`, quietly contradicting the sibling repo's
+registry (`catalog_name: amix-benchmark`) and the recipe's own pkginfo comment. So the file now
+exists, holding exactly one mapping. It is keyed on the **pkginst**, not the catalog name — it is
+what *produces* the catalog name, so it cannot be keyed on its own output.
+
+The catalog carries both strings (`name|version|pkginst|…`), so the split costs nothing on the box:
+apkg resolves and displays `amix-benchmark` and hands `amixbench` to the engine for
+pkgadd/pkgrm/the `/var/sadm` record.
+
+### Staging, and what it deliberately does NOT carry
+
+Staged from the **live host** (`rsync` down from `<host>:<docroot>`, 286 MB)
+into `build/publish-20260916-amixbench/` (gitignored), never from the retired NAS mirror — that
+mirror still holds only 32 entries and `publish.sh` rsyncs `--delete --delete-excluded`. The
+baseline was proven **before** anything was added: `md5sum -c catalog.md5` OK, 38 entries, catalog
+byte-identical to the live HTTP fetch, and all **38/38** pulled-down packages matched their catalog
+md5 **and** size.
+
+Staged metadata: `deps.conf` and the new `names.conf`. Deliberately **not** staged:
+
+* **`cats.conf`** — same reason as BATCH-1 and APKG 0.2: it would re-categorise all 38 published
+  lines in one publish. Not needed anyway; the package's own pkginfo already carries
+  `CATEGORY=utility`, and `utility` is a declared `@group` in the closed vocabulary.
+* **`descs.conf`** — see below. This one is a real decision, not a formality.
+
+`deps` is `none`, and that is a fact rather than an omission: the pkginfo carries no `APKG_DEPS`
+and there is no `deps.conf` entry, so `normalize_deps("")` yields `none`. The five packaged
+benchmark binaries link `/usr/lib/libc.so.1` only, and `core` is never a declared dependency.
+
+### The `descs.conf` collision — one publish cannot do both
+
+`descs.conf` landed earlier the same day with the note that the publish path "should stage it the
+same way" as `deps.conf`, and its one authored line (the `apkg` 0.1 upgrade-trap operator warning)
+has **never reached the live catalog** — it was written after APKG 0.2 was published.
+
+Staging it here would therefore change **two** lines, not one: the new `amix-benchmark` entry *and*
+the `apkg` description. Both variants were generated and diffed:
+
+| staging | catalog md5 | diff vs live |
+|---|---|---|
+| without `descs.conf` (**what shipped**) | `f0ed2ca1fcefe3f45c2c02f28f3c7f7a` | **+1 line**, nothing else |
+| with `descs.conf` | (regenerate to obtain) | +1 line, **and** the `apkg` description gains the 0.1 warning |
+
+(The same pair measured on the withdrawn 1.2 staging was `0a0d0a2b…` / `34493d58…`; the
+decision is unchanged — `descs.conf` stays out of this publish.)
+
+The `+1`-only staging is what shipped, because a publish that carries two unrelated changes is
+harder to reason about and to roll back than two publishes that each carry one. The `descs.conf`
+delivery is therefore **still owed, and still unpublished** — and it is the more urgent of the two
+for a box on apkg 0.1, so it should not be left to ride along with whatever happens to publish
+next.
+
+### ⚠ The staging dir must NOT be re-run through `gen-catalog.py`
+
+`base/APKG-0.1.pkg` is still served (decatalogued, not deleted) and must stay in staging or
+`--delete-excluded` removes it from the host. But catalog v1 keys on the **name**, and both
+`APKG-0.1.pkg` and `APKG-0.2.pkg` map to `apkg` — so `gen-catalog.py` SKIPs the duplicate, and
+because candidates are **sorted**, `0.1` sorts first and **wins**. A re-run would silently emit a
+catalog that decatalogues the live 0.2 and republishes 0.1, with only a stderr `SKIP` to say so.
+
+So the catalog was generated with 0.1 moved aside, 0.1 was moved back, and the staging root now
+carries a `DO-NOT-REGENERATE.txt` saying exactly this. `publish.sh` itself is safe: it only
+`md5sum -c`s the catalog and calls `gen-catalog.py --scan-private`, which builds no catalog.
+
+### How it was published, and the transfer list
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh [--dry-run] build/publish-20260916-amixbench
+```
+
+`--dry-run` first. Its transfer list, verbatim:
+
+```
+publish: syncing packages -> <host>:<docroot>/pkgs/
+building file list ... done
+./
+base/
+extra/
+extra/amixbench-1.3.pkg
+
+publish: syncing catalog -> <host>:<docroot>/
+sending incremental file list
+catalog
+catalog.md5
+```
+
+Exactly one `.pkg`; `./`, `base/`, `extra/` are traversed-directory entries, not transfers. **No
+`deleting …` line anywhere** — which is simultaneously the proof that the other 39 packages on the
+host were already byte-identical to staging, and that `--delete-excluded` was not about to remove
+the decatalogued `APKG-0.1.pkg`. The real run moved the same three files and ended:
+
+```
+publish: OK -- served catalog matches staging (md5 f0ed2ca1fcefe3f45c2c02f28f3c7f7a)
+```
+
+Private-content gate, both runs: `scan-private: OK (40 package(s) scanned, 0 unparseable; none
+carry the kernel-package markers)`.
+
+### Verified from OUTSIDE, the way the client fetches
+
+`curl -0` (HTTP/1.0) with an explicit `Host: pkg.amigaux.org`, which is what `apkg` puts on the
+wire — and re-measured independently of the publishing run, not trusted from its output:
+
+| fetched | result |
+|---|---|
+| `/catalog` | 200, 5647 B, md5 `f0ed2ca1fcefe3f45c2c02f28f3c7f7a`, **39 entries**, byte-identical to staging |
+| `/catalog.md5` | `f0ed2ca1fcefe3f45c2c02f28f3c7f7a  catalog` — matches the served catalog |
+| `/pkgs/extra/amixbench-1.3.pkg` | 200, **132608 B**, md5 **`8f055b9d98dbf3abc8cd18aabf3bd64d`** = catalog |
+| `/pkgs/extra/amixbench-1.2.pkg` | **404** — the withdrawn mint never reached the host |
+| `/pkgs/base/APKG-0.1.pkg` | 200, 115200 B — the decatalogued file survived `--delete-excluded` |
+
+The `apkg|0.2|…` line is byte-unchanged, and `APKG-0.2`, `APKGENG`, `less`, `zlib`, stock `core`
+and `AMIXDEMO` all still serve at their catalog sizes — i.e. nothing was collaterally deleted.
+**No `Content-Encoding`** on the new `.pkg` even with `Accept-Encoding: gzip, deflate`
+(`Content-Type: application/octet-stream`, `Content-Length` = the on-disk size); apkg has no
+decompressor in the fetch path, so a transfer-encoded body would md5-fail every download. The vhost
+rule re-measured rather than assumed: `Host: 52.59.174.203` → **404**, `Host: pkg.amigaux.org` →
+**200**.
+
+### Host-side gates, before the publish
+
+* Datastream: 132608 B, md5 `8f055b9d98dbf3abc8cd18aabf3bd64d`; `pkginfo -l -d` gives PKGINST
+  `amixbench`, VERSION `1.3`, CATEGORY `utility`, ARCH `Amiga`, 22 spooled pathnames; `APKG_DESC`
+  present; no `KSUM_R`/`BOOT2_SHA` markers; `pkgmap-symlink-gate.py` OK (0 link entries — the
+  package ships only `d`/`f`/`i` ftypes).
+* Catalog: 39 entries, 0 skipped; **reproducible** — three consecutive runs all
+  `f0ed2ca1fcefe3f45c2c02f28f3c7f7a`, 5647 B. All 39 entries resolved to a file in staging matching
+  its md5 and size. The new line is 399 bytes, far inside Gate 8's 2046.
+* `tools/repo/tests/run-tests.sh` **226 passed, 0 failed**.
+
+The published line, verbatim:
+
+```
+amix-benchmark|1.3|amixbench|extra/amixbench-1.3.pkg|8f055b9d98dbf3abc8cd18aabf3bd64d|132608|none|utility|amix-bench benchmark suite: run 'amix-bench' for the safe default (CPU/Dhrystone, floating point, memory bandwidth, VM); add --read-target for the iobench disk rows. Five prebuilt m68k binaries + the runbench driver under /opt/amix; the fpu.whet row reports skipped (whet omitted for licence).
+```
+
+### ★ ON-BOX E2E: PASSED, and the name/pkginst split is proven client-side
+
+**Real 68LC060 A4000D**, a **fresh v7.1.4 minimal install**, against the live
+`pkg.amigaux.org`. Record: the run's transcripts 01–08 (kept outside this tree).
+
+```
+apkg update                 -> catalog updated: 39 packages
+apkg install amix-benchmark -> downloaded amixbench-1.3.pkg -> installed <amixbench>
+pkginfo amixbench           -> OK
+amix-bench --only cpu.dhry  -> status=ok, 69,953 dhrystones/s
+apkg remove amix-benchmark  -> gone (pkginfo rc 1)
+```
+
+**This is the half the host could not prove.** Every check before this one was host-side or
+HTTP-side; the question it answers is the one no earlier package could ask, because no earlier
+package had a catalog name that was not its pkginst. The operator types **`amix-benchmark`**, the
+client resolves it in the catalog, and the **engine is handed `amixbench`** — which is why
+`pkginfo amixbench` is the load-bearing line in that transcript, not a formality. Install, run and
+remove all round-trip on the long name while `/var/sadm` only ever sees the short one. The 9-char
+SVR4 ceiling and a readable name are no longer in tension.
+
+The 69,953 dhry/s also brackets the 70,051 measured in the release gate on the same class of
+machine — the shipped package reproduces the reference number, which is the whole argument for
+shipping the fieldkit binaries verbatim rather than rebuilding them.
+
+### ★ BATCH-1's on-box E2E: PASSED — the 2026-09-15 item is CLOSED
+
+Same session, same box:
+
+```
+apkg install less -> less-704.pkg (477 KB) -> /opt/amix/bin/less "less 704 (V8 regex)"
+apkg remove  less -> gone
+```
+
+The **first on-box proof of any BATCH-1 package**, five days after they were published. Until now
+those six were verified only as far as HTTP could verify them; one of them has now been fetched,
+installed, executed and removed by the real client on real hardware. (`less` is also the largest
+of the six at 477 KB, so it exercises the fetch path more than the others would have.)
+
+### Still owed
+
+* **The `descs.conf` apkg-0.1 upgrade warning is still unpublished** (see above). It is the one
+  piece of operator-safety text that a 0.1 box most needs and cannot yet read. A release decision.
+* **The other five BATCH-1 packages** are still unproven on a box individually — `less` closes the
+  *category* doubt (the client, the fetch, the prefix, the round trip all work on real hardware),
+  not each package's own payload.
+
+## 2026-09-16 — apkg gets a stub DNS resolver, and a blocked-SIGALRM hang falls out of building it
+
+**Not published, nothing minted.** No `.pkg` was built and nothing on `pkg.amigaux.org` moved; the
+Saku demo cards stay on the published APKG 0.2. This is for the next release after 2026-09-19.
+
+### The fact this is built on
+
+**Stock Amix has no resolver.** libsocket's `gethostbyname()` reads `/etc/inet/hosts` and nothing
+else; a `resolv.conf` on an Amix box is inert, because nothing reads it. And the client contract is
+**hostname only** — `pkg.amigaux.org` is a name-based virtual host and answers a bare-IP `Host:`
+with 404. So on a stock box "no resolver" means "no repository" until somebody hand-writes a hosts
+line. That is exactly what the demo cards carry, and it is also why a fresh install cannot reach
+the repository until a human edits a file.
+
+### What was added
+
+`src/apkg/dns.c`, ~700 lines, gnu89, in the http.c/conf.c house style. Resolution is three steps:
+
+1. an IPv4 literal is used as it stands;
+2. the **host database** (`gethostbyname()`) — unchanged behaviour;
+3. only if that says nothing, each configured `nameserver`, in order.
+
+**Hosts-first is the load-bearing choice.** No box that resolves today can regress when a
+nameserver is configured, and a line an operator wrote by hand can never be shadowed by DNS. The
+default nameserver list is **empty**, so with no config change apkg resolves exactly as it always
+has.
+
+A stub in the strict sense: one UDP A query per attempt, recursion requested, no EDNS, no cache
+beyond the process, no search list, no TCP fallback, no `resolv.conf`. CNAME chains are followed to
+an A record (by OWNER NAME, re-walking the answer section per hop, so a shuffled chain still
+resolves); TTLs are read past and ignored. Root is not required. It answers **apkg's own lookups
+and nothing else** — telnet, ftp and the rest of the box still read `/etc/inet/hosts`.
+
+Config, in the same family as the nine fetch keys: `nameserver=` (IPv4, optional `:port` for
+testing, **repeatable**, tried in order, empty value clears the list, max 8), `dns_timeout=` (5 s
+per query ATTEMPT), `dns_retries=` (2 extra attempts per nameserver). `-v` prints a `dns:` line
+beside the `fetch:` one, and says which of the three steps answered and which server did it.
+
+Parsing is defensive because a UDP reply is the one input here an attacker picks: the socket is
+`connect()`ed (the kernel drops anything not from the server asked), the transaction id / QR bit /
+opcode / echoed question must all match, **compression pointers must point strictly backwards**
+(which makes an infinite name impossible, with a jump counter on top), every offset is
+bounds-checked, and an A record is believed only with class IN and rdlength 4. Anything else is
+discarded in favour of the next attempt or nameserver — never a partial answer.
+
+### The defect that fell out: the SECOND alarm() was never delivered
+
+Building the retry loop surfaced a hang, and it was **not** only in the new code.
+
+A signal handler runs with its own signal blocked, and that block is lifted by *returning* from the
+handler — which a `longjmp` never does. Whether `setjmp`/`longjmp` restore the mask is a
+libc-flavour question (`sigsetjmp(env,1)`/`siglongjmp` do, `_setjmp`/`_longjmp` do not, and plain
+`setjmp`/`longjmp` are documented both ways). Measured host-side in a 30-line program: after the
+first timeout longjmp **SIGALRM stayed blocked**, so the next `alarm()` was armed and never
+delivered, and the following blocking call hung forever.
+
+`http.c` has used `alarm()`+`longjmp` for its inactivity timeout since it was written, and its
+**retry loop re-arms the same timer**. So with the shipped default `retries=2`, the first stall
+timed out correctly and a **second stall hung the client with no timeout at all**. It stayed
+invisible because the existing stall test runs at `retries=0` and therefore only ever takes the
+first timeout — the failure presenting as the healthy state, again.
+
+Fix: `unblock_alarm()` in `util.c`, called beside every `alarm(0)` on a path that longjmps out of
+the handler (http.c's retry loop, both of dns.c's). `sigsetjmp`/`siglongjmp` were the other
+candidate and were rejected on evidence: the Amix libc exports `sigsetjmp` but **not**
+`siglongjmp`, while `sigprocmask`, `sigemptyset` and `sigaddset` are all real exported symbols in
+`libc.so.1` (checked with readelf against the sysroot). `util.c` needs `_POSIX_SOURCE` to see
+`sigset_t` at all — Amix's `<sys/signal.h>` hides it behind `(__STDC__ - 0 == 0) ||
+_POSIX_SOURCE` — so the macro is defined at the top of **that file only**: http.c and dns.c want
+the non-POSIX socket and STREAMS declarations it would take away.
+
+New regression test: a stall at `retries=1` must produce **two** timeout messages and end. Before
+the fix it hung; after it, 4 s.
+
+### Testing, and why there are two vehicles
+
+`tests/fake-dns.py` is a scripted UDP nameserver, one behaviour per instance: a correct answer, a
+CNAME chain (compression pointers in both legal places, A record emitted *before* the CNAME that
+leads to it, so a resolver that follows record ORDER instead of owner name is caught), `rcode 3`,
+a garbage answer section, an 8-byte datagram, a correct answer carrying someone else's transaction
+id, and one that never replies.
+
+`tests/dns-driver.c` links `dns.c` + `util.c` and calls the resolver directly. **That split is not
+cosmetic, and the reason is worth keeping:** step 3 is reached only when the host database said
+nothing, and on a test machine that is whatever NSS says. This bench host has a **wildcard
+upstream that answers every name**, reserved `.invalid` ones included — so a test written on the
+assumption "an invalid name does not resolve" would have exercised nothing at all while passing.
+The driver removes the variable; the ORDERING is proved end-to-end through apkg with names every
+machine agrees about (`127.0.0.1`, `localhost`), and the end-to-end DNS-only fetch probes candidate
+host names with the same `gethostbyname()` apkg uses, takes the first that genuinely fails, and
+reports a loud SKIP if none does. (On this host the absolute form `dnse2e.apkg.invalid.` fails
+where the relative one is wildcarded, so the end-to-end case does run here.)
+
+### Binary
+
+`src/apkg/apkg.amix` rebuilt with the cross toolchain: **md5 `299d355da851b80b5c71ef01e0512b0b`,
+78045 bytes**, ELF 32-bit MSB m68k. `DT_NEEDED` is `libnsl.so` + `/usr/lib/libc.so.1` and nothing
+else — no host path leaked into a DT_NEEDED, which is the standing wrapper trap. The FILE+RAW
+static variant is unaffected: `dns.c` `#ifdef`s itself out under `-DAPKG_NO_HTTP` (the object comes
+out with zero symbols, asserted) and `build-amix-static.sh` also excludes it by name so the build
+log says the resolver is absent.
+
+### What the metal must still show
+
+Nothing here is proven on hardware. The metal run: on the A4000D, **remove the
+`pkg.amigaux.org` line from `/etc/inet/hosts`**, put `nameserver=<resolver-ip>` in `/etc/apkg.conf`,
+and run `apkg -v update`. Expected: `resolve: pkg.amigaux.org is not in the hosts file; asking 1
+nameserver(s)`, then `resolve: pkg.amigaux.org -> 52.59.174.203 (dns <resolver-ip>)`, then the normal
+fetch. Then put the hosts line back and re-run: it must say `(hosts file)` and send **no** query.
+
+Tests: `src/apkg/tests/run-tests.sh` **220 passed, 0 failed** (was 169);
+`src/apkg/tests/nohttp-variant.sh` **20 passed, 0 failed** (was 17).
+
+## 2026-09-16 — `descs.conf`: the catalog description stops being a function of the .pkg bytes
+
+**Not published. Nothing on `pkg.amigaux.org` moved.** The Saku demo cards are frozen on the
+published APKG 0.2; this is for the next release after 2026-09-19. The authored text below reaches
+the live catalog on the *next* publish, and only then.
+
+### What was wrong
+
+The publish step wanted the catalog's `apkg` line to carry the operator note about the 0.1 upgrade
+trap — the one thing a box still on 0.1 must read *before* it types `apkg upgrade apkg` — and could
+not. The catalog's ninth column was a pure function of the package's own pkginfo
+(`gen-catalog.py` `APKG_DESC`, falling back to `NAME`), so changing that sentence meant re-minting
+`APKG-0.2.pkg`. Re-minting moves the `.pkg` md5, which moves the catalog line, which invalidates
+every digest and gate result recorded against it — for a change that touches no installed byte and
+that the mint is not even byte-reproducible for (NOTES 2026-09-16, publish log).
+
+### The fix: the `deps.conf`/`cats.conf` pattern, one field over
+
+`tools/repo/descs.conf`, read by `gen-catalog.py` from the **staging root**, `<name>: <free text>`,
+catalog name first and pkginst as the fallback — the same key rule as the other two. Only the
+**first** colon separates, so the text may hold as many more as it likes (the apkg note holds two).
+The catalog stays reproducible from staging: the override is an input file *in* staging, not a
+hand-edit of the output.
+
+Validation is deliberately *not* cats.conf's. A category is a token and a space in one breaks
+apkg's parser; a description is free text and spaces are the whole point. What is refused:
+
+* a `|`, the field separator. `clean_field()` would rewrite it to `/` — silently rewriting an
+  operator's authored sentence is worse than refusing the line, so it is a per-package SKIP.
+* an empty override. Almost always a truncated line, and it would *blank* a description the pkginfo
+  did supply. Delete the line to fall back.
+* **Gate 8 (new, fail-closed):** an assembled entry line longer than 2046 bytes. This is the one
+  that matters, and it is a *client* limit, not a generator one: `src/apkg/catalog.c` reads each
+  line with `fgets()` into `char line[2048]` and treats a full buffer with no newline as "line too
+  long" — which rejects the **whole catalog** (`CAT_EFORMAT`), not the offending line. A free-text
+  column that can now be hand-authored is exactly where that gets tripped, so the generator refuses
+  to write the catalog at all (rc 2), the Gate 7 posture. The test pins both sides of the edge:
+  2046 bytes passes, 2047 is fatal.
+
+### Staged on every mint — and why that is safe here
+
+`build-packages.sh` copies `descs.conf` into staging beside `deps.conf`. `cats.conf` is
+deliberately *not* staged (the taxonomy would re-categorise all 38 published lines in one publish);
+`descs.conf` is safe because it names **only packages we mint**, so staging it moves exactly those
+lines and no others. That property is now mechanical, not a promise: T18 fails if a key appears
+that is not one of `apkg`/`apkgeng`/`cdfs`/`amixdemo`/`demolib`.
+
+### The authored text (one line today)
+
+```
+apkg: Remote package client: update/list/search/install over HTTP. Boxes on apkg 0.1: do NOT run 'apkg upgrade apkg' (it removes apkg); migrate with 'apkg download apkg' + stock pkgadd, see NOTES.
+```
+
+191 bytes; the assembled `apkg` catalog line lands far inside Gate 8. The plain one-liner stays in
+front so `apkg search` still matches on it, and the pkginfo `APKG_DESC` is left exactly as it is —
+the override is catalog-level, so an installed box's own pkginfo still says the short thing.
+
+Tests: `tools/repo/tests/run-tests.sh` **226 passed, 0 failed** (T18 is new, 28 checks).
+
+## 2026-09-16 — PUBLISH LOG: APKG 0.2 is live (catalog stays at 38; 0.1 is decatalogued, not deleted)
+
+Approved for publish. This supersedes the previous section's **⚠ Open — nothing was
+published**: the re-minted APKG 0.2 is now on `http://pkg.amigaux.org/`. Nothing else moved.
+
+| | before | after |
+|---|---|---|
+| catalog md5 | **`395b4fbc94aea9df3238e3b7e4750f44`** | **`7b16464b55a85d6a908b2b4f1ac9a27d`** |
+| catalog entries | 38 | 38 |
+| `apkg` entry | `apkg\|0.1\|APKG\|base/APKG-0.1.pkg\|ea72218a454ae57700d254b16e1540b8\|115200\|apkgeng\|application\|…` | `apkg\|0.2\|APKG\|base/APKG-0.2.pkg\|8289178ca832f0ea67ecd7445f512978\|133632\|apkgeng\|application\|…` |
+| `.pkg` files on the host | 38 | **39** |
+
+The **preserved** `build/repo-staging-apkg02/base/APKG-0.2.pkg` was published — md5
+`8289178ca832f0ea67ecd7445f512978`, 133632 B, the re-minted one with the absolute `/usr/bin/apkg`
+symlink and `rcvbuf=0`. It was **not** re-minted for the publish: the mint is not byte-reproducible
+(differing mint-time mtime at byte 525), so a fresh build would have invalidated every md5 in this
+file. `tools/repo/pkgmap-symlink-gate.py` was run on it immediately before staging:
+`link gate OK … (2 link entries checked)`. The same gate run against the **published 0.1** fails on
+both pkgmap copies (`symlink /usr/bin/apkg -> ../apkg/bin/apkg is RELATIVE`) — that contrast is
+what "0.2 fixes the malformed symlink" means in one command.
+
+### Staged from the LIVE HOST, never from the LAN mirror
+
+The retired LAN mirror still holds only 32 entries, and `publish.sh` rsyncs
+`--delete --delete-excluded`, so staging from it would have deleted the six BATCH-1 packages off
+the server. Staging was a fresh `rsync` **down** from `<host>:<docroot>`
+(286 MB, 38 packages) into `build/publish-20260915-apkg02/` (gitignored), and the baseline was
+proven **before** anything was added:
+
+* `md5sum -c catalog.md5` → `catalog: OK`, 38 entries, md5 `395b4fbc94aea9df3238e3b7e4750f44` —
+  byte-identical to the live `catalog.md5`;
+* all **38/38** pulled-down packages matched their catalog md5 **and** size.
+
+`deps.conf` was staged (it is what fills `apkg→apkgeng`); `cats.conf` was deliberately **not**, for
+the same reason as BATCH-1 — it would have re-categorised all 38 other lines in the same publish.
+The regenerated catalog differs from the live one in **exactly one line**, `diff -u` verified.
+
+### `APKG-0.1.pkg` stays on the server, out of the catalog
+
+Catalog v1 keys on `name` and `gen-catalog.py` refuses a staging dir holding both (`duplicate
+catalog name 'apkg'`), so 0.1 was moved aside for the generate step and **moved back before the
+publish**. It therefore stays in `pkgs/base/` where `--delete-excluded` would otherwise have
+removed it — a box that already has APKG 0.1 installed never re-fetches it, and the Saku medium
+carries the bytes locally, but the URL still resolves for a manual recovery fetch.
+
+### Dry run first, and what it showed
+
+```
+tools/repo/publish.sh --dry-run build/publish-20260915-apkg02
+  gen-catalog: scan-private: OK (39 package(s) scanned, 0 unparseable; none carry the kernel-package markers)
+  publish: syncing packages -> <host>:<docroot>/pkgs/
+    ./  base/  base/APKG-0.2.pkg
+  publish: syncing catalog -> <host>:<docroot>/
+    catalog  catalog.md5
+```
+
+Three files, **no `deleting …` line anywhere** — which is also the proof that the other 38 packages
+on the server were already byte-identical to staging. The real run transferred the same three and
+ended `publish: OK -- served catalog matches staging (md5 7b16464b55a85d6a908b2b4f1ac9a27d)`.
+
+### Verified from OUTSIDE, the way the client fetches
+
+`curl -0` (HTTP/1.0) with an explicit `Host: pkg.amigaux.org`, which is what `apkg` puts on the wire:
+
+| fetched | result |
+|---|---|
+| `/catalog` | 200, 5247 B, md5 `7b16464b55a85d6a908b2b4f1ac9a27d`, 38 entries, `apkg\|0.2\|…` |
+| `/catalog.md5` | `7b16464b55a85d6a908b2b4f1ac9a27d  catalog` — matches the served catalog |
+| `/pkgs/base/APKG-0.2.pkg` | 200, **133632 B**, md5 **`8289178ca832f0ea67ecd7445f512978`** = catalog |
+| `/pkgs/base/APKG-0.1.pkg` | 200, 115200 B, md5 `ea72218a454ae57700d254b16e1540b8` — still served |
+
+**No `Content-Encoding` on either `.pkg`**, plain nor with `Accept-Encoding: gzip, deflate`
+(`Content-Type: application/octet-stream`, `Content-Length` = the on-disk size). apkg has no
+decompressor in the fetch path; a transfer-encoded body would md5-fail every download. The vhost
+rule was re-measured unchanged: `Host: 52.59.174.203` → **404**, `Host: pkg.amigaux.org` over a
+connection to the bare IP → **200**.
+
+### ⚠ OPERATOR NOTE — a box still on apkg 0.1 must NOT run `apkg upgrade apkg`
+
+**The published 0.1 client bricks itself on that command.** 0.1's `upgrade` is `pkgrm` *then*
+`pkgadd`, and `/var/apkg/admin` is shipped **by the APKG package itself** as an `e` class entry —
+so the `pkgrm` deletes the admin file two seconds before the `pkgadd` that needs it, which dies
+with `unable to open admin file </var/apkg/admin>` and leaves the box with **no apkg at all**
+(reproduced on the A4000D metal, and host-side with the heirloom engine). The fix is *in* 0.2, so
+0.2 cannot apply it to itself from 0.1. Migrate one of these two ways instead:
+
+```
+# from a working 0.1:
+apkg download apkg
+pkgadd -d /var/apkg/cache/APKG-0.2.pkg APKG     # stock pkgadd; admin file must set instance=overwrite
+```
+
+or a fresh install of `APKG-0.2.pkg`. From 0.2 onward `apkg upgrade` never removes anything before
+its replacement is in place, and `conf_adminfile()` materialises the admin file before every engine
+call, so this path closes behind us.
+
+### The note could NOT be put in the catalog `description` field, and that is a gap
+
+Asked for, and not done, deliberately. The catalog `description` column is a **pure function of the
+package's own pkginfo `APKG_DESC`** (`gen-catalog.py:573`); unlike `deps` and `category` there is no
+staging-level override file. So the only two ways to change it were both wrong:
+
+* **re-mint** — forbidden here, it moves the `.pkg` md5 quoted all over this file;
+* **hand-edit the catalog** — silently reverted by the next `gen-catalog.py` run (i.e. by the next
+  publish of any package), and it would break the invariant that the catalog is reproducible from
+  staging, which is the thing `catalog.md5` and the publish gate exist to guarantee.
+
+The line-length ceiling is not the obstacle (`catalog.c:33` `MAXLINE 2048`; the current `apkg` line
+is 133 B). **Follow-up worth one commit:** a `descs.conf` staging override built exactly like
+`cats.conf` — catalog-level metadata, re-editable, moves no `.pkg` byte. Until it exists, the
+operator note lives here and in the demo runbook only.
+
+### Still owed on a box
+
+The on-metal `apkg update` → migration → `apkg install` round trip against the now-live 0.2, and
+the BATCH-1 client E2E, are both still unrun. The server side is verified as far as HTTP can
+verify it.
+
+## 2026-09-16 — the upgrade verb bricked apkg on metal, and the fix was not the one the message named
+
+A metal test put APKG 0.2 on the real A4000D (68LC060, installed r2 system) and tried every
+self-upgrade path apkg offers (record kept outside this tree). Three of
+the four paths were defective and one of them destroyed the client:
+
+| path | result |
+|---|---|
+| `apkg install apkg` | "already installed", **skipped** — never mentions that the catalog holds a newer version |
+| `apkg -f -c <mirror> install apkg` | force re-pkgadd'ed the whole dep tree incl. the 2.3 MB APKGENG; timed out at 240 s without reaching apkg |
+| `apkg upgrade apkg` | **bricked apkg**: pkgrm succeeded, pkgadd died with `unable to open admin file </var/apkg/admin>`, box left with no apkg |
+| manual `pkgadd -n -a /tmp/adm -d APKG-0.2.pkg APKG` (recovery) | worked — and produced a **broken** `/usr/bin/apkg -> /../apkg/bin/apkg` |
+
+### The brick: the admin file was not the wrong KIND of path, it had just been deleted
+
+The first reading took `unable to open admin file </var/apkg/admin>` as "apkg is passing `pkgadd -a` the
+value of the `admin=` key, which is a pkgadd admin-DB *directory*, not an admin *file*". That is a
+reasonable reading of the message and it is not what happened. `/var/apkg/admin` is a perfectly
+good admin(4) file; it is **shipped by the APKG package itself**, as an `e` (editable) class entry
+— so **`pkgrm APKG` deletes it**, two seconds before the pkgadd that needs it.
+
+Reproduced host-side with the real heirloom engine, which is the whole point of having one:
+
+```
+$ pkgadd -R $R -n -a $ADM -d APKG-0.2.pkg APKG      # /var/apkg/admin present
+$ pkgrm  -R $R -n -a $ADM APKG
+Removal of <APKG> was successful.
+$ ls $R/var/apkg
+ls: cannot access '.../var/apkg/': No such file or directory
+```
+
+The admin file and the entire `/var/apkg` directory go with the package. On the metal `/var/apkg`
+itself survived (the cache had a staged file in it) but the admin file did not, which is exactly
+the observed message. **The failure was ordering, not semantics** — and an ordering bug in a verb
+whose first step is `pkgrm` of the very package you are standing on.
+
+### Two independent fixes, either of which would have prevented it
+
+1. **`conf_adminfile()` (`src/apkg/conf.c`) materialises the admin file before every engine call.**
+   Missing → written (the same permissive body the package ships, `instance=quit`). Present →
+   used untouched, so an operator's edits are never clobbered. Nothing that runs `pkgadd -a` may
+   assume the file is there any more.
+2. **`apkg upgrade` no longer runs `pkgrm` at all.** It is one `pkgadd` over the installed
+   instance, with a derived `<admin>.overwrite` carrying `instance=overwrite` —
+   `pkgcmds/pkginstall/getinst.c:153` reuses the installed pkginst on that setting, where `:97`
+   quits on `instance=quit` (which is why the metal test's manual `pkgadd` over an installed APKG
+   stopped with "Unable to determine whether to overwrite an existing package instance": its
+   `/tmp/adm` did not set it). The derived file is built **from** the operator's admin file — every
+   other key copied verbatim, only the `instance=` line replaced — so switching on overwrite for an
+   upgrade never silently discards a `space=quit` they asked for.
+
+Consequence, and it is the acceptance criterion: **nothing is removed before its replacement is in
+place.** A failed fetch, a failed md5, a failed staging and a failed pkgadd now all leave the
+installed package exactly where it was, and say so ("the installed apkg 0.1 is untouched").
+
+### The malformed symlink is a STOCK-pkgadd defect, not a pkgmap defect
+
+APKG 0.2's pkgmap said what the SVR4 spec wants:
+
+```
+1 s none /usr/bin/apkg=../apkg/bin/apkg
+```
+
+and our heirloom `pkgadd` handles it correctly — verified host-side, it creates
+`/usr/bin/apkg -> ../apkg/bin/apkg`, which resolves to `/usr/apkg/bin/apkg`. But `/usr/apkg/bin` is
+deliberately **not on the default PATH**, so the `pkgadd` an operator actually types is the stock
+1991 `/usr/sbin/pkgadd` — and that one prefixes the basedir onto the link **source** as well as the
+destination, landing `/usr/bin/apkg -> /../apkg/bin/apkg` (the nonexistent `/apkg/bin/apkg`). The
+metal test saw `apkg: not found` immediately after a successful install.
+
+So the entry is now **absolute**, `s none /usr/bin/apkg=/usr/apkg/bin/apkg`, which survives both
+engines and is what stock `core`'s own pkgmap does (`s none /usr/bin/uname=/sbin/uname`). Under
+`pkgadd -R` the link inside the alt-root then points at the absolute path — correct once that root
+is the running root, dangling if you follow it from the build host. That is the accepted trade for
+a link that works on the machine it was built for.
+
+`tools/repo/pkgmap-symlink-gate.py` makes it mechanical: every `s`/`l` entry in a minted pkgmap
+must carry an absolute target that resolves to a path the package itself declares. `build_one()`
+runs it on every package it mints, fail-closed. It **fails against the old APKG-0.2.pkg** and
+passes against the new one — that contrast is the test.
+
+### `-f` is scoped, and "already installed" stopped being a half-truth
+
+`-f` now applies to the packages **named on the command line** only. A missing dependency is still
+installed — that is what makes the closure a closure — but an already-satisfied one is left alone.
+The old behaviour is what made `apkg -f install apkg` re-`pkgadd` the 2.3 MB engine on a 68LC060
+and burn four minutes before reaching the package the operator asked for.
+
+And an installed package whose catalog version is **newer** is no longer reported as a plain
+"already installed, skipping":
+
+* named on the command line → refuse (exit 1), state both versions, point at `apkg upgrade <name>`
+  (or `-f` to force). Refusing is right rather than doing it automatically: falling through to
+  pkgadd hits `instance=quit` and stops with an unhelpful engine message anyway.
+* reached as a dependency → report the gap, count the dependency satisfied, upgrade nothing. Silent
+  dependency upgrades are not this verb's business.
+
+### APKG 0.2 re-minted (never published, so the version does not move)
+
+0.2 was never published, so this replaces it in place rather than becoming 0.3. `build/repo-staging-apkg02/`:
+
+| | preserved (the one installed on the metal) | re-minted |
+|---|---|---|
+| md5 | `2b6c53c7c29df1d4b79815d56b3a3c70` | `8289178ca832f0ea67ecd7445f512978` |
+| size | 124416 B | 133632 B |
+| `/usr/apkg/bin/apkg` | 67643 B | 71229 B |
+| `/usr/bin/apkg` symlink | `../apkg/bin/apkg` (→ `/../apkg/bin/apkg` under stock pkgadd) | `/usr/apkg/bin/apkg` |
+| shipped `/etc/apkg.conf` | `rcvbuf=16384` | `rcvbuf=0` |
+
+The `rcvbuf` row is not part of this session's fix — it is the previous section's measured default
+finally reaching a package. The preserved build predates it, which is why the metal test had to set
+`rcvbuf=0` by hand on the box. The staging catalog was regenerated with it (catalog md5
+`5c805afe608a65bc1dddd861b8116188`). **Not published**; the live repo still carries no 0.2.
+
+### What still needs the metal, and it is the whole point
+
+Everything above is host-proven — 169 apkg host tests, 17 in the nohttp variant, the heirloom
+engine reproducing the pkgrm deletion, the gate failing on the old package and passing on the new.
+None of it proves the thing that actually broke. **The metal test must re-run, on the real
+A4000D, the self-upgrade that bricked it**: put the re-minted APKG-0.2.pkg on the box, install it
+with the stock `pkgadd` (that is the engine that mangled the symlink — using the heirloom one
+would test the wrong thing), confirm `/usr/bin/apkg` points at `/usr/apkg/bin/apkg` and that bare
+`apkg version` answers; then, from an apkg 0.1 box, `apkg upgrade apkg` and confirm that it never
+calls pkgrm, that the box still has a working apkg at every moment, and that a deliberately broken
+run (bad repo URL) leaves 0.1 installed and running.
+
+## 2026-09-16 — the window was never the lever: `rcvbuf` becomes an off-by-default operator knob
+
+Two measurements landed this session. The first said the knob was talking to nobody. The second
+said the thing it was supposed to fix was not the problem. Both are on real metal, and together
+they invert the design the previous section left open.
+
+### Capture 1 — `SO_RCVBUF` never reaches TCP
+
+Server-side `tcpdump` on the repository host while a real 68LC060 A4000D fetched `Xcore-2.1.pkg` from
+`pkg.amigaux.org` (2026-09-14 23:57:40–23:58:40 EEST):
+
+| observation | value |
+|---|---|
+| window Amix advertised in its SYN | **4096** |
+| window in the steady-state ACKs | **4096**, in all **2999** of them — never anything else |
+| TCP options in the SYN | **none** (so no MSS → the server sent 536-byte segments, 5850 of them) |
+| RTT | 43 ms |
+| throughput acked server-side | **53.8 KB/s** |
+
+`apkg` had requested `SO_RCVBUF` 65536 before `connect()`. The box advertised 4096 anyway. **The
+socket option does not reach the tcp module's receive high-water mark on this stack**, and the
+`-v` `getsockopt` readback — which the previous section already refused to call proof — was indeed
+reporting a value TCP never saw. The burst structure confirms the window was binding: 7×536+344 =
+4096, every burst ending exactly on the window edge.
+
+### Capture 2 — raising the window WORKS, and makes it slower
+
+Round 2 (on the metal, 2026-09-15; a cross-built `setwin` on `/dev/tcp`, then apkg
+fetches with `tcpdump` running on the server):
+
+**The ioctl works, and it is module-wide.** After `setwin 16384`, both subsequent apkg fetches
+advertised **win 16384 on the wire** — SYN and steady-state ACKs, on streams the box had not yet
+opened when the ioctl was issued. That is first-party confirmation of the module-template
+semantics derived from source below.
+
+**And throughput went the wrong way.**
+
+| window | WAN throughput | server-side retransmits |
+|---|---|---|
+| 4096 (stock) | **~54 KB/s** | 64/6305 = 1.0 % |
+| 8192 | ~32 KB/s | (loss zone) |
+| 16384 | ~36–40 KB/s | 155/4328 = 3.6 % (olcore), 101/3525 = 2.9 % (Xcore) |
+
+Grouping the server's back-to-back sends by burst size against retransmit-within-400 ms gives the
+mechanism: **an RX-path loss cliff at ~8 segments in flight (~10 KB outstanding)**. ≤7 segments per
+burst lose 2–3 %; **8 lose ~60 %; ≥9 lose ~100 %**. Each loss is dup-ACKs and then a server RTO.
+
+This is not the 32-slot ring (that would be ~30 segments) — it is the firmware backlog cliff and/or
+the 16.67 ms poll quantum: between two drains the RX can absorb about eight segments before
+dropping.
+
+**And so the stock 4096 window is near-optimal as it stands.** It admits at most 8 segments
+(7×536+344) — exactly the loss-free edge. The 4096 that looked like the cap is the stack sitting
+on the one setting this driver can actually sustain.
+
+**The lever is the RX drop mechanism, not the window.** The Z3660 firmware discarding its entire
+queued backlog on overflow (`ethernet.c:549-569`) and the once-per-tick poll in z3660net own the
+number. Fix those and a 16 KB window at 43–55 ms RTT is worth ~300 KB/s; until then, a bigger
+window just pushes past the cliff. Full data (theory and metal measurements) are kept outside this
+tree.
+
+### What shipped here
+
+**`rcvbuf` now defaults to 0 — leave the stack's window alone.** That is a measured default, not a
+cautious one, and the value it replaces (16384) would have made every fetch on the demo box
+slower. `sndbuf` stays 0. No other default moved.
+
+**`rcvbuf > 0` drives the mechanism that actually works**, as an explicit operator knob for the
+set-measure-revert workflow that produced the table above:
+
+1. **STREAMS `INITQPARMS`** (`IQP_RQ|IQP_HIWAT`) via `I_STR` on a TCP stream, root only.
+2. **`SO_RCVBUF`** before `connect()`, kept as the non-root fallback and for non-Amix hosts.
+
+Documented in `apkg.1`, `src/apkg/README.md`, `apkg.h`, the shipped `/etc/apkg.conf` template and
+`http.c` — with the measured slowdown stated in each, so nobody reads the knob as a speed fix.
+
+### Does anything swallow an `I_STR` on a socket fd? No — answered from source before writing it
+
+1. **libsocket's own `ioctl()`.** Amix's libsocket supplies one over the syscall (our `apkg.amix`
+   shows `T ioctl` out of `s_ioctl.o` beside `U _ioctl`). It switches on exactly six BSD-specific
+   requests — `FIOASYNC`, `FIOSETOWN`, `FIOGETOWN`, `SIOCSPGRP`, `SIOCGPGRP`, `SIOCATMARK` — and
+   ends `return _ioctl(des, request, arg);`. Everything else reaches the real syscall untouched.
+   (SVR4.0 reference tree, `usr/src/lib/libsocket/socket/s_ioctl.c:74-228`.)
+2. **`sockmod`.** Its write-side `M_IOCTL` switch ends in `default: putnext(q, mp)`
+   (`sockmod.c:2412,:2424-2427`), and the returning `M_IOCACK`/`M_IOCNAK` is passed back up the
+   same way (`:487-496`, `:514-523`). `tcp` then handles it in `tcpioctl()`
+   (`tcp_main.c:568-575` → `initqparms()`).
+
+So there is **no need to open `/dev/tcp` directly** from apkg. That path was evaluated and
+rejected: it would mean reimplementing `connect()` as a TLI `T_CONN_REQ` state machine and
+hand-rolling the rest of the socket layer for one ioctl, on a 1992 libc, for zero added capability.
+(The metal test's standalone `setwin` does use `/dev/tcp`, correctly — it has no socket to ride on.)
+
+### The ordering is load-bearing, and it is not the obvious one
+
+`initqparms()` does **not** touch the live queue. It writes the module's `module_info` **template**:
+
+```
+case IQP_HIWAT:
+        minfo[i].mi_hiwat = iqpp->iqp_value;      /* netlib.c:148-179 */
+```
+
+and STREAMS copies that template into a queue's `q_hiwat` when the stream is **opened**
+(`strsubr.c:989`, `rq->q_hiwat = rinit->qi_minfo->mi_hiwat`). `tcp_output()` then reads the live
+`q_hiwat` as `recvspace` for every segment it builds (`tcp_output.c:141,:207,:404`). The upper read
+queue is the right one: `tcp_attach()` stores the open-time queue as `inp->inp_q`
+(`tcp_state.c:729`), which is what `tcp_output()` reads, and `IQP_RQ` indexes `tcpm_info[0]`, the
+`module_info` behind `tcpurinit` (`tcp_main.c:127-136`). **Capture 2 confirmed this on the metal**:
+streams opened after the ioctl inherited 16384.
+
+**So the ioctl must be issued on a stream opened BEFORE the one whose window we care about.**
+`apkg` issues it once per process on a throwaway socket, before the first fetch socket exists — and
+then again on the fetch socket itself, as a belt for the possibility that the Amix-vintage
+`initqparms()` writes the live queue instead. The second call is a harmless no-op. Both appear
+under `-v`, labelled `(template)` and `(stream)`, and a host test pins the ordering — verified by
+moving `tcp_tune()` after `socket()` and watching the test fail.
+
+### Three consequences, put where an operator will see them
+
+* **It changes the BOX, not apkg, and it outlives the process.** Because it is the *template* that
+  changes, every TCP stream opened on the box afterwards inherits the new receive high-water mark,
+  and it stands until reboot. A high-water mark is a flow-control threshold, not an allocation, so
+  the cost is bounded — but it is not scoped to us. apkg therefore says so at **warning level, not
+  only under `-v`**, whenever the ioctl is actually accepted, in the same breath as the measured
+  slowdown.
+* **It needs root.** `initqparms()` opens with `drv_priv(ioc_cr)` and returns `EPERM` otherwise
+  (`netlib.c:154-155`). `apkg install` already runs as root. A non-root apkg falls back to the
+  plain `SO_RCVBUF` request and says so — apkg asks `geteuid()` first so the line names the real
+  reason rather than printing "Not owner".
+* **It is capped at 65535.** `iqp_value` is an `unsigned short`. A larger `rcvbuf` is clamped for
+  the ioctl (said once) while `SO_RCVBUF` still gets the full value.
+
+### Why apkg does NOT restore the window on exit
+
+Considered, and rejected on evidence. **apkg cannot learn what was there before.** `INITQPARMS` is
+set-only — `netlib.c:148-179` has no get — and `getsockopt(SO_RCVBUF)` cannot stand in for one,
+because `sockmod` initialises its cached `so->rcvbuf` to **0** at open (`sockmod.c:264-265`) rather
+than from the module's hiwat. The only value apkg could "restore" is the stock compiled-in 4096: a
+number it never measured on this box, and one that would silently clobber a deliberate system-wide
+setting someone else had made.
+
+Two further reasons. An apkg killed mid-fetch would not restore anyway — so the guarantee would be
+false exactly when it mattered, which is the failure mode that looks like the healthy state. And
+the knob's actual use is set, measure, revert **across several runs**, which an auto-restore would
+break.
+
+So apkg sets, warns, and names the way back: `rcvbuf=4096` on a root run, or a reboot. If a
+scoped, self-restoring version is ever wanted, it needs a get primitive that does not exist today —
+that is a kernel-side ask, not a client one.
+
+### Licensing: the constants are restated, not copied
+
+`<net/strioc.h>` is proprietary and is not in this repo. `http.c` restates the three constants and
+the two-field payload under its own names (`APKG_IQP_RQ`, `APKG_IQP_HIWAT`, `APKG_INITQPARMS`,
+`struct apkg_qparm`), citing the header by path rather than quoting it. A typo there would produce
+an ioctl the tcp module silently ignores — the worst available failure mode — so there are two
+guards: a grep in the host suite, and an opt-in **compile-time** proof against the real header:
+
+```
+m68k-cbm-sysv4-gcc -O -DHIGHFIRST -DAPKG_CHECK_STRIOC -c http.c
+```
+
+which includes `<net/strioc.h>` from the Amix sysroot and fails to compile unless every constant
+and the payload size match. Run this session: it compiled clean, and — asking what a broken
+detector would print — flipping `APKG_IQP_HIWAT` to `0x21` made it fail with
+`size of array 'apkg_iqp_matches_strioc_h' is negative`. The detector works.
+
+### What the host suite can and cannot prove
+
+The host build cannot exercise the ioctl at all: there is no STREAMS on Linux and the suite is not
+root. The 16 new assertions prove that the path is compiled in, **off by default**, reached at the
+right two moments when enabled, given the right arguments, never silent about its outcome, and that
+the box-wide warning is at warning level and names the way back.
+
+One instrument note worth keeping: a `strings apkg` check for the warning text was written and then
+**removed**, because in a build without STREAMS `tcp_hiwat()` can only return 0, so gcc proves the
+success branch unreachable and deletes it — literals and all. That grep would have failed on a
+perfectly correct host build. A detector that fires on the healthy state is not a finding.
+
+**Not done, deliberately:** no APKG re-mint, no catalog change, no publish, no bench run. The
+cross-built client is `src/apkg/apkg.amix`, md5 `9e93ab8f4892995a307585120c5b4816`, 69,109 bytes.
+
+## 2026-09-16 — the 60 s fetch timeout was a DEMO BLOCKER; the whole fetch path is now config
+
+**Found on the real A4000D against the public repo**, and it is the kind of defect that only
+shows up at the far end of the wire:
+
+```
+# apkg install Xcore
+apkg: timeout after 60 s fetching http://pkg.amigaux.org/pkgs/stock/Xcore-2.1.pkg
+```
+
+`gzip` (118 KB) and `olcore` (2.2 MB) fetched fine; `Xcore` (8.2 MB) did not. Nothing was wrong
+with the link. That path runs **≈37 KB/s** on a single TCP stream — bandwidth-delay bound plus the
+68060's stack, not the 1 Gbps uplink — so 8.2 MB is **~220 s of perfectly healthy, continuously
+flowing transfer**. `http.c` wrapped the entire `do_get()` in one `alarm(timeout)`, so the timer
+measured **how long the transfer took**. A transfer that takes longer than the cap is exactly what
+a big package on a period link *is*.
+
+### The fix: the timer measures SILENCE, not duration
+
+`alarm()` is now re-armed immediately before every call that can block — `gethostbyname()`,
+`connect()`, each `send()`, each `recv()`. Every chunk that arrives restarts the countdown, so:
+
+* a slow but **flowing** transfer never trips it, however long it runs — there is no size at
+  which apkg gives up on a working link;
+* a connection that has gone **silent** still dies, and now says so usefully:
+  `apkg: timeout: no data for 300 s (1441792 bytes received) fetching …`.
+
+**The distinction, not the number, is the fix.** Under inactivity semantics even the old 60 s
+would have carried Xcore through. That is why the default is **300 s and not the 900 s the brief
+suggested**: 900 was sized for a whole-transfer cap, where the number had to cover the *transfer*;
+an idle threshold only has to cover the longest legitimate **gap** between two chunks (a TCP
+retransmit storm, an Amix box paging hard mid-install), and every second above that is purely
+extra hang on a link that is genuinely dead. With retries on top, a too-generous value multiplies.
+
+### "All relevant things need to be configurable" (user, same day)
+
+So every constant the fetch path used is now an `/etc/apkg.conf` key, same `key=value` format as
+`repo=`. There is no compiled-in number on that path an operator cannot move:
+
+| key | default | what it means |
+|---|---|---|
+| `timeout` | `300` | seconds of network **silence** tolerated mid-transfer |
+| `connect_timeout` | `30` | seconds for resolve + TCP connect — its own, much shorter budget, so a host that is simply down fails in seconds instead of inheriting mid-transfer patience |
+| `retries` | `2` | extra attempts after a **network** failure |
+| `retry_delay` | `5` | seconds before retry 1; doubles thereafter |
+| `progress` | `262144` | bytes between progress lines on stderr; `0` silences, `-v` quarters |
+| `bufsize` | `8192` | socket read buffer, clamped to 512–262144 |
+| `redirects` | `1` | 301/302 hops followed; `0` follows none |
+| `rcvbuf` | `16384` | `SO_RCVBUF`, **requested** before `connect()`; effect on the stock stack unverified — *superseded the same week: the default is now `0` and the key drives INITQPARMS, see the 2026-09-16 window section above* |
+| `sndbuf` | `0` | `SO_SNDBUF`; no effect on fetch throughput, present for symmetry |
+
+Four decisions inside that table are worth keeping:
+
+**A non-200 status is never retried.** It is the server *answering*. Asking a static file server
+the same question three times will not turn a 404 into a package; retrying only `HTTP_ENET`
+keeps a missing-package failure fast and its message honest.
+
+**`connect_timeout` is separate on purpose.** The two numbers answer different questions — "is
+anything there?" and "is what is there still talking?" — and collapsing them forces a bad
+compromise: patient enough for a mid-transfer stall means 5 minutes to notice a box with no route.
+
+**Numbers are parsed strictly.** `atol()` maps both `"0"` and `"banana"` to 0, and `0` is a legal
+setting for `retries`, `progress` and `redirects` — so a typo would have silently *disabled* a
+guard. `getnum()` requires the whole value to be an integer; anything else warns and **keeps the
+existing value**. A bad config file can no longer weaken the client.
+
+**`HDRMAX` (64 KB) is deliberately NOT exposed.** It bounds what a broken or hostile server can
+make the client allocate. There is no operational reason to raise it, and "configurable" is not
+the same as "every constant".
+
+### The socket buffers: the knob goes in, the claim does not
+
+Second ask the same day: *"in the demo the packages come from the internet, so anything that helps
+the ~37 KB/s must be done"* — specifically the socket buffers. `rcvbuf=` and `sndbuf=` are keys
+now, **requested** with `setsockopt()` before `connect()` so that *if* the request takes effect it
+is in force when the SYN advertises the window, and read back with `getsockopt()` so `apkg -v`
+reports what the socket layer says.
+
+**The readback is not proof, and the docs say so in those words.** A parallel read-only assessment
+of the stock stack (kept outside this tree) establishes
+that the STREAMS `tcp` module's receive hiwat is **4096**, that `SO_RCVBUF` writes `q_hiwat`
+directly in the TCP path but the BSD-socket compat layer (`sockmod`) **may not propagate it**, and
+therefore that `getsockopt` can answer from sockmod's own cached copy while TCP below it still runs
+at 4096. So the `-v` line is worded "asked N, socket layer reports M (not proof TCP honoured it)",
+and a test pins that wording. Only a wire capture settles it. **That capture has not been taken.**
+
+**`rcvbuf` defaults to 16384, not the 65535 protocol ceiling.** *(Superseded: the metal said a
+window above 4096 is slower on this driver, so the default is now `0`. The ceiling arithmetic
+below still holds for anyone who sets the knob. See the 2026-09-16 window section above.)* Amix predates RFC 1323 so there is
+no window scaling and nothing above 65535 is advertisable anyway — but the binding limit is much
+lower than that:
+
+* **MSS to a non-local host is pinned at 536.**
+* **The Z3660 firmware RX ring has 32 usable slots**, and on overflow that firmware does not
+  back-pressure — it *discards the entire queued backlog*, which TCP sees as a full-window loss and
+  an RTO.
+
+32 × 536 ≈ **17 KB**, so a window much past that puts more in flight than the ring holds and makes
+things **worse, not better**. 16384 sits just under it. It is a knob: raise it when a capture says
+larger is safe. `sndbuf` defaults to 0 (leave the stack alone) — apkg sends requests and receives
+bodies, so the send buffer cannot affect fetch throughput; it exists so the pair is symmetric
+rather than a trap for whoever reads the man page.
+
+#### The arithmetic, for whoever takes the capture
+
+Measured this session from the host, which sits on the same LAN gateway as the bench, so the same
+RTT as the metal:
+
+| measurement | value |
+|---|---|
+| RTT to `pkg.amigaux.org` | **30.0 ms** (8/8 pings, mdev 0.7 ms) |
+| host-side fetch of `Xcore-2.1.pkg` (8,172,032 B) | 0.67 s = **11.6 MB/s**, md5 `d22303f0…` = catalog |
+| metal-side, reported | **≈37 KB/s** |
+
+The path is not the problem, and the server serves Xcore correctly — the A4000D failure was purely
+the client's timeout. Throughput on a window-bound path is at most *window / RTT*, so inverting the
+metal rate gives the bytes actually in flight:
+
+```
+37 KB/s x 0.030 s = 1135 bytes  =  2.1 x MSS(536)
+```
+
+and the guest's effective RTT is worse than 30 ms anyway: z3660eth polls RX once per `hz` tick at
+60 Hz, adding a mean ~8.3 ms, which is also why its *LAN* pings come back at 3–19 ms. At ~38 ms
+the figure is ~1440 B, about 2.7 segments.
+
+Two or three segments in flight, against a receive window that is **already 4096** before anyone
+touches `SO_RCVBUF` — and 4096 at 30 ms would allow 133 KB/s. **So the receive window is not what
+caps the metal path.** The sender is limited by something else: congestion window (the firmware's
+discard-the-whole-backlog behaviour produces exactly the losses that pin cwnd low), or the
+per-frame cost of a polled RX with two copies, one over a cache-inhibited window, plus a
+synchronous ~0.1–1 ms TX for every bare ACK.
+
+That is a prediction, and it is the useful thing here: **raising `rcvbuf` should move the number
+very little.** If the capture shows otherwise, the sockmod-propagation question is the place to
+look. Either way the knob costs nothing and is the only client-side lever there is.
+
+The same arithmetic is why `bufsize` (the `read()` chunk) was **left at 8192 rather than raised**.
+At 37 KB/s an 8 KB read happens 4.5 times a second; the client is nowhere near syscall-bound, so a
+bigger read buffer buys nothing measurable. The key exists so an operator can change it — that is
+what "configurable" required — but moving the default on a guess would have been churn.
+
+#### A bug caught in the shipped template while writing this
+
+The `/etc/apkg.conf` template in `build-packages.sh` is written by an **unquoted** `<<EOF` heredoc,
+so a backtick in it is *command substitution at mint time*. A comment referencing `` `apkg -v` ``
+was duly executed and its text swallowed — the first mint shipped "0 leaves the stack's own
+default.  prints what the stack actually GRANTED." The template is now free of backticks and `$`,
+and the test suite greps the extracted template for both so it cannot come back.
+
+### Progress output is no longer verbose-only
+
+The operator watching an 8 MB fetch on a 1992 console needs to see it moving. Progress prints
+without `-v` every `progress` bytes (256 KB by default → ~32 lines for Xcore, 0 lines for the
+catalog and for anything under one interval, so ordinary runs stay quiet). `-v` quarters the
+interval; `progress=0` turns it off.
+
+### Structural change: `struct httpopts`
+
+Seven knobs would have been seven more arguments. They travel as one `struct httpopts`, filled by
+`http_opts_from_conf()`, carried in `struct source` (replacing its lone `long timeout`), and
+passed to `http_get()`. Two consequences worth knowing:
+
+* `src_fetch()` **lost its explicit `timeout` argument** — it was always redundant with
+  `s->timeout`, and callers were setting both.
+* The two helpers live in **`conf.c`, not `http.c`**: the install-miniroot variant builds with
+  `-DAPKG_NO_HTTP` and drops `http.c` entirely, but `source.c` still has to fill the struct. The
+  `nohttp-variant.sh` suite caught this immediately (17/17 after the move).
+* `http_get()` now owns the read buffer and the retry loop; `do_get()` borrows the buffer, so the
+  redirect recursion shares one allocation and no exit path has to free it.
+
+### Tests: 87 → 142
+
+The new ones are in `src/apkg/tests/run-tests.sh`, and the load-bearing pair needs a server
+`python3 -m http.server` cannot be — `tests/slow-server.py`:
+
+* **`/trickle/…`** serves a file correctly but in 64 KB pieces with 0.5 s gaps. A 586 KB package
+  through it takes ~4.5 s on the wire against a configured `timeout=2`. **This test fails against
+  the old whole-transfer cap and passes against the inactivity timer** — it is the regression test
+  for the A4000D failure, and it asserts the measured elapsed time really did exceed the timeout,
+  so it cannot pass by being fast.
+* **`/stall/…`** sends correct headers and 256 body bytes, then goes silent for 120 s. apkg must
+  die promptly, report `no data for 2 s`, name `(256 bytes received)`, and leave no `.part`.
+
+Plus: every key's default (pinned on one grep-able `apkg: fetch: …` line printed under `-v`),
+every key overridden, ten nonsense values refused with the default kept, `bufsize` clamped loudly
+at both ends, an unknown key warned, `bufsize=512` still delivering byte-exact bytes,
+`redirects=0` refusing the hop the default follows, `retries=2` producing exactly two retry lines
+against a dead port, `retries=0` producing none, a 404 never retried however high `retries=` goes,
+`progress=0` silencing the progress lines, and the socket-buffer knobs reaching the socket layer —
+the `getsockopt` readback reported for `rcvbuf`, for `sndbuf` and for `rcvbuf=0` (which must leave
+the default alone and still report it, because knowing the default is half of knowing whether
+raising it is worth anything), with the "not proof TCP honoured it" wording pinned so nobody
+quietly promotes it to evidence.
+
+**One drift guard is worth calling out**: the suite extracts the `/etc/apkg.conf` template out of
+`tools/repo/build-packages.sh` and feeds it to the binary, asserting the template names every
+fetch key *and* that its values are the binary's own defaults. A shipped template that quietly
+disagreed with the client would hand every fresh install a different fetch path from the
+documented one, and nothing else in the tree would have noticed.
+
+Other suites unchanged and green: `nohttp-variant.sh` 17/0, `tools/repo` 197/0,
+`tools/migrate` 36/0.
+
+### For amix-installng
+
+The default worst case on a dead link is now `connect_timeout` + 3 × `timeout` ≈ 15 min. That is
+right for an operator at a console and wrong for an unattended install matrix: set `timeout=60`
+and `retries=0` in the medium's `/etc/apkg.conf` if a hung fetch must fail fast.
+
+### APKG 0.2 is minted — and catalog v1 CANNOT carry two versions of one name
+
+`APKG-0.2.pkg` is built and identity-checked, not published:
+
+| field | value |
+|---|---|
+| file | `base/APKG-0.2.pkg`, kept at `build/repo-staging-apkg02/` (gitignored) |
+| size | **124416** |
+| md5 | **`2b6c53c7c29df1d4b79815d56b3a3c70`** |
+| catalog line | `apkg\|0.2\|APKG\|base/APKG-0.2.pkg\|2b6c53c7c29df1d4b79815d56b3a3c70\|124416\|apkgeng\|application\|Remote package client: update/list/search/install over HTTP` |
+
+**That md5 belongs to THAT FILE, not to "APKG 0.2" in the abstract — the mint is not byte-
+reproducible.** Two mints from an identical tree differ at byte 525, inside the first cpio member
+header (mint-time mtime), so a later `build-packages.sh --apkg` produces a *different* md5 for the
+same source. The pipeline stays self-consistent because `gen-catalog.py` checksums whatever is
+actually in staging — but it means **the file preserved above is the one that must be published**,
+and re-minting before the publish silently invalidates every md5 quoted here. It is kept out of
+`/tmp` for exactly that reason.
+
+The shipped `/etc/apkg.conf` inside the package was verified to carry all nine fetch keys at their
+documented defaults (`timeout=300 … rcvbuf=16384 sndbuf=0`), so an 0.2 install documents its own
+knobs.
+
+The cross-built binary is `apkg.amix` md5 `4bb42d5972e10b06fcedf8c056a49884`, 67643 B, and its
+`DT_NEEDED` is clean — `libnsl.so` (bare name, resolved from the guest's own `/usr/lib`) and
+`/usr/lib/libc.so.1` (that *is* libc's SONAME). No host path reaches the dynamic section. The
+installed wrapper at `~/opt/amix-cross` was confirmed byte-identical to gcc-cross-amix HEAD
+(`cc84d5b`) apart from the `@TARGET@` substitution the installer makes, so the DT_NEEDED fix is in
+place; in any case the `apkg.amix` link has always invoked `ld` directly for exactly this reason.
+
+**The plan said "0.1 stays in the catalog for the installed demo systems". It cannot.** Catalog v1
+keys on `name`, and both versions are named `apkg`:
+
+* `gen-catalog.py` **refuses** a staging directory holding both (`duplicate catalog name 'apkg'`);
+* `catalog_find()` returns the **first** entry matching a name, so even a hand-written duplicate
+  would be ambiguous to every client.
+
+One name, one version, by design. What 0.1 actually needs is not a catalog entry but *survival on
+the server*: a box that already has `APKG 0.1` installed never re-fetches it, and the Saku medium
+carries the bytes locally, so decatalogued-but-present is exactly right. That is a real constraint
+on the publish, because `publish.sh` rsyncs with `--delete --delete-excluded` — see below.
+
+### ⚠ Open, and why: nothing was published and nothing was measured on a box
+
+**The publish did NOT happen, deliberately.** Two facts found while preparing it:
+
+1. **The local LAN mirror is STALE and staging from it would have destroyed the
+   repository.** It holds **32** entries (catalog md5 `edeba578…`); the live host holds **38**
+   (`395b4fbc…`) — the mirror never received BATCH-1. `publish.sh` rsyncs `--delete
+   --delete-excluded`, so publishing that mirror would have **deleted the six BATCH-1 packages**
+   off `pkg.amigaux.org`. Any future publish must stage from the **live host** (`rsync` down from
+   `<host>:<docroot>`, which is reachable — 286 MB), never from the LAN mirror,
+   and must keep `base/APKG-0.1.pkg` present in staging or `--delete-excluded` will remove it.
+2. Because of the duplicate-name constraint above, the catalog after the publish will carry `apkg`
+   at **0.2 only**, with `APKG-0.1.pkg` staying on disk uncatalogued. That is a call the maintainer
+   should make consciously rather than discover.
+
+**The bench measurements were NOT taken: the bench was occupied.** An Amiberry running the
+Saku 060 install media build was live, and a second instance steals the first's frames. It was
+left strictly alone. Still owed, and all of it is one bench session:
+
+* `apkg install xcore` from `pkg.amigaux.org` with and without `rcvbuf=0`, timed, bytes/s each
+  way. The analysis above predicts **little or no difference**; a difference would be the
+  interesting result, not the expected one.
+* A **wire capture** alongside it. The `apkg -v` readback cannot settle this on its own — sockmod
+  may report a value the tcp module never saw — so only the window actually advertised on the wire
+  answers whether `SO_RCVBUF` reached TCP at all.
+* The upgrade path a demo operator would use: `apkg update` → `apkg install APKG`. **Unknown and
+  load-bearing: whether the client can replace its own running binary.** SVR4 `pkgadd` unlinks and
+  recreates `/usr/apkg/bin/apkg` while that inode is the running text of the calling process — on
+  SVR4 an executing binary's file is normally ETXTBSY-protected against *write*, but `unlink` +
+  create is not a write, so it may simply succeed. If it does not, the operator step is
+  `apkg download apkg` then `pkgadd -d /var/apkg/cache/APKG-0.2.pkg APKG`, and that has to be
+  written down before the demo.
+
+## 2026-09-15 — PUBLISH LOG: BATCH-1 goes live (32 → 38 packages)
+
+The first third-party packages reach the catalog. Six `.pkg` datastreams built by the sibling
+`amix-packages` repo (its `build/pkg/`, all six `packaged` and bench-proven there since
+2026-08-30) were published to `http://pkg.amigaux.org/` — approved 2026-09-15, for BATCH-1
+only. This is the repo's publish log; append the next batch above this paragraph's section.
+
+| catalog name | version | filename | md5 | size | category | deps |
+|---|---|---|---|---|---|---|
+| `acompat` | 0.1 | `extra/acompat-0.1.pkg` | `552027086bc08eb04fcc5e09390d5aef` | 64000 | development | none |
+| `grep` | 2.5.1a | `extra/grep-2.5.1a.pkg` | `037c3f7344d41cf3142a623ce994795a` | 138752 | utility | none |
+| `gzip` | 1.3.12 | `extra/gzip-1.3.12.pkg` | `a3c313532d4b471aaece16a8595abfe1` | 118272 | utility | none |
+| `less` | 704 | `extra/less-704.pkg` | `3d00235daadb35420f2952eb70365fd7` | 477184 | utility | none |
+| `patch` | 2.5.9 | `extra/patch-2.5.9.pkg` | `eadcc6649e4cd625867b84cef86f2ed7` | 138752 | development | none |
+| `zlib` | 1.2.13 | `extra/zlib-1.2.13.pkg` | `562dc3e72d60c5940bb641a4c00fc843` | 358400 | development | none |
+
+Catalog: **32 → 38** entries; catalog md5 `edeba578b73fc892f3c8c5ede603aca7` →
+**`395b4fbc94aea9df3238e3b7e4750f44`**.
+
+### Three decisions worth keeping
+
+**The new packages live under `pkgs/extra/`, not `pkgs/<category>/`.** The existing tree groups by
+**provenance** — `stock/` (factory), `base/` (ours), `test/` (fixtures) — and `extra/` is the
+fourth member of that series, matching the `extra` set in `sets.conf` (the named handle for exactly
+these packages; see the axis note at the top of `cats.conf`). Grouping the directory by *category*
+instead would tie the URL to a field that is deliberately re-editable: `cats.conf` exists so a
+package can be re-categorised without a single `.pkg` byte moving, and a category-named directory
+would turn every re-categorisation into a file move and a `filename` change. Provenance is stable;
+category is not.
+
+**`cats.conf` was NOT applied to this catalog, deliberately.** The six packages already carry the
+agreed categories in their own pkginfo (`utility` for gzip/grep/less, `development` for
+zlib/patch/acompat — exactly the X3 mapping), so the catalog needed no override, and staging
+without a `cats.conf` kept the other 32 lines **byte-identical**. Dropping `cats.conf` into staging
+would also have re-categorised all 27 stock packages plus apkg/apkgeng/cdfs in the same publish —
+a real and probably desirable change, but not this one. It is now the obvious next metadata move,
+and it costs no `.pkg` byte whenever it is made.
+
+**`deps.conf` WAS in staging** (it is what fills `xbasic→xcore`, `oldev→olcore,xdev`,
+`apkg→apkgeng`, `cdfs→core`, `amixdemo→demolib`). All six new packages are `deps=none` and that is
+correct, not an omission: `grep` links `libacompat` **statically**, and `zlib`/`acompat` ship static
+libraries, so nothing here has a runtime package dependency. `acompat` is the catalog name (its
+`PKG=acompat`); `cats.conf`'s comment block calls the same thing `libamixcompat`, which is the
+sibling repo's registry name.
+
+### How it was published, and what was verified
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org \
+    tools/repo/publish.sh <staging>
+```
+(at the time those were the script's defaults — passed explicitly here as a belt-and-braces record).
+
+- **Baseline proven before touching anything:** the public catalog was byte-identical to the local
+  LAN mirror, and every one of the 32 `.pkg` files in that mirror matched its catalog
+  md5 **and** size. Staging was that mirror + `extra/`.
+- **`--dry-run` first:** rsync's transfer list was exactly the six new files plus `catalog` and
+  `catalog.md5` — which is also the proof that the other 32 packages on the server were already
+  identical to the mirror, and that nothing was deleted.
+- **Private-content gate:** `gen-catalog: scan-private: OK (38 scanned, 0 unparseable; none carry
+  the kernel-package markers)`.
+- **Publish gate:** `publish: OK -- served catalog matches staging (md5 395b4fbc94aea9df…)`.
+- **Client-shaped re-fetch:** all six packages pulled back with **HTTP/1.0 + an explicit `Host:`
+  header** (what `apkg` actually sends) matched catalog md5 **and** size, 6/6.
+- **The vhost rule, measured rather than assumed:** `Host: 52.59.174.203` → **404**;
+  `Host: pkg.amigaux.org` over a connection to the bare IP → **200**. The hostname is the contract;
+  the address is only how you reach it (hence the `/etc/inet/hosts` line).
+
+### ⚠ Open: the on-box client E2E for BATCH-1 has NOT been run — ★ CLOSED 2026-09-20
+
+Everything above is host-side. The `apkg update` → `install gzip` → run → `remove` round trip on a
+guest was **not** run in this session: the bench had another session's Amiberry live on `tap0`
+(the Saku 060 install media build), and a second instance steals the first's frames. It was left alone.
+The server side is verified as far as HTTP can verify it; **the client side of BATCH-1 is still
+unproven on a box** — run it before treating these six as shipped.
+
+Two things the run will need to know: the packages install under **`/opt/amix`** (except `patch`
+and `acompat`, still `/usr/local` — the sibling repo's open prefix-unification item), so nothing
+lands on `PATH` by default; and the guest needs `repo=http://pkg.amigaux.org` in `/etc/apkg.conf`
+plus the `52.59.174.203 pkg.amigaux.org` line in `/etc/inet/hosts`.
+
+**★ CLOSED 2026-09-20.** `apkg install less` → `/opt/amix/bin/less` reporting
+`less 704 (V8 regex)` → `apkg remove` → gone, on the real 68LC060 A4000D against the live
+`pkg.amigaux.org`. Written up in the 2026-09-16 `amix-benchmark` publish log above; the paragraph
+above is left as the dated record of what was open at the time. The other five remain unproven
+individually, but the client/fetch/prefix path they all share is now metal-proven.
+
+## 2026-09-15 — the repository moved: `pkg.amigaux.org` is canonical, the LAN mirror is retired
+
+**This section is the one place the move is explained.** Every earlier section in this file refers to
+the LAN mirror because that is where the repository was on the day it was written; those are
+dated records. From here on, the repository is:
+
+```
+http://pkg.amigaux.org/          catalog at /catalog, packages at /pkgs/<group>/…
+  address   52.59.174.203
+  docroot   /var/www/pkg.amigaux.org   owned by the publishing user — rsync as that user, no root
+```
+
+**Why.** The old mirror was LAN-only. The catalog is
+the thing an Amix box is supposed to be able to reach from anywhere, so the repository moved to a
+public host under its own name. The LAN mirror is **retired as a publish target**;
+the local tree is now only a frozen mirror of what was published from it.
+
+### The client contract — two rules, both load-bearing
+
+1. **Plain HTTP on port 80, never HTTPS, no redirect.** `apkg` speaks HTTP/1.0 over 1992 SVR4
+   sockets and has no TLS and no `getaddrinfo`. This is not a temporary state: the on-box client
+   cannot be given TLS, so the repo URL is `http://` permanently.
+
+2. **The hostname is the only supported form.** The vhost is **name-based**: a request whose
+   `Host:` header carries the bare IP is answered **404**, so `repo=http://52.59.174.203` does not
+   work and never will. `repo=http://pkg.amigaux.org` is the repo URL. A box with no working DNS
+   is not stuck — `apkg` resolves the name through `gethostbyname()` and then sends the *name* in
+   `Host:`, so the DNS-free path is one line in `/etc/inet/hosts`:
+
+   ```
+   52.59.174.203   pkg.amigaux.org
+   ```
+
+   (The same trick the bench has always used for the old host. `src/apkg/http.c` parses IPv4
+   literals by hand because the SVR4 `gethostbyname` is not guaranteed to accept dotted quads —
+   that path still exists, it just cannot be pointed at this repo.)
+
+### First publish, 2026-09-14
+
+The public tree was seeded with a **byte-identical copy** of the LAN mirror — the same 32
+catalog entries, the same `.pkg` bytes, the same catalog md5 `edeba578b73fc892f3c8c5ede603aca7` —
+using this repo's own `tools/repo/publish.sh` with
+
+```
+PUBLISH_DEST=<user>@<host>:<docroot> PUBLISH_URL=http://pkg.amigaux.org
+```
+
+A client E2E from a **real A4000D** against the public host passed 2026-09-15 (`apkg update`,
+install, remove).
+
+### What changed in this repo
+
+Those two environment variables became the **defaults** in `publish.sh` (still overridable — the
+tests and any private staging rely on that; since 2026-10-13 `PUBLISH_DEST` has no default and
+must always be given). The new URL also lands in the source defaults and in
+every doc that states where the repository is: `src/apkg/conf.c` `DEF_REPO`, the `apkg.conf`
+template minted by `tools/repo/build-packages.sh`, `apkg.1`, `src/apkg/README.md`, `docs/design.md`,
+`docs/requirements.md`, `README.md`, the maintainer notes. `src/apkg/http.c`'s header comment now records
+*why* `Host:` is load-bearing in the sharper form: the vhost is name-based and a bare-IP `Host:`
+is a 404, not merely "the server is virtual-hosted".
+
+**Deliberately NOT done: `apkg.amix` is not rebuilt and APKG is not re-versioned.** The source
+defaults are updated; the shipped binary and the published `APKG-0.1.pkg` still carry the old
+compiled-in default. That is on purpose and it is dated:
+
+- The Saku demo install medium (2026-09-19, `amix-installng`) carries the **current APKG package
+  bytes**. Re-minting APKG before the show would force a new medium for no functional gain.
+- Nothing depends on the compiled-in default in practice — the installer writes `/etc/apkg.conf`
+  post-install, and that file (not `DEF_REPO`) is what every real box reads. `DEF_REPO` is only
+  the fallback for a box with no config file at all.
+
+**Follow-up, after 2026-09-19:** rebuild `apkg.amix`, re-mint and re-version `APKG`, publish it,
+and drop this paragraph. Until then, treat `DEF_REPO` in the repository as "the value the *next*
+build will carry".
+
+## 2026-08-28 — the taxonomy answer for the third-party userland (amix-packages X3)
+
+Host-side only, no bench cycle, no box touched, no package re-minted and no
+published byte moved. The sibling `amix-packages` repo is about to mint ~23
+third-party tool packages (gzip, tar, bash, screen, less, dropbear, patch,
+coreutils, …) into this system's catalog, and its roadmap item **X3** was
+blocked on us: `cats.conf`'s ten groups had **no bucket for a general user
+application**, so its registry had provisionally invented a `utility` token
+with nothing here to land on. This session answers X3 and puts the answer
+under test.
+
+### The answer: two new groups, `utility` and `editor` — twelve in all
+
+**`utility` — general-purpose command-line tools.** Not a junk drawer: it is
+the category the stock taxonomy never needed. Commodore bundled the whole
+general userland into `core` and `bsd`, so nothing was left over to name; a
+repo shipping gzip/tar/bash/coreutils as separate packages has ten of them and
+nowhere to put them. It is the peer of `text`, `network` and `development`.
+
+**`editor` — interactive editors.** Earned on how people look for it: "which
+editor can I get?" is the first question on a fresh box, and nobody scans
+"Text processing" for it. It is also the one group that never wobbles.
+
+The line against `text` is **subject matter, not file type**. Stock `text` is
+the Documenter's Workbench (troff/nroff/tbl/eqn/spell) — tools whose purpose is
+producing a formatted document. `grep`, `diff` and `less` are general tools
+that happen to read text; filing them under `text` would redefine that group as
+"anything textual" and leave a heading that tells a user nothing. So this
+**overrides three of the registry's proposals**: `grep`, `diffutils` and `less`
+go to `utility`, not `text`, and `elvis`/`joe` go to `editor`, not `text`.
+Everything else the registry proposed is endorsed as-is.
+
+`emacs` stays its own group and does **not** fold into `editor`: the two exist
+for different reasons — `editor` is functional, `emacs` (like `source`) is a
+**footprint** group, there so a menu can fold 7.8 MB away in one keystroke.
+
+Agreed mapping for the registry's first 23:
+
+| group | packages |
+|---|---|
+| `utility` (10) | bash bzip2 coreutils diffutils grep gzip infozip less screen tar |
+| `editor` (2) | elvis joe |
+| `network` (4) | cryanc dropbear rsync wget |
+| `development` (5) | libamixcompat make patch perl zlib |
+| `system` (2) | prngd top |
+
+**Deferred, each with its trigger** (adding a group is one line and no re-mint,
+so the bias is to under-split): `shell` — bash is the only shell we ship, split
+when a second and third land; `archive` — gzip/bzip2/tar/infozip is a clean
+class, split if a fifth archiver lands or `utility` passes ~15; `perl` as its
+own group — it stays `development`, a language implementation being developer
+infrastructure.
+
+### Provenance is a SET, not a category
+
+"Shipped by Commodore vs. ported by us" is who-wants-it, not what-it-is, so it
+gets no category — it is the new **`extra`** set in `sets.conf`, declared empty
+until amix-packages publishes. Three rules ride on it, and the reason to
+declare it now is to keep the fourth from happening:
+
+1. **`full` is not "every package in the catalog"** — it is the Amix 2.1
+   distribution plus our three, locked at 30 and digest-attested. Never add an
+   amix-packages package to it or to the other four.
+2. `extra` is **off** the minimal ⊂ standard ⊂ {full, developer, x11} chain,
+   carries no OS, and is not an installer menu choice — it is the post-install
+   handle for `apkg install $(sets.py extra)`.
+3. An add-on is categorised by what it *does*, beside the stock package that
+   does the same job (gzip is `utility`, dropbear is `network`).
+
+### The vocabulary is now declared and CLOSED
+
+The ten groups were a **comment block** — it could rot against the assignments
+below it, and it gave a second repo nothing to check itself against. `cats.conf`
+grew a second statement type, `@group <token>: <gloss>`, and `gen-catalog.py` a
+`read_cats_conf()` that separates the two. Declaring any group makes the set
+closed: an override naming an undeclared group is refused **per-package**
+(SKIP, exactly like the spacey-category case), and a package falling through to
+a pkginfo `CATEGORY` outside the vocabulary **warns** — that being the path by
+which a sibling repo's un-agreed token would otherwise reach the catalog
+unnoticed. The pkginfo fallback stays permissive, as before. **A staging
+`cats.conf` with no `@group` line declares nothing and behaves exactly as it
+always did**, so fixtures and any older staging copy still work.
+
+### Tests
+
+`tools/repo/tests/run-tests.sh` **177 → 196**, 0 failed. New: the closed-set
+refusal and its message, the fallback warning, the three `@group` grammar
+errors (duplicate, spacey token, unknown `@` statement), a **lock** on the
+twelve-group vocabulary (so `utility`/`editor` cannot be pruned as unused —
+they carry no package *here*), "every assigned category is a declared group",
+and the `extra` set's disjointness from `full`. The old T15 drift guard
+"cats.conf covers exactly the packages in `full`" was **generalised to the
+union of all sets** — identical in strength today (extra is empty, so the union
+is still the 30) and future-proof for the day amix-packages files its
+assignments here. The miniroot's pre-POSIX sh resolver is cross-checked on
+`extra` too: an empty set resolves the same in both implementations.
+
+`src/apkg/tests/run-tests.sh` unchanged at 87/0 — no client code was touched.
+The real C89 client was fed a hand-built catalog carrying `utility` and
+`editor` entries and rendered them correctly in `list`/`info`/`search`; both
+tokens are well inside the `%-10s` category column (`documentation`, at 13, has
+always overflowed it).
+
+### Still open — the taxonomy is agreed, not yet APPLIED
+
+`build-packages.sh` still copies only `deps.conf` into staging, so the **live
+published catalog does not carry this taxonomy at all** (unchanged since
+2026-08-11; wiring it moves the catalog md5, which is a publish-path event).
+`amix-installng`'s `tools/build-iso.sh` *does* stage `cats.conf`, so the ISO
+path picks the new vocabulary up for free via this repo's `gen-catalog.py`.
+
+## 2026-08-16 — P5.4 r4: the two KERN packages re-minted onto the full regeneration batch
+
+Host-side only, no bench cycle, no box touched. Both private kernel packages
+re-minted from the r4 kernels; the mint pipeline gained one fail-closed fix that
+the falsification work turned up.
+
+### The mint
+
+| PKG | VERSION | `/stand/unix` `sum -r` | size | payload md5 | `.pkg` |
+|---|---|---|---|---|---|
+| `KERNBENCH` | `49667-2026.08.16` | 49667 | 1 586 312 B | `8072e610afa7060fb0c96b8536280b42` | 1 598 464 B, md5 `89a34e2c699a88a397dea64381314d2e` |
+| `KERNZ3660` | `60364-2026.08.16` | 60364 | 1 587 524 B | `23b4b8983435acdf900fa343cb33281d` | 1 599 488 B, md5 `a8a025d0c39f1bc5473be23d802d6638` |
+
+Sources: `../amix-kerntools/work/p54r4-bench-smoke/relocunix` and
+`../amix-kerntools/work/kernel-packages/p54r4-combined/unix`. Both land in
+`build/kernel-private/kernel/` (gitignored, as always). Full record with the batch
+inventory and every proof: `docs/kernel-packages.md` §8.
+
+**r4 is additive, not a retraction.** r3 (`64049`/`45833`) was not defective — it is
+metal-green from the 2026-08-07 calibration — so its `.pkg` pair stays valid-in-place
+beside the new ones. What r4 adds is the whole P5.4 batch that accumulated after r3:
+probed `support.c`, **both** direct-map drivers (`z3660_direct_map` had never flown),
+the cdfs errno-de-laundering pin `673cd9f4`, and `z3660eth` at major 51 baked
+binary-side. Both r4 kernels were linked from the same patched image, so they carry
+byte-identical batch inputs.
+
+**`KERNZ3660` 60364 is metal-proven** (2026-08-15): byte-clean
+`updbootpart` reframe, two cold power-to-network boots, and `adb` reading
+`z3660_direct_map = 1` **and** `z3660eth_direct_map = 1` on the hardware. It is now the
+last metal-validated kernel identity. `KERNBENCH` 49667 is bench-smoke 8/8 (cold boot to
+run-level 2 + LAN, digest 3/3) and is not metal-flown — it is the a4091 bench family,
+which the Z3660 metal box is not.
+
+### ★ `support-stock` is retired from the `KERNBENCH` `KMIX`
+
+The r4 bench kernel links the **probed** `support.c` (the two-register anti-alias A3000
+SCSI probe; the `0x7000000` RAM-size guess is provably gone from the disassembly), so
+the `support-stock` tag would now be a **false assertion**. The kerntools tag vocabulary
+is closed and deliberately has no `support-probed`/`support-fixed` tag yet — and an
+*absent* group-4 tag asserts nothing either way — so the tag is simply **dropped**:
+
+    KMIX=a4091,z3660eth,cdfs,a3091-fixed,a2091-fixed,scsi-gsio
+
+`KERNZ3660`'s `KMIX=z3660scsi,z3660eth,cdfs` is unchanged: it never carried group-4
+tags, and adding them is a registry decision this mint does not own. This is the first
+`KMIX` we ship that describes a kernel partly by what it omits — worth remembering,
+because a reader who greps for `support-` and finds nothing must not read that as
+"stock".
+
+### ★ The input gate was fail-closed but not fail-*clean* — fixed
+
+`gate_kernel` refuses a payload whose `sum -r` or size does not match the proven
+identity. Falsifying it (wrong kernel; and a one-byte-flipped copy of each correct
+kernel — same size, different sum: 40718 and 01010) showed all three refusals fire and
+no `.pkg` is produced. But the arms did
+
+    cp "$SRC" "$DST" ; gate_kernel "$DST" ...
+
+so a **correctly refused** mint had already overwritten
+`build/kernel-packages/{bench,onbox}/unix` with the bad bytes. The gate was doing its
+job and still leaving known-bad payload staged for whatever read it next — and the
+diagnostic named the destination, not the file the operator actually passed. Both arms
+now **gate the source first, then copy, then re-gate the copy** (the second call still
+catches a truncated copy). Re-proved: after a refused run the staged payloads still read
+`sum -r` 49667 / 60364, and the FATAL names the source path.
+
+### Verification
+
+`pkgtrans` round-trip of both `.pkg`s gives `/stand/unix` **byte-identical** (`cmp`) to
+the staged payloads; `/stand/boot2.boot` re-verifies `sha256 f287ff3a…`; newc magic
+`070701` at offset 512. pkgmap is class `none` only — `d /stand 0755`, both files
+`0644 root root`, `i pkginfo` — no class-action, no postinstall, nothing touching a raw
+device. The licensing gate fires on **both** r4 packages: `--scan-private` rc 3 (naming
+each by filename), catalog build rc 3 with no catalog written, `publish.sh --dry-run`
+**rc 4** with the destination left holding zero files — while the same staging *without*
+the kernel package publishes rc 0, so the refusal is caused by the packages themselves
+and not by the staging's shape. Suites: repo tools **178/178**, apkg **87/87**,
+contents-fsck **19/19**.
+
+
+## 2026-08-14 — s5 14-character follow-ups: the cppath upgrade fix + a scanner
+
+Host-side only, no bench cycle, **no package re-minted and no catalog touched**
+(the `docs/s5-14char-collisions.md` Option-A re-mint stays on hold pending the
+UFS question). Two of that brief's follow-ups landed.
+
+### 1. pkgadd could never overwrite a ≥ 14-character basename — fixed
+
+`heirloom/pkgcmds/pkginstall/cppath.c` `write_file()` built its mkstemp
+template as `<target-path>` + `"XXXXXX"`. On s5 a dirent name is truncated to
+14 bytes **on create and on lookup**, so once the target's basename is 14
+characters or longer every candidate name mkstemp can generate truncates back
+onto the dirent being replaced — every `O_EXCL` create gets EEXIST, mkstemp
+gives up, `ERR_MKTEMP`. The empty `<>` in that message is mktemp blanking the
+template, which is precisely what installng's W6 `cd-full` log showed.
+
+The overwrite branch is only entered when the target already exists, so this
+was never a fresh-install defect (that is *why* the four attested sets are
+clean) — it is an **upgrade / re-install** defect: 572 objects of `full`, and
+shipped files as ordinary as `/usr/apkg/doc/OPENSOLARIS.LICENSE`.
+
+Fix: a new `temp_template()` uses at most 8 bytes of the basename plus the six
+X's — a 14-byte template basename, so the X's now *survive* truncation instead
+of being the part eaten — while keeping the temporary in the target's own
+directory, which the `rename(2)` needs to stay atomic. Basenames of ≤ 8
+characters get byte-for-byte upstream's template. The cap is unconditional
+rather than `pathconf`-driven, on purpose: a 14-byte temp name is legal
+everywhere and a 1991 libc answering wrongly would make the fix silently
+inoperative. Full rationale, collision-safety argument and the fail-closed
+overflow change: `heirloom/AMIX-PORT.md`, "s5 14-character names".
+
+**Regression: `heirloom/tests/s5-14char/` — 24 checks, red/green.** There is no
+s5 filesystem on the host, so `s5sim.so` (LD_PRELOAD) gives one directory tree
+s5's naming semantics and supplies the box's own SVR4-mktemp-based `mkstemp()`
+from `compat/amixcompat.c` (glibc's reaches the kernel through internal calls
+LD_PRELOAD cannot interpose — and the box does not use glibc's anyway). The
+suite compiles the **real** `cppath.c` twice: with `-DAMIX_NO_S5_TEMPLATE_CAP`
+it must still reproduce the bench failure, `<>` fingerprint included; as
+shipped it must succeed, replace the payload and leave no temporary behind.
+Short basenames, the relative-path branch and an ordinary 255-character
+filesystem are covered too. `build-host.sh` and `build-amix.sh` both clean
+(the one cppath warning, `BADMODE`/ULONG_MAX at line 211, is pre-existing).
+
+**Deployment debt:** this is source-side only. The engine deployed at
+`/usr/apkg` on the box, and the published `APKGENG-1.12.0.pkg`, both predate
+the fix; it reaches a box only with the next APKGENG mint, which is held with
+the rest of the re-mint decision.
+
+### 2. `tools/repo/s5-collision-scan.py` — the scan W6 never left behind
+
+W6's scan was prose, and keyed collision groups on the truncated **basename
+alone** — so the two `amixInitExt*` pairs that exist in both `WORK/` and
+`ZAPHOD/` collapsed into one row (3 groups reported, 5 real, 10 paths). A
+collision is a property of a *directory*, so the key is `(dirname,
+basename[:14])`.
+
+The tool reads only pkgmaps out of published datastreams (host-side, no box),
+importing `gen-catalog.py`'s datastream reader rather than copying it so the
+two cannot drift. `--check -s full` re-derives and asserts all seven pinned
+constants — 30 packages, 28,709 objects, 27,876 truncation universe, 147 over
+14, 572 at 14 or over, 5 groups per directory, 3 by the W6 key — and prints the
+five groups with ftype and owning package (group 4/5's `.c` side is a symlink,
+so the pairs are not even type-homogeneous). `-s <set>` alone predicts a set's
+contents-DB object count: `minimal` 4,859, `standard` 11,012, `developer`
+11,497, `x11` 11,546, all exact against the attested references, and zero
+collisions in each. `--fail-on-collision` is the gate form for after Option A.
+
+Test: `tools/repo/tests/run-tests.sh` **T17** (suite now 178/178). Its
+synthetic fixtures carry both shapes the basename-only key gets wrong — the
+same aliasing pair in two directories (merged into one) and two different
+over-long names in *different* directories (an invented collision) — plus an
+exactly-14 basename aliased by a longer one, which a key restricted to
+over-long names cannot see at all.
+
+### 3. Left open: renaming our own three ≥ 14-character files
+
+Not done, deliberately — the brief does not recommend it (its Option D is about
+the *stock* colliding objects), and the defect that made those names risky is
+now fixed at the source. For the record, none of the three collides with
+anything, and the only producer of their installed paths is
+`tools/repo/build-packages.sh`; nothing in this repo or in `amix-installng` /
+`amix-kerntools` / `grimoire-amix` references them by installed path:
+
+| object | basename | s5 dirent | package |
+|---|--:|---|---|
+| `/usr/apkg/doc/OPENSOLARIS.LICENSE` | 19 | `OPENSOLARIS.LI` | APKGENG |
+| `/usr/apkg/doc/CALDERA.LICENSE` | 15 | `CALDERA.LICENS` | APKGENG |
+| `/usr/apkg/bin/amix-sadm-migrate` | 17 | `amix-sadm-migr` | APKG |
+
+Renaming them would move the installed path set of APKG/APKGENG, i.e. re-mint
+two base packages, move `catalog.md5`, **and move the attested contents-DB
+digests of every set that contains them** — `minimal` included. That is exactly
+the blast radius the brief's Option A is designed to avoid, so it is a decision
+for the same round as the re-mint, not a drive-by.
+
+## 2026-08-11 — W3 (installer-UX rework): package metadata groundwork
+
+Host-side only. **No package was re-minted; every `.pkg` md5 is exactly what it
+was**, and a plain regeneration of the live repo still produces the published
+catalog byte-for-byte (md5 `edeba578b73fc892f3c8c5ede603aca7`). Three artifacts.
+
+### 1. Installed size — a catalog *extension block*, not a 10th field
+
+`gen-catalog.py --isize` appends, after the entry lines:
+
+```
+#ext isize 1
+#isize <catalog-name> <bytes>
+```
+
+`<bytes>` is the sum of every **sized** pkgmap(4) object — ftypes `f`/`v`/`e`
+(files) plus `i` (pkginfo + install scripts, which land in
+`/var/sadm/pkg/<PKG>/install`). Directories, symlinks, hard links, devices and
+pipes carry no size field and contribute nothing. The size/cksum/modtime triple
+is always the last three tokens of a pkgmap line, so the parser indexes from the
+right and does not care about the class field.
+
+**Why a comment block.** The catalog's field grammar is *full*: `catalog.c`
+(`NFIELDS_MIN`/`NFIELDS_MAX`) accepts 9 fields, or 10 when the 10th is the RAW
+byte offset, and rejects everything else with `CAT_EFORMAT`. An 11th column
+would brick every already-deployed `apkg` on every box, and stealing the 10th
+collides with `--raw`. `amix-installng`'s `isocheck.parse_catalog` is stricter
+still (exactly 9, and it does **not** skip `#` lines). A `#` line is skipped by
+`catalog.c`'s reader — it has been since the first apkg commit `4992a67`, so
+every binary ever built, including the deployed `apkg.amix` and the static
+install variant, tolerates it — needs no format-version bump, rides the RAW
+metadata region and the CD tree for free (it *is* the catalog), and is covered
+by `catalog.md5` like everything else. A sidecar file would instead have needed
+publish/ISO/RAW plumbing in three places, one of which is a `source.h` layout
+change.
+
+The flag is **opt-in**: without it the catalog is byte-for-byte what it always
+was, so nothing downstream moves until a consumer asks for the block. That
+matters concretely — `isocheck.parse_catalog` would count each `#isize` line as
+a malformed entry, so **`build-iso.sh` must not pass `--isize` until installng's
+parser skips `#` lines** (a one-line fix; queued for the installng half of W3).
+
+A package whose pkgmap cannot be summed gets **no** `#isize` line and a stderr
+warning — absence, not a fabricated `0`, so a free-space gate sees an honest gap.
+
+### Cross-check against the original tape index
+
+`hdf/tape21/x00/List` gives each stock package a `size=` in 512-byte blocks.
+Our byte sums come in **consistently under** it — total 273.7 MB vs 296.7 MB,
+ratio **0.9224**, per-package range 0.725 (`terminfo`) … 0.970 (`Xbasic`).
+
+The gap is **not** a discrepancy in the sums; it is the difference between
+payload bytes and s5 on-disk footprint. Modelling the tape figure as
+`ceil(size/1024)` 1 KB blocks + s5 indirect blocks + one block per directory and
+symlink reproduces the List to **within ~1% overall** (603 204 vs 607 718
+blocks), and to within a few percent on 26 of 27 packages. The outlier is
+`core` (est. 23 256 vs List 27 124 blocks, ~2 MB short) — expected, since `core`
+is the package whose install also lays down `/dev` and the `/var/sadm` skeleton.
+The many-small-files packages are exactly the ones with the lowest raw ratio
+(`terminfo` 819 files, `sysadm` 1641 files), which is the 1 KB-block rounding
+showing through.
+
+**Consequence for the free-space gate: budget a margin, do not gate on the bare
+sum.** ~1.10× the `#isize` figure reproduces the tape's own accounting.
+
+### 2. `cats.conf` — taxonomy without a re-mint
+
+`tools/repo/cats.conf`, read from the staging root exactly like `deps.conf` /
+`names.conf` (key = catalog name, pkginst as fallback), wins over the pkginfo
+`CATEGORY`. All 27 stock packages ship `CATEGORY=system`, which collapses the
+distribution into one heap; this fixes it at *catalog* level, so no `.pkg` byte
+and no `.pkg` md5 moves. An override is validated to one
+`[A-Za-z0-9][A-Za-z0-9+.-]*` token — a category with a space makes apkg reject
+the whole catalog — and a bad one is a per-package SKIP, never an emitted
+poison line. The pkginfo fallback keeps its original unvalidated behaviour.
+
+Ten groups over 30 packages: `system` 9, `source` 7, `x11` 4, `network` 2,
+`openlook` 2, `development` 2, `documentation` 1, `text` 1, `emacs` 1,
+`games` 1. **The axis is "what a package IS", not "who wants it"** — intent is
+what the *sets* express, and two groupings of the same 30 packages would
+disagree. So `xdev` is filed under `x11` and `oldev` under `openlook`, while
+`development` holds the two things whose purpose is building software (`cdev`,
+`conf`). `apkg`/`apkgeng`/`cdfs` move from `application` to `system`: they are
+base-OS machinery, not user applications.
+
+**Not wired into the pipeline yet.** `build-packages.sh` copies only
+`deps.conf` into staging, so applying the taxonomy needs one more `cp` there
+(and `build-iso.sh`'s `rm -f .../deps.conf names.conf` line extended). Deferred
+deliberately: the moment it is wired, the catalog md5 changes (only field 8 —
+verified: filename/md5/size/deps/description all unmoved), which is a
+publish-path event.
+
+### 3. `sets.conf` — the five named install sets
+
+`tools/repo/sets.conf` + `tools/repo/sets.py` (reference resolver, also a CLI).
+Grammar is one statement per line, `<set>: <member>,<member>...`, a set may be
+declared on several lines (members accumulate), and `+<set>` includes another
+set transitively; cycles are an error, not a hang. Chosen to stay a two-liner
+in 1991 pre-POSIX Bourne sh (`sed -n "s/^$want:[ \t]*//p" | tr ',' ' '` plus a
+small expansion loop) — the test suite runs exactly that sh loop as a second
+implementation and asserts it agrees with `sets.py` on all five sets.
+
+Composition is a strict chain, minimal ⊂ standard ⊂ {full, developer, x11}:
+
+| set | n | membership |
+|---|---|---|
+| `minimal` | 8 | the proven base-8: core bsd net text sysadm cdfs apkgeng apkg |
+| `standard` | 17 | + the rest of the tape's 14 non-`opt=y` packages (cdev lp man public terminfo uucp xcore xbasic olcore) |
+| `full` | 30 | all 27 stock + our 3 |
+| `developer` | 19 | standard + xdev oldev |
+| `x11` | 18 | standard + xtras |
+
+`conf` is **excluded from developer** (locked user decision): its stock workflow
+ends in `make bootpart`, which frames a boot slice the 1991 way and actively
+misleads against the `updbootpart` flags-based reframing this project ships and
+gates. Custom selection can still take it. `KERN*` appears in **no** set — the
+private kernel packages are off-catalog by the `KSUM_R`/`BOOT2_SHA` marker gates
+and are delivered by `updbootpart`, not by a menu; the test suite asserts no set
+ever names one.
+
+### Tests
+
+`tools/repo/tests/run-tests.sh` **94 → 161** (T14 isize, T15 cats.conf, T16
+sets.conf); `src/apkg/tests/run-tests.sh` **81 → 87** (the C89 client parses a
+block-carrying catalog with byte-identical `list` output, and ignores an unknown
+`#ext` block too). Both suites 0 failed. The isize arithmetic is checked against
+a hand-built pkgmap with a known-by-construction total *and* re-summed
+independently by `awk` over a `cpio`-extracted pkgmap.
+
+## 2026-07-20 — Session 6: `pkgadd -R <altroot>` blocker CLOSED (toolchain modulo fix verified on the box)
+
+**The last hard constraint on the engine is lifted.** The `pkgadd -R` SIGSEGV
+(open follow-up item 0 in `heirloom/AMIX-PORT.md`, the "not trustworthy yet"
+caveat in this repo's docs) was root-caused on 2026-07-20 to a GNU-as-2.8.1
+codegen defect — `nhash.c` `HASH()`'s `hv % hsz` lost its remainder register —
+and the fix shipped in the cross toolchain (`gcc-cross-amix 984192a`: the wrapper's
+`fix_asm` rewrites the SGS `tdivs`/`tdivu` remainder-divide to `divsl`/`divul`,
+which GNU as encodes as the 32-bit-dividend form with the remainder intact). This
+session **rebuilt the m68k engine with the fixed toolchain and proved it on metal.**
+
+- **objdump proof.** Rebuilt `HASH` (in `nhash.o` and the linked unstripped
+  `pkginstall`) now emits `divsll %fp@(16),%d2,%d1` — ext word `1802` (SIZE bit
+  clear = 32-bit dividend, quotient %d1, remainder %d2) + `mov.l %d2,%d0`. A scan of
+  the whole rebuilt engine shows only `divsll`/`divull` (4 + 6) and **zero**
+  mis-assembled 64-bit `divsl`/`divul`.
+- **On-box acceptance** (WinUAE guest, fixed engine deployed to `/usr/apkg`;
+  `pkgadd` sum -r 15636, `pkginstall` 34368). `tests/altroot-repro/task0a.sh` +
+  a plain-×4 / seeded battery:
+
+  | arm | result |
+  |---|---|
+  | plain empty-root `pkgadd -R` ×4 | **4/4 rc=0, zero cores** (was rc=1 + 1 MB core each) |
+  | full task0a (plain/dsdebug1/dsdebug0/ZZQQ1/no-R) | **5/5 rc=0, zero cores** (plain & ZZQQ flipped from crash) |
+  | DS_DEBUG=1 empty-root | rc=0, no core (still passes, now for the right reason) |
+  | seeded (`etc/passwd`+`etc/group`) alt-root | rc=0, no core |
+
+  The alt-root install is genuine: "Installation of <APKG> was successful.",
+  `<root>/var/sadm/pkg/APKG/*` written, 13 APKG records in the alt-root contents
+  DB, `<root>/usr/apkg/bin/apkg` (59202 B) in place. Real-system (non-`-R`)
+  installs were already unaffected.
+- **Engine replaced on the box** (fixed engine left installed — it is now the
+  correct engine). Replaced `/usr/apkg/bin/{pkgadd,pkgask,pkgrm,pkginfo,pkgparam,
+  pkgtrans,installf,removef,pkgchk,pkgmk,pkgproto}` and
+  `/usr/apkg/sadm/install/bin/{pkginstall,pkgremove}`; the previous (broken)
+  binaries were backed up to `/tmp/apkg-bak/` for the session (box `/tmp` is wiped
+  on reboot). `pkgask`/`removef` hardlinks re-established (== pkgadd/installf).
+- **Consequence for the docs.** `heirloom/AMIX-PORT.md` item 0 now reads RESOLVED;
+  the "`-R` is NOT trustworthy" hard-constraint elsewhere in the repo docs
+  (maintainer notes #3, requirements/design) is now stale and should be revised. The
+  `MERGPATH_OPT` `-O0` forcing of nhash/ncgrpw/verify (AMIX-PORT item 1) was never
+  the cure and can be unwound. Out of scope here: rebuilding drivers/kernels with
+  the fixed toolchain is a separate follow-up.
+
+## 2026-07-05 — Session 5: categorized repo, 27 stock packages repackaged, dependency graph
+
+**Repo layout — purpose directories, not letter-pools.** `pkgs/{stock,base,test,...}`; the catalog
+`filename` field carries the relative path, so the layout is pure metadata (clients never browse
+dirs — reorganizable anytime by regenerating the catalog). Chose categories over Debian-style
+`pool/a/b/c` — that shards tens of thousands of packages, a scale Amix never reaches, and letter
+dirs kill the by-hand browsability the repo needs (sneakernet users). apkg + tools got component-wise
+path validation (rejects absolute/`..`/`//`), recursive scan, subtree-preserving publish. Suites
+58/58 + 64/64.
+
+**All 27 Amix 2.1 factory packages repackaged** (`tools/repo/repackage-stock.py`): streams each tape
+cpio-newc archive (zcat for the 10 compressed), reads modes/owners/devices/symlinks from the cpio
+HEADERS (extraction as non-root loses them), maps uid/gid → names via the real box passwd/group,
+emits prototype+pkginfo, builds via host heirloom pkgmk/pkgtrans. 28,866 members, VERSION=2.1,
+faithful devices/setuid/mtimes. **Exactly ONE file excluded tape-wide:** `.../MacFS/TrueType Fonts`
+(the factory-corruption source — prototype's space-delimited format can't represent it; excluding
+beats corrupting). Published to `pkgs/stock/`. Full chain proven on the guest: publish (31 pkgs) →
+`apkg update` → `apkg download games` via the `stock/` subdir URL (md5 ok) → **heirloom pkgadd
+reinstalled the repackaged `games` on the real system, RC=0.**
+
+**Authored dependency graph** (`tools/repo/deps.conf`, version-controlled; build-packages copies it
+into staging; gen-catalog fills the catalog deps field; apkg resolves recursively). Stock metadata
+has none, so authored fresh. Principles: `core` = essential base → never a declared dep; **NO "you
+need a compiler" deps** — a compiler is the user's choice (AT&T `cdev` OR community GCC 2.7.2.3), and
+source is legitimately installed just to read, so all source packages / conf / dev tools pull in no
+compiler. Only non-substitutable X11-library structural edges declared: `xbasic/xtras/olcore→xcore`,
+`xdev→xcore`, `oldev→olcore+xdev`, plus `apkg→apkgeng`, `amixdemo→demolib`. Clean DAG, no cycles.
+Verified on box: `apkg info oldev` → `Depends: olcore, xdev`; `apkg info gnusrc` → `none`;
+`apkg -n -v install x11r5src` resolves standalone. Pure metadata — editable without rebuild.
+(First draft had a toolchain tier making source/conf/xdev → `cdev`; dropped on review.)
+
+**Engine follow-up (non-blocking):** heirloom `pkgadd -R <altroot>` SIGSEGVs in averify group-lookup
+(distinct from the fixed real-system path; real-system installs unaffected). Localized to the
+averify→cgrnam handoff; a defensive guard shipped (crash → graceful warning) +
+`gr_mem` fix + field-dump probe. Chasing the root source continues in the background; documented in
+`heirloom/AMIX-PORT.md` item 0.
+
+## 2026-07-05 — Session 4b: v1.1 COMPLETE — heirloom engine is the daily driver
+
+The background hardening campaign concluded: **full E2E green through the heirloom engine on the
+live DB** (dep-chain install via /usr/apkg/bin/pkgadd, removals via /usr/apkg/bin/pkgrm, DB sane).
+apkg's shipped conf now defaults to the heirloom engine (stock = commented fallback). Eleven
+bench-verified root causes closed the gap; the last three:
+- Sun latent bugs: fpkgparam stack-underflow on empty values; overlapping-strcpy UB in canonize.
+- **The final boss: Amix shared-libc getpwnam() crashes on first call** in our processes (its
+  internal allocator-redirect dance; group side works — asymmetry wholly inside libc, mapped by
+  disassembly as far as statically possible). Fix = mnttab-style sidestep: the executable defines
+  getpwnam/getpwuid/getgrnam/getgrgid as direct /etc/passwd//etc/group text parsers (preempting
+  libc for all callers uniformly). Real box files pulled as regression fixtures.
+- Diagnostic method that cracked it: env-gated DS_DEBUG tracing at every layer + per-stage markers
+  + at(1)-batch runs (session-HUP-immune) + binary-search by -O0 (MERGPATH_OPT) — each bench cycle
+  halved the search space over eight rounds.
+Open cleanups (non-blocking, listed in heirloom/AMIX-PORT.md): MERGPATH_OPT -O bisect-back, apkg
+lock-clear workaround removal (unlockinst now fixed), .swbeg wrapper fix upstream PR to
+gcc-cross-amix.
+
+## 2026-07-04 — Session 4: full implementation — the system is BUILT, LIVE and E2E-verified
+
+**Everything delivered in one marathon session** (parallel work streams on the host and the bench).
+Repo is live on the LAN mirror (retired 2026-09-15): catalog + APKG (client)
++ APKGENG (engine) + demo packages. See [docs/design.md](docs/design.md) for the architecture.
+
+**Shipped components (all committed):**
+- **apkg** (`src/apkg/`): C89 remote client — update/list/search/info/download/install (recursive
+  deps, md5, download-all-verify-first)/upgrade/remove over plain HTTP/1.0. 45/45 host tests;
+  bench-verified on the guest against the live repo (real DNS via /etc/inet/hosts → the lab
+  resolver, virtual-hosted GET).
+- **Heirloom engine port** (`heirloom/`): all tools cross-built (m68k SVR4 ELF, parallel
+  /usr/apkg prefix); tolerant contents parser (spaces in names), VERSION relaxation, de-OpenSSL,
+  newc-bounded datastream feed, text-mnttab parser, adaptive+proportional temp-image sizing,
+  best-effort rlimit raise. Host build powers the packaging pipeline (pkgmk/pkgtrans with
+  newc-emitting cpio shim).
+- **contents-fsck** (`src/contents-fsck/`): 23/23 tests; dogfooded ON the live guest DB
+  (28,716 records, exactly the expected findings; `-s -r` repair applied as the canonical
+  post-migration step).
+- **Migration** (`tools/migrate/`): executed for real on the guest — 27 VERSION= appends,
+  4 install/ dirs, contents backup.
+- **Repo tools** (`tools/repo/`): gen-catalog.py (datastream/cpio parser), publish.sh,
+  build-packages.sh (newc-verified; PKG names ≤9 chars — stock pkgadd silently drops longer).
+
+**E2E acceptance (bench-proven):** stock-pkgadd bootstrap of APKG.pkg → migration → `apkg update`
+→ `install amixdemo` (dep chain demolib→amixdemo over HTTP, md5, correct order) → files+DB verified
+→ `remove` reverses. Round 2: **heirloom pkgadd installs on the CORRUPT live DB** (stock aborts —
+side-by-side proven); full pkgadd+pkgrm cycle incl. corrupt-record tolerance proven in an isolated
+`-R` root; heirloom `pkginfo -l` lists the corrupt DB that kills stock.
+
+**Toolchain war stories (all fixed, all upstreamable to gcc-cross-amix):**
+1. **`.swbeg` switch-dispatch bug**: GNU as emits 0 bytes for the SGS directive gcc 2.7 assumes
+   is 4 → every switch case entered 4 bytes late, branching on stale flags. Fix: `.long N` filler
+   (wrapper patch + KAT battery, 0 failures on box; dispatch-invariant gate now in builds).
+2. **DT_NEEDED host-path trap**: Amix libnsl.so has no SONAME → wrapper's absolute paths get baked
+   in → kernel SIGKILL at exec. Fix: direct ld with -L/-lnsl.
+3. Dangling `-Wl,-Map` clobbered sysroot libc.so.1 (repaired from tape; sysroot now read-only).
+4. Amix cpio reads concatenated archives to EOF (no trailer-stop) → bounded ds feed.
+5. Sun's latent `vfpSetSize` bug (size set before malloc, not restored on failure) — first code
+   ever to hit it; + 32MB CONTENTS_DELTA literal vs ~8–16MB process data limit.
+6. `/etc/mnttab` is TAB-SEPARATED TEXT on Amix (not binary); guest RAM raised 8→64MB
+   (`a3000mem_size=16` + `mbresmem_size=64` — Amix sees 64MB; family configs all ship 8MB).
+7. Long engine ops via telnet need `at`-batch (session HUP kills them — heirloom's traps override
+   nohup's SIG_IGN) and AMIX_CMD_TIMEOUT≥300.
+
+**Known open items (background hardening, documented in heirloom/AMIX-PORT.md):**
+- heirloom engine as apkg's daily driver: deferred to v1.1. Three entangled defects on the
+  full-size live DB (all precisely diagnosed, being worked in the background): pkgremove silent
+  early exit (memory budget), unlockinst leaving .pkg.lock state the next run misreads,
+  and pkginstall SEGV on the second sequential engine invocation within one apkg run.
+  **v1 config: apkg drives the STOCK engine** (proven 100% green incl. dep chains on
+  fsck-repaired DBs — the FINAL3 acceptance run); APKGENG ships the heirloom tools for
+  diagnostics/rescue (tolerant pkginfo -l works on corrupt DBs where stock aborts — proven
+  side-by-side), pkgask/removef, and pkgmk/pkgproto/pkgtrans.
+- Bonus finding: heirloom pkgadd's contents merge SELF-HEALS the corrupt record (dropped on
+  first rewrite) — verify intentionality in the background task.
+- heirloom `unlockinst` leaves .pkg.lock state that the next run misreads as stale and exits
+  silently → apkg clears the lock before engine invocations (workaround, remove when fixed).
+- Original install tape extracted at `hdf/tape21/` — 27 packages, `amixpkg` media format mapped
+  (List index + per-package cpio-070701, zcat flags); source for the future VERSION-repackaging.
+
+## 2026-07-04 — Session 3: direction decided; environment prepared; bench checklist ALL GREEN
+
+**Decision:** direction (a) — Heirloom engine + C89 remote catalog
+client. Requirements captured in [docs/requirements.md](docs/requirements.md). Repo git-initialized (`master`, personal identity).
+
+**Environment now working:**
+- **WinUAE guest** up headless (tap-routed network, telnet/ftp verified).
+- **Cross toolchain BUILT and PROVEN:** `gcc-cross-amix` (binutils 2.8.1 + GCC 2.7.2.3,
+  `m68k-cbm-sysv4`, prefix `~/opt/amix-cross`) — hello.c cross-compiled on Linux, FTP-pushed,
+  **ran on the guest**. Sysroot populated from the **original Amix 2.1 install tape**
+  (`hdf/amix_21_tape.zip` copy, extracted at `hdf/tape21/`, gitignored) — core+Cdev+bsd packages
+  gave usr/include, usr/ccs (incl. crt*.o, libc.a), usr/lib (libc.so.1, ld.so.1). No NFS needed.
+- **NFS note:** guest→NAS NFS mount fails — the NAS offers NFSv2 **over TCP only** (rpcinfo shows
+  no UDP `nfs` service); Amix's 1992 client is UDP-only. FTP push AND pull both verified byte-clean
+  today (2.3 MB pull, sum -r match) — FTP is the working bridge.
+- **Tape format finding** (grimoire-worthy): the 2.1 install tape = file 00 `List`+`Version` index
+  (pkg names, sizes, `zcat=y`/`opt=y` flags) + one **plain cpio-070701 archive per package** in
+  tape order (compressed where zcat=y). NOT SVR4 datastreams — this is the `amixpkg` media format.
+  All 27 tape packages extractable on modern Linux with stock cpio. Original packages now available
+  locally for the future VERSION-repackaging goal.
+
+**Bench checklist (gates from the Heirloom dive) — ALL GREEN ✅:**
+1. **`#` comment trailer:** stock `pkginfo -l` parses fine with Heirloom-style trailing comments
+   appended (factory contents already ends in comments). Coexistence risk CLEARED — no trailer
+   patch needed.
+2. **`install/` dirs:** 27/31 present; missing exactly bnu, face, intf_install, nsu → one-time
+   `mkdir` before Heirloom pkgremove touches those.
+3. **cpio:** native `-oc` emits **070701 newc** (verified); `-C 512` accepted; `-icdumD` is
+   **tolerated** (exit 0) — the `-D` patch drops to hygiene, not blocker.
+4. **VERSION= migration:** appending `VERSION=2.1` to an installed pkginfo is fully compatible —
+   stock `pkginfo -l` displays it, `pkgparam` returns it. → Strategy: migrate the 31 pkginfo files
+   (plus keep the Heirloom getinst NULL-guard as belt-and-braces).
+5. **Full-DB parser scan:** real contents (28,644 records, corrupt line re-inserted for factory
+   fidelity): stock srchcfile = **exactly 1 error** (the TrueType Fonts record — no other
+   anomalies, no old-style lines, no `=`-in-name traps); tolerant patch = **0 errors**, recovers
+   the spaced record perfectly. Artifacts: `research/heirloom/contents-harness/`.
+
+**Next:** vendor heirloom (aflat HEAD) into the repo, apply the patch set, cross-build libpkg
+first; write contents-fsck; VERSION migration script; then the `apkg` catalog client + repo tools
+against the LAN mirror.
+
+## 2026-07-04 — Session 2b: deep dive into aflat/heirloom-pkgtools
+
+**Method.** Source dive (5 topics, each independently re-verified) on a local clone: parser harness fed
+the exact corrupt factory record, three independent host builds, full pkgmk→pkgtrans→pkgadd→pkgrm
+lifecycle against an Amix-faithful fake /var/sadm, linker-map subset math, license census,
+aflat-vs-070227 diff. **Deliverable:** [docs/heirloom-pkgtools-dive.md](docs/heirloom-pkgtools-dive.md);
+raw digest kept outside this tree; validated patches/harness/de-OpenSSL kit in
+[research/heirloom/](research/heirloom/).
+
+**Headlines:**
+- **Space bug NOT fixed upstream** — empirically byte-identical abort to stock. But a **36-line
+  tolerant-parser patch was written and validated** (recovers the factory record exactly, zero
+  regressions); pkgadd merges are already safe on the corrupt DB.
+- **It builds today** (3 fixes, 11.5 s), is rigorously C89, writes a byte-compatible /var/sadm,
+  OpenSSL wall removed with a proven 17-stub-header kit; port bill ~700–800 new lines, 2–4 wk.
+- **NEW blockers found — the VERSION trio:** factory packages lack VERSION → Heirloom pkginfo
+  listing aborts on the whole factory DB, pkgadd refuses factory media, pkginstall SEGFAULTs on
+  upgrade-over-VERSION-less (silently!). Three <10-line patches or a one-time VERSION= migration
+  of 31 pkginfo files.
+- Base on **aflat HEAD** (= Gunnar's 2009 CVS, newer than 070227), revert its 2 CentOS hacks, fix
+  cpio -D at **3** sites; man/ tree = immediate standalone win (Amix has no pkg man pages).
+- Top bench test before mixing toolsets: does stock srchcfile skip `#` comment lines in contents
+  (Heirloom appends a trailer on every write)?
+- **Verdict: adopt-with-patch-set in the engine role**; the remote/catalog client stays a separate
+  Phase-1 build.
+
+## 2026-07-04 — Session 2: evaluate all direction candidates (Goal #2)
+
+**Method.** Desk research (7 candidate families, each independently re-verified, plus a
+completeness pass), source-level inspection — candidate repos were cloned/fetched and grepped for
+C dialect, hard deps, LOC; several were actually built. Raw structured digest (per-claim
+CONFIRMED/REFUTED + file:line evidence) kept outside this tree.
+
+**Deliverable:** [docs/direction-evaluation.md](docs/direction-evaluation.md) — full field
+(30+ candidates), precedent survey, decision criteria, phased recommendation.
+
+**Headlines:**
+- **Fixed SVR4 pkg source EXISTS (CDDL):** illumos-gate `svr4pkg` (alive, but doors/zones-entangled)
+  and **Heirloom pkgtools** (2007 pre-`pkgserv` snapshot, already de-Solarized, strict C89, includes
+  the missing `pkgask`/`removef`, operates on `/var/sadm` in place) — the practical entry point.
+- **apt is C++ from birth** (0 LOC of C in any release) → impossible on Amix; brew needs Ruby 4 +
+  TLS; opkg hard-requires libarchive (C99, ~136k LOC); **ipkg 0.99.163** is the sleeper (18k LOC,
+  libc-only, C89, 144 KB binary) but forks the ecosystem; **historical BSD pkg_install**
+  (pkgsrc-2007Q4 + libnbcompat + FreeBSD libfetch) is the best "port a manager" base (~30k LOC, BSD).
+- **Direction (a) is production-proven three times over** (OpenCSW pkgutil, Tribblix zap — actively
+  shipping, m40 2026-06; HP-UX depothelper = 951 lines total): flat text catalog + dumb HTTP + thin
+  client over unmodified native pkgadd. Zero migration (/var/sadm stays the DB), keeps the
+  amigaunix.com `.pkg` corpus.
+- **Recommendation:** (a) sharpened — Phase 0 contents repair+fsck; Phase 1 static C89 catalog
+  client (~2–3k LOC, pipe-delimited catalog with OpenCSW field semantics, plain HTTP + native ftp);
+  Phase 2 rebuild `removef`/`pkgask` from Heirloom source. Plan B = BSD pkg_install port; Plan C
+  (complement) = epkg. Decision **pending review**.
+
+## 2026-07-01 — Session 1: map the stock SVR4 pkg system (Goal #1)
+
+**Setup.** Investigated on a **clean Amix 2.1c** image (`hdf/Amix_UAE_clean.hdf`, a local copy of
+`amix-kerntools/hdf/Amix_UAE_clean.hdf`) + a WinUAE config (today's equivalent: `configs/amix-winuae.example.uae`), under **WinUAE**,
+brought up headless on a routed tap network. Driven over telnet/ftp with
+`amix-kerntools/tools/amixrun.py` / `amixsync.py`.
+
+**Deliverable:** [docs/stock-pkg-system.md](docs/stock-pkg-system.md) — the confidence-tagged map.
+Raw command transcripts (phases A–E) kept outside this tree.
+
+**Headline findings (all ✅ reproduced firsthand):**
+- Tooling: `pkginfo pkgmk pkgproto pkgparam pkgtrans` (`/usr/bin`) + `pkgadd pkgrm pkgchk installf`
+  (`/usr/sbin`). **`pkgask`, `removef`, `amixpkg` absent** from the installed system (amixpkg is
+  install-media-only). No pkg man pages installed.
+- DB = `/var/sadm/install/contents` (28,645 lines, ~2.3 MB, **world-writable**) as the master
+  installed-object list + `/var/sadm/pkg/<PKG>/{pkginfo,install,save}` per package. **No per-package
+  `pkgmap`.** 31 packages, all `CATEGORY=system`, `ARCH=Amiga`, **no VERSION**.
+- `contents(4)` grammar decoded per ftype (f/d/s/c/b); package media format decoded (directory:
+  pkgmap+pkginfo+root/reloc; datastream `.pkg`: `# PaCkAgE DaTaStReAm` header + cpio `070701`).
+- `pkgadd` inserts objects into `contents` **in sorted pathname order**, pkg-tagged; verified by diff.
+- **⚠ Critical defect:** `contents` line 26966 has a **space in the pathname**
+  (`/usr/x11r5/fonts/server/MacFS/TrueType Fonts`) → "unknown ftype" → **`pkgrm` and `pkginfo -l`
+  abort on the stock image**. Proven it's the *sole* blocker: delete that line and `pkgrm` succeeds
+  and cleanly reverses a `pkgadd`. Likely the real basis of the "amixpkg/pkgrm is broken" lore.
+- Packages are **script-free and dependency-free** (empty `install/`, `CLASSES=none`, no `depend`);
+  only a few system pkgs carry saved `.mi` sysadm-menu files (`intf_install` class).
+
+**Box state:** left the throwaway `AMIXtst` probe removed and the corrupt line deleted (disposable
+image). Reproduce anything on a WinUAE guest booted from a copy of `hdf/Amix_UAE_clean.hdf`.
+
+**Next:** hand the durable findings to the grimoire-amix docs (fills the DB-internals/format/§6
+gaps), then evaluate the three directions (Goal #2) — §9 of the doc sketches the tradeoffs.

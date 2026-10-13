@@ -1,0 +1,46 @@
+amix-packagemanager
+Copyright (c) 2026 Jussi Alanärä -- MIT (see LICENSE)
+
+This repository contains third-party software:
+
+* heirloom/ -- Heirloom Packaging Tools (Gunnar Ritter, 2007; imported via
+  github.com/aflat/heirloom-pkgtools at bfc8d02), derived from the OpenSolaris
+  SVR4 packaging tools. CDDL 1.0 (heirloom/LICENSE/OPENSOLARIS.LICENSE);
+  ancient-UNIX portions under the Caldera license
+  (heirloom/LICENSE/CALDERA.LICENSE): "This product includes software
+  developed or owned by Caldera International, Inc."
+  Amix port modifications: Portions Copyright 2026 Jussi Alanärä, marked
+  "AMIX PORT" at each site and listed in heirloom/AMIX-PORT.md. The source of
+  the CDDL-covered APKGENG binaries served at pkg.amigaux.org is this
+  repository.
+* heirloom/compat/fnmatch.c, fnmatch.h, charclass.h -- BSD/ISC (OpenBSD via
+  openssh-portable); heirloom/compat/snprintf.c -- Patrick Powell / Holger
+  Weiss permissive license; src/apkg/md5.{c,h} -- public domain (Colin Plumb).
+
+
+Trademarks
+----------
+
+The wording Amiga Corporation asked us to carry:
+
+This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
+
+amix-packagemanager is an independent, unofficial project. It is likewise not
+affiliated with, endorsed by, or sponsored by Commodore or any other trademark
+holder. AmigaOS and Amiga UNIX are trademarks of their respective owners; UNIX
+is a registered trademark of The Open Group. Amiga UNIX is Commodore's port of
+AT&T UNIX System V Release 4; portions are copyright AT&T, UNIX System
+Laboratories and their successors.
+
+
+Amiga UNIX material
+-------------------
+
+On 2026-09-23 Amiga Corporation approved distributing the Commodore Amiga
+binaries that this project builds on; the project reads this as lifting the
+restriction on releasing Amiga UNIX to the public. This repository
+nevertheless contains no Amix source, binary, manual, tape or disk image,
+apart from small text excerpts used as test fixtures (system account tables
+without password hashes, a few contents(4) records). Tools that work on
+factory material (tools/repo/repackage-stock.py) read it from the user's own
+copy.

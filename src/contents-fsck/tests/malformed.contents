@@ -1,0 +1,5 @@
+/opt/badmode f none 0999 bin bin 10 20 690829200 PKGA
+/opt/missingpkg f none 0444 bin bin 10 20 690829200
+/opt/nonftype q none 0755 bin bin PKGA
+/opt/short f none
+relative/path f none 0444 bin bin 10 20 690829200 PKGA

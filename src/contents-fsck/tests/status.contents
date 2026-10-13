@@ -1,0 +1,4 @@
+/opt/s1 f none 0444 bin bin 10 20 690829200 -PKGA
+/opt/s2 d none 0755 bin bin +PKGA *PKGB ~PKGC !PKGD %PKGE
+/opt/s3 f none 0444 bin bin 10 20 690829200 ~PKGA PKGA
+/opt/s4 d none 0755 bin bin PKGA:cls

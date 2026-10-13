@@ -1,0 +1,6 @@
+/etc d none 0755 root sys SUAScore
+/etc/passwd f none 0644 root sys 1234 4567 679609720 SUAScore
+/usr d none 0755 root sys SUAScore X11R5
+/usr/x11r5/fonts/server/MacFS/TrueType Fonts f none 0444 x sys 525157 64049 679609720 X11R5 X11R5
+/usr/x11r5/lib/libX11.a f none 0644 bin bin 99999 11111 679609720 X11R5
+/var d none 0755 root sys SUAScore

@@ -1,0 +1,4 @@
+/opt/app d none 0755 bin bin PKGA
+/opt/app/My Cool File f none 0444 bin bin 100 200 690829200 PKGA
+/opt/app/New Folder Of Stuff d none 0755 bin bin PKGA
+/opt/app/zz f none 0444 bin bin 100 200 690829200 PKGA

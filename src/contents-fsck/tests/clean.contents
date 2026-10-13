@@ -1,0 +1,18 @@
+# comment at top of file
+: directive line preserved verbatim
+/bin=/usr/bin s none core
+/dev d none 0755 bin bin core
+/dev/aen0 c none 18 ? 0644 root root core
+/dev/dsk/c0d0s0 b none 18 0 0600 root root core
+/etc/passwd e passwd 0644 root sys 580 48299 690829200 core
+  indented note line preserved verbatim
+
+/etc/saf/inetd/_pmpipe p none 0600 root root core
+/opt/links/hard=/opt/links/target l none core
+/opt/unknown ? none core
+/opt/x d none 0755 bin bin pkgA pkgB
+/usr/bin/ls f none 0555 bin bin 13824 51698 690829200 core
+/usr/lib/z v none 0644 root sys 100 200 690829200 core
+/usr/share x none 0755 root sys core
+# Last modified by pkgadd for AMIXtst package
+# Mon Mar 23 09:52:33 1992

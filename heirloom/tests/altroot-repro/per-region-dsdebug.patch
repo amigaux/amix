@@ -1,0 +1,466 @@
+diff --git a/heirloom/libinst/lockinst.c b/heirloom/libinst/lockinst.c
+index 8081fcd..94cbb5f 100644
+--- a/heirloom/libinst/lockinst.c
++++ b/heirloom/libinst/lockinst.c
+@@ -297,7 +297,7 @@ lockinst(char *util_name, char *pkg_name, char *place)
+ 
+ 	}	/* for (attempt) */
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_LOCK)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(lockinst): %s pid=%ld name=<%s> pkg=<%s> "
+ 		    "place=<%s>\n",
+@@ -321,7 +321,7 @@ lockinst(char *util_name, char *pkg_name, char *place)
+ void
+ lockupd(char *place)
+ {
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_LOCK)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(lockupd): place=<%s> pid=%ld\n",
+ 		    place, (long)getpid());
+@@ -338,7 +338,7 @@ lockupd(char *place)
+ void
+ unlockinst(void)
+ {
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_LOCK)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(unlockinst): applied=%d pid=%ld\n",
+ 		    lock_is_applied, (long)getpid());
+diff --git a/heirloom/libinst/mntinfo.c b/heirloom/libinst/mntinfo.c
+index af55c26..59dfedf 100644
+--- a/heirloom/libinst/mntinfo.c
++++ b/heirloom/libinst/mntinfo.c
+@@ -873,7 +873,7 @@ get_mntinfo(int map_client, char *vfstab_file)
+ 	 * Open the mount table for the current host and establish a global
+ 	 * table that holds data about current mount status.
+ 	 */
+-	if (getenv("DS_DEBUG") != NULL)
++	if (dsreg(DR_MNT))
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(get_mntinfo): enter, table=<%s> "
+ 		    "map_client=%d\n", MOUNT_TABLE, map_client);
+@@ -897,7 +897,7 @@ get_mntinfo(int map_client, char *vfstab_file)
+ 
+ 	(void) endmntent(pp);
+ 
+-	if (getenv("DS_DEBUG") != NULL)
++	if (dsreg(DR_MNT))
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(get_mntinfo): mount table scanned, "
+ 		    "%u entries\n", (unsigned)fs_tab_used);
+@@ -1515,7 +1515,7 @@ _getmntent(FILE *fp, struct mnttab *tp)
+ 		tp->mnt_time = strtok_r((char *)NULL, " \t", &lasts);
+ 		if (tp->mnt_time == NULL)
+ 			tp->mnt_time = "0";
+-		if (getenv("DS_DEBUG") != NULL)
++		if (dsreg(DR_MNT))
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(_getmntent): special=<%s> mountp=<%s> "
+ 			    "fstype=<%s> opts=<%s> time=<%s>\n",
+diff --git a/heirloom/libinst/ocfile.c b/heirloom/libinst/ocfile.c
+index b8f9bb4..602c373 100644
+--- a/heirloom/libinst/ocfile.c
++++ b/heirloom/libinst/ocfile.c
+@@ -351,7 +351,7 @@ ocfile(VFP_T **r_mapvfp, VFP_T **r_tmpvfp, ulong_t map_blks)
+ 	 * is discarded and not written to the disk.
+ 	 */
+ 
+-	if (getenv("DS_DEBUG") != NULL)
++	if (dsreg(DR_LOCK))
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(ocfile): contents=<%s> size=%ld free_blocks=%lu"
+ 		    " - opening temp image\n", contents, (long)statb.st_size,
+@@ -382,7 +382,7 @@ ocfile(VFP_T **r_mapvfp, VFP_T **r_tmpvfp, ulong_t map_blks)
+ 	 */
+ 	{
+ 		long	delta;
+-		int	dbg = (getenv("DS_DEBUG") != NULL);
++		int	dbg = (dsreg(DR_LOCK));
+ 
+ 		/*
+ 		 * The headroom only needs to absorb one package's
+@@ -440,7 +440,7 @@ ocfile(VFP_T **r_mapvfp, VFP_T **r_tmpvfp, ulong_t map_blks)
+ 
+ 	(void) vfpSetFlags(mapvfp, VFP_NEEDNOW);
+ 
+-	if (getenv("DS_DEBUG") != NULL)
++	if (dsreg(DR_LOCK))
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(ocfile): temp image ready (start=%s size=%lu)"
+ 		    " - ocfile OK\n", tmpvfp->_vfpStart ? "set" : "NULL",
+@@ -836,7 +836,7 @@ pkgWlock(int verbose) {
+ 	(void) alarm(0);
+ 	(void) signal(SIGALRM, SIG_IGN);
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_LOCK)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(pkgWlock): %s pid=%ld attempt=%d path=<%s>\n",
+ 		    retval ? "LOCKED" : "FAILED", (long)getpid(), attempt,
+diff --git a/heirloom/libinst/pkgdbmerg.c b/heirloom/libinst/pkgdbmerg.c
+index 545360c..e8f9803 100644
+--- a/heirloom/libinst/pkgdbmerg.c
++++ b/heirloom/libinst/pkgdbmerg.c
+@@ -131,7 +131,7 @@ notice(int n)
+ 	 * - if this appears just before a crash, the progress notifier
+ 	 * interrupting the merge is implicated.
+ 	 */
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MERG)) {
+ 		static const char dbgmsg[] = "DS_DEBUG(notice): FIRED\n";
+ 
+ 		(void) write(2, dbgmsg, sizeof (dbgmsg) - 1);
+@@ -181,7 +181,7 @@ pkgdbmerg(VFP_T *mapvfp, VFP_T *tmpvfp, struct cfextra **extlist, int notify)
+ 
+ 	fpvfp = mapvfp;	/* for notice function ...arg! */
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MERG)) {
+ 		int	dbgi;
+ 
+ 		for (dbgi = 0; extlist[dbgi]; dbgi++)
+@@ -312,7 +312,7 @@ pkgdbmerg(VFP_T *mapvfp, VFP_T *tmpvfp, struct cfextra **extlist, int notify)
+ 				static int dbg_on = -1;
+ 
+ 				if (dbg_on == -1)
+-					dbg_on = (getenv("DS_DEBUG") != NULL);
++					dbg_on = (dsreg(DR_MERG));
+ 				dbg_n++;
+ 				if (dbg_on && (dbg_n <= 50 ||
+ 				    (dbg_n % 2000) == 0 ||
+@@ -388,7 +388,7 @@ pkgdbmerg(VFP_T *mapvfp, VFP_T *tmpvfp, struct cfextra **extlist, int notify)
+ 					}
+ 				}
+ 
+-				if (getenv("DS_DEBUG") != NULL) {
++				if (dsreg(DR_MERG)) {
+ 					(void) fprintf(stderr,
+ 					    "DS_DEBUG(pkgdbmerg): do_like_ent "
+ 					    "<%s>\n", el_ent->cf_ent.path);
+@@ -416,7 +416,7 @@ pkgdbmerg(VFP_T *mapvfp, VFP_T *tmpvfp, struct cfextra **extlist, int notify)
+ 				 * package database.
+ 				 */
+ 				if (!eoextlist) {
+-					if (getenv("DS_DEBUG") != NULL) {
++					if (dsreg(DR_MERG)) {
+ 						(void) fprintf(stderr,
+ 						    "DS_DEBUG(pkgdbmerg): "
+ 						    "do_new_ent <%s>\n",
+@@ -464,7 +464,7 @@ do_like_ent(VFP_T *vfpo, struct cfextra *el_ent, struct cfent *cf_ent, int ctrl)
+ 	int	dbg;
+ 
+ 	ignore = changed = 0;
+-	dbg = (getenv("DS_DEBUG") != NULL);
++	dbg = (dsreg(DR_MERG));
+ 
+ #define	DLE_MARK(what)						\
+ 	if (dbg) {						\
+diff --git a/heirloom/libpkg/dstream.c b/heirloom/libpkg/dstream.c
+index b8bc541..4d92061 100644
+--- a/heirloom/libpkg/dstream.c
++++ b/heirloom/libpkg/dstream.c
+@@ -58,6 +58,34 @@
+ #include <pkglibmsgs.h>
+ #include "pkglocale.h"
+ #include "libadm.h"
++
++/*
++ * AMIX PORT (diagnostic): per-region DS_DEBUG bisection helper.  Caches
++ * the environment on first call (pkginstall main()'s first statement,
++ * before the environ=NULL reset).  DS_DEBUG (any value) enables every
++ * region; DBG_<REGION> enables one.  See pkglib.h for DR_* indices.
++ */
++int
++dsreg(int which)
++{
++	static int	inited;
++	static int	v[7];
++
++	if (!inited) {
++		int all = getenv("DS_DEBUG") ? 1 : 0;
++		inited = 1;
++		v[DR_DS]   = all || (getenv("DBG_DS")   ? 1 : 0);
++		v[DR_ESYS] = all || (getenv("DBG_ESYS") ? 1 : 0);
++		v[DR_MAIN] = all || (getenv("DBG_MAIN") ? 1 : 0);
++		v[DR_MNT]  = all || (getenv("DBG_MNT")  ? 1 : 0);
++		v[DR_LOCK] = all || (getenv("DBG_LOCK") ? 1 : 0);
++		v[DR_MERG] = all || (getenv("DBG_MERG") ? 1 : 0);
++		v[DR_CGR]  = all || (getenv("DBG_CGR")  ? 1 : 0);
++	}
++	if (which < 0 || which > DR_CGR)
++		return (0);
++	return (v[which]);
++}
+ #ifdef u3b2
+ static
+ struct stat	orig_st_buf; /* Stat structure of original file (3B2/CTC) */
+@@ -122,7 +150,7 @@ dsdbg(void)
+ 	static int flag = -1;
+ 
+ 	if (flag == -1)
+-		flag = (getenv("DS_DEBUG") != NULL) ? 1 : 0;
++		flag = (dsreg(DR_DS)) ? 1 : 0;
+ 	return (flag);
+ }
+ 
+diff --git a/heirloom/libpkg/ncgrpw.c b/heirloom/libpkg/ncgrpw.c
+index 62665b3..2cd5710 100644
+--- a/heirloom/libpkg/ncgrpw.c
++++ b/heirloom/libpkg/ncgrpw.c
+@@ -125,7 +125,7 @@ cgrnam(char *nam)
+ 	int len;
+ 	static int cache_failed;
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_CGR)) {
+ 		(void) fprintf(stderr, "DS_DEBUG(cgrnam): enter nam=<%s>\n",
+ 		    nam ? nam : "(null)");
+ 		(void) fflush(stderr);
+@@ -148,7 +148,7 @@ cgrnam(char *nam)
+ 	/* First look in the cache. Failing that, do it the hard way. */
+ 	if ((itemp = lookup_cache(grnam_cache, nam, len)) == Null_Item) {
+ 
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_CGR)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(cgrnam): cache miss, resolving\n");
+ 			(void) fflush(stderr);
+@@ -156,7 +156,7 @@ cgrnam(char *nam)
+ 		/* Get the group by name. */
+ 		if ((grp = clgrnam(nam)) != NULL ||
+ 				(grp = getgrnam(nam)) != NULL) {
+-			if (getenv("DS_DEBUG") != NULL) {
++			if (dsreg(DR_CGR)) {
+ 				(void) fprintf(stderr,
+ 				    "DS_DEBUG(cgrnam): resolved grp=%p\n",
+ 				    (void *)grp);
+@@ -198,7 +198,7 @@ cgrnam(char *nam)
+ 				}
+ 			}
+ 		}
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_CGR)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(cgrnam): return grp=%p (fresh)\n",
+ 			    (void *)grp);
+@@ -206,7 +206,7 @@ cgrnam(char *nam)
+ 		}
+ 		return (grp);
+ 	} else {	/* Found it in the cache. */
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_CGR)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(cgrnam): return cached=%p\n",
+ 			    (void *)itemp->data);
+@@ -455,7 +455,7 @@ dup_gr_ent(struct group *grp)
+ 	char **memp = NULL;
+ 	int	nent = 0;	/* Number of entries in the member list. */
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_CGR)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(dup_gr_ent): enter grp=%p name=<%s> gr_mem=%p\n",
+ 		    (void *)grp,
+@@ -542,7 +542,7 @@ dup_gr_ent(struct group *grp)
+ 		return (-1);
+ 	}
+ 	memp[nent++] = '\0';
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_CGR)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(dup_gr_ent): done, %d member(s)\n", nent - 1);
+ 		(void) fflush(stderr);
+@@ -662,7 +662,7 @@ clgrnam(char *nam)
+ 	FILE *gr_ptr;
+ 
+ 	if ((instroot = get_install_root()) != NULL) {
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_CGR)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(clgrnam): -R root=<%s> nam=<%s>\n",
+ 			    instroot, nam ? nam : "(null)");
+diff --git a/heirloom/libpkg/pkgexecv.c b/heirloom/libpkg/pkgexecv.c
+index 371cb86..c564ad7 100644
+--- a/heirloom/libpkg/pkgexecv.c
++++ b/heirloom/libpkg/pkgexecv.c
+@@ -79,7 +79,7 @@ static void
+ sig_trap(int a_signo)
+ {
+ 	/* AMIX PORT: DS_DEBUG - count and identify parent-side signals */
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_ESYS)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(pkgexecv.sig_trap): signal=%d pid=%ld\n",
+ 		    a_signo, (long)getpid());
+@@ -334,7 +334,7 @@ pkgexecv(char *filein, char *fileout, char *uname, char *gname, char *arg[])
+ 		}
+ 
+ 		/* AMIX PORT: DS_DEBUG - how the child status was decoded */
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_ESYS)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(pkgexecv): child=%ld rawstatus=0x%04x "
+ 			    "sig_received=%d -> exit_no=%d (pid=%ld)\n",
+diff --git a/heirloom/libpkg/pkglib.h b/heirloom/libpkg/pkglib.h
+index c7ed319..12f281d 100644
+--- a/heirloom/libpkg/pkglib.h
++++ b/heirloom/libpkg/pkglib.h
+@@ -59,6 +59,25 @@ extern "C" {
+ #include "keystore.h"
+ #include "cfext.h"
+ 
++/*
++ * AMIX PORT (diagnostic): per-region DS_DEBUG bisection.  The stock
++ * instrumentation is all gated on a single getenv("DS_DEBUG"); to find
++ * WHICH region's mere presence suppresses the -R add_cache crash, each
++ * region is given its own env var (DBG_DS/ESYS/MAIN/MNT/LOCK/MERG/CGR).
++ * DS_DEBUG (any value) still lights every region.  dsreg() caches the
++ * environment on first call -- which happens at pkginstall main()'s
++ * first statement, BEFORE the environ=NULL reset -- so the per-region
++ * flags survive that reset without needing re-injection.
++ */
++#define	DR_DS	0	/* dstream ds_init/ds_scan (front-end) */
++#define	DR_ESYS	1	/* runcmd esystem / pkgexecv spawn */
++#define	DR_MAIN	2	/* pkginstall main + quit */
++#define	DR_MNT	3	/* get_mntinfo (mntinfo.c) */
++#define	DR_LOCK	4	/* lockinst / ocfile / vfpops */
++#define	DR_MERG	5	/* pkgdbmerg / sortmap */
++#define	DR_CGR	6	/* cgrnam family (ncgrpw.c) + averify (verify.c) */
++extern int dsreg(int which);
++
+ #ifndef	S_IAMB
+ #define	S_IAMB	0x1FF	/* access mode bits */
+ #endif
+diff --git a/heirloom/libpkg/runcmd.c b/heirloom/libpkg/runcmd.c
+index db8e340..656eaee 100644
+--- a/heirloom/libpkg/runcmd.c
++++ b/heirloom/libpkg/runcmd.c
+@@ -125,7 +125,7 @@ ds_debug_on(void)
+ 	static int flag = -1;
+ 
+ 	if (flag == -1)
+-		flag = (getenv("DS_DEBUG") != NULL) ? 1 : 0;
++		flag = (dsreg(DR_ESYS)) ? 1 : 0;
+ 	return (flag);
+ }
+ 
+diff --git a/heirloom/libpkg/verify.c b/heirloom/libpkg/verify.c
+index 44f2a4c..962b017 100644
+--- a/heirloom/libpkg/verify.c
++++ b/heirloom/libpkg/verify.c
+@@ -441,13 +441,13 @@ averify(int fix, char *ftype, char *path, struct ainfo *ainfo)
+ 
+ 	/* AMIX PORT: stage markers (v14: SIGSEGV inside this function) */
+ #define	AV_MARK(what)						\
+-	if (getenv("DS_DEBUG") != NULL) {			\
++	if (dsreg(DR_CGR)) {			\
+ 		(void) fprintf(stderr,				\
+ 		    "DS_DEBUG(averify): %s\n", (what));	\
+ 		(void) fflush(stderr);				\
+ 	}
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_CGR)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(averify): enter path=<%s> ftype=%c fix=%d\n",
+ 		    path ? path : "(null)", *ftype, fix);
+@@ -834,7 +834,7 @@ averify(int fix, char *ftype, char *path, struct ainfo *ainfo)
+ 	 * prints); this shows whether ainfo->group is a clean "bin\0..."
+ 	 * or a non-terminated string that cgrnam's strlen() runs off.
+ 	 */
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_CGR)) {
+ 		int	di, nulat;
+ 
+ 		(void) fprintf(stderr,
+diff --git a/heirloom/libpkg/vfpops.c b/heirloom/libpkg/vfpops.c
+index a9c408b..95d34ca 100644
+--- a/heirloom/libpkg/vfpops.c
++++ b/heirloom/libpkg/vfpops.c
+@@ -301,7 +301,7 @@ vfpOpen(VFP_T **r_vfp, char *a_path, char *a_mode, VFPFLAGS_T a_flags)
+ 
+ 	/* if map failed (or not allowed) attempt malloc (if allowed) */
+ 
+-	if ((getenv("DS_DEBUG") != NULL) && (vfp->_vfpStart != MAP_FAILED)) {
++	if ((dsreg(DR_LOCK)) && (vfp->_vfpStart != MAP_FAILED)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(vfpOpen): <%s> backed by MMAP size=%lu\n",
+ 		    a_path, (unsigned long)vfp->_vfpSize);
+@@ -325,7 +325,7 @@ vfpOpen(VFP_T **r_vfp, char *a_path, char *a_mode, VFPFLAGS_T a_flags)
+ 		/* allocate buffer to hold file data */
+ 
+ 		vfp->_vfpStart = memalign((size_t)pagesize, vfp->_vfpSize);
+-		if ((getenv("DS_DEBUG") != NULL) &&
++		if ((dsreg(DR_LOCK)) &&
+ 		    (vfp->_vfpStart != (char *)NULL)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(vfpOpen): <%s> backed by MALLOC "
+diff --git a/heirloom/pkgcmds/pkginstall/main.c b/heirloom/pkgcmds/pkginstall/main.c
+index 4f02dd1..df928da 100644
+--- a/heirloom/pkgcmds/pkginstall/main.c
++++ b/heirloom/pkgcmds/pkginstall/main.c
+@@ -306,7 +306,7 @@ main(int argc, char *argv[])
+ 	 * is missing from a DS_DEBUG run, the process died BEFORE main()
+ 	 * (exec/loader level: fd exhaustion, environment size, ld.so).
+ 	 */
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MAIN)) {			/* AMIX PORT: caches env before reset */
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(%s.main): alive pid=%ld argc=%d\n",
+ 		    "pkginstall", (long)getpid(), argc);
+diff --git a/heirloom/pkgcmds/pkginstall/quit.c b/heirloom/pkgcmds/pkginstall/quit.c
+index 96d3696..c61334f 100644
+--- a/heirloom/pkgcmds/pkginstall/quit.c
++++ b/heirloom/pkgcmds/pkginstall/quit.c
+@@ -249,7 +249,7 @@ quit(int retcode)
+ 	char		pkginfo_path[PATH_MAX];
+ 
+ 	/* AMIX PORT: DS_DEBUG - identify quit code and process */
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MAIN)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(%s.quit): retcode=%d warnflag=%d "
+ 		    "failflag=%d pid=%ld errno=%d\n",
+diff --git a/heirloom/pkgcmds/pkginstall/sortmap.c b/heirloom/pkgcmds/pkginstall/sortmap.c
+index 1845c0f..ec3dea8 100644
+--- a/heirloom/pkgcmds/pkginstall/sortmap.c
++++ b/heirloom/pkgcmds/pkginstall/sortmap.c
+@@ -98,7 +98,7 @@ sortmap(struct cfextra ***extlist, VFP_T *pkgmapVfp,
+ 
+ 	vfpRewind(pkgmapVfp);		/* rewind input file */
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MERG)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(sortmap): calling pkgobjmap\n");
+ 		(void) fflush(stderr);
+@@ -106,7 +106,7 @@ sortmap(struct cfextra ***extlist, VFP_T *pkgmapVfp,
+ 
+ 	*extlist = pkgobjmap(pkgmapVfp, 2, NULL);
+ 
+-	if (getenv("DS_DEBUG") != NULL) {
++	if (dsreg(DR_MERG)) {
+ 		(void) fprintf(stderr,
+ 		    "DS_DEBUG(sortmap): pkgobjmap done (%s)\n",
+ 		    *extlist ? "ok" : "NULL");
+@@ -145,7 +145,7 @@ sortmap(struct cfextra ***extlist, VFP_T *pkgmapVfp,
+ 
+ 		vfpTruncate(tmpvfp);
+ 
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_MERG)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(sortmap): calling pkgdbmerg "
+ 			    "nparts=%d\n", nparts);
+@@ -154,7 +154,7 @@ sortmap(struct cfextra ***extlist, VFP_T *pkgmapVfp,
+ 
+ 		dbchg = pkgdbmerg(mapvfp, tmpvfp, *extlist, 60);
+ 
+-		if (getenv("DS_DEBUG") != NULL) {
++		if (dsreg(DR_MERG)) {
+ 			(void) fprintf(stderr,
+ 			    "DS_DEBUG(sortmap): pkgdbmerg done dbchg=%d\n",
+ 			    dbchg);
