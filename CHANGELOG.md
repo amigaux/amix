@@ -1,3 +1,9 @@
+## 2026-10-14 — batch 0 published to pkg.amigaux.org (6724e96, 871d605)
+
+Catalog db94282c5eaae7d8fb0b07230331eacd, 41 entries: the seven add-ons moved -1 → -2 (strict-060 re-mints) and the -1
+files were removed from the server (D-2); APKGENG 1.12.0 → 1.12.3, APKG 0.2.2 → 0.2.3 (the 1.0 media versions). Older
+APKG/APKGENG files stay served, decatalogued. Proven on a true LC060 cell first (7/7 and the upgrade path).
+
 ## 2026-10-13 — initial public release (github.com/jusii/amix-packagemanager)
 
 Published from a fresh root: apkg, the Heirloom-based SVR4 package tools and the repository tooling as they
