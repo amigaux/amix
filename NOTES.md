@@ -1,22 +1,29 @@
 # amix-packagemanager — lab notes
 
-## 2026-10-14 — PUBLISH LOG: batch 0 staged, dry run clean (NOT published)
+## 2026-10-14 — PUBLISH LOG: batch 0 is live (7 add-ons -> -2, APKGENG 1.12.3, APKG 0.2.3; 41 -> 41)
 
-Root `build/publish-20261014-batch0/` (gitignored): the seven `-2` add-on re-mints
-(amix-packages `build/staging-060-20261005/extra/`, md5s = its MANIFEST) plus APKGENG 1.12.3
-(`88a177e5…`) and APKG 0.2.3 (`db67f4ba…`), both md5-equal to the 1.0 public 060 ISO's catalog
-rows. Evidence the nine pass: workspace `tmp/2026-10-14-addons060-lc060/REPORT.md`.
+**Published 2026-10-14, ~15:50 EEST** by the orchestrator. Root `build/publish-20261014-batch0/` (gitignored):
+the seven `-2` add-on re-mints (amix-packages `build/staging-060-20261005/extra/`, md5s = its MANIFEST)
+plus APKGENG 1.12.3 (`88a177e5…`) and APKG 0.2.3 (`db67f4ba…`), both md5-equal to the 1.0 public 060
+ISO's catalog rows. Evidence the nine pass: workspace `tmp/2026-10-14-addons060-lc060/REPORT.md`.
 
-- Staged by `rsync -a` (read-only) from the host while it served `203085471a251fe5e8e7744adccaed5d`;
-  all 41 catalogued files matched md5+size. Host mtimes came along, so no `touch -r` was needed.
-- The seven `-1` files are **deleted** at this publish (D-2, owner 2026-10-05: "REMOVED from the
-  server at release, not kept downloadable"). APKG 0.1/0.2/0.2.2, APKGENG 1.12.0 and
-  grep 2.5.1a stay served, decatalogued (moved aside for `gen-catalog.py`, then back).
-- Catalog `db94282c5eaae7d8fb0b07230331eacd`, 41 entries, 9 lines changed; reproduced in a
-  symlinked scratch root. Gates: `--scan-private` OK (46), licence gate rc 0, 33 UNKNOWN (stripped).
-- `publish.sh --dry-run`: 7 `deleting` lines, the 9 new `.pkg`, `catalog`, `catalog.md5`, dir lines.
+| catalog | md5 | entries |
+|---|---|---|
+| before (batch-2) | `203085471a251fe5e8e7744adccaed5d` | 41 |
+| **after batch 0** | **`db94282c5eaae7d8fb0b07230331eacd`** | **41** |
 
-The real command is `PUBLISH-CMD.txt` in the root (owner's go only). Update this section when it runs.
+Publish run: "publish: OK -- served catalog matches staging (md5 db94282c…)". Diff against the
+batch-2 catalog, 9 lines: apkg, apkgeng, acompat, gzip, less, make, patch, tar, zlib.
+
+- Seven add-ons move `-1` -> `-2`; the seven `-1` files are **deleted** from the host (D-2, owner
+  2026-10-05: "REMOVED from the server at release, not kept downloadable"); verified 404.
+- APKGENG 1.12.0 -> 1.12.3, APKG 0.2.2 -> 0.2.3; `base/APKGENG-1.12.3.pkg` and `base/APKG-0.2.3.pkg`
+  serve 200 at their staged sizes.
+- APKG 0.1/0.2/0.2.2, APKGENG 1.12.0 and grep 2.5.1a stay served, decatalogued (moved aside for
+  `gen-catalog.py`, then back).
+- Staged by `rsync -a` (read-only) from the host while it served `203085471a25…`; gates:
+  `--scan-private` OK (46), licence gate rc 0, 33 UNKNOWN (stripped). Catalog reproduced in a
+  symlinked scratch root. `DO-NOT-REGENERATE.txt` in the root: it stays unregenerable.
 
 ## 2026-10-06 — APKGENG 1.12.3: plain pkgchk is clean after a keep; installf refuses spaced paths (minted, NOT published)
 
