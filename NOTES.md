@@ -1,5 +1,23 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-14 — PUBLISH LOG: batch 0 staged, dry run clean (NOT published)
+
+Root `build/publish-20261014-batch0/` (gitignored): the seven `-2` add-on re-mints
+(amix-packages `build/staging-060-20261005/extra/`, md5s = its MANIFEST) plus APKGENG 1.12.3
+(`88a177e5…`) and APKG 0.2.3 (`db67f4ba…`), both md5-equal to the 1.0 public 060 ISO's catalog
+rows. Evidence the nine pass: workspace `tmp/2026-10-14-addons060-lc060/REPORT.md`.
+
+- Staged by `rsync -a` (read-only) from the host while it served `203085471a251fe5e8e7744adccaed5d`;
+  all 41 catalogued files matched md5+size. Host mtimes came along, so no `touch -r` was needed.
+- The seven `-1` files are **deleted** at this publish (D-2, owner 2026-10-05: "REMOVED from the
+  server at release, not kept downloadable"). APKG 0.1/0.2/0.2.2, APKGENG 1.12.0 and
+  grep 2.5.1a stay served, decatalogued (moved aside for `gen-catalog.py`, then back).
+- Catalog `db94282c5eaae7d8fb0b07230331eacd`, 41 entries, 9 lines changed; reproduced in a
+  symlinked scratch root. Gates: `--scan-private` OK (46), licence gate rc 0, 33 UNKNOWN (stripped).
+- `publish.sh --dry-run`: 7 `deleting` lines, the 9 new `.pkg`, `catalog`, `catalog.md5`, dir lines.
+
+The real command is `PUBLISH-CMD.txt` in the root (owner's go only). Update this section when it runs.
+
 ## 2026-10-06 — APKGENG 1.12.3: plain pkgchk is clean after a keep; installf refuses spaced paths (minted, NOT published)
 
 **Decision** ("make clean now"): a plain `pkgchk APKG` must be rc 0 after
