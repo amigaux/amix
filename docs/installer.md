@@ -260,6 +260,19 @@ An infeasible cell stays **in** the table with its reason. A cell that is merely
 absent reads as "we covered everything we could", which is how coverage quietly
 shrinks.
 
+**The 68060 cells run on an emulated LC060.** Every 060 rig
+(`configs/accept-z3660-060-*.uae`, `configs/boot-z3660-060-*.uae`) pins
+`cpu_model=68060`, `fpu_model=0` (no FPU), `cpu_no_unimplemented=true`,
+`fpu_no_unimplemented=true` (it matters only if a rig adds an FPU) and `cachesize=0`.
+Amiberry clears both knobs under JIT. The integer knob makes the CPU take vector 61 for
+the forms a real 68060 leaves to software: 64-bit `mul.l`/`div.l`, `movep`,
+`cmp2`/`chk2` and `cas2`. Without the knob they run natively, and a binary that needs
+them passes in emulation and dies on metal. On 2026-10-14 this was checked from inside
+the guest:
+- the 1.0 kernel's ISP counter moves by the probe's 100 forms;
+- a pre-r6 kernel kills the 9 forms it does not emulate;
+- floating point traps into the kernel's FPU emulator.
+
 ★ **Three cells run against a 512 MB target, and that is arithmetic, not a second
 rig.** The canonical bench target is 100 MB, whose stock plan gives a **79 MB
 root**. The catalog's own `#isize` block says otherwise for three of the five
