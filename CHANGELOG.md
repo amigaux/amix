@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-14 — the 68060 matrix cells are an emulated LC060 (f1871f5)
+
+docs/installer.md defines the 060 cells as no FPU plus trapping of unimplemented integer instructions, proven live in the
+guest, and why it matters for the add-on packages.
+
 ## 1.0 — 2026-10-13 (initial public release)
 
 The source of the amigaux 1.0 install media for Amiga UNIX (Amix) 2.1, release candidate r6e (accepted
