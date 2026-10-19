@@ -1,5 +1,63 @@
 # NOTES — amix-z3660net
 
+## RX backpressure (2026-10-19, T-47 decision D1)
+
+**Rule: never free a received frame because an upstream queue is full.**
+
+**The defect.** `toss_packet_up_stream` freed a frame when `canput()` on the
+upstream queue failed (`couldnt_put`), after the drain had already released the
+firmware slot, so the frame was gone. The drain runs at IPL 4, where IP's service
+procedure cannot run, so every frame past IP's queue high-water mark in one drain
+was lost. On metal (T-47, A4000D, real 060) the firmware and the driver had every
+frame while IP got 329 of 2000 datagrams at 1600/s, and the 4 MiB TCP push ran at
+22–31 KB/s with 319–372 retransmits.
+
+**The shape now.**
+- The drain copies the 14-byte header (16, to keep the payload copy aligned)
+  and takes the verdict before it releases the slot: `z3660eth_rx_want` gives
+  the streams that want the frame and those whose `canput()` passes.
+- A wanting stream is full: the drain stops and leaves the frame and everything
+  behind it in the firmware backlog. The failed `canput()` set `QWANTW` on the
+  upstream queue; when that queue drains, STREAMS back-enables our read queue
+  and the new read service procedure `z3660ethrsrv` resumes the drain, usually
+  in the same tick (queuerun runs on the way back to user mode). The next poll
+  tick is the fallback.
+- A frame nobody wants is released without the payload copy.
+
+**Why the service procedure and not `putq` on the read queue.** Queuing on our
+own read queue would still release the slot early: the frame then lives in an
+mblk, and a full read queue is again a choice between freeing and stopping. Leaving
+it in the firmware backlog costs no memory and no copy, and the backlog is where the
+firmware already keeps unread frames. The service procedure exists only to be
+back-enabled; nothing is ever queued on the read side.
+
+**Bounds** (`z3660eth.h`). The firmware backlog is not a ring: frames are stored at
+slot 0, 1, 2, … of a round, and the round restarts at slot 0 only when the driver has
+caught up (`ethernet.c` `ethernet_receive_frame`). Slot 32 is the TX staging frame
+(`0x07EE0000`), and at 64 the firmware discards the whole backlog. A hold keeps the
+round open, so it is bounded:
+- `Z3660ETH_RX_HOLD_SLOTS` 24: once the round reaches slot 24 (one header read at
+  slot 23, serial in sequence with the head), the drain catches up to empty
+  instead of holding, delivering to every stream that can take a frame and
+  dropping it for the rest (`couldnt_put`). That closes the round before it
+  reaches the TX frame.
+- `Z3660ETH_RX_HOLD_TICKS` 30 (HZ/2): a frame held that long means a stuck
+  stream, not a slow one; it is released the same way.
+
+`couldnt_put` counts only those forced drops now. The kmem counters
+`z3660eth_rx_holds`, `z3660eth_rx_resumed`, `z3660eth_rx_force_slots` and
+`z3660eth_rx_force_ticks` say which path ran; the GET_STATUS struct is unchanged
+(it is the `zen` ABI).
+
+**Masking.** `z3660ethrsrv` runs from queuerun, outside the callout, so it holds
+`splz3660eth()` (IPL 4) across the drain, exactly what the callout does: the two
+drainers never interleave on the ring cursor, `last_serial` or `rxbuff`.
+
+**Not changed:** the firmware protocol, the poll period, the TX path. The ACK
+timing of T-47 H4 (ACKs leave from inside the drain, so the sender's next burst
+waits for a poll) is unchanged; resuming from the service procedure only adds
+drains between ticks.
+
 ## Probe failure leaked kernel VA (2026-09-27, AB-04)
 
 **Rule: map, probe, free on failure.** Anything `z3660eth_map()` maps before
@@ -79,8 +137,8 @@ a race needs a base-level sequence that the callout can land inside.
 - The mask on the `tx_busy = 0` release. That is a single aligned store, and `tx_busy` is now `volatile`, so it stays after the TX-result load (object: `movel %a0@(400),%d0` then `clrl %a5@(24)`).
 
 **Deliberately unmasked.** Each item below says why it is safe without a mask.
-- **The RX ring.** This is the `ZZ_ETH_RX_ADDR` cursor, the `last_serial` head, the `ZZ_ETH_RX` strobe and the static `rxbuff`. Only the callout touches them, at IPL 4. A future level-2 ISR cannot interleave with the callout in either direction: the clock is level 2, and the callout masks level 2. The drain loop already runs at IPL 4 as a callout, so a mask would add nothing.
-- **Hand-off to the stream.** `canput`/`allocb`/`putnext` come from the callout, and STREAMS protects its own queues with `splstr`.
+- **The RX ring.** This is the `ZZ_ETH_RX_ADDR` cursor, the `last_serial` head, the `ZZ_ETH_RX` strobe, the hold state and the static `rxbuff`. The callout touches them at IPL 4; since 2026-10-19 the read service procedure does too, and it masks to IPL 4 around the drain (see "RX backpressure"). A future level-2 ISR cannot interleave with the callout in either direction: the clock is level 2, and the callout masks level 2. The drain loop already runs at IPL 4 as a callout, so a mask there would add nothing.
+- **Hand-off to the stream.** `canput`/`allocb`/`putnext` come from the drain at IPL 4, and STREAMS protects its own queues with `splstr`.
 - **`close`.** It stores `zp->q = 0` first as a single aligned store. The stop-poll sequence `poll_running = 0; untimeout(poll_id)` cannot be split in a harmful way: a tick between the two stores does not re-arm, and `untimeout` of an already-fired id is a no-op.
 - **`DL_BIND`/`DL_UNBIND`.** The demux reads `sap` (a single store) and never reads `state`.
 - **Known and accepted: reordering in `wsrv`.** `wsrv` can `getq` frame A, and a tick can then send the queue's frame B before `wsrv` claims `txwin`. Closing that would mean masking across the TX. DLPI connectionless service makes no ordering promise, and IP tolerates reordering.
