@@ -1093,17 +1093,25 @@ z3660eth_info_t *info;
 unsigned long off;
 unsigned short serial;
 {
-    unsigned long head = (off - ZZ_RXBACKLOG_OFF) / ZZ_FRAME_SIZE;
-    unsigned long lim = Z3660ETH_RX_HOLD_SLOTS - 1;
+    /*
+     * Byte offsets, and the slot distance counted by stepping: a divide or
+     * shift by 11 (the 2048-byte slot stride) trips the 060 port's page-
+     * geometry gate, which cannot tell a slot stride from a page size.
+     */
+    unsigned long o = off - ZZ_RXBACKLOG_OFF;
+    unsigned long lim = (Z3660ETH_RX_HOLD_SLOTS - 1) * ZZ_FRAME_SIZE;
+    unsigned short ahead = 0;
     volatile unsigned char *p;
     unsigned short s;
 
-    if (head >= lim)
+    if (o >= lim)
 	return 1;
-    p = info->frame + lim * ZZ_FRAME_SIZE;
+    for (; o < lim; o += ZZ_FRAME_SIZE)
+	ahead++;			/* at most Z3660ETH_RX_HOLD_SLOTS - 1 */
+    p = info->frame + lim;
     z3660eth_inval((unsigned long)p, (unsigned long)ZZ_RX_FRAME_PAD);
     s = (p[2] << 8) | p[3];
-    return s == (unsigned short)(serial + (lim - head));
+    return s == (unsigned short)(serial + ahead);
 }
 
 static void
