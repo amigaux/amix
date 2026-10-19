@@ -23,7 +23,9 @@
  * RX delivery: the firmware raises the receive interrupt as Amiga INT6/EXTER,
  * for which Amix has NO driver hook (only int2_tbl, walked at level 2).  So this
  * driver DRAINS the backlog from a clock-level timeout() poll callout by default
- * (z3660eth_poll -> z3660eth_drain).  z3660ethintr() is provided for a future
+ * (z3660eth_poll -> z3660eth_drain), and from the read service procedure when
+ * a full upstream queue held a frame in the backlog (RX backpressure, at
+ * z3660eth_drain).  z3660ethintr() is provided for a future
  * interrupt-driven path (int2_tbl via board-mod, or a p6int/int6_tbl change) but
  * is not wired into kernel.c.  TX is synchronous and needs no interrupt.
  *
@@ -99,7 +101,10 @@ static void z3660eth_poll();
 static void z3660eth_drain();
 static void z3660eth_tx_drain();
 static void toss_packet_up_stream();
+static void z3660eth_rx_want();
+static int  z3660eth_rx_backlog_full();
 static int  z3660ethopen(), z3660ethclose(), z3660ethwput(), z3660ethwsrv();
+static int  z3660ethrsrv();
 static void z3660ethioctl(), z3660eth_ioc_nak();
 static int  z3660eth_ioc_arg();
 static int  z3660ethproto(), z3660ethxmit();
@@ -114,7 +119,7 @@ static struct module_info z3660eth_minfo =
 
 static struct qinit z3660ethrinit =
 {
-    NULL, NULL, z3660ethopen, z3660ethclose, NULL, &z3660eth_minfo, NULL,
+    NULL, z3660ethrsrv, z3660ethopen, z3660ethclose, NULL, &z3660eth_minfo, NULL,
 };
 
 static struct qinit z3660ethwinit =
@@ -149,6 +154,23 @@ unsigned char z3660eth_direct_map;	/* 1 = section-0 identity, 0 = sptalloc'd */
 long z3660eth_reprobe;
 unsigned long z3660eth_map_fails;	/* probes that ended in a failure verdict */
 unsigned long z3660eth_spt_freed;	/* kernel-VA pages returned by sptfree() */
+
+/*
+ * RX backpressure counters (z3660eth_drain), kmem-readable; the status struct
+ * is the GET_STATUS ABI and stays as it is.
+ *   rx_holds        drains that stopped with a frame left in the ring
+ *   rx_resumed      drains run by the read service procedure (back-enabled)
+ *   rx_force_slots  frames released past Z3660ETH_RX_HOLD_SLOTS
+ *   rx_force_ticks  frames released past Z3660ETH_RX_HOLD_TICKS
+ * A forced frame still goes to every stream that can take it; each stream that
+ * cannot is counted in couldnt_put, which has no other source now.
+ */
+unsigned long z3660eth_rx_holds, z3660eth_rx_resumed;
+unsigned long z3660eth_rx_force_slots, z3660eth_rx_force_ticks;
+
+static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+};
 
 #define WRLONG(base,off,val) (*(volatile unsigned long *)((base) + (off)) = (unsigned long)(val))
 #define RDLONG(base,off)     (*(volatile unsigned long *)((base) + (off)))
@@ -711,6 +733,7 @@ int board_index;
     }
 
     info->last_serial = 0;		/* firmware's first serial is 1 */
+    info->rx_held = 0;
     info->tx_busy = 0;
 
     bzero((caddr_t)&board->z3660eth_status, sizeof(board->z3660eth_status));
@@ -1000,8 +1023,89 @@ mblk_t *mp;
 /* ----------------------------------------------------------------------------
  * RX backlog drain.  Re-reads ZZ_ETH_RX_ADDR every iteration (the cursor only
  * advances on the ZZ_ETH_RX strobe), breaks on the serial sentinel, strobes to
- * free each slot.  Callable from the poll callout OR a future ISR.
+ * free each slot.  Callable from the poll callout, the read service procedure
+ * (masked to the callout's IPL 4 there) OR a future ISR.
+ *
+ * BACKPRESSURE.  A frame is never freed because an upstream queue is full.  The
+ * verdict (z3660eth_rx_want) comes from the header alone, BEFORE the slot is
+ * released: if a stream that wants the frame cannot take it now, the drain stops
+ * and leaves the frame, and everything behind it, in the firmware backlog.  The
+ * failed canput() marks that upstream queue QWANTW; when it drains, STREAMS
+ * back-enables our read queue and z3660ethrsrv resumes here, usually within the
+ * same tick, and otherwise the next poll tick does.  Freeing the frame instead
+ * (the old shape) lost every frame past the upstream queue's high-water mark in
+ * one drain: on metal 4 in 5 datagrams at 1600/s and the TCP push's retransmits.
+ *
+ * The hold is bounded (z3660eth.h, Z3660ETH_RX_HOLD_*): past either guard the
+ * frame goes to every stream that can take it and is dropped for the rest
+ * (couldnt_put), so a stuck stream cannot wedge the interface and the firmware
+ * backlog never reaches the TX staging frame or its whole-backlog discard
+ * because of a hold.
  * ------------------------------------------------------------------------- */
+
+/*
+ * Which streams want this frame -- the same demux as toss_packet_up_stream --
+ * and which of them can take it now.  Bit j stands for stream j.  canput() on a
+ * full queue also sets QWANTW there, which is what back-enables z3660ethrsrv.
+ * Reads only the header (`packet' holds Z3660ETH_RX_PEEK bytes at this point).
+ */
+static void
+z3660eth_rx_want(board_index, packet, wantp, readyp)
+int board_index;
+unsigned char *packet;
+int *wantp, *readyp;
+{
+    z3660eth_board_t *board = &z3660eth_board[board_index];
+    z3660eth_t *zp = board->z3660eth;
+    ether_header_t *eh = (ether_header_t *)packet;
+    int j, want = 0, ready = 0;
+
+    for (j = 0; j < Z3660ETH_MAXDEV; j++, zp++) {
+	if (!zp->q)
+	    continue;
+	if (!(zp->flags & Z3660ETH_RAW_DATA)) {
+	    if (zp->sap != eh->ether_type)
+		continue;
+	    if (bcmp((char *)eh->ether_dhost,
+		     (char *)board->z3660eth_info.paddress, ETH_ADDRESS_SIZE) &&
+		bcmp((char *)eh->ether_dhost,
+		     (char *)z3660eth_bcast, ETH_ADDRESS_SIZE))
+		continue;
+	}
+	want |= 1 << j;
+	if (canput(zp->q->q_next))
+	    ready |= 1 << j;
+    }
+    *wantp = want;
+    *readyp = ready;
+}
+
+/*
+ * Has the firmware backlog reached Z3660ETH_RX_HOLD_SLOTS slots?  `off' is the
+ * cursor (the held frame's slot) and `serial' its serial.  The backlog is linear
+ * and restarts at slot 0 only when the driver has caught up, so slot k of this
+ * round carries serial (serial + k - head); a slot left over from an earlier
+ * round carries an older one.  One header read at the limit slot answers it.
+ */
+static int
+z3660eth_rx_backlog_full(info, off, serial)
+z3660eth_info_t *info;
+unsigned long off;
+unsigned short serial;
+{
+    unsigned long head = (off - ZZ_RXBACKLOG_OFF) / ZZ_FRAME_SIZE;
+    unsigned long lim = Z3660ETH_RX_HOLD_SLOTS - 1;
+    volatile unsigned char *p;
+    unsigned short s;
+
+    if (head >= lim)
+	return 1;
+    p = info->frame + lim * ZZ_FRAME_SIZE;
+    z3660eth_inval((unsigned long)p, (unsigned long)ZZ_RX_FRAME_PAD);
+    s = (p[2] << 8) | p[3];
+    return s == (unsigned short)(serial + (lim - head));
+}
+
 static void
 z3660eth_drain(board_index)
 int board_index;
@@ -1012,7 +1116,7 @@ int board_index;
     volatile unsigned char *slot;
     unsigned long off;
     unsigned short serial;
-    int len, loop = 0;
+    int len, loop = 0, want, ready;
 
     if (info->regs == 0)
 	return;
@@ -1040,8 +1144,10 @@ int board_index;
 	 */
 	z3660eth_inval((unsigned long)slot, (unsigned long)ZZ_RX_FRAME_PAD);
 	serial = (slot[2] << 8) | slot[3];
-	if (serial == info->last_serial)
-	    break;			/* ring drained */
+	if (serial == info->last_serial) {
+	    info->rx_held = 0;		/* ring drained (a held frame, if any, */
+	    break;			/* went with a firmware backlog reset) */
+	}
 
 	len = (slot[0] << 8) | slot[1];
 	board->z3660eth_status.last_serial = serial;
@@ -1052,6 +1158,7 @@ int board_index;
 	    board->z3660eth_status.rx_errors++;
 	    board->ifstats.ifs_ierrors++;
 	    info->last_serial = serial;
+	    info->rx_held = 0;
 	    WRLONG(info->regs, ZZ_ETH_RX, 1);
 	    z3660eth_sync();
 	    continue;				/* payload never read: no invalidate */
@@ -1063,11 +1170,37 @@ int board_index;
 	 * and the slot's unused tail -- both device-written, never CPU-written,
 	 * so the invalidate can discard nothing.  rxbuff[] and the mblk it feeds
 	 * are NOT maintained: single alias, CPU only, never seen by the device.
+	 * The header comes first, for the verdict; the rest only if a stream
+	 * takes the frame (a frame nobody wants is never copied in full).
 	 */
 	z3660eth_inval((unsigned long)(slot + ZZ_RX_FRAME_PAD), (unsigned long)len);
-	bcopy((caddr_t)(slot + ZZ_RX_FRAME_PAD), (caddr_t)rxbuff, len);
+	bcopy((caddr_t)(slot + ZZ_RX_FRAME_PAD), (caddr_t)rxbuff,
+	      min(len, Z3660ETH_RX_PEEK));
+	z3660eth_rx_want(board_index, rxbuff, &want, &ready);
+
+	if (want & ~ready) {
+	    /* a stream that wants it is full: hold, unless a guard has tripped */
+	    if (!info->rx_held || info->rx_hold_serial != serial) {
+		info->rx_held = 1;
+		info->rx_hold_serial = serial;
+		info->rx_hold_since = (long)lbolt;
+	    }
+	    if (z3660eth_rx_backlog_full(info, off, serial))
+		z3660eth_rx_force_slots++;
+	    else if ((long)lbolt - info->rx_hold_since >= Z3660ETH_RX_HOLD_TICKS)
+		z3660eth_rx_force_ticks++;
+	    else {
+		z3660eth_rx_holds++;
+		break;				/* leave it in the ring */
+	    }
+	}
+
+	if ((want & ready) && len > Z3660ETH_RX_PEEK)
+	    bcopy((caddr_t)(slot + ZZ_RX_FRAME_PAD + Z3660ETH_RX_PEEK),
+		  (caddr_t)(rxbuff + Z3660ETH_RX_PEEK), len - Z3660ETH_RX_PEEK);
 
 	info->last_serial = serial;
+	info->rx_held = 0;
 	WRLONG(info->regs, ZZ_ETH_RX, 1);	/* advance/free the slot */
 	z3660eth_sync();		/* next cursor read must not pass the strobe */
 
@@ -1080,7 +1213,7 @@ int board_index;
 	 * a one-frame probe shows trailing FCS, subtract ETH_CRC_LEN here.  The
 	 * scoping verdict is "do NOT subtract by default" -- delivered as-is.
 	 */
-	toss_packet_up_stream(rxbuff, board_index, len);
+	toss_packet_up_stream(rxbuff, board_index, len, ready);
     }
 }
 
@@ -1102,6 +1235,36 @@ caddr_t arg;
     }
     if (info->poll_running)
 	info->poll_id = timeout(z3660eth_poll, arg, Z3660ETH_POLL_TICKS);
+}
+
+/*
+ * Read service procedure.  Nothing is ever queued on the read side: STREAMS
+ * back-enables this queue when an upstream queue that refused a frame (the
+ * canput in z3660eth_rx_want) has drained below its low-water mark, and this
+ * resumes the drain then, instead of a tick later.  It runs from queuerun,
+ * outside the poll callout, so the drain is masked here to the callout's own
+ * IPL 4: the two drainers never interleave on the ring, rxbuff or last_serial.
+ * Holding IPL 4 across the drain is what the callout does already.
+ */
+static int
+z3660ethrsrv(q)
+queue_t *q;
+{
+    z3660eth_t *zp = (z3660eth_t *)q->q_ptr;
+    z3660eth_board_t *board;
+    int s;
+
+    if (zp == NULL || panicstr)
+	return 0;
+    board = &z3660eth_board[zp->board_index];
+    s = splz3660eth();
+    if (board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING &&
+	board->z3660eth_info.rx_held) {
+	z3660eth_rx_resumed++;
+	z3660eth_drain(zp->board_index);
+    }
+    splx(s);
+    return 0;
 }
 
 /*
@@ -1141,9 +1304,10 @@ int board_index;
  * kernel.c by default -- AMIX has no level-6 driver hook; see Q1).  Polls the
  * firmware INT_STATUS, acks ETH, and drains.
  *
- * WARNING: shares the static rxbuff in z3660eth_drain with the poll callout.  If
- * this ISR is ever registered (int2_tbl via board-mod, or an int6_tbl change),
- * DISABLE the poll first -- do not run both drainers concurrently.
+ * WARNING: shares the static rxbuff in z3660eth_drain with the poll callout and
+ * z3660ethrsrv.  If this ISR is ever registered (int2_tbl via board-mod, or an
+ * int6_tbl change), DISABLE the poll first and check that z3660ethrsrv's mask
+ * still covers its level -- do not run two drainers concurrently.
  */
 void
 z3660ethintr()
@@ -1336,6 +1500,12 @@ mblk_t *mp;
  * (header + payload); z3660eth_drain has already range-checked it to
  * [ETH_HEADER_SIZE, MAX_BUFFER_LENGTH], so `length` below is in [0, 1504].
  *
+ * `ready` is z3660eth_rx_want's verdict, taken before the slot was released:
+ * bit j set = stream j can take the frame.  The drain releases a frame with a
+ * clear bit for a stream that wants it only past a hold guard, so couldnt_put
+ * counts exactly those.  The payload in `packet` is present only when some
+ * wanting stream is ready; nothing here reads it otherwise.
+ *
  * NO TRAILER DECODE -- deliberately.  The stock aen/hydra ancestor decoded the
  * 4.2BSD trailer encapsulation (ethertype 0x1000..0x1010) here; that arm was
  * inherited verbatim and has been DELETED because it was doubly unsafe:
@@ -1353,18 +1523,15 @@ mblk_t *mp;
  * unchanged.  Do not reintroduce a decode arm.
  * ------------------------------------------------------------------------- */
 static void
-toss_packet_up_stream(packet, board_index, count)
+toss_packet_up_stream(packet, board_index, count, ready)
 char *packet;
-int board_index, count;
+int board_index, count, ready;
 {
     int j, length;
     unsigned short sap;
     z3660eth_board_t *board = &z3660eth_board[board_index];
     z3660eth_info_t *info = &board->z3660eth_info;
     z3660eth_t *zp = board->z3660eth;
-    static unsigned char broadcast_address[6] = {
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    };
     ether_header_t *packet_header = (ether_header_t *)packet;
     int sap_matched = 0;
 
@@ -1382,7 +1549,7 @@ int board_index, count;
 	    continue;
 
 	if (zp->flags & Z3660ETH_RAW_DATA) {
-	    if (canput(zp->q->q_next)) {
+	    if (ready & (1 << j)) {
 		if ((mp = allocb(count, BPRI_MED)) != NULL) {
 		    mp->b_datap->db_type = M_DATA;
 		    bcopy((caddr_t)packet, (caddr_t)mp->b_wptr, count);
@@ -1398,12 +1565,12 @@ int board_index, count;
 	    if (bcmp((char *)packet_header->ether_dhost,
 		     (char *)info->paddress, ETH_ADDRESS_SIZE) &&
 		bcmp((char *)packet_header->ether_dhost,
-		     (char *)broadcast_address, sizeof(broadcast_address))) {
+		     (char *)z3660eth_bcast, sizeof(z3660eth_bcast))) {
 		board->z3660eth_status.rx_not_for_us++;
 		continue;
 	    }
 
-	    if (canput(zp->q->q_next)) {
+	    if (ready & (1 << j)) {
 		if ((mp = allocb(sizeof(union DL_primitives) +
 				 (2 * ETH_ADDRESS_SIZE), BPRI_MED)) != NULL &&
 		    (mp->b_cont = allocb(length, BPRI_MED)) != NULL) {

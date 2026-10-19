@@ -182,6 +182,25 @@ typedef struct ether_header ether_header_t;
 
 #define Z3660ETH_POLL_TICKS	1	/* RX poll period (clock ticks) */
 
+/*
+ * RX backpressure (z3660eth_drain).  A received frame is never freed because
+ * an upstream queue is full: it stays in the firmware backlog and the drain
+ * stops there, to resume from the read service procedure (back-enabled when
+ * the upstream queue drains) or the next poll tick.  Two guards bound the hold,
+ * and only past one of them is a frame dropped for a stream that cannot take
+ * it (couldnt_put):
+ *   HOLD_SLOTS  the firmware backlog is linear and resets only when the driver
+ *               catches up; slot 32 is the TX staging frame and slot 64 makes
+ *               the firmware discard the whole backlog.  Once the backlog
+ *               reaches this many slots the drain catches up instead of holding.
+ *   HOLD_TICKS  a stream that takes nothing for this long is stuck, not slow.
+ * RX_PEEK is the part of a frame copied before the verdict (the ethernet header,
+ * rounded up so the payload copy keeps its alignment).
+ */
+#define Z3660ETH_RX_HOLD_SLOTS	24
+#define Z3660ETH_RX_HOLD_TICKS	(HZ / 2)
+#define Z3660ETH_RX_PEEK	16
+
 #define blklen(bp)		((bp)->b_wptr - (bp)->b_rptr)
 #ifndef DELAY
 #define DELAY(x)		{ int _d = (x) * 100; while (_d--) ; }
@@ -206,6 +225,9 @@ typedef struct
     volatile u_char	*txwin;		/* frame + ZZ_TXWIN_OFF */
     unsigned char	 paddress[6];	/* station MAC */
     unsigned short	 last_serial;	/* RX ring drain cursor (firmware serial) */
+    unsigned short	 rx_hold_serial; /* serial of the frame left in the ring */
+    unsigned char	 rx_held;	/* a frame is held at the ring head */
+    long		 rx_hold_since;	/* lbolt when rx_hold_serial was first held */
     volatile int	 tx_busy;	/* serialises the single txwin */
     int			 poll_id;	/* timeout() id for the RX poll callout */
     int			 poll_running;
