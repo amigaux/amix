@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-21 — RX back-pressure: hold frames in the card's backlog when IP's queue is full (b896afc, 120cab3, 9787f88; review T-47)
+
+The receive service no longer frees a frame that canput() refuses: it leaves the slot in the card's backlog and
+resumes on the next poll once the queue drains. Before, every full IP queue cost an uncounted drop below IP (about
+115 per 4 MiB push on the tower). Kernel-memory counters rx/delivered/couldnt_put/holds/resumed. Backlog slots are
+counted by stepping, never by a constant shift (060 line rule). Metal-proven in the 261021-71/-72 kernels on both
+boxes: push 25–30 → ~350 KB/s together with the port's 16 KB TCP queue-limit patch and the firmware's receive ring.
+
 ## 2026-10-13 — Publication scrub before the first push since August (fb2059e)
 
 README licence section and a new NOTICE carry the Amiga Corporation trademark wording; NOTES marks the AB-04 evidence
