@@ -3198,8 +3198,8 @@ def audit_bootable_source():
             sel = (dp.get("SRC_BOOT2_IDENTITY"), dp.get("BOOTSLICE_BOOT2_IDENTITY"))
             # r6 (D-2): a `*-r6*.profile` rides the RTH1 root-hint loader instead --
             # good_040_rth (040/060) or good_rth (030), contract CANDIDATES -- on the
-            # same keys, by the same one-fact rule. The r7 bench row (Gayle) rides it too.
-            if ".profile" in pf and ("-r6" in pf or "-r7" in pf):
+            # same keys, by the same one-fact rule. The Gayle bench row R7 (-R7row) rides it too.
+            if ".profile" in pf and ("-r6" in pf or "-R7row" in pf):
                 want = ("good_040_rth", "good_040_rth") if dp.get("INSTALL_CPU") in ("040", "060") else None
                 ok30 = sel in ((None, "good_rth"), ("good_rth", "good_rth"))
                 if (want and sel != want) or (not want and not ok30) or dp.get("SRC_BOOT2_SHA256"):

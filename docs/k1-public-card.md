@@ -104,7 +104,7 @@ Metal re-acceptance on both benches follows via the Bench and Z3660 stations.
   in a host selftest. Its CLI cannot change a boot priority in place, and a delete/re-add drops UNIX_Boot's BootBlocks.
   Never use it to write Amix disks. See `docs/amipart-evaluation.md`.
 - `CHAIN_DIR=` profile key: let a profile take the target boot chain from a directory outside `/cdrom/install`
-  (today the bench R7 kit, `profiles/bench-a4000-gayle-r7.profile`, does it with `../../r7/...` paths relative to
+  (today the bench R7 kit, `profiles/bench-a4000-gayle-R7row.profile`, does it with `../../r7/...` paths relative to
   `INST=/cdrom/install`). An install.sh change, so a new disc.
 - **Check every medium kit in the preflight**, before the target is touched (Bench R7, 2026-10-11: `MONSW=34` on a
   disc without `/install/monsw` stopped install.sh about 2 h in; `X11KIT=rtg` without `/install/x11kit` would have
