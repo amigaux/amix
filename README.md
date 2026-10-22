@@ -104,11 +104,11 @@ produced are listed in `docs/releases/1.0.md`.
 
   ```sh
   tools/build-install-iso.sh --profile public-a3000-a4091-r6 --set full \
-      --out work/iso/amix21-install-public-full-r6e-<date>.iso
+      --out work/iso/amix21-install-public-full-r7-<date>.iso
   tools/build-install-iso.sh --profile public-a4000-z3660-060-a4092cd-r6 --set full \
-      --out work/iso/amix21-install-public060-sd-full-r6e-<date>.iso
+      --out work/iso/amix21-install-public060-sd-full-r7-<date>.iso
   tools/build-install-iso.sh --profile public-a4000-z3660-060-a4092cd2-r6 --set full \
-      --out work/iso/amix21-install-public060-a4092root-full-r6e-<date>.iso
+      --out work/iso/amix21-install-public060-a4092root-full-r7-<date>.iso
   ```
 
   `STAGING` and `STATIC` point at the package engine builds (default:

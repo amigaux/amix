@@ -13,7 +13,7 @@ What this is
 The files
     amix_21_boot-universal.adf   the boot floppy
     amix_21_root-ng.adf          the root floppy
-    amix21-install-public-full-r6e-20261010.iso
+    amix21-install-public-full-r7-20261021.iso
         the install CD: set 1 standard (17 packages, with X11), set 2
         everything (30 packages)
     amix-1.0-a3000.uae           emulator config: A3000
