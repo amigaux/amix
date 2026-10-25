@@ -63,11 +63,12 @@ VERSION=$LESS_VERSION
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 704-2 above 704.
 # Package revision by toolchain: the period build is -2 (the 68060 re-mint);
-# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (phase 2 of
-# the userland switch, owner decision D-3 sec 9); pkginfo is retagged in the
-# work copy (amix_pkginfo_retag).
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision (phase 2 of the
+# userland switch, owner decision D-3 sec 9): -3 was -mcpu=68060 (never
+# published; its FPU forms kill make on a 68882), -4 is -m68020-60.  pkginfo
+# is retagged in the work copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=3 ;;
+gcc14) PKGREV=4 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV
