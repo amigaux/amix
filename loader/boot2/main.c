@@ -561,7 +561,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		   (k > 0 ? AXLF_FALLBACK : 0) | ((hdr.flags & AXF_READONLY) ? AXLF_READONLY : 0) |
 		   (menu ? AXLF_MENU : 0);
 	if (sel.devload)
-		con_puts("amix-boot: DEVELOPMENT LOAD: unsigned modules allowed this boot
+		con_puts("amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot
 ");
 	if (sel.safe)
 		con_puts("amix-boot: safe mode
