@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset check and media builds (S2-05, S2-04) (a3a6795, 25b8b60)
+
+kbootset check re-reads every member in the store (inflated where deflated) against the manifest's CRC-32 and SHA-256,
+the boot/demand files under the root, and the default generation against the installed kernel package; never writes,
+exits 1 on a problem (C2-5's second reader). status notes a pending trial, the next-boot request and low free space.
+kbootset media builds a new medium's pristine generation from the packages under -R with every gate run: --disk (raw,
+own core), --floppy (pair, deflated) and --cd (tree, raw) through mkstore's engine compiled into the host kbootset, so
+media and the test tool share one writer. mkstore writes sha256= on every member. Box binary has no media code.
+
 ## 2026-10-26 — kbootset build and the gates (S2-03); M-LD4 bench half (654a324, 831975e)
 
 kbootset build composes the next generation into /stand/gen/<id>/ from the kernel package (C2-3 sidecar) and apkg's
