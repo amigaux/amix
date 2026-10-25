@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — chip-only refusal; contracts C2-2/C2-4 v2; M-LD5 and M-LD8 closed (cba01a4..9b87bef)
+
+boot2 never binds the kernel in chip memory: no fast region, or a kernel larger than the largest one, is L4 with a line
+saying which; the control blocks move into the work area (spec change after freeze 10 §3.2). C2-2 v2: optional pkginst=
+and offset=. C2-4 v2: bootset= read from <target>/etc/default/bootset (absent = auto, unknown = manual); the box form and
+default journal pending S2-06. kbootset gate 1 ignores apkg's <name>.new temporaries and refuses a path named by two records
+(apkg 0.3 review). M-LD5 bench half closed 24/24; M-LD8 closed: inflate 5.5/7.6 s from fast RAM, a deflated floppy reaches
+the kernel prompt in 18 s against the LZW loader's 31 s. 629 host checks; boot2 28 164 B.
+
 ## 2026-10-26 — boot2 runs from fast memory; metal recipes (042a408..50bed35)
 
 boot2's start-up stub copies image + relocation table into a MEMF_FAST block and relocates there; a chip-only machine runs
