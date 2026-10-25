@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-25 — S0 revised after review T-52 (f4d1b1f..026215c)
+
+CD boot written as two options for the owner (RDB-style disc, or a loader started from the disc's AmigaDOS startup);
+boot1 counts loader-trial attempts in a tally block; the loader record gains root and swap selectors (RAM-disk root on
+block major 20, replacing stock ram.c); the kernel loads only modules of the booted manifest, a development override is
+printed at boot; the core tier exports bdevsw/vfssw/nfstype; Z3660 keys corrected to 144b:01; four-card minor encoding and
+the drivers to rebuild listed, board sets of record and the card-number gate defined; our line rebuilds the 040/060 base
+without ufs/s5; the ABI kit publishes the stock headers (built from the pinned sysroot, never tracked); S0 freezes on
+M-NET1a/b, deviation DV-1 recorded.
+
 ## 2026-10-25 — bootstrap and the S0 specification (ce351f8..5cd25a7)
 
 Repository bootstrapped (MIT licence, README, docs layout). S0 specification for Amix 1.1 loadable kernel modules in
