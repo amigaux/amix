@@ -1,8 +1,8 @@
-# The 1.1 disk
+# The 1.1 disk and the upgrade install
 
-amix-dlm `docs/spec/40-generations-and-composer.md` §2 defines it;
-this repository implements it as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`,
-sourced by `install.sh`). Stage-2 work item S2-30.
+amix-dlm `docs/spec/40-generations-and-composer.md` §2, §7 and D-3 §5 define them;
+this repository implements them as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`,
+sourced by `install.sh`) and `INSTALL_UPGRADE=yes`. Stage-2 work items S2-30 and S2-31.
 
 ## The 1.1 disk
 
@@ -50,3 +50,66 @@ The repair path of the install miniroot (`install or repair` → `repair`) mount
 the root. On a 1.1 disk it then offers `status`, `rollback` and `mark-bad`
 through the disk's own `/sbin/kbootset`, using the store named in its
 `/etc/default/bootset`.
+
+## The upgrade install
+
+`INSTALL_UPGRADE=yes` (with `INSTALL_LAYOUT=1.1`) installs over a disk that
+already holds Amix.
+
+### What survives
+
+| What | 1.0 disk (no data slice) | 1.1 disk |
+|---|---|---|
+| the configuration set (below) | saved, restored, put in place at the first boot | the same |
+| `/home` | saved with the configuration and restored into the new `/home` (into s4 when the new disk has one) | on s4: the slice is not touched; on a 1.1 disk without s4: saved like 1.0 |
+| installed packages | no: the medium's set is installed again | no |
+| anything else on the root | no | no |
+| the boot store | re-laid: one new pristine generation | re-written: one new pristine generation |
+
+The configuration set is every file of this list that exists on the old root (proposed for OQ-40.1):
+
+```
+etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
+etc/passwd etc/shadow etc/group etc/default/login
+etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
+etc/rc2.d/S99zen etc/apkg.conf
+```
+
+Password entries are restored as they were, aging fields included (the
+clock-plausibility rule of spec 40 §7 is not implemented).
+
+### How
+
+1. **Capture**, before the first write. The old root is mounted read-only
+   (ufs, else s5) and saved by that system's own tools: `chroot /mnt`, `find`,
+   `cpio -oc` and `du`.
+   - The archive (relative names) goes to the start of the old swap slice.
+   - A header `AMIXUPG1 <blocks> <sum -r> <home y|n>` goes in that slice's last block.
+   - Each configuration file's `sum -r` is noted.
+   - `/home` that does not fit in the swap slice (less 1 MiB) stops the install,
+     unless `UPGRADE_DROP_HOME=yes`.
+   - The console says what is not kept.
+2. **Re-lay** a 1.0 disk to the 1.1 layout. The old swap slice must lie clear
+   of the new root, swap and data slices, which is checked before the first
+   write; only the new store may cover it.
+
+   A 1.1 disk keeps its RDB: s1 is re-made and s4 kept. Its s2 is both the stash
+   and the swap, so no swap is added until the restore.
+3. **Install** the base set as usual.
+4. **Restore**, before the store is written:
+   - the archive is read through the whole-disk node at the old slice's block,
+     and must give back its `sum -r`;
+   - `/home` is extracted into place;
+   - the configuration goes to `/var/adm/upgrade/cfg`, and every file must
+     match its noted sum;
+   - `/etc/rc2.d/S17upgrade` is armed.
+
+   A mismatch stops the install unarmed. The archive stays where it was, and
+   the console names its block.
+5. **First boot.** `/etc/rc2.d/S17upgrade` runs after `S16firstboot`. It
+   re-checks the sums, copies `cfg/` over `/`, sets the
+   node name and removes its `PENDING`. The old box's identity therefore wins
+   over the profile's first-boot values.
+
+The unattended erase guard does not stop an upgrade; the upgrade is itself the
+deliberate reinstall.

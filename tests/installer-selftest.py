@@ -1528,7 +1528,10 @@ def audit_tool_allowlist():
     # driver's own strict allowlist (and its functions) apply.
     lwords = list(command_words(read_sh(L11)))
     need_l = {"dd", "expr", "die", "msg", "rm"}
-    lbad = [w for w in lwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)]
+    # the upgrade install saves the old system with that system's OWN tools, run on
+    # its own root mounted read-only at /mnt (chroot + its find/cpio/du/sum)
+    lbad = [w for w in lwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)
+            and not w.startswith("/mnt/usr/")]
     if need_l - set(lwords):
         fail("allowlist parser is not exercising l11.sh (vacuity guard): missing %s"
              % sorted(need_l - set(lwords)))
@@ -9733,6 +9736,42 @@ def audit_l11():
            "(a non-number refused, 4 continues)")
     else:
         fail("repair menu drove kbootset wrongly: %r (rc %d)" % (got, r.returncode))
+
+    # (5) the upgrade's first-boot hook S17upgrade, generated from l11.sh's own echo
+    # lines and run against a scratch tree: good sums -> applied once; a changed file ->
+    # nothing applied (the redirect-fed loop must not lose its verdict)
+    m = re.search(r"\n\t\{\n((?:\t\techo .*\n)+)\t\} > \"\$TARGET/etc/rc2\.d/S17upgrade\"", l11)
+    if not m:
+        fail("could not extract the S17upgrade generator from l11.sh")
+    else:
+        gen = os.path.join(d, "gen-s17")
+        r = subprocess.run(["/usr/bin/dash", "-c", m.group(1).replace("\t\t", "")],
+                           capture_output=True, text=True, timeout=30)
+        for bad in (False, True):
+            root = os.path.join(d, "s17-%s" % ("bad" if bad else "good"))
+            u = os.path.join(root, "var", "adm", "upgrade")
+            os.makedirs(os.path.join(u, "cfg", "etc"), exist_ok=True)
+            open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("upgbox\n")
+            s = subprocess.run(["sum", "-r", "etc/nodename"], cwd=os.path.join(u, "cfg"),
+                               capture_output=True, text=True).stdout.split()
+            open(os.path.join(u, "SUMS"), "w").write("%s %s etc/nodename\n" % (s[0], s[1]))
+            open(os.path.join(u, "PENDING"), "w").write("")
+            if bad:
+                open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("changed\n")
+            script = (r.stdout.replace("U=/var/adm/upgrade", "U=" + u)
+                      .replace("cpio -pdmu /", "cpio -pdmu " + root)
+                      .replace("[ -s /etc/nodename ] && uname -S", ": "))
+            open(gen, "w").write(script)
+            o = subprocess.run(["/usr/bin/dash", gen, "start"], capture_output=True, text=True, timeout=30)
+            applied = os.path.exists(os.path.join(root, "etc", "nodename"))
+            pending = os.path.exists(os.path.join(u, "PENDING"))
+            if not bad and applied and not pending and "in place" in o.stdout:
+                ok("S17upgrade: good sums -> the saved files are put in place once (PENDING removed)")
+            elif bad and not applied and pending and "NOT applied" in o.stdout:
+                ok("S17upgrade: a changed saved file -> nothing applied, PENDING kept")
+            else:
+                fail("S17upgrade (%s sums): applied=%s pending=%s out=%r"
+                     % ("bad" if bad else "good", applied, pending, o.stdout.strip()))
 
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],

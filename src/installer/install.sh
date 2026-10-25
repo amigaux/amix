@@ -1362,7 +1362,10 @@ build_target_author() {
 	# sets that (its Preset A IS the deliberate "reinstall over this disk" action);
 	# every other unattended profile leaves it unset and is protected. Uses only
 	# miniroot builtins (rdb/read/[/die).
-	if [ "${INSTALL_UNATTENDED:-no}" = yes ] && [ "${TARGET_ERASE_OK:-no}" != yes ]; then
+	# An upgrade install (INSTALL_UPGRADE=yes, 1.1) IS the deliberate reinstall over an
+	# installed disk: it saves what survives first (l11_upgrade_capture), so the guard
+	# below does not apply to it.
+	if [ "${INSTALL_UNATTENDED:-no}" = yes ] && [ "${TARGET_ERASE_OK:-no}" != yes ] && [ "${INSTALL_UPGRADE:-no}" != yes ]; then
 		_tgt_rdb=no
 		case "`dd if="$DISK_RAW" bs=512 count=1 2>/dev/null | dd bs=4 count=1 2>/dev/null`" in
 			RDSK*)	_tgt_rdb=yes ;;
@@ -1405,7 +1408,12 @@ build_target_author() {
 		_u0=`l11_uni0_count "$DISK_RAW"`
 		[ "$_u0" -le 1 ] || die "target c${ID}d0 already carries $_u0 UNI\\0 (boot) partitions -- REFUSING it: a 1.1 disk has exactly one boot store. Clear the disk first."
 		RDB_CLEAR="$OFFSET_BLOCKS"
+		[ "${INSTALL_UPGRADE:-no}" = yes ] && l11_upgrade_capture
 	fi
+	# an upgrade of a 1.1 disk keeps its layout: s1 is re-made, s4 kept, s3 re-written
+	if [ "${UPGRADE_KIND:-}" = 1.1 ]; then
+		l11_keep_layout
+	else
 	run dd if=/dev/zero of="$DISK_RAW" bs=512 count="$RDB_CLEAR"
 	run /etc/rdb -c -s "$SECS" -L "$TARGET_RDB_BLOCK" -d "$DISKLEN" "$DISK_RAW"
 	# add the three slices IN ORDER (root, swap, boot)
@@ -1427,6 +1435,7 @@ build_target_author() {
 		fi
 		l11_check_layout
 	fi
+	fi	# UPGRADE_KIND 1.1: the layout was kept
 	# RDSK READ-BACK, fail closed: with TARGET_RDB_BLOCK=0 the magic must be at
 	# byte 0 -- the only place stock Z3660 firmware looks. A disk that only the
 	# fork firmware can boot must never leave this path looking finished.
@@ -1449,6 +1458,7 @@ build_target_author() {
 	# empty output from turning `set` into a variable dump. 2c then finds the fake gone and
 	# only logs the table. Fail-open like 2c.
 	early_target_swap() {
+		[ "${SWAP_HOLD:-}" = y ] && return 0	# an upgrade keeps its archive in s2 (l11.sh)
 		set x `/bin/swap -l 2>/dev/null`; shift
 		[ "$6" = /dev/fakeswap ] || return 0
 		set x `/etc/rdb -p "$TARGET_SWAP_SLICE" "$DISK_RAW" 2>/dev/null`; shift
@@ -1699,6 +1709,10 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE}"
 SWAPOUT="$TARGET/tmp/.swapl.$$"
 SWAPTOK="$TARGET/tmp/.swaptk.$$"
 add_target_swap() {
+	if [ "${SWAP_HOLD:-}" = y ]; then
+		msg "swap: held -- the upgrade's saved configuration is in $SWAP_BLK until it is restored"
+		return 0
+	fi
 	rm -f "$SWAPOUT" "$SWAPTOK"
 	# --- is the fake still the swap? (stock's own `$6 = /dev/fakeswap` guard) ---
 	/bin/swap -l > "$SWAPOUT" 2>&1
@@ -2286,6 +2300,10 @@ fi
 # 6-8c, 1.1: the kernel package and the boot store (l11.sh) REPLACE sections 6 to 8c
 # ===========================================================================
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	if [ "${INSTALL_UPGRADE:-no}" = yes ]; then
+		l11_upgrade_restore
+		if [ "${SWAP_HOLD:-}" = y ]; then SWAP_HOLD=; add_target_swap; fi
+	fi
 	l11_bootstore
 else
 # ===========================================================================
