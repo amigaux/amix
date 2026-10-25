@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset retry: the fsck-repair reboot does not spend a trial (8f50dad..d5d4203; also 9632232, 42e9fb1, 4cae4f2)
+
+M-GEN3 on the rig: every power-cut point (before steps 1, 2, 4, 5, 7) leaves a booting generation. Finding at the cut after
+the commit point: the stock /sbin/bcheckrc always reboots after a root fsck repair, and that reboot spent the trial's single
+try-once attempt. Fix (spec change after freeze 10 §7; C2-4 v5 §7): bcheckrc calls `kbootset retry` before each uadmin that
+follows a root repair; if the booted generation is the trial on its attempt, the attempt is given back (at most twice per
+trial, counted in the generation's flags), so a root that never stays clean still ends in L8 after three tries; retry writes
+only the control block. Loader unchanged. Also: vehicles carry a brel's bss=; mkstore stores raw when deflate does not help;
+make box checks for 040/060-only FPU forms; kbootset executes FPU instructions (FPE in the floor). 658 host checks.
+
 ## 2026-10-26 — a brel kernel's bss; contracts C2-3 v4, C2-2 v4; the exit row (84315bb..bf7f93f)
 
 The brel format has no bss (elf2brel writes text+rodata+data and relocations only), so boot2's room check undercounted a
