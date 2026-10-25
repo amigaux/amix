@@ -71,9 +71,9 @@ probetrap:
 
 # ax_handoff .. ax_handoff_end: copied to chip memory and run there through
 # ax_super with a2 = struct ax_ci (also in chip memory):
-#    0 stack top   4 entry   8 d0 for the kernel   12 d1 for the kernel
-#   16 tbuf  20 tvaddr  24 tsize   28 rbuf  32 rvaddr  36 rsize
-#   40 dbuf  44 dvaddr  48 dsize   52 cpu (30/40/60)   56 AttnFlags
+#   +0 stack top  +4 entry  +8 d0 for the kernel  +12 d1 for the kernel
+#   +16 tbuf  +20 tvaddr  +24 tsize  +28 rbuf  +32 rvaddr  +36 rsize
+#   +40 dbuf  +44 dvaddr  +48 dsize  +52 cpu (30/40/60)  +56 AttnFlags
 # Interrupts off, MMU and transparent translation off, a stack in chip
 # memory, text/rodata/data moved to their addresses (all three forward when
 # the image moves down, all three from the tail when it moves up, so an

@@ -8,8 +8,8 @@
 # C code needs no position-independent code generation.
 #
 # Header (offsets from the first byte):
-#   0 bra.w stub     4 "AXB2"     8 table offset (= image size, a count
-#   then that many offsets)      12 bss size     16 image size
+#   +0 bra.w stub    +4 "AXB2"    +8 table offset (= image size, a count
+#   then that many offsets)     +12 bss size    +16 image size
 #
 # Entry from boot1 (see loader/boot1/boot1.s): a1 IOStdReq, a0 store header,
 # d0 partition start, d1 boot1's choice code, d2 the memory block, a6 ExecBase.

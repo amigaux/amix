@@ -8,14 +8,14 @@
 # no relocations (the build checks both).
 #
 # What it does:
-#   1. returns into the strap if an A3000 SuperKickstart wants the OS choice
-#   2. reads bytes 0..2047 of the partition, takes the valid store header
+#   (1) returns into the strap if an A3000 SuperKickstart wants the OS choice
+#   (2) reads bytes 0..2047 of the partition, takes the valid store header
 #      (AXS1 at 0x400 / 0x600) with the newer sequence number
-#   3. loader trial: counts the new boot2's start in the tally block, or
+#   (3) loader trial: counts the new boot2's start in the tally block, or
 #      takes the secondary boot2 if the new one already had its start
-#   4. reads the chosen boot2 (2048-byte units), checks its CRC-32, falls back
+#   (4) reads the chosen boot2 (2048-byte units), checks its CRC-32, falls back
 #      to the other copy, and calls it
-#   5. on failure: one line on the serial port, then returns to the strap
+#   (5) on failure: one line on the serial port, then returns to the strap
 #
 # Interface to boot2 (jsr to its first byte):
 #   a1 IOStdReq   a0 the chosen store header (512 bytes)   a6 ExecBase
@@ -57,7 +57,7 @@ boot1:
 	move.l	(4).w,%a6
 	move.l	%a1,%a5
 
-# 1. A3000 SuperKickstart: when expansion.library's flags ask for the
+# (1) A3000 SuperKickstart: when expansion.library's flags ask for the
 #    operating-system choice, step the strap's return address past its boot
 #    call so Kickstart continues, and return 0.
 	lea	(expname,%pc),%a1
@@ -89,7 +89,7 @@ offok:	move.l	(IO_OFFSET,%a5),%d7
 	lea	(HDRCPY,%a4),%a3
 	lea	(B2AREA,%a4),%a2
 
-# 2. the store header
+# (2) the store header
 	moveq	&0,%d0
 	move.l	%a4,%a0
 	move.l	&2048,%d1
@@ -119,7 +119,7 @@ copyhdr:
 cploop:	move.l	(%a0)+,(%a1)+
 	dbra	%d0,cploop
 
-# 3. loader trial (header flag 0x8, never on a read-only medium, flag 0x2)
+# (3) loader trial (header flag 0x8, never on a read-only medium, flag 0x2)
 	moveq	&0,%d6
 	move.l	(16,%a3),%d0
 	btst	&3,%d0
@@ -168,7 +168,7 @@ clrloop:
 	move.l	&0x201,%d6		# cannot record the start: secondary (B4)
 notrial:
 
-# 4. boot2: the chosen copy, else the other one
+# (4) boot2: the chosen copy, else the other one
 	bsr.w	ld2
 	beq.b	go
 	eor.w	&1,%d6
