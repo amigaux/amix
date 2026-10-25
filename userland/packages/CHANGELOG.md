@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-25 (night) — kbootset -3 from amix-dlm db0ef3a (c9eb388) — not published
+
+kbootset 1.1.0.261025-3 carries /sbin/kbootset f4a6632b (the `retry` verb, C2-4 v5), reproducible from a git archive of
+db0ef3a; supersedes -2. The round trip pins kbootset to db0ef3a, 23/23. Proposed set for the owner's publish decision:
+kern46z -2, kern46zcd -2, ldramix -2, kbootset -3, grep/less/make -4.
+
 ## 2026-10-25 (night) — gcc14 revision -4 on -m68020-60; kernel-space packages -2 with bss= (87d6dc8..4c35db0) — not published
 
 TOOLCHAIN=gcc14 defaults to -m68020-60; the FPU gate fails any fs*/fd* form (040/060-only, absent on a 68881/68882) in every
