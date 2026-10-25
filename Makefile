@@ -33,7 +33,12 @@ $(B)/t_host: $(CSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
 test: $(B)/t_host
 	$(B)/t_host
 
-tools:
+TOOLS := $(B)/bbframe
+
+$(B)/bbframe: tools/bbframe.c | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<
+
+tools: $(TOOLS)
 
 # The compiler is a wrapper script, so its version is read from the .ident
 # line of a compiled empty unit rather than from --version.
@@ -59,7 +64,23 @@ $(B)/cross/%.o: $(COMMON)/%.c $(COMMON)/*.h
 cross: toolchain-check $(COBJ)
 	$(CROSS)scan060 $(COBJ)
 
-boot1:
+# boot1: position-independent code with no relocations, framed as a bootblock;
+# bbframe fails the build if the code exceeds the 1008 bytes the 1 KB strap
+# read leaves after the framing.
+$(B)/boot1.o: loader/boot1/boot1.s | $(B)
+	$(CROSS)as -o $@ $<
+
+$(B)/boot1.bin: $(B)/boot1.o
+	@if $(CROSS)objdump -r $< | grep -q '^[0-9a-f]\{8\} '; then \
+		echo "boot1: GATE: relocations present; boot1 must be position-independent" >&2; \
+		$(CROSS)objdump -r $< >&2; exit 1; fi
+	$(CROSS)objcopy -O binary $< $@
+
+$(B)/boot1.img: $(B)/boot1.bin $(B)/bbframe
+	$(B)/bbframe $< $@
+	$(B)/bbframe -c $@
+
+boot1: toolchain-check $(B)/boot1.img
 
 clean:
 	rm -rf $(B)
