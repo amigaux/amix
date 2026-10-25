@@ -118,6 +118,10 @@ struct ax_ctl {
 	ax_u16 menu_ds;		/* menu window in tenths of a second */
 	ax_u16 console;
 	ax_u32 serial_baud;
+	/* the highest generation id ever issued on this store, so an id is
+	 * never reused after its generation is collected (0 in a block written
+	 * before the field: then the highest id present) */
+	ax_u32 last_id;
 	struct ax_gen gen[AX_MAXGEN];
 };
 

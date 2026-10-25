@@ -21,4 +21,5 @@ void test_select(void);
 void test_rel(void);
 void test_bootinfo(void);
 void test_sha256(void);
+void test_kbootset(void);
 #endif

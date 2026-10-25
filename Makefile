@@ -21,12 +21,14 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
            $(COMMON)/bootinfo.c
 # common code that boot2 does not link (CSRC goes into boot2 whole)
 XSRC    := $(COMMON)/sha256.c
+# kbootset's core (userland: host and box)
+KSRC    := kbootset/ks.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
-           tests/host/t_bootinfo.c tests/host/t_sha256.c
+           tests/host/t_bootinfo.c tests/host/t_sha256.c tests/host/t_kbootset.c
 
-TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link
+TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
 .PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime b2test clean
 
@@ -35,8 +37,8 @@ all: test tools cross boot1 boot2 cdboot axtime b2test
 $(B):
 	mkdir -p $(B)
 
-$(B)/t_host: $(CSRC) $(XSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(XSRC) $(TSRC) -lz
+$(B)/t_host: $(CSRC) $(XSRC) $(KSRC) $(TSRC) $(COMMON)/*.h kbootset/*.h tests/host/t.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -Ikbootset -o $@ $(CSRC) $(XSRC) $(KSRC) $(TSRC) -lz
 
 $(B)/axinflate: tests/host/axinflate.c $(COMMON)/inflate.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axinflate.c $(COMMON)/inflate.c
@@ -69,6 +71,10 @@ $(B)/axsim: tests/host/axsim.c $(CSRC) $(COMMON)/*.h | $(B)
 $(B)/b2medium: tests/host/b2medium.c loader/boot2/main.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -no-pie \
 		-I$(COMMON) -Iloader/boot2 -o $@ tests/host/b2medium.c $(CSRC)
+
+# kbootset on the host (zlib for media that deflate); the box build is S2-07
+$(B)/kbootset: kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC) $(COMMON)/*.h kbootset/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -DKS_ZLIB -I$(COMMON) -Ikbootset -o $@ kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC) -lz
 
 $(B)/b2link: tools/b2link.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c

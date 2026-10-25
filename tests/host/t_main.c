@@ -18,6 +18,7 @@ main(void)
 	test_rel();
 	test_bootinfo();
 	test_sha256();
+	test_kbootset();
 	printf("%d checks, %d failed\n", t_run, t_fail);
 	return t_fail != 0;
 }

@@ -180,6 +180,7 @@ ax_ctl_parse(const ax_u32 *crctab, const ax_u8 buf[2048], struct ax_ctl *c)
 	c->menu_ds = AX_GET16(buf + 28);
 	c->console = AX_GET16(buf + 30);
 	c->serial_baud = AX_GET32(buf + 32);
+	c->last_id = AX_GET32(buf + 36);
 	for (i = 0; i < AX_MAXGEN; i++) {
 		p = buf + 64 + 64 * i;
 		c->gen[i].id = AX_GET32(p);
@@ -217,6 +218,7 @@ ax_ctl_write(const ax_u32 *crctab, const struct ax_ctl *c, ax_u8 buf[2048])
 	AX_PUT16(buf + 28, c->menu_ds);
 	AX_PUT16(buf + 30, c->console);
 	AX_PUT32(buf + 32, c->serial_baud);
+	AX_PUT32(buf + 36, c->last_id);
 	for (i = 0; i < c->ngen && i < AX_MAXGEN; i++) {
 		p = buf + 64 + 64 * i;
 		AX_PUT32(p, c->gen[i].id);

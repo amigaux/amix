@@ -148,3 +148,24 @@ $B/bbframe -x sum $T/boot1.img $W/bb-sum.img >/dev/null
 $B/bbframe -c $W/bb-sum.img 2>&1 | grep -q "checksum wrong"
 [ "$(cmp -l $T/boot1.img $W/bb-sum.img | wc -l)" -eq 1 ]
 echo "store-roundtrip: bootblock variants ok"
+
+# kbootset on an image: create, pristine, commit, mark-good, rollback, the
+# exit codes of a rule (3) and of a gate (4); the loader's rules read it
+KB="$B/kbootset --image $W/kb.img --offset 65536 --journal $W/kb.journal"
+head -c 8454144 /dev/zero > $W/kb.img
+$KB create 8388608 $T/boot2.bin --boot1 $T/boot1.img >/dev/null
+printf 'line k30\nrootfs ufs\nkernel unix %s\n' $T/fkernel > $W/kb.spec
+$KB commit --spec $W/kb.spec | grep -q "generation 1 written as the pristine generation"
+$KB commit --spec $W/kb.spec | grep -q "generation 2 committed"
+$B/axsim $W/kb.img 65536 1 | grep -q "generation 2, kernel"
+$KB mark-good --booted 2 | grep -q "generation 2 is good and the default"
+$KB rollback | grep -q "the default is generation 1"
+set +e
+$KB mark-bad 1 >/dev/null; r1=$?
+head -c 9000000 /dev/urandom > $W/kb.big
+printf 'line k30\nkernel unix %s\n' $W/kb.big > $W/kb.bigspec
+$KB commit --spec $W/kb.bigspec >/dev/null; r2=$?
+set -e
+[ $r1 -eq 3 ] && [ $r2 -eq 4 ]
+$B/lsstore $W/kb.img 65536 | grep -q "lsstore: ok"
+echo "store-roundtrip: kbootset ok"
