@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset box build with GCC 14 (S2-07); contracts agreed v1 (37ec6be..5eae3e6)
+
+Contracts C2-1 to C2-5 agreed (version 1, settlements recorded). Spec change after freeze: rollback reaches the pristine
+generation when there is no older good one; OQ-40.5 closed by C2-5. `make box` builds kbootset for the box with GCC 14,
+statically linked by hand (the driver's specs ignore -static), 70 496 B stripped, one binary for both lines, 68060-checked,
+FPU-free on its paths, plus a C89 compile check on gcc-cross-amix. tests/bench/kbootset-smoke{,-host}.sh: the box/host
+smoke run (identical stores and output prove the box binary computes what the host does). Emulator run pending.
+
 ## 2026-10-26 — kbootset host core and state machine; contracts C2-1..C2-5 (3afa802..3c159ba)
 
 kbootset over any byte device (kbootset/ks.c): create, commit (pristine first, then trial), mark-good (also a loader on
