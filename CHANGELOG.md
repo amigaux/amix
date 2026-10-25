@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset create zeroes and refuses; status prints the set id (C2-4 v6) (29e2c9f, 8ccee80)
+
+`create` refuses a slice that already holds a boot store or a DOS bootblock (status 3) and with --force zeroes the first
+64 KiB first, so nothing of an earlier chain survives; `media --disk` takes --force too. `status` prints `store-id: <8 hex>`
+(the header's set id, as /etc/default/bootset records it) so the installer need not recompute it. 660 host checks.
+
 ## 2026-10-26 — kbootset retry: the fsck-repair reboot does not spend a trial (8f50dad..d5d4203; also 9632232, 42e9fb1, 4cae4f2)
 
 M-GEN3 on the rig: every power-cut point (before steps 1, 2, 4, 5, 7) leaves a booting generation. Finding at the cut after
