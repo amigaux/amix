@@ -188,9 +188,11 @@ cdboot: toolchain-check $(B)/amix-cdboot
 # kbootset for the box (docs/plan/stage-2.md S2-07): GCC 14, statically
 # linked by hand, since the driver's specs always link dynamically; the
 # objects and archives are the driver's own, plus values-Xa.o for
-# _lib_version.  The only FPU instructions are libc's %f/%e/%g formatting,
-# which kbootset never uses.  The sources also compile with gcc-cross-amix
-# (GCC 2.7.2.3) as a C89 check; that build is not shipped.
+# _lib_version.  The GCC 14 runtime's snprintf (libamixc99) saves and
+# restores FPU registers, so kbootset executes FPU instructions; on an
+# FPU-less 68LC040/68LC060 the kernel's FPU emulation (in the floor, D-3
+# §4) takes them.  The sources also compile with gcc-cross-amix (GCC
+# 2.7.2.3) as a C89 check; that build is not shipped.
 G14CC   := $(G14)/prefix/bin/m68k-elf-gcc
 G14LD   := $(G14)/prefix/bin/m68k-elf-ld
 G14LIB  := $(G14)/prefix/lib/gcc/m68k-elf/14.2.0

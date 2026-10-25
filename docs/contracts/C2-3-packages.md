@@ -85,6 +85,11 @@ part of the base set. It is a userland package, not kernel space: it is
 listed among the catalog's ordinary entries, with no kpkg entry and no
 apkg kernel-space record.
 
+It executes FPU instructions: the GCC 14 runtime's `snprintf` saves and
+restores FPU registers. On a 68LC040 or 68LC060 without an FPU, the
+kernel's FPU emulation, which is in the static floor (D-3 §4), takes
+them. A kernel without that emulation cannot run kbootset.
+
 ## 5. Settled at agreement
 
 - The paths and the sidecar keys are as above.
