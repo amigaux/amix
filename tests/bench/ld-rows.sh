@@ -20,6 +20,9 @@
 # Writes OUTDIR/<row>.hdf, <row>.spec*, <row>.expected for rows W1-W3 and M.
 # Run from the repository root after `make tools build/axsim boot1 boot2`.
 set -e
+# reproducible vehicles: the bench and metal rows run the same bytes
+SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1761400000}
+export SOURCE_DATE_EPOCH
 SRC=$1 OFF=$2 SIZE=$3 KERNEL=$4 LINE=$5 OUT=$6
 B=${B:-build}
 mkdir -p "$OUT"

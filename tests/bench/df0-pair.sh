@@ -12,6 +12,9 @@
 # with lsstore and with boot2's own reader (b2medium).
 # Run from the repository root after `make tools build/b2medium boot1 boot2`.
 set -e
+# reproducible vehicles: the bench and metal rows run the same bytes
+SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1761400000}
+export SOURCE_DATE_EPOCH
 WS=$1 OUT=$2
 B=${B:-build}
 K=$WS/amix-kerntools/work/k0-chains

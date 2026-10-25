@@ -114,6 +114,26 @@ selects: mouse actions count only after the first release (10 §7.4). M6
 needs the rig to *send* bytes on the serial port. Serial capture alone
 cannot do it, so until the rig can send, M6 stays open.
 
+## Metal (S1-26, S1-27)
+
+Metal rows run the same images as their bench rows (80 §1). The scripts
+here fix `SOURCE_DATE_EPOCH`, so a vehicle rebuilt from the same inputs
+has the same bytes. Rebuild every vehicle once after a boot2 change and
+run both the bench and the metal rows from that set. boot2 prints
+`no fast memory: the loader runs from chip memory` only on a chip-only
+machine. The lines to judge by are those of the bench rows.
+
+| Row | Vehicle | On metal | Judged by |
+|---|---|---|---|
+| M-LD1, the Z3660 boot ROM | `m-ld1.sh`: each `bb-<variant>.img` written over the boot slice of the card's store | one cold boot per variant | ACCEPTED (`amix-boot 1:` on the serial console) or REFUSED, as on the bench |
+| M-LD3, the Z3660 ROM and both boxes | a vehicle whose boot2 copies are both damaged (boot1 stops with B3) | one cold boot | the line `amix-boot1: B…` on the serial console, and that boot1 stops rather than returning |
+| M-LD4, the Z3660 ROM and both boxes | `ld-rows.sh` W1–W3 on the box's boot disk or card | two power cycles per row; a real 68060 is power-cycled, never reset | `<row>.expected`: the serial lines per boot, then `lsstore` of the store read back on the host |
+| M-LD5, the HID half | `ld-rows.sh` vehicle M | the M1–M5 keys and mouse through the box's own keyboard and mouse converters | the serial lines of `README` M1–M5 |
+| M-LD6, a real 68060 | any vehicle | every cold boot | `amix-boot 1: 68060 (AttnFlags …)`; AttnFlags printed beside the probe, including without SetPatch |
+| M-LD7, M-LD8 on a 68060 | `tools/measure/m-ld7.sh` | `axtime` and `axtime-chip` under AmigaOS on the 68060 | the EXPECTED digests; the timings go into the record |
+| M-LD9, cold boots | the controller's loader vehicle and its stock-loader image | a cold boot of each, from every controller of each box | `m-ld9.py OURS STOCK` → SAME |
+| M-FD1, M-FP2 (S1-27) | `df0-pair.sh` | below | below |
+
 ## The DF0 pair (S1-27, metal)
 
 `df0-pair.sh <workspace> <outdir>` builds one pair per line with the 1.0
