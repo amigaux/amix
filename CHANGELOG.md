@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-25 — axtime and the bench inputs for M-LD4/M-LD5 (656d155, 72c9fc4)
+
+SHA-256 in loader/common (FIPS 180-4 vectors; not linked into boot2). axtime, an AmigaDOS tool, times the loader's
+CRC-32, SHA-256 and inflate with the E-clock (M-LD7/M-LD8 via tools/measure/m-ld7.sh). mkstore -T (loader trial) and -n
+(one-shot request); lsstore shows tally and attempts; axsim replays the loader's write rules over boots. tests/bench/ holds
+the row builders, schedules and expected results for M-LD4, M-LD5 and the DF0 pair (S1-21, S1-22, S1-27). The AmigaDOS
+entry stub adstart.s is shared by amix-cdboot and axtime. 518 host checks; boot2 unchanged.
+
 ## 2026-10-25 — amix-cdboot (S1-C2) and the floppy pair (S1-24) (42476b7..12c70f5)
 
 boot2 split into a shared core plus media (store, CD). amix-cdboot: boot2 as an AmigaDOS load file (b2link -h) reading
