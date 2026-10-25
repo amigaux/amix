@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset makes the journal's directories (S2-46); M-GEN5 recipe (cb82bff..d64bad7)
+
+kbootset makes the journal's missing directories (0755) whenever it writes the journal, named with --journal (apkg's form)
+or default — the exit row's trigger failed with "cannot write the journal" on a box that had never run kbootset (C2-4 §2
+wording, no version bump). M-GEN5 recipe: `mark-bad 2` before the bad trial on a 4 MiB vehicle (collect frees nothing of
+the kept set); spec change after freeze 40 §2.1: boot slices under the 64 MiB store boot but do not hold the kept set.
+
 ## 2026-10-26 — kbootset create zeroes and refuses; status prints the set id (C2-4 v6) (29e2c9f, 8ccee80)
 
 `create` refuses a slice that already holds a boot store or a DOS bootblock (status 3) and with --force zeroes the first
