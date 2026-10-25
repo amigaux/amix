@@ -20,6 +20,8 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c
 
+TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore
+
 .PHONY: all test tools toolchain-check cross boot1 clean
 
 all: test tools cross boot1
@@ -30,13 +32,18 @@ $(B):
 $(B)/t_host: $(CSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(TSRC)
 
-test: $(B)/t_host
+test: $(B)/t_host $(TOOLS)
 	$(B)/t_host
-
-TOOLS := $(B)/bbframe
+	B=$(B) sh tests/host/store-roundtrip.sh
 
 $(B)/bbframe: tools/bbframe.c | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<
+
+$(B)/mkstore: tools/mkstore.c $(CSRC) $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/mkstore.c $(CSRC)
+
+$(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/lsstore.c $(CSRC)
 
 tools: $(TOOLS)
 
