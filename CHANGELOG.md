@@ -1,3 +1,11 @@
+## 2026-10-25 (night) — kernel-space keys per role (C2-2 v3, C2-3 v2) (88bd8e2, f00b22b)
+
+Kernel and module entries need line=k30|k46, kabi= and pin=; a loader entry needs line=any and loader=<n> and may not
+carry kabi=/pin=; the client refuses a missing required key or an excluded one. Records carry kabi/pin for kernel/module
+and a `loader <n>` line for the loader. gen-catalog.py puts loader packages in the block from the package's own ldrinfo
+(and checks ldrinfo's boot1/boot2 hashes against the packaged files); the kbootset package stays an ordinary entry; module
+packages skipped until stage 3. Journal format apkg-txn 2. run-tests 349/0, repo tools 341/0, consumer 12/0.
+
 ## 2026-10-25 (late) — apkg 0.3 follow-up after the kbootset author's review (0e6090f..d7e91f0)
 
 apkg cites contracts C2-2/C2-4 v2 (behaviour unchanged). A kernel-space datastream must be pure files (spec 40 §6): the
