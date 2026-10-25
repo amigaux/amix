@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset on the running box (S2-06); C2-4 v3 (efb7629, c7b7319)
+
+Without --image/--dev kbootset reads /dev/kinfo (C2-1 v2, checked), finds the boot store (bootset's store= when the slice
+still carries store-id=; else the loader record's boot device through kinfo's card table, the disk's RDB and the partition at
+AXL1's start; else a scan of every disk for exactly one UNI\0 store), gate 9 (two UNI\0 slices on the boot disk) and gate 8
+(no or several candidates), writes store=/store-id= back, takes the box facts from options, then kinfo, then bootset; the
+journal defaults to <root>/var/kbootset/journal; mark-good defaults --booted to AXL1's generation. C2-4 v3: §2 the box
+form, §6 /etc/default/bootset. tests/host/kbox.sh on a real RDB image with synthesized kinfo records, checked field by field
+against the port's real record. 109 680 B text.
+
 ## 2026-10-26 — chip-only refusal; contracts C2-2/C2-4 v2; M-LD5 and M-LD8 closed (cba01a4..9b87bef)
 
 boot2 never binds the kernel in chip memory: no fast region, or a kernel larger than the largest one, is L4 with a line
