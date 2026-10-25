@@ -216,7 +216,7 @@ $(B)/box/kbootset: $(KBOBJ)
 		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $(KBOBJ) \
 		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
 		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
-	python3 -I $(G14)/../tools/check-68060-safe.py $@
+	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
 	$(G14)/prefix/bin/m68k-elf-size $@
 
 $(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
