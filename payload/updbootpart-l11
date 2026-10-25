@@ -1,0 +1,18 @@
+#!/bin/sh
+# updbootpart -- on a 1.1 disk, a shim that refuses and names kbootset.
+#
+# The 1.1 disk boots generations from its boot store (amix-dlm docs/spec/40-
+# generations-and-composer.md): the kernel is a kernel-space package, `kbootset`
+# composes and commits generations, and nothing reframes /stand into the boot slice
+# any more. The 1.0 updbootpart would overwrite the store with a framed 1.0 chain,
+# so on this disk it is replaced by this file (spec 40 §2.2, P-28 D54). Laid at
+# /usr/sbin/updbootpart by install.sh (INSTALL_LAYOUT=1.1), not a package member.
+echo "updbootpart: this disk boots from a generation store; updbootpart is retired here." >&2
+echo "updbootpart: a kernel arrives as a package (apkg install ...), and kbootset builds" >&2
+echo "updbootpart: and commits the next generation:" >&2
+echo "updbootpart:   /sbin/kbootset status       the generations and which one boots" >&2
+echo "updbootpart:   /sbin/kbootset build        compose the next generation" >&2
+echo "updbootpart:   /sbin/kbootset commit       write it as a trial, then power-cycle" >&2
+echo "updbootpart:   /sbin/kbootset rollback     the previous good generation by default" >&2
+echo "updbootpart: nothing was written." >&2
+exit 3

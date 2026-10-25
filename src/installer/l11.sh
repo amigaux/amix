@@ -18,6 +18,7 @@
 #   loader/boot1 loader/boot2 loader/store-id   the amix-dlm loader; store-id = the
 #                  header set id `kbootset create` gives a 64 MiB store of this boot2
 #   kpkg/catalog kpkg/pkgs/kernel/*.pkg   the FILE source (#ext kpkg 1 block)
+#   updbootpart    the shim laid at /usr/sbin/updbootpart (payload/updbootpart-l11)
 #
 # PROFILE KEYS:
 #   INSTALL_LAYOUT=1.1   this file; 1.0 (the default) never sources it
@@ -39,7 +40,7 @@ L11_STORE_BYTES=67108864
 l11_keys()
 {
 	for _f in "$L11_KB" "$L11_APKG" "$L11/loader/boot1" "$L11/loader/boot2" \
-		"$L11/loader/store-id" "$L11/kpkg/catalog"
+		"$L11/loader/store-id" "$L11/kpkg/catalog" "$L11/updbootpart"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
 	done
@@ -220,9 +221,14 @@ l11_bootstore()
 	# kbootset package exists, C2-3 §4) and the final bootset file
 	run cp "$L11_KB" "$TARGET/sbin/kbootset"
 	run chmod 0755 "$TARGET/sbin/kbootset"
+	# updbootpart would frame a 1.0 chain over the store: on this disk it is the shim
+	# that refuses and names kbootset (spec 40 §2.2, P-28 D54)
+	[ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
+	run cp "$L11/updbootpart" "$TARGET/usr/sbin/updbootpart"
+	run chmod 0755 "$TARGET/usr/sbin/updbootpart"
 	l11_bootset auto
 	rm -rf "$TARGET/tmp/kpkgcache" "$KCONF"
-	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /sbin/kbootset, /etc/default/bootset and /dev/kinfo laid"
+	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /sbin/kbootset, /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
 }
 
 # l11_kb ARGS -- one kbootset call on the target's store; any status but 0 stops

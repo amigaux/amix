@@ -221,6 +221,54 @@ ask_kmap()
 # chooser is the same ONE bounded 512-byte read per id the interview uses --
 # NEVER /etc/ddsize, which wedged the install on the bench a3091 path (matrix run
 # 20260811-094255-cd) and cannot be bounded on a miniroot with no timeout tool.
+# kbootset_menu -- a 1.1 disk (amix-dlm spec 40): the root mounted at /mnt carries
+# /etc/default/bootset and its own static /sbin/kbootset, which runs here as it is.
+# The store is the bootset file's store= (the raw boot slice). Status, rollback and
+# mark-bad only: `mark-good` needs the booted generation from kinfo, which is not on
+# the installed system yet (S2-10/S2-11), so a box marks nothing good from here.
+kbootset_menu()
+{
+	KSTORE=
+	cp /dev/null /tmp/mr.store
+	while read kl
+	do
+		case "$kl" in
+			store=*)	echo "$kl" > /tmp/mr.store ;;
+		esac
+	done < /mnt/etc/default/bootset
+	if [ -s /tmp/mr.store ]
+	then
+		kl=`cat /tmp/mr.store`
+		KSTORE=`expr "$kl" : 'store=\(.*\)'`
+	fi
+	rm -f /tmp/mr.store
+	if [ -z "$KSTORE" ]
+	then
+		echo "\n/mnt/etc/default/bootset names no store= -- no boot-generation menu"
+		return 0
+	fi
+	KB="/mnt/sbin/kbootset -R /mnt --dev $KSTORE --journal /mnt/var/kbootset/journal"
+	while :
+	do
+		echo "\nThis disk boots generations from its boot store ($KSTORE):\n"
+		echo "  1  show the generations and which one boots (status)"
+		echo "  2  roll back: boot the previous good generation by default"
+		echo "  3  mark a generation bad"
+		echo "  4  continue to the shell"
+		readask "\nChoice? [4] "
+		case "$ask" in
+			1)	$KB status ;;
+			2)	$KB rollback && echo "\nRolled back; power-cycle to boot it." ;;
+			3)	readask "\nWhich generation? "
+				case "$ask" in
+					""|*[!0-9]*)	echo "\n'$ask' is not a generation number." ;;
+					*)		$KB mark-bad "$ask" ;;
+				esac ;;
+			""|4)	return 0 ;;
+		esac
+	done
+}
+
 repairdisk()
 {
 	/etc/mount $UPART /mnt 0 ${ROOT_FSYS}
@@ -272,6 +320,11 @@ repairdisk()
 				echo "\nMount of $UPART failed"
 			fi
 		fi
+	fi
+
+	if [ "$MOUNT" = y ] && [ -f /mnt/etc/default/bootset ] && [ -x /mnt/sbin/kbootset ]
+	then
+		kbootset_menu
 	fi
 
 	echo "\nRunning interactive shell..."

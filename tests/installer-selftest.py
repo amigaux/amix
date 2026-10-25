@@ -9709,6 +9709,38 @@ def audit_l11():
     else:
         fail("1.0 plan 200 MB changed: %r" % (v,))
 
+    # (2) the repair menu, against a fake disk under d/mnt
+    prof = read_sh(MINIROOT_PROFILE)
+    mnt = os.path.join(d, "mnt")
+    os.makedirs(os.path.join(mnt, "etc", "default"), exist_ok=True)
+    os.makedirs(os.path.join(mnt, "sbin"), exist_ok=True)
+    os.makedirs(os.path.join(mnt, "var", "apkg"), exist_ok=True)
+    open(os.path.join(mnt, "etc", "default", "bootset"), "w").write(
+        "# x\nbootset=auto\nstore=/dev/rdsk/c6d0s3\nstore-id=202b20f4\n")
+    log = os.path.join(d, "kb.log")
+    kb = os.path.join(mnt, "sbin", "kbootset")
+    open(kb, "w").write('#!/bin/sh\necho "$*" >> %s\n' % log)
+    os.chmod(kb, 0o755)
+    open(os.path.join(mnt, "var", "apkg", "txn"), "w").write("pending\n")
+    menu = (_extract_func(prof, "readask") + "\n" + _extract_func(prof, "kbootset_menu")).replace("/mnt", mnt)
+    menu = menu.replace("/tmp/mr.store", os.path.join(d, "mr.store"))
+    r = subprocess.run(["/usr/bin/dash", "-c", menu + "\nkbootset_menu\n"], input="1\n2\n3\n2\n3\nx\n4\n",
+                       capture_output=True, text=True, timeout=30)
+    got = open(log).read().splitlines() if os.path.exists(log) else []
+    pre = "-R %s --dev /dev/rdsk/c6d0s3 --journal %s/var/kbootset/journal " % (mnt, mnt)
+    if got == [pre + "status", pre + "rollback", pre + "mark-bad 2"] and r.returncode == 0:
+        ok("repair menu: status, rollback, mark-bad 2 through the disk's own kbootset on store= "
+           "(a non-number refused, 4 continues)")
+    else:
+        fail("repair menu drove kbootset wrongly: %r (rc %d)" % (got, r.returncode))
+
+    # (4) the shim
+    r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
+                       capture_output=True, text=True, timeout=30)
+    if r.returncode == 3 and "kbootset" in r.stderr and "nothing was written" in r.stderr:
+        ok("updbootpart-l11 refuses (exit 3), names kbootset, writes nothing")
+    else:
+        fail("updbootpart-l11: rc %d, stderr %r" % (r.returncode, r.stderr[:200]))
 
 
 def main():

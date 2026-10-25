@@ -36,7 +36,8 @@ The installer:
 5. lays the following on the target:
    - `/sbin/kbootset`;
    - `/etc/default/bootset` (C2-4 §6: `bootset=auto`, `store=`, `store-id=`, the facts);
-   - `/dev/kinfo` (c 53 0, 0444; first boot gives it group sys).
+   - `/dev/kinfo` (c 53 0, 0444; first boot gives it group sys);
+   - the `updbootpart` shim, which refuses and names kbootset.
 
    It lays none of the 1.0 boot-chain pieces: `/stand/boot2.boot`, the framed
    chain, `/stand/unix`, the RTO1 record or the reframe tools.
@@ -44,3 +45,8 @@ The installer:
 `kbootset mark-good` is not run anywhere yet. It needs the booted generation
 from kinfo on the installed system (S2-10/S2-11). Until then a committed trial
 boots once and falls back (try-once). The pristine generation needs no mark.
+
+The repair path of the install miniroot (`install or repair` → `repair`) mounts
+the root. On a 1.1 disk it then offers `status`, `rollback` and `mark-bad`
+through the disk's own `/sbin/kbootset`, using the store named in its
+`/etc/default/bootset`.

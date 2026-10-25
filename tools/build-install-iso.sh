@@ -760,11 +760,13 @@ if [ -n "$_want_l11" ]; then
   cp "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2"
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
+  cp "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
   python3 -c 'import sys,zlib; b=open(sys.argv[1],"rb").read(); print("%08x" % ((zlib.crc32(b) & 0xffffffff) ^ 67108864))' \
     "$STAGE/l11/loader/boot2" > "$STAGE/l11/loader/store-id"
-  chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg"
+  chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
   chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS"
-  { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
+  { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
+    && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && cmp -s "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2" && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \
     || { echo "STOP: staged /install/l11 is not byte-identical to $L11_IN" >&2; exit 1; }
   echo "build-install-iso: staged /install/l11 for${_want_l11}: kbootset $(sha256sum "$STAGE/l11/bin/kbootset" | cut -c1-16)..., apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., boot2 $(sha256sum "$STAGE/l11/loader/boot2" | cut -c1-16)..., store-id $(cat "$STAGE/l11/loader/store-id"), $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel package(s)"
