@@ -249,7 +249,10 @@ sequence number wins): the generation directory and the boot state —
   `kbootset rollback`, never changed by `commit` (a commit only sets the
   trial); the trial generation;
 - one-shot request: none / previous good / a named generation / safe mode;
-- menu timeout, console settings (serial speed, screen on/off).
+- menu timeout, console settings (serial speed, screen on/off);
+- the highest generation id ever issued on the store, so that an id is
+  never reused after its generation is collected (40 §1). A block written
+  before this field reads 0 there, and the highest id present counts.
 
 (The loader-trial state lives in the header and the tally block, §3.1.)
 
