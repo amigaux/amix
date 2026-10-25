@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-25 — boot1 stops on failure (3081ee1)
+
+boot1 stops with a message on the serial port instead of returning failure to the strap: on the Z3660 boot ROM chain a
+failure return raised AN_BootError and reset the machine about every 14 s, and a reset loop can leave a real 68060 dead until
+a power cycle (M-LD3 bench half, from the S1-16 run). Spec change after freeze: 10 §3.1 step 6, failure rows B1/B3, the menu's
+r key; OQ-10.1 narrowed to the other boot ROMs. boot1 884 of 1008 bytes. Also d1782bd: assembler comments no longer read as
+line markers (binaries unchanged).
+
 ## 2026-10-25 — loader stage 1, items S1-07..S1-15 (c4893cf..fd64097)
 
 Raw deflate decoder; generation selection (try-once, one-shot requests, fallback order); kernel relocator for ET_REL, brel and
