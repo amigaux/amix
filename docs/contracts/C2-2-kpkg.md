@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 1
+# C2-2 — kernel-space catalog entries and apkg's install record, version 2
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed by D-3 §13: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -23,6 +23,12 @@ whole.
 - An unknown key is ignored; an unknown key starting with `!` refuses the
   entry.
 - `sha256=` and `size=` are of the package datastream as served (`file=`).
+- Two optional keys (version 2):
+  - `pkginst=<name>`: the datastream's package instance name, when it
+    differs from `<name>`. Names like `kernel-k46` exceed the 9-character
+    pkginst limit.
+  - `offset=<bytes>`: where the datastream starts on a raw medium (a tape
+    or a raw source disk).
 - `#ksig` is optional and absent in 1.1. A 1.1 client records it and does
   not act on it (60 §4).
 

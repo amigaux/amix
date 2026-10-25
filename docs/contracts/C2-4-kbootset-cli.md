@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 1
+# C2-4 — `kbootset` as a called program, version 2
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3), and what is not in kbootset yet (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -22,17 +22,20 @@ starts with `kbootset: `.
 
 | Form | Use |
 |---|---|
-| (none) | on the running box: the boot store found as in 40 §5, the root `/` |
+| (none) | on the running box: the boot store found as in 40 §5, the root `/`. **Pending (S2-06, needs kinfo):** until then a store is always named with `--image` or `--dev` |
 | `-R <root>` | on a mounted target (the installer, repair mode): packages, records and `/stand` under `<root>`; the boot store from `<root>/etc/default/bootset` or `--bootdev` |
 | `--image <file> [--offset N]` | a store in a disk image at byte offset N (host media builds) |
 | `--dev <path> [--offset N]` | a store on a raw device at offset N |
-| `--journal <path>` | the journal; default `<root>/var/kbootset/journal` on a box, none with `--image` |
+| `--journal <path>` | the journal. The default `<root>/var/kbootset/journal` is not in kbootset yet (it comes with the box form, S2-06): until then apkg always passes `--journal <target>/var/kbootset/journal`; without it there is no journal |
+| `media …` | the pristine generation of a new medium (host build only, S2-04): `--disk`, `--floppy`, `--cd` |
 
 ## 3. The trigger
 
 After a transaction that changed a kernel-space package, apkg runs
 `kbootset build && kbootset commit` when `bootset=auto`, and prints the
-command otherwise. On status 0 it repeats kbootset's last line
+command otherwise. apkg reads `bootset=` from
+`<target>/etc/default/bootset`: when the file or the key is absent it is
+`auto`, and any value other than `auto` or `manual` counts as `manual`. On status 0 it repeats kbootset's last line
 (`generation N committed; power-cycle to boot it`).
 
 ## 4. Power-cut rows
