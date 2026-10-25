@@ -94,6 +94,16 @@ sidecar; record
 mv $R/var/apkg/kpkg/kernel-kd060a $T/rec
 refused 1 $KB build $FACTS
 mv $T/rec $R/var/apkg/kpkg/kernel-kd060a
+# a <name>.new left by an interrupted apkg write is not a record
+sed 's/^file \/stand\/k46\/unix .*/file \/stand\/k46\/unix 1 0000/' \
+	$R/var/apkg/kpkg/kernel-kd060a > $R/var/apkg/kpkg/kernel-kd060a.new
+$KB build $FACTS > $T/out && grep -q "built" $T/out
+rm -f $R/var/apkg/kpkg/kernel-kd060a.new
+# two records naming one file: ambiguous, refused
+cp $R/var/apkg/kpkg/kernel-kd060a $R/var/apkg/kpkg/kernel-other
+refused 1 $KB build $FACTS
+grep -q "named by two apkg records" $T/out
+rm -f $R/var/apkg/kpkg/kernel-other
 # the record's kabi differs from the sidecar's
 sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 refused 2 $KB build $FACTS

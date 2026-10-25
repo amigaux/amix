@@ -158,10 +158,13 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 }
 
 /* the apkg record (C2-2) naming path: its file line, and the record's
- * kabi, pin and verified fields; 0 found, -1 not */
+ * kabi, pin and verified fields; 0 found, -1 not, -2 named by more than
+ * one record (r->name and r->other hold two of them).  apkg writes a
+ * record as <name>.new and renames it, so a .new left by an interrupted
+ * write is not a record */
 struct kb_rec {
 	ax_u32 size;
-	char sha256[65], kabi[24], pin[48], verified[8], name[64];
+	char sha256[65], kabi[24], pin[48], verified[8], name[64], other[64];
 };
 
 static int
@@ -174,11 +177,13 @@ record(const char *root, const char *path, struct kb_rec *r)
 
 	if (!d)
 		return -1;
-	while (found < 0 && (e = readdir(d)) != 0) {
+	while ((e = readdir(d)) != 0) {
 		FILE *f;
 		struct kb_rec t;
+		size_t nl = strlen(e->d_name);
+		int here = 0;
 
-		if (e->d_name[0] == '.')
+		if (e->d_name[0] == '.' || (nl > 4 && !strcmp(e->d_name + nl - 4, ".new")))
 			continue;
 		sprintf(rp, "/var/apkg/kpkg/%.60s", e->d_name);
 		if ((f = fopen(under(root, rp), "r")) == 0)
@@ -201,12 +206,17 @@ record(const char *root, const char *path, struct kb_rec *r)
 				/* no sscanf: its number scanner brings libc's floating point */
 				t.size = (ax_u32)strtoul(fs, 0, 10);
 				sprintf(t.sha256, "%.64s", fh);
-				found = 0;
+				here = 1;
 			}
 		}
 		fclose(f);
-		if (found == 0)
+		if (here && found == 0) {
+			sprintf(r->other, "%.60s", t.name);
+			found = -2;
+		} else if (here && found < 0 && found != -2) {
 			*r = t;
+			found = 0;
+		}
 	}
 	closedir(d);
 	return found;
@@ -249,8 +259,12 @@ hashed(struct ks *k, const char *root, const char *path, const ax_u8 *data, ax_u
 	char m[400];
 
 	hex(data, len, sha);
-	if (record(root, path, r) != 0) {
+	switch (record(root, path, r)) {
+	case -1:
 		sprintf(m, "%s has no apkg record: placed by hand or by a bare pkgadd", path);
+		return refuse(k, 1, m);
+	case -2:
+		sprintf(m, "%s is named by two apkg records (%s, %s)", path, r->name, r->other);
 		return refuse(k, 1, m);
 	}
 	if (r->size != len || strcmp(r->sha256, sha)) {
