@@ -19,8 +19,9 @@ Paths are relative to the Amix project workspace. `MP/` =
   install, upgrade install and repair. Repair mounts the target and runs the
   target's own `/sbin/kbootset -R /mnt` (status, rollback, next, check); if the
   target's copy is unusable, the medium's own `kbootset` is used.
-- **Signed sources only for kernel space.** A medium that carries packages
-  carries the signed catalog and its signature (`60-signing-and-publishing.md`).
+- **Hashes for kernel space.** A medium that carries packages carries the
+  catalog with the SHA-256 of every kernel-space package; signing is not in
+  1.1 (D-3 §13; `60-signing-and-publishing.md`).
 - **Same bytes in the emulator and on metal** (§7).
 
 ## 2. Disk and SD images
@@ -77,7 +78,7 @@ so the 1.1 budget is recomputed from the store layout, not inherited.
 | Layout | ISO9660, System Identifier `AMIGA BOOT`; `S/Startup-Sequence` runs `amix-cdboot`; `/BOOT/K30/` and `/BOOT/K46/` hold a read-only control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, `/pkgs/{stock,base,kernel}` |
 | Boot | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
 | Requirement | a boot ROM with a CD filesystem (A4091, A4092); other machines boot the floppy pair and install from the CD |
-| Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel` under the signed catalog |
+| Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel`, each checked against the catalog's SHA-256 |
 | Rescue | boot the CD, choose repair |
 | Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id, `MP/02-medium-cdrom-design.md:173`); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
 | Not bootable | an ATAPI CD on the Gayle IDE (no source says any Kickstart boots Amix from it; it stays a package source); a CD on a controller whose ROM offers no CD node |
@@ -99,7 +100,7 @@ installer, on its own small medium; packages over HTTP from
 | Form A — floppy pair | the floppy-pair RAM-disk profile (§3) with the network miniroot, **if it fits** (M-NET1a–g, §5.1) |
 | Form B — small disk image + CD image | if form A does not fit: a raw RDB image (Z3660 SD, ZuluSCSI, CompactFlash) and a small bootable ISO, both carrying the same generation |
 | Network setup | address, netmask, gateway and name server asked at the interview (no DHCP client in 1.0's miniroot; a hosts-file line as fallback, P-28 D47) |
-| Gate | before any disk write beyond partitioning: reach the repository and verify the signed catalog |
+| Gate | before any disk write beyond partitioning: reach the repository and read its catalog |
 | Install | `apkg -R /mnt` streaming install of the chosen set, then `kbootset -R /mnt build/commit` |
 | Rescue | the same medium, repair mode, with the option to re-fetch kernel space |
 | Transport figures | 37–54 KB/s on metal with the stock TCP window; the r7 kernels carry a larger window, rate to be measured; minimal set about 26 MB, full set about 300 MB (`MP/medium-network.md:76-79`) |
@@ -171,7 +172,7 @@ they are confirmed in stage 1 as they exist, and if they take the margin below
 | Role | a package source behind a boot medium (the floppy pair, a disk image, the CD); never boots (D-3 §2) |
 | Today | the stock distribution tape (a cpio stream at SCSI id 4, read by the stock installer only); our installer's tape row was retired (`IN/docs/installer.md:257`); no tape built by us (`MP/tape-medium-design.md:18-21`) |
 | Driver | `ct` on the floor (`70-static-floor.md`); positionless fixed-block I/O, no seek, a close mid-file spaces to the next filemark (`MP/refute-tape-seof-raw-claim.md`) |
-| Format | TAPE1: 512-byte records, a filemark after each file; file 0 catalog (with the hidden kernel-space block), file 1 checksums and signature, file 2 installer tools, files 3…N one package each, kernel space last (`MP/tape-medium-design.md:155-176`) |
+| Format | TAPE1: 512-byte records, a filemark after each file; file 0 catalog (with the hidden kernel-space block), file 1 checksums (and the signature file once signing exists, D-3 §13), file 2 installer tools, files 3…N one package each, kernel space last (`MP/tape-medium-design.md:155-176`) |
 | Reader | a sequential `tape:` source in apkg 0.3: stage every package in tape order, verify, then install |
 | Devices | the tape must be reachable on an sd card with device nodes for it; new nodes for a tape on card 1 (A4092 on the 060 line) are proposed (`MP/tape-medium-design.md:146-147,180-184`) |
 | Proof | emulator rows first (stock tape image, then TAPE1), then an emulated tape behind the A4092 on metal, then one real drive at a collaborator (P-28 D46) |

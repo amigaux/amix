@@ -523,7 +523,7 @@ choose [1]:
 | digit | select that generation |
 | `p` | **rollback key**: previous good generation, at once (also accepted in the menu window without opening the menu) |
 | `s` | toggle safe mode for the selection (floor + root controller + root filesystem, `70-static-floor.md` §4) |
-| `d` | toggle **development load** for this boot only: the kernel then accepts modules that are not members of the booted manifest (`30-module-core.md` §2, patch 17); boot2 prints `amix-boot: DEVELOPMENT LOAD: unsigned modules allowed this boot` and the kernel repeats it; `kbootset next --devload` requests the same for the next boot |
+| `d` | toggle **development load** for this boot only: the kernel then accepts modules that are not members of the booted manifest (`30-module-core.md` §2, patch 17); boot2 prints `amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot` and the kernel repeats it; `kbootset next --devload` requests the same for the next boot |
 | `r` | not offered: returning to the strap raises AN_BootError and resets rather than trying the next boot node (M-LD3); the key prints why |
 | Return | boot the selection |
 | left mouse button | next entry; held 2 s: boot the selection. Mouse actions count only after the button has first been released, so the hold that opened the menu never selects |

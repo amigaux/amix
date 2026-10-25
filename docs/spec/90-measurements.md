@@ -41,7 +41,7 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | M-GEN4 [T-U6, U-N7] | `kbootset` static binary size per line | bench (host computation) | 2 | 40 §3 |
 | M-GEN5 | Upgrade, commit, mark-good, rollback, one-shot previous, try-once fallback on a trial that panics in `rc` | bench + metal (one row per box per line) | 2 | 40 §3, 10 §7 |
 | M-UPG1 | Upgrade install of a 1.0 disk: configuration captured and restored, layout re-laid, first boot | bench + metal (one per box) | 2 | 40 §7 |
-| M-SIG1 [U17] | Signature verification time on a 68030 and a 68060 | bench (upper bound) + metal | 2 | 60 §2 |
+| M-SIG1 [U17] | Signature verification time on a 68030 and a 68060 — **deferred with signing** (D-3 §13) | bench (upper bound) + metal | — | 60 §5 |
 | M-SIG2 | SHA-256 throughput on a 68030 and a 68060 (apkg, `kbootset check`) | bench (upper bound) + metal | 2 | 60 §3 |
 | M-PKG1 [U11] | Files dropped by `pkgadd instance=overwrite`; stock `pkgadd` on `/stand` conflicts | bench | 2 | 40 §8 |
 

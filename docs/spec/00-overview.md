@@ -11,7 +11,7 @@ kernel plus the modules the root disk needs — as separate files; the module
 core (a patch queue on kdedon's MIT DLM core) loads root-class modules before
 root is mounted and everything else after; the composer `kbootset` builds,
 commits and rolls back generations behind fail-closed gates; packages carry
-kernel space under one offline signing key. The decision record behind it
+kernel space with a SHA-256 per package (signing is not in 1.1, D-3 §13). The decision record behind it
 (D-3) takes nine decisions; this directory turns each into a design that can
 be built and proven. No code is part of S0.
 
@@ -27,7 +27,7 @@ P-28 decisions it replaces or keeps. P-24 and P-28 remain the research record.
 | `30-module-core.md` | the adopted core and its patch queue, load points, interrupts, the four-card sd contract, filesystems as modules, the RAM disk |
 | `40-generations-and-composer.md` | the 1.1 disk layout, generations, `kbootset`, `kinfo`, apkg integration, the upgrade install |
 | `50-media.md` | disk/SD images, floppy pair, CD-ROM, netinstall, tape, emulation |
-| `60-signing-and-publishing.md` | the key, what is signed and checked, offline media, the public catalog |
+| `60-signing-and-publishing.md` | integrity in 1.1, the signature hook, the deferred signing design, offline media, the public catalog |
 | `70-static-floor.md` | the compiled-in set and why each member is there |
 | `80-stages-and-proof.md` | the proof order inside 1.1, collaboration asks |
 | `90-measurements.md` | every measurement, its evidence class and the stage that needs it |
@@ -54,12 +54,13 @@ described and referenced, never reproduced.
 | 4 | Controllers and filesystems are modules; the static floor fixed; filesystem separation on our line, Antti's base the merge target | **30** §5, §6; **70**; 20 §2, §6 |
 | 5 | 1.0 boxes reinstall; in-place upgrades from 1.1 on; upgrade install keeps a data slice and restores the surviving configuration; a layout that never needs a re-lay | **40** §2.1, §7 |
 | 6 | Rescue and rollback: two kept generations + pristine; good only after a full multi-user boot; menu key or mouse button, one-shot previous, safe mode; every install medium a rescue medium; one boot slice per disk | 10 §4.2, §7; **40** §1–§3; 70 §4; 50 §1 |
-| 7 | Publishing and trust: kernel space in the public catalog, marked; one offline key; public key in installer and client; unsigned kernel space refused; second key only by decision; ABI kit published | **60**; 40 §6; 20 §5 |
+| 7 | Publishing and trust: kernel space in the public catalog, marked; one offline key; public key in installer and client; unsigned kernel space refused; second key only by decision; ABI kit published — **signing suspended for 1.1 by item 13** | **60**; 40 §6; 20 §5 |
 | 8 | One 1.1; proof order (loader → lifecycle on static kernels → modules → root as a module); code in amix-dlm, recipes in driver repos, kernel changes as merge requests; asks to Antti, ashnazag, Emre | **80**; 30 §1; repository README |
 | 9 | Toolchain split: kernel space on gcc-cross-amix (GCC 2.7.2.3, `m68k-cbm-sysv4`), pinned by the ABI kit; GCC 14 for userland only | 20 §3.2; 10 §3.3; 40 §3 (`kbootset` is userland); 30 §1 |
 | 10 | (after the freeze) CD boot: a standard ISO9660 disc, AmigaDOS from the ROM's CD filesystem, boot2 as an AmigaDOS program started by its startup-sequence; RDB-style disc rejected | **10** §4.4; 50 §4; 90 M-LD2 |
 | 11 | (after the freeze) Disk numbering: compacted rank on both lines (Z3660, Zorro boards, motherboard controller, IDE); 030 boxes with two controllers renamed relative to 1.0, accepted | **30** §5.2–§5.3; 90 M-SD1 |
 | 12 | (after the freeze) DV-1 approved: the build-dependent netinstall contributions are confirmed in stage 1 as they exist; below a 5 % margin the netinstall medium becomes form B | **50** §5.1; 00 §5; 90 M-NET1c–g |
+| 13 | (after the freeze) Signing out of 1.1: no catalog signature, no key, no refusal of unsigned kernel space; integrity by per-package SHA-256; a verification hook in the catalog format, apkg and kbootset; OQ-60.2/60.3 moot | **60**; 40 §3.1, §6; 50 §1; 30 §2 patch 17; 80 §2; 90 M-SIG1 |
 
 ## 3. The design in one page
 
@@ -77,7 +78,7 @@ Kickstart strap ─► boot1 (1 KB) ─► boot2 (≤ 28 KiB, self-relocating, o
               ─► marc_post: boot-class modules from /stand/gen/<id>/mod (SHA-256 checked)
               ─► rc ─► kbootset mark-good at the end of run level 2
 
-  apkg 0.3 (signed catalog, kernel space in a hidden block) ─► trigger ─► kbootset build/commit
+  apkg 0.3 (catalog with SHA-256, kernel space in a hidden block) ─► trigger ─► kbootset build/commit
   kbootset: gates ─► write extents ─► read back ─► flip control block (the commit point)
 ```
 
@@ -120,10 +121,8 @@ decision reserved to the project owner.
 | OQ-50.5 | Tape device nodes on card 1 | us |
 | OQ-50.6 | One real tape drive row | Antti |
 | OQ-50.7 | One ISO for both lines (proposed) or one per line | us |
-| OQ-60.1 | Signature scheme and file format (Ed25519, minisign/signify layout proposed) | us; owner holds the key |
-| OQ-60.2 | Second key by a repository-fetched statement (proposed: no) | owner |
-| OQ-60.3 | Signed userland packages from 1.1 on | owner |
-| OQ-60.4 | Hash and signature tools on the box for administrators | us |
+| OQ-60.1 | For the release that adds signing: scheme and file format (Ed25519, minisign/signify layout proposed) | us; owner holds the key |
+| OQ-60.4 | Hashing tools on the box for administrators | us |
 | OQ-70.1 | Can the root filesystems leave the 040/060 kernel (symbol surface) | us; Antti reviews |
 | OQ-70.2 | Boot-time consumers of ufs inside the base in safe mode | us |
 | OQ-70.3 | Is the inet stack separable (recorded, not required) | us |
@@ -132,7 +131,7 @@ decision reserved to the project owner.
 | OQ-80.3 | Throughput baselines for stage 3 | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
 
-Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-30.2 (D-3 §11), OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
+Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-60.2 and OQ-60.3 (moot, D-3 §13), OQ-30.2 (D-3 §11), OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
 
 ## 5. Measurements
 
@@ -155,8 +154,9 @@ per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 kernel and the store format, f and g on a running miniroot. They are scheduled
 in stages 1–5 (`90-measurements.md` §5) and confirm or overturn the form-A choice made in S0 (OQ-50.2): if they take the margin below 5 %, the netinstall medium becomes the small disk + CD image (form B).
 
-**Owner decisions open at the freeze:** OQ-60.2, OQ-60.3. OQ-10.9 (CD
-mechanism), OQ-30.2 (030 card order) and DV-1 were decided as D-3 §10–§12. The first measurements after the freeze
+**Owner decisions open at the freeze:** none left. OQ-10.9 (CD mechanism),
+OQ-30.2 (030 card order) and DV-1 were decided as D-3 §10–§12; signing was
+taken out of 1.1 (D-3 §13), which makes OQ-60.2 and OQ-60.3 moot. The first measurements after the freeze
 are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
 ## 6. P-28 decisions and where they went
@@ -168,7 +168,7 @@ are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 | D4 | kept in substance: root class resident (arena), the rest copied |
 | D9 | replaced: four controllers in 1.1, one compacted rank order on both lines (D-3 §11; 30 §5) |
 | D11, D54, D60 | kept, adapted to the loader record (40 §2.2, §5) |
-| D13, D30, D48 | settled by D-3 §7 (60): kernel space in the public signed catalog; the ABI kit publishes the stock headers too (20 §5, 60 §6) |
+| D13, D30, D48 | settled by D-3 §7 and §13 (60): kernel space in the public catalog with SHA-256, signing deferred past 1.1; the ABI kit publishes the stock headers too (20 §5, 60 §8) |
 | D15, D32, D56 | retired: one boot slice per disk; 1.0 boxes reinstall |
 | D17, D37, D38, D39, D40 | replaced: floppy pair supported on both lines, store-based, profile by measurement (50 §3) |
 | D21, D25, D49, D52, D53 | replaced by the proof order of 80 and D-3 §3 |

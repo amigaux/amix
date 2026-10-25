@@ -87,8 +87,11 @@ program against an image file, so media and boxes cannot drift).
 
 `build` and `commit` refuse, naming the gate, when:
 
-1. **Signature:** a kernel-space member's SHA-256 is not covered by a signed
-   catalog record stored at install time (`60-signing-and-publishing.md` §3).
+1. **Hash:** a kernel-space member's SHA-256 differs from the catalog entry
+   apkg recorded at install, or no entry was recorded
+   (`60-signing-and-publishing.md` §3). The gate also reads the entry's
+   `verified=` field, the hook for a later signature policy (§4 there); 1.1
+   has no signing (D-3 §13).
 2. **kabi:** members disagree on family, major, or compiler pin; a module's
    minor exceeds the kernel's.
 3. **Closure:** the root-class set does not contain a module for the boot
@@ -167,7 +170,7 @@ space at all (`tmp/2026-10-22-modules-proposal/refute-apkg-stage-and-comment-ski
 |---|---|
 | Kernel-space packages | roles `kernel`, `loader`, `module`; published in the public catalog inside a hidden `#ext kpkg 1` block (every line < 2048 bytes, `#` in column 0, header unchanged), so older clients never see them (P-28 D12) |
 | Pure files | kernel-space packages carry files only (class `none`, no scripts) and never write a boot slice; `kbootset` does |
-| Pre-flight | apkg checks the signature, kabi family/major, compiler pin and line before staging |
+| Pre-flight | apkg checks kabi family/major, compiler pin and line before staging, and each kernel-space package's SHA-256 after download |
 | Transaction | stage and verify every package, then install; a journal (`/var/apkg/txn`) and `apkg recover` finish or undo an interrupted transaction (P-28 D63). Atomicity for the boot path comes from the generation commit: a half-installed set never reaches the store |
 | Trigger | after a transaction that changed a kernel-space package, apkg runs `kbootset build && kbootset commit` when `bootset=auto` (default), else prints the command. A failed gate exits with a distinct code and the message "the committed generation is unchanged" (`tmp/2026-10-14-modules-study/L4-packaging-with-apkg.md:608-640`) |
 | User message | "generation N committed; power-cycle to boot it" |
