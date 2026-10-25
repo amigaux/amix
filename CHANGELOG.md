@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — M-GEN2 record; stage-3 answers; contract drafts C3-1..C3-4 (b5570bc..a71d221)
+
+M-GEN2 bench half: a k30 commit 16.7 s (median; 11.2 s CPU) and check 16.0 s on the cycle-exact 25 MHz 68030; the GCC 14 box
+binary hashes at about a third of the loader's C rate (cause unmeasured, queued). s2-standin.sh takes a brel's bss. 80 §2:
+intr_attach is built in stage 3 and reused by stage 4 (spec change after freeze). Stage-3 plan: Q3-1/Q3-4 settled, monsw
+planned in amix-z3660rtg until P-8 (c). Contract drafts for agreement: C3-1 module object and .moddata v2 (MD2), C3-2 the
+allowlisted symbol block generated before the final link with loader-relocated addresses + DDI v1, C3-3 the AXK1 identity
+record and sidecar v5 (loader code L14), C3-4 the AXA1 arena directory and manifest copy.
+
 ## 2026-10-26 — stage-3 plan: the module core (aca2460; ledger 737df5a, db58c28)
 
 docs/plan/stage-3.md: work breakdown for the module core as a patch queue on kdedon's MIT core b736c59, the ABI kit, module
