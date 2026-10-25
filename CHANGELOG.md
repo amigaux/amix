@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage-2 bench records and the exit ledger (deea18c..eb8f006)
+
+S2-46 record: a box upgraded and rolled back with apkg alone (k46); the first run's journal failure kept as the finding
+behind d64bad7. M-GEN5 closed on the bench for k46: a trial that cannot mount its root panics and reboots by itself and the
+loader falls back to the good default (L8) on the same boot; recipe matched to the machine. M-GEN2 bench recipe (timed
+commits per line). Stage-2 plan §4: the exit ledger — one line per 80 §2 emulator item with k46/k30 columns and the record
+for each, including apkg's SHA-256 refusal row (altered byte and altered catalog hash both refused, rc 3, nothing written).
+
 ## 2026-10-26 — kbootset makes the journal's directories (S2-46); M-GEN5 recipe (cb82bff..d64bad7)
 
 kbootset makes the journal's missing directories (0755) whenever it writes the journal, named with --journal (apkg's form)
