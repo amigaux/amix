@@ -1,3 +1,10 @@
+## 2026-10-25 (night, 2) — the install record is named by pkginst (C2-2 v4) (3ab2c3f)
+
+/var/apkg/kpkg/<pkginst> (the entry's pkginst=, else its name): an s5 root keeps 14 characters of a file name, so a long
+name and its .new could collide and the write-then-rename stopped being atomic; the full name stays in the record's name
+line; install, list, info, remove, recover and the pre-flight read records by that file name, remove accepts either.
+Journal format apkg-txn 3. run-tests 363/0, consumer 12/0 against kbootset 4caad11, repo tools 341/0.
+
 ## 2026-10-25 (night) — kernel-space keys per role (C2-2 v3, C2-3 v2) (88bd8e2, f00b22b)
 
 Kernel and module entries need line=k30|k46, kabi= and pin=; a loader entry needs line=any and loader=<n> and may not
