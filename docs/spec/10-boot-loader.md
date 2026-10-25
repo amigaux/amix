@@ -158,6 +158,20 @@ table of its R_68K_32 relocations, and the start-up stub (PC-relative
 assembly) applies the table to itself before calling C. Size budget:
 **28 KiB** per copy in the store (§4.2); the AmigaDOS-hosted CD entry of §4.4 shares its C code.
 
+**Where it runs.** boot1 loads boot2 into chip memory, because the strap's
+device reads by DMA. Run from there, its code competes with the display for
+the chip bus: on a 25 MHz 68030, inflate runs 7 times and CRC-32 25 times
+slower than from fast memory (M-LD8, `docs/measurements/2026-10-26-m-ld7-m-ld8.md`).
+So the stub first copies boot2 into a MEMF_FAST block, then relocates it
+there, and calls C. A machine without fast memory runs it in place and
+boot2 says so on the console.
+- Device reads still land in a chip bounce buffer, because the controllers
+  need it there.
+- Members are read into fast memory and inflated, checked and relocated
+  there by code running from fast memory.
+- The kernel's destination is unchanged (step 6).
+- The hand-off code is copied to chip memory as before (step 10).
+
 boot2 does, in order:
 
 1. **Probe the CPU** with its own trap-guarded instruction probe (68030,
