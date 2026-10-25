@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-25 — S1-19 defects: AGA display state at hand-off, boot device name (301b836, 3b404c7)
+
+boot2 restores the display state the 1992 console expects before it starts the kernel: a null copper list and FMODE,
+BPLCON3, BPLCON4 at their power-on values (the AGA console garbling on rig row N21: the stock console programs only
+OCS/ECS registers and the loader's Intuition screen had left AGA fetch modes behind). The loader banner prints the boot
+device's name instead of an io_Unit pointer and the loader record's unit is the real unit. mkstore gains -c serial|screen|both
+and -m <tenths>. boot2 26 008 B. Confirmation run on the rig pending.
+
 ## 2026-10-25 — spec changes after freeze for D-3 §10–13 (0acd5c6..5d2bcd6)
 
 §10 the CD boots boot2 as an AmigaDOS program (amix-cdboot; manifest file= members; needs a boot ROM with a CD filesystem);
