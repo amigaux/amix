@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-25 — spec changes after freeze for D-3 §10–13 (0acd5c6..5d2bcd6)
+
+§10 the CD boots boot2 as an AmigaDOS program (amix-cdboot; manifest file= members; needs a boot ROM with a CD filesystem);
+§11 one compacted disk numbering on both lines; §12 deviation DV-1 approved (below 5 % margin → form B); §13 signing out of 1.1:
+60 rewritten as integrity, signing and publishing (1.1 = per-package hash; an optional #ksig catalog line, an apkg verify step
+recording "unverified", a verified= field and a future require-signature policy keep the hook). boot2's development-load message
+matches the spec (boot2 25 852 B). Fact recorded: today's catalog carries MD5 + size; SHA-256 entries are new in apkg 0.3.
+
 ## 2026-10-25 — boot1 stops on failure (3081ee1)
 
 boot1 stops with a message on the serial port instead of returning failure to the strap: on the Z3660 boot ROM chain a
