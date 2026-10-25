@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-25 — stage 1 plan and the first loader code (f4081f5..b029dbe)
+
+Stage 1 plan (docs/plan/stage-1.md: 28 items plus 3 that wait for the CD fork, each with owner repo, evidence class, what
+it blocks and an estimate). Toolchain pin with a presence check (gcc-cross-amix 8949028: GCC 2.7.2.3, binutils 2.8.1);
+shared C89 store-format, CRC-32 and GMF1 manifest code with 94 host checks; boot1 in position-independent assembly,
+784 of 1008 bytes, under a build gate on size and relocations, framed so the stock 1992 bootblock also passes the gate;
+mkstore/lsstore host tools with a store round-trip test. Spec change after freeze: boot1 reports failures on the serial
+port only (screen output needs graphics.library, which does not fit in 1 KB). boot1 not yet run on any Amiga (S1-19).
+
 ## 2026-10-25 — M-NET1a/b measured; S0 frozen (4d9c5e6..2506516)
 
 Netinstall miniroot (installer + network userland + HTTP apkg): 2 562 866 B (k30) / 2 468 595 B (k46) raw, 959 940 B /
