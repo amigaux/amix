@@ -117,22 +117,48 @@ amix_kpkgroll() {
 	unset _kr_work _kr_root _kr_pkg _kr_ver _kr_out _kr_spool _kr_magic _kr_rt _kr_n _kr_p
 }
 
-# amix_kstage_sidecar <port-sidecar> <shipped-unix> <out> -- the sidecar of
-# the form actually shipped.  Every line of the kernel build's sidecar is
-# copied byte for byte EXCEPT size= and sha256=, which are restated from the
-# shipped file (the build describes its ET_REL link; stage 2 ships the brel
-# conversion, which is 27 % smaller).  Refuses unless both keys exist once.
+# amix_kstage_sidecar <build-sidecar> <shipped-unix> <out> <bss> -- the
+# kernel build's sidecar FOR THE FORM SHIPPED (C2-3 v4 sec 2, sec 5).  The
+# kernel build wrote it for its ET_REL link; stage 2 ships the brel, and the
+# recipe step that converts ET_REL -> brel is the last step of that build, so
+# it writes the brel's sidecar here: every line of the build's sidecar byte
+# for byte, except size= and sha256=, which describe the brel file, and
+# bss=, added after sha256= -- the bytes past the brel image to the kernel's
+# end (bss and COMMON), which a brel does not record.  Packaging then copies
+# this file verbatim.  Refuses unless size= and sha256= exist once and the
+# build's sidecar carries no bss= of its own that disagrees.
 amix_kstage_sidecar() {
 	_ks_size=$(stat -c%s "$2")
 	_ks_sha=$(sha256sum "$2" | cut -c1-64)
 	[ "$(grep -c '^size=' "$1")" = 1 ] && [ "$(grep -c '^sha256=' "$1")" = 1 ] || {
 		echo "[FAIL] $1 lacks exactly one size= and one sha256=" >&2; exit 1; }
-	awk -v s="$_ks_size" -v h="$_ks_sha" '
+	case "$4" in ''|*[!0-9]*) echo "[FAIL] amix_kstage_sidecar: bss '$4' is not a number" >&2; exit 1 ;; esac
+	if grep -q '^bss=' "$1" && ! grep -qx "bss=$4" "$1"; then
+		echo "[FAIL] $1 already says $(grep '^bss=' "$1"), not bss=$4" >&2; exit 1
+	fi
+	awk -v s="$_ks_size" -v h="$_ks_sha" -v b="$4" '
+		/^bss=/    { next }
 		/^size=/   { print "size=" s; next }
-		/^sha256=/ { print "sha256=" h; next }
+		/^sha256=/ { print "sha256=" h; print "bss=" b; next }
 		{ print }' "$1" > "$3"
-	# exactly two lines may differ
+	# exactly size=, sha256= and bss= may differ
 	_ks_d=$(diff "$1" "$3" | grep -c '^>' || true)
-	[ "$_ks_d" -le 2 ] || { echo "[FAIL] sidecar restatement changed $_ks_d lines" >&2; exit 1; }
+	[ "$_ks_d" -le 3 ] || { echo "[FAIL] sidecar restatement changed $_ks_d lines" >&2; exit 1; }
 	unset _ks_size _ks_sha _ks_d
+}
+
+# amix_kbrel_bss <et_rel> <brel> <axrel> -- the brel's bss= measured twice:
+# elf2brel's own bss-tail (the converter that stamps `end`) is passed in by
+# the caller as K_BSS_E2B; the loader's relocator binds the ET_REL at 0 and
+# its end minus the brel's combined image size is the second reading.  The
+# two must agree; prints the value.
+amix_kbrel_bss() {
+	_kb_end=$("$3" "$1" 0 /dev/null pcrel 2>&1 | sed -n 's/.*end 0x\([0-9a-f]*\)$/\1/p')
+	_kb_img=$("$3" "$2" 0 /dev/null 2>&1 | sed -n 's/.*end 0x\([0-9a-f]*\)$/\1/p')
+	[ -n "$_kb_end" ] && [ -n "$_kb_img" ] || { echo "[FAIL] axrel could not bind $1 / $2" >&2; exit 1; }
+	_kb_bss=$(( 0x$_kb_end - 0x$_kb_img ))
+	[ "$_kb_bss" = "$K_BSS_E2B" ] || {
+		echo "[FAIL] bss: elf2brel says $K_BSS_E2B, the loader's relocator $_kb_bss" >&2; exit 1; }
+	echo "$_kb_bss"
+	unset _kb_end _kb_img _kb_bss
 }
