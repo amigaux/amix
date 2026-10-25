@@ -132,8 +132,9 @@ syntax), ≤ 1024 bytes including the bootblock framing. It has one job:
    boot2 extent and check it.
 5. Jump to boot2 with a1 (the IOStdReq), the partition start, the header,
    and a code saying which boot2 copy it took and why.
-6. If no header or no boot2 is valid, put one line on the screen and
-   **return to the strap with a failure code**, so Kickstart can try the next
+6. If no header or no boot2 is valid, put one line on the serial port (the
+   screen needs graphics.library, which does not fit in 1 KB; boot2 owns the
+   screen) and **return to the strap with a failure code**, so Kickstart can try the next
    boot node. (What the strap does with the return value is not recorded in
    the tree; M-LD3 measures it. If returning proves unsafe, boot1 halts with
    the message instead.)
@@ -570,9 +571,9 @@ a mouse click; where a choice is needed the menu opens.
 
 | Code | Condition | Action |
 |---|---|---|
-| B1 | no valid store header (boot1) | print, return to the strap |
+| B1 | no valid store header (boot1) | print (serial port only), return to the strap |
 | B2 | primary boot2 CRC bad | print, use the secondary copy |
-| B3 | both boot2 copies bad | print, return to the strap |
+| B3 | both boot2 copies bad | print (serial port only), return to the strap |
 | B4 | loader trial: the new boot2 already had its attempt, or the tally write failed | print, use the secondary copy |
 | L1 | CPU line of the generation ≠ probed CPU | name both; menu |
 | L2 | manifest missing or CRC bad | name the generation; continue in the order of §7.2 (default, other good newest first, pristine, menu) |
