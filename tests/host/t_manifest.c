@@ -103,6 +103,17 @@ test_manifest(void)
 	T_EQ(m.kernel.vol, 2);
 	T_EQ(m.kernel.at, 0x800);
 
+	/* a CD manifest: members by file name in the line directory */
+	n = seal("GMF1\ngeneration 7\nline k46\nroot sd id=c0de0100 unit=1 slice=1\n"
+		 "kernel unix 1500000 file=UNIX stored=700000 z=deflate crc32=12345678\n");
+	T_EQ(parse(n, &line), AXM_OK);
+	T_CHECK(m.kernel.file && strcmp(m.kernel.file, "UNIX") == 0);
+	T_EQ(m.kernel.has_at, 0);
+	T_EQ(m.kernel.stored, 700000);
+	/* both an extent and a file: refused */
+	n = seal("GMF1\ngeneration 7\nline k46\nkernel unix 10 at=0x800 file=UNIX crc32=00000000\n");
+	T_EQ(parse(n, &line), AXM_EMISSING);
+
 	/* refusals */
 	n = seal(example);
 	buf[30] ^= 1;			/* one changed byte */

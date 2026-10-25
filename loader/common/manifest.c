@@ -148,6 +148,8 @@ attrs(struct ax_member *mb, char **tok, int ntok)
 			mb->match = a + 6;
 		} else if (prefix(a, "path=")) {
 			mb->path = a + 5;
+		} else if (prefix(a, "file=")) {
+			mb->file = a + 5;
 		}
 		/* other attributes are for kbootset and the kernel */
 	}
@@ -183,11 +185,16 @@ member(struct ax_member *mb, int kind, char **tok, int ntok)
 	return attrs(mb, tok + i, ntok - i);
 }
 
-/* what the loader itself must find in a member it loads from the store */
+/* what the loader itself must find in a member it loads: a CRC, and either
+ * a store extent (2048-aligned) or, on a CD, a file in the line directory */
 static int
 loadable(const struct ax_member *mb)
 {
-	return mb->has_at && mb->has_crc && mb->at % 2048 == 0;
+	if (!mb->has_crc)
+		return 0;
+	if (mb->file && *mb->file)
+		return !mb->has_at;
+	return mb->has_at && mb->at % 2048 == 0;
 }
 
 /* one record (the line is NUL-terminated, without its newline) */

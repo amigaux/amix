@@ -26,9 +26,9 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot b2test clean
 
-all: test tools cross boot1 boot2 b2test
+all: test tools cross boot1 boot2 cdboot b2test
 
 $(B):
 	mkdir -p $(B)
@@ -135,6 +135,30 @@ $(B)/boot2.bin: $(B)/boot2.r.o $(B)/b2link
 	$(B)/b2link $< $@
 
 boot2: toolchain-check $(B)/boot2.bin
+
+# amix-cdboot: boot2's core with the CD entry (cdstart.s first, then
+# cdmain.c), written as an AmigaDOS load file; hunkcheck proves its
+# RELOC32 table reproduces the relocator's binding.
+CDOBJ  := $(B)/cross/cdstart.o $(B)/cross/amiga.o $(B)/cross/b2_cdmain.o \
+          $(patsubst loader/boot2/%.c,$(B)/cross/b2_%.o,$(B2LIB)) $(COBJ)
+
+$(B)/cross/cdstart.o: loader/boot2/cdstart.s
+	@mkdir -p $(B)/cross
+	$(CROSS)as -o $@ $<
+
+$(B)/cdboot.r.o: $(CDOBJ)
+	$(CROSS)ld -r -o $@ $(CDOBJ)
+
+$(B)/hunkcheck: tests/host/hunkcheck.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/hunkcheck.c $(COMMON)/rel.c
+
+$(B)/amix-cdboot: $(B)/cdboot.r.o $(B)/b2link $(B)/hunkcheck
+	$(CROSS)scan060 $(CDOBJ)
+	$(B)/b2link -h $< $@
+	$(B)/hunkcheck $< $@ 0x00200000
+	$(B)/hunkcheck $< $@ 0x0812f3a0
+
+cdboot: toolchain-check $(B)/amix-cdboot
 
 # The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
 # with start.s first, b2link, then b2check proves the table reproduces the

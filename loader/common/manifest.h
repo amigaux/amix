@@ -49,6 +49,7 @@ struct ax_member {
 	char *sha256;		/* 64 hex digits, or 0 */
 	char *match;		/* comma-separated match keys, or 0 */
 	char *path;		/* root-filesystem path (boot/demand class), or 0 */
+	char *file;		/* a file in the line directory (CD media), or 0 */
 };
 
 struct ax_manifest {

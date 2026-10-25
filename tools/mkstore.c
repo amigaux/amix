@@ -21,6 +21,17 @@
  *   -c WHAT    console: serial, screen or both (default both)
  *   -m DS      menu window in tenths of a second (default 20; 0 = none)
  *
+ * or:    mkstore -C DIR [-x AMIX-CDBOOT] [-d DEFAULT] [-c ...] [-m DS] SPEC...
+ *
+ *   -C DIR     a CD-ROM tree instead of a store (§4.4): each generation goes
+ *              to DIR/BOOT/K30 or DIR/BOOT/K46 by its `line` record, with a
+ *              read-only control file CONTROL per line, the manifest as
+ *              G<id>.GMF and its members as G<id>K.BIN (kernel), G<id>R.BIN
+ *              (ramdisk) and G<id>M<nn>.BIN (root modules), named with
+ *              file= -- ISO9660 8.3 names, so any mastering keeps them
+ *   -x FILE    also copy amix-cdboot to DIR/BOOT/amix-cdboot and write
+ *              DIR/S/Startup-Sequence to run it
+ *
  * Each SPEC file describes one generation.  Lines are copied into the
  * manifest as written, except:
  *   state pristine|good|trial|bad      (control block only; required)
@@ -34,11 +45,14 @@
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
+#define _POSIX_C_SOURCE 200112L	/* mkdir */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <zlib.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include "crc32.h"
 #include "store.h"
 #include "manifest.h"
@@ -51,6 +65,8 @@ static int nvol = 1, curvol;		/* curvol: 0-based volume being filled */
 static ax_u32 store_size = 64UL << 20;
 static ax_u32 next_free = AX_DATA_OFF;
 #define store (vols[0])
+static const char *cdroot;		/* -C: the CD tree, else 0 */
+static char cddir[1024];		/* -C: the line directory being filled */
 
 static void
 die(const char *msg, const char *arg)
@@ -103,6 +119,54 @@ place(const unsigned char *p, ax_u32 len, ax_u16 *vol)
 	return off;
 }
 
+static void
+makedir(const char *path)
+{
+	if (mkdir(path, 0777) != 0 && errno != EEXIST)
+		die("cannot create directory", path);
+}
+
+/* -C: write len bytes as the file DIR/sub/name (sub may be 0 = cddir) */
+static void
+put_file(const char *sub, const char *name, const unsigned char *p, ax_u32 len)
+{
+	char path[1200];
+	FILE *f;
+
+	if (sub)
+		sprintf(path, "%s/%s/%s", cdroot, sub, name);
+	else
+		sprintf(path, "%s/%s", cddir, name);
+	if (!(f = fopen(path, "wb")) || fwrite(p, 1, len, f) != len || fclose(f) != 0)
+		die("cannot write", path);
+}
+
+/* -C: the line directory of a spec, from its `line` record; 0 = k30 */
+static int
+spec_line(const char *spec)
+{
+	char line[1024];
+	FILE *f = fopen(spec, "r");
+	int k = -1;
+
+	if (!f)
+		die("cannot open", spec);
+	while (k < 0 && fgets(line, sizeof(line), f)) {
+		if (!strncmp(line, "line k30", 8) && (line[8] == '\n' || line[8] == ' ' || !line[8]))
+			k = 0;
+		else if (!strncmp(line, "line k46", 8) && (line[8] == '\n' || line[8] == ' ' || !line[8]))
+			k = 1;
+		else if (!strncmp(line, "line ", 5))
+			die("line must be k30 or k46", spec);
+	}
+	fclose(f);
+	if (k < 0)
+		die("a CD generation needs a 'line' record", spec);
+	sprintf(cddir, "%s/BOOT/%s", cdroot, k ? "K46" : "K30");
+	makedir(cddir);
+	return k;
+}
+
 /* raw deflate at level 9; returns a malloc'd buffer */
 static unsigned char *
 deflate_raw(const unsigned char *in, ax_u32 n, ax_u32 *outn)
@@ -144,9 +208,10 @@ generation(const char *spec, struct ax_gen *g)
 	char line[1024], out[1024];
 	char *tok[16];
 	FILE *f = fopen(spec, "r");
-	ax_u32 mlen = 0, flen, crc, off;
-	ax_u16 vol;
-	int n, state = -1, i, have_gen = 0;
+	ax_u32 mlen = 0, flen, crc, off = 0;
+	ax_u16 vol = 1;
+	int n, state = -1, i, have_gen = 0, nmod = 0;
+	char fname[16];
 	unsigned char *data;
 	struct ax_manifest chk;
 	int errline;
@@ -185,21 +250,35 @@ generation(const char *spec, struct ax_gen *g)
 				else if (!strncmp(tok[i], "z=", 2) && strcmp(tok[i], "z=none"))
 					die("unknown compression", tok[i]);
 			}
+			if (cdroot) {
+				if (!have_gen || g->id > 9999)
+					die("a CD generation needs its id (0..9999) before the members", spec);
+				if (tok[0][0] == 'm' && ++nmod > 99)
+					die("too many modules", spec);
+				if (tok[0][0] == 'm')
+					sprintf(fname, "G%luM%02d.BIN", (unsigned long)g->id, nmod);
+				else
+					sprintf(fname, "G%lu%c.BIN", (unsigned long)g->id,
+						tok[0][0] == 'k' ? 'K' : 'R');
+			}
 			data = slurp(tok[fi], &flen);
 			crc = ax_crc32(tab, data, flen);
-			if (zip) {
-				zdata = deflate_raw(data, flen, &zlen);
-				off = place(zdata, zlen, &vol);
-				free(zdata);
-			} else {
+			zdata = zip ? deflate_raw(data, flen, &zlen) : data;
+			if (!zip)
 				zlen = flen;
-				off = place(data, flen, &vol);
-			}
+			if (cdroot)
+				put_file(0, fname, zdata, zlen);
+			else
+				off = place(zdata, zlen, &vol);
+			if (zip)
+				free(zdata);
 			free(data);
 			out[0] = 0;
 			for (i = 0; i < fi; i++)
 				sprintf(out + strlen(out), "%s ", tok[i]);
-			if (vol > 1)
+			if (cdroot)
+				sprintf(out + strlen(out), "%lu file=%s", (unsigned long)flen, fname);
+			else if (vol > 1)
 				sprintf(out + strlen(out), "%lu at=%u:0x%lx", (unsigned long)flen, vol,
 					(unsigned long)off);
 			else
@@ -235,15 +314,90 @@ generation(const char *spec, struct ax_gen *g)
 	g->state = (ax_u8)state;
 	g->man_len = mlen;
 	g->man_crc = ax_crc32(tab, (ax_u8 *)man, mlen);
-	g->man_off = place((unsigned char *)man, mlen, &vol);
-	g->volume = vol;
+	if (cdroot) {
+		sprintf(fname, "G%lu.GMF", (unsigned long)g->id);
+		put_file(0, fname, (unsigned char *)man, mlen);
+		g->man_off = 0;
+		g->volume = 0;
+	} else {
+		g->man_off = place((unsigned char *)man, mlen, &vol);
+		g->volume = vol;
+	}
 	g->created = (ax_u32)time(0);
+}
+
+/* -C: the CD tree; one read-only control file per line directory */
+static int
+cdtree(char **spec, int nspec, const char *cdboot, ax_u32 deflt, ax_u16 console, ax_u16 menu_ds)
+{
+	static const char *const sub[2] = { "BOOT/K30", "BOOT/K46" };
+	static struct ax_ctl c[2];
+	static unsigned char blk[AX_BLK];
+	char path[1100];
+	unsigned char *p;
+	ax_u32 len, d;
+	int i, k, n = 0;
+
+	ax_crc32_init(tab);
+	makedir(cdroot);
+	sprintf(path, "%s/BOOT", cdroot);
+	makedir(path);
+	for (k = 0; k < 2; k++) {
+		memset(&c[k], 0, sizeof(c[k]));
+		c[k].seq = 1;
+		c[k].menu_ds = menu_ds;
+		c[k].console = console;
+		c[k].serial_baud = 9600;
+	}
+	for (i = 0; i < nspec; i++) {
+		struct ax_gen *g;
+
+		k = spec_line(spec[i]);
+		if (c[k].ngen == AX_MAXGEN)
+			die("too many generations for one line", spec[i]);
+		g = &c[k].gen[c[k].ngen++];
+		generation(spec[i], g);
+		if (g->state == AXG_TRIAL)
+			die("a CD is read-only: no trial generation", spec[i]);
+	}
+	for (k = 0; k < 2; k++) {
+		if (!c[k].ngen)
+			continue;
+		for (d = 0, i = 0; i < c[k].ngen; i++)
+			if (c[k].gen[i].id == deflt)
+				d = deflt;
+		for (i = 0; !d && i < c[k].ngen; i++)
+			if (c[k].gen[i].state == AXG_GOOD || c[k].gen[i].state == AXG_PRISTINE)
+				d = c[k].gen[i].id;
+		c[k].default_gen = d;
+		ax_ctl_write(tab, &c[k], blk);
+		put_file(sub[k], "CONTROL", blk, AX_BLK);
+		n += c[k].ngen;
+	}
+	if (cdboot) {
+		static const char ss[] =
+			"; Amix CD boot: amix-cdboot loads the Amix kernel for this CPU\n"
+			"; from BOOT/K30 or BOOT/K46 and does not return when it boots.\n"
+			"SYS:BOOT/amix-cdboot\n";
+
+		p = slurp(cdboot, &len);
+		if (len < 32 || p[0] || p[1] || p[2] != 0x03 || p[3] != 0xF3)
+			die("not an AmigaDOS load file", cdboot);
+		put_file("BOOT", "amix-cdboot", p, len);
+		free(p);
+		sprintf(path, "%s/S", cdroot);
+		makedir(path);
+		put_file("S", "Startup-Sequence", (const unsigned char *)ss, sizeof(ss) - 1);
+	}
+	printf("mkstore: %s: CD tree, %d generation(s)%s%s%s\n", cdroot, n,
+	       c[0].ngen ? ", K30" : "", c[1].ngen ? ", K46" : "", cdboot ? ", amix-cdboot" : "");
+	return 0;
 }
 
 int
 main(int argc, char **argv)
 {
-	const char *image[MAXVOL], *b1 = 0, *b2 = 0, *b2b = 0;
+	const char *image[MAXVOL], *b1 = 0, *b2 = 0, *b2b = 0, *cdboot = 0;
 	unsigned long poff = 0;
 	ax_u32 ver = 1, deflt = 0, len, ctloff;
 	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, i, v;
@@ -280,10 +434,19 @@ main(int argc, char **argv)
 			else die("-c takes serial, screen or both", argv[i]);
 		}
 		else if (!strcmp(argv[i], "-m")) menu_ds = (ax_u16)strtoul(argv[++i], 0, 0);
+		else if (!strcmp(argv[i], "-C")) cdroot = argv[++i];
+		else if (!strcmp(argv[i], "-x")) cdboot = argv[++i];
 		else die("unknown option", argv[i]);
 	}
 	if (i + 1 < argc && (!strcmp(argv[argc - 1], "-r") || !strcmp(argv[argc - 1], "-f")))
 		die("options go before the spec files", 0);
+	if (cdroot) {
+		if (nimg || b1 || b2 || b2b || floppy || i >= argc)
+			die("usage: mkstore -C DIR [-x AMIX-CDBOOT] [-d ID] [-c serial|screen|both] [-m DS] SPEC...", 0);
+		return cdtree(argv + i, argc - i, cdboot, deflt, console, menu_ds);
+	}
+	if (cdboot)
+		die("-x goes with -C", 0);
 	if (floppy && !sizeset)
 		store_size = 901120;
 	if (nimg > 1 && !floppy)

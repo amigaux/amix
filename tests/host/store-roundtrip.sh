@@ -61,3 +61,38 @@ $B/lsstore $T/boot1.adf 0 $T/boot2.adf | tee $T/f.out
 grep -q "ramdisk miniroot .* at 2:0x800" $T/f.out
 grep -q "header A: seq 1, store 901120 bytes, flags 0x6, volume 1/2" $T/f.out
 echo "store-roundtrip: floppy pair ok"
+
+# a CD tree (spec 10 §4.4): one generation per line directory, members as
+# file= names, the manifest as G<id>.GMF; a corrupted member is caught and
+# a trial generation is refused on read-only media
+C=$T/cd
+sed 's/^state good/state pristine/' $T/g41.spec > $T/c41.spec
+cat > $T/c12.spec <<SPEC
+generation 12
+state pristine
+line k30
+rootfs ufs
+root ramdisk
+swap none
+kernel unix $T/fkernel
+ramdisk miniroot $T/miniroot z=deflate
+SPEC
+# a stand-in for amix-cdboot: the tree only checks the load-file magic
+printf '\000\000\003\363' > $T/cdboot && head -c 60 /dev/zero >> $T/cdboot
+$B/mkstore -C $C -x $T/cdboot $T/c12.spec $T/c41.spec
+$B/lsstore -C $C | tee $T/c.out
+grep -q "kernel  unix .* file G12K.BIN  crc .* ok" $T/c.out
+grep -q "ramdisk miniroot .* file G12R.BIN (deflate)  crc .* ok" $T/c.out
+grep -q "module  z3660scsi .* file G41M01.BIN (deflate)  crc .* ok" $T/c.out
+[ -f $C/BOOT/K30/G12.GMF ] && [ -f $C/BOOT/K46/G41.GMF ] && [ -f $C/BOOT/amix-cdboot ]
+grep -q "^SYS:BOOT/amix-cdboot$" $C/S/Startup-Sequence
+grep -q "^kernel unix 600000 file=G12K.BIN crc32=" $C/BOOT/K30/G12.GMF
+printf '\377' | dd of=$C/BOOT/K46/G41K.BIN bs=1 seek=100 conv=notrunc 2>/dev/null
+if $B/lsstore -C $C >/dev/null; then
+	echo "store-roundtrip: CD corruption NOT detected" >&2; exit 1
+fi
+sed 's/^state pristine/state trial/' $T/c12.spec > $T/ct.spec
+if $B/mkstore -C $T/cdt $T/ct.spec 2>/dev/null; then
+	echo "store-roundtrip: trial generation accepted on a CD" >&2; exit 1
+fi
+echo "store-roundtrip: CD tree ok"

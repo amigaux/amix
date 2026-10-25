@@ -4,7 +4,11 @@
  * self-relocation table its start-up stub applies (loader/boot2/start.s).
  * (docs/plan/stage-1.md S1-11.)
  *
- * usage: b2link IN.o OUT.bin
+ * usage: b2link IN.o OUT.bin       boot2 behind boot1 (self-relocating)
+ *        b2link -h IN.o OUT        amix-cdboot: an AmigaDOS load file (one
+ *                                  code hunk with bss, HUNK_RELOC32 for the
+ *                                  same fields, an empty self-relocation
+ *                                  table) -- docs/spec/10-boot-loader.md §4.4
  *
  * Refuses: an image whose first bytes are not the start.s header; undefined
  * or unbound symbols; a file longer than 28672 bytes or an image plus bss
@@ -34,6 +38,56 @@ note(void *ctx, ax_u32 off)
 	offs[noffs++] = off;
 }
 
+static void
+put(FILE *f, ax_u32 v)
+{
+	unsigned char b[4];
+
+	AX_PUT32(b, v);
+	fwrite(b, 1, 4, f);
+}
+
+/* AmigaDOS load file: HUNK_HEADER, one HUNK_CODE (image + an empty
+ * self-relocation table; the hunk's allocation includes bss), HUNK_RELOC32
+ * for every 0-based address field, HUNK_END */
+static int
+write_hunk(const char *path, unsigned char *img, ax_u32 span, ax_u32 bss)
+{
+	FILE *f = fopen(path, "wb");
+	ax_u32 code = (span + 4) / 4, alloc = (span + 4 + bss + 3) / 4, i;
+
+	if (!f) {
+		perror(path);
+		return 1;
+	}
+	put(f, 0x3F3);				/* HUNK_HEADER */
+	put(f, 0);				/* no resident library names */
+	put(f, 1);				/* one hunk */
+	put(f, 0);
+	put(f, 0);
+	put(f, alloc);
+	put(f, 0x3E9);				/* HUNK_CODE */
+	put(f, code);
+	fwrite(img, 1, span, f);
+	put(f, 0);				/* the empty self-relocation table */
+	if (noffs) {
+		put(f, 0x3EC);			/* HUNK_RELOC32 */
+		put(f, noffs);
+		put(f, 0);			/* against hunk 0 */
+		for (i = 0; i < noffs; i++)
+			put(f, offs[i]);
+		put(f, 0);
+	}
+	put(f, 0x3F2);				/* HUNK_END */
+	if (fclose(f) != 0) {
+		perror(path);
+		return 1;
+	}
+	printf("b2link: AmigaDOS load file, code %lu bytes, %lu relocations, bss %lu\n",
+	       (unsigned long)(code * 4), (unsigned long)noffs, (unsigned long)bss);
+	return 0;
+}
+
 static int
 cmp(const void *a, const void *b)
 {
@@ -50,10 +104,14 @@ main(int argc, char **argv)
 	ax_u32 span, bss, total, i;
 	struct ax_bootdata bd;
 	struct ax_relerr er;
-	int rc;
+	int rc, hunk = 0;
 
+	if (argc == 4 && !strcmp(argv[1], "-h")) {
+		hunk = 1;
+		argv++, argc--;
+	}
 	if (argc != 3) {
-		fprintf(stderr, "usage: b2link IN.o OUT.bin\n");
+		fprintf(stderr, "usage: b2link [-h] IN.o OUT\n");
 		return 2;
 	}
 	if (!(f = fopen(argv[1], "rb"))) {
@@ -92,15 +150,17 @@ main(int argc, char **argv)
 	AX_PUT32(out + 8, span);
 	AX_PUT32(out + 12, bss);
 	AX_PUT32(out + 16, span);
-	AX_PUT32(out + span, noffs);
-	for (i = 0; i < noffs; i++) {
+	for (i = 0; i < noffs; i++)
 		if (offs[i] + 4 > span || offs[i] < 20) {
 			fprintf(stderr, "b2link: relocated field at 0x%lx is outside the image\n",
 				(unsigned long)offs[i]);
 			return 1;
 		}
+	if (hunk)
+		return write_hunk(argv[2], out, span, bss);
+	AX_PUT32(out + span, noffs);
+	for (i = 0; i < noffs; i++)
 		AX_PUT32(out + span + 4 + 4 * i, offs[i]);
-	}
 	if (total > AX_BOOT2_MAX || span + bss > AX_BOOT2_MAX) {
 		fprintf(stderr, "b2link: SIZE GATE: file %lu, image + bss %lu; the limit is %lu\n",
 			(unsigned long)total, (unsigned long)(span + bss), (unsigned long)AX_BOOT2_MAX);
