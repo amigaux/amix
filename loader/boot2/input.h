@@ -8,7 +8,7 @@
 
 #include "axtypes.h"
 
-void in_init(void *strap_iob);
+void in_init(void *replyport);
 void in_matrix(ax_u8 m[16]);
 int in_key(void);
 int in_lmb(void);

@@ -20,12 +20,13 @@ static ax_u8 kreq[IOSTD_SIZE];
 static int kopen;
 static ax_u8 prev[16];
 
+/* replyport: a message port of the running task (the strap's, or one the
+ * CD entry creates) */
 void
-in_init(void *strap_iob)
+in_init(void *replyport)
 {
 	x_memset(kreq, 0, sizeof(kreq));
-	/* the strap's reply port belongs to this task: reuse it */
-	*(ax_u32 *)(kreq + 14) = *(ax_u32 *)((ax_u8 *)strap_iob + 14);
+	*(ax_u32 *)(kreq + 14) = (ax_u32)replyport;
 	*(ax_u16 *)(kreq + 18) = IOSTD_SIZE;
 	kopen = x_opendevice("keyboard.device", 0, kreq, 0) == 0;
 	in_matrix(prev);
