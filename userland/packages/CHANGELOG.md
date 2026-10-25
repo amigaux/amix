@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-25 (night) — gcc14 revision -4 on -m68020-60; kernel-space packages -2 with bss= (87d6dc8..4c35db0) — not published
+
+TOOLCHAIN=gcc14 defaults to -m68020-60; the FPU gate fails any fs*/fd* form (040/060-only, absent on a 68881/68882) in every
+ELF and archive of a payload and names the symbol — it caught the toolchain's own runtime (libamixc99 amix_vsnprintf, libgcc
+__floatundidf) before the gcc14 station rebuilt it for 68020-60. grep, less, make re-minted as -4 on the rebuilt runtime:
+20/20 EQUAL with the period builds on E1 (030) and N6 (060). Kernel-space -2 (C2-3 v4): the conversion step writes the
+shipped-form sidecar with bss= (KD060-Z 283 469, ZA-CD 284 945, K030-U 344 918, measured twice); loader-amix and kbootset -2
+from amix-dlm 1230e8b (boot2 27 434 B); round trip on apkg 72f6a72 + kbootset 1230e8b 23/23 incl. the bss= negative.
+
 ## 2026-10-25 (night) — S2-12 kernel-space packages; gcc14 phase-2 smoke (9e54df8..a8f45d2) — minted, not published
 
 kernel-k46-z 1.1.0.261025.51 and kernel-k46-zacd 1.1.0.261025.52: the port's KD060 kernels as brel (27 % smaller; axrel proves
