@@ -57,6 +57,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -71,14 +72,22 @@ VERSION=$MAKE_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 3.81-2 above 3.81.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (phase 2 of
+# the userland switch, owner decision D-3 sec 9); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/make"
+BUILD="$AMIX_BUILD_ROOT/make"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/make-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 echo "=== GNU make $VERSION ==="
 amix_env_banner
@@ -114,13 +123,32 @@ echo
 # ---------------------------------------------------------------------------
 echo "--- cross-configure ---"
 cd "$TREE"
+# TOOLCHAIN=gcc14 pins four configure answers to the period build's.  GCC 14
+# links the SVR4 way -- usr/ccs/lib/libc.so is an archive of libc.so.1 plus
+# static members -- so probes now find what the period link never saw:
+#   elf_begin in -lelf -> AC_FUNC_GETLOADAVG defines SVR4 and takes the
+#     nlist()/kmem load average (the NLIST-COMMON trap, PORTING.md 3.3) with
+#     a setgid-kmem install: pinned no, as the LOADAVG gate below requires;
+#   vfork (static vfork.o) -> pinned no: make keeps fork, as bench-proven;
+#   stdint.h (the compat one) -> make.h then uses uintmax_t without
+#     including it and does not compile: pinned no, uintmax_t stays the
+#     period's `unsigned long long'.
+#   lstat (static lstat.o) -> MAKE_SYMLINKS, whose code needs lstat,
+#     readlink and S_IFLNK, which the -D_POSIX_SOURCE view below hides:
+#     pinned no, as the period build (no symlink-mtime support).
+# realpath/seteuid/setegid (static members) and strsignal (libamixc99, its
+# one owner) are left as GCC 14's configure finds them.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	export ac_cv_lib_elf_elf_begin=no ac_cv_func_vfork=no ac_cv_header_stdint_h=no \
+		ac_cv_func_lstat=no
+fi
 ac_cv_have_decl__sys_siglist=no \
 make_cv_sa_restart=yes \
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS -D_POSIX_SOURCE" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS -D_POSIX_SOURCE $AMIX_CONFIGURE_LENIENT" \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	--disable-nls \
 	--disable-largefile \
@@ -156,7 +184,10 @@ echo
 # 4. Build.
 # ---------------------------------------------------------------------------
 echo "--- make ---"
-make > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS -D_POSIX_SOURCE"
+make "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
@@ -172,6 +203,10 @@ if grep -E 'pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/n
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+fi
 BIN="$TREE/make"
 [ -f "$BIN" ] || { echo "[FAIL] make binary not built" >&2; exit 1; }
 echo
@@ -241,6 +276,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== GNU make $VERSION built ==="

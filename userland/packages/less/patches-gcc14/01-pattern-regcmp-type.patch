@@ -1,0 +1,14 @@
+--- pattern.h	2026-10-25 17:44:23.655135768 +0200
++++ pattern.h	2026-10-25 17:44:23.664275285 +0200
+@@ -59,7 +59,10 @@
+    wrong for this platform and caused "too many arguments".  Use the system ones. */
+ #include <libgen.h>
+ extern char *__loc1;
+-#define PATTERN_TYPE             char **
++/* The compiled pattern is regcmp()'s char *, not char **: upstream's type is
++   wrong, which gcc 2.7 only warned about and GCC 14 rejects
++   (-Wincompatible-pointer-types).  Same pointer, same code. */
++#define PATTERN_TYPE             char *
+ #define SET_NULL_PATTERN(name)   name = NULL
+ #endif
+ 

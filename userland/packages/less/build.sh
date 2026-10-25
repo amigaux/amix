@@ -47,6 +47,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -61,14 +62,22 @@ VERSION=$LESS_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 704-2 above 704.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (phase 2 of
+# the userland switch, owner decision D-3 sec 9); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/less"
+BUILD="$AMIX_BUILD_ROOT/less"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/less-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 CCSLIB="$AMIX_SYSROOT/usr/ccs/lib"
 
@@ -100,6 +109,15 @@ for p in "$HERE"/patches/*.patch; do
 	( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
 		echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
 done
+# TOOLCHAIN=gcc14 only: type fixes gcc 2.7 merely warned about and GCC 14
+# rejects.  Applied after the shared patches; the period build never sees them.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	for p in "$HERE"/patches-gcc14/*.patch; do
+		echo "  applying gcc14 $(basename "$p")"
+		( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
+			echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
+	done
+fi
 amix_gate_noasm "$TREE" || {
 	echo "[FAIL] unexpected .s/.S assembly in the less tree." >&2; exit 1; }
 echo
@@ -110,12 +128,12 @@ echo
 echo "--- cross-configure ---"
 cd "$TREE"
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS -DUSE_TERMCAP" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS -DUSE_TERMCAP $AMIX_CONFIGURE_LENIENT" \
 LDFLAGS="-L$CCSLIB" \
 LIBS="-lc" \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	ac_cv_func_stat=yes \
 	> "$BUILD/configure.log" 2>&1 || {
@@ -152,7 +170,10 @@ echo
 # libs, which do not exist for this target); LIBS carries the real link set,
 # ending in -lc.
 echo "--- make ---"
-make LIBSAN= LIBS="-lgen -lcurses -lc" > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS -DUSE_TERMCAP"
+make LIBSAN= LIBS="-lgen -lcurses -lc" "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
@@ -168,6 +189,10 @@ if grep -E 'pointer from integer|integer from pointer|makes pointer' "$BUILD/mak
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+fi
 for b in less lesskey lessecho; do
 	[ -f "$TREE/$b" ] || { echo "[FAIL] $b not built" >&2; exit 1; }
 done
@@ -217,6 +242,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== less $VERSION built ==="

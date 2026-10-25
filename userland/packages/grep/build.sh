@@ -49,6 +49,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -63,14 +64,22 @@ VERSION=$GREP_VERSION
 # be a different catalog version -- apkg_vercmp orders 2.5.1a-2 above the
 # published 2.5.1a (segments split on '.' and '-', a missing one counts as 0),
 # which is what makes `apkg upgrade grep` engage on a box holding the old one.
-PKGVERSION=$GREP_VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (phase 2 of
+# the userland switch, owner decision D-3 sec 9); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$GREP_VERSION-$PKGREV
 
-BUILD="$REPO/build/grep"
+BUILD="$AMIX_BUILD_ROOT/grep"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/grep-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 ACOMPAT_LIB="$REPO/build/libamixcompat/dest/usr/local/lib"
 
@@ -78,10 +87,18 @@ echo "=== GNU grep $VERSION ==="
 amix_env_banner
 echo
 
-[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
-	echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB (build libamixcompat first)" >&2
-	exit 1
-}
+# strcasecmp: libacompat under the period toolchain; under gcc14 the
+# toolchain runtime libamixc99 owns it (gcc14-env.sh, one owner per symbol)
+# and the specs link it, so LIBS is empty there.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	GREP_LIBS=
+else
+	[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
+		echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB (build libamixcompat first)" >&2
+		exit 1
+	}
+	GREP_LIBS="-L$ACOMPAT_LIB -lacompat -lc"
+fi
 
 mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
@@ -113,11 +130,18 @@ echo
 # ---------------------------------------------------------------------------
 echo "--- cross-configure ---"
 cd "$TREE"
+# TOOLCHAIN=gcc14: the sysroot has the compat stdint.h, and with it grep's
+# configure keeps its `#define uintmax_t unsigned long long' while including
+# <stdint.h> in later probes -- the off_t probe then fails to compile and
+# off_t becomes a macro.  Pinned to the period answer (no stdint.h).
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	export ac_cv_header_stdint_h=no
+fi
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS $AMIX_CONFIGURE_LENIENT" \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	--disable-nls \
 	--disable-perl-regexp \
@@ -157,7 +181,10 @@ echo
 # final link needs -lacompat for strcasecmp.  Wrapper rule (recipes/README): any
 # -l suppresses the implicit libc, so the list ENDS in -lc.
 echo "--- make ---"
-make LIBS="-L$ACOMPAT_LIB -lacompat -lc" > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS"
+make LIBS="$GREP_LIBS" "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
@@ -173,6 +200,10 @@ if grep -E 'pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/n
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+fi
 [ -f "$TREE/src/grep" ] || { echo "[FAIL] grep binary not built" >&2; exit 1; }
 echo
 
@@ -236,6 +267,11 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$GREP_VERSION-2" "$PKGVERSION"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	sed 's/strcasecmp comes from libacompat, statically linked/strcasecmp comes from the toolchain runtime libamixc99 (GCC 14 build)/' \
+		"$WORK/pkginfo" > "$WORK/pkginfo.g14" && mv "$WORK/pkginfo.g14" "$WORK/pkginfo"
+fi
 grep "^VERSION=$PKGVERSION\$" "$WORK/pkginfo" >/dev/null || {
 	echo "[FAIL] pkginfo VERSION is not $PKGVERSION -- bump pkginfo with the revision" >&2
 	exit 1
