@@ -61,9 +61,16 @@ reproduced):
   the NUL in its length (`boot-process.md:224-258`).
 
 Our boot1 keeps the same bootblock framing (header longwords, checksum,
-trailer) and reproduces the SuperKickstart return. Which header fields the
-strap actually checks on a floppy and on an RDB partition is measured, not
-assumed (M-LD1). A CD is a different case: the ROM's ISO9660 boot node runs
+trailer) and reproduces the SuperKickstart return. What the strap checks
+was measured (M-LD1, `docs/measurements/2026-10-26-m-ld1-m-ld3.md`) on
+Kickstart 3.1 and 3.2.x, on a floppy and on an RDB `UNI\0` partition:
+- the magic's first three bytes, `DOS` (the type byte is not checked);
+- the checksum.
+
+It does not check the third longword or the trailer. A bootblock whose
+magic is `UNI\0`, the partition's DosType, counts as none. When the strap
+refuses a disk partition it shows the insert-disk screen; when it refuses
+DF0 it tries the next boot node. The Z3660 boot ROM is measured on metal. A CD is a different case: the ROM's ISO9660 boot node runs
 no bootblock at all; the CD route starts the loader from AmigaDOS (§4.4,
 M-LD2).
 
