@@ -297,7 +297,8 @@ static struct medium store = {
 };
 
 long
-boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, void *execbase)
+boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, void *execbase,
+	   ax_u32 infast)
 {
 	ax_u8 *cb;	/* both control-block copies, allocated: bss is boot1's space */
 	struct ax_ctl ctl;	/* core_boot keeps its own copy */
@@ -315,6 +316,8 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		con_puts("amix-boot: B2 primary boot2 damaged, secondary used\n");
 	if (choice & 0x200)
 		con_puts("amix-boot: B4 new loader already started once, previous loader used\n");
+	if (!infast)
+		con_puts("amix-boot: no fast memory: the loader runs from chip memory\n");
 
 	bounce = x_allocmem(BOUNCE, MEMF_CHIP);
 	if (!bounce) {
