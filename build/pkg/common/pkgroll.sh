@@ -31,6 +31,24 @@ pkgroll.sh)
 	;;
 esac
 
+# amix_pkginfo_retag <pkginfo> <committed-version> <package-version> -- the
+# committed pkginfo carries the period build's revision.  A TOOLCHAIN=gcc14
+# build is different bytes, so it is a different package revision (a name
+# never refers to two byte-sets): rewrite VERSION and PSTAMP in the WORK copy,
+# never the committed file.  A no-op for the period toolchain.
+amix_pkginfo_retag() {
+	[ "$AMIX_TOOLCHAIN" = gcc14 ] || return 0
+	[ "$2" = "$3" ] && return 0
+	awk -v old="$2" -v new="$3" '
+		$0 == "VERSION=" old { print "VERSION=" new; next }
+		/^PSTAMP=/ && substr($0, length($0) - length(old) + 1) == old {
+			print substr($0, 1, length($0) - length(old)) new "-gcc14"; next }
+		{ print }' "$1" > "$1.retag" && mv "$1.retag" "$1"
+	grep "^VERSION=$3\$" "$1" >/dev/null || {
+		echo "[FAIL] could not retag $1 from $2 to $3" >&2; exit 1; }
+	echo "  pkginfo retagged for gcc14: VERSION=$3, $(grep '^PSTAMP=' "$1")"
+}
+
 amix_pkgroll() {
 	_pr_work="$1"
 	_pr_root="$2"

@@ -42,6 +42,40 @@ if [ ! -f "$AMIX_REPO_ROOT/recipes/common/amix-env.sh" ]; then
 fi
 AMIX_SIBLINGS=$(cd "$AMIX_REPO_ROOT/.." && pwd)
 
+# --- which toolchain ---------------------------------------------------------
+# TOOLCHAIN=period (the default): gcc-cross-amix, gcc 2.7.2.3 behind the
+# fix_asm wrapper -- the toolchain every published package was built with.
+# TOOLCHAIN=gcc14: gcc14-cross-amix, GCC 14 (owner decision D-3 sec 9,
+# 2026-10-25: the USERLAND compiler; kernel space stays on the period one).
+# Everything gcc14 changes is in gcc14-env.sh.  A recipe opts in by setting
+# AMIX_RECIPE_TOOLCHAINS="period gcc14" before sourcing this file; one that
+# has not been ported refuses gcc14 rather than half-building.
+AMIX_TOOLCHAIN="${TOOLCHAIN:-${AMIX_TOOLCHAIN:-period}}"
+case "$AMIX_TOOLCHAIN" in
+period|gcc14) ;;
+*)
+	echo "[FAIL] TOOLCHAIN=$AMIX_TOOLCHAIN -- known: period (default), gcc14" >&2
+	exit 1
+	;;
+esac
+case " ${AMIX_RECIPE_TOOLCHAINS:-period} " in
+*" $AMIX_TOOLCHAIN "*) ;;
+*)
+	echo "[FAIL] this recipe is not ported to TOOLCHAIN=$AMIX_TOOLCHAIN" >&2
+	echo "       (it declares: ${AMIX_RECIPE_TOOLCHAINS:-period})" >&2
+	exit 1
+	;;
+esac
+export AMIX_TOOLCHAIN
+# The triplet configure is told (--host): the target OS is SVR4 whatever
+# compiler builds for it.  AMIX_TARGET stays the tool prefix.
+export AMIX_HOST_TRIPLET=m68k-cbm-sysv4
+
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	. "$AMIX_REPO_ROOT/recipes/common/gcc14-env.sh"
+else
+# The period toolchain -- from here to the matching `fi', unindented.
+
 # --- the cross toolchain -----------------------------------------------------
 # The prefix and sysroot are gcc-cross-amix's, and that repo's build/env.sh is
 # their source of truth.  We source it when it is there rather than duplicating
@@ -120,6 +154,12 @@ AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020}"
 AMIX_CFLAGS="${AMIX_CFLAGS:-$AMIX_ARCH_FLAGS -O -Wall}"
 export AMIX_ARCH_FLAGS AMIX_CFLAGS
 
+export AMIX_CPP="$AMIX_REPO_ROOT/recipes/common/amix-cpp"
+export AMIX_BUILD_ROOT="$AMIX_REPO_ROOT/build"
+export AMIX_CONFIGURE_LENIENT=
+fi
+# --- end of the toolchain selection -----------------------------------------
+
 # --- host tooling ------------------------------------------------------------
 # Heirloom pkgmk/pkgtrans, host build, from the packagemanager repo.  That repo
 # is the authority on the .pkg format; we consume its binaries rather than
@@ -140,7 +180,7 @@ export AMIX_PKGTRANS="${AMIX_PKGTRANS:-$AMIX_PKGMGR/heirloom/build-host/bin/pkgt
 export AMIX_PREFIX="${AMIX_PREFIX:-/usr/local}"
 
 amix_env_banner() {
-	echo "  toolchain : $CC ($TARGET)"
+	echo "  toolchain : $AMIX_TOOLCHAIN -- $CC ($TARGET)"
 	echo "  sysroot   : ${AMIX_SYSROOT:-<unset>}"
 	echo "  cflags    : $AMIX_CFLAGS"
 	echo "  prefix    : $AMIX_PREFIX"
