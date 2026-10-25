@@ -397,31 +397,40 @@ extern int sha256_file(const char *path, char hexout[65]);
  * the signature check here and may refuse the block. */
 extern void kspace_verify_hook(struct catalog *cat);
 
-/* installed version of a kernel-space package, from its record
- * /var/apkg/kpkg/<name>: 0 = no record, 1 = record (version copied) */
-extern int kpkg_installed(const struct conf *cf, const char *name,
+/* The record file is /var/apkg/kpkg/<key>, key = the pkginst: the
+ * entry's pkginst= when given, else its name (C2-2 v4 §2; struct
+ * pkgent's pkginst field is exactly that).  The full name is its `name`
+ * line.
+ * installed version of a kernel-space package, from its record:
+ * 0 = no record, 1 = record (version copied) */
+extern int kpkg_installed(const struct conf *cf, const char *key,
                           char *ver, unsigned verlen);
+/* the record of a package given by name or pkginst; its file name into
+ * key.  1 = found, 0 = none */
+extern int kpkg_find(const struct conf *cf, const char *arg, char *key,
+                     unsigned cap);
 /* the pkginst a datastream carries (its header); 0 ok / -1 */
 extern int ds_pkginst(const char *path, char *out, unsigned outlen);
 /* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
  * of class none and no install scripts (i: pkginfo, depend, copyright),
  * and at least one f.  0 = pure; -1 = not, or unreadable (why[] says) */
 extern int ds_pure_files(const char *path, char *why, unsigned cap);
-/* write the C2-2 §2 record after a successful pkgadd: one `file` line
- * per f/e/v object the contents database lists for pkginst, with the
- * size and SHA-256 of the installed file.  EX_* code. */
+/* write the C2-2 v4 §2 record <key> after a successful pkgadd: one
+ * `file` line per plain file the contents database lists for pkginst
+ * (the datastream's instance), with the size and SHA-256 of the
+ * installed file.  EX_* code. */
 extern int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
                              const char *pkginst, const char *source);
 extern int kpkg_write_record_fields(const struct conf *cf,
-    const char *name, const char *version, const char *role,
+    const char *key, const char *name, const char *version, const char *role,
     const char *line, const char *kabi, const char *pin,
     const char *loaderv, const char *sha256, const char *pkginst,
     const char *source);
 /* the pkginst owning a recorded package's files (contents database);
  * 0 ok / -1 */
-extern int kpkg_owner(const struct conf *cf, const char *name,
+extern int kpkg_owner(const struct conf *cf, const char *key,
                       char *pkginst, unsigned len);
-extern int kpkg_remove_record(const struct conf *cf, const char *name);
+extern int kpkg_remove_record(const struct conf *cf, const char *key);
 /* pre-flight of 40 §6 over the kernel-space members of a transaction:
  * refused entries, kabi family/major/minor, compiler pin, line.  0 ok,
  * EX_* on refusal (message printed). */
@@ -480,6 +489,7 @@ struct txnpkg {
     char *staged;     /* staged datastream, or "-" (remove)            */
     char *role, *kline, *kabi, *pin, *loaderv, *sha256, *source;
                       /* kspace: the record's fields                  */
+    char *reckey;     /* kspace: the record's file name (C2-2 v4)      */
 };
 
 struct txn {

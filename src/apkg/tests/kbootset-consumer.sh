@@ -166,16 +166,16 @@ echo "$OUT" | grep -q "^apkg: generation 1 .*" \
     && ok "apkg repeats kbootset's last line: $(echo "$OUT" | grep '^apkg: generation')" \
     || bad "no generation line repeated" "$OUT"
 grep -q "^file /stand/k46/unix $(size "$T/stand/k46/unix") $(sha "$T/stand/k46/unix")$" \
-    "$T/var/apkg/kpkg/kernel-kd060a" && ok "the record gate 1 accepted names /stand/k46/unix by size and sha256" \
-    || bad "record content" "$(cat "$T/var/apkg/kpkg/kernel-kd060a")"
+    "$T/var/apkg/kpkg/KERNKD60" && ok "the record gate 1 accepted (file KERNKD60, the pkginst: C2-2 v4) names /stand/k46/unix by size and sha256" \
+    || bad "record content" "$(cat "$T/var/apkg/kpkg/KERNKD60")"
 "$KB" --image "$IMG" --offset 65536 status > "$WORK/st1" 2>&1
 grep -q "generation 1 " "$WORK/st1" && ok "the store holds generation 1" \
     || bad "store after the first install" "$(cat "$WORK/st1")"
 
-grep -q "^kabi $(sed -n 's/^kabi=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/kernel-kd060a" && \
-grep -q "^pin $(sed -n 's/^pin=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/kernel-kd060a" \
+grep -q "^kabi $(sed -n 's/^kabi=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/KERNKD60" && \
+grep -q "^pin $(sed -n 's/^pin=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/KERNKD60" \
     && ok "sidecar -> gen-catalog -> apkg record: kabi and pin arrive byte for byte" \
-    || bad "record kabi/pin differ from the sidecar" "$(cat "$T/var/apkg/kpkg/kernel-kd060a")"
+    || bad "record kabi/pin differ from the sidecar" "$(cat "$T/var/apkg/kpkg/KERNKD60")"
 
 # gate 2: a catalog NOT made from the sidecar (kabi=static) against a
 # sidecar that says k46.1.0 -> status 4, apkg exit 7, the gate's line on

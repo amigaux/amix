@@ -1,5 +1,34 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-25 (night, 2) — the install record is named by the pkginst: C2-2 v4 (built, NOT minted, NOT published)
+
+amix-dlm `23cac94`/`4caad11`: C2-2 version 4 §2 names the record file `/var/apkg/kpkg/<pkginst>` — the
+entry's `pkginst=`, else its name. Why: an s5 root keeps 14 characters of a file name, so
+`kernel-k46-zacd` and apkg's `kernel-k46-zacd.new` collapsed into one name and the write-then-rename
+was no longer atomic. A pkginst is at most 9 characters, so `<pkginst>.new` stays distinct. The full
+name stays in the record's `name` line; kbootset reads every non-`.new` file and goes by the `file`
+lines, so it does not care.
+
+- **Writer**: `kpkg_write_record_fields()` takes the file name (`key`) apart from the name; it is
+  struct pkgent's `pkginst` for kernel space, which `catalog.c` already sets to `pkginst=` or the
+  name. The instance pkgadd installs still comes from the datastream header (and must equal
+  `pkginst=`).
+- **Readers**: installed state (`install`, `upgrade`, `list`, `info`) reads `<pkginst>`;
+  `installed_kernel()` and the stranded-module check take names from the records' `name` lines;
+  `remove` finds the record by file name or by `name` line (`kpkg_find()`), so both `apkg remove
+  kernel-k46-zacd` and `apkg remove KERNZACD` work; `recover` uses the journal's new `reckey`
+  field (journal format `apkg-txn 3`, 17 fields).
+- **C2-3 v4** (`bss=` for a brel kernel; the sidecar's `size=`/`sha256=` describe the form shipped):
+  apkg prints no sidecar field; gen-catalog checks `size=`/`sha256=` against the packaged unix, which
+  is the form shipped, so nothing changes there.
+- **Tests**: client run-tests **363/0** — the loader's record is now `/var/apkg/kpkg/LOADER`; an
+  s5-length case installs `kernel-k46-zacd` (15 characters) with `pkginst=KERNZACD` (8): the record
+  file is `KERNZACD`, no `kernel-k46-zacd*` file exists, the `name` line keeps the 15 characters,
+  `KERNZACD.new` is ≤ 14 characters, `list installed` and a re-install skip find it, `remove` by name
+  and by pkginst both work, and a transaction cut during its pkgadd is finished by `apkg recover`
+  under the right file name. `kbootset-consumer.sh` 12/0: the real kbootset (amix-dlm `4caad11`)
+  accepts the record as `KERNKD60`. nohttp 20/0; repo tools 341/0.
+
 ## 2026-10-25 (night) — kernel-space keys per role: C2-2 v3, C2-3 v2 (built, NOT minted, NOT published)
 
 amix-dlm `bddfcef` moved C2-2 to version 3 and C2-3 to version 2: the keys of a `#kpkg` entry depend

@@ -306,7 +306,8 @@ static int is_named(char **names, int nnames, const struct pkgent *ent)
  * installed by the same pkgadd as any other, with four differences:
  *
  *   - it is verified by SHA-256 + size, not md5 (source.c);
- *   - its installed state is apkg's own record /var/apkg/kpkg/<name>,
+ *   - its installed state is apkg's own record /var/apkg/kpkg/<pkginst>
+ *     (the entry's pkginst=, else its name; C2-2 v4),
  *     written after the pkgadd with the SHA-256 of every installed file
  *     (kspace.c); its pkginst comes from the datastream's header;
  *   - the transaction is pre-flighted (kabi, compiler pin, line) before
@@ -332,7 +333,7 @@ static int ent_installed(const struct conf *cf, const struct pkgent *e,
                          char *ver, unsigned verlen)
 {
     if (e->kspace)
-        return kpkg_installed(cf, e->name, ver, verlen);
+        return kpkg_installed(cf, e->pkginst, ver, verlen);  /* C2-2 v4 */
     return installed_version(cf, e->pkginst, ver, verlen);
 }
 
@@ -441,7 +442,8 @@ static int install_one(const struct conf *cf, const char *pkgadd,
         return EX_PKGCMD;
     if (!p->kspace)
         return EX_OK;
-    rc = kpkg_write_record_fields(cf, p->name, p->version, p->role,
+    rc = kpkg_write_record_fields(cf, p->reckey, p->name, p->version,
+                                  p->role,
                                   p->kline, p->kabi, p->pin, p->loaderv,
                                   p->sha256, pkginst, p->source);
     return rc;
@@ -842,19 +844,23 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
     const char *pkginst;
     char iver[128];
     char kinst[64];
+    char key[256];
     char *pkgrm;
     int kspace;
     int rc;
 
-    /* a kernel-space package is known by its record; its pkginst is the
-     * one owning its recorded files in the contents database */
-    kspace = kpkg_installed(cf, name, iver, sizeof(iver));
+    /* a kernel-space package is known by its record -- the file named by
+     * its pkginst, found by name or pkginst (C2-2 v4 §2); its pkginst is
+     * the one owning its recorded files in the contents database */
     pkginst = name;
     ent = NULL;
     if (cat != NULL)
         ent = catalog_find(cat, name);
+    kspace = kpkg_find(cf, name, key, sizeof(key));
+    if (!kspace && ent != NULL && ent->kspace)
+        kspace = kpkg_find(cf, ent->pkginst, key, sizeof(key));
     if (kspace) {
-        if (kpkg_owner(cf, name, kinst, sizeof(kinst)) == 0)
+        if (kpkg_owner(cf, key, kinst, sizeof(kinst)) == 0)
             pkginst = kinst;
         else if (ent != NULL)
             pkginst = ent->pkginst;
@@ -880,6 +886,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
     kent.filename = (char *)"-";
     kent.kspace = kspace;
     kent.md5 = (char *)"-";
+    kent.pkginst = key;                 /* the record's file (txn_add) */
     txn_init(&t, "remove");
     txn_add(&t, &kent, pkginst, "-", 0, "-");
     if (txn_save(cf, &t) != 0) {
@@ -896,7 +903,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
         warnx2("pkgrm failed for %s", pkginst);
         rc = EX_PKGCMD;
     }
-    if (rc == EX_OK && kspace && kpkg_remove_record(cf, name) != 0)
+    if (rc == EX_OK && kspace && kpkg_remove_record(cf, key) != 0)
         rc = EX_USAGE;
     if (rc == EX_OK) {
         t.p[0].done = 1;
@@ -1001,7 +1008,7 @@ int cmd_recover(const struct conf *cf)
                 rc = EX_PKGCMD;
                 break;
             }
-            if (p->kspace && kpkg_remove_record(cf, p->name) != 0) {
+            if (p->kspace && kpkg_remove_record(cf, p->reckey) != 0) {
                 rc = EX_USAGE;
                 break;
             }

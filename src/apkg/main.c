@@ -205,7 +205,7 @@ static int ent_installed_v(const struct conf *cf, const struct pkgent *e,
                            char *ver, unsigned verlen)
 {
     if (e->kspace)
-        return kpkg_installed(cf, e->name, ver, verlen);
+        return kpkg_installed(cf, e->pkginst, ver, verlen);  /* C2-2 v4 */
     return installed_version(cf, e->pkginst, ver, verlen);
 }
 

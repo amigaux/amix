@@ -17,15 +17,17 @@
  * Format: text, one record per line, fields separated by one space, the
  * file replaced whole (write <txn>.new, then rename) at every change:
  *
- *   apkg-txn 2
+ *   apkg-txn 3
  *   verb <install|upgrade|remove>
  *   state <installing|installed|built>
  *   started <seconds since 1970>
  *   kspace <0|1>
  *   pkg <done> <ow> <kspace> <size> <name> <version> <pkginst> <hash>
  *       <staged> <role> <line> <kabi> <pin> <loader> <sha256> <source>
+ *       <reckey>
  *
- * (version 2: <loader>, the loader= of a loader entry, C2-2 v3)
+ * (version 2: <loader>, the loader= of a loader entry, C2-2 v3;
+ *  version 3: <reckey>, the record's file name, C2-2 v4)
  *
  * Absent values are "-".  <hash> is the catalog's md5 (userland) or
  * sha256 (kernel space) of <staged>, or "-" when <staged> is not the
@@ -41,8 +43,8 @@
 
 #include "apkg.h"
 
-#define TXN_MAGIC "apkg-txn 2"
-#define TXN_FIELDS 16
+#define TXN_MAGIC "apkg-txn 3"
+#define TXN_FIELDS 17
 
 static const char *dash(const char *s)
 {
@@ -102,6 +104,9 @@ void txn_add(struct txn *t, const struct pkgent *e, const char *pkginst,
     p->loaderv = xstrdup(dash(e->kspace ? e->loaderv : NULL));
     p->sha256 = xstrdup(dash(e->kspace ? e->sha256 : NULL));
     p->source = xstrdup(dash(source));
+    /* the record file: the entry's pkginst= else its name (C2-2 v4 §2),
+     * which is what struct pkgent's pkginst holds for kernel space */
+    p->reckey = xstrdup(dash(e->kspace ? e->pkginst : NULL));
 }
 
 void txn_free(struct txn *t)
@@ -123,6 +128,7 @@ void txn_free(struct txn *t)
         free(p->loaderv);
         free(p->sha256);
         free(p->source);
+        free(p->reckey);
     }
     if (t->p != NULL)
         free((char *)t->p);
@@ -165,7 +171,7 @@ int txn_save(const struct conf *cf, const struct txn *t)
     for (i = 0; i < t->n; i++) {
         p = &t->p[i];
         if (has_space(p->staged) || has_space(p->source) ||
-            has_space(p->pkginst)) {
+            has_space(p->pkginst) || has_space(p->reckey)) {
             warnx2("cannot journal %s: a path holds a blank (%s)",
                    p->name, p->staged);
             return -1;
@@ -192,10 +198,11 @@ int txn_save(const struct conf *cf, const struct txn *t)
     fprintf(fp, "kspace %d\n", t->kspace);
     for (i = 0; i < t->n; i++) {
         p = &t->p[i];
-        fprintf(fp, "pkg %d %d %d %ld %s %s %s %s %s %s %s %s %s %s %s %s\n",
-                p->done, p->ow, p->kspace, p->size, p->name, p->version,
-                p->pkginst, p->hash, p->staged, p->role, p->kline,
-                p->kabi, p->pin, p->loaderv, p->sha256, p->source);
+        fprintf(fp, "pkg %d %d %d %ld %s %s %s %s %s %s %s %s %s %s %s %s "
+                "%s\n", p->done, p->ow, p->kspace, p->size, p->name,
+                p->version, p->pkginst, p->hash, p->staged, p->role,
+                p->kline, p->kabi, p->pin, p->loaderv, p->sha256,
+                p->source, p->reckey);
     }
     if (fclose(fp) != 0 || rename(tmp, cf->txnfile) != 0) {
         warnx2("cannot write the journal %s", cf->txnfile);
@@ -291,6 +298,7 @@ int txn_load(const struct conf *cf, struct txn *t)
             p->loaderv = xstrdup(f[14]);
             p->sha256 = xstrdup(f[15]);
             p->source = xstrdup(f[16]);
+            p->reckey = xstrdup(f[17]);
         } else {
             goto bad;
         }

@@ -147,7 +147,7 @@ Print the client version.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments (amix-dlm contract
-C2-2, version 3):
+C2-2, version 4):
 .PP
 .RS
 .nf
@@ -216,7 +216,15 @@ exit 3.
 After each kernel-space
 .BR pkgadd ,
 apkg writes the record
-.BI /var/apkg/kpkg/ name
+.BI /var/apkg/kpkg/ pkginst
+\(em the file is named by the entry's
+.B pkginst=
+(else its name), because an s5 root keeps 14 characters of a file name
+and a long name and its
+.B .new
+would collide; the full name is the record's
+.B name
+line (C2-2 version 4) \(em
 (name, version, role, line, then kabi and pin for a kernel or module or
 loader for the loader, the datastream's sha256, the
 source, the install time,
@@ -224,7 +232,10 @@ source, the install time,
 and one
 .BI "file " "path size sha256"
 line per installed plain file, taken from the contents database and hashed
-on disk).  The pkginst comes from the datastream's header.
+on disk).  The instance pkgadd installs comes from the datastream's header and
+must equal
+.B pkginst=
+when the entry gives one.
 .PP
 After a transaction that installed or removed kernel space, and only
 when every package in it is done, apkg calls

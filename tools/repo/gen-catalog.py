@@ -564,6 +564,8 @@ def kernel_sidecar(buf, params, pkgmap_text):
     if keys["line"] != pline:
         raise Malformed("kernel package: sidecar says line=%s but sits in "
                         "/stand/%s" % (keys["line"], pline))
+    # C2-3 v4 section 2: size= and sha256= describe the unix in the form
+    # shipped -- the packaged file -- so they are checked against it.
     if unix in files:
         u = files[unix]
         if "sha256" in keys and keys["sha256"] != hashlib.sha256(u).hexdigest():

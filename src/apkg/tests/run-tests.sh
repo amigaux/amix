@@ -2378,16 +2378,65 @@ file /stand/loader/boot1 $(sizeof "$LB/boot1") $(sha "$LB/boot1")
 file /stand/loader/boot2 $(sizeof "$LB/boot2") $(sha "$LB/boot2")
 file /stand/loader/ldrinfo $(sizeof "$LB/ldrinfo") $(sha "$LB/ldrinfo")
 EOF
-sed 's/^installed [0-9][0-9]*$/installed X/' "$REC/loader" > "$WORK/lrec.got" 2>/dev/null
+sed 's/^installed [0-9][0-9]*$/installed X/' "$REC/LOADER" > "$WORK/lrec.got" 2>/dev/null
 cmp -s "$WORK/lrec.want" "$WORK/lrec.got" \
-    && ok "the loader's record: line any, a loader line, no kabi or pin (C2-2 v3 §2)" \
+    && ok "the loader's record /var/apkg/kpkg/LOADER (pkginst=, C2-2 v4): line any, a loader line, no kabi or pin" \
     || bad "loader record" "$(diff "$WORK/lrec.want" "$WORK/lrec.got" 2>&1)"
 grep -q "^pkgadd .* LOADER$" "$SHIMLOG" && [ "$(grep -c . "$KLOG")" -eq 2 ] \
     && ok "the loader installs as LOADER and triggers build + commit" \
     || bad "loader install" "$(cat "$SHIMLOG" "$KLOG")"
 kreset
 run 0 "remove the loader package" "$APKG" -c "$KCONF" remove loader
-[ ! -f "$REC/loader" ] && ok "the loader's record is gone" || bad "loader record left"
+[ ! -f "$REC/LOADER" ] && ok "the loader's record is gone" \
+    || bad "loader record left" "$(ls "$REC")"
+
+# --- C2-2 v4: the record file is the pkginst, not the name.  An s5 root
+#     keeps 14 characters of a file name, so "kernel-k46-zacd" (15) and
+#     its ".new" would collapse into one name; "KERNZACD.new" stays apart.
+mkds "$KR/pkgs/kernel/kernel-k46-zacd-1.0.pkg" KERNZACD 1.0 zacd
+mkkcat "$KR/catalog" "$KCAT_K110
+$(kline kernel-k46-zacd 1.0 kernel k46 k46.1.0 $PIN kernel/kernel-k46-zacd-1.0.pkg pkginst=KERNZACD)"
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+kreset
+run 0 "install kernel-k46-zacd (a 15-character name, pkginst KERNZACD)" \
+    "$APKG" -c "$KCONF" install kernel-k46-zacd
+[ -f "$REC/KERNZACD" ] && [ ! -e "$REC/kernel-k46-zacd" ] && [ -z "$(ls "$REC" | grep -v '^KERNZACD$\|^kernel-k46$')" ] \
+    && ok "its record file is the 8-character pkginst, KERNZACD (C2-2 v4 §2)" \
+    || bad "record file name for a long name" "$(ls "$REC")"
+grep -qx "name kernel-k46-zacd" "$REC/KERNZACD" 2>/dev/null \
+    && ok "the full 15-character name stays in the record's name line" \
+    || bad "record name line" "$(cat "$REC/KERNZACD" 2>&1)"
+[ "$(printf '%s' KERNZACD.new | wc -c)" -le 14 ] \
+    && ok "KERNZACD.new fits the s5 14-character limit (distinct from the record)" \
+    || bad "KERNZACD.new too long for s5"
+OUT=$("$APKG" -c "$KCONF" list installed 2>&1)
+echo "$OUT" | grep -q "^kernel-k46-zacd .*\[installed 1.0\]" \
+    && ok "list installed finds it through its pkginst-named record" \
+    || bad "list installed for the long name" "$OUT"
+run 0 "install of it again is a skip (installed state read by pkginst)" \
+    "$APKG" -c "$KCONF" install kernel-k46-zacd
+echo "$OUT" | grep -q "already installed" && ok "and says already installed" || bad "re-install skip" "$OUT"
+kreset
+run 0 "remove kernel-k46-zacd by its name" "$APKG" -c "$KCONF" remove kernel-k46-zacd
+grep -q "^pkgrm .* KERNZACD$" "$SHIMLOG" && [ ! -f "$REC/KERNZACD" ] \
+    && ok "remove found the record by its name line, ran pkgrm KERNZACD, deleted KERNZACD" \
+    || bad "remove of the long name" "$(cat "$SHIMLOG"; ls "$REC")"
+"$APKG" -c "$KCONF" install kernel-k46-zacd >/dev/null 2>&1
+run 0 "remove by the pkginst works too" "$APKG" -c "$KCONF" remove KERNZACD
+[ ! -f "$REC/KERNZACD" ] && ok "the record is gone" || bad "record left after remove KERNZACD"
+# an interrupted install of it: the journal carries the record's file name
+kreset; echo KERNZACD > "$WORK/kshim.die"
+"$APKG" -c "$KCONF" install kernel-k46-zacd > /dev/null 2>&1
+grep -q " KERNZACD$" "$TXN" 2>/dev/null \
+    && ok "the journal records the record's file name (apkg-txn 3)" \
+    || bad "journal reckey" "$(cat "$TXN" 2>&1)"
+kreset
+run 0 "recover finishes it" "$APKG" -c "$KCONF" recover
+[ -f "$REC/KERNZACD" ] && grep -qx "name kernel-k46-zacd" "$REC/KERNZACD" \
+    && ok "recover wrote the record under the pkginst" || bad "recover record" "$(ls "$REC")"
+"$APKG" -c "$KCONF" remove kernel-k46-zacd >/dev/null 2>&1
+mkkcat "$KR/catalog" "$KCAT_K110"
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
 
 # --- userland through the new client: no trigger, no journal left ---
 kreset

@@ -6,11 +6,11 @@
  * MIT license - see LICENSE in this directory.
  *
  * The interfaces are agreed contracts of the kernel-modules campaign
- * (amix-dlm; C2-2 version 3, C2-3 version 2, C2-4 version 2, 2026-10-26), and this file implements apkg's side
+ * (amix-dlm; C2-2 version 4, C2-3 version 4, C2-4 version 2, 2026-10-26), and this file implements apkg's side
  * of them exactly:
  *
  *   C2-2 kernel-space catalog entries and the install record
- *        (docs/contracts/C2-2-kpkg.md).  The record /var/apkg/kpkg/<name>
+ *        (docs/contracts/C2-2-kpkg.md).  The record /var/apkg/kpkg/<pkginst>
  *        is apkg's alone; kbootset only reads it (gate 1 compares every
  *        generation member with the `file` line naming it).
  *   C2-4 kbootset as a called program (docs/contracts/C2-4-kbootset-cli.md):
@@ -94,6 +94,7 @@ void kspace_verify_hook(struct catalog *cat)
 /* ---------------- records ---------------- */
 
 struct krec {
+    char name[256];         /* the full name (the file is the pkginst) */
     char version[128];
     char role[16];
     char line[16];
@@ -102,9 +103,25 @@ struct krec {
     char firstfile[1024];   /* path of the first `file` line */
 };
 
-static char *rec_path(const struct conf *cf, const char *name)
+/* The record FILE is named by the package's pkginst -- its pkginst=,
+ * else its name -- not by the name (C2-2 v4 §2): an s5 root keeps 14
+ * characters of a file name, so "kernel-k46-zacd" and
+ * "kernel-k46-zacd.new" collapse into one name and the atomic rename is
+ * lost; a pkginst is at most 9 characters and "<pkginst>.new" stays
+ * distinct.  The full name is the record's `name` line.  Every function
+ * here that takes a `key` takes that file name. */
+static char *rec_path(const struct conf *cf, const char *key)
 {
-    return cat3(cf->kpkgdir, "/", name);
+    return cat3(cf->kpkgdir, "/", key);
+}
+
+static int rec_skip(const char *fname)
+{
+    unsigned n;
+
+    n = (unsigned)strlen(fname);
+    return fname[0] == '.' ||
+           (n > 4 && strcmp(fname + n - 4, ".new") == 0);
 }
 
 static void copyval(char *dst, unsigned cap, const char *v)
@@ -122,7 +139,7 @@ static void copyval(char *dst, unsigned cap, const char *v)
 }
 
 /* 0 = read, -1 = no record */
-static int rec_read(const struct conf *cf, const char *name, struct krec *r)
+static int rec_read(const struct conf *cf, const char *key, struct krec *r)
 {
     char *path;
     FILE *fp;
@@ -131,7 +148,9 @@ static int rec_read(const struct conf *cf, const char *name, struct krec *r)
     char *sp;
 
     memset((char *)r, 0, sizeof(*r));
-    path = rec_path(cf, name);
+    if (key[0] == '\0' || strchr(key, '/') != NULL)
+        return -1;
+    path = rec_path(cf, key);
     fp = fopen(path, "r");
     free(path);
     if (fp == NULL)
@@ -141,7 +160,9 @@ static int rec_read(const struct conf *cf, const char *name, struct krec *r)
         if (v == NULL)
             continue;
         *v++ = '\0';
-        if (strcmp(line, "version") == 0)
+        if (strcmp(line, "name") == 0)
+            copyval(r->name, sizeof(r->name), v);
+        else if (strcmp(line, "version") == 0)
             copyval(r->version, sizeof(r->version), v);
         else if (strcmp(line, "role") == 0)
             copyval(r->role, sizeof(r->role), v);
@@ -162,14 +183,14 @@ static int rec_read(const struct conf *cf, const char *name, struct krec *r)
     return 0;
 }
 
-int kpkg_installed(const struct conf *cf, const char *name,
+int kpkg_installed(const struct conf *cf, const char *key,
                    char *ver, unsigned verlen)
 {
     struct krec r;
     unsigned n;
 
     ver[0] = '\0';
-    if (rec_read(cf, name, &r) != 0)
+    if (rec_read(cf, key, &r) != 0)
         return 0;
     n = (unsigned)strlen(r.version);
     if (n >= verlen)
@@ -179,12 +200,47 @@ int kpkg_installed(const struct conf *cf, const char *name,
     return 1;
 }
 
-int kpkg_remove_record(const struct conf *cf, const char *name)
+/* the record of a package given by its name or its pkginst: the file
+ * <arg> when there is one, else the record whose `name` line is <arg>;
+ * the file name into key.  1 = found, 0 = none */
+int kpkg_find(const struct conf *cf, const char *arg, char *key,
+              unsigned cap)
+{
+    struct krec r;
+    DIR *d;
+    struct dirent *de;
+    int found;
+
+    key[0] = '\0';
+    found = 0;
+    if (!rec_skip(arg) && rec_read(cf, arg, &r) == 0) {
+        strncpy(key, arg, cap - 1);
+        key[cap - 1] = '\0';
+        return 1;
+    }
+    d = opendir(cf->kpkgdir);
+    if (d == NULL)
+        return 0;
+    while ((de = readdir(d)) != NULL) {
+        if (rec_skip(de->d_name) || rec_read(cf, de->d_name, &r) != 0)
+            continue;
+        if (strcmp(r.name, arg) == 0) {
+            strncpy(key, de->d_name, cap - 1);
+            key[cap - 1] = '\0';
+            found = 1;
+            break;
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+int kpkg_remove_record(const struct conf *cf, const char *key)
 {
     char *path;
     int rc;
 
-    path = rec_path(cf, name);
+    path = rec_path(cf, key);
     if (opt_dryrun) {
         printf("would remove the record %s\n", path);
         free(path);
@@ -646,14 +702,14 @@ static int find_owner(void *vctx, const char *path, int type,
     return 1;
 }
 
-int kpkg_owner(const struct conf *cf, const char *name,
+int kpkg_owner(const struct conf *cf, const char *key,
                char *pkginst, unsigned len)
 {
     struct krec r;
     struct owner_ctx c;
 
     pkginst[0] = '\0';
-    if (rec_read(cf, name, &r) != 0 || r.firstfile[0] == '\0')
+    if (rec_read(cf, key, &r) != 0 || r.firstfile[0] == '\0')
         return -1;
     c.path = r.firstfile;
     c.out = pkginst;
@@ -664,10 +720,10 @@ int kpkg_owner(const struct conf *cf, const char *name,
     return 0;
 }
 
-/* ---------------- writing a record (C2-2 §2) ---------------- */
+/* ---------------- writing a record (C2-2 v4 §2) ---------------- */
 
 int kpkg_write_record_fields(const struct conf *cf,
-    const char *name, const char *version, const char *role,
+    const char *key, const char *name, const char *version, const char *role,
     const char *line, const char *kabi, const char *pin,
     const char *loaderv, const char *sha256, const char *pkginst,
     const char *source)
@@ -682,7 +738,7 @@ int kpkg_write_record_fields(const struct conf *cf,
     int i;
     int rc;
 
-    path = rec_path(cf, name);
+    path = rec_path(cf, key);
     if (opt_dryrun) {
         printf("would write the record %s\n", path);
         free(path);
@@ -719,7 +775,7 @@ int kpkg_write_record_fields(const struct conf *cf,
     fprintf(fp, "version %s\n", version);
     fprintf(fp, "role %s\n", role);
     fprintf(fp, "line %s\n", line);
-    /* C2-2 v3 §2: kabi and pin for a kernel or module, loader for the
+    /* C2-2 v4 §2: kabi and pin for a kernel or module, loader for the
      * loader -- never both */
     if (strcmp(role, "loader") == 0) {
         fprintf(fp, "loader %s\n", loaderv);
@@ -769,7 +825,8 @@ out:
 int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
                       const char *pkginst, const char *source)
 {
-    return kpkg_write_record_fields(cf, e->name, e->version, e->role,
+    return kpkg_write_record_fields(cf, e->pkginst, e->name, e->version,
+                                    e->role,
                                     e->kline, e->kabi, e->pin, e->loaderv,
                                     e->sha256, pkginst, source);
 }
@@ -871,16 +928,15 @@ static int installed_kernel(const struct conf *cf, const char *line,
     if (d == NULL)
         return -1;
     while ((de = readdir(d)) != NULL) {
-        n = (unsigned)strlen(de->d_name);
-        if (de->d_name[0] == '.' ||
-            (n > 4 && strcmp(de->d_name + n - 4, ".new") == 0))
-            continue;
-        if (rec_read(cf, de->d_name, kr) != 0)
+        if (rec_skip(de->d_name) || rec_read(cf, de->d_name, kr) != 0)
             continue;
         if (strcmp(kr->role, "kernel") == 0 && strcmp(kr->line, line) == 0) {
+            /* the full name from the record (the file is the pkginst) */
+            n = (unsigned)strlen(kr->name[0] != '\0' ? kr->name :
+                                 de->d_name);
             if (n >= cap)
                 n = cap - 1;
-            memcpy(kname, de->d_name, n);
+            memcpy(kname, kr->name[0] != '\0' ? kr->name : de->d_name, n);
             kname[n] = '\0';
             found = 1;
             break;
@@ -900,7 +956,7 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
     long maj, min;
     DIR *d;
     struct dirent *de;
-    unsigned n;
+    const char *mname;
     int i, j;
     int bad;
 
@@ -963,21 +1019,19 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         if (d == NULL)
             continue;
         while ((de = readdir(d)) != NULL) {
-            n = (unsigned)strlen(de->d_name);
-            if (de->d_name[0] == '.' ||
-                (n > 4 && strcmp(de->d_name + n - 4, ".new") == 0))
-                continue;
-            if (in_todo(todo, nt, de->d_name))
-                continue;
-            if (rec_read(cf, de->d_name, &mr) != 0 ||
+            if (rec_skip(de->d_name) ||
+                rec_read(cf, de->d_name, &mr) != 0 ||
                 strcmp(mr.role, "module") != 0 ||
                 strcmp(mr.line, todo[i]->kline) != 0)
                 continue;
-            if (module_fits(de->d_name, mr.line, mr.kabi, mr.pin,
+            mname = mr.name[0] != '\0' ? mr.name : de->d_name;
+            if (in_todo(todo, nt, mname))
+                continue;
+            if (module_fits(mname, mr.line, mr.kabi, mr.pin,
                             todo[i]->name, todo[i]->kabi,
                             todo[i]->pin) != 0) {
                 warnx2("the installed module %s must be upgraded or "
-                       "removed with the kernel %s", de->d_name,
+                       "removed with the kernel %s", mname,
                        todo[i]->name);
                 bad = 1;
             }
