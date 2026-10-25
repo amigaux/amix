@@ -552,6 +552,15 @@ without the menu. If the attempt cannot be written, boot2 does not boot the
 trial at all: it boots the default good generation (L10). Read-only media
 have no trial state.
 
+The attempt is written when the boot starts, so any reboot before
+multi-user spends it. After an unclean shutdown, the base system's root
+fsck repairs the root and reboots (`bcheckrc`, even after a successful
+repair; M-GEN3, 2026-10-26). A trial committed just before a power cut
+would therefore lose its only attempt to that reboot. So the fsck-repair
+path calls `kbootset retry` (`40-generations-and-composer.md` §3.3) just
+before it reboots. That gives the booted trial its attempt back, at most
+twice per trial, and the next boot tries the trial again.
+
 When the chosen generation cannot be loaded (L2, L3, L6), boot2 tries in
 this order: the default generation, the other good generations newest first,
 the pristine generation, then the menu.

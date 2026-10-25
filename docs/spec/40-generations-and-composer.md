@@ -75,6 +75,7 @@ program against an image file, so media and boxes cannot drift).
 | `kbootset build` | compose the next generation in `/stand/gen/<new>/` from installed packages; runs every gate; writes nothing to the store |
 | `kbootset commit` | write the built generation into the store as `trial`; read back; flip the control block; the default generation is not changed (a newer trial replaces an older unbooted one) |
 | `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2 |
+| `kbootset retry` | called by the base system's fsck-repair reboot path: when the booted generation is the trial, its attempt does not count (at most twice per trial); writes the boot store's control block only, nothing on the root filesystem |
 | `kbootset rollback` | sets the **default** to the newest good generation older than the current default, or to the pristine generation when there is no older good one (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
 | `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
 | `kbootset mark-bad <id>` | administrator verdict |
@@ -135,6 +136,18 @@ new) by construction (`10-boot-loader.md` §4.2).
 in `rc` never reaches it, so the trial stays unmarked and the loader's
 try-once rule boots the previous good generation next time
 (`10-boot-loader.md` §7.2; P-28 D54).
+
+One reboot before that point is not the generation's fault: the root fsck's
+repair reboot in `/sbin/bcheckrc` after an unclean shutdown. The base
+system calls `/sbin/kbootset retry` just before each `/sbin/uadmin 1 1`
+that follows a root repair, so that reboot does not spend the trial's
+attempt (M-GEN3).
+- `retry` writes only the boot store's control block. The root is not
+  repaired yet when it runs, so it writes no journal, no
+  `/etc/default/bootset` and no `/dev/kinfo`.
+- It acts only when kinfo says the booted generation is the trial.
+- It gives an attempt back at most twice per trial, so a root that never
+  stays clean still ends in the try-once fallback.
 
 ## 4. `kinfo`
 
