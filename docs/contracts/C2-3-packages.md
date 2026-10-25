@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar, version 2
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 3
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -11,6 +11,15 @@
 |---|---|
 | `/stand/k30/unix` or `/stand/k46/unix` | the kernel in a form the loader takes (`brel` or ET_REL), uncompressed |
 | `/stand/k30/kabi` or `/stand/k46/kabi` | the sidecar (§2) |
+
+The kernel package does not carry `/dev/kinfo`. A device node is not a
+pure file (the kernel-space packaging rule allows only plain files and
+directories, and no scripts). The node is made:
+- by the installer and the upgrade install, on the target:
+  `/dev/kinfo`, character device 53, 0, mode 0444, owner root, group sys
+  (C2-1 §1);
+- by kbootset, on the running box, when it finds the node missing
+  (C2-4 §2).
 
 During stages 2 and 3 there is one kernel package per static family. Each
 family installs on its line's path, so a box carries the family it was

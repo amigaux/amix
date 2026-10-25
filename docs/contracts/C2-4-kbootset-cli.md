@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 3
+# C2-4 — `kbootset` as a called program, version 4
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -22,7 +22,7 @@ starts with `kbootset: `.
 
 | Form | Use |
 |---|---|
-| (none) | on the running box (S2-06): kinfo read from `/dev/kinfo` (C2-1); the boot store found as in 40 §5 (bootset's `store=`, else the loader record through kinfo's card table, else a scan of every disk), refusing at gate 8 or 9; the facts from the options, then kinfo, then bootset (§6); `mark-good`'s `--booted` and `--secondary` default to kinfo's loader record |
+| (none) | on the running box (S2-06): kinfo read from `/dev/kinfo` (C2-1). When the node is missing, kbootset makes it (character 53, 0, mode 0444) and says so; when it cannot, the facts come from bootset and the options only; the boot store found as in 40 §5 (bootset's `store=`, else the loader record through kinfo's card table, else a scan of every disk), refusing at gate 8 or 9; the facts from the options, then kinfo, then bootset (§6); `mark-good`'s `--booted` and `--secondary` default to kinfo's loader record |
 | `-R <root>` | on a mounted target (the installer, repair mode): packages, records and `/stand` under `<root>`; the boot store from `<root>/etc/default/bootset` or `--bootdev` |
 | `--image <file> [--offset N]` | a store in a disk image at byte offset N (host media builds) |
 | `--dev <path> [--offset N]` | a store on a raw device at offset N |
