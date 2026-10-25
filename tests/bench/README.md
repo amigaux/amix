@@ -168,7 +168,7 @@ sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261
 | 2 | `kbootset mark-good` | `amix-boot: generation 2, kernel …`; then `generation 2 is good and the default` |
 | 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
 | 4 | `kbootset next previous` | boots 1; then `the next boot only is changed` |
-| 5 | `kbootset commit --spec bad.spec` (below) | boots 2, once, the one-shot; then `generation 3 committed …` |
+| 5 | `kbootset mark-bad 2; kbootset commit --spec bad.spec` (below) | boots 2, once, the one-shot; then `marked bad and collected`, then `generation 3 committed …` |
 | 6 | — | boots 3, the trial. It cannot mount its root, so it never reaches mark-good: power-cycle when it stops |
 | 7 | `kbootset status` | `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots; status shows 3 as bad, or already collected, and default 1 |
 
@@ -184,6 +184,17 @@ kernel unix /tmp/KD060-A-c0-u6
 
 `commit --spec` runs no gates. That is the point here: a trial the gates
 would refuse (closure) is the way to get a trial that panics in rc.
+
+**Why mark-bad on boot 5.** The vehicle's 4 MiB store holds two raw k46
+generations. At boot 5 both are in the kept set: generation 1 is good
+(the vehicle's spec made it good, not pristine) and the default, and
+generation 2 is one of the two newest good ones. So `kbootset collect`
+frees nothing, and the third generation does not fit (gate 5).
+`mark-bad 2` is allowed, because 2 is not the default; it collects 2 and
+frees its extents for generation 3. That also exercises `mark-bad`.
+
+The installer's 1.1-layout disks (64 MiB stores) hold the whole row
+without it.
 
 ### S2-42 — M-GEN3: a power cut at each commit step
 
