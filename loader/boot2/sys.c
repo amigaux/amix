@@ -15,7 +15,8 @@ x_allocmem(ax_u32 size, ax_u32 flags)
 {
 	struct ax_regs r;
 
-	r.d0 = size, r.d1 = flags, r.a0 = r.a1 = r.a2 = 0;
+	REGS0(r);
+	r.d0 = size, r.d1 = flags;
 	return (void *)CALL(ax_execbase, -198, r);
 }
 
@@ -26,7 +27,8 @@ x_freemem(void *p, ax_u32 size)
 
 	if (!p)
 		return;
-	r.d0 = size, r.a1 = (ax_u32)p, r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.d0 = size, r.a1 = (ax_u32)p;
 	CALL(ax_execbase, -210, r);
 }
 
@@ -35,7 +37,8 @@ x_doio(void *iob)
 {
 	struct ax_regs r;
 
-	r.a1 = (ax_u32)iob, r.d0 = r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.a1 = (ax_u32)iob;
 	return (signed char)CALL(ax_execbase, -456, r);
 }
 
@@ -44,7 +47,8 @@ x_openlib(const char *name, ax_u32 version)
 {
 	struct ax_regs r;
 
-	r.a1 = (ax_u32)name, r.d0 = version, r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.a1 = (ax_u32)name, r.d0 = version;
 	return (void *)CALL(ax_execbase, -552, r);
 }
 
@@ -55,7 +59,8 @@ x_closelib(void *lib)
 
 	if (!lib)
 		return;
-	r.a1 = (ax_u32)lib, r.d0 = r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.a1 = (ax_u32)lib;
 	CALL(ax_execbase, -414, r);
 }
 
@@ -64,7 +69,7 @@ x_forbid(void)
 {
 	struct ax_regs r;
 
-	r.d0 = r.d1 = r.a0 = r.a1 = r.a2 = 0;
+	REGS0(r);
 	CALL(ax_execbase, -132, r);
 }
 
@@ -73,7 +78,7 @@ x_permit(void)
 {
 	struct ax_regs r;
 
-	r.d0 = r.d1 = r.a0 = r.a1 = r.a2 = 0;
+	REGS0(r);
 	CALL(ax_execbase, -138, r);
 }
 
@@ -82,7 +87,8 @@ x_typeofmem(const void *p)
 {
 	struct ax_regs r;
 
-	r.a1 = (ax_u32)p, r.d0 = r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.a1 = (ax_u32)p;
 	return (ax_u32)CALL(ax_execbase, -534, r);
 }
 
@@ -91,7 +97,8 @@ x_opendevice(const char *name, ax_u32 unit, void *ioreq, ax_u32 flags)
 {
 	struct ax_regs r;
 
-	r.a0 = (ax_u32)name, r.d0 = unit, r.a1 = (ax_u32)ioreq, r.d1 = flags, r.a2 = 0;
+	REGS0(r);
+	r.a0 = (ax_u32)name, r.d0 = unit, r.a1 = (ax_u32)ioreq, r.d1 = flags;
 	return (signed char)CALL(ax_execbase, -444, r);
 }
 
@@ -100,7 +107,8 @@ x_closedevice(void *ioreq)
 {
 	struct ax_regs r;
 
-	r.a1 = (ax_u32)ioreq, r.d0 = r.d1 = r.a0 = r.a2 = 0;
+	REGS0(r);
+	r.a1 = (ax_u32)ioreq;
 	CALL(ax_execbase, -450, r);
 }
 
@@ -109,7 +117,8 @@ x_findconfigdev(void *expbase, void *old, long manuf, long prod)
 {
 	struct ax_regs r;
 
-	r.a0 = (ax_u32)old, r.d0 = (ax_u32)manuf, r.d1 = (ax_u32)prod, r.a1 = r.a2 = 0;
+	REGS0(r);
+	r.a0 = (ax_u32)old, r.d0 = (ax_u32)manuf, r.d1 = (ax_u32)prod;
 	return (void *)CALL(expbase, -72, r);
 }
 

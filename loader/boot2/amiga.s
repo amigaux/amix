@@ -8,17 +8,17 @@
 	.text
 
 # long ax_call(void *base, long lvo, struct ax_regs *r)
-#   struct ax_regs { long d0, d1, a0, a1, a2; } -- loaded into those registers,
-#   a6 = base, then jsr lvo(a6).  Returns d0.
+#   struct ax_regs { long d0, d1, d2, d3, d4, d5, a0, a1, a2; } -- loaded into
+#   those registers, a6 = base, then jsr lvo(a6).  Returns d0.
 	.globl	ax_call
 ax_call:
 	movem.l	%d2-%d7/%a2-%a6,-(%sp)
 	move.l	(48,%sp),%a6
-	move.l	(52,%sp),%d2
+	move.l	(52,%sp),%d7
 	move.l	(56,%sp),%a3
-	move.l	(16,%a3),%a2
-	movem.l	(%a3),%d0-%d1/%a0-%a1
-	jsr	(0,%a6,%d2.l)
+	move.l	(32,%a3),%a2
+	movem.l	(%a3),%d0-%d5/%a0-%a1
+	jsr	(0,%a6,%d7.l)
 	movem.l	(%sp)+,%d2-%d7/%a2-%a6
 	rts
 

@@ -113,7 +113,8 @@ boot1: toolchain-check $(B)/boot1.img
 # boot2: start.s first (its header must be the first bytes), then the rest;
 # ld -r, then b2link binds it at 0, appends the self-relocation table and
 # applies the 28 KiB size gate.
-B2C    := loader/boot2/main.c loader/boot2/sys.c loader/boot2/con.c
+B2C    := loader/boot2/main.c loader/boot2/sys.c loader/boot2/con.c \
+          loader/boot2/input.c loader/boot2/menu.c
 B2OBJ  := $(B)/cross/start.o $(B)/cross/amiga.o \
           $(patsubst loader/boot2/%.c,$(B)/cross/b2_%.o,$(B2C)) $(COBJ)
 
@@ -121,7 +122,7 @@ $(B)/cross/amiga.o: loader/boot2/amiga.s
 	@mkdir -p $(B)/cross
 	$(CROSS)as -m68030 -o $@ $<
 
-$(B)/cross/b2_%.o: loader/boot2/%.c loader/boot2/b2.h $(COMMON)/*.h
+$(B)/cross/b2_%.o: loader/boot2/%.c loader/boot2/*.h $(COMMON)/*.h
 	@mkdir -p $(B)/cross
 	$(CROSS)gcc $(CROSSCFLAGS) -fomit-frame-pointer -I$(COMMON) -c -o $@ $<
 

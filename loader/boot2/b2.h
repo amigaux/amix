@@ -34,7 +34,8 @@
 #define CMD_WRITE	3
 #define TD_MOTOR	9
 
-struct ax_regs { ax_u32 d0, d1, a0, a1, a2; };
+struct ax_regs { ax_u32 d0, d1, d2, d3, d4, d5, a0, a1, a2; };
+#define REGS0(r) x_memset(&(r), 0, sizeof(r))
 
 /* amiga.s */
 long ax_call(void *base, long lvo, struct ax_regs *r);
@@ -62,6 +63,7 @@ void x_memset(void *d, int c, ax_u32 n);
 
 /* con.c: one line per step, to the serial port (and the screen when open) */
 void con_init(ax_u32 baud);
+void con_screen(void);
 void con_puts(const char *s);
 void con_printf(const char *fmt, ...);
 

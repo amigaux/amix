@@ -16,6 +16,8 @@
 #include "inflate.h"
 #include "rel.h"
 #include "bootinfo.h"
+#include "input.h"
+#include "menu.h"
 
 #define BOUNCE	(16 * 2048UL)	/* chip-memory transfer buffer for every read */
 
@@ -41,6 +43,12 @@ static struct ax_header hdr;
 static struct ax_ctl ctl, newctl;
 static int ctlcopy;		/* which control-block copy was read */
 static ax_u32 cpu, attn;
+
+/* the generation that loaded */
+static const struct ax_gen *g;
+static ax_u8 *mbuf, *kbuf;
+static ax_u32 gen, vaddr;
+static struct ax_bootdata bd;
 
 static const char *const lmsg[] = { "",
 	"L1 generation is for the other CPU line",
@@ -283,6 +291,81 @@ rth1_walk(void *expbase, ax_u32 *flags, ax_u32 *unit, ax_u32 *base, ax_u32 *id)
 	}
 }
 
+/* put id first; the rest of the default order follows.  An unstarted
+ * trial keeps its recorded attempt only if it is still the one booted. */
+static void
+override(struct ax_sel *s, ax_u32 id)
+{
+	ax_u32 old[AX_MAXGEN + 1];
+	int i, n = s->n;
+
+	for (i = 0; i < n; i++)
+		old[i] = s->order[i];
+	if (s->trial_first && (n == 0 || old[0] != id))
+		s->trial_first = 0;
+	s->n = 0;
+	s->order[s->n++] = id;
+	for (i = 0; i < n; i++)
+		if (old[i] != id)
+			s->order[s->n++] = old[i];
+	s->write = s->trial_first || s->oneshot_used || s->failed_trial;
+}
+
+/* load the first generation of the order that loads; its index, or -1 */
+static int
+load_first(const struct ax_sel *sel)
+{
+	struct ax_relerr rer;
+	int k, i, errline, rc;
+
+	for (k = 0; k < sel->n; k++) {
+		gen = sel->order[k];
+		g = gen_entry(gen);
+		if (!g || g->man_len == 0 || g->man_len > 65536) {
+			fail(2, gen);
+			continue;
+		}
+		mbuf = x_allocmem(g->man_len, MEMF_PUBLIC);
+		if (!mbuf || io(CMD_READ, g->man_off, mbuf, g->man_len) != 0 ||
+		    ax_crc32(crctab, mbuf, g->man_len) != g->man_crc ||
+		    ax_manifest_parse(crctab, (char *)mbuf, g->man_len, &man, &errline) != AXM_OK ||
+		    man.generation != gen) {
+			fail(2, gen);
+			goto next;
+		}
+		if (!line_ok(man.line)) {
+			con_printf("amix-boot: L1 generation %u is for line %s; this CPU is a 680%u\n",
+				   gen, man.line, cpu);
+			goto next;
+		}
+		for (i = 0; i < man.nmod && man.mod[i].cls != AXC_ROOT; i++)
+			;
+		if (man.loader_min > LOADER_VERSION || man.has_arena || man.has_ramdisk ||
+		    i < man.nmod) {
+			fail(9, gen);
+			goto next;
+		}
+		con_printf("amix-boot: generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
+			   man.kernel.size);
+		kbuf = load_member(&man.kernel, gen);
+		if (!kbuf)
+			goto next;
+		vaddr = bind_address();
+		rc = ax_rel(kbuf, man.kernel.size, vaddr, 1, &bd, &rer);
+		if (rc == AXR_OK)
+			return k;
+		con_printf("amix-boot: L6 relocation failed: error %d, section %u record %u type %u\n",
+			   rc, rer.rsect, rer.index, rer.type);
+		x_freemem(kbuf, man.kernel.size);
+		kbuf = 0;
+next:
+		if (mbuf)
+			x_freemem(mbuf, g->man_len);
+		mbuf = 0;
+	}
+	return -1;
+}
+
 struct ax_ci {
 	ax_u32 sp, entry, d0, d1;
 	ax_u32 tbuf, tvaddr, tsize, rbuf, rvaddr, rsize, dbuf, dvaddr, dsize;
@@ -293,16 +376,13 @@ long
 boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, void *execbase)
 {
 	struct ax_sel sel;
-	struct ax_bootdata bd;
-	struct ax_relerr rer;
 	struct ax_loaderrec lr;
 	struct ax_disksel rootsel;
-	const struct ax_gen *g = 0;
-	ax_u8 *mbuf = 0, *kbuf = 0, *bi, *chipcode, *stack, *expbase, *cfg;
+	ax_u8 *bi, *chipcode, *stack, *expbase, *cfg;
 	ax_u8 rth[AX_RTH1_LEN], rto[AX_RTO1_LEN], axl[AX_AXL1_LEN], keys[16];
 	struct ax_ci *ci;
-	ax_u32 gen = 0, vaddr = 0, f, u, b, id, codesize;
-	int i, k, errline, ncfg, nmem, rc, have_root = 0;
+	ax_u32 f, u, b, id, codesize;
+	int i, k, ncfg, nmem, have_root = 0, win, menu = 0, safe = 0, devload = 0;
 	ax_u8 *mh;
 
 	(void)mem;
@@ -335,7 +415,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		return -1;
 	}
 
-	/* the control block and the choice of generation */
+	/* the control block, the console, the choice of generation */
 	if (io(CMD_READ, hdr.ctl_off[0], w->cb[0], 2048) != 0)
 		x_memset(w->cb[0], 0, 2048);
 	if (io(CMD_READ, hdr.ctl_off[1], w->cb[1], 2048) != 0)
@@ -345,9 +425,31 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		con_puts("amix-boot: no valid control block\n");
 		return -1;
 	}
+	if (ctl.serial_baud)
+		con_init(ctl.serial_baud);
+	if (ctl.console & AXC_SCREEN)
+		con_screen();
+	in_init(iob);
 	ax_select(&ctl, (hdr.flags & AXF_READONLY) != 0, &sel);
+	con_printf("amix-boot %u: 680%u, boot device unit %u at %u\n", LOADER_VERSION, cpu,
+		   *(ax_u32 *)(iob + IO_UNIT), part);
 	if (sel.failed_trial)
 		fail(8, sel.failed_trial);
+
+	x_memset(keys, 0, sizeof(keys));
+	win = ctl.menu_ds ? menu_window(ctl.menu_ds, keys) : MENU_NONE;
+	if (win == MENU_PREVIOUS && (id = menu_previous(&ctl)) != 0) {
+		override(&sel, id);
+		menu = 1;
+	} else if (win != MENU_NONE || sel.n == 0) {
+		id = menu_run(&ctl, sel.n ? sel.order[0] : 0, cpu, &safe, &devload);
+		if (!id)
+			return -1;
+		override(&sel, id);
+		menu = 1;
+	}
+	sel.safe |= safe;
+	sel.devload |= devload;
 	if (sel.write) {
 		ax_select_apply(&ctl, &sel, &newctl);
 		if (ctl_write(&newctl) == 0) {
@@ -358,62 +460,16 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		}
 	}
 
-	/* the first generation that loads */
-	for (k = 0; k < sel.n && !kbuf; k++) {
-		gen = sel.order[k];
-		g = gen_entry(gen);
-		if (!g || g->man_len == 0 || g->man_len > 65536) {
-			fail(2, gen);
-			continue;
-		}
-		mbuf = x_allocmem(g->man_len, MEMF_PUBLIC);
-		if (!mbuf || io(CMD_READ, g->man_off, mbuf, g->man_len) != 0 ||
-		    ax_crc32(crctab, mbuf, g->man_len) != g->man_crc ||
-		    ax_manifest_parse(crctab, (char *)mbuf, g->man_len, &man, &errline) != AXM_OK ||
-		    man.generation != gen) {
-			fail(2, gen);
-			x_freemem(mbuf, g->man_len);
-			mbuf = 0;
-			continue;
-		}
-		if (!line_ok(man.line)) {
-			con_printf("amix-boot: L1 generation %u is for line %s; this CPU is a 680%u\n",
-				   gen, man.line, cpu);
-			goto next;
-		}
-		if (man.loader_min > LOADER_VERSION || man.has_arena || man.has_ramdisk) {
-			fail(9, gen);
-			goto next;
-		}
-		for (i = 0; i < man.nmod; i++)
-			if (man.mod[i].cls == AXC_ROOT)
-				break;
-		if (i < man.nmod) {
-			fail(9, gen);
-			goto next;
-		}
-		con_printf("amix-boot: generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
-			   man.kernel.size);
-		kbuf = load_member(&man.kernel, gen);
-		if (!kbuf)
-			goto next;
-		vaddr = bind_address();
-		rc = ax_rel(kbuf, man.kernel.size, vaddr, 1, &bd, &rer);
-		if (rc != AXR_OK) {
-			con_printf("amix-boot: L6 relocation failed: error %d, section %u record %u type %u\n",
-				   rc, rer.rsect, rer.index, rer.type);
-			x_freemem(kbuf, man.kernel.size);
-			kbuf = 0;
-			goto next;
-		}
-		break;
-next:
-		x_freemem(mbuf, g->man_len);
-		mbuf = 0;
-	}
-	if (!kbuf) {
-		con_puts("amix-boot: nothing to boot\n");
-		return -1;
+	/* the first generation that loads; when none does, the menu */
+	while ((k = load_first(&sel)) < 0) {
+		con_puts("amix-boot: nothing loaded\n");
+		id = menu_run(&ctl, sel.n ? sel.order[0] : 0, cpu, &safe, &devload);
+		if (!id)
+			return -1;
+		override(&sel, id);
+		sel.safe |= safe;
+		sel.devload |= devload;
+		menu = 1;
 	}
 	motor_off();
 
@@ -427,7 +483,6 @@ next:
 	for (mh = *(ax_u8 **)((ax_u8 *)execbase + EXEC_MEMLIST); *(ax_u32 *)mh && nmem < AXB_MAXMEM;
 	     mh = *(ax_u8 **)mh, nmem++)
 		x_memcpy(w->mems + nmem * AXB_MEMSIZE, mh, AXB_MEMSIZE);
-	x_memset(keys, 0, sizeof(keys));
 	f = u = b = id = 0;
 	if (expbase)
 		rth1_walk(expbase, &f, &u, &b, &id);
@@ -442,10 +497,18 @@ next:
 	lr.cpu = cpu;
 	lr.attnflags = attn;
 	lr.gen_id = gen;
-	lr.gen_state = g->state == AXG_TRIAL ? AXL_TRIAL :
+	lr.gen_state = menu ? AXL_MENU : sel.oneshot_used ? AXL_ONESHOT :
+		       g->state == AXG_TRIAL ? AXL_TRIAL :
 		       g->state == AXG_PRISTINE ? AXL_PRISTINE : AXL_GOOD;
 	lr.flags = (sel.safe ? AXLF_SAFE : 0) | (sel.devload ? AXLF_DEVLOAD : 0) |
-		   (k > 0 ? AXLF_FALLBACK : 0) | ((hdr.flags & AXF_READONLY) ? AXLF_READONLY : 0);
+		   (k > 0 ? AXLF_FALLBACK : 0) | ((hdr.flags & AXF_READONLY) ? AXLF_READONLY : 0) |
+		   (menu ? AXLF_MENU : 0);
+	if (sel.devload)
+		con_puts("amix-boot: DEVELOPMENT LOAD: unsigned modules allowed this boot
+");
+	if (sel.safe)
+		con_puts("amix-boot: safe mode
+");
 	lr.dev_unit = *(ax_u32 *)(iob + IO_UNIT);
 	lr.dev_start = part;
 	lr.dev_base = b;
@@ -496,7 +559,7 @@ next:
 	x_memcpy(chipcode, (void *)ax_handoff, codesize);
 	if (x_execversion() >= 37) {
 		struct ax_regs r;
-		r.d0 = r.d1 = r.a0 = r.a1 = r.a2 = 0;
+		REGS0(r);
 		ax_call(ax_execbase, -636, &r);	/* CacheClearU: chipcode was just written */
 	}
 	con_puts("amix-boot: starting the kernel\n");
