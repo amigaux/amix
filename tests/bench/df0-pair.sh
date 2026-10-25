@@ -21,9 +21,13 @@ K=$WS/amix-kerntools/work/k0-chains
 mkdir -p "$OUT"
 cp "$K/K030-U-FD/K030-U-FD-c0-u6" "$OUT/k30.brel"
 python3 -I "$WS/amix-kerntools/tools/elf2brel.py" "$K/KD060-FD/KD060-FD-fd0" "$OUT/k46.brel" >/dev/null
+# their bss= (C2-3 §2): a brel does not record it
+BSS_k30=$(sh tests/bench/bss-of.sh "$K/K030-U-FD/K030-U-FD-c0-u6.etrel" "$K/K030-U-FD/K030-U-FD-c0-u6")
+BSS_k46=$(sh tests/bench/bss-of.sh "$K/KD060-FD/KD060-FD-fd0" "$OUT/k46.brel")
 for line in k30 k46; do
-	printf 'generation 1\nstate good\nline %s\nrootfs ufs\nkernel unix %s\n' \
-		$line "$OUT/$line.brel" > "$OUT/df0-$line.spec"
+	eval bss=\$BSS_$line
+	printf 'generation 1\nstate good\nline %s\nrootfs ufs\nkernel unix %s bss=%s\n' \
+		$line "$OUT/$line.brel" $bss > "$OUT/df0-$line.spec"
 	$B/mkstore -f -o "$OUT/df0-$line-1.adf" -o "$OUT/df0-$line-2.adf" -1 $B/boot1.img \
 		-2 $B/boot2.bin "$OUT/df0-$line.spec" >/dev/null
 	$B/lsstore "$OUT/df0-$line-1.adf" 0 "$OUT/df0-$line-2.adf" | grep -E "kernel|lsstore"

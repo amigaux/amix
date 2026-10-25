@@ -19,6 +19,9 @@ mkdir -p "$F"
 python3 -I tools/measure/m-net1.py "$WS" "$NET" "$F" > "$F/m-net1.json"
 python3 -I "$WS/amix-kerntools/tools/elf2brel.py" "$K/KD060-FD/KD060-FD-fd0" "$F/k46.brel" >/dev/null
 cp "$K/K030-U-FD/K030-U-FD-c0-u6" "$F/k30.brel"
+# their bss= (C2-3 §2): a brel does not record it
+BSS_k30=$(sh tests/bench/bss-of.sh "$K/K030-U-FD/K030-U-FD-c0-u6.etrel" "$K/K030-U-FD/K030-U-FD-c0-u6")
+BSS_k46=$(sh tests/bench/bss-of.sh "$K/KD060-FD/KD060-FD-fd0" "$F/k46.brel")
 ls -l "$B/boot2.bin" | awk '{print "boot2", $5, "bytes"}'
 for line in k30 k46; do
 	for set in trim full; do
@@ -30,7 +33,7 @@ line $line
 rootfs ufs
 root ramdisk
 swap none
-kernel unix $F/$line.brel z=deflate
+kernel unix $F/$line.brel z=deflate bss=$(eval echo \$BSS_$line)
 ramdisk miniroot $F/miniroot-$c.tar z=deflate
 SPEC
 		if ! $B/mkstore -f -o "$F/$c-1.adf" -o "$F/$c-2.adf" -1 $B/boot1.img -2 $B/boot2.bin \

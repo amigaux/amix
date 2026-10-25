@@ -79,6 +79,8 @@ echo "store-roundtrip: floppy pair ok"
 # a trial generation is refused on read-only media
 C=$T/cd
 sed 's/^state good/state pristine/' $T/g41.spec > $T/c41.spec
+# a compressible miniroot: data that deflate does not shrink is stored raw
+yes "amix miniroot file system text" | head -c 500000 > $T/cminiroot
 cat > $T/c12.spec <<SPEC
 generation 12
 state pristine
@@ -87,7 +89,7 @@ rootfs ufs
 root ramdisk
 swap none
 kernel unix $T/fkernel
-ramdisk miniroot $T/miniroot z=deflate
+ramdisk miniroot $T/cminiroot z=deflate
 SPEC
 # a stand-in for amix-cdboot: the tree only checks the load-file magic
 printf '\000\000\003\363' > $T/cdboot && head -c 60 /dev/zero >> $T/cdboot
@@ -175,3 +177,11 @@ $KB commit --spec $W/kb.zspec >/dev/null 2>&1
 $B/lsstore $W/kb.img 65536 | grep -q "kernel  unix .*(deflate)  crc .* ok"
 $KB check | grep -q "check: 0 problem(s)"
 echo "store-roundtrip: kbootset ok"
+
+# a member that deflate does not shrink is stored raw, z=deflate or not
+head -c 300000 /dev/urandom > $W/rnd
+printf 'generation 1\nstate good\nline k30\nkernel unix %s z=deflate bss=344918\n' $W/rnd > $W/rnd.spec
+$B/mkstore -o $W/rnd.img -s 4194304 -1 $T/boot1.img -2 $T/boot2.bin $W/rnd.spec >/dev/null
+$B/lsstore $W/rnd.img | grep -q "kernel  unix .*300000  at 1:0x[0-9a-f]*  crc"
+grep -a -q "^kernel unix 300000 at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=344918$" $W/rnd.img
+echo "store-roundtrip: raw when deflate does not help; bss= passed through ok"

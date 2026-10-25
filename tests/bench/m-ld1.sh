@@ -28,9 +28,13 @@ for v in $V; do
 done
 cp "$K/K030-U-FD/K030-U-FD-c0-u6" "$OUT/k30.brel"
 python3 -I "$WS/amix-kerntools/tools/elf2brel.py" "$K/KD060-FD/KD060-FD-fd0" "$OUT/k46.brel" >/dev/null
+# their bss= (C2-3 §2): a brel does not record it
+BSS_k30=$(sh tests/bench/bss-of.sh "$K/K030-U-FD/K030-U-FD-c0-u6.etrel" "$K/K030-U-FD/K030-U-FD-c0-u6")
+BSS_k46=$(sh tests/bench/bss-of.sh "$K/KD060-FD/KD060-FD-fd0" "$OUT/k46.brel")
 for line in k30 k46; do
-	printf 'generation 1\nstate good\nline %s\nrootfs ufs\nkernel unix %s z=deflate\n' \
-		$line "$OUT/$line.brel" > "$OUT/fd-$line.spec"
+	eval bss=\$BSS_$line
+	printf 'generation 1\nstate good\nline %s\nrootfs ufs\nkernel unix %s z=deflate bss=%s\n' \
+		$line "$OUT/$line.brel" $bss > "$OUT/fd-$line.spec"
 	$B/mkstore -f -o "$OUT/fd-$line-good.adf" -1 "$OUT/bb-good.img" -2 $B/boot2.bin \
 		"$OUT/fd-$line.spec" >/dev/null
 	for v in $V; do	# the good floppy with only its first 1024 bytes replaced

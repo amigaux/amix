@@ -330,6 +330,11 @@ generation(const char *spec, struct ax_gen *g)
 			crc = ax_crc32(tab, data, flen);
 			ax_sha256(data, flen, sha);
 			zdata = zip ? deflate_raw(data, flen, &zlen) : data;
+			if (zip && zlen >= flen) {	/* deflate does not help: stored raw */
+				free(zdata);
+				zdata = data;
+				zip = 0;
+			}
 			if (!zip)
 				zlen = flen;
 			if (cdroot)
