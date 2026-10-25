@@ -1,3 +1,13 @@
+## 2026-10-25 — apkg 0.3 kernel space (4c30036, 36f5f7e, 46278a0) — built, not minted, not published
+
+The client reads the catalog's `#ext kpkg 1` block (contract C2-2 v1; apkg 0.2.3 proven to skip it unharmed). Kernel-space
+datastreams are checked by SHA-256 + size (amix-dlm's loader/common SHA-256, copied verbatim); after each install apkg writes
+/var/apkg/kpkg/<name> with one `file <path> <size> <sha256>` line per installed file; a pre-flight checks kabi, compiler pin
+and line. After a transaction that changed kernel space apkg calls `kbootset build` then `kbootset commit` (C2-4 v1); exits
+6 = kbootset error (journal kept), 7 = kbootset refused (generation unchanged). New journal /var/apkg/txn and `apkg recover`;
+config keys kbootset= and kbootset_journal=. Version 0.3.0 in source only (build-packages.sh still mints 0.2.3 — the mint is
+the owner's call). Host tests 330/0; consumer test against the real kbootset 10/0; emulator smoke on rig row E1 PASS.
+
 ## 2026-10-14 — batch 0 published to pkg.amigaux.org (6724e96, 871d605)
 
 Catalog db94282c5eaae7d8fb0b07230331eacd, 41 entries: the seven add-ons moved -1 → -2 (strict-060 re-mints) and the -1
