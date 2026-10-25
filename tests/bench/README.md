@@ -145,7 +145,7 @@ DF0 then takes the 1.0 root floppy of that line. A stage-1 loader refuses
 RAM-disk generations, so the RAM-disk profile (M-FP1) boots only from
 stage 4 on.
 
-## Stage 2: the lifecycle rows (S2-41, S2-42, S2-46)
+## Stage 2: the lifecycle rows (S2-41, S2-42, S2-46) and M-GEN2
 
 The rows run the box kbootset (`make box`, copied to the box as
 `/tmp/kbootset` until the kbootset package exists) on a kinfo kernel's row
@@ -253,3 +253,66 @@ The row passes when:
 - the rollback brings generation 1 back.
 
 That is stage 2's exit gate (80 §2) on the bench.
+
+### M-GEN2 — `kbootset commit` time, bench upper bound
+
+M-GEN2 times one `kbootset commit` after a `kbootset build`, three times
+per line, without rebooting. The commit does all of its work whether the
+generation came from a build or from `--spec`: it writes the members,
+computes their SHA-256 for the manifest, reads every write back, and
+flips the control block (40 §3.2). The time is taken inside the guest with
+`/usr/bin/time`: its resolution is the clock tick, and a commit takes
+seconds. On the cycle-exact model the guest clock runs on the model's
+time, not the host's. (axtime's E-clock is an AmigaDOS tool, so it cannot
+time a program under Amix.)
+
+| Line | Model | Vehicle | kbootset | Kernel package |
+|---|---|---|---|---|
+| k30 | the cycle-exact 25 MHz 68030 with a 68882 (M-LD7's model) | the A4091 68030 vehicle of M-LD1, under our loader | `/tmp/kbootset` from `make box` | `s2-standin.sh <its K030 kernel> k30 zorro:0202:54 ufs,s5 <its uname -m> <outdir>` now; the k30 kernel package once it exists |
+| k46 | the 68060 model | the kinfo row's (KD060-Z, a 4 MiB store) | `/sbin/kbootset` from the package, or `/tmp/kbootset` | the S2-46 set, or the stand-in made from the same KD060-Z kernel |
+
+The 1.0 K030 kernels have no `kinfo` until S2-11, so the k30 build names
+the box facts instead: `--line 30 --bootdev zorro:0202:54 --rootdev
+zorro:0202:54 --rootfs ufs --mem <the model's fast memory>`. kbootset
+finds the store by its scan of the disks (C2-4 §2). The k46 build needs no
+options.
+
+One boot on a fresh slot copy, as the cell's batch. `KB` is the kbootset
+above and `F` the k30 facts, empty on k46. The vehicle holds generation 1
+only, so the three new ones are 2, 3 and 4 (the box's `/bin/sh` has no
+arithmetic, hence the list):
+
+```
+$KB status > /dev/term/ser 2>&1
+for g in 2 3 4; do
+  $KB build $F > /dev/term/ser 2>&1
+  /usr/bin/time $KB commit > /dev/term/ser 2>&1
+  $KB mark-bad $g > /dev/term/ser 2>&1
+done
+/usr/bin/time $KB check > /dev/term/ser 2>&1
+ls -l /stand/gen/*/unix > /dev/term/ser 2>&1
+```
+
+- `mark-bad` takes the new trial, never booted, back out ("marked bad and
+  collected"), so the next commit has room in a 4 MiB store. It is
+  allowed because the trial is not the default. Checked on a host image:
+  a 2 MB generation 1 and three 1.4 MB passes.
+- Each pass prints `generation N built`, the step markers 1, 2, 4, 5, 7,
+  `generation N committed`, and `time`'s `real`, `user` and `sys` lines.
+- `check` is timed too. That is a second reader of the same bytes, and
+  M-SIG2 predicts its SHA-256 part.
+
+The record gives per line:
+- the kernel's size;
+- `real`, `user` and `sys` of each of the three commits, and their median;
+- the check's time.
+
+**What the figures bound.**
+- The k30 figure is an upper bound for the CPU: no supported machine is
+  slower than the 25 MHz 68030.
+- It is not a bound for the disk. The emulated disk answers faster than a
+  real SCSI disk, and a commit writes the kernel once and reads it back
+  once (about 2.6 MB of transfer for a k30 kernel).
+- The 68060 model runs at the emulator's speed, so its figure is for the
+  record only, as M-SIG2's was.
+- The disk-inclusive figures, and the 68060 figure, are metal (S2-47).
