@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 2
+# C2-2 — kernel-space catalog entries and apkg's install record, version 3
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed by D-3 §13: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -13,7 +13,8 @@ whole.
 
 ```
 #ext kpkg 1
-#kpkg <name> <version> role=<kernel|loader|module> line=<k30|k46> kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex> file=<datastream>
+#kpkg <name> <version> role=<kernel|module> line=<k30|k46> kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex> file=<datastream>
+#kpkg <name> <version> role=loader line=any loader=<n> size=<bytes> sha256=<64 hex> file=<datastream>
 #ksig <key-id> <file>
 #end kpkg
 ```
@@ -32,6 +33,25 @@ whole.
 - `#ksig` is optional and absent in 1.1. A 1.1 client records it and does
   not act on it (60 §4).
 
+### 1.1 The keys each role requires (version 3)
+
+| Role | Required | Absent |
+|---|---|---|
+| `kernel` | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | — |
+| `module` | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | — |
+| `loader` | `line=any`, `loader=<n>`, `size=`, `sha256=`, `file=` | `kabi=`, `pin=` |
+
+- An entry that lacks a key its role requires is refused, as is an entry
+  that carries a key its role excludes.
+- `loader=` is the loader version (C2-3 §3, `ldrinfo` `version=`). It is
+  what a kernel's `loader-min` is compared with (gate 7).
+- The loader carries no `kabi=` or `pin=`: boot1 and boot2 serve both
+  lines and no kernel interface binds them.
+- The kbootset package is userland (C2-3 §4). It goes in the catalog's
+  ordinary entries, not in this block.
+- Module packages are published from stage 3 on; until then
+  `gen-catalog.py` may skip them.
+
 ## 2. The install record `/var/apkg/kpkg/<name>`
 
 apkg 0.3 writes it once the package is installed. It is one `key value`
@@ -41,9 +61,10 @@ per line:
 name <name>
 version <version>
 role <kernel|loader|module>
-line <k30|k46>
-kabi <tag>
-pin <compiler pin>
+line <k30|k46|any>
+kabi <tag>                      kernel and module only
+pin <compiler pin>              kernel and module only
+loader <n>                      loader only
 sha256 <64 hex>                 the datastream, as verified after download
 source <catalog URL or medium id>
 installed <seconds since 1970>

@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar, version 1
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 2
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -48,15 +48,20 @@ Unknown keys are ignored.
 |---|---|
 | `/stand/loader/boot1` | the framed bootblock, 1024 bytes |
 | `/stand/loader/boot2` | boot2 as written behind boot1 |
-| `/stand/loader/ldrinfo` | `version=<n>`, `boot1-sha256=`, `boot2-size=`, `boot2-sha256=` |
+| `/stand/loader/ldrinfo` | one `key=value` per line: `version=<n>`, `line=any`, `boot1-sha256=`, `boot2-size=`, `boot2-sha256=` |
 
-Installing the loader package changes nothing on the boot store.
-`kbootset loader-install` writes it, and only when asked (40 §3).
+- Installing the loader package changes nothing on the boot store.
+  `kbootset loader-install` writes it, and only when asked (40 §3).
+- The catalog entry (C2-2 §1.1) takes `line=any` and `loader=` from
+  `ldrinfo`'s `line=` and `version=`. A loader entry has no `kabi=` or
+  `pin=`.
 
 ## 4. kbootset package
 
 `/sbin/kbootset` is statically linked, built with GCC 14 (D-3 §9), and
-part of the base set. It is a userland package, not kernel space.
+part of the base set. It is a userland package, not kernel space: it is
+listed among the catalog's ordinary entries, with no kpkg entry and no
+apkg kernel-space record.
 
 ## 5. Settled at agreement
 
