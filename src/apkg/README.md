@@ -8,7 +8,9 @@ installed state straight from the stock `/var/sadm/pkg` database, so it
 coexists with the native tools and with the Heirloom engine port.
 
 MIT licensed (see [LICENSE](LICENSE)); `md5.c`/`md5.h` are Colin
-Plumb's public-domain MD5 (1993), vendored with the original notice.
+Plumb's public-domain MD5 (1993), vendored with the original notice;
+`sha256.c`/`sha256.h`/`axtypes.h` are amix-dlm's `loader/common`
+SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from amix-dlm `656d155`.
 
 ## Verbs and options
 
@@ -24,6 +26,8 @@ install <name>...       resolve deps -> download+verify all -> pkgadd each
 upgrade <name>          catalog newer than installed: ONE pkgadd over the
                         installed instance (instance=overwrite, no pkgrm)
 remove <name>           pkgrm wrapper
+recover                 finish an interrupted transaction from /var/apkg/txn
+                        (-f: print and discard the journal)
 version                 client version
 
 -n dry run   -f force reinstall (NAMED packages only)   -v verbose
@@ -31,8 +35,44 @@ version                 client version
 ```
 
 Exit codes: `0` ok · `1` usage/config · `2` network · `3` verify
-(md5/size/catalog) · `4` pkgadd/pkgrm/zcat failure · `5` dependency
-cycle or missing dependency.  See [apkg.1](apkg.1) for the full manual.
+(md5/sha256/size/catalog) · `4` pkgadd/pkgrm/zcat failure · `5` dependency
+cycle or missing dependency, or a kernel-space pre-flight refusal · `6`
+kbootset could not run or failed (status 1/2; `apkg recover` retries) ·
+`7` kbootset refused (status 3/4; the committed generation is unchanged).
+See [apkg.1](apkg.1) for the full manual.
+
+## Kernel space (0.3)
+
+Kernel, loader and module packages are the kernel-modules campaign's
+(amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
+version 1: `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
+NOTES.md 2026-10-25 is the record of what was built and how it was tested.
+
+- **Catalog.** A `#ext kpkg 1` … `#end kpkg` block after the ordinary
+  entries, one `#kpkg <name> <version> role= line= kabi= pin= size= sha256=
+  file=` line per package, optional `#ksig`.  Every line is a comment to a
+  0.2.x client, which skips the block whole (tested against the 0.2.3
+  source).  Extension keys this client also reads: `pkginst=` (otherwise
+  the datastream header names it) and `offset=` (RAW media).
+- **Integrity.** SHA-256 + size for kernel space, md5 + size for userland as
+  before.  No signature in 1.1 (D-3 §13): the hook in `kspace_verify_hook()`
+  records "unverified"; records say `verified no`.
+- **Pre-flight** before anything is fetched: module kabi family/major/minor
+  and compiler pin against the kernel of its line; a static kernel takes no
+  modules; a kernel upgrade may not strand an installed module.
+- **Records.** `/var/apkg/kpkg/<name>` after each pkgadd, with one
+  `file <path> <size> <sha256>` line per f/e/v object the contents database
+  lists for the package, hashed on disk.  kbootset's gate 1 reads them.
+- **Trigger.** After a transaction that changed kernel space:
+  `kbootset [-R t] --journal J build`, then `… commit`, two calls; the
+  statuses 0–4 map to apkg's 0/6/7.  `bootset=manual` in
+  `/etc/default/bootset` prints the commands.  `kbootset=` and
+  `kbootset_journal=` in apkg.conf move the binary and the journal.
+- **Journal.** `/var/apkg/txn` from "all staged and verified" to "done";
+  kept only when `apkg recover` has work left (an interruption, a failed
+  pkgadd in a kernel-space transaction, an owed trigger).  A pending journal
+  blocks the next install/upgrade/remove.
 
 ## Building
 
@@ -396,9 +436,19 @@ the inactivity semantics themselves (a 586 KB transfer that outlives a
 2 s timeout while flowing, a stalled one that is killed promptly
 and names the bytes it got, and a stalled one that is **retried** —
 which is what caught the blocked-SIGALRM defect below), and the stub
-resolver — **223 assertions**, all required to PASS. A companion suite,
+resolver, and kernel space (SHA-256 vectors through
+[tests/sha256-driver.c](tests/sha256-driver.c), the `#ext kpkg` parser and
+its refusals, the 0.2.3 client built from git skipping the block, the
+install record byte for byte, pre-flight, the trigger against a kbootset
+mock for all five statuses, `-R`/`--journal`/`bootset=manual`/`-n`, a
+transaction killed mid-pkgadd and finished by `apkg recover`) — **330
+assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.
+[tests/kbootset-consumer.sh](tests/kbootset-consumer.sh) (**10**, not in
+the count; SKIPs without the sibling amix-dlm tree) builds the real kbootset
+from amix-dlm and lets apkg install a kernel package and trigger it: gate 1
+accepts apkg's record, a real gate 2 refusal maps to exit 7.
 
 The resolver has its own fake nameserver
 ([tests/fake-dns.py](tests/fake-dns.py)), one scripted behaviour per

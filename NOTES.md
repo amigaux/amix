@@ -1,5 +1,72 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-25 — apkg 0.3 kernel space: the kpkg block, SHA-256, install records, the kbootset trigger, the journal (built, NOT minted, NOT published)
+
+**What.** The apkg side of the kernel-modules campaign (D-3; amix-dlm stage-2 plan S2-20/21/22), built
+against the two contracts agreed 2026-10-25, version 1: amix-dlm `docs/contracts/C2-2-kpkg.md` (the
+`#ext kpkg 1` catalog block and the record `/var/apkg/kpkg/<name>`) and `C2-4-kbootset-cli.md`
+(kbootset as a called program). Signing is out of 1.1 (D-3 §13): integrity is SHA-256 + size, and the
+60 §4 hook records "unverified". Commits `4c30036` (code + tests), then docs and the version.
+
+| Item | What apkg does |
+|---|---|
+| catalog | `catalog.c` reads the block after the ordinary entries. Refuses the **catalog**: an unterminated block, a non-`#` line inside it, a second block, a `#kpkg` without a safe name/version, a name used twice, any line ≥ 2048 B (the bound 0.2.x applies to every line). Refuses the **entry** (kept, listed `[refused]`, never installable): a missing/malformed required key, a `!` key, a duplicate key. Unknown keys ignored; a block of another version skipped whole. `#ksig` recorded, not acted on. |
+| old clients | 0.2.3 (built from `cc02d52` in the test) accepts the catalog, counts 15, `list` byte-identical, cannot see `kernel-k46`. |
+| SHA-256 | `sha256.c`/`sha256.h`/`axtypes.h` copied verbatim from amix-dlm `656d155` `loader/common` (FIPS-tested there; copyright kept). Kernel-space datastreams are verified by SHA-256 + size after download (and when a cached copy is reused); userland stays md5 + size. |
+| pkginst | taken from the datastream header (exactly one instance), because names like `kernel-k46` exceed the 9-char pkginst limit. Optional `pkginst=` key must agree. |
+| pre-flight | before staging: a module against the kernel of its line (in the transaction, else the installed record) — same kabi family and major, minor ≤ the kernel's, same pin; a static kernel (`kabi=static` or major 0) takes no modules; a kernel may not strand an installed module (`-f` does not override). Refusal = exit 5, nothing staged. The CPU line is kbootset's gate 10. |
+| record | after each kernel-space pkgadd: the C2-2 §2 fields in order, `source` (HTTP: `<repo>/catalog`; medium: mount path or raw device), `installed <time>`, `verified no`, then one `file <path> <size> <sha256>` per f/e/v object the target's contents DB lists for the pkginst (status/class decorations on the package token stripped), hashed on disk; written `.new` + rename. Remove finds the pkginst as the owner of the first recorded file. |
+| trigger | after a transaction that changed kernel space and only when all of it is done: `kbootset [-R t] --journal J build`, then `… commit`. J = `kbootset_journal=` or `<target>/var/kbootset/journal` (the contract default, passed explicitly because kbootset.c has no default yet). `bootset=manual` in `<target>/etc/default/bootset` (40 §2.2) prints the commands; an unreadable value counts as manual. Statuses: 0 → repeat kbootset's last line; 3/4 → exit **7** "the committed generation is unchanged", kbootset's line passed on, no journal; 1/2/cannot run → exit **6**, journal kept. A failure after a good build says the built generation is uncommitted. `kbootset=` moves the binary (default `/sbin/kbootset`). |
+| journal | `/var/apkg/txn` (target-relative), text, rewritten whole at each step, from "every package staged and verified" to done. Kept only when `apkg recover` has work: an interruption, a failed pkgadd in a kernel-space transaction, an owed trigger. A userland-only pkgadd failure clears it (0.2.x behaviour). A pending journal blocks install/upgrade/remove. `apkg recover` re-checks each pending staged file (size, and md5/sha256 unless it was a `.Z` decompressed into the cache), pkgadds it with `instance=overwrite` (or pkgrms), writes records, runs the trigger; `apkg -f recover` prints and discards. |
+
+**Not built here** (stage-2 items outside this dispatch): `gen-catalog.py` writing the block (S2-23,
+so the live catalog is unchanged); D59 streaming `-R` installs; the A6 reverse-needs refusal on remove;
+`upgrade` with no name; M-PKG1 (S2-44). The shipped `/etc/apkg.conf` template is **not** changed (its
+md5 `8dada8d9…` is pinned, T23); the two new keys are built-in defaults. Built with the period toolchain
+(gcc 2.7.2.3, `make amix`); no GCC 14.
+
+**Evidence.**
+
+- Host: `tests/run-tests.sh` **330 passed, 0 failed** (223 before; the new cases: FIPS 180-4 vectors
+  incl. the million-`a` one and 14 lengths around the block/buffer edges against `sha256sum`, through
+  `tests/sha256-driver.c`; parser and refusals; the 2047/2048-byte bound for both clients; the 0.2.3
+  client skipping the block; the record byte for byte; pre-flight; all five kbootset statuses through
+  a mock; `-R`, `--journal`, `bootset=manual`, `-n`; a transaction killed by `kill -9` in its second
+  pkgadd and finished by `apkg recover`; remove; userland untouched). `tests/nohttp-variant.sh` 20/0.
+  Repo tools 316/0 (T23 mints APKG from the new `apkg.amix`).
+- Against the consumer: `tests/kbootset-consumer.sh` **10/0** builds kbootset from amix-dlm (`04b11d7`,
+  read-only, binary in `tests/work`), and apkg installs a kernel package with `-R` and calls it: gate 1
+  accepts apkg's record and commits generation 1 ("written as the pristine generation"); a sidecar
+  whose kabi disagrees with the record gives a real gate-2 refusal → apkg exit 7 with the gate's line,
+  store unchanged; a member changed by hand → gate 1 refuses.
+- Cross builds: `make amix` clean with gcc-cross-amix (`apkg.amix` sha256 `420fc1da…`); the new objects
+  carry no bare `divsl/divul`; the FILE+RAW static variant (build-amix-static.sh's source rule, SRCS
+  minus http.c/dns.c, `-DAPKG_NO_HTTP`) links against `libc.a` with **0** undefined symbols. `fdopen`
+  is not used (the Amix `<stdio.h>` declares it only for non-ANSI compiles; the kbootset pipe is read
+  with `read(2)`).
+- Emulator smoke, kerntools rig row **E1** (A3000/030, `amix-bench-golden-2026-08-14.hdf`, heirloom
+  `/usr/apkg/bin/pkgadd`, apkg 0.1 installed), slot 5, `--no-writeback`, repo amiberry via
+  `piscsi-rig.sh`: **PASS** (297 s). From a FILE source `/tmp/frepo` the new client installed
+  `amixdemo` + its dep `demolib` (rc 0, `pkginfo` lists both, no journal left), then a real
+  kernel-space datastream `KSMOKE` (minted with the host heirloom `pkgmk`/`pkgtrans`, 53248 B): SHA-256
+  verified on the 68030, real pkgadd, the record's two `file` lines carry exactly the host's
+  `sha256sum` of the payload (`9319e582…`, `5d3325b0…`), a mock `/tmp/kbmock` got `--journal
+  /var/kbootset/journal build` then `… commit`, apkg repeated "generation 2 committed; power-cycle to
+  boot it". `remove ksmoke` ran pkgrm KSMOKE (pkginst found through the contents DB), deleted the
+  record, triggered again. The guest's own apkg 0.1 read the same catalog: "2 packages", kernel space
+  invisible. Evidence: `build/smoke-apkg03-20261025/` (gitignored; `rig/E1/03-host.txt` is the
+  transcript).
+
+**Version.** `APKG_VERSION` and the man page move to 0.3.0 in a separate commit. Nothing is minted:
+`tools/repo/build-packages.sh` still says `VER_APKG="0.2.3"`, and a mint is the owner's call. The live
+catalog and pkg.amigaux.org are untouched.
+
+**Open / for the contracts.** C2-2 §1 does not name `pkginst=` and `offset=`; this client reads them as
+optional extensions (both are ignorable unknown keys for every other reader) — proposed for C2-2 v2.
+C2-4 does not say where `bootset=` lives; apkg reads `<target>/etc/default/bootset` per 40 §2.2.
+kbootset.c today requires `--image`/`--dev` and has no default journal, so the box form (no
+`--image`) of C2-4 §2 is not callable yet; apkg already passes `--journal` explicitly.
+
 ## 2026-10-14 — PUBLISH LOG: batch 0 is live (7 add-ons -> -2, APKGENG 1.12.3, APKG 0.2.3; 41 -> 41)
 
 **Published 2026-10-14, ~15:50 EEST** by the orchestrator. Root `build/publish-20261014-batch0/` (gitignored):

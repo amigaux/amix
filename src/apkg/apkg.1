@@ -117,9 +117,111 @@ Wrapper around
 .IR admin .
 The name is mapped to its package instance through the catalog when
 one is available; otherwise it is used as the instance name directly.
+A kernel-space package is known by its record (see
+.BR "KERNEL SPACE" );
+it is removed with
+.B pkgrm
+of the instance owning its recorded files, its record is deleted, and
+the next generation is built and committed without it.
+.TP
+.B recover
+Finish a transaction that was interrupted (a power cut, a killed
+process) or that ended owing work, from the journal
+.BR /var/apkg/txn :
+every package not yet done is installed again from its staged
+datastream (re-checked against its size and catalog hash first) with
+.BR instance=overwrite ,
+or removed, and a kernel-space transaction ends with the kbootset
+build and commit.  With
+.B \-f
+the journal is printed and discarded and nothing else is changed.
+While a journal exists,
+.BR install ,
+.B upgrade
+and
+.B remove
+refuse to start.
 .TP
 .B version
 Print the client version.
+.SH KERNEL SPACE
+Kernel, loader and module packages are listed in a block of the
+catalog that every older client skips as comments (amix-dlm contract
+C2-2, version 1):
+.PP
+.RS
+.nf
+#ext kpkg 1
+#kpkg <name> <version> role=kernel|loader|module line=k30|k46
+      kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex>
+      file=<datastream>
+#ksig <key-id> <file>
+#end kpkg
+.fi
+.RE
+.PP
+(one
+.B #kpkg
+line per package, every line under 2048 bytes).  An unknown key is
+ignored; an unknown key starting with
+.B !
+refuses that entry.  A structural error (an unterminated block, an
+ordinary entry inside it, a second block, a name used twice) rejects
+the catalog.  A block of another version is skipped.
+.PP
+A kernel-space package is verified by
+.B SHA-256
+and size after download (userland packages stay md5 and size).
+There is no signature in this release: a
+.B #ksig
+line is recorded and not acted on, the catalog block is reported
+"unverified", and every record says
+.BR "verified no" .
+.PP
+Before anything is fetched, a transaction is pre-flighted: a module
+must match the kernel of its line (in the transaction, or installed)
+in kabi family and major, its minor must not exceed the kernel's, and
+the compiler pins must be equal; a static kernel takes no modules; a
+new kernel may not strand an installed module of its line.  A refusal
+exits 5 and changes nothing.  The box's CPU line is checked by
+kbootset (its gate 10), not here.
+.PP
+After each kernel-space
+.BR pkgadd ,
+apkg writes the record
+.BI /var/apkg/kpkg/ name
+(name, version, role, line, kabi, pin, the datastream's sha256, the
+source, the install time,
+.BR "verified no" ,
+and one
+.BI "file " "path size sha256"
+line per installed file, taken from the contents database and hashed
+on disk).  The pkginst comes from the datastream's header.
+.PP
+After a transaction that installed or removed kernel space, and only
+when every package in it is done, apkg calls
+.B kbootset build
+and then
+.B kbootset commit
+(two calls, with
+.B \-R
+.I target
+under
+.B \-R
+and an explicit
+.BR \-\-journal ).
+apkg never writes a boot slice itself.  With
+.B bootset=manual
+in
+.B /etc/default/bootset
+it prints the two commands instead.  On success it repeats kbootset's
+last line ("generation N committed; power-cycle to boot it").  A refusal
+(kbootset status 3 or 4) exits 7 with kbootset's line and "the committed
+generation is unchanged"; an error (status 1 or 2), or a kbootset that
+cannot run, exits 6 and keeps the journal, so
+.B apkg recover
+runs the build and commit again.  A failure after a good build leaves
+the built generation uncommitted.
 .SH OPTIONS
 .TP
 .B \-n
@@ -220,6 +322,23 @@ is replaced with
 The remaining keys tune the fetch path.  Every constant that path uses
 is one of these \- there is no compiled-in number an operator cannot
 move.
+.TP
+.B kbootset
+The generation composer called after a kernel-space transaction;
+default
+.BR /sbin/kbootset .
+Like pkgadd it runs from this system and is told
+.B \-R
+.I target
+under
+.BR \-R .
+.TP
+.B kbootset_journal
+The
+.B \-\-journal
+path handed to kbootset; empty (the default) means
+.IB target /var/kbootset/journal ,
+the contract's own default, passed explicitly.
 .TP
 .B timeout
 Seconds of network
@@ -502,15 +621,25 @@ nameserver, connect, inactivity timeout with the configured retries
 exhausted, HTTP error status).
 .TP
 .B 3
-Verification failure: md5 or size mismatch, bad catalog header,
-malformed catalog.
+Verification failure: md5, sha256 or size mismatch, bad catalog
+header, malformed catalog, a refused kernel-space entry, a datastream
+whose header contradicts the catalog.
 .TP
 .B 4
 pkgadd/pkgrm (or the zcat decompression step) failed.
 .TP
 .B 5
 Dependency cycle, or a dependency (or install target) missing from
-the catalog.
+the catalog; a kernel-space pre-flight refusal (kabi, pin, line).
+.TP
+.B 6
+kbootset could not run, failed (status 1) or rejected its arguments
+(status 2).  The packages are installed; the journal is kept for
+.BR "apkg recover" .
+.TP
+.B 7
+kbootset refused the build or commit by a rule (status 3) or at a gate
+(status 4); the committed generation is unchanged.
 .SH FILES
 .PD 0
 .TP 24
@@ -541,13 +670,28 @@ written by apkg)
 .TP
 .B /var/sadm/pkg/*/pkginfo
 installed-package state (read only)
+.TP
+.B /var/sadm/install/contents
+the files of each installed kernel-space package (read only)
+.TP
+.B /var/apkg/kpkg/*
+apkg's install records of kernel-space packages; kbootset reads them
+.TP
+.B /var/apkg/txn
+the transaction journal
+.TP
+.B /etc/default/bootset
+.B bootset=auto
+(the default) or
+.B manual
 .PD
 .SH SEE ALSO
 .BR pkgadd (1M),
 .BR pkgrm (1M),
 .BR pkginfo (1),
 .BR pkgtrans (1),
-.BR admin (4)
+.BR admin (4),
+.BR kbootset (1M)
 .SH NOTES
 Only plain
 .B http://

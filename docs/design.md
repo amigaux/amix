@@ -122,7 +122,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
 - **.Z transparency**: filename ends `.Z` → pipe through native `zcat` before pkgadd.
 - **admin file** shipped at `/var/apkg/admin`: `instance=quit`, all checks `nocheck`, `action=nocheck`,
   `mail=`; install runs `pkgadd -n -a /var/apkg/admin -d <file> <pkginst>`.
-- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify, 4 pkgadd/pkgrm failure, 5 dep cycle/missing.
+- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify, 4 pkgadd/pkgrm failure, 5 dep cycle/missing (and the kernel-space pre-flight), 6 kbootset error (status 1/2, or not runnable), 7 kbootset refusal (status 3/4). Kernel space (apkg 0.3): NOTES.md 2026-10-25.
 - Host-testable: builds with `gcc -std=gnu89` on Linux (sockets are portable); tests run against
   `python3 -m http.server` + a fake pkgadd shim.
 
