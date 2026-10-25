@@ -121,6 +121,289 @@ static void ent_free(struct pkgent *e)
     for (i = 0; i < e->ndeps; i++)
         free(e->deps[i]);
     free((char *)e->deps);
+    if (e->kspace) {
+        free(e->role);
+        free(e->kline);
+        free(e->kabi);
+        free(e->pin);
+        free(e->sha256);
+        if (e->kpkginst != NULL)
+            free(e->kpkginst);
+        if (e->refused != NULL)
+            free(e->refused);
+    }
+}
+
+/* ---------------- the kernel-space block (#ext kpkg 1) ----------------
+ *
+ * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 1:
+ *
+ *   #ext kpkg 1
+ *   #kpkg <name> <version> role=<kernel|loader|module> line=<k30|k46>
+ *         kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex>
+ *         file=<datastream>                          (one line each)
+ *   #ksig <key-id> <file>                            (optional; absent in 1.1)
+ *   #end kpkg
+ *
+ * After the name and the version the attributes are key=value in any
+ * order.  An unknown key is ignored; an unknown key starting with '!'
+ * refuses the ENTRY.  Two extension keys this client also reads (both
+ * ignorable by any other reader under the rule above): pkginst= (the
+ * SVR4 instance; otherwise taken from the datastream's header) and
+ * offset= (the byte offset on a RAW medium, as the ordinary 10th field).
+ *
+ * What refuses the WHOLE catalog (fail closed, like an unsafe filename):
+ * an unterminated block, an ordinary entry line inside it, a second
+ * block, a #kpkg line without a usable name and version, and a name
+ * used twice.  What refuses only the ENTRY (kept, marked, never
+ * installable): a missing or malformed required key, a '!' key, a
+ * duplicate key.  A block of another version is skipped whole, so a
+ * later format never breaks this client.
+ */
+
+/* a name that is also a safe record file name under /var/apkg/kpkg */
+static int safe_kname(const char *s)
+{
+    if (*s == '\0' || *s == '.' || *s == '-')
+        return 0;
+    while (*s != '\0') {
+        if (!isalnum((unsigned char)*s) && *s != '.' && *s != '_' &&
+            *s != '+' && *s != '-')
+            return 0;
+        s++;
+    }
+    return 1;
+}
+
+static int hex64(const char *s)
+{
+    int i;
+
+    for (i = 0; i < 64; i++) {
+        if (!isxdigit((unsigned char)s[i]))
+            return 0;
+    }
+    return s[64] == '\0';
+}
+
+/* record the first refusal reason only */
+static void krefuse(struct pkgent *e, const char *why, const char *what)
+{
+    if (e->refused != NULL)
+        return;
+    e->refused = cat3(why, what != NULL ? " " : "", what != NULL ? what : "");
+}
+
+/* a key seen twice refuses the entry; returns 1 for the repeat */
+static int kdup(int *seen, struct pkgent *e, const char *key)
+{
+    if (*seen) {
+        krefuse(e, "duplicate key", key);
+        return 1;
+    }
+    *seen = 1;
+    return 0;
+}
+
+/* parse one "#kpkg ..." line (writable) into e.  Returns 0 (entry
+ * parsed; e->refused may be set) or -1 (catalog format error). */
+static int parse_kpkg(char *line, struct pkgent *e, const char *path,
+                      int lineno)
+{
+    char *tok[64];
+    char *p;
+    char *eq;
+    char *key;
+    char *val;
+    int nt;
+    int i;
+    int seen_role, seen_line, seen_kabi, seen_pin, seen_size, seen_sha,
+        seen_file, seen_pkginst, seen_offset;
+
+    nt = 0;
+    p = line;
+    for (;;) {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == '\0')
+            break;
+        if (nt == 64) {
+            warnx2("%s:%d: too many fields on a #kpkg line", path, lineno);
+            return -1;
+        }
+        tok[nt++] = p;
+        while (*p != '\0' && *p != ' ' && *p != '\t')
+            p++;
+        if (*p != '\0')
+            *p++ = '\0';
+    }
+    /* tok[0] is "#kpkg" */
+    if (nt < 3 || !safe_kname(tok[1]) || !safe_word(tok[2]) ||
+        strchr(tok[1], '=') != NULL || strchr(tok[2], '=') != NULL) {
+        warnx2("%s:%d: #kpkg needs a name and a version", path, lineno);
+        return -1;
+    }
+    memset((char *)e, 0, sizeof(*e));
+    e->kspace = 1;
+    e->offset = -1;
+    e->name = xstrdup(tok[1]);
+    e->version = xstrdup(tok[2]);
+    seen_role = seen_line = seen_kabi = seen_pin = seen_size = seen_sha =
+        seen_file = seen_pkginst = seen_offset = 0;
+    for (i = 3; i < nt; i++) {
+        eq = strchr(tok[i], '=');
+        if (eq == NULL || eq == tok[i]) {
+            krefuse(e, "malformed attribute", tok[i]);
+            continue;
+        }
+        *eq = '\0';
+        key = tok[i];
+        val = eq + 1;
+        if (strcmp(key, "role") == 0) {
+            if (kdup(&seen_role, e, key))
+                continue;
+            if (strcmp(val, "kernel") != 0 && strcmp(val, "loader") != 0 &&
+                strcmp(val, "module") != 0)
+                krefuse(e, "unknown role", val);
+            e->role = xstrdup(val);
+        } else if (strcmp(key, "line") == 0) {
+            if (kdup(&seen_line, e, key))
+                continue;
+            if (strcmp(val, "k30") != 0 && strcmp(val, "k46") != 0)
+                krefuse(e, "unknown line", val);
+            e->kline = xstrdup(val);
+        } else if (strcmp(key, "kabi") == 0) {
+            if (kdup(&seen_kabi, e, key))
+                continue;
+            if (!safe_word(val))
+                krefuse(e, "bad kabi", val);
+            e->kabi = xstrdup(val);
+        } else if (strcmp(key, "pin") == 0) {
+            if (kdup(&seen_pin, e, key))
+                continue;
+            if (!safe_word(val))
+                krefuse(e, "bad pin", val);
+            e->pin = xstrdup(val);
+        } else if (strcmp(key, "size") == 0) {
+            if (kdup(&seen_size, e, key))
+                continue;
+            if (!all_digits(val) || strlen(val) > 10)
+                krefuse(e, "bad size", val);
+            else
+                e->size = atol(val);
+        } else if (strcmp(key, "sha256") == 0) {
+            if (kdup(&seen_sha, e, key))
+                continue;
+            if (!hex64(val))
+                krefuse(e, "sha256 is not 64 hex chars", NULL);
+            e->sha256 = xstrdup(val);
+        } else if (strcmp(key, "file") == 0) {
+            if (kdup(&seen_file, e, key))
+                continue;
+            if (!safe_filename(val))
+                krefuse(e, "unsafe file", val);
+            else
+                e->filename = xstrdup(val);
+        } else if (strcmp(key, "pkginst") == 0) {
+            if (kdup(&seen_pkginst, e, key))
+                continue;
+            if (!safe_kname(val) || strlen(val) > 32)
+                krefuse(e, "bad pkginst", val);
+            else
+                e->kpkginst = xstrdup(val);
+        } else if (strcmp(key, "offset") == 0) {
+            if (kdup(&seen_offset, e, key))
+                continue;
+            if (!all_digits(val) || strlen(val) > 10)
+                krefuse(e, "bad offset", val);
+            else
+                e->offset = atol(val);
+        } else if (key[0] == '!') {
+            krefuse(e, "unknown mandatory key", key);
+        }
+        /* any other key: ignored (C2-2 §1) */
+    }
+    if (!seen_role)
+        krefuse(e, "missing key", "role=");
+    if (!seen_line)
+        krefuse(e, "missing key", "line=");
+    if (!seen_kabi)
+        krefuse(e, "missing key", "kabi=");
+    if (!seen_pin)
+        krefuse(e, "missing key", "pin=");
+    if (!seen_size)
+        krefuse(e, "missing key", "size=");
+    if (!seen_sha)
+        krefuse(e, "missing key", "sha256=");
+    if (!seen_file)
+        krefuse(e, "missing key", "file=");
+
+    /* the ordinary fields every verb prints, filled so no caller needs
+     * to know an entry is kernel space just to display it */
+    if (e->role == NULL)
+        e->role = xstrdup("?");
+    if (e->kline == NULL)
+        e->kline = xstrdup("?");
+    if (e->kabi == NULL)
+        e->kabi = xstrdup("?");
+    if (e->pin == NULL)
+        e->pin = xstrdup("?");
+    if (e->sha256 == NULL)
+        e->sha256 = xstrdup("");
+    for (i = 0; e->sha256[i] != '\0'; i++)
+        e->sha256[i] = (char)tolower((unsigned char)e->sha256[i]);
+    if (e->filename == NULL)
+        e->filename = xstrdup("-");
+    e->pkginst = xstrdup(e->kpkginst != NULL ? e->kpkginst : e->name);
+    e->md5 = xstrdup("");
+    e->category = xstrdup(e->role);
+    e->desc = xmalloc((unsigned)(strlen(e->role) + strlen(e->kline) +
+                                 strlen(e->kabi) + 40));
+    sprintf(e->desc, "kernel-space %s, line %s, kabi %s",
+            e->role, e->kline, e->kabi);
+    e->deps = NULL;
+    e->ndeps = 0;
+    if (e->refused != NULL)
+        note("%s:%d: kernel-space entry %s refused: %s",
+             path, lineno, e->name, e->refused);
+    return 0;
+}
+
+/* "#ext kpkg <n>" -> n, or -1 when the line is not that header */
+static int kpkg_ext_version(const char *line)
+{
+    const char *p;
+
+    if (strncmp(line, KPKG_EXT, sizeof(KPKG_EXT) - 1) != 0)
+        return -1;
+    p = line + sizeof(KPKG_EXT) - 1;
+    if (*p != ' ' && *p != '\t')
+        return -1;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (!isdigit((unsigned char)*p))
+        return 0;      /* malformed version: treated as "not ours" */
+    return atoi(p);
+}
+
+static int is_kend(const char *line)
+{
+    unsigned n;
+
+    n = (unsigned)strlen(line);
+    while (n > 0 && (line[n - 1] == ' ' || line[n - 1] == '\t'))
+        n--;
+    return n == sizeof(KPKG_END) - 1 &&
+           strncmp(line, KPKG_END, sizeof(KPKG_END) - 1) == 0;
+}
+
+static int has_word_prefix(const char *line, const char *w)
+{
+    unsigned n;
+
+    n = (unsigned)strlen(w);
+    return strncmp(line, w, n) == 0 &&
+           (line[n] == ' ' || line[n] == '\t');
 }
 
 static int parse_deps(const char *field, struct pkgent *e)
@@ -253,11 +536,17 @@ int catalog_load(const char *path, struct catalog *cat)
     char line[MAXLINE];
     struct pkgent e;
     int lineno;
+    int block;
+    int seen_block;
     unsigned len;
 
     cat->ents = NULL;
     cat->n = 0;
     cat->cap = 0;
+    cat->nk = 0;
+    cat->ksig_key = NULL;
+    cat->ksig_file = NULL;
+    cat->kverified = 0;
 
     fp = fopen(path, "r");
     if (fp == NULL)
@@ -277,25 +566,107 @@ int catalog_load(const char *path, struct catalog *cat)
         return CAT_EBADHDR;
     }
 
+    /* block: 0 = outside, 1 = inside a kpkg 1 block, 2 = inside a
+     * kpkg block of another version (skipped whole) */
+    block = 0;
+    seen_block = 0;
     lineno = 1;
     while (fgets(line, (int)sizeof(line), fp) != NULL) {
         lineno++;
         len = (unsigned)strlen(line);
+        /* the same bound a 0.2.x client applies to EVERY line, comment
+         * or not: a block line this long would brick the old client, so
+         * this one refuses it too (C2-2 §1: every line under 2048 B) */
         if (len == sizeof(line) - 1 && line[len - 1] != '\n') {
             warnx2("%s:%d: line too long", path, lineno);
-            fclose(fp);
-            catalog_free(cat);
-            return CAT_EFORMAT;
+            goto bad;
         }
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
-        if (line[0] == '\0' || line[0] == '#')
-            continue;
-        if (parse_entry(line, &e, path, lineno) != 0) {
-            fclose(fp);
-            catalog_free(cat);
-            return CAT_EFORMAT;
+        if (block != 0) {
+            if (line[0] == '\0')
+                continue;
+            if (line[0] != '#') {
+                warnx2("%s:%d: ordinary entry inside the kernel-space "
+                       "block", path, lineno);
+                goto bad;
+            }
+            if (is_kend(line)) {
+                block = 0;
+                continue;
+            }
+            if (block == 2)
+                continue;
+            if (kpkg_ext_version(line) >= 0) {
+                warnx2("%s:%d: kernel-space block opened twice", path,
+                       lineno);
+                goto bad;
+            }
+            if (has_word_prefix(line, "#kpkg")) {
+                if (parse_kpkg(line, &e, path, lineno) != 0)
+                    goto bad;
+                if (catalog_find(cat, e.name) != NULL) {
+                    warnx2("%s:%d: package name %s used twice", path,
+                           lineno, e.name);
+                    ent_free(&e);
+                    goto bad;
+                }
+                cat->nk++;
+                goto add;
+            }
+            if (has_word_prefix(line, "#ksig")) {
+                char *k, *f, *q;
+
+                k = line + 5;
+                while (*k == ' ' || *k == '\t')
+                    k++;
+                q = k;
+                while (*q != '\0' && *q != ' ' && *q != '\t')
+                    q++;
+                f = q;
+                while (*f == ' ' || *f == '\t')
+                    f++;
+                if (*q != '\0')
+                    *q = '\0';
+                if (*k != '\0' && *f != '\0' && cat->ksig_key == NULL) {
+                    q = f;
+                    while (*q != '\0' && *q != ' ' && *q != '\t')
+                        q++;
+                    *q = '\0';
+                    cat->ksig_key = xstrdup(k);
+                    cat->ksig_file = xstrdup(f);
+                }
+                continue;
+            }
+            continue;       /* any other comment inside the block */
         }
+        if (line[0] == '#') {
+            int v;
+
+            v = kpkg_ext_version(line);
+            if (v >= 0) {
+                if (seen_block) {
+                    warnx2("%s:%d: kernel-space block opened twice", path,
+                           lineno);
+                    goto bad;
+                }
+                seen_block = 1;
+                if (v == KPKG_VERSION) {
+                    block = 1;
+                } else {
+                    note("%s:%d: kernel-space block version %d is not "
+                         "this client's (%d); skipped", path, lineno, v,
+                         KPKG_VERSION);
+                    block = 2;
+                }
+            }
+            continue;
+        }
+        if (line[0] == '\0')
+            continue;
+        if (parse_entry(line, &e, path, lineno) != 0)
+            goto bad;
+    add:
         if (cat->n == cat->cap) {
             cat->cap = cat->cap == 0 ? 16 : cat->cap * 2;
             cat->ents = (struct pkgent *)xrealloc((char *)cat->ents,
@@ -305,7 +676,17 @@ int catalog_load(const char *path, struct catalog *cat)
         cat->n++;
     }
     fclose(fp);
+    if (block != 0) {
+        warnx2("%s: kernel-space block has no '%s' line", path, KPKG_END);
+        catalog_free(cat);
+        return CAT_EFORMAT;
+    }
+    kspace_verify_hook(cat);
     return CAT_OK;
+bad:
+    fclose(fp);
+    catalog_free(cat);
+    return CAT_EFORMAT;
 }
 
 struct pkgent *catalog_find(struct catalog *cat, const char *name)
@@ -329,4 +710,11 @@ void catalog_free(struct catalog *cat)
     cat->ents = NULL;
     cat->n = 0;
     cat->cap = 0;
+    cat->nk = 0;
+    if (cat->ksig_key != NULL)
+        free(cat->ksig_key);
+    if (cat->ksig_file != NULL)
+        free(cat->ksig_file);
+    cat->ksig_key = NULL;
+    cat->ksig_file = NULL;
 }

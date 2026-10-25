@@ -48,6 +48,13 @@
  *                    per server).
  *   dns_retries      extra attempts per nameserver; every configured
  *                    server is asked in turn regardless.
+ *   kbootset         the generation composer apkg calls after a
+ *                    transaction that changed kernel space (C2-4);
+ *                    default /sbin/kbootset (40 §2.2).  Like pkgadd it
+ *                    runs FROM this system and is told -R <target>.
+ *   kbootset_journal the --journal handed to kbootset; empty (the
+ *                    default) = <target>/var/kbootset/journal, the
+ *                    contract's own default, passed explicitly.
  *   rcvbuf/sndbuf    SO_RCVBUF / SO_SNDBUF, REQUESTED before connect();
  *                    0 leaves the stack's own default.  SO_RCVBUF is
  *                    the only client-side lever on the TCP receive
@@ -97,6 +104,7 @@
 #define DEF_PKGRM_FB  "/usr/sbin/pkgrm"
 #define DEF_ADMIN     "/var/apkg/admin"
 #define DEF_CONF      "/etc/apkg.conf"
+#define DEF_KBOOTSET  "/sbin/kbootset"
 
 /* Strict decimal parse: the WHOLE string must be an optionally signed
  * integer.  Returns 0 and stores the value, or -1 on anything else
@@ -179,6 +187,8 @@ int conf_load(const char *conffile_opt, const char *target_opt,
     cf->pkgadd = cat2(cf->root, DEF_PKGADD);
     cf->pkgrm = cat2(cf->root, DEF_PKGRM);
     cf->admin = cat2(cf->root, DEF_ADMIN);
+    cf->kbootset = cat2(cf->root, DEF_KBOOTSET);
+    cf->kbootset_journal = xstrdup("");
     cf->timeout = APKG_DEF_TIMEOUT;
     cf->conn_timeout = APKG_DEF_CONNTIMEO;
     cf->retries = APKG_DEF_RETRIES;
@@ -245,6 +255,12 @@ int conf_load(const char *conffile_opt, const char *target_opt,
             } else if (strcmp(key, "admin") == 0) {
                 free(cf->admin);
                 cf->admin = xstrdup(val);
+            } else if (strcmp(key, "kbootset") == 0) {
+                free(cf->kbootset);
+                cf->kbootset = xstrdup(val);
+            } else if (strcmp(key, "kbootset_journal") == 0) {
+                free(cf->kbootset_journal);
+                cf->kbootset_journal = xstrdup(val);
             } else if (strcmp(key, "timeout") == 0) {
                 if (getnum(val, &num) != 0 || num <= 0)
                     warnx2("%s:%d: bad timeout '%s', keeping %ld",
@@ -358,6 +374,12 @@ int conf_load(const char *conffile_opt, const char *target_opt,
      * then -R (target).  Both empty -> plain /var/sadm/pkg. */
     rootpfx = cat2(cf->root, cf->target);
     cf->sadmpkg = cat2(rootpfx, "/var/sadm/pkg");
+    /* kernel space lives on the TARGET as well: its contents DB, apkg's
+     * records and journal, and the box's bootset setting */
+    cf->contents = cat2(rootpfx, "/var/sadm/install/contents");
+    cf->kpkgdir = cat2(rootpfx, "/var/apkg/kpkg");
+    cf->txnfile = cat2(rootpfx, "/var/apkg/txn");
+    cf->bootsetconf = cat2(rootpfx, "/etc/default/bootset");
     free(rootpfx);
 
     note("config: repo=%s cachedir=%s catalog=%s target=%s",
@@ -371,6 +393,10 @@ int conf_load(const char *conffile_opt, const char *target_opt,
          cf->progress, cf->bufsize, cf->redirects,
          cf->rcvbuf, cf->sndbuf);
     conf_note_dns(cf);
+    note("kspace: kbootset=%s journal=%s records=%s txn=%s",
+         cf->kbootset,
+         cf->kbootset_journal[0] != '\0' ? cf->kbootset_journal :
+         "(default)", cf->kpkgdir, cf->txnfile);
     return 0;
 }
 

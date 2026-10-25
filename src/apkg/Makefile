@@ -15,6 +15,10 @@
 # little-endian host.  Building the host tools on a big-endian host?
 # Add HOST_ENDIAN_FLAGS=-DHIGHFIRST.
 #
+# sha256.c, sha256.h and axtypes.h are amix-dlm's loader/common SHA-256
+# (FIPS 180-4, C89), copied verbatim from amix-dlm 656d155 and kept
+# byte-identical; update them only by copying again.
+#
 # Amix link notes (all discovered against the real sysroot + bench):
 #   - libsocket.SO lacks link closure under GNU ld 2.8.1 (its internal
 #     references to select/syslog/seteuid are not exported by the Amix
@@ -31,7 +35,8 @@
 #     resolves from its own /usr/lib.  libc.so.1 is immune (it has
 #     SONAME /usr/lib/libc.so.1) and is passed by path.
 
-SRCS = main.c util.c conf.c vercmp.c catalog.c md5.c http.c dns.c install.c source.c
+# One line: heirloom/build-amix-static.sh reads SRCS with awk.
+SRCS = main.c util.c conf.c vercmp.c catalog.c md5.c http.c dns.c install.c source.c kspace.c txn.c sha256.c
 
 # ---------------- host ----------------
 
@@ -60,7 +65,7 @@ host: apkg
 apkg: $(HOST_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(HOST_OBJS)
 
-obj-host/%.o: %.c apkg.h md5.h source.h
+obj-host/%.o: %.c apkg.h md5.h source.h sha256.h axtypes.h
 	@mkdir -p obj-host
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -76,7 +81,7 @@ apkg.amix: $(AMIX_OBJS)
 	    $(AMIX_CRT_DIR)/crtn.o
 	@file $@
 
-obj-amix/%.o: %.c apkg.h md5.h source.h
+obj-amix/%.o: %.c apkg.h md5.h source.h sha256.h axtypes.h
 	@mkdir -p obj-amix
 	$(AMIX_CC) $(AMIX_CFLAGS) -c $< -o $@
 

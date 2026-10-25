@@ -1739,6 +1739,582 @@ else
     bad "could not extract the apkg.conf template for the resolver keys"
 fi
 
+# ======================================= kernel space (apkg 0.3)
+#
+# amix-dlm contracts, version 1 (2026-10-25): C2-2 (the #ext kpkg block and
+# the install record /var/apkg/kpkg/<name>) and C2-4 (kbootset as a called
+# program).  Integrity in 1.1 is SHA-256 + size per kernel-space package,
+# no signature (D-3 §13); the hook records "unverified".  kbootset does not
+# exist on a box yet, so a mock stands in for it here: it logs its argv and
+# answers with the status the test asks for (C2-4 §1: 0 done, 1 I/O,
+# 2 usage, 3 rule, 4 gate).  tests/kbootset-consumer.sh runs the record
+# apkg writes through the REAL kbootset build (amix-dlm), separately.
+
+# --- SHA-256: FIPS 180-4 vectors and agreement with sha256sum ---
+echo "== building the sha256 driver =="
+SHADRV=$WORK/sha256-driver
+( cd "$SRC" && gcc -std=gnu89 -O2 -Wall -Wextra -o "$SHADRV" \
+    tests/sha256-driver.c util.c conf.c vercmp.c catalog.c md5.c http.c \
+    dns.c install.c source.c kspace.c txn.c sha256.c ) 2>"$WORK/shadrv.err" \
+    && [ ! -s "$WORK/shadrv.err" ] \
+    && ok "the sha256 driver builds clean (-Wall -Wextra)" \
+    || bad "sha256 driver build failed or warned" "$(cat "$WORK/shadrv.err")"
+SV=$WORK/shavec
+mkdir -p "$SV"
+: > "$SV/empty"
+printf abc > "$SV/abc"
+printf 'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq' > "$SV/two-block"
+python3 -c 'import sys; sys.stdout.write("a" * 1000000)' > "$SV/million-a"
+shav() { "$SHADRV" "$1" | cut -c1-64; }
+[ "$(shav "$SV/empty")" = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ] \
+    && ok "sha256 of the empty message (FIPS 180-4)" \
+    || bad "sha256 empty-message vector wrong" "$(shav "$SV/empty")"
+[ "$(shav "$SV/abc")" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ] \
+    && ok "sha256 of 'abc' (FIPS 180-4)" \
+    || bad "sha256 'abc' vector wrong" "$(shav "$SV/abc")"
+[ "$(shav "$SV/two-block")" = 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1 ] \
+    && ok "sha256 of the 448-bit two-block message (FIPS 180-4)" \
+    || bad "sha256 two-block vector wrong" "$(shav "$SV/two-block")"
+[ "$(shav "$SV/million-a")" = cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0 ] \
+    && ok "sha256 of one million 'a' (FIPS 180-4)" \
+    || bad "sha256 million-a vector wrong" "$(shav "$SV/million-a")"
+# every length around the 64-byte block and the 8 KB read buffer, plus odd
+# sizes, against the system's sha256sum
+for n in 55 56 63 64 65 119 120 127 128 8191 8192 8193 16385 100003; do
+    head -c $n /dev/urandom > "$SV/r$n"
+done
+GOT=$(cd "$SV" && "$SHADRV" r*); WANT=$(cd "$SV" && sha256sum r*)
+[ "$GOT" = "$WANT" ] \
+    && ok "sha256_file agrees with sha256sum at 14 lengths around block/buffer edges" \
+    || bad "sha256_file disagrees with sha256sum" "$GOT
+--- sha256sum:
+$WANT"
+
+# --- fixtures: kernel-space datastreams, shims, the kbootset mock ---
+KR=$WORK/krepo
+KLOG=$WORK/kbootset.log
+mkdir -p "$KR/pkgs/kernel"
+cp -r "$WORK/repo/pkgs/." "$KR/pkgs/"
+# a fake datastream with a real SVR4 header; the shim installs its FILE
+# lines, records DIR lines as directories, SHARED lines as an object two
+# packages own (status- and class-decorated token in the contents DB)
+mkds() {    # mkds <out> <pkginst> <version> <payload-word>
+    {
+        printf '# PaCkAgE DaTaStReAm\n%s 1 20\n# end of header\n' "$2"
+        printf 'VERSION %s\n' "$3"
+        printf 'DIR /stand\nDIR /stand/k46\n'
+        printf 'FILE /stand/k46/%s %s-%s\n' "$4" "$4" "$3"
+        printf 'FILE /stand/k46/%s.kabi kabi-of-%s\n' "$4" "$4"
+        printf 'SHARED /stand/k46/README.%s readme\n' "$2"
+    } > "$1"
+}
+mkds "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg" KERNK46  1.1.0 unix
+mkds "$KR/pkgs/kernel/z3660scsi-k46-1.0.pkg" Z3660SCS 1.0 z3660scsi
+mkds "$KR/pkgs/kernel/modbad-1.0.pkg"  MODBAD  1.0 modbad
+mkds "$KR/pkgs/kernel/modpin-1.0.pkg"  MODPIN  1.0 modpin
+mkds "$KR/pkgs/kernel/modk30-1.0.pkg"  MODK30  1.0 modk30
+mkds "$KR/pkgs/kernel/liar-1.0.pkg"    LIARPKG 1.0 liar
+mkds "$KR/pkgs/kernel/badsha-1.0.pkg"  BADSHA  1.0 badsha
+mkds "$KR/pkgs/kernel/kernel-k46-1.1.1.pkg" KERNK46 1.1.1 unix
+mkds "$KR/pkgs/kernel/kernel-k46-2.0.pkg"   KERNK46 2.0   unix
+sha() { sha256sum "$1" | cut -c1-64; }
+PIN=gcc-2.7.2.3-8949028
+kline() {   # kline <name> <version> <role> <line> <kabi> <pin> <file> [extra]
+    printf '#kpkg %s %s role=%s line=%s kabi=%s pin=%s size=%s sha256=%s file=%s%s\n' \
+        "$1" "$2" "$3" "$4" "$5" "$6" "$(sizeof "$KR/pkgs/$7")" \
+        "$(sha "$KR/pkgs/$7")" "$7" "${8:+ $8}"
+}
+mkkcat() {  # mkkcat <dest-catalog> <kernel-line> <extra-lines...>
+    {
+        cat "$WORK/repo/catalog"
+        echo "#ext kpkg 1"
+        echo "# a comment inside the block is ignored"
+        echo "$2"
+        kline z3660scsi-k46 1.0 module k46 k46.1.0 $PIN kernel/z3660scsi-k46-1.0.pkg "zz-future-key=1"
+        kline modbad 1.0 module k46 k46.1.4 $PIN kernel/modbad-1.0.pkg
+        kline modpin 1.0 module k46 k46.1.0 gcc-14.2-x kernel/modpin-1.0.pkg
+        kline modk30 1.0 module k30 k30.1.0 $PIN kernel/modk30-1.0.pkg
+        kline liar 1.0 module k46 k46.1.0 $PIN kernel/liar-1.0.pkg pkginst=NOTLIAR
+        printf '#kpkg badsha 1.0 role=module line=k46 kabi=k46.1.0 pin=%s size=%s sha256=%s file=kernel/badsha-1.0.pkg\n' \
+            $PIN "$(sizeof "$KR/pkgs/kernel/badsha-1.0.pkg")" \
+            0000000000000000000000000000000000000000000000000000000000000000
+        kline future 1.0 module k46 k46.1.0 $PIN kernel/modbad-1.0.pkg "!needs-signature=ed25519"
+        echo "#kpkg nosha 1.0 role=loader line=k46 kabi=none pin=none size=1 file=kernel/x.pkg"
+        echo "#ksig key-2026a catalog.sig"
+        echo "#end kpkg"
+    } > "$1"
+}
+KCAT_K110=$(kline kernel-k46 1.1.0 kernel k46 k46.1.0 $PIN kernel/kernel-k46-1.1.0.pkg)
+mkkcat "$KR/catalog" "$KCAT_K110"
+
+cat > "$WORK/bin/kpkgadd-shim" <<EOF
+#!/bin/sh
+# models pkgadd for the kernel-space tests: installs the fake datastream's
+# FILE lines under \$APKG_ROOT<-R target> and writes SVR4 contents lines
+echo "pkgadd \$*" >> $SHIMLOG
+T=; F=; I=
+while [ \$# -gt 0 ]; do
+    case "\$1" in
+    -R) T=\$2; shift 2 ;;
+    -d) F=\$2; shift 2 ;;
+    -a) shift 2 ;;
+    -n) shift ;;
+    *)  I=\$1; shift ;;
+    esac
+done
+if [ -f $WORK/kshim.die ] && grep -qx "\$I" $WORK/kshim.die; then
+    kill -9 \$PPID; sleep 1; exit 9      # a power cut, as apkg sees it
+fi
+R=\$APKG_ROOT\$T
+C=\$R/var/sadm/install/contents
+mkdir -p \$R/var/sadm/install \$R/var/sadm/pkg/\$I
+touch \$C
+awk -v i="\$I" '{ keep = 1
+    for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
+        sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
+    if (keep) print }' \$C > \$C.t && mv \$C.t \$C
+printf 'PKG=%s\nVERSION=%s\n' "\$I" "\$(sed -n 's/^VERSION //p' \$F)" \
+    > \$R/var/sadm/pkg/\$I/pkginfo
+sed -n 's/^DIR //p' \$F | while read d; do
+    mkdir -p \$R\$d; echo "\$d d none 0755 root sys \$I" >> \$C; done
+sed -n 's/^FILE //p' \$F | while read p c; do
+    mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
+    echo "\$p f none 0644 root sys \$(wc -c < \$R\$p) 1 1700000000 \$I" >> \$C; done
+sed -n 's/^SHARED //p' \$F | while read p c; do
+    mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
+    printf '%s e none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
+        "\$p" "\$(wc -c < \$R\$p)" "\$I" >> \$C; done
+exit 0
+EOF
+cat > "$WORK/bin/kpkgrm-shim" <<EOF
+#!/bin/sh
+echo "pkgrm \$*" >> $SHIMLOG
+T=; I=
+while [ \$# -gt 0 ]; do
+    case "\$1" in -R) T=\$2; shift 2 ;; -a) shift 2 ;; -n) shift ;;
+    *) I=\$1; shift ;; esac
+done
+R=\$APKG_ROOT\$T
+C=\$R/var/sadm/install/contents
+awk -v i="\$I" '{ keep = 1
+    for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
+        sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
+    if (keep) print }' \$C > \$C.t && mv \$C.t \$C
+rm -rf \$R/var/sadm/pkg/\$I
+exit 0
+EOF
+# the kbootset mock (C2-4): the mode file says which call answers what
+cat > "$WORK/bin/kbootset-mock" <<EOF
+#!/bin/sh
+echo "kbootset \$*" >> $KLOG
+for cmd; do :; done
+mode=\$(cat $WORK/kb.mode 2>/dev/null)
+case "\$mode" in
+"\$cmd"=*) st=\${mode#*=}
+    case \$st in
+    3) echo "kbootset: refused: the boot store is read-only" ;;
+    4) echo "kbootset: gate 1 refused: /stand/k46/unix differs from its record" ;;
+    *) echo "kbootset: \$cmd failed" ;;
+    esac
+    exit \$st ;;
+esac
+case "\$cmd" in
+build)  echo "kbootset: generation 7 built in /stand/gen/7" ;;
+commit) echo "kbootset: step 1 journal" >&2
+        echo "kbootset: generation 7 committed; power-cycle to boot it" ;;
+*)      exit 2 ;;
+esac
+exit 0
+EOF
+chmod +x "$WORK/bin/kpkgadd-shim" "$WORK/bin/kpkgrm-shim" "$WORK/bin/kbootset-mock"
+
+mkkconf() {  # mkkconf <file> <repo> [extra key=value lines]
+    mkconf "$1" "$2" "$WORK/bin/kpkgadd-shim"
+    sed -i "s|^pkgrm=.*|pkgrm=$WORK/bin/kpkgrm-shim|" "$1"
+    echo "kbootset=$WORK/bin/kbootset-mock" >> "$1"
+    [ -n "${3:-}" ] && printf '%s\n' "$3" >> "$1"
+    return 0
+}
+KCONF=$WORK/conf-kspace
+mkkconf "$KCONF" "file://$KR"
+REC=$ROOT/var/apkg/kpkg
+TXN=$ROOT/var/apkg/txn
+kreset() { : > "$SHIMLOG"; : > "$KLOG"; rm -f "$WORK/kb.mode" "$WORK/kshim.die"; }
+kreset
+
+# --- the parser ---
+"$APKG" -c "$KCONF" update > "$WORK/kupd.out" 2>&1; rc=$?
+OUT=$(cat "$WORK/kupd.out")
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 15 packages, 9 kernel-space" \
+    && ok "update counts 15 ordinary + 9 kernel-space entries" \
+    || bad "kernel-space catalog not accepted as expected (rc=$rc)" "$OUT"
+echo "$OUT" | grep -q "unverified: no signature check" \
+    && ok "update says the kernel-space block is unverified (60 §4 hook)" \
+    || bad "the verification hook's verdict is not reported" "$OUT"
+OUT=$("$APKG" -c "$KCONF" list 2>&1)
+echo "$OUT" | grep -q "^kernel-k46 .*kernel .*kernel-space kernel, line k46, kabi k46\." \
+    && ok "list shows a kernel-space entry with its role, line and kabi" \
+    || bad "kernel-space entry missing from list" "$OUT"
+echo "$OUT" | grep "^future " | grep -q "\[refused\]" \
+    && ok "list marks an entry with a '!' key as refused" \
+    || bad "the '!' entry is not marked refused" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info kernel-k46 2>&1)
+echo "$OUT" | grep -q "SHA256:      $(sha "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg")" && \
+echo "$OUT" | grep -q "Pin:         $PIN" && \
+echo "$OUT" | grep -q "Signature:   unverified" && \
+echo "$OUT" | grep -q "Pkginst:     kernel-k46 (from the datastream)" \
+    && ok "info shows sha256, pin, the unverified hook and the pkginst source" \
+    || bad "kernel-space info wrong" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info future 2>&1)
+echo "$OUT" | grep -q "Refused:     unknown mandatory key !needs-signature" \
+    && ok "an unknown '!' key refuses the entry, not the catalog" \
+    || bad "'!' key handling wrong" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info nosha 2>&1)
+echo "$OUT" | grep -q "Refused:     .*missing key sha256=" \
+    && ok "an entry without sha256= is refused" \
+    || bad "a sha256-less entry was not refused" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info z3660scsi-k46 2>&1)
+echo "$OUT" | grep -q "Refused" \
+    && bad "an unknown plain key refused the entry (must be ignored)" "$OUT" \
+    || ok "an unknown plain key is ignored"
+
+# structural errors refuse the whole catalog, as an unsafe filename does
+KBAD=$WORK/kbadrepo; mkdir -p "$KBAD"
+mkkconf "$WORK/conf-kbad" "file://$KBAD"
+kbadcat() { cat "$WORK/repo/catalog" > "$KBAD/catalog"; printf "$1" >> "$KBAD/catalog"; }
+kbadcat '#ext kpkg 1\n#kpkg k 1 role=kernel\n'
+run 3 "an unterminated kernel-space block rejects the catalog (exit 3)" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat '#ext kpkg 1\nfoo2|1.0|FOO2|foo-1.0.pkg|00000000000000000000000000000000|1|none|system|x\n#end kpkg\n'
+run 3 "an ordinary entry inside the block rejects the catalog (exit 3)" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat '#ext kpkg 1\n#kpkg foo 1 role=kernel\n#end kpkg\n'
+run 3 "a kernel-space name equal to an ordinary one rejects the catalog" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat '#ext kpkg 1\n#end kpkg\n#ext kpkg 1\n#end kpkg\n'
+run 3 "a second kernel-space block rejects the catalog" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat '#ext kpkg 1\n#kpkg ../evil 1 role=kernel\n#end kpkg\n'
+run 3 "a #kpkg name that is no safe record name rejects the catalog" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat '#ext kpkg 2\n#kpkg newfmt 1 whatever\n#knew a line of a future format\n#end kpkg\n'
+"$APKG" -c "$WORK/conf-kbad" update > "$WORK/kv2.out" 2>&1; rc=$?
+[ $rc -eq 0 ] && grep -q "catalog updated: 15 packages$" "$WORK/kv2.out" \
+    && ok "a block of another version is skipped whole (forward compatible)" \
+    || bad "a kpkg version-2 block was not skipped (rc=$rc)" "$(cat "$WORK/kv2.out")"
+# the 2048-byte line bound: a block line of 2047 bytes (with its newline)
+# passes, one of 2048 is refused -- the same bound 0.2.x applies to every
+# line, so the new reader can never accept what would brick an old one
+padline() { python3 -c 'import sys; p = "#kpkg longk 1 role=kernel x="
+print(p + "y" * (int(sys.argv[1]) - 1 - len(p)))' "$1"; }
+PAD2047=$(padline 2047)
+PAD2048=$(padline 2048)
+kbadcat "#ext kpkg 1\n$PAD2047\n#end kpkg\n"
+[ "$(sed -n '/^#kpkg longk/p' "$KBAD/catalog" | wc -c)" -eq 2047 ] || bad "fixture: 2047-byte line is not 2047 bytes"
+run 0 "a 2047-byte block line (newline included) is accepted" \
+    "$APKG" -c "$WORK/conf-kbad" update
+kbadcat "#ext kpkg 1\n$PAD2048\n#end kpkg\n"
+run 3 "a 2048-byte block line is refused (C2-2: every line under 2048 B)" \
+    "$APKG" -c "$WORK/conf-kbad" update
+
+# --- the OLD client skips the block unharmed (built from 0.2.3's source) ---
+OLDC=cc02d52                       # amix-packagemanager: APKG 0.2.3 source
+OLDDIR=$WORK/old-apkg
+REPOTOP=$(cd "$SRC/../.." && pwd)
+if command -v git >/dev/null 2>&1 && \
+   git -C "$REPOTOP" cat-file -e "$OLDC:src/apkg/catalog.c" 2>/dev/null; then
+    rm -rf "$OLDDIR"; mkdir -p "$OLDDIR"
+    git -C "$REPOTOP" archive "$OLDC" src/apkg | tar -x -C "$OLDDIR"
+    make -C "$OLDDIR/src/apkg" host >/dev/null 2>&1
+    OLDAPKG=$OLDDIR/src/apkg/apkg
+    [ "$("$OLDAPKG" version 2>&1)" = "apkg 0.2.3" ] \
+        && ok "the 0.2.3 client builds from $OLDC" \
+        || bad "could not build the 0.2.3 client from $OLDC"
+    "$OLDAPKG" -c "$CONF" update >/dev/null 2>&1
+    "$OLDAPKG" -c "$CONF" list > "$WORK/old.list.plain" 2>/dev/null
+    OUT=$("$OLDAPKG" -c "$KCONF" update 2>&1); rc=$?
+    [ $rc -eq 0 ] && echo "$OUT" | grep -q "^catalog updated: 15 packages$" \
+        && ok "0.2.3 accepts the kernel-space catalog and counts 15 packages" \
+        || bad "0.2.3 choked on the kernel-space block (rc=$rc)" "$OUT"
+    "$OLDAPKG" -c "$KCONF" list > "$WORK/old.list.k" 2>/dev/null
+    cmp -s "$WORK/old.list.plain" "$WORK/old.list.k" \
+        && ok "0.2.3's list is byte-identical with and without the block" \
+        || bad "the block changed 0.2.3's view" \
+               "$(diff "$WORK/old.list.plain" "$WORK/old.list.k")"
+    run 5 "0.2.3 never sees kernel space (kernel-k46 is not in its catalog)" \
+        "$OLDAPKG" -c "$KCONF" -n install kernel-k46
+    run 0 "0.2.3 still installs through a block-carrying catalog" \
+        "$OLDAPKG" -c "$KCONF" -n install baz
+    kbadcat "#ext kpkg 1\n$PAD2047\n#end kpkg\n"
+    run 0 "0.2.3 takes the 2047-byte block line" "$OLDAPKG" -c "$WORK/conf-kbad" update
+    kbadcat "#ext kpkg 1\n$PAD2048\n#end kpkg\n"
+    run 3 "0.2.3 refuses a 2048-byte line: the bound the contract keeps" \
+        "$OLDAPKG" -c "$WORK/conf-kbad" update
+    "$APKG" -c "$KCONF" update >/dev/null 2>&1
+else
+    bad "cannot build the 0.2.3 client: git or commit $OLDC unavailable"
+fi
+
+# --- install a kernel: SHA-256 verify, pkgadd, the record, the trigger ---
+kreset
+"$APKG" -c "$KCONF" install kernel-k46 > "$WORK/kinst.out" 2>&1; rc=$?
+OUT=$(cat "$WORK/kinst.out")
+[ $rc -eq 0 ] && ok "install kernel-k46 (rc 0)" || bad "kernel install failed (rc=$rc)" "$OUT"
+echo "$OUT" | grep -q "kernel space: 1 package in this transaction; a generation build (kbootset) and a power cycle follow" \
+    && ok "the transaction announces kernel space before it starts" \
+    || bad "no kernel-space announcement" "$OUT"
+grep -q "^pkgadd -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/kernel-k46-1.1.0.pkg KERNK46$" "$SHIMLOG" \
+    && ok "pkgadd got the verified medium file and the pkginst from the datastream header" \
+    || bad "kernel pkgadd argv wrong" "$(cat "$SHIMLOG")"
+KREC=$REC/kernel-k46
+U=$ROOT/stand/k46/unix
+K=$ROOT/stand/k46/unix.kabi
+S=$ROOT/stand/k46/README.KERNK46
+cat > "$WORK/krec.want" <<EOF
+name kernel-k46
+version 1.1.0
+role kernel
+line k46
+kabi k46.1.0
+pin $PIN
+sha256 $(sha "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg")
+source $KR
+installed X
+verified no
+file /stand/k46/unix $(sizeof "$U") $(sha "$U")
+file /stand/k46/unix.kabi $(sizeof "$K") $(sha "$K")
+file /stand/k46/README.KERNK46 $(sizeof "$S") $(sha "$S")
+EOF
+sed 's/^installed [0-9][0-9]*$/installed X/' "$KREC" > "$WORK/krec.got" 2>/dev/null
+cmp -s "$WORK/krec.want" "$WORK/krec.got" \
+    && ok "the record is exactly C2-2 §2: fields in order, verified no, one file line per object" \
+    || bad "the install record differs from C2-2 §2" "$(diff "$WORK/krec.want" "$WORK/krec.got" 2>&1)"
+grep -q "^installed [0-9][0-9]*$" "$KREC" \
+    && ok "the record's installed field is seconds since 1970" \
+    || bad "installed field malformed" "$(cat "$KREC")"
+grep -q " d " "$KREC" && bad "a directory reached the record" || \
+    ok "directories are not recorded (files only; the shared 'e' object is)"
+printf 'kbootset --journal /var/kbootset/journal build\nkbootset --journal /var/kbootset/journal commit\n' > "$WORK/kb.want"
+cmp -s "$WORK/kb.want" "$KLOG" \
+    && ok "kbootset ran as two calls: build, then commit (C2-4 §5)" \
+    || bad "kbootset calls wrong" "$(cat "$KLOG")"
+echo "$OUT" | grep -q "^apkg: generation 7 committed; power-cycle to boot it$" \
+    && ok "on status 0 apkg repeats kbootset's last line" \
+    || bad "the commit line was not repeated" "$OUT"
+[ ! -f "$TXN" ] && ok "the journal is gone after a finished transaction" \
+    || bad "journal left behind" "$(cat "$TXN")"
+OUT=$("$APKG" -c "$KCONF" list installed 2>&1)
+echo "$OUT" | grep -q "^kernel-k46 .*\[installed 1.1.0\]" \
+    && ok "an installed kernel-space package is known by its record" \
+    || bad "list installed does not show the kernel" "$OUT"
+kreset
+OUT=$("$APKG" -c "$KCONF" install kernel-k46 2>&1); rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "already installed" && [ ! -s "$KLOG" ] \
+    && ok "an installed kernel is skipped and nothing is triggered" \
+    || bad "re-install of an installed kernel misbehaved (rc=$rc)" "$OUT"
+
+# --- pre-flight: kabi family/major/minor, compiler pin, line ---
+kreset
+run 0 "a module whose kabi and pin match the installed kernel installs" \
+    "$APKG" -c "$KCONF" install z3660scsi-k46
+grep -q "^role module$" "$REC/z3660scsi-k46" 2>/dev/null \
+    && ok "the module's record is written" || bad "no module record"
+[ "$(grep -c . "$KLOG")" -eq 2 ] && ok "the module install triggered build + commit" \
+    || bad "module install trigger wrong" "$(cat "$KLOG")"
+kreset
+run 5 "a module needing a newer kabi minor is refused (exit 5)" \
+    "$APKG" -c "$KCONF" install modbad
+OUT2=$OUT
+run 5 "a module built with another compiler pin is refused (exit 5)" \
+    "$APKG" -c "$KCONF" install modpin
+echo "$OUT" | grep -q "compiler pin gcc-14.2-x differs" \
+    && ok "the pin refusal names both pins" || bad "pin refusal message" "$OUT"
+run 5 "a module of a line with no kernel is refused (exit 5)" \
+    "$APKG" -c "$KCONF" install modk30
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
+    && ok "a pre-flight refusal stages, installs and journals nothing" \
+    || bad "pre-flight refusal touched something" "$(cat "$SHIMLOG" "$KLOG")"
+echo "$OUT2" | grep -q "needs a newer kernel" && ok "the minor refusal says why" \
+    || bad "minor refusal message" "$OUT2"
+run 3 "a refused catalog entry cannot be installed (exit 3)" \
+    "$APKG" -c "$KCONF" install future
+run 3 "a datastream whose sha256 differs from the catalog is refused (exit 3)" \
+    "$APKG" -c "$KCONF" install badsha
+run 3 "a datastream whose header contradicts pkginst= is refused (exit 3)" \
+    "$APKG" -c "$KCONF" install liar
+[ ! -s "$SHIMLOG" ] && ok "no pkgadd ran for any refused package" \
+    || bad "pkgadd ran for a refused package" "$(cat "$SHIMLOG")"
+
+# a new kernel whose kabi major moves strands the installed module: refused
+KR2=$WORK/krepo2; mkdir -p "$KR2"; ln -sfn "$KR/pkgs" "$KR2/pkgs"
+mkkcat "$KR2/catalog" "$(kline kernel-k46 2.0 kernel k46 k46.2.0 $PIN kernel/kernel-k46-2.0.pkg)"
+mkkconf "$WORK/conf-k2" "file://$KR2"
+"$APKG" -c "$WORK/conf-k2" update >/dev/null 2>&1
+kreset
+run 5 "upgrading the kernel to kabi k46.2.0 under a k46.1.0 module is refused" \
+    "$APKG" -c "$WORK/conf-k2" upgrade kernel-k46
+echo "$OUT" | grep -q "the installed module z3660scsi-k46 must be upgraded or removed with the kernel kernel-k46" \
+    && ok "the refusal names the module that would be stranded" \
+    || bad "stranded-module message" "$OUT"
+
+# --- upgrade (same kabi): instance=overwrite, the record follows ---
+mkkcat "$KR2/catalog" "$(kline kernel-k46 1.1.1 kernel k46 k46.1.0 $PIN kernel/kernel-k46-1.1.1.pkg)"
+"$APKG" -c "$WORK/conf-k2" update >/dev/null 2>&1
+kreset
+run 0 "upgrade kernel-k46 1.1.0 -> 1.1.1" "$APKG" -c "$WORK/conf-k2" upgrade kernel-k46
+grep -q "^pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR2/pkgs/kernel/kernel-k46-1.1.1.pkg KERNK46$" "$SHIMLOG" \
+    && ok "the kernel upgrade is one pkgadd with instance=overwrite" \
+    || bad "kernel upgrade argv" "$(cat "$SHIMLOG")"
+grep -q "^version 1.1.1$" "$KREC" && grep -q "^file /stand/k46/unix $(sizeof "$U") $(sha "$U")$" "$KREC" \
+    && ok "the record carries the new version and the new file's sha256" \
+    || bad "record not updated by the upgrade" "$(cat "$KREC")"
+[ "$(grep -c . "$KLOG")" -eq 2 ] && ok "the upgrade triggered build + commit" \
+    || bad "upgrade trigger" "$(cat "$KLOG")"
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+
+# --- the five kbootset statuses, mapped (C2-4 §1) ---
+kreset; echo build=4 > "$WORK/kb.mode"
+run 7 "a gate refusal at build exits 7" "$APKG" -c "$KCONF" -f install z3660scsi-k46
+echo "$OUT" | grep -q "refused at a gate (status 4): gate 1 refused: /stand/k46/unix differs" && \
+echo "$OUT" | grep -q "the committed generation is unchanged" \
+    && ok "status 4: the kbootset line is passed on, 'the committed generation is unchanged'" \
+    || bad "status 4 message" "$OUT"
+[ "$(cat "$KLOG")" = "kbootset --journal /var/kbootset/journal build" ] \
+    && ok "after a refused build, commit is not called" || bad "commit ran after a refused build" "$(cat "$KLOG")"
+[ ! -f "$TXN" ] && ok "a refusal is an answer: no journal is kept" || bad "journal kept after a refusal"
+kreset; echo build=3 > "$WORK/kb.mode"
+run 7 "a rule refusal (status 3) exits 7" "$APKG" -c "$KCONF" -f install z3660scsi-k46
+echo "$OUT" | grep -q "refused by a rule (status 3): refused: the boot store is read-only" \
+    && ok "status 3 passes the kbootset line on" || bad "status 3 message" "$OUT"
+kreset; echo build=2 > "$WORK/kb.mode"
+run 6 "status 2 (usage) exits 6" "$APKG" -c "$KCONF" -f install z3660scsi-k46
+echo "$OUT" | grep -q "contract C2-4 version 1" && ok "status 2 asks whether kbootset speaks C2-4" \
+    || bad "status 2 message" "$OUT"
+"$APKG" -c "$KCONF" -f recover >/dev/null 2>&1
+kreset; echo build=1 > "$WORK/kb.mode"
+run 6 "status 1 at build exits 6" "$APKG" -c "$KCONF" -f install z3660scsi-k46
+grep -q "^state installed$" "$TXN" 2>/dev/null \
+    && ok "after status 1 the journal is kept (state installed: the trigger is owed)" \
+    || bad "no journal after status 1" "$(cat "$TXN" 2>&1)"
+run 1 "a pending journal blocks the next transaction" "$APKG" -c "$KCONF" install foo
+echo "$OUT" | grep -q "run 'apkg recover'" && ok "the block says to run apkg recover" \
+    || bad "pending-journal message" "$OUT"
+kreset
+run 0 "apkg recover re-runs the trigger and finishes" "$APKG" -c "$KCONF" recover
+[ "$(grep -c . "$KLOG")" -eq 2 ] && [ ! -f "$TXN" ] && ! grep -q pkgadd "$SHIMLOG" \
+    && ok "recover ran build + commit only (nothing re-installed) and cleared the journal" \
+    || bad "recover of a pending trigger" "$(cat "$KLOG" "$SHIMLOG")"
+kreset; echo commit=1 > "$WORK/kb.mode"
+run 6 "build succeeds, commit fails: exit 6" "$APKG" -c "$KCONF" -f install z3660scsi-k46
+echo "$OUT" | grep -q "built but not committed: the next boot is unchanged" \
+    && ok "a failure between build and commit is reported, next generation uncommitted" \
+    || bad "build-ok/commit-fail message" "$OUT"
+grep -q "^state built$" "$TXN" 2>/dev/null && ok "the journal says the build was done" \
+    || bad "journal state after build" "$(cat "$TXN" 2>&1)"
+kreset
+run 0 "recover after a failed commit builds and commits again" "$APKG" -c "$KCONF" recover
+[ ! -f "$TXN" ] && ok "journal cleared by recover" || bad "journal left"
+
+# kbootset not there (today's boxes) / bootset=manual / -n / -R / --journal
+mkkconf "$WORK/conf-nokb" "file://$KR"
+sed -i "s|^kbootset=.*|kbootset=$WORK/no/such/kbootset|" "$WORK/conf-nokb"
+kreset
+run 6 "kbootset missing: the packages install, exit 6" \
+    "$APKG" -c "$WORK/conf-nokb" -f install z3660scsi-k46
+echo "$OUT" | grep -q "kbootset not found at $WORK/no/such/kbootset" \
+    && ok "a missing kbootset is named" || bad "missing-kbootset message" "$OUT"
+run 0 "apkg -f recover discards the journal" "$APKG" -c "$KCONF" -f recover
+[ ! -f "$TXN" ] && echo "$OUT" | grep -q "discarding the journal" \
+    && ok "-f recover reports the transaction and discards it" || bad "-f recover" "$OUT"
+kreset
+mkdir -p "$ROOT/etc/default"; echo "bootset=manual" > "$ROOT/etc/default/bootset"
+run 0 "bootset=manual: install succeeds without running kbootset" \
+    "$APKG" -c "$KCONF" -f install z3660scsi-k46
+[ ! -s "$KLOG" ] && echo "$OUT" | grep -q "bootset=manual; compose the next generation with: $WORK/bin/kbootset-mock --journal /var/kbootset/journal build" \
+    && ok "bootset=manual prints the commands instead" || bad "manual mode" "$OUT $(cat "$KLOG")"
+rm -f "$ROOT/etc/default/bootset"
+kreset
+run 0 "-n on a kernel-space install" "$APKG" -c "$KCONF" -n -f install z3660scsi-k46
+[ ! -s "$KLOG" ] && [ ! -s "$SHIMLOG" ] && [ ! -f "$TXN" ] && \
+echo "$OUT" | grep -q "would write the record $REC/z3660scsi-k46" && \
+echo "$OUT" | grep -q "would run: $WORK/bin/kbootset-mock --journal /var/kbootset/journal commit" \
+    && ok "-n prints the pkgadd, the record and both kbootset calls, runs nothing" \
+    || bad "-n kernel-space plan" "$OUT"
+KT=$WORK/ktgt
+kreset
+run 0 "-R <target>: kernel-space install into a target" \
+    "$APKG" -c "$KCONF" -R "$KT" install kernel-k46
+printf 'kbootset -R %s --journal %s/var/kbootset/journal build\nkbootset -R %s --journal %s/var/kbootset/journal commit\n' \
+    "$KT" "$KT" "$KT" "$KT" > "$WORK/kb.want"
+cmp -s "$WORK/kb.want" "$KLOG" && ok "kbootset is told -R <target> and the target's journal" \
+    || bad "-R kbootset argv" "$(cat "$KLOG")"
+[ -f "$ROOT$KT/var/apkg/kpkg/kernel-k46" ] && grep -q "^file /stand/k46/unix " "$ROOT$KT/var/apkg/kpkg/kernel-k46" \
+    && ok "the target's record lives under the target, paths as the target sees them" \
+    || bad "target record" "$(ls -R "$ROOT$KT/var/apkg" 2>&1)"
+mkkconf "$WORK/conf-kj" "file://$KR" "kbootset_journal=/var/tmp/kbj"
+kreset
+run 0 "kbootset_journal= is honoured" "$APKG" -c "$WORK/conf-kj" -f install z3660scsi-k46
+grep -q "^kbootset --journal /var/tmp/kbj build$" "$KLOG" \
+    && ok "--journal carries the configured path" || bad "--journal" "$(cat "$KLOG")"
+
+# --- an interrupted transaction (power cut during the 2nd pkgadd) ---
+"$APKG" -c "$KCONF" remove z3660scsi-k46 >/dev/null 2>&1
+"$APKG" -c "$KCONF" remove kernel-k46 >/dev/null 2>&1
+kreset; echo Z3660SCS > "$WORK/kshim.die"
+"$APKG" -c "$KCONF" install kernel-k46 z3660scsi-k46 > "$WORK/kcut.out" 2>&1; rc=$?
+[ $rc -eq 137 ] && ok "apkg was killed mid-transaction (the cut)" \
+    || bad "the cut did not happen (rc=$rc)" "$(cat "$WORK/kcut.out")"
+grep -q "^pkg 1 0 1 .* kernel-k46 " "$TXN" 2>/dev/null && grep -q "^pkg 0 0 1 .* z3660scsi-k46 " "$TXN" \
+    && ok "the journal has the kernel done and the module pending" \
+    || bad "journal after the cut" "$(cat "$TXN" 2>&1)"
+[ -f "$REC/kernel-k46" ] && [ ! -f "$REC/z3660scsi-k46" ] && [ ! -s "$KLOG" ] \
+    && ok "after the cut: kernel recorded, module not, kbootset never ran" \
+    || bad "state after the cut" "$(ls "$REC"; cat "$KLOG")"
+kreset
+run 0 "apkg recover finishes the interrupted transaction" "$APKG" -c "$KCONF" recover
+grep -q "^pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR/pkgs/kernel/z3660scsi-k46-1.0.pkg Z3660SCS$" "$SHIMLOG" && \
+! grep -q KERNK46 "$SHIMLOG" \
+    && ok "recover re-adds only the pending package, with instance=overwrite" \
+    || bad "recover pkgadd" "$(cat "$SHIMLOG")"
+[ -f "$REC/z3660scsi-k46" ] && [ "$(grep -c . "$KLOG")" -eq 2 ] && [ ! -f "$TXN" ] \
+    && ok "recover wrote the record, ran the trigger once and cleared the journal" \
+    || bad "recover end state" "$(cat "$KLOG"; cat "$TXN" 2>&1)"
+echo "$OUT" | grep -q "1 of 2 packages done" && ok "recover reports what it found" \
+    || bad "recover report" "$OUT"
+run 0 "recover with no journal is a no-op" "$APKG" -c "$KCONF" recover
+echo "$OUT" | grep -q "no unfinished transaction" && ok "and says so" || bad "no-journal message" "$OUT"
+
+# --- a pkgadd failure inside a kernel-space transaction keeps the journal ---
+"$APKG" -c "$KCONF" remove z3660scsi-k46 >/dev/null 2>&1
+mkkconf "$WORK/conf-kfail" "file://$KR"
+sed -i "s|^pkgadd=.*|pkgadd=$WORK/bin/pkgadd-fail|" "$WORK/conf-kfail"
+kreset
+run 4 "a failed kernel-space pkgadd exits 4" "$APKG" -c "$WORK/conf-kfail" install z3660scsi-k46
+[ -f "$TXN" ] && [ ! -s "$KLOG" ] && echo "$OUT" | grep -q "the boot store is untouched" \
+    && ok "the journal is kept, the trigger never ran, the store is untouched" \
+    || bad "kernel-space pkgadd failure" "$OUT"
+"$APKG" -c "$KCONF" -f recover >/dev/null 2>&1
+
+# --- remove: pkgrm of the pkginst owning the recorded files, record, trigger ---
+"$APKG" -c "$KCONF" install z3660scsi-k46 >/dev/null 2>&1
+kreset
+run 0 "remove a kernel-space package" "$APKG" -c "$KCONF" remove z3660scsi-k46
+grep -q "^pkgrm -n -a $ROOT/var/apkg/admin Z3660SCS$" "$SHIMLOG" && [ ! -f "$REC/z3660scsi-k46" ] \
+    && ok "remove runs pkgrm on the owning pkginst and deletes the record" \
+    || bad "kernel-space remove" "$(cat "$SHIMLOG"; ls "$REC")"
+[ "$(grep -c . "$KLOG")" -eq 2 ] && ok "the remove triggered build + commit" \
+    || bad "remove trigger" "$(cat "$KLOG")"
+
+# --- userland through the new client: no trigger, no journal left ---
+kreset
+run 0 "a userland install through the kernel-space catalog" \
+    "$APKG" -c "$KCONF" -f install foo
+[ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
+    && ok "userland: no kbootset call, no journal left" || bad "userland touched kspace" "$(cat "$KLOG")"
+rm -rf "$REC" "$ROOT$KT" "$ROOT/stand" "$ROOT/var/sadm/install/contents" \
+       "$ROOT/var/sadm/pkg/KERNK46" "$ROOT/var/sadm/pkg/Z3660SCS"
+"$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
+
 # ------------------------------------------------ exit-code sanity extras
 run 1 "unknown verb fails with exit 1" "$APKG" frobnicate
 run 1 "missing -c file fails with exit 1" "$APKG" -c /nonexistent-conf list

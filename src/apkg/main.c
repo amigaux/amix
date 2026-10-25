@@ -44,6 +44,8 @@ static void usage(void)
         "  upgrade <name>      pkgadd over the installed instance when the\n"
         "                      catalog is newer (no pkgrm; never uninstalls)\n"
         "  remove <name>       pkgrm wrapper\n"
+        "  recover             finish (or with -f discard) an interrupted\n"
+        "                      transaction from the journal /var/apkg/txn\n"
         "  version             print client version\n"
         "options: -n dry-run, -f force reinstall of the NAMED packages only,\n"
         "         -v verbose, -c conffile,\n"
@@ -90,6 +92,7 @@ static int cmd_update(const struct conf *cf)
     int rc;
     int status;
     int n;
+    int nk;
 
     catdir = dirname_of(cf->catalog);
     if (mkpath(catdir) != 0) {
@@ -174,7 +177,8 @@ static int cmd_update(const struct conf *cf)
         free(tmp);
         return EX_VERIFY;
     }
-    n = cat.n;
+    n = cat.n - cat.nk;
+    nk = cat.nk;
     catalog_free(&cat);
 
     if (rename(tmp, cf->catalog) != 0) {
@@ -184,11 +188,26 @@ static int cmd_update(const struct conf *cf)
         return EX_USAGE;
     }
     free(tmp);
-    printf("catalog updated: %d package%s\n", n, n == 1 ? "" : "s");
+    if (nk > 0)
+        printf("catalog updated: %d package%s, %d kernel-space "
+               "(unverified: no signature check in this release)\n",
+               n, n == 1 ? "" : "s", nk);
+    else
+        printf("catalog updated: %d package%s\n", n, n == 1 ? "" : "s");
     return EX_OK;
 }
 
 /* ---------------- list / search / info ---------------- */
+
+/* installed state of any catalog entry: a kernel-space package is
+ * installed when apkg holds its record (/var/apkg/kpkg/<name>) */
+static int ent_installed_v(const struct conf *cf, const struct pkgent *e,
+                           char *ver, unsigned verlen)
+{
+    if (e->kspace)
+        return kpkg_installed(cf, e->name, ver, verlen);
+    return installed_version(cf, e->pkginst, ver, verlen);
+}
 
 /* installed-marker column, e.g. "[installed 1.1]" or "-" */
 static void inst_marker(const struct conf *cf, const struct pkgent *e,
@@ -197,8 +216,8 @@ static void inst_marker(const struct conf *cf, const struct pkgent *e,
     char iver[128];
     const char *v;
 
-    if (!installed_version(cf, e->pkginst, iver, sizeof(iver))) {
-        strcpy(buf, "-");
+    if (!ent_installed_v(cf, e, iver, sizeof(iver))) {
+        strcpy(buf, e->refused != NULL ? "[refused]" : "-");
         return;
     }
     v = iver[0] == '\0' ? "(none)" : iver;
@@ -234,8 +253,7 @@ static int cmd_list(const struct conf *cf, struct catalog *cat,
     }
     for (i = 0; i < cat->n; i++) {
         if (installed_only &&
-            !installed_version(cf, cat->ents[i].pkginst, iver,
-                               sizeof(iver)))
+            !ent_installed_v(cf, &cat->ents[i], iver, sizeof(iver)))
             continue;
         list_line(cf, &cat->ents[i]);
     }
@@ -269,9 +287,21 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     }
     printf("Name:        %s\n", e->name);
     printf("Version:     %s\n", e->version);
-    printf("Pkginst:     %s\n", e->pkginst);
+    printf("Pkginst:     %s%s\n", e->pkginst,
+           e->kspace && e->kpkginst == NULL ? " (from the datastream)" : "");
     printf("Filename:    %s\n", e->filename);
-    printf("MD5:         %s\n", e->md5);
+    if (e->kspace) {
+        printf("Kernel-space: %s, line %s\n", e->role, e->kline);
+        printf("Kabi:        %s\n", e->kabi);
+        printf("Pin:         %s\n", e->pin);
+        printf("SHA256:      %s\n", e->sha256);
+        printf("Signature:   unverified (no signature check in this "
+               "release)\n");
+        if (e->refused != NULL)
+            printf("Refused:     %s\n", e->refused);
+    } else {
+        printf("MD5:         %s\n", e->md5);
+    }
     printf("Size:        %ld\n", e->size);
     printf("Depends:     ");
     if (e->ndeps == 0) {
@@ -283,7 +313,7 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     }
     printf("Category:    %s\n", e->category);
     printf("Description: %s\n", e->desc);
-    if (installed_version(cf, e->pkginst, iver, sizeof(iver)))
+    if (ent_installed_v(cf, e, iver, sizeof(iver)))
         printf("Installed:   yes, version %s\n",
                iver[0] == '\0' ? "(none)" : iver);
     else
@@ -489,6 +519,14 @@ int main(int argc, char **argv)
             rc = cmd_remove(&cf, NULL, argv[i]);
         }
         return rc;
+    }
+
+    if (strcmp(verb, "recover") == 0) {
+        if (i != argc) {
+            usage();
+            return EX_USAGE;
+        }
+        return cmd_recover(&cf);
     }
 
     warnx2("unknown verb '%s'", verb);

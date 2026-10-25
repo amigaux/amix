@@ -137,11 +137,23 @@ static int zcat_to(const char *srcz, const char *out)
     return 0;
 }
 
-/* size + md5 check of `path` against the catalog entry; 0 ok / -1 fail
- * (message printed, but the caller decides whether to unlink) */
+/* the entry's hash check alone: md5 for userland, sha256 for kernel
+ * space (C2-2 §1; userland stays md5 + size).  1 = matches. */
+static int hash_matches(const char *path, const struct pkgent *ent)
+{
+    char hex[65];
+
+    if (ent->kspace)
+        return sha256_file(path, hex) == 0 && strcmp(hex, ent->sha256) == 0;
+    return md5_file(path, hex) == 0 && strcmp(hex, ent->md5) == 0;
+}
+
+/* size + hash check of `path` against the catalog entry: size + md5 for
+ * a userland package, size + SHA-256 for a kernel-space one.  0 ok /
+ * -1 fail (message printed, but the caller decides whether to unlink) */
 static int verify_file(const char *path, const struct pkgent *ent)
 {
-    char hex[33];
+    char hex[65];
     long sz;
 
     sz = file_size(path);
@@ -149,6 +161,20 @@ static int verify_file(const char *path, const struct pkgent *ent)
         warnx2("%s: size %ld does not match catalog size %ld",
                path, sz, ent->size);
         return -1;
+    }
+    if (ent->kspace) {
+        if (ent->sha256[0] == '\0') {
+            warnx2("%s: the catalog carries no sha256 for kernel-space "
+                   "package %s", path, ent->name);
+            return -1;
+        }
+        if (sha256_file(path, hex) != 0 || strcmp(hex, ent->sha256) != 0) {
+            warnx2("%s: sha256 mismatch (got %s, catalog %s)",
+                   path, hex, ent->sha256);
+            return -1;
+        }
+        note("sha256 verified: %s", ent->filename);
+        return 0;
     }
     if (md5_file(path, hex) != 0 || strcmp(hex, ent->md5) != 0) {
         warnx2("%s: md5 mismatch (got %s, catalog %s)",
@@ -446,7 +472,6 @@ int src_stage(const struct source *s, const struct pkgent *ent,
     char *cache;
     char *src;
     char *url;
-    char hex[33];
     int rc;
     int status;
 
@@ -465,8 +490,8 @@ int src_stage(const struct source *s, const struct pkgent *ent,
     case SRC_HTTP:
         /* a cached copy that already matches is by definition the bits
          * we want; reuse it */
-        if (file_exists(cache) && md5_file(cache, hex) == 0 &&
-            strcmp(hex, ent->md5) == 0) {
+        if (file_exists(cache) && file_size(cache) == ent->size &&
+            hash_matches(cache, ent)) {
             note("using cached %s", cache);
         } else if (opt_dryrun) {
             printf("would download %s/pkgs/%s -> %s\n",

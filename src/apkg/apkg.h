@@ -174,10 +174,27 @@
 #define EX_NET     2   /* network failure */
 #define EX_VERIFY  3   /* md5/size/catalog verification failure */
 #define EX_PKGCMD  4   /* pkgadd/pkgrm (or zcat step) failure */
-#define EX_DEPS    5   /* dependency cycle or missing dependency */
+#define EX_DEPS    5   /* dependency cycle or missing dependency; also a
+                          kernel-space pre-flight refusal (kabi, pin, line) */
+#define EX_BOOTSET 6   /* kbootset could not run, failed (status 1) or
+                          rejected its arguments (2); the packages are
+                          installed, `apkg recover` retries the build */
+#define EX_BOOTGATE 7  /* kbootset refused by a rule (3) or a gate (4):
+                          the committed generation is unchanged */
 
 /* Catalog header line required on the first line of every catalog. */
 #define CATALOG_MAGIC "#apkg-catalog 1"
+
+/* The kernel-space block (amix-dlm docs/contracts/C2-2-kpkg.md §1):
+ *     #ext kpkg 1
+ *     #kpkg <name> <version> role= line= kabi= pin= size= sha256= file=
+ *     #ksig <key-id> <file>
+ *     #end kpkg
+ * Every line starts with '#' in column 0, so a 0.2.x client skips the
+ * block whole and never sees kernel space. */
+#define KPKG_EXT     "#ext kpkg"
+#define KPKG_VERSION 1
+#define KPKG_END     "#end kpkg"
 
 /* -------- global option flags (set in main.c) -------- */
 
@@ -211,6 +228,13 @@ struct conf {
     int  dns_retries;  /* extra DNS attempts per nameserver            */
     char *catalog;     /* local catalog path: dirname(cachedir)/catalog */
     char *sadmpkg;     /* <root><target>/var/sadm/pkg (the TARGET DB)  */
+    char *contents;    /* <root><target>/var/sadm/install/contents     */
+    char *kpkgdir;     /* <root><target>/var/apkg/kpkg (C2-2 records)  */
+    char *txnfile;     /* <root><target>/var/apkg/txn (the journal)    */
+    char *bootsetconf; /* <root><target>/etc/default/bootset           */
+    char *kbootset;    /* kbootset binary (engine-like: NOT -R prefixed) */
+    char *kbootset_journal; /* --journal handed to kbootset; "" = the
+                               contract default <target>/var/kbootset/journal */
     int pkgadd_is_default; /* pkgadd came from built-in default        */
     int pkgrm_is_default;  /* pkgrm came from built-in default         */
 };
@@ -252,12 +276,25 @@ struct pkgent {
     char *desc;
     long offset;      /* RAW byte offset (optional 10th field); -1 = absent */
     int mark;         /* scratch: topological sort state */
+    /* kernel space (#ext kpkg 1); all NULL / 0 on an ordinary entry */
+    int kspace;       /* 1 = an entry of the kernel-space block        */
+    char *role;       /* kernel | loader | module                      */
+    char *kline;      /* k30 | k46                                     */
+    char *kabi;       /* kabi tag, e.g. k46.1.0 or static              */
+    char *pin;        /* compiler pin                                  */
+    char *sha256;     /* 64 lowercase hex of the datastream as served  */
+    char *kpkginst;   /* optional pkginst= key; NULL = from the datastream */
+    char *refused;    /* NULL, or why the entry may not be installed   */
 };
 
 struct catalog {
     struct pkgent *ents;
     int n;
     int cap;
+    int nk;           /* kernel-space entries among ents (refused incl.) */
+    char *ksig_key;   /* #ksig key id, NULL when absent (always in 1.1) */
+    char *ksig_file;  /* #ksig signature file name                      */
+    int kverified;    /* the verification hook's verdict: always 0 in 1.1 */
 };
 
 #define CAT_OK       0
@@ -346,6 +383,51 @@ extern int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                        const char *name);
 extern int cmd_remove(const struct conf *cf, struct catalog *cat,
                       const char *name);
+extern int cmd_recover(const struct conf *cf);
+
+/* -------- kernel space (kspace.c) -------- */
+
+/* SHA-256 of a file as 64 lowercase hex chars; 0 ok / -1 unreadable */
+extern int sha256_file(const char *path, char hexout[65]);
+
+/* The verification hook of 60 §4: runs once the catalog is read and
+ * before any kernel-space entry is used.  In 1.1 it records
+ * "unverified" (cat->kverified = 0) and passes; a later release puts
+ * the signature check here and may refuse the block. */
+extern void kspace_verify_hook(struct catalog *cat);
+
+/* installed version of a kernel-space package, from its record
+ * /var/apkg/kpkg/<name>: 0 = no record, 1 = record (version copied) */
+extern int kpkg_installed(const struct conf *cf, const char *name,
+                          char *ver, unsigned verlen);
+/* the pkginst a datastream carries (its header); 0 ok / -1 */
+extern int ds_pkginst(const char *path, char *out, unsigned outlen);
+/* write the C2-2 §2 record after a successful pkgadd: one `file` line
+ * per f/e/v object the contents database lists for pkginst, with the
+ * size and SHA-256 of the installed file.  EX_* code. */
+extern int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
+                             const char *pkginst, const char *source);
+extern int kpkg_write_record_fields(const struct conf *cf,
+    const char *name, const char *version, const char *role,
+    const char *line, const char *kabi, const char *pin,
+    const char *sha256, const char *pkginst, const char *source);
+/* the pkginst owning a recorded package's files (contents database);
+ * 0 ok / -1 */
+extern int kpkg_owner(const struct conf *cf, const char *name,
+                      char *pkginst, unsigned len);
+extern int kpkg_remove_record(const struct conf *cf, const char *name);
+/* pre-flight of 40 §6 over the kernel-space members of a transaction:
+ * refused entries, kabi family/major/minor, compiler pin, line.  0 ok,
+ * EX_* on refusal (message printed). */
+extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
+                            int nt);
+/* the trigger of C2-4 §3: `kbootset build` then `kbootset commit`
+ * (bootset=auto), or print the command (bootset=manual).  Once the
+ * build succeeded the journal t (may be NULL) is saved in state
+ * "built".  Returns EX_OK, EX_BOOTSET or EX_BOOTGATE (message
+ * printed). */
+struct txn;
+extern int kspace_trigger(const struct conf *cf, struct txn *t);
 
 /* -------- util.c -------- */
 
@@ -373,5 +455,46 @@ extern void warnx2(const char *fmt, ...);
 /* -------- md5 helper (md5.c wrapper, see md5.h for the engine) ---- */
 
 extern int md5_file(const char *path, char hexout[33]);
+
+/* -------- transaction journal (txn.c) --------
+ *
+ * /var/apkg/txn (under -R: the target's) records a transaction from
+ * the moment every package is staged and verified until it is done, so
+ * an interrupted one can be finished by `apkg recover`. */
+
+struct txnpkg {
+    int done;         /* pkgadd (and the record) / pkgrm finished      */
+    int ow;           /* pkgadd with instance=overwrite                */
+    int kspace;
+    long size;        /* size of the staged file                       */
+    char *name;
+    char *version;
+    char *pkginst;
+    char *hash;       /* catalog md5/sha256 of the staged file, or "-" */
+    char *staged;     /* staged datastream, or "-" (remove)            */
+    char *role, *kline, *kabi, *pin, *sha256, *source;  /* kspace: record */
+};
+
+struct txn {
+    char verb[16];    /* install | upgrade | remove                    */
+    char state[16];   /* installing | installed | built                */
+    long started;
+    int kspace;       /* the transaction changes kernel space          */
+    struct txnpkg *p;
+    int n;
+};
+
+extern int txn_exists(const struct conf *cf);
+extern int txn_refuse_if_pending(const struct conf *cf);
+extern int txn_save(const struct conf *cf, const struct txn *t);
+extern int txn_load(const struct conf *cf, struct txn *t);
+extern void txn_clear(const struct conf *cf);
+extern void txn_free(struct txn *t);
+/* one package into the journal; staged = the datastream pkgadd gets
+ * ("-" for a remove), source = the record's `source` (kernel space) */
+extern void txn_add(struct txn *t, const struct pkgent *e,
+                    const char *pkginst, const char *staged, int ow,
+                    const char *source);
+extern void txn_init(struct txn *t, const char *verb);
 
 #endif /* APKG_H */

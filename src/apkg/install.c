@@ -14,8 +14,10 @@
  *
  * Fetching + staging is delegated to the SOURCE layer (source.c): HTTP,
  * a mounted FILE tree (/cdrom), or a RAW slice.  cmd_install stages and
- * md5-verifies EVERY package before the first pkgadd, so a bad source
- * cannot leave a half-installed chain.
+ * verifies EVERY package (md5 + size; SHA-256 + size for kernel space)
+ * before the first pkgadd, so a bad source cannot leave a half-installed
+ * chain.  Kernel space, the journal and `apkg recover`: see the section
+ * "kernel space and the journal" below.
  *
  * NOTHING IS EVER REMOVED BEFORE ITS REPLACEMENT IS IN PLACE.  The
  * upgrade verb is a single pkgadd over the installed instance
@@ -297,6 +299,203 @@ static int is_named(char **names, int nnames, const struct pkgent *ent)
     return 0;
 }
 
+/* ---------------- kernel space and the journal ----------------
+ *
+ * apkg 0.3 (amix-dlm contracts C2-2 and C2-4, spec 40 §6).  A
+ * kernel-space package (an entry of the catalog's #ext kpkg block) is
+ * installed by the same pkgadd as any other, with four differences:
+ *
+ *   - it is verified by SHA-256 + size, not md5 (source.c);
+ *   - its installed state is apkg's own record /var/apkg/kpkg/<name>,
+ *     written after the pkgadd with the SHA-256 of every installed file
+ *     (kspace.c); its pkginst comes from the datastream's header;
+ *   - the transaction is pre-flighted (kabi, compiler pin, line) before
+ *     anything is staged;
+ *   - a transaction that changed kernel space ends with the kbootset
+ *     trigger: `kbootset build`, then `kbootset commit`, two calls.
+ *     apkg never writes a boot slice.  Atomicity for the boot path is
+ *     kbootset's generation commit: a half-installed set never reaches
+ *     the store.
+ *
+ * Every transaction (install, upgrade, remove) is journaled in
+ * /var/apkg/txn once all its packages are staged and verified; the
+ * journal is removed when apkg is done with it.  It stays behind only
+ * when there is work `apkg recover` can finish: an interruption, a
+ * failed pkgadd inside a kernel-space transaction, or a trigger that
+ * could not run (EX_BOOTSET).  A gate refusal (EX_BOOTGATE) is an
+ * answer, not an interruption: the journal goes, the message says what
+ * to fix.  A userland-only transaction whose pkgadd FAILS clears its
+ * journal too (exactly 0.2.x behaviour: re-run the install).
+ */
+
+static int ent_installed(const struct conf *cf, const struct pkgent *e,
+                         char *ver, unsigned verlen)
+{
+    if (e->kspace)
+        return kpkg_installed(cf, e->name, ver, verlen);
+    return installed_version(cf, e->pkginst, ver, verlen);
+}
+
+/* the record's `source` (C2-2 §2/§3): the catalog URL for HTTP, the
+ * mount path or the raw device as apkg saw it for a medium */
+static char *source_id(const struct source *s)
+{
+    if (s->kind == SRC_HTTP)
+        return cat2(s->base, "/catalog");
+    return xstrdup(s->base);
+}
+
+static int count_kspace(struct pkgent **todo, int nt)
+{
+    int i;
+    int n;
+
+    n = 0;
+    for (i = 0; i < nt; i++)
+        if (todo[i]->kspace)
+            n++;
+    return n;
+}
+
+static void announce_kspace(int nk)
+{
+    if (nk > 0)
+        printf("kernel space: %d package%s in this transaction; a "
+               "generation build (kbootset) and a power cycle follow\n",
+               nk, nk == 1 ? "" : "s");
+}
+
+/* the pkginst a staged kernel-space datastream installs as; -1 when it
+ * cannot be read or contradicts the catalog's pkginst= (message printed) */
+static int kspace_inst(const struct pkgent *e, const char *staged,
+                       char *out, unsigned cap)
+{
+    if (ds_pkginst(staged, out, cap) != 0) {
+        if (opt_dryrun) {
+            strncpy(out, e->pkginst, cap - 1);
+            out[cap - 1] = '\0';
+            return 0;
+        }
+        warnx2("%s: %s is not a single-package datastream", e->name,
+               staged);
+        return -1;
+    }
+    if (e->kpkginst != NULL && strcmp(e->kpkginst, out) != 0) {
+        warnx2("%s: the datastream installs %s, the catalog says %s",
+               e->name, out, e->kpkginst);
+        return -1;
+    }
+    return 0;
+}
+
+/* Finish a journaled transaction after its package loop.  failed is the
+ * loop's EX_* (EX_OK when every package is done).  Returns the
+ * transaction's exit code. */
+static int txn_finish(const struct conf *cf, struct txn *t, int failed)
+{
+    int rc;
+
+    if (failed != EX_OK) {
+        if (t->kspace && !opt_dryrun) {
+            warnx2("the transaction is incomplete; the boot store is "
+                   "untouched");
+            warnx2("'apkg recover' retries the rest from the journal %s",
+                   cf->txnfile);
+        } else {
+            txn_clear(cf);
+        }
+        return failed;
+    }
+    if (!t->kspace) {
+        txn_clear(cf);
+        return EX_OK;
+    }
+    if (strcmp(t->state, "built") != 0) {
+        strcpy(t->state, "installed");
+        if (txn_save(cf, t) != 0)
+            return EX_USAGE;
+    }
+    rc = kspace_trigger(cf, t);
+    if (rc == EX_BOOTSET)
+        return rc;          /* journal kept: recover re-runs the trigger */
+    txn_clear(cf);
+    return rc;
+}
+
+/* pkgadd one staged package and, for kernel space, write its record */
+static int install_one(const struct conf *cf, const char *pkgadd,
+                       const char *file, const char *pkginst, int ow,
+                       const struct txnpkg *p)
+{
+    int rc;
+
+    if (run_pkgadd(cf, pkgadd, file, pkginst, ow) != 0)
+        return EX_PKGCMD;
+    if (!p->kspace)
+        return EX_OK;
+    rc = kpkg_write_record_fields(cf, p->name, p->version, p->role,
+                                  p->kline, p->kabi, p->pin, p->sha256,
+                                  pkginst, p->source);
+    return rc;
+}
+
+/* the shared phase 2 of install and upgrade: journal, pkgadd in order,
+ * the trigger.  files[]/insts[] are the staged datastreams and the
+ * pkginst each installs as. */
+static int commit_txn(const struct conf *cf, const struct source *src,
+                      const char *verb, struct pkgent **todo, int *ow,
+                      char **files, char **insts, int nt,
+                      const char *pkgadd)
+{
+    struct txn t;
+    char *sid;
+    char iver[128];
+    int i;
+    int rc;
+    int upgrade;
+
+    upgrade = strcmp(verb, "upgrade") == 0;
+    sid = source_id(src);
+    txn_init(&t, verb);
+    for (i = 0; i < nt; i++)
+        txn_add(&t, todo[i], insts[i], files[i], ow[i], sid);
+    free(sid);
+    if (txn_save(cf, &t) != 0) {
+        txn_free(&t);
+        return EX_USAGE;
+    }
+
+    rc = EX_OK;
+    for (i = 0; i < nt; i++) {
+        if (upgrade)
+            (void)ent_installed(cf, todo[i], iver, sizeof(iver));
+        if (install_one(cf, pkgadd, files[i], insts[i], ow[i],
+                        &t.p[i]) != EX_OK) {
+            if (upgrade)
+                warnx2("pkgadd of %s %s failed; the installed %s is "
+                       "untouched", todo[i]->name, todo[i]->version,
+                       disp_ver(iver));
+            else
+                warnx2("pkgadd failed for %s, stopping", todo[i]->name);
+            rc = EX_PKGCMD;
+            break;
+        }
+        t.p[i].done = 1;
+        (void)txn_save(cf, &t);
+        if (!opt_dryrun) {
+            if (upgrade)
+                printf("upgraded %s to %s\n", todo[i]->name,
+                       todo[i]->version);
+            else
+                printf("installed %s-%s\n", todo[i]->name,
+                       todo[i]->version);
+        }
+    }
+    rc = txn_finish(cf, &t, rc);
+    txn_free(&t);
+    return rc;
+}
+
 /* ---------------- verbs ---------------- */
 
 int cmd_download(const struct conf *cf, struct catalog *cat,
@@ -313,6 +512,10 @@ int cmd_download(const struct conf *cf, struct catalog *cat,
         warnx2("package %s not in catalog", name);
         return EX_USAGE;
     }
+    if (ent->refused != NULL) {
+        warnx2("%s: the catalog entry is refused: %s", name, ent->refused);
+        return EX_VERIFY;
+    }
     if (src_open(cf->repo, &src) != 0)
         return EX_USAGE;
     http_opts_from_conf(&src.http, cf);
@@ -328,6 +531,15 @@ int cmd_download(const struct conf *cf, struct catalog *cat,
     return EX_OK;
 }
 
+static void free_strv(char **v, int n)
+{
+    int i;
+
+    for (i = 0; i < n; i++)
+        free(v[i]);
+    free((char *)v);
+}
+
 int cmd_install(const struct conf *cf, struct catalog *cat,
                 char **names, int nnames)
 {
@@ -336,10 +548,12 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     struct pkgent **todo;
     int *ow;               /* parallel to todo[]: pass instance=overwrite */
     char **files;
+    char **insts;
     struct pkgent *ent;
     char *pkgadd;
     char *staged;
     char iver[128];
+    char inst[64];
     int eph;
     int no, nt;
     int i;
@@ -389,6 +603,9 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
      *
      *  - An installed version NEWER than the catalog's is reported, not
      *    silently reinstalled.
+     *
+     * Kernel-space packages follow the same rules; their installed
+     * version is their record's.
      */
     todo = (struct pkgent **)xmalloc(
         (unsigned)((no > 0 ? no : 1) * sizeof(struct pkgent *)));
@@ -397,7 +614,7 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     for (i = 0; i < no; i++) {
         ent = order[i];
         named = is_named(names, nnames, ent);
-        if (!installed_version(cf, ent->pkginst, iver, sizeof(iver))) {
+        if (!ent_installed(cf, ent, iver, sizeof(iver))) {
             todo[nt] = ent;
             ow[nt] = 0;
             nt++;
@@ -442,6 +659,17 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         return EX_OK;
     }
 
+    /* one transaction at a time on a target; then the kernel-space
+     * pre-flight, before anything is fetched */
+    rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
+         kspace_preflight(cf, todo, nt);
+    if (rc != EX_OK) {
+        free((char *)todo);
+        free((char *)ow);
+        return rc;
+    }
+    announce_kspace(count_kspace(todo, nt));
+
     pkgadd = conf_pkgcmd(cf, 0);
     if (pkgadd == NULL) {
         free((char *)todo);
@@ -456,15 +684,20 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     }
     http_opts_from_conf(&src.http, cf);
 
-    /* phase 1: stage + md5-verify EVERYTHING before touching the system,
+    /* phase 1: stage + verify EVERYTHING before touching the system,
      * so a bad source cannot leave a half-installed chain */
     files = (char **)xmalloc((unsigned)(nt * sizeof(char *)));
+    insts = (char **)xmalloc((unsigned)(nt * sizeof(char *)));
     for (i = 0; i < nt; i++) {
         rc = src_stage(&src, todo[i], cf->cachedir, &staged, &eph);
+        if (rc == EX_OK && todo[i]->kspace &&
+            kspace_inst(todo[i], staged, inst, sizeof(inst)) != 0) {
+            free(staged);
+            rc = EX_VERIFY;
+        }
         if (rc != EX_OK) {
-            while (--i >= 0)
-                free(files[i]);
-            free((char *)files);
+            free_strv(files, i);
+            free_strv(insts, i);
             free((char *)todo);
             free((char *)ow);
             free(pkgadd);
@@ -473,24 +706,16 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         }
         note("staged %s%s", staged, eph ? "" : " (in place)");
         files[i] = staged;
+        insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
     }
 
-    /* phase 2: pkgadd in dependency order; stop on first failure */
-    rc = EX_OK;
-    for (i = 0; i < nt; i++) {
-        if (run_pkgadd(cf, pkgadd, files[i], todo[i]->pkginst,
-                       ow[i]) != 0) {
-            warnx2("pkgadd failed for %s, stopping", todo[i]->name);
-            rc = EX_PKGCMD;
-            break;
-        }
-        if (!opt_dryrun)
-            printf("installed %s-%s\n", todo[i]->name, todo[i]->version);
-    }
+    /* phase 2: journal, pkgadd in dependency order (stop on the first
+     * failure), then the trigger when kernel space changed */
+    rc = commit_txn(cf, &src, "install", todo, ow, files, insts, nt,
+                    pkgadd);
 
-    for (i = 0; i < nt; i++)
-        free(files[i]);
-    free((char *)files);
+    free_strv(files, nt);
+    free_strv(insts, nt);
     free((char *)todo);
     free((char *)ow);
     free(pkgadd);
@@ -528,7 +753,12 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
 {
     struct source src;
     struct pkgent *ent;
+    struct pkgent *todo[1];
+    int ow[1];
+    char *files[1];
+    char *insts[1];
     char iver[128];
+    char inst[64];
     char *pkgadd;
     char *staged;
     int eph;
@@ -539,7 +769,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         warnx2("package %s not in catalog", name);
         return EX_DEPS;
     }
-    if (!installed_version(cf, ent->pkginst, iver, sizeof(iver))) {
+    if (!ent_installed(cf, ent, iver, sizeof(iver))) {
         warnx2("%s is not installed; use 'apkg install %s'", name, name);
         return EX_USAGE;
     }
@@ -548,7 +778,14 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                name, disp_ver(iver), ent->version);
         return EX_OK;
     }
+    todo[0] = ent;
+    ow[0] = 1;
+    if (txn_refuse_if_pending(cf) != 0)
+        return EX_USAGE;
+    if ((rc = kspace_preflight(cf, todo, 1)) != EX_OK)
+        return rc;
     printf("upgrading %s %s -> %s\n", name, disp_ver(iver), ent->version);
+    announce_kspace(ent->kspace);
 
     pkgadd = conf_pkgcmd(cf, 0);
     if (pkgadd == NULL)
@@ -559,9 +796,14 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     }
     http_opts_from_conf(&src.http, cf);
 
-    /* fetch + md5-verify BEFORE anything touches the system: a bad
+    /* fetch + verify BEFORE anything touches the system: a bad
      * source must cost nothing but a failed exit */
     rc = src_stage(&src, ent, cf->cachedir, &staged, &eph);
+    if (rc == EX_OK && ent->kspace &&
+        kspace_inst(ent, staged, inst, sizeof(inst)) != 0) {
+        free(staged);
+        rc = EX_VERIFY;
+    }
     if (rc != EX_OK) {
         warnx2("%s not fetched; the installed %s %s is untouched",
                name, name, disp_ver(iver));
@@ -570,52 +812,227 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         return rc;
     }
     note("staged %s%s", staged, eph ? "" : " (in place)");
+    files[0] = staged;
+    insts[0] = ent->kspace ? inst : ent->pkginst;
 
-    rc = EX_OK;
-    if (run_pkgadd(cf, pkgadd, staged, ent->pkginst, 1) != 0) {
-        warnx2("pkgadd of %s %s failed; the installed %s is untouched",
-               name, ent->version, disp_ver(iver));
-        rc = EX_PKGCMD;
-    } else if (!opt_dryrun) {
-        printf("upgraded %s to %s\n", name, ent->version);
-    }
+    rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, 1,
+                    pkgadd);
     free(staged);
     free(pkgadd);
     src_close(&src);
     return rc;
 }
 
+/* remove one package: pkgrm, and for kernel space its record and the
+ * trigger (a generation without the package is built and committed) */
 int cmd_remove(const struct conf *cf, struct catalog *cat,
                const char *name)
 {
     struct pkgent *ent;
+    struct pkgent kent;
+    struct txn t;
     const char *pkginst;
     char iver[128];
+    char kinst[64];
     char *pkgrm;
+    int kspace;
     int rc;
 
-    /* map catalog name -> pkginst when we have a catalog; otherwise
-     * (or when the name is unknown there) treat it as a pkginst */
+    /* a kernel-space package is known by its record; its pkginst is the
+     * one owning its recorded files in the contents database */
+    kspace = kpkg_installed(cf, name, iver, sizeof(iver));
     pkginst = name;
-    if (cat != NULL) {
+    ent = NULL;
+    if (cat != NULL)
         ent = catalog_find(cat, name);
-        if (ent != NULL)
+    if (kspace) {
+        if (kpkg_owner(cf, name, kinst, sizeof(kinst)) == 0)
+            pkginst = kinst;
+        else if (ent != NULL)
             pkginst = ent->pkginst;
+    } else if (ent != NULL) {
+        /* map catalog name -> pkginst when we have a catalog; otherwise
+         * (or when the name is unknown there) treat it as a pkginst */
+        pkginst = ent->pkginst;
     }
-    if (!installed_version(cf, pkginst, iver, sizeof(iver))) {
+    if (!installed_version(cf, pkginst, iver, sizeof(iver)) && !kspace) {
         warnx2("%s (pkginst %s) is not installed", name, pkginst);
         return EX_USAGE;
     }
+    if (txn_refuse_if_pending(cf) != 0)
+        return EX_USAGE;
+    announce_kspace(kspace);
     pkgrm = conf_pkgcmd(cf, 1);
     if (pkgrm == NULL)
         return EX_USAGE;
+
+    memset((char *)&kent, 0, sizeof(kent));
+    kent.name = (char *)name;
+    kent.version = (char *)"-";
+    kent.filename = (char *)"-";
+    kent.kspace = kspace;
+    kent.md5 = (char *)"-";
+    txn_init(&t, "remove");
+    txn_add(&t, &kent, pkginst, "-", 0, "-");
+    if (txn_save(cf, &t) != 0) {
+        txn_free(&t);
+        free(pkgrm);
+        return EX_USAGE;
+    }
+
     rc = EX_OK;
-    if (run_pkgrm(cf, pkgrm, pkginst) != 0) {
+    if (!installed_version(cf, pkginst, iver, sizeof(iver))) {
+        warnx2("%s: the record names %s, which is not installed; "
+               "removing the record", name, pkginst);
+    } else if (run_pkgrm(cf, pkgrm, pkginst) != 0) {
         warnx2("pkgrm failed for %s", pkginst);
         rc = EX_PKGCMD;
-    } else if (!opt_dryrun) {
-        printf("removed %s\n", pkginst);
     }
+    if (rc == EX_OK && kspace && kpkg_remove_record(cf, name) != 0)
+        rc = EX_USAGE;
+    if (rc == EX_OK) {
+        t.p[0].done = 1;
+        (void)txn_save(cf, &t);
+        if (!opt_dryrun)
+            printf("removed %s\n", pkginst);
+    }
+    rc = txn_finish(cf, &t, rc);
+    txn_free(&t);
     free(pkgrm);
+    return rc;
+}
+
+/* ---------------- recover ---------------- */
+
+/* the staged datastream still there and still the verified bytes? */
+static int staged_ok(const struct txnpkg *p)
+{
+    char hex[65];
+
+    if (!file_exists(p->staged)) {
+        warnx2("%s: the staged datastream %s is gone", p->name, p->staged);
+        return 0;
+    }
+    if (p->size >= 0 && file_size(p->staged) != p->size) {
+        warnx2("%s: %s changed size since it was verified", p->name,
+               p->staged);
+        return 0;
+    }
+    if (strcmp(p->hash, "-") == 0)
+        return 1;
+    if (p->kspace) {
+        if (sha256_file(p->staged, hex) != 0 || strcmp(hex, p->hash) != 0) {
+            warnx2("%s: %s no longer matches its sha256", p->name,
+                   p->staged);
+            return 0;
+        }
+    } else if (md5_file(p->staged, hex) != 0 || strcmp(hex, p->hash) != 0) {
+        warnx2("%s: %s no longer matches its md5", p->name, p->staged);
+        return 0;
+    }
+    return 1;
+}
+
+int cmd_recover(const struct conf *cf)
+{
+    struct txn t;
+    struct txnpkg *p;
+    char iver[128];
+    char *eng;
+    int remove;
+    int ndone;
+    int i;
+    int rc;
+
+    if (!txn_exists(cf)) {
+        printf("no unfinished transaction\n");
+        return EX_OK;
+    }
+    rc = txn_load(cf, &t);
+    if (rc != 0) {
+        if (opt_force && !opt_dryrun) {
+            warnx2("discarding the unreadable journal %s", cf->txnfile);
+            txn_clear(cf);
+            return EX_OK;
+        }
+        return EX_USAGE;
+    }
+    ndone = 0;
+    for (i = 0; i < t.n; i++)
+        ndone += t.p[i].done;
+    printf("unfinished %s transaction (started %ld): %d of %d package%s "
+           "done, state %s%s\n", t.verb, t.started, ndone, t.n,
+           t.n == 1 ? "" : "s", t.state,
+           t.kspace ? ", kernel space" : "");
+    for (i = 0; i < t.n; i++)
+        printf("  %s %s%s%s\n", t.p[i].done ? "done   " : "pending",
+               t.p[i].name, strcmp(t.p[i].version, "-") != 0 ? "-" : "",
+               strcmp(t.p[i].version, "-") != 0 ? t.p[i].version : "");
+    if (opt_force) {
+        printf("discarding the journal (-f); nothing else is changed\n");
+        txn_clear(cf);
+        txn_free(&t);
+        return EX_OK;
+    }
+
+    remove = strcmp(t.verb, "remove") == 0;
+    eng = conf_pkgcmd(cf, remove);
+    if (eng == NULL) {
+        txn_free(&t);
+        return EX_USAGE;
+    }
+    rc = EX_OK;
+    for (i = 0; i < t.n && rc == EX_OK; i++) {
+        p = &t.p[i];
+        if (p->done)
+            continue;
+        if (remove) {
+            if (installed_version(cf, p->pkginst, iver, sizeof(iver)) &&
+                run_pkgrm(cf, eng, p->pkginst) != 0) {
+                warnx2("pkgrm failed for %s", p->pkginst);
+                rc = EX_PKGCMD;
+                break;
+            }
+            if (p->kspace && kpkg_remove_record(cf, p->name) != 0) {
+                rc = EX_USAGE;
+                break;
+            }
+        } else {
+            if (!staged_ok(p)) {
+                warnx2("cannot finish %s from the journal: 'apkg -f "
+                       "recover' discards it, then install %s again",
+                       p->name, p->name);
+                rc = EX_VERIFY;
+                break;
+            }
+            /* instance=overwrite: replaces whatever a cut pkgadd left */
+            if (install_one(cf, eng, p->staged, p->pkginst, 1, p) !=
+                EX_OK) {
+                warnx2("pkgadd failed for %s", p->name);
+                rc = EX_PKGCMD;
+                break;
+            }
+        }
+        p->done = 1;
+        (void)txn_save(cf, &t);
+        if (!opt_dryrun)
+            printf("%s %s\n", remove ? "removed" : "installed", p->name);
+    }
+    free(eng);
+    if (rc != EX_OK) {
+        warnx2("the journal %s is kept", cf->txnfile);
+        txn_free(&t);
+        return rc;
+    }
+    if (t.kspace) {
+        rc = kspace_trigger(cf, &t);
+        if (rc != EX_BOOTSET)
+            txn_clear(cf);
+    } else {
+        txn_clear(cf);
+    }
+    if (rc == EX_OK)
+        printf("transaction finished\n");
+    txn_free(&t);
     return rc;
 }
