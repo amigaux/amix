@@ -5,7 +5,14 @@
  * (the box).  The same source builds on the host and, statically, for the
  * box (docs/plan/stage-2.md S2-07).
  *
- * usage: kbootset [-R ROOT] (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND
+ * usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND
+ *
+ * Without --image or --dev, kbootset works on the running box (S2-06): it
+ * reads /dev/kinfo (C2-1), finds the boot store (40 §5, gates 8 and 9)
+ * and records it in ROOT/etc/default/bootset (C2-4 §6); the box facts come
+ * from the options, then kinfo, then bootset; the journal is
+ * ROOT/var/kbootset/journal unless --journal names one; mark-good's
+ * --booted and --secondary default to what kinfo's loader record says.
  *   create SIZE BOOT2 [--boot1 FILE] [--version N]   lay an empty store
  *   status                                           generations and states
  *   build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE]
@@ -56,6 +63,7 @@
 #include <time.h>
 #include "ks.h"
 #include "kbuild.h"
+#include "kbox.h"
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
@@ -317,13 +325,13 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-		"usage: kbootset [-R ROOT] (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND\n"
+		"usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND\n"
 		"  create SIZE BOOT2 [--boot1 FILE] [--version N]\n"
 		"  status | check | rollback | collect | mark-bad ID\n"
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--spec SPEC]\n"
-		"  mark-good --booted ID [--secondary]\n"
+		"  mark-good [--booted ID] [--secondary]\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -477,8 +485,12 @@ main(int argc, char **argv)
 {
 	static struct ks k;
 	struct file d;
-	const char *image = 0, *boot1 = 0, *root = "/";
+	const char *image = 0, *boot1 = 0, *root = "/", *booted = 0;
 	struct kb_facts facts;
+	static struct kb_kinfo ki;
+	static char dev[1100], bootset[1100], jdefault[1100];
+	const char *kpath = getenv("KBOOTSET_KINFO");
+	int have_kinfo = 0, disk = -1, root_given = 0;
 	unsigned long off = 0, version = 1;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
@@ -495,7 +507,7 @@ main(int argc, char **argv)
 		else if (!strcmp(argv[i], "--journal"))
 			jpath = argv[++i];
 		else if (!strcmp(argv[i], "-R"))
-			root = argv[++i];
+			root = argv[++i], root_given = 1;
 		else
 			usage();
 	}
@@ -507,11 +519,28 @@ main(int argc, char **argv)
 		return 2;
 #endif
 	}
-	if (!image || i >= argc)
+	if (i >= argc)
 		usage();
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
+	sprintf(bootset, "%.1000s/etc/default/bootset", root);
+	have_kinfo = kb_kinfo_read(kpath && *kpath ? kpath : "/dev/kinfo", &ki) == 0;
+	if (!image) {			/* the running box: find the store */
+		if (create)
+			return fprintf(stderr, "kbootset: create needs --dev or --image\n"), 2;
+		rc = kb_find_store(&k, &ki, have_kinfo, bootset, dev, &disk);
+		if (rc != KS_OK) {
+			printf("kbootset: %s\n", k.msg);
+			return rc == KS_EREFUSE ? 4 : 1;
+		}
+		image = dev;
+		off = 0;
+		if (!jpath) {
+			sprintf(jdefault, "%.1000s/var/kbootset/journal", root);
+			jpath = jdefault;
+		}
+	}
 	d.base = off;
 	if (!(d.f = fopen(image, "r+b")) && !(create && (d.f = fopen(image, "w+b")))) {
 		perror(image);
@@ -530,8 +559,18 @@ main(int argc, char **argv)
 #endif
 	k.step = step;
 	facts_of(cmd, argc, &facts);
+	if (have_kinfo)
+		kb_kinfo_facts(&ki, &facts);
+	if (root_given || image == dev)		/* not the host's own /etc */
+		kb_bootset_facts(bootset, &facts);
+	if (!facts.bootdev[0] && disk >= 0 && have_kinfo)	/* the disk the store is on */
+		for (i = 0; i < ki.ncards; i++)
+			if (ki.card[i].k == (ax_u32)disk / 8)
+				kb_matchkey(ki.card[i].id, facts.bootdev);
 	for (i = 1; i < argc; i++) {		/* the options after the command */
-		if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
+		if (!strcmp(cmd[i], "--booted") && i + 1 < argc)
+			booted = cmd[++i];
+		else if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
 			boot1 = cmd[++i];
 		else if (!strcmp(cmd[i], "--version") && i + 1 < argc)
 			version = strtoul(cmd[++i], 0, 0);
@@ -556,6 +595,13 @@ main(int argc, char **argv)
 		k.msg[0] = 0;
 		if (!strcmp(cmd[0], "status")) {
 			status(&k);
+			if (have_kinfo && ki.has_axl1)
+				printf("booted: generation %lu, by the %s loader; kernel %s, 680%lu, %lu bytes "
+				       "of fast memory\n", (unsigned long)ki.gen_id,
+				       (ki.boot1_choice & 0x200) ? "secondary" : "primary", ki.build,
+				       (unsigned long)ki.cpu, (unsigned long)ki.fast);
+			else if (have_kinfo)
+				printf("booted: by the stock loader (no loader record); kernel %s\n", ki.build);
 		} else if (!strcmp(cmd[0], "check") && argc == 1) {
 			int bad = ks_check(&k, say) + kb_check(&k, root, say);
 
@@ -570,8 +616,11 @@ main(int argc, char **argv)
 			rc = kb_commit(&k, root, &id);
 		} else if (!strcmp(cmd[0], "build")) {
 			rc = kb_build(&k, root, &facts, now(), &id);
-		} else if (!strcmp(cmd[0], "mark-good") && argc >= 3 && !strcmp(cmd[1], "--booted")) {
-			rc = ks_mark_good(&k, (ax_u32)strtoul(cmd[2], 0, 0), !secondary);
+		} else if (!strcmp(cmd[0], "mark-good") && (booted || (have_kinfo && ki.has_axl1))) {
+			/* the booted generation, and whether boot1 ran the primary boot2
+			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */
+			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
+					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {
 			rc = ks_rollback(&k, &id);
 		} else if (!strcmp(cmd[0], "next") && argc == 2) {
