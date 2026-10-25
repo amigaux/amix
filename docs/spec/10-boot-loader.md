@@ -169,7 +169,11 @@ boot2 says so on the console.
   need it there.
 - Members are read into fast memory and inflated, checked and relocated
   there by code running from fast memory.
-- The kernel's destination is unchanged (step 6).
+- The kernel's destination is unchanged (step 6): the base of the largest
+  fast-memory region. A kernel is never bound in chip memory, where address
+  0 is the vector table. On a machine without fast memory, or whose largest
+  fast region is smaller than the bound kernel, boot2 refuses the
+  generation with L4 and says which of the two it was.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:
