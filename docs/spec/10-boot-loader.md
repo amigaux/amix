@@ -322,6 +322,13 @@ RDB-style disc would stop being a data CD, and that path is unproven on
   §4.2), so one disc carries both lines (proposed, OQ-50.7). The manifest
   names members by file name in the line directory (`file=`, §5.1), never by
   extent.
+- The line directory holds `CONTROL` (2048 bytes, the §4.2 control block;
+  each generation entry carries its manifest's length and CRC-32, its extent
+  is unused), the manifest of generation N as `GN.GMF`, and its members as
+  `GNK.BIN` (kernel), `GNR.BIN` (RAM disk) and `GNMnn.BIN` (root-class
+  modules, in manifest order): ISO9660 8.3 names, so the tree reads the same
+  with or without Rock Ridge, and N ≤ 9999. `amix-cdboot` sits in `/BOOT`.
+  `mkstore -C` writes this tree and `lsstore -C` verifies it.
 - It loads the kernel and the compressed miniroot as plain files, builds the
   same `bootinfo`, RTH1 and loader record (the root selector names the RAM
   disk, §5.4; RTH1 carries no boot-node match), takes the machine over
