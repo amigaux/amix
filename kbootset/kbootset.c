@@ -127,12 +127,31 @@ static int fwrite_(void *c, ax_u32 o, const ax_u8 *b, ax_u32 l) { return fio(c, 
 
 static const char *jpath;
 
+/* make each missing directory above path, as mkdir -p would */
+static void
+mkparents(const char *path)
+{
+	char d[1024];
+	char *s;
+
+	if (strlen(path) >= sizeof d)
+		return;
+	strcpy(d, path);
+	for (s = d + 1; (s = strchr(s, '/')) != 0; s++) {
+		*s = 0;
+		mkdir(d, 0755);
+		*s = '/';
+	}
+}
+
 static int
 jput(void *c, const char *t)
 {
-	FILE *f = fopen(jpath, "w");
+	FILE *f;
 
 	(void)c;
+	mkparents(jpath);		/* given or default, it may not exist yet */
+	f = fopen(jpath, "w");
 	return !f || fprintf(f, "%s\n", t) < 0 || fclose(f) != 0 ? -1 : 0;
 }
 
@@ -570,10 +589,8 @@ main(int argc, char **argv)
 		}
 		image = dev;
 		off = 0;
-		if (!jpath && !noroot) {	/* the directory may not exist yet on an older system */
-			sprintf(jdefault, "%.1000s/var/kbootset", root);
-			mkdir(jdefault, 0755);
-			strcat(jdefault, "/journal");
+		if (!jpath && !noroot) {
+			sprintf(jdefault, "%.1000s/var/kbootset/journal", root);
 			jpath = jdefault;
 		}
 	}

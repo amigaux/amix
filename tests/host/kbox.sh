@@ -131,7 +131,10 @@ $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
 # reboot; with the root read-only, retry gives its attempt back and the
 # next loader run takes the trial again
 $B/kbootset -R $R build | grep -q "generation 3 built"
-$B/kbootset -R $R commit 2>/dev/null | grep -q "generation 3 committed"
+# committed as apkg calls it, a named journal whose directory is missing
+rm -rf $R/var/kbootset
+$B/kbootset -R $R --journal $R/var/kbootset/journal commit 2>/dev/null | grep -q "generation 3 committed"
+[ -d $R/var/kbootset ] && [ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]
 $B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"
 python3 -I $T/disk.py kinfo $T/kinfo 3,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 chmod a-w $R/etc/default $R/var/kbootset
