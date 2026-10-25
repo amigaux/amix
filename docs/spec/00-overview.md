@@ -95,15 +95,14 @@ decision reserved to the project owner.
 | OQ-10.6 | Is a UFS reader ever needed | us |
 | OQ-10.7 | Any kernel consumer misreading a filled `keystates[]` | us |
 | OQ-10.8 | Kernel memory sizing with a shortened `memory[]` region | us |
-| OQ-20.1 | May the ABI kit publish stock headers | owner |
+| OQ-10.9 | **CD boot mechanism:** A, RDB-style CD with boot blocks; B, loader started from the disc's AmigaDOS startup (recommended) | owner |
 | OQ-20.2 | One k46 ABI for 68040 and 68060, or two families | us; Antti |
-| OQ-20.3 | z3660eth's autoconfig product number | us |
 | OQ-20.4 | DDI v1 list and contracts; review | us; Antti reviews |
 | OQ-20.5 | A shared major/syscall registry with ashnazag | ashnazag |
 | OQ-30.1 | Is a no-sleep mode needed at `dmainit` or only at `marc_root` | us |
-| OQ-30.2 | Four-card order: compacted rank order (proposed) or fixed card per class; A3000 onboard first? | us; Antti reviews |
+| OQ-30.2 | **030 card order:** K, keep the 1.0 address order (recommended); R, one rule on both lines | owner |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe in time for 1.1 | us |
-| OQ-30.4 | Can ufs/s5 bytes leave the 040/060 image | Antti |
+| OQ-30.4 | Review of the 040/060 base rebuilt without ufs/s5 | us build; Antti reviews |
 | OQ-30.5 | The 040/060 halt path before the halt pass | Antti; us |
 | OQ-30.6 | Which core patches go upstream | ashnazag |
 | OQ-30.7 | Re-check upstream's `rth1.c` before the merge request | us |
@@ -133,12 +132,30 @@ decision reserved to the project owner.
 | OQ-80.3 | Throughput baselines for stage 3 | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
 
+Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01).
+
 ## 5. Measurements
 
 Every measurement, with its evidence class (bench or metal, P-28 D51) and the
-stage that needs it, is in `90-measurements.md`. The specification is frozen
-when every stage-0 item there is closed; at this draft there are none — the
-first measurements are stage-1 loader items (M-LD1–M-LD9, M-EMU1).
+stage that needs it, is in `90-measurements.md`.
+
+**S0 freeze condition.** The specification freezes when every stage-0
+measurement is closed: **M-NET1a and M-NET1b** (the netinstall miniroot's raw
+and compressed size, a host computation over today's binaries; D-3 §2 says
+the netinstall fit is "measured in S0"). If those already rule out the floppy
+pair, OQ-50.2 is answered in S0 (form B).
+
+**Deviation DV-1 (for the owner to approve).** The rest of the netinstall fit
+— M-NET1c (compressed floor kernel and root modules), M-NET1d (store overhead
+per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
+(HTTP from the miniroot) — cannot close in S0: c–e depend on the 1.1 floor
+kernel and the store format, f and g on a running miniroot. They are scheduled
+in stages 1–5 (`90-measurements.md` §5), and OQ-50.2 is then answered at the
+first stage where they are all closed, not in S0.
+
+**Owner decisions open at the freeze:** OQ-10.9 (CD mechanism), OQ-30.2 (030
+card order), DV-1, OQ-60.2, OQ-60.3. The first measurements after the freeze
+are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
 ## 6. P-28 decisions and where they went
 
@@ -147,17 +164,17 @@ first measurements are stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 | D1, D3, D5, D6, D8, D10, D12, D14, D16, D18, D19/D55, D24, D27, D43, D45, D46, D51, D59, D61, D63 | kept (cited where used) |
 | D2, D7, D20, D57 (slot inside the kernel; slot format; slot capacity) | replaced: our loader fills an arena; capacity rule kept for the arena (10 §5.3) |
 | D4 | kept in substance: root class resident (arena), the rest copied |
-| D9 | replaced: four controllers in 1.1 (30 §5) |
+| D9 | replaced: four controllers in 1.1; 030 order is OQ-30.2 (30 §5) |
 | D11, D54, D60 | kept, adapted to the loader record (40 §2.2, §5) |
-| D13, D30, D48 | settled by D-3 §7 (60) |
+| D13, D30, D48 | settled by D-3 §7 (60): kernel space in the public signed catalog; the ABI kit publishes the stock headers too (20 §5, 60 §6) |
 | D15, D32, D56 | retired: one boot slice per disk; 1.0 boxes reinstall |
 | D17, D37, D38, D39, D40 | replaced: floppy pair supported on both lines, store-based, profile by measurement (50 §3) |
 | D21, D25, D49, D52, D53 | replaced by the proof order of 80 and D-3 §3 |
-| D22, D26, D28 | replaced by D-3 §4 (70, 30 §6) |
+| D22, D26, D28 | replaced by D-3 §4: our line rebuilds the 040/060 base without ufs/s5 (70, 30 §6) |
 | D23 | re-scoped: checksum contract version 2 (OQ-40.5) |
 | D29, D33 | replaced: safe mode chosen in the loader and passed in the loader record (10 §6–§7) |
 | D31, D34, D35, D36, D62 | replaced: host `kbootset --image` composes every medium; the installer runs `kbootset -R` (40 §3, 50 §1) |
-| D41, D42, D44 | replaced: the CD boots (50 §4) |
+| D41, D42, D44 | replaced: the CD boots; the mechanism is OQ-10.9 (10 §4.4, 50 §4) |
 | D47 | replaced: netinstall medium (50 §5) |
 | D50 | kept as stage-1 prerequisite M-EMU1 |
 | D58 | settled: `kinfo` major 53 proposed (20 §6) |

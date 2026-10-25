@@ -34,7 +34,7 @@ file has been read?* Three situations need it:
 | Member | Why it is on the floor | Notes |
 |---|---|---|
 | Base kernel (VM, process, STREAMS framework, `specfs`/`fifofs` and the other non-root pseudo filesystems, the inet stack) | Not separable without rewriting stock code; the module core and every module depend on it. | The inet stack stays with the base because the static A2065 needs it and because the network driver modules (z3660eth) attach below it. |
-| Console and serial (`c0`-family console, the Amiga serial port) | Safe mode and the loader's failure paths end at a console; headless boxes are driven over the serial port. | The serial console is the only console on a headless box (see `10-boot-loader.md` §8). |
+| Console and serial (`c0`-family console, the Amiga serial port) | Safe mode and the loader's failure paths end at a console; headless boxes are driven over the serial port. | The serial console is the only console on a headless box (see `10-boot-loader.md` §7.1 and §7.4). |
 | Floppy (`fd`, major 16) | The classic install medium boots and roots from DF0 (`bootchain-facts.md` D5, F10); the floppy pair is a supported medium on both lines (D-3 §3). | On the 040/060 line the floppy's chip-RAM DMA buffer depends on the DTT0 no-cache window (`bootchain-facts.md` F10); proven on the bench only, a metal row is listed in `90-measurements.md` (M-FD1). |
 | FPE (the floating-point emulation for the 68040/68060 unimplemented instructions; the 030 line's FPU support) | Needed before any user process runs; a missing FPE breaks `init`. P-28 D27 already ruled it never a module. | On the 040/060 line it is part of the port's base (Antti's line). |
 | Stock WD33C93 host adapters (A3000 onboard SCSI, A2091/A2090) and the `sd`/`dd` disk layer | The machines Amix was written for boot from these; a stock box must reach its root disk with no module. The `sd` layer is the registry every root controller module plugs into (`30-module-core.md` §5), so it cannot itself be a module. | The A3000 probe keeps its gate (VPOSR AGA check and two-register readback) so a phantom A3000 controller never takes card 0 (`bootchain-facts.md` C6). |
@@ -65,7 +65,7 @@ mode except its root filesystem.
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| OQ-70.1 | Can the root filesystems really leave the 040/060 kernel, which is built by overriding a stock binary? The separation is done on our line (D-3 §4); the exact symbol surface is not yet mapped. | us, Antti reviews |
+| OQ-70.1 | The exact symbol surface of the ufs/s5 carve-out from the 040/060 base (`30-module-core.md` §6, M-FS1); our line does the rebuild (D-3 §4). | us, Antti reviews |
 | OQ-70.2 | Does safe mode with ufs as a module leave any boot-time consumer of ufs inside the base (swap, `/stand` paths in stock code)? | us |
 | OQ-70.3 | Is the inet stack separable on either line? Not required by D-3; recorded so the answer is written down. | us |
 

@@ -73,10 +73,10 @@ program against an image file, so media and boxes cannot drift).
 |---|---|
 | `kbootset status` | the kept set, states, the booted generation (from `kinfo`), the boot disk, free store space, warnings |
 | `kbootset build` | compose the next generation in `/stand/gen/<new>/` from installed packages; runs every gate; writes nothing to the store |
-| `kbootset commit` | write the built generation into the store as `trial`; read back; flip the control block |
-| `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): marks the booted generation good if `kinfo` names it and it is the trial |
-| `kbootset rollback` | make the previous good generation the default (control-block flip); a later boot uses it |
-| `kbootset next --previous | --safe | <id>` | one-shot request for the next boot only |
+| `kbootset commit` | write the built generation into the store as `trial`; read back; flip the control block; the default generation is not changed (a newer trial replaces an older unbooted one) |
+| `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2 |
+| `kbootset rollback` | sets the **default** to the newest good generation older than the current default (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
+| `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
 | `kbootset mark-bad <id>` | administrator verdict |
 | `kbootset check` | recompute every member's SHA-256 in the store and in `/stand/gen` against the manifests and the package database; compare the installed packages with the default generation; never writes |
 | `kbootset collect` | remove generations outside the kept set (also done by `commit`) |
