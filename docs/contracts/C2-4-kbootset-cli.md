@@ -26,7 +26,7 @@ starts with `kbootset: `.
 | `-R <root>` | on a mounted target (the installer, repair mode): packages, records and `/stand` under `<root>`; the boot store from `<root>/etc/default/bootset` or `--bootdev` |
 | `--image <file> [--offset N]` | a store in a disk image at byte offset N (host media builds) |
 | `--dev <path> [--offset N]` | a store on a raw device at offset N |
-| `--journal <path>` | the journal; default `<root>/var/kbootset/journal` in the box form, none with `--image`/`--dev` unless named (apkg names it) |
+| `--journal <path>` | the journal; default `<root>/var/kbootset/journal` in the box form, none with `--image`/`--dev` unless named (apkg names it); kbootset makes the missing directories above it (mode 0755) when it writes the journal |
 | `media …` | the pristine generation of a new medium (host build only, S2-04): `--disk`, `--floppy`, `--cd` |
 
 ## 3. The trigger
