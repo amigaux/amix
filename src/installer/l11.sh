@@ -15,8 +15,7 @@
 # THE MEDIUM (/install/l11, tools/build-install-iso.sh):
 #   bin/kbootset   the box kbootset (GCC 14, static; amix-dlm `make box`)
 #   bin/apkg       apkg 0.3, static, FILE+RAW (amix-packagemanager)
-#   loader/boot1 loader/boot2 loader/store-id   the amix-dlm loader; store-id = the
-#                  header set id `kbootset create` gives a 64 MiB store of this boot2
+#   loader/boot1 loader/boot2   the amix-dlm loader (`kbootset create` lays it)
 #   kpkg/catalog kpkg/pkgs/kernel/*.pkg   the FILE source (#ext kpkg 1 block)
 #   updbootpart    the shim laid at /usr/sbin/updbootpart (payload/updbootpart-l11)
 #   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
@@ -43,7 +42,7 @@ L11_STORE_BYTES=67108864
 l11_keys()
 {
 	for _f in "$L11_KB" "$L11_APKG" "$L11/loader/boot1" "$L11/loader/boot2" \
-		"$L11/loader/store-id" "$L11/kpkg/catalog" "$L11/updbootpart" \
+		"$L11/kpkg/catalog" "$L11/updbootpart" \
 		"$L11/bcheckrc" "$L11/bcheckrc.stock"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
@@ -86,8 +85,6 @@ l11_keys()
 			*)	die "KBOOTSET_ROOTDEV='$KBOOTSET_ROOTDEV' is not a zorro: or mobo: match key" ;;
 		esac
 	fi
-	L11_STORE_ID=`( read _s _r; echo "$_s" ) < "$L11/loader/store-id"`
-	[ -n "$L11_STORE_ID" ] || die "the medium's loader/store-id is empty"
 	msg "layout 1.1   : store ${L11_STORE_MB} MiB (s$TARGET_BOOT_SLICE), kernel package $KERNEL_KPKG, line k$L11_LINE"
 	msg "box facts    : bootdev $KBOOTSET_BOOTDEV rootdev $KBOOTSET_ROOTDEV mem ${TARGET_FASTMEM_MB} MB"
 	msg "root record  : $KBOOTSET_ROOTREC"
@@ -214,6 +211,15 @@ l11_bootstore()
 	stage ""
 	stage "Installing the kernel and writing the boot store."
 	run mkdir -p "$TARGET/var/kbootset"
+	KB="$L11_KB -R $TARGET --dev $BOOT_RAW --journal $TARGET/var/kbootset/journal"
+	# the store first: kbootset lays it over whatever the slice held -- a 1.0 chain,
+	# an earlier store, a 1.0 root's tail -- and with --force zeroes the first 64 KiB
+	# itself (C2-4 v6 §8); its set id is what `status` prints, for bootset's store-id=
+	run "$L11_KB" --dev "$BOOT_RAW" create "$L11_STORE_BYTES" "$L11/loader/boot2" --boot1 "$L11/loader/boot1" --force
+	"$L11_KB" --dev "$BOOT_RAW" status > /tmp/.l11st 2>&1
+	L11_STORE_ID=`( while read _a _b _r; do [ "$_a" = store-id: ] && echo "$_b"; done ) < /tmp/.l11st`
+	rm -f /tmp/.l11st
+	[ -n "$L11_STORE_ID" ] || die "kbootset status names no store-id for the new store on $BOOT_RAW"
 	# bootset=manual while the kernel package goes in: apkg's trigger then only
 	# prints the commands, and the store is composed below with the facts named
 	l11_bootset manual
@@ -231,11 +237,6 @@ l11_bootstore()
 	[ -f "$TARGET/var/apkg/kpkg/$KERNEL_KPKG" ] || die "apkg installed $KERNEL_KPKG but wrote no record /var/apkg/kpkg/$KERNEL_KPKG -- kbootset gate 1 would refuse"
 	msg "kernel package $KERNEL_KPKG installed; record /var/apkg/kpkg/$KERNEL_KPKG"
 
-	KB="$L11_KB -R $TARGET --dev $BOOT_RAW --journal $TARGET/var/kbootset/journal"
-	# whatever was in the slice (a 1.0 chain, an old store, a 1.0 root's tail) is gone
-	# from the store's own area before kbootset lays it
-	run dd if=/dev/zero of="$BOOT_RAW" bs=512 count=128
-	run "$L11_KB" --dev "$BOOT_RAW" create "$L11_STORE_BYTES" "$L11/loader/boot2" --boot1 "$L11/loader/boot1"
 	l11_kb build --line "$L11_LINE" --bootdev "$KBOOTSET_BOOTDEV" --rootdev "$KBOOTSET_ROOTDEV" \
 		--rootfs "$TARGET_ROOT_FSTYPE" --mem "$L11_MEM" --root "$KBOOTSET_ROOTREC"
 	l11_kb commit

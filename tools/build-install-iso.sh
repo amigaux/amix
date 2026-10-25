@@ -729,9 +729,7 @@ fi
 # The driver's 1.1 half (src/installer/l11.sh) and what it runs: the box kbootset, the
 # static apkg 0.3, the amix-dlm loader, and the kernel-space FILE source. All of it
 # comes from work/l11 (tools/build-l11-inputs.sh: clean exports at named revisions,
-# INPUTS records them); each staged file is cmp'd against its source. store-id is the
-# header set id `kbootset create` gives a 64 MiB store of this boot2 (crc32 ^ size,
-# amix-dlm kbootset/ks.c), written into the target's /etc/default/bootset.
+# INPUTS records them); each staged file is cmp'd against its source.
 L11_IN="${L11_IN:-$repo/work/l11}"
 _want_l11=
 for _p in "${PROFILES[@]}"; do
@@ -783,8 +781,6 @@ if [ -n "$_want_l11" ]; then
     "repo=file:///cdrom/install/l11/kpkg" "cachedir=/mnt/tmp/kpkgcache" \
     "admin=/cdrom/install/admin/pkgadd" "pkgadd=/cdrom/install/bin/pkgadd" \
     "kbootset=/cdrom/install/l11/bin/kbootset" > "$STAGE/l11/recover.conf"
-  python3 -c 'import sys,zlib; b=open(sys.argv[1],"rb").read(); print("%08x" % ((zlib.crc32(b) & 0xffffffff) ^ 67108864))' \
-    "$STAGE/l11/loader/boot2" > "$STAGE/l11/loader/store-id"
   chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
   chmod 0744 "$STAGE/l11/bcheckrc"
   chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock"
@@ -792,7 +788,7 @@ if [ -n "$_want_l11" ]; then
     && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && cmp -s "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2" && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \
     || { echo "STOP: staged /install/l11 is not byte-identical to $L11_IN" >&2; exit 1; }
-  echo "build-install-iso: staged /install/l11 for${_want_l11}: kbootset $(sha256sum "$STAGE/l11/bin/kbootset" | cut -c1-16)..., apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., boot2 $(sha256sum "$STAGE/l11/loader/boot2" | cut -c1-16)..., store-id $(cat "$STAGE/l11/loader/store-id"), $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel package(s)"
+  echo "build-install-iso: staged /install/l11 for${_want_l11}: kbootset $(sha256sum "$STAGE/l11/bin/kbootset" | cut -c1-16)..., apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., boot2 $(sha256sum "$STAGE/l11/loader/boot2" | cut -c1-16)..., $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel package(s)"
 else
   echo "build-install-iso: no requested profile sets INSTALL_LAYOUT=1.1 -- /install/l11 not staged"
 fi

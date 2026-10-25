@@ -26,8 +26,11 @@ The installer:
    `/install/l11` takes it from the medium's FILE catalog (`#ext kpkg 1`), and
    its record lands in `/var/apkg/kpkg/<name>`. `/etc/default/bootset` says
    `bootset=manual` meanwhile, so apkg's trigger only prints the commands.
-4. clears the store's first 64 KiB, then runs the medium's box kbootset:
-   - `create 67108864 boot2 --boot1 boot1` lays the amix-dlm loader;
+4. runs the medium's box kbootset:
+   - `create 67108864 boot2 --boot1 boot1 --force` lays the amix-dlm loader over
+     whatever the slice held; `--force` makes kbootset zero the first 64 KiB itself
+     (C2-4 v6 §8). `status` then prints the store's set id, which goes into
+     `store-id=`;
    - `build` takes the facts: `--line`, `--bootdev`/`--rootdev` from
      `TARGET_HBA`, `--rootfs`, `--mem` from `TARGET_FASTMEM_MB`, and `--root`;
    - `commit` writes the pristine generation;
