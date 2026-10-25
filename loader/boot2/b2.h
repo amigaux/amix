@@ -25,6 +25,7 @@
 #define IO_UNIT		24
 #define IO_COMMAND	28
 #define IO_ERROR	31
+#define IO_ACTUAL	32
 #define IO_LENGTH	36
 #define IO_DATA		40
 #define IO_OFFSET	44
@@ -32,7 +33,9 @@
 #define LN_NAME		10
 #define CMD_READ	2
 #define CMD_WRITE	3
+#define CMD_CLEAR	5	/* drop the device's track buffer */
 #define TD_MOTOR	9
+#define TD_CHANGENUM	13	/* io_Actual = the disk-change counter */
 
 struct ax_regs { ax_u32 d0, d1, d2, d3, d4, d5, a0, a1, a2; };
 #define REGS0(r) x_memset(&(r), 0, sizeof(r))

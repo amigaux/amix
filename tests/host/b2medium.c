@@ -1,17 +1,25 @@
 /*
  * b2medium.c -- test helper: boot2's store medium (loader/boot2/main.c,
  * compiled in whole) reading a floppy pair on the host.  The drive and the
- * person at it are simulated: on every L11 prompt the drive is first empty,
- * then holds a blank disk, then OTHER (a disk of another boot set), then
- * the wrong volume of this set, and only then the volume asked for -- so
- * want_volume's change detection, its refusals and the read of an extent
- * that continues on the next volume all run as on the target.  Every
- * member of every generation is read through st_read_stored, inflated and
- * checked against its CRC-32.
+ * person at it are simulated.  The drive behaves like trackdisk: it keeps
+ * the last track it read in a buffer that a disk change does not drop
+ * (only CMD_CLEAR does), counts disk changes for TD_CHANGENUM, and runs
+ * its motor from a read until TD_MOTOR.  On every L11 prompt the person
+ * takes the disk out, then about every 1.2 s puts in a blank disk, OTHER
+ * (a disk of another boot set), the wrong volume of this set, and finally
+ * the volume asked for.  So want_volume's change detection, its refusals
+ * (each said once per disk), the motor and the read of an extent that
+ * continues on the next volume all run as on the target.  Every member of
+ * every generation is read through st_read_stored, inflated and checked
+ * against its CRC-32.
  *
- * usage: b2medium VOL1 VOL2 OTHER
+ * usage: b2medium [-n] VOL1 VOL2 OTHER
+ *   -n  the device keeps no change counter (TD_CHANGENUM fails): the disk
+ *       is re-read every half second, so the volume still in the drive at
+ *       the prompt is refused once as well
  * Prints the number of volume changes; exit status 0 when every member
- * verifies and every change went through the whole script.
+ * verifies and every change went through the whole script with exactly
+ * one message per refused disk and the motor off while waiting.
  *
  * Built -no-pie with an arena in the program image, so the 32-bit buffer
  * addresses main.c writes into the IOStdReq stay valid pointers here.
@@ -35,7 +43,15 @@ static ax_u8 *drive;		/* the disk in the drive, 0 = empty */
 static ax_u32 disksize;
 static int wanted;		/* the volume the last L11 prompt asked for */
 static int step;		/* where the person is in the swap script; 0 = idle */
-static int changes, refused_set, refused_vol, motor_offs;
+static int changes, refused_set, refused_vol;
+static int nocount;		/* -n: no change counter */
+static ax_u32 changecount;	/* TD_CHANGENUM */
+static ax_u8 *cachedisk;	/* the disk the track buffer was read from */
+static long cachetrack = -1;	/* the buffered track, -1 = none */
+static int motor;		/* the drive motor runs */
+static unsigned long frames, nextat, motorframes;
+
+#define TRACK	5632UL		/* 11 sectors of 512 bytes: one DD track side */
 
 ax_u32 *ax_crctab = crctab;
 ax_u32 core_cpu = 30;
@@ -59,10 +75,13 @@ void x_freemem(void *p, ax_u32 size) { (void)p, (void)size; }
 void x_memcpy(void *d, const void *s, ax_u32 n) { memcpy(d, s, n); }
 void x_memset(void *d, int c, ax_u32 n) { memset(d, c, n); }
 
-/* the person: each read during a change finds the next disk of the script */
+/* the person, every 60 frames after the prompt: out, then each disk of
+ * the script in turn (each insertion is a change, as is each removal) */
 static void
 next_disk(void)
 {
+	if (drive)
+		changecount++;		/* taken out */
 	switch (step) {
 	case 1: drive = 0; break;
 	case 2: drive = blank; break;
@@ -70,7 +89,10 @@ next_disk(void)
 	case 4: drive = disk[wanted == 1 ? 1 : 0]; break;
 	default: drive = disk[wanted - 1]; step = -1; changes++; break;
 	}
+	if (drive)
+		changecount++;		/* put in */
 	step++;
+	nextat = frames + 60;
 }
 
 int
@@ -82,16 +104,35 @@ x_doio(void *iobp)
 	ax_u8 *buf = (ax_u8 *)(unsigned long)*(ax_u32 *)(r + IO_DATA);
 
 	if (cmd == TD_MOTOR) {
-		motor_offs++;
+		motor = 0;
+		return 0;
+	}
+	if (cmd == CMD_CLEAR) {
+		cachetrack = -1;
+		return 0;
+	}
+	if (cmd == TD_CHANGENUM) {
+		if (nocount)
+			return -3;	/* IOERR_NOCMD */
+		*(ax_u32 *)(r + IO_ACTUAL) = changecount;
 		return 0;
 	}
 	if (cmd != CMD_READ)
 		return -1;
-	if (step > 0)
-		next_disk();
-	if (!drive || off % 2048 || len % 2048 || off + len > disksize)
+	if (off % 2048 || len % 2048 || off + len > disksize)
 		return -1;
-	memcpy(buf, drive + off, len);
+	/* sector by sector: a sector of the buffered track comes from the
+	 * buffer, even when another disk is in the drive */
+	for (; len; off += 512, buf += 512, len -= 512) {
+		if ((long)(off / TRACK) != cachetrack || !cachedisk) {
+			if (!drive)
+				return -1;
+			motor = 1;
+			cachedisk = drive;
+			cachetrack = (long)(off / TRACK);
+		}
+		memcpy(buf, cachedisk + off, 512);
+	}
 	return 0;
 }
 
@@ -109,6 +150,7 @@ con_printf(const char *fmt, ...)
 	if (sscanf(line, "amix-boot: L11 insert boot volume %u", &v) == 1) {
 		wanted = (int)v;
 		step = 1;
+		nextat = frames + 60;
 	} else if (strstr(line, "that is volume")) {
 		refused_vol++;
 	}
@@ -122,7 +164,19 @@ con_puts(const char *s)
 		refused_set++;
 }
 
-void in_frame(void) { }
+void
+in_frame(void)
+{
+	frames++;
+	if (step > 0 && motor)
+		motorframes++;
+	if (step > 0 && frames >= nextat)
+		next_disk();
+	if (frames > 200000UL) {
+		printf("b2medium: still waiting after %lu frames: FAILED\n", frames);
+		exit(1);
+	}
+}
 int in_key(void) { return -1; }
 int in_serial(void) { return -1; }
 int in_lmb(void) { return 0; }
@@ -211,6 +265,10 @@ main(int argc, char **argv)
 	ax_u8 cb[2048], *man;
 	int i, j, errline, failed = 0;
 
+	if (argc == 5 && !strcmp(argv[1], "-n")) {
+		nocount = 1;
+		argv++, argc--;
+	}
 	if (argc != 4)
 		return 2;
 	if ((unsigned long)(arena + sizeof(arena)) > 0xFFFFFFFFUL) {
@@ -255,9 +313,13 @@ main(int argc, char **argv)
 			failed |= check("ramdisk", &m.ramdisk);
 	}
 	/* every change refused the blank and the foreign disk, then the wrong volume */
-	if (step != 0 || refused_set != 2 * changes || refused_vol != changes || motor_offs != changes)
+	/* without a change counter the disk still in the drive at the prompt
+	 * (the other volume) is read and refused too, once */
+	if (step != 0 || refused_set != 2 * changes ||
+	    refused_vol != (nocount ? 2 : 1) * changes || motorframes)
 		failed = 1;
-	printf("b2medium: %d volume change(s), %d foreign/blank and %d wrong-volume disks refused: %s\n",
-	       changes, refused_set, refused_vol, failed ? "FAILED" : "ok");
+	printf("b2medium: %d volume change(s), %d foreign/blank and %d wrong-volume disks refused, "
+	       "motor on for %lu waiting frames: %s\n",
+	       changes, refused_set, refused_vol, motorframes, failed ? "FAILED" : "ok");
 	return failed;
 }

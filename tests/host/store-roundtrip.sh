@@ -69,7 +69,9 @@ grep -q "header A: seq 1, store 901120 bytes, flags 0x6, volume 1/2" $T/f.out
 sed 's/^generation 1/generation 2/' $T/f1.spec > $T/f2.spec
 $B/mkstore -f -o $T/other1.adf -o $T/other2.adf -1 $T/boot1.img -2 $T/boot2.bin $T/f2.spec >/dev/null
 $B/b2medium $T/boot1.adf $T/boot2.adf $T/other1.adf | tee $T/m.out
-grep -q "1 volume change(s), 2 foreign/blank and 1 wrong-volume disks refused: ok" $T/m.out
+grep -q "1 volume change(s), 2 foreign/blank and 1 wrong-volume disks refused, motor on for 0 waiting frames: ok" $T/m.out
+# the same on a device without a change counter (re-read every half second)
+$B/b2medium -n $T/boot1.adf $T/boot2.adf $T/other1.adf | grep -q "disks refused, motor on for 0 waiting frames: ok"
 echo "store-roundtrip: floppy pair ok"
 
 # a CD tree (spec 10 §4.4): one generation per line directory, members as

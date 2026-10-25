@@ -61,17 +61,36 @@ motor_off(void)
 	x_doio(iob);	/* devices without a motor answer with an error: ignored */
 }
 
+/* the device's disk-change counter, or -1 when it keeps none */
+static long
+changenum(void)
+{
+	*(ax_u16 *)(iob + IO_COMMAND) = TD_CHANGENUM;
+	*(ax_u32 *)(iob + IO_LENGTH) = 0;
+	if (x_doio(iob) != 0)
+		return -1;
+	return (long)*(ax_u32 *)(iob + IO_ACTUAL);
+}
+
 /*
  * Multi-volume stores (the floppy pair, docs/spec/10-boot-loader.md §4.3):
  * an extent on another volume asks for that disk and waits until a store
  * header of the same set and the wanted volume can be read (L11).
+ * trackdisk keeps the last track it read across a disk change, so the disk
+ * is read again only after its change counter moved (or a key asks for
+ * it), and always after CMD_CLEAR; the motor stays off while waiting.  A
+ * refusal is printed once per disk change, not once per try; a device
+ * without a change counter is re-read every half second and says each
+ * verdict once (N25b/N26b, 2026-10-25).
  */
 static int
 want_volume(ax_u32 vol)
 {
 	ax_u8 *blk;
 	struct ax_header h;
-	int f, k;
+	ax_u32 said = 0, verdict;
+	long last, cn;
+	int f, asked, lmb = 1;
 
 	if (vol == curvol)
 		return 0;
@@ -82,25 +101,40 @@ want_volume(ax_u32 vol)
 		return -1;
 	motor_off();
 	con_printf("amix-boot: L11 insert boot volume %u of %u\n", vol, (ax_u32)hdr.nvolumes);
+	last = changenum();
 	for (;;) {
-		for (f = 0; f < 25; f++) {	/* about half a second between tries */
+		for (f = 0, asked = 0; f < 25 && !asked; f++) {	/* half a second */
 			in_frame();
-			k = in_key();
-			if (k >= 0 || in_serial() >= 0 || in_lmb())
-				break;
+			asked = in_key() >= 0 || in_serial() >= 0 || (in_lmb() && !lmb);
+			lmb = in_lmb();
 		}
-		if (io(CMD_READ, 0, blk, 2048) != 0)
-			continue;
-		if (ax_hdr_pick(ax_crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) < 0 ||
-		    h.set_id != hdr.set_id) {
-			con_puts("amix-boot: that disk is not part of this boot set\n");
+		cn = changenum();
+		if (cn >= 0 && cn == last && !asked)
+			continue;		/* the same disk, and nobody asked */
+		last = cn;
+		*(ax_u16 *)(iob + IO_COMMAND) = CMD_CLEAR;
+		*(ax_u32 *)(iob + IO_LENGTH) = 0;
+		x_doio(iob);
+		if (io(CMD_READ, 0, blk, 2048) != 0) {
+			motor_off();		/* no disk, or not readable yet */
 			continue;
 		}
-		if (h.volume != vol) {
+		if (ax_hdr_pick(ax_crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) < 0)
+			verdict = 1;		/* not a boot store at all */
+		else if (h.set_id != hdr.set_id)
+			verdict = 2 | (h.set_id << 8);
+		else if (h.volume != vol)
+			verdict = 3 | ((ax_u32)h.volume << 8);
+		else
+			break;
+		motor_off();
+		if (cn < 0 && verdict == said && !asked)
+			continue;		/* no change counter: said already */
+		said = verdict;
+		if ((verdict & 0xFF) == 3)
 			con_printf("amix-boot: that is volume %u; insert volume %u\n", (ax_u32)h.volume, vol);
-			continue;
-		}
-		break;
+		else
+			con_puts("amix-boot: that disk is not part of this boot set\n");
 	}
 	x_freemem(blk, 2048);
 	curvol = vol;
