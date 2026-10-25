@@ -131,3 +131,13 @@ if $B/mkstore -f -o $W/x.adf -1 $T/boot1.img -2 $T/boot2.bin -n 12 $W/g12.spec 2
 	echo "store-roundtrip: one-shot accepted on a read-only floppy" >&2; exit 1
 fi
 echo "store-roundtrip: loader writes ok"
+
+# M-LD1 bootblock variants: each fails bbframe's check on its own field
+for v in dos1 uni0 nodos third0 notrailer; do
+	$B/bbframe -x $v $T/boot1.img $W/bb-$v.img >/dev/null
+	$B/bbframe -c $W/bb-$v.img 2>&1 | grep -q "framing longwords wrong"
+done
+$B/bbframe -x sum $T/boot1.img $W/bb-sum.img >/dev/null
+$B/bbframe -c $W/bb-sum.img 2>&1 | grep -q "checksum wrong"
+[ "$(cmp -l $T/boot1.img $W/bb-sum.img | wc -l)" -eq 1 ]
+echo "store-roundtrip: bootblock variants ok"

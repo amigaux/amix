@@ -5,6 +5,15 @@
  *   bbframe <code.bin> <bootblock.img>   frame; fails if the code exceeds
  *                                        1008 bytes
  *   bbframe -c <bootblock.img>           check an image's framing and checksum
+ *   bbframe -x WHAT <in.img> <out.img>   a deliberately wrong copy, for
+ *                                        M-LD1 (which fields the strap
+ *                                        checks, docs/spec/10-boot-loader.md
+ *                                        §2.1); WHAT is one of
+ *        dos1       magic "DOS\1"          uni0   magic "UNI\0"
+ *        nodos      magic "BAD\0"          sum    checksum off by one
+ *        third0     third longword 0       notrailer  trailer longword 0
+ *      every variant but sum is re-checksummed, so it differs in that one
+ *      field only
  *
  * Layout of the 1024-byte image: "DOS\0" at 0, the bootblock checksum at 4,
  * 0x00000370 at 8, code from 12 (where the strap enters), zero padding, and
@@ -82,6 +91,50 @@ check(const char *path)
 	return 0;
 }
 
+static int
+variant(const char *what, const char *in, const char *outp)
+{
+	unsigned char bb[BB_SIZE + 1];
+	FILE *f = fopen(in, "rb");
+	size_t n;
+
+	if (!f) {
+		perror(in);
+		return 1;
+	}
+	n = fread(bb, 1, sizeof(bb), f);
+	fclose(f);
+	if (n != BB_SIZE || bbsum(bb) != 0xFFFFFFFFUL) {
+		fprintf(stderr, "bbframe: %s is not a framed bootblock\n", in);
+		return 1;
+	}
+	if (!strcmp(what, "dos1"))
+		memcpy(bb, "DOS\1", 4);
+	else if (!strcmp(what, "uni0"))
+		memcpy(bb, "UNI\0", 4);
+	else if (!strcmp(what, "nodos"))
+		memcpy(bb, "BAD\0", 4);
+	else if (!strcmp(what, "third0"))
+		put32(bb + 8, 0);
+	else if (!strcmp(what, "notrailer"))
+		put32(bb + BB_SIZE - 4, 0);
+	else if (strcmp(what, "sum")) {
+		fprintf(stderr, "bbframe: unknown variant %s\n", what);
+		return 2;
+	}
+	put32(bb + 4, 0);
+	put32(bb + 4, ~bbsum(bb) & 0xFFFFFFFFUL);
+	if (!strcmp(what, "sum"))
+		put32(bb + 4, (get32(bb + 4) + 1) & 0xFFFFFFFFUL);
+	if (!(f = fopen(outp, "wb")) || fwrite(bb, 1, BB_SIZE, f) != BB_SIZE) {
+		perror(outp);
+		return 1;
+	}
+	fclose(f);
+	printf("bbframe: %s: variant %s\n", outp, what);
+	return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -91,8 +144,11 @@ main(int argc, char **argv)
 
 	if (argc == 3 && strcmp(argv[1], "-c") == 0)
 		return check(argv[2]);
+	if (argc == 5 && strcmp(argv[1], "-x") == 0)
+		return variant(argv[2], argv[3], argv[4]);
 	if (argc != 3) {
-		fprintf(stderr, "usage: bbframe <code.bin> <bootblock.img> | bbframe -c <bootblock.img>\n");
+		fprintf(stderr, "usage: bbframe <code.bin> <bootblock.img> | bbframe -c <bootblock.img>"
+			" | bbframe -x WHAT <in.img> <out.img>\n");
 		return 2;
 	}
 	if (!(f = fopen(argv[1], "rb"))) {

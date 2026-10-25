@@ -10,9 +10,63 @@ Evidence classes and IDs: `docs/spec/90-measurements.md`. Work items:
 
 | Script | Rows | Item |
 |---|---|---|
+| `m-ld1.sh` | bootblock variants on DF0 and on disks (M-LD1, which header fields the strap checks) | S1-20 |
 | `ld-rows.sh` | W1–W3 (M-LD4, control-block and tally writes); vehicle M (M-LD5, menu input) | S1-22, S1-21 |
+| `m-ld9.py` | our loader against the stock loader, same kernel and root (M-LD9 bench half) | S1-25 |
 | `df0-pair.sh` | the DF0 floppy pair per line (M-FD1, M-FP2) | S1-27 |
 | `../../tools/measure/m-ld7.sh` | axtime runs (M-LD7, M-LD8) | S1-23 |
+
+## M-LD1: which bootblock fields the strap checks (S1-20)
+
+`m-ld1.sh <workspace> <outdir>` writes seven bootblocks: the good one, and
+six that each differ in one field (`bbframe -x`). The changed fields are
+the magic (`DOS\1`, `UNI\0` or `BAD\0`), the checksum, the third longword
+and the trailer. It also writes one floppy per line and per bootblock (the
+good floppy with only its first 1024 bytes replaced). For disks it prints
+the `dd` line that writes a bootblock over the boot slice of a slot copy
+of a proven vehicle. Run one boot per variant on DF0 and on each disk
+controller, with Kickstart 3.1 and 3.2.x. Each row ends in one word:
+
+- **ACCEPTED**: the serial log shows `amix-boot 1:`. boot1 never checks
+  its own framing, so a bootblock the strap runs boots like the good one.
+- **REFUSED**: no `amix-boot 1:` line. The frame shows what Kickstart did
+  instead.
+
+`<outdir>/EXPECTED` repeats this with the offsets.
+
+## M-LD9: our loader against the stock loader (S1-25)
+
+`m-ld9.py OURS STOCK` compares two rig evidence directories. OURS is a
+loader row; STOCK is the row with the same machine shape, kernel and root
+booted by the stock loader. It checks:
+
+- both rows passed;
+- every loader stage passed;
+- each batch command both rows ran gives the same output, with the parts
+  that change from boot to boot removed (`mount` dates, `df` free counts);
+- the RTH1 unit on the serial log is the controller number of the root
+  device both rows mounted.
+
+It prints SAME or DIFFERENT (exit status 0 or 1). It does not judge a
+batch command that only one row ran, so give both rows the same batch:
+at least `mount`, `uname -a`, `sum -r /stand/unix`, `swap -l` and `df`.
+
+Pairs from the rig matrix:
+
+| Loader row | Stock row |
+|---|---|
+| N19 | E1 |
+| N20 | E12u |
+| N21 | N6 |
+| N22 | N9u |
+| N23 | a stock Z3660 autoboot row (to be named) |
+| N25 | E1's floppy boot of K030-U-FD |
+| N26 | E29 |
+
+N24 has no root (the 030 line has no Z3660 driver) and ends at the kernel
+banner, so there is nothing to compare. Tried on the S1-19 evidence, N21
+against N6 gives SAME. N20 against N6 gives DIFFERENT, because the kernels'
+uname build tags differ; that is the wrong pair, and the check catches it.
 
 ## M-LD4: writes, read back on the next boot (S1-22)
 
