@@ -19,22 +19,24 @@ COMMON  := loader/common
 CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
            $(COMMON)/inflate.c $(COMMON)/select.c $(COMMON)/rel.c \
            $(COMMON)/bootinfo.c
+# common code that boot2 does not link (CSRC goes into boot2 whole)
+XSRC    := $(COMMON)/sha256.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
-           tests/host/t_bootinfo.c
+           tests/host/t_bootinfo.c tests/host/t_sha256.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime b2test clean
 
-all: test tools cross boot1 boot2 cdboot b2test
+all: test tools cross boot1 boot2 cdboot axtime b2test
 
 $(B):
 	mkdir -p $(B)
 
-$(B)/t_host: $(CSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(TSRC) -lz
+$(B)/t_host: $(CSRC) $(XSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(XSRC) $(TSRC) -lz
 
 $(B)/axinflate: tests/host/axinflate.c $(COMMON)/inflate.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axinflate.c $(COMMON)/inflate.c
@@ -141,13 +143,13 @@ $(B)/boot2.bin: $(B)/boot2.r.o $(B)/b2link
 
 boot2: toolchain-check $(B)/boot2.bin
 
-# amix-cdboot: boot2's core with the CD entry (cdstart.s first, then
+# amix-cdboot: boot2's core with the CD entry (adstart.s first, then
 # cdmain.c), written as an AmigaDOS load file; hunkcheck proves its
 # RELOC32 table reproduces the relocator's binding.
-CDOBJ  := $(B)/cross/cdstart.o $(B)/cross/amiga.o $(B)/cross/b2_cdmain.o \
+CDOBJ  := $(B)/cross/adstart.o $(B)/cross/amiga.o $(B)/cross/b2_cdmain.o \
           $(patsubst loader/boot2/%.c,$(B)/cross/b2_%.o,$(B2LIB)) $(COBJ)
 
-$(B)/cross/cdstart.o: loader/boot2/cdstart.s
+$(B)/cross/adstart.o: loader/boot2/adstart.s
 	@mkdir -p $(B)/cross
 	$(CROSS)as -o $@ $<
 
@@ -164,6 +166,27 @@ $(B)/amix-cdboot: $(B)/cdboot.r.o $(B)/b2link $(B)/hunkcheck
 	$(B)/hunkcheck $< $@ 0x0812f3a0
 
 cdboot: toolchain-check $(B)/amix-cdboot
+
+# axtime (M-LD7/M-LD8): an AmigaDOS program over the loader's own CRC-32,
+# inflate and the SHA-256 boot2 does not link; same entry and writer as
+# amix-cdboot
+XOBJ   := $(patsubst $(COMMON)/%.c,$(B)/cross/%.o,$(XSRC))
+ATOBJ  := $(B)/cross/adstart.o $(B)/cross/amiga.o $(B)/cross/axtime.o \
+          $(B)/cross/b2_sys.o $(B)/cross/crc32.o $(B)/cross/inflate.o $(XOBJ)
+
+$(B)/cross/axtime.o: tools/measure/axtime.c loader/boot2/*.h $(COMMON)/*.h
+	@mkdir -p $(B)/cross
+	$(CROSS)gcc $(CROSSCFLAGS) -Iloader/boot2 -I$(COMMON) -c -o $@ $<
+
+$(B)/axtime.r.o: $(ATOBJ)
+	$(CROSS)ld -r -o $@ $(ATOBJ)
+
+$(B)/axtime: $(B)/axtime.r.o $(B)/b2link $(B)/hunkcheck
+	$(CROSS)scan060 $(ATOBJ)
+	$(B)/b2link -h $< $@
+	$(B)/hunkcheck $< $@ 0x00200000
+
+axtime: toolchain-check $(B)/axtime
 
 # The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
 # with start.s first, b2link, then b2check proves the table reproduces the

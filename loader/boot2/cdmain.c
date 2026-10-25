@@ -115,8 +115,9 @@ static const struct medium cd = {
 	1, cd_read_stored, cd_read_manifest, 0, 0, cd_identify, 0
 };
 
+/* from adstart.s; returns only on failure */
 long
-cdboot_main(void *execbase, const char *args, long arglen)
+ados_main(void *execbase, const char *args, long arglen)
 {
 	static ax_u8 blk[2048];
 	struct ax_ctl ctl;
