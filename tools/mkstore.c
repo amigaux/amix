@@ -44,7 +44,7 @@
  *   module NAME root FILE [attr ...]   likewise; boot- and demand-class
  *                                      module lines are copied as written
  *   ramdisk NAME FILE [attr ...]       likewise
- * mkstore adds the size, at=, crc32= and the end line.  A member with the
+ * mkstore adds the size, at= (or file=), crc32=, sha256= and the end line.  A member with the
  * attribute z=deflate is stored raw-deflate compressed (zlib level 9, the
  * smaller of memory levels 8 and 9) and
  * gets stored=; crc32 is always of the uncompressed bytes.
@@ -66,6 +66,7 @@
 #include "crc32.h"
 #include "store.h"
 #include "manifest.h"
+#include "sha256.h"
 
 #define MAXVOL 8
 
@@ -250,6 +251,7 @@ state_of(const char *s)
 static void
 generation(const char *spec, struct ax_gen *g)
 {
+	ax_u8 sha[32];
 	static char man[65536];
 	char line[1024], out[1024];
 	char *tok[16];
@@ -326,6 +328,7 @@ generation(const char *spec, struct ax_gen *g)
 			}
 			data = slurp(tok[fi], &flen);
 			crc = ax_crc32(tab, data, flen);
+			ax_sha256(data, flen, sha);
 			zdata = zip ? deflate_raw(data, flen, &zlen) : data;
 			if (!zip)
 				zlen = flen;
@@ -349,7 +352,9 @@ generation(const char *spec, struct ax_gen *g)
 					(unsigned long)off);
 			if (zip)
 				sprintf(out + strlen(out), " stored=%lu z=deflate", (unsigned long)zlen);
-			sprintf(out + strlen(out), " crc32=%08lx", (unsigned long)crc);
+			sprintf(out + strlen(out), " crc32=%08lx sha256=", (unsigned long)crc);
+			for (i = 0; i < 32; i++)
+				sprintf(out + strlen(out), "%02x", sha[i]);
 			for (i = fi + 1; i < n; i++)
 				if (strncmp(tok[i], "z=", 2))
 					sprintf(out + strlen(out), " %s", tok[i]);

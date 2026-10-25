@@ -127,3 +127,27 @@ set -e
 [ $rc -eq 1 ] && grep -q "generation 1 kernel unix: CRC-32 BAD" $T/out
 cp $T/before.img $T/disk.img
 echo "kbuild: check ok"
+
+# media builds (S2-04): the pristine generation of a new medium from the
+# same root, every gate run; a disk store by kbootset's core, the floppy
+# pair and the CD tree by mkstore's engine
+MB="$B/kbootset -R $R"
+head -c 8454144 /dev/zero > $T/media.img
+$MB media --disk $T/media.img --offset 65536 --size 8388608 --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin $FACTS --root "$ROOTREC" 2>/dev/null | grep -q "pristine generation"
+$B/lsstore $T/media.img 65536 | grep -q "lsstore: ok"
+$B/kbootset -R $R --image $T/media.img --offset 65536 check | grep -q "check: 0 problem(s)"
+$MB media --floppy $T/m1.adf $T/m2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \
+	$FACTS > /dev/null
+$B/lsstore $T/m1.adf 0 $T/m2.adf | grep -q "lsstore: ok"
+grep -q "z=deflate" $T/m1.adf.spec
+$MB media --cd $T/mcd $FACTS > /dev/null
+$B/lsstore -C $T/mcd | grep -q "lsstore: ok"
+grep -q "sha256=" $T/mcd/BOOT/K46/G1.GMF
+# a refused gate writes no medium
+set +e
+$MB media --floppy $T/x1.adf $T/x2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \
+	--line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs > $T/out; rc=$?
+set -e
+[ $rc -eq 4 ] && grep -q "gate 6" $T/out && [ ! -e $T/x1.adf ]
+echo "kbuild: media (disk, floppy pair, CD) ok"

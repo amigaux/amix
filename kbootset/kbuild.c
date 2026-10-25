@@ -455,17 +455,68 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 	return bad;
 }
 
+/* the generation's records before its members (10 §5.1) */
+static void
+head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const char *rootfs,
+     const char *rootrec, const char *swaprec, const char *boards, ax_u32 created)
+{
+	time_t t = (time_t)created;
+	struct tm *tm = gmtime(&t);	/* by hand: strftime brings libc's locale tables */
+
+	sprintf(text, "line k%d\nkabi %s\ncpu %s\nloader-min %lu\n"
+		"created %04d-%02d-%02dT%02d:%02d:%02dZ\n", f->line, kk->kabi,
+		f->line == 30 ? "68030" : "68040 68060", (unsigned long)kk->loader_min,
+		tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+	if (kk->family[0])
+		sprintf(text + strlen(text), "family %s\n", kk->family);
+	if (kk->build[0])
+		sprintf(text + strlen(text), "kernel-build %s\n", kk->build);
+	sprintf(text + strlen(text), "rootfs %s\n", rootfs);
+	if (rootrec && rootrec[0])
+		sprintf(text + strlen(text), "root %.120s\n", rootrec);
+	if (swaprec && swaprec[0])
+		sprintf(text + strlen(text), "swap %.120s\n", swaprec);
+	if (boards)
+		sprintf(text + strlen(text), "boards %.200s\n", boards);
+}
+
+int
+kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u32 created,
+	int deflate, const char *ramdisk, char *out, char *msg)
+{
+	static struct ks k;
+	struct kb_kernel kk;
+	ax_u8 *kernel;
+	ax_u32 klen;
+	int rc;
+
+	memset(&k, 0, sizeof(k));
+	k.hdr.boot2[0].ver = loader_version;	/* gate 7: the loader the medium carries */
+	if ((rc = gates(&k, root, f, f->rootfs, &kk, &kernel, &klen)) != KS_OK) {
+		strcpy(msg, k.msg);
+		return k.gate ? 4 : 3;
+	}
+	free(kernel);
+	sprintf(out, "generation 1\nstate pristine\n");
+	head(out + strlen(out), f, &kk, f->rootfs, f->root, f->swap, 0, created);
+	sprintf(out + strlen(out), "kernel unix %.500s%s\n", under(root, f->line == 30 ?
+		"/stand/k30/unix" : "/stand/k46/unix"), deflate ? " z=deflate" : "");
+	if (ramdisk)
+		sprintf(out + strlen(out), "ramdisk miniroot %.500s%s\n", ramdisk, deflate ? " z=deflate" : "");
+	msg[0] = 0;
+	return 0;
+}
+
 int
 kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 created, ax_u32 *idp)
 {
 	static char text[8192], facts[2048];
 	static struct ax_manifest m;
 	struct kb_kernel kk;
-	char rootfs[16], when[80], *dman = 0;
+	char rootfs[16], *dman = 0;
 	const char *rootrec = f->root, *swaprec = f->swap, *boards = 0;
 	ax_u8 *kernel;
 	ax_u32 klen, id = ks_next_id(k);
-	time_t t = (time_t)created;
 	int rc;
 
 	k->gate = 0;
@@ -484,25 +535,7 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	if (rc != KS_OK)
 		goto out;
 	free(kernel);
-	{	/* by hand: strftime brings libc's locale tables */
-		struct tm *tm = gmtime(&t);
-
-		sprintf(when, "%04d-%02d-%02dT%02d:%02d:%02dZ", tm->tm_year + 1900, tm->tm_mon + 1,
-			tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-	}
-	sprintf(text, "line k%d\nkabi %s\ncpu %s\nloader-min %lu\ncreated %s\n", f->line, kk.kabi,
-		f->line == 30 ? "68030" : "68040 68060", (unsigned long)kk.loader_min, when);
-	if (kk.family[0])
-		sprintf(text + strlen(text), "family %s\n", kk.family);
-	if (kk.build[0])
-		sprintf(text + strlen(text), "kernel-build %s\n", kk.build);
-	sprintf(text + strlen(text), "rootfs %s\n", rootfs);
-	if (rootrec[0])
-		sprintf(text + strlen(text), "root %.120s\n", rootrec);
-	if (swaprec[0])
-		sprintf(text + strlen(text), "swap %.120s\n", swaprec);
-	if (boards)
-		sprintf(text + strlen(text), "boards %.200s\n", boards);
+	head(text, f, &kk, rootfs, rootrec, swaprec, boards, created);
 	sprintf(text + strlen(text), "kernel unix /stand/k%d/unix\n", f->line);
 	sprintf(facts, "line=%d\nbootdev=%s\nrootdev=%s\nrootfs=%s\nmem=%lu\ncreated=%lu\n",
 		f->line, f->bootdev, f->rootdev, rootfs, (unsigned long)f->mem, (unsigned long)created);

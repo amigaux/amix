@@ -29,6 +29,16 @@
  *   collect
  *   loader-install BOOT2 [--version N] [--boot1 FILE]
  *
+ * Media (host build only, S2-04): the pristine generation of a new medium
+ * from the packages installed under ROOT, every gate run against the
+ * medium's facts and the loader it carries:
+ *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] FACTS
+ *   media --floppy OUT1 OUT2 --boot1 F --boot2 F [--version N] [--ramdisk F] FACTS
+ *   media --cd DIR [--cdboot F] [--version N] [--ramdisk F] FACTS
+ * A disk store is written by kbootset's own core, members raw; the floppy
+ * pair (members deflated) and the CD tree (raw) by mkstore's engine
+ * (kmedia.c).  FACTS are the build options above.
+ *
  * Power-cut rows (docs/plan/stage-2.md S2-08): commit prints
  * "kbootset: step N <what>" to stderr before each step of 40 §3.2, and with
  * KBOOTSET_HOLD=N set it flushes, syncs and waits for ever before step N,
@@ -54,6 +64,9 @@
 #endif
 
 #define SECTOR	512UL
+
+static void usage(void);
+static ax_u8 *slurp(const char *path, ax_u32 *len);
 
 struct file {
 	FILE *f;
@@ -155,6 +168,125 @@ zdeflate(const ax_u8 *in, ax_u32 n, ax_u32 *outn)
 	*outn = cap - z.avail_out;
 	deflateEnd(&z);
 	return out;
+}
+#endif
+
+/* the build options naming the box's (or the medium's) facts */
+static void
+facts_of(char **cmd, int argc, struct kb_facts *f)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+	for (i = 1; i < argc; i++)
+		if (!strcmp(cmd[i], "--line") && i + 1 < argc)
+			f->line = atoi(cmd[++i]);
+		else if (!strcmp(cmd[i], "--bootdev") && i + 1 < argc)
+			sprintf(f->bootdev, "%.47s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--rootdev") && i + 1 < argc)
+			sprintf(f->rootdev, "%.47s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--rootfs") && i + 1 < argc)
+			sprintf(f->rootfs, "%.15s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--mem") && i + 1 < argc)
+			f->mem = (ax_u32)strtoul(cmd[++i], 0, 0);
+		else if (!strcmp(cmd[i], "--root") && i + 1 < argc)
+			sprintf(f->root, "%.127s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--swap") && i + 1 < argc)
+			sprintf(f->swap, "%.127s", cmd[++i]);
+}
+
+static ax_u32
+now(void)
+{
+	return getenv("SOURCE_DATE_EPOCH") ? (ax_u32)strtoul(getenv("SOURCE_DATE_EPOCH"), 0, 10) :
+	       (ax_u32)time(0);
+}
+
+#ifdef KS_MEDIA
+int mkstore_main(int argc, char **argv);
+
+static int
+media(const char *root, char **cmd, int argc)
+{
+	static char spec[16384], msg[400], specpath[1100];
+	static struct ks k;
+	struct kb_facts f;
+	struct file d;
+	const char *disk = 0, *fl1 = 0, *fl2 = 0, *cd = 0, *cdboot = 0, *b1p = 0, *b2p = 0, *rd = 0;
+	unsigned long off = 0, size = 0, version = 1;
+	char *av[16];
+	ax_u8 *b1 = 0, *b2;
+	ax_u32 l1, l2, id;
+	int i, n = 0, rc;
+	FILE *sf;
+
+	facts_of(cmd, argc, &f);
+	for (i = 1; i < argc; i++)
+		if (!strcmp(cmd[i], "--disk") && i + 1 < argc) disk = cmd[++i];
+		else if (!strcmp(cmd[i], "--offset") && i + 1 < argc) off = strtoul(cmd[++i], 0, 0);
+		else if (!strcmp(cmd[i], "--size") && i + 1 < argc) size = strtoul(cmd[++i], 0, 0);
+		else if (!strcmp(cmd[i], "--floppy") && i + 2 < argc) fl1 = cmd[++i], fl2 = cmd[++i];
+		else if (!strcmp(cmd[i], "--cd") && i + 1 < argc) cd = cmd[++i];
+		else if (!strcmp(cmd[i], "--cdboot") && i + 1 < argc) cdboot = cmd[++i];
+		else if (!strcmp(cmd[i], "--boot1") && i + 1 < argc) b1p = cmd[++i];
+		else if (!strcmp(cmd[i], "--boot2") && i + 1 < argc) b2p = cmd[++i];
+		else if (!strcmp(cmd[i], "--version") && i + 1 < argc) version = strtoul(cmd[++i], 0, 0);
+		else if (!strcmp(cmd[i], "--ramdisk") && i + 1 < argc) rd = cmd[++i];
+	if ((!!disk + !!fl1 + !!cd) != 1 || (!cd && (!b1p || !b2p)) || (disk && !size))
+		usage();
+	if (disk) {			/* kbootset's own core: create, build, commit */
+		if (rd)
+			return fprintf(stderr, "kbootset: a disk store carries no RAM disk\n"), 2;
+		b1 = slurp(b1p, &l1);
+		b2 = slurp(b2p, &l2);
+		if (l1 != AX_BOOT1_MAX)
+			return fprintf(stderr, "kbootset: boot1 must be 1024 bytes\n"), 2;
+		d.base = off;
+		if (!(d.f = fopen(disk, "r+b")) && !(d.f = fopen(disk, "w+b"))) {
+			perror(disk);
+			return 1;
+		}
+		k.dev.read = fread_;
+		k.dev.write = fwrite_;
+		k.dev.ctx = &d;
+		rc = ks_create(&k, (ax_u32)size, b1, b2, l2, (ax_u32)version);
+		if (rc == KS_OK)
+			rc = kb_build(&k, root, &f, now(), &id);
+		if (rc == KS_OK)
+			rc = kb_commit(&k, root, &id);
+		if (k.msg[0])
+			printf("kbootset: %s\n", k.msg);
+		fclose(d.f);
+		return rc == KS_OK ? 0 : rc == KS_EREFUSE ? (k.gate ? 4 : 3) : 1;
+	}
+	/* the floppy pair and the CD tree: gated here, written by mkstore's engine */
+	if ((rc = kb_spec(root, &f, (ax_u32)version, now(), fl1 != 0, rd, spec, msg)) != 0) {
+		printf("kbootset: %s\n", msg);
+		return rc;
+	}
+	sprintf(specpath, "%.1000s.spec", fl1 ? fl1 : cd);
+	if (!(sf = fopen(specpath, "w")) || fputs(spec, sf) < 0 || fclose(sf) != 0) {
+		perror(specpath);
+		return 1;
+	}
+	av[n++] = "kbootset-media";
+	if (fl1) {
+		av[n++] = "-f";
+		av[n++] = "-o"; av[n++] = (char *)fl1;
+		av[n++] = "-o"; av[n++] = (char *)fl2;
+		av[n++] = "-1"; av[n++] = (char *)b1p;
+		av[n++] = "-2"; av[n++] = (char *)b2p;
+		av[n++] = "-v"; av[n++] = "1";
+	} else {
+		av[n++] = "-C"; av[n++] = (char *)cd;
+		if (cdboot) {
+			av[n++] = "-x";
+			av[n++] = (char *)cdboot;
+		}
+	}
+	av[n++] = specpath;
+	av[n] = 0;
+	return mkstore_main(n, av);
 }
 #endif
 
@@ -367,6 +499,14 @@ main(int argc, char **argv)
 		else
 			usage();
 	}
+	if (i < argc && !strcmp(argv[i], "media")) {
+#ifdef KS_MEDIA
+		return media(root, argv + i, argc - i);
+#else
+		fprintf(stderr, "kbootset: media builds are the host build's\n");
+		return 2;
+#endif
+	}
 	if (!image || i >= argc)
 		usage();
 	cmd = argv + i;
@@ -389,23 +529,9 @@ main(int argc, char **argv)
 	k.deflate = zdeflate;
 #endif
 	k.step = step;
-	memset(&facts, 0, sizeof(facts));
+	facts_of(cmd, argc, &facts);
 	for (i = 1; i < argc; i++) {		/* the options after the command */
-		if (!strcmp(cmd[i], "--line") && i + 1 < argc)
-			facts.line = atoi(cmd[++i]);
-		else if (!strcmp(cmd[i], "--bootdev") && i + 1 < argc)
-			sprintf(facts.bootdev, "%.47s", cmd[++i]);
-		else if (!strcmp(cmd[i], "--rootdev") && i + 1 < argc)
-			sprintf(facts.rootdev, "%.47s", cmd[++i]);
-		else if (!strcmp(cmd[i], "--rootfs") && i + 1 < argc)
-			sprintf(facts.rootfs, "%.15s", cmd[++i]);
-		else if (!strcmp(cmd[i], "--mem") && i + 1 < argc)
-			facts.mem = (ax_u32)strtoul(cmd[++i], 0, 0);
-		else if (!strcmp(cmd[i], "--root") && i + 1 < argc)
-			sprintf(facts.root, "%.127s", cmd[++i]);
-		else if (!strcmp(cmd[i], "--swap") && i + 1 < argc)
-			sprintf(facts.swap, "%.127s", cmd[++i]);
-		else if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
+		if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
 			boot1 = cmd[++i];
 		else if (!strcmp(cmd[i], "--version") && i + 1 < argc)
 			version = strtoul(cmd[++i], 0, 0);
@@ -443,8 +569,7 @@ main(int argc, char **argv)
 		} else if (!strcmp(cmd[0], "commit") && argc == 1) {
 			rc = kb_commit(&k, root, &id);
 		} else if (!strcmp(cmd[0], "build")) {
-			rc = kb_build(&k, root, &facts, getenv("SOURCE_DATE_EPOCH") ?
-				      (ax_u32)strtoul(getenv("SOURCE_DATE_EPOCH"), 0, 10) : (ax_u32)time(0), &id);
+			rc = kb_build(&k, root, &facts, now(), &id);
 		} else if (!strcmp(cmd[0], "mark-good") && argc >= 3 && !strcmp(cmd[1], "--booted")) {
 			rc = ks_mark_good(&k, (ax_u32)strtoul(cmd[2], 0, 0), !secondary);
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {

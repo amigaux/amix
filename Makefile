@@ -63,8 +63,8 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim
 $(B)/bbframe: tools/bbframe.c | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<
 
-$(B)/mkstore: tools/mkstore.c $(CSRC) $(COMMON)/*.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/mkstore.c $(CSRC) -lz
+$(B)/mkstore: tools/mkstore.c $(CSRC) $(XSRC) $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/mkstore.c $(CSRC) $(XSRC) -lz
 
 $(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/lsstore.c $(CSRC)
@@ -77,9 +77,12 @@ $(B)/b2medium: tests/host/b2medium.c loader/boot2/main.c $(CSRC) $(COMMON)/*.h |
 	$(HOSTCC) $(HOSTCFLAGS) -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -no-pie \
 		-I$(COMMON) -Iloader/boot2 -o $@ tests/host/b2medium.c $(CSRC)
 
-# kbootset on the host (zlib for media that deflate); the box build is S2-07
-$(B)/kbootset: kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC) $(COMMON)/*.h kbootset/*.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -DKS_ZLIB -I$(COMMON) -Ikbootset -o $@ kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC) -lz
+# kbootset on the host: zlib for media that deflate, and mkstore's engine
+# (kbootset/kmedia.c) for the floppy pair and the CD tree; the box build is
+# `make box`
+$(B)/kbootset: kbootset/kbootset.c kbootset/kmedia.c tools/mkstore.c $(KSRC) $(CSRC) $(XSRC) $(COMMON)/*.h kbootset/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -DKS_ZLIB -DKS_MEDIA -I$(COMMON) -Ikbootset -o $@ kbootset/kbootset.c \
+		kbootset/kmedia.c $(KSRC) $(CSRC) $(XSRC) -lz
 
 $(B)/b2link: tools/b2link.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c
