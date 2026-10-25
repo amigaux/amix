@@ -365,11 +365,15 @@ static void announce_kspace(int nk)
                nk, nk == 1 ? "" : "s");
 }
 
-/* the pkginst a staged kernel-space datastream installs as; -1 when it
- * cannot be read or contradicts the catalog's pkginst= (message printed) */
+/* the pkginst a staged kernel-space datastream installs as, after the
+ * pure-files check (40 §6); -1 when it cannot be read, contradicts the
+ * catalog's pkginst= or carries anything but plain files (message
+ * printed).  Runs on every staged package before the first pkgadd. */
 static int kspace_inst(const struct pkgent *e, const char *staged,
                        char *out, unsigned cap)
 {
+    char why[256];
+
     if (ds_pkginst(staged, out, cap) != 0) {
         if (opt_dryrun) {
             strncpy(out, e->pkginst, cap - 1);
@@ -383,6 +387,10 @@ static int kspace_inst(const struct pkgent *e, const char *staged,
     if (e->kpkginst != NULL && strcmp(e->kpkginst, out) != 0) {
         warnx2("%s: the datastream installs %s, the catalog says %s",
                e->name, out, e->kpkginst);
+        return -1;
+    }
+    if (ds_pure_files(staged, why, sizeof(why)) != 0) {
+        warnx2("%s: not a pure-file kernel-space package: %s", e->name, why);
         return -1;
     }
     return 0;

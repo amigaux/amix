@@ -248,6 +248,248 @@ int ds_pkginst(const char *path, char *out, unsigned outlen)
     return npkg == 1 ? 0 : -1;
 }
 
+/* ---------------- pure files (40 §6) ----------------
+ *
+ * "Kernel-space packages carry files only (class none, no scripts) and
+ * never write a boot slice."  apkg checks it on the staged datastream,
+ * before anything is installed, from the package's own pkgmap(4) (the
+ * first cpio archive, newc or odc):
+ *   f  allowed in class none only -- the payload;
+ *   d  allowed in class none only -- the directories holding it (pkgadd
+ *      needs them named to give them owner and mode);
+ *   i  pkginfo, depend and copyright only -- no install or class-action
+ *      scripts;
+ *   anything else (e, v, l, s, c, b, p, x) refuses the package.
+ * At least one f is required.
+ */
+
+static unsigned long hexval(const char *p, int n)
+{
+    unsigned long v;
+    int i;
+    int c;
+
+    v = 0;
+    for (i = 0; i < n; i++) {
+        c = p[i];
+        if (c >= '0' && c <= '9')
+            c -= '0';
+        else if (c >= 'a' && c <= 'f')
+            c = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            c = c - 'A' + 10;
+        else
+            return (unsigned long)-1;
+        v = v * 16 + (unsigned long)c;
+    }
+    return v;
+}
+
+static unsigned long octval(const char *p, int n)
+{
+    unsigned long v;
+    int i;
+
+    v = 0;
+    for (i = 0; i < n; i++) {
+        if (p[i] < '0' || p[i] > '7')
+            return (unsigned long)-1;
+        v = v * 8 + (unsigned long)(p[i] - '0');
+    }
+    return v;
+}
+
+static void setwhy(char *why, unsigned cap, const char *a, const char *b)
+{
+    unsigned n;
+
+    n = 0;
+    while (*a != '\0' && n + 1 < cap)
+        why[n++] = *a++;
+    while (b != NULL && *b != '\0' && n + 1 < cap)
+        why[n++] = *b++;
+    why[n] = '\0';
+}
+
+/* the pkgmap rule above; 0 = pure, -1 = not (why set) */
+static int pkgmap_pure(char *text, char *why, unsigned cap)
+{
+    char *line;
+    char *next;
+    char *tok[4];
+    char *p;
+    int nt;
+    int nf;
+
+    nf = 0;
+    for (line = text; line != NULL && *line != '\0'; line = next) {
+        next = strchr(line, '\n');
+        if (next != NULL)
+            *next++ = '\0';
+        nt = 0;
+        p = line;
+        while (nt < 4) {
+            while (*p == ' ' || *p == '\t' || *p == '\r')
+                p++;
+            if (*p == '\0')
+                break;
+            tok[nt++] = p;
+            while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '\r')
+                p++;
+            if (*p != '\0')
+                *p++ = '\0';
+        }
+        if (nt == 0 || tok[0][0] == ':' || tok[0][0] == '#')
+            continue;
+        if (nt < 3 || tok[1][1] != '\0') {
+            setwhy(why, cap, "unreadable pkgmap line ", tok[0]);
+            return -1;
+        }
+        switch (tok[1][0]) {
+        case 'i':
+            if (strcmp(tok[2], "pkginfo") != 0 &&
+                strcmp(tok[2], "depend") != 0 &&
+                strcmp(tok[2], "copyright") != 0) {
+                setwhy(why, cap, "it carries an install script: ", tok[2]);
+                return -1;
+            }
+            break;
+        case 'f':
+        case 'd':
+            if (strcmp(tok[2], "none") != 0) {
+                setwhy(why, cap, "an object in class ", tok[2]);
+                return -1;
+            }
+            if (nt < 4) {
+                setwhy(why, cap, "unreadable pkgmap line ", tok[0]);
+                return -1;
+            }
+            if (tok[1][0] == 'f')
+                nf++;
+            break;
+        default:
+            setwhy(why, cap, "an object of type ", tok[1]);
+            if (nt == 4) {
+                unsigned n;
+
+                n = (unsigned)strlen(why);
+                setwhy(why + n, cap - n, " at ", tok[3]);
+            }
+            return -1;
+        }
+    }
+    if (nf == 0) {
+        setwhy(why, cap, "it installs no file", NULL);
+        return -1;
+    }
+    return 0;
+}
+
+int ds_pure_files(const char *path, char *why, unsigned cap)
+{
+    FILE *fp;
+    char hdr[8193];
+    char name[256];
+    char *text;
+    unsigned long off;
+    unsigned long fsz;
+    unsigned long nsz;
+    unsigned long dataoff;
+    unsigned n;
+    unsigned i;
+    int odc;
+    int rc;
+
+    why[0] = '\0';
+    fp = fopen(path, "rb");
+    if (fp == NULL) {
+        setwhy(why, cap, "cannot read the datastream", NULL);
+        return -1;
+    }
+    n = (unsigned)fread(hdr, 1, sizeof(hdr) - 1, fp);
+    hdr[n] = '\0';
+    if (n < 21 || strncmp(hdr, "# PaCkAgE DaTaStReAm\n", 21) != 0) {
+        fclose(fp);
+        setwhy(why, cap, "not a datastream", NULL);
+        return -1;
+    }
+    off = 0;
+    for (i = 0; i + 16 <= n; i++) {
+        if (memcmp(hdr + i, "# end of header\n", 16) == 0) {
+            off = (i + 16 + 511UL) & ~511UL;
+            break;
+        }
+    }
+    if (off == 0) {
+        fclose(fp);
+        setwhy(why, cap, "datastream header has no end", NULL);
+        return -1;
+    }
+    rc = -1;
+    setwhy(why, cap, "no pkgmap in the first archive", NULL);
+    for (;;) {
+        if (fseek(fp, (long)off, SEEK_SET) != 0 ||
+            fread(hdr, 1, 110, fp) < 76) {
+            setwhy(why, cap, "truncated cpio archive", NULL);
+            break;
+        }
+        if (strncmp(hdr, "070701", 6) == 0 ||
+            strncmp(hdr, "070702", 6) == 0) {
+            odc = 0;
+            fsz = hexval(hdr + 54, 8);
+            nsz = hexval(hdr + 94, 8);
+        } else if (strncmp(hdr, "070707", 6) == 0) {
+            odc = 1;
+            nsz = octval(hdr + 59, 6);
+            fsz = octval(hdr + 65, 11);
+        } else {
+            setwhy(why, cap, "not a cpio archive after the header", NULL);
+            break;
+        }
+        if (nsz == (unsigned long)-1 || fsz == (unsigned long)-1 ||
+            nsz == 0 || nsz > sizeof(name)) {
+            setwhy(why, cap, "bad cpio header", NULL);
+            break;
+        }
+        if (fseek(fp, (long)(off + (odc ? 76 : 110)), SEEK_SET) != 0 ||
+            fread(name, 1, (unsigned)nsz, fp) != (unsigned)nsz) {
+            setwhy(why, cap, "truncated cpio name", NULL);
+            break;
+        }
+        name[nsz - 1] = '\0';
+        dataoff = off + (odc ? 76 : 110) + nsz;
+        if (!odc)
+            dataoff = (dataoff + 3) & ~3UL;
+        if (strcmp(name, "TRAILER!!!") == 0)
+            break;
+        n = (unsigned)strlen(name);
+        if ((n == 6 && strcmp(name, "pkgmap") == 0) ||
+            (n > 7 && strcmp(name + n - 7, "/pkgmap") == 0 &&
+             strchr(name, '/') == name + n - 7)) {
+            if (fsz > 1048576UL) {
+                setwhy(why, cap, "pkgmap too large", NULL);
+                break;
+            }
+            text = xmalloc((unsigned)fsz + 1);
+            if (fseek(fp, (long)dataoff, SEEK_SET) != 0 ||
+                fread(text, 1, (unsigned)fsz, fp) != (unsigned)fsz) {
+                free(text);
+                setwhy(why, cap, "truncated pkgmap", NULL);
+                break;
+            }
+            text[fsz] = '\0';
+            rc = pkgmap_pure(text, why, cap);
+            free(text);
+            break;
+        }
+        off = dataoff + fsz;
+        if (!odc)
+            off = (off + 3) & ~3UL;
+    }
+    fclose(fp);
+    return rc;
+}
+
 /* ---------------- the contents database ----------------
  *
  * SVR4 contents lines (heirloom libpkg/putcfile.c):
@@ -373,8 +615,9 @@ static int collect_files(void *vctx, const char *path, int type,
     struct files_ctx *c;
 
     c = (struct files_ctx *)vctx;
-    if ((type == 'f' || type == 'e' || type == 'v') &&
-        owns(pkgs, npkgs, c->pkginst)) {
+    /* plain files only: a kernel-space package is pure files (40 §6),
+     * which ds_pure_files() checked before the pkgadd */
+    if (type == 'f' && owns(pkgs, npkgs, c->pkginst)) {
         c->paths = (char **)xrealloc((char *)c->paths,
             (unsigned)((c->n + 1) * sizeof(char *)));
         c->paths[c->n++] = xstrdup(path);

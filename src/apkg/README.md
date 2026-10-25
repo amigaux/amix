@@ -61,8 +61,12 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 - **Pre-flight** before anything is fetched: module kabi family/major/minor
   and compiler pin against the kernel of its line; a static kernel takes no
   modules; a kernel upgrade may not strand an installed module.
+- **Pure files** (40 §6): after staging, before the first pkgadd, the
+  datastream's pkgmap may hold only `f`/`d` objects of class `none` and no
+  install scripts (`i`: pkginfo, depend, copyright), and at least one `f`;
+  anything else refuses with exit 3.
 - **Records.** `/var/apkg/kpkg/<name>` after each pkgadd, with one
-  `file <path> <size> <sha256>` line per f/e/v object the contents database
+  `file <path> <size> <sha256>` line per plain-file (`f`) object the contents database
   lists for the package, hashed on disk.  kbootset's gate 1 reads them.
 - **Trigger.** After a transaction that changed kernel space:
   `kbootset [-R t] --journal J build`, then `… commit`, two calls; the

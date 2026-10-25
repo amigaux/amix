@@ -402,6 +402,10 @@ extern int kpkg_installed(const struct conf *cf, const char *name,
                           char *ver, unsigned verlen);
 /* the pkginst a datastream carries (its header); 0 ok / -1 */
 extern int ds_pkginst(const char *path, char *out, unsigned outlen);
+/* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
+ * of class none and no install scripts (i: pkginfo, depend, copyright),
+ * and at least one f.  0 = pure; -1 = not, or unreadable (why[] says) */
+extern int ds_pure_files(const char *path, char *why, unsigned cap);
 /* write the C2-2 §2 record after a successful pkgadd: one `file` line
  * per f/e/v object the contents database lists for pkginst, with the
  * size and SHA-256 of the installed file.  EX_* code. */

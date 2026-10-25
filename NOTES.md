@@ -15,6 +15,15 @@ mapping match to the byte. Four fixes followed, one commit each.
    it already had (`kbootset/kmedia.c`), and the old hard-coded source list would no longer link. `B=`
    keeps the build directory inside this repo's `tests/work`; the amix-dlm tree is only read. With the
    tree present, a failed build is a FAIL (it used to SKIP). 10/0 against amix-dlm `bbb6088`.
+4. **Pure files, enforced** (40 §6: kernel-space packages carry files only, class none, no
+   scripts). `ds_pure_files()` reads the staged datastream's pkgmap (first cpio archive, newc or
+   odc) before the first pkgadd: only `f` and `d` objects of class `none`, of the `i` entries only
+   pkginfo/depend/copyright, at least one `f`. `d` is allowed because a package names the
+   directories it owns (KSMOKE did; pkgadd gives them owner and mode from it); everything else (`e`,
+   `v`, `l`, `s`, `c`, `b`, `p`, `x`, another class, an install or class-action script) refuses the
+   transaction, exit 3, nothing installed or journaled. `collect_files()` records `f` objects only.
+   The run-tests fixtures are now real datastreams (header + newc cpio with pkginfo/pkgmap, new
+   `tests/mkds.py`); four impure variants are refused by name. Host tests 338/0.
 
 ## 2026-10-25 — apkg 0.3 kernel space: the kpkg block, SHA-256, install records, the kbootset trigger, the journal (built, NOT minted, NOT published)
 

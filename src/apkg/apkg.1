@@ -186,6 +186,22 @@ new kernel may not strand an installed module of its line.  A refusal
 exits 5 and changes nothing.  The box's CPU line is checked by
 kbootset (its gate 10), not here.
 .PP
+A kernel-space package is pure files: once staged, and before anything
+is installed, its pkgmap may hold only
+.B f
+and
+.B d
+objects of class
+.B none
+and no install scripts (of the
+.B i
+entries only pkginfo, depend and copyright), and at least one file.
+Anything else
+.RB ( e ,
+.BR v ,
+links, devices, another class, a script) refuses the transaction with
+exit 3.
+.PP
 After each kernel-space
 .BR pkgadd ,
 apkg writes the record
@@ -195,7 +211,7 @@ source, the install time,
 .BR "verified no" ,
 and one
 .BI "file " "path size sha256"
-line per installed file, taken from the contents database and hashed
+line per installed plain file, taken from the contents database and hashed
 on disk).  The pkginst comes from the datastream's header.
 .PP
 After a transaction that installed or removed kernel space, and only
@@ -623,7 +639,8 @@ exhausted, HTTP error status).
 .B 3
 Verification failure: md5, sha256 or size mismatch, bad catalog
 header, malformed catalog, a refused kernel-space entry, a datastream
-whose header contradicts the catalog.
+whose header contradicts the catalog, a kernel-space datastream that
+is not pure files.
 .TP
 .B 4
 pkgadd/pkgrm (or the zcat decompression step) failed.

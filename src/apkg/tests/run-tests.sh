@@ -1795,18 +1795,19 @@ KR=$WORK/krepo
 KLOG=$WORK/kbootset.log
 mkdir -p "$KR/pkgs/kernel"
 cp -r "$WORK/repo/pkgs/." "$KR/pkgs/"
-# a fake datastream with a real SVR4 header; the shim installs its FILE
-# lines, records DIR lines as directories, SHARED lines as an object two
-# packages own (status- and class-decorated token in the contents DB)
-mkds() {    # mkds <out> <pkginst> <version> <payload-word>
+# a fake datastream: a real SVR4 header and a real first cpio archive
+# (pkginfo + pkgmap, tests/mkds.py) followed by the shim's directives: it
+# installs the FILE lines, records DIR lines as directories, SHARED lines as
+# a file two packages own (status- and class-decorated token in the contents
+# DB).  apkg reads the header and the pkgmap (40 §6 pure files).
+mkds() {    # mkds <out> <pkginst> <version> <payload-word> [extra pkgmap line]
     {
-        printf '# PaCkAgE DaTaStReAm\n%s 1 20\n# end of header\n' "$2"
-        printf 'VERSION %s\n' "$3"
         printf 'DIR /stand\nDIR /stand/k46\n'
         printf 'FILE /stand/k46/%s %s-%s\n' "$4" "$4" "$3"
         printf 'FILE /stand/k46/%s.kabi kabi-of-%s\n' "$4" "$4"
         printf 'SHARED /stand/k46/README.%s readme\n' "$2"
-    } > "$1"
+        [ -n "${5:-}" ] && printf 'PKGMAP %s\n' "$5"
+    } | python3 "$TESTS/mkds.py" "$1" "$2" "$3"
 }
 mkds "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg" KERNK46  1.1.0 unix
 mkds "$KR/pkgs/kernel/z3660scsi-k46-1.0.pkg" Z3660SCS 1.0 z3660scsi
@@ -1817,6 +1818,11 @@ mkds "$KR/pkgs/kernel/liar-1.0.pkg"    LIARPKG 1.0 liar
 mkds "$KR/pkgs/kernel/badsha-1.0.pkg"  BADSHA  1.0 badsha
 mkds "$KR/pkgs/kernel/kernel-k46-1.1.1.pkg" KERNK46 1.1.1 unix
 mkds "$KR/pkgs/kernel/kernel-k46-2.0.pkg"   KERNK46 2.0   unix
+# not pure files (40 §6): each must be refused before anything installs
+mkds "$KR/pkgs/kernel/impure-e-1.0.pkg"   IMPUREE 1.0 impe "1 e none /etc/kmod.conf 0644 root sys 1 1 1"
+mkds "$KR/pkgs/kernel/impure-c-1.0.pkg"   IMPUREC 1.0 impc "1 f kcls /stand/k46/impc.x 0644 root sys 1 1 1"
+mkds "$KR/pkgs/kernel/impure-s-1.0.pkg"   IMPURES 1.0 imps "1 i postinstall 20 1 1"
+mkds "$KR/pkgs/kernel/impure-l-1.0.pkg"   IMPUREL 1.0 impl "1 s none /stand/k46/impl.lnk=/stand/k46/impl"
 sha() { sha256sum "$1" | cut -c1-64; }
 PIN=gcc-2.7.2.3-8949028
 kline() {   # kline <name> <version> <role> <line> <kabi> <pin> <file> [extra]
@@ -1840,6 +1846,9 @@ mkkcat() {  # mkkcat <dest-catalog> <kernel-line> <extra-lines...>
             0000000000000000000000000000000000000000000000000000000000000000
         kline future 1.0 module k46 k46.1.0 $PIN kernel/modbad-1.0.pkg "!needs-signature=ed25519"
         echo "#kpkg nosha 1.0 role=loader line=k46 kabi=none pin=none size=1 file=kernel/x.pkg"
+        for i in e c s l; do
+            kline impure-$i 1.0 module k46 k46.1.0 $PIN kernel/impure-$i-1.0.pkg
+        done
         echo "#ksig key-2026a catalog.sig"
         echo "#end kpkg"
     } > "$1"
@@ -1882,7 +1891,7 @@ sed -n 's/^FILE //p' \$F | while read p c; do
     echo "\$p f none 0644 root sys \$(wc -c < \$R\$p) 1 1700000000 \$I" >> \$C; done
 sed -n 's/^SHARED //p' \$F | while read p c; do
     mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
-    printf '%s e none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
+    printf '%s f none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
         "\$p" "\$(wc -c < \$R\$p)" "\$I" >> \$C; done
 exit 0
 EOF
@@ -1945,8 +1954,8 @@ kreset
 # --- the parser ---
 "$APKG" -c "$KCONF" update > "$WORK/kupd.out" 2>&1; rc=$?
 OUT=$(cat "$WORK/kupd.out")
-[ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 15 packages, 9 kernel-space" \
-    && ok "update counts 15 ordinary + 9 kernel-space entries" \
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 15 packages, 13 kernel-space" \
+    && ok "update counts 15 ordinary + 13 kernel-space entries" \
     || bad "kernel-space catalog not accepted as expected (rc=$rc)" "$OUT"
 echo "$OUT" | grep -q "unverified: no signature check" \
     && ok "update says the kernel-space block is unverified (60 §4 hook)" \
@@ -2093,7 +2102,7 @@ grep -q "^installed [0-9][0-9]*$" "$KREC" \
     && ok "the record's installed field is seconds since 1970" \
     || bad "installed field malformed" "$(cat "$KREC")"
 grep -q " d " "$KREC" && bad "a directory reached the record" || \
-    ok "directories are not recorded (files only; the shared 'e' object is)"
+    ok "directories are not recorded (plain files only; the shared one is)"
 printf 'kbootset --journal /var/kbootset/journal build\nkbootset --journal /var/kbootset/journal commit\n' > "$WORK/kb.want"
 cmp -s "$WORK/kb.want" "$KLOG" \
     && ok "kbootset ran as two calls: build, then commit (C2-4 §5)" \
@@ -2142,7 +2151,20 @@ run 3 "a datastream whose sha256 differs from the catalog is refused (exit 3)" \
     "$APKG" -c "$KCONF" install badsha
 run 3 "a datastream whose header contradicts pkginst= is refused (exit 3)" \
     "$APKG" -c "$KCONF" install liar
-[ ! -s "$SHIMLOG" ] && ok "no pkgadd ran for any refused package" \
+for i in e c s l; do
+    case $i in
+    e) why="an object of type e at /etc/kmod.conf" ;;
+    c) why="an object in class kcls" ;;
+    s) why="it carries an install script: postinstall" ;;
+    l) why="an object of type s at /stand/k46/impl.lnk=/stand/k46/impl" ;;
+    esac
+    run 3 "a kernel-space datastream with $why is refused (exit 3)" \
+        "$APKG" -c "$KCONF" install impure-$i
+    echo "$OUT" | grep -qF "impure-$i: not a pure-file kernel-space package: $why" \
+        && ok "the pure-files refusal says why ($why)" \
+        || bad "pure-files refusal message for impure-$i" "$OUT"
+done
+[ ! -s "$SHIMLOG" ] && [ ! -f "$TXN" ] && ok "no pkgadd ran and nothing was journaled for any refused package" \
     || bad "pkgadd ran for a refused package" "$(cat "$SHIMLOG")"
 
 # a new kernel whose kabi major moves strands the installed module: refused

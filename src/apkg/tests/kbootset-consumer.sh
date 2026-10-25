@@ -76,10 +76,9 @@ root=zorro:0202:54
 rootfs=ufs
 EOF
 }
-mkds() {       # mkds <out> <pkginst> <payload dir>
-    { printf '# PaCkAgE DaTaStReAm\n%s 1 2000\n# end of header\n' "$2"
-      printf 'COPY /stand/k46/unix %s/unix\nCOPY /stand/k46/kabi %s/kabi\n' "$3" "$3"
-    } > "$1"
+mkds() {       # mkds <out> <pkginst> <payload dir>   (tests/mkds.py)
+    printf 'DIR /stand\nDIR /stand/k46\nCOPY /stand/k46/unix %s/unix\nCOPY /stand/k46/kabi %s/kabi\n' "$3" "$3" \
+        | python3 "$SRC/tests/mkds.py" "$1" "$2" 1.0
 }
 mkkernel "$WORK/k1" static
 mkds "$WORK/repo/pkgs/kernel/kernel-kd060a-1.1.0.pkg" KERNKD60 "$WORK/k1"
