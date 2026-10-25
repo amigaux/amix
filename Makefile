@@ -17,9 +17,10 @@ B          := build
 
 COMMON  := loader/common
 CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
-           $(COMMON)/inflate.c
+           $(COMMON)/inflate.c $(COMMON)/select.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
-           tests/host/t_manifest.c tests/host/t_inflate.c
+           tests/host/t_manifest.c tests/host/t_inflate.c \
+           tests/host/t_select.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore
 
