@@ -275,7 +275,7 @@ ks_open(struct ks *k)
 	 * never referenced, after it the commit is complete; either way the
 	 * store is consistent and only the journal is left to clear */
 	if (k->jrn.get && k->jrn.get(k->jrn.ctx, line, sizeof(line)) > 0) {
-		if (sscanf(line, "commit %lu", &id) == 1)
+		if (!strncmp(line, "commit ", 7) && (id = strtoul(line + 7, 0, 10)) != 0)
 			sprintf(k->msg, ks_find(k, (ax_u32)id) ?
 				"the commit of generation %lu had completed when it was interrupted" :
 				"the commit of generation %lu was interrupted before its commit point; "

@@ -5,14 +5,18 @@
 #   make toolchain-check  the pinned cross toolchain is present (toolchain.pin)
 #   make cross            cross-compile the shared loader code; 68060 scan gate
 #   make boot1            assemble boot1 and apply the 1 KB size gate
+#   make box              kbootset for the box: GCC 14, static (D-3 §9)
 #   make all              all of the above
 #
 # The cross toolchain is gcc-cross-amix; source its build/env.sh first, or
-# set CROSS to the tool prefix (default m68k-cbm-sysv4- on PATH).
+# set CROSS to the tool prefix (default m68k-cbm-sysv4- on PATH).  Userland
+# for the box (kbootset) is built with gcc14-cross-amix: G14 names its
+# build directory (default: the sibling checkout).
 
 HOSTCC     ?= cc
 HOSTCFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2
 CROSS      ?= m68k-cbm-sysv4-
+G14        ?= ../gcc14-cross-amix/build
 B          := build
 
 COMMON  := loader/common
@@ -30,9 +34,9 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box b2test clean
 
-all: test tools cross boot1 boot2 cdboot axtime b2test
+all: test tools cross boot1 boot2 cdboot axtime box b2test
 
 $(B):
 	mkdir -p $(B)
@@ -175,6 +179,46 @@ $(B)/amix-cdboot: $(B)/cdboot.r.o $(B)/b2link $(B)/hunkcheck
 	$(B)/hunkcheck $< $@ 0x0812f3a0
 
 cdboot: toolchain-check $(B)/amix-cdboot
+
+# kbootset for the box (docs/plan/stage-2.md S2-07): GCC 14, statically
+# linked by hand, since the driver's specs always link dynamically; the
+# objects and archives are the driver's own, plus values-Xa.o for
+# _lib_version.  The only FPU instructions are libc's %f/%e/%g formatting,
+# which kbootset never uses.  The sources also compile with gcc-cross-amix
+# (GCC 2.7.2.3) as a C89 check; that build is not shipped.
+G14CC   := $(G14)/prefix/bin/m68k-elf-gcc
+G14LD   := $(G14)/prefix/bin/m68k-elf-ld
+G14LIB  := $(G14)/prefix/lib/gcc/m68k-elf/14.2.0
+G14SR   := $(G14)/sysroot
+G14CFLAGS := -std=gnu89 -O2 -Wall -Wextra -Werror -D__svr4__ -DSVR4 -Dunix -D__unix__ -DKS_SYNC
+KBSRC   := kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC)
+KBOBJ   := $(patsubst %.c,$(B)/box/%.o,$(notdir $(KBSRC)))
+
+$(B)/box/%.o: kbootset/%.c kbootset/*.h $(COMMON)/*.h
+	@mkdir -p $(B)/box
+	$(G14CC) $(G14CFLAGS) -I$(COMMON) -Ikbootset -c -o $@ $<
+
+$(B)/box/%.o: $(COMMON)/%.c $(COMMON)/*.h
+	@mkdir -p $(B)/box
+	$(G14CC) $(G14CFLAGS) -I$(COMMON) -c -o $@ $<
+
+$(B)/box/kbootset: $(KBOBJ)
+	@test -x $(G14CC) || { echo "box: no gcc14-cross-amix at $(G14) (set G14)" >&2; exit 1; }
+	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
+		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
+		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $(KBOBJ) \
+		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
+		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
+	python3 -I $(G14)/../tools/check-68060-safe.py $@
+	$(G14)/prefix/bin/m68k-elf-size $@
+
+$(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
+	@mkdir -p $(B)/box/c89
+	for f in $(KBSRC); do $(CROSS)gcc $(CROSSCFLAGS) -DKS_SYNC -I$(COMMON) -Ikbootset \
+		-c -o $(B)/box/c89/$$(basename $$f .c).o $$f || exit 1; done
+	touch $@
+
+box: toolchain-check $(B)/box/kbootset $(B)/box/c89-check
 
 # axtime (M-LD7/M-LD8): an AmigaDOS program over the loader's own CRC-32,
 # inflate and the SHA-256 boot2 does not link; same entry and writer as
