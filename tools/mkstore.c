@@ -41,7 +41,8 @@
  *                                      module lines are copied as written
  *   ramdisk NAME FILE [attr ...]       likewise
  * mkstore adds the size, at=, crc32= and the end line.  A member with the
- * attribute z=deflate is stored raw-deflate compressed (zlib, level 9) and
+ * attribute z=deflate is stored raw-deflate compressed (zlib level 9, the
+ * smaller of memory levels 8 and 9) and
  * gets stored=; crc32 is always of the uncompressed bytes.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -178,16 +179,16 @@ spec_line(const char *spec)
 	return k;
 }
 
-/* raw deflate at level 9; returns a malloc'd buffer */
+/* raw deflate at level 9 and zlib memory level ml; a malloc'd buffer */
 static unsigned char *
-deflate_raw(const unsigned char *in, ax_u32 n, ax_u32 *outn)
+deflate_ml(const unsigned char *in, ax_u32 n, int ml, ax_u32 *outn)
 {
 	z_stream z;
 	ax_u32 cap = n + n / 8 + 1024;
 	unsigned char *out = malloc(cap);
 
 	memset(&z, 0, sizeof(z));
-	if (!out || deflateInit2(&z, 9, Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY) != Z_OK)
+	if (!out || deflateInit2(&z, 9, Z_DEFLATED, -15, ml, Z_DEFAULT_STRATEGY) != Z_OK)
 		die("deflate init failed", 0);
 	z.next_in = (unsigned char *)in;
 	z.avail_in = n;
@@ -198,6 +199,23 @@ deflate_raw(const unsigned char *in, ax_u32 n, ax_u32 *outn)
 	*outn = cap - z.avail_out;
 	deflateEnd(&z);
 	return out;
+}
+
+/* the smaller of memory levels 8 and 9: neither wins on every input */
+static unsigned char *
+deflate_raw(const unsigned char *in, ax_u32 n, ax_u32 *outn)
+{
+	ax_u32 n8, n9;
+	unsigned char *z8 = deflate_ml(in, n, 8, &n8), *z9 = deflate_ml(in, n, 9, &n9);
+
+	if (n8 <= n9) {
+		free(z9);
+		*outn = n8;
+		return z8;
+	}
+	free(z8);
+	*outn = n9;
+	return z9;
 }
 
 static int

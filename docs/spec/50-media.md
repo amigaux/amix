@@ -159,8 +159,8 @@ between the 1.0 floppy kernels and the 1.1 floor kernel plus root modules
 **Result of M-FP1 (static) and M-NET1d (2026-10-25,
 `docs/measurements/2026-10-25-m-fp1.md`).** Real pairs written by
 `mkstore -f` with the static floppy kernels and the trimmed miniroot: a pair
-holds 870 400 + 899 072 usable bytes. k30 fits with 262 144 B free
-(**14.8 %**) and k46 with 208 896 B free (**11.8 %**). Each deflated miniroot
+holds 870 400 + 899 072 usable bytes. k30 fits with 270 336 B free
+(**15.3 %**) and k46 with 212 992 B free (**12.0 %**). Each deflated miniroot
 is larger than one volume, so it runs on from volume 1 into volume 2
 (`10-boot-loader.md` §4.3). `kbootset`, the installer's netinstall
 additions and M-NET1c still come out of these margins.
