@@ -24,11 +24,11 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_select.c tests/host/t_rel.c \
            tests/host/t_bootinfo.c
 
-TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore
+TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link
 
-.PHONY: all test tools toolchain-check cross boot1 clean
+.PHONY: all test tools toolchain-check cross boot1 b2test clean
 
-all: test tools cross boot1
+all: test tools cross boot1 b2test
 
 $(B):
 	mkdir -p $(B)
@@ -59,6 +59,12 @@ $(B)/mkstore: tools/mkstore.c $(CSRC) $(COMMON)/*.h | $(B)
 
 $(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/lsstore.c $(CSRC)
+
+$(B)/b2link: tools/b2link.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c
+
+$(B)/b2check: tests/host/b2check.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/b2check.c $(COMMON)/rel.c
 
 tools: $(TOOLS)
 
@@ -103,6 +109,25 @@ $(B)/boot1.img: $(B)/boot1.bin $(B)/bbframe
 	$(B)/bbframe -c $@
 
 boot1: toolchain-check $(B)/boot1.img
+
+# The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
+# with start.s first, b2link, then b2check proves the table reproduces the
+# relocator's binding at two load addresses.
+$(B)/cross/start.o: loader/boot2/start.s
+	@mkdir -p $(B)/cross
+	$(CROSS)as -o $@ $<
+
+$(B)/cross/b2test.o: tests/cross/b2test.c
+	@mkdir -p $(B)/cross
+	$(CROSS)gcc $(CROSSCFLAGS) -c -o $@ $<
+
+$(B)/b2test.r.o: $(B)/cross/start.o $(B)/cross/b2test.o
+	$(CROSS)ld -r -o $@ $(B)/cross/start.o $(B)/cross/b2test.o
+
+b2test: toolchain-check $(B)/b2test.r.o $(B)/b2link $(B)/b2check
+	$(B)/b2link $(B)/b2test.r.o $(B)/b2test.bin
+	$(B)/b2check $(B)/b2test.r.o $(B)/b2test.bin 0x00200a00
+	$(B)/b2check $(B)/b2test.r.o $(B)/b2test.bin 0x07ff1234
 
 clean:
 	rm -rf $(B)

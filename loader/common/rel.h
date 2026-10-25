@@ -52,4 +52,11 @@ struct ax_relerr {
 int ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 	   struct ax_bootdata *bd, struct ax_relerr *err);
 
+/* as ax_rel, and call note(ctx, off) for every 32-bit field that holds a
+ * bind-address-relative value (off counted from vaddr), so a host tool can
+ * emit a self-relocation table; absolute values are not reported */
+typedef void (*ax_relnote)(void *ctx, ax_u32 off);
+int ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
+	      struct ax_bootdata *bd, struct ax_relerr *err, ax_relnote note, void *ctx);
+
 #endif

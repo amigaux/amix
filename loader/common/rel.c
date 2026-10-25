@@ -42,7 +42,7 @@ streq(const ax_u8 *a, const char *b)
 
 static int
 brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
-     ax_u32 shnum, struct ax_bootdata *bd)
+     ax_u32 shnum, struct ax_bootdata *bd, ax_relnote note, void *ctx)
 {
 	ax_u32 toff, tsize, roff, rsize, i, off, val;
 	ax_u8 *p;
@@ -58,8 +58,11 @@ brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
 	for (i = 0; i < rsize; i += 8) {
 		off = AX_GET32(img + roff + i);
 		val = AX_GET32(img + roff + i + 4);
-		if (!(off & 0x80000000UL))
+		if (!(off & 0x80000000UL)) {
 			val += vaddr;
+			if (note)
+				note(ctx, off);
+		}
 		off &= 0x7FFFFFFFUL;
 		if (!inside(off, 4, tsize))
 			return AXR_EBOUNDS;
@@ -76,6 +79,13 @@ brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
 int
 ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
        struct ax_bootdata *bd, struct ax_relerr *err)
+{
+	return ax_rel_ex(img, len, vaddr, pcrel_ok, bd, err, 0, 0);
+}
+
+int
+ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
+	  struct ax_bootdata *bd, struct ax_relerr *err, ax_relnote note, void *ctx)
 {
 	ax_u32 type, shoff, shentsize, shnum, i, k;
 	ax_u32 t = 0, r = 0, d = 0, b = 0, sy = 0;	/* section indices; 0 = none */
@@ -115,7 +125,7 @@ ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 		return AXR_EBOUNDS;
 
 	if (type == ET_BREL)
-		return brel(img, len, vaddr, shoff, shentsize, shnum, bd);
+		return brel(img, len, vaddr, shoff, shentsize, shnum, bd, note, ctx);
 	if (type != ET_REL)
 		return AXR_EFORMAT;
 
@@ -252,6 +262,7 @@ ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 			ax_u32 shx, S, v;
 			ax_s32 disp;
 			ax_u8 *p;
+			int relative = 1;
 
 			err->rsect = i, err->index = n, err->type = rt, err->sym = si;
 			if (si >= nsym)
@@ -264,6 +275,7 @@ ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 				S = AX_GET32(SH(shx) + 12) + AX_GET32(sym + 4);
 			} else if (shx == SHN_ABS) {
 				S = AX_GET32(sym + 4);
+				relative = 0;
 			} else {
 				return AXR_ESYMBOL;
 			}
@@ -273,6 +285,8 @@ ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 					return AXR_EBOUNDS;
 				p = img + toff + off;
 				AX_PUT32(p, v);
+				if (note && relative)
+					note(ctx, taddr - vaddr + off);
 				continue;
 			}
 			if (!pcrel_ok || (rt != R_68K_PC32 && rt != R_68K_PC16 && rt != R_68K_PC8))
