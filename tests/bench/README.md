@@ -144,3 +144,78 @@ volume 2 of 2` insert volume 2 (a wrong disk is refused first). After
 DF0 then takes the 1.0 root floppy of that line. A stage-1 loader refuses
 RAM-disk generations, so the RAM-disk profile (M-FP1) boots only from
 stage 4 on.
+
+## Stage 2: the lifecycle rows (S2-41, S2-42, S2-46)
+
+The rows run the box kbootset (`make box`, copied to the box as
+`/tmp/kbootset` until the kbootset package exists) on a kinfo kernel's row
+under our loader (the port's E5 shape, KD060-Z). One rig lifecycle cell
+spans the boots of a row. The rig runs `kbootset mark-good` after its
+login, standing in for the end of run level 2 until the rc hook is
+installed. Until the kernel packages exist, `s2-standin.sh` gives a kernel
+package and its apkg record. The row copies the tree onto the box's root,
+then:
+
+```
+sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261025-50 <outdir>
+```
+
+### S2-41 — M-GEN5: upgrade, mark-good, rollback, one-shot, try-once
+
+| Boot | Before power-cycling | Expected on the serial log / from kbootset |
+|---|---|---|
+| 1 | `kbootset build; kbootset commit` | `generation 2 committed; power-cycle to boot it` |
+| 2 | `kbootset mark-good` | `amix-boot: generation 2, kernel …`; then `generation 2 is good and the default` |
+| 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
+| 4 | `kbootset next previous` | boots 1; then `the next boot only is changed` |
+| 5 | `kbootset commit --spec bad.spec` (below) | boots 2, once, the one-shot; then `generation 3 committed …` |
+| 6 | — | boots 3, the trial. It cannot mount its root, so it never reaches mark-good: power-cycle when it stops |
+| 7 | `kbootset status` | `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots; status shows 3 as bad, or already collected, and default 1 |
+
+`bad.spec` names a k46 kernel without the Z3660 driver, such as KD060-A,
+whose root controller is the A4091:
+
+```
+line k46
+rootfs ufs
+root sd id=144b0100 unit=6 slice=1
+kernel unix /tmp/KD060-A-c0-u6
+```
+
+`commit --spec` runs no gates. That is the point here: a trial the gates
+would refuse (closure) is the way to get a trial that panics in rc.
+
+### S2-42 — M-GEN3: a power cut at each commit step
+
+Needs the rig's kill at a step marker (S2-40). For each N in 1, 2, 4, 5
+and 7, on a fresh copy of the row's image after boot 1:
+
+```
+KBOOTSET_HOLD=N /tmp/kbootset build && KBOOTSET_HOLD=N /tmp/kbootset commit
+```
+
+The rig kills the emulator when the console shows `kbootset: holding
+before step N`, and boots again.
+
+| N | Killed before | Next boot | Next `kbootset status` |
+|---|---|---|---|
+| 1 | the journal | the previous default | no journal message |
+| 2 | the members | the previous default | `the commit of generation 2 was interrupted before its commit point; nothing of it remains` |
+| 4 | the manifest | the previous default | as N = 2 |
+| 5 | the control block (the commit point) | the previous default | as N = 2 |
+| 7 | the journal cleared | generation 2, the trial | `the commit of generation 2 had completed when it was interrupted` |
+
+Every row must boot. That is M-GEN3's exit condition, and 80's "every
+power-cut point leaves a booting generation".
+
+### S2-46 — the exit row: upgrade and roll back with apkg alone
+
+Once the kernel packages (S2-12) and the catalog's kernel-space block
+(S2-23) exist:
+1. `apkg update; apkg upgrade <kernel package>`: apkg's trigger runs
+   `kbootset build` and `commit`, and prints `generation 2 committed;
+   power-cycle to boot it`.
+2. Power-cycle; `kbootset mark-good` at the end of rc.
+3. `kbootset rollback`; power-cycle: generation 1 boots.
+
+The commands are filled in when S2-12 lands.
