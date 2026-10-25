@@ -143,9 +143,9 @@ every line of this table.
 | **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | after S2-11 and the k30 kernel package |
 | **exit gate:** every power-cut point leaves a booting generation | **passed**, as M-GEN3 | as above |
 
-Still open on the bench besides the k30 column: M-UPG1 on k46, and M-GEN2 (commit time,
-recipe in `tests/bench/README.md`), a stage-2 measurement that 80's exit
-gate does not name.
+Still open on the bench besides the k30 column: M-UPG1 on k46. M-GEN2, a
+stage-2 measurement that 80's exit gate does not name, is closed on the
+bench (`2026-10-26-m-gen2.md`).
 
 **The SHA-256 refusal row** (evidence: the workspace's
 `tmp/2026-10-26-s2/s2-46sha/N36/`). On the kinfo vehicle with apkg 0.3

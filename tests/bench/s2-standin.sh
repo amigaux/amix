@@ -6,16 +6,18 @@
 # apkg would write (C2-2), so kbootset's gates 1 and 2 accept them.  The
 # rows copy OUTDIR's tree onto the box's root.
 #
-# usage: s2-standin.sh KERNEL LINE ROOTKEYS ROOTFS BUILD OUTDIR
+# usage: s2-standin.sh KERNEL LINE ROOTKEYS ROOTFS BUILD OUTDIR [BSS]
 #   KERNEL    the static kernel (brel or ET_REL)
 #   LINE      k30 or k46
 #   ROOTKEYS  its built-in root controllers as match keys, comma-separated
 #             (zorro:144b:01, mobo:a3000-wd, ...)
 #   ROOTFS    its built-in root filesystems (ufs, s5), comma-separated
 #   BUILD     its build id (uname -m)
+#   BSS       for a brel kernel, its bss and COMMON bytes (bss-of.sh gives
+#             them); gate 2 refuses a brel kernel whose sidecar has no bss=
 # Writes OUTDIR/stand/<line>/{unix,kabi} and OUTDIR/var/apkg/kpkg/kernel-standin.
 set -e
-KERNEL=$1 LINE=$2 KEYS=$3 FS=$4 BUILD=$5 OUT=$6
+KERNEL=$1 LINE=$2 KEYS=$3 FS=$4 BUILD=$5 OUT=$6 BSS=$7
 sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
 mkdir -p "$OUT/stand/$LINE" "$OUT/var/apkg/kpkg"
@@ -32,6 +34,7 @@ loader-min=1
 root=$KEYS
 rootfs=$FS
 EOF
+[ -z "$BSS" ] || echo "bss=$BSS" >> "$OUT/stand/$LINE/kabi"
 cat > "$OUT/var/apkg/kpkg/kernel-standin" <<EOF
 name kernel-standin
 version 0.0.0

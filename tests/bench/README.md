@@ -268,9 +268,10 @@ time a program under Amix.)
 
 | Line | Model | Vehicle | kbootset | Kernel package |
 |---|---|---|---|---|
-| k30 | the cycle-exact 25 MHz 68030 with a 68882 (M-LD7's model) | the A4091 68030 vehicle of M-LD1, under our loader | `/tmp/kbootset` from `make box` | `s2-standin.sh <its K030 kernel> k30 zorro:0202:54 ufs,s5 <its uname -m> <outdir>` now; the k30 kernel package once it exists |
+| k30 | the cycle-exact 25 MHz 68030 with a 68882 (M-LD7's model) | the A4091 68030 vehicle of M-LD1, under our loader | `/tmp/kbootset` from `make box` | `s2-standin.sh <its K030 kernel> k30 zorro:0202:54 ufs,s5 <its build id> <outdir> <its bss>` now (`bss-of.sh` gives the bss; `uname -m` dumps core on the 1.0 K030 kernels, so the build id is `uname -a`'s last field); the k30 kernel package once it exists |
 | k46 | the 68060 model | the kinfo row's (KD060-Z, a 4 MiB store) | `/sbin/kbootset` from the package, or `/tmp/kbootset` | the S2-46 set, or the stand-in made from the same KD060-Z kernel |
 
+A 2 MiB boot slice holds the k30 trial only beside a deflated generation 1.
 The 1.0 K030 kernels have no `kinfo` until S2-11, so the k30 build names
 the box facts instead: `--line 30 --bootdev zorro:0202:54 --rootdev
 zorro:0202:54 --rootfs ufs --mem <the model's fast memory>`. kbootset
@@ -290,7 +291,7 @@ for g in 2 3 4; do
   $KB mark-bad $g > /dev/term/ser 2>&1
 done
 /usr/bin/time $KB check > /dev/term/ser 2>&1
-ls -l /stand/gen/*/unix > /dev/term/ser 2>&1
+ls -l /stand/k*/unix > /dev/term/ser 2>&1
 ```
 
 - `mark-bad` takes the new trial, never booted, back out ("marked bad and
