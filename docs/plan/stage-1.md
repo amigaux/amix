@@ -18,8 +18,8 @@ the RTH1 record our loader writes and ignore the new loader record — so the
 - **Class:** `host` = unit tests or computation on the build machine (bench
   class in the spec's terms); `bench` = the emulator; `metal` = real hardware.
 - **Estimate** in working sessions of one station.
-- **CD** marks the items the CD mechanism fork (OQ-10.9) decides; they wait
-  for the owner and nothing else waits on them.
+- The CD items (§2.5) were decided after this plan was written (D-3 §10)
+  and no longer wait.
 
 ## 2. Work breakdown
 
@@ -71,14 +71,15 @@ the RTH1 record our loader writes and ignore the new loader record — so the
 | S1-27 | **Metal**: M-FD1 floppy DMA under 040/060 caches, M-FP2 floppy-pair boot on both lines | amix-dlm (via the lab registry) | metal | S1-24, S1-15 | stage exit | 1 |
 | S1-28 | If the Z3660 boot ROM refuses the loader's writes (S1-22/S1-26): a firmware change for CMD_WRITE through the boot ROM's device | Z3660 | bench + metal | S1-26 finding | S1-26 | contingent |
 
-### 2.5 Items that wait for the CD fork (OQ-10.9)
+### 2.5 The CD items (decided: D-3 §10, boot2 as an AmigaDOS program)
 
 | ID | Item | Owner | Class | Needs | Est. |
 |---|---|---|---|---|---|
-| S1-C1 **CD** | Option A: RDB-style CD image layout (2048-byte RDB, store partition, package partition) and its builder | amix-installng (layout) + amix-dlm (store) | host | owner decision | 1 |
-| S1-C2 **CD** | Option B: `amix-cdboot`, boot2 as an AmigaDOS executable with a dos.library file front end, and the ISO with `S/Startup-Sequence` | amix-dlm (program) + amix-installng (ISO) | host | owner decision, S1-13 | 1.5 |
-| S1-C3 **CD** | **M-LD2a** or **M-LD2b** (whichever option is kept) on the A4091 ROM in the emulator, then the A4092 on metal | amix-dlm | bench + metal | S1-C1 or S1-C2 | 1 |
+| S1-C2 | `amix-cdboot`: boot2's sources with an AmigaDOS entry and a dos.library file reader; the build tool emits an AmigaDOS load file (code hunk + `HUNK_RELOC32` + bss); the manifest's `file=` members | amix-dlm | host (cross build) | S1-13 | 1.5 |
+| S1-C3 | The bootable ISO: System Identifier `AMIGA BOOT`, `S/Startup-Sequence`, `/BOOT/K30/` and `/BOOT/K46/` | amix-installng (ISO) + amix-dlm (contents) | host | S1-C2 | 0.5 |
+| S1-C4 | **M-LD2** on the A4091 ROM in the emulator, then the A4092 on metal | amix-dlm | bench + metal | S1-C3 | 1 |
 
+The RDB-style disc (former S1-C1) was rejected by the owner (D-3 §10).
 Nothing in §2.1–§2.4 depends on the CD items.
 
 ## 3. Critical path and totals
@@ -91,7 +92,7 @@ soon as S1-06 exists.
 
 Estimate: amix-dlm host and cross items about 12 sessions; emulator
 prerequisites about 3 (other repos); measurements and proof rows about 7;
-CD items about 3.5 after the owner's decision.
+CD items about 3.
 
 ## 4. Not in stage 1
 

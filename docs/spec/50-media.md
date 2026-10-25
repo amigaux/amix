@@ -73,20 +73,19 @@ so the 1.1 budget is recomputed from the store layout, not inherited.
 | | |
 |---|---|
 | Today (1.0) | ISO9660 with Rock Ridge, 2048-byte sectors, `/catalog`, `/pkgs/{stock,base}`, `/install/…`; System Identifier deliberately blank so the CD never outranks the hard disk; never a boot device — the 060 route boots an install hard-file image on the Z3660 SD and reads the CD through cdfs (`IN/docs/install-iso.md:7-33`; `MP/02-medium-cdrom-design.md:9-34`) |
-| 1.1 | **bootable** (D-3 §2) on the A4091/A4092 ROMs. Their ISO9660 boot node runs no bootblock (it starts the ROM's CD filesystem and boots AmigaDOS), so the mechanism is an owner decision between two options (`10-boot-loader.md` §4.4, OQ-10.9) |
-| Option A layout (RDB-style CD) | not ISO9660: an RDB at 2048-byte blocks, a `UNI\0` boot-store partition (boot1, header, boot2, both lines' generations), a package partition read by a reader still to be chosen |
-| Option B layout (recommended: AmigaDOS-hosted loader) | ISO9660, System Identifier `AMIGA BOOT`; `S/Startup-Sequence` runs `amix-cdboot`; `/BOOT/K30/` and `/BOOT/K46/` hold a control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, signature, `/pkgs/{stock,base,kernel}` |
-| Boot (option B) | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
+| 1.1 | **bootable** (D-3 §2, §10): the boot ROM's CD filesystem boots AmigaDOS from the disc and its startup-sequence starts the loader (`10-boot-loader.md` §4.4) |
+| Layout | ISO9660, System Identifier `AMIGA BOOT`; `S/Startup-Sequence` runs `amix-cdboot`; `/BOOT/K30/` and `/BOOT/K46/` hold a read-only control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, `/pkgs/{stock,base,kernel}` |
+| Boot | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
+| Requirement | a boot ROM with a CD filesystem (A4091, A4092); other machines boot the floppy pair and install from the CD |
 | Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel` under the signed catalog |
 | Rescue | boot the CD, choose repair |
 | Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id, `MP/02-medium-cdrom-design.md:173`); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
 | Not bootable | an ATAPI CD on the Gayle IDE (no source says any Kickstart boots Amix from it; it stays a package source); a CD on a controller whose ROM offers no CD node |
 | Hazards kept in the design | a second cdfs mount on an absent unit panics — probe by inquiry, then mount once (P-28 D43); a 512-byte read of a CD through the A4092 wedges the bus — only cdfs opens CD units (`MP/02-medium-cdrom-design.md:40-42`) |
 
-Under option B the bootable profile sets `AMIGA BOOT`; an image meant to sit
-in a drive while the box boots from disk keeps the System Identifier blank.
-The first measurement of this medium is M-LD2a (option A) or M-LD2b
-(option B), whichever the owner keeps on the table.
+The bootable profile sets `AMIGA BOOT`; an image meant to sit in a drive
+while the box boots from disk keeps the System Identifier blank. The first
+measurement of this medium is M-LD2.
 
 ## 5. The netinstall medium
 
@@ -193,12 +192,11 @@ recorded as **deviation DV-1** from D-3 §2, for the owner to approve
 | OQ-50.1 | Floppy profile: RAM-disk or fd0 root, per line (M-FP1/M-FP2). | us |
 | OQ-50.2 | Narrowed by M-NET1a/b: form A (trimmed engine) chosen; confirm the margin stays ≥ 5 % once M-NET1c, M-NET1d, `kbootset` and the installer's network additions are known, else form B (§5.1). | us |
 | OQ-50.3 | Whether the Z3660 firmware's floppy emulation can boot the floppy pair (no record). | us |
-| OQ-50.4 | Which machines of the 030 line can run a CD boot (they need an A4091/A4092 ROM with CD boot). | us |
 | OQ-50.5 | Tape device nodes on card 1 and their names. | us |
 | OQ-50.6 | One real tape drive row (a collaborator's A3000 has one at SCSI id 4, `amix-040-060-port/docs/REALHW-ISSUE54-CLASSIFY-260829-07.md:74`). | Antti |
 | OQ-50.7 | Whether one CD image carries both lines' generations within one ISO (proposed) or one ISO per line. | us |
 
 ## 9. Measurements
 
-M-FP1, M-FP2, M-NET1a–g, M-LD2a, M-LD2b, M-EMU1, M-CD1, M-TAPE1…4 —
+M-FP1, M-FP2, M-NET1a–g, M-LD2, M-EMU1, M-CD1, M-TAPE1…4 —
 `90-measurements.md`.

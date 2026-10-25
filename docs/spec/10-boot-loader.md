@@ -23,7 +23,7 @@ copied into this repository.
 | boot2 | stock lineage patched in place, 8192 B slot, 76 B / 256 B free (`MP/bootchain-facts.md` B4); rebuilt only on the golden box with the 1992 compiler (B5) | ours, C + assembly built with gcc-cross-amix, self-relocating, ≤ 28 KiB |
 | What is read | exactly one blob behind one info block placed right after boot2 (0x2600 on the 8 KiB-boot2 disk slice; discovered by scanning on a floppy; a larger boot2 moves it) (`MP/refute-boot2-one-blob.md`, P2–P5) | a generation manifest, then the kernel and each root-class module as separate files |
 | Block size | 512-byte reads only; a 2048-byte unit gets zero-block reads (`MP/refute-cd-boot-chain.md`, `MP/CLAIMS.md` C11) | every read aligned to and a multiple of 2048 bytes, so one code path serves 512- and 2048-byte media |
-| Media read | raw slice / floppy | the boot store (disk, SD image, floppy); on a CD the boot store or ISO9660 files, by the CD mechanism (§4.4) |
+| Media read | raw slice / floppy | the boot store (disk, SD image, floppy); on a CD, files through AmigaDOS (§4.4) |
 | Choice at boot | none; root from the compiled-in device or the RTH1/RTO1 records | menu, rollback key, safe mode, one-shot previous generation, try-once fallback |
 | Output | Intuition alerts, a mouse click to continue (`MP/CLAIMS.md` C15) | one line per step on the screen and on the serial port; no step waits for a mouse |
 
@@ -64,7 +64,8 @@ Our boot1 keeps the same bootblock framing (header longwords, checksum,
 trailer) and reproduces the SuperKickstart return. Which header fields the
 strap actually checks on a floppy and on an RDB partition is measured, not
 assumed (M-LD1). A CD is a different case: the ROM's ISO9660 boot node runs
-no bootblock at all (§4.4, M-LD2a/M-LD2b).
+no bootblock at all; the CD route starts the loader from AmigaDOS (§4.4,
+M-LD2).
 
 ### 2.2 What the kernel expects from boot2
 
@@ -155,7 +156,7 @@ the golden box because it is PC-relative code in the 1992 assembler's syntax
 generation entirely: it is linked at address 0, the build tool appends a
 table of its R_68K_32 relocations, and the start-up stub (PC-relative
 assembly) applies the table to itself before calling C. Size budget:
-**28 KiB** per copy in the store (§4.2); the AmigaDOS-hosted CD front end of §4.4 option B shares its C code.
+**28 KiB** per copy in the store (§4.2); the AmigaDOS-hosted CD entry of §4.4 shares its C code.
 
 boot2 does, in order:
 
@@ -168,8 +169,7 @@ boot2 does, in order:
    graphics.library, and the serial port at the console's speed. Every line
    goes to both.
 3. **Read the medium**: the boot store (§4) on a disk, SD image or floppy;
-   on a CD, the boot store or ISO9660 files depending on the CD mechanism
-   (§4.4).
+   files through dos.library in the CD entry `amix-cdboot` (§4.4).
 4. **Choose a generation** (§7): default, try-once fallback, one-shot flag,
    menu.
 5. **Load the manifest**, check its CRC, check that its CPU line matches the
@@ -199,7 +199,7 @@ never by GCC 14 (D-3 §9). The loader package records the compiler pin.
 |---|---|---|
 | Disk / SD image boot slice (the `UNI\0` partition) | **boot store** (§4.2) | writable by `kbootset` with atomic commits; read by boot1 and boot2 with fixed, aligned extents |
 | Floppy pair (both lines) | **boot store**, multi-volume (§4.3) | same code as the disk; volumes 1 and 2 hold one store |
-| CD-ROM | **ISO9660** (file reader for the AmigaDOS-hosted mechanism) or the **boot store** (RDB-CD mechanism), §4.4 | the ROM's ISO9660 boot node runs no bootblock, so the CD mechanism decides the reader; one disc carrying both lines is proposed (OQ-50.7) |
+| CD-ROM | **files through dos.library**, in `amix-cdboot` (§4.4) | the ROM's ISO9660 boot node runs no bootblock; AmigaDOS mounts the disc and the loader reads plain files; one disc carrying both lines is proposed (OQ-50.7) |
 | UFS | **not needed in 1.1** | considered for the boot slice and not chosen: UFS has no atomic update (a power cut needs `fsck` before the loader could trust it), the project has no host-side UFS writer for media builds (`MP/RESEARCH.md`, risk list), and the loader never needs the root filesystem. Reopened only if a future need appears (OQ-10.6). |
 
 All reads are aligned to 2048 bytes and are multiples of 2048 bytes. On a
@@ -289,60 +289,54 @@ Two profiles, decided by measurement (M-FP1, M-FP2):
 
 Floppies are read-only to the loader (no control-block writes; no try-once).
 
-### 4.4 The CD-ROM — two candidate mechanisms (owner decision, OQ-10.9)
+### 4.4 The CD-ROM — boot2 as an AmigaDOS program (D-3 §10)
 
-**Fact.** The A4091/A4092 ROM mounter gives an ISO9660 data disc a boot node
-with priority 2 (System Identifier `AMIGA BOOT` or `CDTV`) or −1, but that
-node's environment has no boot blocks (`de_BootBlocks` is never set) and the
-CD filesystem's DosType (`CD01`/`CDVD`), and it is added with
-`ADNF_STARTPROC`: Kickstart starts the CD filesystem and boots AmigaDOS from
-the disc; no bootblock — and therefore no boot1 in the System Area — ever
-runs (`amix-a4091/reference/a4091-software/3rdparty/mounter/mounter.c:1229-1264`; the parameter packet is zero-filled at :1231).
-A data disc **without** a Primary Volume Descriptor is instead scanned for an
-RDB, and its partitions are mounted the way a hard disk's are
-(`mounter.c:1212-1214`, `ScanRDSK` at :1031). Two mechanisms follow; both
-are written down, neither is chosen here.
+**Why this route.** The A4091/A4092 ROM mounter gives an ISO9660 data disc a
+boot node with priority 2 (System Identifier `AMIGA BOOT` or `CDTV`) or −1;
+that node has no boot blocks (`de_BootBlocks` is never set), carries the CD
+filesystem's DosType (`CD01`/`CDVD`) and is added with `ADNF_STARTPROC`, so
+Kickstart starts the CD filesystem and boots AmigaDOS from the disc; no
+bootblock ever runs (`amix-a4091/reference/a4091-software/3rdparty/mounter/mounter.c:1229-1264`;
+the parameter packet is zero-filled at :1231). The ROM takes its RDB path
+only for a disc without an ISO descriptor (`mounter.c:1212-1214`), so an
+RDB-style disc would stop being a data CD, and that path is unproven on
+2048-byte blocks; it was rejected (D-3 §10).
 
-**Option A — RDB-style CD.** The disc is not ISO9660: it carries an RDB at
-2048-byte blocks, a `UNI\0` partition holding the boot store (§4.2, read-only
-medium flag, boot blocks set so the strap runs boot1) and a second partition
-for the packages.
-- For: the same boot1/boot2 code path as every disk; no AmigaDOS involved.
-- Against: the disc is no longer readable as ISO9660 by cdfs, by other
-  operating systems or by the 1.0 tools; the package partition needs a
-  reader (cdfs at a partition offset, or apkg's raw source through sd, which
-  must then obey the rule that only 2048-aligned reads reach a CD unit —
-  `MP/02-medium-cdrom-design.md:40-42` records a bus wedge on a 512-byte
-  read); unproven: whether the strap honours boot blocks on a 2048-byte RDB
-  node at all.
+**The design.**
+- The disc is a standard ISO9660 data CD (Rock Ridge as today,
+  `IN/docs/install-iso.md:20`) with System Identifier `AMIGA BOOT`. It mounts
+  normally under Amix (cdfs), AmigaOS and other systems.
+- Kickstart boots AmigaDOS from it through the ROM's CD filesystem and runs
+  `S/Startup-Sequence`, which runs one program by its full path:
+  **`amix-cdboot`**.
+- `amix-cdboot` is boot2 built as an AmigaDOS executable: the same C sources
+  and the same hand-off, with a different entry. Its entry gets ExecBase and
+  dos.library instead of boot1's registers; its reader opens files through
+  dos.library instead of reading store extents through the strap's IOStdReq.
+  The build tool that makes boot2's self-relocating image emits, for this
+  entry, an AmigaDOS load file instead (one code hunk, its 32-bit
+  relocations as a `HUNK_RELOC32` table, bss included), so AmigaDOS's own
+  loader relocates it and no self-relocation runs.
+- It probes the CPU and reads the generation list from
+  `/BOOT/K30/CONTROL` or `/BOOT/K46/CONTROL` (a read-only control block,
+  §4.2), so one disc carries both lines (proposed, OQ-50.7). The manifest
+  names members by file name in the line directory (`file=`, §5.1), never by
+  extent.
+- It loads the kernel and the compressed miniroot as plain files, builds the
+  same `bootinfo`, RTH1 and loader record (the root selector names the RAM
+  disk, §5.4; RTH1 carries no boot-node match), takes the machine over
+  (Forbid, interrupts off, supervisor, MMU off) and hands off exactly as
+  boot2 does (§3.2 steps 6–10). AmigaOS is the carrier for about two seconds
+  and is never touched again.
+- Menu, safe mode, development load and failure messages are those of
+  §7–§9; try-once does not apply (read-only medium).
+- Requirement: a boot ROM with a CD filesystem (the A4091 and A4092 have
+  one) and a Kickstart that boots AmigaDOS from it. Other machines boot the
+  floppy pair and install from the CD (`50-media.md` §3–§4).
 
-**Option B — loader started from the disc's AmigaDOS startup.** The disc
-stays ISO9660 with System Identifier `AMIGA BOOT`; Kickstart boots AmigaDOS
-from it through the ROM's CD filesystem; `S/Startup-Sequence` runs one
-program, **amix-cdboot**, which is boot2 built as an AmigaDOS executable: the
-same C code, with a front end that reads the manifest and members through
-dos.library from `/BOOT/K30/` or `/BOOT/K46/` instead of from a store. It
-then takes the machine over (Forbid, interrupts off, supervisor, MMU off)
-and hands off exactly as boot2 does (§3.2 steps 4–10). Precedent: Markus
-Wild's AmigaDOS-hosted `unix_boot` boots an Amix kernel from a running
-AmigaDOS, and the 040/060 port's development path uses its descendant
+Precedent for an AmigaDOS-hosted Amix loader: Markus Wild's `unix_boot`,
+whose descendant is the 040/060 port's development path
 (`PORT/docs/boot-path-map.md:13-37`).
-- For: the disc stays ISO9660, so cdfs reads the packages from the same disc
-  and every tool can read it; the ROM path is the one the ROM is built for.
-- Against: AmigaDOS runs first (memory, time, the Kickstart version on the
-  machine must boot a CD); a second front end to keep in step with boot2;
-  the take-over from a running AmigaDOS must leave no AmigaDOS state the
-  kernel trips over (measured, M-LD2b).
-
-**Recommendation: option B**, because the install CD must stay a readable
-ISO9660 package source and option A needs both an unproven strap behaviour
-and a new package reader. The owner decides (OQ-10.9). Either way the
-menu, try-once (not applicable: read-only) and failure messages are those of
-§7–§9, and after a CD boot the root is the RAM-disk miniroot (§5.4); the disc
-stays mounted through cdfs as the package source under option B.
-
-Under option B one disc can carry both lines (the program picks
-`/BOOT/K30/` or `/BOOT/K46/` by CPU) — proposed, OQ-50.7.
 
 ## 5. What a generation is to the loader
 
@@ -380,7 +374,7 @@ end crc32=5e6f7a8b
 |---|---|
 | `line`, `cpu` | must match the probed CPU, else the generation is refused with a message naming both |
 | `loader-min` | lowest loader version that can boot this generation |
-| `kernel` | size after decompression, extent (`at`, store-relative; on a CD a path), stored size, compression, CRC-32 |
+| `kernel` | size after decompression, extent (`at=`, store-relative) or, on a CD, `file=` (a file in the line directory), stored size, compression, CRC-32 |
 | `module … root` | a root-class module the loader places in the arena |
 | `module … boot` / `demand` | not read by the loader; loaded by the kernel from the root filesystem (`30-module-core.md` §3) |
 | `arena` | offset and capacity of the module arena inside the relocated kernel image |
@@ -597,15 +591,13 @@ a mouse click; where a choice is needed the menu opens.
 |---|---|---|
 | OQ-10.1 | What the strap does with a bootblock's return value on the other boot ROMs and Kickstart versions (the Z3660 ROM chain raises AN_BootError and resets, M-LD3). | us |
 | OQ-10.2 | Which bootblock header fields the strap checks on an RDB `UNI\0` partition (the stock image carries `DOS\0`). | us |
-| OQ-10.3 | Why ROM 42.39 offered no Amix RDB partition on a disk while the reference mounter source would; whether the same ROM honours boot blocks on an RDB-style CD (option A of §4.4). | us |
+| OQ-10.3 | Why ROM 42.39 offered no Amix RDB partition on a disk while the reference mounter source would. | us |
 | OQ-10.4 | Whether boot2's screen output should use graphics.library directly or an Intuition screen, given the size budget. | us |
 | OQ-10.5 | Whether the hand-off on a 68060 must clear CACR.CABC. | us; Antti for the kernel side |
 | OQ-10.6 | Whether a UFS reader is ever needed (for example, a boot directly from a root filesystem). Not needed by D-3. | us |
 | OQ-10.7 | Whether `keystates[]` has any kernel consumer that would misread a filled matrix. | us |
 | OQ-10.8 | How the kernel's memory sizing treats a shortened `memory[]` region (RAM-disk carve-out). | us |
-| OQ-10.9 | The 1.1 CD boot mechanism: option A, an RDB-style CD with boot blocks the ROM runs, or option B, a loader started from the disc's AmigaDOS startup (§4.4). Recommendation: B. | owner |
 
 ## 11. Measurements
 
-M-LD1 … M-LD9 (with M-LD2a/b for the two CD mechanisms), M-FP1, M-FP2,
-M-RD1, M-RD2, M-MOD1 (`90-measurements.md`).
+M-LD1 … M-LD9, M-FP1, M-FP2, M-RD1, M-RD2, M-MOD1 (`90-measurements.md`).

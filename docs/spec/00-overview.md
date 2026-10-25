@@ -57,6 +57,7 @@ described and referenced, never reproduced.
 | 7 | Publishing and trust: kernel space in the public catalog, marked; one offline key; public key in installer and client; unsigned kernel space refused; second key only by decision; ABI kit published | **60**; 40 §6; 20 §5 |
 | 8 | One 1.1; proof order (loader → lifecycle on static kernels → modules → root as a module); code in amix-dlm, recipes in driver repos, kernel changes as merge requests; asks to Antti, ashnazag, Emre | **80**; 30 §1; repository README |
 | 9 | Toolchain split: kernel space on gcc-cross-amix (GCC 2.7.2.3, `m68k-cbm-sysv4`), pinned by the ABI kit; GCC 14 for userland only | 20 §3.2; 10 §3.3; 40 §3 (`kbootset` is userland); 30 §1 |
+| 10 | (after the freeze) CD boot: a standard ISO9660 disc, AmigaDOS from the ROM's CD filesystem, boot2 as an AmigaDOS program started by its startup-sequence; RDB-style disc rejected | **10** §4.4; 50 §4; 90 M-LD2 |
 
 ## 3. The design in one page
 
@@ -95,7 +96,6 @@ decision reserved to the project owner.
 | OQ-10.6 | Is a UFS reader ever needed | us |
 | OQ-10.7 | Any kernel consumer misreading a filled `keystates[]` | us |
 | OQ-10.8 | Kernel memory sizing with a shortened `memory[]` region | us |
-| OQ-10.9 | **CD boot mechanism:** A, RDB-style CD with boot blocks; B, loader started from the disc's AmigaDOS startup (recommended) | owner |
 | OQ-20.2 | One k46 ABI for 68040 and 68060, or two families | us; Antti |
 | OQ-20.4 | DDI v1 list and contracts; review | us; Antti reviews |
 | OQ-20.5 | A shared major/syscall registry with ashnazag | ashnazag |
@@ -116,7 +116,6 @@ decision reserved to the project owner.
 | OQ-50.1 | Floppy profile per line: RAM-disk or fd0 root | us |
 | OQ-50.2 | Netinstall: form A (floppy pair, trimmed engine) chosen by M-NET1a/b; confirm the ≥ 5 % margin after M-NET1c/d and `kbootset`, else form B | us |
 | OQ-50.3 | Can the Z3660 firmware's floppy emulation boot the pair | us |
-| OQ-50.4 | Which 030 machines can boot the CD | us |
 | OQ-50.5 | Tape device nodes on card 1 | us |
 | OQ-50.6 | One real tape drive row | Antti |
 | OQ-50.7 | One ISO for both lines (proposed) or one per line | us |
@@ -132,7 +131,7 @@ decision reserved to the project owner.
 | OQ-80.3 | Throughput baselines for stage 3 | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
 
-Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01).
+Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
 
 ## 5. Measurements
 
@@ -155,8 +154,8 @@ per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 kernel and the store format, f and g on a running miniroot. They are scheduled
 in stages 1–5 (`90-measurements.md` §5), and they confirm or overturn the form-A choice made in S0 (OQ-50.2).
 
-**Owner decisions open at the freeze:** OQ-10.9 (CD mechanism), OQ-30.2 (030
-card order), DV-1, OQ-60.2, OQ-60.3. The first measurements after the freeze
+**Owner decisions open at the freeze:** OQ-30.2 (030 card order), DV-1,
+OQ-60.2, OQ-60.3. OQ-10.9 (CD mechanism) was decided as D-3 §10. The first measurements after the freeze
 are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
 ## 6. P-28 decisions and where they went
@@ -176,7 +175,7 @@ are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 | D23 | re-scoped: checksum contract version 2 (OQ-40.5) |
 | D29, D33 | replaced: safe mode chosen in the loader and passed in the loader record (10 §6–§7) |
 | D31, D34, D35, D36, D62 | replaced: host `kbootset --image` composes every medium; the installer runs `kbootset -R` (40 §3, 50 §1) |
-| D41, D42, D44 | replaced: the CD boots; the mechanism is OQ-10.9 (10 §4.4, 50 §4) |
+| D41, D42, D44 | replaced: the CD boots, with boot2 as an AmigaDOS program (D-3 §10; 10 §4.4, 50 §4) |
 | D47 | replaced: netinstall medium (50 §5) |
 | D50 | kept as stage-1 prerequisite M-EMU1 |
 | D58 | settled: `kinfo` major 53 proposed (20 §6) |
