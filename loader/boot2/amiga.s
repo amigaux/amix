@@ -74,7 +74,12 @@ probetrap:
 #   +0 stack top  +4 entry  +8 d0 for the kernel  +12 d1 for the kernel
 #   +16 tbuf  +20 tvaddr  +24 tsize  +28 rbuf  +32 rvaddr  +36 rsize
 #   +40 dbuf  +44 dvaddr  +48 dsize  +52 cpu (30/40/60)  +56 AttnFlags
-# Interrupts off, MMU and transparent translation off, a stack in chip
+#   +60 a copper list in chip memory, or 0
+# Interrupts off; the display put back to what the 1992 console expects
+# (the loader's screen left AGA registers -- FMODE, BPLCON3, BPLCON4 -- that
+# the console never writes, and its copper list keeps rewriting them, so the
+# copper is pointed at the null list given in +60 and the registers are
+# reset to their power-on values); MMU and transparent translation off, a stack in chip
 # memory, text/rodata/data moved to their addresses (all three forward when
 # the image moves down, all three from the tail when it moves up, so an
 # overlapping move is safe), caches pushed, then a jump to the entry with
@@ -83,6 +88,13 @@ probetrap:
 	.globl	ax_handoff_end
 ax_handoff:
 	move.w	&0x2700,%sr
+	move.l	(60,%a2),%d0
+	beq.b	nocop
+	move.l	%d0,0xdff080		# COP1LC
+	move.w	%d0,0xdff088		# COPJMP1 (strobe)
+nocop:	move.w	&0x0000,0xdff1fc	# FMODE      (AGA only; ignored elsewhere)
+	move.w	&0x0c00,0xdff106	# BPLCON3    (power-on value)
+	move.w	&0x0011,0xdff10c	# BPLCON4    (AGA only; power-on value)
 	move.l	(52,%a2),%d7
 	cmp.l	&30,%d7
 	bne.b	mmu46

@@ -145,9 +145,12 @@ main(int argc, char **argv)
 		printf("control block: no valid copy\n");
 		return 1;
 	}
-	printf("control %c: seq %lu, default %lu, trial %lu, one-shot %u, %u generation(s)\n",
+	printf("control %c: seq %lu, default %lu, trial %lu, one-shot %u, %u generation(s), "
+	       "console%s%s, menu %u ds\n",
 	       "AB"[which], (unsigned long)c.seq, (unsigned long)c.default_gen,
-	       (unsigned long)c.trial_gen, c.oneshot, c.ngen);
+	       (unsigned long)c.trial_gen, c.oneshot, c.ngen,
+	       (c.console & AXC_SERIAL) ? " serial" : "", (c.console & AXC_SCREEN) ? " screen" : "",
+	       c.menu_ds);
 	for (i = 0; i < c.ngen; i++) {
 		struct ax_gen *g = &c.gen[i];
 

@@ -426,7 +426,15 @@ struct ax_ci {
 	ax_u32 sp, entry, d0, d1;
 	ax_u32 tbuf, tvaddr, tsize, rbuf, rvaddr, rsize, dbuf, dvaddr, dsize;
 	ax_u32 cpu, attn;
+	ax_u32 coplist;		/* null copper list the hand-off installs */
 };
+
+/* copper words: FMODE, BPLCON3, BPLCON4 to their power-on values, no
+ * bitplanes, black background, end -- the state the stock loader leaves
+ * and the 1992 console assumes (N21, 2026-10-25) */
+static const ax_u16 nullcop[] = {
+	0x01fc, 0x0000, 0x0106, 0x0c00, 0x010c, 0x0011,
+	0x0100, 0x0200, 0x0180, 0x0000, 0xffff, 0xfffe };
 
 long
 boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, void *execbase)
@@ -434,7 +442,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	struct ax_sel sel;
 	struct ax_loaderrec lr;
 	struct ax_disksel rootsel;
-	ax_u8 *bi, *chipcode, *stack, *expbase, *cfg;
+	ax_u8 *bi, *chipcode, *stack, *expbase, *cfg, *cop;
 	ax_u8 rth[AX_RTH1_LEN], rto[AX_RTO1_LEN], axl[AX_AXL1_LEN], keys[16];
 	struct ax_ci *ci;
 	ax_u32 f, u, b, id, codesize;
@@ -591,7 +599,8 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	chipcode = x_allocmem(codesize, MEMF_CHIP);
 	ci = x_allocmem(sizeof(*ci), MEMF_CHIP | MEMF_CLEAR);
 	stack = x_allocmem(256, MEMF_CHIP);
-	if (!bi || !chipcode || !ci || !stack) {
+	cop = x_allocmem(sizeof(nullcop), MEMF_CHIP);
+	if (!bi || !chipcode || !ci || !stack || !cop) {
 		con_puts("amix-boot: L4 no chip memory for the hand-off\n");
 		return -1;
 	}
@@ -613,6 +622,8 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	ci->dbuf = (ax_u32)kbuf + bd.doffset, ci->dvaddr = bd.dvaddr, ci->dsize = bd.dsize;
 	ci->cpu = cpu;
 	ci->attn = attn;
+	x_memcpy(cop, nullcop, sizeof(nullcop));
+	ci->coplist = (ax_u32)cop;
 	x_memcpy(chipcode, (void *)ax_handoff, codesize);
 	if (x_execversion() >= 37) {
 		struct ax_regs r;

@@ -18,6 +18,8 @@
  *   -v N       loader version recorded for the boot2 copies (default 1)
  *   -r         read-only medium (no loader trial, no loader writes)
  *   -d ID      default generation (default: the first good or pristine one)
+ *   -c WHAT    console: serial, screen or both (default both)
+ *   -m DS      menu window in tenths of a second (default 20; 0 = none)
  *
  * Each SPEC file describes one generation.  Lines are copied into the
  * manifest as written, except:
@@ -245,6 +247,7 @@ main(int argc, char **argv)
 	unsigned long poff = 0;
 	ax_u32 ver = 1, deflt = 0, len, ctloff;
 	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, i, v;
+	ax_u16 console = AXC_SERIAL | AXC_SCREEN, menu_ds = 20;
 	unsigned char *p;
 	struct ax_header h;
 	static struct ax_ctl c;
@@ -269,6 +272,14 @@ main(int argc, char **argv)
 		else if (!strcmp(argv[i], "-v")) ver = (ax_u32)strtoul(argv[++i], 0, 0);
 		else if (!strcmp(argv[i], "-d")) deflt = (ax_u32)strtoul(argv[++i], 0, 0);
 		else if (!strcmp(argv[i], "-r")) readonly = 1;
+		else if (!strcmp(argv[i], "-c")) {
+			i++;
+			if (!strcmp(argv[i], "serial")) console = AXC_SERIAL;
+			else if (!strcmp(argv[i], "screen")) console = AXC_SCREEN;
+			else if (!strcmp(argv[i], "both")) console = AXC_SERIAL | AXC_SCREEN;
+			else die("-c takes serial, screen or both", argv[i]);
+		}
+		else if (!strcmp(argv[i], "-m")) menu_ds = (ax_u16)strtoul(argv[++i], 0, 0);
 		else die("unknown option", argv[i]);
 	}
 	if (i + 1 < argc && (!strcmp(argv[argc - 1], "-r") || !strcmp(argv[argc - 1], "-f")))
@@ -279,7 +290,7 @@ main(int argc, char **argv)
 		die("several volumes need the floppy profile (-f)", 0);
 	nvol = nimg ? nimg : 1;
 	if (!nimg || !b1 || !b2 || i >= argc)
-		die("usage: mkstore -o IMAGE [-p OFF] [-s SIZE] -1 BOOT1 -2 BOOT2 [-b BOOT2B] [-v N] [-r] [-d ID] SPEC...", 0);
+		die("usage: mkstore -o IMAGE [-p OFF] [-s SIZE] -1 BOOT1 -2 BOOT2 [-b BOOT2B] [-v N] [-r] [-d ID] [-c serial|screen|both] [-m DS] SPEC...", 0);
 	if (store_size % AX_BLK || store_size < AX_DATA_OFF + AX_BLK)
 		die("store size must be a multiple of 2048 and larger than 64 KiB", 0);
 	if (argc - i > AX_MAXGEN)
@@ -341,8 +352,8 @@ main(int argc, char **argv)
 
 	memset(&c, 0, sizeof(c));
 	c.seq = 1;
-	c.menu_ds = 20;
-	c.console = AXC_SERIAL | AXC_SCREEN;
+	c.menu_ds = menu_ds;
+	c.console = console;
 	c.serial_baud = 9600;
 	for (c.ngen = 0; i < argc; i++, c.ngen++) {
 		generation(argv[i], &c.gen[c.ngen]);
