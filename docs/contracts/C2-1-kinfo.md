@@ -1,6 +1,6 @@
-# C2-1 — the `kinfo` record, version 1
+# C2-1 — the `kinfo` record, version 2
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator), version 2 (2026-10-26): the memory sizes at 528 and 532, so the module list moves by 8 (gate 6, 40 §3.1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §4, `70-static-floor.md` (`kinfo` in the floor), `20-module-format-and-abi.md` §6 (major 53)
 - **Built by:** the kernels of both lines: the 040/060 families (amix-040-060-port) and the 030 families (amix-kerntools), stage-2 static kernels included (S2-10, S2-11)
 - **Read by:** `kbootset` (the booted generation, the boot disk), apkg 0.3 (line, kabi), the installer
@@ -15,7 +15,7 @@
   - `lseek(2)` works;
   - `write(2)` fails with `EPERM`.
 - The kernel builds the record once at boot, from `bootinfo` before that
-  memory is reused. Only the module list (§2, offset 528) changes after
+  memory is reused. Only the module list (§2, offset 536) changes after
   boot.
 
 ## 2. Layout (big-endian; all offsets in bytes)
@@ -23,7 +23,7 @@
 | Offset | Size | Field |
 |---|---|---|
 | 0 | 4 | magic `KIF1` |
-| 4 | 4 | version 1 << 16 \| `length` |
+| 4 | 4 | version 2 << 16 \| `length` |
 | 8 | 4 | check: all longwords of the record sum to zero (as RTH1 and AXL1) |
 | 12 | 4 | CPU as the kernel runs it: 30, 40 or 60 |
 | 16 | 4 | line: 30 or 46 |
@@ -37,10 +37,12 @@
 | 268 | 16 × 12 | boards in AutoConfig order: manufacturer (2), product (1), 0 (1), board base (4), board size (4) |
 | 460 | 4 | number of sd cards (at most 4) |
 | 464 | 4 × 16 | sd card table: card number (the `c` of `cNdMsK`) (4), controller id = manufacturer << 16 \| product << 8, or a motherboard id (4), board base, 0 for the motherboard (4), flags: 0x1 motherboard controller (4) |
-| 528 | 4 | number of loaded modules (0 on a static kernel) |
-| 532 | n × 32 | per module: name NUL-padded (24), load address (4), size (4) |
+| 528 | 4 | fast memory in bytes: all non-chip RAM the kernel uses |
+| 532 | 4 | chip memory in bytes |
+| 536 | 4 | number of loaded modules (0 on a static kernel) |
+| 540 | n × 32 | per module: name NUL-padded (24), load address (4), size (4) |
 
-`length` = 532 + 32 × modules. The booted generation's id and state are
+`length` = 540 + 32 × modules. The booted generation's id and state are
 the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
 §6). The boot device is AXL1 unit, partition start, board base and id, at
 84 + 44 onwards.
@@ -51,7 +53,7 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
 |---|---|
 | `kbootset mark-good` | AXL1 generation id; AXL1 boot1 choice (bit 9 set: the secondary boot2 ran, so the loader trial is not accepted) |
 | `kbootset` boot-disk finding (40 §5) | AXL1 boot device + the sd card table → card and unit → the slice whose start is the AXL1 partition start; RTH1 boot fields when there is no AXL1 |
-| `kbootset` gates 3, 10 | the card table and the board set (closure); the line (line gate) |
+| `kbootset` gates 3, 6, 10 | the card table and the board set (closure); the fast memory (memory gate); the line (line gate) |
 | apkg 0.3 pre-flight | line, kabi |
 
 ## 4. Settled at agreement
