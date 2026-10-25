@@ -47,7 +47,8 @@ line, the kabi tag, the compiler pin and the package's **SHA-256**.
 | apkg 0.3 (box and installer) | the catalog signature before reading the kernel-space block; each kernel-space package's SHA-256 after download | any kernel-space package from an unsigned or badly signed catalog, or with a hash mismatch; a catalog whose kernel-space block is present but whose signature is missing |
 | apkg 0.3 | records, per installed kernel-space package, the signed catalog line it was installed from (`/var/apkg/ksig/<pkg>`) | — |
 | `kbootset build/commit` | each kernel-space member's SHA-256 against its recorded signed line (`40-generations-and-composer.md` §3.1, gate 1) | composing a generation from any member without a recorded signed line — including files placed by hand or by a bare `pkgadd` |
-| the loader | CRC-32 of each member (integrity of the medium, not authenticity) | — |
+| the loader | CRC-32 of each member (integrity of the medium, not authenticity); places the booted manifest in the arena | — |
+| the kernel (module core, `30-module-core.md` §2 patch 17) | every module load against the booted manifest's member list and SHA-256 | any module that is not a member of the booted generation or whose hash differs — unless the development-load flag was set for this boot, which the loader and the kernel both print |
 
 Userland packages keep today's checks; their move to signed catalogs is
 apkg's own roadmap, not a 1.1 requirement here.
@@ -76,8 +77,11 @@ from signed packages, under the same gate.
 ## 6. Publishing the ABI kit
 
 The ABI kit (`20-module-format-and-abi.md` §5) is published in this
-repository and as one package per kernel line. It contains no Commodore or
-AT&T material unless the owner decides otherwise (OQ-20.1). Every publication
+repository and as one package per kernel line. It includes the stock Amix
+kernel headers a module build needs (D-3 §7: "the ABI kit (headers + module
+tooling) is published in amix-dlm"; distribution permission of 2026-09-23);
+they are added at kit build time and are not tracked in this repository's
+history. Every publication
 — repository, catalog, site — remains a per-action owner decision.
 
 ## 7. Open questions

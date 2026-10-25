@@ -146,13 +146,21 @@ an allowlist of two tiers (`STUDY` §2.3):
   `bootinfo` and `cputype`. On k46 also `dev_kvmap`/`dev_kvunmap` and
   `dma_prepare`/`dma_complete`.
 - **Core tier** — what the root filesystem modules (ufs, s5, cdfs) need from
-  the base (about 110 names each, `L2` §2.5). Core-tier modules are built
-  with the kernel and also carry the kernel build id; outside modules may
-  not use the core tier.
+  the base: 112 undefined symbols in the stock ufs object and 108 in s5,
+  among them `bdevsw` and `vfssw` (checked with `nm -u` on
+  `amix-kerntools/work/cross-kernel-k030u-c6s1/usr/sys/fs/{ufs,s5}/exp`);
+  cdfs imports `vfssw`, `nfstype`, `sdopen` and `sdqueue` (`L2`:462). The
+  core tier therefore exports `bdevsw`, `vfssw` and `nfstype`. The exported
+  `vfssw` entry names the **grown** table the core installs
+  (`30-module-core.md` §6), not the stock one, and `nfstype` is read live, so
+  the stock filesystem objects work unchanged against the grown table.
+  Core-tier modules are built with the kernel and also carry the kernel
+  build id; outside modules may not use the core tier.
 
-Never exported: the raw switch tables and interrupt vectors (`int2_tbl`,
-`vfssw`, `cdevsw`, `bdevsw`), `conputc`, `ifstats`. Modules reach them only
-through the registration calls.
+Never exported in the DDI tier: the raw switch tables and interrupt vectors
+(`int2_tbl`, `vfssw`, `cdevsw`, `bdevsw`), `conputc`, `ifstats`. Outside
+modules reach them only through the registration calls; only the core tier
+sees `bdevsw`, `vfssw` and `nfstype`, for the stock filesystem objects.
 
 Several DDI providers are not in today's kernels (`dev_kvmap` exists only
 where the A4091 pass linked it, `sdcardbase` only after the RTH1/A4091
@@ -175,19 +183,21 @@ kernel line:
 
 | Content | Notes |
 |---|---|
-| Our headers: `mod.h`, `moddefs.h`, `ksym.h` (MIT, from the adopted core, with our changes), `ddi.h` (DDI v1 declarations and contracts) | No Commodore or AT&T header text. |
+| Our headers: `mod.h`, `moddefs.h`, `ksym.h` (MIT, from the adopted core, with our changes), `ddi.h` (DDI v1 declarations and contracts) | Ours; MIT. |
+| The stock Amix kernel headers a module build needs | Commodore's; published in the kit under the project's distribution permission of 2026-09-23 (D-3 §7: "the ABI kit (headers + module tooling) is published in amix-dlm"). Added to the kit at kit build time from the pinned sysroot; not tracked in this repository's history. |
 | The allowlist per line and tier, and the kabi sidecar | Generated from each kernel build. |
 | The registries of §6 | One text file each. |
 | Module tooling: `mkmod`, `modfix`, a `.moddata` v2 writer, a module checker (format, relocation types, undefined symbols against the allowlist, 68060 instruction scan) | Host tools; MIT. |
-| A make fragment that builds a module with the pinned compiler against a user-supplied, licensed Amix sysroot | The sysroot path is the user's. |
+| A make fragment that builds a module with the pinned compiler against the kit's headers | No separate Amix installation is needed to build a module. |
 | A probe module and a sample driver module | For the fingerprint and as a template. |
 | The DDI contracts and a "writing a module" guide | `docs/abi/`. |
 
-Whether the kit may also publish the stock headers a driver needs (they are
-Commodore's) is an owner decision (P-28 D30, P-22 D1); until then the kit
-names the headers and the user supplies them from a licensed installation
-(OQ-20.1). `gcc-cross-amix` follows the same rule (its README's
-redistribution notice).
+The stock headers are part of the published kit, as D-3 §7 decided
+(this settles P-28 D30 and P-22 D1 for the kit). The repository itself keeps
+no Commodore text: the kit build copies the headers from the pinned sysroot
+into the kit artefact, so the published kit is complete while the history of
+this repository stays free of them. (`gcc-cross-amix` keeps its own,
+stricter redistribution notice for its repository.)
 
 ## 6. Registries
 
@@ -197,23 +207,23 @@ checked against the built kernels before they are frozen (M-REG1).
 | Registry | Entries |
 |---|---|
 | System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined, `tmp/2026-10-22-modules-proposal/refute-ashnazag-dlm-init-claim.md`) |
-| Character majors | 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` *(proposed)*, 54 `ramdisk` raw *(proposed)*; stock rows free in the images examined: 7, 38, 39, 42–45, 47–48, 55–69 (`L2`:283) |
-| Block majors | 18 `dd` (stock); 21 `ramdisk` *(proposed)*; free: 0–15, 21–31 (`L2` §2.2) |
+| Character majors | 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` *(proposed)*; stock rows free in the images examined: 7, 38, 39, 42–45, 47–48, 54–69 (`L2`:283) |
+| Block majors | 18 `dd` (stock); 20 `ram` — the stock kmem-backed RAM disk (stock `tmp/2026-08-26-svr4-refs/amix-src/master.d/kernel.c:307`, driver `amiga/driver/ram.c` there), replaced in 1.1 by our `ramdisk` module on the same major (`30-module-core.md` §7); free: 0–15, 21–31 (`L2` §2.3) |
 | Filesystem names | `ufs`, `s5`, `cdfs` (root class); stock rows otherwise unchanged; table grown by the core (`30-module-core.md` §6) |
 | Interrupt chains | INT2 (Zorro/CIA-A level 2), INT6 (Zorro/CIA-B level 6); attachment only through `intr_attach` |
-| Motherboard probes (`mobo:`) | `gayle` (VPOSR AGA gate + task-file write/readback at 0xDD2020, `amix-gayle-ide/README.md:44`), `a4000t-710` (gated by chipset identity; probe to be designed, `amix-kerntools/docs/k0-families.md:1190-1195`), `a3000-wd` (floor driver; VPOSR gate + two-register readback) |
-| Zorro keys of record | z3660scsi 144b:01 (`amix-z3660scsi/README.md:9`); A4091 0202:54, A4092 c0de:01, A4770 c0de:02 (`amix-a4091/README.md:58`; the last two untested on hardware); z3660rtg 6d6e:03 (`amix-z3660rtg/README.md:98-101`); z3660eth: product number to be recorded (OQ-20.3) |
+| Motherboard probes (`mobo:`) | `z3660-window` (above), `gayle` (VPOSR AGA gate + task-file write/readback at 0xDD2020, `amix-gayle-ide/README.md:44`), `a4000t-710` (gated by chipset identity; probe to be designed, `amix-kerntools/docs/k0-families.md:1190-1195`), `a3000-wd` (floor driver; VPOSR gate + two-register readback) |
+| Zorro keys of record | **144b:01** (`Z3660_PROD 0x144B0001`, `amix-z3660net/src/z3660eth.h:15`; `amix-z3660rtg/DESIGN.md:158`) is shared by three modules: z3660scsi, z3660eth and z3660rtg on a Z3660. That ConfigDev is not the FPGA's: the Z3660 extended ROM builds it at the fixed window 0x10000000 (`Z3660/docs/real-cpu-autoconfig-and-ext-rom.md:14-30`), so the key matches only where that ROM runs. For setups without it the registry adds the gated probe `mobo:z3660-window` (the fixed base `Z3660_FIXED 0x10000000`, `z3660eth.h:16`), never read when the combo board has autoconfigured (`amix-z3660rtg/NOTES.md:157`). A4091 0202:54, A4092 c0de:01, A4770 c0de:02 (`amix-a4091/README.md:58`; the last two untested on hardware). 6d6e:03 is the upstream ZZ9000's own identity (`amix-z3660rtg/README.md:98-101`) and matches only a real ZZ9000 |
 | sd rank keys | `30-module-core.md` §5 |
 
 ## 7. Open questions
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| OQ-20.1 | May the ABI kit publish the stock headers a module build needs (P-28 D30, P-22 D1)? | owner (by decision) |
 | OQ-20.2 | Is one k46 ABI right for both 68040 and 68060 kernels, or must they be two families? Depends on M-ABI1 and on the runtime CPU probe asked of the 040/060 port. | us; Antti |
-| OQ-20.3 | z3660eth's autoconfig product number for its match key. | us |
 | OQ-20.4 | Exact DDI v1 list and contracts; Antti reviews before the kit is frozen (D-3 §8). | us; Antti reviews |
 | OQ-20.5 | Whether ashnazag's author wants the shared major/syscall registry to be common to both projects (his zz9000 and our z3660rtg both use 49). | ashnazag |
+
+Closed in the review pass (T-52): OQ-20.1 — the stock headers are published in the kit (D-3 §7, §5 above); OQ-20.3 — z3660eth matches 144b:01 like its two siblings (§6).
 
 ## 8. Measurements
 

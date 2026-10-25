@@ -32,12 +32,14 @@ only (including `kbootset` and the package tools) and never for kernel space.
 
 ## What is not here
 
-No Commodore or AT&T material is in this repository: no kernel source, no
-headers copied from the Amix development kit, no binaries, no ROM images.
+No Commodore or AT&T material is tracked in this repository: no kernel
+source, no headers from the Amix development kit, no binaries, no ROM images.
 Where the design depends on the behaviour of a stock component, the
 specification describes that behaviour and names the component; it does not
-reproduce it. Building against the stock kernel requires a legally obtained
-Amix 2.1 installation.
+reproduce it. The published ABI kit additionally carries the stock Amix
+kernel headers a module build needs, under the project's distribution
+permission; the kit build adds them, so they never enter this repository's
+history.
 
 ## Related projects
 

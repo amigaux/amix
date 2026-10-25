@@ -64,6 +64,7 @@ What the adopted core lacks for our use is mapped in `MAP` §10 and
 | 14 | Pin by default: no unload unless the module declares `unload=allowed` and every registration it made is tracked | upstream has no auto-unload daemon and unload paths that need care (`MAP` §5) |
 | 15 | Structure offsets generated, not hard-coded: a probe object compiled against the licensed headers at build time produces the `cdevsw`/`streamtab`/`qinit` offsets | upstream hard-codes AMIX 2.1 layouts and its host test reuses the same macros (`MAP` §6) |
 | 16 | `marc_root` and `marc_post` passes driven by the arena directory and the manifest (§3) | upstream has no load point before first open (`MAP` §10.4) |
+| 17 | **Manifest-only loading.** Every load path — `modload`, dependency loads, `dlm_loadname`, and the first-open trampoline — resolves a module only as a member of the booted generation's manifest (the copy the loader placed in the arena, `10-boot-loader.md` §5.3), reads it from `/stand/gen/<id>/mod/`, and refuses it unless its SHA-256 matches the manifest; `modpath` no longer adds search directories. The only override is the **development-load** flag, set for one boot in the loader menu or by `kbootset next --devload`, carried in the loader record, and printed by the loader and by the kernel at boot and at every load it permits | upstream loads any file from `/etc/conf/mod.d` or a `modpath` directory through the VFS, unhashed (`MAP` §2, §5, §6); D-3 §7: a box refuses unsigned kernel space. Members were verified against the signed catalog when `kbootset` composed the generation (`60-signing-and-publishing.md` §3) |
 
 ## 3. Load points
 
@@ -71,10 +72,10 @@ What the adopted core lacks for our use is mapped in `MAP` §10 and
 |---|---|---|---|
 | `dmainit` (arm) | `startup()`, before `cred_init` and `init_tbl` (`STUDY` §2.2) | nothing; the core checks the symbol block and arms syscalls 64–69 only when `sysentsize` is 142 and the slots hold `nosys` (`MAP` §2) | — |
 | `marc_root` (root class) | inside `rth1_mountroot`, before `rth1_apply` and therefore before `vfs_mountroot` (P-28 D3, D61) | every module in the arena directory: relocate in place, run `_load`; disk controllers call `sd_register`, filesystems call `vfs_register`; the RAM disk registers its block major | the arena, filled by the loader (`10-boot-loader.md` §5.3) |
-| `rth1_apply` | unchanged | sd's first open closes controller registration (`sdopen(0)`) | — |
+| `rth1_apply` | extended (the driver line's own file) | sd's first open closes controller registration (`sdopen(0)`); then the loader record's **root selector** is applied: for an sd root, `rootdev` and the swap name are rewritten for cards 0–3 with the bit-7 encoding of §5.2; for a RAM-disk root, `rootdev` becomes block major 20 minor 0; for `swap none`, no swap device is configured (M-RD2). Without a loader record the 1.0 RTH1 behaviour is unchanged | — |
 | `vfs_mountroot` | unchanged call | `rootfstype` is set from the loader record, so only the named type is tried (stock tries every row, s5 first, and reports the last errno, `grimoire-amix/docs/how-it-works/boot-process.md:312-332`) | — |
-| `marc_post` (boot class) | after `vfs_mountroot` returns, in process 0, or from the first `sysinit` entry if file loading in process 0 proves unsafe (U15) | boot-class modules of the booted generation, SHA-256-checked against the manifest | `/stand/gen/<id>/mod/` on the root filesystem |
-| first open (demand class) | on first open of a registered major | demand modules, SHA-256-checked | same directory |
+| `marc_post` (boot class) | after `vfs_mountroot` returns, in process 0, or from the first `sysinit` entry if file loading in process 0 proves unsafe (U15) | boot-class modules of the booted generation, SHA-256-checked against the arena copy of the manifest (patch 17) | `/stand/gen/<id>/mod/` on the root filesystem |
+| first open (demand class) | on first open of a registered major | demand modules of the booted generation, SHA-256-checked (patch 17) | `/stand/gen/<id>/mod/` — the trampoline is redirected there from upstream's `/etc/conf/mod.d` |
 
 In safe mode `marc_post` and demand loading are refused (`70-static-floor.md`
 §4).
@@ -87,12 +88,17 @@ only adds an import to its relink pass (`tmp/2026-10-22-modules-proposal/refute-
 
 ## 4. Interrupt attachment
 
-Today `int2_tbl` holds five handlers and a NULL and no INT6 chain exists for
-Zorro boards: level 6 calls only the CIA-B handler (`L2`, `ttrap.s` reading).
-The core pass installs:
+Today `int2_tbl` is a NULL-terminated table with no free entry — five
+handlers on the 040/060 kernels (`L2`:247-248, asserted by
+`patch_a3091_intr.py`), six in the 030 kit, which adds the Gayle IDE handler
+(`amix-kerntools/work/cross-kernel-k030u-c6s1/usr/sys/master.d/kernel.c:190-197`)
+— and no INT6 chain exists for Zorro boards: level 6 calls only the CIA-B
+handler (`L2`:249). The core pass installs:
 
-- an INT2 chain walker in the table's last slot; static handlers stay where
-  they are, attached modules run after them;
+- an INT2 chain walker in the table's **last handler slot** (the entry before
+  the NULL terminator, which stays): the handler it displaces is called first
+  by the walker, the other static handlers stay where they are, and attached
+  modules run after them;
 - an INT6 chain called after the CIA-B handler.
 
 `intr_attach(level, handler, arg, name)` adds to a chain; `intr_detach`
@@ -130,24 +136,57 @@ not enough.
 |---|---|
 | Cards | four: minor bit 7 becomes the card's high bit; cards 0–1 keep today's minor numbers (`STUDY` §2.6) |
 | Names | `c<card*8+unit>` in hexadecimal as today: cards 0–1 → `c0`–`cf`, cards 2–3 → `c10`–`c1f`; every tool that assumes one hex digit (`updbootpart`, the installer, `/etc/devnm` readers, the RTH1 kernel half's one-byte `bo_name` rewrite) moves to the general form |
-| Order | **one rule on both lines**, by rank key, compacted over the controllers present: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A3000 WD33C93 or A4000T 53C710), (4) Gayle IDE. A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept; the 1.0 040/060 names for two controllers are kept |
+| Minor encoding | unit = bits 0–2, card low bit = bit 3, slice = bits 4–6, card high bit = bit 7. The RTH1 kernel half today builds the root minor as `card << 3 | unit` with `SDCARDS 2` (`amix-040-060-port/src/rth1.c:31,99,195`), which for cards 2–3 would land in the slice bits; it moves to `(card & 1) << 3 | (card >> 1) << 7 | slice << 4 | unit` and loops over four cards |
+| Drivers rebuilt for four cards | every array sized by `SDCARDS`: `sd` and `dd` (the disk layer), `ct` (tape), `a2091` and `a2090` (the floor WD33C93 drivers) (`tmp/2026-08-26-svr4-refs/amix-src/amiga/alien/{sd.h,sd.c,dd.c,ct.c,a2091.c,a2090.c}`), plus the RTH1 kernel half above. On the 030 line from the relink kit's source; on the 040/060 line as part of the base rebuild (§6) |
+| Order | by rank key, compacted over the controllers present. 040/060 line: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A4000T 53C710), (4) Gayle IDE — the 1.0 order extended. 030 line: **an owner decision, OQ-30.2** (below). A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept on both lines |
 | Registration | `sd_register(queuefn, probefn, name, rankkey)` is accepted only before sd's first open; afterwards `EBUSY` and a console line. The floor's static controllers register through the same table |
 | Rank keys | in the registry (`20-…` §6); a module's `rank` key in `.moddata` must match its class |
-| Equivalence gate | for every board set of record, a module kernel names every disk exactly as the stage-1 static kernel built for that board set (`80-stages-and-proof.md` §2, stage 4) |
+| Card-number gate | over the board sets of record (§5.3): see there (`80-stages-and-proof.md` §2, stage 4) |
 | Change detection | the manifest records the board set; when the booted board set differs, the loader prints it and `kbootset check` warns that device names may have moved. The root itself is found by identity (RTH1/RTO1 rule), not by name |
 
-Trade-off recorded: with compacted order, adding a higher-ranked controller
-moves the names of lower-ranked ones (an IDE-rooted box gains a Zorro SCSI
-board: the IDE moves from card 0 to card 1). The alternative — a fixed card
-per controller class — never moves names but gives the commonest single-
-controller machines (A3000 alone, IDE alone) non-stock names and has no slot
-for a second Zorro SCSI board. The compacted order is proposed; the choice is
-OQ-30.2. On the 030 line the address order goes away: the IDE no longer
-sorts first, and an A3000 with its onboard controller plus a Zorro SCSI board
-now numbers the Zorro board card 0. This changes 1.0 names for such 030
-boxes, which reinstall anyway (D-3 §5); whether the stock A3000UX convention
-(onboard controller first) should instead outrank Zorro boards is part of
-OQ-30.2.
+**The 030 line — owner decision (OQ-30.2).** 1.0's 030 kernels number
+controllers by board address, so the A3000 onboard controller (0xDD0000) and
+the Gayle IDE (0xDD2020) sort before any Zorro board. Two options:
+
+- *Option K — keep the 1.0 address order on the 030 line* (extended to four
+  cards in address order). Every 030 board set keeps its 1.0 names; the stock
+  A3000UX convention (onboard controller first) holds. Cost: the rank function
+  differs per line — a constant in each line's platform file, one kernel per
+  line either way.
+- *Option R — one rule on both lines* (the 040/060 order above). One rule to
+  document and test. Cost: an A3000 with a Zorro SCSI board, or an IDE box
+  with a Zorro SCSI board, gets new names (the Zorro board becomes card 0);
+  such boxes reinstall anyway (D-3 §5).
+
+**Recommendation: option K**, because 030 users and the stock documentation
+expect the onboard controller first and the per-line constant costs nothing.
+
+Either way, adding a higher-ranked controller later moves the names of
+lower-ranked ones (the compacted order); the alternative of a fixed card per
+controller class was considered and set aside because it gives the commonest
+single-controller machines non-stock names and has no slot for a second
+Zorro SCSI board. The root is found by identity regardless (§3).
+
+### 5.3 Board sets of record and the card-number gate
+
+A *board set of record* is a combination of disk controllers the project
+supports and tests: on the 040/060 line Z3660 alone; Z3660 + A4091/A4092;
+Z3660 + Gayle IDE; Z3660 + A4092 + Gayle IDE; Z3660 + A4000T 53C710; Z3660 +
+A4000T 53C710 + A4092 (+ Gayle IDE); Gayle IDE alone; on the 030 line A3000
+onboard alone; A3000 onboard + A4091; A4091 alone; A2091 alone; Gayle IDE
+alone; Gayle IDE + A4091. The list is kept with the measurement rows (M-SD1)
+and grows only by adding rows.
+
+The stage-4 gate judges each set against one of three expectations:
+
+1. **Order unchanged from 1.0** (every one- and two-controller set whose 1.0
+   order the contract keeps): every disk has its 1.0 name.
+2. **Accepted changes** (two-controller sets whose order the contract
+   changes): the new names are listed per set in the measurement record and
+   in the release notes. Under option K this list is empty on the 030 line;
+   under option R it holds A3000 + Zorro SCSI and Gayle IDE + Zorro SCSI.
+3. **Three and four controllers** (1.0 dropped the third controller): judged
+   against the contract's expected names, not against 1.0.
 
 The sd layer is a stock binary on the 040/060 line, patched in place, and
 generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
@@ -161,12 +200,17 @@ generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
   only `ufsinit` is referenced from outside (the `vfssw` row); s5 has 53 and
   is referenced through `s5init` and `inoinit` (`init_tbl`) (`L2` §2.5). The
   `inoinit` call becomes a filesystem-init hook the s5 module fills.
-- **040/060 line:** the kernel is the fully linked stock binary; ufs and s5
-  bytes are inside it (`L2` §2.5). Separation on our line means the base no
-  longer registers its own ufs/s5 rows, and the modules (built from the same
-  relocatable objects of the base) register instead; removing the dead bytes
-  from the image needs the base rebuilt from relocatable parts, which is
-  Antti's line (OQ-30.4).
+- **040/060 line:** the kernel is the stock binary, overridden and
+  byte-patched, kept as one relocatable object with its full symbol table and
+  relocations (`amix-kerntools/docs/040-kernel-line.md:10-22`); ufs and s5
+  live inside it and no separate 4 KiB-page ufs/s5 objects exist (`L2`
+  §2.5). **Our line rebuilds the 040/060 base so the 1.1 image carries no
+  ufs/s5 bytes** (D-3 §4): the ufs and s5 code and data are carved out of the
+  base object, with their relocations, into two relocatable objects that
+  become the k46 `ufs` and `s5` modules, and the base is relinked without
+  them. Feasibility (self-contained symbol ranges and relocations) is
+  measured (M-FS1). Antti reviews the rebuilt base; he does not deliver it
+  (OQ-30.4).
 - **`vfssw`:** 12 rows on 040, 13 on 030, no free row; on the 040 line cdfs
   today takes the RFS row by relocation retarget
   (`amix-040-060-port/src/patch_cdfs_vfssw.py:1-30`). The core grows the
@@ -181,13 +225,21 @@ generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
 
 ## 7. The RAM disk
 
-A root-class module (`ramdisk`, block major 21 and character major 54
-proposed) presenting the image the loader placed (`10-boot-loader.md` §5.4)
-as a disk. It maps the image by its physical address from the loader record,
-never allocates it, and refuses to attach if the record is absent. Writable
-(the miniroot needs a writable `/tmp`); contents are lost at power-off. The
-RAM-disk driver is new code on both lines; no RAM disk exists in Amix today
-(`review/P-6-compressed-miniroot-ramdisk.md`).
+Stock Amix has a RAM disk: `ram.c`, block major 20, three units whose memory
+is `kmem_alloc`ed at first open and freed at last close (stock
+`tmp/2026-08-26-svr4-refs/amix-src/amiga/driver/ram.c:18,47,66`;
+`master.d/kernel.c:307` there). It cannot present a pre-loaded image, and it
+is not on the D-3 §4 floor.
+
+1.1 replaces it with our `ramdisk` root-class module **on the same block
+major 20**: unit 0 presents the image the loader placed
+(`10-boot-loader.md` §5.4), mapped by its physical address from the loader
+record and never allocated or freed; units 1–2 keep the stock behaviour
+(kmem-backed scratch disks). The stock `ram` driver leaves the base (on the
+040/060 line with the base rebuild of §6). Writable (the miniroot needs a
+writable `/tmp`); contents are lost at power-off. P-6's premise that "Amix
+has no RAM-disk driver" is corrected here: it has one, but not one that can
+root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
 
 ## 8. Memory classes
 
@@ -209,9 +261,9 @@ RAM-disk driver is new code on both lines; no RAM disk exists in Amix today
 | ID | Question | Proposed owner |
 |---|---|---|
 | OQ-30.1 | Is a no-sleep mode strictly needed at `dmainit` on our base, or only at `marc_root` (U1)? | us |
-| OQ-30.2 | Compacted rank order (proposed) or fixed card per controller class for the four-card contract. | us; Antti reviews (sd is his binary on k46) |
+| OQ-30.2 | 030 line card order: option K, keep the 1.0 address order (recommended), or option R, one rule on both lines (§5.2). | owner |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe: does it exist in time for 1.1 (`amix-kerntools/docs/k0-families.md:1190-1195`)? | us |
-| OQ-30.4 | Can Antti's base be rebuilt so ufs/s5 bytes leave the 040/060 image, or does 1.1 ship them dead in the image? | Antti |
+| OQ-30.4 | Antti's review of the rebuilt 040/060 base without ufs/s5 (carving method, gates, acceptance record per his `docs/ACCEPTANCE.md`). | us build; Antti reviews |
 | OQ-30.5 | Does the halt path, known to crash on `shutdown -i0` on the 040/060 base (`amix-040-060-port/README.md`), need fixing before the halt pass can be proven? | Antti; us |
 | OQ-30.6 | Does ashnazag's author want the patches (arena path, no-sleep mode, `.moddata` v2, halt pass, `fmodsw` refusal, allowlist mode, shared registry) offered upstream? | ashnazag |
 | OQ-30.7 | Upstream's `rth1.c` copy is byte-identical today; re-check before the merge request. | us |
@@ -221,4 +273,6 @@ RAM-disk driver is new code on both lines; no RAM disk exists in Amix today
 U1 (state at `dmainit` and at the hook), U2 (kernel VA at 128 MB), U3
 (execution from `.data`), U12 (`vfssw` walkers and `nfstype`), U15 (file
 loading in process 0), M-REG1, M-CORE1 (upstream host tests on our
-toolchain), M-SD1 (equivalence over board sets) — `90-measurements.md`.
+toolchain), M-SD1 (card-number gate over board sets), M-FS1 (ufs/s5 carved
+from the 040/060 base), M-RD2 (root selector), M-SIG3 (manifest-only
+loading) — `90-measurements.md`.
