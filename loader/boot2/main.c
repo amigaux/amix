@@ -569,11 +569,9 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		   (k > 0 ? AXLF_FALLBACK : 0) | ((hdr.flags & AXF_READONLY) ? AXLF_READONLY : 0) |
 		   (menu ? AXLF_MENU : 0);
 	if (sel.devload)
-		con_puts("amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot
-");
+		con_puts("amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
 	if (sel.safe)
-		con_puts("amix-boot: safe mode
-");
+		con_puts("amix-boot: safe mode\n");
 	lr.dev_unit = (f & RTH_BOOT) ? u : 0xFFFFFFFFUL;	/* io_Unit is a pointer, not the unit */
 	lr.dev_start = part;
 	lr.dev_base = b;
