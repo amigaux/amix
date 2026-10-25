@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-25 (night) — S2-12 kernel-space packages; gcc14 phase-2 smoke (9e54df8..a8f45d2) — minted, not published
+
+kernel-k46-z 1.1.0.261025.51 and kernel-k46-zacd 1.1.0.261025.52: the port's KD060 kernels as brel (27 % smaller; axrel proves
+both forms bind to the same image), sidecar verbatim except size=/sha256= restated for the shipped form; kernel-k30-u is a
+stand-in, never catalogued. loader-amix 1.0.261025 (/stand/loader/{boot1,boot2,ldrinfo}, loader version 1) and kbootset
+1.1.0.261025 (/sbin/kbootset, userland), built from amix-dlm fb9c1ce. recipes/common/kpkgroll.sh (pure-files roll),
+dlm-src.sh; tools/kspace-roundtrip.sh: gen-catalog → apkg 0.3 -R → kbootset build/commit/check, 20/20, with gate-1 and
+gate-2 refusals. gcc14 phase 2 (tools/gcc14-smoke/): grep and less byte-equal to the period builds on E1 and N6; make dies on
+the 030+68882 with -mcpu=68060 FPU forms and matches with -m68020-60 — see tmp/2026-10-25-gcc14-eval/PHASE2.md.
+
 ## 2026-10-25 — TOOLCHAIN=gcc14 selector and gates; grep, less, make recipes ported (414de4a, b8985c1)
 
 A selectable GCC 14 toolchain (Antti's gcc14-cross-amix, userland only per D-3 §9) beside the period default:
