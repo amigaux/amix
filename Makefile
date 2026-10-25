@@ -26,9 +26,9 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link
 
-.PHONY: all test tools toolchain-check cross boot1 b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 b2test clean
 
-all: test tools cross boot1 b2test
+all: test tools cross boot1 boot2 b2test
 
 $(B):
 	mkdir -p $(B)
@@ -82,7 +82,7 @@ toolchain-check: | $(B)
 
 # Loader code is plain ANSI C89 (not -traditional) for the 68020 and up; every
 # object must pass the toolchain's 68060 instruction scanner.
-CROSSCFLAGS ?= -O2 -m68020 -fno-builtin -Wall
+CROSSCFLAGS ?= -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall
 COBJ := $(patsubst $(COMMON)/%.c,$(B)/cross/%.o,$(CSRC))
 
 $(B)/cross/%.o: $(COMMON)/%.c $(COMMON)/*.h
@@ -109,6 +109,30 @@ $(B)/boot1.img: $(B)/boot1.bin $(B)/bbframe
 	$(B)/bbframe -c $@
 
 boot1: toolchain-check $(B)/boot1.img
+
+# boot2: start.s first (its header must be the first bytes), then the rest;
+# ld -r, then b2link binds it at 0, appends the self-relocation table and
+# applies the 28 KiB size gate.
+B2C    := loader/boot2/main.c loader/boot2/sys.c loader/boot2/con.c
+B2OBJ  := $(B)/cross/start.o $(B)/cross/amiga.o \
+          $(patsubst loader/boot2/%.c,$(B)/cross/b2_%.o,$(B2C)) $(COBJ)
+
+$(B)/cross/amiga.o: loader/boot2/amiga.s
+	@mkdir -p $(B)/cross
+	$(CROSS)as -m68030 -o $@ $<
+
+$(B)/cross/b2_%.o: loader/boot2/%.c loader/boot2/b2.h $(COMMON)/*.h
+	@mkdir -p $(B)/cross
+	$(CROSS)gcc $(CROSSCFLAGS) -fomit-frame-pointer -I$(COMMON) -c -o $@ $<
+
+$(B)/boot2.r.o: $(B2OBJ)
+	$(CROSS)ld -r -o $@ $(B2OBJ)
+
+$(B)/boot2.bin: $(B)/boot2.r.o $(B)/b2link
+	$(CROSS)scan060 $(B2OBJ)
+	$(B)/b2link $< $@
+
+boot2: toolchain-check $(B)/boot2.bin
 
 # The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
 # with start.s first, b2link, then b2check proves the table reproduces the
