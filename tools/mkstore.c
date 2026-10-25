@@ -2,10 +2,15 @@
  * mkstore.c -- build a boot store (docs/spec/10-boot-loader.md §4.2) into an
  * image file: the seed of `kbootset --image` (docs/plan/stage-1.md S1-06).
  *
- * usage: mkstore -o IMAGE [-p OFFSET] [-s SIZE] -1 BOOT1.IMG -2 BOOT2.BIN
- *                [-b BOOT2B.BIN] [-v LOADERVER] [-r] [-d DEFAULT] SPEC...
+ * usage: mkstore -o IMAGE [-o IMAGE2 ...] [-p OFFSET] [-s SIZE] [-f]
+ *                -1 BOOT1.IMG -2 BOOT2.BIN [-b BOOT2B.BIN] [-v LOADERVER]
+ *                [-r] [-d DEFAULT] SPEC...
  *
- *   -o IMAGE   image file; created if missing, otherwise written in place
+ *   -o IMAGE   image file; created if missing, otherwise written in place.
+ *              Give -o once per volume for a multi-volume store (with -f)
+ *   -f         floppy profile: read-only, one boot2 and one control block,
+ *              packed after boot2; volumes of SIZE bytes (default 901120)
+ *              filled in order, each member on one volume
  *   -p OFFSET  byte offset of the boot partition in the image (default 0)
  *   -s SIZE    store (partition) size in bytes (default 64 MiB)
  *   -1 FILE    boot1 bootblock (1024 bytes, from bbframe)
@@ -36,10 +41,14 @@
 #include "store.h"
 #include "manifest.h"
 
+#define MAXVOL 8
+
 static ax_u32 tab[256];
-static unsigned char *store;	/* the whole store, built in memory */
+static unsigned char *vols[MAXVOL];	/* each volume, built in memory */
+static int nvol = 1, curvol;		/* curvol: 0-based volume being filled */
 static ax_u32 store_size = 64UL << 20;
 static ax_u32 next_free = AX_DATA_OFF;
+#define store (vols[0])
 
 static void
 die(const char *msg, const char *arg)
@@ -68,16 +77,27 @@ slurp(const char *path, ax_u32 *len)
 	return p;
 }
 
-/* place len bytes in the data area; returns the extent offset */
+/* where volumes after the first start their data: after the headers */
+#define VOLN_DATA (AX_HDR_B_OFF + AX_HDR_SIZE)
+
+/* place len bytes in the data area; returns the extent offset and sets
+ * *vol (1-based); a member that does not fit moves to the next volume */
 static ax_u32
-place(const unsigned char *p, ax_u32 len)
+place(const unsigned char *p, ax_u32 len, ax_u16 *vol)
 {
 	ax_u32 off = next_free;
 
-	if (len > store_size - off)
-		die("store full", 0);
-	memcpy(store + off, p, len);
+	if (len > store_size - off) {
+		if (curvol + 1 >= nvol)
+			die("store full", 0);
+		curvol++;
+		off = next_free = VOLN_DATA;
+		if (len > store_size - off)
+			die("member larger than a volume", 0);
+	}
+	memcpy(vols[curvol] + off, p, len);
 	next_free = (off + len + AX_BLK - 1) / AX_BLK * AX_BLK;
+	*vol = (ax_u16)(curvol + 1);
 	return off;
 }
 
@@ -123,6 +143,7 @@ generation(const char *spec, struct ax_gen *g)
 	char *tok[16];
 	FILE *f = fopen(spec, "r");
 	ax_u32 mlen = 0, flen, crc, off;
+	ax_u16 vol;
 	int n, state = -1, i, have_gen = 0;
 	unsigned char *data;
 	struct ax_manifest chk;
@@ -166,17 +187,22 @@ generation(const char *spec, struct ax_gen *g)
 			crc = ax_crc32(tab, data, flen);
 			if (zip) {
 				zdata = deflate_raw(data, flen, &zlen);
-				off = place(zdata, zlen);
+				off = place(zdata, zlen, &vol);
 				free(zdata);
 			} else {
 				zlen = flen;
-				off = place(data, flen);
+				off = place(data, flen, &vol);
 			}
 			free(data);
 			out[0] = 0;
 			for (i = 0; i < fi; i++)
 				sprintf(out + strlen(out), "%s ", tok[i]);
-			sprintf(out + strlen(out), "%lu at=0x%lx", (unsigned long)flen, (unsigned long)off);
+			if (vol > 1)
+				sprintf(out + strlen(out), "%lu at=%u:0x%lx", (unsigned long)flen, vol,
+					(unsigned long)off);
+			else
+				sprintf(out + strlen(out), "%lu at=0x%lx", (unsigned long)flen,
+					(unsigned long)off);
 			if (zip)
 				sprintf(out + strlen(out), " stored=%lu z=deflate", (unsigned long)zlen);
 			sprintf(out + strlen(out), " crc32=%08lx", (unsigned long)crc);
@@ -205,20 +231,20 @@ generation(const char *spec, struct ax_gen *g)
 		}
 	}
 	g->state = (ax_u8)state;
-	g->volume = 1;
 	g->man_len = mlen;
 	g->man_crc = ax_crc32(tab, (ax_u8 *)man, mlen);
-	g->man_off = place((unsigned char *)man, mlen);
+	g->man_off = place((unsigned char *)man, mlen, &vol);
+	g->volume = vol;
 	g->created = (ax_u32)time(0);
 }
 
 int
 main(int argc, char **argv)
 {
-	const char *image = 0, *b1 = 0, *b2 = 0, *b2b = 0;
+	const char *image[MAXVOL], *b1 = 0, *b2 = 0, *b2b = 0;
 	unsigned long poff = 0;
-	ax_u32 ver = 1, deflt = 0, len;
-	int readonly = 0, i;
+	ax_u32 ver = 1, deflt = 0, len, ctloff;
+	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, i, v;
 	unsigned char *p;
 	struct ax_header h;
 	static struct ax_ctl c;
@@ -227,9 +253,16 @@ main(int argc, char **argv)
 	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
 		if (i + 1 >= argc && strcmp(argv[i], "-r"))
 			die("missing argument for", argv[i]);
-		if (!strcmp(argv[i], "-o")) image = argv[++i];
-		else if (!strcmp(argv[i], "-p")) poff = strtoul(argv[++i], 0, 0);
-		else if (!strcmp(argv[i], "-s")) store_size = (ax_u32)strtoul(argv[++i], 0, 0);
+		if (!strcmp(argv[i], "-o")) {
+			if (nimg == MAXVOL)
+				die("too many volumes", 0);
+			image[nimg++] = argv[++i];
+		} else if (!strcmp(argv[i], "-p")) poff = strtoul(argv[++i], 0, 0);
+		else if (!strcmp(argv[i], "-s")) {
+			store_size = (ax_u32)strtoul(argv[++i], 0, 0);
+			sizeset = 1;
+		}
+		else if (!strcmp(argv[i], "-f")) floppy = readonly = 1;
 		else if (!strcmp(argv[i], "-1")) b1 = argv[++i];
 		else if (!strcmp(argv[i], "-2")) b2 = argv[++i];
 		else if (!strcmp(argv[i], "-b")) b2b = argv[++i];
@@ -238,7 +271,14 @@ main(int argc, char **argv)
 		else if (!strcmp(argv[i], "-r")) readonly = 1;
 		else die("unknown option", argv[i]);
 	}
-	if (!image || !b1 || !b2 || i >= argc)
+	if (i + 1 < argc && (!strcmp(argv[argc - 1], "-r") || !strcmp(argv[argc - 1], "-f")))
+		die("options go before the spec files", 0);
+	if (floppy && !sizeset)
+		store_size = 901120;
+	if (nimg > 1 && !floppy)
+		die("several volumes need the floppy profile (-f)", 0);
+	nvol = nimg ? nimg : 1;
+	if (!nimg || !b1 || !b2 || i >= argc)
 		die("usage: mkstore -o IMAGE [-p OFF] [-s SIZE] -1 BOOT1 -2 BOOT2 [-b BOOT2B] [-v N] [-r] [-d ID] SPEC...", 0);
 	if (store_size % AX_BLK || store_size < AX_DATA_OFF + AX_BLK)
 		die("store size must be a multiple of 2048 and larger than 64 KiB", 0);
@@ -246,8 +286,9 @@ main(int argc, char **argv)
 		die("too many generations", 0);
 
 	ax_crc32_init(tab);
-	if (!(store = calloc(1, store_size)))
-		die("out of memory", 0);
+	for (v = 0; v < nvol; v++)
+		if (!(vols[v] = calloc(1, store_size)))
+			die("out of memory", 0);
 
 	p = slurp(b1, &len);
 	if (len != AX_BOOT1_MAX)
@@ -264,10 +305,22 @@ main(int argc, char **argv)
 	h.ctl_off[0] = AX_CTL_A_OFF;
 	h.ctl_off[1] = AX_CTL_B_OFF;
 	h.tally_off = AX_TALLY_OFF;
-	h.medium = AXM_DISK;
+	h.medium = floppy ? AXM_FLOPPY : AXM_DISK;
+	h.nvolumes = (ax_u16)nvol;
+	if (nvol > 1)
+		h.flags |= AXF_MULTIVOL;
 	p = slurp(b2, &len);
 	if (len == 0 || len > AX_BOOT2_MAX)
 		die("boot2 must be 1..28672 bytes", b2);
+	if (floppy) {
+		/* packed: one control block right after boot2, data after it */
+		if (b2b)
+			die("the floppy profile carries one boot2", 0);
+		ctloff = (AX_BOOT2_A_OFF + len + AX_BLK - 1) / AX_BLK * AX_BLK;
+		h.ctl_off[0] = h.ctl_off[1] = ctloff;
+		h.tally_off = 0;
+		next_free = ctloff + AX_BLK;
+	}
 	memcpy(store + AX_BOOT2_A_OFF, p, len);
 	h.boot2[0].off = AX_BOOT2_A_OFF;
 	h.boot2[0].len = len;
@@ -285,8 +338,6 @@ main(int argc, char **argv)
 		h.boot2[1].ver = ver;
 		free(p);
 	}
-	ax_hdr_write(tab, &h, store + AX_HDR_A_OFF);
-	ax_hdr_write(tab, &h, store + AX_HDR_B_OFF);
 
 	memset(&c, 0, sizeof(c));
 	c.seq = 1;
@@ -301,15 +352,20 @@ main(int argc, char **argv)
 			deflt = c.gen[c.ngen].id;
 	}
 	c.default_gen = deflt;
-	ax_ctl_write(tab, &c, store + AX_CTL_A_OFF);
-
-	f = fopen(image, "r+b");
-	if (!f)
-		f = fopen(image, "w+b");
-	if (!f || fseek(f, (long)poff, SEEK_SET) != 0 ||
-	    fwrite(store, 1, store_size, f) != store_size || fclose(f) != 0)
-		die("cannot write", image);
-	printf("mkstore: %s: store of %lu bytes at offset %lu, %d generation(s), %lu bytes used\n",
-	       image, (unsigned long)store_size, poff, c.ngen, (unsigned long)next_free);
+	ax_ctl_write(tab, &c, store + h.ctl_off[0]);
+	for (v = 0; v < nvol; v++) {
+		h.volume = (ax_u16)(v + 1);
+		ax_hdr_write(tab, &h, vols[v] + AX_HDR_A_OFF);
+		ax_hdr_write(tab, &h, vols[v] + AX_HDR_B_OFF);
+		f = fopen(image[v], "r+b");
+		if (!f)
+			f = fopen(image[v], "w+b");
+		if (!f || fseek(f, v ? 0L : (long)poff, SEEK_SET) != 0 ||
+		    fwrite(vols[v], 1, store_size, f) != store_size || fclose(f) != 0)
+			die("cannot write", image[v]);
+	}
+	printf("mkstore: %s: store of %lu bytes at offset %lu, %d volume(s), %d generation(s), "
+	       "%lu bytes used on the last volume\n", image[0], (unsigned long)store_size, poff,
+	       nvol, c.ngen, (unsigned long)next_free);
 	return 0;
 }

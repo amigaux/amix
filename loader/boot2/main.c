@@ -39,6 +39,7 @@ static struct work *w;
 static ax_u8 *iob;		/* the strap's IOStdReq */
 static ax_u32 part;		/* partition start in bytes */
 static ax_u8 *bounce;		/* BOUNCE bytes of chip memory */
+static ax_u32 curvol = 1;	/* the volume in the drive (floppy pairs) */
 static struct ax_header hdr;
 static struct ax_ctl ctl, newctl;
 static int ctlcopy;		/* which control-block copy was read */
@@ -71,6 +72,8 @@ fail(int code, ax_u32 gen)
 	con_printf("amix-boot: %s (generation %u)\n", lmsg[code], gen);
 }
 
+static void motor_off(void);
+
 /* device I/O through the chip bounce buffer: off is partition-relative,
  * 2048-aligned; len any; writes are whole 2048-byte blocks */
 static int
@@ -95,6 +98,54 @@ io(int cmd, ax_u32 off, ax_u8 *buf, ax_u32 len)
 		buf += chunk;
 		len -= chunk;
 	}
+	return 0;
+}
+
+/*
+ * Multi-volume stores (the floppy pair, docs/spec/10-boot-loader.md §4.3):
+ * an extent on another volume asks for that disk and waits until a store
+ * header of the same set and the wanted volume can be read (L11).
+ */
+static int
+want_volume(ax_u32 vol)
+{
+	ax_u8 *blk;
+	struct ax_header h;
+	int f, k;
+
+	if (vol == curvol)
+		return 0;
+	if (vol == 0 || vol > hdr.nvolumes) {
+		fail(11, vol);
+		return -1;
+	}
+	blk = x_allocmem(2048, MEMF_PUBLIC);
+	if (!blk)
+		return -1;
+	motor_off();
+	con_printf("amix-boot: L11 insert boot volume %u of %u\n", vol, (ax_u32)hdr.nvolumes);
+	for (;;) {
+		for (f = 0; f < 25; f++) {	/* about half a second between tries */
+			in_frame();
+			k = in_key();
+			if (k >= 0 || in_serial() >= 0 || in_lmb())
+				break;
+		}
+		if (io(CMD_READ, 0, blk, 2048) != 0)
+			continue;
+		if (ax_hdr_pick(crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) < 0 ||
+		    h.set_id != hdr.set_id) {
+			con_puts("amix-boot: that disk is not part of this boot set\n");
+			continue;
+		}
+		if (h.volume != vol) {
+			con_printf("amix-boot: that is volume %u; insert volume %u\n", (ax_u32)h.volume, vol);
+			continue;
+		}
+		break;
+	}
+	x_freemem(blk, 2048);
+	curvol = vol;
 	return 0;
 }
 
@@ -171,6 +222,10 @@ load_member(const struct ax_member *mb, ax_u32 gen)
 		buf = x_allocmem(mb->size ? mb->size : 1, MEMF_PUBLIC);
 	if (!buf) {
 		fail(4, gen);
+		return 0;
+	}
+	if (want_volume(mb->vol) != 0) {
+		x_freemem(buf, mb->size);
 		return 0;
 	}
 	if (mb->z == AXZ_DEFLATE) {
@@ -326,7 +381,8 @@ load_first(const struct ax_sel *sel)
 			continue;
 		}
 		mbuf = x_allocmem(g->man_len, MEMF_PUBLIC);
-		if (!mbuf || io(CMD_READ, g->man_off, mbuf, g->man_len) != 0 ||
+		if (!mbuf || want_volume(g->volume ? g->volume : 1) != 0 ||
+		    io(CMD_READ, g->man_off, mbuf, g->man_len) != 0 ||
 		    ax_crc32(crctab, mbuf, g->man_len) != g->man_crc ||
 		    ax_manifest_parse(crctab, (char *)mbuf, g->man_len, &man, &errline) != AXM_OK ||
 		    man.generation != gen) {
@@ -414,6 +470,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		con_puts("amix-boot: B1 store header lost\n");
 		return -1;
 	}
+	curvol = hdr.volume;
 
 	/* the control block, the console, the choice of generation */
 	if (io(CMD_READ, hdr.ctl_off[0], w->cb[0], 2048) != 0)

@@ -40,3 +40,24 @@ if $B/lsstore $T/disk.img 1048576 >/dev/null; then
 	echo "store-roundtrip: corruption NOT detected" >&2; exit 1
 fi
 echo "store-roundtrip: ok"
+
+# a floppy pair: packed layout, a member that does not fit volume 1 moves
+# to volume 2, and lsstore reads both volumes
+head -c 600000 /dev/urandom > $T/fkernel
+head -c 500000 /dev/urandom > $T/miniroot
+cat > $T/f1.spec <<SPEC
+generation 1
+state pristine
+line k30
+rootfs ufs
+root ramdisk
+swap none
+kernel unix $T/fkernel
+ramdisk miniroot $T/miniroot
+SPEC
+$B/mkstore -f -o $T/boot1.adf -o $T/boot2.adf -1 $T/boot1.img -2 $T/boot2.bin $T/f1.spec
+[ "$(wc -c < $T/boot1.adf)" -eq 901120 ] && [ "$(wc -c < $T/boot2.adf)" -eq 901120 ]
+$B/lsstore $T/boot1.adf 0 $T/boot2.adf | tee $T/f.out
+grep -q "ramdisk miniroot .* at 2:0x800" $T/f.out
+grep -q "header A: seq 1, store 901120 bytes, flags 0x6, volume 1/2" $T/f.out
+echo "store-roundtrip: floppy pair ok"
