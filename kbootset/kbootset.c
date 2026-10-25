@@ -69,8 +69,9 @@
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
-#ifdef KS_SYNC			/* the box build: sync() before a hold */
+#ifdef KS_SYNC			/* the box build: sync() before a hold; mknod */
 #include <unistd.h>
+#include <sys/sysmacros.h>
 #endif
 
 #define SECTOR	512UL
@@ -323,6 +324,24 @@ step(int n, const char *what)
 	}
 }
 
+#ifdef KS_SYNC
+/* the node kinfo is read through (C2-3 §1, C2-4 §2): the installer makes
+ * it; on a box without it kbootset makes it, character 53, 0, mode 0444 */
+static void
+kinfo_node(void)
+{
+	struct stat st;
+
+	if (stat("/dev/kinfo", &st) == 0)
+		return;
+	if (mknod("/dev/kinfo", S_IFCHR | 0444, makedevice(53, 0)) == 0)
+		printf("kbootset: made /dev/kinfo (character device 53, 0), which was missing\n");
+	else
+		printf("kbootset: /dev/kinfo is missing and cannot be made: the box facts come from "
+		       "/etc/default/bootset and the options\n");
+}
+#endif
+
 static void
 usage(void)
 {
@@ -527,6 +546,10 @@ main(int argc, char **argv)
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
 	sprintf(bootset, "%.1000s/etc/default/bootset", root);
+#ifdef KS_SYNC
+	if (!image && !(kpath && *kpath))
+		kinfo_node();
+#endif
 	have_kinfo = kb_kinfo_read(kpath && *kpath ? kpath : "/dev/kinfo", &ki) == 0;
 	if (!image) {			/* the running box: find the store */
 		if (create)
