@@ -112,7 +112,7 @@ decision reserved to the project owner.
 | OQ-40.2 | Data slice default size and mount point | us |
 | OQ-40.3 | A rescue RAM-disk generation in every boot store | us |
 | OQ-40.4 | Stock `pkgadd` on `/stand` conflicts and overwrite orphans | us |
-| OQ-40.5 | Checksum contract version 2 for generations (P-28 D23 re-scoped) | us |
+| OQ-40.5 | Checksum contract version 2 for generations (P-28 D23 re-scoped) — **closed** by `docs/contracts/C2-5-checksum-v2.md` | us |
 | OQ-40.6 | Swap slice size cap for the configuration archive | us |
 | OQ-40.7 | The 1024 MiB filesystem limit before the layout freezes | us |
 | OQ-50.1 | Floppy profile per line: RAM-disk or fd0 root | us |

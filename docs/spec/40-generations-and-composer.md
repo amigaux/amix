@@ -75,7 +75,7 @@ program against an image file, so media and boxes cannot drift).
 | `kbootset build` | compose the next generation in `/stand/gen/<new>/` from installed packages; runs every gate; writes nothing to the store |
 | `kbootset commit` | write the built generation into the store as `trial`; read back; flip the control block; the default generation is not changed (a newer trial replaces an older unbooted one) |
 | `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2 |
-| `kbootset rollback` | sets the **default** to the newest good generation older than the current default (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
+| `kbootset rollback` | sets the **default** to the newest good generation older than the current default, or to the pristine generation when there is no older good one (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
 | `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
 | `kbootset mark-bad <id>` | administrator verdict |
 | `kbootset check` | recompute every member's SHA-256 in the store and in `/stand/gen` against the manifests and the package database; compare the installed packages with the default generation; never writes |
@@ -213,7 +213,7 @@ trap, `firstboot.sh:30-31`).
 | OQ-40.2 | Data slice default size and mount point (`/home` proposed). | us |
 | OQ-40.3 | Whether the boot store should also hold a rescue RAM-disk generation so every installed disk can rescue itself without a medium. Not required by D-3 ("every install medium is the rescue medium"). | us |
 | OQ-40.4 | Stock `pkgadd` behaviour on `/stand` conflicts and on files dropped by `instance=overwrite` (E1); `kbootset` already avoids depending on either. | us |
-| OQ-40.5 | The checksum contract (`amix-kerntools/contracts/bootchain-v1.json`, `sum_gate_interplay`) needs a version 2 for generations: identity = SHA-256 per member from the packages plus the manifest; `kbootset check` as the second reader (P-28 D23 re-scoped). Written as a decision record when the store format is frozen. | us |
+| OQ-40.5 | The checksum contract (`amix-kerntools/contracts/bootchain-v1.json`, `sum_gate_interplay`) needs a version 2 for generations: identity = SHA-256 per member from the packages plus the manifest; `kbootset check` as the second reader (P-28 D23 re-scoped). Written as a decision record when the store format is frozen. **Closed 2026-10-25** by `docs/contracts/C2-5-checksum-v2.md`. | us |
 | OQ-40.6 | Whether the swap slice is always large enough for the configuration archive (18 MB minimum) — it is for any plausible configuration; a size cap and refusal are specified. | us |
 | OQ-40.7 | Lifting the 1024 MiB filesystem limit, or laying several data filesystems on large disks; must be settled before the 1.1 layout freezes so no later release needs a re-lay. | us |
 
