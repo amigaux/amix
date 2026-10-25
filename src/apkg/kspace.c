@@ -6,7 +6,7 @@
  * MIT license - see LICENSE in this directory.
  *
  * The interfaces are agreed contracts of the kernel-modules campaign
- * (amix-dlm, version 1, 2026-10-25), and this file implements apkg's side
+ * (amix-dlm; C2-2 and C2-4 version 2, 2026-10-26), and this file implements apkg's side
  * of them exactly:
  *
  *   C2-2 kernel-space catalog entries and the install record
@@ -937,7 +937,7 @@ static int kb_call(const struct conf *cf, const char *cmd, char *last,
         return EX_BOOTSET;
     case 2:
         warnx2("kbootset rejected the call '%s' (status 2, usage): is "
-               "%s the kbootset of contract C2-4 version 1?", cmd,
+               "%s the kbootset of contract C2-4 version 2?", cmd,
                cf->kbootset);
         return EX_BOOTSET;
     case 3:

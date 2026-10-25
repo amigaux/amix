@@ -1741,7 +1741,7 @@ fi
 
 # ======================================= kernel space (apkg 0.3)
 #
-# amix-dlm contracts, version 1 (2026-10-25): C2-2 (the #ext kpkg block and
+# amix-dlm contracts, version 2 (2026-10-26): C2-2 (the #ext kpkg block and
 # the install record /var/apkg/kpkg/<name>) and C2-4 (kbootset as a called
 # program).  Integrity in 1.1 is SHA-256 + size per kernel-space package,
 # no signature (D-3 §13); the hook records "unverified".  kbootset does not
@@ -2188,7 +2188,7 @@ echo "$OUT" | grep -q "refused by a rule (status 3): refused: the boot store is 
     && ok "status 3 passes the kbootset line on" || bad "status 3 message" "$OUT"
 kreset; echo build=2 > "$WORK/kb.mode"
 run 6 "status 2 (usage) exits 6" "$APKG" -c "$KCONF" -f install z3660scsi-k46
-echo "$OUT" | grep -q "contract C2-4 version 1" && ok "status 2 asks whether kbootset speaks C2-4" \
+echo "$OUT" | grep -q "contract C2-4 version 2" && ok "status 2 asks whether kbootset speaks C2-4" \
     || bad "status 2 message" "$OUT"
 "$APKG" -c "$KCONF" -f recover >/dev/null 2>&1
 kreset; echo build=1 > "$WORK/kb.mode"

@@ -1,5 +1,16 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-25 (late) — apkg 0.3 follow-up after the kbootset author's review (built, NOT minted, NOT published)
+
+The kbootset author checked the 2026-10-25 work against its consumer: the record format and the exit
+mapping match to the byte. Four fixes followed, one commit each.
+
+1. **Contracts at version 2.** C2-2 v2 names `pkginst=` and `offset=` as optional keys (apkg already
+   read them); C2-4 v2 says `bootset=` is read from `<target>/etc/default/bootset`, absent = auto,
+   unknown = manual (already so), and that the box form without `--image`/`--dev` and the default
+   journal wait for kinfo, so apkg keeps passing `--journal`. The status-2 message now names C2-4
+   version 2.
+
 ## 2026-10-25 — apkg 0.3 kernel space: the kpkg block, SHA-256, install records, the kbootset trigger, the journal (built, NOT minted, NOT published)
 
 **What.** The apkg side of the kernel-modules campaign (D-3; amix-dlm stage-2 plan S2-20/21/22), built

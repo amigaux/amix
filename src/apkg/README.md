@@ -45,7 +45,7 @@ See [apkg.1](apkg.1) for the full manual.
 
 Kernel, loader and module packages are the kernel-modules campaign's
 (amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
-version 1: `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 
@@ -53,7 +53,7 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
   entries, one `#kpkg <name> <version> role= line= kabi= pin= size= sha256=
   file=` line per package, optional `#ksig`.  Every line is a comment to a
   0.2.x client, which skips the block whole (tested against the 0.2.3
-  source).  Extension keys this client also reads: `pkginst=` (otherwise
+  source).  The optional keys of C2-2 v2: `pkginst=` (otherwise
   the datastream header names it) and `offset=` (RAW media).
 - **Integrity.** SHA-256 + size for kernel space, md5 + size for userland as
   before.  No signature in 1.1 (D-3 §13): the hook in `kspace_verify_hook()`

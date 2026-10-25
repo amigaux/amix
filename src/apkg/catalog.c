@@ -136,7 +136,7 @@ static void ent_free(struct pkgent *e)
 
 /* ---------------- the kernel-space block (#ext kpkg 1) ----------------
  *
- * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 1:
+ * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 2 (2026-10-26):
  *
  *   #ext kpkg 1
  *   #kpkg <name> <version> role=<kernel|loader|module> line=<k30|k46>
@@ -147,10 +147,10 @@ static void ent_free(struct pkgent *e)
  *
  * After the name and the version the attributes are key=value in any
  * order.  An unknown key is ignored; an unknown key starting with '!'
- * refuses the ENTRY.  Two extension keys this client also reads (both
- * ignorable by any other reader under the rule above): pkginst= (the
- * SVR4 instance; otherwise taken from the datastream's header) and
- * offset= (the byte offset on a RAW medium, as the ordinary 10th field).
+ * refuses the ENTRY.  Version 2 names two optional keys, both read here:
+ * pkginst= (the SVR4 instance; otherwise taken from the datastream's
+ * header) and offset= (the byte offset on a RAW medium, as the ordinary
+ * 10th field).
  *
  * What refuses the WHOLE catalog (fail closed, like an unsafe filename):
  * an unterminated block, an ordinary entry line inside it, a second
