@@ -1555,17 +1555,54 @@ else
         "$S25/src/stand/k46/unix" "$S25/src/stand/k46/kabi" | python3 "$MKDS" "$K25" KERNKD60 1.1.0
     echo "  skip- host pkgmk absent: the kernel datastream comes from mkds.py"
 fi
+# the loader package (C2-3 v2 section 3): boot1, boot2, and ldrinfo with one
+# key=value per line; its entry takes line=any and loader= from ldrinfo
+mkdir -p "$S25/src/stand/loader"
+head -c 1024 /dev/urandom > "$S25/src/stand/loader/boot1"
+head -c 30000 /dev/urandom > "$S25/src/stand/loader/boot2"
+ldrinfo25() {   # ldrinfo25 <out> [line] [boot2-sha256] [version-line]
+    cat > "$1" <<EOF
+${4-version=3}
+line=${2:-any}
+boot1-sha256=$(sha256sum "$S25/src/stand/loader/boot1" | cut -c1-64)
+boot2-size=$(wc -c < "$S25/src/stand/loader/boot2" | tr -d ' ')
+boot2-sha256=${3:-$(sha256sum "$S25/src/stand/loader/boot2" | cut -c1-64)}
+EOF
+}
+ldrinfo25 "$S25/src/stand/loader/ldrinfo"
+L25="$S25/stg/kernel/LOADER-3.pkg"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    mkdir -p "$S25/lspool"
+    printf 'PKG=LOADER\nNAME=amix-dlm boot loader\nVERSION=3\nARCH=m68k\nCATEGORY=system\nCLASSES=none\nBASEDIR=/\n' > "$S25/lpkginfo"
+    printf 'i pkginfo=%s\nd none /stand/loader 0755 root sys\nf none /stand/loader/boot1=%s 0644 root sys\nf none /stand/loader/boot2=%s 0644 root sys\nf none /stand/loader/ldrinfo=%s 0644 root sys\n' \
+        "$S25/lpkginfo" "$S25/src/stand/loader/boot1" "$S25/src/stand/loader/boot2" "$S25/src/stand/loader/ldrinfo" > "$S25/lprototype"
+    ( cd "$S25" && "$HB/pkgmk" -o -d "$S25/lspool" -f lprototype && \
+      "$HB/pkgtrans" -s "$S25/lspool" "$L25" LOADER ) >"$WORK/t25.lmk" 2>&1
+    check "a real loader datastream (boot1, boot2, ldrinfo) minted by pkgmk/pkgtrans" test -s "$L25"
+else
+    printf 'DIR /stand\nDIR /stand/loader\nCOPY /stand/loader/boot1 %s\nCOPY /stand/loader/boot2 %s\nCOPY /stand/loader/ldrinfo %s\n' \
+        "$S25/src/stand/loader/boot1" "$S25/src/stand/loader/boot2" "$S25/src/stand/loader/ldrinfo" \
+        | python3 "$MKDS" "$L25" LOADER 3
+fi
+# the kbootset package is userland (C2-3 v2 section 4): an ordinary entry
+printf 'DIR /sbin\nFILE /sbin/kbootset static-binary\n' | python3 "$MKDS" "$S25/stg/KBOOTSET-1.0.pkg" KBOOTSET 1.0
 cp "$FIX/TESTpkg.pkg" "$S25/stg/"
-echo "KERNKD60: kernel-kd060a" > "$S25/stg/names.conf"
-mkdir -p "$S25/plain"; cp "$FIX/TESTpkg.pkg" "$S25/stg/names.conf" "$S25/plain/"
+printf 'KERNKD60: kernel-kd060a\nLOADER: loader\n' > "$S25/stg/names.conf"
+mkdir -p "$S25/plain"; cp "$FIX/TESTpkg.pkg" "$S25/stg/KBOOTSET-1.0.pkg" "$S25/stg/names.conf" "$S25/plain/"
 python3 "$GEN" "$S25/plain" >/dev/null 2>&1
 python3 "$GEN" "$S25/stg" >"$WORK/t25.out" 2>"$WORK/t25.err"
 check "gen-catalog takes a staging root with a kernel package (rc 0)" test $? -eq 0
 KL="#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=gcc-2.7.2.3-8949028 size=$(wc -c < "$K25" | tr -d ' ') sha256=$(sha256sum "$K25" | cut -c1-64) file=kernel/KERNKD60-1.1.0.pkg pkginst=KERNKD60"
-check "the block is exactly: #ext kpkg 1, the #kpkg line, #end kpkg" \
+LL="#kpkg loader 3 role=loader line=any loader=3 size=$(wc -c < "$L25" | tr -d ' ') sha256=$(sha256sum "$L25" | cut -c1-64) file=kernel/LOADER-3.pkg pkginst=LOADER"
+check "the block is exactly: #ext kpkg 1, the kernel's and the loader's #kpkg lines, #end kpkg" \
     test "$(sed -n '/^#ext kpkg 1$/,/^#end kpkg$/p' "$S25/stg/catalog")" = "#ext kpkg 1
 $KL
+$LL
 #end kpkg"
+check "the loader's line has line=any and loader= from ldrinfo, no kabi= or pin= (C2-2 v3)" \
+    bash -c "grep '^#kpkg loader ' '$S25/stg/catalog' | grep -q ' line=any loader=3 ' && ! grep '^#kpkg loader ' '$S25/stg/catalog' | grep -q 'kabi=\\|pin='"
+check "the kbootset package is an ordinary entry, not kernel space (C2-3 v2 section 4)" \
+    bash -c "grep -q '^kbootset|1.0|KBOOTSET|KBOOTSET-1.0.pkg|' '$S25/stg/catalog' && ! grep -q '^#kpkg kbootset' '$S25/stg/catalog'"
 SKABI=$(sed -n 's/^kabi=//p' "$S25/src/stand/k46/kabi")
 SPIN=$(sed -n 's/^pin=//p' "$S25/src/stand/k46/kabi")
 check "kabi= and pin= are the sidecar's bytes" \
@@ -1577,7 +1614,7 @@ check "without the block the catalog is byte-for-byte the plain one" \
 check "every block line is under 2048 bytes" \
     test "$(awk 'length($0) >= 2047' "$S25/stg/catalog" | wc -l)" = 0
 mkdir -p "$S25/rawout"; python3 "$GEN" --raw -o "$S25/rawout" "$S25/stg" >/dev/null 2>&1
-ROFF=$(sed -n 's/^#kpkg .* offset=\([0-9]*\)$/\1/p' "$S25/rawout/catalog")
+ROFF=$(sed -n 's/^#kpkg kernel-kd060a .* offset=\([0-9]*\)$/\1/p' "$S25/rawout/catalog")
 check "--raw gives the #kpkg line an offset= and packs the bytes there" \
     bash -c "[ -n '$ROFF' ] && cmp -s '$K25' <(tail -c +\$(($ROFF + 1)) '$S25/rawout/raw.img' | head -c $(wc -c < "$K25"))"
 
@@ -1601,8 +1638,17 @@ t25bad "a sidecar without pin= is refused" "no usable pin=" \
 t25bad "a kernel package that is not pure files is refused (40 section 6)" "not pure files.*type e" \
     "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/src/stand/k46/kabi" \
     "PKGMAP 1 e none /etc/kmod.conf 0644 root sys 1 1 1"
-t25bad "a loader package is not catalogued yet (C2-3 ldrinfo has no line/kabi/pin)" "loader package: not catalogued yet" \
-    "FILE /stand/loader/ldrinfo version=1"
+ldrinfo25 "$S25/li-line" k46
+t25bad "an ldrinfo whose line= is not any is refused" "ldrinfo says line=k46" \
+    "COPY /stand/loader/boot2 $S25/src/stand/loader/boot2" "COPY /stand/loader/ldrinfo $S25/li-line"
+ldrinfo25 "$S25/li-sha" any 0000000000000000000000000000000000000000000000000000000000000000
+t25bad "an ldrinfo whose boot2-sha256= is not the packaged boot2's is refused" "boot2-sha256= is not" \
+    "COPY /stand/loader/boot2 $S25/src/stand/loader/boot2" "COPY /stand/loader/ldrinfo $S25/li-sha"
+ldrinfo25 "$S25/li-nov" any "" ""
+t25bad "an ldrinfo without version= is refused" "no numeric version=" \
+    "COPY /stand/loader/boot2 $S25/src/stand/loader/boot2" "COPY /stand/loader/ldrinfo $S25/li-nov"
+t25bad "a module package is skipped until stage 3" "module package: not catalogued until stage 3" \
+    "FILE /etc/conf/mod.d/z3660scsi obj"
 
 # the round trip through the client: update, info, download (sha256), and an
 # install plan that runs apkg's own pure-files check on this datastream
@@ -1613,8 +1659,14 @@ if make -C "$HERE/../../../src/apkg" host >/dev/null 2>&1 && [ -x "$APKG25" ]; t
     printf 'repo=file://%s/repo\ncachedir=%s/root/var/apkg/cache\nadmin=%s/admin\npkgadd=/bin/true\nkbootset=/bin/true\n' \
         "$S25" "$S25" "$S25" > "$S25/apkg.conf"
     A25() { APKG_ROOT="$S25/root" "$APKG25" -c "$S25/apkg.conf" "$@"; }
-    check "apkg update reads the generated block (1 kernel-space)" \
-        bash -c "APKG_ROOT='$S25/root' '$APKG25' -c '$S25/apkg.conf' update | grep -q '1 package, 1 kernel-space'"
+    check "apkg update reads the generated block (2 kernel-space)" \
+        bash -c "APKG_ROOT='$S25/root' '$APKG25' -c '$S25/apkg.conf' update | grep -q '2 packages, 2 kernel-space'"
+    OUT25=$(A25 info loader 2>&1)
+    check "apkg info loader: line any, loader 3, no kabi/pin, not refused" \
+        bash -c "echo \"\$0\" | grep -qx 'Kernel-space: loader, line any' && echo \"\$0\" | grep -qx 'Loader:      3' && ! echo \"\$0\" | grep -q '^Kabi\\|^Pin\\|^Refused'" "$OUT25"
+    OUT25=$(A25 -n install loader 2>&1); rc25=$?
+    check "apkg -n install loader: the real loader datastream passes sha256 and pure files (rc 0)" \
+        bash -c "[ $rc25 -eq 0 ] && ! echo \"\$0\" | grep -q 'not a pure-file'" "$OUT25"
     OUT25=$(A25 info kernel-kd060a 2>&1)
     check "apkg info: kabi and pin are the sidecar's" \
         bash -c "echo \"\$0\" | grep -qx 'Kabi:        $SKABI' && echo \"\$0\" | grep -qx 'Pin:         $SPIN'" "$OUT25"

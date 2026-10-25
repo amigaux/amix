@@ -59,7 +59,8 @@
 #   OPT-IN (no flag => the catalog is byte-for-byte what it always was).
 #
 # ------------------------------------------------- KERNEL-SPACE BLOCK ---
-# A kernel, loader or module package (amix-dlm contract C2-2 v2, D-3) is
+# A kernel, loader or module package (amix-dlm contracts C2-2 v3, C2-3 v2,
+# D-3) is
 # NEVER an ordinary entry: a deployed 0.2.x apkg must not see kernel space.
 # It goes into a block after the ordinary entries (and after --isize), every
 # line a '#' comment under 2048 bytes:
@@ -68,7 +69,12 @@
 #     #kpkg <name> <version> role=kernel line=<k30|k46> kabi=<tag>
 #           pin=<compiler pin> size=<bytes> sha256=<64 hex> file=<path>
 #           pkginst=<PKG> [offset=<n> with --raw]
+#     #kpkg <name> <version> role=loader line=any loader=<n> size=<bytes>
+#           sha256=<64 hex> file=<path> pkginst=<PKG> [offset=<n>]
 #     #end kpkg
+#
+# The keys are role-dependent (C2-2 v3 section 1.1): a loader entry has
+# line=any and loader=<n> and never kabi= or pin=.
 #
 # Not opt-in: a package is kernel space by its content, so a staging root
 # without one gives a catalog byte-for-byte as before.  Detected from the
@@ -79,12 +85,18 @@
 # archive) byte for byte -- never from a table here -- because kbootset's
 # gate 2 compares apkg's record (which carries these catalog values) with
 # that sidecar, byte for byte.  size= and sha256= are of the served file.
+# A loader package's line= and loader= come the same way from its own
+# /stand/loader/ldrinfo (C2-3 v2 section 3: one key=value per line,
+# version=<n>, line=any, boot1-sha256=, boot2-size=, boot2-sha256=).
+# The kbootset package (/sbin/kbootset) is userland (C2-3 v2 section 4):
+# an ordinary entry, nothing special here.
 # Refused per package (SKIP, like any malformed package): a sidecar
 # missing, unreadable, without kabi/pin/line, or whose line differs from
-# its path, or whose sha256=/size= disagree with the packaged unix; a
-# package that is not pure files (40 §6: only f/d of class none, no
-# install scripts); a loader or module package (C2-3 gives the loader no
-# line/kabi/pin and modules arrive in stage 3: both are contract work).
+# its path, or whose sha256=/size= disagree with the packaged unix; an
+# ldrinfo without a numeric version= or with a line= other than any, or
+# whose boot1-sha256=/boot2-size=/boot2-sha256= disagree with the
+# packaged boot1/boot2; a package that is not pure files (40 section 6:
+# only f/d of class none, no install scripts); a module package (stage 3).
 # The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
 #
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
@@ -563,6 +575,45 @@ def kernel_sidecar(buf, params, pkgmap_text):
     return keys["line"], keys["kabi"], keys["pin"]
 
 
+def loader_info(buf, params):
+    """C2-3 v2 section 3: return (line, loader version) from the loader
+    package's own /stand/loader/ldrinfo; Malformed when it cannot be
+    trusted (C2-2 v3 section 1.1 needs line=any and loader=<n>)."""
+    basedir = params.get("BASEDIR", "/") or "/"
+    b1, b2 = "/stand/loader/boot1", "/stand/loader/boot2"
+    files = payload_files(buf, [LDRINFO_PATH, b1, b2], basedir)
+    if LDRINFO_PATH not in files:
+        raise Malformed("loader package: %s is not in the payload"
+                        % LDRINFO_PATH)
+    keys = {}
+    for raw in files[LDRINFO_PATH].decode("latin-1").split("\n"):
+        if "=" in raw:
+            k, v = raw.split("=", 1)
+            keys.setdefault(k, v)
+    ver = keys.get("version", "")
+    if not ver.isdigit():
+        raise Malformed("loader package: ldrinfo has no numeric version= "
+                        "(C2-3 v2 section 3)")
+    if keys.get("line") != "any":
+        raise Malformed("loader package: ldrinfo says line=%s, a loader is "
+                        "line=any (C2-2 v3 section 1.1)"
+                        % keys.get("line", "(none)"))
+    if b1 in files and "boot1-sha256" in keys and \
+            keys["boot1-sha256"] != hashlib.sha256(files[b1]).hexdigest():
+        raise Malformed("loader package: ldrinfo boot1-sha256= is not the "
+                        "packaged boot1's")
+    if b2 in files and "boot2-sha256" in keys and \
+            keys["boot2-sha256"] != hashlib.sha256(files[b2]).hexdigest():
+        raise Malformed("loader package: ldrinfo boot2-sha256= is not the "
+                        "packaged boot2's")
+    if b2 in files and "boot2-size" in keys and \
+            keys["boot2-size"] != str(len(files[b2])):
+        raise Malformed("loader package: ldrinfo boot2-size=%s, packaged "
+                        "boot2 is %d bytes" % (keys["boot2-size"],
+                                               len(files[b2])))
+    return "any", ver
+
+
 def parse_pkginfo(text):
     """Parse pkginfo(4) KEY=VALUE lines; first occurrence wins."""
     params = {}
@@ -741,15 +792,18 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     basedir = params.get("BASEDIR", "/") or "/"
     role = kspace_role(pkgmap_text, basedir)
     if role is not None:
-        if role != "kernel":
-            raise Malformed("%s package: not catalogued yet (%s)" % (
-                role, "C2-3 gives ldrinfo no line=/kabi=/pin=, which C2-2 "
-                "needs" if role == "loader" else "modules arrive in stage 3"))
+        if role == "module":
+            raise Malformed("module package: not catalogued until stage 3 "
+                            "(C2-2 v3 section 1.1)")
         why = pure_files_problem(pkgmap_text)
         if why is not None:
             raise Malformed("kernel-space package is not pure files "
                             "(40 section 6): %s" % why)
-        kline, kabi, pin = kernel_sidecar(buf, params, pkgmap_text)
+        kabi = pin = loader = None
+        if role == "loader":
+            kline, loader = loader_info(buf, params)
+        else:
+            kline, kabi, pin = kernel_sidecar(buf, params, pkgmap_text)
         version = clean_field(params["VERSION"])
         if len(version.split()) != 1:
             raise Malformed("kernel-space VERSION %r is not one token"
@@ -757,14 +811,16 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         entry = {
             "kspace": True, "name": name, "version": version,
             "pkginst": pkginst, "filename": fname, "role": role,
-            "line": kline, "kabi": kabi, "pin": pin,
+            "line": kline, "kabi": kabi, "pin": pin, "loader": loader,
             "size": str(len(raw)),
             "sha256": hashlib.sha256(raw).hexdigest(),
             "md5": hashlib.md5(raw).hexdigest(),
         }
         if verbose:
-            print("  %s: kernel space role=%s line=%s kabi=%s pin=%s "
-                  "(sidecar)" % (fname, role, kline, kabi, pin))
+            print("  %s: kernel space role=%s line=%s %s" % (
+                fname, role, kline,
+                ("loader=%s (ldrinfo)" % loader) if role == "loader" else
+                ("kabi=%s pin=%s (sidecar)" % (kabi, pin))))
         return entry
 
     deps_raw = deps_conf.get(name, deps_conf.get(pkginst,
@@ -869,12 +925,15 @@ FIELDS = ("name", "version", "pkginst", "filename", "md5", "size",
 
 
 def kpkg_line(e):
-    """One '#kpkg' line of the kernel-space block (C2-2 section 1)."""
-    line = ("#kpkg %s %s role=%s line=%s kabi=%s pin=%s size=%s sha256=%s "
-            "file=%s pkginst=%s" % (e["name"], e["version"], e["role"],
-                                     e["line"], e["kabi"], e["pin"],
-                                     e["size"], e["sha256"], e["filename"],
-                                     e["pkginst"]))
+    """One '#kpkg' line of the kernel-space block (C2-2 v3 section 1.1:
+    kabi=/pin= for a kernel, loader= and never kabi=/pin= for a loader)."""
+    if e["role"] == "loader":
+        keys = "line=%s loader=%s" % (e["line"], e["loader"])
+    else:
+        keys = "line=%s kabi=%s pin=%s" % (e["line"], e["kabi"], e["pin"])
+    line = ("#kpkg %s %s role=%s %s size=%s sha256=%s file=%s pkginst=%s"
+            % (e["name"], e["version"], e["role"], keys, e["size"],
+               e["sha256"], e["filename"], e["pkginst"]))
     if "offset" in e:
         line += " offset=%s" % e["offset"]
     return line

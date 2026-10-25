@@ -192,8 +192,10 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
   that sidecar inside the package byte for byte (kbootset gate 2 compares them), `size=`/`sha256=`
   of the served file, `pkginst=`, and `offset=` under `--raw`. Not opt-in; a staging root without
-  kernel space gives the catalog it always did. Loader and module packages are SKIPped until C2-3
-  gives them the keys. NOTES.md 2026-10-25 (late) is the record.
+  kernel space gives the catalog it always did. A loader package (`/stand/loader/ldrinfo`) gets
+  `role=loader line=any loader=<n>` from its ldrinfo and no `kabi=`/`pin=` (C2-2 v3, C2-3 v2); the
+  kbootset package is an ordinary entry; module packages are SKIPped until stage 3. NOTES.md
+  2026-10-25 (late) and the C2-2 v3 section after it are the record.
 
 - `gen-catalog.py` (python3): scan a staging dir of `.pkg`/`.pkg.Z` datastreams; for each, read the
   `# PaCkAgE DaTaStReAm` header + first cpio member to extract pkginfo params (PKG, NAME, VERSION,

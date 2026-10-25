@@ -1,5 +1,38 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-25 (night) — kernel-space keys per role: C2-2 v3, C2-3 v2 (built, NOT minted, NOT published)
+
+amix-dlm `bddfcef` moved C2-2 to version 3 and C2-3 to version 2: the keys of a `#kpkg` entry depend
+on its role, and the loader package now has a catalog entry.
+
+| Role | Entry requires | Entry may not carry | Record carries |
+|---|---|---|---|
+| kernel, module | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | — | `line`, `kabi`, `pin` |
+| loader | `line=any`, `loader=<n>`, `size=`, `sha256=`, `file=` | `kabi=`, `pin=` | `line any`, `loader <n>` |
+
+- **Client** (`catalog.c`): role-dependent checks after the key loop; a missing or excluded key
+  refuses the entry (kept, `[refused]`, never installable) with a reason citing "C2-2 v3 §1.1";
+  `line=` other than `any` on a loader, or other than `k30|k46` on a kernel/module, is refused. The
+  pre-flight skips loaders (no kabi, both lines). The record writes `kabi`/`pin` for a kernel or
+  module and `loader <n>` for the loader, never both (`kspace.c`). `info` shows `Loader:` for a
+  loader. The journal carries the loader version: format `apkg-txn 2` (16 fields per package; a
+  version-1 journal is refused as unreadable, `apkg -f recover` discards it — none exists outside
+  tests).
+- **gen-catalog.py**: a loader package (pkgmap holds `/stand/loader/ldrinfo`) now goes into the
+  block (it was SKIPped): `line=any` and `loader=` from its own ldrinfo (`line=`, `version=`), never
+  `kabi=`/`pin=`; refused when ldrinfo lacks a numeric `version=`, says a line other than `any`, or
+  its `boot1-sha256=`/`boot2-size=`/`boot2-sha256=` disagree with the packaged boot1/boot2. The
+  kbootset package (`/sbin/kbootset`) is userland (C2-3 v2 §4) and stays an ordinary entry. Module
+  packages stay SKIPped (stage 3).
+- **Tests.** Client `run-tests.sh` **349/0**: a loader entry (line any, loader 3, no kabi/pin) and
+  its exact record after install and removal; refused: a loader carrying `kabi=`, a loader with
+  `line=k46`, a loader without `loader=`, a kernel missing `pin=`. Repo tools **341/0**: T25 mints a
+  real loader datastream with the host heirloom pkgmk/pkgtrans (boot1 1024 B, boot2, ldrinfo), checks
+  both `#kpkg` lines exactly, the kbootset package as an ordinary entry, three ldrinfo refusals and
+  the module skip, and the round trip (update counts 2 kernel-space; `info loader`; `-n install
+  loader` passes sha256 and pure files on the real datastream). nohttp 20/0; kbootset-consumer 12/0;
+  `make amix` clean, no bare divsl/divul.
+
 ## 2026-10-25 (late) — apkg 0.3 follow-up after the kbootset author's review (built, NOT minted, NOT published)
 
 The kbootset author checked the 2026-10-25 work against its consumer: the record format and the exit
