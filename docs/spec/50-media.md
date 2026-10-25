@@ -160,8 +160,9 @@ host computation over today's binaries and were **stage 0, the S0 freeze
 condition**; they are closed (above).
 M-NET1c–g cannot close in S0 — c and d depend on the 1.1 floor kernel and
 the store format, e on both, f and g need a running miniroot — and are
-recorded as **deviation DV-1** from D-3 §2, for the owner to approve
-(`00-overview.md` §5).
+recorded as **deviation DV-1** from D-3 §2, approved by the owner (D-3 §12):
+they are confirmed in stage 1 as they exist, and if they take the margin below
+5 % the netinstall medium becomes form B (`00-overview.md` §5).
 
 ## 6. Tape
 

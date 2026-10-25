@@ -59,6 +59,7 @@ described and referenced, never reproduced.
 | 9 | Toolchain split: kernel space on gcc-cross-amix (GCC 2.7.2.3, `m68k-cbm-sysv4`), pinned by the ABI kit; GCC 14 for userland only | 20 §3.2; 10 §3.3; 40 §3 (`kbootset` is userland); 30 §1 |
 | 10 | (after the freeze) CD boot: a standard ISO9660 disc, AmigaDOS from the ROM's CD filesystem, boot2 as an AmigaDOS program started by its startup-sequence; RDB-style disc rejected | **10** §4.4; 50 §4; 90 M-LD2 |
 | 11 | (after the freeze) Disk numbering: compacted rank on both lines (Z3660, Zorro boards, motherboard controller, IDE); 030 boxes with two controllers renamed relative to 1.0, accepted | **30** §5.2–§5.3; 90 M-SD1 |
+| 12 | (after the freeze) DV-1 approved: the build-dependent netinstall contributions are confirmed in stage 1 as they exist; below a 5 % margin the netinstall medium becomes form B | **50** §5.1; 00 §5; 90 M-NET1c–g |
 
 ## 3. The design in one page
 
@@ -147,15 +148,15 @@ to what the installer calls, miniroot plus a deflated kernel fills two DD
 volumes with 16.1 % (k30) and 13.0 % (k46) to spare, so form A is chosen
 (`50-media.md` §5.1, OQ-50.2 narrowed).
 
-**Deviation DV-1 (for the owner to approve).** The rest of the netinstall fit
+**Deviation DV-1 (approved, D-3 §12).** The rest of the netinstall fit
 — M-NET1c (compressed floor kernel and root modules), M-NET1d (store overhead
 per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 (HTTP from the miniroot) — cannot close in S0: c–e depend on the 1.1 floor
 kernel and the store format, f and g on a running miniroot. They are scheduled
-in stages 1–5 (`90-measurements.md` §5), and they confirm or overturn the form-A choice made in S0 (OQ-50.2).
+in stages 1–5 (`90-measurements.md` §5) and confirm or overturn the form-A choice made in S0 (OQ-50.2): if they take the margin below 5 %, the netinstall medium becomes the small disk + CD image (form B).
 
-**Owner decisions open at the freeze:** DV-1, OQ-60.2, OQ-60.3. OQ-10.9 (CD
-mechanism) and OQ-30.2 (030 card order) were decided as D-3 §10 and §11. The first measurements after the freeze
+**Owner decisions open at the freeze:** OQ-60.2, OQ-60.3. OQ-10.9 (CD
+mechanism), OQ-30.2 (030 card order) and DV-1 were decided as D-3 §10–§12. The first measurements after the freeze
 are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
 ## 6. P-28 decisions and where they went
