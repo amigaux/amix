@@ -58,6 +58,7 @@ described and referenced, never reproduced.
 | 8 | One 1.1; proof order (loader → lifecycle on static kernels → modules → root as a module); code in amix-dlm, recipes in driver repos, kernel changes as merge requests; asks to Antti, ashnazag, Emre | **80**; 30 §1; repository README |
 | 9 | Toolchain split: kernel space on gcc-cross-amix (GCC 2.7.2.3, `m68k-cbm-sysv4`), pinned by the ABI kit; GCC 14 for userland only | 20 §3.2; 10 §3.3; 40 §3 (`kbootset` is userland); 30 §1 |
 | 10 | (after the freeze) CD boot: a standard ISO9660 disc, AmigaDOS from the ROM's CD filesystem, boot2 as an AmigaDOS program started by its startup-sequence; RDB-style disc rejected | **10** §4.4; 50 §4; 90 M-LD2 |
+| 11 | (after the freeze) Disk numbering: compacted rank on both lines (Z3660, Zorro boards, motherboard controller, IDE); 030 boxes with two controllers renamed relative to 1.0, accepted | **30** §5.2–§5.3; 90 M-SD1 |
 
 ## 3. The design in one page
 
@@ -100,7 +101,6 @@ decision reserved to the project owner.
 | OQ-20.4 | DDI v1 list and contracts; review | us; Antti reviews |
 | OQ-20.5 | A shared major/syscall registry with ashnazag | ashnazag |
 | OQ-30.1 | Is a no-sleep mode needed at `dmainit` or only at `marc_root` | us |
-| OQ-30.2 | **030 card order:** K, keep the 1.0 address order (recommended); R, one rule on both lines | owner |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe in time for 1.1 | us |
 | OQ-30.4 | Review of the 040/060 base rebuilt without ufs/s5 | us build; Antti reviews |
 | OQ-30.5 | The 040/060 halt path before the halt pass | Antti; us |
@@ -131,7 +131,7 @@ decision reserved to the project owner.
 | OQ-80.3 | Throughput baselines for stage 3 | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
 
-Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
+Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-30.2 (D-3 §11), OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
 
 ## 5. Measurements
 
@@ -154,8 +154,8 @@ per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 kernel and the store format, f and g on a running miniroot. They are scheduled
 in stages 1–5 (`90-measurements.md` §5), and they confirm or overturn the form-A choice made in S0 (OQ-50.2).
 
-**Owner decisions open at the freeze:** OQ-30.2 (030 card order), DV-1,
-OQ-60.2, OQ-60.3. OQ-10.9 (CD mechanism) was decided as D-3 §10. The first measurements after the freeze
+**Owner decisions open at the freeze:** DV-1, OQ-60.2, OQ-60.3. OQ-10.9 (CD
+mechanism) and OQ-30.2 (030 card order) were decided as D-3 §10 and §11. The first measurements after the freeze
 are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
 ## 6. P-28 decisions and where they went
@@ -165,7 +165,7 @@ are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 | D1, D3, D5, D6, D8, D10, D12, D14, D16, D18, D19/D55, D24, D27, D43, D45, D46, D51, D59, D61, D63 | kept (cited where used) |
 | D2, D7, D20, D57 (slot inside the kernel; slot format; slot capacity) | replaced: our loader fills an arena; capacity rule kept for the arena (10 §5.3) |
 | D4 | kept in substance: root class resident (arena), the rest copied |
-| D9 | replaced: four controllers in 1.1; 030 order is OQ-30.2 (30 §5) |
+| D9 | replaced: four controllers in 1.1, one compacted rank order on both lines (D-3 §11; 30 §5) |
 | D11, D54, D60 | kept, adapted to the loader record (40 §2.2, §5) |
 | D13, D30, D48 | settled by D-3 §7 (60): kernel space in the public signed catalog; the ABI kit publishes the stock headers too (20 §5, 60 §6) |
 | D15, D32, D56 | retired: one boot slice per disk; 1.0 boxes reinstall |

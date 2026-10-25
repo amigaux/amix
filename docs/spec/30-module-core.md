@@ -138,30 +138,21 @@ not enough.
 | Names | `c<card*8+unit>` in hexadecimal as today: cards 0–1 → `c0`–`cf`, cards 2–3 → `c10`–`c1f`; every tool that assumes one hex digit (`updbootpart`, the installer, `/etc/devnm` readers, the RTH1 kernel half's one-byte `bo_name` rewrite) moves to the general form |
 | Minor encoding | unit = bits 0–2, card low bit = bit 3, slice = bits 4–6, card high bit = bit 7. The RTH1 kernel half today builds the root minor as `card << 3 | unit` with `SDCARDS 2` (`amix-040-060-port/src/rth1.c:31,99,195`), which for cards 2–3 would land in the slice bits; it moves to `(card & 1) << 3 | (card >> 1) << 7 | slice << 4 | unit` and loops over four cards |
 | Drivers rebuilt for four cards | every array sized by `SDCARDS`: `sd` and `dd` (the disk layer), `ct` (tape), `a2091` and `a2090` (the floor WD33C93 drivers) (`tmp/2026-08-26-svr4-refs/amix-src/amiga/alien/{sd.h,sd.c,dd.c,ct.c,a2091.c,a2090.c}`), plus the RTH1 kernel half above. On the 030 line from the relink kit's source; on the 040/060 line as part of the base rebuild (§6) |
-| Order | by rank key, compacted over the controllers present. 040/060 line: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A4000T 53C710), (4) Gayle IDE — the 1.0 order extended. 030 line: **an owner decision, OQ-30.2** (below). A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept on both lines |
+| Order | **one rule on both lines** (D-3 §11), by rank key, compacted over the controllers present: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A3000 WD33C93 or A4000T 53C710), (4) Gayle IDE — the 1.0 040/060 order extended. A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept |
 | Registration | `sd_register(queuefn, probefn, name, rankkey)` is accepted only before sd's first open; afterwards `EBUSY` and a console line. The floor's static controllers register through the same table |
 | Rank keys | in the registry (`20-…` §6); a module's `rank` key in `.moddata` must match its class |
 | Card-number gate | over the board sets of record (§5.3): see there (`80-stages-and-proof.md` §2, stage 4) |
 | Change detection | the manifest records the board set; when the booted board set differs, the loader prints it and `kbootset check` warns that device names may have moved. The root itself is found by identity (RTH1/RTO1 rule), not by name |
 
-**The 030 line — owner decision (OQ-30.2).** 1.0's 030 kernels number
-controllers by board address, so the A3000 onboard controller (0xDD0000) and
-the Gayle IDE (0xDD2020) sort before any Zorro board. Two options:
+**The 030 line (D-3 §11).** 1.0's 030 kernels numbered controllers by
+board address, so the A3000 onboard controller (0xDD0000) and the Gayle IDE
+(0xDD2020) sorted before any Zorro board. 1.1 uses the one rule above on both
+lines: an A3000 with a Zorro SCSI board, or an IDE box with a Zorro SCSI
+board, numbers the Zorro board card 0 and is renamed relative to 1.0. This is
+accepted because every 1.0 box reinstalls (D-3 §5) and one rule serves the
+installer, the composer, the card-number gate and the documentation.
 
-- *Option K — keep the 1.0 address order on the 030 line* (extended to four
-  cards in address order). Every 030 board set keeps its 1.0 names; the stock
-  A3000UX convention (onboard controller first) holds. Cost: the rank function
-  differs per line — a constant in each line's platform file, one kernel per
-  line either way.
-- *Option R — one rule on both lines* (the 040/060 order above). One rule to
-  document and test. Cost: an A3000 with a Zorro SCSI board, or an IDE box
-  with a Zorro SCSI board, gets new names (the Zorro board becomes card 0);
-  such boxes reinstall anyway (D-3 §5).
-
-**Recommendation: option K**, because 030 users and the stock documentation
-expect the onboard controller first and the per-line constant costs nothing.
-
-Either way, adding a higher-ranked controller later moves the names of
+Adding a higher-ranked controller later moves the names of
 lower-ranked ones (the compacted order); the alternative of a fixed card per
 controller class was considered and set aside because it gives the commonest
 single-controller machines non-stock names and has no slot for a second
@@ -182,9 +173,9 @@ The stage-4 gate judges each set against one of three expectations:
 1. **Order unchanged from 1.0** (every one- and two-controller set whose 1.0
    order the contract keeps): every disk has its 1.0 name.
 2. **Accepted changes** (two-controller sets whose order the contract
-   changes): the new names are listed per set in the measurement record and
-   in the release notes. Under option K this list is empty on the 030 line;
-   under option R it holds A3000 + Zorro SCSI and Gayle IDE + Zorro SCSI.
+   changes): on the 030 line, A3000 onboard + Zorro SCSI and Gayle IDE +
+   Zorro SCSI (D-3 §11); the new names are listed per set in the measurement
+   record and in the release notes.
 3. **Three and four controllers** (1.0 dropped the third controller): judged
    against the contract's expected names, not against 1.0.
 
@@ -261,7 +252,6 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
 | ID | Question | Proposed owner |
 |---|---|---|
 | OQ-30.1 | Is a no-sleep mode strictly needed at `dmainit` on our base, or only at `marc_root` (U1)? | us |
-| OQ-30.2 | 030 line card order: option K, keep the 1.0 address order (recommended), or option R, one rule on both lines (§5.2). | owner |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe: does it exist in time for 1.1 (`amix-kerntools/docs/k0-families.md:1190-1195`)? | us |
 | OQ-30.4 | Antti's review of the rebuilt 040/060 base without ufs/s5 (carving method, gates, acceptance record per his `docs/ACCEPTANCE.md`). | us build; Antti reviews |
 | OQ-30.5 | Does the halt path, known to crash on `shutdown -i0` on the 040/060 base (`amix-040-060-port/README.md`), need fixing before the halt pass can be proven? | Antti; us |
