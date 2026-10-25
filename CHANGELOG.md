@@ -1,3 +1,12 @@
+## 2026-10-25 (late) — apkg 0.3 follow-up after the kbootset author's review (0e6090f..d7e91f0)
+
+apkg cites contracts C2-2/C2-4 v2 (behaviour unchanged). A kernel-space datastream must be pure files (spec 40 §6): the
+pkgmap may hold only f and d objects of class none and the i entries pkginfo, depend, copyright; anything else exits 3
+before any pkgadd; install records list plain files only. gen-catalog.py writes the `#ext kpkg 1` block (S2-23): a kernel
+package goes into it with line=, kabi=, pin= copied verbatim from its own sidecar; a catalog without kernel space is
+byte-identical to before; loader and module packages are skipped for now (ldrinfo lacks line/kabi/pin — contract question).
+The kbootset consumer test builds kbootset through amix-dlm's Makefile. run-tests 338/0, repo tools 333/0, consumer 12/0.
+
 ## 2026-10-25 — apkg 0.3 kernel space (4c30036, 36f5f7e, 46278a0) — built, not minted, not published
 
 The client reads the catalog's `#ext kpkg 1` block (contract C2-2 v1; apkg 0.2.3 proven to skip it unharmed). Kernel-space
