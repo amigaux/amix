@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -4 from amix-dlm d64bad7 (83a0f1f, f96e552) — not published
+
+/sbin/kbootset 9cf75c1c creates the journal's directories itself; the package also ships /var/kbootset (d none 0755 root sys),
+the directory apkg's trigger points the journal at (the stage-2 exit row found it missing on a fresh box). Supersedes -3.
+The round trip pins d64bad7, no longer creates /var/kbootset itself and checks the pkgmap entry and the installed
+directory: 25/25. Current sets for the owner's publish decision: kern46z -2, kern46zcd -2, ldramix -2, kbootset -4;
+grep/less/make -4.
+
 ## 2026-10-25 (night) — kbootset -3 from amix-dlm db0ef3a (c9eb388) — not published
 
 kbootset 1.1.0.261025-3 carries /sbin/kbootset f4a6632b (the `retry` verb, C2-4 v5), reproducible from a git archive of
