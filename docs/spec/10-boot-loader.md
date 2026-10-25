@@ -426,7 +426,7 @@ end crc32=5e6f7a8b
 |---|---|
 | `line`, `cpu` | must match the probed CPU, else the generation is refused with a message naming both |
 | `loader-min` | lowest loader version that can boot this generation |
-| `kernel` | size after decompression, extent (`at=`, store-relative) or, on a CD, `file=` (a file in the line directory), stored size, compression, CRC-32 |
+| `kernel` | size after decompression, extent (`at=`, store-relative) or, on a CD, `file=` (a file in the line directory), stored size, compression, CRC-32; for a `brel` kernel, `bss=`: the bytes past the image to the kernel's end (bss and COMMON), which the `brel` format does not record. boot2 adds them to the kernel's end before it checks that the kernel fits fast memory; without `bss=` it assumes 512 KiB and says so (the 1.0 families measure 270–345 KiB) |
 | `module … root` | a root-class module the loader places in the arena |
 | `module … boot` / `demand` | not read by the loader; loaded by the kernel from the root filesystem (`30-module-core.md` §3) |
 | `arena` | offset and capacity of the module arena inside the relocated kernel image |
