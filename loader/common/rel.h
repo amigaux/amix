@@ -31,7 +31,9 @@ struct ax_bootdata {
 	ax_u32 tvaddr, toffset, tsize;
 	ax_u32 rvaddr, roffset, rsize;
 	ax_u32 dvaddr, doffset, dsize;
-	ax_u32 end;		/* first address past text..bss and COMMON */
+	ax_u32 end;		/* first address past text..bss and COMMON; for a
+				 * brel, past the image only (see ax_kernel_end) */
+	ax_u32 brel;		/* 1: a brel, whose bss is not recorded */
 };
 
 #define AXR_OK		0
@@ -55,6 +57,13 @@ int ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 /* as ax_rel, and call note(ctx, off) for every 32-bit field that holds a
  * bind-address-relative value (off counted from vaddr), so a host tool can
  * emit a self-relocation table; absolute values are not reported */
+/* the first address past the kernel's bss.  A brel carries no bss size
+ * (its converter writes text, rodata and data only), so the manifest's
+ * bss= is added; without one AX_BREL_BSS is assumed and *assumed is set.
+ * The 1.0 families' bss and COMMON measure 270-345 KiB (2026-10-26) */
+#define AX_BREL_BSS	(512UL * 1024UL)
+ax_u32 ax_kernel_end(const struct ax_bootdata *bd, ax_u32 bss, int *assumed);
+
 typedef void (*ax_relnote)(void *ctx, ax_u32 off);
 int ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 	      struct ax_bootdata *bd, struct ax_relerr *err, ax_relnote note, void *ctx);

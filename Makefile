@@ -265,10 +265,12 @@ $(B)/cross/b2test.o: tests/cross/b2test.c
 $(B)/b2test.r.o: $(B)/cross/start.o $(B)/cross/b2test.o
 	$(CROSS)ld -r -o $@ $(B)/cross/start.o $(B)/cross/b2test.o
 
-b2test: toolchain-check $(B)/b2test.r.o $(B)/b2link $(B)/b2check
+b2test: toolchain-check $(B)/b2test.r.o $(B)/b2link $(B)/b2check $(B)/boot2.bin
 	$(B)/b2link $(B)/b2test.r.o $(B)/b2test.bin
 	$(B)/b2check $(B)/b2test.r.o $(B)/b2test.bin 0x00200a00
 	$(B)/b2check $(B)/b2test.r.o $(B)/b2test.bin 0x07ff1234
+	$(B)/b2check $(B)/boot2.r.o $(B)/boot2.bin 0x00200a00
+	$(B)/b2check $(B)/boot2.r.o $(B)/boot2.bin 0x07ff1234
 
 clean:
 	rm -rf $(B)

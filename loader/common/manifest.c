@@ -131,6 +131,9 @@ attrs(struct ax_member *mb, char **tok, int ntok)
 		} else if (prefix(a, "stored=")) {
 			if (!number(a + 7, &mb->stored))
 				return AXM_ESYNTAX;
+		} else if (prefix(a, "bss=")) {
+			if (!number(a + 4, &mb->bss))
+				return AXM_ESYNTAX;
 		} else if (prefix(a, "z=")) {
 			if (streq(a + 2, "deflate"))
 				mb->z = AXZ_DEFLATE;

@@ -182,6 +182,22 @@ test_rel(void)
 	T_EQ(AX_GET32(img + 108), 0xDEADBEEFUL);
 	T_EQ(bd.tsize, 32);
 	T_EQ(bd.toffset, 100);
+	/* a brel records no bss: its end is the image's, and ax_kernel_end adds
+	 * the manifest's bss=, or assumes AX_BREL_BSS without one */
+	{
+		int assumed;
+
+		T_EQ(bd.brel, 1);
+		T_EQ(bd.end, V + 32);
+		T_EQ(ax_kernel_end(&bd, 283445, &assumed), V + 32 + 283445);
+		T_EQ(assumed, 0);
+		T_EQ(ax_kernel_end(&bd, 0, &assumed), V + 32 + AX_BREL_BSS);
+		T_EQ(assumed, 1);
+		/* an ET_REL's end already holds its bss: bss= is not added */
+		bd.brel = 0;
+		T_EQ(ax_kernel_end(&bd, 283445, &assumed), V + 32);
+		T_EQ(assumed, 0);
+	}
 	/* a pair pointing past the text */
 	p32(200, 30);
 	T_EQ(ax_rel(img, 700, V, 0, &bd, &er), AXR_EBOUNDS);

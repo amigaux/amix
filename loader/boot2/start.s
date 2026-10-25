@@ -10,8 +10,9 @@
 # table into a MEMF_FAST block first; without fast memory it stays in chip.
 #
 # boot2 is linked at address 0.  tools/b2link.c appends a table of the
-# offsets of every 32-bit field holding a 0-based address and patches the
-# header below.  The stub adds the load address to each such field, so the
+# offsets of every 32-bit field holding a 0-based address (a 32-bit count,
+# then 16-bit offsets: the image is under 32 KiB) and patches the header
+# below.  The stub adds the load address to each such field, so the
 # C code needs no position-independent code generation.
 #
 # Header (offsets from the first byte):
@@ -41,7 +42,7 @@ stub:
 	moveq	&0,%d7			# infast
 	move.l	(8,%a3),%d3		# image + table bytes
 	move.l	(0,%a3,%d3.l),%d4
-	lsl.l	&2,%d4
+	add.l	%d4,%d4			# 2 bytes an entry
 	addq.l	&4,%d4
 	add.l	%d4,%d3
 	move.l	(16,%a3),%d4		# image + bss bytes
@@ -72,7 +73,8 @@ inplace:
 	lea	(0,%a3,%d3.l),%a4
 	move.l	(%a4)+,%d3		# entries
 	bra.b	relnext
-relone:	move.l	(%a4)+,%d4
+relone:	move.w	(%a4)+,%d4
+	ext.l	%d4			# offsets are below 32768
 	add.l	%d5,(0,%a3,%d4.l)
 relnext:
 	subq.l	&1,%d3

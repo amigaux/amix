@@ -46,7 +46,7 @@ main(int argc, char **argv)
 	span = AX_GET32(bin + 8);
 	cnt = AX_GET32(bin + span);
 	for (i = 0; i < cnt; i++) {
-		off = AX_GET32(bin + span + 4 + 4 * i);
+		off = AX_GET16(bin + span + 4 + 2 * i);	/* 16-bit entries */
 		v = AX_GET32(bin + off) + (ax_u32)base;
 		AX_PUT32(bin + off, v);
 	}

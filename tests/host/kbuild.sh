@@ -123,6 +123,25 @@ set -e
 [ $rc -eq 3 ] || [ $rc -eq 4 ] || { echo "kbuild: a stale build was committed" >&2; exit 1; }
 echo "kbuild: build, commit and gates 1, 2, 3, 6, 7, 10 ok"
 
+# a brel kernel (ELF type 0xff00) records no bss: its sidecar must give
+# bss=, gate 6 counts it, and the manifest carries it for the loader
+cp $R/stand/k46/unix $T/unix.keep
+printf '\177ELF' | dd of=$R/stand/k46/unix bs=1 conv=notrunc 2>/dev/null
+printf '\377\000' | dd of=$R/stand/k46/unix bs=1 seek=16 conv=notrunc 2>/dev/null
+sidecar; record
+refused 2 $KB build $FACTS
+grep -q "brel, whose bss is not recorded" $T/out
+echo "bss=283445" >> $R/stand/k46/kabi; record
+# 700 000 + 283 445 bytes need about 1.97 MB: 1.5 MB is too little
+refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 1500000
+$KB build $FACTS | grep -q "built"
+$KB commit 2>/dev/null | grep -q "committed"
+$B/lsstore $T/disk.img 65536 > $T/ls
+$B/kbootset --image $T/disk.img --offset 65536 status | grep -q "trial"
+grep -a -q "^kernel unix 700000 at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=283445$" $T/disk.img
+cp $T/unix.keep $R/stand/k46/unix; sidecar; record
+echo "kbuild: brel bss (gate 2, gate 6, the manifest) ok"
+
 # check: every member against its manifest, the default generation against
 # the installed kernel; a damaged member makes it say BAD and exit 1
 $KB check > $T/out

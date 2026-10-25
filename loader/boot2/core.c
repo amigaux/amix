@@ -232,6 +232,12 @@ load_first(const struct ax_sel *sel)
 		if (!kbuf)
 			goto next;
 		rc = ax_rel(kbuf, man.kernel.size, vaddr, 1, &bd, &rer);
+		if (rc == AXR_OK) {
+			bd.end = ax_kernel_end(&bd, man.kernel.bss, &i);
+			if (i)
+				con_puts("amix-boot: a brel kernel without bss= in its manifest: "
+					 "512 KiB assumed\n");
+		}
 		if (rc == AXR_OK && bd.end - vaddr <= room)
 			return k;
 		if (rc == AXR_OK) {

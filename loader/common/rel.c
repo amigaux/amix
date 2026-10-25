@@ -72,8 +72,22 @@ brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
 	bd->entry = bd->tvaddr = vaddr;
 	bd->toffset = toff;
 	bd->tsize = tsize;
-	bd->end = vaddr + tsize;
+	bd->end = vaddr + tsize;	/* the bss is not recorded */
+	bd->brel = 1;
 	return AXR_OK;
+}
+
+ax_u32
+ax_kernel_end(const struct ax_bootdata *bd, ax_u32 bss, int *assumed)
+{
+	*assumed = 0;
+	if (!bd->brel)
+		return bd->end;
+	if (!bss) {
+		bss = AX_BREL_BSS;
+		*assumed = 1;
+	}
+	return bd->end + bss;
 }
 
 int
@@ -95,7 +109,7 @@ ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 
 	bd->entry = bd->tvaddr = bd->toffset = bd->tsize = 0;
 	bd->rvaddr = bd->roffset = bd->rsize = 0;
-	bd->dvaddr = bd->doffset = bd->dsize = bd->end = 0;
+	bd->dvaddr = bd->doffset = bd->dsize = bd->end = bd->brel = 0;
 	err->rsect = err->index = err->type = err->sym = 0;
 
 	if (len < 52 || img[0] != 0x7F || img[1] != 'E' || img[2] != 'L' || img[3] != 'F' ||

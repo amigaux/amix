@@ -30,7 +30,10 @@ struct kb_kernel {
 	char kabi[24], family[32], line[8], pin[48], build[48], sha256[65];
 	char root[256], rootfs[64];
 	ax_u32 size, loader_min, arena_off, arena_cap;
+	ax_u32 bss;		/* bytes past the image to the kernel's end: a brel
+				 * kernel does not record them (C2-3 §2) */
 	int has_arena;
+	int brel;		/* the kernel file is a brel (ELF type 0xff00) */
 };
 
 /* compose the next generation under root (the box: "/") into

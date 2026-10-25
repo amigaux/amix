@@ -96,6 +96,11 @@ test_manifest(void)
 	T_EQ(parse(n, &line), AXM_OK);
 	T_EQ(m.has_arena, 0);
 	T_EQ(m.nmod, 0);
+	T_EQ(m.kernel.bss, 0);
+	/* a brel kernel's bss (its format does not record it) */
+	n = seal("GMF1\ngeneration 1\nline k46\nkernel unix 1459584 at=0x10800 crc32=cafebabe bss=283445\n");
+	T_EQ(parse(n, &line), AXM_OK);
+	T_EQ(m.kernel.bss, 283445);
 
 	/* multi-volume extent */
 	n = seal("GMF1\ngeneration 2\nline k30\nkernel unix 10 at=2:0x800 crc32=00000000\n");

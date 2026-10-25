@@ -1,7 +1,9 @@
 /*
  * b2link.c -- turn boot2's relocatable link (ld -r output) into the loaded
  * image: bound at address 0 with the loader's own relocator, followed by the
- * self-relocation table its start-up stub applies (loader/boot2/start.s).
+ * self-relocation table its start-up stub applies (loader/boot2/start.s):
+ * a 32-bit count, then one 16-bit offset per field (every field lies below
+ * the 28 KiB limit, so below 32768).
  * (docs/plan/stage-1.md S1-11.)
  *
  * usage: b2link IN.o OUT.bin       boot2 behind boot1 (self-relocating)
@@ -143,7 +145,7 @@ main(int argc, char **argv)
 	span = bd.dsize ? bd.dvaddr + bd.dsize : bd.rsize ? bd.rvaddr + bd.rsize : bd.tsize;
 	span = (span + 3) & ~3UL;
 	bss = bd.end > span ? bd.end - span : 0;
-	total = span + 4 + 4 * noffs;
+	total = span + 4 + 2 * noffs;
 	out = calloc(1, total);
 	memcpy(out + bd.tvaddr, img + bd.toffset, bd.tsize);
 	if (bd.rsize)
@@ -166,9 +168,14 @@ main(int argc, char **argv)
 		}
 	if (hunk)
 		return write_hunk(argv[2], out, span, bss);
+	if (span > 0x7FFF + 1UL) {
+		fprintf(stderr, "b2link: image of %lu bytes: the 16-bit table needs fewer than 32768\n",
+			(unsigned long)span);
+		return 1;
+	}
 	AX_PUT32(out + span, noffs);
 	for (i = 0; i < noffs; i++)
-		AX_PUT32(out + span + 4 + 4 * i, offs[i]);
+		AX_PUT16(out + span + 4 + 2 * i, offs[i]);
 	if (total > AX_BOOT2_MAX || span + bss > AX_BOOT2_MAX) {
 		fprintf(stderr, "b2link: SIZE GATE: file %lu, image + bss %lu; the limit is %lu\n",
 			(unsigned long)total, (unsigned long)(span + bss), (unsigned long)AX_BOOT2_MAX);
@@ -179,7 +186,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 	printf("b2link: boot2 image %lu + table %lu = %lu bytes, bss %lu (limit %lu)\n",
-	       (unsigned long)span, (unsigned long)(4 + 4 * noffs), (unsigned long)total,
+	       (unsigned long)span, (unsigned long)(4 + 2 * noffs), (unsigned long)total,
 	       (unsigned long)bss, (unsigned long)AX_BOOT2_MAX);
 	return 0;
 }

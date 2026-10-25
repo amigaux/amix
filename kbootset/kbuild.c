@@ -147,6 +147,7 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 	value(text, "rootfs", kk->rootfs, sizeof(kk->rootfs));
 	kk->size = value(text, "size", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 0;
 	kk->loader_min = value(text, "loader-min", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 1;
+	kk->bss = value(text, "bss", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 0) : 0;
 	if (value(text, "arena", buf, sizeof(buf))) {
 		char *e;
 		kk->arena_off = (ax_u32)strtoul(buf, &e, 0);
@@ -311,9 +312,14 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 		rc = hashed(k, root, kpath, *kernel, *klen, &rk, sha);
 	if (rc == KS_OK && (strcmp(kk->sha256, sha) || kk->size != *klen))
 		rc = refuse(k, 1, "the kernel does not match its own sidecar (size, sha256)");
-	/* 2: kabi -- the sidecar against the record it was installed with */
+	/* 2: kabi -- the sidecar against the record it was installed with; a
+	 * brel kernel records no bss, so its sidecar must give it */
 	if (rc == KS_OK && (!kk->kabi[0] || !kk->pin[0]))
 		rc = refuse(k, 2, "the sidecar names no kabi or no compiler pin");
+	kk->brel = *klen > 18 && (*kernel)[16] == 0xFF && (*kernel)[17] == 0x00;
+	if (rc == KS_OK && kk->brel && !kk->bss)
+		rc = refuse(k, 2, "the kernel is a brel, whose bss is not recorded, and its sidecar "
+			    "gives no bss=");
 	if (rc == KS_OK && (strcmp(rk.kabi, kk->kabi) || strcmp(rk.pin, kk->pin))) {
 		sprintf(m, "the kernel's sidecar says kabi %s pin %s, its package record %s %s",
 			kk->kabi, kk->pin, rk.kabi, rk.pin);
@@ -343,7 +349,7 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 	}
 	/* 4: arena -- nothing to place in a static kernel */
 	/* 6: memory -- about twice the kernel, arena and RAM disk */
-	need = 2 * (*klen + (kk->has_arena ? kk->arena_cap : 0));
+	need = 2 * (*klen + (kk->brel ? kk->bss : 0) + (kk->has_arena ? kk->arena_cap : 0));
 	if (rc == KS_OK && !f->mem)
 		rc = refuse(k, 6, "the box's fast memory is unknown (no kinfo): name --mem on a host build");
 	if (rc == KS_OK && f->mem < need) {
@@ -513,8 +519,11 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	free(kernel);
 	sprintf(out, "generation 1\nstate pristine\n");
 	head(out + strlen(out), f, &kk, f->rootfs, f->root, f->swap, 0, created);
-	sprintf(out + strlen(out), "kernel unix %.500s%s\n", under(root, f->line == 30 ?
+	sprintf(out + strlen(out), "kernel unix %.500s%s", under(root, f->line == 30 ?
 		"/stand/k30/unix" : "/stand/k46/unix"), deflate ? " z=deflate" : "");
+	if (kk.brel)
+		sprintf(out + strlen(out), " bss=%lu", (unsigned long)kk.bss);
+	strcat(out, "\n");
 	if (ramdisk)
 		sprintf(out + strlen(out), "ramdisk miniroot %.500s%s\n", ramdisk, deflate ? " z=deflate" : "");
 	msg[0] = 0;
@@ -634,6 +643,12 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp)
 	mb.data = kernel;
 	mb.size = klen;
 	mb.deflate = 0;			/* raw in a disk store (10 §5.5) */
+	if (kk.brel) {			/* the loader adds it to the brel's end */
+		static char battr[32];
+
+		sprintf(battr, "bss=%lu", (unsigned long)kk.bss);
+		mb.attrs = battr;
+	}
 	memset(&g, 0, sizeof(g));
 	g.head = head;
 	g.n = 1;
