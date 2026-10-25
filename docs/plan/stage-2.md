@@ -136,14 +136,14 @@ every line of this table.
 | 80 §2 item | k46 (bench) | k30 (bench) |
 |---|---|---|
 | upgrade, commit, mark-good, rollback, one-shot previous, try-once fallback | **passed** 2026-10-26: M-GEN5, `2026-10-26-m-gen5.md` | after S2-11 and the k30 kernel package |
-| pristine boot | **passed**: the stage-1 vehicles boot a `state pristine` generation 1 (M-LD4 rows, the floppy pairs); the installer's pristine generation on the 1.1 layout is amix-installng's S2-30 | as k46 (the stage-1 rows ran both lines) |
+| pristine boot | **passed** 2026-10-26: the installer's 1.1-layout image (S2-30) boots its pristine generation 1 under our loader (the workspace's `tmp/2026-10-26-s2/l11-v6/N39`; install evidence `tmp/2026-10-26-s2-installng-v6/l11-k46.*`, amix-installng `work/install-matrix/20261025-l11-k46-h/`); the stage-1 vehicles and floppy pairs boot `state pristine` generations too | **passed** 2026-10-26: as k46, `l11-v6/N37` and `l11-k30.*`, `20261025-l11-k30-h/` |
 | power cut at each commit step | **passed** 2026-10-26: M-GEN3, `2026-10-26-m-gen3.md` | optional: one N = 7 cell once the k30 package exists |
 | refusal of a kernel-space package whose SHA-256 differs | **passed** 2026-10-26: apkg's S2-20 row (amix-packagemanager), below | line-independent (apkg's check) |
-| upgrade install from a 1.0 image | M-UPG1, amix-installng's S2-45 row: to confirm with amix-installng whether a k46 disk ran | reported passed 2026-10-26 (`l11-k30-upg`); record in amix-installng |
+| upgrade install from a 1.0 image | **open**: M-UPG1's k46 cell (`l11-k46-upg`, a 1.0 KD060 disk to 1.1) is running at amix-installng | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261025-l11-k30-upg-g/` and `-h/` (after the memory fix), copies in the workspace's `tmp/2026-10-26-s2-installng-v6/l11-k30-upg.*`; all install gates pass, generation 1 pristine. The first Bench cell (`l11-v6/N38`) did not reach login; the box's boot as `upgbox` was reported by the orchestrator |
 | **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | after S2-11 and the k30 kernel package |
 | **exit gate:** every power-cut point leaves a booting generation | **passed**, as M-GEN3 | as above |
 
-Still open on the bench besides the k30 column: M-GEN2 (commit time,
+Still open on the bench besides the k30 column: M-UPG1 on k46, and M-GEN2 (commit time,
 recipe in `tests/bench/README.md`), a stage-2 measurement that 80's exit
 gate does not name.
 
