@@ -15,14 +15,18 @@
 #      takes the secondary boot2 if the new one already had its start
 #   (4) reads the chosen boot2 (2048-byte units), checks its CRC-32, falls back
 #      to the other copy, and calls it
-#   (5) on failure: one line on the serial port, then returns to the strap
+#   (5) on failure: a line on the serial port, then stops (waits for ever).
+#       Returning failure to the strap does not make Kickstart try the next
+#       boot node: it raises AN_BootError and resets (M-LD3, measured on the
+#       Z3660 ROM chain 2026-10-25), and a reset loop can leave a real 68060
+#       dead until a power cycle
 #
 # Interface to boot2 (jsr to its first byte):
 #   a1 IOStdReq   a0 the chosen store header (512 bytes)   a6 ExecBase
 #   d0 partition start (bytes)   d1 choice: bit 0 = copy taken (1 = secondary),
 #   bit 8 = taken after a CRC failure (B2), bit 9 = taken by the loader-trial
 #   rule (B4)   d2 the memory block holding boot2 (BUFSZ bytes, MEMF_CHIP)
-# If boot2 returns, boot1 frees the block and returns failure to the strap.
+# If boot2 returns, boot1 says so and stops.
 #
 # Assembler: binutils 2.8.1 for m68k-cbm-sysv4 (SVR4 syntax: & immediate,
 # % register).  68000-compatible instructions only.
@@ -35,7 +39,6 @@
 	.set	B2AREA, 2560
 
 	.set	LVO_ALLOCMEM, -198
-	.set	LVO_FREEMEM, -210
 	.set	LVO_CLOSELIB, -414
 	.set	LVO_DOIO, -456
 	.set	LVO_OPENLIB, -552
@@ -185,24 +188,22 @@ nocache:
 	move.l	%d6,%d1
 	move.l	%a4,%d2
 	jsr	(%a2)
-	bra.b	freeret			# boot2 returned: give the strap a failure
+	lea	(msgret,%pc),%a0	# boot2 gave up
+	bra.b	failp
 
 failb1:	lea	(msgb1,%pc),%a0
 	bra.b	failp
 failb3:	lea	(msgb3,%pc),%a0
-failp:	bsr.b	puts
-freeret:
-	move.l	%a4,%a1
-	move.l	&BUFSZ,%d0
-	jsr	(LVO_FREEMEM,%a6)
-failret:
-	moveq	&-1,%d0
-ret:	movem.l	(%sp)+,%d2-%d7/%a2-%a6
-	rts
+	bra.b	failp
 failmem:
 	lea	(msgmem,%pc),%a0
+failp:	bsr.b	puts
+	lea	(msgstop,%pc),%a0
 	bsr.b	puts
-	bra.b	failret
+stop:	bra.b	stop			# interrupts stay on; a reset is the user's
+
+ret:	movem.l	(%sp)+,%d2-%d7/%a2-%a6
+	rts
 
 # puts: a0 = NUL-terminated string to the serial port, 8N1 at about 9600
 # baud (period 370 suits both PAL and NTSC clocks within 1 %).
@@ -302,4 +303,7 @@ expname:
 msgb1:	.ascii	"\r\namix-boot1: B1 no valid store header\r\n\0"
 msgb3:	.ascii	"\r\namix-boot1: B3 no valid boot2\r\n\0"
 msgmem:	.ascii	"\r\namix-boot1: no memory\r\n\0"
+msgret:	.ascii	"\r\namix-boot1: boot2 gave up\r\n\0"
+msgstop:
+	.ascii	"amix-boot1: stopped. Reset; both mouse buttons at reset: Kickstart menu\r\n\0"
 	.even

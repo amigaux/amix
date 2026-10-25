@@ -132,12 +132,14 @@ syntax), ≤ 1024 bytes including the bootblock framing. It has one job:
    boot2 extent and check it.
 5. Jump to boot2 with a1 (the IOStdReq), the partition start, the header,
    and a code saying which boot2 copy it took and why.
-6. If no header or no boot2 is valid, put one line on the serial port (the
-   screen needs graphics.library, which does not fit in 1 KB; boot2 owns the
-   screen) and **return to the strap with a failure code**, so Kickstart can try the next
-   boot node. (What the strap does with the return value is not recorded in
-   the tree; M-LD3 measures it. If returning proves unsafe, boot1 halts with
-   the message instead.)
+6. If no header or no boot2 is valid, or boot2 gives up, put a line on the
+   serial port (the screen needs graphics.library, which does not fit in
+   1 KB; boot2 owns the screen) and **stop**: boot1 loops with interrupts on
+   and the user resets. Returning failure to the strap does not make
+   Kickstart try the next boot node: on the Z3660 boot ROM chain it raises
+   a recoverable AN_BootError alert and resets, about every 14 s (M-LD3,
+   measured 2026-10-25), and a reset loop can leave a real 68060 dead until
+   a power cycle.
 
 boot1 has no CPU gate and no filesystem knowledge; it reads extents named in
 the header, reads and writes the tally block, and nothing else. On a
@@ -518,7 +520,7 @@ amix-boot 1 (k46, 68060)    boot device: c0 unit 6
   1  generation 41  good      2026-11-02   (default)
   2  generation 40  good      2026-10-28
   3  generation 12  pristine  2026-10-20
-  s  safe mode (toggle)       r  return to Kickstart
+  s  safe mode (toggle)       d  development load (toggle)
 choose [1]:
 ```
 
@@ -528,7 +530,7 @@ choose [1]:
 | `p` | **rollback key**: previous good generation, at once (also accepted in the menu window without opening the menu) |
 | `s` | toggle safe mode for the selection (floor + root controller + root filesystem, `70-static-floor.md` §4) |
 | `d` | toggle **development load** for this boot only: the kernel then accepts modules that are not members of the booted manifest (`30-module-core.md` §2, patch 17); boot2 prints `amix-boot: DEVELOPMENT LOAD: unsigned modules allowed this boot` and the kernel repeats it; `kbootset next --devload` requests the same for the next boot |
-| `r` | return to the strap so Kickstart can try the next boot node — offered only once M-LD3 shows the strap handles a return; until then the key halts with a message |
+| `r` | not offered: returning to the strap raises AN_BootError and resets rather than trying the next boot node (M-LD3); the key prints why |
 | Return | boot the selection |
 | left mouse button | next entry; held 2 s: boot the selection. Mouse actions count only after the button has first been released, so the hold that opened the menu never selects |
 
@@ -571,9 +573,9 @@ a mouse click; where a choice is needed the menu opens.
 
 | Code | Condition | Action |
 |---|---|---|
-| B1 | no valid store header (boot1) | print (serial port only), return to the strap |
+| B1 | no valid store header (boot1) | print (serial port only), stop |
 | B2 | primary boot2 CRC bad | print, use the secondary copy |
-| B3 | both boot2 copies bad | print (serial port only), return to the strap |
+| B3 | both boot2 copies bad | print (serial port only), stop |
 | B4 | loader trial: the new boot2 already had its attempt, or the tally write failed | print, use the secondary copy |
 | L1 | CPU line of the generation ≠ probed CPU | name both; menu |
 | L2 | manifest missing or CRC bad | name the generation; continue in the order of §7.2 (default, other good newest first, pristine, menu) |
@@ -593,7 +595,7 @@ a mouse click; where a choice is needed the menu opens.
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| OQ-10.1 | What the strap does with a bootblock's return value (failure code and the a0/d0 convention), on each Kickstart version in use. | us |
+| OQ-10.1 | What the strap does with a bootblock's return value on the other boot ROMs and Kickstart versions (the Z3660 ROM chain raises AN_BootError and resets, M-LD3). | us |
 | OQ-10.2 | Which bootblock header fields the strap checks on an RDB `UNI\0` partition (the stock image carries `DOS\0`). | us |
 | OQ-10.3 | Why ROM 42.39 offered no Amix RDB partition on a disk while the reference mounter source would; whether the same ROM honours boot blocks on an RDB-style CD (option A of §4.4). | us |
 | OQ-10.4 | Whether boot2's screen output should use graphics.library directly or an Intuition screen, given the size budget. | us |

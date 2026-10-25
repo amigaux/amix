@@ -87,7 +87,7 @@ decision reserved to the project owner.
 
 | ID | Question (short) | Proposed owner |
 |---|---|---|
-| OQ-10.1 | What the strap does with a bootblock's return value | us |
+| OQ-10.1 | What the strap does with a bootblock's return value (Z3660 ROM chain answered by M-LD3: alert and reset; other ROMs open) | us |
 | OQ-10.2 | Which bootblock header fields the strap checks on a `UNI\0` partition | us |
 | OQ-10.3 | Strap and a 2048-byte CD node; ROM 42.39 vs the reference mounter | us |
 | OQ-10.4 | boot2 screen output: graphics.library or an Intuition screen | us |

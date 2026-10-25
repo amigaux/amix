@@ -9,8 +9,8 @@
 #include "store.h"
 #include "menu.h"
 
-/* returning to the strap stays off until M-LD3 shows Kickstart handles it */
-#define STRAP_RETURN 0
+/* returning to the strap is not offered: on the Z3660 boot ROM chain it
+ * raises AN_BootError and resets instead of trying the next boot node (M-LD3) */
 
 static const char *const statename[] = { "free", "pristine", "good", "trial", "bad" };
 
@@ -115,9 +115,7 @@ menu_run(const struct ax_ctl *c, ax_u32 first, ax_u32 cpu, int *safe, int *devlo
 			*devload = !*devload;
 			draw(c, sel, *safe, *devload, cpu);
 		} else if (ch == 'r' || ch == 'R') {
-			if (STRAP_RETURN)
-				return 0;
-			con_puts("amix-boot: returning to Kickstart is not enabled in this loader\n");
+			con_puts("amix-boot: returning to Kickstart would only reset the machine; reset by hand\n");
 		} else if (ch == '\r' || ch == '\n') {
 			return c->gen[sel].id;
 		}
