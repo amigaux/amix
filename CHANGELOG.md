@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage-2 records and row recipes (64a9881, 47abc38)
+
+M-GEN1 (stage 2): a static generation is 1.26–1.27 MB (k30 brel), 1.93–2.08 MB (k46 ET_REL) or 1.41–1.52 MB (k46 brel)
+raw plus one manifest extent; a 64 MiB store holds ≥ 32, the 1.0 10 MiB slice five ET_REL k46 generations. M-GEN4: kbootset
+one GCC 14 static binary for both lines, 119 388 B stripped. M-SIG2 bench half: SHA-256 540 KiB/s on the 25 MHz 030 model,
+kbootset check of a k46 generation about 3.8 s. tests/bench/s2-standin.sh: a stand-in kernel package + apkg record until
+S2-12. README "Stage 2": the M-GEN5 lifecycle row (seven boots), the M-GEN3 power-cut rows (hold at steps 1, 2, 4, 5, 7) and
+the exit row (apkg upgrade → trigger → power-cycle → mark-good → rollback).
+
 ## 2026-10-26 — kbootset on the running box (S2-06); C2-4 v3 (efb7629, c7b7319)
 
 Without --image/--dev kbootset reads /dev/kinfo (C2-1 v2, checked), finds the boot store (bootset's store= when the slice
