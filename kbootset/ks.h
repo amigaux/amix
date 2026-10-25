@@ -66,6 +66,10 @@ struct ks {
 	struct ks_dev dev;
 	struct ks_jrn jrn;	/* put == 0: no journal (host media builds) */
 	ks_deflate deflate;	/* 0: members are stored raw */
+	/* called before each commit step of 40 §3.2 (1 journal, 2 members,
+	 * 4 manifest, 5 control block = the commit point, 7 journal cleared),
+	 * for the power-cut rows (docs/plan/stage-2.md S2-08); or 0 */
+	void (*step)(int n, const char *what);
 	ax_u32 crctab[256];
 	struct ax_header hdr;
 	int hdrcopy;		/* 0 = header A holds hdr, 1 = B */

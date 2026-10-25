@@ -455,6 +455,8 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 		goto out;
 
 	/* 1. journal; 2-4. members and manifest, each read back */
+	if (k->step)
+		k->step(1, "journal");
 	if (k->jrn.put) {
 		sprintf(jl, "commit %lu", (unsigned long)id);
 		if (k->jrn.put(k->jrn.ctx, jl) != 0) {
@@ -462,8 +464,12 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 			goto out;
 		}
 	}
+	if (k->step)
+		k->step(2, "members");
 	for (i = 0; i < g->n && rc == KS_OK; i++)
 		rc = put(k, plan[i].off, data[i], stored[i]);
+	if (rc == KS_OK && k->step)
+		k->step(4, "manifest");
 	if (rc == KS_OK)
 		rc = put(k, plan[g->n].off, (ax_u8 *)man, mlen);
 	if (rc != KS_OK)
@@ -491,8 +497,12 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 	}
 	c.last_id = id;
 	keep(&c);				/* 6. collect */
+	if (k->step)
+		k->step(5, "control block");
 	if ((rc = write_ctl(k, &c)) != KS_OK)
 		goto out;
+	if (k->step)
+		k->step(7, "journal cleared");
 
 	/* 7. done */
 	if (k->jrn.clear && k->jrn.clear(k->jrn.ctx) != 0) {

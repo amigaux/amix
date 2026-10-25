@@ -17,6 +17,11 @@
  *   collect
  *   loader-install BOOT2 [--version N] [--boot1 FILE]
  *
+ * Power-cut rows (docs/plan/stage-2.md S2-08): commit prints
+ * "kbootset: step N <what>" to stderr before each step of 40 §3.2, and with
+ * KBOOTSET_HOLD=N set it flushes, syncs and waits for ever before step N,
+ * so the row can cut the power exactly there.
+ *
  * Exit status: 0 done; 1 I/O error or damaged store; 2 usage; 3 refused
  * by a rule; 4 refused by a gate of 40 §3.1 (its number is printed).
  * Nothing is written when the status is 2, 3 or 4.
@@ -30,6 +35,9 @@
 #include "ks.h"
 #ifdef KS_ZLIB
 #include <zlib.h>
+#endif
+#ifdef KS_SYNC			/* the box build: sync() before a hold */
+#include <unistd.h>
 #endif
 
 #define SECTOR	512UL
@@ -136,6 +144,23 @@ zdeflate(const ax_u8 *in, ax_u32 n, ax_u32 *outn)
 	return out;
 }
 #endif
+
+static void
+step(int n, const char *what)
+{
+	const char *hold = getenv("KBOOTSET_HOLD");
+
+	fprintf(stderr, "kbootset: step %d %s\n", n, what);
+	if (hold && atoi(hold) == n) {
+		fprintf(stderr, "kbootset: holding before step %d; cut the power now\n", n);
+		fflush(0);
+#ifdef KS_SYNC
+		sync();
+#endif
+		for (;;)
+			;	/* waits for the power cut */
+	}
+}
 
 static void
 usage(void)
@@ -323,6 +348,7 @@ main(int argc, char **argv)
 #ifdef KS_ZLIB
 	k.deflate = zdeflate;
 #endif
+	k.step = step;
 	for (i = 1; i < argc; i++) {		/* the options after the command */
 		if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
 			boot1 = cmd[++i];
