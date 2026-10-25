@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — /dev/kinfo: made by the installer, and by kbootset when missing (fb9c1ce..a96427d)
+
+M-GEN3 power-cut rows in the rig's cut shape (holds before steps 1, 2, 4, 5, 7); kbootset creates /var/kbootset for its
+default journal. C2-3 v3 §1: the kernel package does not carry /dev/kinfo (a device node is not a pure file); the installer
+and the upgrade install make it (c 53 0, 0444, root:sys). C2-4 v4 §2: on the running box kbootset makes /dev/kinfo when it
+is missing and says so; when it cannot, the facts come from /etc/default/bootset and the options. Box build uses mknod with
+makedevice(53, 0).
+
 ## 2026-10-26 — stage-2 records and row recipes (64a9881, 47abc38)
 
 M-GEN1 (stage 2): a static generation is 1.26–1.27 MB (k30 brel), 1.93–2.08 MB (k46 ET_REL) or 1.41–1.52 MB (k46 brel)
