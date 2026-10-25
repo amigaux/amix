@@ -126,7 +126,40 @@ agrees them); `kbootset` about 7; kernel side and packages about 2.75 (other
 repositories); apkg 0.3 about 3.25; installer about 3; rows and measurements
 about 5.5; the media-track rows about 2.
 
-## 4. Not in stage 2
+## 4. Exit ledger (80 §2)
+
+What 80 §2 asks for stage 2 on the emulator, and where each result is
+recorded. Records under `docs/measurements/` are this repository's; the
+others are named by the repository that holds them. Metal is S2-47 for
+every line of this table.
+
+| 80 §2 item | k46 (bench) | k30 (bench) |
+|---|---|---|
+| upgrade, commit, mark-good, rollback, one-shot previous, try-once fallback | **passed** 2026-10-26: M-GEN5, `2026-10-26-m-gen5.md` | after S2-11 and the k30 kernel package |
+| pristine boot | **passed**: the stage-1 vehicles boot a `state pristine` generation 1 (M-LD4 rows, the floppy pairs); the installer's pristine generation on the 1.1 layout is amix-installng's S2-30 | as k46 (the stage-1 rows ran both lines) |
+| power cut at each commit step | **passed** 2026-10-26: M-GEN3, `2026-10-26-m-gen3.md` | optional: one N = 7 cell once the k30 package exists |
+| refusal of a kernel-space package whose SHA-256 differs | **passed** 2026-10-26: apkg's S2-20 row (amix-packagemanager), below | line-independent (apkg's check) |
+| upgrade install from a 1.0 image | M-UPG1, amix-installng's S2-45 row: to confirm with amix-installng whether a k46 disk ran | reported passed 2026-10-26 (`l11-k30-upg`); record in amix-installng |
+| **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | after S2-11 and the k30 kernel package |
+| **exit gate:** every power-cut point leaves a booting generation | **passed**, as M-GEN3 | as above |
+
+Still open on the bench besides the k30 column: M-GEN2 (commit time,
+recipe in `tests/bench/README.md`), a stage-2 measurement that 80's exit
+gate does not name.
+
+**The SHA-256 refusal row** (evidence: the workspace's
+`tmp/2026-10-26-s2/s2-46sha/N36/`). On the kinfo vehicle with apkg 0.3
+and the S2-46 catalog, with a logging stub in place of kbootset:
+- A datastream altered by one byte: `sha256 mismatch (got 085f472b…,
+  catalog 9f46ab01…)`, exit 3.
+- The catalog's hash altered instead: the same message with the roles
+  swapped, exit 3.
+- In both cases nothing followed: no `/var/apkg/kpkg`, no `/var/apkg/txn`,
+  no package installed, no cache file, and the stub was never called.
+- The positive control, the unaltered set, installed and called the
+  trigger.
+
+## 5. Not in stage 2
 
 - Modules, the module core and the arena (stage 3).
 - Root-class modules, the RAM-disk root and the miniroot boot of the floppy
