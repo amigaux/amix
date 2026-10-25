@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 5
+# C2-4 — `kbootset` as a called program, version 6
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -98,4 +98,16 @@ case, the `*` case, and after the repair shell. One line before each:
 - **What it writes:** the boot store's control block, nothing else; the
   root may still be read-only or unrepaired.
 - **Exit status:** 0, or 1 on an I/O error. The reboot follows either way.
+
+## 8. `create` and the set id
+
+- `create SIZE BOOT2 [--boot1 FILE] [--version N] [--force]` refuses,
+  with status 3, a slice that already holds a store header or a bootblock
+  (the magic `DOS`, as a 1.0 chain has). With `--force`, or on a blank
+  slice, it zeroes the first 64 KiB, then lays the store, so nothing of
+  an earlier chain survives. The installer need not zero the slice
+  itself, and passes `--force` when it replaces a chain.
+- `status` prints `store-id: <8 hex>`, the store header's set id, as
+  `/etc/default/bootset`'s `store-id=` records it. Nothing outside
+  kbootset needs to compute it.
 
