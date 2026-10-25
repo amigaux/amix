@@ -73,19 +73,20 @@ so the 1.1 budget is recomputed from the store layout, not inherited.
 | | |
 |---|---|
 | Today (1.0) | ISO9660 with Rock Ridge, 2048-byte sectors, `/catalog`, `/pkgs/{stock,base}`, `/install/…`; System Identifier deliberately blank so the CD never outranks the hard disk; never a boot device — the 060 route boots an install hard-file image on the Z3660 SD and reads the CD through cdfs (`IN/docs/install-iso.md:7-33`; `MP/02-medium-cdrom-design.md:9-34`) |
-| 1.1 | **bootable** (D-3 §2) on the A4091/A4092 ROMs, which offer an ISO9660 disc to Kickstart with priority 2 when the System Identifier reads `AMIGA BOOT` (`MP/refute-cd-boot-chain.md`) |
-| Layout | System Area: boot1, store header, boot2 (`10-boot-loader.md` §4.4); `/BOOT/K30/` and `/BOOT/K46/`: control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, signature, `/pkgs/{stock,base,kernel}` |
-| Boot | ROM offers the disc → boot1 → boot2 picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
+| 1.1 | **bootable** (D-3 §2) on the A4091/A4092 ROMs. Their ISO9660 boot node runs no bootblock (it starts the ROM's CD filesystem and boots AmigaDOS), so the mechanism is an owner decision between two options (`10-boot-loader.md` §4.4, OQ-10.9) |
+| Option A layout (RDB-style CD) | not ISO9660: an RDB at 2048-byte blocks, a `UNI\0` boot-store partition (boot1, header, boot2, both lines' generations), a package partition read by a reader still to be chosen |
+| Option B layout (recommended: AmigaDOS-hosted loader) | ISO9660, System Identifier `AMIGA BOOT`; `S/Startup-Sequence` runs `amix-cdboot`; `/BOOT/K30/` and `/BOOT/K46/` hold a control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, signature, `/pkgs/{stock,base,kernel}` |
+| Boot (option B) | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
 | Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel` under the signed catalog |
 | Rescue | boot the CD, choose repair |
 | Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id, `MP/02-medium-cdrom-design.md:173`); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
 | Not bootable | an ATAPI CD on the Gayle IDE (no source says any Kickstart boots Amix from it; it stays a package source); a CD on a controller whose ROM offers no CD node |
 | Hazards kept in the design | a second cdfs mount on an absent unit panics — probe by inquiry, then mount once (P-28 D43); a 512-byte read of a CD through the A4092 wedges the bus — only cdfs opens CD units (`MP/02-medium-cdrom-design.md:40-42`) |
 
-The bootable profile sets `AMIGA BOOT`; an image meant to sit in a drive while
-the box boots from disk keeps the System Identifier blank. Whether the strap
-reads a bootblock from a 2048-byte node is the first measurement of this
-medium (M-LD2).
+Under option B the bootable profile sets `AMIGA BOOT`; an image meant to sit
+in a drive while the box boots from disk keeps the System Identifier blank.
+The first measurement of this medium is M-LD2a (option A) or M-LD2b
+(option B), whichever the owner keeps on the table.
 
 ## 5. The netinstall medium
 
@@ -134,6 +135,15 @@ Form A therefore depends on compression and on the RAM-disk root. Measure:
 Form A ships if (1+2) + (3) + (4) fit two volumes with a margin of at least
 5 % and (5) fits the smallest machine; otherwise form B.
 
+**When.** D-3 §2 says the fit is "measured in S0". M-NET1a and M-NET1b are a
+host computation over today's binaries and are **stage 0: S0 does not freeze
+until they are closed**. If the compressed miniroot alone (1+2) leaves less
+than a generous kernel estimate on two volumes, form B is decided in S0.
+M-NET1c–g cannot close in S0 — c and d depend on the 1.1 floor kernel and
+the store format, e on both, f and g need a running miniroot — and are
+recorded as **deviation DV-1** from D-3 §2, for the owner to approve
+(`00-overview.md` §5).
+
 ## 6. Tape
 
 | | |
@@ -170,5 +180,5 @@ Form A ships if (1+2) + (3) + (4) fit two volumes with a margin of at least
 
 ## 9. Measurements
 
-M-FP1, M-FP2, M-NET1a–g, M-LD2, M-EMU1, M-CD1, M-TAPE1…4 —
+M-FP1, M-FP2, M-NET1a–g, M-LD2a, M-LD2b, M-EMU1, M-CD1, M-TAPE1…4 —
 `90-measurements.md`.

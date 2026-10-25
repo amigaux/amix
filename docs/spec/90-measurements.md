@@ -16,9 +16,10 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
 | M-LD1 | Which bootblock header fields (magic, checksum, trailer) the strap checks on a floppy and on an RDB `UNI\0` partition, per Kickstart version in use (3.1, 3.2.x) | bench (A4091 ROM, WD, Gayle, floppy) + metal (Z3660 boot ROM) | 1 | 10 §2.1 |
-| M-LD2 | Whether the strap reads and runs a bootblock from a 2048-byte CD node (A4091 ROM, A4092 ROM 42.39); System Area placement on the built ISO | bench (A4091 ROM) + metal (A4092) | 1 | 10 §4.4, 50 §4 |
+| M-LD2a | CD option A: on a PVD-less disc with an RDB at 2048-byte blocks and a `UNI\0` partition with boot blocks set, does the A4091 ROM (and ROM 42.39) mount it and does the strap run boot1 | bench (A4091 ROM) + metal (A4092) | 1 | 10 §4.4, 50 §4 |
+| M-LD2b | CD option B: an `AMIGA BOOT` ISO boots AmigaDOS through the ROM's CD filesystem, `S/Startup-Sequence` runs `amix-cdboot`, which takes the machine over and boots a static kernel; minimum Kickstart; memory left after AmigaDOS | bench (A4091 ROM) + metal (A4092) | 1 | 10 §4.4, 50 §4 |
 | M-LD3 | What the strap does when a bootblock returns a failure code (does Kickstart try the next boot node?) | bench + metal (Z3660 ROM) | 1 | 10 §3.1 |
-| M-LD4 | Control-block write through the strap's IOStdReq on each boot ROM (try-once and one-shot), with read-back on the next boot | bench (A4091, WD, Gayle) + metal (Z3660 ROM, both boxes) | 1 | 10 §4.2, §7 |
+| M-LD4 | Writes through the strap's IOStdReq on each boot ROM: boot2's control-block write (try-once, one-shot) and boot1's tally-block write (loader trial), with read-back on the next boot | bench (A4091, WD, Gayle) + metal (Z3660 ROM, both boxes) | 1 | 10 §4.2, §7 |
 | M-LD5 [U18] | Menu input: keyboard matrix, left/right mouse buttons and serial input at the menu window; through the HID converters on both reference machines; phantom key or button reads on a marginal card | bench (input injected over the emulator's control channel) + metal (HID path) | 1 | 10 §7.4 |
 | M-LD6 | CPU probe gives the right answer on 68030, 68040, LC/full 68060, including a 68060 without SetPatch | bench (030, 040, LC060 models) + metal (real 68060) | 1 | 10 §3.2 |
 | M-LD7 | CRC-32 and SHA-256 time over a 2 MB kernel on a 25 MHz 68030 and a 68060 (decides whether the loader checks SHA-256 too) | bench (upper bound) + metal (68060; 68030 per OQ-80.1) | 1 | 10 §5.1 |
@@ -29,6 +30,7 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | M-FP2 | Floppy-pair boot on metal, both lines (RAM-disk profile; fd0-root profile if chosen), including the volume change | metal | 1, again 5 | 50 §3 |
 | M-EMU1 | The emulated Z3660 with the autoboot option (DIAGVALID advertised) boots our loader like metal | bench | 1 (prerequisite) | 50 §7 |
 | M-RD1 | The kernel's memory sizing honours a `memory[]` region shortened by the loader (RAM-disk carve-out); the RAM-disk module maps the image | bench | 4 | 10 §5.4, 30 §7 |
+| M-RD2 | The kernel half applies the loader record's root selector: an sd root on cards 0–3 (bit-7 encoding) and a RAM-disk root (block major 20); `swap none` boots without a swap device | bench | 4 | 10 §6, 30 §3, §5.2 |
 
 ## 2. Lifecycle
 
@@ -62,13 +64,15 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | M-MOD1 | Object sizes of every root-class module (z3660scsi, a4091, gayle-ide, a4000t-710, ufs, s5, cdfs, ramdisk) → arena capacity = 2 × set rounded to 64 KiB | bench (host computation) | 3 | 10 §5.3, 20 §8 |
 | M-CORE1 [U13] | The adopted core's host tests (relocation oracle, state harness) built with our toolchain | bench (host) | 3 | 30 §1 |
 | M-INT1 | INT2 and INT6 chains; z3660eth with interrupt receive; polled fallback | bench (chain logic) + metal (the emulated board raises no INT6) | 3 | 30 §4 |
+| M-SIG3 | The kernel refuses `modload`, dependency loads and first-open loads of any file not a member of the booted manifest or whose SHA-256 differs; the development-load flag lifts this and is printed | bench | 3 | 30 §2 |
 | M-THR1 | z3660eth and RTG throughput as modules vs the static drivers' figures of record | metal | 3 | 80 §2 |
 
 ## 4. Root as a module, filesystems, safe mode
 
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
-| M-SD1 | Equivalence: for every board set of record, the module kernel names every disk as the stage-1 static kernel for that set; four-controller sets | bench + metal (both boxes' board sets) | 4 | 30 §5 |
+| M-SD1 | Card-number contract over the board sets of record (`30-module-core.md` §5.3): unchanged-order sets name every disk as the 1.0 static kernel did; the listed changed sets give exactly the listed new names; three- and four-controller sets give the contract's expected names | bench + metal (both boxes' board sets) | 4 | 30 §5 |
+| M-FS1 | The 040/060 base rebuilt without ufs/s5: the carved ufs and s5 objects are self-contained (symbol ranges, relocations), the rebuilt image passes the port's gates, and root on ufs and s5 modules boots | bench (host computation, then emulator) + metal | 5 | 30 §6 |
 | M-A4T1 | The A4000T onboard 53C710 probe: gated, never touches the controller window ungated, hangs nothing | metal | 4 | 20 §6, 30 §5 |
 | M-DMA1 | Cache and DMA behaviour per root controller module (z3660scsi, A4091/A4092, Gayle IDE, 53C710) | metal | 4 | 30 §8 |
 | M-FL1 | Floor kernel size per line once controllers and filesystems leave it | bench (host computation) | 5 | 70 §6 |
@@ -80,13 +84,13 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
 | M-CD1 | CD boot and install on the A4091 ROM (emulated) and the A4092 (metal), both lines' generations from one disc | bench + metal | 5 | 50 §4 |
-| M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line | bench (host computation) | 5 | 50 §5.1 |
-| M-NET1b | Its deflate-compressed size | bench (host computation) | 5 | 50 §5.1 |
-| M-NET1c | Compressed kernel + root-class modules under the 1.1 floor | bench (host computation) | 5 | 50 §5.1 |
-| M-NET1d | Store overhead and usable bytes per DD volume | bench (host computation) | 5 | 50 §5.1 |
-| M-NET1e | RAM needed at boot vs the smallest supported machine per line | bench | 5 | 50 §5.1 |
-| M-NET1f [U-N1] | A single-user miniroot runs the inet STREAMS stack (on a static kernel first) | bench | 2 (early, static kernel), again 5 | 50 §5.1 |
-| M-NET1g [U-N2, U-N8] | HTTP throughput and inactivity timeouts from the miniroot | metal | 5 | 50 §5.1 |
+| M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line, from today's binaries | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1b | Its deflate-compressed size | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1c | Compressed kernel + root-class modules under the 1.1 floor (DV-1) | bench (host computation) | 5 | 50 §5.1 |
+| M-NET1d | Store overhead and usable bytes per DD volume (DV-1) | bench (host computation) | 1 (store format frozen) | 50 §5.1 |
+| M-NET1e | RAM needed at boot vs the smallest supported machine per line (DV-1) | bench | 5 | 50 §5.1 |
+| M-NET1f [U-N1] | A single-user miniroot runs the inet STREAMS stack (on a static kernel first; DV-1) | bench | 2 (early, static kernel), again 5 | 50 §5.1 |
+| M-NET1g [U-N2, U-N8] | HTTP throughput and inactivity timeouts from the miniroot (DV-1) | metal | 5 | 50 §5.1 |
 | M-TAPE1 [T-U1, T-U2] | Stock floppies + stock tape image install in the emulator; origin of the old "timeout" | bench | 2 | 50 §6 |
 | M-TAPE2 [T-U5, T-U7] | TAPE1 written from a running box reads back; tape source throughput | bench | 2 | 50 §6 |
 | M-TAPE3 [T-U3] | An emulated tape (ZuluSCSI tape image) behind the A4092: sense data, mode select, filemark spacing at close | metal | 2 | 50 §6 |
