@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-25 — loader stage 1, items S1-07..S1-15 (c4893cf..fd64097)
+
+Raw deflate decoder; generation selection (try-once, one-shot requests, fallback order); kernel relocator for ET_REL, brel and
+ET_EXEC with the stock binding rules, bounds-checked; bootinfo, RTH1/RTO1 and AXL1 builders; boot2 linked at 0 and
+self-relocating (b2link); boot2 itself (CPU probe, store reads through a chip bounce buffer, manifest, inflate, relocation,
+bootinfo with the RTH1 boot-node walk, 68030 and 68040/060 hand-off); menu with rollback key, safe-mode and development-load
+toggles, screen and serial console, keyboard, mouse and serial input; multi-volume floppy stores; mkstore stores members
+deflated and builds packed floppy pairs. boot2 25 824 B + 2 336 bss of 28 672. 308 host checks; the real 1.0 floppy kernels
+inflate byte-identical; the relocator matches kerntools' elf2brel on three real kernels. Nothing has run on an Amiga yet.
+
 ## 2026-10-25 — stage 1 plan and the first loader code (f4081f5..b029dbe)
 
 Stage 1 plan (docs/plan/stage-1.md: 28 items plus 3 that wait for the CD fork, each with owner repo, evidence class, what
