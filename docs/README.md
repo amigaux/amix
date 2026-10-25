@@ -3,6 +3,7 @@
 | Path | Content |
 |---|---|
 | `spec/` | The S0 specification: one file per area, numbered in reading order. `spec/00-overview.md` maps the release decisions to the files, collects the open questions, and points to `spec/90-measurements.md`. |
+| `measurements/` | One record per closed measurement: what was counted, from which inputs (with hashes), what was left out, the numbers and the verdict. The tools that produce them are in `../tools/measure/`. |
 
 Later additions keep the same rule: one topic per file, written for a reader
 who has never seen the project, with references instead of copies for any

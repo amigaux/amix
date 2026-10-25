@@ -57,7 +57,9 @@ history.
 
 ```
 docs/spec/     the specification, one file per area (00-overview.md first)
+docs/measurements/  records of closed measurements
 docs/          other documentation (see docs/README.md)
+tools/measure/ host-side measurement scripts
 ```
 
 Planned, as the code arrives: `loader/` (boot1, boot2, filesystem readers),
