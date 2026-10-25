@@ -13,6 +13,7 @@ main(void)
 	test_crc32();
 	test_store();
 	test_manifest();
+	test_inflate();
 	printf("%d checks, %d failed\n", t_run, t_fail);
 	return t_fail != 0;
 }

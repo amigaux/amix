@@ -16,4 +16,5 @@ extern int t_fail, t_run;
 void test_crc32(void);
 void test_store(void);
 void test_manifest(void);
+void test_inflate(void);
 #endif

@@ -14,6 +14,7 @@
 #include "crc32.h"
 #include "store.h"
 #include "manifest.h"
+#include "inflate.h"
 
 static ax_u32 tab[256];
 static FILE *img;
@@ -48,17 +49,29 @@ member(const char *what, const struct ax_member *mb)
 		       mb->path ? mb->path : "-");
 		return;
 	}
-	if (mb->z != AXZ_NONE) {
-		printf("    %-7s %-12s %8lu  at 0x%lx  (compressed; CRC not checked here)\n", what,
-		       mb->name, (unsigned long)mb->size, (unsigned long)mb->at);
-		return;
-	}
 	p = malloc(mb->size ? mb->size : 1);
-	rd(mb->at, p, mb->size);
+	if (mb->z == AXZ_DEFLATE) {
+		static struct ax_inflate st;
+		unsigned char *zp = malloc(mb->stored ? mb->stored : 1);
+		ax_u32 got = 0;
+
+		rd(mb->at, zp, mb->stored);
+		if (ax_inflate(&st, p, mb->size, &got, zp, mb->stored) != AXI_OK || got != mb->size) {
+			printf("    %-7s %-12s inflate FAILED\n", what, mb->name);
+			bad = 1;
+			free(zp);
+			free(p);
+			return;
+		}
+		free(zp);
+	} else {
+		rd(mb->at, p, mb->size);
+	}
 	crc = ax_crc32(tab, p, mb->size);
 	free(p);
-	printf("    %-7s %-12s %8lu  at 0x%lx  crc %08lx %s\n", what, mb->name,
-	       (unsigned long)mb->size, (unsigned long)mb->at, (unsigned long)crc,
+	printf("    %-7s %-12s %8lu  at 0x%lx%s  crc %08lx %s\n", what, mb->name,
+	       (unsigned long)mb->size, (unsigned long)mb->at,
+	       mb->z == AXZ_DEFLATE ? " (deflate)" : "", (unsigned long)crc,
 	       crc == mb->crc ? "ok" : "BAD");
 	if (crc != mb->crc)
 		bad = 1;

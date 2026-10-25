@@ -6,7 +6,8 @@ B=${B:-build}
 T=$B/rt
 rm -rf $T && mkdir -p $T
 head -c 1267397 /dev/urandom > $T/unix
-head -c 45678 /dev/urandom > $T/z3660scsi
+# a compressible module, stored deflated
+yes "amix z3660scsi module text" | head -c 45678 > $T/z3660scsi
 head -c 20000 /dev/urandom > $T/boot2.bin
 head -c 1008 /dev/zero > $T/b1.bin
 $B/bbframe $T/b1.bin $T/boot1.img >/dev/null
@@ -26,7 +27,7 @@ rootfs ufs
 root sd id=144b0100 base=00000000 unit=6 slice=1
 arena 0x001f2000 0x00080000
 kernel unix $T/unix
-module z3660scsi root $T/z3660scsi match=zorro:144b:01
+module z3660scsi root $T/z3660scsi z=deflate match=zorro:144b:01
 module z3660eth boot 30212 path=/stand/gen/41/mod/z3660eth
 SPEC
 # an image with the store at a partition offset of 1 MiB

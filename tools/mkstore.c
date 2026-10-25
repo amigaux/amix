@@ -21,8 +21,9 @@
  *   module NAME root FILE [attr ...]   likewise; boot- and demand-class
  *                                      module lines are copied as written
  *   ramdisk NAME FILE [attr ...]       likewise
- * mkstore adds the size, at=, crc32= and the end line.  Members are stored
- * uncompressed (z=deflate arrives with the inflate decoder, S1-07).
+ * mkstore adds the size, at=, crc32= and the end line.  A member with the
+ * attribute z=deflate is stored raw-deflate compressed (zlib, level 9) and
+ * gets stored=; crc32 is always of the uncompressed bytes.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -30,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <zlib.h>
 #include "crc32.h"
 #include "store.h"
 #include "manifest.h"
@@ -77,6 +79,28 @@ place(const unsigned char *p, ax_u32 len)
 	memcpy(store + off, p, len);
 	next_free = (off + len + AX_BLK - 1) / AX_BLK * AX_BLK;
 	return off;
+}
+
+/* raw deflate at level 9; returns a malloc'd buffer */
+static unsigned char *
+deflate_raw(const unsigned char *in, ax_u32 n, ax_u32 *outn)
+{
+	z_stream z;
+	ax_u32 cap = n + n / 8 + 1024;
+	unsigned char *out = malloc(cap);
+
+	memset(&z, 0, sizeof(z));
+	if (!out || deflateInit2(&z, 9, Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY) != Z_OK)
+		die("deflate init failed", 0);
+	z.next_in = (unsigned char *)in;
+	z.avail_in = n;
+	z.next_out = out;
+	z.avail_out = cap;
+	if (deflate(&z, Z_FINISH) != Z_STREAM_END)
+		die("deflate failed", 0);
+	*outn = cap - z.avail_out;
+	deflateEnd(&z);
+	return out;
 }
 
 static int
@@ -128,21 +152,37 @@ generation(const char *spec, struct ax_gen *g)
 		 * boot- and demand-class module lines are copied as written */
 		if ((!strcmp(tok[0], "kernel") && n >= 3) || (!strcmp(tok[0], "ramdisk") && n >= 3) ||
 		    (!strcmp(tok[0], "module") && n >= 4 && !strcmp(tok[2], "root"))) {
-			int fi = !strcmp(tok[0], "module") ? 3 : 2;
+			int fi = !strcmp(tok[0], "module") ? 3 : 2, zip = 0;
+			ax_u32 zlen;
+			unsigned char *zdata;
+
+			for (i = fi + 1; i < n; i++) {
+				if (!strcmp(tok[i], "z=deflate"))
+					zip = 1;
+				else if (!strncmp(tok[i], "z=", 2) && strcmp(tok[i], "z=none"))
+					die("unknown compression", tok[i]);
+			}
 			data = slurp(tok[fi], &flen);
 			crc = ax_crc32(tab, data, flen);
-			off = place(data, flen);
+			if (zip) {
+				zdata = deflate_raw(data, flen, &zlen);
+				off = place(zdata, zlen);
+				free(zdata);
+			} else {
+				zlen = flen;
+				off = place(data, flen);
+			}
 			free(data);
 			out[0] = 0;
 			for (i = 0; i < fi; i++)
 				sprintf(out + strlen(out), "%s ", tok[i]);
-			sprintf(out + strlen(out), "%lu at=0x%lx crc32=%08lx", (unsigned long)flen,
-				(unsigned long)off, (unsigned long)crc);
-			for (i = fi + 1; i < n; i++) {
-				if (!strncmp(tok[i], "z=", 2) && strcmp(tok[i], "z=none"))
-					die("compressed members are not supported yet", tok[i]);
-				sprintf(out + strlen(out), " %s", tok[i]);
-			}
+			sprintf(out + strlen(out), "%lu at=0x%lx", (unsigned long)flen, (unsigned long)off);
+			if (zip)
+				sprintf(out + strlen(out), " stored=%lu z=deflate", (unsigned long)zlen);
+			sprintf(out + strlen(out), " crc32=%08lx", (unsigned long)crc);
+			for (i = fi + 1; i < n; i++)
+				if (strncmp(tok[i], "z=", 2))
+					sprintf(out + strlen(out), " %s", tok[i]);
 		}
 		if (strlen(out) > AXM_MAXLINE)
 			die("manifest line too long", out);

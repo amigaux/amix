@@ -16,9 +16,10 @@ CROSS      ?= m68k-cbm-sysv4-
 B          := build
 
 COMMON  := loader/common
-CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c
+CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
+           $(COMMON)/inflate.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
-           tests/host/t_manifest.c
+           tests/host/t_manifest.c tests/host/t_inflate.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore
 
@@ -30,17 +31,22 @@ $(B):
 	mkdir -p $(B)
 
 $(B)/t_host: $(CSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(TSRC)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ $(CSRC) $(TSRC) -lz
 
-test: $(B)/t_host $(TOOLS)
+$(B)/axinflate: tests/host/axinflate.c $(COMMON)/inflate.c $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axinflate.c $(COMMON)/inflate.c
+
+# AX_FLOPPIES (optional): real boot floppy images for inflate-kernels.sh
+test: $(B)/t_host $(TOOLS) $(B)/axinflate
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
+	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
 
 $(B)/bbframe: tools/bbframe.c | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<
 
 $(B)/mkstore: tools/mkstore.c $(CSRC) $(COMMON)/*.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/mkstore.c $(CSRC)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/mkstore.c $(CSRC) -lz
 
 $(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/lsstore.c $(CSRC)
