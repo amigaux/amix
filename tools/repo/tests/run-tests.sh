@@ -1515,6 +1515,118 @@ else
     echo "  skip- installf white-space checks (T23 did not run)"
 fi
 
+# T25: the kernel-space block (amix-dlm C2-2 v2, C2-3).  A kernel package
+# never becomes an ordinary entry; its #kpkg line takes line=, kabi= and pin=
+# from the package's OWN sidecar /stand/<line>/kabi, byte for byte, because
+# kbootset gate 2 compares apkg's record (the catalog's values) with that
+# sidecar.  The sidecar below has the shape of amix-dlm tests/host/kbuild.sh.
+echo "T25: kernel-space block from the package's own sidecar"
+MKDS="$HERE/../../../src/apkg/tests/mkds.py"
+S25="$WORK/t25"; mkdir -p "$S25/src/stand/k46" "$S25/stg/kernel"
+head -c 70000 /dev/urandom > "$S25/src/stand/k46/unix"
+sidecar25() {   # sidecar25 <out> [line] [sha256] [pin-line]
+    cat > "$1" <<EOF
+kabi=static
+family=KD060-A
+line=${2:-k46}
+${4-pin=gcc-2.7.2.3-8949028}
+build=68060-260928-52
+size=$(wc -c < "$S25/src/stand/k46/unix" | tr -d ' ')
+sha256=${3:-$(sha256sum "$S25/src/stand/k46/unix" | cut -c1-64)}
+loader-min=1
+root=zorro:0202:54,zorro:144b:01
+rootfs=ufs
+EOF
+}
+sidecar25 "$S25/src/stand/k46/kabi"
+HB="$HERE/../../../heirloom/build-host/bin"
+K25="$S25/stg/kernel/KERNKD60-1.1.0.pkg"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    # a real datastream, minted by the host heirloom engine
+    mkdir -p "$S25/spool"
+    printf 'PKG=KERNKD60\nNAME=KD060-A kernel\nVERSION=1.1.0\nARCH=m68k\nCATEGORY=system\nCLASSES=none\nBASEDIR=/\n' > "$S25/pkginfo"
+    printf 'i pkginfo=%s\nd none /stand/k46 0755 root sys\nf none /stand/k46/unix=%s 0644 root sys\nf none /stand/k46/kabi=%s 0644 root sys\n' \
+        "$S25/pkginfo" "$S25/src/stand/k46/unix" "$S25/src/stand/k46/kabi" > "$S25/prototype"
+    ( cd "$S25" && "$HB/pkgmk" -o -d "$S25/spool" -f prototype && \
+      "$HB/pkgtrans" -s "$S25/spool" "$K25" KERNKD60 ) >"$WORK/t25.mk" 2>&1
+    check "a real kernel datastream minted by the host pkgmk/pkgtrans" test -s "$K25"
+else
+    printf 'DIR /stand\nDIR /stand/k46\nCOPY /stand/k46/unix %s\nCOPY /stand/k46/kabi %s\n' \
+        "$S25/src/stand/k46/unix" "$S25/src/stand/k46/kabi" | python3 "$MKDS" "$K25" KERNKD60 1.1.0
+    echo "  skip- host pkgmk absent: the kernel datastream comes from mkds.py"
+fi
+cp "$FIX/TESTpkg.pkg" "$S25/stg/"
+echo "KERNKD60: kernel-kd060a" > "$S25/stg/names.conf"
+mkdir -p "$S25/plain"; cp "$FIX/TESTpkg.pkg" "$S25/stg/names.conf" "$S25/plain/"
+python3 "$GEN" "$S25/plain" >/dev/null 2>&1
+python3 "$GEN" "$S25/stg" >"$WORK/t25.out" 2>"$WORK/t25.err"
+check "gen-catalog takes a staging root with a kernel package (rc 0)" test $? -eq 0
+KL="#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=gcc-2.7.2.3-8949028 size=$(wc -c < "$K25" | tr -d ' ') sha256=$(sha256sum "$K25" | cut -c1-64) file=kernel/KERNKD60-1.1.0.pkg pkginst=KERNKD60"
+check "the block is exactly: #ext kpkg 1, the #kpkg line, #end kpkg" \
+    test "$(sed -n '/^#ext kpkg 1$/,/^#end kpkg$/p' "$S25/stg/catalog")" = "#ext kpkg 1
+$KL
+#end kpkg"
+SKABI=$(sed -n 's/^kabi=//p' "$S25/src/stand/k46/kabi")
+SPIN=$(sed -n 's/^pin=//p' "$S25/src/stand/k46/kabi")
+check "kabi= and pin= are the sidecar's bytes" \
+    grep -q " kabi=$SKABI pin=$SPIN " "$S25/stg/catalog"
+check "the kernel package is no ordinary entry (a 0.2.x client never sees it)" \
+    bash -c "! grep -v '^#' '$S25/stg/catalog' | grep -q KERNKD60"
+check "without the block the catalog is byte-for-byte the plain one" \
+    test "$(grep -v -e '^#ext kpkg' -e '^#kpkg ' -e '^#end kpkg' "$S25/stg/catalog")" = "$(cat "$S25/plain/catalog")"
+check "every block line is under 2048 bytes" \
+    test "$(awk 'length($0) >= 2047' "$S25/stg/catalog" | wc -l)" = 0
+mkdir -p "$S25/rawout"; python3 "$GEN" --raw -o "$S25/rawout" "$S25/stg" >/dev/null 2>&1
+ROFF=$(sed -n 's/^#kpkg .* offset=\([0-9]*\)$/\1/p' "$S25/rawout/catalog")
+check "--raw gives the #kpkg line an offset= and packs the bytes there" \
+    bash -c "[ -n '$ROFF' ] && cmp -s '$K25' <(tail -c +\$(($ROFF + 1)) '$S25/rawout/raw.img' | head -c $(wc -c < "$K25"))"
+
+# refusals: a SKIP naming why, never a #kpkg line
+t25bad() {   # t25bad <desc> <stderr text> <directives...>  (mkds.py fixture)
+    local d="$S25/bad"; rm -rf "$d"; mkdir -p "$d"
+    desc=$1; want=$2; shift 2
+    printf '%s\n' "$@" | python3 "$MKDS" "$d/KBAD-1.0.pkg" KBAD 1.0
+    python3 "$GEN" "$d" >"$WORK/t25b.out" 2>"$WORK/t25b.err"
+    check "$desc" bash -c "grep -q 'SKIP KBAD-1.0.pkg: .*$want' '$WORK/t25b.err' && ! grep -q '^#kpkg' '$d/catalog' 2>/dev/null"
+}
+sidecar25 "$S25/sc-line" k30
+t25bad "a sidecar whose line= is not its path's is refused" "sidecar says line=k30" \
+    "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/sc-line"
+sidecar25 "$S25/sc-sha" k46 0000000000000000000000000000000000000000000000000000000000000000
+t25bad "a sidecar whose sha256= is not the packaged unix's is refused" "sidecar sha256= is not" \
+    "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/sc-sha"
+sidecar25 "$S25/sc-nopin" k46 "" ""
+t25bad "a sidecar without pin= is refused" "no usable pin=" \
+    "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/sc-nopin"
+t25bad "a kernel package that is not pure files is refused (40 section 6)" "not pure files.*type e" \
+    "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/src/stand/k46/kabi" \
+    "PKGMAP 1 e none /etc/kmod.conf 0644 root sys 1 1 1"
+t25bad "a loader package is not catalogued yet (C2-3 ldrinfo has no line/kabi/pin)" "loader package: not catalogued yet" \
+    "FILE /stand/loader/ldrinfo version=1"
+
+# the round trip through the client: update, info, download (sha256), and an
+# install plan that runs apkg's own pure-files check on this datastream
+APKG25="$HERE/../../../src/apkg/apkg"
+if make -C "$HERE/../../../src/apkg" host >/dev/null 2>&1 && [ -x "$APKG25" ]; then
+    mkdir -p "$S25/repo" "$S25/root"; cp "$S25/stg/catalog" "$S25/repo/"
+    ln -s "$S25/stg" "$S25/repo/pkgs"
+    printf 'repo=file://%s/repo\ncachedir=%s/root/var/apkg/cache\nadmin=%s/admin\npkgadd=/bin/true\nkbootset=/bin/true\n' \
+        "$S25" "$S25" "$S25" > "$S25/apkg.conf"
+    A25() { APKG_ROOT="$S25/root" "$APKG25" -c "$S25/apkg.conf" "$@"; }
+    check "apkg update reads the generated block (1 kernel-space)" \
+        bash -c "APKG_ROOT='$S25/root' '$APKG25' -c '$S25/apkg.conf' update | grep -q '1 package, 1 kernel-space'"
+    OUT25=$(A25 info kernel-kd060a 2>&1)
+    check "apkg info: kabi and pin are the sidecar's" \
+        bash -c "echo \"\$0\" | grep -qx 'Kabi:        $SKABI' && echo \"\$0\" | grep -qx 'Pin:         $SPIN'" "$OUT25"
+    A25 download kernel-kd060a >/dev/null 2>&1
+    check "apkg download verifies the datastream by sha256 (rc 0)" test $? -eq 0
+    OUT25=$(A25 -n install kernel-kd060a 2>&1); rc25=$?
+    check "apkg -n install: the datastream passes the pure-files check (rc 0)" \
+        bash -c "[ $rc25 -eq 0 ] && ! echo \"\$0\" | grep -q 'not a pure-file'" "$OUT25"
+else
+    bad "T25: the host apkg did not build for the round trip"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

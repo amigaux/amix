@@ -58,6 +58,35 @@
 #   extension block is invisible to a v1 field parser.  Extensions are
 #   OPT-IN (no flag => the catalog is byte-for-byte what it always was).
 #
+# ------------------------------------------------- KERNEL-SPACE BLOCK ---
+# A kernel, loader or module package (amix-dlm contract C2-2 v2, D-3) is
+# NEVER an ordinary entry: a deployed 0.2.x apkg must not see kernel space.
+# It goes into a block after the ordinary entries (and after --isize), every
+# line a '#' comment under 2048 bytes:
+#
+#     #ext kpkg 1
+#     #kpkg <name> <version> role=kernel line=<k30|k46> kabi=<tag>
+#           pin=<compiler pin> size=<bytes> sha256=<64 hex> file=<path>
+#           pkginst=<PKG> [offset=<n> with --raw]
+#     #end kpkg
+#
+# Not opt-in: a package is kernel space by its content, so a staging root
+# without one gives a catalog byte-for-byte as before.  Detected from the
+# pkgmap (C2-3): a plain file /stand/k30/kabi or /stand/k46/kabi = a kernel
+# package (role=kernel); /stand/loader/ldrinfo = a loader; anything under
+# /etc/conf/mod.d/ = a module.  line=, kabi= and pin= come from the
+# package's OWN sidecar (/stand/<line>/kabi, read out of the payload
+# archive) byte for byte -- never from a table here -- because kbootset's
+# gate 2 compares apkg's record (which carries these catalog values) with
+# that sidecar, byte for byte.  size= and sha256= are of the served file.
+# Refused per package (SKIP, like any malformed package): a sidecar
+# missing, unreadable, without kabi/pin/line, or whose line differs from
+# its path, or whose sha256=/size= disagree with the packaged unix; a
+# package that is not pure files (40 §6: only f/d of class none, no
+# install scripts); a loader or module package (C2-3 gives the loader no
+# line/kabi/pin and modules arrive in stage 3: both are contract work).
+# The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
+#
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
 # empirically verified against real Heirloom pkgtrans output):
 #   ASCII header, NUL-padded to a 512-byte boundary:
@@ -368,6 +397,172 @@ def kernel_package_markers(params):
     return set(k for k in KERNEL_MARKER_PARAMS if params.get(k, "").strip())
 
 
+# ------------------------------------------------------- kernel space ---
+
+KSIDECAR_RE = re.compile(r"^/stand/(k30|k46)/kabi$")
+LDRINFO_PATH = "/stand/loader/ldrinfo"
+MODDIR_PREFIX = "/etc/conf/mod.d/"
+KPKG_ALLOWED_I = ("pkginfo", "depend", "copyright")
+
+
+def pkgmap_objects(pkgmap_text, basedir):
+    """Yield (ftype, class, installed path) for every non-i object."""
+    for line in pkgmap_text.splitlines():
+        parts = line.split()
+        if len(parts) < 4 or parts[0] == ":" or parts[0].startswith("#"):
+            continue
+        if parts[1] == "i":
+            continue
+        path = parts[3].split("=", 1)[0]
+        if not path.startswith("/"):
+            path = basedir.rstrip("/") + "/" + path
+        yield parts[1], parts[2], path
+
+
+def kspace_role(pkgmap_text, basedir):
+    """'kernel' / 'loader' / 'module' by the C2-3 paths, or None."""
+    if pkgmap_text is None:
+        return None
+    role = None
+    for ftype, _cls, path in pkgmap_objects(pkgmap_text, basedir):
+        if ftype != "f":
+            continue
+        if KSIDECAR_RE.match(path):
+            return "kernel"
+        if path == LDRINFO_PATH:
+            role = "loader"
+        elif path.startswith(MODDIR_PREFIX) and role is None:
+            role = "module"
+    return role
+
+
+def pure_files_problem(pkgmap_text):
+    """40 section 6: None when the pkgmap holds only f/d objects of class
+    none, i entries pkginfo/depend/copyright only, and at least one f --
+    the rule apkg's ds_pure_files() applies on the box; else why not."""
+    nf = 0
+    for line in pkgmap_text.splitlines():
+        parts = line.split()
+        if not parts or parts[0] == ":" or parts[0].startswith("#"):
+            continue
+        if len(parts) < 3:
+            return "unreadable pkgmap line %r" % line
+        ftype = parts[1]
+        if ftype == "i":
+            if parts[2] not in KPKG_ALLOWED_I:
+                return "it carries an install script: %s" % parts[2]
+        elif ftype in ("f", "d"):
+            if parts[2] != "none":
+                return "an object in class %s" % parts[2]
+            nf += ftype == "f"
+        else:
+            return "an object of type %s%s" % (
+                ftype, (" at " + parts[3]) if len(parts) > 3 else "")
+    return None if nf else "it installs no file"
+
+
+def _members(buf, off):
+    """Yield (name, data, next_off) of one cpio archive at off (newc or
+    odc), the TRAILER!!! included; Malformed on damage."""
+    while True:
+        magic = buf[off:off + 6]
+        if magic in (b"070701", b"070702"):
+            hdr = buf[off:off + 110]
+            if len(hdr) < 110:
+                raise Malformed("truncated newc cpio header")
+            filesize = int(hdr[54:62], 16)
+            namesize = int(hdr[94:102], 16)
+            name_end = off + 110 + namesize
+            data_off = (name_end + 3) & ~3
+            nxt = (data_off + filesize + 3) & ~3
+            name = buf[off + 110:name_end - 1].decode("ascii", "replace")
+        elif magic == b"070707":
+            hdr = buf[off:off + 76]
+            if len(hdr) < 76:
+                raise Malformed("truncated odc cpio header")
+            namesize = int(hdr[59:65], 8)
+            filesize = int(hdr[65:76], 8)
+            name_end = off + 76 + namesize
+            data_off = name_end
+            nxt = data_off + filesize
+            name = buf[off + 76:name_end - 1].decode("ascii", "replace")
+        else:
+            raise Malformed("bad cpio magic at offset %d" % off)
+        if data_off + filesize > len(buf):
+            raise Malformed("truncated cpio member %r" % name)
+        yield name, buf[data_off:data_off + filesize], nxt
+        if name == "TRAILER!!!":
+            return
+        off = nxt
+
+
+def payload_files(buf, paths, basedir):
+    """Read installed paths out of the datastream's payload archives
+    (members root/<path>, or reloc/<path relative to BASEDIR>); returns
+    {path: bytes} for the ones found."""
+    end = buf.find(DS_END, 0, 8192)
+    off = (end + len(DS_END) + 511) & ~511
+    want = {}
+    for p in paths:
+        want["root" + p] = p
+        b = basedir.rstrip("/")
+        if b and p.startswith(b + "/"):
+            want["reloc" + p[len(b):]] = p
+        elif not b:
+            want["reloc" + p] = p
+    found = {}
+    while off < len(buf) and buf[off:off + 4] == b"0707":
+        last = off
+        for name, data, nxt in _members(buf, off):
+            if name in want:
+                found[want[name]] = data
+            last = nxt
+        off = (last + 511) & ~511
+    return found
+
+
+def kernel_sidecar(buf, params, pkgmap_text):
+    """C2-3 section 2: return (line, kabi, pin) from the package's own
+    /stand/<line>/kabi, verbatim; Malformed when it cannot be trusted."""
+    basedir = params.get("BASEDIR", "/") or "/"
+    sidecar = None
+    for ftype, _cls, path in pkgmap_objects(pkgmap_text, basedir):
+        m = KSIDECAR_RE.match(path)
+        if ftype == "f" and m:
+            if sidecar is not None:
+                raise Malformed("kernel package carries two sidecars")
+            sidecar = (path, m.group(1))
+    path, pline = sidecar
+    unix = "/stand/%s/unix" % pline
+    files = payload_files(buf, [path, unix], basedir)
+    if path not in files:
+        raise Malformed("kernel package: sidecar %s is not in the payload"
+                        % path)
+    keys = {}
+    for raw in files[path].decode("latin-1").split("\n"):
+        if "=" not in raw:
+            continue
+        k, v = raw.split("=", 1)
+        keys.setdefault(k, v)
+    for k in ("kabi", "pin", "line"):
+        v = keys.get(k)
+        if v is None or v == "" or len(v.split()) != 1 or v != v.strip():
+            raise Malformed("kernel package: sidecar %s has no usable %s= "
+                            "(C2-3 section 2)" % (path, k))
+    if keys["line"] != pline:
+        raise Malformed("kernel package: sidecar says line=%s but sits in "
+                        "/stand/%s" % (keys["line"], pline))
+    if unix in files:
+        u = files[unix]
+        if "sha256" in keys and keys["sha256"] != hashlib.sha256(u).hexdigest():
+            raise Malformed("kernel package: sidecar sha256= is not the "
+                            "packaged %s's" % unix)
+        if "size" in keys and keys["size"] != str(len(u)):
+            raise Malformed("kernel package: sidecar size=%s, packaged %s "
+                            "is %d bytes" % (keys["size"], unix, len(u)))
+    return keys["line"], keys["kabi"], keys["pin"]
+
+
 def parse_pkginfo(text):
     """Parse pkginfo(4) KEY=VALUE lines; first occurrence wins."""
     params = {}
@@ -541,6 +736,37 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         raise Malformed("bad catalog name %r for pkginst %s" %
                         (name, pkginst))
 
+    # Kernel space (see KERNEL-SPACE BLOCK at the top): never an ordinary
+    # entry; described from the package's own sidecar.
+    basedir = params.get("BASEDIR", "/") or "/"
+    role = kspace_role(pkgmap_text, basedir)
+    if role is not None:
+        if role != "kernel":
+            raise Malformed("%s package: not catalogued yet (%s)" % (
+                role, "C2-3 gives ldrinfo no line=/kabi=/pin=, which C2-2 "
+                "needs" if role == "loader" else "modules arrive in stage 3"))
+        why = pure_files_problem(pkgmap_text)
+        if why is not None:
+            raise Malformed("kernel-space package is not pure files "
+                            "(40 section 6): %s" % why)
+        kline, kabi, pin = kernel_sidecar(buf, params, pkgmap_text)
+        version = clean_field(params["VERSION"])
+        if len(version.split()) != 1:
+            raise Malformed("kernel-space VERSION %r is not one token"
+                            % version)
+        entry = {
+            "kspace": True, "name": name, "version": version,
+            "pkginst": pkginst, "filename": fname, "role": role,
+            "line": kline, "kabi": kabi, "pin": pin,
+            "size": str(len(raw)),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "md5": hashlib.md5(raw).hexdigest(),
+        }
+        if verbose:
+            print("  %s: kernel space role=%s line=%s kabi=%s pin=%s "
+                  "(sidecar)" % (fname, role, kline, kabi, pin))
+        return entry
+
     deps_raw = deps_conf.get(name, deps_conf.get(pkginst,
                              params.get("APKG_DEPS", "")))
     # cats.conf is a CATALOG-level taxonomy override: it re-categorises a
@@ -640,6 +866,18 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
 
 FIELDS = ("name", "version", "pkginst", "filename", "md5", "size",
           "deps", "category", "description")
+
+
+def kpkg_line(e):
+    """One '#kpkg' line of the kernel-space block (C2-2 section 1)."""
+    line = ("#kpkg %s %s role=%s line=%s kabi=%s pin=%s size=%s sha256=%s "
+            "file=%s pkginst=%s" % (e["name"], e["version"], e["role"],
+                                     e["line"], e["kabi"], e["pin"],
+                                     e["size"], e["sha256"], e["filename"],
+                                     e["pkginst"]))
+    if "offset" in e:
+        line += " offset=%s" % e["offset"]
+    return line
 
 
 def build_raw_image(outdir, catalog_bytes, md5_bytes, entries, staging):
@@ -829,6 +1067,9 @@ def main(argv):
         print("gen-catalog: warning: no *.pkg / *.pkg.Z in %s; writing an "
               "empty catalog" % staging, file=sys.stderr)
 
+    kentries = sorted((e for e in entries if e.get("kspace")),
+                      key=lambda e: e["name"])
+    entries = [e for e in entries if not e.get("kspace")]
     entries.sort(key=lambda e: e["name"])
 
     # --raw: assign each package a 512-aligned byte offset (deps-order is
@@ -837,7 +1078,7 @@ def main(argv):
     fields = FIELDS
     if args.raw:
         off = RAW_DATA_OFF
-        for e in entries:
+        for e in entries + kentries:
             e["offset"] = str(off)
             off += roundup512(int(e["size"]))
         fields = FIELDS + ("offset",)
@@ -882,6 +1123,23 @@ def main(argv):
                 continue
             body += "#isize %s %s\n" % (e["name"], e["isize"])
 
+    # The kernel-space block (see the top): emitted only when there is
+    # kernel space, so a catalog without it is byte-for-byte as before.
+    # Gate 8 holds here too: a '#' line of 2048 bytes would brick 0.2.x.
+    if kentries:
+        body += "#ext kpkg 1\n"
+        for e in kentries:
+            line = kpkg_line(e)
+            if len(line.encode("utf-8")) > CATALOG_MAX_ENTRY:
+                print("gen-catalog: FATAL %s: #kpkg line is %d bytes (limit "
+                      "%d)" % (e["filename"], len(line.encode("utf-8")),
+                               CATALOG_MAX_ENTRY), file=sys.stderr)
+                print("gen-catalog: catalog NOT written (Gate 8: entry line "
+                      "too long)", file=sys.stderr)
+                return 2
+            body += line + "\n"
+        body += "#end kpkg\n"
+
     body_bytes = body.encode("utf-8")
 
     cat_path = os.path.join(outdir, "catalog")
@@ -898,16 +1156,18 @@ def main(argv):
         fp.write(md5_bytes)
     os.replace(tmp_path, md5_path)
 
-    print("gen-catalog: wrote %s: %d package(s), %d skipped"
-          % (cat_path, len(entries), skipped))
+    print("gen-catalog: wrote %s: %d package(s)%s, %d skipped"
+          % (cat_path, len(entries),
+             (", %d kernel-space" % len(kentries)) if kentries else "",
+             skipped))
 
     if args.raw:
         img_path, img_len = build_raw_image(outdir, body_bytes, md5_bytes,
-                                            entries, staging)
+                                            entries + kentries, staging)
         print("gen-catalog: wrote %s: %d bytes (metadata region + %d "
               "package datastream(s))" % (img_path, img_len, len(entries)))
         if args.verbose:
-            for e in entries:
+            for e in entries + kentries:
                 print("  %s @ %s (%s B) <- %s"
                       % (e["name"], e["offset"], e["size"], e["filename"]))
     return 0

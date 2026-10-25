@@ -15,6 +15,27 @@ mapping match to the byte. Four fixes followed, one commit each.
    it already had (`kbootset/kmedia.c`), and the old hard-coded source list would no longer link. `B=`
    keeps the build directory inside this repo's `tests/work`; the amix-dlm tree is only read. With the
    tree present, a failed build is a FAIL (it used to SKIP). 10/0 against amix-dlm `bbb6088`.
+3. **`gen-catalog.py` writes the block (S2-23), from the package's own sidecar.** A package whose
+   pkgmap holds a plain file `/stand/k30/kabi` or `/stand/k46/kabi` (C2-3 §1) is a kernel package:
+   it never becomes an ordinary entry, and goes into `#ext kpkg 1` … `#end kpkg` after the entries
+   (and after `--isize`). `line=`, `kabi=`, `pin=` are read out of the payload archive's
+   `root/stand/<line>/kabi` (or `reloc/…` against BASEDIR) verbatim, never from a table, because
+   kbootset gate 2 compares apkg's record (which carries the catalog's values) with that sidecar byte
+   for byte. `size=`/`sha256=` are of the served file; `pkginst=` always; `offset=` under `--raw`
+   (and the bytes are packed into `raw.img`). Not opt-in: a staging root without kernel space gives
+   the same catalog as before (tested byte for byte). SKIPped with the reason: a sidecar missing or
+   without `kabi=`/`pin=`/`line=`, a `line=` other than its path's, a `sha256=`/`size=` that is not
+   the packaged unix's, a package that is not pure files (the rule of item 4), a loader package (C2-3
+   §3 `ldrinfo` carries no `line=`/`kabi=`/`pin=`, which C2-2 needs: a contract question), a module
+   package (stage 3). The KSUM_R/BOOT2_SHA private gate runs first, unchanged; its re-scope (60 §7)
+   is the owner's. Tests: repo tools **T25** (17 checks; 333/0 total) builds a real kernel datastream
+   with the host heirloom `pkgmk`/`pkgtrans` and a kbuild.sh-shaped sidecar, checks the block line
+   exactly, the five refusals, `--raw`, and the round trip through the client (update, info shows the
+   sidecar's kabi/pin, download verifies sha256, `-n install` passes the pure-files check);
+   `kbootset-consumer.sh` now takes its catalogs from `gen-catalog.py`, and the record that arrives
+   carries the sidecar's kabi/pin byte for byte, which the real kbootset accepts (12/0); a
+   hand-written catalog with another kabi still gets gate 2's refusal (exit 7). The live catalog and
+   pkg.amigaux.org are untouched.
 4. **Pure files, enforced** (40 §6: kernel-space packages carry files only, class none, no
    scripts). `ds_pure_files()` reads the staged datastream's pkgmap (first cpio archive, newc or
    odc) before the first pkgadd: only `f` and `d` objects of class `none`, of the `i` entries only

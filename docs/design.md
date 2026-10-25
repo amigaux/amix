@@ -187,6 +187,14 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 
 ### 5.1 Catalog and publishing
 
+- **Kernel space** (apkg 0.3, amix-dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
+  one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
+  block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
+  that sidecar inside the package byte for byte (kbootset gate 2 compares them), `size=`/`sha256=`
+  of the served file, `pkginst=`, and `offset=` under `--raw`. Not opt-in; a staging root without
+  kernel space gives the catalog it always did. Loader and module packages are SKIPped until C2-3
+  gives them the keys. NOTES.md 2026-10-25 (late) is the record.
+
 - `gen-catalog.py` (python3): scan a staging dir of `.pkg`/`.pkg.Z` datastreams; for each, read the
   `# PaCkAgE DaTaStReAm` header + first cpio member to extract pkginfo params (PKG, NAME, VERSION,
   CATEGORY, and optional `APKG_DEPS=`, `APKG_DESC=`); emit `catalog` (+ `catalog.md5`). Deps may

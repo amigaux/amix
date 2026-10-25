@@ -11,8 +11,11 @@
 #   SHARED <path> <word>       as FILE; the shim also names OTHERPKG first
 #   COPY <path> <hostfile>     as FILE; the shim copies <hostfile>
 #   PKGMAP <pkgmap line>       an extra pkgmap line, verbatim (no directive)
-# The directives stay in the file after the archive (the shims read them
-# with sed); apkg and gen-catalog read the header and the cpio archive.
+# A second archive carries the payload as pkgtrans lays it out (pkginfo,
+# pkgmap, then root/<path> for every DIR/FILE/SHARED/COPY), so
+# gen-catalog.py can read a kernel package's sidecar out of it.  The
+# directives stay in the file after the archives (the shims read them with
+# sed); apkg and gen-catalog read the header and the cpio archives.
 import sys
 
 def newc(name, data):
@@ -47,6 +50,20 @@ hdr += b"\0" * ((512 - len(hdr) % 512) % 512)
 arc = newc(pkg + "/pkginfo", pkginfo) + newc(pkg + "/pkgmap", pkgmap) \
     + newc("TRAILER!!!", b"")
 arc += b"\0" * ((512 - len(arc) % 512) % 512)
+pay = newc("pkginfo", pkginfo) + newc("pkgmap", pkgmap) + newc("root", b"")
+for d in directives:
+    t = d.split(None, 2)
+    if not t or t[0] == "PKGMAP":
+        continue
+    if t[0] == "DIR":
+        pay += newc("root" + t[1], b"")
+    elif t[0] == "COPY":
+        pay += newc("root" + t[1], open(t[2], "rb").read())
+    elif t[0] in ("FILE", "SHARED"):
+        pay += newc("root" + t[1], (t[2] + "\n").encode())
+pay += newc("TRAILER!!!", b"")
+pay += b"\0" * ((512 - len(pay) % 512) % 512)
+arc += pay
 body = ("VERSION %s\n" % ver + "\n".join(directives) + "\n").encode()
 with open(out, "wb") as fp:
     fp.write(hdr + arc + b"\n" + body)

@@ -8,7 +8,8 @@
 # with the REAL reader: it builds kbootset from the sibling amix-dlm tree
 # with its own Makefile (build dir redirected into tests/work, so the
 # amix-dlm tree is only read), lays an empty boot store in
-# an image, and lets apkg install a kernel-space package and call that
+# an image, has tools/repo/gen-catalog.py describe a kernel package from its
+# own sidecar, and lets apkg install it and call that
 # kbootset through a wrapper that adds what a host build needs (--image,
 # the box facts).  kbootset's gate 1 then compares every member with the
 # `file` line apkg wrote; gate 2 compares the record's kabi with the
@@ -35,7 +36,7 @@ fi
 DLM=$(cd "$DLM" && pwd)
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 APKG=$SRC/apkg
-rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/repo/pkgs/kernel" "$WORK/cache"
+rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/cache"
 
 # kbootset is built by amix-dlm's own Makefile, so a source file it gains
 # is picked up here too.  B= points its build directory into tests/work:
@@ -76,20 +77,38 @@ root=zorro:0202:54
 rootfs=ufs
 EOF
 }
-mkds() {       # mkds <out> <pkginst> <payload dir>   (tests/mkds.py)
-    printf 'DIR /stand\nDIR /stand/k46\nCOPY /stand/k46/unix %s/unix\nCOPY /stand/k46/kabi %s/kabi\n' "$3" "$3" \
-        | python3 "$SRC/tests/mkds.py" "$1" "$2" 1.0
+mkds() {       # mkds <out> <pkginst> <version> <payload dir>   (tests/mkds.py)
+    mkdir -p "$(dirname "$1")"
+    printf 'DIR /stand\nDIR /stand/k46\nCOPY /stand/k46/unix %s/unix\nCOPY /stand/k46/kabi %s/kabi\n' "$4" "$4" \
+        | python3 "$SRC/tests/mkds.py" "$1" "$2" "$3"
 }
+# one staging root per version; the catalog of the good versions comes from
+# tools/repo/gen-catalog.py, which takes kabi=/pin= from the sidecar inside
+# the package (C2-3) -- the round trip gate 2 checks byte for byte
+GEN=$SRC/../../tools/repo/gen-catalog.py
+for v in 1.1.0 1.1.1 1.1.2; do
+    mkdir -p "$WORK/st/$v"; echo "KERNKD60: kernel-kd060a" > "$WORK/st/$v/names.conf"
+done
 mkkernel "$WORK/k1" static
-mkds "$WORK/repo/pkgs/kernel/kernel-kd060a-1.1.0.pkg" KERNKD60 "$WORK/k1"
+mkds "$WORK/st/1.1.0/kernel/kernel-kd060a-1.1.0.pkg" KERNKD60 1.1.0 "$WORK/k1"
 mkkernel "$WORK/k2" k46.1.0           # sidecar disagrees with the catalog
-mkds "$WORK/repo/pkgs/kernel/kernel-kd060a-1.1.1.pkg" KERNKD60 "$WORK/k2"
+mkds "$WORK/st/1.1.1/kernel/kernel-kd060a-1.1.1.pkg" KERNKD60 1.1.1 "$WORK/k2"
 mkkernel "$WORK/k3" static
-mkds "$WORK/repo/pkgs/kernel/kernel-kd060a-1.1.2.pkg" KERNKD60 "$WORK/k3"
-kl() { f=kernel/kernel-kd060a-$1.pkg
-    printf '#kpkg kernel-kd060a %s role=kernel line=k46 kabi=static pin=%s size=%s sha256=%s file=%s\n' \
-        "$1" $PIN "$(size "$WORK/repo/pkgs/$f")" "$(sha "$WORK/repo/pkgs/$f")" "$f"; }
-mkcat() { printf '#apkg-catalog 1\n#ext kpkg 1\n%s\n#end kpkg\n' "$(kl "$1")" > "$WORK/repo/catalog"; }
+mkds "$WORK/st/1.1.2/kernel/kernel-kd060a-1.1.2.pkg" KERNKD60 1.1.2 "$WORK/k3"
+rm -rf "$WORK/repo"; mkdir -p "$WORK/repo"
+mkcat() {      # mkcat <version>: gen-catalog's catalog for that staging root
+    ln -sfn "$WORK/st/$1" "$WORK/repo/pkgs"
+    python3 "$GEN" -o "$WORK/repo" "$WORK/st/$1" > "$WORK/gen.out" 2>&1
+}
+# what a catalog NOT made from the sidecar would say (the defect fix 3 of
+# 2026-10-25 closes): kabi=static for a kernel whose sidecar says k46.1.0
+badcat() {
+    f=kernel/kernel-kd060a-$1.pkg; ln -sfn "$WORK/st/$1" "$WORK/repo/pkgs"
+    rm -f "$WORK/repo/catalog.md5"
+    rm -f "$WORK/repo/catalog.md5"
+    printf '#apkg-catalog 1\n#ext kpkg 1\n#kpkg kernel-kd060a %s role=kernel line=k46 kabi=static pin=%s size=%s sha256=%s file=%s pkginst=KERNKD60\n#end kpkg\n' \
+        "$1" $PIN "$(size "$WORK/st/$1/$f")" "$(sha "$WORK/st/$1/$f")" "$f" > "$WORK/repo/catalog"
+}
 
 # the pkgadd stand-in: copies the payload into the target and writes the
 # SVR4 contents lines a real pkgadd -R writes (paths as the target sees them)
@@ -135,7 +154,11 @@ EOF
 unset APKG_ROOT
 A() { "$APKG" -c "$WORK/apkg.conf" -R "$T" "$@"; }
 
-mkcat 1.1.0; A update >/dev/null 2>&1
+mkcat 1.1.0
+grep -q "^#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=$PIN " "$WORK/repo/catalog" \
+    && ok "gen-catalog wrote the #kpkg line with the sidecar's kabi and pin" \
+    || bad "gen-catalog output" "$(cat "$WORK/gen.out" "$WORK/repo/catalog")"
+A update >/dev/null 2>&1
 OUT=$(A install kernel-kd060a 2>&1); rc=$?
 [ $rc -eq 0 ] && ok "apkg installs the kernel and the real kbootset builds + commits (rc 0)" \
     || bad "first install through the real kbootset (rc=$rc)" "$OUT"
@@ -149,9 +172,14 @@ grep -q "^file /stand/k46/unix $(size "$T/stand/k46/unix") $(sha "$T/stand/k46/u
 grep -q "generation 1 " "$WORK/st1" && ok "the store holds generation 1" \
     || bad "store after the first install" "$(cat "$WORK/st1")"
 
-# gate 2: the record's kabi (the catalog's: static) against a sidecar that
-# says k46.1.0 -> status 4, apkg exit 7, the gate's line passed on
-mkcat 1.1.1; A update >/dev/null 2>&1
+grep -q "^kabi $(sed -n 's/^kabi=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/kernel-kd060a" && \
+grep -q "^pin $(sed -n 's/^pin=//p' "$T/stand/k46/kabi")$" "$T/var/apkg/kpkg/kernel-kd060a" \
+    && ok "sidecar -> gen-catalog -> apkg record: kabi and pin arrive byte for byte" \
+    || bad "record kabi/pin differ from the sidecar" "$(cat "$T/var/apkg/kpkg/kernel-kd060a")"
+
+# gate 2: a catalog NOT made from the sidecar (kabi=static) against a
+# sidecar that says k46.1.0 -> status 4, apkg exit 7, the gate's line on
+badcat 1.1.1; A update >/dev/null 2>&1
 OUT=$(A upgrade kernel-kd060a 2>&1); rc=$?
 [ $rc -eq 7 ] && echo "$OUT" | grep -q "refused at a gate (status 4): .*gate 2" && \
 echo "$OUT" | grep -q "the committed generation is unchanged" \

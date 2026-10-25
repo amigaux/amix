@@ -445,14 +445,17 @@ resolver, and kernel space (SHA-256 vectors through
 its refusals, the 0.2.3 client built from git skipping the block, the
 install record byte for byte, pre-flight, the trigger against a kbootset
 mock for all five statuses, `-R`/`--journal`/`bootset=manual`/`-n`, a
-transaction killed mid-pkgadd and finished by `apkg recover`) — **330
+transaction killed mid-pkgadd and finished by `apkg recover`, four impure
+packages refused) — **338
 assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.
-[tests/kbootset-consumer.sh](tests/kbootset-consumer.sh) (**10**, not in
+[tests/kbootset-consumer.sh](tests/kbootset-consumer.sh) (**12**, not in
 the count; SKIPs without the sibling amix-dlm tree) builds the real kbootset
-from amix-dlm and lets apkg install a kernel package and trigger it: gate 1
-accepts apkg's record, a real gate 2 refusal maps to exit 7.
+with amix-dlm's Makefile, has `tools/repo/gen-catalog.py` describe a kernel
+package from its own sidecar, and lets apkg install it and trigger it: gate 1
+accepts apkg's record, gate 2 accepts the sidecar's kabi/pin as they arrive
+in it, and a hand-written catalog with another kabi maps to exit 7.
 
 The resolver has its own fake nameserver
 ([tests/fake-dns.py](tests/fake-dns.py)), one scripted behaviour per
