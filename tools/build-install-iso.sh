@@ -761,10 +761,16 @@ if [ -n "$_want_l11" ]; then
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
   cp "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
+  # apkg's conf for finishing a target's pending transaction from the repair path
+  # (install.sh names it when it stops on one): the medium's engine and kernel space
+  printf '%s\n' "# apkg 0.3 -R /mnt recover, from the repair path (install.sh, l11.sh)" \
+    "repo=file:///cdrom/install/l11/kpkg" "cachedir=/mnt/tmp/kpkgcache" \
+    "admin=/cdrom/install/admin/pkgadd" "pkgadd=/cdrom/install/bin/pkgadd" \
+    "kbootset=/cdrom/install/l11/bin/kbootset" > "$STAGE/l11/recover.conf"
   python3 -c 'import sys,zlib; b=open(sys.argv[1],"rb").read(); print("%08x" % ((zlib.crc32(b) & 0xffffffff) ^ 67108864))' \
     "$STAGE/l11/loader/boot2" > "$STAGE/l11/loader/store-id"
   chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
-  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS"
+  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf"
   { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
     && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && cmp -s "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2" && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \

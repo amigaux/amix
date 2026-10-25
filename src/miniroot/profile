@@ -248,6 +248,12 @@ kbootset_menu()
 		return 0
 	fi
 	KB="/mnt/sbin/kbootset -R /mnt --dev $KSTORE --journal /mnt/var/kbootset/journal"
+	if [ -f /mnt/var/apkg/txn ]
+	then
+		echo "\nA package transaction is pending on this disk (/mnt/var/apkg/txn)."
+		echo "To finish it, mount the install CD at /cdrom from the shell and run:"
+		echo "  /cdrom/install/l11/bin/apkg -c /cdrom/install/l11/recover.conf -R /mnt recover"
+	fi
 	while :
 	do
 		echo "\nThis disk boots generations from its boot store ($KSTORE):\n"

@@ -19,6 +19,7 @@
 #                  header set id `kbootset create` gives a 64 MiB store of this boot2
 #   kpkg/catalog kpkg/pkgs/kernel/*.pkg   the FILE source (#ext kpkg 1 block)
 #   updbootpart    the shim laid at /usr/sbin/updbootpart (payload/updbootpart-l11)
+#   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
 #
 # PROFILE KEYS:
 #   INSTALL_LAYOUT=1.1   this file; 1.0 (the default) never sources it
@@ -276,13 +277,38 @@ l11_kb()
 	esac
 }
 
-# l11_apkg ARGS -- apkg 0.3 for the kernel-space install; a failure stops the install
+# l11_txn_pending -- apkg 0.3's transaction journal on the target (C2-2; apkg's
+# /var/apkg/txn): while it exists the next install is blocked and the package set may
+# be half-installed, so the disk is never armed over it
+l11_txn_pending()
+{
+	[ -f "$TARGET/var/apkg/txn" ] || return 1
+	warn "apkg: a transaction is pending on the target ($TARGET/var/apkg/txn):"
+	cat "$TARGET/var/apkg/txn"
+	return 0
+}
+
+# l11_apkg ARGS -- apkg 0.3 for the kernel-space install. Its exit status decides:
+#   0  done (and no journal may be left behind)
+#   6  kbootset failed after the packages went in; the journal is KEPT for recover
+#   7  kbootset refused (a rule or a gate); the committed generation is unchanged
+#   *  anything else: the transaction failed (5 = pre-flight refused, nothing staged)
+# Every non-zero status stops the install unarmed and says how to finish the
+# transaction: the repair path, then `apkg -R /mnt recover` from this medium.
+L11_RECOVER="boot this medium, choose repair, mount the install CD at /cdrom and run: /cdrom/install/l11/bin/apkg -c /cdrom/install/l11/recover.conf -R /mnt recover"
 l11_apkg()
 {
+	l11_txn_pending && die "apkg: a pending transaction blocks the kernel-space install -- NOT arming. To finish it: $L11_RECOVER"
 	runq "$L11_APKG" "$@"
 	_rc=$?
-	[ "$_rc" = 0 ] || die "apkg $* failed (rc=$_rc) -- refusing to arm a half-installed disk"
-	return 0
+	case "$_rc" in
+		0)	l11_txn_pending && die "apkg $* returned 0 but left its journal -- NOT arming. To finish it: $L11_RECOVER"
+			return 0 ;;
+		6)	die "apkg $* exit 6: kbootset failed after the packages went in; the journal is kept -- NOT arming. To finish it: $L11_RECOVER" ;;
+		7)	die "apkg $* exit 7: kbootset refused it; the committed generation is unchanged -- NOT arming" ;;
+		*)	l11_txn_pending
+			die "apkg $* failed (rc=$_rc) -- refusing to arm a half-installed disk. If a journal is listed above, to finish it: $L11_RECOVER" ;;
+	esac
 }
 
 # ===========================================================================

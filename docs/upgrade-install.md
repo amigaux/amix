@@ -42,6 +42,22 @@ The installer:
    It lays none of the 1.0 boot-chain pieces: `/stand/boot2.boot`, the framed
    chain, `/stand/unix`, the RTO1 record or the reframe tools.
 
+apkg's exit status is checked as well. These stop the install unarmed:
+- a pending `/var/apkg/txn` before the kernel-space install;
+- exit 6 (kbootset failed after the packages went in; the journal is kept);
+- exit 7 (kbootset refused; the committed generation is unchanged);
+- any other non-zero status;
+- a journal left behind after exit 0.
+
+The message names the way to finish the transaction: boot the medium, choose
+repair, mount the install CD at `/cdrom` and run
+`/cdrom/install/l11/bin/apkg -c /cdrom/install/l11/recover.conf -R /mnt recover`.
+The repair menu reports a pending journal with the same command. Until kbootset
+reads `store=` from `/etc/default/bootset` (S2-06), the trigger that `recover`
+runs cannot find the store, so recover still exits 6 after it reinstalls the
+packages. Then compose the store from the repair shell:
+`/mnt/sbin/kbootset -R /mnt --dev <store=> build`, then `commit`.
+
 `kbootset mark-good` is not run anywhere yet. It needs the booted generation
 from kinfo on the installed system (S2-10/S2-11). Until then a committed trial
 boots once and falls back (try-once). The pristine generation needs no mark.

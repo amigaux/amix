@@ -9736,6 +9736,49 @@ def audit_l11():
            "(a non-number refused, 4 continues)")
     else:
         fail("repair menu drove kbootset wrongly: %r (rc %d)" % (got, r.returncode))
+    if "apkg -c /cdrom/install/l11/recover.conf -R /mnt recover" in r.stdout.replace(mnt, "/mnt"):
+        ok("repair menu: a pending /var/apkg/txn is reported with the recover command")
+    else:
+        fail("repair menu does not report a pending apkg transaction")
+
+    # (3) apkg's exits
+    tgt = os.path.join(d, "tgt")
+    os.makedirs(os.path.join(tgt, "var", "apkg"), exist_ok=True)
+    fake = os.path.join(d, "apkg")
+    open(fake, "w").write('#!/bin/sh\n[ -n "$LEAVE_TXN" ] && echo pending > %s/var/apkg/txn\nexit $APKG_RC\n' % tgt)
+    os.chmod(fake, 0o755)
+    rec = next(l for l in l11.splitlines() if l.startswith("L11_RECOVER="))
+    body = ('die() { echo "DIE $*"; exit 3; }\nwarn() { echo "WARN $*"; }\nrunq() { "$@"; }\n'
+            "TARGET=%s\nL11_APKG=%s\n%s\n" % (tgt, fake, rec) +
+            _extract_func(l11, "l11_txn_pending") + "\n" + _extract_func(l11, "l11_apkg") +
+            '\nl11_apkg -R x install k\necho RETURNED\n')
+
+    def apkg(rc, txn_before=False, leave=False):
+        txn = os.path.join(tgt, "var", "apkg", "txn")
+        if os.path.exists(txn):
+            os.remove(txn)
+        if txn_before:
+            open(txn, "w").write("pending\n")
+        env = dict(os.environ, APKG_RC=str(rc), LEAVE_TXN="y" if leave else "")
+        r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30, env=env)
+        return r.stdout
+
+    cases = [
+        (apkg(0), "RETURNED", "exit 0 returns"),
+        (apkg(6, leave=True), "exit 6: kbootset failed", "exit 6 stops, journal kept, recover named"),
+        (apkg(7), "exit 7: kbootset refused it", "exit 7 stops (generation unchanged)"),
+        (apkg(5), "failed (rc=5)", "any other status stops"),
+        (apkg(0, txn_before=True), "a pending transaction blocks", "a pending /var/apkg/txn blocks the install"),
+        (apkg(0, leave=True), "left its journal", "a journal left after exit 0 stops"),
+    ]
+    for out, want, what in cases:
+        if want in out and (want == "RETURNED" or "RETURNED" not in out):
+            if want != "RETURNED" and want != "exit 7: kbootset refused it" and "recover" not in out:
+                fail("apkg %s, but the stop does not name recover: %s" % (what, out.strip()))
+            else:
+                ok("apkg: %s" % what)
+        else:
+            fail("apkg: %s -- got %r" % (what, out.strip()))
 
     # (5) the upgrade's first-boot hook S17upgrade, generated from l11.sh's own echo
     # lines and run against a scratch tree: good sums -> applied once; a changed file ->
