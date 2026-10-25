@@ -20,6 +20,8 @@
 #   kpkg/catalog kpkg/pkgs/kernel/*.pkg   the FILE source (#ext kpkg 1 block)
 #   updbootpart    the shim laid at /usr/sbin/updbootpart (payload/updbootpart-l11)
 #   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
+#   bcheckrc bcheckrc.stock   /sbin/bcheckrc with `kbootset retry` before each root
+#                  fsck reboot (C2-4 v5 §7), and the stock file's `sum -r`
 #
 # PROFILE KEYS:
 #   INSTALL_LAYOUT=1.1   this file; 1.0 (the default) never sources it
@@ -41,7 +43,8 @@ L11_STORE_BYTES=67108864
 l11_keys()
 {
 	for _f in "$L11_KB" "$L11_APKG" "$L11/loader/boot1" "$L11/loader/boot2" \
-		"$L11/loader/store-id" "$L11/kpkg/catalog" "$L11/updbootpart"
+		"$L11/loader/store-id" "$L11/kpkg/catalog" "$L11/updbootpart" \
+		"$L11/bcheckrc" "$L11/bcheckrc.stock"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
 	done
@@ -258,9 +261,37 @@ l11_bootstore()
 	[ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
 	run cp "$L11/updbootpart" "$TARGET/usr/sbin/updbootpart"
 	run chmod 0755 "$TARGET/usr/sbin/updbootpart"
+	l11_bcheckrc "$TARGET/sbin/bcheckrc"
 	l11_bootset auto
 	rm -rf "$TARGET/tmp/kpkgcache" "$KCONF"
 	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /sbin/kbootset, /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
+}
+
+# l11_bcheckrc FILE -- FILE becomes the medium's bcheckrc, with `kbootset retry`
+# before each of the root fsck block's three `/sbin/uadmin 1 1` (C2-4 v5 §7: a repair
+# reboot gives a trial its attempt back instead of spending it), only while FILE is
+# still the stock 2.1 file; written with cat, so its links (/usr/sbin/bcheckrc) and
+# mode stay. Anything else is left alone, and said.
+l11_bcheckrc()
+{
+	_bf="$1"
+	set x `"$INST/bin/sum" -r "$_bf"`; shift
+	_bh=$1
+	_bs=`( read _s _r; echo "$_s" ) < "$L11/bcheckrc.stock"`
+	set x `"$INST/bin/sum" -r "$L11/bcheckrc"`; shift
+	_bp=$1
+	if [ "$_bh" = "$_bp" ]; then
+		msg "bcheckrc     : $_bf already carries kbootset retry (sum -r $_bp)"
+		return 0
+	fi
+	if [ "$_bh" != "$_bs" ]; then
+		warn "$_bf is not the stock 2.1 bcheckrc (sum -r $_bh, stock $_bs) -- kbootset retry NOT added; add it by hand (C2-4 section 7)"
+		return 0
+	fi
+	cat "$L11/bcheckrc" > "$_bf" || die "cannot write $_bf"
+	set x `"$INST/bin/sum" -r "$_bf"`; shift
+	[ "$1" = "$_bp" ] || die "the patched bcheckrc did not read back ($_bf)"
+	msg "bcheckrc     : kbootset retry before the three root-fsck reboots in $_bf (sum -r $_bp)"
 }
 
 # l11_kb ARGS -- one kbootset call on the target's store; any status but 0 stops
@@ -334,7 +365,7 @@ l11_apkg()
 L11_KEEP="etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/apkg.conf"
+etc/rc2.d/S99zen etc/apkg.conf sbin/bcheckrc"
 
 # l11_rdbpart N -- _pn _po _pl: name, start, length of partition N (empty if none)
 l11_rdbpart()
@@ -469,7 +500,7 @@ l11_upgrade_restore()
 	fi
 	run mkdir -p "$TARGET/var/adm/upgrade/cfg"
 	( cd "$TARGET/var/adm/upgrade/cfg" && dd if="$DISK_RAW" bs=512 iseek="$OLD_SWAP_OFF" count="$UPG_NBLK" 2>/dev/null \
-		| /bin/cpio -icdmu 'etc/*' ) > /tmp/upg.err 2>&1 || { cat /tmp/upg.err; die "upgrade: restoring the configuration failed"; }
+		| /bin/cpio -icdmu 'etc/*' 'sbin/bcheckrc' ) > /tmp/upg.err 2>&1 || { cat /tmp/upg.err; die "upgrade: restoring the configuration failed"; }
 	cp /dev/null /tmp/upg.bad
 	while read _s _n _f
 	do
@@ -477,6 +508,23 @@ l11_upgrade_restore()
 		[ "$1" = "$_s" ] || echo "$_f" >> /tmp/upg.bad
 	done < /tmp/upg.sums
 	[ -s /tmp/upg.bad ] && die "upgrade: restored file(s) differ from the saved ones: `cat /tmp/upg.bad` -- NOT arming"
+	# a stock bcheckrc (every 1.0 disk) comes back with kbootset retry in it; one the
+	# administrator changed is kept as it was, without it
+	if [ -f "$TARGET/var/adm/upgrade/cfg/sbin/bcheckrc" ]; then
+		l11_bcheckrc "$TARGET/var/adm/upgrade/cfg/sbin/bcheckrc"
+		cp /dev/null /tmp/upg.sums2
+		while read _s _n _f
+		do
+			if [ "$_f" = sbin/bcheckrc ]; then
+				set x `"$INST/bin/sum" -r "$TARGET/var/adm/upgrade/cfg/$_f"`; shift
+				echo "$1 $2 $_f" >> /tmp/upg.sums2
+			else
+				echo "$_s $_n $_f" >> /tmp/upg.sums2
+			fi
+		done < /tmp/upg.sums
+		cp /tmp/upg.sums2 /tmp/upg.sums
+		rm -f /tmp/upg.sums2
+	fi
 	run cp /tmp/upg.sums "$TARGET/var/adm/upgrade/SUMS"
 	run cp /tmp/upg.hdr "$TARGET/var/adm/upgrade/HEADER"
 	: > "$TARGET/var/adm/upgrade/PENDING"
@@ -495,7 +543,9 @@ l11_upgrade_restore()
 		echo '	[ "$1" = "$s" ] || echo "$f" >> $U/BAD'
 		echo 'done < $U/SUMS'
 		echo 'if [ -s $U/BAD ]; then echo "upgrade: saved file(s) changed since the install, NOT applied:" `cat $U/BAD`; exit 0; fi'
-		echo 'find . -print | cpio -pdmu / 2>/dev/null'
+		echo '# bcheckrc in place (cat keeps its /usr/sbin link), everything else by cpio'
+		echo 'find . -print | grep -v "^./sbin/bcheckrc$" | cpio -pdmu / 2>/dev/null'
+		echo '[ -f sbin/bcheckrc ] && cat sbin/bcheckrc > /sbin/bcheckrc'
 		echo '[ -s /etc/nodename ] && uname -S `cat /etc/nodename`'
 		echo 'rm -f $U/PENDING'
 		echo 'echo "upgrade: the previous configuration is in place (`wc -l < $U/SUMS` files; $U)"'

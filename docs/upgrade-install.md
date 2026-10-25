@@ -37,7 +37,13 @@ The installer:
    - `/sbin/kbootset`;
    - `/etc/default/bootset` (C2-4 §6: `bootset=auto`, `store=`, `store-id=`, the facts);
    - `/dev/kinfo` (c 53 0, 0444; first boot gives it group sys);
-   - the `updbootpart` shim, which refuses and names kbootset.
+   - the `updbootpart` shim, which refuses and names kbootset;
+   - `/sbin/bcheckrc` with `[ -x /sbin/kbootset ] && /sbin/kbootset retry >/dev/console 2>&1`
+     before each of the three `/sbin/uadmin 1 1` of its root fsck block (C2-4 v5 §7), so a
+     repair reboot gives a trial its attempt back instead of spending it. The medium carries
+     the patched copy, made from core's 2.1 file (md5 bff26ae7). It is written in place
+     (`cat`, so `/usr/sbin/bcheckrc`, its hard link, follows), and only over the stock
+     file; a changed one is left alone with a warning.
 
    It lays none of the 1.0 boot-chain pieces: `/stand/boot2.boot`, the framed
    chain, `/stand/unix`, the RTO1 record or the reframe tools.
@@ -88,8 +94,14 @@ The configuration set is every file of this list that exists on the old root (pr
 etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/apkg.conf
+etc/rc2.d/S99zen etc/apkg.conf sbin/bcheckrc
 ```
+
+`/sbin/bcheckrc` survives upgrades as a configuration file (P-29 class).
+- A stock copy (every 1.0 disk) is saved and comes back with `kbootset retry` in it.
+- An already patched copy comes back as it was.
+- A copy the administrator changed comes back as it was, without the lines; the
+  install says so.
 
 Password entries are restored as they were, aging fields included (the
 clock-plausibility rule of spec 40 §7 is not implemented).
@@ -125,7 +137,8 @@ clock-plausibility rule of spec 40 §7 is not implemented).
 5. **First boot.** `/etc/rc2.d/S17upgrade` runs after `S16firstboot`. It
    re-checks the sums, copies `cfg/` over `/`, sets the
    node name and removes its `PENDING`. The old box's identity therefore wins
-   over the profile's first-boot values.
+   over the profile's first-boot values. `bcheckrc` is written with `cat`, so its
+   `/usr/sbin` link keeps the same content.
 
 The unattended erase guard does not stop an upgrade; the upgrade is itself the
 deliberate reinstall.

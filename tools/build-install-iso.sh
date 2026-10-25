@@ -761,6 +761,22 @@ if [ -n "$_want_l11" ]; then
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
   cp "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
+  # /sbin/bcheckrc with `kbootset retry` before each of the three reboots of its root
+  # fsck block (amix-dlm C2-4 v5 §7): a repair reboot must not spend a trial's single
+  # attempt. Made here from core's own file (2.1, pinned) by inserting one line before
+  # each `/sbin/uadmin 1 1`; install.sh writes it over the target's only while that is
+  # still the stock file (bcheckrc.stock: its `sum -r`).
+  _bc="$CORE_T/sbin/bcheckrc"
+  [ "$(md5sum < "$_bc" | cut -c1-32)" = bff26ae7c4a0e5c23aeba6044d3421d2 ] \
+    || { echo "STOP: $_bc is not the 2.1 bcheckrc (md5 bff26ae7...)" >&2; exit 1; }
+  [ "$(grep -c "^		/sbin/uadmin 1 1\$" "$_bc")" = 3 ] \
+    || { echo "STOP: $_bc does not carry exactly three root-fsck reboots" >&2; exit 1; }
+  sed 's|^		/sbin/uadmin 1 1$|		[ -x /sbin/kbootset ] \&\& /sbin/kbootset retry >/dev/console 2>\&1\n&|' \
+    "$_bc" > "$STAGE/l11/bcheckrc"
+  [ "$(grep -c '^		\[ -x /sbin/kbootset \] && /sbin/kbootset retry >/dev/console 2>&1$' "$STAGE/l11/bcheckrc")" = 3 ] \
+    && [ "$(wc -l < "$STAGE/l11/bcheckrc")" = "$(( $(wc -l < "$_bc") + 3 ))" ] \
+    || { echo "STOP: the bcheckrc retry patch did not insert exactly three lines" >&2; exit 1; }
+  sum -r "$_bc" | awk '{print $1}' > "$STAGE/l11/bcheckrc.stock"
   # apkg's conf for finishing a target's pending transaction from the repair path
   # (install.sh names it when it stops on one): the medium's engine and kernel space
   printf '%s\n' "# apkg 0.3 -R /mnt recover, from the repair path (install.sh, l11.sh)" \
@@ -770,7 +786,8 @@ if [ -n "$_want_l11" ]; then
   python3 -c 'import sys,zlib; b=open(sys.argv[1],"rb").read(); print("%08x" % ((zlib.crc32(b) & 0xffffffff) ^ 67108864))' \
     "$STAGE/l11/loader/boot2" > "$STAGE/l11/loader/store-id"
   chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
-  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf"
+  chmod 0744 "$STAGE/l11/bcheckrc"
+  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock"
   { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
     && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && cmp -s "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2" && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \

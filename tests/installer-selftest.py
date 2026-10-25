@@ -9795,26 +9795,82 @@ def audit_l11():
             u = os.path.join(root, "var", "adm", "upgrade")
             os.makedirs(os.path.join(u, "cfg", "etc"), exist_ok=True)
             open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("upgbox\n")
-            s = subprocess.run(["sum", "-r", "etc/nodename"], cwd=os.path.join(u, "cfg"),
-                               capture_output=True, text=True).stdout.split()
-            open(os.path.join(u, "SUMS"), "w").write("%s %s etc/nodename\n" % (s[0], s[1]))
+            os.makedirs(os.path.join(u, "cfg", "sbin"), exist_ok=True)
+            open(os.path.join(u, "cfg", "sbin", "bcheckrc"), "w").write("patched\n")
+            for dd in ("sbin", "usr/sbin"):
+                os.makedirs(os.path.join(root, dd), exist_ok=True)
+            open(os.path.join(root, "sbin", "bcheckrc"), "w").write("stock\n")
+            if not os.path.exists(os.path.join(root, "usr", "sbin", "bcheckrc")):
+                os.link(os.path.join(root, "sbin", "bcheckrc"), os.path.join(root, "usr", "sbin", "bcheckrc"))
+            rows = ""
+            for rel in ("etc/nodename", "sbin/bcheckrc"):
+                s = subprocess.run(["sum", "-r", rel], cwd=os.path.join(u, "cfg"),
+                                   capture_output=True, text=True).stdout.split()
+                rows += "%s %s %s\n" % (s[0], s[1], rel)
+            open(os.path.join(u, "SUMS"), "w").write(rows)
             open(os.path.join(u, "PENDING"), "w").write("")
             if bad:
                 open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("changed\n")
             script = (r.stdout.replace("U=/var/adm/upgrade", "U=" + u)
                       .replace("cpio -pdmu /", "cpio -pdmu " + root)
+                      .replace("> /sbin/bcheckrc", "> " + root + "/sbin/bcheckrc")
                       .replace("[ -s /etc/nodename ] && uname -S", ": "))
             open(gen, "w").write(script)
             o = subprocess.run(["/usr/bin/dash", gen, "start"], capture_output=True, text=True, timeout=30)
             applied = os.path.exists(os.path.join(root, "etc", "nodename"))
             pending = os.path.exists(os.path.join(u, "PENDING"))
-            if not bad and applied and not pending and "in place" in o.stdout:
-                ok("S17upgrade: good sums -> the saved files are put in place once (PENDING removed)")
+            linked = open(os.path.join(root, "usr", "sbin", "bcheckrc")).read() == "patched\n"
+            if not bad and applied and not pending and linked and "in place" in o.stdout:
+                ok("S17upgrade: good sums -> the saved files are put in place once (PENDING removed), "
+                   "bcheckrc by cat so /usr/sbin/bcheckrc (its link) follows")
             elif bad and not applied and pending and "NOT applied" in o.stdout:
                 ok("S17upgrade: a changed saved file -> nothing applied, PENDING kept")
             else:
                 fail("S17upgrade (%s sums): applied=%s pending=%s out=%r"
                      % ("bad" if bad else "good", applied, pending, o.stdout.strip()))
+
+    # (6) l11_bcheckrc: the stock 2.1 bcheckrc becomes the medium's retry-patched one in
+    # place (its hard link follows); a patched one is kept; any other is left alone
+    core = os.path.join(REPO, "..", "amix-packagemanager", "build", "repo-staging", "stock", ".t",
+                        "core", "sbin", "bcheckrc")
+    if not os.path.exists(core):
+        skip("no stock core bcheckrc in ../amix-packagemanager staging -- l11_bcheckrc not executed")
+    else:
+        inst = os.path.join(d, "inst")
+        lroot = os.path.join(inst, "l11")
+        os.makedirs(os.path.join(inst, "bin"), exist_ok=True)
+        os.makedirs(lroot, exist_ok=True)
+        if not os.path.exists(os.path.join(inst, "bin", "sum")):
+            os.symlink(shutil.which("sum"), os.path.join(inst, "bin", "sum"))
+        stock = open(core).read()
+        line = "\t\t[ -x /sbin/kbootset ] && /sbin/kbootset retry >/dev/console 2>&1\n"
+        patched = stock.replace("\t\t/sbin/uadmin 1 1\n", line + "\t\t/sbin/uadmin 1 1\n")
+        open(os.path.join(lroot, "bcheckrc"), "w").write(patched)
+        open(os.path.join(lroot, "bcheckrc.stock"), "w").write(
+            subprocess.run(["sum", "-r", core], capture_output=True, text=True).stdout.split()[0] + "\n")
+        body = ('msg() { echo "MSG $*"; }\nwarn() { echo "WARN $*"; }\ndie() { echo "DIE $*"; exit 3; }\n'
+                "INST=%s\nL11=%s\n" % (inst, lroot) + _extract_func(l11, "l11_bcheckrc") + '\nl11_bcheckrc "$1"\n')
+        tgt = os.path.join(d, "bc")
+        os.makedirs(os.path.join(tgt, "sbin"), exist_ok=True)
+        os.makedirs(os.path.join(tgt, "usr", "sbin"), exist_ok=True)
+        f1, f2 = os.path.join(tgt, "sbin", "bcheckrc"), os.path.join(tgt, "usr", "sbin", "bcheckrc")
+        for case, content in (("stock", stock), ("patched", patched), ("changed", stock + "# local\n")):
+            for f in (f1, f2):
+                if os.path.exists(f):
+                    os.remove(f)
+            open(f1, "w").write(content)
+            os.link(f1, f2)
+            r = subprocess.run(["/usr/bin/dash", "-c", body, "x", f1], capture_output=True, text=True, timeout=30)
+            now = open(f2).read()
+            good = {"stock": now == patched and now.count(line) == 3 and "kbootset retry before" in r.stdout,
+                    "patched": now == patched and "already carries" in r.stdout,
+                    "changed": now == content and "NOT added" in r.stdout}[case]
+            if good and "DIE" not in r.stdout:
+                ok("l11_bcheckrc: a %s bcheckrc -> %s" % (case, {
+                    "stock": "the retry-patched one, written in place (3 lines; the link follows)",
+                    "patched": "kept, said so", "changed": "left alone, said so"}[case]))
+            else:
+                fail("l11_bcheckrc on a %s bcheckrc: %r" % (case, r.stdout.strip()))
 
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
