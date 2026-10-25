@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset build and the gates (S2-03); M-LD4 bench half (654a324, 831975e)
+
+kbootset build composes the next generation into /stand/gen/<id>/ from the kernel package (C2-3 sidecar) and apkg's
+records (C2-2), running gates 1 hash, 2 kabi/pin, 3 closure (a static kernel's built-in root controllers and filesystems
+against the boot/root controllers and root fs), 6 memory, 7 loader version and 10 line; commit re-runs the gates on the
+files as they are and refuses a stale build. Every refusal exits 4, names the gate and leaves the store byte-identical
+(tests/host/kbuild.sh provokes each). Box build 103 004 B stripped. Gates 8/9 come with kinfo (S2-06); root-class modules
+are stage 3. M-LD4 bench half closed: the loader's writes read back 12/12 on A3000 WD, Gayle, A4091 030 and 060.
+
 ## 2026-10-26 — kbootset box build with GCC 14 (S2-07); contracts agreed v1 (37ec6be..5eae3e6)
 
 Contracts C2-1 to C2-5 agreed (version 1, settlements recorded). Spec change after freeze: rollback reaches the pristine
