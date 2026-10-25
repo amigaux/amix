@@ -120,7 +120,7 @@ forces 3 earlier (S3-40).
 |---|---|---|---|---|---|---|
 | S3-25 | **z3660eth as a module** (C3-6): <br>– the wrapper; <br>– the STREAMS-driver linkage on major 51, registered from `.moddata`; <br>– mailbox and frame buffers from `dma_alloc`; <br>– polled RX by default, with interrupt receive through `intr_attach` on INT6 as the measured option (M-INT1); <br>– boot class. <br>The static form stays buildable until the exit. The board runs both lines' kernels, so one module per line | amix-z3660net | host + bench | C3-1, C3-6, S3-09, S3-10, S3-20 | S3-22, S3-45 | 1.5 |
 | S3-26 | **z3660rtg as a module** (C3-6): <br>– the wrapper; <br>– the cdev linkage on major 49 with `d_mmap`; <br>– the `init_tbl` work moved into `_load`; <br>– the console hook through `cons_hook_set`; <br>– both targets (ZZ9000, Z3660); <br>– demand class, loaded on first open of `/dev/zz9000`; <br>– `depend=monsw`. <br>The static form stays buildable until the exit | amix-z3660rtg | host + bench | C3-1, C3-6, S3-10, S3-20, S3-27 | S3-22, S3-45 | 1.5 |
-| S3-27 | **monsw as a module** (P-8): the card-independent `/dev/monsw` on major 52; `monsw_set`/`register`/`unregister`/`lastclose` exported to other modules through the module symbol table, not the kernel's allowlist; demand class | P-8 question (c): amix-040-060-port or amix-kerntools | host + bench | C3-1, C3-6, S3-10 | S3-26 | 1 |
+| S3-27 | **monsw as a module** (P-8): the card-independent `/dev/monsw` on major 52; `monsw_set`/`register`/`unregister`/`lastclose` exported to other modules through the module symbol table, not the kernel's allowlist; demand class | amix-z3660rtg until the owner decides P-8 question (c) | host + bench | C3-1, C3-6, S3-10 | S3-26 | 1 |
 
 ### 2.6 apkg and the installer
 
@@ -138,7 +138,7 @@ forces 3 earlier (S3-40).
 | S3-43 | **80's stage-3 emulator rows**: <br>– load; <br>– unload refusal (pinned) and the allowed unload; <br>– dependency (monsw before z3660rtg); <br>– kabi refusal (family, major, minor above the kernel's, pin); <br>– bad-object refusal (`SHT_REL`, a type outside the list, a zero match key, a name over 14, revision 1, a symbol outside the allowlist); <br>– 128 MB machines; <br>– the relocation oracle against the cross linker; <br>– **M-SIG3**: a file not in the manifest, or with another SHA-256, refused at `modload`, at dependency load and at first open; development load lifts it and is printed; <br>– a failed `_load` leaves the kernel as it was (80 §3) | amix-dlm (rows by the Bench station) | bench | S3-03, S3-06, S3-07, S3-15, S3-16, S3-20 | S3-45 | 1.5 |
 | S3-44 | **M-INT1, bench half**: the INT2 and INT6 chain logic, polled fallback. The emulated board raises no INT6, so interrupt receive is metal | amix-dlm (rows by the Bench station) | bench | S3-09, S3-25 | S3-46 | 0.5 |
 | S3-45 | **Exit row**: a box whose network and graphics come only from modules, installed by the installer and upgraded with apkg. zen0 up with telnet and ftp; X on the RTG (the emulator's ZZ9000 model); the monitor switch; rollback to the previous generation still works | amix-dlm (rows by the Bench station) | bench | S3-16, S3-22, S3-25–S3-27, S3-30, S3-31, S3-43 | S3-46 | 0.5 |
-| S3-46 | **Metal**: <br>– z3660eth and z3660rtg as modules on both boxes; <br>– interrupt attachment on metal (M-INT1); <br>– **M-THR1**: throughput as modules against the static figures of record (z3660eth's sustained FTP, about 185 KiB/s; the RTG blitter's per-operation cost); <br>– the 030 line's metal per OQ-80.1 | amix-dlm, the driver repos (via the lab registry) | metal | S3-44, S3-45 | stage exit | 1.5 |
+| S3-46 | **Metal**: <br>– z3660eth and z3660rtg as modules on both boxes; <br>– interrupt attachment on metal (M-INT1); <br>– **M-THR1**: throughput as modules against the static figures of record (z3660eth's sustained FTP, about 185 KiB/s; the RTG blitter's per-operation cost); <br>– the 030 line's metal: z3660eth on a K030 kernel on the Z3660 in 68030 mode (Q3-4) | amix-dlm, the driver repos (via the lab registry) | metal | S3-44, S3-45 | stage exit | 1.5 |
 
 ## 3. Critical path and totals
 
@@ -171,10 +171,10 @@ Estimate:
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| Q3-1 | `intr_attach` is in 80 §2's stage-4 "Builds" column, but 80's stage-3 metal column ("interrupt attachment on metal") and 90's M-INT1 (stage 3) need it now. The plan builds it in stage 3 for the copied modules (S3-09), and stage 4 reuses it for the root controllers. 80's wording would follow as a "Spec change after freeze" | orchestrator |
-| Q3-2 | Which repository holds monsw (P-8 question (c): the port, recommended there, or amix-kerntools)? S3-27's owner follows | owner |
+| Q3-1 | **Settled** (orchestrator, 2026-10-26): `intr_attach` is built in stage 3 for the copied modules (S3-09), and stage 4 reuses it for the root controllers. 80 §2 changed after the freeze to say so | — |
+| Q3-2 | Which repository holds monsw (P-8 question (c))? The owner decides. Until then S3-27 is planned where monsw lives today, amix-z3660rtg, and stays movable | owner |
 | Q3-3 | Is one k46 ABI right for the 68040 and the 68060 (OQ-20.2)? M-ABI1 (S3-40) decides before the family is fixed in S3-20 | us; Antti |
-| Q3-4 | The 030 line's metal for z3660eth (OQ-80.1). The board runs k30 kernels, but whether that counts as the 030 line's metal evidence is the open question | orchestrator |
+| Q3-4 | **Settled** (orchestrator, 2026-10-26): z3660eth on a K030 kernel, on the Z3660 in 68030 mode, is the 030 line's metal. It is the only real 68030 with an MMU on the benches (the A4000D's 68EC030 has none), so OQ-80.1 closes that way for this stage | — |
 | Q3-5 | Do we offer the patches upstream (OQ-30.6)? Upstream's zz9000 module also takes major 49 (OQ-20.5). Neither blocks the plan | ashnazag; us |
 
 ## 5. Not in stage 3
