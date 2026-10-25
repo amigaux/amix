@@ -23,7 +23,7 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | M-LD5 [U18] | Menu input: keyboard matrix, left/right mouse buttons and serial input at the menu window; through the HID converters on both reference machines; phantom key or button reads on a marginal card | bench (input injected over the emulator's control channel) + metal (HID path) | 1 | 10 §7.4 |
 | M-LD6 | CPU probe gives the right answer on 68030, 68040, LC/full 68060, including a 68060 without SetPatch | bench (030, 040, LC060 models) + metal (real 68060) | 1 | 10 §3.2 |
 | M-LD7 | CRC-32 and SHA-256 time over a 2 MB kernel on a 25 MHz 68030 and a 68060 (decides whether the loader checks SHA-256 too) | bench (upper bound) + metal (68060; 68030 per OQ-80.1) | 1 | 10 §5.1 |
-| M-LD8 | Deflate vs LZW (`compress -b16`) ratio on K030-U-FD- and KD060-FD-class kernels and on a miniroot image; inflate time on a 68030 | bench (host computation; decode timing on the emulator as an upper bound) | 1 | 10 §5.5 |
+| M-LD8 | Deflate vs LZW (`compress -b16`) ratio on K030-U-FD- and KD060-FD-class kernels and on a miniroot image; inflate time on a 68030 — ratio part measured 2026-10-25 on the 1.0 floppy kernels: deflate = 73 % (K030-U-FD) and 71 % (KD060-FD) of the LZW size (`docs/measurements/2026-10-25-m-net1.md`); decode time open | bench (host computation; decode timing on the emulator as an upper bound) | 1 | 10 §5.5 |
 | M-LD9 | Cold boots of static kernels through our loader from every controller on both boxes, compared with the stock loader (root naming, devices, RTH1 line) | bench + metal | 1 | 80 §2 |
 | M-FD1 | Floppy DMA into chip RAM under the 040/060 caches (DTT0 window) on a real floppy or Gotek | metal | 1 | 70 §2 |
 | M-FP1 | Floppy-pair fit per line in the RAM-disk profile: compressed kernel + root-class modules + compressed miniroot + store overhead against two DD volumes | bench (host computation) | 1 (static), again 5 | 10 §4.3, 50 §3 |
@@ -84,8 +84,8 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
 | M-CD1 | CD boot and install on the A4091 ROM (emulated) and the A4092 (metal), both lines' generations from one disc | bench + metal | 5 | 50 §4 |
-| M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line, from today's binaries | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
-| M-NET1b | Its deflate-compressed size | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line, from today's binaries — **closed 2026-10-25**: k30 2 562 866 B, k46 2 468 595 B with the trimmed engine (3 265 054 / 3 170 783 B with the full 1.0 engine); evidence `docs/measurements/2026-10-25-m-net1.md`, tool `tools/measure/m-net1.py` | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1b | Its deflate-compressed size — **closed 2026-10-25**: k30 959 940 B, k46 924 595 B trimmed (1 228 315 / 1 192 293 B full); with the deflated 1.0 floppy kernel, margins on two DD volumes +16.1 % / +13.0 % trimmed, +1.1 % / −2.0 % full; evidence as M-NET1a | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
 | M-NET1c | Compressed kernel + root-class modules under the 1.1 floor (DV-1) | bench (host computation) | 5 | 50 §5.1 |
 | M-NET1d | Store overhead and usable bytes per DD volume (DV-1) | bench (host computation) | 1 (store format frozen) | 50 §5.1 |
 | M-NET1e | RAM needed at boot vs the smallest supported machine per line (DV-1) | bench | 5 | 50 §5.1 |

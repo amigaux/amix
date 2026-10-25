@@ -107,12 +107,14 @@ installer, on its own small medium; packages over HTTP from
 
 ### 5.1 What must be measured to decide form A
 
-The network userland alone is about 0.5 MB uncompressed: `slink` 30 516,
-`ifconfig` 58 700, `route` 44 140, `libnsl.so` 236 040, `libsocket.so`
-54 032, `strcf` 2 522, dynamic apkg 59 202, `ping` 21 320 bytes
-(`MP/medium-network.md:59-66`); no static `libnsl.a` exists, so the HTTP
-client is dynamic. None of it fits either 1.0 root ADF (46 KB and 63 KB free).
-Form A therefore depends on compression and on the RAM-disk root. Measure:
+The network userland is `slink` 30 516, `ifconfig` 58 700, `route` 44 140,
+`ping` 21 320, `libnsl.so` 236 040, `libsocket.so` 54 032, `strcf` 2 522
+bytes plus `libc.so.1` (206 876 B, the shared C library and runtime linker
+every one of them names; already on both 1.0 root floppies) and the HTTP
+apkg (66 736 B stripped); no static `libnsl.a` exists, so the HTTP client is
+dynamic (`docs/measurements/2026-10-25-m-net1.md`). None of it fits either
+1.0 root ADF (46 KB and 63 KB free). Form A therefore depends on compression
+and on the RAM-disk root. Measure:
 
 1. **M-NET1a** — the miniroot's uncompressed size with installer + network
    userland + apkg + `kbootset` + public key, per line, after stripping.
@@ -135,10 +137,28 @@ Form A therefore depends on compression and on the RAM-disk root. Measure:
 Form A ships if (1+2) + (3) + (4) fit two volumes with a margin of at least
 5 % and (5) fits the smallest machine; otherwise form B.
 
+**Result of M-NET1a/b (2026-10-25, `docs/measurements/2026-10-25-m-net1.md`).**
+Against two volumes at the budget of record (2 × 890 880 = 1 781 760 B),
+with the 1.0 floppy kernels deflate-compressed standing in for M-NET1c:
+
+| Line | Installer engine | Miniroot raw (a) | Deflated (b) | + kernel | Margin |
+|---|---|---|---|---|---|
+| k30 | as on the 1.0 CD | 3 265 054 | 1 228 315 | 1 762 535 | +1.1 % — fails the 5 % rule |
+| k30 | trimmed | 2 562 866 | 959 940 | 1 494 160 | **+16.1 %** |
+| k46 | as on the 1.0 CD | 3 170 783 | 1 192 293 | 1 817 732 | −2.0 % — does not fit |
+| k46 | trimmed | 2 468 595 | 924 595 | 1 550 034 | **+13.0 %** |
+
+"Trimmed" drops the engine tools the installer never calls (`pkgchk`,
+`pkgtrans`, `pkginfo`, the static no-HTTP `apkg`). **Form A — the floppy
+pair with the trimmed engine — is chosen.** Not yet in the numbers and to
+come out of the margin: `kbootset`, the 1.1 store overhead per volume
+(M-NET1d), the netinstall additions to the installer, and the difference
+between the 1.0 floppy kernels and the 1.1 floor kernel plus root modules
+(M-NET1c). Form B stays the fallback if those take the margin below 5 %.
+
 **When.** D-3 §2 says the fit is "measured in S0". M-NET1a and M-NET1b are a
-host computation over today's binaries and are **stage 0: S0 does not freeze
-until they are closed**. If the compressed miniroot alone (1+2) leaves less
-than a generous kernel estimate on two volumes, form B is decided in S0.
+host computation over today's binaries and were **stage 0, the S0 freeze
+condition**; they are closed (above).
 M-NET1c–g cannot close in S0 — c and d depend on the 1.1 floor kernel and
 the store format, e on both, f and g need a running miniroot — and are
 recorded as **deviation DV-1** from D-3 §2, for the owner to approve
@@ -171,7 +191,7 @@ recorded as **deviation DV-1** from D-3 §2, for the owner to approve
 | ID | Question | Proposed owner |
 |---|---|---|
 | OQ-50.1 | Floppy profile: RAM-disk or fd0 root, per line (M-FP1/M-FP2). | us |
-| OQ-50.2 | Netinstall form A or B (§5.1). | us |
+| OQ-50.2 | Narrowed by M-NET1a/b: form A (trimmed engine) chosen; confirm the margin stays ≥ 5 % once M-NET1c, M-NET1d, `kbootset` and the installer's network additions are known, else form B (§5.1). | us |
 | OQ-50.3 | Whether the Z3660 firmware's floppy emulation can boot the floppy pair (no record). | us |
 | OQ-50.4 | Which machines of the 030 line can run a CD boot (they need an A4091/A4092 ROM with CD boot). | us |
 | OQ-50.5 | Tape device nodes on card 1 and their names. | us |

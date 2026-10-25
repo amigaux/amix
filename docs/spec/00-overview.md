@@ -114,7 +114,7 @@ decision reserved to the project owner.
 | OQ-40.6 | Swap slice size cap for the configuration archive | us |
 | OQ-40.7 | The 1024 MiB filesystem limit before the layout freezes | us |
 | OQ-50.1 | Floppy profile per line: RAM-disk or fd0 root | us |
-| OQ-50.2 | Netinstall form A (floppy pair) or B (disk + CD image) | us |
+| OQ-50.2 | Netinstall: form A (floppy pair, trimmed engine) chosen by M-NET1a/b; confirm the ≥ 5 % margin after M-NET1c/d and `kbootset`, else form B | us |
 | OQ-50.3 | Can the Z3660 firmware's floppy emulation boot the pair | us |
 | OQ-50.4 | Which 030 machines can boot the CD | us |
 | OQ-50.5 | Tape device nodes on card 1 | us |
@@ -139,19 +139,21 @@ Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the AB
 Every measurement, with its evidence class (bench or metal, P-28 D51) and the
 stage that needs it, is in `90-measurements.md`.
 
-**S0 freeze condition.** The specification freezes when every stage-0
-measurement is closed: **M-NET1a and M-NET1b** (the netinstall miniroot's raw
-and compressed size, a host computation over today's binaries; D-3 §2 says
-the netinstall fit is "measured in S0"). If those already rule out the floppy
-pair, OQ-50.2 is answered in S0 (form B).
+**S0 freeze condition — met 2026-10-25.** The specification freezes when
+every stage-0 measurement is closed: **M-NET1a and M-NET1b** (the netinstall
+miniroot's raw and compressed size; D-3 §2 says the netinstall fit is
+"measured in S0"). Both are closed
+(`docs/measurements/2026-10-25-m-net1.md`): with the installer engine trimmed
+to what the installer calls, miniroot plus a deflated kernel fills two DD
+volumes with 16.1 % (k30) and 13.0 % (k46) to spare, so form A is chosen
+(`50-media.md` §5.1, OQ-50.2 narrowed).
 
 **Deviation DV-1 (for the owner to approve).** The rest of the netinstall fit
 — M-NET1c (compressed floor kernel and root modules), M-NET1d (store overhead
 per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 (HTTP from the miniroot) — cannot close in S0: c–e depend on the 1.1 floor
 kernel and the store format, f and g on a running miniroot. They are scheduled
-in stages 1–5 (`90-measurements.md` §5), and OQ-50.2 is then answered at the
-first stage where they are all closed, not in S0.
+in stages 1–5 (`90-measurements.md` §5), and they confirm or overturn the form-A choice made in S0 (OQ-50.2).
 
 **Owner decisions open at the freeze:** OQ-10.9 (CD mechanism), OQ-30.2 (030
 card order), DV-1, OQ-60.2, OQ-60.3. The first measurements after the freeze
