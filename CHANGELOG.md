@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-25 — M-NET1a/b measured; S0 frozen (4d9c5e6..2506516)
+
+Netinstall miniroot (installer + network userland + HTTP apkg): 2 562 866 B (k30) / 2 468 595 B (k46) raw, 959 940 B /
+924 595 B deflated with the unused engine tools dropped; with a deflated kernel a floppy pair keeps 16.1 % / 13.0 % margin,
+so netinstall form A (floppy pair) is chosen. Record in docs/measurements/, script tools/measure/m-net1.py. S0 freeze
+condition met; the specification is frozen at this commit (orchestrator, 2026-10-25).
+
 ## 2026-10-25 — S0 revised after review T-52 (f4d1b1f..026215c)
 
 CD boot written as two options for the owner (RDB-style disc, or a loader started from the disc's AmigaDOS startup);
