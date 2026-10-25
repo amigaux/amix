@@ -19,4 +19,5 @@ void test_manifest(void);
 void test_inflate(void);
 void test_select(void);
 void test_rel(void);
+void test_bootinfo(void);
 #endif
