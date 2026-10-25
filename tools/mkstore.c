@@ -21,6 +21,10 @@
  *   -d ID      default generation (default: the first good or pristine one)
  *   -c WHAT    console: serial, screen or both (default both)
  *   -m DS      menu window in tenths of a second (default 20; 0 = none)
+ *   -T         loader trial: the primary boot2 is on trial (header flag;
+ *              needs -b, the previous loader, and a writable medium)
+ *   -n REQ     a one-shot request for the next boot: previous, safe,
+ *              devload, or a generation id (needs a writable medium)
  *
  * or:    mkstore -C DIR [-x AMIX-CDBOOT] [-d DEFAULT] [-c ...] [-m DS] SPEC...
  *
@@ -452,7 +456,8 @@ main(int argc, char **argv)
 	const char *image[MAXVOL], *b1 = 0, *b2 = 0, *b2b = 0, *cdboot = 0;
 	unsigned long poff = 0;
 	ax_u32 ver = 1, deflt = 0, len, ctloff;
-	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, i, v;
+	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, ldrtrial = 0, i, v;
+	const char *oneshot = 0;
 	ax_u16 console = AXC_SERIAL | AXC_SCREEN, menu_ds = 20;
 	unsigned char *p;
 	struct ax_header h;
@@ -460,7 +465,7 @@ main(int argc, char **argv)
 	FILE *f;
 
 	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
-		if (i + 1 >= argc && strcmp(argv[i], "-r"))
+		if (i + 1 >= argc && strcmp(argv[i], "-r") && strcmp(argv[i], "-T"))
 			die("missing argument for", argv[i]);
 		if (!strcmp(argv[i], "-o")) {
 			if (nimg == MAXVOL)
@@ -487,6 +492,8 @@ main(int argc, char **argv)
 		}
 		else if (!strcmp(argv[i], "-m")) menu_ds = (ax_u16)strtoul(argv[++i], 0, 0);
 		else if (!strcmp(argv[i], "-C")) cdroot = argv[++i];
+		else if (!strcmp(argv[i], "-T")) ldrtrial = 1;
+		else if (!strcmp(argv[i], "-n")) oneshot = argv[++i];
 		else if (!strcmp(argv[i], "-x")) cdboot = argv[++i];
 		else die("unknown option", argv[i]);
 	}
@@ -499,13 +506,17 @@ main(int argc, char **argv)
 	}
 	if (cdboot)
 		die("-x goes with -C", 0);
+	if ((ldrtrial || oneshot) && readonly)
+		die("-T and -n need a writable medium", 0);
+	if (ldrtrial && !b2b)
+		die("-T needs the previous loader (-b)", 0);
 	if (floppy && !sizeset)
 		store_size = 901120;
 	if (nimg > 1 && !floppy)
 		die("several volumes need the floppy profile (-f)", 0);
 	nvol = nimg ? nimg : 1;
 	if (!nimg || !b1 || !b2 || i >= argc)
-		die("usage: mkstore -o IMAGE [-p OFF] [-s SIZE] -1 BOOT1 -2 BOOT2 [-b BOOT2B] [-v N] [-r] [-d ID] [-c serial|screen|both] [-m DS] SPEC...", 0);
+		die("usage: mkstore -o IMAGE [-p OFF] [-s SIZE] -1 BOOT1 -2 BOOT2 [-b BOOT2B [-T]] [-v N] [-r] [-d ID] [-c serial|screen|both] [-m DS] [-n REQ] SPEC...", 0);
 	if (store_size % AX_BLK || store_size < AX_DATA_OFF + AX_BLK)
 		die("store size must be a multiple of 2048 and larger than 64 KiB", 0);
 	if (argc - i > AX_MAXGEN)
@@ -534,6 +545,8 @@ main(int argc, char **argv)
 	h.nvolumes = (ax_u16)nvol;
 	if (nvol > 1)
 		h.flags |= AXF_MULTIVOL;
+	if (ldrtrial)
+		h.flags |= AXF_LDRTRIAL;
 	p = slurp(b2, &len);
 	if (len == 0 || len > AX_BOOT2_MAX)
 		die("boot2 must be 1..28672 bytes", b2);
@@ -577,6 +590,19 @@ main(int argc, char **argv)
 			deflt = c.gen[c.ngen].id;
 	}
 	c.default_gen = deflt;
+	if (oneshot) {
+		if (!strcmp(oneshot, "previous")) c.oneshot = AXO_PREVIOUS;
+		else if (!strcmp(oneshot, "safe")) c.oneshot = AXO_SAFE;
+		else if (!strcmp(oneshot, "devload")) c.oneshot = AXO_DEVLOAD;
+		else {
+			c.oneshot = AXO_GEN;
+			c.oneshot_gen = (ax_u32)strtoul(oneshot, 0, 0);
+			for (v = 0; v < c.ngen && c.gen[v].id != c.oneshot_gen; v++)
+				;
+			if (v == c.ngen)
+				die("-n names no generation in the store", oneshot);
+		}
+	}
 	ax_ctl_write(tab, &c, store + h.ctl_off[0]);
 	/* the set id tells the volumes of this set from any other: the time
 	 * and the control block, which holds every manifest's CRC */

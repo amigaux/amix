@@ -106,3 +106,28 @@ if $B/mkstore -C $T/cdt $T/ct.spec 2>/dev/null; then
 	echo "store-roundtrip: trial generation accepted on a CD" >&2; exit 1
 fi
 echo "store-roundtrip: CD tree ok"
+
+# the loader's writes over boots (axsim, the rules of loader/common): a
+# trial generation is attempted, then marked bad (L8); a one-shot request
+# is consumed; a loader trial records its start, then falls back (B4)
+W=$T/w
+mkdir -p $W
+sed 's/^state pristine/state good/' $T/g12.spec > $W/g12.spec
+sed -e 's/^generation 12/generation 13/' -e 's/^state pristine/state trial/' $T/g12.spec > $W/g13.spec
+sed -e 's/^generation 12/generation 14/' -e 's/^state pristine/state good/' $T/g12.spec > $W/g14.spec
+$B/mkstore -o $W/try.img -s 8388608 -1 $T/boot1.img -2 $T/boot2.bin -d 12 $W/g12.spec $W/g13.spec >/dev/null
+$B/axsim $W/try.img 0 2 > $W/try.out
+grep -q "generation 13, kernel" $W/try.out
+grep -q "L8 trial generation did not reach multi-user (generation 13)" $W/try.out
+$B/lsstore $W/try.img | grep -q "generation 13 (bad, 1 attempt(s))"
+$B/mkstore -o $W/one.img -s 8388608 -1 $T/boot1.img -2 $T/boot2.bin -d 14 -n 12 $W/g12.spec $W/g14.spec >/dev/null
+$B/lsstore $W/one.img | grep -q "one-shot 2 (generation 12)"
+$B/axsim $W/one.img 0 2 | grep "kernel" | tr '\n' ' ' | grep -q "generation 12, kernel .* generation 14, kernel"
+$B/lsstore $W/one.img | grep -q "seq 2, default 14, trial 0, one-shot 0,"
+$B/mkstore -o $W/ldr.img -s 8388608 -1 $T/boot1.img -2 $T/boot2.bin -b $T/boot2.bin -T $W/g12.spec >/dev/null
+$B/axsim $W/ldr.img 0 2 | grep -q "B4 new loader already started once"
+$B/lsstore $W/ldr.img | grep -q "tally: header seq 1, 1 start(s)"
+if $B/mkstore -f -o $W/x.adf -1 $T/boot1.img -2 $T/boot2.bin -n 12 $W/g12.spec 2>/dev/null; then
+	echo "store-roundtrip: one-shot accepted on a read-only floppy" >&2; exit 1
+fi
+echo "store-roundtrip: loader writes ok"

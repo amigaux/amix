@@ -90,11 +90,17 @@ rdv(int vol, ax_u32 off, void *buf, ax_u32 len)
 
 #define rd(off, buf, len) rdv(1, off, buf, len)
 
+/* a generation's state, with its attempt count once it has one */
 static const char *
-statename(int s)
+statename(const struct ax_gen *g)
 {
 	static const char *n[] = { "free", "pristine", "good", "trial", "bad" };
-	return s >= 0 && s <= 4 ? n[s] : "?";
+	static char s[40];
+
+	sprintf(s, "%s", g->state <= 4 ? n[g->state] : "?");
+	if (g->attempts)
+		sprintf(s + strlen(s), ", %u attempt(s)", g->attempts);
+	return s;
 }
 
 static void
@@ -149,10 +155,16 @@ member(const char *what, const struct ax_member *mb)
 static void
 control(int which, const struct ax_ctl *c)
 {
-	printf("control %c: seq %lu, default %lu, trial %lu, one-shot %u, %u generation(s), "
+	char req[40];
+
+	if (c->oneshot == AXO_GEN)
+		sprintf(req, "%u (generation %lu)", c->oneshot, (unsigned long)c->oneshot_gen);
+	else
+		sprintf(req, "%u", c->oneshot);
+	printf("control %c: seq %lu, default %lu, trial %lu, one-shot %s, %u generation(s), "
 	       "console%s%s, menu %u ds\n",
 	       "AB"[which], (unsigned long)c->seq, (unsigned long)c->default_gen,
-	       (unsigned long)c->trial_gen, c->oneshot, c->ngen,
+	       (unsigned long)c->trial_gen, req, c->ngen,
 	       (c->console & AXC_SERIAL) ? " serial" : "", (c->console & AXC_SCREEN) ? " screen" : "",
 	       c->menu_ds);
 }
@@ -172,7 +184,7 @@ generations(const struct ax_ctl *c, int cd)
 		if (cd) {
 			sprintf(name, "G%lu.GMF", (unsigned long)g->id);
 			printf("  generation %lu (%s), manifest %lu bytes, %s\n", (unsigned long)g->id,
-			       statename(g->state), (unsigned long)g->man_len, name);
+			       statename(g), (unsigned long)g->man_len, name);
 			if (rdfile(name, man, g->man_len) != 0) {
 				bad = 1;
 				free(man);
@@ -180,7 +192,7 @@ generations(const struct ax_ctl *c, int cd)
 			}
 		} else {
 			printf("  generation %lu (%s), manifest %lu bytes at 0x%lx\n", (unsigned long)g->id,
-			       statename(g->state), (unsigned long)g->man_len, (unsigned long)g->man_off);
+			       statename(g), (unsigned long)g->man_len, (unsigned long)g->man_off);
 			rdv(g->volume ? g->volume : 1, g->man_off, man, g->man_len);
 		}
 		if (ax_crc32(tab, (ax_u8 *)man, g->man_len) != g->man_crc) {
@@ -297,11 +309,22 @@ main(int argc, char **argv)
 		rd(h.boot2[i].off, b2, h.boot2[i].len);
 		rc = ax_crc32(tab, b2, h.boot2[i].len) == h.boot2[i].crc;
 		free(b2);
-		printf("  boot2[%d]: %lu bytes at 0x%lx, version %lu, crc %s\n", i,
+		printf("  boot2[%d]: %lu bytes at 0x%lx, version %lu, crc %s%s\n", i,
 		       (unsigned long)h.boot2[i].len, (unsigned long)h.boot2[i].off,
-		       (unsigned long)h.boot2[i].ver, rc ? "ok" : "BAD");
+		       (unsigned long)h.boot2[i].ver, rc ? "ok" : "BAD",
+		       i == 0 && (h.flags & AXF_LDRTRIAL) ? ", on trial" : "");
 		if (!rc)
 			bad = 1;
+	}
+	if (h.tally_off) {
+		struct ax_tally t;
+
+		rd(h.tally_off, cb[0], 2048);
+		if (ax_tally_parse(tab, cb[0], &t) == AX_OK)
+			printf("  tally: header seq %lu, %lu start(s)%s\n", (unsigned long)t.hdr_seq,
+			       (unsigned long)t.attempts, t.hdr_seq == h.seq ? "" : " (another header: none)");
+		else
+			printf("  tally: none\n");
 	}
 	rd(h.ctl_off[0], cb[0], 2048);
 	rd(h.ctl_off[1], cb[1], 2048);
