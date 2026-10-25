@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — boot2 runs from fast memory; metal recipes (042a408..50bed35)
+
+boot2's start-up stub copies image + relocation table into a MEMF_FAST block and relocates there; a chip-only machine runs
+in place and says so once on serial. Device reads stay in the chip bounce buffer; members are read, inflated, checked and
+relocated from fast code (M-LD8: chip-RAM execution cost 7× on inflate, 25× on CRC-32). Spec change after freeze 10 §3.2.
+Vehicle scripts fix SOURCE_DATE_EPOCH so bench and metal run the same bytes; tests/bench/README.md "Metal" lists the
+S1-26/S1-27 rows; m-ld1.sh adds the M-LD3 vehicle (only boot2 damaged → B3, stop). boot2 27 716 B (560 B under the gate).
+
 ## 2026-10-26 — kbootset check and media builds (S2-05, S2-04) (a3a6795, 25b8b60)
 
 kbootset check re-reads every member in the store (inflated where deflated) against the manifest's CRC-32 and SHA-256,
