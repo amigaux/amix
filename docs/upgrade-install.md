@@ -32,7 +32,12 @@ The installer:
      (C2-4 v6 §8). `status` then prints the store's set id, which goes into
      `store-id=`;
    - `build` takes the facts: `--line`, `--bootdev`/`--rootdev` from
-     `TARGET_HBA`, `--rootfs`, `--mem` from `TARGET_FASTMEM_MB`, and `--root`;
+     `TARGET_HBA`, `--rootfs`, `--mem` from `TARGET_FASTMEM_MB`, and `--root`.
+     `TARGET_FASTMEM_MB` is the fast memory of the box that will boot the disk, not of
+     the machine running the install. The miniroot cannot measure it (no kinfo in the
+     install kernels), so the profile states it. A kinfo kernel's own value wins at run
+     time; on a kernel without kinfo (K030-U today), bootset's `mem=` is what kbootset's
+     memory gate reads;
    - `commit` writes the pristine generation;
    - `check` is the post-write proof (status 1 means a problem was found).
    Any non-zero status stops the install before anything is armed.

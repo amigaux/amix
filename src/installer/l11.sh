@@ -25,8 +25,11 @@
 # PROFILE KEYS:
 #   INSTALL_LAYOUT=1.1   this file; 1.0 (the default) never sources it
 #   KERNEL_KPKG          the kernel package's catalog name (kernel-k030u, ...)
-#   TARGET_FASTMEM_MB    fast memory of the box, for gate 6 and bootset's mem= (until
-#                        kinfo is on the installed system)
+#   TARGET_FASTMEM_MB    fast memory of the box that will BOOT this disk (not of the
+#                        machine running the install: a bench rig and a disk moved
+#                        between boxes differ), for gate 6 and bootset's mem=. The
+#                        miniroot cannot measure it (its kernel has no kinfo), so a
+#                        profile states it; on a kinfo kernel kinfo wins at run time
 #   TARGET_DATA_MB       the data slice in MB; 0 = none; empty = the spec's default
 #   KBOOTSET_BOOTDEV KBOOTSET_ROOTDEV   match keys; derived from TARGET_HBA when empty
 #   KBOOTSET_ROOTREC     the manifest's root record; derived from the root key when empty
