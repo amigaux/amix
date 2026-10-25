@@ -21,7 +21,7 @@ Single-session, Rock Ridge on, Joliet off, no `.Z`, no spaces in any pathname
 (see the header of `tools/build-iso.sh` and `tools/lib/isocheck.py` for the full
 rationale — every constraint corresponds to a way an Amix cdfs read misbehaves
 *silently*). `--self-test` masters synthetic discs and proves each hard constraint
-FIRES (16/16). The builder verifies the finished image against the constraints by
+FIRES (20/20). The builder verifies the finished image against the constraints by
 reading the MASTERED artifact back, not by trusting the mkisofs flags.
 
     tools/build-iso.sh --set full          # all 27 stock + our base/ -> work/iso/
@@ -30,7 +30,42 @@ reading the MASTERED artifact back, not by trusting the mkisofs flags.
 The PVD System ID stays blank. The A4091/A4092 ROM (`a4092_cdfs.rom`, CD boot on by
 default) boots a data CD whose System ID reads `CDTV` or `AMIGA BOOT` at priority 2,
 above the installer's UNIX_Boot (1); any other disc gets -1. `check_blank_system_id`
-refuses a disc that carries one.
+refuses a disc that carries one. The one exception is the bootable CD below.
+
+## The bootable install CD — `--cd-boot TREE`
+
+The disc that boots by itself from an A4091/A4092 (amix-dlm `docs/spec/10-boot-loader.md`
+§4.4, D-3 §10): the ROM mounts it with its CD filesystem, Kickstart runs
+`S/Startup-Sequence`, which runs `SYS:BOOT/amix-cdboot`; that loads the kernel and the
+RAM-disk root of `/BOOT/K30` or `/BOOT/K46` and hands off like boot2. The disc stays an
+ordinary data CD with the packages and `/install/`.
+
+    mkstore -C TREE -x amix-cdboot k30.spec k46.spec      # amix-dlm, read-only for us
+    tools/build-install-iso.sh --profile ... --set full --cd-boot TREE --out ISO
+
+`--cd-boot` (also on `tools/build-iso.sh`) refuses a TREE that is not a `mkstore -C`
+tree (`/BOOT/amix-cdboot`, `/S/Startup-Sequence` running it, line directories holding
+`CONTROL` and only `G<n>.GMF`, `G<n>K.BIN`, `G<n>R.BIN`, `G<n>M<nn>.BIN`), copies `/BOOT`
+and `/S` onto the disc and masters with System ID `AMIGA BOOT`. On the image it checks
+the System ID, the tree byte for byte, the loader's execute bit, and that the line
+directories keep their 8.3 names without Rock Ridge.
+
+Names. The ROM's CD filesystem is ODFileSystem in its ROM profile
+(`reference/a4091-software` `Makefile:184-196`, `3rdparty/ODFileSystem/docs/rom-profile.md`):
+ISO 9660 + Rock Ridge + Joliet, precedence Rock Ridge > Joliet > plain ISO (`core/mount.c`),
+names compared case-insensitively (`backends/iso9660/iso9660.c`). The two long names
+(`amix-cdboot`, `Startup-Sequence`) therefore resolve through Rock Ridge, which every disc
+here already carries; their plain ISO names are `AMIX_CDBOOT` and `STARTUP_SEQUENCE`. The
+line directories are 8.3 and read the same either way.
+
+Execute bit. ODFileSystem turns a Rock Ridge mode without the owner execute bit into
+FIBF_EXECUTE (`platform/amiga/handler_main.c:1488-1495`), and AmigaDOS then will not run
+the loader. `mkstore -x` writes it 0664 and `-rational-rock` would make that 0444, so the
+builder stages it 0755 (mode 0555 on the disc).
+
+Medium settings come from the first `--profile` (BASE, fpfix, MEDIUM_PROFILES): for a
+disc that carries both lines, put a 060 profile first, or the LC060's patched
+`mkfs`/`fsck` (`/install/fpfix`) is not staged.
 
 The ISO is a build artifact and is **never committed**: `work/` (the default
 output dir) is gitignored, and build-iso.sh's own Gate 1 refuses to write the

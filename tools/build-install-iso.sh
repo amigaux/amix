@@ -110,6 +110,7 @@ PROFILES=()
 SET=base
 EXTRA_PKGS=()
 OUT=""
+CDBOOT=""
 STAGE="${STAGE:-$repo/work/install-tree}"
 KEEP_STAGE=0
 STAGE_ONLY=0
@@ -142,6 +143,7 @@ usage() {
 usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
                         [--out ISO] [--stage DIR] [--keep-stage]
                         [--source-hdf PROFILE=HDF]... [--no-require-gate]
+                        [--cd-boot TREE]
 
   --profile NAME    target profile to build a boot slice for (repeatable;
                     default: bench-a3000-a4091). Each must exist in profiles/.
@@ -159,6 +161,8 @@ usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
   --source-hdf P=H  override a profile's BOOTSLICE_SOURCE_HDF (repeatable)
   --no-require-gate do NOT require the kerntools bootchain-verify round-trip
                     (default: required -- a missing sibling is fatal)
+  --cd-boot TREE    master a bootable CD: passed to build-iso.sh (amix-dlm's
+                    mkstore -C tree, System ID AMIGA BOOT)
 EOF
 }
 
@@ -174,6 +178,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --stage-only) STAGE_ONLY=1; KEEP_STAGE=1; shift;;
   --source-hdf) k="${2%%=*}"; v="${2#*=}"; SRC_OVERRIDE["$k"]="$v"; shift 2;;
   --no-require-gate) REQUIRE_GATE=0; shift;;
+  --cd-boot)   CDBOOT="$2"; shift 2;;
   -h|--help)   usage; exit 0;;
   *) echo "build-install-iso: unknown argument: $1" >&2; usage >&2; exit 2;;
 esac; done
@@ -1039,6 +1044,7 @@ echo
 echo "=== mastering install CD (build-iso.sh --install-src) ==="
 BIARGS=(--set "$SET" --install-src "$STAGE")
 [ -n "$OUT" ] && BIARGS+=(--out "$OUT")
+[ -n "$CDBOOT" ] && BIARGS+=(--cd-boot "$CDBOOT")
 for x in ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}; do BIARGS+=(--pkg "$x"); done
 "$here/build-iso.sh" "${BIARGS[@]}"
 

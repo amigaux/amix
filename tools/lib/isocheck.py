@@ -15,6 +15,7 @@
 
 import hashlib
 import os
+import re
 
 # ODFS_NAME_MAX on Amix is 512. The 128-byte cap that appears in ODFileSystem is
 # the AmigaOS platform limit, NOT ours -- checking against 128 would reject
@@ -267,6 +268,179 @@ def check_rockridge(img):
         "no Rock Ridge extension identifier (RRIP_1991A / IEEE_P1282) in the image",
         "Without RR, cdfs falls back to the mangled ISO9660 namespace and every "
         "on-disc pathname differs from what the catalog records.")]
+
+
+# ------------------------------------------------------------------ CD boot ---
+# The bootable install CD (amix-dlm docs/spec/10-boot-loader.md §4.4, D-3 §10):
+# the A4091/A4092 ROM mounts the disc with its CD filesystem (ODFileSystem, ROM
+# profile: ISO9660 + Rock Ridge + Joliet, precedence RR > Joliet > plain ISO,
+# names compared case-insensitively) and Kickstart runs S/Startup-Sequence, which
+# runs SYS:BOOT/amix-cdboot. The tree comes from amix-dlm's `mkstore -C`.
+
+CDBOOT_SYSTEM_ID = "AMIGA BOOT"
+CDBOOT_LINES = ("K30", "K46")
+_CDBOOT_LINE_NAME = re.compile(
+    r"^(CONTROL|G[0-9]{1,4}\.GMF|G[0-9]{1,4}[KR]\.BIN|G[0-9]{1,4}M[0-9]{2}\.BIN)$")
+
+
+def check_system_id(img, want):
+    """The PVD System ID must read `want` (the CD-boot disc: "AMIGA BOOT").
+
+    The mounter compares the System ID (PVD offset 8) by prefix against "CDTV" and
+    "AMIGA BOOT" and gives a match boot priority 2, anything else -1
+    (3rdparty/mounter/mounter.c:1157-1219); at -1 the disc never boots ahead of a
+    hard disk."""
+    base = 16 * SECTOR
+    if img[base:base + 6] != b"\x01" + ISO_VD_SIG:
+        return [Violation("no-pvd", "no primary volume descriptor at LBA 16",
+                          "The image is not an ISO9660 disc.")]
+    sysid = img[base + 8:base + 40].rstrip(b" \x00").decode("latin-1")
+    if sysid != want:
+        return [Violation(
+            "system-id-wrong", "PVD System ID is %r, want %r" % (sysid, want),
+            "Master with -sysid '%s': without it the A4091/A4092 ROM gives the disc "
+            "boot priority -1." % want)]
+    return []
+
+
+def check_cdboot_tree(tree):
+    """The mkstore -C tree is what the CD boot path reads, and nothing else.
+
+    /BOOT/amix-cdboot, /S/Startup-Sequence running it, and at least one line
+    directory /BOOT/K30 or /BOOT/K46 holding CONTROL (2048 bytes) and only
+    G<n>.GMF / G<n>K.BIN / G<n>R.BIN / G<n>M<nn>.BIN: 8.3 names, so the line
+    directories read the same with or without Rock Ridge."""
+    bad = []
+
+    def v(kind, detail):
+        bad.append(Violation(kind, detail,
+                             "Rebuild the tree with amix-dlm's mkstore -C DIR -x amix-cdboot."))
+
+    top = sorted(os.listdir(tree)) if os.path.isdir(tree) else []
+    if top != ["BOOT", "S"]:
+        v("cdboot-top", "tree top level is %r, want ['BOOT', 'S']" % top)
+        return bad
+    boot = os.path.join(tree, "BOOT")
+    if not os.path.isfile(os.path.join(boot, "amix-cdboot")):
+        v("cdboot-no-loader", "no BOOT/amix-cdboot")
+    lines = []
+    for e in sorted(os.listdir(boot)):
+        p = os.path.join(boot, e)
+        if e == "amix-cdboot":
+            continue
+        if e not in CDBOOT_LINES or not os.path.isdir(p):
+            v("cdboot-stray", "BOOT/%s is not amix-cdboot or a line directory %s"
+              % (e, "/".join(CDBOOT_LINES)))
+            continue
+        lines.append(e)
+        names = sorted(os.listdir(p))
+        ctl = os.path.join(p, "CONTROL")
+        if not os.path.isfile(ctl) or os.path.getsize(ctl) != SECTOR:
+            v("cdboot-control", "BOOT/%s/CONTROL missing or not %d bytes" % (e, SECTOR))
+        for n in names:
+            if not _CDBOOT_LINE_NAME.match(n) or not os.path.isfile(os.path.join(p, n)):
+                v("cdboot-name", "BOOT/%s/%s is not a line-directory member (8.3 name)" % (e, n))
+    if not lines:
+        v("cdboot-no-line", "neither BOOT/K30 nor BOOT/K46 is present")
+    s = os.path.join(tree, "S")
+    if sorted(os.listdir(s)) != ["Startup-Sequence"]:
+        v("cdboot-s", "S/ holds %r, want ['Startup-Sequence']" % sorted(os.listdir(s)))
+    else:
+        text = open(os.path.join(s, "Startup-Sequence"), "rb").read().decode("latin-1")
+        cmds = [l.strip() for l in text.splitlines()
+                if l.strip() and not l.strip().startswith(";")]
+        if cmds != ["SYS:BOOT/amix-cdboot"]:
+            v("cdboot-startup", "S/Startup-Sequence runs %r, want ['SYS:BOOT/amix-cdboot']" % cmds)
+    return bad
+
+
+def iso_plain_paths(img):
+    """Every file and directory of the image by its PLAIN ISO9660 name, Rock Ridge
+    ignored: the version suffix ';1' and a trailing '.' dropped, as ODFileSystem's
+    ISO backend shows them. Returns {path: is_dir}."""
+    def le32(b, o):
+        return int.from_bytes(b[o:o + 4], "little")
+
+    pvd = 16 * SECTOR
+    out = {}
+
+    def walk(lba, size, prefix, depth):
+        if depth > 8:
+            return
+        data = img[lba * SECTOR:lba * SECTOR + size]
+        off = 0
+        while off < len(data):
+            n = data[off]
+            if n == 0:
+                off = (off // SECTOR + 1) * SECTOR
+                continue
+            rec = data[off:off + n]
+            nl = rec[32]
+            name = rec[33:33 + nl]
+            off += n
+            if name in (b"\x00", b"\x01"):
+                continue
+            nm = name.decode("latin-1").split(";")[0].rstrip(".")
+            path = prefix + nm
+            isdir = bool(rec[25] & 2)
+            out[path] = isdir
+            if isdir:
+                walk(le32(rec, 2), le32(rec, 10), path + "/", depth + 1)
+
+    root = img[pvd + 156:pvd + 156 + 34]
+    walk(le32(root, 2), le32(root, 10), "", 0)
+    return out
+
+
+def check_cdboot_plain_names(img, tree):
+    """Each line-directory member keeps its exact 8.3 name in the plain ISO9660
+    namespace, so a reader without Rock Ridge (or one that drops it) still finds
+    BOOT/K30/CONTROL and the generation files the control block names."""
+    plain = iso_plain_paths(img)
+    bad = []
+    for line in CDBOOT_LINES:
+        d = os.path.join(tree, "BOOT", line)
+        if not os.path.isdir(d):
+            continue
+        for n in sorted(os.listdir(d)):
+            p = "BOOT/%s/%s" % (line, n)
+            if plain.get(p) is not False:
+                bad.append(Violation(
+                    "cdboot-plain-name", "%s has no plain ISO9660 name of its own" % p,
+                    "The line directories must read the same without Rock Ridge; "
+                    "master with -iso-level 3 and keep the names 8.3 uppercase."))
+    return bad
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for b in iter(lambda: fh.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def check_cdboot_disc(tree, disc):
+    """The mastered disc carries the mkstore tree byte for byte, and BOOT/amix-cdboot
+    is executable: ODFileSystem turns a Rock Ridge mode without the owner execute bit
+    into FIBF_EXECUTE (platform/amiga/handler_main.c:1488-1495), and AmigaDOS then
+    refuses to run the loader from S/Startup-Sequence."""
+    bad = []
+    for rel in walk_rel(tree):
+        a, b = os.path.join(tree, rel), os.path.join(disc, rel)
+        if not os.path.isfile(b):
+            bad.append(Violation("cdboot-missing", "%s is not on the disc" % rel))
+        elif _sha256(a) != _sha256(b):
+            bad.append(Violation("cdboot-differs", "%s on the disc differs from the tree" % rel))
+    ld = os.path.join(disc, "BOOT", "amix-cdboot")
+    if os.path.isfile(ld) and not os.stat(ld).st_mode & 0o100:
+        bad.append(Violation(
+            "cdboot-not-executable",
+            "BOOT/amix-cdboot has mode %o on the disc: no owner execute bit"
+            % (os.stat(ld).st_mode & 0o7777),
+            "Stage it 0755 before mastering; -rational-rock keeps an execute bit "
+            "only when one is set."))
+    return bad
 
 
 # ------------------------------------------------------------------ catalog ---

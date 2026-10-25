@@ -14,6 +14,8 @@
 #   /install/           installer driver + engine binaries — structure only for now
 #   /MANIFEST           what this disc is: content set, every package, classification
 #   /LICENSING          release status: cleared 2026-09-23, publication owner-gated
+#   /BOOT/, /S/         --cd-boot only: the CD boot tree amix-dlm's `mkstore -C`
+#                       writes (amix-cdboot, K30/K46 generations, Startup-Sequence)
 #
 # CONTENT SET. The set names are NOT ours: they are resolved from
 # ../amix-packagemanager/tools/repo/sets.conf, the authored set definitions
@@ -62,6 +64,10 @@
 #                    which silently breaks the catalog's filename lookup — the
 #                    catalog says one thing, the disc holds another.
 #   ODFS_NAME_MAX = 512 on Amix (the 128 cap is the AmigaOS platform only).
+#   SYSTEM ID.       Blank, except on the bootable CD (--cd-boot): the A4091/A4092
+#                    ROM boots a data CD whose System ID reads "AMIGA BOOT" at
+#                    priority 2, above every hard disk -- right for that disc, a
+#                    hijacked boot for any other.
 #   RELEASE STAMP.   Stock package content is Commodore material, release-cleared
 #                    2026-09-23 (Amiga Corporation's approval to distribute the
 #                    Commodore Amiga binaries). Publishing a disc is still a per-artefact
@@ -80,6 +86,17 @@
 #   tools/build-iso.sh --set full          # all 27 stock packages
 #   tools/build-iso.sh --pkg man --pkg conf
 #   tools/build-iso.sh --self-test         # prove every constraint above FIRES
+#   tools/build-iso.sh --set full --install-src S --cd-boot TREE   # bootable CD
+#
+# CD BOOT (--cd-boot TREE, amix-dlm docs/spec/10-boot-loader.md §4.4, D-3 §10). The
+# A4091/A4092 ROM mounts the disc with its CD filesystem (ODFileSystem, ROM profile:
+# ISO9660 + Rock Ridge + Joliet, RR first, names compared case-insensitively) and
+# Kickstart runs S/Startup-Sequence -> SYS:BOOT/amix-cdboot, which loads the kernel
+# and the RAM-disk root of /BOOT/K30 or /BOOT/K46. The long names (amix-cdboot,
+# Startup-Sequence) resolve through Rock Ridge, already on; the line directories are
+# 8.3 and read the same without it (checked on the plain ISO9660 names). The loader
+# is mastered 0755: without an owner execute bit ODFileSystem reports FIBF_EXECUTE
+# and AmigaDOS will not run it. The disc stays an ordinary data CD.
 
 set -euo pipefail
 
@@ -103,6 +120,7 @@ PUBLISHED=""
 SELFTEST=0
 KEEP_STAGE=0
 INSTALL_SRC=""
+CDBOOT=""
 
 # `base` is this repo's historical spelling of the packagemanager's `minimal` set.
 # Every runbook line, matrix invocation and ISO filename says "base", so the
@@ -137,6 +155,9 @@ usage: $(basename "$0") [--set NAME] [--pkg NAME]... [--out ISO] [--volid ID]
                     payload: driver, order, engine, boot-slice images, firstboot,
                     sum). Assembled by tools/build-install-iso.sh. When omitted a
                     PLACEHOLDER is written and /install/ is structure-only.
+  --cd-boot TREE    make the disc bootable from an A4091/A4092 ROM: add the CD
+                    boot tree amix-dlm's 'mkstore -C TREE -x amix-cdboot' wrote
+                    (/BOOT, /S) and master with System ID 'AMIGA BOOT'
   --self-test       master synthetic discs and prove each hard constraint fires,
                     then exit. Needs no packages and writes no ISO to --out.
 EOF
@@ -154,6 +175,7 @@ while [ $# -gt 0 ]; do case "$1" in
     exit 2;;
   --keep-stage)      KEEP_STAGE=1; shift;;
   --install-src)     INSTALL_SRC="$2"; shift 2;;
+  --cd-boot)         CDBOOT="$2"; shift 2;;
   --self-test)       SELFTEST=1; shift;;
   -h|--help)         usage; exit 0;;
   *) echo "build-iso: unknown argument: $1" >&2; usage >&2; exit 2;;
@@ -422,6 +444,31 @@ It is created here so the disc layout is stable; it is populated by a later step
 EOF
 fi
 
+SYSID_ARGS=()
+if [ -n "$CDBOOT" ]; then
+  CDBOOT="$(cd "$CDBOOT" 2>/dev/null && pwd)" || {
+    echo "STOP: --cd-boot is not a directory" >&2; exit 1; }
+  echo "build-iso: adding the CD boot tree from $CDBOOT"
+  python3 - "$CDBOOT" <<'PY'
+import sys
+from isocheck import check_cdboot_tree
+v = check_cdboot_tree(sys.argv[1])
+for x in v:
+    print("  FAIL  %s" % x)
+if v:
+    print("\nSTOP: --cd-boot tree is not a mkstore -C tree -- refusing to master.")
+    sys.exit(1)
+PY
+  for d in BOOT S; do
+    [ ! -e "$root/$d" ] || { echo "STOP: the disc already has /$d" >&2; exit 1; }
+    cp -R "$CDBOOT/$d" "$root/$d"
+  done
+  find "$root/BOOT" "$root/S" -type d -exec chmod 0755 {} +
+  find "$root/BOOT" "$root/S" -type f -exec chmod 0644 {} +
+  chmod 0755 "$root/BOOT/amix-cdboot"
+  SYSID_ARGS=(-sysid "AMIGA BOOT")
+fi
+
 cat >"$root/LICENSING" <<EOF
 Amix 2.1 install CD -- release-cleared 2026-09-23.
 
@@ -447,6 +494,13 @@ EOF
   echo "metadata:     deps.conf + cats.conf from amix-packagemanager/tools/repo/"
   echo "sessions:     1 (single-session ONLY — Amix cdfs cannot see a second one)"
   echo "extensions:   Rock Ridge on, Joliet off, no .Z compression"
+  if [ -n "$CDBOOT" ]; then
+    echo "system-id:    AMIGA BOOT (boots from an A4091/A4092 ROM: S/Startup-Sequence -> BOOT/amix-cdboot)"
+    echo "cd-boot tree: (amix-dlm mkstore -C; sha256 | path)"
+    (cd "$root" && find BOOT S -type f | LC_ALL=C sort | xargs sha256sum | sed 's/^/  /')
+  else
+    echo "system-id:    blank (never boots from a CD ROM ahead of a disk)"
+  fi
   echo "release:      cleared 2026-09-23 (Amiga Corporation approval)"
   echo "publication:  $PUBLINE"
   echo
@@ -512,6 +566,7 @@ xorriso -as mkisofs \
         -A "AMIX 2.1 INSTALL" \
         -iso-level 3 \
         -rational-rock \
+        ${SYSID_ARGS[@]+"${SYSID_ARGS[@]}"} \
         "$root" 2>&1 | sed 's/^/  /'
 
 [ -s "$TMPISO" ] || { echo "STOP: xorriso produced no image" >&2; exit 1; }
@@ -529,15 +584,17 @@ exdir="$work/extract"
 xorriso -osirrox on -indev "$TMPISO" -extract / "$exdir" >/dev/null 2>&1 || {
   echo "STOP: could not read the mastered image back with xorriso" >&2; exit 1; }
 
-python3 - "$TMPISO" "$root" "$exdir" <<'PY'
+python3 - "$TMPISO" "$root" "$exdir" "$CDBOOT" <<'PY'
 import sys
 from isocheck import (walk_rel, walk_rel_dirs, check_single_session, check_rockridge,
                       check_no_joliet, check_blank_system_id, check_no_spaces, check_name_length,
                       check_no_compression, check_zero_renames, parse_catalog,
                       check_catalog_resolves, check_no_orphan_packages,
-                      parse_catalog_isize, check_catalog_isize)
+                      parse_catalog_isize, check_catalog_isize,
+                      CDBOOT_SYSTEM_ID, check_system_id, check_cdboot_plain_names,
+                      check_cdboot_disc)
 
-iso_p, staged_p, disc_p = sys.argv[1], sys.argv[2], sys.argv[3]
+iso_p, staged_p, disc_p, cdboot = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 img = open(iso_p, 'rb').read()
 staged = walk_rel(staged_p)
 disc = walk_rel(disc_p)
@@ -559,8 +616,16 @@ group("Rock Ridge present (cdfs resolves RR before Joliet before plain ISO)",
       check_rockridge(img))
 group("Joliet off (a second name space cdfs would never resolve through)",
       check_no_joliet(img))
-group("PVD System ID blank (an A4092 ROM boots a 'CDTV'/'AMIGA BOOT' disc at pri 2)",
-      check_blank_system_id(img))
+if cdboot:
+    group("PVD System ID '%s' (the A4091/A4092 ROM boots the disc at pri 2)"
+          % CDBOOT_SYSTEM_ID, check_system_id(img, CDBOOT_SYSTEM_ID))
+    group("CD boot tree on the disc byte for byte, BOOT/amix-cdboot executable",
+          check_cdboot_disc(cdboot, disc_p))
+    group("BOOT/K30, BOOT/K46 members keep their 8.3 names without Rock Ridge",
+          check_cdboot_plain_names(img, cdboot))
+else:
+    group("PVD System ID blank (an A4092 ROM boots a 'CDTV'/'AMIGA BOOT' disc at pri 2)",
+          check_blank_system_id(img))
 group("zero collision renames: on-disc names == staged names (%d files)" % len(disc),
       check_zero_renames(staged, disc))
 group("no spaces in any on-disc pathname (%d paths)" % len(disc_all),
@@ -612,5 +677,6 @@ echo
 printf 'built install CD: %s (%s bytes, %s)\n' \
   "$outabs" "$(wc -c <"$outabs")" "$(du -h "$outabs" | cut -f1)"
 echo "content set: $SET — $nstock stock + $nbase base package(s); see /MANIFEST on the disc"
+[ -z "$CDBOOT" ] || echo "cd boot:     System ID AMIGA BOOT, /BOOT + /S from $CDBOOT"
 echo "publication: $PUBLINE"
 echo "Build artefact: never commit it; publishing it is a per-artefact owner decision."

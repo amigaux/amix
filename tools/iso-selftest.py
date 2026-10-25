@@ -30,6 +30,8 @@ from isocheck import (                                       # noqa: E402
     check_no_spaces, check_name_length, check_no_compression, check_no_collisions,
     check_single_session, check_rockridge, check_no_joliet, check_blank_system_id,
     check_zero_renames,
+    CDBOOT_SYSTEM_ID, check_system_id, check_cdboot_tree, check_cdboot_plain_names,
+    check_cdboot_disc,
     parse_catalog, check_catalog_resolves, check_no_orphan_packages,
 )
 
@@ -236,6 +238,114 @@ def c_sysid(tmp):
     return True, d + "; blank-System-ID control passed"
 
 
+def cdboot_tree(root, loader_mode=0o755):
+    """A synthetic mkstore -C tree: both line directories, loader, Startup-Sequence."""
+    write(os.path.join(root, "BOOT", "amix-cdboot"), b"\x00\x00\x03\xf3synthetic")
+    os.chmod(os.path.join(root, "BOOT", "amix-cdboot"), loader_mode)
+    for line in ("K30", "K46"):
+        d = os.path.join(root, "BOOT", line)
+        write(os.path.join(d, "CONTROL"), b"\0" * 2048)
+        for n in ("G1.GMF", "G1K.BIN", "G1R.BIN", "G1M01.BIN"):
+            write(os.path.join(d, n), n.encode() + b"\n")
+    write(os.path.join(root, "S", "Startup-Sequence"),
+          b"; synthetic\nSYS:BOOT/amix-cdboot\n")
+
+
+def master_cdboot(root, iso, sysid=True):
+    cmd = ["xorriso", "-as", "mkisofs", "-o", iso, "-V", "SELFTEST",
+           "-iso-level", "3", "-rational-rock"]
+    if sysid:
+        cmd += ["-sysid", CDBOOT_SYSTEM_ID]
+    subprocess.run(cmd + [root], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   check=True)
+
+
+def c_cdboot_sysid(tmp):
+    """The CD-boot disc must carry System ID 'AMIGA BOOT' (else the ROM gives it -1)."""
+    root = os.path.join(tmp, "cbsys")
+    cdboot_tree(root)
+    iso = os.path.join(tmp, "cbsys-none.iso")
+    master_cdboot(root, iso, sysid=False)
+    ok, d = fired(check_system_id(open(iso, "rb").read(), CDBOOT_SYSTEM_ID), "system-id-wrong")
+    if not ok:
+        return ok, d
+    iso2 = os.path.join(tmp, "cbsys-set.iso")
+    master_cdboot(root, iso2)
+    v = check_system_id(open(iso2, "rb").read(), CDBOOT_SYSTEM_ID)
+    if v:
+        return False, "a disc mastered with -sysid 'AMIGA BOOT' was refused: %s" % v[0]
+    return True, d + "; -sysid 'AMIGA BOOT' control passed"
+
+
+def c_cdboot_tree(tmp):
+    """A tree that is not a mkstore -C tree is refused before mastering."""
+    good = os.path.join(tmp, "cbtree-good")
+    cdboot_tree(good)
+    if check_cdboot_tree(good):
+        return False, "the synthetic mkstore tree was refused: %s" % check_cdboot_tree(good)[0]
+    broken = []
+    for kind, mutate in (
+            ("cdboot-no-loader", lambda r: os.remove(os.path.join(r, "BOOT", "amix-cdboot"))),
+            ("cdboot-name", lambda r: write(os.path.join(r, "BOOT", "K30", "G1-K.BIN"))),
+            ("cdboot-control", lambda r: write(os.path.join(r, "BOOT", "K46", "CONTROL"), b"short")),
+            ("cdboot-startup", lambda r: write(os.path.join(r, "S", "Startup-Sequence"),
+                                               b"LoadWB\nEndCLI\n")),
+            ("cdboot-top", lambda r: write(os.path.join(r, "README"))),
+    ):
+        r = os.path.join(tmp, "cbtree-" + kind)
+        cdboot_tree(r)
+        mutate(r)
+        ok, d = fired(check_cdboot_tree(r), kind)
+        if not ok:
+            return False, "%s: %s" % (kind, d)
+        broken.append(kind)
+    return True, "fired: %s; the good tree passed" % ", ".join(broken)
+
+
+def c_cdboot_exec(tmp):
+    """BOOT/amix-cdboot mastered without an execute bit is caught (ODFS FIBF_EXECUTE)."""
+    root = os.path.join(tmp, "cbexec")
+    cdboot_tree(root, loader_mode=0o644)
+    iso = os.path.join(tmp, "cbexec.iso")
+    master_cdboot(root, iso)
+    disc = os.path.join(tmp, "cbexec-x")
+    extract(iso, disc)
+    ok, d = fired(check_cdboot_disc(root, disc), "cdboot-not-executable")
+    if not ok:
+        return ok, d
+    root2 = os.path.join(tmp, "cbexec2")
+    cdboot_tree(root2)
+    iso2 = os.path.join(tmp, "cbexec2.iso")
+    master_cdboot(root2, iso2)
+    disc2 = os.path.join(tmp, "cbexec2-x")
+    extract(iso2, disc2)
+    v = check_cdboot_disc(root2, disc2)
+    if v:
+        return False, "a 0755 loader mastered with -rational-rock was refused: %s" % v[0]
+    return True, d + "; 0755 control passed"
+
+
+def c_cdboot_plain(tmp):
+    """A line-directory member without its own plain ISO9660 name is caught."""
+    root = os.path.join(tmp, "cbplain")
+    cdboot_tree(root)
+    os.rename(os.path.join(root, "BOOT", "K30", "G1K.BIN"),
+              os.path.join(root, "BOOT", "K30", "g1k.bin"))
+    iso = os.path.join(tmp, "cbplain.iso")
+    master_cdboot(root, iso)
+    ok, d = fired(check_cdboot_plain_names(open(iso, "rb").read(), root), "cdboot-plain-name")
+    if not ok:
+        return ok, d
+    root2 = os.path.join(tmp, "cbplain2")
+    cdboot_tree(root2)
+    iso2 = os.path.join(tmp, "cbplain2.iso")
+    master_cdboot(root2, iso2)
+    v = check_cdboot_plain_names(open(iso2, "rb").read(), root2)
+    if v:
+        return False, "the 8.3 tree lost a plain ISO9660 name: %s" % v[0]
+    return True, d + "; 8.3 control passed"
+
+
 def c_rockridge(tmp):
     """Rock Ridge OFF must be detected, and must destroy the on-disc names.
 
@@ -374,6 +484,10 @@ CASES = [
     ("HARD CONSTRAINT: Joliet off (real -J master detected)",     c_joliet),
     ("HARD CONSTRAINT: PVD System ID blank (real -sysid CDTV master)", c_sysid),
     ("HARD CONSTRAINT: zero renames (staged names == disc names)", c_renames),
+    ("CD BOOT: System ID 'AMIGA BOOT' (real masters with and without)", c_cdboot_sysid),
+    ("CD BOOT: the tree is a mkstore -C tree (five broken trees)", c_cdboot_tree),
+    ("CD BOOT: amix-cdboot executable on the disc (real 0644 master)", c_cdboot_exec),
+    ("CD BOOT: line directories keep 8.3 plain ISO9660 names", c_cdboot_plain),
     ("CATALOG: row pointing at a file not on the disc",          c_catalog_dangling),
     ("CATALOG: row whose md5 disagrees with the disc",           c_catalog_md5),
     ("CATALOG: .pkg on the disc with no catalog row",            c_catalog_orphan),
