@@ -1,0 +1,12 @@
+# Documentation
+
+| Path | Content |
+|---|---|
+| `spec/` | The S0 specification: one file per area, numbered in reading order. `spec/00-overview.md` maps the release decisions to the files, collects the open questions, and points to `spec/90-measurements.md`. |
+
+Later additions keep the same rule: one topic per file, written for a reader
+who has never seen the project, with references instead of copies for any
+stock Commodore or AT&T material.
+
+Planned: `abi/` (how to build a module against the ABI kit), `howto/`
+(installing, upgrading and rolling back a kernel on a running box).

@@ -1,0 +1,7 @@
+# build outputs and scratch
+build/
+tmp/
+
+# local session files, never tracked
+CLAUDE.md
+.claude/
