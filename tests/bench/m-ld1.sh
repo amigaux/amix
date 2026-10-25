@@ -38,6 +38,10 @@ for line in k30 k46; do
 		cp "$OUT/fd-$line-good.adf" "$OUT/fd-$line-$v.adf"
 		dd if="$OUT/bb-$v.img" of="$OUT/fd-$line-$v.adf" bs=1024 count=1 conv=notrunc 2>/dev/null
 	done
+	# M-LD3: the good floppy with its only boot2 damaged (one byte at
+	# 0x800 + 100): boot1 must print B3 and stop, not return to the strap
+	cp "$OUT/fd-$line-good.adf" "$OUT/fd-$line-b2bad.adf"
+	printf '\377' | dd of="$OUT/fd-$line-b2bad.adf" bs=1 seek=2148 conv=notrunc 2>/dev/null
 done
 cat > "$OUT/EXPECTED" <<EOF
 # M-LD1 rows: one boot per bootblock variant, per medium, per Kickstart
@@ -61,6 +65,12 @@ cat > "$OUT/EXPECTED" <<EOF
 # DF0: fd-<line>-<variant>.adf (one volume; the 1.0 floppy kernel deflated;
 # a loader-only row: it ends at the kernel stage).  Each variant is the good
 # floppy with its first 1024 bytes replaced, identical otherwise.
+#
+# M-LD3: fd-<line>-b2bad.adf, the good floppy with its only boot2 damaged:
+# the serial log shows "amix-boot1: B3 no valid boot2" and boot1 stops
+# (the strap is not returned to, 10 §3.1).  On a disk: a slot copy with
+# one byte of each boot2 copy changed (at slice + 0x800 + 100 and, when
+# the store has a secondary, slice + 0x8000 + 100).
 #
 # Disks: a fresh slot copy of the controller's proven vehicle, then
 #   dd if=$OUT/bb-<variant>.img of=<slot copy> bs=1024 seek=<slice offset / 1024> conv=notrunc

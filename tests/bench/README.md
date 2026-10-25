@@ -126,7 +126,7 @@ machine. The lines to judge by are those of the bench rows.
 | Row | Vehicle | On metal | Judged by |
 |---|---|---|---|
 | M-LD1, the Z3660 boot ROM | `m-ld1.sh`: each `bb-<variant>.img` written over the boot slice of the card's store | one cold boot per variant | ACCEPTED (`amix-boot 1:` on the serial console) or REFUSED, as on the bench |
-| M-LD3, the Z3660 ROM and both boxes | a vehicle whose boot2 copies are both damaged (boot1 stops with B3) | one cold boot | the line `amix-boot1: B…` on the serial console, and that boot1 stops rather than returning |
+| M-LD3, the Z3660 ROM and both boxes | `m-ld1.sh`: `fd-<line>-b2bad.adf`, or a disk store with each boot2 copy damaged (EXPECTED) | one cold boot | `amix-boot1: B3 no valid boot2` on the serial console, and boot1 stops rather than returning |
 | M-LD4, the Z3660 ROM and both boxes | `ld-rows.sh` W1–W3 on the box's boot disk or card | two power cycles per row; a real 68060 is power-cycled, never reset | `<row>.expected`: the serial lines per boot, then `lsstore` of the store read back on the host |
 | M-LD5, the HID half | `ld-rows.sh` vehicle M | the M1–M5 keys and mouse through the box's own keyboard and mouse converters | the serial lines of `README` M1–M5 |
 | M-LD6, a real 68060 | any vehicle | every cold boot | `amix-boot 1: 68060 (AttnFlags …)`; AttnFlags printed beside the probe, including without SetPatch |
