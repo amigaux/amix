@@ -17,10 +17,10 @@ B          := build
 
 COMMON  := loader/common
 CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
-           $(COMMON)/inflate.c $(COMMON)/select.c
+           $(COMMON)/inflate.c $(COMMON)/select.c $(COMMON)/rel.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
-           tests/host/t_select.c
+           tests/host/t_select.c tests/host/t_rel.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore
 
@@ -37,11 +37,17 @@ $(B)/t_host: $(CSRC) $(TSRC) $(COMMON)/*.h tests/host/t.h | $(B)
 $(B)/axinflate: tests/host/axinflate.c $(COMMON)/inflate.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axinflate.c $(COMMON)/inflate.c
 
-# AX_FLOPPIES (optional): real boot floppy images for inflate-kernels.sh
-test: $(B)/t_host $(TOOLS) $(B)/axinflate
+$(B)/axrel: tests/host/axrel.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axrel.c $(COMMON)/rel.c
+
+# Optional real inputs (not in this repository):
+#   AX_FLOPPIES  boot floppy images, for inflate-kernels.sh
+#   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
+test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
+	B=$(B) AX_KERNELS="$(AX_KERNELS)" AX_ELF2BREL="$(AX_ELF2BREL)" sh tests/host/rel-kernels.sh
 
 $(B)/bbframe: tools/bbframe.c | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<

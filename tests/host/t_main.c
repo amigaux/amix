@@ -15,6 +15,7 @@ main(void)
 	test_manifest();
 	test_inflate();
 	test_select();
+	test_rel();
 	printf("%d checks, %d failed\n", t_run, t_fail);
 	return t_fail != 0;
 }

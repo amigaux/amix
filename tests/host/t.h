@@ -18,4 +18,5 @@ void test_store(void);
 void test_manifest(void);
 void test_inflate(void);
 void test_select(void);
+void test_rel(void);
 #endif
