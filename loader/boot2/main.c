@@ -496,8 +496,8 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		con_screen();
 	in_init(iob);
 	ax_select(&ctl, (hdr.flags & AXF_READONLY) != 0, &sel);
-	con_printf("amix-boot %u: 680%u, boot device unit %u at %u\n", LOADER_VERSION, cpu,
-		   *(ax_u32 *)(iob + IO_UNIT), part);
+	con_printf("amix-boot %u: 680%u, boot device %s, partition at %u\n", LOADER_VERSION, cpu,
+		   *(const char **)(*(ax_u8 **)(iob + IO_DEVICE) + LN_NAME), part);
 	if (sel.failed_trial)
 		fail(8, sel.failed_trial);
 
@@ -574,7 +574,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	if (sel.safe)
 		con_puts("amix-boot: safe mode
 ");
-	lr.dev_unit = *(ax_u32 *)(iob + IO_UNIT);
+	lr.dev_unit = (f & RTH_BOOT) ? u : 0xFFFFFFFFUL;	/* io_Unit is a pointer, not the unit */
 	lr.dev_start = part;
 	lr.dev_base = b;
 	lr.dev_id = id;
