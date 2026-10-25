@@ -381,6 +381,81 @@ put_text(struct ks *k, const char *root, ax_u32 id, const char *name, const char
 }
 
 int
+kb_check(struct ks *k, const char *root, void (*say)(const char *line))
+{
+	static struct ax_manifest m;
+	struct kb_rec r;
+	char line[600], sha[65], kpath[32], *buf;
+	ax_u8 *data;
+	ax_u32 len;
+	DIR *d;
+	int i, j, bad = 0;
+
+	if ((d = opendir(under(root, "/var/apkg/kpkg"))) == 0) {
+		sprintf(line, "no apkg records under %.400s: the root-side checks are skipped", root);
+		say(line);
+		return 0;
+	}
+	closedir(d);
+	for (i = 0; i < k->ctl.ngen; i++) {
+		const struct ax_gen *g = &k->ctl.gen[i];
+
+		if ((buf = ks_manifest(k, g->id, &m)) == 0)
+			continue;		/* ks_check reports it */
+		for (j = 0; j < m.nmod; j++) {
+			const struct ax_member *mb = &m.mod[j];
+
+			if (mb->has_at || !mb->path)
+				continue;
+			if ((data = slurp(under(root, mb->path), &len)) == 0) {
+				sprintf(line, "generation %lu module %s: %.300s missing", (unsigned long)g->id,
+					mb->name, mb->path);
+				bad++;
+			} else {
+				hex(data, len, sha);
+				free(data);
+				if (mb->sha256 && strncmp(sha, mb->sha256, 64)) {
+					sprintf(line, "generation %lu module %s: %.300s SHA-256 BAD",
+						(unsigned long)g->id, mb->name, mb->path);
+					bad++;
+				} else {
+					sprintf(line, "generation %lu module %s: %.300s ok", (unsigned long)g->id,
+						mb->name, mb->path);
+				}
+			}
+			say(line);
+		}
+		/* the default generation against what is installed now */
+		if (g->id == k->ctl.default_gen && m.line && m.kernel.sha256) {
+			sprintf(kpath, "/stand/%.3s/unix", m.line);
+			if ((data = slurp(under(root, kpath), &len)) == 0) {
+				sprintf(line, "%s: not installed", kpath);
+				say(line);
+			} else {
+				hex(data, len, sha);
+				free(data);
+				if (record(root, kpath, &r) != 0 || strcmp(r.sha256, sha)) {
+					sprintf(line, "%s differs from its apkg record (or has none)", kpath);
+					say(line);
+					bad++;
+				} else if (strncmp(sha, m.kernel.sha256, 64)) {
+					sprintf(line, "%s (package %s) differs from the default generation %lu: "
+						"kbootset build and commit compose it", kpath, r.name,
+						(unsigned long)g->id);
+					say(line);
+				} else {
+					sprintf(line, "%s is the default generation %lu's kernel", kpath,
+						(unsigned long)g->id);
+					say(line);
+				}
+			}
+		}
+		free(buf);
+	}
+	return bad;
+}
+
+int
 kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 created, ax_u32 *idp)
 {
 	static char text[8192], facts[2048];

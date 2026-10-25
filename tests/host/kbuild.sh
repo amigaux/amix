@@ -112,3 +112,18 @@ $KB commit > $T/out 2>&1; rc=$?
 set -e
 [ $rc -eq 3 ] || [ $rc -eq 4 ] || { echo "kbuild: a stale build was committed" >&2; exit 1; }
 echo "kbuild: build, commit and gates 1, 2, 3, 6, 7, 10 ok"
+
+# check: every member against its manifest, the default generation against
+# the installed kernel; a damaged member makes it say BAD and exit 1
+$KB check > $T/out
+grep -q "generation 1 kernel unix: .* CRC-32 and SHA-256 ok" $T/out
+grep -q "check: 0 problem(s)" $T/out
+grep -q "differs from the default generation 1" $T/out
+cp $T/disk.img $T/before.img
+printf 'Z' | dd of=$T/disk.img bs=1 seek=$((65536 + 65536 + 5000)) conv=notrunc 2>/dev/null
+set +e
+$KB check > $T/out; rc=$?
+set -e
+[ $rc -eq 1 ] && grep -q "generation 1 kernel unix: CRC-32 BAD" $T/out
+cp $T/before.img $T/disk.img
+echo "kbuild: check ok"

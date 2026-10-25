@@ -44,4 +44,10 @@ int kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 cr
  * against its files as they are now, then ks_commit */
 int kb_commit(struct ks *k, const char *root, ax_u32 *id);
 
+/* the root-side half of `kbootset check` (C2-5), never writing: the
+ * boot- and demand-class files the manifests name under root, and the
+ * default generation's kernel against the installed kernel package;
+ * skipped when root holds no apkg records; returns the number of problems */
+int kb_check(struct ks *k, const char *root, void (*say)(const char *line));
+
 #endif

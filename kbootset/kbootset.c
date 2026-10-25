@@ -18,6 +18,10 @@
  *   commit                 commit the built generation (the gates again)
  *   commit --spec SPEC     a generation from a spec (mkstore's format), for
  *                          tests and media built without packages
+ *   check                  SHA-256 and CRC-32 of every member in the store,
+ *                          the files the manifests name under ROOT, the
+ *                          default generation against the installed kernel;
+ *                          never writes; status 1 when a problem is found
  *   mark-good --booted ID [--secondary]   end of a full multi-user boot
  *   rollback               the default to the previous good generation
  *   next previous|safe|devload|none|ID   for the next boot only
@@ -155,6 +159,12 @@ zdeflate(const ax_u8 *in, ax_u32 n, ax_u32 *outn)
 #endif
 
 static void
+say(const char *line)
+{
+	printf("  %s\n", line);
+}
+
+static void
 step(int n, const char *what)
 {
 	const char *hold = getenv("KBOOTSET_HOLD");
@@ -177,7 +187,7 @@ usage(void)
 	fprintf(stderr,
 		"usage: kbootset [-R ROOT] (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND\n"
 		"  create SIZE BOOT2 [--boot1 FILE] [--version N]\n"
-		"  status | rollback | collect | mark-bad ID\n"
+		"  status | check | rollback | collect | mark-bad ID\n"
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--spec SPEC]\n"
@@ -219,8 +229,12 @@ state(int s)
 }
 
 static void
-status(const struct ks *k)
+status(struct ks *k)
 {
+	static const char *const req[] = { "none", "the previous good generation",
+		"generation", "safe mode", "development load" };
+	static struct ax_manifest m;
+	char *buf;
 	int i;
 
 	printf("store: %lu bytes, %lu free; header seq %lu%s%s\n",
@@ -242,6 +256,18 @@ status(const struct ks *k)
 		printf("  generation %lu  %-8s attempts %u  created %lu  manifest %lu bytes%s\n",
 		       (unsigned long)g->id, state(g->state), g->attempts, (unsigned long)g->created,
 		       (unsigned long)g->man_len, g->id == k->ctl.default_gen ? "  (default)" : "");
+	}
+	if (k->ctl.trial_gen)
+		printf("note: generation %lu is on trial: power-cycle to boot it; it becomes good with "
+		       "kbootset mark-good at the end of a full boot\n", (unsigned long)k->ctl.trial_gen);
+	if (k->ctl.oneshot && k->ctl.oneshot <= AXO_DEVLOAD)
+		printf("note: the next boot only: %s%s\n", req[k->ctl.oneshot],
+		       k->ctl.oneshot == AXO_GEN ? " (above)" : "");
+	if (k->ctl.default_gen && (buf = ks_manifest(k, k->ctl.default_gen, &m)) != 0) {
+		if (ks_free(k) < m.kernel.stored)
+			printf("warning: a generation the size of the default does not fit "
+			       "(%lu bytes free): kbootset collect\n", (unsigned long)ks_free(k));
+		free(buf);
 	}
 }
 
@@ -404,6 +430,12 @@ main(int argc, char **argv)
 		k.msg[0] = 0;
 		if (!strcmp(cmd[0], "status")) {
 			status(&k);
+		} else if (!strcmp(cmd[0], "check") && argc == 1) {
+			int bad = ks_check(&k, say) + kb_check(&k, root, say);
+
+			printf("kbootset: check: %d problem(s)\n", bad);
+			fclose(d.f);
+			return bad ? 1 : 0;
 		} else if (!strcmp(cmd[0], "commit") && argc == 3 && !strcmp(cmd[1], "--spec")) {
 			rc = commit_spec(&k, cmd[2]);
 			if (rc == 2)

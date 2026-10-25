@@ -10,6 +10,7 @@
 #include <string.h>
 #include "crc32.h"
 #include "sha256.h"
+#include "inflate.h"
 #include "ks.h"
 
 #define MAXMAN	65536		/* a manifest is at most this long */
@@ -268,6 +269,83 @@ writable(struct ks *k)
 	if (k->hdr.flags & (AXF_READONLY | AXF_MULTIVOL))
 		return fail(k, KS_EREFUSE, 0, "the store is read-only (a floppy pair or a CD)");
 	return KS_OK;
+}
+
+/* one member: read, inflate, CRC-32 and SHA-256; 0 good, 1 a problem */
+static int
+check_member(struct ks *k, ax_u32 gen, const char *what, const struct ax_member *mb,
+	     void (*say)(const char *))
+{
+	static struct ax_inflate st;
+	ax_u8 *z = 0, *p = 0, sha[32];
+	char line[400], hx[65];
+	ax_u32 got = 0;
+	int i, bad = 1;
+
+	if (!mb->has_at)
+		return 0;		/* boot/demand class: on the root filesystem */
+	if ((z = malloc(mb->stored ? mb->stored : 1)) == 0 ||
+	    (p = mb->z == AXZ_DEFLATE ? malloc(mb->size ? mb->size : 1) : z) == 0) {
+		sprintf(line, "generation %lu %s %s: out of memory", (unsigned long)gen, what, mb->name);
+		goto out;
+	}
+	if (get(k, mb->at, z, mb->stored) != KS_OK) {
+		sprintf(line, "generation %lu %s %s: read error", (unsigned long)gen, what, mb->name);
+		goto out;
+	}
+	if (mb->z == AXZ_DEFLATE &&
+	    (ax_inflate(&st, p, mb->size, &got, z, mb->stored) != AXI_OK || got != mb->size)) {
+		sprintf(line, "generation %lu %s %s: does not inflate", (unsigned long)gen, what, mb->name);
+		goto out;
+	}
+	if (ax_crc32(k->crctab, p, mb->size) != mb->crc) {
+		sprintf(line, "generation %lu %s %s: CRC-32 BAD", (unsigned long)gen, what, mb->name);
+		goto out;
+	}
+	if (mb->sha256) {
+		ax_sha256(p, mb->size, sha);
+		for (i = 0; i < 32; i++)
+			sprintf(hx + 2 * i, "%02x", sha[i]);
+		if (strncmp(hx, mb->sha256, 64)) {
+			sprintf(line, "generation %lu %s %s: SHA-256 BAD", (unsigned long)gen, what, mb->name);
+			goto out;
+		}
+	}
+	sprintf(line, "generation %lu %s %s: %lu bytes, %s ok", (unsigned long)gen, what, mb->name,
+		(unsigned long)mb->size, mb->sha256 ? "CRC-32 and SHA-256" : "CRC-32 (no SHA-256 recorded)");
+	bad = 0;
+out:
+	say(line);
+	if (p != z)
+		free(p);
+	free(z);
+	return bad;
+}
+
+int
+ks_check(struct ks *k, void (*say)(const char *line))
+{
+	static struct ax_manifest m;
+	char line[200], *buf;
+	int i, j, bad = 0;
+
+	for (i = 0; i < k->ctl.ngen; i++) {
+		const struct ax_gen *g = &k->ctl.gen[i];
+
+		if ((buf = manifest(k, g, &m)) == 0) {
+			sprintf(line, "generation %lu: manifest unreadable or damaged", (unsigned long)g->id);
+			say(line);
+			bad++;
+			continue;
+		}
+		bad += check_member(k, g->id, "kernel", &m.kernel, say);
+		for (j = 0; j < m.nmod; j++)
+			bad += check_member(k, g->id, "module", &m.mod[j], say);
+		if (m.has_ramdisk)
+			bad += check_member(k, g->id, "ramdisk", &m.ramdisk, say);
+		free(buf);
+	}
+	return bad;
 }
 
 int

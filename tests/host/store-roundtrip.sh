@@ -168,4 +168,10 @@ $KB commit --spec $W/kb.bigspec >/dev/null; r2=$?
 set -e
 [ $r1 -eq 3 ] && [ $r2 -eq 4 ]
 $B/lsstore $W/kb.img 65536 | grep -q "lsstore: ok"
+# a deflated member (media built on the host): check inflates and verifies it
+yes "amix kbootset deflate check" | head -c 300000 > $W/kb.z
+printf 'line k30\nkernel unix %s z=deflate\n' $W/kb.z > $W/kb.zspec
+$KB commit --spec $W/kb.zspec >/dev/null 2>&1
+$B/lsstore $W/kb.img 65536 | grep -q "kernel  unix .*(deflate)  crc .* ok"
+$KB check | grep -q "check: 0 problem(s)"
 echo "store-roundtrip: kbootset ok"

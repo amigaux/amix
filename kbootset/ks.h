@@ -129,6 +129,12 @@ ax_u32 ks_next_id(const struct ks *k);
  * into (free it after use); 0 when it cannot be read */
 char *ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m);
 
+/* check every generation in the store, never writing: the manifest's
+ * CRC-32, and each member's CRC-32 and SHA-256 after decompression
+ * (docs/contracts/C2-5-checksum-v2.md); one line per finding to say();
+ * returns the number of problems */
+int ks_check(struct ks *k, void (*say)(const char *line));
+
 /* the entry of generation id, or 0 */
 const struct ax_gen *ks_find(const struct ks *k, ax_u32 id);
 
