@@ -141,7 +141,7 @@ base(struct ks *k)
 	memset(img, 0, SIZE);
 	setup(k);
 	fill(boot2a, sizeof(boot2a), 7);
-	ks_create(k, SIZE, 0, boot2a, sizeof(boot2a), 1);
+	ks_create(k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0);
 	commit(k, 1, &id);
 	commit(k, 2, &id);
 	ks_mark_good(k, 2, 1);
@@ -281,7 +281,10 @@ test_kbootset(void)
 	setup(&k);
 	fill(boot2a, sizeof(boot2a), 7);
 	fill(boot2b, sizeof(boot2b), 8);
-	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1), KS_OK);
+	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_OK);
+	/* a store is not replaced by accident; --force replaces it */
+	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_EREFUSE);
+	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 1), KS_OK);
 	T_EQ(k.ctl.ngen, 0);
 	/* the first generation is pristine and the default */
 	T_EQ(commit(&k, 1, &id), KS_OK);

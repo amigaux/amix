@@ -156,6 +156,20 @@ echo "store-roundtrip: bootblock variants ok"
 KB="$B/kbootset --image $W/kb.img --offset 65536 --journal $W/kb.journal"
 head -c 8454144 /dev/zero > $W/kb.img
 $KB create 8388608 $T/boot2.bin --boot1 $T/boot1.img >/dev/null
+# a slice that holds a store, or only a bootblock (a 1.0 chain), is not
+# replaced without --force; with it, the first 64 KiB are zeroed
+set +e
+$KB create 8388608 $T/boot2.bin >/dev/null; r1=$?
+set -e
+[ $r1 -eq 3 ]
+head -c 8454144 /dev/zero > $W/kb10.img
+dd if=$T/boot1.img of=$W/kb10.img bs=1024 seek=64 conv=notrunc 2>/dev/null
+set +e
+$B/kbootset --image $W/kb10.img --offset 65536 create 8388608 $T/boot2.bin >/dev/null; r2=$?
+set -e
+[ $r2 -eq 3 ]
+$B/kbootset --image $W/kb10.img --offset 65536 create 8388608 $T/boot2.bin --force >/dev/null
+[ "$(dd if=$W/kb10.img bs=1024 skip=64 count=1 2>/dev/null | tr -d '\000' | wc -c)" -eq 0 ]
 printf 'line k30\nrootfs ufs\nkernel unix %s\n' $T/fkernel > $W/kb.spec
 $KB commit --spec $W/kb.spec | grep -q "generation 1 written as the pristine generation"
 $KB commit --spec $W/kb.spec | grep -q "generation 2 committed"

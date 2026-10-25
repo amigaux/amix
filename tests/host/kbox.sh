@@ -82,14 +82,15 @@ grep -q "booted: generation 1, by the primary loader; kernel 68060-261025-50, 68
 grep -q "facts: line k46, boot zorro:0202:54, root zorro:0202:54, rootfs ufs, fast memory 16777184" $T/out
 grep -q "^store=$T/dev/c6d0s3$" $R/etc/default/bootset
 grep -q "^store-id=" $R/etc/default/bootset
+# status prints the set id that bootset records
+[ "$(sed -n 's/^store-id: //p' $T/out)" = "$(sed -n 's/^store-id=//p' $R/etc/default/bootset)" ]
 # 2. the next run takes bootset's store= (the whole-disk node is not read)
 mv $T/dev/c6d0s0 $T/c6d0s0.away
 $B/kbootset -R $R status > /dev/null
 mv $T/c6d0s0.away $T/dev/c6d0s0
 # a different store under the same name is noticed: found again
 cp $T/dev/c6d0s3 $T/s3.keep
-$B/kbootset --dev $T/dev/c6d0s3 create $((700 * 32 * 512)) $B/rt/boot1.img >/dev/null 2>&1 || \
-	$B/kbootset --dev $T/dev/c6d0s3 create $((700 * 32 * 512)) $B/rt/boot2.bin >/dev/null
+$B/kbootset --dev $T/dev/c6d0s3 create $((700 * 32 * 512)) $B/rt/boot1.img --force >/dev/null
 sed -i 's/^store-id=.*/store-id=00000001/' $R/etc/default/bootset
 $B/kbootset -R $R status > /dev/null
 ! grep -q "^store-id=00000001$" $R/etc/default/bootset

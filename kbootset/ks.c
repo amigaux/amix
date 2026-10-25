@@ -388,11 +388,12 @@ ks_open(struct ks *k)
 
 int
 ks_create(struct ks *k, ax_u32 store_size, const ax_u8 *boot1, const ax_u8 *boot2,
-	  ax_u32 boot2_len, ax_u32 loader_version)
+	  ax_u32 boot2_len, ax_u32 loader_version, int force)
 {
 	ax_u8 blk[AX_BLK];
 	struct ax_header h;
 	struct ax_ctl c;
+	ax_u32 off;
 	int rc;
 
 	ax_crc32_init(k->crctab);
@@ -401,6 +402,18 @@ ks_create(struct ks *k, ax_u32 store_size, const ax_u8 *boot1, const ax_u8 *boot
 		return fail(k, KS_EREFUSE, 0, "a store is a multiple of 2048 bytes and larger than 64 KiB");
 	if (boot2_len == 0 || boot2_len > AX_BOOT2_MAX)
 		return fail(k, KS_EREFUSE, 0, "boot2 must be 1..28672 bytes");
+	/* what is there: a store, or any bootblock (a 1.0 chain), is not
+	 * replaced by accident */
+	if (!force && get(k, 0, blk, AX_BLK) == KS_OK &&
+	    (ax_hdr_pick(k->crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) >= 0 ||
+	     !memcmp(blk, "DOS", 3)))
+		return fail(k, KS_EREFUSE, 0, "the slice already holds a boot store or a bootblock: "
+			    "create --force replaces it");
+	/* the first 64 KiB zeroed: nothing of an earlier chain survives */
+	memset(blk, 0, AX_BLK);
+	for (off = 0; off < AX_DATA_OFF; off += AX_BLK)
+		if ((rc = put(k, off, blk, AX_BLK)) != KS_OK)
+			return rc;
 	if (boot1 && (rc = put(k, AX_BOOT1_OFF, boot1, AX_BOOT1_MAX)) != KS_OK)
 		return rc;
 	if ((rc = put(k, AX_BOOT2_A_OFF, boot2, boot2_len)) != KS_OK)

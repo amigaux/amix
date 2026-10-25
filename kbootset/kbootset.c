@@ -13,7 +13,9 @@
  * from the options, then kinfo, then bootset; the journal is
  * ROOT/var/kbootset/journal unless --journal names one; mark-good's
  * --booted and --secondary default to what kinfo's loader record says.
- *   create SIZE BOOT2 [--boot1 FILE] [--version N]   lay an empty store
+ *   create SIZE BOOT2 [--boot1 FILE] [--version N] [--force]
+ *                          lay an empty store (the first 64 KiB zeroed);
+ *                          a slice holding a store or a bootblock needs --force
  *   status                                           generations and states
  *   build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE]
  *         [--mem BYTES] [--root REC] [--swap REC]
@@ -42,7 +44,7 @@
  * Media (host build only, S2-04): the pristine generation of a new medium
  * from the packages installed under ROOT, every gate run against the
  * medium's facts and the loader it carries:
- *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] FACTS
+ *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] [--force] FACTS
  *   media --floppy OUT1 OUT2 --boot1 F --boot2 F [--version N] [--ramdisk F] FACTS
  *   media --cd DIR [--cdboot F] [--version N] [--ramdisk F] FACTS
  * A disk store is written by kbootset's own core, members raw; the floppy
@@ -228,6 +230,7 @@ media(const char *root, char **cmd, int argc)
 	struct file d;
 	const char *disk = 0, *fl1 = 0, *fl2 = 0, *cd = 0, *cdboot = 0, *b1p = 0, *b2p = 0, *rd = 0;
 	unsigned long off = 0, size = 0, version = 1;
+	int force = 0;
 	char *av[16];
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 l1, l2, id;
@@ -246,6 +249,7 @@ media(const char *root, char **cmd, int argc)
 		else if (!strcmp(cmd[i], "--boot2") && i + 1 < argc) b2p = cmd[++i];
 		else if (!strcmp(cmd[i], "--version") && i + 1 < argc) version = strtoul(cmd[++i], 0, 0);
 		else if (!strcmp(cmd[i], "--ramdisk") && i + 1 < argc) rd = cmd[++i];
+		else if (!strcmp(cmd[i], "--force")) force = 1;
 	if ((!!disk + !!fl1 + !!cd) != 1 || (!cd && (!b1p || !b2p)) || (disk && !size))
 		usage();
 	if (disk) {			/* kbootset's own core: create, build, commit */
@@ -263,7 +267,7 @@ media(const char *root, char **cmd, int argc)
 		k.dev.read = fread_;
 		k.dev.write = fwrite_;
 		k.dev.ctx = &d;
-		rc = ks_create(&k, (ax_u32)size, b1, b2, l2, (ax_u32)version);
+		rc = ks_create(&k, (ax_u32)size, b1, b2, l2, (ax_u32)version, force);
 		if (rc == KS_OK)
 			rc = kb_build(&k, root, &f, now(), &id);
 		if (rc == KS_OK)
@@ -350,7 +354,7 @@ usage(void)
 {
 	fprintf(stderr,
 		"usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND\n"
-		"  create SIZE BOOT2 [--boot1 FILE] [--version N]\n"
+		"  create SIZE BOOT2 [--boot1 FILE] [--version N] [--force]\n"
 		"  status | check | rollback | collect | mark-bad ID\n"
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
@@ -405,6 +409,7 @@ status(struct ks *k)
 	       (unsigned long)k->hdr.store_size, (unsigned long)ks_free(k), (unsigned long)k->hdr.seq,
 	       (k->hdr.flags & AXF_READONLY) ? ", read-only" : "",
 	       (k->hdr.flags & AXF_LDRTRIAL) ? ", new loader on trial" : "");
+	printf("store-id: %08lx\n", (unsigned long)k->hdr.set_id);	/* bootset's store-id= */
 	for (i = 0; i < 2; i++)
 		if (k->hdr.boot2[i].len)
 			printf("loader %s: version %lu, %lu bytes\n", i ? "secondary" : "primary",
@@ -514,7 +519,7 @@ main(int argc, char **argv)
 	static struct kb_kinfo ki;
 	static char dev[1100], bootset[1100], jdefault[1100];
 	const char *kpath = getenv("KBOOTSET_KINFO");
-	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0;
+	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0, force = 0;
 	unsigned long off = 0, version = 1;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
@@ -607,6 +612,8 @@ main(int argc, char **argv)
 			version = strtoul(cmd[++i], 0, 0);
 		else if (!strcmp(cmd[i], "--secondary"))
 			secondary = 1;
+		else if (!strcmp(cmd[i], "--force"))
+			force = 1;
 	}
 	if (boot1) {
 		b1 = slurp(boot1, &l1);
@@ -617,7 +624,7 @@ main(int argc, char **argv)
 		if (argc < 3)
 			usage();
 		b2 = slurp(cmd[2], &len);
-		rc = ks_create(&k, (ax_u32)strtoul(cmd[1], 0, 0), b1, b2, len, (ax_u32)version);
+		rc = ks_create(&k, (ax_u32)strtoul(cmd[1], 0, 0), b1, b2, len, (ax_u32)version, force);
 	} else if ((rc = ks_open(&k)) != KS_OK) {
 		;
 	} else {

@@ -90,10 +90,11 @@ struct ks {
 /* read the store; recovers an interrupted commit from the journal */
 int ks_open(struct ks *k);
 
-/* lay a new, empty store: boot1 (1024 bytes, or 0 to leave the first
- * 1024 bytes as they are), boot2 as the primary loader, no generation */
+/* lay a new, empty store: the first 64 KiB zeroed, boot1 (1024 bytes, or
+ * 0 for none), boot2 as the primary loader, no generation.  A slice that
+ * already holds a store header or a bootblock is refused unless force */
 int ks_create(struct ks *k, ax_u32 store_size, const ax_u8 *boot1,
-	      const ax_u8 *boot2, ax_u32 boot2_len, ax_u32 loader_version);
+	      const ax_u8 *boot2, ax_u32 boot2_len, ax_u32 loader_version, int force);
 
 /* write generation g as the trial (as pristine when the store holds no
  * generation yet); *id = its number */
