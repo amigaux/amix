@@ -169,8 +169,8 @@ sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261
 | 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
 | 4 | `kbootset next previous` | boots 1; then `the next boot only is changed` |
 | 5 | `kbootset mark-bad 2; kbootset commit --spec bad.spec` (below) | boots 2, once, the one-shot; then `marked bad and collected`, then `generation 3 committed …` |
-| 6 | — | boots 3, the trial. It cannot mount its root, so it never reaches mark-good: power-cycle when it stops |
-| 7 | `kbootset status` | `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots; status shows 3 as bad, or already collected, and default 1 |
+| 6 | — | boots 3, the trial. It cannot mount its root (`PANIC: vfs_mountroot: cannot mount root`), so it never reaches mark-good. The kernel reboots by itself after the panic, and in the same boot: `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots to login. The rig's login watch waits longer here |
+| 7 | `kbootset status` | generation 1 boots; status shows default 1, no trial, 3 as bad with 1 attempt (or already collected) |
 
 `bad.spec` names a k46 kernel without the Z3660 driver, such as KD060-A,
 whose root controller is the A4091:
