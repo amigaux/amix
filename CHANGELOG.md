@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-25 — L11 disk change fixed; reproducible stores; stage-2 plan (c0c8f93..62a6b66)
+
+boot2's L11 volume change waits for trackdisk's change counter (or a key), clears the track buffer before re-reading, keeps
+the motor off while waiting and says each refusal once per disk change (rig rows N25b/N26b: the old code re-read the cached
+track of volume 1 three times a second). mkstore honours SOURCE_DATE_EPOCH (byte-identical rebuilds) and writes
+BOOT/amix-cdboot mode 0755. docs/plan/stage-2.md: the work breakdown for lifecycle and rollback on static kernels, with the
+five cross-repo interfaces C2-1..C2-5. boot2 26 788 B.
+
 ## 2026-10-25 — axtime and the bench inputs for M-LD4/M-LD5 (656d155, 72c9fc4)
 
 SHA-256 in loader/common (FIPS 180-4 vectors; not linked into boot2). axtime, an AmigaDOS tool, times the loader's
