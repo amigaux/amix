@@ -725,6 +725,53 @@ else
   echo "build-install-iso: every requested profile sets TZFILES=stock -- /install/tz not staged"
 fi
 
+# --- /install/l11: the 1.1 disk layout (INSTALL_LAYOUT=1.1, amix-dlm spec 40) -------
+# The driver's 1.1 half (src/installer/l11.sh) and what it runs: the box kbootset, the
+# static apkg 0.3, the amix-dlm loader, and the kernel-space FILE source. All of it
+# comes from work/l11 (tools/build-l11-inputs.sh: clean exports at named revisions,
+# INPUTS records them); each staged file is cmp'd against its source. store-id is the
+# header set id `kbootset create` gives a 64 MiB store of this boot2 (crc32 ^ size,
+# amix-dlm kbootset/ks.c), written into the target's /etc/default/bootset.
+L11_IN="${L11_IN:-$repo/work/l11}"
+_want_l11=
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    ''|1.0) ;;
+    1.1) _want_l11="$_want_l11 $_p" ;;
+    *) echo "STOP: profile $_p: INSTALL_LAYOUT='$_v' is not 1.0 or 1.1" >&2; exit 1 ;;
+  esac
+done
+if [ -n "$_want_l11" ]; then
+  for _f in dlm/build/boot1.img dlm/build/boot2.bin dlm/build/box/kbootset apkg/apkg kpkg/catalog INPUTS; do
+    [ -f "$L11_IN/$_f" ] || { echo "STOP: INSTALL_LAYOUT=1.1 requested by${_want_l11} but $L11_IN/$_f is missing (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  done
+  [ "$(wc -c < "$L11_IN/dlm/build/boot1.img")" = 1024 ] || { echo "STOP: $L11_IN boot1.img is not 1024 bytes" >&2; exit 1; }
+  rm -rf "$STAGE/l11"; mkdir -p "$STAGE/l11/bin" "$STAGE/l11/loader" "$STAGE/l11/kpkg"
+  if [ -n "$STRIP_COMMENTS" ]; then
+    python3 "$here/strip-sh-comments.py" "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
+      || { echo "STOP: strip-sh-comments refused l11.sh" >&2; exit 1; }
+  else
+    cp "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"
+  fi
+  cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"
+  cp "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg"
+  cp "$L11_IN/dlm/build/boot1.img" "$STAGE/l11/loader/boot1"
+  cp "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2"
+  cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
+  cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
+  python3 -c 'import sys,zlib; b=open(sys.argv[1],"rb").read(); print("%08x" % ((zlib.crc32(b) & 0xffffffff) ^ 67108864))' \
+    "$STAGE/l11/loader/boot2" > "$STAGE/l11/loader/store-id"
+  chmod 0755 "$STAGE/l11/bin/kbootset" "$STAGE/l11/bin/apkg"
+  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/loader/"* "$STAGE/l11/INPUTS"
+  { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } && cmp -s "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
+    && cmp -s "$L11_IN/dlm/build/boot2.bin" "$STAGE/l11/loader/boot2" && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \
+    || { echo "STOP: staged /install/l11 is not byte-identical to $L11_IN" >&2; exit 1; }
+  echo "build-install-iso: staged /install/l11 for${_want_l11}: kbootset $(sha256sum "$STAGE/l11/bin/kbootset" | cut -c1-16)..., apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., boot2 $(sha256sum "$STAGE/l11/loader/boot2" | cut -c1-16)..., store-id $(cat "$STAGE/l11/loader/store-id"), $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel package(s)"
+else
+  echo "build-install-iso: no requested profile sets INSTALL_LAYOUT=1.1 -- /install/l11 not staged"
+fi
+
 # --- /stand framing tools + the syslog unit (P5.4 field findings) -------------
 # Every staged byte is fingerprint-gated: `sum -r` checksum AND byte size must
 # match the pin or the build STOPS -- the installer's laydown must be the
@@ -921,6 +968,12 @@ echo "build-install-iso: per-set order files: ${OFFERED_SETS[*]}"
 for p in "${PROFILES[@]}"; do
   pf="$repo/profiles/$p.profile"
   [ -f "$pf" ] || { echo "STOP: unknown profile '$p' ($pf)" >&2; exit 1; }
+  # a 1.1 profile carries no framed chain: kbootset composes its store from the
+  # kernel package in /install/l11 (staged above)
+  if [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$pf" | tail -1 | tr -d '"')" = 1.1 ]; then
+    echo; echo "build-install-iso: profile '$p' is INSTALL_LAYOUT=1.1 -- no boot slice; the store comes from /install/l11"
+    continue
+  fi
   outdir="$STAGE/boot/$(basename "$p")"
   # the profile's BOOTSLICE_IMG names boot/<name>/...; keep that <name> as the dir.
   name="$(sed -n 's/^BOOTSLICE_IMG=boot\/\([^/]*\)\/.*/\1/p' "$pf" | head -1)"

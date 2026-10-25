@@ -4954,3 +4954,23 @@ is KD060-ZA c1-u1 (sum -r 27291, 2 MiB slice); the donor is `tools/build-k1-dono
 
 Metal: the maintainer's notes (route R1: a pri-5 boot-only disk on the Z3660 SD carries the
 c1-u1 chain; the A4092 ROM boot R2 is not run).
+
+## 1.1: the generation-store disk (stage 2, amix-dlm S2-30, 2026-10-25)
+
+`INSTALL_LAYOUT=1.1` (default `1.0`, so every 1.0 profile and medium is unchanged) lays the disk of amix-dlm spec
+40 §2.1:
+- s1 root, s2 swap, s3 the 64 MiB boot store, and an optional s4 data slice;
+- the kernel comes in as an apkg 0.3 kernel-space package;
+- `kbootset` writes and checks the pristine generation.
+
+The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/install/l11` with the box
+kbootset, apkg 0.3, the amix-dlm loader and the kernel-space FILE catalog (`tools/build-l11-inputs.sh`,
+`tools/build-kpkg.sh`). The disk, the upgrade install of a 1.0 disk, and what survives it are described in
+`docs/upgrade-install.md`.
+
+Matrix cells:
+- `l11-k30`, `l11-k46`: the two lines;
+- `l11-k30-upg`: the upgrade of a seeded r7 disk.
+
+Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`). The boot through
+the new loader is a Bench row: N19's shape for k30, N23's for k46.

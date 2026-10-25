@@ -1239,7 +1239,19 @@ fi
 	echo "#to mount       to fsck         point   type    pass    at boot options"
 	echo "$ROOT_BLK	$ROOT_RAW	/	$FB_ROOT_FSTYPE	1	no	-"
 	echo "$SWAP_BLK	-	-	swap	-	no	-"
+	# a 1.1 disk's data slice (FB_DATA_SLICE, absent on 1.0) holds /home
+	if [ -n "$FB_DATA_SLICE" ]; then
+		echo "/dev/dsk/c${ID}d0s${FB_DATA_SLICE}	/dev/rdsk/c${ID}d0s${FB_DATA_SLICE}	/home	$FB_ROOT_FSTYPE	2	yes	-"
+	fi
 } > /etc/vfstab
+# a 1.1 disk: the installer made /dev/kinfo (c 53 0, 0444) on a miniroot with no chgrp
+if [ -c /dev/kinfo ]; then
+	chown root /dev/kinfo; chgrp sys /dev/kinfo; chmod 444 /dev/kinfo
+fi
+if [ -n "$FB_DATA_SLICE" ]; then
+	[ -d /home ] || mkdir /home
+	mount /home 2>/dev/null && echo "firstboot: mounted the data slice s$FB_DATA_SLICE at /home"
+fi
 echo "firstboot: wrote /etc/vfstab (root $ROOT_BLK $FB_ROOT_FSTYPE, rootdev $FB_ROOTDEV)"
 
 # --- 4b. /stand/unix in the core package (040/060 line; Q-4.15 trap ii) ---------

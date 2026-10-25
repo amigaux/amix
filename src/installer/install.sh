@@ -863,6 +863,23 @@ case "$INSTALL_CPU" in
 	*)		die "profile INSTALL_CPU='$INSTALL_CPU' is not 030, 040 or 060" ;;
 esac
 
+# --- INSTALL_LAYOUT: the 1.0 disk or the 1.1 disk (amix-dlm spec 40 §2.1) ------
+#   INSTALL_LAYOUT  1.0  root, swap and a boot slice holding the framed 1.0 chain.
+#                        1.1: root, swap, the 64 MiB boot store (generations, the
+#                        new loader) and an optional data slice; the kernel comes
+#                        in as a kernel-space package and kbootset writes the store.
+# The default is 1.0, so every profile and medium written before the key installs
+# the byte-identical disk it always did. The 1.1 half lives on the medium in
+# $INST/l11/l11.sh and is only ever sourced here.
+[ -n "$INSTALL_LAYOUT" ] || INSTALL_LAYOUT=1.0
+case "$INSTALL_LAYOUT" in
+	1.0)	: ;;
+	1.1)	[ -f "$INST/l11/l11.sh" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $INST/l11/l11.sh"
+		. "$INST/l11/l11.sh"
+		l11_keys ;;
+	*)	die "profile INSTALL_LAYOUT='$INSTALL_LAYOUT' is not 1.0 or 1.1" ;;
+esac
+
 # --- SOURCE dimension (W6-RAW.1): where the base packages come from -----------
 # SOURCE_KIND=cdfs (default, backward-compatible) sources the install CD via the
 # cdfs helper and the per-file pkgadd -R loop. SOURCE_KIND=raw sources a raw
@@ -887,9 +904,11 @@ esac
 : "${TARGET_ROOT_SLICE:?profile missing TARGET_ROOT_SLICE}"
 : "${TARGET_SWAP_SLICE:?profile missing TARGET_SWAP_SLICE}"
 : "${TARGET_BOOT_SLICE:?profile missing TARGET_BOOT_SLICE}"
-: "${BOOTSLICE_IMG:?profile missing BOOTSLICE_IMG}"
-: "${BOOT2_BOOT:?profile missing BOOT2_BOOT}"
-: "${BOOTSLICE_MANIFEST:?profile missing BOOTSLICE_MANIFEST}"
+if [ "$INSTALL_LAYOUT" = 1.0 ]; then	# a 1.1 disk carries no framed chain
+	: "${BOOTSLICE_IMG:?profile missing BOOTSLICE_IMG}"
+	: "${BOOT2_BOOT:?profile missing BOOT2_BOOT}"
+	: "${BOOTSLICE_MANIFEST:?profile missing BOOTSLICE_MANIFEST}"
+fi
 
 # The cXd0 block/raw namespace binds to the PRIMARY (system) SCSI controller, not
 # to whichever physical HBA the profile's TARGET_HBA names. W5.4b proved this on
@@ -1031,7 +1050,7 @@ esac
 # ii -- a user's `make bootpart` / updbootpart reframes /stand/unix, and the stock core
 # package's 1992 030 kernel there would frame an unbootable chain). RUN_UNIT=6 media ship
 # it beside the single chain as boot/<p>/unix.
-if [ -z "$STAND_UNIX" ] && [ -z "$STAND_UNIX_FROM_SLICE" ]; then
+if [ "$INSTALL_LAYOUT" = 1.0 ] && [ -z "$STAND_UNIX" ] && [ -z "$STAND_UNIX_FROM_SLICE" ]; then
 	case "${INSTALL_CPU:-030}" in
 		040|060)	STAND_UNIX="`expr "$BOOTSLICE_IMG" : '\(.*\)/'`/unix" ;;
 	esac
@@ -1056,7 +1075,9 @@ else
 	msg "install src  : cdfs $CD_SPEC -> $CDROOT"
 fi
 msg "target disk  : c${ID}d0  root=s${TARGET_ROOT_SLICE} swap=s${TARGET_SWAP_SLICE} boot=s${TARGET_BOOT_SLICE}"
-msg "target kernel: relocunix sum -r $KERNEL_RELOCUNIX_SUMR / brel $KERNEL_BREL_SUMR (rootdev $ROOTDEV)"
+if [ "$INSTALL_LAYOUT" = 1.0 ]; then
+	msg "target kernel: relocunix sum -r $KERNEL_RELOCUNIX_SUMR / brel $KERNEL_BREL_SUMR (rootdev $ROOTDEV)"
+fi
 
 # ===========================================================================
 # 1. DISCOVER + PLAN -- the partition arithmetic (mkroot.sh, transcribed to sh)
@@ -1096,6 +1117,9 @@ plan_partitions() {
 	# the 0x2800 chain is 1,943,513 B -- 92.7% of a 2 MB slice. That fits, but a
 	# disk handed to someone who BUILDS kernels has ~150 KB of headroom, and
 	# growing a boot slice afterwards is a re-partition, i.e. a re-install.
+	# 1.1: the boot slice is the 64 MiB store, fixed by the spec (l11_keys refuses
+	# TARGET_BOOT_MB), and a data slice may come off the end (l11_plan_data).
+	[ "$INSTALL_LAYOUT" = 1.1 ] && BOOTSIZE="$L11_STORE_MB"
 	if [ -n "$TARGET_BOOT_MB" ]; then
 		is_num "$TARGET_BOOT_MB" || die "TARGET_BOOT_MB='$TARGET_BOOT_MB' is not a number"
 		[ "$TARGET_BOOT_MB" -ge "$MINBOOT" ] || die "TARGET_BOOT_MB=$TARGET_BOOT_MB is below the minimum boot partition of ${MINBOOT}MB"
@@ -1104,6 +1128,12 @@ plan_partitions() {
 	BOOTLEN=`expr "$BOOTSIZE" \* "$BLOCKS_PER_MB"`
 	[ "$BOOTLEN" -lt "$REMAIN" ] || die "disk too small for a ${BOOTSIZE}MB boot partition"
 	REMAIN=`expr "$REMAIN" - "$BOOTLEN"`
+	DATALEN=0
+	if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+		l11_plan_data "$disk_mb"
+		[ "$DATALEN" -lt "$REMAIN" ] || die "disk too small for a ${DATA_MB}MB data slice"
+		REMAIN=`expr "$REMAIN" - "$DATALEN"`
+	fi
 
 	# swap default: BREAKPT rule
 	if [ "$disk_mb" -gt "$BREAKPT" ]; then DEFSWAP="$LGSWAP"; else DEFSWAP="$SMSWAP"; fi
@@ -1176,6 +1206,7 @@ plan_partitions() {
 	ROOT_OFF="$off"
 	SWAP_OFF=`expr "$ROOT_OFF" + "$ROOTLEN"`
 	BOOT_OFF=`expr "$SWAP_OFF" + "$SWAPLEN"`
+	DATA_OFF=`expr "$BOOT_OFF" + "$BOOTLEN"`
 }
 
 # --- geometry: TARGET_DISK_MB, else the REAL disk, probed (W1) ----------------
@@ -1228,6 +1259,7 @@ fi
 [ -n "$DISK_MB" ] || DISK_MB=100
 plan_partitions "$DISK_MB"
 msg "plan (${DISK_MB}MB, cyl=${SECS} blocks): root ${ROOT_MB}MB @blk${ROOT_OFF}  swap ${SWAP_MB}MB @blk${SWAP_OFF}  boot ${BOOTSIZE}MB @blk${BOOT_OFF}"
+[ "$DATALEN" -gt 0 ] && msg "plan (1.1)   : data ${DATA_MB}MB @blk${DATA_OFF} (s4, /home)"
 
 # --- 1b. MACHINE CLASS: detect-and-print the OLD_BOOT hole (W6, plan sec. 6) --
 # The interview refuses this class outright (setup.sh check_old_boot). The
@@ -1364,7 +1396,17 @@ build_target_author() {
 	# 0..15 first -- past the erase guard, on a disk about to be re-authored, and
 	# below the first partition (OFFSET=128 blocks) -- or a reinstall over an old
 	# RDSK-at-2 disk would silently keep block 2.
-	run dd if=/dev/zero of="$DISK_RAW" bs=512 count=16
+	# 1.1: a disk that already carries two UNI\0 partitions is refused, whatever the
+	# erase gate said -- which of them booted is not ours to guess (spec 40 §5, gate 9)
+	# -- and the whole RDB area below the first slice is cleared, so no PART block of
+	# the old layout survives to be counted by the one-store check after authoring.
+	RDB_CLEAR=16
+	if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+		_u0=`l11_uni0_count "$DISK_RAW"`
+		[ "$_u0" -le 1 ] || die "target c${ID}d0 already carries $_u0 UNI\\0 (boot) partitions -- REFUSING it: a 1.1 disk has exactly one boot store. Clear the disk first."
+		RDB_CLEAR="$OFFSET_BLOCKS"
+	fi
+	run dd if=/dev/zero of="$DISK_RAW" bs=512 count="$RDB_CLEAR"
 	run /etc/rdb -c -s "$SECS" -L "$TARGET_RDB_BLOCK" -d "$DISKLEN" "$DISK_RAW"
 	# add the three slices IN ORDER (root, swap, boot)
 	run /etc/rdb -a "$DISK_RAW" UNIX_Root "$ROOT_OFF" "$ROOTLEN"
@@ -1378,6 +1420,13 @@ build_target_author() {
 	run /etc/rdb -p "$TARGET_BOOT_SLICE" -M -B -C 2 -P 2 -F 0x554e4900 "$DISK_RAW"
 	run /etc/rdb -p "$TARGET_ROOT_SLICE" -m -F 0x554e4901 "$DISK_RAW"
 	run /etc/rdb -p "$TARGET_SWAP_SLICE" -m -F 0x72657376 "$DISK_RAW"
+	if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+		if [ "$DATALEN" -gt 0 ]; then
+			run /etc/rdb -a "$DISK_RAW" UNIX_Data "$DATA_OFF" "$DATALEN"
+			run /etc/rdb -p 4 -m -F 0x554e4901 "$DISK_RAW"
+		fi
+		l11_check_layout
+	fi
 	# RDSK READ-BACK, fail closed: with TARGET_RDB_BLOCK=0 the magic must be at
 	# byte 0 -- the only place stock Z3660 firmware looks. A disk that only the
 	# fork firmware can boot must never leave this path looking finished.
@@ -1470,6 +1519,8 @@ build_target_author() {
 		# label the root fs (miniroot has only the s5 back-end labelit)
 		run /usr/lib/fs/s5/labelit "$ROOT_RAW" root ROOT
 	fi
+	[ "$INSTALL_LAYOUT" = 1.1 ] && l11_mkfs_data
+	return 0
 }
 
 build_target_prebuilt() {
@@ -2232,6 +2283,12 @@ else
 fi
 
 # ===========================================================================
+# 6-8c, 1.1: the kernel package and the boot store (l11.sh) REPLACE sections 6 to 8c
+# ===========================================================================
+if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	l11_bootstore
+else
+# ===========================================================================
 # 6. OVERWRITE /stand/boot2.boot WITH THE FLAGS-BASED LOADER
 # ===========================================================================
 # core ships the NAME-BASED loader (sha256 5ab360b1...) at /stand/boot2.boot --
@@ -2470,6 +2527,8 @@ if [ -n "${ROOT_RECORD_DISK:-}" ]; then
 	fi
 fi
 
+fi	# INSTALL_LAYOUT 1.0: sections 6-8c
+
 # ===========================================================================
 # 8z. THE 030 LINE'S SWAP (2026-10-07; the tail 2026-10-08, r6c)
 # ===========================================================================
@@ -2629,6 +2688,8 @@ run chmod 600 "$TARGET/var/adm/firstboot/root.shadow"
 	# key to s5 when it is absent, so a firstboot.conf written by an older
 	# driver keeps its old behaviour exactly.
 	echo "FB_ROOT_FSTYPE=$TARGET_ROOT_FSTYPE"
+	# 1.1: the data slice firstboot.sh mounts at /home (absent = none, as before)
+	if [ "${DATALEN:-0}" -gt 0 ]; then echo "FB_DATA_SLICE=4"; fi
 } > "$TARGET/var/adm/firstboot/firstboot.conf"
 # The PENDING marker: the rc2 hook (below) runs firstboot.sh once iff this exists,
 # and firstboot.sh removes it when done -- that pair is the once-only mechanism.
@@ -2663,6 +2724,8 @@ echo "+ emit_firstboot_hook $TARGET/etc/rc2.d/S16firstboot"
 emit_firstboot_hook "$TARGET/etc/rc2.d/S16firstboot" || die "cannot write the first-boot rc2 hook"
 run chmod 0744 "$TARGET/etc/rc2.d/S16firstboot"
 
+# 1.1: no reframe tool and no /stand framing tools -- kbootset owns the boot store.
+if [ "$INSTALL_LAYOUT" != 1.1 ]; then
 # --- INSTALL updbootpart onto the target (W6-I; MEDIUM-STAGED since W5.5) ----
 # The on-box boot-slice reframe tool -- the finisher for "kernel upgrade via a
 # package": `updbootpart --backup` -> `pkgadd KERNBENCH` -> `updbootpart` reframes
@@ -2712,6 +2775,8 @@ run chmod 0644 "$TARGET/stand/boot1.boot"
 run cp "$INST/stand/makeiblk" "$TARGET/stand/makeiblk"
 run chmod 0755 "$TARGET/stand/makeiblk"
 msg "laid down /stand framing tools: boot1.boot (41892) + makeiblk (2.1c, 58483) -- updbootpart gate 5a satisfied on every fresh install"
+
+fi	# INSTALL_LAYOUT 1.0: updbootpart + /stand framing
 
 # --- LAY DOWN the syslog unit (P5.4 queue: base-8 ships none) ----------------
 # A base-8 install carries core's /usr/sbin/syslogd BINARY (2.1, 22,368 B) but
@@ -3167,9 +3232,15 @@ fi
 msg "   root filesystem    : $TARGET_ROOT_FSTYPE on $ROOT_BLK ($TARGET_BUILD_MODE)"
 msg "   contents DB        : integrity-checked (contents-fsck, clean)"
 msg "   apkg client        : /etc/apkg.conf -> $FB_REPO_URL"
-msg "   boot chain         : verified on-target ($KERNEL_BREL_SUMR brel)"
-msg "   /stand/boot2.boot  : flags-based ($BOOT2_ID...)"
-msg "   /stand framing     : boot1.boot 41892 + makeiblk 58483 (updbootpart-ready)"
+if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	msg "   layout             : 1.1 (store s$TARGET_BOOT_SLICE ${L11_STORE_MB} MiB, store-id $L11_STORE_ID)"
+	msg "   kernel             : $KERNEL_KPKG (apkg 0.3 kernel space, record /var/apkg/kpkg)"
+	msg "   boot store         : pristine generation committed + kbootset check clean"
+else
+	msg "   boot chain         : verified on-target ($KERNEL_BREL_SUMR brel)"
+	msg "   /stand/boot2.boot  : flags-based ($BOOT2_ID...)"
+	msg "   /stand framing     : boot1.boot 41892 + makeiblk 58483 (updbootpart-ready)"
+fi
 msg "   syslog             : unit laid down ENABLED (2.1c; S70/K50 links, /var/log)"
 msg "   keymap             : ${FB_KMAP:-none} (default.kmap hard link; empty/usa = compiled-in American)"
 msg "   lost+found         : preseeded with 100 slots (stock step)"

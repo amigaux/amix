@@ -176,6 +176,8 @@ from sumr import bsd_sum_r                                        # noqa: E402
 
 DRIVER = os.path.join(REPO, "src", "installer", "install.sh")
 SETUP = os.path.join(REPO, "src", "installer", "setup.sh")
+# the 1.1 layout's half of the driver, sourced by install.sh (INSTALL_LAYOUT=1.1)
+L11 = os.path.join(REPO, "src", "installer", "l11.sh")
 # W4: the miniroot's own /etc/profile -- the install script the console login
 # shell sources. It is the STRICTEST of the three on-box scripts (it runs with
 # nothing mounted), so it takes the same audits under the same allowlist.
@@ -1216,6 +1218,7 @@ FIRSTBOOT_EXTRA = {
     "sum",         # the summary's stock NetNews cnews-vs-nntp test
     "stty",        # the stock terminal setup the dialog opens with
     "mknod",       # /dev/zen0 does not exist before rc2 (S99zen makes it)
+    "chown", "chgrp",  # /dev/kinfo's owner and group on a 1.1 disk (no chgrp on the miniroot)
     "false",       # /usr/bin/true and /usr/bin/false ARE the A2024 flag (stock)
     "A2024", "aen", "passwdall", "amixcolorx", "amixmkuser", "amixnews",
     # IN-rtc-2: the ONE gated battery-clock re-read after the zone question
@@ -1511,14 +1514,30 @@ def audit_tool_allowlist():
         ok("parser exercises the scripts (install.sh %d cmds incl cp/dd/expr/rdb; "
            "firstboot.sh %d incl sed/echo/mv)" % (len(dwords), len(fwords)))
 
-    # install.sh -- STRICT miniroot allowlist, no target-side extras.
-    dbad = [w for w in dwords if _classify(w, _defined_funcs(open(DRIVER).read()),
-                                            proto_tools, DRIVER_EXTRA)]
+    # install.sh -- STRICT miniroot allowlist, no target-side extras. Its functions
+    # include l11.sh's: the driver sources that file for a 1.1 layout.
+    dfuncs = _defined_funcs(open(DRIVER).read() + open(L11).read())
+    dbad = [w for w in dwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)]
     if dbad:
         fail("install.sh references tool(s) the miniroot does NOT carry: %s"
              % ", ".join(sorted(set(dbad))))
     else:
         ok("install.sh: every command resolves to a builtin, a miniroot.proto binary, or /cdrom")
+
+    # l11.sh -- the 1.1 layout: sourced into the driver on the miniroot, so the
+    # driver's own strict allowlist (and its functions) apply.
+    lwords = list(command_words(read_sh(L11)))
+    need_l = {"dd", "expr", "die", "msg", "rm"}
+    lbad = [w for w in lwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)]
+    if need_l - set(lwords):
+        fail("allowlist parser is not exercising l11.sh (vacuity guard): missing %s"
+             % sorted(need_l - set(lwords)))
+    elif lbad:
+        fail("l11.sh references tool(s) the miniroot does NOT carry: %s"
+             % ", ".join(sorted(set(lbad))))
+    else:
+        ok("l11.sh: every command (%d) resolves to a builtin, a miniroot.proto binary, "
+           "a driver function or /cdrom" % len(lwords))
 
     # setup.sh -- the interview. MEDIUM-resident, but it executes on the thin
     # miniroot exactly like the driver, so it gets the SAME strict allowlist:
@@ -2321,6 +2340,8 @@ def audit_rdb_location():
     if not fn:
         return
     clear = re.search(r'run dd if=/dev/zero of="\$DISK_RAW" bs=512 count=16\b', fn)
+    if not clear and re.search(r'\n\tRDB_CLEAR=16\n', fn):
+        clear = re.search(r'run dd if=/dev/zero of="\$DISK_RAW" bs=512 count="\$RDB_CLEAR"', fn)
     create = re.search(r'run /etc/rdb -c -s "\$SECS" -L "\$TARGET_RDB_BLOCK" '
                        r'-d "\$DISKLEN" "\$DISK_RAW"', fn)
     literal = re.search(r'run /etc/rdb -c[^\n]*-L\s+[0-9]', fn)
@@ -3199,6 +3220,12 @@ def audit_bootable_source():
             # r6 (D-2): a `*-r6*.profile` rides the RTH1 root-hint loader instead --
             # good_040_rth (040/060) or good_rth (030), contract CANDIDATES -- on the
             # same keys, by the same one-fact rule. The Gayle bench row R7 (-R7row) rides it too.
+            if dp.get("INSTALL_LAYOUT") == "1.1":
+                # the 1.1 layout boots the amix-dlm loader from its store: no 1.0
+                # boot2 identity is selected, and none may be
+                if sel[0] or sel[1] or dp.get("SRC_BOOT2_SHA256"):
+                    wrong.append("%s (1.1 selects a 1.0 boot2)" % pf)
+                continue
             if ".profile" in pf and ("-r6" in pf or "-R7row" in pf):
                 want = ("good_040_rth", "good_040_rth") if dp.get("INSTALL_CPU") in ("040", "060") else None
                 ok30 = sel in ((None, "good_rth"), ("good_rth", "good_rth"))
@@ -9422,7 +9449,7 @@ def audit_pick_at_install():
     head("Q415. pick-at-install: the per-unit resolver EXECUTED, the unit tables, the wiring")
     drv = read_sh(DRIVER)
     m = re.search(r'(STAND_UNIX=\nSTAMP_PATCH=\nSTAND_UNIX_FROM_SLICE=\ncase "\$\{RUN_UNIT:-6\}" in\n.*?'
-                  r'\nif \[ -z "\$STAND_UNIX" \] && \[ -z "\$STAND_UNIX_FROM_SLICE" \]; then\n.*?\nfi\n)',
+                  r'\nif \[ "\$INSTALL_LAYOUT" = 1.0 \] && \[ -z "\$STAND_UNIX" \] && \[ -z "\$STAND_UNIX_FROM_SLICE" \]; then\n.*?\nfi\n)',
                   drv, re.S)
     if not m:
         fail("could not extract install.sh's pick-at-install resolver (STAND_UNIX= .. fi) -- moved or reshaped?")
@@ -9445,7 +9472,7 @@ def audit_pick_at_install():
         block = m.group(1).replace("/tmp/.unitrow", os.path.join(d, "unitrow"))
 
         def run(run_unit, id_, cpu):
-            h = ('msg() { :; }\ndie() { echo "DIE $*"; exit 3; }\nINST=%s\nID=%s\nRUN_UNIT=%s\n'
+            h = ('msg() { :; }\ndie() { echo "DIE $*"; exit 3; }\nINSTALL_LAYOUT=1.0\nINST=%s\nID=%s\nRUN_UNIT=%s\n'
                  'INSTALL_CPU=%s\nBOOTSLICE_IMG=boot/metal/bootslice.img\n'
                  'BOOTSLICE_MANIFEST=boot/metal/bootslice.man\nBOOT2_BOOT=boot/metal/boot2.boot\n'
                  'ROOTDEV=0x00480016\nKERNEL_BREL_SUMR=08512\nTARGET_VFSTAB_SCSI_ID=6\n'
@@ -9632,6 +9659,58 @@ def audit_unattended():
                      % (pn, key, v, card, v))
 
 
+def audit_l11():
+    """L11. The 1.1 disk layout (amix-dlm spec 40, stage 2 S2-30/S2-31), EXECUTED
+    under dash from the scripts' own text: (1) plan_partitions with INSTALL_LAYOUT=1.1
+    lays root, swap, the 64 MiB store and the data slice end to end, and 1.0 stays the
+    10 MiB boot slice; (2) the repair path's kbootset menu drives status, rollback and
+    mark-bad through the disk's own kbootset on the store its bootset file names; (3)
+    l11_apkg maps apkg 0.3's exits (0, 5, 6, 7) and a pending /var/apkg/txn to a stop
+    that names `apkg ... recover`; (4) the updbootpart shim refuses (exit 3) and names
+    kbootset."""
+    head("L11. the 1.1 disk: plan, repair menu, apkg exits, updbootpart shim (executed)")
+    if not os.path.exists("/usr/bin/dash"):
+        skip("dash absent -- cannot execute the 1.1 functions")
+        return
+    l11 = open(L11, encoding="utf-8").read()
+    d = workpath("l11")
+    os.makedirs(d, exist_ok=True)
+
+    # (1) the plan
+    src = open(DRIVER, encoding="utf-8").read()
+    harness = extract_plan_harness().replace(
+        'echo "$ROOT_OFF $SWAP_OFF $BOOT_OFF $ROOTLEN $SWAPLEN $BOOTLEN"',
+        'echo "$ROOT_OFF $SWAP_OFF $BOOT_OFF $ROOTLEN $SWAPLEN $BOOTLEN $DATA_OFF $DATALEN $DISKLEN"')
+    harness = _extract_func(l11, "l11_plan_data") + "\n" + harness
+
+    def plan(mb, layout, data=""):
+        env = dict(os.environ, INSTALL_LAYOUT=layout, L11_STORE_MB="64", TARGET_DATA_MB=data,
+                   KERNEL_SDDEVSIZE="fixed", INSTALL_CPU="030")
+        r = subprocess.run(["/usr/bin/dash", "-c", harness, "plan", str(mb)],
+                           capture_output=True, text=True, timeout=30, env=env)
+        v = r.stdout.split()
+        return [int(x) for x in v] if r.returncode == 0 and len(v) == 9 else None
+
+    for mb, data, want_data in ((200, "", 0), (1024, "", 256 * 2048), (300, "40", 40 * 2048)):
+        v = plan(mb, "1.1", data)
+        if not v:
+            fail("1.1 plan for %d MB did not run" % mb)
+            continue
+        ro, so, bo, rl, sl, bl, do, dl, dk = v
+        if (bl == 64 * 2048 and dl == want_data and ro + rl == so and so + sl == bo
+                and bo + bl == do and do + dl <= dk):
+            ok("1.1 plan %d MB%s: root %d, swap %d, store %d blocks (64 MiB), data %d -- end to end"
+               % (mb, " (TARGET_DATA_MB=%s)" % data if data else "", rl, sl, bl, dl))
+        else:
+            fail("1.1 plan %d MB is wrong: %r" % (mb, v))
+    v = plan(200, "1.0")
+    if v and v[5] == 10 * 2048 and v[7] == 0:
+        ok("1.0 plan 200 MB keeps the 10 MiB boot slice and no data slice")
+    else:
+        fail("1.0 plan 200 MB changed: %r" % (v,))
+
+
+
 def main():
     # accept and ignore --self-test (the run-checks.sh entrypoint)
     args = [a for a in sys.argv[1:] if a != "--self-test"]
@@ -9692,6 +9771,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_l11()
 
     print()
     if NOTES:
