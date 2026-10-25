@@ -21,6 +21,26 @@ bits(struct ax_inflate *s, int n, ax_u32 *v)
 	return AXI_OK;
 }
 
+/* the lookup table: each code of at most AXI_FAST bits, bit-reversed (the
+ * stream sends codes most significant bit first into an LSB-first bit
+ * buffer), in every slot whose low bits it matches */
+static void
+fill(struct ax_huff *h)
+{
+	unsigned code = 0, rev, i, b;
+	int len, k, index = 0;
+
+	for (i = 0; i < (1U << AXI_FAST); i++)
+		h->fast[i] = 0;
+	for (len = 1; len <= AXI_FAST; len++, code <<= 1)
+		for (k = 0; k < h->count[len]; k++, code++, index++) {
+			for (rev = 0, b = 0; b < (unsigned)len; b++)
+				rev |= ((code >> b) & 1) << (len - 1 - b);
+			for (i = rev; i < (1U << AXI_FAST); i += 1U << len)
+				h->fast[i] = (ax_u16)((len << 9) | h->symbol[index]);
+		}
+}
+
 /* build canonical tables from n code lengths; 0 = complete or a permitted
  * incomplete single-code set, AXI_ECODES = over-subscribed */
 static int
@@ -48,12 +68,14 @@ build(struct ax_huff *h, const ax_u8 *length, int n)
 	for (sym = 0; sym < n; sym++)
 		if (length[sym])
 			h->symbol[offs[length[sym]]++] = (ax_u16)sym;
+	fill(h);
 	return left;			/* > 0: incomplete */
 }
 
-/* decode one symbol, bit by bit (codes are stored most significant first) */
+/* decode one symbol, bit by bit (codes are stored most significant first);
+ * returns the symbol, or a negative AXI_E code */
 static int
-decode(struct ax_inflate *s, const struct ax_huff *h, int *sym)
+slow(struct ax_inflate *s, const struct ax_huff *h)
 {
 	int code = 0, first = 0, index = 0, len, count;
 	ax_u32 b;
@@ -63,16 +85,35 @@ decode(struct ax_inflate *s, const struct ax_huff *h, int *sym)
 			return AXI_EINPUT;
 		code |= (int)b;
 		count = h->count[len];
-		if (code - count < first) {
-			*sym = h->symbol[index + (code - first)];
-			return AXI_OK;
-		}
+		if (code - count < first)
+			return h->symbol[index + (code - first)];
 		index += count;
 		first += count;
 		first <<= 1;
 		code <<= 1;
 	}
 	return AXI_ESYMBOL;
+}
+
+/* decode one symbol: one lookup for a short code, else bit by bit */
+static int
+decode(struct ax_inflate *s, const struct ax_huff *h, int *sym)
+{
+	unsigned e;
+
+	while (s->bitcnt < AXI_FAST && s->inpos < s->inlen) {
+		s->bitbuf |= (ax_u32)s->in[s->inpos++] << s->bitcnt;
+		s->bitcnt += 8;
+	}
+	e = h->fast[s->bitbuf & ((1U << AXI_FAST) - 1)];
+	if (e && (int)(e >> 9) <= s->bitcnt) {
+		s->bitbuf >>= e >> 9;
+		s->bitcnt -= (int)(e >> 9);
+		*sym = (int)(e & 511);
+		return AXI_OK;
+	}
+	*sym = slow(s, h);
+	return *sym < 0 ? *sym : AXI_OK;
 }
 
 static const ax_u16 lbase[29] = {
@@ -89,44 +130,103 @@ static const ax_u8 dext[30] = {
 	0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
 	7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 };
 
+/*
+ * The literal/length and distance codes of one block.  The hot loop keeps
+ * the bit buffer and both positions in locals (registers), and writes
+ * them back only around the bit-by-bit path for a long code and on exit.
+ */
+#define LOAD()	(bb = s->bitbuf, bc = s->bitcnt, inpos = s->inpos, outpos = s->outpos)
+#define SAVE()	(s->bitbuf = bb, s->bitcnt = bc, s->inpos = inpos, s->outpos = outpos)
+#define NEED(n)	while (bc < (n) && inpos < inlen) { \
+			bb |= (ax_u32)in[inpos++] << bc; \
+			bc += 8; \
+		}
+
 static int
 codes(struct ax_inflate *s)
 {
-	int sym, rc;
-	ax_u32 len, dist, x;
+	const ax_u8 *in = s->in;
+	ax_u8 *out = s->out, *o, *from;
+	ax_u32 inlen = s->inlen, outlen = s->outlen, inpos, outpos, bb, len, dist;
+	int bc, sym, n;
+	unsigned e;
 
+	LOAD();
 	for (;;) {
-		if ((rc = decode(s, &s->lit, &sym)) != AXI_OK)
-			return rc;
-		if (sym < 256) {
-			if (s->outpos >= s->outlen)
-				return AXI_EOUTPUT;
-			s->out[s->outpos++] = (ax_u8)sym;
-		} else if (sym == 256) {
-			return AXI_OK;
+		NEED(AXI_FAST);
+		e = s->lit.fast[bb & ((1U << AXI_FAST) - 1)];
+		if (e && (int)(e >> 9) <= bc) {
+			bb >>= e >> 9;
+			bc -= (int)(e >> 9);
+			sym = (int)(e & 511);
 		} else {
-			sym -= 257;
-			if (sym >= 29)
-				return AXI_ESYMBOL;
-			if (bits(s, lext[sym], &x))
-				return AXI_EINPUT;
-			len = lbase[sym] + x;
-			if ((rc = decode(s, &s->dist, &sym)) != AXI_OK)
-				return rc;
-			if (sym >= 30)
-				return AXI_ESYMBOL;
-			if (bits(s, dext[sym], &x))
-				return AXI_EINPUT;
-			dist = dbase[sym] + x;
-			if (dist > s->outpos)
-				return AXI_EDIST;
-			if (len > s->outlen - s->outpos)
-				return AXI_EOUTPUT;
-			while (len--) {
-				s->out[s->outpos] = s->out[s->outpos - dist];
-				s->outpos++;
-			}
+			SAVE();
+			sym = slow(s, &s->lit);
+			LOAD();
+			if (sym < 0)
+				return sym;
 		}
+		if (sym < 256) {
+			if (outpos >= outlen) {
+				SAVE();
+				return AXI_EOUTPUT;
+			}
+			out[outpos++] = (ax_u8)sym;
+			continue;
+		}
+		if (sym == 256) {
+			SAVE();
+			return AXI_OK;
+		}
+		sym -= 257;
+		if (sym >= 29) {
+			SAVE();
+			return AXI_ESYMBOL;
+		}
+		n = lext[sym];
+		NEED(n);
+		if (bc < n) {
+			SAVE();
+			return AXI_EINPUT;
+		}
+		len = lbase[sym] + (bb & ((1UL << n) - 1));
+		bb >>= n;
+		bc -= n;
+		NEED(AXI_FAST);
+		e = s->dist.fast[bb & ((1U << AXI_FAST) - 1)];
+		if (e && (int)(e >> 9) <= bc) {
+			bb >>= e >> 9;
+			bc -= (int)(e >> 9);
+			sym = (int)(e & 511);
+		} else {
+			SAVE();
+			sym = slow(s, &s->dist);
+			LOAD();
+			if (sym < 0)
+				return sym;
+		}
+		if (sym >= 30) {
+			SAVE();
+			return AXI_ESYMBOL;
+		}
+		n = dext[sym];
+		NEED(n);
+		if (bc < n) {
+			SAVE();
+			return AXI_EINPUT;
+		}
+		dist = dbase[sym] + (bb & ((1UL << n) - 1));
+		bb >>= n;
+		bc -= n;
+		if (dist > outpos || len > outlen - outpos) {
+			SAVE();
+			return dist > outpos ? AXI_EDIST : AXI_EOUTPUT;
+		}
+		o = out + outpos;
+		from = o - dist;
+		outpos += len;
+		while (len--)
+			*o++ = *from++;
 	}
 }
 

@@ -189,7 +189,12 @@ $(B)/axtime: $(B)/axtime.r.o $(B)/b2link $(B)/hunkcheck
 	$(B)/b2link -h $< $@
 	$(B)/hunkcheck $< $@ 0x00200000
 
-axtime: toolchain-check $(B)/axtime
+# the same program with its hunk in chip memory, as boot2 runs behind boot1
+$(B)/axtime-chip: $(B)/axtime.r.o $(B)/b2link $(B)/hunkcheck
+	$(B)/b2link -h -c $< $@
+	$(B)/hunkcheck $< $@ 0x00200000
+
+axtime: toolchain-check $(B)/axtime $(B)/axtime-chip
 
 # The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
 # with start.s first, b2link, then b2check proves the table reproduces the

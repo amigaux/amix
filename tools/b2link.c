@@ -5,10 +5,13 @@
  * (docs/plan/stage-1.md S1-11.)
  *
  * usage: b2link IN.o OUT.bin       boot2 behind boot1 (self-relocating)
- *        b2link -h IN.o OUT        amix-cdboot: an AmigaDOS load file (one
+ *        b2link -h [-c] IN.o OUT   amix-cdboot: an AmigaDOS load file (one
  *                                  code hunk with bss, HUNK_RELOC32 for the
  *                                  same fields, an empty self-relocation
- *                                  table) -- docs/spec/10-boot-loader.md §4.4
+ *                                  table) -- docs/spec/10-boot-loader.md §4.4;
+ *                                  -c asks AmigaDOS for chip memory (to time
+ *                                  code that runs from chip RAM, as boot2
+ *                                  does behind boot1)
  *
  * Refuses: an image whose first bytes are not the start.s header; undefined
  * or unbound symbols; a file longer than 28672 bytes or an image plus bss
@@ -24,6 +27,7 @@
 
 static ax_u32 *offs;
 static ax_u32 noffs, capoffs;
+static int chip;		/* -c: the hunk in chip memory */
 
 static void
 note(void *ctx, ax_u32 off)
@@ -65,7 +69,7 @@ write_hunk(const char *path, unsigned char *img, ax_u32 span, ax_u32 bss)
 	put(f, 1);				/* one hunk */
 	put(f, 0);
 	put(f, 0);
-	put(f, alloc);
+	put(f, alloc | (chip ? 0x40000000UL : 0));	/* bit 30: MEMF_CHIP */
 	put(f, 0x3E9);				/* HUNK_CODE */
 	put(f, code);
 	fwrite(img, 1, span, f);
@@ -106,12 +110,16 @@ main(int argc, char **argv)
 	struct ax_relerr er;
 	int rc, hunk = 0;
 
-	if (argc == 4 && !strcmp(argv[1], "-h")) {
+	if (argc >= 4 && !strcmp(argv[1], "-h")) {
 		hunk = 1;
 		argv++, argc--;
+		if (argc == 4 && !strcmp(argv[1], "-c")) {
+			chip = 1;
+			argv++, argc--;
+		}
 	}
 	if (argc != 3) {
-		fprintf(stderr, "usage: b2link [-h] IN.o OUT\n");
+		fprintf(stderr, "usage: b2link [-h [-c]] IN.o OUT\n");
 		return 2;
 	}
 	if (!(f = fopen(argv[1], "rb"))) {

@@ -49,7 +49,7 @@ main(int argc, char **argv)
 	if (AX_GET32(h) != 0x3F3 || AX_GET32(h + 4) != 0 || AX_GET32(h + 8) != 1 ||
 	    AX_GET32(h + 12) != 0 || AX_GET32(h + 16) != 0)
 		BAD("not a one-hunk AmigaDOS load file");
-	alloc = AX_GET32(h + 20) * 4;
+	alloc = (AX_GET32(h + 20) & 0x3FFFFFFFUL) * 4;	/* bits 30/31: memory type */
 	if (AX_GET32(h + 24) != 0x3E9)
 		BAD("no HUNK_CODE");
 	ncode = AX_GET32(h + 28) * 4;

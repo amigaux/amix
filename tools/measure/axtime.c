@@ -126,8 +126,10 @@ number(const char *s, int n)
 long
 ados_main(void *execbase, const char *args, long arglen)
 {
-	static ax_u32 tab[256];
-	static struct ax_inflate inf;
+	/* the tables in allocated memory, as boot2 keeps them (its work area),
+	 * so a chip-memory build (b2link -c) moves only the code */
+	ax_u32 *tab;
+	struct ax_inflate *inf;
 	static ax_u8 tr[40];		/* a timerequest */
 	struct ax_sha256 sh;
 	ax_u8 digest[32], *buf, *data, *copy;
@@ -175,6 +177,12 @@ ados_main(void *execbase, const char *args, long arglen)
 	}
 	dos(-36, (ax_u32)fh, 0, 0);			/* Close */
 
+	tab = x_allocmem(256 * 4, MEMF_PUBLIC);
+	inf = x_allocmem(sizeof(*inf), MEMF_PUBLIC);
+	if (!tab || !inf) {
+		put("axtime: no memory for the tables\n");
+		return RETURN_FAIL;
+	}
 	attn = *(ax_u16 *)((ax_u8 *)execbase + EXEC_ATTNFLAGS);
 	eclock();
 	put("axtime: ");
@@ -183,6 +191,18 @@ ados_main(void *execbase, const char *args, long arglen)
 	putu(len);
 	put(" bytes, 680");
 	put(attn & 0x80 ? "60" : attn & 0x08 ? "40" : attn & 0x04 ? "30" : "20");
+	put(", code at 0x");
+	{
+		static const char x[] = "0123456789abcdef";
+		char a[9];
+		ax_u32 v = (ax_u32)ados_main;
+		int i;
+
+		for (i = 7; i >= 0; i--, v >>= 4)
+			a[i] = x[v & 15];
+		a[8] = 0;
+		put(a);
+	}
 	put(", E-clock ");
 	putu(efreq);
 	put(" Hz\n");
@@ -196,7 +216,7 @@ ados_main(void *execbase, const char *args, long arglen)
 		}
 		x_forbid();
 		t0 = eclock();
-		n = ax_inflate(&inf, data, size, &got, buf, len);
+		n = ax_inflate(inf, data, size, &got, buf, len);
 		report("inflate", t0, eclock(), size);
 		x_permit();
 		if (n != AXI_OK || got != size) {

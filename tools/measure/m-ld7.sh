@@ -14,12 +14,15 @@ B=${B:-build}
 K=$WS/amix-kerntools/work/k0-chains
 mkdir -p "$OUT"
 cp $B/axtime "$OUT/axtime"
+cp $B/axtime-chip "$OUT/axtime-chip"
 cp "$K/K030-U-FD/K030-U-FD-c0-u6" "$OUT/k30.kernel"
 cp "$K/KD060-FD/KD060-FD-fd0" "$OUT/k46.kernel"
 python3 -I - "$OUT" <<'EOF'
 import hashlib, os, sys, zlib
 out = sys.argv[1]
-lines = ['# axtime runs for M-LD7/M-LD8; each must print the crc32 and sha256 shown']
+lines = ['# axtime runs for M-LD7/M-LD8; each must print the crc32 and sha256 shown.',
+         '# axtime-chip is the same program loaded into chip RAM (boot2 runs from',
+         '# chip RAM behind boot1): run every line with both']
 for k in ('k30', 'k46'):
     raw = open(os.path.join(out, k + '.kernel'), 'rb').read()
     best = None

@@ -3,8 +3,12 @@
  *
  * The whole output is decoded into one caller buffer, so back-references
  * are read from the output itself and no sliding window is kept.  No
- * allocation and no writable static data; the decoder state (about 1.3 KB)
+ * allocation and no writable static data; the decoder state (about 3.3 KB)
  * lives in a caller-provided struct.  Written from RFC 1951.
+ *
+ * Codes of up to AXI_FAST bits are decoded with one table lookup; longer
+ * (rare) codes bit by bit.  The bit-at-a-time decoder alone ran at 45-53
+ * KiB/s on a 25 MHz 68030 (M-LD8, 2026-10-26).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -17,10 +21,14 @@
 #define AXI_MAXLCODES	286	/* in a dynamic block */
 #define AXI_FIXLCODES	288	/* the fixed code has 288, two never used */
 #define AXI_MAXDCODES	30
+#define AXI_FAST	9	/* bits decoded by one table lookup */
 
 struct ax_huff {
 	ax_u16 count[AXI_MAXBITS + 1];	/* codes of each length */
 	ax_u16 symbol[AXI_FIXLCODES];	/* symbols in canonical order */
+	/* indexed by the next AXI_FAST input bits: (code length << 9) |
+	 * symbol for a code of at most AXI_FAST bits, else 0 */
+	ax_u16 fast[1 << AXI_FAST];
 };
 
 struct ax_inflate {
