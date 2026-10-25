@@ -49,6 +49,10 @@
  * smaller of memory levels 8 and 9) and
  * gets stored=; crc32 is always of the uncompressed bytes.
  *
+ * Reproducible builds: with SOURCE_DATE_EPOCH set, that time (seconds since
+ * 1970) is used for every creation time and for the set id, so the same
+ * inputs give the same bytes.
+ *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
 #define _POSIX_C_SOURCE 200112L	/* mkdir */
@@ -133,6 +137,15 @@ place(const unsigned char *p, ax_u32 len, ax_u16 *vol, int span)
 		curvol++;
 		next_free = AX_VOLN_DATA;
 	}
+}
+
+/* the build time: SOURCE_DATE_EPOCH when set, else now */
+static ax_u32
+build_time(void)
+{
+	const char *s = getenv("SOURCE_DATE_EPOCH");
+
+	return s && *s ? (ax_u32)strtoul(s, 0, 10) : (ax_u32)time(0);
 }
 
 static void
@@ -379,7 +392,7 @@ generation(const char *spec, struct ax_gen *g)
 		g->man_off = place((unsigned char *)man, mlen, &vol, 0);
 		g->volume = vol;
 	}
-	g->created = (ax_u32)time(0);
+	g->created = build_time();
 }
 
 /* -C: the CD tree; one read-only control file per line directory */
@@ -441,6 +454,11 @@ cdtree(char **spec, int nspec, const char *cdboot, ax_u32 deflt, ax_u16 console,
 			die("not an AmigaDOS load file", cdboot);
 		put_file("BOOT", "amix-cdboot", p, len);
 		free(p);
+		/* executable: the ROM's CD filesystem maps a mode without
+		 * owner-x to no FIBF_EXECUTE, and AmigaDOS refuses to run it */
+		sprintf(path, "%s/BOOT/amix-cdboot", cdroot);
+		if (chmod(path, 0755) != 0)
+			die("cannot make executable", path);
 		sprintf(path, "%s/S", cdroot);
 		makedir(path);
 		put_file("S", "Startup-Sequence", (const unsigned char *)ss, sizeof(ss) - 1);
@@ -606,7 +624,7 @@ main(int argc, char **argv)
 	ax_ctl_write(tab, &c, store + h.ctl_off[0]);
 	/* the set id tells the volumes of this set from any other: the time
 	 * and the control block, which holds every manifest's CRC */
-	h.set_id = (ax_u32)time(0) ^ ax_crc32(tab, store + h.ctl_off[0], AX_BLK);
+	h.set_id = build_time() ^ ax_crc32(tab, store + h.ctl_off[0], AX_BLK);
 	for (v = 0; v < nvol; v++) {
 		h.volume = (ax_u16)(v + 1);
 		ax_hdr_write(tab, &h, vols[v] + AX_HDR_A_OFF);

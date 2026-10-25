@@ -107,6 +107,11 @@ sed 's/^state pristine/state trial/' $T/c12.spec > $T/ct.spec
 if $B/mkstore -C $T/cdt $T/ct.spec 2>/dev/null; then
 	echo "store-roundtrip: trial generation accepted on a CD" >&2; exit 1
 fi
+[ "$(stat -c %a $C/BOOT/amix-cdboot)" = 755 ]
+# SOURCE_DATE_EPOCH makes the tree reproducible
+SOURCE_DATE_EPOCH=1761400000 $B/mkstore -C $T/cdr1 $T/c12.spec >/dev/null
+SOURCE_DATE_EPOCH=1761400000 $B/mkstore -C $T/cdr2 $T/c12.spec >/dev/null
+diff -r $T/cdr1 $T/cdr2
 echo "store-roundtrip: CD tree ok"
 
 # the loader's writes over boots (axsim, the rules of loader/common): a
