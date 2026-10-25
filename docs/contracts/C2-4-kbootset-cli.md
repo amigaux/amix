@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program (draft)
+# C2-4 — `kbootset` as a called program, version 1
 
-- **Status:** draft for agreement, 2026-10-26; the exit codes and messages are implemented (`kbootset/kbootset.c`)
+- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -43,9 +43,8 @@ block = the commit point, 7 journal cleared). With `KBOOTSET_HOLD=N` in
 the environment it syncs and waits before step N, for the rig to cut the
 power (S2-08, S2-40).
 
-## 5. To agree
+## 5. Settled at agreement
 
-- the five statuses;
-- that apkg runs `build` and `commit` as two calls (proposed: so a build
-  can be inspected before it is committed);
-- the default journal path.
+- The five statuses are as above.
+- apkg runs `build` and `commit` as two calls.
+- The default journal path is `<root>/var/kbootset/journal`.

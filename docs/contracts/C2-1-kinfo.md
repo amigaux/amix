@@ -1,6 +1,6 @@
-# C2-1 — the `kinfo` record, version 1 (draft)
+# C2-1 — the `kinfo` record, version 1
 
-- **Status:** draft for agreement, 2026-10-26
+- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §4, `70-static-floor.md` (`kinfo` in the floor), `20-module-format-and-abi.md` §6 (major 53)
 - **Built by:** the kernels of both lines: the 040/060 families (amix-040-060-port) and the 030 families (amix-kerntools), stage-2 static kernels included (S2-10, S2-11)
 - **Read by:** `kbootset` (the booted generation, the boot disk), apkg 0.3 (line, kabi), the installer
@@ -54,10 +54,12 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
 | `kbootset` gates 3, 10 | the card table and the board set (closure); the line (line gate) |
 | apkg 0.3 pre-flight | line, kabi |
 
-## 4. To agree
+## 4. Settled at agreement
 
-- the major and the node name;
-- the board-entry shape (12 bytes);
-- the card table as the four-card sd contract will define it at stage 4
-  (stage 2 fills it from the static drivers' own card numbering);
-- whether the module entry needs more than name, address and size.
+- Major 53 and `/dev/kinfo`. The port and kerntools stations confirm that
+  nothing in their trees uses 53 before they build.
+- The board entry is 12 bytes as above.
+- At stage 2 the card table is filled from the static drivers' own card
+  numbering. The four-card sd contract (stage 4) defines it from then on.
+- The module entry stays name, address and size. The header's length field
+  leaves room to grow.

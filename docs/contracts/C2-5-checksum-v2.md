@@ -1,6 +1,6 @@
-# C2-5 — the checksum contract, version 2 (draft)
+# C2-5 — the checksum contract, version 2
 
-- **Status:** draft for agreement, 2026-10-26 (OQ-40.5)
+- **Status:** agreed 2026-10-25 (orchestrator). Other repositories build against this text; a change from here is a contract change with a version bump. Closes OQ-40.5.
 - **Replaces:** the `sum_gate_interplay` part of `amix-kerntools/contracts/bootchain-v1.json` for 1.1 boot stores
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3 (`check`), `60-signing-and-publishing.md` §3
 
@@ -28,8 +28,8 @@ applies to a 1.1 store: the manifest's SHA-256 replaces it. A rig row that
 compares booted bytes against the image takes the SHA-256 from the
 manifest.
 
-## 3. To agree
+## 3. Settled at agreement
 
-- with amix-kerntools: the rig's booted-bytes check reads the manifest
-  (`lsstore`, or `kbootset status`) instead of the slice;
+- The rig's booted-bytes check reads the manifest (`lsstore`, or
+  `kbootset status`) instead of the slice (amix-kerntools).
 - `bootchain-v1.json` stays for 1.0 media.

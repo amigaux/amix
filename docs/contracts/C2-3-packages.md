@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar (draft)
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 1
 
-- **Status:** draft for agreement, 2026-10-26
+- **Status:** agreed 2026-10-25 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -58,10 +58,9 @@ Installing the loader package changes nothing on the boot store.
 `/sbin/kbootset` is statically linked, built with GCC 14 (D-3 §9), and
 part of the base set. It is a userland package, not kernel space.
 
-## 5. To agree
+## 5. Settled at agreement
 
-- the paths and the sidecar keys;
-- how the static families name their `root` match keys (the same keys as
-  the module `match=` attributes, 10 §5.1);
-- who writes the sidecar: the kernel build (proposed) or the packaging
-  line.
+- The paths and the sidecar keys are as above.
+- The static families' `root` match keys are the module `match=` keys
+  (10 §5.1).
+- The kernel build writes the sidecar, and packaging copies it verbatim.
