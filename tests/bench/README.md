@@ -221,12 +221,24 @@ boot 2 batch: /tmp/kbootset status > /dev/term/ser 2>&1
 
 ### S2-46 — the exit row: upgrade and roll back with apkg alone
 
-Once the kernel packages (S2-12) and the catalog's kernel-space block
-(S2-23) exist:
-1. `apkg update; apkg upgrade <kernel package>`: apkg's trigger runs
-   `kbootset build` and `commit`, and prints `generation 2 committed;
-   power-cycle to boot it`.
-2. Power-cycle; `kbootset mark-good` at the end of rc.
-3. `kbootset rollback`; power-cycle: generation 1 boots.
+The packages are amix-packages' S2-12 set: `kbootset`, `loader-amix` and
+`kernel-k46-z`, catalogued by `gen-catalog`, with the kernel-space block.
+The kernel sidecar must carry `bss=` (C2-3 v4) and the kbootset package
+must be built from amix-dlm 1230e8b or later. Vehicle: the kinfo row's.
+The box has apkg 0.3 and `/dev/kinfo` (kbootset makes it if missing), its
+catalog source reachable, and no `/etc/default/bootset` (auto is the
+default).
 
-The commands are filled in when S2-12 lands.
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | `apkg update; apkg install kbootset loader-amix kernel-k46-z` | apkg installs the three. `/var/apkg/kpkg/` gets records for loader-amix and kernel-k46-z, named by pkginst; kbootset has none. The trigger runs `/sbin/kbootset build` and `commit`, and apkg ends with `apkg: generation 2 committed; power-cycle to boot it` |
+| 2 | `kbootset mark-good` | `amix-boot: generation 2, kernel unix 1459584 bytes`; then `generation 2 is good and the default` |
+| 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
+| 4 | `kbootset status` | `amix-boot: generation 1, kernel …`; status shows default 1, and 2 still good |
+
+The row passes when:
+- the box was upgraded by apkg alone, with no file placed by hand;
+- `kbootset check` reports 0 problems after boot 2;
+- the rollback brings generation 1 back.
+
+That is stage 2's exit gate (80 §2) on the bench.
