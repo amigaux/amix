@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-25 — amix-cdboot (S1-C2) and the floppy pair (S1-24) (42476b7..12c70f5)
+
+boot2 split into a shared core plus media (store, CD). amix-cdboot: boot2 as an AmigaDOS load file (b2link -h) reading
+/BOOT/K30|K46 through dos.library; manifest file= members; mkstore -C / lsstore -C write and verify the CD tree. Floppy
+pairs: an extent may continue on the next volume and the manifest sits ahead of its members, so a pair boots with one disk
+change (the deflated miniroot is larger than one volume); M-FP1 (static) and M-NET1d closed: k30 fits with 14.8 %, k46
+with 11.8 % (trimmed engine). Spec changes after freeze: 10 §4.3 and §4.4. 313 host checks; boot2 26 556 B. The bench rows
+N19–N26 need a re-run on this boot2 before stage exit.
+
 ## 2026-10-25 — S1-19 defects: AGA display state at hand-off, boot device name (301b836, 3b404c7)
 
 boot2 restores the display state the 1992 console expects before it starts the kernel: a null copper list and FMODE,
