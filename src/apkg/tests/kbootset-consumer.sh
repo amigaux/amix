@@ -6,15 +6,17 @@
 # run-tests.sh proves the record apkg writes is C2-2 §2 to the byte and
 # that the trigger speaks C2-4 to a mock.  This script closes the loop
 # with the REAL reader: it builds kbootset from the sibling amix-dlm tree
-# (read-only; the binary lands in tests/work), lays an empty boot store in
+# with its own Makefile (build dir redirected into tests/work, so the
+# amix-dlm tree is only read), lays an empty boot store in
 # an image, and lets apkg install a kernel-space package and call that
 # kbootset through a wrapper that adds what a host build needs (--image,
 # the box facts).  kbootset's gate 1 then compares every member with the
 # `file` line apkg wrote; gate 2 compares the record's kabi with the
 # kernel's sidecar.
 #
-# Not part of the run-tests.sh count: it needs the amix-dlm checkout and
-# zlib.  Without them it says SKIP and exits 0.
+# Not part of the run-tests.sh count: it needs the amix-dlm checkout, a
+# host cc and zlib.  Without the checkout it says SKIP and exits 0; with it,
+# a kbootset that does not build fails the script.
 #
 # Usage: sh tests/kbootset-consumer.sh [path-to-amix-dlm]
 
@@ -27,22 +29,24 @@ ok()  { PASS=$((PASS + 1)); echo "PASS: $1"; }
 bad() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; [ -n "${2:-}" ] && { \
         echo "----- output -----"; echo "$2"; echo "------------------"; }; }
 
-if [ ! -f "$DLM/kbootset/kbuild.c" ]; then
-    echo "SKIP: no amix-dlm tree with kbootset build at $DLM"; exit 0
+if [ ! -f "$DLM/Makefile" ] || [ ! -d "$DLM/kbootset" ]; then
+    echo "SKIP: no amix-dlm tree (Makefile + kbootset/) at $DLM"; exit 0
 fi
 DLM=$(cd "$DLM" && pwd)
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 APKG=$SRC/apkg
 rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/repo/pkgs/kernel" "$WORK/cache"
 
-C=$DLM/loader/common
-( cd "$DLM" && cc -std=c89 -O2 -DKS_ZLIB -I"$C" -Ikbootset -o "$WORK/kbootset" \
-    kbootset/kbootset.c kbootset/ks.c kbootset/kbuild.c "$C/crc32.c" \
-    "$C/store.c" "$C/manifest.c" "$C/inflate.c" "$C/select.c" "$C/rel.c" \
-    "$C/bootinfo.c" "$C/sha256.c" -lz ) 2>"$WORK/kb.err" \
-    || { echo "SKIP: kbootset did not build from $DLM"; cat "$WORK/kb.err"; exit 0; }
-ok "kbootset built from amix-dlm $(git -C "$DLM" log -1 --format=%h 2>/dev/null)"
-
+# kbootset is built by amix-dlm's own Makefile, so a source file it gains
+# is picked up here too.  B= points its build directory into tests/work:
+# nothing is written inside the amix-dlm tree.  Once the tree is there, a
+# build that fails is a FAIL, never a SKIP.
+make -C "$DLM" B="$WORK/dlm" "$WORK/dlm/kbootset" > "$WORK/kb.err" 2>&1 \
+    && [ -x "$WORK/dlm/kbootset" ] \
+    && ok "kbootset built by amix-dlm's Makefile at $(git -C "$DLM" log -1 --format=%h 2>/dev/null)" \
+    || { bad "kbootset did not build from $DLM" "$(tail -20 "$WORK/kb.err")"
+         echo "== kbootset consumer: $PASS passed, $FAIL failed =="; exit 1; }
+cp "$WORK/dlm/kbootset" "$WORK/kbootset"
 KB=$WORK/kbootset
 IMG=$WORK/disk.img
 T=$WORK/root                      # the -R target

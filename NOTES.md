@@ -10,6 +10,11 @@ mapping match to the byte. Four fixes followed, one commit each.
    unknown = manual (already so), and that the box form without `--image`/`--dev` and the default
    journal wait for kinfo, so apkg keeps passing `--journal`. The status-2 message now names C2-4
    version 2.
+2. **The consumer test builds kbootset with amix-dlm's own Makefile**
+   (`make -C <amix-dlm> B=<tests/work>/dlm <...>/dlm/kbootset`), so a file kbootset gains is picked up:
+   it already had (`kbootset/kmedia.c`), and the old hard-coded source list would no longer link. `B=`
+   keeps the build directory inside this repo's `tests/work`; the amix-dlm tree is only read. With the
+   tree present, a failed build is a FAIL (it used to SKIP). 10/0 against amix-dlm `bbb6088`.
 
 ## 2026-10-25 — apkg 0.3 kernel space: the kpkg block, SHA-256, install records, the kbootset trigger, the journal (built, NOT minted, NOT published)
 
