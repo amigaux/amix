@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 3
+# C2-2 — kernel-space catalog entries and apkg's install record, version 4
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed by D-3 §13: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -52,10 +52,19 @@ whole.
 - Module packages are published from stage 3 on; until then
   `gen-catalog.py` may skip them.
 
-## 2. The install record `/var/apkg/kpkg/<name>`
+## 2. The install record `/var/apkg/kpkg/<pkginst>`
 
-apkg 0.3 writes it once the package is installed. It is one `key value`
-per line:
+apkg 0.3 writes it once the package is installed.
+- The file is named by the package's pkginst: its `pkginst=` (C2-2 §1),
+  else its name. A pkginst is at most 9 characters, so the record and
+  apkg's `<pkginst>.new` stay distinct on an s5 root, which keeps 14
+  characters of a name. `kernel-k46-zacd` and `kernel-k46-zacd.new` would
+  not.
+- The `name` line inside carries the full name.
+- kbootset reads every file in the directory except `*.new` and goes by
+  the `file` lines, so the file name does not matter to it.
+
+The record is one `key value` per line:
 
 ```
 name <name>
