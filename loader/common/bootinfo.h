@@ -94,6 +94,18 @@ int ax_disksel_parse(const char *s, struct ax_disksel *d);
 /* the 0x1c-byte RTO1 record for an sd disk selector; 0, or -1 if invalid */
 int ax_rto1_build(const struct ax_disksel *d, ax_u8 out[AX_RTO1_LEN]);
 
+/* a memory region as exec lists it: MemHeader attributes, lower, upper */
+struct ax_memr {
+	ax_u32 attr, lower, upper;
+};
+
+/* where the kernel is bound: the largest region without MEMF_CHIP (attr
+ * 0x2), its base rounded down to 256 bytes; *size its bytes from there.
+ * Returns 0 with *size 0 when there is no such region: the kernel needs
+ * fast memory and is never bound in chip memory (address 0 is the vector
+ * table) */
+ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
+
 /* the 0x38-byte RTH1 record; root may be 0 */
 void ax_rth1_build(ax_u32 flags, ax_u32 boot_unit, ax_u32 boot_base, ax_u32 boot_id,
 		   const ax_u8 *root, ax_u8 out[AX_RTH1_LEN]);

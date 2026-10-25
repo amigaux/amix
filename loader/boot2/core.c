@@ -22,6 +22,7 @@ struct work {
 	ax_u32 crctab[256];
 	struct ax_inflate inf;
 	struct ax_manifest man;
+	struct ax_ctl ctl, newctl;	/* the control block, and the one written */
 	ax_u8 cfgs[AXB_MAXBOARDS * AXB_CFGSIZE];
 	ax_u8 mems[AXB_MAXMEM * AXB_MEMSIZE];
 };
@@ -29,12 +30,13 @@ static struct work *w;
 #define crctab	(w->crctab)
 #define inf	(w->inf)
 #define man	(w->man)
+#define ctl	(w->ctl)
+#define newctl	(w->newctl)
 
 ax_u32 *ax_crctab;
 ax_u32 core_cpu;
 static ax_u32 attn;
 static const struct medium *med;
-static struct ax_ctl ctl, newctl;
 
 /* the generation that loaded */
 static const struct ax_gen *g;
@@ -78,22 +80,21 @@ core_init(void)
 	return 0;
 }
 
-/* the base of the largest non-chip memory region, rounded down to 256 bytes */
+/* the kernel's bind address (ax_bind_region over exec's memory list);
+ * *size 0: no fast memory */
 static ax_u32
-bind_address(void)
+bind_address(ax_u32 *size)
 {
 	ax_u8 *mh = *(ax_u8 **)((ax_u8 *)ax_execbase + EXEC_MEMLIST);
-	ax_u32 base = 0, max = 0, lower, size;
+	struct ax_memr r[AXB_MAXMEM];
+	int n;
 
-	for (; *(ax_u32 *)mh; mh = *(ax_u8 **)mh) {
-		if (*(ax_u16 *)(mh + 14) & MEMF_CHIP)
-			continue;
-		lower = *(ax_u32 *)(mh + 20) & ~0xFFUL;
-		size = *(ax_u32 *)(mh + 24) - lower;
-		if (size > max)
-			max = size, base = lower;
+	for (n = 0; *(ax_u32 *)mh && n < AXB_MAXMEM; mh = *(ax_u8 **)mh, n++) {
+		r[n].attr = *(ax_u16 *)(mh + 14);
+		r[n].lower = *(ax_u32 *)(mh + 20);
+		r[n].upper = *(ax_u32 *)(mh + 24);
 	}
-	return base;
+	return ax_bind_region(r, n, size);
 }
 
 static const struct ax_gen *
@@ -190,6 +191,7 @@ static int
 load_first(const struct ax_sel *sel)
 {
 	struct ax_relerr rer;
+	ax_u32 room;
 	int k, i, errline, rc;
 
 	for (k = 0; k < sel->n; k++) {
@@ -220,15 +222,25 @@ load_first(const struct ax_sel *sel)
 		}
 		con_printf("amix-boot: generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
 			   man.kernel.size);
+		vaddr = bind_address(&room);
+		if (!room) {	/* never bind in chip memory: 0 is the vector table */
+			con_puts("amix-boot: no fast memory to run the kernel in\n");
+			fail(4, gen);
+			goto next;
+		}
 		kbuf = load_member(&man.kernel, gen);
 		if (!kbuf)
 			goto next;
-		vaddr = bind_address();
 		rc = ax_rel(kbuf, man.kernel.size, vaddr, 1, &bd, &rer);
-		if (rc == AXR_OK)
+		if (rc == AXR_OK && bd.end - vaddr <= room)
 			return k;
-		con_printf("amix-boot: L6 relocation failed: error %d, section %u record %u type %u\n",
-			   rc, rer.rsect, rer.index, rer.type);
+		if (rc == AXR_OK) {
+			con_printf("amix-boot: the kernel needs %u bytes, the largest fast memory "
+				   "region has %u\n", bd.end - vaddr, room);
+			fail(4, gen);
+		} else
+			con_printf("amix-boot: L6 relocation failed: error %d, section %u record %u type %u\n",
+				   rc, rer.rsect, rer.index, rer.type);
 		x_freemem(kbuf, man.kernel.size);
 		kbuf = 0;
 next:

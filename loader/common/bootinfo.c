@@ -231,3 +231,20 @@ ax_bootinfo_build(ax_u8 out[AXB_SIZE], const ax_u8 *cfgdevs, int ncfg,
 		copy(out + AXB_RESERVED + AX_AXL1_OFF, axl1, AX_AXL1_LEN);
 	return 0;
 }
+
+ax_u32
+ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size)
+{
+	ax_u32 base = 0, max = 0, lower;
+	int i;
+
+	for (i = 0; i < n; i++) {
+		if (r[i].attr & 0x2)
+			continue;	/* MEMF_CHIP */
+		lower = r[i].lower & ~0xFFUL;
+		if (r[i].upper > lower && r[i].upper - lower > max)
+			max = r[i].upper - lower, base = lower;
+	}
+	*size = max;
+	return base;
+}

@@ -123,4 +123,25 @@ test_bootinfo(void)
 	T_EQ(AX_GET32(bi + 0x678 + 0x38), AX_AXL1_MAGIC);
 	/* more than 16 boards refused (the kernel's copy loop has no bound) */
 	T_EQ(ax_bootinfo_build(bi, cfg, 17, mem, 1, keys, &bd, rth, axl), -1);
+
+	/* where the kernel is bound: never in chip memory */
+	{
+		/* a chip-only machine: no fast region, size 0 (the loader refuses, L4) */
+		struct ax_memr chiponly[1] = { { 0x3, 0x400, 0x200000 } };
+		/* chip, a small and a large fast region; the base rounds down to 256 */
+		struct ax_memr mixed[3] = {
+			{ 0x3, 0x400, 0x200000 },
+			{ 0x5, 0x07000020, 0x07100000 },
+			{ 0x5, 0x08000040, 0x09000000 } };
+		ax_u32 size, base;
+
+		base = ax_bind_region(chiponly, 1, &size);
+		T_EQ(size, 0);
+		T_EQ(base, 0);
+		base = ax_bind_region(mixed, 3, &size);
+		T_EQ(base, 0x08000000UL);
+		T_EQ(size, 0x01000000UL);
+		base = ax_bind_region(mixed, 0, &size);
+		T_EQ(size, 0);
+	}
 }
