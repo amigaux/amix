@@ -276,6 +276,14 @@ or a key / mouse button. The stock loader already continued on volume 2 after
 a read error (`MP/refute-boot2-one-blob.md` P2), but that path was never
 exercised; ours is explicit.
 
+An extent may run past the end of its volume: its bytes continue at offset
+0x800 of the next volume (after that volume's two store headers), and boot2
+asks for that volume in the middle of the member. A deflated miniroot is
+larger than the data area of one DD volume (M-FP1), so this is what lets the
+RAM-disk profile fit. A manifest never spans; the writer places each
+generation's manifest on the volume where its first member starts, so the
+pair boots with one disk change.
+
 Two profiles, decided by measurement (M-FP1, M-FP2):
 
 - **RAM-disk profile (proposed default):** both volumes are store; the
