@@ -14,6 +14,9 @@
 #     (tree gate stubbed out) refuses and removes the .pkg;
 #   - the NEEDED gate rejects a host path in DT_NEEDED;
 #   - the ll-printf gate rejects printf("%lld") and accepts it once reviewed;
+#   - the FPU gate rejects the 040/060-only FPU forms -mcpu=68060 emits (an
+#     executable, an archive, and amix_pkgroll's payload) and passes the same
+#     source built with the recipe flags (-m68020-60);
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in.
 # Exit 0 only if every check holds.
 
@@ -116,5 +119,27 @@ if amix_gate_g14_llprintf "$T/ll" >/dev/null 2>&1; then fail "ll-printf gate pas
 AMIX_LL_PRINTF_REVIEWED="selftest" amix_gate_g14_llprintf "$T/ll" >/dev/null 2>&1 || fail "ll-printf gate ignored AMIX_LL_PRINTF_REVIEWED"
 amix_gate_g14_llprintf "$T/llsn" >/dev/null 2>&1 || fail "ll-printf gate rejected snprintf-only use"
 ok "ll-printf gate rejects printf(\"%lld\"), honours a review, passes snprintf-only"
+
+# FPU: -mcpu=68060 emits fdmul/fdadd for double arithmetic, which a
+# 68881/68882 lacks (SIGSYS on the 030 golden row); the recipe flags do not.
+printf 'double fma2(double a, double b) { return a * b + a; }\nint main(int c, char **v) { return (int)fma2(c, 1.5); }\n' > "$T/fp.c"
+mkdir -p "$T/fp060" "$T/fpok"
+$CC -mcpu=68060 -O2 -o "$T/fp060/prog" "$T/fp.c"
+$CC -mcpu=68060 -O2 -c "$T/fp.c" -o "$T/fp060/fp.o"; "$AR" rc "$T/fp060/libfp.a" "$T/fp060/fp.o"; rm -f "$T/fp060/fp.o"
+$CC $AMIX_ARCH_FLAGS -O2 -o "$T/fpok/prog" "$T/fp.c"
+$CC $AMIX_ARCH_FLAGS -O2 -c "$T/fp.c" -o "$T/fpok/fp.o"; "$AR" rc "$T/fpok/libfp.a" "$T/fpok/fp.o"; rm -f "$T/fpok/fp.o"
+for f in "$T/fp060/prog" "$T/fp060/libfp.a"; do
+	if amix_gate_g14_fpu "$f" >/dev/null 2>&1; then fail "FPU gate passed the -mcpu=68060 $f"; fi
+done
+amix_gate_g14_fpu "$T/fp060/prog" 2>&1 | grep -q '<fma2>' || fail "FPU gate did not name the symbol (fma2)"
+for f in "$T/fpok/prog" "$T/fpok/libfp.a"; do
+	amix_gate_g14_fpu "$f" >/dev/null 2>&1 || fail "FPU gate rejected the $AMIX_ARCH_FLAGS $f"
+done
+ok "FPU gate rejects -mcpu=68060 fd*/fs* forms (executable, archive; names <fma2>), passes $AMIX_ARCH_FLAGS"
+cp "$T/fp060/libfp.a" "$T/fp060/liblib.a"
+if roll fp060 "$T/fp060"; then fail "amix_pkgroll rolled a payload with 040/060-only FPU forms"; fi
+[ ! -f "$T/out-fp060.pkg" ] || fail "amix_pkgroll left a datastream for the fd*-form payload"
+grep 'FPU FAIL' "$T/roll-fp060.log" >/dev/null || fail "amix_pkgroll failed, but not at the FPU gate"
+ok "amix_pkgroll refuses a payload with 040/060-only FPU forms, no datastream written"
 
 echo "gate-gcc14-selftest: PASS ($n checks)"

@@ -94,7 +94,8 @@ amix_pkgroll() {
 	command -v amix_gate_060_tree >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/gates.sh"
 	amix_gate_060_tree "$_pr_root" || {
 		echo "[FAIL] 68060 gate: the payload of $_pr_pkg carries instructions a 68060" >&2
-		echo "       SIGKILLs on; no datastream rolled." >&2
+		echo "       SIGKILLs on, or (gcc14) a gate above failed -- e.g. 040/060-only FPU" >&2
+		echo "       forms a 68881/68882 lacks; no datastream rolled." >&2
 		exit 1
 	}
 

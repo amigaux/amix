@@ -247,10 +247,11 @@ _amix_gate_060_tree_impl() {
 	[ "$AMIX_TOOLCHAIN" = gcc14 ] || return 0
 	_gt_bad=0
 	for _gt_e in $(amix_gate_elfs "$1"); do
+		# every ELF and archive: no 040/060-only FPU form (a 68881/2 lacks them)
+		amix_gate_g14_fpu "$_gt_e" || _gt_bad=1
 		case "$(od -An -tx1 -j16 -N2 "$_gt_e" | tr -d ' ')" in 0002) ;; *) continue ;; esac
 		amix_gate_g14_needed "$_gt_e" || _gt_bad=1
 		amix_gate_g14_llprintf "$_gt_e" || _gt_bad=1
-		amix_gate_g14_fpu "$_gt_e"
 	done
 	unset _gt_e
 	return $_gt_bad
@@ -377,7 +378,8 @@ amix_g14_scan3() {
 # amix_gate_d4_selftest_g14 <workdir> -- the same proof under TOOLCHAIN=gcc14.
 # GCC 14 has no AMIX_MUL64 switch; -m68020 is what brings the 64-bit forms
 # back (it emits MULS.L <ea>,Dh:Dl for a long long product and MULU.L #imm,
-# Dh:Dl for x / 10), and -mcpu=68060 is what keeps them out.  So: the probe
+# Dh:Dl for x / 10), and the recipe flags (-m68020-60: tuned for the 060) keep
+# them out.  So: the probe
 # built -m68020 must be rejected by all three scanners, the awk one counting
 # exactly 2 multiplies; built with the recipe flags it must be clean; and the
 # same for a linked executable, which is what scan060.py reads.
@@ -524,17 +526,42 @@ amix_gate_g14_llprintf() {
 	return $_gl_rc
 }
 
-# amix_gate_g14_fpu <elf> -- count FPU instructions (informational, never
-# fails): code built -mcpu=68060 is hard-float, so a nonzero count means the
-# binary needs a 68881/2 or an 040/060 FPU and will not run on a 68LC040/LC060.
+# amix_gate_g14_fpu <elf|archive> -- the FPU gate.  FAILS on any 68040/68060-only
+# FPU form: fsmove/fdmove, fsadd/fdadd, fssub/fdsub, fsmul/fdmul, fsdiv/fddiv,
+# fssqrt/fdsqrt, fsabs/fdabs, fsneg/fdneg (single/double-rounding variants).
+# A 68881/68882 does not have them: on the 030 golden row (68030 + 68882,
+# stock 2.1c kernel) the first one kills the process with SIGSYS ("Bad System
+# Call", PHASE2 2026-10-25, gcc14 make built -mcpu=68060).  -m68020-60 keeps
+# them out of compiled code; the toolchain runtime (libgcc, libamixc99) built
+# --with-cpu=68060 still carries them, so a binary that links such a member
+# fails here and the gate names the symbol it sits in.  Then it counts the
+# FPU instructions (informational): a nonzero count means the binary needs a
+# 68881/2 or an 040/060 FPU (not an LC part without the kernel's FPE).
 amix_gate_g14_fpu() {
+	_gf_bad=$("$OBJDUMP" -d "$1" 2>/dev/null | awk -F'\t' '
+		/^[0-9a-f]+ <.*>:$/ { fn = $0; sub(/^[0-9a-f]+ /, "", fn); sub(/:$/, "", fn) }
+		/^In archive / { mem = "" }
+		/:     file format / { mem = $0; sub(/:.*/, "", mem); sub(/.*\//, "", mem) }
+		NF >= 3 { split($3, a, " ");
+			if (a[1] ~ /^f[sd](move|add|sub|mul|div|sqrt|abs|neg)[bwlsdxp]?$/)
+				printf "%s%s %s %s\n", (mem != "" ? mem ":" : ""), fn, $1, $3 }')
+	if [ -n "$_gf_bad" ]; then
+		echo "  FPU FAIL $1 -- 68040/68060-only FPU forms (a 68881/68882 lacks them):" >&2
+		# a stripped executable has no .symtab: objdump labels code by the
+		# nearest DYNAMIC symbol, which is not the function the code is in
+		"$READELF" -S "$1" 2>/dev/null | grep -q "\.symtab" || echo "          (stripped: the labels are the nearest dynamic symbols; read the unstripped build for the function)" >&2
+		echo "$_gf_bad" | awk '{c[$1]++; if (!($1 in ex)) ex[$1] = $3 " " $4}
+			END {for (s in c) printf "          %-40s %3d  e.g. %s\n", s, c[s], ex[s]}' | sort >&2
+		unset _gf_bad
+		return 1
+	fi
 	_gf_n=$("$OBJDUMP" -d "$1" 2>/dev/null | awk -F'\t' 'NF >= 3 && $3 ~ /^f/ && $3 != "ff1" {n++} END {print n + 0}')
 	if [ "$_gf_n" -eq 0 ]; then
-		echo "  FPU      $(basename "$1"): 0 FPU instructions (runs without an FPU)"
+		echo "  FPU      $(basename "$1"): 0 FPU instructions (runs without an FPU), no 040/060-only form"
 	else
-		echo "  FPU      $(basename "$1"): $_gf_n FPU instructions -- NEEDS an FPU (68881/2, 040, 060; not LC parts)"
+		echo "  FPU      $(basename "$1"): $_gf_n FPU instructions, none 040/060-only -- NEEDS an FPU (68881/2, 040, 060)"
 	fi
-	unset _gf_n
+	unset _gf_n _gf_bad
 	return 0
 }
 

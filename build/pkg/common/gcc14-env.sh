@@ -15,14 +15,21 @@
 #              interpreter /usr/lib/libc.so.1, -Ttext-segment=0x80000000,
 #              SysV hash, no RELRO, -malign-int, and
 #              -L usr/ccs/lib -L usr/lib -lamixc99 -lc.
-#   CPU        -mcpu=68060 (the toolchain's --with-cpu default): GCC then
-#              never emits the 64-bit MUL.L/DIV.L forms the 68060 removed, and
-#              the code still runs on the 68020/030/040.  It is HARD-FLOAT
-#              (__HAVE_68881__): any FP instruction needs a 68881/2 or an
-#              040/060 FPU, so a binary that uses floating point does not run
-#              on an FPU-less part (68LC040, 68LC060).  The period compiler
-#              is hard-float too (-m68020 also defines __HAVE_68881__); what
-#              each package actually contains is counted at build time
+#   CPU        -m68020-60 (PHASE2, 2026-10-25): code for the 68020 through
+#              the 68060, tuned for the 060.  GCC then never emits the 64-bit
+#              MUL.L/DIV.L forms the 68060 removed, and its FPU code is the
+#              68881 set.  NOT the toolchain's --with-cpu=68060 default:
+#              -mcpu=68060 also emits the 040/060-only FPU forms (fdmove,
+#              fdadd, fdmul, fddiv, ...), which a 68881/68882 lacks -- the
+#              gcc14 make built that way died with SIGSYS on the 030 golden
+#              row (68030 + 68882).  068060-only codegen is never the default;
+#              amix_gate_g14_fpu refuses any such form in a payload, whatever
+#              the flags.  It is HARD-FLOAT (__HAVE_68881__): any FP
+#              instruction needs a 68881/2 or an 040/060 FPU, so a binary that
+#              uses floating point does not run on an FPU-less part (68LC040,
+#              68LC060) without the kernel's FPE.  The period compiler is
+#              hard-float too (-m68020 also defines __HAVE_68881__); what each
+#              package actually contains is counted at build time
 #              (amix_gate_g14_fpu) and recorded, not assumed.
 #   predefines the specs define only amix/__amix/__amix__.  The period
 #              compiler's platform set is restored here, exactly:
@@ -85,10 +92,14 @@
 #              reports must be explained as table data (gates.sh,
 #              amix_g14_scan3).  tools/gate-gcc14-selftest.sh proves the
 #              gcc14 gates fail when they should.
-#   FPU users  amix_gate_g14_fpu counts FPU instructions per binary.  Note
-#              libamixc99's vsnprintf saves %fp2 in its prologue, so any
-#              binary that calls snprintf executes an FPU instruction even
-#              for integer-only formats.
+#   FPU users  amix_gate_g14_fpu refuses the 040/060-only FPU forms and
+#              counts the rest per binary.  The toolchain runtime was built
+#              --with-cpu=68060, so libgcc (e.g. __floatundidf) and
+#              libamixc99 (amix_vsnprintf) carry such forms until it is
+#              rebuilt: a binary that links one of those members fails the
+#              gate.  libamixc99's vsnprintf also saves %fp2 in its prologue,
+#              so any binary that calls snprintf executes an FPU instruction
+#              even for integer-only formats.
 #   outputs    build/gcc14/<recipe>/ and build/gcc14/pkg/, so a gcc14 build
 #              never overwrites a period artifact; the package revision is
 #              the recipe's own (a new revision: different bytes).
@@ -161,10 +172,10 @@ export AMIX_SYSROOT AMIX_CHECK060 AMIX_PREDEFS AMIX_GCC14_CC AMIX_GCC14_ROOT
 # same predefines and the same sysroot headers (no host /lib/cpp fallback).
 export AMIX_CPP="$CC -E"
 
-# -mcpu=68060: see the header.  -O2 per the evaluation (-Os where a hot loop
+# -m68020-60: see the header.  -O2 per the evaluation (-Os where a hot loop
 # must fit the 060's 8 KB I-cache).  Never -mno-align-int or
 # -fpcc-struct-return (ABI).
-AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--mcpu=68060}"
+AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020-60}"
 AMIX_CFLAGS="${AMIX_CFLAGS:-$AMIX_ARCH_FLAGS -O2 -Wall}"
 export AMIX_ARCH_FLAGS AMIX_CFLAGS
 
