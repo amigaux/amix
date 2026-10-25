@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset host core and state machine; contracts C2-1..C2-5 (3afa802..3c159ba)
+
+kbootset over any byte device (kbootset/ks.c): create, commit (pristine first, then trial), mark-good (also a loader on
+trial), rollback (down to pristine), next, mark-bad, collect, loader-install; every write read back; the kept-set rule;
+gate 5 (store space) writes nothing; journal recovery. Command line (kbootset/kbootset.c) on images and raw slices, exit
+codes 0–4, commit step markers and KBOOTSET_HOLD for power-cut rows (every single or torn write survives: the store still
+boots by the loader's own rules). The control block records the last generation id issued (spec change 10 §4.2).
+docs/contracts/: C2-1 kinfo record, C2-2 kpkg catalog block and install record, C2-3 kernel/loader package layout and kabi
+sidecar, C2-4 kbootset as a called program, C2-5 checksum contract v2 — agreed by the orchestrator 2026-10-25 evening.
+624 host checks. boot2 27 540 B.
+
 ## 2026-10-26 — table-driven inflate; raw where there is room; no SHA-256 in the loader (cd56b88, eaba2d1)
 
 M-LD7 bench half closed: the loader checks CRC-32 only (SHA-256 costs 2.3–3.75 s per kernel on a 25 MHz 68030). M-LD8:
