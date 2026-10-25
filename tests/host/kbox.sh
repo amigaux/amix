@@ -79,6 +79,7 @@ python3 -I $T/disk.py kinfo $T/kinfo 1,0,6,$START,0x40000000,$A4091,$A4091 0,$A4
 # 1. the loader record through the card table: no --dev needed
 $B/kbootset -R $R status > $T/out
 grep -q "booted: generation 1, by the primary loader; kernel 68060-261025-50, 68060" $T/out
+grep -q "facts: line k46, boot zorro:0202:54, root zorro:0202:54, rootfs ufs, fast memory 16777184" $T/out
 grep -q "^store=$T/dev/c6d0s3$" $R/etc/default/bootset
 grep -q "^store-id=" $R/etc/default/bootset
 # 2. the next run takes bootset's store= (the whole-disk node is not read)
@@ -129,8 +130,18 @@ $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
 # loader record maps to no card, so every disk is scanned
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,0 ""
 rm -f $R/etc/default/bootset
-$B/kbootset -R $R status > /dev/null
+$B/kbootset -R $R status > $T/out
 grep -q "^store=$T/dev/c6d0s3$" $R/etc/default/bootset
+
+# 5b. the Z3660 shape (port evidence dlm-1): the BootNode names no
+# ConfigDev, so AXL1's boot device is base 0 / id 0, and the card table
+# holds only the Z3660 card: the scan finds the store, and the boot
+# controller is the card of the disk it is on
+Z3660=0x144b0100
+python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,$Z3660 0,$Z3660,0x40000000,0
+rm -f $R/etc/default/bootset
+$B/kbootset -R $R status > $T/out
+grep -q "facts: line k46, boot zorro:144b:01, root zorro:144b:01, rootfs ufs" $T/out
 
 # 6. gate 9: a second UNI\0 slice on the boot disk
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0

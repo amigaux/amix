@@ -602,6 +602,11 @@ main(int argc, char **argv)
 				       (unsigned long)ki.cpu, (unsigned long)ki.fast);
 			else if (have_kinfo)
 				printf("booted: by the stock loader (no loader record); kernel %s\n", ki.build);
+			printf("facts: line %s, boot %s, root %s, rootfs %s, fast memory %lu\n",
+			       facts.line == 30 ? "k30" : facts.line == 46 ? "k46" : "(unknown)",
+			       facts.bootdev[0] ? facts.bootdev : "(unknown)",
+			       facts.rootdev[0] ? facts.rootdev : "(unknown)",
+			       facts.rootfs[0] ? facts.rootfs : "(unknown)", (unsigned long)facts.mem);
 		} else if (!strcmp(cmd[0], "check") && argc == 1) {
 			int bad = ks_check(&k, say) + kb_check(&k, root, say);
 
