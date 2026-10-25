@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-25 — TOOLCHAIN=gcc14 selector and gates; grep, less, make recipes ported (414de4a, b8985c1)
+
+A selectable GCC 14 toolchain (Antti's gcc14-cross-amix, userland only per D-3 §9) beside the period default:
+recipes/common/gcc14-env.sh with the switch items (SVR4/unix predefines, prototypes, hard-float), gates for DT_NEEDED bare
+names, 68060 safety and the libc %lld printf defect (tools/gate-gcc14-selftest.sh, 10 checks). grep, less and make build with
+TOOLCHAIN=gcc14 (one source patch for less). Emulator proof of the three packages and PHASE2.md still to come (the run was
+stopped mid-way); nothing published.
+
 ## 2026-10-13 — initial public release (github.com/jusii/amix-packages)
 
 Published from a fresh root: the recipes, the 68060 gate and its selftest, the registry and the docs as they
