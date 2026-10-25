@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 2
+# C2-4 — `kbootset` as a called program, version 3
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3), and what is not in kbootset yet (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -22,11 +22,11 @@ starts with `kbootset: `.
 
 | Form | Use |
 |---|---|
-| (none) | on the running box: the boot store found as in 40 §5, the root `/`. **Pending (S2-06, needs kinfo):** until then a store is always named with `--image` or `--dev` |
+| (none) | on the running box (S2-06): kinfo read from `/dev/kinfo` (C2-1); the boot store found as in 40 §5 (bootset's `store=`, else the loader record through kinfo's card table, else a scan of every disk), refusing at gate 8 or 9; the facts from the options, then kinfo, then bootset (§6); `mark-good`'s `--booted` and `--secondary` default to kinfo's loader record |
 | `-R <root>` | on a mounted target (the installer, repair mode): packages, records and `/stand` under `<root>`; the boot store from `<root>/etc/default/bootset` or `--bootdev` |
 | `--image <file> [--offset N]` | a store in a disk image at byte offset N (host media builds) |
 | `--dev <path> [--offset N]` | a store on a raw device at offset N |
-| `--journal <path>` | the journal. The default `<root>/var/kbootset/journal` is not in kbootset yet (it comes with the box form, S2-06): until then apkg always passes `--journal <target>/var/kbootset/journal`; without it there is no journal |
+| `--journal <path>` | the journal; default `<root>/var/kbootset/journal` in the box form, none with `--image`/`--dev` unless named (apkg names it) |
 | `media …` | the pristine generation of a new medium (host build only, S2-04): `--disk`, `--floppy`, `--cd` |
 
 ## 3. The trigger
@@ -51,3 +51,32 @@ power (S2-08, S2-40).
 - The five statuses are as above.
 - apkg runs `build` and `commit` as two calls.
 - The default journal path is `<root>/var/kbootset/journal`.
+
+## 6. `/etc/default/bootset`
+
+The installer writes it, apkg reads `bootset=`, and kbootset reads the
+rest and rewrites `store=` and `store-id=`. One `key=value` per line,
+lowercase keys, `#` comments, unknown keys ignored.
+
+```
+# /etc/default/bootset -- read by kbootset and apkg (40 §2.2, §5; C2-4 §6)
+bootset=auto
+store=/dev/rdsk/c6d0s3
+store-id=1a2b3c4d
+line=46
+bootdev=zorro:0202:54
+rootdev=zorro:0202:54
+rootfs=ufs
+mem=16777216
+```
+
+| Key | Meaning |
+|---|---|
+| `bootset` | `auto` or `manual` (§3) |
+| `store` | the boot store's raw slice. The store starts at offset 0 of its slice. Used when kbootset is called without `--image`/`--dev` |
+| `store-id` | the store header's set id, 8 hex digits. When the slice's header no longer carries it, kbootset finds the store again (40 §5) and rewrites `store` and `store-id` |
+| `line`, `bootdev`, `rootdev`, `rootfs`, `mem` | the box facts (`bootdev`/`rootdev` are C2-1 §2.1 match keys, `mem` in bytes), used only for a fact that kinfo does not give |
+
+There are no `root=` or `swap=` keys. kbootset carries both from the
+default generation's manifest, and the installer names them once, on the
+pristine build (`build --root … --swap …`).
