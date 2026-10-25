@@ -187,26 +187,37 @@ would refuse (closure) is the way to get a trial that panics in rc.
 
 ### S2-42 — M-GEN3: a power cut at each commit step
 
-Needs the rig's kill at a step marker (S2-40). For each N in 1, 2, 4, 5
-and 7, on a fresh copy of the row's image after boot 1:
+These rows run on the rig's cut (`rig-run --cut-at`, amix-kerntools
+`docs/rig-slots.md` §5), with the stand-in kernel package; the commit
+path is kbootset's own, so the rows need no apkg.
+- Vehicle: the kinfo row's (the KD060-Z kernel, generation 1 good, a
+  4 MiB store), with `/tmp/kbootset` from `make box`.
+- The stand-in tree from `s2-standin.sh`, made from that same KD060-Z
+  kernel, copied onto the root. That way generation 2 boots when its
+  commit completes.
+- Five rows, N = 1, 2, 4, 5, 7. Each is a lifecycle cell of two boots on a
+  fresh slot copy:
 
 ```
-KBOOTSET_HOLD=N /tmp/kbootset build && KBOOTSET_HOLD=N /tmp/kbootset commit
+--boots 2 --cut-boot 1 --cut-at 'kbootset: holding before step N'
+--extra '/tmp/kbootset build > /dev/term/ser 2>&1; (KBOOTSET_HOLD=N /tmp/kbootset commit > /dev/term/ser 2>&1 &)'
+boot 2 batch: /tmp/kbootset status > /dev/term/ser 2>&1
+--post-cell 'lsstore "$RIG_FIRST" <slice offset>'
 ```
 
-The rig kills the emulator when the console shows `kbootset: holding
-before step N`, and boots again.
+| N | Cut before | Boot 1 serial: the step markers up to N, then the hold | Boot 2: the loader boots | Boot 2: `kbootset status`, first line | lsstore after the cell |
+|---|---|---|---|---|---|
+| 1 | the journal | `generation 2 built …`; step 1; `holding before step 1` | `amix-boot: generation 1, kernel …` | the store listing (no journal message) | `ok`; generation 1 only |
+| 2 | the members | steps 1, 2; `holding before step 2` | generation 1 | `kbootset: the commit of generation 2 was interrupted before its commit point; nothing of it remains` | `ok`; generation 1 only |
+| 4 | the manifest | steps 1, 2, 4; `holding before step 4` | generation 1 | as N = 2 | `ok`; generation 1 only |
+| 5 | the control block | steps 1, 2, 4, 5; `holding before step 5` | generation 1 | as N = 2 | `ok`; generation 1 only |
+| 7 | clearing the journal | steps 1, 2, 4, 5, 7; `holding before step 7` | `amix-boot: generation 2, kernel …` (the trial, its attempt recorded) | `kbootset: the commit of generation 2 had completed when it was interrupted` | `ok`; generation 1 good, generation 2 trial with 1 attempt |
 
-| N | Killed before | Next boot | Next `kbootset status` |
-|---|---|---|---|
-| 1 | the journal | the previous default | no journal message |
-| 2 | the members | the previous default | `the commit of generation 2 was interrupted before its commit point; nothing of it remains` |
-| 4 | the manifest | the previous default | as N = 2 |
-| 5 | the control block (the commit point) | the previous default | as N = 2 |
-| 7 | the journal cleared | generation 2, the trial | `the commit of generation 2 had completed when it was interrupted` |
-
-Every row must boot. That is M-GEN3's exit condition, and 80's "every
-power-cut point leaves a booting generation".
+- Every row must boot (M-GEN3; 80's "every power-cut point leaves a
+  booting generation").
+- After the journal message, kbootset has cleared the journal: a second
+  `status` shows no message.
+- kbootset creates `/var/kbootset` itself when the system has none.
 
 ### S2-46 — the exit row: upgrade and roll back with apkg alone
 

@@ -11,7 +11,7 @@
 set -e
 B=${B:-build}
 T=$B/kbox
-rm -rf $T && mkdir -p $T/dev $T/root/etc/default $T/root/var/kbootset $T/root/stand/k46 $T/root/var/apkg/kpkg
+rm -rf $T && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/var/apkg/kpkg
 R=$T/root
 export KBOOTSET_DEVROOT=$T/dev KBOOTSET_KINFO=$T/kinfo
 
@@ -121,7 +121,7 @@ $B/kbootset -R $R build --root "sd id=02025400 base=40000000 unit=6 slice=1" | g
 $B/kbootset -R $R commit 2>/dev/null | grep -q "pristine"
 $B/kbootset -R $R build | grep -q "generation 2 built"
 $B/kbootset -R $R commit 2>/dev/null | grep -q "generation 2 committed"
-[ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]
+[ -d $R/var/kbootset ] && [ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]	# made by kbootset
 # 4. mark-good with no options: kinfo says generation 2 booted by the primary
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"

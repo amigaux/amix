@@ -61,6 +61,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "ks.h"
 #include "kbuild.h"
 #include "kbox.h"
@@ -536,8 +538,10 @@ main(int argc, char **argv)
 		}
 		image = dev;
 		off = 0;
-		if (!jpath) {
-			sprintf(jdefault, "%.1000s/var/kbootset/journal", root);
+		if (!jpath) {	/* the directory may not exist yet on an older system */
+			sprintf(jdefault, "%.1000s/var/kbootset", root);
+			mkdir(jdefault, 0755);
+			strcat(jdefault, "/journal");
 			jpath = jdefault;
 		}
 	}
