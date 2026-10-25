@@ -111,7 +111,8 @@ program against an image file, so media and boxes cannot drift).
 ### 3.2 Commit sequence
 
 1. Write a journal record (generation id, target store, extents planned).
-2. Write each member (deflate-compressed where it helps) into free extents
+2. Write each member into free extents (raw in a disk store, deflated
+   only on media where a generation must fit, `10-boot-loader.md` §5.5)
    of the store's data area.
 3. Read every written extent back and compare byte for byte.
 4. Write the manifest, read it back.

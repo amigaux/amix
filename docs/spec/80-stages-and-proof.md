@@ -82,3 +82,6 @@ the gap is an open question (OQ-80.1), not a silent skip.
 
 Each stage's emulator and metal rows are listed in `90-measurements.md` with
 their evidence class (bench or metal, P-28 D51) and the stage that needs them.
+The media-track rows that 90 lists under stage 2 (M-NET1f, M-TAPE1–4) do not
+gate stage 2's exit. They gate the media of the 1.1 release, which are built
+and proven at stage 5 (orchestrator, 2026-10-26).

@@ -313,7 +313,16 @@ RDB-style disc would stop being a data CD, and that path is unproven on
 **The design.**
 - The disc is a standard ISO9660 data CD (Rock Ridge as today,
   `IN/docs/install-iso.md:20`) with System Identifier `AMIGA BOOT`. It mounts
-  normally under Amix (cdfs), AmigaOS and other systems.
+  normally under Amix (cdfs), AmigaOS and other systems. The A4091/A4092
+  ROM's CD filesystem is ODFileSystem's ROM profile:
+  - it reads ISO9660, Rock Ridge and Joliet, preferring Rock Ridge, then
+    Joliet, then plain names, and matches case-insensitively;
+  - `S/Startup-Sequence` and `BOOT/amix-cdboot` therefore ride on Rock
+    Ridge;
+  - `amix-cdboot` needs an owner-execute mode, or AmigaOS refuses to run
+    it;
+  - the line directories use exact 8.3 names in every namespace
+    (installng, S1-C3).
 - Kickstart boots AmigaDOS from it through the ROM's CD filesystem and runs
   `S/Startup-Sequence`, which runs one program by its full path:
   **`amix-cdboot`**.
@@ -401,8 +410,10 @@ end crc32=5e6f7a8b
 
 The loader checks CRC-32 on the manifest and on every member it loads.
 SHA-256 values are for `kbootset check`, the package system and the kernel's
-own checks of boot- and demand-class files; whether the loader also checks
-SHA-256 is decided by its cost on a 25 MHz 68030 (M-LD7).
+own checks of boot- and demand-class files. The loader does not check
+SHA-256: on a 25 MHz 68030 it costs 2.3 s for a k30 kernel and 3.75 s for a
+k46 kernel, 6.3 times the CRC-32 (M-LD7,
+`docs/measurements/2026-10-26-m-ld7-m-ld8.md`).
 
 ### 5.2 Kernel identity
 
@@ -461,7 +472,15 @@ Members may be stored raw or deflate-compressed. Deflate replaces the stock
 LZW (`compress -b16`) stream: its decoder is small, it compresses better, and
 the stock decoder is Commodore code. The ratio against LZW on the floppy
 kernels and the decode time on a 68030 are measured (M-LD8); LZW is kept only
-if deflate loses on either.
+if deflate loses on either. Deflate wins the ratio (73 % and 71 % of the LZW
+size).
+
+**Raw where there is room.** Inflating costs seconds on a 68030 (M-LD8).
+Reading a raw kernel from a hard disk or a CD costs well under a second
+more. So members are stored raw in a disk store and on the CD, and deflated
+only where a generation must fit: the floppy pair and the netinstall medium
+(M-FP1). A floppy reads about 27 KiB/s, so there deflate saves more reading
+time than it costs to decode.
 
 ## 6. The loader record
 
