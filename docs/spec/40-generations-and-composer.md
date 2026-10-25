@@ -38,7 +38,12 @@ The 1.0 installer lays root, swap and a 10 MiB boot slice and no data slice
 holds the kept set four times over at today's kernel sizes (a k46 kernel is
 about 2.0–2.1 MB uncompressed, `amix-kerntools/docs/k0-families.md:1107-1120`)
 and leaves room for larger kernels, more root modules and a rescue RAM-disk
-generation without a re-lay. The data slice exists so a later reinstall can
+generation without a re-lay. Smaller boot slices are not a 1.1 target (D-3 §5: 1.0 boxes reinstall).
+They still boot, but the kept set does not fit them. A 4 MiB slice, as the
+stage-1 test vehicles have, holds two raw k46 generations (M-GEN1): the
+first and one upgrade. A third needs a generation marked bad first, and
+`collect` alone frees nothing, since the default and the two newest good
+ones are all kept. The data slice exists so a later reinstall can
 keep user data (D-3 §5). Each filesystem stays under the 1.0 limit of
 1024 MiB (`mkfs_ufs` fails at 65 536 cylinders,
 `amix-installng/docs/releases/1.0.md:265-301`); on larger disks the installer
