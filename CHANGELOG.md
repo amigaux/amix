@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — a brel kernel's bss; contracts C2-3 v4, C2-2 v4; the exit row (84315bb..bf7f93f)
+
+The brel format has no bss (elf2brel writes text+rodata+data and relocations only), so boot2's room check undercounted a
+brel kernel by 270–345 KB. Fix: the manifest's kernel record carries bss= for a brel (spec change after freeze 10 §5.1);
+boot2 adds it before the room check (512 KiB assumed with a printed line when absent); kbootset reads bss= from the sidecar,
+refuses a brel without it (gate 2), counts it in gate 6 and writes it on the manifest. boot2's self-relocation table moved to
+16-bit offsets (27 434 B, 1 238 B margin; b2check on the real boot2 at two bases in every make all). C2-3 v4: the kernel
+build writes the sidecar for the form it ships (size/sha256 of that file, bss= from the ELF); C2-2 v4: the install record
+file is /var/apkg/kpkg/<pkginst> (s5 14-char names). S2-46 exit row written with the S2-12 packages. 640 host checks.
+
 ## 2026-10-26 — /dev/kinfo: made by the installer, and by kbootset when missing (fb9c1ce..a96427d)
 
 M-GEN3 power-cut rows in the rig's cut shape (holds before steps 1, 2, 4, 5, 7); kbootset creates /var/kbootset for its
