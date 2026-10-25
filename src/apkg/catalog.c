@@ -127,6 +127,7 @@ static void ent_free(struct pkgent *e)
         free(e->kabi);
         free(e->pin);
         free(e->sha256);
+        free(e->loaderv);
         if (e->kpkginst != NULL)
             free(e->kpkginst);
         if (e->refused != NULL)
@@ -136,12 +137,18 @@ static void ent_free(struct pkgent *e)
 
 /* ---------------- the kernel-space block (#ext kpkg 1) ----------------
  *
- * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 2 (2026-10-26):
+ * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 3 (2026-10-26):
  *
  *   #ext kpkg 1
- *   #kpkg <name> <version> role=<kernel|loader|module> line=<k30|k46>
+ *   #kpkg <name> <version> role=<kernel|module> line=<k30|k46>
  *         kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex>
  *         file=<datastream>                          (one line each)
+ *   #kpkg <name> <version> role=loader line=any loader=<n> size=<bytes>
+ *         sha256=<64 hex> file=<datastream>
+ *
+ * The keys are role-dependent (§1.1): an entry lacking a key its role
+ * requires, or carrying one its role excludes (kabi=/pin= on a loader),
+ * is refused.
  *   #ksig <key-id> <file>                            (optional; absent in 1.1)
  *   #end kpkg
  *
@@ -218,7 +225,8 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     int nt;
     int i;
     int seen_role, seen_line, seen_kabi, seen_pin, seen_size, seen_sha,
-        seen_file, seen_pkginst, seen_offset;
+        seen_file, seen_pkginst, seen_offset, seen_loader;
+    int loader;
 
     nt = 0;
     p = line;
@@ -249,7 +257,7 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     e->name = xstrdup(tok[1]);
     e->version = xstrdup(tok[2]);
     seen_role = seen_line = seen_kabi = seen_pin = seen_size = seen_sha =
-        seen_file = seen_pkginst = seen_offset = 0;
+        seen_file = seen_pkginst = seen_offset = seen_loader = 0;
     for (i = 3; i < nt; i++) {
         eq = strchr(tok[i], '=');
         if (eq == NULL || eq == tok[i]) {
@@ -269,9 +277,7 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         } else if (strcmp(key, "line") == 0) {
             if (kdup(&seen_line, e, key))
                 continue;
-            if (strcmp(val, "k30") != 0 && strcmp(val, "k46") != 0)
-                krefuse(e, "unknown line", val);
-            e->kline = xstrdup(val);
+            e->kline = xstrdup(val);       /* checked per role below */
         } else if (strcmp(key, "kabi") == 0) {
             if (kdup(&seen_kabi, e, key))
                 continue;
@@ -304,6 +310,12 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
                 krefuse(e, "unsafe file", val);
             else
                 e->filename = xstrdup(val);
+        } else if (strcmp(key, "loader") == 0) {
+            if (kdup(&seen_loader, e, key))
+                continue;
+            if (!all_digits(val) || strlen(val) > 9)
+                krefuse(e, "bad loader", val);
+            e->loaderv = xstrdup(val);
         } else if (strcmp(key, "pkginst") == 0) {
             if (kdup(&seen_pkginst, e, key))
                 continue;
@@ -323,14 +335,32 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         }
         /* any other key: ignored (C2-2 §1) */
     }
+    /* the keys each role requires and excludes (C2-2 v3 §1.1): kernel and
+     * module carry line=k30|k46, kabi=, pin=; the loader carries
+     * line=any and loader=<n>, and never kabi= or pin= */
+    loader = e->role != NULL && strcmp(e->role, "loader") == 0;
     if (!seen_role)
         krefuse(e, "missing key", "role=");
     if (!seen_line)
         krefuse(e, "missing key", "line=");
-    if (!seen_kabi)
-        krefuse(e, "missing key", "kabi=");
-    if (!seen_pin)
-        krefuse(e, "missing key", "pin=");
+    else if (loader && strcmp(e->kline, "any") != 0)
+        krefuse(e, "a loader needs line=any, not", e->kline);
+    else if (!loader && strcmp(e->kline, "k30") != 0 &&
+             strcmp(e->kline, "k46") != 0)
+        krefuse(e, "unknown line", e->kline);
+    if (loader) {
+        if (seen_kabi)
+            krefuse(e, "a loader entry may not carry", "kabi= (C2-2 v3 §1.1)");
+        if (seen_pin)
+            krefuse(e, "a loader entry may not carry", "pin= (C2-2 v3 §1.1)");
+        if (!seen_loader)
+            krefuse(e, "missing key", "loader= (C2-2 v3 §1.1)");
+    } else {
+        if (!seen_kabi)
+            krefuse(e, "missing key", "kabi= (C2-2 v3 §1.1)");
+        if (!seen_pin)
+            krefuse(e, "missing key", "pin= (C2-2 v3 §1.1)");
+    }
     if (!seen_size)
         krefuse(e, "missing key", "size=");
     if (!seen_sha)
@@ -345,9 +375,11 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     if (e->kline == NULL)
         e->kline = xstrdup("?");
     if (e->kabi == NULL)
-        e->kabi = xstrdup("?");
+        e->kabi = xstrdup(loader ? "-" : "?");
     if (e->pin == NULL)
-        e->pin = xstrdup("?");
+        e->pin = xstrdup(loader ? "-" : "?");
+    if (e->loaderv == NULL)
+        e->loaderv = xstrdup("-");
     if (e->sha256 == NULL)
         e->sha256 = xstrdup("");
     for (i = 0; e->sha256[i] != '\0'; i++)
@@ -358,9 +390,13 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     e->md5 = xstrdup("");
     e->category = xstrdup(e->role);
     e->desc = xmalloc((unsigned)(strlen(e->role) + strlen(e->kline) +
-                                 strlen(e->kabi) + 40));
-    sprintf(e->desc, "kernel-space %s, line %s, kabi %s",
-            e->role, e->kline, e->kabi);
+                                 strlen(e->kabi) + strlen(e->loaderv) + 40));
+    if (loader)
+        sprintf(e->desc, "kernel-space loader %s, line %s", e->loaderv,
+                e->kline);
+    else
+        sprintf(e->desc, "kernel-space %s, line %s, kabi %s",
+                e->role, e->kline, e->kabi);
     e->deps = NULL;
     e->ndeps = 0;
     if (e->refused != NULL)

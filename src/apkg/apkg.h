@@ -279,10 +279,11 @@ struct pkgent {
     /* kernel space (#ext kpkg 1); all NULL / 0 on an ordinary entry */
     int kspace;       /* 1 = an entry of the kernel-space block        */
     char *role;       /* kernel | loader | module                      */
-    char *kline;      /* k30 | k46                                     */
-    char *kabi;       /* kabi tag, e.g. k46.1.0 or static              */
-    char *pin;        /* compiler pin                                  */
+    char *kline;      /* k30 | k46; "any" for the loader               */
+    char *kabi;       /* kabi tag, e.g. k46.1.0 or static; "-" loader  */
+    char *pin;        /* compiler pin; "-" for the loader              */
     char *sha256;     /* 64 lowercase hex of the datastream as served  */
+    char *loaderv;    /* loader=<n> of a loader entry; "-" otherwise   */
     char *kpkginst;   /* optional pkginst= key; NULL = from the datastream */
     char *refused;    /* NULL, or why the entry may not be installed   */
 };
@@ -414,7 +415,8 @@ extern int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
 extern int kpkg_write_record_fields(const struct conf *cf,
     const char *name, const char *version, const char *role,
     const char *line, const char *kabi, const char *pin,
-    const char *sha256, const char *pkginst, const char *source);
+    const char *loaderv, const char *sha256, const char *pkginst,
+    const char *source);
 /* the pkginst owning a recorded package's files (contents database);
  * 0 ok / -1 */
 extern int kpkg_owner(const struct conf *cf, const char *name,
@@ -476,7 +478,8 @@ struct txnpkg {
     char *pkginst;
     char *hash;       /* catalog md5/sha256 of the staged file, or "-" */
     char *staged;     /* staged datastream, or "-" (remove)            */
-    char *role, *kline, *kabi, *pin, *sha256, *source;  /* kspace: record */
+    char *role, *kline, *kabi, *pin, *loaderv, *sha256, *source;
+                      /* kspace: the record's fields                  */
 };
 
 struct txn {

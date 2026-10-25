@@ -1830,6 +1830,15 @@ kline() {   # kline <name> <version> <role> <line> <kabi> <pin> <file> [extra]
         "$1" "$2" "$3" "$4" "$5" "$6" "$(sizeof "$KR/pkgs/$7")" \
         "$(sha "$KR/pkgs/$7")" "$7" "${8:+ $8}"
 }
+# the loader package (C2-3 v2 §3): boot1, boot2 and ldrinfo, one key=value
+# per line; its entry (C2-2 v3 §1.1) has line=any and loader=, no kabi/pin
+printf 'DIR /stand\nDIR /stand/loader\nFILE /stand/loader/boot1 b1bytes\nFILE /stand/loader/boot2 b2\nFILE /stand/loader/ldrinfo version=3\n' \
+    | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/loader-3.pkg" LOADER 3
+lline() {   # lline <name> <version> <role keys> [extra]
+    printf '#kpkg %s %s role=loader %s size=%s sha256=%s file=kernel/loader-3.pkg%s\n' \
+        "$1" "$2" "$3" "$(sizeof "$KR/pkgs/kernel/loader-3.pkg")" \
+        "$(sha "$KR/pkgs/kernel/loader-3.pkg")" "${4:+ $4}"
+}
 mkkcat() {  # mkkcat <dest-catalog> <kernel-line> <extra-lines...>
     {
         cat "$WORK/repo/catalog"
@@ -1845,7 +1854,13 @@ mkkcat() {  # mkkcat <dest-catalog> <kernel-line> <extra-lines...>
             $PIN "$(sizeof "$KR/pkgs/kernel/badsha-1.0.pkg")" \
             0000000000000000000000000000000000000000000000000000000000000000
         kline future 1.0 module k46 k46.1.0 $PIN kernel/modbad-1.0.pkg "!needs-signature=ed25519"
-        echo "#kpkg nosha 1.0 role=loader line=k46 kabi=none pin=none size=1 file=kernel/x.pkg"
+        echo "#kpkg nosha 1.0 role=kernel line=k46 kabi=k46.1.0 pin=$PIN size=1 file=kernel/x.pkg"
+        lline loader 3 "line=any loader=3" "pkginst=LOADER"
+        lline loaderkabi 3 "line=any loader=3 kabi=k46.1.0"
+        lline loaderk46 3 "line=k46 loader=3"
+        lline loadernov 3 "line=any"
+        printf '#kpkg kernnopin 1.0 role=kernel line=k46 kabi=k46.1.0 size=%s sha256=%s file=kernel/kernel-k46-1.1.0.pkg\n' \
+            "$(sizeof "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg")" "$(sha "$KR/pkgs/kernel/kernel-k46-1.1.0.pkg")"
         for i in e c s l; do
             kline impure-$i 1.0 module k46 k46.1.0 $PIN kernel/impure-$i-1.0.pkg
         done
@@ -1954,8 +1969,8 @@ kreset
 # --- the parser ---
 "$APKG" -c "$KCONF" update > "$WORK/kupd.out" 2>&1; rc=$?
 OUT=$(cat "$WORK/kupd.out")
-[ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 15 packages, 13 kernel-space" \
-    && ok "update counts 15 ordinary + 13 kernel-space entries" \
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 15 packages, 18 kernel-space" \
+    && ok "update counts 15 ordinary + 18 kernel-space entries" \
     || bad "kernel-space catalog not accepted as expected (rc=$rc)" "$OUT"
 echo "$OUT" | grep -q "unverified: no signature check" \
     && ok "update says the kernel-space block is unverified (60 §4 hook)" \
@@ -2326,6 +2341,53 @@ grep -q "^pkgrm -n -a $ROOT/var/apkg/admin Z3660SCS$" "$SHIMLOG" && [ ! -f "$REC
     || bad "kernel-space remove" "$(cat "$SHIMLOG"; ls "$REC")"
 [ "$(grep -c . "$KLOG")" -eq 2 ] && ok "the remove triggered build + commit" \
     || bad "remove trigger" "$(cat "$KLOG")"
+
+# --- the loader role (C2-2 v3 §1.1, C2-3 v2 §3) ---
+OUT=$("$APKG" -c "$KCONF" info loader 2>&1)
+echo "$OUT" | grep -q "^Kernel-space: loader, line any$" && echo "$OUT" | grep -q "^Loader:      3$" && \
+! echo "$OUT" | grep -q "^Kabi:\|^Pin:\|^Refused" \
+    && ok "a loader entry: line any, loader 3, no kabi or pin, not refused" \
+    || bad "loader entry info" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info loaderkabi 2>&1)
+echo "$OUT" | grep -q "^Refused:     a loader entry may not carry kabi= (C2-2 v3 §1.1)$" \
+    && ok "a loader entry carrying kabi= is refused (C2-2 v3)" || bad "loader+kabi" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info loaderk46 2>&1)
+echo "$OUT" | grep -q "^Refused:     a loader needs line=any, not k46$" \
+    && ok "a loader entry with line=k46 is refused" || bad "loader line" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info loadernov 2>&1)
+echo "$OUT" | grep -q "^Refused:     missing key loader= (C2-2 v3 §1.1)$" \
+    && ok "a loader entry without loader= is refused" || bad "loader without loader=" "$OUT"
+OUT=$("$APKG" -c "$KCONF" info kernnopin 2>&1)
+echo "$OUT" | grep -q "^Refused:     missing key pin= (C2-2 v3 §1.1)$" \
+    && ok "a kernel entry missing pin= is refused (C2-2 v3)" || bad "kernel without pin" "$OUT"
+run 3 "a refused loader entry cannot be installed (exit 3)" "$APKG" -c "$KCONF" install loaderkabi
+kreset
+run 0 "install the loader package" "$APKG" -c "$KCONF" install loader
+LB=$ROOT/stand/loader
+cat > "$WORK/lrec.want" <<EOF
+name loader
+version 3
+role loader
+line any
+loader 3
+sha256 $(sha "$KR/pkgs/kernel/loader-3.pkg")
+source $KR
+installed X
+verified no
+file /stand/loader/boot1 $(sizeof "$LB/boot1") $(sha "$LB/boot1")
+file /stand/loader/boot2 $(sizeof "$LB/boot2") $(sha "$LB/boot2")
+file /stand/loader/ldrinfo $(sizeof "$LB/ldrinfo") $(sha "$LB/ldrinfo")
+EOF
+sed 's/^installed [0-9][0-9]*$/installed X/' "$REC/loader" > "$WORK/lrec.got" 2>/dev/null
+cmp -s "$WORK/lrec.want" "$WORK/lrec.got" \
+    && ok "the loader's record: line any, a loader line, no kabi or pin (C2-2 v3 §2)" \
+    || bad "loader record" "$(diff "$WORK/lrec.want" "$WORK/lrec.got" 2>&1)"
+grep -q "^pkgadd .* LOADER$" "$SHIMLOG" && [ "$(grep -c . "$KLOG")" -eq 2 ] \
+    && ok "the loader installs as LOADER and triggers build + commit" \
+    || bad "loader install" "$(cat "$SHIMLOG" "$KLOG")"
+kreset
+run 0 "remove the loader package" "$APKG" -c "$KCONF" remove loader
+[ ! -f "$REC/loader" ] && ok "the loader's record is gone" || bad "loader record left"
 
 # --- userland through the new client: no trigger, no journal left ---
 kreset

@@ -6,7 +6,7 @@
  * MIT license - see LICENSE in this directory.
  *
  * The interfaces are agreed contracts of the kernel-modules campaign
- * (amix-dlm; C2-2 and C2-4 version 2, 2026-10-26), and this file implements apkg's side
+ * (amix-dlm; C2-2 version 3, C2-3 version 2, C2-4 version 2, 2026-10-26), and this file implements apkg's side
  * of them exactly:
  *
  *   C2-2 kernel-space catalog entries and the install record
@@ -669,7 +669,8 @@ int kpkg_owner(const struct conf *cf, const char *name,
 int kpkg_write_record_fields(const struct conf *cf,
     const char *name, const char *version, const char *role,
     const char *line, const char *kabi, const char *pin,
-    const char *sha256, const char *pkginst, const char *source)
+    const char *loaderv, const char *sha256, const char *pkginst,
+    const char *source)
 {
     struct files_ctx c;
     char *path;
@@ -718,8 +719,14 @@ int kpkg_write_record_fields(const struct conf *cf,
     fprintf(fp, "version %s\n", version);
     fprintf(fp, "role %s\n", role);
     fprintf(fp, "line %s\n", line);
-    fprintf(fp, "kabi %s\n", kabi);
-    fprintf(fp, "pin %s\n", pin);
+    /* C2-2 v3 §2: kabi and pin for a kernel or module, loader for the
+     * loader -- never both */
+    if (strcmp(role, "loader") == 0) {
+        fprintf(fp, "loader %s\n", loaderv);
+    } else {
+        fprintf(fp, "kabi %s\n", kabi);
+        fprintf(fp, "pin %s\n", pin);
+    }
     fprintf(fp, "sha256 %s\n", sha256);
     fprintf(fp, "source %s\n", source);
     fprintf(fp, "installed %ld\n", (long)time((time_t *)0));
@@ -763,8 +770,8 @@ int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
                       const char *pkginst, const char *source)
 {
     return kpkg_write_record_fields(cf, e->name, e->version, e->role,
-                                    e->kline, e->kabi, e->pin, e->sha256,
-                                    pkginst, source);
+                                    e->kline, e->kabi, e->pin, e->loaderv,
+                                    e->sha256, pkginst, source);
 }
 
 /* ---------------- pre-flight (40 §6, 20 §3) ---------------- */
@@ -906,6 +913,9 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
                    todo[i]->refused);
             return EX_VERIFY;
         }
+        /* the loader has no kabi and serves both lines (C2-2 v3 §1.1) */
+        if (strcmp(todo[i]->role, "loader") == 0)
+            continue;
         /* a tag naming a family must name the entry's own line */
         if (kabi_parse(todo[i]->kabi, fam, sizeof(fam), &maj, &min) == 0 &&
             strcmp(fam, todo[i]->kline) != 0) {

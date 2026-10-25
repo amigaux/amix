@@ -45,7 +45,7 @@ See [apkg.1](apkg.1) for the full manual.
 
 Kernel, loader and module packages are the kernel-modules campaign's
 (amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
-version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+C2-2 version 3 and C2-4 version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 
@@ -53,7 +53,9 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
   entries, one `#kpkg <name> <version> role= line= kabi= pin= size= sha256=
   file=` line per package, optional `#ksig`.  Every line is a comment to a
   0.2.x client, which skips the block whole (tested against the 0.2.3
-  source).  The optional keys of C2-2 v2: `pkginst=` (otherwise
+  source).  Keys per role (C2-2 v3 §1.1): kernel/module need `line=k30|k46`,
+  `kabi=`, `pin=`; a loader needs `line=any` and `loader=<n>` and may not
+  carry `kabi=`/`pin=`; a missing or excluded key refuses the entry.  The optional keys of C2-2 v2: `pkginst=` (otherwise
   the datastream header names it) and `offset=` (RAW media).
 - **Integrity.** SHA-256 + size for kernel space, md5 + size for userland as
   before.  No signature in 1.1 (D-3 §13): the hook in `kspace_verify_hook()`
@@ -446,7 +448,7 @@ its refusals, the 0.2.3 client built from git skipping the block, the
 install record byte for byte, pre-flight, the trigger against a kbootset
 mock for all five statuses, `-R`/`--journal`/`bootset=manual`/`-n`, a
 transaction killed mid-pkgadd and finished by `apkg recover`, four impure
-packages refused) — **338
+packages refused, the loader role and the C2-2 v3 key refusals) — **349
 assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.

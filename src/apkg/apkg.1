@@ -147,14 +147,16 @@ Print the client version.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments (amix-dlm contract
-C2-2, version 2):
+C2-2, version 3):
 .PP
 .RS
 .nf
 #ext kpkg 1
-#kpkg <name> <version> role=kernel|loader|module line=k30|k46
+#kpkg <name> <version> role=kernel|module line=k30|k46
       kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex>
       file=<datastream>
+#kpkg <name> <version> role=loader line=any loader=<n>
+      size=<bytes> sha256=<64 hex> file=<datastream>
 #ksig <key-id> <file>
 #end kpkg
 .fi
@@ -162,7 +164,16 @@ C2-2, version 2):
 .PP
 (one
 .B #kpkg
-line per package, every line under 2048 bytes).  An unknown key is
+line per package, every line under 2048 bytes; optional
+.B pkginst=
+and
+.BR offset= ).
+The keys depend on the role: an entry that lacks a key its role
+requires, or carries one its role excludes
+.RB ( kabi=
+or
+.B pin=
+on a loader), is refused.  An unknown key is
 ignored; an unknown key starting with
 .B !
 refuses that entry.  A structural error (an unterminated block, an
@@ -206,7 +217,8 @@ After each kernel-space
 .BR pkgadd ,
 apkg writes the record
 .BI /var/apkg/kpkg/ name
-(name, version, role, line, kabi, pin, the datastream's sha256, the
+(name, version, role, line, then kabi and pin for a kernel or module or
+loader for the loader, the datastream's sha256, the
 source, the install time,
 .BR "verified no" ,
 and one

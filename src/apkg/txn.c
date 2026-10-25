@@ -17,13 +17,15 @@
  * Format: text, one record per line, fields separated by one space, the
  * file replaced whole (write <txn>.new, then rename) at every change:
  *
- *   apkg-txn 1
+ *   apkg-txn 2
  *   verb <install|upgrade|remove>
  *   state <installing|installed|built>
  *   started <seconds since 1970>
  *   kspace <0|1>
  *   pkg <done> <ow> <kspace> <size> <name> <version> <pkginst> <hash>
- *       <staged> <role> <line> <kabi> <pin> <sha256> <source>
+ *       <staged> <role> <line> <kabi> <pin> <loader> <sha256> <source>
+ *
+ * (version 2: <loader>, the loader= of a loader entry, C2-2 v3)
  *
  * Absent values are "-".  <hash> is the catalog's md5 (userland) or
  * sha256 (kernel space) of <staged>, or "-" when <staged> is not the
@@ -39,8 +41,8 @@
 
 #include "apkg.h"
 
-#define TXN_MAGIC "apkg-txn 1"
-#define TXN_FIELDS 15
+#define TXN_MAGIC "apkg-txn 2"
+#define TXN_FIELDS 16
 
 static const char *dash(const char *s)
 {
@@ -97,6 +99,7 @@ void txn_add(struct txn *t, const struct pkgent *e, const char *pkginst,
     p->kline = xstrdup(dash(e->kspace ? e->kline : NULL));
     p->kabi = xstrdup(dash(e->kspace ? e->kabi : NULL));
     p->pin = xstrdup(dash(e->kspace ? e->pin : NULL));
+    p->loaderv = xstrdup(dash(e->kspace ? e->loaderv : NULL));
     p->sha256 = xstrdup(dash(e->kspace ? e->sha256 : NULL));
     p->source = xstrdup(dash(source));
 }
@@ -117,6 +120,7 @@ void txn_free(struct txn *t)
         free(p->kline);
         free(p->kabi);
         free(p->pin);
+        free(p->loaderv);
         free(p->sha256);
         free(p->source);
     }
@@ -188,10 +192,10 @@ int txn_save(const struct conf *cf, const struct txn *t)
     fprintf(fp, "kspace %d\n", t->kspace);
     for (i = 0; i < t->n; i++) {
         p = &t->p[i];
-        fprintf(fp, "pkg %d %d %d %ld %s %s %s %s %s %s %s %s %s %s %s\n",
+        fprintf(fp, "pkg %d %d %d %ld %s %s %s %s %s %s %s %s %s %s %s %s\n",
                 p->done, p->ow, p->kspace, p->size, p->name, p->version,
                 p->pkginst, p->hash, p->staged, p->role, p->kline,
-                p->kabi, p->pin, p->sha256, p->source);
+                p->kabi, p->pin, p->loaderv, p->sha256, p->source);
     }
     if (fclose(fp) != 0 || rename(tmp, cf->txnfile) != 0) {
         warnx2("cannot write the journal %s", cf->txnfile);
@@ -284,8 +288,9 @@ int txn_load(const struct conf *cf, struct txn *t)
             p->kline = xstrdup(f[11]);
             p->kabi = xstrdup(f[12]);
             p->pin = xstrdup(f[13]);
-            p->sha256 = xstrdup(f[14]);
-            p->source = xstrdup(f[15]);
+            p->loaderv = xstrdup(f[14]);
+            p->sha256 = xstrdup(f[15]);
+            p->source = xstrdup(f[16]);
         } else {
             goto bad;
         }

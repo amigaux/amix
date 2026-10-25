@@ -292,8 +292,12 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     printf("Filename:    %s\n", e->filename);
     if (e->kspace) {
         printf("Kernel-space: %s, line %s\n", e->role, e->kline);
-        printf("Kabi:        %s\n", e->kabi);
-        printf("Pin:         %s\n", e->pin);
+        if (strcmp(e->role, "loader") == 0) {
+            printf("Loader:      %s\n", e->loaderv);
+        } else {
+            printf("Kabi:        %s\n", e->kabi);
+            printf("Pin:         %s\n", e->pin);
+        }
         printf("SHA256:      %s\n", e->sha256);
         printf("Signature:   unverified (no signature check in this "
                "release)\n");

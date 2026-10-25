@@ -442,8 +442,8 @@ static int install_one(const struct conf *cf, const char *pkgadd,
     if (!p->kspace)
         return EX_OK;
     rc = kpkg_write_record_fields(cf, p->name, p->version, p->role,
-                                  p->kline, p->kabi, p->pin, p->sha256,
-                                  pkginst, p->source);
+                                  p->kline, p->kabi, p->pin, p->loaderv,
+                                  p->sha256, pkginst, p->source);
     return rc;
 }
 
