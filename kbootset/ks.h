@@ -54,6 +54,7 @@ struct ks_newgen {
 	int n;
 	const struct ks_member *m;
 	ax_u32 created;		/* seconds since 1970 */
+	ax_u32 id;		/* the id it was built as, or 0: the next id */
 };
 
 #define KS_MAXEXT	(AX_MAXGEN * (AXM_MAXMOD + 3) + 4)
@@ -120,6 +121,13 @@ int ks_collect(struct ks *k);
  * the secondary; boot1 (1024 bytes) only when given */
 int ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 		      const ax_u8 *boot1);
+
+/* the id the next commit gives */
+ax_u32 ks_next_id(const struct ks *k);
+
+/* generation id's manifest, checked, in a malloc'd buffer that *m points
+ * into (free it after use); 0 when it cannot be read */
+char *ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m);
 
 /* the entry of generation id, or 0 */
 const struct ax_gen *ks_find(const struct ks *k, ax_u32 id);

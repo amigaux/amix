@@ -79,6 +79,26 @@ manifest(struct ks *k, const struct ax_gen *g, struct ax_manifest *m)
 	return buf;
 }
 
+char *
+ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m)
+{
+	const struct ax_gen *g = ks_find(k, id);
+
+	return g ? manifest(k, g, m) : 0;
+}
+
+ax_u32
+ks_next_id(const struct ks *k)
+{
+	ax_u32 id = k->ctl.last_id;
+	int i;
+
+	for (i = 0; i < k->ctl.ngen; i++)
+		if (k->ctl.gen[i].id > id)
+			id = k->ctl.gen[i].id;
+	return id + 1;
+}
+
 static void
 use(struct ks *k, ax_u32 off, ax_u32 len)
 {
@@ -382,10 +402,12 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 		return fail(k, KS_EREFUSE, 0, "a generation is one kernel and its members");
 	if (k->ctl.ngen >= AX_MAXGEN)
 		return fail(k, KS_EREFUSE, 0, "the control block is full; run kbootset collect");
-	for (id = k->ctl.last_id, i = 0; i < k->ctl.ngen; i++)
-		if (k->ctl.gen[i].id > id)
-			id = k->ctl.gen[i].id;
-	id++;
+	id = ks_next_id(k);
+	if (g->id && g->id != id) {
+		sprintf(line, "generation %lu was built, but the store's next id is %lu: "
+			"run kbootset build again", (unsigned long)g->id, (unsigned long)id);
+		return fail(k, KS_EREFUSE, 0, line);
+	}
 
 	/* everything is prepared in memory and placed before anything is
 	 * written, so a refusal writes nothing */

@@ -5,11 +5,19 @@
  * (the box).  The same source builds on the host and, statically, for the
  * box (docs/plan/stage-2.md S2-07).
  *
- * usage: kbootset (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND
+ * usage: kbootset [-R ROOT] (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND
  *   create SIZE BOOT2 [--boot1 FILE] [--version N]   lay an empty store
  *   status                                           generations and states
- *   commit --spec SPEC     a generation from a spec (mkstore's format): the
- *                          host form until `build` composes from packages
+ *   build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE]
+ *         [--mem BYTES] [--root REC] [--swap REC]
+ *                          compose the next generation from the packages
+ *                          installed under ROOT (default /) into
+ *                          ROOT/stand/gen/<id>/; every gate; the options
+ *                          name the box's facts on a host build (kinfo on
+ *                          the box, S2-06)
+ *   commit                 commit the built generation (the gates again)
+ *   commit --spec SPEC     a generation from a spec (mkstore's format), for
+ *                          tests and media built without packages
  *   mark-good --booted ID [--secondary]   end of a full multi-user boot
  *   rollback               the default to the previous good generation
  *   next previous|safe|devload|none|ID   for the next boot only
@@ -33,6 +41,7 @@
 #include <string.h>
 #include <time.h>
 #include "ks.h"
+#include "kbuild.h"
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
@@ -166,10 +175,12 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-		"usage: kbootset (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND\n"
+		"usage: kbootset [-R ROOT] (--image FILE | --dev PATH) [--offset N] [--journal PATH] COMMAND\n"
 		"  create SIZE BOOT2 [--boot1 FILE] [--version N]\n"
 		"  status | rollback | collect | mark-bad ID\n"
-		"  commit --spec SPEC\n"
+		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
+		"        [--root REC] [--swap REC]\n"
+		"  commit [--spec SPEC]\n"
 		"  mark-good --booted ID [--secondary]\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
@@ -308,7 +319,8 @@ main(int argc, char **argv)
 {
 	static struct ks k;
 	struct file d;
-	const char *image = 0, *boot1 = 0;
+	const char *image = 0, *boot1 = 0, *root = "/";
+	struct kb_facts facts;
 	unsigned long off = 0, version = 1;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
@@ -324,6 +336,8 @@ main(int argc, char **argv)
 			off = strtoul(argv[++i], 0, 0);
 		else if (!strcmp(argv[i], "--journal"))
 			jpath = argv[++i];
+		else if (!strcmp(argv[i], "-R"))
+			root = argv[++i];
 		else
 			usage();
 	}
@@ -349,8 +363,23 @@ main(int argc, char **argv)
 	k.deflate = zdeflate;
 #endif
 	k.step = step;
+	memset(&facts, 0, sizeof(facts));
 	for (i = 1; i < argc; i++) {		/* the options after the command */
-		if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
+		if (!strcmp(cmd[i], "--line") && i + 1 < argc)
+			facts.line = atoi(cmd[++i]);
+		else if (!strcmp(cmd[i], "--bootdev") && i + 1 < argc)
+			sprintf(facts.bootdev, "%.47s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--rootdev") && i + 1 < argc)
+			sprintf(facts.rootdev, "%.47s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--rootfs") && i + 1 < argc)
+			sprintf(facts.rootfs, "%.15s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--mem") && i + 1 < argc)
+			facts.mem = (ax_u32)strtoul(cmd[++i], 0, 0);
+		else if (!strcmp(cmd[i], "--root") && i + 1 < argc)
+			sprintf(facts.root, "%.127s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--swap") && i + 1 < argc)
+			sprintf(facts.swap, "%.127s", cmd[++i]);
+		else if (!strcmp(cmd[i], "--boot1") && i + 1 < argc)
 			boot1 = cmd[++i];
 		else if (!strcmp(cmd[i], "--version") && i + 1 < argc)
 			version = strtoul(cmd[++i], 0, 0);
@@ -379,6 +408,11 @@ main(int argc, char **argv)
 			rc = commit_spec(&k, cmd[2]);
 			if (rc == 2)
 				return 2;
+		} else if (!strcmp(cmd[0], "commit") && argc == 1) {
+			rc = kb_commit(&k, root, &id);
+		} else if (!strcmp(cmd[0], "build")) {
+			rc = kb_build(&k, root, &facts, getenv("SOURCE_DATE_EPOCH") ?
+				      (ax_u32)strtoul(getenv("SOURCE_DATE_EPOCH"), 0, 10) : (ax_u32)time(0), &id);
 		} else if (!strcmp(cmd[0], "mark-good") && argc >= 3 && !strcmp(cmd[1], "--booted")) {
 			rc = ks_mark_good(&k, (ax_u32)strtoul(cmd[2], 0, 0), !secondary);
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {
