@@ -10,7 +10,8 @@
  *              Give -o once per volume for a multi-volume store (with -f)
  *   -f         floppy profile: read-only, one boot2 and one control block,
  *              packed after boot2; volumes of SIZE bytes (default 901120)
- *              filled in order, each member on one volume
+ *              filled in order; a member that runs past the end of a volume
+ *              continues on the next (§4.3), a manifest never does
  *   -p OFFSET  byte offset of the boot partition in the image (default 0)
  *   -s SIZE    store (partition) size in bytes (default 64 MiB)
  *   -1 FILE    boot1 bootblock (1024 bytes, from bbframe)
@@ -95,28 +96,38 @@ slurp(const char *path, ax_u32 *len)
 	return p;
 }
 
-/* where volumes after the first start their data: after the headers */
-#define VOLN_DATA (AX_HDR_B_OFF + AX_HDR_SIZE)
-
 /* place len bytes in the data area; returns the extent offset and sets
- * *vol (1-based); a member that does not fit moves to the next volume */
+ * *vol (1-based).  With span, bytes past the end of a volume continue at
+ * AX_VOLN_DATA on the next; without, data that does not fit moves whole to
+ * the next volume */
 static ax_u32
-place(const unsigned char *p, ax_u32 len, ax_u16 *vol)
+place(const unsigned char *p, ax_u32 len, ax_u16 *vol, int span)
 {
-	ax_u32 off = next_free;
+	ax_u32 off, n;
 
-	if (len > store_size - off) {
+	if (next_free >= store_size || (!span && len > store_size - next_free)) {
 		if (curvol + 1 >= nvol)
 			die("store full", 0);
 		curvol++;
-		off = next_free = VOLN_DATA;
-		if (len > store_size - off)
-			die("member larger than a volume", 0);
+		next_free = AX_VOLN_DATA;
+		if (!span && len > store_size - next_free)
+			die("manifest larger than a volume", 0);
 	}
-	memcpy(vols[curvol] + off, p, len);
-	next_free = (off + len + AX_BLK - 1) / AX_BLK * AX_BLK;
+	off = next_free;
 	*vol = (ax_u16)(curvol + 1);
-	return off;
+	for (;;) {
+		n = store_size - next_free < len ? store_size - next_free : len;
+		memcpy(vols[curvol] + next_free, p, n);
+		next_free = (next_free + n + AX_BLK - 1) / AX_BLK * AX_BLK;
+		p += n;
+		len -= n;
+		if (!len)
+			return off;
+		if (curvol + 1 >= nvol)
+			die("store full", 0);
+		curvol++;
+		next_free = AX_VOLN_DATA;
+	}
 }
 
 static void
@@ -212,6 +223,8 @@ generation(const char *spec, struct ax_gen *g)
 	ax_u16 vol = 1;
 	int n, state = -1, i, have_gen = 0, nmod = 0;
 	char fname[16];
+	ax_u32 res_off = 0, res_len = 0;
+	ax_u16 res_vol = 0;
 	unsigned char *data;
 	struct ax_manifest chk;
 	int errline;
@@ -219,6 +232,21 @@ generation(const char *spec, struct ax_gen *g)
 
 	if (!f)
 		die("cannot open", spec);
+	if (nvol > 1) {
+		/* a multi-volume set: reserve the manifest's room ahead of its
+		 * members, so the loader reads the manifest from the volume its
+		 * members start on (one change per pair, not three); every line
+		 * is at most 256 bytes, plus the GMF1 and end lines */
+		static unsigned char zero[65536];
+
+		for (n = 2; fgets(line, sizeof(line), f); n++)
+			;
+		rewind(f);
+		res_len = ((ax_u32)n * 256 + AX_BLK - 1) / AX_BLK * AX_BLK;
+		if (res_len > sizeof(zero))
+			die("spec too long", spec);
+		res_off = place(zero, res_len, &res_vol, 0);
+	}
 	strcpy(man, "GMF1\n");
 	mlen = 5;
 	while (fgets(line, sizeof(line), f)) {
@@ -269,7 +297,7 @@ generation(const char *spec, struct ax_gen *g)
 			if (cdroot)
 				put_file(0, fname, zdata, zlen);
 			else
-				off = place(zdata, zlen, &vol);
+				off = place(zdata, zlen, &vol, 1);
 			if (zip)
 				free(zdata);
 			free(data);
@@ -319,8 +347,14 @@ generation(const char *spec, struct ax_gen *g)
 		put_file(0, fname, (unsigned char *)man, mlen);
 		g->man_off = 0;
 		g->volume = 0;
+	} else if (res_len) {
+		if (mlen > res_len)
+			die("manifest larger than its reservation", spec);
+		memcpy(vols[res_vol - 1] + res_off, man, mlen);
+		g->man_off = res_off;
+		g->volume = res_vol;
 	} else {
-		g->man_off = place((unsigned char *)man, mlen, &vol);
+		g->man_off = place((unsigned char *)man, mlen, &vol, 0);
 		g->volume = vol;
 	}
 	g->created = (ax_u32)time(0);
@@ -475,7 +509,6 @@ main(int argc, char **argv)
 	h.store_size = store_size;
 	h.flags = readonly ? AXF_READONLY : AXF_WRITABLE;
 	h.volume = h.nvolumes = 1;
-	h.set_id = (ax_u32)time(0);
 	h.ctl_off[0] = AX_CTL_A_OFF;
 	h.ctl_off[1] = AX_CTL_B_OFF;
 	h.tally_off = AX_TALLY_OFF;
@@ -527,6 +560,9 @@ main(int argc, char **argv)
 	}
 	c.default_gen = deflt;
 	ax_ctl_write(tab, &c, store + h.ctl_off[0]);
+	/* the set id tells the volumes of this set from any other: the time
+	 * and the control block, which holds every manifest's CRC */
+	h.set_id = (ax_u32)time(0) ^ ax_crc32(tab, store + h.ctl_off[0], AX_BLK);
 	for (v = 0; v < nvol; v++) {
 		h.volume = (ax_u16)(v + 1);
 		ax_hdr_write(tab, &h, vols[v] + AX_HDR_A_OFF);

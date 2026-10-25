@@ -22,6 +22,7 @@ static ax_u32 tab[256];
 static FILE *img, *volimg[8];
 static unsigned long base;
 static int bad, nvolimg = 1;
+static ax_u32 storesize;	/* from the header: where a volume ends */
 static char cddir[1024];	/* -C: the line directory being listed */
 
 static void rdv(int vol, ax_u32 off, void *buf, ax_u32 len);
@@ -51,10 +52,23 @@ rdfile(const char *name, void *buf, ax_u32 len)
 static int
 stored(const struct ax_member *mb, void *buf)
 {
+	ax_u32 vol = mb->vol, off = mb->at, left = mb->stored, n;
+	unsigned char *b = buf;
+
 	if (mb->file)
 		return rdfile(mb->file, buf, mb->stored);
-	rdv(mb->vol, mb->at, buf, mb->stored);
-	return 0;
+	for (;;) {	/* past the end of a volume: on at AX_VOLN_DATA of the next */
+		if (off >= storesize)
+			return -1;
+		n = storesize - off < left ? storesize - off : left;
+		rdv(vol, off, b, n);
+		b += n;
+		left -= n;
+		if (!left)
+			return 0;
+		vol++;
+		off = AX_VOLN_DATA;
+	}
 }
 
 static void
@@ -123,10 +137,11 @@ member(const char *what, const struct ax_member *mb)
 		       mb->z == AXZ_DEFLATE ? " (deflate)" : "", (unsigned long)crc,
 		       crc == mb->crc ? "ok" : "BAD");
 	else
-		printf("    %-7s %-12s %8lu  at %u:0x%lx%s  crc %08lx %s\n", what, mb->name,
+		printf("    %-7s %-12s %8lu  at %u:0x%lx%s%s  crc %08lx %s\n", what, mb->name,
 		       (unsigned long)mb->size, mb->vol, (unsigned long)mb->at,
-		       mb->z == AXZ_DEFLATE ? " (deflate)" : "", (unsigned long)crc,
-		       crc == mb->crc ? "ok" : "BAD");
+		       mb->z == AXZ_DEFLATE ? " (deflate)" : "",
+		       mb->at + mb->stored > storesize ? " (on to the next volume)" : "",
+		       (unsigned long)crc, crc == mb->crc ? "ok" : "BAD");
 	if (crc != mb->crc)
 		bad = 1;
 }
@@ -269,6 +284,7 @@ main(int argc, char **argv)
 		printf("header: no valid copy\n");
 		return 1;
 	}
+	storesize = h.store_size;
 	printf("header %c: seq %lu, store %lu bytes, flags 0x%lx, volume %u/%u\n", "AB"[which],
 	       (unsigned long)h.seq, (unsigned long)h.store_size, (unsigned long)h.flags,
 	       h.volume, h.nvolumes);

@@ -41,8 +41,9 @@ if $B/lsstore $T/disk.img 1048576 >/dev/null; then
 fi
 echo "store-roundtrip: ok"
 
-# a floppy pair: packed layout, a member that does not fit volume 1 moves
-# to volume 2, and lsstore reads both volumes
+# a floppy pair: packed layout, the manifest ahead of its members on
+# volume 1, a member that runs past the end of volume 1 continues on volume
+# 2 (§4.3), and lsstore reads both volumes
 head -c 600000 /dev/urandom > $T/fkernel
 head -c 500000 /dev/urandom > $T/miniroot
 cat > $T/f1.spec <<SPEC
@@ -58,8 +59,17 @@ SPEC
 $B/mkstore -f -o $T/boot1.adf -o $T/boot2.adf -1 $T/boot1.img -2 $T/boot2.bin $T/f1.spec
 [ "$(wc -c < $T/boot1.adf)" -eq 901120 ] && [ "$(wc -c < $T/boot2.adf)" -eq 901120 ]
 $B/lsstore $T/boot1.adf 0 $T/boot2.adf | tee $T/f.out
-grep -q "ramdisk miniroot .* at 2:0x800" $T/f.out
+grep -q "generation 1 (pristine), manifest .* at 0x6000" $T/f.out
+grep -q "ramdisk miniroot .* at 1:0x.* (on to the next volume)  crc .* ok" $T/f.out
 grep -q "header A: seq 1, store 901120 bytes, flags 0x6, volume 1/2" $T/f.out
+# boot2's own reader on the pair: one change (volume 1 -> 2 inside the
+# miniroot), with a blank disk, a disk of another set and volume 1 again
+# refused first; the other set holds another generation (the set id is
+# the build time and the control block's CRC)
+sed 's/^generation 1/generation 2/' $T/f1.spec > $T/f2.spec
+$B/mkstore -f -o $T/other1.adf -o $T/other2.adf -1 $T/boot1.img -2 $T/boot2.bin $T/f2.spec >/dev/null
+$B/b2medium $T/boot1.adf $T/boot2.adf $T/other1.adf | tee $T/m.out
+grep -q "1 volume change(s), 2 foreign/blank and 1 wrong-volume disks refused: ok" $T/m.out
 echo "store-roundtrip: floppy pair ok"
 
 # a CD tree (spec 10 §4.4): one generation per line directory, members as

@@ -4,7 +4,7 @@
 # as the kernel estimate.  Host-side, read-only.  See
 # docs/measurements/2026-10-25-m-net1.md for what is counted and why.
 #
-# usage: m-net1.py <workspace> <netdir>
+# usage: m-net1.py <workspace> <netdir> [<outdir>]
 #   <workspace>  the Amix project workspace (holds amix-installng/)
 #   <netdir>     a directory holding the network userland extracted from the
 #                stock distribution tape (file 02: usr/sbin/slink,
@@ -12,9 +12,12 @@
 #                etc/inet/strcf; file 07: usr/sbin/route,
 #                usr/sbin/ping, usr/bin/ftp) and a stripped apkg 0.2.3 as
 #                <netdir>/apkg
+#   <outdir>     optional: also write each miniroot archive there as
+#                miniroot-<line>-<full|trim>.tar (the M-FP1 input, S1-24)
 import io, json, os, struct, subprocess, sys, tarfile, zlib
 
 WS, NET = sys.argv[1], sys.argv[2]
+OUT = sys.argv[3] if len(sys.argv) > 3 else None
 sys.path.insert(0, os.path.join(WS, 'amix-installng/tools/lib'))
 import s5, ufs  # noqa: E402  (amix-installng's own readers)
 
@@ -81,7 +84,7 @@ def total(files):
     return sum(len(v) for k, v in files.values() if k != 'link')
 
 
-def tar_deflate(files):
+def tar_deflate(files, save=None):
     bio = io.BytesIO()
     with tarfile.open(fileobj=bio, mode='w', format=tarfile.USTAR_FORMAT) as t:
         for p, (k, v) in sorted(files.items()):
@@ -91,6 +94,9 @@ def tar_deflate(files):
             ti.size, ti.mtime = len(v), 0
             t.addfile(ti, io.BytesIO(v))
     raw = bio.getvalue()
+    if save:
+        with open(save, 'wb') as f:
+            f.write(raw)
     return len(raw), len(zlib.compress(raw, 9))
 
 
@@ -132,7 +138,7 @@ for line in ('k30', 'k46'):
                  'already_in_base': sorted(p for p in net if p in base[line])}}
     for name, ins in (('full', inst), ('trim', inst_trim)):
         u = dict(base[line]); u.update(ins); u.update(net)
-        raw, z = tar_deflate(u)
+        raw, z = tar_deflate(u, OUT and os.path.join(OUT, 'miniroot-%s-%s.tar' % (line, name)))
         t = z + kern[line]['deflate9']
         r['miniroot_' + name] = {'raw': total(u), 'tar': raw, 'deflate': z,
                                  'with_kernel': t, 'margin': BUDGET - t,

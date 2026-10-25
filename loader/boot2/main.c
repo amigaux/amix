@@ -107,14 +107,28 @@ want_volume(ax_u32 vol)
 	return 0;
 }
 
+/* an extent that runs past the end of its volume continues at
+ * AX_VOLN_DATA on the next one (§4.3) */
 static int
 st_read_stored(const struct ax_member *mb, ax_u8 *dst)
 {
+	ax_u32 vol = mb->vol, off = mb->at, left = mb->stored, n;
+
 	if (!mb->has_at)
 		return 12;		/* a CD member (file=) in a store */
-	if (want_volume(mb->vol) != 0)
-		return 11;
-	return io(CMD_READ, mb->at, dst, mb->stored) != 0 ? 13 : 0;
+	for (;;) {
+		if (off >= hdr.store_size || want_volume(vol) != 0)
+			return 11;
+		n = hdr.store_size - off < left ? hdr.store_size - off : left;
+		if (io(CMD_READ, off, dst, n) != 0)
+			return 13;
+		dst += n;
+		left -= n;
+		if (!left)
+			return 0;
+		vol++;
+		off = AX_VOLN_DATA;
+	}
 }
 
 static ax_u8 *

@@ -25,6 +25,10 @@
 #define AX_CTL_B_OFF	0xF800UL
 #define AX_BLK		2048UL	/* every read and every extent: aligned to this */
 #define AX_DATA_OFF	0x10000UL
+/* multi-volume stores (§4.3): data on volumes after the first starts here,
+ * and an extent that runs past the end of its volume continues here on the
+ * next volume */
+#define AX_VOLN_DATA	0x0800UL
 
 #define AX_MAGIC_HDR	0x41585331UL	/* "AXS1" */
 #define AX_MAGIC_TALLY	0x41585431UL	/* "AXT1" */

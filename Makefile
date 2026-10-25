@@ -45,7 +45,7 @@ $(B)/axrel: tests/host/axrel.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 # Optional real inputs (not in this repository):
 #   AX_FLOPPIES  boot floppy images, for inflate-kernels.sh
 #   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
-test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel
+test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
@@ -59,6 +59,11 @@ $(B)/mkstore: tools/mkstore.c $(CSRC) $(COMMON)/*.h | $(B)
 
 $(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/lsstore.c $(CSRC)
+
+# boot2's store medium on the host, against a simulated drive and person
+$(B)/b2medium: tests/host/b2medium.c loader/boot2/main.c $(CSRC) $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -no-pie \
+		-I$(COMMON) -Iloader/boot2 -o $@ tests/host/b2medium.c $(CSRC)
 
 $(B)/b2link: tools/b2link.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c
