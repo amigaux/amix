@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage-3 plan: the module core (aca2460; ledger 737df5a, db58c28)
+
+docs/plan/stage-3.md: work breakdown for the module core as a patch queue on kdedon's MIT core b736c59, the ABI kit, module
+kernels with the arena and the allowlisted symbol block, the composer and loader side (AXA1 + the manifest copy),
+z3660eth/z3660rtg/monsw as the first copied modules, the measurements, and interface drafts C3-1 to C3-6. Exit ledger: the
+installer's citations; M-UPG1 k30 cites the upgbox first boot, k46 open.
+
 ## 2026-10-26 — stage-2 bench records and the exit ledger (deea18c..eb8f006)
 
 S2-46 record: a box upgraded and rolled back with apkg alone (k46); the first run's journal failure kept as the finding
