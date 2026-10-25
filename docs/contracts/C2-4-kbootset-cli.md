@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 4
+# C2-4 — `kbootset` as a called program, version 5
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -80,3 +80,22 @@ mem=16777216
 There are no `root=` or `swap=` keys. kbootset carries both from the
 default generation's manifest, and the installer names them once, on the
 pristine build (`build --root … --swap …`).
+
+## 7. `kbootset retry`: the fsck-repair reboot
+
+Called by the base system (amix-installng owns `/sbin/bcheckrc`) just
+before each `/sbin/uadmin 1 1` that follows a root repair: the `0|40`
+case, the `*` case, and after the repair shell. One line before each:
+
+```
+[ -x /sbin/kbootset ] && /sbin/kbootset retry >/dev/console 2>&1
+```
+
+- **It acts** only when the booted generation (kinfo) is the trial on its
+  attempt: the attempt is given back, at most twice per trial, and the
+  next boot tries the trial again.
+- **Otherwise** it does nothing and exits 0.
+- **What it writes:** the boot store's control block, nothing else; the
+  root may still be read-only or unrepaired.
+- **Exit status:** 0, or 1 on an I/O error. The reboot follows either way.
+
