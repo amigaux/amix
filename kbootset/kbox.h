@@ -57,6 +57,7 @@ void kb_bootset_facts(const char *path, struct kb_facts *f);
  * bootset's store=/store-id= are written.  Returns 0, or KS_EREFUSE with
  * k->gate 8 or 9 and k->msg */
 int kb_find_store(struct ks *k, const struct kb_kinfo *ki, int have_kinfo,
-		  const char *bootset, char *dev, int *disk);
+		  const char *bootset, char *dev, int *disk, int record);
+/* (record 0: bootset is not written -- a root that may not be writable) */
 
 #endif

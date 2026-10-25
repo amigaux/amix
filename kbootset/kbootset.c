@@ -29,7 +29,10 @@
  *                          the files the manifests name under ROOT, the
  *                          default generation against the installed kernel;
  *                          never writes; status 1 when a problem is found
- *   mark-good --booted ID [--secondary]   end of a full multi-user boot
+ *   mark-good [--booted ID] [--secondary]   end of a full multi-user boot
+ *   retry [--booted ID]    from the base system's fsck-repair reboot path:
+ *                          the trial's attempt does not count (40 §3.3);
+ *                          writes the boot slice only, nothing on the root
  *   rollback               the default to the previous good generation
  *   next previous|safe|devload|none|ID   for the next boot only
  *   mark-bad ID
@@ -352,7 +355,7 @@ usage(void)
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--spec SPEC]\n"
-		"  mark-good [--booted ID] [--secondary]\n"
+		"  mark-good [--booted ID] [--secondary] | retry [--booted ID]\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -511,7 +514,7 @@ main(int argc, char **argv)
 	static struct kb_kinfo ki;
 	static char dev[1100], bootset[1100], jdefault[1100];
 	const char *kpath = getenv("KBOOTSET_KINFO");
-	int have_kinfo = 0, disk = -1, root_given = 0;
+	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0;
 	unsigned long off = 0, version = 1;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
@@ -545,23 +548,24 @@ main(int argc, char **argv)
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
+	noroot = !strcmp(cmd[0], "retry");	/* the root may be unrepaired: write nothing there */
 	sprintf(bootset, "%.1000s/etc/default/bootset", root);
 #ifdef KS_SYNC
-	if (!image && !(kpath && *kpath))
+	if (!image && !(kpath && *kpath) && !noroot)
 		kinfo_node();
 #endif
 	have_kinfo = kb_kinfo_read(kpath && *kpath ? kpath : "/dev/kinfo", &ki) == 0;
 	if (!image) {			/* the running box: find the store */
 		if (create)
 			return fprintf(stderr, "kbootset: create needs --dev or --image\n"), 2;
-		rc = kb_find_store(&k, &ki, have_kinfo, bootset, dev, &disk);
+		rc = kb_find_store(&k, &ki, have_kinfo, bootset, dev, &disk, !noroot);
 		if (rc != KS_OK) {
 			printf("kbootset: %s\n", k.msg);
 			return rc == KS_EREFUSE ? 4 : 1;
 		}
 		image = dev;
 		off = 0;
-		if (!jpath) {	/* the directory may not exist yet on an older system */
+		if (!jpath && !noroot) {	/* the directory may not exist yet on an older system */
 			sprintf(jdefault, "%.1000s/var/kbootset", root);
 			mkdir(jdefault, 0755);
 			strcat(jdefault, "/journal");
@@ -653,6 +657,8 @@ main(int argc, char **argv)
 			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */
 			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
 					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
+		} else if (!strcmp(cmd[0], "retry") && (booted || (have_kinfo && ki.has_axl1))) {
+			rc = ks_retry(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id);
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {
 			rc = ks_rollback(&k, &id);
 		} else if (!strcmp(cmd[0], "next") && argc == 2) {

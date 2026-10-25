@@ -162,6 +162,60 @@ op(struct ks *k, int which)
 	}
 }
 
+/* the loader's attempt write, as boot2 does it before booting a trial */
+static void
+loader_boot(struct ks *k, ax_u32 *booted)
+{
+	struct ax_sel sel;
+	struct ax_ctl nc;
+	ax_u8 blk[AX_BLK];
+
+	ax_select(&k->ctl, 0, &sel);
+	*booted = sel.order[0];
+	if (sel.write) {
+		ax_select_apply(&k->ctl, &sel, &nc);
+		ax_ctl_write(k->crctab, &nc, blk);
+		memcpy(img + k->hdr.ctl_off[k->ctlcopy ^ 1], blk, AX_BLK);
+	}
+	setup(k);
+	ks_open(k);
+}
+
+/* retry: an fsck-repair reboot gives the trial's attempt back, twice at
+ * most; then the loader's try-once rule marks it bad */
+static void
+retries(void)
+{
+	struct ks k;
+	ax_u32 booted, id;
+	const struct ax_gen *g;
+	int i;
+
+	base(&k);			/* pristine 1, good 2 (default), trial 3 */
+	for (i = 0; i < KS_RETRIES; i++) {
+		loader_boot(&k, &booted);
+		T_EQ(booted, 3);
+		T_CHECK((g = ks_find(&k, 3)) != 0 && g->attempts == 1);
+		T_EQ(ks_retry(&k, 3), KS_OK);	/* the fsck reboot */
+		T_CHECK((g = ks_find(&k, 3)) != 0 && g->attempts == 0);
+		T_EQ(g->flags & 3, i + 1);
+	}
+	loader_boot(&k, &booted);
+	T_EQ(booted, 3);
+	writes = 0;
+	T_EQ(ks_retry(&k, 3), KS_OK);		/* given back twice: it stands */
+	T_EQ(writes, 0);
+	T_CHECK(strstr(k.msg, "stands") != 0);
+	loader_boot(&k, &booted);		/* never marked good: L8, back to 2 */
+	T_EQ(booted, 2);
+	T_CHECK((g = ks_find(&k, 3)) == 0 || g->state == AXG_BAD);
+	/* a boot that was not the trial gets nothing back */
+	writes = 0;
+	T_EQ(ks_retry(&k, 2), KS_OK);
+	T_EQ(writes, 0);
+	(void)id;
+}
+
 static void
 powercuts(void)
 {
@@ -315,6 +369,7 @@ test_kbootset(void)
 	T_EQ(ks_open(&k), KS_OK);
 	T_CHECK(strstr(k.msg, "generation 42 was interrupted") != 0);
 	T_EQ(jrn[0], 0);
+	retries();
 	powercuts();
 	free(img);
 }

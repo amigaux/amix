@@ -340,7 +340,7 @@ store_on(const ax_u32 *crctab, ax_u32 x, ax_u32 want, char *dev, int *nuni, ax_u
 
 int
 kb_find_store(struct ks *k, const struct kb_kinfo *ki, int have_kinfo, const char *bootset,
-	      char *dev, int *disk)
+	      char *dev, int *disk, int record)
 {
 	ax_u32 tab[256], id = 0, want, x, sid, fx = 0;
 	char v[1024], cand[1100], first[1100];
@@ -406,7 +406,7 @@ kb_find_store(struct ks *k, const struct kb_kinfo *ki, int have_kinfo, const cha
 	sid = id;
 	*disk = (int)fx;
 found:
-	if (bootset_store(bootset, dev, sid) != 0) {
+	if (record && bootset_store(bootset, dev, sid) != 0) {
 		sprintf(k->msg, "the boot store is %.120s, but %.120s cannot be written", dev, bootset);
 		return KS_EIO;
 	}

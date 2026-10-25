@@ -126,6 +126,19 @@ $B/kbootset -R $R commit 2>/dev/null | grep -q "generation 2 committed"
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
 
+# 4b. retry: the trial's boot ended in the base system's fsck-repair
+# reboot; with the root read-only, retry gives its attempt back and the
+# next loader run takes the trial again
+$B/kbootset -R $R build | grep -q "generation 3 built"
+$B/kbootset -R $R commit 2>/dev/null | grep -q "generation 3 committed"
+$B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"
+python3 -I $T/disk.py kinfo $T/kinfo 3,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
+chmod a-w $R/etc/default $R/var/kbootset
+$B/kbootset -R $R retry > $T/out
+chmod u+w $R/etc/default $R/var/kbootset
+grep -q "generation 3 gets its trial boot again" $T/out
+$B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"
+
 # 5. the controller missing from the card table (the A3000 case): the
 # loader record maps to no card, so every disk is scanned
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,0 ""
@@ -161,4 +174,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry ok"

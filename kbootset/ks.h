@@ -104,6 +104,13 @@ int ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *id);
  * the loader trial) */
 int ks_mark_good(struct ks *k, ax_u32 booted, int primary_used);
 
+/* the trial's attempt is given back: the boot that spent it ended in the
+ * base system's fsck-repair reboot, not in the generation (40 §3.3).  At
+ * most KS_RETRIES times per trial; nothing to do for a boot that was not
+ * the trial.  One control-block write, nothing else */
+#define KS_RETRIES	2
+int ks_retry(struct ks *k, ax_u32 booted);
+
 /* the default goes to the newest good (or pristine) generation older than
  * it; a pending trial is cancelled; *to = the new default */
 int ks_rollback(struct ks *k, ax_u32 *to);

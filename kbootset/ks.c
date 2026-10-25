@@ -665,6 +665,33 @@ ks_mark_good(struct ks *k, ax_u32 booted, int primary_used)
 }
 
 int
+ks_retry(struct ks *k, ax_u32 booted)
+{
+	const struct ax_gen *g = ks_find(k, booted);
+	struct ax_ctl c;
+	int i, rc;
+
+	k->gate = 0;
+	if ((rc = writable(k)) != KS_OK)
+		return rc;
+	if (!g || g->state != AXG_TRIAL || booted != k->ctl.trial_gen || !g->attempts)
+		return fail(k, KS_OK, 0, "the booted generation is not a trial on its attempt: nothing to give back");
+	if ((g->flags & 3) >= KS_RETRIES)
+		return fail(k, KS_OK, 0, "this trial's attempt was given back twice already: it stands");
+	c = k->ctl;
+	for (i = 0; i < c.ngen; i++)
+		if (c.gen[i].id == booted) {
+			c.gen[i].attempts = 0;
+			c.gen[i].flags = (ax_u8)((c.gen[i].flags & ~3) | ((c.gen[i].flags & 3) + 1));
+		}
+	if ((rc = write_ctl(k, &c)) != KS_OK)
+		return rc;
+	sprintf(k->msg, "generation %lu gets its trial boot again (the fsck reboot did not count)",
+		(unsigned long)booted);
+	return KS_OK;
+}
+
+int
 ks_rollback(struct ks *k, ax_u32 *to)
 {
 	ax_u32 best = 0;
