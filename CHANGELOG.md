@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — table-driven inflate; raw where there is room; no SHA-256 in the loader (cd56b88, eaba2d1)
+
+M-LD7 bench half closed: the loader checks CRC-32 only (SHA-256 costs 2.3–3.75 s per kernel on a 25 MHz 68030). M-LD8:
+the bit-at-a-time inflate (45–53 KiB/s on the 030, ~290 instructions per literal) is replaced by a table-driven decoder
+(9-bit lookup, ~35 instructions per literal; 3.0× on the host, estimated 6–10× on the 030; 3 000 zlib streams and both 1.0
+floppy kernels inflate identical). axtime-chip times code in chip RAM as boot2 runs. Spec changes after freeze: 10 §5.1 no
+SHA-256 in the loader; 10 §5.5 and 40 §3.2 members raw in disk stores and on the CD, deflated only where a generation must
+fit (floppy pair, netinstall); 10 §4.4 the ROM CD filesystem facts; 80 §7 the media-track rows gate the media, not stage 2.
+boot2 27 528 B (752 B under the gate).
+
 ## 2026-10-25 — L11 disk change fixed; reproducible stores; stage-2 plan (c0c8f93..62a6b66)
 
 boot2's L11 volume change waits for trackdisk's change counter (or a key), clears the track buffer before re-reading, keeps
