@@ -1,3 +1,13 @@
+## 2026-10-26 — package m4: the stock /usr/ccs/bin/m4 alone, shared with Cdev (b70500c)
+
+New package `m4` (pkginst m4, VERSION 2.1): the stock Amix 2.1 /usr/ccs/bin/m4 alone, from the Cdev tape member, so
+syslogd can read /etc/syslog.conf without the 10 MB Cdev set (the 2.1c syslogd pipes its conf through m4 and files nothing
+without it). `build-packages.sh --m4` via the new `repackage-stock.py --member`; the pkgmap row is identical to Cdev's field
+for field, so the two packages share the file: an identical row is never a conflict (pkgdbmerg's shared/contchg/attrchg,
+ckconflct), pkgrm of one owner leaves the file to the other — proven on the host engine in both orders, strict and APKG
+admin, with mode/mtime controls. Staged build/repo-staging/stock/m4-2.1.pkg (md5 cf0784f9, 26112 B), not published.
+deps.conf `m4: core`; test T27; repo tools 401/0. Open: m4 into sets.conf minimal (base-8 → base-9) is the owner's.
+
 ## 2026-10-26 — APKG 0.3.2 minted for the 1.1 media, staged in build/repo-staging-apkg032 (d6ff38f) — NOT published
 
 APKG-0.3.2.pkg sha256 c971c992, md5 9d6de726, 198144 B; apkg.amix c18d6ee2 inside (0.3.2: module packages may carry /dev
