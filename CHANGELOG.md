@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — boot2 binds the kernel only below 0x40000000; ledger and README updates (92d2924..d51fb2c)
+
+A kernel bound in Zorro III expansion memory never starts (S3-43-7, N69/N70): the kernels identity-map the low 1 GiB and keep
+syssegs and the sptalloc arena at virtual 0x40040000–0x40440000, so text at 0x40000000 is unmapped or overlapped once
+translation is on. boot2 clips every region at AX_IDMAP_TOP = 0x40000000 (the stock bind.c had no such limit); with no fast
+memory below it: "no fast memory below 0x40000000 to run the kernel in", L4, the next generation. Loader version stays 2
+(manifest untouched); boot2 28 136 B (e36c1c55), 236 B under the gate; amix-cdboot rebuilt from the same core.c. Spec 10 §3
+states the rule; 40 gate 6 is an estimate counting all fast memory, L4 is the binding check. README S3-43-8 is the row.
+Exit ledger §2: all twelve B rows pass; README carries the sweep's three deviations. make test 671 checks.
+
 ## 2026-10-26 — S3-41 recipes (U1 by -DDLM_U1, U2/U4 probes); core patch 0023; the stage-3 exit ledger (1ca60a0..377866f)
 
 U1 (the process-0 load context) is measured by a -DDLM_U1 build of each kernel of record: core patch 0023 prints at the end
