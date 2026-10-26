@@ -22,6 +22,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 1 | minted 2026-10-25, staged, not published |
 | [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | minted 2026-10-25, staged, not published |
+| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14 | minted 2026-10-26, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
@@ -45,7 +46,7 @@ Sourced by every recipe so none re-derives a flag and none can bypass the wrappe
 | `fetch.sh` | Checksum-verified fetch. Knows *how* to verify a digest; never knows what any digest should be — that lives in each recipe's own `pin.sh`. Verifies before extract, always. |
 | `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
 | `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
-| `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile; the sibling checkout is only read. |
+| `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile; the sibling checkout is only read. |
 | `gates.sh` | The object-code gates: **D4** (no register/memory-source 64-bit `MUL.L`, no 64-bit-dividend `DIV.L` — classified by **encoding**, and self-tested on a probe before any pass is trusted; see the note below), "is it really an m68k SVR4 ELF", the undefined-symbol listing, and the no-imported-assembly check. |
 | `amix-pwgr.c` | **D3**: `getpwnam`/`getpwuid`/`getgrnam`/`getgrgid` as direct `/etc/passwd`/`/etc/group` parsers, linked as a plain object into any executable that maps uid↔name, so the stock libc's first-call `getpwnam` crash is never reached. MIT (this repo). |
 | `amix-cpp` | A C preprocessor for autoconf's `CPP`. Still used by every recipe so far — see the trap below and the 2026-08-29 fix note that follows it. |

@@ -1,17 +1,18 @@
-# dlm-src.sh -- build amix-dlm artefacts (loader, kbootset) from a PINNED
-# commit, in this repository's build/.  Sourced, never executed.
+# dlm-src.sh -- build amix-dlm artefacts (loader, kbootset, modadmin) from
+# a PINNED commit, in this repository's build/.  Sourced, never executed.
 #
 #     . "$REPO/recipes/common/dlm-src.sh"
-#     amix_dlm_build <commit> <target>...      e.g. boot1.img boot2.bin box/kbootset
+#     amix_dlm_build <commit> <target>...
+#         e.g. boot1.img boot2.bin box/kbootset box/modadmin
 #
 # The sibling checkout ../amix-dlm is only READ: `git archive <commit>` exports
 # the tree into build/kspace/src/amix-dlm-<commit>/ (the fetch-at-build rule:
 # a pinned revision, never "whatever the working tree holds"), and amix-dlm's
 # own Makefile builds the targets there.  The period cross toolchain comes
 # from gcc-cross-amix's env.sh (boot1/boot2 need it), GCC 14 from the sibling
-# gcc14-cross-amix (kbootset).  Each recipe then verifies the outputs
-# against its own sha256 pins, so a commit that builds different bytes
-# fails rather than ships.
+# gcc14-cross-amix (kbootset, modadmin).  Each recipe then verifies the
+# outputs against its own sha256 pins, so a commit that builds different
+# bytes fails rather than ships.
 
 case "${0##*/}" in
 dlm-src.sh)
