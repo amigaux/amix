@@ -217,10 +217,12 @@ generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
 
 ## 6. Filesystems as modules
 
-- **Targets:** ufs, s5 and cdfs become root-class (or boot-class, for
-  cdfs on disk-rooted boxes: the stock mount path has no load-by-type
-  hook, so a demand class would have nothing to trigger it; changed after
-  the freeze, 2026-10-26, contract C4-6 §5) modules on both lines (D-3 §4).
+- **Targets:** ufs, s5 and cdfs become boot-class modules on both lines
+  (D-3 §4), and the generation's root filesystem is promoted to a root
+  record (contract C4-6 version 3 §1, core patch 0043): the stock mount
+  path has no load-by-type hook, so a demand class would have nothing to
+  trigger it (changed after the freeze, 2026-10-26 and 2026-10-27). The
+  media's miniroot is s5.
 - **030 line:** the relink kit separates cleanly — ufs has 82 globals and
   only `ufsinit` is referenced from outside (the `vfssw` row); s5 has 53 and
   is referenced through `s5init` and `inoinit` (`init_tbl`) (`L2` §2.5). The
