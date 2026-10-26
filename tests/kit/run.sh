@@ -156,7 +156,7 @@ for l in k30 k46; do
 		refused "a zero match key" $l "$W/$l-zkey/out/mod.d/zkey" "may be zero"
 	PIN_OVERRIDE=gcc-2.95.3-0000000 mkbad $l pin "$WRAP"'MOD_MISC_WRAPPER(pin, l, u, "x");\n' "$M0"'pin\tpin\n' &&
 		refused "another compiler pin" $l "$W/$l-pin/out/mod.d/pin" "the kit's pin is"
-	other=$([ $l = k30 ] && echo k46.1.1 || echo k30.1.1)
+	other=$([ $l = k30 ] && echo k46.1.2 || echo k30.1.2)
 	KABI_OVERRIDE=$other mkbad $l kabi "$WRAP"'MOD_MISC_WRAPPER(kabi, l, u, "x");\n' "$M0"'kabi\tkabi\n' &&
 		refused "the other line's kabi" $l "$W/$l-kabi/out/mod.d/kabi" "this kit is"
 	mkbad $l common "$WRAP"'int ifnet, common_count;\nint f() { return ifnet + common_count; }\nMOD_MISC_WRAPPER(common, l, u, "x");\n' "$M0"'common\tcommon\n' &&
@@ -277,8 +277,8 @@ mkdir -p "$d"
 cp "$R/abi/sample/hello/hello.c" "$R/abi/sample/hello/Master" "$d/"
 printf 'MODULE = hello\nOBJS = hello.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
 if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
-   strings "$d/build/k30/mod.d/hello" | grep -q '^kabi=k30.1.1$' &&
-   strings "$d/build/k46/mod.d/hello" | grep -q '^kabi=k46.1.1$'; then
+   strings "$d/build/k30/mod.d/hello" | grep -q '^kabi=k30.1.2$' &&
+   strings "$d/build/k46/mod.d/hello" | grep -q '^kabi=k46.1.2$'; then
 	pass "one directory, both kits: build/k30 and build/k46 each hold their own line's module"
 else
 	fail "one directory, both kits"; cat "$d"/make*.log

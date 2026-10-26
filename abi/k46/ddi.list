@@ -39,7 +39,7 @@ if_attach func 0
 if_detach func 0
 intr_attach func 0
 intr_detach func 0
-iodone func 1
+iodone func 2
 kmem_alloc func 0
 kmem_free func 0
 kmem_zalloc func 0
@@ -62,7 +62,7 @@ putbq func 0
 putnext func 0
 putq func 0
 qreply func 0
-ramdisk_image func 1
+ramdisk_image func 2
 root_defer func 1
 sd_register func 1
 sleep func 0
@@ -85,6 +85,6 @@ timeout func 0
 uiomove func 0
 unlinkb func 0
 untimeout func 0
-vfs_register func 1
+vfs_register func 2
 vtop func 0
 wakeup func 0

@@ -34,6 +34,13 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 | `sample/hello/` | the sample module |
 | `docs/` | `ddi.md` (the DDI contracts), `guide.md` (writing a module), `contracts/C3-1.md`, `C3-2.md`, `C3-6.md` |
 
+**Minors.** k30.1.0 / k46.1.0 is stage 3's DDI. 1.1 is closed: it is
+what the minted kernels kern46m -71 and kern30m -10 export (`sd_register`
+on both lines, `root_defer` on k46). 1.2 holds the rest of stage 4's
+names (`iodone`, `ramdisk_image`, `vfs_register`, `root_defer` on k30,
+and the DMA calls of C4-5 when they come). A module carries the kit's
+minor and loads on a kernel of that minor or later.
+
 Every name in the kit is at most 14 bytes, so it unpacks on an s5
 filesystem too.
 

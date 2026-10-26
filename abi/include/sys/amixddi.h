@@ -1,5 +1,5 @@
 /*
- * amixddi.h -- DDI v1 (k30.1.0, k46.1.0): the names a module may use from the
+ * amixddi.h -- DDI v1 (k30.1.0, k46.1.0; stage 4 adds minors 1 and 2): the names a module may use from the
  * kernel, and the declarations of those the module core provides.
  *
  * The list of record is the kit's ddi.list; the contract of each name
@@ -68,7 +68,7 @@ extern int	intr_detach();		/* (int, int (*)(), char *) */
 extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
 
 /*
- * The deferred call (root, k30.1.1 / k46.1.1; contract C4-2 section 3).
+ * The deferred call (root, k30.1.2 / k46.1.1; contract C4-2 section 3).
  * root_defer(fn, arg) from a root-class module's _load: fn(arg) runs once
  * at the first sysinit entry, at level 0, where the driver attaches its
  * interrupt and runs its self-test.  0, EINVAL (not in a root-class
@@ -77,14 +77,14 @@ extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
 extern int	root_defer();		/* (int (*)(), char *) */
 
 /*
- * The RAM-disk image (any, k30.1.1 / k46.1.1; contract C4-3 section 4).
+ * The RAM-disk image (any, k30.1.2 / k46.1.2; contract C4-3 section 4).
  * ramdisk_image(&paddr, &size): the physical address and size of the
  * image boot2 placed.  0, or ENOENT when there is none.
  */
 extern int	ramdisk_image();	/* (unsigned long *, unsigned long *) */
 
 /*
- * A filesystem (k30.1.1 / k46.1.1; contract C4-6 section 3).
+ * A filesystem (k30.1.2 / k46.1.2; contract C4-6 section 3).
  * vfs_register(name, init, ops, flag) from the module's _load, with name
  * its .moddata fs=: a vfssw row, init(row, index) run once now.  0,
  * EINVAL, EEXIST (that type is there), ENOSPC (4 spare rows).  A

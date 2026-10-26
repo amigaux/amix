@@ -121,7 +121,7 @@ fi
 
 # ---- 2. kernel objects ----
 PIN=gcc-2.7.2.3-8949028	# toolchain.pin
-KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.1\" -DDLM_PIN=\"$PIN\""
+KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.2\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
 for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post dlm_ddi dlm_intr; do
@@ -180,7 +180,7 @@ fi
 for IMG; do
 	K=$(basename "$IMG")
 	W=$B/test/$K
-	case "$K" in K030*|*k30*) KABI=k30.1.1 LINE=k30 ;; *) KABI=k46.1.1 LINE=k46 ;; esac
+	case "$K" in K030*|*k30*) KABI=k30.1.2 LINE=k30 ;; *) KABI=k46.1.2 LINE=k46 ;; esac
 	ORIG=$IMG
 	export DLM_KABI=$KABI DLM_PIN=$PIN	# mkmod's -K and -P
 	rm -rf "$W"

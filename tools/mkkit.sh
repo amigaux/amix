@@ -45,8 +45,8 @@
 set -e
 LINE=$1 OUT=$2
 case "$LINE" in
-k30) KABI=k30.1.1 CPUFLAG=-m68020 DEFCPU=68030 ;;
-k46) KABI=k46.1.1 CPUFLAG=-m68040 DEFCPU=68040 ;;
+k30) KABI=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
+k46) KABI=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
 *) echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
