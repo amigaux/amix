@@ -4,8 +4,11 @@
  * (sidecar version 5, C3-3), whose manifest gets its arena and identity
  * records for loader version 2, and the boot- and demand-class modules
  * installed under /etc/conf/mod.d (C3-5): copied to /stand/gen/<id>/mod/,
- * each with its manifest record and parameters.  Root-class modules are
- * stage 4's and are refused here until then.
+ * each with its manifest record and parameters.  Root-class modules on a
+ * module kernel become members of the store beside the kernel, each with
+ * its bss= (km_tail), match=, depend= and safe=1 for the safe-mode set
+ * (C3-5 version 7, C4-4 version 3); gate 3's closure counts them, and
+ * ks_commit's gate 4 counts the whole set against the arena.
  *
  * Gates 5 (store space) is ks_commit's.  Gates 8 and 9 (the boot disk) are
  * met when the store is named explicitly (--image, --dev); finding it on
@@ -392,32 +395,19 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			kk->kabi, kk->pin, rk.kabi, rk.pin);
 		rc = refuse(k, 2, m);
 	}
-	/* 3: closure -- the kernel's built-in root controllers and filesystems
-	 * (root=, rootfs=); root-class modules come with stage 4.  A read-only
-	 * medium's boot device is read by its loader (dos.library, trackdisk),
-	 * never by the kernel: only the root controller counts (C2-4 §13) */
+	/* 3: the controllers must be known; whether the kernel or a
+	 * root-class module drives them is closure()'s, after the modules.  A
+	 * read-only medium's boot device is read by its loader (dos.library,
+	 * trackdisk), never by the kernel: only the root controller counts
+	 * (C2-4 §13) */
 	if (rc == KS_OK && ro_medium && !f->rootdev[0])
 		rc = refuse(k, 3, "the root disk's controller is unknown: name --rootdev");
 	if (rc == KS_OK && !ro_medium && (!f->bootdev[0] || !f->rootdev[0]))
 		rc = refuse(k, 3, "the boot or root disk's controller is unknown (no kinfo): "
 			    "name --bootdev and --rootdev on a host build");
-	if (rc == KS_OK && !ro_medium && !listed(kk->root, f->bootdev)) {
-		sprintf(m, "the kernel has no driver for the boot disk's controller %s (it has %s)",
-			f->bootdev, kk->root[0] ? kk->root : "none");
-		rc = refuse(k, 3, m);
-	}
-	if (rc == KS_OK && !listed(kk->root, f->rootdev)) {
-		sprintf(m, "the kernel has no driver for the root disk's controller %s (it has %s)",
-			f->rootdev, kk->root[0] ? kk->root : "none");
-		rc = refuse(k, 3, m);
-	}
-	if (rc == KS_OK && !listed(kk->rootfs, rootfs)) {
-		sprintf(m, "the kernel cannot mount a %s root (it has %s)", rootfs[0] ? rootfs : "(unknown)",
-			kk->rootfs[0] ? kk->rootfs : "none");
-		rc = refuse(k, 3, m);
-	}
-	/* 4: arena -- no root-class module to place before stage 4; that the
-	 * manifest copy fits is ks_commit's (C3-4 §4) */
+	(void)rootfs;
+	/* 4: arena -- the whole root set against the capacity is ks_commit's,
+	 * with the manifest it writes (C4-4 version 3) */
 	/* 6: memory -- about twice the kernel, its bss, arena and RAM disk; an
 	 * ET_REL kernel's bss is in its section headers, a brel's only in the
 	 * sidecar's bss= */
@@ -459,6 +449,8 @@ struct kb_mod {
 	int np;
 	char pv[KM_MAXPARAM][64];	/* each declared parameter's value */
 	int placed;
+	ax_u32 bss;			/* root class: its tail (km_tail, C3-5 §3) */
+	int safe;			/* root class: in the safe-mode set (C4-4 §2) */
 };
 static struct kb_mod mods[AXM_MAXMOD];
 static int nmods;
@@ -586,9 +578,83 @@ named(const char *list, const char *name)
  * depend order, then demand class, then the param records.  mods[] keeps
  * the objects for mods_copy.
  */
+/*
+ * Gate 3, the closure: the root disk's controller -- and, on a writable
+ * store, the boot disk's -- is driven by the kernel (its sidecar's root=)
+ * or by a root-class module whose match= names it, and the root
+ * filesystem is the kernel's (rootfs=) or a root-class module of that
+ * name (C4-2, C4-4).  n root-class modules, their names and match= keys.
+ */
+#define KB_RNAME	16
+#define KB_RMATCH	256
+
+static int
+covered(const char *keys, const char *key, int n, char (*match)[KB_RMATCH])
+{
+	int i;
+
+	if (listed(keys, key))
+		return 1;
+	for (i = 0; i < n; i++)
+		if (listed(match[i], key))
+			return 1;
+	return 0;
+}
+
+static int
+closure(struct ks *k, const struct kb_facts *f, const struct kb_kernel *kk, const char *rootfs,
+	int n, char (*name)[KB_RNAME], char (*match)[KB_RMATCH])
+{
+	char m[800];
+	int i;
+
+	if (!ro_medium && !covered(kk->root, f->bootdev, n, match)) {
+		sprintf(m, "the kernel has no driver for the boot disk's controller %s (it has %s), "
+			"and no root-class module names it", f->bootdev, kk->root[0] ? kk->root : "none");
+		return refuse(k, 3, m);
+	}
+	if (!covered(kk->root, f->rootdev, n, match)) {
+		sprintf(m, "the kernel has no driver for the root disk's controller %s (it has %s), "
+			"and no root-class module names it", f->rootdev, kk->root[0] ? kk->root : "none");
+		return refuse(k, 3, m);
+	}
+	for (i = 0; i < n && strcmp(name[i], rootfs); i++)
+		;
+	if (i == n && !listed(kk->rootfs, rootfs)) {
+		sprintf(m, "the kernel cannot mount a %s root (it has %s), and no root-class module is "
+			"that filesystem", rootfs[0] ? rootfs : "(unknown)",
+			kk->rootfs[0] ? kk->rootfs : "none");
+		return refuse(k, 3, m);
+	}
+	return KS_OK;
+}
+
+static char rnames[AXM_MAXMOD][KB_RNAME], rmatch[AXM_MAXMOD][KB_RMATCH];
+
+/* the closure over mods[]'s root-class modules */
+static int
+mods_closure(struct ks *k, const struct kb_facts *f, const struct kb_kernel *kk, const char *rootfs)
+{
+	int i, n = 0;
+
+	for (i = 0; i < nmods; i++)
+		if (!strcmp(mods[i].i.cls, "root")) {
+			sprintf(rnames[n], "%.15s", mods[i].i.name);
+			sprintf(rmatch[n++], "%.255s", mods[i].i.match);
+		}
+	return closure(k, f, kk, rootfs, n, rnames, rmatch);
+}
+
+/*
+ * The modules into tail: root class first (their records with a
+ * placeholder at=, which kbootset commit turns into store members; for a
+ * medium's spec, mkstore's `module NAME root FILE attrs` lines), then boot
+ * class in depend order, then demand class, then the param records.
+ * f and rootfs mark the safe-mode set (C4-4 version 3 §2).
+ */
 static int
 modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, char *tail,
-	size_t cap)
+	size_t cap, const struct kb_facts *f, const char *rootfs, int media, int deflate)
 {
 	DIR *dd;
 	struct dirent *e;
@@ -635,6 +701,11 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		}
 		if ((rc = mod_gate2(k, kk, &md->i)) != KS_OK)
 			break;
+		if (!strcmp(md->i.cls, "root") && km_tail(md->data, md->size, &md->bss, why)) {
+			sprintf(m, "%s: %.120s", path, why);
+			rc = refuse(k, 2, m);
+			break;
+		}
 		for (j = 0; j < md->i.nparam; j++)
 			if (km_value(&md->i.param[j], md->i.param[j].def, md->pv[j])) {
 				sprintf(m, "module %.15s: its own default %s=%s is not a valid %s value",
@@ -661,11 +732,17 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 	for (i = 0; i < nmods && rc == KS_OK; i++) {
 		struct km_info *mi = &mods[i].i;
 		const char *p = mi->majors;
+		int isroot = !strcmp(mi->cls, "root");
 
-		if (!strcmp(mi->cls, "root"))
-			sprintf(m, "module %.15s is root class: root-class modules are composed from stage 4",
+		if (isroot && !kk->has_arena)
+			sprintf(m, "module %.15s is root class: the kernel has no arena (a static kernel)",
 				mi->name), rc = refuse(k, 3, m);
-		else if (strcmp(mi->cls, "boot") && strcmp(mi->cls, "demand"))
+		else if (isroot && !mi->match[0])
+			sprintf(m, "root-class module %.15s has no match=", mi->name), rc = refuse(k, 3, m);
+		else if (isroot && !strcmp(mi->unload, "allowed"))
+			sprintf(m, "root-class module %.15s says unload=allowed: a root module is pinned "
+				"(C4-2 section 1)", mi->name), rc = refuse(k, 3, m);
+		else if (!isroot && strcmp(mi->cls, "boot") && strcmp(mi->cls, "demand"))
 			sprintf(m, "module %.15s has class %s", mi->name, mi->cls), rc = refuse(k, 3, m);
 		else if (!strcmp(mi->cls, "boot") && !mi->match[0])
 			sprintf(m, "boot-class module %.15s has no match= (one that needs no board says "
@@ -680,11 +757,12 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 			if (maj < 0 || (*q && *q != ',')) {
 				sprintf(m, "module %.15s: majors=%s is malformed", mi->name, mi->majors);
 				rc = refuse(k, 3, m);
-			} else if (p[0] == 'b') {
-				sprintf(m, "module %.15s: block majors come with stage 4", mi->name);
+			} else if (p[0] == 'b' && !isroot) {
+				sprintf(m, "module %.15s: a block major needs a root-class module, which is "
+					"pinned (core patch 0031)", mi->name);
 				rc = refuse(k, 3, m);
-			} else if ((own = km_owner('c', (int)maj)) == 0 || strcmp(own, mi->name)) {
-				sprintf(m, "module %.15s: major c:%ld is %s", mi->name, maj,
+			} else if ((own = km_owner(p[0], (int)maj)) == 0 || strcmp(own, mi->name)) {
+				sprintf(m, "module %.15s: major %c:%ld is %s", mi->name, p[0], maj,
 					own ? "registered to another module" : "not in the registry");
 				rc = refuse(k, 3, m);
 			} else
@@ -700,14 +778,18 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 				sprintf(m, "module %.15s depends on %.*s, which is not in the generation",
 					mi->name, (int)(len > 15 ? 15 : len), p);
 				rc = refuse(k, 3, m);
+			} else if (isroot && strcmp(mods[j].i.cls, "root")) {
+				sprintf(m, "root-class module %.15s depends on %.15s, which is not root class",
+					mi->name, mods[j].i.name);
+				rc = refuse(k, 3, m);
 			}
 			p += len + (p[len] == ',');
 		}
 	}
 
-	/* the order: each module after its dependencies, boot class before
-	 * demand class, names breaking ties */
-	for (n = 0, cls = 0; cls < 2 && rc == KS_OK; cls++) {
+	/* the order: each module after its dependencies, root class, then
+	 * boot class, then demand class, names breaking ties */
+	for (n = 0, cls = 0; cls < 3 && rc == KS_OK; cls++) {
 		int progress = 1;
 
 		while (progress) {
@@ -715,7 +797,8 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 			for (i = 0; i < nmods; i++) {
 				int ready = 1;
 
-				if (mods[i].placed || strcmp(mods[i].i.cls, cls ? "demand" : "boot"))
+				if (mods[i].placed || strcmp(mods[i].i.cls, cls == 0 ? "root" : cls == 1 ?
+								     "boot" : "demand"))
 					continue;
 				for (j = 0; j < nmods; j++)
 					if (!mods[j].placed && j != i && named(mods[i].i.depend, mods[j].i.name))
@@ -737,21 +820,48 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		rc = refuse(k, 3, m);
 	}
 
+	/* the safe-mode set: the root controller's module, the root
+	 * filesystem's, and the root-class modules they depend on */
+	for (i = 0; i < nmods && rc == KS_OK; i++)
+		if (!strcmp(mods[i].i.cls, "root") &&
+		    (listed(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs)))
+			mods[i].safe = 1;
+	for (cls = 1; cls && rc == KS_OK; ) {
+		for (cls = 0, i = 0; i < nmods; i++)
+			for (j = 0; mods[i].safe && j < nmods; j++)
+				if (!mods[j].safe && named(mods[i].i.depend, mods[j].i.name))
+					mods[j].safe = cls = 1;
+	}
+
 	for (i = 0; i < n && rc == KS_OK; i++) {
 		struct kb_mod *md = &mods[order[i]];
-		int boot = !strcmp(md->i.cls, "boot");
+		int boot = !strcmp(md->i.cls, "boot"), isroot = !strcmp(md->i.cls, "root");
 
-		sprintf(rec, "module %.15s %s %lu path=/stand/gen/%lu/mod/%s sha256=%s", md->i.name,
-			md->i.cls, (unsigned long)md->size, (unsigned long)id, md->i.name, md->sha);
+		if (isroot && media) {
+			char p2[64];
+
+			sprintf(p2, "/stand/gen/%lu/mod/%.15s", (unsigned long)id, md->i.name);
+			sprintf(rec, "module %.15s root %.400s%s bss=%lu match=%s", md->i.name, under(root, p2),
+				deflate ? " z=deflate" : "", (unsigned long)md->bss, md->i.match);
+		} else if (isroot)
+			sprintf(rec, "module %.15s root %lu at=0x10000 crc32=00000000 sha256=%s "
+				"path=/stand/gen/%lu/mod/%s bss=%lu match=%s", md->i.name,
+				(unsigned long)md->size, md->sha, (unsigned long)id, md->i.name,
+				(unsigned long)md->bss, md->i.match);
+		else
+			sprintf(rec, "module %.15s %s %lu path=/stand/gen/%lu/mod/%s sha256=%s", md->i.name,
+				md->i.cls, (unsigned long)md->size, (unsigned long)id, md->i.name, md->sha);
 		if (boot)
 			sprintf(rec + strlen(rec), " match=%s", md->i.match);
-		else
+		else if (!isroot)
 			sprintf(rec + strlen(rec), " majors=%s", md->i.majors);
 		if (md->i.depend[0])
 			sprintf(rec + strlen(rec), " depend=%s", md->i.depend);
+		if (isroot && md->safe)
+			strcat(rec, " safe=1");
 		if (!strcmp(md->i.tier, "core"))
 			sprintf(rec + strlen(rec), " tier=core build=%s", md->i.build);
-		if (strlen(rec) > AXM_MAXLINE || tl + strlen(rec) + 2 > cap) {
+		if ((!media && strlen(rec) > AXM_MAXLINE) || tl + strlen(rec) + 2 > cap) {
 			sprintf(m, "module %.15s: its record is longer than the manifest's 255 bytes",
 				md->i.name);
 			rc = refuse(k, 0, m);
@@ -952,7 +1062,12 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	free(kernel);
 	/* the modules of the pristine generation: records as build writes them,
 	 * the copies under root's /stand/gen/1/mod/, for the medium's root */
-	if ((rc = modules(&k, root, &kk, 1, mtail, sizeof(mtail))) != KS_OK ||
+	ro_medium = 1;
+	rc = modules(&k, root, &kk, 1, mtail, sizeof(mtail), f, f->rootfs, 1, deflate);
+	if (rc == KS_OK)
+		rc = mods_closure(&k, f, &kk, f->rootfs);
+	ro_medium = 0;
+	if (rc != KS_OK ||
 	    (nmods && ((rc = mkdirs(&k, root, 1)) != KS_OK || (rc = mods_copy(&k, root, 1)) != KS_OK))) {
 		mods_free();
 		strcpy(msg, k.msg);
@@ -1019,7 +1134,9 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 	     d.kernel.bss == n.kernel.bss && d.nmod == n.nmod && d.has_ramdisk == n.has_ramdisk &&
 	     d.nparam == n.nparam;
 	for (i = 0; eq && i < d.nmod; i++)
-		eq = same(d.mod[i].name, n.mod[i].name) && same(d.mod[i].sha256, n.mod[i].sha256);
+		eq = same(d.mod[i].name, n.mod[i].name) && same(d.mod[i].sha256, n.mod[i].sha256) &&
+		     d.mod[i].cls == n.mod[i].cls && d.mod[i].safe == n.mod[i].safe &&
+		     d.mod[i].bss == n.mod[i].bss;
 	for (i = 0; eq && i < d.nparam; i++)
 		eq = same(d.param[i], n.param[i]);
 	*dflt = d.generation;
@@ -1054,7 +1171,8 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	rc = gates(k, root, f, rootfs, &kk, &kernel, &klen);
 	if (rc != KS_OK)
 		goto out;
-	if ((rc = modules(k, root, &kk, id, mtail, sizeof(mtail))) != KS_OK) {
+	if ((rc = modules(k, root, &kk, id, mtail, sizeof(mtail), f, rootfs, 0, 0)) != KS_OK ||
+	    (rc = mods_closure(k, f, &kk, rootfs)) != KS_OK) {
 		free(kernel);
 		goto out;
 	}
@@ -1119,19 +1237,64 @@ mod_verify(struct ks *k, const char *root, const struct kb_kernel *kk, const cha
 	return rc;
 }
 
+/*
+ * A built root-class record (mod_verify has checked its copy) as a store
+ * member: its bytes from the copy, and as attributes what C3-5 §3 puts on
+ * a root record besides at=, crc32= and sha256= (which ks_commit writes):
+ * bss=, match=, depend=, safe=.  Its name and match= for the closure.
+ */
+static int
+root_member(struct ks *k, const char *root, const char *line, struct ks_member *mb, char *attrs,
+	    char *name, char *match)
+{
+	static char nbuf[AXM_MAXMOD + 1][KB_RNAME];
+	static int nn;
+	char buf[600], *tok[16], *p;
+	const char *path = 0;
+	int n = 0, i;
+
+	sprintf(buf, "%.590s", line);
+	for (p = strtok(buf, " "); p && n < 16; p = strtok(0, " "))
+		tok[n++] = p;
+	attrs[0] = match[0] = 0;
+	for (i = 4; i < n; i++)
+		if (!strncmp(tok[i], "path=", 5))
+			path = tok[i] + 5;
+		else if (!strncmp(tok[i], "bss=", 4) || !strncmp(tok[i], "match=", 6) ||
+			 !strncmp(tok[i], "depend=", 7) || !strncmp(tok[i], "safe=", 5)) {
+			if (!strncmp(tok[i], "match=", 6))
+				sprintf(match, "%.255s", tok[i] + 6);
+			sprintf(attrs + strlen(attrs), "%s%.200s", attrs[0] ? " " : "", tok[i]);
+		}
+	if (!path || n < 4)
+		return refuse(k, 0, "a root-class record of the build lacks path=");
+	nn = (nn + 1) % (AXM_MAXMOD + 1);
+	sprintf(nbuf[nn], "%.15s", tok[1]);
+	strcpy(name, nbuf[nn]);
+	memset(mb, 0, sizeof(*mb));
+	mb->kind = AXK_MODULE;
+	mb->name = name;
+	mb->attrs = attrs;
+	mb->deflate = 0;		/* raw in a disk store (10 §5.5) */
+	if ((mb->data = slurp(under(root, path), &mb->size)) == 0)
+		return refuse(k, 1, "a root-class module's copy cannot be read");
+	return KS_OK;
+}
+
 int
 kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 {
-	static char head[8192], tail[16384];
-	static struct ks_member mb;
+	static char head[8192], tail[16384], rtail[16384], cmp[32768];
+	static char attrs[AXM_MAXMOD][300];
+	static struct ks_member mb[1 + AXM_MAXMOD];
 	struct kb_facts f;
 	struct kb_kernel kk;
 	struct ks_newgen g;
 	char p[80], buf[64], *text, *line, *next;
 	ax_u8 *t, *kernel;
 	ax_u32 len, klen, id = ks_next_id(k), created, dflt;
-	size_t hl = 0, tl = 0;
-	int rc;
+	size_t hl = 0, tl = 0, rl = 0;
+	int rc, nr = 0, i;
 
 	k->gate = 0;
 	k->msg[0] = 0;
@@ -1164,7 +1327,8 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	memcpy(text, t, len);
 	text[len] = 0;
 	free(t);
-	head[0] = tail[0] = 0;
+	head[0] = tail[0] = rtail[0] = 0;
+	memset(mb, 0, sizeof(mb));
 	for (line = text; *line; line = next) {
 		next = strchr(line, '\n');
 		if (next)
@@ -1173,6 +1337,24 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 			next = line + strlen(line);
 		if (!strncmp(line, "kernel ", 7))
 			continue;		/* the kernel is the member checked above */
+		if (!strncmp(line, "module ", 7) && strstr(line, " root ") &&
+		    strstr(line, " root ") == line + 7 + strcspn(line + 7, " ")) {
+			/* a root-class module: a store member of the generation */
+			if ((rc = mod_verify(k, root, &kk, line)) != KS_OK ||
+			    (rc = root_member(k, root, line, &mb[1 + nr], attrs[nr], rnames[nr],
+					      rmatch[nr])) != KS_OK ||
+			    (rl + strlen(line) + 2 > sizeof(rtail) &&
+			     (rc = refuse(k, 0, "the build's module records are too long")) != KS_OK)) {
+				for (i = 0; i < nr; i++)
+					free((void *)mb[1 + i].data);
+				free(text);
+				free(kernel);
+				return rc;
+			}
+			rl += (size_t)sprintf(rtail + rl, "%s\n", line);
+			nr++;
+			continue;
+		}
 		if (!strncmp(line, "module ", 7) || !strncmp(line, "param ", 6)) {
 			if ((line[0] == 'm' && (rc = mod_verify(k, root, &kk, line)) != KS_OK) ||
 			    (tl + strlen(line) + 2 > sizeof(tail) &&
@@ -1194,22 +1376,30 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 		hl += (size_t)sprintf(head + hl, "%s\n", line);
 	}
 	free(text);
-	memset(&mb, 0, sizeof(mb));
-	mb.kind = AXK_KERNEL;
-	mb.name = "unix";
-	mb.data = kernel;
-	mb.size = klen;
-	mb.deflate = 0;			/* raw in a disk store (10 §5.5) */
+	if ((rc = closure(k, &f, &kk, f.rootfs, nr, rnames, rmatch)) != KS_OK) {
+		for (i = 0; i < nr; i++)
+			free((void *)mb[1 + i].data);
+		free(kernel);
+		return rc;
+	}
+	mb[0].kind = AXK_KERNEL;
+	mb[0].name = "unix";
+	mb[0].data = kernel;
+	mb[0].size = klen;
+	mb[0].deflate = 0;		/* raw in a disk store (10 §5.5) */
 	if (kk.brel) {			/* the loader adds it to the brel's end */
 		static char battr[32];
 
 		sprintf(battr, "bss=%lu", (unsigned long)kk.bss);
-		mb.attrs = battr;
+		mb[0].attrs = battr;
 	}
-	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, tail, &dflt)) {
+	sprintf(cmp, "%s%s", rtail, tail);
+	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, cmp, &dflt)) {
 		/* nothing new: write nothing, and drop the build so the next one
 		 * starts clean (C2-4 §3) */
 		free(kernel);
+		for (i = 0; i < nr; i++)
+			free((void *)mb[1 + i].data);
 		sprintf(p, "/stand/gen/%lu/build", (unsigned long)id);
 		remove(under(root, p));
 		sprintf(p, "/stand/gen/%lu/facts", (unsigned long)id);
@@ -1224,12 +1414,14 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	memset(&g, 0, sizeof(g));
 	g.head = head;
 	g.tail = tail;
-	g.n = 1;
-	g.m = &mb;
+	g.n = 1 + nr;
+	g.m = mb;
 	g.created = created;
 	g.id = id;
 	rc = ks_commit(k, &g, idp);
 	free(kernel);
+	for (i = 0; i < nr; i++)
+		free((void *)mb[1 + i].data);
 	return rc;
 }
 

@@ -486,6 +486,30 @@ ks_create(struct ks *k, ax_u32 store_size, const ax_u8 *boot1, const ax_u8 *boot
 	return ks_open(k);
 }
 
+/*
+ * What boot2 puts in the arena for the manifest m (mlen bytes): the
+ * directory of 32 + 48 bytes a root-class record, the manifest copy, then
+ * every root-class module 16-aligned with its bss= tail -- the layout of
+ * loader/boot2/core.c's arena_fill (C4-4 version 3 section 1)
+ */
+ax_u32
+ks_arena_need(const struct ax_manifest *m, ax_u32 mlen)
+{
+	ax_u32 off, n = 0;
+	int i;
+
+	for (i = 0; i < m->nmod; i++)
+		n += m->mod[i].cls == AXC_ROOT;
+	off = 32 + 48 * n + mlen;
+	for (i = 0; i < m->nmod; i++)
+		if (m->mod[i].cls == AXC_ROOT) {
+			off = (off + 15) & ~(ax_u32)15;
+			off = (off + m->mod[i].size + 15) & ~(ax_u32)15;
+			off += m->mod[i].bss;
+		}
+	return off;
+}
+
 /* one member record of the manifest */
 static void
 record(char *out, const struct ks_member *mb, ax_u32 at, ax_u32 stored, ax_u32 crc,
@@ -586,10 +610,12 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 		    chk.generation != id) {
 			sprintf(line, "the new manifest is refused by the loader's parser at line %d", errline);
 			rc = fail(k, KS_EREFUSE, 0, line);
-		} else if (chk.has_arena && 32 + mlen > chk.arena_cap) {
-			/* boot2 copies the manifest behind the arena directory (C3-4) */
-			sprintf(line, "gate 4 (arena): the manifest copy needs %lu bytes, the arena has %lu",
-				(unsigned long)(32 + mlen), (unsigned long)chk.arena_cap);
+		} else if (chk.has_arena && ks_arena_need(&chk, mlen) > chk.arena_cap) {
+			/* boot2 places the directory, the manifest copy and every
+			 * root-class module with its bss= tail (C3-4, C4-4 v3) */
+			sprintf(line, "gate 4 (arena): the manifest copy and the root set need %lu bytes, "
+				"the arena has %lu", (unsigned long)ks_arena_need(&chk, mlen),
+				(unsigned long)chk.arena_cap);
 			rc = fail(k, KS_EREFUSE, 4, line);
 		}
 	}

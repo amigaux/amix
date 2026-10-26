@@ -217,7 +217,7 @@ grep -q "abi= is not a fingerprint" $T/out
 msidecar 0x00000100
 $KB build $FACTS | grep -q "built"
 refused 4 $KB commit
-grep -q "the manifest copy needs" $T/out
+grep -q "the manifest copy and the root set need" $T/out
 # a store whose loader is version 1 boots no module kernel (gate 7)
 head -c 8454144 /dev/zero > $T/v1.img
 $B/kbootset -R $R --image $T/v1.img --offset 65536 create 8388608 $B/rt/boot2.bin --version 1 >/dev/null
@@ -354,7 +354,8 @@ three; modpkg z3660eth class=boot match=always majors=c:51 depend=monsw
 refused 3 $KB build $FACTS			# a boot module on a demand module
 grep -q "module z3660eth: its depend= closure has a cycle or a demand-class dependency" $T/out
 three; modpkg monsw class=root match=always
-refused 3 $KB build $FACTS			# root class before stage 4
+$KB build $FACTS | grep -q "built"		# root class on a module kernel (stage 4)
+rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
 three; printf 'X' | dd of=$MD/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
 refused 1 $KB build $FACTS			# changed after apkg installed it
 # a copy changed between build and commit
@@ -367,6 +368,83 @@ rm -rf "${R:?}/stand/gen/${id:?}"
 rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
 cp $T/kabi.static $R/stand/k46/kabi; record
 echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, commit, check) ok"
+
+# root-class modules (S4-12; C3-5 version 7, C4-4 version 3) on a module
+# kernel whose sidecar names no built-in root controller or filesystem:
+# the closure through the modules, the records with bss= and safe=1, the
+# members in the store, gate 4 over the whole set
+rootset() {	# rootset: zscsi drives the root disk, ufs mounts it, a4091 is spare
+	rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
+	modpkg zscsi class=root match=zorro:144b:01 rank=z3660
+	modpkg ufs class=root match=always
+	modpkg a4091 class=root match=zorro:0202:54 rank=zorro
+}
+cp $T/disk.img $T/pre-root.img		# the store as the later sections expect it
+pregens=" $(ls $R/stand/gen | tr '\n' ' ')"
+msidecar 0x00060000
+sed -i -e '/^root=/d' -e '/^rootfs=/d' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+RFACTS="--line 46 --bootdev zorro:144b:01 --rootdev zorro:144b:01 --rootfs ufs --mem 16777216"
+rootset
+$KB build $RFACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module zscsi root [0-9]* at=0x10000 crc32=00000000 sha256=[0-9a-f]* path=/stand/gen/$id/mod/zscsi bss=0 match=zorro:144b:01 safe=1$" $R/stand/gen/$id/build
+grep -q "^module ufs root .* bss=0 match=always safe=1$" $R/stand/gen/$id/build
+grep -q "^module a4091 root .* bss=0 match=zorro:0202:54$" $R/stand/gen/$id/build
+$KB commit 2>/dev/null | grep -q "committed"
+grep -a -q "^module zscsi root [0-9]* at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=0 match=zorro:144b:01 safe=1$" $T/disk.img
+grep -a -q "^module a4091 root [0-9]* at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=0 match=zorro:0202:54$" $T/disk.img
+$B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
+# the same set again, once the trial is good: the default already has
+# these members, root-class ones included
+$KB mark-good --booted $id > /dev/null
+$KB build $RFACTS | grep -q "equals the default generation"
+$KB commit 2>/dev/null | grep -q "nothing to commit"
+# the closure: a root disk no module names; a filesystem none is
+refused 3 $KB build --line 46 --bootdev zorro:144b:01 --rootdev zorro:dead:01 --rootfs ufs --mem 16777216
+grep -q "root disk's controller zorro:dead:01 .* no root-class module names it" $T/out
+refused 3 $KB build --line 46 --bootdev zorro:144b:01 --rootdev zorro:144b:01 --rootfs s5 --mem 16777216
+grep -q "cannot mount a s5 root .* no root-class module is that filesystem" $T/out
+# the root-class rules of gate 3
+rootset; modpkg ufs class=root
+refused 3 $KB build $RFACTS
+grep -q "root-class module ufs has no match=" $T/out
+rootset; modpkg ufs class=root match=always unload=allowed
+refused 3 $KB build $RFACTS
+grep -q "root-class module ufs says unload=allowed" $T/out
+rootset; modpkg z3660eth class=boot match=always majors=c:51; modpkg ufs class=root match=always depend=z3660eth
+refused 3 $KB build $RFACTS
+grep -q "root-class module ufs depends on z3660eth, which is not root class" $T/out
+rootset; modpkg monsw class=demand majors=b:20
+refused 3 $KB build $RFACTS
+grep -q "a block major needs a root-class module" $T/out
+rootset; modpkg ramdisk class=root match=always majors=b:20
+$KB build $RFACTS | grep -q "built"
+rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+# a medium's pristine generation with the root set: mkstore's root lines
+rootset
+$B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
+grep -q "^module zscsi root .*/stand/gen/1/mod/zscsi z=deflate bss=0 match=zorro:144b:01 safe=1$" $T/r1.adf.spec
+grep -q "^module a4091 root .*/stand/gen/1/mod/a4091 z=deflate bss=0 match=zorro:0202:54$" $T/r1.adf.spec
+$B/lsstore $T/r1.adf 0 $T/r2.adf | grep -q "lsstore: ok"
+# gate 4: the whole root set against an arena that holds the directory
+# and the manifest copy (about 1 000 bytes) but not the modules too
+rootset
+msidecar 0x00000600
+sed -i -e '/^root=/d' -e '/^rootfs=/d' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+$KB build $RFACTS | grep -q "built"
+refused 4 $KB commit
+grep -q "the manifest copy and the root set need" $T/out
+rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-*
+for g in $(ls $R/stand/gen); do
+	case "$pregens" in *" $g "*) ;; *) rm -rf "${R:?}/stand/gen/${g:?}" ;; esac
+done
+cp $T/pre-root.img $T/disk.img
+cp $T/kabi.static $R/stand/k46/kabi; record
+echo "kbuild: root-class modules (gate 3 closure and rules, records, store members, gate 4) ok"
 
 # check: every member against its manifest, the default generation against
 # the installed kernel; a damaged member makes it say BAD and exit 1

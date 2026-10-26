@@ -100,6 +100,9 @@ int ks_create(struct ks *k, ax_u32 store_size, const ax_u8 *boot1,
  * generation yet); *id = its number */
 int ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *id);
 
+/* the arena bytes boot2 needs for manifest m of mlen bytes (C4-4 v3) */
+ax_u32 ks_arena_need(const struct ax_manifest *m, ax_u32 mlen);
+
 /* the end of a full multi-user boot of generation booted: a trial becomes
  * good and the default; primary_used: boot1 ran the primary boot2 (clears
  * the loader trial) */
