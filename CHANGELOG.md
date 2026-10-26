@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patch 0010: marc_post; contract C3-5; the S3-20/S3-21 kernel brief (1038d5f..23d0bc1)
+
+dlm_marc_post() registers the demand-class majors from the booted manifest, then loads the boot-class records in manifest
+order unless match= names no board here (the platform's matcher), one console line each; in safe mode nothing loads and every
+other load is refused; a member's param records reach its _load as one string. Contract C3-5, the module package and the
+manifest's module record (agreed on the report: match=/majors=/depend=/tier=+build= copied verbatim from .moddata, gate 3
+refusals, no GMF1 or loader-min change, order and reporting through kinfo). docs/plan/stage-3-kernel-brief.md: the 11 build
+steps, the providers per kernel and the acceptance for the first module kernels. Harness 146/146 both lines.
+
 ## 2026-10-26 — module core patch 0009: manifest-only loading and development load (9d1528b)
 
 Every load (modload, dependency, dlm_loadname, first open) resolves a module only as a member of the manifest the loader
