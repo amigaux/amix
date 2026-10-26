@@ -1,8 +1,10 @@
 # C4-6 — the filesystem module form, version 1
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement. Once agreed, other repositories build against this text, and
-  a change is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), with this draft's three
+  choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
+  and cdfs boot class on disk (§5). Implemented by core patch 0040
+  (S4-41). Other repositories build against this text; a change from
+  here is a contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §2 patch 9 (`vfs_register`
   and a grown `vfssw`), §6 (filesystems as modules), §3 (`rootfstype`);
   `20-module-format-and-abi.md` §4.1 (the core tier); D-3 §4; measurements
@@ -69,6 +71,10 @@ or boot-class module's `_load`:
 - otherwise it fills the next free row, runs `init` once (the stock
   `vfsinit` ran each row's at boot, before any module), raises
   `nfstype`, and returns 0.
+
+`init` is called as `vfsinit` calls it, with the row and its index, and
+its result is not read (the stock ones are `void`). A module with
+`unload=allowed` is refused (`EINVAL`): a filesystem module is pinned.
 
 There is no unregister: a filesystem module is pinned. A `_load` that
 fails after `vfs_register` has its row taken back by the core, as
