@@ -78,6 +78,7 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 		ki->boot1_choice = get32(a + 16);
 		ki->gen_id = get32(a + 28);
 		ki->gen_state = get32(a + 32);
+		ki->axl1_flags = get32(a + 36);
 		ki->dev_unit = get32(a + 44);
 		ki->dev_start = get32(a + 48);
 		ki->dev_base = get32(a + 52);

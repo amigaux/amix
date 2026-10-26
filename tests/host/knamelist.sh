@@ -25,6 +25,7 @@ cat > $T/kinfo.py <<'EOF'
 import struct, sys
 ver, gen, lay = int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
 extra = int(sys.argv[5], 0) if len(sys.argv) > 5 else 0
+medium = sys.argv[6] if len(sys.argv) > 6 else ''     # cd or floppy: AXL1 flag 0x08
 l = {w[0]: (int(w[1], 16), int(w[2])) for w in (x.split() for x in open(lay))}
 ml = 576 if ver == 3 else 536
 r = bytearray(ml + 4)
@@ -34,6 +35,10 @@ r[24:31] = b'k46.1.0'; r[48:63] = b'68060-261026-56'
 a = 84
 struct.pack_into('>I', r, a, 0x41584c31)
 struct.pack_into('>IIIIII', r, a + 12, 2, 0, 60, 0xf, gen, 2)
+if medium:
+    struct.pack_into('>II', r, a + 32, 3, 0x08)      # pristine, a read-only medium
+    if medium == 'cd':
+        struct.pack_into('>I', r, a + 44, 0xffffffff) # no boot node: started by AmigaDOS
 s = sum(struct.unpack('>31I', r[a:a + 124])) & 0xffffffff
 struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
 struct.pack_into('>I', r, 80, 1 | extra)
@@ -106,6 +111,28 @@ if [ -f "$K46" ]; then
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46b
 	$KB namelist | grep -q "bound at 0x07f00000$" && cmp -s $R/stand/unix $T/n46b
 	echo "knamelist: k46 (written over a link to 2.1_unix, current, stale, missing, mark-good, refusals) ok"
+	# a CD boot (C2-4 section 13): the store did not boot; the namelist comes
+	# from the installed kernel when its build id is kinfo's
+	cp "$K46" $R/stand/k46/unix
+	echo "build=68060-261026-56" > $R/stand/k46/kabi
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 0 cd
+	rm -f $R/stand/unix
+	$KB status > $T/out
+	grep -q "^booted: generation 1 of a read-only medium (a CD), not of this box's store; kernel 68060-261026-56" $T/out
+	$KB namelist | grep -q "^kbootset: namelist /stand/unix written for the medium's kernel (68060-261026-56), bound at 0x08000000$"
+	cmp -s $R/stand/unix $T/n46
+	$KB status | grep -q "^namelist: /stand/unix is the medium's kernel's (68060-261026-56), bound at 0x08000000$"
+	$B/lsstore $T/store 0 > $T/before
+	$KB mark-good > $T/out
+	grep -q "^kbootset: booted from a read-only medium (generation 1 of a CD): nothing to mark$" $T/out
+	! grep -q "namelist" $T/out				# current
+	$B/lsstore $T/store 0 | cmp -s - $T/before		# the store is untouched
+	[ -z "$($KB retry)" ]
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 0 floppy
+	$KB mark-good | grep -q "(generation 1 of a floppy pair): nothing to mark"
+	echo "build=68060-261026-57" > $R/stand/k46/kabi
+	no 3 "booted from a read-only medium whose kernel (68060-261026-56) is not the one installed here (68060-261026-57)" $KB namelist
+	echo "knamelist: k46 booted from a read-only medium (status, namelist from the installed kernel, no mark-good, no retry) ok"
 	rm -rf $R
 else
 	echo "knamelist: no k46 kernel, skipped"

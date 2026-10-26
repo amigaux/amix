@@ -20,7 +20,9 @@ struct kb_kinfo {
 	ax_u32 cpu, line, attn, flags;
 	char kabi[25], build[33];
 	int has_axl1;			/* booted by our loader */
+#define KB_MEDIUM(ki)	((ki)->has_axl1 && ((ki)->axl1_flags & 0x08))	/* not from this box's store */
 	ax_u32 boot1_choice, gen_id, gen_state;
+	ax_u32 axl1_flags;		/* AXL1's flags: 0x08 a read-only medium (CD, floppy pair) */
 	ax_u32 dev_unit, dev_start, dev_base, dev_id;
 	ax_u32 root_kind, root_id, root_base, root_unit, root_slice;
 	char rootfs[17];

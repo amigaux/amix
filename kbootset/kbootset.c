@@ -685,7 +685,13 @@ main(int argc, char **argv)
 		k.msg[0] = 0;
 		if (!strcmp(cmd[0], "status")) {
 			status(&k);
-			if (have_kinfo && ki.has_axl1) {
+			if (have_kinfo && KB_MEDIUM(&ki)) {	/* C2-4 section 13 */
+				printf("booted: generation %lu of a read-only medium (%s), not of this box's store; "
+				       "kernel %s, 680%lu, %lu bytes of fast memory\n", (unsigned long)ki.gen_id,
+				       ki.dev_unit == 0xFFFFFFFFUL ? "a CD" : "a floppy pair", ki.build,
+				       (unsigned long)ki.cpu, (unsigned long)ki.fast);
+				printf("loaded modules (kinfo): %d\n", ki.nmods);
+			} else if (have_kinfo && ki.has_axl1) {
 				printf("booted: generation %lu, by the %s loader; kernel %s, 680%lu, %lu bytes "
 				       "of fast memory\n", (unsigned long)ki.gen_id,
 				       (ki.boot1_choice & 0x200) ? "secondary" : "primary", ki.build,
@@ -697,7 +703,10 @@ main(int argc, char **argv)
 				char nl[300];
 				int r = kb_namelist_run(&k, root, &ki, 0, nl);
 
-				if (r == KB_NL_CURRENT)
+				if (r == KB_NL_CURRENT && KB_MEDIUM(&ki))
+					printf("namelist: /stand/unix is the medium's kernel's (%s), bound at 0x%08lx\n",
+					       ki.build, (unsigned long)ki.bd_tvaddr);
+				else if (r == KB_NL_CURRENT)
 					printf("namelist: /stand/unix is generation %lu's, bound at 0x%08lx\n",
 					       (unsigned long)ki.gen_id, (unsigned long)ki.bd_tvaddr);
 				else if (r == KB_NL_STALE)
@@ -726,6 +735,16 @@ main(int argc, char **argv)
 			rc = kb_commit(&k, root, &id, 1);
 		} else if (!strcmp(cmd[0], "build")) {
 			rc = kb_build(&k, root, &facts, now(), &id);
+		} else if (!strcmp(cmd[0], "mark-good") && !booted && have_kinfo && KB_MEDIUM(&ki)) {
+			char nl[300];	/* C2-4 section 13: the store did not boot; the namelist still */
+
+			printf("kbootset: booted from a read-only medium (generation %lu of %s): nothing to mark\n",
+			       (unsigned long)ki.gen_id, ki.dev_unit == 0xFFFFFFFFUL ? "a CD" : "a floppy pair");
+			if (kb_namelist_run(&k, root, &ki, 1, nl) != KB_NL_CURRENT)
+				printf("kbootset: %s\n", nl);
+		} else if (!strcmp(cmd[0], "retry") && !booted && have_kinfo && KB_MEDIUM(&ki)) {
+			fclose(d.f);	/* no trial of this store booted: nothing to give back */
+			return 0;
 		} else if (!strcmp(cmd[0], "mark-good") && (booted || (have_kinfo && ki.has_axl1))) {
 			/* the booted generation, and whether boot1 ran the primary boot2
 			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */

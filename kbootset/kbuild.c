@@ -1232,7 +1232,7 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 	struct kb_layout lay;
 	ax_u8 *kern = 0, *sym = 0, *nl = 0, *old = 0;
 	ax_u32 klen, slen = 0, nlen, olen = 0;
-	char *buf, why[120], path[96], text[4096], v[200], sha[65], np[1100];
+	char *buf, why[120], path[96], text[4096], v[200], sha[65], ksha[65], lname[16], np[1100];
 	int rc = KB_NL_NONE;
 	FILE *f;
 
@@ -1248,18 +1248,49 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		strcpy(line, "no namelist: kinfo flags a loader fault (0x8)");
 		return KB_NL_NONE;
 	}
-	if ((buf = ks_manifest(k, ki->gen_id, &m)) == 0 || !m.has_kernel ||
-	    (kern = ks_member(k, &m.kernel, &klen)) == 0) {
-		sprintf(line, "no namelist: generation %lu's kernel cannot be read from the store",
-			(unsigned long)ki->gen_id);
-		free(buf);
-		free(kern);
-		return KB_NL_NONE;
+	/*
+	 * The booted kernel: the generation's, from the store; or, on a boot
+	 * from a read-only medium (a CD, a floppy pair: AXL1 flag 0x08), whose
+	 * generation is not this box's, the line's installed kernel when its
+	 * build id is kinfo's (C2-4 section 13)
+	 */
+	buf = 0;
+	if (KB_MEDIUM(ki)) {
+		sprintf(lname, "k%lu", (unsigned long)ki->line);
+		sprintf(path, "/stand/%s/kabi", lname);
+		if ((f = fopen(under(root, path), "r")) == 0) {
+			sprintf(line, "no namelist: booted from a read-only medium, and %s cannot be read", path);
+			return KB_NL_NONE;
+		}
+		text[fread(text, 1, sizeof(text) - 1, f)] = 0;
+		fclose(f);
+		if (!value(text, "build", v, sizeof(v)) || strcmp(v, ki->build)) {
+			sprintf(line, "no namelist: booted from a read-only medium whose kernel (%.32s) is not "
+				"the one installed here (%.32s)", ki->build, value(text, "build", v, sizeof(v)) ? v : "none");
+			return KB_NL_NONE;
+		}
+		sprintf(path, "/stand/%s/unix", lname);
+		if ((kern = slurp(under(root, path), &klen)) == 0) {
+			sprintf(line, "no namelist: %s cannot be read", path);
+			return KB_NL_NONE;
+		}
+		hex(kern, klen, ksha);
+	} else {
+		if ((buf = ks_manifest(k, ki->gen_id, &m)) == 0 || !m.has_kernel ||
+		    (kern = ks_member(k, &m.kernel, &klen)) == 0) {
+			sprintf(line, "no namelist: generation %lu's kernel cannot be read from the store",
+				(unsigned long)ki->gen_id);
+			free(buf);
+			free(kern);
+			return KB_NL_NONE;
+		}
+		sprintf(lname, "%.3s", m.line ? m.line : "k??");
+		sprintf(ksha, "%.64s", m.kernel.sha256 ? m.kernel.sha256 : "");
 	}
 	if (klen >= 18 && kern[16] == 0xff && kern[17] == 0) {	/* a brel: the line's unix.sym */
 		const char *p;
 
-		sprintf(path, "/stand/%.3s/kabi", m.line ? m.line : "k??");
+		sprintf(path, "/stand/%s/kabi", lname);
 		if ((f = fopen(under(root, path), "r")) == 0) {
 			sprintf(line, "no namelist: %s cannot be read", path);
 			goto out;
@@ -1270,13 +1301,12 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 			strcpy(line, "no namelist: the kernel has no symbols (no unix.sym)");
 			goto out;
 		}
-		if (!value(text, "sha256", sha, sizeof(sha)) || !m.kernel.sha256 ||
-		    strncmp(sha, m.kernel.sha256, 64)) {
+		if (!value(text, "sha256", sha, sizeof(sha)) || strncmp(sha, ksha, 64)) {
 			sprintf(line, "no namelist: generation %lu's kernel is not the installed one, whose "
 				"unix.sym this is", (unsigned long)ki->gen_id);
 			goto out;
 		}
-		sprintf(path, "/stand/%.3s/unix.sym", m.line);
+		sprintf(path, "/stand/%s/unix.sym", lname);
 		p = strchr(v + 9, ' ');
 		if ((sym = slurp(under(root, path), &slen)) == 0 || !p ||
 		    strtoul(v + 9, 0, 10) != slen) {
@@ -1303,7 +1333,10 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 	}
 	old = slurp(under(root, "/stand/unix"), &olen);
 	if (old && olen == nlen && !memcmp(old, nl, nlen)) {
-		sprintf(line, "namelist for generation %lu is current", (unsigned long)ki->gen_id);
+		if (KB_MEDIUM(ki))
+			sprintf(line, "namelist for the medium's kernel (%.32s) is current", ki->build);
+		else
+			sprintf(line, "namelist for generation %lu is current", (unsigned long)ki->gen_id);
 		rc = KB_NL_CURRENT;
 		goto out;
 	}
@@ -1334,8 +1367,12 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		rc = -1;
 		goto out;
 	}
-	sprintf(line, "namelist /stand/unix written for generation %lu, bound at 0x%08lx",
-		(unsigned long)ki->gen_id, (unsigned long)ki->bd_tvaddr);
+	if (KB_MEDIUM(ki))
+		sprintf(line, "namelist /stand/unix written for the medium's kernel (%.32s), bound at 0x%08lx",
+			ki->build, (unsigned long)ki->bd_tvaddr);
+	else
+		sprintf(line, "namelist /stand/unix written for generation %lu, bound at 0x%08lx",
+			(unsigned long)ki->gen_id, (unsigned long)ki->bd_tvaddr);
 	rc = KB_NL_WRITTEN;
 out:
 	free(buf);
