@@ -91,14 +91,15 @@ fi
 PIN=gcc-2.7.2.3-8949028	# toolchain.pin
 KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.0\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
-for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf; do
+sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
+for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg; do
 	$KCC -c "$DLM/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
 done
 for f in dlm_cache dlmksym dlm_hooksw; do
 	m68k-cbm-sysv4-gcc -c "$DLM/$f.s" -o "$B/obj/$f.o"
 done
 m68k-cbm-sysv4-ld -r -o "$B/obj/dlm.o" $(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str \
-	dlmconf dlm_cache dlmksym dlm_hooksw; do echo "$B/obj/$f.o"; done)
+	dlmconf dlmreg dlm_cache dlmksym dlm_hooksw; do echo "$B/obj/$f.o"; done)
 if grep -v 'types.h:182\|In file included\|^ *from ' "$B/kobj.warn" | grep . > "$B/kobj.other"; then
 	fail "kernel objects: warnings beyond the stock headers'"; cat "$B/kobj.other"
 else

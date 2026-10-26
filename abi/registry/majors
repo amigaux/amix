@@ -1,0 +1,11 @@
+# The major-number registry of 1.1 (docs/spec/20-module-format-and-abi.md
+# section 6, confirmed against the kernels of record by M-REG1).  One line
+# per number: c (character) or b (block), the major, the module that owns
+# it.  The module core is built with this table (core tools/mkreg) and
+# refuses a module whose .moddata majors= names a number registered to
+# another module, or one not registered at all (C3-1 section 4).
+c 49 z3660rtg
+c 51 z3660eth
+c 52 monsw
+c 53 kinfo
+b 20 ramdisk

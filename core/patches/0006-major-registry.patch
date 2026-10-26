@@ -1,0 +1,172 @@
+Subject: the major registry: a module's majors are the ones registered to it
+
+A module's .moddata majors= (c:N, b:N) must name numbers the registry
+gives to that module; a number registered to another module, or not
+registered at all, is refused with ECONFIG (amix-dlm
+docs/contracts/C3-1-module-object.md section 4,
+20-module-format-and-abi.md section 6).  The registry is a table the
+kernel build generates from the ABI kit's file with tools/mkreg
+(dlm_majreg[], "c|b major module" lines).  An occupied switch row stays
+EEXIST in dlm_creg as before.  30-module-core.md section 2, patch 6.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -523,6 +523,36 @@
+ }
+ 
+ /*
++ * Every major a module's majors= names is registered to it
++ * (20-module-format-and-abi.md section 6, C3-1 section 4).  The
++ * syntax was checked by dlm_ld_moddata.
++ */
++static int
++md_majors(v, name)
++	char *v, *name;
++{
++	struct dlm_majreg *r;
++	int type, n;
++
++	while (*v) {
++		type = *v;
++		for (v += 2, n = 0; *v >= '0' && *v <= '9'; v++)
++			n = n * 10 + (*v - '0');
++		for (r = dlm_majreg; r->r_type; r++)
++			if (r->r_type == type && r->r_major == n)
++				break;
++		if (r->r_type == 0 || strcmp(r->r_name, name) != 0) {
++			printf("dlm: %s: major %c:%d is %s\n", name, type, n,
++			    r->r_type ? "registered to another module" : "not in the registry");
++			return ECONFIG;
++		}
++		if (*v == ',')
++			v++;
++	}
++	return 0;
++}
++
++/*
+  * What .moddata says against this kernel (C3-1 sections 3-4): the name
+  * is the file's, the kabi family and major are the kernel's and the
+  * minor not above it, the compiler pin is the kernel's, a core-tier
+@@ -553,6 +583,8 @@
+ 		printf("dlm: %s: root class is loaded from the arena only\n", name);
+ 		return ECONFIG;
+ 	}
++	if (md->md_majoff >= 0 && md_majors(ld->ld_mod + md->md_majoff, name) != 0)
++		return ECONFIG;
+ 	return 0;
+ }
+ 
+--- a/dlm.h
++++ b/dlm.h
+@@ -146,6 +146,7 @@
+ 	int		md_unload;	/* 1: unload=allowed */
+ 	int		md_tier;	/* 0 ddi, 1 core */
+ 	long		md_depoff;	/* the depend value in ld_mod, or -1 */
++	long		md_majoff;	/* the majors value in ld_mod, or -1 */
+ };
+ 
+ /* loader state for one file */
+@@ -333,4 +334,12 @@
+ extern char *dlm_static[];
+ extern char *dlm_kabi, *dlm_pin, *dlm_build;	/* this kernel, for .moddata */
+ 
++/* the major registry, generated from the ABI kit's file by tools/mkreg */
++struct dlm_majreg {
++	int	r_type;			/* 'c' or 'b'; 0 ends the table */
++	int	r_major;
++	char	*r_name;		/* the module that owns it */
++};
++extern struct dlm_majreg dlm_majreg[];
++
+ #endif	/* _DLM_H */
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -380,6 +380,7 @@
+ 	case K_MATCH:
+ 		return eachitem(v, okmatch);
+ 	case K_MAJORS:
++		md->md_majoff = v - ld->ld_mod;
+ 		return eachitem(v, okmajor);
+ 	case K_DEPEND:
+ 		md->md_depoff = v - ld->ld_mod;
+@@ -430,7 +431,7 @@
+ 	    ld->ld_modsz, ERELOC))
+ 		return ERELOC;
+ 	bzero((caddr_t)md, sizeof *md);
+-	md->md_depoff = -1;
++	md->md_depoff = md->md_majoff = -1;
+ 	if (ld->ld_modsz < 12 || bcmp(ld->ld_mod + 4, "MD2", 4) != 0)
+ 		return EBADVER;
+ 	if (ld->ld_modsz > MD_MAXSZ)
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -14,6 +14,14 @@
+ char	*dlm_pin = "gcc-2.7.2.3-8949028";
+ char	*dlm_build = "68060-261101-01";
+ 
++/* the harness's major registry */
++struct dlm_majreg dlm_majreg[] = {
++	{ 'c', 51, "z3660eth" },
++	{ 'c', 58, "regok" },
++	{ 'b', 20, "ramdisk" },
++	{ 0, 0, 0 }
++};
++
+ /* stock exec rows and a hook table, as the static kernel has them */
+ int	stock_calls, stock_rv = 42;
+ static short coffmagic = 0x150, elfmagic = 0x7f45, intpmagic = 0x2321;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -166,9 +166,13 @@
+ mod('mdtier', extra=['tier=core'])                          # core tier without build
+ mod('mdtbad', extra=['tier=core', 'build=68060-000000-00'])
+ mod('mdtok', extra=['tier=core', 'build=68060-261101-01'])
+-mod('mdkeys', extra=['match=zorro:144b:01,mobo:gayle,always', 'majors=c:51,b:20',
++mod('mdkeys', extra=['match=zorro:144b:01,mobo:gayle,always',
+                      'unload=allowed', 'param=intr:int:6:0:7', 'param=mac:str:-',
+                      'desc=every key'])
++# the major registry (hconf.c): 58 is regok's, 51 is z3660eth's, 99 is no one's
++mod('regok', extra=['majors=c:58'])
++mod('regown', extra=['majors=c:51'])
++mod('regnone', extra=['majors=c:99'])
+ 
+ # the core tier (C3-2): both reference lbolt, which the harness marks core-tier
+ mod('tiu', data='\t.globl\ttiu_ref\ntiu_ref:\n\t.long\tlbolt\n')
+--- a/test/state.c
++++ b/test/state.c
+@@ -352,7 +352,12 @@
+ 	check(modload("mdtok", &id) == 0 && byname("mdtok"),
+ 	    "core tier with this kernel's build loads");
+ 	check(modload("mdkeys", &id) == 0 && byname("mdkeys"),
+-	    "match, majors, unload, param, desc all accepted");
++	    "match, unload, param, desc all accepted");
++	check(modload("regok", &id) == 0 && byname("regok"), "a major registered to the module loads");
++	check(modload("regown", &id) == ECONFIG && !byname("regown"),
++	    "a major registered to another module -> ECONFIG");
++	check(modload("regnone", &id) == ECONFIG && !byname("regnone"),
++	    "a major outside the registry -> ECONFIG");
+ }
+ 
+ /* the core tier (C3-2): a core-tier kernel name only for a core-tier module */
+--- a/tools/mkreg
++++ b/tools/mkreg
+@@ -0,0 +1,18 @@
++#!/bin/sh
++# mkreg -- the module core's major registry as C, from the ABI kit's
++# registry file (amix-dlm abi/registry/majors: "c|b major module" lines,
++# '#' comments).  The kernel build compiles the output with the core.
++#
++#   mkreg registry > dlmreg.c
++set -e
++[ $# -eq 1 ] || { echo "usage: mkreg registry" >&2; exit 2; }
++awk -v f="$1" '
++BEGIN { print "/* generated by mkreg from " f "; do not edit */"
++	print "#include \"dlm.h\""
++	print "struct dlm_majreg dlm_majreg[] = {" }
++/^#/ || NF == 0 { next }
++NF != 3 || ($1 != "c" && $1 != "b") || $2 !~ /^[0-9]+$/ || $2 > 255 {
++	print "mkreg: " f ": bad line: " $0 > "/dev/stderr"; bad = 1; exit 1 }
++seen[$1 $2]++ { print "mkreg: " f ": " $1 " " $2 " registered twice" > "/dev/stderr"; bad = 1; exit 1 }
++{ printf "\t{ \x27%s\x27, %d, \"%s\" },\n", $1, $2, $3 }
++END { if (bad) exit 1; print "\t{ 0, 0, 0 }"; print "};" }' "$1"
