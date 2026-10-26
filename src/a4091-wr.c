@@ -333,6 +333,11 @@ struct a4091_kstat {
 	ulong	bw_mask[A4091_NCARD];	/* per card, see above                       */
 	ulong	bounce_n;		/* FROM_DEVICE transfers bounced (misaligned) */
 	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
+#ifdef	A4091_MODULE			/* appended: the static layout is unchanged */
+	ulong	noreach;		/* dma_addr 0 (C4-5 v5): not armed, failed;
+					 * drv_prep == drv_cmpl + noreach          */
+	ulong	stsync;			/* status-line syncs after a WRITE or TUR    */
+#endif
 };
 struct a4091_kstat	a4091_kstat = {
 	0x41344b32,
@@ -365,21 +370,26 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 #ifdef	A4091_MODULE
 /*
  * The module's chip-visible structures: one dma_alloc area (C4-5 section 3),
- * 1328 bytes, every member at a 16-byte multiple from a 16-aligned base.  The
- * names the queue path uses (ds, inq_script, the buffers, the bounce) are
- * redefined onto it below, so the code is the static driver's; A4091_BUS()
- * turns a member's kernel address into the physical one the chip is given.
- * The SCRIPTS are position-independent (REL jumps, table-indirect moves): _load
- * copies the template unchanged and DSP is the copy's physical address.
+ * 1332 bytes from a 16-aligned base.  The names the queue path uses (ds,
+ * inq_script, the buffers, the bounce) are redefined onto it below, so the code
+ * is the static driver's; A4091_BUS() turns a member's kernel address into the
+ * physical one the chip is given.  The SCRIPTS are position-independent (REL
+ * jumps, table-indirect moves): _load copies the template unchanged and DSP is
+ * the copy's physical address.
+ *
+ * The status line comes first, a 16-byte line of its own holding only what the
+ * chip writes outside the data segment (status, message bytes): after a command
+ * whose data complete did not clear the 030 data cache (a WRITE, a TUR) the
+ * driver prepares and completes FROM_DEVICE over that line before it reads the
+ * status (C4-5 v5 section 5.4), and nothing the CPU wrote shares the line.
  */
 struct a4091_dmaarea {
-	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x000, 184 */
-	struct siop_ds	d_ds;						/* 0x0b8, 76  */
-	uchar		d_ident[4];					/* 0x104      */
-	uchar		d_cdb[12];					/* 0x108      */
-	uchar		d_status[4];					/* 0x114      */
-	uchar		d_msg[8];					/* 0x118      */
-	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x120      */
+	uchar		d_sline[16];		/* 0x000 status 0-3, message 4-11 */
+	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x010, 184 */
+	struct siop_ds	d_ds;						/* 0x0c8, 76  */
+	uchar		d_ident[4];					/* 0x114      */
+	uchar		d_cdb[12];					/* 0x118      */
+	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x124      */
 };
 
 struct a4091_dmaarea	*a4091_da;	/* kernel address, 0 until _load        */
@@ -390,8 +400,8 @@ static ulong		*a4091_tmpl = inq_script;	/* the template _load copies */
 #define	ds		(a4091_da->d_ds)
 #define	ident_buf	(a4091_da->d_ident)
 #define	cdb_buf		(a4091_da->d_cdb)
-#define	status_buf	(a4091_da->d_status)
-#define	msg_buf		(a4091_da->d_msg)
+#define	status_buf	(a4091_da->d_sline)
+#define	msg_buf		(&a4091_da->d_sline[4])
 #define	a4091_bounce	(a4091_da->d_bounce)
 
 extern char	*dma_alloc();	/* (ulong len, ulong *pa)  C4-5 section 3 */
@@ -894,8 +904,23 @@ struct sdcom	*cp;
 	/* C4-5 version 3 section 2.3: arm with dma_addr(r, pa) -- dpa on k46, a
 	 * pool bounce on k30 when dpa is out of a Zorro master's reach.  The one
 	 * site: the 53C710 takes the data address only from the DSA table. */
-	if (dlen != 0)
-		ds.data1buf = (uchar *)dma_addr( &a4091_dmarec[A4091_CARD], dpa);
+	if (dlen != 0) {
+		ulong	da;
+
+		da = dma_addr( &a4091_dmarec[A4091_CARD], dpa);
+		if (da == 0) {
+			/* C4-5 v5: a segment the board cannot reach and no bounce
+			 * (pool short, or the seam off): never arm.  The provider
+			 * owns nothing, so no complete: the gap is the count. */
+			a4091_kstat.noreach++;
+			printf("A4091 c%d: no reachable DMA buffer for %d bytes\n",
+			    (int)cp->card, (int)cp->nbyte);
+			cp->status = 0xff; cp->okay = FALSE;
+			(*cp->intr)( cp);
+			return TRUE;
+		}
+		ds.data1buf = (uchar *)da;
+	}
 #endif
 #endif
 
@@ -1105,6 +1130,19 @@ struct sdcom	*cp;
 			bn = bn + 1;
 		}
 	}
+#ifdef	A4091_MODULE
+	/* The status line (C4-5 v5 section 5.4): a FROM_DEVICE complete clears the
+	 * 030 data cache; after a WRITE or a TUR none ran, so sync the line the
+	 * chip wrote the status and message bytes to before reading them. */
+	if (!(dmadir == DMA_FROM_DEVICE && dlen != 0)) {
+		ulong	spa;
+
+		spa = A4091_BUS(a4091_da->d_sline);
+		a4091_dma_prepare( (int)A4091_CARD, spa, (ulong)16, DMA_FROM_DEVICE);
+		a4091_dma_complete( (int)A4091_CARD, spa, (ulong)16, DMA_FROM_DEVICE);
+		a4091_kstat.stsync++;
+	}
+#endif
 #endif
 
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
