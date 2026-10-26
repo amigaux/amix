@@ -42,3 +42,4 @@
 0039-ramdisk-image.patch
 0040-vfs-register.patch
 0041-moddefs-block-rows.patch
+0042-abi-fs-layouts.patch
