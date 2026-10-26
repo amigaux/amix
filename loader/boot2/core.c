@@ -228,8 +228,10 @@ arena_fill(void)
 	    i == 24 || man.kabi[i] || id[12 + i] || AX_GET32(id + 36) != line ||
 	    AX_GET32(id + 40) != man.arena_off || AX_GET32(id + 44) != man.arena_cap)
 		return 14;
-	if (32 + g->man_len > man.arena_cap)
+	if (32 + g->man_len > man.arena_cap) {
+		con_say("the arena needs %u bytes, it has %u\n", 32 + g->man_len, man.arena_cap);
 		return 5;
+	}
 	x_memset(a, 0, 32);
 	AX_PUT32(a, 0x41584131UL);		/* AXA1 */
 	AX_PUT32(a + 4, 0x00010020UL);
