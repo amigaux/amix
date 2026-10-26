@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern46m k46.1.2.261026-77, the kabi 1.2 k46 kernel with the 16-aligned arena (fddf560); ramdisk-k30/-k46 1.0.0-1 minted, not staged (7379df6) — not published
+
+kern46m: cut in amix-packages (build/kspace/cut-k46m, the port's S4-22c recipe) from port 12d416c + dlm 49239b1 + base
+284154a3, no z3660 pass; identical to the port's -75 dry build but the build-id byte (-72…-76 were taken, so -77).
+unix e85d4371 (2440473 B), sidecar 0ca10470: kabi k46.1.2, arena 0x0012c050, abi fea18182, sdcards 4, root= dlm_static_root.
+kabi-sidecar.py and mkident --check pass; build.sh refuses a non-16-aligned arena. Pkg md5 4c37a341 / 2477056 B; staged
+catalog 8034952e (-71 root at superseded/repo-20261026-2257); round trip 114/114; gates PASS.
+ramdisk30/46 1.0.0-1 (objects 5523d853 / 054467f6, md5 edc26b2b / 9e5b1024, 14336 B, /dev/dsk/ram0–2 b 20 0–2): kpkgroll
+accepts `b` entries, but gen-catalog 124c329 and apkg refuse them (C3-5 v8 §1.2 support is a packagemanager change) — unstaged.
+
 ## 2026-10-26 — dlmkit -8 from amix-dlm 49239b1, the first kabi 1.2 kits (7175792) — not published
 
 dlmkit30 k30.1.2.261026-8 (md5 06d332e8 / 4068864 B, manifest f04242ed) and dlmkit46 k46.1.2.261026-8 (e098de2e /
