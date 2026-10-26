@@ -170,7 +170,7 @@ param <name>.<pname>=<value>
 | Key | Written from | Read by |
 |---|---|---|
 | `<size>` | the object's size | `kbootset check` |
-| `bss=` | root class: the bytes the module's NOBITS sections and COMMON symbols need, laid out from 0 by the core's rules (C4-4 §4: each section aligned to max(its alignment, 4), then each common to its own; any alignment above 16 refused), rounded up to 4; written even when 0 | boot2: the zeroed tail it reserves behind the file and counts against the capacity (C4-4 §1.2); the core: the tail it lays them into, refusing a layout larger than this |
+| `bss=` | root class: the bytes the module's NOBITS sections and COMMON symbols need, laid out from 0 by the core's rules (C4-4 §4: each section aligned to max(its alignment, 4), then each common to its own; any alignment above 16 refused), rounded up to 4; written even when 0. Every COMMON is counted, so it is an upper bound when the core resolves one against the kernel or a dependency instead (`kbootset/kmod.c` `km_tail`) | boot2: the zeroed tail it reserves behind the file and counts against the capacity (C4-4 §1.2); the core: the tail it lays them into, refusing a layout larger than this |
 | `path=` | the generation directory | the core: where the bytes come from (patch 0009) |
 | `sha256=` | the object | the core: what they must hash to (patch 0009); `kbootset check` |
 | `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); boot2 selects root-class records by it (10 §5.3) |
