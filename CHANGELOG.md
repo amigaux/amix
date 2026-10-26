@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-4 v2 and C3-5 v6 (bss= on root records); core patch 0033, the arena load path (88c7618, bc1dc58, 68623c8)
+
+C4-4 version 2 (agreed): boot2 reserves each root module's `bss=` zeroed tail behind its file (file end rounded up to 16)
+and counts it for L5; the core runs the PROGBITS in place and lays NOBITS and COMMON into the tail, one span per module
+(spec 10 §5.3 follows). C3-5 version 6: `bss=` on root records, written by kbootset by the core's layout rules, even when
+0. Core patch 0033 (S4-01): `dlm_load_mem(name, p, len, bss)` — in-place layout (each PROGBITS at a file offset that is a
+multiple of its alignment ≤ 16, else ENOLOAD; over the reserve → "its bss is over the reserved %d"), nothing allocated or
+freed for the image, root class only from the arena and only root class there, a dependency must already be linked.
+Harness 222/222 both kernels; fingerprints unchanged; dlm.o 2e7ca0c8. The CRC-32 re-check and membership check are the
+marc_root walker's (S4-04).
+
 ## 2026-10-26 — Core patch 0032: sd_register, C4-1's registration (S4-03, a15104e)
 
 `sd_register(queuefn, c, base, name, rank)`: a root-class controller registers each board from its _load; the entries wait
