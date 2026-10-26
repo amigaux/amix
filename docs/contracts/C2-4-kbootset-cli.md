@@ -1,6 +1,6 @@
 # C2-4 — `kbootset` as a called program, version 10
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -288,6 +288,15 @@ medium. On a box that has a store of its own, that store did not boot,
 and its generation of the same id is another generation. kinfo's loader
 record says so: AXL1 flag 0x08, a read-only medium (10 §6); the CD also
 gives no boot device (unit 0xFFFFFFFF).
+
+- **`media --cd` and `media --floppy`** (version 11): the medium's loader
+  reads it (amix-cdboot through dos.library, boot2 through trackdisk), and
+  the kernel never drives its controller. So gate 3 checks the root
+  controller and the root filesystem only, and `--rootdev` is required. A
+  `--bootdev` given there is unused: `kbootset: --bootdev is not used for
+  a read-only medium: its loader reads it, the kernel never drives it`.
+  The generation carries no boot device either way. `media --disk` keeps
+  both checks.
 
 - **`mark-good`** marks nothing: `kbootset: booted from a read-only medium
   (generation N of a CD|a floppy pair): nothing to mark`, exit 0. It still

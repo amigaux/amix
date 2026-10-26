@@ -105,6 +105,8 @@ program against an image file, so media and boxes cannot drift).
 3. **Closure:** the root-class set does not contain a module for the boot
    disk's controller and for the root disk's controller and filesystem, as
    seen by `kinfo` (or named with `--bootdev`/`--rootdev` on a host build).
+   A CD or floppy pair's generation checks the root only: its loader reads
+   the medium, never the kernel (C2-4 §13).
 4. **Arena:** the root-class set exceeds the kernel's arena capacity.
 5. **Store space:** the new generation does not fit the free store space
    without deleting a member of the kept set. A module kernel carries its
