@@ -13,7 +13,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | What | k46 | k30 |
 |---|---|---|
 | kernel | KD060-Z module kernel -58, ET_REL, 2 431 362 bytes, `8459eaee…` (amix-040-060-port `k46-module`) | K030-U module kernel, brel, 1 715 944 bytes, `bss=349324`, `3fb1aa50…`; `.etrel` `48b8f1e8…`; `unix.sym` 196 444 bytes, `4012b09b…` (amix-kerntools) |
-| its core | `core/series` 0001–0022 (0021 and 0023 are test only) | the same |
+| its core | `core/series` 0001–0022 (0021 and 0023 are test only), `dlm_maximage` 2 MiB; 0024–0026 are user side, 0027 rides the stage-4 cut (§6) | the same |
 | kinfo | version 3 (C2-1) | version 3 |
 | kernel package | `kernel-k46-m` / `kern46m`, `k46.1.0.261026-58` | `kernel-k30-m` / `kern30m`, `k30.1.0.261026-01` |
 | loader | boot2 version 2, 28 100 bytes, `c7bff405…` (amix-dlm 124b86c) | the same |
@@ -91,6 +91,12 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
   `amix-cdboot` refuse a ramdisk member until then; 10 §5.4's placement is
   unimplemented; M-RD1 unmeasured). The CD boot path itself is proven in
   stage 3 by the disk-rooted cell.
+- **Core patch 0027 (C3-1 v4, `dlm_maximage` 256 KiB) rides the stage-4
+  kernel cut, not a stage-3 re-cut** (decided 2026-10-26). The kernels of
+  record keep 2 MiB. The kit's checker refuses an image over 256 KiB or a
+  file of 256 KiB for every module meanwhile, and no planned module is
+  near the limit (cdfs, the largest, is a 69 KB image in a 97.6 KB file).
+  A re-cut now would force a third remaster of the media of record.
 - **Throughput (80 §2, OQ-80.3):** "no regression against the static
   drivers' figures" needs the static baselines of record named before
   S3-45.
