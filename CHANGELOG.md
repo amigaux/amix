@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — kabi 1.2 opened, 1.1 closed (42411c4, fc4ee89)
+
+The set taken from the minted kernels' KSYM blocks (kern46m -71: 82 names, has sd_register + root_defer; kern30m -10: 79,
+has sd_register only). 1.2 on both lines: iodone, ramdisk_image, vfs_register, the C4-5 DMA calls when listed; k30 only:
+root_defer. 1.1 closed = sd_register (both) + root_defer (k46). abi-*.1.2.txt identical to 1.1 (abi= fea18182; functions only).
+Kits now k30.1.2 / k46.1.2; C4-2 v3, C4-5 v2, C4-6 v2, C4-3 carry the minors. Kernel re-cuts must tag kabi 1.2 (mkident,
+sidecar, DLM_KABI). ramdisk builds ok on both 1.2 kits (k30 5523d853, k46 054467f6). Harness 255/255; kit-test 0 failed;
+make test 692/0.
+
 ## 2026-10-26 — S4-41 vfs_register; C4-6 and C4-5 agreed; iodone; block-only modcheck (5c9ee3b…9c0cd10)
 
 S4-41: vfs_register and the grown vfssw (core 0040): the core owns vfssw[stock+4] and nfstype, copied at dmainit from
