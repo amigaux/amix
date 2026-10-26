@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-11: boot2 places the RAM-disk image; ax_memcap a page short; C4-3 agreed (4295d81, 4003c9f, ee77481)
+
+boot2 claims the image in place at the top of the kernel's region (exec AllocAbs, 64 KiB aligned, above the kernel's end),
+ends memory[] below it, writes AXL1 116/120 and the ramdisk root selector; the claim is freed on a CRC failure; rootsel.kind
+initialised. ax_memcap ends the region under the bind base one 2 KiB page short (10 §3.2; the k30 DMA pool relies on it).
+kbootset media --ramdisk defaults to root ramdisk, swap none (ramdisk safe=1). Budget: the code-only hunt found 112 file bytes
+(packed L table, shared L4 and `needs` lines), items 3–5 228 (L texts ≤ 20 chars, terser menu key line, three lines); file
+28 646 / image+bss 28 420 of 28 672 (26 / 252 left). make test 692/0; b2test, cdboot, cross pass. Placement proof = M-RD1/M-RD2.
+
 ## 2026-10-27 — k46 dma_alloc through the DTT0 alias (C4-5 v4); C3-5 v10 package names (01024f5, 9075fb2, ebc52f9)
 
 The k46 heap lies above 0x40000000 (vtop(va) != va; the port's D42 walk), so bbd20b6's dma_alloc returned 0 on every k46
