@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage 3 begins: the module core imported, patch 0001, M-CORE1 (becf104..9626629)
+
+core/: kdedon's MIT DLM core (ashnazag kernel/dlm at b736c59) imported unmodified with upstream's LICENSE, the base of the
+patch queue; patch 0001 makes the trampolines' hold volatile across longjmp (GCC 15 -O kept it in a register; GCC 2.7.2.3 did
+not). M-CORE1 closed on both lines: `make core` runs upstream's host tests on our toolchains against KD060-Z and K030-U, 87
+checks pass (mkmod 4/4, oracle 7/7 byte-identical, error paths 29/29, state harness 105/105 per kernel).
+
 ## 2026-10-26 — stage 2's exit met on the emulator; C2-4 v7: commit no-op and `commit --again` (db91add..f43fe08)
 
 S2-46 passes on k30 (row N45, the installer's v10 disk): stage 2's exit gate is met on the emulator on both lines; the metal
