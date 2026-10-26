@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset 1.1.0.261026-16 from amix-dlm f340556; round trip 114/114 on kern46m -71 (c1e18c0, 78fac35) — not published
+
+kbootset -16 (kbootset code as 05f700a): composes root-class modules as root records (`module <name> root … bss= match=
+safe=1`, S4-12); a generation carrying one gets loader-min 3 (AX_LOADER_ROOT, gate 7); gate 3 refuses a root module for a
+controller the kernel's root= already names. /sbin/kbootset 98c04c09, datastream md5 101453b3 / 194048 B, sha256 1351983f;
+replaces -15. Staged catalog 51bf05f4 (-15 root at superseded/repo-20261026-2213). Round-trip fixture: k46-m stages 1–3
+boot from mobo:a3000-wd as k30-m does (kern46m -71 no longer links z3660scsi); stage 4 keeps the Z3660 facts and composes
+the zscsi46 root record. Host kbootset f340556; 114/114 rc 0; both gate selftests PASS.
+
 ## 2026-10-26 — kern46m k46.1.1.261026-71, the k46 root-class kernel without static z3660scsi (1c23b76) — not published
 
 KD060-Z module kernel 68060-261026-71 (port afc8d09, amix-dlm 05f700a core 0001–0038): -69 without the z3660 pass
