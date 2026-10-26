@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — C2-3 v7: sidecar keys are read by name (fadc007)
+
+Their order carries no meaning (the S4-21 k46 sidecar places sdcards= before root=; fine). The S4-21 k46 cut of record
+(5a7028c0) checks abi=fea18182 with mkabi --check and no cputype note; the fc6ae88f thread is closed.
+
 ## 2026-10-26 — C2-3 v7: sdcards= in the kernel sidecar; kbootset km_tail (cbba08f, 60e7eb1, 3b74296)
 
 C2-3 version 7: `sdcards=` = the sd cards the kernel was built for, absent = 2; the S4-21 kernels write 4; written by the
