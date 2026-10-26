@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-26 — C4-1, the installer's half of the four-card sd contract (f526af4, d384553, e989926)
+
+Controller numbers c0–cf and c10–c1f (minor bit 7 for cards 2–3), host ids unit 7 of each card, the 1.1 root record's unit
+N mod 8 (a real bug once the WD is ced0); a four-card kernel (its sidecar's sdcards=4, read by l11.sh) has its first boot
+swap core's 256 d1 nodes for the c10–c1f nodes (removef per id / installf, pkgchk core quiet; proven on the real 2.1 sh);
+the first boot names the root as the running kernel does (`/etc/devnm /`), so vfstab, swap and the atdevs gate follow the
+kernel; ROOT_RECORD_DISK stays card 0 and says why; a CD-boot 1.1 disc under a four-card install kernel gets the class-order
+names appended to its staged profiles (tools/sdnames.py reads sdcards from a datastream, a sidecar or a chain MANIFEST.json;
+SD_BOARDS/CD_HBA in the six 1.1 profiles). Regression on the S4-55 set PASS both lines.
+
 ## 2026-10-26 — S4-55, the first stage-4 media of record (0c3cc9f) — not published before 1.1
 
 tools/l11-set.conf moves to the current set, every row the live catalog's (9e143d53): amix-dlm 4b7eb3d, kernel-k30-m -04 /
