@@ -44,6 +44,10 @@ packages.
   the module **name**, which is the file name, is the registry's (§2–§4).
 - **`_load(params)`**:
   - called once, in process context; it may sleep;
+  - kmem: at most 256 KiB per request, `KM_SLEEP` only up to that, and a
+    `KM_NOSLEEP` request checked. A running box gives no more than 256 KiB
+    in one piece on k46, and a `KM_SLEEP` request above what it can give
+    never returns (30 §8, U4). A larger buffer is built from pieces;
   - called **before** the core installs the linkages, so the `cdevsw`
     row does not exist yet: nothing in `_load` may rely on it;
   - `params` is the manifest's `param <module>.<name>=<value>` records as

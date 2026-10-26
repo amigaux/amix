@@ -267,6 +267,20 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
 - **Kernel virtual space:** copied modules consume the fixed kernel map
   shared with page structures and u-areas; at 128 MB of RAM the headroom is
   measured (U2; `grimoire-amix/docs/how-it-works/ram-ceiling.md:86-110`).
+- **Large requests (U4, 2026-10-26):** in process context after multi-user
+  one kmem request gives at most 256 KiB on k46 at 128 MB and 512 KiB on
+  k30 at 64 MB. A `KM_SLEEP` request above that sleeps forever.
+  - A module's requests are at most 256 KiB each, on both lines. A larger
+    need is split.
+  - `KM_SLEEP` is only for requests up to 256 KiB, and every `KM_NOSLEEP`
+    request is checked.
+  - Root-class `_load` at boot keeps its own rule (§3, U1: `KM_NOSLEEP`,
+    at most 1 MiB).
+  - The core's own allocations for a module grow with its size and are
+    `KM_SLEEP`. The image limit (C3-1 §4, 2 MiB) is therefore above what
+    a running box can give. A module larger than about 256 KiB could hang
+    `modload` (`docs/measurements/2026-10-26-u4.md`), and no planned
+    module comes near that.
 
 ## 9. Open questions
 
