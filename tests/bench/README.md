@@ -670,3 +670,170 @@ Both kernels were checked on the host:
   1 998 273, which is why the Bench needed the deflated one. Generation 2's manifest carries
   `loader-min 2`, `arena` and `ident`, and `lsstore` gives `ok`.
 - With a version-1 store, `build` is refused by gate 7.
+
+## S3-43 — the stage-3 emulator rows (80 §3)
+
+The rows that break the module rules on purpose, after S3-B5 and S3-B6
+of record pass, on both lines, in one campaign per line. Each row names
+the console line of record; a different line, or a box that stops, fails
+the row.
+
+**Inputs:**
+- the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
+  k30: the K030-U cut with `unix.sym`), each through `s3-standin.sh`;
+  kbootset -12 and modadmin as S3-B5;
+- the module set, built with the line's kit (`make kit`, KIT_REV
+  e84878e):
+
+```
+KERNEL=<the line's ET_REL kernel> sh tests/bench/s3-43/mkset.sh build/kit/<line> <outdir>
+```
+
+  KERNEL is the k46 kernel itself, or the k30 kernel before `elf2brel`.
+  It gives `<outdir>/tree/` (copy onto the box's root: the stand-in
+  packages of the six members), `<outdir>/s43/` (copy to `/tmp/s43`:
+  t43ext and the ten rule-breakers) and `<outdir>/verdicts.txt` (each
+  rule-breaker's refusal by the kit's checker and by the host loader);
+- the loader rows' inputs:
+
+```
+sh tests/bench/s3-43/boot2.sh <unix> <kabi> <outdir> "<root record>" [<boot slice bytes>]
+```
+
+  It gives `l14.spec`, and `l5.img`, a whole store for the boot slice
+  (kbootset refuses to write that generation: gate 4).
+
+**The set** (`tests/bench/s3-43/src/`):
+
+| Member | Class | What it is for |
+|---|---|---|
+| `monsw` | demand, `c:52`, pinned | stand-in for S3-27: the dependency, the pinned unload |
+| `z3660rtg` | demand, `c:49`, `depend=monsw`, `unload=allowed` | stand-in for S3-26: the dependency order, the allowed unload, the first open |
+| `t43boot` | boot, `match=always`, `unload=allowed`, `param tag` (modreg.d `s3-43`), `count` (3) | load, parameters, the allowed unload, M-SIG3 at `modload` |
+| `t43leak` | boot, `unload=allowed` | its `_unload` forgets its level-6 handler: the backstop |
+| `t43fail` | boot | its `_load` attaches a handler and fails (EIO): the kernel as it was |
+| `t43rel` | boot, `unload=allowed` | the relocation oracle |
+
+`monsw` and `z3660rtg` carry the real modules' names, because the
+registry gives their majors to those names. The rows run on a slot copy
+that has no real `monsw` or `z3660rtg` package.
+
+**The vehicle:** a fresh slot copy in S3-B5's state after its boot 1:
+- loader version 2 accepted;
+- `/sbin/modadmin`, the `modadmin -B` inittab line, `/sbin/kbootset` and
+  `S01kbnamelist` installed.
+
+On the 4 MiB k46 store only one module generation fits beside
+generation 1. So the S3-43 generation takes the place of S3-B5's, and a
+row that commits another generation first marks the previous one bad and
+runs `kbootset collect`. The 64 MiB k30 store needs neither.
+
+### S3-43-1 — the generation (boot 1)
+
+| Commands | Expected |
+|---|---|
+| copy the stand-in trees and `<outdir>/tree/`; copy `<outdir>/s43/` to `/tmp/s43`; `mknod /dev/t43rtg c 49 0`; `mknod /dev/t43monsw c 52 0`; `kbootset build`; `kbootset commit` | the build's records, after the kernel's: `t43boot`, `t43fail`, `t43leak`, `t43rel` (boot class, by name), then `monsw` and `z3660rtg … majors=c:49 depend=monsw` (demand class); `param t43boot.tag=s3-43`, `param t43boot.count=3`; `generation A committed` |
+
+### S3-43-2 — load, the backstop, unload, the dependency (boot 2, generation A)
+
+From init's first sysinit entry, in this order:
+
+```
+t43boot: loaded, params "tag=s3-43 count=3"
+dlm: boot module t43boot loaded
+t43fail: handler attached, failing with EIO
+dlm: t43fail left 1 registration(s) pointing into it (an interrupt handler, network interface or console hook): removed
+dlm: boot module t43fail not loaded: error 5
+t43leak: level-6 handler attached (0)
+dlm: boot module t43leak loaded
+t43rel: loaded at 0x…
+dlm: boot module t43rel loaded
+```
+
+Then multi-user as S3-B5 (the keyboard and the timers keep working: the
+level-6 chain is as it was after t43fail).
+
+| Row | Commands | Expected |
+|---|---|---|
+| load | `modadmin -s`; `kbootset status` | t43boot, t43leak, t43rel; no t43fail. Status: the four boot members, t43fail `not loaded (the console says why)`; monsw and z3660rtg `not loaded (loads at the first open of its device)` |
+| allowed unload | `modadmin -U t43boot` | `t43boot: goodbye`; gone from `modadmin -s` |
+| backstop | `modadmin -U t43leak` | `t43leak: unloading without intr_detach`, then `dlm: t43leak left 1 registration(s) pointing into it (an interrupt handler, network interface or console hook): removed`; the keyboard still works |
+| M-SIG3, `modload` | `modadmin -l t43ext` | `dlm: t43ext is not a member of the booted generation`; modadmin `cannot load t43ext` (EPERM) |
+| M-SIG3, `modload` | `cp /stand/gen/A/mod/t43boot /tmp/t43boot.keep`; `echo x >> /stand/gen/A/mod/t43boot`; `modadmin -l t43boot`; then `cp /tmp/t43boot.keep /stand/gen/A/mod/t43boot`; `modadmin -l t43boot` | `dlm: t43boot: SHA-256 differs from the booted manifest`, modadmin `cannot load t43boot` (EPERM); after the copy is restored, `t43boot: loaded, params "tag=s3-43 count=3"` |
+| M-SIG3, dependency | `cp /stand/gen/A/mod/monsw /tmp/monsw.keep`; `echo x >> /stand/gen/A/mod/monsw`; `cat /dev/t43rtg`; then restore it | `dlm: monsw: SHA-256 differs from the booted manifest`; `cat` cannot open `/dev/t43rtg` (ENXIO); neither module in `modadmin -s` |
+| M-SIG3, first open | the same with `/stand/gen/A/mod/z3660rtg`; `cat /dev/t43rtg`; then restore it | `dlm: z3660rtg: SHA-256 differs from the booted manifest`; ENXIO |
+| dependency | `cat /dev/t43rtg`; `modadmin -s` | `monsw: the S3-43 stand-in, loaded`, then `z3660rtg: the S3-43 stand-in, loaded` (the dependency first); an empty read; both listed, monsw with one dependent (DEPS 1) |
+| allowed unload, demand | `modadmin -U z3660rtg` | `z3660rtg: the S3-43 stand-in, unloaded`; gone |
+| pinned | `modadmin -U monsw` | modadmin `cannot unload monsw` (EBUSY); still listed |
+| relocation oracle | `modadmin -Q t43rel > /tmp/q`; `modadmin -p t43rel_first:64 t43rel_fns:64 > /tmp/p`; `dd if=/dev/kinfo bs=4 skip=135 count=1 2>/dev/null \| od -x` (the bind address, kinfo bootdata's text vaddr); copy `/tmp/q` and `/tmp/p` to the host | on the host, `sh tests/bench/s3-43/oracle.sh <tree>/etc/conf/mod.d/t43rel <unix> <kabi> <bind> q p`: `oracle: t43rel at 0x…: 83 words, 332 bytes of 332, identical to the host loader` |
+
+### S3-43-3 — development load (boot 3)
+
+Before the reboot, `echo x >> /stand/gen/A/mod/t43boot` (the copy kept as
+above), then `kbootset next devload` and power-cycle. The flag is for
+this boot only.
+
+| Row | Commands | Expected |
+|---|---|---|
+| a changed member | (sysinit) | `dlm: DEVELOPMENT LOAD: t43boot, its SHA-256 not checked`, then `t43boot: loaded, …`; the same `DEVELOPMENT LOAD` line for each boot member |
+| outside the generation | `modadmin -l /tmp/s43/t43ext` | `dlm: DEVELOPMENT LOAD: t43ext, outside the booted manifest`; `t43ext: loaded` |
+| kabi family | `modadmin -l /tmp/s43/kfam` | `dlm: kfam: built for another kernel (kabi, compiler pin or build)`; modadmin `module wrapper revision mismatch` (EBADVER, 167) |
+| kabi major, a minor above, another pin | `kmaj`, `kmin`, `kpin` the same way | the same line for each |
+| `SHT_REL` | `/tmp/s43/bshtrel` | `dlm: bshtrel: not a module object as C3-1 says (error 165)` |
+| a type outside the list | `/tmp/s43/brtype` | `dlm: brtype: its relocations are refused (error 165)` |
+| a zero match key | `/tmp/s43/bzkey` | `dlm: bzkey: .moddata refused, a malformed or missing key, or an unknown critical one (error 168)` |
+| a name over 14 | `/tmp/s43/blong` | `dlm: blong: .moddata refused, a name over 14 (error 78)` |
+| revision 1 | `/tmp/s43/bv1` | `dlm: bv1: .moddata refused, not version 2 (error 167)` |
+| a symbol outside the allowlist | `/tmp/s43/bsym` | `dlm: bsym: its symbols are refused, an undefined name outside the allowlist or a bad symbol table (error 165)` |
+| nothing left | `modadmin -s` | the boot members and t43ext; none of the ten |
+
+Each rule-breaker's line is preceded by its own `DEVELOPMENT LOAD: …,
+outside the booted manifest`. Restore t43boot's copy afterwards.
+`verdicts.txt` gives the same refusals from the kit's checker, and the
+host loader's step and errno for the six it refuses at load:
+`bshtrel` hdr 165, `brtype` reloc 165, `bzkey` moddata 168, `blong`
+moddata 78, `bv1` moddata 167, `bsym` syms 165. The kabi breakers pass
+the host loader, which has no kernel to compare against: the core's
+check is `md_check`.
+
+### S3-43-4 — a dependency outside the generation (boot 4)
+
+Generation B is A without monsw, written as given:
+
+```
+mkdir -p /stand/gen/B/mod
+cp /stand/gen/A/mod/* /stand/gen/B/mod/
+sed -e '/^module monsw /d' -e 's|/stand/gen/A/|/stand/gen/B/|g' \
+    -e 's|^\(kernel unix .*\)$|\1 z=deflate|' /stand/gen/A/build > /tmp/nodep.spec
+kbootset commit --spec /tmp/nodep.spec
+```
+
+B is the next id (`kbootset status`). B's kernel is deflated, so it may
+fit beside generations 1 and A on the 4 MiB k46 store. If gate 5 refuses
+there, the row runs on k30 only, and the report says so.
+
+| Commands | Expected |
+|---|---|
+| (boot B) `cat /dev/t43rtg` | `dlm: monsw is not a member of the booted generation`; ENXIO. A first open of a module that is in no generation cannot happen: only a member's majors are registered for one |
+
+### S3-43-5 — L14 (boot 5)
+
+| Commands | Expected |
+|---|---|
+| copy `l14.spec`; `kbootset commit --spec l14.spec`; power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 kernel identity does not match the manifest (generation N)`; the default generation boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
+
+### S3-43-6 — L5 (boot 6, last: it replaces the store)
+
+| Commands | Expected |
+|---|---|
+| on the host, write `l5.img` over the slot copy's boot slice; boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 351 bytes, it has 64` (k30: 362), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
+
+10 §9 says L5 goes to the menu. boot2 as built treats it as L2 and boots
+the next generation in the order. The row records which happens.
+
+### S3-43-7 — 128 MB
+
+The emulator with 128 MB of Zorro III fast memory, the S3-43-2 rows
+`load`, `dependency` and `relocation oracle` again: the same lines, and
+kinfo's fast memory (`kbootset status`) about 128 MB. The relocation
+oracle's base is then above 64 MB.

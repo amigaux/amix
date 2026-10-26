@@ -1,0 +1,6 @@
+$modtype misc
+$class boot
+$match always
+$unload allowed
+$desc S3-43 forgetful unload
+t43leak	t43leak

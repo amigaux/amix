@@ -1,0 +1,8 @@
+$modtype misc
+$class boot
+$match always
+$unload allowed
+$param tag:str:none
+$param count:int:3:0:9
+$desc S3-43 boot-class module
+t43boot	t43boot

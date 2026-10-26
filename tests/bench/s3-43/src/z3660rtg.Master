@@ -1,0 +1,7 @@
+$modtype drv
+$class demand
+$majors c:49
+$depend monsw
+$unload allowed
+$desc S3-43 stand-in for z3660rtg
+z3660rtg	z3660rtg
