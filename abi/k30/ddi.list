@@ -21,6 +21,7 @@ cmn_err func 0
 cons_hook_clear func 0
 cons_hook_set func 0
 copyin func 0
+copyinstr func 2
 copymsg func 0
 copyout func 0
 cputype data 0
@@ -35,9 +36,18 @@ dupmsg func 0
 flushq func 0
 freeb func 0
 freemsg func 0
+fs_cmp func 2
+fs_frlock func 2
+fs_nosys func 2
+fs_pathconf func 2
+fs_poll func 2
+fs_rwlock func 2
+fs_rwunlock func 2
+fs_setfl func 2
 getmajor func 0
 getminor func 0
 getq func 0
+getudev func 2
 if_attach func 0
 if_detach func 0
 intr_attach func 0
@@ -68,6 +78,8 @@ qreply func 0
 ramdisk_image func 2
 root_defer func 2
 sd_register func 1
+sdopen func 2
+sdqueue func 2
 sleep func 0
 spl0 func 0
 spl1 func 0
@@ -89,5 +101,6 @@ uiomove func 0
 unlinkb func 0
 untimeout func 0
 vfs_register func 2
+vn_rele func 2
 vtop func 0
 wakeup func 0
