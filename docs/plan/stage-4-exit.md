@@ -108,19 +108,18 @@ alignment (fixed in a829c44, C3-3 version 5).
 | S4-25 packages | pending |
 | S4-30 … S4-34 the root-class modules | pending |
 | S4-40 … S4-43 the filesystems and the kernels without them | pending |
-| S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook). **k46 PASS**: N105/N105b, the first A4091 root-class boot (kern46m -78, a4091 1.0.0-1; `cp` and `sync` clean through `dma_alloc` memory; amix-kerntools d1a2e3c), and N106, two root modules ranked with the A4091 root as card 1 (1653ea3). k30 (N109/N109b, the force-bounce hook and the entry-0 decode) pending |
+| S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook). **k46 PASS**: N105/N105b, the first A4091 root-class boot (kern46m -78, a4091 1.0.0-1; `cp` and `sync` clean through `dma_alloc` memory; amix-kerntools d1a2e3c), and N106, two root modules ranked with the A4091 root as card 1 (1653ea3). **k30 PASS**: N109/N109b (E6), a4091-k30 1.0.0-3 rooted on the A4091 alone on kern30m -14, the pool at 0x7FDF800, a raw read and `cp`/`sync` identical under `dma_forcebounce` 0 and 1; the entry-0 decode read live, the identity map cacheable (C4-5 v6 §5.3); amix-kerntools c326ccb. E6b (the pool-miss path) is reachable only through `dma_forcefail`: pending on kern30m -15 |
 | S4-63 C3-6 §1, the register-write rule | pending |
-| S4-71 the root context (C4-2 §2) | the probe and its row defined (c2dc7fb, `tests/bench/s4-71`). **k46 PASS**: N107 (kern46m -78; every call at level 7 with the clock stopped, `bprobe` of a decoded address 0 and of an unheld one 1, the fault caught; amix-kerntools 1653ea3): C4-2 §2's list stands on k46. k30 (N108, kern30m -14) pending |
+| S4-71 the root context (C4-2 §2) | the probe and its row defined (c2dc7fb, `tests/bench/s4-71`). **k46 PASS**: N107 (kern46m -78; every call at level 7 with the clock stopped, `bprobe` of a decoded address 0 and of an unheld one 1, the fault caught; amix-kerntools 1653ea3): C4-2 §2's list stands on k46. **k30 PASS**: N108 (kern30m -14; every call at level 7, the fault caught, and `dma: pool 128 KiB at 0x7FDF800` on the console; amix-kerntools c326ccb): C4-2 §2's list stands on both lines |
 | S4-73 exit row | **PASS** k30 — N104r (§2a) |
 | S4-74 metal: the A4000D and the cardless A4000T (root controllers, M-A4T1, M-DMA1, M-HALT1, U3's cache half, root filesystems, M-FP2, M-NET1g) | pending |
 
 ## 7. What remains (2026-10-27)
 
-- **S4-71 on k30** (N108, kern30m -14); k46 passed (N107). The Gayle
-  module's shipping waits on the k30 `bprobe` line too.
-- **The A4091 rows on k30** (N109/N109b, a4091-k30 root with
-  `dma_forcebounce`, and the entry-0 cache-mode decode read live from
-  `pstart`'s root table); k46 passed (N105/N105b, N106).
+- **E6b on kern30m -15**: the A4091's do-not-arm path, driven through the
+  `dma_forcefail` hook (C4-5 v7), with the force-bounce exemption of
+  dma_alloc memory (v8). S4-71 and the A4091 rows passed on both lines
+  (N107, N108; N105/N105b, N106, N109/N109b).
 - **The k30 module rows on kern30m -14**: the 030 DMA pool's console line,
   the module set of record.
 - **cdfs, S4-42**: the module (amix-cdfs ef96470) with its page-shift
