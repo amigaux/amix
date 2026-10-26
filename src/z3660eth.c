@@ -119,6 +119,9 @@ static void z3660eth_tx_drain();
 static void toss_packet_up_stream();
 static void z3660eth_rx_want();
 static int  z3660eth_rx_backlog_full();
+#ifdef Z3660ETH_MODULE
+static int  z3660eth_rx_wedged();
+#endif
 static int  z3660ethopen(), z3660ethclose(), z3660ethwput(), z3660ethwsrv();
 static int  z3660ethrsrv();
 static void z3660ethioctl(), z3660eth_ioc_nak();
@@ -185,6 +188,14 @@ unsigned long z3660eth_spt_freed;	/* kernel-VA pages returned by sptfree() */
  */
 unsigned long z3660eth_rx_holds, z3660eth_rx_resumed;
 unsigned long z3660eth_rx_force_slots, z3660eth_rx_force_ticks;
+#ifdef Z3660ETH_MODULE
+/*
+ * Ring resyncs (z3660eth_rx_wedged), kmem-readable: how many times the drain
+ * stepped the firmware cursor past a slot it had already consumed, and the
+ * last one as (slot byte offset in the ring) | (serial gap at slot 0, else 0).
+ */
+unsigned long z3660eth_rx_resyncs, z3660eth_rx_resync_last;
+#endif
 
 #ifdef Z3660ETH_MODULE
 /*
@@ -1175,6 +1186,52 @@ unsigned short serial;
     return s == (unsigned short)(serial + ahead);
 }
 
+#ifdef Z3660ETH_MODULE
+/*
+ * The cursor's slot carries the serial of the frame the driver consumed last
+ * (`serial'): the ring is empty -- or the firmware and the driver disagree, and
+ * then the drain would read "empty" for ever while the firmware fills the
+ * other 31 slots and tail-drops (S3-46 on metal: "backlog 32 fetched 0").
+ * Two ways in, both a frame the firmware still counts as unfetched:
+ *   - the ETH_RX strobe for that frame never reached ethernet_receive_frame;
+ *   - the catch-up in ethernet_receive_frame (10c7501 ethernet.c:734-744)
+ *     resets the backlog and only then writes the released serial into slot 0;
+ *     an RX interrupt in between lands a new frame in slot 0, whose serial is
+ *     then overwritten with the old one.
+ * Empty exists only at slot 0 (the firmware moves the cursor to a slot k > 0
+ * only onto a frame), so at k > 0 this is always the lost strobe.  At slot 0
+ * slot 1 decides: a frame there is serial + 1 (lost strobe) or serial + 2 (the
+ * overwritten frame was serial + 1); a slot left from an earlier round is
+ * older.  Slot 0 is read again after slot 1: the firmware writes slot 0 before
+ * slot 1 in a round, so a frame landing between the reads is seen there.
+ */
+static int
+z3660eth_rx_wedged(info, off, serial)
+z3660eth_info_t *info;
+unsigned long off;
+unsigned short serial;
+{
+    volatile unsigned char *p;
+    unsigned short gap;
+
+    if (off != ZZ_RXBACKLOG_OFF) {
+	z3660eth_rx_resync_last = off - ZZ_RXBACKLOG_OFF;
+	return 1;
+    }
+    p = info->frame + ZZ_FRAME_SIZE;
+    z3660eth_inval((unsigned long)p, (unsigned long)ZZ_RX_FRAME_PAD);
+    gap = (unsigned short)(((p[2] << 8) | p[3]) - serial);
+    if (gap != 1 && gap != 2)
+	return 0;
+    p = info->frame;
+    z3660eth_inval((unsigned long)p, (unsigned long)ZZ_RX_FRAME_PAD);
+    if ((unsigned short)((p[2] << 8) | p[3]) != serial)
+	return 0;
+    z3660eth_rx_resync_last = gap;
+    return 1;
+}
+#endif
+
 static void
 z3660eth_drain(board_index)
 int board_index;
@@ -1186,6 +1243,9 @@ int board_index;
     unsigned long off;
     unsigned short serial;
     int len, loop = 0, want, ready;
+#ifdef Z3660ETH_MODULE
+    int resynced = 0;
+#endif
 
     if (info->regs == 0)
 	return;
@@ -1214,6 +1274,17 @@ int board_index;
 	z3660eth_inval((unsigned long)slot, (unsigned long)ZZ_RX_FRAME_PAD);
 	serial = (slot[2] << 8) | slot[3];
 	if (serial == info->last_serial) {
+#ifdef Z3660ETH_MODULE
+	    /* intr=6 only, once per drain: step past it, deliver nothing */
+	    if (z3660eth_intr_mode == 6 && !resynced &&
+		z3660eth_rx_wedged(info, off, serial)) {
+		resynced = 1;
+		z3660eth_rx_resyncs++;
+		WRLONG(info->regs, ZZ_ETH_RX, 1);
+		z3660eth_sync();
+		continue;
+	    }
+#endif
 	    info->rx_held = 0;		/* ring drained (a held frame, if any, */
 	    break;			/* went with a firmware backlog reset) */
 	}
@@ -1926,6 +1997,9 @@ z3660ethinit()
  * clears it under the board's mask.  A frame that arrives while the interrupt
  * is off is not lost: the firmware re-raises while the backlog is non-empty
  * (rtg.c ethernet_thread), and the poll tick drains every tick in all modes.
+ * With intr=6 the drain also resyncs a ring whose cursor slot carries the
+ * serial it consumed last while the firmware holds a backlog
+ * (z3660eth_rx_wedged, above z3660eth_drain).
  * ------------------------------------------------------------------------- */
 
 #define Z3660ETH_MAJOR		51	/* = .moddata majors=c:51, the registry's */

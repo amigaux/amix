@@ -64,6 +64,24 @@ spun on both and printed "interrupt self-test failed; polled" every time.
 - `intrl2=0` leaves the drain to the next poll tick (the other half M-INT1
   measures). Counters: `z3660eth_int6_n`, `z3660eth_int2_n`,
   `z3660eth_intr_mode` (6 = running on interrupts).
+- **Ring resync (1.0.0-4, after S3-46 on the A4000D).** The first metal
+  intr=6 run died under a 5 ms ping flood with the firmware at "backlog 32
+  fetched 0": the cursor at slot 0 carried the serial the driver had consumed
+  last, so every drain broke on its empty-ring sentinel while the firmware
+  filled the other 31 slots and tail-dropped. The level-6/level-2 handoff is
+  not where it stops: `int_pending` is cleared, the backlog drained and the
+  interrupt re-enabled by every poll tick, and an unacknowledged INT6 would
+  hard-lock the box, which stayed up. Two ways into that state: a lost ETH_RX
+  strobe, or the firmware's catch-up (10c7501 `ethernet.c:734-744`) writing
+  the released serial into slot 0 after resetting the backlog, so an RX
+  interrupt in between has its new slot-0 frame relabelled with the old
+  serial. With intr=6 the drain now checks the sentinel (`z3660eth_rx_wedged`):
+  at a slot k > 0 it is always a lost strobe; at slot 0, slot 1 holding serial
+  + 1 or + 2 (and slot 0 unchanged on a second read) means a backlog. Then one
+  ETH_RX strobe per drain steps past the slot, delivering nothing (at most one
+  frame lost). Counters `z3660eth_rx_resyncs` and `z3660eth_rx_resync_last`
+  (slot byte offset, or the slot-0 gap). Polled (intr=0) and the static driver
+  do not have it yet: the same state would kill them too.
 
 **Kit result (2026-10-26, amix-dlm 6ef133e kits, gcc-cross-amix 8949028).**
 `modcheck.py` passes on both lines (`ok (k30.1.0, boot, 12444 bytes)`, the
