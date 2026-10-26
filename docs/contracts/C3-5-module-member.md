@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 10
+# C3-5 — the module package and the per-module manifest record, version 11
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -15,7 +15,8 @@
   (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2); version 9
   (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1);
   version 10 (2026-10-27): z3660scsi's (as amix-packages minted it) and
-  a4091's (§1.1).
+  a4091's (§1.1); version 11 (2026-10-27, C4-4 version 5): a root record
+  for the root filesystem's boot-class module (§3).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -180,6 +181,10 @@ module <name> demand <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> majo
 module <name> root <size> at=<off> [stored=<n> z=deflate] bss=<n> crc32=<8 hex> sha256=<64 hex> match=<keys> [safe=1] ...   (stage 4)
 param <name>.<pname>=<value>
 ```
+
+A root record names a root-class module, or (C4-4 §1.3, version 11) the
+boot-class module whose `fs=` is the generation's `rootfs`, which
+`kbootset` composes as root there.
 
 | Key | Written from | Read by |
 |---|---|---|

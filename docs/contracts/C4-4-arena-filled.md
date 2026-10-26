@@ -1,4 +1,4 @@
-# C4-4 — the arena filled: what boot2 places and the core links, version 4
+# C4-4 — the arena filled: what boot2 places and the core links, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, option A of S4-01's design): each root module's NOBITS and
@@ -8,8 +8,10 @@
   `match=`; `kbootset` marks the safe set (`safe=1`) and checks the whole
   root set against the capacity; boot2 writes no parameter strings; L7
   leaves boot2 (§1–§4); version 4 (2026-10-26, from the port's S4-22 cut):
-  no root-class module for a controller the kernel drives itself (§4.1).
-  Other repositories build against this text; a change from here is a
+  no root-class module for a controller the kernel drives itself (§4.1);
+  version 5 (2026-10-27, the orchestrator's decision on amix-cdfs's plan):
+  the root filesystem's boot-class module is placed as a root record
+  (§1.3). Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
   §5.3, §7.4 (safe mode), §9 (L3, L5, L7); `30-module-core.md` §2 patches 2
@@ -77,6 +79,22 @@ directory, the manifest copy and every root record's file and tail fit
 the arena's capacity (C2-4). So boot2's L5, which refuses the generation
 when they exceed it and gives the needed and the available bytes
 (C3-4 §4), is a backstop.
+
+### 1.3 The root filesystem's module of boot class
+
+A filesystem that is boot class where the box roots on a disk and root
+class where it roots on it (cdfs: boot on a disk-rooted box, root on the
+CD medium, C4-6 §5) is one object, with `class=boot`, `fs=` and
+`match=always` in its `.moddata`:
+- `kbootset` composes it as a **root record** on a generation whose
+  `rootfs` is its `fs=`, with `bss=`, the in-place rule of §4 (`km_tail`)
+  and `safe=1` as the root filesystem's module; on every other
+  generation it stays a boot record;
+- the core links an arena module of boot class **only** when its `fs=` is
+  the manifest's `rootfs` (core patch 0043). Any other non-root module in
+  the arena is refused, as before (`in the arena but not root class`);
+- the module builds in-place-ready, as a root-class one does (C4-2 §1),
+  and its `_load` is root-context safe (C4-2 §2).
 
 ## 2. Safe mode
 
