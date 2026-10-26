@@ -749,6 +749,27 @@ if [ -n "$_want_l11" ]; then
     grep -q "^$_p|\|^#kpkg $_p " "$L11_IN/kpkg/catalog" \
       || { echo "STOP: $L11_IN/kpkg/catalog carries no $_p package (every 1.1 disk installs it)" >&2; exit 1; }
   done
+  # each profile's kernel, and for a module kernel modtools and its modules (S3-31):
+  # rows of the medium's catalog, of the kernel's line
+  _kkey() { grep -m1 "^#kpkg $1 " "$L11_IN/kpkg/catalog" | tr ' ' '\n' | sed -n "s/^$2=//p"; }
+  for _p in $_want_l11; do
+    _pf="$repo/profiles/$_p.profile"
+    _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_pf" | tail -1 | tr -d '"')"
+    _km="$(sed -n 's/^KERNEL_MODPKGS=//p' "$_pf" | tail -1 | tr -d '"')"
+    [ "$(_kkey "$_kk" role)" = kernel ] \
+      || { echo "STOP: profile $_p: KERNEL_KPKG=$_kk is not a kernel row of $L11_IN/kpkg/catalog" >&2; exit 1; }
+    _kl="$(_kkey "$_kk" line)"
+    if [ "$(_kkey "$_kk" kabi)" != static ]; then
+      grep -q "^modtools|" "$L11_IN/kpkg/catalog" \
+        || { echo "STOP: profile $_p: $_kk is a module kernel but $L11_IN/kpkg/catalog carries no modtools" >&2; exit 1; }
+    elif [ -n "$_km" ]; then
+      echo "STOP: profile $_p: KERNEL_MODPKGS='$_km' with the static kernel $_kk" >&2; exit 1
+    fi
+    for _m in $_km; do
+      [ "$(_kkey "$_m" role)" = module ] && [ "$(_kkey "$_m" line)" = "$_kl" ] \
+        || { echo "STOP: profile $_p: $_m is not a role=module row of line $_kl in $L11_IN/kpkg/catalog" >&2; exit 1; }
+    done
+  done
   rm -rf "$STAGE/l11"; mkdir -p "$STAGE/l11/bin" "$STAGE/l11/kpkg"
   if [ -n "$STRIP_COMMENTS" ]; then
     python3 "$here/strip-sh-comments.py" "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
@@ -776,6 +797,18 @@ if [ -n "$_want_l11" ]; then
     && [ "$(wc -l < "$STAGE/l11/bcheckrc")" = "$(( $(wc -l < "$_bc") + 3 ))" ] \
     || { echo "STOP: the bcheckrc retry patch did not insert exactly three lines" >&2; exit 1; }
   sum -r "$_bc" | awk '{print $1}' > "$STAGE/l11/bcheckrc.stock"
+  # /etc/inittab as modtools' postinstall must leave it (amix-dlm C3-5 v4 §5): core's,
+  # with the dlm line before its first sysinit entry; install.sh compares the target's
+  _it="$CORE_T/etc/inittab"
+  [ "$(md5sum < "$_it" | cut -c1-32)" = 06b13538fb68ef8ba305ba04f844c3b8 ] \
+    || { echo "STOP: $_it is not the 2.1 inittab (md5 06b13538...)" >&2; exit 1; }
+  awk -F: 'BEGIN { L = "dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1"; d = 0 }
+    d == 0 && $3 == "sysinit" { print L; d = 1 } { print } END { if (d == 0) exit 1 }' "$_it" > "$STAGE/l11/inittab" \
+    && [ "$(grep -c '^dlm:' "$STAGE/l11/inittab")" = 1 ] \
+    && [ "$(grep -v '^dlm:' "$STAGE/l11/inittab" | md5sum | cut -c1-32)" = 06b13538fb68ef8ba305ba04f844c3b8 ] \
+    || { echo "STOP: the expected inittab is not core's plus the one dlm line" >&2; exit 1; }
+  # core's 1992 kernel, which stays when install.sh removes the name /stand/unix
+  sum -r "$CORE_T/stand/2.1_unix" | awk '{print $1}' > "$STAGE/l11/2.1_unix.sum"
   # apkg's conf for finishing a target's pending transaction from the repair path
   # (install.sh names it when it stops on one): the medium's engine and kernel space
   printf '%s\n' "# apkg 0.3 -R /mnt recover, from the repair path (install.sh, l11.sh)" \
@@ -784,7 +817,8 @@ if [ -n "$_want_l11" ]; then
     "kbootset=/mnt/sbin/kbootset" > "$STAGE/l11/recover.conf"
   chmod 0755 "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
   chmod 0744 "$STAGE/l11/bcheckrc"
-  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock"
+  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock" \
+    "$STAGE/l11/inittab" "$STAGE/l11/2.1_unix.sum"
   { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
     && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \

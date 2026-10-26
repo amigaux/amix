@@ -4963,14 +4963,34 @@ c1-u1 chain; the A4092 ROM boot R2 is not run).
 - the kernel comes in as an apkg 0.3 kernel-space package;
 - `kbootset` writes and checks the pristine generation.
 
-The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/install/l11` with the box
-kbootset, apkg 0.3, the amix-dlm loader and the kernel-space FILE catalog (`tools/build-l11-inputs.sh`,
-`tools/build-kpkg.sh`). The disk, the upgrade install of a 1.0 disk, and what survives it are described in
-`docs/upgrade-install.md`.
+The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/install/l11` with a static
+apkg 0.3 and the kernel-space FILE source. The disk, the upgrade install of a 1.0 disk, and what survives it are
+described in `docs/upgrade-install.md`.
+
+What a 1.1 medium carries is one tracked file, `tools/l11-set.conf` (S3-31):
+- the amix-dlm and amix-packagemanager revisions;
+- the package staging and the APKG datastream that replaces its own;
+- one `pkg NAME VERSION` line per package: kbootset, modtools, loader-amix, the kernels and the module packages.
+
+`tools/build-l11-inputs.sh --set tools/l11-set.conf` takes each package from amix-packages' `build/kspace`. The
+catalog is gen-catalog's (amix-packagemanager at the set's revision), never hand-written rows. `INPUTS` records
+every revision and hash, and whether gen-catalog's rows equal amix-packages' own. `tools/build-install-iso.sh`
+refuses a 1.1 profile whose `KERNEL_KPKG` is not a kernel row of the medium's catalog. For a module kernel
+(`kabi=` not `static`) it also refuses one without modtools, or with a `KERNEL_MODPKGS` entry that is not a
+`role=module` row of the kernel's line.
 
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
-- `l11-k30-upg`: the upgrade of a seeded r7 disk.
+- `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk.
 
-Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`). The boot through
+Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`):
+- the store and its pristine generation;
+- every package installed with its record;
+- each module in generation 1's manifest and at `/stand/gen/1/mod/<name>`;
+- the dlm inittab line;
+- `S99zen` for the z3660eth module;
+- no `/stand/unix`, and `S01kbnamelist`.
+
+It also runs `kbootset status` and `kbootset namelist` with a version-3 kinfo made for generation 1. The status
+must say the namelist is missing, and the namelist call (what the first boot runs) must write it. The boot through
 the new loader is a Bench row: N19's shape for k30, N23's for k46.

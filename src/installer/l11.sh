@@ -24,10 +24,19 @@
 #   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
 #   bcheckrc bcheckrc.stock   /sbin/bcheckrc with `kbootset retry` before each root
 #                  fsck reboot (C2-4 v5 §7), and the stock file's `sum -r`
+#   inittab        core's /etc/inittab with C3-5 §5's dlm line before its first sysinit
+#                  entry: what modtools' postinstall must leave on the target
+#   2.1_unix.sum   the `sum -r` of core's /stand/2.1_unix, which stays when the name
+#                  /stand/unix goes (C2-4 v9 §12)
 #
 # PROFILE KEYS:
 #   INSTALL_LAYOUT=1.1   this file; 1.0 (the default) never sources it
-#   KERNEL_KPKG          the kernel package's catalog name (kernel-k030u, ...)
+#   KERNEL_KPKG          the kernel package's catalog name (kernel-k30-m, ...). A module
+#                        kernel (its row's kabi= is not static; its sidecar has arena=)
+#                        brings modtools into the same transaction
+#   KERNEL_MODPKGS       the module packages, catalog names <name>-<line> (z3660eth-k46;
+#                        C3-5 v4 §1.1), installed in the same transaction; a module
+#                        kernel only
 #   TARGET_FASTMEM_MB    fast memory of the box that will BOOT this disk (not of the
 #                        machine running the install: a bench rig and a disk moved
 #                        between boxes differ), for gate 6 and bootset's mem=. The
@@ -40,6 +49,7 @@
 L11=$INST/l11
 L11_APKG=$L11/bin/apkg
 L11_BASE_KPKGS="kbootset loader-amix"	# installed with the kernel, every 1.1 disk
+L11_DLM='dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1'	# C3-5 §5
 L11_STORE_MB=64
 L11_STORE_BYTES=67108864
 
@@ -48,7 +58,7 @@ L11_STORE_BYTES=67108864
 l11_keys()
 {
 	for _f in "$L11_APKG" "$L11/kpkg/catalog" "$L11/updbootpart" \
-		"$L11/bcheckrc" "$L11/bcheckrc.stock"
+		"$L11/bcheckrc" "$L11/bcheckrc.stock" "$L11/inittab" "$L11/2.1_unix.sum"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
 	done
@@ -67,6 +77,22 @@ l11_keys()
 		030)		L11_LINE=30 ;;
 		*)		L11_LINE=46 ;;
 	esac
+	# the kernel and the modules: rows of the medium's catalog, of this line
+	[ "`l11_kpkg_key "$KERNEL_KPKG" role`" = kernel ] || die "KERNEL_KPKG=$KERNEL_KPKG is not a kernel package of the medium's catalog"
+	[ "`l11_kpkg_key "$KERNEL_KPKG" line`" = "k$L11_LINE" ] || die "KERNEL_KPKG=$KERNEL_KPKG is not a k$L11_LINE kernel (INSTALL_CPU=$INSTALL_CPU)"
+	L11_KMOD=n L11_MODS= L11_XPKGS=
+	[ "`l11_kpkg_key "$KERNEL_KPKG" kabi`" = static ] || L11_KMOD=y L11_XPKGS=modtools
+	if [ -n "$KERNEL_MODPKGS" ] && [ "$L11_KMOD" = n ]; then
+		die "KERNEL_MODPKGS='$KERNEL_MODPKGS' needs a module kernel; $KERNEL_KPKG is static"
+	fi
+	for _m in $KERNEL_MODPKGS
+	do
+		[ "`l11_kpkg_key "$_m" role`" = module ] || die "KERNEL_MODPKGS: $_m is not a module package of the medium's catalog"
+		[ "`l11_kpkg_key "$_m" line`" = "k$L11_LINE" ] || die "KERNEL_MODPKGS: $_m is not a k$L11_LINE module"
+		_o=`expr "$_m" : "\\(.*\\)-k$L11_LINE\$"`
+		[ -n "$_o" ] || die "KERNEL_MODPKGS: $_m is not named <module>-k$L11_LINE (C3-5 section 1.1)"
+		L11_MODS="$L11_MODS $_o"
+	done
 	if [ -z "$KBOOTSET_BOOTDEV" ]; then
 		case "$TARGET_HBA" in
 			a3000)		KBOOTSET_BOOTDEV=mobo:a3000-wd ;;
@@ -91,6 +117,7 @@ l11_keys()
 		esac
 	fi
 	msg "layout 1.1   : store ${L11_STORE_MB} MiB (s$TARGET_BOOT_SLICE), kernel package $KERNEL_KPKG, line k$L11_LINE"
+	[ "$L11_KMOD" = y ] && msg "modules      : a module kernel: modtools $KERNEL_MODPKGS"
 	msg "box facts    : bootdev $KBOOTSET_BOOTDEV rootdev $KBOOTSET_ROOTDEV mem ${TARGET_FASTMEM_MB} MB"
 	msg "root record  : $KBOOTSET_ROOTREC"
 }
@@ -232,12 +259,24 @@ l11_bootstore()
 		echo "kbootset=$TARGET/sbin/kbootset"
 	} > "$KCONF" || die "cannot write $KCONF"
 	run "$L11_APKG" -c "$KCONF" update
-	# one transaction: kbootset, the loader and the kernel
-	l11_apkg -c "$KCONF" -R "$TARGET" install $L11_BASE_KPKGS "$KERNEL_KPKG"
-	l11_kpkg_record loader-amix
-	l11_kpkg_record "$KERNEL_KPKG"
+	# one transaction: kbootset, the loader, the kernel; for a module kernel modtools and
+	# the module packages too
+	l11_apkg -c "$KCONF" -R "$TARGET" install $L11_BASE_KPKGS $L11_XPKGS "$KERNEL_KPKG" $KERNEL_MODPKGS
+	l11_kpkg_record loader-amix loader
+	l11_kpkg_record "$KERNEL_KPKG" kernel
+	for _m in $KERNEL_MODPKGS
+	do
+		l11_kpkg_record "$_m" module
+	done
 	[ -f "$TARGET/var/sadm/pkg/kbootset/pkginfo" ] || die "apkg installed kbootset but the package database has no kbootset"
-	msg "packages     : kbootset, loader-amix and $KERNEL_KPKG installed by apkg (records under /var/apkg/kpkg)"
+	_ka=`( while read _l; do case "$_l" in arena=*) echo y ;; esac; done ) < "$TARGET/stand/k$L11_LINE/kabi"`
+	[ "${_ka:-n}" = "$L11_KMOD" ] || die "the catalog and /stand/k$L11_LINE/kabi disagree on whether $KERNEL_KPKG is a module kernel (arena= ${_ka:-absent})"
+	if [ "$L11_KMOD" = y ]; then
+		[ -f "$TARGET/var/sadm/pkg/modtools/pkginfo" ] && [ -x "$TARGET/sbin/modadmin" ] \
+			|| die "apkg installed modtools but there is no /sbin/modadmin or no modtools in the package database"
+		l11_inittab
+	fi
+	msg "packages     : `echo $L11_BASE_KPKGS $L11_XPKGS $KERNEL_KPKG $KERNEL_MODPKGS` installed by apkg (records under /var/apkg/kpkg)"
 
 	# the store, by the INSTALLED kbootset from the INSTALLED loader files: it lays the
 	# store over whatever the slice held -- a 1.0 chain, an earlier store, a 1.0 root's
@@ -265,6 +304,14 @@ l11_bootstore()
 	# the generation against apkg's record; kbootset never writes in `check`
 	l11_kb check
 	runq $KB status
+	# the generation's module copies, where the module core loads them from (C2-4 §11:
+	# build -R writes them onto this root; check above hashed them)
+	for _o in $L11_MODS
+	do
+		[ -f "$TARGET/stand/gen/1/mod/$_o" ] || die "the pristine generation has no /stand/gen/1/mod/$_o -- NOT arming"
+	done
+	[ -n "$L11_MODS" ] && msg "modules      :$L11_MODS in generation 1 (/stand/gen/1/mod)"
+	l11_namelist
 
 	# /dev/kinfo (amix-dlm C2-3 v3 §1, C2-4 v4 §2): kernel-space packages are pure
 	# files, so the node is the installer's: c 53 0, 0444. The miniroot has no chown or
@@ -332,8 +379,10 @@ l11_markgood()
 	msg "mark-good    : /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
 }
 
-# l11_kpkg_record NAME -- the kernel-space record of NAME: /var/apkg/kpkg/<pkginst>
-# (C2-2 v4 §2), whose `name` line is NAME; refuses to go on without it
+# l11_kpkg_record NAME ROLE -- the kernel-space record of NAME: /var/apkg/kpkg/<pkginst>
+# (C2-2 v4 §2), whose `name` line is NAME and `role` line ROLE; a module's names its
+# object /etc/conf/mod.d/<module> and the package's modreg.d file (C3-5 §1), which are
+# on the target. Refuses to go on without it.
 l11_kpkg_record()
 {
 	_pi=`l11_kpkg_inst "$1"`
@@ -342,7 +391,97 @@ l11_kpkg_record()
 	[ -f "$_rec" ] || die "apkg installed $1 but wrote no record /var/apkg/kpkg/$_pi -- kbootset gate 1 would refuse"
 	_rn=`( read _k _v _r; [ "$_k" = name ] && echo "$_v" ) < "$_rec"`
 	[ "$_rn" = "$1" ] || die "/var/apkg/kpkg/$_pi names '$_rn', not $1"
+	_rr=`( while read _k _v _r; do [ "$_k" = role ] && echo "$_v"; done ) < "$_rec"`
+	[ "$_rr" = "$2" ] || die "/var/apkg/kpkg/$_pi says role '$_rr', not $2"
+	[ "$2" = module ] || return 0
+	_o=`expr "$1" : '\(.*\)-k[34][06]$'`
+	_rf=`( while read _k _v _r; do [ "$_k" = file ] && echo "$_v"; done ) < "$_rec"`
+	for _f in /etc/conf/mod.d/$_o /etc/conf/modreg.d/$_o
+	do
+		case " "`echo $_rf`" " in
+			*" $_f "*)	: ;;
+			*)	die "/var/apkg/kpkg/$_pi has no file line for $_f" ;;
+		esac
+		[ -f "$TARGET$_f" ] || die "the module package $1 laid no $_f"
+	done
 	return 0
+}
+
+# l11_kpkg_key NAME KEY -- KEY's value in the #kpkg row of NAME in the medium's
+# catalog (role, line, kabi, ...); nothing when there is no such row or key
+l11_kpkg_key()
+{
+	( while read _h _n _v _rest
+	do
+		[ "$_h" = "#kpkg" ] && [ "$_n" = "$1" ] || continue
+		for _t in $_rest
+		do
+			case "$_t" in "$2"=*) expr "$_t" : "$2=\\(.*\\)" ;; esac
+		done
+	done ) < "$L11/kpkg/catalog"
+}
+
+# l11_inittab -- after modtools' postinstall (C3-5 v4 §5): /etc/inittab holds exactly one
+# line with the id dlm, it is the first sysinit entry, with C3-5's text, and the rest of
+# the file is core's (the medium's inittab: core's with that one line before the first
+# sysinit entry). The miniroot has no grep or awk: read, expr and sum only, and a
+# redirect-fed loop is a subshell, so what it finds goes to files.
+l11_inittab()
+{
+	_it="$TARGET/etc/inittab"
+	_why="modtools' postinstall (C3-5 section 5) did not leave /etc/inittab as it must be"
+	[ -f "$_it" ] || die "$_why: there is no $_it"
+	rm -f /tmp/.l11it /tmp/.l11dl
+	while read _l
+	do
+		case "$_l" in
+			dlm:*)	echo dlm >> /tmp/.l11it
+				echo "$_l" >> /tmp/.l11dl ;;
+			\#*)	: ;;
+			*)	expr "$_l" : '[^:]*:[^:]*:sysinit:' > /dev/null && echo other >> /tmp/.l11it ;;
+		esac
+	done < "$_it"
+	[ -s /tmp/.l11it ] || die "$_why: it has no sysinit entry and no dlm line"
+	set x `cat /tmp/.l11it`; shift
+	_first=$1 _nd=0
+	for _w
+	do
+		[ "$_w" = dlm ] && _nd=`expr $_nd + 1`
+	done
+	[ "$_nd" = 1 ] || die "$_why: $_nd line(s) with the id dlm, not exactly one"
+	[ "$_first" = dlm ] || die "$_why: the dlm line is not the first sysinit entry"
+	_dl=`cat /tmp/.l11dl`
+	[ "$_dl" = "$L11_DLM" ] || die "$_why: the dlm line reads '$_dl'"
+	set x `"$INST/bin/sum" -r "$_it"`; shift
+	_ih=$1
+	set x `"$INST/bin/sum" -r "$L11/inittab"`; shift
+	[ "$_ih" = "$1" ] || die "$_why: beside the dlm line it is not core's inittab (sum -r $_ih, expected $1)"
+	rm -f /tmp/.l11it /tmp/.l11dl
+	msg "inittab      : the dlm line (modadmin -B) once, the first sysinit entry; the rest core's (sum -r $_ih)"
+}
+
+# l11_namelist -- /stand/unix is the namelist the stock nlist users read (netstat,
+# ifconfig, crash). Core left it a hard link to /stand/2.1_unix, the 1992 kernel, never
+# the booted one on a 1.1 disk: the name goes (2.1_unix stays, checked), and so does any
+# /unix. /etc/rc2.d/S01kbnamelist -- after S01MOUNTFSYS, before every other rc2 script --
+# writes the booted generation's namelist on every boot (C2-4 v9 §12, spec 40 §4.2): the
+# installer cannot, it does not know where the first boot binds the kernel.
+l11_namelist()
+{
+	rm -f "$TARGET/stand/unix" "$TARGET/unix"
+	[ -f "$TARGET/stand/unix" ] && die "cannot remove $TARGET/stand/unix"
+	[ -f "$TARGET/stand/2.1_unix" ] || die "core's /stand/2.1_unix is not on the target"
+	_us=`( read _s _r; echo "$_s" ) < "$L11/2.1_unix.sum"`
+	set x `"$INST/bin/sum" -r "$TARGET/stand/2.1_unix"`; shift
+	[ "$1" = "$_us" ] || die "/stand/2.1_unix is not core's 2.1 kernel (sum -r $1, core $_us)"
+	{
+		echo '#!/bin/sh'
+		echo '# S01kbnamelist -- written by install.sh (1.1). The booted generation'"'"'s namelist'
+		echo '# at /stand/unix before anything in run level 2 reads it (amix-dlm C2-4 section 12).'
+		echo '[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1'
+	} > "$TARGET/etc/rc2.d/S01kbnamelist" || die "cannot write $TARGET/etc/rc2.d/S01kbnamelist"
+	run chmod 0744 "$TARGET/etc/rc2.d/S01kbnamelist"
+	msg "namelist     : /stand/unix and /unix removed (/stand/2.1_unix kept, sum -r $_us); /etc/rc2.d/S01kbnamelist writes it at every boot"
 }
 
 # l11_kpkg_inst NAME -- the pkginst of catalog entry NAME on the medium: its pkginst=
@@ -433,6 +572,8 @@ L11_KEEP="etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
 etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc"
+# ... and every file of etc/conf/modreg.local.d (the administrator's module parameters,
+# C3-5 §1), which the restore also puts on the new root before the store is composed
 
 # l11_rdbpart N -- _pn _po _pl: name, start, length of partition N (empty if none)
 l11_rdbpart()
@@ -495,6 +636,10 @@ l11_upgrade_capture()
 	for _f in $L11_KEEP
 	do
 		[ -f "/mnt/$_f" ] && echo "$_f" >> /tmp/upg.list
+	done
+	for _f in /mnt/etc/conf/modreg.local.d/*
+	do
+		[ -f "$_f" ] && expr "$_f" : '/mnt/\(.*\)' >> /tmp/upg.list
 	done
 	UPG_HOME=n
 	if [ "$OLD_DATA" = n ] && [ -d /mnt/home ]; then
@@ -575,6 +720,12 @@ l11_upgrade_restore()
 		[ "$1" = "$_s" ] || echo "$_f" >> /tmp/upg.bad
 	done < /tmp/upg.sums
 	[ -s /tmp/upg.bad ] && die "upgrade: restored file(s) differ from the saved ones: `cat /tmp/upg.bad` -- NOT arming"
+	# the administrator's module parameters go in now, so the pristine generation takes them
+	if [ -d "$TARGET/var/adm/upgrade/cfg/etc/conf/modreg.local.d" ]; then
+		run mkdir -p "$TARGET/etc/conf/modreg.local.d"
+		run cp "$TARGET"/var/adm/upgrade/cfg/etc/conf/modreg.local.d/* "$TARGET/etc/conf/modreg.local.d/"
+		msg "upgrade: /etc/conf/modreg.local.d restored before the store is composed"
+	fi
 	# a stock bcheckrc (every 1.0 disk) comes back with kbootset retry in it; one the
 	# administrator changed is kept as it was, without it
 	if [ -f "$TARGET/var/adm/upgrade/cfg/sbin/bcheckrc" ]; then

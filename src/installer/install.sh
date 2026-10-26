@@ -527,7 +527,9 @@ emit_zen_hook() {
 		echo '    i=`expr $i + 1`'
 		echo '  done'
 		echo '  /usr/sbin/ifconfig zen0 $ADDR netmask $NETMASK up -trailers'
-		if [ -n "$FB_IP" ]; then
+		# no gateway (an address-less laydown, or a zen0 beside another interface
+		# that carries the default route): the route line is guarded
+		if [ -n "$FB_IP" ] && [ -n "$FB_GATEWAY" ]; then
 			echo '  /usr/sbin/route add default $GATEWAY 1'
 		else
 			echo '  [ -n "$GATEWAY" ] && /usr/sbin/route add default $GATEWAY 1'
@@ -622,6 +624,10 @@ esac
 #                                 load-bearing leading colon itself (TZ=:<zone>)
 #   FB_GATEWAY       <none>       default route for the zen0 laydown; required
 #                                 only for FB_ETHER_IF=zen0 profiles (gated below)
+#   FB_ZEN_IP        <none>       S3-31: zen0's own address when the z3660eth module
+#   FB_ZEN_NETMASK   FB_NETMASK   is installed on a profile whose interface is not
+#   FB_ZEN_GATEWAY   <none>       zen0 (S99zen beside it); empty FB_ZEN_IP = zen0 left
+#                                 down; never FB_IP (two interfaces, one address)
 #   FB_ZEN_CARDS     <empty>      P-3 address-by-card table, "MAC=ADDR=NAME ..."
 #                                 (a "default=ADDR" word = the unknown-card row);
 #                                 firstboot renders it into /etc/inet/zen.conf on a
@@ -2694,6 +2700,10 @@ run chmod 600 "$TARGET/var/adm/firstboot/root.shadow"
 	echo "FB_SCSI_ID=${TARGET_VFSTAB_SCSI_ID:-$ID}"
 	# 8b laid the framed kernel at /stand/unix: first boot re-registers it in core.
 	[ -n "$STAND_UNIX" ] && echo "FB_STANDUNIX_REG=y"
+	# 1.1: l11_namelist removed the name /stand/unix; first boot takes it out of core's
+	# contents too. modtools rewrote /etc/inittab by rename, so it lost core's group.
+	[ "$INSTALL_LAYOUT" = 1.1 ] && echo "FB_STANDUNIX_RM=y"
+	[ "${L11_KMOD:-n}" = y ] && echo "FB_INITTAB_SYS=y"
 	echo "FB_ROOT_SLICE=$TARGET_ROOT_SLICE"
 	echo "FB_SWAP_SLICE=$TARGET_SWAP_SLICE"
 	# The filesystem this install laid on the root slice -- the ONE field the
@@ -2904,7 +2914,22 @@ if [ "$FB_ETHER_IF" = zen0 ]; then
 		msg "WARNING: no $INST/zenmac on this medium -- S99zen cannot read the card MAC (address-by-card falls back; re-master with tools/build-install-iso.sh)"
 	fi
 else
-	msg "ethernet interface is '$FB_ETHER_IF' (not zen0) -- stock aen0 userland; no zen0 bring-up laid down"
+	# S3-31: a disk that installs the z3660eth module gets the zen0 bring-up too, on
+	# both lines, beside the profile's own interface: at its own FB_ZEN_IP /
+	# FB_ZEN_NETMASK (default FB_NETMASK) / FB_ZEN_GATEWAY (optional), or address-less
+	# (left down) without FB_ZEN_IP -- never the same address on two interfaces
+	case " $KERNEL_MODPKGS " in
+	*" z3660eth-k"*)
+		[ -z "$FB_ZEN_IP" ] || [ "$FB_ZEN_IP" != "$FB_IP" ] \
+			|| die "profile $PROFILE_NAME: FB_ZEN_IP=$FB_ZEN_IP is FB_IP, $FB_ETHER_IF's address -- zen0 needs its own"
+		echo "+ emit_zen_hook $TARGET/etc/rc2.d/S99zen (z3660eth module; zen0 @ ${FB_ZEN_IP:-no address})"
+		( FB_IP="$FB_ZEN_IP"; FB_NETMASK="${FB_ZEN_NETMASK:-$FB_NETMASK}"; FB_GATEWAY="$FB_ZEN_GATEWAY"
+		  emit_zen_hook "$TARGET/etc/rc2.d/S99zen" ) || die "cannot write the zen0 bring-up hook /etc/rc2.d/S99zen"
+		run chmod 0744 "$TARGET/etc/rc2.d/S99zen"
+		msg "laid down /etc/rc2.d/S99zen for the z3660eth module (zen0 @ ${FB_ZEN_IP:-no address -- left down}; $FB_ETHER_IF stays as it is)"
+		;;
+	*)	msg "ethernet interface is '$FB_ETHER_IF' (not zen0) -- stock aen0 userland; no zen0 bring-up laid down" ;;
+	esac
 fi
 
 # --- LAY DOWN the monitor-switch bits (P-8, /dev/monsw) -----------------------
@@ -3253,7 +3278,9 @@ msg "   apkg client        : /etc/apkg.conf -> $FB_REPO_URL"
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	msg "   layout             : 1.1 (store s$TARGET_BOOT_SLICE ${L11_STORE_MB} MiB, store-id $L11_STORE_ID)"
 	msg "   kernel             : $KERNEL_KPKG (apkg 0.3 kernel space, record /var/apkg/kpkg)"
+	[ "$L11_KMOD" = y ] && msg "   modules            : modtools (dlm sysinit line checked)$L11_MODS"
 	msg "   boot store         : pristine generation committed + kbootset check clean"
+	msg "   /stand/unix        : removed; /etc/rc2.d/S01kbnamelist writes the booted namelist"
 else
 	msg "   boot chain         : verified on-target ($KERNEL_BREL_SUMR brel)"
 	msg "   /stand/boot2.boot  : flags-based ($BOOT2_ID...)"

@@ -1052,7 +1052,8 @@ esac
 # FB_NETMASK / FB_ETHER_IF / FB_GATEWAY / FB_DNS1 / FB_DNS2 / FB_KMAP /
 # FB_REPO_HOST / FB_REPO_IP / FB_REPO_URL / FB_ROOTDEV / FB_SCSI_ID /
 # FB_ROOT_SLICE / FB_SWAP_SLICE / FB_ROOT_FSTYPE / FB_DIALOG / FB_ROOT_TELNET /
-# FB_SYSLOG / FB_NET_CONFIGURED / FB_ZEN_CARDS / FB_STANDUNIX_REG
+# FB_SYSLOG / FB_NET_CONFIGURED / FB_ZEN_CARDS / FB_STANDUNIX_REG / FB_STANDUNIX_RM /
+# FB_INITTAB_SYS
 . "$CONF"
 
 # FB_TZ is the timezone ZONE NAME (W1). It was a literal `US/Eastern` in this
@@ -1269,6 +1270,37 @@ if [ "$FB_STANDUNIX_REG" = y ]; then
 		echo "firstboot: /stand/unix re-registered in the core package (APKG installf)"
 	else
 		echo "firstboot: WARNING: could not re-register /stand/unix (no APKG installf?) -- pkgchk will report it modified"
+	fi
+fi
+
+# --- 4c. a 1.1 disk: /stand/unix and /etc/inittab in the core package --------------
+# The installer removed the name /stand/unix, core's 1992 kernel (S01kbnamelist writes
+# the booted generation's namelist there; amix-dlm C2-4 section 12). Core's contents
+# record it as the file and /stand/2.1_unix as a link to it: /stand/2.1_unix becomes the
+# file, /stand/unix goes, so pkgchk core stays quiet on both. APKG's heirloom tools as in
+# 4b, from /tmp (the stock installf and removef take a bus error on the 68060).
+if [ "$FB_STANDUNIX_RM" = y ]; then
+	( cd /tmp && /usr/apkg/bin/installf core /stand/2.1_unix f 0644 root root >/dev/null 2>&1 &&
+	  /usr/apkg/bin/installf -f core >/dev/null 2>&1 &&
+	  /usr/apkg/bin/removef core /stand/unix >/dev/null 2>&1 &&
+	  /usr/apkg/bin/removef -f core >/dev/null 2>&1 )
+	if grep '^/stand/unix[ =]' /var/sadm/install/contents >/dev/null 2>&1; then
+		echo "firstboot: WARNING: /stand/unix is still in core's contents -- pkgchk core will report it missing"
+	elif ( cd /tmp && /usr/apkg/bin/pkgchk -p /stand/2.1_unix core 2>&1 ) | grep . >/dev/null; then
+		echo "firstboot: WARNING: pkgchk core is not quiet on /stand/2.1_unix"
+	else
+		echo "firstboot: /stand/unix out of the core package, /stand/2.1_unix its own file (APKG removef/installf); pkgchk quiet"
+	fi
+fi
+# modtools' postinstall rewrote /etc/inittab by rename on the install miniroot, which has
+# no chgrp: core's owner, group and mode back (root sys 0664)
+if [ "$FB_INITTAB_SYS" = y ]; then
+	chown root /etc/inittab; chgrp sys /etc/inittab; chmod 664 /etc/inittab
+	set -- `ls -l /etc/inittab`
+	if [ "$1" = "-rw-rw-r--" ] && [ "$3" = root ] && [ "$4" = sys ]; then
+		echo "firstboot: /etc/inittab root sys 0664, as core lays it"
+	else
+		echo "firstboot: WARNING: /etc/inittab is $1 $3 $4, not -rw-rw-r-- root sys"
 	fi
 fi
 

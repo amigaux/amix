@@ -1227,6 +1227,9 @@ FIRSTBOOT_EXTRA = {
     # Q-4.15 trap ii: re-register the installer-laid /stand/unix (040/060) in the core
     # package -- the stock pkgtools installf, a core member on every installed target
     "installf",
+    # S3-31: a 1.1 disk's /stand/unix out of the core package -- APKGENG's heirloom
+    # removef and pkgchk (/usr/apkg/bin), from the APKG set every target carries
+    "removef", "pkgchk",
 }
 
 # IN-rtc-2: the dialog re-reads the battery clock in the zone just chosen. This is
@@ -9905,6 +9908,181 @@ def audit_l11():
         ok("l11_kpkg_inst: the row's pkginst= (kern30u), else its name; nothing for a missing row (C2-2 v4)")
     else:
         fail("l11_kpkg_inst: %r" % (got,))
+
+    # (9) S3-31 l11_inittab: modtools' result on core's inittab -- the dlm line once, the
+    # first sysinit entry, C3-5's text, the rest core's (sum -r against the medium's
+    # inittab); each way it can be wrong stops the install naming modtools' postinstall
+    core_it = os.path.join(REPO, "..", "amix-packagemanager", "build", "repo-staging", "stock", ".t",
+                           "core", "etc", "inittab")
+    dlm = "dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1"
+    if not os.path.exists(core_it):
+        skip("no stock core inittab in ../amix-packagemanager staging -- l11_inittab not executed")
+    else:
+        inst = os.path.join(d, "inst")
+        lroot = os.path.join(inst, "l11")
+        os.makedirs(os.path.join(inst, "bin"), exist_ok=True)
+        os.makedirs(lroot, exist_ok=True)
+        if not os.path.exists(os.path.join(inst, "bin", "sum")):
+            os.symlink(shutil.which("sum"), os.path.join(inst, "bin", "sum"))
+        stock = open(core_it).read().splitlines(True)
+        first = next(i for i, l in enumerate(stock) if l.split(":")[2:3] == ["sysinit"])
+        good = "".join(stock[:first] + [dlm + "\n"] + stock[first:])
+        open(os.path.join(lroot, "inittab"), "w").write(good)
+        tgt = os.path.join(d, "it")
+        os.makedirs(os.path.join(tgt, "etc"), exist_ok=True)
+        dlm_line = next(l for l in l11.splitlines() if l.startswith("L11_DLM="))
+        body = ('msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n'
+                "INST=%s\nL11=%s\nTARGET=%s\n%s\n" % (inst, lroot, tgt, dlm_line.split("\t")[0]) +
+                _extract_func(l11, "l11_inittab") + "\nl11_inittab\n")
+        cases = (
+            ("as modtools leaves it", good, "MSG inittab"),
+            ("no dlm line", "".join(stock), "0 line(s) with the id dlm"),
+            ("the dlm line twice", good.replace(dlm + "\n", dlm + "\n" + dlm + "\n"), "2 line(s) with the id dlm"),
+            ("the dlm line after S0", "".join(stock[:first + 1] + [dlm + "\n"] + stock[first + 1:]),
+             "not the first sysinit entry"),
+            ("another dlm text", good.replace(dlm, dlm.replace(" -B", "")), "the dlm line reads"),
+            ("another line changed", good.replace("S2::sysinit", "S2::sysinit:"), "not core's inittab"),
+        )
+        for what, text, want in cases:
+            open(os.path.join(tgt, "etc", "inittab"), "w").write(text)
+            r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
+            okc = want in r.stdout and (("DIE" in r.stdout and "modtools' postinstall" in r.stdout)
+                                        if want != "MSG inittab" else "DIE" not in r.stdout)
+            (ok if okc else fail)("l11_inittab, %s: %s" % (what, "passes" if want == "MSG inittab" else
+                                  "stops naming modtools' postinstall" if okc else repr(r.stdout.strip())))
+
+    # (10) S3-31 l11_keys' module half: a module kernel brings modtools; KERNEL_MODPKGS
+    # must be role=module rows of the kernel's line named <module>-k<line>, and only with
+    # a module kernel
+    kc = os.path.join(d, "kc")
+    os.makedirs(os.path.join(kc, "kpkg"), exist_ok=True)
+    os.makedirs(os.path.join(kc, "bin"), exist_ok=True)
+    for f in ("bin/apkg", "updbootpart", "bcheckrc", "bcheckrc.stock", "inittab", "2.1_unix.sum"):
+        open(os.path.join(kc, f), "w").write("x\n")
+    open(os.path.join(kc, "kpkg", "catalog"), "w").write(
+        "#apkg-catalog 1\nmodtools|1|modtools|base/m.pkg|0|1|none|system|m\n#ext kpkg 1\n"
+        "#kpkg kernel-k46-m k46.1 role=kernel line=k46 kabi=k46.1.0 pin=p size=1 sha256=x file=base/a.pkg pkginst=kern46m\n"
+        "#kpkg kernel-k46-z 1.1 role=kernel line=k46 kabi=static pin=p size=1 sha256=x file=base/b.pkg pkginst=kern46z\n"
+        "#kpkg z3660eth-k46 1.0 role=module line=k46 kabi=k46.1.0 pin=p size=1 sha256=x file=base/c.pkg pkginst=zeth46\n"
+        "#kpkg z3660eth-k30 1.0 role=module line=k30 kabi=k30.1.0 pin=p size=1 sha256=x file=base/d.pkg pkginst=zeth30\n"
+        "#kpkg zeth-odd 1.0 role=module line=k46 kabi=k46.1.0 pin=p size=1 sha256=x file=base/e.pkg pkginst=zodd\n"
+        "#end kpkg\n")
+    kbody = ('msg() { :; }\nwarn() { :; }\ndie() { echo "DIE $*"; exit 3; }\n'
+             'is_num() { expr "$1" : "[0-9][0-9]*$" > /dev/null; }\n'
+             "INST=%s\nL11=%s\nL11_APKG=%s/bin/apkg\nL11_STORE_MB=64\n" % (kc, kc, kc) +
+             _extract_func(l11, "l11_kpkg_key") + "\n" + _extract_func(l11, "l11_keys") +
+             '\nl11_keys\necho "XPKGS=$L11_XPKGS MODS=$L11_MODS KMOD=$L11_KMOD"\n')
+
+    def keys(kernel, mods):
+        env = dict(os.environ, KERNEL_KPKG=kernel, KERNEL_MODPKGS=mods, TARGET_FASTMEM_MB="32",
+                   INSTALL_CPU="040", TARGET_HBA="z3660scsi", TARGET_SCSI_ID="6", TARGET_ROOT_SLICE="1",
+                   TARGET_BOOT_SLICE="3", TARGET_BOOT_MB="", INSTALL_TARGET_PREBUILT="0")
+        return subprocess.run(["/usr/bin/dash", "-c", kbody], capture_output=True, text=True,
+                              timeout=30, env=env).stdout.strip()
+    for what, kernel, mods, want in (
+            ("a module kernel and z3660eth-k46", "kernel-k46-m", "z3660eth-k46", "XPKGS=modtools MODS= z3660eth KMOD=y"),
+            ("a module kernel, no modules", "kernel-k46-m", "", "XPKGS=modtools MODS= KMOD=y"),
+            ("a static kernel, no modules", "kernel-k46-z", "", "XPKGS= MODS= KMOD=n"),
+            ("a static kernel with a module", "kernel-k46-z", "z3660eth-k46", "DIE KERNEL_MODPKGS='z3660eth-k46' needs a module kernel"),
+            ("a module of the other line", "kernel-k46-m", "z3660eth-k30", "is not a k46 module"),
+            ("a kernel row as a module", "kernel-k46-m", "kernel-k46-z", "is not a module package"),
+            ("a module not named <module>-k46", "kernel-k46-m", "zeth-odd", "is not named <module>-k46"),
+            ("a module the catalog lacks", "kernel-k46-m", "absent-k46", "is not a module package")):
+        got = keys(kernel, mods)
+        (ok if want in got else fail)("l11_keys, %s: %s" % (what, got if want not in got else
+                                      ("refused" if "DIE" in got else want)))
+
+    # (11) S3-31 l11_kpkg_record for a module: name, role and the file lines of its
+    # object and modreg.d file, both on the target
+    rt = os.path.join(d, "rec")
+    for sub in ("var/apkg/kpkg", "etc/conf/mod.d", "etc/conf/modreg.d"):
+        os.makedirs(os.path.join(rt, sub), exist_ok=True)
+    open(os.path.join(rt, "etc/conf/mod.d/z3660eth"), "w").write("o")
+    open(os.path.join(rt, "etc/conf/modreg.d/z3660eth"), "w").write("#\n")
+    rbody = ('die() { echo "DIE $*"; exit 3; }\nL11=%s\nTARGET=%s\n' % (kc, rt) +
+             _extract_func(l11, "l11_kpkg_inst") + "\n" + _extract_func(l11, "l11_kpkg_record") +
+             '\nl11_kpkg_record "$1" "$2" && echo RECORD-OK\n')
+    full = ("name z3660eth-k46\nversion 1.0\nrole module\nline k46\n"
+            "file /etc/conf/mod.d/z3660eth 1 aa\nfile /etc/conf/modreg.d/z3660eth 2 bb\n")
+    for what, rec, role, want in (
+            ("a module's full record", full, "module", "RECORD-OK"),
+            ("a record without the modreg.d line", full.replace("file /etc/conf/modreg.d/z3660eth 2 bb\n", ""),
+             "module", "has no file line for /etc/conf/modreg.d/z3660eth"),
+            ("a module record of another role", full.replace("role module", "role kernel"), "module", "says role 'kernel'")):
+        open(os.path.join(rt, "var/apkg/kpkg/zeth46"), "w").write(rec)
+        got = subprocess.run(["/usr/bin/dash", "-c", rbody, "x", "z3660eth-k46", role], capture_output=True,
+                             text=True, timeout=30).stdout.strip()
+        (ok if want in got else fail)("l11_kpkg_record, %s: %s" % (what, "accepted" if want == "RECORD-OK" and
+                                      want in got else "refused" if want in got else got))
+
+    # (12) S3-31 l11_namelist (C2-4 v9 §12): /stand/unix (core's link to 2.1_unix) and /unix
+    # go, 2.1_unix stays and is checked, S01kbnamelist is the one call
+    nt = os.path.join(d, "nl")
+    for case in ("core", "changed"):
+        shutil.rmtree(nt, ignore_errors=True)
+        os.makedirs(os.path.join(nt, "stand"))
+        os.makedirs(os.path.join(nt, "etc", "rc2.d"))
+        open(os.path.join(nt, "stand", "2.1_unix"), "w").write("the 1992 kernel\n")
+        os.link(os.path.join(nt, "stand", "2.1_unix"), os.path.join(nt, "stand", "unix"))
+        open(os.path.join(nt, "unix"), "w").write("x")
+        want_sum = subprocess.run(["sum", "-r", os.path.join(nt, "stand", "2.1_unix")], capture_output=True,
+                                  text=True).stdout.split()[0]
+        open(os.path.join(kc, "2.1_unix.sum"), "w").write((want_sum if case == "core" else "1") + "\n")
+        open(os.path.join(kc, "bin", "sum"), "w").write('#!/bin/sh\nexec %s "$@"\n' % shutil.which("sum"))
+        os.chmod(os.path.join(kc, "bin", "sum"), 0o755)
+        nbody = ('msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\nrun() { "$@"; }\n'
+                 "INST=%s\nL11=%s\nTARGET=%s\n" % (kc, kc, nt) + _extract_func(l11, "l11_namelist") + "\nl11_namelist\n")
+        out = subprocess.run(["/usr/bin/dash", "-c", nbody], capture_output=True, text=True, timeout=30).stdout
+        s01 = os.path.join(nt, "etc", "rc2.d", "S01kbnamelist")
+        body_l = [x for x in open(s01).read().splitlines() if x and not x.startswith("#")] if os.path.exists(s01) else []
+        gone = not os.path.exists(os.path.join(nt, "stand", "unix")) and not os.path.exists(os.path.join(nt, "unix"))
+        kept = open(os.path.join(nt, "stand", "2.1_unix")).read() == "the 1992 kernel\n"
+        if case == "core":
+            good = (gone and kept and "DIE" not in out and oct(os.stat(s01).st_mode & 0o777) == "0o744"
+                    and body_l == ["[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1"]
+                    and "S01kbnamelist" > "S01MOUNTFSYS" and "S01kbnamelist" < "S02PRESERVE")
+            (ok if good else fail)("l11_namelist: /stand/unix and /unix removed, 2.1_unix kept (sum -r checked), "
+                                   "S01kbnamelist 0744 the one kbootset namelist line, sorted after S01MOUNTFSYS and "
+                                   "before S02PRESERVE" if good else "l11_namelist: %r" % out.strip())
+        else:
+            (ok if "is not core's 2.1 kernel" in out else fail)(
+                "l11_namelist: a 2.1_unix that is not core's stops the install" if "is not core's" in out
+                else "l11_namelist with a changed 2.1_unix: %r" % out.strip())
+
+    # (13) S3-31 S99zen beside another interface: install.sh lays it for a z3660eth module
+    # profile at FB_ZEN_IP (never FB_IP), through emit_zen_hook; a zen0 with an address
+    # and no gateway gets a guarded route line
+    code = strip_full_comments(src)
+    if re.search(r'\*" z3660eth-k"\*\)', code) and 'FB_IP="$FB_ZEN_IP"' in code and \
+            re.search(r'\[ "\$FB_ZEN_IP" != "\$FB_IP" \]', code):
+        ok("install.sh lays S99zen for a z3660eth-module profile at FB_ZEN_IP, refusing FB_IP's address")
+    else:
+        fail("install.sh does not lay S99zen for z3660eth-module profiles at FB_ZEN_IP")
+    zfunc = _extract_func(src, "emit_zen_hook")
+    rc, em = _emit_zen(zfunc, "192.0.2.39", "255.255.255.0", gw="")
+    if rc == 0 and em and b"FALLBACK=192.0.2.39\n" in em and \
+            b'  [ -n "$GATEWAY" ] && /usr/sbin/route add default $GATEWAY 1\n' in em and \
+            b"zen0 has no address" not in em:
+        ok("emit_zen_hook with an address and no gateway: zen0 up at it, the route line guarded")
+    else:
+        fail("emit_zen_hook with an address and no gateway: rc %d" % rc)
+
+    # (14) S3-31 first boot on a 1.1 disk: /stand/unix out of core (APKG's tools from /tmp,
+    # 2.1_unix its own file), /etc/inittab back to root sys 0664
+    fb = read_sh(FIRSTBOOT)
+    for what, good in (
+            ("install.sh writes FB_STANDUNIX_RM=y on a 1.1 disk and FB_INITTAB_SYS=y with a module kernel",
+             '[ "$INSTALL_LAYOUT" = 1.1 ] && echo "FB_STANDUNIX_RM=y"' in src and
+             '[ "${L11_KMOD:-n}" = y ] && echo "FB_INITTAB_SYS=y"' in src),
+            ("firstboot: /stand/2.1_unix re-registered as a file and /stand/unix removed from core with APKG's "
+             "installf/removef from /tmp, then checked in contents and with pkgchk", re.search(
+                 r'FB_STANDUNIX_RM" = y \].*?cd /tmp && /usr/apkg/bin/installf core /stand/2\.1_unix f 0644 root root'
+                 r'.*?/usr/apkg/bin/removef core /stand/unix.*?/usr/apkg/bin/removef -f core.*?'
+                 r'/var/sadm/install/contents.*?/usr/apkg/bin/pkgchk -p /stand/2\.1_unix core', fb, re.S)
+             and not re.search(r'/usr/sbin/removef', fb)),
+            ("firstboot: FB_INITTAB_SYS=y gives /etc/inittab root sys 0664 and checks it", re.search(
+                r'FB_INITTAB_SYS" = y \].*?chgrp sys /etc/inittab.*?chmod 664 /etc/inittab.*?ls -l /etc/inittab', fb, re.S))):
+        (ok if good else fail)(what)
 
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],

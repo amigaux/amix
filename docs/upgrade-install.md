@@ -22,19 +22,32 @@ The installer:
    Afterwards it checks there is exactly one `UNI\0`, counting PART blocks by
    their DosType.
 2. installs the medium's package set as for 1.0.
-3. installs, in one apkg transaction, the three packages every 1.1 disk carries:
+3. installs, in one apkg transaction, the packages of the disk:
    - `kbootset` (userland, `/sbin/kbootset`);
    - `loader-amix` (kernel space, `/stand/loader/{boot1,boot2,ldrinfo}`);
-   - the profile's kernel (`KERNEL_KPKG`: `kernel-k30-u` or `kernel-k46-z`,
-     `/stand/k30|k46/{unix,kabi}`).
+   - the profile's kernel (`KERNEL_KPKG`: `kernel-k30-m` or `kernel-k46-m`,
+     `/stand/k30|k46/{unix,kabi}`; k30's also `unix.sym`);
+   - for a module kernel (its catalog row's `kabi=` is not `static`; its sidecar
+     has `arena=`), `modtools` (`/sbin/modadmin`) and the profile's module
+     packages (`KERNEL_MODPKGS`, catalog names `<module>-<line>`, such as
+     `z3660eth-k46`; amix-dlm C3-5 v4 §1): `/etc/conf/mod.d/<module>`, the
+     object, and `/etc/conf/modreg.d/<module>`, the package's defaults.
 
    The static apkg 0.3 on `/install/l11` takes them from the medium's FILE
    catalog, as amix-packages mints them. The box therefore carries a record for
-   each and `apkg upgrade` reaches all three: the kernel-space records are
-   `/var/apkg/kpkg/<pkginst>` (C2-2 v4), and kbootset is in the package database.
+   each and `apkg upgrade` reaches them all: the kernel-space records are
+   `/var/apkg/kpkg/<pkginst>` (C2-2 v4; a module's says `role module` and names its
+   two files), and kbootset and modtools are in the package database.
    `/etc/default/bootset` says `bootset=manual` meanwhile, so apkg's trigger only
    prints the commands. Neither the loader nor the kernel commits anything, and the
    store gets exactly one generation, the pristine one, in step 4.
+
+   modtools' postinstall puts `dlm::sysinit:/sbin/modadmin -B </dev/console
+   >/dev/console 2>&1` in `/etc/inittab` before its first sysinit entry (C3-5
+   §5): the boot-class modules load there. The installer then checks the file:
+   exactly one line with the id `dlm`, the first sysinit entry, C3-5's text, and
+   the rest core's inittab (`sum -r` against the medium's copy). Anything else
+   stops the install and names the postinstall.
 4. runs the INSTALLED `/sbin/kbootset` (the package's; there is no other copy):
    - `create 67108864 /stand/loader/boot2 --boot1 /stand/loader/boot1 --version
      <ldrinfo's> --force` lays the loader package's bytes over
@@ -48,8 +61,12 @@ The installer:
      install kernels), so the profile states it. A kinfo kernel's own value wins at run
      time; on a kernel without kinfo (K030-U today), bootset's `mem=` is what kbootset's
      memory gate reads;
+   - `build` also composes the installed modules (C2-4 §11): it copies each object
+     to `/stand/gen/1/mod/<module>` on the target, where the module core loads it
+     from, and writes its `module` and `param` records into the manifest;
    - `commit` writes the pristine generation;
-   - `check` is the post-write proof (status 1 means a problem was found).
+   - `check` is the post-write proof (status 1 means a problem was found); it
+     hashes the module copies too.
    Any non-zero status stops the install before anything is armed.
 5. lays the following on the target:
    - `/etc/default/bootset` (C2-4 §6: `bootset=auto`, `store=`, `store-id=`, the facts);
@@ -62,8 +79,31 @@ The installer:
      (`cat`, so `/usr/sbin/bcheckrc`, its hard link, follows), and only over the stock
      file; a changed one is left alone with a warning.
 
+   - no `/stand/unix` and no `/unix` (C2-4 v9 §12). Core leaves `/stand/unix` as a
+     hard link to `/stand/2.1_unix`, the 1992 kernel. `netstat`, `ifconfig` and
+     `crash` read their kernel addresses from it, and on a 1.1 disk it is never the
+     booted kernel. The name goes; `/stand/2.1_unix` stays, its `sum -r` checked;
+   - `/etc/rc2.d/S01kbnamelist`, the one line
+     `[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1`. It
+     sorts after `S01MOUNTFSYS` and before every other run-level-2 script, and
+     writes the booted generation's namelist to `/stand/unix` at every boot. The
+     installer cannot write it: where the kernel is bound is known only once it
+     has booted;
+   - `/etc/rc2.d/S99zen` when the z3660eth module is installed, on either line.
+     A profile whose interface is zen0 brings zen0 up at `FB_IP`. Otherwise zen0
+     comes up beside that interface at its own `FB_ZEN_IP` (`FB_ZEN_NETMASK`,
+     optional `FB_ZEN_GATEWAY`), or is left down when there is none. It never takes
+     `FB_IP`.
+
    It lays none of the 1.0 boot-chain pieces: `/stand/boot2.boot`, the framed
-   chain, `/stand/unix`, the RTO1 record or the reframe tools.
+   chain, the RTO1 record or the reframe tools.
+
+   The first boot then:
+   - takes `/stand/unix` out of core's contents: `/stand/2.1_unix` becomes its own
+     file, so `pkgchk core` stays quiet on both. It uses APKG's heirloom
+     `installf`/`removef` from `/tmp`; the stock ones take a bus error on the 68060;
+   - gives `/etc/inittab` back root, sys, 0664. modtools rewrote it by rename, and
+     the miniroot has no `chgrp`.
 
 apkg's exit status is checked as well. These stop the install unarmed:
 - a pending `/var/apkg/txn` before the kernel-space install;
@@ -117,7 +157,12 @@ etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
 etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc
+etc/conf/modreg.local.d/*
 ```
+
+`etc/conf/modreg.local.d` holds the administrator's module parameters (C3-5 §1).
+The restore also puts it on the new root before the store is composed, so the
+pristine generation takes them.
 
 `/sbin/bcheckrc` survives upgrades as a configuration file (P-29 class).
 - A stock copy (every 1.0 disk) is saved and comes back with `kbootset retry` in it.
