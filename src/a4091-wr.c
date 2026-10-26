@@ -38,6 +38,15 @@
  * bounced through a 16-aligned driver buffer (D42 "Bounce"); a4091_bytewrite_probe
  * (off by default) measures U77.
  *
+ * MODULE FORM (-DA4091_MODULE, with -DA4091_KVA on the k46 line): the same source
+ * is the root-class loadable module a4091 (amix-dlm contracts C4-1, C4-2, C4-5;
+ * the section at the end of this file).  The D42 seam is on for both lines and
+ * calls the DDI's dma_* names; every structure the chip reads (SCRIPTS, the DSA
+ * table, the ident/CDB/status/message buffers, the bounce) lives in one dma_alloc
+ * area instead of this object's .data; the per-card tables are indexed by the
+ * module's own board index c and sized 4.  Without the switch this file is the
+ * static driver, byte for byte.
+ *
  * Refs: reference/a4091-study.md (init recipe, SCRIPTS, DSA layout, done-detection),
  *       reference/a4091-software/siop.c + siop_script.ss (53C710 / ARCH_710).
  */
@@ -48,7 +57,38 @@
 #include	"sd.h"
 #ifdef	A4091_KVA
 #include	"sys/inline.h"		/* _spl7()/splx(): the bprobe windows */
+#endif
+#ifdef	A4091_MODULE			/* after inline.h, whose spl forms it keeps */
+#define	A4091_D42			/* the module calls the DDI's dma_* (C4-5) */
+#include	"sys/moddefs.h"		/* the ABI kit's wrapper (amix-dlm C3-1, C4-2) */
+#include	"sys/amixddi.h"		/* the kit's DDI: sd_register (C4-1) */
+#endif
+#if	defined(A4091_KVA) || defined(A4091_MODULE)
+#define	A4091_SEAM			/* the D42 seam: 040/060 static arm, module */
+#endif
+#ifdef	A4091_SEAM
 #include	"a4091_dmarec.h"	/* the D42 seam: record + prepare/complete */
+#endif
+
+/*
+ * Static vs module.  The static driver indexes its per-card tables by the sd
+ * card (cp->card) and sizes them SDCARDS; the module by its own board index c
+ * (handed to sd_register and back to a4091queue), sized 4 (C4-1 section 2.3).
+ * The static driver hands the chip its own .data by the kernel-.data identity;
+ * the module hands it the physical address of its dma_alloc area (C4-5 sec. 3).
+ */
+#ifdef	A4091_MODULE
+#define	A4091_NCARD	4
+#define	A4091_CARD	c
+#define	A4091_BUS(p)	(a4091_dapa + ((ulong)(p) - (ulong)a4091_da))
+#define	A4091_BUSP(p)	((uchar *)A4091_BUS(p))
+#define	A4091_BVA	dva
+#else
+#define	A4091_NCARD	SDCARDS
+#define	A4091_CARD	cp->card
+#define	A4091_BUS(p)	((ulong)(p))
+#define	A4091_BUSP(p)	p
+#define	A4091_BVA	dpa
 #endif
 
 #define	A4091_PROD	0x02020054	/* AutoConfig: Commodore(0x0202) product 0x54 */
@@ -99,7 +139,14 @@
 
 extern caddr_t	sptalloc();
 extern int	printf();
+#ifdef	A4091_MODULE
+/* the module records autocon()'s base per board in _load: sdcardbase() is sd's,
+ * not in the DDI, and sd's slots are not filled until its first open */
+long		a4091_mbase[A4091_NCARD];
+#define	sdcardbase(k)	((char *)a4091_mbase[(k)])
+#else
 extern char	*sdcardbase();		/* sd.c: phys base recorded for a card */
+#endif
 
 /*
  * Per-card register mappings, indexed by the sd-layer card number (cp->card).
@@ -108,9 +155,9 @@ extern char	*sdcardbase();		/* sd.c: phys base recorded for a card */
  * so an A4091 and an A4092/A4770 can be driven at the same time.  The RD/WR
  * macros and the SCRIPTS launch all work through the current-card view.
  */
-static volatile uchar	*acfg_tbl[SDCARDS];	/* board base page per card       */
-static volatile uchar	*siop_tbl[SDCARDS];	/* 53C710 register block per card */
-static long		phys_tbl[SDCARDS];	/* board phys base per card       */
+static volatile uchar	*acfg_tbl[A4091_NCARD];	/* board base page per card       */
+static volatile uchar	*siop_tbl[A4091_NCARD];	/* 53C710 register block per card */
+static long		phys_tbl[A4091_NCARD];	/* board phys base per card       */
 
 static volatile uchar	*acfg;		/* current card: board base page (AutoConfig regs) */
 static volatile uchar	*siop;		/* current card: 53C710 register block (read base)  */
@@ -172,7 +219,10 @@ static ulong inq_script[] = {		/* READ+WRITE: DATA phase dispatches on live bus 
  * Each {len,ptr} pair is 8 bytes; scsi_addr is a lone selector word at offset 0.
  * All longwords big-endian, pointers are bus addresses (identity).
  */
-static struct siop_ds {
+#ifndef	A4091_MODULE
+static
+#endif
+struct siop_ds {
 	ulong	scsi_addr;		/* 0x00  (1<<(16+target)) | (sxfer<<8) */
 	ulong	idlen;    uchar	*idbuf;		/* 0x04 ds_MsgOut (IDENTIFY) */
 	ulong	cmdlen;   uchar	*cmdbuf;	/* 0x0c ds_Cmd     (CDB)     */
@@ -183,13 +233,19 @@ static struct siop_ds {
 	ulong	synmsglen;uchar	*synmsgbuf;	/* 0x34 ds_SyncMsg           */
 	ulong	data1len; uchar	*data1buf;	/* 0x3c ds_Data1  (INQUIRY)  */
 	ulong	data2len; uchar	*data2buf;	/* 0x44 ds_Data2  (chain end)*/
-} ds;
+}
+#ifndef	A4091_MODULE			/* the module's are in its dma_alloc area */
+	ds
+#endif
+	;
 
+#ifndef	A4091_MODULE
 static uchar	ident_buf[4];
 static uchar	cdb_buf[12];
 static uchar	datain_buf[36];
 static uchar	status_buf[4];
 static uchar	msg_buf[8];
+#endif
 
 /* last-transaction diagnostics (data path goes straight to cp->addr now) */
 ulong	a4091_dsps;
@@ -208,10 +264,12 @@ uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 ulong	a4091_slow_poll = 1000000;
 ulong	a4091_maxpoll;
 
-#ifdef	A4091_KVA
+#ifdef	A4091_SEAM
 /*
  * ---------------------------------------------------------------------------
- * 040/060 driver-line arm.  Nothing below exists in the 030 build.
+ * 040/060 driver-line arm, and the module on both lines (the D42 seam).
+ * Nothing below exists in the static 030 build.  The board mapping (dev_kvmap,
+ * bprobe, a4091attach) is the 040/060 line's alone (A4091_KVA).
  * ---------------------------------------------------------------------------
  *
  * Provided by the port's relink, not by stock AMIX:
@@ -222,6 +280,7 @@ ulong	a4091_maxpoll;
  *   bprobe(addr, v)  -- one byte through u_nofault: v < 0 reads, else writes
  *                       the low byte of v; 0 = no fault, 1 = bus error caught.
  */
+#ifdef	A4091_KVA
 extern char	*dev_kvmap();
 extern void	dev_kvunmap();
 extern int	bprobe();
@@ -229,6 +288,7 @@ extern int	bprobe();
 #define	A4091_CM_NCS	0x40		/* noncacheable, serialised: control registers */
 #define	A4091_NOSLEEP	1		/* runs from the boot-time sd bus scan */
 #define	A4091_MAPLEN	0x1000		/* one page each: AutoConfig page, 53C710 page */
+#endif	/* A4091_KVA */
 
 /*
  * Patchable knobs (.data; poke the kernel image before boot, or /dev/kmem).
@@ -246,7 +306,7 @@ long	a4091_dma_off = 0;
  * The per-controller D42 record: owned by THIS object (D42 as amended), one per
  * sd card, filled in at attach.  Layout and field ownership: a4091_dmarec.h.
  */
-struct dma_rec	a4091_dmarec[SDCARDS];
+struct dma_rec	a4091_dmarec[A4091_NCARD];
 
 /*
  * Driver-side counters, kmem-readable, magic first ("A4K2"; "A4K1" had no bounce
@@ -270,7 +330,7 @@ struct a4091_kstat {
 	ulong	bw_rfault;		/* lanes whose byte READ faulted             */
 	ulong	bw_mismatch;		/* lanes read back different                 */
 	ulong	bw_refused;		/* attaches refused on a failed probe        */
-	ulong	bw_mask[SDCARDS];	/* per card, see above                       */
+	ulong	bw_mask[A4091_NCARD];	/* per card, see above                       */
 	ulong	bounce_n;		/* FROM_DEVICE transfers bounced (misaligned) */
 	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
 };
@@ -283,7 +343,7 @@ struct a4091_kstat	a4091_kstat = {
 #endif
 };
 
-static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
+static uchar	a4091_nobrd[A4091_NCARD];	/* "no board" latched: stay quiet after */
 
 /*
  * The bounce (docs/D42-CALL-SHAPE.md "Bounce").  A FROM_DEVICE range whose pa or
@@ -298,7 +358,46 @@ static uchar	a4091_nobrd[SDCARDS];	/* "no board" latched: stay quiet after */
 #define	A4091_BOUNCE_MAX	1024		/* GSIO's ceiling; sense is 16 */
 /* +16: room to start on a 16-byte line AND to round the service length up to
  * whole lines (<= 15 + 1024 bytes used). */
+#ifndef	A4091_MODULE
 static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
+#endif
+
+#ifdef	A4091_MODULE
+/*
+ * The module's chip-visible structures: one dma_alloc area (C4-5 section 3),
+ * 1328 bytes, every member at a 16-byte multiple from a 16-aligned base.  The
+ * names the queue path uses (ds, inq_script, the buffers, the bounce) are
+ * redefined onto it below, so the code is the static driver's; A4091_BUS()
+ * turns a member's kernel address into the physical one the chip is given.
+ * The SCRIPTS are position-independent (REL jumps, table-indirect moves): _load
+ * copies the template unchanged and DSP is the copy's physical address.
+ */
+struct a4091_dmaarea {
+	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x000, 184 */
+	struct siop_ds	d_ds;						/* 0x0b8, 76  */
+	uchar		d_ident[4];					/* 0x104      */
+	uchar		d_cdb[12];					/* 0x108      */
+	uchar		d_status[4];					/* 0x114      */
+	uchar		d_msg[8];					/* 0x118      */
+	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x120      */
+};
+
+struct a4091_dmaarea	*a4091_da;	/* kernel address, 0 until _load        */
+ulong			a4091_dapa;	/* its physical address (dma_alloc)     */
+static ulong		*a4091_tmpl = inq_script;	/* the template _load copies */
+
+#define	inq_script	(a4091_da->d_script)
+#define	ds		(a4091_da->d_ds)
+#define	ident_buf	(a4091_da->d_ident)
+#define	cdb_buf		(a4091_da->d_cdb)
+#define	status_buf	(a4091_da->d_status)
+#define	msg_buf		(a4091_da->d_msg)
+#define	a4091_bounce	(a4091_da->d_bounce)
+
+extern char	*dma_alloc();	/* (ulong len, ulong *pa)  C4-5 section 3 */
+extern void	dma_free();	/* (char *va, ulong len) */
+extern ulong	dma_addr();	/* (struct dma_rec *r, ulong pa)  C4-5 v3 */
+#endif	/* A4091_MODULE */
 
 #ifndef	A4091_D42
 /*
@@ -367,6 +466,7 @@ int	dir;
 	dma_complete( r, pa, len, dir);
 }
 
+#ifdef	A4091_KVA
 /*
  * One byte through bprobe's u_nofault pad.  u_nofault belongs to the u-area, and
  * interrupt code runs on the same u-area: an interrupt taking a legitimate fault
@@ -515,6 +615,7 @@ int	card;
 	return 0;
 }
 #endif	/* A4091_KVA */
+#endif	/* A4091_SEAM */
 
 /*
  * Map one card's two safe sub-regions (AutoConfig page + 53C710 window) into
@@ -530,7 +631,7 @@ int	card;
 {
 	long	base;
 
-	if (card < 0 || card >= SDCARDS)
+	if (card < 0 || card >= A4091_NCARD)
 		return ENXIO;
 
 #ifdef	A4091_KVA
@@ -544,8 +645,13 @@ int	card;
 #else
 	if (siop_tbl[card] == 0) {		/* first request for this card: map it */
 		base = (long)sdcardbase( card);
+#ifdef	A4091_MODULE
+		if (base == 0)
+			return ENXIO;		/* no fixed address in the module */
+#else
 		if (base == 0)
 			base = 0x40000000;	/* last-resort guard (A4091 phys base) */
+#endif
 		acfg_tbl[card] = (volatile uchar *)sptalloc( 1, PG_V, phystopfn( (paddr_t)base), 0);
 		siop_tbl[card] = (volatile uchar *)sptalloc( 1, PG_V, phystopfn( (paddr_t)base + SIOP_OFF), 0);
 		if (acfg_tbl[card] == 0 || siop_tbl[card] == 0) {
@@ -624,7 +730,7 @@ long	a4091_busreset = 1;
 ulong	a4091_busreset_n;
 ulong	a4091_busreset_to;
 ulong	a4091_rearm_n;
-static uchar	a4091_rstdone[SDCARDS];
+static uchar	a4091_rstdone[A4091_NCARD];
 
 static void
 a4091_lines( n)
@@ -689,20 +795,23 @@ struct sdcom	*cp;
 	ulong	dsps, poll;
 	uchar	istat, dstat, sstat0;
 	int	e, i, rc, target, cmdlen, recovered;
-#ifdef	A4091_KVA
+#ifdef	A4091_SEAM
 	int	dmadir, bounced;
 	ulong	dpa, dlen;
+#ifdef	A4091_MODULE
+	ulong	dva;			/* the bounce's kernel address (dpa: physical) */
+#endif
 #endif
 
-	if (e = a4091map( cp->card)) {
+	if (e = a4091map( A4091_CARD)) {
 		cp->status = 0xff; cp->okay = FALSE;
 		(*cp->intr)( cp);
 		return TRUE;
 	}
-	if (!a4091_rstdone[cp->card])
-		a4091_busreset_card( (int)cp->card);
+	if (!a4091_rstdone[A4091_CARD])
+		a4091_busreset_card( (int)A4091_CARD);
 
-#ifdef	A4091_KVA
+#ifdef	A4091_SEAM
 	/* The DMA target: the caller's buffer, or the bounce for a misaligned
 	 * FROM_DEVICE range.  TO_DEVICE never bounces (no op at complete, no edge). */
 	dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
@@ -719,7 +828,12 @@ struct sdcom	*cp;
 			(*cp->intr)( cp);
 			return TRUE;
 		}
+#ifdef	A4091_MODULE
+		dva = ((ulong)a4091_bounce + 15) & ~(ulong)15;
+		dpa = A4091_BUS(dva);
+#else
 		dpa = ((ulong)a4091_bounce + 15) & ~(ulong)15;
+#endif
 		/* Service length rounded UP to whole lines: both edges then sit on
 		 * our own aligned buffer, so edge_shared cannot count.  The SCSI
 		 * length (ds.data1len) stays the caller's.  Clear it first: the
@@ -731,7 +845,7 @@ struct sdcom	*cp;
 			uchar	*bz;
 			ulong	bi;
 
-			bz = (uchar *)dpa;
+			bz = (uchar *)A4091_BVA;
 			bi = 0;
 			while (bi < dlen) {
 				bz[bi] = 0;
@@ -758,32 +872,39 @@ struct sdcom	*cp;
 
 	/* DSA table -- command + data bound to the caller's sdcom */
 	ds.scsi_addr = (ulong)0x10000 << target;
-	ds.idlen = 1;        ds.idbuf     = ident_buf;
-	ds.cmdlen = cmdlen;  ds.cmdbuf    = cdb_buf;
-	ds.stslen = 1;       ds.stsbuf    = status_buf;
-	ds.msglen = 1;       ds.msgbuf    = &msg_buf[0];
-	ds.msginlen = 1;     ds.msginbuf  = &msg_buf[1];
-	ds.extmsglen = 1;    ds.extmsgbuf = &msg_buf[2];
-	ds.synmsglen = 1;    ds.synmsgbuf = &msg_buf[3];
-#ifdef	A4091_KVA
+	ds.idlen = 1;        ds.idbuf     = A4091_BUSP(ident_buf);
+	ds.cmdlen = cmdlen;  ds.cmdbuf    = A4091_BUSP(cdb_buf);
+	ds.stslen = 1;       ds.stsbuf    = A4091_BUSP(status_buf);
+	ds.msglen = 1;       ds.msgbuf    = A4091_BUSP(&msg_buf[0]);
+	ds.msginlen = 1;     ds.msginbuf  = A4091_BUSP(&msg_buf[1]);
+	ds.extmsglen = 1;    ds.extmsgbuf = A4091_BUSP(&msg_buf[2]);
+	ds.synmsglen = 1;    ds.synmsgbuf = A4091_BUSP(&msg_buf[3]);
+#ifdef	A4091_SEAM
 	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)dpa;	/* caller buf or bounce */
 #else
 	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)cp->addr;	/* DMA -> caller buf */
 #endif
 	ds.data2len = 0;     ds.data2buf  = 0;
 
-#ifdef	A4091_KVA
+#ifdef	A4091_SEAM
 	/* D42 prepare: after the DSA table is final, before the DSP write arms the
 	 * chip.  The recovery re-launch below moves no new segment: this covers it. */
-	a4091_dma_prepare( (int)cp->card, dpa, dlen, dmadir);
+	a4091_dma_prepare( (int)A4091_CARD, dpa, dlen, dmadir);
+#ifdef	A4091_MODULE
+	/* C4-5 version 3 section 2.3: arm with dma_addr(r, pa) -- dpa on k46, a
+	 * pool bounce on k30 when dpa is out of a Zorro master's reach.  The one
+	 * site: the 53C710 takes the data address only from the DSA table. */
+	if (dlen != 0)
+		ds.data1buf = (uchar *)dma_addr( &a4091_dmarec[A4091_CARD], dpa);
+#endif
 #endif
 
 	/* launch */
 	recovered = 0;
 	WR32( R_TEMP, 0);
 	WR8 ( R_SBCL, 0);
-	WR32( R_DSA, (ulong)&ds);
-	WR32( R_DSP, (ulong)inq_script);
+	WR32( R_DSA, A4091_BUS(&ds));
+	WR32( R_DSP, A4091_BUS(inq_script));
 
 	/* bounded-poll completion -- spin on ISTAT until SIP|DIP or the bound.
 	 * cc-safe while-form (bound in a local, poll = poll + 1; NOT for/++/helper):
@@ -876,7 +997,7 @@ struct sdcom	*cp;
 		 * chip requires; DSA still points at ds, so no re-init.  Writing DSP
 		 * starts SCRIPTS (DMODE MAN=0).
 		 */
-		WR32( R_DSP, (ulong)inq_script + SCRIPT_DISPATCH);
+		WR32( R_DSP, A4091_BUS(inq_script) + SCRIPT_DISPATCH);
 
 		/* (c) re-poll for the resumed completion (same bounded cc-safe form) */
 		{
@@ -955,11 +1076,11 @@ struct sdcom	*cp;
 	 * command clears the bus first.  Read before the quiesce below.
 	 */
 	if (rc == -2 || (rc == -3 && (RD8(R_SBCL) & SBCL_BSY))) {
-		a4091_rstdone[cp->card] = 0;
+		a4091_rstdone[A4091_CARD] = 0;
 		a4091_rearm_n++;
 	}
 
-#ifdef	A4091_KVA
+#ifdef	A4091_SEAM
 	/*
 	 * D42 complete: the chip must have stopped touching the segment first.  On
 	 * the poll bound (rc -2) SCRIPTS may still be running -- quiesce it (abort +
@@ -969,14 +1090,14 @@ struct sdcom	*cp;
 	 */
 	if (rc == -2) {
 		a4091init();
-		a4091_dmarec[cp->card].drv_quiesce++;
+		a4091_dmarec[A4091_CARD].drv_quiesce++;
 	}
-	a4091_dma_complete( (int)cp->card, dpa, dlen, dmadir);
+	a4091_dma_complete( (int)A4091_CARD, dpa, dlen, dmadir);
 	if (bounced) {			/* after complete, before the callback */
 		uchar	*bs, *bd;
 		ulong	bn;
 
-		bs = (uchar *)dpa;
+		bs = (uchar *)A4091_BVA;
 		bd = (uchar *)cp->addr;
 		bn = 0;
 		while (bn < (ulong)cp->nbyte) {
@@ -992,7 +1113,142 @@ struct sdcom	*cp;
 	return TRUE;
 }
 
+#ifndef	A4091_MODULE
 void
 a4091intr()
 {
 }
+#endif
+
+#ifdef	A4091_MODULE
+/* ----------------------------------------------------------------------------
+ * The root-class module form (amix-dlm docs/contracts C4-2 version 3 section 8,
+ * C4-1 version 2, C4-5 version 2).  Built with -DA4091_MODULE once per kernel
+ * line, -DA4091_KVA on k46; module/Master gives the .moddata keys: class=root,
+ * match=zorro:0202:54,zorro:c0de:01,zorro:c0de:02, rank=zorro, unload=never,
+ * no majors (sd owns the disk majors).
+ *
+ * _load runs in marc_root: process 0, before the root is mounted, at LEVEL 7
+ * WITH THE CLOCK STOPPED (C4-2 section 2).  There it takes the dma_alloc area
+ * and copies the SCRIPTS into it, then asks autocon() for every A4091, A4092
+ * and A4770 (four boards at most), maps each board polled (k46: dev_kvmap NCS
+ * and a first-touch bprobe of ISTAT; k30: sptalloc, as the static drivers do),
+ * fills its D42 record (k46: a4091attach; k30: below) and registers it with
+ * sd_register(a4091queue, k, base, name, rank zorro).  It sleeps on nothing:
+ * every poll is bounded by a read count, and the once-per-card bus reset at
+ * the first command is timed by the beam counter, not by lbolt or a timeout.
+ *
+ * Interrupts: none in v1 (C4-2 version 2 section 8).  The driver is
+ * synchronous and polled, as the static one; root_defer() is not called.
+ *
+ * Returns 0 linked; ENXIO, silently, when autocon() finds no board (boot2 places
+ * the module only on a match key, so that is a board the kernel does not see);
+ * ENXIO with a console line per board when every board found failed to map;
+ * ENOMEM when dma_alloc has no area; or sd_register()'s errno, which the core
+ * prints.  A board that does not map is skipped and the others are registered.
+ * ------------------------------------------------------------------------- */
+
+#define	A4091_RANK	2	/* C4-1 section 4: class 2 zorro = .moddata rank=zorro */
+#define	A4091_NPROD	3
+
+extern int	sd_register();	/* (bool (*)(), uint, char *, char *, uint) */
+extern int	autocon();	/* (long prod, int index, long *base, long *size) */
+extern void	bcopy();
+
+static long	a4091_prod[A4091_NPROD] = { 0x02020054, 0xc0de0001, 0xc0de0002 };
+static char	*a4091_name[A4091_NPROD] = { "A4091 SCSI", "A4092 SCSI", "A4770 SCSI" };
+
+void		a4091_halt();
+int		a4091_nboards;	/* kmem-readable: boards registered                */
+ulong		a4091_halted;	/* kmem-readable: the halt pass ran (count)        */
+
+int
+a4091_load( params)
+char	*params;
+{
+	int	p, n, k, e;
+	long	base, size;
+	ulong	pa;
+#ifndef	A4091_KVA
+	struct dma_rec	*r;
+#endif
+
+	a4091_da = (struct a4091_dmaarea *)dma_alloc(
+	    (ulong)sizeof (struct a4091_dmaarea), &pa);
+	if (a4091_da == 0) {
+		printf( "a4091: no DMA memory for %d bytes\n",
+		    (int)sizeof (struct a4091_dmaarea));
+		return ENOMEM;
+	}
+	a4091_dapa = pa;
+	bcopy( (char *)a4091_tmpl, (char *)a4091_da->d_script,
+	    sizeof a4091_da->d_script);
+
+	k = 0;
+	for (p = 0; p < A4091_NPROD; ++p) {
+		for (n = 0; k < A4091_NCARD; ++n) {
+			if (!autocon( a4091_prod[p], n, &base, &size))
+				break;
+			a4091_mbase[k] = base;
+#ifdef	A4091_KVA
+			a4091_nobrd[k] = 0;	/* a4091attach latches a failed slot */
+#endif
+			if (a4091map( k) != 0) {	/* says why on the console */
+				a4091_mbase[k] = 0;
+				continue;
+			}
+#ifndef	A4091_KVA
+			r = &a4091_dmarec[k];	/* a4091attach does this on k46 */
+			r->magic   = DMA_REC_MAGIC;
+			r->version = DMA_REC_VERSION;
+			r->ctlid   = A4091_PROD;
+			r->unit    = (ulong)k;
+			r->off     = (ulong)a4091_dma_off;
+#endif
+			e = sd_register( a4091queue, (uint)k, (char *)base,
+			    a4091_name[p], A4091_RANK);
+			if (e) {	/* the core undoes the earlier registrations */
+				printf( "a4091: sd_register failed (errno %d)\n", e);
+				a4091_halt();
+				dma_free( (char *)a4091_da,
+				    (ulong)sizeof (struct a4091_dmaarea));
+				a4091_da = 0;
+				return e;
+			}
+			k++;
+		}
+	}
+	a4091_nboards = k;
+	if (k == 0) {
+		dma_free( (char *)a4091_da, (ulong)sizeof (struct a4091_dmaarea));
+		a4091_da = 0;
+		return ENXIO;		/* silent with no board; else each said why */
+	}
+	return 0;
+}
+
+/*
+ * _halt (C4-2 section 5): stop SCRIPTS on every mapped board -- the init path's
+ * abort and soft reset, which also leaves SIEN/DIEN at 0.  The driver runs one
+ * command to completion inside a4091queue, so from the halt pass there is
+ * normally nothing to stop; the reset makes sure the chip touches no memory
+ * after the kernel has gone.
+ */
+void
+a4091_halt()
+{
+	int	k;
+
+	a4091_halted++;
+	for (k = 0; k < A4091_NCARD; ++k) {
+		if (siop_tbl[k] == 0)
+			continue;
+		siop = siop_tbl[k];
+		a4091init();
+	}
+}
+
+/* no _unload: unload=never, a root-class module is pinned (C4-2 section 1) */
+MOD_HDRV_WRAPPER(a4091, a4091_load, 0, a4091_halt,
+		"A4091/A4092/A4770 SCSI (NCR 53C710)");
+#endif	/* A4091_MODULE */
