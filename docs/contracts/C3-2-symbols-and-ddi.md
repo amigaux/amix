@@ -1,8 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, draft
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 1
 
-- **Status:** draft for agreement, 2026-10-26. The DDI list (§3) goes to
-  Antti for review before the ABI kit is frozen (OQ-20.4, D-3 §8).
-  Nothing builds against it until the orchestrator agrees it.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) goes to Antti for review through the owner (OQ-20.4, D-3 §8); names his review adds or removes before the kit freezes change the minor, not this version.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -76,8 +74,8 @@ Context means where the function may be called.
 - `no-sleep`: never sleeps, safe at any spl.
 
 The "Today" column names the provider:
-- **stock**: in the 1.0 kernels, to be confirmed for each name by M-REG1
-  (S3-40);
+- **stock**: defined in all ten kernels of record (S3-40,
+  `docs/measurements/2026-10-26-m-reg1-m-abi1.md` §3);
 - **core**: the core pass links its own provider, because a kernel lacks
   it (20 §4.1).
 
@@ -91,18 +89,18 @@ The second column marks names one of today's two drivers imports
 | panic state | `panicstr` (data, read-only) | z3660eth | any | stock |
 | kernel memory | `kmem_alloc`, `kmem_zalloc`, `kmem_free` | — | proc with `KM_SLEEP`; no-sleep with `KM_NOSLEEP` | stock |
 | large memory | `sptalloc`, `sptfree` | z3660eth | proc | stock |
-| DMA memory | `dma_alloc`, `dma_free`, `vtop`; on k46 also `dma_prepare`, `dma_complete`, `dev_kvmap`, `dev_kvunmap` | — | proc | core where missing |
+| DMA memory | `dma_alloc`, `dma_free`, `vtop`; on k46 also `dma_prepare`, `dma_complete`, `dev_kvmap`, `dev_kvunmap` | — | proc | `vtop` stock; `dma_alloc`, `dma_free`, `dma_prepare`, `dma_complete` core; `dev_kvmap`/`dev_kvunmap` stock in the A families, core in KD060-Z and K060 |
 | copy, string | `bcopy`, `bzero`, `bcmp`, `memcpy`, `strlen`, `strcmp`, `strncmp`, `copyin`, `copyout`, `uiomove` | `bcopy`, `bzero`, `bcmp`, `memcpy`, `copyin`, `copyout`, `uiomove` | `copyin`/`copyout`/`uiomove`: proc; the rest any | stock |
 | sleep, timers | `sleep`, `wakeup`, `timeout`, `untimeout`, `lbolt` (data, read-only) | `timeout`, `untimeout` | `sleep`: proc; the rest any | stock |
-| privilege, devices | `suser`, `drv_priv`, `getmajor`, `getminor`, `makedevice` | `getmajor`, `getminor`, `makedevice` | proc for the first two; the rest any | stock (`drv_priv`: to confirm) |
+| privilege, devices | `suser`, `drv_priv`, `getmajor`, `getminor`, `makedevice` | `getmajor`, `getminor`, `makedevice` | proc for the first two; the rest any | stock |
 | autoconfig | `autocon`, `bprobe` | `autocon` | proc | stock |
 | interrupt level | `spl0`…`spl7`, `splx` as functions | — | any | core |
 | interrupts | `intr_attach`, `intr_detach` | — | proc | core (S3-09) |
 | STREAMS | `allocb`, `freemsg`, `freeb`, `dupmsg`, `copymsg`, `linkb`, `unlinkb`, `msgdsize`, `putq`, `getq`, `putbq`, `putnext`, `qreply`, `canput`, `flushq`, `OTHERQ`, `RD`, `WR` | all but `freeb`, `dupmsg`, `copymsg`, `linkb`, `msgdsize` | any, except where the STREAMS rules say otherwise | stock |
 | network attachment | `if_attach`, `if_detach` | — | proc | core |
 | console hook | `cons_hook_set`, `cons_hook_clear` | — | proc | core |
-| libgcc | `__udivdi3`, `__umoddi3`, `__lshrdi3` | — | any | core |
-| identity | `bootinfo`, `cputype` (data, read-only) | `bootinfo` | any | stock |
+| libgcc | `__udivdi3`, `__umoddi3`, `__lshrdi3` | — | any | stock on k30, core on k46 |
+| identity | `bootinfo`, `cputype` (data, read-only) | `bootinfo` | any | stock; `cputype` core on k30 |
 
 **Never in the DDI tier** (20 §4.1): the switch tables and vectors
 (`cdevsw`, `bdevsw`, `vfssw`, `int2_tbl`), `conputc` and `ifstats`. Today
@@ -126,7 +124,7 @@ others, 20 §4.1). Only a module with `tier=core` and the kernel's `build`
 (C3-1) may resolve against it. The list is written when the filesystems are
 carved (M-FS1).
 
-## 5. Settled at agreement (to confirm)
+## 5. Settled at agreement
 
 - Values as relocations, the block generated before the final link from
   the allowlist, `KSYM_VERSION` 2, the tier in `st_other`.

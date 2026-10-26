@@ -1,7 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar, version 5 of C2-3, draft
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 1
 
-- **Status:** draft for agreement, 2026-10-26. On agreement, §3 becomes
-  version 5 of C2-3 (the sidecar) and the identity record is new.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -115,7 +114,7 @@ tag does not. An added symbol raises the minor. A changed size or offset,
 or a removed symbol, raises the major. The kit keeps the text of the last
 fingerprint per tag, so the failure names what moved.
 
-## 5. Settled at agreement (to confirm)
+## 5. Settled at agreement
 
 - `AXK1` as above, with no addresses in it; its check holds in the file and
   in memory.

@@ -1,7 +1,6 @@
-# C3-4 — the arena directory `AXA1` and the manifest copy, draft
+# C3-4 — the arena directory `AXA1` and the manifest copy, version 1
 
-- **Status:** draft for agreement, 2026-10-26. Nothing builds against it
-  until the orchestrator agrees it.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.3, §6;
   `30-module-core.md` §2 patches 2, 16 and 17, §3
 - **Written by:** boot2, loader version 2 (S3-15)
@@ -91,7 +90,7 @@ needed and the available bytes.
 Stage 4 adds the entries and the module bytes without changing this
 layout.
 
-## 5. Settled at agreement (to confirm)
+## 5. Settled at agreement
 
 - The header and entry layouts, the 16-byte absolute alignment of module
   bytes, and the parameter-string form.

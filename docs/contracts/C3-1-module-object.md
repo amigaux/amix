@@ -1,8 +1,6 @@
-# C3-1 — the module object and `.moddata` version 2, draft
+# C3-1 — the module object and `.moddata` version 2, version 1
 
-- **Status:** draft for agreement, 2026-10-26. Nothing builds against it
-  until the orchestrator agrees it; from then a change is a contract change
-  with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
 - **Produced by:** the ABI kit's `mkmod` and `modfix` (S3-10), used by the
@@ -124,7 +122,7 @@ where one fits.
 | `name` longer than 14 | `ENAMETOOLONG` |
 | not a member of the booted manifest, or a SHA-256 other than the manifest's, without development load (C3-4, 30 §2 patch 17) | `EPERM` |
 
-## 5. Settled at agreement (to confirm)
+## 5. Settled at agreement
 
 - Wrapper revision 2, the `MD2\0` marker, and the key table above,
   including the two additions `tier` and `build`.
