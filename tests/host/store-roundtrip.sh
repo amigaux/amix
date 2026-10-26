@@ -127,7 +127,7 @@ sed -e 's/^generation 12/generation 14/' -e 's/^state pristine/state good/' $T/g
 $B/mkstore -o $W/try.img -s 8388608 -1 $T/boot1.img -2 $T/boot2.bin -d 12 $W/g12.spec $W/g13.spec >/dev/null
 $B/axsim $W/try.img 0 2 > $W/try.out
 grep -q "generation 13, kernel" $W/try.out
-grep -q "L8 trial generation did not reach multi-user (generation 13)" $W/try.out
+grep -q "L8 trial not confirmed (generation 13)" $W/try.out
 $B/lsstore $W/try.img | grep -q "generation 13 (bad, 1 attempt(s))"
 $B/mkstore -o $W/one.img -s 8388608 -1 $T/boot1.img -2 $T/boot2.bin -d 14 -n 12 $W/g12.spec $W/g14.spec >/dev/null
 $B/lsstore $W/one.img | grep -q "one-shot 2 (generation 12)"

@@ -146,9 +146,9 @@ out(const char *line)
 		wanted = (int)v;
 		step = 1;
 		nextat = frames + 60;
-	} else if (strstr(line, "that is volume")) {
+	} else if (strstr(line, ", not ")) {
 		refused_vol++;
-	} else if (strstr(line, "not part of this boot set")) {
+	} else if (strstr(line, "not of this boot set")) {
 		refused_set++;
 	}
 }

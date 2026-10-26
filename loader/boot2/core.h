@@ -35,6 +35,7 @@ extern ax_u32 *ax_crctab;
 extern ax_u32 core_cpu;
 
 void fail(int code, ax_u32 gen);
+extern const char l4_nomem[];	/* "L4 no memory" */
 /* allocate the working state, init CRC, probe the CPU; 0 or -1 */
 int core_init(void);
 /* boot from the control block c; returns only on failure */

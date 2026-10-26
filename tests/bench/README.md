@@ -106,7 +106,7 @@ the rig's US keymap.
 | M2 rollback key | `25 type p` | no menu; `amix-boot: generation 1, kernel` |
 | M3 mouse | `25 mouse L`, `27 mouse -`, `28 mouse L`, `28.5 mouse -`, `30 mouse L`, `33 mouse -` | the menu; one redraw with `>1  generation 1` (click = next entry); `amix-boot: generation 1, kernel` once the 2 s hold ends |
 | M4 toggles | `25 type x`, `27 type s`, `28 type d`, `30 tap return` | redraws with `safe mode: on`, then `development load: on`; `amix-boot: generation 2, kernel`, then `amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot` and `amix-boot: safe mode` |
-| M5 r key | `25 type x`, `27 type r`, `29 tap return` | `amix-boot: returning to Kickstart would only reset the machine; reset by hand`; then generation 2 boots |
+| M5 r key | `25 type x`, `27 type r`, `29 tap return` | `amix-boot: no return to Kickstart: reset by hand`; then generation 2 boots |
 | M6 serial input | `x`, `1` and CR sent to the serial port at 25, 27 and 29 s | as M1 |
 
 The key that opens the menu (`x` here) only opens it, and the hold that opens it never
@@ -177,7 +177,7 @@ sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261
 | 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
 | 4 | `kbootset next previous` | boots 1; then `the next boot only is changed` |
 | 5 | `kbootset mark-bad 2; kbootset commit --spec bad.spec` (below) | boots 2, once, the one-shot; then `marked bad and collected`, then `generation 3 committed …` |
-| 6 | — | boots 3, the trial. It cannot mount its root (`PANIC: vfs_mountroot: cannot mount root`), so it never reaches mark-good. The kernel reboots by itself after the panic, and in the same boot: `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots to login. The rig's login watch waits longer here |
+| 6 | — | boots 3, the trial. It cannot mount its root (`PANIC: vfs_mountroot: cannot mount root`), so it never reaches mark-good. The kernel reboots by itself after the panic, and in the same boot: `amix-boot: L8 trial not confirmed (generation 3)`, then generation 1 boots to login. The rig's login watch waits longer here |
 | 7 | `kbootset status` | generation 1 boots; status shows default 1, no trial, 3 as bad with 1 attempt (or already collected) |
 
 `bad.spec` names the line's own installed kernel, with a root on a SCSI
@@ -564,8 +564,8 @@ gate refuses until then.
 | Boot | Commands | Expected |
 |---|---|---|
 | 1 | copy the tree; `kbootset build`; `kbootset commit --spec <outdir>/l9.spec` | build: `gate 7 (loader): the installed loader is version 1, the kernel needs 2: run kbootset loader-install first`, exit status 4; then `generation 2 committed …` (`--spec` runs no gates) |
-| 2 | `kbootset status` | `amix-boot 1: …`; `amix-boot: L9 generation needs a newer loader (generation 2)`; then `amix-boot: generation 1, kernel …` in the same boot. Status: generation 2 `trial`, 1 attempt: the attempt is spent before boot2 reads the generation (10 §7.2), and the L9 line is the reason of record |
-| 3 | — | `amix-boot: L8 trial generation did not reach multi-user (generation 2)`, generation 2 marked bad, generation 1 boots (10 §7.2) |
+| 2 | `kbootset status` | `amix-boot 1: …`; `amix-boot: L9 loader too old (generation 2)`; then `amix-boot: generation 1, kernel …` in the same boot. Status: generation 2 `trial`, 1 attempt: the attempt is spent before boot2 reads the generation (10 §7.2), and the L9 line is the reason of record |
+| 3 | — | `amix-boot: L8 trial not confirmed (generation 2)`, generation 2 marked bad, generation 1 boots (10 §7.2) |
 
 ### S3-B3 — loader version 1, the core finds no arena
 
@@ -908,13 +908,13 @@ there, the row runs on k30 only, and the report says so. After the row,
 
 | Commands | Expected |
 |---|---|
-| copy `l14.spec`; `kbootset commit --spec l14.spec` (on k46, if the store refuses it for space: `kbootset mark-bad A`, `kbootset collect`, commit again); power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 kernel identity does not match the manifest (generation N)`; the default generation, B, boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
+| copy `l14.spec`; `kbootset commit --spec l14.spec` (on k46, if the store refuses it for space: `kbootset mark-bad A`, `kbootset collect`, commit again); power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 identity mismatch (generation N)`; the default generation, B, boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
 
 ### S3-43-6 — L5 (boot 6, last: it replaces the store)
 
 | Commands | Expected |
 |---|---|
-| on the host, write `l5.img` over a slot copy's boot slice (the campaign's last, or a fresh copy: the image replaces the whole store); boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
+| on the host, write `l5.img` over a slot copy's boot slice (the campaign's last, or a fresh copy: the image replaces the whole store); boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
 
 L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
 the order boots, with no menu. That fallback is the line of record.
@@ -930,7 +930,7 @@ bytes, loader version 2) counts only memory below 0x40000000 (10 §3).
 | Commands | Expected |
 |---|---|
 | the slot copy with the fixed boot2 installed (`kbootset loader-install /tmp/boot2.bin --version 2`, accepted at the next boot), the emulator with `+z3=128` beside the CPU board's fast memory; boot | `amix-boot: kernel bound at <an address below 0x40000000: the CPU board's region>`, the banner, multi-user. kinfo's fast memory (`kbootset status`) is the bind region alone (k46 with a 32 MB mbres bank: 33 554 400 bytes; k30 in its 64 MB a3000 bank: 67 108 832): Zorro III RAM beside is never kernel memory on either line (10 §3) |
-| the same with the Zorro III board as the only fast memory, if the emulator allows it | `amix-boot: no fast memory below 0x40000000 to run the kernel in`, `amix-boot: L4 not enough memory (generation N)`; the next generation in the order, or the menu |
+| the same with the Zorro III board as the only fast memory, if the emulator allows it | `amix-boot: no fast memory below 0x40000000 to run the kernel in`, `amix-boot: L4 no memory (generation N)`; the next generation in the order, or the menu |
 
 ### S3-43-9 — k30 in a region over 64 MB
 

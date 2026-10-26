@@ -67,7 +67,7 @@ writes the arena, when the manifest has an `ident` record:
 - arena offset and capacity equal to the manifest's `arena` line.
 
 On any mismatch boot2 refuses the generation:
-`amix-boot: L14 kernel identity does not match the manifest`, then as L2
+`amix-boot: L14 identity mismatch`, then as L2
 (the next candidate in the order of 10 §7.2). That is a new code; 10 §9's
 table gains it at agreement. A manifest without
 `ident` and `arena` (a static kernel, stages 1 and 2) skips the check,

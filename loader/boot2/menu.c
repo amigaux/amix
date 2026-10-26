@@ -60,7 +60,7 @@ draw(const struct ax_ctl *c, int sel, int safe, int devload, ax_u32 cpu)
 	}
 	con_printf("  s  safe mode: %s   d  development load: %s   p  previous good\n",
 		   safe ? "on" : "off", devload ? "on" : "off");
-	con_puts("  digit: choose   Return: boot   left mouse: next, hold 2 s: boot\n");
+	con_puts("  digit, Return, mouse\n");	/* the keys: 10 section 7.4 */
 }
 
 /* the newest good generation other than the default, or 0 (the same rule
@@ -115,7 +115,7 @@ menu_run(const struct ax_ctl *c, ax_u32 first, ax_u32 cpu, int *safe, int *devlo
 			*devload = !*devload;
 			draw(c, sel, *safe, *devload, cpu);
 		} else if (ch == 'r' || ch == 'R') {
-			con_say("returning to Kickstart would only reset the machine; reset by hand\n");
+			con_say("no return to Kickstart: reset by hand\n");
 		} else if (ch == '\r' || ch == '\n') {
 			return c->gen[sel].id;
 		}

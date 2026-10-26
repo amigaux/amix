@@ -48,26 +48,35 @@ static ax_u32 gen, vaddr;
 static int k30;			/* the generation is for the k30 line */
 static struct ax_bootdata bd;
 
-static const char *const lmsg[] = { "",
-	"L1 generation is for the other CPU line",
-	"L2 manifest missing or damaged",
-	"L3 member damaged",
-	"L4 not enough memory",
-	"L5 module arena overflow",
-	"L6 relocation failed",
-	"L7",				/* retired: the core matches (C4-4 v3) */
-	"L8 trial generation did not reach multi-user",
-	"L9 generation needs a newer loader",
-	"L10 control block write failed",
-	"L11 volume needed",
-	"L12 path not found",
-	"L13 read error",
-	"L14 kernel identity does not match the manifest" };
+/* the L codes' lines, packed: entry n follows the n-th NUL; each at most
+ * 20 characters after its code, 10 section 9 gives the meaning */
+static const char lmsg[] = "\0"
+	"L1 wrong CPU line\0"
+	"L2 manifest damaged\0"
+	"L3 member damaged\0"
+	"L4 no memory\0"
+	"L5 arena overflow\0"
+	"L6 relocation failed\0"
+	"L7\0"				/* retired: the core matches (C4-4 v3) */
+	"L8 trial not confirmed\0"
+	"L9 loader too old\0"
+	"L10 control write failed\0"
+	"L11 volume needed\0"
+	"L12 path not found\0"
+	"L13 read error\0"
+	"L14 identity mismatch";
+
+const char l4_nomem[] = "L4 no memory\n";	/* core.c and main.c */
 
 void
 fail(int code, ax_u32 id)
 {
-	con_say("%s (generation %u)\n", lmsg[code], id);
+	const char *p = lmsg;
+
+	while (code)
+		if (!*p++)
+			code--;
+	con_say("%s (generation %u)\n", p, id);
 }
 
 int
@@ -75,7 +84,7 @@ core_init(void)
 {
 	w = x_allocmem(sizeof(*w), MEMF_PUBLIC | MEMF_CLEAR);
 	if (!w) {
-		con_say("L4 no memory\n");
+		con_say(l4_nomem);
 		return -1;
 	}
 	ax_crc32_init(crctab);
@@ -225,6 +234,8 @@ placed(const struct ax_member *mb, int safe)
 	return mb->cls == AXC_ROOT && (!safe || mb->safe);
 }
 
+static const char needs[] = "the %s needs %u bytes, it has %u\n";
+
 static int
 arena_fill(int safe)
 {
@@ -246,7 +257,7 @@ arena_fill(int safe)
 		n += placed(&man.mod[i], safe);
 	off = 32 + 48 * n;
 	if (off + g->man_len > man.arena_cap) {
-		con_say("the arena needs %u bytes, it has %u\n", off + g->man_len, man.arena_cap);
+		con_say(needs, "arena", off + g->man_len, man.arena_cap);
 		return 5;
 	}
 	x_memset(a, 0, off);
@@ -260,8 +271,7 @@ arena_fill(int safe)
 			continue;
 		off = (off + 15) & ~15UL;
 		if (off + ((mb->size + 15) & ~15UL) + mb->bss > man.arena_cap) {
-			con_say("the arena needs %u bytes, it has %u\n",
-				off + mb->size + mb->bss, man.arena_cap);
+			con_say(needs, "arena", off + mb->size + mb->bss, man.arena_cap);
 			return 5;
 		}
 		con_say("module %s %u bytes\n", mb->name, mb->size);
@@ -353,7 +363,7 @@ load_first(const struct ax_sel *sel)
 			if (rc > 0)
 				fail(rc, gen);
 		} else if (rc == AXR_OK) {
-			con_say("the kernel needs %u bytes, the region has %u\n", bd.end - vaddr, room);
+			con_say(needs, "kernel", bd.end - vaddr, room);
 			fail(4, gen);
 		} else
 			con_say("L6 relocation failed: error %d, section %u record %u type %u\n",

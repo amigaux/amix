@@ -132,9 +132,9 @@ want_volume(ax_u32 vol)
 			continue;		/* no change counter: said already */
 		said = verdict;
 		if ((verdict & 0xFF) == 3)
-			con_say("that is volume %u; insert volume %u\n", (ax_u32)h.volume, vol);
+			con_say("volume %u, not %u\n", (ax_u32)h.volume, vol);
 		else
-			con_say("that disk is not part of this boot set\n");
+			con_say("not of this boot set\n");
 	}
 	x_freemem(blk, 2048);
 	curvol = vol;
@@ -331,7 +331,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	curvol = hdr.volume;
 	cb = x_allocmem(2 * 2048, MEMF_PUBLIC);
 	if (!cb) {
-		con_say("L4 no memory\n");
+		con_say(l4_nomem);
 		return -1;
 	}
 	if (io(CMD_READ, hdr.ctl_off[0], cb, 2048) != 0)

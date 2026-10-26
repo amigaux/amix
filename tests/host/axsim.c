@@ -87,7 +87,7 @@ main(int argc, char **argv)
 		}
 		ax_select(&c, (h.flags & AXF_READONLY) != 0, &s);
 		if (s.failed_trial)
-			printf("  amix-boot: L8 trial generation did not reach multi-user (generation %lu)\n",
+			printf("  amix-boot: L8 trial not confirmed (generation %lu)\n",
 			       (unsigned long)s.failed_trial);
 		if (s.write) {
 			ax_select_apply(&c, &s, &nc);

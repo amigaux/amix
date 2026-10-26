@@ -604,7 +604,7 @@ itself must still fall back on the next boot. So a trial boot2 refuses
 keeps `trial`, attempt 1, for the rest of that boot (`kbootset status`
 shows `trial`, 1 attempt), and the next boot marks it `bad` with L8. The
 refusal line of the boot that spent it says why (for example
-`amix-boot: L9 generation needs a newer loader (generation 2)`), and that
+`amix-boot: L9 loader too old (generation 2)`), and that
 line, not L8's wording, is the reason of record. In normal use kbootset's
 gates keep such a generation out of the store (gate 7 for L9, gate 10 for
 L1); only `kbootset commit --spec`, which runs no gates, can put one there.
