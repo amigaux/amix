@@ -110,10 +110,12 @@
 # key twice (param aside), a name= other than the file name, a kabi= not
 # k30|k46.<major>.<minor> or no single-token cc=; a package that is not pure
 # files (40 section 6: only f/d of class none, no install scripts; a module
-# package may also carry its driver's device nodes, C3-5 v4 section 1.2:
+# package may also carry its driver's device nodes, C3-5 v8 section 1.2:
 # "c none /dev/<node> <major> <minor> <mode> <owner> <group>", as apkg
-# 0.3.2's ds_pure_files() accepts them; a c entry in a kernel or loader
-# package, a b/p/other entry, a node outside /dev/ is still refused).
+# 0.3.2's ds_pure_files() accepts them, and a block driver's nodes
+# "b none /dev/dsk/<node> ..." alike, as apkg's next revision does; a c or
+# b entry in a kernel or loader package, a p/s/l/other entry, a c node
+# outside /dev/ or a b node outside /dev/dsk/ is still refused).
 # The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
 #
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
@@ -471,14 +473,19 @@ OCTAL_RE = re.compile(r"^[0-7]+$")
 
 
 def cdev_problem(parts):
-    """C3-5 v4 section 1.2: None when a module's pkgmap c entry is
-    "<part> c none /dev/<node> <major> <minor> <mode> <owner> <group>"
+    """C3-5 v8 section 1.2: None when a module's pkgmap device entry is
+    "<part> c none /dev/<node> <major> <minor> <mode> <owner> <group>" or
+    "<part> b none /dev/dsk/<node> <major> <minor> <mode> <owner> <group>"
     (decimal major/minor, octal mode); else why not, in apkg's words."""
     if len(parts) < 4:
         return "unreadable pkgmap line %r" % " ".join(parts)
     if parts[2] != "none":
         return "an object in class %s" % parts[2]
-    if not parts[3].startswith("/dev/") or parts[3] == "/dev/":
+    if parts[1] == "b":
+        if (not parts[3].startswith("/dev/dsk/")
+                or parts[3] == "/dev/dsk/"):
+            return "a block device node outside /dev/dsk/: %s" % parts[3]
+    elif not parts[3].startswith("/dev/") or parts[3] == "/dev/":
         return "a device node outside /dev/: %s" % parts[3]
     if (len(parts) != 9 or not DIGITS_RE.match(parts[4])
             or not DIGITS_RE.match(parts[5]) or not OCTAL_RE.match(parts[6])):
@@ -491,7 +498,7 @@ def pure_files_problem(pkgmap_text, role=None):
     """40 section 6: None when the pkgmap holds only f/d objects of class
     none, i entries pkginfo/depend/copyright only, and at least one f --
     the rule apkg's ds_pure_files() applies on the box; else why not.
-    role "module" also allows its device nodes (cdev_problem())."""
+    role "module" also allows its device nodes, c and b (cdev_problem())."""
     nf = 0
     for line in pkgmap_text.splitlines():
         parts = line.split()
@@ -507,7 +514,7 @@ def pure_files_problem(pkgmap_text, role=None):
             if parts[2] != "none":
                 return "an object in class %s" % parts[2]
             nf += ftype == "f"
-        elif ftype == "c" and role == "module":
+        elif ftype in ("c", "b") and role == "module":
             why = cdev_problem(parts)
             if why is not None:
                 return why

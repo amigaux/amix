@@ -1766,12 +1766,40 @@ t26bad "two module objects in one package are refused" "2 objects under /etc/con
 t26bad "a module package that is not pure files is refused (40 section 6)" "not pure files.*postinstall" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 i postinstall 20 1 1"
 # device entries (C3-5 v4 section 1.2): a module's c none /dev/<node> passes
-# (above); a b or p entry, a node outside /dev/, a c line short of its
-# fields or in another class does not, and a kernel package takes none
-t26bad "a block-device entry in a module package is refused" "not pure files.*an object of type b at /dev/zbd0" \
+# (above), and (C3-5 v8 section 1.2) a block driver's b none /dev/dsk/<node>
+# (the ramdisk: /dev/dsk/ram0-2 b 20 0-2, 0600 root root); a b node outside
+# /dev/dsk/, a p, s or l entry, a c node outside /dev/, a c or b line short
+# of its fields or in another class does not, and a kernel package takes none
+t26good() {  # t26good <desc> <directives...>  (mkds.py fixture)
+    local d="$S26/good"; rm -rf "$d"; mkdir -p "$d"
+    desc=$1; shift
+    printf '%s\n' "$@" | python3 "$MKDS" "$d/zbad46-1.0.pkg" zbad46 1.0
+    python3 "$GEN" "$d" >"$WORK/t26g.out" 2>"$WORK/t26g.err"
+    check "$desc" bash -c "[ $? -eq 0 ] && ! grep -q SKIP '$WORK/t26g.err' && grep -q '^#kpkg zbad46 1.0 role=module ' '$d/catalog'"
+}
+t26good "a module package with block nodes in /dev/dsk/ is accepted (C3-5 v8 section 1.2)" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "DIR /dev" "DIR /dev/dsk" \
+    "PKGMAP 1 b none /dev/dsk/ram0 20 0 0600 root root" \
+    "PKGMAP 1 b none /dev/dsk/ram1 20 1 0600 root root" \
+    "PKGMAP 1 b none /dev/dsk/ram2 20 2 0600 root root"
+t26good "a module package with a c node in /dev/rdsk/ and a b node in /dev/dsk/ is accepted" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "DIR /dev" \
+    "PKGMAP 1 b none /dev/dsk/zb0 52 0 0600 root root" \
+    "PKGMAP 1 c none /dev/rdsk/zb0 52 0 0600 root root"
+t26bad "a module's block node outside /dev/dsk/ is refused" "not pure files.*a block device node outside /dev/dsk/: /dev/zbd0" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
+t26bad "a module's block node in /dev/rdsk/ is refused" "not pure files.*a block device node outside /dev/dsk/: /dev/rdsk/ram0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b none /dev/rdsk/ram0 20 0 0600 root root"
+t26bad "a module's b entry without a minor is refused" "not pure files.*a device entry not of the form .*: /dev/dsk/ram0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b none /dev/dsk/ram0 20 0600 root root"
+t26bad "a module's b entry in another class is refused" "not pure files.*an object in class kcls" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b kcls /dev/dsk/ram0 20 0 0600 root root"
 t26bad "a named-pipe entry in a module package is refused" "not pure files.*an object of type p at /dev/zp" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 p none /dev/zp 0644 root root"
+t26bad "a symlink entry in a module package is refused" "not pure files.*an object of type s at /dev/zs=/dev/dsk/ram0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 s none /dev/zs=/dev/dsk/ram0"
+t26bad "a hard-link entry in a module package is refused" "not pure files.*an object of type l at /dev/zl=/dev/dsk/ram0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 l none /dev/zl=/dev/dsk/ram0"
 t26bad "a module's device node outside /dev/ is refused" "not pure files.*a device node outside /dev/: /etc/zen0" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 c none /etc/zen0 51 0 0644 root root"
 t26bad "a module's c entry without a minor is refused" "not pure files.*a device entry not of the form .*: /dev/zen0" \
@@ -1781,6 +1809,9 @@ t26bad "a module's c entry in another class is refused" "not pure files.*an obje
 t26bad "the same /dev/zen0 entry in a kernel package is refused" "not pure files.*an object of type c at /dev/zen0" \
     "DIR /stand" "DIR /stand/k46" "FILE /stand/k46/unix u" "FILE /stand/k46/kabi k" \
     "DIR /dev" "CDEV /dev/zen0 51 0"
+t26bad "a /dev/dsk/ram0 b entry in a kernel package is refused" "not pure files.*an object of type b at /dev/dsk/ram0" \
+    "DIR /stand" "DIR /stand/k46" "FILE /stand/k46/unix u" "FILE /stand/k46/kabi k" \
+    "DIR /dev" "DIR /dev/dsk" "BDEV /dev/dsk/ram0 20 0"
 
 # the round trip through the client: update counts it, info shows the
 # .moddata's kabi and pin, download verifies its sha256

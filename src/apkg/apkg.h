@@ -414,7 +414,8 @@ extern int ds_pkginst(const char *path, char *out, unsigned outlen);
 /* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
  * of class none and no install scripts (i: pkginfo, depend, copyright),
  * and at least one f; with module set, also c entries of class none
- * under /dev/ (C3-5 v4 §1.2: the driver's device nodes).  0 = pure;
+ * under /dev/ and b entries under /dev/dsk/ (C3-5 v8 §1.2: the driver's
+ * device nodes).  0 = pure;
  * -1 = not, or unreadable (why[] says) */
 extern int ds_pure_files(const char *path, int module, char *why,
                          unsigned cap);

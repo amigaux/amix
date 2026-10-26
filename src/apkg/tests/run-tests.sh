@@ -1918,6 +1918,10 @@ sed -n 's/^CDEV //p' \$F | while read p mj mn; do
     mkdir -p \$(dirname \$R\$p)
     mknod \$R\$p c \$mj \$mn 2>/dev/null || : > \$R\$p
     echo "\$p c none \$mj \$mn 0644 root root \$I" >> \$C; done
+sed -n 's/^BDEV //p' \$F | while read p mj mn; do
+    mkdir -p \$(dirname \$R\$p)
+    mknod \$R\$p b \$mj \$mn 2>/dev/null || : > \$R\$p
+    echo "\$p b none \$mj \$mn 0600 root root \$I" >> \$C; done
 sed -n 's/^SHARED //p' \$F | while read p c; do
     mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
     printf '%s f none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
@@ -2459,26 +2463,38 @@ mkkcat "$KR/catalog" "$KCAT_K110"
 # A module package ships the nodes of its driver's majors as pkgmap c
 # entries, no script (z3660eth: /dev/zen0 c 51 0).  pkgadd makes the node
 # and records it in the contents DB; the install record keeps `file` lines
-# for plain files only (a node has no bytes to hash).  A c entry in a
-# kernel package, a b or p entry, a node outside /dev/, a short c line
-# and a c line of another class are refused before anything installs.
+# for plain files only (a node has no bytes to hash).  C3-5 v8 §1.2 adds
+# a block driver's b nodes under /dev/dsk/ (the ramdisk: /dev/dsk/ram0-2
+# b 20 0-2).  A c or b entry in a kernel package, a b node outside
+# /dev/dsk/, a p, s or l entry, a c node outside /dev/, a short c or b
+# line and one of another class are refused before anything installs.
 modds() {   # modds <out> <pkginst> <object name> [directives...]
     o=$1; i=$2; m=$3; shift 3
     { printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nFILE /etc/conf/mod.d/%s %s-obj\n' "$m" "$m"
       [ $# -gt 0 ] && printf '%s\n' "$@"; } | python3 "$TESTS/mkds.py" "$o" "$i" 1.0.0-1
 }
 modds "$KR/pkgs/kernel/zeth46-1.0.0-1.pkg" zeth46 zeth "DIR /dev" "CDEV /dev/zen0 51 0"
+modds "$KR/pkgs/kernel/ram46-1.0.0-1.pkg" ram46 ramdisk "DIR /dev" "DIR /dev/dsk" \
+    "BDEV /dev/dsk/ram0 20 0" "BDEV /dev/dsk/ram1 20 1" "BDEV /dev/dsk/ram2 20 2"
 modds "$KR/pkgs/kernel/zdevb-1.0.pkg" ZDEVB zdevb "DIR /dev" "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
+modds "$KR/pkgs/kernel/zdevbm-1.0.pkg" ZDEVBM zdevbm "DIR /dev" "PKGMAP 1 b none /dev/dsk/ram0 20 0600 root root"
+modds "$KR/pkgs/kernel/zdevbk-1.0.pkg" ZDEVBK zdevbk "DIR /dev" "PKGMAP 1 b kcls /dev/dsk/ram0 20 0 0600 root root"
+modds "$KR/pkgs/kernel/zdevs-1.0.pkg" ZDEVS zdevs "DIR /dev" "PKGMAP 1 s none /dev/zsl=/dev/zen0"
+modds "$KR/pkgs/kernel/zdevl-1.0.pkg" ZDEVL zdevl "DIR /dev" "PKGMAP 1 l none /dev/zln=/dev/zen0"
 modds "$KR/pkgs/kernel/zdevp-1.0.pkg" ZDEVP zdevp "DIR /dev" "PKGMAP 1 p none /dev/zpipe 0644 root root"
 modds "$KR/pkgs/kernel/zdevx-1.0.pkg" ZDEVX zdevx "PKGMAP 1 c none /etc/zen0 51 0 0644 root root"
 modds "$KR/pkgs/kernel/zdevm-1.0.pkg" ZDEVM zdevm "DIR /dev" "PKGMAP 1 c none /dev/zen0 51 0644 root root"
 modds "$KR/pkgs/kernel/zdevk-1.0.pkg" ZDEVK zdevk "DIR /dev" "PKGMAP 1 c kcls /dev/zen0 51 0 0644 root root"
 printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/kdev kdev\nDIR /dev\nCDEV /dev/zen0 51 0\n' \
     | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/kerndev-1.0.pkg" KERNDEV 1.0
+printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/kbdev kbdev\nDIR /dev\nDIR /dev/dsk\nBDEV /dev/dsk/ram0 20 0\n' \
+    | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/kernbdev-1.0.pkg" KERNBDEV 1.0
 mkkcat "$KR/catalog" "$KCAT_K110
 $(kline z3660eth-k46 1.0.0-1 module k46 k46.1.0 $PIN kernel/zeth46-1.0.0-1.pkg pkginst=zeth46)
+$(kline ramdisk-k46 1.0.0-1 module k46 k46.1.0 $PIN kernel/ram46-1.0.0-1.pkg pkginst=ram46)
 $(kline kerndev 1.0 kernel k46 k46.1.0 $PIN kernel/kerndev-1.0.pkg)
-$(for i in b p x m k; do kline zdev$i 1.0 module k46 k46.1.0 $PIN kernel/zdev$i-1.0.pkg; done)"
+$(kline kernbdev 1.0 kernel k46 k46.1.0 $PIN kernel/kernbdev-1.0.pkg)
+$(for i in b bm bk p s l x m k; do kline zdev$i 1.0 module k46 k46.1.0 $PIN kernel/zdev$i-1.0.pkg; done)"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 KD=$WORK/ktgt-dev
 "$APKG" -c "$KCONF" -R "$KD" install kernel-k46 >/dev/null 2>&1
@@ -2519,10 +2535,34 @@ grep -qx "pkgrm -R $KD -n -a $ROOT/var/apkg/admin zeth46" "$SHIMLOG" && \
     && ok "pkgrm zeth46 takes the node out of the contents DB; the record is gone" \
     || bad "module remove with a device entry" "$(cat "$SHIMLOG" "$KDC"; ls "$ROOT$KD/var/apkg/kpkg")"
 kreset
-for i in kerndev zdevb zdevp zdevx zdevm zdevk; do
+# a block driver's nodes (C3-5 v8 §1.2): the ramdisk's three b nodes
+run 0 "install -R <target> of a module package with block nodes (/dev/dsk/ram0-2 b 20 0-2)" \
+    "$APKG" -c "$KCONF" -R "$KD" install ramdisk-k46
+grep -qx "pkgadd -R $KD -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/ram46-1.0.0-1.pkg ram46" "$SHIMLOG" \
+    && grep -qx "/dev/dsk/ram0 b none 20 0 0600 root root ram46" "$KDC" \
+    && grep -qx "/dev/dsk/ram2 b none 20 2 0600 root root ram46" "$KDC" \
+    && [ -e "$ROOT$KD/dev/dsk/ram1" ] \
+    && ok "pkgadd -R got ram46; the contents DB records /dev/dsk/ram0-2 as b none 20 0-2" \
+    || bad "block nodes not laid or not recorded" "$(cat "$SHIMLOG" "$KDC"; ls -l "$ROOT$KD/dev/dsk" 2>&1)"
+[ "$(grep -c '^file ' "$ROOT$KD/var/apkg/kpkg/ram46" 2>/dev/null)" -eq 1 ] \
+    && grep -q '^file /etc/conf/mod.d/ramdisk ' "$ROOT$KD/var/apkg/kpkg/ram46" \
+    && ok "the ramdisk's record: one file line (the object), none for the b nodes" \
+    || bad "ramdisk record" "$(cat "$ROOT$KD/var/apkg/kpkg/ram46" 2>&1)"
+kreset
+run 0 "remove -R of the ramdisk module package" "$APKG" -c "$KCONF" -R "$KD" remove ramdisk-k46
+! grep -q "^/dev/dsk/ram" "$KDC" && [ ! -f "$ROOT$KD/var/apkg/kpkg/ram46" ] \
+    && ok "pkgrm ram46 takes the b nodes out of the contents DB; the record is gone" \
+    || bad "ramdisk remove" "$(cat "$SHIMLOG" "$KDC")"
+kreset
+for i in kerndev kernbdev zdevb zdevbm zdevbk zdevp zdevs zdevl zdevx zdevm zdevk; do
     case $i in
     kerndev) why="an object of type c at /dev/zen0" ;;
-    zdevb) why="an object of type b at /dev/zbd0" ;;
+    kernbdev) why="an object of type b at /dev/dsk/ram0" ;;
+    zdevb) why="a block device node outside /dev/dsk/: /dev/zbd0" ;;
+    zdevbm) why="a device entry not of the form <major> <minor> <mode> <owner> <group>: /dev/dsk/ram0" ;;
+    zdevbk) why="an object in class kcls" ;;
+    zdevs) why="an object of type s at /dev/zsl=/dev/zen0" ;;
+    zdevl) why="an object of type l at /dev/zln=/dev/zen0" ;;
     zdevp) why="an object of type p at /dev/zpipe" ;;
     zdevx) why="a device node outside /dev/: /etc/zen0" ;;
     zdevm) why="a device entry not of the form <major> <minor> <mode> <owner> <group>: /dev/zen0" ;;

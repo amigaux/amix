@@ -247,6 +247,75 @@ cmp -s "$NH_RAW" "$CACHE/foo-1.0.pkg" \
     && ok "RAW parity: nohttp staged bytes byte-identical to the shared build" \
     || bad "RAW parity: staged bytes differ"
 
+# ---------------------------------------------- (4) kernel-space parity
+# 40 section 6 / C3-5 v8 section 1.2 through kspace.c: a module's device
+# nodes, c under /dev/ and b under /dev/dsk/ (the ramdisk's ram0-2 b 20),
+# pass; a b node elsewhere, a short or classed b line, a p, s or l entry and
+# a b node in a kernel package are refused.  Dry-run installs (-n) of each
+# with its kernel, through both binaries: same rc, same output.
+KW=$WORK/kspace; KP=$KW/repo/pkgs/kernel
+mkdir -p "$KP" "$KW/root/var/apkg" "$KW/root/var/sadm/pkg"
+cp "$ROOT/var/apkg/admin" "$KW/root/var/apkg/admin"
+KPIN=gcc-2.7.2.3-8949028
+kds() {     # kds <file> <pkginst> <directives...>  (a module package)
+    f=$1; i=$2; shift 2
+    { printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nFILE /etc/conf/mod.d/%s o\nDIR /dev\n' "$i"
+      printf '%s\n' "$@"; } | python3 "$TESTS/mkds.py" "$KP/$f" "$i" 1.0
+}
+printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/unix u\n' \
+    | python3 "$TESTS/mkds.py" "$KP/k46.pkg" KERNK46 1.1.0
+printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/unix u\nDIR /dev\nDIR /dev/dsk\nBDEV /dev/dsk/ram0 20 0\n' \
+    | python3 "$TESTS/mkds.py" "$KP/kbdev.pkg" KBDEV 1.0
+kds ram46.pkg ram46 "DIR /dev/dsk" "BDEV /dev/dsk/ram0 20 0" \
+    "BDEV /dev/dsk/ram1 20 1" "BDEV /dev/dsk/ram2 20 2"
+kds zeth46.pkg zeth46 "CDEV /dev/zen0 51 0"
+kds zdevb.pkg zdevb "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
+kds zdevbm.pkg zdevbm "PKGMAP 1 b none /dev/dsk/ram0 20 0600 root root"
+kds zdevbk.pkg zdevbk "PKGMAP 1 b kcls /dev/dsk/ram0 20 0 0600 root root"
+kds zdevp.pkg zdevp "PKGMAP 1 p none /dev/zpipe 0644 root root"
+kds zdevs.pkg zdevs "PKGMAP 1 s none /dev/zsl=/dev/zen0"
+kds zdevl.pkg zdevl "PKGMAP 1 l none /dev/zln=/dev/zen0"
+kl() {      # kl <name> <role> <file>
+    printf '#kpkg %s 1.0 role=%s line=k46 kabi=k46.1.0 pin=%s size=%s sha256=%s file=kernel/%s\n' \
+        "$1" "$2" "$KPIN" "$(sizeof "$KP/$3")" "$(sha256sum "$KP/$3" | cut -c1-64)" "$3"
+}
+{ echo "#apkg-catalog 1"; echo "#ext kpkg 1"
+  kl kernel-k46 kernel k46.pkg; kl kbdev kernel kbdev.pkg
+  for i in ram46 zeth46 zdevb zdevbm zdevbk zdevp zdevs zdevl; do kl $i module $i.pkg; done
+  echo "#end kpkg"; } > "$KW/repo/catalog"
+md5sum "$KW/repo/catalog" > "$KW/repo/catalog.md5"
+cat > "$KW/conf" <<EOF
+repo=file://$KW/repo
+cachedir=$KW/root/var/apkg/cache
+pkgadd=$WORK/bin/pkgadd-shim
+pkgrm=$WORK/bin/pkgrm-shim
+admin=$KW/root/var/apkg/admin
+kbootset=/bin/true
+EOF
+APKG_ROOT=$KW/root "$APKG" -c "$KW/conf" update >/dev/null 2>&1
+for i in ram46 zeth46 kbdev zdevb zdevbm zdevbk zdevp zdevs zdevl; do
+    case $i in
+    ram46|zeth46) want=0; why= ;;
+    kbdev)  want=3; why="an object of type b at /dev/dsk/ram0" ;;
+    zdevb)  want=3; why="a block device node outside /dev/dsk/: /dev/zbd0" ;;
+    zdevbm) want=3; why="a device entry not of the form <major> <minor> <mode> <owner> <group>: /dev/dsk/ram0" ;;
+    zdevbk) want=3; why="an object in class kcls" ;;
+    zdevp)  want=3; why="an object of type p at /dev/zpipe" ;;
+    zdevs)  want=3; why="an object of type s at /dev/zsl=/dev/zen0" ;;
+    zdevl)  want=3; why="an object of type l at /dev/zln=/dev/zen0" ;;
+    esac
+    names="kernel-k46 $i"; [ $i = kbdev ] && names=kbdev
+    run $want "nohttp: -n install $i: rc $want${why:+ ($why)}" \
+        env APKG_ROOT="$KW/root" "$APKGNH" -n -c "$KW/conf" install $names
+    NHOUT=$OUT
+    [ -z "$why" ] || echo "$OUT" | grep -qF "$i: not a pure-file kernel-space package: $why" \
+        || bad "nohttp: $i refusal message" "$OUT"
+    SHOUT=$(APKG_ROOT="$KW/root" "$APKG" -n -c "$KW/conf" install $names 2>&1)
+    [ "$SHOUT" = "$NHOUT" ] \
+        && ok "KSPACE parity: $i byte-identical through the shared build" \
+        || bad "KSPACE parity: $i differs" "nohttp:$NHOUT shared:$SHOUT"
+done
+
 # ---------------------------------------------------------------- summary
 echo
 echo "== nohttp variant: $PASS passed, $FAIL failed =="

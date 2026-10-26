@@ -1,5 +1,42 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — module packages may ship block nodes in /dev/dsk (C3-5 v8 §1.2) (NOT MINTED)
+
+**Why.** amix-dlm C3-5 v8 §1.2 (amix-dlm `eeca440`): a block driver's nodes ship as pkgmap `b`
+entries in `/dev/dsk` (the ramdisk: `/dev/dsk/ram0`-`ram2`, `b 20 0-2 0600 root root`, no
+`/dev/rdsk` node). gen-catalog and apkg took only `c`, so amix-packages' `ramdisk30`/`ramdisk46`
+1.0.0-1 (md5 `edc26b2b…` / `9e5b1024…`) were SKIPped: "an object of type b at /dev/dsk/ram0".
+
+**Change.** `tools/repo/gen-catalog.py` `cdev_problem()`/`pure_files_problem()` and `src/apkg/kspace.c`
+`cdev_ok()`/`pkgmap_pure()` accept `b` beside `c` in a role=module package, same form (class none,
+`<major> <minor> <mode> <owner> <group>`, decimal major/minor, octal mode), path under `/dev/dsk/`
+(else "a block device node outside /dev/dsk/: <path>"); `c` stays "under /dev/". Kernel and loader
+packages still take no device node; `p`, `s`, `l` and every other type are still refused. The two
+tools give the same verdict and the same words. Install records are unchanged (no `file` line for
+a node; pkgadd/pkgrm own it through the contents DB).
+
+**Proof on the real datastreams** (scratch copies, amix-packages staging untouched): gen-catalog
+writes both `#kpkg ramdisk30/46 1.0.0-1 role=module` rows, 0 skipped (HEAD's gen-catalog: both
+SKIP, catalog not written); `apkg -n install kern46m ramdisk46` and `kern30m ramdisk30` rc 0 past
+the pure-files check (HEAD's apkg: "not a pure-file kernel-space package: an object of type b at
+/dev/dsk/ram0"). Note: the staged kern30m is k30.1.1 and ramdisk30 wants k30.1.2 (the scratch run
+lowered the row's kabi to reach the check).
+
+**Tests.** apkg `run-tests.sh` **457/0** (442 before): `mkds.py` gains `BDEV <path> <maj> <min>`,
+the kernel pkgadd shim lays it with a `b` contents line; `install -R ramdisk-k46` (ram46, three b
+nodes): argv, contents lines, the record's one `file` line; `remove -R` clears them; new refusals
+by message: kernel `b`, module `b` outside /dev/dsk/, short `b`, `b` of class kcls, `s`, `l`.
+`nohttp-variant.sh` **38/0** (20 before): new section 4, kernel-space parity, nine dry-run installs
+(ram46 and zeth46 accepted, seven refusals) through the nohttp and shared builds, same rc and output.
+`kbootset-consumer.sh` 12/0. Repo tools **409/0** (400 before): T26 accepts a module with
+`/dev/dsk/ram0-2` b nodes and one with `b /dev/dsk/zb0` + `c /dev/rdsk/zb0`; refuses `b` outside
+/dev/dsk/ and in /dev/rdsk/, short `b`, `b` of class kcls, `s`, `l`, and `b /dev/dsk/ram0` in a kernel.
+
+**Builds.** Host `-Wall -Wextra` clean. `make amix` (gcc-cross-amix) twice from a clean `obj-amix`:
+`apkg.amix` **sha256 `226678a5d81a59b92e49486759651ef0d6d0be47e5b44d14ed01a3911c50b579`**, md5
+`65f5c0971e27533f1a5b3c7ab09518ee`, 113350 B, version string still 0.3.2; no `divsl`/`divul`;
+scan060 CLEAN. Not minted, not deployed: this is the next APKG revision's content.
+
 ## 2026-10-26 — `removef PKG -` removed nothing: fgets' newline kept (FIXED, NOT MINTED)
 
 **Bug.** Found on the box by the installer: the stdin path-list form `removef PKG -` kept fgets'

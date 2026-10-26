@@ -322,8 +322,10 @@ int ds_pkginst(const char *path, char *out, unsigned outlen)
  *      <group>" with decimal major and minor and an octal mode; pkgadd
  *      makes the node (heirloom pkginstall/instvol.c -> libpkg/verify.c
  *      averify() mknod) and records it in the contents database;
- *   anything else (e, v, l, s, b, p, x; c in a kernel or loader package)
- *      refuses the package.
+ *   b  the same, a block driver's nodes (C3-5 v8 section 1.2), under
+ *      /dev/dsk/ only (the ramdisk: /dev/dsk/ram0 b 20 0);
+ *   anything else (e, v, l, s, p, x; c or b in a kernel or loader
+ *      package) refuses the package.
  * At least one f is required.
  */
 
@@ -385,7 +387,8 @@ static int all_in(const char *s, const char *set)
     return 1;
 }
 
-/* one module's c entry (tok[0..nt-1]); 0 = acceptable, -1 = not (why) */
+/* one module's c or b entry (tok[0..nt-1]); 0 = acceptable, -1 = not
+ * (why).  c: under /dev/; b: under /dev/dsk/ (C3-5 v8 section 1.2) */
 static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
 {
     if (nt < 4) {
@@ -396,7 +399,13 @@ static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
         setwhy(why, cap, "an object in class ", tok[2]);
         return -1;
     }
-    if (strncmp(tok[3], "/dev/", 5) != 0 || tok[3][5] == '\0') {
+    if (tok[1][0] == 'b') {
+        if (strncmp(tok[3], "/dev/dsk/", 9) != 0 || tok[3][9] == '\0') {
+            setwhy(why, cap, "a block device node outside /dev/dsk/: ",
+                   tok[3]);
+            return -1;
+        }
+    } else if (strncmp(tok[3], "/dev/", 5) != 0 || tok[3][5] == '\0') {
         setwhy(why, cap, "a device node outside /dev/: ", tok[3]);
         return -1;
     }
@@ -409,7 +418,7 @@ static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
     return 0;
 }
 
-/* the pkgmap rule above; module: c entries allowed.  0 = pure, -1 = not
+/* the pkgmap rule above; module: c and b entries allowed.  0 = pure, -1 = not
  * (why set) */
 static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
 {
@@ -467,6 +476,7 @@ static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
                 nf++;
             break;
         case 'c':
+        case 'b':
             if (module) {
                 if (cdev_ok(tok, nt, why, cap) != 0)
                     return -1;

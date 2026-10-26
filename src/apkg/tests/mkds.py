@@ -12,6 +12,8 @@
 #   COPY <path> <hostfile>     as FILE; the shim copies <hostfile>
 #   CDEV <path> <maj> <min>    pkgmap "1 c none <path> <maj> <min> 0644 root
 #                              root" (the shim makes the node, or a stand-in)
+#   BDEV <path> <maj> <min>    pkgmap "1 b none <path> <maj> <min> 0600 root
+#                              root" (a block node, C3-5 v8 section 1.2)
 #   PKGMAP <pkgmap line>       an extra pkgmap line, verbatim (no directive)
 # A second archive carries the payload as pkgtrans lays it out (pkginfo,
 # pkgmap, then root/<path> for every DIR/FILE/SHARED/COPY), so
@@ -45,6 +47,8 @@ for d in directives:
         pm.append("1 f none %s 0644 root sys 1 1 1" % t[1])
     elif t[0] == "CDEV":
         pm.append("1 c none %s %s 0644 root root" % (t[1], t[2]))
+    elif t[0] == "BDEV":
+        pm.append("1 b none %s %s 0600 root root" % (t[1], t[2]))
     elif t[0] == "PKGMAP":
         pm.append(d.split(None, 1)[1])
 pm.append("1 i pkginfo %d 1 1" % len(pkginfo))
@@ -57,7 +61,7 @@ arc += b"\0" * ((512 - len(arc) % 512) % 512)
 pay = newc("pkginfo", pkginfo) + newc("pkgmap", pkgmap) + newc("root", b"")
 for d in directives:
     t = d.split(None, 2)
-    if not t or t[0] in ("PKGMAP", "CDEV"):
+    if not t or t[0] in ("PKGMAP", "CDEV", "BDEV"):
         continue
     if t[0] == "DIR":
         pay += newc("root" + t[1], b"")
