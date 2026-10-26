@@ -123,6 +123,30 @@ for the wrapper; `monsw_conf_data` is a weak reference. Its globals are the API 
 - the same line in an installer's `modreg.d` default;
 - leave `config` unset and let `/etc/monsw` reach the driver through `MONSWIOC_SETCFG` at boot.
 
+## Size and memory
+
+amix-dlm's C3-1 §6 (version 4) limits a module's allocated image to 256 KiB and its file to
+under 256 KiB. C3-6 §1 limits each kernel memory request a module makes to 256 KiB. monsw is
+far below both. The figures are from the built objects; they are the same on both lines.
+
+| | monsw | Limit |
+|---|---|---|
+| file (`mod.d/monsw`) | 5,197 bytes | under 256 KiB |
+| allocated image (the size `modcheck` prints) | 2,200 bytes: `.text` 1,584, `.data` 432, `.moddata` 161, `.bss` 16; no COMMON symbols | at most 256 KiB |
+| the core's working set for a load from a file (file buffer, tables, image; `modcheck`'s estimate) | about 15 KiB | `modcheck` warns above 160 KiB for a demand-class module |
+
+monsw makes no kernel memory requests at all:
+- Nothing in the source calls `kmem_alloc`, `kmem_zalloc` or `sptalloc`. The only imports are
+  `copyout`, `drv_priv`, `printf` and `mod_drvops`.
+- `_load` reads `config` from the parameter string where it lies. Its one buffer is 16 bytes
+  on the stack, for the text of a `config` that is not a number. Then `monswinit()` works out
+  the value in effect.
+- All state is static, in `.data` and `.bss`: the value and its sources, the switch state,
+  the holder flags and the four card slots. `struct monsw_info` for `MONSWIOC_GETCFG` is built
+  on the stack and copied out.
+- It maps no device window. CIA-B is reached at its fixed addresses through the kernel's
+  transparent translation, so there is nothing to map in `_load` or to release in `_unload`.
+
 ## Building
 
 You need:
