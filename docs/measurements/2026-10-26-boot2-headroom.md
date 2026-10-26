@@ -117,3 +117,34 @@ console:
 
 Item 1 gave 138 bytes, not the estimated 40. Item 2 gave 176. With S4-10's
 measured +448, 182 bytes of file stay for S4-11, before items 3–5.
+
+## 6. S4-11: the RAM-disk image, and what paid for it (2026-10-27)
+
+S4-11 (C4-3 §2) costs boot2 the image's placement: exec `AllocAbs` at the
+top of the kernel's region, the read into place, `memory[]` ended below
+the image, the loader record's address and size, and the `ramdisk` root
+selector. Measured on the prototype, +464 bytes of file and +424 of
+image + bss, over both gates. 10 §3.2's `ax_memcap` clause (the region
+under the bind base one 2 KiB page short) adds 4. The budget came from
+§3, as the orchestrator decided: a code-only search first, then items
+3–5 with their quotes.
+
+| Step | file | image + bss | left (file) |
+|---|---|---|---|
+| before (S4-10, 2026-10-26) | 28 526 | 28 312 | 146 |
+| S4-11's prototype with the `ax_memcap` clause | 28 994 | 28 740 | −322 |
+| the L table as one packed string (15 pointers and their relocations gone) | −74 | −44 | |
+| items 3–5: each L text at most 20 characters after its code; the menu's key line to `digit, Return, mouse` (10 §7.4 has the keys); `volume %u, not %u`, `not of this boot set`, `no return to Kickstart: reset by hand` | −228 | −228 | |
+| the kernel's room line through the shared `needs` format | −26 | −28 | |
+| one `L4 no memory` line for core.c and main.c | −12 | −12 | |
+| the savings alone on S4-10's tree (4295d81) | 28 192 | 28 004 | 480 |
+| S4-11, with the claim freed when the image fails its CRC (4003c9f) | 28 646 | 28 420 | 26 |
+
+The deltas were measured one after another on the prototype; on S4-10's
+tree the savings come to 334 bytes of file and 308 of image + bss.
+
+Nothing else changes on the console. The quotes of the changed lines
+moved in the same commit: 10 §7.2, C3-3 §2, the Bench README, the host
+simulator and the round trip. 26 bytes of file and 252 of image + bss
+remain. The next boot2 change starts at §3 item 6 (the code-only L
+table), or at a code size win first.

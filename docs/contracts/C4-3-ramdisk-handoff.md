@@ -1,8 +1,10 @@
 # C4-3 — the RAM-disk hand-off, version 1
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement. Once agreed, other repositories build against this text, and
-  a change is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), with the draft's (a) and
+  (b); marked agreed with S4-11's first commit (4003c9f, 2026-10-27),
+  which places the image. `ramdisk_image` is minor 2 (k30.1.2,
+  k46.1.2). Other repositories build against this text; a change from
+  here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
   selector), §7 (the RAM disk); `50-media.md` §3–§5 (the media that root
