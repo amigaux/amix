@@ -1,0 +1,21 @@
+Subject: dlm_str_open: say that a STREAMS open runs at level 4
+
+The stock qattach() raises SR to 0x2400 around a STREAMS open, and the
+core's trampoline leaves it.  A self-test that spins for a level-2
+interrupt raised from the open never sees it (S3-44-3, z3660eth
+1.0.0-2).  Comment only: dlm.o is unchanged.
+
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -129,7 +129,10 @@
+ 
+ /*
+  * qi_qopen of a loadable row.  A signal that ends a sleep in the
+- * module's open unwinds through u_qsav; the hold goes first.
++ * module's open unwinds through u_qsav; the hold goes first.  The stock
++ * qattach() calls this at level 4 (SR 0x2400), and the level stays:
++ * a level-2 interrupt the open raises is taken only after it returns,
++ * or while it sleeps (C3-6 section 1.3).
+  */
+ int
+ dlm_str_open(q, devp, flag, sflag, cr)
