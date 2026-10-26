@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — the kernel fingerprint abi= (C3-3 version 3) (9a45f1b, bd65e6b)
+
+The text: sorted lines `data <name> <st_size>` for each DDI data name plus `offs <NAME> <value>` from the probe's dlm_offs.h;
+abi= is its SHA-256, in the sidecar only. tools/mkabi.py checks a kernel against abi/<line>/abi-<kabi>.txt, naming what moved
+and the tag change it needs (brief step 9; it writes the sidecar's abi= at step 11). References from the cut kernels: k46.1.0
+04b52092…, k30.1.0 7a90c7d9… (10 data lines, 19 offsets). The kit ships mkabi.py, the reference, the probe and mkoffs;
+kbootset refuses a malformed abi= at gate 2. make core 119/119, kit-test 33/33, 665 host checks. KIT_REV=bd65e6b.
+
 ## 2026-10-26 — kbootset composes module members (S3-16); bench row S3-B5 (a71a875, 2410287)
 
 `build` takes every module object under /etc/conf/mod.d (unless modreg disables it) through gates 1–3 (record; kabi
