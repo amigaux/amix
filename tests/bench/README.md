@@ -1110,6 +1110,18 @@ KABI=k46.1.1 sh tests/bench/s3-modpkg.sh <z3660scsi> k46 <outdir>
 | 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of S3-B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot 3: …` (the version is in the banner), `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
 | 4 | `shutdown -i0 -g0 -y` | `dlm: halt pass: 1 module(s) stopped` if z3660scsi has a `_halt` (C4-2 §5: the mailbox left idle), then `The system is halted` |
 
+**The kernel must not drive the Z3660 itself.** A cut that still links
+the static z3660scsi (its sidecar's `root=` names `zorro:144b:01`)
+cannot take the module: boot 2's `kbootset build` refuses with `gate 3
+(closure): root-class module z3660scsi is for zorro:144b:01, which the
+kernel drives itself (its sidecar's root=): two drivers on one board`
+(C4-4 version 4 §4.1). That refusal is the row's first expected line on
+such a cut, and it ends the row there. The root-class boot needs S4-22's
+cut without the static z3660scsi. If a generation built elsewhere
+carries both anyway, the kernel says `dlm: root module z3660scsi is for
+zorro:144b:01, which the kernel drives itself; not linked` and roots on
+its static driver.
+
 **What the row says if it fails.**
 - No `module z3660scsi … bytes` from boot2: the generation carries no
   root record (look at the `build` file), or boot2 is older. A loader
