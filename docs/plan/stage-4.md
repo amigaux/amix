@@ -169,6 +169,7 @@ on each.
 | S4-54 | **The upgrade install's survivors** (40 §7, 40 OQ-40.1; Q4-8): the known set from the first-boot dialog's list; captured to a checksummed archive on the swap slice, restored, verified before the first boot; from a 1.1 disk (s4 kept) and a 1.0 disk (re-laid). P-29's conffile policy is grilled separately and gates nothing here | amix-installng | host + bench | — | S4-73 | 1.5 |
 | S4-55 | **The first stage-4 media** (Q4-9): the next media cut from the stage-3 set (loader -6, kbootset -15, modtools -6, dlmkit -5, zeth -5, monsw -2, m4, the syslog unit fixes) on S4-20's kernels, and the CD discs; one cell per line. In progress (catalog `9e143d53…`). Not published before 1.1 (D-3 §8) | amix-installng, amix-packages | bench | S4-20 | S4-50 | 0.75 |
 | S4-56 | **Disk and SD images, and tape** (50 §2, §6): the installed images built from the root-class kernels and modules, with rescue; tape as a package source behind a boot medium (M-TAPE1–4 carried from stage 2) | amix-installng | bench | S4-25, S4-54 | S4-73 | 0.75 |
+| S4-57 | **The generic 060 target** (the owner, 2026-10-26, from a user's three boxes): <br>– an A3000 or A4000 with a third-party 68060 accelerator (no Z3660); <br>– root on an A4091/A4092, the A3000 onboard SCSI (the floor) or Gayle IDE; <br>– a ZZ9000 in Zorro II mode as RTG (z3660rtg's ZZ9000 target). <br>Covered by stage 4's design: root as a module, boot2 placing every root record, the kernel matching. **Proven under emulation** (amiberry: A3000 and A4000 with a 68060, an A4091, a ZZ9000 in Zorro II; it emulates neither the BFG9060 nor the CyberStorm). **Delivered as pre-installed disk images** that run the first-boot dialog on their first boot, not through the installer (such a box's A4092 ROM may have no CD filesystem). Release notes per accelerator board: "proven under emulation; reported working by <tester>". Out of scope, written down: CyberVision PPC graphics and the CyberStorm's UW-SCSI. The first image (the A3000D's, on the 1.0.1 kernel) is installng's, outside this row | amix-installng (images), the Bench station (rows) | bench | S4-31, S4-32, S4-33, S4-56, the RTG kit profile | S4-73 | 1.5 |
 
 ### 2.8 Carried to stage 5 (Q4-5)
 
@@ -226,7 +227,7 @@ Estimate:
 - kernels and packages: about 5.75 (other repositories);
 - the root-class modules: about 6.75 (driver repositories);
 - filesystems: about 6;
-- media and the installer: about 8;
+- media and the installer: about 9.5;
 - measurements and rows: about 8;
 - the DMA providers and the C3-6 rule: about 1.25;
 - carried to stage 5: about 3.

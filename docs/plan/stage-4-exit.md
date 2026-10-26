@@ -68,6 +68,7 @@ cells of this ledger.
 | S4-53 the netinstall medium: form A or B, M-NET1c, M-NET1e, M-NET1f | pending | pending |
 | S4-54 the upgrade install, from a 1.1 disk and from a 1.0 disk | pending | pending |
 | S4-56 disk and SD images with rescue; tape as a package source | pending | pending |
+| S4-57 the generic 060 target, emulated: an A3000 with a 68060, an A4091 root and a ZZ9000 in Zorro II; an A4000 with a 68060, an A4092 or Gayle IDE root and a ZZ9000 in Zorro II; each from its pre-installed image through the first-boot dialog | pending | — (a 68060 target) |
 
 ## 5. The measurements (S4-70, S4-71; 90)
 
