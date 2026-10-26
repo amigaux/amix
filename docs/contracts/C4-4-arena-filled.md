@@ -1,15 +1,18 @@
-# C4-4 — the arena filled: what boot2 places and the core links, version 1
+# C4-4 — the arena filled: what boot2 places and the core links, version 2
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement. Once agreed, other repositories build against this text, and
-  a change is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+  (2026-10-26, option A of S4-01's design): each root module's NOBITS and
+  COMMON lie in a zeroed tail boot2 reserves behind its file, from the
+  record's `bss=` (§1.2, §4). Other repositories build against this
+  text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
   §5.3, §7.4 (safe mode), §9 (L3, L5, L7); `30-module-core.md` §2 patches 2
   and 16, §3 (`marc_root`); `70-static-floor.md` §4
 - **Layout:** C3-4 version 1, unchanged. This contract fills it; it adds
   no field, so `AXA1` stays version 1.
 - **Written by:** boot2 and `amix-cdboot` (S4-10); `kbootset`, which
-  writes the manifest's `module … root` records (S4-12)
+  writes the manifest's `module … root` records and their `bss=` (S4-12,
+  C3-5 version 6)
 - **Read by:** the module core at `marc_root` (S4-01, S4-04); `kinfo`,
   nothing new
 
@@ -43,14 +46,25 @@ dependency is always linked first.
 
 Each placed module is decompressed (raw or `z=deflate`, 10 §5.5) to an
 address that is a multiple of 16, after the parameter strings (C3-4 §2).
+Behind it boot2 reserves its **tail**: from the file's end rounded up to
+16, the record's `bss=` bytes, zeroed. The next module starts after the
+tail, rounded up to 16. A root record without `bss=` has no tail. The
+directory entry's length stays the file's length; C3-4's "bytes used"
+counts the tails.
+
+The file's allocated PROGBITS sections run where they lie in it, and its
+NOBITS sections and COMMON symbols lie in the tail (§4). So the module's
+image is one contiguous span, from the file's start to the tail's end,
+inside the arena and with its cache class (30 §8).
+
 Its CRC-32 over the decompressed bytes must equal the record's `crc32=`.
 Otherwise L3 names the module and boot2 goes on as for L2 (10 §9): the
 next generation in the order of 10 §7.2, and the menu when none is left.
 **This is how a damaged root module selects the menu** (80 §2).
 
-If the directory, the manifest copy, the parameter strings and the placed
-modules exceed the arena's capacity, boot2 refuses the generation with
-L5, giving the needed and the available bytes (C3-4 §4).
+If the directory, the manifest copy, the parameter strings, the placed
+modules and their tails exceed the arena's capacity, boot2 refuses the
+generation with L5, giving the needed and the available bytes (C3-4 §4).
 
 ## 2. Safe mode
 
@@ -91,9 +105,20 @@ At `dmainit` the core has checked the header and the manifest copy
    good, because it never reaches multi-user, and try-once and L8 return
    the box to the default generation at the next boot (10 §7.2);
 2. it checks that the module is a `module … root` member of the manifest
-   copy with the same name and CRC-32;
-3. it relocates the module in place (patch 2): the bytes stay in the
-   arena, and nothing is allocated for the image or freed;
+   copy with the same name and CRC-32, and takes the record's `bss=`;
+3. it relocates the module in place (patch 2):
+   - each allocated PROGBITS section runs at its offset in the file; an
+     offset that is not a multiple of the section's alignment, or an
+     alignment above 16, is refused (`ENOLOAD`);
+   - the NOBITS sections, then the COMMON symbols, are laid into the
+     tail, each aligned to its own alignment (at least 4 for a section)
+     and at most 16. These are the rules `kbootset` used for `bss=`. A
+     layout larger than `bss=` is refused:
+     `dlm: root module %s: its bss is over the reserved %d`;
+   - the relocations are applied to those bytes. The symbol, string and
+     relocation tables are read in the file and never written;
+   - the bytes stay in the arena, and nothing is allocated for the image
+     or freed;
 4. it runs `_load` with the entry's parameter string, in the
    `marc_root` context (C3-6 v4 §1.3: level 7, the clock stopped,
    `KM_NOSLEEP` only);

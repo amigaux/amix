@@ -500,7 +500,9 @@ hand-off copy:
 - a verbatim copy of the booted manifest, so the kernel checks every later
   load against the manifest the loader actually booted rather than against a
   file on the root filesystem (`30-module-core.md` §2, patch 17);
-- each selected module's file bytes, decompressed, 16-byte aligned.
+- each selected module's file bytes, decompressed, 16-byte aligned, then
+  its zeroed tail of the record's `bss=` bytes, which holds its NOBITS and
+  COMMON (contract C4-4 §1.2; changed after the freeze, 2026-10-26).
 
 boot2 does **not** relocate modules; `marc_root` in the kernel does
 (`30-module-core.md` §3). A module is selected when one of its match keys is
