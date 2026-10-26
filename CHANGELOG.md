@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — Stage 4 re-scoped by the owner's nine answers (288ac3d, d350bc2)
+
+Spec 80 §2: stage 4 = "Root, filesystems and media" (root controllers, ufs/s5/cdfs as modules, every medium of spec 50
+proven); stage 5 = "Carried metal and release acceptance" (the 030 line on the release firmware, the tower's Zorro-dependent
+rows, every medium rebuilt from the final packages; a carried row that changes a shipped byte re-proves every medium carrying
+it). §4 settles Q4-1…Q4-9 one line each: filesystems and media in; the self-test pass at the first sysinit entry; the
+four-card naming now as a merge request; row 20 freed in the second cut S4-21 (the stock ram's bytes leave in S4-43); no wait
+for the carried metal; DDI v1.1 DMA (C4-5) with an 030 bounce; the A4000T 53C710 written in stage 4 (S4-33, in amix-a4091);
+the known survivor set (S4-54); the first media now (S4-55). New: C4-5, C4-6, S4-21–S4-25, S4-40–S4-43, S4-56.
+
 ## 2026-10-26 — Stage 4 plan (69423ed)
 
 docs/plan/stage-4.md: interfaces C4-1–C4-4, rows S4-01–S4-74 (root-class modules and the arena-only load path, boot2 root
