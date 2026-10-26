@@ -24,8 +24,7 @@ copyin func 0
 copymsg func 0
 copyout func 0
 cputype data 0
-dma_alloc func 0
-dma_free func 0
+displayedscreen data 0
 drv_priv func 0
 dupmsg func 0
 flushq func 0

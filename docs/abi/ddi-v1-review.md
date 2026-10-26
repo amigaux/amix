@@ -60,18 +60,19 @@ Context means where the function may be called:
 | panic state | `panicstr` (data, read-only) | any | stock |
 | kernel memory | `kmem_alloc`, `kmem_zalloc`, `kmem_free` | proc with `KM_SLEEP`, no-sleep with `KM_NOSLEEP` | stock |
 | large memory | `sptalloc`, `sptfree` | proc | stock |
-| DMA memory | `dma_alloc`, `dma_free`, `vtop`, `dma_prepare`, `dma_complete`, `dev_kvmap`, `dev_kvunmap` | proc | `vtop` stock; `dev_kvmap`/`dev_kvunmap` stock where the A4091 pass linked them, else core; the rest core |
+| memory mapping | `vtop`, `dev_kvmap`, `dev_kvunmap` | proc | `vtop` stock; `dev_kvmap`/`dev_kvunmap` your `devkvmap040.o`, linked into every k46 module kernel |
 | copy, string | `bcopy`, `bzero`, `bcmp`, `memcpy`, `strlen`, `strcmp`, `strncmp`, `copyin`, `copyout`, `uiomove` | `copyin`/`copyout`/`uiomove` proc; the rest any | stock |
 | sleep, timers | `sleep`, `wakeup`, `timeout`, `untimeout`, `lbolt` (data, read-only) | `sleep` proc; the rest any | stock |
 | privilege, devices | `suser`, `drv_priv`, `getmajor`, `getminor`, `makedevice` | the first two proc; the rest any | stock |
 | autoconfig | `autocon`, `bprobe` | proc | stock |
-| interrupt level | `spl0`…`spl7`, `splx`, as real functions | any | core (the kernels inline them) |
+| interrupt level | `spl0`…`spl7`, `splx`, as real functions; spl5–spl7 raise to **level 4 only**, as the kernel's inline forms do (`FAST_INTERRUPTS` in `<sys/inline.h>`) | any | core (the kernels inline them) |
 | interrupts | `intr_attach`, `intr_detach` | proc | core: an INT2 chain walker in `int2_tbl`'s last handler slot (the handler it displaces is called first), and an INT6 chain after the CIA-B handler. A handler returns whether it claimed the interrupt; drivers with a polled mode keep it as the default |
 | STREAMS | `allocb`, `freemsg`, `freeb`, `dupmsg`, `copymsg`, `linkb`, `unlinkb`, `msgdsize`, `putq`, `getq`, `putbq`, `putnext`, `qreply`, `canput`, `flushq`, `OTHERQ`, `RD`, `WR` | as the STREAMS rules say | stock |
 | network attachment | `if_attach`, `if_detach` | proc | core (replaces drivers touching `ifstats`) |
 | console hook | `cons_hook_set`, `cons_hook_clear` | proc | core (replaces drivers calling `conputc`) |
 | compiler helpers | `__udivdi3`, `__umoddi3`, `__lshrdi3` | any | core on k46 (the 030 kernels have them) |
 | identity | `bootinfo`, `cputype` (data, read-only) | any | stock |
+| console | `displayedscreen` (data, read-only): which screen is on display, so a console hook takes only its own screen's writes | any | stock |
 | module interface | `mod_miscops`, `mod_execops`, `mod_hookops`, `mod_drvops`, `mod_strops` (data), `mod_hold`, `mod_rele` | proc | the module core itself: every module references its linkage operations through the wrapper macros, and `mod_hold`/`mod_rele` hold a module while it is in use |
 
 **Never exported:**
@@ -90,17 +91,25 @@ interrupts only through `intr_attach`.
 
 ## What we would like your view on
 
-1. **Anything missing or wrong for drivers on your line.** In particular:
-   - the 68040/68060 DMA and cache calls (`dma_prepare`, `dma_complete`,
-     `dev_kvmap`);
-   - whether `vtop` is the right primitive there.
+1. **Anything missing or wrong for drivers on your line.** In
+   particular, are `dev_kvmap` and `vtop` the right memory-mapping
+   primitives there? DMA is left out of v1.0, since no stage-3 module
+   needs it. Your `dma_prepare` and `dma_complete` (`dma_cache040.o`, the
+   A3091 copy-back hooks) stay kernel-internal. We would like to design
+   a DMA interface for the root controllers with you in stage 4, under
+   names that cannot clash with yours.
 2. **`intr_attach` placed in `int2_tbl`'s last slot.** On your kernels
    that slot holds `aenintr`, after `a3091intr_demux`. Does the chain
    walker sit correctly beside your demultiplexer, or do you want a
    different seat?
-3. **The `spl` functions.** We provide real functions for modules, while
-   the kernel keeps its inline forms. Any objection on the 68060
-   (pipeline, `sr` handling)?
+3. **The `spl` functions.** We provide real functions for modules,
+   identical to the kernel's inline forms, while the kernel keeps
+   those. Under `FAST_INTERRUPTS` in `<sys/inline.h>`, spl5, spl6 and
+   spl7 raise to level 4 only, so **no spl masks level 6** (CIA-B, and
+   the Z3660 firmware's ethernet interrupt). We copy that exactly, and
+   the list tells driver authors that an INT6 driver masks at its own
+   board, never with spl7. Is that the behaviour you want modules to
+   see? And any objection on the 68060 (pipeline, `sr` handling)?
 4. **One interface for the 68040 and the 68060,** as measured above. Is
    that your intention going forward?
 5. **Anything you would not want a module to touch** that we have listed.

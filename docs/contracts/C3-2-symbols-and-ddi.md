@@ -89,24 +89,39 @@ The second column marks names one of today's two drivers imports
 | panic state | `panicstr` (data, read-only) | z3660eth | any | stock |
 | kernel memory | `kmem_alloc`, `kmem_zalloc`, `kmem_free` | — | proc with `KM_SLEEP`; no-sleep with `KM_NOSLEEP` | stock |
 | large memory | `sptalloc`, `sptfree` | z3660eth | proc | stock |
-| DMA memory | `dma_alloc`, `dma_free`, `vtop`; on k46 also `dma_prepare`, `dma_complete`, `dev_kvmap`, `dev_kvunmap` | — | proc | `vtop` stock; `dma_alloc`, `dma_free`, `dma_prepare`, `dma_complete` core; `dev_kvmap`/`dev_kvunmap` stock in the A families, core in KD060-Z and K060 |
+| memory mapping | `vtop`; on k46 also `dev_kvmap`, `dev_kvunmap` | — | proc | `vtop` stock; `dev_kvmap`/`dev_kvunmap` the port's own (`devkvmap040.o`), linked into every k46 module kernel |
 | copy, string | `bcopy`, `bzero`, `bcmp`, `memcpy`, `strlen`, `strcmp`, `strncmp`, `copyin`, `copyout`, `uiomove` | `bcopy`, `bzero`, `bcmp`, `memcpy`, `copyin`, `copyout`, `uiomove` | `copyin`/`copyout`/`uiomove`: proc; the rest any | stock |
 | sleep, timers | `sleep`, `wakeup`, `timeout`, `untimeout`, `lbolt` (data, read-only) | `timeout`, `untimeout` | `sleep`: proc; the rest any | stock |
 | privilege, devices | `suser`, `drv_priv`, `getmajor`, `getminor`, `makedevice` | `getmajor`, `getminor`, `makedevice` | proc for the first two; the rest any | stock |
 | autoconfig | `autocon`, `bprobe` | `autocon` | proc | stock |
-| interrupt level | `spl0`…`spl7`, `splx` as functions | — | any | core |
+| interrupt level | `spl0`…`spl7`, `splx` as functions; **spl5, spl6 and spl7 raise to level 4 only**, as the kernel's own inline forms (`<sys/inline.h>`, `FAST_INTERRUPTS`), so no spl masks level 6 | — | any | core (`dlm_spl.s`) |
 | interrupts | `intr_attach`, `intr_detach` | — | proc | core (S3-09) |
 | STREAMS | `allocb`, `freemsg`, `freeb`, `dupmsg`, `copymsg`, `linkb`, `unlinkb`, `msgdsize`, `putq`, `getq`, `putbq`, `putnext`, `qreply`, `canput`, `flushq`, `OTHERQ`, `RD`, `WR` | all but `freeb`, `dupmsg`, `copymsg`, `linkb`, `msgdsize` | any, except where the STREAMS rules say otherwise | stock |
 | network attachment | `if_attach`, `if_detach` | — | proc | core |
 | console hook | `cons_hook_set`, `cons_hook_clear` | — | proc | core |
 | libgcc | `__udivdi3`, `__umoddi3`, `__lshrdi3` | — | any | stock on k30, core on k46 |
 | identity | `bootinfo`, `cputype` (data, read-only) | `bootinfo` | any | stock; `cputype` core on k30 |
+| console | `displayedscreen` (data, read-only): the screen on display, for a `cons_hook_set` hook to take only its own screen's writes | `displayedscreen` (zz9000's static console hook) | any | stock |
 | module interface | `mod_miscops`, `mod_execops`, `mod_hookops`, `mod_drvops`, `mod_strops` (data), `mod_hold`, `mod_rele` | every module (`mod_miscops` and the like through the wrapper macros, C3-1 §2) | proc | the core itself (`dlm.o`) |
 
 The module interface row was missing from the list as first agreed.
 Every module references its linkage ops through the wrapper macros, so
 the list cannot work without it. It was added on 2026-10-26, while v1.0
 was still open for review, so it needs no minor (S3-04).
+
+**Level 6 and spl.** An INT6 interrupt (CIA-B, and the Z3660 firmware's
+ethernet interrupt) is never masked by an spl in this kernel. A driver on
+the INT6 chain masks at its own board: it disables the board's interrupt
+before touching shared state, and enables it again after. It does not
+rely on spl7.
+
+**DMA is not in DDI v1.0.** `dma_alloc`, `dma_free`, `dma_prepare` and
+`dma_complete` were taken out on 2026-10-26 (orchestrator): no stage-3
+module uses them. The 68040/68060 port's `dma_prepare` and
+`dma_complete` (`dma_cache040.o`, the A3091 copy-back hooks) are
+kernel-internal, not DDI. A DMA interface is designed with the port in
+stage 4, under names that cannot clash with those, and arrives as a
+minor.
 
 **Never in the DDI tier** (20 §4.1): the switch tables and vectors
 (`cdevsw`, `bdevsw`, `vfssw`, `int2_tbl`), `conputc` and `ifstats`. Today
