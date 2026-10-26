@@ -1,9 +1,12 @@
-# C4-5 — DDI v1.2, the DMA interface, version 2
+# C4-5 — DDI v1.2, the DMA interface, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
   the calls are minor 2 (k30.1.2, k46.1.2), since kabi 1.1 closed with
-  the minted kernels (§2). Other repositories build
+  the minted kernels (§2); version 3 (2026-10-27, S4-62's first piece):
+  `dma_addr(r, pa)` takes the segment's address (§2.3), and the k30
+  names are a placeholder until the 030 provider (§5.4). Other
+  repositories build
   against this text; a change from here is a contract change with a
   version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
@@ -69,21 +72,27 @@ void dma_complete(struct dma_rec *r, ulong pa, ulong len, int dir);
 
 A `prepare` that cannot get a bounce buffer returns nonzero, as the
 port's does when the seam is off, and the driver arms all the same. So
-the k30 driver must arm with `dma_addr(r)` (§2.3), which then gives `pa`
-and counts the miss in the record's `off_n`.
+the k30 driver must arm with `dma_addr(r, pa)` (§2.3), which then gives
+`pa`; the miss is counted in the record's `off_n`.
 
 ### 2.3 `dma_addr`
 
 ```c
-ulong dma_addr(struct dma_rec *r);
+ulong dma_addr(struct dma_rec *r, ulong pa);
 ```
 
-The physical address the device must be armed with for the segment `r`
-owns after `prepare`: `pa` on k46 and for a reachable segment on k30,
-the bounce buffer's address for a bounced one. A driver written for both
-lines arms with `dma_addr(r)` where the port's driver armed with `pa`.
-This is the one change to the port's call shape, and on k46 it is the
-identity.
+The physical address the device must be armed with for the segment at
+`pa` after `prepare`: `pa` on k46 and for a reachable segment on k30,
+the bounce buffer's address when `r` owns a bounce for that `pa`. A
+driver written for both lines arms with `dma_addr(r, pa)` where the
+port's driver armed with `pa`. This is the one change to the port's call
+shape, and on k46 it is the identity.
+
+`pa` is an argument (version 3) because the record cannot always give
+it: on a miss the port's `prepare` stores nothing, and when a segment is
+still owned the record's `pa` is the earlier segment's. A `dma_addr(r)`
+reading the record would arm the device with a wrong address in exactly
+the case §2.2 tells the driver to arm past.
 
 **Where the address is taken** (the a4091 station and the port,
 2026-10-26, from `amix-a4091/src/a4091-wr.c` at 27d2079):
@@ -93,7 +102,7 @@ identity.
   short-read recovery re-launch reuses the same table and segment, and
   there is no reconnect (IDENTIFY 0x80, no disconnect privilege).
 - The order therefore becomes: `dma_prepare`, then
-  `ds.data1buf = dma_addr(r)`, then the DSP write. Today the table is
+  `ds.data1buf = dma_addr(r, pa)`, then the DSP write. Today the table is
   built before `prepare`.
 - The floor's A3091 (the A3000 WD33C93 DMAC), which the port's
   `dma_cache040.s` wraps, has two arm sites: the initial arm and the
@@ -136,7 +145,7 @@ void  dma_free(char *va, ulong len);
    SCRIPTS and the per-unit buffers; initialise one `struct dma_rec` per
    controller (`magic`, `version` 2, `ctlid`, `unit`).
 2. Per data transfer: `dma_prepare(r, pa, len, dir)`; then put
-   `dma_addr(r)` where the device takes the data address (for the 53C710,
+   `dma_addr(r, pa)` where the device takes the data address (for the 53C710,
    the DSA table); then arm; on completion `dma_complete(r, pa, len,
    dir)`.
 3. The same calls on both lines. The 030 build, which today makes none,
@@ -196,6 +205,15 @@ pool does not promise.
   root-table entry 0, which differ from those of entries 2 and 3, before
   the first `FROM_DEVICE` test, to know whether the 030 data cache is on
   for the memory the pool and the bounce buffers live in.
+
+### 5.4 Until the 030 provider
+
+The k30 names are in DDI 1.2 now, so a driver builds and checks on both
+lines, but until S4-62 their provider (`core/plat/k30`) is a placeholder
+that never hands a board memory it may not reach: `dma_alloc` returns 0
+(a bus-master driver's `_load` then fails), `dma_prepare` takes no
+ownership and counts the call in `off_n`, `dma_complete` does nothing,
+`dma_addr` returns `pa`.
 
 ## 6. Not in this contract
 
