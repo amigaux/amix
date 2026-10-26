@@ -147,6 +147,14 @@ stage 4 on.
 
 ## Stage 2: the lifecycle rows (S2-41, S2-42, S2-46) and M-GEN2
 
+**`commit --again` in these rows** (C2-4 v7, kbootset from 1.1.0.261025-7
+on). These rows build a generation from the same packages as the
+default, so it equals the default, and a plain `commit` writes nothing
+("the default generation M already has these members; nothing to
+commit"). `--again` writes it all the same: a row needs the generation.
+An older kbootset rejects `--again` as a usage error (status 2), so a row
+on kbootset -6 or earlier uses a plain `commit`.
+
 The rows run the box kbootset (`make box`, copied to the box as
 `/tmp/kbootset` until the kbootset package exists) on a kinfo kernel's row
 under our loader (the port's E5 shape, KD060-Z). One rig lifecycle cell
@@ -164,7 +172,7 @@ sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261
 
 | Boot | Before power-cycling | Expected on the serial log / from kbootset |
 |---|---|---|
-| 1 | `kbootset build; kbootset commit` | `generation 2 committed; power-cycle to boot it` |
+| 1 | `kbootset build; kbootset commit --again` | `generation 2 committed; power-cycle to boot it` |
 | 2 | `kbootset mark-good` | `amix-boot: generation 2, kernel …`; then `generation 2 is good and the default` |
 | 3 | `kbootset rollback` | boots 2; then `the default is generation 1 (was 2)` |
 | 4 | `kbootset next previous` | boots 1; then `the next boot only is changed` |
@@ -228,7 +236,7 @@ path is kbootset's own, so the rows need no apkg.
 
 ```
 --boots 2 --cut-boot 1 --cut-at 'kbootset: holding before step N'
---extra '/tmp/kbootset build > /dev/term/ser 2>&1; (KBOOTSET_HOLD=N /tmp/kbootset commit > /dev/term/ser 2>&1 &)'
+--extra '/tmp/kbootset build > /dev/term/ser 2>&1; (KBOOTSET_HOLD=N /tmp/kbootset commit --again > /dev/term/ser 2>&1 &)'
 boot 2 batch: /tmp/kbootset status > /dev/term/ser 2>&1
 --post-cell 'lsstore "$RIG_FIRST" <slice offset>'
 ```
@@ -328,6 +336,14 @@ bytes may be the same). Then the S2-46 table above applies with:
 - `amix-boot: generation 2, kernel unix 1270676 bytes` on boot 2;
 - `amix-boot: generation 1, kernel unix 1270676 bytes` on boot 4.
 
+**From kbootset -7 on** (C2-4 v7), an upgrade to a kernel with the same
+bytes changes nothing the default holds. The trigger then answers
+`apkg: the default generation 1 already has these members; nothing to
+commit`, and no generation 2 is made. That is the right answer for apkg.
+A re-run of this row on kbootset -7 needs a `kernel-k30-u` whose bytes
+differ from the installed one, a rebuild with a new build id, say. The
+row of record (N45) ran on kbootset -6.
+
 **The variant for a 1.1 disk installed before the packages existed**
 (kbootset and the loader as bare files, as on v8 and v9) is
 `apkg -f install kbootset loader-amix kernel-k30-u`. It is also one
@@ -337,7 +353,7 @@ passed the whole row this way. It is supporting evidence, not the row of
 record.
 
 **S2-41 on k30.** The S2-41 table above applies with:
-- boot 1: `kbootset build; kbootset commit`;
+- boot 1: `kbootset build; kbootset commit --again`;
 - the kernel lines: `kernel unix 1270676 bytes` for every generation,
   the trial included (it is the same kernel);
 - boot 5: the 64 MiB store has room, so `mark-bad 2` is not needed for
@@ -397,7 +413,7 @@ arithmetic, hence the list):
 $KB status > /dev/term/ser 2>&1
 for g in 2 3 4; do
   $KB build $F > /dev/term/ser 2>&1
-  /usr/bin/time $KB commit > /dev/term/ser 2>&1
+  /usr/bin/time $KB commit --again > /dev/term/ser 2>&1
   $KB mark-bad $g > /dev/term/ser 2>&1
 done
 /usr/bin/time $KB check > /dev/term/ser 2>&1
