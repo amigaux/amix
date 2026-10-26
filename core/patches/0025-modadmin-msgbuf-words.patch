@@ -1,0 +1,110 @@
+Subject: modadmin -L: the ring's words first, oldest byte first, text only
+
+One line of the message buffer's words (putbufsz, putbufwpos, putbufrpos,
+conslogging, prt_where), read by lseek on /dev/kmem: dd skip reads its way
+there and hangs the box.  The stock printf stores after a pre-increment, so
+the oldest byte follows putbufwpos.  Only text is printed: the log driver's
+copies (logcons) bring binary header bytes.  User side only.
+
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -23,7 +23,8 @@
+  *					generation, once a boot: the first
+  *					sysinit entry runs it (root)
+  *	modadmin -L			the kernel's message buffer, oldest
+- *					first: what the core and the modules
++ *					first, text only, after a line of its
++ *					words: what the core and the modules
+  *					printed, also after the console
+  *					stopped showing kernel messages
+  *
+@@ -31,7 +32,7 @@
+  * first, then each loaded module's own globals, so a module's tunables
+  * and counters, which move with the module, are reached by name.
+  *
+- * -L finds putbuf, putbufsz and putbufwpos in the namelist /stand/unix,
++ * -L finds putbuf and its words in the namelist /stand/unix,
+  * which kbootset writes for the booted kernel (amix-dlm C2-4 section 12),
+  * and reads them through /dev/kmem.
+  *
+@@ -142,17 +143,37 @@
+ 	return 0;
+ }
+ 
+-/* the kernel's message buffer, oldest first */
++/* a long at kernel address a through the open /dev/kmem fd; -1 if unreadable */
++static long
++kword(fd, a)
++	int fd;
++	unsigned long a;
++{
++	long v;
++
++	if (!a || lseek(fd, (long)a, 0) < 0 || read(fd, (char *)&v, sizeof v) != sizeof v)
++		return -1;
++	return v;
++}
++
++/*
++ * The kernel's message buffer, oldest first, after one line of its words
++ * (the ring's size, write and read positions, conslogging, prt_where).
++ * The stock printf writes the ring after a pre-increment, so the oldest
++ * byte is the one after putbufwpos.  Only text is printed: the log
++ * driver's copies (logcons) bring binary header bytes into the ring.
++ */
+ void
+ msgbuf()
+ {
+-	static char *names[] = { "putbuf", "putbufsz", "putbufwpos" };
+-	unsigned long val[3], sz[3], n, w, i;
+-	long v;
++	static char *names[] = { "putbuf", "putbufsz", "putbufwpos", "putbufrpos", "conslogging",
++				 "prt_where" };
++	unsigned long val[6], sz[6], n, w, i;
++	long v, wpos, rpos, cl;
+ 	char *buf;
+-	int fd;
++	int fd, c;
+ 
+-	if (namelist(names, 3, val, sz) != 0 || !val[0] || !val[2]) {
++	if (namelist(names, 6, val, sz) != 0 || !val[0] || !val[2]) {
+ 		errno = ENOENT;
+ 		fail("cannot find putbuf in", "/stand/unix (kbootset namelist)");
+ 		return;
+@@ -162,21 +183,28 @@
+ 		return;
+ 	}
+ 	n = sz[0];
+-	if (val[1] && lseek(fd, (long)val[1], 0) >= 0 && read(fd, (char *)&v, sizeof v) == sizeof v &&
+-	    v > 0 && (unsigned long)v <= sz[0])
++	if ((v = kword(fd, val[1])) > 0 && (unsigned long)v <= sz[0])
+ 		n = (unsigned long)v;
+-	if (n == 0 || (buf = (char *)malloc((unsigned)n)) == 0 ||
+-	    lseek(fd, (long)val[2], 0) < 0 || read(fd, (char *)&v, sizeof v) != sizeof v ||
++	wpos = kword(fd, val[2]);
++	rpos = kword(fd, val[3]);
++	cl = kword(fd, val[4]);
++	v = kword(fd, val[5]);		/* prt_where is a short: its high half */
++	printf("putbuf 0x%lx (%lu bytes), putbufsz %ld, wpos %ld, rpos %ld, conslogging %ld, "
++	       "prt_where 0x%lx\n", val[0], sz[0], kword(fd, val[1]), wpos, rpos, cl,
++	       v == -1 ? (unsigned long)v : ((unsigned long)v >> 16) & 0xffff);
++	if (n == 0 || wpos < 0 || (buf = (char *)malloc((unsigned)n)) == 0 ||
+ 	    lseek(fd, (long)val[0], 0) < 0 || read(fd, buf, (unsigned)n) != (int)n) {
+ 		close(fd);
+ 		fail("cannot read", "putbuf");
+ 		return;
+ 	}
+ 	close(fd);
+-	w = (unsigned long)v % n;
+-	for (i = 0; i < n; i++)		/* from the write position round: oldest first */
+-		if (buf[(w + i) % n])
+-			putchar(buf[(w + i) % n]);
++	w = ((unsigned long)wpos + 1) % n;
++	for (i = 0; i < n; i++) {	/* from after the write position round: oldest first */
++		c = buf[(w + i) % n] & 0xff;
++		if ((c >= 0x20 && c < 0x7f) || c == '\n' || c == '\t')
++			putchar(c);
++	}
+ 	free(buf);
+ }
+ 

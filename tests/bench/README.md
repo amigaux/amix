@@ -688,6 +688,15 @@ buffer through `/stand/unix`, so `kbootset status` must show a current
 namelist first. modadmin's own output (`cannot load …: <errno text>`) is
 on the terminal as always.
 
+From core patch 0025, `modadmin -L` starts with one line of the ring's
+words: `putbuf 0x… (2000 bytes), putbufsz …, wpos …, rpos …,
+conslogging …, prt_where 0x…`. Never read them with `dd skip=`: dd reads
+its way through `/dev/kmem` from 0 and hangs the box. `prt_where` 0x2 is
+the stock kernel after boot: printf writes the ring, not the console. The
+ring holds text only in `-L`'s output, because the log driver's copies
+(`logcons`) also put binary header bytes there. A `cmn_err` line can
+appear twice, once from printf and once from the log driver's copy.
+
 **Inputs:**
 - the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
   k30: the K030-U cut with `unix.sym`), each through `s3-standin.sh`;
