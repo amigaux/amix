@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset reads unix.sym as ET_EXEC by section name; L5 as L2; C2-3 kernel names (9763024, bb088bb)
+
+kbootset reads unix.sym as an ET_EXEC whose st_value is the address with the kernel bound at 0 (no section base added) and
+tells its NOBITS sections apart by name — before, every NOBITS section counted as bss and rodata/data read as 0 (the symbol
+values were right; the k30 layout check compares only text). s3-standin.sh carries the sidecar's sym= file and record line.
+Spec 10 §9: L5 is handled as L2. C2-3 v6: the unix.sym form (ET_EXEC, st_value = value at bind 0, section symbols move by
+the bind, SHN_ABS constant but etext/edata/end); module kernel packages kernel-k46-m/kern46m and kernel-k30-m/kern30m,
+version <kabi>.<yymmdd>-<nn> from the build id. The k30 S3-43 set rebuilt from the s3-21e .etrel. Box kbootset cd02b817.
+
 ## 2026-10-26 — S01kbnamelist; C3-5 module/VERSION; the S3-43 recipes and the rule-breaking module set (e024b55, 8be28b8)
 
 C2-4 §12: the early rc2 script is S01kbnamelist (rc2 runs S* in byte order; S02PRESERVE would sort before S02kbnamelist).
