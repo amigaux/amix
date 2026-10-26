@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — k46.1.0 fingerprint rewritten from the re-cut; abi= required at gate 2; C3-3 v4 (3ee2fe4, a28d5ab)
+
+k46.1.0's reference is rewritten once from the re-cut KD060-Z: cputype's size went 0 → 4 and nothing else moved; it now
+equals k30's (abi=7a90c7d9…). kbootset refuses a module kernel whose sidecar has no abi= (gate 2); s3-standin.sh requires
+the key. C3-3 v4: abi= required, the k46.1.0 reference closed, equal fingerprints across lines expected (the kabi tag tells
+the lines apart). Both re-cut kernels compose through the new gate. 665 host checks; make core 119/119; KIT_REV=a28d5ab.
+Box kbootset 45909ae5.
+
 ## 2026-10-26 — modadmin for the box (S3-11); C2-4 version 8 (55722ef, cdf29fd)
 
 The core's modadmin built with GCC 14, static like kbootset, its six system calls through the stock syscall(); core patch
