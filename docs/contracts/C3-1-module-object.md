@@ -1,7 +1,9 @@
-# C3-1 — the module object and `.moddata` version 2, version 2
+# C3-1 — the module object and `.moddata` version 2, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
-  (2026-10-26): the text form of parameter values (§3). Other repositories build against this text; a change from here is a contract change with a version bump.
+  (2026-10-26): the text form of parameter values (§3); version 3
+  (2026-10-26): the §4 table is the load call's, a refused first open is
+  `ENXIO` (§4). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
 - **Produced by:** the ABI kit's `mkmod` and `modfix` (S3-10), used by the
@@ -126,6 +128,12 @@ module.
 Every refusal leaves the kernel as it was and prints one console line
 naming the module and the rule. The errno values are upstream's (`mod.h`)
 where one fits.
+
+The table is the load call's: `modload`, a dependency's load, and
+`marc_post`'s boot-class load return these. **A demand-class module
+refused at the first open of its device returns `ENXIO` to `open(2)`**,
+whatever the refusal, as a device that cannot be opened does. The
+console line names the module and the rule.
 
 | Refusal | errno |
 |---|---|
