@@ -35,6 +35,7 @@ against our kernels (M-CORE1).
 | 0005 | `allowlisted-symbol-block` | 30 §2 patch 5, contract C3-2. Symbol block version 2. `mkksym -a` writes the block of the allowlisted names as assembler before the final link, with the values as relocations, so it stays right wherever the loader binds the kernel. `mkksym -f` fills the sizes. `st_other` is the tier, and only a core-tier module resolves a core-tier name. `dlm_init` checks the block against `dlm_ksym_space`, and the stock `dlmksym.s` is an empty block. | not yet |
 | 0006 | `major-registry` | 30 §2 patch 6. A module's `majors=` must name numbers the registry gives to that module (`ECONFIG` otherwise). The kernel build generates the table from the kit's `abi/registry/majors` with `tools/mkreg`. | not yet (upstream would carry its own registry file) |
 | 0007 | `fmodsw-no-truncation` | 30 §2 patch 12. Every stock STREAMS-module row is kept. More than 11 leave fewer rows for modules and are reported; more than the table holds panic at `dmainit`. | not yet |
+| 0008 | `measured-structure-layouts` | 30 §2 patch 15. The `mod_drv_data`, `cdevsw`, `mod_str_data`, `streamtab` and `qinit` layouts are measured from the kernel's headers by the kernel's compiler (`dlmoffs.c`, `tools/mkoffs`, `dlm_offs.h`) instead of written down. On the 2.1 sysroot all 19 equal upstream's values. | not yet |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order

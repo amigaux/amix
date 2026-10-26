@@ -73,6 +73,22 @@ mkdir -p "$TB" "$B/test-bin" "$B/obj" "$B/target"
 ${HOSTCC:-cc} -O2 -I"$R/loader/common" -o "$B/test-bin/axrel" "$R/tests/host/axrel.c" \
 	"$R/loader/common/rel.c"
 
+# ---- 0. the structure layouts (core patch 0008), before anything includes them ----
+if sh "$DLM/tools/mkoffs" m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -I"$DLM/include" \
+	> "$DLM/dlm_offs.h" 2> "$B/offs.log"; then
+	# against the values upstream wrote down for AMIX 2.1
+	grep -h '^#define	\(DRV\|CD_\|SD_\|SDSZ\|STSZ\|QI\)' "$U/dlm_slot.c" "$U/dlm_str.c" |
+		awk '{print $2, $3}' | sort > "$B/offs.upstream"
+	awk '/^#define/ {print $2, $3}' "$DLM/dlm_offs.h" | sort > "$B/offs.measured"
+	if cmp -s "$B/offs.upstream" "$B/offs.measured"; then
+		pass "structure layouts measured by the kernel compiler: $(wc -l < "$B/offs.measured"), all equal to upstream's written-down values"
+	else
+		fail "structure layouts differ from upstream's: $(diff "$B/offs.upstream" "$B/offs.measured" | grep '^[<>]' | tr '\n' ' ')"
+	fi
+else
+	fail "tools/mkoffs: $(cat "$B/offs.log")"; exit 1
+fi
+
 # ---- 1. host tools ----
 HCC="${HOSTCC:-cc} -std=gnu89 -O -g -Wall -Wno-parentheses -Wno-unused-but-set-variable"
 if $HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$TB/mkksym" "$DLM/tools/mkksym.c" "$DLM/dlm_sym.c" &&
