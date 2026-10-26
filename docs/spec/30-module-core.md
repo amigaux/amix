@@ -58,7 +58,7 @@ What the adopted core lacks for our use is mapped in `MAP` §10 and
 | 8 | `sd_register`: disk controllers register into the sd layer (§5) | no HBA registration exists (`MAP` §6) |
 | 9 | `vfs_register` and a grown `vfssw` (§6) | no filesystem linkage exists |
 | 10 | `intr_attach` / `intr_detach` with INT2 and INT6 chains (§4) | interrupts are platform-static in upstream (`MAP` §6) |
-| 11 | Halt pass: call each module's halt entry, newest first, before the kernel halts or reboots | the halt hook is declared and filled by the wrapper macros but never called (`MAP` §3) |
+| 11 | Halt pass: call each module's halt entry, newest first, before the kernel halts or reboots. The kernel calls `dlm_halt()` from `mdboot`, before `haltsys` or `rtnfirm`, for uadmin's `A_SHUTDOWN` and `A_REBOOT` only: panic and the keyboard reset reach `haltsys` too, and must not run module code (2026-10-26, from the port's halt-path record) | the halt hook is declared and filled by the wrapper macros but never called (`MAP` §3) |
 | 12 | `fmodsw`: refuse rather than truncate when the kernel has more stock rows than expected | upstream truncates `fmodcnt` to 11 (`MAP` §6); ours is exactly 11 today (`L2`:280) |
 | 13 | Per-module range checks in `inimg`/`okptr` and the cdev entry check | a pointer inside `[stext,end)` is not proof it belongs to a module (`STUDY` §2.5, C2-F1) |
 | 14 | Pin by default: no unload unless the module declares `unload=allowed` and every registration it made is tracked | upstream has no auto-unload daemon and unload paths that need care (`MAP` §5) |
@@ -308,7 +308,7 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
 | OQ-30.1 | Is a no-sleep mode strictly needed at `dmainit` on our base, or only at `marc_root` (U1)? | us |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe: does it exist in time for 1.1 (`amix-kerntools/docs/k0-families.md:1190-1195`)?  **Settled** (the owner, 2026-10-26): written in stage 4 (80 OQ-80.2) | us |
 | OQ-30.4 | Antti's review of the rebuilt 040/060 base without ufs/s5 (carving method, gates, acceptance record per his `docs/ACCEPTANCE.md`). | us build; Antti reviews |
-| OQ-30.5 | Does the halt path, known to crash on `shutdown -i0` on the 040/060 base (`amix-040-060-port/README.md`), need fixing before the halt pass can be proven? | Antti; us |
+| OQ-30.5 | Does the halt path, known to crash on `shutdown -i0` on the 040/060 base (`amix-040-060-port/README.md`), need fixing before the halt pass can be proven?  **Answered** (2026-10-26, the port's records): no. `shutdown -i0` does not crash on today's 040/060 kernels: the 2026-07-20 report was the user-side shutdown process faulting before `uadmin`, and 246 halts since reached "The system is halted" | Antti; us |
 | OQ-30.6 | Does ashnazag's author want the patches (arena path, no-sleep mode, `.moddata` v2, halt pass, `fmodsw` refusal, allowlist mode, shared registry) offered upstream? | ashnazag |
 | OQ-30.7 | Upstream's `rth1.c` copy is byte-identical today; re-check before the merge request. | us |
 

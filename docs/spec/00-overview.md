@@ -105,7 +105,7 @@ decision reserved to the project owner.
 | OQ-30.1 | Is a no-sleep mode needed at `dmainit` or only at `marc_root` | us |
 | OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe in time for 1.1 (settled: written in stage 4) | us |
 | OQ-30.4 | Review of the 040/060 base rebuilt without ufs/s5 | us build; Antti reviews |
-| OQ-30.5 | The 040/060 halt path before the halt pass | Antti; us |
+| OQ-30.5 | The 040/060 halt path before the halt pass (answered: no crash; the pass hooks mdboot) | Antti; us |
 | OQ-30.6 | Which core patches go upstream | ashnazag |
 | OQ-30.7 | Re-check upstream's `rth1.c` before the merge request | us |
 | OQ-40.1 | The exact surviving-configuration set (P-29) | us |
