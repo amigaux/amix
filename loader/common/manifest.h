@@ -50,6 +50,7 @@ struct ax_member {
 	char *match;		/* comma-separated match keys, or 0 */
 	char *path;		/* root-filesystem path (boot/demand class), or 0 */
 	char *file;		/* a file in the line directory (CD media), or 0 */
+	int safe;		/* root class: a safe-mode member (safe=1) */
 	ax_u32 bss;		/* kernel: bytes past the image to its end (bss and
 				 * COMMON), which a brel kernel does not record; 0 if
 				 * not given */

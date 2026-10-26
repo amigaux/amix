@@ -4,9 +4,9 @@
  * Loader version 2: a generation is a kernel and a manifest; a module
  * kernel's manifest names its identity record and its module arena
  * (C3-3, C3-4), and the loader checks the one and fills the other with
- * the arena directory and a copy of the manifest.  Root-class modules and
- * a RAM disk are stage 4's: a manifest with either is refused with a
- * message (loader-min guards this as well).
+ * the arena directory, a copy of the manifest and the root-class modules
+ * (C4-4 version 3).  A RAM disk is S4-11's: a manifest with one is
+ * refused with a message (loader-min guards this as well).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -55,7 +55,7 @@ static const char *const lmsg[] = { "",
 	"L4 not enough memory",
 	"L5 module arena overflow",
 	"L6 relocation failed",
-	"L7 no root module matched",
+	"L7",				/* retired: the core matches (C4-4 v3) */
 	"L8 trial generation did not reach multi-user",
 	"L9 generation needs a newer loader",
 	"L10 control block write failed",
@@ -210,14 +210,27 @@ img(ax_u32 off, ax_u32 len)
 
 /*
  * A module kernel: its identity record must say what the manifest says
- * (C3-3), then the arena gets its directory, with no modules in stage 3,
- * and the manifest copy (C3-4).  0, or the L code.
+ * (C3-3), then the arena gets its directory, the manifest copy and every
+ * root-class module of the generation, in safe mode only the safe set
+ * (C3-4; C4-4 version 3): each file 16-aligned, decompressed and
+ * CRC-checked by load_member, with its zeroed bss= tail behind it.
+ * boot2 selects nothing: the core evaluates match= at marc_root.  No
+ * parameter strings: the core reads them in the manifest copy.  0, or
+ * the L code.
  */
+/* boot2 places every root-class record, in safe mode the safe set (C4-4 v3) */
 static int
-arena_fill(void)
+placed(const struct ax_member *mb, int safe)
 {
-	ax_u8 *id = img(man.ident_off, 64), *a = img(man.arena_off, man.arena_cap);
-	ax_u32 sum = 0, i, line = (ax_u32)(man.line[1] - '0') * 10 + (ax_u32)(man.line[2] - '0');
+	return mb->cls == AXC_ROOT && (!safe || mb->safe);
+}
+
+static int
+arena_fill(int safe)
+{
+	ax_u8 *id = img(man.ident_off, 64), *a = img(man.arena_off, man.arena_cap), *e, *b;
+	ax_u32 sum = 0, i, n = 0, off, line = (ax_u32)(man.line[1] - '0') * 10 + (ax_u32)(man.line[2] - '0');
+	struct ax_member *mb;
 
 	if (!id || !a || !man.kabi)
 		return 14;
@@ -229,21 +242,53 @@ arena_fill(void)
 	    i == 24 || man.kabi[i] || id[12 + i] || AX_GET32(id + 36) != line ||
 	    AX_GET32(id + 40) != man.arena_off || AX_GET32(id + 44) != man.arena_cap)
 		return 14;
-	if (32 + g->man_len > man.arena_cap) {
-		con_say("the arena needs %u bytes, it has %u\n", 32 + g->man_len, man.arena_cap);
+	for (i = 0; i < (ax_u32)man.nmod; i++)
+		n += placed(&man.mod[i], safe);
+	off = 32 + 48 * n;
+	if (off + g->man_len > man.arena_cap) {
+		con_say("the arena needs %u bytes, it has %u\n", off + g->man_len, man.arena_cap);
 		return 5;
 	}
-	x_memset(a, 0, 32);
+	x_memset(a, 0, off);
+	x_memcpy(a + off, mcopy, g->man_len);
+	AX_PUT32(a + 16, off);
+	AX_PUT32(a + 20, g->man_len);
+	off += g->man_len;
+	for (n = 0, i = 0; i < (ax_u32)man.nmod; i++) {
+		mb = &man.mod[i];
+		if (!placed(mb, safe))
+			continue;
+		off = (off + 15) & ~15UL;
+		if (off + ((mb->size + 15) & ~15UL) + mb->bss > man.arena_cap) {
+			con_say("the arena needs %u bytes, it has %u\n",
+				off + mb->size + mb->bss, man.arena_cap);
+			return 5;
+		}
+		con_say("module %s %u bytes\n", mb->name, mb->size);
+		if ((b = load_member(mb, gen)) == 0)
+			return -1;		/* load_member said which L code */
+		x_memcpy(a + off, b, mb->size);
+		x_freemem(b, mb->size);
+		e = a + 32 + 48 * n++;
+		for (sum = 0; sum < 15 && mb->name[sum]; sum++)
+			e[sum] = (ax_u8)mb->name[sum];
+		AX_PUT32(e + 16, off);
+		AX_PUT32(e + 20, mb->size);
+		AX_PUT32(e + 24, 1);
+		AX_PUT32(e + 28, mb->crc);
+		AX_PUT32(e + 32, 1 | (mb->safe ? 4 : 0));
+		off = (off + mb->size + 15) & ~15UL;
+		x_memset(a + off, 0, mb->bss);
+		off += mb->bss;
+	}
 	AX_PUT32(a, 0x41584131UL);		/* AXA1 */
 	AX_PUT32(a + 4, 0x00010020UL);
-	AX_PUT32(a + 16, 32);
-	AX_PUT32(a + 20, g->man_len);
-	AX_PUT32(a + 24, 32 + g->man_len);
+	AX_PUT32(a + 12, n);
+	AX_PUT32(a + 24, off);
 	AX_PUT32(a + 28, gen);
-	for (sum = 0, i = 0; i < 8; i++)
+	for (sum = 0, i = 0; i < 8 + 12 * n; i++)
 		sum += AX_GET32(a + 4 * i);
 	AX_PUT32(a + 8, 0 - sum);
-	x_memcpy(a + 32, mcopy, g->man_len);
 	return 0;
 }
 
@@ -277,10 +322,8 @@ load_first(const struct ax_sel *sel)
 				   gen, man.line, core_cpu);
 			goto next;
 		}
-		for (i = 0; i < man.nmod && man.mod[i].cls != AXC_ROOT; i++)
-			;
 		if (man.loader_min > LOADER_VERSION || man.has_arena != man.has_ident ||
-		    man.has_ramdisk || i < man.nmod) {
+		    man.has_ramdisk) {
 			fail(9, gen);
 			goto next;
 		}
@@ -305,9 +348,10 @@ load_first(const struct ax_sel *sel)
 				con_say("no bss= for this brel: 512 KiB assumed\n");
 		}
 		if (rc == AXR_OK && bd.end - vaddr <= room) {
-			if (!man.has_arena || (rc = arena_fill()) == 0)
+			if (!man.has_arena || (rc = arena_fill(sel->safe)) == 0)
 				return k;
-			fail(rc, gen);
+			if (rc > 0)
+				fail(rc, gen);
 		} else if (rc == AXR_OK) {
 			con_say("the kernel needs %u bytes, the region has %u\n", bd.end - vaddr, room);
 			fail(4, gen);

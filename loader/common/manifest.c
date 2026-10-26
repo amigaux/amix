@@ -147,6 +147,8 @@ attrs(struct ax_member *mb, char **tok, int ntok)
 			mb->has_crc = 1;
 		} else if (prefix(a, "sha256=")) {
 			mb->sha256 = a + 7;
+		} else if (prefix(a, "safe=")) {
+			mb->safe = a[5] == '1';	/* the safe-mode set (C3-5 section 3) */
 		} else if (prefix(a, "match=")) {
 			mb->match = a + 6;
 		} else if (prefix(a, "path=")) {

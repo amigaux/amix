@@ -53,7 +53,7 @@ cells of this ledger.
 | root on s5 as a module | pending | pending |
 | cdfs as a demand module | pending | pending |
 | a damaged root module selects the menu | pending | pending |
-| L5 arena overflow; L7 no root module matched | pending | pending |
+| L5 arena overflow (a backstop: gate 4 refuses first); an unmatched root entry skipped silently by the core (L7 retired, C4-4 v3) | pending | pending |
 | `sd_register` after sd's first open: `EBUSY` and a console line | pending | pending |
 | a failed root-class `_load` leaves the kernel as it was | pending | pending |
 | the deferred self-test point (S4-05): Gayle IDE leaves polled | pending | pending |
