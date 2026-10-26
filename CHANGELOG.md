@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patch 0019: code pointers in kernel text or the image; registry majors (dafa9c0)
+
+A switch entry or STREAMS routine must be 0, kernel text [stext, etext) or the module's own image (kernel data and the arena
+refused); a qinit's module_info and module_stat must be in the image; every character major a module registers or installs
+at must be registered to it in the major registry (ECONFIG; a row held by another module is ECONFIG, C3-1 §4). The real
+modules are unaffected (own-image routines, majors 51/49/52 registered to their names). Harness 169/169 both kernels; make
+core 119/119; 665 host checks. Audit items §1.2 and §1.4.
+
 ## 2026-10-26 — core patch 0018: development load as C3-4 says; paths under /stand/gen (b633b3a)
 
 With no booted manifest nothing loads, even under development load; under development load a manifest member loads from
