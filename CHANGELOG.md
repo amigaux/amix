@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-2 draft: what a root-class driver changes (24e1ae1)
+
+Its own contract beside C3-6 (which still governs every module). `.moddata`: class=root, match required, rank for disk
+controllers, unload=never, depend only on root modules, sections that run in place (alignment ≤ 16). `_load` in the root pass
+(level 7, clock stopped): no sleep or wait, KM_NOSLEEP ≤ 1 MiB checked, no file I/O, polled probes; 0 = linked, ENXIO = no
+board (silent); allowed names = every *any* DDI name, kmem NOSLEEP, sd_register, root_defer, and four *proc* names the static
+root drivers use in init_tbl today (autocon, bprobe, sptalloc/sptfree, dev_kvmap on k46) — S4-71 confirms them on both lines
+with a probe module before any port ships. `root_defer(fn, arg)`: a new DDI name (minor 1; S4-05), up to 8 calls run once
+each at the first sysinit entry in process context at level 0 before any boot-class load — intr_attach, self-test and enable
+live there, polled until then; the calls run in safe mode too. sd_register per board with its class. `_halt` from dlm_halt.
+DMA only through C4-5. A row per driver (z3660scsi, A4091/A4092, the 53C710, Gayle, ramdisk) with match, rank, interrupt path.
+
 ## 2026-10-26 — Core patch 0034: marc_root, the arena's root modules linked (S4-04, 82cc554)
 
 `dlm_marc_root()`, the kernel's hook in rth1_mountroot before rth1_apply (C4-4 §4): walks the arena directory in order in
