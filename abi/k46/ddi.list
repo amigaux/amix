@@ -27,6 +27,11 @@ cputype data 0
 dev_kvmap func 0
 dev_kvunmap func 0
 displayedscreen data 0
+dma_addr func 2
+dma_alloc func 2
+dma_complete func 2
+dma_free func 2
+dma_prepare func 2
 drv_priv func 0
 dupmsg func 0
 flushq func 0

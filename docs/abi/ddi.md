@@ -137,6 +137,19 @@ level-2 handler raised through PORTS or in the poll.
 |---|---|---|---|---|
 | `vfs_register` | `int vfs_register(name, init, ops, flag)` | `_load` | core | Appends a `vfssw` row for the module's filesystem type (contract C4-6 §3): `name` is the module's `fs=` and stays in its storage, `ops` its `struct vfsops`, `flag` the row's `vsw_flag`. `init`, when not 0, runs once now with the row and its index, as `vfsinit` runs the stock rows'; its result is not read. 0; `EINVAL` (a name other than `fs=`, no `ops`, outside a module's `_load`, or a module with `unload=allowed`); `EEXIST` (a row of that name, the kernel's own included); `ENOSPC` (the 4 spare rows taken). There is no unregister; a failed `_load`'s row is removed |
 
+## DMA (k30.1.2, k46.1.2)
+
+| Name | Form | Context | Provider | Contract |
+|---|---|---|---|---|
+| `dma_prepare` | `int dma_prepare(r, pa, len, dir)` | any | port (k46), core (k30) | Before the write that arms the device: makes `[pa, pa+len)` coherent for the device and takes ownership in `r` (contract C4-5 §2). 0; nonzero is a miss (seam off, a segment still owned, no bounce buffer), and the driver arms all the same |
+| `dma_complete` | `dma_complete(r, pa, len, dir)` | any | port (k46), core (k30) | After the device stopped, before the completion: for `DMA_FROM_DEVICE` makes the device's bytes visible to the CPU, and gives up the segment |
+| `dma_addr` | `ulong dma_addr(r, pa)` | any | core | The address to arm the device with for the segment at `pa`: `pa`, or on k30 the bounce buffer `r` owns for it |
+| `dma_alloc` | `char *dma_alloc(len, &pa)` | any (never sleeps) | core | `len` bytes (at most 64 KiB), 16-aligned, that a Zorro III bus master reaches, with their physical address: SCRIPTS, tables, message and status buffers. 0 when none. k46: identity-mapped kernel memory, cache-inhibited through DTT0. **k30: none yet** (0 always) until the 030 provider, S4-62 |
+| `dma_free` | `dma_free(va, len)` | any | core | gives back one `dma_alloc` block, with its `len`. Never while the device may touch it |
+
+`r` is the driver's `struct dma_rec`, one per controller, layout version 2
+(the port's `DMA040-SERVICE-RECORD.md`). Zero-length transfers make no call.
+
 ## STREAMS
 
 | Name | Context | Provider |
@@ -187,7 +200,7 @@ never names them.
 
 These names are never in the DDI: `cdevsw`, `bdevsw`, `vfssw`, `int2_tbl`,
 `conputc`, `ifstats`, and every other kernel global not listed above. Their
-module forms are the core's interfaces (C3-6 §1). DMA (`dma_alloc` and the
-others) is not in v1.0. A stage-4 interface comes as a minor. A name a
+module forms are the core's interfaces (C3-6 §1). DMA is not in v1.0; it
+came with 1.2 (above). A stage-4 interface comes as a minor. A name a
 driver needs and the DDI lacks is asked for, and it enters as a minor
 after review.

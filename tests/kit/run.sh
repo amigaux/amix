@@ -188,6 +188,11 @@ for l in k30 k46; do
 		else fail "$l: the STREAMS driver"; cat "$W/str.out"; fi
 	mkbad $l drvx "$DRV"'struct mod_drv_data drvx_drvdata[] = { { { 0 }, 0, 0, { o, o, o, o, o }, 52, 1 } };\nMOD_DRV_WRAPPER(drvx, l, u, 0, "x");\n' '$modtype drv\n$class demand\n$cpu 68020\ndrvx\tdrvx\n' &&
 		refused "drv_cmajor not in majors=" $l "$W/$l-drvx/out/mod.d/drvx" "drv_cmajor 52"
+	# the DMA names (C4-5 v3, DDI 1.2): a module calling all five checks
+	mkbad $l dmause "$WRAP"'#include "sys/amixddi.h"\nchar rec[0x60];\nunsigned long f(pa) unsigned long pa; { unsigned long p; char *v = dma_alloc(1024L, &p); unsigned long a; if (dma_prepare(rec, pa, 512L, DMA_FROM_DEVICE)) ; a = dma_addr(rec, pa); dma_complete(rec, pa, 512L, DMA_FROM_DEVICE); dma_free(v, 1024L); return a + p; }\nMOD_MISC_WRAPPER(dmause, l, u, "x");\n' "$M0"'dmause\tdmause\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-dmause/out/mod.d/dmause" > "$W/dma.out" 2>&1; then
+			pass "$l: a module calling dma_prepare, dma_addr, dma_complete, dma_alloc, dma_free passes"
+		else fail "$l: the DMA module"; cat "$W/dma.out"; fi
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do

@@ -162,6 +162,13 @@ if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -I"$R/loader/common" -o "$B/test-bin
 else
 	grep '^FAIL' "$B/t_plat.log"; fail "core/plat"
 fi
+if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -DDMA_IDTOP='(~0UL)' -o "$B/test-bin/t_dma" \
+	"$R/tests/core/t_dma.c" "$R/core/plat/k46/line.c" &&
+   "$B/test-bin/t_dma" > "$B/t_dma.log" 2>&1; then
+	pass "core/plat k46 DMA: $(grep -c '^PASS' "$B/t_dma.log") checks (dma_alloc, dma_free, dma_addr)"
+else
+	grep '^FAIL' "$B/t_dma.log"; fail "core/plat k46 DMA"
+fi
 
 # ---- 3. the user side ----
 if for f in modload moduload modpath modstat modadm getksym; do
@@ -368,16 +375,25 @@ for IMG; do
 	m68k-cbm-sysv4-ld -r -u __udivdi3 -u __umoddi3 -u __lshrdi3 -o "$A/prov.o" $prov
 	{ m68k-elf-nm "$ORIG"; m68k-elf-nm "$A/prov.o"; } |
 		awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
+	# on k46 the DMA service is the port's (dma_cache040.o, which the
+	# port's kernel links and this k0 base lacks): its names, when that
+	# object defines them, are stubbed here and said, not failed
+	portdma=
+	DC=$WS/amix-040-060-port/build/dma_cache040.o
+	[ $LINE = k46 ] && [ -f "$DC" ] &&
+		portdma=$(m68k-elf-nm "$DC" | awk '$2=="T" && ($3=="dma_prepare" || $3=="dma_complete") {print $3}' | sort | tr '\n' ' ')
 	awk '!/^#/ && NF {print $1, $2}' "$L" | while read n k; do
 		grep -qx "$n" "$A/defined" || echo "$n $k"; done > "$A/stubbed"
+	for n in $portdma; do echo "$n func"; done > "$A/portdma"
+	grep -vxFf "$A/portdma" "$A/stubbed" > "$A/lost" || true
 	awk '$2=="func" {printf "\t.text\n\t.globl\t%s\n%s:\n\trts\n", $1, $1}
 	     $2=="data" {printf "\t.data\n\t.globl\t%s\n%s:\n\t.long\t0\n", $1, $1}' \
 		"$A/stubbed" > "$A/stubs.s"
 	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
-	if [ -s "$A/stubbed" ]; then	# a lost provider fails the run (stubbed only so later checks run)
-		fail "$K: allowlisted names with no provider in the spliced kernel: $(awk '{printf "%s ", $1}' "$A/stubbed")"
+	if [ -s "$A/lost" ]; then	# a lost provider fails the run (stubbed only so later checks run)
+		fail "$K: allowlisted names with no provider in the spliced kernel: $(awk '{printf "%s ", $1}' "$A/lost")"
 	else
-		pass "$K: every allowlisted name has its real provider in the spliced kernel"
+		pass "$K: every allowlisted name has its real provider in the spliced kernel${portdma:+ (the port's dma_cache040.o defines ${portdma% }, stubbed in this base)}"
 	fi
 	python3 "$R/tools/mkident.py" --asm $LINE $KABI 0x60000 > "$A/ident.s"
 	m68k-cbm-sysv4-as -o "$A/ident.o" "$A/ident.s"

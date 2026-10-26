@@ -93,6 +93,28 @@ extern int	ramdisk_image();	/* (unsigned long *, unsigned long *) */
 extern int	vfs_register();		/* (char *, int (*)(), struct vfsops *, long) */
 
 /*
+ * DMA by a bus-master board (k30.1.2 / k46.1.2; contract C4-5).  The
+ * record is the driver's, struct dma_rec of layout version 2 (0x60 bytes,
+ * the 040/060 port's DMA040-SERVICE-RECORD.md).  Per transfer:
+ * dma_prepare(r, pa, len, dir) after the driver built what the device
+ * reads, then arm the device with dma_addr(r, pa) where it takes the data
+ * address, then dma_complete(r, pa, len, dir) when it has stopped.  A
+ * nonzero prepare is a miss the driver arms past.  dma_alloc(len, &pa):
+ * len bytes (at most 64 KiB, 16-aligned) the board reaches, for SCRIPTS
+ * and tables, 0 when none; never sleeps.  On k30 the provider is a
+ * placeholder until S4-62: dma_alloc returns 0.
+ */
+#ifndef DMA_TO_DEVICE
+#define	DMA_TO_DEVICE	0
+#define	DMA_FROM_DEVICE	1
+#endif
+extern int		dma_prepare();	/* (struct dma_rec *, ulong pa, ulong len, int dir) */
+extern void		dma_complete();	/* (struct dma_rec *, ulong pa, ulong len, int dir) */
+extern unsigned long	dma_addr();	/* (struct dma_rec *, ulong pa) */
+extern char		*dma_alloc();	/* (ulong len, ulong *pa) */
+extern void		dma_free();	/* (char *va, ulong len) */
+
+/*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or
  * off the stock list netstat reads.  0, EEXIST / ENOENT.
  */
