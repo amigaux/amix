@@ -46,8 +46,11 @@ B=$(mkdir -p "${B:-$R/build}/core" && cd "${B:-$R/build}/core" && pwd)
 . "$GCA/env.sh"
 PATH="$G14/prefix/bin:$PATH"
 export PATH
-[ $# -gt 0 ] || set -- "$WS/amix-kerntools/work/k0-chains/KD060-Z/KD060-Z-c0-u6" \
-	"$WS/amix-kerntools/work/k0-chains/K030-U/K030-U-c0-u6.etrel"
+# the k30 module kernel is cut from K030-U with kinfo (amix-kerntools
+# 5b5fa21); without that build at hand, the K030-U of record
+K30=$WS/tmp/2026-10-26-kinfo030/pkg/K030-U-kinfo.etrel
+[ -f "$K30" ] || K30=$WS/amix-kerntools/work/k0-chains/K030-U/K030-U-c0-u6.etrel
+[ $# -gt 0 ] || set -- "$WS/amix-kerntools/work/k0-chains/KD060-Z/KD060-Z-c0-u6" "$K30"
 
 fails=0
 pass() { echo "PASS $*"; }
@@ -130,7 +133,7 @@ fi
 m68k-elf-nm -u "$B/obj/dlm.o" | awk '$1=="U"{print $2}' | sort -u > "$B/obj/dlm.undef"
 
 # the platform hook (core/plat): built as the kernel builds it, and on the host
-for f in amiga k30/cputype; do
+for f in amiga k30/line k46/line; do
 	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
 		-I"$R/loader/common" -c "$R/core/plat/$f.c" -o "$B/obj/plat-$(echo $f | tr / -).o" 2>> "$B/kobj.warn"
 done
@@ -331,9 +334,8 @@ for IMG; do
 		--add-symbol __amix_aciabintr=.text:0x$(sym aciabintr),global,function "$ORIG" "$A/spliced.o"
 	prov=$(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post \
 		dlm_ddi dlm_intr sha256 crc32 dlm_cache dlm_hooksw dlm_spl plat-amiga; do echo "$B/obj/$f.o"; done)
-	if [ $LINE = k30 ]; then
-		prov="$prov $B/obj/plat-k30-cputype.o"
-	else
+	prov="$prov $B/obj/plat-$LINE-line.o"
+	if [ $LINE = k46 ]; then
 		prov="$prov $(dirname "$(command -v m68k-cbm-sysv4-ld)")/../lib/gcc-lib/m68k-cbm-sysv4/2.7.2.3/libgcc.a"
 		[ -f "$WS/amix-040-060-port/build/devkvmap040.o" ] &&
 			prov="$prov $WS/amix-040-060-port/build/devkvmap040.o"
@@ -355,6 +357,12 @@ for IMG; do
 	python3 "$R/tools/mkident.py" --asm $LINE $KABI 0x60000 > "$A/ident.s"
 	m68k-cbm-sysv4-as -o "$A/ident.o" "$A/ident.s"
 	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/ident.o" "$A/stubs.o"
+	weak=$(m68k-elf-nm "$A/kernel.o" | awk '$2 ~ /^[WwVv]$/ {print $3}' | tr '\n' ' ')
+	if [ -z "$weak" ]; then
+		pass "$K: no weak symbol survives the splice (the port refuses a kernel with one)"
+	else
+		fail "$K: weak symbols in the spliced kernel: $weak"
+	fi
 	und=$(m68k-elf-nm -u "$A/kernel.o" | awk '{print $2}' | grep -vx 'etext\|edata\|end' | tr '\n' ' ')
 	if [ -z "$und" ]; then
 		pass "$K: the spliced kernel has no undefined symbol but etext, edata, end (as the loader requires)"

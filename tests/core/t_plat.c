@@ -11,7 +11,8 @@
 #include "rel.h"
 
 char bootinfo[AXB_SIZE];
-char buildid[] = "68060-261101-01";
+static char buildid[] = "68060-261101-01";
+char *plat_buildid(void) { return buildid; }
 int dlm_devload, dlm_safe;
 char *dlm_build;
 int (*dlm_plat_match)(char *);
@@ -66,7 +67,7 @@ main(void)
 {
 	boot(AXLF_SAFE | AXLF_DEVLOAD, 1);
 	check(dlm_safe == 1 && dlm_devload == 1, "plat: AXL1's safe and development-load flags reach the core");
-	check(dlm_build && strcmp(dlm_build, "68060-261101-01") == 0, "plat: the build id is the kernel's buildid");
+	check(dlm_build && strcmp(dlm_build, "68060-261101-01") == 0, "plat: the build id is the line's");
 	check(dlm_plat_match == plat_match, "plat: the board matcher is set");
 	check(plat_match("zorro:144b:01") && plat_match("zorro:0202:54"), "plat: a zorro key of a board here matches");
 	check(!plat_match("zorro:144b:02") && !plat_match("zorro:dead:01"), "plat: other boards do not");

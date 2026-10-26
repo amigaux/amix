@@ -13,3 +13,4 @@
 0010-marc-post.patch
 0011-ddi-providers.patch
 0012-interrupt-chains.patch
+0013-no-weak-symbols-kinfo-list.patch

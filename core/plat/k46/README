@@ -1,4 +1,0 @@
-The 68040/68060 line needs nothing beyond core/plat/amiga.c: its kernels
-define cputype themselves, and dev_kvmap/dev_kvunmap are the port's own
-(devkvmap040.o), linked by the kernel build
-(docs/plan/stage-3-kernel-brief.md, step 7).

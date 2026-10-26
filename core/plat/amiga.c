@@ -6,8 +6,9 @@
  *
  *   - the loader record (AXL1, docs/spec/10-boot-loader.md section 6) in
  *     bootinfo's reserved area gives development load and safe mode;
- *   - the kernel's buildid string (what uname -m shows) is its build id,
- *     for core-tier modules (C3-1);
+ *   - the kernel's build id (plat_buildid(), the line's file: buildid on
+ *     the 68040/68060 line, kinfo_buildid on the 030 line), for core-tier
+ *     modules (C3-1);
  *   - match= keys are matched against the boards in bootinfo: a
  *     zorro:MMMM:PP key against each board's manufacturer and product; a
  *     mobo: key always, because the module's gated probe decides, as for
@@ -26,13 +27,7 @@ extern char *dlm_build;
 extern int (*dlm_plat_match)(char *);
 extern int printf(const char *, ...);
 
-/*
- * The kernel's buildid when it has one; this empty, weak definition when
- * it does not.  A weak definition, not a weak reference: the loader binds
- * no undefined symbol but etext, edata and end.
- */
-__asm__(".weak buildid");
-char buildid[1] = "";
+extern char *plat_buildid(void);	/* core/plat/<line>/line.c */
 
 static ax_u32
 get32(const char *p)
@@ -87,7 +82,7 @@ void
 plat_dmainit(void)
 {
 	const char *l = bootinfo + AXB_RESERVED + AX_AXL1_OFF;
-	char *bid = buildid;
+	char *bid = plat_buildid();
 	ax_u32 sum = 0, flags;
 	int i;
 
