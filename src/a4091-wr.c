@@ -280,6 +280,27 @@ ulong	a4091_maxpoll;
  *   bprobe(addr, v)  -- one byte through u_nofault: v < 0 reads, else writes
  *                       the low byte of v; 0 = no fault, 1 = bus error caught.
  */
+/*
+ * The attach messages.  The static driver numbers a board by its sd card; the
+ * module by its own board index, since sd ranks the cards only after the
+ * registrations close (C4-1 section 3.1): RTH1 and kinfo name the card.
+ */
+#ifdef	A4091_MODULE
+#define	A4091_M_U77	"a4091: board %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
+#define	A4091_M_NOBASE	"a4091: board %d: no base recorded\n"
+#define	A4091_M_NOMAP	"a4091: board %d: cannot map it at 0x%x: no board\n"
+#define	A4091_M_BERR	"a4091: board %d: bus error at 0x%x: no board\n"
+#define	A4091_M_BWREF	"a4091: board %d: byte writes refused: board not usable\n"
+#define	A4091_M_ATTACH	"a4091: board %d at 0x%x, NCS pages, D42 seam %s\n"
+#else
+#define	A4091_M_U77	"a4091: card %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
+#define	A4091_M_NOBASE	"a4091: card %d: no board (autocon recorded no base)\n"
+#define	A4091_M_NOMAP	"a4091: card %d: cannot map board at 0x%x: no board\n"
+#define	A4091_M_BERR	"a4091: card %d: bus error at 0x%x: no board\n"
+#define	A4091_M_BWREF	"a4091: card %d: byte writes refused: board not usable\n"
+#define	A4091_M_ATTACH	"a4091: card %d: board at 0x%x, NCS pages, D42 seam %s\n"
+#endif
+
 #ifdef	A4091_KVA
 extern char	*dev_kvmap();
 extern void	dev_kvunmap();
@@ -544,7 +565,7 @@ volatile uchar	*s;
 		a4091_kstat.bw_ok++;
 	}
 	a4091_kstat.bw_mask[card] = m;
-	printf("a4091: card %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n",
+	printf(A4091_M_U77,
 	    card, 4 - bad, (int)m);
 	return bad;
 }
@@ -570,7 +591,7 @@ int	card;
 	if (base == 0) {
 		a4091_kstat.nobase++;
 		a4091_nobrd[card] = 1;
-		printf("a4091: card %d: no board (autocon recorded no base)\n", card);
+		printf(A4091_M_NOBASE, card);
 		return ENXIO;
 	}
 
@@ -582,7 +603,7 @@ int	card;
 		if (s) dev_kvunmap( (char *)s, A4091_MAPLEN);
 		a4091_kstat.mapfail++;
 		a4091_nobrd[card] = 1;
-		printf("a4091: card %d: cannot map board at 0x%x: no board\n", card, (int)base);
+		printf(A4091_M_NOMAP, card, (int)base);
 		return ENXIO;
 	}
 
@@ -593,7 +614,7 @@ int	card;
 		dev_kvunmap( (char *)s, A4091_MAPLEN);
 		a4091_kstat.deadwin++;
 		a4091_nobrd[card] = 1;
-		printf("a4091: card %d: bus error at 0x%x: no board\n", card, (int)(base + SIOP_OFF));
+		printf(A4091_M_BERR, card, (int)(base + SIOP_OFF));
 		return ENXIO;
 	}
 
@@ -603,7 +624,7 @@ int	card;
 		dev_kvunmap( (char *)s, A4091_MAPLEN);
 		a4091_kstat.bw_refused++;
 		a4091_nobrd[card] = 1;
-		printf("a4091: card %d: byte writes refused: board not usable\n", card);
+		printf(A4091_M_BWREF, card);
 		return ENXIO;
 	}
 
@@ -619,7 +640,7 @@ int	card;
 	siop_tbl[card] = s;
 	phys_tbl[card] = base;
 	a4091_kstat.attached++;
-	printf("a4091: card %d: board at 0x%x, NCS pages, D42 seam %s\n", card, (int)base,
+	printf(A4091_M_ATTACH, card, (int)base,
 	    a4091_kstat.d42_linked ? "linked" : "STUB (no cache maintenance)");
 	return 0;
 }

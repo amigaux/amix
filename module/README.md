@@ -52,7 +52,7 @@ unchanged:
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status line | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's status line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync` |
-| Version | `VERSION` (`1.0.0-2`), the package version. 1.0.0-1 had no refused arm and no status line |
+| Version | `VERSION` (`1.0.0-3`), the package version. 1.0.0-1 had no refused arm and no status line; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index |
 
 ### The `dma_alloc` area
 
@@ -95,7 +95,9 @@ clock stopped** (C4-2 §2). There it:
     a dead window is "no board", not a bus error;
   - **k30:** `sptalloc`, as the static 030 driver does, with no fixed
     0x40000000 fallback;
-- prints the k46 attach line per board;
+- prints the k46 attach line per board, numbered by the module's board
+  index (`a4091: board 0 at 0x48000000, …`): sd ranks the cards only after
+  the registrations close, so RTH1 and `kinfo` name the card;
 - calls `sd_register()` once per board that mapped.
 
 It returns:
@@ -145,8 +147,9 @@ in the root pass) can drive the board at level 7.
 
 Status as of 2026-10-27:
 - **Host:** green.
-- **Emulation:** waits for kern46m -78. Kernel -77's symbol block lacks the
-  five `dma_*` names, so the core refuses the link.
+- **Emulation:** E1 and E2 passed on kern46m -78 with 1.0.0-1. Kernel -77's
+  symbol block lacks the five `dma_*` names, so the core refuses the link
+  there.
 - **Metal:** later.
 
 ### Host (`test/host`, `make -C test/host check`)
@@ -172,8 +175,8 @@ So the A4092 and A4770 identities are host and metal rows only.
 
 | Row | Setup | Pass when |
 |---|---|---|
-| E1 | k46: kern46m -78 + this module; one A4091 (R003); root on the A4091 (id 6) | `dlm: … root module(s) linked`, `RTH1: root … from the root record`, multi-user, `kinfo` lists a4091, a 2 MB `cp` + `sync` compare identical, `dlm: halt pass: … stopped`. kmem: `a4091_nboards` 1, `drv_prep == drv_cmpl`, `edge_shared` 0 |
-| E2 | k46: the Z3660 root (z3660scsi) + the A4091 as a second controller | sd order z3660 card 0, A4091 card 1: its id-6 disk is `ced0` |
+| E1 | k46: kern46m -78 + this module; one A4091 (R003); root on the A4091 (id 6) | `dlm: … root module(s) linked`, `RTH1: root … from the root record`, multi-user, `kinfo` lists a4091, a 2 MB `cp` + `sync` compare identical, `dlm: halt pass: … stopped`. kmem: `a4091_nboards` 1, `drv_prep == drv_cmpl`, `edge_shared` 0. **Passed 2026-10-27** (Bench N105, N105b; 1.0.0-1): board at 0x48000000, root `c6d0s1` from the root record, 2.4 MB `cp` + `sync` byte-identical twice, halt pass |
+| E2 | k46: the Z3660 root (z3660scsi) + the A4091 as a second controller | sd order z3660 card 0, A4091 card 1: its id-6 disk is `ced0`. **Passed 2026-10-27** (Bench N106; 1.0.0-1 with z3660scsi-k46): 2 root modules linked, root `ced0s1` on card 1, `kinfo` 2 sd cards, check and `cp` + `sync` clean, halt pass of 3 modules |
 | E3 | k46: E1's box; `dd` reads with sense, a tape short read if a tape unit is set | `a4091_kstat.bounce_n` grows; the sense and the short read return as with the static driver |
 | E4 | k46: E1's box, five `reboot` cycles | Each boot clean; the halt pass runs each time |
 | E5 | k46: two A4091 boards, if amiberry offers a second instance | Two registrations; the lower base is the lower card |
