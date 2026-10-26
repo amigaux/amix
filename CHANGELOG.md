@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — M-GEN5 closed on both lines; M-GEN3 N=7 on k30; ledger k30 cells (44f7c49, f486028)
+
+k30 row N43: the unit-5 trial panics at mountroot (errno 30 = EROFS, the last vfssw row's errno; k46 reports 89) and L8 falls
+back to the pristine generation, end state exact. M-GEN3's N=7 cell passes on k30 (N44: the trial boots through the fsck
+reboot, the rc2 hook marks it good). Ledger: k30 lifecycle and power-cut cells; S2-46 k30 waits for the installer's v10 disk
+(kbootset and loader-amix as packages); the `-f install` variant is supporting evidence only.
+
 ## 2026-10-26 — sha256.c reverted: the restructured round is slower on the 030 (fb77acd, 16f2bde)
 
 Hashbench run 2 on the cycle-exact 25 MHz 68030: the restructured round ran at 237 KiB/s with GCC 2.7.2.3 (was 534) and 176
