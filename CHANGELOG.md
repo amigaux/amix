@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — Exit ledger: S3-46 progress on the A4000D; 030 mode to stage 4; OQ-80.6/80.7 (0d7777c, 21d506c)
+
+k46: INT6 attachment on metal PASS (221 counted); the interrupt-mode flood failure is a z3660eth defect (the RX ring wedged
+at the sentinel, fixed in 1.0.0-4, retest pending) plus a firmware backlog race (fixed in the Z3660 fork, unflashed); polled
+zen0 PASS (2000/2000 at 5 ms); M-THR1 PASS as modules: FTP push up to 352 and pull up to 582 KiB/s against ~185, RTG 69.7 µs
+per op against 76, 186.6 µs per ioctl against ~200, 5.4 µs per register write against ~7; rtg + monsw PASS. k30 in
+UAE_030_MMU: "030 emulation mode unproven on metal (golden firmware line)" — the 9994961A core1 double-faults early
+Kickstart (31 attempts, two A3000 ROMs); carried into stage 4 on a 1.1 release firmware (spec 80 OQ-80.6: the amix-main +
+1.0 merge built for metal). OQ-80.7: a spacer between back-to-back Z3660 register writes (the FPGA's address capture); its
+C3-6 rule waits for the proving boot. OQ-80.3 answered; the overview indexes OQ-80.5–80.7.
+
 ## 2026-10-26 — Exit ledger: S3-44-3 and S3-45 PASS; S3-46 on the A4000D (85b7026, baabf5c)
 
 S3-44-3 PASS on both lines with z3660eth 1.0.0-3 (N90, N91; the level-4 STREAMS open explained 1.0.0-2, intrl2=0 confirmed
