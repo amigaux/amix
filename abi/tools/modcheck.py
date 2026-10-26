@@ -30,7 +30,14 @@
 #     geometry (no shift by 11 of an address, the port's
 #     check_page_geometry.sh rule).
 #   - parameter defaults (and min, max) in C3-1 section 3's text form;
-#   - a driver linkage's drv_cmajor: in majors=, registered to the module.
+#   - a driver linkage's drv_cmajor: in majors=, registered to the module;
+#   - class root (C4-2 section 1): match= given; no unload=allowed; block
+#     majors only (b:, the ramdisk's), and a block major only on root
+#     class; rank=, where given, one of z3660 zorro mobo ide and only on
+#     root class (C4-1 section 4.1); the object runs in place in the arena
+#     (C4-4 section 4): sections and COMMONs aligned to at most 16, each
+#     allocated PROGBITS at a file offset that is a multiple of its
+#     alignment.
 # Warns (exit status unchanged) on each COMMON symbol outside the module's
 # own names (its name, its wrapper's prefix): a stock header's tentative
 # definition of a kernel name (ifnet, rawintrq) becomes a private copy in
@@ -49,6 +56,7 @@ IMAGE_MAX = 256 << 10                    # C3-1 section 6: the image at most thi
 FILE_MAX = 256 << 10                     # the file under this (the core reads it whole)
 WSET_WARN = 160 << 10                    # half of k46's 320 KiB in process context (U2)
 CPUS = ('68020', '68030', '68040', '68060')
+RANKS = ('z3660', 'zorro', 'mobo', 'ide')     # the sd rank classes, C4-1 section 4.1
 PTYPES = ('int', 'bool', 'str', 'hex')
 problems = []
 
@@ -223,10 +231,19 @@ def moddata(e, path, c, reg, kit, depnames):
     if 'cpu' in keys and keys['cpu'] not in CPUS:
         bad('cpu=%s: one of %s' % (keys['cpu'], ', '.join(CPUS)))
     cls = keys.get('class')
+    if cls is not None and cls not in ('root', 'boot', 'demand'):
+        bad('class=%s: root, boot or demand' % cls)
+    if 'rank' in keys:
+        if cls != 'root':
+            bad('rank=%s: only a root-class disk controller has a rank (C4-1 section 4.1)'
+                % keys['rank'])
+        elif keys['rank'] not in RANKS:
+            bad('rank=%s: one of %s (C4-1 section 4.1)' % (keys['rank'], ', '.join(RANKS)))
     if cls == 'root':
-        bad('class=root: root-class modules come with stage 4')
-    elif cls is not None and cls not in ('boot', 'demand'):
-        bad('class=%s: boot or demand' % cls)
+        if 'match' not in keys:
+            bad('class=root needs match= (C3-1 section 3)')
+        if keys.get('unload') == 'allowed':
+            bad('class=root with unload=allowed: a root-class module is pinned (C4-2 section 1)')
     mobo = names(os.path.join(kit, 'registry', 'mobo'))
     for key in filter(None, keys.get('match', '').split(',')):
         z = re.fullmatch(r'zorro:([0-9a-f]{4}):([0-9a-f]{2})', key)
@@ -246,6 +263,12 @@ def moddata(e, path, c, reg, kit, depnames):
         if not mm:
             bad('majors entry %s: c:<n> or b:<n>' % mj)
             continue
+        if mm.group(1) == 'c' and cls == 'root':
+            bad('major %s: a root-class module registers no character major (C4-2 section 1)'
+                % mj)
+        if mm.group(1) == 'b' and cls != 'root':
+            bad('major %s: a block major needs a root-class module, which is pinned '
+                '(C4-2 section 1)' % mj)
         owner = reg.get((mm.group(1), int(mm.group(2))))
         if owner is None:
             bad('major %s is not in the registry' % mj)
@@ -330,6 +353,27 @@ def drvmajors(e, keys, reg, kit):
                 elif reg.get(('c', mj + k)) != keys.get('name'):
                     bad('drv_cmajor %d: c:%d is not registered to %s' % (mj, mj + k, keys.get('name')))
         link = (link[0], link[1] + 8)                         # the next modlink entry
+
+
+def inplace(e):
+    """A root-class module runs where boot2 places its file (C4-4 section 4):
+    each allocated PROGBITS section at a file offset that is a multiple of
+    its alignment, and no section or COMMON aligned above 16 (the arena's
+    alignment); kbootset's km_tail refuses the same at compose time."""
+    for s in e.sh:
+        if not s['flags'] & ALLOC:
+            continue
+        al = max(s['align'], 4)
+        if al > 16:
+            bad('section %s is aligned to %d: a root-class module runs in the arena, which '
+                'aligns to 16' % (s['nm'], al))
+        elif s['type'] != 8 and s['off'] % al:
+            bad('section %s lies at file offset 0x%x, not a multiple of %d: a root-class '
+                'module runs where its file lies' % (s['nm'], s['off'], al))
+    for y in e.syms:
+        if y['shndx'] == 0xfff2 and max(y['value'], 1) > 16:
+            bad('COMMON symbol %s is aligned to %d: the arena aligns to 16'
+                % (y['name'], y['value']))
 
 
 def scan(e, path):
@@ -418,6 +462,8 @@ def main(argv):
     keys = moddata(e, path, c, registry(kit), kit,
                    [os.path.basename(d) for d in deps])
     drvmajors(e, keys, registry(kit), kit)
+    if keys.get('class') == 'root':
+        inplace(e)
     allow = names(os.path.join(kit, 'ddi.list'))
     if keys.get('tier') == 'core':
         allow |= names(os.path.join(kit, 'core.list'))

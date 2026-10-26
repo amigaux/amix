@@ -130,8 +130,28 @@ for l in k30 k46; do
 		refused "another module's major" $l "$W/$l-owned/out/mod.d/owned" "registered to z3660eth"
 	mkbad $l boolp "$WRAP"'MOD_MISC_WRAPPER(boolp, l, u, "x");\n' "$M0"'$param on:bool:yes\nboolp\tboolp\n' &&
 		refused "a bool default other than 0 or 1" $l "$W/$l-boolp/out/mod.d/boolp" "is not a bool value"
-	mkbad $l root "$WRAP"'MOD_MISC_WRAPPER(root, l, u, "x");\n' '$modtype misc\n$class root\n$cpu 68020\n$match always\nroot\troot\n' &&
-		refused "class root before stage 4" $l "$W/$l-root/out/mod.d/root" "root-class modules come with stage 4"
+	# a root-class disk controller (C4-2 section 1): accepted, rank= written
+	R0='$modtype misc\n$class root\n$cpu 68020\n'
+	mkbad $l root "$WRAP"'MOD_MISC_WRAPPER(root, l, u, "x");\n' "$R0"'$match zorro:144b:01\n$rank z3660\nroot\troot\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-root/out/mod.d/root" > "$W/root.out" 2>&1 &&
+		   grep -q "ok (k.*, root," "$W/root.out" &&
+		   strings "$W/$l-root/out/mod.d/root" | grep -qx "rank=z3660"; then
+			pass "$l: a root-class module with match= and rank= is accepted, rank= in .moddata"
+		else
+			fail "$l: the root-class module"; cat "$W/root.out"
+		fi
+	mkbad $l rrank "$WRAP"'MOD_MISC_WRAPPER(rrank, l, u, "x");\n' "$R0"'$match always\n$rank scsi\nrrank\trrank\n' &&
+		refused "an unknown rank class" $l "$W/$l-rrank/out/mod.d/rrank" "rank=scsi: one of z3660, zorro, mobo, ide"
+	mkbad $l drank "$WRAP"'MOD_MISC_WRAPPER(drank, l, u, "x");\n' "$M0"'$rank zorro\ndrank\tdrank\n' &&
+		refused "a rank on a demand module" $l "$W/$l-drank/out/mod.d/drank" "only a root-class disk controller has a rank"
+	mkbad $l rnom "$WRAP"'MOD_MISC_WRAPPER(rnom, l, u, "x");\n' "$R0"'rnom\trnom\n' &&
+		refused "a root module without match=" $l "$W/$l-rnom/out/mod.d/rnom" "class=root needs match="
+	mkbad $l runl "$WRAP"'MOD_MISC_WRAPPER(runl, l, u, "x");\n' "$R0"'$match always\n$unload allowed\nrunl\trunl\n' &&
+		refused "a root module with unload=allowed" $l "$W/$l-runl/out/mod.d/runl" "a root-class module is pinned"
+	mkbad $l z3660eth "$WRAP"'MOD_MISC_WRAPPER(z3660eth, l, u, "x");\n' "$R0"'$match always\n$majors c:51\nz3660eth\tz3660eth\n' &&
+		refused "a character major on a root module" $l "$W/$l-z3660eth/out/mod.d/z3660eth" "registers no character major"
+	mkbad $l ramdisk "$WRAP"'MOD_MISC_WRAPPER(ramdisk, l, u, "x");\n' "$M0"'$majors b:20\nramdisk\tramdisk\n' &&
+		refused "a block major on a demand module" $l "$W/$l-ramdisk/out/mod.d/ramdisk" "a block major needs a root-class module"
 	mkbad $l zkey "$WRAP"'MOD_MISC_WRAPPER(zkey, l, u, "x");\n' "$M0"'$match zorro:0000:01\nzkey\tzkey\n' &&
 		refused "a zero match key" $l "$W/$l-zkey/out/mod.d/zkey" "may be zero"
 	PIN_OVERRIDE=gcc-2.95.3-0000000 mkbad $l pin "$WRAP"'MOD_MISC_WRAPPER(pin, l, u, "x");\n' "$M0"'pin\tpin\n' &&

@@ -38,3 +38,4 @@
 0035-marc-root-match.patch
 0036-root-defer.patch
 0037-static-root-skip.patch
+0038-mkmod-rank.patch
