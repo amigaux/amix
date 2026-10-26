@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger marks S4-71 k30 PASS (N108) and the A4091 rows k30 PASS (N109/N109b)
+
+Both now pass on both lines (kerntools c326ccb); the entry-0 decode recorded; E6b remains, on kern30m -15 through dma_forcefail.
+
 ## 2026-10-27 — the k30 force-bounce hook leaves dma_alloc memory unbounced (N109's phantom NO SENSE); C4-5 v8
 
 reached() first asks allocated(pa, n) — in pool mode inside the pool (dma_alloc areas and live bounces), in heap mode inside one
