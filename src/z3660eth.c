@@ -234,8 +234,73 @@ static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
 
-#define WRLONG(base,off,val) (*(volatile unsigned long *)((base) + (off)) = (unsigned long)(val))
-#define RDLONG(base,off)     (*(volatile unsigned long *)((base) + (off)))
+/* ----------------------------------------------------------------------------
+ * ZS-05 -- the address-capture rule (Z3660 FPGA, real-CPU path; 2026-10-26;
+ * amix-z3660scsi 9ceada6 is the reference, its NOTES.md 2026-10-26).
+ *
+ * The FPGA captures a register access's address for the ARM (rtg.c
+ * rtg_thread(): zaddr = gpio & 0x1FFFFF) and on back-to-back cycles samples
+ * RISING address bits too early: the access is delivered at (previous address
+ * AND this address), silently, and the ARM services it there, a write with
+ * whatever its DDR mirror holds for that cell.  In this driver: the INT6
+ * acknowledge R $1A8 -> W $104 lands at $100 = REG_ZZ_MODE ("[RTG] Error mode:
+ * 255" on both boxes, the acknowledge lost); the drain's R $1A4 -> W $194
+ * lands at $184 = ACC_OP, silently, and the ETH_RX strobe is lost (one of the
+ * two ways into the wedge 1.0.0-4 resyncs past).  Every pair: NOTES.md.
+ *
+ * RULE: every board register access is issued right after a read of an offset
+ * that has no bit the access's offset lacks, with nothing in between -- then
+ * the AND is the access's own address.  The macros below are the only way this
+ * driver touches a board register; each is ONE asm block run with the IPL
+ * raised to 7 for its two to four instructions, so no interrupt handler's board
+ * access (this driver's own INT6, z3660scsi's piscsi mailbox) or exception
+ * stacking can land between the arming read and the access.
+ *
+ *   Z3660ETH_WRA(regs, arm, off, val)     read arm, write off
+ *   Z3660ETH_WRV(regs, off, val, res)     read off, write off, nop, read off
+ *   Z3660ETH_RDA(regs, off, res)          read off (discarded), read off
+ *
+ * The arms, each side-effect free in the fork, in stock firmware and in the
+ * amiberry model (rtg.c read_rtg_register(): pure reads; amiberry
+ * eth_reg_read()):
+ *   CONFIG $104 (write-only)  armed by RX_ADDR $1A4 (the cursor, a pure read)
+ *   ETH_RX $194 (write-only)  armed by MAC_LO  $19C ($1A4/$1AC lack bit $10)
+ *   ETH_TX $190               armed by itself (the send result); WRV reads
+ *                             the result in the same block, so it is never
+ *                             a read with an arbitrary predecessor either
+ * RDA is for the reads whose predecessor is arbitrary or rises (the MAC probe,
+ * the drain cursor, INT_STATUS): its arming read may itself be misdelivered,
+ * which costs nothing, and the read that counts follows its own address.
+ *
+ * The ETH_TX write is the synchronous ~1 ms trigger; IPL 7 across it delays
+ * no interrupt that would otherwise be taken: none is taken inside a bus
+ * cycle, and the block restores SR right after the result read.
+ * ------------------------------------------------------------------------- */
+#define ZZ_ARM_CONFIG	ZZ_ETH_RX_ADDR	/* $1A4 covers $104 */
+#define ZZ_ARM_ETH_RX	ZZ_ETH_MAC_LO	/* $19C covers $194 */
+#if (ZZ_CONFIG & ~ZZ_ARM_CONFIG) != 0 || (ZZ_ETH_RX & ~ZZ_ARM_ETH_RX) != 0
+#error "z3660eth: an offset has a bit its arming register lacks (ZS-05)"
+#endif
+
+#define Z3660ETH_WRA(r_, a_, o_, x_) do { unsigned long z_sr_, z_t_;		\
+	__asm__ __volatile__("mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\tmov.l (%2),%1\n\tmov.l %4,(%3)\n\tmov.w %0,%%sr" \
+	    : "=&d" (z_sr_), "=&d" (z_t_)					\
+	    : "a" ((r_) + (a_)), "a" ((r_) + (o_)), "d" ((unsigned long)(x_))	\
+	    : "memory"); } while (0)
+#define Z3660ETH_WRV(r_, o_, x_, res_) do { unsigned long z_sr_, z_t_;		\
+	__asm__ __volatile__("mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\tmov.l (%2),%1\n\tmov.l %3,(%2)\n\tnop\n\tmov.l (%2),%1\n\tmov.w %0,%%sr" \
+	    : "=&d" (z_sr_), "=&d" (z_t_)					\
+	    : "a" ((r_) + (o_)), "d" ((unsigned long)(x_)) : "memory");	\
+	(res_) = z_t_; } while (0)
+#define Z3660ETH_RDA(r_, o_, res_) do { unsigned long z_sr_, z_t_;		\
+	__asm__ __volatile__("mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\tmov.l (%2),%1\n\tmov.l (%2),%1\n\tmov.w %0,%%sr" \
+	    : "=&d" (z_sr_), "=&d" (z_t_)					\
+	    : "a" ((r_) + (o_)) : "memory");				\
+	(res_) = z_t_; } while (0)
+
+/* the board's interrupt control, and the RX strobe: always armed */
+#define Z3660ETH_CONFIG(r_, x_)	Z3660ETH_WRA((r_), ZZ_ARM_CONFIG, ZZ_CONFIG, (x_))
+#define Z3660ETH_RX_STROBE(r_)	Z3660ETH_WRA((r_), ZZ_ARM_ETH_RX, ZZ_ETH_RX, 1)
 
 /* ----------------------------------------------------------------------------
  * BLIZZARD F3-M0 -- the 040/060 gate, and the free ride asserted instead of
@@ -681,8 +746,8 @@ int board_index;
 			       0);
 
     /* verify the firmware ethernet register file answers (open bus => absent) */
-    hi = RDLONG(info->regs, ZZ_ETH_MAC_HI);
-    lo = RDLONG(info->regs, ZZ_ETH_MAC_LO);
+    Z3660ETH_RDA(info->regs, ZZ_ETH_MAC_HI, hi);	/* ZS-05: the predecessor */
+    Z3660ETH_RDA(info->regs, ZZ_ETH_MAC_LO, lo);	/* is anyone's; $198->$19C rises */
     z3660eth_machi = hi;
     z3660eth_maclo = lo;
     if (hi == 0xFFFFFFFF || (hi & 0xFFFF) == 0)	/* open bus / not a Z3660 window */
@@ -814,7 +879,7 @@ int board_index;
      * writing 0 keeps the full datapath AND clears any pending INT6 (rtg.c:1168-9).
      * Interrupt-driven RX is a future board-mod / int6_tbl option (ETHERNET-SCOPING Q1).
      */
-    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+    Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_DISABLE);
 
     if (!info->poll_running) {
 	info->poll_running = 1;
@@ -939,7 +1004,7 @@ register queue_t *q;
 	    untimeout(info->poll_id);
 	}
 	if (info->regs)
-	    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+	    Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_DISABLE);
 #ifdef Z3660ETH_MODULE
 	z3660eth_int_on = 0;		/* after the board's interrupt is off */
 	z3660eth_int_pending = 0;
@@ -1070,10 +1135,14 @@ mblk_t *mp;
     z3660eth_push((unsigned long)info->txwin, (unsigned long)pktsize);
     z3660eth_sync();
 
-    /* trigger: synchronous, ~1ms -- NOT at raised spl */
-    WRLONG(info->regs, ZZ_ETH_TX, pktsize);
-    z3660eth_sync();		/* the result load must not pass the trigger store */
-    rc = RDLONG(info->regs, ZZ_ETH_TX);
+    /*
+     * trigger: synchronous, ~1ms -- no spl section around it.  ZS-05: armed by
+     * a read of ETH_TX itself, the result read in the same block after a nop
+     * (the barrier z3660eth_sync() gave here: the result load must not pass
+     * the trigger store); IPL 7 for the block's instructions only, which
+     * delays no interrupt (see the ZS-05 comment).
+     */
+    Z3660ETH_WRV(info->regs, ZZ_ETH_TX, pktsize, rc);
     z3660eth_last_rc = rc;
 
     info->tx_busy = 0;			/* release: volatile store, after the rc load */
@@ -1252,7 +1321,7 @@ int board_index;
     board->z3660eth_status.drain_calls++;
 
     while (++loop <= 256) {
-	off = RDLONG(info->regs, ZZ_ETH_RX_ADDR);
+	Z3660ETH_RDA(info->regs, ZZ_ETH_RX_ADDR, off);	/* ZS-05: W $194 -> R $1A4 rises */
 	z3660eth_last_off = off;
 
 	if (off < ZZ_RXBACKLOG_OFF ||
@@ -1280,7 +1349,7 @@ int board_index;
 		z3660eth_rx_wedged(info, off, serial)) {
 		resynced = 1;
 		z3660eth_rx_resyncs++;
-		WRLONG(info->regs, ZZ_ETH_RX, 1);
+		Z3660ETH_RX_STROBE(info->regs);
 		z3660eth_sync();
 		continue;
 	    }
@@ -1299,7 +1368,7 @@ int board_index;
 	    board->ifstats.ifs_ierrors++;
 	    info->last_serial = serial;
 	    info->rx_held = 0;
-	    WRLONG(info->regs, ZZ_ETH_RX, 1);
+	    Z3660ETH_RX_STROBE(info->regs);
 	    z3660eth_sync();
 	    continue;				/* payload never read: no invalidate */
 	}
@@ -1341,7 +1410,7 @@ int board_index;
 
 	info->last_serial = serial;
 	info->rx_held = 0;
-	WRLONG(info->regs, ZZ_ETH_RX, 1);	/* advance/free the slot */
+	Z3660ETH_RX_STROBE(info->regs);	/* advance/free the slot (ZS-05: armed) */
 	z3660eth_sync();		/* next cursor read must not pass the strobe */
 
 	board->z3660eth_status.packets_received++;
@@ -1468,8 +1537,11 @@ z3660ethintr()
 
 	if (board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING &&
 	    info->regs != 0) {
-	    if (RDLONG(info->regs, ZZ_INT_STATUS) & ZZ_INT_ETH) {
-		WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_ACK_ETH);
+	    unsigned long st;
+
+	    Z3660ETH_RDA(info->regs, ZZ_INT_STATUS, st);
+	    if (st & ZZ_INT_ETH) {
+		Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_ACK_ETH);
 		z3660eth_drain(i);
 	    }
 	}
@@ -2036,10 +2108,10 @@ char *arg;
     }
     if (regs == 0)
 	return 0;
-    st = RDLONG(regs, ZZ_INT_STATUS);
+    Z3660ETH_RDA(regs, ZZ_INT_STATUS, st);	/* ZS-05: the predecessor is anyone's */
     if (st == 0xFFFFFFFF || (st & ZZ_INT_ETH) == 0)
 	return 0;
-    WRLONG(regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);	/* acknowledge and mask */
+    Z3660ETH_CONFIG(regs, ZZ_CONFIG_DISABLE);	/* acknowledge and mask (armed) */
     if (z3660eth_int_on) {
 	z3660eth_int_on = 0;
 	z3660eth_int_pending = 1;
@@ -2100,7 +2172,7 @@ int board_index;
     if (z3660eth_intr_mode == 6 && info->regs &&
 	board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING) {
 	z3660eth_int_on = 1;		/* before the enable: see z3660eth_int6 */
-	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_ENABLE);
+	Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_ENABLE);
     }
 }
 
@@ -2179,7 +2251,7 @@ int board_index;
     s = splz3660eth();			/* against z3660eth_int2 and the tick */
     z3660eth_int_pending = 0;
     z3660eth_int_on = 1;		/* before the enable: see z3660eth_int6 */
-    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_ENABLE);
+    Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_ENABLE);
     splx(s);
 }
 
@@ -2247,7 +2319,7 @@ char *params;
 	z3660eth_autoconfigured = 0;
 	return e;
     }
-    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+    Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_DISABLE);
 
     board->ifstats.ifs_name = "zen";
     board->ifstats.ifs_mtu = Z3660ETH_MTU;
@@ -2285,7 +2357,7 @@ z3660eth_unload()
 	if (board->z3660eth[n].q)
 	    return EBUSY;
     if (info->regs)
-	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+	Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_DISABLE);
     if (z3660eth_number_of_boards)
 	(void)if_detach(&board->ifstats);
     z3660eth_number_of_boards = 0;
@@ -2306,7 +2378,7 @@ z3660eth_halt()
     z3660eth_info_t *info = &z3660eth_board[0].z3660eth_info;
 
     if (info->regs)
-	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+	Z3660ETH_CONFIG(info->regs, ZZ_CONFIG_DISABLE);
     z3660eth_int_on = 0;
     if (info->poll_running) {
 	info->poll_running = 0;

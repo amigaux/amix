@@ -9,6 +9,9 @@
 #                             the kit's headers, and its sha256 (the static
 #                             driver must not change: BUILD.md section 9)
 #   make -C module test       the host test of the _load parameter parser
+#   make -C module zs05       both lines and both forms, then the ZS-05 gate
+#                             (check-zs05.py: every board register access is
+#                             an armed IPL-7 block; NOTES.md "ZS-05")
 #   make -C module clean
 #
 # DLM is the amix-dlm checkout whose kits are built (`make kit` there gives
@@ -37,12 +40,18 @@ $(LINES:%=static-%): static-%:
 test:
 	sh $(TOP)/module/test-params.sh
 
+zs05: all static
+	for l in $(LINES); do \
+	    python3 $(TOP)/module/check-zs05.py module $(TOP)/build/$$l/obj/z3660eth.o && \
+	    python3 $(TOP)/module/check-zs05.py static $(TOP)/build/$$l/z3660eth-static.o || exit 1; \
+	done
+
 clean: $(LINES:%=clean-%)
 
 $(LINES:%=clean-%): clean-%:
 	$(MAKE) KIT=$(call kit,$*) clean
 
-.PHONY: all static test clean $(LINES) $(LINES:%=static-%) $(LINES:%=clean-%)
+.PHONY: all static test zs05 clean $(LINES) $(LINES:%=static-%) $(LINES:%=clean-%)
 
 else	# one line, the kit's
 

@@ -190,6 +190,7 @@ make -C module                          # build/k30/mod.d/z3660eth, build/k46/mo
 make -C module k46                      # one line
 make -C module static                   # the static object per line, and its sha256
 make -C module test                     # host test of the _load parameter parser
+make -C module zs05                     # both lines, both forms, then the ZS-05 object gate
 ```
 `DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. The kit's
 fragment builds each line under `build/<line>/` (objects in `obj/`, the module in
@@ -203,9 +204,11 @@ shift). A refusal fails the build. `modcheck.py` warns about COMMON symbols outs
 the module's own names: `ifnet` and `rawintrq`, from the stock `<net/if.h>`.
 
 `make -C module static` compiles the static driver (no `-DZ3660ETH_MODULE`) against
-each kit's headers; the hashes must stay those of the static objects (NOTES.md
-"Module form"). Parameters: `intr` (0 polled, the default; 6 INT6 receive) and
-`intrl2` (with intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).
+each kit's headers; the hashes must stay those of the static objects of record
+(NOTES.md "Module form"; changed last by ZS-05, NOTES.md "ZS-05"). `make -C module
+zs05` checks every object's board register accesses (`module/check-zs05.py`).
+Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with
+intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).
 
 ## Real-world build notes (historical record, validated 2026-06-21 on the WinUAE build box)
 The current build harness is **Amiberry** with `../amix-kerntools/configs/amix-golden.uae` (§0).
