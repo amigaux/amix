@@ -51,6 +51,11 @@ MODOUT    ?= build/$(LINE)
 MODCPU    ?= $(DEFCPU)
 MODOBJS    = $(addprefix $(MODOUT)/obj/,$(OBJS))
 LOCALIZE_OBJCOPY ?= m68k-elf-objcopy
+ifneq ($(LOCALIZE),)
+ifeq ($(shell command -v $(LOCALIZE_OBJCOPY) 2>/dev/null),)
+$(error LOCALIZE needs $(LOCALIZE_OBJCOPY), a newer objcopy than binutils 2.8.1: put gcc14-cross-amix's build/prefix/bin on PATH or set LOCALIZE_OBJCOPY to its path)
+endif
+endif
 
 all: $(MODOUT)/mod.d/$(MODULE)
 

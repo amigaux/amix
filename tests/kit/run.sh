@@ -96,6 +96,13 @@ for l in k30 k46; do
 	else
 		fail "$l: the font module"; cat "$d/make.log"
 	fi
+	if (cd "$d" && make LOCALIZE_OBJCOPY=no-such-objcopy > nolocal.log 2>&1); then
+		fail "$l: LOCALIZE without its objcopy was not refused"
+	elif grep -q "LOCALIZE needs no-such-objcopy" "$d/nolocal.log"; then
+		pass "$l: LOCALIZE without its objcopy is refused up front, naming the tool"
+	else
+		fail "$l: LOCALIZE without its objcopy"; cat "$d/nolocal.log"
+	fi
 
 	# what the checker refuses
 	cp "$H" "$W/$l-hello2" && refused "name other than the file" $l "$W/$l-hello2" "the file name is the module name"
