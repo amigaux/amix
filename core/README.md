@@ -29,6 +29,7 @@ against our kernels (M-CORE1).
 | # | Patch | What and why | Offered upstream |
 |---|---|---|---|
 | 0001 | `trampoline-hold-volatile` | The exec and cdev trampolines set the hold after `setjmp` and read it on the `longjmp` path. ISO C leaves such a variable indeterminate unless it is `volatile`: GCC 2.7.2.3 kept it in memory, but GCC 15 at `-O` put it in a register, and the state harness failed three checks. | not yet (OQ-30.6) |
+| 0002 | `platform-registrations-out-of-dlm_init` | 30 §2 patch 1: `dlm_init` no longer registers ashnazag's guest major 59 or calls its `ds_modinit`. A platform registers in `plat_dmainit()`, which `dmainit()` calls after `dlm_init()`; ours live in `plat/k30/` and `plat/k46/`. | not yet (upstream would move the two calls to its own platform file) |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order

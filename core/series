@@ -2,3 +2,4 @@
 # §1-§2).  Each line names a file in core/patches/, applied with patch -p1
 # from core/upstream's root.
 0001-trampoline-hold-volatile.patch
+0002-platform-registrations-out-of-dlm_init.patch
