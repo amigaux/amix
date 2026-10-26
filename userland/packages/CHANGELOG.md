@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — modtools 1.0.261026-3: pure-sh inittab scripts for the install miniroot (a080191) — not published
+
+Same /sbin/modadmin as -2 (a206874d). postinstall and preremove are pure Bourne sh per C3-5 v4 §1.2: builtins plus mv, with
+/usr/bin/cat, chgrp and rm used only behind `test -x`; -2 failed on the miniroot ("awk: not found" → pkgadd failed, the
+install stopped). Behaviour unchanged (the dlm line first, once; preremove idempotent); a rewrite is a temp file in /etc
+renamed with mv (0664; group sys where chgrp exists — on the miniroot the group stays root, fixed at first boot). build.sh
+refuses bare external commands and unguarded absolute ones. Round trip under the miniroot's tools only: 62/62; differential
+fuzz against -2's logic: 0 mismatches. Datastream md5 065b4c34 / 56320 B.
+
 ## 2026-10-26 — kbootset -11, modtools -2, ABI kit packages dlmkit30/dlmkit46 (amix-dlm f5ce731) (0c6a4a4..c2c5d3d) — not published
 
 kbootset -11: /sbin/kbootset 013fe25f (= dlm's box build); gate 2 needs abi= on a module kernel, gate 6 counts an ET_REL
