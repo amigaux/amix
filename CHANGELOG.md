@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-1 draft: sd_register and the four-card contract (323ace9, 0bd8508, b74484d)
+
+Minor bits: unit 0–2, card low bit 3, slice 4–6, card high bit 7; names in hex c0–cf and c10–c1f for cards 2–3 (card×8 +
+target, as today); four rank classes (z3660, zorro, mobo, ide) then base; EBUSY after sd's first open. Spec 30 §5.2:
+sd_register(queuefn, c, base, name, rank), no probe function (a module probes in its _load); a2091/a2090 need no four-card
+rebuild; spec 20 §6's registry row names the classes. The 1.0 order fact (an answering A3000 WD ahead of the Z3660) cannot
+occur on an A4000 — not a set of record. The plan records the A4092's metal rows as stage-5 carries and S4-33 in amix-a4091.
+Same wave as S4-21: installng's and kerntools' one-digit tools (the port's ENUMERATION.md §D); kbootset's name forming.
+
 ## 2026-10-26 — Stage 4 re-scoped by the owner's nine answers (288ac3d, d350bc2)
 
 Spec 80 §2: stage 4 = "Root, filesystems and media" (root controllers, ufs/s5/cdfs as modules, every medium of spec 50
