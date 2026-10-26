@@ -1,10 +1,12 @@
-# C3-1 — the module object and `.moddata` version 2, version 4
+# C3-1 — the module object and `.moddata` version 2, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): the text form of parameter values (§3); version 3
   (2026-10-26): the §4 table is the load call's, a refused first open is
   `ENXIO` (§4); version 4 (2026-10-26): the image and the file under
-  256 KiB (§1, §4, §6). Other repositories build against this text; a
+  256 KiB (§1, §4, §6); version 5 (2026-10-27, from amix-cdfs's module
+  plan): `fs` is required of every module that calls `vfs_register`,
+  boot class too (§3). Other repositories build against this text; a
   change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
@@ -85,7 +87,7 @@ offset 8   ...       NUL-terminated "key=value" strings, ending with an empty st
 | `match` | comma-separated keys: `zorro:MMMM:PP` (4 and 2 lowercase hex digits, neither all zero), `mobo:<probe>` from the registry, `always` | root class; optional for boot and demand | core |
 | `rank` | the sd rank key (30 §5) | root-class disk controllers | core |
 | `majors` | comma-separated `c:<n>` / `b:<n>`, each in the registry (20 §6) | when the module registers a device | core, `kbootset` |
-| `fs` | the filesystem name for `vfs_register` | root-class filesystems | core |
+| `fs` | the filesystem name for `vfs_register` | every module that calls `vfs_register`, root or boot class (C4-6 §3) | core |
 | `depend` | comma-separated module names | when it uses another module's symbols | core, `kbootset` |
 | `unload` | `never` (the default) or `allowed` | no | core |
 | `param` | `<name>:<type>:<default>[:<min>:<max>]`, type `int`, `bool`, `str` or `hex` | per parameter | `kbootset`, core |

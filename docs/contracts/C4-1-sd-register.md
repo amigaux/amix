@@ -1,10 +1,11 @@
-# C4-1 — `sd_register` and the four-card contract, version 2
+# C4-1 — `sd_register` and the four-card contract, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
   third-party 68060 runs the 040/060 line with an A3000 WD, so the WD
-  behind the Zorro boards is an accepted rename on both lines (§4.3, §6).
-  Other repositories build against this text; a change from here is a
+  behind the Zorro boards is an accepted rename on both lines (§4.3, §6);
+  version 3 (2026-10-27, from amix-cdfs's module plan): the level at which
+  a controller calls a command's completion (§3.2). Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
   compacted order, registration, the card-number gate), D-3 §4 and §11;
@@ -165,6 +166,14 @@ no `sd_unregister`. A module whose `_load` fails after `sd_register` has
 returned 0 is the one case the core undoes: it removes that module's
 pending entries before the failure is reported (C3-6 v3, `_unload` on a
 failed load).
+
+### 3.2 The completion's level
+
+A controller module calls a command's completion, `cp->intr(cp)`, at
+level 4 or below: from its polled path, its deferred call or a level-2
+handler, never from a level-6 handler (C3-6 §1.3: a level-6 handler calls
+no DDI function). The completion may then `wakeup`, as a filesystem's
+`sdqueue` caller does (amix-cdfs) and the stock `gsioctl` does.
 
 ## 4. The order
 
