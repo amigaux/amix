@@ -1,11 +1,13 @@
-# C4-5 — DDI v1.2, the DMA interface, version 3
+# C4-5 — DDI v1.2, the DMA interface, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
   the calls are minor 2 (k30.1.2, k46.1.2), since kabi 1.1 closed with
   the minted kernels (§2); version 3 (2026-10-27, S4-62's first piece):
   `dma_addr(r, pa)` takes the segment's address (§2.3), and the k30
-  names are a placeholder until the 030 provider (§5.4). Other
+  names are a placeholder until the 030 provider (§5.4); version 4
+  (2026-10-27, from the port's heap reading): on k46 `dma_alloc` gives
+  heap memory through its DTT0 alias (§3). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
@@ -121,12 +123,18 @@ void  dma_free(char *va, ulong len);
   address, and its physical address in `*pa`. They are for what lives in
   host memory for the whole life of a transfer queue: SCRIPTS, the
   message and status buffers, the descriptor tables.
-- On k46 it is kernel memory under the DTT0 identity map
+- On k46 it is kernel memory reached through the DTT0 identity map
   (0x00000000–0x3FFFFFFF, cache-inhibited), where the port's line keeps
   the driver's DMA structures today, as kernel-image statics in the
   Z3660's RAM. Zorro III bus-master DMA reaches it, proven on metal by
-  the A4092 root rows (the port, 2026-10-26). On k30 the memory comes
-  from the pool (§5).
+  the A4092 root rows (the port, 2026-10-26). The kernel heap's
+  addresses lie in the kernel map above 0x40000000, but its pages are
+  that RAM (the port, 2026-10-27): so `dma_alloc` takes a heap block,
+  requires its pages physically contiguous below 0x40000000, and returns
+  the physical address itself as the pointer (equal to `*pa`), a
+  cache-inhibited alias. It pushes and invalidates the block by physical
+  line at alloc and at free, against the heap mapping's own cache lines.
+  On k30 the memory comes from the pool (§5).
 - As a module, a driver moves the structures it hands the chip (the
   DSA table, the SCRIPTS, the ident, CDB, status and message buffers,
   its own bounce: about 1.3 KiB for the A4091) into one `dma_alloc`
