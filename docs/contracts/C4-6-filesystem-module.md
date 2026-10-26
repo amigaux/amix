@@ -1,10 +1,13 @@
-# C4-6 — the filesystem module form, version 2
+# C4-6 — the filesystem module form, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
   and cdfs boot class on disk (§5). Implemented by core patch 0040
   (S4-41). Version 2 (2026-10-26): `vfs_register` is minor 2 (§3),
-  since kabi 1.1 closed with the minted kernels. Other repositories
+  since kabi 1.1 closed with the minted kernels. Version 3 (2026-10-27,
+  the orchestrator's answers to the S4-40 plan): one rule for every
+  filesystem module, boot class with the generation's `rootfs` promoted
+  to a root record (§1, §5); the miniroot is s5. Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §2 patch 9 (`vfs_register`
@@ -21,9 +24,18 @@
 
 ## 1. A filesystem module
 
+**One rule for ufs, s5 and cdfs: a filesystem module is boot class; the
+generation's `rootfs` is promoted to a root record.** `kbootset` composes
+the module whose `fs=` is the generation's `rootfs` as a root record
+(boot2 places it, `marc_root` links it before the root is mounted, and it
+is in the safe set), and every other filesystem module as a boot record,
+loaded at the first `sysinit` entry before anything else is mounted
+(C4-4 §1.3, core patch 0043). So one object per line serves every box,
+and the arena holds one filesystem at most.
+
 | Key | ufs, s5 | cdfs |
 |---|---|---|
-| `class` | `root` (placed by boot2, linked in `marc_root`) | `root` on the CD medium (it mounts the disc); `boot` on a disk-rooted box (§5) |
+| `class` | `boot`; promoted where it is the `rootfs` | `boot`; promoted only on a medium that roots on the CD itself, which none of 1.1 does (§5) |
 | `match` | `always` | `always` |
 | `fs` | `ufs` / `s5`: the name it registers (C3-1 §3) | `cdfs` |
 | `tier` | `core`, with the kernel's `build` (C3-1): a stock object imports more than the DDI (§4) | `ddi` |
@@ -31,7 +43,13 @@
 
 **`_load`** calls `vfs_register` once with its `vfssw` row (§3) and
 returns its result. s5's `_load` first calls `inoinit`, which the base's
-`init_tbl` called before the base lost s5 (30 §6).
+`init_tbl` called before the base lost s5 (30 §6). It must be safe in
+both contexts, the root pass and the first `sysinit` entry (S4-71).
+
+**The roots of 1.1:** an installed disk roots on ufs. The media root on
+their RAM disk (C4-3), whose image is s5, the stock miniroot's type; on
+them ufs and cdfs are boot class, to make and mount the target disk and
+to mount the disc.
 
 ## 2. The table
 
@@ -103,22 +121,25 @@ use the core tier (C3-2 §4). cdfs, our own source, stays in the DDI tier:
 it registers through `vfs_register` and reaches the disk through
 `sdqueue`, without `vfssw` or `nfstype`.
 
-## 5. Choosing cdfs's class
+## 5. Choosing the class
 
-30 §6 calls cdfs a demand-class module on disk-rooted boxes. Nothing in
-the stock mount path loads a module for an unknown type: `mount` fails
-in `vfs_getvfssw`. So this draft makes cdfs **boot class** on a
-disk-rooted box. It loads at the first `sysinit` entry, with a 69 KB
-image well inside U2's process-context total. It is root class on the CD
-medium, whose package source is the disc. A load-by-type hook in the
-mount path would be a change to stock code that the alternative avoids.
+Nothing in the stock mount path loads a module for an unknown type:
+`mount` fails in `vfs_getvfssw`. So no filesystem module is demand class
+(30 §6 had cdfs so). Boot class loads it at the first `sysinit` entry,
+before `mountall`, in process context; cdfs's 69 KB image and the
+boot-class one of ufs and s5 are well inside U2's process-context total.
+The root filesystem cannot wait for `sysinit`, so it is promoted (§1). A
+load-by-type hook in the mount path would be a change to stock code that
+this avoids. The 1.1 CD medium roots on its RAM disk (D-3 §10, option B),
+so cdfs is boot class there too; a medium that roots on the CD itself
+would promote it by the same rule.
 
 ## 6. The root filesystem type
 
 The loader record carries the manifest's `rootfs` (10 §6). The kernel's
 RTH1 half sets `rootfstype` from it, so `vfs_mountroot` tries only that
-type (30 §3). That type's row is the static one or a root-class module's
-registered in `marc_root` just before. In safe mode the root
+type (30 §3). That type's row is the static one or the promoted module's
+(§1), registered in `marc_root` just before. In safe mode the root
 filesystem's module is in the safe set (C4-4 version 4 §2).
 
 ## 7. Measurements
