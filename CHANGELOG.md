@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — README: the stale syslog.pid as the conslogging 0 cause (340cfcb)
+
+"conslogging 0 and no syslogd in ps" names its likely cause: the stock /etc/init.d/syslogd trusts a stale /etc/syslog.pid,
+and the dlm sysinit line plus S01kbnamelist shift the early pids onto a live process (both together, 6/6 on the k46
+vehicle; the installer's unit is fixed in amix-installng). No shipped script runs -K. No repair recipe: unverified.
+
 ## 2026-10-26 — Exit ledger: core patch 0027 rides the stage-4 kernel cut (ada916c)
 
 The kernels of record keep dlm_maximage 2 MiB; the kit's modcheck guards every module meanwhile; a stage-3 re-cut would
