@@ -1,6 +1,6 @@
 $modtype misc
 $class demand
 $unload allowed
-$param kib:int:256:4:4096
+$param kib:int:64:4:4096
 $desc U2 kernel memory probe
 u2kva	u2kva

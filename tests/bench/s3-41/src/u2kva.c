@@ -42,7 +42,7 @@ static int
 u2kva_load(params)
 	char *params;
 {
-	long size = u2kva_param(params, "kib", 256L) * 1024L;
+	long size = u2kva_param(params, "kib", 64L) * 1024L;
 	unsigned long lo = 0xffffffffUL, hi = 0;
 	int n, i;
 

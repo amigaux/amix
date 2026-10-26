@@ -688,6 +688,11 @@ buffer through `/stand/unix`, so `kbootset status` must show a current
 namelist first. modadmin's own output (`cannot load …: <errno text>`) is
 on the terminal as always.
 
+`-L`'s first line also tells the vehicle from the kernel: `conslogging
+0` while no syslogd is in `ps` means the console logger never started on
+that boot, which is the vehicle's start-up, not the kernel (S3-43: the
+log driver and syslogd's I_CONSLOG work under both module kernels).
+
 From core patch 0025, `modadmin -L` starts with one line of the ring's
 words: `putbuf 0x… (2000 bytes), putbufsz …, wpos …, rpos …,
 conslogging …, prt_where 0x…`. Never read them with `dd skip=`: dd reads
@@ -970,7 +975,11 @@ sh tests/bench/s3-41/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s41/u2
 
 | Commands | Expected |
 |---|---|
-| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request) and the kernel of record's generation is good and the default (a one-shot request boots the default, never a trial: 10 §7.3); that generation carries the arena (`l14.spec`'s form with the kernel's own `arena` and `ident`, or `kbootset build`'s): development load widens what may load, it does not replace the manifest, so a generation in `noarena.spec`'s form refuses every load (`dlm: u4big: no booted manifest, so no module loads this boot`, modadmin `Not owner`); power-cycle; on that boot `modadmin -K` first (a box without a console logger); run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request) and the kernel of record's generation is good and the default (a one-shot request boots the default, never a trial: 10 §7.3); that generation carries the arena (`l14.spec`'s form with the kernel's own `arena` and `ident`, or `kbootset build`'s): development load widens what may load, it does not replace the manifest, so a generation in `noarena.spec`'s form refuses every load (`dlm: u4big: no booted manifest, so no module loads this boot`, modadmin `Not owner`); power-cycle; on that boot `modadmin -K` first (a box without a console logger); run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 65536 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+
+Run U2 in a boot of its own, without U4: a stuck `KM_SLEEP` request
+holds memory and makes U2's figure low (the first run). The chunk is
+64 KiB, below every line's process-context ceiling (U4: 256 KiB on k46).
 
 **The number:** K KiB, with the address range, at 128 MB. That is what
 the core could take for module images, beside the arena. Run it on a

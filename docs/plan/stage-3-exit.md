@@ -54,8 +54,8 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | ID | k46 | k30 |
 |---|---|---|
 | U1 status register, clock and `KM_NOSLEEP` at dmainit and at the hook (U1 kernels, core patch 0023) | done (N77): sr 0x2704 / 0x2700 (priority 7), the clock still at both, `KM_NOSLEEP` up to 2 MiB gives memory at 128 MB | done (N78): sr 0x2704 at both, the clock still, `KM_NOSLEEP` 1 MiB yes, 2 MiB fails at 64 MB (`docs/measurements/2026-10-26-u1.md`) |
-| U2 kernel memory for module images at 128 MB | | |
-| U4 large kmem requests return | | |
+| U2 kernel memory for module images at 128 MB | first run void (u4big held its memory: 256 KiB); rerun clean with 64 KiB chunks | first run void (512 KiB); rerun |
+| U4 large kmem requests return | done (N79): `KM_NOSLEEP` 256 KiB yes, 512 KiB fails; `KM_SLEEP` 512 KiB **never returns** | done (N80): `KM_NOSLEEP` 512 KiB yes, 1 MiB fails; `KM_SLEEP` 1 MiB **never returns** (`docs/measurements/2026-10-26-u4.md`) |
 | U15 file loading in process 0 | answered: unsafe (S3-B5, core patch 0017) | answered |
 
 ## 5. The plan's rows
