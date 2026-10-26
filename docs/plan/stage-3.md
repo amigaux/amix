@@ -1,6 +1,6 @@
 # Stage 3 — modules: work breakdown
 
-- **Status:** plan, 2026-10-26
+- **Status:** plan, 2026-10-26; closed 2026-10-26 (`stage-3-exit.md`)
 - **Source:**
   - `docs/spec/80-stages-and-proof.md` §2 stage 3 and §3;
   - `docs/spec/20-module-format-and-abi.md`;
