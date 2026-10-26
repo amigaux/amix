@@ -3,6 +3,17 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — stage-3 mint: kbootset -12, dlmkit -2, module kernels kernel-k46-m/kernel-k30-m, module packages z3660eth/z3660rtg (16cb27c..50b4ed1) — not published
+
+kbootset -12 from amix-dlm af363be: `kbootset namelist` writes /stand/unix; unix.sym read per C2-3 v6 §2.1; /sbin/kbootset
+cd02b817 (174012 B) = dlm's box build; md5 67e8916c / 179712 B. dlmkit30/46 -2 from e84878e: every kit name within 14 bytes
+(no renames), PORT_REV=617c64e; manifests k30 a8ce9b9d, k46 dcc2c522. New recipes: kernel-k46-m / kern46m k46.1.0.261026-58
+(ET_REL 8459eaee, sidecar verbatim; abi= = the reference, ksymgate 12/12); kernel-k30-m / kern30m k30.1.0.261026-01 (brel
+3fb1aa50, bss=349324, /stand/k30/unix.sym 4012b09b = sym=); z3660eth-k30/-k46 (zeth30/46 1.0.0-1) and z3660rtg-k30/-k46
+(zrtg30/46 1.1.0-1): /etc/conf/mod.d/<name> verbatim + a comment-only modreg.d file, no scripts, modcheck ok. Round trip
+composes both module kernels and z3660eth on both lines: 96/96. gen-catalog 72f6a72 writes no module rows yet (the round
+trip writes them); z3660rtg composes only once monsw exists.
+
 ## 2026-10-26 — modtools 1.0.261026-3: pure-sh inittab scripts for the install miniroot (a080191) — not published
 
 Same /sbin/modadmin as -2 (a206874d). postinstall and preremove are pure Bourne sh per C3-5 v4 §1.2: builtins plus mv, with
