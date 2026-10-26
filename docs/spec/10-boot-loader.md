@@ -205,9 +205,11 @@ boot2 says so on the console.
   starts, 64 MB at the same address boots (S3-43, N70 and N75). So for a
   k30 generation boot2 caps the kernel's room at 64 MiB, and in the
   `bootinfo.memory[]` it hands over it ends the bind region 64 MiB above
-  its base and empties a region that touches it from below
-  (`ax_memcap`). A k30 kernel on a 128 MB box uses 64 MB of it. The k46
-  line takes its whole region.
+  its base and ends a region that touches it from below one 2 KiB page
+  short of the base (`ax_memcap`). The kernel's join of touching regions
+  then leaves that region out of the main store with its range intact,
+  where the k30 DMA pool comes from (C4-5 §5.2). A k30 kernel on a
+  128 MB box uses 64 MB of it. The k46 line takes its whole region.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:
