@@ -20,7 +20,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25, staged, not published |
 | [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26, staged, not published |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
-| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261026-58, ET_REL), unix + kabi verbatim | minted 2026-10-26, staged, not published |
+| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261026-61, ET_REL), unix + kabi verbatim | minted 2026-10-26, staged, not published |
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261026-01, brel), unix + kabi + unix.sym verbatim | minted 2026-10-26, staged, not published |
 | [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
 | [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
