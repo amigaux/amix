@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2026-10-26 — S3-44 rows, ledger gates restated, CD gate 3, namelist 0644, C3-5 v5, modcheck warning (f7eff90..5491d61)
+
+S3-44's bench rows (README S3-44; probes t44intr and t44fill): the chains on the kernels of record, a full chain with
+z3660eth's polled fallback ("zen: level-6 attach failed (errno 168); polled"), z3660eth 1.0.0-2 with intr=6 — no z3660net
+build owed. Exit ledger: S3-27 done (monsw30/46 1.0.0-1 from amix-modules c0386d9); S3-31's box run done (installng's media
+of record); S3-44/S3-45/S3-46 gates restated (none owner-gated); S3-46's k30 row on a bench variant kernel, the 1.1 record =
+stage 4's root-class z3660scsi. kbootset: on `media --cd`/`--floppy` gate 3 checks only the root controller and filesystem
+(C2-4 v11 §13, spec 40 §3.1; a --bootdev is noted and unused); `namelist` writes /stand/unix 0644 whatever the umask; box
+kbootset d44f6a32 (→ kbootset -15). Spec 80: OQ-80.1 (030 metal), OQ-80.5 (an A4091 root on an 030 Z3660 needs a bounce or a
+motherboard bind). C3-5 v5 §1.3: no rc script trusts a pid from an earlier boot (the stock syslogd case, zero margin).
+modcheck warns when a demand-class load's working set passes 160 KiB (kit-test 64/64). monsw's ENODEV is the read (no
+d_read: nodev), not the open — one Bench check confirms.
+
 ## 2026-10-26 — U2 answered; the process-context total (0bacad5, 52b903c)
 
 N81 (k46 at 128 MB) / N82 (k30 at 64 MB): in process context after multi-user a module gets 320 KiB (320–383) resp.
