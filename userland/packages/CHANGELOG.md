@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kernel licence audit; kpkgroll device entries for module packages (96eaf7a, d5ffff2) — not published
+
+Every kernel package's copyright carries the licence of each repository its cut links (pin.sh lists them by sha256):
+kernel-k46-z adds amix-z3660scsi, amix-z3660net, amix-z3660rtg and amix-kerntools; kernel-k46-zacd those plus amix-a4091
+(LICENSE + NOTICE, the NetBSD SCRIPTS notice) and amix-cdfs; kernel-k46-m amix-z3660scsi + amix-kerntools; kernel-k30-u/-m
+amix-a4091's NOTICE + amix-kerntools. All seven kernel datastreams re-rolled at the same version with unchanged payloads
+(kern30u -1 91b7e592, -2 e607d185, kern30m 99d2e65b, kern46z -2 ff8b110e, -3 0fe41f72, kern46zcd b7cca1a3, kern46m c4bde0b6;
+superseded/kernel-licence-audit/). kpkgroll lets a module package carry `c none /dev/…` entries (C3-5 §1.2). Round trip
+95/95; catalog md5 d2142883. zeth -2 waits for gen-catalog/apkg to accept device entries and for module/VERSION 1.0.0-2.
+
 ## 2026-10-26 — kspace round trip on gen-catalog fc49df7; k30 kernels ship amix-z3660scsi's licence (2c5f833, 6da5ce2) — not published
 
 The round trip uses amix-packagemanager fc49df7 (apkg 0.3.1; gen-catalog writes the role=module rows) and requires those rows to
