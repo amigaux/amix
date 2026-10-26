@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — the final cut's base: kbootset gate 6 ET_REL bss; make core guards (6b2d669, f5ce731)
+
+kbootset's memory gate counts an ET_REL kernel's bss (its NOBITS sections and COMMONs, aligned as rel.c lays them out) as
+well as a brel's bss= (the re-cut KD060-Z: 284 172 B). make core fails when an allowlisted name has no provider and checks
+core/plat's warnings; make test checks core/upstream/ against core/upstream.sha256 (48 files). core/series 0001–0020 as at
+314c2aa. make core 124/124; 665 host checks. Box kbootset 013fe25f (-11), modadmin a206874d (modtools); KIT_REV=f5ce731.
+
 ## 2026-10-26 — core patch 0020: registration backstop; C3-1 §4 refusals (314c2aa)
 
 After every _unload and after a failed _load, any interrupt handler, network interface or console hook still pointing into the
