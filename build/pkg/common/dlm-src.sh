@@ -5,7 +5,7 @@
 #     . "$REPO/recipes/common/dlm-src.sh"
 #     amix_dlm_build <commit> <target>...
 #         e.g. boot1.img boot2.bin box/kbootset box/modadmin
-#     amix_dlm_kit <commit>
+#     amix_dlm_kit <commit> [<amix-modules commit>]
 #         `make kit`: $AMIX_DLM_TREE/build/kit/{k30,k46}, KIT_REV=<commit>
 #
 # The sibling checkout ../amix-dlm is only READ: `git archive <commit>` exports
@@ -68,16 +68,38 @@ amix_dlm_build() {
 # `-C <port>` go to the real git, so PORT_REV is the port's own.  Any other
 # git call is refused.  The stock headers come from gcc-cross-amix's sysroot,
 # as in amix-dlm.
+# With <amix-modules commit>, sys/monsw.h comes from the git archive of that
+# commit (build/kspace/src/kitmods-<commit>/amix-modules/, MONSW_H), and the
+# shim answers mkkit's three calls on it (since amix-dlm 6492c3b: the commit,
+# a clean diff, the toplevel), so kit.conf says MONSW_REV=amix-modules@<commit>.
+# Without it mkkit finds no amix-modules beside the export and takes the
+# port's src/sys/monsw.h (kits before 6492c3b record no MONSW_REV).
 amix_dlm_kit() {
 	amix_dlm_export "$1"
 	_dk_shim="$AMIX_BUILD_ROOT/kspace/src/gitshim-$1"
 	_dk_port="$AMIX_SIBLINGS/amix-040-060-port"
 	_dk_git=$(command -v git)
+	_dk_mh=
+	if [ -n "${2:-}" ]; then
+		_dk_mr="$AMIX_BUILD_ROOT/kspace/src/kitmods-$2/amix-modules"
+		git -C "$AMIX_SIBLINGS/amix-modules" cat-file -e "$2^{commit}" 2>/dev/null || {
+			echo "[FAIL] amix-modules has no commit $2" >&2; exit 1; }
+		if [ ! -f "$_dk_mr/include/sys/monsw.h" ]; then
+			rm -rf "$_dk_mr"; mkdir -p "$_dk_mr"
+			git -C "$AMIX_SIBLINGS/amix-modules" archive "$2" | tar -x -C "$_dk_mr"
+		fi
+		_dk_mh="$_dk_mr/include/sys/monsw.h"
+	fi
 	mkdir -p "$_dk_shim"
 	{
 		echo '#!/bin/sh'
 		echo 'case "$*" in'
 		echo "\"-C $_dk_port rev-parse --short HEAD\"|\"-C $_dk_port diff --quiet HEAD -- \"*) exec $_dk_git \"\$@\" ;;"
+		if [ -n "$_dk_mh" ]; then
+			echo "\"-C $_dk_mr/include/sys rev-parse --short HEAD\") echo $2 ;;"
+			echo "\"-C $_dk_mr/include/sys diff --quiet HEAD -- $_dk_mh\") exit 0 ;;"
+			echo "\"-C $_dk_mr/include/sys rev-parse --show-toplevel\") echo $_dk_mr ;;"
+		fi
 		echo "*\"rev-parse --short HEAD\") echo $1 ;;"
 		echo '*"status --porcelain"*) ;;'
 		echo '*) echo "dlm-src.sh git shim: refused: git $*" >&2; exit 1 ;;'
@@ -86,6 +108,7 @@ amix_dlm_kit() {
 	chmod +x "$_dk_shim/git"
 	(
 		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+		if [ -n "$_dk_mh" ]; then export MONSW_H="$_dk_mh"; fi
 		PATH="$_dk_shim:$PATH" GCA="$AMIX_SIBLINGS/gcc-cross-amix/build" \
 			PORT="$_dk_port" \
 			make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" kit
@@ -97,5 +120,5 @@ amix_dlm_kit() {
 			echo "[FAIL] amix-dlm $1: the $_dk_l kit is not labelled KIT_REV=$1" >&2; exit 1; }
 	done
 	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1 (log $AMIX_DLM_TREE.kit.log)"
-	unset _dk_shim _dk_l _dk_port _dk_git
+	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh
 }
