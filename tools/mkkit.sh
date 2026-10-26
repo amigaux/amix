@@ -20,11 +20,14 @@
 #   tools/               mkmod, modfix (built here), modcheck.py, mkoffs and
 #                        mkabi.py (the fingerprint, C3-3 section 4)
 #   dlmoffs.c            the probe: the structure offsets mkoffs measures
-#   abi-<kabi>.txt       the kernel line's fingerprint text (abi= is its SHA-256)
+#   abi.txt              the kernel line's fingerprint text (abi= is its SHA-256;
+#                        abi/<line>/abi-<kabi>.txt here)
 #   mk/module.mk         the make fragment
 #   ddi.list, core.list, exports (their names), registry/
 #   sample/hello/        the sample module
-#   docs/                the DDI contracts and the module guide
+#   docs/                ddi.md, guide.md (docs/abi/writing-a-module.md) and
+#                        contracts/C3-1.md, C3-2.md, C3-6.md
+# Every name in the kit is at most 14 bytes, so the package installs on s5.
 #   LICENSE, NOTICE, README.md
 # On k46 the two page-geometry headers, sys/immu.h and sys/param.h, are the
 # 68040/68060 port's 4 KiB forms (amix-040-060-port include-modelb/), the
@@ -84,7 +87,8 @@ rm -rf "$S"
 cp "$R/abi/tools/modcheck.py" "$OUT/tools/"
 cp "$R/abi/mk/module.mk" "$OUT/mk/"
 
-cp "$R/abi/$LINE/ddi.list" "$R/abi/$LINE/core.list" "$R/abi/$LINE/abi-$KABI.txt" "$OUT/"
+cp "$R/abi/$LINE/ddi.list" "$R/abi/$LINE/core.list" "$OUT/"
+cp "$R/abi/$LINE/abi-$KABI.txt" "$OUT/abi.txt"
 cp "$R/tools/mkabi.py" "$OUT/tools/"
 cat "$OUT/ddi.list" "$OUT/core.list" | sed 's/#.*//' | awk 'NF {print $1}' | sort -u > "$OUT/exports"
 cp "$R/abi/registry/"* "$OUT/registry/"
@@ -93,9 +97,10 @@ sed -i 's|^KIT    ?= .*|KIT    ?= ../..|' "$OUT/sample/hello/Makefile"
 
 # the guides by name: docs/abi/ also holds the DDI review draft, which
 # leaves this repository only on the owner's word
-cp "$R/docs/abi/ddi.md" "$R/docs/abi/writing-a-module.md" "$OUT/docs/"
+cp "$R/docs/abi/ddi.md" "$OUT/docs/"
+cp "$R/docs/abi/writing-a-module.md" "$OUT/docs/guide.md"
 for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
-	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/"
+	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/${c%%-[a-z]*}.md"
 done
 cp "$R/LICENSE" "$OUT/LICENSE"
 cp "$R/abi/README.md" "$OUT/README.md"
@@ -126,6 +131,10 @@ if [ "$LINE" = k46 ]; then
 			cp "$PORT/include-modelb/sys/$h.h" "$d/$h.h"
 		done
 	done
+	# the port commit the two headers come from, -dirty if they differ from it
+	PORT_REV=$(git -C "$PORT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	git -C "$PORT" diff --quiet HEAD -- include-modelb/sys/immu.h include-modelb/sys/param.h \
+		2>/dev/null || PORT_REV=$PORT_REV-dirty
 fi
 
 cat > "$OUT/kit.conf" <<EOF
@@ -137,6 +146,7 @@ CPUFLAG=$CPUFLAG
 DEFCPU=$DEFCPU
 KIT_REV=$REV
 EOF
+[ "$LINE" = k46 ] && echo "PORT_REV=$PORT_REV" >> "$OUT/kit.conf"
 cat > "$OUT/NOTICE" <<EOF
 The Amix ABI kit for $KABI, built from amix-dlm $REV.
 
@@ -148,7 +158,10 @@ tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on
-2026-09-23.$( [ "$LINE" = k46 ] && printf '\nsys/immu.h and sys/param.h there are the 68040/68060 port'"'"'s 4 KiB page\nforms of the stock headers (amix-040-060-port include-modelb/).' )
+2026-09-23.$( [ "$LINE" = k46 ] && printf '\nsys/immu.h and sys/param.h there are the 68040/68060 port'"'"'s 4 KiB page\nforms of the stock headers (amix-040-060-port include-modelb/ at '"$PORT_REV"').' )
 EOF
+# s5 keeps 14 bytes of a name: the package must install there
+long=$(cd "$OUT" && find . | awk -F/ '{ for (i = 2; i <= NF; i++) if (length($i) > 14) { print; break } }')
+[ -z "$long" ] || { echo "mkkit: names over 14 bytes: $long" >&2; exit 1; }
 n=$(find "$OUT/sysroot" "$OUT/stock" -name '*.h' | wc -l)
 echo "mkkit: $OUT: $LINE $KABI, pin $PIN, $n stock headers, amix-dlm $REV"

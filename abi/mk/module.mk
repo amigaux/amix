@@ -1,5 +1,5 @@
 # module.mk -- build an Amix kernel module with the ABI kit
-# (docs/contracts/C3-1-module-object.md, C3-6 in amix-dlm).
+# (the kit's docs/contracts/C3-1.md and C3-6.md).
 #
 # In the module's own Makefile:
 #
@@ -13,7 +13,7 @@
 #	include $(KIT)/mk/module.mk
 #
 # and a Master file beside it (the .moddata keys and the definition line,
-# see the kit's sample/hello/Master and docs/writing-a-module.md).  A
+# see the kit's sample/hello/Master and docs/guide.md).  A
 # Master without a $cpu line gets the line's (kit.conf DEFCPU: 68030 on
 # k30, 68040 on k46), or MODCPU if set, so one Master serves both lines.
 # Optional: EXTRA (objects linked in as they are, a font for example:

@@ -2,7 +2,7 @@
  * hello.c -- the ABI kit's sample module: a misc module that prints its
  * parameters when it loads and says goodbye when it unloads.  A template:
  * a driver keeps this shape and uses MOD_DRV_WRAPPER with its cdevsw row
- * instead (docs/writing-a-module.md, docs/contracts/C3-6).
+ * instead (the kit's docs/guide.md and docs/contracts/C3-6.md).
  *
  * K&R C: the kernel compiler runs with -traditional.
  *

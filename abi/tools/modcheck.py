@@ -266,7 +266,7 @@ def drvmajors(e, keys, reg, kit):
     offsets from the kit's fingerprint text) against majors= and the
     registry: the core installs at drv_cmajor, so it must be the module's"""
     offs = {}
-    for line in open(os.path.join(kit, 'abi-%s.txt' % conf(kit)['KABI'])):
+    for line in open(os.path.join(kit, 'abi.txt')):
         f = line.split()
         if len(f) == 3 and f[0] == 'offs':
             offs[f[1]] = int(f[2])

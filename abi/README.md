@@ -6,6 +6,11 @@ Everything an Amix kernel module needs to be built for one kernel line
 module. No Amix installation is needed beside it; the cross compiler is
 the pinned gcc-cross-amix (`m68k-cbm-sysv4-*` on `PATH`).
 
+The kit is a host-side artefact: `tools/modfix` is a Linux x86-64
+executable and the compilers are cross compilers. Nothing in it runs on
+Amix. The `.pkg` that carries it is only a distribution container: fetch
+it with `apkg download`, or unpack it with `pkgtrans` on the host.
+
 Build a module:
 
 ```
@@ -14,11 +19,12 @@ cd sample/hello && make            # gives build/<line>/mod.d/hello
 
 and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 `include $(KIT)/mk/module.mk`, and a `Master` beside it
-(`docs/writing-a-module.md`).
+(`docs/guide.md`).
 
 | Path | Content |
 |---|---|
-| `kit.conf` | the line, its kabi tag, the compiler pin, the CPU flag |
+| `kit.conf` | the line, its kabi tag, the compiler pin, the CPU flag, the amix-dlm commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`) |
+| `abi.txt` | the line's fingerprint text (C3-3 §4): `abi=` is its SHA-256 |
 | `include/sys/` | `mod.h`, `moddefs.h` (the wrapper macros), `ksym.h`, `amixddi.h` (DDI v1) |
 | `sysroot/`, `stock/` | the stock Amix 2.1 kernel headers (see `NOTICE`) |
 | `ddi.list`, `core.list` | the names a module may import, per tier (C3-2) |
@@ -26,7 +32,10 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 | `tools/` | `mkmod`, `modfix`, `modcheck.py` (the checker) |
 | `mk/module.mk` | the make fragment |
 | `sample/hello/` | the sample module |
-| `docs/` | the DDI contracts, the module guide, C3-1, C3-2, C3-6 |
+| `docs/` | `ddi.md` (the DDI contracts), `guide.md` (writing a module), `contracts/C3-1.md`, `C3-2.md`, `C3-6.md` |
+
+Every name in the kit is at most 14 bytes, so it unpacks on an s5
+filesystem too.
 
 In amix-dlm this directory holds the kit's sources; `make kit` builds the
 kits for both lines into `build/kit/`.
