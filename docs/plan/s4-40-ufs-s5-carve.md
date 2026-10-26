@@ -2,7 +2,10 @@
 
 - **Status:** plan, 2026-10-27 (amix-dlm), for the orchestrator, the port
   and amix-kerntools. No code yet. The questions in §9 are numbered for
-  answers by number.
+  answers by number. **Answered by the orchestrator:** A1 yes (C4-6
+  version 3: one boot-class rule, `rootfs` promoted); A2 cdfs is boot
+  class on the 1.1 CD medium too, which roots on its RAM disk; A3 the
+  miniroot is s5. P1–P4 and K1–K4 sent to the port and amix-kerntools.
 - **Implements:** `docs/spec/30-module-core.md` §6, `70-static-floor.md`
   §2 (OQ-70.1, OQ-70.2), contract C4-6 (`vfs_register`, the core tier),
   C4-4 §1.3 (core patch 0043, the promotion); the plan rows S4-40 (the
