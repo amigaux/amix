@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 5
+# C4-5 — DDI v1.2, the DMA interface, version 6
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -10,7 +10,9 @@
   heap memory through its DTT0 alias (§3); version 5 (2026-10-27,
   S4-62's second piece, the 030 provider): on k30 a miss for a segment
   the board cannot reach gives `dma_addr` 0, and the driver does not arm
-  (§2.2); the provider as built (§5.4). Other repositories build
+  (§2.2); the provider as built (§5.4); version 6 (2026-10-27, the
+  Bench's N109b): the entry-0 decode, the identity map cacheable, so
+  §5.4's read-after-complete rule stays (§5.3). Other repositories build
   against this text; a change from here is a contract change with a
   version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
@@ -222,7 +224,22 @@ pool does not promise.
 - **The cache mode of the identity map:** decode the status bits of the
   root-table entry 0, which differ from those of entries 2 and 3, before
   the first `FROM_DEVICE` test, to know whether the 030 data cache is on
-  for the memory the pool and the bounce buffers live in.
+  for the memory the pool and the bounce buffers live in. **Decoded**
+  (amix-kerntools, N109b on kern30m -14, read live through `/dev/kmem`
+  from `pstart`'s root table at `cpuroot`):
+  - entry 0 `0x7fff0319 0x00000000`: an early-termination page
+    descriptor, VA 0–1 GiB to PA 0, **CI clear: cacheable**;
+  - entries 2 and 3 `0x7fff0341 0x80000000` / `0xc0000000`: CI set;
+  - `pstart` writes status 0xc0 into entry 0 and 0xd0 into entries 2 and
+    3; the 0x10 between them is CI, and nothing changes it later.
+
+  So the pool and every bounce buffer lie in cacheable memory behind a
+  write-through data cache, and §5.4's rule stays: a driver reads what the
+  board wrote into `dma_alloc` memory only after a `dma_complete`.
+- **The force-bounce hook and the pool, measured:** `dma_pool`
+  0x07fdf800, `dma_poolsz` 0x20000, ending one 2 KiB page below the
+  0x08000000 bind (10 §3.2); the console's `dma: pool 128 KiB at
+  0x7FDF800` (N108).
 
 ### 5.4 The 030 provider (`core/plat/k30`, S4-62)
 
@@ -242,10 +259,10 @@ pool does not promise.
   bytes.
 - **The force-bounce hook:** the kernel global `dma_forcebounce`, nonzero
   bounces every segment (§5.3).
-- **Until the entry-0 decode (§5.3)** shows the identity map
-  cache-inhibited, a driver reads what the chip wrote into `dma_alloc`
-  memory (status, message buffers) only after a `dma_complete`, which
-  clears the data cache.
+- **The read-after-complete rule:** the identity map is cacheable (the
+  entry-0 decode, §5.3), so a driver reads what the chip wrote into
+  `dma_alloc` memory (status, message buffers) only after a
+  `dma_complete`, which clears the data cache. This is permanent on k30.
 
 ## 6. Not in this contract
 
