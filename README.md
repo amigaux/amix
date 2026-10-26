@@ -8,12 +8,13 @@ module there (z3660eth, z3660rtg, a4091, gayle-ide, z3660scsi, cdfs).
 | Module | Class | Majors | Origin |
 |---|---|---|---|
 | `monsw` | demand | c 52 | the console monitor switch; moved from amix-040-060-port `src/monsw.c` (2026-10-26, D-3 / S3-27) |
+| `ramdisk` | root | b 20 | the RAM disk: unit 0 the loader-placed miniroot image, units 1–2 scratch disks; replaces the stock `ram` driver (2026-10-26, D-3 / S4-34) |
 
 Layout, per module (`monsw/README.md` is the worked example):
 
 | Path | Content |
 |---|---|
-| `<module>/src/` | the source; the module glue sits under `-D<NAME>_MODULE`, so a static form can still be built from it |
+| `<module>/src/` | the source; where a module also has a static form, its module glue sits under `-D<NAME>_MODULE` (monsw) |
 | `<module>/module/keys` | the `.moddata` keys, one `key=value` per line |
 | `<module>/module/Master` | the kit's form of `keys`, generated from it |
 | `<module>/module/Makefile` | builds both lines on the kit's `mk/module.mk` |

@@ -1,0 +1,12 @@
+# The .moddata keys of the ramdisk module (amix-dlm C3-1 section 3, C4-2 sections 1 and 8),
+# one key=value string per line as the section carries them.  kabi, cc and cpu come from the
+# ABI kit of the line (68030 on k30, 68040 on k46); module/Makefile turns this file into
+# the kit's Master.  The sizes are the scratch units' (1 and 2), in KiB.
+name=ramdisk
+class=root
+match=always
+majors=b:20
+unload=never
+desc=RAM disk /dev/dsk/ram[0-2]
+param=size1:int:512:0:16384
+param=size2:int:2048:0:16384
