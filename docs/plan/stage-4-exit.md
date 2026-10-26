@@ -108,20 +108,19 @@ alignment (fixed in a829c44, C3-3 version 5).
 | S4-25 packages | pending |
 | S4-30 … S4-34 the root-class modules | pending |
 | S4-40 … S4-43 the filesystems and the kernels without them | pending |
-| S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook); the bench rows with the A4091 (N105/N105b) and the entry-0 cache decode pending |
+| S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook). **k46 PASS**: N105/N105b, the first A4091 root-class boot (kern46m -78, a4091 1.0.0-1; `cp` and `sync` clean through `dma_alloc` memory; amix-kerntools d1a2e3c), and N106, two root modules ranked with the A4091 root as card 1 (1653ea3). k30 (N109/N109b, the force-bounce hook and the entry-0 decode) pending |
 | S4-63 C3-6 §1, the register-write rule | pending |
-| S4-71 the root context (C4-2 §2) | the probe and its row defined (c2dc7fb, `tests/bench/s4-71`); the run on both lines pending |
+| S4-71 the root context (C4-2 §2) | the probe and its row defined (c2dc7fb, `tests/bench/s4-71`). **k46 PASS**: N107 (kern46m -78; every call at level 7 with the clock stopped, `bprobe` of a decoded address 0 and of an unheld one 1, the fault caught; amix-kerntools 1653ea3): C4-2 §2's list stands on k46. k30 (N108, kern30m -14) pending |
 | S4-73 exit row | **PASS** k30 — N104r (§2a) |
 | S4-74 metal: the A4000D and the cardless A4000T (root controllers, M-A4T1, M-DMA1, M-HALT1, U3's cache half, root filesystems, M-FP2, M-NET1g) | pending |
 
 ## 7. What remains (2026-10-27)
 
-- **S4-71**, the root-context probe, both lines (emulation, then metal).
-  The Gayle module's shipping waits on its `bprobe` line.
-- **The A4091 rows N105 / N105b**: the A4091 root module with C4-5 v5's
-  DMA, on k46 (-78) and k30 (-14, the 030 provider), with the force-bounce
-  hook in emulation, and the entry-0 cache-mode decode before the first
-  `FROM_DEVICE` test on k30.
+- **S4-71 on k30** (N108, kern30m -14); k46 passed (N107). The Gayle
+  module's shipping waits on the k30 `bprobe` line too.
+- **The A4091 rows on k30** (N109/N109b, a4091-k30 root with
+  `dma_forcebounce`, and the entry-0 cache-mode decode read live from
+  `pstart`'s root table); k46 passed (N105/N105b, N106).
 - **The k30 module rows on kern30m -14**: the 030 DMA pool's console line,
   the module set of record.
 - **cdfs, S4-42**: the module (amix-cdfs ef96470) with its page-shift
