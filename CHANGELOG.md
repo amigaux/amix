@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — S3-31 part 3, k30: PASS; the installed disk keeps boot priority 2 (73f218f, f6c770b)
+
+The CD-booted, disk-rooted cell passes on k30 (N83c): amix-cdboot's line, the kernel at 0x04000000, the root record,
+multi-user from the disk, the read-only-medium lines, the store byte-identical. An installed disk keeps boot priority 2;
+the disc's node only ties it and the disk wins the tie, so a disc left in the drive never takes over a box. The CD is chosen
+in the Kickstart early-startup menu or by lowering the disk's priority below 2 (stage-3-cd-boot.md §5, spec 50 §4 Rescue).
+
 ## 2026-10-26 — S3-44 rows, ledger gates restated, CD gate 3, namelist 0644, C3-5 v5, modcheck warning (f7eff90..5491d61)
 
 S3-44's bench rows (README S3-44; probes t44intr and t44fill): the chains on the kernels of record, a full chain with
