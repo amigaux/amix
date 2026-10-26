@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage 2's exit met on the emulator; C2-4 v7: commit no-op and `commit --again` (db91add..f43fe08)
+
+S2-46 passes on k30 (row N45, the installer's v10 disk): stage 2's exit gate is met on the emulator on both lines; the metal
+rows S1-26, S1-27 and S2-47 stay open for the owner's bench time. kbootset commit writes nothing when the built generation
+equals the default (compared through the loader's parser: members by size and SHA-256, the facts, the parameters) and says
+"the default generation M already has these members; nothing to commit"; `commit --again` commits it all the same (a repair,
+a row). C2-4 version 7; apkg needs no change. Bench recipes use `commit --again` where a row needs an equal generation.
+Box kbootset a2970b2000e6c505.
+
 ## 2026-10-26 — M-GEN5 closed on both lines; M-GEN3 N=7 on k30; ledger k30 cells (44f7c49, f486028)
 
 k30 row N43: the unit-5 trial panics at mountroot (errno 30 = EROFS, the last vfssw row's errno; k46 reports 89) and L8 falls
