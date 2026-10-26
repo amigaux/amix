@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern46m k46.1.0.261026-61, the S4-20 module kernel (2834c79) — not published
+
+The first stage-4 k46 cut: KD060-Z module kernel build 68060-261026-61 (port k46-module 13dc9f3) with amix-dlm 4b7eb3d
+(core 0001–0028, dlm_maximage 256 KiB) and amix-z3660scsi 86e6cd7 (ZS-05). unix cb2499f1 (2433820 B), sidecar 9a85b329,
+abi= unchanged 7a90c7d9; ksymgate 12/12. md5 0fdca621 / 2470912 B. -58 stays in build/kspace/pkg (the stage-3 media of
+record use it); the staged root carries -61 (catalog 6b003630); the -58 root kept at superseded/repo-20261026-1848
+(47584f25). Round trip 106/106; gates PASS.
+
 ## 2026-10-26 — z3660eth-k30/-k46 1.0.0-5 (0a37c09) — not published
 
 From amix-z3660net c5f7a46: every board register access in the module armed against the Z3660 address-capture race (ZS-05).
