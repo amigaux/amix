@@ -157,11 +157,13 @@ echo "kbuild: brel bss (gate 2, gate 6, the manifest) ok"
 
 # a module kernel (sidecar version 5, C3-3 §3): arena=, ident= and
 # loader-min=2 together; the manifest gets its arena and ident records
-msidecar() {	# msidecar CAP [LOADER-MIN] [ident=...]
+ABI=abi=7a90c7d92c2e0882f546d38543b8921d55a42ffd72801449a89b8e70a702dc0b
+msidecar() {	# msidecar CAP [LOADER-MIN] [ident=...] [abi=...]
 	sed -e 's/^kabi=static$/kabi=k46.1.0/' -e 's/^family=KD060-A$/family=generic/' \
 	    -e "s/^loader-min=.*/loader-min=${2:-2}/" $T/kabi.static > $R/stand/k46/kabi
 	echo "arena=0x0009a000 $1" >> $R/stand/k46/kabi
 	[ "${3-x}" = "" ] || echo "${3:-ident=0x00099fc0}" >> $R/stand/k46/kabi
+	[ "${4-x}" = "" ] || echo "${4:-$ABI}" >> $R/stand/k46/kabi
 	record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 }
 cp $R/stand/k46/kabi $T/kabi.static
@@ -181,9 +183,11 @@ $KB commit 2>/dev/null | grep -q "committed"
 grep -a -q "^ident 0x00099fc0$" $T/disk.img
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
 # the manifest copy must fit the arena behind its directory (C3-4 §4)
-# abi= (C3-3 section 4), when given, is a SHA-256
-msidecar 0x00060000
-echo "abi=not-a-fingerprint" >> $R/stand/k46/kabi; record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+# abi= (C3-3 section 4): a module kernel's sidecar carries it, a SHA-256
+msidecar 0x00060000 2 ident=0x00099fc0 ""
+refused 2 $KB build $FACTS
+grep -q "a module kernel's sidecar gives no abi=" $T/out
+msidecar 0x00060000 2 ident=0x00099fc0 abi=not-a-fingerprint
 refused 2 $KB build $FACTS
 grep -q "abi= is not a fingerprint" $T/out
 msidecar 0x00000100

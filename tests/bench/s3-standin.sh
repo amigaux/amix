@@ -9,7 +9,7 @@
 # usage: s3-standin.sh KERNEL SIDECAR OUTDIR [ROOTREC]
 #   KERNEL    the module kernel as shipped (ET_REL on k46, brel on k30)
 #   SIDECAR   its sidecar from the kernel build: kabi=, line=, pin=,
-#             loader-min=2, ident=, arena=, root=, rootfs= (and bss= for a
+#             loader-min=2, ident=, arena=, abi=, root=, rootfs= (and bss= for a
 #             brel); size= and sha256= are written here from KERNEL
 #   ROOTREC   the vehicle's manifest root record ("sd id=144b0100
 #             base=00000000 unit=6 slice=1"); with it, the two specs of the
@@ -34,7 +34,7 @@ sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
 key() { sed -n "s/^$1=//p" "$SIDECAR" | head -1; }
 LINE=$(key line) KABI=$(key kabi) PIN=$(key pin)
-for k in line kabi pin ident arena root rootfs; do
+for k in line kabi pin ident arena abi root rootfs; do
 	[ -n "$(key $k)" ] || { echo "s3-standin: the sidecar has no $k=" >&2; exit 1; }
 done
 mkdir -p "$OUT/stand/$LINE" "$OUT/var/apkg/kpkg"

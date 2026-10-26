@@ -337,6 +337,9 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			    (kk->has_arena && (!kk->arena_cap || kk->loader_min < 2))))
 		rc = refuse(k, 2, "a module kernel's sidecar gives arena=, ident= and loader-min=2 "
 			    "together, a static kernel's none of them");
+	if (rc == KS_OK && kk->has_arena && !kk->abi[0])
+		rc = refuse(k, 2, "a module kernel's sidecar gives no abi= (the fingerprint, C3-3 "
+			    "section 4)");
 	if (rc == KS_OK && kk->abi[0] && (strlen(kk->abi) != 64 ||
 					  strspn(kk->abi, "0123456789abcdef") != 64))
 		rc = refuse(k, 2, "the sidecar's abi= is not a fingerprint (64 lowercase hex digits)");

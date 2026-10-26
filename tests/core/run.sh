@@ -395,16 +395,23 @@ for IMG; do
 	else
 		fail "$K: mkident: $(cat "$A/ident.log" 2>/dev/null)"
 	fi
-	# the fingerprint (C3-3 section 4) against the line's reference text
-	if python3 "$R/tools/mkabi.py" --check "$R/abi/$LINE/abi-$KABI.txt" "$A/kernel.o" \
+	# the fingerprint (C3-3 section 4) against the line's reference text.
+	# The k46 kernel of record predates the re-cut's `.size cputype,4` (its
+	# cputype has size 0): that one known line is compared as 0, and said
+	REF=$R/abi/$LINE/abi-$KABI.txt NOTE=
+	if [ $LINE = k46 ] && ! m68k-elf-nm -S "$A/kernel.o" | grep -q ' 00000004 [DdBb] cputype$'; then
+		sed 's/^data cputype 4$/data cputype 0/' "$REF" > "$A/abi-ref.txt"
+		REF=$A/abi-ref.txt NOTE=" (cputype compared as size 0: this base predates the re-cut's .size)"
+	fi
+	if python3 "$R/tools/mkabi.py" --check "$REF" "$A/kernel.o" \
 		"$R/abi/$LINE/ddi.list" "$DLM/dlm_offs.h" > "$A/abi.log" 2>&1; then
-		pass "$K: fingerprint as abi/$LINE/abi-$KABI.txt: $(cat "$A/abi.log")"
+		pass "$K: fingerprint as abi/$LINE/abi-$KABI.txt$NOTE: $(cat "$A/abi.log")"
 	else
 		fail "$K: fingerprint: $(cat "$A/abi.log")"
 	fi
 	# what moved: a name the reference lacks is a minor, a changed size a major
-	grep -v '^data lbolt ' "$R/abi/$LINE/abi-$KABI.txt" > "$A/abi-less.txt"
-	sed 's/^offs SDSZ .*/offs SDSZ 24/' "$R/abi/$LINE/abi-$KABI.txt" > "$A/abi-moved.txt"
+	grep -v '^data lbolt ' "$REF" > "$A/abi-less.txt"
+	sed 's/^offs SDSZ .*/offs SDSZ 24/' "$REF" > "$A/abi-moved.txt"
 	if ! python3 "$R/tools/mkabi.py" --check "$A/abi-less.txt" "$A/kernel.o" "$R/abi/$LINE/ddi.list" \
 		"$DLM/dlm_offs.h" > "$A/abi-less.log" 2>&1 && grep -q "data lbolt added (4): raise the minor" "$A/abi-less.log" &&
 	   ! python3 "$R/tools/mkabi.py" --check "$A/abi-moved.txt" "$A/kernel.o" "$R/abi/$LINE/ddi.list" \

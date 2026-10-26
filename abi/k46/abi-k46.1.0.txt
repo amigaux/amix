@@ -1,5 +1,5 @@
 data bootinfo 1900
-data cputype 0
+data cputype 4
 data displayedscreen 4
 data lbolt 4
 data mod_drvops 12
