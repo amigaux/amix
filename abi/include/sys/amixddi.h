@@ -46,6 +46,15 @@ extern int	intr_attach();		/* (int, int (*)(), char *, char *) */
 extern int	intr_detach();		/* (int, int (*)(), char *) */
 
 /*
+ * A disk controller (root, k30.1.1 / k46.1.1; contract C4-1).
+ * sd_register(queuefn, c, base, name, rank) from the module's _load:
+ * queuefn(c, cp) gets sd's requests for the board, rank is the class the
+ * module's .moddata declares (1 z3660, 2 zorro, 3 mobo, 4 ide).  0,
+ * EINVAL, ENOSPC (four), EBUSY (after sd's first open).
+ */
+extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
+
+/*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or
  * off the stock list netstat reads.  0, EEXIST / ENOENT.
  */

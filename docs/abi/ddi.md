@@ -1,4 +1,4 @@
-# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0)
+# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in k30.1.1, k46.1.1)
 
 These are the names a module may use from the kernel. The list of record
 is the ABI kit's `ddi.list` (`abi/<line>/ddi.list` here). The kernel's
@@ -10,7 +10,9 @@ record. This page gives each name's contract.
 **Context** says where a name may be used:
 - **proc**: process context; it may sleep;
 - **any**: interrupt level as well;
-- **no-sleep**: never sleeps.
+- **no-sleep**: never sleeps;
+- **root**: a root-class module's `_load` in the root pass (level 7, the
+  clock stopped; C3-6 §1.3).
 
 In these kernels no spl masks level 6 (`spl5`–`spl7` stop at level 4).
 So a level-6 handler calls none of these
@@ -117,6 +119,12 @@ board is set up, and enables the board's interrupt only after a software
 self-test passes (C3-6 §1.3). A level-6 handler acknowledges and masks its
 board and records what happened. The work runs at level 4 or below, in a
 level-2 handler raised through PORTS or in the poll.
+
+## Disk controllers (k30.1.1, k46.1.1)
+
+| Name | Form | Context | Provider | Contract |
+|---|---|---|---|---|
+| `sd_register` | `int sd_register(queuefn, c, base, name, rank)` | root | core | Registers one board with sd (contract C4-1 §3). `queuefn(c, cp)` gets sd's requests for it; `base` is what `sdcardbase()` returns; `name` (the module's storage) what `sdhardwarename()` returns; `rank` the class the module declares in `.moddata` (1 `z3660`, 2 `zorro`, 3 `mobo`, 4 `ide`). 0; `EINVAL` (another class, no `queuefn` or `name`, or outside a module's `_load`); `ENOSPC` (four registered); `EBUSY` (sd's first open has closed registration). Allocates nothing; a failed `_load`'s registrations are removed |
 
 ## STREAMS
 

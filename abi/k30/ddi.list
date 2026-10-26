@@ -59,6 +59,7 @@ putbq func 0
 putnext func 0
 putq func 0
 qreply func 0
+sd_register func 1
 sleep func 0
 spl0 func 0
 spl1 func 0
