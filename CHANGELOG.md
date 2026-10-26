@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — monsw's home is amix-modules; kbootset -13: a boot from a read-only medium (e319d85..b6b4b87)
+
+monsw lives in amix-modules (plan S3-27, Q3-2 settled; C3-6 §4; the kit ships include/sys/monsw.h — interface headers of
+generic modules ship with the kit, versioned with their module; registry: b 20 ramdisk's home is amix-modules). kbootset -13:
+on a boot from a read-only medium (AXL1 flag 0x08 — the CD, the floppy pair — with no boot node) mark-good marks nothing,
+retry does nothing, status says the medium booted and marks none of the store's generations as booted, and the namelist comes
+from the line's installed kernel when its build id is kinfo's (else "no namelist: booted from a read-only medium whose kernel
+… is not the one installed here", exit 3). C2-4 v10 §13; 10 §6 names the AXL1 flag bits. Plan S3-31 and the exit ledger
+carry part 3 as decided. Box kbootset e56172b6; KIT_REV=b6b4b87 (PORT_REV ebe8dfd).
+
 ## 2026-10-26 — C3-5 §1.3 the 2.1 sh's read; C2-2 §2 device nodes; the CD boot tree recipe (9000802, 42dd80d)
 
 C3-5 §1.3: never re-read a file through `exec <file` — the 1991 sh's read keeps its buffer across the redirection and
