@@ -169,5 +169,32 @@ test_bootinfo(void)
 			T_EQ(size, 0);
 			T_EQ(base, 0);
 		}
+		{
+			/* k30's 64 MiB cap (ax_memcap) on MemHeader copies: chip, a
+			 * 16 MB bank touching a 128 MB one from below, Zorro III */
+			static ax_u8 m[4 * AXB_MEMSIZE];
+			static const ax_u32 r[4][3] = {
+				{ 0x3, 0x400, 0x200000 },
+				{ 0x5, 0x07000020, 0x08000000 },
+				{ 0x5, 0x08000020, 0x10000000 },
+				{ 0x5, 0x40000020, 0x48000000 } };
+			int i;
+
+			for (i = 0; i < 4; i++) {
+				AX_PUT16(m + i * AXB_MEMSIZE + 14, r[i][0]);
+				AX_PUT32(m + i * AXB_MEMSIZE + 20, r[i][1]);
+				AX_PUT32(m + i * AXB_MEMSIZE + 24, r[i][2]);
+				AX_PUT32(m + i * AXB_MEMSIZE + 28, r[i][2] - r[i][1]);
+			}
+			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP), 1);
+			T_EQ(AX_GET32(m + 2 * AXB_MEMSIZE + 24), 0x0C000000UL);	/* capped */
+			T_EQ(AX_GET32(m + 1 * AXB_MEMSIZE + 24), 0x07000020UL);	/* emptied */
+			T_EQ(AX_GET32(m + 3 * AXB_MEMSIZE + 24), 0x48000000UL);	/* Z3 untouched */
+			T_EQ(AX_GET32(m + 0 * AXB_MEMSIZE + 24), 0x200000UL);	/* chip untouched */
+			/* a 64 MB bank: nothing to cut */
+			AX_PUT32(m + 2 * AXB_MEMSIZE + 24, 0x0C000000UL);
+			AX_PUT32(m + 1 * AXB_MEMSIZE + 24, 0x07000020UL);
+			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP), 0);
+		}
 	}
 }

@@ -109,6 +109,20 @@ struct ax_memr {
  * 0x40000000, is not mapped once translation is on and never starts
  * (S3-43-7, 2026-10-26; docs/spec/10-boot-loader.md §5) */
 #define AX_IDMAP_TOP	0x40000000UL
+
+/* the most fast memory a k30 kernel can describe: the stock 2 KiB-page
+ * kernel takes as its main store the whole region its end lies in, and
+ * one over 64 MiB stops it before the banner (S3-43, N70 and N75,
+ * 2026-10-26); 10 section 3 */
+#define AX_K30_MEMCAP	0x04000000UL
+
+/* in the MemHeader copies mems[0..n) (bootinfo.memory[] to be): the fast
+ * region holding base ends at most cap bytes above its base, and a fast
+ * region that ends where it begins is emptied, so the kernel, which joins
+ * touching regions into its main store, sees at most cap (mh_Lower and
+ * mh_Upper only: the kernel reads no other field).  Returns 1 if anything
+ * was cut */
+int ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap);
 ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
 
 /* the 0x38-byte RTH1 record; root may be 0 */

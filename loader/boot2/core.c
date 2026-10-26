@@ -45,6 +45,7 @@ static const struct medium *med;
 static const struct ax_gen *g;
 static ax_u8 *mbuf, *mcopy, *kbuf;
 static ax_u32 gen, vaddr;
+static int k30;			/* the generation is for the k30 line */
 static struct ax_bootdata bd;
 
 static const char *const lmsg[] = { "",
@@ -283,9 +284,12 @@ load_first(const struct ax_sel *sel)
 			fail(9, gen);
 			goto next;
 		}
+		k30 = man.line[1] == '3';	/* line_ok: k30 or k46 */
 		con_say("generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
 			   man.kernel.size);
 		vaddr = bind_address(&room);
+		if (k30 && room > AX_K30_MEMCAP)
+			room = AX_K30_MEMCAP;	/* the k30 kernel's limit (10 section 3) */
 		if (!room) {	/* never bind in chip memory: 0 is the vector table */
 			con_say("no fast memory below 0x40000000 to run the kernel in\n");
 			fail(4, gen);
@@ -298,16 +302,14 @@ load_first(const struct ax_sel *sel)
 		if (rc == AXR_OK) {
 			bd.end = ax_kernel_end(&bd, man.kernel.bss, &i);
 			if (i)
-				con_say("a brel kernel without bss= in its manifest: "
-					 "512 KiB assumed\n");
+				con_say("no bss= for this brel: 512 KiB assumed\n");
 		}
 		if (rc == AXR_OK && bd.end - vaddr <= room) {
 			if (!man.has_arena || (rc = arena_fill()) == 0)
 				return k;
 			fail(rc, gen);
 		} else if (rc == AXR_OK) {
-			con_say("the kernel needs %u bytes, the largest fast memory "
-				   "region has %u\n", bd.end - vaddr, room);
+			con_say("the kernel needs %u bytes, the region has %u\n", bd.end - vaddr, room);
 			fail(4, gen);
 		} else
 			con_say("L6 relocation failed: error %d, section %u record %u type %u\n",
@@ -410,6 +412,8 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 	for (mh = *(ax_u8 **)((ax_u8 *)ax_execbase + EXEC_MEMLIST); *(ax_u32 *)mh && nmem < AXB_MAXMEM;
 	     mh = *(ax_u8 **)mh, nmem++)
 		x_memcpy(w->mems + nmem * AXB_MEMSIZE, mh, AXB_MEMSIZE);
+	if (k30)
+		ax_memcap(w->mems, nmem, vaddr, AX_K30_MEMCAP);
 
 	x_memset(&lr, 0, sizeof(lr));
 	f = u = b = id = 0;

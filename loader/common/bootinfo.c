@@ -232,6 +232,27 @@ ax_bootinfo_build(ax_u8 out[AXB_SIZE], const ax_u8 *cfgdevs, int ncfg,
 	return 0;
 }
 
+int
+ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap)
+{
+	ax_u8 *m, *e = mems + n * AXB_MEMSIZE;
+	ax_u32 lo = 1, l;
+	int cut = 0;
+
+	for (m = mems; m < e; m += AXB_MEMSIZE) {	/* the region holding base */
+		l = AX_GET32(m + 20) & ~0xFFUL;
+		if (!(AX_GET16(m + 14) & 0x2) && base >= l && base < AX_GET32(m + 24)) {
+			lo = l;
+			if (AX_GET32(m + 24) - l > cap)
+				AX_PUT32(m + 24, l + cap), cut = 1;
+		}
+	}
+	for (m = mems; m < e; m += AXB_MEMSIZE)	/* one touching it from below */
+		if (!(AX_GET16(m + 14) & 0x2) && AX_GET32(m + 24) == lo)
+			AX_PUT32(m + 24, AX_GET32(m + 20)), cut = 1;
+	return cut;
+}
+
 ax_u32
 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size)
 {
