@@ -217,7 +217,8 @@ the module packages installed under the root, as C3-5 §2 says.
   (loads at the first open of its device)`.
 - **The unchanged-generation comparison** (§10) compares the module
   records and the parameters with the rest.
-- **On the box,** `modadmin` (amix-dlm 55722ef on, built with `make box`)
-  lists the loaded modules and reads a module's tunables and counters by
+- **On the box,** `modadmin` (amix-dlm 55722ef on, built with `make box`,
+  shipped in its own package `modtools`, not in kbootset's) lists the
+  loaded modules and reads a module's tunables and counters by
   name (`-s`, `-Q`, `-k`, `-p`, `-w`).
 
