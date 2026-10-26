@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Stage 4 plan: S4-57, the generic 060 target (a2829f6)
+
+An A3000 or A4000 with a third-party 68060 and no Z3660, root on an A4091/A4092, the A3000 onboard SCSI or Gayle IDE, a
+ZZ9000 in Zorro II mode as RTG; proven under emulation, delivered as pre-installed disk images through the first-boot
+dialog; release notes per accelerator "proven under emulation; reported working by <tester>"; CyberVision PPC graphics and
+the CyberStorm UW-SCSI out of scope. Exposed: an A3000 with a third-party 060 runs the k46 line WITH an A3000 WD, so C4-1
+§4.3's "no set of record" sentence is wrong for k46 and spec 30 §5.3's 040/060 board sets lack every no-Z3660 set — the
+A3000 WD behind a Zorro board is an accepted rename on both lines (D-3 §11), to be written in (C4-1 v2, 30 §5.3).
+
 ## 2026-10-26 — C4-4 v3, C3-5 v7, boot2 savings 1–2, S4-10 placement, core patch 0035 (d7d1cd7..a51089b)
 
 C4-4 v3: boot2 places every root record (in safe mode the `safe=1` set, flag 0x4 from it) and never evaluates match=; the
