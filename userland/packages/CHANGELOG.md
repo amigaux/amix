@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — monsw-k30/-k46 1.0.0-2 (d059277) — not published
+
+A package revision for S3-45's `apkg upgrade` row, from amix-modules b0f75a4: module/VERSION 1.0.0-2, README facts; objects
+unchanged (k30 01a40342, k46 2c2760e9; kit c6ad5bd). monsw30 md5 d345e3d1, monsw46 b7367ae7, 14336 B each. The 1.0.0-1
+datastreams stay in build/kspace/pkg; catalog v1 cannot carry two versions of one name, so the staged root carries -2
+(fde1018e) and the -1 root is kept at build/kspace/superseded/repo-20261026-1426 (6bdb0969) as the upgrade row's "from"
+root. Round trip 106/106; both gate selftests PASS.
+
 ## 2026-10-26 — kbootset -15, dlmkit -5 from amix-dlm 594731b (2e58723..904e209) — not published
 
 kbootset 1.1.0.261025-15: in `media --cd`/`--floppy` gate 3 checks only the root controller (C2-4 v11 §13), `namelist`
