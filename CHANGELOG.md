@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Loader version 2; kbootset sidecar v5 (9febccf..124b86c)
+
+boot2 checks a module kernel's identity record (AXK1) against the manifest (L14 on a mismatch) and fills the arena's AXA1
+directory and manifest copy; L5 gives the bytes needed and available. The "amix-boot: " prefix is printed in one place
+(con_say), saving 308 B: image 27020 + table 1080, bss 1380, 272 B under the 28 KiB gate. b2check 538 relocations at two
+binds. kbootset reads sidecar v5 (ident=; arena=/ident=/loader-min=2 together), writes the manifest's arena and ident records,
+gate 4 checks the manifest copy fits the arena; loader version 2 is the default of kbootset and mkstore (store.h). 665 host
+checks. Spec change after freeze: 10 gains the ident record and L14 (C3-3).
+
 ## 2026-10-26 — §1 of the kernel brief complete: core/plat, mkident, patch 0013, M-REG1 fix, dry-run answers (771fe15..db0abef)
 
 core/plat (amiga.c: AXL1 safe/devload, build id, board matcher; per-line line.c: k46 buildid, k30 kinfo_buildid and cputype),
