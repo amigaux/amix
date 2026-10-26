@@ -1,6 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 2
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 3
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -127,10 +127,46 @@ The SHA-256 of a text the kernel build writes, one line per item, sorted:
 - the probe module's structure-offset table (`cdevsw`, `streamtab`,
   `qinit` and the other offsets the core generates, 30 §2 patch 15).
 
+**The text**, ASCII, one item per line, each ending in a newline, the
+lines sorted bytewise:
+
+```
+data <name> <st_size>     each name abi/<line>/ddi.list marks data, from the final link
+offs <NAME> <value>       each #define of dlm_offs.h: tools/mkoffs over dlmoffs.c (the probe),
+                          compiled against the kernel's headers (the brief's step 2)
+```
+
+`abi=` is the SHA-256 of that text, 64 lowercase hex digits. The core tier
+(C3-2 §4, stage 5) adds its data names when it is written.
+
+**The tool** is `tools/mkabi.py` (the kit ships it, with the probe
+`dlmoffs.c` and `tools/mkoffs`). It runs at the brief's step 9, on the
+final link as it ships:
+`mkabi.py --check abi/<line>/abi-<kabi>.txt <kernel> abi/<line>/ddi.list dlm_offs.h`
+prints `abi=…` for the sidecar (step 11) when the text equals the
+reference, and otherwise names each line that moved and fails.
+
+**The reference** is the text of the last fingerprint of each tag,
+`abi/<line>/abi-<kabi>.txt`, tracked in amix-dlm and shipped in the kit. A
+new tag's first text is written with `mkabi.py --text` and committed
+there with the tag's kit change. The k30.1.0 and k46.1.0 texts were
+written from the S3-20 and S3-21 cuts. They may be rewritten once, from
+the stage-3 re-cut, before the first module package of either tag is
+published. After that the rule binds.
+
 **The rule (20 §3.1):** the build fails when `abi=` changes and the kabi
 tag does not. An added symbol raises the minor. A changed size or offset,
 or a removed symbol, raises the major. The kit keeps the text of the last
 fingerprint per tag, so the failure names what moved.
+
+**Where it goes, and who checks it.** `abi=` is a sidecar key only. It is
+not in the manifest (GMF1 and its records do not change, C3-5 §4) and not
+in `AXK1`. It is checked at build time, where it can still stop a
+mismatched kernel: the kernel build fails on it, and the kit's probe,
+measured through the kit's headers, must give the same offsets
+(`make kit-test`). At run time the kabi tag, which modules carry and gate
+2 compares, stands for it. `kbootset` refuses a sidecar whose `abi=` is
+not 64 hex digits (gate 2). boot2 and the core never read it.
 
 ## 5. Settled at agreement
 
@@ -140,5 +176,8 @@ fingerprint per tag, so the failure names what moved.
 - The new sidecar keys `ident`, `ksym` and `abi`; `loader-min=2`.
 - Version 2: `root`/`rootfs` on a module kernel through stage 3; the first
   root-class module in a generation is the stage-4 trigger for gate 3.
+- Version 3: the fingerprint's text form, the reference per tag in
+  amix-dlm and the kit, `tools/mkabi.py` at the brief's step 9, and the
+  checks of §4 (build time; kbootset the form only).
 - The manifest record `ident`.
 - The new loader code L14 (L1–L13 are taken).

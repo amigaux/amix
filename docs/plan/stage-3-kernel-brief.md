@@ -162,13 +162,17 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
    - `mkksym -f <kernel>`: the sizes; it fails on a listed name undefined
      or of the other kind;
    - `python3 tools/mkident.py --fill <kernel>`: the `AXK1` offsets and
-     its check; it prints the sidecar lines.
+     its check; it prints the sidecar lines;
+   - `python3 tools/mkabi.py --check abi/<line>/abi-<kabi>.txt <kernel>
+     abi/<line>/ddi.list dlm_offs.h`: the fingerprint (C3-3 §4) against
+     the line's reference, with `dlm_offs.h` from step 2; it prints the
+     sidecar's `abi=` line, or names what moved and fails.
 10. **The gate:**
     `python3 tools/ksymgate.py axrel <kernel> abi/<line>/ddi.list abi/<line>/core.list`.
     On k30, run it on the `.etrel` before `elf2brel`, then convert.
 11. **Write the sidecar (C2-3 version 5):**
     - `kabi=$KABI`, `family=generic`, `loader-min=2`;
-    - `ident=`, `arena=0x… 0x60000`, `ksym=` from step 9;
+    - `ident=`, `arena=0x… 0x60000`, `ksym=` and `abi=` from step 9;
     - `size=`, `sha256=` (and `bss=` for k30's brel) of the form shipped;
     - `root=`/`rootfs=` for the built-in root controllers and
       filesystems, the same two lines the line's static sidecar carries
