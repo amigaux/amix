@@ -295,13 +295,15 @@ int *rvp;
 /*
  * The `config` parameter in the string the core passes to _load: the manifest's
  * "name=value ..." records, or 0 (C3-6 section 1.1).  The value is C3-1's int form, decimal
- * with an optional '-'.  Returns 0 if config is absent (*vp untouched), 1 with *vp set if it is
- * a decimal, -1 if it is there but not a decimal of at most five digits.
+ * with an optional '-'.  Returns 0 if config is absent, 1 with *vp set if it is a decimal (a
+ * long one saturates above 100000, which is just as invalid a bit sum), -1 if it is there but
+ * not a decimal; *tp is then where its text starts.
  */
 static int
-monsw_param(params, vp)
+monsw_param(params, vp, tp)
 char *params;
 int *vp;
+char **tp;
 {
 	static char name[] = "config=";
 	char *p, *n;
@@ -321,14 +323,15 @@ int *vp;
 		while (*p && *p != ' ')
 			p++;
 	}
+	*tp = p;
 	neg = 0;
 	if (*p == '-') {
 		neg = 1;
 		p++;
 	}
 	for (v = 0, nd = 0; *p >= '0' && *p <= '9'; p++, nd++)
-		v = v * 10 + (*p - '0');
-	if (nd == 0 || nd > 5 || (*p != 0 && *p != ' '))
+		v = v < 100000 ? v * 10 + (*p - '0') : 100000;
+	if (nd == 0 || (*p != 0 && *p != ' '))
 		return -1;
 	*vp = neg ? -v : v;
 	return 1;
@@ -337,21 +340,25 @@ int *vp;
 /*
  * The value _load gives monsw_config (monsw/README.md): absent or negative = -1, unset; 0 and
  * up forces it, as the patched static variable does: monswinit() takes an invalid bit sum as
- * 0 and says so once, and MONSWIOC_SETCFG answers EBUSY.  A value that is not a decimal
- * (never from kbootset, which normalizes) is taken as 0, forced, and said here.
+ * 0 and says so once, and MONSWIOC_SETCFG answers EBUSY.  A value that is not a number (never
+ * from kbootset, which normalizes) is said here and left unset, so it never blocks SETCFG.
  */
 static int
 monsw_cfgparam(params)
 char *params;
 {
-	int v;
+	char buf[16], *t;
+	int v, i;
 
-	switch (monsw_param(params, &v)) {
+	switch (monsw_param(params, &v, &t)) {
 	case 1:
 		return v < 0 ? -1 : v;
 	case -1:
-		printf("monsw: config is not a decimal number; taken as 0\n");
-		return 0;
+		for (i = 0; i < sizeof buf - 1 && t[i] && t[i] != ' '; i++)
+			buf[i] = t[i];
+		buf[i] = 0;
+		printf("monsw: config '%s' is not a number; unset\n", buf);
+		return -1;
 	}
 	return -1;
 }

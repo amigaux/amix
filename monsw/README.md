@@ -101,9 +101,10 @@ The module's entry points:
     form: decimal, with an optional `-`.
   - If `config` is absent or negative, the value is unset (-1). A value of 0 or above is
     forced, as described above.
-  - `kbootset` only ever passes decimals. If `config` is there but is not a decimal of at most
-    five digits, it is forced to 0 and the console says `monsw: config is not a decimal
-    number; taken as 0`.
+  - A decimal that is not a valid bit sum, however long, is forced and taken as 0 (above).
+  - `kbootset` only ever passes decimals. If `config` is there but is not a number, the console
+    says `monsw: config '<text>' is not a number; unset` and the value stays unset: a bad
+    parameter never blocks root's `MONSWIOC_SETCFG`.
 - **`_unload`** is never called by `moduload`, because `unload` is `never`. The core still
   calls it if a load fails after `_load` succeeded. It returns `EBUSY` while a card driver
   holds a handle. Otherwise it returns the switch to native if it was on RTG, and unsets
@@ -180,7 +181,7 @@ with `-DMONSW_MODULE` after these substitutions:
 
 It then checks:
 - the parameter parser;
-- the forced, SETCFG, seed and unset precedence;
+- the forced, SETCFG, seed and unset precedence, also after a parameter that is not a number;
 - the invalid-value report, given once;
 - the port bits driven for 34, 17, 1 and 2;
 - the native-first change in RTG state;

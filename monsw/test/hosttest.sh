@@ -136,7 +136,9 @@ main(void)
 	p("config=51", 51, 0);
 	p("config=-7", -1, 0);			/* any negative = unset */
 	p("config=4", 4, 0);			/* not a bit sum: monswinit reports it */
-	p("config=99999", 99999, 0);		/* five digits, out of range: forced, reported later */
+	p("config=99999", 99999, 0);		/* out of range: forced, reported later */
+	p("config=123456", 123456, 0);		/* a long decimal is still a decimal */
+	p("config=12345678901234", 100000, 0);	/* saturates: no overflow into a valid sum */
 	p("x=1 config=2", 2, 0);
 	p("config=2 x=1", 2, 0);
 	p("  config=3  ", 3, 0);
@@ -144,12 +146,12 @@ main(void)
 	p("xconfig=3", -1, 0);
 	p("config", -1, 0);
 	p("conf=3", -1, 0);
-	p("config=", 0, 1);			/* there but not a decimal: forced 0, said */
-	p("config=3a", 0, 1);
-	p("config=-", 0, 1);
-	p("config=0x22", 0, 1);
-	p("config=123456", 0, 1);		/* six digits */
-	p("config= 3", 0, 1);
+	p("config=", -1, 1);			/* there but not a number: unset, said */
+	p("config=3a", -1, 1);
+	p("config=-", -1, 1);
+	p("config=0x22", -1, 1);
+	p("config=--3", -1, 1);
+	p("config= 3", -1, 1);
 
 	/* 2. _load with no value: nothing forced, nothing said, no line touched */
 	fresh(0xff, 0xc0);
@@ -198,13 +200,32 @@ main(void)
 	monsw_set(1);
 	CHECK(td_pra == 0x5a && td_ddra == 0x00, "value 0 touched the port");
 
-	/* 6. a malformed value: forced 0, said by _load */
+	/* 6. not a number: said once by _load with its text, left unset; SETCFG stays open */
 	fresh(0, 0);
-	monsw_wrapper.load("config=0x22");
-	CHECK(monsw_config == 0 && monsw_cfg == 0 && monsw_src == MONSW_SRC_PATCH,
+	monsw_wrapper.load("x=1 config=0x22 y=2");
+	CHECK(monsw_config == -1 && monsw_cfg == 0 && monsw_src == MONSW_SRC_NONE,
 	    "load(0x22): config %d cfg %d src %d", monsw_config, monsw_cfg, monsw_src);
-	CHECK(strcmp(td_lines, "monsw: config is not a decimal number; taken as 0\n"
-	    "monsw: switch value 0 (patched)\n") == 0, "load(0x22) said: %s", td_lines);
+	CHECK(strcmp(td_lines, "monsw: config '0x22' is not a number; unset\n") == 0,
+	    "load(0x22) said: %s", td_lines);
+	CHECK(ioc(MONSWIOC_SETCFG, 34) == 0 && monsw_cfg == 34 && monsw_src == MONSW_SRC_SET,
+	    "SETCFG after a non-number: cfg %d src %d", monsw_cfg, monsw_src);
+	h = monsw_register("z3660", 1);
+	CHECK(monsw_cfg == 34 && ioc(MONSWIOC_SETCFG, -1) == 0 && monsw_cfg == 1 &&
+	    monsw_src == MONSW_SRC_SEED, "seed after a non-number: cfg %d src %d", monsw_cfg,
+	    monsw_src);
+	fresh(0, 0);
+	monsw_wrapper.load("config=abcdefghijklmnopqrstuvwxyz");
+	CHECK(strcmp(td_lines, "monsw: config 'abcdefghijklmno' is not a number; unset\n") == 0,
+	    "a long non-number said: %s", td_lines);
+
+	/* 6b. a long decimal is an invalid bit sum: forced, reported once, taken as 0 */
+	fresh(0, 0);
+	monsw_wrapper.load("config=123456");
+	CHECK(monsw_config == 123456 && monsw_cfg == 0 && monsw_src == MONSW_SRC_PATCH &&
+	    ioc(MONSWIOC_SETCFG, 2) == EBUSY, "load(123456): config %d cfg %d src %d",
+	    monsw_config, monsw_cfg, monsw_src);
+	CHECK(strcmp(td_lines, "monsw: value 0x1e240 is not a 1/2/16/32 bit sum; taken as 0\n"
+	    "monsw: switch value 0 (patched)\n") == 0, "load(123456) said: %s", td_lines);
 
 	/* 7. unset: seed from the first card, SETCFG over it, -1 back to the seed; root only */
 	fresh(0xff, 0x00);
