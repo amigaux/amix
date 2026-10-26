@@ -1,0 +1,454 @@
+Subject: registrations swept after a module goes; C3-1 section 4 refusals
+
+From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
+section 1.3, 1.5).  A failed _load that attached, or an _unload that
+forgot, left an interrupt-chain entry, an ifstats link or the console
+hook pointing into freed memory.  The core now sweeps them after every
+_unload and after a failed _load, and names what it removed (plan patch
+14, "every registration tracked").  C3-1 section 4: a section type
+outside the list and an image over the limit are ENOLOAD (were ERELOC,
+ENOMEM); each refusal prints one line naming the module and the rule;
+parameter defaults are checked against C3-1 section 3's value forms;
+word 0 of .moddata must be one R_68K_32 with addend 0.  New harness and
+error-path cases.
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -353,6 +353,7 @@
+ /* interrupt chains (30 section 4) */
+ extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_int2_walk();
+ extern void dlm_intr_init();
++extern int dlm_intr_sweep(), dlm_ddi_sweep();	/* (lo, hi): what was left in [lo, hi) */
+ 
+ /* the loaded modules, for kinfo's module list (C2-1 offset 536) */
+ extern int dlm_kinfo_list();
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -509,6 +509,29 @@
+ 	}
+ }
+ 
++/*
++ * After a module's _unload, or after its _load failed: any interrupt
++ * handler, network interface or console hook still pointing into its
++ * image is removed and named, so nothing calls into freed memory.  The
++ * module should have undone them itself (C3-6 section 1.1); this is the
++ * backstop (plan patch 14, "every registration tracked").
++ */
++static void
++sweep(m)
++	struct dlm_mod *m;
++{
++	unsigned long lo = m->m_run, hi = m->m_run + m->m_size;
++	int n;
++
++	n = dlm_intr_sweep(lo, hi);
++#ifndef DLM_HOST
++	n += dlm_ddi_sweep(lo, hi);
++#endif
++	if (n)
++		printf("dlm: %s left %d registration(s) pointing into it (an interrupt handler, "
++		    "network interface or console hook): removed\n", m->m_name, n);
++}
++
+ static void
+ freemod(m)
+ 	struct dlm_mod *m;
+@@ -564,6 +587,8 @@
+ 			if (w)
+ 				(void)DLM_CALL(m, w, m, 0);
+ 		}
++		if (lf->lf_stage >= LF_INLOAD)	/* its _load ran: what did it leave? */
++			sweep(m);
+ 		freemod(m);
+ 	}
+ 	dlm_free((char *)lf, (long)sizeof (struct dlm_lf));
+@@ -822,8 +847,19 @@
+ 	if ((e = lf_gate(lf, name, &path)) != 0 || (e = lf_find(lf, path, m)) != 0 ||
+ 	    (lf->lf_sha[0] && (e = lf_hashload(lf)) != 0))
+ 		goto fail;
+-	if ((e = dlm_ld_hdr(ld)) != 0 || (e = dlm_ld_moddata(ld)) != 0 ||
+-	    (e = md_check(ld, name)) != 0)
++	/* each refusal names the module and the rule (C3-1 section 4) */
++	if ((e = dlm_ld_hdr(ld)) != 0) {
++		printf("dlm: %s: not a module object as C3-1 says (error %d)\n", name, e);
++		goto fail;
++	}
++	if ((e = dlm_ld_moddata(ld)) != 0) {
++		printf("dlm: %s: .moddata refused, %s (error %d)\n", name,
++		    e == EBADVER ? "not version 2" : e == ENAMETOOLONG ? "a name over 14" :
++		    e == ERELOC ? "word 0 is not the wrapper's R_68K_32" :
++		    "a malformed or missing key, or an unknown critical one", e);
++		goto fail;
++	}
++	if ((e = md_check(ld, name)) != 0)
+ 		goto fail;
+ 	if (ld->ld_md.md_unload)		/* pinned unless it says so (C3-1) */
+ 		m->m_flags |= DM_UNLOADOK;
+@@ -854,10 +890,14 @@
+ 	ld->ld_ktab = dlm_ktab;
+ 
+ 	/* symbols, image, relocation */
+-	if ((e = dlm_ld_syms(ld)) != 0)
++	if ((e = dlm_ld_syms(ld)) != 0) {
++		printf("dlm: %s: its symbols are refused, an undefined name outside the allowlist "
++		    "or a bad symbol table (error %d)\n", name, e);
+ 		goto fail;
++	}
+ 	if (ld->ld_imgsz > (unsigned long)dlm_maximage) {
+-		e = ENOMEM;
++		printf("dlm: %s: its image is over the limit\n", name);
++		e = ENOLOAD;
+ 		goto fail;
+ 	}
+ 	m->m_size = ld->ld_imgsz;
+@@ -867,8 +907,10 @@
+ 	m->m_run = DLM_RUNADDR(m);
+ 	ld->ld_img = m->m_base;
+ 	ld->ld_base = m->m_run;
+-	if ((e = dlm_ld_image(ld)) != 0 || (e = dlm_ld_reloc(ld)) != 0)
++	if ((e = dlm_ld_image(ld)) != 0 || (e = dlm_ld_reloc(ld)) != 0) {
++		printf("dlm: %s: its relocations are refused (error %d)\n", name, e);
+ 		goto fail;
++	}
+ 	dlm_cacheflush();
+ 	(void)dlm_ld_table(ld);
+ 	m->m_tab = ld->ld_tab;
+@@ -881,11 +923,14 @@
+ 
+ 	/* wrapper */
+ 	if (!inimg(m, w, (unsigned long)MWSZ) || (w & 1)) {
++		printf("dlm: %s: its wrapper is not in its image\n", name);
+ 		e = ERELOC;
+ 		goto fail;
+ 	}
+ 	m->m_wrapper = w;
+ 	if (G32(DLM_RP(m, w) + MW_REV) != MODREV) {
++		printf("dlm: %s: wrapper revision %d, not %d\n", name,
++		    (int)G32(DLM_RP(m, w) + MW_REV), MODREV);
+ 		e = EBADVER;
+ 		goto fail;
+ 	}
+@@ -985,6 +1030,7 @@
+ 		wake(m);
+ 		return e;
+ 	}
++	sweep(m);
+ 	freemod(m);
+ 	return 0;
+ }
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -110,19 +110,19 @@
+ 		if (!(f & SHF_ALLOC))
+ 			continue;
+ 		if (!placed(t))
+-			return ERELOC;
++			return ENOLOAD;		/* a section type outside C3-1 section 1 */
+ 		al = SHW(ld, i, SH_ALIGN);
+ 		if (al < 4)
+ 			al = 4;
+ 		if (al & (al - 1))
+ 			return ERELOC;
+ 		if (sz > (unsigned long)dlm_maximage)
+-			return ENOMEM;
++			return ENOLOAD;		/* an image over the limit (C3-1 section 4) */
+ 		off = (off + al - 1) & ~(al - 1);
+ 		ld->ld_secoff[i] = off;
+ 		off += sz;
+ 		if (off > (unsigned long)dlm_maximage)
+-			return ENOMEM;
++			return ENOLOAD;
+ 	}
+ 	ld->ld_comoff = ld->ld_imgsz = off;
+ 	if (nsymtab != 1)
+@@ -258,11 +258,13 @@
+ }
+ 
+ /* <name>:<int|bool|str|hex>:<default>[:<min>:<max>] */
++static int okvalue();
++
+ static int
+ okparam(s)
+ 	char *s;
+ {
+-	char *p = chr(s, ':');
++	char *p = chr(s, ':'), *q;
+ 	int n, colons = 0;
+ 
+ 	if (p == 0)
+@@ -276,10 +278,48 @@
+ 	if (strncmp(p, "int:", 4) && strncmp(p, "bool:", 5) && strncmp(p, "str:", 4) &&
+ 	    strncmp(p, "hex:", 4))
+ 		return 0;
+-	for (; *p; p++)
+-		if (*p == ':')
++	for (q = p; *q; q++)
++		if (*q == ':')
+ 			colons++;
+-	return colons == 1 || colons == 3;
++	if (colons != 1 && colons != 3)
++		return 0;
++	/* the values in C3-1 section 3's forms; min and max for int and hex only */
++	q = chr(p, ':') + 1;
++	if (*p == 'b')
++		return colons == 1 && (q[0] == '0' || q[0] == '1') && (q[1] == 0 || q[1] == ':');
++	if (*p == 's')
++		return colons == 1 && strlen(q) <= 63 && chr(q, ' ') == 0;
++	for (n = 0; n < colons; n++) {
++		if (!okvalue(q, *p == 'h'))
++			return 0;
++		if ((q = chr(q, ':')) != 0)
++			q++;
++	}
++	return 1;
++}
++
++/* an int (decimal, an optional -) or hex (0x and hex digits) value up to
++ * the next ':' or the end */
++static int
++okvalue(q, hex)
++	char *q;
++	int hex;
++{
++	int n = 0;
++
++	if (hex) {
++		if (q[0] != '0' || q[1] != 'x')
++			return 0;
++		for (q += 2; (*q >= '0' && *q <= '9') || (*q >= 'a' && *q <= 'f') ||
++		    (*q >= 'A' && *q <= 'F'); q++)
++			n++;
++	} else {
++		if (*q == '-')
++			q++;
++		for (; *q >= '0' && *q <= '9'; q++)
++			n++;
++	}
++	return n > 0 && (*q == 0 || *q == ':');
+ }
+ 
+ static int
+@@ -410,6 +450,35 @@
+ }
+ 
+ /*
++ * Word 0 of .moddata: exactly one relocation there, R_68K_32 with addend
++ * 0 (C3-1 section 1), which the wrapper check then follows.
++ */
++static int
++mdword0(ld)
++	struct dlm_ld *ld;
++{
++	char r[RELASZ];
++	unsigned long i, k, n;
++	int found = 0;
++
++	for (i = 1; i < ld->ld_shnum; i++) {
++		if (SHW(ld, i, SH_TYPE) != SHT_RELA || SHW(ld, i, SH_INFO) != ld->ld_modsec)
++			continue;
++		n = SHW(ld, i, SH_SIZE) / RELASZ;
++		for (k = 0; k < n; k++) {
++			if (rdx(ld, SHW(ld, i, SH_OFFSET) + k * RELASZ, r, (long)RELASZ, ERELOC))
++				return ERELOC;
++			if (G32(r) != 0)
++				continue;
++			if ((G32(r + 4) & 0xff) != R_68K_32 || G32(r + 8) != 0)
++				return ERELOC;
++			found++;
++		}
++	}
++	return found == 1 ? 0 : ERELOC;
++}
++
++/*
+  * The type-13 section: read, then checked as .moddata version 2.  Word 0
+  * is the wrapper's relocation (checked with the image), bytes 4..7 are
+  * "MD2\0", then NUL-terminated key=value strings end with an empty one.
+@@ -450,7 +519,7 @@
+ 	}
+ 	if ((seen & K_REQUIRED) != K_REQUIRED || (md->md_tier && md->md_build == 0))
+ 		return ECONFIG;
+-	return 0;
++	return mdword0(ld);
+ }
+ 
+ /*
+--- a/dlm_intr.c
++++ b/dlm_intr.c
+@@ -168,6 +168,29 @@
+ 	return ENOENT;
+ }
+ 
++/* every chain entry whose handler lies in [lo, hi), removed: a module's
++ * backstop (dlm_core.c sweep); the count */
++int
++dlm_intr_sweep(lo, hi)
++	unsigned long lo, hi;
++{
++	struct dlm_intr *c;
++	int i, l, s, n = 0;
++
++	for (l = 0; l < 2; l++) {
++		c = l ? int6_chain : int2_chain;
++		for (i = 0; i < INTR_MAX; i++)
++			if (c[i].i_fn && (unsigned long)c[i].i_fn >= lo &&
++			    (unsigned long)c[i].i_fn < hi) {
++				SPLHI(s);
++				c[i].i_fn = 0;
++				SPLX(s);
++				n++;
++			}
++	}
++	return n;
++}
++
+ /* a handler's counts, for diagnosis (the harness, modstat later) */
+ int
+ dlm_intr_count(level, fn, callsp, claimsp)
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -93,6 +93,30 @@
+ 	cons_hook = 0;
+ }
+ 
++/* every ifstats link and the console hook pointing into [lo, hi), removed:
++ * a module's backstop (dlm_core.c sweep); the count */
++int
++dlm_ddi_sweep(lo, hi)
++	unsigned long lo, hi;
++{
++	struct ifs_link **pp;
++	int s, n = 0;
++
++	SPLHI(s);
++	for (pp = &ifstats; *pp; )
++		if ((unsigned long)*pp >= lo && (unsigned long)*pp < hi) {
++			*pp = (*pp)->ifs_next;
++			n++;
++		} else
++			pp = &(*pp)->ifs_next;
++	if (cons_hook && (unsigned long)cons_hook >= lo && (unsigned long)cons_hook < hi) {
++		cons_hook = 0;
++		n++;
++	}
++	SPLX(s);
++	return n;
++}
++
+ /* the stock entry, wrapped: the hook first, then the native screen code */
+ int
+ scrcon_put(cp, p, n)
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -102,6 +102,8 @@
+ mod('usest', 'stat1')
+ # several dependencies, all honoured, blank/tab/NUL separated
+ mod('multi', 'hc\\tshd  trc')
++# the registration backstop: swp's _load attaches a handler in its image
++mod('swp')
+ # pinning (C3-1 section 2): pin1 says nothing, so unload=never
+ mod('pin1', md=['name=pin1', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ # three independent modules for the id and modstat tests
+@@ -178,6 +180,11 @@
+ mod('mdtier', extra=['tier=core'])                          # core tier without build
+ mod('mdtbad', extra=['tier=core', 'build=68060-000000-00'])
+ mod('mdtok', extra=['tier=core', 'build=68060-261101-01'])
++# C3-1 section 3's value forms: each default is the wrong form for its type
++mod('mdpbool', extra=['param=on:bool:yes'])
++mod('mdpint', extra=['param=n:int:abc'])
++mod('mdphex', extra=['param=h:hex:12'])
++mod('mdprng', extra=['param=b:bool:1:0:1'])           # bool takes no range
+ mod('mdkeys', extra=['match=zorro:144b:01,mobo:gayle,always',
+                      'unload=allowed', 'param=intr:int:6:0:7', 'param=mac:str:-',
+                      'desc=every key'])
+--- a/test/mkneg.py
++++ b/test/mkneg.py
+@@ -114,6 +114,20 @@
+ variant('strnul', ERELOC, 'string table not NUL-terminated',
+         lambda d: d.__setitem__(sh(strtab, 16) + sh(strtab, 20) - 1, ord('x')))
+ variant('shentsize', ENOLOAD, 'bad e_shentsize', lambda d: put16(d, 46, 32))
++variant('sectype', ENOLOAD, 'an allocated section of a type outside C3-1 section 1',
++        lambda d: put32(d, shoff + 40 * two + 4, 7))
++
++
++def w0addend(d):
++    # the .moddata relocation at offset 0 gets addend 4: no longer the wrapper
++    for r in [i for i in range(shnum) if types[i] == 4 and sh(i, 28) == mod]:
++        for k in range(sh(r, 20) // 12):
++            o = sh(r, 16) + 12 * k
++            if u32(d0, o) == 0:
++                put32(d, o + 8, 4)
++
++
++variant('w0addend', ERELOC, '.moddata word 0 with an addend', w0addend)
+ 
+ 
+ def trunc(d):
+--- a/test/state.c
++++ b/test/state.c
+@@ -346,6 +346,10 @@
+ 	REFUSED("mddup", ECONFIG, "a key given twice -> ECONFIG");
+ 	REFUSED("mdtier", ECONFIG, "core tier without build -> ECONFIG");
+ 	REFUSED("mdlong", ENAMETOOLONG, ".moddata name over 14 -> ENAMETOOLONG");
++	REFUSED("mdpbool", ECONFIG, "a bool default other than 0 or 1 -> ECONFIG");
++	REFUSED("mdpint", ECONFIG, "an int default that is no number -> ECONFIG");
++	REFUSED("mdphex", ECONFIG, "a hex default without 0x -> ECONFIG");
++	REFUSED("mdprng", ECONFIG, "a bool with a min and max -> ECONFIG");
+ #undef	REFUSED
+ 	check(modload("mdmok", &id) == 0 && byname("mdmok"), "kabi minor 0 on a minor-3 kernel loads");
+ 	check(modload("mdunkn", &id) == 0 && byname("mdunkn"), "an unknown key is ignored");
+@@ -568,6 +572,35 @@
+ 	dlm_devload = 1;
+ }
+ 
++/* ---- the registration backstop (dlm_core.c sweep) ---- */
++static int swp_rv;
++static int (*swp_fn)();
++
++int
++h_swp(m, a, b)
++	char *m, *a;
++	long b;
++{
++	swp_fn = (int (*)())modsym((struct dlm_mod *)m, "swp_load");
++	intr_attach(6, swp_fn, (char *)0, "swp");
++	return swp_rv;
++}
++
++static void
++sweep_tests()
++{
++	int id;
++
++	host_handler("swp_load", h_swp);
++	swp_rv = EIO;
++	check(modload("swp", &id) == EIO && !byname("swp") && intr_detach(6, swp_fn, (char *)0) == ENOENT,
++	    "backstop: a handler left by a failed _load is removed");
++	swp_rv = 0;
++	check(modload("swp", &id) == 0 && byname("swp") && moduload(id) == 0 && !byname("swp") &&
++	    intr_detach(6, swp_fn, (char *)0) == ENOENT,
++	    "backstop: a handler an _unload forgot is removed");
++}
++
+ /* ---- interrupt chains (30 section 4) ---- */
+ extern int hconf_i2a, hconf_i2b, hconf_ciab;
+ extern int (*int2_tbl[])();
+@@ -613,6 +646,7 @@
+ 	p2int();
+ 	check(hconf_i2b == 2 && h1n == 1, "intr: a detached handler is not called, the stock ones still are");
+ 	intr_detach(6, ih2, (char *)0);
++	sweep_tests();
+ }
+ 
+ /* kinfo's module list (C2-1 offset 536) from the core */
+@@ -1084,7 +1118,8 @@
+ 	    "15-character name -> ENAMETOOLONG");
+ 	check(modload("nosuch", &id) == ENOENT, "missing file -> ENOENT");
+ 	dlm_maximage = 1024;
+-	check(modload("big", &id) == ENOMEM && nloaded() == 0, "over dlm_maximage -> ENOMEM");
++	check(modload("big", &id) == ENOLOAD && nloaded() == 0,
++	    "over dlm_maximage -> ENOLOAD (C3-1 section 4)");
+ 	dlm_maximage = 2 * 1024 * 1024;
+ 
+ 	/* ---- modpath ---- */
