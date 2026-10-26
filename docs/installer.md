@@ -1672,6 +1672,13 @@ box, cold boot #1 runs `S70syslogd start` from rc2 and the box logs from day one
 expected on-box verification is the throttle doc's: `syslogd` in `ps`, and
 `logger -p daemon.err` landing in `/var/log/notice`.
 
+**syslogd needs m4.** syslogd builds its table by running `echo 'define(LOGHOST, 1)' | /usr/ccs/bin/m4 -
+/etc/syslog.conf`. `/usr/ccs/bin/m4` is a Cdev member, and no package ships `/usr/bin/m4`. Without Cdev the shell
+prints `/usr/ccs/bin/m4: not found`, every table row is UNUSED, and nothing is filed, although syslogd runs and
+receives the messages (the Bench's `syslogd -d` capture, 2026-10-26). The `standard` and larger sets carry Cdev.
+A `minimal` install has a syslogd that files nothing, and so has every 1.0 install of the minimal sets. A 1.1
+medium carries Cdev in its base (see the 1.1 section).
+
 ---
 
 ## W1: driver plumbing — the input keys the interview will land on
@@ -4979,6 +4986,11 @@ refuses a 1.1 profile whose `KERNEL_KPKG` is not a kernel row of the medium's ca
 (`kabi=` not `static`) it also refuses one without modtools, or with a `KERNEL_MODPKGS` entry that is not a
 `role=module` row of the kernel's line.
 
+A 1.1 medium's stock set is `minimal` plus **Cdev** (2026-10-26). The 2.1c syslogd reads `/etc/syslog.conf` only
+through `/usr/ccs/bin/m4`, a Cdev member (23,004 B). Without m4 the conf parses empty and syslogd files nothing,
+kernel lines included. `build-install-iso.sh` adds Cdev to the set of a medium with a 1.1 profile (10,370,048 B
+on the disc, about 10.2 MB installed), and `install.sh` refuses a 1.1 install order without it.
+
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
 - `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk.
@@ -4989,7 +5001,9 @@ Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-tar
 - each module in generation 1's manifest and at `/stand/gen/1/mod/<name>`;
 - the dlm inittab line;
 - `S99zen` for the z3660eth module;
-- no `/stand/unix`, and `S01kbnamelist`.
+- no `/stand/unix`, and `S01kbnamelist`;
+- Cdev's `/usr/ccs/bin/m4` (size and sum of its contents row), and the conf filing `kern.info` in
+  `/var/log/bus-errors` and `kern` on `/dev/console`.
 
 It also runs `kbootset status` and `kbootset namelist` with a version-3 kinfo made for generation 1. The status
 must say the namelist is missing, and the namelist call (what the first boot runs) must write it. The boot through

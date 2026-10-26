@@ -10102,6 +10102,23 @@ def audit_l11():
                 r'FB_INITTAB_SYS" = y \].*?chgrp sys /etc/inittab.*?chmod 664 /etc/inittab.*?ls -l /etc/inittab', fb, re.S))):
         (ok if good else fail)(what)
 
+    # (15) the 1.1 base carries Cdev: syslogd reads /etc/syslog.conf through its
+    # /usr/ccs/bin/m4, so a 1.1 order without Cdev stops the install
+    m = re.search(r'\nif \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n\tORDCDEV=.*?\nfi\n', src, re.S)
+    if not m:
+        fail("install.sh has no Cdev check of a 1.1 order")
+    else:
+        ct = os.path.join(d, "cdev")
+        os.makedirs(os.path.join(ct, "tmp"), exist_ok=True)
+        for what, pkgs, want in (("an order with Cdev", "core bsd Cdev APKG", "PASSED"),
+                                 ("an order without Cdev", "core bsd APKG", "DIE install order")):
+            open(os.path.join(ct, "order"), "w").write("# set: minimal\n" + "\n".join(pkgs.split()) + "\n")
+            body = ('die() { echo "DIE $*"; exit 3; }\nINSTALL_LAYOUT=1.1\nTARGET=%s\nORDER=%s/order\n'
+                    % (ct, ct) + m.group(0) + "echo PASSED\n")
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            (ok if want in out and not os.listdir(os.path.join(ct, "tmp")) else fail)(
+                "install.sh's 1.1 Cdev check, %s: %s" % (what, "accepted" if "PASSED" in out else "refused"))
+
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
                        capture_output=True, text=True, timeout=30)
