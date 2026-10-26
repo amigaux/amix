@@ -105,4 +105,15 @@ clean
 modpkg helper class=boot match=always D:helper_fn
 modpkg nodep class=boot match=always U:helper_fn
 refused "module nodep imports 1 name(s) .*: helper_fn" $KB build $FACTS
+# a dependency absent from the generation: gate 3 names it, not gate 2's
+# "a newer kernel cut" (z3660rtg without monsw)
+clean
+modpkg rtg class=boot match=always depend=monsw U:printf U:monsw_register U:monsw_set
+set +e
+$KB build $FACTS > $T/out 2>&1; rc=$?
+set -e
+if [ $rc -ne 4 ] || ! grep -q "gate 3 .*module rtg depends on monsw, which is not in the generation" $T/out ||
+   grep -q "newer kernel cut" $T/out; then
+	echo "kimports: the absent dependency not named by gate 3 (rc $rc):" >&2; cat $T/out >&2; exit 1
+fi
 echo "kimports: the import check (gate 2: the kernel's block, dependencies, the core tier) ok"

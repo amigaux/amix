@@ -626,11 +626,33 @@ imp_one(void *ctx, const char *name, int undef)
 	return 0;
 }
 
+/* every module md names in depend= is in the generation */
+static int
+deps_present(const struct kb_mod *md)
+{
+	const char *p = md->i.depend;
+	int j;
+
+	while (*p) {
+		size_t len = strcspn(p, ",");
+
+		for (j = 0; j < nmods && (strlen(mods[j].i.name) != len ||
+					 strncmp(mods[j].i.name, p, len)); j++)
+			;
+		if (j == nmods)
+			return 0;
+		p += len + (p[len] == ',');
+	}
+	return 1;
+}
+
 /*
  * Gate 2, the imports: every undefined global of every module in the
  * generation comes from a module it depends on or from the kernel's
  * symbol block, a core-tier name only for a core-tier module (C3-2).
  * Otherwise the core would refuse it at link, in the boot, with error 165.
+ * A module whose dependency is absent is left to gate 3, which names the
+ * dependency: its missing names are most likely that module's.
  */
 static int
 imports(struct ks *k, const struct kb_kernel *kk)
@@ -640,6 +662,8 @@ imports(struct ks *k, const struct kb_kernel *kk)
 	int i;
 
 	for (i = 0; kblk && i < nmods; i++) {
+		if (!deps_present(&mods[i]))
+			continue;
 		memset(&c, 0, sizeof(c));
 		c.md = &mods[i];
 		c.tier = !strcmp(mods[i].i.tier, "core");
