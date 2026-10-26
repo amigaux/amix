@@ -1,0 +1,122 @@
+Subject: harness cases for branches the stage-3 audit found untested
+
+Test only: no kernel source changes (amix-dlm docs/plan/stage-3-audit-
+2026-10-26.md section 2.5).  The interrupt chains' error returns (ENXIO
+before the walk is armed, ECONFIG on a full chain, EINVAL at a bad level)
+and the order of stock and module handlers on both levels; marc_post
+loading a boot member's dependency first; modstat reporting a pinned
+module locked.
+
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -210,4 +210,5 @@
+ # matches a board this box lacks, pdm is demand class on major 67
+ mod('pb1')
+ mod('pb2')
++mod('pb3', 'pb1')                   # depends on pb1: pb1 loads first
+ mod('pdm')
+--- a/test/state.c
++++ b/test/state.c
+@@ -500,7 +500,16 @@
+ 
+ /* ---- marc_post (patch 16, C3-5) ---- */
+ static char pb1_params[256];
+-static int pb1_loads;
++static int pb1_loads, pb3_saw = -1;
++
++int
++h_pb3(m, a, b)
++	char *m, *a;
++	long b;
++{
++	pb3_saw = pb1_loads;
++	return 0;
++}
+ 
+ int
+ h_pb1(m, a, b)
+@@ -566,6 +575,26 @@
+ 	if ((m = byname("pb1")) != 0)
+ 		moduload(m->m_id);
+ 	dlm_posted = 0;
++	/* a boot member's dependency loads before it, whatever the order */
++	{
++		static char s4[65];
++
++		hexsha("pb3", s4);
++		sprintf(man, "GMF1\ngeneration 9\n"
++		    "module pb3 boot 300 path=/stand/gen/7/mod/pb3 sha256=%s match=always depend=pb1\n"
++		    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=always\n", s4, s1);
++		mkarena(a, man, 1, 1);
++		dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++		host_handler("pb3_load", h_pb3);
++		pb1_loads = 0;
++		dlm_marc_run();
++		check(pb3_saw == 1 && byname("pb1") && byname("pb3"),
++		    "marc_post: a boot member's dependency loads before it");
++		if ((m = byname("pb3")) != 0)
++			moduload(m->m_id);
++		if ((m = byname("pb1")) != 0)
++			moduload(m->m_id);
++	}
+ 	dlm_plat_match = 0;
+ 	dlm_man = om;
+ 	dlm_manlen = ol;
+@@ -606,8 +635,10 @@
+ extern int (*int2_tbl[])();
+ static int h1n, h2n;
+ static char *h1a;
+-static int ih1(a) char *a; { h1n++; h1a = a; return 1; }
+-static int ih2(a) char *a; { h2n++; return 0; }
++static int ih1_saw, ih2_saw;	/* the stock counts when the module's handler ran */
++static int ih1(a) char *a; { h1n++; h1a = a; ih1_saw = hconf_i2a + hconf_i2b; return 1; }
++static int ih2(a) char *a; { h2n++; ih2_saw = hconf_ciab; return 0; }
++static int ih3(a) char *a; { return 0; }
+ 
+ /* p2int: every int2_tbl entry, with a pointer to a zeroed longword */
+ static void
+@@ -625,18 +656,29 @@
+ {
+ 	extern int aciabintr();
+ 	long calls, claims;
+-	char x[1];
++	char x[1], xs[9];
++	int i;
+ 
++	check(intr_attach(2, ih1, x, "ih1") == ENXIO, "intr: level 2 before the walk is armed -> ENXIO");
+ 	dlm_intr_init();
++	for (i = 0; i < 8; i++)
++		intr_attach(6, ih3, xs + i, "ih3");
++	check(intr_attach(6, ih3, xs + 8, "ih3") == ECONFIG, "intr: a ninth handler on a full chain -> ECONFIG");
++	for (i = 0; i < 8; i++)
++		intr_detach(6, ih3, xs + i);
++	check(intr_detach(3, ih1, x) == EINVAL, "intr: detach at a level other than 2 or 6 -> EINVAL");
+ 	check(int2_tbl[1] == dlm_int2_walk && int2_tbl[2] == 0,
+ 	    "intr: the walk takes int2_tbl's last handler slot, the terminator stays");
+ 	check(intr_attach(2, ih1, x, "ih1") == 0 && intr_attach(6, ih2, (char *)0, "ih2") == 0,
+ 	    "intr: a handler on each chain");
+ 	p2int();
++	check(ih1_saw == hconf_i2a + hconf_i2b && ih1_saw == 2,
++	    "intr: on level 2 the stock handlers run first, then the module's");
+ 	check(hconf_i2a == 1 && hconf_i2b == 1 && h1n == 1 && h1a == x,
+ 	    "intr: level 2 calls the stock handlers, the displaced one first, then the module's with its arg");
+ 	aciabintr((char *)0);
+-	check(hconf_ciab == 1 && h2n == 1, "intr: level 6 calls the stock CIA-B handler, then the module's");
++	check(hconf_ciab == 1 && h2n == 1 && ih2_saw == 1,
++	    "intr: level 6 calls the stock CIA-B handler, then the module's");
+ 	check(dlm_intr_count(2, ih1, &calls, &claims) == 0 && calls == 1 && claims == 1 &&
+ 	    dlm_intr_count(6, ih2, &calls, &claims) == 0 && claims == 0,
+ 	    "intr: calls and claims are counted per handler");
+@@ -892,6 +934,12 @@
+ 	    "pin: a module without unload=allowed loads");
+ 	check(moduload(id) == EBUSY && byname("pin1") == m,
+ 	    "pin: unload=never (the default) refuses moduload");
++	{
++		struct modstatus st;
++
++		check(modstat(id, &st, 0) == 0 && (st.ms_flags & MS_LOCKED),
++		    "pin: modstat reports the pinned module locked");
++	}
+ 	check(moduload(0) == EBUSY && byname("pin1") == m,
+ 	    "pin: moduload(0) leaves the pinned module");
+ 	m->m_flags |= DM_UNLOADOK;		/* the harness's own way out */
