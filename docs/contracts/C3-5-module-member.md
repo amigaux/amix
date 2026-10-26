@@ -1,9 +1,8 @@
-# C3-5 — the module package and the per-module manifest record, draft
+# C3-5 — the module package and the per-module manifest record, version 1
 
-- **Status:** draft 2026-10-26, for agreement with the S3-08 report. Every
-  consumer is in amix-dlm: `kbootset` writes the records, boot2 and the
-  module core read them. Once it is agreed, a change is a contract change
-  with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Every consumer
+  is in amix-dlm: `kbootset` writes the records, boot2 and the module core
+  read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
   `10-boot-loader.md` §5.1; `30-module-core.md` §2 patches 16 and 17, §3
 - **Produced by:** the module packages (amix-packages, S3-22) from the
@@ -117,7 +116,7 @@ a new record, with `loader-min` raised. This contract adds none.
   it, because whether a generation is good is a full run level 2, not a
   module count.
 
-## 6. Settled at agreement (to confirm)
+## 6. Settled at agreement
 
 - The package files, and the `disable` and `param` keys.
 - The record keys and the four copied verbatim (`match=`, `majors=`,
