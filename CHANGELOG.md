@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patch 0016: pin by default (31e5676)
+
+The module core pins modules by default, as C3-1 §2 says: a module that does not declare unload=allowed is refused by
+moduload with EBUSY (moduload(0) leaves it) and modstat reports it locked. Before this the key was parsed but not enforced,
+so any idle module could be unloaded — S3-06 had been counted done with only its range-check half in place. State harness
+160/160 both kernels; make core 119/119; 665 host checks. Not in the kernels re-cut on e86c9c4.
+
 ## 2026-10-26 — k46.1.0 fingerprint rewritten from the re-cut; abi= required at gate 2; C3-3 v4 (3ee2fe4, a28d5ab)
 
 k46.1.0's reference is rewritten once from the re-cut KD060-Z: cputype's size went 0 → 4 and nothing else moved; it now
