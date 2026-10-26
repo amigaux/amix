@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — Stage 4 plan (69423ed)
+
+docs/plan/stage-4.md: interfaces C4-1–C4-4, rows S4-01–S4-74 (root-class modules and the arena-only load path, boot2 root
+placement, kbootset; z3660scsi, A4091/A4092, Gayle IDE, ramdisk, the A4000T 710 contingent; the root filesystems ufs/s5/cdfs
+started here and proven at stage 5 per 80 §2; the compressed miniroot, netinstall, the CD installer, the floppy pair, the
+upgrade survivors; the first stage-4 cut with core 0027/0028 and the ZS-05 static drivers; the first stage-4 media; the
+carries: 030 metal on the 1.1 release firmware, the tower's rows, OQ-80.5, the C3-6 register-write rule), constraints taken as
+measured (U1/U15/U2/U4, 256 KiB, the k30 64 MiB cap, the arena, boot2's 516 B, level 4, ZS-05), nine owner questions in §4
+with recommendations; docs/plan/stage-4-exit.md skeleton. No spec change.
+
 ## 2026-10-26 — Stage 3 closed (6f38d2e)
 
 S3-46 metal on the A4000D (amix-kerntools ee06634, M3–M7): M3 polled PASS, M5 INT6 on zeth 1.0.0-4 PASS (0 % loss over
