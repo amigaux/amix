@@ -30,7 +30,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 1 | minted 2026-10-25, staged, not published |
 | [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | minted 2026-10-25, staged, not published |
 | [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries | minted 2026-10-26, staged, not published |
-| [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -2 (amix-dlm e84878e) minted 2026-10-26, staged, not published |
+| [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -10 (amix-dlm 33ea0c7, kabi 1.2) minted 2026-10-27, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
