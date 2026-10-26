@@ -43,15 +43,15 @@ KiB/s from user time; every build printed the host's SHA-256 and CRC-32.
 - The loop is longer than the 68030's 256-byte instruction cache under
   either compiler, so it is fetched from memory on every round.
 
-## 2. The change
+## 2. The change tried (reverted after run 2)
 
-`loader/common/sha256.c` now:
-- computes the whole 64-word schedule first;
-- runs eight rounds per pass, with the working variables renamed in the
+Commit 4afd10f changed `loader/common/sha256.c` to:
+- compute the whole 64-word schedule first;
+- run eight rounds per pass, with the working variables renamed in the
   macro's arguments instead of shifted;
-- uses the cheaper Ch and Maj forms.
+- use the cheaper Ch and Maj forms.
 
-On the host, the new form matches Python's `hashlib` at the padding edges
+On the host, that form matched Python's `hashlib` at the padding edges
 (0, 1, 55, 56, 63, 64, 65 and 1000 bytes) and the hashbench pattern, and
 the repository's host tests pass. Static count per round, from the
 assembly:
@@ -61,14 +61,41 @@ assembly:
 | before, GCC 2.7.2.3 / GCC 14 | 102 / 102 | 10 / 8 |
 | after, GCC 2.7.2.3 / GCC 14 | 42 / 45 | 2.3 / 4.4 |
 
-boot2 does not link `sha256.c`, so its size gate is untouched. The code
-also serves kbootset, axtime, the host tools, and the kernel's module
-checks of stage 3.
+boot2 does not link `sha256.c`, so its size gate was never involved.
 
-## 3. Run 2
+## 3. Run 2: the restructured round
 
-Pending: the same cell with the rebuilt binaries. GCC 14 should reach
-the GCC 2.7.2.3 rate or better, and GCC 2.7.2.3 should not lose. If GCC
-14 stays well below, the fallback is to accept the factor. A `check` is
-seconds on the slowest machine and runs once per kernel-space
-transaction.
+The same cell with the rebuilt binaries
+(`tmp/2026-10-26-hashbench/run2/N40/03-host.txt`; the binaries are
+snapshotted beside it, and their hashes match the build). `times(2)`
+counts in 1/60 s on this kernel. Every build printed the host's digests.
+
+| Build | SHA-256 before | SHA-256 after |
+|---|---|---|
+| gcc-cross-amix `-O2 -m68020` | 534 | **237** |
+| GCC 14 `-O2` (kbootset) | 270 | **176** |
+| GCC 14 `-O3` | 252 | 177 |
+| GCC 14 `-O1` | 190 | 201 |
+| GCC 14 `-Os` | 135 | 173 |
+
+CRC-32 and the copy did not change.
+
+**The restructure is slower on the 68030 under both compilers:** it
+halves the GCC 2.7.2.3 rate and costs GCC 14 a third. The host
+instruction count did not predict this. The likely reasons, not measured
+one by one: the renamed-variables round keeps more values live than the
+68030's eight data registers hold, and its unrolled loop streams through
+the instruction cache with no reuse.
+
+## 4. Verdict
+
+- **The source restructure regresses on the 68030.** It was reverted
+  (`sha256.c` is back to the shifting round of §1).
+- **The GCC 14 factor of two on the original round stands, as accepted
+  cost.** A `kbootset check` or commit hashes for seconds on the slowest
+  machine, once per kernel-space transaction. The loader does not hash
+  with SHA-256 at all (M-LD7). The kernel's module checks in stage 3 use
+  the GCC 2.7.2.3 build.
+- **Any later attempt** is designed against the bench: the Bench runs
+  hashbench on each candidate before anything else changes. It is low
+  priority.
