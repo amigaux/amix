@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern46m k46.1.1.261026-69, the S4-22 k46 root-class kernel (27240b0) — not published
+
+KD060-Z module kernel build 68060-261026-69 (port k46-module ab91c80) on amix-dlm 4c1acd0 (core 0001–0035): -65's content
+plus the root pass (the arena load path, dlm_marc_root, match= at marc_root); z3660scsi 86e6cd7. unix e3a049fc (2447964 B),
+sidecar 415c52ba, abi= fea18182, sdcards=4; ksymgate 12/12. md5 41a469f0 / 2485248 B. -65 stays in build/kspace/pkg; the
+staged root carries -69 (catalog da231aed); the -65 root at superseded/repo-20261026-2141. Round trip 106/106 (nothing in
+it exercises the root pass — that is S4-72's); gates PASS.
+
 ## 2026-10-26 — dlmkit -6 from amix-dlm 96205b6, the first kabi 1.1 kits (b4c6eb6) — not published
 
 dlmkit30 k30.1.1.261026-6.96205b6 and dlmkit46 k46.1.1.261026-6.96205b6 (KIT_REV 96205b6, core 0001–0035): abi.txt =
