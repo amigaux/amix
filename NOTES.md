@@ -1,5 +1,29 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — `removef PKG -` removed nothing: fgets' newline kept (FIXED, NOT MINTED)
+
+**Bug.** Found on the box by the installer: the stdin path-list form `removef PKG -` kept fgets'
+trailing newline on every line, so no path matched the contents DB and nothing was removed,
+rc 0, silently. Upstream defect (heirloom/OpenSolaris `removef.c`). The argument form
+(`removef PKG /path ...`) and installf's stdin form (strtok) were never affected; the installer
+already uses the argument form. Stock Amix ships no `removef` at all (absent from the installed
+system, see the 2026-07 survey below; no `removef` string anywhere under `hdf/tape21`), so stock
+has no such defect to share.
+
+**Fix.** `heirloom/pkgcmds/installf/removef.c`: each stdin line is cut to its first `" \t\n"`
+token, as installf does; blank lines are skipped. `AMIX PORT:` at the site, root cause 13 in
+`heirloom/AMIX-PORT.md`.
+
+**Regression.** `heirloom/tests/removef-stdin/run.sh`, step 6 of `build-host.sh`: installf
+registers three files under a test PKG, `printf 'a\nc \n' | removef PKG -` + `removef -f`, then
+exactly `b` must remain (and removef must list 2 paths). On the unfixed source it fails
+("a still in contents"); with the fix the whole host battery passes.
+
+**Amix build.** `heirloom/build-amix.sh` rc 0, switch-dispatch invariant clean. Only `installf`
+(= `removef`) changed in size: 157676 -> **157732 B**, **sha256
+`fdeee971edc60722993a7428352e20f91b86a07ec6bc2e9a8d375682776a3999`**; scan060 CLEAN. Not minted
+(next APKGENG), not deployed; the static set (`build-amix-static*`) was not rebuilt.
+
 ## 2026-10-26 — `m4`: the stock /usr/ccs/bin/m4 alone, shared with Cdev (STAGED, NOT PUBLISHED)
 
 **Why.** The stock 2.1c syslogd (in `core`) pipes `/etc/syslog.conf` through `/usr/ccs/bin/m4`

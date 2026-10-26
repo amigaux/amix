@@ -209,5 +209,12 @@ echo "VERSION relaxed:   OK (listed as \"(none)\")"
 echo "== pw/gr parser regression (real Amix fixtures) =="
 "$TOP/compat/tests/test-pwgr.sh" || { echo "SMOKE FAIL: pw/gr parser"; exit 1; }
 
+# ------------------------------------------------------------------
+# 6. removef stdin form (`removef PKG -`) removes exactly the listed
+#    paths (AMIX PORT fix 2026-10-26: upstream kept fgets' newline)
+# ------------------------------------------------------------------
+echo "== removef stdin-form regression =="
+"$TOP/tests/removef-stdin/run.sh" || { echo "SMOKE FAIL: removef stdin"; exit 1; }
+
 echo "== host build + smoke test PASSED =="
 ls -l "$BIN"

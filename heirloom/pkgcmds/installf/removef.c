@@ -57,6 +57,7 @@ removef(int argc, char *argv[])
 {
 	struct cfextra *new;
 	char	path[PATH_MAX];
+	char	*tok;	/* AMIX PORT: stdin token */
 	int	flag;
 
 	flag = strcmp(argv[0], "-") == 0;
@@ -70,6 +71,17 @@ removef(int argc, char *argv[])
 		if (flag) {
 			if (fgets(path, PATH_MAX, stdin) == NULL)
 				break;
+			/*
+			 * AMIX PORT: take the first white-space delimited
+			 * token, as installf's stdin form does (strtok
+			 * " \t\n").  Upstream kept fgets' newline, so no
+			 * "-" path ever matched contents and nothing was
+			 * removed, silently.  Blank lines are skipped.
+			 */
+			if ((tok = strtok(path, " \t\n")) == NULL)
+				continue;
+			if (tok != path)
+				(void) memmove(path, tok, strlen(tok) + 1);
 		} else {
 			if (argc-- <= 0)
 				break;
