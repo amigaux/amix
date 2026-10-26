@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 6
+# C3-5 — the module package and the per-module manifest record, version 7
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -9,7 +9,9 @@
   (2026-10-26, from S3-31's media of record): init's process ids are not
   stable, so no rc script trusts a pid from an earlier boot (§1.3); version 6
   (2026-10-26, C4-4 version 2): a root record carries `bss=`, the size of
-  the module's NOBITS and COMMON, which boot2 reserves behind its file (§3). Every consumer
+  the module's NOBITS and COMMON, which boot2 reserves behind its file (§3); version 7
+  (2026-10-26, C4-4 version 3): `safe=1` marks the root records of the safe-mode
+  set (§3). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -163,7 +165,7 @@ records.
 ```
 module <name> boot <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> match=<keys> [depend=<names>] [tier=core build=<id>]
 module <name> demand <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> majors=<c:N,...> [depend=<names>] [tier=core build=<id>]
-module <name> root <size> at=<off> [stored=<n> z=deflate] bss=<n> crc32=<8 hex> sha256=<64 hex> match=<keys> ...   (stage 4)
+module <name> root <size> at=<off> [stored=<n> z=deflate] bss=<n> crc32=<8 hex> sha256=<64 hex> match=<keys> [safe=1] ...   (stage 4)
 param <name>.<pname>=<value>
 ```
 
@@ -173,7 +175,8 @@ param <name>.<pname>=<value>
 | `bss=` | root class: the bytes the module's NOBITS sections and COMMON symbols need, laid out from 0 by the core's rules (C4-4 §4: each section aligned to max(its alignment, 4), then each common to its own; any alignment above 16 refused), rounded up to 4; written even when 0. Every COMMON is counted, so it is an upper bound when the core resolves one against the kernel or a dependency instead (`kbootset/kmod.c` `km_tail`) | boot2: the zeroed tail it reserves behind the file and counts against the capacity (C4-4 §1.2); the core: the tail it lays them into, refusing a layout larger than this |
 | `path=` | the generation directory | the core: where the bytes come from (patch 0009) |
 | `sha256=` | the object | the core: what they must hash to (patch 0009); `kbootset check` |
-| `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); boot2 selects root-class records by it (10 §5.3) |
+| `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); `marc_root` the same for a root-class record (C4-4 version 3 §4). boot2 does not read it |
+| `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), and the root-class modules those two depend on; absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
 | `majors=` | **copied verbatim**; required on demand class | `marc_post`: registers each character major for the module (block majors: stage 4) |
 | `depend=` | **copied verbatim** | `kbootset` gate 3, and the record order |
 | `tier=`, `build=` | **copied verbatim** when `tier=core` | `kbootset status`; the core decides from the object's own `.moddata` (patch 0003) |
