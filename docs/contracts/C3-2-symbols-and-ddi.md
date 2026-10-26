@@ -101,6 +101,12 @@ The second column marks names one of today's two drivers imports
 | console hook | `cons_hook_set`, `cons_hook_clear` | — | proc | core |
 | libgcc | `__udivdi3`, `__umoddi3`, `__lshrdi3` | — | any | stock on k30, core on k46 |
 | identity | `bootinfo`, `cputype` (data, read-only) | `bootinfo` | any | stock; `cputype` core on k30 |
+| module interface | `mod_miscops`, `mod_execops`, `mod_hookops`, `mod_drvops`, `mod_strops` (data), `mod_hold`, `mod_rele` | every module (`mod_miscops` and the like through the wrapper macros, C3-1 §2) | proc | the core itself (`dlm.o`) |
+
+The module interface row was missing from the list as first agreed.
+Every module references its linkage ops through the wrapper macros, so
+the list cannot work without it. It was added on 2026-10-26, while v1.0
+was still open for review, so it needs no minor (S3-04).
 
 **Never in the DDI tier** (20 §4.1): the switch tables and vectors
 (`cdevsw`, `bdevsw`, `vfssw`, `int2_tbl`), `conputc` and `ifstats`. Today
