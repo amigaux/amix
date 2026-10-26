@@ -62,16 +62,22 @@ amix_dlm_build() {
 # labels the kit with `git rev-parse --short HEAD` and a dirty check, which
 # in an export under this repository would answer for THIS repository; the
 # export is the pinned commit by construction, so a shim answers for it
-# (KIT_REV=<commit>, never dirty) and refuses any other git call.  The
-# stock headers come from gcc-cross-amix's sysroot, the k46 4 KiB headers
-# from ../amix-040-060-port (include-modelb/), as in amix-dlm.
+# (KIT_REV=<commit>, never dirty).  The k46 kit also records PORT_REV, the
+# commit of ../amix-040-060-port its 4 KiB headers come from (include-modelb/,
+# with a -dirty check on immu.h/param.h): those two read-only calls with
+# `-C <port>` go to the real git, so PORT_REV is the port's own.  Any other
+# git call is refused.  The stock headers come from gcc-cross-amix's sysroot,
+# as in amix-dlm.
 amix_dlm_kit() {
 	amix_dlm_export "$1"
 	_dk_shim="$AMIX_BUILD_ROOT/kspace/src/gitshim-$1"
+	_dk_port="$AMIX_SIBLINGS/amix-040-060-port"
+	_dk_git=$(command -v git)
 	mkdir -p "$_dk_shim"
 	{
 		echo '#!/bin/sh'
 		echo 'case "$*" in'
+		echo "\"-C $_dk_port rev-parse --short HEAD\"|\"-C $_dk_port diff --quiet HEAD -- \"*) exec $_dk_git \"\$@\" ;;"
 		echo "*\"rev-parse --short HEAD\") echo $1 ;;"
 		echo '*"status --porcelain"*) ;;'
 		echo '*) echo "dlm-src.sh git shim: refused: git $*" >&2; exit 1 ;;'
@@ -81,7 +87,7 @@ amix_dlm_kit() {
 	(
 		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
 		PATH="$_dk_shim:$PATH" GCA="$AMIX_SIBLINGS/gcc-cross-amix/build" \
-			PORT="$AMIX_SIBLINGS/amix-040-060-port" \
+			PORT="$_dk_port" \
 			make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" kit
 	) > "$AMIX_DLM_TREE.kit.log" 2>&1 || {
 		echo "[FAIL] amix-dlm $1: make kit failed:" >&2
@@ -91,5 +97,5 @@ amix_dlm_kit() {
 			echo "[FAIL] amix-dlm $1: the $_dk_l kit is not labelled KIT_REV=$1" >&2; exit 1; }
 	done
 	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1 (log $AMIX_DLM_TREE.kit.log)"
-	unset _dk_shim _dk_l
+	unset _dk_shim _dk_l _dk_port _dk_git
 }
