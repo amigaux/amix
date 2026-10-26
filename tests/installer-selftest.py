@@ -8686,6 +8686,21 @@ def audit_x11kit_k1():
     k1cd = {"metal-a4000-z3660-060-a4092cd.profile": "metal-a4000-z3660-060-k1.profile"}
     # CD-2 (bench): CD-1 with the target on the A4092 Zulu (card 1 id 1).
     k1cd2 = {"metal-a4000-z3660-060-a4092cd2.profile": "metal-a4000-z3660-060-a4092cd.profile"}
+    # S3-45 (stage 3's exit row): the 1.1 module-kernel bench profiles with the RTG desktop,
+    # each its l11 base plus z3660rtg and the kit, nothing else (drift-locked here).
+    s345 = {"bench-a4000-z3660-060-cd-l11-rtg.profile": "bench-a4000-z3660-060-cd-l11.profile",
+            "bench-a3000-a4091-l11-rtg.profile": "bench-a3000-a4091-l11.profile"}
+    for rp, bp in sorted(s345.items()):
+        rk = _parse_profile(os.path.join(PROFILES_DIR, rp))
+        bk = _parse_profile(os.path.join(PROFILES_DIR, bp))
+        d = sorted(k for k in set(rk) | set(bk) if rk.get(k) != bk.get(k)
+                   and k not in ("PROFILE_NAME", "PROFILE_DESC", "KERNEL_MODPKGS", "X11KIT"))
+        mods = rk.get("KERNEL_MODPKGS", "").split()
+        if d or rk.get("X11KIT") != "rtg" or not any(m.startswith("z3660rtg-k") for m in mods):
+            fail("%s is not %s plus z3660rtg and X11KIT=rtg (also differs on %s)" % (rp, bp, d))
+        else:
+            ok("%s = %s plus z3660rtg (%s) and X11KIT=rtg, nothing else" % (rp, bp, " ".join(mods)))
+    carriers = [c for c in carriers if c not in s345]
     # r6 (D-2): a `<base>-r6[-tag].profile` re-cut carries the kit exactly when its r5 base does.
     _base = sorted(list(k1) + list(k1pub) + list(k1md1) + list(k1cd) + list(k1cd2))
     r6c = [c for c in carriers if "-r6" in c]
