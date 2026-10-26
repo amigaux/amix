@@ -1135,7 +1135,10 @@ its static driver.
 - No `root module(s) linked` line and a hang or panic at the root mount:
   the kernel has no `marc_root` hook before `rth1_apply`, or z3660scsi's
   board did not register (C4-1: `sd: … registered after the controllers
-  closed`).
+  closed`). Measured on the S4-22 kernel with no root module (the port's
+  negative control, -71): `RTH1: root c6d0s1 built in (controller not
+  present)`, then `PANIC: vfs_mountroot: cannot mount root: errno 89`,
+  and the next boot is the loader's L8 fallback to the good generation.
 - `dlm: root module z3660scsi is not the booted manifest's; not linked`:
   the manifest copy and the directory disagree (a boot2 and kbootset
   from different revisions).
