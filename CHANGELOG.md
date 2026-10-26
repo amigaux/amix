@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — Exit ledger: core patch 0027 rides the stage-4 kernel cut (ada916c)
+
+The kernels of record keep dlm_maximage 2 MiB; the kit's modcheck guards every module meanwhile; a stage-3 re-cut would
+force a third remaster of the media of record.
+
 ## 2026-10-26 — C3-1 v4: a module's image at most 256 KiB, its file under 256 KiB (07689e6, 1082c0c, 2ee5916)
 
 From U4: the core's own KM_SLEEP allocations grow with the module (ten call sites, C3-1 §6: lf_hashload's buffer ×2,
