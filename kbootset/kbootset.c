@@ -249,7 +249,7 @@ int mkstore_main(int argc, char **argv);
 static int
 media(const char *root, char **cmd, int argc)
 {
-	static char spec[16384], msg[400], specpath[1100], vstr[12];
+	static char spec[32768], msg[400], specpath[1100], vstr[12];
 	static struct ks k;
 	struct kb_facts f;
 	struct file d;

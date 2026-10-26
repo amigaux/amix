@@ -880,6 +880,7 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	int deflate, const char *ramdisk, char *out, char *msg)
 {
 	static struct ks k;
+	static char mtail[16384];
 	struct kb_kernel kk;
 	ax_u8 *kernel;
 	ax_u32 klen;
@@ -892,6 +893,15 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 		return k.gate ? 4 : 3;
 	}
 	free(kernel);
+	/* the modules of the pristine generation: records as build writes them,
+	 * the copies under root's /stand/gen/1/mod/, for the medium's root */
+	if ((rc = modules(&k, root, &kk, 1, mtail, sizeof(mtail))) != KS_OK ||
+	    (nmods && ((rc = mkdirs(&k, root, 1)) != KS_OK || (rc = mods_copy(&k, root, 1)) != KS_OK))) {
+		mods_free();
+		strcpy(msg, k.msg);
+		return k.gate ? 4 : 3;
+	}
+	mods_free();
 	sprintf(out, "generation 1\nstate pristine\n");
 	head(out + strlen(out), f, &kk, f->rootfs, f->root, f->swap, 0, created);
 	sprintf(out + strlen(out), "kernel unix %.500s%s", under(root, f->line == 30 ?
@@ -901,6 +911,7 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	strcat(out, "\n");
 	if (ramdisk)
 		sprintf(out + strlen(out), "ramdisk miniroot %.500s%s\n", ramdisk, deflate ? " z=deflate" : "");
+	strcat(out, mtail);
 	msg[0] = 0;
 	return 0;
 }

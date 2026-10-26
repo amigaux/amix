@@ -55,7 +55,9 @@ int kb_commit(struct ks *k, const char *root, ax_u32 *id, int again);
 /* a new medium's pristine generation (host media builds, S2-04): every
  * gate, against the loader version the medium carries, then the
  * generation as a mkstore spec in out (paths under root; members deflated
- * when deflate is set; ramdisk, if given, as its RAM disk); msg the refusal;
+ * when deflate is set; ramdisk, if given, as its RAM disk; the installed
+ * modules' records, with their copies written to root's /stand/gen/1/mod/
+ * for the medium's root, C3-5); msg the refusal;
  * returns kbootset's exit status (0, 3 or 4) */
 int kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u32 created,
 	    int deflate, const char *ramdisk, char *out, char *msg);

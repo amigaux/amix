@@ -332,4 +332,18 @@ $MB media --floppy $T/x1.adf $T/x2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boo
 	--line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 6" $T/out && [ ! -e $T/x1.adf ]
-echo "kbuild: media (disk, floppy pair, CD) ok"
+# a medium's pristine generation takes the installed modules too: their
+# records in the spec, their copies under the root's /stand/gen/1/mod/
+msidecar 0x00060000
+three
+$MB media --floppy $T/mm1.adf $T/mm2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \
+	$FACTS > $T/out || { echo "kbuild: media with modules" >&2; cat $T/out >&2; exit 1; }
+grep -q "^module z3660eth boot $(size $MD/z3660eth) path=/stand/gen/1/mod/z3660eth sha256=$(sha $MD/z3660eth) match=" $T/mm1.adf.spec
+grep -q "^module z3660rtg demand .* depend=monsw$" $T/mm1.adf.spec
+grep -qx "param z3660eth.intr=0" $T/mm1.adf.spec
+cmp -s $MD/monsw $R/stand/gen/1/mod/monsw
+$B/lsstore $T/mm1.adf 0 $T/mm2.adf | grep -q "lsstore: ok"
+rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
+rm -rf "${R:?}/stand/gen/1/mod"
+cp $T/kabi.static $R/stand/k46/kabi; record
+echo "kbuild: media (disk, floppy pair, CD; a medium with modules) ok"
