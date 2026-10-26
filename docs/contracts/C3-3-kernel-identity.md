@@ -1,6 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 1
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -85,13 +85,31 @@ ident=0x001f1fc0             image offset of AXK1                       (new)
 arena=0x001f2000 0x00080000  image offset and capacity, equal to AXK1's
 ksym=0x001e8000 0x00002400   image offset and size of the symbol block  (new)
 abi=<64 hex>                 the binary fingerprint (§4)                (new)
+root=zorro:144b:01           built-in root controllers, through stage 3 (below)
+rootfs=ufs,s5                built-in root filesystems, through stage 3
 ```
 
-`root=` and `rootfs=` belong to static kernels. A module kernel has no
-built-in root controllers and does not write them.
+**`root=` and `rootfs=`.** Through stage 3 a module kernel writes
+`root=`/`rootfs=` for its built-in root controllers and filesystems, as a
+static kernel does: its root drivers are still linked in, and it has no
+root-class modules. From stage 4, with root-class modules, it writes
+neither.
+
+The trigger is the generation, not a date or a stage number: **the first
+root-class module (`module … root`) in a generation.** `kbootset`'s gate 3
+tells the two cases apart from the manifest alone:
+- a generation with no root-class module is closed by the kernel's
+  `root=`/`rootfs=`, which must name the boot and root disks' controllers
+  and the root filesystem, as for a static kernel;
+- a generation with at least one root-class module is closed by its
+  root-class modules' `match` keys and `fs` (C3-1 §3); the kernel's
+  `root=`/`rootfs=` are not read, and a kernel built only for such
+  generations omits them.
 
 What `kbootset` does with them (S3-16):
 - gate 2: `kabi`, `pin`, and each module's `kabi`/`cc` against them;
+- gate 3: `root=`/`rootfs=` while the generation has no root-class module
+  (above);
 - gate 4: `arena` (stage 4 places root modules; in stage 3 the arena holds
   only the directory and the manifest copy, C3-4);
 - gate 6: kernel + `bss` + the arena;
@@ -119,7 +137,8 @@ fingerprint per tag, so the failure names what moved.
 - `AXK1` as above, with no addresses in it; its check holds in the file and
   in memory.
 - Image offsets measured from the bind address in `rel.h`'s layout.
-- The new sidecar keys `ident`, `ksym` and `abi`; `loader-min=2`; no
-  `root`/`rootfs` on a module kernel.
+- The new sidecar keys `ident`, `ksym` and `abi`; `loader-min=2`.
+- Version 2: `root`/`rootfs` on a module kernel through stage 3; the first
+  root-class module in a generation is the stage-4 trigger for gate 3.
 - The manifest record `ident`.
 - The new loader code L14 (L1–L13 are taken).

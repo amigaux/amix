@@ -139,7 +139,11 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
     - `kabi=$KABI`, `family=generic`, `loader-min=2`;
     - `ident=`, `arena=0x… 0x60000`, `ksym=` from step 9;
     - `size=`, `sha256=` (and `bss=` for k30's brel) of the form shipped;
-    - no `root=`/`rootfs=`.
+    - `root=`/`rootfs=` for the built-in root controllers and
+      filesystems, the same two lines the line's static sidecar carries
+      (C3-3 version 2 §3: through stage 3 a module kernel keeps its root
+      drivers linked in; from the first root-class module in a
+      generation, stage 4, it writes neither).
 
 ## 3a. Answers to the dry runs
 
