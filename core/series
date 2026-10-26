@@ -43,3 +43,4 @@
 0040-vfs-register.patch
 0041-moddefs-block-rows.patch
 0042-abi-fs-layouts.patch
+0043-rootfs-promotion.patch

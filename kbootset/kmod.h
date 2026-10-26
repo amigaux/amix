@@ -23,6 +23,7 @@ struct km_param {
 struct km_info {
 	char name[16], kabi[24], cc[48], cpu[8], cls[8];
 	char match[256], majors[128], depend[128], unload[8], tier[8], build[48];
+	char fs[16];		/* the type vfs_register takes (C4-6 section 3), or "" */
 	int nparam;
 	struct km_param param[KM_MAXPARAM];
 };

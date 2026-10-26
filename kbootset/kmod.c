@@ -123,6 +123,7 @@ km_read(const ax_u8 *b, ax_u32 len, struct km_info *mi, char *why)
 		else if (KEY("unload")) bad = put(mi->unload, sizeof(mi->unload), v);
 		else if (KEY("tier")) bad = put(mi->tier, sizeof(mi->tier), v);
 		else if (KEY("build")) bad = put(mi->build, sizeof(mi->build), v);
+		else if (KEY("fs")) bad = put(mi->fs, sizeof(mi->fs), v);
 		else if (KEY("param")) {
 			if (mi->nparam == KM_MAXPARAM) {
 				strcpy(why, "more parameters than kbootset takes (16)");

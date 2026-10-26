@@ -473,6 +473,20 @@ grep -q "^module ramdisk root .* match=always safe=1$" $T/r1.adf.spec
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always$" $T/r1.adf.spec
+# the root filesystem's module of boot class (cdfs) is composed as a root
+# record on a generation that roots on it, and stays boot class otherwise
+# (C4-4 section 1.3)
+rootset
+modpkg cdfs class=boot match=always fs=cdfs
+$KB build --line 46 --bootdev zorro:144b:01 --rootdev zorro:144b:01 --rootfs cdfs --mem 16777216 |
+	grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module cdfs root [0-9]* at=0x10000 .* match=always safe=1$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+$KB build $RFACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module cdfs boot [0-9]* path=/stand/gen/$id/mod/cdfs .* match=always$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
 # gate 4: the whole root set against an arena that holds the directory
 # and the manifest copy (about 1 000 bytes) but not the modules too
 rootset

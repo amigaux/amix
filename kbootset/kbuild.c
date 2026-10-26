@@ -776,6 +776,12 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		}
 		if ((rc = mod_gate2(k, kk, &md->i)) != KS_OK)
 			break;
+		/* the root filesystem's module, boot class elsewhere (cdfs), is
+		 * root class on a generation that roots on it: the core links a
+		 * boot-class module from the arena only for the manifest's rootfs
+		 * (C4-4 section 1.3) */
+		if (!strcmp(md->i.cls, "boot") && md->i.fs[0] && rootfs && !strcmp(md->i.fs, rootfs))
+			strcpy(md->i.cls, "root");
 		if (!strcmp(md->i.cls, "root") && km_tail(md->data, md->size, &md->bss, why)) {
 			sprintf(m, "%s: %.120s", path, why);
 			rc = refuse(k, 2, m);
