@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — Spec 30 §5.3: the no-Z3660 060 board sets; C4-1 version 2 (bef0ccd)
+
+30 §5.3 gains the 040/060 sets without a Z3660 (S4-57): A3000 onboard alone; A3000 onboard + A4091/A4092; A4091/A4092
+alone; Gayle IDE + A4091/A4092 (unchanged: 1.0's IDE glue key 0xfffffff0 sorted it last, as class 4 does); A4000T 53C710
+alone and + A4092 (sets with a controller 1.0 did not drive). Expectation 2 gains k46's A3000 onboard + Zorro SCSI (1.0
+put the WD at 0xDD0000 first; c6d0 becomes ced0, D-3 §11). C4-1 v2: §4.3's "not a set of record" replaced by the accepted
+k46 rename; §6 lists it; S4-72 M-SD1 and the ledger name the added sets.
+
 ## 2026-10-26 — Stage 4 plan: S4-57, the generic 060 target (a2829f6)
 
 An A3000 or A4000 with a third-party 68060 and no Z3660, root on an A4091/A4092, the A3000 onboard SCSI or Gayle IDE, a
