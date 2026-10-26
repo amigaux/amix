@@ -31,7 +31,14 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # the class action script src/apkg/i.apkgconf, so an upgrade keeps the box's
 # own file; the default also ships as /usr/apkg/lib/apkg.conf.  0.2.2
 # (feb57752...) stays what it is.  NOTES 2026-10-06.
-VER_APKG="0.2.3"
+# 0.3.0 (2026-10-26): kernel space (amix-dlm C2-2 v4, C2-3 v4, C2-4 v2) --
+# the #ext kpkg block, SHA-256, /var/apkg/kpkg records, the kbootset
+# trigger, the journal and `apkg recover`, `upgrade` of several names.
+# STAGED FOR THE 1.1 MEDIA, NOT PUBLISHED: minted into its own staging dir
+# (build/repo-staging-apkg030); the public catalog and the publish line of
+# record still say 0.2.3 until the owner decides the publish.  NOTES
+# 2026-10-26.
+VER_APKG="0.3.0"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -442,6 +449,11 @@ EOF
   # makes every such box's kept conf differ from its new record.
   # /var/apkg/admin stays `e none`, so an upgrade still replaces an edited
   # admin file -- out of this change's scope, a follow-up in NOTES 2026-10-06.
+  #
+  # Version 0.3.0 (2026-10-26).  The apkg binary and apkg.1 change (kernel
+  # space, see VER_APKG); every other payload byte, the /etc/apkg.conf
+  # template included (md5 8dada8d9..., T23), is 0.2.3's.  Staged for the
+  # 1.1 media, NOT published.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.apkgconf=$REPO/src/apkg/i.apkgconf

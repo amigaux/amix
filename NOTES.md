@@ -1,5 +1,42 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — APKG 0.3.0 minted for the 1.1 media (STAGED, NOT PUBLISHED)
+
+**Why.** The 1.1 installs still carried APKG 0.2.3 from the 1.0 media, so on a running box a
+kernel-space upgrade failed with "package loader-amix not in catalog" (the stage-2 exit row): 0.2.x
+skips the `#ext kpkg` block by design. installng puts this mint on the 1.1 media. **The public catalog
+and the publish line of record are unchanged** (still 0.2.3); publishing is the owner's decision.
+
+**The mint.** `build/repo-staging-apkg030/base/APKG-0.3.0.pkg` (own staging dir; `build/repo-staging`
+and every earlier mint untouched), `tools/repo/build-packages.sh --apkg`, `VER_APKG="0.3.0"`:
+
+- **sha256 `e6e7b7d5a94654383738e42a368e038a2484ffc38307d110e6b410e6df3a6d1b`**, md5
+  `9a8aed87e3113d79af00474acdbeba9c`, **192000 B**, mode 444, sidecar `.md5`;
+  `PSTAMP=lucifer20261026033802`; source commit `6215017` (kernel space through C2-2 v4, the
+  several-name `upgrade`).
+- `apkg.amix` built twice from a clean `obj-amix` with gcc-cross-amix (gcc 2.7.2.3): both
+  **md5 `9c2cb2149e33c1821751005592ba886e`, 109145 B** (0.2.3's: 78045 B). Version string 0.3.0.
+- Payload against 0.2.3: `apkg` and `apkg.1` are new bytes; `contents-fsck` (`7305529b…`),
+  `/var/apkg/admin` (`289c0cb0…`), `/etc/apkg.conf` and `/usr/apkg/lib/apkg.conf` (`8dada8d9…`, the
+  pinned default) byte-identical; `amix-sadm-migrate` and `install/i.apkgconf` differ only in their
+  header comment (the SPDX/copyright lines of the public-release commit `a2c88b9`; the copyright now
+  spells the name with UTF-8 "ä" in a `#` comment). pkgmap: the same 17 objects + `i i.apkgconf` +
+  `i pkginfo`.
+- Gates: link gate OK (1 link); scan060 0 hits in 2 ELFs; `payload-licence-gate` OK (2 ELFs; the
+  usual `libnsl.so` note); `gen-catalog --scan-private` OK.
+- APKGENG stays 1.12.3: 0.3 drives pkgadd/pkgrm and reads the contents DB exactly as 0.2.3 does; no
+  engine change is needed.
+- Host install of the staged file (heirloom `pkgadd -R` under fakeroot): 0.2.3 installed, conf
+  edited (`repo=/cdrom`), then 0.3.0 added with instance=overwrite: rc 0, "kept as it is", the
+  edit survives byte for byte, the installed `/usr/apkg/bin/apkg` is `9c2cb214…`, VERSION=0.3.0.
+  Repo tools 341/0 (T23 mints from the same tree and runs the conf-keeping cases A–E against it).
+- `apkg_vercmp("0.3.0", "0.2.3")` > 0, so `apkg upgrade apkg` from 0.2.3 takes it once it is in a
+  catalog.
+
+**Owed on a box** (no guest path in this repo): the i.apkgconf header now holds two UTF-8 bytes in a
+comment; stock/heirloom `/sbin/sh` skip comments, but the first 1.1-media install of this file is
+the on-box proof (installng's).
+
 ## 2026-10-26 — `apkg upgrade` takes several names: one transaction, one trigger
 
 **Why.** The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and kbootset together.
