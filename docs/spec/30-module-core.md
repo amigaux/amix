@@ -184,8 +184,11 @@ Zorro SCSI board. The root is found by identity regardless (§3).
 A *board set of record* is a combination of disk controllers the project
 supports and tests: on the 040/060 line Z3660 alone; Z3660 + A4091/A4092;
 Z3660 + Gayle IDE; Z3660 + A4092 + Gayle IDE; Z3660 + A4000T 53C710; Z3660 +
-A4000T 53C710 + A4092 (+ Gayle IDE); Gayle IDE alone; on the 030 line A3000
-onboard alone; A3000 onboard + A4091; A4091 alone; A2091 alone; Gayle IDE
+A4000T 53C710 + A4092 (+ Gayle IDE); Gayle IDE alone; and without a Z3660
+(a third-party 68060, `docs/plan/stage-4.md` S4-57; added after the freeze,
+2026-10-26): A3000 onboard alone; A3000 onboard + A4091/A4092; A4091/A4092
+alone; Gayle IDE + A4091/A4092; A4000T 53C710 alone; A4000T 53C710 + A4092;
+on the 030 line A3000 onboard alone; A3000 onboard + A4091; A4091 alone; A2091 alone; Gayle IDE
 alone; Gayle IDE + A4091. The list is kept with the measurement rows (M-SD1)
 and grows only by adding rows.
 
@@ -195,10 +198,18 @@ The stage-4 gate judges each set against one of three expectations:
    order the contract keeps): every disk has its 1.0 name.
 2. **Accepted changes** (two-controller sets whose order the contract
    changes): on the 030 line, A3000 onboard + Zorro SCSI and Gayle IDE +
-   Zorro SCSI (D-3 §11); the new names are listed per set in the measurement
-   record and in the release notes.
-3. **Three and four controllers** (1.0 dropped the third controller): judged
+   Zorro SCSI; on the 040/060 line, A3000 onboard + Zorro SCSI (1.0 sorted
+   the A3000 WD at 0xDD0000 first, and its disks move from card 0 to card
+   1: `c6d0` becomes `ced0`); all by D-3 §11. The new names are listed per
+   set in the measurement record and in the release notes.
+3. **Three and four controllers** (1.0 dropped the third controller), and
+   sets with a controller 1.0 did not drive (the A4000T 53C710): judged
    against the contract's expected names, not against 1.0.
+
+On the 040/060 line, Gayle IDE + A4091/A4092 keeps its 1.0 names: 1.0's
+IDE glue gave the IDE the sort key 0xfffffff0, after every board, and the
+contract's class 4 puts it last too. A4091/A4092 alone and A3000 onboard
+alone have one controller, card 0, as in 1.0.
 
 The sd layer is a stock binary on the 040/060 line, patched in place, and
 generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per

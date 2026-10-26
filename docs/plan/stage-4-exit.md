@@ -47,7 +47,7 @@ cells of this ledger.
 
 | Row | k46 | k30 |
 |---|---|---|
-| M-SD1, one row per emulated board set of record (30 §5.3), judged against its expectation | pending | pending |
+| M-SD1, one row per emulated board set of record (30 §5.3), judged against its expectation; on k46 including the no-Z3660 sets (A3000 onboard alone and + A4091/A4092 (renamed: `c6d0` → `ced0`), A4091/A4092 alone, Gayle IDE + A4091/A4092, the A4000T 53C710 alone and + A4092) | pending | pending |
 | M-FL2 safe mode on each root controller and root filesystem | pending | pending |
 | root on ufs as a module | pending | pending |
 | root on s5 as a module | pending | pending |

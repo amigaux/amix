@@ -1,8 +1,11 @@
-# C4-1 — `sd_register` and the four-card contract, version 1
+# C4-1 — `sd_register` and the four-card contract, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other
-  repositories build against this text; a change from here is a contract
-  change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+  (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
+  third-party 68060 runs the 040/060 line with an A3000 WD, so the WD
+  behind the Zorro boards is an accepted rename on both lines (§4.3, §6).
+  Other repositories build against this text; a change from here is a
+  contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
   compacted order, registration, the card-number gate), D-3 §4 and §11;
   core patch 8 (30 §2)
@@ -220,8 +223,11 @@ no address is used as a rank.
 The common sets keep their 1.0 names, because there the address order
 and the class order agree: Z3660 alone, and Z3660 + A4091/A4092. Where
 1.0 put a motherboard controller first, the class order moves it behind
-the Z3660 and the Zorro boards. That case is not a set of record: a
-Z3660 sits only in an A4000's CPU slot, and no A4000 has an A3000 WD.
+the Z3660 and the Zorro boards. On the 040/060 line that is an A3000
+with a third-party 68060 and a Zorro SCSI board: 1.0 made its WD card 0,
+and the class order makes the board card 0 and the WD card 1, so the
+WD's disks are renamed (`c6d0` becomes `ced0`). D-3 §11 accepted this
+rename on both lines; it is expectation 2 of §6.
 
 ## 5. The board set and the card table
 
@@ -239,9 +245,10 @@ M-SD1 (S4-72) judges every board set of record (30 §5.3) against one of
 three expectations:
 1. **order unchanged from 1.0:** every disk has its 1.0 name;
 2. **accepted changes** (on k30, A3000 onboard + Zorro SCSI, and Gayle IDE
-   + Zorro SCSI): exactly the new names listed per set in the measurement
-   record and the release notes;
-3. **three and four controllers:** the names this contract gives.
+   + Zorro SCSI; on k46, A3000 onboard + Zorro SCSI): exactly the new names
+   listed per set in the measurement record and the release notes;
+3. **three and four controllers, and sets with a controller 1.0 did not
+   drive** (the A4000T 53C710): the names this contract gives.
 
 ## 7. Not in this contract
 
