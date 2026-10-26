@@ -1651,7 +1651,7 @@ staging; unconditional — bench profiles need logging as much as metal):
 | piece | mode | notes |
 |-------|------|-------|
 | `/etc/syslog.conf` | 0444 | 2.1c conf 1.1 (63870/1,928) — `*.notice;kern.none → /var/log/notice` already selects inetd's `daemon.err`; no edit needed |
-| `/etc/init.d/syslogd` | 0544 | the **ENABLED** copy (55649/728): the vendor disable — one bare `exit` — was commented **at media staging** (the miniroot has no `sed`); §5's enablement, pre-applied |
+| `/etc/init.d/syslogd` | 0544 | the **ENABLED** copy (28819/967): the vendor disable — one bare `exit` — was commented **at media staging** (the miniroot has no `sed`); §5's enablement, pre-applied. Start and stop also trust `/etc/syslog.pid` only when `ps -p` shows that pid is a syslogd, and remove a stale file: the vendor `kill -0` test let an earlier boot's pid, held by another process now, keep syslogd from ever starting (S3-31) |
 | `/etc/rc2.d/S70syslogd`, `/etc/rc0.d/K50syslogd` | — | **hard links** (`ln`) to the init script — the stock one-inode **3-link** topology. Any later edit must be **`cp` in place, never `mv`** (throttle doc §4): `mv` would orphan the rc links and the fix would work once, then never again after a reboot |
 | `/usr/sbin/syslogd` | 0100 | the 2.1c "major revisions" daemon (53154/22,728) over core's 2.1 copy — the `boot2.boot`-class content touch; keeps the exact combination the goldens run and the throttle doc validated end to end |
 | `/var/log/{alert,bus-errors,console,critical,kernel,news-urgent,notice,security}` | 0644 | eight zero-length stubs (syslogd appends to existing files; the vendor patch ships exactly these) |

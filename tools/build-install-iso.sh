@@ -876,14 +876,46 @@ sum_gate "$STAGE/syslog/syslogd"     53154 22728 "staged syslogd is not the 2.1c
 nexit="$(grep -c '^exit$' "$repo/payload/21c/etc/init.d/syslogd" || true)"
 [ "$nexit" = 1 ] || { echo "STOP: vendor init.d/syslogd carries $nexit bare 'exit' line(s), expected exactly 1 -- refusing to transform" >&2; exit 1; }
 sed 's/^exit$/#exit/' "$repo/payload/21c/etc/init.d/syslogd" > "$STAGE/syslog/syslogd.init"
+# The vendor start branch trusts /etc/syslog.pid with `kill -0`, and nothing removes the
+# file at boot: when an earlier boot's syslogd pid belongs to another live process on
+# this boot (the dlm sysinit line and S01kbnamelist move the numbering; per disk it then
+# collides on every boot), syslogd never starts and no kernel message is kept. start
+# and stop trust the pid only when `ps -p` shows a syslogd, and drop a stale file. The
+# 1991 sh and grep: no grep -q, no read loop.
+python3 - "$STAGE/syslog/syslogd.init" <<'PY' || { echo "STOP: syslogd.init pid-file transform failed" >&2; exit 1; }
+import sys
+p = sys.argv[1]
+s = open(p).read()
+start = (
+    "\t    #\n\t    #\tTest for the presense of a running syslogd\n\t    #\n"
+    "\t    kill -0 $pid 2> /dev/null\n"
+    "\t    #\n\t    #\tIf there wasn't a pid to kill, or the process\n\t    #\tdid not exists, start syslogd\n\t    #\n"
+    "\t    if [ -z \"$pid\" -o $? -ne 0 ]\n\t    then\n\t\t/usr/sbin/syslogd\n\t    fi\n")
+start_new = (
+    "\t    #\n\t    #\tTest for the presense of a running syslogd. The pid file\n"
+    "\t    #\toutlives the boot: trust it only when ps shows that pid is a\n"
+    "\t    #\tsyslogd (an earlier boot's pid can be any process now)\n\t    #\n"
+    "\t    s=\n\t    if [ -n \"$pid\" ]\n\t    then\n"
+    "\t\ts=`ps -p $pid 2> /dev/null | grep syslogd`\n\t    fi\n"
+    "\t    if [ -z \"$s\" ]\n\t    then\n"
+    "\t\trm -f /etc/syslog.pid\n\t\t/usr/sbin/syslogd\n\t    fi\n")
+stop = "'stop')\n\tkill $pid 2> /dev/null\n\t;;\n"
+stop_new = ("'stop')\n\ts=\n\tif [ -n \"$pid\" ]\n\tthen\n"
+            "\t\ts=`ps -p $pid 2> /dev/null | grep syslogd`\n\tfi\n"
+            "\tif [ -n \"$s\" ]\n\tthen\n\t\tkill $pid 2> /dev/null\n\tfi\n"
+            "\trm -f /etc/syslog.pid\n\t;;\n")
+if s.count(start) != 1 or s.count(stop) != 1:
+    sys.exit("syslogd.init: the vendor start/stop text is not as pinned")
+open(p, "w").write(s.replace(start, start_new).replace(stop, stop_new))
+PY
 chmod 0644 "$STAGE/syslog/syslogd.init"
 if grep -q '^exit$' "$STAGE/syslog/syslogd.init" || \
    [ "$(grep -c '^#exit$' "$STAGE/syslog/syslogd.init")" != 1 ]; then
   echo "STOP: syslogd.init enablement transform failed (a live 'exit' remains or '#exit' count != 1)" >&2; exit 1
 fi
-sum_gate "$STAGE/syslog/syslogd.init" 55649 728 "enabled syslogd.init does not match the pinned transform"
+sum_gate "$STAGE/syslog/syslogd.init" 28819 967 "enabled syslogd.init does not match the pinned transform"
 echo "build-install-iso: staged /install/stand (boot1.boot 41892, makeiblk 58483) +"
-echo "  /install/syslog (conf 63870, syslogd 53154, init ENABLED 55649 -- vendor exit commented)"
+echo "  /install/syslog (conf 63870, syslogd 53154, init ENABLED 28819 -- vendor exit commented, pid file checked by ps)"
 
 # admin(4): the permissive install-time policy + the 183-B stock default
 cat >"$STAGE/admin/pkgadd" <<'EOF'

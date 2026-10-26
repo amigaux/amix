@@ -105,7 +105,7 @@
 #      must be cp-in-place), the 2.1c daemon over core's 2.1 copy (chmod 0100),
 #      the eight /var/log stubs, and /dev/conslog c 25 0; that the laydown is
 #      UNCONDITIONAL (not inside the zen0 guard); that the staging transform is
-#      gated (exactly one vendor `exit` -> `#exit`, pinned 55649/728); and (when
+#      gated (exactly one vendor `exit` -> `#exit`, the pid file checked by ps, pinned 28819/967); and (when
 #      a staged tree is present) that the staged unit matches the pins with NO
 #      live `exit`. Negative fixtures prove the link-topology and live-exit
 #      checks fire.
@@ -4460,7 +4460,7 @@ FT_PINS = {                      # staged-file fingerprints: (sum -r, bytes)
 SYSLOG_PINS = {
     "syslog/syslog.conf": (63870, 1928),
     "syslog/syslogd": (53154, 22728),
-    "syslog/syslogd.init": (55649, 728),
+    "syslog/syslogd.init": (28819, 967),
 }
 
 
@@ -4701,7 +4701,8 @@ def audit_syslog_unit():
         fail("could not locate the zen0 guard block to prove the syslog laydown is unconditional")
 
     # R4: the STAGING transform + pins in build-install-iso.sh -- one vendor
-    # `exit` pre-gated, transformed to `#exit`, verified, and pinned 55649/728;
+    # `exit` pre-gated, transformed to `#exit`, verified, the pid file trusted only when
+    # `ps -p` shows a syslogd (stale-pid fix), and pinned 28819/967;
     # conf + daemon pinned too.
     if not os.path.isfile(ISO_BUILDER):
         fail("build-install-iso.sh missing -- cannot check the syslog staging")
@@ -4712,8 +4713,10 @@ def audit_syslog_unit():
             (r"sed 's/\^exit\$/#exit/'", "comments the vendor `exit` (the §5 enablement) host-side"),
             (r"grep -q '\^exit\$' \"\$STAGE/syslog/syslogd\.init\"",
              "verifies NO live `exit` survives the transform"),
-            (r'sum_gate\s+"\$STAGE/syslog/syslogd\.init"\s+55649\s+728',
-             "pins the ENABLED init 55649/728"),
+            (r'sum_gate\s+"\$STAGE/syslog/syslogd\.init"\s+28819\s+967',
+             "pins the ENABLED init 28819/967"),
+            (r"s=`ps -p \$pid 2> /dev/null \| grep syslogd`",
+             "trusts /etc/syslog.pid only when ps shows a syslogd (an earlier boot's pid can be any process)"),
             (r'sum_gate\s+"\$STAGE/syslog/syslog\.conf"\s+63870\s+1928',
              "pins syslog.conf 63870/1928"),
             (r'sum_gate\s+"\$STAGE/syslog/syslogd"\s+53154\s+22728',
