@@ -3,7 +3,8 @@ Subject: dlm_init: the platform's registrations leave the core
 dlm_init() registered ashnazag's guest major 59 (cpmguest) and called its
 ds_modinit; the Amix kernels have neither.  What a platform registers at
 boot belongs in its plat_dmainit(), which dmainit() already calls after
-dlm_init() (weak and empty in dlm_cache.s).  Upstream would carry the two
+dlm_init() (weak and empty in dlm_cache.s until patch 0013; since then
+only core/plat defines it).  Upstream would carry the two
 calls in its own platform file (kernel/amiga/amigadlm.c there); ours are
 core/plat/k30 and core/plat/k46.  30-module-core.md section 2, patch 1.
 
