@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-5 amended from the stations' readings; C4-2 v2, the A4770 key (a2e9a0b, 3233b48)
+
+C4-5: one arm site (the A4091's DSA-table data address, taken by dma_addr after prepare; the A3091's two stay stock on
+k46); k46 dma_alloc is kernel memory under the DTT0 identity map (Zorro III bus masters reach it, metal-proven by the
+A4092 root rows); k30 bounces 16-byte aligned and line-rounded; a module's chip-visible statics (~1.3 KiB for the A4091)
+move to one dma_alloc area. Waits only on §5 (the k30 pool's origin, kerntools). C4-2 v2: the A4091 row gains
+zorro:c0de:02 (A4770, untested on hardware); the A4091 is synchronous and polled in v1, INT2 via root_defer later;
+per-card arrays a constant 4; the A4092 needs the unsigned-autocon fix in every K family.
+
 ## 2026-10-26 — 30 §6 cdfs boot class; S4-72-1's measured failure line; C4-5 draft, DDI v1.1 DMA (477d583, 1714b41, 64268c5)
 
 C4-5 (agreed apart from §5): dma_prepare/dma_complete and struct dma_rec adopted unchanged from the port's
