@@ -13,10 +13,13 @@
 # it (C2-2, C2-3, C2-4). Nothing here frames a kernel or writes a loader by hand.
 #
 # THE MEDIUM (/install/l11, tools/build-install-iso.sh):
-#   bin/kbootset   the box kbootset (GCC 14, static; amix-dlm `make box`)
 #   bin/apkg       apkg 0.3, static, FILE+RAW (amix-packagemanager)
-#   loader/boot1 loader/boot2   the amix-dlm loader (`kbootset create` lays it)
-#   kpkg/catalog kpkg/pkgs/kernel/*.pkg   the FILE source (#ext kpkg 1 block)
+#   kpkg/catalog kpkg/pkgs/...   the FILE source: the packages kbootset (userland) and
+#                  loader-amix and the kernel (kernel space, the #ext kpkg 1 block), as
+#                  amix-packages mints them. They are installed like any package, so the
+#                  box carries their records and `apkg upgrade` reaches all three; the
+#                  store is laid by the INSTALLED /sbin/kbootset from the INSTALLED
+#                  /stand/loader files -- one copy of each, the package's.
 #   updbootpart    the shim laid at /usr/sbin/updbootpart (payload/updbootpart-l11)
 #   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
 #   bcheckrc bcheckrc.stock   /sbin/bcheckrc with `kbootset retry` before each root
@@ -35,8 +38,8 @@
 #   KBOOTSET_ROOTREC     the manifest's root record; derived from the root key when empty
 
 L11=$INST/l11
-L11_KB=$L11/bin/kbootset
 L11_APKG=$L11/bin/apkg
+L11_BASE_KPKGS="kbootset loader-amix"	# installed with the kernel, every 1.1 disk
 L11_STORE_MB=64
 L11_STORE_BYTES=67108864
 
@@ -44,8 +47,7 @@ L11_STORE_BYTES=67108864
 # after the profile is loaded.
 l11_keys()
 {
-	for _f in "$L11_KB" "$L11_APKG" "$L11/loader/boot1" "$L11/loader/boot2" \
-		"$L11/kpkg/catalog" "$L11/updbootpart" \
+	for _f in "$L11_APKG" "$L11/kpkg/catalog" "$L11/updbootpart" \
 		"$L11/bcheckrc" "$L11/bcheckrc.stock"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
@@ -214,17 +216,11 @@ l11_bootstore()
 	stage ""
 	stage "Installing the kernel and writing the boot store."
 	run mkdir -p "$TARGET/var/kbootset"
-	KB="$L11_KB -R $TARGET --dev $BOOT_RAW --journal $TARGET/var/kbootset/journal"
-	# the store first: kbootset lays it over whatever the slice held -- a 1.0 chain,
-	# an earlier store, a 1.0 root's tail -- and with --force zeroes the first 64 KiB
-	# itself (C2-4 v6 §8); its set id is what `status` prints, for bootset's store-id=
-	run "$L11_KB" --dev "$BOOT_RAW" create "$L11_STORE_BYTES" "$L11/loader/boot2" --boot1 "$L11/loader/boot1" --force
-	"$L11_KB" --dev "$BOOT_RAW" status > /tmp/.l11st 2>&1
-	L11_STORE_ID=`( while read _a _b _r; do [ "$_a" = store-id: ] && echo "$_b"; done ) < /tmp/.l11st`
-	rm -f /tmp/.l11st
-	[ -n "$L11_STORE_ID" ] || die "kbootset status names no store-id for the new store on $BOOT_RAW"
-	# bootset=manual while the kernel package goes in: apkg's trigger then only
-	# prints the commands, and the store is composed below with the facts named
+	# bootset=manual while the packages go in: apkg's trigger then only prints the
+	# commands, so neither the loader nor the kernel package commits anything, and the
+	# store gets exactly one generation, the pristine one, composed below. Its store-id=
+	# is filled in once the store exists.
+	L11_STORE_ID=
 	l11_bootset manual
 	KCONF="$TARGET/tmp/kpkg.conf"
 	{
@@ -233,18 +229,33 @@ l11_bootstore()
 		echo "cachedir=$TARGET/tmp/kpkgcache"
 		echo "admin=$INST/admin/pkgadd"
 		echo "pkgadd=$INST/bin/pkgadd"
-		echo "kbootset=$L11_KB"
+		echo "kbootset=$TARGET/sbin/kbootset"
 	} > "$KCONF" || die "cannot write $KCONF"
 	run "$L11_APKG" -c "$KCONF" update
-	l11_apkg -c "$KCONF" -R "$TARGET" install "$KERNEL_KPKG"
-	# the record is named by the pkginst (C2-2 v4 §2), its `name` line by the catalog name
-	KPKG_INST=`l11_kpkg_inst "$KERNEL_KPKG"`
-	[ -n "$KPKG_INST" ] || die "the medium's catalog has no #kpkg row for $KERNEL_KPKG"
-	_rec="$TARGET/var/apkg/kpkg/$KPKG_INST"
-	[ -f "$_rec" ] || die "apkg installed $KERNEL_KPKG but wrote no record /var/apkg/kpkg/$KPKG_INST -- kbootset gate 1 would refuse"
-	_rn=`( read _k _v _r; [ "$_k" = name ] && echo "$_v" ) < "$_rec"`
-	[ "$_rn" = "$KERNEL_KPKG" ] || die "/var/apkg/kpkg/$KPKG_INST names '$_rn', not $KERNEL_KPKG"
-	msg "kernel package $KERNEL_KPKG installed; record /var/apkg/kpkg/$KPKG_INST"
+	# one transaction: kbootset, the loader and the kernel
+	l11_apkg -c "$KCONF" -R "$TARGET" install $L11_BASE_KPKGS "$KERNEL_KPKG"
+	l11_kpkg_record loader-amix
+	l11_kpkg_record "$KERNEL_KPKG"
+	[ -f "$TARGET/var/sadm/pkg/kbootset/pkginfo" ] || die "apkg installed kbootset but the package database has no kbootset"
+	msg "packages     : kbootset, loader-amix and $KERNEL_KPKG installed by apkg (records under /var/apkg/kpkg)"
+
+	# the store, by the INSTALLED kbootset from the INSTALLED loader files: it lays the
+	# store over whatever the slice held -- a 1.0 chain, an earlier store, a 1.0 root's
+	# tail -- and with --force zeroes the first 64 KiB itself (C2-4 v6 §8); its set id
+	# is what `status` prints, for bootset's store-id=
+	KBX="$TARGET/sbin/kbootset"
+	[ -x "$KBX" ] || die "the kbootset package laid no executable $KBX"
+	_lv=`( while read _l; do case "$_l" in version=*) expr "$_l" : 'version=\(.*\)' ;; esac; done ) < "$TARGET/stand/loader/ldrinfo"`
+	is_num "$_lv" || die "the loader package's /stand/loader/ldrinfo names no version"
+	KB="$KBX -R $TARGET --dev $BOOT_RAW --journal $TARGET/var/kbootset/journal"
+	run "$KBX" --dev "$BOOT_RAW" create "$L11_STORE_BYTES" "$TARGET/stand/loader/boot2" \
+		--boot1 "$TARGET/stand/loader/boot1" --version "$_lv" --force
+	"$KBX" --dev "$BOOT_RAW" status > /tmp/.l11st 2>&1
+	L11_STORE_ID=`( while read _a _b _r; do [ "$_a" = store-id: ] && echo "$_b"; done ) < /tmp/.l11st`
+	rm -f /tmp/.l11st
+	[ -n "$L11_STORE_ID" ] || die "kbootset status names no store-id for the new store on $BOOT_RAW"
+	l11_bootset manual
+	msg "boot store   : laid by the installed kbootset with the loader package's boot1/boot2 (version $_lv), store-id $L11_STORE_ID"
 
 	l11_kb build --line "$L11_LINE" --bootdev "$KBOOTSET_BOOTDEV" --rootdev "$KBOOTSET_ROOTDEV" \
 		--rootfs "$TARGET_ROOT_FSTYPE" --mem "$L11_MEM" --root "$KBOOTSET_ROOTREC"
@@ -262,10 +273,6 @@ l11_bootstore()
 	rm -f "$TARGET/dev/kinfo"
 	run /bin/mknod "$TARGET/dev/kinfo" c 53 0
 	run chmod 0444 "$TARGET/dev/kinfo"
-	# the installed box gets the same kbootset (a driver-written file until the
-	# kbootset package exists, C2-3 §4) and the final bootset file
-	run cp "$L11_KB" "$TARGET/sbin/kbootset"
-	run chmod 0755 "$TARGET/sbin/kbootset"
 	# updbootpart would frame a 1.0 chain over the store: on this disk it is the shim
 	# that refuses and names kbootset (spec 40 §2.2, P-28 D54)
 	[ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
@@ -275,7 +282,7 @@ l11_bootstore()
 	l11_markgood
 	l11_bootset auto
 	rm -rf "$TARGET/tmp/kpkgcache" "$KCONF"
-	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /sbin/kbootset, /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
+	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
 }
 
 # l11_bcheckrc FILE -- FILE becomes the medium's bcheckrc, with `kbootset retry`
@@ -323,6 +330,19 @@ l11_markgood()
 	} > "$TARGET/etc/rc2.d/S99zkbootset" || die "cannot write $TARGET/etc/rc2.d/S99zkbootset"
 	run chmod 0744 "$TARGET/etc/rc2.d/S99zkbootset"
 	msg "mark-good    : /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
+}
+
+# l11_kpkg_record NAME -- the kernel-space record of NAME: /var/apkg/kpkg/<pkginst>
+# (C2-2 v4 §2), whose `name` line is NAME; refuses to go on without it
+l11_kpkg_record()
+{
+	_pi=`l11_kpkg_inst "$1"`
+	[ -n "$_pi" ] || die "the medium's catalog has no #kpkg row for $1"
+	_rec="$TARGET/var/apkg/kpkg/$_pi"
+	[ -f "$_rec" ] || die "apkg installed $1 but wrote no record /var/apkg/kpkg/$_pi -- kbootset gate 1 would refuse"
+	_rn=`( read _k _v _r; [ "$_k" = name ] && echo "$_v" ) < "$_rec"`
+	[ "$_rn" = "$1" ] || die "/var/apkg/kpkg/$_pi names '$_rn', not $1"
+	return 0
 }
 
 # l11_kpkg_inst NAME -- the pkginst of catalog entry NAME on the medium: its pkginst=

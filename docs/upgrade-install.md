@@ -22,12 +22,22 @@ The installer:
    Afterwards it checks there is exactly one `UNI\0`, counting PART blocks by
    their DosType.
 2. installs the medium's package set as for 1.0.
-3. installs the kernel as a kernel-space package. The static apkg 0.3 on
-   `/install/l11` takes it from the medium's FILE catalog (`#ext kpkg 1`), and
-   its record lands in `/var/apkg/kpkg/<name>`. `/etc/default/bootset` says
-   `bootset=manual` meanwhile, so apkg's trigger only prints the commands.
-4. runs the medium's box kbootset:
-   - `create 67108864 boot2 --boot1 boot1 --force` lays the amix-dlm loader over
+3. installs, in one apkg transaction, the three packages every 1.1 disk carries:
+   - `kbootset` (userland, `/sbin/kbootset`);
+   - `loader-amix` (kernel space, `/stand/loader/{boot1,boot2,ldrinfo}`);
+   - the profile's kernel (`KERNEL_KPKG`: `kernel-k30-u` or `kernel-k46-z`,
+     `/stand/k30|k46/{unix,kabi}`).
+
+   The static apkg 0.3 on `/install/l11` takes them from the medium's FILE
+   catalog, as amix-packages mints them. The box therefore carries a record for
+   each and `apkg upgrade` reaches all three: the kernel-space records are
+   `/var/apkg/kpkg/<pkginst>` (C2-2 v4), and kbootset is in the package database.
+   `/etc/default/bootset` says `bootset=manual` meanwhile, so apkg's trigger only
+   prints the commands. Neither the loader nor the kernel commits anything, and the
+   store gets exactly one generation, the pristine one, in step 4.
+4. runs the INSTALLED `/sbin/kbootset` (the package's; there is no other copy):
+   - `create 67108864 /stand/loader/boot2 --boot1 /stand/loader/boot1 --version
+     <ldrinfo's> --force` lays the loader package's bytes over
      whatever the slice held; `--force` makes kbootset zero the first 64 KiB itself
      (C2-4 v6 §8). `status` then prints the store's set id, which goes into
      `store-id=`;
@@ -42,7 +52,6 @@ The installer:
    - `check` is the post-write proof (status 1 means a problem was found).
    Any non-zero status stops the install before anything is armed.
 5. lays the following on the target:
-   - `/sbin/kbootset`;
    - `/etc/default/bootset` (C2-4 §6: `bootset=auto`, `store=`, `store-id=`, the facts);
    - `/dev/kinfo` (c 53 0, 0444; first boot gives it group sys);
    - the `updbootpart` shim, which refuses and names kbootset;
@@ -136,7 +145,10 @@ clock-plausibility rule of spec 40 §7 is not implemented).
 
    A 1.1 disk keeps its RDB: s1 is re-made and s4 kept. Its s2 is both the stash
    and the swap, so no swap is added until the restore.
-3. **Install** the base set as usual.
+3. **Install** the base set and the three packages as on a fresh disk, so an
+   upgraded disk carries the same records (kbootset, loader-amix, the kernel) as a
+   fresh one. `/var/apkg` and the package database are not part of the saved set:
+   they describe the new install.
 4. **Restore**, before the store is written:
    - the archive is read through the whole-disk node at the old slice's block,
      and must give back its `sum -r`;
