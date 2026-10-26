@@ -3,6 +3,18 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — modtools -4 (inittab scripts safe on the 1991 sh), loader-amix -4, z3660eth 1.0.0-2 with /dev/zen0, kbootset -13, dlmkit -3 (2676d36..22efd2f) — not published
+
+modtools -3's postinstall wiped /etc/inittab on Amix 2.1: that sh's `read` keeps its input buffer across `exec <file`. In -4
+the script's own shell never runs `read` — each read is in a child (a backquote or a redirected while-read) with one
+redirection; no exec, no IFS change; cat and dd copy the bytes (the line goes after an initdefault line 1, else first);
+preremove cuts a line-1/line-2 dlm line out with dd; a size check refuses before every mv; cat, ls, dd and expr (all on the
+miniroot) are required. On core's inittab the result equals the installer's expected file (md5 7c952cc3). build.sh rejects
+the forbidden constructs. modadmin unchanged (a206874d); datastream 48be0b90 / 59392 B. loader-amix -4: boot2 e36c1c55 (binds
+below 0x40000000), loader=2. z3660eth-k30/-k46 1.0.0-2: /dev/zen0 c 51 0 as a pkgmap device entry, objects unchanged. kbootset
+-13: e56172b6 (read-only-medium boot). dlmkit30/46 -3 at b6b4b87: sys/monsw.h; k46 PORT_REV ebe8dfd. Round trip on
+packagemanager 124c329: 102/102; catalog md5 d3bca155.
+
 ## 2026-10-26 — kernel licence audit; kpkgroll device entries for module packages (96eaf7a, d5ffff2) — not published
 
 Every kernel package's copyright carries the licence of each repository its cut links (pin.sh lists them by sha256):
