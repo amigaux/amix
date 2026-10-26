@@ -20,10 +20,15 @@
 #                             loader refuses it with L9
 #               noarena.spec  the same kernel as a version-1 generation (no
 #                             arena, no ident): the core finds no arena
-# Writes OUTDIR/stand/<line>/{unix,kabi}, OUTDIR/var/apkg/kpkg/kernel-s3standin
+# Writes OUTDIR/stand/<line>/{unix,kabi}, OUTDIR/var/apkg/kpkg/$RECNAME
 # and, with ROOTREC, OUTDIR/l9.spec and OUTDIR/noarena.spec.
+#
+# RECNAME (environment, default kernel-s3standin) names the record file.
+# On a vehicle that already has a kernel record for the line, give that
+# record's name (the k30 installer disk: RECNAME=kern30u), so the copied
+# tree replaces it: gate 1 refuses a path two records name.
 set -e
-KERNEL=$1 SIDECAR=$2 OUT=$3 ROOTREC=$4
+KERNEL=$1 SIDECAR=$2 OUT=$3 ROOTREC=$4 RECNAME=${RECNAME:-kernel-s3standin}
 [ -n "$OUT" ] || { echo "usage: s3-standin.sh KERNEL SIDECAR OUTDIR [ROOTREC]" >&2; exit 2; }
 sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
@@ -39,8 +44,8 @@ cp "$KERNEL" "$OUT/stand/$LINE/unix"
 	echo "size=$(size "$OUT/stand/$LINE/unix")"
 	echo "sha256=$(sha "$OUT/stand/$LINE/unix")"
 } > "$OUT/stand/$LINE/kabi"
-cat > "$OUT/var/apkg/kpkg/kernel-s3standin" <<EOF
-name kernel-s3standin
+cat > "$OUT/var/apkg/kpkg/$RECNAME" <<EOF
+name $RECNAME
 version 0.0.0
 role kernel
 line $LINE

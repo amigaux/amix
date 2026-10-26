@@ -1,6 +1,7 @@
-# C3-1 — the module object and `.moddata` version 2, version 1
+# C3-1 — the module object and `.moddata` version 2, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+  (2026-10-26): the text form of parameter values (§3). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
 - **Produced by:** the ABI kit's `mkmod` and `modfix` (S3-10), used by the
@@ -86,6 +87,20 @@ offset 8   ...       NUL-terminated "key=value" strings, ending with an empty st
 | `tier` | `ddi` (the default) or `core` (C3-2 §4) | no | core |
 | `build` | the kernel build id a core-tier module was built with (C2-3 `build=`) | when `tier=core` | core, `kbootset` |
 | `desc` | one line | no | tools |
+
+**Parameter values** (the same text in `.moddata`'s default, the
+manifest's `param` record and the string `_load` receives):
+
+| Type | Text |
+|---|---|
+| `int` | decimal, an optional `-`; `min` and `max` bound it |
+| `hex` | `0x` and hexadecimal digits; `min` and `max` bound it |
+| `bool` | exactly `0` or `1` |
+| `str` | one word: no space and no NUL (`_load`'s string separates parameters with spaces), at most 63 bytes |
+
+A module's parser may accept more spellings than these (a driver may
+read `yes` as 1), but nothing it is given in the manifest or by the core
+is ever other than the forms above: `kbootset` normalizes (C3-5 §2).
 
 `tier` and `build` are additions to 20 §2's table. The core tier's modules
 carry the kernel build id (20 §4.1), and this is where it goes. 20 §2

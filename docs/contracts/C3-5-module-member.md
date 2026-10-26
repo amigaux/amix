@@ -1,6 +1,8 @@
-# C3-5 — the module package and the per-module manifest record, version 1
+# C3-5 — the module package and the per-module manifest record, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Every consumer
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+  (2026-10-26): what `kbootset` accepts and writes for a parameter value
+  (§2). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -47,6 +49,12 @@ the gate, when:
 
 **Parameters:** each parameter the module declares (`param`, C3-1) takes
 its default, then `modreg.d`'s value, then `modreg.local.d`'s.
+`kbootset` writes the value in C3-1 §3's form only. On input
+(`modreg.d`, `modreg.local.d`) it accepts for a `bool` `0`/`1`,
+`yes`/`no`, `true`/`false` and `on`/`off` (lowercase), and writes `1` or
+`0`; for an `int` or `hex`, the number in either form, written in the
+declared one. Anything else is refused at gate 2, naming the module, the
+parameter and the value.
 
 ## 3. The manifest records
 

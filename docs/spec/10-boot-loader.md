@@ -564,6 +564,18 @@ path calls `kbootset retry` (`40-generations-and-composer.md` §3.3) just
 before it reboots. That gives the booted trial its attempt back, at most
 twice per trial, and the next boot tries the trial again.
 
+**A trial refused before it starts spends its attempt too** (L1, L2, L3,
+L6, L9, L14). The attempt is written before boot2 reads anything of the
+generation, and on purpose: a trial that hangs or crashes the loader
+itself must still fall back on the next boot. So a trial boot2 refuses
+keeps `trial`, attempt 1, for the rest of that boot (`kbootset status`
+shows `trial`, 1 attempt), and the next boot marks it `bad` with L8. The
+refusal line of the boot that spent it says why (for example
+`amix-boot: L9 generation needs a newer loader (generation 2)`), and that
+line, not L8's wording, is the reason of record. In normal use kbootset's
+gates keep such a generation out of the store (gate 7 for L9, gate 10 for
+L1); only `kbootset commit --spec`, which runs no gates, can put one there.
+
 When the chosen generation cannot be loaded (L2, L3, L6), boot2 tries in
 this order: the default generation, the other good generations newest first,
 the pristine generation, then the menu.

@@ -107,9 +107,13 @@ program against an image file, so media and boxes cannot drift).
 5. **Store space:** the new generation does not fit the free store space
    without deleting a member of the kept set. A module kernel carries its
    arena as zeros in `.data` (0x60000 in stage 3, M-MOD1), so its file is
-   larger than the static family's: 2.4 MB on k46, 1.7 MB on k30. A store
-   of 4 MiB holds a static generation and one module generation of either
-   line and no third. The installer's 64 MiB stores hold many.
+   larger than the static family's: 2.4 MB on k46, 1.7 MB on k30.
+   kbootset writes disk-store members raw (10 §5.5). So a 4 MiB store
+   holds one module generation only beside a deflated static generation
+   (as `mkstore` writes a vehicle's generation 1 with deflate), not beside
+   a raw one: a raw KD060-Z generation 1 (1 998 273 bytes) and the k46
+   module kernel (2 426 952 bytes) do not fit. The installer's 64 MiB
+   stores hold many.
 6. **Memory:** fast memory on the box is below about twice the kernel plus
    arena plus RAM-disk image (`amix-kerntools/docs/k0-families.md:1126-1128`).
 7. **Loader:** the installed loader's version is below the generation's
