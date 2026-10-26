@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — monsw: a config that is not a number stays unset (6c407b7)
+
+A `config` parameter that is not a number is left unset: one console line "monsw: config '<text>' is not a number; unset",
+and root's MONSWIOC_SETCFG stays open (the seed and SETCFG order applies). A decimal that is not a valid bit sum is still
+forced, reported once and taken as 0 (SETCFG EBUSY). Host test 96 checks. Objects k30 01a40342, k46 2c2760e9 (5197 B).
+
 ## 2026-10-26 — monsw: the console monitor switch as a module for k30 and k46 (b954ce9)
 
 The source comes from amix-040-060-port ab53a85 src/monsw.c with the module glue under MONSW_MODULE; the static object is
