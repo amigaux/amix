@@ -539,7 +539,7 @@ time than it costs to decode.
 | CPU probe result, `AttnFlags` | both, for diagnosis |
 | boot device | device name hash, unit, partition start, board base and id (the RTH1 match result, plus the start, so `kbootset` finds its own boot slice without an RDB scan, `40-generations-and-composer.md` §5) |
 | generation id, state as booted | `good`, `trial`, `pristine`, `chosen-in-menu`, `one-shot` |
-| flags | safe mode, menu used, try-once fallback taken, store read-only, **development load** (§7.4) |
+| flags | safe mode 0x01, menu used 0x02, try-once fallback taken 0x04, **read-only medium 0x08**, **development load** 0x10 (§7.4). 0x08 is set for every boot from a read-only medium, the CD (`amix-cdboot`, which also gives no boot device: unit 0xFFFFFFFF) and the floppy pair: the generation booted is the medium's, not one of the box's own store, and `kbootset` acts on that (C2-4 §13) |
 | root selector | kind (`sd` or `ramdisk`); for `sd`: controller id, board base, unit, **slice**; from the manifest's `root` line |
 | swap selector | `sd` (id, base, unit, slice) or `none` |
 | root filesystem type | from the manifest; the kernel sets `rootfstype` from it so `vfs_mountroot` tries only that type |

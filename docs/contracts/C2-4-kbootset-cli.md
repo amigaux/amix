@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 9
+# C2-4 — `kbootset` as a called program, version 10
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -280,4 +280,35 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
   `status` itself writes nothing.
 - **The installer** (S3-31) removes the name `/stand/unix` from the
   target (`/stand/2.1_unix` stays) and installs `S01kbnamelist`.
+
+## 13. A boot from a read-only medium (CD, floppy pair)
+
+A CD (`amix-cdboot`, 10 §4.4) or a floppy pair boots a generation of the
+medium. On a box that has a store of its own, that store did not boot,
+and its generation of the same id is another generation. kinfo's loader
+record says so: AXL1 flag 0x08, a read-only medium (10 §6); the CD also
+gives no boot device (unit 0xFFFFFFFF).
+
+- **`mark-good`** marks nothing: `kbootset: booted from a read-only medium
+  (generation N of a CD|a floppy pair): nothing to mark`, exit 0. It still
+  writes the namelist as below.
+- **`retry`** does nothing and prints nothing (exit 0): no trial of the
+  box's store booted.
+- **`namelist`** cannot read the medium's kernel (the medium is not this
+  box's store), so it takes the line's installed kernel. It does so only
+  when the installed sidecar's `build=` is kinfo's build id. Then the
+  kernel bytes are `/stand/<line>/unix` (and `unix.sym` for a `brel`),
+  with the same layout check against kinfo's bootdata block. It prints
+  `kbootset: namelist /stand/unix written for the medium's kernel
+  (<build>), bound at 0x<addr>`, or `… is current`. Otherwise it prints
+  `kbootset: no namelist: booted from a read-only medium whose kernel
+  (<build>) is not the one installed here (<build>)`, exit 3.
+- **`status`** prints `booted: generation N of a read-only medium (a
+  CD|a floppy pair), not of this box's store; kernel <build>, …` and
+  kinfo's loaded-module count, in place of the booted-generation and
+  member lines. Its namelist line reads `namelist: /stand/unix is the
+  medium's kernel's (<build>), bound at 0x<addr>`. The store found (40 §5)
+  is listed as on any boot. None of its generations is the booted one.
+- `build`, `commit` and the other commands compose for the box's own store
+  as on any boot.
 
