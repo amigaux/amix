@@ -71,6 +71,13 @@
  * docs/BLIZZARD-F3.md) is still owed.  With no board, autocon() returns 0 and the
  * I/O fails gracefully, just like the A4091 driver when no A4091 is present.
  *
+ * Built with -DZ3660SCSI_MODULE the same source is the root-class loadable
+ * module z3660scsi (amix-dlm contracts C4-1, C4-2; the section at the end of
+ * this file): _load probes the board polled in the root pass and registers it
+ * with sd_register(); the sd.c probe hook z3660present() and the empty
+ * z3660intr() are not in the module.  Without the switch this file is the
+ * static driver, byte for byte.
+ *
  * Refs: repo/z3660-drivers/scsi/{z3660_scsi.c,z3660_scsi_enums.h},
  *       repo/KNOWN_ISSUES.md, ../amix-a4091/src/a4091-wr.c (Amix framework).
  */
@@ -83,6 +90,10 @@
 					 * resolves to test/host/stubs/sys/inline.h. */
 #include	"rico.h"
 #include	"sd.h"
+#if	defined(Z3660SCSI_MODULE) && !defined(HOST_TEST)
+#include	"sys/moddefs.h"		/* the ABI kit's wrapper (amix-dlm C3-1, C4-2) */
+#include	"sys/amixddi.h"		/* the kit's DDI: sd_register (C4-1) */
+#endif
 
 #define	Z3660_PROD	0x144B0001	/* autocon pc = (manufacturer<<16)|product */
 #define	Z3660_FIXED	0x10000000	/* combo window base when not autoconfigured */
@@ -1050,8 +1061,10 @@ z3660map()
 		unless (found) {
 			regs = 0;		/* fixed base: open bus, not a piscsi window */
 			z3660_present = 0;
+#ifndef	Z3660SCSI_MODULE	/* the module's ENXIO is silent (C4-2 section 2) */
 			if (z3660_sig_fails == 1)
 				printf( "z3660: no piscsi mailbox at 0x%x\n", (int)bp);
+#endif
 			return ENXIO;
 		}
 		/* AutoConfig found it; the mailbox is not answering yet */
@@ -1086,6 +1099,7 @@ z3660map()
 	return 0;
 }
 
+#ifndef	Z3660SCSI_MODULE	/* the module registers from z3660scsi_load */
 /*
  * sd.c probe hook (see templates/sd.c.in @DRIVER_PROBES@): register the card
  * even when autocon() knows nothing about it.  Returns 1 and the board base
@@ -1105,6 +1119,7 @@ char	**ap;
 	*ap = (char *)board_phys;
 	return 1;
 }
+#endif	/* !Z3660SCSI_MODULE */
 
 /*
  * ---------------------------------------------------------------------------
@@ -1908,7 +1923,97 @@ struct sdcom	*cp;
 	return TRUE;
 }
 
+#ifndef	Z3660SCSI_MODULE
 void
 z3660intr()
 {
 }
+#endif
+
+#ifdef	Z3660SCSI_MODULE
+/* ----------------------------------------------------------------------------
+ * The root-class module form (amix-dlm docs/contracts/C4-2-root-class-driver.md
+ * version 1, C4-1 version 2).  Built with -DZ3660SCSI_MODULE once per kernel
+ * line (k30, k46); module/Master gives the .moddata keys: class=root,
+ * match=zorro:144b:01,mobo:z3660-window, rank=z3660, unload=never, no majors
+ * (sd owns the disk majors, C4-2 section 1).
+ *
+ * _load runs in marc_root: process 0, inside rth1_mountroot, before the root
+ * is mounted, at LEVEL 7 WITH THE CLOCK STOPPED (C4-2 section 2).  What it
+ * does there is z3660present()'s work and nothing more: z3660map() -- autocon()
+ * first, the fixed base 0x10000000 only on AGA, the ZS-02 signature, the
+ * attach-time unit sweep -- all of it polled register reads and writes, every
+ * write armed (ZS-05), then one sd_register().  It allocates no memory (the
+ * driver's state is its own .data/.bss), sleeps on nothing, sets no timeout,
+ * waits for no interrupt and opens no file.  It does NOT take the mailbox
+ * bracket (z3660_enter()): spl6 is an absolute move to IPL 4, and here it
+ * would LOWER the level from 7; at level 7 no clock callout can nest a
+ * transaction, which is all the bracket is for.  The board has no interrupt
+ * (the piscsi mailbox is synchronous), so root_defer() is not called.
+ *
+ * One board at most: the Z3660 is the CPU card, and the driver's state (regs,
+ * bounce, the geometry cache) is single-instance, so c is always 0.
+ * Returns 0 linked; ENXIO with no board, silently (no console line: an ECS or
+ * OCS machine, or an AGA one whose fixed window has no piscsi mailbox);
+ * ENOMEM when the high window cannot be mapped (z3660map names it), EIO from
+ * the cache-inhibit assertion (z3660_cache 40/60 only), or sd_register()'s
+ * errno (EBUSY, EINVAL, ENOSPC), which the core prints.  An AutoConfig board
+ * whose mailbox does not answer the signature yet is registered with the
+ * sweep deferred, as the static driver attaches it.
+ *
+ * What the root pass cannot do and this module therefore never does there:
+ * sleep, timeout(), delay(), a KM_SLEEP allocation, an interrupt self-test,
+ * file I/O.  After _load, sd's first open (rth1_apply, still in the root pass)
+ * calls z3660queue(), whose spl6 bracket moves the level to 4 and back for each
+ * transaction, exactly as the static driver does at the same point.
+ * ------------------------------------------------------------------------- */
+
+#define	Z3660SCSI_RANK	1	/* C4-1 section 4: class 1 z3660 = .moddata rank=z3660 */
+
+extern int	sd_register();	/* (bool (*)(), uint, char *, char *, uint) */
+
+ulong	z3660_halted;		/* kmem-readable: the halt pass ran (count)        */
+ulong	z3660_halt_busy;	/* halt pass found a transaction in flight (never) */
+
+int
+z3660scsi_load( params)
+char	*params;
+{
+	int	e;
+
+	z3660_nest_hits += (z3660_nest_depth != 0);
+	z3660_nest_depth++;		/* the accounting of z3660_enter(), no spl */
+	e = z3660map();
+	z3660_nest_depth--;
+	if (e)
+		return e;
+	e = sd_register( z3660queue, 0, (char *)board_phys, "Z3660 SCSI",
+	    Z3660SCSI_RANK);
+	if (e) {
+		printf( "z3660: sd_register failed (errno %d)\n", e);
+		return e;
+	}
+	return 0;
+}
+
+/*
+ * _halt (C4-2 section 5): leave the mailbox idle.  Every transaction completes
+ * inside z3660queue() under its bracket before it returns -- the doorbell write
+ * is the completion -- so from uadmin's halt pass there is never a command in
+ * flight and nothing to stop.  It therefore touches no register (each access
+ * would be one more mailbox event, ZS-05) and only records that it ran.
+ */
+void
+z3660scsi_halt()
+{
+	z3660_halted++;
+	if (z3660_nest_depth != 0)
+		z3660_halt_busy++;
+}
+
+#ifndef	HOST_TEST
+/* no _unload: unload=never, a root-class module is pinned (C4-2 section 1) */
+MOD_HDRV_WRAPPER(z3660scsi, z3660scsi_load, 0, z3660scsi_halt,
+		"Z3660 SCSI (piscsi mailbox)");
+#endif
+#endif	/* Z3660SCSI_MODULE */

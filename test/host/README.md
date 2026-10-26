@@ -12,8 +12,10 @@ make -C test/host clean
 
 ## What it exercises
 
-Current run: **155 gating assertions passed, 0 failed**, plus 6/6 stretch parity
-against the firmware's CD oracle.
+Current run: **230 gating assertions passed, 0 failed**, plus 6/6 stretch parity
+against the firmware's CD oracle; then `z3660_modtest`, the root-class module
+form (`-DZ3660SCSI_MODULE`, a mock `sd_register`): **11 passed, 0 failed**
+(`module/README.md`).
 
 `z3660queue()` is driven with a hand-built `struct sdcom` and completes
 **in-context**: since a5af58a the driver delivers through `z3660_complete()`

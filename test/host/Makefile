@@ -20,9 +20,12 @@ DRV      := ../../src/z3660.c
 HOST_OBJS := $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_test.o
 OBJS      := $(BUILD)/z3660.o $(HOST_OBJS)
 BIN       := $(BUILD)/z3660_test
+# the root-class module form (-DZ3660SCSI_MODULE): its own driver object
+MOD_OBJS  := $(BUILD)/z3660_mod.o $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_modtest.o
+MOD_BIN   := $(BUILD)/z3660_modtest
 
 .PHONY: all check clean
-all: $(BIN)
+all: $(BIN) $(MOD_BIN)
 
 # The driver: kernel include world + register seam + HOST_TEST.
 $(BUILD)/z3660.o: $(DRV) mock_regs.h stubs/rico.h stubs/sd.h \
@@ -30,6 +33,12 @@ $(BUILD)/z3660.o: $(DRV) mock_regs.h stubs/rico.h stubs/sd.h \
                   stubs/sys/inline.h
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -DHOST_TEST -Istubs -include mock_regs.h -c $(DRV) -o $@
+
+$(BUILD)/z3660_mod.o: $(DRV) mock_regs.h stubs/rico.h stubs/sd.h \
+                  stubs/sys/types.h stubs/sys/immu.h stubs/sys/errno.h \
+                  stubs/sys/inline.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -DHOST_TEST -DZ3660SCSI_MODULE -Istubs -include mock_regs.h -c $(DRV) -o $@
 
 # Harness translation units: plain host code (real system headers).
 $(BUILD)/%.o: %.c mock_piscsi.h
@@ -39,8 +48,12 @@ $(BUILD)/%.o: %.c mock_piscsi.h
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@
 
-check: $(BIN)
+$(MOD_BIN): $(MOD_OBJS)
+	$(CC) $(CFLAGS) $(MOD_OBJS) -o $@
+
+check: $(BIN) $(MOD_BIN)
 	./$(BIN)
+	./$(MOD_BIN)
 
 clean:
 	rm -rf $(BUILD)

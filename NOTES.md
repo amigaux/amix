@@ -1437,3 +1437,46 @@ hazard: same registers, same values, same order.
 to the tripwire firmware's proving boot: with ZS-05 the driver's own phantoms should be 0. The
 HDL fix (capture after the address settles) and the AmigaOS `z3660_scsi.device`, which has the
 same pairs, are the Z3660 repo's.
+
+## 2026-10-26: S4-30 — z3660scsi as a root-class module (C4-2)
+
+**Form.** `-DZ3660SCSI_MODULE` builds `src/z3660.c` as the module `z3660scsi`
+(`module/`: Makefile on the ABI kit's fragment, Master, VERSION 1.0.0-1; `module/README.md`).
+`.moddata`: `class=root`, `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`,
+`unload=never`, no `majors`. Wrapper `MOD_HDRV_WRAPPER` with no `_unload`. The static driver is
+unchanged: `build/mkobj.sh` gives `z3660_040.o` b43e36e7, `z3660_030.o` 0e15a363 as before;
+the module paths are `#ifdef`s (z3660present/z3660intr out, the fixed-base "no piscsi mailbox"
+line out, the wrapper section added at the end).
+
+**`_load` in the root pass** (level 7, the clock stopped): `z3660map()` polled, then one
+`sd_register(z3660queue, 0, board_phys, "Z3660 SCSI", 1)`. It allocates nothing, sleeps on
+nothing, sets no timeout. It does not call `z3660_enter()`: `spl6` is an absolute move to IPL 4
+and would lower the level from 7; the nesting accounting is kept. `ENXIO` is silent. The base
+handed to sd is `board_phys`, the value the static sd probe hook reported, so `sdcardbase()` is
+unchanged. `_halt` touches no register (no transaction is ever in flight between calls, and
+every access is a mailbox event); it counts `z3660_halted`. No interrupt, no `root_defer`.
+
+**One thing for S4-71/S4-72 to watch.** sd's first open runs in the root pass too, and each
+`z3660queue()` transaction there runs at IPL 4 under its `spl6` bracket and returns to 7. The
+static driver does exactly this at the same point today, so it is not new, but it is a level
+below C4-2's "level 7" for the length of each transaction.
+
+**Kit.** Built against the staged dlmkit -6 kits (kabi k30.1.1 / k46.1.1, KIT_REV 96205b6);
+`-fno-common` in the module's CFLAGS turns the driver's diagnostics globals into `.bss`
+definitions (no COMMON warnings). The kit as shipped does not yet build a root-class module:
+its `mkmod` writes no `rank=` key and its `modcheck.py` refuses `class=root` ("root-class modules
+come with stage 4"). That is amix-dlm's to change. With a two-line scratch overlay of both tools
+(mkmod writes `$rank`; modcheck accepts root with a rank) both objects pass every other check:
+image 6764 bytes, file 12988 bytes on each line, scan060 and the 4 KiB page geometry clean on
+k46, undefined `autocon bcopy mod_miscops printf sd_register sptalloc` (+ weak
+`z3660scsi_conf_data`), sections aligned at most 8 with file offsets on their alignment.
+
+**Host harness.** `make -C test/host check`: 230/230 and 6/6 parity as before, plus
+`z3660_modtest` (the module form against the same mock, a mock `sd_register`): 11/11 — ENXIO
+silent on ECS and on an open AGA window; the fixed-base board registers once with the right
+arguments and no spl; the registered queue function runs; `_halt` makes no access; a silent
+AutoConfig board registers with the sweep deferred; ENOMEM and an `sd_register` refusal pass
+back.
+
+**Not done here.** No metal or emulator boot (S4-72's). The package mint (S4-25).
+
