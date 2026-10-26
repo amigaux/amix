@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — C3-3 v6: root= and rootfs= list only what is linked in (the S4-40 k30 calls)
+
+kerntools' K1–K4 all yes (exact-line edits: OPT_SUBEXP, the two vfssw rows, inoinit; tunables stay via master.d; no boot-time
+consumer; modules beside unix.brel, stock bodies hash-checked). Calls: the vfssw rows are deleted, not placeholders (k30's
+vfsinit calls every row's init); a carved kernel omits rootfs= so a generation without the module fails gate 3, not at mount.
+
 ## 2026-10-27 — C4-6 v3: filesystem modules boot class, the rootfs promoted; 30 §6 aligned (a382c41, f2438a6, f50afd8)
 
 One rule for ufs, s5 and cdfs: "a filesystem module is boot class; the generation's rootfs is promoted to a root record"; cdfs is
