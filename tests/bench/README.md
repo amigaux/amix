@@ -591,6 +591,37 @@ above (kabi, 0 modules). The stock media carry no boot store, so
 dd if=/dev/kinfo bs=1 skip=84 count=4 2>/dev/null | od -c     # not "A X L 1"
 ```
 
+### S3-B5 — the first module: z3660eth from the generation (S3-16)
+
+The first composed module generation. The module kernel boots with
+z3660eth as a boot-class member, and the network comes from the module.
+z3660eth goes alone: z3660rtg's `depend=monsw` needs a monsw member, and
+no monsw module exists yet (S3-27).
+
+- **Inputs:** as S3-B1, with `/tmp/kbootset` from amix-dlm at the S3-16
+  commit or later (`make box`), and the module the z3660net station built
+  with the kit (`build/<line>/mod.d/z3660eth`: k46 `e83b097e…`, k30
+  `3628335f…`, 18 397 bytes, kit d197198). Its stand-in package:
+
+```
+sh tests/bench/s3-modpkg.sh <z3660eth> k46 <outdir>          # or k30
+```
+
+- **Vehicle:** a fresh slot copy, as S3-B1's. On the 4 MiB k46 store the
+  module kernel's generation fits only once: so S3-B5 composes the module
+  generation as the first one after generation 1, in place of S3-B1's
+  generation 2. On the k30 disk's 64 MiB store it can follow S3-B1.
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy both trees (s3-standin's and s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
+| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as S3-B1. `build`'s generation has, after the kernel's record, `module z3660eth boot 18397 path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
+| 3 | `kbootset status`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix 2426952 bytes` (k30 `1712168`). On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), then `dlm: boot module z3660eth loaded`. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded`. kinfo: kabi as S3-B1, module count 1 (`0000 0001`) |
+
+If the console says `dlm: boot module z3660eth not loaded: no board
+matches …` or `… error <n>`, the reason is on that line. The row then
+fails, and the number goes in the report.
+
 ### Host rehearsal (2026-10-26)
 
 Both kernels were checked on the host:
