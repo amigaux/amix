@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — ramdisk 1.0.0-1: the root-class RAM disk module (80d8b2e) — builds only against a kit with iodone
+
+Block driver on major 20 (C4-2 §8, C4-3 §4; S4-34). Unit 0 = the loader-placed miniroot from `ramdisk_image` at
+phystokv of its physical address (identity below VSECT1; never allocated or freed; writable). Units 1–2 = kmem scratch
+disks allocated at first open in KM_NOSLEEP pieces ≤ 256 KiB, freed at last close; `size1`/`size2` (default 512/2048 KiB,
+max 16384). Pinned, no _halt, no root_defer; _load calls only ramdisk_image and printf. .text 1544/.data 372/.moddata
+206/.bss 816, file 4630 B, both lines. Host test 81 checks per page size, mutation-checked. Blocked on amix-dlm: `iodone`
+in the DDI (modfix: undefined) and modcheck accepting a block-only driver (drvmajors demands a character major).
+
 ## 2026-10-26 — monsw 1.0.0-2 (b0f75a4)
 
 A packaging release so S3-45 can test `apkg upgrade` of a kernel module: module/VERSION 1.0.0-2; README gains "Size and
