@@ -8,6 +8,8 @@ before any open: board interrupt off, if_detach, unmap — it used to return EBU
 backstop and the sptalloc pages mapped. `make -C module test` runs a host test of the parameter parser (18 cases; no bug
 found). Static objects unchanged. Modules k30 0c5c3580, k46 8356712a. The first module boot's error 22 is the core's
 (a boot-class STREAMS driver gets no slot), not the driver's.
+Module release 1.0.0: module/VERSION holds the package version (`1.0.0-1`, the same on both lines) for
+z3660eth-k30 / z3660eth-k46, pkginst zeth30 / zeth46 (amix-dlm C3-5 v4 §1.1); amix-packages reads it.
 
 ## 2026-10-26 — z3660eth module on kit d197198: one Master, $match added (e510330)
 
