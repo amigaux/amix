@@ -79,7 +79,8 @@ else
 fi
 
 # ---- 2. kernel objects ----
-KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM"
+PIN=gcc-2.7.2.3-8949028	# toolchain.pin
+KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.0\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf; do
 	$KCC -c "$DLM/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
@@ -113,6 +114,8 @@ fi
 for IMG; do
 	K=$(basename "$IMG")
 	W=$B/test/$K
+	case "$K" in K030*|*k30*) KABI=k30.1.0 ;; *) KABI=k46.1.0 ;; esac
+	export DLM_KABI=$KABI DLM_PIN=$PIN	# mkmod's -K and -P
 	rm -rf "$W"
 	mkdir -p "$W"
 	echo "== $K"
@@ -212,8 +215,10 @@ for IMG; do
 	mkdir -p "$N"
 	python3 "$T/mkneg.py" "$M/mod.d/rall" "$N" > "$N/list"
 	asmneg() {	# asmneg name errno what source
-		printf '%s\n\t.data\n\t.globl\t%s_wrapper\n%s_wrapper:\n\t.long\t1,0,0,0,0,0\n' "$4" "$1" "$1" > "$N/$1.s"
+		printf '%s\n\t.data\n\t.globl\t%s_wrapper\n%s_wrapper:\n\t.long\t2,0,0,0,0,0\n' "$4" "$1" "$1" > "$N/$1.s"
 		printf '\t.section .moddata,"aw",@progbits\n\t.balign\t4\n\t.long\t%s_wrapper\n' "$1" >> "$N/$1.s"
+		printf '\t.byte\t0x4d, 0x44, 0x32, 0\n\t.asciz\t"name=%s"\n\t.asciz\t"kabi=%s"\n\t.asciz\t"cc=%s"\n\t.asciz\t"cpu=68020"\n\t.asciz\t"class=demand"\n\t.byte\t0\n' \
+			"$1" "$KABI" "$PIN" >> "$N/$1.s"
 		m68k-cbm-sysv4-as -o "$N/$1.o" "$N/$1.s"
 		m68k-cbm-sysv4-ld -r -o "$N/$1" "$N/$1.o"
 		"$TB/modfix" -p "$1" -m "$1" "$N/$1"
@@ -242,10 +247,10 @@ for IMG; do
 	RT=$W/root/etc/conf/mod.d
 	mkdir -p "$RT"
 	python3 "$T/mkmods.py" "$W/hmods" > "$W/hmods.list"
-	while read n s; do
+	while read n s f; do	# f: modfix flags (-1 for the version-1 refusal case)
 		m68k-cbm-sysv4-as -o "$W/hmods/$n.o" "$s"
 		m68k-cbm-sysv4-ld -r -o "$RT/$n" "$W/hmods/$n.o"
-		"$TB/modfix" -p "$n" -m "$n" "$RT/$n"
+		"$TB/modfix" $f -p "$n" -m "$n" "$RT/$n"
 	done < "$W/hmods.list"
 	if "$B/test-bin/state" "$W/ksym.bin" "$W/root" > "$W/state.log" 2>&1; then
 		pass "$K: state harness: $(tail -1 "$W/state.log")"

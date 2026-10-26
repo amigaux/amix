@@ -30,6 +30,7 @@ against our kernels (M-CORE1).
 |---|---|---|---|
 | 0001 | `trampoline-hold-volatile` | The exec and cdev trampolines set the hold after `setjmp` and read it on the `longjmp` path. ISO C leaves such a variable indeterminate unless it is `volatile`: GCC 2.7.2.3 kept it in memory, but GCC 15 at `-O` put it in a register, and the state harness failed three checks. | not yet (OQ-30.6) |
 | 0002 | `platform-registrations-out-of-dlm_init` | 30 §2 patch 1: `dlm_init` no longer registers ashnazag's guest major 59 or calls its `ds_modinit`. A platform registers in `plat_dmainit()`, which `dmainit()` calls after `dlm_init()`; ours live in `plat/k30/` and `plat/k46/`. | not yet (upstream would move the two calls to its own platform file) |
+| 0003 | `moddata-v2-kabi-pin` | 30 §2 patch 4, contract C3-1. Wrapper revision 2, and `.moddata` version 2 (`MD2\0` plus key=value strings), every key checked. The module is checked against the kernel: its name, kabi family, major and minor, compiler pin, and the build id for the core tier. Root class is refused until the arena load path. The kernel's kabi and pin come from the kernel build (`DLM_KABI`, `DLM_PIN`). `mkmod` writes version 2 (`-K`, `-P`), and `modfix` checks it (`-1` lets the harness's version-1 case through). The state harness and `test/run.sh` gain the C3-1 refusals. | not yet |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order
