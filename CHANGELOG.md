@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — S4-55, the first stage-4 media of record (0c3cc9f) — not published before 1.1
+
+tools/l11-set.conf moves to the current set, every row the live catalog's (9e143d53): amix-dlm 4b7eb3d, kernel-k30-m -04 /
+kernel-k46-m -61 (S4-20), loader-amix -6, kbootset -15, modtools -6, z3660eth -5, monsw -2, dlmkit -5, z3660rtg 1.1.0-1,
+the m4 package, APKG 0.3.2, the syslog unit fixes. Media (tmp/2026-10-26-s4-55): install ISOs k30 992e6811, k46 6eeccf55;
+CD-boot discs k30 8c9c5003, k46 8062eba5 (part 3's recipe, no --bootdev). Four cells PASS 9/9 (syslog unit 4/4); first boots
+on all four disks: syslogd up, conslogging 1, the namelist bound, a kernel line after S70 filed in /var/log/bus-errors.
+
 ## 2026-10-26 — 1.1 media: the m4 package, not Cdev, carries syslogd's m4 (5be4268)
 
 The base carries the stock-derived m4 package (amix-packagemanager b70500c) instead of the whole of Cdev for
