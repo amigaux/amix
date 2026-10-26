@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-21 … 2026-10-26 — r7 (1.0.1) pins and the 1.1 media with kernel modules (d180fcf..513b9c4)
+
+r7: profiles repointed to the cut r7 kernels, cards and configs pinned (Z3660.bin 9994961A), the 1.0.1 ISOs named, notes
+draft with credits. 1.1 (S2/S3 of the module campaign): the 1.1 disk layout with the kernel package and the kbootset store,
+upgrade install of an installed disk (incl. the k46 line), kbootset retry and create --force (C2-4 v5/v6), updbootpart shim
+and kbootset in the repair menu, mark-good from the last rc2 script, kernel-space records by pkginst (C2-2 v4), kbootset and
+loader-amix as apkg packages, APKG 0.3.0 → 0.3.2 installed and gated; build-iso --cd-boot masters the A4091/A4092 bootable
+CD; build-l11-inputs reads the media set from tools/l11-set.conf and says whether a CD boot tree exists. S3-31: the 1.1 media
+carry kernel modules — the module kernel, modtools -5 and the module packages (z3660eth, monsw) in one apkg transaction, the
+dlm inittab line checked, modules composed into the pristine generation, the stale /stand/unix removed and S01kbnamelist laid
+(C2-4 v9 §12), S99zen for the z3660eth module; the bootstore gate checks modules, inittab, S99zen (bench address mapped) and
+the namelist; set = kbootset -14, modtools -5, loader-amix -5, kern30m/kern46m, zeth, monsw, dlmkit -3; four s3dry2 cells PASS.
+
 ## 2026-10-14 — the 68060 matrix cells are an emulated LC060 (f1871f5)
 
 docs/installer.md defines the 060 cells as no FPU plus trapping of unimplemented integer instructions, proven live in the
