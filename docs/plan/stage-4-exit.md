@@ -101,4 +101,5 @@ cells of this ledger.
 
 **Carried to stage 5, not cells here (Q4-5):** S4-60, the 030 line on the
 1.1 release firmware; S4-61, the A4000T's Zorro-dependent rows after its
-repair (an A4092 root, CD boot on metal, the second bus).
+repair (an A4092 root, CD boot on metal, the second bus), with the
+A4091/A4092 module's metal and M-DMA1 rows.
