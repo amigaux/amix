@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -14, modtools -5, dlmkit -3 at c6ad5bd, monsw-k30/-k46 1.0.0-1 (38f9193..5ecf509) — not published
+
+kbootset -14 from amix-dlm c6ad5bd: deflates on the box with its own encoder so `--spec z=deflate` works; /sbin/kbootset
+9acb9add; md5 e30da9aa / 187904 B (supersedes -13, never staged). modtools -5: modadmin 7329e183 (core patch 0024,
+`modadmin -L` prints the kernel's message buffer) with -4's inittab scripts unchanged; md5 c7ae85e0 / 59904 B. dlmkit30/46 -3
+re-pinned to KIT_REV c6ad5bd (monsw.h from amix-modules). New monsw-k30/-k46 1.0.0-1 (monsw30/monsw46) from amix-modules
+c0386d9: /etc/conf/mod.d/monsw (k30 01a40342, k46 2c2760e9), a comments-only modreg, /dev/monsw c 52 0 as a device entry;
+with monsw installed z3660rtg passes gate 3 on both lines. Round trip 106/106; staged catalog md5 2cdf52ae.
+
 ## 2026-10-26 — modtools -4 (inittab scripts safe on the 1991 sh), loader-amix -4, z3660eth 1.0.0-2 with /dev/zen0, kbootset -13, dlmkit -3 (2676d36..22efd2f) — not published
 
 modtools -3's postinstall wiped /etc/inittab on Amix 2.1: that sh's `read` keeps its input buffer across `exec <file`. In -4
