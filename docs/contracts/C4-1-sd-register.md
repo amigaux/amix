@@ -1,8 +1,8 @@
 # C4-1 — `sd_register` and the four-card contract, version 1
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement. Once agreed, other repositories build against this text, and
-  a change is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other
+  repositories build against this text; a change from here is a contract
+  change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
   compacted order, registration, the card-number gate), D-3 §4 and §11;
   core patch 8 (30 §2)
@@ -220,8 +220,8 @@ no address is used as a rank.
 The common sets keep their 1.0 names, because there the address order
 and the class order agree: Z3660 alone, and Z3660 + A4091/A4092. Where
 1.0 put a motherboard controller first, the class order moves it behind
-the Z3660 and the Zorro boards. Such a set is either an accepted change
-of §6 or not a set of record.
+the Z3660 and the Zorro boards. That case is not a set of record: a
+Z3660 sits only in an A4000's CPU slot, and no A4000 has an A3000 WD.
 
 ## 5. The board set and the card table
 
