@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — §1 of the kernel brief complete: core/plat, mkident, patch 0013, M-REG1 fix, dry-run answers (771fe15..db0abef)
+
+core/plat (amiga.c: AXL1 safe/devload, build id, board matcher; per-line line.c: k46 buildid, k30 kinfo_buildid and cputype),
+host-tested. tools/mkident.py (AXK1 and the arena: --asm/--fill/--check). Core patch 0013: 4-byte symbol block, strong hooksw,
+no weak plat_dmainit default, dlm_kinfo_list() for kinfo's module list. M-REG1 counts a cdevsw row filled at boot (major 51 is
+z3660eth's at run time on the static Z families; record corrected). The gate rehearses the brief's whole step 7 on both
+kernels: nothing stubbed, no weak symbol, 12/12 at both binds; `make core` 114/114. The brief answers the port's dry run
+(§3a): 4-byte alignment, .rodata fold, chain order, kinfo kabi and module list.
+
 ## 2026-10-26 — DDI v1 decisions applied; module core patch 0012: intr_attach (2cb274e, 1257dd9)
 
 DDI v1 (C3-2, abi lists 80/78 names, review draft, brief): dma_alloc/free/prepare/complete removed (stage-4 design with the
