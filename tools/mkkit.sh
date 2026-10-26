@@ -102,10 +102,10 @@ cp "$R/docs/abi/writing-a-module.md" "$OUT/docs/guide.md"
 for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
 	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/${c%%-[a-z]*}.md"
 done
-# the interface headers of generic modules (amix-modules), versioned with
-# the module's release: sys/monsw.h from amix-modules once monsw is there,
-# from the port's copy until then
-MONSW_H=${MONSW_H:-$WS/amix-modules/monsw/module/sys/monsw.h}
+# the interface headers of generic modules, versioned with the module's
+# release: sys/monsw.h from amix-modules' include/sys/ (where every generic
+# module's header sits) once monsw is there, from the port's copy until then
+MONSW_H=${MONSW_H:-$WS/amix-modules/include/sys/monsw.h}
 [ -f "$MONSW_H" ] || MONSW_H=$PORT/src/sys/monsw.h
 [ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
 cp "$MONSW_H" "$OUT/include/sys/monsw.h"
