@@ -1,6 +1,6 @@
 # Stage 2 — lifecycle and rollback on static kernels: work breakdown
 
-- **Status:** plan, 2026-10-25
+- **Status:** plan, 2026-10-25; **exit met on the emulator, both lines, 2026-10-26** (§4); metal open (S1-26, S1-27, S2-47)
 - **Source:** `docs/spec/80-stages-and-proof.md` §2 stage 2, `docs/spec/40-generations-and-composer.md`, `docs/spec/60-signing-and-publishing.md` (as changed by D-3 §13), `docs/spec/90-measurements.md` stage-2 rows, `docs/spec/10-boot-loader.md` §6–§7
 - **Exit gate (80 §2):** a box upgraded and rolled back with apkg alone; every power-cut point leaves a booting generation
 - **Invariant carried forward (80 §3):** the pristine generation is never deleted; an unbooted generation never displaces a good one
@@ -140,14 +140,27 @@ every line of this table.
 | power cut at each commit step | **passed** 2026-10-26: M-GEN3, `2026-10-26-m-gen3.md` | **passed** 2026-10-26: the N = 7 cell (M-GEN3 §5, row N44), the trial boots through the fsck reboot |
 | refusal of a kernel-space package whose SHA-256 differs | **passed** 2026-10-26: apkg's S2-20 row (amix-packagemanager), below | line-independent (apkg's check) |
 | upgrade install from a 1.0 image | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261026-l11-k46-upg-a/` (source a 1.0 KD060-ZA-CD disk; configuration and `/home` captured and restored; store gates pass). First boot: the workspace's `tmp/2026-10-26-kinfo030/run/N42/03-host.txt`: `uname -n` upgbox on 68060-261025-51, the kept user, home file and hosts lines, kbootset status (store-id dfbf2a0a, generation 1 booted) and check (0 problems), the `retry` lines, `/dev/kinfo`. The rig's "no-login-prompt" there is the login-prompt misread seen on the k30 cell | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261025-l11-k30-upg-g/` and `-h/` (after the memory fix), copies in the workspace's `tmp/2026-10-26-s2-installng-v6/l11-k30-upg.*`; all install gates pass, generation 1 pristine. First boot: the workspace's `tmp/2026-10-26-s2/l11-v6/N38/03-host.txt`, the on-box batch after login: `uname -n` upgbox, the kept user and home file (`kept-by-the-upgrade`), the hosts line, kbootset status and check (0 problems), the `retry` lines in `bcheckrc`. The rig's "no-login-prompt" there is a misread of the login prompt |
-| **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | after S2-11 and the k30 kernel package |
+| **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | **passed** 2026-10-26: S2-46 §4, row N45 on the installer's v10 disk |
 | **exit gate:** every power-cut point leaves a booting generation | **passed**, as M-GEN3 | as above |
 
 **The k46 column is complete** (2026-10-26). M-GEN2, a stage-2
 measurement that 80's exit gate does not name, is closed on the bench
-(`2026-10-26-m-gen2.md`). In the k30 column only S2-46 is still open: its row of record waits
-for the installer's v10 disk, on which kbootset and the loader are
-installed as packages.
+(`2026-10-26-m-gen2.md`). **Stage 2's exit is met on the emulator, on both lines** (2026-10-26):
+every item of 80 §2's emulator column has passed on k46 and on k30.
+
+Still open, all metal, on the owner's bench time:
+- stage 1's metal rows:
+  - S1-26: the Z3660 ROM halves of M-LD1, M-LD3 and M-LD4, the HID half
+    of M-LD5, M-LD6 and M-LD7 on a real 68060, and cold boots from every
+    controller on both machines;
+  - S1-27: floppy DMA under the 040/060 caches, and the floppy-pair boot
+    on both lines;
+- stage 2's metal row S2-47: an upgrade, rollback and power-cut row per
+  box per line, M-GEN2 on a real 68060 and the real disk, and one
+  upgrade install of a 1.0 box per box.
+
+80 §1 has each stage proven on metal too. Stage 3 starts on the emulator
+while the metal rows wait (orchestrator, 2026-10-26).
 
 **The SHA-256 refusal row** (evidence: the workspace's
 `tmp/2026-10-26-s2/s2-46sha/N36/`). On the kinfo vehicle with apkg 0.3
