@@ -74,6 +74,17 @@ for l in k30 k46; do
 		fail "$l: sample build"; cat "$W/hello-$l.log"
 	fi
 	H=$K/sample/hello/build/$l/mod.d/hello
+	# the probe, measured through the kit's own headers, gives the offsets
+	# of the line's fingerprint (C3-3 section 4)
+	. "$K/kit.conf"
+	CF="-O -traditional -fno-builtin -Dinline=__inline__ -Dvolatile=__volatile__ -Dconst=__const__ $CPUFLAG -D_KERNEL -DSVR40 -DSVR4 -I$K/include -I$K/stock/usr/include -I$K/stock/usr/sys -I$K/stock/usr/sys/amiga/inc"
+	if AMIX_SYSROOT=$K/sysroot sh "$K/tools/mkoffs" m68k-cbm-sysv4-gcc $CF > "$W/offs-$l.h" 2> "$W/offs-$l.log" &&
+	   awk '/^#define/ {print "offs", $2, $3}' "$W/offs-$l.h" | LC_ALL=C sort > "$W/offs-$l.got" &&
+	   grep '^offs ' "$K/abi-$KABI.txt" > "$W/offs-$l.want" && cmp -s "$W/offs-$l.got" "$W/offs-$l.want"; then
+		pass "$l: the probe through the kit's headers: $(wc -l < "$W/offs-$l.got") offsets, as abi-$KABI.txt"
+	else
+		fail "$l: the probe's offsets differ from abi-$KABI.txt"; diff "$W/offs-$l.got" "$W/offs-$l.want"; cat "$W/offs-$l.log"
+	fi
 	# a font-drawing module: the kit's Sun font linked in, builtinfont local
 	d=$W/$l-font
 	mkdir -p "$d"

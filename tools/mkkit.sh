@@ -17,7 +17,10 @@
 #   stock/usr/sys/       (headers only, never a source file), and
 #                        amiga/console/sunfont.o, the stock Sun font
 #                        assembled by tools/sunfont.py
-#   tools/               mkmod, modfix (built here), modcheck.py
+#   tools/               mkmod, modfix (built here), modcheck.py, mkoffs and
+#                        mkabi.py (the fingerprint, C3-3 section 4)
+#   dlmoffs.c            the probe: the structure offsets mkoffs measures
+#   abi-<kabi>.txt       the kernel line's fingerprint text (abi= is its SHA-256)
 #   mk/module.mk         the make fragment
 #   ddi.list, core.list, exports (their names), registry/
 #   sample/hello/        the sample module
@@ -73,14 +76,16 @@ while read p; do
 done < "$R/core/series"
 cp "$S/include/sys/mod.h" "$S/include/sys/moddefs.h" "$S/include/sys/ksym.h" "$OUT/include/sys/"
 cp "$R/abi/include/sys/amixddi.h" "$OUT/include/sys/"
-cp "$S/tools/mkmod" "$OUT/tools/"
+cp "$S/tools/mkmod" "$S/tools/mkoffs" "$OUT/tools/"
+cp "$S/dlmoffs.c" "$OUT/"		# the probe: tools/mkoffs finds it here
 ${HOSTCC:-cc} -std=gnu89 -O -w -o "$OUT/tools/modfix" "$S/tools/modfix.c"
 cp "$S/LICENSE" "$OUT/tools/LICENSE.core"
 rm -rf "$S"
 cp "$R/abi/tools/modcheck.py" "$OUT/tools/"
 cp "$R/abi/mk/module.mk" "$OUT/mk/"
 
-cp "$R/abi/$LINE/ddi.list" "$R/abi/$LINE/core.list" "$OUT/"
+cp "$R/abi/$LINE/ddi.list" "$R/abi/$LINE/core.list" "$R/abi/$LINE/abi-$KABI.txt" "$OUT/"
+cp "$R/tools/mkabi.py" "$OUT/tools/"
 cat "$OUT/ddi.list" "$OUT/core.list" | sed 's/#.*//' | awk 'NF {print $1}' | sort -u > "$OUT/exports"
 cp "$R/abi/registry/"* "$OUT/registry/"
 cp -R "$R/abi/sample/hello" "$OUT/sample/"

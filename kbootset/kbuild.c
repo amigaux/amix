@@ -150,6 +150,7 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 	value(text, "pin", kk->pin, sizeof(kk->pin));
 	value(text, "build", kk->build, sizeof(kk->build));
 	value(text, "sha256", kk->sha256, sizeof(kk->sha256));
+	value(text, "abi", kk->abi, sizeof(kk->abi));
 	value(text, "root", kk->root, sizeof(kk->root));
 	value(text, "rootfs", kk->rootfs, sizeof(kk->rootfs));
 	kk->size = value(text, "size", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 0;
@@ -336,6 +337,9 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			    (kk->has_arena && (!kk->arena_cap || kk->loader_min < 2))))
 		rc = refuse(k, 2, "a module kernel's sidecar gives arena=, ident= and loader-min=2 "
 			    "together, a static kernel's none of them");
+	if (rc == KS_OK && kk->abi[0] && (strlen(kk->abi) != 64 ||
+					  strspn(kk->abi, "0123456789abcdef") != 64))
+		rc = refuse(k, 2, "the sidecar's abi= is not a fingerprint (64 lowercase hex digits)");
 	if (rc == KS_OK && (strcmp(rk.kabi, kk->kabi) || strcmp(rk.pin, kk->pin))) {
 		sprintf(m, "the kernel's sidecar says kabi %s pin %s, its package record %s %s",
 			kk->kabi, kk->pin, rk.kabi, rk.pin);

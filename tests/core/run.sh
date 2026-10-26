@@ -395,6 +395,24 @@ for IMG; do
 	else
 		fail "$K: mkident: $(cat "$A/ident.log" 2>/dev/null)"
 	fi
+	# the fingerprint (C3-3 section 4) against the line's reference text
+	if python3 "$R/tools/mkabi.py" --check "$R/abi/$LINE/abi-$KABI.txt" "$A/kernel.o" \
+		"$R/abi/$LINE/ddi.list" "$DLM/dlm_offs.h" > "$A/abi.log" 2>&1; then
+		pass "$K: fingerprint as abi/$LINE/abi-$KABI.txt: $(cat "$A/abi.log")"
+	else
+		fail "$K: fingerprint: $(cat "$A/abi.log")"
+	fi
+	# what moved: a name the reference lacks is a minor, a changed size a major
+	grep -v '^data lbolt ' "$R/abi/$LINE/abi-$KABI.txt" > "$A/abi-less.txt"
+	sed 's/^offs SDSZ .*/offs SDSZ 24/' "$R/abi/$LINE/abi-$KABI.txt" > "$A/abi-moved.txt"
+	if ! python3 "$R/tools/mkabi.py" --check "$A/abi-less.txt" "$A/kernel.o" "$R/abi/$LINE/ddi.list" \
+		"$DLM/dlm_offs.h" > "$A/abi-less.log" 2>&1 && grep -q "data lbolt added (4): raise the minor" "$A/abi-less.log" &&
+	   ! python3 "$R/tools/mkabi.py" --check "$A/abi-moved.txt" "$A/kernel.o" "$R/abi/$LINE/ddi.list" \
+		"$DLM/dlm_offs.h" > "$A/abi-moved.log" 2>&1 && grep -q "offs SDSZ 24 -> 20: raise the major" "$A/abi-moved.log"; then
+		pass "$K: a fingerprint that moved without a new tag is refused (a minor for an added name, a major for a changed offset)"
+	else
+		fail "$K: mkabi --check on a moved fingerprint: $(cat "$A/abi-less.log" "$A/abi-moved.log")"
+	fi
 	if python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel.o" "$L" "$LC" > "$A/gate.log" 2>&1; then
 		pass "$K: post-link gate: $(grep -c '^PASS' "$A/gate.log") checks, bound at 0x00200000 and 0x07f00000"
 	else

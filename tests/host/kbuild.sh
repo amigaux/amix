@@ -181,6 +181,11 @@ $KB commit 2>/dev/null | grep -q "committed"
 grep -a -q "^ident 0x00099fc0$" $T/disk.img
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
 # the manifest copy must fit the arena behind its directory (C3-4 §4)
+# abi= (C3-3 section 4), when given, is a SHA-256
+msidecar 0x00060000
+echo "abi=not-a-fingerprint" >> $R/stand/k46/kabi; record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+refused 2 $KB build $FACTS
+grep -q "abi= is not a fingerprint" $T/out
 msidecar 0x00000100
 $KB build $FACTS | grep -q "built"
 refused 4 $KB commit
