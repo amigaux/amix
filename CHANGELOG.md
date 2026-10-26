@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — S3-31 media of record; the syslog unit trusts its pid file only for a running syslogd (513b9c4, cfcdb6a)
+
+Media of record (tmp/2026-10-26-s3-31, SHA256SUMS fff4fd0d): amix21-install-l11-k30-s3-31.iso 98a88d43, -k46- 5ed3bbea;
+set = dlm c6ad5bd, packagemanager 124c329, kbootset -14, modtools -5, loader-amix -5, kern30m/kern46m, z3660eth -2,
+monsw -1, dlmkit -3, APKG 0.3.2; catalog rows = amix-packages' (3305d908). Four cells PASS 9/9; the record disks' first
+boots run syslogd on every boot (pid margin zero: the stale file said 87 and syslogd got 87). The syslog unit (cfcdb6a,
+after the record build; rides the next cut): start trusts /etc/syslog.pid only when `ps -p` shows a syslogd, else removes
+it and starts; stop kills only a syslogd and removes the file; proven on both lines' real 2.1 sh (seven cases).
+
 ## 2026-10-21 … 2026-10-26 — r7 (1.0.1) pins and the 1.1 media with kernel modules (d180fcf..513b9c4)
 
 r7: profiles repointed to the cut r7 kernels, cards and configs pinned (Z3660.bin 9994961A), the 1.0.1 ISOs named, notes
