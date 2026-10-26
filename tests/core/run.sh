@@ -109,7 +109,7 @@ PIN=gcc-2.7.2.3-8949028	# toolchain.pin
 KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.0\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
-for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post; do
+for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post dlm_ddi; do
 	$KCC -c "$DLM/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
 done
 # the loader's SHA-256 and CRC-32 (C89 with prototypes: the loader's flags)
@@ -117,11 +117,11 @@ for f in sha256 crc32; do
 	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
 		-I"$R/loader/common" -c "$R/loader/common/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
 done
-for f in dlm_cache dlmksym dlm_hooksw; do
+for f in dlm_cache dlmksym dlm_hooksw dlm_spl; do
 	m68k-cbm-sysv4-gcc -c "$DLM/$f.s" -o "$B/obj/$f.o"
 done
 m68k-cbm-sysv4-ld -r -o "$B/obj/dlm.o" $(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str \
-	dlmconf dlmreg dlm_arena dlm_post sha256 crc32 dlm_cache dlmksym dlm_hooksw; do echo "$B/obj/$f.o"; done)
+	dlmconf dlmreg dlm_arena dlm_post dlm_ddi sha256 crc32 dlm_cache dlmksym dlm_hooksw dlm_spl; do echo "$B/obj/$f.o"; done)
 if grep -v 'types.h:182\|In file included\|^ *from ' "$B/kobj.warn" | grep . > "$B/kobj.other"; then
 	fail "kernel objects: warnings beyond the stock headers'"; cat "$B/kobj.other"
 else
@@ -303,8 +303,15 @@ for IMG; do
 	else
 		fail "$K: mkksym -a: $(cat "$A/ksym.log")"; continue
 	fi
-	# the providers that come with later core patches, or dlm.o itself: stubbed
-	m68k-elf-nm "$ORIG" | awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
+	# the core's providers linked for real (dlm_spl, dlm_ddi), with the splice
+	# its console hook needs: scrcon_put weakened, the stock body kept as
+	# __amix_scrcon_put (brief step 7); the rest still to come, stubbed
+	sp=$(m68k-elf-nm "$ORIG" | awk '$3=="scrcon_put" && $2=="T" {print $1}')
+	m68k-elf-objcopy --weaken-symbol=scrcon_put \
+		--add-symbol __amix_scrcon_put=.text:0x$sp,global,function "$ORIG" "$A/spliced.o"
+	m68k-cbm-sysv4-ld -r -o "$A/prov.o" "$B/obj/dlm_spl.o" "$B/obj/dlm_ddi.o"
+	{ m68k-elf-nm "$ORIG"; m68k-elf-nm "$A/prov.o"; } |
+		awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
 	awk '!/^#/ && NF {print $1, $2}' "$L" | while read n k; do
 		grep -qx "$n" "$A/defined" || echo "$n $k"; done > "$A/stubbed"
 	awk '$2=="func" {printf "\t.text\n\t.globl\t%s\n%s:\n\trts\n", $1, $1}
@@ -312,7 +319,7 @@ for IMG; do
 		"$A/stubbed" > "$A/stubs.s"
 	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
 	echo "$K: providers to come (stubbed for the gate): $(awk '{printf "%s ", $1}' "$A/stubbed")"
-	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$ORIG" "$A/ksym.o" "$A/stubs.o"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/stubs.o"
 	if "$TB/mkksym" -f "$A/kernel.o" > "$A/fill.log" 2>&1; then
 		pass "$K: mkksym -f: $(sed 's#.*: ##' "$A/fill.log")"
 	else
@@ -334,7 +341,7 @@ for IMG; do
 	# a listed name left undefined (the last stub dropped): -f refuses it
 	head -n -4 "$A/stubs.s" > "$A/stubs-short.s"
 	m68k-cbm-sysv4-as -o "$A/stubs-short.o" "$A/stubs-short.s"
-	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$ORIG" "$A/ksym.o" "$A/stubs-short.o"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/stubs-short.o"
 	if ! "$TB/mkksym" -f "$A/kernel-short.o" > "$A/short.log" 2>&1 &&
 	   grep -q "listed but not defined" "$A/short.log"; then
 		pass "$K: a listed name left undefined: $(grep -o '[^ ]* is listed but not defined' "$A/short.log" | head -1), refused"
