@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 6
+# C4-5 — DDI v1.2, the DMA interface, version 7
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -12,7 +12,9 @@
   the board cannot reach gives `dma_addr` 0, and the driver does not arm
   (§2.2); the provider as built (§5.4); version 6 (2026-10-27, the
   Bench's N109b): the entry-0 decode, the identity map cacheable, so
-  §5.4's read-after-complete rule stays (§5.3). Other repositories build
+  §5.4's read-after-complete rule stays (§5.3); version 7 (2026-10-27):
+  the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3). Other
+  repositories build
   against this text; a change from here is a contract change with a
   version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
@@ -217,10 +219,19 @@ pool does not promise.
 
 ### 5.3 The k30 provider's acceptance (S4-62)
 
-- **A force-bounce test hook:** a switch that bounces every segment,
-  reachable or not. Amiberry's bank at 0x08000000 is reachable by
-  emulated Zorro DMA, so a missed bounce passes in emulation and only
-  metal shows it.
+- **Two test hooks, kernel globals set from the box through `/dev/kmem`
+  (amix-kerntools `tools/kmemrw`), never in production:**
+  - `dma_forcebounce` nonzero bounces every segment, reachable or not.
+    Amiberry's bank at 0x08000000 is reachable by emulated Zorro DMA, so a
+    missed bounce passes in emulation and only metal shows it. Measured:
+    N109 (a4091-k30 1.0.0-3 on kern30m -14), a raw 2 MiB read and `cp` and
+    `sync` identical with it 0 and 1;
+  - `dma_forcefail` (version 7) nonzero makes every prepare that would
+    bounce miss: `dma_addr` gives 0 and the driver's path that does not
+    arm (§2.2) runs. The stock kernel never hands a driver more than the
+    pool can bounce (raw I/O a page a command, block I/O a filesystem
+    block, GSIO at most 64 KiB), so only this hook reaches that path from
+    the box.
 - **The cache mode of the identity map:** decode the status bits of the
   root-table entry 0, which differ from those of entries 2 and 3, before
   the first `FROM_DEVICE` test, to know whether the 030 data cache is on
@@ -257,8 +268,9 @@ pool does not promise.
   pushed. `dma_complete` for `FROM_DEVICE` clears the whole data cache
   (CACR CD) before the bounce is copied back or the driver reads the
   bytes.
-- **The force-bounce hook:** the kernel global `dma_forcebounce`, nonzero
-  bounces every segment (§5.3).
+- **The test hooks:** the kernel globals `dma_forcebounce` (bounce every
+  segment) and `dma_forcefail` (every bounce misses), both 0 in
+  production (§5.3).
 - **The read-after-complete rule:** the identity map is cacheable (the
   entry-0 decode, §5.3), so a driver reads what the chip wrote into
   `dma_alloc` memory (status, message buffers) only after a
