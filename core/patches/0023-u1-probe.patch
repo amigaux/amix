@@ -1,0 +1,74 @@
+Subject: U1: a measurement build reports the context at dmainit and the hook
+
+Test only, under -DDLM_U1: the shipped dlm.o is unchanged (amix-dlm
+docs/spec/90-measurements.md U1, tests/bench/README.md S3-41).  At the end
+of dlm_init and on entry to the kernel's hook in rth1_mountroot it prints
+the status register, the proc pointer, whether lbolt advances in a spin,
+and which kmem_zalloc sizes KM_NOSLEEP gives (each freed again).
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -1434,6 +1434,39 @@
+ };
+ #define	NCALLS	(sizeof dlm_calls / sizeof dlm_calls[0])
+ 
++#ifdef DLM_U1
++/*
++ * U1 (amix-dlm docs/spec/90-measurements.md): the context at dmainit and
++ * at the kernel's hook in rth1_mountroot, where stage 4's root-class
++ * loads will run.  A measurement build only (-DDLM_U1): the status
++ * register, whether the clock still ticks there, and which kmem_zalloc
++ * sizes KM_NOSLEEP gives.
++ */
++void
++dlm_u1(where)
++	char *where;
++{
++	static long sizes[] = { 4096L, 65536L, 262144L, 1048576L, 2097152L, 0 };
++	unsigned short sr;
++	long l0 = lbolt, i;
++	char *p;
++	int k;
++
++	__asm__ __volatile__("movew %%sr,%0" : "=d" (sr));
++	for (i = 0; i < 4000000L && lbolt == l0; i++)
++		;
++	printf("dlm: U1 %s: sr 0x%x, u_procp 0x%x, the clock %s after %d spins\n", where, (int)sr,
++	    (int)u.u_procp, lbolt == l0 ? "stood still" : "ticked", (int)i);
++	for (k = 0; sizes[k]; k++) {
++		p = (char *)kmem_zalloc((size_t)sizes[k], KM_NOSLEEP);
++		printf("dlm: U1 %s: kmem_zalloc(%d, KM_NOSLEEP) %s\n", where, (int)sizes[k],
++		    p ? "gave memory" : "failed");
++		if (p)
++			kmem_free(p, (size_t)sizes[k]);
++	}
++}
++#endif
++
+ void
+ dlm_init()
+ {
+@@ -1469,4 +1502,7 @@
+ 	dlm_intr_init();		/* the level-2 chain walk */
+ #endif
+ 	printf("dlm: %d kernel symbols\n", (int)G32(dlm_ksym + KH_NSYM) - 1);
++#ifdef DLM_U1
++	dlm_u1("dmainit");
++#endif
+ }
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -89,6 +89,13 @@
+ #ifndef DLM_HOST
+ 	unsigned short sr;
+ 
++#ifdef DLM_U1
++	{
++		extern void dlm_u1();
++
++		dlm_u1("hook");
++	}
++#endif
+ 	__asm__ __volatile__("movew %%sr,%0" : "=d" (sr));
+ 	if (sr & 0x0700) {
+ 		if (dlm_inited && dlm_man)
