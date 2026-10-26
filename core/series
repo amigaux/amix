@@ -30,3 +30,4 @@
 0027-image-limit-256k.patch
 0028-str-open-level4-comment.patch
 0029-no-sleep-mode.patch
+0030-halt-pass.patch

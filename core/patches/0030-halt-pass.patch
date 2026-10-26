@@ -1,0 +1,173 @@
+Subject: the halt pass: dlm_halt runs each module's halt entry, newest first
+
+30 section 2 patch 11 (S4-07).  The wrapper's halt entry was filled by
+the macros and never called.  dlm_halt() runs each settled module's halt
+entry, newest first, once, so a board that can interrupt or write memory
+is stopped before the kernel halts or reboots (M-HALT1).  The kernel
+calls it from mdboot, before haltsys or rtnfirm, for uadmin's A_SHUTDOWN
+and A_REBOOT only, never from panic or the keyboard reset.  An entry that
+is not code is named and skipped.  It returns how many entries ran.  The
+state harness checks the order, the skip and that a second call does
+nothing.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -1296,6 +1296,45 @@
+ 	return n;
+ }
+ 
++/*
++ * The halt pass (30 section 2 patch 11, S4-07).  Before the kernel halts
++ * or reboots, each settled module's halt entry runs, newest first, so a
++ * board that can interrupt or write memory is stopped (M-HALT1).  The
++ * kernel calls it from mdboot, before haltsys or rtnfirm, for uadmin's
++ * A_SHUTDOWN and A_REBOOT only: never from panic or the keyboard reset,
++ * which reach haltsys too.  It runs once; an entry that is not code is
++ * named and skipped.  Returns how many entries ran.
++ */
++int	dlm_halted;
++
++int
++dlm_halt()
++{
++	struct dlm_mod *m, *done;
++	unsigned long w;
++	int n = 0;
++
++	if (!dlm_inited || dlm_halted++)
++		return 0;
++	for (done = 0; done != dlm_list; done = m) {
++		for (m = dlm_list; m->m_next != done; m = m->m_next)
++			;
++		if ((m->m_flags & (DM_TRANS | DM_SYMOK)) != DM_SYMOK)
++			continue;
++		if ((w = G32(DLM_RP(m, m->m_wrapper) + MW_HALT)) == 0)
++			continue;
++		if (!dlm_okcode(m, w)) {
++			printf("dlm: %s: its halt entry is not code; skipped\n", m->m_name);
++			continue;
++		}
++		(void)DLM_CALL(m, w, 0, 0);
++		n++;
++	}
++	if (n)
++		printf("dlm: halt pass: %d module(s) stopped\n", n);
++	return n;
++}
++
+ static int
+ dlm_modstat(uap, rvp)
+ 	struct modstata *uap;
+--- a/dlm.h
++++ b/dlm.h
+@@ -315,6 +315,7 @@
+ 
+ /* services the loader needs from its environment */
+ extern char *dlm_zalloc();
++extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
+ #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
+ extern void dlm_free();
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -34,7 +34,7 @@
+ 
+ 
+ def mod(p, deps='', rev=2, text='', data='', ops='mod_miscops', pdata='0', md=None,
+-        v1=False, extra=()):
++        v1=False, extra=(), halt='0'):
+     if md is None and extra:
+         md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'] + list(extra)
+         if not any(k.startswith('unload=') for k in extra):
+@@ -52,7 +52,7 @@
+ 	.data
+ 	.globl	{p}_wrapper
+ {p}_wrapper:
+-	.long	{rev}, {p}_load, {p}_unload, 0, 0, {p}_link
++	.long	{rev}, {p}_load, {p}_unload, {halt}, 0, {p}_link
+ {p}_link:
+ 	.long	{ops}, {p}_td, 0, 0
+ {p}_td:
+@@ -65,11 +65,19 @@
+ 	.balign	4
+ 	.long	{p}_wrapper
+ {md}'''.format(p=p, rev=rev, text=text, data=data, ops=ops, pdata=pdata,
+-               md=moddata(p, deps, md, v1))
++               md=moddata(p, deps, md, v1), halt=halt)
+     open(os.path.join(out, p + '.s'), 'w').write(s)
+     print(p, os.path.join(out, p + '.s'), '-1' if v1 else '')
+ 
+ 
++# the halt pass (S4-07): hl1 and hl2 have halt entries, hl3's points at
++# kernel data (lbolt), hl4 has none
++for p in ('hl1', 'hl2'):
++    mod(p, halt=p + '_halt', text='\t.globl\t{p}_halt\n{p}_halt:\n\trts\n'.format(p=p))
++mod('hl3', halt='lbolt')
++mod('hl4')
++
++
+ # a 3-chain for moduload(0): ha -> hb -> hc
+ mod('ha', 'hb')
+ mod('hb', 'hc')
+--- a/test/state.c
++++ b/test/state.c
+@@ -540,6 +540,51 @@
+ 	    "no-sleep: the unload returns every byte");
+ }
+ 
++/* ---- the halt pass (30 section 2 patch 11, S4-07) ---- */
++extern int dlm_halted;
++static char halt_order[16];
++
++int
++h_hl1(m, a, b)
++	char *m, *a;
++	long b;
++{
++	strcat(halt_order, "1");
++	return 0;
++}
++
++int
++h_hl2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	strcat(halt_order, "2");
++	return 0;
++}
++
++void
++halt_tests()
++{
++	unsigned long v, ok = host_ktext;
++	int i1, i2, i3, i4;
++
++	host_handler("hl1_halt", h_hl1);
++	host_handler("hl2_halt", h_hl2);
++	check(modload("hl1", &i1) == 0 && modload("hl2", &i2) == 0 && modload("hl3", &i3) == 0 &&
++	    modload("hl4", &i4) == 0, "halt: four modules load (two halt entries, one not code, one none)");
++	dlm_blklookup(dlm_ktab, "lbolt", &v, (int *)0);
++	host_ktext = v;		/* kernel text ends below lbolt, kernel data */
++	check(dlm_halt() == 2 && strcmp(halt_order, "21") == 0,
++	    "halt: each halt entry runs once, newest first; one in kernel data is skipped");
++	check(dlm_halt() == 0 && strcmp(halt_order, "21") == 0, "halt: a second call does nothing");
++	host_ktext = ok;
++	dlm_halted = 0;
++	moduload(i4);
++	moduload(i3);
++	moduload(i2);
++	moduload(i1);
++}
++
+ /* ---- marc_post (patch 16, C3-5) ---- */
+ static char pb1_params[256];
+ static int pb1_loads, pb3_saw = -1;
+@@ -1455,6 +1500,7 @@
+ 	post_tests();
+ 	intr_tests();
+ 	kinfo_tests();
++	halt_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
