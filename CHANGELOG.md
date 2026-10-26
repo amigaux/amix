@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patch 0029: no-sleep mode for the root pass (S4-02, 7f0613e)
+
+dlm_nosleep makes dlm_zalloc ask KM_NOSLEEP and refuse requests over 1 MiB (U1's rule); every load-path allocation is
+checked and ENOMEM leaves the kernel as it was (kmem bytes and blocks exactly as before, loaded count unchanged); a module
+another load holds is EBUSY instead of a wait. Nothing changes outside the mode. State harness 197/197 on both kernels; the
+fingerprint unchanged (7a90c7d9). dlm.o b55f0b12; rides the second cut S4-21. Stage 4's ABI additions (bdevsw layout names
+for S4-06, sd_register, vfs_register, DDI v1.1 DMA) open one kabi minor, k46.1.1 / k30.1.1, with S4-06.
+
 ## 2026-10-26 — C4-1 agreed (version 1); C4-4 draft: the arena filled (6c78656, cc5cbc3)
 
 C4-4: boot2 places every `module … root` record whose match holds, in manifest order (`zorro:` against
