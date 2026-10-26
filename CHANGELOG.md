@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — DDI v1 decisions applied; module core patch 0012: intr_attach (2cb274e, 1257dd9)
+
+DDI v1 (C3-2, abi lists 80/78 names, review draft, brief): dma_alloc/free/prepare/complete removed (stage-4 design with the
+port; the port's dma_prepare/complete stay kernel-internal); displayedscreen added (data, read-only); spl5–7 raise to level 4
+only, so no spl masks level 6 and an INT6 driver masks at its board. Patch 0012: intr_attach/intr_detach — a level-2 chain
+walk in int2_tbl's last handler slot calls the displaced handler first; a level-6 chain sits behind a wrapper at the stock
+aciabintr (weakened, __amix_aciabintr; p6int is its only caller); every handler is called every time, claims counted; chains
+change at IPL 7. Harness 154/154; gate 12/12 with intr_* linked for real.
+
 ## 2026-10-26 — module core patch 0011: the DDI providers spl, if_attach, cons_hook; C3-5 agreed (887981b..cde866e)
 
 spl0–7/splx as functions identical to <sys/inline.h> (spl5–7 raise to level 4 under FAST_INTERRUPTS, so no spl masks INT6);
