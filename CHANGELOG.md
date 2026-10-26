@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — Exit ledger: S3-44-1 and -2 PASS; -3 open (9a3c39f)
+
+N86/N87: software interrupts reach both chains at once (0 spins), the level-6 claimer and counter counts are equal; a full
+level-6 chain refuses the ninth handler with 168 and z3660eth falls back to polled; monsw's open is silent and loads it, a
+read gives ENODEV by design. S3-44-3 open: the likely cause (kernel of record) is that a STREAMS open runs at IPL 4, so
+z3660eth's software self-test can take the level-6 half but its level-2 half stays pending until the open returns —
+z3660net's to fix; `intrl2=0` with intr=6 is the cheap confirmation.
+
 ## 2026-10-26 — Exit ledger: CD cell k46 PASS; K030-UZ and N84 (f25775f)
 
 S3-31 part 3 k46 PASS (N85c); part 3 closed on both lines. S3-46's k30 instrument K030-UZ (a measurement kernel, retiring in
