@@ -8,7 +8,10 @@
 #     20 §6);
 #   - cdevsw: rows, and which are empty (ten entry points all nodev or
 #     nulldev, no tty, no streamtab) -- the free majors; the owner of the
-#     majors the registry names (49, 51, 52, 53);
+#     majors the registry names (49, 51, 52, 53), including a row the code
+#     fills at boot (a store relocated against cdevsw inside that row, as
+#     a STREAMS driver's init sets d_str: the row is empty in the image but
+#     taken at run time);
 #   - bdevsw rows and the free ones; fmodcnt; nexectype; nfstype;
 #   - int2_tbl's handlers;
 #   - U5: whether every reference to execsw, fmodsw and vfssw is a
@@ -136,6 +139,26 @@ def cdev_owner(e, major):
     return t or '-'
 
 
+def boot_stores(e, major):
+    # code that stores into the row at boot: relocations against cdevsw
+    # (in a code section) whose addend lies inside the row; named by the
+    # function the relocation is in
+    s = e.sym('cdevsw')
+    lo, hi = s[1] + CDEVSZ * major, s[1] + CDEVSZ * (major + 1)
+    funcs = {}
+    for sec, d in e.rel.items():
+        if e.sh[sec]['nm'] not in ('.text',):
+            continue
+        for off, (t, name, add, si) in d.items():
+            if name == 'cdevsw' and lo <= s[1] + add < hi:
+                best = None
+                for nm, val, sz, shn in e.syms:
+                    if shn == sec and nm and val <= off and (best is None or val > best[1]):
+                        best = (nm, val)
+                funcs[best[0] if best else '?'] = 1
+    return sorted(funcs)
+
+
 def ranges(l):
     out, i = [], 0
     while i < len(l):
@@ -160,9 +183,15 @@ for fam, rel in KERNELS:
     print('sysentsize %s; sysent[64..69] nosys: %s' % (n, 'all' if len(nosys) == 6 else nosys))
     nc, cfree = rows(e, 'cdevsw', 'cdevcnt', CDEVSZ, cdev_empty)
     print('cdevsw %s rows; empty %s' % (nc, ranges(cfree)))
+    def state(m):
+        st = boot_stores(e, m)
+        if m in cfree and not st:
+            return 'free'
+        if m in cfree:
+            return 'filled at boot by ' + ' '.join(st)
+        return 'used by ' + cdev_owner(e, m)
     print('majors of the registry: ' + ', '.join(
-        '%d %s (%s)' % (m, 'free' if m in cfree else 'used by ' + cdev_owner(e, m), who)
-        for m, who in sorted(REGISTRY.items()) if nc and m < nc))
+        '%d %s (%s)' % (m, state(m), who) for m, who in sorted(REGISTRY.items()) if nc and m < nc))
     nb, bfree = rows(e, 'bdevsw', 'bdevcnt', BDEVSZ, bdev_empty)
     print('bdevsw %s rows; empty %s' % (nb, ranges(bfree)))
     print('fmodcnt %s; nexectype %s; nfstype %s' % (
