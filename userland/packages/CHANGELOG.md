@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kspace round trip on gen-catalog fc49df7; k30 kernels ship amix-z3660scsi's licence (2c5f833, 6da5ce2) — not published
+
+The round trip uses amix-packagemanager fc49df7 (apkg 0.3.1; gen-catalog writes the role=module rows) and requires those rows to
+equal the ones it computes from .moddata (95/95; the two old checks became one; catalog byte-identical). kernel-k30-u -2 and
+kernel-k30-m ship amix-z3660scsi's MIT LICENSE (the cuts link the driver); payloads unchanged, re-rolled: kern30u -2 md5
+8676db46, kern30m f45c545d; catalog md5 e7ca13f4. kern30u -1 (installng's pristine) still lacks it.
+
 ## 2026-10-26 — stage-3 mint: kbootset -12, dlmkit -2, module kernels kernel-k46-m/kernel-k30-m, module packages z3660eth/z3660rtg (16cb27c..50b4ed1) — not published
 
 kbootset -12 from amix-dlm af363be: `kbootset namelist` writes /stand/unix; unix.sym read per C2-3 v6 §2.1; /sbin/kbootset
