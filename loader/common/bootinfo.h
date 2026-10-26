@@ -118,10 +118,11 @@ struct ax_memr {
 
 /* in the MemHeader copies mems[0..n) (bootinfo.memory[] to be): the fast
  * region holding base ends at most cap bytes above its base, and a fast
- * region that ends where it begins is emptied, so the kernel, which joins
- * touching regions into its main store, sees at most cap (mh_Lower and
- * mh_Upper only: the kernel reads no other field).  Returns 1 if anything
- * was cut */
+ * region that ends where it begins ends a 2 KiB page short of it instead,
+ * so the kernel, which joins touching regions into its main store, sees at
+ * most cap (mh_Lower and mh_Upper only: the kernel reads no other field),
+ * and that region's range stays for the k30 DMA pool (10 section 3.2).
+ * Returns 1 if anything was cut */
 int ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap);
 ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
 

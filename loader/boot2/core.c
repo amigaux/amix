@@ -122,27 +122,20 @@ gen_entry(ax_u32 id)
 	return 0;
 }
 
-/* read member mb into a new MEMF_FAST buffer of mb->size bytes */
-static ax_u8 *
-load_member(const struct ax_member *mb, ax_u32 id)
+/* read member mb into buf (mb->size bytes), CRC-checked; 0, or -1 with
+ * the L code said */
+static int
+load_into(const struct ax_member *mb, ax_u32 id, ax_u8 *buf)
 {
-	ax_u8 *buf, *z;
+	ax_u8 *z;
 	ax_u32 got;
 	int rc;
 
-	buf = x_allocmem(mb->size ? mb->size : 1, MEMF_FAST);
-	if (!buf)
-		buf = x_allocmem(mb->size ? mb->size : 1, MEMF_PUBLIC);
-	if (!buf) {
-		fail(4, id);
-		return 0;
-	}
 	if (mb->z == AXZ_DEFLATE) {
 		z = x_allocmem(mb->stored ? mb->stored : 1, MEMF_PUBLIC);
 		if (!z) {
 			fail(4, id);
-			x_freemem(buf, mb->size);
-			return 0;
+			return -1;
 		}
 		if ((rc = med->read_stored(mb, z)) != 0) {
 			fail(rc, id);
@@ -153,21 +146,63 @@ load_member(const struct ax_member *mb, ax_u32 id)
 			rc = -1;
 		}
 		x_freemem(z, mb->stored);
-		if (rc) {
-			x_freemem(buf, mb->size);
-			return 0;
-		}
+		if (rc)
+			return -1;
 	} else if ((rc = med->read_stored(mb, buf)) != 0) {
-		x_freemem(buf, mb->size);
 		fail(rc, id);
-		return 0;
+		return -1;
 	}
 	if (ax_crc32(crctab, buf, mb->size) != mb->crc) {
-		x_freemem(buf, mb->size);
 		fail(3, id);
+		return -1;
+	}
+	return 0;
+}
+
+/* read member mb into a new MEMF_FAST buffer of mb->size bytes */
+static ax_u8 *
+load_member(const struct ax_member *mb, ax_u32 id)
+{
+	ax_u8 *buf;
+
+	buf = x_allocmem(mb->size ? mb->size : 1, MEMF_FAST);
+	if (!buf)
+		buf = x_allocmem(mb->size ? mb->size : 1, MEMF_PUBLIC);
+	if (!buf) {
+		fail(4, id);
+		return 0;
+	}
+	if (load_into(mb, id, buf)) {
+		x_freemem(buf, mb->size);
 		return 0;
 	}
 	return buf;
+}
+
+static ax_u32 rd_addr, rd_room;	/* the RAM-disk image (C4-3); its region's top */
+static const char needs[] = "the %s needs %u bytes, it has %u\n";
+
+/*
+ * The RAM-disk image at the top of the kernel's region (C4-3 section 2):
+ * claimed in place with AllocAbs while exec still runs, so the hand-off
+ * moves nothing more; 64 KiB aligned, above the kernel's end.  0, or the
+ * L code.
+ */
+static int
+ramdisk_place(void)
+{
+	ax_u32 top = vaddr + rd_room, at = (top - man.ramdisk.size) & ~0xffffUL;
+
+	if (man.ramdisk.size > rd_room || at < bd.end || !x_allocabs(top - at, (void *)at)) {
+		con_say(needs, "RAM disk", man.ramdisk.size, top - bd.end);
+		return 4;	/* too big, or its place already in use */
+	}
+	if (load_into(&man.ramdisk, gen, (ax_u8 *)at)) {
+		x_freemem((void *)at, top - at);	/* the next generation may place its own */
+		return -1;
+	}
+	rd_addr = at;
+	return 0;
 }
 
 static int
@@ -233,8 +268,6 @@ placed(const struct ax_member *mb, int safe)
 {
 	return mb->cls == AXC_ROOT && (!safe || mb->safe);
 }
-
-static const char needs[] = "the %s needs %u bytes, it has %u\n";
 
 static int
 arena_fill(int safe)
@@ -332,8 +365,7 @@ load_first(const struct ax_sel *sel)
 				   gen, man.line, core_cpu);
 			goto next;
 		}
-		if (man.loader_min > LOADER_VERSION || man.has_arena != man.has_ident ||
-		    man.has_ramdisk) {
+		if (man.loader_min > LOADER_VERSION || man.has_arena != man.has_ident) {
 			fail(9, gen);
 			goto next;
 		}
@@ -358,7 +390,9 @@ load_first(const struct ax_sel *sel)
 				con_say("no bss= for this brel: 512 KiB assumed\n");
 		}
 		if (rc == AXR_OK && bd.end - vaddr <= room) {
-			if (!man.has_arena || (rc = arena_fill(sel->safe)) == 0)
+			rd_room = room;
+			if ((!man.has_arena || (rc = arena_fill(sel->safe)) == 0) &&
+			    (!man.has_ramdisk || (rc = ramdisk_place()) == 0))
 				return k;
 			if (rc > 0)
 				fail(rc, gen);
@@ -468,10 +502,16 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 		x_memcpy(w->mems + nmem * AXB_MEMSIZE, mh, AXB_MEMSIZE);
 	if (k30)
 		ax_memcap(w->mems, nmem, vaddr, AX_K30_MEMCAP);
+	for (i = 0; rd_addr && i < nmem; i++) {	/* the image's pages are not the kernel's */
+		mh = w->mems + i * AXB_MEMSIZE;
+		if (AX_GET32(mh + 20) <= rd_addr && rd_addr < AX_GET32(mh + 24))
+			AX_PUT32(mh + 24, rd_addr);
+	}
 
 	x_memset(&lr, 0, sizeof(lr));
 	f = u = b = id = 0;
 	m->identify(&f, &u, &b, &id, &lr);
+	rootsel.kind = AXS_NONE;
 	if (man.root && ax_disksel_parse(man.root, &rootsel) == 0 && rootsel.kind == AXS_SD &&
 	    ax_rto1_build(&rootsel, rto) == 0)
 		have_root = 1;
@@ -492,8 +532,10 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 		con_say("DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
 	if (sel.safe)
 		con_say("safe mode\n");
-	if (have_root)
+	if (have_root || rootsel.kind == AXS_RAMDISK)
 		lr.root = rootsel;
+	lr.ramdisk_addr = rd_addr;
+	lr.ramdisk_size = man.ramdisk.size;	/* 0 without one: the parser zeroes man */
 	if (man.swap)
 		ax_disksel_parse(man.swap, &lr.swap);
 	if (man.rootfs)

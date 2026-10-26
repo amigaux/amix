@@ -247,9 +247,12 @@ ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap)
 				AX_PUT32(m + 24, l + cap), cut = 1;
 		}
 	}
-	for (m = mems; m < e; m += AXB_MEMSIZE)	/* one touching it from below */
+	/* one touching it from below ends a 2 KiB page short of it: the
+	 * kernel then does not join it to its main store, and its range stays
+	 * for the k30 DMA pool (C4-5 section 5.2) */
+	for (m = mems; m < e; m += AXB_MEMSIZE)
 		if (!(AX_GET16(m + 14) & 0x2) && AX_GET32(m + 24) == lo)
-			AX_PUT32(m + 24, AX_GET32(m + 20)), cut = 1;
+			AX_PUT32(m + 24, lo - 0x800), cut = 1;
 	return cut;
 }
 

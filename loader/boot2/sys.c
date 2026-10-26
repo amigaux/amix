@@ -20,6 +20,17 @@ x_allocmem(ax_u32 size, ax_u32 flags)
 	return (void *)CALL(ax_execbase, -198, r);
 }
 
+/* exec AllocAbs: size bytes at location, or 0 when they are not free */
+void *
+x_allocabs(ax_u32 size, void *location)
+{
+	struct ax_regs r;
+
+	REGS0(r);
+	r.d0 = size, r.a1 = (ax_u32)location;
+	return (void *)CALL(ax_execbase, -204, r);
+}
+
 void
 x_freemem(void *p, ax_u32 size)
 {

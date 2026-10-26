@@ -52,6 +52,7 @@ void ax_handoff_end(void);
 extern void *ax_execbase;
 void *x_allocmem(ax_u32 size, ax_u32 flags);
 void x_freemem(void *p, ax_u32 size);
+void *x_allocabs(ax_u32 size, void *location);
 int x_doio(void *iob);
 void *x_openlib(const char *name, ax_u32 version);
 void x_closelib(void *lib);

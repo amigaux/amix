@@ -309,6 +309,10 @@ media(const char *root, char **cmd, int argc)
 	if (f.bootdev[0])
 		fprintf(stderr, "kbootset: --bootdev is not used for a read-only medium: "
 			"its loader reads it, the kernel never drives it\n");
+	if (rd && !f.root[0])		/* a RAM-disk medium roots on it (C4-3 section 1) */
+		strcpy(f.root, "ramdisk");
+	if (rd && !f.swap[0])
+		strcpy(f.swap, "none");
 	if ((rc = kb_spec(root, &f, (ax_u32)version, now(), fl1 != 0, rd, spec, msg)) != 0) {
 		printf("kbootset: %s\n", msg);
 		return rc;

@@ -464,6 +464,12 @@ head -c 4096 /dev/zero > $T/mini.img
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS --root ramdisk --swap none > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always safe=1$" $T/r1.adf.spec
+# --ramdisk alone gives root ramdisk and swap none (C4-3 section 1)
+$B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS > /dev/null 2>&1
+grep -q "^root ramdisk$" $T/r1.adf.spec
+grep -q "^swap none$" $T/r1.adf.spec
+grep -q "^module ramdisk root .* match=always safe=1$" $T/r1.adf.spec
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always$" $T/r1.adf.spec

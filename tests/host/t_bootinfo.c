@@ -188,7 +188,7 @@ test_bootinfo(void)
 			}
 			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP), 1);
 			T_EQ(AX_GET32(m + 2 * AXB_MEMSIZE + 24), 0x0C000000UL);	/* capped */
-			T_EQ(AX_GET32(m + 1 * AXB_MEMSIZE + 24), 0x07000020UL);	/* emptied */
+			T_EQ(AX_GET32(m + 1 * AXB_MEMSIZE + 24), 0x07FFF800UL);	/* a page short */
 			T_EQ(AX_GET32(m + 3 * AXB_MEMSIZE + 24), 0x48000000UL);	/* Z3 untouched */
 			T_EQ(AX_GET32(m + 0 * AXB_MEMSIZE + 24), 0x200000UL);	/* chip untouched */
 			/* a 64 MB bank: nothing to cut */
