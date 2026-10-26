@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — Exit ledger: CD cell k46 PASS; K030-UZ and N84 (f25775f)
+
+S3-31 part 3 k46 PASS (N85c); part 3 closed on both lines. S3-46's k30 instrument K030-UZ (a measurement kernel, retiring in
+stage 4 with the root-class z3660scsi) recorded; its piscsi root proven on the emulator (N84). S3-44, S3-45, S3-46 remain.
+
 ## 2026-10-26 — S3-31 part 3, k30: PASS; the installed disk keeps boot priority 2 (73f218f, f6c770b)
 
 The CD-booted, disk-rooted cell passes on k30 (N83c): amix-cdboot's line, the kernel at 0x04000000, the root record,
