@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -5 from amix-dlm 6c69125 (5c6706a) — not published
+
+/sbin/kbootset 6b76c54c: the restructured SHA-256 round (about 2× on the 030) and the no-kinfo fixes. Same pkgmap as -4.
+Round trip pinned to 6c69125: 37/37 on both lines. Kernel-space set: kern30u -1, kern46z -2, kern46zcd -2, ldramix -2,
+kbootset -5.
+
 ## 2026-10-26 — kernel-k30-u 1.1.0.261026.01-1: the K030-U with kinfo (c5019ae, 06253b6) — not published
 
 The K030-U that amix-kerntools cut with kinfo (build 68030-261026-01): /stand/k30/unix (brel dfa6a1d1) and the kernel
