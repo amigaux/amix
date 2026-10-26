@@ -63,7 +63,8 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
    `$KCC -I<core>/include -I<core> -DDLM_KABI=\"$KABI\" -DDLM_PIN=\"$PIN\"`:
    - from C: `dlm_core`, `dlm_ld`, `dlm_sym`, `dlm_slot`, `dlm_str`,
      `dlmconf`, `dlmreg`, `dlm_arena`, `dlm_post`, `dlm_ddi`,
-     `dlm_intr`, and `core/plat/<line>`;
+     `dlm_intr`; and from `core/plat`, `amiga.c` and `<line>/line.c` (with
+     the loader's flags, like `sha256.c`: they use `loader/common/bootinfo.h`);
    - from assembler: `dlm_cache.s`, `dlm_hooksw.s`, `dlm_spl.s`;
    - **not `dlmksym.s`**: it is the empty block, and step 6 replaces it;
    - `loader/common/sha256.c` and `crc32.c` with the loader's flags
@@ -73,11 +74,24 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
 5. **Write the identity record and the arena:**
    `python3 tools/mkident.py --asm <line> $KABI 0x60000 > ident.s`
    (`dlm_ident`, 64 bytes; `dlm_arena`, 0x60000 bytes of zeros, both in
-   `.data`). The capacity is 0x60000, from M-MOD1.
+   `.data`). The capacity is 0x60000, from M-MOD1. Both are 4-byte
+   aligned, never 16, because `.data` follows `.text` directly in the
+   loader's layout. The arena's image offset is therefore 4-aligned only:
+   boot2 pads each module's bytes to a 16-byte absolute address (C3-4).
 6. **Generate the symbol block:**
    `mkksym -a abi/<line>/ddi.list -a abi/<line>/core.list > ksym.s`, then
-   assemble it.
-7. **Splice into the base** as the adopted core does (core map §8):
+   assemble it (4-byte aligned, core patch 0013).
+7. **Splice into the base**, in this order:
+   1. **the base chain without the static z3660eth, zz9000 and monsw:** a
+      rebuild of the chain on the kernel's own tree, not a splice option.
+      On k46, z3660eth shares the z3660 pass with the SCSI root driver;
+      the port's switch is `Z3660_NET=off`, branch `k46-module`, d0dbfea;
+   2. **kinfo**, with its kabi set to `$KABI` (step 8);
+   3. **the core's splice**, below;
+   4. **last, fpe** (k46) or **`elf2brel`** (k30). Steps 9 and 10 run on
+      the kernel before `elf2brel`, and on k46 on fpe's output.
+
+   The core's splice is the adopted core's method (core map §8):
    - `objcopy --weaken-symbol` on `dmainit`, `execsw`, `fmodsw`,
      `scrcon_put` and `aciabintr`;
    - `--add-symbol` `__amix_execsw` and `__amix_fmodsw` as aliases of the
@@ -88,14 +102,31 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
      `p6int` is `aciabintr`'s only caller. `make core` does this splice;
    - `ld -r` with the core objects, `ident.o` and `ksym.o`; on k46 add
      `libgcc.a` and the port's `devkvmap040.o`.
-   - Leave the static z3660eth and zz9000 (and monsw) out, so majors 49,
-     51 and 52 are free.
+   - **.rodata:** `dlm.o` carries 0x100 bytes of `.rodata`, and libgcc's
+     `__clz_tab` 0x200. The port folds `.rodata` into `.data`
+     (`tools/fold-rodata.sh`, as for cdfs and fpe). C3-3's image offsets
+     then hold with `.rodata` = 0: an offset is the size of `.text` plus
+     the object's offset in `.data`. `mkident.py --fill` reads the final
+     layout either way.
+   - **No weak symbol survives:** `hooksw` is strong (patch 0013), and
+     `plat_dmainit` comes only from `core/plat`. The weak references
+     (`cputype` in `dlm_cache.s`, `dlm_ident` in `dlm_arena.c`) are
+     defined by the link. `make core` checks that `nm` shows no `W`, `w`
+     or `V`, and no undefined symbol but `etext`, `edata` and `end`.
 8. **The kernel hooks** (the kernel tree's own change):
    - `dlm_marc_post()` is called once after `vfs_mountroot` returns (in
      `rth1_mountroot`), or from the first `sysinit` entry if U15 says
      loading in process 0 is unsafe;
-   - `kinfo`'s module list (C2-1 offset 536) is filled from the core's
-     loaded modules.
+   - **kinfo's kabi is `$KABI`, not "static":**
+     - k30: compile amix-kerntools' `kinfo030.c` with
+       `-DKINFO_KABI=\"k30.1.0\"` (it takes the define, `kinfo_kabi[]`);
+     - k46: the port's kinfo sets its `kinfo_kabi` the same way;
+   - **kinfo's module list (C2-1 offset 536):** on every read, kinfo calls
+     `n = dlm_kinfo_list(buf, max)` (core patch 0013). It writes `n`
+     entries of 32 bytes (name NUL-padded to 24, load address, size) and
+     sets the count at 536, the `length` (540 + 32 × n) and the check;
+   - **k30's build id** for the core is kinfo's `kinfo_buildid[]`, stamped
+     by the build; `core/plat/k30/line.c` reads it. k46 reads `buildid`.
 9. **Fill after the final link:**
    - `mkksym -f <kernel>`: the sizes; it fails on a listed name undefined
      or of the other kind;
@@ -110,6 +141,28 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
     - `size=`, `sha256=` (and `bss=` for k30's brel) of the form shipped;
     - no `root=`/`rootfs=`.
 
+## 3a. Answers to the dry runs
+
+**The port, KD060-Z (2026-10-26), steps 1–7 and 9–10 clean, the gate 12 of
+12, U16 and M-REG1 holding:**
+- **(a)** The symbol block, `dlm_ident` and the arena are 4-byte aligned
+  (core patch 0013, `mkident.py`); steps 5 and 6.
+- **(b)** Fold `.rodata` into `.data` (step 7). C3-3's offsets hold with
+  `.rodata` = 0.
+- **(c)** `hooksw` is strong and the weak `plat_dmainit` default is gone
+  (patch 0013); `core/plat` provides `plat_dmainit`. No rebind is needed.
+- **(d)** The order is base chain (static network, RTG and monsw left
+  out) → kinfo → the core's splice → fpe last; steps 9–10 on fpe's
+  output. Step 7.
+- **(e)** M-REG1 now counts a row filled at boot (a store relocated
+  against `cdevsw` inside the row). On the static -51, major 51 is filled
+  at boot by z3660eth's init, and the record is corrected. The module
+  kernel's acceptance asks for 49, 51 and 52 neither used nor filled at
+  boot.
+- **(f)** Confirmed: the arena's offset is 4-aligned only, and boot2 pads
+  each module's bytes to 16 absolute (C3-4 §2).
+- **(g)** kinfo's kabi and module list: step 8.
+
 ## 4. Acceptance
 
 - **Steps 2–10 pass**, the gate 12 of 12 at both binds, and the port's
@@ -117,7 +170,9 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
   That is **U16**; its numbers go in the report.
 - **M-REG1 re-run** on the module kernel (amix-dlm
   `tools/measure/m-reg1.py`): `sysentsize` 142 with slots 64–69 `nosys`,
-  majors 49/51/52 empty, `fmodcnt` 11.
+  majors 49/51/52 free (neither used nor filled at boot), `fmodcnt` 11.
+- **`nm`** shows no weak symbol, and no undefined symbol but `etext`,
+  `edata` and `end`.
 - **The image boots under loader version 2** with a generation that has
   an `arena` and an `ident` line and no modules. The console shows
   `dlm: <n> kernel symbols` and `dlm: modules from generation <id>'s
