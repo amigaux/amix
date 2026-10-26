@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 6
+# C2-4 — `kbootset` as a called program, version 7
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -35,8 +35,12 @@ After a transaction that changed a kernel-space package, apkg runs
 `kbootset build && kbootset commit` when `bootset=auto`, and prints the
 command otherwise. apkg reads `bootset=` from
 `<target>/etc/default/bootset`: when the file or the key is absent it is
-`auto`, and any value other than `auto` or `manual` counts as `manual`. On status 0 it repeats kbootset's last line
-(`generation N committed; power-cycle to boot it`).
+`auto`, and any value other than `auto` or `manual` counts as `manual`. On status 0 it repeats kbootset's last line:
+`generation N committed; power-cycle to boot it`, or, when the
+transaction changed nothing the default generation holds (a loader-only
+or kbootset-only transaction, say),
+`the default generation M already has these members; nothing to commit`
+(§10). apkg never passes `--again`.
 
 ## 4. Power-cut rows
 
@@ -143,3 +147,35 @@ has run:
   nothing to it.
 - `retry` (§7) and `mark-good` are the only two calls the base system
   makes on every boot.
+
+## 10. An unchanged generation, and `commit --again`
+
+`kbootset commit` compares the built generation with the default one
+before it writes anything. The comparison is of what the two manifests
+say, through the loader's parser:
+- the line, kabi, CPUs, `loader-min`, root, swap, root filesystem,
+  boards and arena;
+- every member, by kind, name, size and SHA-256, and `bss=`;
+- the parameters.
+
+The generation id and the `created` time are not compared.
+
+- **When they are equal,** commit writes nothing: no journal, no member,
+  no control block. It removes the build from `/stand/gen/<id>`, so the
+  next build starts clean with the same id, and exits 0. Its last line is
+  `kbootset: the default generation M already has these members; nothing to commit`.
+  apkg's trigger repeats it and finishes its transaction as after any
+  commit.
+- **`build` says so in advance:** `generation N built in /stand/gen/N;
+  kbootset commit writes it; it equals the default generation M:
+  kbootset commit will write nothing (commit --again writes it)`.
+- **`commit --again`** commits the built generation even when it equals
+  the default. When it does not, `--again` is a plain commit. It is for:
+  - a repair. The comparison reads manifests, not the stored bytes, so a
+    damaged copy of the default in the store compares equal. `kbootset
+    check` is what finds damaged store bytes, and `commit --again` writes
+    a fresh copy as a new generation;
+  - rows and tests that need a new generation from the same packages.
+- **`commit --spec`** is never compared. It writes the generation the
+  spec gives.
+
