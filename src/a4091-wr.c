@@ -356,7 +356,7 @@ struct a4091_kstat {
 	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
 #ifdef	A4091_MODULE			/* appended: the static layout is unchanged */
 	ulong	noreach;		/* dma_addr 0 (C4-5 v5): not armed, failed */
-	ulong	stsync;			/* status-line syncs after a WRITE or TUR    */
+	ulong	stsync;			/* clear-line syncs after a WRITE or TUR     */
 #endif
 };
 struct a4091_kstat	a4091_kstat = {
@@ -390,7 +390,7 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 #ifdef	A4091_MODULE
 /*
  * The module's chip-visible structures: one dma_alloc area (C4-5 section 3),
- * 1332 bytes from a 16-aligned base.  The names the queue path uses (ds,
+ * 1348 bytes from a 16-aligned base.  The names the queue path uses (ds,
  * inq_script, the buffers, the bounce) are redefined onto it below, so the code
  * is the static driver's; A4091_BUS() turns a member's kernel address into the
  * physical one the chip is given.  The SCRIPTS are position-independent (REL
@@ -398,18 +398,22 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
  * the copy's physical address.
  *
  * The status line comes first, a 16-byte line of its own holding only what the
- * chip writes outside the data segment (status, message bytes): after a command
- * whose data complete did not clear the 030 data cache (a WRITE, a TUR) the
- * driver prepares and completes FROM_DEVICE over that line before it reads the
- * status (C4-5 v5 section 5.4), and nothing the CPU wrote shares the line.
+ * chip writes outside the data segment (status, message bytes).  After a
+ * command whose data complete did not clear the 030 data cache (a WRITE, a TUR)
+ * the driver prepares and completes FROM_DEVICE over the CLEAR LINE beside it,
+ * a line nobody writes, before it reads the status (C4-5 v5 section 5.4): the
+ * k30 complete clears the whole data cache, and should the provider bounce that
+ * segment (its dma_forcebounce hook does, Bench N109), the bounce it copies back
+ * lands on the clear line, never on the status byte the chip wrote.
  */
 struct a4091_dmaarea {
 	uchar		d_sline[16];		/* 0x000 status 0-3, message 4-11 */
-	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x010, 184 */
-	struct siop_ds	d_ds;						/* 0x0c8, 76  */
-	uchar		d_ident[4];					/* 0x114      */
-	uchar		d_cdb[12];					/* 0x118      */
-	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x124      */
+	uchar		d_cline[16];		/* 0x010 the clear line: never written */
+	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x020, 184 */
+	struct siop_ds	d_ds;						/* 0x0d8, 76  */
+	uchar		d_ident[4];					/* 0x124      */
+	uchar		d_cdb[12];					/* 0x128      */
+	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x134      */
 };
 
 struct a4091_dmaarea	*a4091_da;	/* kernel address, 0 until _load        */
@@ -1153,13 +1157,14 @@ struct sdcom	*cp;
 		}
 	}
 #ifdef	A4091_MODULE
-	/* The status line (C4-5 v5 section 5.4): a FROM_DEVICE complete clears the
-	 * 030 data cache; after a WRITE or a TUR none ran, so sync the line the
-	 * chip wrote the status and message bytes to before reading them. */
+	/* The status (C4-5 v5 section 5.4): a FROM_DEVICE complete clears the 030
+	 * data cache; after a WRITE or a TUR none ran, so run one over the clear
+	 * line -- not the status line: a bounced complete copies back over its
+	 * segment (N109) -- before the status and message bytes are read. */
 	if (!(dmadir == DMA_FROM_DEVICE && dlen != 0)) {
 		ulong	spa;
 
-		spa = A4091_BUS(a4091_da->d_sline);
+		spa = A4091_BUS(a4091_da->d_cline);
 		a4091_dma_prepare( (int)A4091_CARD, spa, (ulong)16, DMA_FROM_DEVICE);
 		a4091_dma_complete( (int)A4091_CARD, spa, (ulong)16, DMA_FROM_DEVICE);
 		a4091_kstat.stsync++;

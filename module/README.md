@@ -51,23 +51,37 @@ unchanged:
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
-| Status line | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's status line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync` |
-| Version | `VERSION` (`1.0.0-3`), the package version. 1.0.0-1 had no refused arm and no status line; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index |
+| Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (Bench N109) |
+| Version | `VERSION` (`1.0.0-4`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself |
 
 ### The `dma_alloc` area
 
 Everything the chip reads or writes besides the caller's buffer is in one
-area of 1332 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
+area of 1348 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
 handing a board the module's own memory, and on k30 the arena is out of a
 Zorro master's reach.
 
 | Offset | Content |
 |---|---|
 | 0x000 | the status line: the status byte (0) and the message bytes (4–11), a 16-byte line holding nothing the CPU writes during a command |
-| 0x010 | the SCRIPTS, 184 bytes, copied from the template |
-| 0x0c8 | the DSA table, 76 bytes |
-| 0x114 | the IDENTIFY and CDB buffers, 16 bytes |
-| 0x124 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
+| 0x010 | the clear line: 16 bytes nobody writes; the cache-clearing sync's segment |
+| 0x020 | the SCRIPTS, 184 bytes, copied from the template |
+| 0x0d8 | the DSA table, 76 bytes |
+| 0x124 | the IDENTIFY and CDB buffers, 16 bytes |
+| 0x134 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
+
+**N109 (2026-10-27).** 1.0.0-3 ran the sync over the status line itself. With
+the k30 provider's `dma_forcebounce` hook on, that segment was bounced too.
+The FROM complete then copied the bounce's leftover bytes over the status byte
+the chip had written. Under write load dd saw a nonzero status, REQUEST SENSE
+answered NO SENSE (`… blk158420 0x0 0x0`), and the retry succeeded with the
+data intact.
+- Production was not affected: without the hook, `dma_alloc` memory is never
+  bounced.
+- Fixed twice: the provider's hook now exempts `dma_alloc` memory (C4-5 v8
+  §5.3, kern30m -15), and 1.0.0-4 syncs the clear line instead.
+- The host test "status under force-bounce (N109)" models it: 1.0.0-3 fails it
+  and 1.0.0-4 passes.
 
 - The SCRIPTS are position-independent (relative jumps, table-indirect
   moves), so they copy unchanged, and DSP is the copy's physical address.
@@ -156,8 +170,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 16/16 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 16/16 cases |
+| H1 | k30 (`sptalloc` arm) | 17/17 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 17/17 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
@@ -180,7 +194,7 @@ So the A4092 and A4770 identities are host and metal rows only.
 | E3 | k46: E1's box; `dd` reads with sense, a tape short read if a tape unit is set | `a4091_kstat.bounce_n` grows; the sense and the short read return as with the static driver |
 | E4 | k46: E1's box, five `reboot` cycles | Each boot clean; the halt pass runs each time |
 | E5 | k46: two A4091 boards, if amiberry offers a second instance | Two registrations; the lower base is the lower card |
-| E6 | k30: E1's setup on the 030 module kernel (-14 or later), with 1.0.0-2 | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise |
+| E6 | k30: E1's setup on the 030 module kernel (-14 or later) | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise. **Passed 2026-10-27** (Bench N109, N109b; 1.0.0-3 on kern30m -14): root on the A4091 alone, pool 128 KiB, 2 MiB raw read and `cp` + `sync` + `cmp` identical with the hook off and on, `noreach` 0. Finding N109 (above) is fixed in 1.0.0-4 |
 | E6b | k30: E6's box, `dma_forcebounce` on, one read too large for the 128 KiB pool (`dd` with a 256 KiB block on the raw A4091 disk) | `noreach` +1, the console line `A4091 c…: no reachable DMA buffer for … bytes`, the `dd` fails with EIO, the chip is not armed, and the next command runs |
 
 ### Metal (later)
