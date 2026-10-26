@@ -58,11 +58,24 @@ grep -q "^kernel unix /stand/k46/unix$" $R/stand/gen/1/build
 grep -q "^root sd id=02025400 base=00000000 unit=6 slice=1$" $R/stand/gen/1/build
 $KB commit 2>/dev/null | grep -q "generation 1 written as the pristine generation"
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
-# an upgrade: the root, swap and filesystem come from the default generation
-$KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 16777216 | grep -q "generation 2 built"
+# a build of the same packages (a loader-only transaction, say): the root,
+# swap and filesystem come from the default generation, so it equals it;
+# build says so, commit writes nothing and exits 0, and the next build
+# still gets id 2 (C2-4 §3)
+$KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 16777216 > $T/out
+grep -q "generation 2 built" $T/out
+grep -q "equals the default generation 1: kbootset commit will write nothing (commit --again writes it)" $T/out
 grep -q "^root sd id=02025400" $R/stand/gen/2/build
 grep -q "^rootfs ufs$" $R/stand/gen/2/build
-$KB commit 2>/dev/null | grep -q "generation 2 committed"
+cp $T/disk.img $T/before.img
+$KB commit > $T/out 2>&1 || { echo "kbuild: the unchanged commit failed" >&2; cat $T/out >&2; exit 1; }
+tail -1 $T/out | grep -qx "kbootset: the default generation 1 already has these members; nothing to commit"
+cmp -s $T/disk.img $T/before.img || { echo "kbuild: the unchanged commit wrote the store" >&2; exit 1; }
+[ ! -d $R/stand/gen/2 ] || { echo "kbuild: the unchanged build was left behind" >&2; exit 1; }
+# commit --again writes it all the same (a repair, a bench row); then the
+# generation counts as an upgrade
+$KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 16777216 | grep -q "generation 2 built"
+$KB commit --again 2>/dev/null | grep -q "generation 2 committed"
 $B/axsim $T/disk.img 65536 1 | grep -q "generation 2, kernel"
 
 # each gate refuses with status 4, naming itself, and writes nothing

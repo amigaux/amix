@@ -44,8 +44,11 @@ int kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 cr
 	     ax_u32 *id);
 
 /* commit the generation built for the store's next id: the gates run again
- * against its files as they are now, then ks_commit */
-int kb_commit(struct ks *k, const char *root, ax_u32 *id);
+ * against its files as they are now, then ks_commit.  When it equals the
+ * default generation (members by size and SHA-256, the facts, the
+ * parameters) nothing is written and KS_OK returned, unless again is set
+ * (C2-4 §3: a repair, or a row that needs the generation) */
+int kb_commit(struct ks *k, const char *root, ax_u32 *id, int again);
 
 /* a new medium's pristine generation (host media builds, S2-04): every
  * gate, against the loader version the medium carries, then the

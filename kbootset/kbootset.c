@@ -24,7 +24,9 @@
  *                          ROOT/stand/gen/<id>/; every gate; the options
  *                          name the box's facts on a host build (kinfo on
  *                          the box, S2-06)
- *   commit                 commit the built generation (the gates again)
+ *   commit                 commit the built generation (the gates again);
+ *                          nothing when it equals the default generation
+ *   commit --again         commit it even then (a repair; the bench rows)
  *   commit --spec SPEC     a generation from a spec (mkstore's format), for
  *                          tests and media built without packages
  *   check                  SHA-256 and CRC-32 of every member in the store,
@@ -290,7 +292,7 @@ media(const char *root, char **cmd, int argc)
 		if (rc == KS_OK)
 			rc = kb_build(&k, root, &f, now(), &id);
 		if (rc == KS_OK)
-			rc = kb_commit(&k, root, &id);
+			rc = kb_commit(&k, root, &id, 0);
 		if (k.msg[0])
 			printf("kbootset: %s\n", k.msg);
 		fclose(d.f);
@@ -377,7 +379,7 @@ usage(void)
 		"  status | check | rollback | collect | mark-bad ID\n"
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
-		"  commit [--spec SPEC]\n"
+		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID]\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
@@ -673,7 +675,9 @@ main(int argc, char **argv)
 			if (rc == 2)
 				return 2;
 		} else if (!strcmp(cmd[0], "commit") && argc == 1) {
-			rc = kb_commit(&k, root, &id);
+			rc = kb_commit(&k, root, &id, 0);
+		} else if (!strcmp(cmd[0], "commit") && argc == 2 && !strcmp(cmd[1], "--again")) {
+			rc = kb_commit(&k, root, &id, 1);
 		} else if (!strcmp(cmd[0], "build")) {
 			rc = kb_build(&k, root, &facts, now(), &id);
 		} else if (!strcmp(cmd[0], "mark-good") && (booted || (have_kinfo && ki.has_axl1))) {

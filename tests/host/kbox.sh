@@ -121,7 +121,8 @@ EOF2
 $B/kbootset -R $R build --root "sd id=02025400 base=40000000 unit=6 slice=1" | grep -q "generation 1 built"
 $B/kbootset -R $R commit 2>/dev/null | grep -q "pristine"
 $B/kbootset -R $R build | grep -q "generation 2 built"
-$B/kbootset -R $R commit 2>/dev/null | grep -q "generation 2 committed"
+# the same package as generation 1: --again, or commit would write nothing (C2-4 §3)
+$B/kbootset -R $R commit --again 2>/dev/null | grep -q "generation 2 committed"
 [ -d $R/var/kbootset ] && [ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]	# made by kbootset
 # 4. mark-good with no options: kinfo says generation 2 booted by the primary
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
@@ -133,7 +134,7 @@ $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
 $B/kbootset -R $R build | grep -q "generation 3 built"
 # committed as apkg calls it, a named journal whose directory is missing
 rm -rf $R/var/kbootset
-$B/kbootset -R $R --journal $R/var/kbootset/journal commit 2>/dev/null | grep -q "generation 3 committed"
+$B/kbootset -R $R --journal $R/var/kbootset/journal commit --again 2>/dev/null | grep -q "generation 3 committed"
 [ -d $R/var/kbootset ] && [ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]
 $B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"
 python3 -I $T/disk.py kinfo $T/kinfo 3,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0

@@ -18,6 +18,8 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include "crc32.h"
 #include "sha256.h"
 #include "kbuild.h"
 
@@ -530,6 +532,58 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	return 0;
 }
 
+static int
+same(const char *a, const char *b)
+{
+	return a == b || (a && b && !strcmp(a, b));
+}
+
+/*
+ * Does the default generation already hold what head and this kernel
+ * describe?  Both sides go through the loader's parser, so the comparison
+ * is of what the manifests say (line, kabi, CPUs, loader-min, root,
+ * swap, filesystem, boards, arena, every member by size and SHA-256, the
+ * parameters), not of their layout; the generation id and created time
+ * are not compared.  Sets *dflt to the default's id.
+ */
+static int
+same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen, ax_u32 bss,
+		ax_u32 *dflt)
+{
+	static char cand[8192 + 512];
+	static struct ax_manifest d, n;
+	char *dman, hx[65];
+	int i, errline, eq;
+	size_t l;
+
+	if (!k->ctl.default_gen || (dman = ks_manifest(k, k->ctl.default_gen, &d)) == 0)
+		return 0;
+	hex(kernel, klen, hx);		/* the kernel's SHA-256 */
+	l = (size_t)sprintf(cand, "GMF1\ngeneration %lu\n%.8192s", (unsigned long)d.generation, head);
+	l += (size_t)sprintf(cand + l, "kernel unix %lu at=0x10000 crc32=00000000 sha256=%s",
+			     (unsigned long)klen, hx);
+	if (bss)
+		l += (size_t)sprintf(cand + l, " bss=%lu", (unsigned long)bss);
+	cand[l++] = '\n';
+	l += (size_t)sprintf(cand + l, "end crc32=%08lx\n",
+			     (unsigned long)ax_crc32(k->crctab, (ax_u8 *)cand, (ax_u32)l));
+	eq = ax_manifest_parse(k->crctab, cand, (ax_u32)l, &n, &errline) == AXM_OK &&
+	     same(d.line, n.line) && same(d.kabi, n.kabi) && same(d.cpu, n.cpu) &&
+	     d.loader_min == n.loader_min && same(d.rootfs, n.rootfs) && same(d.root, n.root) &&
+	     same(d.swap, n.swap) && same(d.boards, n.boards) &&
+	     d.has_arena == n.has_arena && d.arena_off == n.arena_off && d.arena_cap == n.arena_cap &&
+	     d.has_kernel && d.kernel.size == n.kernel.size && same(d.kernel.sha256, n.kernel.sha256) &&
+	     d.kernel.bss == n.kernel.bss && d.nmod == n.nmod && d.has_ramdisk == n.has_ramdisk &&
+	     d.nparam == n.nparam;
+	for (i = 0; eq && i < d.nmod; i++)
+		eq = same(d.mod[i].name, n.mod[i].name) && same(d.mod[i].sha256, n.mod[i].sha256);
+	for (i = 0; eq && i < d.nparam; i++)
+		eq = same(d.param[i], n.param[i]);
+	*dflt = d.generation;
+	free(dman);
+	return eq;
+}
+
 int
 kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 created, ax_u32 *idp)
 {
@@ -539,8 +593,8 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	char rootfs[16], *dman = 0;
 	const char *rootrec = f->root, *swaprec = f->swap, *boards = 0;
 	ax_u8 *kernel;
-	ax_u32 klen, id = ks_next_id(k);
-	int rc;
+	ax_u32 klen, id = ks_next_id(k), dflt = 0;
+	int rc, same_default = 0;
 
 	k->gate = 0;
 	k->msg[0] = 0;
@@ -557,8 +611,9 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	rc = gates(k, root, f, rootfs, &kk, &kernel, &klen);
 	if (rc != KS_OK)
 		goto out;
-	free(kernel);
 	head(text, f, &kk, rootfs, rootrec, swaprec, boards, created);
+	same_default = same_as_default(k, text, kernel, klen, kk.brel ? kk.bss : 0, &dflt);
+	free(kernel);
 	sprintf(text + strlen(text), "kernel unix /stand/k%d/unix\n", f->line);
 	sprintf(facts, "line=%d\nbootdev=%s\nrootdev=%s\nrootfs=%s\nmem=%lu\ncreated=%lu\n",
 		f->line, f->bootdev, f->rootdev, rootfs, (unsigned long)f->mem, (unsigned long)created);
@@ -567,6 +622,10 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 		*idp = id;
 		sprintf(k->msg, "generation %lu built in /stand/gen/%lu; kbootset commit writes it",
 			(unsigned long)id, (unsigned long)id);
+		if (same_default)	/* a loader-only transaction, say (C2-4 §3) */
+			sprintf(k->msg + strlen(k->msg), "; it equals the default generation %lu: "
+				"kbootset commit will write nothing (commit --again writes it)",
+				(unsigned long)dflt);
 	}
 out:
 	free(dman);
@@ -574,7 +633,7 @@ out:
 }
 
 int
-kb_commit(struct ks *k, const char *root, ax_u32 *idp)
+kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 {
 	static char head[8192];
 	static struct ks_member mb;
@@ -583,7 +642,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp)
 	struct ks_newgen g;
 	char p[80], buf[64], *text, *line, *next;
 	ax_u8 *t, *kernel;
-	ax_u32 len, klen, id = ks_next_id(k), created;
+	ax_u32 len, klen, id = ks_next_id(k), created, dflt;
 	size_t hl = 0;
 	int rc;
 
@@ -648,6 +707,21 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp)
 
 		sprintf(battr, "bss=%lu", (unsigned long)kk.bss);
 		mb.attrs = battr;
+	}
+	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, &dflt)) {
+		/* nothing new: write nothing, and drop the build so the next one
+		 * starts clean (C2-4 §3) */
+		free(kernel);
+		sprintf(p, "/stand/gen/%lu/build", (unsigned long)id);
+		remove(under(root, p));
+		sprintf(p, "/stand/gen/%lu/facts", (unsigned long)id);
+		remove(under(root, p));
+		sprintf(p, "/stand/gen/%lu", (unsigned long)id);
+		rmdir(under(root, p));
+		*idp = dflt;
+		sprintf(k->msg, "the default generation %lu already has these members; nothing to commit",
+			(unsigned long)dflt);
+		return KS_OK;
 	}
 	memset(&g, 0, sizeof(g));
 	g.head = head;
