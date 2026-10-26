@@ -1,3 +1,11 @@
+## 2026-10-26 — apkg upgrade with several names; APKG 0.3.0 staged for the 1.1 media (6215017, bb0072d) — NOT published
+
+`apkg upgrade <name>...` takes several names as one transaction: one journal, one kbootset build + commit, so a kernel, the
+loader and kbootset upgrade into one generation (stage-2 exit row S2-46); an unknown or not-installed name refuses the whole
+call; up-to-date names are left out. APKG 0.3.0 minted by build-packages.sh --apkg for the 1.1 media
+(build/repo-staging-apkg030/base/APKG-0.3.0.pkg, 192 000 B, sha256 e6e7b7d5…): STAGED, the public catalog and the publish
+line of record still say 0.2.3 — publishing is the owner's decision. APKGENG stays 1.12.3. run-tests 376/0.
+
 ## 2026-10-25 (night, 2) — the install record is named by pkginst (C2-2 v4) (3ab2c3f)
 
 /var/apkg/kpkg/<pkginst> (the entry's pkginst=, else its name): an s5 root keeps 14 characters of a file name, so a long
