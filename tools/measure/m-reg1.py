@@ -194,8 +194,11 @@ for fam, rel in KERNELS:
         '%d %s (%s)' % (m, state(m), who) for m, who in sorted(REGISTRY.items()) if nc and m < nc))
     nb, bfree = rows(e, 'bdevsw', 'bdevcnt', BDEVSZ, bdev_empty)
     print('bdevsw %s rows; empty %s' % (nb, ranges(bfree)))
+    # in a module kernel the core's nfstype is 0 in the image (dmainit
+    # fills it); the stock count is __amix_nfstype (core patch 0040)
+    nfs = 'nfstype' if e.sym('__amix_nfstype') is None else '__amix_nfstype'
     print('fmodcnt %s; nexectype %s; nfstype %s' % (
-        intval(e, 'fmodcnt'), intval(e, 'nexectype'), intval(e, 'nfstype')))
+        intval(e, 'fmodcnt'), intval(e, 'nexectype'), intval(e, nfs)))
     it = e.sym('int2_tbl')
     if it:
         h, k = [], 0
