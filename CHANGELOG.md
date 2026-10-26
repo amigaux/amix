@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — a4091 module: the refused arm also calls dma_complete (drv_prep == drv_cmpl)
+
+dma_complete with nothing prepared only counts cmpl_noprep on both providers (dlm), so the refused arm completes too.
+Host 16/16 per arm; modcheck ok k46.1.2 (5492 B, ef8cd0dc) / k30.1.2 (4484 B, adbc4e47); static objects unchanged. Still 1.0.0-2
+(1.0.0-2 is unminted; it mints in the -79/-14 wave).
+
 ## 2026-10-27 — a4091 module 1.0.0-2, C4-5 v5 (0c00bc9, 7ad5299, 53bebc5)
 
 A dma_addr of 0 is never armed: no DSP write, status 0xff, okay FALSE, callback, a4091_kstat.noreach++ (no dma_complete;
