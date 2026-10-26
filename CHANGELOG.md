@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — core patch 0042: the filesystem layouts in the fingerprint; the 1.2 texts (0572fcf)
+
+dlmoffs probes the sizes and the fields cdfs reads of vfs, vnode, vattr, uio/iovec, dirent, statvfs, mounta, fid and sdcom;
+abi-k30/k46.1.2.txt carry them: abi= 2ab48658 on both lines (was fea18182). Every 1.2 kernel minted before this needs a re-cut.
+dma_complete without ownership is harmless on both providers (cmpl_noprep), so a driver may complete after a refused arm.
+
 ## 2026-10-27 — S4-62 piece 2: the 030 DMA provider; C4-5 v5 dma_addr 0 = do not arm (e9665e6, 20f2c8c)
 
 core/plat/k30: at dmainit the pool is the top 128 KiB of the largest fast memory[] region in 0x00200000–0x08000000 not holding
