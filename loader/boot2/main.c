@@ -100,7 +100,7 @@ want_volume(ax_u32 vol)
 	if (!blk)
 		return -1;
 	motor_off();
-	con_printf("amix-boot: L11 insert boot volume %u of %u\n", vol, (ax_u32)hdr.nvolumes);
+	con_say("L11 insert boot volume %u of %u\n", vol, (ax_u32)hdr.nvolumes);
 	last = changenum();
 	for (;;) {
 		for (f = 0, asked = 0; f < 25 && !asked; f++) {	/* half a second */
@@ -132,9 +132,9 @@ want_volume(ax_u32 vol)
 			continue;		/* no change counter: said already */
 		said = verdict;
 		if ((verdict & 0xFF) == 3)
-			con_printf("amix-boot: that is volume %u; insert volume %u\n", (ax_u32)h.volume, vol);
+			con_say("that is volume %u; insert volume %u\n", (ax_u32)h.volume, vol);
 		else
-			con_puts("amix-boot: that disk is not part of this boot set\n");
+			con_say("that disk is not part of this boot set\n");
 	}
 	x_freemem(blk, 2048);
 	curvol = vol;
@@ -313,25 +313,25 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	con_printf("\namix-boot %u: 680%u (AttnFlags %04x), boot1 choice %x\n",
 		   LOADER_VERSION, core_cpu, *(ax_u16 *)((ax_u8 *)execbase + EXEC_ATTNFLAGS), choice);
 	if (choice & 0x100)
-		con_puts("amix-boot: B2 primary boot2 damaged, secondary used\n");
+		con_say("B2 primary boot2 damaged, secondary used\n");
 	if (choice & 0x200)
-		con_puts("amix-boot: B4 new loader already started once, previous loader used\n");
+		con_say("B4 new loader already started once, previous loader used\n");
 	if (!infast)
-		con_puts("amix-boot: no fast memory: the loader runs from chip memory\n");
+		con_say("no fast memory: the loader runs from chip memory\n");
 
 	bounce = x_allocmem(BOUNCE, MEMF_CHIP);
 	if (!bounce) {
-		con_puts("amix-boot: L4 no chip memory\n");
+		con_say("L4 no chip memory\n");
 		return -1;
 	}
 	if (ax_hdr_parse(ax_crctab, (ax_u8 *)hdrp, &hdr) != AX_OK) {
-		con_puts("amix-boot: B1 store header lost\n");
+		con_say("B1 store header lost\n");
 		return -1;
 	}
 	curvol = hdr.volume;
 	cb = x_allocmem(2 * 2048, MEMF_PUBLIC);
 	if (!cb) {
-		con_puts("amix-boot: L4 no memory\n");
+		con_say("L4 no memory\n");
 		return -1;
 	}
 	if (io(CMD_READ, hdr.ctl_off[0], cb, 2048) != 0)
@@ -341,7 +341,7 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	ctlcopy = ax_ctl_pick(ax_crctab, cb, cb + 2048, &ctl);
 	x_freemem(cb, 2 * 2048);
 	if (ctlcopy < 0) {
-		con_puts("amix-boot: no valid control block\n");
+		con_say("no valid control block\n");
 		return -1;
 	}
 	con_printf("amix-boot %u: 680%u, boot device %s, partition at %u\n", LOADER_VERSION,

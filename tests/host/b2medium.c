@@ -136,16 +136,11 @@ x_doio(void *iobp)
 	return 0;
 }
 
-void
-con_printf(const char *fmt, ...)
+static void
+out(const char *line)
 {
-	char line[256];
 	unsigned v;
-	va_list ap;
 
-	va_start(ap, fmt);
-	vsprintf(line, fmt, ap);
-	va_end(ap);
 	fputs(line, stdout);
 	if (sscanf(line, "amix-boot: L11 insert boot volume %u", &v) == 1) {
 		wanted = (int)v;
@@ -153,15 +148,40 @@ con_printf(const char *fmt, ...)
 		nextat = frames + 60;
 	} else if (strstr(line, "that is volume")) {
 		refused_vol++;
+	} else if (strstr(line, "not part of this boot set")) {
+		refused_set++;
 	}
+}
+
+void
+con_printf(const char *fmt, ...)
+{
+	char line[256];
+	va_list ap;
+
+	va_start(ap, fmt);
+	vsprintf(line, fmt, ap);
+	va_end(ap);
+	out(line);
+}
+
+void
+con_say(const char *fmt, ...)
+{
+	char line[256];
+	va_list ap;
+
+	strcpy(line, "amix-boot: ");
+	va_start(ap, fmt);
+	vsprintf(line + 11, fmt, ap);
+	va_end(ap);
+	out(line);
 }
 
 void
 con_puts(const char *s)
 {
-	fputs(s, stdout);
-	if (strstr(s, "not part of this boot set"))
-		refused_set++;
+	out(s);
 }
 
 void

@@ -137,14 +137,12 @@ putnum(ax_u32 v, int base, int width, int zero)
 }
 
 /* %s %c %u %d %x, with an optional zero flag and width: "%08x" */
-void
-con_printf(const char *fmt, ...)
+static void
+vout(const char *fmt, va_list ap)
 {
-	va_list ap;
 	int width, zero;
 	long d;
 
-	va_start(ap, fmt);
 	for (; *fmt; fmt++) {
 		if (*fmt != '%') {
 			putc_(*fmt);
@@ -179,5 +177,26 @@ con_printf(const char *fmt, ...)
 			putc_(*fmt);
 		}
 	}
+}
+
+void
+con_printf(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vout(fmt, ap);
+	va_end(ap);
+}
+
+/* a loader message (10 §9): the "amix-boot: " prefix, then as con_printf */
+void
+con_say(const char *fmt, ...)
+{
+	va_list ap;
+
+	con_puts("amix-boot: ");
+	va_start(ap, fmt);
+	vout(fmt, ap);
 	va_end(ap);
 }

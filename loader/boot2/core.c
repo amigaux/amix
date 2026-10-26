@@ -66,7 +66,7 @@ static const char *const lmsg[] = { "",
 void
 fail(int code, ax_u32 id)
 {
-	con_printf("amix-boot: %s (generation %u)\n", lmsg[code], id);
+	con_say("%s (generation %u)\n", lmsg[code], id);
 }
 
 int
@@ -74,7 +74,7 @@ core_init(void)
 {
 	w = x_allocmem(sizeof(*w), MEMF_PUBLIC | MEMF_CLEAR);
 	if (!w) {
-		con_puts("amix-boot: L4 no memory\n");
+		con_say("L4 no memory\n");
 		return -1;
 	}
 	ax_crc32_init(crctab);
@@ -270,7 +270,7 @@ load_first(const struct ax_sel *sel)
 			goto next;
 		}
 		if (!line_ok(man.line)) {
-			con_printf("amix-boot: L1 generation %u is for line %s; this CPU is a 680%u\n",
+			con_say("L1 generation %u is for line %s; this CPU is a 680%u\n",
 				   gen, man.line, core_cpu);
 			goto next;
 		}
@@ -281,11 +281,11 @@ load_first(const struct ax_sel *sel)
 			fail(9, gen);
 			goto next;
 		}
-		con_printf("amix-boot: generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
+		con_say("generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
 			   man.kernel.size);
 		vaddr = bind_address(&room);
 		if (!room) {	/* never bind in chip memory: 0 is the vector table */
-			con_puts("amix-boot: no fast memory to run the kernel in\n");
+			con_say("no fast memory to run the kernel in\n");
 			fail(4, gen);
 			goto next;
 		}
@@ -296,7 +296,7 @@ load_first(const struct ax_sel *sel)
 		if (rc == AXR_OK) {
 			bd.end = ax_kernel_end(&bd, man.kernel.bss, &i);
 			if (i)
-				con_puts("amix-boot: a brel kernel without bss= in its manifest: "
+				con_say("a brel kernel without bss= in its manifest: "
 					 "512 KiB assumed\n");
 		}
 		if (rc == AXR_OK && bd.end - vaddr <= room) {
@@ -304,11 +304,11 @@ load_first(const struct ax_sel *sel)
 				return k;
 			fail(rc, gen);
 		} else if (rc == AXR_OK) {
-			con_printf("amix-boot: the kernel needs %u bytes, the largest fast memory "
+			con_say("the kernel needs %u bytes, the largest fast memory "
 				   "region has %u\n", bd.end - vaddr, room);
 			fail(4, gen);
 		} else
-			con_printf("amix-boot: L6 relocation failed: error %d, section %u record %u type %u\n",
+			con_say("L6 relocation failed: error %d, section %u record %u type %u\n",
 				   rc, rer.rsect, rer.index, rer.type);
 		x_freemem(kbuf, man.kernel.size);
 		kbuf = 0;
@@ -386,7 +386,7 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 
 	/* the first generation that loads; when none does, the menu */
 	while ((k = load_first(&sel)) < 0) {
-		con_puts("amix-boot: nothing loaded\n");
+		con_say("nothing loaded\n");
 		id = menu_run(&ctl, sel.n ? sel.order[0] : 0, core_cpu, &safe, &devload);
 		if (!id)
 			return -1;
@@ -429,9 +429,9 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 		   (k > 0 ? AXLF_FALLBACK : 0) | (m->readonly ? AXLF_READONLY : 0) |
 		   (menu ? AXLF_MENU : 0);
 	if (sel.devload)
-		con_puts("amix-boot: DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
+		con_say("DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
 	if (sel.safe)
-		con_puts("amix-boot: safe mode\n");
+		con_say("safe mode\n");
 	if (have_root)
 		lr.root = rootsel;
 	if (man.swap)
@@ -448,16 +448,16 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 	stack = x_allocmem(256, MEMF_CHIP);
 	cop = x_allocmem(sizeof(nullcop), MEMF_CHIP);
 	if (!bi || !chipcode || !ci || !stack || !cop) {
-		con_puts("amix-boot: L4 no chip memory for the hand-off\n");
+		con_say("L4 no chip memory for the hand-off\n");
 		return -1;
 	}
 	if (ax_bootinfo_build(bi, w->cfgs, ncfg, w->mems, nmem, keys, &bd, rth, axl) != 0) {
-		con_puts("amix-boot: more than 16 boards or memory regions\n");
+		con_say("more than 16 boards or memory regions\n");
 		return -1;
 	}
-	con_printf("amix-boot: RTH1 flags %x unit %u board %08x id %08x%s\n", f, u, b, id,
+	con_say("RTH1 flags %x unit %u board %08x id %08x%s\n", f, u, b, id,
 		   have_root ? ", root record from the manifest" : "");
-	con_printf("amix-boot: kernel bound at %08x, text %u rodata %u data %u, end %08x\n",
+	con_say("kernel bound at %08x, text %u rodata %u data %u, end %08x\n",
 		   vaddr, bd.tsize, bd.rsize, bd.dsize, bd.end);
 
 	ci->sp = (ax_u32)stack + 252;
@@ -477,7 +477,7 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 		REGS0(r);
 		ax_call(ax_execbase, -636, &r);	/* CacheClearU: chipcode was just written */
 	}
-	con_puts("amix-boot: starting the kernel\n");
+	con_say("starting the kernel\n");
 	ax_super((void (*)(void))chipcode, ci);
 	return -1;			/* not reached */
 }

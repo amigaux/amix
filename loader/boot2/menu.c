@@ -89,7 +89,7 @@ menu_run(const struct ax_ctl *c, ax_u32 first, ax_u32 cpu, int *safe, int *devlo
 		if (listed(c, i) && (sel < 0 || c->gen[i].id == first))
 			sel = i;
 	if (sel < 0) {
-		con_puts("amix-boot: no generation to choose from\n");
+		con_say("no generation to choose from\n");
 		return 0;
 	}
 	draw(c, sel, *safe, *devload, cpu);
@@ -107,7 +107,7 @@ menu_run(const struct ax_ctl *c, ax_u32 first, ax_u32 cpu, int *safe, int *devlo
 			ax_u32 prev = menu_previous(c);
 			if (prev)
 				return prev;
-			con_puts("amix-boot: no previous good generation\n");
+			con_say("no previous good generation\n");
 		} else if (ch == 's' || ch == 'S') {
 			*safe = !*safe;
 			draw(c, sel, *safe, *devload, cpu);
@@ -115,7 +115,7 @@ menu_run(const struct ax_ctl *c, ax_u32 first, ax_u32 cpu, int *safe, int *devlo
 			*devload = !*devload;
 			draw(c, sel, *safe, *devload, cpu);
 		} else if (ch == 'r' || ch == 'R') {
-			con_puts("amix-boot: returning to Kickstart would only reset the machine; reset by hand\n");
+			con_say("returning to Kickstart would only reset the machine; reset by hand\n");
 		} else if (ch == '\r' || ch == '\n') {
 			return c->gen[sel].id;
 		}

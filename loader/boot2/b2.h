@@ -69,5 +69,6 @@ void con_init(ax_u32 baud);
 void con_screen(void);
 void con_puts(const char *s);
 void con_printf(const char *fmt, ...);
+void con_say(const char *fmt, ...);
 
 #endif

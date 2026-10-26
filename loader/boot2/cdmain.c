@@ -68,7 +68,7 @@ read_file(const char *name, ax_u8 *dst, ax_u32 len)
 	cat(path, name, sizeof(path));
 	fh = dos(-30, (ax_u32)path, MODE_OLDFILE, 0);		/* Open */
 	if (!fh) {
-		con_printf("amix-boot: L12 cannot open %s\n", path);
+		con_say("L12 cannot open %s\n", path);
 		return 12;
 	}
 	got = dos(-42, (ax_u32)fh, (ax_u32)dst, len);		/* Read */
