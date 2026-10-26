@@ -298,12 +298,15 @@ The facts come from `kinfo`, so no command takes options. No stand-in
 package is needed: `kbootset build` composes from the installed
 `kernel-k30-u`.
 
-**S2-46 on k30.** On the installer's v9 disk. Two things make that disk
-the one:
+**S2-46 on k30.** On the installer's v10 disk. Three things make that
+disk the one:
 - its record for the installed kernel is named by its pkginst
   (`kern30u`, C2-2 v4);
 - it carries APKG 0.3.0. The 1.0 media's APKG 0.2.3 cannot read
-  kernel-space entries.
+  kernel-space entries;
+- kbootset and the loader are installed as packages, not as bare files.
+  On v9, `apkg upgrade` rightly refused: "loader-amix is not
+  installed".
 
 The catalog serves `kbootset`, `loader-amix` and `kernel-k30-u` at
 revisions above the installed ones (amix-packages mints them; the kernel
@@ -319,9 +322,19 @@ bytes may be the same). Then the S2-46 table above applies with:
     and a generation number each: in the renamed-record variant (N45)
     the loader's call committed generation 2 and the kernel's generation
     3, and generation 2 never booted.
+- apkg reports `loader-amix` -2 and `kbootset` -6 as up to date, and
+  upgrades the kernel -1 → -2, in that one transaction;
 - the kernel's record replaced by the upgrade, not doubled;
 - `amix-boot: generation 2, kernel unix 1270676 bytes` on boot 2;
 - `amix-boot: generation 1, kernel unix 1270676 bytes` on boot 4.
+
+**The variant for a 1.1 disk installed before the packages existed**
+(kbootset and the loader as bare files, as on v8 and v9) is
+`apkg -f install kbootset loader-amix kernel-k30-u`. It is also one
+transaction ("kernel space: 2 packages"), with `-f` as the Bench ran
+it over the bare files. The Bench's v8a and v9f runs
+passed the whole row this way. It is supporting evidence, not the row of
+record.
 
 **S2-41 on k30.** The S2-41 table above applies with:
 - boot 1: `kbootset build; kbootset commit`;
