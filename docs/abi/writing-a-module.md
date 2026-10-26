@@ -32,6 +32,10 @@ Master       its .moddata keys and its definition line
 Makefile     KIT, MODULE, OBJS, then include $(KIT)/mk/module.mk
 ```
 
+The make fragment compiles the `.c` files beside the Makefile (one `%.o`
+rule, no search path): list the sources there, or give other objects in
+`EXTRA`.
+
 ```c
 #include "sys/types.h"
 #include "sys/moddefs.h"
@@ -60,7 +64,6 @@ MOD_MISC_WRAPPER(hello, hello_load, hello_unload, "the ABI kit's sample module")
 ```
 $modtype misc
 $class demand
-$cpu 68020
 $unload allowed
 $param greeting:str:hello
 hello	hello
@@ -82,10 +85,10 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 |---|---|
 | `$modtype` | `misc`, `drv` or `str`: the wrapper macro you use |
 | `$class` | `boot` (loaded after the root is mounted) or `demand` (at the first open of one of its majors) |
-| `$cpu` | the lowest CPU it runs on: `68020`, `68030`, `68040`, `68060` |
+| `$cpu` | the lowest CPU it runs on: `68020`, `68030`, `68040`, `68060`. Leave it out and the make fragment gives the line's (68030 on k30, 68040 on k46, or `MODCPU`), so one Master serves both kits |
 | `$majors` | `c:<n>` per character major, each registered to this module's name in the kit's `registry/majors` |
 | `$match` | for a boot module that needs a board: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated |
-| `$depend` | modules whose globals it uses (one line per name) |
+| `$depend` | modules whose globals it uses (one line per name). Build those first and name their objects in the Makefile's `DEPS`: without them modfix stops at `modfix: undefined: <symbol>` |
 | `$unload` | `never` (the default) or `allowed` |
 | `$param` | `<name>:<type>:<default>[:<min>:<max>]`, one line each: types `int`, `hex`, `bool`, `str` |
 | `$desc` | one line |
@@ -143,7 +146,15 @@ has it in full):
   registrations with other modules.
 - `_halt` (void) stops a board that can interrupt or write memory.
 
-## 5. Kernel names
+## 5. Headers
+
+The kit's `include/` holds the module headers. Its `stock/usr/include` and
+`stock/usr/sys` hold the kernel's own. The compiler searches them as
+`-I`, so a driver includes the kernel tree's headers by their path from
+there, never relative to its own directory:
+`#include "amiga/console/console.h"`, not `"../../console/console.h"`.
+
+## 6. Kernel names
 
 `docs/ddi.md` lists every name, with its context and contract. A module
 may import only those, and the globals of the modules it names in
@@ -155,9 +166,12 @@ wrapper's `<prefix>_conf_data` does. Notes on particular names:
 - A stock header's tentative definition (`int ifnet;`) becomes a private
   copy in your module. The checker warns about each COMMON symbol.
 
-## 6. Linking other objects in
+## 7. Linking other objects in
 
-`EXTRA` names objects linked in as they are. `LOCALIZE` names globals
+`EXTRA` names objects linked in as they are. `LOCALIZE` needs a newer
+objcopy than the pinned binutils have: gcc14-cross-amix's
+`build/prefix/bin/m68k-elf-objcopy`, on `PATH` or named in
+`LOCALIZE_OBJCOPY`. `LOCALIZE` names globals
 made local after the link, so the module neither exports nor shadows
 them. A console-drawing driver links the kit's copy of the stock Sun
 font and keeps its name to itself:
@@ -167,7 +181,7 @@ EXTRA    = $(KIT)/stock/usr/sys/amiga/console/sunfont.o
 LOCALIZE = builtinfont
 ```
 
-## 7. On k46
+## 8. On k46
 
 The kit compiles with `-m68040`. Its `sys/immu.h` and `sys/param.h` are
 the port's 4 KiB-page forms, and the checker refuses a shift by 11 of an
@@ -175,7 +189,7 @@ address (2 KiB pages). The compiler's wrapper rewrites what the 68060
 lacks, and the checker scans for anything left
 (`m68k-cbm-sysv4-scan060`).
 
-## 8. Shipping it
+## 9. Shipping it
 
 The module goes into a package of role `module` as
 `/etc/conf/mod.d/<name>`, with `/etc/conf/modreg.d/<name>` for its

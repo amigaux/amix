@@ -5,12 +5,17 @@
 #
 #	KIT    = /path/to/kit-k46		# a built kit, one per line
 #	MODULE = hello				# the module's name = its file name
-#	OBJS   = hello.o			# compiled from the .c beside them
-#	DEPS   = ../monsw/build/mod.d/monsw	# optional: modules named in depend
+#	OBJS   = hello.o			# compiled from the .c beside the Makefile
+#					# (the %.o rule looks nowhere else)
+#	DEPS   = ../monsw/build/mod.d/monsw	# the modules named in depend: build
+#					# them first; without them modfix
+#					# stops at "undefined: <their name>"
 #	include $(KIT)/mk/module.mk
 #
 # and a Master file beside it (the .moddata keys and the definition line,
-# see the kit's sample/hello/Master and docs/writing-a-module.md).
+# see the kit's sample/hello/Master and docs/writing-a-module.md).  A
+# Master without a $cpu line gets the line's (kit.conf DEFCPU: 68030 on
+# k30, 68040 on k46), or MODCPU if set, so one Master serves both lines.
 # Optional: EXTRA (objects linked in as they are, a font for example:
 # $(KIT)/stock/usr/sys/amiga/console/sunfont.o), LOCALIZE (globals made
 # local after the link, so the module neither exports nor shadows them:
@@ -18,7 +23,8 @@
 # Mtune (as mkmod takes them).  LOCALIZE needs a newer objcopy than the
 # pinned binutils 2.8.1 has (LOCALIZE_OBJCOPY, default m68k-elf-objcopy, as
 # gcc14-cross-amix provides); only symbol bindings change, and the pinned
-# ld links its output.
+# ld links its output; gcc14-cross-amix has it in build/prefix/bin, which is
+# not on PATH by default: put it there or set LOCALIZE_OBJCOPY to its path.
 #
 # `make` gives build/mod.d/$(MODULE): compiled by the pinned
 # gcc-cross-amix against the kit's headers only, linked, .moddata written
@@ -38,6 +44,7 @@ KIT_CFLAGS = -O -traditional -fno-builtin -Dinline=__inline__ -Dvolatile=__volat
 	-Dconst=__const__ $(CPUFLAG) -D_KERNEL -DSVR40 -DSVR4 -I$(KIT)/include \
 	-I$(KIT)/stock/usr/include -I$(KIT)/stock/usr/sys -I$(KIT)/stock/usr/sys/amiga/inc
 MODOUT    ?= build
+MODCPU    ?= $(DEFCPU)
 LOCALIZE_OBJCOPY ?= m68k-elf-objcopy
 
 all: $(MODOUT)/mod.d/$(MODULE)
@@ -51,6 +58,7 @@ $(MODOUT)/mod.d/$(MODULE): $(OBJS) $(EXTRA) Master $(DEPS)
 	$(if $(LOCALIZE),$(LOCALIZE_OBJCOPY) $(foreach s,$(LOCALIZE),--localize-symbol=$(s)) \
 		$(MODOUT)/src/Driver.o)
 	cp Master $(MODOUT)/src/
+	grep -q '^\$$cpu' Master || sed -i '1a $$cpu $(MODCPU)' $(MODOUT)/src/Master
 	for f in Space.c Mtune; do [ ! -f $$f ] || cp $$f $(MODOUT)/src/; done
 	MKMOD_CC="$(KIT_CC) $(KIT_CFLAGS)" DLM_TOOLS=$(KIT)/tools sh $(KIT)/tools/mkmod \
 		-K $(KABI) -P $(PIN) -e $(KIT)/exports $(foreach d,$(DEPS),-d $(d)) \

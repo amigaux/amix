@@ -6,7 +6,9 @@
 # usage: mkkit.sh LINE OUTDIR        LINE: k30 or k46
 #
 # OUTDIR gets:
-#   kit.conf             LINE, KABI, PIN, CPUFLAG, KIT_REV (the amix-dlm commit)
+#   kit.conf             LINE, KABI, PIN, CPUFLAG, DEFCPU (a module's default
+#                        cpu=), KIT_REV (the amix-dlm commit; -dirty when
+#                        the kit's inputs had uncommitted changes)
 #   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
 #                        core/series) and amixddi.h (abi/include)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
@@ -37,8 +39,8 @@
 set -e
 LINE=$1 OUT=$2
 case "$LINE" in
-k30) KABI=k30.1.0 CPUFLAG=-m68020 ;;
-k46) KABI=k46.1.0 CPUFLAG=-m68040 ;;
+k30) KABI=k30.1.0 CPUFLAG=-m68020 DEFCPU=68030 ;;
+k46) KABI=k46.1.0 CPUFLAG=-m68040 DEFCPU=68040 ;;
 *) echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
@@ -49,6 +51,12 @@ PORT=${PORT:-$WS/amix-040-060-port}
 . "$GCA/env.sh"
 PIN=gcc-2.7.2.3-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
 REV=$(git -C "$R" rev-parse --short HEAD 2>/dev/null || echo unknown)
+# a kit built from uncommitted inputs says so in its revision
+if [ -n "$(git -C "$R" status --porcelain -- abi core tools/mkkit.sh tools/sunfont.py \
+	docs/abi/ddi.md docs/abi/writing-a-module.md docs/contracts LICENSE 2>/dev/null)" ]; then
+	REV=$REV-dirty
+	echo "mkkit: the kit's inputs have uncommitted changes: KIT_REV=$REV" >&2
+fi
 
 rm -rf "$OUT"
 mkdir -p "$OUT/include/sys" "$OUT/tools" "$OUT/mk" "$OUT/registry" "$OUT/sample" \
@@ -121,6 +129,7 @@ LINE=$LINE
 KABI=$KABI
 PIN=$PIN
 CPUFLAG=$CPUFLAG
+DEFCPU=$DEFCPU
 KIT_REV=$REV
 EOF
 cat > "$OUT/NOTICE" <<EOF
