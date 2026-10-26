@@ -101,7 +101,13 @@ enforces:
   and the other pattern expansions, `printf`, and flags to `read` or
   `echo`.
 - **Files:** `cat` or `dd` copy the bytes, and a size check comes before
-  every `mv` that replaces a file.
+  every `mv` that replaces a file. A `while read l; … done < file` loop is
+  never a byte-exact copy: on the default IFS the 1991 sh strips a line's
+  trailing blanks.
+- **What the 2.1 sh does** (installng's probe on the miniroot's `/bin/sh`):
+  `exec <f` at top level, `read l <f`, a redirected while-read and
+  `exec 4>f` behave; `for …; do exec <f; read l; done` continues at line 2
+  on the second pass; `IFS` and `set -f` make no difference to that.
 
 Scripts are proven on the 2.1 sh (the installer miniroot), not only on a
 host shell. modtools' postinstall, which puts the `modadmin -B` line first
