@@ -1,0 +1,46 @@
+Subject: fmodsw: every stock row is kept, never truncated
+
+dlm_str_init() cut fmodcnt to 11 when the kernel had more stock
+STREAMS-module rows, dropping the rest without a word.  Now every stock
+row is copied: more than 11 leave fewer rows for modules and are said on
+the console, and more than the table holds is a panic at dmainit (the
+kernel could not keep its own modules).  str_install never writes past
+the table.  The Amix kernels of record have 11 (amix-dlm M-REG1).
+30-module-core.md section 2, patch 12.
+
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -62,13 +62,23 @@
+ 
+ int	dlm_str_open(), dlm_str_close();
+ 
++/*
++ * Every stock row comes across; none is dropped.  The kernels of record
++ * have 11 (M-REG1).  More leave fewer rows for modules, and are said;
++ * more than the table holds cannot be kept, and a kernel that would lose
++ * a STREAMS module of its own does not boot as if it had not.
++ */
+ void
+ dlm_str_init()
+ {
+ 	int i;
+ 
++	if (fmodcnt > NFMODSW)
++		cmn_err(CE_PANIC, "dlm: fmodsw has %d stock rows; the module core's table holds %d",
++		    fmodcnt, NFMODSW);
+ 	if (fmodcnt > FMOD_STATIC)
+-		fmodcnt = FMOD_STATIC;		/* the stock kernel has 11 */
++		printf("dlm: fmodsw has %d stock rows, %d expected: %d left for modules\n",
++		    fmodcnt, FMOD_STATIC, NFMODSW - fmodcnt);
+ 	for (i = 0; i < fmodcnt; i++)
+ 		fmodsw[i] = __amix_fmodsw[i];
+ 	fstatic = fmodcnt;
+@@ -219,7 +229,7 @@
+ 	j = i - fstatic;
+ 	if (j < 0 || (i < fmodcnt && fown[j] && fown[j] != m))
+ 		return EEXIST;
+-	if (j >= FMOD_RESERVE)
++	if (j >= FMOD_RESERVE || i >= NFMODSW)
+ 		return ECONFIG;
+ 	SPLHI(s);
+ 	bcopy(DLM_RP(m, rq), (caddr_t)&frq[j], QISZ);

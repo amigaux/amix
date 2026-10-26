@@ -7,3 +7,4 @@
 0004-format-errors-enoload.patch
 0005-allowlisted-symbol-block.patch
 0006-major-registry.patch
+0007-fmodsw-no-truncation.patch
