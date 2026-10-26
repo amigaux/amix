@@ -52,7 +52,11 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # C3-5 v4 sec 1.2: `c none /dev/<node>`).  Same rule: its own staging dir
 # (build/repo-staging-apkg032), NOT published; 0.3.1 (45b809cd...) stays
 # what it is.  NOTES 2026-10-26.
-VER_APKG="0.3.2"
+# 0.3.3 (2026-10-26): a module package may also carry block nodes under
+# /dev/dsk (amix-dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
+# dir (build/repo-staging-apkg033), NOT published; 0.3.2 (9d6de726...)
+# stays what it is.  NOTES 2026-10-26.
+VER_APKG="0.3.3"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -480,6 +484,10 @@ EOF
   # Version 0.3.2 (2026-10-26).  The apkg binary and apkg.1 change again
   # (module device entries); every other payload byte is 0.3.1's.  Staged
   # for the 1.1 media, NOT published.
+  #
+  # Version 0.3.3 (2026-10-26).  The apkg binary and apkg.1 change again
+  # (block nodes under /dev/dsk); every other payload byte is 0.3.2's.
+  # Staged for the 1.1 media, NOT published.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.apkgconf=$REPO/src/apkg/i.apkgconf

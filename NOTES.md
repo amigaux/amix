@@ -1,5 +1,38 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — APKG 0.3.3 minted for the 1.1 media (STAGED, NOT PUBLISHED)
+
+**Why.** The box's 0.3.2 refuses `b` device nodes in a module package (ramdisk30/46); 0.3.3 is
+abfaaac's `kspace.c` (block nodes under `/dev/dsk`, C3-5 v8 §1.2, the section below). As with
+0.3.0-0.3.2, **the public catalog and the publish line of record are unchanged** (still 0.2.3);
+publishing is the owner's decision.
+
+**The mint.** `build/repo-staging-apkg033/base/APKG-0.3.3.pkg` (own staging dir; `repo-staging-apkg032`
+and every earlier mint untouched), `tools/repo/build-packages.sh --apkg build/repo-staging-apkg033`,
+`VER_APKG="0.3.3"`, minted from the committed tree:
+
+- **md5 `2237f5239e9d3000e1a086ed7b44af26`**, **sha256
+  `f42c87c375a1bb757132180e86f285684e668024be7ed1ee2903a5a2869cfdec`**, **198144 B**, mode 444,
+  sidecar `.md5`; `PSTAMP=lucifer20261026231342`.
+- `apkg.amix` built twice from a clean `obj-amix` with gcc-cross-amix: **sha256
+  `d45c24c0ef2b2354d13e5a8e53a495afb74615c1ffbadd84c0e228770efa3a96`**, md5
+  `02d4e7c01317921bbdaace18f22f24ae`, 113350 B (abfaaac's size; only the version string moved),
+  version string `0.3.3`, no `0.3.2` left in it; no `divsl`/`divul`; scan060 CLEAN. The packaged
+  member is the same bytes.
+- Payload against 0.3.2, member by member: `apkg` and `apkg.1` (`.TH` now "apkg 0.3.3") are new
+  bytes; every other member byte-identical. pkginfo differs in VERSION and PSTAMP only.
+- Gates (run without publishing): build_one's name check and link gate OK (1 link); scan060 0 hits
+  in 2 ELFs; `gen-catalog --scan-private` OK (1 scanned); `payload-licence-gate` OK (2 ELFs; the
+  usual `libnsl.so` note).
+- Staging catalog of the own dir (`catalog.md5` `45105521cb013f894de37bdefcf35315`), the row a
+  publish would carry:
+  `apkg|0.3.3|APKG|base/APKG-0.3.3.pkg|2237f5239e9d3000e1a086ed7b44af26|198144|apkgeng|system|…`
+- Host install (heirloom `pkgadd -R` under fakeroot, instance=overwrite): 0.3.2, conf edited
+  (`repo=/cdrom`), then 0.3.3: rc 0, "kept as it is", the edit survives byte for byte, installed
+  `apkg` is `d45c24c0…`, VERSION 0.3.3, `pkgchk -n` and plain `pkgchk` rc 0.
+- Suites on this tree: apkg `run-tests.sh` **457/0** (incl. `version` verb), `nohttp-variant.sh`
+  **38/0**, `kbootset-consumer.sh` **12/0**; repo tools **409/0**. Host `apkg version` = `apkg 0.3.3`.
+
 ## 2026-10-26 — module packages may ship block nodes in /dev/dsk (C3-5 v8 §1.2) (NOT MINTED)
 
 **Why.** amix-dlm C3-5 v8 §1.2 (amix-dlm `eeca440`): a block driver's nodes ship as pkgmap `b`
