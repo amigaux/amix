@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — z3660eth as a loadable module, source half (859dfc1, bee712c; amix-dlm S3-25, C3-6)
+
+Building with -DZ3660ETH_MODULE turns the same source into the module form: z3660eth_load(params) / _unload (EBUSY,
+unload=never) / _halt and MOD_DRV_WRAPPER; major 51 is data in z3660eth_drvdata (d_str only); if_attach replaces the ifstats
+link. INT6 receive is optional behind intr=6 (default polled): the level-6 handler only acknowledges, masks and flags; the drain
+stays at IPL 4, from a level-2 handler raised through PORTS (intrl2=1) or the poll tick (intrl2=0); attaches at the first open
+after a software EXTER self-test, polled on any failure. Static objects byte-identical (k30 c2d6225e, k46 142e2486).
+tools/build-module.sh builds one object per line and checks it against amix-dlm's DDI v1 lists (32 imports, all listed).
+
 ## 2026-10-21 — RX back-pressure: hold frames in the card's backlog when IP's queue is full (b896afc, 120cab3, 9787f88; review T-47)
 
 The receive service no longer frees a frame that canput() refuses: it leaves the slot in the card's backlog and
