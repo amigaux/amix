@@ -1,0 +1,111 @@
+Subject: dlm_maximage 256 KiB; a file over it is ENOLOAD with a line
+
+C3-1 version 4: a module's image is at most 256 KiB and its file is
+smaller.  The core's own allocations for a module are KM_SLEEP and grow
+with it, and U4 found that a running box gives one request at most
+256 KiB; a KM_SLEEP request above that never returns.  lf_hashload's
+refusal of a file at the limit was a silent ENOMEM; it is ENOLOAD with
+the console line C3-1 section 4 asks for.  The state harness gains pmf,
+a small image in a file over 8 KiB.
+
+--- a/dlmconf.c
++++ b/dlmconf.c
+@@ -7,7 +7,7 @@
+ 
+ #include "dlm.h"
+ 
+-long	dlm_maximage = 2 * 1024 * 1024;	/* largest image, bytes */
++long	dlm_maximage = 256 * 1024;	/* largest image and file, bytes (C3-1 6) */
+ int	dlm_verbose = 0;		/* undefined symbols on the console */
+ int	dlm_def_unload_delay = 60;	/* seconds (DEF_UNLOAD_DELAY) */
+ int	dlm_unload_wake = 60;		/* seconds (UNLOAD_WAKE) */
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -459,7 +459,8 @@
+ 		if (n == cap) {
+ 			if (cap >= dlm_maximage) {
+ 				dlm_free(b, cap);
+-				return ENOMEM;
++				printf("dlm: %s: its file is over the limit\n", lf->lf_mod->m_name);
++				return ENOLOAD;
+ 			}
+ 			nb = dlm_zalloc(cap * 2);
+ 			bcopy(b, nb, n);
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -7,7 +7,7 @@
+ #include "sys/stream.h"
+ #include "sys/conf.h"
+ 
+-long	dlm_maximage = 2 * 1024 * 1024;
++long	dlm_maximage = 256 * 1024;
+ int	dlm_verbose = 0;
+ int	dlm_def_unload_delay = 60;
+ int	dlm_unload_wake = 60;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -229,6 +229,8 @@
+ mod('pm3')
+ mod('pmd', 'pmdep')
+ mod('pmdep')
++# pmf: a small image in a file over 8 KiB (a non-allocated section)
++mod('pmf', text='\t.section\t.comment\n\t.space\t12288\n\t.text\n')
+ 
+ # marc_post (patch 16, C3-5): pb1 matches always and takes parameters, pb2
+ # matches a board this box lacks, pdm is demand class on major 67
+--- a/test/state.c
++++ b/test/state.c
+@@ -308,7 +308,7 @@
+ 	check(moduload(m->m_id) == 0 && !byname("xa"), "exec: idle module unloads");
+ 	dlm_maximage = 16;
+ 	e = xexec(0);
+-	dlm_maximage = 2 * 1024 * 1024;
++	dlm_maximage = 256 * 1024;
+ 	check(e == stock_rv && stock_calls == 2 && !byname("xa"),
+ 	    "exec: load failure falls through");
+ 	check(xreg("xb", 0x152, EXF_FIRST) == 0 && nexectype == 5 &&
+@@ -448,18 +448,20 @@
+ void
+ man_tests()
+ {
+-	static char a[4096], man[2048], s1[65], sd[65];
++	static char a[4096], man[2048], s1[65], sd[65], sf[65];
+ 	char *m;
+ 	long len, gen;
+ 	int id;
+ 
+ 	hexsha("pm1", s1);
+ 	hexsha("pmd", sd);
++	hexsha("pmf", sf);
+ 	sprintf(man, "GMF1\ngeneration 7\nline k46\n"
+ 	    "module pm1 boot 300 path=/stand/gen/7/mod/pm1 sha256=%s\n"
+ 	    "module pm2 demand 300 path=/stand/gen/7/mod/pm2 sha256=%s\n"
+ 	    "module pmd boot 300 path=/stand/gen/7/mod/pmd sha256=%s\n"
+-	    "module pm4 boot 300 path=/stand/gen/6/mod/pm4 sha256=%s\n", s1, s1, sd, s1);
++	    "module pm4 boot 300 path=/stand/gen/6/mod/pm4 sha256=%s\n"
++	    "module pmf boot 300 path=/stand/gen/7/mod/pmf sha256=%s\n", s1, s1, sd, s1, sf);
+ 	mkarena(a, man, 1, 1);
+ 	check(dlm_arena_check(a, 4096L, &m, &len, &gen) == 0 && m == a + 32 && gen == 7,
+ 	    "arena: a valid directory and manifest copy");
+@@ -482,6 +484,12 @@
+ 	    "manifest: a member whose dependency is outside it does not load");
+ 	check(modload("pm4", &id) == EPERM && !byname("pm4"),
+ 	    "manifest: a member whose path= is not /stand/gen/<id>/mod/<name> -> EPERM");
++	dlm_maximage = 8192;
++	check(modload("pmf", &id) == ENOLOAD && !byname("pmf"),
++	    "manifest: a file of dlm_maximage bytes or more -> ENOLOAD (C3-1 section 6)");
++	dlm_maximage = 256 * 1024;
++	check(modload("pmf", &id) == 0 && byname("pmf"), "manifest: the same file under the limit loads");
++	moduload(id);
+ 	dlm_devload = 1;
+ 	check(modload("pm3", &id) == 0 && byname("pm3"),
+ 	    "development load: a module outside the manifest loads");
+@@ -1299,7 +1307,7 @@
+ 	dlm_maximage = 1024;
+ 	check(modload("big", &id) == ENOLOAD && nloaded() == 0,
+ 	    "over dlm_maximage -> ENOLOAD (C3-1 section 4)");
+-	dlm_maximage = 2 * 1024 * 1024;
++	dlm_maximage = 256 * 1024;
+ 
+ 	/* ---- modpath ---- */
+ 	check(modpath("/nonexist:/also/missing") == 0 &&
