@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module 1.0.0-4: the RX ring resyncs past a wedged sentinel (2a15a4c)
+
+On metal (S3-46, A4000D, intr=6) zen0 died under a 5 ms ping flood: the firmware showed "backlog 32 fetched 0" — the
+cursor sat at slot 0 carrying the serial the driver had already consumed, so every drain took the ring as empty while the
+firmware filled the other 31 slots and dropped the rest; permanent, and intr=0 can die the same way. Two ways in: a lost
+ETH_RX strobe, or the firmware's catch-up race (10c7501 ethernet.c:734-744, unlocked against the RX ISR). With intr=6 the
+drain now detects it (z3660eth_rx_wedged: at slot k > 0 always a lost strobe; at slot 0 only when slot 1 holds serial+1 or
++2 and slot 0 reads the same twice), strobes once past the slot, loses at most one frame; counters z3660eth_rx_resyncs,
+z3660eth_rx_resync_last. Objects k30 8d0e75f0, k46 a928fd2b (19379 B file, 13177 B image); static unchanged. The two
+stray -1 stores are not this driver (its stores are offsets 0x104/0x190/0x194, values 0/1/24/pktsize).
+
 ## 2026-10-26 — z3660eth module 1.0.0-3: the intr=6 self-test passes inside the IPL-4 open (3e6b696)
 
 The stock qattach() calls a driver's open with SR 0x2400 (k46 0x4ee1c, k30 0x5190c), so the PORTS that the level-6 test
