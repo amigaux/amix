@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -10 and modtools 1.0.261026-1 from amix-dlm 42df482 (02fa3a2, a2bec2d) — not published
+
+kbootset -10: `kbootset media` composes the installed module packages into the medium's pristine generation; /sbin/kbootset
+305345a3 (159988 B) byte-equal to dlm's box build; datastream md5 893fb434 / 165888 B; pkgmap unchanged (/var/kbootset).
+modtools -1 (new userland recipe, S3-11): /sbin/modadmin d94e5228 (GCC 14 static, byte-equal to dlm's box build; 68060-safe),
+no catalog dependency, no kernel-space record; datastream md5 34cd0e5a / 50176 B; copyright carries kdedon's MIT and
+amix-dlm's MIT. Round trip at 42df482 with a modtools row and install: 41/41.
+
 ## 2026-10-26 — kbootset -9 from amix-dlm a71a875 (449c1ef) — not published
 
 S3-16: kbootset composes module members through gates 1–3, writes module and param records, `status` shows which members are
