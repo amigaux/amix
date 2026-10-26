@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — 1.1 media: the m4 package, not Cdev, carries syslogd's m4 (5be4268)
+
+The base carries the stock-derived m4 package (amix-packagemanager b70500c) instead of the whole of Cdev for
+/usr/ccs/bin/m4 (ISO −10.3 MB, root −10.2 MB against the Cdev form; +28 KB against no m4); install.sh takes m4 or Cdev in a
+1.1 order and dies with neither; l11-set.conf gains a `stock-pkg` item (copied into staging, recorded with its sha256 in
+INPUTS); the S3-45 set's superseded kbootset -14, z3660eth -2 and monsw -1 kept as rows of record. One cell per line PASS
+9/9; first boots file kernel lines in /var/log/bus-errors on both lines (E937/E938).
+
 ## 2026-10-26 — 1.1 media: syslogd now files kernel and system messages (55d8e15)
 
 The 2.1c syslogd reads /etc/syslog.conf through /usr/ccs/bin/m4 (stock Cdev) and filed nothing without it; every 1.1 medium
