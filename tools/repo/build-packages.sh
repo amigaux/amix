@@ -38,7 +38,11 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # (build/repo-staging-apkg030); the public catalog and the publish line of
 # record still say 0.2.3 until the owner decides the publish.  NOTES
 # 2026-10-26.
-VER_APKG="0.3.0"
+# 0.3.1 (2026-10-26): one kernel package per line (C2-2 v5 sec 2.1) -- a
+# kernel install pkgrm's the other package of its line first.  Same rule:
+# its own staging dir (build/repo-staging-apkg031), NOT published; 0.3.0
+# (e6e7b7d5...) stays what it is.  NOTES 2026-10-26.
+VER_APKG="0.3.1"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -454,6 +458,10 @@ EOF
   # space, see VER_APKG); every other payload byte, the /etc/apkg.conf
   # template included (md5 8dada8d9..., T23), is 0.2.3's.  Staged for the
   # 1.1 media, NOT published.
+  #
+  # Version 0.3.1 (2026-10-26).  The apkg binary and apkg.1 change again
+  # (one kernel package per line); every other payload byte is 0.3.0's.
+  # Staged for the 1.1 media, NOT published.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.apkgconf=$REPO/src/apkg/i.apkgconf

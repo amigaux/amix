@@ -1,5 +1,37 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — APKG 0.3.1 minted for the 1.1 media (STAGED, NOT PUBLISHED)
+
+**Why.** 0.3.1 (one kernel package per line, C2-2 v5 §2.1; the section below) replaces 0.3.0 on the
+1.1 media. As with 0.3.0, **the public catalog and the publish line of record are unchanged** (still
+0.2.3); publishing is the owner's decision.
+
+**The mint.** `build/repo-staging-apkg031/base/APKG-0.3.1.pkg` (own staging dir; `build/repo-staging`,
+`repo-staging-apkg030` and every earlier mint untouched), `tools/repo/build-packages.sh --apkg`,
+`VER_APKG="0.3.1"`:
+
+- **sha256 `45b809cda5a57fb849978c14831040d3d5df004beae27ffe8572891ef1d41366`**, md5
+  `2378f66d64c048a3800cdcba2ea541f2`, **197120 B**, mode 444, sidecar `.md5`;
+  `PSTAMP=lucifer20261026095751`; source tree = `reviewed` `12f3b11` (apkg `06b77c4`).
+- `apkg.amix` rebuilt from a clean `obj-amix` with gcc-cross-amix (gcc 2.7.2.3): **sha256
+  `87b0c427f866813ef23f73aa44722cbee86074565d49eccacac515b5abf1a5bf`**, 112647 B, version string 0.3.1
+  -- the bytes of the 0.3.1 build section (third identical build). The packaged member is the same.
+- Payload against 0.3.0, member by member: `apkg` (109145 -> 112647 B) and `apkg.1` (21710 -> 23600 B)
+  are new bytes; `contents-fsck` (`4a89f1f3…`), `amix-sadm-migrate`, `/etc/apkg.conf` and
+  `/usr/apkg/lib/apkg.conf`, `/var/apkg/admin`, `install/i.apkgconf` byte-identical. pkginfo differs
+  in VERSION and PSTAMP only; pkgmap in those sizes/sums and mtimes only (same 15 entries).
+- Gates (the publish path's, run without publishing): build_one's ≤9-char name check (APKG) and link
+  gate OK (1 link, also re-run on the extracted pkgmap); scan060 0 hits in 2 ELFs; `gen-catalog
+  --scan-private` OK (1 scanned); `payload-licence-gate` OK (2 ELFs; the usual `libnsl.so` note);
+  `publish.sh --dry-run` against a LOCAL scratch destination runs both gates and rc 0.
+- Staging catalog (`gen-catalog`, `catalog.md5` `f1fd10ae23669347cff1dd6c3a8ac176`):
+  `apkg|0.3.1|APKG|base/APKG-0.3.1.pkg|2378f66d64c048a3800cdcba2ea541f2|197120|apkgeng|system|…`
+- Host install of the staged file (heirloom `pkgadd -R` under fakeroot): 0.3.0 installed, conf edited
+  (`repo=/cdrom`), 0.3.1 added with instance=overwrite: rc 0, "kept as it is", the edit survives,
+  installed `apkg` is `87b0c427…`, VERSION=0.3.1, `pkgchk -n` clean. Repo tools 360/0 (T23 mints
+  from the same tree).
+- APKGENG stays 1.12.3 (no engine change).
+
 ## 2026-10-26 — gen-catalog writes module rows (stage 3) from the object's `.moddata`
 
 **Why.** Stage 3 is here: amix-packages minted four module packages (`z3660eth-k30/-k46` -> pkginst
