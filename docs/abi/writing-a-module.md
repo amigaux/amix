@@ -131,7 +131,8 @@ MOD_DRV_WRAPPER(mydrv, mydrv_load, mydrv_unload, mydrv_halt, "my driver");
 `52, 1` are its major and the count of consecutive majors. The major must
 be registered to the module's name: 52 is monsw's, so this sketch builds
 only as `monsw`. A STREAMS driver's row is zeros except `d_str`. The core reads a zero
-entry as `nodev`. What changes from a static driver, in short (C3-6 §1
+entry as `nodev`: a driver without a read entry answers `read` with
+ENODEV, as monsw does. What changes from a static driver, in short (C3-6 §1
 has it in full):
 - `_load` does the init work: find the board, map it, set it up. It
   returns `ENXIO` if there is no board, and leaves nothing behind on an
@@ -141,6 +142,10 @@ has it in full):
 - Interrupts go through `intr_attach`. Polled stays the default. A
   level-6 handler calls no kernel function: it acknowledges, masks and
   flags, and the work runs at level 4 or below.
+- A STREAMS open runs at level 4 (the stock `qattach`). A self-test that
+  raises level 2 from there cannot see it with a spin: wait with a
+  one-tick `timeout`/`sleep` round, or test at `_load`, which runs at
+  level 0 (C3-6 §1.3).
 - The console goes through `cons_hook_set`, never `conputc`.
 - Board windows: `phystokv` below `VSECT1`, `sptalloc` or (k46)
   `dev_kvmap` above. Never give a board the address of the module's own
