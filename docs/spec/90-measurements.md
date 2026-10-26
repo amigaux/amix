@@ -25,8 +25,8 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | M-LD8 | Deflate vs LZW (`compress -b16`) ratio on K030-U-FD- and KD060-FD-class kernels and on a miniroot image; inflate time on a 68030 — ratio part measured 2026-10-25 on the 1.0 floppy kernels: deflate = 73 % (K030-U-FD) and 71 % (KD060-FD) of the LZW size (`docs/measurements/2026-10-25-m-net1.md`); **bench half closed 2026-10-26**: the table-driven decoder inflates the k30 / k46 kernel in 5 492 / 7 580 ms on the 25 MHz 68030 model (code in fast RAM; 7 times slower from chip RAM, so boot2 moves to fast RAM); a deflated floppy boot reaches the kernel's first prompt in 18 s against 31 s for the stock LZW loader; LZW is not carried (`docs/measurements/2026-10-26-m-ld7-m-ld8.md`) | bench (host computation; decode timing on the emulator as an upper bound) | 1 | 10 §5.5 |
 | M-LD9 | Cold boots of static kernels through our loader from every controller on both boxes, compared with the stock loader (root naming, devices, RTH1 line) | bench + metal | 1 | 80 §2 |
 | M-FD1 | Floppy DMA into chip RAM under the 040/060 caches (DTT0 window) on a real floppy or Gotek | metal | 1 | 70 §2 |
-| M-FP1 | Floppy-pair fit per line in the RAM-disk profile: compressed kernel + root-class modules + compressed miniroot + store overhead against two DD volumes — **static part closed 2026-10-25**: with the trimmed engine, k30 fits with 270 336 B free (15.3 %) and k46 with 212 992 B free (12.0 %); the full 1.0 engine misses the 5 % rule on both lines; the miniroot needs extents that span volumes (10 §4.3); evidence `docs/measurements/2026-10-25-m-fp1.md` | bench (host computation) | 1 (static), again 5 | 10 §4.3, 50 §3 |
-| M-FP2 | Floppy-pair boot on metal, both lines (RAM-disk profile; fd0-root profile if chosen), including the volume change | metal | 1, again 5 | 50 §3 |
+| M-FP1 | Floppy-pair fit per line in the RAM-disk profile: compressed kernel + root-class modules + compressed miniroot + store overhead against two DD volumes — **static part closed 2026-10-25**: with the trimmed engine, k30 fits with 270 336 B free (15.3 %) and k46 with 212 992 B free (12.0 %); the full 1.0 engine misses the 5 % rule on both lines; the miniroot needs extents that span volumes (10 §4.3); evidence `docs/measurements/2026-10-25-m-fp1.md` | bench (host computation) | 1 (static), again 4 | 10 §4.3, 50 §3 |
+| M-FP2 | Floppy-pair boot on metal, both lines (RAM-disk profile; fd0-root profile if chosen), including the volume change | metal | 1, again 4 | 50 §3 |
 | M-EMU1 | The emulated Z3660 with the autoboot option (DIAGVALID advertised) boots our loader like metal | bench | 1 (prerequisite) | 50 §7 |
 | M-RD1 | The kernel's memory sizing honours a `memory[]` region shortened by the loader (RAM-disk carve-out); the RAM-disk module maps the image | bench | 4 | 10 §5.4, 30 §7 |
 | M-RD2 | The kernel half applies the loader record's root selector: an sd root on cards 0–3 (bit-7 encoding) and a RAM-disk root (block major 20); `swap none` boots without a swap device | bench | 4 | 10 §6, 30 §3, §5.2 |
@@ -54,7 +54,7 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | U3 | Execution from the arena in `.data` through ITT0 on 040/060; cache class of module `.bss` | bench (mapping) + metal (cache behaviour) | 4 | 30 §8 |
 | U4 | Large `kmem` requests routed to `sptalloc` behave (no silent hang). Probe module `u4big` (`tests/bench/s3-41`), recipe `tests/bench/README.md` S3-41. **Answered 2026-10-26 (N79 k46, N80 k30):** after multi-user the largest single request is 256 KiB on k46 at 128 MB and 512 KiB on k30 at 64 MB, and a `KM_SLEEP` request above that never returns; a module's requests are at most 256 KiB each, `KM_SLEEP` only up to 256 KiB (30 §8); evidence `docs/measurements/2026-10-26-u4.md` | bench | 3 | 30 §2 |
 | U5 | `execsw`/`fmodsw`/`vfssw` references are symbol-relative on both lines so tables can be grown — **closed 2026-10-26**: in all ten kernels of record every reference to `execsw`, `fmodsw`, `vfssw`, `cdevsw` and `bdevsw` is a relocation against the table's symbol, none by section offset; evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md` | bench (host computation) | 3 | 30 §6 |
-| U12 | Every walker of `vfssw` reads `nfstype` live; `vfs_mountroot` with module rows | bench | 5 | 30 §6 |
+| U12 | Every walker of `vfssw` reads `nfstype` live; `vfs_mountroot` with module rows | bench | 4 | 30 §6 |
 | U15 | File loading in process 0 after root is mounted (else the first `sysinit` entry). **Answered 2026-10-26 (S3-B5, k30):** unsafe. The hook runs at psw 0x2700 and the read faulted (bus error in uiomove from `lf_hashload`), so the load runs from the first `sysinit` entry (core patch 0017) | bench | 3 | 30 §3 |
 | U16 | The 040/060 port's relocation and page-geometry checks pass with the arena's zero block in `.data` — **closed 2026-10-26**: on the final cut's KD060-Z module kernel, `check_relink_relocs` totals 0, `.data` follows `.text` contiguously, every k0 gate passes, and two emits are byte-identical; evidence `docs/measurements/2026-10-26-u16-m-abi2.md` | bench (host computation) | 3 | 30 §8 |
 | M-ABI1 [U7] | Export and header diff between the 68040 and 68060 kernels of the k46 family — **closed 2026-10-26**: KD040-A and KD060-A differ in one byte (the CPU stamp), 4 458 globals agree in name, kind and size: one k46 family (OQ-20.2); evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md` | bench (host computation) | 3 | 20 §3.1 |
@@ -71,25 +71,25 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
 | M-SD1 | Card-number contract over the board sets of record (`30-module-core.md` §5.3): unchanged-order sets name every disk as the 1.0 static kernel did; the listed changed sets give exactly the listed new names; three- and four-controller sets give the contract's expected names | bench + metal (both boxes' board sets) | 4 | 30 §5 |
-| M-FS1 | The 040/060 base rebuilt without ufs/s5: the carved ufs and s5 objects are self-contained (symbol ranges, relocations), the rebuilt image passes the port's gates, and root on ufs and s5 modules boots | bench (host computation, then emulator) + metal | 5 | 30 §6 |
+| M-FS1 | The 040/060 base rebuilt without ufs/s5: the carved ufs and s5 objects are self-contained (symbol ranges, relocations), the rebuilt image passes the port's gates, and root on ufs and s5 modules boots | bench (host computation, then emulator) + metal | 4 | 30 §6 |
 | M-A4T1 | The A4000T onboard 53C710 probe: gated, never touches the controller window ungated, hangs nothing | metal | 4 | 20 §6, 30 §5 |
 | M-DMA1 | Cache and DMA behaviour per root controller module (z3660scsi, A4091/A4092, Gayle IDE, 53C710) | metal | 4 | 30 §8 |
-| M-FL1 | Floor kernel size per line once controllers and filesystems leave it | bench (host computation) | 5 | 70 §6 |
-| M-FL2 | Safe-mode boot on every root controller and root filesystem | bench + metal | 4, again 5 | 70 §4 |
+| M-FL1 | Floor kernel size per line once controllers and filesystems leave it | bench (host computation) | 4 | 70 §6 |
+| M-FL2 | Safe-mode boot on every root controller and root filesystem | bench + metal | 4 | 70 §4 |
 | M-HALT1 | The halt pass stops every root controller before power-off (A4091 SCRIPTS stopped) | bench + metal | 4 | 30 §2 |
 
 ## 5. Media
 
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
-| M-CD1 | CD boot and install on the A4091 ROM (emulated) and the A4092 (metal), both lines' generations from one disc | bench + metal | 5 | 50 §4 |
+| M-CD1 | CD boot and install on the A4091 ROM (emulated) and the A4092 (metal), both lines' generations from one disc | bench + metal | 4; the A4092 metal half 5 (carried, 80 §2) | 50 §4 |
 | M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line, from today's binaries — **closed 2026-10-25**: k30 2 562 866 B, k46 2 468 595 B with the trimmed engine (3 265 054 / 3 170 783 B with the full 1.0 engine); evidence `docs/measurements/2026-10-25-m-net1.md`, tool `tools/measure/m-net1.py` | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
 | M-NET1b | Its deflate-compressed size — **closed 2026-10-25**: k30 959 940 B, k46 924 595 B trimmed (1 228 315 / 1 192 293 B full); with the deflated 1.0 floppy kernel, margins on two DD volumes +16.1 % / +13.0 % trimmed, +1.1 % / −2.0 % full; evidence as M-NET1a | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
-| M-NET1c | Compressed kernel + root-class modules under the 1.1 floor (DV-1) | bench (host computation) | 5 | 50 §5.1 |
+| M-NET1c | Compressed kernel + root-class modules under the 1.1 floor (DV-1) | bench (host computation) | 4 | 50 §5.1 |
 | M-NET1d | Store overhead and usable bytes per DD volume (DV-1) — **closed 2026-10-25**: volume 1 data from 0x7800 (870 400 B usable; 868 352 B with boot2 at 28 KiB), later volumes from 0x800 (899 072 B), plus a manifest reservation per generation; evidence as M-FP1 | bench (host computation) | 1 (store format frozen) | 50 §5.1 |
-| M-NET1e | RAM needed at boot vs the smallest supported machine per line (DV-1) | bench | 5 | 50 §5.1 |
-| M-NET1f [U-N1] | A single-user miniroot runs the inet STREAMS stack (on a static kernel first; DV-1) | bench | 2 (early, static kernel), again 5 | 50 §5.1 |
-| M-NET1g [U-N2, U-N8] | HTTP throughput and inactivity timeouts from the miniroot (DV-1) | metal | 5 | 50 §5.1 |
+| M-NET1e | RAM needed at boot vs the smallest supported machine per line (DV-1) | bench | 4 | 50 §5.1 |
+| M-NET1f [U-N1] | A single-user miniroot runs the inet STREAMS stack (on a static kernel first; DV-1) | bench | 2 (early, static kernel), again 4 | 50 §5.1 |
+| M-NET1g [U-N2, U-N8] | HTTP throughput and inactivity timeouts from the miniroot (DV-1) | metal | 4 | 50 §5.1 |
 | M-TAPE1 [T-U1, T-U2] | Stock floppies + stock tape image install in the emulator; origin of the old "timeout" | bench | 2 | 50 §6 |
 | M-TAPE2 [T-U5, T-U7] | TAPE1 written from a running box reads back; tape source throughput | bench | 2 | 50 §6 |
 | M-TAPE3 [T-U3] | An emulated tape (ZuluSCSI tape image) behind the A4092: sense data, mode select, filemark spacing at close | metal | 2 | 50 §6 |

@@ -232,7 +232,7 @@ generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
   kernel sets `rootfstype` (empty today, asserted empty by the stamper,
   `amix-kerntools/contracts/bootchain-v1.json:332-342`).
 - **Merge target:** the separation is built on our line first; it is offered
-  to Antti's base once stage 5 is proven, as passes he can take unchanged
+  to Antti's base once stage 4 is proven, as passes he can take unchanged
   (D-3 §8).
 
 ## 7. The RAM disk
@@ -306,7 +306,7 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
 | ID | Question | Proposed owner |
 |---|---|---|
 | OQ-30.1 | Is a no-sleep mode strictly needed at `dmainit` on our base, or only at `marc_root` (U1)? | us |
-| OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe: does it exist in time for 1.1 (`amix-kerntools/docs/k0-families.md:1190-1195`)? | us |
+| OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe: does it exist in time for 1.1 (`amix-kerntools/docs/k0-families.md:1190-1195`)?  **Settled** (the owner, 2026-10-26): written in stage 4 (80 OQ-80.2) | us |
 | OQ-30.4 | Antti's review of the rebuilt 040/060 base without ufs/s5 (carving method, gates, acceptance record per his `docs/ACCEPTANCE.md`). | us build; Antti reviews |
 | OQ-30.5 | Does the halt path, known to crash on `shutdown -i0` on the 040/060 base (`amix-040-060-port/README.md`), need fixing before the halt pass can be proven? | Antti; us |
 | OQ-30.6 | Does ashnazag's author want the patches (arena path, no-sleep mode, `.moddata` v2, halt pass, `fmodsw` refusal, allowlist mode, shared registry) offered upstream? | ashnazag |

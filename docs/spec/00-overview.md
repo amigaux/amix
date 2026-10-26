@@ -103,7 +103,7 @@ decision reserved to the project owner.
 | OQ-20.4 | DDI v1 list and contracts; review | us; Antti reviews |
 | OQ-20.5 | A shared major/syscall registry with ashnazag | ashnazag |
 | OQ-30.1 | Is a no-sleep mode needed at `dmainit` or only at `marc_root` | us |
-| OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe in time for 1.1 | us |
+| OQ-30.3 | The A4000T onboard 53C710 driver and its gated probe in time for 1.1 (settled: written in stage 4) | us |
 | OQ-30.4 | Review of the 040/060 base rebuilt without ufs/s5 | us build; Antti reviews |
 | OQ-30.5 | The 040/060 halt path before the halt pass | Antti; us |
 | OQ-30.6 | Which core patches go upstream | ashnazag |
@@ -127,10 +127,10 @@ decision reserved to the project owner.
 | OQ-70.2 | Boot-time consumers of ufs inside the base in safe mode | us |
 | OQ-70.3 | Is the inet stack separable (recorded, not required) | us |
 | OQ-80.1 | Metal evidence for the 030 line | us; Antti |
-| OQ-80.2 | The A4000T 53C710 driver for stage 4, else a release note | us |
+| OQ-80.2 | The A4000T 53C710 driver for stage 4 (settled: written in stage 4) | us |
 | OQ-80.3 | Throughput baselines for stage 3 (answered 2026-10-26) | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
-| OQ-80.5 | An A4091 root on an 030 Z3660 box: a bounce buffer or the kernel bound in motherboard RAM | us; amix-a4091 |
+| OQ-80.5 | An A4091 root on an 030 Z3660 box: a bounce buffer or the kernel bound in motherboard RAM (settled: DDI v1.1 DMA, the 030 provider bounces) | us; amix-a4091 |
 | OQ-80.6 | A 1.1 Z3660 release firmware that runs the 68030 MMU mode on metal | Z3660 |
 | OQ-80.7 | A spacer between back-to-back Z3660 register writes, for every driver | Z3660; the driver repos |
 
