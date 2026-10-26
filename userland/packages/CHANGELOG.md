@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — z3660eth-k30/-k46 1.0.0-5 (0a37c09) — not published
+
+From amix-z3660net c5f7a46: every board register access in the module armed against the Z3660 address-capture race (ZS-05).
+Objects k30 022c012b, k46 ca3a2b05 (19751 B file, 13537 B image). zeth30 md5 6c88d4f7, zeth46 4a641610, 29184 B each. The
+-4 datastreams stay in build/kspace/pkg; the staged root carries -5 (catalog 47584f25); the -4 root is kept at
+build/kspace/superseded/repo-20261026-1744 (086eac4d). Round trip 106/106; gates PASS.
+
 ## 2026-10-26 — z3660eth-k30/-k46 1.0.0-4 (09cdd8d) — not published
 
 From amix-z3660net 2a15a4c: in intr=6 mode the module's RX ring resyncs past a wedged sentinel (the metal S3-46 stall).
