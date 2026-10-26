@@ -26,6 +26,19 @@
 #define _SYS_AMIXDDI_H
 
 /*
+ * Board windows below VSECT1 (any): the kernel maps physical addresses
+ * there one to one on both lines, so phystokv is the identity.  The k30
+ * <sys/immu.h> defines both; the k46 kit's 4 KiB-page form does not, so
+ * they are here, in the stock form.
+ */
+#ifndef VSECT1
+#define VSECT1		0x40000000
+#endif
+#ifndef phystokv
+#define phystokv(paddr) (paddr)
+#endif
+
+/*
  * Interrupt level as functions (any).  <sys/inline.h> gives the same as
  * inline code and #defines the names; a module may use either form.
  */

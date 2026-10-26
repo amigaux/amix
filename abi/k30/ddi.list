@@ -37,6 +37,7 @@ if_attach func 0
 if_detach func 0
 intr_attach func 0
 intr_detach func 0
+iodone func 1
 kmem_alloc func 0
 kmem_free func 0
 kmem_zalloc func 0

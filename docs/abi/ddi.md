@@ -52,8 +52,10 @@ The C is K&R. The kernel compiler runs with `-traditional`.
 The kernel maps physical addresses below `VSECT1` (0x40000000) one to one.
 That is the page tables' early termination, not transparent translation.
 A board window there is reachable at `phystokv(phys)`, which is the
-identity (`<sys/immu.h>`). On k46 the kit's `sys/immu.h` and `sys/param.h`
-are the 4 KiB-page forms, so `phystopfn()` and `btop()` are right.
+identity (`<sys/immu.h>` on k30; `<sys/amixddi.h>` gives both names on k46,
+whose kit has the port's 4 KiB-page `sys/immu.h` without them). On k46 the
+kit's `sys/immu.h` and `sys/param.h` are the 4 KiB-page forms, so
+`phystopfn()` and `btop()` are right.
 
 ## Copy and strings
 
@@ -124,6 +126,7 @@ level-2 handler raised through PORTS or in the poll.
 
 | Name | Form | Context | Provider | Contract |
 |---|---|---|---|---|
+| `iodone` | `iodone(bp)` | any but level 6 | stock | Ends a block request: a block driver's `strategy` calls it when the transfer of `bp` (a `struct buf *`, `<sys/buf.h>`) is done or has failed, with `b_flags`, `b_error` and `b_resid` set first, as a static driver does |
 | `ramdisk_image` | `int ramdisk_image(paddr, size)` | any | core | The physical address and size of the RAM-disk image boot2 placed (contract C4-3 §4), from the loader record. 0; `ENOENT` (no image) |
 | `root_defer` | `int root_defer(fn, arg)` | root | core | `fn(arg)` runs once at the first `sysinit` entry, in process context at level 0, before any boot-class module loads, in safe mode too: where a root-class driver attaches its interrupt and runs its self-test (contract C4-2 §3). 0; `EINVAL` (not in a root-class `_load`, or no `fn`); `ENOSPC` (8 already). `fn`'s nonzero return is printed; the module stays linked |
 | `sd_register` | `int sd_register(queuefn, c, base, name, rank)` | root | core | Registers one board with sd (contract C4-1 §3). `queuefn(c, cp)` gets sd's requests for it; `base` is what `sdcardbase()` returns; `name` (the module's storage) what `sdhardwarename()` returns; `rank` the class the module declares in `.moddata` (1 `z3660`, 2 `zorro`, 3 `mobo`, 4 `ide`). 0; `EINVAL` (another class, no `queuefn` or `name`, or outside a module's `_load`); `ENOSPC` (four registered); `EBUSY` (sd's first open has closed registration). Allocates nothing; a failed `_load`'s registrations are removed |

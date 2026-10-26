@@ -188,6 +188,16 @@ for l in k30 k46; do
 		else fail "$l: the STREAMS driver"; cat "$W/str.out"; fi
 	mkbad $l drvx "$DRV"'struct mod_drv_data drvx_drvdata[] = { { { 0 }, 0, 0, { o, o, o, o, o }, 52, 1 } };\nMOD_DRV_WRAPPER(drvx, l, u, 0, "x");\n' '$modtype drv\n$class demand\n$cpu 68020\ndrvx\tdrvx\n' &&
 		refused "drv_cmajor not in majors=" $l "$W/$l-drvx/out/mod.d/drvx" "drv_cmajor 52"
+	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
+	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
+	for o in pre post; do
+		if [ $o = pre ]; then I='#include "sys/amixddi.h"\n#include "sys/immu.h"\n'
+		else I='#include "sys/immu.h"\n#include "sys/amixddi.h"\n'; fi
+		mkbad $l phys$o "$WRAP$I"'unsigned long f(a) unsigned long a; { return a < VSECT1 ? (unsigned long)phystokv(a) : 0; }\nMOD_MISC_WRAPPER(phys'$o', l, u, "x");\n' "$M0"'phys'$o'\tphys'$o'\n' &&
+			if [ ! -s "$W/$l-phys$o/cc.log" ]; then
+				pass "$l: VSECT1 and phystokv, <sys/amixddi.h> $o <sys/immu.h>, no warning"
+			else fail "$l: VSECT1/phystokv ($o)"; cat "$W/$l-phys$o/cc.log"; fi
+	done
 
 	# format refusals, on edited copies of the sample
 	edit "$H" "$W/$l-rtype/hello" <<'PY' && refused "a relocation type outside the list" $l "$W/$l-rtype/hello" "outside the list"
