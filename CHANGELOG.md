@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — a4091 module 1.0.0-4: the WRITE/TUR sync runs over a clear line, not the status line (3ec2ecd, 21d3bac)
+
+Bench N109's NO-SENSE retries under dma_forcebounce: the cache-clearing sync ran over the chip-written status line, so a bounced
+FROM complete copied stale bytes over the status. The area gains a 16-byte clear line nobody writes (1348 B) and the sync runs
+there. The host mock models the hook (GOOD lands, then 0x5a copied back): red on 1.0.0-3, green now, 17/17 per arm,
+mutation-checked. modcheck ok k46 (5476 B, 3d8cc066) / k30 (4492 B, 69929d09); static objects unchanged. E6 marked passed.
+
 ## 2026-10-27 — a4091 module 1.0.0-3: the attach lines name the board, not a card (aa4c278)
 
 sd assigns the card only after registration (Bench N106: the Z3660 ranked first made the A4091 card 1 after the module had
