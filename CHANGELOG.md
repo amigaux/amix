@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger marks S4-71 k46 and the A4091 root rows PASS
+
+§6 S4-71 k46 PASS (N107, kerntools 1653ea3); §6 S4-62 k46 PASS (N105/N105b d1a2e3c, N106 1653ea3); §7 lists only the k30
+halves (N108, N109/N109b pending).
+
 ## 2026-10-27 — kbootset: a module with an absent depend= is left to gate 3's message (fa7a4ab)
 
 The import check skips a module whose depend= names a module the generation lacks, so gate 3's "module X depends on Y, which is
