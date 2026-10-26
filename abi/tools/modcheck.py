@@ -29,7 +29,8 @@
 #   - on k46: the 68060 scan (m68k-cbm-sysv4-scan060) and the 4 KiB page
 #     geometry (no shift by 11 of an address, the port's
 #     check_page_geometry.sh rule).
-#   - parameter defaults (and min, max) in C3-1 section 3's text form.
+#   - parameter defaults (and min, max) in C3-1 section 3's text form;
+#   - a driver linkage's drv_cmajor: in majors=, registered to the module.
 # Warns (exit status unchanged) on each COMMON symbol outside the module's
 # own names (its name, its wrapper's prefix): a stock header's tentative
 # definition of a kernel name (ifnet, rawintrq) becomes a private copy in
@@ -81,8 +82,8 @@ class Elf:
                 for k in range(s['size'] // 16):
                     o = s['off'] + 16 * k
                     nm, val, sz, info, oth, shn = struct.unpack('>IIIBBH', b[o:o + 16])
-                    self.syms.append(dict(name=self.cstr(st + nm), value=val, bind=info >> 4,
-                                          stype=info & 15, shndx=shn))
+                    self.syms.append(dict(name=self.cstr(st + nm), value=val, size=sz,
+                                          bind=info >> 4, stype=info & 15, shndx=shn))
 
     def cstr(self, o):
         return self.b[o:self.b.index(b'\0', o)].decode('latin-1')
@@ -260,6 +261,58 @@ def moddata(e, path, c, reg, kit, depnames):
     return keys
 
 
+def drvmajors(e, keys, reg, kit):
+    """a driver linkage's drv_cmajor and drv_ccount (mod_drv_data, the
+    offsets from the kit's fingerprint text) against majors= and the
+    registry: the core installs at drv_cmajor, so it must be the module's"""
+    offs = {}
+    for line in open(os.path.join(kit, 'abi-%s.txt' % conf(kit)['KABI'])):
+        f = line.split()
+        if len(f) == 3 and f[0] == 'offs':
+            offs[f[1]] = int(f[2])
+    rel = {}                    # (section, offset) -> (symbol, addend)
+    for s, off, sym, rtype, add in e.relas(None):
+        if rtype == 1:
+            rel[(s['info'], off)] = (sym, add)
+
+    def target(sec, off):
+        r = rel.get((sec, off))
+        if r is None or r[0] >= len(e.syms):
+            return None
+        y = e.syms[r[0]]
+        if y['shndx'] == 0:
+            return ('undef', y['name'])
+        return (y['shndx'], y['value'] + r[1])
+
+    def word(sec, off):
+        s = e.sh[sec]
+        return struct.unpack('>I', e.b[s['off'] + off:s['off'] + off + 4])[0]
+
+    w = [y for y in e.syms if y['name'].endswith('_wrapper') and y['shndx'] != 0]
+    if len(w) != 1:
+        return
+    link = target(w[0]['shndx'], w[0]['value'] + 20)          # mw_modlink
+    while link and link[0] != 'undef':
+        ops = target(link[0], link[1])
+        if ops is None:
+            break
+        if ops == ('undef', 'mod_drvops'):
+            td = target(link[0], link[1] + 4)                 # mod_type_data
+            dd = td and td[0] != 'undef' and target(td[0], td[1] + 4)  # mtd_pdata
+            if not dd or dd[0] == 'undef':
+                bad('a mod_drvops linkage whose mod_drv_data cannot be followed')
+                return
+            mj = struct.unpack('>i', struct.pack('>I', word(dd[0], dd[1] + offs['DRV_CMAJOR'])))[0]
+            n = struct.unpack('>i', struct.pack('>I', word(dd[0], dd[1] + offs['DRV_CCOUNT'])))[0]
+            declared = [m for m in keys.get('majors', '').split(',') if m]
+            for k in range(max(n, 1)):
+                if 'c:%d' % (mj + k) not in declared:
+                    bad('drv_cmajor %d (count %d): c:%d is not in majors=' % (mj, n, mj + k))
+                elif reg.get(('c', mj + k)) != keys.get('name'):
+                    bad('drv_cmajor %d: c:%d is not registered to %s' % (mj, mj + k, keys.get('name')))
+        link = (link[0], link[1] + 8)                         # the next modlink entry
+
+
 def scan(e, path):
     """the 68060 scan and the page geometry, on a copy whose .moddata is
     PROGBITS again: binutils 2.8.1 (scan060 runs its objdump) cannot read
@@ -331,6 +384,10 @@ def main(argv):
             image = (image + al - 1) // al * al + s['size']
         if s['type'] == SHT_REL:
             bad('section %s is SHT_REL: RELA only' % s['nm'])
+    for y in e.syms:            # the core allocates COMMONs into the image too
+        if y['shndx'] == 0xfff2:
+            al = max(y['value'], 1)
+            image = (image + al - 1) // al * al + y['size']
     if image > IMAGE_MAX:
         bad('the allocated image is %d bytes, over 2 MiB' % image)
     for s, off, sym, rtype, add in e.relas(None):
@@ -339,6 +396,7 @@ def main(argv):
     depmods = [Elf(d) for d in deps]
     keys = moddata(e, path, c, registry(kit), kit,
                    [os.path.basename(d) for d in deps])
+    drvmajors(e, keys, registry(kit), kit)
     allow = names(os.path.join(kit, 'ddi.list'))
     if keys.get('tier') == 'core':
         allow |= names(os.path.join(kit, 'core.list'))

@@ -57,6 +57,21 @@ mkbad() {
 }
 
 M0='$modtype misc\n$class demand\n$cpu 68020\n'
+# edit FILE OUT: OUT is FILE with python's edit (stdin) applied to its bytes `d`
+edit() {
+	python3 -c "
+import struct, sys
+d = bytearray(open(sys.argv[1], 'rb').read())
+u16 = lambda o: struct.unpack('>H', d[o:o+2])[0]
+u32 = lambda o: struct.unpack('>I', d[o:o+4])[0]
+shoff, shnum = u32(32), u16(48)
+sh = lambda i, f: u32(shoff + 40 * i + f)
+$(cat)
+open(sys.argv[2], 'wb').write(d)" "$1" "$2"
+}
+# a character driver, as the guide's section 4 shows: NAME on MAJOR, and
+# STR=1 for a STREAMS driver (d_str only); built under a registered name
+DRV='#include "sys/types.h"\n#include "sys/conf.h"\n#include "sys/moddefs.h"\nstatic int o() { return 0; }\nstatic int l() { return 0; }\nstatic int u() { return 0; }\n'
 WRAP='#include "sys/types.h"\n#include "sys/moddefs.h"\nstatic int l() { return 0; }\nstatic int u() { return 0; }\n'
 
 for l in k30 k46; do
@@ -134,7 +149,57 @@ for l in k30 k46; do
 	if [ $l = k46 ]; then
 		mkbad $l geom "$WRAP"'unsigned f(a) unsigned a; { return a >> 11; }\nMOD_MISC_WRAPPER(geom, l, u, "x");\n' "$M0"'geom\tgeom\n' &&
 			refused "a 2 KiB page shift on k46" $l "$W/$l-geom/out/mod.d/geom" "shift by 11"
+		# a 64-bit multiply the 68060 lacks, past the compiler's rewrite
+		mkbad $l m64 "$WRAP"'int f(a, b) int a, b; { int h, lo; __asm__("mulsl %2,%0:%1" : "=d" (h), "=d" (lo) : "d" (b), "1" (a)); return h; }\nMOD_MISC_WRAPPER(m64, l, u, "x");\n' "$M0"'m64\tm64\n' &&
+			refused "a 64-bit multiply on k46 (the 68060 scan)" $l "$W/$l-m64/out/mod.d/m64" "68060 scan"
 	fi
+
+	# driver-type modules through the kit (C3-6 section 1.2): a character
+	# driver as monsw on 52 and a STREAMS driver as z3660eth on 51, the
+	# majors registered to those names; drv_cmajor must agree with majors=
+	mkbad $l monsw "$DRV"'struct mod_drv_data monsw_drvdata[] = { { { 0 }, 0, 0, { o, o, o, o, o }, 52, 1 } };\nMOD_DRV_WRAPPER(monsw, l, u, 0, "a character driver");\n' '$modtype drv\n$class demand\n$cpu 68020\n$majors c:52\nmonsw\tmonsw\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-monsw/out/mod.d/monsw" > "$W/drv.out" 2>&1; then
+			pass "$l: a character driver (MOD_DRV_WRAPPER, drv_cmajor 52 = majors=) passes"
+		else fail "$l: the character driver"; cat "$W/drv.out"; fi
+	mkbad $l z3660eth "$DRV"'char zinfo[16];\nstruct mod_drv_data z3660eth_drvdata[] = { { { 0 }, 0, 0, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (struct streamtab *)zinfo, 0 }, 51, 1 } };\nMOD_DRV_WRAPPER(z3660eth, l, u, 0, "a STREAMS driver");\n' '$modtype drv\n$class demand\n$cpu 68020\n$majors c:51\nz3660eth\tz3660eth\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-z3660eth/out/mod.d/z3660eth" > "$W/str.out" 2>&1; then
+			pass "$l: a STREAMS driver (d_str only, drv_cmajor 51) passes"
+		else fail "$l: the STREAMS driver"; cat "$W/str.out"; fi
+	mkbad $l drvx "$DRV"'struct mod_drv_data drvx_drvdata[] = { { { 0 }, 0, 0, { o, o, o, o, o }, 52, 1 } };\nMOD_DRV_WRAPPER(drvx, l, u, 0, "x");\n' '$modtype drv\n$class demand\n$cpu 68020\ndrvx\tdrvx\n' &&
+		refused "drv_cmajor not in majors=" $l "$W/$l-drvx/out/mod.d/drvx" "drv_cmajor 52"
+
+	# format refusals, on edited copies of the sample
+	edit "$H" "$W/$l-rtype/hello" <<'PY' && refused "a relocation type outside the list" $l "$W/$l-rtype/hello" "outside the list"
+for i in range(shnum):
+    if sh(i, 4) == 4:
+        o = sh(i, 16); d[o + 7] = 7; break
+PY
+	edit "$H" "$W/$l-shtrel/hello" <<'PY' && refused "an SHT_REL section" $l "$W/$l-shtrel/hello" "SHT_REL"
+for i in range(shnum):
+    if sh(i, 4) == 4:
+        struct.pack_into('>I', d, shoff + 40 * i + 4, 9); break
+PY
+	edit "$H" "$W/$l-v1/hello" <<'PY' && refused ".moddata without MD2 (version 1)" $l "$W/$l-v1/hello" "not version 2"
+i = d.index(b'MD2\0'); d[i + 2] = ord('1')
+PY
+	edit "$H" "$W/$l-crit/hello" <<'PY' && refused "an unknown critical key" $l "$W/$l-crit/hello" "critical key"
+i = d.index(b'desc='); d[i] = ord('!')
+PY
+	edit "$H" "$W/$l-nocpu/hello" <<'PY' && refused "a missing required key" $l "$W/$l-nocpu/hello" "required key cpu missing"
+i = d.index(b'cpu='); d[i] = ord('x')
+PY
+	mkdir -p "$W/$l-hello"
+	mkbad $l huge "$WRAP"'char huge_space[2200000];\nMOD_MISC_WRAPPER(huge, l, u, "x");\n' "$M0"'huge\thuge\n' &&
+		refused "an image over 2 MiB" $l "$W/$l-huge/out/mod.d/huge" "over 2 MiB"
+	mkbad $l tierc "$WRAP"'MOD_MISC_WRAPPER(tierc, l, u, "x");\n' "$M0"'$tier core\ntierc\ttierc\n' &&
+		refused "tier=core without build=" $l "$W/$l-tierc/out/mod.d/tierc" "needs build="
+	# a dependency's globals count only when it is named (-d and depend=)
+	mkbad $l dep1 "$WRAP"'int dep1_val;\nint dep1_get() { return dep1_val; }\nMOD_MISC_WRAPPER(dep1, l, u, "x");\n' "$M0"'dep1\tdep1\n' &&
+	mkbad $l dep2 "$WRAP"'extern int dep1_get();\nint f() { return dep1_get(); }\nMOD_MISC_WRAPPER(dep2, l, u, "x");\n' "$M0"'$depend dep1\ndep2\tdep2\n' dep1_get &&
+		if python3 "$K/tools/modcheck.py" -k "$K" -d "$W/$l-dep1/out/mod.d/dep1" "$W/$l-dep2/out/mod.d/dep2" > "$W/dep.out" 2>&1; then
+			pass "$l: a dependency's global, with -d and depend=, passes"
+		else fail "$l: the dependency"; cat "$W/dep.out"; fi &&
+		refused "a dependency's global without -d" $l "$W/$l-dep2/out/mod.d/dep2" "dep1_get is not in the allowlist"
 
 	# the sample against the module kernel's own symbol block, as the loader leaves it
 	KERN=$([ $l = k46 ] && echo "$K46" || echo "$K30")
