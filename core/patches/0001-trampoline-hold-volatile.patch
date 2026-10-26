@@ -1,0 +1,31 @@
+Subject: dlm_slot: the trampolines' hold is volatile across the longjmp
+
+xcall() and dlm_cdev_open() set h.m after DLM_SETJMP and read it on the
+longjmp path to drop the hold.  ISO C leaves a non-volatile automatic
+modified after setjmp indeterminate after the longjmp; the one-member
+struct kept it in memory under GCC 2.7.2.3, but a compiler that splits
+aggregates into registers (GCC 15 at -O, the host test build) reads a
+stale value, so the hold leaks and the state harness fails three checks.
+Declaring h volatile makes the code right for any compiler; the kernel
+build's code is unchanged in effect (h.m already lived in memory).
+
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -137,7 +137,7 @@
+ 	long *a;
+ {
+ 	struct dlm_guard g;
+-	struct { struct dlm_mod *m; } h;	/* in memory: read after a longjmp */
++	volatile struct { struct dlm_mod *m; } h;	/* read after a longjmp */
+ 	label_t save;
+ 	struct dlm_mod *m;
+ 	int e;
+@@ -549,7 +549,7 @@
+ {
+ 	struct dlm_cslot *cs = cslot((int)getmajor(*devp));
+ 	struct dlm_guard g;
+-	struct { struct dlm_mod *m; } h;	/* in memory: read after a longjmp */
++	volatile struct { struct dlm_mod *m; } h;	/* read after a longjmp */
+ 	label_t save;
+ 	struct dlm_mod *m;
+ 	long a[8];
