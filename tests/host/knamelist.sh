@@ -78,9 +78,10 @@ if [ -f "$K46" ]; then
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
 	$KB status > $T/out
 	grep -q "^namelist: /stand/unix is not the booted kernel's: run kbootset namelist$" $T/out
-	$KB namelist > $T/out
+	(umask 0; $KB namelist) > $T/out			# rc2's umask on the box
 	grep -q "^kbootset: namelist /stand/unix written for generation 1, bound at 0x08000000$" $T/out
 	cmp -s $R/stand/unix $T/n46				# what nlmake makes at that bind
+	[ "$(stat -c %a $R/stand/unix)" = 644 ]			# never 0666
 	[ "$(cat $R/stand/2.1_unix)" = "the stock kernel" ]	# the link's file is untouched
 	[ "$(stat -c %h $R/stand/2.1_unix)" = 1 ]
 	[ ! -e $R/stand/unix.new ]

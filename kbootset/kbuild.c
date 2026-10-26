@@ -1355,6 +1355,7 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		bad = bad || fsync(fileno(f)) != 0;
 #endif
 		bad = fclose(f) != 0 || bad;
+		bad = bad || chmod(np, 0644) != 0;	/* as the stock /stand/unix, whatever the umask */
 		if (bad)
 			remove(np);
 		else if (rename(np, under(root, "/stand/unix")) == 0)
