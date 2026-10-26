@@ -1066,3 +1066,68 @@ quiet box: for that moment the kernel has no memory to spare.
 `KM_NOSLEEP`. A request that never returns fails U4. Its size is the
 last `...` line, and 30 §2's routing of large requests is then the
 core's to change.
+
+## Stage 4: the first root-class boot (S4-72-1)
+
+The first boot whose root disk is reached through a module. boot2 places
+z3660scsi in the arena (C4-4 version 3), the core links it in
+`marc_root` before the root is mounted (core patches 0033–0035), it
+registers its board with sd (C4-1, patch 0032), and the root mounts
+through it. ufs is still the kernel's own: the filesystems leave the base
+with S4-43. k46 first; k30 follows with S4-23's kernel in the same
+shape.
+
+- **Inputs:**
+  - the S4-22 k46 root-class kernel and the sidecar its build wrote: kabi
+    `k46.1.1`, `sdcards=4`, `arena=`, `ident=`, `abi=fea18182…`, and a
+    `root=` that names no Z3660 controller (z3660scsi is not linked in),
+    with `rootfs=ufs`. Through `s3-standin.sh`, as S3-B5's kernels;
+  - `/tmp/boot2.bin` from amix-dlm a0a3d66 or later (`make boot2`,
+    S4-10's placement), and `/tmp/kbootset` from b4297bd or later
+    (`make box`, S4-12's composition);
+  - the z3660scsi root-class module (S4-30), built with the stage-4 kit
+    (kabi `k46.1.1`): `.moddata` `class=root`,
+    `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`, no `unload=`.
+    Its stand-in package:
+
+```
+KABI=k46.1.1 sh tests/bench/s3-modpkg.sh <z3660scsi> k46 <outdir>
+```
+
+  - optionally z3660eth 1.0.0-5 (kabi `k46.1.0`, which a `k46.1.1`
+    kernel accepts) through `s3-modpkg.sh` as in S3-B5, so the network
+    comes up too.
+- **Vehicle:** S3-B5's k46 vehicle: a fresh slot copy, generation 1
+  static and deflated in a 4 MiB store, the root on the emulated Z3660's
+  piscsi disk at SCSI id 6, with `dlm::sysinit:/sbin/modadmin -B …`
+  first in `/etc/inittab` and `S01kbnamelist`, as S3-B5 set them.
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy the trees (s3-standin's, s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
+| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | `build`'s record in `/stand/gen/<id>/build`, after the kernel's: `module z3660scsi root <size> at=0x10000 crc32=00000000 sha256=… path=/stand/gen/<id>/mod/z3660scsi bss=<n> match=zorro:144b:01,mobo:z3660-window safe=1`. The box's `--rootdev` is the Z3660 from kinfo's card table, and no built-in driver names it, so gate 3 is met by the module and it is the safe set. `generation <id> committed` |
+| 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of S3-B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
+| 4 | `shutdown -i0 -g0 -y` | `dlm: halt pass: 1 module(s) stopped` if z3660scsi has a `_halt` (C4-2 §5: the mailbox left idle), then `The system is halted` |
+
+**What the row says if it fails.**
+- No `module z3660scsi … bytes` from boot2: the generation carries no
+  root record (look at the `build` file), or boot2 is older than
+  a0a3d66. A boot2 from before S4-10 refuses a root-class record with L9
+  and falls back to generation 1.
+- `L3 member damaged`, or `dlm: root module z3660scsi damaged; not
+  linked`: the bytes. Check the store with `lsstore` on the host.
+- `dlm: root module z3660scsi: error <n>`, or z3660scsi's own line: its
+  `_load`. The number goes in the report.
+- No `root module(s) linked` line and a hang or panic at the root mount:
+  the kernel has no `marc_root` hook before `rth1_apply`, or z3660scsi's
+  board did not register (C4-1: `sd: … registered after the controllers
+  closed`).
+- `dlm: root module z3660scsi is not the booted manifest's; not linked`:
+  the manifest copy and the directory disagree (a boot2 and kbootset
+  from different revisions).
+
+The next cells reuse this vehicle: safe mode (the menu's `s`; the same
+lines, since z3660scsi is the safe set); a damaged module (one byte of
+its store extent changed: `L3`, then generation 1 boots); and the
+card-number cells of M-SD1 on the emulated board sets (30 §5.3).
+

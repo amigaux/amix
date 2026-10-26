@@ -9,6 +9,8 @@
 #   MODULE   the module object built with the ABI kit (build/<line>/mod.d/<name>)
 #   LINE     k30 or k46
 #   modreg-line  written to etc/conf/modreg.d/<name> ("param intr=6", "disable")
+#   KABI     the record's kabi (default <line>.1.0; k46.1.1 for a module
+#            built with the stage-4 kit)
 # Writes OUTDIR/etc/conf/mod.d/<name>, OUTDIR/var/apkg/kpkg/mod-<name> and,
 # with modreg lines, OUTDIR/etc/conf/modreg.d/<name>.
 set -e
@@ -32,7 +34,7 @@ name mod-$N
 version 0.0.0
 role module
 line $LINE
-kabi $LINE.1.0
+kabi ${KABI:-$LINE.1.0}
 pin gcc-2.7.2.3-8949028
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source stand-in (tests/bench/s3-modpkg.sh)
