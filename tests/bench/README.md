@@ -942,6 +942,66 @@ kinfo's fast memory (`kbootset status`): about 128 MB on k46; on k30 64 MB,
 the line's maximum, which boot2 caps the bank to (S3-43-9). On k46 the
 relocation oracle's base is then above 64 MB.
 
+## S3-44 — M-INT1, bench half: the interrupt chains on the module kernels
+
+The host harness proves the chains' logic: order, claims counted but not
+stopping the chain, a full chain, refusals (`make core`, `intr:` cases).
+These rows prove the same on the kernels of record: the level-2 walk in
+`int2_tbl`'s last slot and the level-6 chain behind the CIA-B handler,
+called by real and software-raised interrupts. They also prove a driver's
+fallback to polled mode.
+
+- **Already covered (S3-43-2, N65/N66):** a boot-class `intr_attach(6, …)`
+  returns 0. The box runs to multi-user with a declining level-6 handler
+  attached. The backstop removes a handler an unload forgot, and the
+  keyboard still works.
+- **Not on the emulator:** interrupt receive from the board itself (the
+  emulated board raises no INT6). That is S3-46, on metal.
+- **No z3660net build is owed:** z3660eth 1.0.0-2 already carries
+  `param intr:int:0:0:6`. With `intr=6`, the first open attaches its
+  level-6 handler (and a level-2 one, `intrl2=1`), raises EXTER once from
+  software as a self-test, and falls back to polled on any failure. The
+  poll tick drains in every mode.
+
+The probes are built with the line's kit:
+
+```
+sh tests/bench/s3-44/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s44/t44intr, t44fill
+```
+
+| Probe | What it does |
+|---|---|
+| `t44intr` | `_load` attaches a counter on level 2, then a claimer and a counter on level 6. It raises PORTS and EXTER once from software and waits for them. `_unload` prints the counts and detaches |
+| `t44fill` | `_load` attaches declining level-6 handlers until `intr_attach` refuses, and keeps them. `_unload` detaches them |
+
+**The vehicle:**
+- each line's slot copy in S3-B5's state: z3660eth from zeth 1.0.0-2 as
+  a boot-class member, the kernels of record;
+- `/sbin/modadmin` with core patch 0026 (`-K`);
+- `<outdir>/s44` copied to `/tmp/s44`.
+
+The script that plumbs zen0 at boot is held back for the whole campaign
+(renamed out of `/etc/rc2.d`), so that z3660eth's first open happens by
+hand, after `modadmin -K`. Then its lines are read with
+`modadmin -L | tail`.
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | `echo 'param intr=6' > /etc/conf/modreg.local.d/z3660eth`; `kbootset build`; `kbootset commit` (on the 4 MiB k46 store, mark the previous module generation bad first, as S3-43 does); power-cycle | `build`'s generation has `param intr=6` in z3660eth's record |
+| 2 (the new generation) | `kbootset mark-good` once the loader is accepted; `modadmin -K`; plumb zen0 by hand (the held-back script's steps); `modadmin -L \| tail -3`; host ping 3/3, telnet, ftp a file | **S3-44-3:** `zen: INT6 receive, drain at level 2`; zen0 carries ping, telnet and ftp (the poll tick drains, since the emulated board raises no INT6) |
+| 3 (`kbootset next devload`; the generation is good and the default, 10 §7.3) | `modadmin -K`; `modadmin -l /tmp/s44/t44intr`; type a few keys on the console for about 10 s; `modadmin -U t44intr`; `modadmin -L \| tail -5` | **S3-44-1:** `dlm: DEVELOPMENT LOAD: t44intr, outside the booted manifest`; `t44intr: attached: level 2 counter 0, level 6 claimer 0, counter 0`; `t44intr: software PORTS seen after N spins, EXTER after M (-1: never)` with N and M not -1; at the unload, `t44intr: level 2: A calls; level 6: claimer B calls, counter B calls` with A ≥ 1 and the two level-6 counts **equal** and ≥ 1; `t44intr: detached 0 0 0; again 2` (ENOENT); the keyboard still works |
+| 3, continued | `modadmin -l /tmp/s44/t44fill`; plumb zen0 by hand; `modadmin -L \| tail -3`; host ping 3/3; `modadmin -U t44fill` | **S3-44-2:** `t44fill: level 6 took 8 handlers, then error 168` (ECONFIG; 8 is the chain's size while nothing else is attached); `zen: level-6 attach failed (errno 168); polled`; zen0 carries ping, polled; `t44fill: 8 of 8 detached` |
+
+**The numbers:** N and M (the spins until a software-raised interrupt
+reaches the chain), A and B over the 10 s, and the 8.
+
+**Failure readings:**
+- `-1` in S3-44-1: that level's chain is not called (the walk is not in
+  `int2_tbl`, or the kernel build did not weaken `aciabintr`).
+- Unequal level-6 counts: a claim stops the chain, against 30 §4.
+- In S3-44-3, `zen: interrupt self-test failed; polled` with the chain
+  working in S3-44-1 is z3660eth's to read.
+
 ## S3-41 — bench measurements on the module kernels (U1, U2, U4)
 
 After the S3-43 sweep, on the same kernels of record and the same slot
