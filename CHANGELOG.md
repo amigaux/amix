@@ -10,6 +10,8 @@ found). Static objects unchanged. Modules k30 0c5c3580, k46 8356712a. The first 
 (a boot-class STREAMS driver gets no slot), not the driver's.
 Module release 1.0.0: module/VERSION holds the package version (`1.0.0-1`, the same on both lines) for
 z3660eth-k30 / z3660eth-k46, pkginst zeth30 / zeth46 (amix-dlm C3-5 v4 §1.1); amix-packages reads it.
+Package revision `1.0.0-2` (module release still 1.0.0): the package gains the device node /dev/zen0 (c 51 0) as a
+pkgmap device entry (C3-5 v4 §1.2, amix-dlm 568b9ac); module object unchanged (k30 0c5c3580, k46 8356712a).
 
 ## 2026-10-26 — z3660eth module on kit d197198: one Master, $match added (e510330)
 
