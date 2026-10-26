@@ -284,9 +284,28 @@ grep -a -qx "param z3660rtg.blit=0" $T/disk.img
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
 $KB check > $T/out
 grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
+# check: a module copy changed, then gone
+cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
+printf 'Z' | dd of=$R/stand/gen/$id/mod/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+! $KB check > $T/out
+grep -q "module monsw: /stand/gen/$id/mod/monsw SHA-256 BAD" $T/out
+rm $R/stand/gen/$id/mod/monsw
+! $KB check > $T/out
+grep -q "module monsw: /stand/gen/$id/mod/monsw missing" $T/out
+cp $T/monsw.keep $R/stand/gen/$id/mod/monsw
+$KB check > $T/out
 # what build refuses
 modpkg monsw class=demand majors=c:52 kabi=k46.1.1
 refused 2 $KB build $FACTS			# a minor above the kernel's
+three; modpkg monsw class=demand majors=c:52 kabi=k46.2.0
+refused 2 $KB build $FACTS			# another major
+grep -q "module monsw is built for kabi k46.2.0, the kernel is k46.1.0" $T/out
+three; modpkg monsw class=demand majors=c:52 kabi=k30.1.0
+refused 2 $KB build $FACTS			# another family
+grep -q "module monsw is built for kabi k30.1.0, the kernel is k46.1.0" $T/out
+three; modpkg monsw class=demand majors=c:52 tier=core build=68060-260101-1
+refused 2 $KB build $FACTS			# core tier, another kernel build
+grep -q "core-tier module monsw is built for kernel 68060-260101-1, this one is 68060-260928-52" $T/out
 three; modpkg monsw class=demand majors=c:52 cc=gcc-2.95.3-0000000
 refused 2 $KB build $FACTS			# another compiler
 three; echo "param speed=9" > $R/etc/conf/modreg.d/monsw
@@ -296,6 +315,29 @@ three; echo "param blit=maybe" > $R/etc/conf/modreg.d/z3660rtg
 refused 2 $KB build $FACTS			# not a bool
 three; echo "param maxarea=4000000" > $R/etc/conf/modreg.d/z3660rtg
 refused 2 $KB build $FACTS			# above its max
+three; echo "param intr=-1" > $R/etc/conf/modreg.d/z3660eth
+refused 2 $KB build $FACTS			# below its min
+grep -q "intr=-1 is not a valid int value for module z3660eth" $T/out
+three; echo "intr=6" > $R/etc/conf/modreg.d/z3660eth
+refused 2 $KB build $FACTS			# a malformed line
+grep -q "neither param <name>=<value> nor disable" $T/out
+three; modpkg monsw class=demand majors=c:52 param=base:hex:0x10:0:0xff param=tag:str:mon
+echo "param base=0x100" > $R/etc/conf/modreg.d/monsw
+refused 2 $KB build $FACTS			# hex above its max
+echo "param tag=$(printf '%064d' 0)" > $R/etc/conf/modreg.d/monsw
+refused 2 $KB build $FACTS			# a str over 63 characters
+grep -q "is not a valid str value for module monsw" $T/out
+printf 'param base=32\nparam tag=mon2\n' > $R/etc/conf/modreg.d/monsw
+$KB build $FACTS | grep -q "built"		# hex takes decimal, written as hex
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -qx "param monsw.base=0x20" $R/stand/gen/$id/build
+grep -qx "param monsw.tag=mon2" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+three; modpkg monsw class=demand majors=c:52 tier=core build=68060-260928-52
+$KB build $FACTS | grep -q "built"		# core tier for this kernel build
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module monsw demand .* majors=c:52 tier=core build=68060-260928-52$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
 three; echo "disable" > $R/etc/conf/modreg.d/monsw
 refused 3 $KB build $FACTS			# z3660rtg depends on the disabled monsw
 grep -q "depends on monsw, which is not in the generation" $T/out
@@ -308,6 +350,9 @@ refused 3 $KB build $FACTS			# another module's major
 grep -q "major c:51 is registered to another module" $T/out
 three; modpkg monsw class=demand majors=c:52 depend=z3660rtg
 refused 3 $KB build $FACTS			# a depend cycle
+three; modpkg z3660eth class=boot match=always majors=c:51 depend=monsw
+refused 3 $KB build $FACTS			# a boot module on a demand module
+grep -q "module z3660eth: its depend= closure has a cycle or a demand-class dependency" $T/out
 three; modpkg monsw class=root match=always
 refused 3 $KB build $FACTS			# root class before stage 4
 three; printf 'X' | dd of=$MD/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
