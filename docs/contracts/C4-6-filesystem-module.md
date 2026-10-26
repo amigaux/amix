@@ -1,10 +1,12 @@
-# C4-6 — the filesystem module form, version 1
+# C4-6 — the filesystem module form, version 2
 
 - **Status:** agreed 2026-10-26 (orchestrator), with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
   and cdfs boot class on disk (§5). Implemented by core patch 0040
-  (S4-41). Other repositories build against this text; a change from
-  here is a contract change with a version bump.
+  (S4-41). Version 2 (2026-10-26): `vfs_register` is minor 2 (§3),
+  since kabi 1.1 closed with the minted kernels. Other repositories
+  build against this text; a change from here is a contract change with
+  a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §2 patch 9 (`vfs_register`
   and a grown `vfssw`), §6 (filesystems as modules), §3 (`rootfstype`);
   `20-module-format-and-abi.md` §4.1 (the core tier); D-3 §4; measurements
@@ -61,7 +63,7 @@ int vfs_register(name, init, ops, flag)
 	long flag;			/* vsw_flag */
 ```
 
-A DDI name of minor 1 (k30.1.1, k46.1.1). It may be called from a root-
+A DDI name of minor 2 (k30.1.2, k46.1.2). It may be called from a root-
 or boot-class module's `_load`:
 - it refuses (`EINVAL`) a `name` other than the calling module's `fs=`,
   a 0 `ops`, or a call from outside a `_load`;

@@ -1,9 +1,11 @@
-# C4-2 — what a root-class driver changes, version 2
+# C4-2 — what a root-class driver changes, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
   version 2 (2026-10-26, from the a4091 station): the A4770's key in the
-  A4091 row, and the A4091 polled in its first module form (§8).
+  A4091 row, and the A4091 polled in its first module form (§8);
+  version 3 (2026-10-26, the kabi 1.2 cut): `root_defer` is minor 2 on
+  k30, whose minted kernel (kern30m -10) does not export it (§3).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -18,7 +20,7 @@
   amix-a4091 (A4091/A4092 and the A4000T onboard 53C710 as its second
   target), amix-gayle-ide (Gayle IDE), amix-modules (`ramdisk`)
 - **Depends on:** C4-1 (`sd_register`), C4-3 (the RAM-disk hand-off),
-  C4-4 (the arena), C4-5 (DDI v1.1 DMA); core patches 0029–0034
+  C4-4 (the arena), C4-5 (DDI v1.2 DMA); core patches 0029–0034
 
 ## 1. The `.moddata` of a root-class module
 
@@ -75,7 +77,7 @@ at level 7 (C3-6 v4 §1.3). So a root-class driver:
    and enables the board's interrupt only if the test passes; otherwise
    it stays polled and says so.
 
-`root_defer(fn, arg)` is a DDI name of minor 1 (k30.1.1, k46.1.1), root
+`root_defer(fn, arg)` is a DDI name of k46.1.1 and k30.1.2, root
 context only, implemented by S4-05:
 - the core keeps up to 8 calls, in order;
 - it runs each once at the first `sysinit` entry (`MOD_C_POST`,
@@ -119,7 +121,7 @@ before the kernel halts or reboots, newest module first (core patch
   DTT0 cache-inhibited, as the static drivers' are (30 §8; U3 measures
   it).
 - **A board that reads or writes memory by DMA** gets its buffers only
-  through DDI v1.1's DMA interface (C4-5). Never hand a board the address
+  through DDI v1.2's DMA interface (C4-5). Never hand a board the address
   of the module's own memory: C3-6 §1.5 stands until C4-5 is agreed.
   On the 030 line Zorro DMA cannot reach the Z3660's DDR (80 OQ-80.5).
 

@@ -83,7 +83,7 @@ stock `ram` entry is out of the switch. On k30 the stock `ram` is out of
 ## 4. The `ramdisk` module
 
 `int ramdisk_image(paddr, size)` (`unsigned long *paddr, *size`) is a DDI
-name of minor 1 (k30.1.1, k46.1.1), root context. It gives the image's
+name of minor 2 (k30.1.2, k46.1.2), root context. It gives the image's
 physical address and size from the loader record and returns 0, or
 `ENOENT` when the loader placed no image.
 

@@ -1,14 +1,17 @@
-# C4-5 — DDI v1.1, the DMA interface, version 1
+# C4-5 — DDI v1.2, the DMA interface, version 2
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
-  shape (b) and the loader's clause (§5.2). Other repositories build
+  shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
+  the calls are minor 2 (k30.1.2, k46.1.2), since kabi 1.1 closed with
+  the minted kernels (§2). Other repositories build
   against this text; a change from here is a contract change with a
   version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
-  Q4-6): DDI v1.1 DMA in the shape of the 040/060 port's `dma_prepare` /
-  `dma_complete`, on both lines, whose 030 provider bounces through
+  Q4-6, "DDI v1.1 DMA", now minor 2): DDI DMA in the shape of the
+  040/060 port's `dma_prepare` / `dma_complete`, on both lines, whose
+  030 provider bounces through
   memory a Zorro bus master reaches; `20-module-format-and-abi.md` §4
-  (`dma_alloc`, `dma_free`); C3-6 §1.5, which this lifts for v1.1
+  (`dma_alloc`, `dma_free`); C3-6 §1.5, which this lifts for v1.2
 - **Base:** the port's service and record,
   `amix-040-060-port/docs/contracts/DMA040-SERVICE-RECORD.md` (layout
   version 2), and the A4091 driver line's call shape,
@@ -33,7 +36,7 @@ data phases) needs two things the DDI v1.0 lacked:
 C3-6 §1.5 ("never give a board the address of the module's own memory")
 stands for every module that does not use this interface.
 
-## 2. The calls (minor 1, both lines)
+## 2. The calls (minor 2, both lines)
 
 ### 2.1 `dma_prepare`, `dma_complete`
 
