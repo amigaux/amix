@@ -1,6 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 5
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 6
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4); version 5 (2026-10-26, S4-72-1 N103): the arena offset is a multiple of 16 (§2). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4); version 5 (2026-10-26, S4-72-1 N103): the arena offset is a multiple of 16 (§2); version 6 (2026-10-27, S4-40): `root=` and `rootfs=` each list only what is linked in, so a kernel without ufs and s5 omits `rootfs=` (§3). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -115,6 +115,15 @@ tells the two cases apart from the manifest alone:
   root-class modules' `match` keys and `fs` (C3-1 §3); the kernel's
   `root=`/`rootfs=` are not read, and a kernel built only for such
   generations omits them.
+
+**Each lists only what is linked in** (version 6). The two keys are
+independent: a kernel that still links a root controller writes `root=`
+for it, and one that links no root filesystem (the S4-40 cut, without
+ufs and s5) omits `rootfs=`, even when its kernel package ships the ufs
+and s5 modules. Those are modules, and gate 3 finds them as such: the
+generation's `rootfs` is promoted (C4-6 §1), so its module is a root
+record that closes the gate. Naming them in `rootfs=` would let a
+generation without the module pass gate 3 and fail at the root mount.
 
 What `kbootset` does with them (S3-16):
 - gate 2: `kabi`, `pin`, and each module's `kabi`/`cc` against them;
