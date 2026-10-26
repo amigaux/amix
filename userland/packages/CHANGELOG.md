@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kernel-k30-u 1.1.0.261026.01-1: the K030-U with kinfo (c5019ae, 06253b6) — not published
+
+The K030-U that amix-kerntools cut with kinfo (build 68030-261026-01): /stand/k30/unix (brel dfa6a1d1) and the kernel
+build's sidecar (bss=344916) copied verbatim into a pure-files package; the recipe checks the inputs (elf2brel reproduces the
+brel; bss-tail = the relocator's figure). The r7 stand-in is superseded (refuses to build unless KERNEL_K30_STANDIN=1, never
+catalogued). The round trip runs the 030 line beside k46 on its own root and store: 37/37, incl. gate 3 refusing a Z3660
+root for K030-U. Kernel-space set: kern30u -1, kern46z -2, kern46zcd -2, ldramix -2, kbootset -4.
+
 ## 2026-10-26 — kbootset -4 from amix-dlm d64bad7 (83a0f1f, f96e552) — not published
 
 /sbin/kbootset 9cf75c1c creates the journal's directories itself; the package also ships /var/kbootset (d none 0755 root sys),
