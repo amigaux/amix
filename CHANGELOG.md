@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-6: what a driver changes to become a module (e511cdf..4834304)
+
+C3-6 agreed, version 1: the wrapper and _load/_unload/_halt; majors from .moddata; intr_attach with polled as the default and
+the level-6 rule (no spl masks level 6, so a level-6 handler acknowledges, masks and flags, and calls no DDI function; the
+work runs at level 4 or below); cons_hook_set; device windows without a DMA interface; allowlisted symbols only; the kit.
+Checklists for z3660eth (boot, unload=never, if_attach, param intr), z3660rtg (demand, depend=monsw, cons_hook with the
+displayedscreen check, one module with a run-time probe, unload=allowed) and monsw (demand, unload=never, param config).
+Brief step 8 names KINFO_DLM. Plan rows S3-25/S3-26 follow DDI v1 without dma_*.
+
 ## 2026-10-26 — C3-3 v2; brief and C2-1 take the cut findings; stage-3 boot rows (7ee4c59..edd9599)
 
 C3-3 version 2: a stage-3 module kernel writes root=/rootfs=, and the first root-class module in a generation is the stage-4
