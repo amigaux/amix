@@ -37,7 +37,8 @@ inert until a root-class module exists) — no third cut.
 before haltsys/rtnfirm for A_SHUTDOWN/A_REBOOT only (spec 30 §2 patch 11; OQ-30.5 answered: no crash). 0031 (S4-06): a pinned
 driver's registered b: majors fill empty bdevsw rows; block-only allowed; a block row that cannot link puts the character rows
 back; a failed load restores the row. The measured bdevsw layout (DRV_BDEVSW, DRV_BMAJOR, BD_NFN, BD_FLAG) opens the stage-4
-kabi minor: abi-k46.1.1 fc6ae88f, abi-k30.1.1 fea18182; the kit moves to 1.1. Harness 206/206 both kernels; kit-test and
+kabi minor: abi-k46.1.1 and abi-k30.1.1, both fea18182 (identical texts; run.sh prints fc6ae88f for the -61 k46 base,
+compared with cputype size 0); the kit moves to 1.1. Harness 206/206 both kernels; kit-test and
 make test clean; dlm.o 8918560f. **No dlmkit mint from 1aba361 until S4-21's 1.1 kernels exist** (a 1.1 kit's modules are
 refused by 1.0 kernels); dlmkit -5 stays the kit for 1.0. For S4-21: row 20's stock ram entry becomes bempty (every routine
 nodev, flag 0).
