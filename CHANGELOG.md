@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset: a `--root ramdisk` generation marks the ramdisk module safe=1 (57b3832)
+
+C4-4 v4 §2 and C4-3 §1 already said it; kbuild.c's safe-set loop now adds the root-class module owning b:20 (plus its depend
+closure) when the facts' root record is ramdisk. Disk roots unchanged. make test 692/0 with two new kbuild.sh cases.
+
 ## 2026-10-26 — mkident: dlm_arena back to .balign 4; .data stays 4-aligned (a32fc10, 8bbe731)
 
 The record rounds the arena (C3-3 v5), so the directive added nothing and a .data alignment above 4 could open a text/data
