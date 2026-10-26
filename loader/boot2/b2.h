@@ -9,7 +9,7 @@
 
 #include "axtypes.h"
 
-#define LOADER_VERSION	1
+#define LOADER_VERSION	2
 
 /* exec memory flags */
 #define MEMF_PUBLIC	1UL

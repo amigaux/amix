@@ -266,6 +266,14 @@ record(struct ax_manifest *m, char *line)
 		m->has_arena = 1;
 		return AXM_OK;
 	}
+	if (streq(key, "ident")) {
+		if (n != 2 || !number(tok[1], &m->ident_off))
+			return AXM_ESYNTAX;
+		if (m->has_ident)
+			return AXM_EDUP;
+		m->has_ident = 1;
+		return AXM_OK;
+	}
 	if (streq(key, "kernel")) {
 		if (m->has_kernel)
 			return AXM_EDUP;

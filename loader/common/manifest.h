@@ -68,6 +68,8 @@ struct ax_manifest {
 	char *boards;
 	int has_arena;
 	ax_u32 arena_off, arena_cap;
+	int has_ident;
+	ax_u32 ident_off;	/* the kernel's AXK1 record, an image offset (C3-3) */
 	int has_kernel;
 	struct ax_member kernel;
 	int nmod;

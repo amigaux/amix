@@ -1,8 +1,11 @@
 /*
  * core.c -- see core.h.
  *
- * Stage 1 boots static kernels: a generation is a kernel and a manifest; a
- * manifest that needs the module arena or a RAM disk is refused with a
+ * Loader version 2: a generation is a kernel and a manifest; a module
+ * kernel's manifest names its identity record and its module arena
+ * (C3-3, C3-4), and the loader checks the one and fills the other with
+ * the arena directory and a copy of the manifest.  Root-class modules and
+ * a RAM disk are stage 4's: a manifest with either is refused with a
  * message (loader-min guards this as well).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -40,7 +43,7 @@ static const struct medium *med;
 
 /* the generation that loaded */
 static const struct ax_gen *g;
-static ax_u8 *mbuf, *kbuf;
+static ax_u8 *mbuf, *mcopy, *kbuf;
 static ax_u32 gen, vaddr;
 static struct ax_bootdata bd;
 
@@ -57,7 +60,8 @@ static const char *const lmsg[] = { "",
 	"L10 control block write failed",
 	"L11 volume needed",
 	"L12 path not found",
-	"L13 read error" };
+	"L13 read error",
+	"L14 kernel identity does not match the manifest" };
 
 void
 fail(int code, ax_u32 id)
@@ -186,6 +190,60 @@ override(struct ax_sel *s, ax_u32 id)
 	s->write = s->trial_first || s->oneshot_used || s->failed_trial;
 }
 
+/*
+ * Where image offset off (len bytes) sits in the relocated file buffer.
+ * The identity record and the arena are .data objects (C3-3): in the data
+ * segment of an ET_REL kernel, in the single section of a brel.
+ */
+static ax_u8 *
+img(ax_u32 off, ax_u32 len)
+{
+	ax_u32 a = vaddr + off;
+
+	if (bd.dsize && a >= bd.dvaddr && a - bd.dvaddr + len <= bd.dsize)
+		return kbuf + bd.doffset + (a - bd.dvaddr);
+	if (!bd.dsize && a >= bd.tvaddr && a - bd.tvaddr + len <= bd.tsize)
+		return kbuf + bd.toffset + (a - bd.tvaddr);
+	return 0;
+}
+
+/*
+ * A module kernel: its identity record must say what the manifest says
+ * (C3-3), then the arena gets its directory, with no modules in stage 3,
+ * and the manifest copy (C3-4).  0, or the L code.
+ */
+static int
+arena_fill(void)
+{
+	ax_u8 *id = img(man.ident_off, 64), *a = img(man.arena_off, man.arena_cap);
+	ax_u32 sum = 0, i, line = (ax_u32)(man.line[1] - '0') * 10 + (ax_u32)(man.line[2] - '0');
+
+	if (!id || !a || !man.kabi)
+		return 14;
+	for (i = 0; i < 16; i++)
+		sum += AX_GET32(id + 4 * i);
+	for (i = 0; i < 24 && man.kabi[i] && id[12 + i] == (ax_u8)man.kabi[i]; i++)
+		;
+	if (AX_GET32(id) != 0x41584b31UL || AX_GET32(id + 4) != 0x00010040UL || sum ||
+	    i == 24 || man.kabi[i] || id[12 + i] || AX_GET32(id + 36) != line ||
+	    AX_GET32(id + 40) != man.arena_off || AX_GET32(id + 44) != man.arena_cap)
+		return 14;
+	if (32 + g->man_len > man.arena_cap)
+		return 5;
+	x_memset(a, 0, 32);
+	AX_PUT32(a, 0x41584131UL);		/* AXA1 */
+	AX_PUT32(a + 4, 0x00010020UL);
+	AX_PUT32(a + 16, 32);
+	AX_PUT32(a + 20, g->man_len);
+	AX_PUT32(a + 24, 32 + g->man_len);
+	AX_PUT32(a + 28, gen);
+	for (sum = 0, i = 0; i < 8; i++)
+		sum += AX_GET32(a + 4 * i);
+	AX_PUT32(a + 8, 0 - sum);
+	x_memcpy(a + 32, mcopy, g->man_len);
+	return 0;
+}
+
 /* load the first generation of the order that loads; its index, or -1 */
 static int
 load_first(const struct ax_sel *sel)
@@ -202,7 +260,10 @@ load_first(const struct ax_sel *sel)
 			continue;
 		}
 		mbuf = med->read_manifest(g);
-		if (!mbuf || ax_crc32(crctab, mbuf, g->man_len) != g->man_crc ||
+		/* the parser cuts its buffer up: the arena gets this copy */
+		if (mbuf && (mcopy = x_allocmem(g->man_len, MEMF_PUBLIC)) != 0)
+			x_memcpy(mcopy, mbuf, g->man_len);
+		if (!mbuf || !mcopy || ax_crc32(crctab, mbuf, g->man_len) != g->man_crc ||
 		    ax_manifest_parse(crctab, (char *)mbuf, g->man_len, &man, &errline) != AXM_OK ||
 		    man.generation != gen) {
 			fail(2, gen);
@@ -215,8 +276,8 @@ load_first(const struct ax_sel *sel)
 		}
 		for (i = 0; i < man.nmod && man.mod[i].cls != AXC_ROOT; i++)
 			;
-		if (man.loader_min > LOADER_VERSION || man.has_arena || man.has_ramdisk ||
-		    i < man.nmod) {
+		if (man.loader_min > LOADER_VERSION || man.has_arena != man.has_ident ||
+		    man.has_ramdisk || i < man.nmod) {
 			fail(9, gen);
 			goto next;
 		}
@@ -238,9 +299,11 @@ load_first(const struct ax_sel *sel)
 				con_puts("amix-boot: a brel kernel without bss= in its manifest: "
 					 "512 KiB assumed\n");
 		}
-		if (rc == AXR_OK && bd.end - vaddr <= room)
-			return k;
-		if (rc == AXR_OK) {
+		if (rc == AXR_OK && bd.end - vaddr <= room) {
+			if (!man.has_arena || (rc = arena_fill()) == 0)
+				return k;
+			fail(rc, gen);
+		} else if (rc == AXR_OK) {
 			con_printf("amix-boot: the kernel needs %u bytes, the largest fast memory "
 				   "region has %u\n", bd.end - vaddr, room);
 			fail(4, gen);
@@ -252,7 +315,9 @@ load_first(const struct ax_sel *sel)
 next:
 		if (mbuf)
 			x_freemem(mbuf, g->man_len);
-		mbuf = 0;
+		if (mcopy)
+			x_freemem(mcopy, g->man_len);
+		mbuf = mcopy = 0;
 	}
 	return -1;
 }

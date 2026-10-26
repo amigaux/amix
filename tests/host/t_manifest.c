@@ -43,6 +43,7 @@ static const char *example_lines[] = {
 	"swap sd id=144b0100 base=00000000 unit=6 slice=2\n",
 	"boards 144b0100 02025400\n",
 	"arena 0x001f2000 0x00080000\n",
+	"ident 0x001f1fc0\n",
 	"kernel unix 2101234 at=0x00012000 stored=1203317 z=deflate crc32=1a2b3c4d sha256=00ff\n",
 	"module z3660scsi root 45678 at=0x00134000 stored=20000 z=deflate crc32=0badf00d match=zorro:144b:01\n",
 	"module gayle-ide root 19876 at=0x0013a000 crc32=00000001 match=mobo:gayle\n",
@@ -76,6 +77,8 @@ test_manifest(void)
 	T_EQ(m.has_arena, 1);
 	T_EQ(m.arena_off, 0x1f2000);
 	T_EQ(m.arena_cap, 0x80000);
+	T_EQ(m.has_ident, 1);
+	T_EQ(m.ident_off, 0x1f1fc0);
 	T_EQ(m.kernel.size, 2101234);
 	T_EQ(m.kernel.stored, 1203317);
 	T_EQ(m.kernel.z, AXZ_DEFLATE);
@@ -95,6 +98,7 @@ test_manifest(void)
 	n = seal("GMF1\ngeneration 1\nline k30\nkernel unix 1267397 at=0x10800 crc32=cafebabe\n");
 	T_EQ(parse(n, &line), AXM_OK);
 	T_EQ(m.has_arena, 0);
+	T_EQ(m.has_ident, 0);
 	T_EQ(m.nmod, 0);
 	T_EQ(m.kernel.bss, 0);
 	/* a brel kernel's bss (its format does not record it) */
@@ -131,7 +135,7 @@ test_manifest(void)
 	strcat(body, "!future-critical yes\n");
 	n = seal(body);
 	T_EQ(parse(n, &line), AXM_ECRIT);
-	T_EQ(line, 19);			/* the 19th line */
+	T_EQ(line, 20);			/* the 20th line */
 
 	/* a known key may carry the critical mark */
 	n = seal("GMF1\n!generation 3\nline k30\nkernel unix 1 at=0 crc32=00000000\n");
@@ -152,6 +156,12 @@ test_manifest(void)
 
 	n = seal("GMF1\ngeneration 1\nline k30\nline k46\nkernel unix 1 at=0 crc32=00000000\n");
 	T_EQ(parse(n, &line), AXM_EDUP);
+
+	n = seal("GMF1\ngeneration 1\nline k30\nident 0x40\nident 0x40\nkernel unix 1 at=0 crc32=00000000\n");
+	T_EQ(parse(n, &line), AXM_EDUP);
+
+	n = seal("GMF1\ngeneration 1\nline k30\nident 0x40 0x80\nkernel unix 1 at=0 crc32=00000000\n");
+	T_EQ(parse(n, &line), AXM_ESYNTAX);
 
 	n = seal("GMF1\ngeneration 1\nline k30\nkernel unix 1 at=0 crc32=00000000\nmodule x root 9 path=/a\n");
 	T_EQ(parse(n, &line), AXM_EMISSING);		/* root module without an extent */
