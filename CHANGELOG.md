@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset -14 deflates on the box; modadmin -L reads the kernel's message buffer; README fixes (9f175bf..7e731f9)
+
+kbootset -14: its own raw deflate (kdeflate.c: fixed Huffman, LZ77 with hash chains, one byte of lazy matching) where zlib is
+absent, so `--spec z=deflate` stores the member deflated on the box (-58: 2 431 362 → 834 032 B; K030-U 1 715 944 → 636 890;
+both inflate through the loader's inflate; before, the null hook stored raw silently and gate 5 refused). Core patch 0024
+(user side only, dlm.o unchanged): `modadmin -L` prints the kernel's message buffer (putbuf/putbufsz/putbufwpos through
+/stand/unix and /dev/kmem, oldest first) — the read path for run-time lines of record, which the console does not show after
+boot. README: where each line of record is read; S3-43-4's spec line takes bss= and z=deflate. mkkit takes sys/monsw.h from
+amix-modules/include/sys/. 677 host checks; box kbootset 9acb9add, modadmin 7329e183.
+
 ## 2026-10-26 — monsw's home is amix-modules; kbootset -13: a boot from a read-only medium (e319d85..b6b4b87)
 
 monsw lives in amix-modules (plan S3-27, Q3-2 settled; C3-6 §4; the kit ships include/sys/monsw.h — interface headers of
