@@ -7,7 +7,8 @@
   parameters (§3); from the z3660net station's: the STREAMS row is zeros
   but `d_str`, interrupts attach at first open with a software self-test
   (§1.3), z3660eth's handlers, `intrl2` and its acknowledge-and-mask
-  write (§2), the k46 page-geometry headers in the kit (§1.7). The
+  write (§2), the k46 page-geometry headers in the kit (§1.7);
+  z3660eth's `match=` (§2: a boot-class module needs one, C3-5). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -223,7 +224,7 @@ The module:
 
 | Item | Content |
 |---|---|
-| `.moddata` | `name=z3660eth`, `class=boot`, `majors=c:51`, `unload=never`, `cpu=68030` (k30) / `68040` (k46), `param=intr:int:0:0:6`, `param=intrl2:int:1:0:1` (with `intr=6`: 1 drains in a level-2 handler raised through PORTS, 0 in the poll tick; M-INT1 chooses); no `match` while the AGA fixed-base fallback stays (the board can be present without an AutoConfig entry), else `match=zorro:144b:01` |
+| `.moddata` | `name=z3660eth`, `class=boot`, `majors=c:51`, `unload=never`, `cpu=68030` (k30) / `68040` (k46), `param=intr:int:0:0:6`, `param=intrl2:int:1:0:1` (with `intr=6`: 1 drains in a level-2 handler raised through PORTS, 0 in the poll tick; M-INT1 chooses); `match=zorro:144b:01,mobo:z3660-window`: a boot-class module must carry `match=` (C3-5 §2, gate 3), and with the AGA fixed-base fallback the board can be present without an AutoConfig entry, which is the case the registry's `mobo:z3660-window` probe covers (20 §6) |
 | Wrapper | `MOD_DRV_WRAPPER(z3660eth, …)`, the row zeros except `d_str = &z3660ethinfo`, `drv_cmajor` 51 |
 | `_load` | find the board as the first open does today (`autocon(0x144B0001)`, then the AGA fallback); `ENXIO` if none. Map the board here (as the module form does), or lazily at first open; `ENOMEM` when no kernel address space is left for it. Write `ZZ_CONFIG_DISABLE`. `if_attach(&ifstats of the board)` here or at first open (once), instead of linking into `ifstats` |
 | Interrupts | polled stays the default (`intr=0`). `intr=6`, at the first open: `intr_attach(6, z3660eth_int6, board, "z3660eth")`, and with `intrl2=1` also `intr_attach(2, z3660eth_int2, board, "z3660eth")`; the self-test (§1.3); then the board's interrupt on; polled on any failure. `z3660eth_int6` only acknowledges, masks and flags: on this board one write, `ZZ_CONFIG_DISABLE`, both acknowledges and masks (an acknowledge alone does not mask; the firmware treats acknowledge and enable/disable as exclusive). The drain runs at level 4 or below, in `z3660eth_int2` or the poll tick, never at level 6; the static `z3660ethintr`, which drains at its own level, is not attached. M-INT1 on metal decides the default; the emulator raises no INT6 |
