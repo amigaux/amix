@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-1 v4: a module's image at most 256 KiB, its file under 256 KiB (07689e6, 1082c0c, 2ee5916)
+
+From U4: the core's own KM_SLEEP allocations grow with the module (ten call sites, C3-1 §6: lf_hashload's buffer ×2,
+ld_sh, ld_secoff, ld_syms, ld_str, ld_ls, oh.b, ld_tab, m_alloc), so a module much over 256 KiB would hang modload as
+u4big did. The file limit comes beside the image limit because lf_hashload reads the whole file into one buffer doubled
+up to dlm_maximage (cdfs: 97 611-byte file for a 69 080-byte image). §6 records the way past the limit (pieced KM_NOSLEEP),
+not planned work. The kit's modcheck refuses a larger module at build time. Core patch 0027: dlm_maximage 256 KiB at the
+next kernel cut, an oversized file is ENOLOAD "its file is over the limit" (before, a silent ENOMEM); dlm.o 77f1ef80 →
+b808cb52; the kernels of record keep 2 MiB until then. kit-test: five edited-module refusal cases never ran (edit() wrote
+into unmade directories and skipped without a failure) — revived, 62/62 both lines; printf for the \0 text. Module guide
+§6 "Size and memory". Kit at KIT_REV 2ee5916 = the HEAD for dlmkit -4. Producers today: 18.8 / 30.8 / 5.2 / 97.6 KB files.
+
 ## 2026-10-26 — U4 answered; kmem requests at most 256 KiB; kit.conf fix (fca6140, 6c3b581, 134731f)
 
 U4 (N79 k46 at 128 MB, N80 k30 at 64 MB): after multi-user one kmem request gives 256 KiB on k46 and 512 KiB on k30
