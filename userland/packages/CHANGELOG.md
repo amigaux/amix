@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kbootset 1.1.0.261027-18 from amix-dlm d227dbf (0ccddf5); round trip 157/157 — not published
+
+Gate 2 checks every module's imports against the kernel's symbol block (ksym=, C3-3 v7): a module importing a name the kernel
+does not export is refused at compose time with the names. /sbin/kbootset a9e4f923; md5 2df10f91 / 199168 B. boot2 and modadmin
+unchanged (no loader/modtools mint). Catalog cdcbff84 (-17 root at superseded/repo-20261027-0118). Round trip 157/157: z3660rtg
+without monsw is now refused at gate 2 (its monsw imports) instead of gate 3; new negative row: cdfs-k30 on kern30m -13 refused
+with its 13 missing names. Wording issue for dlm: a missing depend= module gets "it needs a newer kernel cut".
+
 ## 2026-10-27 — kern30m k30.1.2.261027-14 (41e04ad), a4091-k30/-k46 1.0.0-3 (c23cfdd); round trip 156/156 — not published
 
 kern30m -14 (kerntools d1a2e3c --no-scsi-drivers --object-absent, dlm 33ea0c7): the static A4091/A4092/A4770 and Gayle IDE
