@@ -60,7 +60,7 @@
 #
 # ------------------------------------------------- KERNEL-SPACE BLOCK ---
 # A kernel, loader or module package (amix-dlm contracts C2-2 v3, C2-3 v2,
-# D-3) is
+# C3-1, C3-5, D-3) is
 # NEVER an ordinary entry: a deployed 0.2.x apkg must not see kernel space.
 # It goes into a block after the ordinary entries (and after --isize), every
 # line a '#' comment under 2048 bytes:
@@ -71,6 +71,9 @@
 #           pkginst=<PKG> [offset=<n> with --raw]
 #     #kpkg <name> <version> role=loader line=any loader=<n> size=<bytes>
 #           sha256=<64 hex> file=<path> pkginst=<PKG> [offset=<n>]
+#     #kpkg <name> <version> role=module line=<k30|k46> kabi=<tag>
+#           pin=<compiler pin> size=<bytes> sha256=<64 hex> file=<path>
+#           pkginst=<PKG> [offset=<n>]
 #     #end kpkg
 #
 # The keys are role-dependent (C2-2 v3 section 1.1): a loader entry has
@@ -88,6 +91,12 @@
 # A loader package's line= and loader= come the same way from its own
 # /stand/loader/ldrinfo (C2-3 v2 section 3: one key=value per line,
 # version=<n>, line=any, boot1-sha256=, boot2-size=, boot2-sha256=).
+# A module package's (stage 3, C3-5 section 1.2) kabi= and pin= come from
+# its module object /etc/conf/mod.d/<name> (exactly one): the .moddata
+# section (C3-1: the one ELF section of type 13; a 4-byte word, "MD2\0",
+# then NUL-terminated key=value strings ending with an empty one), keys
+# kabi= and cc=; line= is kabi's family.  No depend= key: C2-2 has none,
+# and kbootset's gate 3 enforces module dependencies.
 # The kbootset package (/sbin/kbootset) is userland (C2-3 v2 section 4):
 # an ordinary entry, nothing special here.
 # Refused per package (SKIP, like any malformed package): a sidecar
@@ -95,8 +104,12 @@
 # its path, or whose sha256=/size= disagree with the packaged unix; an
 # ldrinfo without a numeric version= or with a line= other than any, or
 # whose boot1-sha256=/boot2-size=/boot2-sha256= disagree with the
-# packaged boot1/boot2; a package that is not pure files (40 section 6:
-# only f/d of class none, no install scripts); a module package (stage 3).
+# packaged boot1/boot2; a module package without exactly one object in
+# /etc/conf/mod.d/, whose object is not ELF32 big-endian ET_REL EM_68K or
+# has not exactly one type-13 section, whose .moddata lacks "MD2\0", has a
+# key twice (param aside), a name= other than the file name, a kabi= not
+# k30|k46.<major>.<minor> or no single-token cc=; a package that is not pure
+# files (40 section 6: only f/d of class none, no install scripts).
 # The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
 #
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
@@ -146,6 +159,7 @@ import hashlib
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -616,6 +630,98 @@ def loader_info(buf, params):
     return "any", ver
 
 
+MODDATA_SHT = 13                       # C3-1 section 1: .moddata's type
+MODKABI_RE = re.compile(r"^(k30|k46)\.([0-9]+)\.([0-9]+)$")
+
+
+def moddata_keys(obj, what):
+    """C3-1 sections 1 and 3: the key=value strings of a module object's
+    .moddata (the one section of type 13); Malformed when the object or
+    the section is not what C3-1 says."""
+    if len(obj) < 52 or obj[:4] != b"\x7fELF" or obj[4] != 1 or obj[5] != 2:
+        raise Malformed("module package: %s is not an ELF32 big-endian "
+                        "object (C3-1 section 1)" % what)
+    e_type, e_machine = struct.unpack(">HH", obj[16:20])
+    if e_type != 1 or e_machine != 4:
+        raise Malformed("module package: %s is not ET_REL EM_68K (e_type %d, "
+                        "e_machine %d; C3-1 section 1)"
+                        % (what, e_type, e_machine))
+    e_shoff = struct.unpack(">I", obj[32:36])[0]
+    e_shentsize, e_shnum = struct.unpack(">HH", obj[46:50])
+    if e_shentsize < 40 or e_shoff + e_shnum * e_shentsize > len(obj):
+        raise Malformed("module package: %s has a damaged section header "
+                        "table" % what)
+    secs = []
+    for i in range(e_shnum):
+        h = e_shoff + i * e_shentsize
+        sh_type, = struct.unpack(">I", obj[h + 4:h + 8])
+        sh_off, sh_size = struct.unpack(">II", obj[h + 16:h + 24])
+        if sh_type == MODDATA_SHT:
+            secs.append((sh_off, sh_size))
+    if len(secs) != 1:
+        raise Malformed("module package: %s has %d sections of type 13; "
+                        ".moddata is exactly one (C3-1 section 1)"
+                        % (what, len(secs)))
+    off, size = secs[0]
+    if size < 12 or size > 2048 or off + size > len(obj):
+        raise Malformed("module package: %s .moddata is %d bytes (C3-1: "
+                        "12 to 2048)" % (what, size))
+    data = obj[off:off + size]
+    if data[4:8] != b"MD2\0":
+        raise Malformed("module package: %s .moddata has no MD2 marker "
+                        "(C3-1 section 3)" % what)
+    keys = {}
+    for raw in data[8:].split(b"\0"):
+        if raw == b"":
+            break
+        text = raw.decode("latin-1")
+        if "=" not in text:
+            raise Malformed("module package: %s .moddata string %r is not "
+                            "key=value" % (what, text))
+        k, v = text.split("=", 1)
+        if k == "param":
+            continue
+        if k in keys:
+            raise Malformed("module package: %s .moddata has %s= twice "
+                            "(C3-1 section 3)" % (what, k))
+        keys[k] = v
+    return keys
+
+
+def module_info(buf, params, pkgmap_text):
+    """C3-5 section 1.2: return (line, kabi, pin) of a module package from
+    its object's .moddata (kabi=, cc=); Malformed when it cannot be
+    trusted."""
+    basedir = params.get("BASEDIR", "/") or "/"
+    objs = [path for ftype, _cls, path in pkgmap_objects(pkgmap_text, basedir)
+            if ftype == "f" and path.startswith(MODDIR_PREFIX)]
+    direct = [p for p in objs if "/" not in p[len(MODDIR_PREFIX):]]
+    if len(objs) != 1 or len(direct) != 1:
+        raise Malformed("module package: %d objects under %s; a module "
+                        "package carries exactly one (C3-5 section 1)"
+                        % (len(objs), MODDIR_PREFIX))
+    path = direct[0]
+    files = payload_files(buf, [path], basedir)
+    if path not in files:
+        raise Malformed("module package: %s is not in the payload" % path)
+    keys = moddata_keys(files[path], path)
+    fname = path[len(MODDIR_PREFIX):]
+    if keys.get("name") != fname:
+        raise Malformed("module package: .moddata name=%s, the object is "
+                        "%s (C3-1 section 3: equal to the file name)"
+                        % (keys.get("name", "(none)"), path))
+    m = MODKABI_RE.match(keys.get("kabi", ""))
+    if m is None:
+        raise Malformed("module package: %s .moddata kabi=%s is not "
+                        "k30|k46.<major>.<minor> (C3-1 section 3)"
+                        % (path, keys.get("kabi", "(none)")))
+    pin = keys.get("cc", "")
+    if pin == "" or len(pin.split()) != 1 or pin != pin.strip():
+        raise Malformed("module package: %s .moddata has no usable cc= "
+                        "(C3-1 section 3)" % path)
+    return m.group(1), keys["kabi"], pin
+
+
 def parse_pkginfo(text):
     """Parse pkginfo(4) KEY=VALUE lines; first occurrence wins."""
     params = {}
@@ -794,9 +900,6 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     basedir = params.get("BASEDIR", "/") or "/"
     role = kspace_role(pkgmap_text, basedir)
     if role is not None:
-        if role == "module":
-            raise Malformed("module package: not catalogued until stage 3 "
-                            "(C2-2 v3 section 1.1)")
         why = pure_files_problem(pkgmap_text)
         if why is not None:
             raise Malformed("kernel-space package is not pure files "
@@ -804,6 +907,8 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         kabi = pin = loader = None
         if role == "loader":
             kline, loader = loader_info(buf, params)
+        elif role == "module":
+            kline, kabi, pin = module_info(buf, params, pkgmap_text)
         else:
             kline, kabi, pin = kernel_sidecar(buf, params, pkgmap_text)
         version = clean_field(params["VERSION"])
@@ -822,7 +927,9 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
             print("  %s: kernel space role=%s line=%s %s" % (
                 fname, role, kline,
                 ("loader=%s (ldrinfo)" % loader) if role == "loader" else
-                ("kabi=%s pin=%s (sidecar)" % (kabi, pin))))
+                ("kabi=%s pin=%s (%s)" % (kabi, pin, ".moddata"
+                                          if role == "module" else
+                                          "sidecar"))))
         return entry
 
     deps_raw = deps_conf.get(name, deps_conf.get(pkginst,

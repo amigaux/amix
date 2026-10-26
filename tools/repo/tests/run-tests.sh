@@ -1647,8 +1647,6 @@ t25bad "an ldrinfo whose boot2-sha256= is not the packaged boot2's is refused" "
 ldrinfo25 "$S25/li-nov" any "" ""
 t25bad "an ldrinfo without version= is refused" "no numeric version=" \
     "COPY /stand/loader/boot2 $S25/src/stand/loader/boot2" "COPY /stand/loader/ldrinfo $S25/li-nov"
-t25bad "a module package is skipped until stage 3" "module package: not catalogued until stage 3" \
-    "FILE /etc/conf/mod.d/z3660scsi obj"
 
 # the round trip through the client: update, info, download (sha256), and an
 # install plan that runs apkg's own pure-files check on this datastream
@@ -1677,6 +1675,124 @@ if make -C "$HERE/../../../src/apkg" host >/dev/null 2>&1 && [ -x "$APKG25" ]; t
         bash -c "[ $rc25 -eq 0 ] && ! echo \"\$0\" | grep -q 'not a pure-file'" "$OUT25"
 else
     bad "T25: the host apkg did not build for the round trip"
+fi
+
+# --------------------------------------------------------------- T26 ----
+# T26: module packages (stage 3; C3-5 section 1.2, C2-2 section 1.1).  The
+# row is role=module with line=/kabi=/pin= from the module object's own
+# .moddata (C3-1: the one section of type 13, word 0, "MD2\0", key=value
+# strings; keys kabi= and cc=), catalog name and version as for any package
+# (names.conf, pkginfo VERSION), and no depend= key (kbootset gate 3).
+echo "T26: module packages, kabi= and pin= from the object's .moddata"
+MKOBJ="$HERE/mkmodobj.py"
+S26="$WORK/t26"; mkdir -p "$S26/src" "$S26/stg/base"
+MPIN=gcc-2.7.2.3-8949028
+python3 "$MKOBJ" "$S26/src/zeth" name=zeth kabi=k46.1.0 cc=$MPIN cpu=68030 \
+    class=boot match=zorro:144b:01 majors=c:51 depend=zbus \
+    param=mtu:int:1500 param=promisc:bool:0 "desc=test module"
+printf '# defaults\n' > "$S26/src/zeth.reg"
+M26="$S26/stg/base/zeth46-1.0.0-1.pkg"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    mkdir -p "$S26/spool"
+    printf 'PKG=zeth46\nNAME=z3660eth-k46 test module\nVERSION=1.0.0-1\nARCH=Amiga\nCATEGORY=system\nCLASSES=none\nBASEDIR=/\n' > "$S26/pkginfo"
+    printf 'i pkginfo=%s\nd none /etc 0755 root root\nd none /etc/conf 0755 root sys\nd none /etc/conf/mod.d 0755 root sys\nf none /etc/conf/mod.d/zeth=%s 0644 root sys\nd none /etc/conf/modreg.d 0755 root sys\nf none /etc/conf/modreg.d/zeth=%s 0644 root sys\n' \
+        "$S26/pkginfo" "$S26/src/zeth" "$S26/src/zeth.reg" > "$S26/prototype"
+    ( cd "$S26" && "$HB/pkgmk" -o -d "$S26/spool" -f prototype && \
+      "$HB/pkgtrans" -s "$S26/spool" "$M26" zeth46 ) >"$WORK/t26.mk" 2>&1
+    check "a real module datastream (C3-5 section 1.2 layout) minted by pkgmk/pkgtrans" test -s "$M26"
+else
+    printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nCOPY /etc/conf/mod.d/zeth %s\nDIR /etc/conf/modreg.d\nCOPY /etc/conf/modreg.d/zeth %s\n' \
+        "$S26/src/zeth" "$S26/src/zeth.reg" | python3 "$MKDS" "$M26" zeth46 1.0.0-1
+    echo "  skip- host pkgmk absent: the module datastream comes from mkds.py"
+fi
+cp "$FIX/TESTpkg.pkg" "$S26/stg/"
+printf 'zeth46: z3660eth-k46\n' > "$S26/stg/names.conf"
+printf 'z3660eth-k46: TESTpkg\n' > "$S26/stg/deps.conf"     # must not reach the row
+python3 "$GEN" "$S26/stg" >"$WORK/t26.out" 2>"$WORK/t26.err"
+check "gen-catalog takes a staging root with a module package (rc 0, nothing skipped)" \
+    bash -c "[ $? -eq 0 ] && ! grep -q SKIP '$WORK/t26.err'"
+ML="#kpkg z3660eth-k46 1.0.0-1 role=module line=k46 kabi=k46.1.0 pin=$MPIN size=$(wc -c < "$M26" | tr -d ' ') sha256=$(sha256sum "$M26" | cut -c1-64) file=base/zeth46-1.0.0-1.pkg pkginst=zeth46"
+check "the block is exactly the module's C2-2 row (name from names.conf, version from pkginfo)" \
+    test "$(sed -n '/^#ext kpkg 1$/,/^#end kpkg$/p' "$S26/stg/catalog")" = "#ext kpkg 1
+$ML
+#end kpkg"
+check "no depend= key on the row, though the object and deps.conf name dependencies" \
+    bash -c "! grep '^#kpkg z3660eth-k46 ' '$S26/stg/catalog' | grep -q 'depend'"
+check "the module package is no ordinary entry" \
+    bash -c "! grep -v '^#' '$S26/stg/catalog' | grep -q zeth46"
+
+# refusals: a SKIP naming why, never a #kpkg line
+t26bad() {   # t26bad <desc> <stderr text> <directives...>  (mkds.py fixture)
+    local d="$S26/bad"; rm -rf "$d"; mkdir -p "$d"
+    desc=$1; want=$2; shift 2
+    printf '%s\n' "$@" | python3 "$MKDS" "$d/zbad46-1.0.pkg" zbad46 1.0
+    python3 "$GEN" "$d" >"$WORK/t26b.out" 2>"$WORK/t26b.err"
+    check "$desc" bash -c "grep -q 'SKIP zbad46-1.0.pkg: .*$want' '$WORK/t26b.err' && ! grep -q '^#kpkg' '$d/catalog' 2>/dev/null"
+}
+mo() { python3 "$MKOBJ" "$S26/src/$1" "${@:2}"; }
+mo noelf.o; echo "not an object" > "$S26/src/noelf.o"
+t26bad "an object that is not ELF is refused" "not an ELF32 big-endian object" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/noelf.o"
+mo exec.o --type 2 name=zbad kabi=k46.1.0 cc=$MPIN
+t26bad "an object that is not ET_REL is refused" "is not ET_REL EM_68K" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/exec.o"
+mo nosec.o --nsec 0 name=zbad kabi=k46.1.0 cc=$MPIN
+t26bad "an object without a type-13 section is refused" "has 0 sections of type 13" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/nosec.o"
+mo twosec.o --nsec 2 name=zbad kabi=k46.1.0 cc=$MPIN
+t26bad "an object with two type-13 sections is refused" "has 2 sections of type 13" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/twosec.o"
+mo md1.o --magic MD1 name=zbad kabi=k46.1.0 cc=$MPIN
+t26bad "a .moddata without MD2 is refused (a version-1 object)" "has no MD2 marker" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/md1.o"
+mo nocc.o name=zbad kabi=k46.1.0
+t26bad "a .moddata without cc= is refused" "has no usable cc=" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/nocc.o"
+mo badkabi.o name=zbad kabi=k46.1 cc=$MPIN
+t26bad "a kabi= that is not k30|k46.<major>.<minor> is refused" "kabi=k46.1 is not" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/badkabi.o"
+mo twokabi.o name=zbad kabi=k46.1.0 kabi=k46.1.1 cc=$MPIN
+t26bad "a key twice (param aside) is refused" "has kabi= twice" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/twokabi.o"
+mo wrongname.o name=other kabi=k46.1.0 cc=$MPIN
+t26bad "a name= other than the file name is refused" "name=other, the object is /etc/conf/mod.d/zbad" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/wrongname.o"
+mo good.o name=zbad kabi=k46.1.0 cc=$MPIN
+t26bad "two module objects in one package are refused" "2 objects under /etc/conf/mod.d/" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "COPY /etc/conf/mod.d/zbad2 $S26/src/good.o"
+t26bad "a module package that is not pure files is refused (40 section 6)" "not pure files.*postinstall" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 i postinstall 20 1 1"
+
+# the round trip through the client: update counts it, info shows the
+# .moddata's kabi and pin, download verifies its sha256
+if [ -x "$APKG25" ]; then
+    mkdir -p "$S26/repo" "$S26/root"; cp "$S26/stg/catalog" "$S26/repo/"
+    ln -s "$S26/stg" "$S26/repo/pkgs"
+    printf 'repo=file://%s/repo\ncachedir=%s/root/var/apkg/cache\nadmin=%s/admin\npkgadd=/bin/true\nkbootset=/bin/true\n' \
+        "$S26" "$S26" "$S26" > "$S26/apkg.conf"
+    A26() { APKG_ROOT="$S26/root" "$APKG25" -c "$S26/apkg.conf" "$@"; }
+    check "apkg update reads the module row (1 kernel-space)" \
+        bash -c "APKG_ROOT='$S26/root' '$APKG25' -c '$S26/apkg.conf' update | grep -q '1 package, 1 kernel-space'"
+    OUT26=$(A26 info z3660eth-k46 2>&1)
+    check "apkg info z3660eth-k46: a module, kabi and pin from .moddata, not refused" \
+        bash -c "echo \"\$0\" | grep -qx 'Kernel-space: module, line k46' && echo \"\$0\" | grep -qx 'Kabi:        k46.1.0' && echo \"\$0\" | grep -qx 'Pin:         $MPIN' && ! echo \"\$0\" | grep -q '^Refused'" "$OUT26"
+    A26 download z3660eth-k46 >/dev/null 2>&1
+    check "apkg download verifies the module datastream by sha256 (rc 0)" test $? -eq 0
+else
+    bad "T26: no host apkg for the round trip"
+fi
+
+# against amix-packages' stage-3 mint, when that sibling tree is there (read
+# only, copied): every #kpkg row, the four module rows among them, must be
+# the one its round trip wrote (build/kspace/repo/catalog)
+REF26="$HERE/../../../../amix-packages/build/kspace"
+if [ -f "$REF26/repo/catalog" ] && [ -d "$REF26/rt/repo/pkgs" ]; then
+    cp -r "$REF26/rt/repo/pkgs" "$S26/ref"; mkdir -p "$S26/refout"
+    python3 "$GEN" -o "$S26/refout" "$S26/ref" >/dev/null 2>&1
+    check "amix-packages' stage-3 mint: the generated #kpkg rows equal its catalog's ($(grep -c '^#kpkg .* role=module ' "$REF26/repo/catalog") module rows)" \
+        test "$(grep '^#kpkg ' "$S26/refout/catalog" 2>/dev/null)" = "$(grep '^#kpkg ' "$REF26/repo/catalog")"
+else
+    echo "  skip- amix-packages build/kspace absent: no comparison with its mint"
 fi
 
 # -------------------------------------------------------------- done ----

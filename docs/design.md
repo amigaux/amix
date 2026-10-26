@@ -194,9 +194,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   of the served file, `pkginst=`, and `offset=` under `--raw`. Not opt-in; a staging root without
   kernel space gives the catalog it always did. A loader package (`/stand/loader/ldrinfo`) gets
   `role=loader line=any loader=<n>` from its ldrinfo and no `kabi=`/`pin=` (C2-2 v3, C2-3 v2); the
-  kbootset package is an ordinary entry; module packages are SKIPped until stage 3. apkg names
-  each install record `/var/apkg/kpkg/<pkginst>` (C2-2 v4). NOTES.md 2026-10-25 (late) and the
-  C2-2 v3 and v4 sections after it are the record.
+  kbootset package is an ordinary entry. A module package (stage 3; one object in
+  `/etc/conf/mod.d/`) gets `role=module line= kabi= pin=` from that object's `.moddata` (C3-1: the
+  type-13 section, keys `kabi=` and `cc=`; `line=` is kabi's family), no `depend=`. apkg names
+  each install record `/var/apkg/kpkg/<pkginst>` (C2-2 v4) and keeps one kernel package per line
+  (C2-2 v5 §2.1, apkg 0.3.1). NOTES.md 2026-10-25 (late) and the sections after it are the record.
 
 - `gen-catalog.py` (python3): scan a staging dir of `.pkg`/`.pkg.Z` datastreams; for each, read the
   `# PaCkAgE DaTaStReAm` header + first cpio member to extract pkginfo params (PKG, NAME, VERSION,

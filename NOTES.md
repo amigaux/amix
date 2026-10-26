@@ -1,5 +1,37 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — gen-catalog writes module rows (stage 3) from the object's `.moddata`
+
+**Why.** Stage 3 is here: amix-packages minted four module packages (`z3660eth-k30/-k46` -> pkginst
+`zeth30/zeth46`, `z3660rtg-k30/-k46` -> `zrtg30/zrtg46`), and gen-catalog (`72f6a72`) still SKIPped
+every package with a file under `/etc/conf/mod.d/` ("module package: not catalogued until stage 3"),
+so amix-packages' round trip appended the rows itself. Their rows now come from gen-catalog.
+
+**What** (`module_info()`, `moddata_keys()`): a module package (C3-5 §1, §1.2) carries exactly one
+plain file directly in `/etc/conf/mod.d/`; that object is read out of the payload archive and its
+`.moddata` parsed per C3-1: ELF32 big-endian, `ET_REL`, `EM_68K`, exactly one section of type 13,
+12 to 2048 bytes, word 0 then `MD2\0`, NUL-terminated `key=value` strings to an empty one; `name=`
+must equal the file name, `kabi=` must be `k30|k46.<major>.<minor>`, `cc=` one token. The row is
+C2-2's: `#kpkg <name> <version> role=module line=<kabi family> kabi=<kabi> pin=<cc> size= sha256=
+file= pkginst=` (+ `offset=` under `--raw`); name from names.conf (else the lowercased PKG) and
+version from pkginfo, as for every package. No `depend=` key (C2-2 has none; kbootset gate 3 enforces
+module dependencies), and deps.conf does not reach the row. Anything else is a per-package SKIP with
+the reason: not ELF / not `ET_REL EM_68K`, 0 or 2+ type-13 sections, no `MD2`, a key twice
+(`param` aside), a wrong `name=`, a bad `kabi=`, no `cc=`, two objects, not pure files.
+
+**Evidence.** Against amix-packages' stage-3 mint (its `build/kspace/rt/repo/pkgs` staging with its
+names.conf, copied, read only): gen-catalog writes all **10 `#kpkg` rows byte-identical** to
+`build/kspace/repo/catalog`, the four module rows among them (e.g. `#kpkg z3660eth-k30 1.0.0-1
+role=module line=k30 kabi=k30.1.0 pin=gcc-2.7.2.3-8949028 size=28160 sha256=444d9d31… file=base/zeth30-1.0.0-1.pkg
+pkginst=zeth30`), and the ordinary lines identical too ("4 package(s), 10 kernel-space, 0 skipped").
+Repo tools **360/0** (341 before): T25's "skipped until stage 3" check retired; new **T26** (20):
+a real module datastream minted by the host pkgmk/pkgtrans with an object from the new
+`tests/mkmodobj.py` (ELF32 BE ET_REL EM_68K, a type-13 `.moddata`, two `param=` lines, a `depend=`),
+its exact block, no `depend=` though the object and deps.conf name one, not an ordinary entry; eleven
+refusals by message; the apkg round trip (update counts 1 kernel-space, `info` shows module/k46/kabi/
+pin, `download` verifies sha256); and the comparison with amix-packages' mint above (skipped when that
+sibling tree is absent).
+
 ## 2026-10-26 — apkg 0.3.1: one kernel package per line, C2-2 v5 §2.1 (built, NOT minted, NOT published)
 
 **Why.** amix-dlm `0d49ddd` (C2-2 v5 §2.1, C2-3 v6 §1.1): a static family (`kernel-k46-z`) and the
