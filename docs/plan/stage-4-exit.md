@@ -51,7 +51,7 @@ cells of this ledger.
 | M-FL2 safe mode on each root controller and root filesystem | pending | pending |
 | root on ufs as a module | pending | pending |
 | root on s5 as a module | pending | pending |
-| cdfs as a demand module | pending | pending |
+| cdfs as a boot-class module (C4-6 §5) | pending | pending |
 | a damaged root module selects the menu | pending | pending |
 | L5 arena overflow (a backstop: gate 4 refuses first); an unmatched root entry skipped silently by the core (L7 retired, C4-4 v3) | pending | pending |
 | `sd_register` after sd's first open: `EBUSY` and a console line | pending | pending |
