@@ -336,6 +336,45 @@ etrel_bss(const ax_u8 *k, ax_u32 len)
 
 static int ro_medium;	/* kb_spec: a read-only medium's generation (gate 3) */
 
+/* the oldest loader that may boot a new generation: the primary, and the
+ * secondary as well while a new primary is on trial (gate 7) */
+static ax_u32
+loader_ver(const struct ks *k)
+{
+	ax_u32 ver = k->hdr.boot2[0].ver;
+
+	if ((k->hdr.flags & AXF_LDRTRIAL) && k->hdr.boot2[1].len && k->hdr.boot2[1].ver < ver)
+		ver = k->hdr.boot2[1].ver;
+	return ver;
+}
+
+/*
+ * A generation with nroot root-class records needs loader version 3,
+ * the boot2 that places them (S4-10, 10 §5.1): its loader-min is raised,
+ * and gate 7 refuses it on a store whose loader is older, at compose
+ * time rather than with L9 at boot.
+ */
+static int
+root_loader(struct ks *k, struct kb_kernel *kk, int nroot)
+{
+	char m[200];
+
+	if (!nroot)
+		return KS_OK;
+	if (kk->loader_min < AX_LOADER_ROOT)
+		kk->loader_min = AX_LOADER_ROOT;
+	if (loader_ver(k) < AX_LOADER_ROOT) {
+		sprintf(m, "the generation carries root-class modules, which need loader version %d; "
+			"the installed loader is version %lu: run kbootset loader-install first",
+			AX_LOADER_ROOT, (unsigned long)loader_ver(k));
+		return refuse(k, 7, m);
+	}
+	return KS_OK;
+}
+
+static int
+nroot_mods(void);
+
 /* every gate this module owns, for the kernel of line f->line; on success
  * *kernel holds the kernel's bytes (malloc'd) */
 static int
@@ -421,9 +460,7 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 	}
 	/* 7: loader -- the oldest loader that may boot it: the secondary as
 	 * well while a new primary is on trial */
-	ver = k->hdr.boot2[0].ver;
-	if ((k->hdr.flags & AXF_LDRTRIAL) && k->hdr.boot2[1].len && k->hdr.boot2[1].ver < ver)
-		ver = k->hdr.boot2[1].ver;
+	ver = loader_ver(k);
 	if (rc == KS_OK && ver < kk->loader_min) {
 		sprintf(m, "the installed loader is version %lu, the kernel needs %lu: "
 			"run kbootset loader-install first", (unsigned long)ver, (unsigned long)kk->loader_min);
@@ -630,6 +667,17 @@ closure(struct ks *k, const struct kb_facts *f, const struct kb_kernel *kk, cons
 }
 
 static char rnames[AXM_MAXMOD][KB_RNAME], rmatch[AXM_MAXMOD][KB_RMATCH];
+
+/* how many of mods[] are root class */
+static int
+nroot_mods(void)
+{
+	int i, n = 0;
+
+	for (i = 0; i < nmods; i++)
+		n += !strcmp(mods[i].i.cls, "root");
+	return n;
+}
 
 /* the closure over mods[]'s root-class modules */
 static int
@@ -1066,6 +1114,8 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	rc = modules(&k, root, &kk, 1, mtail, sizeof(mtail), f, f->rootfs, 1, deflate);
 	if (rc == KS_OK)
 		rc = mods_closure(&k, f, &kk, f->rootfs);
+	if (rc == KS_OK)
+		rc = root_loader(&k, &kk, nroot_mods());
 	ro_medium = 0;
 	if (rc != KS_OK ||
 	    (nmods && ((rc = mkdirs(&k, root, 1)) != KS_OK || (rc = mods_copy(&k, root, 1)) != KS_OK))) {
@@ -1172,7 +1222,8 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	if (rc != KS_OK)
 		goto out;
 	if ((rc = modules(k, root, &kk, id, mtail, sizeof(mtail), f, rootfs, 0, 0)) != KS_OK ||
-	    (rc = mods_closure(k, f, &kk, rootfs)) != KS_OK) {
+	    (rc = mods_closure(k, f, &kk, rootfs)) != KS_OK ||
+	    (rc = root_loader(k, &kk, nroot_mods())) != KS_OK) {
 		free(kernel);
 		goto out;
 	}
@@ -1376,7 +1427,8 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 		hl += (size_t)sprintf(head + hl, "%s\n", line);
 	}
 	free(text);
-	if ((rc = closure(k, &f, &kk, f.rootfs, nr, rnames, rmatch)) != KS_OK) {
+	if ((rc = closure(k, &f, &kk, f.rootfs, nr, rnames, rmatch)) != KS_OK ||
+	    (rc = root_loader(k, &kk, nr)) != KS_OK) {
 		for (i = 0; i < nr; i++)
 			free((void *)mb[1 + i].data);
 		free(kernel);

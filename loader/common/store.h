@@ -19,8 +19,12 @@
 #define AX_HDR_SIZE	512UL
 #define AX_BOOT2_A_OFF	0x0800UL
 #define AX_BOOT2_MAX	(28UL * 1024UL)
-#define AX_LOADER_VERSION	2	/* boot2's version, as the header records it and
-				 * a manifest's loader-min asks for (10 §5.1) */
+#define AX_LOADER_VERSION	3	/* boot2's version, as the header records it and
+				 * a manifest's loader-min asks for (10 §5.1):
+				 * 2 the arena (stage 3), 3 root-class modules
+				 * placed in it (S4-10) */
+#define AX_LOADER_ROOT		3	/* the loader-min of a generation with a
+				 * root-class record */
 #define AX_TALLY_OFF	0x7800UL
 #define AX_BOOT2_B_OFF	0x8000UL
 #define AX_CTL_A_OFF	0xF000UL

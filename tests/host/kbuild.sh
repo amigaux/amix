@@ -96,7 +96,7 @@ refused 3 $KB build --line 46 --bootdev mobo:gayle --rootdev zorro:0202:54 --mem
 refused 3 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs s5 --mem 16777216
 refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 1000000
 refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54
-sidecar 3; record
+sidecar 4; record			# one above the store's loader (version 3)
 refused 7 $KB build $FACTS
 sidecar; record
 # a kernel changed by hand after apkg installed it
@@ -391,6 +391,7 @@ id=$(ls $R/stand/gen | sort -n | tail -1)
 grep -q "^module zscsi root [0-9]* at=0x10000 crc32=00000000 sha256=[0-9a-f]* path=/stand/gen/$id/mod/zscsi bss=0 match=zorro:144b:01 safe=1$" $R/stand/gen/$id/build
 grep -q "^module ufs root .* bss=0 match=always safe=1$" $R/stand/gen/$id/build
 grep -q "^module a4091 root .* bss=0 match=zorro:0202:54$" $R/stand/gen/$id/build
+grep -q "^loader-min 3$" $R/stand/gen/$id/build	# root-class records need loader 3
 $KB commit 2>/dev/null | grep -q "committed"
 grep -a -q "^module zscsi root [0-9]* at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=0 match=zorro:144b:01 safe=1$" $T/disk.img
 grep -a -q "^module a4091 root [0-9]* at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=0 match=zorro:0202:54$" $T/disk.img
@@ -421,6 +422,13 @@ grep -q "a block major needs a root-class module" $T/out
 rootset; modpkg ramdisk class=root match=always majors=b:20
 $KB build $RFACTS | grep -q "built"
 rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+# gate 7: a store whose loader is version 2 cannot place root-class
+# modules, so the generation is refused when it is composed
+head -c 8454144 /dev/zero > $T/v2.img
+$B/kbootset -R $R --image $T/v2.img --offset 65536 create 8388608 $B/rt/boot2.bin --version 2 >/dev/null
+rootset
+refused 7 $B/kbootset -R $R --image $T/v2.img --offset 65536 build $RFACTS
+grep -q "root-class modules, which need loader version 3; the installed loader is version 2" $T/out
 # a medium's pristine generation with the root set: mkstore's root lines
 rootset
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
