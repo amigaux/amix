@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — 1.1 media: syslogd now files kernel and system messages (55d8e15)
+
+The 2.1c syslogd reads /etc/syslog.conf through /usr/ccs/bin/m4 (stock Cdev) and filed nothing without it; every 1.1 medium
+now installs Cdev (+10.4 MB on the disc, +10.3 MB installed), install.sh refuses a 1.1 order without it, and the bootstore
+gate checks m4 and the conf rows ("the syslog unit"). Proven on both lines: after S70 a kernel line lands in
+/var/log/bus-errors and on the console in syslogd's format. 1.0: standard/full/developer/x11 carry Cdev; minimal and
+060-minimal do not (unchanged). Proposed for the packagemanager: m4 as a package of its own (23 KB, no compiler forced).
+
 ## 2026-10-26 — S3-45's medium: RTG-kit 1.1 profiles and cells; booting the install CD (0f73c0b..02fe6c4)
 
 RTG-kit 1.1 profiles (bench-a4000-z3660-060-cd-l11-rtg, bench-a3000-a4091-l11-rtg) and matrix cells l11-k46-rtg / l11-k30-rtg:
