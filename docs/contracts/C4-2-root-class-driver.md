@@ -1,8 +1,9 @@
 # C4-2 — what a root-class driver changes, version 1
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement. Once agreed, other repositories build against this text, and
-  a change is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
+  contract beside C3-6, and `root_defer` a DDI call (core patch 0036).
+  Other repositories build against this text; a change from here is a
+  contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
   context), §4 (interrupt attachment), §5 (the sd contract), §7 (the RAM
   disk), §8 (memory classes); `70-static-floor.md` §4 (safe mode); D-3 §4
