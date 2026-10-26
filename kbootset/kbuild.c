@@ -26,7 +26,9 @@
 #include "crc32.h"
 #include "sha256.h"
 #include "kbuild.h"
+#include "kbox.h"
 #include "kmod.h"
+#include "knl.h"
 
 #define MAXFILE	(64UL << 20)
 
@@ -1221,3 +1223,126 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	free(kernel);
 	return rc;
 }
+
+int
+kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int write,
+		char line[300])
+{
+	struct ax_manifest m;
+	struct kb_layout lay;
+	ax_u8 *kern = 0, *sym = 0, *nl = 0, *old = 0;
+	ax_u32 klen, slen = 0, nlen, olen = 0;
+	char *buf, why[120], path[96], text[4096], v[200], sha[65], np[1100];
+	int rc = KB_NL_NONE;
+	FILE *f;
+
+	if (!ki || !ki->has_axl1) {
+		strcpy(line, "no namelist: which generation booted is unknown (no kinfo loader record)");
+		return KB_NL_NONE;
+	}
+	if (ki->version < 3 || !ki->has_bootdata) {
+		sprintf(line, "no namelist: kinfo version %lu gives no bind address", (unsigned long)ki->version);
+		return KB_NL_NONE;
+	}
+	if (ki->flags & 8) {
+		strcpy(line, "no namelist: kinfo flags a loader fault (0x8)");
+		return KB_NL_NONE;
+	}
+	if ((buf = ks_manifest(k, ki->gen_id, &m)) == 0 || !m.has_kernel ||
+	    (kern = ks_member(k, &m.kernel, &klen)) == 0) {
+		sprintf(line, "no namelist: generation %lu's kernel cannot be read from the store",
+			(unsigned long)ki->gen_id);
+		free(buf);
+		free(kern);
+		return KB_NL_NONE;
+	}
+	if (klen >= 18 && kern[16] == 0xff && kern[17] == 0) {	/* a brel: the line's unix.sym */
+		const char *p;
+
+		sprintf(path, "/stand/%.3s/kabi", m.line ? m.line : "k??");
+		if ((f = fopen(under(root, path), "r")) == 0) {
+			sprintf(line, "no namelist: %s cannot be read", path);
+			goto out;
+		}
+		text[fread(text, 1, sizeof(text) - 1, f)] = 0;
+		fclose(f);
+		if (!value(text, "sym", v, sizeof(v)) || strncmp(v, "unix.sym ", 9)) {
+			strcpy(line, "no namelist: the kernel has no symbols (no unix.sym)");
+			goto out;
+		}
+		if (!value(text, "sha256", sha, sizeof(sha)) || !m.kernel.sha256 ||
+		    strncmp(sha, m.kernel.sha256, 64)) {
+			sprintf(line, "no namelist: generation %lu's kernel is not the installed one, whose "
+				"unix.sym this is", (unsigned long)ki->gen_id);
+			goto out;
+		}
+		sprintf(path, "/stand/%.3s/unix.sym", m.line);
+		p = strchr(v + 9, ' ');
+		if ((sym = slurp(under(root, path), &slen)) == 0 || !p ||
+		    strtoul(v + 9, 0, 10) != slen) {
+			sprintf(line, "no namelist: %s is missing or not the size its sidecar says", path);
+			goto out;
+		}
+		hex(sym, slen, sha);
+		if (strncmp(sha, p + 1, 64)) {
+			sprintf(line, "no namelist: %s differs from its sidecar's sym=", path);
+			goto out;
+		}
+	}
+	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, ki->bd_tvaddr, &lay, &nl, &nlen, why)) {
+		sprintf(line, "no namelist: %s", why);
+		goto out;
+	}
+	/* the layout against where the loader says it bound the kernel */
+	if (lay.vaddr[0] != ki->bd_tvaddr ||
+	    (ki->bd_rsize && (lay.vaddr[1] != ki->bd_rvaddr || lay.size[1] != ki->bd_rsize)) ||
+	    (ki->bd_dsize && (lay.vaddr[2] != ki->bd_dvaddr || lay.size[2] != ki->bd_dsize)) ||
+	    (!sym && lay.size[0] != ki->bd_tsize)) {
+		strcpy(line, "no namelist: the layout does not match kinfo");
+		goto out;
+	}
+	old = slurp(under(root, "/stand/unix"), &olen);
+	if (old && olen == nlen && !memcmp(old, nl, nlen)) {
+		sprintf(line, "namelist for generation %lu is current", (unsigned long)ki->gen_id);
+		rc = KB_NL_CURRENT;
+		goto out;
+	}
+	if (!write) {
+		strcpy(line, old ? "namelist: /stand/unix is not the booted kernel's: run kbootset namelist"
+				 : "namelist: /stand/unix is missing: run kbootset namelist");
+		rc = KB_NL_STALE;
+		goto out;
+	}
+	/* a new file renamed over the name: a link to /stand/2.1_unix keeps its file */
+	sprintf(np, "%.1000s", under(root, "/stand/unix.new"));
+	if ((f = fopen(np, "wb")) != 0) {
+		int bad = fwrite(nl, 1, nlen, f) != nlen || fflush(f) != 0;
+
+#ifdef KS_SYNC
+		bad = bad || fsync(fileno(f)) != 0;
+#endif
+		bad = fclose(f) != 0 || bad;
+		if (bad)
+			remove(np);
+		else if (rename(np, under(root, "/stand/unix")) == 0)
+			f = (FILE *)1;		/* written */
+		else
+			f = 0;
+	}
+	if (f != (FILE *)1) {
+		strcpy(line, "no namelist: /stand/unix cannot be written");
+		rc = -1;
+		goto out;
+	}
+	sprintf(line, "namelist /stand/unix written for generation %lu, bound at 0x%08lx",
+		(unsigned long)ki->gen_id, (unsigned long)ki->bd_tvaddr);
+	rc = KB_NL_WRITTEN;
+out:
+	free(buf);
+	free(kern);
+	free(sym);
+	free(nl);
+	free(old);
+	return rc;
+}
+

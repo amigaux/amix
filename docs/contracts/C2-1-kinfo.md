@@ -22,7 +22,7 @@
 | Offset | Size | Field |
 |---|---|---|
 | 0 | 4 | magic `KIF1` |
-| 4 | 4 | version 2 << 16 \| `length` |
+| 4 | 4 | version 3 << 16 \| `length` (version 2 before C2-1 version 3) |
 | 8 | 4 | check: all longwords of the record sum to zero (as RTH1 and AXL1) |
 | 12 | 4 | CPU as the kernel runs it: 30, 40 or 60 |
 | 16 | 4 | line: 30 or 46 |

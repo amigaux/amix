@@ -74,12 +74,17 @@ symbols is the converter's. So the kernel build ships the symbols beside
 it:
 - an ELF32 big-endian m68k file (any `e_type`) with a `.symtab` and its
   string table. Section contents are not needed (`NOBITS` will do);
-- every defined symbol's `st_value` is the address of what it names
-  **with the kernel bound at 0**, in the form shipped: text, rodata and
-  data as the `brel`'s image lays them, bss and COMMON past it as the
-  converter placed them (`end` = the image size + `bss=`). A symbol is
-  `SHN_ABS`, or in a section whose `sh_addr` is its offset in that
-  layout;
+- every symbol that names an address is defined in a section and its
+  `st_value` is that address **with the kernel bound at 0** (as in an
+  executable; in an ET_REL file, relative to a section whose `sh_addr` is
+  its offset), in the form shipped: text, rodata and data as the `brel`'s
+  image lays them, bss and COMMON past it as the converter placed them
+  (`end` = the image size + `bss=`). `SHN_ABS` is a constant and is not
+  moved, except `etext`, `edata` and `end`, which are addresses whatever
+  their section;
+- a namelist kbootset makes at bind 0 has this form (`tests/host/nlmake`),
+  and for the 1.1 kernels the loader's layout of the ELF before conversion
+  is the `brel`'s (S3-B5: K030-U's 78 block names agree);
 - the same names, kinds (`STT_FUNC`, `STT_OBJECT`, …) and sizes as the
   ELF before conversion.
 

@@ -44,7 +44,7 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 {
 	static ax_u8 r[2048];
 	FILE *f = fopen(path, "rb");
-	ax_u32 len, sum, i;
+	ax_u32 len, sum, i, ver, ml;
 	size_t n;
 
 	memset(ki, 0, sizeof(*ki));
@@ -52,10 +52,14 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 		return -1;
 	n = fread(r, 1, sizeof(r), f);
 	fclose(f);
-	if (n < 540 || get32(r) != 0x4B494631UL || (get32(r + 4) >> 16) != 2)
+	if (n < 540 || get32(r) != 0x4B494631UL)
 		return -1;
+	ver = get32(r + 4) >> 16;	/* C2-1: version 3 adds the bootdata block at 536 */
+	if (ver != 2 && ver != 3)
+		return -1;
+	ml = ver == 3 ? 576 : 536;	/* the module count; the list follows it */
 	len = get32(r + 4) & 0xFFFF;
-	if (len < 540 || len > n || len % 4)
+	if (len < ml + 4 || len > n || len % 4)
 		return -1;
 	for (sum = 0, i = 0; i < len; i += 4)
 		sum += get32(r + i);
@@ -108,11 +112,24 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 	}
 	ki->fast = get32(r + 528);
 	ki->chip = get32(r + 532);
-	ki->nmods = (int)get32(r + 536);
-	if (ki->nmods > KB_MAXMODS || 540 + 32 * (ax_u32)ki->nmods > len)
+	ki->version = ver;
+	if (ver == 3) {
+		const ax_u8 *d = r + 536;
+
+		ki->bd_entry = get32(d);
+		ki->bd_tvaddr = get32(d + 4);
+		ki->bd_tsize = get32(d + 12);
+		ki->bd_rvaddr = get32(d + 16);
+		ki->bd_rsize = get32(d + 24);
+		ki->bd_dvaddr = get32(d + 28);
+		ki->bd_dsize = get32(d + 36);
+		ki->has_bootdata = ki->bd_tvaddr != 0 && ki->bd_tsize != 0;
+	}
+	ki->nmods = (int)get32(r + ml);
+	if (ki->nmods > KB_MAXMODS || ml + 4 + 32 * (ax_u32)ki->nmods > len)
 		ki->nmods = 0;
 	for (i = 0; i < (ax_u32)ki->nmods; i++)
-		str(ki->mods[i], r + 540 + 32 * i, 24);
+		str(ki->mods[i], r + ml + 4 + 32 * i, 24);
 	return 0;
 }
 

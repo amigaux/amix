@@ -68,4 +68,19 @@ int kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, a
  * skipped when root holds no apkg records; returns the number of problems */
 int kb_check(struct ks *k, const char *root, void (*say)(const char *line));
 
+/* the booted kernel's namelist, root/stand/unix (40 §4.2, C2-4 §12):
+ * made from the booted generation's kernel (or the line's unix.sym for a
+ * brel) at kinfo's bind address, its layout checked against kinfo's
+ * bootdata block.  write: write it when it differs (stand/unix.new, then
+ * renamed); else only compare.  line gets the message (C2-4 §12).
+ * Returns KB_NL_WRITTEN, KB_NL_CURRENT, KB_NL_STALE (not written),
+ * KB_NL_NONE (it cannot be made: line says why) or -1 (I/O error) */
+struct kb_kinfo;
+#define KB_NL_WRITTEN	0
+#define KB_NL_CURRENT	1
+#define KB_NL_STALE	2
+#define KB_NL_NONE	3
+int kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int write,
+		    char line[300]);
+
 #endif

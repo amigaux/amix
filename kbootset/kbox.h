@@ -29,12 +29,15 @@ struct kb_kinfo {
 	int ncards;
 	struct { ax_u32 k, id, base, flags; } card[KB_MAXCARD];
 	ax_u32 fast, chip;
+	ax_u32 version;			/* 2 or 3 */
+	int has_bootdata;		/* version 3: where the loader bound the kernel */
+	ax_u32 bd_entry, bd_tvaddr, bd_tsize, bd_rvaddr, bd_rsize, bd_dvaddr, bd_dsize;
 	int nmods;			/* the modules loaded, from the core's list */
 	char mods[KB_MAXMODS][25];
 };
 
 /* read and check the record at path (/dev/kinfo on the box); 0, or -1
- * when there is none or it is not a valid version-2 record */
+ * when there is none or it is not a valid version-2 or version-3 record */
 int kb_kinfo_read(const char *path, struct kb_kinfo *ki);
 
 /* a controller id (C2-1 §2.1) as a gate match key: "zorro:0202:54",

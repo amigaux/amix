@@ -137,6 +137,11 @@ ax_u32 ks_next_id(const struct ks *k);
  * into (free it after use); 0 when it cannot be read */
 char *ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m);
 
+/* a member's bytes from the store, inflated and checked against its
+ * CRC-32 and SHA-256 (malloc'd, *len bytes); 0 when it cannot be read or
+ * does not check, or is not in the store (a boot- or demand-class member) */
+ax_u8 *ks_member(struct ks *k, const struct ax_member *mb, ax_u32 *len);
+
 /* check every generation in the store, never writing: the manifest's
  * CRC-32, and each member's CRC-32 and SHA-256 after decompression
  * (docs/contracts/C2-5-checksum-v2.md); one line per finding to say();

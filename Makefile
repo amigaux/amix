@@ -28,7 +28,8 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
 # common code that boot2 does not link (CSRC goes into boot2 whole)
 XSRC    := $(COMMON)/sha256.c
 # kbootset's core (userland: host and box)
-KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c kbootset/kmod.c kbootset/kreg.c
+KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c kbootset/kmod.c kbootset/kreg.c \
+           kbootset/knl.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
@@ -52,14 +53,19 @@ $(B)/axinflate: tests/host/axinflate.c $(COMMON)/inflate.c $(COMMON)/*.h | $(B)
 $(B)/axrel: tests/host/axrel.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axrel.c $(COMMON)/rel.c
 
+$(B)/nlmake: tests/host/nlmake.c kbootset/knl.c $(COMMON)/rel.c $(COMMON)/*.h kbootset/knl.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -Ikbootset -o $@ tests/host/nlmake.c kbootset/knl.c $(COMMON)/rel.c
+
 # Optional real inputs (not in this repository):
 #   AX_FLOPPIES  boot floppy images, for inflate-kernels.sh
 #   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
-test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim
+test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(B)/nlmake
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kbox.sh
+	B=$(B) sh tests/host/namelist.sh
+	B=$(B) sh tests/host/knamelist.sh
 	B=$(B) sh tests/host/prfcheck.sh
 	sh tests/host/upstream.sh
 	B=$(B) sh tests/host/libmod.sh

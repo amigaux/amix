@@ -272,6 +272,41 @@ writable(struct ks *k)
 }
 
 /* one member: read, inflate, CRC-32 and SHA-256; 0 good, 1 a problem */
+ax_u8 *
+ks_member(struct ks *k, const struct ax_member *mb, ax_u32 *len)
+{
+	static struct ax_inflate st;
+	ax_u8 *z, *p, sha[32];
+	ax_u32 got = 0;
+	char hx[65];
+	int i;
+
+	if (!mb->has_at || (z = malloc(mb->stored ? mb->stored : 1)) == 0)
+		return 0;
+	if ((p = mb->z == AXZ_DEFLATE ? malloc(mb->size ? mb->size : 1) : z) == 0 ||
+	    get(k, mb->at, z, mb->stored) != KS_OK ||
+	    (mb->z == AXZ_DEFLATE &&
+	     (ax_inflate(&st, p, mb->size, &got, z, mb->stored) != AXI_OK || got != mb->size)) ||
+	    ax_crc32(k->crctab, p, mb->size) != mb->crc)
+		goto bad;
+	if (mb->sha256) {
+		ax_sha256(p, mb->size, sha);
+		for (i = 0; i < 32; i++)
+			sprintf(hx + 2 * i, "%02x", sha[i]);
+		if (strncmp(hx, mb->sha256, 64))
+			goto bad;
+	}
+	if (p != z)
+		free(z);
+	*len = mb->size;
+	return p;
+bad:
+	if (p && p != z)
+		free(p);
+	free(z);
+	return 0;
+}
+
 static int
 check_member(struct ks *k, ax_u32 gen, const char *what, const struct ax_member *mb,
 	     void (*say)(const char *))

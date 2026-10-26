@@ -34,6 +34,7 @@
  *                          default generation against the installed kernel;
  *                          never writes; status 1 when a problem is found
  *   mark-good [--booted ID] [--secondary]   end of a full multi-user boot
+ *   namelist                            /stand/unix for the booted kernel (C2-4 §12)
  *   retry [--booted ID]    from the base system's fsck-repair reboot path:
  *                          the trial's attempt does not count (40 §3.3);
  *                          writes the boot slice only, nothing on the root
@@ -381,11 +382,12 @@ usage(void)
 	fprintf(stderr,
 		"usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND\n"
 		"  create SIZE BOOT2 [--boot1 FILE] [--version N] [--force]\n"
-		"  status | check | rollback | collect | mark-bad ID\n"
+		"  status | check | rollback | collect | mark-bad ID\n");
+	fprintf(stderr,
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
-		"  mark-good [--booted ID] [--secondary] | retry [--booted ID]\n"
+		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -691,6 +693,18 @@ main(int argc, char **argv)
 				status_modules(&k, &ki);
 			} else if (have_kinfo)
 				printf("booted: by the stock loader (no loader record); kernel %s\n", ki.build);
+			if (have_kinfo) {	/* compare only: status writes nothing */
+				char nl[300];
+				int r = kb_namelist_run(&k, root, &ki, 0, nl);
+
+				if (r == KB_NL_CURRENT)
+					printf("namelist: /stand/unix is generation %lu's, bound at 0x%08lx\n",
+					       (unsigned long)ki.gen_id, (unsigned long)ki.bd_tvaddr);
+				else if (r == KB_NL_STALE)
+					printf("%s\n", nl);
+				else
+					printf("namelist: none (%s)\n", strncmp(nl, "no namelist: ", 13) ? nl : nl + 13);
+			}
 			printf("facts: line %s, boot %s, root %s, rootfs %s, fast memory %lu\n",
 			       facts.line == 30 ? "k30" : facts.line == 46 ? "k46" : "(unknown)",
 			       facts.bootdev[0] ? facts.bootdev : "(unknown)",
@@ -717,6 +731,22 @@ main(int argc, char **argv)
 			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */
 			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
 					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
+			if (rc == KS_OK && have_kinfo && !booted) {	/* every boot (C2-4 §9) */
+				char nl[300];
+
+				if (k.msg[0])
+					printf("kbootset: %s\n", k.msg);
+				k.msg[0] = 0;
+				if (kb_namelist_run(&k, root, &ki, 1, nl) != KB_NL_CURRENT)
+					printf("kbootset: %s\n", nl);
+			}
+		} else if (!strcmp(cmd[0], "namelist") && argc == 1) {
+			char nl[300];
+			int r = kb_namelist_run(&k, root, have_kinfo ? &ki : 0, 1, nl);
+
+			printf("kbootset: %s\n", nl);
+			fclose(d.f);
+			return r == KB_NL_WRITTEN || r == KB_NL_CURRENT ? 0 : r == KB_NL_NONE ? 3 : 1;
 		} else if (!strcmp(cmd[0], "retry") && (booted || (have_kinfo && ki.has_axl1))) {
 			rc = ks_retry(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id);
 		} else if (!strcmp(cmd[0], "retry")) {	/* no booted generation known: nothing to give back (C2-4 §7) */
