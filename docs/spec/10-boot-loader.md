@@ -406,12 +406,13 @@ generation 41
 line k46
 kabi k46.1.0
 cpu 68040 68060
-loader-min 1
+loader-min 2
 created 2026-11-02T10:00:00Z
 rootfs ufs
 root sd id=144b0100 base=00000000 unit=6 slice=1
 boards 144b0100 02025400
 arena 0x001f2000 0x00080000
+ident 0x001f1fc0
 kernel unix 2101234 at=0x00012000 stored=1203317 z=deflate crc32=1a2b3c4d sha256=...
 module z3660scsi root 45678 at=... stored=... z=deflate crc32=... sha256=... match=zorro:144b:01
 module a4091 root 61234 at=... crc32=... sha256=... match=zorro:0202:54,zorro:c0de:01
@@ -430,6 +431,7 @@ end crc32=5e6f7a8b
 | `module … root` | a root-class module the loader places in the arena |
 | `module … boot` / `demand` | not read by the loader; loaded by the kernel from the root filesystem (`30-module-core.md` §3) |
 | `arena` | offset and capacity of the module arena inside the relocated kernel image |
+| `ident` | image offset of the kernel's identity record `AXK1` (loader version 2, C3-3); a manifest has both `arena` and `ident` or neither, else L9 |
 | `ramdisk` | a RAM-disk image to place (§5.4) |
 | `rootfs`, `root` | copied into the loader record's root selector (§6); for an sd root boot2 also builds the RTO1-format root record (unit, base, id, flags) into RTH1's `root[]` field from this line, as the 1.0 installer wrote RTO1 into the kernel info block; `root ramdisk` names the RAM-disk root (§5.4) |
 | `swap` | `swap sd … slice=2` or `swap none` (RAM-disk media); copied into the loader record |
@@ -447,8 +449,9 @@ k46 kernel, 6.3 times the CRC-32 (M-LD7,
 
 The kernel package's sidecar gives `kbootset` the arena offset and the
 kernel's identity record offset; `kbootset` copies both into the manifest.
-boot2 verifies the identity record's magic and kabi string at that offset in
-the loaded image before it fills the arena. A static (pre-module) kernel has
+boot2 (loader version 2) verifies the identity record at that offset in the
+relocated image before it fills the arena: magic, version, check, kabi tag,
+line, and the arena's offset and capacity (C3-3 §2); a mismatch is L14. A static (pre-module) kernel has
 no arena record; its manifest has no `arena` line and no root-class modules,
 which is how stage 1 boots today's static kernels (`80-stages-and-proof.md`).
 
@@ -655,6 +658,7 @@ a mouse click; where a choice is needed the menu opens.
 | L11 | volume N needed (floppy) | prompt, wait for the change |
 | L12 | ISO9660 path not found / multi-extent file | name the path; menu |
 | L13 | store read error | name extent and device error; retry once, then as L2 |
+| L14 | kernel identity record does not match the manifest (magic, version, check, kabi tag, line, arena offset or capacity; C3-3 §2) | print; as L2 |
 
 ## 10. Open questions
 
