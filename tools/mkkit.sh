@@ -159,7 +159,7 @@ DEFCPU=$DEFCPU
 KIT_REV=$REV
 EOF
 [ "$LINE" = k46 ] && echo "PORT_REV=$PORT_REV" >> "$OUT/kit.conf"
-echo "MONSW_REV=$MONSW_REPO $MONSW_REV" >> "$OUT/kit.conf"
+echo "MONSW_REV=$MONSW_REPO@$MONSW_REV" >> "$OUT/kit.conf"
 cat > "$OUT/NOTICE" <<EOF
 The Amix ABI kit for $KABI, built from amix-dlm $REV.
 
