@@ -80,6 +80,25 @@ What the adopted core lacks for our use is mapped in `MAP` §10 and
 In safe mode `marc_post` and demand loading are refused (`70-static-floor.md`
 §4).
 
+**The `sysinit` path is for the boot class only.** Root-class modules
+(stage 4) cannot wait for init, because the root is mounted through them.
+They keep `marc_root`, and that load point does not meet U15's wall: it
+reads no file. boot2 has already placed their bytes in the arena (C3-4),
+so the core only relocates and links them in memory, in process 0 inside
+`rth1_mountroot`, with interrupts masked. Their `_load` therefore runs in
+the context the floor's static drivers have in `init_tbl` today:
+- no file I/O and no page fault: the code and data are in the arena or
+  kmem, never behind the file system's mapping window;
+- no sleep;
+- allocation with `KM_NOSLEEP`, unless U1 shows `KM_SLEEP` is safe there;
+- board probes polled, interrupts attached only after the self-test
+  (§4), as now.
+
+U1 (the status register and kmem state at `dmainit` and at the
+`marc_root` hook) measures that context before stage 4 relies on it. A
+root-class driver that needs more than this context gives belongs to the
+boot class, or loads its remainder from `_load`'s first open.
+
 The `rth1_mountroot` hook is the driver line's own file on both lines,
 already merged upstream unchanged as an opt-in pass; placing the `marc_root`
 call before `rth1_apply` keeps both of its patch-check assertions true and
