@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module on kit d197198: one Master, $match added (e510330)
+
+The kit's mk/module.mk does the per-line work: module/Master (no $cpu; DEFCPU gives 68030/68040), per-line Master generation
+and the custom object rule gone; the Master carries `$match zorro:144b:01,mobo:z3660-window` (C3-6 §2, amix-dlm 393d1cd).
+Modules k30 3628335f, k46 e83b097e (18397 B; only .moddata changed); COMMON warnings now only ifnet and rawintrq; static
+objects unchanged.
+
 ## 2026-10-26 — z3660eth module built with amix-dlm's ABI kit (3a89f54)
 
 `make -C module` builds build/<line>/mod.d/z3660eth for k30 and k46 through the kit's mk/module.mk (kits from amix-dlm
