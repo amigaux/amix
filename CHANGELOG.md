@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — public-a3000-060-wd-r6 and cell a3000-060-img: a pre-installed 1.0.1 image for an A3000 + 68060 (519d9f6) — not published
+
+The r7 KD060-Z (68060-261021-80) rooted on the onboard WD at id 6 (c6d0s1), the standard set (17 packages, m4 for syslogd)
+and the RTG X11 kit for a ZZ9000 in Zorro II mode; the first-boot dialog armed, root without a password until the dialog
+sets one. Mastered with the HEAD installer on the r7 pins (carries cfcdb6a and d384553). Install cell PASS 9/9; a copy
+booted on an emulated A3000/ECS + 68060 + ZZ9000_Z2 through firstboot to login and OpenLook on the RTG. Image
+amix-1.0.1-a3000-060-wd.img 1,048,576,000 B sha256 74a1a00f, README and evidence in tmp/2026-10-26-a3000-060-image/.
+Finding: the 060 kernels' W-D7 registers the WD only on ECS, never under AGA. Not run on real hardware.
+
 ## 2026-10-26 — C4-1, the installer's half of the four-card sd contract (f526af4, d384553, e989926)
 
 Controller numbers c0–cf and c10–c1f (minor bit 7 for cards 2–3), host ids unit 7 of each card, the 1.1 root record's unit
