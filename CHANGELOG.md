@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — the ABI kit (S3-10) (8c9172d, 418ead5)
+
+`make kit` builds a kit per line: the module core's headers, sys/amixddi.h (DDI v1; the stock sysroot already has a sys/ddi.h
+with the same guard), the stock headers from the pinned sysroot (k46 with the port's 4 KiB immu.h/param.h), a linkable stock
+Sun font built at kit time by tools/sunfont.py (font bytes in .data, not .text), mkmod (core patch 0014), modfix, modcheck.py,
+mk/module.mk, sample/hello, ddi.md and writing-a-module.md. modcheck scans a PROGBITS copy (binutils 2.8.1 cannot read a
+type-13 .moddata) and fails an empty scan; DDI_CPUTYPE reads cputype as the long it is. `make kit-test` 29/29, the sample
+loads against both module kernels' symbol blocks. Nothing stock is tracked. Owed: the probe module and the abi= fingerprint.
+
 ## 2026-10-26 — C3-6 v2 takes z3660eth's findings; C3-1/C3-5 v2 param value forms; 10 §7.2 L9; 40 gate 5 (609ccc7, ce94b5c)
 
 C3-6: the STREAMS row is zeros except d_str; z3660eth_int6/int2 are the handlers, attached at first open after the software
