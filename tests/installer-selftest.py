@@ -8710,7 +8710,10 @@ def audit_x11kit_k1():
     # The PUBLIC CD flavours (owner 2026-10-07) carry the kit exactly when their metal r6 twin does.
     pubcd = {"public-a4000-z3660-060-a4092cd-r6.profile": "metal-a4000-z3660-060-a4092cd-r6.profile",
              "public-a4000-z3660-060-a4092cd2-r6.profile": "metal-a4000-z3660-060-a4092cd2-r6.profile"}
-    r6bad = [c for c in r6c if not (c in pubcd and pubcd[c] in r6c)
+    # The A3000 + 68060 disk image (owner 2026-10-26): an r7 profile of its own, no r5 base;
+    # the RTG kit is for its ZZ9000 (Zorro II), so it carries X11KIT by itself.
+    pubimg = {"public-a3000-060-wd-r6.profile"}
+    r6bad = [c for c in r6c if not (c in pubcd and pubcd[c] in r6c) and c not in pubimg
              and re.sub(r"-r6(-[a-z0-9]+)?\.profile$", ".profile", c) not in _base]
     carriers = [c for c in carriers if "-r6" not in c]
     if r6bad:
