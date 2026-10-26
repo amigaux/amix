@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — the k30 DMA provider's `dma_forcefail` test hook; C4-5 v7
+
+While nonzero every prepare that would bounce misses (dma_addr 0); a reachable segment is untouched; with dma_forcebounce also
+set every segment misses. Both hooks documented as test-only kernel globals set through /dev/kmem; N109's measurement recorded.
+The only way to reach a driver's no-arm path from the box (raw I/O is page-split, GSIO ≤ 64 KiB). Harness 257/257, 17 k30 DMA
+checks. Rides into kern30m -15.
+
 ## 2026-10-27 — C4-5 v6: the entry-0 decode (N109b) — k30's identity map is cacheable; the read-after-complete rule permanent
 
 §5.3 closed with the four root-table entries: entry 0 `0x7fff0319 0x00000000` (early termination, VA 0–1 GiB → PA 0, CI clear),
