@@ -2,7 +2,9 @@
 
 - **Status:** plan, 2026-10-27 (amix-dlm), for the orchestrator, the port
   and amix-kerntools. No code yet. The questions in §9 are numbered for
-  answers by number. **Answered by the orchestrator:** A1 yes (C4-6
+  answers by number. **The port and amix-kerntools answered P1–P4 and
+K1–K4 read-only** (2026-10-27); §2, §4 and §5.2 carry their corrections.
+**Answered by the orchestrator:** A1 yes (C4-6
   version 3: one boot-class rule, `rootfs` promoted); A2 cdfs is boot
   class on the 1.1 CD medium too, which roots on its RAM disk; A3 the
   miniroot is s5. P1–P4 and K1–K4 sent to the port and amix-kerntools.
@@ -35,9 +37,20 @@ theirs until they retire (S4-24).
 | imports outside DDI 1.2 | 88 | 90 (99 in the union: the core tier, §4) |
 | referenced from the rest of the stock tree | `ufsinit` from `master.d/filesys.o` (the `vfssw` row) | `s5init` from `master.d/filesys.o`; `inoinit` from `master.d/kernel.o` (`init_tbl`) |
 | references between ufs and s5 | none | none |
-| k46 base: `.text` | contiguous: 0x76e7c–0x81a60, no other object's global inside | contiguous: 0x6c3d8–0x7184a |
-| k46 base: `.data` | contiguous: 0x8260–0x864c (`mastertemplate` … `ufs_ra`); `rootvp` lies apart (0x9200) | contiguous: 0x7fb0–0x8104 |
+| k46 base: `.text` (the port's object markers, P1) | contiguous: 0x76e54–0x83290, `quota.c` … `ufs_vnops.c` | contiguous: 0x6c3c0–0x75750, `s5alloc.c` … `s5vnops.c` |
+| k46 base: `.data` | contiguous: 0x8260–0x864c (`mastertemplate` … `ufs_ra`); `rootvp` lies apart (0x9200) | contiguous: 0x7f8c–0x8108 |
+| k46 base: local `.bss` of the carved objects | `runningproc`, `uamoncnt` 0xf818–0xf828 | `s5updwant`, `s5updlock` 0xf7e8–0xf7f8; `dirbufp_%0` 0xf828–0xf830 |
 | k46 base: globals the 030 object defines and the base lacks | none | none |
+| k46 base: what the carved code imports | 118 stock globals and 26 COMMONs between the two, plus their own `.bss` locals (P2) | |
+
+**The k46 ranges above are the port's** (P1, measured on `build/b-new`
+and -54). This plan's first ranges came from global symbols only and fell
+short at both ends: they missed s5's vnode operations (`s5vnops.c`), ufs's
+quota objects and its page-in and page-out (`ufs_rdwri` …
+`ufs_allocstore`, `ufs_getpage`, `ufs_putpage`). **The carve takes its
+boundaries from the base's own object markers** (`STT_FILE`,
+`gcc_compiled%`), never from constants: the addresses are stable through
+every port pass of a base, but a rebuilt base moves them.
 
 So the separation is clean on both lines. On k30 the stock objects
 themselves are the modules' bodies (they are the 030 line's own 2 KiB-page
@@ -81,10 +94,14 @@ everywhere (question A1).
   `master.d/filesys.o` (k30) and from the base's `vfssw` (k46) by the
   carve.
 - **The core tier**, `abi/<line>/core.list`, is the union of what the two
-  objects import outside DDI 1.2: 99 names on k30 (§2), among them
-  `bdevsw`, `vfssw`, `nfstype`, the buffer cache, the page layer, `u`,
-  `rootdev`, `rootvfs`, and `rootvp`. The k46 list comes from the carved
-  objects and should be the same names. A core-tier module loads only on
+  objects import outside DDI 1.2, per line: 99 names on k30 (§2), among
+  them `bdevsw`, `vfssw`, `nfstype`, the buffer cache, the page layer,
+  `u`, `rootdev`, `rootvfs`, and `rootvp`. On k46 the carved objects
+  import 118 stock globals and 26 COMMONs (P2); the list is written from
+  the carve, and the shared COMMONs (`curproc`, `hrestime`, `kprunrun`,
+  `segkmap`, `syserr`, `sysinfo`, `vminfo`) are in it, so the modules use
+  the kernel's. The COMMONs only the carve uses go with the modules
+  (`ihead`, `hinode`, `inode`, `dqhead` and the rest). A core-tier module loads only on
   its kernel build (C3-1), so ufs and s5 are built with each kernel cut
   and travel in its kernel package (C4-6 §4).
 - **`vfssw` and `nfstype`** are in the core tier because ufs's mount path
@@ -103,6 +120,17 @@ everywhere (question A1).
 
 ### 5.1 k30 (amix-kerntools)
 
+kerntools' answers (K1–K4): every step below is an exact-line edit the
+builder already makes in kind (fs/Makefile's `OPT_SUBEXP` loses `s5/exp`
+and `ufs/exp`; `filesys.c` loses the two rows; `kernel.c` loses
+`inoinit,`), about one option, `--carve-fs ufs,s5`. The two `vfssw` rows
+are **deleted**, not kept as placeholders: the stock `vfsinit` calls
+every row's init unconditionally, and fstype indices are per-boot facts.
+The module bodies are the staged stock objects, hash-checked against the
+sysroot; amix-dlm's wrap runs as a step of `dlm-core-link` with the cut's
+build id, and the module objects go into the cut's output beside
+`unix.brel`.
+
 1. The K030-U relink leaves `fs/ufs/exp` and `fs/s5/exp` out of the link.
 2. `master.d/filesys.o` loses the ufs and s5 rows: 11 stock rows instead
    of 13. The core copies whatever `__amix_nfstype` says, so no core
@@ -119,10 +147,23 @@ everywhere (question A1).
 
 ### 5.2 k46 (the port)
 
-1. The carve: the ufs and s5 `.text` and `.data` ranges of §2, with their
-   relocations and local symbols, become two ET_REL objects; their
-   COMMONs move with them, except `rootvp`. The base is relinked without
+1. The carve: the ufs and s5 `.text`, `.data` and local `.bss` of §2,
+   bounded by the base's object markers, with their relocations and local
+   symbols, become two ET_REL objects; the COMMONs only they use move with
+   them, the shared ones and `rootvp` stay. The base is relinked without
    those ranges (M-FS1).
+   - **It runs on the port's patched base, `b-new`, right after
+     `relink-040.sh` and before the chain** (P1, P3: a pass
+     `relink-040-carve.sh`). The 4 KiB-page byte patches lie inside both
+     ranges (`patch_modelb*.py`, `patch_pagecreate.py`,
+     `patch_ufsbmap.py`, `patch_writeback.py`), so the modules carry them.
+     Two later passes put relocation-free PC-relative branches across the
+     gap (the four-card pass's `bsr.l`, kerntools' W-D7 `bra.l`), so no
+     carve may run after them.
+   - amix-dlm's `tools/carve.py` extracts and checks: no base relocation
+     into a carved range, the exact symbol sets, the COMMON split. The
+     port's pass adds its own gates (`check_relink_relocs`, contiguity,
+     the b2 flip, `scan060` of the module objects).
 2. The base's `vfssw` loses the ufs and s5 rows, and `nfstype` drops by
    two; `init_tbl` loses `inoinit`. No relocation in the base may still
    reach into a carved range (the carve checks it and refuses).
@@ -130,6 +171,15 @@ everywhere (question A1).
    a module (C4-6 §2).
 4. The page geometry: the carved code is the base's own 4 KiB-page code,
    so modcheck's scan applies unchanged.
+5. The port's `kabi-sidecar.py` (`rootfs=`) and `check_root_family` stop
+   deriving the root filesystems from `ufs_mountroot`/`s5mountroot` in
+   the image: a carved kernel omits `rootfs=` (C3-3 version 6), and
+   kerntools' `kabi-sidecar030.py` does the same on k30.
+
+**Userland readers of the namelist** (`crash`, `pstat -i`, `sar -v`)
+read `inode`, `ufs_inode` and `s5fstype` by name. Those move into module
+space and leave `/stand/unix`'s namelist: the tools need a module-aware
+namelist (`modadmin -L`). It is not a boot matter.
 
 ### 5.3 What the core needs
 
