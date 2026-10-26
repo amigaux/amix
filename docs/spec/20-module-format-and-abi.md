@@ -74,9 +74,12 @@ then        NUL-terminated key=value strings, ending with an empty string
 | `depend` | comma-separated module names | `kbootset`, core |
 | `unload` | `never` (default) or `allowed` | core |
 | `param` | `<name>:<type>:<default>[:<min>:<max>]`, type `int`, `bool`, `str`, `hex` | `kbootset` (validates values), core |
+| `tier` | `ddi` (default) or `core`: which tier of the exported-symbol block the module may resolve against (§4.1) | core |
+| `build` | the kernel build id a core-tier module was built with; required with `tier=core` | core, `kbootset` |
 | `desc` | one-line description | tools |
 
-Rules: a zero match key is refused (a zeroed autoconfig row must never match,
+The exact syntax, limits and refusals are contract C3-1
+(`docs/contracts/C3-1-module-object.md`). Rules: a zero match key is refused (a zeroed autoconfig row must never match,
 P-28 risk 8); `mobo:` keys name a gated, positively identifying probe listed
 in the registry (§6), never an address; a root-class module must carry
 `match`, `rank` (disk controllers) or `fs` (filesystems).
