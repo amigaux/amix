@@ -853,6 +853,19 @@ there, the row runs on k30 only, and the report says so. After the row,
 L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
 the order boots, with no menu. That fallback is the line of record.
 
+### S3-43-8 — Zorro III memory: the kernel binds below 0x40000000
+
+The finding of S3-43-7's first run (N69, N70). With the emulator's
+`+z3=128`, a 128 MB Zorro III board at 0x40000000 was the largest fast
+region. Loader version 1 and the stock rule bound the kernel there, and
+it never started on either line. boot2 from amix-dlm 9f6f0bb on (28 136
+bytes, loader version 2) counts only memory below 0x40000000 (10 §3).
+
+| Commands | Expected |
+|---|---|
+| the slot copy with the fixed boot2 installed (`kbootset loader-install /tmp/boot2.bin --version 2`, accepted at the next boot), the emulator with `+z3=128` beside the CPU board's fast memory; boot | `amix-boot: kernel bound at <an address below 0x40000000: the CPU board's region>`, the banner, multi-user. kinfo's fast memory counts the Zorro III RAM too (`kbootset status`): the kernel uses it as page frames |
+| the same with the Zorro III board as the only fast memory, if the emulator allows it | `amix-boot: no fast memory below 0x40000000 to run the kernel in`, `amix-boot: L4 not enough memory (generation N)`; the next generation in the order, or the menu |
+
 ### S3-43-7 — 128 MB
 
 The emulator with 128 MB of Zorro III fast memory, the S3-43-2 rows

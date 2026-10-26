@@ -94,7 +94,8 @@ Both CPU lines' kernels expect, unchanged from 1.0 (`PORT/docs/boot-path-map.md:
   `amix-a4091/tmp/amix-src/amiga/boot/boot2.c:322-324`; the boot2 entry in
   `KT/docs/amix-kernel-source-map.md:153`).
 - The kernel image relocated to its bind address: by default the 256-byte
-  aligned base of the largest non-chip memory region; relocation types
+  aligned base of the largest non-chip memory region (the stock `bind.c`;
+  1.1 counts only memory below 0x40000000, step 6 below); relocation types
   R_68K_32 on the 030 line, plus R_68K_PC32/PC16/PC8 (range-checked) on the
   040/060 line (`KT/docs/boot2-040.md:21-27`; `MP/CLAIMS.md` C2). Kernel
   forms: ET_REL with symbols (040/060 line), the compact `brel` form
@@ -176,11 +177,25 @@ boot2 says so on the console.
   need it there.
 - Members are read into fast memory and inflated, checked and relocated
   there by code running from fast memory.
-- The kernel's destination is unchanged (step 6): the base of the largest
-  fast-memory region. A kernel is never bound in chip memory, where address
-  0 is the vector table. On a machine without fast memory, or whose largest
-  fast region is smaller than the bound kernel, boot2 refuses the
-  generation with L4 and says which of the two it was.
+- The kernel's destination (step 6): the base of the largest fast-memory
+  region, counting only its part **below 0x40000000**. A kernel is never
+  bound in chip memory, where address 0 is the vector table, and never in
+  Zorro III expansion memory. The Amix kernels map the first 1 GiB one to
+  one, and keep their own segment maps at virtual 0x40040000 (`syssegs`,
+  the `sptalloc` arena). A kernel bound at 0x40000000 or above is not
+  mapped once translation is on, and never starts. S3-43-7 (2026-10-26)
+  showed it on both lines with a 128 MB Zorro III board, after `amix-boot:
+  starting the kernel`. The stock loader's `bind.c` has no such limit.
+- The loader tells the regions apart by address, from the memory list it
+  copies into `bootinfo.memory[]`: each `MemHeader`'s `mh_Lower` and
+  `mh_Upper` (offsets 20 and 24; `mh_Attributes` at 14 gives `MEMF_CHIP`).
+  Zorro III RAM carries the same `MEMF_FAST | MEMF_PUBLIC` attributes as a
+  CPU board's, so the attributes cannot tell them apart.
+- On a machine without fast memory below 0x40000000, or whose largest such
+  region is smaller than the bound kernel, boot2 refuses the generation
+  with L4 and says which of the two it was (`no fast memory below
+  0x40000000 to run the kernel in`). The kernel still uses Zorro III RAM
+  as ordinary page frames once it runs.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:
