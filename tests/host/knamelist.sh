@@ -11,9 +11,9 @@
 set -e
 B=${B:-build}
 WS=$(cd "$(dirname "$0")/../../.." && pwd)
-K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20c/out/m/unix}
-K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21c/dlm/usr/sys/unix}
-K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21c/dlm/usr/sys/unix.brel}
+K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20d/out/m/unix}
+K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix}
+K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix.brel}
 T=$B/knamelist
 rm -rf $T && mkdir -p $T
 sha() { sha256sum "$1" | cut -c1-64; }
@@ -95,7 +95,7 @@ if [ -f "$K46" ]; then
 	$KB status | grep -q "^namelist: none (kinfo version 2 gives no bind address)$"
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 8
 	no 3 "kinfo flags a loader fault (0x8)" $KB namelist
-	sed 's/^data 0x0810b764/data 0x0810b768/' $T/lay46 > $T/laybad
+	awk '$1 == "data" { $2 = sprintf("0x%08x", strtonum($2) + 4) } { print }' $T/lay46 > $T/laybad
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/laybad
 	no 3 "the layout does not match kinfo" $KB namelist
 	python3 -I $T/kinfo.py $T/kinfo 3 7 $T/lay46

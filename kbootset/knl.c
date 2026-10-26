@@ -90,18 +90,17 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 					  SHF_ALLOC | SHF_WRITE };
 	ax_u8 *img = 0, *o = 0, *sh;
 	const ax_u8 *e, *st;
-	int rel;
 	struct nsym *ns = 0;
 	ax_u32 shoff, shent, shnum, i, k, sy = 0, nsy, syoff, syent, stroff, strsize;
-	ax_u32 secaddr[64], n = 0, nlocal, strtot, off, symoff, stroff2, shstroff, shoff2, len;
+	ax_u32 secaddr[64], n = 0, nlocal, strtot, off, symoff, stroff2, shstroff, shoff2, len, shstr0;
 	int rc = -1;
 
 	memset(lay, 0, sizeof(*lay));
 	*out = 0;
 	*olen = 0;
 	if (sym) {
-		if (!elfok(sym, slen)) {
-			strcpy(why, "unix.sym is not a big-endian m68k ELF file");
+		if (!elfok(sym, slen) || AX_GET16(sym + 16) != ET_EXEC) {
+			strcpy(why, "unix.sym is not a big-endian m68k ELF executable (C2-3 2.1)");
 			return -1;
 		}
 		e = sym;
@@ -129,7 +128,6 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 		len = klen;
 	}
 
-	rel = AX_GET16(e + 16) == ET_REL;	/* values relative to their section */
 	shoff = AX_GET32(e + 32);
 	shent = AX_GET16(e + 46);
 	shnum = AX_GET16(e + 48);
@@ -137,10 +135,13 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 		strcpy(why, "bad section headers");
 		goto out;
 	}
-	/* each section's address in this boot; the four the loader binds */
+	/* each section's address in this boot; the four the loader binds.  A
+	 * unix.sym's sections may all be NOBITS: there the name decides */
+	shstr0 = AX_GET16(e + 50) < shnum ? AX_GET32(e + shoff + AX_GET16(e + 50) * shent + 16) : 0;
 	for (i = 0; i < shnum; i++) {
 		const ax_u8 *s = e + shoff + i * shent;
 		ax_u32 t = AX_GET32(s + 4), fl = AX_GET32(s + 8), sz = AX_GET32(s + 20);
+		const char *nm = shstr0 && shstr0 + AX_GET32(s) < len ? (const char *)e + shstr0 + AX_GET32(s) : "";
 
 		secaddr[i] = AX_GET32(s + 12) + (sym ? bind : 0);
 		if (t == SHT_SYMTAB)
@@ -148,6 +149,9 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 		if (!(fl & SHF_ALLOC) || sz == 0 || (t != SHT_PROGBITS && t != SHT_NOBITS))
 			continue;
 		k = (fl & SHF_EXECINSTR) ? 0 : t == SHT_NOBITS ? 3 : (fl & SHF_WRITE) ? 2 : 1;
+		if (sym && !(fl & SHF_EXECINSTR))
+			k = !strncmp(nm, ".rodata", 7) ? 1 : !strncmp(nm, ".data", 5) ? 2 :
+			    !strncmp(nm, ".bss", 4) ? 3 : k;
 		if (!sym && t == SHT_NOBITS && !(fl & SHF_WRITE))
 			continue;
 		lay->vaddr[k] = secaddr[i];
@@ -201,7 +205,7 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 		} else if (x < SHN_LORESERVE && x < shnum &&
 			   (AX_GET32(e + shoff + x * shent + 8) & SHF_ALLOC)) {
 			a = 1;
-			v += rel ? secaddr[x] : sym ? bind : 0;
+			v += sym ? bind : secaddr[x];	/* unix.sym: the address at bind 0 */
 		} else
 			continue;
 		ns[n].cnst = (ax_u8)!a;

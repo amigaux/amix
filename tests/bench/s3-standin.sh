@@ -21,7 +21,10 @@
 #               noarena.spec  the same kernel as a version-1 generation (no
 #                             arena, no ident): the core finds no arena
 # Writes OUTDIR/stand/<line>/{unix,kabi}, OUTDIR/var/apkg/kpkg/$RECNAME
-# and, with ROOTREC, OUTDIR/l9.spec and OUTDIR/noarena.spec.
+# and, with ROOTREC, OUTDIR/l9.spec and OUTDIR/noarena.spec.  A sidecar
+# with sym= (C2-3 version 6, a brel's symbols) also gets its unix.sym, from
+# beside the sidecar or the kernel, checked against sym=, into the tree and
+# the record.
 #
 # RECNAME (environment, default kernel-s3standin) names the record file.
 # On a vehicle that already has a kernel record for the line, give that
@@ -44,6 +47,17 @@ cp "$KERNEL" "$OUT/stand/$LINE/unix"
 	echo "size=$(size "$OUT/stand/$LINE/unix")"
 	echo "sha256=$(sha "$OUT/stand/$LINE/unix")"
 } > "$OUT/stand/$LINE/kabi"
+SYMLINE=
+if [ -n "$(key sym)" ]; then
+	set -- $(key sym)
+	for d in "$(dirname "$SIDECAR")" "$(dirname "$KERNEL")"; do
+		[ -f "$d/$1" ] && SYMF=$d/$1 && break
+	done
+	[ -n "$SYMF" ] && [ "$(size "$SYMF")" = "$2" ] && [ "$(sha "$SYMF")" = "$3" ] ||
+		{ echo "s3-standin: sym=$1: no file of that size and SHA-256 beside the sidecar or the kernel" >&2; exit 1; }
+	cp "$SYMF" "$OUT/stand/$LINE/$1"
+	SYMLINE="file /stand/$LINE/$1 $2 $3"
+fi
 cat > "$OUT/var/apkg/kpkg/$RECNAME" <<EOF
 name $RECNAME
 version 0.0.0
@@ -58,6 +72,7 @@ verified no
 file /stand/$LINE/unix $(size "$OUT/stand/$LINE/unix") $(sha "$OUT/stand/$LINE/unix")
 file /stand/$LINE/kabi $(size "$OUT/stand/$LINE/kabi") $(sha "$OUT/stand/$LINE/kabi")
 EOF
+[ -z "$SYMLINE" ] || echo "$SYMLINE" >> "$OUT/var/apkg/kpkg/$RECNAME"
 if [ -n "$ROOTREC" ]; then
 	BSS=$(key bss)
 	KLINE="kernel unix /stand/$LINE/unix${BSS:+ bss=$BSS}"

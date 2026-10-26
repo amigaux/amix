@@ -16,10 +16,10 @@
 set -e
 B=${B:-build}
 WS=$(cd "$(dirname "$0")/../../.." && pwd)
-K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20c/out/m/unix}
-K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21c/dlm/usr/sys/unix}
-K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21c/dlm/usr/sys/unix.brel}
-K30S=${NL_K30_KABI:-$WS/tmp/2026-10-26-s3-21c/kabi}
+K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20d/out/m/unix}
+K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix}
+K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix.brel}
+K30S=${NL_K30_KABI:-$WS/tmp/2026-10-26-s3-21e/kabi}
 T=$B/namelist
 rm -rf "$T" && mkdir -p "$T"
 
