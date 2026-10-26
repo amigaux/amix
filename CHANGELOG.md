@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — S4-72-1 N103: the module arena 16-aligned in the image; gate 4 (a829c44, 239b4a7, 49239b1)
+
+Core 0034 checks a root module's ABSOLUTE 16-alignment; boot2 places it 16-aligned relative to the arena, whose image
+offset (.text + .rodata + dlm_arena's .data offset, back to back) was 8 mod 16 on both minted kernels — `.balign 16` alone
+would not fix it. mkident --asm makes dlm_arena capacity + 16 bytes; --fill writes AXK1 +40 and arena= as the first
+16-aligned offset inside it; --check refuses any other (C3-3 v5). kbootset gate 4 refuses a root set on a misaligned arena
+(40 §3.1). Harness 255/255 (KD060-Z arena 0x0012f100, K030-U 0x001091c0); make test 692/0; kit-test 0 failed; kit at
+49239b1. The port's kabi-sidecar.py:101 and kerntools' kabi-sidecar030.py:142 must accept the rounded offset.
+
 ## 2026-10-26 — m-reg1.py reads a module kernel's stock nfstype as __amix_nfstype (63d33c4)
 
 The core's nfstype is 0 in .data until dmainit copies the stock count; the reader prefers __amix_nfstype when present.
