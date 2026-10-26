@@ -5,7 +5,8 @@
  * dlm_init():
  *
  *   - the loader record (AXL1, docs/spec/10-boot-loader.md section 6) in
- *     bootinfo's reserved area gives development load and safe mode;
+ *     bootinfo's reserved area gives development load, safe mode and the
+ *     RAM-disk image's physical address and size (C4-3, ramdisk_image);
  *   - the kernel's build id (plat_buildid(), the line's file: buildid on
  *     the 68040/68060 line, kinfo_buildid on the 030 line), for core-tier
  *     modules (C3-1);
@@ -23,6 +24,7 @@
 
 extern char bootinfo[];			/* the kernel's copy, AXB_SIZE bytes */
 extern int dlm_devload, dlm_safe;
+extern unsigned long dlm_rd_addr, dlm_rd_size;	/* the RAM-disk image, C4-3 */
 extern char *dlm_build;
 extern int (*dlm_plat_match)(char *);
 extern int printf(const char *, ...);
@@ -93,6 +95,8 @@ plat_dmainit(void)
 		flags = get32(l + 36);
 		dlm_safe = (flags & AXLF_SAFE) != 0;
 		dlm_devload = (flags & AXLF_DEVLOAD) != 0;
+		dlm_rd_addr = get32(l + 116);
+		dlm_rd_size = get32(l + 120);
 		if (dlm_devload)
 			printf("dlm: DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
 	}

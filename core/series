@@ -39,3 +39,4 @@
 0036-root-defer.patch
 0037-static-root-skip.patch
 0038-mkmod-rank.patch
+0039-ramdisk-image.patch

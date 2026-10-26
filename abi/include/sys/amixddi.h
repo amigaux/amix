@@ -64,6 +64,13 @@ extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
 extern int	root_defer();		/* (int (*)(), char *) */
 
 /*
+ * The RAM-disk image (any, k30.1.1 / k46.1.1; contract C4-3 section 4).
+ * ramdisk_image(&paddr, &size): the physical address and size of the
+ * image boot2 placed.  0, or ENOENT when there is none.
+ */
+extern int	ramdisk_image();	/* (unsigned long *, unsigned long *) */
+
+/*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or
  * off the stock list netstat reads.  0, EEXIST / ENOENT.
  */

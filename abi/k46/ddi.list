@@ -61,6 +61,7 @@ putbq func 0
 putnext func 0
 putq func 0
 qreply func 0
+ramdisk_image func 1
 root_defer func 1
 sd_register func 1
 sleep func 0
