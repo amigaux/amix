@@ -1,5 +1,44 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — APKGENG 1.12.4: the removef stdin fix minted (STAGED, NOT PUBLISHED)
+
+**Why.** 75be235 (`removef PKG -` kept fgets' newline, removed nothing; the section further down)
+was fixed, not minted. 1.12.4 carries it. The public catalog still says 1.12.3; publishing is the
+owner's decision.
+
+**Engine.** `heirloom/build-host.sh` rc 0: smoke, patched-behavior smoke, pw/gr 16/16, **removef
+stdin OK (2 of 3 paths removed via `removef PKG -`)**. Independent host check on the same engine:
+six files registered with installf, stdin `f1`, a blank line, `f3<TAB>`, `f5<SP>`, `f6`, then
+`removef -f`: rc 0 both, the four listed paths gone, f2 and f4 kept (contents restored after).
+`heirloom/build-amix.sh` twice: rc 0, switch-dispatch invariant clean, all 11 binaries identical
+between the two builds; `installf` (= `removef`) 157732 B, **sha256 `fdeee971…a3999`** (the 75be235
+build), md5 `b0540d0dcc96b0a5900242c87dbe7a70`.
+
+**The mint.** `build/repo-staging-apkgeng1124/base/APKGENG-1.12.4.pkg` (own staging dir;
+`repo-staging-apkgeng1123` untouched), `tools/repo/build-packages.sh --eng build/repo-staging-apkgeng1124`,
+`VER_ENG="1.12.4"`, minted from the committed tree:
+
+- **md5 `4433b3a191ab3de4624b427851f4de6e`**, **sha256
+  `2b3bbdc850acbc6cc444ce398e97b68abdb79e4645ab95a13cba75b0b3e8ab68`**, **2364416 B**, mode 444,
+  sidecar `.md5`; `PSTAMP=lucifer20261026231721`.
+- Against 1.12.3 (`88a177e5…`): pkgmap path/type/class/mode/owner/group identical (55 lines); pkginfo
+  VERSION and PSTAMP only. Five binaries differ: `installf` (the fix) and `pkgadd`, `pkgrm`,
+  `pkginstall`, `pkgremove`. In those four the disassembly differs ONLY in `__assert` line-number
+  constants (`pea`, +3 each; 47/40/47/40 instructions; same sizes, same strings): the public
+  release (a2c88b9) added the three-line "Portions Copyright 2026 Jussi Alanärä … AMIX PORT"
+  notice to the headers of modified files such as `pkgadd/main.c` and `libinst/pkgops.c`. No
+  code change. The other six binaries, man pages and licences are byte-identical.
+- Gates: link gate OK (2 links); scan060 0 hits in 11 ELFs; `gen-catalog --scan-private` OK;
+  `payload-licence-gate` rc 0 (11 stripped UNKNOWN, as every APKGENG).
+- Host `fakeroot pkgadd -R`: 1.12.3, then 1.12.4 over it (instance=overwrite): rc 0, 55 contents
+  records, plain `pkgchk APKGENG` rc 0, VERSION 1.12.4, installed `removef` = `installf` link.
+- `apkg_vercmp("1.12.4", x)` = 1 for x = 1.12.3, 1.12.2, 1.12.1, 1.12.0.
+- Staging catalog of the own dir (`catalog.md5` `e34432f5d674de94c986390fc574459c`), the row a
+  publish would carry:
+  `apkgeng|1.12.4|APKGENG|base/APKGENG-1.12.4.pkg|4433b3a191ab3de4624b427851f4de6e|2364416|none|system|…`
+- Repo tools 409/0 on the rebuilt host engine. The static set (`build-amix-static*`) was not
+  rebuilt: it carries no installf/removef.
+
 ## 2026-10-26 — APKG 0.3.3 minted for the 1.1 media (STAGED, NOT PUBLISHED)
 
 **Why.** The box's 0.3.2 refuses `b` device nodes in a module package (ramdisk30/46); 0.3.3 is

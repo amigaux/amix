@@ -72,7 +72,11 @@ VER_APKG="0.3.3"
 # cksum and mtime of an e/v object a class action script installed, so a
 # plain pkgchk is clean after i.apkgconf keeps /etc/apkg.conf.  1.12.2
 # (f5858094...) stays what it is.  NOTES 2026-10-06.
-VER_ENG="1.12.3"
+# 1.12.4 (2026-10-26) -- removef's stdin form cuts each line to its first
+# token (75be235), so `removef PKG -` removes the listed paths.  Own staging
+# dir (build/repo-staging-apkgeng1124), NOT published; 1.12.3
+# (88a177e5...) stays what it is.  NOTES 2026-10-26.
+VER_ENG="1.12.4"
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"
