@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patch 0018: development load as C3-4 says; paths under /stand/gen (b633b3a)
+
+With no booted manifest nothing loads, even under development load; under development load a manifest member loads from
+its path= without the SHA-256 check and says so on the console; a member whose path= is not /stand/gen/<booted id>/mod/<name>
+is refused. The state harness boots an empty generation at startup instead of relying on the removed behaviour. Harness
+166/166 both kernels; make core 119/119; 665 host checks. Audit items §1.1 and §1.6.
+
 ## 2026-10-26 — stage-3 audit of the rows reported done; 30 §3 root-class context (f98c1ac, 4fea711)
 
 Audit (docs/plan/stage-3-audit-2026-10-26.md): of 14 rows reported done, 7 are done (S3-01, 02, 04, 08, 09, 11, 15) and
