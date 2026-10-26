@@ -33,7 +33,7 @@ make -C test/host clean
 | queue: aligned READ | `prepare(pa, 512, FROM)`, then `dma_addr(r, pa)`, then `complete`. `data1buf` is `dma_addr`'s answer, not `pa`. DSA, DSP and the IDENTIFY/CDB pointers are physical addresses inside the area |
 | queue: misaligned READ | A 16-byte sense lands in the driver's bounce: prepared by its physical address (16-aligned, in the area) and copied out by its kernel address, to exactly 16 bytes |
 | queue: zero length / WRITE | No data DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce. Either way, the data step is followed by the status-line sync: prepare and complete FROM_DEVICE over a 16-aligned 16-byte line in the area that holds the status byte (C4-5 v5 §5.4). An aligned or bounced READ has none: its own complete clears the cache |
-| queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), no `dma_complete` (so `drv_prep == drv_cmpl + 1`), and the next command runs |
+| queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
 
 ## How the harness works
 

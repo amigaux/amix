@@ -334,8 +334,7 @@ struct a4091_kstat {
 	ulong	bounce_n;		/* FROM_DEVICE transfers bounced (misaligned) */
 	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
 #ifdef	A4091_MODULE			/* appended: the static layout is unchanged */
-	ulong	noreach;		/* dma_addr 0 (C4-5 v5): not armed, failed;
-					 * drv_prep == drv_cmpl + noreach          */
+	ulong	noreach;		/* dma_addr 0 (C4-5 v5): not armed, failed */
 	ulong	stsync;			/* status-line syncs after a WRITE or TUR    */
 #endif
 };
@@ -910,9 +909,11 @@ struct sdcom	*cp;
 		da = dma_addr( &a4091_dmarec[A4091_CARD], dpa);
 		if (da == 0) {
 			/* C4-5 v5: a segment the board cannot reach and no bounce
-			 * (pool short, or the seam off): never arm.  The provider
-			 * owns nothing, so no complete: the gap is the count. */
+			 * (pool short, or the seam off): never arm.  The complete
+			 * finds no PREPARED record and only counts cmpl_noprep on
+			 * both lines (dlm, 2026-10-27): drv_prep == drv_cmpl holds. */
 			a4091_kstat.noreach++;
+			a4091_dma_complete( (int)A4091_CARD, dpa, dlen, dmadir);
 			printf("A4091 c%d: no reachable DMA buffer for %d bytes\n",
 			    (int)cp->card, (int)cp->nbyte);
 			cp->status = 0xff; cp->okay = FALSE;

@@ -396,7 +396,7 @@ t_queue_write(void)
 }
 
 /* C4-5 v5: dma_addr 0 (out of reach, no bounce) -- never arm, fail the
- * command, no complete for what the provider never took */
+ * command; the complete still runs (the provider counts cmpl_noprep) */
 static void
 t_queue_noreach(void)
 {
@@ -416,9 +416,11 @@ t_queue_noreach(void)
 	/* DSP only: on the host an 8-byte read of the DSA shadow also takes the
 	 * CTEST0 byte (0x17) that a4091init writes */
 	CHECK(mock_wr32(b, R_DSP) == 0, "the chip was never armed (no DSP write)");
-	CHECK(mock_nlog == 2 && mock_log[0].op == OP_PREPARE && mock_log[1].op == OP_ADDR,
-	    "prepare, dma_addr, and no complete");
-	CHECK(a4091_dmarec[0].drv_prep == a4091_dmarec[0].drv_cmpl + 1, "the gap is the count");
+	CHECK(mock_nlog == 3 && mock_log[0].op == OP_PREPARE && mock_log[1].op == OP_ADDR
+	    && mock_log[2].op == OP_COMPLETE && mock_log[2].pa == (unsigned long)buf
+	    && mock_log[2].len == 512 && mock_log[2].dir == 1,
+	    "prepare, dma_addr, then complete(pa, 512, FROM_DEVICE)");
+	CHECK(a4091_dmarec[0].drv_prep == a4091_dmarec[0].drv_cmpl, "drv_prep == drv_cmpl");
 	mock_addr_zero = 0;
 	CHECK(run_queue(0, 0, 1, buf, sizeof buf, 0x28), "the next command runs");
 }

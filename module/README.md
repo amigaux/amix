@@ -50,7 +50,7 @@ unchanged:
 | `_load` | Takes one `dma_alloc` area and copies the SCRIPTS into it. Then, for every board `autocon()` finds (four at most): maps it, fills its D42 record, and calls `sd_register(a4091queue, k, base, name, 2)` |
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
-| DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. There is no `dma_complete` for it, so `drv_prep == drv_cmpl + noreach` |
+| DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status line | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's status line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync` |
 | Version | `VERSION` (`1.0.0-2`), the package version. 1.0.0-1 had no refused arm and no status line |
 
