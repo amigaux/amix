@@ -287,24 +287,13 @@ On a 1.0 disk the user's own data lives on the root filesystem, because 1.0
 lays no data slice; the installer cannot keep it in place. Before re-laying it
 prints what it will not keep and the size of `/home` and offers to stop.
 
-**Surviving configuration** (P-29 names the class; the exact set is OQ-40.1).
-Proposed, from what the 1.0 first-boot dialog writes
-(`amix-installng/payload/firstboot.sh:20-45,303-341`): node name and domain,
-time zone, network (addresses, netmask, gateway, interface, name servers,
-`/etc/inet/hosts`, the per-card network file), users and passwords
-(`/etc/passwd`, `/etc/shadow`, `/etc/group`, home-directory entries), the
-package client's configuration, the repository address. Captured into a
-checksummed archive written to the swap slice before any filesystem is made
-(swap is scratch during an install), restored after the new root is made, and
-verified before the first boot. Restored password entries keep their aging
-fields only if the clock is plausible (the first-boot dialog guards a clock
-trap, `firstboot.sh:30-31`).
+**Surviving configuration** (OQ-40.1, answered by S4-54). What the first-boot dialog and the interview write: the node name and domain; the time zone (TIMEZONE, TZ, tz.index, clkzone); users and passwords (passwd, shadow, group) and the console login rule (default/login); the network: hosts, rc.inet, zen.conf, resolv.conf, netconfig, S99zen; the package client's configuration (apkg.conf); bcheckrc and the administrator's module parameters (modreg.local.d); the dialog's record (firstboot.conf), kept beside the new one. The dialog's choices that live in files packages own (syslog on or off, the A2024 flag, the keymap, the X colour server, the Netnews flavour) are kept as states and set again with the new system's own files. A choice whose package the new install lacks is reported, not forced. Everything is captured into a checksummed archive written to the swap slice before any filesystem is made. It is restored after the new root is made, put in place by the installer at the end of the install and verified there (each file's sum on the new root), before the first boot; the first boot leaves those files alone. Restored password entries keep their aging fields only if the battery clock passes setclk's plausibility gate and no entry's last change is later than today; otherwise every entry's aging fields are cleared, and the installer says so.
 
 ## 8. Open questions
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| OQ-40.1 | The exact surviving-configuration set and its format (P-29 is parked and defines only package-conffile policy, `review/P-29-config-files-and-network-setup.md`). | us |
+| OQ-40.1 | The exact surviving-configuration set and its format (P-29 is parked and defines only package-conffile policy, `review/P-29-config-files-and-network-setup.md`). **Answered by S4-54** (amix-installng 74abe1f): §7, "Surviving configuration". | us |
 | OQ-40.2 | Data slice default size and mount point (`/home` proposed). | us |
 | OQ-40.3 | Whether the boot store should also hold a rescue RAM-disk generation so every installed disk can rescue itself without a medium. Not required by D-3 ("every install medium is the rescue medium"). | us |
 | OQ-40.4 | Stock `pkgadd` behaviour on `/stand` conflicts and on files dropped by `instance=overwrite` (E1); `kbootset` already avoids depending on either. | us |
