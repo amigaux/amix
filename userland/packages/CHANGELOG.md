@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30u -2 and kern46z -3: upgrade targets with identical payloads (711ef91, 0b27fd6) — not published
+
+kernel-k30-u 1.1.0.261026.01-2 and kernel-k46-z 1.1.0.261025.51-3 carry the same unix and kabi as the revision before them
+(diff -r of the unpacked trees empty; only NAME, VERSION, PSTAMP differ); the 1.1 install disks carry -1 / -2 as their
+pristine kernels, so the exit row's `apkg upgrade` needs a higher revision. The previous revisions stay staged. The round
+trip installs the previous revision first and upgrades to the new one on both lines: 39/39.
+
 ## 2026-10-26 — kbootset -6 from amix-dlm fb77acd (a48aa2c) — not published
 
 /sbin/kbootset 870d4752: the original SHA-256 round restored (the -5 restructure was slower on the 030) with the no-kinfo
