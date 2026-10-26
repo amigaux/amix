@@ -50,22 +50,24 @@ unchanged:
 | `_load` | Takes one `dma_alloc` area and copies the SCRIPTS into it. Then, for every board `autocon()` finds (four at most): maps it, fills its D42 record, and calls `sd_register(a4091queue, k, base, name, 2)` |
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
-| DMA | Through C4-5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table |
-| Version | `VERSION` (`1.0.0-1`), the package version |
+| DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. There is no `dma_complete` for it, so `drv_prep == drv_cmpl + noreach` |
+| Status line | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's status line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync` |
+| Version | `VERSION` (`1.0.0-2`), the package version. 1.0.0-1 had no refused arm and no status line |
 
 ### The `dma_alloc` area
 
 Everything the chip reads or writes besides the caller's buffer is in one
-area of 1328 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
+area of 1332 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
 handing a board the module's own memory, and on k30 the arena is out of a
 Zorro master's reach.
 
 | Offset | Content |
 |---|---|
-| 0x000 | the SCRIPTS, 184 bytes, copied from the template |
-| 0x0b8 | the DSA table, 76 bytes |
-| 0x104 | the IDENTIFY, CDB, status and message buffers, 28 bytes |
-| 0x120 | the misaligned-read bounce, 1040 bytes (D42 "Bounce") |
+| 0x000 | the status line: the status byte (0) and the message bytes (4–11), a 16-byte line holding nothing the CPU writes during a command |
+| 0x010 | the SCRIPTS, 184 bytes, copied from the template |
+| 0x0c8 | the DSA table, 76 bytes |
+| 0x114 | the IDENTIFY and CDB buffers, 16 bytes |
+| 0x124 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
 
 - The SCRIPTS are position-independent (relative jumps, table-indirect
   moves), so they copy unchanged, and DSP is the copy's physical address.
@@ -122,10 +124,16 @@ in the root pass) can drive the board at level 7.
   identity, and `dma_alloc` gives kernel memory. **Test the module here, on
   kern46m -78 or later.** -77's symbol block lacks the five `dma_*` names,
   so the core refuses the link.
-- **k30:** the provider is a **placeholder** until S4-62's 030 piece:
-  `dma_alloc` returns 0, so **`_load` returns `ENOMEM` and the module does
-  not link on k30 yet.** The object builds and passes modcheck. It gets its
-  first test when the core's pool exists.
+- **k30:** the core's 030 provider (amix-dlm e9665e6, C4-5 v5) gives
+  `dma_alloc` a 128 KiB pool in motherboard RAM, shared with the bounces.
+  A segment in the CPU card's DDR or chip memory is bounced. When no bounce
+  can be had, `dma_addr` gives 0 and the command fails (`noreach`).
+  - The 030 data cache is write-through; a FROM_DEVICE `dma_complete`
+    clears it, hence the status line.
+  - The first k30 kernel the module links on is the -14 cut; package
+    1.0.0-2 mints in the -79/-14 wave.
+  - Before that pool existed, `dma_alloc` returned 0 and `_load` returned
+    `ENOMEM`.
 - **A4092** (manufacturer 0xc0de): it needs the kernel's unsigned
   `autocon()` shift. Both module kernels have it:
   - kern46m -77 carries the port's ISSUE-76 `lsrl`;
@@ -145,8 +153,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 15/15 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 15/15 cases |
+| H1 | k30 (`sptalloc` arm) | 16/16 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 16/16 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
@@ -169,7 +177,8 @@ So the A4092 and A4770 identities are host and metal rows only.
 | E3 | k46: E1's box; `dd` reads with sense, a tape short read if a tape unit is set | `a4091_kstat.bounce_n` grows; the sense and the short read return as with the static driver |
 | E4 | k46: E1's box, five `reboot` cycles | Each boot clean; the halt pass runs each time |
 | E5 | k46: two A4091 boards, if amiberry offers a second instance | Two registrations; the lower base is the lower card |
-| E6 | k30: E1's setup on the 030 module kernel, after S4-62's pool | As E1. Run once with the provider's force-bounce hook (C4-5 §5.3), since the bounce is invisible in emulation otherwise |
+| E6 | k30: E1's setup on the 030 module kernel (-14 or later), with 1.0.0-2 | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise |
+| E6b | k30: E6's box, `dma_forcebounce` on, one read too large for the 128 KiB pool (`dd` with a 256 KiB block on the raw A4091 disk) | `noreach` +1, the console line `A4091 c…: no reachable DMA buffer for … bytes`, the `dd` fails with EIO, the chip is not armed, and the next command runs |
 
 ### Metal (later)
 
