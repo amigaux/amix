@@ -128,8 +128,11 @@ decision reserved to the project owner.
 | OQ-70.3 | Is the inet stack separable (recorded, not required) | us |
 | OQ-80.1 | Metal evidence for the 030 line | us; Antti |
 | OQ-80.2 | The A4000T 53C710 driver for stage 4, else a release note | us |
-| OQ-80.3 | Throughput baselines for stage 3 | us |
+| OQ-80.3 | Throughput baselines for stage 3 (answered 2026-10-26) | us |
 | OQ-80.4 | Gayle IDE as the first outside module: module form, `intr_attach`, rank key, ATAPI route | Emre |
+| OQ-80.5 | An A4091 root on an 030 Z3660 box: a bounce buffer or the kernel bound in motherboard RAM | us; amix-a4091 |
+| OQ-80.6 | A 1.1 Z3660 release firmware that runs the 68030 MMU mode on metal | Z3660 |
+| OQ-80.7 | A spacer between back-to-back Z3660 register writes, for every driver | Z3660; the driver repos |
 
 Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-60.2 and OQ-60.3 (moot, D-3 §13), OQ-30.2 (D-3 §11), OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
 
