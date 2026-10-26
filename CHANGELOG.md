@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — ledger k46 complete; SHA-256 restructured; kbootset without kinfo; C2-4 §9; k30 recipes (8b42bcc..6c69125)
+
+Exit ledger: M-UPG1 k46 passed, the k46 column complete. Hashbench run 1: GCC 14's SHA-256 at half GCC 2.7.2.3's rate on
+the 030 (codegen, not I/O). sha256.c restructured: the full schedule first, eight renamed rounds per pass, nothing shifted —
+42–45 instructions per round instead of 102 under both compilers; correct against hashlib. kbootset without kinfo: retry
+exits 0 quietly (C2-4 §7), mark-good refuses with status 3 and names --booted. C2-4 §9: the end-of-rc2 mark-good hook. Bench
+recipes for the k30 line (S2-46, S2-41 with K030-IDE as the bad trial, one S2-42 cell); they need an l11-k30 disk whose
+pristine kernel is kernel-k30-u. hashbench tool untouched; hashbench re-run pending.
+
 ## 2026-10-26 — C3-1..C3-4 agreed; S3-40 host half; DDI v1 for review (a1c7678..de519de)
 
 C3-1..C3-4 agreed (version 1). S3-40 host half over the ten kernels of record: one k46 ABI for 68040 and 68060 (the two
