@@ -196,6 +196,15 @@ PY
 	edit "$H" "$W/$l-fat/hello" <<'PY' && refused "a file of 256 KiB" $l "$W/$l-fat/hello" "not under 256 KiB"
 d += bytes(262144 - len(d))
 PY
+	# a demand-class module whose load needs over 160 KiB: warned, not refused (30 section 8)
+	mkbad $l wide "$WRAP"'char wide_space[170000];\nMOD_MISC_WRAPPER(wide, l, u, "x");\n' "$M0"'wide\twide\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-wide/out/mod.d/wide" > "$W/wide.out" 2>&1 &&
+		   grep -q "warning: a demand-class load holds about" "$W/wide.out" &&
+		   ! grep -q "demand-class load" "$W/hello-$l.log"; then
+			pass "$l: a demand-class module over 160 KiB of load working set is warned about, not refused"
+		else
+			fail "$l: working-set warning"; cat "$W/wide.out"
+		fi
 	mkbad $l tierc "$WRAP"'MOD_MISC_WRAPPER(tierc, l, u, "x");\n' "$M0"'$tier core\ntierc\ttierc\n' &&
 		refused "tier=core without build=" $l "$W/$l-tierc/out/mod.d/tierc" "needs build="
 	# a dependency's globals count only when it is named (-d and depend=)

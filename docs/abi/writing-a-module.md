@@ -174,6 +174,10 @@ symbols included, and its file is under 256 KiB. The checker refuses
 anything larger (C3-1 §6). Ask `kmem_alloc` or `kmem_zalloc` for at most
 256 KiB at a time. A `KM_SLEEP` request above that on a running box
 never returns. Check every `KM_NOSLEEP` result for 0 (C3-6 §1).
+A demand-class module loads after multi-user, when k46 gives a module
+only about 320 KiB in all. The checker warns when its load (file
+buffer, tables and image together) needs more than 160 KiB. Such a module
+belongs in boot class (30 §8).
 
 ## 7. Linking other objects in
 

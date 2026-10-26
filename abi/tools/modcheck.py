@@ -34,7 +34,9 @@
 # Warns (exit status unchanged) on each COMMON symbol outside the module's
 # own names (its name, its wrapper's prefix): a stock header's tentative
 # definition of a kernel name (ifnet, rawintrq) becomes a private copy in
-# a module.
+# a module.  Warns when a demand-class module's load working set (the
+# core's KM_SLEEP allocations for a load from a file) passes WSET_WARN,
+# half of what k46 gives a module in process context (U2, 30 section 8).
 # One line per problem; exit status 1 if there is any.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -45,6 +47,7 @@ OK_TYPES = (1, 8, 13)                    # PROGBITS, NOBITS, the .moddata type
 OK_RELOCS = range(0, 7)                  # R_68K_NONE .. R_68K_PC8
 IMAGE_MAX = 256 << 10                    # C3-1 section 6: the image at most this,
 FILE_MAX = 256 << 10                     # the file under this (the core reads it whole)
+WSET_WARN = 160 << 10                    # half of k46's 320 KiB in process context (U2)
 CPUS = ('68020', '68030', '68040', '68060')
 PTYPES = ('int', 'bool', 'str', 'hex')
 problems = []
@@ -99,6 +102,21 @@ class Elf:
 
     def defined_globals(self):
         return {y['name'] for y in self.syms if y['bind'] in (1, 2) and y['shndx'] != 0}
+
+
+def wset(e, image):
+    """The core's working set for a load from a file, all held at once
+    (docs/measurements/2026-10-26-u2.md): lf_hashload's buffer (the file
+    rounded up to a power of two, at least 8 KiB), the section, symbol and
+    string tables, the image and the module's symbol table; upper bounds."""
+    buf = 8192
+    while buf <= len(e.b):
+        buf *= 2
+    nsym = len(e.syms)
+    strsz = sum(e.sh[s['link']]['size'] for s in e.sh if s['type'] == SHT_SYMTAB)
+    tables = len(e.sh) * 44 + nsym * 24 + strsz + (101 + nsym) * 4
+    modtab = nsym * 16 + strsz + 4 * (103 + nsym)
+    return buf + tables + image + 15 + modtab
 
 
 def conf(kit):
@@ -421,6 +439,10 @@ def main(argv):
             warn('COMMON symbol %s, outside the module\'s own names: the core gives the '
                  'module a private copy; if a stock header made it a tentative definition '
                  'of a kernel global, the module does not see the kernel\'s' % y['name'])
+    if keys.get('class') == 'demand' and wset(e, image) > WSET_WARN:
+        warn('a demand-class load holds about %d bytes of kernel memory (file buffer, tables, '
+             'image), over 160 KiB, half of what k46 gives a module after multi-user (U2): '
+             'make it boot class or, from stage 4, root class (30 section 8)' % wset(e, image))
     if c['LINE'] == 'k46':
         scan(e, path)
     for w in warnings:
