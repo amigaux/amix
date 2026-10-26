@@ -420,6 +420,15 @@ for IMG; do
 	else
 		fail "$K: the arena offset $ao is not a multiple of 16"
 	fi
+	# and nothing mkident adds raises .data's alignment above 4: .data
+	# follows .text directly in the image, so a higher one opens a gap
+	al=$(for f in "$A/ident.o" "$A/kernel.o"; do
+		m68k-elf-readelf -SW "$f" | awk '$0 ~ / \.data / {print $NF}'; done | tr '\n' ' ')
+	if [ "$al" = "4 4 " ]; then
+		pass "$K: .data stays 4-aligned (ident.o and the spliced kernel)"
+	else
+		fail "$K: .data alignment of ident.o, kernel.o: $al"
+	fi
 	cp "$A/kernel.o" "$A/kernel-a8.o"
 	python3 - "$A/kernel-a8.o" <<'PY'
 import struct, sys
