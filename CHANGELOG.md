@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-3 v2; brief and C2-1 take the cut findings; stage-3 boot rows (7ee4c59..edd9599)
+
+C3-3 version 2: a stage-3 module kernel writes root=/rootfs=, and the first root-class module in a generation is the stage-4
+trigger for gate 3. The kernel brief takes the S3-20/S3-21 findings: post-link steps after the last size-changing step,
+RTH1_DLM, the splice derived from the core's own definitions, the layout rule (.text, .rodata, .data, no padding), addresses
+only from nm. C2-1 caps the module list at 32 and says when it is fresh. 40's gate 5 notes the module kernel's store size
+(4 MiB holds one static plus one module generation). New bench rows S3-B1–B4 and tests/bench/s3-standin.sh, rehearsed on the
+host with both cut kernels bound by the loader's relocator at two addresses.
+
 ## 2026-10-26 — Loader version 2; kbootset sidecar v5 (9febccf..124b86c)
 
 boot2 checks a module kernel's identity record (AXK1) against the manifest (L14 on a mismatch) and fills the arena's AXA1
