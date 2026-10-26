@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — dlmkit -8 from amix-dlm 49239b1, the first kabi 1.2 kits (7175792) — not published
+
+dlmkit30 k30.1.2.261026-8 (md5 06d332e8 / 4068864 B, manifest f04242ed) and dlmkit46 k46.1.2.261026-8 (e098de2e /
+4086272 B, a6ce6e30; PORT_REV 12d416c): iodone, ramdisk_image, vfs_register minor 2 on both lines, root_defer minor 2 on
+k30; block-only modcheck; VSECT1/phystokv on k46. The ramdisk (amix-modules dc433b6) builds against the staged kits
+byte-identical (5523d853 / 054467f6). Staged catalog ef345e73 (-7 root at superseded/repo-20261026-2248). Round trip 114/114;
+gates PASS. modtools and loader-amix need no re-mint (boot1/boot2/modadmin byte-identical at 49239b1). Known: the k46 kit's
+PORT_REV stamps the live port HEAD, so a rebuild fails its pin whenever the port moves — pin a git archive (follow-up).
+
 ## 2026-10-26 — kbootset 1.1.0.261026-16 from amix-dlm f340556; round trip 114/114 on kern46m -71 (c1e18c0, 78fac35) — not published
 
 kbootset -16 (kbootset code as 05f700a): composes root-class modules as root records (`module <name> root … bss= match=
