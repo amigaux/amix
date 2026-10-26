@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -15, dlmkit -5 from amix-dlm 594731b (2e58723..904e209) — not published
+
+kbootset 1.1.0.261025-15: in `media --cd`/`--floppy` gate 3 checks only the root controller (C2-4 v11 §13), `namelist`
+writes /stand/unix 0644 whatever the umask; /sbin/kbootset d44f6a32 = dlm's box build; md5 4531c633 / 188416 B (supersedes
+-14). dlmkit30/46 -5 (KIT_REV 594731b): modcheck warns when a demand-class module's load working set passes 160 KiB, guide
+updated; MONSW_REV amix-modules@c0386d9, kit.conf sources in sh; md5 bf551763 / 4057600 B, e868d694 / 4074496 B; kit-test
+64/64. Staged catalog regenerated in the wave (6bdb0969, three rows); round trip 106/106; both gate selftests PASS.
+
 ## 2026-10-26 — dlmkit -4, modtools -6, loader-amix -6 from amix-dlm 2233745 (bf15f58..8ac06af) — not published
 
 dlmkit30/46 -4 (KIT_REV 2233745): kit.conf's MONSW_REV is `amix-modules@c0386d9` and sources in sh (build.sh checks both);
