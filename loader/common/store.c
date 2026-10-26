@@ -238,17 +238,16 @@ int
 ax_ctl_pick(const ax_u32 *crctab, const ax_u8 a[2048], const ax_u8 b[2048],
 	    struct ax_ctl *c)
 {
-	/* both copies parsed into one scratch each; struct ax_ctl is ~600 bytes */
-	static struct ax_ctl ca, cb;
-	int va = ax_ctl_parse(crctab, a, &ca) == AX_OK;
-	int vb = ax_ctl_parse(crctab, b, &cb) == AX_OK;
+	/* copy A straight into c, copy B into the one scratch: struct ax_ctl is
+	 * 488 bytes of boot2's bss, which its 28 KiB gate counts */
+	static struct ax_ctl t;
+	int va = ax_ctl_parse(crctab, a, c) == AX_OK;
+	int vb = ax_ctl_parse(crctab, b, &t) == AX_OK;
 
-	if (va && (!vb || !AX_SEQ_NEWER(cb.seq, ca.seq))) {
-		*c = ca;
+	if (va && (!vb || !AX_SEQ_NEWER(t.seq, c->seq)))
 		return 0;
-	}
 	if (vb) {
-		*c = cb;
+		*c = t;
 		return 1;
 	}
 	return AX_ENONE;

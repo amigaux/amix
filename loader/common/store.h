@@ -151,7 +151,7 @@ void ax_tally_write(const ax_u32 *crctab, const struct ax_tally *t, ax_u8 buf[20
 int ax_ctl_parse(const ax_u32 *crctab, const ax_u8 buf[2048], struct ax_ctl *c);
 void ax_ctl_write(const ax_u32 *crctab, const struct ax_ctl *c, ax_u8 buf[2048]);
 int ax_ctl_pick(const ax_u32 *crctab, const ax_u8 a[2048], const ax_u8 b[2048],
-		struct ax_ctl *c);
+		struct ax_ctl *c);	/* *c is undefined when it returns AX_ENONE */
 
 /* the boot1 decision for a loader trial (docs/spec/10-boot-loader.md §3.1):
  * returns 0 to take the primary boot2, 1 for the secondary; *write_tally is
