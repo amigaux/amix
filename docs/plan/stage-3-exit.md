@@ -41,20 +41,22 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 
 | Row | k46 | k30 |
 |---|---|---|
-| S3-43-1 the generation | | |
-| S3-43-2 load, backstop, unload (allowed, pinned), dependency, M-SIG3 at `modload`, dependency load and first open, relocation oracle | | |
-| S3-43-3 development load, kabi refusal (family, major, minor, pin), bad-object refusal (`SHT_REL`, type, zero match key, name over 14, version 1, off-list symbol) | | |
-| S3-43-4 a dependency outside the generation | (k30 only if the 4 MiB store refuses) | |
-| S3-43-5 L14 | | |
-| S3-43-6 L5 (as L2) | | |
-| S3-43-7 128 MB | | |
+| S3-43-1 the generation | PASS (N65) | PASS (N66) |
+| S3-43-2 load, backstop, unload (allowed, pinned), dependency, M-SIG3 at `modload`, dependency load and first open, relocation oracle | PASS (N65; run-time lines through `modadmin -K` and `-L`; oracle "t43rel at 0x401a4c00: 83 words, 332 bytes of 332, identical to the host loader") | PASS (N66; run-time lines through `-L`; oracle at 0x402fcc00, identical) |
+| S3-43-3 development load, kabi refusal (family, major, minor, pin), bad-object refusal (`SHT_REL`, type, zero match key, name over 14, version 1, off-list symbol) | PASS (N65): every refusal's errno as C3-1 §4 | PASS (N66) |
+| S3-43-4 a dependency outside the generation | not run, as the row allows: the box's kbootset -12 did not deflate (gate 5: 2 433 024 bytes needed, 972 800 free); kbootset -14 deflates on the box | PASS (N66): "dlm: monsw is not a member of the booted generation" |
+| S3-43-5 L14 | PASS (N65): L14 to generation 3 after the rollback, then L8 | PASS (N66): L14 to generation 4, then L8 |
+| S3-43-6 L5 (as L2) | PASS (N67): "the arena needs 337 bytes, it has 64", fallback to generation 1 | PASS (N68): 367 bytes, fallback to generation 1 |
+| S3-43-7 128 MB | PASS (N69, 128 MB at 0x08000000: load, dependency, oracle at 0x4035b400 identical) | at 64 MB, the line's maximum (N66). 128 MB in one bank (N70) failed: K030-U runs in 64 MiB at most, so boot2 caps k30 there (S3-43-9) |
+| S3-43-8 Zorro III RAM beside and alone (boot2 e36c1c55) | PASS (N71 beside: kernel at 0x08000000; N73 alone: "no fast memory below 0x40000000 to run the kernel in", L4) | PASS (N72 beside: kernel at 0x04000000; N74 alone: the same refusal) |
+| S3-43-9 the k30 64 MiB cap (boot2 6147ab3b) | — (k30 only) | PASS (N76: 128 MB bank, "kernel bound at 08000000", 67 108 832 bytes of fast memory) |
 
 ## 4. The measurements (S3-41; 90 §3)
 
 | ID | k46 | k30 |
 |---|---|---|
 | U1 status register, clock and `KM_NOSLEEP` at dmainit and at the hook (U1 kernels, core patch 0023) | done (N77): sr 0x2704 / 0x2700 (priority 7), the clock still at both, `KM_NOSLEEP` up to 2 MiB gives memory at 128 MB | done (N78): sr 0x2704 at both, the clock still, `KM_NOSLEEP` 1 MiB yes, 2 MiB fails at 64 MB (`docs/measurements/2026-10-26-u1.md`) |
-| U2 kernel memory for module images at 128 MB | first run void (u4big held its memory: 256 KiB); rerun clean with 64 KiB chunks | first run void (512 KiB); rerun |
+| U2 kernel memory a module gets in process context | done (N81, 128 MB): 5 × 64 KiB = 320 KiB with `KM_NOSLEEP`, all given back (first run N79 void) | done (N82, 64 MB): 10 × 64 KiB = 640 KiB, all given back (`docs/measurements/2026-10-26-u2.md`; first run N80 void) |
 | U4 large kmem requests return | done (N79): `KM_NOSLEEP` 256 KiB yes, 512 KiB fails; `KM_SLEEP` 512 KiB **never returns** | done (N80): `KM_NOSLEEP` 512 KiB yes, 1 MiB fails; `KM_SLEEP` 1 MiB **never returns** (`docs/measurements/2026-10-26-u4.md`) |
 | U15 file loading in process 0 | answered: unsafe (S3-B5, core patch 0017) | answered |
 
