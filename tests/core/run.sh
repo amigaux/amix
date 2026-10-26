@@ -141,10 +141,16 @@ fi
 m68k-elf-nm -u "$B/obj/dlm.o" | awk '$1=="U"{print $2}' | sort -u > "$B/obj/dlm.undef"
 
 # the platform hook (core/plat): built as the kernel builds it, and on the host
+rm -f "$B/plat.warn"
 for f in amiga k30/line k46/line; do
 	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
-		-I"$R/loader/common" -c "$R/core/plat/$f.c" -o "$B/obj/plat-$(echo $f | tr / -).o" 2>> "$B/kobj.warn"
+		-I"$R/loader/common" -c "$R/core/plat/$f.c" -o "$B/obj/plat-$(echo $f | tr / -).o" 2>> "$B/plat.warn"
 done
+if grep -v 'types.h:182\|In file included\|^ *from ' "$B/plat.warn" | grep . > "$B/plat.other"; then
+	fail "core/plat objects: warnings beyond the stock headers'"; cat "$B/plat.other"
+else
+	pass "core/plat objects: no warnings of their own"
+fi
 if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -I"$R/loader/common" -o "$B/test-bin/t_plat" \
 	"$R/tests/core/t_plat.c" "$R/core/plat/amiga.c" "$R/loader/common/bootinfo.c" &&
    "$B/test-bin/t_plat" > "$B/t_plat.log" 2>&1; then
@@ -361,8 +367,8 @@ for IMG; do
 	     $2=="data" {printf "\t.data\n\t.globl\t%s\n%s:\n\t.long\t0\n", $1, $1}' \
 		"$A/stubbed" > "$A/stubs.s"
 	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
-	if [ -s "$A/stubbed" ]; then
-		echo "$K: providers still missing (stubbed for the gate): $(awk '{printf "%s ", $1}' "$A/stubbed")"
+	if [ -s "$A/stubbed" ]; then	# a lost provider fails the run (stubbed only so later checks run)
+		fail "$K: allowlisted names with no provider in the spliced kernel: $(awk '{printf "%s ", $1}' "$A/stubbed")"
 	else
 		pass "$K: every allowlisted name has its real provider in the spliced kernel"
 	fi

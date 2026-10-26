@@ -61,6 +61,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kbox.sh
 	B=$(B) sh tests/host/prfcheck.sh
+	sh tests/host/upstream.sh
 	sh tools/mkkreg.sh | cmp -s - kbootset/kreg.c || \
 		{ echo "kbootset/kreg.c differs from abi/registry/majors: sh tools/mkkreg.sh > kbootset/kreg.c"; false; }
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
