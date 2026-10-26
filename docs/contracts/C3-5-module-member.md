@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 8
+# C3-5 — the module package and the per-module manifest record, version 9
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -12,7 +12,9 @@
   the module's NOBITS and COMMON, which boot2 reserves behind its file (§3); version 7
   (2026-10-26, C4-4 version 3): `safe=1` marks the root records of the safe-mode
   set (§3); version 8 (2026-10-26, amix-modules' ramdisk): its short name
-  (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2). Every consumer
+  (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2); version 9
+  (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1).
+  Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -66,6 +68,7 @@ per line**:
 | z3660rtg | `zrtg` | `zrtg30` / `zrtg46` |
 | monsw | `monsw` | `monsw30` / `monsw46` |
 | ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
+| gayle | `gayle` | `gayle30` / `gayle46` |
 
   A new module's owner adds its row in a version bump of this contract.
 

@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 4
+# C3-6 — what a driver changes to become a module, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -12,7 +12,10 @@
   version 3 (2026-10-26, from S3-B5): every module has an `_unload`,
   which the core also calls when a load fails after `_load` succeeded
   (§1.1, §2); version 4 (2026-10-26, from S3-44-3): the interrupt level
-  each entry runs at, and where a self-test can complete (§1.3). The
+  each entry runs at, and where a self-test can complete (§1.3); version
+  5 (2026-10-27, from the Gayle IDE module plan): a self-test by a real
+  command where a software raise cannot set the board's pending state
+  (§1.3). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -123,6 +126,13 @@ packages.
   (SETCLR | EXTER) with the board's own interrupt-pending state set, as
   the board would. The stock CIA-B handler runs once as well, as it does
   for every level-6 interrupt the board raises; that is harmless.
+- **A board whose pending state software cannot set** self-tests with a
+  real command that interrupts and moves no data, in process context
+  with the queue idle. The A4000's Gayle IDE is one: its handler claims
+  only with the INTRQ mirror set (0xDD3020 bit 7), which an `INTREQ`
+  raise does not set, so the driver issues ATA READ VERIFY SECTOR(S) (one
+  sector) and waits in one-tick `timeout`/`sleep` rounds for its handler
+  to count the interrupt.
 - **The level each entry runs at** (version 4; read from both kernels of
   record, S3-44-3). A software raise is taken only above the level the
   code runs at:
