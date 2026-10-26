@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — k46 dma_alloc through the DTT0 alias (C4-5 v4); C3-5 v10 package names (01024f5, 9075fb2, ebc52f9)
+
+The k46 heap lies above 0x40000000 (vtop(va) != va; the port's D42 walk), so bbd20b6's dma_alloc returned 0 on every k46
+kernel. Now: kmem_alloc(len + 20), every page vtop'd, the run contiguous and below 0x40000000 or freed; the returned pointer is
+the physical address (DTT0, cache-inhibited); the heap VA kept in a header for dma_free; the block pushed and invalidated by
+physical line at alloc and free via the port's prepare/complete FROM_DEVICE. 10 host checks; harness 255/255; make test 692/0.
+kern46m must pin 9075fb2 or later; kern30m -13 and dlmkit -9 at bbd20b6 unaffected. C3-5 v10: `z3660scsi | zscsi | zscsi30 /
+zscsi46` (as minted) and `a4091 | a4091 | a409130 / a409146`.
+
 ## 2026-10-27 — C3-5 v9 (gayle row); C3-6 v5 (self-test by a real command) (3511139)
 
 C3-5 §1.1 `gayle | gayle | gayle30 / gayle46`, no device nodes (sd owns the disk majors). C3-6 §1.3: a board whose pending
