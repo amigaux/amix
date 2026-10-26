@@ -1,0 +1,330 @@
+Subject: marc_root: link the arena's root modules before the root mounts
+
+30 section 3, section 2 patch 16's root half (S4-04), contract C4-4
+section 4.  dlm_marc_root(), the kernel's hook in rth1_mountroot before
+rth1_apply, walks the arena directory in order in no-sleep mode (level 7,
+the clock stopped, U1).  Each entry's CRC-32 is taken again: bytes that
+changed after boot2 checked them are not linked.  The manifest copy must
+hold a root record of that name and crc32=, and gives its bss=.  Then
+dlm_load_mem.  ENXIO (no such board) is silent, any other error one line.
+In safe mode only the safe-mode members (flag 0x4) link.  dlm_arena_init
+keeps the arena's address; dlm_crc32 gives the core the loader's CRC-32.
+A file off 16 in the arena now has its own line (it shared the bss
+one in 0033).  The state harness builds arenas as boot2 does and checks
+each case.
+
+--- a/dlm_arena.c
++++ b/dlm_arena.c
+@@ -26,6 +26,18 @@
+ #define	AXA1_ENT	48
+ 
+ static unsigned long crctab[256];
++char	*dlm_arena_base;		/* set when the directory is valid */
++
++/* the loader's CRC-32 over n bytes (loader/common/crc32.c) */
++unsigned long
++dlm_crc32(p, n)
++	char *p;
++	unsigned long n;
++{
++	if (crctab[1] == 0)
++		ax_crc32_init(crctab);
++	return M32(ax_crc32(crctab, p, n));
++}
+ 
+ static int
+ hexval(c)
+@@ -111,6 +123,7 @@
+ 			sum += G32(id + 4 * i);
+ 		if (M32(sum) == 0 && dlm_arena_check(stext + G32(id + 40), (long)G32(id + 44),
+ 		    &dlm_man, &dlm_manlen, &dlm_mangen) == 0) {
++			dlm_arena_base = stext + G32(id + 40);
+ 			printf("dlm: modules from generation %d's manifest\n", (int)dlm_mangen);
+ 			return;
+ 		}
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -964,7 +964,12 @@
+ 	if (ld->ld_inplace) {
+ 		/* the image is the file and its tail, in the arena (C4-4 section 4) */
+ 		n = (ld->ld_inplace + 15) & ~15L;
+-		if (((unsigned long)lf->lf_mbuf & 15) || (long)m->m_size - n > lf->lf_bss) {
++		if ((unsigned long)lf->lf_mbuf & 15) {
++			printf("dlm: root module %s does not start on 16 in the arena\n", name);
++			e = ENOLOAD;
++			goto fail;
++		}
++		if ((long)m->m_size - n > lf->lf_bss) {
+ 			printf("dlm: root module %s: its bss is over the reserved %d\n", name,
+ 			    (int)lf->lf_bss);
+ 			e = ENOLOAD;
+--- a/dlm.h
++++ b/dlm.h
+@@ -364,6 +364,10 @@
+ /* manifest-only loading (30-module-core.md section 2, patch 17; C3-4) */
+ extern char *dlm_man;			/* the manifest the loader booted, or 0 */
+ extern long dlm_manlen, dlm_mangen;
++extern char *dlm_arena_base;		/* the arena, when its directory is valid */
++extern unsigned long dlm_crc32();	/* (p, n): the loader's CRC-32 */
++extern int dlm_root_pass();		/* (arena): marc_root's root modules */
++extern void dlm_marc_root();		/* the kernel's hook in rth1_mountroot */
+ extern int dlm_devload;			/* development load this boot */
+ extern int dlm_arena_check(), dlm_man_member();
+ extern void dlm_arena_init();
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -22,6 +22,9 @@
+  * Each outcome is one console line; what loaded is in kinfo's module list.
+  * In safe mode nothing loads (70-static-floor.md section 4).
+  *
++ * marc_root (S4-04, contract C4-4 section 4) is here too: the root-class
++ * modules boot2 placed in the arena, linked before the root is mounted.
++ *
+  * K&R C.
+  */
+ 
+@@ -187,3 +190,120 @@
+ 		buf[k += m] = 0;
+ 	}
+ }
++
++/* ---- marc_root (30 section 3, section 2 patch 16; C4-4 section 4) ---- */
++
++#define	AXA1_HDR	32
++#define	AXA1_ENT	48
++#define	AXF_SAFE	0x4		/* a safe-mode member */
++
++/*
++ * The manifest's root record for name: 0 with its bss= (0 if absent) if
++ * there is a "module <name> root" record whose crc32= is crc, else ENOENT.
++ */
++static int
++man_root(name, crc, bssp)
++	char *name;
++	unsigned long crc;
++	long *bssp;
++{
++	char *p = dlm_man, *lim = dlm_man + dlm_manlen, *l, v[16], nm[MODMAXNAMELEN];
++	unsigned long c;
++	long b;
++	int k, h;
++
++	for (; p && p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p < 8 || bcmp(p, "module ", 7) != 0)
++			continue;
++		recname(p + 7, l, nm);
++		if (strcmp(nm, name) != 0 || l - (p + 8 + strlen(nm)) < 5 ||
++		    bcmp(p + 8 + strlen(nm), "root ", 5) != 0)
++			continue;
++		if (!attr(p + 8, l, "crc32=", v, sizeof v) || strlen(v) != 8)
++			return ENOENT;
++		for (c = 0, k = 0; k < 8; k++) {
++			h = v[k] >= '0' && v[k] <= '9' ? v[k] - '0' : v[k] >= 'a' && v[k] <= 'f' ?
++			    v[k] - 'a' + 10 : -1;
++			if (h < 0)
++				return ENOENT;
++			c = c << 4 | h;
++		}
++		if (M32(c) != M32(crc))
++			return ENOENT;
++		b = 0;
++		if (attr(p + 8, l, "bss=", v, sizeof v))
++			for (k = 0; v[k]; k++) {
++				if (v[k] < '0' || v[k] > '9' || b > 0x1000000L)
++					return ENOENT;
++				b = b * 10 + (v[k] - '0');
++			}
++		*bssp = b;
++		return 0;
++	}
++	return ENOENT;
++}
++
++/*
++ * The root-class modules in the arena at a, in directory order, in
++ * no-sleep mode: process 0 at level 7 with the clock stopped (U1).  For
++ * each entry its bytes' CRC-32 again (bytes changed after boot2 checked
++ * them are not linked, and that boot never reaches multi-user); the
++ * manifest copy's root record with that name and crc32=, and its bss=;
++ * then dlm_load_mem.  ENXIO (no such board) is silent; any other error
++ * is one line.  In safe mode only the safe-mode members link (70 section
++ * 4).  Returns how many linked.
++ */
++int
++dlm_root_pass(a)
++	char *a;
++{
++	struct dlm_mod *m;
++	char *e, name[16];
++	unsigned long off, len, used, want;
++	long i, count, bss;
++	int n = 0, err;
++
++	if (a == 0 || dlm_man == 0 || !dlm_inited)
++		return 0;
++	count = G32(a + 12);
++	used = G32(a + 24);
++	dlm_nosleep = 1;
++	for (i = 0; i < count; i++) {
++		e = a + AXA1_HDR + AXA1_ENT * i;
++		bcopy(e, name, 16);
++		name[15] = 0;
++		off = G32(e + 16);
++		len = G32(e + 20);
++		want = G32(e + 28);
++		if (G32(e + 24) != 1 || (dlm_safe && !(G32(e + 32) & AXF_SAFE)))
++			continue;
++		if (len == 0 || off > used || len > used - off ||
++		    dlm_crc32(a + off, len) != M32(want)) {
++			printf("dlm: root module %s damaged; not linked\n", name);
++			continue;
++		}
++		if (man_root(name, want, &bss) != 0 || ((len + 15) & ~15L) + bss > used - off) {
++			printf("dlm: root module %s is not the booted manifest's; not linked\n", name);
++			continue;
++		}
++		if ((err = dlm_load_mem(name, a + off, (long)len, bss, &m)) == 0)
++			n++;
++		else if (err != ENXIO)
++			printf("dlm: root module %s: error %d\n", name, err);
++	}
++	dlm_nosleep = 0;
++	return n;
++}
++
++/* the kernel's hook in rth1_mountroot, before rth1_apply (30 section 3) */
++void
++dlm_marc_root()
++{
++	int n;
++
++	if ((n = dlm_root_pass(dlm_arena_base)) > 0)
++		printf("dlm: %d root module(s) linked\n", n);
++}
++
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -94,6 +94,11 @@
+ armod('ar1b')
+ armod('ar2', deps=('ar9',))
+ mod('ardm')                         # demand class, offered from the arena
++# marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
++# the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
++# member and rp7 is not
++for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7'):
++    armod(p)
+ 
+ 
+ # sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
+--- a/test/state.c
++++ b/test/state.c
+@@ -600,6 +600,99 @@
+ 	    "arena: a module that is not root class -> ECONFIG");
+ }
+ 
++/* ---- marc_root (30 section 3, section 2 patch 16; C4-4, S4-04) ---- */
++extern long host_km_sleep;
++
++int
++h_enxio(m, a, b)
++	char *m, *a;
++	long b;
++{
++	return ENXIO;
++}
++
++/*
++ * An arena as boot2 fills it: the directory, then each module's file
++ * 16-aligned with a 128-byte tail, and a manifest copy beside it.  flags
++ * per entry; damage flips a byte after the CRC is taken; inman 0 leaves
++ * the module out of the manifest.
++ */
++static char *rp_arena, rp_man[2048];
++
++static int
++rpbuild(names, flags, damage, inman, count)
++	char **names;
++	int *flags, *damage, *inman, count;
++{
++	char *a, *f, line[256];
++	long off, len, i;
++	unsigned long crc;
++
++	if (rp_arena == 0)
++		rp_arena = (char *)(((unsigned long)calloc(1, 0x30000) + 15) & ~15UL);
++	a = rp_arena;
++	bzero(a, 0x20000);
++	strcpy(rp_man, "GMF1\ngeneration 7\nline k46\n");
++	off = (32 + 48 * count + 15) & ~15L;
++	for (i = 0; i < count; i++) {
++		if ((f = arfile(names[i], &len, 0L, 0)) == 0)
++			return -1;
++		bcopy(f, a + off, len);
++		crc = dlm_crc32(a + off, (unsigned long)len);
++		strncpy(a + 32 + 48 * i, names[i], 15);
++		P32(a + 32 + 48 * i + 16, off);
++		P32(a + 32 + 48 * i + 20, len);
++		P32(a + 32 + 48 * i + 24, 1);
++		P32(a + 32 + 48 * i + 28, crc);
++		P32(a + 32 + 48 * i + 32, flags[i]);
++		if (damage[i])
++			a[off + 8] ^= 1;
++		if (inman[i]) {
++			sprintf(line, "module %s root %ld at=0 bss=128 crc32=%08lx sha256=0 match=always\n",
++			    names[i], len, crc);
++			strcat(rp_man, line);
++		}
++		off = (off + len + 15 + 128 + 15) & ~15L;
++	}
++	P32(a + 12, count);
++	P32(a + 24, off);
++	strcat(rp_man, "end crc32=00000000\n");
++	dlm_man = rp_man;
++	dlm_manlen = strlen(rp_man);
++	return 0;
++}
++
++void
++root_tests()
++{
++	static char *n1[] = { "rp1", "rp2", "rp3", "rp5" }, *n2[] = { "rp6", "rp7" };
++	static int f1[] = { 1, 1, 1, 1 }, d1[] = { 0, 1, 0, 0 }, m1[] = { 1, 1, 0, 1 };
++	static int f2[] = { 5, 1 }, d2[] = { 0, 0 }, m2[] = { 1, 1 };
++	char *man = dlm_man;
++	long manlen = dlm_manlen, sl;
++	int n;
++
++	host_handler("rp5_load", h_enxio);
++	check(rpbuild(n1, f1, d1, m1, 4) == 0, "marc_root: an arena of four entries built");
++	sl = host_km_sleep;
++	n = dlm_root_pass(rp_arena);
++	check(n == 1 && byname("rp1") && byname("rp1")->m_base > rp_arena &&
++	    byname("rp1")->m_base < rp_arena + 0x20000, "marc_root: the good entry links, in the arena");
++	check(!byname("rp2"), "marc_root: an entry whose bytes changed after boot2 is not linked");
++	check(!byname("rp3"), "marc_root: an entry the manifest copy does not name is not linked");
++	check(!byname("rp5"), "marc_root: a _load that finds no board (ENXIO) is not linked");
++	check(host_km_sleep == sl && dlm_nosleep == 0,
++	    "marc_root: the pass asks nothing that sleeps, and no-sleep mode ends with it");
++	check(rpbuild(n2, f2, d2, m2, 2) == 0, "marc_root: a second arena built");
++	dlm_safe = 1;
++	n = dlm_root_pass(rp_arena);
++	dlm_safe = 0;
++	check(n == 1 && byname("rp6") && !byname("rp7"), "marc_root: in safe mode only the safe-mode members link");
++	check(dlm_root_pass((char *)0) == 0, "marc_root: no arena, nothing");
++	dlm_man = man;
++	dlm_manlen = manlen;
++}
++
+ /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ static int sr_e[8], sr_n;
+ 
+@@ -1681,6 +1774,7 @@
+ 	kinfo_tests();
+ 	halt_tests();
+ 	arena_tests();
++	root_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
