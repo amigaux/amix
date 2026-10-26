@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — Kit README: a DDI function leaves abi.txt as it is; C4-3 draft, the RAM-disk hand-off (6f1c775, 1724dc2)
+
+abi.txt covers the DDI's data names with sizes and the layouts the core reads, not function names; a function added to
+ddi.list records the minor it entered and the kabi rule binds a caller to that minor. C4-3 draft (agreed): the manifest's
+`ramdisk miniroot <size> at=|file= [z=deflate] crc32=` with `root ramdisk`, `swap none`, `rootfs`, the ramdisk root-class
+module (match=always, b:20, safe=1) written only for a medium's generation (--ramdisk); boot2 inflates the image to the top
+of the largest usable fast region (below 0x40000000, on k30 within the 64 MiB cap), 64 KiB aligned, shortening that
+memory[] entry, AXL1 offsets 116/120, L4 when kernel + arena + image do not fit; the kernel honours the shortened entry, the
+RTH1 half sets rootdev b 20/0, no swap, rootfstype after marc_root linked the ramdisk; the module gets the image through a
+new DDI name `ramdisk_image(&paddr, &size)` (minor 1, root context), unit 0 maps it as a board window, units 1–2 are kmem
+scratch disks within U4's limit, no _halt. build/kit rebuilt at HEAD after every kit-affecting commit from now on.
+
 ## 2026-10-26 — Loader version 3; two drivers on one board refused; the kit makes root-class modules (ec99e40..ba2bcee)
 
 AX_LOADER_VERSION 3; kbootset raises loader-min to 3 on a generation with a root-class record and gate 7 refuses it on a
