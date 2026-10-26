@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 3
+# C3-6 — what a driver changes to become a module, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -11,7 +11,8 @@
   z3660eth's `match=` (§2: a boot-class module needs one, C3-5);
   version 3 (2026-10-26, from S3-B5): every module has an `_unload`,
   which the core also calls when a load fails after `_load` succeeded
-  (§1.1, §2). The
+  (§1.1, §2); version 4 (2026-10-26, from S3-44-3): the interrupt level
+  each entry runs at, and where a self-test can complete (§1.3). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -122,6 +123,25 @@ packages.
   (SETCLR | EXTER) with the board's own interrupt-pending state set, as
   the board would. The stock CIA-B handler runs once as well, as it does
   for every level-6 interrupt the board raises; that is harmless.
+- **The level each entry runs at** (version 4; read from both kernels of
+  record, S3-44-3). A software raise is taken only above the level the
+  code runs at:
+  - **`_load` of a boot- or demand-class module, and `_unload`:** process
+    context, level 0. A spin sees both level 2 and level 6.
+  - **A character driver's `d_open`** (not STREAMS): the opener's process
+    context. The stock `spec_open` does not raise the level.
+  - **A STREAMS driver's or module's open: level 4.** The stock
+    `qattach()` sets SR to 0x2400 around the call, and the core's open
+    trampoline leaves it there. Level 6 is taken, but a raised PORTS
+    (level 2) stays pending until the open returns, so a spin there sees
+    level 6 only. Wait for level 2 with a sleep instead: a `timeout` and
+    `sleep` round of one tick, a few times, which lets the level fall
+    (z3660eth 1.0.0-3). Or run that half of the test at `_load`.
+  - **Root class at `marc_root` (stage 4): level 7, the clock stopped
+    (U1).** No raise is taken there and nothing may sleep. A self-test
+    cannot run at that point: it waits for a later process-context point
+    (the first open, or a pass after boot), and the driver stays polled
+    until it passes.
 - **Level 6.** No spl masks level 6 in these kernels: `spl5`–`spl7`
   raise to level 4 only (C3-2 §3). So:
   - a level-6 handler shares no state with its own lower-level code
