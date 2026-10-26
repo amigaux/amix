@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — U2 answered; the process-context total (0bacad5, 52b903c)
+
+N81 (k46 at 128 MB) / N82 (k30 at 64 MB): in process context after multi-user a module gets 320 KiB (320–383) resp.
+640 KiB (640–703) of KVA in total with KM_NOSLEEP. Spec 30 §8: the working set of a load from a file (file buffer rounded
+to a power of two, tables, image, module table — all at once, all KM_SLEEP; monsw ~15 KB, z3660eth ~57 KB, z3660rtg ~67 KB,
+a cdfs-sized module ~232 KB, a module at the limit > 512 KiB) stays well under k46's total; C3-1's 256 KiB is a ceiling,
+not a budget; larger modules are boot or root class (arena: no kmem for file or image). Spec 90 U2 answered. Exit ledger:
+the S3-43 rows of record (N65–N76) and U2.
+
 ## 2026-10-26 — README: the stale syslog.pid as the conslogging 0 cause (340cfcb)
 
 "conslogging 0 and no syslogd in ps" names its likely cause: the stock /etc/init.d/syslogd trusts a stale /etc/syslog.pid,
