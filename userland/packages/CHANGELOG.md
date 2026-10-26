@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30m k30.1.1.261026-10, the S4-23 k30 root-class kernel (6e5bb14) — not published
+
+K030-U build 68030-261026-10 (kerntools 3405b11) on amix-dlm 4c1acd0 (core 0001–0035, marc_root live): -08's content plus
+the root pass. brel 1c837598 (1722768 B), unix.sym 3c9c6e74, sidecar c4476f3c, abi= fea18182, sdcards=4; ksymgate 12/12.
+md5 d733de8c / 1942528 B. The staged root carries -10 beside kern46m -69 (catalog 10d591cb); the -08 root at
+superseded/repo-20261026-2144. Round trip 106/106; gates PASS. The S4-23 cut has no top-level sidecar copy (the recipe cmp
+is a no-op; the sidecar stays sha-pinned) — kerntools' cut script may restore it.
+
 ## 2026-10-26 — kern46m k46.1.1.261026-69, the S4-22 k46 root-class kernel (27240b0) — not published
 
 KD060-Z module kernel build 68060-261026-69 (port k46-module ab91c80) on amix-dlm 4c1acd0 (core 0001–0035): -65's content
