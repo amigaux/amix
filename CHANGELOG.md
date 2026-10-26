@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Exit ledger: S3-44-3 and S3-45 PASS; S3-46 on the A4000D (85b7026, baabf5c)
+
+S3-44-3 PASS on both lines with z3660eth 1.0.0-3 (N90, N91; the level-4 STREAMS open explained 1.0.0-2, intrl2=0 confirmed
+it). S3-45, the exit row, PASS on both lines (N88–N92): network and graphics from modules, the monitor switch, an apkg
+upgrade of module packages building and committing generation 2, rollback; a monsw-only upgrade with identical objects
+correctly commits nothing. S3-46's exit evidence is the A4000D: every stage-3 module is the Z3660 card's, the same in either
+box; the A4000T's rows (its onboard 53C710 and expansion bus) open stage 4's metal after its EAD_12/13 repair (spec 80 §2,
+plan S3-46). README: on a 1.1 install syslogd files nothing until the install ships /usr/ccs/bin/m4; -L is the record.
+
 ## 2026-10-26 — C3-6 v4 §1.3: the interrupt level each driver entry runs at (d7af4b8, 937a373, 32ca41f)
 
 _load/_unload of a boot- or demand-class module: level 0; a character d_open: the opener's level (spec_open writes no SR);
