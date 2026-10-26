@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 2026-10-26 — Exit ledger: S3-44-1 and -2 PASS; -3 open (9a3c39f)
+## 2026-10-26 — Exit ledger: S3-44-1 and -2 PASS; -3 open (93c5e2d)
 
 N86/N87: software interrupts reach both chains at once (0 spins), the level-6 claimer and counter counts are equal; a full
 level-6 chain refuses the ninth handler with 168 and z3660eth falls back to polled; monsw's open is silent and loads it, a
