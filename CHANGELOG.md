@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — kernel printf formats %d %x %s only; kit fixes (2c62201, c722e41)
+
+The module core prints only the formats the 1992 kernel printf has: the arena line reads "modules from generation N's manifest"
+again (patch 0009 %ld → %d with a cast; patch 0006 %c → %s). tools/prfcheck.py in make test and make core refuses any other
+conversion in kernel-side code; make core 115/115. Kit: a Master without $cpu gets the line's default (DEFCPU, MODCPU
+override); a kit built from uncommitted inputs labels itself -dirty; the guide covers DEPS and the modfix message,
+LOCALIZE_OBJCOPY, the "amiga/console/…" include form and where the %.o rule looks. Kits rebuilt: KIT_REV=c722e41.
+
 ## 2026-10-26 — the ABI kit (S3-10) (8c9172d, 418ead5)
 
 `make kit` builds a kit per line: the module core's headers, sys/amixddi.h (DDI v1; the stock sysroot already has a sys/ddi.h
