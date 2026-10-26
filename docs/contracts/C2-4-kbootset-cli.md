@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 7
+# C2-4 — `kbootset` as a called program, version 8
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -178,4 +178,46 @@ The generation id and the `created` time are not compared.
   - rows and tests that need a new generation from the same packages.
 - **`commit --spec`** is never compared. It writes the generation the
   spec gives.
+
+## 11. Module members (S3-16, C3-5)
+
+From kbootset -10 (amix-dlm a64aee1) on, a generation takes
+the module packages installed under the root, as C3-5 §2 says.
+
+- **What kbootset reads under the root** (the box's `/`, or `-R <root>`):
+  - `/etc/conf/mod.d/<name>`: each module object, with its apkg record
+    (C2-2, `role module`), which gate 1 checks;
+  - `/etc/conf/modreg.d/<name>`, then `/etc/conf/modreg.local.d/<name>`:
+    `param <pname>=<value>` and `disable`, a later line winning.
+  No module package means a kernel-only generation, as before.
+- **`build`** puts every module that is not disabled through gates 1 to 3
+  (C3-5 §2). It copies each object byte for byte to
+  `/stand/gen/<id>/mod/<name>`. Into the build it writes one `module`
+  record per member, boot class first, then demand class, each in
+  `depend` order, then one `param` record per declared parameter, its
+  value in C3-1 §3's form. A refusal names the module and the gate, and
+  exits 4.
+- **`commit`** checks each copy against its record again (size and
+  SHA-256: `… changed since kbootset build`, gate 1), and gate 2 against
+  the kernel as it is now. The records go into the manifest after the
+  kernel's.
+- **`media … -R <root>`** composes the medium's pristine generation
+  (id 1) the same way. The records go into the medium's manifest, and the
+  copies go to `<root>/stand/gen/1/mod/<name>`. The medium's root
+  filesystem must carry that tree at the same path: the module core loads
+  `path=` from the root filesystem and checks it against the manifest's
+  SHA-256. **The installer** builds the medium from a staging root where
+  the module packages are installed, and copies `/stand/gen/1/mod/` onto
+  the target root with the rest of `/stand`. A medium whose staging root
+  has no module package gets no module record.
+- **`check`** hashes each module copy the manifests name (C2-5).
+- **`status`** lists the booted generation's members, each marked from
+  kinfo's module list (C2-1 offset 536): `module <name> (boot): loaded`;
+  `… not loaded (the console says why)`; for demand class `… not loaded
+  (loads at the first open of its device)`.
+- **The unchanged-generation comparison** (§10) compares the module
+  records and the parameters with the rest.
+- **On the box,** `modadmin` (amix-dlm 55722ef on, built with `make box`)
+  lists the loaded modules and reads a module's tunables and counters by
+  name (`-s`, `-Q`, `-k`, `-p`, `-w`).
 
