@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset: a module with an absent depend= is left to gate 3's message (fa7a4ab)
+
+The import check skips a module whose depend= names a module the generation lacks, so gate 3's "module X depends on Y, which is
+not in the generation" fires instead of "needs a newer kernel cut". kimports.sh has the case. For kbootset -19.
+
 ## 2026-10-27 — kbootset gate 2: every module import exported by the kernel's ksym block; C3-3 v7; 40 §3.1, §7 (101e9a3…3360c7e)
 
 gates() lifts the kernel's KSYM v2 block through the sidecar's ksym= (binding a copy with the loader's ax_rel); each module's
