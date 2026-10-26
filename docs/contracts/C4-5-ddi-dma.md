@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 7
+# C4-5 — DDI v1.2, the DMA interface, version 8
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -13,7 +13,9 @@
   (§2.2); the provider as built (§5.4); version 6 (2026-10-27, the
   Bench's N109b): the entry-0 decode, the identity map cacheable, so
   §5.4's read-after-complete rule stays (§5.3); version 7 (2026-10-27):
-  the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3). Other
+  the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3); version
+  8 (2026-10-27, from N109's sense lines): `dma_forcebounce` never
+  bounces `dma_alloc` memory (§5.3). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
@@ -221,7 +223,14 @@ pool does not promise.
 
 - **Two test hooks, kernel globals set from the box through `/dev/kmem`
   (amix-kerntools `tools/kmemrw`), never in production:**
-  - `dma_forcebounce` nonzero bounces every segment, reachable or not.
+  - `dma_forcebounce` nonzero bounces every segment, reachable or not,
+    **except `dma_alloc` memory** (version 8): the pool's extents, and in
+    heap mode each block `dma_alloc` gave. §2.2 promises such memory is
+    never bounced, and a bounce of a line the chip wrote would copy stale
+    bytes back over it at complete. Found on N109: the a4091's
+    `FROM_DEVICE` sync over its status line was bounced under the hook, the
+    copy-back overwrote the chip's status byte, and dd retried a phantom
+    error (`status, NO SENSE, retried`). Production was never affected.
     Amiberry's bank at 0x08000000 is reachable by emulated Zorro DMA, so a
     missed bounce passes in emulation and only metal shows it. Measured:
     N109 (a4091-k30 1.0.0-3 on kern30m -14), a raw 2 MiB read and `cp` and
