@@ -88,8 +88,22 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
       the port's switch is `Z3660_NET=off`, branch `k46-module`, d0dbfea;
    2. **kinfo**, with its kabi set to `$KABI` (step 8);
    3. **the core's splice**, below;
-   4. **last, fpe** (k46) or **`elf2brel`** (k30). Steps 9 and 10 run on
-      the kernel before `elf2brel`, and on k46 on fpe's output.
+   4. **last, fpe** (k46) or **`elf2brel`** (k30).
+
+   **Where steps 9 and 10 go.** They run on the last form whose section
+   sizes are final. Any later step may patch words in place, never grow or
+   move a section, and `mkident.py --check` runs again on the form that
+   ships.
+   - **k46** (the port's S3-20 run, 2026-10-26): fpe → `sddevsize` →
+     kerntools' W-D7 inject → steps 9 and 10 (`mkksym -f`, `mkident.py
+     --fill`, the gate) → emit. W-D7 grows `.text` by 124 bytes after fpe,
+     which moves every `.data` image offset, so steps 9 and 10 cannot run
+     on fpe's output. Emit patches `.data` words only.
+   - **k30:** steps 9 and 10 on the `.etrel`, then `elf2brel`. The station
+     checks its own post-steps the same way: nothing after `--fill` may
+     change `.text` or `.data` sizes, and `elf2brel` must add no padding
+     between them, so the brel's image is `.text` then `.data` exactly as
+     the `.etrel` laid them out.
 
    The core's splice is the adopted core's method (core map §8):
    - `objcopy --weaken-symbol` on `dmainit`, `execsw`, `fmodsw`,
@@ -116,7 +130,10 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
 8. **The kernel hooks** (the kernel tree's own change):
    - `dlm_marc_post()` is called once after `vfs_mountroot` returns (in
      `rth1_mountroot`), or from the first `sysinit` entry if U15 says
-     loading in process 0 is unsafe;
+     loading in process 0 is unsafe. The port's call in `src/rth1.c` is
+     guarded by `RTH1_DLM`. kerntools compiles the same `rth1.c` for the
+     030 line, so S3-21 builds it with `-DRTH1_DLM`; the static families
+     build it without, and keep no call to a core they do not link;
    - **kinfo's kabi is `$KABI`, not "static":**
      - k30: compile amix-kerntools' `kinfo030.c` with
        `-DKINFO_KABI=\"k30.1.0\"` (it takes the define, `kinfo_kabi[]`);
@@ -124,7 +141,8 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
    - **kinfo's module list (C2-1 offset 536):** on every read, kinfo calls
      `n = dlm_kinfo_list(buf, max)` (core patch 0013). It writes `n`
      entries of 32 bytes (name NUL-padded to 24, load address, size) and
-     sets the count at 536, the `length` (540 + 32 × n) and the check;
+     sets the count at 536, the `length` (540 + 32 × n) and the check.
+     `max` is 32 (C2-1 §2);
    - **k30's build id** for the core is kinfo's `kinfo_buildid[]`, stamped
      by the build; `core/plat/k30/line.c` reads it. k46 reads `buildid`.
 9. **Fill after the final link:**
@@ -156,8 +174,9 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
 - **(c)** `hooksw` is strong and the weak `plat_dmainit` default is gone
   (patch 0013); `core/plat` provides `plat_dmainit`. No rebind is needed.
 - **(d)** The order is base chain (static network, RTG and monsw left
-  out) → kinfo → the core's splice → fpe last; steps 9–10 on fpe's
-  output. Step 7.
+  out) → kinfo → the core's splice → fpe last. Steps 9–10 run after the
+  last step that changes a section's size (on k46 after W-D7, not on fpe's
+  output; the S3-20 run found it). Step 7.
 - **(e)** M-REG1 now counts a row filled at boot (a store relocated
   against `cdevsw` inside the row). On the static -51, major 51 is filled
   at boot by z3660eth's init, and the record is corrected. The module

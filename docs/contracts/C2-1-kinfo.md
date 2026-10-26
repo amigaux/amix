@@ -38,10 +38,12 @@
 | 464 | 4 × 16 | sd card table: card number k, the sd card index (the device digit `c` of `cNdMsK` is 8k + unit) (4), controller id (§2.1) (4), board base, 0 for the motherboard (4), flags: 0x1 motherboard controller (4) |
 | 528 | 4 | fast memory in bytes: all non-chip RAM the kernel uses |
 | 532 | 4 | chip memory in bytes |
-| 536 | 4 | number of loaded modules (0 on a static kernel) |
+| 536 | 4 | number of loaded modules (0 on a static kernel), at most 32 |
 | 540 | n × 32 | per module: name NUL-padded (24), load address (4), size (4) |
 
-`length` = 540 + 32 × modules.
+`length` = 540 + 32 × modules, so at most 1 564 bytes. With more than 32
+modules loaded, the record lists the first 32 the core reports
+(`dlm_kinfo_list`, load order) and the count says 32.
 
 ### 2.1 Controller ids
 
@@ -92,3 +94,7 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
   - the record is built on first open.
 - The module entry stays name, address and size. The header's length field
   leaves room to grow.
+- From the port station's implementation (2026-10-26; wording, version 2
+  and the record's version field unchanged): the module list holds at most
+  32 entries, as the port's kinfo builds it. Readers size their buffer for
+  1 564 bytes (kbootset reads 2 048).
