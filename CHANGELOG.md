@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-1 agreed (version 1); C4-4 draft: the arena filled (6c78656, cc5cbc3)
+
+C4-4: boot2 places every `module … root` record whose match holds, in manifest order (`zorro:` against
+bootinfo.autocon[], `mobo:` always with the module's gated probe deciding in _load, `always`); kbootset writes the records
+in depend order, the core links in directory order; flag 0x2 "forced" reserved. A CRC-32 mismatch on a module is L3 then as
+L2 (next generation, then the menu); L5 on overflow. Safe mode places only the root controller's module (from the `root`
+record), the `rootfs` module and their depend closure, flag 0x4. L7: no root controller on the floor or placed — print the
+boards and boot anyway. At marc_root the core re-checks the CRC-32 ("root module %s damaged; not linked"), membership,
+relocates in place, _loads; ENXIO silent, other errors print and unlink after undoing registrations. AXA1 stays C3-4 v1.
+
 ## 2026-10-26 — C4-1 draft: sd_register and the four-card contract (323ace9, 0bd8508, b74484d)
 
 Minor bits: unit 0–2, card low bit 3, slice 4–6, card high bit 7; names in hex c0–cf and c10–c1f for cards 2–3 (card×8 +
