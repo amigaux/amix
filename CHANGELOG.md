@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — spec 10 §7.3: a one-shot request boots the default (8e0b17a)
+
+A one-shot request takes its boot ahead of a pending trial, and devload and safe requests boot the default generation,
+never the trial (select.c's design: a diagnostic boot of the known-good default must not spend a new generation's one
+attempt); a loader on trial also boots the default and consumes the request. Mark a new generation good before
+`kbootset next devload`. README U2/U4 sequencing (the Bench's two void S3-41 tries).
+
 ## 2026-10-26 — U1 answered: root-class context at boot (806768d, b2930e4)
 
 N77 (k46 5c4fad37) / N78 (k30 ce689ab4): at dmainit and at the rth1_mountroot hook both lines run at priority 7 (sr 0x2704
