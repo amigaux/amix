@@ -1,7 +1,9 @@
-# C4-2 — what a root-class driver changes, version 1
+# C4-2 — what a root-class driver changes, version 2
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
-  contract beside C3-6, and `root_defer` a DDI call (core patch 0036).
+  contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
+  version 2 (2026-10-26, from the a4091 station): the A4770's key in the
+  A4091 row, and the A4091 polled in its first module form (§8).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -132,7 +134,7 @@ nothing for it, and `_load` cannot tell the difference.
 | Driver | Owner | `match` | `rank` | Interrupt | `_halt` | Notes |
 |---|---|---|---|---|---|---|
 | z3660scsi | amix-z3660scsi | `zorro:144b:01,mobo:z3660-window` | `z3660` | none: the piscsi mailbox is synchronous, polled | mailbox idle | ZS-05's armed register access (C3-6 §1, S4-63) |
-| A4091 / A4092 | amix-a4091 | `zorro:0202:54,zorro:c0de:01` | `zorro` | INT2 through `root_defer` | stop SCRIPTS | the per-card arrays sized to 4 or bounded (C4-1 §2.3); DMA through C4-5 |
+| A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target) | `mobo:a4000t-710` (gated by chipset identity; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
 | ramdisk | amix-modules | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
