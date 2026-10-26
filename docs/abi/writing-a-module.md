@@ -208,7 +208,11 @@ LOCALIZE = builtinfont
 
 The kit compiles with `-m68040`. Its `sys/immu.h` and `sys/param.h` are
 the port's 4 KiB-page forms, and the checker refuses a shift by 11 of an
-address (2 KiB pages). The compiler's wrapper rewrites what the 68060
+address (2 KiB pages). A shift by 11 that is not page arithmetic (a CD
+sector is 2048 bytes) is waived per function: `PAGESHIFT_OK =
+fn1,fn2` in the Makefile (`modcheck.py -w`). The checker names the
+waived functions in its `ok` line and refuses a listed function with no
+such shift, so every waiver is visible at review. The compiler's wrapper rewrites what the 68060
 lacks, and the checker scans for anything left
 (`m68k-cbm-sysv4-scan060`).
 

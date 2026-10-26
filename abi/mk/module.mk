@@ -16,7 +16,10 @@
 # see the kit's sample/hello/Master and docs/guide.md).  A
 # Master without a $cpu line gets the line's (kit.conf DEFCPU: 68030 on
 # k30, 68040 on k46), or MODCPU if set, so one Master serves both lines.
-# Optional: EXTRA (objects linked in as they are, a font for example:
+# Optional: PAGESHIFT_OK (comma-separated functions whose shifts by 11 are
+# not page arithmetic, a CD sector's 2048 for one: modcheck waives them
+# there only, names them in its ok line, and refuses a name with none),
+# EXTRA (objects linked in as they are, a font for example:
 # $(KIT)/stock/usr/sys/amiga/console/sunfont.o), LOCALIZE (globals made
 # local after the link, so the module neither exports nor shadows them:
 # builtinfont with that font), CFLAGS (added to the kit's), Space.c and
@@ -74,7 +77,8 @@ $(MODOUT)/mod.d/$(MODULE): $(MODOBJS) $(EXTRA) Master $(DEPS) $(KIT)/kit.conf
 	MKMOD_CC="$(KIT_CC) $(KIT_CFLAGS)" DLM_TOOLS=$(KIT)/tools sh $(KIT)/tools/mkmod \
 		-K $(KABI) -P $(PIN) -e $(KIT)/exports $(foreach d,$(DEPS),-d $(d)) \
 		-o $(MODOUT) $(MODOUT)/src
-	python3 $(KIT)/tools/modcheck.py -k $(KIT) $(foreach d,$(DEPS),-d $(d)) $@
+	python3 $(KIT)/tools/modcheck.py -k $(KIT) $(foreach d,$(DEPS),-d $(d)) \
+		$(if $(PAGESHIFT_OK),-w $(PAGESHIFT_OK)) $@
 
 clean:
 	@case "$(MODOUT)" in ""|.|./|/|..|../) echo "module.mk: MODOUT=$(MODOUT) is not a build directory" >&2; exit 1 ;; esac

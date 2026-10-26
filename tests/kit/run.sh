@@ -170,6 +170,15 @@ for l in k30 k46; do
 	if [ $l = k46 ]; then
 		mkbad $l geom "$WRAP"'unsigned f(a) unsigned a; { return a >> 11; }\nMOD_MISC_WRAPPER(geom, l, u, "x");\n' "$M0"'geom\tgeom\n' &&
 			refused "a 2 KiB page shift on k46" $l "$W/$l-geom/out/mod.d/geom" "shift by 11"
+		# a per-function waiver (a CD sector is 2048 bytes): counted and named
+		if python3 "$K/tools/modcheck.py" -k "$K" -w f "$W/$l-geom/out/mod.d/geom" > "$W/geomw.out" 2>&1 &&
+		   grep -q "ok (k46.*; 1 page-geometry shift(s) waived in f" "$W/geomw.out"; then
+			pass "$l: -w f waives the shift in f, and the ok line names it"
+		else fail "$l: the page-shift waiver"; cat "$W/geomw.out"; fi
+		if ! python3 "$K/tools/modcheck.py" -k "$K" -w f,g "$W/$l-geom/out/mod.d/geom" > "$W/geomw2.out" 2>&1 &&
+		   grep -q "\-w g: no shift by 11 in it to waive" "$W/geomw2.out"; then
+			pass "$l: a waiver naming a function with no shift is refused"
+		else fail "$l: the stale waiver"; cat "$W/geomw2.out"; fi
 		# a 64-bit multiply the 68060 lacks, past the compiler's rewrite
 		mkbad $l m64 "$WRAP"'int f(a, b) int a, b; { int h, lo; __asm__("mulsl %2,%0:%1" : "=d" (h), "=d" (lo) : "d" (b), "1" (a)); return h; }\nMOD_MISC_WRAPPER(m64, l, u, "x");\n' "$M0"'m64\tm64\n' &&
 			refused "a 64-bit multiply on k46 (the 68060 scan)" $l "$W/$l-m64/out/mod.d/m64" "68060 scan"

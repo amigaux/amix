@@ -421,23 +421,43 @@ def scan(e, path):
             return
     if code and not any(re.match(r'\s+[0-9a-f]+:\s', l) for l in d):
         bad('the page-geometry check disassembled nothing')
+    fn = ''
     for a, b2 in zip(d, d[1:]):
+        lab = re.match(r'[0-9a-f]+ <([^>+]+)>:', a)
+        if lab:
+            fn = lab.group(1)
         mq = re.search(r'moveq #11,(%d\d)', a)
         if mq and re.search(r'\b(lsrl|asrl) ' + mq.group(1) + ',', b2):
-            bad('a shift by 11 (2 KiB pages) at: %s -- k46 pages are 4 KiB' % a.strip())
+            if fn in waived:
+                waived[fn] += 1
+            else:
+                bad('a shift by 11 (2 KiB pages) at: %s in %s -- k46 pages are 4 KiB'
+                    % (a.strip(), fn or '?'))
+    for f, n in sorted(waived.items()):
+        if n == 0:
+            bad('-w %s: no shift by 11 in it to waive' % f)
+
+
+# -w: functions whose shifts by 11 are not page arithmetic (a CD sector
+# is 2048 bytes), each named at review; a shift outside them still fails
+waived = {}
 
 
 def main(argv):
     kit = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     deps = []
-    while len(argv) > 1 and argv[0] in ('-k', '-d'):
+    while len(argv) > 1 and argv[0] in ('-k', '-d', '-w'):
         if argv[0] == '-k':
             kit = argv[1]
+        elif argv[0] == '-w':
+            for f in argv[1].split(','):
+                if f:
+                    waived[f] = 0
         else:
             deps.append(argv[1])
         argv = argv[2:]
     if len(argv) != 1:
-        sys.exit('usage: modcheck.py [-k KIT] [-d DEPMODULE]... MODULE')
+        sys.exit('usage: modcheck.py [-k KIT] [-d DEPMODULE]... [-w FUNC,...] MODULE')
     path = argv[0]
     c = conf(kit)
     try:
@@ -506,8 +526,10 @@ def main(argv):
     for p in problems:
         print('modcheck: %s: %s' % (os.path.basename(path), p))
     if not problems:
-        print('modcheck: %s: ok (%s, %s, %d bytes)' % (os.path.basename(path), keys.get('kabi'),
-                                                       keys.get('class'), image))
+        w = sum(waived.values())
+        print('modcheck: %s: ok (%s, %s, %d bytes)%s' % (os.path.basename(path), keys.get('kabi'),
+              keys.get('class'), image, '; %d page-geometry shift(s) waived in %s' %
+              (w, ', '.join(sorted(waived))) if w else ''))
     return 1 if problems else 0
 
 
