@@ -118,10 +118,11 @@ program against an image file, so media and boxes cannot drift).
    stores hold many.
 6. **Memory:** fast memory on the box is below about twice the kernel plus
    arena plus RAM-disk image (`amix-kerntools/docs/k0-families.md:1126-1128`).
-   The figure is kinfo's fast memory (C2-1 offset 528): all non-chip RAM,
-   Zorro III RAM included, which the kernel cannot be bound in (10 §3).
-   So gate 6 is an estimate. boot2's L4 is the binding check, against the
-   largest region below 0x40000000.
+   The figure is kinfo's fast memory (C2-1 offset 528): the region the
+   kernel was bound in, the only memory either line's kernel uses. Zorro
+   III RAM is never kernel memory, and on k30 the region is at most
+   64 MiB (10 §3). boot2's L4 stays the binding check, against the largest
+   region below 0x40000000 (64 MiB at most on k30).
 7. **Loader:** the installed loader's version is below the generation's
    `loader-min`.
 8. **Boot disk:** the boot store cannot be identified unambiguously (§5).

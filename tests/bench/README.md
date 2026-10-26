@@ -842,8 +842,8 @@ kbootset commit --spec /tmp/nodep.spec
 
 The build file's kernel line has no `bss=` (`commit` adds it from the
 sidecar), so the spec's line takes it from `kabi`: a `brel` (k30) without
-it boots with `a brel kernel without bss= in its manifest: 512 KiB
-assumed`. `z=deflate` needs kbootset -14 (amix-dlm 72ed9c2) or later: the
+it boots with `no bss= for this brel: 512 KiB assumed` (`a brel kernel
+without bss= in its manifest: …` before boot2 at 001b04a). `z=deflate` needs kbootset -14 (amix-dlm 72ed9c2) or later: the
 box's kbootset had no deflate before (it ignored the flag, so gate 5 counted
 the raw kernel).
 
@@ -882,15 +882,23 @@ bytes, loader version 2) counts only memory below 0x40000000 (10 §3).
 
 | Commands | Expected |
 |---|---|
-| the slot copy with the fixed boot2 installed (`kbootset loader-install /tmp/boot2.bin --version 2`, accepted at the next boot), the emulator with `+z3=128` beside the CPU board's fast memory; boot | `amix-boot: kernel bound at <an address below 0x40000000: the CPU board's region>`, the banner, multi-user. kinfo's fast memory counts the Zorro III RAM too (`kbootset status`): the kernel uses it as page frames |
+| the slot copy with the fixed boot2 installed (`kbootset loader-install /tmp/boot2.bin --version 2`, accepted at the next boot), the emulator with `+z3=128` beside the CPU board's fast memory; boot | `amix-boot: kernel bound at <an address below 0x40000000: the CPU board's region>`, the banner, multi-user. kinfo's fast memory (`kbootset status`) is the bind region alone (k46 with a 32 MB mbres bank: 33 554 400 bytes; k30 in its 64 MB a3000 bank: 67 108 832): Zorro III RAM beside is never kernel memory on either line (10 §3) |
 | the same with the Zorro III board as the only fast memory, if the emulator allows it | `amix-boot: no fast memory below 0x40000000 to run the kernel in`, `amix-boot: L4 not enough memory (generation N)`; the next generation in the order, or the menu |
+
+### S3-43-9 — k30 in a region over 64 MB
+
+| Commands | Expected |
+|---|---|
+| k30 with boot2 from amix-dlm 001b04a on, the emulator with a 128 MB bank at 0x08000000; boot | `amix-boot: kernel bound at 08000000`, the banner, multi-user; kinfo's fast memory 64 MiB less the MemHeader's 32 bytes (67 108 832, `kbootset status`). Before the fix this box never started the kernel (N70) |
 
 ### S3-43-7 — 128 MB
 
-The emulator with 128 MB of Zorro III fast memory, the S3-43-2 rows
-`load`, `dependency` and `relocation oracle` again: the same lines, and
-kinfo's fast memory (`kbootset status`) about 128 MB. The relocation
-oracle's base is then above 64 MB.
+The emulator with 128 MB in the CPU board's bank at 0x08000000 (not
+Zorro III memory, which is never kernel memory: S3-43-8), the S3-43-2
+rows `load`, `dependency` and `relocation oracle` again: the same lines.
+kinfo's fast memory (`kbootset status`): about 128 MB on k46; on k30 64 MB,
+the line's maximum, which boot2 caps the bank to (S3-43-9). On k46 the
+relocation oracle's base is then above 64 MB.
 
 ## S3-41 — bench measurements on the module kernels (U1, U2, U4)
 
@@ -931,7 +939,7 @@ sh tests/bench/s3-41/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s41/u2
 
 | Commands | Expected |
 |---|---|
-| the emulator with 128 MB of Zorro III fast memory (as S3-43-7); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload`; power-cycle; run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload`; power-cycle; run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
 
 **The number:** K KiB, with the address range, at 128 MB. That is what
 the core could take for module images, beside the arena. Run it on a

@@ -194,8 +194,20 @@ boot2 says so on the console.
 - On a machine without fast memory below 0x40000000, or whose largest such
   region is smaller than the bound kernel, boot2 refuses the generation
   with L4 and says which of the two it was (`no fast memory below
-  0x40000000 to run the kernel in`). The kernel still uses Zorro III RAM
-  as ordinary page frames once it runs.
+  0x40000000 to run the kernel in`).
+- **Neither line uses any memory but the region it is bound in.** The
+  kernel's main store is the region its end lies in, joined with regions
+  that touch it (the stock `support.c`). kinfo's fast memory is that
+  region alone, and Zorro III RAM beside it is never kernel memory
+  (S3-43-8, 2026-10-26).
+- **On k30 that region is at most 64 MiB.** The 2 KiB-page kernel stops
+  before its banner with a larger main store: 128 MB at 0x08000000 never
+  starts, 64 MB at the same address boots (S3-43, N70 and N75). So for a
+  k30 generation boot2 caps the kernel's room at 64 MiB, and in the
+  `bootinfo.memory[]` it hands over it ends the bind region 64 MiB above
+  its base and empties a region that touches it from below
+  (`ax_memcap`). A k30 kernel on a 128 MB box uses 64 MB of it. The k46
+  line takes its whole region.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:
