@@ -94,7 +94,8 @@ case, the `*` case, and after the repair shell. One line before each:
 - **It acts** only when the booted generation (kinfo) is the trial on its
   attempt: the attempt is given back, at most twice per trial, and the
   next boot tries the trial again.
-- **Otherwise** it does nothing and exits 0.
+- **Otherwise** it does nothing and exits 0. That includes a kernel
+  without kinfo, such as a 1.0 kernel: retry then prints nothing.
 - **What it writes:** the boot store's control block, nothing else; the
   root may still be read-only or unrepaired.
 - **Exit status:** 0, or 1 on an I/O error. The reboot follows either way.
@@ -111,3 +112,34 @@ case, the `*` case, and after the repair shell. One line before each:
   `/etc/default/bootset`'s `store-id=` records it. Nothing outside
   kbootset needs to compute it.
 
+## 9. `kbootset mark-good` at the end of run level 2
+
+The base system (amix-installng) calls it once per boot, as the last
+step of run level 2 (40 §3, D54), after every other `rc2.d` script,
+so that a generation counts as good only when the whole of run level 2
+has run:
+
+```
+[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1
+```
+
+- **No options.** The booted generation, and whether boot1 ran the
+  primary boot2, come from kinfo's loader record (§2).
+- **What it prints:**
+  - on a trial: `kbootset: generation N is good and the default`;
+  - on any other boot: `kbootset: generation N is <state>; nothing to
+    mark`;
+  - after a new loader's trial boot, one more clause: the new loader is
+    accepted, or, when boot1 ran the secondary boot2, the new loader did
+    not complete a boot.
+- **Exit status:**
+  - 0 for all of the above;
+  - 3 when it refuses: the booted generation is not in the store, or the
+    kernel has no kinfo (`which generation booted is unknown`);
+  - 1 on an I/O error.
+- **The boot goes on whatever the status;** the hook never stops run
+  level 2. A trial that is not marked good is taken back by the loader
+  on the next boot (L8). That is the try-once rule, and the hook adds
+  nothing to it.
+- `retry` (§7) and `mark-good` are the only two calls the base system
+  makes on every boot.
