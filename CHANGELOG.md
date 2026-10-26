@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — S3-41 recipes (U1 by -DDLM_U1, U2/U4 probes); core patch 0023; the stage-3 exit ledger (1ca60a0..377866f)
+
+U1 (the process-0 load context) is measured by a -DDLM_U1 build of each kernel of record: core patch 0023 prints at the end
+of dlm_init and at the hook the SR, u_procp, whether the clock ticks, and five KM_NOSLEEP allocations up to 2 MiB; without
+the flag dlm.o is byte-identical. U2 and U4 by the probe modules u2kva and u4big (tests/bench/s3-41/mkprobes.sh, built with
+the kit, development load at 128 MB). 90 names the recipes; U15 stands answered. docs/plan/stage-3-exit.md: the bytes of
+record per line and every row's result; plan Q3-2 records monsw, z3660rtg's dependency and the metal rows as open.
+
 ## 2026-10-26 — C2-2 §2.1 as apkg 0.3.1; C3-5 §1.2 device nodes; the S3-43 hand-over (47941d0, 568b9ac, cb64436)
 
 C2-2 §2.1 follows apkg 0.3.1 (`apkg recover` finishes a cut; the readings confirmed). C3-5 §1.2: a driver module's package
