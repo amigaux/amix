@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 7
+# C3-5 — the module package and the per-module manifest record, version 8
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -11,7 +11,8 @@
   (2026-10-26, C4-4 version 2): a root record carries `bss=`, the size of
   the module's NOBITS and COMMON, which boot2 reserves behind its file (§3); version 7
   (2026-10-26, C4-4 version 3): `safe=1` marks the root records of the safe-mode
-  set (§3). Every consumer
+  set (§3); version 8 (2026-10-26, amix-modules' ramdisk): its short name
+  (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -64,6 +65,7 @@ per line**:
 | z3660eth | `zeth` | `zeth30` / `zeth46` |
 | z3660rtg | `zrtg` | `zrtg30` / `zrtg46` |
 | monsw | `monsw` | `monsw30` / `monsw46` |
+| ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
 
   A new module's owner adds its row in a version bump of this contract.
 
@@ -79,8 +81,11 @@ per line**:
 - `/etc/conf/modreg.local.d` is the administrator's and is never shipped
   (§1).
 - **Device nodes:** the package ships the nodes of the majors its driver
-  owns as pkgmap device entries (`c`), no script: z3660eth `/dev/zen0`
-  c 51 0. Network plumbing (`slink`, `ifconfig`) is not the package's: the
+  owns as pkgmap device entries, no script: z3660eth `/dev/zen0` c 51 0.
+  A block driver's nodes (`b`) are in `/dev/dsk`, and its character
+  (raw) nodes in `/dev/rdsk` only when the driver has a character row:
+  the ramdisk, block only, ships `/dev/dsk/ram0`–`ram2`, b 20 0–2, 0600
+  root root, and no `/dev/rdsk` node. Network plumbing (`slink`, `ifconfig`) is not the package's: the
   installer's `S99zen` does it (S3-31).
 - The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
   `.moddata`. **apkg does not check dependencies** between module
