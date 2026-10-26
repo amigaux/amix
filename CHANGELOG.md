@@ -1,3 +1,9 @@
+## 2026-10-26 — APKG 0.3.1 minted for the 1.1 media, staged in build/repo-staging-apkg031 (9c55d35) — NOT published
+
+APKG-0.3.1.pkg sha256 45b809cd, md5 2378f66d, 197120 B; the apkg.amix inside is 87b0c427 (112647 B). Against 0.3.0 only
+apkg and apkg.1 changed. All publish-path gates pass; heirloom pkgadd -R overwrite install keeps an edited apkg.conf. The
+public catalog stays at 0.2.3 until the owner's go.
+
 ## 2026-10-26 — apkg 0.3.1: one kernel package per line; gen-catalog module rows (06b77c4, 07ebd85) — NOT minted
 
 apkg 0.3.1 keeps one kernel package per line (amix-dlm C2-2 v5 §2.1): an install bringing a kernel while another package's
