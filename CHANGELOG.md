@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module 1.0.0-3: the intr=6 self-test passes inside the IPL-4 open (3e6b696)
+
+The stock qattach() calls a driver's open with SR 0x2400 (k46 0x4ee1c, k30 0x5190c), so the PORTS that the level-6 test
+handler raises stayed pending for the whole spin and 1.0.0-2 always printed "zen: interrupt self-test failed; polled",
+emulator and metal alike (S3-44-3, N86/N87). The open now spins on the level-6 flag only and waits for the level-2 flag
+with up to 4 one-tick timeout/sleep rounds (the stock delay() idiom). Module objects k30 abf530d7, k46 9dfe0294 (12945 B,
+modcheck ok); static objects unchanged (k30 c2d6225e, k46 142e2486). NOTES.md: the IPL-4 fact.
+
 ## 2026-10-26 — z3660eth module: refusal lines, _unload undoes _load, parser test (be0ef63)
 
 `_load` prints a `zen:` console line before every failure return (if_attach used to fail silently; the probe-failure lines
