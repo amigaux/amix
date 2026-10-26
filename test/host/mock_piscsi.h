@@ -108,4 +108,18 @@ extern unsigned long  mock_vposr_reads;
 extern unsigned long  mock_sptalloc_calls;
 extern int            mock_sptalloc_fail;   /* nonzero: sptalloc() fails */
 
+
+/*
+ * ZS-05 address-capture model (mock_piscsi.c): accesses with a rising address
+ * bit, the AND-capture fault switch, phantom deliveries, and a latch-drop
+ * injector for the read-back gates.  mock_rise_* survive mock_reset().
+ */
+extern unsigned long	mock_rise_wr, mock_rise_rd;
+extern int		mock_capture_and;
+extern unsigned long	mock_phantom_wr, mock_phantom_rd;
+extern long		mock_drop_reg;
+extern int		mock_drop_n;
+extern unsigned long	mock_dropped;
+void mock_rise_reset(void);
+
 #endif

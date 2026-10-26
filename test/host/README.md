@@ -44,6 +44,12 @@ Gating (mount-critical, gate the exit code):
   ECS never touches the window; a ConfigDev board whose mailbox is silent at
   attach is attached with the sweep deferred and names no phantom units until
   the mailbox answers (`NOTES.md` 2026-09-27).
+- **ZS-05 address capture** (`test_zs05_capture()`, run last): no driver write in
+  any scenario has an address bit its predecessor lacked (`mock_rise_wr`); under the
+  AND-capture model (`mock_capture_and`) an unarmed `$090 → $240` rings a WRITE
+  doorbell, while the armed driver moves every byte right with no phantom; a dropped
+  descriptor write is read back, rewritten and lands at its own LBA; one that will
+  not latch fails the request with no doorbell (`NOTES.md` 2026-10-26).
 - Board mapping: `z3660map()` takes the **direct** (section-0 identity) arm and
   calls no `sptalloc()` — see below.
 - **Per-CDB round-trip budget** — see below.
@@ -81,19 +87,21 @@ many registers it touches, not by how many bytes it moves — so the mock counts
 `WRLONG`/`RDLONG` (`mock_trips*`, reset by `mock_trips_reset()`), and that count is a
 faithful, mock-independent proxy for metal cost.
 
-`test_hotpath_trip_budget()` gates the exact per-CDB totals — **6** for a 2 KB
-READ(10), **5** for a WRITE(10) — and, separately, that the three static per-unit
+`test_hotpath_trip_budget()` gates the exact per-CDB totals — **15** for a 2 KB
+READ(10), **13** for a WRITE(10) since ZS-05 (6 and 5 before: the arming reads and
+the descriptor read-backs are the difference) — and, separately, that the three static per-unit
 geometry registers (`BLOCKSIZE0+4n`, `BLOCKS0+4n`, `PDT`) are **not touched at all**
 on the command path, and that `DRVNUMX` is written exactly once. Before the per-unit
 geometry cache those figures were 10 and 9, with a redundant second `DRVNUMX` write.
 The named category counters matter: a regression that reinstated one re-fetch fails
 by name rather than as an opaque total. `test_direct_mapping()` additionally gates the
-probe's breakdown (8 × BLOCKSIZE, 8 × BLOCKS, 8 × PDT) to pin the cache fill to
+probe's breakdown (each attach read armed, so 16 × BLOCKSIZE, 4 × BLOCKS, 4 × PDT for
+the two mapped units) to pin the cache fill to
 **attach**, so it cannot silently drift back into the command path.
 
 A cheap-but-wrong cache would pass every count, so the same gate re-checks READ
 CAPACITY(10)'s reported block size and block count against the mock's geometry while
-asserting it cost no wire reads.
+asserting it cost no wire reads (2 trips: the armed DRVNUMX select).
 
 Stretch (reported, never gated): a parity table of the driver against the CD
 half of the firmware oracle

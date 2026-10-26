@@ -253,6 +253,58 @@ unsigned long	val;
 		bus_ram[cmd / 4] = val;
 }
 
+/* -------- ZS-05: the FPGA address-capture model ----------------------- */
+/*
+ * On the real-CPU path the FPGA captures an access's address with RISING
+ * address bits sampled too early on back-to-back cycles: the access is
+ * delivered at (previous address AND this address), and a write's value is
+ * then taken from the mirror cell at that address -- the stale value of the
+ * last write that really went there (z3660.c, ZS-05).
+ *
+ *   mock_rise_wr / mock_rise_rd   writes / reads whose offset has a bit the
+ *       previous access lacked -- the accesses the hazard can hit.  Program-
+ *       wide: zeroed only by mock_rise_reset(), never by mock_reset(), so one
+ *       gate can assert that no test scenario ever issued an unarmed write.
+ *   mock_capture_and   nonzero: apply the hazard to every such access.
+ *   mock_phantom_wr / mock_phantom_rd   accesses delivered at a phantom offset.
+ *   mock_drop_reg / mock_drop_n   the next n writes to that offset are not
+ *       latched (the DI-1 data race: the ARM keeps the old value).
+ */
+unsigned long	mock_rise_wr, mock_rise_rd;
+int		mock_capture_and;
+unsigned long	mock_phantom_wr, mock_phantom_rd;
+long		mock_drop_reg = -1;
+int		mock_drop_n;
+unsigned long	mock_dropped;
+static unsigned int	cap_prev;
+static int		cap_prev_ok;
+static unsigned long	cap_cell[0x300 / 4];	/* last value written per offset */
+
+void mock_rise_reset()
+{
+	mock_rise_wr = mock_rise_rd = 0;
+}
+
+/* the offset the access is delivered at; `cmd` becomes the bus's last address */
+static unsigned int capture( cmd, rd)
+unsigned int	cmd;
+int		rd;
+{
+	unsigned int	eff = cmd;
+
+	if (cap_prev_ok && (cmd & ~cap_prev) != 0) {
+		if (rd)
+			mock_rise_rd++;
+		else
+			mock_rise_wr++;
+		if (mock_capture_and)
+			eff = cap_prev & cmd;
+	}
+	cap_prev = cmd;
+	cap_prev_ok = 1;
+	return eff;
+}
+
 /* -------- data movement triggers --------------------------------------- */
 
 static void do_read( drive)
@@ -326,10 +378,26 @@ void z3660_mock_wrlong( cmd, val)
 unsigned int	cmd;
 unsigned long	val;
 {
+	unsigned int	eff;
+
 	mock_trips++;
 	mock_trips_wr++;
 	if (cmd == R_DRVNUMX)
 		mock_trips_drvnumx++;
+	eff = capture( cmd, 0);
+	if (cmd < sizeof cap_cell / sizeof cap_cell[0] * 4)
+		cap_cell[cmd / 4] = val;	/* the mirror cell takes the value */
+	if (eff != cmd) {
+		mock_phantom_wr++;		/* serviced at eff, with eff's cell */
+		cmd = eff;
+		val = (cmd < sizeof cap_cell / sizeof cap_cell[0] * 4) ?
+			cap_cell[cmd / 4] : 0;
+	}
+	if ((long)cmd == mock_drop_reg && mock_drop_n > 0) {
+		mock_drop_n--;
+		mock_dropped++;
+		return;
+	}
 	if (!bus_board()) {
 		bus_write( cmd, val);
 		return;
@@ -358,8 +426,15 @@ unsigned long	val;
 unsigned long z3660_mock_rdlong( cmd)
 unsigned int	cmd;
 {
+	unsigned int	eff;
+
 	mock_trips++;
 	mock_trips_rd++;
+	eff = capture( cmd, 1);
+	if (eff != cmd) {
+		mock_phantom_rd++;
+		cmd = eff;
+	}
 	if (cmd == R_PDT)
 		mock_trips_pdt++;
 	if (!bus_board())
@@ -437,6 +512,13 @@ void mock_reset()
 	mock_vposr_reads = 0;
 	mock_sptalloc_calls = 0;
 	mock_sptalloc_fail = 0;
+	mock_capture_and = 0;
+	mock_phantom_wr = mock_phantom_rd = 0;
+	mock_drop_reg = -1;
+	mock_drop_n = 0;
+	mock_dropped = 0;
+	cap_prev_ok = 0;
+	memset( cap_cell, 0, sizeof cap_cell);
 	if (!g_bounce)
 		g_bounce = (unsigned char *)malloc( MOCK_BOUNCE);
 	memset( g_bounce, 0, MOCK_BOUNCE);

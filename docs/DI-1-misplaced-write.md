@@ -832,3 +832,23 @@ that it does not reproduce on a healthy bus. §1 item 5's metal step is done (§
 placement of the event is superseded (§9.6). Any prevalence detector built on §4.1's predictions
 must compare time-masked dinodes or block pointers (§9.2). §8.8's FTL ranking drops to weakened
 (§9.7).
+
+## 10. Addendum, 2026-10-26: a second sufficient mechanism, and a driver change after all
+
+The Z3660 FPGA's register **address** capture has a race of its own: on back-to-back 060
+cycles, rising address bits are sampled too early and the access is delivered at (previous
+address AND this address). In the driver as it stood (§3), `DRVNUMX` (`$090`) is written right
+before `WRITE_ADDR1` (`$240`): `$090 & $240 = $000`. The block-number write is therefore lost
+and lands on the WRITE doorbell, which re-runs the previous piece's write from its own buffer
+(the same bytes, harmless). The real doorbell then writes piece k's data at piece k−1's LBA.
+That is §4.1's stale-`WRITE_ADDR1` row, i.e. **DI-1's picture**, and the firmware prints
+nothing because `$000` is a handled register. How close together the two writes must be is
+not known (the cached driver runs some code between them, and §9.3's torture saw no
+misplacement in about 11.6 M register writes), but nothing about it needs an abnormal bus. So
+§9.8's "the only sufficient mechanism" no longer holds; which of the two produced the A4000D
+event cannot be told from the image.
+
+§8.10's open point is settled from the code: a driver read of an ADDR cell is served by the
+ARM (`rtg.c` read branch → `handle_piscsi_read()` → `piscsi_u32_*[i]`), so a read-back does
+show what the ARM latched. §9.8's "No driver change is owed" is superseded: ZS-05 arms every
+mailbox write and reads the descriptor back before the doorbell (`NOTES.md` 2026-10-26).

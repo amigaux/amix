@@ -58,6 +58,14 @@ Since that milestone — every item below has a dated entry in
 - **Window geometry is byte-primary and page-size-agnostic.** The fixed quantity is
   the firmware's 64 KB aperture; page counts are derived, rounded up, and pinned from
   both sides by compile-time guards.
+- **Every mailbox write is armed against the Z3660 FPGA's address-capture race
+  (ZS-05, 2026-10-26).** On back-to-back 060 cycles the FPGA samples rising address
+  bits too early and delivers an access at (previous address AND this address) —
+  e.g. a `WRITE_ADDR1` after a `DRVNUMX` lands on the WRITE doorbell. The firmware's
+  re-read covers the data, not the address. The driver now reads an offset covering
+  each write immediately before it (one masked asm block), and reads each descriptor
+  cell back before the doorbell (one rewrite, then EIO). Cost: READ 15, WRITE 13 round
+  trips. See [NOTES.md](NOTES.md) 2026-10-26.
 - **68040/68060 data-cache maintenance is implemented but gated OFF by default**
   (`z3660_cache`, poked through `/dev/kmem`). Every deployment so far has run on an
   emulated CPU, which has no data cache. The round is pre-registered in

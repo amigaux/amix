@@ -1323,3 +1323,117 @@ default is exactly the brief, and −4 needs no rebuild.
     tail.
 
 Nothing ships. kerntools cuts the diagnostic sibling from this source.
+
+## 2026-10-26: ZS-05 — the FPGA address-capture race; every mailbox write is armed
+
+**The firmware fact** (Z3660 station, eth-rxring `22e0dde`/`dd9d179` era; T-51 2026-10-26). On
+the real-CPU path the FPGA hands each 060 access to the ARM as a REG1 word, and `rtg_thread()`
+(rtg.c) takes the address from it: `zaddr = gpio & 0x1FFFFF`, piscsi at `zaddr - 0x2000`. On
+back-to-back cycles the FPGA samples **rising** address bits too early, so the access is
+delivered at **(previous address AND this address)**. A write is then serviced there with
+whatever the DDR mirror holds for that cell (`swap32(*address)` of the wrong cell). Seen as
+`[!!!PISCSI] Unhandled register write to 00000200` (240 on the A4000D's full serial log, -1 and
+1608113141 as the stale cell values) and `Write to read only register PISCSI_CMD_BLOCKS
+(00000010: -1)` (5), and in the ZZ window as $104 delivered at $100. The comment above
+`piscsi_reg_value()` in rtg.c (the event is raised in the same clock as the AXI write starts)
+is about the **data**; this is the **address**, and the firmware cannot see it. The read path
+uses the same word (`handle_piscsi_read(zaddr…)`), so reads are assumed exposed too.
+
+**What a phantom does depends on where it lands, and most landings are silent.** The firmware
+prints only for an unhandled offset; one that lands on a handled register is serviced as that
+register. Every adjacent pair in the driver before ZS-05, with the bits that rise and where
+the second access lands (`p & a`):
+
+| pair (prev → access) | rising | lands at | effect |
+|---|---|---|---|
+| W `$000` (last WRITE's doorbell) → W `$090` DRVNUMX | `$090` | `$000` | **WRITE doorbell**: the last WRITE's descriptors run again, from its buffer's *current* bytes |
+| W `$090` → W `$240` WRITE_ADDR1 | `$240` | `$000` | WRITE doorbell as above, **and** ADDR1 lost: the write goes to the previous WRITE's LBA (DI-1's picture) |
+| W `$240` → W `$244` | `$004` | `$240` | ADDR2 lost: stale length |
+| W `$244` → W `$248` | `$008` | `$240` | ADDR3 lost: the previous request's buffer is written here |
+| W `$090` → W `$020` READ_ADDR1 | `$020` | `$000` | WRITE doorbell, **and** READ_ADDR1 lost: stale LBA, reported GOOD |
+| W `$020` → W `$024` | `$004` | `$020` | READ length stale |
+| W `$024` → W `$028` | `$008` | `$020` | READ_ADDR3 lost: the data lands in the previous READ's buffer |
+| W `$028` → W `$004` READ doorbell | `$004` | `$000` | **the READ becomes a WRITE doorbell**: the last WRITE's LBA is rewritten from its old buffer, the READ never runs, the caller gets a stale buffer as GOOD |
+| W `$004` → R `$09C` USED_DMA | `$098` | `$004` | reads 0: a bounced READ would take the direct arm (unreachable on AMIX RAM today) |
+| attach: W `$024` K1 → W `$244` K2 | `$240` | `$004` | READ doorbell with K1 (0xA55A3CC3) as the length |
+| attach: R `$244` → W `$090`, R `$008` → W `$090` | `$090` | `$000` | WRITE doorbell with K2 (0x3CC3A55A) as the length |
+| attach: R `$22x/$23x` BLOCKSn → W `$090` | `$090`/`$080` | `$000`/`$010` | WRITE doorbell (units 0–3); the `$010` BLOCKS print (units 4–7) |
+| attach: R `$20x` → R `$22x`; W `$090` → R `$0A0`; signature reads | various | — | wrong block count, PDT, signature: wrong geometry or no board |
+
+Pairs with no rising bit (`$248 → $000`, `$09C → $090`) were safe. The table is address
+arithmetic; how close two cycles must be for the race to fire is not known. The descriptor
+stores and the doorbell are consecutive instructions (the tightest pairs); `DRVNUMX → ADDR1`
+has the geometry lookup and the `z3660_rw()` entry between them. So every command carried pairs
+the race can hit, not only the `$220 → $240` pair the brief named: that
+pair is the **pre-cache** driver's (before 29b2482 every WRITE read `BLOCKS0+4u` right before
+`WRITE_ADDR1`) and the AmigaOS `z3660_scsi.device`'s (`get_blocksize()` reads `BLOCKSIZE0+4u`
+right before `WRITE_ADDR1`). With the cached driver the same race lands on `$000`, a handled
+register, and prints nothing. Which driver ran in the two long September silences is not
+settled here (the installer kernel's z3660 object is not identified); either way the phantom
+**before** a silence fits a lost descriptor or a doorbell that moved the wrong data.
+
+**Could it stall the driver?** No. The mailbox is synchronous and the driver has no wait loop:
+every cycle, phantom or not, is acknowledged by the ARM, and `z3660queue()` returns. There is
+nothing for a timeout to time. What a lost write gives is **silent wrong data reported GOOD**: a
+write at the wrong LBA, a read that returns a stale buffer, a READ turned into a rewrite of the
+last WRITE's LBA, a transfer into an old buffer. The "stall" is the system after that (a
+corrupted root, a page-in of garbage), not the driver. So the useful "retry" is not a timeout:
+it is a read-back of what the ARM latched, before the doorbell.
+
+**The fix (ZS-05, `src/z3660.c`).** Rule: every mailbox write is issued right after a read of
+an offset that has no bit the write's offset lacks, with nothing in between; then the AND is
+the write's own address. Four macros are now the only way the driver writes the mailbox, each
+ONE asm block run at IPL 7 for its two or three cycles (so no interrupt handler's board access,
+z3660eth's INT6 being the live one, and no exception stacking can fall between the arming read
+and the write): `Z3660_WRA` (read cmd, write cmd), `Z3660_WRV` (read cmd, write cmd, `nop`, read
+cmd back), `Z3660_RING` (read the set's ADDR2, write the doorbell), `Z3660_RDX`/`Z3660_RDA`
+(arming read, then the read). The arming reads are side-effect free in the fork, in stock
+firmware and in amiberry (descriptor cells return their latch; DRVNUMX has no read case and
+returns 0; `BLOCKSIZE0/BLOCKS0+4n` re-select the same unit). USED_DMA consumes on read, so it is
+armed by `P_UDMA_ARM = 0xBC`, an offset none of the three defines. Compile-time `#error`s pin
+`$000 ⊆ $244`, `$004 ⊆ $024`, `$09C ⊆ $0BC`.
+
+The descriptor read-back (`z3660_set()`): `handle_piscsi_read()` returns `piscsi_u32_read/
+write[i]`, the ARM's own latch, in the fork and in stock, so a mismatch means the ARM does not
+hold the value. This settles DI-1 §8.10's open point from the code: the read goes through the
+ARM (rtg.c read branch → `handle_piscsi_read()` → `write_reg_s01(REG5, …)`), not past it. A
+mismatch is rewritten once (counted in `z3660_rb_retry`, last one in `z3660_rb_last[]`, one
+console line on the first); a second fails the request with EIO **before** its doorbell
+(`z3660_rb_fail`, one console line). It also catches the DI-1 data race (§4.1), which the
+fork's `piscsi_reg_value()` re-read masks and stock does not. The arms are what prevent damage;
+the read-back cannot replace them, because a phantom lands somewhere first (the M2 mutant
+below shows it).
+
+**Cost.** Round trips per steady-state command: READ 6 → 15, WRITE 5 → 13 (an arm before
+DRVNUMX, each descriptor cell, the doorbell and USED_DMA; a read-back per cell). On the
+real-060 path a trip is an ARM event service; its time is not measured here. The SD transaction
+dominates a request (io R ~340–410 µs, W ~1.2–1.4 ms on the D), so the expected cost is a few
+percent per request, more on the emulated 030 path where trips are dearer. Measure it with
+PSTAT before and after on the bench (proposed, not run). Nothing changes when there is no
+hazard: same registers, same values, same order.
+
+**Evidence.**
+- `make -C test/host check`: **230 passed, 0 failed**, 6/6 parity (was 217). The mock gained
+  the capture model: `mock_rise_wr/rd` count accesses with a rising bit (program-wide),
+  `mock_capture_and` applies the AND to every such access with the stale-cell value,
+  `mock_drop_reg/n` drops writes (the data race). New `test_zs05_capture()`, run last: no driver
+  write in any earlier scenario had a rising bit; the model bites (an unarmed `$090 → $240` is
+  delivered at `$000` and rings a WRITE doorbell); with the AND model on, attach + a 16 KB READ,
+  a WRITE and a CD READ are byte-correct with 0 phantom writes and 0 read-back mismatches; a
+  lost `WRITE_ADDR1` is rewritten and the data lands at its own LBA with the previous piece's
+  LBA untouched; a cell that will not latch fails the request with no doorbell and the buffer
+  untouched. The trip-budget and attach-count gates were moved to the armed counts.
+- Negative controls, each a one-line mutant in a scratch copy: WRA unarmed 9 fails, WRV
+  unarmed 6 (the read-back alone does not save the data: phantoms ring doorbells), RING
+  unarmed 6, USED_DMA unarmed 3, no rewrite 2, doorbell rung after a failed descriptor 2, no
+  read-back check 5; the pre-existing gates fail only on trip counts.
+- `build/mkobj.sh zs05`: both objects build, `nm -u` still `autocon bcopy printf sptalloc`,
+  relink TOTAL complaints 0, scan060 CLEAN (040 listing 1334 decoded lines), spl-gate G1/G2 OK.
+  In both objects every masked block is `move.w %sr,%dN; ori.w #0x700,%sr` then the arming
+  read and the access back to back, then `move.w %dN,%sr` (7 WRA, 2 WRV, 2 RING, 9 RDA/RDX
+  sites); the doorbell arms are `+0x244 → +0x0` and `+0x24 → +0x4`, USED_DMA `+0xBC → +0x9C`.
+
+**Not done here.** No kernel is cut (the fix rides the stage-4 module cut). Metal proof belongs
+to the tripwire firmware's proving boot: with ZS-05 the driver's own phantoms should be 0. The
+HDL fix (capture after the address settles) and the AmigaOS `z3660_scsi.device`, which has the
+same pairs, are the Z3660 repo's.

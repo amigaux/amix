@@ -169,12 +169,13 @@ static void test_direct_mapping()
 	printf("       probe trips=%lu (rd=%lu wr=%lu) drvnumx=%lu blocksize=%lu blocks=%lu pdt=%lu div0=%lu\n",
 	       mock_trips, mock_trips_rd, mock_trips_wr, mock_trips_drvnumx,
 	       mock_trips_blocksize, mock_trips_blocks, mock_trips_pdt, mock_div0);
-	CHECK( mock_trips_blocksize == 8,
-	       "attach reads BLOCKSIZE for all 8 units (geometry cached at probe)");
-	CHECK( mock_trips_blocks == 2,
-	       "attach reads BLOCKS only for the 2 units with a valid block size");
-	CHECK( mock_trips_pdt == 2,
-	       "attach reads PDT only for the 2 present units");
+	/* ZS-05: every attach read is armed (read twice), so each fact is 2 trips */
+	CHECK( mock_trips_blocksize == 16,
+	       "attach reads BLOCKSIZE for all 8 units, armed (geometry cached at probe)");
+	CHECK( mock_trips_blocks == 4,
+	       "attach reads BLOCKS, armed, only for the 2 units with a valid block size");
+	CHECK( mock_trips_pdt == 4,
+	       "attach reads PDT, armed, only for the 2 present units");
 	CHECK( mock_trips_drvnumx == 4,
 	       "attach selects each present unit before its PDT read (2) + the ZS-02 signature's two selects (2)");
 	CHECK( z3660_sig_ok == 1,
@@ -211,7 +212,11 @@ static void test_direct_mapping()
 /*  10  RDLONG USED_DMA       bounce-or-direct verdict                      */
 /*                                                                         */
 /* Trips 2-5 are now served from the per-unit cache filled at attach, so a  */
-/* steady-state READ costs SIX and a WRITE (no USED_DMA readback) FIVE.     */
+/* steady-state READ cost SIX and a WRITE (no USED_DMA readback) FIVE.      */
+/* ZS-05 (2026-10-26) adds reads: an arming read before DRVNUMX, before    */
+/* each descriptor cell and before the doorbell (5), a read-back of each    */
+/* descriptor cell (3), and on a READ an arming read before USED_DMA (1) -- */
+/* READ 15, WRITE 13.                                                       */
 /* The gate asserts the exact totals and, separately, that the three static */
 /* geometry registers are not touched at all on the command path -- so a    */
 /* regression that reinstated one of them fails loudly and by name.         */
@@ -246,8 +251,8 @@ static void test_hotpath_trip_budget()
 	       "trip budget: READ(10) reads NO PDT register (served from cache)");
 	CHECK( mock_trips_drvnumx == 1,
 	       "trip budget: READ(10) writes DRVNUMX exactly once (redundant repeat gone)");
-	CHECK( rd_trips == 6,
-	       "trip budget: READ(10) costs 6 round trips (was 10 before the cache)");
+	CHECK( rd_trips == 15,
+	       "trip budget: READ(10) costs 15 round trips (6 + ZS-05's 6 arms + 3 read-backs)");
 
 	/* ---- steady-state WRITE(10): 1 x 512-byte block @ LBA 12 ---- */
 	for (i = 0; i < 512; i++) src[i] = (uchar)(0x30 + (i & 0x0F));
@@ -265,8 +270,8 @@ static void test_hotpath_trip_budget()
 	       "trip budget: WRITE(10) touches none of the three static geometry registers");
 	CHECK( mock_trips_drvnumx == 1,
 	       "trip budget: WRITE(10) writes DRVNUMX exactly once");
-	CHECK( wr_trips == 5,
-	       "trip budget: WRITE(10) costs 5 round trips (was 9 before the cache)");
+	CHECK( wr_trips == 13,
+	       "trip budget: WRITE(10) costs 13 round trips (5 + ZS-05's 5 arms + 3 read-backs)");
 
 	/*
 	 * The cached facts must still be the RIGHT facts -- a cache that answers
@@ -282,8 +287,8 @@ static void test_hotpath_trip_budget()
 	       mock_trips, be32( buf), be32( buf + 4));
 	CHECK( be32( buf) == DK_NBLK - 1 && be32( buf + 4) == DK_BS,
 	       "trip budget: cached geometry is CORRECT (last LBA + block length)");
-	CHECK( mock_trips == 1,
-	       "trip budget: READ CAPACITY costs 1 trip (the DRVNUMX select) -- geometry cached");
+	CHECK( mock_trips == 2,
+	       "trip budget: READ CAPACITY costs 2 trips (the armed DRVNUMX select) -- geometry cached");
 }
 
 /*
@@ -325,8 +330,8 @@ static void test_unmapped_unit_not_cached()
 	       g_status, (int)g_okay);
 	CHECK( !g_okay && g_status == 0xff,
 	       "unmapped unit: READ(10) REFUSED (firmware would silently no-op it)");
-	CHECK( mock_trips_blocksize == 1,
-	       "unmapped unit: geometry was actually probed (cache miss, not a stale hit)");
+	CHECK( mock_trips_blocksize == 2,
+	       "unmapped unit: geometry was actually probed, armed (cache miss, not a stale hit)");
 	CHECK( mock_trips_blocks == 0 && mock_trips_pdt == 0,
 	       "unmapped unit: block size 0 stops the probe before BLOCKS/PDT (no stock div0)");
 
@@ -339,7 +344,7 @@ static void test_unmapped_unit_not_cached()
 	       g_status, (int)g_okay);
 	CHECK( !g_okay && g_status == 0xff,
 	       "unmapped unit: second READ(10) still refused");
-	CHECK( mock_trips_blocksize == 1 && mock_trips_blocks == 0 && mock_trips_pdt == 0,
+	CHECK( mock_trips_blocksize == 2 && mock_trips_blocks == 0 && mock_trips_pdt == 0,
 	       "unmapped unit: RE-PROBED on every command (absence never cached)");
 	CHECK( mock_trips == first_trips,
 	       "unmapped unit: identical trip cost both passes (no latched state)");
@@ -354,8 +359,8 @@ static void test_unmapped_unit_not_cached()
 	run_cmd( U_DISK, cdb, 10, buf, 8);
 	CHECK( g_okay && be32( buf) == DK_NBLK - 1 && be32( buf + 4) == DK_BS,
 	       "unmapped unit: mapped unit's cached geometry still intact afterwards");
-	CHECK( mock_trips == 1,
-	       "unmapped unit: mapped unit still answers from cache (1 trip)");
+	CHECK( mock_trips == 2,
+	       "unmapped unit: mapped unit still answers from cache (2 trips: armed DRVNUMX)");
 }
 
 /*
@@ -1614,6 +1619,129 @@ static void test_console_truthful()
 	       "A1: a command re-tries the map, fails without a doorbell, still counted");
 }
 
+/* ====================================================================== */
+/* GATING: ZS-05 -- the FPGA address-capture rule and the descriptor       */
+/* read-back (z3660.c ZS-05; NOTES.md 2026-10-26).                         */
+/* ====================================================================== */
+
+extern unsigned long	z3660_rb_retry, z3660_rb_fail, z3660_rb_last[3];
+extern void		z3660_mock_wrlong();	/* the seam, driven raw by gate 2 */
+
+static unsigned long zs05_doorbells()
+{
+	unsigned long	n = 0;
+	int		i;
+
+	for (i = 0; i < 8; i++)
+		n += mock_doorbells[i];
+	return n;
+}
+
+static void zs05_attach()
+{
+	mock_reset();
+	mock_add_drive( U_CD,   0x05, CD_BS, CD_NBLK, 128UL * CD_BS);
+	mock_add_drive( U_DISK, 0x00, DK_BS, DK_NBLK, 256UL * DK_BS);
+	z3660_test_unmap();
+	z3660_cache = 0;
+}
+
+static void test_zs05_capture()
+{
+	uchar		cdb[10], buf[16384], src[2048], old[2048];
+	unsigned char	*back;
+	unsigned long	db, retry, fail;
+	int		i;
+
+	printf("\n=== GATE: ZS-05 address capture -- armed writes, descriptor read-back ===\n");
+
+	/* 1. whole run so far: every driver write followed a superset access */
+	printf("       whole run: writes with a rising address bit=%lu (reads %lu)\n",
+	       mock_rise_wr, mock_rise_rd);
+	CHECK( mock_rise_wr == 0,
+	       "ZS-05: no driver write in any scenario so far had a rising address bit");
+
+	/* 2. the model bites: the pre-ZS-05 WRITE preamble, unarmed */
+	zs05_attach();
+	run_cmd( U_DISK, (uchar *)"\x00\x00\x00\x00\x00\x00", 6, buf, 0);	/* attach (TUR) */
+	db = zs05_doorbells();
+	mock_capture_and = 1;
+	z3660_mock_wrlong( 0x90, (unsigned long)U_DISK);	/* DRVNUMX */
+	z3660_mock_wrlong( 0x240, 77UL);			/* WRITE_ADDR1 */
+	printf("       unarmed $090 -> $240 under the model: phantom wr=%lu doorbells +%lu\n",
+	       mock_phantom_wr, zs05_doorbells() - db);
+	CHECK( mock_phantom_wr == 1 && zs05_doorbells() == db + 1,
+	       "ZS-05 model: unarmed $090->$240 is delivered at $000, a WRITE doorbell");
+	mock_rise_reset();			/* that was the harness, not the driver */
+
+	/* 3. under the model, the armed driver moves every byte right */
+	zs05_attach();
+	mock_capture_and = 1;
+	back = mock_backing( U_DISK);
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x28; cdb[5] = 16; cdb[8] = 32;	/* 16 KB @ 16 */
+	memset( buf, 0, sizeof buf);
+	run_cmd( U_DISK, cdb, 10, buf, 16384);
+	CHECK( g_okay && g_status == 0 && memcmp( buf, back + 16 * 512, 16384) == 0,
+	       "ZS-05 model: attach + READ(10) 16 KB correct with AND capture on");
+	for (i = 0; i < 2048; i++) src[i] = (uchar)(0xA5 ^ i);
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x2A; cdb[5] = 40; cdb[8] = 4;	/* 2 KB @ 40 */
+	db = zs05_doorbells();
+	run_cmd( U_DISK, cdb, 10, src, 2048);
+	CHECK( g_okay && memcmp( back + 40 * 512, src, 2048) == 0 && zs05_doorbells() == db + 1,
+	       "ZS-05 model: WRITE(10) lands at its own LBA, one doorbell");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x28; cdb[5] = 3; cdb[8] = 1;
+	run_cmd( U_CD, cdb, 10, buf, 2048);
+	CHECK( g_okay && memcmp( buf, mock_backing( U_CD) + 3 * CD_BS, 2048) == 0,
+	       "ZS-05 model: CD READ(10) correct with AND capture on");
+	printf("       AND capture on: phantom wr=%lu rd=%lu retry=%lu fail=%lu\n",
+	       mock_phantom_wr, mock_phantom_rd, z3660_rb_retry, z3660_rb_fail);
+	CHECK( mock_phantom_wr == 0,
+	       "ZS-05 model: no driver write was delivered at a phantom offset");
+	CHECK( z3660_rb_retry == 0 && z3660_rb_fail == 0,
+	       "ZS-05 model: no read-back mismatch (the arming rule left none to catch)");
+
+	/* 4. a lost WRITE_ADDR1 (DI-1's picture) is caught and rewritten */
+	zs05_attach();
+	back = mock_backing( U_DISK);
+	for (i = 0; i < 2048; i++) src[i] = (uchar)(0x11 + i);
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x2A; cdb[5] = 20; cdb[8] = 4;	/* piece @ 20 */
+	run_cmd( U_DISK, cdb, 10, src, 2048);
+	memcpy( old, back + 20 * 512, 2048);
+	retry = z3660_rb_retry;
+	mock_drop_reg = 0x240; mock_drop_n = 1;
+	for (i = 0; i < 2048; i++) src[i] = (uchar)(0x77 ^ i);
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x2A; cdb[5] = 24; cdb[8] = 4;	/* next @ 24 */
+	run_cmd( U_DISK, cdb, 10, src, 2048);
+	printf("       dropped ADDR1 once: status=0x%02X okay=%d retry=+%lu last=(0x%lx,%lu,%lu)\n",
+	       g_status, (int)g_okay, z3660_rb_retry - retry,
+	       z3660_rb_last[0], z3660_rb_last[1], z3660_rb_last[2]);
+	CHECK( g_okay && g_status == 0 && memcmp( back + 24 * 512, src, 2048) == 0,
+	       "ZS-05 read-back: a lost WRITE_ADDR1 is rewritten; data at its own LBA");
+	CHECK( memcmp( back + 20 * 512, old, 2048) == 0,
+	       "ZS-05 read-back: the previous piece's LBA is untouched (no DI-1 misplacement)");
+	CHECK( z3660_rb_retry == retry + 1 && z3660_rb_fail == 0 && mock_dropped == 1
+	       && z3660_rb_last[0] == 0x240 && z3660_rb_last[1] == 24 && z3660_rb_last[2] == 20,
+	       "ZS-05 read-back: counted once, last mismatch = $240 wrote 24 read 20");
+
+	/* 5. a cell that will not latch fails the request before its doorbell */
+	fail = z3660_rb_fail;
+	mock_drop_reg = 0x28; mock_drop_n = 2;
+	db = zs05_doorbells();
+	memset( buf, 0xEE, 2048);
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x28; cdb[5] = 8; cdb[8] = 4;
+	run_cmd( U_DISK, cdb, 10, buf, 2048);
+	printf("       READ_ADDR3 dropped twice: status=0x%02X okay=%d fail=+%lu doorbells +%lu\n",
+	       g_status, (int)g_okay, z3660_rb_fail - fail, zs05_doorbells() - db);
+	CHECK( !g_okay && g_status == 0xff && z3660_rb_fail == fail + 1,
+	       "ZS-05 read-back: a mismatch surviving the rewrite fails the request (EIO)");
+	CHECK( zs05_doorbells() == db && buf[0] == 0xEE && buf[2047] == 0xEE,
+	       "ZS-05 read-back: no doorbell rung, the caller's buffer untouched");
+	mock_drop_reg = -1; mock_drop_n = 0;
+	run_cmd( U_DISK, cdb, 10, buf, 2048);
+	CHECK( g_okay && memcmp( buf, back + 8 * 512, 2048) == 0,
+	       "ZS-05 read-back: the next request runs normally");
+}
+
 int main()
 {
 	mock_reset();
@@ -1658,6 +1786,7 @@ int main()
 	/* ZS-02 cells reset the mock (and so mock_div0): run them last */
 	test_zs02_detection();
 	test_console_truthful();
+	test_zs05_capture();		/* last: gate 1 covers every scenario above */
 
 	printf("\n=== GATING: %d passed, %d failed ===\n", g_pass, g_fail);
 	printf("=== STRETCH parity: %d match, %d deviation ===\n", s_match, s_dev);

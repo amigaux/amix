@@ -52,6 +52,9 @@
  *   bus cycle and finishes the whole transfer before the write returns.  After a
  *   READ, read USED_DMA(0x9C): if nonzero the data is in the bounce buffer, copy it
  *   out.  Before a WRITE, if the buffer is < 0x08000000 copy it into the bounce.
+ *   Since ZS-05 (2026-10-26) every one of those writes is ARMED by a read of an
+ *   offset covering it, and each address-triple cell is read back before the
+ *   command register is written -- see the ZS-05 block below WRLONG/RDLONG.
  *
  *   INQUIRY / READ_CAPACITY / MODE_SENSE / TEST_UNIT_READY are interpreted *here*
  *   (the firmware only does block read/write + geometry queries) -- mirroring
@@ -138,6 +141,17 @@
 #define	P_WRITE_ADDR3	0x248
 #define	P_BLOCKSIZE0	0x200		/* + unit*4, units 0..7 */
 #define	P_BLOCKS0	0x220		/* + unit*4, units 0..7 */
+
+/*
+ * ZS-05: each doorbell is armed by its set's ADDR2, and USED_DMA by P_UDMA_ARM
+ * -- undefined in the fork, in stock firmware and in amiberry (each read
+ * handler's default: 0, no side effect); a future firmware must keep it so.
+ */
+#define	P_UDMA_ARM	0xBC
+#if	(P_WRITE & ~P_WRITE_ADDR2) != 0 || (P_READ & ~P_READ_ADDR2) != 0 || \
+	(P_USED_DMA & ~P_UDMA_ARM) != 0
+#error	"z3660: an offset has a bit its arming register lacks (ZS-05)"
+#endif
 /*
  * Depth of the piscsi per-unit register arrays, and so of this driver's per-unit
  * geometry cache (see z3660_geom[] below): P_BLOCKSIZE0..+0x1C and
@@ -244,6 +258,80 @@ static long		board_phys;
 #endif	/* !HOST_TEST: the host harness force-includes its own WRLONG/RDLONG/
 	 * RDVPOSR (test/host/mock_regs.h) that drive a mock piscsi mailbox and a
 	 * mock Agnus/Alice id instead of real MMIO.  Inert for the kernel build. */
+
+/*
+ * ZS-05 -- the address-capture rule (Z3660 FPGA, real-CPU path; 2026-10-26).
+ *
+ * The FPGA captures a register access's address for the ARM (REG1, rtg.c
+ * rtg_thread(): zaddr = gpio & 0x1FFFFF) and on back-to-back 060 cycles it
+ * samples RISING address bits too early: the access is delivered at
+ * (previous address AND this address), silently, and the ARM services it
+ * there with whatever its DDR mirror holds for that cell.  Seen on both boxes
+ * as "[!!!PISCSI] Unhandled register write to 00000200" ($240 delivered at
+ * $200) and in the ZZ window ($104 delivered at $100).  rtg.c's comment above
+ * piscsi_reg_value() (same-clock event vs AXI write) is about the DATA; this
+ * is the ADDRESS, and no firmware re-read can see it.  A phantom that lands on
+ * a handled register is invisible to the firmware's "unhandled" print: a
+ * descriptor write landing on $000/$004 is a WRITE/READ doorbell with stale
+ * descriptors, a lost ADDR1 is a write to the previous request's LBA (DI-1's
+ * picture), a lost doorbell is a request that reports GOOD and moved nothing.
+ *
+ * RULE: every mailbox write is issued right after a read of an offset that has
+ * no bit the write's offset lacks, with nothing in between -- then the AND is
+ * the write's own address.  The macros below are the only way this driver
+ * writes the mailbox; each is ONE asm block (no stack or other bus cycle can
+ * sit between the arming read and the write) run with the IPL raised to 7 for
+ * its two or three cycles, so no interrupt handler's board access (z3660eth's
+ * INT6 at level 6 is the live one) or exception stacking can land in between.
+ *
+ *   Z3660_WRA(cmd, val)       read cmd, write cmd
+ *   Z3660_WRV(cmd, val, rb)   read cmd, write cmd, nop, read cmd back -> rb
+ *   Z3660_RING(arm, cmd, val) read arm, write cmd (arm a superset of cmd)
+ *   Z3660_RDX(arm, cmd, v)    read arm (discarded), read cmd -> v
+ *   Z3660_RDA(cmd, v)         RDX with arm == cmd
+ *
+ * The arming read of the register itself is side-effect free for every
+ * register armed this way (the descriptor cells return their latch; DRVNUMX
+ * has no read case and returns 0; BLOCKSIZE0/BLOCKS0+4n re-select the same
+ * unit) in the fork, in stock firmware and in the amiberry model.  RDA is for
+ * the attach-time reads, whose predecessors are arbitrary.  USED_DMA cannot
+ * arm itself (reading it consumes it), so it is armed by P_UDMA_ARM, an
+ * offset no firmware defines (read: 0, no side effect).  NOTES.md 2026-10-26.
+ */
+#ifndef	HOST_TEST
+#define	Z3660_WRA(cmd,val) do { ulong z_sr_, z_x_;				\
+	__asm__ __volatile__( "mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\t"		\
+	    "mov.l (%2),%1\n\tmov.l %3,(%2)\n\tmov.w %0,%%sr"			\
+	    : "=&d" (z_sr_), "=&d" (z_x_)					\
+	    : "a" (regs + (cmd)), "d" ((ulong)(val)) : "memory"); } while (0)
+#define	Z3660_WRV(cmd,val,rb) do { ulong z_sr_, z_x_;				\
+	__asm__ __volatile__( "mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\t"		\
+	    "mov.l (%2),%1\n\tmov.l %3,(%2)\n\tnop\n\tmov.l (%2),%1\n\t"		\
+	    "mov.w %0,%%sr"							\
+	    : "=&d" (z_sr_), "=&d" (z_x_)					\
+	    : "a" (regs + (cmd)), "d" ((ulong)(val)) : "memory");		\
+	(rb) = z_x_; } while (0)
+#define	Z3660_RING(arm,cmd,val) do { ulong z_sr_, z_x_;			\
+	__asm__ __volatile__( "mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\t"		\
+	    "mov.l (%2),%1\n\tmov.l %4,(%3)\n\tmov.w %0,%%sr"			\
+	    : "=&d" (z_sr_), "=&d" (z_x_)					\
+	    : "a" (regs + (arm)), "a" (regs + (cmd)), "d" ((ulong)(val))	\
+	    : "memory"); } while (0)
+#define	Z3660_RDX(arm,cmd,v) do { ulong z_sr_, z_x_;				\
+	__asm__ __volatile__( "mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\t"		\
+	    "mov.l (%2),%1\n\tmov.l (%3),%1\n\tmov.w %0,%%sr"			\
+	    : "=&d" (z_sr_), "=&d" (z_x_)					\
+	    : "a" (regs + (arm)), "a" (regs + (cmd)) : "memory");		\
+	(v) = z_x_; } while (0)
+#define	Z3660_RDA(cmd,v)	Z3660_RDX(cmd,cmd,v)
+#else	/* the harness sees the same access sequence through the mock seam */
+#define	Z3660_WRA(cmd,val)	do { (void)RDLONG(cmd); WRLONG(cmd,val); } while (0)
+#define	Z3660_WRV(cmd,val,rb)	do { (void)RDLONG(cmd); WRLONG(cmd,val);	\
+				     (rb) = RDLONG(cmd); } while (0)
+#define	Z3660_RING(arm,cmd,val)	do { (void)RDLONG(arm); WRLONG(cmd,val); } while (0)
+#define	Z3660_RDX(arm,cmd,v)	do { (void)RDLONG(arm); (v) = RDLONG(cmd); } while (0)
+#define	Z3660_RDA(cmd,v)	Z3660_RDX(cmd,cmd,v)
+#endif
 
 /* last-transaction diagnostics (read via /dev/mem or a probe tool) */
 ulong	z3660_lastblock, z3660_lastlen, z3660_blocks0, z3660_dma;
@@ -793,15 +881,15 @@ int	leave;
 	ulong	p;
 
 	p = (ulong)(leave ^ 1);
-	WRLONG( P_READ_ADDR2,  Z3660_SIG_K1);
-	WRLONG( P_WRITE_ADDR2, Z3660_SIG_K2);
-	z3660_sig_rd[0] = RDLONG( P_READ_ADDR2);	/* first written, read first */
-	z3660_sig_rd[1] = RDLONG( P_WRITE_ADDR2);
-	WRLONG( P_DRVNUMX, p);
-	z3660_sig_rd[2] = RDLONG( P_DRVNUM);
-	WRLONG( P_DRVNUMX, leave);
-	z3660_sig_rd[3] = RDLONG( P_DRVNUM);
-	z3660_sig_rd[4] = RDLONG( P_DRVTYPE);		/* firmware returns 0 or 1 */
+	Z3660_WRA( P_READ_ADDR2,  Z3660_SIG_K1);	/* ZS-05: every access armed */
+	Z3660_WRA( P_WRITE_ADDR2, Z3660_SIG_K2);
+	Z3660_RDA( P_READ_ADDR2, z3660_sig_rd[0]);	/* first written, read first */
+	Z3660_RDA( P_WRITE_ADDR2, z3660_sig_rd[1]);
+	Z3660_WRA( P_DRVNUMX, p);
+	Z3660_RDA( P_DRVNUM, z3660_sig_rd[2]);
+	Z3660_WRA( P_DRVNUMX, leave);
+	Z3660_RDA( P_DRVNUM, z3660_sig_rd[3]);
+	Z3660_RDA( P_DRVTYPE, z3660_sig_rd[4]);	/* firmware returns 0 or 1 */
 	if (z3660_sig_rd[0] == Z3660_SIG_K1 && z3660_sig_rd[1] == Z3660_SIG_K2 &&
 	    z3660_sig_rd[2] == p && z3660_sig_rd[3] == (ulong)leave &&
 	    z3660_sig_rd[4] <= 1) {
@@ -1182,18 +1270,21 @@ int	unit;
 {
 	ulong	bs, nb;
 
-	bs = RDLONG( P_BLOCKSIZE0 + unit * 4);	/* no divide in any firmware */
+	ulong	pdt;
+
+	Z3660_RDA( P_BLOCKSIZE0 + unit * 4, bs);	/* no divide in any firmware */
 	if (!z3660_bs_ok( bs)) {
 		z3660_geom_skip( unit, bs, 0UL);
 		return;
 	}
-	nb = RDLONG( P_BLOCKS0 + unit * 4);	/* safe: block_size != 0 here */
+	Z3660_RDA( P_BLOCKS0 + unit * 4, nb);	/* safe: block_size != 0 here */
 	if (nb == 0) {
 		z3660_geom_skip( unit, bs, nb);
 		return;
 	}
-	WRLONG( P_DRVNUMX, unit);
-	z3660_geom[unit].pdt     = RDLONG( P_PDT);
+	Z3660_WRA( P_DRVNUMX, unit);
+	Z3660_RDA( P_PDT, pdt);
+	z3660_geom[unit].pdt     = pdt;
 	z3660_geom[unit].bs      = bs;
 	z3660_geom[unit].nblocks = nb;
 	z3660_geom[unit].valid   = 1;		/* unmapped units stay re-readable */
@@ -1244,7 +1335,7 @@ int	unit;
 			unless (z3660_sig( unit))
 				return &z3660_geom_absent;
 			z3660_geom_sweep();
-			WRLONG( P_DRVNUMX, unit);
+			Z3660_WRA( P_DRVNUMX, unit);
 			return &z3660_geom[unit];
 		}
 		z3660_geom_fill( unit);
@@ -1284,10 +1375,62 @@ z3660_test_unmap()
 #endif	/* HOST_TEST */
 
 /*
+ * ZS-05 descriptor read-back.  Each descriptor cell is written armed and read
+ * straight back (Z3660_WRV); the read handler returns the ARM's own latch
+ * (piscsi_u32_read/write[i], scsi.c handle_piscsi_read(), fork and stock), so
+ * a write the ARM did not take -- an address-capture phantom outside the
+ * arming rule, or the data race of docs/DI-1-misplaced-write.md 4.1 -- shows
+ * as a mismatch.  A mismatch is rewritten once; a second one fails the request
+ * before its doorbell (EIO), so no transfer runs on a descriptor the ARM does
+ * not hold.  The counters and the last mismatch are kmem-readable.
+ */
+ulong	z3660_rb_retry;		/* descriptor mismatches rewritten              */
+ulong	z3660_rb_fail;		/* requests failed: mismatch survived a rewrite */
+ulong	z3660_rb_last[3];	/* last mismatch: offset, written, read back    */
+
+static int
+z3660_set( cmd, val)
+int	cmd;
+ulong	val;
+{
+	ulong	rb;
+
+	Z3660_WRV( cmd, val, rb);
+	if (rb == val)
+		return 0;
+	z3660_rb_last[0] = (ulong)cmd;
+	z3660_rb_last[1] = val;
+	z3660_rb_last[2] = rb;
+	if (z3660_rb_retry++ == 0)
+		printf( "z3660: mailbox 0x%x read back 0x%x, wrote 0x%x; rewritten\n",
+			cmd, (int)rb, (int)val);
+	Z3660_WRV( cmd, val, rb);
+	if (rb == val)
+		return 0;
+	if (z3660_rb_fail++ == 0)
+		printf( "z3660: mailbox 0x%x will not latch 0x%x; request failed\n",
+			cmd, (int)val);
+	return 1;
+}
+
+/* the descriptor triple at a1 (READ_ADDR1 or WRITE_ADDR1); 0 = all latched */
+static int
+z3660_desc( a1, block, len, pa)
+int	a1;
+ulong	block, len, pa;
+{
+	if (z3660_set( a1, block) || z3660_set( a1 + 4, len) ||
+	    z3660_set( a1 + 8, pa))
+		return EIO;
+	return 0;
+}
+
+/*
  * Run one block READ or WRITE through the piscsi mailbox, chunked to <=64KB.
  * block = starting LBA, blocks = block count, bs = block size, data = buffer.
+ * 0, or EIO when a descriptor would not latch (no doorbell for that chunk).
  */
-static void
+static int
 z3660_rw( unit, write, block, blocks, bs, data)
 int	unit, write;
 ulong	block, blocks, bs;
@@ -1343,10 +1486,9 @@ uchar	*data;
 				z3660_bounce_wr_n++;	/* unreachable on AMIX RAM */
 				bcopy( (caddr_t)data, (caddr_t)bounce, (int)len);
 			}
-			WRLONG( P_WRITE_ADDR1, block);
-			WRLONG( P_WRITE_ADDR2, len);
-			WRLONG( P_WRITE_ADDR3, pa);
-			WRLONG( P_WRITE, unit);			/* trigger (sync) */
+			if (z3660_desc( P_WRITE_ADDR1, block, len, pa))
+				return EIO;
+			Z3660_RING( P_WRITE_ADDR2, P_WRITE, unit);	/* trigger (sync) */
 			/* no completion op: TO_DEVICE never invalidates */
 		} else {
 			/*
@@ -1355,12 +1497,11 @@ uchar	*data;
 			 * valid line may survive to be read instead of them.
 			 */
 			z3660_push( pa, len);
-			WRLONG( P_READ_ADDR1, block);
-			WRLONG( P_READ_ADDR2, len);
-			WRLONG( P_READ_ADDR3, pa);
-			WRLONG( P_READ, unit);			/* trigger (sync) */
+			if (z3660_desc( P_READ_ADDR1, block, len, pa))
+				return EIO;
+			Z3660_RING( P_READ_ADDR2, P_READ, unit);	/* trigger (sync) */
 			z3660_sync();		/* S4: doorbell must precede the readback */
-			z3660_dma = RDLONG( P_USED_DMA);
+			Z3660_RDX( P_UDMA_ARM, P_USED_DMA, z3660_dma);
 			if (z3660_dma != 0) {
 				/*
 				 * BOUNCE arm -- the CPU writes `data`, through the
@@ -1383,6 +1524,7 @@ uchar	*data;
 		blocks -= chunk;
 		data   += len;
 	}
+	return 0;
 }
 
 /*
@@ -1525,7 +1667,7 @@ struct sdcom	*cp;
 	 * a hit); before that cache existed these three facts cost four further
 	 * round trips on every single CDB.
 	 */
-	WRLONG( P_DRVNUMX, unit);
+	Z3660_WRA( P_DRVNUMX, unit);	/* ZS-05: armed, like every mailbox write */
 	g   = z3660_geom_get( unit);
 	bs  = g->bs;
 	pdt = g->pdt;			/* 0x00 disk, 0x05 CD-ROM (sole device-type source) */
@@ -1742,13 +1884,17 @@ struct sdcom	*cp;
 			to = (long)block + z3660_fault_shift;
 			if (z3660_fault_mode == 1 && to >= 0
 			    && (ulong)to + blocks <= nb) {
-				z3660_rw( unit, write, (ulong)to, blocks, bs, data);
+				if (z3660_rw( unit, write, (ulong)to, blocks, bs, data)) {
+					cp->status = 0xff; cp->okay = FALSE;
+				}
 				break;
 			}
 			cp->status = 0xff; cp->okay = FALSE;	/* as a map failure */
 			break;
 		}
-		z3660_rw( unit, write, block, blocks, bs, data);
+		if (z3660_rw( unit, write, block, blocks, bs, data)) {
+			cp->status = 0xff; cp->okay = FALSE;	/* ZS-05: EIO */
+		}
 		break;
 
 	default:
