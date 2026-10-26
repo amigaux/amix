@@ -1082,9 +1082,10 @@ shape.
     `k46.1.1`, `sdcards=4`, `arena=`, `ident=`, `abi=fea18182…`, and a
     `root=` that names no Z3660 controller (z3660scsi is not linked in),
     with `rootfs=ufs`. Through `s3-standin.sh`, as S3-B5's kernels;
-  - `/tmp/boot2.bin` from amix-dlm a0a3d66 or later (`make boot2`,
-    S4-10's placement), and `/tmp/kbootset` from b4297bd or later
-    (`make box`, S4-12's composition);
+  - `/tmp/boot2.bin` from amix-dlm ec99e40 or later (`make boot2`,
+    S4-10's placement, loader version 3; loader-amix -7 at the next
+    mint), and `/tmp/kbootset` from ec99e40 or later (`make box`, S4-12's
+    composition and the loader-3 gate);
   - the z3660scsi root-class module (S4-30), built with the stage-4 kit
     (kabi `k46.1.1`): `.moddata` `class=root`,
     `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`, no `unload=`.
@@ -1104,16 +1105,17 @@ KABI=k46.1.1 sh tests/bench/s3-modpkg.sh <z3660scsi> k46 <outdir>
 
 | Boot | Commands | Expected |
 |---|---|---|
-| 1 | copy the trees (s3-standin's, s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
+| 1 | copy the trees (s3-standin's, s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 3` | `loader version 3 installed on trial; power-cycle to boot it`. A build before the loader is accepted refuses: `gate 7 … root-class modules, which need loader version 3` |
 | 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | `build`'s record in `/stand/gen/<id>/build`, after the kernel's: `module z3660scsi root <size> at=0x10000 crc32=00000000 sha256=… path=/stand/gen/<id>/mod/z3660scsi bss=<n> match=zorro:144b:01,mobo:z3660-window safe=1`. The box's `--rootdev` is the Z3660 from kinfo's card table, and no built-in driver names it, so gate 3 is met by the module and it is the safe set. `generation <id> committed` |
-| 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of S3-B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
+| 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of S3-B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot 3: …` (the version is in the banner), `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
 | 4 | `shutdown -i0 -g0 -y` | `dlm: halt pass: 1 module(s) stopped` if z3660scsi has a `_halt` (C4-2 §5: the mailbox left idle), then `The system is halted` |
 
 **What the row says if it fails.**
 - No `module z3660scsi … bytes` from boot2: the generation carries no
-  root record (look at the `build` file), or boot2 is older than
-  a0a3d66. A boot2 from before S4-10 refuses a root-class record with L9
-  and falls back to generation 1.
+  root record (look at the `build` file), or boot2 is older. A loader
+  below version 3 refuses the generation (`loader-min 3`) with L9 and
+  falls back to generation 1; kbootset's gate 7 normally refuses it
+  first.
 - `L3 member damaged`, or `dlm: root module z3660scsi damaged; not
   linked`: the bytes. Check the store with `lsstore` on the host.
 - `dlm: root module z3660scsi: error <n>`, or z3660scsi's own line: its
