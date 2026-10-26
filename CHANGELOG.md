@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patches 0030 (the halt pass) and 0031 (block rows); kabi k46.1.1 / k30.1.1 (3e4c3a0, 99a61ea, 1aba361)
+
+0030 (S4-07): `int dlm_halt(void)` runs each settled module's halt entry newest first, once; the kernel calls it from mdboot
+before haltsys/rtnfirm for A_SHUTDOWN/A_REBOOT only (spec 30 §2 patch 11; OQ-30.5 answered: no crash). 0031 (S4-06): a pinned
+driver's registered b: majors fill empty bdevsw rows; block-only allowed; a block row that cannot link puts the character rows
+back; a failed load restores the row. The measured bdevsw layout (DRV_BDEVSW, DRV_BMAJOR, BD_NFN, BD_FLAG) opens the stage-4
+kabi minor: abi-k46.1.1 fc6ae88f, abi-k30.1.1 fea18182; the kit moves to 1.1. Harness 206/206 both kernels; kit-test and
+make test clean; dlm.o 8918560f. **No dlmkit mint from 1aba361 until S4-21's 1.1 kernels exist** (a 1.1 kit's modules are
+refused by 1.0 kernels); dlmkit -5 stays the kit for 1.0. For S4-21: row 20's stock ram entry becomes bempty (every routine
+nodev, flag 0).
+
 ## 2026-10-26 — Core patch 0029: no-sleep mode for the root pass (S4-02, 7f0613e)
 
 dlm_nosleep makes dlm_zalloc ask KM_NOSLEEP and refuse requests over 1 MiB (U1's rule); every load-path allocation is
