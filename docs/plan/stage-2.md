@@ -139,13 +139,13 @@ every line of this table.
 | pristine boot | **passed** 2026-10-26: the installer's 1.1-layout image (S2-30) boots its pristine generation 1 under our loader (the workspace's `tmp/2026-10-26-s2/l11-v6/N39`; install evidence `tmp/2026-10-26-s2-installng-v6/l11-k46.*`, amix-installng `work/install-matrix/20261025-l11-k46-h/`); the stage-1 vehicles and floppy pairs boot `state pristine` generations too | **passed** 2026-10-26: as k46, `l11-v6/N37` and `l11-k30.*`, `20261025-l11-k30-h/` |
 | power cut at each commit step | **passed** 2026-10-26: M-GEN3, `2026-10-26-m-gen3.md` | optional: one N = 7 cell once the k30 package exists |
 | refusal of a kernel-space package whose SHA-256 differs | **passed** 2026-10-26: apkg's S2-20 row (amix-packagemanager), below | line-independent (apkg's check) |
-| upgrade install from a 1.0 image | **open**: M-UPG1's k46 cell (`l11-k46-upg`, a 1.0 KD060 disk to 1.1) is running at amix-installng | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261025-l11-k30-upg-g/` and `-h/` (after the memory fix), copies in the workspace's `tmp/2026-10-26-s2-installng-v6/l11-k30-upg.*`; all install gates pass, generation 1 pristine. First boot: the workspace's `tmp/2026-10-26-s2/l11-v6/N38/03-host.txt`, the on-box batch after login: `uname -n` upgbox, the kept user and home file (`kept-by-the-upgrade`), the hosts line, kbootset status and check (0 problems), the `retry` lines in `bcheckrc`. The rig's "no-login-prompt" there is a misread of the login prompt |
+| upgrade install from a 1.0 image | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261026-l11-k46-upg-a/` (source a 1.0 KD060-ZA-CD disk; configuration and `/home` captured and restored; store gates pass). First boot: the workspace's `tmp/2026-10-26-kinfo030/run/N42/03-host.txt`: `uname -n` upgbox on 68060-261025-51, the kept user, home file and hosts lines, kbootset status (store-id dfbf2a0a, generation 1 booted) and check (0 problems), the `retry` lines, `/dev/kinfo`. The rig's "no-login-prompt" there is the login-prompt misread seen on the k30 cell | **passed** 2026-10-26: M-UPG1, amix-installng `work/install-matrix/20261025-l11-k30-upg-g/` and `-h/` (after the memory fix), copies in the workspace's `tmp/2026-10-26-s2-installng-v6/l11-k30-upg.*`; all install gates pass, generation 1 pristine. First boot: the workspace's `tmp/2026-10-26-s2/l11-v6/N38/03-host.txt`, the on-box batch after login: `uname -n` upgbox, the kept user and home file (`kept-by-the-upgrade`), the hosts line, kbootset status and check (0 problems), the `retry` lines in `bcheckrc`. The rig's "no-login-prompt" there is a misread of the login prompt |
 | **exit gate:** a box upgraded and rolled back with apkg alone | **passed** 2026-10-26: S2-46, `2026-10-26-s2-46.md` | after S2-11 and the k30 kernel package |
 | **exit gate:** every power-cut point leaves a booting generation | **passed**, as M-GEN3 | as above |
 
-Still open on the bench besides the k30 column: M-UPG1 on k46. M-GEN2, a
-stage-2 measurement that 80's exit gate does not name, is closed on the
-bench (`2026-10-26-m-gen2.md`).
+**The k46 column is complete** (2026-10-26). M-GEN2, a stage-2
+measurement that 80's exit gate does not name, is closed on the bench
+(`2026-10-26-m-gen2.md`). The k30 column waits for the k30 kernel package.
 
 **The SHA-256 refusal row** (evidence: the workspace's
 `tmp/2026-10-26-s2/s2-46sha/N36/`). On the kinfo vehicle with apkg 0.3
