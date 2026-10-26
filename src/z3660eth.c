@@ -1902,7 +1902,7 @@ z3660ethinit()
  * The module form (amix-dlm docs/contracts/C3-6-driver-to-module.md, version 1,
  * section 2).  Built with -DZ3660ETH_MODULE, once per kernel line (k30, k46);
  * without it this file is the static driver, byte for byte.  The ABI kit's
- * mkmod adds .moddata (module/Master.in) and modfix the section type.
+ * mkmod adds .moddata (module/Master) and modfix the section type.
  *
  *   class=boot, unload=never, majors=c:51: the core registers major 51 from
  *   z3660eth_drvdata; no code here touches cdevsw.  The interface goes on the

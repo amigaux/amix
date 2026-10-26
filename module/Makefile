@@ -1,5 +1,5 @@
 # module/Makefile -- the z3660eth loadable module, one per kernel line, built
-# with amix-dlm's ABI kit (S3-10; the kit's docs/writing-a-module.md).
+# with amix-dlm's ABI kit (S3-10; the kit's docs/guide.md).
 #
 #   make -C module            both lines: build/k30/mod.d/z3660eth and
 #                             build/k46/mod.d/z3660eth, each checked by the
