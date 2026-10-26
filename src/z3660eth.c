@@ -1933,7 +1933,8 @@ z3660ethinit()
 #define INTREQ_SETCLR		0x8000
 #define INTREQ_EXTER		0x2000	/* level 6 */
 #define INTREQ_PORTS		0x0008	/* level 2 */
-#define Z3660ETH_SELFTEST_SPIN	200000	/* polls of the test flags, IPL 0 */
+#define Z3660ETH_SELFTEST_SPIN	200000	/* polls of the level-6 test flag */
+#define Z3660ETH_SELFTEST_TICKS	4	/* one-tick sleeps for the level-2 flag */
 
 #define RAISE_INTREQ(bits) \
 	(*(volatile unsigned short *)AMIGA_INTREQ = (unsigned short)(INTREQ_SETCLR | (bits)))
@@ -2034,14 +2035,20 @@ int board_index;
  * software (INTREQ EXTER, as the firmware's INT6 arrives; p6int acknowledges
  * it and calls the stock CIA-B handler first, as on every firmware INT6).
  * The test passes when the level-6 handler took its flag and, with intrl2,
- * the level-2 handler took the one it raised.  Process context, IPL 0, the
- * board's interrupt off.  0, or an errno with nothing left attached.
+ * the level-2 handler took the one it raised.  Process context, the board's
+ * interrupt off, and IPL 4: the stock qattach() calls a driver's open with
+ * SR = 0x2400.  Level 6 passes IPL 4, so its flag is polled; the PORTS the
+ * level-6 handler raises waits for the IPL to drop, so the open sleeps a
+ * tick at a time (the stock delay(): timeout, then sleep, at IPL 4, which
+ * holds off the level-2 clock, so the wakeup cannot come first) and the next
+ * process or the idle loop takes it.
+ * 0, or an errno with nothing left attached.
  */
 static int
 z3660eth_intr_setup(board)
 z3660eth_board_t *board;
 {
-    int e, i;
+    int e, i, s;
 
     if ((e = intr_attach(6, z3660eth_int6, (char *)board, "z3660eth")) != 0) {
 	cmn_err(CE_NOTE, "zen: level-6 attach failed (errno %d); polled", e);
@@ -2057,8 +2064,15 @@ z3660eth_board_t *board;
     z3660eth_l6_test = 1;
     RAISE_INTREQ(INTREQ_EXTER);
     for (i = 0; i < Z3660ETH_SELFTEST_SPIN; i++)
-	if (!z3660eth_l6_test && !z3660eth_l2_test)
+	if (!z3660eth_l6_test)
 	    break;
+    for (i = 0; !z3660eth_l6_test && z3660eth_l2_test &&
+	i < Z3660ETH_SELFTEST_TICKS; i++) {
+	s = splz3660eth();
+	(void)timeout(wakeup, (caddr_t)&z3660eth_l2_test, 1);
+	(void)sleep((caddr_t)&z3660eth_l2_test, PZERO - 1);
+	splx(s);
+    }
     if (z3660eth_l6_test || z3660eth_l2_test) {
 	z3660eth_l6_test = z3660eth_l2_test = 0;
 	if (z3660eth_intrl2)

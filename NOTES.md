@@ -42,6 +42,11 @@ software (INTREQ 0xA000, the way the firmware's INT6 arrives); the level-6
 handler takes the test flag and, with `intrl2`, raises PORTS (0x8008) for the
 level-2 handler's flag. Only when both flags came back is the board's
 interrupt enabled; any failure detaches and stays polled, one console line.
+The open runs at IPL 4 (the stock `qattach()` sets SR 0x2400 around the
+driver's open: k46 0x4ee1c, k30 0x5190c), so the PORTS stays pending inside
+it: the level-6 flag is spun on, the level-2 flag is waited for with one-tick
+`timeout`/`sleep` rounds (up to 4) while the IPL drops elsewhere. 1.0.0-2
+spun on both and printed "interrupt self-test failed; polled" every time.
 - `z3660eth_int6` calls nothing: it reads `ZZ_INT_STATUS`, and for ETH writes
   `ZZ_CONFIG_DISABLE`. In the firmware (`rtg.c` REG_ZZ_CONFIG) that write both
   clears the ETH interrupt and stops it (`interrupt_enabled_ethernet = 0`), so
