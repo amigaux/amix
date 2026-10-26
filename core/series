@@ -5,3 +5,4 @@
 0002-platform-registrations-out-of-dlm_init.patch
 0003-moddata-v2-kabi-pin.patch
 0004-format-errors-enoload.patch
+0005-allowlisted-symbol-block.patch

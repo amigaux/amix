@@ -18,7 +18,14 @@
 #     dlmtest2 at -O2 -m68040, rall with every relocation type), the
 #     relocation oracle (each module relocated by the host loader must be
 #     byte-identical to m68k-elf-ld linking it at the same base), the
-#     error paths, and the state harness.
+#     error paths, and the state harness;
+#  5. per kernel, the allowlisted block (C3-2, core patch 0005): mkksym -a
+#     from the line's abi/ lists, linked into the kernel with stubs for the
+#     names whose providers come later (listed), mkksym -f, the post-link
+#     gate (tools/ksymgate.py: bound twice by the loader's relocator), and
+#     modules resolved against that block as the loader leaves it: the
+#     test modules load, a module using a name off the list is ERELOC, and
+#     a listed name left undefined fails -f.
 #
 # usage: sh tests/core/run.sh [KERNEL.elf ...]
 #   default: the k46 and k30 kernels of record (amix-kerntools k0-chains)
@@ -63,6 +70,8 @@ DLM=$S/kernel/dlm
 T=$DLM/test
 TB=$B/tools
 mkdir -p "$TB" "$B/test-bin" "$B/obj" "$B/target"
+${HOSTCC:-cc} -O2 -I"$R/loader/common" -o "$B/test-bin/axrel" "$R/tests/host/axrel.c" \
+	"$R/loader/common/rel.c"
 
 # ---- 1. host tools ----
 HCC="${HOSTCC:-cc} -std=gnu89 -O -g -Wall -Wno-parentheses -Wno-unused-but-set-variable"
@@ -114,7 +123,8 @@ fi
 for IMG; do
 	K=$(basename "$IMG")
 	W=$B/test/$K
-	case "$K" in K030*|*k30*) KABI=k30.1.0 ;; *) KABI=k46.1.0 ;; esac
+	case "$K" in K030*|*k30*) KABI=k30.1.0 LINE=k30 ;; *) KABI=k46.1.0 LINE=k46 ;; esac
+	ORIG=$IMG
 	export DLM_KABI=$KABI DLM_PIN=$PIN	# mkmod's -K and -P
 	rm -rf "$W"
 	mkdir -p "$W"
@@ -258,6 +268,69 @@ for IMG; do
 		sed 's/^/state: /' "$W/state.log" | grep -v '^state: PASS'
 		fail "$K: state harness"
 	fi
+
+	# ---- 5. the allowlisted block ----
+	A=$W/allow
+	mkdir -p "$A"
+	L="$R/abi/$LINE/ddi.list"
+	LC="$R/abi/$LINE/core.list"
+	if "$TB/mkksym" -a "$L" -a "$LC" > "$A/ksym.s" 2> "$A/ksym.log" &&
+	   m68k-cbm-sysv4-as -o "$A/ksym.o" "$A/ksym.s"; then
+		pass "$K: allowlisted block generated and assembled ($(sed 's/^mkksym: //' "$A/ksym.log"))"
+	else
+		fail "$K: mkksym -a: $(cat "$A/ksym.log")"; continue
+	fi
+	# the providers that come with later core patches, or dlm.o itself: stubbed
+	m68k-elf-nm "$ORIG" | awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
+	awk '!/^#/ && NF {print $1, $2}' "$L" | while read n k; do
+		grep -qx "$n" "$A/defined" || echo "$n $k"; done > "$A/stubbed"
+	awk '$2=="func" {printf "\t.text\n\t.globl\t%s\n%s:\n\trts\n", $1, $1}
+	     $2=="data" {printf "\t.data\n\t.globl\t%s\n%s:\n\t.long\t0\n", $1, $1}' \
+		"$A/stubbed" > "$A/stubs.s"
+	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
+	echo "$K: providers to come (stubbed for the gate): $(awk '{printf "%s ", $1}' "$A/stubbed")"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$ORIG" "$A/ksym.o" "$A/stubs.o"
+	if "$TB/mkksym" -f "$A/kernel.o" > "$A/fill.log" 2>&1; then
+		pass "$K: mkksym -f: $(sed 's#.*: ##' "$A/fill.log")"
+	else
+		fail "$K: mkksym -f: $(cat "$A/fill.log")"
+	fi
+	if python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel.o" "$L" "$LC" > "$A/gate.log" 2>&1; then
+		pass "$K: post-link gate: $(grep -c '^PASS' "$A/gate.log") checks, bound at 0x00200000 and 0x07f00000"
+	else
+		grep '^FAIL' "$A/gate.log"; fail "$K: post-link gate"
+	fi
+	# the gate itself fails on a block that does not match the lists
+	printf 'no_such_name func 0\n' > "$A/extra.list"
+	if ! python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel.o" "$L" "$A/extra.list" \
+		> "$A/gate-neg.log" 2>&1 && grep -q '^FAIL.*exactly the' "$A/gate-neg.log"; then
+		pass "$K: post-link gate fails when the lists name what the block lacks"
+	else
+		fail "$K: post-link gate passed a block that does not match the lists"
+	fi
+	# a listed name left undefined (the last stub dropped): -f refuses it
+	head -n -4 "$A/stubs.s" > "$A/stubs-short.s"
+	m68k-cbm-sysv4-as -o "$A/stubs-short.o" "$A/stubs-short.s"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$ORIG" "$A/ksym.o" "$A/stubs-short.o"
+	if ! "$TB/mkksym" -f "$A/kernel-short.o" > "$A/short.log" 2>&1 &&
+	   grep -q "listed but not defined" "$A/short.log"; then
+		pass "$K: a listed name left undefined: $(grep -o '[^ ]* is listed but not defined' "$A/short.log" | head -1), refused"
+	else
+		fail "$K: mkksym -f accepted a missing name"
+	fi
+	# modules against the block as the loader leaves it at 0x08000000
+	python3 "$R/tools/ksymgate.py" --extract "$B/test-bin/axrel" "$A/kernel.o" 0x08000000 "$A/ksym.bin"
+	for m in dlmdep dlmtest rall; do
+		case $m in
+		dlmdep) ra= want=0 ;;
+		dlmtest) ra="-D $M/mod.d/dlmdep@0x00380000" want=0 ;;
+		rall) ra="-S $W/rall.sym" want=165 ;;	# it uses u, which is off the list
+		esac
+		got=$("$B/test-bin/reloc" -k "$A/ksym.bin" $ra -b 0x300000 "$M/mod.d/$m" 2>&1 |
+			awk '/^ERR/{print $2} /^OK/{print 0}')
+		if [ "$got" = "$want" ]; then pass "$K: $m against the allowlisted block -> $want"
+		else fail "$K: $m against the allowlisted block: got '$got' want $want"; fi
+	done
 done
 
 echo "core: $fails failed"
