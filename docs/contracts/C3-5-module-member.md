@@ -88,7 +88,15 @@ box, and on the installer's miniroot, which has no `awk`, `cmp`, `grep` or
 `sed`, under a fixed `PATH`. So they are **pure Bourne shell**: the
 builtins (`read`, `case`, `test`, `echo`, `while`, redirection) and `mv`.
 Any other command runs only after `test -x` finds it, with the script
-still correct without it. modtools' postinstall, which puts the `modadmin -B` line
+still correct without it.
+
+Never re-read a file through `exec <file`: the 1991 sh's `read` keeps
+buffered input across the redirection and continues from where the
+previous read stopped. Read a file once per redirection: `while read l;
+do …; done < file`, or `read l < file`. Scripts are proven on the 2.1 sh
+(the installer miniroot), not on a host shell. (modtools -3's
+postinstall re-read `/etc/inittab` that way and left only the `dlm`
+line.) modtools' postinstall, which puts the `modadmin -B` line
 first among the sysinit entries (§5), is written that way from modtools -3.
 
 ## 2. What `kbootset build` composes, and what it refuses
