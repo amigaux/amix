@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — mkident: dlm_arena back to .balign 4; .data stays 4-aligned (a32fc10, 8bbe731)
+
+The record rounds the arena (C3-3 v5), so the directive added nothing and a .data alignment above 4 could open a text/data
+gap the loader does not expect (the port's finding). The core harness checks .data stays 4-aligned in ident.o and the spliced
+kernel; the arena stays 16-aligned in the image (KD060-Z 0x0012f0f0, K030-U 0x001091b0). Kit at 8bbe731, content unchanged.
+
 ## 2026-10-26 — C3-5 v8: the ramdisk package row; block-driver nodes in /dev/dsk (b5791e9)
 
 §1.1 `ramdisk | ramdisk | ramdisk30 / ramdisk46`; §1.2 device nodes ship as pkgmap entries, block nodes in /dev/dsk,
