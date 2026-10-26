@@ -134,6 +134,10 @@ void  dma_free(char *va, ulong len);
   the physical address itself as the pointer (equal to `*pa`), a
   cache-inhibited alias. It pushes and invalidates the block by physical
   line at alloc and at free, against the heap mapping's own cache lines.
+  **dma_alloc memory is addressed through the identity map; the kernel's
+  own heap alias must not be used by the driver after dma_alloc
+  returns.** The core keeps the heap address in the block's header,
+  read through the alias, for `dma_free`.
   On k30 the memory comes from the pool (§5).
 - As a module, a driver moves the structures it hands the chip (the
   DSA table, the SCRIPTS, the ident, CDB, status and message buffers,
