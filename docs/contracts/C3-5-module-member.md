@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 9
+# C3-5 — the module package and the per-module manifest record, version 10
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -13,7 +13,9 @@
   (2026-10-26, C4-4 version 3): `safe=1` marks the root records of the safe-mode
   set (§3); version 8 (2026-10-26, amix-modules' ramdisk): its short name
   (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2); version 9
-  (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1).
+  (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1);
+  version 10 (2026-10-27): z3660scsi's (as amix-packages minted it) and
+  a4091's (§1.1).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -67,6 +69,8 @@ per line**:
 | z3660eth | `zeth` | `zeth30` / `zeth46` |
 | z3660rtg | `zrtg` | `zrtg30` / `zrtg46` |
 | monsw | `monsw` | `monsw30` / `monsw46` |
+| z3660scsi | `zscsi` | `zscsi30` / `zscsi46` |
+| a4091 | `a4091` | `a409130` / `a409146` |
 | ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
 | gayle | `gayle` | `gayle30` / `gayle46` |
 
