@@ -189,6 +189,7 @@ make -C ../amix-dlm kit                 # ../amix-dlm/build/kit/{k30,k46}
 make -C module                          # build/k30/mod.d/z3660eth, build/k46/mod.d/z3660eth
 make -C module k46                      # one line
 make -C module static                   # the static object per line, and its sha256
+make -C module test                     # host test of the _load parameter parser
 ```
 `DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. The kit's
 fragment builds each line under `build/<line>/` (objects in `obj/`, the module in

@@ -8,6 +8,7 @@
 #   make -C module static     the static object of each line compiled against
 #                             the kit's headers, and its sha256 (the static
 #                             driver must not change: BUILD.md section 9)
+#   make -C module test       the host test of the _load parameter parser
 #   make -C module clean
 #
 # DLM is the amix-dlm checkout whose kits are built (`make kit` there gives
@@ -33,12 +34,15 @@ static: $(LINES:%=static-%)
 $(LINES:%=static-%): static-%:
 	$(MAKE) -s KIT=$(call kit,$*) static
 
+test:
+	sh $(TOP)/module/test-params.sh
+
 clean: $(LINES:%=clean-%)
 
 $(LINES:%=clean-%): clean-%:
 	$(MAKE) KIT=$(call kit,$*) clean
 
-.PHONY: all static clean $(LINES) $(LINES:%=static-%) $(LINES:%=clean-%)
+.PHONY: all static test clean $(LINES) $(LINES:%=static-%) $(LINES:%=clean-%)
 
 else	# one line, the kit's
 

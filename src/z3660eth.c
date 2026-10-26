@@ -206,6 +206,19 @@ static volatile int z3660eth_l6_test, z3660eth_l2_test;	/* the attach self-test 
 unsigned long z3660eth_int6_n, z3660eth_int2_n;		/* claims, kmem-readable */
 #endif
 
+/*
+ * The tail of a probe-failure console line.  The static driver probes at open
+ * and again later; the module probes once, in _load, and a failure there means
+ * the module is not kept (C3-6 section 1.1: a console line per refusal).
+ */
+#ifdef Z3660ETH_MODULE
+#define Z3660ETH_FAILS	"module not loaded, errno"
+#define Z3660ETH_RETRY	"module not loaded"
+#else
+#define Z3660ETH_FAILS	"opens fail errno"
+#define Z3660ETH_RETRY	"will retry"
+#endif
+
 static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
@@ -640,7 +653,8 @@ int board_index;
 	if (!info->nomem_said) {
 	    info->nomem_said = 1;
 	    cmn_err(CE_NOTE,
-		"zen: no Z3660 ethernet found (kernel VA map failed); will retry");
+		"zen: no Z3660 ethernet found (kernel VA map failed); "
+		Z3660ETH_RETRY);
 	}
 	return ENOMEM;
     }
@@ -726,11 +740,11 @@ int showmac;
     info->map_verdict = e;
     if (showmac)
 	cmn_err(CE_NOTE,
-	    "zen: no Z3660 ethernet found (%s 0x%x 0x%x); opens fail errno %d",
+	    "zen: no Z3660 ethernet found (%s 0x%x 0x%x); " Z3660ETH_FAILS " %d",
 	    why, z3660eth_machi, z3660eth_maclo, e);
     else
 	cmn_err(CE_NOTE,
-	    "zen: no Z3660 ethernet found (%s); opens fail errno %d", why, e);
+	    "zen: no Z3660 ethernet found (%s); " Z3660ETH_FAILS " %d", why, e);
     return e;
 }
 
@@ -2118,9 +2132,10 @@ long dflt;
 /*
  * _load: once, process context, before the core installs the cdevsw row.  Finds
  * and maps the board as the first open of the static driver does, turns its
- * interrupt off and puts zen on the interface list.  ENXIO without a board;
- * on any error nothing is left (z3660eth_map unmaps its own failures, and
- * nothing is armed or attached yet).
+ * interrupt off and puts zen on the interface list, the last step and its only
+ * registration.  ENXIO without a board.  Every nonzero return prints one "zen:"
+ * line naming the reason (z3660eth_map prints its own) and leaves nothing:
+ * z3660eth_map unmaps its own failures, and nothing is armed or attached yet.
  */
 int
 z3660eth_load(params)
@@ -2151,6 +2166,7 @@ char *params;
     board->ifstats.ifs_unit = 0;
     board->ifstats.ifs_active = 0;
     if ((e = if_attach(&board->ifstats)) != 0) {
+	cmn_err(CE_NOTE, "zen: if_attach failed (errno %d); module not loaded", e);
 	z3660eth_unmap(info);
 	z3660eth_present = 0;
 	z3660eth_autoconfigured = 0;
@@ -2160,11 +2176,36 @@ char *params;
     return 0;
 }
 
-/* unload=never: the core never calls it; if it did, the answer is no. */
+/*
+ * unload=never: the core never unloads the module on request (its unload
+ * entry is gated on unload=allowed).  It does call _unload when a linkage
+ * fails to install after _load succeeded (dlm_core.c lf_fail), before any
+ * open can have happened: then everything _load did is undone here, in
+ * reverse order, so the core's registration backstop finds nothing.
+ * Anything an open started (a stream, the poll, the interrupt chain) is EBUSY.
+ */
 int
 z3660eth_unload()
 {
-    return EBUSY;
+    z3660eth_board_t *board = &z3660eth_board[0];
+    z3660eth_info_t *info = &board->z3660eth_info;
+    int n;
+
+    if (info->poll_running || z3660eth_intr_mode == 6)
+	return EBUSY;
+    for (n = 0; n < Z3660ETH_MAXDEV; n++)
+	if (board->z3660eth[n].q)
+	    return EBUSY;
+    if (info->regs)
+	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+    if (z3660eth_number_of_boards)
+	(void)if_detach(&board->ifstats);
+    z3660eth_number_of_boards = 0;
+    z3660eth_unmap(info);
+    info->map_verdict = 0;
+    z3660eth_present = 0;
+    z3660eth_autoconfigured = 0;
+    return 0;
 }
 
 /*

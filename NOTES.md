@@ -18,14 +18,21 @@ The module form includes the kit's `sys/amixddi.h` for `if_attach` and
 **What changes in the module.**
 - `z3660eth_load(params)` does what the first open did: `z3660eth_map(0)`
   (autocon, then the AGA fixed base, the MAC probe), `ZZ_CONFIG_DISABLE`,
-  and `if_attach(&board->ifstats)` with the name set. An error returns the
-  map's errno (ENXIO absent, ENOMEM no VA) with nothing armed or attached.
+  and `if_attach(&board->ifstats)` with the name set, last. An error returns
+  the map's errno (ENXIO absent, ENOMEM no VA) or if_attach's, with nothing
+  armed or attached, after one `zen:` line naming the reason (the probe lines
+  end "module not loaded" in the module form). Parser: `make -C module test`.
 - Open no longer links `ifstats`; `extern ifstats` is gone. `z3660ethintr()`
   and `z3660ethinit()` are not compiled.
 - Major 51 is data: `z3660eth_drvdata[]` carries the row (only `d_str`) and
   `drv_cmajor` 51; the core registers it from `.moddata` `majors=c:51`.
 - `z3660eth_halt()`: the board's interrupt off, the poll stopped.
-  `z3660eth_unload()` returns EBUSY (`unload=never`).
+  `z3660eth_unload()`: `unload=never`, so the core calls it only when a
+  linkage fails to install after `_load` succeeded (`lf_fail`, before any
+  open). It then undoes `_load` (interrupt off, `if_detach`, unmap); after
+  any open it is EBUSY. The first module boot (2026-10-26, k30) hit that case
+  (the core's EINVAL, no STREAMS slot for a boot-class major): the old EBUSY
+  left the ifstats link to the core's backstop and the sptalloc pages kept.
 
 **Interrupts (C3-6 section 1.3).** `intr=0` (default) is the static driver's
 polling. `intr=6` attaches at the first open (process context, board set up,
