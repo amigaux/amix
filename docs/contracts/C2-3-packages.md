@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar, version 6
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 7
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -69,6 +69,7 @@ root=zorro:0202:54           built-in root controllers (match keys, comma-separa
 rootfs=ufs                   built-in root filesystems; static kernels only
 arena=0x001f2000 0x00080000  offset and capacity; absent on a static kernel
 sym=unix.sym 412345 <64 hex> the symbols file beside unix: name, size, SHA-256 (version 6; every brel)
+sdcards=4                    the sd cards the kernel was built for (version 7); absent means 2
 ```
 
 What the gates read:
@@ -78,6 +79,19 @@ What the gates read:
 - gate 4 (arena): `arena`;
 - gate 7: `loader-min`;
 - gate 10 (line): `line`.
+
+**`sdcards=`** (version 7) is the number of sd cards the kernel's sd layer
+was built for: `4` for a kernel with contract C4-1's four cards (the
+S4-21 kernels on both lines and every later one), `2` or absent for every
+earlier kernel. The minor layout depends on it (C4-1 §2.1): on a
+two-card kernel bit 7 is not a card bit, so a `c10` node there would
+open card 0. It is an explicit key, never read from the kabi minor:
+- the kernel build writes it with the other keys (amix-kerntools'
+  `kabi-sidecar030.py`, amix-040-060-port's `kabi-sidecar.py`), and a
+  sidecar written before this version is re-stamped, not the kernel;
+- amix-packages passes it through;
+- the installer reads it from `/stand/kNN/kabi` on the medium, as it
+  reads `kabi=` and `line=`, before it makes device nodes or names a disk.
 
 Unknown keys are ignored.
 
