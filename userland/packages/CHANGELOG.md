@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — z3660eth-k30/-k46 1.0.0-3 (0247012) — not published
+
+From amix-z3660net 3e6b696: the module's intr=6 interrupt self-test now works inside the IPL-4 STREAMS open. Objects k30
+abf530d7, k46 9dfe0294 (18984 B file, 12945 B image); kit e84878e; /dev/zen0 c 51 0 as in -2. zeth30 md5 a8608c3e, zeth46
+bff54223, 28160 B each. The -2 datastreams stay in build/kspace/pkg (upgrade-from); the staged root carries -3 (catalog
+ad04c5bc); the -2 root is kept at build/kspace/superseded/repo-20261026-1507 (fde1018e). Round trip 106/106; gates PASS.
+
 ## 2026-10-26 — monsw-k30/-k46 1.0.0-2 (d059277) — not published
 
 A package revision for S3-45's `apkg upgrade` row, from amix-modules b0f75a4: module/VERSION 1.0.0-2, README facts; objects
