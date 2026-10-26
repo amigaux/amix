@@ -67,3 +67,41 @@ spec lines that quote it, in the same commit. Item 6 is the last resort.
 
 Bench evidence recorded before 001b04a (the S3-43 cells' serial logs)
 shows the old form. That is history, not a pattern to grep for.
+
+## 5. Stage 4: the two gates, and what root placement costs (S4-10)
+
+**Both gates bind, and the file binds first.** `b2link` refuses a boot2
+whose file (image plus its self-relocation table) or whose image plus
+bss exceeds 28 672 bytes. At amix-dlm 24e1ae1:
+
+| | bytes | left |
+|---|---|---|
+| image | 27 264 | |
+| self-relocation table | 1 092 | |
+| **file** | **28 356** | **316** |
+| bss | 892 | |
+| image + bss | 28 156 | 516 |
+
+§1's "516 left" is the image + bss gate. New code grows the table as
+well as the image, so the file's 316 is the figure to plan against.
+
+**Root placement, measured by building it** (the prototype is not
+committed; the directory written as C4-4 version 2 §1 lays it out:
+counted first, the manifest copy at 32 + 48 × count, each module
+16-aligned with its zeroed `bss=` tail, L5 on overflow):
+
+| Variant | file | image + bss | cost (file) | over the file gate |
+|---|---|---|---|---|
+| boot2 evaluates `match=` (FindConfigDev per `zorro:` key) and the safe set | 29 100 | 28 872 | +744 | 428 |
+| boot2 places every root record (safe mode: only the safe set); `match=` left to the core | 28 804 | 28 584 | +448 | 132 |
+
+Reading `bss=` costs nothing: the manifest parser already reads it for
+the kernel record. Marking the safe set with a `safe=1` attribute costs
+about 10 bytes in the parser, against the root-record parsing that §2's
+rule would need. A motherboard root's `root sd … mobo` record carries no
+controller id, so boot2 could not tell the A3000 WD, Gayle and the
+53C710 apart without it.
+
+With the second variant, §3's items 1 and 2 (about 240–340 bytes, no
+change on the console) cover S4-10. S4-11's RAM-disk placement is not
+measured yet; §3's items 3–5 (about 260 bytes) are the budget for it.
