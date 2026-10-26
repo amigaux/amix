@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset composes module members (S3-16); bench row S3-B5 (a71a875, 2410287)
+
+`build` takes every module object under /etc/conf/mod.d (unless modreg disables it) through gates 1–3 (record; kabi
+family/major/minor, compiler pin, core-tier build, parameters normalized to C3-1 §3; match= on boot class, registered
+majors= on demand class, depend closure, no root class), copies them to /stand/gen/<id>/mod/ and writes module and param
+records in depend order; `commit` re-verifies; `status` marks members loaded or not from kinfo. 665 host checks; host
+rehearsal with the real z3660eth members on both cut kernels. S3-B5 = the first module generation (z3660eth alone),
+tests/bench/s3-modpkg.sh. Box kbootset 8cb4c157. Owed: media builds composing modules (S3-31's pristine generation).
+
 ## 2026-10-26 — kit: per-line MODOUT and objects, COMMON warning by prefix, clean guard (d197198)
 
 A build's objects and module live under build/<line> and rebuild when the kit changes, so one module directory builds for
