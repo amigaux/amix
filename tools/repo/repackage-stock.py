@@ -18,6 +18,14 @@
 #   repackage-stock.py --install-test lp,core,amigasrc
 #                                              build + host pkgadd -R test
 #   repackage-stock.py --keep                  keep per-package work dirs
+#   repackage-stock.py --member Cdev:usr/ccs/bin/m4 --out <file>
+#                                              extract ONE regular-file
+#                                              member (data + mtime) and
+#                                              print its prototype fields
+#                                              "<perm> <owner> <group>
+#                                              <size> <mtime>" (the m4
+#                                              package's source; see
+#                                              build-packages.sh --m4)
 #
 # MIT License
 #
@@ -351,6 +359,63 @@ def scan_archive(spec, treedir=None):
             if m is not canon:
                 m.hardlink_to = canon.name
     return members, anomalies, excluded, databytes
+
+
+def extract_member(spec, want, dest):
+    """Stream the tape archive and write the ONE regular-file member whose
+    normalized path is `want` to `dest`, mtime from the cpio header.
+
+    Returns the Member (true mode/uid/gid/size/mtime from the header).
+    Fails closed: no such member, a non-regular member, a hardlink twin
+    without data, or a short read all exit non-zero, and a partial `dest`
+    is removed.  Used by build-packages.sh --m4 to carve one stock file
+    out of a factory package without repackaging the whole set.
+    """
+    rd, proc = open_archive(spec)
+    found = None
+    try:
+        while True:
+            hdr = rd.read(HDR_LEN)
+            if len(hdr) < HDR_LEN or hdr[:6] != NEWC_MAGIC:
+                break
+            fld = [int(hdr[6 + i * 8: 14 + i * 8], 16) for i in range(13)]
+            (ino, mode, uid, gid, nlink, mtime, filesize, devmajor,
+             devminor, rdevmajor, rdevminor, namesize, _check) = fld
+            raw = rd.read(namesize)
+            name = raw.split(b"\0", 1)[0].decode("latin-1")
+            rd.skip(pad4(HDR_LEN + namesize))
+            if name == TRAILER:
+                break
+            if safe_relpath(name) != want:
+                rd.skip(filesize + pad4(filesize))
+                continue
+            if stat.S_IFMT(mode) != stat.S_IFREG:
+                raise SystemExit("%s: %s is not a regular file (mode 0%o)"
+                                 % (spec.tapefile, want, mode))
+            if filesize == 0 and nlink > 1:
+                raise SystemExit("%s: %s is a data-less hardlink twin"
+                                 % (spec.tapefile, want))
+            data = rd.read(filesize)
+            if len(data) != filesize:
+                raise SystemExit("%s: short data for %s"
+                                 % (spec.tapefile, want))
+            with open(dest, "wb") as out:
+                out.write(data)
+            os.utime(dest, (mtime, mtime))
+            m = Member()
+            m.name, m.mode, m.uid, m.gid = want, mode, uid, gid
+            m.nlink, m.mtime, m.filesize = nlink, mtime, filesize
+            found = m
+            break
+    finally:
+        if proc is not None:
+            proc.stdout.close()
+            proc.wait()
+        else:
+            rd.f.close()
+    if found is None:
+        raise SystemExit("%s: no member %s" % (spec.tapefile, want))
+    return found
 
 
 # --------------------------------------------------------- prototype
@@ -719,6 +784,9 @@ def main():
                     help="comma-separated packages to pkgadd -R verify")
     ap.add_argument("--keep", action="store_true",
                     help="keep per-package work trees")
+    ap.add_argument("--member",
+                    help="PKG:path - extract one regular-file member")
+    ap.add_argument("--out", help="destination file for --member")
     args = ap.parse_args()
 
     specs = parse_list(LIST_FILE)
@@ -736,6 +804,31 @@ def main():
 
     uidmap = load_idmap(PASSWD_FILE, 2)
     gidmap = load_idmap(GROUP_FILE, 2)
+
+    if args.member:
+        if not args.out or ":" not in args.member:
+            raise SystemExit("--member PKG:path needs --out <file>")
+        pkg, want = args.member.split(":", 1)
+        spec = [s for s in specs if s.name == pkg]
+        if not spec:
+            raise SystemExit("unknown package %r" % pkg)
+        want = safe_relpath(want)
+        if want is None:
+            raise SystemExit("bad member path %r" % args.member)
+        try:
+            m = extract_member(spec[0], want, args.out)
+        except SystemExit:
+            if os.path.exists(args.out):
+                os.unlink(args.out)
+            raise
+        misses = set()
+        print("%04o %s %s %d %d" % (m.mode & 0o7777,
+                                    owner_name(uidmap, m.uid, misses),
+                                    owner_name(gidmap, m.gid, misses),
+                                    m.filesize, m.mtime))
+        if misses:
+            raise SystemExit("unmapped uid/gid %s" % sorted(misses))
+        return
 
     if args.scan:
         for s in specs:

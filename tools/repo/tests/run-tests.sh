@@ -1814,6 +1814,111 @@ else
     echo "  skip- amix-packages build/kspace absent: no comparison with its mint"
 fi
 
+# --------------------------------------------------------------- T27 ----
+# m4: the stock /usr/ccs/bin/m4 alone, carved out of the factory Cdev package
+# (build-packages.sh --m4), so syslogd works without the C development set.
+# Both packages deliver /usr/ccs/bin/m4.  The claim is that an IDENTICAL
+# pkgmap row is a shared file, not a conflict: either install order is clean
+# even with conflict=quit, plain pkgchk passes for both, and removing one
+# leaves the file to the other.  A variant with a different mode must be
+# refused under the same admin, or the "clean" result proves nothing.
+echo "T27: m4 package shares /usr/ccs/bin/m4 with Cdev"
+TAPE27="$HERE/../../../hdf/tape21"
+CDEV27="$HERE/../../../build/repo-staging/stock/Cdev-2.1.pkg"
+if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
+   [ -f "$TAPE27/x00/List" ] && [ -f "$TAPE27/04" ] && [ -f "$CDEV27" ]; then
+    S27="$WORK/t27"; mkdir -p "$S27"
+    ROW27='1 f none /usr/ccs/bin/m4 0755 bin bin 23004 51597 690829200'
+    python3 "$HERE/../repackage-stock.py" --member Cdev:usr/ccs/bin/nosuch \
+        --out "$S27/nosuch" >/dev/null 2>&1
+    check "--member: a member the tape lacks fails, and leaves no file" \
+        bash -c "test $? -ne 0 && test ! -e '$S27/nosuch'"
+    bash "$BP" --m4 "$S27/stg" >"$WORK/t27.build" 2>&1
+    check "build-packages.sh --m4 mints into a scratch staging root" test $? -eq 0
+    P27="$S27/stg/stock/m4-2.1.pkg"
+    check "  ... as stock/m4-2.1.pkg, beside the stock set" test -f "$P27"
+    check "  ... and stages deps.conf with it" test -f "$S27/stg/deps.conf"
+    check "the m4 pkgmap row is the factory one" grep -aqx "$ROW27" "$P27"
+    check "  ... field for field the row Cdev carries" grep -aqx "$ROW27" "$CDEV27"
+    mkdir -p "$S27/x"; "$HB/pkgtrans" "$P27" "$S27/x" m4 >/dev/null 2>&1
+    X27="$S27/x/m4"
+    check "pkginfo: PKG=m4 VERSION=2.1 CATEGORY=system" \
+        bash -c "grep -qx 'PKG=m4' '$X27/pkginfo' && grep -qx 'VERSION=2.1' '$X27/pkginfo' && grep -qx 'CATEGORY=system' '$X27/pkginfo'"
+    check "pkginfo: provenance in APKG_DESC" \
+        grep -q '^APKG_DESC=.*(Amix 2.1 stock, Cdev tape member)$' "$X27/pkginfo"
+    check "exactly four objects: /usr, /usr/ccs, /usr/ccs/bin and m4" \
+        test "$(grep -v -e '^:' -e '^1 i ' "$X27/pkgmap" | tr '\n' ';')" = \
+             "1 d none /usr 0755 bin bin;1 d none /usr/ccs 0755 bin bin;1 d none /usr/ccs/bin 0755 bin bin;$ROW27;"
+    check "the payload is the tape's bytes (md5 93945b5c...)" \
+        test "$(md5sum < "$S27/x/m4/root/usr/ccs/bin/m4" | cut -c1-32)" = 93945b5c306cf5286204a003b330df50
+
+    printf 'mail=\ninstance=quit\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=quit\naction=nocheck\nbasedir=default\n' \
+        > "$S27/strict"
+    fr27() { local fs="$S27/fakeroot.$CUR"; touch "$fs"; fakeroot -i "$fs" -s "$fs" "$@"; }
+    newroot27() { CUR="$(basename "$1")"; rm -rf "$1"
+        mkdir -p "$1/etc" "$1/var/sadm/install"
+        printf 'root:x:%s:%s::/:/bin/sh\nbin:x:%s:%s::/:\namiga:x:%s:%s::/:\n' \
+            "$(id -u)" "$(id -g)" "$(id -u)" "$(id -g)" "$(id -u)" "$(id -g)" > "$1/etc/passwd"
+        printf 'root::%s:\nsys::%s:\nbin::%s:\namiga::%s:\n' \
+            "$(id -g)" "$(id -g)" "$(id -g)" "$(id -g)" > "$1/etc/group"; }
+    add27() { fr27 "$HB/pkgadd" -R "$1" -n -a "$S27/strict" -d "$2" "$3" >"$WORK/t27.add" 2>&1; }
+    rm27()  { fr27 "$HB/pkgrm" -R "$1" -n -a "$S27/strict" "$2" >"$WORK/t27.rm" 2>&1; }
+    chk27() { fr27 "$HB/pkgchk" -R "$1" "$2" >"$WORK/t27.chk" 2>&1; }
+    cdb27() { find "$1" -path '*/var/sadm/install/contents' | head -1; }
+    rowis() { grep -qx "/usr/ccs/bin/m4 f none 0755 bin bin 23004 51597 690829200 $2" "$(cdb27 "$1")"; }
+    ondisk27() { test "$(md5sum < "$1/usr/ccs/bin/m4" | cut -c1-32)" = 93945b5c306cf5286204a003b330df50; }
+
+    # order A: m4, then Cdev
+    A27="$S27/a"; newroot27 "$A27"
+    add27 "$A27" "$P27" m4;      check "A: m4 into an empty root, conflict=quit: rc 0" test $? -eq 0
+    add27 "$A27" "$CDEV27" Cdev; check "A: then Cdev, conflict=quit: rc 0" test $? -eq 0
+    check "A: no conflict was listed" bash -c "! grep -q 'already installed on the system' '$WORK/t27.add'"
+    check "A: one contents row, both packages on it" rowis "$A27" "m4 Cdev"
+    chk27 "$A27" m4;   check "A: plain pkgchk m4 clean" test $? -eq 0
+    chk27 "$A27" Cdev; check "A: plain pkgchk Cdev clean" test $? -eq 0
+    rm27 "$A27" Cdev;  check "A: pkgrm Cdev rc 0" test $? -eq 0
+    check "A: the file stays, the tape's bytes" ondisk27 "$A27"
+    check "A: the row now names m4 alone" rowis "$A27" "m4"
+    chk27 "$A27" m4;   check "A: plain pkgchk m4 still clean" test $? -eq 0
+    rm27 "$A27" m4
+    check "A: pkgrm of the last owner removes the file" test ! -e "$A27/usr/ccs/bin/m4"
+
+    # order B: Cdev, then m4
+    B27="$S27/b"; newroot27 "$B27"
+    add27 "$B27" "$CDEV27" Cdev; check "B: Cdev into an empty root: rc 0" test $? -eq 0
+    add27 "$B27" "$P27" m4;      check "B: then m4, conflict=quit: rc 0" test $? -eq 0
+    check "B: no conflict was listed" bash -c "! grep -q 'already installed on the system' '$WORK/t27.add'"
+    check "B: one contents row, both packages on it" rowis "$B27" "Cdev m4"
+    chk27 "$B27" Cdev; check "B: plain pkgchk Cdev clean" test $? -eq 0
+    chk27 "$B27" m4;   check "B: plain pkgchk m4 clean" test $? -eq 0
+    rm27 "$B27" m4;    check "B: pkgrm m4 rc 0" test $? -eq 0
+    check "B: the file stays, the tape's bytes" ondisk27 "$B27"
+    check "B: the row now names Cdev alone" rowis "$B27" "Cdev"
+    chk27 "$B27" Cdev; check "B: plain pkgchk Cdev still clean" test $? -eq 0
+
+    # negative control: the same file at mode 0775 IS a conflict
+    N27="$S27/neg"; mkdir -p "$N27/spool"
+    cp "$S27/x/m4/root/usr/ccs/bin/m4" "$N27/m4"
+    printf 'PKG=m4\nNAME=m4 variant\nARCH=Amiga\nVERSION=2.1\nCATEGORY=system\nCLASSES=none\n' > "$N27/pkginfo"
+    printf 'i pkginfo\nd none /usr/ccs 0755 bin bin\nd none /usr/ccs/bin 0755 bin bin\nf none /usr/ccs/bin/m4=%s 0775 bin bin\n' \
+        "$N27/m4" > "$N27/prototype"
+    ( cd "$N27" && "$HB/pkgmk" -o -d "$N27/spool" -f prototype ) >/dev/null 2>&1
+    "$HB/pkgtrans" -s "$N27/spool" "$N27/m4-var.pkg" m4 >/dev/null 2>&1
+    C27="$S27/c"; newroot27 "$C27"
+    add27 "$C27" "$CDEV27" Cdev
+    add27 "$C27" "$N27/m4-var.pkg" m4
+    check "control: a different mode under conflict=quit is refused (rc 4)" test $? -eq 4
+    check "control: ... and listed as a conflict" \
+        grep -q 'already installed on the system' "$WORK/t27.add"
+
+    # the catalog row: deps core (deps.conf), category system (pkginfo)
+    python3 "$GEN" "$S27/stg" >/dev/null 2>&1
+    check "catalog: m4|2.1|m4|stock/m4-2.1.pkg, deps core, category system" \
+        test "$(cut -d'|' -f1-4,7,8 "$S27/stg/catalog" | grep '^m4|')" = "m4|2.1|m4|stock/m4-2.1.pkg|core|system"
+else
+    echo "  skip- m4 checks (host engine, fakeroot, hdf/tape21 or the staged Cdev-2.1.pkg missing)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

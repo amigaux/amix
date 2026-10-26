@@ -1,5 +1,96 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — `m4`: the stock /usr/ccs/bin/m4 alone, shared with Cdev (STAGED, NOT PUBLISHED)
+
+**Why.** The stock 2.1c syslogd (in `core`) pipes `/etc/syslog.conf` through `/usr/ccs/bin/m4`
+unconditionally; without m4 the conf parses empty and nothing is ever filed. Only `Cdev` (10 MB)
+ships m4, so every 1.1 install logged nothing (installng's interim fix, `55d8e15`, installs the
+whole Cdev). `m4` carries that one file. Stock-derived, allowed since the 2026-09-23 licensing
+outcome; publishing is the owner's.
+
+**The mint.** `tools/repo/build-packages.sh --m4` (new arm, not part of `--all`: like the stock set
+it needs the tape) -> `build/repo-staging/stock/m4-2.1.pkg`, beside the 27 repackaged stock packages:
+
+- **md5 `cf0784f91b6d43f3e7f9e3788546bee2`**, **sha256
+  `4f51a9cb5d99f6b4c43d0c0b9211ba8694808dda58aa3f7576ffbfe0c1dac4c6`**, **26112 B**;
+  `PSTAMP=lucifer20261026170531`. PKG `m4` (2 chars; build_one's 9-char check), VERSION `2.1` (the
+  stock set's), CATEGORY `system`, `APKG_DESC=… (Amix 2.1 stock, Cdev tape member)`.
+- Source: tape file `04` (the List's third entry, `pkg=Cdev`, plain newc), member
+  `usr/ccs/bin/m4`, read by the new `repackage-stock.py --member Cdev:usr/ccs/bin/m4 --out <file>`
+  (one member, data + header mtime; prints `perm owner group size mtime`; fails closed and leaves no
+  file). Bytes: md5 `93945b5c306cf5286204a003b330df50`, 23004 B, ELF m68k 68020, NEEDED
+  `/usr/lib/libc.so.1` only (core's), stripped.
+- Identity gate in the arm (fail closed): the member must be the factory Cdev row, `0755 bin bin
+  23004 51597 690829200` (mode owner group size sum(1) mtime), and the minted pkgmap must carry
+  exactly `1 f none /usr/ccs/bin/m4 0755 bin bin 23004 51597 690829200` -- Cdev's line, byte for
+  byte. pkgmap: `d none /usr`, `/usr/ccs`, `/usr/ccs/bin` (all `0755 bin bin`, core's and Cdev's
+  attributes) and that `f` line.
+
+**The design point: two packages own /usr/ccs/bin/m4.** Read, then run. heirloom
+`libinst/pkgdbmerg.c`: a path already in the contents DB becomes `mstat.shared`; `contchg` is set
+when size, **mtime** or cksum differ from the DB row, `attrchg` when mode, owner or group do, and
+`set_change()` also compares the file on disk (`cverify`/`averify`). `pkginstall/check.c
+ckconflct()` lists only shared paths with `contchg` or `attrchg`; `conflict=nocheck` (APKG's
+admin, apkg `conf.c`) returns before any of it, and stock pkginstall does the same for
+`nocheck`/`nochange` (the 2026-10-06 disassembly note). An identical row is therefore no conflict
+under any admin: pkgadd appends the package to the path's list (`… 690829200 m4 Cdev`) and pkgrm
+of one leaves the file to the other (`pkgremove` keeps a path other packages still name). Hence the
+gate on mtime too: a re-extract with a fresh mtime would be a conflict.
+
+Host engine, `fakeroot pkgadd -R`, admin `conflict=quit instance=quit` (strict: a conflict refuses):
+
+| case | result |
+|---|---|
+| A: m4, then Cdev | both rc 0, nothing listed; row `… 690829200 m4 Cdev`; plain `pkgchk` m4 0, Cdev 0 |
+| A: `pkgrm Cdev` | rc 0; file kept (md5 `93945b5c…`, 0755, mtime 690829200); row `… m4`; `pkgchk m4` 0 |
+| A: `pkgrm m4` | the last owner: file and row gone |
+| B: Cdev, then m4 | both rc 0; row `… Cdev m4`; `pkgchk` both 0 |
+| B: `pkgrm m4` | rc 0; file kept; row `… Cdev`; `pkgchk Cdev` 0 |
+| APKG's admin (`conflict=nocheck`), both orders | rc 0, same rows, `pkgchk` both 0 |
+| core (APKG admin), then m4 and Cdev strict | rc 0, rc 0; `/usr/ccs/bin d none 0755 bin bin core m4 Cdev`; `pkgchk` m4 0, Cdev 0; `pkgrm Cdev` -> `/usr/ccs/bin/m4 … m4`, `pkgchk m4` 0 |
+| control: Cdev, then an m4 at mode 0775 | rc 4, "already installed … being used by another package: … `<attribute change only>`", suspended |
+| control: Cdev, then an m4 with mtime +1 | rc 4, listed as a content conflict |
+
+`content-gate.sh` (host pkgchk under fakeroot) on both nocheck roots: m4 OK, Cdev OK. Harness note:
+the core case needs the root's `/etc/passwd`/`group` re-seeded after core (core installs the real
+ones, bin = 2, and the host `averify` stat is not faked, so every directory then shows an
+attribute change); on a box pkgadd runs as root and nothing differs. Residual: the **stock**
+`pkgadd` with the factory admin (`conflict=ask`) is read, not run, for this pair -- a box run owes
+it; APKG and installng use the heirloom engine.
+
+**Metadata.**
+- `deps.conf`: `m4: core` (like cdfs: core first under `-R`; libc and `/usr/ccs/bin` are core's).
+  No `core: m4` -- it would make a cycle with the core-first rule; the installer's base list picks
+  m4. No cdev edge either way (cdev carries the same file).
+- `cats.conf`: no assignment line, a note in "deliberately NOT listed". T15 requires the file to
+  name exactly the packages the install sets name, and the sets are locked (`minimal` is the
+  digest-attested base-8). The catalog says `system` from the pkginfo. When m4 joins a set, add
+  `m4: system`.
+- `descs.conf`: none needed -- we mint m4, so its pkginfo carries the description.
+- Scratch catalog over a copy (core, Cdev, the staged m4 + the confs; the staging root's own
+  catalog is not regenerated): `m4|2.1|m4|stock/m4-2.1.pkg|cf0784f91b6d43f3e7f9e3788546bee2|26112|core|system|m4
+  macro processor alone, …`; `--scan-private` OK (3 scanned).
+
+**Gates.** Link gate (build_one, and `pkgmap-symlink-gate.py --pkg` on the staged file): OK, 0
+links. `payload-licence-gate`: `stock/` is out of scope by provenance path (the skip is printed),
+so a staging root holding `stock/m4-2.1.pkg` is OK; `--include-stock` reports m4 **UNKNOWN**
+(stripped, no symtab), rc 0 -- the vendor's binary, under the 2026-09-23 decision, not object code
+we linked. `scan060` (informational for a stock binary): CLEAN, 0 of 3403 instructions.
+`content-gate`: OK as above.
+
+**Tests.** Repo tools **401/0** (367 before). New T27 (34): the `--member` refusal; the `--m4` mint
+into scratch, its pkgmap row = Cdev's, pkginfo, the four objects, the payload md5; orders A and B
+with `conflict=quit` (rc, no listing, the shared row, plain pkgchk, removal keeps the file, the
+last owner removes it); the mode-0775 control refused with rc 4; the catalog row. Skips when the
+tape, host engine, fakeroot or the staged Cdev are absent.
+
+**installng** (not done here): its 1.1 base swaps Cdev for m4 -- `tools/build-install-iso.sh`
+`EXTRA_PKGS+=(Cdev)` -> `EXTRA_PKGS+=(m4)`, with its `*" cdev "*)` test and `install.sh`'s
+order check accepting `m4` (Cdev still satisfies it), and `m4-2.1.pkg` on the medium.
+**Proposal:** m4 joins `minimal` (base-8 -> base-9) -- 1.0's base has the same hole; that move
+needs the minimal reference digest re-attested, so it is the owner's call.
+
+
 ## 2026-10-26 — APKG 0.3.2 minted for the 1.1 media (STAGED, NOT PUBLISHED)
 
 **Why.** 0.3.2 (a module package may carry `c none /dev/<node>` device entries, amix-dlm C3-5 v4

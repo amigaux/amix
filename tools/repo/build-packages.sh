@@ -6,8 +6,14 @@
 # with the HOST-built heirloom pkgmk/pkgtrans (newc-emitting cpio shim baked in).
 #
 # Usage: build-packages.sh [--apkg] [--eng] [--cdfs] [--demo] [--all]
+#                          [--m4]
 #                          [--kernbench] [--kernz3660] [--kern] [<stagingdir>]
 # Default stagingdir: <repo>/build/repo-staging
+#
+# --m4 mints `m4`, the stock /usr/ccs/bin/m4 alone, carved out of the factory
+# Cdev package on the install tape (hdf/tape21, gitignored) into
+# <stagingdir>/stock/ beside the 27 repackaged stock packages.  Not part of
+# --all or the bare default: like the stock set it needs the tape.
 #
 # The KERNEL arms (--kernbench/--kernz3660/--kern) mint the PRIVATE kernel
 # packages and are NEVER part of --all or the bare default (which build only
@@ -64,6 +70,8 @@ VER_APKG="0.3.2"
 # (f5858094...) stays what it is.  NOTES 2026-10-06.
 VER_ENG="1.12.3"
 VER_DEMO="1.0"
+# m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
+VER_M4="2.1"
 # cdfs package version: "0.1" (our first mint) with the amix-cdfs provenance
 # commit as the build id -- style matches the T6 fixture's "2.3-1" and keeps
 # the filename HTTP-safe (only [A-Za-z0-9.-]; no '+' that a naive server would
@@ -139,6 +147,7 @@ VER_KERNBENCH="49667-2026.08.16"
 VER_KERNZ3660="60364-2026.08.16"
 
 do_apkg=0; do_eng=0; do_cdfs=0; do_demo=0; do_kernbench=0; do_kernz3660=0
+do_m4=0
 STAGING=""
 for a in "$@"; do
   case "$a" in
@@ -146,6 +155,7 @@ for a in "$@"; do
     --eng)  do_eng=1 ;;
     --cdfs) do_cdfs=1 ;;
     --demo) do_demo=1 ;;
+    --m4)   do_m4=1 ;;
     --all)  do_apkg=1; do_eng=1; do_cdfs=1; do_demo=1 ;;
     --kernbench) do_kernbench=1 ;;
     --kernz3660) do_kernz3660=1 ;;
@@ -156,7 +166,7 @@ done
 # Bare invocation builds the redistributable set only.  A kernel-only request
 # must NOT trip the redistributable default, so the guard checks every arm.
 if [ $do_apkg -eq 0 ] && [ $do_eng -eq 0 ] && [ $do_cdfs -eq 0 ] && [ $do_demo -eq 0 ] \
-   && [ $do_kernbench -eq 0 ] && [ $do_kernz3660 -eq 0 ]; then
+   && [ $do_m4 -eq 0 ] && [ $do_kernbench -eq 0 ] && [ $do_kernz3660 -eq 0 ]; then
   do_apkg=1; do_eng=1; do_cdfs=1; do_demo=1
 fi
 STAGING="${STAGING:-$REPO/build/repo-staging}"
@@ -659,6 +669,77 @@ fi
 # Override sources with KERNBENCH_SRC / KERNZ3660_SRC / BOOT2_SRC; the gates
 # below (sum -r + size for the kernels, sha256 for boot2) are always enforced.
 # ======================================================================
+if [ $do_m4 -eq 1 ]; then
+  # ---- m4: the stock /usr/ccs/bin/m4 ALONE, so a box can run syslogd
+  # without the 10 MB C development set.  The stock 2.1c syslogd (core) pipes
+  # /etc/syslog.conf through /usr/ccs/bin/m4 unconditionally; without m4 the
+  # conf parses empty and nothing is ever logged (every 1.1 install,
+  # 2026-10-26).  Only Cdev ships m4.
+  #
+  # PROVENANCE: Amix 2.1 install tape, package Cdev (tape file 04, plain
+  # newc, the List's third entry), member usr/ccs/bin/m4.  The bytes, mode,
+  # owner and mtime come from that member's cpio header via
+  # repackage-stock.py --member, exactly as the stock set gets them.
+  #
+  # SHARED WITH Cdev, ON PURPOSE.  Both packages deliver /usr/ccs/bin/m4, and
+  # the gate below makes the m4 pkgmap row field-identical to Cdev's
+  # (`f none 0755 bin bin 23004 51597 690829200`).  SVR4 pkgadd treats a
+  # path another package already owns as a conflict only when its contents
+  # (size, cksum, mtime) or attributes (mode, owner, group) differ
+  # (heirloom libinst/pkgdbmerg.c, pkginstall/check.c ckconflct()); an
+  # identical row just adds the package to the path's package list, and
+  # pkgrm of one keeps the file for the other.  So m4 and Cdev install in
+  # either order and remove independently.  NOTES 2026-10-26.
+  M4_TAPE="$REPO/hdf/tape21"
+  M4_LIST="$M4_TAPE/x00/List"
+  [ -f "$M4_LIST" ] && [ -f "$M4_TAPE/04" ] || {
+    echo "FATAL: install tape missing: $M4_TAPE (hdf/tape21, gitignored)" >&2; exit 1; }
+  # tape file 04 is the List's third package (files 02.. carry the List in
+  # order, repackage-stock.py FIRST_PKG_TAPE_FILE) -- refuse anything else
+  if ! sed -n 3p "$M4_LIST" | grep -q '^pkg=Cdev[[:space:]]'; then
+    echo "FATAL: $M4_LIST line 3 is not pkg=Cdev" >&2; exit 1
+  fi
+  M="$WORK/m4"; mkdir -p "$M"
+  attr="$(python3 "$REPO/tools/repo/repackage-stock.py" \
+            --member Cdev:usr/ccs/bin/m4 --out "$M/m4")"
+  # Identity gate (fail closed): the member must be the factory Cdev
+  # contents row for /usr/ccs/bin/m4 -- mode, owner, group, size, sum(1)
+  # checksum and mtime.  Anything else would make the shared path a conflict.
+  M4_ROW="0755 bin bin 23004 51597 690829200"
+  set -- $attr
+  got="$1 $2 $3 $4 $(sum -s "$M/m4" | awk '{print $1}') $5"
+  if [ "$got" != "$M4_ROW" ]; then
+    echo "FATAL: tape m4 is '$got', expected the Cdev row '$M4_ROW'" >&2; exit 1
+  fi
+  echo "m4 member OK: $got (md5 $(md5sum < "$M/m4" | cut -c1-32))"
+  cat > "$M/pkginfo" <<EOF
+PKG=m4
+NAME=m4 macro processor (from the C Development system)
+ARCH=Amiga
+VERSION=$VER_M4
+CATEGORY=system
+CLASSES=none
+APKG_DESC=m4 macro processor alone, /usr/ccs/bin/m4: syslogd reads /etc/syslog.conf through it. The same file as in cdev, either or both may be installed (Amix 2.1 stock, Cdev tape member)
+EOF
+  # /usr, /usr/ccs and /usr/ccs/bin are core's (and Cdev's) with these exact
+  # attributes; declaring them the same way is a shared directory, not a
+  # conflict.
+  cat > "$M/prototype" <<EOF
+i pkginfo
+d none /usr 0755 bin bin
+d none /usr/ccs 0755 bin bin
+d none /usr/ccs/bin 0755 bin bin
+f none /usr/ccs/bin/m4=$M/m4 0755 bin bin
+EOF
+  build_one m4 "$VER_M4" stock
+  # the minted row must be the Cdev row, field for field (path/type/class too)
+  if ! grep -aq "^1 f none /usr/ccs/bin/m4 $M4_ROW\$" "$out"; then
+    echo "FATAL: $out pkgmap row for /usr/ccs/bin/m4 is not '$M4_ROW'" >&2
+    rm -f "$out"; exit 1
+  fi
+  echo "m4 pkgmap row OK: 1 f none /usr/ccs/bin/m4 $M4_ROW"
+fi
+
 KPKG="$REPO/build/kernel-packages"
 BOOT2_GATE="$REPO/../amix-kerntools/tools/boot2-sha-gate.sh"
 BOOT2_SHA="f287ff3a759d6f80304fa35bb53e1479fc98056836b44a16824bd3e3f8fdba78"
@@ -892,7 +973,8 @@ fi
 # regenerate away.  The expected diff against the live catalog is recorded
 # in NOTES.md (the 2026-09-26 PREPARED publish), so the next publish is
 # reviewed as "these lines change category", not discovered.
-if [ $do_apkg -eq 1 ] || [ $do_eng -eq 1 ] || [ $do_cdfs -eq 1 ] || [ $do_demo -eq 1 ]; then
+if [ $do_apkg -eq 1 ] || [ $do_eng -eq 1 ] || [ $do_cdfs -eq 1 ] || [ $do_demo -eq 1 ] \
+   || [ $do_m4 -eq 1 ]; then
   cp "$REPO/tools/repo/deps.conf" "$STAGING/deps.conf"
   cp "$REPO/tools/repo/descs.conf" "$STAGING/descs.conf"
   cp "$REPO/tools/repo/names.conf" "$STAGING/names.conf"
