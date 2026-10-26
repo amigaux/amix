@@ -1,8 +1,9 @@
 # C3-6 — what a driver changes to become a module, version 1
 
-- **Status:** draft 2026-10-26, for agreement (orchestrator) and relay to
-  the z3660net and z3660rtg stations as their driver-change brief. Once
-  agreed, a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; the driver-change
+  brief of the z3660net and z3660rtg stations (and of the monsw owner).
+  Other repositories build against this text; a change from here is a
+  contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §2–§5,
   `30-module-core.md` §3–§4; it applies C3-1 (the object), C3-2 (the
   symbols and DDI v1) and C3-5 (the package) to three drivers
@@ -234,9 +235,9 @@ The module:
 | `_load` | `zz9k_probe(0)`; `ENXIO` if no board. No console at load: as today it is the ioctl's |
 | Console | `ZZ9KIOC_CONSOLE` ENABLE/REDIRECT: `cons_hook_set(zz9k_cons_hook)`, where the hook takes `(cp, p, n)` and returns nonzero only for `cp == displayedscreen` writes it drew (REDIRECT: drawn and not passed on; the per-character `zz9k_conputc` becomes a loop over `p`); DISABLE: `cons_hook_clear()`. No `conputc` |
 | Memory | unchanged; `d_mmap` hands out device pages only (§1.5) |
-| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC`, or ask for it as a DDI minor (§5) |
+| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC` (§5, §6) |
 | Font | `sunfont.o` linked into the module object (§1.7), `ZZ9K_NO_BUILTINFONT` kept |
-| Targets | one module per line serves both targets if the probe can tell the boards apart at run time (preferred: one name, one major); otherwise the Z3660 build is `z3660rtg` and the ZZ9000 build waits (§5) |
+| Targets | one module per line serves both targets: the probe tells the ZZ9000 and the Z3660 apart at run time, so the target is no longer a compile-time switch in the module form; one name, one major (§6) |
 | `_unload` | `cons_hook_clear()` if the console is on; the switch back to native (`ZZ9K_MONSW_SET(0)`, as DISABLE does); nothing else is armed. The core does not call it while `/dev/zz9000` is open |
 | `_halt` | 0 (the board neither interrupts nor writes memory) |
 
@@ -260,23 +261,25 @@ The module:
 | Symbols | unchanged; all in DDI v1 |
 | `_halt` | 0 |
 
-## 5. Open for agreement
+## 5. Open DDI item (not a stage-3 blocker)
 
-- **`hat_cm_fb_add`** (z3660rtg with `-DZZ9K_FB_NC`): leave it out of the
-  stage-3 module, or add it to DDI v1 as a minor (k46 only; a 68040/68060
-  cache-mode call) after the port's review.
-- **Where monsw's module source lives.** The source is in
-  amix-040-060-port today; the plan puts S3-27 in amix-z3660rtg until the
-  owner decides P-8 question (c) (Q3-2). The station that builds the
-  module needs the source in its own repository.
-- **z3660rtg's two targets:** one module with a run-time probe, or the
-  Z3660 target first.
-- **The INT6 path's second half** (§1.3): the poll tick or a level-2
-  handler raised through `INTREQ` PORTS. Settled by M-INT1 on metal; the
-  contract allows both.
-- **`unload=never`** for z3660eth and monsw in stage 3. S3-43's "allowed
-  unload" row uses z3660rtg.
+- **`hat_cm_fb_add`**, the 68040/68060 non-cached framebuffer mapping
+  z3660rtg uses with `-DZZ9K_FB_NC`, is not in DDI v1.0. If RTG
+  performance needs it, it comes as a DDI minor (k46) after the port's
+  review.
 
-## 6. Settled at agreement
+## 6. Settled at agreement (2026-10-26)
 
-(Filled when the orchestrator agrees the draft.)
+- §1's rules as written, for every driver turned into a module.
+- **`hat_cm_fb_add` stays out of the stage-3 z3660rtg module.** The module
+  maps its windows without it and builds without `-DZZ9K_FB_NC` (§5).
+- **monsw's source location is the owner's decision** (P-8 question (c),
+  plan Q3-2). Until he decides, S3-27 stays as the plan says, and nothing
+  on z3660eth or z3660rtg waits on it.
+- **z3660rtg is one module per line with a run-time probe for both
+  targets** (ZZ9000 and Z3660): one name, one major.
+- **The INT6 path's second half** (§1.3), the poll tick or a level-2
+  handler raised through PORTS, is M-INT1's to decide on metal. Polled
+  stays the default, and the contract keeps both forms.
+- **`unload=never` for z3660eth and monsw.** S3-43's allowed-unload row
+  uses z3660rtg.
