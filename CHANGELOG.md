@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — S4-58: the interview offers the upgrade install (37422a4)
+
+On a 1.1 medium a chosen disk that holds Amix (slice 1 UNIX_Root + slice 2 UNIX_Swap; 1.1 by the store magic, s4 by UNIX_Data)
+gets 1) upgrade 2) erase and install afresh 3) stop (default 1), with what is kept and not kept and /home's size measured on the
+old root (LOST when it exceeds the swap slice less 1 MiB); an upgrade asks no sizes and keeps the old configuration (no dialog).
+Cell l11-k46-upg-ia PASS 9/9 through the interview; selftests cover the offer's four shapes.
+
 ## 2026-10-27 — S4-54, the upgrade install's survivors (74abe1f)
 
 The installer puts the saved configuration in place at the end of the install (from the archive's own cpio entries) and checks
