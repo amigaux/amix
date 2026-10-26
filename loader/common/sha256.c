@@ -1,9 +1,7 @@
 /*
- * sha256.c -- SHA-256 (FIPS 180-4) for a 32-bit big-endian CPU with few
- * registers: the whole 64-word schedule first, then eight rounds per pass
- * with the working variables renamed rather than shifted.  On the 68030
- * the shifting form ran at half speed under GCC 14, which spilled the
- * shifted variables (docs/measurements/2026-10-26-hashbench.md).
+ * sha256.c -- SHA-256 (FIPS 180-4), written for a 32-bit big-endian CPU
+ * without a barrel-shifter penalty worth unrolling for: one compression
+ * loop, the message schedule computed in place in 16 words.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -24,44 +22,27 @@ static const ax_u32 k[64] = {
 };
 
 #define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
-#define S0(x) (ROR(x, 2) ^ ROR(x, 13) ^ ROR(x, 22))
-#define S1(x) (ROR(x, 6) ^ ROR(x, 11) ^ ROR(x, 25))
-#define CH(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
-#define MAJ(x, y, z) (((x) & (y)) | ((z) & ((x) | (y))))
-
-/* one round with the eight working variables named, not shifted: eight
- * rounds per pass rename them back, so nothing moves between rounds */
-#define ROUND(a, b, c, d, e, f, g, h, j) \
-	t = h + S1(e) + CH(e, f, g) + kp[j] + wp[j]; \
-	d += t; \
-	h = t + S0(a) + MAJ(a, b, c)
 
 static void
 block(ax_u32 h[8], const ax_u8 *p)
 {
-	ax_u32 w[64], a, b, c, d, e, f, g, hh, t, s0, s1;
-	const ax_u32 *kp;
-	ax_u32 *wp;
+	ax_u32 w[16], a, b, c, d, e, f, g, hh, t1, t2, s0, s1;
 	int i;
 
 	for (i = 0; i < 16; i++)
 		w[i] = AX_GET32(p + 4 * i);
-	for (i = 16; i < 64; i++) {	/* the whole schedule first */
-		s0 = w[i - 15];
-		s1 = w[i - 2];
-		w[i] = w[i - 16] + w[i - 7] + (ROR(s0, 7) ^ ROR(s0, 18) ^ (s0 >> 3)) +
-		    (ROR(s1, 17) ^ ROR(s1, 19) ^ (s1 >> 10));
-	}
 	a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
-	for (kp = k, wp = w; wp < w + 64; kp += 8, wp += 8) {
-		ROUND(a, b, c, d, e, f, g, hh, 0);
-		ROUND(hh, a, b, c, d, e, f, g, 1);
-		ROUND(g, hh, a, b, c, d, e, f, 2);
-		ROUND(f, g, hh, a, b, c, d, e, 3);
-		ROUND(e, f, g, hh, a, b, c, d, 4);
-		ROUND(d, e, f, g, hh, a, b, c, 5);
-		ROUND(c, d, e, f, g, hh, a, b, 6);
-		ROUND(b, c, d, e, f, g, hh, a, 7);
+	for (i = 0; i < 64; i++) {
+		if (i >= 16) {
+			s0 = w[(i + 1) & 15];
+			s0 = ROR(s0, 7) ^ ROR(s0, 18) ^ (s0 >> 3);
+			s1 = w[(i + 14) & 15];
+			s1 = ROR(s1, 17) ^ ROR(s1, 19) ^ (s1 >> 10);
+			w[i & 15] += s0 + s1 + w[(i + 9) & 15];
+		}
+		t1 = hh + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + k[i] + w[i & 15];
+		t2 = (ROR(a, 2) ^ ROR(a, 13) ^ ROR(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
+		hh = g, g = f, f = e, e = d + t1, d = c, c = b, b = a, a = t1 + t2;
 	}
 	h[0] += a, h[1] += b, h[2] += c, h[3] += d, h[4] += e, h[5] += f, h[6] += g, h[7] += hh;
 }
