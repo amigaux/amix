@@ -26,13 +26,14 @@ make -C test/host clean
 | two boards | An A4092 below an A4091. The module registers in product order (A4091 c 0, A4092 c 1); sd's (rank, base) order makes the A4092 card 0. A card-0 request (`queuefn(1, cp)`) arms the A4092's chip, and the A4091's registers stay untouched |
 | four-board cap | Five boards found, four registered |
 | no board / no board maps | `ENXIO`, nothing registered, the area given back |
-| no `dma_alloc` area | `ENOMEM` before any probe: k30 today, until S4-62's pool |
+| no `dma_alloc` area | `ENOMEM` before any probe (k30 before the 030 provider's pool) |
 | a board that does not map | Skipped; the next board becomes c 0 |
 | `sd_register` refuses | Its errno is returned, the mapped boards are stopped and the area is given back |
 | halt | Every mapped board is aborted, soft-reset and re-initialised |
 | queue: aligned READ | `prepare(pa, 512, FROM)`, then `dma_addr(r, pa)`, then `complete`. `data1buf` is `dma_addr`'s answer, not `pa`. DSA, DSP and the IDENTIFY/CDB pointers are physical addresses inside the area |
 | queue: misaligned READ | A 16-byte sense lands in the driver's bounce: prepared by its physical address (16-aligned, in the area) and copied out by its kernel address, to exactly 16 bytes |
-| queue: zero length / WRITE | No DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce |
+| queue: zero length / WRITE | No data DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce. Either way, the data step is followed by the status-line sync: prepare and complete FROM_DEVICE over a 16-aligned 16-byte line in the area that holds the status byte (C4-5 v5 §5.4). An aligned or bounced READ has none: its own complete clears the cache |
+| queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), no `dma_complete` (so `drv_prep == drv_cmpl + 1`), and the next command runs |
 
 ## How the harness works
 
@@ -49,7 +50,9 @@ make -C test/host clean
 
 ## Mutation check (2026-10-27)
 
-Each of these bugs makes a case fail:
+Each of these bugs makes a case fail (the last two added with C4-5 v5):
 - arming with `dpa` instead of `dma_addr(r, dpa)`;
 - indexing the tables by `cp->card` instead of `c`;
-- writing DSA with the table's kernel address.
+- writing DSA with the table's kernel address;
+- arming past a `dma_addr` of 0;
+- skipping the status-line sync after a WRITE or a TUR.

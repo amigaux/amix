@@ -51,6 +51,7 @@ extern struct mock_log		mock_log[MOCK_NLOG];
 extern int			mock_nlog;
 extern int			mock_dma_alloc_fail;
 extern unsigned long		mock_addr_offset;	/* dma_addr = pa + this */
+extern int			mock_addr_zero;		/* dma_addr = 0: out of reach */
 extern void			*mock_dma_va;
 extern size_t			mock_dma_len;
 extern int			mock_dma_allocs, mock_dma_frees;

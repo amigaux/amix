@@ -132,7 +132,7 @@ t_one_a4091(void)
 	CHECK(mock_reg[0].fn != NULL, "queue function given");
 	CHECK(mock_dma_allocs == 1 && a4091_da == mock_dma_va && a4091_dapa == MOCK_DMA_PA,
 	    "one dma_alloc area, its kernel and physical address kept");
-	memcpy(&w0, a4091_da, sizeof w0);
+	memcpy(&w0, (char *)a4091_da + 16, sizeof w0);	/* behind the status line */
 	CHECK(w0 == 0x47000000UL, "SCRIPTS copied into the area (SELECT ATN first)");
 	CHECK(a4091_dmarec[0].magic == DMA_REC_MAGIC && a4091_dmarec[0].version == 2
 	    && a4091_dmarec[0].ctlid == 0x02020054UL && a4091_dmarec[0].unit == 0,
@@ -347,7 +347,23 @@ t_queue_bounce(void)
 	CHECK(raw[0] == (char)0xaa && raw[17] == (char)0xaa, "no byte outside the 16");
 }
 
-/* TEST UNIT READY: no data, no DMA call */
+/* the status-line sync (C4-5 v5 section 5.4): prepare + complete FROM_DEVICE
+ * over a 16-byte line in the area holding the status byte the chip wrote */
+static void
+check_sline(int i)
+{
+	unsigned char *sl = area_va(mock_log[i].pa);
+
+	CHECK(mock_log[i].op == OP_PREPARE && mock_log[i + 1].op == OP_COMPLETE,
+	    "status line: prepare then complete");
+	CHECK(sl != NULL && (mock_log[i].pa & 15) == 0 && mock_log[i].len == 16
+	    && mock_log[i].dir == 1 && mock_log[i + 1].pa == mock_log[i].pa
+	    && mock_log[i + 1].len == 16 && mock_log[i + 1].dir == 1,
+	    "status line: 16 aligned bytes in the area, FROM_DEVICE");
+	CHECK(sl && sl[0] == 0xff, "status line holds the status byte");
+}
+
+/* TEST UNIT READY: no data segment; only the status line is synced */
 static void
 t_queue_zero(void)
 {
@@ -355,11 +371,14 @@ t_queue_zero(void)
 	mock_add(P_A4091, 0x40000000);
 	CHECK(a4091_load(NULL) == 0, "load returns 0");
 	CHECK(run_queue(0, 0, 0, NULL, 0, 0x00), "TUR completes");
-	CHECK(mock_nlog == 0, "no DMA call");
+	CHECK(mock_nlog == 2, "no data DMA call, one status-line sync");
+	if (mock_nlog == 2)
+		check_sline(0);
 	CHECK(a4091_dmarec[0].drv_zero == 1, "drv_zero counted");
 }
 
-/* a WRITE: TO_DEVICE, never bounced by the driver */
+/* a WRITE: TO_DEVICE, never bounced by the driver; its complete clears no
+ * cache, so the status line is synced after it */
 static void
 t_queue_write(void)
 {
@@ -369,8 +388,39 @@ t_queue_write(void)
 	mock_add(P_A4091, 0x40000000);
 	CHECK(a4091_load(NULL) == 0, "load returns 0");
 	CHECK(run_queue(0, 0, 0, raw + 2, 512, 0x2a), "WRITE completes");
-	CHECK(mock_nlog == 3 && mock_log[0].dir == 0
+	CHECK(mock_nlog == 5 && mock_log[0].dir == 0
 	    && mock_log[0].pa == (unsigned long)(raw + 2), "prepare(caller pa, TO_DEVICE)");
+	CHECK(mock_log[2].op == OP_COMPLETE && mock_log[2].dir == 0, "data complete first");
+	if (mock_nlog == 5)
+		check_sline(3);
+}
+
+/* C4-5 v5: dma_addr 0 (out of reach, no bounce) -- never arm, fail the
+ * command, no complete for what the provider never took */
+static void
+t_queue_noreach(void)
+{
+	static char buf[512] __attribute__((aligned(16)));
+	struct mock_board *b;
+	struct sdcom cp;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	mock_addr_zero = 1;
+	memset(&cp, 0, sizeof cp);
+	cp.reading = 1; cp.cdb[0] = 0x28; cp.addr = buf; cp.nbyte = sizeof buf;
+	cp.unit = 6; cp.intr = (void (*)())cb;
+	CHECK(mock_reg[0].fn(0, &cp), "queue returns TRUE");
+	CHECK(!cp.okay && cp.status == 0xff && intr_calls == 1, "failed: status 0xff, callback once");
+	/* DSP only: on the host an 8-byte read of the DSA shadow also takes the
+	 * CTEST0 byte (0x17) that a4091init writes */
+	CHECK(mock_wr32(b, R_DSP) == 0, "the chip was never armed (no DSP write)");
+	CHECK(mock_nlog == 2 && mock_log[0].op == OP_PREPARE && mock_log[1].op == OP_ADDR,
+	    "prepare, dma_addr, and no complete");
+	CHECK(a4091_dmarec[0].drv_prep == a4091_dmarec[0].drv_cmpl + 1, "the gap is the count");
+	mock_addr_zero = 0;
+	CHECK(run_queue(0, 0, 1, buf, sizeof buf, 0x28), "the next command runs");
 }
 
 static const struct { const char *name; void (*fn)(void); } cases[] = {
@@ -389,6 +439,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "queue: misaligned READ (bounce)", t_queue_bounce },
 	{ "queue: zero length", t_queue_zero },
 	{ "queue: WRITE", t_queue_write },
+	{ "queue: out of reach (dma_addr 0)", t_queue_noreach },
 };
 
 int

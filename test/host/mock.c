@@ -21,6 +21,7 @@ struct mock_log		mock_log[MOCK_NLOG];
 int			mock_nlog;
 int			mock_dma_alloc_fail;
 unsigned long		mock_addr_offset;
+int			mock_addr_zero;
 void			*mock_dma_va;
 size_t			mock_dma_len;
 int			mock_dma_allocs, mock_dma_frees;
@@ -39,6 +40,7 @@ mock_reset(void)
 	mock_nlog = 0;
 	mock_dma_alloc_fail = 0;
 	mock_addr_offset = 0;
+	mock_addr_zero = 0;
 	mock_dma_allocs = mock_dma_frees = 0;
 	mock_autocon_calls = 0;
 }
@@ -227,9 +229,11 @@ dma_complete(void *r, unsigned long pa, unsigned long len, int dir)
 unsigned long
 dma_addr(void *r, unsigned long pa)
 {
+	unsigned long a = mock_addr_zero ? 0 : pa + mock_addr_offset;
+
 	(void)r;
-	logop(OP_ADDR, pa, 0, 0, pa + mock_addr_offset);
-	return pa + mock_addr_offset;
+	logop(OP_ADDR, pa, 0, 0, a);
+	return a;
 }
 
 void
