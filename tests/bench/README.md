@@ -823,10 +823,19 @@ Generation B is A without monsw, written as given:
 ```
 mkdir -p /stand/gen/B/mod
 cp /stand/gen/A/mod/* /stand/gen/B/mod/
+BSS=`sed -n 's/^bss=//p' /stand/<line>/kabi`
 sed -e '/^module monsw /d' -e 's|/stand/gen/A/|/stand/gen/B/|g' \
-    -e 's|^\(kernel unix .*\)$|\1 z=deflate|' /stand/gen/A/build > /tmp/nodep.spec
+    -e "s|^\(kernel unix [^ ]*\).*\$|\1${BSS:+ bss=$BSS} z=deflate|" \
+    /stand/gen/A/build > /tmp/nodep.spec
 kbootset commit --spec /tmp/nodep.spec
 ```
+
+The build file's kernel line has no `bss=` (`commit` adds it from the
+sidecar), so the spec's line takes it from `kabi`: a `brel` (k30) without
+it boots with `a brel kernel without bss= in its manifest: 512 KiB
+assumed`. `z=deflate` needs kbootset -14 (amix-dlm 72ed9c2) or later: the
+box's kbootset had no deflate before (it ignored the flag, so gate 5 counted
+the raw kernel).
 
 B is the next numeric id, A + 1. B's kernel is deflated, so it may fit
 beside generations 1 and A on the 4 MiB k46 store. If gate 5 refuses
