@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-62 piece 2: the 030 DMA provider; C4-5 v5 dma_addr 0 = do not arm (e9665e6, 20f2c8c)
+
+core/plat/k30: at dmainit the pool is the top 128 KiB of the largest fast memory[] region in 0x00200000–0x08000000 not holding
+the kernel (boot2's one-page-short clause exposes it under a Z3660 bind); no such region with the kernel below 0x08000000 =
+heap mode, nothing bounced; otherwise DMA off, said on the console. prepare bounces any segment outside that window from a
+line-granular free-extent pool (TO_DEVICE copied in); complete clears the 030 data cache (CACR CD) for FROM_DEVICE and copies
+back; `dma_forcebounce` is the test hook. C4-5 v5: on k30 dma_addr returns 0 for an unreachable segment with no bounce — the
+driver fails the transfer, never arms. 16 host checks; harness 255/255; make test 692/0; kit-test 0 failed. Reaches a box with
+kern30m -14+ and boot2 at 4003c9f+.
+
 ## 2026-10-27 — the cdfs answers: kit sd.h four-card; 13 DDI names; C3-1 v5; C4-1 v3 §3.2; cdfs boot class (a8efd99…2ba7fd4)
 
 The kit's sd.h now carries SDCARDS 4 and the four-card sdcard() decode (kerntools' two exact-line edits, refused if absent).
