@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — dlmkit -9 from amix-dlm bbd20b6: the DMA names in DDI 1.2 (a7f30fb) — not published
+
+dlmkit30 k30.1.2.261027-9 (md5 ecea42d0 / 4071936 B, manifest 0e4c7208) and dlmkit46 k46.1.2.261027-9 (a55964ac / 4088832 B,
+c0b64ee4; PORT_REV 12d416c): dma_prepare/complete/addr/alloc/free at minor 2 on both lines (S4-62 piece 1, C4-5 v3); the k30
+provider a placeholder (NOTICE). The ramdisk builds byte-identical against them. Staged catalog b82f7901 (-8 root at
+superseded/repo-20261027-0013). Round trip 126/126; gates PASS. modtools and loader-amix need no re-mint at bbd20b6.
+
 ## 2026-10-26 — kern30m k30.1.2.261026-12, the k30 kernel with the sd seam restored (2fe11d2) — not published
 
 -11 with sd.c calling the core's dlm_sd_close again (C4-1 §3; -10/-11 lost it to kerntools' pipefail defect, 44caef7): the
