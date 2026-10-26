@@ -34,7 +34,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test clean
 
 all: test tools cross boot1 boot2 cdboot axtime box b2test
 
@@ -261,6 +261,12 @@ $(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/cr
 		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
 		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
 	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
+
+# M-CORE1: the module core (core/upstream + core/series) built with the
+# pinned toolchains, upstream's host tests run against the kernels of record
+# (amix-kerntools); not part of `test`, which needs no sibling repository
+core: toolchain-check
+	B=$(B) sh tests/core/run.sh
 
 hashbench: toolchain-check $(B)/box/hashbench $(B)/hb27/hashbench $(foreach o,$(HBOPTS),$(B)/hb14-$(o)/hashbench)
 
