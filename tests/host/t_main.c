@@ -20,6 +20,7 @@ main(void)
 	test_sha256();
 	test_kbootset();
 	test_deflate();
+	test_kmod();
 	printf("%d checks, %d failed\n", t_run, t_fail);
 	return t_fail != 0;
 }

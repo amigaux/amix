@@ -189,3 +189,69 @@ km_value(const struct km_param *p, const char *in, char *out)
 	strcpy(out, in);
 	return 0;
 }
+
+int
+km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why)
+{
+	ax_u32 shoff, shnum, i, k, t, al, off = 0, so, sz, n;
+
+	if (len < 52 || memcmp(b, "\177ELF", 4) || G16(b + 46) != 40) {
+		strcpy(why, "not an ELF32 relocatable object");
+		return -1;
+	}
+	shoff = G32(b + 32);
+	shnum = G16(b + 48);
+	if (shoff > len || shnum * 40 > len - shoff) {
+		strcpy(why, "malformed section headers");
+		return -1;
+	}
+	for (i = 1; i < shnum; i++) {		/* the NOBITS sections */
+		const ax_u8 *s = b + shoff + 40 * i;
+
+		if (!(G32(s + 8) & 2))		/* SHF_ALLOC */
+			continue;
+		t = G32(s + 4);
+		al = G32(s + 32) < 4 ? 4 : G32(s + 32);
+		if ((al & (al - 1)) || al > 16) {
+			sprintf(why, "section %lu is aligned to %lu: the arena aligns to 16",
+				(unsigned long)i, (unsigned long)al);
+			return -1;
+		}
+		if (t == 8) {			/* SHT_NOBITS */
+			off = (off + al - 1) & ~(al - 1);
+			off += G32(s + 20);
+		} else if (G32(s + 16) % al) {
+			sprintf(why, "section %lu lies at file offset %lu, not a multiple of %lu",
+				(unsigned long)i, (unsigned long)G32(s + 16), (unsigned long)al);
+			return -1;
+		}
+	}
+	for (i = 1; i < shnum; i++) {		/* then the commons */
+		const ax_u8 *s = b + shoff + 40 * i;
+
+		if (G32(s + 4) != 2)		/* SHT_SYMTAB */
+			continue;
+		so = G32(s + 16);
+		sz = G32(s + 20);
+		if (G32(s + 36) != 16 || so > len || sz > len - so) {
+			strcpy(why, "malformed symbol table");
+			return -1;
+		}
+		for (n = sz / 16, k = 1; k < n; k++) {
+			const ax_u8 *y = b + so + 16 * k;
+
+			if (G16(y + 14) != 0xfff2)	/* SHN_COMMON */
+				continue;
+			al = G32(y + 4) ? G32(y + 4) : 1;
+			if ((al & (al - 1)) || al > 16) {
+				sprintf(why, "a common symbol is aligned to %lu: the arena aligns to 16",
+					(unsigned long)al);
+				return -1;
+			}
+			off = (off + al - 1) & ~(al - 1);
+			off += G32(y + 8);
+		}
+	}
+	*tail = (off + 3) & ~(ax_u32)3;
+	return 0;
+}

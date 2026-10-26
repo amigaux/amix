@@ -32,6 +32,17 @@ struct km_info {
  * malformed key list, a required key missing, too many parameters */
 int km_read(const ax_u8 *b, ax_u32 len, struct km_info *mi, char *why);
 
+/* the tail a root-class module needs behind its file, its manifest
+ * record's bss= (C3-5 section 3, C4-4 section 4): the NOBITS sections in
+ * section order, each aligned to max(its alignment, 4), then every COMMON
+ * symbol aligned to its own, from 0, as the module core lays them (core
+ * patch 0033), rounded up to 4.  Every COMMON counts, so it is an upper
+ * bound when the core resolves one against the kernel or a dependency.
+ * 0 with *tail set, or -1 with why (at most 120 bytes): malformed headers
+ * or symbols, an alignment above 16, or a PROGBITS section whose file
+ * offset is not a multiple of its alignment (the core runs it in place) */
+int km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why);
+
 /* in, a parameter value as modreg.d gives it, in C3-1's form for p's type
  * into out (64 bytes): bool from 0/1, yes/no, true/false, on/off; int and
  * hex from either number form, written in the declared one and within

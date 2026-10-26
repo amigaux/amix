@@ -34,7 +34,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
            tests/host/t_bootinfo.c tests/host/t_sha256.c tests/host/t_kbootset.c \
-           tests/host/t_deflate.c
+           tests/host/t_deflate.c tests/host/t_kmod.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
