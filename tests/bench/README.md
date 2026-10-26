@@ -614,9 +614,14 @@ sh tests/bench/s3-modpkg.sh <z3660eth> k46 <outdir>          # or k30
 
 | Boot | Commands | Expected |
 |---|---|---|
-| 1 | copy both trees (s3-standin's and s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
+| 1 | copy both trees (s3-standin's and s3-modpkg's); install `build/box/modadmin` (amix-dlm with core patch 0017 or later) as `/sbin/modadmin`, and put `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1` in `/etc/inittab` before every other `sysinit` line; `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
 | 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as S3-B1. `build`'s generation has, after the kernel's record, `module z3660eth boot 18397 path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
-| 3 | `kbootset status`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix 2426952 bytes` (k30 `1712168`). On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), then `dlm: boot module z3660eth loaded`. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded`. kinfo: kabi as S3-B1, module count 1 (`0000 0001`) |
+| 3 | `kbootset status`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix 2426952 bytes` (k30 `1712168`). On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`; then, from init's first sysinit entry, `dlm: boot module z3660eth loaded`. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded`. kinfo: kabi as S3-B1, module count 1 (`0000 0001`) |
+
+**Needs the final cut's kernels** (core patch 0017). On a kernel without
+it the hook loads in process 0 and panics (the S3-B5 exploratory run on
+the old k30 cut, N50): `PANIC: KERNEL FAULT psw=0x2700 … (Bus Error)`
+under `lf_hashload`.
 
 If the console says `dlm: boot module z3660eth not loaded: no board
 matches …` or `… error <n>`, the reason is on that line. The row then
