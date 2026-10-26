@@ -1,6 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 3
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 4
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -149,10 +149,18 @@ reference, and otherwise names each line that moved and fails.
 **The reference** is the text of the last fingerprint of each tag,
 `abi/<line>/abi-<kabi>.txt`, tracked in amix-dlm and shipped in the kit. A
 new tag's first text is written with `mkabi.py --text` and committed
-there with the tag's kit change. The k30.1.0 and k46.1.0 texts were
-written from the S3-20 and S3-21 cuts. They may be rewritten once, from
-the stage-3 re-cut, before the first module package of either tag is
-published. After that the rule binds.
+there with the tag's kit change. The k30.1.0 text was written from the
+S3-21 cut. k46.1.0's was rewritten once, from the stage-3 re-cut
+(KD060-Z build 68060-261026-54), when the port gave `cputype` its size:
+`data cputype 0` became `4`, and nothing else moved. The rule binds both
+tags from now on.
+
+**The two lines' fingerprints may be equal, and today they are**
+(`7a90c7d9…`): the same DDI data names at the same sizes, and the same
+structure offsets. That is expected, not a clash. The fingerprint guards
+a tag against drift, and the kabi tag tells the lines apart: a module
+carries `k30.…` or `k46.…`, and gate 2 and the core compare the family
+first.
 
 **The rule (20 §3.1):** the build fails when `abi=` changes and the kabi
 tag does not. An added symbol raises the minor. A changed size or offset,
@@ -165,8 +173,9 @@ in `AXK1`. It is checked at build time, where it can still stop a
 mismatched kernel: the kernel build fails on it, and the kit's probe,
 measured through the kit's headers, must give the same offsets
 (`make kit-test`). At run time the kabi tag, which modules carry and gate
-2 compares, stands for it. `kbootset` refuses a sidecar whose `abi=` is
-not 64 hex digits (gate 2). boot2 and the core never read it.
+2 compares, stands for it. `kbootset` refuses a module kernel whose
+sidecar has no `abi=`, or one that is not 64 hex digits (gate 2). boot2
+and the core never read it.
 
 ## 5. Settled at agreement
 
@@ -179,5 +188,8 @@ not 64 hex digits (gate 2). boot2 and the core never read it.
 - Version 3: the fingerprint's text form, the reference per tag in
   amix-dlm and the kit, `tools/mkabi.py` at the brief's step 9, and the
   checks of §4 (build time; kbootset the form only).
+- Version 4: `abi=` required on a module kernel's sidecar (gate 2), once
+  both re-cut kernels carried it; k46.1.0's one rewrite; equal
+  fingerprints across lines expected.
 - The manifest record `ident`.
 - The new loader code L14 (L1–L13 are taken).
