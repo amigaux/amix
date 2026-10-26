@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-6 v4 §1.3: the interrupt level each driver entry runs at (d7af4b8, 937a373, 2e1d5a0)
+
+_load/_unload of a boot- or demand-class module: level 0; a character d_open: the opener's level (spec_open writes no SR);
+a STREAMS open: level 4 under the stock qattach (SR 0x2400; the trampoline leaves it), so a level-2 self-test half needs
+one-tick timeout/sleep rounds (z3660eth 1.0.0-3's way) or runs at _load; root class at marc_root: level 7 with the clock
+stopped (U1), no self-test there — attach, test and enable at a later process-context point, polled until then (the
+gayle-ide module form's stage-4 case). Core patch 0028: the fact in dlm_str_open's comment (dlm.o b808cb52 unchanged).
+The guide (§4) notes it, and that a driver without a read entry answers ENODEV, as monsw does.
+
 ## 2026-10-26 — Exit ledger: S3-44-1 and -2 PASS; -3 open (93c5e2d)
 
 N86/N87: software interrupts reach both chains at once (0 spins), the level-6 claimer and counter counts are equal; a full
