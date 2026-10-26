@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — S01kbnamelist; C3-5 module/VERSION; the S3-43 recipes and the rule-breaking module set (e024b55, 8be28b8)
+
+C2-4 §12: the early rc2 script is S01kbnamelist (rc2 runs S* in byte order; S02PRESERVE would sort before S02kbnamelist).
+C3-5 §1.1: a module repo records its package version in module/VERSION (z3660eth 1.0.0-1, z3660rtg 1.1.0-1). The S3-B5
+z3660eth hashes are final (kit e84878e). tests/bench/s3-43: mkset.sh builds the module set with the line's kit — stand-ins
+monsw and z3660rtg, t43boot/t43leak/t43fail/t43rel, t43ext, and ten rule-breakers each refused for exactly its rule (the six
+load-time ones with C3-1 §4's errnos through the staged host loader); boot2.sh writes the L14 spec and an L5 store image;
+oracle.sh compares t43rel's bytes in box memory with the host loader's image; README rows S3-43-1..7.
+
 ## 2026-10-26 — kbootset -12: the booted kernel's namelist; C3-5 v4; the shipping kit (cf49440..e84878e)
 
 `kbootset namelist` writes /stand/unix, the booted kernel's namelist, as an ELF32 ET_EXEC whose symbols carry this boot's
