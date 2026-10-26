@@ -1053,7 +1053,7 @@ esac
 # FB_REPO_HOST / FB_REPO_IP / FB_REPO_URL / FB_ROOTDEV / FB_SCSI_ID /
 # FB_ROOT_SLICE / FB_SWAP_SLICE / FB_ROOT_FSTYPE / FB_DIALOG / FB_ROOT_TELNET /
 # FB_SYSLOG / FB_NET_CONFIGURED / FB_ZEN_CARDS / FB_STANDUNIX_REG / FB_STANDUNIX_RM /
-# FB_INITTAB_SYS
+# FB_INITTAB_SYS / FB_SDCARDS
 . "$CONF"
 
 # FB_TZ is the timezone ZONE NAME (W1). It was a literal `US/Eastern` in this
@@ -1304,6 +1304,55 @@ if [ "$FB_INITTAB_SYS" = y ]; then
 	fi
 fi
 
+# --- 4d. a four-card kernel (C4-1): the card-2/3 disk nodes replace core's d1 nodes ----
+# Minor bit 7 is the card's high bit on a four-card kernel, so core's 256 c<N>d1s<S>
+# nodes (minor 128 + ...) would open card-2/3 disks under names that say otherwise:
+# they leave the core package, and c10..c1f d0 s0..s7 take their minors (C4-1 §2.1:
+# slice*16 + N%16 + 128), registered to core so pkgchk core stays quiet. APKG's tools
+# from /tmp, as in 4c: removef by arguments, 16 paths per id (its stdin form keeps each
+# line's newline and matches nothing); installf's list goes through a file.
+if [ "$FB_SDCARDS" = 4 ]; then
+	for _n in 0 1 2 3 4 5 6 7 8 9 a b c d e f
+	do
+		_p=
+		for _s in 0 1 2 3 4 5 6 7
+		do
+			_p="$_p /dev/dsk/c${_n}d1s$_s /dev/rdsk/c${_n}d1s$_s"
+		done
+		( cd /tmp && /usr/apkg/bin/removef core $_p >/dev/null 2>&1 )
+		rm -f $_p
+	done
+	( cd /tmp && /usr/apkg/bin/removef -f core >/dev/null 2>&1 )
+	_lo=0
+	for _n in 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f
+	do
+		for _s in 0 1 2 3 4 5 6 7
+		do
+			_mn=`expr $_s \* 16 + $_lo + 128`
+			mknod /dev/dsk/c${_n}d0s$_s b 18 $_mn
+			mknod /dev/rdsk/c${_n}d0s$_s c 40 $_mn
+			echo "/dev/dsk/c${_n}d0s$_s b 18 $_mn 0600 root root"
+			echo "/dev/rdsk/c${_n}d0s$_s c 40 $_mn 0600 root root"
+		done
+		_lo=`expr $_lo + 1`
+	done > /tmp/c1x.$$
+	chmod 600 /dev/dsk/c1?d0s? /dev/rdsk/c1?d0s?
+	( cd /tmp && /usr/apkg/bin/installf core - < /tmp/c1x.$$ >/dev/null 2>&1 &&
+	  /usr/apkg/bin/installf -f core >/dev/null 2>&1 )
+	set -- /dev/dsk/c?d1s? /dev/rdsk/c?d1s?
+	_left=$#; [ -b "$1" ] || _left=0
+	set -- /dev/dsk/c1?d0s? /dev/rdsk/c1?d0s?
+	_made=$#; [ -b "$1" ] || _made=0
+	if grep '^/dev/r*dsk/c.d1s' /var/sadm/install/contents >/dev/null 2>&1; then
+		echo "firstboot: WARNING: core's contents still name d1 nodes -- pkgchk core will report them missing"
+	elif grep '^/dev/rdsk/c1fd0s7 ' /var/sadm/install/contents >/dev/null 2>&1; then
+		echo "firstboot: four-card kernel: the d1 nodes are gone ($_left left), c10-c1f made ($_made) and registered to core"
+	else
+		echo "firstboot: WARNING: c10-c1f made ($_made) but not registered to core"
+	fi
+	rm -f /tmp/c1x.$$
+fi
+
 # --- 5. /etc/inet/hosts (the ONLY networking edit; NEVER network-config) ----
 # Add "<ip> <nodename> <nodename>.<domain>" so `uname -n` resolves to the box's
 # own IP (which is what the SHIPPED network-config's `ifconfig aen0 `uname -n``
@@ -1414,8 +1463,9 @@ fi
 # is a misnomer; on a machine whose /dev is already the stock grid the probe
 # only DETECTS controllers and changes no node.
 #
-# ★ SKIP THE PROBE WHEN ROOT IS ON CARD 1. FB_SCSI_ID is the destination
-# controller id (card<<3 | unit); card 1 is ids 8..f (ced0 = e = card 1 unit 6).
+# ★ SKIP THE PROBE WHEN ROOT IS NOT ON CARD 0. FB_SCSI_ID is the destination
+# controller number (card*8 + unit, hex); card 0 is ids 0..7, card 1 is 8..f (ced0 = e =
+# card 1 unit 6), cards 2-3 are 10..1f (C4-1 §2.2).
 # A card-1 root means this is the real Z3660 under amix_mode NO, where card 0 is
 # the PHANTOM A3091 -- and atdevs's very first open, /dev/dsk/c0d0s0, bus-errors
 # in the driver's initialize() -> a supervisor-mode KERNEL PANIC (pc=0x800D578,
@@ -1426,10 +1476,7 @@ fi
 # IS the real HBA and answering is correct. Derived from FB_SCSI_ID, never a
 # separate key, so a card-1 install can never forget to skip and panic.
 case "$FB_SCSI_ID" in
-	[89aAbBcCdDeEfF])
-		echo "firstboot: /dev regeneration SKIPPED -- root is on card 1 (FB_SCSI_ID=$FB_SCSI_ID); the stock /dev already carries the card-1 nodes and atdevs would open card 0 (phantom A3091 -> bus error on the real LC060)"
-		;;
-	*)
+	[0-7])
 		if [ -x /usr/amiga/lib/atdevs ]; then
 			# atdevs's EXIT STATUS IS MEANINGLESS: its main() probes c0..c6d0s0 (4
 			# skipped), prints each unit whose 512-byte read succeeds ("%d\n") and
@@ -1443,6 +1490,9 @@ case "$FB_SCSI_ID" in
 		else
 			echo "firstboot: WARNING: /usr/amiga/lib/atdevs not present -- /dev not regenerated" >&2
 		fi
+		;;
+	*)
+		echo "firstboot: /dev regeneration SKIPPED -- root is not on card 0 (FB_SCSI_ID=$FB_SCSI_ID); atdevs probes card 0 only, and on the real LC060 card 0 is the phantom A3091 (bus error)"
 		;;
 esac
 

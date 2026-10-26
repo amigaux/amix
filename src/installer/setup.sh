@@ -277,7 +277,7 @@ if [ -z "$SCAN_IDS" ] && [ -f /etc/install-src-candidates ]; then
 	_c1=
 	for _cand in `cat /etc/install-src-candidates`
 	do
-		_x=`expr "$_cand" : '.*/c\(.\)d0'`
+		_x=`expr "$_cand" : '.*/c\([0-9a-fA-F]*\)d0'`
 		case "$_x" in [89aAbBcCdDeEfF]) _c1=1 ;; esac
 	done
 	# card-1 ids only (units 0..7 of card 1); nodes absent for a given id fail at
@@ -308,30 +308,40 @@ die()  { echo "$PROG: STOP: $*" >&2; exit 1; }
 # is_num WORD -- strict non-negative integer test (no external tool). Every
 # value read off a device or a tool's stdout goes through this, so an empty or
 # garbled reading can never be used as a number (fail closed).
-# hexval C -- the value of one controller digit (c<X>d0: X = card<<3 | unit), or "".
+# hexval N -- the value of a controller number (c<N>d0: N = card*8 + unit in lowercase hex,
+# one digit for cards 0-1, 10-1f for cards 2-3, contract C4-1 §2.2), or "".
 hexval()
 {
 	case "$1" in
 		[0-9])	echo "$1" ;;
 		a|A) echo 10 ;; b|B) echo 11 ;; c|C) echo 12 ;;
 		d|D) echo 13 ;; e|E) echo 14 ;; f|F) echo 15 ;;
+		1[0-9])	expr 16 + `expr "$1" : '1\(.\)'` ;;
+		1a|1A) echo 26 ;; 1b|1B) echo 27 ;; 1c|1C) echo 28 ;;
+		1d|1D) echo 29 ;; 1e|1E) echo 30 ;; 1f|1F) echo 31 ;;
+		*)	echo "" ;;
+	esac
+}
+# hexname V -- the name of the controller number V (0-31): c%x, lowercase (C4-1 §2.2).
+hexname()
+{
+	case "$1" in
+		[0-9])	echo "$1" ;;
+		10) echo a ;; 11) echo b ;; 12) echo c ;; 13) echo d ;; 14) echo e ;; 15) echo f ;;
+		1[6-9]|2[0-5])	echo 1`expr $1 - 16` ;;
+		26) echo 1a ;; 27) echo 1b ;; 28) echo 1c ;; 29) echo 1d ;; 30) echo 1e ;; 31) echo 1f ;;
 		*)	echo "" ;;
 	esac
 }
 
-# cd_unit_id -- the controller digit of the cdfs source (CD_SPEC <card>,<unit>), or "".
+# cd_unit_id -- the controller number of the cdfs source (CD_SPEC <card>,<unit>), or "".
 cd_unit_id()
 {
 	[ -n "$CD_SPEC" ] || return 0
 	_cc=`expr "$CD_SPEC" : '\([0-9]*\),'`
 	_cu=`expr "$CD_SPEC" : '[0-9]*,\([0-9]*\)'`
 	[ -n "$_cc" ] && [ -n "$_cu" ] || return 0
-	_cx=`expr $_cc \* 8 + $_cu`
-	case "$_cx" in
-		10) echo a ;; 11) echo b ;; 12) echo c ;;
-		13) echo d ;; 14) echo e ;; 15) echo f ;;
-		*)	echo "$_cx" ;;
-	esac
+	hexname `expr $_cc \* 8 + $_cu`
 }
 
 # MINIROOT_CD_CANDIDATES -- the miniroot's own CD probe walk (src/miniroot/profile
@@ -371,7 +381,7 @@ scan_safe_ids()
 	_out=
 	for _i in "$@"
 	do
-		case "$_i" in 7|f|F) continue ;; esac
+		case "$_i" in 7|f|F|17|1f|1F) continue ;; esac
 		[ -n "$_cdx" ] && [ "$_i" = "$_cdx" ] && continue
 		case " $_cand " in
 			*" $_i "*)
@@ -389,7 +399,8 @@ scan_safe_ids()
 # ensure_disk_nodes ID -- create /dev/[r]dsk/c<ID>d0s0..s5 when absent. The K1 miniroot
 # carries card-1 nodes only for c8 and ce; a card-1 target needs its own. The sd majors
 # are miniroot.proto's (block 18, raw 40; installer-selftest audit CD2 pins them) and
-# minor = slice*16 + X, the rule the stock /dev follows (c9d0s1 = 18,25).
+# minor = slice*16 + X, the rule the stock /dev follows (c9d0s1 = 18,25); for cards 2-3
+# (c10-c1f) the card's high bit is minor bit 7 (C4-1 §2.1).
 SD_BMAJ=18
 SD_CMAJ=40
 ensure_disk_nodes()
@@ -399,7 +410,7 @@ ensure_disk_nodes()
 	[ -n "$_v" ] || return 1
 	for _s in 0 1 2 3 4 5
 	do
-		_mn=`expr $_s \* 16 + $_v`
+		_mn=`expr $_s \* 16 + $_v % 16 + $_v / 16 \* 128`
 		[ -b /dev/dsk/c${_ID}d0s$_s ] || /bin/mknod /dev/dsk/c${_ID}d0s$_s b $SD_BMAJ $_mn || return 1
 		[ -c /dev/rdsk/c${_ID}d0s$_s ] || /bin/mknod /dev/rdsk/c${_ID}d0s$_s c $SD_CMAJ $_mn || return 1
 	done
@@ -502,7 +513,7 @@ fi
 #   * the install CD's own unit (cdfs <card>,<unit> -> c<card*8+unit>): a 512-byte
 #     dd-layer read of a 2048-byte CD unit behind an A4091/A4092 overruns the
 #     SCRIPTS and wedges that bus (A4091-UA, 2026-10-05) -- only cdfs may talk to it;
-#   * the host adapters' own ids, 7 (card 0) and f (card 1).
+#   * the host adapters' own ids, unit 7 of each card: 7, f, 17, 1f.
 if [ -n "$TARGET_SCAN_IDS" ]; then
 	SCAN_IDS="$TARGET_SCAN_IDS"
 fi

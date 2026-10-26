@@ -925,8 +925,9 @@ fi
 # TARGET_SCSI_ID; TARGET_HBA stays informational (which HBA the disk hangs off).
 ID="$TARGET_SCSI_ID"
 # --- CD-2: a target behind the A4092 (card 1) ------------------------------------
-# The id is a controller digit c<X>d0, X = card<<3 | unit (9 = card 1 unit 1). Two ids
-# are never a target: the host adapters' own (7, f), and the install CD's unit (cdfs
+# The id is a controller number c<N>d0, N = card*8 + unit in hex (9 = card 1 unit 1; cards
+# 2-3 are 10-1f, C4-1 §2.2). Two kinds of id
+# are never a target: the host adapters' own (unit 7: 7, f, 17, 1f), and the install CD's unit (cdfs
 # <card>,<unit>) -- only cdfs may talk to a CD behind an A4091/A4092; a dd-layer read
 # of it wedges that bus (A4091-UA, 2026-10-05). The K1 miniroot carries card-1 nodes
 # only for c8 and ce, so a card-1 target's nodes are made here (the same helper and
@@ -937,6 +938,20 @@ hexval()
 		[0-9])	echo "$1" ;;
 		a|A) echo 10 ;; b|B) echo 11 ;; c|C) echo 12 ;;
 		d|D) echo 13 ;; e|E) echo 14 ;; f|F) echo 15 ;;
+		1[0-9])	expr 16 + `expr "$1" : '1\(.\)'` ;;
+		1a|1A) echo 26 ;; 1b|1B) echo 27 ;; 1c|1C) echo 28 ;;
+		1d|1D) echo 29 ;; 1e|1E) echo 30 ;; 1f|1F) echo 31 ;;
+		*)	echo "" ;;
+	esac
+}
+# hexname V -- the name of the controller number V (0-31): c%x, lowercase (C4-1 §2.2).
+hexname()
+{
+	case "$1" in
+		[0-9])	echo "$1" ;;
+		10) echo a ;; 11) echo b ;; 12) echo c ;; 13) echo d ;; 14) echo e ;; 15) echo f ;;
+		1[6-9]|2[0-5])	echo 1`expr $1 - 16` ;;
+		26) echo 1a ;; 27) echo 1b ;; 28) echo 1c ;; 29) echo 1d ;; 30) echo 1e ;; 31) echo 1f ;;
 		*)	echo "" ;;
 	esac
 }
@@ -946,12 +961,7 @@ cd_unit_id()
 	_cc=`expr "$CD_SPEC" : '\([0-9]*\),'`
 	_cu=`expr "$CD_SPEC" : '[0-9]*,\([0-9]*\)'`
 	[ -n "$_cc" ] && [ -n "$_cu" ] || return 0
-	_cx=`expr $_cc \* 8 + $_cu`
-	case "$_cx" in
-		10) echo a ;; 11) echo b ;; 12) echo c ;;
-		13) echo d ;; 14) echo e ;; 15) echo f ;;
-		*)	echo "$_cx" ;;
-	esac
+	hexname `expr $_cc \* 8 + $_cu`
 }
 SD_BMAJ=18
 SD_CMAJ=40
@@ -962,15 +972,15 @@ ensure_disk_nodes()
 	[ -n "$_v" ] || return 1
 	for _s in 0 1 2 3 4 5
 	do
-		_mn=`expr $_s \* 16 + $_v`
+		_mn=`expr $_s \* 16 + $_v % 16 + $_v / 16 \* 128`
 		[ -b /dev/dsk/c${_ID}d0s$_s ] || /bin/mknod /dev/dsk/c${_ID}d0s$_s b $SD_BMAJ $_mn || return 1
 		[ -c /dev/rdsk/c${_ID}d0s$_s ] || /bin/mknod /dev/rdsk/c${_ID}d0s$_s c $SD_CMAJ $_mn || return 1
 	done
 	return 0
 }
-[ -n "`hexval "$ID"`" ] || die "TARGET_SCSI_ID='$ID' is not a controller digit (0-9, a-f)"
+[ -n "`hexval "$ID"`" ] || die "TARGET_SCSI_ID='$ID' is not a controller number (0-f, 10-1f)"
 case "$ID" in
-	7|f|F)	die "TARGET_SCSI_ID=$ID is a host adapter's own id -- never a target" ;;
+	7|f|F|17|1f|1F)	die "TARGET_SCSI_ID=$ID is a host adapter's own id -- never a target" ;;
 esac
 if [ "$SOURCE_KIND" = cdfs ] && [ "$ID" = "`cd_unit_id`" ]; then
 	die "TARGET_SCSI_ID=$ID is the install CD's own unit (cdfs $CD_SPEC) -- never a target"
@@ -2513,9 +2523,9 @@ fi
 # record's 28 bytes are verified ONE BY ONE: no span sum can tell two units' records apart.
 if [ -n "${ROOT_RECORD_DISK:-}" ]; then
 	RD="$ROOT_RECORD_DISK"
-	[ -n "`hexval "$RD"`" ] || die "ROOT_RECORD_DISK='$RD' is not a controller digit"
+	[ -n "`hexval "$RD"`" ] || die "ROOT_RECORD_DISK='$RD' is not a controller number"
 	case "$RD" in
-		7|f|F|8|9|a|A|b|B|c|C|d|D|e|E)	die "ROOT_RECORD_DISK=$RD: the boot disk must be a card-0 unit 0-6 (Kickstart boots it)" ;;
+		7|f|F|8|9|a|A|b|B|c|C|d|D|e|E|1?)	die "ROOT_RECORD_DISK=$RD: the boot disk must be a card-0 unit 0-6 (Kickstart boots it)" ;;
 	esac
 	[ "$RD" != "$ID" ] || die "ROOT_RECORD_DISK=$RD is the target itself -- a same-disk install carries no root record"
 	[ "${RUN_UNIT:-6}" = hint ] || die "ROOT_RECORD_DISK needs RUN_UNIT=hint (a root record means nothing to a loader without RTH1)"
@@ -2719,6 +2729,8 @@ run chmod 600 "$TARGET/var/adm/firstboot/root.shadow"
 	# contents too. modtools rewrote /etc/inittab by rename, so it lost core's group.
 	[ "$INSTALL_LAYOUT" = 1.1 ] && echo "FB_STANDUNIX_RM=y"
 	[ "${L11_KMOD:-n}" = y ] && echo "FB_INITTAB_SYS=y"
+	# a four-card kernel (C4-1): first boot swaps core's d1 nodes for c10-c1f
+	[ "${L11_SDCARDS:-2}" = 4 ] && echo "FB_SDCARDS=4"
 	echo "FB_ROOT_SLICE=$TARGET_ROOT_SLICE"
 	echo "FB_SWAP_SLICE=$TARGET_SWAP_SLICE"
 	# The filesystem this install laid on the root slice -- the ONE field the

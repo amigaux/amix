@@ -80,7 +80,7 @@ l11_keys()
 	# the kernel and the modules: rows of the medium's catalog, of this line
 	[ "`l11_kpkg_key "$KERNEL_KPKG" role`" = kernel ] || die "KERNEL_KPKG=$KERNEL_KPKG is not a kernel package of the medium's catalog"
 	[ "`l11_kpkg_key "$KERNEL_KPKG" line`" = "k$L11_LINE" ] || die "KERNEL_KPKG=$KERNEL_KPKG is not a k$L11_LINE kernel (INSTALL_CPU=$INSTALL_CPU)"
-	L11_KMOD=n L11_MODS= L11_XPKGS=
+	L11_KMOD=n L11_MODS= L11_XPKGS= L11_SDCARDS=2
 	[ "`l11_kpkg_key "$KERNEL_KPKG" kabi`" = static ] || L11_KMOD=y L11_XPKGS=modtools
 	if [ -n "$KERNEL_MODPKGS" ] && [ "$L11_KMOD" = n ]; then
 		die "KERNEL_MODPKGS='$KERNEL_MODPKGS' needs a module kernel; $KERNEL_KPKG is static"
@@ -107,12 +107,20 @@ l11_keys()
 	# the root record (amix-dlm 10 §5.1): a Zorro board by its id, manufacturer<<16 |
 	# product<<8; a motherboard controller by the `mobo` flag with id and base 0
 	if [ -z "$KBOOTSET_ROOTREC" ]; then
+		# the record's unit is the SCSI unit, card*8 + unit's low three bits (C4-1 §2.2: the
+		# controller is named by identity, never by its card number)
+		_u=`expr "$TARGET_SCSI_ID" : '.*\(.\)$'`
+		case "$_u" in
+			[0-7])	;;
+			8) _u=0 ;; 9) _u=1 ;; a|A) _u=2 ;; b|B) _u=3 ;; c|C) _u=4 ;; d|D) _u=5 ;; e|E) _u=6 ;; f|F) _u=7 ;;
+			*)	die "TARGET_SCSI_ID='$TARGET_SCSI_ID' is not a controller number" ;;
+		esac
 		case "$KBOOTSET_ROOTDEV" in
 			zorro:*:*)
 				_m=`expr "$KBOOTSET_ROOTDEV" : 'zorro:\([0-9a-fA-F]*\):'`
 				_p=`expr "$KBOOTSET_ROOTDEV" : 'zorro:[0-9a-fA-F]*:\([0-9a-fA-F]*\)$'`
-				KBOOTSET_ROOTREC="sd id=${_m}${_p}00 base=00000000 unit=$TARGET_SCSI_ID slice=$TARGET_ROOT_SLICE" ;;
-			mobo:*)	KBOOTSET_ROOTREC="sd id=00000000 base=00000000 unit=$TARGET_SCSI_ID slice=$TARGET_ROOT_SLICE mobo" ;;
+				KBOOTSET_ROOTREC="sd id=${_m}${_p}00 base=00000000 unit=$_u slice=$TARGET_ROOT_SLICE" ;;
+			mobo:*)	KBOOTSET_ROOTREC="sd id=00000000 base=00000000 unit=$_u slice=$TARGET_ROOT_SLICE mobo" ;;
 			*)	die "KBOOTSET_ROOTDEV='$KBOOTSET_ROOTDEV' is not a zorro: or mobo: match key" ;;
 		esac
 	fi
@@ -271,12 +279,19 @@ l11_bootstore()
 	[ -f "$TARGET/var/sadm/pkg/kbootset/pkginfo" ] || die "apkg installed kbootset but the package database has no kbootset"
 	_ka=`( while read _l; do case "$_l" in arena=*) echo y ;; esac; done ) < "$TARGET/stand/k$L11_LINE/kabi"`
 	[ "${_ka:-n}" = "$L11_KMOD" ] || die "the catalog and /stand/k$L11_LINE/kabi disagree on whether $KERNEL_KPKG is a module kernel (arena= ${_ka:-absent})"
+	# the kernel's sd cards (C4-1; the sidecar's sdcards=4, absent = 2): a four-card
+	# kernel reads minor bit 7 as the card's high bit, so firstboot swaps core's d1 nodes
+	# for the c10-c1f nodes
+	_sc=`( while read _l; do case "$_l" in sdcards=*) expr "$_l" : 'sdcards=\(.*\)' ;; esac; done ) < "$TARGET/stand/k$L11_LINE/kabi"`
+	L11_SDCARDS=${_sc:-2}
+	case "$L11_SDCARDS" in 2|4) ;; *) die "/stand/k$L11_LINE/kabi says sdcards=$L11_SDCARDS, not 2 or 4" ;; esac
 	if [ "$L11_KMOD" = y ]; then
 		[ -f "$TARGET/var/sadm/pkg/modtools/pkginfo" ] && [ -x "$TARGET/sbin/modadmin" ] \
 			|| die "apkg installed modtools but there is no /sbin/modadmin or no modtools in the package database"
 		l11_inittab
 	fi
 	msg "packages     : `echo $L11_BASE_KPKGS $L11_XPKGS $KERNEL_KPKG $KERNEL_MODPKGS` installed by apkg (records under /var/apkg/kpkg)"
+	msg "sd cards     : $L11_SDCARDS (the kernel's sidecar, C4-1)"
 
 	# the store, by the INSTALLED kbootset from the INSTALLED loader files: it lays the
 	# store over whatever the slice held -- a 1.0 chain, an earlier store, a 1.0 root's

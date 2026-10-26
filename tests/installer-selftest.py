@@ -2177,17 +2177,17 @@ def audit_firstboot_wiring():
                  "card 0 (phantom A3091) and PANIC on the real LC060")
         else:
             block = m.group(0)
-            card1_arm = re.search(r'\[[^\]]*[89aAbBcCdDeEfF][^\]]*\]\s*\)(.*?);;',
-                                  block, re.S)
-            has_card1_class = bool(card1_arm)
-            atdevs_in_card1 = bool(card1_arm and ATDEVS in card1_arm.group(1))
-            if has_card1_class and not atdevs_in_card1:
-                ok("firstboot.sh gates the atdevs /dev probe on FB_SCSI_ID: a "
-                   "card-1 root (8..f) SKIPS it so the phantom card-0 A3091 is "
-                   "never opened; card-0 roots keep the historical probe")
+            # C4-1: only a card-0 root (one digit 0..7) probes; every other root (8..f,
+            # 10..1f) falls to the default arm, which must not run atdevs
+            card0_arm = re.search(r'\n\t\[0-7\]\)(.*?);;', block, re.S)
+            other_arm = re.search(r'\n\t\*\)(.*?);;', block, re.S)
+            if card0_arm and ATDEVS in card0_arm.group(1) and other_arm and ATDEVS not in other_arm.group(1):
+                ok("firstboot.sh gates the atdevs /dev probe on FB_SCSI_ID: only a "
+                   "card-0 root (0..7) probes; a card-1..3 root (8..f, 10..1f) SKIPS it "
+                   "so the phantom card-0 A3091 is never opened")
             else:
-                fail("firstboot.sh's atdevs gate does not exempt card-1 roots "
-                     "(FB_SCSI_ID 8..f) -- a card-1 install could still run the "
+                fail("firstboot.sh's atdevs gate does not limit the probe to card-0 roots "
+                     "(FB_SCSI_ID 0..7) -- a card-1 install could still run the "
                      "probe and bus-error on card 0 (pc=0x800D578)")
 
     # J6b: nothing ELSE in firstboot.sh opens a hardcoded card-0..7 disk node.
@@ -8906,7 +8906,7 @@ def audit_cd2_card1_target():
         else:
             fail("%s: SD_BMAJ/SD_CMAJ do not match miniroot.proto's /dev/[r]dsk majors" % name)
     # one helper, two copies: they must be the same text
-    for f in ("hexval", "cd_unit_id", "ensure_disk_nodes"):
+    for f in ("hexval", "hexname", "cd_unit_id", "ensure_disk_nodes"):
         a, b = fn(setup, f), fn(drv, f)
         if a and b and a == b:
             ok("%s() is byte-identical in setup.sh and install.sh" % f)
@@ -8933,7 +8933,7 @@ def audit_cd2_card1_target():
     else:
         fail("setup.sh MINIROOT_CD_CANDIDATES differs from src/miniroot/profile CD_CANDIDATES (or is missing)")
     body = (sc.group(0) if sc else "") + "\n" + "\n".join(
-        fn(setup, f) for f in ("hexval", "cd_unit_id", "spec_id", "scan_safe_ids"))
+        fn(setup, f) for f in ("hexval", "hexname", "cd_unit_id", "spec_id", "scan_safe_ids"))
     body += "\nSD_BMAJ=18\nSD_CMAJ=40\n" + fn(setup, "ensure_disk_nodes").replace("/bin/mknod", "echo MKNOD")
     cases = [
         ("CD_SPEC=1,3 INSTALLABLE_IDS=9", "scan_safe_ids 8 9 a b c d e f", "8 9 c d e",
@@ -8950,6 +8950,15 @@ def audit_cd2_card1_target():
         ("CD_SPEC=1,3", "ensure_disk_nodes 9 | grep 'dsk/c9d0s1 '", "MKNOD /dev/dsk/c9d0s1 b 18 25\nMKNOD /dev/rdsk/c9d0s1 c 40 25",
          "c9d0s1 = 18,25 / 40,25 (the stock /dev's c9d0s1)"),
         ("CD_SPEC=1,3", "ensure_disk_nodes z; echo rc=$?", "rc=1", "a non-digit id is refused"),
+        # C4-1 (four cards): c10-c1f, the card's high bit is minor bit 7
+        ("CD_SPEC=1,3", "ensure_disk_nodes 1e | grep 'dsk/c1ed0s1 '", "MKNOD /dev/dsk/c1ed0s1 b 18 158\nMKNOD /dev/rdsk/c1ed0s1 c 40 158",
+         "C4-1: c1ed0s1 (card 3 unit 6) = 18,158: slice 1, card bit 0 = 1, unit 6, bit 7"),
+        ("CD_SPEC=1,3", "ensure_disk_nodes 10 | grep 'dsk/c10d0s0 '", "MKNOD /dev/dsk/c10d0s0 b 18 128\nMKNOD /dev/rdsk/c10d0s0 c 40 128",
+         "C4-1: c10d0s0 (card 2 unit 0) = 18,128"),
+        ("CD_SPEC=", "hexval 1f; hexval 1a; hexval 20; echo .", "31\n26\n\n.", "C4-1: hexval 1f = 31, 1a = 26, 20 refused"),
+        ("CD_SPEC=", "hexname 14; hexname 16; hexname 31", "e\n10\n1f", "C4-1: hexname 14 = e, 16 = 10, 31 = 1f"),
+        ("CD_SPEC=3,3", "cd_unit_id", "1b", "C4-1: cdfs 3,3 is controller number 1b"),
+        ("CD_SPEC= INSTALLABLE_IDS=16", "scan_safe_ids 16 17 1e 1f", "16 1e", "C4-1: the card-2/3 host ids 17 and 1f go"),
     ]
     for env, call, want, what in cases:
         r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s\n%s" % (env, body, call)],
@@ -8981,10 +8990,11 @@ def audit_cd2_card1_target():
                 fail("D-2 scan union: %s -- got %r, want %r" % (what, got, want))
     # install.sh refuses the CD's unit and the host ids as a target
     seg = drv[drv.index('[ -n "`hexval "$ID"`" ]'):drv.index('if [ ! -b "/dev/dsk/c${ID}d0s0" ]')]
-    pre = "\n".join(fn(drv, f) for f in ("hexval", "cd_unit_id")) + '\ndie() { echo "DIE $*"; exit 1; }\n'
+    pre = "\n".join(fn(drv, f) for f in ("hexval", "hexname", "cd_unit_id")) + '\ndie() { echo "DIE $*"; exit 1; }\n'
     for env, want in (("ID=b SOURCE_KIND=cdfs CD_SPEC=1,3", "DIE"), ("ID=7 SOURCE_KIND=cdfs CD_SPEC=1,3", "DIE"),
                       ("ID=f SOURCE_KIND=raw", "DIE"), ("ID=9 SOURCE_KIND=cdfs CD_SPEC=1,3", "PASS"),
-                      ("ID=x SOURCE_KIND=cdfs CD_SPEC=1,3", "DIE")):
+                      ("ID=x SOURCE_KIND=cdfs CD_SPEC=1,3", "DIE"), ("ID=1f SOURCE_KIND=raw", "DIE"),
+                      ("ID=1e SOURCE_KIND=raw", "PASS"), ("ID=1b SOURCE_KIND=cdfs CD_SPEC=3,3", "DIE")):
         r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s\n%s\necho PASS" % (env, pre, seg)],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         got = "DIE" if "DIE" in r.stdout.decode() else ("PASS" if "PASS" in r.stdout.decode() else r.stdout.decode())
@@ -10119,6 +10129,75 @@ def audit_l11():
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
             (ok if want in out and not os.listdir(os.path.join(ct, "tmp")) else fail)(
                 "install.sh's 1.1 m4 check, %s: %s" % (what, "accepted" if "PASSED" in out else "refused"))
+
+    # (16) C4-1: l11.sh reads the kernel's sd cards from its sidecar (sdcards=4, absent = 2)
+    # and install.sh hands FB_SDCARDS=4 to the first boot
+    m = re.search(r'\n\t_sc=`.*?\n\tcase "\$L11_SDCARDS" in .*?esac\n', l11, re.S)
+    if not m or '[ "${L11_SDCARDS:-2}" = 4 ] && echo "FB_SDCARDS=4"' not in src:
+        fail("l11.sh does not read sdcards= from the kernel's sidecar, or install.sh does not pass FB_SDCARDS=4")
+    else:
+        st = os.path.join(d, "sdc")
+        os.makedirs(os.path.join(st, "stand", "k46"), exist_ok=True)
+        for what, side, want in (("sdcards=4", "kabi=k46.1.0\nsdcards=4\nline=k46\n", "SDC=4"),
+                                 ("no sdcards= key", "kabi=k46.1.0\nline=k46\n", "SDC=2"),
+                                 ("sdcards=3", "sdcards=3\n", "DIE")):
+            open(os.path.join(st, "stand", "k46", "kabi"), "w").write(side)
+            body = ('die() { echo "DIE $*"; exit 3; }\nTARGET=%s\nL11_LINE=46\n' % st
+                    + m.group(0) + 'echo "SDC=$L11_SDCARDS"\n')
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            (ok if want in out else fail)("l11.sh's sd cards from the sidecar, %s: %s" % (what, out.strip()))
+
+    # (17) C4-1 first boot on a four-card kernel: core's 256 d1 nodes out (removef core),
+    # the 256 c10-c1f nodes in by §2.1's minor (installf core), sandboxed
+    m = re.search(r'\nif \[ "\$FB_SDCARDS" = 4 \]; then\n.*?\nfi\n', fb, re.S)
+    if not m:
+        fail("firstboot.sh has no FB_SDCARDS=4 section")
+    else:
+        sb = os.path.join(d, "fbsd")
+        shutil.rmtree(sb, ignore_errors=True)
+        for x in ("dev/dsk", "dev/rdsk", "tmp", "bin", "log"):
+            os.makedirs(os.path.join(sb, x))
+        for n in "0123456789abcdef":
+            for sl in range(8):
+                for k in ("dsk", "rdsk"):
+                    open(os.path.join(sb, "dev", k, "c%sd1s%d" % (n, sl)), "w").close()
+        open(os.path.join(sb, "contents"), "w").write("".join(
+            "/dev/%s/c%sd1s%d %s none %d %d 0600 root root core\n" % (k, n, sl, "b" if k == "dsk" else "c",
+                                                                      18 if k == "dsk" else 40, sl * 16 + int(n, 16) + 128)
+            for n in "0123456789abcdef" for sl in range(8) for k in ("dsk", "rdsk")))
+        for t in ("removef", "installf"):
+            # `-f PKG` finalizes; `PKG -` reads the list on stdin; `PKG path...` takes it as arguments
+            open(os.path.join(sb, "bin", t), "w").write(
+                '#!/bin/sh\nL=%s/log/%s\nif [ "$1" = -f ]; then echo "$*" >> $L.final\n'
+                'elif [ "$2" = - ]; then cat >> $L.$1\nelse p=$1; shift; for a; do echo "$a"; done >> $L.$p; fi\n' % (sb, t))
+            os.chmod(os.path.join(sb, "bin", t), 0o755)
+        open(os.path.join(sb, "bin", "mknod"), "w").write('#!/bin/sh\necho "$*" >> %s/log/mknod\n: > "$1"\n' % sb)
+        os.chmod(os.path.join(sb, "bin", "mknod"), 0o755)
+        blk = (m.group(0).replace("/tmp", "@SB@/tmp").replace("/usr/apkg/bin/", "@SB@/bin/")
+               .replace("/var/sadm/install/contents", "@SB@/contents").replace("/dev/", "@SB@/dev/").replace("@SB@", sb))
+        out = subprocess.run(["/usr/bin/dash", "-c", "PATH=%s/bin:$PATH\nFB_SDCARDS=4\n%s" % (sb, blk)],
+                             capture_output=True, text=True, timeout=60).stdout
+        rm = open(os.path.join(sb, "log", "removef.core")).read().split() if os.path.exists(
+            os.path.join(sb, "log", "removef.core")) else []
+        want_rm = ["%s/dev/%s/c%sd1s%d" % (sb, k, n, sl) for n in "0123456789abcdef" for sl in range(8) for k in ("dsk", "rdsk")]
+        ins = open(os.path.join(sb, "log", "installf.core")).read().splitlines() if os.path.exists(
+            os.path.join(sb, "log", "installf.core")) else []
+        want_ins = []
+        for card in (2, 3):
+            for unit in range(8):
+                nn = card * 8 + unit
+                for sl in range(8):
+                    mn = (card & 1) << 3 | (card >> 1) << 7 | sl << 4 | unit
+                    want_ins += ["%s/dev/dsk/c%xd0s%d b 18 %d 0600 root root" % (sb, nn, sl, mn),
+                                 "%s/dev/rdsk/c%xd0s%d c 40 %d 0600 root root" % (sb, nn, sl, mn)]
+        left = [f for k in ("dsk", "rdsk") for f in os.listdir(os.path.join(sb, "dev", k)) if "d1s" in f]
+        fin = open(os.path.join(sb, "log", "removef.final")).read() if os.path.exists(
+            os.path.join(sb, "log", "removef.final")) else ""
+        (ok if rm == want_rm and fin == "-f core\n" and "removef core -" not in m.group(0) else fail)(
+            "firstboot FB_SDCARDS=4: removef core takes core's 256 d1 nodes by argument, then one removef -f (%d)" % len(rm))
+        (ok if not left else fail)("firstboot FB_SDCARDS=4: no d1 node left (%d)" % len(left))
+        (ok if ins == want_ins else fail)(
+            "firstboot FB_SDCARDS=4: installf core registers the 256 c10-c1f nodes by C4-1 §2.1's minor (%d)" % len(ins))
 
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],

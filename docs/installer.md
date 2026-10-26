@@ -5012,6 +5012,20 @@ It also runs `kbootset status` and `kbootset namelist` with a version-3 kinfo ma
 must say the namelist is missing, and the namelist call (what the first boot runs) must write it. The boot through
 the new loader is a Bench row: N19's shape for k30, N23's for k46.
 
+### Four cards (amix-dlm contract C4-1)
+
+A stage-4 kernel drives four sd cards. A disk is `c<N>d0s<slice>` with N = card × 8 + unit in lowercase hex: `c0`–`cf`
+for cards 0–1 as before, `c10`–`c1f` for cards 2–3. In the minor, the card's high bit is bit 7 (C4-1 §2.1), so
+minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
+- The installer and the interview take a controller number of one or two hex digits (`hexval`, `hexname`). The host
+  adapter is unit 7 of every card (7, f, 17, 1f). The root record's `unit=` is N mod 8, and `tools/mkroot.sh` names
+  disks with `%x`.
+- The first boot runs atdevs only for a card-0 root.
+- A kernel package's sidecar says `sdcards=4` on a four-card kernel (absent = 2). `l11.sh` reads it, and the first
+  boot of such a disk (`FB_SDCARDS=4`) takes core's 256 `c<N>d1s<S>` nodes out of the core package. Their minors
+  (128 and up) name card-2/3 disks there. In their place it makes and registers the 256 `c10`–`c1f` nodes, with
+  APKG's removef/installf, so `pkgchk core` stays quiet.
+
 ### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
 
 A 1.1 install CD can also boot by itself through an A4091 or A4092 boot ROM that has a
