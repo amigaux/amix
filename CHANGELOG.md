@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-5 v8: the ramdisk package row; block-driver nodes in /dev/dsk (b5791e9)
+
+§1.1 `ramdisk | ramdisk | ramdisk30 / ramdisk46`; §1.2 device nodes ship as pkgmap entries, block nodes in /dev/dsk,
+/dev/rdsk only with a character row (the ramdisk: /dev/dsk/ram0–2, b 20 0–2, 0600 root root). Documentation only.
+
 ## 2026-10-26 — S4-72-1 N103: the module arena 16-aligned in the image; gate 4 (a829c44, 239b4a7, 49239b1)
 
 Core 0034 checks a root module's ABSOLUTE 16-alignment; boot2 places it 16-aligned relative to the arena, whose image
