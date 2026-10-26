@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — modadmin -K keeps kernel messages in putbuf too (662de06)
+
+Core patch 0026: `modadmin -K` (root) sets prt_where's PRW_BUF bit through the namelist and /dev/kmem, so every kernel,
+core and module message is also kept in putbuf on a box with no console logger. Background: after boot printf stores into
+putbuf only through the console logger (consbuf → log driver → logcons); the k46 vehicle has none registered (conslogging
+0), so its run-time lines went to the console VT and were kept nowhere — the k46 S3-43 gap, a vehicle difference, not the
+port kernel. README: when -K is needed, once per boot after S01kbnamelist, the console keeps every line, the 2000-byte ring
+wraps (read `-L | tail` after each action), a line can appear twice more on a box with a logger. dlm.o unchanged; box
+modadmin 0518fb28. Rides the next modtools mint.
+
 ## 2026-10-26 — spec 10 §7.3: a one-shot request boots the default (8e0b17a)
 
 A one-shot request takes its boot ahead of a pending trial, and devload and safe requests boot the default generation,
