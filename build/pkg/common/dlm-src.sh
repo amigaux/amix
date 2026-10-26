@@ -5,7 +5,7 @@
 #     . "$REPO/recipes/common/dlm-src.sh"
 #     amix_dlm_build <commit> <target>...
 #         e.g. boot1.img boot2.bin box/kbootset box/modadmin
-#     amix_dlm_kit <commit> [<amix-modules commit>]
+#     amix_dlm_kit <commit> [<amix-modules commit>] [<port commit>]
 #         `make kit`: $AMIX_DLM_TREE/build/kit/{k30,k46}, KIT_REV=<commit>
 #
 # The sibling checkout ../amix-dlm is only READ: `git archive <commit>` exports
@@ -64,9 +64,13 @@ amix_dlm_build() {
 # export is the pinned commit by construction, so a shim answers for it
 # (KIT_REV=<commit>, never dirty).  The k46 kit also records PORT_REV, the
 # commit of ../amix-040-060-port its 4 KiB headers come from (include-modelb/,
-# with a -dirty check on immu.h/param.h): those two read-only calls with
-# `-C <port>` go to the real git, so PORT_REV is the port's own.  Any other
-# git call is refused.  The stock headers come from gcc-cross-amix's sysroot,
+# with a -dirty check on immu.h/param.h).  With <port commit>, mkkit's PORT
+# is the git archive of that commit's include-modelb/ (and src/sys/monsw.h
+# when it has one) in build/kspace/src/port-<commit>/, and the shim answers
+# its two calls (PORT_REV=<port commit>, never dirty), so the kit does not
+# follow the port's live HEAD.  Without it PORT is the sibling checkout and
+# those two read-only calls go to the real git (PORT_REV = its HEAD).  Any
+# other git call is refused.  The stock headers come from gcc-cross-amix's sysroot,
 # as in amix-dlm.
 # With <amix-modules commit>, sys/monsw.h comes from the git archive of that
 # commit (build/kspace/src/kitmods-<commit>/amix-modules/, MONSW_H), and the
@@ -80,6 +84,20 @@ amix_dlm_kit() {
 	_dk_port="$AMIX_SIBLINGS/amix-040-060-port"
 	_dk_git=$(command -v git)
 	_dk_mh=
+	_dk_pc="${3:-}"
+	if [ -n "$_dk_pc" ]; then
+		git -C "$_dk_port" cat-file -e "$_dk_pc^{commit}" 2>/dev/null || {
+			echo "[FAIL] amix-040-060-port has no commit $_dk_pc" >&2; exit 1; }
+		_dk_pt="$AMIX_BUILD_ROOT/kspace/src/port-$_dk_pc"
+		if [ ! -f "$_dk_pt/include-modelb/sys/immu.h" ]; then
+			rm -rf "$_dk_pt"; mkdir -p "$_dk_pt"
+			_dk_pf=include-modelb
+			git -C "$_dk_port" cat-file -e "$_dk_pc:src/sys/monsw.h" 2>/dev/null &&
+				_dk_pf="$_dk_pf src/sys/monsw.h"
+			git -C "$_dk_port" archive "$_dk_pc" $_dk_pf | tar -x -C "$_dk_pt"
+		fi
+		_dk_port="$_dk_pt"
+	fi
 	if [ -n "${2:-}" ]; then
 		_dk_mr="$AMIX_BUILD_ROOT/kspace/src/kitmods-$2/amix-modules"
 		git -C "$AMIX_SIBLINGS/amix-modules" cat-file -e "$2^{commit}" 2>/dev/null || {
@@ -94,7 +112,12 @@ amix_dlm_kit() {
 	{
 		echo '#!/bin/sh'
 		echo 'case "$*" in'
-		echo "\"-C $_dk_port rev-parse --short HEAD\"|\"-C $_dk_port diff --quiet HEAD -- \"*) exec $_dk_git \"\$@\" ;;"
+		if [ -n "$_dk_pc" ]; then
+			echo "\"-C $_dk_port rev-parse --short HEAD\") echo $_dk_pc ;;"
+			echo "\"-C $_dk_port diff --quiet HEAD -- \"*) exit 0 ;;"
+		else
+			echo "\"-C $_dk_port rev-parse --short HEAD\"|\"-C $_dk_port diff --quiet HEAD -- \"*) exec $_dk_git \"\$@\" ;;"
+		fi
 		if [ -n "$_dk_mh" ]; then
 			echo "\"-C $_dk_mr/include/sys rev-parse --short HEAD\") echo $2 ;;"
 			echo "\"-C $_dk_mr/include/sys diff --quiet HEAD -- $_dk_mh\") exit 0 ;;"
@@ -119,6 +142,10 @@ amix_dlm_kit() {
 		grep -qx "KIT_REV=$1" "$AMIX_DLM_TREE/build/kit/$_dk_l/kit.conf" || {
 			echo "[FAIL] amix-dlm $1: the $_dk_l kit is not labelled KIT_REV=$1" >&2; exit 1; }
 	done
-	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1 (log $AMIX_DLM_TREE.kit.log)"
-	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh
+	if [ -n "$_dk_pc" ]; then
+		grep -qx "PORT_REV=$_dk_pc" "$AMIX_DLM_TREE/build/kit/k46/kit.conf" || {
+			echo "[FAIL] amix-dlm $1: the k46 kit is not labelled PORT_REV=$_dk_pc" >&2; exit 1; }
+	fi
+	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1${_dk_pc:+ PORT_REV=$_dk_pc} (log $AMIX_DLM_TREE.kit.log)"
+	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh _dk_pc _dk_pt _dk_pf
 }
