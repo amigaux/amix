@@ -18,7 +18,8 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`make/`](make/) | `make` 3.81 — GNU make | **published** 2026-09-26 (`/opt/amix`); 3.81-2 re-mint staged |
 | [`amix-benchmark/`](amix-benchmark/) | `amixbench` 1.3 (catalog name `amix-benchmark`) — the amix-bench suite | **published** 2026-09-16 (`/opt/amix`) |
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25, staged, not published |
-| [`kernel-k30/`](kernel-k30/) | `kernel-k30-u` — the r7 K030-U with a hand-written sidecar | **stand-in**, never shipped |
+| [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26, staged, not published |
+| [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 1 | minted 2026-10-25, staged, not published |
 | [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | minted 2026-10-25, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
