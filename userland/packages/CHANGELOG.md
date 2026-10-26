@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern46m k46.1.1.261026-71, the k46 root-class kernel without static z3660scsi (1c23b76) — not published
+
+KD060-Z module kernel 68060-261026-71 (port afc8d09, amix-dlm 05f700a core 0001–0038): -69 without the z3660 pass
+(`build-m.sh` skips it unless Z3660=1). root= mobo:a3000-wd,zorro:0202:01,zorro:0202:03 = dlm_static_root; the Z3660
+root comes from the zscsi46 root module. unix 8d146e9e (2438117 B), sidecar aff218e1, abi= fea18182, sdcards=4,
+ksymgate 12/12; package md5 353d8aa4 / 2474496 B. Catalog 6979e980 (the -69 root kept at superseded/repo-20261026-2208).
+Round trip 107/114: the 7 FAILs are the script booting k46-m stages 1–3 from zorro:144b:01 before zscsi46 exists
+(gate 3 rightly refuses); fixture fix (mobo boot/root for stages 1–3, as k30-m's F30) is the follow-up.
+
 ## 2026-10-26 — z3660scsi-k30/-k46 1.0.0-1, the first root-class module packages (3b12add, e9ef38b) — not published
 
 From amix-z3660scsi 2f4183b (module form beff392), built with dlmkit -7 (amix-dlm 05f700a). PKG zscsi30/zscsi46, kabi
