@@ -172,18 +172,35 @@ sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261
 | 6 | — | boots 3, the trial. It cannot mount its root (`PANIC: vfs_mountroot: cannot mount root`), so it never reaches mark-good. The kernel reboots by itself after the panic, and in the same boot: `amix-boot: L8 trial generation did not reach multi-user (generation 3)`, then generation 1 boots to login. The rig's login watch waits longer here |
 | 7 | `kbootset status` | generation 1 boots; status shows default 1, no trial, 3 as bad with 1 attempt (or already collected) |
 
-`bad.spec` names a k46 kernel without the Z3660 driver, such as KD060-A,
-whose root controller is the A4091:
+`bad.spec` names the line's own installed kernel, with a root on a SCSI
+unit where the vehicle has no disk. The kernel boots, cannot mount its
+root and panics, a true mountroot failure, on either line. It uses the
+line's kernel and sidecar `bss=`, with unit 5 (the vehicles carry their
+disk at unit 6 only):
 
 ```
-line k46
-rootfs ufs
-root sd id=144b0100 unit=6 slice=1
-kernel unix /tmp/KD060-A-c0-u6
+line k46                                      line k30
+rootfs ufs                                    rootfs ufs
+root sd id=144b0100 unit=5 slice=1            root sd id=00000000 base=00000000 unit=5 slice=1 mobo
+kernel unix /stand/k46/unix bss=<its bss>     kernel unix /stand/k30/unix bss=<its bss>
 ```
 
-`commit --spec` runs no gates. That is the point here: a trial the gates
-would refuse (closure) is the way to get a trial that panics in rc.
+`bss=` is the one in `/stand/k<line>/kabi`. The record's controller id
+is the vehicle's root controller: the Z3660 `144b0100` on k46, the A3000
+WD (`mobo`) on k30.
+
+`commit --spec` runs no gates and writes the root line as given. That is
+the point here: it is how a row gets a trial that panics before rc.
+
+Do not use another kernel family for the trial. A family whose sd layer
+keeps the stock rows still drives the vehicle's controller and mounts
+root: K030-IDE does on the A3000 (row N43). A 1.0 kernel has no `kinfo`
+either, so its "fallback" comes from `mark-good` refusing, not from the
+root.
+
+The first k46 run (row N36, `2026-10-26-m-gen5.md`) used KD060-A, whose
+A4091 root controller the Z3660 vehicle lacks. That works on k46, but
+the unit-5 spec is the recipe from now on.
 
 **Why mark-bad on boot 5.** The vehicle's 4 MiB store holds two raw k46
 generations. At boot 5 both are in the kept set: generation 1 is good
@@ -228,6 +245,12 @@ boot 2 batch: /tmp/kbootset status > /dev/term/ser 2>&1
   booting generation").
 - After the journal message, kbootset has cleared the journal: a second
   `status` shows no message.
+- **With the rc2 hook** (the installer's disks from v7, C2-4 §9), the
+  first kbootset run of boot 2 is the hook's `mark-good`, at the end of
+  run level 2. It reports and clears the journal, and its output goes to
+  the console, not the serial log. So the row's own `status` shows no
+  journal message: read the journal line from the console frames, or
+  judge the row by the boot and the store state.
 - kbootset creates `/var/kbootset` itself when the system has none.
 
 ### S2-46 — the exit row: upgrade and roll back with apkg alone
@@ -286,44 +309,31 @@ applies with:
 
 **S2-41 on k30.** The S2-41 table above applies with:
 - boot 1: `kbootset build; kbootset commit`;
-- the kernel lines: `kernel unix 1270676 bytes` for generations 1 and 2;
+- the kernel lines: `kernel unix 1270676 bytes` for every generation,
+  the trial included (it is the same kernel);
 - boot 5: the 64 MiB store has room, so `mark-bad 2` is not needed for
   space. Keep it, because it exercises `mark-bad`. Then
-  `kbootset commit --spec bad30.spec`.
-
-`bad30.spec` names K030-IDE, a k30 kernel whose only disk driver is
-Gayle IDE, probed as the sole controller on an A4000 only. On the A3000
-it finds no disk, so it cannot mount its root. Copy
-`amix-kerntools/work/k0-chains/K030-IDE/K030-IDE-c0-u6` (1 260 137
-bytes, sha256 `4cb66c1b…`) to `/tmp`:
-
-```
-line k30
-rootfs ufs
-root sd id=00000000 base=00000000 unit=6 slice=1 mobo
-kernel unix /tmp/K030-IDE-c0-u6 bss=280135
-```
-
-(`bss=` from `tests/bench/bss-of.sh` over its `.etrel` and brel.)
-- **Boot 6:** `amix-boot: generation 3, kernel unix 1260137 bytes`,
-  then the kernel stops at
-  `PANIC: vfs_mountroot: cannot mount root: errno <n>` (k46 gave errno
-  89; the 030 value is the row's to record).
+  `kbootset commit --spec bad.spec` with the k30 column above
+  (`bss=344916`).
+- **Boot 6:** `amix-boot: generation 3, kernel unix 1270676 bytes`, then
+  `PANIC: vfs_mountroot: cannot mount root: errno <n>` (k46 gave 89; the
+  030 value is the row's to record).
 - **If the kernel reboots by itself,** as k46 did, the L8 line and
   generation 1 follow in the same boot. If it stops, power-cycle, and L8
   shows on boot 7.
 - **Either way the end state:** default 1, generation 3 bad with 1
-  attempt, generation 2 good.
+  attempt. Generation 2 is gone, because `mark-bad 2` collected it.
 
 **One S2-42 cell on k30 (N = 7).** As the S2-42 table above, on the
 l11-k30 disk, with `build` composing from the installed package (no
 stand-in). Boot 2:
 - the loader boots generation 2 (the trial, `kernel unix 1270676
   bytes`);
-- `status` says the commit had completed;
 - if the root fsck reboots, `retry` gives the attempt back, and the
   trial boots again (M-GEN3 §4);
-- then `mark-good`.
+- at the end of run level 2 the hook's `mark-good` marks it good.
+  "had completed" is printed then, on the console (see "With the rc2
+  hook" above).
 
 ### M-GEN2 — `kbootset commit` time, bench upper bound
 
