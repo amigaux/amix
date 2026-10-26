@@ -29,6 +29,12 @@
  * interrupt-driven path (int2_tbl via board-mod, or a p6int/int6_tbl change) but
  * is not wired into kernel.c.  TX is synchronous and needs no interrupt.
  *
+ * Built with -DZ3660ETH_MODULE the same source is the loadable module (amix-dlm
+ * C3-6; the section at the end of this file): if_attach instead of the ifstats
+ * link, and an optional INT6 receive path whose level-6 handler only
+ * acknowledges, masks and flags, the drain staying at IPL 4.  z3660ethintr()
+ * and z3660ethinit() are not in the module.
+ *
  * Cache coherency, 030 line: the eth windows are CACHEABLE (AMIX section 0 is
  * mapped with cache-inhibit clear -- see the mapping note above z3660eth_map())
  * and per-page cache-inhibit is impossible whichever way the board is mapped:
@@ -81,6 +87,10 @@
 #include "sys/sockio.h"
 #include "net/if.h"
 #include "z3660eth.h"
+#ifdef Z3660ETH_MODULE
+#include "sys/conf.h"		/* struct cdevsw, for struct mod_drv_data */
+#include "sys/moddefs.h"	/* the ABI kit's wrapper (amix-dlm C3-1, C3-6) */
+#endif
 
 extern int	autocon();
 extern caddr_t	sptalloc();
@@ -95,8 +105,13 @@ extern void	bcopy(), bzero();
 extern char *panicstr;
 
 void z3660eth_autoconfig();
+#ifndef Z3660ETH_MODULE
 void z3660ethinit();
 void z3660ethintr();
+#else
+static void z3660eth_rx_work();
+static void z3660eth_intr_start();
+#endif
 static void z3660eth_poll();
 static void z3660eth_drain();
 static void z3660eth_tx_drain();
@@ -132,7 +147,11 @@ struct streamtab z3660ethinfo =		/* goes in cdevsw[].d_str */
     &z3660ethrinit, &z3660ethwinit, NULL, NULL,
 };
 
+#ifndef Z3660ETH_MODULE
 extern struct ifstats *ifstats;
+#else
+extern int if_attach();		/* DDI v1: the module never touches ifstats */
+#endif
 
 static z3660eth_board_t z3660eth_board[Z3660ETH_MAXBOARDS];
 static int z3660eth_number_of_boards;
@@ -167,6 +186,26 @@ unsigned long z3660eth_spt_freed;	/* kernel-VA pages returned by sptfree() */
  */
 unsigned long z3660eth_rx_holds, z3660eth_rx_resumed;
 unsigned long z3660eth_rx_force_slots, z3660eth_rx_force_ticks;
+
+#ifdef Z3660ETH_MODULE
+/*
+ * Module form only (amix-dlm C3-6 section 2): the interrupt path the static
+ * kernels never had.  The parameters come from the manifest through _load:
+ *   z3660eth_intr    0 = polled (the default), 6 = the INT6 chain
+ *   z3660eth_intrl2  with intr=6: 1 = the drain runs in a level-2 handler the
+ *                    level-6 handler raises through PORTS, 0 = in the poll tick
+ * z3660eth_intr_mode is what runs: 6 only after intr_attach and the self-test
+ * passed.  int_on and int_pending are the only state the level-6 handler
+ * shares with the lower levels, and only under the board's own mask (the
+ * comment above z3660eth_int6).
+ */
+long z3660eth_intr, z3660eth_intrl2 = 1, z3660eth_intr_mode;
+static int z3660eth_intr_tried;
+static volatile int z3660eth_int_on;		/* the board's ETH interrupt is enabled */
+static volatile int z3660eth_int_pending;	/* level 6 masked it: drain, then re-enable */
+static volatile int z3660eth_l6_test, z3660eth_l2_test;	/* the attach self-test */
+unsigned long z3660eth_int6_n, z3660eth_int2_n;		/* claims, kmem-readable */
+#endif
 
 static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -758,6 +797,9 @@ int board_index;
 	info->poll_id = timeout(z3660eth_poll, (caddr_t)(long)board_index,
 				Z3660ETH_POLL_TICKS);
     }
+#ifdef Z3660ETH_MODULE
+    z3660eth_intr_start(board_index);	/* intr=6: attach once, self-test, enable */
+#endif
     return 0;
 }
 
@@ -835,12 +877,14 @@ cred_t *credp;
     zp->q = q;
     splx(s);
 
+#ifndef Z3660ETH_MODULE
     if (!board->ifstats.ifs_name) {
 	board->ifstats.ifs_name = "zen";
 	board->ifstats.ifs_mtu = Z3660ETH_MTU;
 	board->ifstats.ifs_next = ifstats;
 	ifstats = &board->ifstats;
     }
+#endif				/* the module's _load did if_attach() */
     board->ifstats.ifs_unit = board_index;
     board->ifstats.ifs_active = 1;
     board->if_flags = IFF_BROADCAST | IFF_NOTRAILERS | IFF_RUNNING;
@@ -872,6 +916,10 @@ register queue_t *q;
 	}
 	if (info->regs)
 	    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+#ifdef Z3660ETH_MODULE
+	z3660eth_int_on = 0;		/* after the board's interrupt is off */
+	z3660eth_int_pending = 0;
+#endif
 	board->z3660eth_status.board_state = Z3660ETH_BOARD_RESET;
 	board->ifstats.ifs_active = 0;
     }
@@ -1238,7 +1286,11 @@ caddr_t arg;
 	return;
 
     if (board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING) {
+#ifndef Z3660ETH_MODULE
 	z3660eth_drain(board_index);
+#else
+	z3660eth_rx_work(board_index);	/* the drain, and intr=6's re-enable */
+#endif
 	z3660eth_tx_drain(board_index);
     }
     if (info->poll_running)
@@ -1317,6 +1369,7 @@ int board_index;
  * int6_tbl change), DISABLE the poll first and check that z3660ethrsrv's mask
  * still covers its level -- do not run two drainers concurrently.
  */
+#ifndef Z3660ETH_MODULE
 void
 z3660ethintr()
 {
@@ -1338,6 +1391,7 @@ z3660ethintr()
 	}
     }
 }
+#endif /* !Z3660ETH_MODULE: the module's level-6 handler is z3660eth_int6 */
 
 /* ----------------------------------------------------------------------------
  * DLPI protocol engine -- the seven primitives, copied from hydra (Style-1
@@ -1822,8 +1876,331 @@ mblk_t *mp;
  * GEM-less WinUAE build box boots cleanly and open() simply ENXIOs.  Provided
  * for completeness / future use.
  */
+#ifndef Z3660ETH_MODULE
 void
 z3660ethinit()
 {
     z3660eth_autoconfig();
 }
+#endif /* the module's z3660eth_load does this */
+
+#ifdef Z3660ETH_MODULE
+/* ----------------------------------------------------------------------------
+ * The module form (amix-dlm docs/contracts/C3-6-driver-to-module.md, version 1,
+ * section 2).  Built with -DZ3660ETH_MODULE, once per kernel line (k30, k46);
+ * without it this file is the static driver, byte for byte.  The ABI kit's
+ * mkmod adds .moddata (src/z3660eth.modkeys) and modfix the section type.
+ *
+ *   class=boot, unload=never, majors=c:51: the core registers major 51 from
+ *   z3660eth_drvdata; no code here touches cdevsw.  The interface goes on the
+ *   stock list with if_attach(), never by linking into ifstats.
+ *
+ * INTERRUPTS.  Polled stays the default (intr=0): the poll callout drains, as in
+ * the static driver.  With intr=6 the first open attaches z3660eth_int6 to the
+ * level-6 chain (and z3660eth_int2 to the level-2 chain when intrl2=1), raises
+ * the chain once from software as a self-test, and only then enables the
+ * board's ETH interrupt.  Any failure leaves it polled.
+ *
+ * THE LEVEL-6 RULE (C3-6 section 1.3).  No spl masks level 6 in these kernels
+ * (spl5-spl7 raise to 4), so z3660eth_int6 calls no DDI function: it reads
+ * INT_STATUS, writes ZZ_CONFIG_DISABLE (which both acknowledges the ETH
+ * interrupt and masks it: the firmware clears it and stops re-raising,
+ * rtg.c REG_ZZ_CONFIG), records int_pending, and with intrl2 raises PORTS
+ * (INTREQ = SETCLR|PORTS).  The drain runs at IPL 4: in the level-2 handler
+ * under splz3660eth(), or in the next poll tick (itself at IPL 4).  Either way
+ * z3660eth_rx_work clears int_pending and re-enables the board.  int_pending is
+ * set only with the board's interrupt already off, so the lower half reads and
+ * clears it under the board's mask.  A frame that arrives while the interrupt
+ * is off is not lost: the firmware re-raises while the backlog is non-empty
+ * (rtg.c ethernet_thread), and the poll tick drains every tick in all modes.
+ * ------------------------------------------------------------------------- */
+
+#define Z3660ETH_MAJOR		51	/* = .moddata majors=c:51, the registry's */
+#define AMIGA_INTREQ		0xDFF09C	/* Paula INTREQ, identity-mapped (like VPOSR) */
+#define INTREQ_SETCLR		0x8000
+#define INTREQ_EXTER		0x2000	/* level 6 */
+#define INTREQ_PORTS		0x0008	/* level 2 */
+#define Z3660ETH_SELFTEST_SPIN	200000	/* polls of the test flags, IPL 0 */
+
+extern int intr_attach(), intr_detach();
+
+#define RAISE_INTREQ(bits) \
+	(*(volatile unsigned short *)AMIGA_INTREQ = (unsigned short)(INTREQ_SETCLR | (bits)))
+
+/*
+ * Level 6, called on every INT6 (CIA-B and the firmware alike) with the board
+ * as its argument.  NO DDI CALL, NO spl, NO STREAMS: board registers and this
+ * driver's own variables only.  Returns nonzero only when this board raised it.
+ */
+static int
+z3660eth_int6(arg)
+char *arg;
+{
+    z3660eth_board_t *board = (z3660eth_board_t *)arg;
+    volatile unsigned char *regs = board->z3660eth_info.regs;
+    unsigned long st;
+
+    if (z3660eth_l6_test) {		/* the self-test's software EXTER */
+	if (z3660eth_intrl2) {
+	    z3660eth_l2_test = 1;	/* set before l6_test clears: no gap */
+	    RAISE_INTREQ(INTREQ_PORTS);
+	}
+	z3660eth_l6_test = 0;
+	return 1;
+    }
+    if (regs == 0)
+	return 0;
+    st = RDLONG(regs, ZZ_INT_STATUS);
+    if (st == 0xFFFFFFFF || (st & ZZ_INT_ETH) == 0)
+	return 0;
+    WRLONG(regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);	/* acknowledge and mask */
+    if (z3660eth_int_on) {
+	z3660eth_int_on = 0;
+	z3660eth_int_pending = 1;
+	z3660eth_int6_n++;
+	if (z3660eth_intrl2)
+	    RAISE_INTREQ(INTREQ_PORTS);
+    }
+    return 1;
+}
+
+/*
+ * Level 2, called on every PORTS interrupt: returns at once unless the level-6
+ * handler left work.  The drain runs at IPL 4 (splz3660eth), as the poll
+ * callout and z3660ethrsrv run it, so the three never interleave.
+ */
+static int
+z3660eth_int2(arg)
+char *arg;
+{
+    z3660eth_board_t *board = (z3660eth_board_t *)arg;
+    int s;
+
+    if (z3660eth_l2_test) {
+	z3660eth_l2_test = 0;
+	return 1;
+    }
+    if (!z3660eth_int_pending)
+	return 0;
+    s = splz3660eth();
+    if (board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING) {
+	z3660eth_int2_n++;
+	z3660eth_rx_work(0);
+    } else
+	z3660eth_int_pending = 0;	/* closed: the next open re-enables */
+    splx(s);
+    return 1;
+}
+
+/*
+ * The RX lower half, at IPL 4 (the poll callout, or z3660eth_int2).  A set
+ * int_pending means the level-6 handler has already turned the board's
+ * interrupt off, so it is cleared here under the board's mask, the backlog is
+ * drained, and then the interrupt goes back on.  A clear one is a plain drain.
+ */
+static void
+z3660eth_rx_work(board_index)
+int board_index;
+{
+    z3660eth_board_t *board = &z3660eth_board[board_index];
+    z3660eth_info_t *info = &board->z3660eth_info;
+
+    if (!z3660eth_int_pending) {
+	z3660eth_drain(board_index);
+	return;
+    }
+    z3660eth_int_pending = 0;
+    z3660eth_drain(board_index);
+    if (z3660eth_intr_mode == 6 && info->regs &&
+	board->z3660eth_status.board_state == Z3660ETH_BOARD_RUNNING) {
+	z3660eth_int_on = 1;		/* before the enable: see z3660eth_int6 */
+	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_ENABLE);
+    }
+}
+
+/*
+ * intr=6, once per module life: attach the handlers and raise the chain from
+ * software (INTREQ EXTER, as the firmware's INT6 arrives; p6int acknowledges
+ * it and calls the stock CIA-B handler first, as on every firmware INT6).
+ * The test passes when the level-6 handler took its flag and, with intrl2,
+ * the level-2 handler took the one it raised.  Process context, IPL 0, the
+ * board's interrupt off.  0, or an errno with nothing left attached.
+ */
+static int
+z3660eth_intr_setup(board)
+z3660eth_board_t *board;
+{
+    int e, i;
+
+    if ((e = intr_attach(6, z3660eth_int6, (char *)board, "z3660eth")) != 0) {
+	cmn_err(CE_NOTE, "zen: level-6 attach failed (errno %d); polled", e);
+	return e;
+    }
+    if (z3660eth_intrl2 &&
+	(e = intr_attach(2, z3660eth_int2, (char *)board, "z3660eth")) != 0) {
+	(void)intr_detach(6, z3660eth_int6, (char *)board);
+	cmn_err(CE_NOTE, "zen: level-2 attach failed (errno %d); polled", e);
+	return e;
+    }
+    z3660eth_l2_test = 0;
+    z3660eth_l6_test = 1;
+    RAISE_INTREQ(INTREQ_EXTER);
+    for (i = 0; i < Z3660ETH_SELFTEST_SPIN; i++)
+	if (!z3660eth_l6_test && !z3660eth_l2_test)
+	    break;
+    if (z3660eth_l6_test || z3660eth_l2_test) {
+	z3660eth_l6_test = z3660eth_l2_test = 0;
+	if (z3660eth_intrl2)
+	    (void)intr_detach(2, z3660eth_int2, (char *)board);
+	(void)intr_detach(6, z3660eth_int6, (char *)board);
+	cmn_err(CE_NOTE, "zen: interrupt self-test failed; polled");
+	return EIO;
+    }
+    cmn_err(CE_NOTE, "zen: INT6 receive, drain at %s", z3660eth_intrl2 ?
+	"level 2" : "the poll tick");
+    return 0;
+}
+
+/* From z3660eth_initialize (first open, after the poll is armed). */
+static void
+z3660eth_intr_start(board_index)
+int board_index;
+{
+    z3660eth_board_t *board = &z3660eth_board[board_index];
+    z3660eth_info_t *info = &board->z3660eth_info;
+    int s;
+
+    if (z3660eth_intr == 6 && !z3660eth_intr_tried) {
+	z3660eth_intr_tried = 1;
+	if (z3660eth_intr_setup(board) == 0)
+	    z3660eth_intr_mode = 6;
+    }
+    if (z3660eth_intr_mode != 6 || info->regs == 0)
+	return;
+    s = splz3660eth();			/* against z3660eth_int2 and the tick */
+    z3660eth_int_pending = 0;
+    z3660eth_int_on = 1;		/* before the enable: see z3660eth_int6 */
+    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_ENABLE);
+    splx(s);
+}
+
+/*
+ * One "name=value" of the manifest's parameter string (names separated by
+ * spaces; 0 when there are none), as a non-negative decimal; `dflt' (the
+ * .moddata default) when the name is absent or its value is not a number.
+ */
+static long
+z3660eth_param(params, name, dflt)
+char *params, *name;
+long dflt;
+{
+    char *p = params, *n;
+    long v;
+
+    if (p == 0)
+	return dflt;
+    while (*p) {
+	while (*p == ' ')
+	    p++;
+	for (n = name; *n && *p == *n; n++, p++)
+	    ;
+	if (*n == 0 && *p == '=') {
+	    p++;
+	    if (*p < '0' || *p > '9')
+		return dflt;
+	    for (v = 0; *p >= '0' && *p <= '9'; p++)
+		v = v * 10 + (*p - '0');
+	    return (*p == 0 || *p == ' ') ? v : dflt;
+	}
+	while (*p && *p != ' ')
+	    p++;
+    }
+    return dflt;
+}
+
+/*
+ * _load: once, process context, before the core installs the cdevsw row.  Finds
+ * and maps the board as the first open of the static driver does, turns its
+ * interrupt off and puts zen on the interface list.  ENXIO without a board;
+ * on any error nothing is left (z3660eth_map unmaps its own failures, and
+ * nothing is armed or attached yet).
+ */
+int
+z3660eth_load(params)
+char *params;
+{
+    z3660eth_board_t *board = &z3660eth_board[0];
+    z3660eth_info_t *info = &board->z3660eth_info;
+    int e;
+
+    z3660eth_intr = z3660eth_param(params, "intr", 0L);
+    z3660eth_intrl2 = z3660eth_param(params, "intrl2", 1L);
+    if (z3660eth_intr != 0 && z3660eth_intr != 6) {
+	cmn_err(CE_NOTE, "zen: intr=%d is not 0 or 6; polled", (int)z3660eth_intr);
+	z3660eth_intr = 0;
+    }
+    if (z3660eth_intrl2 != 0 && z3660eth_intrl2 != 1)
+	z3660eth_intrl2 = 1;
+
+    z3660eth_autoconfigured = 1;	/* z3660eth_autoconfig() is this, here */
+    if ((e = z3660eth_map(0)) != 0) {
+	z3660eth_autoconfigured = 0;
+	return e;
+    }
+    WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+
+    board->ifstats.ifs_name = "zen";
+    board->ifstats.ifs_mtu = Z3660ETH_MTU;
+    board->ifstats.ifs_unit = 0;
+    board->ifstats.ifs_active = 0;
+    if ((e = if_attach(&board->ifstats)) != 0) {
+	z3660eth_unmap(info);
+	z3660eth_present = 0;
+	z3660eth_autoconfigured = 0;
+	return e;
+    }
+    z3660eth_number_of_boards = 1;
+    return 0;
+}
+
+/* unload=never: the core never calls it; if it did, the answer is no. */
+int
+z3660eth_unload()
+{
+    return EBUSY;
+}
+
+/*
+ * _halt (stage 4 on): no sleep, interrupts perhaps off.  The board's interrupt
+ * off at the board, and the poll stopped (untimeout never sleeps).
+ */
+void
+z3660eth_halt()
+{
+    z3660eth_info_t *info = &z3660eth_board[0].z3660eth_info;
+
+    if (info->regs)
+	WRLONG(info->regs, ZZ_CONFIG, ZZ_CONFIG_DISABLE);
+    z3660eth_int_on = 0;
+    if (info->poll_running) {
+	info->poll_running = 0;
+	untimeout(info->poll_id);
+    }
+}
+
+/*
+ * The STREAMS row: d_str only.  The function entries are 0, which the core
+ * reads as nodev (nodev itself is not DDI); d_open/d_close are the core's
+ * trampolines.  drv_cmajor is the .moddata major.
+ */
+struct mod_drv_data z3660eth_drvdata[] = {
+    {
+	{ 0 }, 0, 0,
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (struct tty *)0, &z3660ethinfo, (int *)0 },
+	Z3660ETH_MAJOR, 1,
+    },
+};
+
+MOD_DRV_WRAPPER(z3660eth, z3660eth_load, z3660eth_unload, z3660eth_halt,
+		"Z3660 ethernet (zen)");
+#endif /* Z3660ETH_MODULE */
