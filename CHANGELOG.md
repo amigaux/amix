@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-4 v3, C3-5 v7, boot2 savings 1–2, S4-10 placement, core patch 0035 (d7d1cd7..a51089b)
+
+C4-4 v3: boot2 places every root record (in safe mode the `safe=1` set, flag 0x4 from it) and never evaluates match=; the
+core matches at marc_root; kbootset's gate 4 checks the whole set (files + bss tails) against the capacity so L5 is a
+backstop; boot2 writes no parameter strings (the core reads params from the manifest copy); L7 retired; the accepted cost
+(a few hundred KB more read per boot from a disk store) recorded, S4-70 the arena check. C3-5 v7: `safe=1` on the safe
+set's records; match= read by marc_root. boot2 savings with nothing changed on the console: rel.c's notes only for b2link
+(138 B), the loader build of manifest.c skipping boards/cpu/created/param (176 B). S4-10: boot2 lays the directory, the
+manifest copy and each root module 16-aligned, CRC-checked, with its zeroed bss= tail, then L5; "module %s %u bytes" per
+module; amix-cdboot shares it. File 28 526 (146 left), image + bss 28 312 (360 left). Core patch 0035: marc_root reads
+match= and checks it with marc_post's matcher, skipping an unmatched entry silently (harness 233/233; dlm.o 1fb106c4).
+Not yet run on the emulator: boot2's placement needs root records (S4-12); S4-72's rows are the check.
+
 ## 2026-10-26 — boot2 headroom: the file gate binds (316 left); S4-10 measured (661ca4e)
 
 b2link gates two figures: the file (image + self-relocation table), 28 356 → 316 left, and image + bss, 28 156 → 516 left;
