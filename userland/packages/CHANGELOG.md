@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern30m k30.1.2.261027-14 (41e04ad), a4091-k30/-k46 1.0.0-3 (c23cfdd); round trip 156/156 — not published
+
+kern30m -14 (kerntools d1a2e3c --no-scsi-drivers --object-absent, dlm 33ea0c7): the static A4091/A4092/A4770 and Gayle IDE
+drivers dropped; brel 9a4f0792 (1713708 B), ET_REL 31db0f56, sidecar 81bc23d1: kabi k30.1.2, arena 0x001070f0, abi 2ab48658,
+root= mobo:a3000-wd,zorro:0202:01,zorro:0202:03, rootfs=ufs,s5; 101 names (+13 fs names); the seam relocation present; three
+checks pass. Copyright keeps amix-a4091's LICENSE/NOTICE (its four stock-file patches still apply), drops amix-gayle-ide. Pkg
+md5 6d092318 / 1934848 B; needs loader-amix -8. a4091 1.0.0-3 (2151d03): k46 54405c68, k30 as -2; md5 e349031d / 0e915d89.
+Catalog e8d72a59 (22 rows). Round trip 156/156: on k30 a4091 and gayle now compose as root records (safe=1 under their rootdev).
+
 ## 2026-10-27 — dlmkit -11 (f5fe10a), kern46m k46.1.2.261027-79 (047a038), a4091 1.0.0-2 (e4af9d5), cdfs-k30/-k46 1.0.0-1 (626e1a5); round trip 152/152 — not published
 
 dlmkit -11 (c2dc7fb: modcheck -w / PAGESHIFT_OK; k30 a1de94e6, k46 7fb3de45; abi 2ab48658). kern46m -79 (port 1d1a566, dlm
