@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-5 §1.3 the script rule as enforced; C2-2 §2; kit.conf MONSW_REV (6492c3b, dc54ff4)
+
+C3-5 §1.3 states the package-script rule as amix-packages' gate enforces it (sh builtins plus mv, cat, ls, dd, expr behind
+test -x, refusing without; read only in a child with one redirection; the forbidden constructs; cat/dd copy, a size check
+before every mv; proven on the 2.1 sh). C2-2 §2: a module record has a file line per plain file (the object and its modreg.d
+file), none for the device node. kit.conf records MONSW_REV (the repository and commit of sys/monsw.h); the kit is rebuilt at
+dc54ff4 with monsw.h from amix-modules b954ce9 (KIT_REV dc54ff4, PORT_REV ebe8dfd).
+
 ## 2026-10-26 — kbootset -14 deflates on the box; modadmin -L reads the kernel's message buffer; README fixes (9f175bf..7e731f9)
 
 kbootset -14: its own raw deflate (kdeflate.c: fixed Huffman, LZ77 with hash chains, one byte of lazy matching) where zlib is
