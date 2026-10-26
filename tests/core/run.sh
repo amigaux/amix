@@ -106,9 +106,10 @@ if $HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$TB/mkksym" "$DLM/tools/mkksym.
    $HCC -o "$TB/modfix" "$DLM/tools/modfix.c" &&
    $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -o "$B/test-bin/reloc" \
 	"$T/reloc.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" &&
-   $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -o "$B/test-bin/state" \
+   $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -I"$T/include" -o "$B/test-bin/state" \
 	"$T/state.c" "$T/hostk.c" "$DLM/dlm_core.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" \
-	"$DLM/dlm_slot.c" "$DLM/dlm_arena.c" "$DLM/dlm_post.c" "$DLM/dlm_intr.c" "$T/hconf.c" \
+	"$DLM/dlm_slot.c" "$DLM/dlm_arena.c" "$DLM/dlm_post.c" "$DLM/dlm_intr.c" "$DLM/dlm_str.c" \
+	"$DLM/dlm_ddi.c" "$T/hconf.c" \
 	"$R/loader/common/sha256.c" "$R/loader/common/crc32.c" > "$B/tools.log" 2>&1; then
 	pass "host tools (mkksym, modfix, reloc, state)"
 else
@@ -318,7 +319,7 @@ for IMG; do
 	# the manifests' paths (C3-5 section 3): /stand/gen/<id>/mod/<name>
 	mkdir -p "$W/root/stand/gen/7/mod"
 	cp "$RT"/pm* "$W/root/stand/gen/7/mod/"
-	cp "$RT"/pb* "$RT"/pdm "$W/root/stand/gen/7/mod/"
+	cp "$RT"/pb* "$RT"/pdm "$RT"/sddem "$W/root/stand/gen/7/mod/"
 	if "$B/test-bin/state" "$W/ksym.bin" "$W/root" > "$W/state.log" 2>&1; then
 		pass "$K: state harness: $(tail -1 "$W/state.log")"
 	else

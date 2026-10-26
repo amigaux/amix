@@ -1,0 +1,599 @@
+Subject: drivers loaded at boot register their majors; ddi and str on the host
+
+A driver loaded at boot or by modload found no slot: only a demand-class
+registration or modadmin -r made one, so its linkage failed with EINVAL
+(S3-B5 on k30: z3660eth, "error 22").  drv_install now registers the
+module's own registry majors, dlm_sreg for a STREAMS driver and dlm_creg
+otherwise; a STREAMS driver in demand class is refused with a console
+line.  The state harness builds dlm_str.c and dlm_ddi.c (host stand-ins
+for sys/stream.h and sys/conf.h, a run-address accessor for the ifstats
+list) and gains boot-class driver cases and ifstats backstop cases: the
+module's link first, in the middle and last, after a failed _load, after
+an _unload that forgot, and after a failed linkage.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -524,9 +524,7 @@
+ 	int n;
+ 
+ 	n = dlm_intr_sweep(lo, hi);
+-#ifndef DLM_HOST
+ 	n += dlm_ddi_sweep(lo, hi);
+-#endif
+ 	if (n)
+ 		printf("dlm: %s left %d registration(s) pointing into it (an interrupt handler, "
+ 		    "network interface or console hook): removed\n", m->m_name, n);
+@@ -1347,13 +1345,11 @@
+ 			return EFAULT;
+ 		return dlm_creg(r.md_modname, mj);
+ 	}
+-#ifndef DLM_HOST
+ 	if (uap->type == MOD_TY_SDEV) {
+ 		if (copyin(r.md_typedata, (caddr_t)&mj, sizeof mj))
+ 			return EFAULT;
+ 		return dlm_sreg(r.md_modname, mj);
+ 	}
+-#endif
+ 	return EINVAL;			/* other slot types not implemented yet */
+ }
+ 
+@@ -1444,9 +1440,7 @@
+ 	int i;
+ 
+ 	dlm_slot_init();
+-#ifndef DLM_HOST
+ 	dlm_str_init();
+-#endif
+ 	if (dlm_blkcheck(dlm_ksym, dlm_ksym_space) != 0 ||
+ 	    G32(dlm_ksym + KH_LO) != DLM_KLO || G32(dlm_ksym + KH_HI) != DLM_KHI) {
+ 		printf("dlm: no kernel symbol table, modules disabled\n");
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -29,12 +29,23 @@
+ 	struct ifs_link	*ifs_next;
+ };
+ extern struct ifs_link *ifstats;	/* the stock list head (net/if.h) */
++#ifndef DLM_HOST
++#define	NEXT(p)	((p)->ifs_next)
++#else				/* the harness's run addresses are not host pointers */
++extern char *host_ptr();
++#define	NEXT(p)	(((struct ifs_link *)host_ptr((unsigned long)(p)))->ifs_next)
++#endif
+ 
++#ifndef DLM_HOST
+ #define	SPLHI(s) do { \
+ 	__asm__ __volatile__("movew %%sr,%0" : "=d" (s) : : "memory"); \
+ 	__asm__ __volatile__("movew %0,%%sr" : : "d" ((s) | 0x0700) : "memory"); \
+ } while (0)
+ #define	SPLX(s)	__asm__ __volatile__("movew %0,%%sr" : : "d" (s) : "memory")
++#else
++#define	SPLHI(s)	((s) = 0)
++#define	SPLX(s)	((void)(s))
++#endif
+ 
+ int
+ if_attach(ifs)
+@@ -44,12 +55,12 @@
+ 	int s;
+ 
+ 	SPLHI(s);
+-	for (p = ifstats; p; p = p->ifs_next)
++	for (p = ifstats; p; p = NEXT(p))
+ 		if (p == ifs) {
+ 			SPLX(s);
+ 			return EEXIST;
+ 		}
+-	ifs->ifs_next = ifstats;
++	NEXT(ifs) = ifstats;
+ 	ifstats = ifs;
+ 	SPLX(s);
+ 	return 0;
+@@ -63,10 +74,10 @@
+ 	int s;
+ 
+ 	SPLHI(s);
+-	for (pp = &ifstats; *pp; pp = &(*pp)->ifs_next)
++	for (pp = &ifstats; *pp; pp = &NEXT(*pp))
+ 		if (*pp == ifs) {
+-			*pp = ifs->ifs_next;
+-			ifs->ifs_next = 0;
++			*pp = NEXT(ifs);
++			NEXT(ifs) = 0;
+ 			SPLX(s);
+ 			return 0;
+ 		}
+@@ -105,10 +116,10 @@
+ 	SPLHI(s);
+ 	for (pp = &ifstats; *pp; )
+ 		if ((unsigned long)*pp >= lo && (unsigned long)*pp < hi) {
+-			*pp = (*pp)->ifs_next;
++			*pp = NEXT(*pp);
+ 			n++;
+ 		} else
+-			pp = &(*pp)->ifs_next;
++			pp = &NEXT(*pp);
+ 	if (cons_hook && (unsigned long)cons_hook >= lo && (unsigned long)cons_hook < hi) {
+ 		cons_hook = 0;
+ 		n++;
+@@ -117,6 +128,7 @@
+ 	return n;
+ }
+ 
++#ifndef DLM_HOST
+ /* the stock entry, wrapped: the hook first, then the native screen code */
+ int
+ scrcon_put(cp, p, n)
+@@ -129,3 +141,4 @@
+ 		return 0;
+ 	return __amix_scrcon_put(cp, p, n);
+ }
++#endif
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -651,7 +651,7 @@
+ 	struct cdevsw *cp;
+ 	unsigned long d, c, fl, f;
+ 	char *r;
+-	int mj, n, i, k, s;
++	int mj, n, i, k, s, e;
+ 
+ 	if (!inimg(m, td, 8L))
+ 		return ERELOC;
+@@ -679,17 +679,24 @@
+ 			return EINVAL;
+ 	}
+ 	if (G32(DLM_RP(m, c) + CD_STR))
+-#ifdef DLM_HOST
+-		return EINVAL;
+-#else
+ 		return n > SDEV_MAX ? EINVAL : dlm_sdev_install(m, mj, n,
+ 		    G32(DLM_RP(m, c) + CD_STR), fl ? (int *)DLM_RP(m, fl) : (int *)0);
+-#endif
+ 	for (k = 0; k < CD_NFN; k++) {
+ 		f = G32(DLM_RP(m, c) + 4 * k);
+ 		if (!dlm_okcode(m, f))
+ 			return ERELOC;
+ 	}
++	/*
++	 * A driver loaded at boot or by modload finds no slot: nothing
++	 * registered its majors for a first open.  The registry gave them
++	 * to it (above), so they are registered now.
++	 */
++	for (i = 0; i < n; i++)
++		if (cslot(mj + i) == 0 && (e = dlm_creg(m->m_name, mj + i)) != 0) {
++			printf("dlm: %s: major c:%d cannot take the driver (error %d)\n",
++			    m->m_name, mj + i, e);
++			return e;
++		}
+ 	for (i = 0; i < n; i++) {
+ 		cs = cslot(mj + i);
+ 		if (cs == 0 || strcmp(cs->cs_name, m->m_name) != 0 ||
+@@ -721,9 +728,7 @@
+ 	struct dlm_cslot *cs;
+ 	int s;
+ 
+-#ifndef DLM_HOST
+ 	dlm_sdev_remove(m);
+-#endif
+ 	for (cs = dlm_cslot; cs; cs = cs->cs_next)
+ 		if (cs->cs_mod == m) {
+ 			s = dlm_splhi();
+@@ -754,9 +759,7 @@
+ 				st->mss_p1[0] = cs->cs_major;
+ 			st->mss_p1[1]++;
+ 		}
+-#ifndef DLM_HOST
+ 	dlm_sdev_info(m, &st->mss_p1[0], &st->mss_p1[1]);
+-#endif
+ }
+ 
+ struct mod_operations mod_drvops = { drv_install, drv_remove, drv_info };
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -37,17 +37,22 @@
+ extern int	strncmp();
+ 
+ /* the switch and queues are read at interrupt level */
++#ifndef DLM_HOST
+ #define	SPLHI(s) do { \
+ 	__asm__ __volatile__("movew %%sr,%0" : "=d" (s) : : "memory"); \
+ 	__asm__ __volatile__("movew %0,%%sr" : : "d" ((s) | 0x0700) : "memory"); \
+ } while (0)
+ #define	SPLX(s)	__asm__ __volatile__("movew %0,%%sr" : : "d" (s) : "memory")
++#else
++#define	SPLHI(s)	((s) = 0)
++#define	SPLX(s)	((void)(s))
++#endif
+ 
+ static int		fstatic;		/* stock rows */
+ static struct dlm_mod	*fown[FMOD_RESERVE];	/* per loadable row */
+ static struct streamtab	ftab[FMOD_RESERVE];
+ static struct qinit	frq[FMOD_RESERVE], fwq[FMOD_RESERVE];
+-static int		(*fopen[FMOD_RESERVE])(), (*fclose[FMOD_RESERVE])();
++static int		(*fqopen[FMOD_RESERVE])(), (*fqclose[FMOD_RESERVE])();
+ static int		zeroflag;
+ static struct module_info ph_info = { 0, "dlm", 0, INFPSZ, 1, 0 };
+ 
+@@ -138,7 +143,7 @@
+ 	caddr_t had = q->q_ptr;
+ 	int j = qrow(q), e;
+ 
+-	if (j < 0 || fown[j] == 0 || fopen[j] == 0)
++	if (j < 0 || fown[j] == 0 || fqopen[j] == 0)
+ 		return ENXIO;
+ 	h.m = fown[j];
+ 	dlm_hold(h.m);
+@@ -148,7 +153,7 @@
+ 		dlm_rele(h.m);			/* a failed open: no close follows */
+ 		DLM_LONGJMP(&u.u_qsav);
+ 	}
+-	e = (*fopen[j])(q, devp, flag, sflag, cr);
++	e = (*fqopen[j])(q, devp, flag, sflag, cr);
+ 	bcopy((caddr_t)&save, (caddr_t)&u.u_qsav, sizeof (label_t));
+ 	if (e != 0 || had != 0 || q->q_ptr == 0)
+ 		dlm_rele(h.m);
+@@ -169,8 +174,8 @@
+ 	if (j < 0 || (m = fown[j]) == 0)
+ 		return 0;
+ 	m->m_incall++;
+-	if (fclose[j])
+-		e = (*fclose[j])(q, flag, cr);
++	if (fqclose[j])
++		e = (*fqclose[j])(q, flag, cr);
+ 	m->m_incall--;
+ 	if (had)
+ 		dlm_rele(m);
+@@ -225,8 +230,8 @@
+ 	SPLHI(s);
+ 	bcopy(DLM_RP(m, rq), (caddr_t)&frq[j], QISZ);
+ 	bcopy(DLM_RP(m, wq), (caddr_t)&fwq[j], QISZ);
+-	fopen[j] = frq[j].qi_qopen;
+-	fclose[j] = frq[j].qi_qclose;
++	fqopen[j] = frq[j].qi_qopen;
++	fqclose[j] = frq[j].qi_qclose;
+ 	frq[j].qi_qopen = dlm_str_open;
+ 	frq[j].qi_qclose = dlm_str_close;
+ 	ftab[j].st_rdinit = &frq[j];
+@@ -252,7 +257,7 @@
+ 		if (fown[j] == m) {
+ 			SPLHI(s);
+ 			fown[j] = 0;
+-			fopen[j] = fclose[j] = 0;
++			fqopen[j] = fqclose[j] = 0;
+ 			bzero((caddr_t)&frq[j], QISZ);
+ 			bzero((caddr_t)&fwq[j], QISZ);
+ 			frq[j].qi_qopen = dlm_str_open;
+@@ -465,7 +470,7 @@
+ {
+ 	struct sdslot *sd;
+ 	unsigned long rq, wq;
+-	int i, s;
++	int i, s, e;
+ 
+ 	if (!inimg(m, tab, (unsigned long)STSZ))
+ 		return ERELOC;
+@@ -476,6 +481,17 @@
+ 	if (!okqinit(m, rq) || !okqinit(m, wq) ||
+ 	    G32(DLM_RP(m, rq) + QI_OPEN) == 0)
+ 		return ERELOC;
++	/*
++	 * A STREAMS driver loaded at boot or by modload: its registry majors
++	 * get their STREAMS rows now.  A row a demand-class registration
++	 * holds for a first open is a character row, which this cannot take.
++	 */
++	for (i = 0; i < n; i++)
++		if (sdmajor(mj + i) == 0 && (e = dlm_sreg(m->m_name, mj + i)) != 0) {
++			printf("dlm: %s: major c:%d cannot take the STREAMS driver (error %d); "
++			    "a STREAMS driver loads in boot class or by modload\n", m->m_name, mj + i, e);
++			return e;
++		}
+ 	for (i = 0; i < n; i++) {
+ 		sd = sdmajor(mj + i);
+ 		if (sd == 0 || strcmp(sd->sd_name, m->m_name) != 0 ||
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -4,6 +4,8 @@
+  */
+ 
+ #include "dlm.h"
++#include "sys/stream.h"
++#include "sys/conf.h"
+ 
+ long	dlm_maximage = 2 * 1024 * 1024;
+ int	dlm_verbose = 0;
+@@ -38,10 +40,24 @@
+ 	{ 'c', 63, "zz" },
+ 	{ 'c', 65, "cdkd" },
+ 	{ 'c', 67, "pdm" },
++	{ 'c', 64, "sddem" },
++	{ 'c', 68, "pbcd" },
++	{ 'c', 69, "pbsd" },
+ 	{ 'b', 20, "ramdisk" },
+ 	{ 0, 0, 0 }
+ };
+ 
++/* the stock ifstats list (net/if.h) and console entry, for dlm_ddi.c */
++char	*ifstats;
++int	__amix_scrcon_put() { return 0; }
++
++/* the stock fmodsw, its 11 rows (M-REG1), and the STREAMS calls dlm_str.c makes */
++struct fmodsw __amix_fmodsw[11] = { { "ldterm" }, { "ttcompat" }, { "timod" }, { "tirdwr" },
++	{ "ptem" }, { "pckt" }, { "ptm" }, { "pts" }, { "connld" }, { "sockmod" }, { "bufmod" } };
++int	fmodcnt = 11;
++void	setq() { }
++void	freemsg() { }
++
+ /* stock exec rows and a hook table, as the static kernel has them */
+ int	stock_calls, stock_rv = 42;
+ static short coffmagic = 0x150, elfmagic = 0x7f45, intpmagic = 0x2321;
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -232,6 +232,19 @@
+ 	return m->m_base + (a - m->m_run);
+ }
+ 
++/* a run address inside a loaded module as a host pointer; else as given */
++char *
++host_ptr(a)
++	unsigned long a;
++{
++	struct dlm_mod *m;
++
++	for (m = dlm_list; m; m = m->m_next)
++		if (m->m_base && a >= m->m_run && a < m->m_run + m->m_size)
++			return host_rp(m, a);
++	return (char *)a;
++}
++
+ unsigned long
+ host_runaddr(m)
+ 	struct dlm_mod *m;
+--- a/test/include/sys/conf.h
++++ b/test/include/sys/conf.h
+@@ -0,0 +1,9 @@
++/* conf.h -- the host harness's stand-in for the stock sys/conf.h: fmodsw */
++#ifndef _HOST_CONF_H
++#define _HOST_CONF_H
++struct fmodsw {
++	char		f_name[FMNAMESZ + 1];
++	struct streamtab *f_str;
++	int		*f_flag;
++};
++#endif
+--- a/test/include/sys/stream.h
++++ b/test/include/sys/stream.h
+@@ -0,0 +1,31 @@
++/*
++ * stream.h -- the host harness's stand-in for the stock sys/stream.h:
++ * the fields dlm_str.c names, host-sized.  The core reads a module's
++ * streamtab and qinit through the measured m68k offsets (dlm_offs.h),
++ * never through these.
++ */
++#ifndef _HOST_STREAM_H
++#define _HOST_STREAM_H
++#define	FMNAMESZ	8
++#define	INFPSZ		(-1)
++struct module_info {
++	unsigned short	mi_idnum;
++	char		*mi_idname;
++	long		mi_minpsz, mi_maxpsz;
++	unsigned long	mi_hiwat, mi_lowat;
++};
++struct qinit {
++	int	(*qi_putp)(), (*qi_srvp)(), (*qi_qopen)(), (*qi_qclose)(), (*qi_qadmin)();
++	struct module_info *qi_minfo;
++	char	*qi_mstat;
++};
++struct streamtab {
++	struct qinit	*st_rdinit, *st_wrinit, *st_muxrinit, *st_muxwinit;
++};
++typedef struct queue {
++	struct qinit	*q_qinfo;
++	char		*q_ptr;
++} queue_t;
++typedef struct msgb mblk_t;
++extern void freemsg();
++#endif
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -104,6 +104,9 @@
+ mod('multi', 'hc\\tshd  trc')
+ # the registration backstop: swp's _load attaches a handler in its image
+ mod('swp')
++# swi's _load puts swi_ifs, in its image, on the stock ifstats list; swd
++# does the same, then its driver linkage fails (major 66 is no one's)
++mod('swi', data='\t.globl\tswi_ifs\nswi_ifs:\n\t.long\t0, 0, 0, 0\n')
+ # pinning (C3-1 section 2): pin1 says nothing, so unload=never
+ mod('pin1', md=['name=pin1', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ # three independent modules for the id and modstat tests
+@@ -157,6 +160,27 @@
+ # cdmaj installs at a major the registry gives no one
+ drvmod('cdkd', 65, read='lbolt')
+ drvmod('cdmaj', 66)
++# a driver loaded at boot or by modload registers its own registry major:
++# pbcd a character driver, pbsd and sddem STREAMS drivers (d_str only)
++drvmod('pbcd', 68)
++drvmod('swd', 66)                   # the backstop after a failed linkage
++
++
++def strdrv(p, major):
++    fns = ''.join('\t.globl\t{p}_{f}\n{p}_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(p=p, f=f)
++                  for f in ('put', 'open', 'close'))
++    mod(p, ops='mod_drvops', pdata=p + '_dd', text=fns,
++        data='{p}_flag:\n\t.long\t0\n{p}_mi:\n\t.space\t64\n{p}_ms:\n\t.long\t0\n'
++        '{p}_rq:\n\t.long\t{p}_put, 0, {p}_open, {p}_close, 0, {p}_mi, {p}_ms\n'
++        '{p}_wq:\n\t.long\t{p}_put, 0, 0, 0, 0, {p}_mi, {p}_ms\n'
++        '{p}_tab:\n\t.long\t{p}_rq, {p}_wq, 0, 0\n'
++        '{p}_dd:\n\t.space\t32\n\t.long\t0, 0\n'
++        '\t.long\t0, 0, 0, 0, 0, 0, 0, 0, 0, 0\n'
++        '\t.long\t0, {p}_tab, {p}_flag\n\t.long\t{mj}, 1\n'.format(p=p, mj=major))
++
++
++strdrv('pbsd', 69)
++strdrv('sddem', 64)
+ 
+ 
+ # .moddata version 2 (C3-1): each module breaks one rule
+--- a/test/state.c
++++ b/test/state.c
+@@ -534,7 +534,7 @@
+ {
+ 	static char a[4096], man[2048], s1[65], s2[65], s3[65];
+ 	extern struct cdevsw cdevsw[];
+-	extern int dlm_cdev_open(), copen();
++	extern int dlm_cdev_open(), copen(), cclose();
+ 	char *om = dlm_man;
+ 	long ol = dlm_manlen, gen;
+ 	struct dlm_mod *m;
+@@ -595,6 +595,44 @@
+ 		if ((m = byname("pb1")) != 0)
+ 			moduload(m->m_id);
+ 	}
++	/*
++	 * Drivers in boot class: nothing registered their majors for a first
++	 * open, so the install registers them.  A STREAMS driver in demand
++	 * class finds a character row it cannot take.
++	 */
++	{
++		static char s5[65], s6[65], s7[65];
++		struct modstatus st;
++
++		hexsha("pbcd", s5);
++		hexsha("pbsd", s6);
++		hexsha("sddem", s7);
++		sprintf(man, "GMF1\ngeneration 9\n"
++		    "module pbcd boot 300 path=/stand/gen/7/mod/pbcd sha256=%s match=always\n"
++		    "module pbsd boot 300 path=/stand/gen/7/mod/pbsd sha256=%s match=always\n"
++		    "module sddem demand 300 path=/stand/gen/7/mod/sddem sha256=%s majors=c:64\n",
++		    s5, s6, s7);
++		mkarena(a, man, 1, 1);
++		dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++		dlm_marc_run();
++		check((m = byname("pbcd")) != 0 && cdevsw[68].d_open == dlm_cdev_open &&
++		    copen(68, 0, OTYP_CHR) == 0 && cclose(68, 0, OTYP_CHR) == 0,
++		    "boot class: a character driver registers its own major and opens");
++		check((m = byname("pbsd")) != 0 && cdevsw[69].d_str != 0 &&
++		    modstat(m->m_id, &st, 0) == 0 && st.ms_msinfo[0].mss_p1[0] == 69 &&
++		    st.ms_msinfo[0].mss_p1[1] == 1,
++		    "boot class: a STREAMS driver registers its own major as a STREAMS row");
++		check(cdevsw[64].d_open == dlm_cdev_open && modload("sddem", &id) == ECONFIG &&
++		    !byname("sddem") && cdevsw[64].d_str == 0,
++		    "demand class: a STREAMS driver is refused (ECONFIG), the character row stays");
++		if ((m = byname("pbcd")) != 0)
++			moduload(m->m_id);
++		check(!byname("pbcd") && cdevsw[68].d_open == dlm_cdev_open,
++		    "boot class: unloaded, the character driver's row waits for a first open");
++		if ((m = byname("pbsd")) != 0)
++			moduload(m->m_id);
++		check(!byname("pbsd"), "boot class: the STREAMS driver unloads");
++	}
+ 	dlm_plat_match = 0;
+ 	dlm_man = om;
+ 	dlm_manlen = ol;
+@@ -615,6 +653,70 @@
+ 	return swp_rv;
+ }
+ 
++extern int if_attach();
++extern char *host_ptr();
++
++/* the stock ifstats list (net/if.h: ifs_next first), host-sized */
++struct hifs {
++	struct hifs	*ifs_next;
++	char		*ifs_name;
++};
++extern struct hifs *ifstats;
++static struct hifs ifa = { 0, "aen" }, ifb = { 0, "lo" }, ifc = { 0, "slip" };
++static int swi_mode;		/* 0 module first, 1 in the middle, 2 last */
++static unsigned long swi_at;
++
++/* the list's names in order, "aen lo" */
++static char *
++ifnames()
++{
++	static char b[128];
++	struct hifs *p;
++
++	for (b[0] = 0, p = ifstats; p; p = ((struct hifs *)host_ptr((unsigned long)p))->ifs_next)
++		sprintf(b + strlen(b), "%s%s", b[0] ? " " : "",
++		    ((unsigned long)p == swi_at) ? "MOD" : p->ifs_name);
++	return b;
++}
++
++int
++h_swi(m, a, b)
++	char *m, *a;
++	long b;
++{
++	swi_at = modsym((struct dlm_mod *)m, "swi_ifs");
++	if (swi_mode == 2) {			/* the list was empty */
++		if_attach(swi_at);
++		if_attach((unsigned long)&ifa);
++		if_attach((unsigned long)&ifb);
++	} else {
++		if_attach(swi_at);
++		if (swi_mode == 1)
++			if_attach((unsigned long)&ifc);
++	}
++	return swp_rv;
++}
++
++int
++h_swd(m, a, b)
++	char *m, *a;
++	long b;
++{
++	/* any 8 bytes of its image: the host never runs a module's code */
++	swi_at = modsym((struct dlm_mod *)m, "swd_open");
++	if_attach(swi_at);
++	return 0;
++}
++
++static void
++stock2()
++{
++	ifstats = 0;
++	ifa.ifs_next = ifb.ifs_next = ifc.ifs_next = 0;
++	if_attach((unsigned long)&ifb);
++	if_attach((unsigned long)&ifa);		/* aen lo */
++}
++
+ static void
+ sweep_tests()
+ {
+@@ -628,6 +730,35 @@
+ 	check(modload("swp", &id) == 0 && byname("swp") && moduload(id) == 0 && !byname("swp") &&
+ 	    intr_detach(6, swp_fn, (char *)0) == ENOENT,
+ 	    "backstop: a handler an _unload forgot is removed");
++
++	/* the ifstats list: the module's link first, in the middle, last */
++	host_handler("swi_load", h_swi);
++	swp_rv = EIO;
++	stock2();
++	swi_mode = 0;
++	check(modload("swi", &id) == EIO && !byname("swi") &&
++	    strcmp(ifnames(), "aen lo") == 0, "backstop: a failed _load's ifstats link at the head is removed");
++	stock2();
++	swi_mode = 1;
++	check(modload("swi", &id) == EIO && strcmp(ifnames(), "slip aen lo") == 0,
++	    "backstop: a failed _load's ifstats link in the middle is removed");
++	ifstats = 0;
++	ifa.ifs_next = ifb.ifs_next = 0;
++	swi_mode = 2;
++	check(modload("swi", &id) == EIO && strcmp(ifnames(), "lo aen") == 0,
++	    "backstop: a failed _load's ifstats link at the end is removed");
++	swp_rv = 0;
++	stock2();
++	swi_mode = 0;
++	check(modload("swi", &id) == 0 && strcmp(ifnames(), "MOD aen lo") == 0 && moduload(id) == 0 &&
++	    !byname("swi") && strcmp(ifnames(), "aen lo") == 0,
++	    "backstop: an ifstats link an _unload forgot is removed");
++	/* _load succeeds, the linkage fails: _unload runs, then the backstop */
++	host_handler("swd_load", h_swd);
++	stock2();
++	check(modload("swd", &id) == ECONFIG && !byname("swd") && strcmp(ifnames(), "aen lo") == 0,
++	    "backstop: _load attached, the driver linkage failed: the link is removed");
++	ifstats = 0;
+ }
+ 
+ /* ---- interrupt chains (30 section 4) ---- */
