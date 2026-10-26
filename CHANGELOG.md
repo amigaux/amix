@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — boot2 headroom: the file gate binds (316 left); S4-10 measured (661ca4e)
+
+b2link gates two figures: the file (image + self-relocation table), 28 356 → 316 left, and image + bss, 28 156 → 516 left;
+new code grows the table too, so the file gate binds. S4-10 measured as C4-4 v2 lays it out: boot2 evaluating match= per
+zorro key costs +744 (428 over the gate); boot2 placing every root record with match= left to the core costs +448 (132 over);
+reading bss= is free. C4-4 v2 §2's safe-mode rule cannot be done in boot2: a motherboard root record carries no controller id,
+so boot2 cannot tell an A3000 WD, Gayle and the 53C710 apart — kbootset can, from kinfo's card table.
+
 ## 2026-10-26 — C4-2 draft: what a root-class driver changes (24e1ae1)
 
 Its own contract beside C3-6 (which still governs every module). `.moddata`: class=root, match required, rank for disk
