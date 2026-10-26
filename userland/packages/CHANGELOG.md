@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — ramdisk-k30/-k46 1.0.0-1 staged; round trip on packagemanager abfaaac, 126/126 (3211350) — not published
+
+packagemanager abfaaac accepts the `b none /dev/dsk/<node>` entries (C3-5 v8 §1.2). ramdisk30/46 (md5 edc26b2b / 9e5b1024,
+kabi 1.2) staged in base/ beside zscsi30/46; names.conf ramdisk30/46 → ramdisk-k30/-k46. Staged catalog 65324000 (16
+kernel-space; 5a441729 root at superseded/repo-20261026-2312). Round trip 114 → 126: dry run, -R install (contents carries
+the three `b 20 0–2 0600 root root` lines, no /dev/rdsk), build, commit, check; kbootset composes `module ramdisk root 4630
+… bss=816 match=always` on both lines — no safe=1 (safe = the root controller's and rootfs modules only; a RAM-disk-rooted
+medium needs C4-2/C4-4 to know the ramdisk, an amix-dlm question). The box needs APKG 0.3.3 to install them.
+
 ## 2026-10-26 — kern30m k30.1.2.261026-11, the kabi 1.2 k30 kernel with the 16-aligned arena (f7f1e18) — not published
 
 K030-U build 68030-261026-11 (kerntools bf221f3 cut on dlm 49239b1, core 0001–0041): -10 plus iodone, ramdisk_image,
