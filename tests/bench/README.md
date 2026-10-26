@@ -317,3 +317,44 @@ The record gives per line:
 - The 68060 model runs at the emulator's speed, so its figure is for the
   record only, as M-SIG2's was.
 - The disk-inclusive figures, and the 68060 figure, are metal (S2-47).
+
+### M-GEN2 follow-up — the hashing rate apart from I/O (hashbench)
+
+M-GEN2 found the box kbootset hashing at about a third of axtime's rate
+(`docs/measurements/2026-10-26-m-gen2.md`). `tools/measure/hashbench.c`
+times the loader's own SHA-256 and CRC-32, and a `memcpy`, over a fixed
+buffer in memory, with `times(2)`. `make hashbench` builds it five times
+from the one source:
+
+| Binary | Compiler and flags | What it stands for |
+|---|---|---|
+| `build/box/hashbench` | GCC 14, `-O2`, the box kbootset's flags and objects | kbootset as shipped |
+| `build/hb14-O1/hashbench`, `hb14-O3`, `hb14-Os` | GCC 14 at the other levels | whether the level is the remedy |
+| `build/hb27/hashbench` | gcc-cross-amix, the loader's flags (`-O2 -m68020 -fno-builtin -fomit-frame-pointer`), dynamically linked | the code axtime timed |
+
+One boot on the M-GEN2 k30 vehicle: the A4091 68030 vehicle on the
+cycle-exact 25 MHz 68030 model, 8 MiB of fast memory. Copy the five to
+`/tmp`, then:
+
+```
+for b in g14 g14-O1 g14-O3 g14-Os gcc27; do
+  echo "== $b" > /dev/term/ser; /tmp/hashbench.$b 1024 2 > /dev/term/ser 2>&1
+done
+```
+
+Each prints three timing lines and
+`hashbench: sha256 d20eb937c9f60f43f57e926c16d86929e34ea273c23ad296e6c9b66a3b4fb7c7 crc32 fff55677 over 2 x 1024 KiB`.
+The host build prints exactly that too
+(`cc -Iloader/common tools/measure/hashbench.c loader/common/{sha256,crc32}.c`).
+A different line means a wrong build, not a slow one.
+
+**Reading it.**
+- The reference is axtime on the same model: SHA-256 540 KiB/s, CRC-32
+  and copy 3.4 MiB/s (M-LD7).
+- If `gcc27` gives about 540 and `g14` about 170, the compiler is the
+  cause. The best GCC 14 level is then the remedy, or a change to the
+  source of `sha256.c`'s round.
+- If both give about 540, the cost is in kbootset's I/O and copies, and
+  the next step is timing its commit by phase.
+- The 68060 model runs at emulator speed, so a run there is for the
+  record only.

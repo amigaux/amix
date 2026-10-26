@@ -34,7 +34,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench b2test clean
 
 all: test tools cross boot1 boot2 cdboot axtime box b2test
 
@@ -226,6 +226,43 @@ $(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
 	touch $@
 
 box: toolchain-check $(B)/box/kbootset $(B)/box/c89-check
+
+# hashbench (M-GEN2's finding): the loader's SHA-256 and CRC-32 over a buffer
+# in memory, once as GCC 14 builds them for kbootset and once as
+# gcc-cross-amix builds them for the loader; both are Amix programs
+HBG14 := $(B)/box/hashbench.o $(B)/box/sha256.o $(B)/box/crc32.o
+$(B)/box/hashbench.o: tools/measure/hashbench.c $(COMMON)/*.h
+	@mkdir -p $(B)/box
+	$(G14CC) $(G14CFLAGS) -I$(COMMON) -c -o $@ $<
+
+$(B)/box/hashbench: $(HBG14)
+	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
+		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
+		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $(HBG14) \
+		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
+		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
+	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
+
+$(B)/hb27/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c $(COMMON)/*.h
+	@mkdir -p $(B)/hb27
+	$(CROSS)gcc $(CROSSCFLAGS) -I$(COMMON) -o $@ tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c
+
+# the same GCC 14 program at other optimisation levels, to see whether the
+# level is the remedy
+HBOPTS := O1 O3 Os
+$(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c $(COMMON)/*.h
+	@mkdir -p $(B)/hb14-$*
+	for f in tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c; do \
+		$(G14CC) $(filter-out -O2,$(G14CFLAGS)) -$* -I$(COMMON) -c -o $(B)/hb14-$*/$$(basename $$f .c).o $$f || exit 1; done
+	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
+		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
+		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o \
+		$(B)/hb14-$*/hashbench.o $(B)/hb14-$*/sha256.o $(B)/hb14-$*/crc32.o \
+		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
+		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
+	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
+
+hashbench: toolchain-check $(B)/box/hashbench $(B)/hb27/hashbench $(foreach o,$(HBOPTS),$(B)/hb14-$(o)/hashbench)
 
 # axtime (M-LD7/M-LD8): an AmigaDOS program over the loader's own CRC-32,
 # inflate and the SHA-256 boot2 does not link; same entry and writer as
