@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset gate 2: every module import exported by the kernel's ksym block; C3-3 v7; 40 §3.1, §7 (101e9a3…3360c7e)
+
+gates() lifts the kernel's KSYM v2 block through the sidecar's ksym= (binding a copy with the loader's ax_rel); each module's
+undefined globals must be exported by the block at the module's tier or defined by a depend= module, else gate 2 refuses with the
+missing names ("it needs a newer kernel cut"); a sidecar whose ksym= names no block is refused; static kernels unchecked. No
+.moddata key: module bytes unchanged. tests/host/kimports.sh (synthetic kernel + modules); make test 692 + new; on real bytes
+cdfs-k30 is refused on kern30m -13 and cdfs-k46 builds on -79. Spec 40 §7's surviving configuration replaced by S4-54's text
+(OQ-40.1 answered, amix-installng 74abe1f). Rides in kbootset -18.
+
 ## 2026-10-27 — S4-40 plan: the port's corrected k46 ranges; the carve is stage 5's first kernel item (7c6b109)
 
 The k46 ranges come from the base's STT_FILE markers (ufs .text 0x76e54–0x83290, s5 0x6c3c0–0x75750, plus local .bss), never
