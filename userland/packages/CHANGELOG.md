@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern30m k30.1.2.261026-13, the five DMA names in the k30 kernel (6b689e0); the k46 kit's port headers pinned by archive (db9f1e5) — not published
+
+kern30m -13 (kerntools fcbc007 on dlm bbd20b6): -12 plus dma_prepare/complete/addr/alloc/free in the 88-name symbol block
+(k30 provider a placeholder); seam unchanged (one relocation against dlm_sd_close). brel 689b2c4f, ET_REL 95c6ed17, sidecar
+ff957937: kabi k30.1.2, arena 0x00109550, abi fea18182. Both sidecar checks pass. Pkg md5 5688536c / 1947136 B; staged catalog
+256c7544 (-12 root at superseded/repo-20261027-0017). Round trip 126/126; gates PASS. dlmkit: mkkit reads the k46 port
+headers from a git archive of DK_K46_PORT_COMMIT=12d416c, so PORT_REV no longer follows the live port HEAD; the -9 rebuild
+reproduces both manifests (0e4c7208, c0b64ee4). kmodpkg.sh still stamps the live port HEAD for modcheck kits (no pin involved).
+
 ## 2026-10-27 — dlmkit -9 from amix-dlm bbd20b6: the DMA names in DDI 1.2 (a7f30fb) — not published
 
 dlmkit30 k30.1.2.261027-9 (md5 ecea42d0 / 4071936 B, manifest 0e4c7208) and dlmkit46 k46.1.2.261027-9 (a55964ac / 4088832 B,
