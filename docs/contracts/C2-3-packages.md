@@ -43,9 +43,10 @@ package, never a revision of a static family's:
   are examples; the values come from the sidecar of the kernel minted.
 - Like the static families, it installs `/stand/<line>/unix` and `kabi`
   (and on k30 `unix.sym`, §2.1). So a box carries either a static family
-  or the module kernel of a line, and installing one replaces the other:
-  apkg removes the other package's record first, because gate 1 refuses a
-  path that two records name.
+  or the module kernel of a line, and installing one replaces the other
+  in one apkg transaction: `pkgrm` and record of the other first, then the
+  new package (C2-2 §2.1, apkg 0.3.1; apkg 0.3.0 does not do it, so on a
+  box with 0.3.0 the other package is removed by hand first).
 
 ## 2. The sidecar: one `key=value` per line
 

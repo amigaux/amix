@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 4
+# C2-2 — kernel-space catalog entries and apkg's install record, version 5
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed by D-3 §13: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -87,6 +87,44 @@ file <path> <size> <64 hex>     one line per installed file: SHA-256 of the file
 - a member whose SHA-256 differs from its record.
 
 A later policy `require-signature` would refuse `verified no` (60 §4).
+
+### 2.1 One kernel package per line (version 5)
+
+Every kernel package of a line installs the same paths
+(`/stand/<line>/unix`, `kabi`, on k30 `unix.sym`): a static family's and
+the module kernel's (C2-3 §1.1) alike. Two kernel records of one line
+would name one path twice, which gate 1 refuses. So when a transaction
+installs a `role=kernel` package and a `role=kernel` record of the same
+line exists under another pkginst (**the other kernel package**), apkg
+replaces it in the same journaled transaction:
+
+1. **Plan:** the transaction's plan (and `-n`, the dry run) says
+   `kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per
+   line`.
+2. **Pre-flight** (§1.1) checks the transaction and every installed
+   module record against the new kernel. A module that does not fit
+   refuses the transaction before anything changes, naming it:
+   `zeth46: built for kabi k46.1.0, the new kernel kernel-k46-z is
+   static: remove the module packages first`. So going back from the
+   module kernel to a static family needs the module packages removed
+   first.
+3. **`pkgrm` the other kernel package,** then remove its record (prints
+   `removed KERN46Z`). The new package's `pkgadd` comes after, not before,
+   because both ship `/stand/<line>/unix`: a `pkgadd` over another
+   package's file is a conflict, and a `pkgrm` after it would leave the
+   path shared in the contents database.
+4. **`pkgadd` the new package,** then write its record (`installed
+   kernel-k46-m`).
+5. **The trigger** (C2-4 §3) runs once, at the end, as for any
+   kernel-space transaction.
+
+A cut between steps 3 and 4 leaves the line without a kernel package. The
+journal finishes the install (`apkg -f recover`), and until then the box
+still boots: the boot store's generations hold their own copies of the
+kernel. Two or more kernel records of one line already present (a box
+damaged by hand) refuse the transaction: `two kernel records for line
+k46 (KERN46Z, KERN46M): remove one`. A package of the same pkginst is an
+upgrade, as before.
 
 ## 3. Settled at agreement
 
