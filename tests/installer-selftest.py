@@ -9872,6 +9872,25 @@ def audit_l11():
             else:
                 fail("l11_bcheckrc on a %s bcheckrc: %r" % (case, r.stdout.strip()))
 
+    # (7) /etc/rc2.d/S99zkbootset, generated from l11.sh's own echo lines: a valid script
+    # that, started, calls `/sbin/kbootset mark-good` with no options and nothing else
+    m = re.search(r"\n\t\{\n((?:\t\techo .*\n)+)\t\} > \"\$TARGET/etc/rc2\.d/S99zkbootset\"", l11)
+    if not m:
+        fail("could not extract the S99zkbootset generator from l11.sh")
+    else:
+        r = subprocess.run(["/usr/bin/dash", "-c", m.group(1).replace("\t\t", "")],
+                           capture_output=True, text=True, timeout=30)
+        gen = os.path.join(d, "S99zkbootset")
+        open(gen, "w").write(r.stdout)
+        syn = subprocess.run(["/usr/bin/dash", "-n", gen], capture_output=True, text=True)
+        calls = [l for l in r.stdout.splitlines() if "kbootset" in l and not l.startswith("#")]
+        want = "[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1"
+        if syn.returncode == 0 and calls[-1:] == [want] and "S99zkbootset" > "S99zen":
+            ok("S99zkbootset: a valid rc2 script whose start runs C2-4 section 9's mark-good line "
+               "(no options, to the console) and sorts after S99zen")
+        else:
+            fail("S99zkbootset generator: rc %d, calls %r" % (syn.returncode, calls))
+
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
                        capture_output=True, text=True, timeout=30)

@@ -72,9 +72,14 @@ runs cannot find the store, so recover still exits 6 after it reinstalls the
 packages. Then compose the store from the repair shell:
 `/mnt/sbin/kbootset -R /mnt --dev <store=> build`, then `commit`.
 
-`kbootset mark-good` is not run anywhere yet. It needs the booted generation
-from kinfo on the installed system (S2-10/S2-11). Until then a committed trial
-boots once and falls back (try-once). The pristine generation needs no mark.
+`/etc/rc2.d/S99zkbootset`, the last run-level-2 script (it sorts after `S99zen`),
+runs C2-4 §9's `[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1`,
+with no options. kbootset takes the booted
+generation from the loader record through kinfo, so a box that came all the way up
+marks its trial good (spec 40 §3.3). One that panics or hangs in `rc` never gets
+there, and the loader's try-once rule boots the previous good generation. On the
+pristine first boot it says that generation 1 is good and there is nothing to
+mark.
 
 The repair path of the install miniroot (`install or repair` → `repair`) mounts
 the root. On a 1.1 disk it then offers `status`, `rollback` and `mark-bad`
@@ -102,7 +107,7 @@ The configuration set is every file of this list that exists on the old root (pr
 etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/apkg.conf sbin/bcheckrc
+etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc
 ```
 
 `/sbin/bcheckrc` survives upgrades as a configuration file (P-29 class).

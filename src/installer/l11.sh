@@ -266,6 +266,7 @@ l11_bootstore()
 	run cp "$L11/updbootpart" "$TARGET/usr/sbin/updbootpart"
 	run chmod 0755 "$TARGET/usr/sbin/updbootpart"
 	l11_bcheckrc "$TARGET/sbin/bcheckrc"
+	l11_markgood
 	l11_bootset auto
 	rm -rf "$TARGET/tmp/kpkgcache" "$KCONF"
 	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /sbin/kbootset, /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
@@ -296,6 +297,26 @@ l11_bcheckrc()
 	set x `"$INST/bin/sum" -r "$_bf"`; shift
 	[ "$1" = "$_bp" ] || die "the patched bcheckrc did not read back ($_bf)"
 	msg "bcheckrc     : kbootset retry before the three root-fsck reboots in $_bf (sum -r $_bp)"
+}
+
+# l11_markgood -- /etc/rc2.d/S99zkbootset, the LAST run-level-2 script (it sorts after
+# S99zen): a box that came all the way up marks the booted generation good (spec 40
+# §3.3, D-3 §6, P-28 D54), with C2-4 §9's line. kbootset takes the booted generation from the loader record
+# through kinfo; a box that panics or hangs in rc never gets here, and the loader's
+# try-once rule boots the previous good generation instead.
+l11_markgood()
+{
+	{
+		echo '#!/bin/sh'
+		echo '# S99zkbootset -- written by install.sh (1.1). The last run-level-2 script: the boot'
+		echo '# got this far, so the generation it booted is good (amix-dlm spec 40 section 3.3).'
+		echo 'case $1 in start) ;; *) exit 0 ;; esac'
+		echo '# the call of record (C2-4 section 9): no options; it never stops run level 2'
+		echo '[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1'
+		echo 'exit 0'
+	} > "$TARGET/etc/rc2.d/S99zkbootset" || die "cannot write $TARGET/etc/rc2.d/S99zkbootset"
+	run chmod 0744 "$TARGET/etc/rc2.d/S99zkbootset"
+	msg "mark-good    : /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
 }
 
 # l11_kb ARGS -- one kbootset call on the target's store; any status but 0 stops
@@ -369,7 +390,7 @@ l11_apkg()
 L11_KEEP="etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/apkg.conf sbin/bcheckrc"
+etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc"
 
 # l11_rdbpart N -- _pn _po _pl: name, start, length of partition N (empty if none)
 l11_rdbpart()

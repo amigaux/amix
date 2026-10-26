@@ -224,8 +224,8 @@ ask_kmap()
 # kbootset_menu -- a 1.1 disk (amix-dlm spec 40): the root mounted at /mnt carries
 # /etc/default/bootset and its own static /sbin/kbootset, which runs here as it is.
 # The store is the bootset file's store= (the raw boot slice). Status, rollback and
-# mark-bad only: `mark-good` needs the booted generation from kinfo, which is not on
-# the installed system yet (S2-10/S2-11), so a box marks nothing good from here.
+# mark-bad only: the miniroot booted the install kernel, not a generation of this disk,
+# so there is nothing to mark good from here (the disk's own S99zkbootset does that).
 kbootset_menu()
 {
 	KSTORE=
