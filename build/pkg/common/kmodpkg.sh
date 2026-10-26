@@ -19,6 +19,9 @@
 #     KM_LICENCES      "<path> <sha256>" per line, relative to the siblings
 #     KM_SOURCE_EPOCH
 #     KM_EXTRA_NOTE    optional: a paragraph for the copyright file
+#     KM_PAGESHIFT_OK  optional: the module Makefile's PAGESHIFT_OK, passed
+#                      to modcheck as -w (functions whose shifts by 11 are
+#                      not page arithmetic; kit 8fc87de or later)
 # and, from the recipe directory: pkginfo.<line>, prototype, modreg.
 #
 # Installs /etc/conf/mod.d/<name> (the object, verbatim) and
@@ -72,7 +75,8 @@ amix_kmodpkg() {
 	rm -rf "$_km_build/chk"; mkdir -p "$_km_build/chk"; cp "$_km_obj" "$_km_build/chk/$KM_NAME"
 	( . "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
 	  command -v m68k-cbm-sysv4-scan060 >/dev/null || { echo "no scan060 on PATH"; exit 1; }
-	  python3 -I "$_km_kit/tools/modcheck.py" -k "$_km_kit" $_km_d "$_km_build/chk/$KM_NAME" ) \
+	  python3 -I "$_km_kit/tools/modcheck.py" -k "$_km_kit" $_km_d \
+		${KM_PAGESHIFT_OK:+-w "$KM_PAGESHIFT_OK"} "$_km_build/chk/$KM_NAME" ) \
 		> "$_km_build/modcheck.out" 2>&1 || {
 		cat "$_km_build/modcheck.out" >&2; echo "[FAIL] modcheck refuses $KM_NAME ($_km_line)" >&2; exit 1; }
 	grep -q "^modcheck: $KM_NAME: ok ($_km_kabi, " "$_km_build/modcheck.out" || {
