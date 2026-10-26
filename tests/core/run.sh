@@ -92,6 +92,14 @@ else
 	fail "tools/mkoffs: $(cat "$B/offs.log")"; exit 1
 fi
 
+# the kernel printf takes %d, %x and %s only (tools/prfcheck.py)
+if python3 "$R/tools/prfcheck.py" "$DLM"/dlm_*.c "$DLM"/dlmconf.c "$R"/core/plat/*.c \
+	"$R"/core/plat/*/*.c > "$B/prfcheck.log" 2>&1; then
+	pass "kernel-side printf formats: %d, %x, %s only"
+else
+	fail "kernel-side printf formats: $(cat "$B/prfcheck.log")"
+fi
+
 # ---- 1. host tools ----
 HCC="${HOSTCC:-cc} -std=gnu89 -O -g -Wall -Wno-parentheses -Wno-unused-but-set-variable"
 if $HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$TB/mkksym" "$DLM/tools/mkksym.c" "$DLM/dlm_sym.c" &&

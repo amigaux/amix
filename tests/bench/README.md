@@ -550,6 +550,10 @@ dd if=/dev/kinfo bs=4 skip=134 count=1 2>/dev/null | od -x    # modules at 536: 
 | 2 | `kbootset mark-good`; `kbootset build`; `kbootset commit` | `amix-boot 2: 680x0 …`; generation 1 boots. Then `generation 1 is good; nothing to mark; the new loader is accepted` (`pristine` on the k30 disk); `generation 2 built …`; `generation 2 committed; power-cycle to boot it` |
 | 3 | `kbootset mark-good`; `kbootset status`; the two `dd` reads | `amix-boot 2:`, `amix-boot: generation 2, kernel unix 2426952 bytes` (k30: `1712168`), `amix-boot: starting the kernel`. On the console: `dlm: modules from generation 2's manifest`, then `dlm: 80 kernel symbols` (k30: 78). Then multi-user as the static family. `generation 2 is good and the default`; `booted: generation 2, by the primary loader; kernel 68060-261026-51` (k30: `68030-261026-01`); kabi `k46.1.0` (k30: `k30.1.0`); module count 0 |
 
+On the 4 MiB store, `kbootset status` after boot 3 also warns
+`a generation the size of the default does not fit (976896 bytes free):
+kbootset collect`. That is right: the store holds no third generation.
+
 The loader must be accepted before build. While the new loader is on
 trial, gate 7 also counts the secondary boot2, which is version 1. The
 gate refuses until then.

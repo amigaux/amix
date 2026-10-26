@@ -34,7 +34,7 @@ EEXIST in dlm_creg as before.  30-module-core.md section 2, patch 6.
 +			if (r->r_type == type && r->r_major == n)
 +				break;
 +		if (r->r_type == 0 || strcmp(r->r_name, name) != 0) {
-+			printf("dlm: %s: major %c:%d is %s\n", name, type, n,
++			printf("dlm: %s: major %s:%d is %s\n", name, type == 'b' ? "b" : "c", n,
 +			    r->r_type ? "registered to another module" : "not in the registry");
 +			return ECONFIG;
 +		}

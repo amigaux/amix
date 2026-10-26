@@ -60,6 +60,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kbox.sh
+	B=$(B) sh tests/host/prfcheck.sh
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
 	B=$(B) AX_KERNELS="$(AX_KERNELS)" AX_ELF2BREL="$(AX_ELF2BREL)" sh tests/host/rel-kernels.sh
 

@@ -133,7 +133,7 @@ SHA-256 and CRC-32 are amix-dlm's loader/common code.
 +			sum += G32(id + 4 * i);
 +		if (M32(sum) == 0 && dlm_arena_check(stext + G32(id + 40), (long)G32(id + 44),
 +		    &dlm_man, &dlm_manlen, &dlm_mangen) == 0) {
-+			printf("dlm: modules from generation %ld's manifest\n", dlm_mangen);
++			printf("dlm: modules from generation %d's manifest\n", (int)dlm_mangen);
 +			return;
 +		}
 +	}
