@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30m k30.1.2.261026-12, the k30 kernel with the sd seam restored (2fe11d2) — not published
+
+-11 with sd.c calling the core's dlm_sd_close again (C4-1 §3; -10/-11 lost it to kerntools' pipefail defect, 44caef7): the
+seam proven by `U dlm_sd_close` in sd.o and one R_68K_32 relocation in the ET_REL (-11 had none). brel 2ba846c2 (1726044 B),
+ET_REL fba7cb6d, sidecar 40d23f37: kabi k30.1.2, arena 0x001094a0, abi fea18182. kabi-sidecar030 and mkident --check pass.
+Pkg md5 a8f4276c / 1947136 B; staged catalog 06f12015 (-11 root at superseded/repo-20261026-2349). Round trip 126/126; gates PASS.
+
 ## 2026-10-26 — ramdisk-k30/-k46 1.0.0-1 staged; round trip on packagemanager abfaaac, 126/126 (3211350) — not published
 
 packagemanager abfaaac accepts the `b none /dev/dsk/<node>` entries (C3-5 v8 §1.2). ramdisk30/46 (md5 edc26b2b / 9e5b1024,
