@@ -2,11 +2,14 @@
 # mkident.py -- a module kernel's identity record (AXK1,
 # docs/contracts/C3-3-kernel-identity.md) and its module arena (C3-4).
 #
-#   mkident.py --asm LINE KABI CAP > ident.s
+#   mkident.py --asm LINE KABI CAP [ROOT] > ident.s
 #       dlm_ident (64 bytes: magic, version, kabi tag, line, flags; the
 #       offsets and the check still 0) and dlm_arena (CAP zero bytes), both
 #       4-byte aligned in .data (.data follows .text directly in the
-#       loader's layout; boot2 aligns each module's bytes itself, C3-4).
+#       loader's layout; boot2 aligns each module's bytes itself, C3-4);
+#       then dlm_static_root, the string ROOT: the kernel's built-in root
+#       controllers as the sidecar's root= names them, "" when none.  The
+#       core skips a root-class module for one of them (C4-4 version 4).
 #   mkident.py --fill KERNEL
 #       after the final link (ET_REL, as shipped; on the 030 line the .etrel
 #       before elf2brel): the arena's and the symbol block's image offsets
@@ -27,9 +30,11 @@ def u32(b, o):
     return struct.unpack('>I', b[o:o + 4])[0]
 
 
-def asm(line, kabi, cap):
+def asm(line, kabi, cap, root=''):
     if line not in ('k30', 'k46') or len(kabi) > 23 or not kabi.startswith(line + '.'):
         sys.exit('mkident: line k30 or k46, and a kabi tag of that line (k46.1.0)')
+    if len(root) > 255 or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789:,-' for c in root):
+        sys.exit('mkident: ROOT is the sidecar\'s root= list (zorro:MMMM:PP,mobo:NAME,...)')
     if cap % 0x10000:
         sys.exit('mkident: the arena capacity is a multiple of 64 KiB')
     tag = kabi.encode().ljust(24, b'\0')
@@ -43,8 +48,10 @@ def asm(line, kabi, cap):
           '\t.long\t%s\n'
           '\t.long\t%d, 0, 0x%x, 0, 0, 1, 0\n'
           '\t.balign\t4\n\t.globl\tdlm_arena\n\t.type\tdlm_arena,@object\n'
-          '\t.size\tdlm_arena,%d\ndlm_arena:\n\t.space\t%d'
-          % (line, kabi, cap, MAGIC, VERLEN, words, int(line[1:]), cap, cap, cap))
+          '\t.size\tdlm_arena,%d\ndlm_arena:\n\t.space\t%d\n'
+          '\t.globl\tdlm_static_root\n\t.type\tdlm_static_root,@object\n'
+          'dlm_static_root:\n\t.asciz\t"%s"\n\t.balign\t4'
+          % (line, kabi, cap, MAGIC, VERLEN, words, int(line[1:]), cap, cap, cap, root))
 
 
 def parse(path):
@@ -139,11 +146,11 @@ def check(path):
           % (path, idimg, kabi, aimg, asz, kimg, ksz))
 
 
-if len(sys.argv) == 5 and sys.argv[1] == '--asm':
-    asm(sys.argv[2], sys.argv[3], int(sys.argv[4], 0))
+if len(sys.argv) in (5, 6) and sys.argv[1] == '--asm':
+    asm(sys.argv[2], sys.argv[3], int(sys.argv[4], 0), sys.argv[5] if len(sys.argv) == 6 else '')
 elif len(sys.argv) == 3 and sys.argv[1] == '--fill':
     fill(sys.argv[2])
 elif len(sys.argv) == 3 and sys.argv[1] == '--check':
     check(sys.argv[2])
 else:
-    sys.exit('usage: mkident.py --asm LINE KABI CAP | --fill KERNEL | --check KERNEL')
+    sys.exit('usage: mkident.py --asm LINE KABI CAP [ROOT] | --fill KERNEL | --check KERNEL')

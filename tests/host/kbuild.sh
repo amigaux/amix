@@ -429,6 +429,16 @@ $B/kbootset -R $R --image $T/v2.img --offset 65536 create 8388608 $B/rt/boot2.bi
 rootset
 refused 7 $B/kbootset -R $R --image $T/v2.img --offset 65536 build $RFACTS
 grep -q "root-class modules, which need loader version 3; the installed loader is version 2" $T/out
+# a root-class module for a controller the kernel drives itself (its
+# sidecar's root=) is refused: two drivers on one board (C4-4 v4 section 4)
+msidecar 0x00060000
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+rootset
+refused 3 $KB build $RFACTS
+grep -q "root-class module .* is for zorro:[0-9a-f:]*, which the kernel drives itself" $T/out
+msidecar 0x00060000
+sed -i -e '/^root=/d' -e '/^rootfs=/d' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 # a medium's pristine generation with the root set: mkstore's root lines
 rootset
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \

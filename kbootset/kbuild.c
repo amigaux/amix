@@ -668,6 +668,25 @@ closure(struct ks *k, const struct kb_facts *f, const struct kb_kernel *kk, cons
 
 static char rnames[AXM_MAXMOD][KB_RNAME], rmatch[AXM_MAXMOD][KB_RMATCH];
 
+/* the first of a module's match= keys that the kernel's own root= list
+ * names (a controller it drives statically), or 0 */
+static const char *
+drives(const char *kroot, const char *match)
+{
+	static char key[64];
+	const char *p = match;
+	size_t n;
+
+	while (*p) {
+		n = strcspn(p, ",");
+		sprintf(key, "%.*s", (int)(n < 63 ? n : 63), p);
+		if (key[0] && listed(kroot, key))
+			return key;
+		p += n + (p[n] == ',');
+	}
+	return 0;
+}
+
 /* how many of mods[] are root class */
 static int
 nroot_mods(void)
@@ -779,7 +798,7 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 	/* gate 3: class, match, majors, depend */
 	for (i = 0; i < nmods && rc == KS_OK; i++) {
 		struct km_info *mi = &mods[i].i;
-		const char *p = mi->majors;
+		const char *p = mi->majors, *key;
 		int isroot = !strcmp(mi->cls, "root");
 
 		if (isroot && !kk->has_arena)
@@ -790,6 +809,10 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		else if (isroot && !strcmp(mi->unload, "allowed"))
 			sprintf(m, "root-class module %.15s says unload=allowed: a root module is pinned "
 				"(C4-2 section 1)", mi->name), rc = refuse(k, 3, m);
+		else if (isroot && (key = drives(kk->root, mi->match)) != 0)
+			sprintf(m, "root-class module %.15s is for %.40s, which the kernel drives itself "
+				"(its sidecar's root=): two drivers on one board (C4-4 section 4)", mi->name,
+				key), rc = refuse(k, 3, m);
 		else if (!isroot && strcmp(mi->cls, "boot") && strcmp(mi->cls, "demand"))
 			sprintf(m, "module %.15s has class %s", mi->name, mi->cls), rc = refuse(k, 3, m);
 		else if (!strcmp(mi->cls, "boot") && !mi->match[0])

@@ -37,3 +37,4 @@
 0034-marc-root.patch
 0035-marc-root-match.patch
 0036-root-defer.patch
+0037-static-root-skip.patch
