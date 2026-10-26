@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-27 — the stage-4 exit ledger refreshed; kabi 1.2's closing rule (1b9aa1a)
+
+§2a: S4-72-1 (N103r, kern46m -77) and S4-73 (N104r, kern30m -12) PASS — the rig's `FAIL (b1:lifecycle)` is its stale-mark
+check on a reused disk, by design; N103's first-run arena fault fixed by a829c44. §1: DDI 1.2, abi 2ab48658. §6: C4-1…C4-6
+agreed; S4-01…08, S4-10/11/12, S4-62's providers built; S4-71 defined. §7: S4-71 both lines (gates gayle), the A4091 rows,
+the k30 module rows on -14, cdfs S4-42, M-RD1/M-RD2, the metal cells and S4-74, the stage-5 carries. §8: 1.2 closes in the
+stage-4 exit commit; earlier cuts keep their text's hash (fea18182 → 2ab48658 from 0572fcf); the exit's re-cut carries the final text.
+
 ## 2026-10-27 — S4-71: the root-context probe module rprobe and its Bench row (c2dc7fb)
 
 tests/bench/s4-71/rprobe.c: a root-class module (match=always) whose _load runs in marc_root and reports each call's value,
