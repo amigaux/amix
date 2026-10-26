@@ -900,10 +900,13 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 	}
 
 	/* the safe-mode set: the root controller's module, the root
-	 * filesystem's, and the root-class modules they depend on */
+	 * filesystem's, and the root-class modules they depend on.  On a
+	 * RAM-disk root the controller is the RAM disk: the module that owns
+	 * block major 20 (C4-3 section 1) */
 	for (i = 0; i < nmods && rc == KS_OK; i++)
 		if (!strcmp(mods[i].i.cls, "root") &&
-		    (listed(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs)))
+		    (listed(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs) ||
+		     (!strcmp(f->root, "ramdisk") && named(mods[i].i.majors, "b:20"))))
 			mods[i].safe = 1;
 	for (cls = 1; cls && rc == KS_OK; ) {
 		for (cls = 0, i = 0; i < nmods; i++)

@@ -457,6 +457,16 @@ $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 grep -q "^module zscsi root .*/stand/gen/1/mod/zscsi z=deflate bss=0 match=zorro:144b:01 safe=1$" $T/r1.adf.spec
 grep -q "^module a4091 root .*/stand/gen/1/mod/a4091 z=deflate bss=0 match=zorro:0202:54$" $T/r1.adf.spec
 $B/lsstore $T/r1.adf 0 $T/r2.adf | grep -q "lsstore: ok"
+# a RAM-disk root (C4-3 section 1): the module that owns b:20 is the
+# root's controller, so it is in the safe set; on a disk root it is not
+modpkg ramdisk class=root match=always majors=b:20
+head -c 4096 /dev/zero > $T/mini.img
+$B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS --root ramdisk --swap none > /dev/null 2>&1
+grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always safe=1$" $T/r1.adf.spec
+$B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
+grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always$" $T/r1.adf.spec
 # gate 4: the whole root set against an arena that holds the directory
 # and the manifest copy (about 1 000 bytes) but not the modules too
 rootset
