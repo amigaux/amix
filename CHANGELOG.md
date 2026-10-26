@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-1..C3-4 agreed; S3-40 host half; DDI v1 for review (a1c7678..de519de)
+
+C3-1..C3-4 agreed (version 1). S3-40 host half over the ten kernels of record: one k46 ABI for 68040 and 68060 (the two
+kernels differ in one byte, OQ-20.2 closed), every registry value confirmed (sysent 142 with 64–69 free, cdevsw 70 rows,
+majors 51 and 53 free everywhere), the switch tables movable (U5), elf2brel carries the symbol block (M-ABI2), arena
+capacity 0x60000 on both lines (M-MOD1; a module kernel is 384 KiB larger raw, a 64 MiB store still holds ~28). 20 §2 gains
+tier and build; major 53 confirmed free. docs/abi/ddi-v1-review.md: the stage-3 export list, self-contained, for the
+collaborator's review.
+
 ## 2026-10-26 — M-GEN2 record; stage-3 answers; contract drafts C3-1..C3-4 (b5570bc..a71d221)
 
 M-GEN2 bench half: a k30 commit 16.7 s (median; 11.2 s CPU) and check 16.0 s on the cycle-exact 25 MHz 68030; the GCC 14 box
