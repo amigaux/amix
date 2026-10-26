@@ -1,11 +1,13 @@
-# C3-5 — the module package and the per-module manifest record, version 4
+# C3-5 — the module package and the per-module manifest record, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
   (§2); version 3 (2026-10-26): `marc_post` runs from the first sysinit
   entry, `modadmin -B` (§5, U15); version 4 (2026-10-26, from S3-31's
   dry run): the package's names and version (§1.1), and its scripts run
-  on the installer's miniroot, so pure `sh` (§1.3); the package's contents (§1.2). Every consumer
+  on the installer's miniroot, so pure `sh` (§1.3); the package's contents (§1.2); version 5
+  (2026-10-26, from S3-31's media of record): init's process ids are not
+  stable, so no rc script trusts a pid from an earlier boot (§1.3). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -108,6 +110,17 @@ enforces:
   `exec <f` at top level, `read l <f`, a redirected while-read and
   `exec 4>f` behave; `for …; do exec <f; read l; done` continues at line 2
   on the second pass; `IFS` and `set -f` make no difference to that.
+
+- **Process ids are not stable across boots** (version 5). What a
+  package or the installer adds to init (an `inittab` sysinit line such as
+  `modadmin -B`, an early `rc2.d` script such as `S01kbnamelist`) shifts
+  every later process's id. So an rc script never trusts a pid an earlier
+  boot saved without checking the process's name (`ps -p <pid>`, and that
+  the command is the expected one). The stock `/etc/init.d/syslogd` does
+  trust `/etc/syslog.pid` (`kill -0` alone). On the media of record that
+  pid margin was zero (stale 87, and this boot's syslogd got 87), so
+  syslogd never started. amix-installng's unit checks with `ps -p`. Kernel
+  messages after boot then reach no log (`conslogging 0`).
 
 Scripts are proven on the 2.1 sh (the installer miniroot), not only on a
 host shell. modtools' postinstall, which puts the `modadmin -B` line first
