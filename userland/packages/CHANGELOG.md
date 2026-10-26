@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — dlmkit -11 (f5fe10a), kern46m k46.1.2.261027-79 (047a038), a4091 1.0.0-2 (e4af9d5), cdfs-k30/-k46 1.0.0-1 (626e1a5); round trip 152/152 — not published
+
+dlmkit -11 (c2dc7fb: modcheck -w / PAGESHIFT_OK; k30 a1de94e6, k46 7fb3de45; abi 2ab48658). kern46m -79 (port 1d1a566, dlm
+33ea0c7 core 0001–0043): unix 23d4be39 (2442248 B), arena 0x0012c2e0, abi 2ab48658, 103 names; md5 df1fc408 / 2479104 B. a4091
+1.0.0-2 (db230fa; C4-5 v5): objects adbc4e47 / ef8cd0dc; md5 c8896f98 / 0722bdfb. cdfs-k30/-k46 1.0.0-1 (fd6cad8; boot class,
+match=always, fs=cdfs; objects 3038f6fd / 2808fcd9): md5 7f22ff7d / 860f5202, 110592 B; kmodpkg passes KM_PAGESHIFT_OK as -w.
+Catalog 9027569f (22 kernel-space rows). Round trip 152/152: cdfs composes as boot on a disk root and PROMOTED (`root … safe=1`)
+with --rootfs cdfs. Known: kbootset does not check a module's imports against the kernel's symbol block (cdfs-k30 composes on -13).
+
 ## 2026-10-27 — dlmkit -10, loader-amix -8, kbootset -17 from amix-dlm 33ea0c7 (bb947aa, 8e5c4d3, 14f4a65) — not published
 
 dlmkit30 k30.1.2.261027-10 (md5 d654b658 / 4082688 B, manifest c883c4fd) and dlmkit46 (280595b9 / 4099584 B, 749b19b8; PORT_REV
