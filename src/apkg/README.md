@@ -23,8 +23,9 @@ search <substr>         case-insensitive match on name|description
 info <name>             full catalog entry + installed state
 download <name>         fetch <repo>/pkgs/<file> into the cache, md5-verify
 install <name>...       resolve deps -> download+verify all -> pkgadd each
-upgrade <name>          catalog newer than installed: ONE pkgadd over the
-                        installed instance (instance=overwrite, no pkgrm)
+upgrade <name>...       catalog newer than installed: ONE pkgadd over each
+                        installed instance (instance=overwrite, no pkgrm);
+                        several names = one transaction, one kbootset trigger
 remove <name>           pkgrm wrapper
 recover                 finish an interrupted transaction from /var/apkg/txn
                         (-f: print and discard the journal)
@@ -451,7 +452,8 @@ install record byte for byte, pre-flight, the trigger against a kbootset
 mock for all five statuses, `-R`/`--journal`/`bootset=manual`/`-n`, a
 transaction killed mid-pkgadd and finished by `apkg recover`, four impure
 packages refused, the loader role and the C2-2 v3 key refusals, a
-15-character name recorded under its 8-character pkginst) — **363
+15-character name recorded under its 8-character pkginst, a several-name
+`upgrade` as one transaction with one trigger) — **376
 assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.

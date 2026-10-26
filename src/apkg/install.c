@@ -759,75 +759,131 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
  * running process while the directory entry is replaced.
  */
 int cmd_upgrade(const struct conf *cf, struct catalog *cat,
-                const char *name)
+                char **names, int nnames)
 {
     struct source src;
     struct pkgent *ent;
-    struct pkgent *todo[1];
-    int ow[1];
-    char *files[1];
-    char *insts[1];
+    struct pkgent **todo;
+    int *ow;
+    char **files;
+    char **insts;
     char iver[128];
     char inst[64];
     char *pkgadd;
     char *staged;
     int eph;
+    int nt;
+    int i, j;
+    int nk;
     int rc;
 
-    ent = catalog_find(cat, name);
-    if (ent == NULL) {
-        warnx2("package %s not in catalog", name);
-        return EX_DEPS;
+    /* Several names, ONE transaction (one journal, one kbootset build +
+     * commit): the stage-2 exit row (amix-dlm S2-46) upgrades a kernel,
+     * the loader and kbootset together, and one name per call meant one
+     * generation per package.  Every name is checked before anything is
+     * fetched: one that is not in the catalog (exit 5) or not installed
+     * (exit 1) refuses the whole call; one already up to date is
+     * reported and left out.  Only the NAMED packages move -- no
+     * dependency is pulled in, exactly as for one name. */
+    todo = (struct pkgent **)xmalloc(
+        (unsigned)(nnames * sizeof(struct pkgent *)));
+    ow = (int *)xmalloc((unsigned)(nnames * sizeof(int)));
+    nt = 0;
+    rc = EX_OK;
+    for (i = 0; i < nnames && rc == EX_OK; i++) {
+        ent = catalog_find(cat, names[i]);
+        if (ent == NULL) {
+            warnx2("package %s not in catalog", names[i]);
+            rc = EX_DEPS;
+            break;
+        }
+        for (j = 0; j < nt; j++)
+            if (todo[j] == ent)
+                break;
+        if (j < nt)
+            continue;                         /* named twice */
+        if (!ent_installed(cf, ent, iver, sizeof(iver))) {
+            warnx2("%s is not installed; use 'apkg install %s'",
+                   names[i], names[i]);
+            rc = EX_USAGE;
+            break;
+        }
+        if (apkg_vercmp(ent->version, iver) <= 0) {
+            printf("%s is up to date (installed %s, catalog %s)\n",
+                   names[i], disp_ver(iver), ent->version);
+            continue;
+        }
+        printf("upgrading %s %s -> %s\n", names[i], disp_ver(iver),
+               ent->version);
+        todo[nt] = ent;
+        ow[nt] = 1;
+        nt++;
     }
-    if (!ent_installed(cf, ent, iver, sizeof(iver))) {
-        warnx2("%s is not installed; use 'apkg install %s'", name, name);
-        return EX_USAGE;
-    }
-    if (apkg_vercmp(ent->version, iver) <= 0) {
-        printf("%s is up to date (installed %s, catalog %s)\n",
-               name, disp_ver(iver), ent->version);
-        return EX_OK;
-    }
-    todo[0] = ent;
-    ow[0] = 1;
-    if (txn_refuse_if_pending(cf) != 0)
-        return EX_USAGE;
-    if ((rc = kspace_preflight(cf, todo, 1)) != EX_OK)
+    if (rc != EX_OK || nt == 0) {
+        if (rc != EX_OK && nnames > 1)
+            warnx2("nothing was upgraded");
+        free((char *)todo);
+        free((char *)ow);
         return rc;
-    printf("upgrading %s %s -> %s\n", name, disp_ver(iver), ent->version);
-    announce_kspace(ent->kspace);
+    }
+    rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
+         kspace_preflight(cf, todo, nt);
+    if (rc != EX_OK) {
+        free((char *)todo);
+        free((char *)ow);
+        return rc;
+    }
+    nk = 0;
+    for (i = 0; i < nt; i++)
+        nk += todo[i]->kspace;
+    announce_kspace(nk);
 
     pkgadd = conf_pkgcmd(cf, 0);
-    if (pkgadd == NULL)
-        return EX_USAGE;
-    if (src_open(cf->repo, &src) != 0) {
-        free(pkgadd);
+    if (pkgadd == NULL || src_open(cf->repo, &src) != 0) {
+        if (pkgadd != NULL)
+            free(pkgadd);
+        free((char *)todo);
+        free((char *)ow);
         return EX_USAGE;
     }
     http_opts_from_conf(&src.http, cf);
 
-    /* fetch + verify BEFORE anything touches the system: a bad
-     * source must cost nothing but a failed exit */
-    rc = src_stage(&src, ent, cf->cachedir, &staged, &eph);
-    if (rc == EX_OK && ent->kspace &&
-        kspace_inst(ent, staged, inst, sizeof(inst)) != 0) {
-        free(staged);
-        rc = EX_VERIFY;
+    /* fetch + verify EVERY package BEFORE anything touches the system: a
+     * bad source must cost nothing but a failed exit */
+    files = (char **)xmalloc((unsigned)(nt * sizeof(char *)));
+    insts = (char **)xmalloc((unsigned)(nt * sizeof(char *)));
+    for (i = 0; i < nt; i++) {
+        rc = src_stage(&src, todo[i], cf->cachedir, &staged, &eph);
+        if (rc == EX_OK && todo[i]->kspace &&
+            kspace_inst(todo[i], staged, inst, sizeof(inst)) != 0) {
+            free(staged);
+            rc = EX_VERIFY;
+        }
+        if (rc != EX_OK) {
+            (void)ent_installed(cf, todo[i], iver, sizeof(iver));
+            warnx2("%s not fetched; the installed %s %s is untouched",
+                   todo[i]->name, todo[i]->name, disp_ver(iver));
+            if (nt > 1)
+                warnx2("nothing was upgraded");
+            free_strv(files, i);
+            free_strv(insts, i);
+            free((char *)todo);
+            free((char *)ow);
+            free(pkgadd);
+            src_close(&src);
+            return rc;
+        }
+        note("staged %s%s", staged, eph ? "" : " (in place)");
+        files[i] = staged;
+        insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
     }
-    if (rc != EX_OK) {
-        warnx2("%s not fetched; the installed %s %s is untouched",
-               name, name, disp_ver(iver));
-        free(pkgadd);
-        src_close(&src);
-        return rc;
-    }
-    note("staged %s%s", staged, eph ? "" : " (in place)");
-    files[0] = staged;
-    insts[0] = ent->kspace ? inst : ent->pkginst;
 
-    rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, 1,
+    rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
                     pkgadd);
-    free(staged);
+    free_strv(files, nt);
+    free_strv(insts, nt);
+    free((char *)todo);
+    free((char *)ow);
     free(pkgadd);
     src_close(&src);
     return rc;

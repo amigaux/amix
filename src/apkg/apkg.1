@@ -92,9 +92,9 @@ are decompressed with
 before being handed to
 .BR pkgadd .
 .TP
-.BI upgrade " name"
-When the catalog version is newer than the installed one, download and
-verify the new package and then run a single
+.BI upgrade " name" ...
+For each named package whose catalog version is newer than the installed
+one, download and verify the new package and then run a single
 .B pkgadd
 over the installed instance, with an
 .B instance=overwrite
@@ -109,7 +109,16 @@ pkgrm-then-pkgadd sequence could, and on real hardware did, leave the
 machine with the package uninstalled and unreplaceable.)  An installed
 package without a VERSION field counts as older than any catalog
 version.  When the installed version is equal or newer, say so and
-exit 0.
+leave that name out (exit 0 when nothing is left).
+.IP
+Several names are ONE transaction: every package is fetched and verified
+before the first
+.BR pkgadd ,
+one journal covers them, and a transaction that changes kernel space ends
+with one kbootset build and commit (so a kernel, the loader and kbootset
+upgrade into one generation).  A name not in the catalog (exit 5) or not
+installed (exit 1) refuses the whole call before anything is fetched.  No
+dependency is pulled in: only the named packages move.
 .TP
 .BI remove " name"
 Wrapper around

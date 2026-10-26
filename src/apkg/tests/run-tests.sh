@@ -2438,6 +2438,61 @@ run 0 "recover finishes it" "$APKG" -c "$KCONF" recover
 mkkcat "$KR/catalog" "$KCAT_K110"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 
+# --- upgrade with several names: ONE transaction, ONE trigger ---------
+# The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and
+# kbootset together; with one name per call that was one generation per
+# package.  Here: kernel-k46 1.1.0 -> 1.1.1, loader 3 -> 4, and the userland
+# oldpkg 1.0 -> 2.0, in one call.
+printf 'DIR /stand\nDIR /stand/loader\nFILE /stand/loader/boot1 b1v4\nFILE /stand/loader/boot2 b2v4\nFILE /stand/loader/ldrinfo version=4\n' \
+    | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/loader-4.pkg" LOADER 4
+KR3=$WORK/krepo3; mkdir -p "$KR3"; ln -sfn "$KR/pkgs" "$KR3/pkgs"
+mkkcat "$KR3/catalog" "$(kline kernel-k46 1.1.1 kernel k46 k46.1.0 $PIN kernel/kernel-k46-1.1.1.pkg)"
+sed -i "s|^#kpkg loader 3 role=loader line=any loader=3 size=[0-9]* sha256=[0-9a-f]* file=kernel/loader-3.pkg|#kpkg loader 4 role=loader line=any loader=4 size=$(sizeof "$KR/pkgs/kernel/loader-4.pkg") sha256=$(sha "$KR/pkgs/kernel/loader-4.pkg") file=kernel/loader-4.pkg|" "$KR3/catalog"
+mkkconf "$WORK/conf-k3" "file://$KR3"
+"$APKG" -c "$KCONF" install loader >/dev/null 2>&1
+"$APKG" -c "$WORK/conf-k3" update >/dev/null 2>&1
+cp "$ROOT/var/sadm/pkg/OLDPKG/pkginfo" "$WORK/oldpkg.pkginfo.save"
+kreset
+run 0 "upgrade kernel-k46 loader oldpkg: one call" \
+    "$APKG" -c "$WORK/conf-k3" upgrade kernel-k46 loader oldpkg
+[ "$(grep -c '^pkgadd .*admin.overwrite' "$SHIMLOG")" = 3 ] && \
+grep -q " KERNK46$" "$SHIMLOG" && grep -q " LOADER$" "$SHIMLOG" && grep -q " OLDPKG$" "$SHIMLOG" \
+    && ok "three pkgadds, each with instance=overwrite" \
+    || bad "multi-upgrade pkgadds" "$(cat "$SHIMLOG")"
+[ "$(cat "$KLOG")" = "kbootset --journal /var/kbootset/journal build
+kbootset --journal /var/kbootset/journal commit" ] \
+    && ok "ONE kbootset build + commit for the whole transaction" \
+    || bad "multi-upgrade trigger" "$(cat "$KLOG")"
+grep -qx "version 1.1.1" "$REC/kernel-k46" && grep -qx "loader 4" "$REC/LOADER" && [ ! -f "$TXN" ] \
+    && ok "both records carry the new versions; the journal is gone" \
+    || bad "records after the multi-upgrade" "$(cat "$REC/kernel-k46" "$REC/LOADER" 2>&1)"
+echo "$OUT" | grep -q "kernel space: 2 packages in this transaction" \
+    && ok "the transaction announces its two kernel-space packages once" \
+    || bad "multi-upgrade announcement" "$OUT"
+cp "$WORK/oldpkg.pkginfo.save" "$ROOT/var/sadm/pkg/OLDPKG/pkginfo"
+kreset
+run 0 "an up-to-date name is reported and left out, the rest upgrade" \
+    "$APKG" -c "$WORK/conf-k3" upgrade samepkg oldpkg
+echo "$OUT" | grep -q "samepkg is up to date" && [ "$(grep -c '^pkgadd' "$SHIMLOG")" = 1 ] \
+    && grep -q " OLDPKG$" "$SHIMLOG" && [ ! -s "$KLOG" ] \
+    && ok "samepkg skipped, oldpkg upgraded, no trigger for userland" \
+    || bad "partial up-to-date multi-upgrade" "$OUT $(cat "$SHIMLOG" "$KLOG")"
+cp "$WORK/oldpkg.pkginfo.save" "$ROOT/var/sadm/pkg/OLDPKG/pkginfo"
+kreset
+run 1 "a name that is not installed refuses the whole call (exit 1)" \
+    "$APKG" -c "$WORK/conf-k3" upgrade oldpkg foo
+[ ! -s "$SHIMLOG" ] && echo "$OUT" | grep -q "nothing was upgraded" \
+    && ok "nothing was upgraded, and it says so" || bad "refusal touched something" "$OUT"
+run 5 "a name not in the catalog refuses the whole call (exit 5)" \
+    "$APKG" -c "$WORK/conf-k3" upgrade oldpkg nosuch
+[ ! -s "$SHIMLOG" ] && ok "nothing ran" || bad "pkgadd ran after a refusal" "$(cat "$SHIMLOG")"
+run 0 "everything already current: nothing to do" \
+    "$APKG" -c "$WORK/conf-k3" upgrade kernel-k46 loader
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && ok "no pkgadd and no trigger when nothing is newer" \
+    || bad "an up-to-date upgrade ran something" "$(cat "$SHIMLOG" "$KLOG")"
+"$APKG" -c "$KCONF" remove loader >/dev/null 2>&1
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+
 # --- userland through the new client: no trigger, no journal left ---
 kreset
 run 0 "a userland install through the kernel-space catalog" \

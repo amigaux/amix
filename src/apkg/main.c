@@ -6,7 +6,7 @@
  *
  * Verbs (docs/design.md section 2):
  *   update, list [installed|all], search <substr>, info <name>,
- *   download <name>, install <name>..., upgrade <name>,
+ *   download <name>, install <name>..., upgrade <name>...,
  *   remove <name>, version
  * Options (before the verb): -n dry-run, -f force (applies to the
  *   packages NAMED on the command line, never to their dependencies),
@@ -41,8 +41,9 @@ static void usage(void)
         "  info <name>         show one catalog entry + installed state\n"
         "  download <name>     fetch a package into the cache and verify\n"
         "  install <name>...   resolve deps, download, pkgadd\n"
-        "  upgrade <name>      pkgadd over the installed instance when the\n"
-        "                      catalog is newer (no pkgrm; never uninstalls)\n"
+        "  upgrade <name>...   pkgadd over the installed instances when the\n"
+        "                      catalog is newer, one transaction (no pkgrm;\n"
+        "                      never uninstalls)\n"
         "  remove <name>       pkgrm wrapper\n"
         "  recover             finish (or with -f discard) an interrupted\n"
         "                      transaction from the journal /var/apkg/txn\n"
@@ -498,13 +499,13 @@ int main(int argc, char **argv)
     }
 
     if (strcmp(verb, "upgrade") == 0) {
-        if (argc - i != 1) {
+        if (argc - i < 1) {
             usage();
             return EX_USAGE;
         }
         if (load_catalog_or_die(&cf, &cat, &ec) != 0)
             return ec;
-        rc = cmd_upgrade(&cf, &cat, argv[i]);
+        rc = cmd_upgrade(&cf, &cat, argv + i, argc - i);
         catalog_free(&cat);
         return rc;
     }

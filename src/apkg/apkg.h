@@ -381,7 +381,7 @@ extern int cmd_download(const struct conf *cf, struct catalog *cat,
 extern int cmd_install(const struct conf *cf, struct catalog *cat,
                        char **names, int nnames);
 extern int cmd_upgrade(const struct conf *cf, struct catalog *cat,
-                       const char *name);
+                       char **names, int nnames);
 extern int cmd_remove(const struct conf *cf, struct catalog *cat,
                       const char *name);
 extern int cmd_recover(const struct conf *cf);

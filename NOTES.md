@@ -1,5 +1,26 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — `apkg upgrade` takes several names: one transaction, one trigger
+
+**Why.** The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and kbootset together.
+`upgrade` took one name, and `install` of an installed older package refuses without `-f` (by design,
+kept), so the row needed one call per package -- one journal and one kbootset build + commit each, i.e.
+one generation per package.
+
+**What.** `apkg upgrade <name>...`: every name is checked first (not in the catalog -> exit 5, not
+installed -> exit 1, both refuse the whole call before anything is fetched, "nothing was upgraded");
+an up-to-date name is reported and left out; the rest are fetched and verified together, pre-flighted
+together (so a kernel and its modules are judged as one set), installed in the order named with
+`instance=overwrite` under one journal, and a transaction that touched kernel space ends with ONE
+`kbootset build` + `commit`. Only the named packages move (no dependency is pulled in, as before).
+`install` semantics are unchanged. One name behaves exactly as before (same messages, same exits).
+
+**Tests.** run-tests **376/0** (363 before): kernel-k46 1.1.0 -> 1.1.1, loader 3 -> 4 and the userland
+oldpkg in one call -> three overwrite pkgadds, one build + commit, both records at the new versions,
+no journal left, one announcement "kernel space: 2 packages"; an up-to-date name left out; a
+not-installed name (exit 1) and an unknown name (exit 5) refuse with nothing run; all-current -> no
+pkgadd, no trigger.
+
 ## 2026-10-25 (night, 2) — the install record is named by the pkginst: C2-2 v4 (built, NOT minted, NOT published)
 
 amix-dlm `23cac94`/`4caad11`: C2-2 version 4 §2 names the record file `/var/apkg/kpkg/<pkginst>` — the
