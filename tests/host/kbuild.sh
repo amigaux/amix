@@ -399,6 +399,28 @@ grep -q "z=deflate" $T/m1.adf.spec
 $MB media --cd $T/mcd $FACTS > /dev/null
 $B/lsstore -C $T/mcd | grep -q "lsstore: ok"
 grep -q "sha256=" $T/mcd/BOOT/K46/G1.GMF
+# a read-only medium's boot controller is its loader's, never the kernel's
+# (C2-4 §13): gate 3 checks only the root controller; a --bootdev the
+# kernel has no driver for is noted and the spec is the same
+RO="--line 46 --rootdev zorro:0202:54 --rootfs ufs --mem 16777216"
+$MB media --cd $T/mcd2 $RO > $T/out 2>&1 || { echo "kbuild: media --cd without --bootdev" >&2; cat $T/out >&2; exit 1; }
+$MB media --cd $T/mcd3 $RO --bootdev zorro:dead:01 > $T/out 2>&1 ||
+	{ echo "kbuild: media --cd with a foreign --bootdev" >&2; cat $T/out >&2; exit 1; }
+grep -q "^kbootset: --bootdev is not used for a read-only medium" $T/out
+cmp -s $T/mcd2.spec $T/mcd3.spec || [ "$(grep -v '^created' $T/mcd2.spec)" = "$(grep -v '^created' $T/mcd3.spec)" ]
+$MB media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \
+	$RO --bootdev zorro:dead:01 > /dev/null 2>&1
+set +e
+$MB media --cd $T/mcd4 --line 46 --rootfs ufs --mem 16777216 > $T/out 2>&1; rc=$?
+set -e
+[ $rc -eq 4 ] && grep -q "gate 3.*the root disk's controller is unknown: name --rootdev" $T/out
+set +e
+head -c 8454144 /dev/zero > $T/media2.img
+$MB media --disk $T/media2.img --offset 65536 --size 8388608 --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin $RO --bootdev zorro:dead:01 --root "$ROOTREC" > $T/out 2>&1; rc=$?
+set -e
+[ $rc -eq 4 ] && grep -q "no driver for the boot disk's controller zorro:dead:01" $T/out
+rm -f $T/media2.img
 # a refused gate writes no medium
 set +e
 $MB media --floppy $T/x1.adf $T/x2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \

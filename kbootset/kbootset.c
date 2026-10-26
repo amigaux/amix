@@ -304,7 +304,11 @@ media(const char *root, char **cmd, int argc)
 		fclose(d.f);
 		return rc == KS_OK ? 0 : rc == KS_EREFUSE ? (k.gate ? 4 : 3) : 1;
 	}
-	/* the floppy pair and the CD tree: gated here, written by mkstore's engine */
+	/* the floppy pair and the CD tree: gated here, written by mkstore's engine;
+	 * their loader reads the medium, the kernel never drives it (C2-4 §13) */
+	if (f.bootdev[0])
+		fprintf(stderr, "kbootset: --bootdev is not used for a read-only medium: "
+			"its loader reads it, the kernel never drives it\n");
 	if ((rc = kb_spec(root, &f, (ax_u32)version, now(), fl1 != 0, rd, spec, msg)) != 0) {
 		printf("kbootset: %s\n", msg);
 		return rc;

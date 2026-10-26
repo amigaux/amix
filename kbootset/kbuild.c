@@ -331,6 +331,8 @@ etrel_bss(const ax_u8 *k, ax_u32 len)
 	return n;
 }
 
+static int ro_medium;	/* kb_spec: a read-only medium's generation (gate 3) */
+
 /* every gate this module owns, for the kernel of line f->line; on success
  * *kernel holds the kernel's bytes (malloc'd) */
 static int
@@ -391,11 +393,15 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 		rc = refuse(k, 2, m);
 	}
 	/* 3: closure -- the kernel's built-in root controllers and filesystems
-	 * (root=, rootfs=); root-class modules come with stage 4 */
-	if (rc == KS_OK && (!f->bootdev[0] || !f->rootdev[0]))
+	 * (root=, rootfs=); root-class modules come with stage 4.  A read-only
+	 * medium's boot device is read by its loader (dos.library, trackdisk),
+	 * never by the kernel: only the root controller counts (C2-4 §13) */
+	if (rc == KS_OK && ro_medium && !f->rootdev[0])
+		rc = refuse(k, 3, "the root disk's controller is unknown: name --rootdev");
+	if (rc == KS_OK && !ro_medium && (!f->bootdev[0] || !f->rootdev[0]))
 		rc = refuse(k, 3, "the boot or root disk's controller is unknown (no kinfo): "
 			    "name --bootdev and --rootdev on a host build");
-	if (rc == KS_OK && !listed(kk->root, f->bootdev)) {
+	if (rc == KS_OK && !ro_medium && !listed(kk->root, f->bootdev)) {
 		sprintf(m, "the kernel has no driver for the boot disk's controller %s (it has %s)",
 			f->bootdev, kk->root[0] ? kk->root : "none");
 		rc = refuse(k, 3, m);
@@ -936,7 +942,10 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 
 	memset(&k, 0, sizeof(k));
 	k.hdr.boot2[0].ver = loader_version;	/* gate 7: the loader the medium carries */
-	if ((rc = gates(&k, root, f, f->rootfs, &kk, &kernel, &klen)) != KS_OK) {
+	ro_medium = 1;
+	rc = gates(&k, root, f, f->rootfs, &kk, &kernel, &klen);
+	ro_medium = 0;
+	if (rc != KS_OK) {
 		strcpy(msg, k.msg);
 		return k.gate ? 4 : 3;
 	}

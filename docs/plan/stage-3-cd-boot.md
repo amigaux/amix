@@ -46,10 +46,10 @@ The generations are gated by kbootset like any medium's (C2-4 §11 `media`,
 # per line, from a staging root where that line's kernel package is installed
 # (kernel-k46-m / kernel-k30-m: /stand/<line>/unix and kabi, k30 also unix.sym):
 kbootset -R <stage46> media --cd <tmp46> --version 2 \
-    --line 46 --bootdev zorro:0202:54 --rootdev <vehicle's root controller key> \
+    --line 46 --rootdev <vehicle's root controller key> \
     --rootfs ufs --root "<vehicle's root record>" --mem <bytes>
 kbootset -R <stage30> media --cd <tmp30> --version 2 \
-    --line 30 --bootdev zorro:0202:54 --rootdev <key> --rootfs ufs --root "<record>" --mem <bytes>
+    --line 30 --rootdev <key> --rootfs ufs --root "<record>" --mem <bytes>
 #   each writes <tmpNN>.spec: generation 1, the kernel member raw
 # one disc, both lines:
 mkstore -C <TREE> -x build/amix-cdboot <tmp30>.spec <tmp46>.spec
@@ -57,7 +57,12 @@ lsstore -C <TREE>                                  # "lsstore: ok"
 tools/build-install-iso.sh … --cd-boot <TREE> --out <ISO>     # installng
 ```
 
-- `--bootdev zorro:0202:54` is the A4091 (the CD's controller). `--rootdev`
+- No `--bootdev`: amix-cdboot reads the disc through dos.library, and the
+  kernel never drives the CD's controller (C2-4 §13). From kbootset -15
+  gate 3 checks only the root controller on a `media --cd` or `--floppy`
+  generation, and a `--bootdev` given there is noted and unused. The spec
+  carries no boot device either way, so a disc mastered with
+  `--bootdev zorro:0202:54` (k30, before -15) is the same. `--rootdev`
   and `--root` name the disk the kernel roots on (§5): the vehicles' are
   `sd id=144b0100 unit=6 slice=1` (k46) and `sd id=00000000
   base=00000000 unit=6 slice=1 mobo` (k30).
