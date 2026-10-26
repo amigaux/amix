@@ -1,3 +1,11 @@
+## 2026-10-26 — apkg 0.3.2, gen-catalog: module packages may carry device entries (abd6d3c) — NOT minted
+
+A role=module package may ship `c none /dev/<node> <major> <minor> <mode> <owner> <group>` (C3-5 v4 §1.2; z3660eth's
+/dev/zen0 c 51 0): gen-catalog writes its row instead of SKIPping, apkg installs it; kernel and loader packages still refuse
+a `c` entry; b, p and every other type refused everywhere; the module record keeps `file` lines for plain files only (pkgadd
+makes the node and records it in contents; pkgrm removes it). A latent off-by-one in the contents reader for c/b lines fixed.
+apkg 442/0, repo tools 367/0; apkg.amix c18d6ee2 (113230 B).
+
 ## 2026-10-26 — APKG 0.3.1 minted for the 1.1 media, staged in build/repo-staging-apkg031 (9c55d35) — NOT published
 
 APKG-0.3.1.pkg sha256 45b809cd, md5 2378f66d, 197120 B; the apkg.amix inside is 87b0c427 (112647 B). Against 0.3.0 only
