@@ -298,19 +298,27 @@ The facts come from `kinfo`, so no command takes options. No stand-in
 package is needed: `kbootset build` composes from the installed
 `kernel-k30-u`.
 
-**S2-46 on k30.** On the installer's v8 disk, whose record for the
-installed kernel is named by its pkginst (`kern30u`, C2-2 v4). The
-catalog serves `kbootset`, `loader-amix` and `kernel-k30-u` at a
-revision above the one installed (amix-packages mints it; the kernel
+**S2-46 on k30.** On the installer's v9 disk. Two things make that disk
+the one:
+- its record for the installed kernel is named by its pkginst
+  (`kern30u`, C2-2 v4);
+- it carries APKG 0.3.0. The 1.0 media's APKG 0.2.3 cannot read
+  kernel-space entries.
+
+The catalog serves `kbootset`, `loader-amix` and `kernel-k30-u` at
+revisions above the installed ones (amix-packages mints them; the kernel
 bytes may be the same). Then the S2-46 table above applies with:
-- **on boot 1, all three in one apkg call** (install, or upgrade for
-  packages already present, as apkg 0.3 names it). One transaction
-  triggers one build and commit, so the row's new generation is 2.
-  Each kernel-space transaction triggers its own build and commit, a
-  loader-only one included. So separate calls spend a commit and a
-  generation number each: in the renamed-record variant (N45) the
-  loader's call committed generation 2 and the kernel's generation 3,
-  and generation 2 never booted;
+- **on boot 1, one call:** `apkg update; apkg upgrade kernel-k30-u
+  loader-amix kbootset`.
+  - apkg 0.3 makes one transaction of an `upgrade` with several names,
+    with one trigger, so the row's new generation is 2.
+  - `apkg install` of a package already installed at an older revision
+    refuses without `-f`.
+  - Each kernel-space transaction triggers its own build and commit, a
+    loader-only one included. Separate calls therefore spend a commit
+    and a generation number each: in the renamed-record variant (N45)
+    the loader's call committed generation 2 and the kernel's generation
+    3, and generation 2 never booted.
 - the kernel's record replaced by the upgrade, not doubled;
 - `amix-boot: generation 2, kernel unix 1270676 bytes` on boot 2;
 - `amix-boot: generation 1, kernel unix 1270676 bytes` on boot 4.
