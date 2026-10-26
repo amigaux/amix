@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-71: the root-context probe module rprobe and its Bench row (c2dc7fb)
+
+tests/bench/s4-71/rprobe.c: a root-class module (match=always) whose _load runs in marc_root and reports each call's value,
+level and whether lbolt moved — a 2 000 000-iteration spin, bprobe(0xdff004) and bprobe(0x7fff0000), autocon, sptalloc +
+VPOSR read + sptfree, dev_kvmap/dev_kvunmap on k46, kmem_alloc/kmem_free — then `rprobe: PASS: every call returned at level 7
+with the clock stopped` or FAIL; returns ENXIO (never linked). Row: any kabi-1.2 kernel, loader v3, kbootset ≥ 33ea0c7, a
+stand-in package; a FAIL moves that call to the deferred list for that line (C4-2 §3); the Gayle module ships only after the
+bprobe line passes on both lines. modcheck ok k30 (1268 B) / k46 (1400 B). ddi.md: sptalloc's fourth argument.
+
 ## 2026-10-27 — C3-5 v12 cdfs row; modcheck per-function page-shift waivers (27ea6e3, 8fc87de)
 
 `cdfs | cdfs | cdfs30 / cdfs46`, no majors. modcheck -w FUNC,… / module.mk PAGESHIFT_OK: a `moveq #11` + lsrl/asrl pair is
