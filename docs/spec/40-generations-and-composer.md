@@ -129,7 +129,10 @@ program against an image file, so media and boxes cannot drift).
    64 MiB (10 §3). boot2's L4 stays the binding check, against the largest
    region below 0x40000000 (64 MiB at most on k30).
 7. **Loader:** the installed loader's version is below the generation's
-   `loader-min`.
+   `loader-min`. A generation with a root-class record has `loader-min` 3
+   at least, so a store whose loader cannot place root-class modules
+   refuses it when it is composed, not with L9 at boot (changed after the
+   freeze, 2026-10-26).
 8. **Boot disk:** the boot store cannot be identified unambiguously (§5).
 9. **One boot slice:** the boot disk carries more than one `UNI\0` partition.
 10. **Line:** the kernel's line does not match the box's CPU.
