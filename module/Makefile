@@ -13,57 +13,49 @@
 # DLM is the amix-dlm checkout whose kits are built (`make kit` there gives
 # build/kit/k30 and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.
 # The pinned cross tools (m68k-cbm-sysv4-*) and python3 must be on PATH.
-#
-# Each line runs in build/<line>, because a Master and the objects are per
-# directory in the kit's fragment and the two lines differ: the object (the
-# kit's CPU flag and headers) and the Master's $cpu.
+# The kit's fragment does the rest: objects and the module under
+# build/<line> (MODOUT, here the repo's build/), $cpu from the line.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))..)
 DLM ?= $(abspath $(TOP)/../amix-dlm)
 LINES = k30 k46
+kit = $(or $(KIT_$(1)),$(DLM)/build/kit/$(1))
 
-ifeq ($(LINE),)
+ifeq ($(KIT),)
 
 all: $(LINES)
 
 $(LINES):
-	mkdir -p $(TOP)/build/$@
-	$(MAKE) -C $(TOP)/build/$@ -f $(TOP)/module/Makefile LINE=$@ \
-		KIT=$(or $(KIT_$@),$(DLM)/build/kit/$@)
+	$(MAKE) KIT=$(call kit,$@)
 
 static: $(LINES:%=static-%)
 
 $(LINES:%=static-%): static-%:
-	mkdir -p $(TOP)/build/$*
-	$(MAKE) -s -C $(TOP)/build/$* -f $(TOP)/module/Makefile LINE=$* \
-		KIT=$(or $(KIT_$*),$(DLM)/build/kit/$*) static
+	$(MAKE) -s KIT=$(call kit,$*) static
 
-clean:
-	rm -rf $(LINES:%=$(TOP)/build/%)
+clean: $(LINES:%=clean-%)
 
-.PHONY: all static clean $(LINES) $(LINES:%=static-%)
+$(LINES:%=clean-%): clean-%:
+	$(MAKE) KIT=$(call kit,$*) clean
 
-else	# one line, in build/$(LINE)
+.PHONY: all static clean $(LINES) $(LINES:%=static-%) $(LINES:%=clean-%)
+
+else	# one line, the kit's
 
 MODULE = z3660eth
 OBJS   = z3660eth.o
-MODOUT = .
+MODOUT = $(TOP)/build/$(LINE)
 SRC    = $(TOP)/src
 CFLAGS = -DZ3660ETH_MODULE
+vpath %.c $(SRC)
 include $(KIT)/mk/module.mk
 
-CPU_k30 = 68030
-CPU_k46 = 68040
-
-z3660eth.o: $(SRC)/z3660eth.c $(SRC)/z3660eth.h $(SRC)/z3660ethuser.h $(KIT)/kit.conf
-	$(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -c $< -o $@
-
-Master: $(TOP)/module/Master.in $(KIT)/kit.conf
-	sed 's/@CPU@/$(CPU_$(LINE))/' $< > $@
+$(MODOUT)/obj/z3660eth.o: $(SRC)/z3660eth.h $(SRC)/z3660ethuser.h
 
 static:
-	$(KIT_CC) $(KIT_CFLAGS) -c $(SRC)/z3660eth.c -o z3660eth-static.o
-	sha256sum z3660eth-static.o | sed 's|  |  $(LINE)/|'
+	mkdir -p $(MODOUT)
+	$(KIT_CC) $(KIT_CFLAGS) -c $(SRC)/z3660eth.c -o $(MODOUT)/z3660eth-static.o
+	cd $(TOP)/build && sha256sum $(LINE)/z3660eth-static.o
 
 .PHONY: static
 

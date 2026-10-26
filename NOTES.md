@@ -7,8 +7,11 @@ loadable module; without it the file is the static driver, byte for byte (the
 `.o` of both lines is identical before and after, and the preprocessed token
 stream too). The module is built with amix-dlm's ABI kit (S3-10), one kit per
 line: `make -C module` builds `build/<line>/mod.d/z3660eth` through the kit's
-`mk/module.mk` (its headers, `mkmod`, `modfix`, `modcheck.py`), with the
-`Master` written from `module/Master.in` (`$cpu` 68030 on k30, 68040 on k46).
+`mk/module.mk` (its headers, `mkmod`, `modfix`, `modcheck.py`) from the one
+`module/Master` (no `$cpu`: the kit's DEFCPU gives 68030 on k30, 68040 on k46).
+`match=zorro:144b:01,mobo:z3660-window` (C3-6 section 2): kbootset refuses a
+boot module without `match=` (C3-5 section 2, gate 3); `mobo:z3660-window`
+covers the AGA fixed-base fallback, the board without an AutoConfig entry.
 The module form includes the kit's `sys/amixddi.h` for `if_attach` and
 `intr_attach`/`intr_detach`; the static form does not see it. BUILD.md section 9.
 

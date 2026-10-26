@@ -79,7 +79,8 @@ fast clean boot.
 - `src/Makefile` — installed as `/usr/sys/amiga/driver/z3660eth/Makefile`.
 - `module/` — the loadable-module form (`-DZ3660ETH_MODULE`) built with
   amix-dlm's ABI kit: `Makefile` (`make -C module`, one module per kernel
-  line) and `Master.in` (its `.moddata` keys); BUILD.md §9, NOTES.md
+  line) and `Master` (its `.moddata` keys, one for both lines); BUILD.md §9,
+  NOTES.md
   "Module form".
 - `driver.conf` — the `net` stanza consumed by `amix-build`.
 - `userland/` — `zen.c` (the `zen -S` presence tool), the `/etc/inet` config

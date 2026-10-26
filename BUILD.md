@@ -190,14 +190,16 @@ make -C module                          # build/k30/mod.d/z3660eth, build/k46/mo
 make -C module k46                      # one line
 make -C module static                   # the static object per line, and its sha256
 ```
-`DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. Each line
-builds in `build/<line>/`: the object, `Master` (from `module/Master.in`, with `$cpu`
-68030 on k30, 68040 on k46; `kabi` and `cc` come from the kit), then the kit's `mkmod`
-writes `.moddata`, `modfix` the section type, and `modcheck.py` checks the module
-(undefined symbols on the line's DDI v1 list, the registry's major 51, the parameter
-forms, on k46 the 68060 scan and no 2 KiB page shift). A refusal fails the build.
-`modcheck.py` warns about every COMMON symbol: `ifnet` and `rawintrq` come from the
-stock `<net/if.h>`; the rest are the driver's own counters and tunables.
+`DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. The kit's
+fragment builds each line under `build/<line>/` (objects in `obj/`, the module in
+`mod.d/`), so the two lines never share an object. One `module/Master` serves both:
+no `$cpu` (the kit gives 68030 on k30, 68040 on k46), `kabi` and `cc` from the kit,
+and `$match zorro:144b:01,mobo:z3660-window` (a boot module needs `match=`, C3-5 §2).
+The kit's `mkmod` writes `.moddata`, `modfix` the section type, and `modcheck.py`
+checks the module (undefined symbols on the line's DDI v1 list, the registry's major
+51 and mobo probe, the parameter forms, on k46 the 68060 scan and no 2 KiB page
+shift). A refusal fails the build. `modcheck.py` warns about COMMON symbols outside
+the module's own names: `ifnet` and `rawintrq`, from the stock `<net/if.h>`.
 
 `make -C module static` compiles the static driver (no `-DZ3660ETH_MODULE`) against
 each kit's headers; the hashes must stay those of the static objects (NOTES.md
