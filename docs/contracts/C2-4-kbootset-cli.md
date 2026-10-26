@@ -258,8 +258,9 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     does not match kinfo`, `kinfo flags a loader fault (0x8)`.
 - **Exit status:** 0 when written or current, 3 when it cannot, 1 on an
   I/O error. The base system calls it early in run level 2 and ignores
-  the status, from **`/etc/rc2.d/S02kbnamelist`**. That runs after
-  `S01MOUNTFSYS` and before every other `rc2.d` script, so before the
+  the status, from **`/etc/rc2.d/S01kbnamelist`**. `/sbin/rc2` runs the
+  `S*` scripts in byte order, so it runs after `S01MOUNTFSYS` (`M` < `k`)
+  and before every other `rc2.d` script (`S02PRESERVE` included), so before the
   network scripts (`netstat` and `ifconfig` users) and long before
   `S99zkbootset`, the `mark-good` hook (§9). Its body is the one line:
 
@@ -278,5 +279,5 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     above.
   `status` itself writes nothing.
 - **The installer** (S3-31) removes the name `/stand/unix` from the
-  target (`/stand/2.1_unix` stays) and installs `S02kbnamelist`.
+  target (`/stand/2.1_unix` stays) and installs `S01kbnamelist`.
 

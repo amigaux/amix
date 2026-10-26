@@ -46,6 +46,11 @@ per line**:
 
 - The kabi is not in the version: it is the catalog's `kabi=` (C2-2),
   which apkg's pre-flight checks against the installed kernel.
+- **Where the version lives:** the module's repository records it in
+  `module/VERSION`, one line `x.y.z-rev`, the same for both lines.
+  amix-packages reads it when it makes `<name>-<line>`. It is not a
+  `.moddata` key: that would change the module's bytes and need a C3-1
+  version. z3660eth is 1.0.0-1, z3660rtg 1.1.0-1.
 - The short names, assigned here, one per module, unique:
 
 | Module | Short name | pkginst k30 / k46 |
