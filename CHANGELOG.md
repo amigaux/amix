@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patches 0006–0008: major registry, fmodsw kept whole, measured layouts (27b471e..95657b0)
+
+DDI v1 review draft gains the module-interface row (as C3-2; still unsent). Patch 0006: a module's majors= must be registered
+to it (abi/registry/majors: c 49 z3660rtg, c 51 z3660eth, c 52 monsw, c 53 kinfo, b 20 ramdisk; tools/mkreg; ECONFIG
+otherwise). Patch 0007: fmodsw keeps every stock row, never truncates (more than the table holds panics at dmainit; not
+host-testable, read-verified). Patch 0008: the structure layouts the core reads are measured by the kernel's compiler from the
+kernel's headers (dlmoffs.c, tools/mkoffs); all 19 equal upstream's values on the 2.1 sysroot. `make core` 104/104, harness
+129/129, both lines.
+
 ## 2026-10-26 — module core patch 0005: the allowlisted symbol block (C3-2); DDI v1 lists; the gate (a0fb839, f7b5596)
 
 Kernel symbol block version 2, generated before the final link from the allowlist (mkksym -a) with the values as relocations
