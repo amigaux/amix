@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset -12: the booted kernel's namelist; C3-5 v4; the shipping kit (cf49440..e84878e)
+
+`kbootset namelist` writes /stand/unix, the booted kernel's namelist, as an ELF32 ET_EXEC whose symbols carry this boot's
+addresses: kinfo v2 and v3 read, refusal on a layout mismatch against kinfo's bootdata (status 3 with the reason, the file
+untouched), written as a new file renamed into place (a hard-linked 2.1_unix survives), run from mark-good on every boot and
+from /etc/rc2.d/S02kbnamelist; status reports current, stale, missing or none. Verified against the kernels' own symbol
+blocks at two binds on both lines; the k30 brel through unix.sym (`nlmake <etrel> 0 unix.sym`). C3-5 v4: module package
+names (<name>-<line>, pkginst zeth30/zeth46, zrtg30/46, monsw30/46; the module's own version), package scripts use sh
+builtins plus mv only. C2-4 v9: S02kbnamelist after S01MOUNTFSYS; §11 no copy step on the box. C3-3 §4: abi= required only
+with arena=. C2-1 table fixed. Box kbootset 4a09a6dd. Kits rebuilt clean: KIT_REV=e84878e, PORT_REV=617c64e.
+
 ## 2026-10-26 — the booted kernel's namelist: C2-1 v3, C2-3 v6, 40 §4.2, C2-4 v9 §12; C3-6 v3; kit names (d9558a6..41a382d)
 
 The stock netstat, ifconfig and crash nlist /stand/unix, which on a 1.1 disk is a hard link to the stock 2.1 kernel. C2-1 v3:
