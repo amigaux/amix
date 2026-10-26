@@ -1926,17 +1926,18 @@ ofirst=`cat "$ORDERFIRST"`
 rm -f "$ORDERFIRST"
 [ "$ofirst" = core ] || die "install order $ORDER starts with '$ofirst', not 'core' -- core is the base OS and establishes the target's name service (Gate 13); refusing"
 
-# THE 1.1 BASE CARRIES Cdev (2026-10-26). The 2.1c syslogd reads /etc/syslog.conf only
-# through /usr/ccs/bin/m4, a Cdev member; without m4 the conf parses empty and syslogd
-# files nothing, kernel lines included. build-install-iso.sh puts Cdev in every 1.1
-# medium's order, so an order without it is a custom selection that dropped it.
+# THE 1.1 BASE CARRIES m4 (2026-10-26). The 2.1c syslogd reads /etc/syslog.conf only
+# through /usr/ccs/bin/m4, the m4 package's (Cdev ships the same file); without it the
+# conf parses empty and syslogd files nothing, kernel lines included. build-install-iso.sh
+# puts m4 in every 1.1 medium's order, so an order with neither is a custom selection
+# that dropped it.
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	ORDCDEV="$TARGET/tmp/.ordcdev.$$"
 	rm -f "$ORDCDEV"
 	while read pkg; do
-		case "$pkg" in Cdev) [ -f "$ORDCDEV" ] || echo y > "$ORDCDEV" ;; esac
+		case "$pkg" in m4|Cdev) [ -f "$ORDCDEV" ] || echo y > "$ORDCDEV" ;; esac
 	done < "$ORDER"
-	[ -f "$ORDCDEV" ] || die "install order $ORDER has no Cdev -- a 1.1 install needs its /usr/ccs/bin/m4 (syslogd reads /etc/syslog.conf through m4); refusing"
+	[ -f "$ORDCDEV" ] || die "install order $ORDER has neither m4 nor Cdev -- a 1.1 install needs /usr/ccs/bin/m4 (syslogd reads /etc/syslog.conf through m4); refusing"
 	rm -f "$ORDCDEV"
 fi
 

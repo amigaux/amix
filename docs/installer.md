@@ -1673,11 +1673,11 @@ expected on-box verification is the throttle doc's: `syslogd` in `ps`, and
 `logger -p daemon.err` landing in `/var/log/notice`.
 
 **syslogd needs m4.** syslogd builds its table by running `echo 'define(LOGHOST, 1)' | /usr/ccs/bin/m4 -
-/etc/syslog.conf`. `/usr/ccs/bin/m4` is a Cdev member, and no package ships `/usr/bin/m4`. Without Cdev the shell
+/etc/syslog.conf`. `/usr/ccs/bin/m4` is a Cdev member, and no package ships `/usr/bin/m4`. Without it the shell
 prints `/usr/ccs/bin/m4: not found`, every table row is UNUSED, and nothing is filed, although syslogd runs and
 receives the messages (the Bench's `syslogd -d` capture, 2026-10-26). The `standard` and larger sets carry Cdev.
 A `minimal` install has a syslogd that files nothing, and so has every 1.0 install of the minimal sets. A 1.1
-medium carries Cdev in its base (see the 1.1 section).
+medium carries m4 in its base (see the 1.1 section).
 
 ---
 
@@ -4986,10 +4986,13 @@ refuses a 1.1 profile whose `KERNEL_KPKG` is not a kernel row of the medium's ca
 (`kabi=` not `static`) it also refuses one without modtools, or with a `KERNEL_MODPKGS` entry that is not a
 `role=module` row of the kernel's line.
 
-A 1.1 medium's stock set is `minimal` plus **Cdev** (2026-10-26). The 2.1c syslogd reads `/etc/syslog.conf` only
-through `/usr/ccs/bin/m4`, a Cdev member (23,004 B). Without m4 the conf parses empty and syslogd files nothing,
-kernel lines included. `build-install-iso.sh` adds Cdev to the set of a medium with a 1.1 profile (10,370,048 B
-on the disc, about 10.2 MB installed), and `install.sh` refuses a 1.1 install order without it.
+A 1.1 medium's stock set is `minimal` plus **m4** (2026-10-26). The 2.1c syslogd reads `/etc/syslog.conf` only
+through `/usr/ccs/bin/m4` (23,004 B). Without it the conf parses empty and syslogd files nothing, kernel lines
+included. The m4 package (amix-packagemanager b70500c, 26,112 B) is that one file of Cdev's, with the same pkgmap
+row, so either package or both may be installed. `tools/l11-set.conf` adds it to the staging (`stock-pkg`),
+`build-install-iso.sh` adds it to the set of a medium with a 1.1 profile, and `install.sh` refuses a 1.1 install
+order with neither m4 nor Cdev. Until m4 existed, the 1.1 base carried the whole of Cdev (10,370,048 B on the
+disc).
 
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
@@ -5002,7 +5005,7 @@ Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-tar
 - the dlm inittab line;
 - `S99zen` for the z3660eth module;
 - no `/stand/unix`, and `S01kbnamelist`;
-- Cdev's `/usr/ccs/bin/m4` (size and sum of its contents row), and the conf filing `kern.info` in
+- `/usr/ccs/bin/m4` from m4 or Cdev (size and sum of its contents row), and the conf filing `kern.info` in
   `/var/log/bus-errors` and `kern` on `/dev/console`.
 
 It also runs `kbootset status` and `kbootset namelist` with a version-3 kinfo made for generation 1. The status

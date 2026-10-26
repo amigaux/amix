@@ -293,16 +293,16 @@ mapfile -t SET_MEMBERS < <(resolve_set "$SET_NAME") || true
     echo "      available: $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}' | tr '\n' ' ')base"
   } >&2; exit 1; }
 
-# A 1.1 medium's base carries Cdev: the 2.1c syslogd reads /etc/syslog.conf only through
-# /usr/ccs/bin/m4 (a Cdev member) and files nothing without it. install.sh refuses a 1.1
-# order without Cdev.
+# A 1.1 medium's base carries m4: the 2.1c syslogd reads /etc/syslog.conf only through
+# /usr/ccs/bin/m4 (the m4 package; Cdev ships the same file) and files nothing without
+# it. install.sh refuses a 1.1 order with neither.
 for _p in "${PROFILES[@]}"; do
   case "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" in
     1.1)
       case " $(printf '%s ' "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"} | tr 'A-Z' 'a-z')" in
-        *" cdev "*) ;;
-        *) EXTRA_PKGS+=(Cdev)
-           echo "build-install-iso: profile $_p is INSTALL_LAYOUT=1.1 -- Cdev joins the set (/usr/ccs/bin/m4 for syslogd)" ;;
+        *" m4 "*|*" cdev "*) ;;
+        *) EXTRA_PKGS+=(m4)
+           echo "build-install-iso: profile $_p is INSTALL_LAYOUT=1.1 -- m4 joins the set (/usr/ccs/bin/m4 for syslogd)" ;;
       esac ;;
   esac
 done
