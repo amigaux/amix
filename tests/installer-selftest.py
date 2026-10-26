@@ -9891,6 +9891,21 @@ def audit_l11():
         else:
             fail("S99zkbootset generator: rc %d, calls %r" % (syn.returncode, calls))
 
+    # (8) l11_kpkg_inst: the record's name is the catalog row's pkginst=, else its name
+    kl = os.path.join(d, "kl11")
+    os.makedirs(os.path.join(kl, "kpkg"), exist_ok=True)
+    open(os.path.join(kl, "kpkg", "catalog"), "w").write(
+        "#apkg-catalog 1\n#ext kpkg 1\n"
+        "#kpkg kernel-k30-u 1.1.0 role=kernel line=k30 size=1 sha256=x file=base/a.pkg pkginst=kern30u\n"
+        "#kpkg plainname 1.0 role=kernel line=k46 size=1 sha256=x file=base/b.pkg\n#end kpkg\n")
+    body = "L11=%s\n" % kl + _extract_func(l11, "l11_kpkg_inst") + '\nl11_kpkg_inst "$1"\n'
+    got = [subprocess.run(["/usr/bin/dash", "-c", body, "x", n], capture_output=True, text=True,
+                          timeout=30).stdout.strip() for n in ("kernel-k30-u", "plainname", "absent")]
+    if got == ["kern30u", "plainname", ""]:
+        ok("l11_kpkg_inst: the row's pkginst= (kern30u), else its name; nothing for a missing row (C2-2 v4)")
+    else:
+        fail("l11_kpkg_inst: %r" % (got,))
+
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
                        capture_output=True, text=True, timeout=30)

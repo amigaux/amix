@@ -237,8 +237,14 @@ l11_bootstore()
 	} > "$KCONF" || die "cannot write $KCONF"
 	run "$L11_APKG" -c "$KCONF" update
 	l11_apkg -c "$KCONF" -R "$TARGET" install "$KERNEL_KPKG"
-	[ -f "$TARGET/var/apkg/kpkg/$KERNEL_KPKG" ] || die "apkg installed $KERNEL_KPKG but wrote no record /var/apkg/kpkg/$KERNEL_KPKG -- kbootset gate 1 would refuse"
-	msg "kernel package $KERNEL_KPKG installed; record /var/apkg/kpkg/$KERNEL_KPKG"
+	# the record is named by the pkginst (C2-2 v4 §2), its `name` line by the catalog name
+	KPKG_INST=`l11_kpkg_inst "$KERNEL_KPKG"`
+	[ -n "$KPKG_INST" ] || die "the medium's catalog has no #kpkg row for $KERNEL_KPKG"
+	_rec="$TARGET/var/apkg/kpkg/$KPKG_INST"
+	[ -f "$_rec" ] || die "apkg installed $KERNEL_KPKG but wrote no record /var/apkg/kpkg/$KPKG_INST -- kbootset gate 1 would refuse"
+	_rn=`( read _k _v _r; [ "$_k" = name ] && echo "$_v" ) < "$_rec"`
+	[ "$_rn" = "$KERNEL_KPKG" ] || die "/var/apkg/kpkg/$KPKG_INST names '$_rn', not $KERNEL_KPKG"
+	msg "kernel package $KERNEL_KPKG installed; record /var/apkg/kpkg/$KPKG_INST"
 
 	l11_kb build --line "$L11_LINE" --bootdev "$KBOOTSET_BOOTDEV" --rootdev "$KBOOTSET_ROOTDEV" \
 		--rootfs "$TARGET_ROOT_FSTYPE" --mem "$L11_MEM" --root "$KBOOTSET_ROOTREC"
@@ -317,6 +323,22 @@ l11_markgood()
 	} > "$TARGET/etc/rc2.d/S99zkbootset" || die "cannot write $TARGET/etc/rc2.d/S99zkbootset"
 	run chmod 0744 "$TARGET/etc/rc2.d/S99zkbootset"
 	msg "mark-good    : /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
+}
+
+# l11_kpkg_inst NAME -- the pkginst of catalog entry NAME on the medium: its pkginst=
+# key, else NAME (C2-2 v4 §1-2); nothing when the catalog has no such row
+l11_kpkg_inst()
+{
+	( while read _h _n _v _rest
+	do
+		[ "$_h" = "#kpkg" ] && [ "$_n" = "$1" ] || continue
+		_pi="$1"
+		for _t in $_rest
+		do
+			case "$_t" in pkginst=*) _pi=`expr "$_t" : 'pkginst=\(.*\)'` ;; esac
+		done
+		echo "$_pi"
+	done ) < "$L11/kpkg/catalog"
 }
 
 # l11_kb ARGS -- one kbootset call on the target's store; any status but 0 stops
