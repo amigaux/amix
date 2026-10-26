@@ -107,7 +107,10 @@ program against an image file, so media and boxes cannot drift).
    seen by `kinfo` (or named with `--bootdev`/`--rootdev` on a host build).
    A CD or floppy pair's generation checks the root only: its loader reads
    the medium, never the kernel (C2-4 §13).
-4. **Arena:** the root-class set exceeds the kernel's arena capacity.
+4. **Arena:** the root-class set exceeds the kernel's arena capacity: the
+   directory (32 + 48 bytes a record), the manifest copy, and every root
+   record's file rounded up to 16 with its `bss=` tail, as boot2 places
+   them all (C4-4 version 3).
 5. **Store space:** the new generation does not fit the free store space
    without deleting a member of the kept set. A module kernel carries its
    arena as zeros in `.data` (0x60000 in stage 3, M-MOD1), so its file is

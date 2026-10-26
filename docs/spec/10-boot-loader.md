@@ -505,12 +505,14 @@ hand-off copy:
   COMMON (contract C4-4 §1.2; changed after the freeze, 2026-10-26).
 
 boot2 does **not** relocate modules; `marc_root` in the kernel does
-(`30-module-core.md` §3). A module is selected when one of its match keys is
-satisfied: `zorro:MMMM:PP` against the ConfigDev list, `mobo:<name>` always
-(the kernel's gated probe decides), `always`. In safe mode only the root
-controller's module and the root filesystem's module are placed. Arena
-overflow refuses the generation with a message giving the needed and the
-available size.
+(`30-module-core.md` §3). boot2 places every root-class record of the
+generation and selects none: the core evaluates each record's match keys
+at `marc_root` (contract C4-4 version 3; changed after the freeze,
+2026-10-26). In safe mode only the records `kbootset` marked `safe=1`
+are placed: the root controller's module, the root filesystem's module
+and their dependencies. Arena overflow refuses the generation with a
+message giving the needed and the available size; `kbootset`'s gate 4
+already refused such a generation when it composed it.
 
 ### 5.4 The RAM-disk image
 
@@ -699,7 +701,7 @@ a mouse click; where a choice is needed the menu opens.
 | L4 | not enough fast memory for kernel + arena (+ RAM disk) | give needed and largest region; menu |
 | L5 | arena overflow | give needed and capacity; as L2 (the next generation in the order: try-once falls back to the good one, and an unattended box does not stop at a menu; the menu stays reachable by key) |
 | L6 | unknown relocation type or out-of-range displacement | give type and offset; as L2 |
-| L7 | no root-class module matched any board | print the boards seen; boot anyway (the kernel will name the missing root controller) |
+| L7 | retired (C4-4 version 3, 2026-10-26): boot2 no longer matches root-class modules; the kernel names a missing root controller when the root does not mount | — |
 | L8 | trial generation did not reach multi-user | print, mark bad, boot the default |
 | L9 | loader version below the manifest's `loader-min` | print; menu |
 | L10 | control-block write failed | print; for a trial, boot the default good generation instead (§7.2); for a one-shot request, boot it without consuming it (the request repeats next boot) |
