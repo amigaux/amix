@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — S4-41 vfs_register; C4-6 and C4-5 agreed; iodone; block-only modcheck (5c9ee3b…9c0cd10)
+
+S4-41: vfs_register and the grown vfssw (core 0040): the core owns vfssw[stock+4] and nfstype, copied at dmainit from
+__amix_vfssw/__amix_nfstype (a module kernel cut must weaken and alias both, as execsw/fmodsw); fs= on the module record,
+mkmod writes $fs; ENOSPC at stock+4. C4-6 agreed: init called as vfsinit calls it (row, index), result unread, unload=allowed
+refused. DDI: iodone (func 1, both lines); amixddi.h gives VSECT1/phystokv on k46 under #ifndef. modcheck accepts block-only
+drivers and checks b: majors against majors= and the registry (core 0041 comment). 10 §3.2: ax_memcap ends the touching
+region one page short (coded with S4-11). C4-5 agreed: §5 shape (b), the k30 pool from memory outside the main store;
+no bounce when the main store is below 0x08000000; promised to 32-bit Zorro III masters only. State harness 255/255;
+make test 692/0; kit-test 86/0; ramdisk builds ok on both lines, hashes unchanged.
+
 ## 2026-10-26 — C4-5 amended from the stations' readings; C4-2 v2, the A4770 key (a2e9a0b, 3233b48)
 
 C4-5: one arm site (the A4091's DSA-table data address, taken by dma_addr after prepare; the A3091's two stay stock on
