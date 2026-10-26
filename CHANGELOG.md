@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-40 plan: the port's corrected k46 ranges; the carve is stage 5's first kernel item (7c6b109)
+
+The k46 ranges come from the base's STT_FILE markers (ufs .text 0x76e54–0x83290, s5 0x6c3c0–0x75750, plus local .bss), never
+from constants; the carve runs on the port's patched b-new before the chain (the 4 KiB-page patches lie inside the ranges; later
+relocation-free branches forbid a later carve). k46 imports 118 stock globals and 26 COMMONs (core.list per line); shared COMMONs
+stay the kernel's. crash/pstat/sar need a module-aware namelist. Both lines in one wave at stage 5 (kerntools ½ day, port 1–1.5
+sessions, the risk in the boot rows).
+
 ## 2026-10-27 — C3-3 v6: root= and rootfs= list only what is linked in (the S4-40 k30 calls)
 
 kerntools' K1–K4 all yes (exact-line edits: OPT_SUBEXP, the two vfssw rows, inoinit; tunables stay via master.d; no boot-time
