@@ -20,10 +20,14 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25, staged, not published |
 | [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26, staged, not published |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
+| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261026-58, ET_REL), unix + kabi verbatim | minted 2026-10-26, staged, not published |
+| [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261026-01, brel), unix + kabi + unix.sym verbatim | minted 2026-10-26, staged, not published |
+| [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
+| [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 1 | minted 2026-10-25, staged, not published |
 | [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | minted 2026-10-25, staged, not published |
 | [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries | minted 2026-10-26, staged, not published |
-| [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`; five names renamed for s5 (`S5NAMES`) | minted 2026-10-26, staged, not published |
+| [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -2 (amix-dlm e84878e) minted 2026-10-26, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
@@ -46,6 +50,7 @@ Sourced by every recipe so none re-derives a flag and none can bypass the wrappe
 | `amix-env.sh` | The one place a recipe learns what "build for Amix" means: `CC`/`AR`/`NM`/`OBJDUMP`, the standard flags, the sysroot, the host pkgtools, the shared prefix. Refuses if `CC` resolves to `gcc.real`. |
 | `fetch.sh` | Checksum-verified fetch. Knows *how* to verify a digest; never knows what any digest should be — that lives in each recipe's own `pin.sh`. Verifies before extract, always. |
 | `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
+| `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
 | `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
 | `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. |
 | `gates.sh` | The object-code gates: **D4** (no register/memory-source 64-bit `MUL.L`, no 64-bit-dividend `DIV.L` — classified by **encoding**, and self-tested on a probe before any pass is trusted; see the note below), "is it really an m68k SVR4 ELF", the undefined-symbol listing, and the no-imported-assembly check. |
