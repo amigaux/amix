@@ -540,6 +540,7 @@ The kabi and the module count are read directly:
 ```
 dd if=/dev/kinfo bs=1 skip=24 count=24 2>/dev/null; echo     # kabi: k46.1.0 / k30.1.0
 dd if=/dev/kinfo bs=4 skip=134 count=1 2>/dev/null | od -x    # modules at 536: 0000 0000
+dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null | od -x    # kinfo version 3 (the -58 cut on): at 576
 ```
 
 ### S3-B1 — loader version 2, the module generation (three boots)
@@ -598,10 +599,21 @@ z3660eth as a boot-class member, and the network comes from the module.
 z3660eth goes alone: z3660rtg's `depend=monsw` needs a monsw member, and
 no monsw module exists yet (S3-27).
 
-- **Inputs:** as S3-B1, with `/tmp/kbootset` from amix-dlm at the S3-16
-  commit or later (`make box`), and the module the z3660net station built
-  with the kit (`build/<line>/mod.d/z3660eth`: k46 `e83b097e…`, k30
-  `3628335f…`, 18 397 bytes, kit d197198). Its stand-in package:
+- **Inputs:**
+  - the kernels of the cut with kinfo version 3 (C2-1): KD060-Z -58
+    (`8459eaee…`, 2 431 362 bytes) and the K030-U cut that ships
+    `unix.sym` (C2-3 version 6), each through `s3-standin.sh`; on k30
+    the stand-in tree also carries `/stand/k30/unix.sym`, and the sidecar
+    its `sym=` line;
+  - `/tmp/kbootset` from amix-dlm cf49440 or later (`make box`): kbootset
+    -12, with `kbootset namelist` (C2-4 §12);
+  - core patch 0022 or later in the kernels: a boot-class STREAMS driver
+    registers its own major (the first run's `error 22`);
+  - the module the z3660net station built with the kit of the cut
+    (`build/<line>/mod.d/z3660eth`). z3660net be0ef63 against the dirty
+    kit gave k30 `0c5c3580…` and k46 `8356712a…`. The hashes of record
+    come from the rebuild against the clean kit at the shipping commit.
+    Its stand-in package:
 
 ```
 sh tests/bench/s3-modpkg.sh <z3660eth> k46 <outdir>          # or k30
@@ -614,9 +626,9 @@ sh tests/bench/s3-modpkg.sh <z3660eth> k46 <outdir>          # or k30
 
 | Boot | Commands | Expected |
 |---|---|---|
-| 1 | copy both trees (s3-standin's and s3-modpkg's); install `build/box/modadmin` (amix-dlm with core patch 0017 or later) as `/sbin/modadmin`, and put `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1` in `/etc/inittab` before every other `sysinit` line; `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
-| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as S3-B1. `build`'s generation has, after the kernel's record, `module z3660eth boot 18397 path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
-| 3 | `kbootset status`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix 2426952 bytes` (k30 `1712168`). On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`; then, from init's first sysinit entry, `dlm: boot module z3660eth loaded`. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded`. kinfo: kabi as S3-B1, module count 1 (`0000 0001`) |
+| 1 | copy both trees (s3-standin's and s3-modpkg's); install `build/box/modadmin` (amix-dlm with core patch 0017 or later) as `/sbin/modadmin`, and put `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1` in `/etc/inittab` before every other `sysinit` line; install `/tmp/kbootset` as `/sbin/kbootset` and `/etc/rc2.d/S02kbnamelist` (its one line, C2-4 §12); `ls -li /stand/unix /stand/2.1_unix`; `kbootset loader-install /tmp/boot2.bin --version 2` | the two names one inode (the stock kernel, as 1.0 left it); `loader version 2 installed on trial; power-cycle to boot it` |
+| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as S3-B1. Early in run level 2, from `S02kbnamelist`: `kbootset: no namelist: kinfo version 2 gives no bind address` (generation 1 is the vehicle's static kernel, whose kinfo is version 2). `build`'s generation has, after the kernel's record, `module z3660eth boot <size> path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
+| 3 | `kbootset status`; `ls -li /stand/unix /stand/2.1_unix`; `netstat -i`; `ifconfig -a`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix …`. On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`; then, from init's first sysinit entry, `dlm: boot module z3660eth loaded`; then, from `S02kbnamelist`, `kbootset: namelist /stand/unix written for generation <id>, bound at 0x…`. `/stand/unix` is now its own inode, `/stand/2.1_unix` unchanged with a link count of 1. `netstat -i` lists aen0 and zen0 with sane counters and no `read error on ifstats element`; `ifconfig -a` lists both with no `SIOCGIFFLAGS` error. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded` and `namelist: /stand/unix is generation <id>'s, bound at 0x…`. kinfo: kabi as S3-B1, module count 1, read at offset 576 now (version 3): `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` gives `0000 0001` |
 
 **Needs the final cut's kernels** (core patch 0017). On a kernel without
 it the hook loads in process 0 and panics (the S3-B5 exploratory run on
