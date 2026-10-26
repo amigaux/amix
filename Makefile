@@ -29,11 +29,12 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
 XSRC    := $(COMMON)/sha256.c
 # kbootset's core (userland: host and box)
 KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c kbootset/kmod.c kbootset/kreg.c \
-           kbootset/knl.c
+           kbootset/knl.c kbootset/kdeflate.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
-           tests/host/t_bootinfo.c tests/host/t_sha256.c tests/host/t_kbootset.c
+           tests/host/t_bootinfo.c tests/host/t_sha256.c tests/host/t_kbootset.c \
+           tests/host/t_deflate.c
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
@@ -59,7 +60,7 @@ $(B)/nlmake: tests/host/nlmake.c kbootset/knl.c $(COMMON)/rel.c $(COMMON)/*.h kb
 # Optional real inputs (not in this repository):
 #   AX_FLOPPIES  boot floppy images, for inflate-kernels.sh
 #   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
-test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(B)/nlmake
+test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(B)/nlmake $(B)/kbootset-nz
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) sh tests/host/kbuild.sh
@@ -90,6 +91,11 @@ $(B)/axsim: tests/host/axsim.c $(CSRC) $(COMMON)/*.h | $(B)
 $(B)/b2medium: tests/host/b2medium.c loader/boot2/main.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -no-pie \
 		-I$(COMMON) -Iloader/boot2 -o $@ tests/host/b2medium.c $(CSRC)
+
+# kbootset as the box builds it, on the host: no zlib, so its own deflate
+# (kdeflate.c) and no media builds -- kbuild.sh's --spec z=deflate case
+$(B)/kbootset-nz: kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC) $(COMMON)/*.h kbootset/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -Ikbootset -o $@ kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC)
 
 # kbootset on the host: zlib for media that deflate, and mkstore's engine
 # (kbootset/kmedia.c) for the floppy pair and the CD tree; the box build is

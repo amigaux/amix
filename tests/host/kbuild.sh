@@ -420,3 +420,22 @@ rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R
 rm -rf "${R:?}/stand/gen/1/mod"
 cp $T/kabi.static $R/stand/k46/kabi; record
 echo "kbuild: media (disk, floppy pair, CD; a medium with modules) ok"
+
+# commit --spec with z=deflate on the kbootset the box runs (no zlib: its
+# own deflate): the member is stored deflated, the store checks, and a
+# generation that fits only deflated is accepted (S3-43-4 on a 4 MiB store)
+KZ="$B/kbootset-nz --image $T/z.img --offset 0"
+head -c 1048576 /dev/zero > $T/z.img
+$KZ create 1048576 $B/rt/boot2.bin > /dev/null
+{ head -c 300000 /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c 600000; head -c 600000 /dev/zero; } > $T/zkern
+printf 'line k46\nkabi static\nloader-min 1\nrootfs ufs\nroot sd id=144b0100 unit=6 slice=1\nkernel unix %s z=deflate\n' $T/zkern > $T/z.spec
+$KZ commit --spec $T/z.spec > $T/out 2>&1 || { echo "kbuild: --spec z=deflate refused" >&2; cat $T/out >&2; exit 1; }
+$B/lsstore $T/z.img 0 | grep -q "kernel  unix .*(deflate)  crc .* ok"
+$B/lsstore $T/z.img 0 | grep -q "lsstore: ok"
+$KZ check | grep -q "check: 0 problem(s)"
+sed 's/ z=deflate//' $T/z.spec > $T/zraw.spec
+head -c 1048576 /dev/zero > $T/z.img
+$KZ create 1048576 $B/rt/boot2.bin > /dev/null
+refused 5 $KZ commit --spec $T/zraw.spec			# raw, it does not fit
+echo "kbuild: --spec z=deflate on the box's kbootset (its own deflate) ok"
+

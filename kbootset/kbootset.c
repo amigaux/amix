@@ -78,6 +78,7 @@
 #include "ks.h"
 #include "kbuild.h"
 #include "kbox.h"
+#include "kdeflate.h"
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
@@ -644,6 +645,8 @@ main(int argc, char **argv)
 	}
 #ifdef KS_ZLIB
 	k.deflate = zdeflate;
+#else
+	k.deflate = kb_deflate;		/* the box: no zlib */
 #endif
 	k.step = step;
 	facts_of(cmd, argc, &facts);
