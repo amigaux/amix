@@ -1,3 +1,14 @@
+## 2026-10-26 — apkg 0.3.1: one kernel package per line; gen-catalog module rows (06b77c4, 07ebd85) — NOT minted
+
+apkg 0.3.1 keeps one kernel package per line (amix-dlm C2-2 v5 §2.1): an install bringing a kernel while another package's
+kernel record of the same line exists replaces it in the same journaled transaction — the plan line `<new> replaces <old>
+(<PKGINST>): one kernel package per line`, a pre-flight of every installed module record against the new kernel ("…: remove
+the module packages first"), pkgrm + record removal of the old before pkgadd + record of the new, one kbootset trigger; two
+kernel records of one line, or two kernels in one transaction, refuse with exit 5; `apkg recover` finishes a cut between
+removal and pkgadd (journal format unchanged, apkg-txn 3). apkg.amix 87b0c427 (112647 B). gen-catalog writes role=module
+rows from the object's .moddata (kabi=/cc=), no depend= — byte-identical to amix-packages' stage-3 catalog. Tests: run-tests
+421/0, nohttp 20/0, kbootset-consumer 12/0, repo tools 360/0.
+
 ## 2026-10-26 — apkg upgrade with several names; APKG 0.3.0 staged for the 1.1 media (6215017, bb0072d) — NOT published
 
 `apkg upgrade <name>...` takes several names as one transaction: one journal, one kbootset build + commit, so a kernel, the
