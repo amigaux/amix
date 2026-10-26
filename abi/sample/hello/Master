@@ -1,0 +1,8 @@
+# hello: the ABI kit's sample module (a misc module, no device)
+$modtype misc
+$class demand
+$cpu 68020
+$unload allowed
+$param greeting:str:hello
+$desc the ABI kit's sample module
+hello	hello

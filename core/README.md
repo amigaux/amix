@@ -41,6 +41,7 @@ against our kernels (M-CORE1).
 | 0011 | `ddi-providers` | The DDI v1 services the kernels have no callable form of. The `spl` functions match `<sys/inline.h>` (spl5–7 raise to level 4). `if_attach`/`if_detach` work on the stock `ifstats` list. `cons_hook_set`/`clear` wrap the stock `scrcon_put`, which the kernel build weakens and keeps as `__amix_scrcon_put`. | not yet |
 | 0012 | `interrupt-chains` | 30 §4 (§2 patch 10). `intr_attach`/`intr_detach`: a level-2 chain walk in `int2_tbl`'s last handler slot, which calls the displaced handler first, and a level-6 chain behind a wrapper at the stock `aciabintr`, which the kernel build weakens and keeps as `__amix_aciabintr`. Every handler is called every time, as the stock ones are; claims are counted. | not yet |
 | 0013 | `no-weak-symbols-kinfo-list` | From the port's dry run: `mkksym -a` aligns the block to 4 (`.data` follows `.text` directly); `hooksw` is strong, and `dlm_cache.s` has no weak `plat_dmainit` (the platform always provides it), so no weak symbol survives a splice; `dlm_kinfo_list()` gives a kinfo driver the loaded modules (C2-1 offset 536). | not yet |
+| 0014 | `mkmod-for-the-kit` | `mkmod` runs from the ABI kit's directory with the compiler the kit's make fragment sets (`MKMOD_CC`), no toolchain `env.sh` beside it; `$modtype` takes `drv` and `str` as well as `misc`. | not yet |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order

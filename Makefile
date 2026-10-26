@@ -7,6 +7,8 @@
 #   make boot1            assemble boot1 and apply the 1 KB size gate
 #   make box              kbootset for the box: GCC 14, static (D-3 §9)
 #   make all              all of the above
+#   make kit              the ABI kit for both lines into build/kit/ (S3-10)
+#   make kit-test         the kit: build, the sample, the checker's refusals
 #
 # The cross toolchain is gcc-cross-amix; source its build/env.sh first, or
 # set CROSS to the tool prefix (default m68k-cbm-sysv4- on PATH).  Userland
@@ -34,7 +36,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test clean
+.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
 
 all: test tools cross boot1 boot2 cdboot axtime box b2test
 
@@ -267,6 +269,15 @@ $(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/cr
 # (amix-kerntools); not part of `test`, which needs no sibling repository
 core: toolchain-check
 	B=$(B) sh tests/core/run.sh
+
+# the ABI kit (abi/, docs/spec/20-module-format-and-abi.md section 5): one
+# per line, with the stock headers of the pinned sysroot (never tracked)
+kit: toolchain-check
+	sh tools/mkkit.sh k30 $(B)/kit/k30
+	sh tools/mkkit.sh k46 $(B)/kit/k46
+
+kit-test: toolchain-check
+	B=$(B) sh tests/kit/run.sh
 
 hashbench: toolchain-check $(B)/box/hashbench $(B)/hb27/hashbench $(foreach o,$(HBOPTS),$(B)/hb14-$(o)/hashbench)
 

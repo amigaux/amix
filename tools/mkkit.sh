@@ -1,0 +1,140 @@
+#!/bin/sh
+# mkkit.sh -- build the ABI kit for one kernel line (docs/spec/20-module-
+# format-and-abi.md section 5; plan item S3-10): everything a module build
+# needs, with no Amix tree beside it.
+#
+# usage: mkkit.sh LINE OUTDIR        LINE: k30 or k46
+#
+# OUTDIR gets:
+#   kit.conf             LINE, KABI, PIN, CPUFLAG, KIT_REV (the amix-dlm commit)
+#   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
+#                        core/series) and amixddi.h (abi/include)
+#   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
+#                        gcc wrapper puts first ($AMIX_SYSROOT)
+#   stock/usr/include/,  the stock headers AMIX_KERNEL_CFLAGS names
+#   stock/usr/sys/       (headers only, never a source file), and
+#                        amiga/console/sunfont.o, the stock Sun font
+#                        assembled by tools/sunfont.py
+#   tools/               mkmod, modfix (built here), modcheck.py
+#   mk/module.mk         the make fragment
+#   ddi.list, core.list, exports (their names), registry/
+#   sample/hello/        the sample module
+#   docs/                the DDI contracts and the module guide
+#   LICENSE, NOTICE, README.md
+# On k46 the two page-geometry headers, sys/immu.h and sys/param.h, are the
+# 68040/68060 port's 4 KiB forms (amix-040-060-port include-modelb/), the
+# stock ones kept as sys/immu_stock.h and sys/param_stock.h, as the port's
+# own mirror sysroot does.
+#
+# The stock headers are Commodore's: they go into the kit, which is
+# published under the distribution permission of 2026-09-23 (D-3 section 7),
+# and never into this repository (build/ is not tracked).
+#
+# Environment: GCA (gcc-cross-amix's build directory, default the sibling
+# checkout), PORT (amix-040-060-port, default the sibling), HOSTCC.
+#
+# Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
+set -e
+LINE=$1 OUT=$2
+case "$LINE" in
+k30) KABI=k30.1.0 CPUFLAG=-m68020 ;;
+k46) KABI=k46.1.0 CPUFLAG=-m68040 ;;
+*) echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2 ;;
+esac
+[ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
+R=$(cd "$(dirname "$0")/.." && pwd)
+WS=$(cd "$R/.." && pwd)
+GCA=${GCA:-$WS/gcc-cross-amix/build}
+PORT=${PORT:-$WS/amix-040-060-port}
+. "$GCA/env.sh"
+PIN=gcc-2.7.2.3-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
+REV=$(git -C "$R" rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+rm -rf "$OUT"
+mkdir -p "$OUT/include/sys" "$OUT/tools" "$OUT/mk" "$OUT/registry" "$OUT/sample" \
+	"$OUT/docs/contracts" "$OUT/sysroot/usr" "$OUT/stock/usr"
+OUT=$(cd "$OUT" && pwd)
+
+# the module core as shipped: core/upstream with core/series applied
+S=$OUT/.core
+mkdir -p "$S"
+cp -R "$R/core/upstream/." "$S/"
+while read p; do
+	case "$p" in \#*|"") continue ;; esac
+	patch -p1 -s -d "$S" < "$R/core/patches/$p"
+done < "$R/core/series"
+cp "$S/include/sys/mod.h" "$S/include/sys/moddefs.h" "$S/include/sys/ksym.h" "$OUT/include/sys/"
+cp "$R/abi/include/sys/amixddi.h" "$OUT/include/sys/"
+cp "$S/tools/mkmod" "$OUT/tools/"
+${HOSTCC:-cc} -std=gnu89 -O -w -o "$OUT/tools/modfix" "$S/tools/modfix.c"
+cp "$S/LICENSE" "$OUT/tools/LICENSE.core"
+rm -rf "$S"
+cp "$R/abi/tools/modcheck.py" "$OUT/tools/"
+cp "$R/abi/mk/module.mk" "$OUT/mk/"
+
+cp "$R/abi/$LINE/ddi.list" "$R/abi/$LINE/core.list" "$OUT/"
+cat "$OUT/ddi.list" "$OUT/core.list" | sed 's/#.*//' | awk 'NF {print $1}' | sort -u > "$OUT/exports"
+cp "$R/abi/registry/"* "$OUT/registry/"
+cp -R "$R/abi/sample/hello" "$OUT/sample/"
+sed -i 's|^KIT    ?= .*|KIT    ?= ../..|' "$OUT/sample/hello/Makefile"
+
+# the guides by name: docs/abi/ also holds the DDI review draft, which
+# leaves this repository only on the owner's word
+cp "$R/docs/abi/ddi.md" "$R/docs/abi/writing-a-module.md" "$OUT/docs/"
+for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
+	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/"
+done
+cp "$R/LICENSE" "$OUT/LICENSE"
+cp "$R/abi/README.md" "$OUT/README.md"
+
+# the stock headers, headers only
+headers() {	# headers SRC DST
+	[ -d "$1" ] || { echo "mkkit: no $1" >&2; exit 1; }
+	mkdir -p "$2"
+	(cd "$1" && find . -name '*.h' -type f) > "$OUT/.list"
+	tar -C "$1" -cf - -T "$OUT/.list" | tar -C "$2" -xf -
+	rm -f "$OUT/.list"
+}
+headers "$AMIX_SYSROOT/usr/include" "$OUT/sysroot/usr/include"
+headers "$AMIX_ROOT/usr/include" "$OUT/stock/usr/include"
+headers "$AMIX_ROOT/usr/sys" "$OUT/stock/usr/sys"
+# the stock console's Sun font as a linkable object (a console-drawing
+# driver links it, C3-6 section 3); built from the stock source, which is
+# not copied
+mkdir -p "$OUT/stock/usr/sys/amiga/console"
+python3 "$R/tools/sunfont.py" "$AMIX_ROOT/usr/sys/amiga/console" \
+	"$OUT/stock/usr/sys/amiga/console/sunfont.o" > /dev/null
+if [ "$LINE" = k46 ]; then
+	for d in "$OUT/sysroot/usr/include/sys" "$OUT/stock/usr/include/sys"; do
+		for h in immu param; do
+			[ -f "$PORT/include-modelb/sys/$h.h" ] ||
+				{ echo "mkkit: no $PORT/include-modelb/sys/$h.h (the k46 4 KiB headers)" >&2; exit 1; }
+			mv "$d/$h.h" "$d/${h}_stock.h"
+			cp "$PORT/include-modelb/sys/$h.h" "$d/$h.h"
+		done
+	done
+fi
+
+cat > "$OUT/kit.conf" <<EOF
+# the ABI kit for $LINE (amix-dlm $REV): read by mk/module.mk and modcheck.py
+LINE=$LINE
+KABI=$KABI
+PIN=$PIN
+CPUFLAG=$CPUFLAG
+KIT_REV=$REV
+EOF
+cat > "$OUT/NOTICE" <<EOF
+The Amix ABI kit for $KABI, built from amix-dlm $REV.
+
+Under the MIT licence (LICENSE), Copyright (c) 2026 Jussi Alanärä:
+include/sys/amixddi.h, tools/modcheck.py, mk/, sample/, docs/, the lists and
+the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
+tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
+(tools/LICENSE.core).
+
+sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
+this kit under the distribution permission given to the project on
+2026-09-23.$( [ "$LINE" = k46 ] && printf '\nsys/immu.h and sys/param.h there are the 68040/68060 port'"'"'s 4 KiB page\nforms of the stock headers (amix-040-060-port include-modelb/).' )
+EOF
+n=$(find "$OUT/sysroot" "$OUT/stock" -name '*.h' | wc -l)
+echo "mkkit: $OUT: $LINE $KABI, pin $PIN, $n stock headers, amix-dlm $REV"
