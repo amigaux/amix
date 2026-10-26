@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30m k30.1.1.261026-08, the S4-21 k30 module kernel of record (6db5e5c) — not published
+
+The first k30 kernel at kabi k30.1.1: K030-U build 68030-261026-08 (kerntools 1079741) on amix-dlm a15104e (core
+0001–0032), the four-card sd layer with the dlm_sd_close seam, the dlm_halt hook, bdevsw row 20 freed. brel 9e823641
+(1720256 B), unix.sym 027060cc, sidecar d009be9b, abi= fea18182 (= abi-k30.1.1.txt), sdcards=4 passed through; ksymgate
+12/12. md5 6c606993 / 1939968 B. -04 stays in build/kspace/pkg (the S4-55 media); the staged root carries -08 (catalog
+008d58f0); the -04 root at superseded/repo-20261026-2108. Round trip 106/106 with the 1.0 modules composing; gates PASS.
+
 ## 2026-10-26 — kern46m k46.1.1.261026-65, the S4-21 k46 module kernel of record (11fe968) — not published
 
 The first kernel at kabi k46.1.1: KD060-Z module kernel build 68060-261026-65 (port k46-module aebb759) on amix-dlm a15104e
