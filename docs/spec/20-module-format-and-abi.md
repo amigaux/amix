@@ -217,7 +217,7 @@ checked against the built kernels before they are frozen (M-REG1).
 | Interrupt chains | INT2 (Zorro/CIA-A level 2), INT6 (Zorro/CIA-B level 6); attachment only through `intr_attach` |
 | Motherboard probes (`mobo:`) | `z3660-window` (above), `gayle` (VPOSR AGA gate + task-file write/readback at 0xDD2020, `amix-gayle-ide/README.md:44`), `a4000t-710` (gated by chipset identity; probe to be designed, `amix-kerntools/docs/k0-families.md:1190-1195`), `a3000-wd` (floor driver; VPOSR gate + two-register readback) |
 | Zorro keys of record | **144b:01** (`Z3660_PROD 0x144B0001`, `amix-z3660net/src/z3660eth.h:15`; `amix-z3660rtg/DESIGN.md:158`) is shared by three modules: z3660scsi, z3660eth and z3660rtg on a Z3660. That ConfigDev is not the FPGA's: the Z3660 extended ROM builds it at the fixed window 0x10000000 (`Z3660/docs/real-cpu-autoconfig-and-ext-rom.md:14-30`), so the key matches only where that ROM runs. For setups without it the registry adds the gated probe `mobo:z3660-window` (the fixed base `Z3660_FIXED 0x10000000`, `z3660eth.h:16`), never read when the combo board has autoconfigured (`amix-z3660rtg/NOTES.md:157`). A4091 0202:54, A4092 c0de:01, A4770 c0de:02 (`amix-a4091/README.md:58`; the last two untested on hardware). 6d6e:03 is the upstream ZZ9000's own identity (`amix-z3660rtg/README.md:98-101`) and matches only a real ZZ9000 |
-| sd rank keys | `30-module-core.md` §5 |
+| sd rank classes | `z3660`, `zorro`, `mobo`, `ide`, in that order (`30-module-core.md` §5.2, contract C4-1 §4) |
 
 ## 7. Open questions
 
