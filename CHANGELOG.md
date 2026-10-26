@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — C3-5 v12 cdfs row; modcheck per-function page-shift waivers (27ea6e3, 8fc87de)
+
+`cdfs | cdfs | cdfs30 / cdfs46`, no majors. modcheck -w FUNC,… / module.mk PAGESHIFT_OK: a `moveq #11` + lsrl/asrl pair is
+waived only inside the named functions (static ones included, by objdump's labels), counted and named in the ok line; a named
+function with no such shift is refused; the waiver lives in the module's Makefile, so the object's bytes do not change. The cdfs
+k46 object checks ok with its seven CD-sector functions waived. kit-test 0 failed. Kit at 8fc87de (a dlmkit re-mint after -10).
+
 ## 2026-10-27 — promotion: the rootfs's boot-class module as a root record (core 0043); C4-4 v5 §1.3, C3-5 v11 (5d3d988, 33ea0c7)
 
 kbootset reads fs=; a class=boot module whose fs= equals the generation's rootfs gets root treatment (km_tail, bss=, a root
