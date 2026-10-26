@@ -484,3 +484,98 @@ A different line means a wrong build, not a slow one.
   the next step is timing its commit by phase.
 - The 68060 model runs at emulator speed, so a run there is for the
   record only.
+
+## Stage 3: the module kernel's boot rows (S3-20, S3-21)
+
+The acceptance rows of `docs/plan/stage-3-kernel-brief.md` §4. Each line's
+module kernel boots a generation with an `arena` and an `ident` record and
+no modules: under loader version 2, the core finds the arena that boot2
+filled. Three controls show the other loaders do no harm: under loader
+version 1 or the stock loader, the system boots and modules are refused.
+
+**Inputs**, all from amix-dlm 124b86c or later (the kbootset sidecar v5
+read, loader version 2):
+- `/tmp/kbootset` (`make box`);
+- `/tmp/boot2.bin`: `build/boot2.bin` (`make boot2`), loader version 2,
+  28 100 bytes at 124b86c;
+- the stand-in tree. `s3-standin.sh` takes the module kernel as shipped
+  and the sidecar its build wrote. The fourth argument is the vehicle's
+  root record, copied from its generation 1 manifest (`lsstore`):
+
+```
+sh tests/bench/s3-standin.sh <unix> <kabi> <outdir> "<root record>"
+```
+
+| Line | Kernel | Vehicle |
+|---|---|---|
+| k46 | KD060-Z module kernel, ET_REL, 2 426 952 bytes, build `68060-261026-51` | the kinfo row's (the port's E5 shape, KD060-Z): generation 1 good, a 4 MiB store, loader version 1 |
+| k30 | K030-U module kernel, brel, 1 712 168 bytes, `bss=349320`, build `68030-261026-01` | the installer's l11-k30 disk (rig row N19's shape: A3000, WD unit 6), its 64 MiB store, loader version 1 |
+
+A 4 MiB store holds the static generation 1 and the module generation of
+either line. In the host rehearsal, the k46 manifest ended at 0x3c6000.
+It holds no third generation. Each row starts from a fresh slot copy, and
+every box command runs `/tmp/kbootset`.
+
+The kernel prints `dlm: 80 kernel symbols` on k46 and
+`dlm: 78 kernel symbols` on k30. These are the names of `abi/<line>/ddi.list`
+(`core.list` is empty in stage 3).
+
+To read kinfo, `kbootset status` shows the booted generation and build.
+The kabi and the module count are read directly:
+
+```
+dd if=/dev/kinfo bs=1 skip=24 count=24 2>/dev/null; echo     # kabi: k46.1.0 / k30.1.0
+dd if=/dev/kinfo bs=4 skip=134 count=1 2>/dev/null | od -x    # modules at 536: 0000 0000
+```
+
+### S3-B1 — loader version 2, the module generation (three boots)
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy the tree; `kbootset loader-install /tmp/boot2.bin --version 2` | `loader version 2 installed on trial; power-cycle to boot it` |
+| 2 | `kbootset mark-good`; `kbootset build`; `kbootset commit` | `amix-boot 2: 680x0 …`; generation 1 boots. Then `generation 1 is good; nothing to mark; the new loader is accepted` (`pristine` on the k30 disk); `generation 2 built …`; `generation 2 committed; power-cycle to boot it` |
+| 3 | `kbootset mark-good`; `kbootset status`; the two `dd` reads | `amix-boot 2:`, `amix-boot: generation 2, kernel unix 2426952 bytes` (k30: `1712168`), `amix-boot: starting the kernel`. On the console: `dlm: 80 kernel symbols` (k30: 78), `dlm: modules from generation 2's manifest`. Then multi-user as the static family. `generation 2 is good and the default`; `booted: generation 2, by the primary loader; kernel 68060-261026-51` (k30: `68030-261026-01`); kabi `k46.1.0` (k30: `k30.1.0`); module count 0 |
+
+The loader must be accepted before build. While the new loader is on
+trial, gate 7 also counts the secondary boot2, which is version 1. The
+gate refuses until then.
+
+### S3-B2 — loader version 1 refuses the generation (L9)
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy the tree; `kbootset build`; `kbootset commit --spec <outdir>/l9.spec` | build: `gate 7 (loader): the installed loader is version 1, the kernel needs 2: run kbootset loader-install first`, exit status 4; then `generation 2 committed …` (`--spec` runs no gates) |
+| 2 | `kbootset status` | `amix-boot 1: …`; `amix-boot: L9 generation needs a newer loader (generation 2)`; then `amix-boot: generation 1, kernel …` in the same boot |
+
+### S3-B3 — loader version 1, the core finds no arena
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy the tree; `kbootset commit --spec <outdir>/noarena.spec` | `generation 2 committed …` |
+| 2 | `kbootset mark-good`; the two `dd` reads | `amix-boot 1:`, `amix-boot: generation 2, kernel unix …`. On the console: `dlm: 80 kernel symbols` (k30: 78), `dlm: no valid arena directory; modules are refused this boot`. Then multi-user. `generation 2 is good and the default`; kabi `k46.1.0` / `k30.1.0`; module count 0 |
+
+`noarena.spec` is the same kernel as a version-1 generation: no `arena`,
+no `ident`, `loader-min 1`. Loader version 2 boots it the same way, so
+S3-B3 also holds after S3-B1.
+
+### S3-B4 — the stock loader
+
+The line's stock-loader row, with the module kernel as the kernel it
+loads: on k46, a stock-loader row of the kinfo kernel's shape; on k30,
+E1. Expected on the console: `dlm: 80 kernel symbols` (k30: 78),
+`dlm: no valid arena directory; modules are refused this boot`, then
+multi-user. `kbootset status` shows
+`booted: by the stock loader (no loader record); kernel 68060-261026-51`
+(k30: `68030-261026-01`).
+
+### Host rehearsal (2026-10-26)
+
+Both kernels were checked on the host:
+- `axrel` (the loader's relocator) binds each at 0x00200000 and
+  0x07F00000. In both images, `AXK1` at the sidecar's `ident` passes
+  boot2's own check: magic, version, check, kabi, line, arena offset and
+  capacity. The 0x60000 arena is zero.
+- `s3-standin.sh` with `kbootset create`, then a static generation 1, then
+  `build` and `commit`, in a 4 MiB store. Generation 2's manifest carries
+  `loader-min 2`, `arena` and `ident`, and `lsstore` gives `ok`.
+- With a version-1 store, `build` is refused by gate 7.
