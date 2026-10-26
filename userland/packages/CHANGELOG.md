@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -7 from amix-dlm f43fe08 (f25ccc2) — not published
+
+C2-4 version 7: `kbootset commit` writes nothing when the built generation equals the default; `commit --again` writes it
+anyway. /sbin/kbootset a2970b20 (135772 B, GCC 14 static), datastream kbootset-1.1.0.261025-7.pkg md5 c5d552f5 / 141312 B,
+pkgmap as -6 (/var/kbootset included). Round trip's host kbootset now at f43fe08: 39/39. Staged, not published.
+
 ## 2026-10-26 — kern30u -2 and kern46z -3: upgrade targets with identical payloads (711ef91, 0b27fd6) — not published
 
 kernel-k30-u 1.1.0.261026.01-2 and kernel-k46-z 1.1.0.261025.51-3 carry the same unix and kabi as the revision before them
