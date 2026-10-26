@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 2026-10-26 — C3-6 v4 §1.3: the interrupt level each driver entry runs at (d7af4b8, 937a373, 2e1d5a0)
+## 2026-10-26 — C3-6 v4 §1.3: the interrupt level each driver entry runs at (d7af4b8, 937a373, 32ca41f)
 
 _load/_unload of a boot- or demand-class module: level 0; a character d_open: the opener's level (spec_open writes no SR);
 a STREAMS open: level 4 under the stock qattach (SR 0x2400; the trampoline leaves it), so a level-2 self-test half needs
