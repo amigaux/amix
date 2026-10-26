@@ -622,6 +622,25 @@ If the console says `dlm: boot module z3660eth not loaded: no board
 matches …` or `… error <n>`, the reason is on that line. The row then
 fails, and the number goes in the report.
 
+### S3-B6 — modadmin on the box (S3-11), after S3-B5
+
+modadmin is built for the box (`make box`: `build/box/modadmin`, GCC 14,
+static, the core's own modadmin with core patch 0015). The row copies it
+as `/tmp/modadmin` onto S3-B5's box after boot 3, with z3660eth loaded:
+
+| Command | Expected |
+|---|---|
+| `/tmp/modadmin -s` | `ID REFS DEPS NAME`, then one line for z3660eth |
+| `/tmp/modadmin -Q z3660eth` | its status: name, id, path `/stand/gen/<id>/mod/z3660eth`, size, base address, revision 2 |
+| `/tmp/modadmin -k z3660eth_intr_mode bootinfo` | an address for each: the module's global (from its own table), then the kernel's exported `bootinfo` |
+| `/tmp/modadmin -p z3660eth_intr_mode z3660eth_int6_n:2` | `z3660eth_intr_mode+0 0x…: 0x00000000 (0)` (polled), then the two claim counters |
+| `/tmp/modadmin -w z3660eth_rx_holds 0`, then `-p z3660eth_rx_holds` | written, then read back as 0 (as root) |
+| `/tmp/modadmin -a <the address -k printed for z3660eth_intr_mode>` | `0x… z3660eth_intr_mode+0x0` |
+| `/tmp/modadmin -k no_such_name` | `modadmin: no symbol no_such_name: symbol not found`, exit status 1 |
+
+The z3660net station's M-INT1 reads `z3660eth_intr_mode`, `z3660eth_int6_n`
+and `z3660eth_int2_n` this way (the module's globals move with each load).
+
 ### Host rehearsal (2026-10-26)
 
 Both kernels were checked on the host:

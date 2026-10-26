@@ -15,3 +15,4 @@
 0012-interrupt-chains.patch
 0013-no-weak-symbols-kinfo-list.patch
 0014-mkmod-for-the-kit.patch
+0015-modadmin-symbols-kmem.patch

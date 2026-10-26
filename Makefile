@@ -5,7 +5,7 @@
 #   make toolchain-check  the pinned cross toolchain is present (toolchain.pin)
 #   make cross            cross-compile the shared loader code; 68060 scan gate
 #   make boot1            assemble boot1 and apply the 1 KB size gate
-#   make box              kbootset for the box: GCC 14, static (D-3 §9)
+#   make box              kbootset and modadmin for the box: GCC 14, static (D-3 §9)
 #   make all              all of the above
 #   make kit              the ABI kit for both lines into build/kit/ (S3-10)
 #   make kit-test         the kit: build, the sample, the checker's refusals
@@ -230,7 +230,28 @@ $(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
 		-c -o $(B)/box/c89/$$(basename $$f .c).o $$f || exit 1; done
 	touch $@
 
-box: toolchain-check $(B)/box/kbootset $(B)/box/c89-check
+# modadmin for the box (S3-11): the core's own modadmin.c (core/series
+# applied), its six system calls through the stock syscall() (modtools/)
+$(B)/box/core/modadmin.c: core/upstream/modadmin.c core/series core/patches/*.patch
+	sh tools/stagecore.sh $(B)/box/core
+
+$(B)/box/modadmin.o: $(B)/box/core/modadmin.c
+	$(G14CC) $(G14CFLAGS) -I$(B)/box/core/include -c -o $@ $<
+
+$(B)/box/libmod.o: modtools/libmod.c
+	@mkdir -p $(B)/box
+	$(G14CC) $(G14CFLAGS) -c -o $@ $<
+
+$(B)/box/modadmin: $(B)/box/modadmin.o $(B)/box/libmod.o
+	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
+		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
+		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $^ \
+		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
+		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
+	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
+	$(G14)/prefix/bin/m68k-elf-size $@
+
+box: toolchain-check $(B)/box/kbootset $(B)/box/c89-check $(B)/box/modadmin
 
 # hashbench (M-GEN2's finding): the loader's SHA-256 and CRC-32 over a buffer
 # in memory, once as GCC 14 builds them for kbootset and once as
