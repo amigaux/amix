@@ -73,9 +73,10 @@ the gap is an open question (OQ-80.1), not a silent skip.
 
 | ID | Question | Proposed owner |
 |---|---|---|
-| OQ-80.1 | What metal evidence exists for the 030 line? The A4000D's stock card has no MMU and the Z3660's 030 mode was blocked for 1.0 (`bootchain-facts.md` F8). Candidates: an A3000 or a full 68030 card at a collaborator, or the Z3660 030 mode once unblocked. | us; Antti (his A3000) |
+| OQ-80.1 | What metal evidence exists for the 030 line? The A4000D's stock card has no MMU and the Z3660's 030 mode was blocked for 1.0 (`bootchain-facts.md` F8). Candidates: an A3000 or a full 68030 card at a collaborator, or the Z3660 030 mode once unblocked. Stage 3 (2026-10-26): the Z3660 in 030 mode with a bench variant kernel, K030-U plus a static z3660scsi, never packaged (`docs/plan/stage-3-exit.md` S3-46); stage 4 roots it on z3660scsi as a root-class module | us; Antti (his A3000) |
 | OQ-80.2 | Whether the A4000T onboard 53C710 driver exists in time for stage 4. D-3 §4 lists it "when its driver exists"; if it does not, stage 4 exits without it and the release notes say so. | us |
 | OQ-80.3 | What throughput figures stage 3 compares against (the static z3660eth and RTG baselines of record). | us |
+| OQ-80.5 | An A4091 root on an 030 Z3660 box (stage 4). The a4091 030 build does no cache maintenance (that rests on emulation only); Zorro DMA cannot reach the Z3660's DDR; boot2 binds the kernel in the card's RAM. So the root module needs a bounce buffer in motherboard RAM, or the kernel bound there. The 060 line has this through the port's `dma_prepare`/`dma_complete`. Settle before stage 4's cache/DMA rows for the A4091 | us; amix-a4091 |
 | OQ-80.4 | Whether the Gayle IDE author takes the module form into his driver: the root-class wrapper with the positive-ID `mobo:gayle` probe, `intr_attach` in place of the driver's own interrupt-table search, the four-card rank key, the ATAPI CD route — and builds it against the ABI kit as the first outside module (`amix-gayle-ide/docs/module-form.md`). Asked once our integration of his driver is tested. | Emre |
 
 ## 7. Measurements
