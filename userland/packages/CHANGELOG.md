@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -9 from amix-dlm a71a875 (449c1ef) — not published
+
+S3-16: kbootset composes module members through gates 1–3, writes module and param records, `status` shows which members are
+loaded. /sbin/kbootset 8cb4c157 (158828 B), byte-equal to dlm's box build; datastream md5 7bb5cea7 / 164352 B; pkgmap as
+before with /var/kbootset. Round trip at a71a875: 39/39. Note: the pkgmap's copyright/pkginfo mtimes are build-time, so a
+rebuild changes the datastream md5 but not the binary (true since -8).
+
 ## 2026-10-26 — loader-amix -3 and kbootset -8 from amix-dlm 124b86c (1832319, e4fd3f4) — not published
 
 Loader version 2: boot2 28100 B (c7bff405) checks a module kernel's AXK1 against the manifest (L14) and fills the arena's
