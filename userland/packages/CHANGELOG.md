@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — loader-amix -3 and kbootset -8 from amix-dlm 124b86c (1832319, e4fd3f4) — not published
+
+Loader version 2: boot2 28100 B (c7bff405) checks a module kernel's AXK1 against the manifest (L14) and fills the arena's
+AXA1; boot1 unchanged (c6c380ee); ldrinfo version=2 → catalog loader=2; ldramix -3 datastream 35328 B md5 f59b9e33.
+kbootset -8 reads sidecar v5 and lays stores at loader version 2 by default; /sbin/kbootset 05c1d40f (= dlm's box build),
+datastream 142336 B md5 52f6b90a, /var/kbootset in the pkgmap. Round trip takes the loader version from ldrinfo: 39/39.
+
 ## 2026-10-26 — kbootset -7 from amix-dlm f43fe08 (f25ccc2) — not published
 
 C2-4 version 7: `kbootset commit` writes nothing when the built generation equals the default; `commit --again` writes it
