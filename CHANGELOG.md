@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-26 — S4-30: z3660scsi as a root-class module (beff392)
+
+`-DZ3660SCSI_MODULE` builds src/z3660.c as the module z3660scsi (module/: Makefile on the ABI kit's fragment, Master, VERSION
+1.0.0-1). .moddata: class=root, match=zorro:144b:01,mobo:z3660-window, rank=z3660, unload=never, no majors (sd owns the disk
+majors). _load probes polled at level 7 (no spl; ZS-05's armed accesses unchanged) and calls sd_register(z3660queue, 0,
+board_phys, "Z3660 SCSI", 1); ENXIO silent; _halt touches no register; no interrupt, no root_defer. Static objects unchanged
+(040 b43e36e7, 030 0e15a363). Host harness 230/230 plus the module test 11/11 (ENXIO on ECS/AGA, one registration, no spl
+calls, TEST UNIT READY through the registered queue, _halt idle). Image 6764 B, file 12988 B. Blocked on the kit: mkmod drops
+rank= and modcheck refuses class=root (amix-dlm); the package waits.
+
 ## 2026-10-26 — ZS-05: every piscsi mailbox write armed against the Z3660 address-capture race (9ceada6)
 
 When the 060 issues two board accesses back to back, the FPGA delivers the second at (previous address AND this address).
