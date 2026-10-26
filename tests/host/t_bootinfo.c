@@ -143,5 +143,31 @@ test_bootinfo(void)
 		T_EQ(size, 0x01000000UL);
 		base = ax_bind_region(mixed, 0, &size);
 		T_EQ(size, 0);
+		{
+			/* a larger Zorro III board (+z3=128 at 0x40000000) is never
+			 * chosen: the kernel runs only below the identity map's top */
+			struct ax_memr z3[3] = {
+				{ 0x3, 0x400, 0x200000 },
+				{ 0x5, 0x08000000, 0x09000000 },
+				{ 0x5, 0x40000000, 0x48000000 } };
+			/* a region across the top counts only below it */
+			struct ax_memr across[2] = {
+				{ 0x5, 0x08000000, 0x08800000 },
+				{ 0x5, 0x3f000000, 0x41000000 } };
+			/* Zorro III memory alone: nothing to bind in (L4) */
+			struct ax_memr z3only[2] = {
+				{ 0x3, 0x400, 0x200000 },
+				{ 0x5, 0x40000000, 0x48000000 } };
+
+			base = ax_bind_region(z3, 3, &size);
+			T_EQ(base, 0x08000000UL);
+			T_EQ(size, 0x01000000UL);
+			base = ax_bind_region(across, 2, &size);
+			T_EQ(base, 0x3f000000UL);
+			T_EQ(size, 0x01000000UL);
+			base = ax_bind_region(z3only, 2, &size);
+			T_EQ(size, 0);
+			T_EQ(base, 0);
+		}
 	}
 }

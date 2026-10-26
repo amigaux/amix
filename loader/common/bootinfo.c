@@ -235,15 +235,18 @@ ax_bootinfo_build(ax_u8 out[AXB_SIZE], const ax_u8 *cfgdevs, int ncfg,
 ax_u32
 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size)
 {
-	ax_u32 base = 0, max = 0, lower;
+	ax_u32 base = 0, max = 0, lower, upper;
 	int i;
 
 	for (i = 0; i < n; i++) {
 		if (r[i].attr & 0x2)
 			continue;	/* MEMF_CHIP */
 		lower = r[i].lower & ~0xFFUL;
-		if (r[i].upper > lower && r[i].upper - lower > max)
-			max = r[i].upper - lower, base = lower;
+		/* the kernel runs where its virtual and physical addresses agree:
+		 * below AX_IDMAP_TOP only (Zorro III expansion memory lies above) */
+		upper = r[i].upper > AX_IDMAP_TOP ? AX_IDMAP_TOP : r[i].upper;
+		if (upper > lower && upper - lower > max)
+			max = upper - lower, base = lower;
 	}
 	*size = max;
 	return base;

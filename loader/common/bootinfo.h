@@ -100,10 +100,15 @@ struct ax_memr {
 };
 
 /* where the kernel is bound: the largest region without MEMF_CHIP (attr
- * 0x2), its base rounded down to 256 bytes; *size its bytes from there.
- * Returns 0 with *size 0 when there is no such region: the kernel needs
- * fast memory and is never bound in chip memory (address 0 is the vector
- * table) */
+ * 0x2), counting only its part below AX_IDMAP_TOP, its base rounded down
+ * to 256 bytes; *size its bytes from there.  Returns 0 with *size 0 when
+ * there is no such region: the kernel needs fast memory and is never bound
+ * in chip memory (address 0 is the vector table).  The Amix kernels map
+ * the first 1 GiB one to one and keep their own segment maps at 0x40040000
+ * (syssegs): a kernel bound in Zorro III expansion memory, from
+ * 0x40000000, is not mapped once translation is on and never starts
+ * (S3-43-7, 2026-10-26; docs/spec/10-boot-loader.md §5) */
+#define AX_IDMAP_TOP	0x40000000UL
 ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
 
 /* the 0x38-byte RTH1 record; root may be 0 */

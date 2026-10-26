@@ -287,7 +287,7 @@ load_first(const struct ax_sel *sel)
 			   man.kernel.size);
 		vaddr = bind_address(&room);
 		if (!room) {	/* never bind in chip memory: 0 is the vector table */
-			con_say("no fast memory to run the kernel in\n");
+			con_say("no fast memory below 0x40000000 to run the kernel in\n");
 			fail(4, gen);
 			goto next;
 		}
