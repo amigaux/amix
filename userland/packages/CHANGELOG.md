@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — z3660scsi-k30/-k46 1.0.0-1, the first root-class module packages (3b12add, e9ef38b) — not published
+
+From amix-z3660scsi 2f4183b (module form beff392), built with dlmkit -7 (amix-dlm 05f700a). PKG zscsi30/zscsi46, kabi
+k30.1.1 / k46.1.1, class root, match=zorro:144b:01,mobo:z3660-window, rank=z3660, unload=never; no majors and no device
+nodes (sd owns the disk majors): payload /etc/conf/mod.d/z3660scsi + modreg. Objects 14b165ad (k30), 21577308 (k46), 12988 B;
+modcheck ok 6764 B. md5 841fce7b / 06f7e84f, 22528 B each. Staged catalog c17b4b8e. The round trip goes 106 → 113 with the
+host kbootset at 05f700a: on kern30m -10 (its root= has no Z3660) the root record composes (`module z3660scsi root 12988 …
+bss=156 match=… safe=1`) and commits as a store member; on kern46m -69 gate 3 refuses it ("which the kernel drives itself"),
+as expected until the -71 kernel. Gates PASS.
+
 ## 2026-10-26 — dlmkit -7 (root-class kits) and loader-amix -7 (loader version 3) from amix-dlm 05f700a (59fbfca, 4cf39c7) — not published
 
 dlmkit30/46 -7 (KIT_REV 05f700a, core 0001–0038): mkmod writes rank=, modcheck accepts class=root with its rules, the DDI
