@@ -703,6 +703,26 @@ sh tests/bench/s3-43/boot2.sh <unix> <kabi> <outdir> "<root record>" [<boot slic
   It gives `l14.spec`, and `l5.img`, a whole store for the boot slice
   (kbootset refuses to write that generation: gate 4).
 
+**The hand-over**, one directory per line, from:
+
+```
+sh tests/bench/s3-43/handover.sh k46 <-58 unix> <-58 kabi> <-58 unix> "sd id=144b0100 unit=6 slice=1" 4194304 <outdir>
+sh tests/bench/s3-43/handover.sh k30 <K030-U unix.brel> <its kabi> <its .etrel> "sd id=00000000 base=00000000 unit=6 slice=1 mobo" 67108864 <outdir>
+```
+
+Each holds `tree/`, `s43/`, `verdicts.txt`, `l14.spec`, `l5.img` (the
+vehicle's boot slice size: the 4 MiB k46 store, the 64 MiB k30 v10
+store) and `SHA256SUMS`. The relocation oracle runs on the host after
+S3-43-2, from the repository root:
+
+```
+sh tests/bench/s3-43/oracle.sh <outdir>/tree/etc/conf/mod.d/t43rel <unix> <kabi> <bind> q p
+```
+
+with the kernel and sidecar as shipped, the bind address from kinfo,
+and the box's `q` and `p` files (S3-43-2's last row). It needs
+`build/axrel` and `build/core/test-bin/reloc` (`make test`, `make core`).
+
 **The set** (`tests/bench/s3-43/src/`):
 
 | Member | Class | What it is for |
@@ -826,7 +846,7 @@ there, the row runs on k30 only, and the report says so.
 
 | Commands | Expected |
 |---|---|
-| on the host, write `l5.img` over the slot copy's boot slice; boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 351 bytes, it has 64` (k30: 362), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
+| on the host, write `l5.img` over the slot copy's boot slice; boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
 
 L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
 the order boots, with no menu. That fallback is the line of record.
