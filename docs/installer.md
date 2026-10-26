@@ -5028,6 +5028,13 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
 - The first boot names the root as the running kernel does: `/etc/devnm /` maps the mounted root's device number to
   its node by stat, opening nothing. vfstab, the swap name and the atdevs gate follow it. So when the install kernel
   and the target kernel number the controllers differently, the installed names are the target kernel's.
+- A four-card kernel orders the controllers by rank class (z3660 < zorro < mobo < ide), then base, where 1.0 ordered
+  them by base. On the A3000 with an A4091 the A4091 becomes card 0 and the WD card 1, so the root c6d0s1 becomes
+  ced0s1. A 1.1 profile keeps its two-card values and names its rig's controllers: `SD_BOARDS` (in base order),
+  `TARGET_HBA`, `CD_HBA`. On a CD-boot disc the install kernel is the line's kernel package. When its sidecar says
+  `sdcards=4`, `build-install-iso.sh` appends the names that move (TARGET_SCSI_ID, CD_SPEC, ROOTDEV) to each staged
+  1.1 profile of that line; `tools/sdnames.py` derives them. A floppy-booted 1.1 disc installs under fd0unix
+  (two-card), so nothing moves there. The 1.0-layout media stay on the r7 kernels.
 
 ### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
 

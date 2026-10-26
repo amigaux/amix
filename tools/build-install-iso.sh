@@ -964,6 +964,32 @@ case "$_mp" in
   *) echo "STOP: profile ${PROFILES[0]}: MEDIUM_PROFILES='$_mp' is not 'all' or 'requested'" >&2; exit 1 ;;
 esac
 
+# C4-1: on a CD-boot disc the install kernel is the line's kernel package, and a four-card
+# one (its sidecar's sdcards=4) numbers the controllers by class: each staged 1.1 profile of
+# that line gets the names that move appended (tools/sdnames.py; the tracked profile keeps
+# the two-card values). A floppy-booted 1.1 disc installs under fd0unix (two-card), so
+# nothing moves there; the installed system names its root as its own kernel does
+# (firstboot, /etc/devnm).
+if [ -n "$CDBOOT" ] && [ -n "$_want_l11" ]; then
+  for _f in "$STAGE"/profiles/*.profile; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$_f" | tail -1 | tr -d '"')" = 1.1 ] || continue
+    _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_f" | tail -1 | tr -d '"')"
+    _row="$(grep -m1 "^#kpkg $_kk " "$L11_IN/kpkg/catalog" || true)"
+    [ -n "$_row" ] || continue
+    _kl="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^line=//p')"
+    _kf="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^file=//p')"
+    [ -d "$CDBOOT/BOOT/$(echo "$_kl" | tr a-z A-Z)" ] || continue
+    _sc="$(python3 "$here/sdnames.py" --datastream "$L11_IN/kpkg/pkgs/$_kf" --line "$_kl")" \
+      || { echo "STOP: cannot read the sd cards of $_kk's sidecar" >&2; exit 1; }
+    _mv="$(python3 "$here/sdnames.py" "$_f" --sdcards "$_sc")" \
+      || { echo "STOP: profile ${_f##*/}: no controller numbers under $_kk's $_sc cards" >&2; exit 1; }
+    if [ -n "$_mv" ]; then
+      printf '%s\n' "$_mv" >> "$_f"
+      echo "build-install-iso: ${_f##*/}: four-card install kernel $_kk -- $(echo "$_mv" | grep -v '^#' | tr '\n' ' ')"
+    fi
+  done
+fi
+
 # --- /install/profiles/BASE: the medium's own declaration of which profile it -
 # was mastered for. A medium carries ONE boot slice per family, so "which rig is
 # this disc for" is a mastering-time fact, not something the operator should have
