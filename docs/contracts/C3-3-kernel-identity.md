@@ -173,8 +173,9 @@ in `AXK1`. It is checked at build time, where it can still stop a
 mismatched kernel: the kernel build fails on it, and the kit's probe,
 measured through the kit's headers, must give the same offsets
 (`make kit-test`). At run time the kabi tag, which modules carry and gate
-2 compares, stands for it. `kbootset` refuses a module kernel whose
-sidecar has no `abi=`, or one that is not 64 hex digits (gate 2). boot2
+2 compares, stands for it. `kbootset` refuses a module kernel (a sidecar
+with `arena=`, §3) whose sidecar has no `abi=`, or any `abi=` that is not
+64 hex digits (gate 2); a static kernel may omit it. boot2
 and the core never read it.
 
 ## 5. Settled at agreement

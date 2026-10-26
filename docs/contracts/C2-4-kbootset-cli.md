@@ -211,10 +211,13 @@ the module packages installed under the root, as C3-5 §2 says.
   copies go to `<root>/stand/gen/1/mod/<name>`. The medium's root
   filesystem must carry that tree at the same path: the module core loads
   `path=` from the root filesystem and checks it against the manifest's
-  SHA-256. **The installer** builds the medium from a staging root where
-  the module packages are installed, and copies `/stand/gen/1/mod/` onto
-  the target root with the rest of `/stand`. A medium whose staging root
-  has no module package gets no module record.
+  SHA-256. A medium whose staging root has no module package gets no
+  module record. Only a host-mastered medium needs the copy: built from a
+  staging root where the module packages are installed, its
+  `/stand/gen/1/mod/` goes onto the target root with the rest of
+  `/stand`. **The 1.1 installer on the box** runs `kbootset -R $TARGET
+  build` (and `commit`), which writes `/stand/gen/<id>/mod/<name>` on the
+  target root directly: no copy step.
 - **`check`** hashes each module copy the manifests name (C2-5).
 - **`status`** lists the booted generation's members, each marked from
   kinfo's module list (C2-1 offset 576, version 3; 536 in version 2): `module <name> (boot): loaded`;
@@ -255,7 +258,10 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     does not match kinfo`, `kinfo flags a loader fault (0x8)`.
 - **Exit status:** 0 when written or current, 3 when it cannot, 1 on an
   I/O error. The base system calls it early in run level 2 and ignores
-  the status:
+  the status, from **`/etc/rc2.d/S02kbnamelist`**. That runs after
+  `S01MOUNTFSYS` and before every other `rc2.d` script, so before the
+  network scripts (`netstat` and `ifconfig` users) and long before
+  `S99zkbootset`, the `mark-good` hook (§9). Its body is the one line:
 
 ```
 [ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1
@@ -272,6 +278,5 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     above.
   `status` itself writes nothing.
 - **The installer** (S3-31) removes the name `/stand/unix` from the
-  target (`/stand/2.1_unix` stays) and installs the line above in run
-  level 2, before any script that reads kernel memory.
+  target (`/stand/2.1_unix` stays) and installs `S02kbnamelist`.
 

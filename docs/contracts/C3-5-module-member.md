@@ -1,9 +1,11 @@
-# C3-5 — the module package and the per-module manifest record, version 3
+# C3-5 — the module package and the per-module manifest record, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
   (§2); version 3 (2026-10-26): `marc_post` runs from the first sysinit
-  entry, `modadmin -B` (§5, U15). Every consumer
+  entry, `modadmin -B` (§5, U15); version 4 (2026-10-26, from S3-31's
+  dry run): the package's names and version (§1.1), and its scripts run
+  on the installer's miniroot, so pure `sh` (§1.2). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -30,6 +32,39 @@ keys, owned by no package, read after `modreg.d`, and a later line wins.
 The catalog entry and the install record are C2-2's (`role=module` with
 `line=`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=`). C2-2 needs no
 change.
+
+### 1.1 Names and version
+
+A module object is built for one line (its kabi family), so **one package
+per line**:
+
+| | Form | z3660eth on k46 |
+|---|---|---|
+| catalog name | `<name>-<line>` | `z3660eth-k46` |
+| pkginst (C2-2 `pkginst=`, at most 9 bytes) | `<short><line digits>`, the short name at most 7 bytes | `zeth46` |
+| version | the module's own release, `<major>.<minor>.<patch>[-<rev>]`, the same on both lines | `1.0.0-1` |
+
+- The kabi is not in the version: it is the catalog's `kabi=` (C2-2),
+  which apkg's pre-flight checks against the installed kernel.
+- The short names, assigned here, one per module, unique:
+
+| Module | Short name | pkginst k30 / k46 |
+|---|---|---|
+| z3660eth | `zeth` | `zeth30` / `zeth46` |
+| z3660rtg | `zrtg` | `zrtg30` / `zrtg46` |
+| monsw | `monsw` | `monsw30` / `monsw46` |
+
+  A new module's owner adds its row in a version bump of this contract.
+
+### 1.2 Package scripts
+
+A module package's scripts (and `modtools`') run where `pkgadd` runs: on a
+box, and on the installer's miniroot, which has no `awk`, `cmp`, `grep` or
+`sed`, under a fixed `PATH`. So they are **pure Bourne shell**: the
+builtins (`read`, `case`, `test`, `echo`, `while`, redirection) and `mv`.
+Any other command runs only after `test -x` finds it, with the script
+still correct without it. modtools' postinstall, which puts the `modadmin -B` line
+first among the sysinit entries (§5), is written that way from modtools -3.
 
 ## 2. What `kbootset build` composes, and what it refuses
 
