@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — boot2: a k30 kernel gets at most 64 MiB of fast memory; Z3 RAM is never kernel memory (001b04a, b7a1148)
+
+ax_memcap caps the fast region holding a k30 bind address at base + 64 MiB in bootinfo.memory[] and empties a region touching
+it from below (the stock support.c joins touching regions into the main store; over ~64 MB the 2 KiB-page kernel never starts
+— N70, N75); the L4 fit check uses the capped room; k46 untouched. Spec 10 §3 and 40 gate 6: either line's kernel uses its
+bind region only, so Zorro III RAM is never kernel memory. README: S3-43-8's kinfo expectation, new S3-43-9 (k30 in a 128 MB
+bank), S3-43-7 and U2 in the CPU board's bank. boot2 28 392 B (6147ab3b) fills its gate exactly — 0 bytes left: the next
+loader change must give bytes back first. 683 host checks; amix-cdboot rebuilt from the same core.
+
 ## 2026-10-26 — C3-5 §1.3 the 2.1 sh's while-read and probe facts; kit NOTICE from MONSW_REV (32587ae, c6c9d02)
 
 A while-read loop strips trailing blanks on the 1991 sh, so it is never a byte-exact copy (cat or dd and a size check are);
