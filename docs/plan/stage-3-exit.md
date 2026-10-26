@@ -17,7 +17,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | kinfo | version 3 (C2-1) | version 3 |
 | kernel package | `kernel-k46-m` / `kern46m`, `k46.1.0.261026-58` | `kernel-k30-m` / `kern30m`, `k30.1.0.261026-01` |
 | loader | boot2 version 2, 28 100 bytes, `c7bff405…` (amix-dlm 124b86c) | the same |
-| kbootset | -12: amix-dlm 9763024, box binary `cd02b817…` (the k46 B rows ran -12 at cf49440, `4a09a6dd…`, which differs only in the `unix.sym` reader k46 does not use) | -12 at 9763024, `cd02b817…` |
+| kbootset | -12: amix-dlm 9763024, box binary `cd02b817…` (the k46 B rows ran -12 at cf49440, `4a09a6dd…`, which differs only in the `unix.sym` reader k46 does not use) | -12 at 9763024, `cd02b817…` (the B rows ran it) |
 | modadmin | modtools -3, `a206874d…` | the same |
 | ABI kit | `dlmkit46` -2, KIT_REV e84878e, PORT_REV 617c64e | `dlmkit30` -2, KIT_REV e84878e |
 | z3660eth | `z3660eth-k46` / `zeth46` 1.0.0-1, 18 787 bytes, `8356712a…` | `z3660eth-k30` / `zeth30` 1.0.0-1, `0c5c3580…` |
@@ -30,12 +30,12 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 
 | Row | k46 | k30 |
 |---|---|---|
-| S3-B1 loader version 2, the module generation | PASS | pending (N62) |
+| S3-B1 loader version 2, the module generation | PASS | PASS (N62: kinfo version 3, 0x8 clear, text 0x04000000, 1 471 752 bytes) |
 | S3-B2 loader version 1 refuses the generation (L9) | PASS | PASS |
 | S3-B3 loader version 1, no arena | PASS | PASS |
 | S3-B4 the stock loader | PASS | PASS |
-| S3-B5 z3660eth from the generation; the namelist | PASS (zen0 up: ping, telnet, ftp; `/stand/unix` written for generation 2 at 0x08000000) | pending (N62: `/dev/zen0` and `S99zen` on the k30 disk) |
-| S3-B6 modadmin on the box | PASS | pending (N62) |
+| S3-B5 z3660eth from the generation; the namelist | PASS (zen0 up: ping, telnet, ftp; `/stand/unix` written for generation 2 at 0x08000000) | PASS (N62: `/stand/unix` = `unix.sym`'s 196 444 bytes for generation 3, its own inode; zen0 up after `S99zen`'s two steps: ping 3/3, telnet, ftp; kinfo: z3660eth at 0x40306000, 12 865 bytes) |
+| S3-B6 modadmin on the box | PASS | PASS (N62) |
 
 ## 3. The emulator rows (S3-43; 80 §2)
 
@@ -65,7 +65,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | S3-01 … S3-11, S3-15, S3-16 (the core, the kit, the user side, the loader, kbootset) | done on the host; audited 2026-10-26 (`stage-3-audit-2026-10-26.md`), every audit item closed by core patches 0016–0022 and the tools' follow-ups |
 | S3-20, S3-21 the module kernels | built; the rows of record are §2 |
 | S3-22 packages | minted (§1), except monsw |
-| S3-25 z3660eth as a module | built, loads from the generation on k46 (S3-B5); k30 pending N62 |
+| S3-25 z3660eth as a module | built; loads from the generation and carries zen0 on both lines (S3-B5) |
 | S3-26 z3660rtg as a module | built; composes only with monsw in the generation, or with monsw disabled, which gate 3 refuses for z3660rtg's `depend=` |
 | S3-27 monsw as a module | waits for the owner's decision on where monsw lives (Q3-2) |
 | S3-30 module packages in apkg | apkg 0.3.1 |

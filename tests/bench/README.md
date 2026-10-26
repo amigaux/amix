@@ -828,9 +828,11 @@ sed -e '/^module monsw /d' -e 's|/stand/gen/A/|/stand/gen/B/|g' \
 kbootset commit --spec /tmp/nodep.spec
 ```
 
-B is the next id (`kbootset status`). B's kernel is deflated, so it may
-fit beside generations 1 and A on the 4 MiB k46 store. If gate 5 refuses
-there, the row runs on k30 only, and the report says so.
+B is the next numeric id, A + 1. B's kernel is deflated, so it may fit
+beside generations 1 and A on the 4 MiB k46 store. If gate 5 refuses
+there, the row runs on k30 only, and the report says so. After the row,
+`kbootset mark-good` on B: B is then the generation L14 falls back to
+(S3-43-5), on both lines.
 
 | Commands | Expected |
 |---|---|
@@ -840,13 +842,13 @@ there, the row runs on k30 only, and the report says so.
 
 | Commands | Expected |
 |---|---|
-| copy `l14.spec`; `kbootset commit --spec l14.spec`; power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 kernel identity does not match the manifest (generation N)`; the default generation boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
+| copy `l14.spec`; `kbootset commit --spec l14.spec` (on k46, if the store refuses it for space: `kbootset mark-bad A`, `kbootset collect`, commit again); power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 kernel identity does not match the manifest (generation N)`; the default generation, B, boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
 
 ### S3-43-6 — L5 (boot 6, last: it replaces the store)
 
 | Commands | Expected |
 |---|---|
-| on the host, write `l5.img` over the slot copy's boot slice; boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
+| on the host, write `l5.img` over a slot copy's boot slice (the campaign's last, or a fresh copy: the image replaces the whole store); boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
 
 L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
 the order boots, with no menu. That fallback is the line of record.
