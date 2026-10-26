@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-27 — a4091 module 1.0.0-2, C4-5 v5 (0c00bc9, 7ad5299, 53bebc5)
+
+A dma_addr of 0 is never armed: no DSP write, status 0xff, okay FALSE, callback, a4091_kstat.noreach++ (no dma_complete;
+invariant drv_prep == drv_cmpl + noreach). After a WRITE or TUR the area's own 16-byte status line gets a FROM_DEVICE
+prepare/complete before the status read (the k30 write-through cache), counted in stsync. Area 1332 B (sline, SCRIPTS, DSA,
+ident+CDB, bounce). modcheck ok k46.1.2 (5476 B, 2ba85168) / k30.1.2 (4468 B, fe163b4e); host tests 16/16 per arm,
+mutation-checked; static objects unchanged. README: E6 with dma_forcebounce, E6b the pool-miss EIO row.
+
 ## 2026-10-27 — S4-31 tests: test/host and the module README's test matrix (caa35b5, 23e34ba)
 
 test/host (new): the real a4091-wr.c with -DA4091_MODULE on host gcc, mocks for autocon, the two map arms, sd_register and the
