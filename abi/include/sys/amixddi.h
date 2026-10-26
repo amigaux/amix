@@ -55,6 +55,15 @@ extern int	intr_detach();		/* (int, int (*)(), char *) */
 extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
 
 /*
+ * The deferred call (root, k30.1.1 / k46.1.1; contract C4-2 section 3).
+ * root_defer(fn, arg) from a root-class module's _load: fn(arg) runs once
+ * at the first sysinit entry, at level 0, where the driver attaches its
+ * interrupt and runs its self-test.  0, EINVAL (not in a root-class
+ * _load), ENOSPC (8 already).
+ */
+extern int	root_defer();		/* (int (*)(), char *) */
+
+/*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or
  * off the stock list netstat reads.  0, EEXIST / ENOENT.
  */
