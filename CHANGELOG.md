@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — the k30 force-bounce hook leaves dma_alloc memory unbounced (N109's phantom NO SENSE); C4-5 v8
+
+reached() first asks allocated(pa, n) — in pool mode inside the pool (dma_alloc areas and live bounces), in heap mode inside one
+of ≤ 16 tracked dma_alloc blocks — and such a segment is never bounced, hook or not, as C4-5 §2.2 promises. The hook had bounced
+the a4091's chip-written status line and copied stale bytes back; production was never affected. Harness 257/257, 20 k30 DMA checks.
+Rides into kern30m -15 with dma_forcefail.
+
 ## 2026-10-27 — the k30 DMA provider's `dma_forcefail` test hook; C4-5 v7
 
 While nonzero every prepare that would bounce misses (dma_addr 0); a reachable segment is untouched; with dma_forcebounce also
