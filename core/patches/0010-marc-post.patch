@@ -1,0 +1,342 @@
+Subject: marc_post: the boot-class modules after root is mounted
+
+dlm_marc_post(), which the kernel calls once after vfs_mountroot returns,
+reads the manifest the loader booted (amix-dlm
+docs/contracts/C3-5-module-member.md): it registers every demand-class
+record's character majors= for that module, so the first open loads it,
+then loads every boot-class record in manifest order, unless its match=
+keys name no board here (the platform's dlm_plat_match; "always" always
+matches).  Each outcome is one console line.  In safe mode (dlm_safe,
+the platform's, from the loader record) nothing loads, and every other
+load -- a first open, modload -- is refused (30 section 3).  Every load of a
+manifest member passes the member's param records to its _load as one
+string "<pname>=<value> ...", valid during the call.
+30-module-core.md section 3, section 2 patch 16 (the boot-class half;
+marc_root comes with the arena load path).
+
+--- a/dlmconf.c
++++ b/dlmconf.c
+@@ -42,6 +42,10 @@
+ long	dlm_manlen, dlm_mangen;
+ int	dlm_devload = 0;
+ 
++/* safe mode, and the board matcher for match= keys: the platform's */
++int	dlm_safe = 0;
++int	(*dlm_plat_match)() = 0;
++
+ #ifndef DLM_HOST
+ extern void plat_dmainit();
+ 
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -408,6 +408,10 @@
+ {
+ 	lf->lf_mpath = dlm_zalloc((long)MAXPATHLEN);
+ 	lf->lf_sha[0] = 0;
++	if (dlm_safe) {			/* the floor and the root controller only */
++		printf("dlm: safe mode: %s is refused\n", name);
++		return EPERM;
++	}
+ 	if (dlm_man && dlm_man_member(name, lf->lf_mpath, MAXPATHLEN, lf->lf_sha) == 0) {
+ 		*pathp = lf->lf_mpath;
+ 		return 0;
+@@ -853,9 +857,16 @@
+ 		m->m_flags |= DM_LOCKED;
+ 
+ 	lf->lf_stage = LF_INLOAD;
+-	if ((c = G32(DLM_RP(m, w) + MW_LOAD)) != 0 &&
+-	    (e = DLM_CALL(m, c, 0, 0)) != 0)
+-		goto fail;
++	if ((c = G32(DLM_RP(m, w) + MW_LOAD)) != 0) {
++		/* the manifest's parameters, as one string, valid during _load (C3-5) */
++		char *pa = dlm_zalloc(512L);
++
++		dlm_man_params(m->m_name, pa, 512);
++		e = DLM_CALL(m, c, pa[0] ? pa : (char *)0, 0);
++		dlm_free(pa, 512L);
++		if (e != 0)
++			goto fail;
++	}
+ 	lf->lf_stage = LF_LOADED;
+ 	for (i = 0; i < n; i++) {
+ 		if ((e = link_install(m, i)) != 0)
+--- a/dlm.h
++++ b/dlm.h
+@@ -342,6 +342,11 @@
+ extern void dlm_arena_init();
+ extern void ax_sha256();		/* amix-dlm loader/common/sha256.c */
+ 
++/* marc_post (patch 16, C3-5) */
++extern int dlm_safe;			/* safe mode this boot (the platform, from AXL1) */
++extern int (*dlm_plat_match)();		/* the platform's: 1 if a match key names a board here */
++extern void dlm_marc_post(), dlm_man_params();
++
+ /* the major registry, generated from the ABI kit's file by tools/mkreg */
+ struct dlm_majreg {
+ 	int	r_type;			/* 'c' or 'b'; 0 ends the table */
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -0,0 +1,157 @@
++/*
++ * dlm_post.c -- marc_post: the boot-class modules, after the root
++ * filesystem is mounted (amix-dlm docs/spec/30-module-core.md section 3,
++ * section 2 patch 16; docs/contracts/C3-5-module-member.md).
++ *
++ * The kernel calls dlm_marc_post() once, in process 0 after vfs_mountroot
++ * returns (or from the first sysinit entry, if loading files in process 0
++ * proves unsafe, U15).  It reads the manifest the loader booted:
++ *
++ *   1. every demand-class record's character majors= are registered for
++ *      that module, so the first open of one loads it;
++ *   2. every boot-class record is loaded, in manifest order (kbootset
++ *      writes them in depend order, and a dependency loads first anyway),
++ *      unless its match= keys name no board in this box.
++ *
++ * Each outcome is one console line; what loaded is in kinfo's module list.
++ * In safe mode nothing loads (70-static-floor.md section 4).
++ *
++ * K&R C.
++ */
++
++#include "dlm.h"
++
++/* the value of key= in the record [p, l) into out; 1 if present */
++static int
++attr(p, l, key, out, cap)
++	char *p, *l, *key, *out;
++	int cap;
++{
++	int n = strlen(key), k;
++
++	for (; p < l; p++) {
++		if (p[-1] != ' ' || l - p <= n || bcmp(p, key, n) != 0)
++			continue;
++		for (p += n, k = 0; p < l && *p != ' ' && k < cap - 1; )
++			out[k++] = *p++;
++		out[k] = 0;
++		return 1;
++	}
++	return 0;
++}
++
++/* the record's module name into name; p points past "module " */
++static void
++recname(p, l, name)
++	char *p, *l, *name;
++{
++	int k;
++
++	for (k = 0; p < l && *p != ' ' && k < MODMAXNAMELEN - 1; )
++		name[k++] = *p++;
++	name[k] = 0;
++}
++
++/* does one of the comma-separated keys name a board here? */
++static int
++matches(keys)
++	char *keys;
++{
++	char key[64], *p = keys;
++	int k;
++
++	if (dlm_plat_match == 0)
++		return 1;		/* no matcher: the module's _load decides */
++	while (*p) {
++		for (k = 0; *p && *p != ',' && k < (int)sizeof key - 1; )
++			key[k++] = *p++;
++		key[k] = 0;
++		if (strcmp(key, "always") == 0 || (*dlm_plat_match)(key))
++			return 1;
++		if (*p == ',')
++			p++;
++	}
++	return 0;
++}
++
++void
++dlm_marc_post()
++{
++	char name[MODMAXNAMELEN], v[MD_MAXSTR + 1], *p, *l, *lim, *q;
++	int pass, e, n;
++
++	if (!dlm_inited || dlm_man == 0)
++		return;
++	if (dlm_safe) {
++		printf("dlm: safe mode: no boot- or demand-class module loads this boot\n");
++		return;
++	}
++	lim = dlm_man + dlm_manlen;
++	for (pass = 1; pass <= 2; pass++)
++		for (p = dlm_man; p < lim; p = l + 1) {
++			for (l = p; l < lim && *l != '\n'; l++)
++				;
++			if (l - p < 8 || bcmp(p, "module ", 7) != 0)
++				continue;
++			recname(p + 7, l, name);
++			q = p + 8 + strlen(name);
++			if (pass == 1 && l - q > 7 && bcmp(q, "demand ", 7) == 0) {
++				if (!attr(q, l, "majors=", v, sizeof v))
++					continue;
++				for (q = v; *q; ) {
++					if (*q != 'c') {
++						printf("dlm: demand module %s: block majors come with "
++						    "stage 4\n", name);
++						break;
++					}
++					for (q += 2, n = 0; *q >= '0' && *q <= '9'; q++)
++						n = n * 10 + (*q - '0');
++					if ((e = dlm_creg(name, n)) != 0)
++						printf("dlm: demand module %s: major %d not registered "
++						    "(error %d)\n", name, n, e);
++					if (*q == ',')
++						q++;
++				}
++			} else if (pass == 2 && l - q > 5 && bcmp(q, "boot ", 5) == 0) {
++				if (attr(q, l, "match=", v, sizeof v) && !matches(v)) {
++					printf("dlm: boot module %s not loaded: no board matches %s\n",
++					    name, v);
++					continue;
++				}
++				if ((e = dlm_loadname(name)) == 0)
++					printf("dlm: boot module %s loaded\n", name);
++				else
++					printf("dlm: boot module %s not loaded: error %d\n", name, e);
++			}
++		}
++}
++
++/*
++ * A member's parameters from the manifest ("param <name>.<pname>=<value>"
++ * records), as one string "<pname>=<value> ..." into buf; buf[0] is 0 when
++ * there are none.  C3-5: passed to the module's _load.
++ */
++void
++dlm_man_params(name, buf, cap)
++	char *name, *buf;
++	int cap;
++{
++	char *p = dlm_man, *l, *lim = dlm_man + dlm_manlen;
++	int n = strlen(name), k = 0, m;
++
++	buf[0] = 0;
++	for (; p && p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p <= 7 + n || bcmp(p, "param ", 6) != 0 || bcmp(p + 6, name, n) != 0 ||
++		    p[6 + n] != '.')
++			continue;
++		m = l - (p + 7 + n);
++		if (k + m + 2 > cap)
++			break;
++		if (k)
++			buf[k++] = ' ';
++		bcopy(p + 7 + n, buf + k, m);
++		buf[k += m] = 0;
++	}
++}
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -18,6 +18,8 @@
+ char	*dlm_man = 0;
+ long	dlm_manlen, dlm_mangen;
+ int	dlm_devload = 1;
++int	dlm_safe = 0;
++int	(*dlm_plat_match)() = 0;
+ 
+ /* the harness's major registry */
+ struct dlm_majreg dlm_majreg[] = {
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -186,3 +186,9 @@
+ mod('pm3')
+ mod('pmd', 'pmdep')
+ mod('pmdep')
++
++# marc_post (patch 16, C3-5): pb1 matches always and takes parameters, pb2
++# matches a board this box lacks, pdm is demand class on major 58
++mod('pb1')
++mod('pb2')
++mod('pdm')
+--- a/test/state.c
++++ b/test/state.c
+@@ -486,6 +486,72 @@
+ 	dlm_devload = 1;
+ }
+ 
++/* ---- marc_post (patch 16, C3-5) ---- */
++static char pb1_params[256];
++static int pb1_loads;
++
++int
++h_pb1(m, a, b)
++	char *m, *a;
++	long b;
++{
++	pb1_loads++;
++	strcpy(pb1_params, a ? a : "(none)");
++	return 0;
++}
++
++/* the platform's matcher: no board here answers to "dead" */
++int
++hmatch(key)
++	char *key;
++{
++	return strstr(key, "dead") == 0;
++}
++
++void
++post_tests()
++{
++	static char a[4096], man[2048], s1[65], s2[65], s3[65];
++	extern struct cdevsw cdevsw[];
++	extern int dlm_cdev_open(), copen();
++	char *om = dlm_man;
++	long ol = dlm_manlen, gen;
++	struct dlm_mod *m;
++	int id;
++
++	hexsha("pb1", s1);
++	hexsha("pb2", s2);
++	hexsha("pdm", s3);
++	sprintf(man, "GMF1\ngeneration 9\n"
++	    "module pb1 boot 300 path=/etc/conf/mod.d/pb1 sha256=%s match=zorro:144b:01,always\n"
++	    "module pb2 boot 300 path=/etc/conf/mod.d/pb2 sha256=%s match=zorro:dead:01\n"
++	    "module pdm demand 300 path=/etc/conf/mod.d/pdm sha256=%s majors=c:58\n"
++	    "param pb1.x=1\nparam pb2.z=3\nparam pb1.y=two\n", s1, s2, s3);
++	mkarena(a, man, 1, 1);
++	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++	dlm_devload = 0;
++	dlm_plat_match = hmatch;
++	host_handler("pb1_load", h_pb1);
++	dlm_marc_post();
++	check(pb1_loads == 1 && byname("pb1"), "marc_post: a boot member whose match= is satisfied loads");
++	check(strcmp(pb1_params, "x=1 y=two") == 0, "marc_post: its parameters reach _load as one string");
++	check(!byname("pb2"), "marc_post: a boot member whose match= names no board here is not loaded");
++	check(cdevsw[58].d_open == dlm_cdev_open && !byname("pdm"),
++	    "marc_post: a demand member's major is registered, the module not yet loaded");
++	if ((m = byname("pb1")) != 0)
++		moduload(m->m_id);
++	dlm_safe = 1;
++	dlm_marc_post();
++	check(pb1_loads == 1 && !byname("pb1"), "marc_post: in safe mode nothing loads");
++	check(copen(58, 0, OTYP_CHR) != 0 && !byname("pdm") && modload("pb1", &id) == EPERM &&
++	    !byname("pb1"), "safe mode: a first open and a modload are refused too");
++	dlm_safe = 0;
++	dlm_plat_match = 0;
++	dlm_man = om;
++	dlm_manlen = ol;
++	dlm_devload = 1;
++}
++
+ void
+ hook_tests()
+ {
+@@ -1000,6 +1066,7 @@
+ 	host_handler("cd_close", h_cdclose);
+ 	drv_tests();
+ 	man_tests();
++	post_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
