@@ -22,7 +22,7 @@ cells of this ledger.
 | loader (boot2, its size under 28 672) | pending | pending |
 | kbootset | pending | pending |
 | modadmin | pending | pending |
-| ABI kit (DDI v1.1) | pending | pending |
+| ABI kit (DDI 1.2, `abi=2ab48658…` from 0572fcf) | pending | pending |
 | z3660scsi | pending | pending |
 | A4091/A4092 | pending | pending |
 | the A4000T 53C710 | pending | — (no A4000T on this line) |
@@ -42,6 +42,19 @@ cells of this ledger.
 | S4-20 the first cut: 0027/0028, the ZS-05 static drivers | built: -61, `cb2499f1…` | built: -04, `c0f69e0a…` |
 | S4-21 the second cut: four-card sd/dd, `bdevsw` row 20 free | pending | pending |
 | S4-55 the first stage-4 media, one cell | pending | pending |
+
+## 2a. The first root-class boots (S4-72-1, S4-73)
+
+| Row | k46 | k30 |
+|---|---|---|
+| a root reached through a module: z3660scsi placed by boot2 (loader version 3), linked in `marc_root`, the root mounted through it | **PASS** — N103r (`tmp/2026-10-26-s4-72-1/cell-r/N103`): kern46m -77, kabi `k46.1.2`; boot2 `module z3660scsi 12988 bytes`; `kbootset status` `module z3660scsi (root): loaded`; `/` on `c6d0s1` | **PASS** — N104r (`tmp/2026-10-26-s4-73/cell-r/N104`), S4-73: kern30m -12, kabi `k30.1.2`; the same lines; z3660scsi linked at 0x081098a0 in the arena; `/` on `c6d0s1` |
+
+The rig's own verdict on both cells reads `FAIL (b1:lifecycle)`. That is
+its stale-mark check (the slot's image carried an earlier run's
+`/etc/rig-lifecycle.mark`, `want 'none'`), not the row: both boots
+mounted their root through the module and the second boot read back the
+first's mark. The first run, N103, failed on the arena's 8-mod-16
+alignment (fixed in a829c44, C3-3 version 5).
 
 ## 3. The emulator rows (S4-72; 80 §2)
 
@@ -87,18 +100,52 @@ cells of this ledger.
 
 | Row | Status |
 |---|---|
-| C4-1 … C4-6 the interfaces | pending |
-| S4-01 … S4-08 the core | pending |
-| S4-10 … S4-12 loader and `kbootset` | pending |
+| C4-1 … C4-6 the interfaces | **agreed**: C4-1 v3, C4-2 v3, C4-3 v1 (agreed with S4-11), C4-4 v5, C4-5 v5, C4-6 v2 |
+| S4-01 … S4-08 the core | built (core patches 0029–0043; state harness 257/257 on both kernels); their bench halves are rows above |
+| S4-10 … S4-12 loader and `kbootset` | built: S4-10 (placement), S4-11 (the RAM-disk image, 4003c9f: file 28 646, image + bss 28 420 of 28 672), S4-12 (composition); M-RD1/M-RD2 pending |
 | S4-22, S4-23 the root-class kernels | pending |
 | S4-24 the 1.0 families retire | pending |
 | S4-25 packages | pending |
 | S4-30 … S4-34 the root-class modules | pending |
 | S4-40 … S4-43 the filesystems and the kernels without them | pending |
-| S4-62 the DDI v1.1 DMA providers | pending |
+| S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook); the bench rows with the A4091 (N105/N105b) and the entry-0 cache decode pending |
 | S4-63 C3-6 §1, the register-write rule | pending |
-| S4-73 exit row | pending |
+| S4-71 the root context (C4-2 §2) | the probe and its row defined (c2dc7fb, `tests/bench/s4-71`); the run on both lines pending |
+| S4-73 exit row | **PASS** k30 — N104r (§2a) |
 | S4-74 metal: the A4000D and the cardless A4000T (root controllers, M-A4T1, M-DMA1, M-HALT1, U3's cache half, root filesystems, M-FP2, M-NET1g) | pending |
+
+## 7. What remains (2026-10-27)
+
+- **S4-71**, the root-context probe, both lines (emulation, then metal).
+  The Gayle module's shipping waits on its `bprobe` line.
+- **The A4091 rows N105 / N105b**: the A4091 root module with C4-5 v5's
+  DMA, on k46 (-78) and k30 (-14, the 030 provider), with the force-bounce
+  hook in emulation, and the entry-0 cache-mode decode before the first
+  `FROM_DEVICE` test on k30.
+- **The k30 module rows on kern30m -14**: the 030 DMA pool's console line,
+  the module set of record.
+- **cdfs, S4-42**: the module (amix-cdfs ef96470) with its page-shift
+  waivers (8fc87de), boot class on disk and promoted to root on the CD
+  (core 0043); U12 with its first mount.
+- **M-RD1 / M-RD2 on the installer medium**: the RAM-disk image placed by
+  boot2 (S4-11), `memory[]` honoured, the `ramdisk` root and `swap none`.
+- **The rest of §1–§5's cells** (the bytes of record, the media, the
+  filesystems as modules after S4-40/S4-43, the measurements) and S4-74
+  on metal.
+- **The stage-5 carries** below.
+
+## 8. kabi 1.2 closes with the stage
+
+kabi 1.2 (k30.1.2, k46.1.2) is the stage-4 minor. **It closes when stage
+4 exits**, in the exit commit: from then `abi/<line>/abi-<line>.1.2.txt`
+and the 1.2 names of `ddi.list` are frozen, and any DDI name added or
+fingerprint line changed after it is **1.3**. Until the exit, 1.2 takes
+the stage's additions, and kernels cut on an earlier 1.2 text carry its
+hash: `fea18182…` for the 1.2 cuts before 0572fcf (kern46m -77, -78;
+kern30m -12, -13; the 1.1 cuts -71 and -10 had the same text), and
+`2ab48658…` from 0572fcf (kern46m -79, kern30m -14 and later). A module
+built for 1.2 loads on any 1.2 kernel whose symbol block has the names it
+imports; the exit's re-cut of record carries the final 1.2 text.
 
 **Carried to stage 5, not cells here (Q4-5):** S4-60, the 030 line on the
 1.1 release firmware; S4-61, the A4000T's Zorro-dependent rows after its
