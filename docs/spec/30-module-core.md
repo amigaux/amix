@@ -277,10 +277,12 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
   - Root-class `_load` at boot keeps its own rule (§3, U1: `KM_NOSLEEP`,
     at most 1 MiB).
   - The core's own allocations for a module grow with its size and are
-    `KM_SLEEP`. The image limit (C3-1 §4, 2 MiB) is therefore above what
-    a running box can give. A module larger than about 256 KiB could hang
-    `modload` (`docs/measurements/2026-10-26-u4.md`), and no planned
-    module comes near that.
+    `KM_SLEEP`. So the module's image is at most 256 KiB and its file is
+    under 256 KiB (C3-1 §6, version 4; it was 2 MiB). The kit's checker
+    refuses a larger module at build time. Core patch 0027 sets
+    `dlm_maximage` to 256 KiB from the next kernel cut. C3-1 §6 records
+    the way past the limit, which no planned module needs (cdfs, the
+    largest, has an image of about 69 KB).
 
 ## 9. Open questions
 

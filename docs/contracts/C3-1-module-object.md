@@ -1,9 +1,11 @@
-# C3-1 — the module object and `.moddata` version 2, version 3
+# C3-1 — the module object and `.moddata` version 2, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): the text form of parameter values (§3); version 3
   (2026-10-26): the §4 table is the load call's, a refused first open is
-  `ENXIO` (§4). Other repositories build against this text; a change from here is a contract change with a version bump.
+  `ENXIO` (§4); version 4 (2026-10-26): the image and the file under
+  256 KiB (§1, §4, §6). Other repositories build against this text; a
+  change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
 - **Produced by:** the ABI kit's `mkmod` and `modfix` (S3-10), used by the
@@ -28,7 +30,8 @@ A module is one file, `/etc/conf/mod.d/<name>` in its package and
 | Rule | Content |
 |---|---|
 | ELF header | ELF32, big-endian, `ET_REL`, `EM_68K`, version 1 |
-| Sections | allocated sections of type PROGBITS, NOBITS or 13 only; the allocated image ≤ 2 MiB |
+| Sections | allocated sections of type PROGBITS, NOBITS or 13 only; the allocated image ≤ 256 KiB, COMMON symbols included (§6) |
+| Size | the file is smaller than 256 KiB (§6) |
 | `.moddata` | exactly one section of type 13, allocated, at least 12 bytes (§3). `modfix` sets the type, which binutils 2.8.1 cannot emit |
 | Relocations | `SHT_RELA` only; a `SHT_REL` section is refused. Types `R_68K_NONE`, `32`, `16`, `8`, `PC32`, `PC16`, `PC8`; every result range-checked |
 | Symbols | exactly one `.symtab` with its string table. Each undefined global resolves to a name in the kernel's allowlist for the module's tier (C3-2), or to a global of a module named in `depend`. A weak undefined symbol that resolves nowhere is 0. COMMON symbols are allocated by the core |
@@ -137,7 +140,7 @@ console line names the module and the rule.
 
 | Refusal | errno |
 |---|---|
-| not ELF32 big-endian `ET_REL` `EM_68K`; a section type outside §1; image over 2 MiB; no `.moddata` or more than one | `ENOLOAD` (164) |
+| not ELF32 big-endian `ET_REL` `EM_68K`; a section type outside §1; an image over 256 KiB or a file of 256 KiB or more (§6); no `.moddata` or more than one | `ENOLOAD` (164) |
 | a `SHT_REL` section; a relocation type outside §1; a result out of range | `ERELOC` (165) |
 | an undefined symbol outside the allowlist of the module's tier and its dependencies | `ERELOC` (165) |
 | wrapper revision other than 2; no `MD2\0`; a `kabi` family or major other than the kernel's; a minor above the kernel's; a `cc` other than the kernel's pin; `tier=core` with a `build` other than the kernel's | `EBADVER` (167) |
@@ -152,3 +155,39 @@ console line names the module and the rule.
 - The 2 048-byte limit on `.moddata` and 255 bytes per string.
 - A boot-class module with `match` loads only on a matching board set.
 - The errno per refusal.
+
+## 6. The size limit (version 4)
+
+A module's allocated image is at most 256 KiB and its file is smaller
+than 256 KiB. Version 3 allowed an image of 2 MiB.
+
+- **Why.** The core's own allocations for a module grow with it, and
+  all of them are `KM_SLEEP` (`dlm_zalloc`): the buffer that holds the
+  whole file for the SHA-256 check, the section, symbol and string
+  tables, and the image itself. U4 (`docs/measurements/2026-10-26-u4.md`)
+  found that once a box runs, one kmem request gives at most 256 KiB on
+  k46 at 128 MB, and that a `KM_SLEEP` request above that never returns.
+  So a module above 256 KiB could hang `modload`. With these limits each
+  request the core makes for a module is about 256 KiB at most (the image
+  allocation adds 15 bytes for alignment). Together they come to a few
+  times that for a module at the limit; the clean U2 rerun measures how
+  much a running box gives in total.
+- **Who enforces it.**
+  - The kit's checker refuses a larger module when it is built.
+  - The core refuses one when it loads (`dlm_maximage`, 256 KiB, core
+    patch 0027): `ENOLOAD`, with the console line `its image is over the
+    limit`, or `its file is over the limit` when the file is read whole
+    for the manifest's SHA-256 (every load except a development load of a
+    file outside the manifest). Kernels cut before patch 0027
+    still carry 2 MiB, and the checker covers them.
+- **The way past it, if a module ever needs more.** This is a recorded
+  path, not planned work: the largest planned module, cdfs, has an image
+  of about 69 KB (M-MOD1). The ten calls in the core that grow with the
+  module become pieced `KM_NOSLEEP` allocations that are checked for
+  failure, after which the limit can rise:
+  - `lf_hashload`'s file buffer (two calls, `dlm_core.c`);
+  - in `dlm_ld.c`, the section table and section offsets (`ld_sh`,
+    `ld_secoff`), the symbols, strings and resolved symbols (`ld_syms`,
+    `ld_str`, `ld_ls`), the definition hash (`oh.b`) and the module's
+    symbol table (`ld_tab`);
+  - the image (`m_alloc`, `dlm_core.c`).

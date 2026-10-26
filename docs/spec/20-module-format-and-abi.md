@@ -21,7 +21,8 @@ the format the adopted core loads (`MAP` §3):
 - exactly one `.symtab` with its string table;
 - exactly one `.moddata` section (section type 13, written by `modfix`
   because binutils 2.8.1 cannot emit it);
-- allocated sections of type PROGBITS, NOBITS or 13; image ≤ 2 MiB;
+- allocated sections of type PROGBITS, NOBITS or 13; image ≤ 256 KiB and
+  the file under 256 KiB (C3-1 §6, from U4);
 - the module name ≤ 14 characters.
 
 The same format serves both lines; a module is built for one line (its
