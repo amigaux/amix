@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset composes root-class modules (S4-12, b4297bd)
+
+On a module kernel, root-class modules become store members beside the kernel: `module <name> root <size> at= crc32=
+sha256= bss=<km_tail> match= [depend=] [safe=1]`, root class first in depend order; the safe set = the module whose match=
+names --rootdev, the --rootfs module and their dependencies. Gate 3's closure moves after the modules (boot/root controllers
+and the root filesystem are the kernel's own or a root module's); root rules: match= required, unload=allowed refused, a
+root module depends only on root modules, a block major only on a root module (the ramdisk's b:20 composes), root class
+refused on a kernel without an arena. Gate 4 counts the directory, the manifest copy and every root module 16-aligned with
+its bss tail against the capacity. "Nothing to commit" compares root members too. Media carry mkstore's root lines.
+make test 692 + kbuild sections ok. Not run end to end on the emulator until the root-class kernels (S4-72 is the check).
+Remaining: the board set from kinfo's list at build (C4-1 §5) — later; two-digit names already right (c%lx of 8×card+unit).
+
 ## 2026-10-26 — Spec 30 §5.3: the no-Z3660 060 board sets; C4-1 version 2 (bef0ccd)
 
 30 §5.3 gains the 040/060 sets without a Z3660 (S4-57): A3000 onboard alone; A3000 onboard + A4091/A4092; A4091/A4092
