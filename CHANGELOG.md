@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — U1 answered: root-class context at boot (806768d, b2930e4)
+
+N77 (k46 5c4fad37) / N78 (k30 ce689ab4): at dmainit and at the rth1_mountroot hook both lines run at priority 7 (sr 0x2704
+and 0x2700 are the same state, the low nibble is condition codes) with the clock stopped, so KM_SLEEP, sleeping and
+timeouts are unsafe there; KM_NOSLEEP gives 1 MiB on both lines (k30 refuses 2 MiB at 64 MB; k46 gives 2 MiB at 128 MB).
+Spec 30 §3 (after freeze): a root-class _load allocates KM_NOSLEEP only, at most 1 MiB per request, each checked; more comes
+in pieces or later from process context. Spec 90's U1 row answered, exit ledger §4 filled, docs/measurements/2026-10-26-u1.md.
+README U2/U4: `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default
+generation and spends the one-shot).
+
 ## 2026-10-26 — modadmin -L prints the message buffer's words first (d834597)
 
 Core patch 0025: `modadmin -L` starts with one line of the ring's words (putbufsz, putbufwpos, putbufrpos, conslogging,
