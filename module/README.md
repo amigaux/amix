@@ -22,6 +22,7 @@ byte for byte.
 make -C module                 # build/k30/mod.d/a4091, build/k46/mod.d/a4091
 make -C module k46             # one line (or k30)
 make -C module clean
+make -C test/host check        # the module form's host tests, both map arms
 ```
 
 The kits are amix-dlm's ABI kits (`DLM=…/amix-dlm`, default the sibling
@@ -118,7 +119,9 @@ in the root pass) can drive the board at level 7.
 ## The line status (2026-10-27)
 
 - **k46:** the provider is the port's `dma_cache040.s`. `dma_addr` is the
-  identity, and `dma_alloc` gives kernel memory. **Test the module here.**
+  identity, and `dma_alloc` gives kernel memory. **Test the module here, on
+  kern46m -78 or later.** -77's symbol block lacks the five `dma_*` names,
+  so the core refuses the link.
 - **k30:** the provider is a **placeholder** until S4-62's 030 piece:
   `dma_alloc` returns 0, so **`_load` returns `ENOMEM` and the module does
   not link on k30 yet.** The object builds and passes modcheck. It gets its
@@ -129,6 +132,54 @@ in the root pass) can drive the board at level 7.
   - kern30m -12's cut tree has `support.c.patch` (A4-23).
 - **A4770:** in the match keys as `driver.conf` has it; untested on hardware.
 - **Emulation first** (amiberry's A4091 rows), metal later.
+
+## Test matrix
+
+Status as of 2026-10-27:
+- **Host:** green.
+- **Emulation:** waits for kern46m -78. Kernel -77's symbol block lacks the
+  five `dma_*` names, so the core refuses the link.
+- **Metal:** later.
+
+### Host (`test/host`, `make -C test/host check`)
+
+| Row | Line | Result |
+|---|---|---|
+| H1 | k30 (`sptalloc` arm) | 15/15 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 15/15 cases |
+
+The cases cover the registrations, the A4092/A4770 identities, two-board
+ordering, the four-board cap, every `_load` failure path, `_halt`, and the
+queue path's DMA order and addresses (`test/host/README.md`).
+
+### Emulation (amiberry, the Bench)
+
+The emulated A4091 takes its AutoConfig ID from the ROM image:
+- A Commodore A4091 ROM (the ROM store's R003) answers `0202:54`.
+- An A4092 ROM built from upstream encodes the manufacturer byte-swapped
+  (`0xD0CE`, a4091-software issue #64), so the module's `c0de:01` key never
+  matches in emulation.
+
+So the A4092 and A4770 identities are host and metal rows only.
+
+| Row | Setup | Pass when |
+|---|---|---|
+| E1 | k46: kern46m -78 + this module; one A4091 (R003); root on the A4091 (id 6) | `dlm: … root module(s) linked`, `RTH1: root … from the root record`, multi-user, `kinfo` lists a4091, a 2 MB `cp` + `sync` compare identical, `dlm: halt pass: … stopped`. kmem: `a4091_nboards` 1, `drv_prep == drv_cmpl`, `edge_shared` 0 |
+| E2 | k46: the Z3660 root (z3660scsi) + the A4091 as a second controller | sd order z3660 card 0, A4091 card 1: its id-6 disk is `ced0` |
+| E3 | k46: E1's box; `dd` reads with sense, a tape short read if a tape unit is set | `a4091_kstat.bounce_n` grows; the sense and the short read return as with the static driver |
+| E4 | k46: E1's box, five `reboot` cycles | Each boot clean; the halt pass runs each time |
+| E5 | k46: two A4091 boards, if amiberry offers a second instance | Two registrations; the lower base is the lower card |
+| E6 | k30: E1's setup on the 030 module kernel, after S4-62's pool | As E1. Run once with the provider's force-bounce hook (C4-5 §5.3), since the bounce is invisible in emulation otherwise |
+
+### Metal (later)
+
+| Row | Setup | Pass when |
+|---|---|---|
+| M1 | A4000D + Z3660 (060) + the A4092 (`c0de:01`) with the Zulu; k46 module kernel; root on the A4092 | As E1, with `A4092 SCSI` registered. The A4092 matches only because kern46m carries the unsigned `autocon()` shift |
+| M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as MD-1 |
+| M3 | M1's box: a CD install from the Zulu CD unit through the module | As C1/C2 with the static driver: `rearm_n` 0 on a clean run |
+| M4 | M1's box on the k30 line (Z3660 in 030 mode), after S4-62 | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
+| M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (A1, `mobo:a4000t-710`), not this one |
 
 ## Package (C3-5)
 
