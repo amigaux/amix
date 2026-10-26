@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patch 0005: the allowlisted symbol block (C3-2); DDI v1 lists; the gate (a0fb839, f7b5596)
+
+Kernel symbol block version 2, generated before the final link from the allowlist (mkksym -a) with the values as relocations
+bound by the loader; mkksym -f fills sizes; st_other is the tier, core-tier names resolve only for core-tier modules;
+dlm_init checks the block against dlm_ksym_space. abi/k46 and abi/k30 ddi.list (DDI v1: 83 / 79 names) and core.list.
+tools/ksymgate.py binds the kernel twice with the loader's own relocator and checks every name (12/12 both binds).
+C3-2 correction: the module interface (mod_*ops, mod_hold, mod_rele; provider the core) belongs to DDI v1. `make core`
+103/103 both lines; dlm.o data 165 KB → 1.9 KB.
+
 ## 2026-10-26 — module core patches 0002–0004: platform split, .moddata v2 (C3-1), ENOLOAD (58b42fb..dbc3d74)
 
 Patch 0002 takes ashnazag's guest registrations out of dlm_init (30 §2 patch 1); plat_dmainit is the platform's place.
