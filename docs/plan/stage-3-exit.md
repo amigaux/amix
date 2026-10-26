@@ -22,7 +22,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | ABI kit | `dlmkit46` -2, KIT_REV e84878e, PORT_REV 617c64e | `dlmkit30` -2, KIT_REV e84878e |
 | z3660eth | `z3660eth-k46` / `zeth46` 1.0.0-1, 18 787 bytes, `8356712a…` | `z3660eth-k30` / `zeth30` 1.0.0-1, `0c5c3580…` |
 | z3660rtg | `z3660rtg-k46` / `zrtg46` 1.1.0-1, `21ccf3c5…` | `z3660rtg-k30` / `zrtg30` 1.1.0-1, `4f8c3e33…` |
-| monsw | not yet (S3-27, §4) | not yet |
+| monsw | `monsw46` 1.0.0-1, amix-modules c0386d9, `2a01aa1f…` (the package) | `monsw30` 1.0.0-1, `aed6eb1a…` |
 | apkg | 0.3.1, amix-packagemanager 06b77c4, `apkg.amix` `87b0c427…` | the same |
 | the S3-43 set | `build/s3-43/handover/k46` (`tests/bench/s3-43/handover.sh`, its SHA256SUMS) | `build/s3-43/handover/k30` |
 
@@ -68,26 +68,19 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | S3-20, S3-21 the module kernels | built; the rows of record are §2 |
 | S3-22 packages | minted (§1), except monsw |
 | S3-25 z3660eth as a module | built; loads from the generation and carries zen0 on both lines (S3-B5) |
-| S3-26 z3660rtg as a module | built; composes only with monsw in the generation, or with monsw disabled, which gate 3 refuses for z3660rtg's `depend=` |
-| S3-27 monsw as a module | waits for the owner's decision on where monsw lives (Q3-2) |
+| S3-26 z3660rtg as a module | built; composes with monsw in the generation: gate 3 passes its `depend=monsw` |
+| S3-27 monsw as a module | done: Q3-2 settled (amix-modules); the module at amix-modules c0386d9, packaged `monsw30`/`monsw46` 1.0.0-1 (§1), on the s3dry2 media and the media of record; z3660rtg passes gate 3 with it |
 | S3-30 module packages in apkg | apkg 0.3.1 |
-| S3-31 the installer | S3-31's dry run passed on the host; on the box with the kernels of record, pending. Part 3: the CD-booted, disk-rooted cell (`stage-3-cd-boot.md` §5), pending the CD-capable A4091 ROM |
+| S3-31 the installer | the dry run passed on the host. The box run: amix-installng's four media-of-record cells, on the -5 set, pending their report. Part 3, the CD-booted, disk-rooted cell (`stage-3-cd-boot.md` §5): amix-installng's discs, after the media of record |
 | S3-40 host measurements | done (`docs/measurements/2026-10-26-m-reg1-m-abi1.md`, `2026-10-26-u16-m-abi2.md`) |
 | S3-41 bench measurements | §4 |
 | S3-43 emulator rows | §3 |
-| S3-44 M-INT1, bench half | pending (z3660net) |
-| S3-45 exit row: network and graphics only from modules, installed by the installer, upgraded with apkg, rollback | pending: needs S3-27 (the graphics stack's monsw) |
-| S3-46 metal | waits for the owner's bench time |
+| S3-44 M-INT1, bench half | rows S3-44-1 to -3 (`tests/bench/README.md` S3-44): the chains on the kernels of record (probe `t44intr`), a full chain and z3660eth's polled fallback (`t44fill`), z3660eth 1.0.0-2 with `intr=6` and its self-test. No z3660net build is owed. The Bench station, pending |
+| S3-45 exit row: network and graphics only from modules, installed by the installer, upgraded with apkg, rollback | runnable: amix-installng builds the RTG-kit profile medium (zeth, monsw, zrtg) after the CD discs; the Bench station runs the cell (zen0 with telnet and ftp, X on the module RTG, the monitor switch, `apkg upgrade` of a module package, rollback); pending |
+| S3-46 metal | the Bench station; the box that holds the Z3660 card is handed over through the orchestrator; pending. The k30 row (z3660eth on the Z3660 in 68030 mode): no K030 family of record carries z3660scsi, so its instrument is a **bench variant**, the K030-U `--dlm` cut plus a static z3660scsi, a measurement kernel never packaged. Its piscsi root is proven on the emulator in N24's shape first. The 1.1 kernel of record for an 030 on the Z3660 is stage 4's: the K030 floor with z3660scsi as a root-class module in the same slot (D-3 §4) |
 
 ## 6. Open, outside the Bench's sweep
 
-- **monsw (S3-27):** the module waits for the owner's decision on its
-  repository (Q3-2). z3660rtg composes into a generation only after it,
-  because gate 3 refuses `depend=monsw` without a monsw member. So
-  S3-45's graphics half waits too.
-- **Metal (S3-46):** the stage-3 metal rows (z3660eth and z3660rtg as
-  modules on both boxes, interrupt attachment on metal) wait for the
-  owner's bench time.
 - **The installer CD (S3-31 part 3, second half):** the compressed miniroot
   as a RAM-disk root waits for stage 4's `ramdisk` module (boot2 and
   `amix-cdboot` refuse a ramdisk member until then; 10 §5.4's placement is
