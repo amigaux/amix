@@ -54,7 +54,8 @@ caps s1 and s4 at that limit until the limit is lifted (OQ-40.7). A disk laid wi
 | Path | Content | Owner |
 |---|---|---|
 | `/stand/k30/unix`, `/stand/k46/unix` + `kabi` | pristine kernel of the line and its sidecar (kabi tag, compiler pin, arena and identity offsets, SHA-256); `/stand/k30/unix.sym`, the symbols of a `brel` (C2-3 §2.1) | kernel package |
-| `/stand/unix`, `/unix` | the booted kernel's namelist (§4.2), for the stock `nlist` consumers | `kbootset` |
+| `/stand/unix` | the booted kernel's namelist (§4.2), for the stock `nlist` consumers | `kbootset` |
+| `/stand/2.1_unix` | the stock Amix 2.1 kernel, as the 1.0 install left it; nothing reads it | — |
 | `/stand/loader/{boot1,boot2}` + `ldrinfo` | loader bytes and their version and SHA-256 | loader package |
 | `/etc/conf/mod.d/<name>` | module objects | module packages |
 | `/etc/conf/modreg.d/<name>` | the package's registration defaults (class, parameters) | module packages |
@@ -177,18 +178,18 @@ bootdata block, C2-1 version 3), the loaded-module list.
 
 ### 4.2 The namelist
 
-The stock tools that read kernel memory (`netstat`, `ps`, `crash`, `pstat`,
-the `sar` family, Amix's `ifconfig`) find kernel symbols with `nlist` on a
-fixed kernel path. In 1.0 that file was the kernel the stock loader booted,
+The stock tools that read kernel memory find kernel symbols with `nlist`
+on `/stand/unix`: `netstat`, `ifconfig` ("no namelist /stand/unix") and
+`crash` (S3-B5's survey of the stock binaries: nothing reads `/unix`,
+`ps` reads no kernel file, there is no `/dev/ksyms`). In 1.0 that file was
+a hard link to `/stand/2.1_unix`, the kernel the stock loader booted,
 linked at the address it ran at. With generations the booted kernel is a
 generation's member, bound by the loader where it chose, and its file on
 disk does not carry those addresses: an ET_REL kernel's symbols are
 section-relative, and a `brel` has none. Without a namelist, `netstat -i`
 reads `ifstats` at another kernel's address (S3-B5).
 
-So **the booted kernel's namelist is at every path the stock consumers
-read**: `/stand/unix` and `/unix`, and any other path S3-B5's survey of
-the stock binaries finds.
+So **`/stand/unix` is the booted kernel's namelist.**
 - **What it is:** an ELF32 `ET_EXEC` holding the booted kernel's symbol
   table, each symbol's value its address in this boot: the bind address
   plus its offset in the loader's layout (text, rodata, data, bss, COMMON;
@@ -202,8 +203,9 @@ the stock binaries finds.
   (C2-4 §9, §12), and whenever `kbootset namelist` is called. It checks
   the layout it computes against kinfo's rodata and data addresses. It
   writes the file only when the content differs, as a new file renamed
-  into place, then makes the other paths hard links to it (a copy when a
-  path is on another filesystem; both ufs and s5 roots link). The base
+  into place. It never writes through the old `/stand/unix`, which may be
+  a link to `/stand/2.1_unix`: the rename replaces the name and leaves
+  that file as it was. The base
   system calls `kbootset namelist` early in run level 2 as well, so
   nothing typed or started later reads a stale namelist.
 - **When it cannot:** with a version 2 kinfo, no kinfo, a kernel without
@@ -211,9 +213,11 @@ the stock binaries finds.
   kinfo, it writes nothing and says why. `kbootset status` reports
   whether the namelist matches the booted kernel.
 - **The installer** cannot know where the first boot will bind the
-  kernel, so it lays no namelist: it removes a stock `/stand/unix` and
-  `/unix` from the target, so that nothing reads another kernel's
-  symbols, and the first boot's early `kbootset namelist` writes them.
+  kernel (the loader chooses at boot), so it lays no namelist. It removes
+  the name `/stand/unix` from the target (`/stand/2.1_unix` stays), so
+  that nothing reads another kernel's symbols, and the first boot's early
+  `kbootset namelist` writes it. Until then the stock tools say "no
+  namelist /stand/unix" rather than print another kernel's numbers.
 
 ## 5. Finding the boot disk
 

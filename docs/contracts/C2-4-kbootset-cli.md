@@ -230,10 +230,11 @@ the module packages installed under the root, as C3-5 §2 says.
 
 ## 12. `kbootset namelist` (40 §4.2)
 
-Writes the booted kernel's namelist to the paths the stock `nlist`
-consumers read: `/stand/unix` first, then `/unix` (a hard link to it, a
-copy across filesystems). S3-B5's survey of the stock binaries may add
-paths; they are linked the same way.
+Writes the booted kernel's namelist to `/stand/unix`, the one path the
+stock `nlist` consumers read (`netstat`, `ifconfig`, `crash`; S3-B5's
+survey). It writes `/stand/unix.new` and renames it over `/stand/unix`,
+so a `/stand/unix` that is a hard link to `/stand/2.1_unix` (as 1.0 left
+it) loses only its name; `/stand/2.1_unix` is untouched.
 
 - **No options.** The booted generation comes from kinfo (C2-1 version
   3); the kernel from that generation's manifest, read from the boot
@@ -245,8 +246,8 @@ paths; they are linked the same way.
 - **The check:** the layout's text, rodata and data addresses must equal
   kinfo's bootdata block. Otherwise nothing is written.
 - **What it prints:**
-  - `kbootset: namelist /stand/unix (and /unix) written for generation N,
-    bound at 0x<addr>` when it wrote one;
+  - `kbootset: namelist /stand/unix written for generation N, bound at
+    0x<addr>` when it wrote one;
   - `kbootset: namelist for generation N is current` when the files
     already match;
   - `kbootset: no namelist: <reason>` otherwise: `kinfo version 2 gives no
@@ -260,9 +261,17 @@ paths; they are linked the same way.
 [ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1
 ```
 
-- **`status`** adds `namelist: current`, `namelist: stale (kbootset
-  namelist)` or `namelist: none (<reason>)`.
-- **The installer** (S3-31) removes a stock `/stand/unix` and `/unix` from
-  the target and installs the line above in run level 2, before any
-  script that reads kernel memory.
+- **`status`** adds one line:
+  - `namelist: /stand/unix is generation N's, bound at 0x<addr>` when it
+    matches the booted kernel;
+  - `namelist: /stand/unix is not the booted kernel's: run kbootset
+    namelist` when it differs, or is another kernel (a link to
+    `/stand/2.1_unix`);
+  - `namelist: /stand/unix is missing: run kbootset namelist`;
+  - `namelist: none (<reason>)` when none can be made, with the reasons
+    above.
+  `status` itself writes nothing.
+- **The installer** (S3-31) removes the name `/stand/unix` from the
+  target (`/stand/2.1_unix` stays) and installs the line above in run
+  level 2, before any script that reads kernel memory.
 
