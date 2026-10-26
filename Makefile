@@ -105,7 +105,7 @@ $(B)/kbootset: kbootset/kbootset.c kbootset/kmedia.c tools/mkstore.c $(KSRC) $(C
 		kbootset/kmedia.c $(KSRC) $(CSRC) $(XSRC) -lz
 
 $(B)/b2link: tools/b2link.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
-	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c
+	$(HOSTCC) $(HOSTCFLAGS) -DAX_RELNOTE -I$(COMMON) -o $@ tools/b2link.c $(COMMON)/rel.c
 
 $(B)/b2check: tests/host/b2check.c $(COMMON)/rel.c $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/b2check.c $(COMMON)/rel.c
@@ -131,7 +131,7 @@ COBJ := $(patsubst $(COMMON)/%.c,$(B)/cross/%.o,$(CSRC))
 
 $(B)/cross/%.o: $(COMMON)/%.c $(COMMON)/*.h
 	@mkdir -p $(B)/cross
-	$(CROSS)gcc $(CROSSCFLAGS) -I$(COMMON) -c -o $@ $<
+	$(CROSS)gcc $(CROSSCFLAGS) -DAX_LOADER -I$(COMMON) -c -o $@ $<
 
 cross: toolchain-check $(COBJ)
 	$(CROSS)scan060 $(COBJ)

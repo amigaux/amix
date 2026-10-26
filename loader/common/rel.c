@@ -25,6 +25,21 @@
 
 #define SH(i)		(img + shoff + (ax_u32)(i) * shentsize)
 
+/*
+ * The relocation notes (ax_rel_ex) are for b2link, a host tool, which
+ * builds with AX_RELNOTE; boot2 and the other users of ax_rel carry none
+ * of it (docs/measurements/2026-10-26-boot2-headroom.md section 3, item 1).
+ */
+#ifdef AX_RELNOTE
+#define NOTEARGS	, ax_relnote note, void *ctx
+#define NOTEPASS	, note, ctx
+#define NOTE(o)		do { if (note) note(ctx, (o)); } while (0)
+#else
+#define NOTEARGS
+#define NOTEPASS
+#define NOTE(o)		((void)0)
+#endif
+
 /* is [off, off+n) inside len? overflow-safe */
 static int
 inside(ax_u32 off, ax_u32 n, ax_u32 len)
@@ -42,7 +57,7 @@ streq(const ax_u8 *a, const char *b)
 
 static int
 brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
-     ax_u32 shnum, struct ax_bootdata *bd, ax_relnote note, void *ctx)
+     ax_u32 shnum, struct ax_bootdata *bd NOTEARGS)
 {
 	ax_u32 toff, tsize, roff, rsize, i, off, val;
 	ax_u8 *p;
@@ -60,8 +75,7 @@ brel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, ax_u32 shoff, ax_u32 shentsize,
 		val = AX_GET32(img + roff + i + 4);
 		if (!(off & 0x80000000UL)) {
 			val += vaddr;
-			if (note)
-				note(ctx, off);
+			NOTE(off);
 		}
 		off &= 0x7FFFFFFFUL;
 		if (!inside(off, 4, tsize))
@@ -90,16 +104,9 @@ ax_kernel_end(const struct ax_bootdata *bd, ax_u32 bss, int *assumed)
 	return bd->end + bss;
 }
 
-int
-ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
-       struct ax_bootdata *bd, struct ax_relerr *err)
-{
-	return ax_rel_ex(img, len, vaddr, pcrel_ok, bd, err, 0, 0);
-}
-
-int
-ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
-	  struct ax_bootdata *bd, struct ax_relerr *err, ax_relnote note, void *ctx)
+static int
+relocate(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
+	 struct ax_bootdata *bd, struct ax_relerr *err NOTEARGS)
 {
 	ax_u32 type, shoff, shentsize, shnum, i, k;
 	ax_u32 t = 0, r = 0, d = 0, b = 0, sy = 0;	/* section indices; 0 = none */
@@ -139,7 +146,7 @@ ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 		return AXR_EBOUNDS;
 
 	if (type == ET_BREL)
-		return brel(img, len, vaddr, shoff, shentsize, shnum, bd, note, ctx);
+		return brel(img, len, vaddr, shoff, shentsize, shnum, bd NOTEPASS);
 	if (type != ET_REL)
 		return AXR_EFORMAT;
 
@@ -299,8 +306,8 @@ ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 					return AXR_EBOUNDS;
 				p = img + toff + off;
 				AX_PUT32(p, v);
-				if (note && relative)
-					note(ctx, taddr - vaddr + off);
+				if (relative)
+					NOTE(taddr - vaddr + off);
 				continue;
 			}
 			if (!pcrel_ok || (rt != R_68K_PC32 && rt != R_68K_PC16 && rt != R_68K_PC8))
@@ -330,3 +337,23 @@ ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
 	}
 	return AXR_OK;
 }
+
+int
+ax_rel(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
+       struct ax_bootdata *bd, struct ax_relerr *err)
+{
+#ifdef AX_RELNOTE
+	return relocate(img, len, vaddr, pcrel_ok, bd, err, 0, 0);
+#else
+	return relocate(img, len, vaddr, pcrel_ok, bd, err);
+#endif
+}
+
+#ifdef AX_RELNOTE
+int
+ax_rel_ex(ax_u8 *img, ax_u32 len, ax_u32 vaddr, int pcrel_ok,
+	  struct ax_bootdata *bd, struct ax_relerr *err, ax_relnote note, void *ctx)
+{
+	return relocate(img, len, vaddr, pcrel_ok, bd, err, note, ctx);
+}
+#endif

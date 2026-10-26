@@ -219,24 +219,34 @@ record(struct ax_manifest *m, char *line)
 		sdst = &m->root;
 	else if (prefix(key, "swap "))
 		sdst = &m->swap;
+#ifndef AX_LOADER
+	/*
+	 * The loader build (boot2, amix-cdboot) never reads these, so they
+	 * take the unknown-record path there (docs/measurements/
+	 * 2026-10-26-boot2-headroom.md section 3, item 2).  A module's
+	 * parameters reach the kernel in the manifest copy (C4-4 section 1).
+	 */
 	else if (prefix(key, "boards "))
 		sdst = &m->boards;
 	else if (prefix(key, "cpu "))
 		sdst = &m->cpu;
 	else if (prefix(key, "created "))
 		sdst = &m->created;
+#endif
 	if (sdst) {
 		if (*sdst)
 			return AXM_EDUP;
 		*sdst = rest(key);
 		return AXM_OK;
 	}
+#ifndef AX_LOADER
 	if (prefix(key, "param ")) {
 		if (m->nparam == AXM_MAXPARAM)
 			return AXM_EMANY;
 		m->param[m->nparam++] = rest(key);
 		return AXM_OK;
 	}
+#endif
 
 	n = split(line, tok);
 	if (n <= 0)

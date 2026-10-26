@@ -105,3 +105,15 @@ controller id, so boot2 could not tell the A3000 WD, Gayle and the
 With the second variant, §3's items 1 and 2 (about 240–340 bytes, no
 change on the console) cover S4-10. S4-11's RAM-disk placement is not
 measured yet; §3's items 3–5 (about 260 bytes) are the budget for it.
+
+**§3's items 1 and 2, taken (2026-10-26).** Nothing changes on the
+console:
+
+| Step | file | image + bss | left (file) |
+|---|---|---|---|
+| before (24e1ae1) | 28 356 | 28 156 | 316 |
+| item 1: `rel.c`'s notes only under `AX_RELNOTE` (b2link) | 28 218 | 28 020 | 454 |
+| item 2: the loader build of `manifest.c` (`AX_LOADER`) skips `boards`, `cpu`, `created`, `param` | 28 042 | 27 852 | 630 |
+
+Item 1 gave 138 bytes, not the estimated 40. Item 2 gave 176. With S4-10's
+measured +448, 182 bytes of file stay for S4-11, before items 3–5.
