@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patch 0011: the DDI providers spl, if_attach, cons_hook; C3-5 agreed (887981b..cde866e)
+
+spl0–7/splx as functions identical to <sys/inline.h> (spl5–7 raise to level 4 under FAST_INTERRUPTS, so no spl masks INT6);
+if_attach/if_detach on the stock ifstats list at IPL 7; cons_hook_set/clear through a wrapper at the stock scrcon_put (both
+VT writes and the printf funnel), which the kernel build weakens and keeps as __amix_scrcon_put. With these linked for real
+the ksym gate is 12/12 on both kernels. C3-5 agreed, version 1. Kernel brief: the scrcon_put splice, libgcc.a and
+devkvmap040.o on k46, cputype from core/plat on k30.
+
 ## 2026-10-26 — module core patch 0010: marc_post; contract C3-5; the S3-20/S3-21 kernel brief (1038d5f..23d0bc1)
 
 dlm_marc_post() registers the demand-class majors from the booted manifest, then loads the boot-class records in manifest
