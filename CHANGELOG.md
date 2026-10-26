@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patch 0034: marc_root, the arena's root modules linked (S4-04, 82cc554)
+
+`dlm_marc_root()`, the kernel's hook in rth1_mountroot before rth1_apply (C4-4 §4): walks the arena directory in order in
+no-sleep mode, re-takes each entry's CRC-32 ("damaged; not linked" on changed bytes), requires the manifest copy's root record
+with that name and crc32= (taking its bss=), then dlm_load_mem; ENXIO silent, other errors one line; safe mode links flag-0x4
+members only; no arena or no root entries = nothing (safe on any module kernel, not for static families); it must run before
+sd's first open so sd_register's entries land before dlm_sd_close. dlm_arena_init keeps the arena's address; dlm_crc32 gives
+the loader's CRC-32; a file off 16 has its own console line. Harness 231/231 both kernels; dlm.o 446c81cd.
+
 ## 2026-10-26 — C2-3 v7: sidecar keys are read by name (fadc007)
 
 Their order carries no meaning (the S4-21 k46 sidecar places sdcards= before root=; fine). The S4-21 k46 cut of record
