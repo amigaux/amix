@@ -675,8 +675,18 @@ Both kernels were checked on the host:
 
 The rows that break the module rules on purpose, after S3-B5 and S3-B6
 of record pass, on both lines, in one campaign per line. Each row names
-the console line of record; a different line, or a box that stops, fails
-the row.
+the line of record; a different line, or a box that stops, fails the row.
+
+**Where a line of record is read.** Lines printed while the box boots,
+up to and including init's sysinit entries (`modadmin -B`), are on the
+console and the serial port. Lines the kernel, the core or a module print
+later, after a `modadmin` action in multi-user, reach only the kernel's
+message buffer (`putbuf`), not the console (S3-43's first run). Read them
+with `modadmin -L` (core patch 0024, modtools with it), the buffer oldest
+first, after the action: `modadmin -L | tail -5`. `modadmin -L` finds the
+buffer through `/stand/unix`, so `kbootset status` must show a current
+namelist first. modadmin's own output (`cannot load …: <errno text>`) is
+on the terminal as always.
 
 **Inputs:**
 - the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
