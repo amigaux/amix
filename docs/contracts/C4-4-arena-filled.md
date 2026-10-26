@@ -1,4 +1,4 @@
-# C4-4 — the arena filled: what boot2 places and the core links, version 3
+# C4-4 — the arena filled: what boot2 places and the core links, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, option A of S4-01's design): each root module's NOBITS and
@@ -7,8 +7,10 @@
   measurement): boot2 places every root record and the core evaluates
   `match=`; `kbootset` marks the safe set (`safe=1`) and checks the whole
   root set against the capacity; boot2 writes no parameter strings; L7
-  leaves boot2 (§1–§4). Other repositories build against this text; a
-  change from here is a contract change with a version bump.
+  leaves boot2 (§1–§4); version 4 (2026-10-26, from the port's S4-22 cut):
+  no root-class module for a controller the kernel drives itself (§4.1).
+  Other repositories build against this text; a change from here is a
+  contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
   §5.3, §7.4 (safe mode), §9 (L3, L5, L7); `30-module-core.md` §2 patches 2
   and 16, §3 (`marc_root`); `70-static-floor.md` §4
@@ -143,6 +145,30 @@ At `dmainit` the core has checked the header and the manifest copy
 In safe mode the core links exactly the entries with flag 0x4. A module
 the core does not link stays in the arena as dead bytes until the next
 boot.
+
+### 4.1 Two drivers on one board
+
+A root-class module for a controller the kernel still drives statically
+would register the same board with sd, and both drivers would talk to
+it. Three layers refuse it, each before the next:
+1. **The rule, at compose time:** `kbootset`'s gate 3 refuses a
+   generation with a root-class module one of whose `match=` keys the
+   kernel's sidecar `root=` names: `root-class module %s is for %s,
+   which the kernel drives itself`.
+2. **The backstop, before `_load`:** the kernel names its built-in root
+   controllers in `dlm_static_root`, a string beside the identity record
+   that `tools/mkident.py --asm LINE KABI CAP ROOT` writes from the same
+   `root=` list (`""` when it has none; every module kernel defines it).
+   At `marc_root`, after the match, the core skips an entry one of whose
+   keys is in it: `dlm: root module %s is for %s, which the kernel drives
+   itself; not linked` (core patch 0037). The module's `_load` never
+   runs, so the board is not touched.
+3. **The last line, in sd:** a registration whose base is already a card
+   is dropped (the port's sd pass; amix-kerntools' `sd.c.in` the same).
+
+A kernel that drives a controller statically and a root module for it
+are a stage-4 transition: the module replaces the static driver only in
+a kernel cut without it.
 
 ## 5. Not in this contract
 

@@ -107,6 +107,9 @@ program against an image file, so media and boxes cannot drift).
    seen by `kinfo` (or named with `--bootdev`/`--rootdev` on a host build).
    A CD or floppy pair's generation checks the root only: its loader reads
    the medium, never the kernel (C2-4 §13).
+   It also refuses a root-class module for a controller the kernel drives
+   itself (its sidecar's `root=`): two drivers on one board (C4-4 version
+   4 §4.1; changed after the freeze, 2026-10-26).
 4. **Arena:** the root-class set exceeds the kernel's arena capacity: the
    directory (32 + 48 bytes a record), the manifest copy, and every root
    record's file rounded up to 16 with its `bss=` tail, as boot2 places
