@@ -1,0 +1,525 @@
+Subject: manifest-only loading, and the development-load override
+
+Every load -- modload, a dependency, dlm_loadname, the first-open
+trampoline -- goes through dlm_load, which now resolves the module only
+as a member of the manifest the loader booted: its path= is where it is
+read from, and its bytes must hash to its sha256=.  The file is read
+once into memory, hashed, and loaded from that copy, so what was hashed
+is what loads.  Anything else is EPERM with a console line.  The
+manifest is the verbatim copy the loader leaves in the kernel's module
+arena (amix-dlm docs/contracts/C3-4-arena-directory.md); dlm_arena.c
+finds it through the kernel's identity record (AXK1, C3-3) at dmainit
+and checks the directory and the copy's end crc32.  No valid arena means
+no module loads that boot; the floor boots.  The loader record's
+development-load flag (dlm_devload, set by the platform from AXL1) lets
+a module outside the manifest load from the path asked for, said on the
+console each time.  modpath adds no search directory a member could use.
+SHA-256 and CRC-32 are amix-dlm's loader/common code.
+30-module-core.md section 2, patch 17.
+
+--- a/dlm_arena.c
++++ b/dlm_arena.c
+@@ -0,0 +1,161 @@
++/*
++ * dlm_arena.c -- manifest-only loading (amix-dlm docs/spec/30-module-core.md
++ * section 2, patch 17; docs/contracts/C3-4-arena-directory.md).
++ *
++ * The loader leaves, in the kernel's module arena, a directory (AXA1) and
++ * a verbatim copy of the manifest it booted.  dlm_arena_init() finds the
++ * arena through the kernel's identity record (AXK1, C3-3) and checks both;
++ * that copy is then the only reference for which modules may load and
++ * what their bytes must hash to.  The loader record's development-load
++ * flag (dlm_devload, set by the platform) lifts that rule, and only that.
++ *
++ * The CRC-32 and SHA-256 are amix-dlm's loader/common code, compiled by
++ * the kernel build with the core.
++ *
++ * K&R C.
++ */
++
++#include "dlm.h"
++
++extern unsigned long ax_crc32();
++extern void ax_crc32_init();
++
++#define	AXA1_MAGIC	0x41584131L	/* 'AXA1' */
++#define	AXK1_MAGIC	0x41584b31L	/* 'AXK1' */
++#define	AXA1_HDR	32
++#define	AXA1_ENT	48
++
++static unsigned long crctab[256];
++
++static int
++hexval(c)
++	int c;
++{
++	return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
++}
++
++/*
++ * Check an arena of cap bytes at a: the directory (magic, version,
++ * longwords summing to zero, offsets inside the arena) and the manifest
++ * copy (GMF1, its end crc32= over every byte before the end line).  0 and
++ * *manp, *lenp, *genp if usable, -1 if not.
++ */
++int
++dlm_arena_check(a, cap, manp, lenp, genp)
++	char *a;
++	long cap;
++	char **manp;
++	long *lenp, *genp;
++{
++	unsigned long sum = 0, crc, want = 0;
++	long count, d, len, used, i, e;
++	char *m;
++	int v;
++
++	if (cap < AXA1_HDR || G32(a) != AXA1_MAGIC || G32(a + 4) != (1L << 16 | AXA1_HDR))
++		return -1;
++	count = G32(a + 12);
++	if (count < 0 || count > (cap - AXA1_HDR) / AXA1_ENT)
++		return -1;
++	for (i = 0; i < (AXA1_HDR + AXA1_ENT * count) / 4; i++)
++		sum += G32(a + 4 * i);
++	d = G32(a + 16);
++	len = G32(a + 20);
++	used = G32(a + 24);
++	if (M32(sum) != 0 || d != AXA1_HDR + AXA1_ENT * count || len < 20 ||
++	    d + len > used || used > cap)
++		return -1;
++	m = a + d;
++	if (bcmp(m, "GMF1\n", 5) != 0 || m[len - 1] != '\n')
++		return -1;
++	for (e = len - 2; e > 0 && m[e - 1] != '\n'; e--)
++		;
++	if (len - e != 19 || bcmp(m + e, "end crc32=", 10) != 0)
++		return -1;
++	for (i = 0; i < 8; i++) {
++		if ((v = hexval(m[e + 10 + i])) < 0)
++			return -1;
++		want = want << 4 | v;
++	}
++	if (crctab[1] == 0)
++		ax_crc32_init(crctab);
++	crc = ax_crc32(crctab, m, (unsigned long)e);
++	if (M32(crc) != M32(want))
++		return -1;
++	*manp = m;
++	*lenp = len;
++	*genp = G32(a + 28);
++	return 0;
++}
++
++#ifndef DLM_HOST
++extern char dlm_ident[];		/* AXK1, from the kernel build (C3-3) */
++
++/*
++ * At dmainit: the identity record names the arena (an image offset from
++ * stext) and its capacity.  A kernel without one, or an arena the loader
++ * did not fill, leaves dlm_man 0: no module loads this boot, the floor
++ * boots as always.
++ */
++void
++dlm_arena_init()
++{
++	char *volatile id = dlm_ident;	/* weak: 0 in a kernel without one */
++	unsigned long sum = 0;
++	int i;
++
++	__asm__(".weak dlm_ident");
++	dlm_man = 0;
++	if (id != 0 && G32(id) == AXK1_MAGIC && G32(id + 4) == (1L << 16 | 64)) {
++		for (i = 0; i < 16; i++)
++			sum += G32(id + 4 * i);
++		if (M32(sum) == 0 && dlm_arena_check(stext + G32(id + 40), (long)G32(id + 44),
++		    &dlm_man, &dlm_manlen, &dlm_mangen) == 0) {
++			printf("dlm: modules from generation %ld's manifest\n", dlm_mangen);
++			return;
++		}
++	}
++	dlm_man = 0;
++	printf("dlm: no valid arena directory; modules are refused this boot\n");
++}
++#endif
++
++/*
++ * The manifest's record for a boot- or demand-class module: 0 with its
++ * path= (into path, at most cap bytes) and sha256= (64 hex digits into
++ * sha), ENOENT if the manifest names no such module.
++ */
++int
++dlm_man_member(name, path, cap, sha)
++	char *name, *path, *sha;
++	int cap;
++{
++	char *p = dlm_man, *lim = dlm_man + dlm_manlen, *l, *t;
++	int n = strlen(name), k;
++
++	for (; p && p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p < 8 + n || bcmp(p, "module ", 7) != 0 || bcmp(p + 7, name, n) != 0 ||
++		    p[7 + n] != ' ')
++			continue;
++		t = p + 8 + n;
++		if (!(l - t > 5 && bcmp(t, "boot ", 5) == 0) && !(l - t > 7 && bcmp(t, "demand ", 7) == 0))
++			continue;
++		path[0] = sha[0] = 0;
++		for (; t < l; t++) {
++			if (t[-1] != ' ')
++				continue;
++			if (l - t > 5 && bcmp(t, "path=", 5) == 0) {
++				for (t += 5, k = 0; t < l && *t != ' ' && k < cap - 1; )
++					path[k++] = *t++;
++				path[k] = 0;
++			} else if (l - t >= 71 && bcmp(t, "sha256=", 7) == 0) {
++				bcopy(t + 7, sha, 64);
++				sha[64] = 0;
++			}
++		}
++		return path[0] == '/' && sha[0] ? 0 : ENOENT;
++	}
++	return ENOENT;
++}
+--- a/dlmconf.c
++++ b/dlmconf.c
+@@ -33,6 +33,15 @@
+ char	*dlm_pin = DLM_PIN;
+ char	*dlm_build = 0;
+ 
++/*
++ * The manifest the loader booted (dlm_arena_init finds it in the arena),
++ * and the loader record's development-load flag, which the platform sets
++ * in plat_dmainit() from AXL1 (10-boot-loader.md section 6).
++ */
++char	*dlm_man = 0;
++long	dlm_manlen, dlm_mangen;
++int	dlm_devload = 0;
++
+ #ifndef DLM_HOST
+ extern void plat_dmainit();
+ 
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -27,6 +27,10 @@
+ 	char		**lf_deptab;
+ 	int		lf_depsz;
+ 	char		*lf_pbuf;	/* path being tried */
++	char		*lf_mpath;	/* the manifest's path= (MAXPATHLEN) */
++	char		lf_sha[65];	/* its sha256=, "" when not checked */
++	char		*lf_mbuf;	/* the file, read once, hashed, loaded */
++	long		lf_mcap, lf_msz;
+ };
+ #define	LF_OPEN		0
+ #define	LF_INLOAD	1	/* inside mw_load */
+@@ -359,6 +363,115 @@
+ 	return resid ? DLM_ESHORT : 0;
+ }
+ 
++/* the file's bytes from the buffer lf_hashload read */
++static int
++mem_read(ld, off, buf, len)
++	struct dlm_ld *ld;
++	unsigned long off;
++	char *buf;
++	long len;
++{
++	struct dlm_lf *lf = (struct dlm_lf *)ld->ld_rh;
++	long n;
++
++	if (off >= (unsigned long)lf->lf_msz)
++		return len ? DLM_ESHORT : 0;
++	n = lf->lf_msz - (long)off;
++	if (n > len)
++		n = len;
++	bcopy(lf->lf_mbuf + off, buf, n);
++	return n < len ? DLM_ESHORT : 0;
++}
++
++/* free what lf_gate and lf_hashload allocated */
++static void
++lf_mfree(lf)
++	struct dlm_lf *lf;
++{
++	if (lf->lf_mbuf)
++		dlm_free(lf->lf_mbuf, lf->lf_mcap);
++	if (lf->lf_mpath)
++		dlm_free(lf->lf_mpath, (long)MAXPATHLEN);
++	lf->lf_mbuf = lf->lf_mpath = 0;
++}
++
++/*
++ * Manifest-only loading (patch 17): a module loads only as a member of
++ * the manifest the loader booted, from its path=, and only if its bytes
++ * hash to its sha256=.  Development load lets a module outside the
++ * manifest load from the path asked for, and says so every time.
++ */
++static int
++lf_gate(lf, name, pathp)
++	struct dlm_lf *lf;
++	char *name, **pathp;
++{
++	lf->lf_mpath = dlm_zalloc((long)MAXPATHLEN);
++	lf->lf_sha[0] = 0;
++	if (dlm_man && dlm_man_member(name, lf->lf_mpath, MAXPATHLEN, lf->lf_sha) == 0) {
++		*pathp = lf->lf_mpath;
++		return 0;
++	}
++	lf->lf_sha[0] = 0;
++	if (dlm_devload) {
++		printf("dlm: DEVELOPMENT LOAD: %s, outside the booted manifest\n", name);
++		return 0;
++	}
++	if (dlm_man == 0)
++		printf("dlm: %s: no booted manifest, so no module loads this boot\n", name);
++	else
++		printf("dlm: %s is not a member of the booted generation\n", name);
++	return EPERM;
++}
++
++/* Read the whole file once, check its SHA-256, and load from the copy. */
++static int
++lf_hashload(lf)
++	struct dlm_lf *lf;
++{
++	unsigned char sha[32];
++	long cap = 8192, n = 0, i;
++	char *b, *nb;
++	int resid, e;
++	static char hex[] = "0123456789abcdef";
++
++	b = dlm_zalloc(cap);
++	for (;;) {
++		if (n == cap) {
++			if (cap >= dlm_maximage) {
++				dlm_free(b, cap);
++				return ENOMEM;
++			}
++			nb = dlm_zalloc(cap * 2);
++			bcopy(b, nb, n);
++			dlm_free(b, cap);
++			b = nb;
++			cap *= 2;
++		}
++		resid = 0;
++		e = vn_rdwr(UIO_READ, lf->lf_vp, (caddr_t)(b + n), (int)(cap - n), (off_t)n,
++		    UIO_SYSSPACE, 0, 0x7fffffffL, u.u_cred, &resid);
++		if (e) {
++			dlm_free(b, cap);
++			return e;
++		}
++		n += (cap - n) - resid;
++		if (resid)
++			break;
++	}
++	lf->lf_mbuf = b;
++	lf->lf_mcap = cap;
++	lf->lf_msz = n;
++	ax_sha256(b, n, sha);
++	for (i = 0; i < 32; i++)
++		if (lf->lf_sha[2 * i] != hex[sha[i] >> 4] || lf->lf_sha[2 * i + 1] != hex[sha[i] & 15]) {
++			printf("dlm: %s: SHA-256 differs from the booted manifest\n", lf->lf_mod->m_name);
++			return EPERM;
++		}
++	lf->lf_ld.ld_read = mem_read;
++	return 0;
++}
++
+ static void
+ lf_close(lf)
+ 	struct dlm_lf *lf;
+@@ -418,6 +531,7 @@
+ 
+ 	g->g_lf = lf->lf_next;
+ 	lf_close(lf);
++	lf_mfree(lf);
+ 	dlm_ld_free(&lf->lf_ld);
+ 	if (lf->lf_deptab)
+ 		dlm_free((char *)lf->lf_deptab, (long)lf->lf_depsz);
+@@ -657,7 +771,8 @@
+ 		u.u_procp->p_cred = dlm_syscred;
+ 		u.u_rdir = 0;
+ 	}
+-	if ((e = lf_find(lf, path, m)) != 0)
++	if ((e = lf_gate(lf, name, &path)) != 0 || (e = lf_find(lf, path, m)) != 0 ||
++	    (lf->lf_sha[0] && (e = lf_hashload(lf)) != 0))
+ 		goto fail;
+ 	if ((e = dlm_ld_hdr(ld)) != 0 || (e = dlm_ld_moddata(ld)) != 0 ||
+ 	    (e = md_check(ld, name)) != 0)
+@@ -750,6 +865,7 @@
+ 
+ 	/* settle */
+ 	g->g_lf = lf->lf_next;
++	lf_mfree(lf);
+ 	if (lf->lf_deptab)
+ 		dlm_free((char *)lf->lf_deptab, (long)lf->lf_depsz);
+ 	dlm_free((char *)lf, (long)sizeof (struct dlm_lf));
+@@ -1215,5 +1331,8 @@
+ 	dlm_ktab = dlm_ksym;
+ 	strcpy(dlm_path, dlm_defpath);
+ 	dlm_inited = 1;
++#ifndef DLM_HOST
++	dlm_arena_init();		/* the manifest this boot loads from */
++#endif
+ 	printf("dlm: %d kernel symbols\n", (int)G32(dlm_ksym + KH_NSYM) - 1);
+ }
+--- a/dlm.h
++++ b/dlm.h
+@@ -334,6 +334,14 @@
+ extern char *dlm_static[];
+ extern char *dlm_kabi, *dlm_pin, *dlm_build;	/* this kernel, for .moddata */
+ 
++/* manifest-only loading (30-module-core.md section 2, patch 17; C3-4) */
++extern char *dlm_man;			/* the manifest the loader booted, or 0 */
++extern long dlm_manlen, dlm_mangen;
++extern int dlm_devload;			/* development load this boot */
++extern int dlm_arena_check(), dlm_man_member();
++extern void dlm_arena_init();
++extern void ax_sha256();		/* amix-dlm loader/common/sha256.c */
++
+ /* the major registry, generated from the ABI kit's file by tools/mkreg */
+ struct dlm_majreg {
+ 	int	r_type;			/* 'c' or 'b'; 0 ends the table */
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -14,6 +14,11 @@
+ char	*dlm_pin = "gcc-2.7.2.3-8949028";
+ char	*dlm_build = "68060-261101-01";
+ 
++/* manifest-only loading: off for the older tests, man_tests() turns it on */
++char	*dlm_man = 0;
++long	dlm_manlen, dlm_mangen;
++int	dlm_devload = 1;
++
+ /* the harness's major registry */
+ struct dlm_majreg dlm_majreg[] = {
+ 	{ 'c', 51, "z3660eth" },
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -178,3 +178,11 @@
+ mod('tiu', data='\t.globl\ttiu_ref\ntiu_ref:\n\t.long\tlbolt\n')
+ mod('tic', extra=['tier=core', 'build=68060-261101-01'],
+     data='\t.globl\ttic_ref\ntic_ref:\n\t.long\tlbolt\n')
++
++# manifest-only loading (patch 17): pm1 matches its record, pm2's record
++# carries another hash, pm3 is in no record, pmd's dependency pmdep is not
++mod('pm1')
++mod('pm2')
++mod('pm3')
++mod('pmd', 'pmdep')
++mod('pmdep')
+--- a/test/state.c
++++ b/test/state.c
+@@ -388,6 +388,104 @@
+ 	settier("lbolt", KSYM_DDI);
+ }
+ 
++/* ---- manifest-only loading and the arena directory (patch 17, C3-4) ---- */
++extern unsigned long ax_crc32();
++extern void ax_crc32_init();
++
++/* the SHA-256 of a harness module file, in hex */
++static void
++hexsha(name, out)
++	char *name, *out;
++{
++	static char b[65536];
++	unsigned char s[32];
++	char p[1024];
++	size_t n = 0;
++	FILE *f;
++	int i;
++
++	snprintf(p, sizeof p, "%s/etc/conf/mod.d/%s", host_root, name);
++	if ((f = fopen(p, "rb")) != 0) {
++		n = fread(b, 1, sizeof b, f);
++		fclose(f);
++	}
++	ax_sha256(b, (unsigned long)n, s);
++	for (i = 0; i < 32; i++)
++		sprintf(out + 2 * i, "%02x", s[i]);
++}
++
++/* an AXA1 directory without entries and the manifest man, as boot2 writes */
++static void
++mkarena(a, man, sum_ok, crc_ok)
++	char *a, *man;
++	int sum_ok, crc_ok;
++{
++	static unsigned long tab[256];
++	unsigned long sum = 0, crc;
++	long ml = strlen(man), i;
++
++	memset(a, 0, 4096);
++	P32(a, 0x41584131L);
++	P32(a + 4, 1L << 16 | 32);
++	P32(a + 16, 32);
++	memcpy(a + 32, man, ml);
++	ax_crc32_init(tab);
++	crc = ax_crc32(tab, a + 32, (unsigned long)ml) ^ (crc_ok ? 0 : 1);
++	sprintf(a + 32 + ml, "end crc32=%08lx\n", crc & 0xffffffffUL);
++	ml += 19;
++	P32(a + 20, ml);
++	P32(a + 24, 32 + ml);
++	P32(a + 28, 7);
++	for (i = 0; i < 8; i++)
++		sum += G32(a + 4 * i);
++	P32(a + 8, (0 - sum + (sum_ok ? 0 : 1)) & 0xffffffffUL);
++}
++
++void
++man_tests()
++{
++	static char a[4096], man[2048], s1[65], sd[65];
++	char *m;
++	long len, gen;
++	int id;
++
++	hexsha("pm1", s1);
++	hexsha("pmd", sd);
++	sprintf(man, "GMF1\ngeneration 7\nline k46\n"
++	    "module pm1 boot 300 path=/etc/conf/mod.d/pm1 sha256=%s\n"
++	    "module pm2 demand 300 path=/etc/conf/mod.d/pm2 sha256=%s\n"
++	    "module pmd boot 300 path=/etc/conf/mod.d/pmd sha256=%s\n", s1, s1, sd);
++	mkarena(a, man, 1, 1);
++	check(dlm_arena_check(a, 4096L, &m, &len, &gen) == 0 && m == a + 32 && gen == 7,
++	    "arena: a valid directory and manifest copy");
++	check(dlm_arena_check(a, 64L, &m, &len, &gen) == -1, "arena: a manifest past the arena -> refused");
++	mkarena(a, man, 0, 1);
++	check(dlm_arena_check(a, 4096L, &m, &len, &gen) == -1, "arena: a bad directory check -> refused");
++	mkarena(a, man, 1, 0);
++	check(dlm_arena_check(a, 4096L, &m, &len, &gen) == -1,
++	    "arena: a manifest copy with a wrong end crc32 -> refused");
++	mkarena(a, man, 1, 1);
++	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &dlm_mangen);
++	dlm_devload = 0;
++	check(modload("pm1", &id) == 0 && byname("pm1"), "manifest: a member whose bytes match loads");
++	check(modload("pm2", &id) == EPERM && !byname("pm2"),
++	    "manifest: a member whose SHA-256 differs -> EPERM");
++	check(modload("pm3", &id) == EPERM && !byname("pm3"), "manifest: a module outside it -> EPERM");
++	check(modload("/etc/conf/mod.d/pm3", &id) == EPERM && !byname("pm3"),
++	    "manifest: an absolute path outside it -> EPERM");
++	check(modload("pmd", &id) != 0 && !byname("pmd") && !byname("pmdep"),
++	    "manifest: a member whose dependency is outside it does not load");
++	dlm_devload = 1;
++	check(modload("pm3", &id) == 0 && byname("pm3"),
++	    "development load: a module outside the manifest loads");
++	dlm_devload = 0;
++	m = dlm_man;
++	dlm_man = 0;
++	check(modload("pmdep", &id) == EPERM && !byname("pmdep"), "no booted manifest: nothing loads");
++	dlm_man = m;
++	dlm_devload = 1;
++}
++
+ void
+ hook_tests()
+ {
+@@ -901,6 +999,7 @@
+ 	host_handler("cd_open", h_cdopen);
+ 	host_handler("cd_close", h_cdclose);
+ 	drv_tests();
++	man_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;

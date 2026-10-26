@@ -97,7 +97,8 @@ if $HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$TB/mkksym" "$DLM/tools/mkksym.
 	"$T/reloc.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" &&
    $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -o "$B/test-bin/state" \
 	"$T/state.c" "$T/hostk.c" "$DLM/dlm_core.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" \
-	"$DLM/dlm_slot.c" "$T/hconf.c" > "$B/tools.log" 2>&1; then
+	"$DLM/dlm_slot.c" "$DLM/dlm_arena.c" "$T/hconf.c" \
+	"$R/loader/common/sha256.c" "$R/loader/common/crc32.c" > "$B/tools.log" 2>&1; then
 	pass "host tools (mkksym, modfix, reloc, state)"
 else
 	fail "host tools"; cat "$B/tools.log"; exit 1
@@ -108,14 +109,19 @@ PIN=gcc-2.7.2.3-8949028	# toolchain.pin
 KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.0\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
-for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg; do
+for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena; do
 	$KCC -c "$DLM/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
+done
+# the loader's SHA-256 and CRC-32 (C89 with prototypes: the loader's flags)
+for f in sha256 crc32; do
+	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
+		-I"$R/loader/common" -c "$R/loader/common/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
 done
 for f in dlm_cache dlmksym dlm_hooksw; do
 	m68k-cbm-sysv4-gcc -c "$DLM/$f.s" -o "$B/obj/$f.o"
 done
 m68k-cbm-sysv4-ld -r -o "$B/obj/dlm.o" $(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str \
-	dlmconf dlmreg dlm_cache dlmksym dlm_hooksw; do echo "$B/obj/$f.o"; done)
+	dlmconf dlmreg dlm_arena sha256 crc32 dlm_cache dlmksym dlm_hooksw; do echo "$B/obj/$f.o"; done)
 if grep -v 'types.h:182\|In file included\|^ *from ' "$B/kobj.warn" | grep . > "$B/kobj.other"; then
 	fail "kernel objects: warnings beyond the stock headers'"; cat "$B/kobj.other"
 else

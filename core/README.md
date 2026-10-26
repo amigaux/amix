@@ -36,6 +36,7 @@ against our kernels (M-CORE1).
 | 0006 | `major-registry` | 30 §2 patch 6. A module's `majors=` must name numbers the registry gives to that module (`ECONFIG` otherwise). The kernel build generates the table from the kit's `abi/registry/majors` with `tools/mkreg`. | not yet (upstream would carry its own registry file) |
 | 0007 | `fmodsw-no-truncation` | 30 §2 patch 12. Every stock STREAMS-module row is kept. More than 11 leave fewer rows for modules and are reported; more than the table holds panic at `dmainit`. | not yet |
 | 0008 | `measured-structure-layouts` | 30 §2 patch 15. The `mod_drv_data`, `cdevsw`, `mod_str_data`, `streamtab` and `qinit` layouts are measured from the kernel's headers by the kernel's compiler (`dlmoffs.c`, `tools/mkoffs`, `dlm_offs.h`) instead of written down. On the 2.1 sysroot all 19 equal upstream's values. | not yet |
+| 0009 | `manifest-only-loading` | 30 §2 patch 17, contract C3-4. Every load resolves a module only as a member of the booted manifest (the loader's copy in the arena, found through AXK1 and checked by `dlm_arena.c`). It is read from its `path=` into memory, its SHA-256 checked, and loaded from that copy; anything else is `EPERM`. The development-load flag (`dlm_devload`) lets a module outside the manifest load, and says so each time. SHA-256 and CRC-32 come from amix-dlm's `loader/common`. | not yet (upstream would supply its own hash code) |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order
