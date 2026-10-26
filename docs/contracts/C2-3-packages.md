@@ -35,14 +35,19 @@ package, never a revision of a static family's:
 | Line | Catalog name | pkginst | Version |
 |---|---|---|---|
 | k46 | `kernel-k46-m` | `kern46m` | `k46.1.0.261026-58` |
-| k30 | `kernel-k30-m` | `kern30m` | `k30.1.0.261026-02` |
+| k30 | `kernel-k30-m` | `kern30m` | `k30.1.0.261026-01` |
 
 - **The version** is `<kabi>.<yymmdd>-<nn>`: the kabi tag, then the last
-  two fields of the build id (`build=`, `68060-261026-58`). A re-mint of
+  two fields of the build id (`build=`: `68060-261026-58`, K030-U's
+  `68030-261026-01`). A re-mint of
   the same build adds `.<r>` (`k46.1.0.261026-58.1`). The build ids above
   are examples; the values come from the sidecar of the kernel minted.
 - Like the static families, it installs `/stand/<line>/unix` and `kabi`
-  (and on k30 `unix.sym`, §2.1). So a box carries either a static family
+  (and on k30 `unix.sym`, §2.1). The k46 module kernel is ET_REL, so its
+  sidecar needs no `bss=` (the loader takes the bss from its sections) and
+  no `sym=` (kbootset reads its symbol table); both are required of a
+  `brel` only. The catalog row carries `line=`, `kabi=` and `pin=`; the
+  rest is the installed sidecar's (C2-2 §1.1). So a box carries either a static family
   or the module kernel of a line, and installing one replaces the other
   in one apkg transaction: `pkgrm` and record of the other first, then the
   new package (C2-2 §2.1, apkg 0.3.1; apkg 0.3.0 does not do it, so on a

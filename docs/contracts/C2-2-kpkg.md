@@ -51,6 +51,18 @@ whole.
   ordinary entries, not in this block.
 - Module packages are published from stage 3 on; until then
   `gen-catalog.py` may skip them.
+- **Where the values come from** (the stage-3 mint's conventions, version
+  5):
+  - a `kernel` row's `line=`, `kabi=` and `pin=` come from the kernel's
+    sidecar (C2-3 §2). The row carries only what apkg's pre-flight needs.
+    Everything else kbootset reads from the installed sidecar itself:
+    `abi=`, `loader-min=`, `bss=`, `sym=`, `ident=`, `arena=`;
+  - a `module` row's `kabi=` and `pin=` come from the object's
+    `.moddata` `kabi=` and `cc=` (C3-1), and `line=` from the kabi family.
+    A row has no `depend=` key: apkg does not check module dependencies at
+    install, kbootset's gate 3 does at build (C3-5 §2);
+  - `file=` is a path under the repository's `base/`, as for the
+    ordinary entries.
 
 ## 2. The install record `/var/apkg/kpkg/<pkginst>`
 

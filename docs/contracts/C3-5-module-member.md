@@ -5,7 +5,7 @@
   (§2); version 3 (2026-10-26): `marc_post` runs from the first sysinit
   entry, `modadmin -B` (§5, U15); version 4 (2026-10-26, from S3-31's
   dry run): the package's names and version (§1.1), and its scripts run
-  on the installer's miniroot, so pure `sh` (§1.2). Every consumer
+  on the installer's miniroot, so pure `sh` (§1.3); the package's contents (§1.2). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
@@ -61,7 +61,23 @@ per line**:
 
   A new module's owner adds its row in a version bump of this contract.
 
-### 1.2 Package scripts
+### 1.2 The package's contents (the stage-3 mint's conventions)
+
+- `CATEGORY` is `system`.
+- Files: `/etc/conf/mod.d/<name>`, and `/etc/conf/modreg.d/<name>`. When
+  the package sets no parameter other than the module's own defaults, the
+  modreg file is comments only, pointing at the format and at
+  `modreg.local.d` for the administrator's overrides.
+- Directories: `/etc/conf`, `/etc/conf/mod.d` and `/etc/conf/modreg.d`
+  0755 root sys; `/etc` 0755 root root, as the core packages have it.
+- `/etc/conf/modreg.local.d` is the administrator's and is never shipped
+  (§1).
+- The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
+  `.moddata`. **apkg does not check dependencies** between module
+  packages at install: a module whose `depend=` names a module that is not
+  installed (or is disabled) is refused by `kbootset build`, gate 3 (§2).
+
+### 1.3 Package scripts
 
 A module package's scripts (and `modtools`') run where `pkgadd` runs: on a
 box, and on the installer's miniroot, which has no `awk`, `cmp`, `grep` or
