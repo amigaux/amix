@@ -89,13 +89,15 @@ so the core only relocates and links them in memory, in process 0 inside
 the context the floor's static drivers have in `init_tbl` today:
 - no file I/O and no page fault: the code and data are in the arena or
   kmem, never behind the file system's mapping window;
-- no sleep;
-- allocation with `KM_NOSLEEP`, unless U1 shows `KM_SLEEP` is safe there;
+- no sleep, and no `timeout`: the status register is at priority 7 and
+  the clock stands still there (U1, 2026-10-26);
+- allocation with `KM_NOSLEEP` only, each request at most 1 MiB (the k30
+  line refuses 2 MiB there, U1), checked for failure;
 - board probes polled, interrupts attached only after the self-test
   (§4), as now.
 
-U1 (the status register and kmem state at `dmainit` and at the
-`marc_root` hook) measures that context before stage 4 relies on it. A
+U1 measured that context (`docs/measurements/2026-10-26-u1.md`): the
+same at `dmainit` and at the hook, on both lines. A
 root-class driver that needs more than this context gives belongs to the
 boot class, or loads its remainder from `_load`'s first open.
 

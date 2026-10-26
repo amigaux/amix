@@ -49,7 +49,7 @@ U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
 
 | ID | Measurement | Class | Stage | Spec |
 |---|---|---|---|---|
-| U1 | Status register and kmem state at `dmainit` and at the `marc_root` hook; whether `kmem_zalloc(KM_SLEEP)` is safe there. Measured by a `-DDLM_U1` build of each kernel of record (core patch 0023, test only); recipe `tests/bench/README.md` S3-41 | bench | 3 | 30 §3 |
+| U1 | Status register and kmem state at `dmainit` and at the `marc_root` hook; whether `kmem_zalloc(KM_SLEEP)` is safe there. Measured by a `-DDLM_U1` build of each kernel of record (core patch 0023, test only); recipe `tests/bench/README.md` S3-41. **Answered 2026-10-26 (N77 k46, N78 k30):** priority 7 and the clock stopped at both points on both lines, so `KM_SLEEP` is not safe and nothing may sleep there; `KM_NOSLEEP` gives 1 MiB on both lines (k30 refuses 2 MiB at 64 MB, k46 gives 2 MiB at 128 MB); evidence `docs/measurements/2026-10-26-u1.md` | bench | 3 | 30 §3 |
 | U2 | Free kernel virtual space for copied modules at 128 MB of RAM. Probe module `u2kva` (`tests/bench/s3-41`), recipe `tests/bench/README.md` S3-41 | bench | 3 | 30 §8 |
 | U3 | Execution from the arena in `.data` through ITT0 on 040/060; cache class of module `.bss` | bench (mapping) + metal (cache behaviour) | 4 | 30 §8 |
 | U4 | Large `kmem` requests routed to `sptalloc` behave (no silent hang). Probe module `u4big` (`tests/bench/s3-41`), recipe `tests/bench/README.md` S3-41 | bench | 3 | 30 §2 |
