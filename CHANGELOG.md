@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — stage-3 audit of the rows reported done; 30 §3 root-class context (f98c1ac, 4fea711)
+
+Audit (docs/plan/stage-3-audit-2026-10-26.md): of 14 rows reported done, 7 are done (S3-01, 02, 04, 08, 09, 11, 15) and
+7 half (S3-03 errnos/console lines/param forms; S3-05 drv_cmajor unchecked; S3-06 range checks not implemented, registrations
+untracked; S3-07 devload vs C3-4; S3-10 no sample driver; S3-16 gate 6 misses ET_REL bss; S3-40 records). Seven kernel fixes
+proposed for the final cut (patches 0018–0020). 30 §3: the sysinit path is boot class only; root-class modules load from the
+arena in marc_root (no file I/O, floor init_tbl rules), U1 measures that context before stage 4 relies on it.
+
 ## 2026-10-26 — core patch 0017: boot-class modules load from the first sysinit entry (cf762a3..bcd6f0d)
 
 S3-B5's panic (N50): the kernel's hook after vfs_mountroot read the module file in process 0 at IPL 7, where the file system
