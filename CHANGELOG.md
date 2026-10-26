@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — Loader version 3; two drivers on one board refused; the kit makes root-class modules (ec99e40..ba2bcee)
+
+AX_LOADER_VERSION 3; kbootset raises loader-min to 3 on a generation with a root-class record and gate 7 refuses it on a
+store whose loader is older (spec 10 §5.1, 40 §3.1); the banner reads `amix-boot 3:` / `amix-cdboot 3:`. C4-4 v4 §4.1, three
+layers against two drivers on one board: kbootset's gate 3 refuses a root module for a controller the kernel's sidecar
+root= names; core patch 0037 has marc_root skip one before its _load, the kernel naming its built-in root controllers in
+`dlm_static_root` (written by `mkident.py --asm LINE KABI CAP ROOT`, "" when omitted); the port's sd guard is the last
+line. The kit: core patch 0038 has mkmod write `$rank`; modcheck accepts class=root (match= required, no unload=allowed,
+only b: majors and only on root, rank one of z3660/zorro/mobo/ide, the in-place layout). S4-71 records the root context's
+measured shape; the S4-72-1 recipe gets the version-3 banner, gate 7 and the static-driver refusal as its first expected line
+on a kernel that still links z3660scsi. make test 692; harness 243/243; kit-test accepts a root module and six refusals.
+
 ## 2026-10-26 — Core patch 0036 root_defer; C4-2 agreed; the S4-72-1 recipe (6813501, 1e6c56d, 4dc0e8b)
 
 `root_defer(fn, arg)`: only from a root-class module's _load in the root pass; up to 8 calls, run once each in order by
