@@ -71,7 +71,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | S3-26 z3660rtg as a module | built; composes with monsw in the generation: gate 3 passes its `depend=monsw` |
 | S3-27 monsw as a module | done: Q3-2 settled (amix-modules); the module at amix-modules c0386d9, packaged `monsw30`/`monsw46` 1.0.0-1 (§1), on the s3dry2 media and the media of record; z3660rtg passes gate 3 with it |
 | S3-30 module packages in apkg | apkg 0.3.1 |
-| S3-31 the installer | the dry run passed on the host. The box run: amix-installng's four media-of-record cells, on the -5 set, pending their report. Part 3, the CD-booted, disk-rooted cell (`stage-3-cd-boot.md` §5): amix-installng's discs, after the media of record |
+| S3-31 the installer | the dry run passed on the host. The box run: **done** — amix-installng's media of record (ISOs k30 `98a88d43…`, k46 `5ed3bbea…`, SHA256SUMS `fff4fd0d…`), four cells PASS on the -5 set; first boots of the record disks on both lines: `S01kbnamelist` writes `/stand/unix` (bound at 0x04000000 / 0x08000000), netstat works, k46 "module z3660eth (boot): loaded" (k30 error 6, no Z3660 on that rig, as it should), syslogd up every boot. Part 3, the CD-booted, disk-rooted cell (`stage-3-cd-boot.md` §5): pending amix-installng's discs (k30 mastered; k46 with kbootset 35dd599 or later) |
 | S3-40 host measurements | done (`docs/measurements/2026-10-26-m-reg1-m-abi1.md`, `2026-10-26-u16-m-abi2.md`) |
 | S3-41 bench measurements | §4 |
 | S3-43 emulator rows | §3 |
