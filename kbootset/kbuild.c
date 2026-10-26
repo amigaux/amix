@@ -32,6 +32,7 @@
 #include "kbox.h"
 #include "kmod.h"
 #include "knl.h"
+#include "rel.h"
 
 #define MAXFILE	(64UL << 20)
 
@@ -166,6 +167,12 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 		kk->arena_off = (ax_u32)strtoul(buf, &e, 0);
 		kk->arena_cap = (ax_u32)strtoul(e, 0, 0);
 		kk->has_arena = 1;
+	}
+	if (value(text, "ksym", buf, sizeof(buf))) {
+		char *e;
+		kk->ksym_off = (ax_u32)strtoul(buf, &e, 0);
+		kk->ksym_len = (ax_u32)strtoul(e, 0, 0);
+		kk->has_ksym = 1;
 	}
 	if (value(text, "ident", buf, sizeof(buf))) {
 		kk->ident_off = (ax_u32)strtoul(buf, 0, 0);
@@ -383,6 +390,72 @@ root_loader(struct ks *k, struct kb_kernel *kk, int nroot)
 static int
 nroot_mods(void);
 
+/*
+ * The kernel's symbol block (C3-2, the sidecar's ksym=): the names a
+ * module may import from this kernel, with their tier.  Found by binding
+ * a copy of the kernel as boot2 does (the loader's layout) and reading
+ * the block at its image offset.  Only the names are read, so the bind
+ * address does not matter.
+ */
+static ax_u8 *kblk;
+static ax_u32 kblklen;
+
+static int
+kblock_load(struct ks *k, const struct kb_kernel *kk, const ax_u8 *kernel, ax_u32 klen)
+{
+	struct ax_bootdata bd;
+	struct ax_relerr er;
+	ax_u8 *img;
+	ax_u32 a, o = 0, vaddr = 0x08000000UL;
+	int found = 0;
+
+	free(kblk);
+	kblk = 0;
+	if (!kk->has_ksym)
+		return KS_OK;		/* a static kernel: nothing to check against */
+	if ((img = malloc(klen)) == 0)
+		return refuse(k, 0, "out of memory for the kernel's symbol block");
+	memcpy(img, kernel, klen);
+	if (ax_rel(img, klen, vaddr, 1, &bd, &er) == AXR_OK) {
+		a = vaddr + kk->ksym_off;
+		/* as boot2's img(): a brel is one image, its data inside "text" */
+		if (bd.dsize && a >= bd.dvaddr && a - bd.dvaddr + kk->ksym_len <= bd.dsize)
+			o = bd.doffset + (a - bd.dvaddr), found = 1;
+		else if (!bd.dsize && a >= bd.tvaddr && a - bd.tvaddr + kk->ksym_len <= bd.tsize)
+			o = bd.toffset + (a - bd.tvaddr), found = 1;
+	}
+	if (found && kk->ksym_len >= 40 && o + kk->ksym_len <= klen &&
+	    AX_GET32(img + o) == 0x4b53594dUL && AX_GET32(img + o + 4) == 2 &&
+	    (kblk = malloc(kk->ksym_len)) != 0) {
+		memcpy(kblk, img + o, kk->ksym_len);
+		kblklen = kk->ksym_len;
+	}
+	free(img);
+	if (!kblk)
+		return refuse(k, 2, "the sidecar's ksym= names no KSYM version 2 block in the kernel");
+	return KS_OK;
+}
+
+/* the block exports name to a module of this tier (0 ddi, 1 core) */
+static int
+kblock_has(const char *name, int tier)
+{
+	ax_u32 n = AX_GET32(kblk + 8), so = AX_GET32(kblk + 12), st = AX_GET32(kblk + 16),
+	       sz = AX_GET32(kblk + 20), i, nm;
+
+	if (so > kblklen || n > (kblklen - so) / 16 || st > kblklen || sz > kblklen - st)
+		return 0;
+	for (i = 1; i < n; i++) {
+		const ax_u8 *y = kblk + so + 16 * i;
+
+		nm = AX_GET32(y);
+		if (nm < sz && !strcmp((const char *)kblk + st + nm, name) && y[13] <= tier)
+			return 1;
+	}
+	return 0;
+}
+
+
 /* every gate this module owns, for the kernel of line f->line; on success
  * *kernel holds the kernel's bytes (malloc'd) */
 static int
@@ -431,6 +504,8 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			    (kk->has_arena && (!kk->arena_cap || kk->loader_min < 2))))
 		rc = refuse(k, 2, "a module kernel's sidecar gives arena=, ident= and loader-min=2 "
 			    "together, a static kernel's none of them");
+	if (rc == KS_OK)
+		rc = kblock_load(k, kk, *kernel, *klen);
 	if (rc == KS_OK && kk->has_arena && !kk->abi[0])
 		rc = refuse(k, 2, "a module kernel's sidecar gives no abi= (the fingerprint, C3-3 "
 			    "section 4)");
@@ -499,6 +574,88 @@ struct kb_mod {
 };
 static struct kb_mod mods[AXM_MAXMOD];
 static int nmods;
+
+struct def {
+	const char *name;
+	int found;
+};
+
+static int
+def_one(void *ctx, const char *name, int undef)
+{
+	struct def *d = ctx;
+
+	if (!undef && !strcmp(name, d->name))
+		d->found = 1;
+	return d->found;
+}
+
+/* module m defines the global name */
+static int
+defines(const struct kb_mod *m, const char *name)
+{
+	struct def d;
+	char why[128];
+
+	d.name = name, d.found = 0;
+	return km_syms(m->data, m->size, def_one, &d, why) == 0 && d.found;
+}
+
+struct imp {
+	const struct kb_mod *md;
+	int tier, nmiss;
+	char miss[300];
+};
+
+static int named(const char *list, const char *name);
+
+/* one import of md: from a module it depends on, else from the kernel's block */
+static int
+imp_one(void *ctx, const char *name, int undef)
+{
+	struct imp *c = ctx;
+	int j;
+
+	if (!undef || kblock_has(name, c->tier))
+		return 0;
+	for (j = 0; j < nmods; j++)
+		if (named(c->md->i.depend, mods[j].i.name) && defines(&mods[j], name))
+			return 0;
+	if (c->nmiss++ < 6 && strlen(c->miss) + strlen(name) + 2 < sizeof(c->miss))
+		sprintf(c->miss + strlen(c->miss), "%s%s", c->miss[0] ? ", " : "", name);
+	return 0;
+}
+
+/*
+ * Gate 2, the imports: every undefined global of every module in the
+ * generation comes from a module it depends on or from the kernel's
+ * symbol block, a core-tier name only for a core-tier module (C3-2).
+ * Otherwise the core would refuse it at link, in the boot, with error 165.
+ */
+static int
+imports(struct ks *k, const struct kb_kernel *kk)
+{
+	struct imp c;
+	char m[600], why[128];
+	int i;
+
+	for (i = 0; kblk && i < nmods; i++) {
+		memset(&c, 0, sizeof(c));
+		c.md = &mods[i];
+		c.tier = !strcmp(mods[i].i.tier, "core");
+		if (km_syms(mods[i].data, mods[i].size, imp_one, &c, why)) {
+			sprintf(m, "module %.15s: %.120s", mods[i].i.name, why);
+			return refuse(k, 2, m);
+		}
+		if (c.nmiss) {
+			sprintf(m, "module %.15s imports %d name(s) kernel %.47s (kabi %.23s) does not "
+				"export: %s%s; it needs a newer kernel cut", mods[i].i.name, c.nmiss,
+				kk->build[0] ? kk->build : "?", kk->kabi, c.miss, c.nmiss > 6 ? ", ..." : "");
+			return refuse(k, 2, m);
+		}
+	}
+	return KS_OK;
+}
 
 static void
 mods_free(void)
@@ -803,6 +960,8 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		}
 	}
 	closedir(dd);
+	if (rc == KS_OK)
+		rc = imports(k, kk);
 	if (rc != KS_OK) {
 		mods_free();
 		return rc;

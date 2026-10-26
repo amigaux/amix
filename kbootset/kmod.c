@@ -256,3 +256,49 @@ km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why)
 	*tail = (off + 3) & ~(ax_u32)3;
 	return 0;
 }
+
+int
+km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *ctx, char *why)
+{
+	ax_u32 shoff, shnum, i, k, n, so, sz, st, stsz, nm;
+
+	if (len < 52 || memcmp(b, "\177ELF", 4) || G16(b + 46) != 40) {
+		strcpy(why, "not an ELF32 relocatable object");
+		return -1;
+	}
+	shoff = G32(b + 32);
+	shnum = G16(b + 48);
+	if (shoff > len || shnum * 40 > len - shoff) {
+		strcpy(why, "malformed section headers");
+		return -1;
+	}
+	for (i = 1; i < shnum; i++) {
+		const ax_u8 *s = b + shoff + 40 * i, *t;
+
+		if (G32(s + 4) != 2)		/* SHT_SYMTAB */
+			continue;
+		so = G32(s + 16);
+		sz = G32(s + 20);
+		if (G32(s + 36) != 16 || so > len || sz > len - so || G32(s + 24) >= shnum) {
+			strcpy(why, "malformed symbol table");
+			return -1;
+		}
+		t = b + shoff + 40 * G32(s + 24);	/* its string table */
+		st = G32(t + 16);
+		stsz = G32(t + 20);
+		if (st > len || stsz > len - st || stsz == 0 || b[st + stsz - 1] != 0) {
+			strcpy(why, "malformed string table");
+			return -1;
+		}
+		for (n = sz / 16, k = 1; k < n; k++) {
+			const ax_u8 *y = b + so + 16 * k;
+
+			nm = G32(y);
+			if ((y[12] >> 4) != 1 || nm == 0 || nm >= stsz)	/* STB_GLOBAL, named */
+				continue;
+			if (fn(ctx, (const char *)b + st + nm, G16(y + 14) == 0))
+				return 0;
+		}
+	}
+	return 0;
+}

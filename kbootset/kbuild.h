@@ -32,6 +32,8 @@ struct kb_kernel {
 	char abi[66];		/* the fingerprint, C3-3 section 4: 64 hex or "" */
 	char root[256], rootfs[64];
 	ax_u32 size, loader_min, arena_off, arena_cap, ident_off;
+	ax_u32 ksym_off, ksym_len;	/* the kernel's symbol block (C3-2), image offset and size */
+	int has_ksym;
 	ax_u32 bss;		/* bytes past the image to the kernel's end: a brel
 				 * kernel does not record them (C2-3 §2) */
 	int has_arena, has_ident;

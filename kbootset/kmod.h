@@ -44,6 +44,13 @@ int km_read(const ax_u8 *b, ax_u32 len, struct km_info *mi, char *why);
  * offset is not a multiple of its alignment (the core runs it in place) */
 int km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why);
 
+/* each global symbol of the module object in b: fn(ctx, name, undef),
+ * undef 1 for an import (SHN_UNDEF), 0 for a definition; fn returns
+ * nonzero to stop.  0, or -1 with why set: not ELF32, a malformed symbol
+ * table */
+int km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *ctx,
+	    char *why);
+
 /* in, a parameter value as modreg.d gives it, in C3-1's form for p's type
  * into out (64 bytes): bool from 0/1, yes/no, true/false, on/off; int and
  * hex from either number form, written in the declared one and within

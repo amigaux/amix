@@ -64,6 +64,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) sh tests/host/kbuild.sh
+	B=$(B) sh tests/host/kimports.sh
 	B=$(B) sh tests/host/kbox.sh
 	B=$(B) sh tests/host/namelist.sh
 	B=$(B) sh tests/host/knamelist.sh
