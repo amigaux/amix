@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-6 v2 takes z3660eth's findings; C3-1/C3-5 v2 param value forms; 10 §7.2 L9; 40 gate 5 (609ccc7, ce94b5c)
+
+C3-6: the STREAMS row is zeros except d_str; z3660eth_int6/int2 are the handlers, attached at first open after the software
+EXTER self-test (INTREQ 0xa000); param intrl2; ZZ_CONFIG_DISABLE acknowledges and masks; the kit's k46 immu.h/param.h are the
+port's 4 KiB forms. C3-1/C3-5 v2: every param value is normalized (bool exactly 0 or 1; kbootset accepts 0/1, yes/no,
+true/false, on/off and refuses the rest at gate 2 — lands with S3-16). Spec 10 §7.2: a trial refused before it starts (L9,
+like L1/L2/L3/L6/L14) spends its attempt. Spec 40 gate 5: a 4 MiB store holds a module generation only beside a deflated
+generation 1. Bench rows: RECNAME in s3-standin.sh, arena line before the symbol count, the rc2 hook's line is the one of
+record, S3-B4 checked through kinfo offset 84.
+
 ## 2026-10-26 — C3-6 version 2: the console hook's cp is the console (3d809d7)
 
 A hook takes only writes where cp->screen == displayedscreen (C3-2's row and patch 0011's comment say the same); _halt is
