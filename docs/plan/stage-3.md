@@ -127,7 +127,7 @@ forces 3 earlier (S3-40).
 | ID | Item | Owner | Class | Needs | Blocks | Est. |
 |---|---|---|---|---|---|---|
 | S3-30 | **Module packages in apkg**: role `module` through the kernel-space path (SHA-256, record, trigger); pre-flight on kabi family/major, minor ≤ the installed kernel's, and the pin | amix-packagemanager | host + bench | C3-5 | S3-45 | 0.5 |
-| S3-31 | **The installer**: the pristine generation from the module kernel and its boot- and demand-class modules; `/etc/conf/mod.d` and `modreg.d`; the rc steps that stay (`S99zen`'s `slink`, `/etc/monsw`) | amix-installng | bench | S3-16, S3-22 | S3-45 | 0.75 |
+| S3-31 | **The installer**: the pristine generation from the module kernel and its boot- and demand-class modules; `/etc/conf/mod.d` and `modreg.d`; the rc steps that stay (`S99zen`'s `slink`, `/etc/monsw`). Part 3, the CD boot (decided 2026-10-26, `stage-3-cd-boot.md`): the CD boot path proven now with a disk-rooted generation; the installer CD, with the compressed miniroot as a RAM-disk root, waits for stage 4's `ramdisk` module (boot2 refuses a ramdisk member until then, 10 §5.4's placement is unimplemented, M-RD1 unmeasured) | amix-installng | bench | S3-16, S3-22 | S3-45 | 0.75 |
 
 ### 2.7 Measurements and rows
 

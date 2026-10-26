@@ -69,7 +69,7 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 | S3-26 z3660rtg as a module | built; composes only with monsw in the generation, or with monsw disabled, which gate 3 refuses for z3660rtg's `depend=` |
 | S3-27 monsw as a module | waits for the owner's decision on where monsw lives (Q3-2) |
 | S3-30 module packages in apkg | apkg 0.3.1 |
-| S3-31 the installer | S3-31's dry run passed on the host; on the box with the kernels of record, pending |
+| S3-31 the installer | S3-31's dry run passed on the host; on the box with the kernels of record, pending. Part 3: the CD-booted, disk-rooted cell (`stage-3-cd-boot.md` §5), pending the CD-capable A4091 ROM |
 | S3-40 host measurements | done (`docs/measurements/2026-10-26-m-reg1-m-abi1.md`, `2026-10-26-u16-m-abi2.md`) |
 | S3-41 bench measurements | §4 |
 | S3-43 emulator rows | §3 |
@@ -86,6 +86,11 @@ S3-43, S3-41) and `docs/plan/stage-3.md`.
 - **Metal (S3-46):** the stage-3 metal rows (z3660eth and z3660rtg as
   modules on both boxes, interrupt attachment on metal) wait for the
   owner's bench time.
+- **The installer CD (S3-31 part 3, second half):** the compressed miniroot
+  as a RAM-disk root waits for stage 4's `ramdisk` module (boot2 and
+  `amix-cdboot` refuse a ramdisk member until then; 10 §5.4's placement is
+  unimplemented; M-RD1 unmeasured). The CD boot path itself is proven in
+  stage 3 by the disk-rooted cell.
 - **Throughput (80 §2, OQ-80.3):** "no regression against the static
   drivers' figures" needs the static baselines of record named before
   S3-45.

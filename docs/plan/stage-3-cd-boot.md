@@ -31,8 +31,8 @@ generation cannot boot before stage 4:**
 
 The CD boot path itself (ROM, AmigaDOS, the CD filesystem, `amix-cdboot`,
 the hand-off) does not depend on the RAM disk. It can be proven now with
-a generation that roots on the vehicle's hard disk. **Proposed for S3-31
-part 3:**
+a generation that roots on the vehicle's hard disk. **S3-31 part 3,
+decided 2026-10-26:**
 1. the CD-booted, disk-rooted cell below (§5), on both lines;
 2. the installer CD (kernel + miniroot) as soon as stage 4 gives the RAM
    disk. The 1.1 media ship after stage 4 in any case (D-3 §8).
@@ -140,10 +140,16 @@ Expected on the console, in order:
 6. A missing file gives `amix-boot: L12 cannot open <path>`. A bad
    control file gives `amix-cdboot: no valid control file`.
 
-**Watch on that boot:** the vehicle's own `S01kbnamelist` and the
-`mark-good` hook run against kinfo's loader record, which names generation
-1 of the CD. The CD has no store, so kbootset's store search (40 §5) may
-fall back to scanning the disks and find the vehicle's store, which has
-its own generation 1. Note what `kbootset status`, `namelist` and
-`mark-good` print on a CD boot. Whether a CD boot should tell kbootset so
-(a loader record flag) is the cell's finding to bring back.
+**kbootset on that boot** (C2-4 §13, kbootset -13): `amix-cdboot` sets
+the loader record's read-only-medium flag (AXL1 0x08) and no boot device.
+The vehicle's own scripts then print, with kbootset -13 installed:
+- from `S01kbnamelist`: `kbootset: namelist /stand/unix written for the
+  medium's kernel (68060-261026-58), bound at 0x…` (k30:
+  `68030-261026-01`), because the CD's kernel is the vehicle's installed
+  kernel of record;
+- from the `mark-good` hook: `kbootset: booted from a read-only medium
+  (generation 1 of a CD): nothing to mark`;
+- `kbootset status`: `booted: generation 1 of a read-only medium (a CD),
+  not of this box's store; kernel 68060-261026-58, …`, and `namelist:
+  /stand/unix is the medium's kernel's (…), bound at 0x…`;
+- the vehicle's store unchanged (`lsstore` before and after).
