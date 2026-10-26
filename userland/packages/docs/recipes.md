@@ -24,6 +24,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261026-10, brel), unix + kabi + unix.sym verbatim | minted 2026-10-26, staged, not published |
 | [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
 | [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
+| [`ramdisk/`](ramdisk/) | `ramdisk-k30` / `ramdisk-k46` (`ramdisk30`/`ramdisk46`) — the RAM disk, a root-class module of each line (kabi 1.2), with its `/dev/dsk/ram0`–`ram2` block nodes | minted 2026-10-26, not staged: gen-catalog/apkg refuse `b` entries yet |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 1 | minted 2026-10-25, staged, not published |
 | [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | minted 2026-10-25, staged, not published |
 | [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries | minted 2026-10-26, staged, not published |

@@ -13,7 +13,8 @@
 #     depend or copyright.  No install scripts, no links, no classes.
 #     A module package (an f under /etc/conf/mod.d/) may also carry the
 #     device nodes of its driver's majors as `c none /dev/<node> <major>
-#     <minor> <mode> <owner> <group>` (amix-dlm C3-5 sec 1.2, 568b9ac).
+#     <minor> <mode> <owner> <group>` (amix-dlm C3-5 sec 1.2, 568b9ac), and
+#     a block driver's as `b none /dev/dsk/<node> ...` (C3-5 v8 sec 1.2).
 #  2. NO USERLAND 68060 GATE.  A kernel image is not a userland program: the
 #     040/060 kernel carries fpsp060/isp060 tables a scanner reads as movep,
 #     and a k30 kernel never runs on a 68060.  Kernel objects are gated by
@@ -69,6 +70,10 @@ amix_kpkgroll() {
 		            if ($3 !~ /^\/dev\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
 		                print "BAD device entry " $0;
 		            nc++; next }
+		$1 == "b" { if ($2 != "none") print "BAD class " $2 " " $3;
+		            if ($3 !~ /^\/dev\/dsk\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
+		                print "BAD block device entry " $0;
+		            nc++; next }
 		{ print "BAD type " $1 " " $3 }
 		END { if (!nf) print "BAD no file"
 		      if (nc && !mod) print "BAD device entries outside a module package" }
@@ -82,7 +87,7 @@ amix_kpkgroll() {
 
 	# GATE 4 -- s5 14-byte basenames (pkgroll.sh gate 3, same rule).
 	awk '
-		$1 ~ /^[fdc]$/ && NF >= 3 {
+		$1 ~ /^[fdcb]$/ && NF >= 3 {
 			p = $3; sub(/=.*$/, "", p);
 			n = split(p, seg, "/"); base = seg[n];
 			if (length(base) > 14) print "TRUNC " p;
