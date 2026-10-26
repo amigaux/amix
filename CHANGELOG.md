@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-40's plan: ufs and s5 as boot-class filesystem modules promoted by rootfs (2d95b99)
+
+docs/plan/s4-40-ufs-s5-carve.md, plan only. Measured: ufs .text 50 236 / .data 1 004 (13 COMMONs), s5 37 776 / 380; a clean
+separation on k30 (only filesys.o's vfssw rows and kernel.o's inoinit reference them); contiguous ranges in the k46 base;
+rootvp stays the kernel's (core tier). Core tier = 99 names (abi/<line>/core.list). Both fs= modules boot class, match=always,
+promoted by rootfs (core 0043), tier=core, shipped in the kernel package; k30: drop the objects, 13 → 11 vfssw rows, no
+inoinit; k46: carve by ranges (tools/carve.py), relink, drop patch_cdfs_vfssw.py. S4-71 halves via probe=1. Budgets: ~80 KB of
+the 393 KB arena for the largest root set; the kernel loses ~89 KB of text. Questions A1–A3 (orchestrator), P1–P4, K1–K4.
+
 ## 2026-10-27 — the stage-4 exit ledger refreshed; kabi 1.2's closing rule (1b9aa1a)
 
 §2a: S4-72-1 (N103r, kern46m -77) and S4-73 (N104r, kern30m -12) PASS — the rig's `FAIL (b1:lifecycle)` is its stale-mark
