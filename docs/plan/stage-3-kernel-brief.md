@@ -105,23 +105,35 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
      between them, so the brel's image is `.text` then `.data` exactly as
      the `.etrel` laid them out.
 
-   The core's splice is the adopted core's method (core map §8):
-   - `objcopy --weaken-symbol` on `dmainit`, `execsw`, `fmodsw`,
-     `scrcon_put` and `aciabintr`;
-   - `--add-symbol` `__amix_execsw` and `__amix_fmodsw` as aliases of the
-     stock tables, and `__amix_scrcon_put` and `__amix_aciabintr` at the
-     stock functions' addresses. Those are `.text` 0x5284 for `scrcon_put`
-     in both kernels of record, and for `aciabintr` 0xdf52 on KD060-Z and
-     0x10a7e on K030-U; read them with `nm`, never hard-code them.
+   The core's splice follows from the core's own definitions. No
+   external document fixes it. Upstream's `build.sh` points at an A/UX
+   relink script that is not vendored here. The rule:
+   - **weaken** every global the core objects define that the base also
+     defines (`nm` of both): today `dmainit`, `execsw`, `fmodsw`,
+     `scrcon_put` and `aciabintr` (`objcopy --weaken-symbol`). The core's
+     definition then wins the link;
+   - **alias** each `__amix_<name>` the core objects leave undefined to the
+     base's `<name>` (`objcopy --add-symbol __amix_<name>=<section>:<value>`
+     with the value from `nm` of the base). Today these are
+     `__amix_execsw` and `__amix_fmodsw` (the stock tables) and
+     `__amix_scrcon_put` and `__amix_aciabintr` (the stock bodies the
+     core's wrappers call). **Read every address with `nm` on the base
+     being built, never write a number down:** they differ between builds
+     of one family (K030-U's `aciabintr` moved between two builds).
      `p6int` is `aciabintr`'s only caller. `make core` does this splice;
    - `ld -r` with the core objects, `ident.o` and `ksym.o`; on k46 add
      `libgcc.a` and the port's `devkvmap040.o`.
    - **.rodata:** `dlm.o` carries 0x100 bytes of `.rodata`, and libgcc's
-     `__clz_tab` 0x200. The port folds `.rodata` into `.data`
-     (`tools/fold-rodata.sh`, as for cdfs and fpe). C3-3's image offsets
-     then hold with `.rodata` = 0: an offset is the size of `.text` plus
-     the object's offset in `.data`. `mkident.py --fill` reads the final
-     layout either way.
+     `__clz_tab` 0x200. The general rule: C3-3's image offsets are
+     measured in the loader's layout (`.text`, `.rodata`, `.data`, no
+     padding). `mkident.py --fill`, boot2's relocator and `elf2brel` all
+     lay a kernel out in that order. So the offsets hold with or without
+     a `.rodata` section, as long as nothing after `--fill` changes a
+     section's size (step 9). The port folds `.rodata` into `.data`
+     (`tools/fold-rodata.sh`, as for cdfs and fpe). The k30 module kernel
+     keeps 5 956 bytes of `.rodata` of its own. Both pass boot2's `AXK1`
+     check when bound by the loader's relocator (`tests/bench/README.md`,
+     stage 3, host rehearsal).
    - **No weak symbol survives:** `hooksw` is strong (patch 0013), and
      `plat_dmainit` comes only from `core/plat`. The weak references
      (`cputype` in `dlm_cache.s`, `dlm_ident` in `dlm_arena.c`) are
@@ -169,8 +181,9 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
 12, U16 and M-REG1 holding:**
 - **(a)** The symbol block, `dlm_ident` and the arena are 4-byte aligned
   (core patch 0013, `mkident.py`); steps 5 and 6.
-- **(b)** Fold `.rodata` into `.data` (step 7). C3-3's offsets hold with
-  `.rodata` = 0.
+- **(b)** C3-3's offsets are in the loader's layout (`.text`, `.rodata`,
+  `.data`), with or without a `.rodata` section. The port folds it, k30
+  keeps its own (step 7).
 - **(c)** `hooksw` is strong and the weak `plat_dmainit` default is gone
   (patch 0013); `core/plat` provides `plat_dmainit`. No rebind is needed.
 - **(d)** The order is base chain (static network, RTG and monsw left

@@ -98,3 +98,10 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
   and the record's version field unchanged): the module list holds at most
   32 entries, as the port's kinfo builds it. Readers size their buffer for
   1 564 bytes (kbootset reads 2 048).
+- When the module list is current (2026-10-26; wording, version 2
+  unchanged): a read at offset 0 returns the list as it is at that read,
+  and so does the open that precedes it. A sequential read that continues
+  past offset 0 may see that snapshot (k30's kinfo keeps it) or a fresh
+  one (the port's refreshes on every read). A reader that wants one
+  consistent record reads it whole, in one read from offset 0, as
+  kbootset does.
