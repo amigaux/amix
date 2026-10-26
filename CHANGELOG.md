@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module 1.0.0-5: every board register access is armed (ZS-05) (c5f7a46)
+
+The Z3660 FPGA's address capture delivers back-to-back accesses at (previous AND this). In this driver that lost the INT6
+acknowledge (R $1A8 → W $104 landing on MODE $100, the "[RTG] Error mode: 255" on both boxes), the ETH_RX strobe (R $1A4 →
+W $194 landing silently on ACC_OP $184 — one of the two ways into the ring wedge), the TX trigger (R $1A4 → W $190 → $180),
+the station MAC at attach (R $198 → R $19C reading $198) and gave false rx_overrun breaks (W $194 → R $1A4). Every register
+access is now one asm block at IPL 7 with a covering read before it (CONFIG armed by $1A4, ETH_RX by MAC_LO $19C, ETH_TX by
+itself with the result read in the block; MAC/cursor/INT_STATUS reads preceded by a same-register read). Shared code: the
+static objects change too (k30 c9370806, k46 37185507; the kernels of record take them at the stage-4 cut). Modules k30
+022c012b, k46 ca3a2b05 (19751 B file, 13537 B image). Object gate module/check-zs05.py (`make zs05`; mutants caught). Round
+trips: RX frame 2→4, poll tick 1→2, TX 2→3, INT6 2→4. Future firmware must keep the $19C/$1A4/$190/$198/$1A8 reads side-effect-free.
+
 ## 2026-10-26 — z3660eth module 1.0.0-4: the RX ring resyncs past a wedged sentinel (2a15a4c)
 
 On metal (S3-46, A4000D, intr=6) zen0 died under a 5 ms ping flood: the firmware showed "backlog 32 fetched 0" — the
