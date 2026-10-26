@@ -1,8 +1,9 @@
-# C3-5 — the module package and the per-module manifest record, version 2
+# C3-5 — the module package and the per-module manifest record, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
-  (§2). Every consumer
+  (§2); version 3 (2026-10-26): `marc_post` runs from the first sysinit
+  entry, `modadmin -B` (§5, U15). Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
