@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — README S3-41: U2/U4 need a generation with the arena (4041e80)
+
+The S3-41 U2/U4 generation must carry the arena (l14.spec's form with the kernel's own arena and ident, or build's):
+development load widens what may load but does not replace the manifest, so a noarena generation refuses every load
+("no booted manifest, so no module loads this boot"). `modadmin -K` first on a box without a console logger.
+
 ## 2026-10-26 — modadmin -K keeps kernel messages in putbuf too (662de06)
 
 Core patch 0026: `modadmin -K` (root) sets prt_where's PRW_BUF bit through the namelist and /dev/kmem, so every kernel,
