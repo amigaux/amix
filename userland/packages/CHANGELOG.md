@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30m k30.1.0.261026-04, the S4-20 module kernel (ddb6f14) — not published
+
+The first stage-4 k30 cut: K030-U build 68030-261026-04 (kerntools 39fd8dd) with amix-dlm 4b7eb3d (core 0001–0028,
+dlm_maximage 256 KiB), no driver change. brel c0f69e0a (1716016 B, bss 349324), unix.sym d9991e90, sidecar 21c63f07, abi=
+unchanged 7a90c7d9; ksymgate 12/12. md5 8f70f34a / 1935360 B. The recipe reads the cut's layout (u/usr/sys, kabi-u) and
+checks its SHA256SUMS. -01 stays in build/kspace/pkg for the stage-3 media; the staged root carries -04 (catalog 9e143d53);
+the previous root kept at superseded/repo-20261026-1906 (6b003630). Round trip 106/106; gates PASS.
+
 ## 2026-10-26 — kern46m k46.1.0.261026-61, the S4-20 module kernel (2834c79) — not published
 
 The first stage-4 k46 cut: KD060-Z module kernel build 68060-261026-61 (port k46-module 13dc9f3) with amix-dlm 4b7eb3d
