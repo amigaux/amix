@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — modadmin for the box (S3-11); C2-4 version 8 (55722ef, cdf29fd)
+
+The core's modadmin built with GCC 14, static like kbootset, its six system calls through the stock syscall(); core patch
+0015 adds -k (a symbol's address: the kernel's exported names, then each loaded module's globals), -a (the symbol at an
+address) and -p/-w (read or write longs at a symbol through /dev/kmem), so a module's tunables and counters are reached by
+name. Box modadmin d94e5228 (68060-safe). C2-4 v8: module members in build, commit, media -R and status. New bench row S3-B6.
+
 ## 2026-10-26 — kbootset media composes the installed modules; kit LOCALIZE check (a64aee1, d6985be)
 
 `kbootset media` (disk, floppy pair, CD) composes the installed module packages into the medium's pristine generation as
