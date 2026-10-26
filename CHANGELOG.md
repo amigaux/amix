@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — boot2 gets 516 bytes of headroom back (aad576f, ea90332)
+
+ax_ctl_pick parses the control block's copy A into the caller's structure and keeps one 488-byte scratch instead of two
+(boot2's bss 1380 → 892; the struct is undefined on AX_ENONE and every caller stops there). boot2 28356 B, 344b8e07, 516 B
+under the 28 KiB gate; nothing on the console changes. docs/measurements/2026-10-26-boot2-headroom.md records the per-part
+sizes, the ranked next savings (free ones first) and every quote of the two messages shortened in 001b04a. Not packaged:
+loader-amix -6 waits for the next loader change with a reason of its own.
+
 ## 2026-10-26 — boot2: a k30 kernel gets at most 64 MiB of fast memory; Z3 RAM is never kernel memory (001b04a, b7a1148)
 
 ax_memcap caps the fast region holding a k30 bind address at base + 64 MiB in bootinfo.memory[] and empties a region touching
