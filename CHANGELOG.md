@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-6 v3: filesystem modules boot class, the rootfs promoted; 30 §6 aligned (a382c41, f2438a6, f50afd8)
+
+One rule for ufs, s5 and cdfs: "a filesystem module is boot class; the generation's rootfs is promoted to a root record"; cdfs is
+promoted only on a medium that roots on the CD itself (none in 1.1); the 1.1 media root on the s5 RAM disk; _load safe in both
+contexts (S4-71). §5 covers the class choice for all three. The S4-40 plan records A1–A3. Scheduling: the carve is stage 5's
+first kernel item unless P1–P3/K1–K2 return "clean exact-line edits", in which case k30 may go first as one re-cut.
+
 ## 2026-10-27 — S4-40's plan: ufs and s5 as boot-class filesystem modules promoted by rootfs (2d95b99)
 
 docs/plan/s4-40-ufs-s5-carve.md, plan only. Measured: ufs .text 50 236 / .data 1 004 (13 COMMONs), s5 37 776 / 380; a clean
