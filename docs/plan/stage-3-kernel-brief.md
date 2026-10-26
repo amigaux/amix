@@ -150,7 +150,8 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
      - k30: compile amix-kerntools' `kinfo030.c` with
        `-DKINFO_KABI=\"k30.1.0\"` (it takes the define, `kinfo_kabi[]`);
      - k46: the port's kinfo sets its `kinfo_kabi` the same way;
-   - **kinfo's module list (C2-1 offset 536):** on every read, kinfo calls
+   - **kinfo's module list (C2-1 offset 536):** on k30 the call is gated by
+     `-DKINFO_DLM` in `kinfo030.c` (`KINFO_KABI` stays the kabi define). On every read, kinfo calls
      `n = dlm_kinfo_list(buf, max)` (core patch 0013). It writes `n`
      entries of 32 bytes (name NUL-padded to 24, load address, size) and
      sets the count at 536, the `length` (540 + 32 × n) and the check.
