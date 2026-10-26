@@ -8,7 +8,14 @@ macro does the linkage; the type names the registration line).
 
 --- a/tools/mkmod
 +++ b/tools/mkmod
-@@ -6,7 +6,8 @@
+@@ -1,12 +1,14 @@
+ #!/bin/sh
+-# mkmod -- build a loadable module from a module directory (MISC type).
++# mkmod -- build a loadable module from a module directory (misc, drv or
++# str type: the wrapper macro does the linkage).
+ #
+ #   mkmod [-k kernel.elf | -e exports] [-d depmodule]... [-K kabi] [-P pin]
+ #         [-o outdir] dir
  #
  # dir holds:
  #   Driver.o   the module's code (any number of objects linked into it)
@@ -18,7 +25,7 @@ macro does the linkage; the type names the registration line).
  #              the .moddata v2 keys as "$class boot|demand", "$cpu 68020"
  #              (required), "$match", "$majors", "$unload", "$tier",
  #              "$build", "$desc" (one each) and "$param" (any number),
-@@ -32,7 +33,12 @@
+@@ -32,7 +34,12 @@
  HERE=$(cd "$(dirname "$0")" && pwd)
  DLM=$(cd "$HERE/.." && pwd)
  AUX=$(cd "$DLM/../.." && pwd)
@@ -32,7 +39,7 @@ macro does the linkage; the type names the registration line).
  TB="${DLM_TOOLS:-$DLM/build/tools}"
  
  KERN= EXP= DEPS= OUT=./build
-@@ -59,7 +65,10 @@
+@@ -59,7 +66,10 @@
  [ -n "$NAME" ] && [ -n "$PREFIX" ] || { echo "mkmod: no definition line in Master" >&2; exit 1; }
  DEPEND=$(sed -n 's/^\$depend[ 	]*//p' "$D/Master" | tr '\n' ' ')
  TYPE=$(sed -n 's/^\$modtype[ 	]*//p' "$D/Master" | tail -1)
@@ -44,7 +51,7 @@ macro does the linkage; the type names the registration line).
  [ -n "$KABI" ] && [ -n "$PIN" ] || { echo "mkmod: the kernel's kabi and pin (-K, -P or DLM_KABI, DLM_PIN)" >&2; exit 1; }
  key() { sed -n "s/^\\\$$1[ 	]*//p" "$D/Master" | tail -1; }
  CLASS=$(key class) CPU=$(key cpu)
-@@ -71,7 +80,7 @@
+@@ -71,7 +81,7 @@
  mkdir -p "$OUT/mod.d" "$OUT/mod_register.d" "$OUT/loadmods.d"
  W="$OUT/work.$NAME"
  rm -rf "$W"; mkdir -p "$W"
@@ -53,7 +60,7 @@ macro does the linkage; the type names the registration line).
  OBJS="$D/Driver.o"
  
  if [ -n "$DELAY" ]; then
-@@ -117,7 +126,7 @@
+@@ -117,7 +127,7 @@
  fi
  "$TB/modfix" ${EXP:+-e "$EXP"} $DEPS -p "$PREFIX" -m "$NAME" "$W/$NAME"
  mv "$W/$NAME" "$OUT/mod.d/$NAME"

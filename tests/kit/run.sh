@@ -73,14 +73,14 @@ for l in k30 k46; do
 	else
 		fail "$l: sample build"; cat "$W/hello-$l.log"
 	fi
-	H=$K/sample/hello/build/mod.d/hello
+	H=$K/sample/hello/build/$l/mod.d/hello
 	# a font-drawing module: the kit's Sun font linked in, builtinfont local
 	d=$W/$l-font
 	mkdir -p "$d"
 	printf '%b' "$WRAP"'extern char builtinfont[];\nchar *font() { return builtinfont; }\nMOD_MISC_WRAPPER(fontmod, l, u, "font");\n' > "$d/fontmod.c"
 	printf '%b' "$M0"'fontmod\tfontmod\n' > "$d/Master"
 	printf 'KIT = %s\nMODULE = fontmod\nOBJS = fontmod.o\nEXTRA = $(KIT)/stock/usr/sys/amiga/console/sunfont.o\nLOCALIZE = builtinfont\ninclude $(KIT)/mk/module.mk\n' "$K" > "$d/Makefile"
-	if (cd "$d" && make > make.log 2>&1) && m68k-elf-nm "$d/build/mod.d/fontmod" | grep -q ' d builtinfont$'; then
+	if (cd "$d" && make > make.log 2>&1) && m68k-elf-nm "$d/build/$l/mod.d/fontmod" | grep -q ' d builtinfont$'; then
 		pass "$l: a module with the kit's sunfont.o and LOCALIZE=builtinfont: ok, builtinfont local"
 	else
 		fail "$l: the font module"; cat "$d/make.log"
@@ -105,10 +105,11 @@ for l in k30 k46; do
 	other=$([ $l = k30 ] && echo k46.1.0 || echo k30.1.0)
 	KABI_OVERRIDE=$other mkbad $l kabi "$WRAP"'MOD_MISC_WRAPPER(kabi, l, u, "x");\n' "$M0"'kabi\tkabi\n' &&
 		refused "the other line's kabi" $l "$W/$l-kabi/out/mod.d/kabi" "this kit is"
-	mkbad $l common "$WRAP"'int ifnet;\nint f() { return ifnet; }\nMOD_MISC_WRAPPER(common, l, u, "x");\n' "$M0"'common\tcommon\n' &&
+	mkbad $l common "$WRAP"'int ifnet, common_count;\nint f() { return ifnet + common_count; }\nMOD_MISC_WRAPPER(common, l, u, "x");\n' "$M0"'common\tcommon\n' &&
 		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-common/out/mod.d/common" > "$W/common.out" 2>&1 &&
-		   grep -q "warning: COMMON symbol ifnet" "$W/common.out"; then
-			pass "$l: a COMMON symbol is warned about, not refused"
+		   grep -q "warning: COMMON symbol ifnet" "$W/common.out" &&
+		   ! grep -q "COMMON symbol common_count" "$W/common.out"; then
+			pass "$l: a COMMON outside the module's names is warned about (not its own), not refused"
 		else
 			fail "$l: COMMON warning"; cat "$W/common.out"
 		fi
@@ -131,5 +132,23 @@ for l in k30 k46; do
 		echo "SKIP $l: no host loader (make core) or no module kernel: the load against the block"
 	fi
 done
+# one module directory, both kits: each line's objects and module apart
+d=$W/both
+mkdir -p "$d"
+cp "$R/abi/sample/hello/hello.c" "$R/abi/sample/hello/Master" "$d/"
+printf 'MODULE = hello\nOBJS = hello.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   strings "$d/build/k30/mod.d/hello" | grep -q '^kabi=k30.1.0$' &&
+   strings "$d/build/k46/mod.d/hello" | grep -q '^kabi=k46.1.0$'; then
+	pass "one directory, both kits: build/k30 and build/k46 each hold their own line's module"
+else
+	fail "one directory, both kits"; cat "$d"/make*.log
+fi
+if (cd "$d" && make KIT="$B/kit/k46" MODOUT=. clean > clean.log 2>&1); then
+	fail "clean with MODOUT=. was not refused"
+else
+	pass "clean refuses MODOUT=."
+fi
+
 echo "kit: $fails failed"
 [ $fails -eq 0 ]

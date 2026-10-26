@@ -14,7 +14,8 @@ kit's `docs/contracts/`:
 
 - The pinned cross compiler, gcc-cross-amix (`m68k-cbm-sysv4-gcc` 2.7.2.3,
   binutils 2.8.1), on `PATH`.
-- The kit for the line: `kit-k30` or `kit-k46` (`make kit` in amix-dlm).
+- The kit for the line: `build/kit/k30` or `build/kit/k46` (`make kit` in
+  amix-dlm).
 - Python 3, for the checker.
 - For `LOCALIZE` only, a newer objcopy (`m68k-elf-objcopy`, as
   gcc14-cross-amix has).
@@ -69,7 +70,9 @@ $param greeting:str:hello
 hello	hello
 ```
 
-Run `make`. The module is `build/mod.d/hello`: compiled against the kit's
+Run `make`. The module is `build/<line>/mod.d/hello` (`build/k46/mod.d/hello`
+with the k46 kit). Objects go under `build/<line>/obj`, so one directory
+builds for both kits without mixing them. It is compiled against the kit's
 headers, linked, its `.moddata` written by `mkmod`, and checked by
 `modfix` and `modcheck.py`. The checker names each rule a module breaks.
 The module core makes the same refusals at load time.

@@ -9,7 +9,7 @@ the pinned gcc-cross-amix (`m68k-cbm-sysv4-*` on `PATH`).
 Build a module:
 
 ```
-cd sample/hello && make            # gives build/mod.d/hello
+cd sample/hello && make            # gives build/<line>/mod.d/hello
 ```
 
 and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and

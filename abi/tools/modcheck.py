@@ -30,9 +30,10 @@
 #     geometry (no shift by 11 of an address, the port's
 #     check_page_geometry.sh rule).
 #   - parameter defaults (and min, max) in C3-1 section 3's text form.
-# Warns (exit status unchanged) on each COMMON symbol: a stock header's
-# tentative definition of a kernel name (ifnet, rawintrq) becomes a
-# private copy in a module.
+# Warns (exit status unchanged) on each COMMON symbol outside the module's
+# own names (its name, its wrapper's prefix): a stock header's tentative
+# definition of a kernel name (ifnet, rawintrq) becomes a private copy in
+# a module.
 # One line per problem; exit status 1 if there is any.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -272,16 +273,26 @@ def scan(e, path):
     with tempfile.TemporaryDirectory() as t:
         tmp = os.path.join(t, os.path.basename(path))
         open(tmp, 'wb').write(b)
-        r = subprocess.run(['m68k-cbm-sysv4-scan060', tmp], stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT)
+        try:
+            r = subprocess.run(['m68k-cbm-sysv4-scan060', tmp], stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT)
+        except FileNotFoundError:
+            bad('m68k-cbm-sysv4-scan060 is not on PATH: the k46 check needs the pinned '
+                'gcc-cross-amix bin directory (the one with m68k-cbm-sysv4-gcc) on PATH')
+            return
         out = r.stdout.decode('latin-1')
         n = re.search(r'\((\d+) insns', out)
         if r.returncode != 0:
             bad('68060 scan: %s' % ('; '.join(out.strip().splitlines()[-3:]) or 'failed'))
         elif code and (not n or int(n.group(1)) == 0):
             bad('68060 scan inspected no instruction of %d bytes of code' % code)
-        d = subprocess.run(['m68k-cbm-sysv4-objdump', '-d', tmp], stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL).stdout.decode('latin-1').splitlines()
+        try:
+            d = subprocess.run(['m68k-cbm-sysv4-objdump', '-d', tmp], stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL).stdout.decode('latin-1').splitlines()
+        except FileNotFoundError:
+            bad('m68k-cbm-sysv4-objdump is not on PATH (the pinned gcc-cross-amix bin '
+                'directory)')
+            return
     if code and not any(re.match(r'\s+[0-9a-f]+:\s', l) for l in d):
         bad('the page-geometry check disassembled nothing')
     for a, b2 in zip(d, d[1:]):
@@ -337,11 +348,18 @@ def main(argv):
         if y['shndx'] == 0 and y['bind'] == 1 and y['name'] and y['name'] not in allow:
             bad('undefined symbol %s is not in the allowlist (%s) nor defined by a dependency'
                 % (y['name'], 'ddi' if keys.get('tier', 'ddi') == 'ddi' else 'ddi+core'))
+    # a COMMON outside the module's own names: most likely a stock header's
+    # tentative definition of a kernel global (ifnet, rawintrq), which
+    # becomes a private copy the module sees instead of the kernel's
+    own = [keys.get('name', '')]
+    own += [y['name'][:-len('wrapper')] for y in e.syms
+            if y['name'].endswith('_wrapper') and y['shndx'] != 0]
     for y in e.syms:
-        if y['shndx'] == 0xfff2 and y['name']:
-            warn('COMMON symbol %s: the core allocates a private copy for the module; if a '
-                 'stock header made it a tentative definition of a kernel name, the module '
-                 'does not see the kernel\'s' % y['name'])
+        if y['shndx'] == 0xfff2 and y['name'] and \
+                not any(o and y['name'].startswith(o) for o in own):
+            warn('COMMON symbol %s, outside the module\'s own names: the core gives the '
+                 'module a private copy; if a stock header made it a tentative definition '
+                 'of a kernel global, the module does not see the kernel\'s' % y['name'])
     if c['LINE'] == 'k46':
         scan(e, path)
     for w in warnings:

@@ -26,7 +26,9 @@
 # ld links its output; gcc14-cross-amix has it in build/prefix/bin, which is
 # not on PATH by default: put it there or set LOCALIZE_OBJCOPY to its path.
 #
-# `make` gives build/mod.d/$(MODULE): compiled by the pinned
+# `make` gives build/<line>/mod.d/$(MODULE) (MODOUT, default build/$(LINE),
+# holds the objects too, so one directory builds for both kits): compiled
+# by the pinned
 # gcc-cross-amix against the kit's headers only, linked, .moddata written
 # by mkmod, checked by modfix and modcheck.py.  The cross tools
 # (m68k-cbm-sysv4-*) must be on PATH.
@@ -43,18 +45,22 @@ KIT_CC     = m68k-cbm-sysv4-gcc
 KIT_CFLAGS = -O -traditional -fno-builtin -Dinline=__inline__ -Dvolatile=__volatile__ \
 	-Dconst=__const__ $(CPUFLAG) -D_KERNEL -DSVR40 -DSVR4 -I$(KIT)/include \
 	-I$(KIT)/stock/usr/include -I$(KIT)/stock/usr/sys -I$(KIT)/stock/usr/sys/amiga/inc
-MODOUT    ?= build
+# everything a build makes is under MODOUT, one directory per line, so a
+# k30 and a k46 build in one directory never share an object
+MODOUT    ?= build/$(LINE)
 MODCPU    ?= $(DEFCPU)
+MODOBJS    = $(addprefix $(MODOUT)/obj/,$(OBJS))
 LOCALIZE_OBJCOPY ?= m68k-elf-objcopy
 
 all: $(MODOUT)/mod.d/$(MODULE)
 
-%.o: %.c
+$(MODOUT)/obj/%.o: %.c $(KIT)/kit.conf
+	@mkdir -p $(dir $@)
 	$(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -c $< -o $@
 
-$(MODOUT)/mod.d/$(MODULE): $(OBJS) $(EXTRA) Master $(DEPS)
+$(MODOUT)/mod.d/$(MODULE): $(MODOBJS) $(EXTRA) Master $(DEPS) $(KIT)/kit.conf
 	rm -rf $(MODOUT)/src && mkdir -p $(MODOUT)/src
-	m68k-cbm-sysv4-ld -r -o $(MODOUT)/src/Driver.o $(OBJS) $(EXTRA)
+	m68k-cbm-sysv4-ld -r -o $(MODOUT)/src/Driver.o $(MODOBJS) $(EXTRA)
 	$(if $(LOCALIZE),$(LOCALIZE_OBJCOPY) $(foreach s,$(LOCALIZE),--localize-symbol=$(s)) \
 		$(MODOUT)/src/Driver.o)
 	cp Master $(MODOUT)/src/
@@ -66,6 +72,7 @@ $(MODOUT)/mod.d/$(MODULE): $(OBJS) $(EXTRA) Master $(DEPS)
 	python3 $(KIT)/tools/modcheck.py -k $(KIT) $(foreach d,$(DEPS),-d $(d)) $@
 
 clean:
-	rm -rf $(MODOUT) $(OBJS)
+	@case "$(MODOUT)" in ""|.|./|/|..|../) echo "module.mk: MODOUT=$(MODOUT) is not a build directory" >&2; exit 1 ;; esac
+	rm -rf $(MODOUT)
 
 .PHONY: all clean
