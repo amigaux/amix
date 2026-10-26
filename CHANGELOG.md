@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-5 v6: the entry-0 decode (N109b) — k30's identity map is cacheable; the read-after-complete rule permanent
+
+§5.3 closed with the four root-table entries: entry 0 `0x7fff0319 0x00000000` (early termination, VA 0–1 GiB → PA 0, CI clear),
+entries 2/3 `0x7fff0341` (CI set); the pool measured at 0x07fdf800 / 0x20000. §5.4: on k30 read what the device wrote into
+dma_alloc memory only after dma_complete, permanently; ddi.md's dma_complete row says so. No code change.
+
 ## 2026-10-27 — the exit ledger marks S4-71 k46 and the A4091 root rows PASS
 
 §6 S4-71 k46 PASS (N107, kerntools 1653ea3); §6 S4-62 k46 PASS (N105/N105b d1a2e3c, N106 1653ea3); §7 lists only the k30
