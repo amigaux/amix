@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 4
+# C4-5 — DDI v1.2, the DMA interface, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -7,8 +7,10 @@
   `dma_addr(r, pa)` takes the segment's address (§2.3), and the k30
   names are a placeholder until the 030 provider (§5.4); version 4
   (2026-10-27, from the port's heap reading): on k46 `dma_alloc` gives
-  heap memory through its DTT0 alias (§3). Other
-  repositories build
+  heap memory through its DTT0 alias (§3); version 5 (2026-10-27,
+  S4-62's second piece, the 030 provider): on k30 a miss for a segment
+  the board cannot reach gives `dma_addr` 0, and the driver does not arm
+  (§2.2); the provider as built (§5.4). Other repositories build
   against this text; a change from here is a contract change with a
   version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
@@ -69,13 +71,17 @@ void dma_complete(struct dma_rec *r, ulong pa, ulong len, int dir);
 |---|---|---|
 | `prepare` | pushes the CPU's dirty lines over `[pa, pa+len)` and takes ownership | if `[pa, pa+len)` is reachable: as k46's, with the 030's cache operations. If not, takes a bounce buffer of `len` from the pool (§3), copies the bytes into it for `TO_DEVICE`, and owns that |
 | `complete` | invalidates the owned lines for `FROM_DEVICE` | for a bounced `FROM_DEVICE`, copies the bounce buffer back to `pa`; then gives the buffer back |
-| `dma_addr` (§2.3) | `pa` | the bounce buffer's physical address when bounced, else `pa` |
+| `dma_addr` (§2.3) | `pa` | the bounce buffer's physical address when bounced; `pa` when the board reaches it; else 0 |
 | bounce buffers | the driver's own (its misaligned-read bounce, D42) | 16-byte aligned and rounded up to 16-byte lines, so a driver's own bounce in `dma_alloc` memory is never bounced again, and `edge_shared` stays 0 |
 
 A `prepare` that cannot get a bounce buffer returns nonzero, as the
-port's does when the seam is off, and the driver arms all the same. So
-the k30 driver must arm with `dma_addr(r, pa)` (§2.3), which then gives
-`pa`; the miss is counted in the record's `off_n`.
+port's does when the seam is off, and counts the miss in the record's
+`off_n`. On k46, and for a segment the board reaches on k30, the driver
+arms all the same with `dma_addr(r, pa)` (§2.3), which gives `pa`. **For a
+segment the board cannot reach (version 5), `dma_addr` gives 0: the
+driver does not arm, and fails the transfer** (`EIO`, or a retry after
+other transfers have given their bounces back). Arming such a segment
+would point the board at memory it cannot reach.
 
 ### 2.3 `dma_addr`
 
@@ -218,14 +224,28 @@ pool does not promise.
   the first `FROM_DEVICE` test, to know whether the 030 data cache is on
   for the memory the pool and the bounce buffers live in.
 
-### 5.4 Until the 030 provider
+### 5.4 The 030 provider (`core/plat/k30`, S4-62)
 
-The k30 names are in DDI 1.2 now, so a driver builds and checks on both
-lines, but until S4-62 their provider (`core/plat/k30`) is a placeholder
-that never hands a board memory it may not reach: `dma_alloc` returns 0
-(a bus-master driver's `_load` then fails), `dma_prepare` takes no
-ownership and counts the call in `off_n`, `dma_complete` does nothing,
-`dma_addr` returns `pa`.
+- **At `dmainit`** (`plat_line_init`): the pool is the top 128 KiB of the
+  largest fast `memory[]` region between 0x00200000 and 0x08000000 that
+  does not hold the kernel. When there is none and the kernel itself runs
+  below 0x08000000, `dma_alloc` takes the heap through its identity
+  alias, as k46 does, and nothing is bounced. Otherwise bus-master DMA is
+  off: `dma_alloc` returns 0 and the console says so.
+- **Reached:** a segment within 0x00200000–0x08000000 is not bounced.
+  Chip memory and the CPU card's DDR are bounced.
+- **The pool:** 16-byte lines, first fit over a map of free extents,
+  joined on free, under level 7; `dma_alloc` and the bounces share it.
+- **The cache:** the 68030's data cache is write-through, so nothing is
+  pushed. `dma_complete` for `FROM_DEVICE` clears the whole data cache
+  (CACR CD) before the bounce is copied back or the driver reads the
+  bytes.
+- **The force-bounce hook:** the kernel global `dma_forcebounce`, nonzero
+  bounces every segment (§5.3).
+- **Until the entry-0 decode (§5.3)** shows the identity map
+  cache-inhibited, a driver reads what the chip wrote into `dma_alloc`
+  memory (status, message buffers) only after a `dma_complete`, which
+  clears the data cache.
 
 ## 6. Not in this contract
 
