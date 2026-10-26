@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2026-10-26 — the booted kernel's namelist: C2-1 v3, C2-3 v6, 40 §4.2, C2-4 v9 §12; C3-6 v3; kit names (d9558a6..41a382d)
+
+The stock netstat, ifconfig and crash nlist /stand/unix, which on a 1.1 disk is a hard link to the stock 2.1 kernel. C2-1 v3:
+kinfo carries the loader's bootdata block at 536 (40 bytes, bootinfo 0x650–0x677 verbatim), the module count moves to 576 and
+the list to 580 (length ≤ 1604); flag 0x8 when bootdata's text vaddr differs from stext; readers accept v2 and v3. C2-3 v6: a
+brel ships /stand/k30/unix.sym (ELF32 .symtab/.strtab, values bound at 0) with a sidecar `sym=` line. 40 §4.2 / C2-4 v9 §12:
+`kbootset namelist` writes an ELF32 ET_EXEC namelist (symbols at bind + layout offset) as a new file renamed onto /stand/unix
+when the content differs; mark-good writes it on every boot and an early rc2 call too; retry writes none (the root is not yet
+repaired); the installer removes the stock /stand/unix and /unix and installs the rc2 call. C3-6 v3: _unload always exists and
+runs on a failed load. Kit: every name within 14 bytes (abi.txt, docs/guide.md, C3-n.md), mkkit refuses longer; PORT_REV on
+k46; the S3-22 row fixed (/usr/dlm/kit/<line>/, version scheme, extra/development, host-side container). kit-test 50/50.
+
 ## 2026-10-26 — core patches 0021–0022; the audit's non-kernel follow-ups (0481f30..2168509)
 
 Patch 0022: a driver loaded at boot or by modload registers its own registry majors at install (dlm_sreg for d_str,
