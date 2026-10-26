@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — C3-5 v9 (gayle row); C3-6 v5 (self-test by a real command) (3511139)
+
+C3-5 §1.1 `gayle | gayle | gayle30 / gayle46`, no device nodes (sd owns the disk majors). C3-6 §1.3: a board whose pending
+state software cannot set self-tests with a real command that interrupts and moves no data (the A4000 Gayle IDE: READ VERIFY,
+one sector, one-tick rounds). The gayle-ide §7 answers: all seven accepted; `param intr=1` lives in /etc/conf/modreg.d/gayle.
+
 ## 2026-10-27 — S4-62 piece 1: the five DMA names in DDI 1.2; the k46 provider half; C4-5 v3 dma_addr(r, pa) (0e4c34f, bbd20b6)
 
 dma_prepare/dma_complete (k46: the port's dma_cache040.s, exported), dma_addr, dma_alloc, dma_free in DDI 1.2 on both lines.
