@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern46m k46.1.2.261027-78 (7be39e3); a4091-k30/-k46 1.0.0-1 (3e42e94) and gayle-k30/-k46 1.1.0-1 (f14c0e7) staged; round trip 142/142 — not published
+
+kern46m -78: cut in build/kspace/cut-k46m from the port's recipe (port 9ead75f, dlm 4acd4a6 = C4-5 v4 dma_alloc through DTT0,
+base 284154a3, no z3660 pass); equals the port's -53 but the id digits. unix abc709f5 (2441362 B), sidecar 2dd0e6cf: kabi
+k46.1.2, arena 0x0012c210, 90 symbols, abi fea18182. Both sidecar checks pass. Pkg md5 abf76e6f / 2478080 B. a4091 (78cf019)
+and gayle (6e3d811) objects as pinned under kits bbd20b6 and 4acd4a6; md5 a409130 50b2de4f, a409146 055a905b, gayle30
+f4768c8e, gayle46 ca71699c; no device nodes. Catalog 94f5d0a1 (20 kernel-space rows). On k30 gate 3 refuses both modules while
+kern30m's root= names their boards. gayle ships only after S4-71's bprobe row (publication gate).
+
 ## 2026-10-27 — kern30m k30.1.2.261026-13, the five DMA names in the k30 kernel (6b689e0); the k46 kit's port headers pinned by archive (db9f1e5) — not published
 
 kern30m -13 (kerntools fcbc007 on dlm bbd20b6): -12 plus dma_prepare/complete/addr/alloc/free in the 88-name symbol block
