@@ -10,7 +10,7 @@
 #
 # DLM is the amix-dlm checkout whose kits are built (`make kit` there gives build/kit/k30
 # and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.  The kit must be of kabi
-# k30.1.1 / k46.1.1 or later (ramdisk_image, C4-3).  The pinned cross tools
+# k30.1.2 / k46.1.2 or later (iodone and ramdisk_image, C4-3).  The pinned cross tools
 # (m68k-cbm-sysv4-*, gcc-cross-amix) and python3 must be on PATH.  The source is
 # ramdisk/src/ramdisk.c, which is the module only: the stock `ram` driver is the static form
 # it replaces.  Master is generated from keys; it has no $cpu, so the kit gives each line its

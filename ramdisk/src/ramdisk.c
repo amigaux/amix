@@ -44,16 +44,9 @@
 #include <sys/amixddi.h>
 
 /*
- * The kernel maps physical addresses below VSECT1 one to one (amix-dlm docs/abi/ddi.md,
- * "Memory"); the k30 kit's <sys/immu.h> says so, the k46 kit's 4 KiB-page form does not
- * carry these two names.
+ * The kernel maps physical addresses below VSECT1 one to one, so phystokv() is the
+ * identity there; <sys/amixddi.h> gives both names on both lines (amix-dlm docs/abi/ddi.md).
  */
-#ifndef VSECT1
-#define VSECT1          0x40000000UL
-#endif
-#ifndef phystokv
-#define phystokv(pa)    (pa)
-#endif
 
 #define RD_MAJOR        20
 #define RD_NUNIT        3

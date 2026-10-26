@@ -37,7 +37,7 @@ replaces.
 ## The units
 
 **Unit 0, the image.** At load, the module asks the kernel for the image with
-`ramdisk_image(&paddr, &size)`, a DDI name of kabi minor 1 (k30.1.1, k46.1.1):
+`ramdisk_image(&paddr, &size)`, a DDI name of kabi minor 2 (k30.1.2, k46.1.2):
 - If it returns `ENOENT`, there is no image. Unit 0 does not exist: its open gives `ENXIO` and
   its size is -1.
 - If it returns 0, unit 0 is `size` bytes at physical address `paddr`, rounded down to whole
@@ -98,7 +98,7 @@ the last close, as the stock `ram` does it:
 | `majors` | `b:20` (registered to `ramdisk` in the kit's `registry/majors`) |
 | `unload` | `never`: a block row needs a pinned module (core patch 0031) |
 | `param` | `size1:int:512:0:16384` and `size2:int:2048:0:16384`, the scratch units' sizes in KiB |
-| `cpu`, `kabi`, `cc` | from the kit: `68030` / `k30.1.1` on k30, `68040` / `k46.1.1` on k46 |
+| `cpu`, `kabi`, `cc` | from the kit: `68030` / `k30.1.2` on k30, `68040` / `k46.1.2` on k46 |
 
 It has no `rank`: it is not an sd disk controller.
 
@@ -126,10 +126,8 @@ The module imports only DDI names: `bcopy`, `getminor`, `iodone`, `kmem_free`, `
 `printf`, `ramdisk_image`, `vtop`, and `mod_drvops` for the wrapper. `ramdisk_conf_data` is a
 weak reference. Its globals are `ramdisk_drvdata` and `ramdisk_wrapper` only.
 
-**`iodone` is not yet in the DDI.** It is the block-completion call the stock `ram` driver
-makes, and amix-dlm's C3-2 §3 lists it for a stage-4 minor. Until the kit's `ddi.list`
-carries it, the kit's `modfix` stops the build with `modfix: undefined: iodone`. See
-"Building".
+`iodone` is the block-completion call the stock `ram` driver makes. Like `ramdisk_image`, it
+is a DDI name of kabi minor 2, so the module needs a kernel of k30.1.2 / k46.1.2 or later.
 
 ## Size and memory
 
@@ -155,8 +153,8 @@ Its memory, beyond the image:
 You need:
 - the pinned gcc-cross-amix (`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`;
 - `python3`;
-- amix-dlm's built kits (`make kit` there), of kabi k30.1.1 / k46.1.1 or later, which carry
-  `ramdisk_image`.
+- amix-dlm's built kits (`make kit` there), of kabi k30.1.2 / k46.1.2 or later, which carry
+  `iodone` and `ramdisk_image`.
 
 ```sh
 make -C ramdisk/module             # both lines
@@ -168,20 +166,12 @@ make -C ramdisk/module test        # the host test (any host cc)
 name the kits directly.
 
 The objects are `ramdisk/build/k30/mod.d/ramdisk` and `ramdisk/build/k46/mod.d/ramdisk`. The
-kit's `modfix` and `modcheck.py` check each one; `modcheck` prints `ok (k30.1.1, root, 2944
-bytes)`.
+kit's `modfix` and `modcheck.py` check each one; `modcheck` prints `ok (k30.1.2, root, 2944
+bytes)` and `ok (k46.1.2, root, 2944 bytes)`.
 
-**What the kit still needs.** The kits of amix-dlm c2ed79c (kabi 1.1) lack two things, so
-`make` stops on them:
-1. `iodone` in the DDI (`ddi.list` and the kernel's symbol block on both lines). Without it
-   the build stops at `modfix: undefined: iodone`.
-2. `modcheck.py` that accepts a driver with a block row and no character row. Today it
-   requires a character major for every `mod_drvops` linkage
-   (`drv_cmajor 0 (count 0): c:0 is not in majors=`). It should check `drv_bmajor` and
-   `drv_bcount` against `majors=` `b:` entries and the registry, as the core's
-   `blk_install` does.
-
-With both in place, the object passes `modcheck` as `ok (…, root, 2944 bytes)` on each line.
+An older kit stops the build: one without `iodone` or `ramdisk_image` in its `ddi.list` at
+`modfix: undefined: …`, and one whose `modcheck.py` predates block-only drivers (amix-dlm
+186bd1f) at `drv_cmajor 0 (count 0): c:0 is not in majors=`.
 
 ## Packages (amix-dlm C3-5)
 

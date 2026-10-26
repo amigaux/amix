@@ -82,6 +82,13 @@ struct td_wrapper { int (*load)(); int (*unload)(); void (*halt)(); char *desc; 
 #define MOD_DRV_WRAPPER(p, l, u, h, d) struct td_wrapper p##_wrapper = { l, u, h, d }
 H
 cat > "$tmp/inc/sys/amixddi.h" <<'H'
+/* as the kit's: VSECT1 and an identity phystokv, unless already defined */
+#ifndef VSECT1
+#define VSECT1 0x40000000
+#endif
+#ifndef phystokv
+#define phystokv(paddr) (paddr)
+#endif
 int ramdisk_image(unsigned long *, unsigned long *);
 H
 
