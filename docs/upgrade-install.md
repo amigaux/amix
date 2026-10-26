@@ -250,3 +250,25 @@ clock that was put back after it ran ahead would otherwise lock those accounts o
 
 The unattended erase guard does not stop an upgrade; the upgrade is itself the
 deliberate reinstall.
+
+### The interview's offer (S4-58)
+
+On a 1.1 medium, when the chosen disk holds Amix (slice 1 `UNIX_Root`, slice 2
+`UNIX_Swap`; a 1.1 disk is recognised by its store), the interview offers before the
+erase question:
+
+```
+This disk holds an Amiga UNIX 1.0 installation.
+An upgrade installs this disc's system again and keeps the configuration:
+...
+  1)   Upgrade this installation
+  2)   Erase the disk and install afresh
+  3)   Stop
+```
+
+It says what is not kept. It also reports the size of `/home`, read off the installed
+root mounted read-only and measured by that system's own `du`: kept in place on a data
+slice, carried over when it fits in the swap slice, LOST (`UPGRADE_DROP_HOME=yes`) when
+it does not. An upgrade asks no sizes and no filesystem type. The answers carry
+`INSTALL_UPGRADE=yes`, and the summary says that the old configuration is kept and the
+first-boot dialog not armed. Matrix cell `l11-k46-upg-ia` drives it through the interview.

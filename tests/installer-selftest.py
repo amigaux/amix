@@ -1551,8 +1551,12 @@ def audit_tool_allowlist():
     # setup.sh -- the interview. MEDIUM-resident, but it executes on the thin
     # miniroot exactly like the driver, so it gets the SAME strict allowlist:
     # no sed, no touch, no basename, no grep, no od.
+    # ... except the installed system's own tools under /mnt/usr/, run by chroot on a
+    # disk it mounted read-only (S4-58: the upgrade offer measures /home with that
+    # system's du, as l11.sh's capture does)
     sbad = [w for w in swords if _classify(w, _defined_funcs(open(SETUP).read()),
-                                           proto_tools, DRIVER_EXTRA)]
+                                           proto_tools, DRIVER_EXTRA)
+            and not w.startswith("/mnt/usr/")]
     if sbad:
         fail("setup.sh references tool(s) the miniroot does NOT carry: %s"
              % ", ".join(sorted(set(sbad))))
@@ -10099,6 +10103,42 @@ def audit_l11():
             ("firstboot: FB_INITTAB_SYS=y gives /etc/inittab root sys 0664 and checks it", re.search(
                 r'FB_INITTAB_SYS" = y \].*?chgrp sys /etc/inittab.*?chmod 664 /etc/inittab.*?ls -l /etc/inittab', fb, re.S))):
         (ok if good else fail)(what)
+
+    # (19) S4-58: the interview's upgrade offer on a 1.1 medium (setup.sh upgrade_offer),
+    # with /etc/rdb, dd, mount and the old system's chroot+du stubbed
+    setup_src = open(SETUP).read()
+    uo = _extract_func(setup_src, "upgrade_offer")
+    if not uo:
+        fail("setup.sh has no upgrade_offer")
+    else:
+        ud = os.path.join(d, "upgoffer")
+        os.makedirs(os.path.join(ud, "bin"), exist_ok=True)
+        for what, layout, p4, magic, home, swap, answer, want in (
+                ("a 1.0 disk, /home fits, answer 1", "1.1", "", "", "20480", "61440", "1", "RC=0 UPG=yes DROP="),
+                ("a 1.0 disk, /home too big, answer 1", "1.1", "", "", "90000", "61440", "1", "RC=0 UPG=yes DROP=yes"),
+                ("a 1.1 disk with s4, answer 2", "1.1", "UNIX_Data 900000 262144", "AXS1", "", "61440", "2", "RC=1 UPG= DROP="),
+                ("a 1.0 medium (no 1.1 layout)", "1.0", "", "", "20480", "61440", "1", "RC=1 UPG= DROP=")):
+            rdb = ('#!/bin/sh\ncase "$2" in 1) echo UNIX_Root 128 200000;; 2) echo UNIX_Swap 200128 %s;; 4) %s;; esac\n'
+                   % (swap, ('echo ' + p4) if p4 else 'exit 1'))
+            open(os.path.join(ud, "bin", "rdb"), "w").write(rdb)
+            open(os.path.join(ud, "bin", "dd"), "w").write("#!/bin/sh\nprintf '%s'\n" % magic)
+            open(os.path.join(ud, "bin", "mount"), "w").write("#!/bin/sh\nexit 0\n")
+            open(os.path.join(ud, "bin", "chroot"), "w").write("#!/bin/sh\necho '%s /home'\n" % home)
+            for t in ("rdb", "dd", "mount", "chroot"):
+                os.chmod(os.path.join(ud, "bin", t), 0o755)
+            os.makedirs(os.path.join(ud, "mnt", "home"), exist_ok=True)
+            body = (uo.replace("/etc/rdb", ud + "/bin/rdb").replace("/etc/mount", ud + "/bin/mount")
+                    .replace("/etc/umount", "true").replace("/mnt/usr/sbin/chroot /mnt", ud + "/bin/chroot")
+                    .replace("[ -x /mnt/usr/sbin/chroot ]", "true").replace("/mnt/home", ud + "/mnt/home")
+                    .replace("dd if=", ud + "/bin/dd if=").replace("| dd bs=4", "| cat >/dev/null; " + ud + "/bin/dd bs=4")
+                    .replace("/tmp/.upo", ud + "/upo"))
+            prog = ('is_num() { case "$1" in ""|*[!0-9]*) return 1;; esac; return 0; }\n'
+                    'readask() { ask=%s; }\nrestart() { echo RESTART; exit 0; }\n'
+                    'INSTALL_LAYOUT=%s SCSI=6 ANS_UPGRADE= ANS_DROP_HOME=\n%s\n'
+                    'upgrade_offer > /dev/null; echo "RC=$? UPG=$ANS_UPGRADE DROP=$ANS_DROP_HOME"\n'
+                    % (answer, layout, body))
+            out = subprocess.run(["/usr/bin/dash", "-c", prog], capture_output=True, text=True, timeout=30).stdout.strip()
+            (ok if out.endswith(want) else fail)("setup.sh upgrade_offer, %s: %s" % (what, out.splitlines()[-1] if out else "(nothing)"))
 
     # (15) the 1.1 base carries m4: syslogd reads /etc/syslog.conf through
     # /usr/ccs/bin/m4 (the m4 package, or Cdev), so a 1.1 order with neither stops the install
