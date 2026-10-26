@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-27 — S4-31: the A4091/A4092/A4770 root-class module (d9ee8d7, a7f7fea)
+
+-DA4091_MODULE turns a4091-wr.c into module `a4091` (C4-2 v3 §8, C4-5 v3): the chip-visible statics move to one 1328 B
+dma_alloc area (SCRIPTS, DSA table, ident/CDB/status/msg, the 1040 B bounce), the data address armed with dma_addr(r, pa);
+autocon over zorro:0202:54, c0de:01, c0de:02, up to four boards; polled, rank zorro, _halt = a4091init per board. modcheck
+ok on k46.1.2 (5324 B, 00469cdf) and k30.1.2 (4316 B, 856823d6); k30 _load returns ENOMEM until S4-62 piece 2. Static objects
+unchanged (030 b5042e96, 040 c9f0e467, --d42 7d75ab42). Not yet run on any kernel (needs kern46m -78's symbol block).
+
 ## 2026-10-13 — Publication scrub before the first push since August (05dffa2)
 
 NOTICE and README carry the Amiga Corporation trademark wording and point at amigaux.org/about/ instead of an
