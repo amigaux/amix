@@ -1148,3 +1148,53 @@ lines, since z3660scsi is the safe set); a damaged module (one byte of
 its store extent changed: `L3`, then generation 1 boots); and the
 card-number cells of M-SD1 on the emulated board sets (30 §5.3).
 
+
+## Stage 4: the root context (S4-71, C4-2 section 2)
+
+C4-2 §2 lets a root-class `_load` call `autocon`, `bprobe`,
+`sptalloc`/`sptfree` and on k46 `dev_kvmap`, which `ddi.md` marks *proc*,
+because the static root drivers call them in `init_tbl`, the same
+context. **This row confirms each one on both lines**: it returns, the
+level stays 7, and the clock does not run. Until it passes on a line, a
+root-class driver that calls one of them (the Gayle module: `bprobe`)
+may be built and tested but not shipped there.
+
+- **The probe:** `tests/bench/s4-71/`, the root-class module `rprobe`
+  (`class=root`, `match=always`). Its `_load` calls each name once, on
+  addresses every Amiga decodes, and after each one prints the status
+  register's level and whether `lbolt` moved. It returns `ENXIO`, so it is
+  never linked and the boot goes on as without it. Build it with the
+  kit of the line under test and make its stand-in package:
+
+```
+make -C tests/bench/s4-71 KIT=<amix-dlm>/build/kit/<line>
+KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-71/build/<line>/mod.d/rprobe <line> <outdir>
+```
+
+- **Kernels:** a kabi-1.2 module kernel of the line (kern46m -78 or
+  later, kern30m -13 or later). Its own root driver may be static or a
+  module: the probe is an extra root module, in no safe set.
+- **Loader and kbootset:** loader version 3 (boot2 at 4003c9f or later),
+  kbootset at 33ea0c7 or later.
+- **Order:** both lines in emulation first, then metal, k46 and k30.
+
+| Boot | Commands | Expected |
+|---|---|---|
+| 1 | copy the stand-in tree; `kbootset build`; `kbootset commit` | the generation's `build` file has `module rprobe root <size> at=0x10000 … match=always` (no `safe=1`); `generation <id> committed` |
+| 2 | boot the new generation; read the console | **boot2:** `module rprobe <size> bytes`. **The kernel**, in the root pass, before the root mounts: `rprobe: root pass, level 7, lbolt <x>`; then one line per call, `rprobe: <call> -> <value>, level 7, lbolt unmoved`, for: a spin of 2000000 (the clock check), `bprobe custom chips (dff004, read)` (expect `0`), `bprobe Zorro III nowhere (7fff0000, read)` (the value is recorded: `1`, a fault caught, is the expected answer, and `0` is noted, not a failure), `autocon Z3660 (144b0001, index 0)` (nonzero with a Z3660, then `rprobe: autocon base … size …`), `sptalloc 1 page of the custom chips` (nonzero; then `rprobe: vposr through it <x>`), `sptfree (flag 1)`, on k46 `dev_kvmap custom chips (cm 0x40, no sleep)` (nonzero) and `dev_kvunmap`, `kmem_alloc 65536 KM_NOSLEEP` (nonzero) and `kmem_free`. **The verdict:** `rprobe: PASS: every call returned at level 7 with the clock stopped`. The module is not linked (`ENXIO` is silent), and the boot reaches multi-user as before |
+| 3 | on the host or the box: keep the console log as the row's evidence | — |
+
+**What the row says if it fails.**
+- `rprobe: FAIL: a call left level 7 or let the clock run`: the line
+  before it says which call, with `level <n>` or `lbolt MOVED`. That
+  name may not be called from a root-class `_load` on this line: move it
+  to the driver's deferred call (C4-2 §3), and C4-2 §2's list loses it.
+- No line after one call, and a hang: that call waits for an interrupt or
+  sleeps at level 7. Name it in the report. The same consequence applies.
+- No `rprobe:` line at all: the generation carries no root record for it
+  (the `build` file), or boot2 is older than version 3.
+
+**Later rows on the same probe** (S4-71, other halves): the ufs and s5
+init routines returning in this context (C4-6 §3) come with S4-40's
+carved modules. U12, every walker of `vfssw` reading `nfstype` live, is
+measured with cdfs's first mount (S4-42).

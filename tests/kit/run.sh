@@ -303,6 +303,20 @@ if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" 
 else
 	fail "one directory, both kits"; cat "$d"/make*.log
 fi
+# S4-71's root-context probe builds and checks on both lines; on k46 it
+# also calls dev_kvmap (tests/bench/README.md, S4-71)
+d=$W/rprobe
+mkdir -p "$d"
+cp "$R/tests/bench/s4-71/rprobe.c" "$R/tests/bench/s4-71/Master" "$R/tests/bench/s4-71/Makefile" "$d/"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: rprobe: ok (k30.1.2, root," "$d/make30.log" &&
+   grep -q "modcheck: rprobe: ok (k46.1.2, root," "$d/make46.log" &&
+   m68k-cbm-sysv4-nm "$d/build/k46/src/Driver.o" | grep -q " U dev_kvmap$" &&
+   ! m68k-cbm-sysv4-nm "$d/build/k30/src/Driver.o" | grep -q dev_kvmap; then
+	pass "the S4-71 probe builds and checks on both lines (dev_kvmap on k46 only)"
+else
+	fail "the S4-71 probe"; cat "$d"/make*.log
+fi
 if (cd "$d" && make KIT="$B/kit/k46" MODOUT=. clean > clean.log 2>&1); then
 	fail "clean with MODOUT=. was not refused"
 else
