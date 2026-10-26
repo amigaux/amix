@@ -309,6 +309,10 @@ for IMG; do
 		m68k-cbm-sysv4-ld -r -o "$RT/$n" "$W/hmods/$n.o"
 		"$TB/modfix" $f -p "$n" -m "$n" "$RT/$n"
 	done < "$W/hmods.list"
+	# the manifests' paths (C3-5 section 3): /stand/gen/<id>/mod/<name>
+	mkdir -p "$W/root/stand/gen/7/mod"
+	cp "$RT"/pm* "$W/root/stand/gen/7/mod/"
+	cp "$RT"/pb* "$RT"/pdm "$W/root/stand/gen/7/mod/"
 	if "$B/test-bin/state" "$W/ksym.bin" "$W/root" > "$W/state.log" 2>&1; then
 		pass "$K: state harness: $(tail -1 "$W/state.log")"
 	else
