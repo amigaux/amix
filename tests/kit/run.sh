@@ -188,6 +188,12 @@ for l in k30 k46; do
 		else fail "$l: the STREAMS driver"; cat "$W/str.out"; fi
 	mkbad $l drvx "$DRV"'struct mod_drv_data drvx_drvdata[] = { { { 0 }, 0, 0, { o, o, o, o, o }, 52, 1 } };\nMOD_DRV_WRAPPER(drvx, l, u, 0, "x");\n' '$modtype drv\n$class demand\n$cpu 68020\ndrvx\tdrvx\n' &&
 		refused "drv_cmajor not in majors=" $l "$W/$l-drvx/out/mod.d/drvx" "drv_cmajor 52"
+	# sd.h as the kernels build it: four cards, the C4-1 card decode
+	SDH=$B/kit/$l/stock/usr/sys/amiga/alien/sd.h
+	if grep -qx '#define	SDCARDS	4' "$SDH" &&
+	   grep -qxF '#define	sdcard( dev)	((dev)>>3 & 01 | (dev)>>6 & 02)' "$SDH"; then
+		pass "$l: sd.h has SDCARDS 4 and the four-card sdcard() decode (C4-1 section 2)"
+	else fail "$l: sd.h is not the four-card form"; fi
 	# the DMA names (C4-5 v3, DDI 1.2): a module calling all five checks
 	mkbad $l dmause "$WRAP"'#include "sys/amixddi.h"\nchar rec[0x60];\nunsigned long f(pa) unsigned long pa; { unsigned long p; char *v = dma_alloc(1024L, &p); unsigned long a; if (dma_prepare(rec, pa, 512L, DMA_FROM_DEVICE)) ; a = dma_addr(rec, pa); dma_complete(rec, pa, 512L, DMA_FROM_DEVICE); dma_free(v, 1024L); return a + p; }\nMOD_MISC_WRAPPER(dmause, l, u, "x");\n' "$M0"'dmause\tdmause\n' &&
 		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-dmause/out/mod.d/dmause" > "$W/dma.out" 2>&1; then

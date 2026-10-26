@@ -128,6 +128,18 @@ headers() {	# headers SRC DST
 headers "$AMIX_SYSROOT/usr/include" "$OUT/sysroot/usr/include"
 headers "$AMIX_ROOT/usr/include" "$OUT/stock/usr/include"
 headers "$AMIX_ROOT/usr/sys" "$OUT/stock/usr/sys"
+# sd.h as the kernels of this kabi build it: the four-card sd layer
+# (C4-1 section 2; amix-kerntools build-cross-kernel.sh --sd-cards 4, the
+# port's sd4card base), each stock line replaced exactly once
+SDH=$OUT/stock/usr/sys/amiga/alien/sd.h
+for e in '#define	SDCARDS	2|#define	SDCARDS	4' \
+	 '#define	sdcard( dev)	((dev)>>3 \& 01)|#define	sdcard( dev)	((dev)>>3 \& 01 | (dev)>>6 \& 02)'; do
+	old=$(printf '%s' "${e%%|*}" | sed 's/\\&/\&/g') new=$(printf '%s' "${e#*|}" | sed 's/\\&/\&/g')
+	n=$(grep -cxF -- "$old" "$SDH" || true)
+	[ "$n" = 1 ] || { echo "mkkit: '$old' occurs $n time(s) in $SDH, want 1" >&2; exit 1; }
+	OLD=$old NEW=$new awk '$0 == ENVIRON["OLD"] { print ENVIRON["NEW"]; next } { print }' \
+		"$SDH" > "$SDH.edit" && mv "$SDH.edit" "$SDH"
+done
 # the stock console's Sun font as a linkable object (a console-drawing
 # driver links it, C3-6 section 3); built from the stock source, which is
 # not copied
