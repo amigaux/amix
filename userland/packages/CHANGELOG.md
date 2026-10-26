@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — dlmkit -6 from amix-dlm 96205b6, the first kabi 1.1 kits (b4c6eb6) — not published
+
+dlmkit30 k30.1.1.261026-6.96205b6 and dlmkit46 k46.1.1.261026-6.96205b6 (KIT_REV 96205b6, core 0001–0035): abi.txt =
+abi-k30.1.1 / abi-k46.1.1 (fea18182 both); MONSW_REV amix-modules@c0386d9; k46 records PORT_REV a0f86be; the sample module
+carries kabi=k30.1.1 / k46.1.1 and passes modcheck; kit-test 64/64 with the sample loading against the 1.1 kernels of record
+(k30 ET_REL 0fe57802, k46 5a7028c0). md5 9d87eb78 / 4060672 B and 07183c3c / 4078080 B; supersede -5. Staged catalog
+2d52a62b; round trip 106/106 (the staged modules are still kabi 1.0 and compose on the 1.1 kernels); gates PASS. No
+round-trip case yet for "a 1.1-kit module refused by a 1.0 kernel".
+
 ## 2026-10-26 — kern30m k30.1.1.261026-08, the S4-21 k30 module kernel of record (6db5e5c) — not published
 
 The first k30 kernel at kabi k30.1.1: K030-U build 68030-261026-08 (kerntools 1079741) on amix-dlm a15104e (core
