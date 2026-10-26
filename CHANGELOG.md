@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — kbootset media composes the installed modules; kit LOCALIZE check (a64aee1, d6985be)
+
+`kbootset media` (disk, floppy pair, CD) composes the installed module packages into the medium's pristine generation as
+`build` does (gates 1–3, the parameters), writes the module and param records into the spec and copies the objects to the
+root tree's /stand/gen/1/mod/ — S3-31's input. The kit's make fragment refuses LOCALIZE up front when its objcopy is missing,
+naming the tool and the gcc14-cross-amix path. 665 host checks; kit-test 35/35; box kbootset 305345a3; KIT_REV=d6985be.
+
 ## 2026-10-26 — the kernel fingerprint abi= (C3-3 version 3) (9a45f1b, bd65e6b)
 
 The text: sorted lines `data <name> <st_size>` for each DDI data name plus `offs <NAME> <value>` from the probe's dlm_offs.h;
