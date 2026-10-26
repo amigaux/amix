@@ -69,6 +69,7 @@ extern void bcopy(const void *, void *, unsigned long);
 extern int printf(const char *, ...);
 
 int		dma_forcebounce;	/* test hook (C4-5 section 5.3): bounce every segment */
+int		dma_forcefail;		/* test hook: every bounce misses (dma_addr 0) */
 unsigned long	dma_pool, dma_poolsz;	/* the pool, or 0 */
 int		dma_heap;		/* 1: the kernel runs where the board reaches */
 static struct { unsigned long a, n; } map[DMA_NMAP];	/* free extents, by address */
@@ -220,7 +221,7 @@ dma_prepare(char *r, unsigned long pa, unsigned long len, int dir)
 		return -1;
 	}
 	if (!reached(pa, len)) {
-		if (n == 0 || (b = pool_get(n)) == 0) {
+		if (dma_forcefail || n == 0 || (b = pool_get(n)) == 0) {
 			RW(r, DR_OFFN)++;	/* a miss: dma_addr gives 0, the driver does not arm */
 			return -1;
 		}

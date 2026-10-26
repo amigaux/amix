@@ -23,7 +23,7 @@
 char bootinfo[0x778];
 char kinfo_buildid[] = "030-261101-01";
 int dma_host_dclear;
-extern int dma_forcebounce, dma_heap;
+extern int dma_forcebounce, dma_forcefail, dma_heap;
 extern unsigned long dma_pool, dma_poolsz;
 void plat_line_init(void);
 int dma_prepare(char *, unsigned long, unsigned long, int);
@@ -119,6 +119,14 @@ main(void)
 	dma_complete(r, (unsigned long)near, 64, 0);
 	dma_forcebounce = 0;
 
+	dma_forcefail = 1;
+	check(dma_prepare(r, (unsigned long)ddr, 64, 0) != 0 && dma_addr(r, (unsigned long)ddr) == 0 &&
+	    RW(r, 0x4c) == 1 && dma_prepare(r, (unsigned long)near, 64, 0) == 0 &&
+	    dma_addr(r, (unsigned long)near) == (unsigned long)near,
+	    "the force-fail hook: a bounce misses (dma_addr 0), a reachable segment is untouched");
+	dma_complete(r, (unsigned long)near, 64, 0);
+	dma_forcefail = 0;
+	RW(r, 0x4c) = 0;
 	check(dma_prepare(r, (unsigned long)ddr, POOL, 0) != 0 && RW(r, 0x4c) == 1 &&
 	    dma_addr(r, (unsigned long)ddr) == 0,
 	    "no bounce to be had: a miss, and dma_addr gives 0 (do not arm)");
