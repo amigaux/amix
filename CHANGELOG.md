@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-5 §1.3 the 2.1 sh's while-read and probe facts; kit NOTICE from MONSW_REV (32587ae, c6c9d02)
+
+A while-read loop strips trailing blanks on the 1991 sh, so it is never a byte-exact copy (cat or dd and a size check are);
+installng's probe list of what the 2.1 sh does with redirections is recorded. The kit NOTICE names sys/monsw.h's origin from
+MONSW_REV (amix-modules c0386d9, MIT); kit rebuilt at c6c9d02.
+
 ## 2026-10-26 — C3-5 §1.3 the script rule as enforced; C2-2 §2; kit.conf MONSW_REV (6492c3b, dc54ff4)
 
 C3-5 §1.3 states the package-script rule as amix-packages' gate enforces it (sh builtins plus mv, cat, ls, dd, expr behind
