@@ -26,6 +26,27 @@ During stages 2 and 3 there is one kernel package per static family. Each
 family installs on its line's path, so a box carries the family it was
 installed with. From stage 4 there is one kernel per line.
 
+### 1.1 The module kernels' names (stage 3)
+
+The module kernel of a line (`family=generic`, C3-3) is a different kernel
+from every static family (their static drivers are out), so it is its own
+package, never a revision of a static family's:
+
+| Line | Catalog name | pkginst | Version |
+|---|---|---|---|
+| k46 | `kernel-k46-m` | `kern46m` | `k46.1.0.261026-58` |
+| k30 | `kernel-k30-m` | `kern30m` | `k30.1.0.261026-02` |
+
+- **The version** is `<kabi>.<yymmdd>-<nn>`: the kabi tag, then the last
+  two fields of the build id (`build=`, `68060-261026-58`). A re-mint of
+  the same build adds `.<r>` (`k46.1.0.261026-58.1`). The build ids above
+  are examples; the values come from the sidecar of the kernel minted.
+- Like the static families, it installs `/stand/<line>/unix` and `kabi`
+  (and on k30 `unix.sym`, §2.1). So a box carries either a static family
+  or the module kernel of a line, and installing one replaces the other:
+  apkg removes the other package's record first, because gate 1 refuses a
+  path that two records name.
+
 ## 2. The sidecar: one `key=value` per line
 
 ```
@@ -72,16 +93,18 @@ The booted kernel's namelist (40 §4.2) needs every symbol's address. A
 `brel` has no symbol table, and the layout that places its COMMON
 symbols is the converter's. So the kernel build ships the symbols beside
 it:
-- an ELF32 big-endian m68k file (any `e_type`) with a `.symtab` and its
+- an ELF32 big-endian m68k **`ET_EXEC`** file with a `.symtab` and its
   string table. Section contents are not needed (`NOBITS` will do);
-- every symbol that names an address is defined in a section and its
-  `st_value` is that address **with the kernel bound at 0** (as in an
-  executable; in an ET_REL file, relative to a section whose `sh_addr` is
-  its offset), in the form shipped: text, rodata and data as the `brel`'s
-  image lays them, bss and COMMON past it as the converter placed them
-  (`end` = the image size + `bss=`). `SHN_ABS` is a constant and is not
-  moved, except `etext`, `edata` and `end`, which are addresses whatever
-  their section;
+- every symbol's `st_value` **is** its value with the kernel bound at 0:
+  for a symbol defined in a section, the address of what it names; no
+  reader adds a section's `sh_addr` to it (as in any executable). The
+  layout is the form shipped: text, rodata and data as the `brel`'s image
+  lays them, bss and COMMON past it as the converter placed them (`end` =
+  the image size + `bss=`);
+- a symbol defined in a section is an address, and kbootset moves it by
+  the bind address. `SHN_ABS` is a constant and is not moved, except
+  `etext`, `edata` and `end`, which are addresses whatever their section.
+  kbootset refuses a `unix.sym` that is not `ET_EXEC`;
 - a namelist kbootset makes at bind 0 has this form (`tests/host/nlmake`),
   and for the 1.1 kernels the loader's layout of the ELF before conversion
   is the `brel`'s (S3-B5: K030-U's 78 block names agree);
@@ -136,4 +159,6 @@ them. A kernel without that emulation cannot run kbootset.
 - Version 6 (2026-10-26, from S3-B5): a `brel` kernel ships `unix.sym`
   and its sidecar says `sym=` (amix-kerntools makes both; amix-packages
   installs the file). An ET_REL kernel's sidecar may say `sym=` too, and
-  then kbootset reads that file instead of the kernel.
+  then kbootset reads that file instead of the kernel. From kerntools' first
+  reader: `unix.sym` is `ET_EXEC` and `st_value` is the address itself
+  (§2.1). The module kernels' package names (§1.1).

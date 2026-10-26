@@ -828,8 +828,8 @@ there, the row runs on k30 only, and the report says so.
 |---|---|
 | on the host, write `l5.img` over the slot copy's boot slice; boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 351 bytes, it has 64` (k30: 362), `amix-boot: L5 module arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
 
-10 §9 says L5 goes to the menu. boot2 as built treats it as L2 and boots
-the next generation in the order. The row records which happens.
+L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
+the order boots, with no menu. That fallback is the line of record.
 
 ### S3-43-7 — 128 MB
 

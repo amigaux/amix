@@ -661,7 +661,7 @@ a mouse click; where a choice is needed the menu opens.
 | L2 | manifest missing or CRC bad | name the generation; continue in the order of §7.2 (default, other good newest first, pristine, menu) |
 | L3 | member CRC bad (kernel or module) | name the member; as L2 |
 | L4 | not enough fast memory for kernel + arena (+ RAM disk) | give needed and largest region; menu |
-| L5 | arena overflow | give needed and capacity; menu |
+| L5 | arena overflow | give needed and capacity; as L2 (the next generation in the order: try-once falls back to the good one, and an unattended box does not stop at a menu; the menu stays reachable by key) |
 | L6 | unknown relocation type or out-of-range displacement | give type and offset; as L2 |
 | L7 | no root-class module matched any board | print the boards seen; boot anyway (the kernel will name the missing root controller) |
 | L8 | trial generation did not reach multi-user | print, mark bad, boot the default |
