@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — the cdfs answers: kit sd.h four-card; 13 DDI names; C3-1 v5; C4-1 v3 §3.2; cdfs boot class (a8efd99…2ba7fd4)
+
+The kit's sd.h now carries SDCARDS 4 and the four-card sdcard() decode (kerntools' two exact-line edits, refused if absent).
+DDI 1.2 adds sdqueue, sdopen, vn_rele, copyinstr, getudev and fs_nosys/setfl/frlock/poll/pathconf/cmp/rwlock/rwunlock on both
+lines (all T in both stock bases; fingerprint unchanged). C3-1 v5: fs= required of every vfs_register caller. C4-1 v3 §3.2: a
+controller calls cp->intr at level 4 or below. The plan rows (S4-42, S4-72, exit) say cdfs is boot class on disk. Needs
+dlmkit -10; cdfs's first kernel is a re-cut at bc1c511+. Open: the vfs/vnode ABI texts (changes the 1.2 fingerprint; with the
+next re-cut wave) and the one-object/two-class rule (promotion recommended). Harness 255/255; kit-test 0 failed.
+
 ## 2026-10-27 — S4-11: boot2 places the RAM-disk image; ax_memcap a page short; C4-3 agreed (4295d81, 4003c9f, ee77481)
 
 boot2 claims the image in place at the top of the kernel's region (exec AllocAbs, 64 KiB aligned, above the kernel's end),
