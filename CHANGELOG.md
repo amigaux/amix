@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patches 0021–0022; the audit's non-kernel follow-ups (0481f30..2168509)
+
+Patch 0022: a driver loaded at boot or by modload registers its own registry majors at install (dlm_sreg for d_str,
+dlm_creg otherwise) — the first module boot's error 22; a demand-class STREAMS driver gets a console refusal (error 168).
+The harness now builds dlm_str.c and dlm_ddi.c with host stand-ins and covers the boot-class character and STREAMS drivers,
+the demand STREAMS refusal, the ifstats backstop with the module's link first/middle/last after a failed _load and a
+forgetful _unload, and "_load attached but the linkage failed". Patch 0021: harness cases for the audit's untested branches.
+Kit: modcheck checks drv_cmajor and COMMONs. make test checks libmod.c's syscall numbers against the core. Records: U16,
+M-ABI2 with the block, M-CORE1 through 0021. Harness 191/191 both kernels; make core 124/124.
+
 ## 2026-10-26 — the final cut's base: kbootset gate 6 ET_REL bss; make core guards (6b2d669, f5ce731)
 
 kbootset's memory gate counts an ET_REL kernel's bss (its NOBITS sections and COMMONs, aligned as rel.c lays them out) as
