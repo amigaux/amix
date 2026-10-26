@@ -5,10 +5,11 @@
 #   mkident.py --asm LINE KABI CAP [ROOT] > ident.s
 #       dlm_ident (64 bytes: magic, version, kabi tag, line, flags; the
 #       offsets and the check still 0) and dlm_arena, CAP + 16 zero bytes,
-#       in .data.  .data follows .text directly in the loader's layout, so
-#       no alignment in .data makes the arena 16-aligned in the image:
-#       --fill records the first 16-aligned offset inside dlm_arena (C3-3
-#       version 5), and boot2, binding on 256, aligns each module from it;
+#       both 4-byte aligned in .data.  .data follows .text directly in the
+#       loader's layout, so no alignment in .data makes the arena 16-aligned
+#       in the image (and one above 4 would raise .data's own): --fill
+#       records the first 16-aligned offset inside dlm_arena (C3-3 version
+#       5), and boot2, binding on 256, aligns each module from it;
 #       then dlm_static_root, the string ROOT: the kernel's built-in root
 #       controllers as the sidecar's root= names them, "" when none.  The
 #       core skips a root-class module for one of them (C4-4 version 4).
@@ -49,7 +50,7 @@ def asm(line, kabi, cap, root=''):
           '\t.long\t0x%08x, 0x%08x, 0\n'
           '\t.long\t%s\n'
           '\t.long\t%d, 0, 0x%x, 0, 0, 1, 0\n'
-          '\t.balign\t16\n\t.globl\tdlm_arena\n\t.type\tdlm_arena,@object\n'
+          '\t.balign\t4\n\t.globl\tdlm_arena\n\t.type\tdlm_arena,@object\n'
           '\t.size\tdlm_arena,%d\ndlm_arena:\n\t.space\t%d\n'
           '\t.globl\tdlm_static_root\n\t.type\tdlm_static_root,@object\n'
           'dlm_static_root:\n\t.asciz\t"%s"\n\t.balign\t4'
