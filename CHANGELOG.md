@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-27 — S4-31 tests: test/host and the module README's test matrix (caa35b5, 23e34ba)
+
+test/host (new): the real a4091-wr.c with -DA4091_MODULE on host gcc, mocks for autocon, the two map arms, sd_register and the
+five DMA names; 15/15 cases per line: registrations, A4092/A4770 identities, two-board sd order (an A4092 below an A4091 is
+card 0), 4-board cap, ENXIO/ENOMEM/dead-board/refused-registration paths, _halt per board, the C4-5 order and addresses;
+mutation-checked. README matrix: H1/H2, emulation E1–E6 (k46 -78+; A4092/A4770 cannot be emulated — amiberry takes the board
+id from a byte-swapped ROM), metal M1–M5. Static pins untouched.
+
 ## 2026-10-27 — S4-31: the A4091/A4092/A4770 root-class module (d9ee8d7, a7f7fea)
 
 -DA4091_MODULE turns a4091-wr.c into module `a4091` (C4-2 v3 §8, C4-5 v3): the chip-visible statics move to one 1328 B
