@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-27 — promotion: the rootfs's boot-class module as a root record (core 0043); C4-4 v5 §1.3, C3-5 v11 (5d3d988, 33ea0c7)
+
+kbootset reads fs=; a class=boot module whose fs= equals the generation's rootfs gets root treatment (km_tail, bss=, a root
+record placed by boot2, safe=1); on any other generation it stays a boot record. Core 0043: md_check links an arena module of
+boot class only when the manifest's `rootfs <fs>` is its fs=. Harness 257/257; make test 692/0; kit-test 0 failed; boot2
+unchanged (28 646 / 28 420). **Pin 33ea0c7** for dlmkit -10, loader-amix -8, kbootset -17, kern46m -79, kern30m -14
+(abi= 2ab48658, 98 added offs lines; the k30 cut carries the 030 DMA provider and needs boot2 ≥ 4003c9f on the box).
+
 ## 2026-10-27 — core patch 0042: the filesystem layouts in the fingerprint; the 1.2 texts (0572fcf)
 
 dlmoffs probes the sizes and the fields cdfs reads of vfs, vnode, vattr, uio/iovec, dirent, statvfs, mounta, fid and sdcom;
