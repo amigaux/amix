@@ -698,6 +698,11 @@ the dlm `sysinit` line together with `S01kbnamelist` shift the early pids
 so that number is a live process, and syslogd is not started. Either
 addition alone misses it (6 of 6 boots on the k46 vehicle). The
 installer's unit is fixed in amix-installng.
+On a 1.1 install syslogd files nothing, even when it runs: the stock
+syslogd runs `syslog.conf` through `/usr/ccs/bin/m4`, which the install
+does not ship. Kernel lines reach syslogd as `kern.info` (cmn_err's as
+`kern.notice` or `kern.warning`), which the stock conf files, once it
+parses. `modadmin -L` is the record until the install ships m4.
 
 From core patch 0025, `modadmin -L` starts with one line of the ring's
 words: `putbuf 0x… (2000 bytes), putbufsz …, wpos …, rpos …,
