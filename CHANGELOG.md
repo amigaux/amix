@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patch 0036 root_defer; C4-2 agreed; the S4-72-1 recipe (6813501, 1e6c56d, 4dc0e8b)
+
+`root_defer(fn, arg)`: only from a root-class module's _load in the root pass; up to 8 calls, run once each in order by
+dlm_marc_run at the first sysinit entry before any boot-class load, in safe mode too; fn's nonzero return printed, the
+module stays linked; EINVAL outside the pass, ENOSPC on a ninth, a failed load's calls swept; a DDI name of minor 1. Harness
+241/241 both kernels; dlm.o 13de7929. C4-2 agreed (version 1). Bench recipe S4-72-1: the first root-class boot, z3660scsi on
+k46 (inputs, vehicle, four boots with the expected console lines, a failure guide, the next cells); s3-modpkg.sh takes
+KABI=k46.1.1 for stage-4 modules. Decided: LOADER_VERSION 3 for S4-10's boot2 and `loader-min 3` on any generation with a
+root-class record, so kbootset's gate 7 refuses an older loader at compose time instead of boot2 falling back at L9.
+
 ## 2026-10-26 — kbootset composes root-class modules (S4-12, b4297bd)
 
 On a module kernel, root-class modules become store members beside the kernel: `module <name> root <size> at= crc32=
