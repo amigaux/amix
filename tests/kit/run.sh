@@ -198,6 +198,18 @@ for l in k30 k46; do
 				pass "$l: VSECT1 and phystokv, <sys/amixddi.h> $o <sys/immu.h>, no warning"
 			else fail "$l: VSECT1/phystokv ($o)"; cat "$W/$l-phys$o/cc.log"; fi
 	done
+	# a block-only root-class driver (core patch 0031, C4-2 section 8): the
+	# ramdisk on b:20, drv_ccount 0; its block major checked as the
+	# character ones are
+	RD='$modtype drv\n$class root\n$cpu 68020\n$match always\n'
+	mkbad $l ramdisk "$DRV"'struct mod_drv_data ramdisk_drvdata[] = { { { o, o, o, o }, 20, 1, { 0 }, 0, 0 } };\nMOD_DRV_WRAPPER(ramdisk, l, u, 0, "a block driver");\n' "$RD"'$majors b:20\nramdisk\tramdisk\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-ramdisk/out/mod.d/ramdisk" > "$W/blk.out" 2>&1; then
+			pass "$l: a block-only driver (drv_bmajor 20 = majors=, drv_ccount 0) passes"
+		else fail "$l: the block-only driver"; cat "$W/blk.out"; fi
+	mkbad $l ramdisk "$DRV"'struct mod_drv_data ramdisk_drvdata[] = { { { o, o, o, o }, 21, 1, { 0 }, 0, 0 } };\nMOD_DRV_WRAPPER(ramdisk, l, u, 0, "x");\n' "$RD"'$majors b:20\nramdisk\tramdisk\n' &&
+		refused "drv_bmajor not in majors=" $l "$W/$l-ramdisk/out/mod.d/ramdisk" "drv_bmajor 21"
+	mkbad $l ramdisk "$DRV"'struct mod_drv_data ramdisk_drvdata[] = { { { 0 }, 0, 0, { 0 }, 0, 0 } };\nMOD_DRV_WRAPPER(ramdisk, l, u, 0, "x");\n' "$RD"'$majors b:20\nramdisk\tramdisk\n' &&
+		refused "a driver with no rows" $l "$W/$l-ramdisk/out/mod.d/ramdisk" "one or both above 0"
 
 	# format refusals, on edited copies of the sample
 	edit "$H" "$W/$l-rtype/hello" <<'PY' && refused "a relocation type outside the list" $l "$W/$l-rtype/hello" "outside the list"

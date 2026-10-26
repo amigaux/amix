@@ -304,9 +304,11 @@ def moddata(e, path, c, reg, kit, depnames):
 
 
 def drvmajors(e, keys, reg, kit):
-    """a driver linkage's drv_cmajor and drv_ccount (mod_drv_data, the
+    """a driver linkage's character and block rows (mod_drv_data, the
     offsets from the kit's fingerprint text) against majors= and the
-    registry: the core installs at drv_cmajor, so it must be the module's"""
+    registry: the core installs at drv_cmajor and drv_bmajor, so they must
+    be the module's.  Either count may be 0, not both (core patch 0031);
+    block rows need a pinned module"""
     offs = {}
     for line in open(os.path.join(kit, 'abi.txt')):
         f = line.split()
@@ -344,14 +346,22 @@ def drvmajors(e, keys, reg, kit):
             if not dd or dd[0] == 'undef':
                 bad('a mod_drvops linkage whose mod_drv_data cannot be followed')
                 return
-            mj = struct.unpack('>i', struct.pack('>I', word(dd[0], dd[1] + offs['DRV_CMAJOR'])))[0]
-            n = struct.unpack('>i', struct.pack('>I', word(dd[0], dd[1] + offs['DRV_CCOUNT'])))[0]
+            def sword(name):
+                return struct.unpack('>i', struct.pack('>I', word(dd[0], dd[1] + offs[name])))[0]
             declared = [m for m in keys.get('majors', '').split(',') if m]
-            for k in range(max(n, 1)):
-                if 'c:%d' % (mj + k) not in declared:
-                    bad('drv_cmajor %d (count %d): c:%d is not in majors=' % (mj, n, mj + k))
-                elif reg.get(('c', mj + k)) != keys.get('name'):
-                    bad('drv_cmajor %d: c:%d is not registered to %s' % (mj, mj + k, keys.get('name')))
+            cn, bn = sword('DRV_CCOUNT'), sword('DRV_BCOUNT')
+            if cn < 0 or bn < 0 or cn + bn == 0:
+                bad('drv_ccount %d, drv_bcount %d: one or both above 0, neither below' % (cn, bn))
+            if bn > 0 and keys.get('unload') == 'allowed':
+                bad('a block driver must be pinned (no unload=allowed)')
+            for t, f, n in (('c', 'drv_cmajor', cn), ('b', 'drv_bmajor', bn)):
+                mj = sword(f.upper())
+                for k in range(max(n, 0)):
+                    if '%s:%d' % (t, mj + k) not in declared:
+                        bad('%s %d (count %d): %s:%d is not in majors=' % (f, mj, n, t, mj + k))
+                    elif reg.get((t, mj + k)) != keys.get('name'):
+                        bad('%s %d: %s:%d is not registered to %s'
+                            % (f, mj, t, mj + k, keys.get('name')))
         link = (link[0], link[1] + 8)                         # the next modlink entry
 
 

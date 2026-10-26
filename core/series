@@ -41,3 +41,4 @@
 0038-mkmod-rank.patch
 0039-ramdisk-image.patch
 0040-vfs-register.patch
+0041-moddefs-block-rows.patch

@@ -89,7 +89,7 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 | `$modtype` | `misc`, `drv` or `str`: the wrapper macro you use |
 | `$class` | `boot` (loaded after the root is mounted), `demand` (at the first open of one of its majors) or `root` (placed by the loader and linked before the root is mounted: a disk controller, a root filesystem, the RAM disk; `docs/contracts/C4-2-root-class-driver.md`) |
 | `$cpu` | the lowest CPU it runs on: `68020`, `68030`, `68040`, `68060`. Leave it out and the make fragment gives the line's (68030 on k30, 68040 on k46, or `MODCPU`), so one Master serves both kits |
-| `$majors` | `c:<n>` per character major, each registered to this module's name in the kit's `registry/majors` |
+| `$majors` | `c:<n>` per character major and `b:<n>` per block major, each registered to this module's name in the kit's `registry/majors`. A block major needs a root-class, pinned module |
 | `$match` | for a boot module that needs a board, and always for a root module: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated |
 | `$rank` | a root-class disk controller's sd class: `z3660`, `zorro`, `mobo` or `ide` (C4-1 §4.1). A root filesystem and the RAM disk have none |
 | `$fs` | a filesystem module's type name, the one `vfs_register` takes (C4-6 §3); the module is then pinned (no `$unload allowed`) |
@@ -132,7 +132,10 @@ MOD_DRV_WRAPPER(mydrv, mydrv_load, mydrv_unload, mydrv_halt, "my driver");
 
 `52, 1` are its major and the count of consecutive majors. The major must
 be registered to the module's name: 52 is monsw's, so this sketch builds
-only as `monsw`. A STREAMS driver's row is zeros except `d_str`. The core reads a zero
+only as `monsw`. A block driver fills the first row (`bdevsw`) and its
+major and count instead, and may leave the character row and count 0:
+the ramdisk is `{ { open, close, strategy, print }, 20, 1, { 0 }, 0, 0 }`
+on `b:20`. A STREAMS driver's row is zeros except `d_str`. The core reads a zero
 entry as `nodev`: a driver without a read entry answers `read` with
 ENODEV, as monsw does. What changes from a static driver, in short (C3-6 §1
 has it in full):
