@@ -1,6 +1,6 @@
-# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 4
+# C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 5
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4); version 5 (2026-10-26, S4-72-1 N103): the arena offset is a multiple of 16 (§2). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
@@ -37,12 +37,22 @@ A `.data` object `dlm_ident`, 4-byte aligned, big-endian:
 | 8 | 4 | check: all longwords of the record sum to zero (as `AXL1` and `KIF1`) |
 | 12 | 24 | kabi tag, NUL-padded: `k46.1.0` |
 | 36 | 4 | line: 30 or 46 |
-| 40 | 4 | arena image offset |
+| 40 | 4 | arena image offset, a multiple of 16 (version 5) |
 | 44 | 4 | arena capacity in bytes, a multiple of 64 KiB |
 | 48 | 4 | symbol block image offset (`dlm_ksym`, C3-2) |
 | 52 | 4 | symbol block size |
 | 56 | 4 | flags: 0x1 module kernel; other bits 0 |
 | 60 | 4 | 0 |
+
+**The arena's alignment** (version 5). boot2 binds on 256 bytes and
+places each root-class module 16-aligned from the arena's start, and the
+core runs it in place only at an absolute multiple of 16 (C3-4 §2). No
+alignment inside `.data` gives that, since `.data` follows `.text` and
+`.rodata` with no padding. So `dlm_arena` is the capacity plus 16 bytes,
+and the record's arena is the first 16-aligned image offset inside it;
+`mkident.py --fill` writes it and `--check` refuses any other. On
+S4-72-1 (N103) both cuts of record had an arena 8 mod 16, and the core
+refused the root module on both lines.
 
 The record holds no addresses, only image offsets. Its bytes are therefore
 the same in the file and in memory at any bind address, and the check holds
@@ -82,7 +92,7 @@ sha256=…                     of unix as shipped
 bss=…                        required for a brel, as in version 4
 loader-min=2                 a module kernel needs loader version 2 (C3-4)
 ident=0x001f1fc0             image offset of AXK1                       (new)
-arena=0x001f2000 0x00080000  image offset and capacity, equal to AXK1's
+arena=0x001f2000 0x00080000  image offset (a multiple of 16) and capacity, equal to AXK1's
 ksym=0x001e8000 0x00002400   image offset and size of the symbol block  (new)
 abi=<64 hex>                 the binary fingerprint (§4)                (new)
 root=zorro:144b:01           built-in root controllers, through stage 3 (below)
