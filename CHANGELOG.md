@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patch 0039: ramdisk_image, the RAM-disk image for its module (c2ed79c)
+
+`int ramdisk_image(unsigned long *paddr, unsigned long *size)`, a DDI name of minor 1 (any context): core/plat/amiga.c keeps
+the image's physical address and size from AXL1 (offsets 116, 120) and hands them to the ramdisk module, ENOENT without an
+image. Harness 245/245; plat 11 checks; the kit rebuilt at c2ed79c. C4-3's text is final for the ramdisk module's port.
+
 ## 2026-10-26 — Kit README: a DDI function leaves abi.txt as it is; C4-3 draft, the RAM-disk hand-off (6f1c775, 1724dc2)
 
 abi.txt covers the DDI's data names with sizes and the layouts the core reads, not function names; a function added to
