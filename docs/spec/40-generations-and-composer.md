@@ -101,7 +101,11 @@ program against an image file, so media and boxes cannot drift).
    `verified=` field, the hook for a later signature policy (§4 there); 1.1
    has no signing (D-3 §13).
 2. **kabi:** members disagree on family, major, or compiler pin; a module's
-   minor exceeds the kernel's.
+   minor exceeds the kernel's; or a module imports a name that neither a
+   module it depends on defines nor the kernel's symbol block exports (the
+   sidecar's `ksym=`, C3-2; a core-tier name only for a core-tier module).
+   That last one the core would otherwise refuse only at link, in the
+   boot, with error 165.
 3. **Closure:** the root-class set does not contain a module for the boot
    disk's controller and for the root disk's controller and filesystem, as
    seen by `kinfo` (or named with `--bootdev`/`--rootdev` on a host build).
