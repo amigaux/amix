@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — C2-3 v7: sdcards= in the kernel sidecar; kbootset km_tail (cbba08f, 60e7eb1, 3b74296)
+
+C2-3 version 7: `sdcards=` = the sd cards the kernel was built for, absent = 2; the S4-21 kernels write 4; written by the
+kernel build's sidecar tools (a sidecar from before is re-stamped, not the kernel), passed through by amix-packages, read by
+the installer from /stand/kNN/kabi before making nodes or naming a disk; never inferred from the kabi minor. kbootset
+km_tail computes a root module's `bss=` by core patch 0033's layout (make test 692/692). C3-5 v6's text: `bss=` counts every
+COMMON (an upper bound). S4-12's record writing (at=, bss=, crc32=, placement, gate 6, the board set, safe-mode flags, media
+with a ramdisk member, two-digit card names) follows S4-04.
+
 ## 2026-10-26 — C4-4 v2 and C3-5 v6 (bss= on root records); core patch 0033, the arena load path (88c7618, bc1dc58, 68623c8)
 
 C4-4 version 2 (agreed): boot2 reserves each root module's `bss=` zeroed tail behind its file (file end rounded up to 16)
