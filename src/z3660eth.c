@@ -90,6 +90,7 @@
 #ifdef Z3660ETH_MODULE
 #include "sys/conf.h"		/* struct cdevsw, for struct mod_drv_data */
 #include "sys/moddefs.h"	/* the ABI kit's wrapper (amix-dlm C3-1, C3-6) */
+#include "sys/amixddi.h"	/* the kit's DDI v1: if_attach, intr_attach, ... */
 #endif
 
 extern int	autocon();
@@ -148,9 +149,7 @@ struct streamtab z3660ethinfo =		/* goes in cdevsw[].d_str */
 };
 
 #ifndef Z3660ETH_MODULE
-extern struct ifstats *ifstats;
-#else
-extern int if_attach();		/* DDI v1: the module never touches ifstats */
+extern struct ifstats *ifstats;	/* the module uses if_attach (sys/amixddi.h) */
 #endif
 
 static z3660eth_board_t z3660eth_board[Z3660ETH_MAXBOARDS];
@@ -1889,7 +1888,7 @@ z3660ethinit()
  * The module form (amix-dlm docs/contracts/C3-6-driver-to-module.md, version 1,
  * section 2).  Built with -DZ3660ETH_MODULE, once per kernel line (k30, k46);
  * without it this file is the static driver, byte for byte.  The ABI kit's
- * mkmod adds .moddata (src/z3660eth.modkeys) and modfix the section type.
+ * mkmod adds .moddata (module/Master.in) and modfix the section type.
  *
  *   class=boot, unload=never, majors=c:51: the core registers major 51 from
  *   z3660eth_drvdata; no code here touches cdevsw.  The interface goes on the
@@ -1921,8 +1920,6 @@ z3660ethinit()
 #define INTREQ_EXTER		0x2000	/* level 6 */
 #define INTREQ_PORTS		0x0008	/* level 2 */
 #define Z3660ETH_SELFTEST_SPIN	200000	/* polls of the test flags, IPL 0 */
-
-extern int intr_attach(), intr_detach();
 
 #define RAISE_INTREQ(bits) \
 	(*(volatile unsigned short *)AMIGA_INTREQ = (unsigned short)(INTREQ_SETCLR | (bits)))

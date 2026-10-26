@@ -5,13 +5,12 @@
 **One source, a switch.** `-DZ3660ETH_MODULE` turns `src/z3660eth.c` into the
 loadable module; without it the file is the static driver, byte for byte (the
 `.o` of both lines is identical before and after, and the preprocessed token
-stream too). `tools/build-module.sh` builds one relocatable object per line
-(`build/k30/z3660eth.o`, `-m68020`, stock sysroot; `build/k46/z3660eth.o`,
-`-m68040`, a mirror sysroot with the port's Model-B `immu.h`/`param.h`), fills
-`src/z3660eth.modkeys` into `build/<line>/z3660eth.keys`, and gates it: every
-undefined symbol on `amix-dlm/abi/<line>/ddi.list`, the 68060 scan, no 2 KiB
-page shift on k46. Wrapping (`.moddata`, the section type) is the ABI kit's
-`mkmod`/`modfix` (S3-10); nothing here does it.
+stream too). The module is built with amix-dlm's ABI kit (S3-10), one kit per
+line: `make -C module` builds `build/<line>/mod.d/z3660eth` through the kit's
+`mk/module.mk` (its headers, `mkmod`, `modfix`, `modcheck.py`), with the
+`Master` written from `module/Master.in` (`$cpu` 68030 on k30, 68040 on k46).
+The module form includes the kit's `sys/amixddi.h` for `if_attach` and
+`intr_attach`/`intr_detach`; the static form does not see it. BUILD.md section 9.
 
 **What changes in the module.**
 - `z3660eth_load(params)` does what the first open did: `z3660eth_map(0)`
@@ -51,15 +50,29 @@ interrupt enabled; any failure detaches and stays polled, one console line.
   measures). Counters: `z3660eth_int6_n`, `z3660eth_int2_n`,
   `z3660eth_intr_mode` (6 = running on interrupts).
 
-**Gate result (2026-10-26, gcc-cross-amix 8949028).** Imports, both lines:
-`OTHERQ RD WR allocb autocon bcmp bcopy bzero canput cmn_err flushq freemsg
-getmajor getminor getq if_attach intr_attach intr_detach lbolt makedevice
-memcpy mod_drvops panicstr putbq putnext putq qreply sptalloc sptfree timeout
-unlinkb untimeout`, all on DDI v1; one weak undefined, the wrapper's own
-`z3660eth_conf_data` (C3-1: resolves to 0). The `.o` defines `ifnet` and
-`rawintrq` as COMMON: tentative definitions in the stock `<net/if.h>`, also in
-the static object; in a module the core allocates private copies, which the
-driver never uses.
+**Kit result (2026-10-26, amix-dlm 6ef133e kits, gcc-cross-amix 8949028).**
+`modcheck.py` passes on both lines (`ok (k30.1.0, boot, 12444 bytes)`, the
+same for k46.1.0). Imports, both lines: `OTHERQ RD WR allocb autocon bcmp bcopy
+bzero canput cmn_err flushq freemsg getmajor getminor getq if_attach
+intr_attach intr_detach lbolt makedevice memcpy mod_drvops panicstr putbq
+putnext putq qreply sptalloc sptfree timeout unlinkb untimeout`, all on DDI
+v1; one weak undefined, the wrapper's own `z3660eth_conf_data` (C3-1:
+resolves to 0). 34 COMMON symbols, each a checker warning: `ifnet` and
+`rawintrq` are tentative definitions in the stock `<net/if.h>` (in the static
+object too; the module gets private copies, which the driver never uses), the
+other 32 are the driver's own uninitialised counters and tunables, allocated
+by the core with the module. The static objects compiled against the kits'
+headers are the static objects of record: k30 `c2d6225e…`, k46 `142e2486…`
+(`make -C module static`).
+
+**In the module, the kmem tunables move.** `z3660eth_cache`,
+`z3660eth_ci_enforce`, `z3660eth_reprobe` and the counters are pokes and reads
+at a kernel address the static kernel's `nm` gives. In the module they live
+wherever the core placed the module at load; their addresses are in the
+module's symbol table the core builds at load (`getksym`, the kit's
+`sys/ksym.h`), not in the kernel's. How a tool on the box reads them is
+amix-dlm's side (S3-11, `modadmin`); until then the documented `/dev/kmem`
+pokes (BUILD.md section 8) apply to the static driver only.
 
 ## RX backpressure (2026-10-19, T-47 decision D1)
 

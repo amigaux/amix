@@ -77,9 +77,10 @@ fast clean boot.
   `Z3660/src/{ethernet.c,memorymap.h,rtg/rtg.c}`).
 - `src/z3660ethuser.h` — user‑facing ioctls + status struct (no kernel types).
 - `src/Makefile` — installed as `/usr/sys/amiga/driver/z3660eth/Makefile`.
-- `src/z3660eth.modkeys` — the `.moddata` keys of the loadable-module form
-  (`-DZ3660ETH_MODULE`); `tools/build-module.sh` builds and gates the module
-  object per kernel line (NOTES.md "Module form").
+- `module/` — the loadable-module form (`-DZ3660ETH_MODULE`) built with
+  amix-dlm's ABI kit: `Makefile` (`make -C module`, one module per kernel
+  line) and `Master.in` (its `.moddata` keys); BUILD.md §9, NOTES.md
+  "Module form".
 - `driver.conf` — the `net` stanza consumed by `amix-build`.
 - `userland/` — `zen.c` (the `zen -S` presence tool), the `/etc/inet` config
   snippet, and the manual interface bring‑up runbook.

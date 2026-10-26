@@ -178,16 +178,31 @@ and the arm is declared unsupported with a live data cache. The shipped Z3660 co
 
 ## 9. The loadable-module form (host-side, cross-compiled)
 The same `src/z3660eth.c` built with `-DZ3660ETH_MODULE` is the module of amix-dlm's
-contract C3-6; the static build above does not change. On the host, with the sibling
-checkouts `gcc-cross-amix`, `amix-dlm` and `amix-040-060-port` present:
+contract C3-6; the static build above does not change. The module is built with
+amix-dlm's **ABI kit** (S3-10), one kit per kernel line, and nothing else: the kit's
+headers (its own `sys/moddefs.h` and `sys/amixddi.h`, the stock headers, on k46 the
+port's 4 KiB `immu.h`/`param.h`), its `mk/module.mk`, `mkmod`, `modfix` and
+`modcheck.py`. Build the kits once in the amix-dlm checkout, then the module here:
 ```
-sh tools/build-module.sh            # build/k30/z3660eth.o and build/k46/z3660eth.o
+. ../gcc-cross-amix/build/env.sh        # m68k-cbm-sysv4-* on PATH
+make -C ../amix-dlm kit                 # ../amix-dlm/build/kit/{k30,k46}
+make -C module                          # build/k30/mod.d/z3660eth, build/k46/mod.d/z3660eth
+make -C module k46                      # one line
+make -C module static                   # the static object per line, and its sha256
 ```
-Each object is gated (undefined symbols against `amix-dlm/abi/<line>/ddi.list`, the
-68060 scan, no 2 KiB page shift on k46) and `build/<line>/z3660eth.keys` holds its
-`.moddata` keys. The ABI kit (amix-dlm S3-10) wraps the object into the module.
-Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with intr=6:
-1 drain in a level-2 handler, the default; 0 in the poll tick). NOTES.md "Module form".
+`DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. Each line
+builds in `build/<line>/`: the object, `Master` (from `module/Master.in`, with `$cpu`
+68030 on k30, 68040 on k46; `kabi` and `cc` come from the kit), then the kit's `mkmod`
+writes `.moddata`, `modfix` the section type, and `modcheck.py` checks the module
+(undefined symbols on the line's DDI v1 list, the registry's major 51, the parameter
+forms, on k46 the 68060 scan and no 2 KiB page shift). A refusal fails the build.
+`modcheck.py` warns about every COMMON symbol: `ifnet` and `rawintrq` come from the
+stock `<net/if.h>`; the rest are the driver's own counters and tunables.
+
+`make -C module static` compiles the static driver (no `-DZ3660ETH_MODULE`) against
+each kit's headers; the hashes must stay those of the static objects (NOTES.md
+"Module form"). Parameters: `intr` (0 polled, the default; 6 INT6 receive) and
+`intrl2` (with intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).
 
 ## Real-world build notes (historical record, validated 2026-06-21 on the WinUAE build box)
 The current build harness is **Amiberry** with `../amix-kerntools/configs/amix-golden.uae` (§0).
