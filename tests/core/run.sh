@@ -173,7 +173,7 @@ fi
 if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -no-pie -DDMA_HOST -DDMA_REACH=0x20080000UL \
 	-DDMA_CHIP=0x20010000UL -o "$B/test-bin/t_dma30" "$R/tests/core/t_dma30.c" "$R/core/plat/k30/line.c" &&
    "$B/test-bin/t_dma30" > "$B/t_dma30.log" 2>&1; then
-	pass "core/plat k30 DMA: $(grep -c '^PASS' "$B/t_dma30.log") checks (the pool, bounces, the force-bounce and force-fail hooks, heap mode)"
+	pass "core/plat k30 DMA: $(grep -c '^PASS' "$B/t_dma30.log") checks (the pool, bounces, both test hooks and their dma_alloc exemption, heap mode)"
 else
 	grep '^FAIL' "$B/t_dma30.log"; fail "core/plat k30 DMA"
 fi

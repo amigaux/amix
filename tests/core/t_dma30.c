@@ -68,7 +68,7 @@ check(int ok, const char *what)
 int
 main(void)
 {
-	char r[0x60], *ddr = (char *)(RAM + 0x90000), *near = (char *)(RAM + 0x30000), *v;
+	char r[0x60], *ddr = (char *)(RAM + 0x90000), *near = (char *)(RAM + 0x30000), *v, *st;
 	unsigned long pa, b, kb = (unsigned long)bootinfo & ~0xfffUL;
 
 	if (mmap((void *)RAM, 0x100000, PROT_READ | PROT_WRITE,
@@ -112,7 +112,16 @@ main(void)
 	    "a prepare while a segment is owned is refused");
 	dma_complete(r, (unsigned long)near, 512, 1);
 
+	/* the force-bounce hook leaves dma_alloc memory alone (C4-5 2.2): a
+	 * FROM sync over a line the chip wrote must not copy stale bytes back */
 	dma_forcebounce = 1;
+	st = dma_alloc(64, &pa);
+	memcpy(st, "chip status", 12);
+	check(st && dma_prepare(r, pa, 16, 1) == 0 && dma_addr(r, pa) == pa,
+	    "force-bounce leaves a pool segment reachable: not bounced");
+	dma_complete(r, pa, 16, 1);
+	check(!memcmp(st, "chip status", 12), "and its complete leaves the chip's bytes as they are");
+	dma_free(st, 64);
 	check(dma_prepare(r, (unsigned long)near, 64, 0) == 0 &&
 	    dma_addr(r, (unsigned long)near) != (unsigned long)near,
 	    "the force-bounce hook bounces a reachable segment");
@@ -152,6 +161,13 @@ main(void)
 		v = dma_alloc(1300, &pa);
 		check(dma_heap && !dma_pool && v && pa == (unsigned long)v && !(pa & 15) &&
 		    ((char **)v)[-1] == (char *)heap_at, "heap mode: the block through its identity alias");
+		dma_free(v, 1300);
+		v = dma_alloc(1300, &pa);
+		dma_forcebounce = 1;
+		check(dma_prepare(r, pa + 16, 16, 1) == 0 && dma_addr(r, pa + 16) == pa + 16,
+		    "heap mode: force-bounce leaves a dma_alloc block reachable");
+		dma_complete(r, pa + 16, 16, 1);
+		dma_forcebounce = 0;
 		dma_free(v, 1300);
 		check(freed == (char *)heap_at, "heap mode: dma_free gives the heap block back");
 	}

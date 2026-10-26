@@ -43,6 +43,7 @@ plat_buildid(void)
 #define DMA_PG		4096UL
 #define DMA_NMAP	32		/* the pool's free extents */
 #define DMA_NOWN	8		/* records with a bounce at once */
+#define DMA_NALLOC	16		/* dma_alloc blocks in heap mode */
 
 /* struct dma_rec, layout version 2 (the 040/060 port's DMA040-SERVICE-RECORD.md) */
 #define DR_OFF		0x10
@@ -74,6 +75,7 @@ unsigned long	dma_pool, dma_poolsz;	/* the pool, or 0 */
 int		dma_heap;		/* 1: the kernel runs where the board reaches */
 static struct { unsigned long a, n; } map[DMA_NMAP];	/* free extents, by address */
 static struct { char *r; unsigned long b; } own[DMA_NOWN];	/* the bounces held */
+static struct { unsigned long a, n; } blk[DMA_NALLOC];	/* heap mode's dma_alloc blocks */
 
 #ifndef DMA_HOST
 #define SPLHI(s) do { \
@@ -100,9 +102,30 @@ get32(const char *p)
 	return (unsigned long)u[0] << 24 | (unsigned long)u[1] << 16 | (unsigned long)u[2] << 8 | u[3];
 }
 
+/* inside dma_alloc memory: the pool, or one of heap mode's blocks */
+static int
+allocated(unsigned long pa, unsigned long n)
+{
+	int i;
+
+	if (dma_pool)
+		return pa >= dma_pool && pa + n <= dma_pool + dma_poolsz && pa + n >= pa;
+	for (i = 0; i < DMA_NALLOC; i++)
+		if (blk[i].n && pa >= blk[i].a && pa + n <= blk[i].a + blk[i].n && pa + n >= pa)
+			return 1;
+	return 0;
+}
+
+/*
+ * The board reaches pa..pa+n.  dma_alloc memory is never bounced, the
+ * force-bounce hook's included (C4-5 section 2.2): a bounce of a line the
+ * chip wrote would copy stale bytes back over it at complete.
+ */
 static int
 reached(unsigned long pa, unsigned long n)
 {
+	if (allocated(pa, n))
+		return 1;
 	return !dma_forcebounce && pa >= DMA_CHIP && pa + n <= DMA_REACH && pa + n >= pa;
 }
 
@@ -285,6 +308,7 @@ dma_alloc(unsigned long len, unsigned long *pa)
 {
 	unsigned long n = (len + 15) & ~15UL, a, b, k;
 	char *p;
+	int i;
 
 	if (len == 0 || len > DMA_MAX)
 		return 0;
@@ -294,7 +318,9 @@ dma_alloc(unsigned long len, unsigned long *pa)
 		*pa = a;
 		return (char *)a;
 	}
-	if (!dma_heap || (p = kmem_alloc(len + DMA_HDR, 1)) == 0)
+	for (i = 0; i < DMA_NALLOC && blk[i].n; i++)
+		;
+	if (!dma_heap || i == DMA_NALLOC || (p = kmem_alloc(len + DMA_HDR, 1)) == 0)
 		return 0;
 	b = vtop(p, 0);
 	for (k = DMA_PG - ((unsigned long)p & (DMA_PG - 1)); k < len + DMA_HDR; k += DMA_PG)
@@ -306,6 +332,7 @@ dma_alloc(unsigned long len, unsigned long *pa)
 	}
 	a = (b + 4 + 15) & ~15UL;		/* through the identity map */
 	((char **)a)[-1] = p;
+	blk[i].a = a, blk[i].n = len;
 	*pa = a;
 	return (char *)a;
 }
@@ -314,11 +341,17 @@ void
 dma_free(char *va, unsigned long len)
 {
 	unsigned long a = (unsigned long)va;
+	int i;
 
 	if (va == 0)
 		return;
+
 	if (dma_pool && a >= dma_pool && a < dma_pool + dma_poolsz)
 		pool_put(a, (len + 15) & ~15UL);
-	else
+	else {
+		for (i = 0; i < DMA_NALLOC; i++)
+			if (blk[i].a == a)
+				blk[i].n = 0;
 		kmem_free(((char **)va)[-1], len + DMA_HDR);
+	}
 }
