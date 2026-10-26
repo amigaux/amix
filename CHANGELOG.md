@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patches 0002–0004: platform split, .moddata v2 (C3-1), ENOLOAD (58b42fb..dbc3d74)
+
+Patch 0002 takes ashnazag's guest registrations out of dlm_init (30 §2 patch 1); plat_dmainit is the platform's place.
+Patch 0003 brings .moddata version 2 and wrapper revision 2: every C3-1 key checked, the module checked against the kernel
+(name, kabi family/major/minor, compiler pin, core-tier build id), root class refused until the arena path; mkmod writes v2,
+modfix checks it; dlmconf.c takes DLM_KABI/DLM_PIN from the kernel build. Patch 0004: non-module files are refused with
+ENOLOAD (C3-1 §4). M-CORE1 87/87 on both lines; state harness 124/124; dlm.o text 28 268 B.
+
 ## 2026-10-26 — stage 3 begins: the module core imported, patch 0001, M-CORE1 (becf104..9626629)
 
 core/: kdedon's MIT DLM core (ashnazag kernel/dlm at b736c59) imported unmodified with upstream's LICENSE, the base of the
