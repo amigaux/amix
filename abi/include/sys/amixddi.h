@@ -101,8 +101,8 @@ extern int	vfs_register();		/* (char *, int (*)(), struct vfsops *, long) */
  * address, then dma_complete(r, pa, len, dir) when it has stopped.  A
  * nonzero prepare is a miss the driver arms past.  dma_alloc(len, &pa):
  * len bytes (at most 64 KiB, 16-aligned) the board reaches, for SCRIPTS
- * and tables, 0 when none; never sleeps.  On k30 the provider is a
- * placeholder until S4-62: dma_alloc returns 0.
+ * and tables, 0 when none; never sleeps.  On k30 dma_addr is 0 for a
+ * segment the board cannot reach and no bounce could take: do not arm.
  */
 #ifndef DMA_TO_DEVICE
 #define	DMA_TO_DEVICE	0

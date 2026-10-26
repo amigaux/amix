@@ -40,6 +40,12 @@ extern unsigned long vtop(char *, char *);
 extern int dma_prepare(char *, unsigned long, unsigned long, int);
 extern void dma_complete(char *, unsigned long, unsigned long, int);
 
+/* nothing at dmainit on this line: dma_alloc needs no pool */
+void
+plat_line_init(void)
+{
+}
+
 /* the address the device is armed with: on this line the segment's own */
 unsigned long
 dma_addr(char *r, unsigned long pa)

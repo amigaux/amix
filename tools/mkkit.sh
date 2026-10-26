@@ -185,7 +185,7 @@ $MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix-modules ] && printf ' (MIT)' 
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on
-2026-09-23.$( [ "$LINE" = k46 ] && printf '\nsys/immu.h and sys/param.h there are the 68040/68060 port'"'"'s 4 KiB page\nforms of the stock headers (amix-040-060-port include-modelb/ at '"$PORT_REV"').' )$( [ "$LINE" = k30 ] && printf '\n\nThe DMA names (dma_prepare and the others, contract C4-5) are listed, but\ntheir k30 provider is a placeholder until the 030 provider (S4-62):\ndma_alloc returns 0, so a bus-master driver fails its _load on this line.' )
+2026-09-23.$( [ "$LINE" = k46 ] && printf '\nsys/immu.h and sys/param.h there are the 68040/68060 port'"'"'s 4 KiB page\nforms of the stock headers (amix-040-060-port include-modelb/ at '"$PORT_REV"').' )
 EOF
 # s5 keeps 14 bytes of a name: the package must install there
 long=$(cd "$OUT" && find . | awk -F/ '{ for (i = 2; i <= NF; i++) if (length($i) > 14) { print; break } }')

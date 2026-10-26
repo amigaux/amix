@@ -169,6 +169,14 @@ if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -DDMA_IDTOP='(~0UL)' -o "$B/test-bin
 else
 	grep '^FAIL' "$B/t_dma.log"; fail "core/plat k46 DMA"
 fi
+# k30: "physical" memory mapped at 0x20000000, so the binary is not PIE
+if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -no-pie -DDMA_HOST -DDMA_REACH=0x20080000UL \
+	-DDMA_CHIP=0x20010000UL -o "$B/test-bin/t_dma30" "$R/tests/core/t_dma30.c" "$R/core/plat/k30/line.c" &&
+   "$B/test-bin/t_dma30" > "$B/t_dma30.log" 2>&1; then
+	pass "core/plat k30 DMA: $(grep -c '^PASS' "$B/t_dma30.log") checks (the pool, bounces, the force-bounce hook, heap mode)"
+else
+	grep '^FAIL' "$B/t_dma30.log"; fail "core/plat k30 DMA"
+fi
 
 # ---- 3. the user side ----
 if for f in modload moduload modpath modstat modadm getksym; do

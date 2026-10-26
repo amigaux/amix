@@ -13,6 +13,7 @@
 char bootinfo[AXB_SIZE];
 static char buildid[] = "68060-261101-01";
 char *plat_buildid(void) { return buildid; }
+void plat_line_init(void) { }
 int dlm_devload, dlm_safe;
 unsigned long dlm_rd_addr, dlm_rd_size;
 static ax_u32 rd_a, rd_s;	/* the image boot() puts in the loader record */

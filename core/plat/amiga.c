@@ -30,6 +30,7 @@ extern int (*dlm_plat_match)(char *);
 extern int printf(const char *, ...);
 
 extern char *plat_buildid(void);	/* core/plat/<line>/line.c */
+extern void plat_line_init(void);	/* the line's own, at dmainit (k30: the DMA pool) */
 
 static ax_u32
 get32(const char *p)
@@ -103,4 +104,5 @@ plat_dmainit(void)
 	if (bid[0] != 0)
 		dlm_build = bid;
 	dlm_plat_match = plat_match;
+	plat_line_init();
 }
