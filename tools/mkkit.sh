@@ -102,6 +102,13 @@ cp "$R/docs/abi/writing-a-module.md" "$OUT/docs/guide.md"
 for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
 	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/${c%%-[a-z]*}.md"
 done
+# the interface headers of generic modules (amix-modules), versioned with
+# the module's release: sys/monsw.h from amix-modules once monsw is there,
+# from the port's copy until then
+MONSW_H=${MONSW_H:-$WS/amix-modules/monsw/module/sys/monsw.h}
+[ -f "$MONSW_H" ] || MONSW_H=$PORT/src/sys/monsw.h
+[ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
+cp "$MONSW_H" "$OUT/include/sys/monsw.h"
 cp "$R/LICENSE" "$OUT/LICENSE"
 cp "$R/abi/README.md" "$OUT/README.md"
 
@@ -155,6 +162,8 @@ include/sys/amixddi.h, tools/modcheck.py, mk/, sample/, docs/, the lists and
 the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
 tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
 (tools/LICENSE.core).
+include/sys/monsw.h, the monitor switch's interface, is Jussi Alanärä's, from
+amix-040-060-port today and from amix-modules (MIT) once monsw moves there.
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on

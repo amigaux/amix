@@ -25,7 +25,7 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 |---|---|
 | `kit.conf` | the line, its kabi tag, the compiler pin, the CPU flag, the amix-dlm commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`) |
 | `abi.txt` | the line's fingerprint text (C3-3 §4): `abi=` is its SHA-256 |
-| `include/sys/` | `mod.h`, `moddefs.h` (the wrapper macros), `ksym.h`, `amixddi.h` (DDI v1) |
+| `include/sys/` | `mod.h`, `moddefs.h` (the wrapper macros), `ksym.h`, `amixddi.h` (DDI v1); `monsw.h`, the monitor switch's interface |
 | `sysroot/`, `stock/` | the stock Amix 2.1 kernel headers (see `NOTICE`) |
 | `ddi.list`, `core.list` | the names a module may import, per tier (C3-2) |
 | `registry/` | the character and block majors, the motherboard probes |
@@ -36,6 +36,11 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 
 Every name in the kit is at most 14 bytes, so it unpacks on an s5
 filesystem too.
+
+The interface headers of generic modules (amix-modules: today
+`sys/monsw.h`) ship with the kit, so a module that calls another module
+builds against the kit alone. Each header is versioned with its module's
+release; a kit carries the version current when it was built.
 
 In amix-dlm this directory holds the kit's sources; `make kit` builds the
 kits for both lines into `build/kit/`.

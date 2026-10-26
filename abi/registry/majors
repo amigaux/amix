@@ -8,4 +8,5 @@ c 49 z3660rtg
 c 51 z3660eth
 c 52 monsw
 c 53 kinfo
+# b 20: the RAM-disk module's home is amix-modules, when it is written
 b 20 ramdisk
