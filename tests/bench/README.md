@@ -298,12 +298,20 @@ The facts come from `kinfo`, so no command takes options. No stand-in
 package is needed: `kbootset build` composes from the installed
 `kernel-k30-u`.
 
-**S2-46 on k30.** The catalog serves `kbootset`, `loader-amix` and
-`kernel-k30-u` at a revision above the one installed (amix-packages
-mints it; the kernel bytes may be the same). Then the S2-46 table above
-applies with:
-- `apkg install kernel-k30-u` on boot 1, an upgrade of the installed
-  package, so its record is replaced, not doubled;
+**S2-46 on k30.** On the installer's v8 disk, whose record for the
+installed kernel is named by its pkginst (`kern30u`, C2-2 v4). The
+catalog serves `kbootset`, `loader-amix` and `kernel-k30-u` at a
+revision above the one installed (amix-packages mints it; the kernel
+bytes may be the same). Then the S2-46 table above applies with:
+- **on boot 1, all three in one apkg call** (install, or upgrade for
+  packages already present, as apkg 0.3 names it). One transaction
+  triggers one build and commit, so the row's new generation is 2.
+  Each kernel-space transaction triggers its own build and commit, a
+  loader-only one included. So separate calls spend a commit and a
+  generation number each: in the renamed-record variant (N45) the
+  loader's call committed generation 2 and the kernel's generation 3,
+  and generation 2 never booted;
+- the kernel's record replaced by the upgrade, not doubled;
 - `amix-boot: generation 2, kernel unix 1270676 bytes` on boot 2;
 - `amix-boot: generation 1, kernel unix 1270676 bytes` on boot 4.
 
