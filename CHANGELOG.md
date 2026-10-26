@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-26 — ramdisk requires kabi 1.2; VSECT1/phystokv from the kit (cad5ff3)
+
+iodone and ramdisk_image are kabi minor 2 (amix-dlm 42411c4); the local VSECT1/phystokv fallbacks are gone now that the
+kit's amixddi.h provides them on both lines (8b0e43e); the host test's stub header matches. Objects byte-identical on the
+1.2 kits: k30 5523d853, k46 054467f6; modcheck ok both lines (2944 B); hosttest 81 checks per page size.
+
 ## 2026-10-26 — ramdisk 1.0.0-1: the root-class RAM disk module (80d8b2e) — builds only against a kit with iodone
 
 Block driver on major 20 (C4-2 §8, C4-3 §4; S4-34). Unit 0 = the loader-placed miniroot from `ramdisk_image` at
