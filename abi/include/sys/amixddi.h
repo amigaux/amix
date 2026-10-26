@@ -71,6 +71,15 @@ extern int	root_defer();		/* (int (*)(), char *) */
 extern int	ramdisk_image();	/* (unsigned long *, unsigned long *) */
 
 /*
+ * A filesystem (k30.1.1 / k46.1.1; contract C4-6 section 3).
+ * vfs_register(name, init, ops, flag) from the module's _load, with name
+ * its .moddata fs=: a vfssw row, init(row, index) run once now.  0,
+ * EINVAL, EEXIST (that type is there), ENOSPC (4 spare rows).  A
+ * filesystem module is pinned.
+ */
+extern int	vfs_register();		/* (char *, int (*)(), struct vfsops *, long) */
+
+/*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or
  * off the stock list netstat reads.  0, EEXIST / ENOENT.
  */

@@ -128,6 +128,12 @@ level-2 handler raised through PORTS or in the poll.
 | `root_defer` | `int root_defer(fn, arg)` | root | core | `fn(arg)` runs once at the first `sysinit` entry, in process context at level 0, before any boot-class module loads, in safe mode too: where a root-class driver attaches its interrupt and runs its self-test (contract C4-2 §3). 0; `EINVAL` (not in a root-class `_load`, or no `fn`); `ENOSPC` (8 already). `fn`'s nonzero return is printed; the module stays linked |
 | `sd_register` | `int sd_register(queuefn, c, base, name, rank)` | root | core | Registers one board with sd (contract C4-1 §3). `queuefn(c, cp)` gets sd's requests for it; `base` is what `sdcardbase()` returns; `name` (the module's storage) what `sdhardwarename()` returns; `rank` the class the module declares in `.moddata` (1 `z3660`, 2 `zorro`, 3 `mobo`, 4 `ide`). 0; `EINVAL` (another class, no `queuefn` or `name`, or outside a module's `_load`); `ENOSPC` (four registered); `EBUSY` (sd's first open has closed registration). Allocates nothing; a failed `_load`'s registrations are removed |
 
+## Filesystems (k30.1.1, k46.1.1)
+
+| Name | Form | Context | Provider | Contract |
+|---|---|---|---|---|
+| `vfs_register` | `int vfs_register(name, init, ops, flag)` | `_load` | core | Appends a `vfssw` row for the module's filesystem type (contract C4-6 §3): `name` is the module's `fs=` and stays in its storage, `ops` its `struct vfsops`, `flag` the row's `vsw_flag`. `init`, when not 0, runs once now with the row and its index, as `vfsinit` runs the stock rows'; its result is not read. 0; `EINVAL` (a name other than `fs=`, no `ops`, outside a module's `_load`, or a module with `unload=allowed`); `EEXIST` (a row of that name, the kernel's own included); `ENOSPC` (the 4 spare rows taken). There is no unregister; a failed `_load`'s row is removed |
+
 ## STREAMS
 
 | Name | Context | Provider |

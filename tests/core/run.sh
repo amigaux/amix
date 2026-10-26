@@ -342,16 +342,19 @@ for IMG; do
 		fail "$K: mkksym -a: $(cat "$A/ksym.log")"; continue
 	fi
 	# the splice of the brief's step 7, as a module kernel's build does it:
-	# dmainit, execsw, fmodsw, scrcon_put, aciabintr weakened; the stock
-	# tables and functions kept as __amix_*; the whole core (less its empty
-	# dlmksym.o, which ksym.o replaces), the platform hook, and on k46 the
-	# libgcc helpers and the port's dev_kvmap.  Anything still missing is
-	# stubbed and listed.
+	# dmainit, execsw, fmodsw, vfssw, nfstype, scrcon_put, aciabintr
+	# weakened; the stock tables and functions kept as __amix_*; the whole
+	# core (less its empty dlmksym.o, which ksym.o replaces), the platform
+	# hook, and on k46 the libgcc helpers and the port's dev_kvmap.
+	# Anything still missing is stubbed and listed.
 	sym() { m68k-elf-nm "$ORIG" | awk -v n="$1" '$3==n {print $1}'; }
 	m68k-elf-objcopy --weaken-symbol=dmainit --weaken-symbol=execsw --weaken-symbol=fmodsw \
+		--weaken-symbol=vfssw --weaken-symbol=nfstype \
 		--weaken-symbol=scrcon_put --weaken-symbol=aciabintr \
 		--add-symbol __amix_execsw=.data:0x$(sym execsw),global,object \
 		--add-symbol __amix_fmodsw=.data:0x$(sym fmodsw),global,object \
+		--add-symbol __amix_vfssw=.data:0x$(sym vfssw),global,object \
+		--add-symbol __amix_nfstype=.data:0x$(sym nfstype),global,object \
 		--add-symbol __amix_scrcon_put=.text:0x$(sym scrcon_put),global,function \
 		--add-symbol __amix_aciabintr=.text:0x$(sym aciabintr),global,function "$ORIG" "$A/spliced.o"
 	prov=$(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post \

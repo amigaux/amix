@@ -92,6 +92,7 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 | `$majors` | `c:<n>` per character major, each registered to this module's name in the kit's `registry/majors` |
 | `$match` | for a boot module that needs a board, and always for a root module: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated |
 | `$rank` | a root-class disk controller's sd class: `z3660`, `zorro`, `mobo` or `ide` (C4-1 §4.1). A root filesystem and the RAM disk have none |
+| `$fs` | a filesystem module's type name, the one `vfs_register` takes (C4-6 §3); the module is then pinned (no `$unload allowed`) |
 | `$depend` | modules whose globals it uses (one line per name). Build those first and name their objects in the Makefile's `DEPS`: without them modfix stops at `modfix: undefined: <symbol>` |
 | `$unload` | `never` (the default) or `allowed` |
 | `$param` | `<name>:<type>:<default>[:<min>:<max>]`, one line each: types `int`, `hex`, `bool`, `str` |

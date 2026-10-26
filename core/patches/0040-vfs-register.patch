@@ -1,0 +1,448 @@
+Subject: vfs_register: filesystem modules and the grown vfssw
+
+Contract C4-6 sections 2 and 3.  The core defines vfssw (the stock rows
+plus 4) and nfstype; the kernel build keeps the stock ones as
+__amix_vfssw and __amix_nfstype, and dlm_vfs_init copies them at
+dmainit, before vfsinit walks the table.  vfs_register(name, init, ops,
+flag) appends a row for the calling module's fs= type and runs init
+once with the row and its index, as vfsinit does; it refuses another
+name, no ops, a call outside _load or an unloadable module (EINVAL), a
+type already there (EEXIST) and a fifth row (ENOSPC).  The fs= key is
+parsed and kept on the module record, and mkmod writes $fs.  A failed
+load's row goes with the backstop sweep.  A DDI name of minor 1.  The
+state harness covers each case.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -549,7 +549,8 @@
+ 	n += dlm_ddi_sweep(lo, hi);
+ 	if (n)
+ 		printf("dlm: %s left %d registration(s) pointing into it (an interrupt handler, "
+-		    "network interface, console hook or disk controller): removed\n", m->m_name, n);
++		    "network interface, console hook, disk controller or filesystem type): "
++		    "removed\n", m->m_name, n);
+ }
+ 
+ static void
+@@ -918,6 +919,7 @@
+ 	if (ld->ld_md.md_unload)		/* pinned unless it says so (C3-1) */
+ 		m->m_flags |= DM_UNLOADOK;
+ 	m->m_rank = ld->ld_md.md_rank;
++	strcpy(m->m_fs, ld->ld_md.md_fs);
+ 
+ 	/* dependencies */
+ 	for (n = 0, pos = 0; dlm_ld_dep(ld, &pos, dep) > 0; n++)
+@@ -1635,6 +1637,7 @@
+ 
+ 	dlm_slot_init();
+ 	dlm_str_init();
++	dlm_vfs_init();
+ 	if (dlm_blkcheck(dlm_ksym, dlm_ksym_space) != 0 ||
+ 	    G32(dlm_ksym + KH_LO) != DLM_KLO || G32(dlm_ksym + KH_HI) != DLM_KHI) {
+ 		printf("dlm: no kernel symbol table, modules disabled\n");
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -24,6 +24,7 @@
+  */
+ 
+ #include "dlm.h"
++#include "sys/vfs.h"
+ 
+ struct ifs_link {			/* struct ifstats begins with its link */
+ 	struct ifs_link	*ifs_next;
+@@ -47,6 +48,13 @@
+ #define	SPLX(s)	((void)(s))
+ #endif
+ 
++/* the grown filesystem switch (C4-6 section 2), below */
++#define	VFS_STATIC	13		/* the stock rows: 12 on k46, 13 on k30 */
++#define	VFS_SPARE	4
++struct vfssw	vfssw[VFS_STATIC + VFS_SPARE] = { { 0 } };	/* in .data, as the stock table */
++int		nfstype = 0;
++static int	vstatic;
++
+ int
+ if_attach(ifs)
+ 	struct ifs_link *ifs;
+@@ -129,7 +137,7 @@
+ 	unsigned long lo, hi;
+ {
+ 	struct ifs_link **pp;
+-	int s, i, n = 0;
++	int s, i, k, n = 0;
+ 
+ 	SPLHI(s);
+ 	for (pp = &ifstats; *pp; )
+@@ -148,6 +156,15 @@
+ 			n++;
+ 		} else
+ 			i++;
++	for (i = vstatic; i < nfstype; )
++		if ((unsigned long)vfssw[i].vsw_vfsops >= lo && (unsigned long)vfssw[i].vsw_vfsops < hi) {
++			for (k = i; k + 1 < nfstype; k++)
++				vfssw[k] = vfssw[k + 1];
++			nfstype--;
++			bzero((caddr_t)&vfssw[nfstype], sizeof vfssw[0]);
++			n++;
++		} else
++			i++;
+ 	for (i = 0; !dlm_sdclosed && i < dlm_nsdreg; )
+ 		if ((unsigned long)dlm_sdreg[i].sr_f >= lo && (unsigned long)dlm_sdreg[i].sr_f < hi) {
+ 			dlm_sdreg[i] = dlm_sdreg[--dlm_nsdreg];
+@@ -285,3 +302,68 @@
+ 	return 0;
+ }
+ 
++
++/*
++ * The filesystem switch (C4-6 sections 2 and 3).  The kernel build keeps
++ * the stock table as __amix_vfssw and its count as __amix_nfstype; every
++ * stock reference resolves to the core's, which dmainit fills before
++ * vfsinit walks it.  vfs_register appends a row from a filesystem
++ * module's _load, runs its init as vfsinit would (the row and its index),
++ * and raises nfstype.  There is no unregister: the module is pinned.  A
++ * failed load's row goes with the backstop above.
++ */
++extern struct vfssw __amix_vfssw[];
++extern int	__amix_nfstype;
++
++void
++dlm_vfs_init()
++{
++	int i;
++
++	if (__amix_nfstype > VFS_STATIC)
++		cmn_err(CE_PANIC, "dlm: vfssw has %d stock rows; the module core's table holds %d",
++		    __amix_nfstype, VFS_STATIC);
++	for (i = 0; i < __amix_nfstype; i++)
++		vfssw[i] = __amix_vfssw[i];
++	nfstype = vstatic = __amix_nfstype;
++}
++
++int
++vfs_register(name, init, ops, flag)
++	char *name;
++	int (*init)();
++	struct vfsops *ops;
++	long flag;
++{
++	struct dlm_mod *m = dlm_curmod;
++	struct vfssw *v;
++	int i;
++
++	if (m == 0 || name == 0 || ops == 0 || strcmp(name, m->m_fs)) {
++		printf("dlm: vfs_register: %s is not the calling module's fs=, or no ops\n",
++		    name ? name : "?");
++		return EINVAL;
++	}
++	if (m->m_flags & DM_UNLOADOK) {
++		printf("dlm: %s: a filesystem module must be pinned (no unload=allowed)\n", m->m_name);
++		return EINVAL;
++	}
++	for (i = 1; i < nfstype; i++)
++		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, name) == 0) {
++			printf("dlm: %s: filesystem type %s is there already\n", m->m_name, name);
++			return EEXIST;
++		}
++	if (nfstype >= vstatic + VFS_SPARE) {
++		printf("dlm: %s: the %d spare vfssw rows are taken\n", m->m_name, VFS_SPARE);
++		return ENOSPC;
++	}
++	v = &vfssw[nfstype];
++	v->vsw_name = name;
++	v->vsw_init = init;
++	v->vsw_vfsops = ops;
++	v->vsw_flag = flag;
++	if (init)			/* as vfsinit: no result (the stock ones are void) */
++		(void)DLM_CALL(m, init, (char *)v, nfstype);
++	nfstype++;
++	return 0;
++}
+--- a/dlm.h
++++ b/dlm.h
+@@ -146,6 +146,7 @@
+ 	int		md_unload;	/* 1: unload=allowed */
+ 	int		md_tier;	/* 0 ddi, 1 core */
+ 	int		md_rank;	/* sd rank class 1-4 (C4-1 section 4), 0 none */
++	char		md_fs[MODMAXNAMELEN];	/* the fs= type name, or empty */
+ 	long		md_depoff;	/* the depend value in ld_mod, or -1 */
+ 	long		md_majoff;	/* the majors value in ld_mod, or -1 */
+ };
+@@ -218,6 +219,7 @@
+ 	int		m_ndep, m_maxdep;
+ 	int		m_nlink;	/* linkages installed */
+ 	int		m_rank;		/* its .moddata rank class, 0 none */
++	char		m_fs[MODMAXNAMELEN];	/* its fs=, the one name vfs_register takes */
+ };
+ 
+ /* m_flags */
+@@ -341,6 +343,8 @@
+ extern int root_defer();		/* (fn, arg): C4-2 section 3 */
+ extern unsigned long dlm_rd_addr, dlm_rd_size;	/* the RAM-disk image (the platform, AXL1) */
+ extern int ramdisk_image();		/* (&paddr, &size): C4-3 section 4 */
++extern int vfs_register();		/* (name, init, ops, flag): C4-6 section 3 */
++extern void dlm_vfs_init();
+ extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
+ extern int dlm_halt();
+ extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -458,9 +458,16 @@
+ 		md->md_rank = strcmp(v, "z3660") == 0 ? 1 : strcmp(v, "zorro") == 0 ? 2 :
+ 		    strcmp(v, "mobo") == 0 ? 3 : strcmp(v, "ide") == 0 ? 4 : 0;
+ 		return md->md_rank ? 0 : ECONFIG;
++	case K_FS:			/* the type vfs_register takes (C4-6 section 3) */
++		if (strlen(v) > MODMAXNAMELEN - 1)
++			return ENAMETOOLONG;
++		if (!okname(v))
++			return ECONFIG;
++		strcpy(md->md_fs, v);
++		return 0;
+ 	case 0:				/* param */
+ 		return okparamv(v) ? 0 : ECONFIG;
+-	default:			/* fs, desc: checked where used */
++	default:			/* desc */
+ 		return 0;
+ 	}
+ }
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -6,6 +6,7 @@
+ #include "dlm.h"
+ #include "sys/stream.h"
+ #include "sys/conf.h"
++#include "sys/vfs.h"
+ 
+ long	dlm_maximage = 256 * 1024;
+ int	dlm_verbose = 0;
+@@ -61,6 +62,11 @@
+ struct fmodsw __amix_fmodsw[11] = { { "ldterm" }, { "ttcompat" }, { "timod" }, { "tirdwr" },
+ 	{ "ptem" }, { "pckt" }, { "ptm" }, { "pts" }, { "connld" }, { "sockmod" }, { "bufmod" } };
+ int	fmodcnt = 11;
++
++/* a stock vfssw of the 040/060 line's 12 rows (C4-6 section 2), names for the harness */
++struct vfssw __amix_vfssw[12] = { { 0 }, { "s5" }, { "ufs" }, { "proc" }, { "fdfs" },
++	{ "namefs" }, { "fifofs" }, { "specfs" }, { "rfs" }, { "nfs" }, { "bfs" }, { "xnamefs" } };
++int	__amix_nfstype = 12;
+ void	setq() { }
+ void	freemsg() { }
+ 
+--- a/test/include/sys/vfs.h
++++ b/test/include/sys/vfs.h
+@@ -0,0 +1,13 @@
++/* vfs.h -- the host harness's stand-in for the stock sys/vfs.h: vfssw */
++#ifndef _HOST_VFS_H
++#define _HOST_VFS_H
++struct vfsops;
++typedef struct vfssw {
++	char		*vsw_name;
++	int		(*vsw_init)();
++	struct vfsops	*vsw_vfsops;
++	long		vsw_flag;
++} vfssw_t;
++extern struct vfssw vfssw[];
++extern int nfstype;
++#endif
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -116,6 +116,23 @@
+ mod('srbad', extra=['rank=scsi'])
+ 
+ 
++# vfs_register (C4-6, S4-41): each fs module has <p>_init and <p>_ops.
++# vf1 registers its own type; vf2 a name not its fs=; vf3 the stock ufs;
++# vf4 fails its _load after registering; vf5 is unloadable; vf6-vf9 fill
++# the spare rows
++def fsmod(p, fs, unload='never'):
++    mod(p, extra=['fs=' + fs, 'unload=' + unload],
++        text='\t.globl\t{p}_init\n{p}_init:\n\trts\n'
++             '\t.globl\t{p}_ops\n{p}_ops:\n\t.long\t0, 0, 0, 0\n'.format(p=p))
++
++
++for p in ('vf1', 'vf2', 'vf4', 'vf6', 'vf7', 'vf8', 'vf9'):
++    fsmod(p, p)
++fsmod('vf3', 'ufs')
++fsmod('vf5', 'vf5', unload='allowed')
++mod('vfbad', extra=['fs=Bad-Name'])
++
++
+ # a 3-chain for moduload(0): ha -> hb -> hc
+ mod('ha', 'hb')
+ mod('hb', 'hc')
+--- a/test/state.c
++++ b/test/state.c
+@@ -12,6 +12,7 @@
+  */
+ 
+ #include "dlm.h"
++#include "sys/vfs.h"
+ 
+ extern char *host_root;
+ extern long host_kbytes;
+@@ -231,6 +232,7 @@
+ }
+ 
+ extern struct execsw execsw[], __amix_execsw[];
++extern struct vfssw __amix_vfssw[];
+ extern int nexectype, stock_calls, stock_rv;
+ extern char *h_one, *h_two, h_one_dflt[];
+ 
+@@ -917,6 +919,130 @@
+ 	moduload(i1);
+ }
+ 
++/* ---- vfs_register (C4-6 section 3, S4-41) ---- */
++static int vf_e[8], vf_n, vf_inits, vf_idx;
++static char *vf_row;
++
++int
++h_vfinit(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_inits++;
++	vf_row = a;
++	vf_idx = (int)b;
++	return 0;
++}
++
++/* register type t for the calling module, its own init and ops */
++static int
++vf_reg(m, t)
++	char *m, *t;
++{
++	struct dlm_mod *dm = (struct dlm_mod *)m;
++	char sym[16];
++	unsigned long init, ops;
++
++	sprintf(sym, "%s_init", dm->m_name);
++	init = modsym(dm, sym);
++	sprintf(sym, "%s_ops", dm->m_name);
++	ops = modsym(dm, sym);
++	return vfs_register(t, (int (*)())init, (struct vfsops *)ops, 0x10L);
++}
++
++int
++h_vfown(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_e[vf_n++] = vf_reg(m, ((struct dlm_mod *)m)->m_name);
++	return 0;
++}
++
++int
++h_vf2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_e[vf_n++] = vf_reg(m, "vfx");
++	vf_e[vf_n++] = vfs_register("vf2", (int (*)())0, (struct vfsops *)0, 0L);
++	return 0;
++}
++
++int
++h_vf3(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_e[vf_n++] = vf_reg(m, "ufs");
++	return 0;
++}
++
++int
++h_vf4(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_e[vf_n++] = vf_reg(m, "vf4");
++	return EIO;
++}
++
++void
++vfs_tests()
++{
++	static char *own[] = { "vf1_load", "vf5_load", "vf6_load", "vf7_load", "vf8_load",
++		"vf9_load" }, *inits[] = { "vf1_init", "vf4_init", "vf5_init", "vf6_init",
++		"vf7_init", "vf8_init", "vf9_init" };
++	struct dlm_mod *m;
++	int i, id, base = nfstype, ok;
++
++	for (i = 0; i < 6; i++)
++		host_handler(own[i], h_vfown);
++	for (i = 0; i < 7; i++)
++		host_handler(inits[i], h_vfinit);
++	host_handler("vf2_load", h_vf2);
++	host_handler("vf3_load", h_vf3);
++	host_handler("vf4_load", h_vf4);
++	for (ok = base == 12, i = 0; i < 12; i++)
++		ok &= vfssw[i].vsw_name == __amix_vfssw[i].vsw_name;
++	check(ok, "vfs: dmainit copied the 12 stock rows, nfstype 12");
++	check(modload("vfbad", &id) == ECONFIG && !byname("vfbad"), "vfs: a malformed fs= -> ECONFIG");
++	check(vfs_register("vf1", h_vfinit, (struct vfsops *)4, 0L) == EINVAL && nfstype == base,
++	    "vfs: outside a module's _load -> EINVAL");
++	vf_n = vf_inits = 0;
++	check(modload("vf1", &id) == 0 && (m = byname("vf1")) != 0 && vf_e[0] == 0 &&
++	    nfstype == base + 1 && strcmp(vfssw[base].vsw_name, "vf1") == 0 &&
++	    (unsigned long)vfssw[base].vsw_vfsops == modsym(m, "vf1_ops") && vfssw[base].vsw_flag == 0x10,
++	    "vfs: a module registers its fs= type in the next row, nfstype raised");
++	check(vf_inits == 1 && vf_row == (char *)&vfssw[base] && vf_idx == base,
++	    "vfs: its init ran once, with the row and its index, as vfsinit runs it");
++	vf_n = 0;
++	check(modload("vf2", &id) == 0 && vf_e[0] == EINVAL && vf_e[1] == EINVAL && nfstype == base + 1,
++	    "vfs: a name other than the module's fs=, or no ops -> EINVAL");
++	vf_n = 0;
++	check(modload("vf3", &id) == 0 && vf_e[0] == EEXIST && nfstype == base + 1,
++	    "vfs: a type the kernel has already (ufs) -> EEXIST");
++	vf_n = vf_inits = 0;
++	check(modload("vf4", &id) == EIO && !byname("vf4") && vf_e[0] == 0 && vf_inits == 1 &&
++	    nfstype == base + 1 && vfssw[base + 1].vsw_name == 0,
++	    "vfs: a _load that fails after registering leaves no row");
++	vf_n = 0;
++	check(modload("vf5", &id) == 0 && vf_e[0] == EINVAL && nfstype == base + 1,
++	    "vfs: an unloadable module -> EINVAL (a filesystem module is pinned)");
++	moduload(id);
++	vf_n = 0;
++	for (i = 6; i <= 9; i++) {
++		char nm[8];
++
++		sprintf(nm, "vf%d", i);
++		(void)modload(nm, &id);
++	}
++	check(vf_e[0] == 0 && vf_e[1] == 0 && vf_e[2] == 0 && vf_e[3] == ENOSPC && nfstype == base + 4,
++	    "vfs: the four spare rows taken, a fifth type -> ENOSPC");
++	nfstype = base;			/* the rows' modules stay, pinned */
++	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
++}
++
+ /* ---- block rows (30 section 2 patch 7, S4-06) ---- */
+ void
+ blk_tests()
+@@ -1911,6 +2037,7 @@
+ 	root_tests();
+ 	defer_tests();
+ 	rdimg_tests();
++	vfs_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
+--- a/tools/mkmod
++++ b/tools/mkmod
+@@ -10,7 +10,7 @@
+ #   Master     "$depend a b ..." lines (any number), "$modtype misc|drv|str"
+ #              (the wrapper macro's type; misc when absent),
+ #              the .moddata v2 keys as "$class root|boot|demand", "$cpu 68020"
+-#              (required), "$match", "$rank", "$majors", "$unload", "$tier",
++#              (required), "$match", "$rank", "$majors", "$fs", "$unload", "$tier",
+ #              "$build", "$desc" (one each) and "$param" (any number),
+ #              and a final line "name prefix flags ..." ('#' comments)
+ #   Space.c    optional, compiled and linked in
+@@ -107,7 +107,7 @@
+ 	echo "	.asciz	\"cpu=$CPU\""
+ 	echo "	.asciz	\"class=$CLASS\""
+ 	[ -z "$DEPEND" ] || echo "	.asciz	\"depend=$(echo $DEPEND | tr ' ' ',')\""
+-	for k in match rank majors unload tier build desc; do
++	for k in match rank majors fs unload tier build desc; do
+ 		v=$(key $k)
+ 		[ -z "$v" ] || echo "	.asciz	\"$k=$v\""
+ 	done

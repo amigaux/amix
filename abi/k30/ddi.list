@@ -82,5 +82,6 @@ timeout func 0
 uiomove func 0
 unlinkb func 0
 untimeout func 0
+vfs_register func 1
 vtop func 0
 wakeup func 0
