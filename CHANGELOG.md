@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-5 §1.3 the 2.1 sh's read; C2-2 §2 device nodes; the CD boot tree recipe (9000802, 42dd80d)
+
+C3-5 §1.3: never re-read a file through `exec <file` — the 1991 sh's read keeps its buffer across the redirection and
+continues where the previous read stopped (modtools -3 wiped /etc/inittab that way); one redirection per pass; scripts are
+proven on the 2.1 sh. C2-2 §2: a module package's device node gets no `file` line in the record. docs/plan/stage-3-cd-boot.md:
+the CD boot tree recipe per line (`kbootset media --cd`, `mkstore -C TREE -x amix-cdboot`, Startup-Sequence → SYS:BOOT/
+amix-cdboot), what is unproven (the whole CD path has never run on any box), the emulator needs (an A4091 ROM with the
+ODFileSystem profile), and the first cell: a disk-rooted generation booted from the CD; the installer CD (RAM-disk root) waits
+for stage 4's ramdisk module.
+
 ## 2026-10-26 — boot2 binds the kernel only below 0x40000000; ledger and README updates (92d2924..d51fb2c)
 
 A kernel bound in Zorro III expansion memory never starts (S3-43-7, N69/N70): the kernels identity-map the low 1 GiB and keep
