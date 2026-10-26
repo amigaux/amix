@@ -169,7 +169,7 @@ the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
 tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
 (tools/LICENSE.core).
 include/sys/monsw.h, the monitor switch's interface, is Jussi Alanärä's, from
-amix-040-060-port today and from amix-modules (MIT) once monsw moves there.
+$MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix-modules ] && printf ' (MIT)' ).
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on
