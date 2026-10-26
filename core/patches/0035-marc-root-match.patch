@@ -1,0 +1,129 @@
+Subject: marc_root evaluates match=: boot2 places, the core selects
+
+Contract C4-4 version 3 section 4 (S4-10's other half).  boot2 now
+places every root-class record and selects none, so the root pass reads
+each record's match= keys from the manifest copy and checks them with
+marc_post's platform matcher (zorro:MMMM:PP against the board list,
+mobo: and always always).  An entry none of whose keys names a board
+here is skipped silently, as an ENXIO from its _load would be.  The
+state harness adds an entry whose record names an absent board.
+
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -198,14 +198,16 @@
+ #define	AXF_SAFE	0x4		/* a safe-mode member */
+ 
+ /*
+- * The manifest's root record for name: 0 with its bss= (0 if absent) if
+- * there is a "module <name> root" record whose crc32= is crc, else ENOENT.
++ * The manifest's root record for name: 0 with its bss= (0 if absent) and
++ * its match= keys (into keys, cap bytes) if there is a "module <name>
++ * root" record whose crc32= is crc, else ENOENT.
+  */
+ static int
+-man_root(name, crc, bssp)
+-	char *name;
++man_root(name, crc, bssp, keys, cap)
++	char *name, *keys;
+ 	unsigned long crc;
+ 	long *bssp;
++	int cap;
+ {
+ 	char *p = dlm_man, *lim = dlm_man + dlm_manlen, *l, v[16], nm[MODMAXNAMELEN];
+ 	unsigned long c;
+@@ -240,6 +242,8 @@
+ 				b = b * 10 + (v[k] - '0');
+ 			}
+ 		*bssp = b;
++		if (!attr(p + 8, l, "match=", keys, cap))
++			keys[0] = 0;
+ 		return 0;
+ 	}
+ 	return ENOENT;
+@@ -251,7 +255,9 @@
+  * each entry its bytes' CRC-32 again (bytes changed after boot2 checked
+  * them are not linked, and that boot never reaches multi-user); the
+  * manifest copy's root record with that name and crc32=, and its bss=;
+- * then dlm_load_mem.  ENXIO (no such board) is silent; any other error
++ * its match= keys, with marc_post's matcher: boot2 places every root
++ * record and selects none (C4-4 version 3), so an entry no key of which
++ * names a board here is skipped silently; then dlm_load_mem.  ENXIO (no such board) is silent; any other error
+  * is one line.  In safe mode only the safe-mode members link (70 section
+  * 4).  Returns how many linked.
+  */
+@@ -260,7 +266,7 @@
+ 	char *a;
+ {
+ 	struct dlm_mod *m;
+-	char *e, name[16];
++	char *e, name[16], keys[256];
+ 	unsigned long off, len, used, want;
+ 	long i, count, bss;
+ 	int n = 0, err;
+@@ -284,10 +290,13 @@
+ 			printf("dlm: root module %s damaged; not linked\n", name);
+ 			continue;
+ 		}
+-		if (man_root(name, want, &bss) != 0 || ((len + 15) & ~15L) + bss > used - off) {
++		if (man_root(name, want, &bss, keys, (int)sizeof keys) != 0 ||
++		    ((len + 15) & ~15L) + bss > used - off) {
+ 			printf("dlm: root module %s is not the booted manifest's; not linked\n", name);
+ 			continue;
+ 		}
++		if (!matches(keys))
++			continue;		/* no such board here: silent, as ENXIO */
+ 		if ((err = dlm_load_mem(name, a + off, (long)len, bss, &m)) == 0)
+ 			n++;
+ 		else if (err != ENXIO)
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -97,7 +97,8 @@
+ # marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
+ # the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
+ # member and rp7 is not
+-for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7'):
++# rp8's record names a board that is not here (the core matches, C4-4 v3)
++for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8'):
+     armod(p)
+ 
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -602,6 +602,7 @@
+ 
+ /* ---- marc_root (30 section 3, section 2 patch 16; C4-4, S4-04) ---- */
+ extern long host_km_sleep;
++int hmatch();
+ 
+ int
+ h_enxio(m, a, b)
+@@ -648,8 +649,8 @@
+ 		if (damage[i])
+ 			a[off + 8] ^= 1;
+ 		if (inman[i]) {
+-			sprintf(line, "module %s root %ld at=0 bss=128 crc32=%08lx sha256=0 match=always\n",
+-			    names[i], len, crc);
++			sprintf(line, "module %s root %ld at=0 bss=128 crc32=%08lx sha256=0 match=%s\n",
++			    names[i], len, crc, strcmp(names[i], "rp8") ? "always" : "zorro:dead:01");
+ 			strcat(rp_man, line);
+ 		}
+ 		off = (off + len + 15 + 128 + 15) & ~15L;
+@@ -688,6 +689,18 @@
+ 	n = dlm_root_pass(rp_arena);
+ 	dlm_safe = 0;
+ 	check(n == 1 && byname("rp6") && !byname("rp7"), "marc_root: in safe mode only the safe-mode members link");
++	{
++		static char *n3[] = { "rp8" };
++		static int f3[] = { 1 }, d3[] = { 0 }, m3[] = { 1 };
++		int (*pm)() = dlm_plat_match;
++
++		check(rpbuild(n3, f3, d3, m3, 1) == 0, "marc_root: a third arena built");
++		dlm_plat_match = hmatch;
++		n = dlm_root_pass(rp_arena);
++		dlm_plat_match = pm;
++		check(n == 0 && !byname("rp8"),
++		    "marc_root: an entry whose match= names no board here is skipped (the core matches)");
++	}
+ 	check(dlm_root_pass((char *)0) == 0, "marc_root: no arena, nothing");
+ 	dlm_man = man;
+ 	dlm_manlen = manlen;
