@@ -1,3 +1,9 @@
+## 2026-10-26 — APKG 0.3.2 minted for the 1.1 media, staged in build/repo-staging-apkg032 (d6ff38f) — NOT published
+
+APKG-0.3.2.pkg sha256 c971c992, md5 9d6de726, 198144 B; apkg.amix c18d6ee2 inside (0.3.2: module packages may carry /dev
+device entries). Against 0.3.1 only apkg and apkg.1 changed; all publish-path gates pass; the overwrite install keeps an edited
+apkg.conf. The public catalog stays at 0.2.3.
+
 ## 2026-10-26 — apkg 0.3.2, gen-catalog: module packages may carry device entries (abd6d3c) — NOT minted
 
 A role=module package may ship `c none /dev/<node> <major> <minor> <mode> <owner> <group>` (C3-5 v4 §1.2; z3660eth's
