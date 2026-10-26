@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — z3660eth-k30/-k46 1.0.0-4 (09cdd8d) — not published
+
+From amix-z3660net 2a15a4c: in intr=6 mode the module's RX ring resyncs past a wedged sentinel (the metal S3-46 stall).
+Objects k30 8d0e75f0, k46 a928fd2b (19379 B file, 13177 B image); /dev/zen0 as before. zeth30 md5 5404d3e3, zeth46
+a9e30900, 28672 B each. The -3 datastreams stay in build/kspace/pkg; the staged root carries -4 (catalog 086eac4d); the -3
+root is kept at build/kspace/superseded/repo-20261026-1652 (ad04c5bc). Round trip 106/106; gates PASS.
+
 ## 2026-10-26 — z3660eth-k30/-k46 1.0.0-3 (0247012) — not published
 
 From amix-z3660net 3e6b696: the module's intr=6 interrupt self-test now works inside the IPL-4 STREAMS open. Objects k30
