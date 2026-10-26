@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — 30 §6 cdfs boot class; S4-72-1's measured failure line; C4-5 draft, DDI v1.1 DMA (477d583, 1714b41, 64268c5)
+
+C4-5 (agreed apart from §5): dma_prepare/dma_complete and struct dma_rec adopted unchanged from the port's
+DMA040-SERVICE-RECORD and amix-a4091's D42-CALL-SHAPE; providers = the port's dma_cache040.s on k46 and the core's on k30
+(prepare bounces a segment a Zorro bus master cannot reach through a pool; complete copies back); one added call
+`dma_addr(r)` (pa on k46, the bounce address on k30); `dma_alloc(len, &pa)`/`dma_free` for SCRIPTS and buffers (16-aligned,
+≤ 64 KiB, no sleep). Open §5: where k30's pool comes from — (a) boot2 reserving it (AXL1 v2, a dmapool record) or (b) the
+K030-U kernel's memory sizing reserving a reachable range at dmainit — kerntools answers from the relink kit. S4-72-1's
+failure guide carries the measured line on -71 with no root module (RTH1 "built in (controller not present)" → the panic
+→ the L8 fallback). 30 §6: cdfs boot class on a disk-rooted box.
+
 ## 2026-10-26 — C4-6 draft: the filesystem module form (7982391)
 
 ufs and s5: class root, match=always, fs=, core tier with the kernel's build=, pinned (s5's _load calls inoinit); cdfs: DDI
