@@ -399,7 +399,8 @@ static int kspace_inst(const struct pkgent *e, const char *staged,
                e->name, out, e->kpkginst);
         return -1;
     }
-    if (ds_pure_files(staged, why, sizeof(why)) != 0) {
+    if (ds_pure_files(staged, strcmp(e->role, "module") == 0,
+                      why, sizeof(why)) != 0) {
         warnx2("%s: not a pure-file kernel-space package: %s", e->name, why);
         return -1;
     }

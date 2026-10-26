@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "October 2026" "apkg 0.3.1" "Amix User Commands"
+.TH APKG 1 "October 2026" "apkg 0.3.2" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -260,10 +260,23 @@ objects of class
 and no install scripts (of the
 .B i
 entries only pkginfo, depend and copyright), and at least one file.
+A module package may also carry the device nodes of its driver's majors
+(C3-5 version 4) as
+.B c
+entries of class
+.B none
+under
+.BR /dev/ ,
+in full
+.RB ( "c none /dev/zen0 51 0 0644 root root" );
+pkgadd makes the node and records it in the contents database.
 Anything else
 .RB ( e ,
 .BR v ,
-links, devices, another class, a script) refuses the transaction with
+links, block devices, a character device in a kernel or loader package
+or outside
+.BR /dev/ ,
+another class, a script) refuses the transaction with
 exit 3.
 .PP
 After each kernel-space
@@ -285,7 +298,9 @@ source, the install time,
 and one
 .BI "file " "path size sha256"
 line per installed plain file, taken from the contents database and hashed
-on disk).  The instance pkgadd installs comes from the datastream's header and
+on disk; a module's device node has no bytes and no
+.B file
+line: the contents database records it, and pkgrm removes it).  The instance pkgadd installs comes from the datastream's header and
 must equal
 .B pkginst=
 when the entry gives one.

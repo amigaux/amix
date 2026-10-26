@@ -316,7 +316,14 @@ int ds_pkginst(const char *path, char *out, unsigned outlen)
  *      needs them named to give them owner and mode);
  *   i  pkginfo, depend and copyright only -- no install or class-action
  *      scripts;
- *   anything else (e, v, l, s, c, b, p, x) refuses the package.
+ *   c  in a module package only (C3-5 v4 section 1.2: the driver's
+ *      device nodes ship as pkgmap entries, no script), class none, under
+ *      /dev/, all of "c none <path> <major> <minor> <mode> <owner>
+ *      <group>" with decimal major and minor and an octal mode; pkgadd
+ *      makes the node (heirloom pkginstall/instvol.c -> libpkg/verify.c
+ *      averify() mknod) and records it in the contents database;
+ *   anything else (e, v, l, s, b, p, x; c in a kernel or loader package)
+ *      refuses the package.
  * At least one f is required.
  */
 
@@ -368,12 +375,47 @@ static void setwhy(char *why, unsigned cap, const char *a, const char *b)
     why[n] = '\0';
 }
 
-/* the pkgmap rule above; 0 = pure, -1 = not (why set) */
-static int pkgmap_pure(char *text, char *why, unsigned cap)
+static int all_in(const char *s, const char *set)
+{
+    if (*s == '\0')
+        return 0;
+    for (; *s != '\0'; s++)
+        if (strchr(set, *s) == NULL)
+            return 0;
+    return 1;
+}
+
+/* one module's c entry (tok[0..nt-1]); 0 = acceptable, -1 = not (why) */
+static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
+{
+    if (nt < 4) {
+        setwhy(why, cap, "unreadable pkgmap line ", tok[0]);
+        return -1;
+    }
+    if (strcmp(tok[2], "none") != 0) {
+        setwhy(why, cap, "an object in class ", tok[2]);
+        return -1;
+    }
+    if (strncmp(tok[3], "/dev/", 5) != 0 || tok[3][5] == '\0') {
+        setwhy(why, cap, "a device node outside /dev/: ", tok[3]);
+        return -1;
+    }
+    if (nt != 9 || !all_in(tok[4], "0123456789") ||
+        !all_in(tok[5], "0123456789") || !all_in(tok[6], "01234567")) {
+        setwhy(why, cap, "a device entry not of the form "
+               "<major> <minor> <mode> <owner> <group>: ", tok[3]);
+        return -1;
+    }
+    return 0;
+}
+
+/* the pkgmap rule above; module: c entries allowed.  0 = pure, -1 = not
+ * (why set) */
+static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
 {
     char *line;
     char *next;
-    char *tok[4];
+    char *tok[10];
     char *p;
     int nt;
     int nf;
@@ -385,7 +427,7 @@ static int pkgmap_pure(char *text, char *why, unsigned cap)
             *next++ = '\0';
         nt = 0;
         p = line;
-        while (nt < 4) {
+        while (nt < 10) {
             while (*p == ' ' || *p == '\t' || *p == '\r')
                 p++;
             if (*p == '\0')
@@ -424,9 +466,16 @@ static int pkgmap_pure(char *text, char *why, unsigned cap)
             if (tok[1][0] == 'f')
                 nf++;
             break;
+        case 'c':
+            if (module) {
+                if (cdev_ok(tok, nt, why, cap) != 0)
+                    return -1;
+                break;
+            }
+            /* FALLTHROUGH - no device nodes in a kernel or loader */
         default:
             setwhy(why, cap, "an object of type ", tok[1]);
-            if (nt == 4) {
+            if (nt >= 4) {
                 unsigned n;
 
                 n = (unsigned)strlen(why);
@@ -442,7 +491,7 @@ static int pkgmap_pure(char *text, char *why, unsigned cap)
     return 0;
 }
 
-int ds_pure_files(const char *path, char *why, unsigned cap)
+int ds_pure_files(const char *path, int module, char *why, unsigned cap)
 {
     FILE *fp;
     char hdr[8193];
@@ -535,7 +584,7 @@ int ds_pure_files(const char *path, char *why, unsigned cap)
                 break;
             }
             text[fsz] = '\0';
-            rc = pkgmap_pure(text, why, cap);
+            rc = pkgmap_pure(text, module, why, cap);
             free(text);
             break;
         }
@@ -627,8 +676,8 @@ static int contents_walk(const struct conf *cf, cont_cb cb, void *ctx)
         case 'f': case 'e': case 'v':
             first = t + 8;
             break;
-        case 'c': case 'b':
-            first = t + 6;
+        case 'c': case 'b':     /* class major minor mode owner group */
+            first = t + 7;
             break;
         case 'd': case 'x': case 'p':
             first = t + 5;
@@ -673,7 +722,11 @@ static int collect_files(void *vctx, const char *path, int type,
 
     c = (struct files_ctx *)vctx;
     /* plain files only: a kernel-space package is pure files (40 §6),
-     * which ds_pure_files() checked before the pkgadd */
+     * which ds_pure_files() checked before the pkgadd.  A module's device
+     * node (C3-5 v4 §1.2) has no bytes to hash, so it gets no `file` line
+     * (C2-2 §2: a file's size and SHA-256; kbootset gate 1 compares
+     * generation members, which are files): pkgadd records the node in
+     * the contents database and pkgrm removes it from there */
     if (type == 'f' && owns(pkgs, npkgs, c->pkginst)) {
         c->paths = (char **)xrealloc((char *)c->paths,
             (unsigned)((c->n + 1) * sizeof(char *)));

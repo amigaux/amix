@@ -109,7 +109,11 @@
 # has not exactly one type-13 section, whose .moddata lacks "MD2\0", has a
 # key twice (param aside), a name= other than the file name, a kabi= not
 # k30|k46.<major>.<minor> or no single-token cc=; a package that is not pure
-# files (40 section 6: only f/d of class none, no install scripts).
+# files (40 section 6: only f/d of class none, no install scripts; a module
+# package may also carry its driver's device nodes, C3-5 v4 section 1.2:
+# "c none /dev/<node> <major> <minor> <mode> <owner> <group>", as apkg
+# 0.3.2's ds_pure_files() accepts them; a c entry in a kernel or loader
+# package, a b/p/other entry, a node outside /dev/ is still refused).
 # The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
 #
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
@@ -462,10 +466,32 @@ def kspace_role(pkgmap_text, basedir):
     return role
 
 
-def pure_files_problem(pkgmap_text):
+DIGITS_RE = re.compile(r"^[0-9]+$")
+OCTAL_RE = re.compile(r"^[0-7]+$")
+
+
+def cdev_problem(parts):
+    """C3-5 v4 section 1.2: None when a module's pkgmap c entry is
+    "<part> c none /dev/<node> <major> <minor> <mode> <owner> <group>"
+    (decimal major/minor, octal mode); else why not, in apkg's words."""
+    if len(parts) < 4:
+        return "unreadable pkgmap line %r" % " ".join(parts)
+    if parts[2] != "none":
+        return "an object in class %s" % parts[2]
+    if not parts[3].startswith("/dev/") or parts[3] == "/dev/":
+        return "a device node outside /dev/: %s" % parts[3]
+    if (len(parts) != 9 or not DIGITS_RE.match(parts[4])
+            or not DIGITS_RE.match(parts[5]) or not OCTAL_RE.match(parts[6])):
+        return ("a device entry not of the form <major> <minor> <mode> "
+                "<owner> <group>: %s" % parts[3])
+    return None
+
+
+def pure_files_problem(pkgmap_text, role=None):
     """40 section 6: None when the pkgmap holds only f/d objects of class
     none, i entries pkginfo/depend/copyright only, and at least one f --
-    the rule apkg's ds_pure_files() applies on the box; else why not."""
+    the rule apkg's ds_pure_files() applies on the box; else why not.
+    role "module" also allows its device nodes (cdev_problem())."""
     nf = 0
     for line in pkgmap_text.splitlines():
         parts = line.split()
@@ -481,6 +507,10 @@ def pure_files_problem(pkgmap_text):
             if parts[2] != "none":
                 return "an object in class %s" % parts[2]
             nf += ftype == "f"
+        elif ftype == "c" and role == "module":
+            why = cdev_problem(parts)
+            if why is not None:
+                return why
         else:
             return "an object of type %s%s" % (
                 ftype, (" at " + parts[3]) if len(parts) > 3 else "")
@@ -900,7 +930,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     basedir = params.get("BASEDIR", "/") or "/"
     role = kspace_role(pkgmap_text, basedir)
     if role is not None:
-        why = pure_files_problem(pkgmap_text)
+        why = pure_files_problem(pkgmap_text, role)
         if why is not None:
             raise Malformed("kernel-space package is not pure files "
                             "(40 section 6): %s" % why)

@@ -1695,16 +1695,19 @@ M26="$S26/stg/base/zeth46-1.0.0-1.pkg"
 if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
     mkdir -p "$S26/spool"
     printf 'PKG=zeth46\nNAME=z3660eth-k46 test module\nVERSION=1.0.0-1\nARCH=Amiga\nCATEGORY=system\nCLASSES=none\nBASEDIR=/\n' > "$S26/pkginfo"
-    printf 'i pkginfo=%s\nd none /etc 0755 root root\nd none /etc/conf 0755 root sys\nd none /etc/conf/mod.d 0755 root sys\nf none /etc/conf/mod.d/zeth=%s 0644 root sys\nd none /etc/conf/modreg.d 0755 root sys\nf none /etc/conf/modreg.d/zeth=%s 0644 root sys\n' \
+    printf 'i pkginfo=%s\nd none /etc 0755 root root\nd none /etc/conf 0755 root sys\nd none /etc/conf/mod.d 0755 root sys\nf none /etc/conf/mod.d/zeth=%s 0644 root sys\nd none /etc/conf/modreg.d 0755 root sys\nf none /etc/conf/modreg.d/zeth=%s 0644 root sys\nd none /dev 0755 bin bin\nc none /dev/zen0 51 0 0644 root root\n' \
         "$S26/pkginfo" "$S26/src/zeth" "$S26/src/zeth.reg" > "$S26/prototype"
     ( cd "$S26" && "$HB/pkgmk" -o -d "$S26/spool" -f prototype && \
       "$HB/pkgtrans" -s "$S26/spool" "$M26" zeth46 ) >"$WORK/t26.mk" 2>&1
     check "a real module datastream (C3-5 section 1.2 layout) minted by pkgmk/pkgtrans" test -s "$M26"
 else
-    printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nCOPY /etc/conf/mod.d/zeth %s\nDIR /etc/conf/modreg.d\nCOPY /etc/conf/modreg.d/zeth %s\n' \
+    printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nCOPY /etc/conf/mod.d/zeth %s\nDIR /etc/conf/modreg.d\nCOPY /etc/conf/modreg.d/zeth %s\nDIR /dev\nCDEV /dev/zen0 51 0\n' \
         "$S26/src/zeth" "$S26/src/zeth.reg" | python3 "$MKDS" "$M26" zeth46 1.0.0-1
     echo "  skip- host pkgmk absent: the module datastream comes from mkds.py"
 fi
+# C3-5 v4 section 1.2: the driver's device node rides in the pkgmap
+check "the module datastream carries /dev/zen0 as a pkgmap c entry (C3-5 v4 section 1.2)" \
+    grep -aq '^1 c none /dev/zen0 51 0 0644 root root$' "$M26"
 cp "$FIX/TESTpkg.pkg" "$S26/stg/"
 printf 'zeth46: z3660eth-k46\n' > "$S26/stg/names.conf"
 printf 'z3660eth-k46: TESTpkg\n' > "$S26/stg/deps.conf"     # must not reach the row
@@ -1762,6 +1765,22 @@ t26bad "two module objects in one package are refused" "2 objects under /etc/con
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "COPY /etc/conf/mod.d/zbad2 $S26/src/good.o"
 t26bad "a module package that is not pure files is refused (40 section 6)" "not pure files.*postinstall" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 i postinstall 20 1 1"
+# device entries (C3-5 v4 section 1.2): a module's c none /dev/<node> passes
+# (above); a b or p entry, a node outside /dev/, a c line short of its
+# fields or in another class does not, and a kernel package takes none
+t26bad "a block-device entry in a module package is refused" "not pure files.*an object of type b at /dev/zbd0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
+t26bad "a named-pipe entry in a module package is refused" "not pure files.*an object of type p at /dev/zp" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 p none /dev/zp 0644 root root"
+t26bad "a module's device node outside /dev/ is refused" "not pure files.*a device node outside /dev/: /etc/zen0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 c none /etc/zen0 51 0 0644 root root"
+t26bad "a module's c entry without a minor is refused" "not pure files.*a device entry not of the form .*: /dev/zen0" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 c none /dev/zen0 51 0644 root root"
+t26bad "a module's c entry in another class is refused" "not pure files.*an object in class kcls" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 c kcls /dev/zen0 51 0 0644 root root"
+t26bad "the same /dev/zen0 entry in a kernel package is refused" "not pure files.*an object of type c at /dev/zen0" \
+    "DIR /stand" "DIR /stand/k46" "FILE /stand/k46/unix u" "FILE /stand/k46/kabi k" \
+    "DIR /dev" "CDEV /dev/zen0 51 0"
 
 # the round trip through the client: update counts it, info shows the
 # .moddata's kabi and pin, download verifies its sha256

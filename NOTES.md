@@ -1,5 +1,58 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — module packages carry device entries: apkg 0.3.2, gen-catalog (built, NOT minted, NOT published)
+
+**Why.** amix-dlm C3-5 v4 §1.2 (`568b9ac`): "a driver module's package ships the device nodes of its
+majors as pkgmap device entries (z3660eth: `/dev/zen0 c 51 0`), no script". amix-packages' kpkgroll
+(`d5ffff2`) already rolls `1 d none /dev 0755 bin bin` + `1 c none /dev/zen0 51 0 0644 root root`
+into zeth; gen-catalog (`fc49df7`) SKIPped that package ("not pure files … an object of type c at
+/dev/zen0") and apkg 0.3.1 refused it at install the same way.
+
+**The rule** (40 §6 "pure files", now role-aware, the same in both places): in a `role=module`
+package a `c` entry is allowed when it is all of `c none /dev/<node> <major> <minor> <mode> <owner>
+<group>` (decimal major and minor, octal mode, nine pkgmap fields with the part number); the `d none
+/dev` it needs was already allowed (any `d` of class none). Everything else stays as it was: only
+`f`/`d` of class none, `i` pkginfo/depend/copyright, at least one `f`. Refused, with these words: a
+`c` in a kernel or loader package (`an object of type c at /dev/zen0`), `b`/`p`/any other type, a
+node outside `/dev/` (`a device node outside /dev/: …`), a short or malformed line (`a device entry
+not of the form <major> <minor> <mode> <owner> <group>: …`), another class (`an object in class …`).
+
+- **apkg** (`kspace.c` `pkgmap_pure()`/`cdev_ok()`, `ds_pure_files(path, module, …)`, called from
+  `install.c` `kspace_inst()` with `role == module`). Version **0.3.2**; man page and README say so.
+- **gen-catalog** (`pure_files_problem(pkgmap, role)`, `cdev_problem()`): a module package with
+  `/dev/zen0` writes its ordinary C2-2 row; the same entry in a kernel package is a per-package SKIP.
+- **What pkgadd does with it (read, then run).** heirloom `pkgcmds/pkginstall/instvol.c` (case `c`
+  → `averify(1, …)`) → `libpkg/verify.c` `mknod(path, mode|S_IFCHR, makedev(major, minor))`; the
+  entry is merged into the contents DB through `libinst/pkgdbmerg.c` and written by
+  `libpkg/putcfile.c` as `path c class major minor mode owner group pkgs`. Run on the host (heirloom
+  `pkgmk`/`pkgtrans`/`pkgadd -R` under fakeroot, the kpkgroll layout): rc 0, the node is `crw-r--r--
+  51, 0`, the contents DB holds `/dev d none 0755 bin bin zeth46` and `/dev/zen0 c none 51 0 0644 root
+  root zeth46`; `pkgrm -R` removes node and line.
+- **The module's install record carries nothing for the node.** C2-2 §2's `file` lines are a file's
+  size and SHA-256 and kbootset gate 1 compares generation members, which are files; a node has no
+  bytes. The record stays `file` lines for plain files (`/etc/conf/mod.d/<name>`,
+  `/etc/conf/modreg.d/<name>`); the node is the contents DB's, and `apkg remove` (pkgrm) takes it
+  away. (Reported to the contract owner: C2-2 §2 could say so in a sentence.)
+- **Fixed on the way** (latent): `contents_walk()` took a `c`/`b` contents line's first package
+  token one field early (`t + 6`, the group); it is `t + 7` (class major minor mode owner group).
+  Nothing read a device line's owner before, so no behaviour changed.
+
+**Tests.** apkg `run-tests.sh` **442/0** (421 before): `mkds.py` gains `CDEV <path> <maj> <min>` and
+the kernel pkgadd shim lays it (mknod, or a stand-in file unprivileged) with the contents line
+heirloom writes; `install -R <target> z3660eth-k46` (pkginst zeth46): the pkgadd argv, the node and
+`/dev/zen0 c none 51 0 0644 root root zeth46` in the target's contents, the record exactly (one `file`
+line, the object; none for the node), build + commit; `remove -R` takes the line and the record; six
+refusals by message (kernel `c`, module `b`, `p`, outside `/dev/`, no minor, class kcls), nothing run
+or journaled, kernel-k46 untouched. `nohttp-variant.sh` 20/0; `kbootset-consumer.sh` 12/0. Repo tools
+**367/0** (360 before): T26's module datastream (host pkgmk/pkgtrans) now carries `/dev` + `/dev/zen0`
+as kpkgroll rolls them and still gives the exact row; new refusals: module `b`, `p`, outside `/dev/`,
+no minor, class kcls, and `/dev/zen0` in a kernel package.
+
+**Builds.** Host `-Wall -Wextra` clean. `make amix` with gcc-cross-amix (gcc 2.7.2.3), twice from a
+clean `obj-amix`: both `apkg.amix` **sha256 `c18d6ee2d09e52f19c52334b89b053b67f2184e35a1a67dc2899893830a4a489`**,
+md5 `92a8496b9bcc56a33490ac4d451cfc1f`, 113230 B, version string 0.3.2; no `divsl`/`divul` in the
+objects. Not minted: `build-packages.sh` `VER_APKG` stays 0.3.1 until an APKG 0.3.2 mint.
+
 ## 2026-10-26 — APKG 0.3.1 minted for the 1.1 media (STAGED, NOT PUBLISHED)
 
 **Why.** 0.3.1 (one kernel package per line, C2-2 v5 §2.1; the section below) replaces 0.3.0 on the

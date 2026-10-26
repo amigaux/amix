@@ -77,7 +77,11 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 - **Pure files** (40 §6): after staging, before the first pkgadd, the
   datastream's pkgmap may hold only `f`/`d` objects of class `none` and no
   install scripts (`i`: pkginfo, depend, copyright), and at least one `f`;
-  anything else refuses with exit 3.
+  a module package may also carry its driver's device nodes as `c none`
+  entries under `/dev/` (C3-5 v4 §1.2, apkg 0.3.2: `c none /dev/zen0 51 0
+  0644 root root`), which pkgadd makes and the contents database records
+  (the install record's `file` lines stay plain files); anything else,
+  including a `c` in a kernel or loader package, refuses with exit 3.
 - **Records.** `/var/apkg/kpkg/<pkginst>` after each pkgadd (C2-2 v4: the file is
   named by `pkginst=`, else the name, so a long name and its `.new` cannot collide
   on an s5 root's 14 characters; the full name is the `name` line), with one
@@ -463,7 +467,9 @@ mock for all five statuses, `-R`/`--journal`/`bootset=manual`/`-n`, a
 transaction killed mid-pkgadd and finished by `apkg recover`, four impure
 packages refused, the loader role and the C2-2 v3 key refusals, a
 15-character name recorded under its 8-character pkginst, a several-name
-`upgrade` as one transaction with one trigger) — **376
+`upgrade` as one transaction with one trigger, one kernel package per
+line, a module's device node laid and kept out of its record, and device
+entries refused outside a module package) — **442
 assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.

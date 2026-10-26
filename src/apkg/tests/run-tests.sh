@@ -1911,6 +1911,13 @@ sed -n 's/^DIR //p' \$F | while read d; do
 sed -n 's/^FILE //p' \$F | while read p c; do
     mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
     echo "\$p f none 0644 root sys \$(wc -c < \$R\$p) 1 1700000000 \$I" >> \$C; done
+# a module's device node (C3-5 v4 §1.2): pkgadd makes it (mknod, or a
+# stand-in file when the tests do not run as root) and records it as a
+# c line in the contents DB, as heirloom's pkginstall does
+sed -n 's/^CDEV //p' \$F | while read p mj mn; do
+    mkdir -p \$(dirname \$R\$p)
+    mknod \$R\$p c \$mj \$mn 2>/dev/null || : > \$R\$p
+    echo "\$p c none \$mj \$mn 0644 root root \$I" >> \$C; done
 sed -n 's/^SHARED //p' \$F | while read p c; do
     mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
     printf '%s f none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
@@ -2447,6 +2454,93 @@ mkkcat "$KR/catalog" "$KCAT_K110"
 # kernel-k46-zacd is a kernel of line k46 too, so its first install above
 # replaced kernel-k46 (C2-2 v5 §2.1, tested below); put kernel-k46 back
 "$APKG" -c "$KCONF" install kernel-k46 >/dev/null 2>&1
+
+# --- a module's device nodes (C3-5 v4 §1.2, apkg 0.3.2) ----------------
+# A module package ships the nodes of its driver's majors as pkgmap c
+# entries, no script (z3660eth: /dev/zen0 c 51 0).  pkgadd makes the node
+# and records it in the contents DB; the install record keeps `file` lines
+# for plain files only (a node has no bytes to hash).  A c entry in a
+# kernel package, a b or p entry, a node outside /dev/, a short c line
+# and a c line of another class are refused before anything installs.
+modds() {   # modds <out> <pkginst> <object name> [directives...]
+    o=$1; i=$2; m=$3; shift 3
+    { printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nFILE /etc/conf/mod.d/%s %s-obj\n' "$m" "$m"
+      [ $# -gt 0 ] && printf '%s\n' "$@"; } | python3 "$TESTS/mkds.py" "$o" "$i" 1.0.0-1
+}
+modds "$KR/pkgs/kernel/zeth46-1.0.0-1.pkg" zeth46 zeth "DIR /dev" "CDEV /dev/zen0 51 0"
+modds "$KR/pkgs/kernel/zdevb-1.0.pkg" ZDEVB zdevb "DIR /dev" "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
+modds "$KR/pkgs/kernel/zdevp-1.0.pkg" ZDEVP zdevp "DIR /dev" "PKGMAP 1 p none /dev/zpipe 0644 root root"
+modds "$KR/pkgs/kernel/zdevx-1.0.pkg" ZDEVX zdevx "PKGMAP 1 c none /etc/zen0 51 0 0644 root root"
+modds "$KR/pkgs/kernel/zdevm-1.0.pkg" ZDEVM zdevm "DIR /dev" "PKGMAP 1 c none /dev/zen0 51 0644 root root"
+modds "$KR/pkgs/kernel/zdevk-1.0.pkg" ZDEVK zdevk "DIR /dev" "PKGMAP 1 c kcls /dev/zen0 51 0 0644 root root"
+printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/kdev kdev\nDIR /dev\nCDEV /dev/zen0 51 0\n' \
+    | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/kerndev-1.0.pkg" KERNDEV 1.0
+mkkcat "$KR/catalog" "$KCAT_K110
+$(kline z3660eth-k46 1.0.0-1 module k46 k46.1.0 $PIN kernel/zeth46-1.0.0-1.pkg pkginst=zeth46)
+$(kline kerndev 1.0 kernel k46 k46.1.0 $PIN kernel/kerndev-1.0.pkg)
+$(for i in b p x m k; do kline zdev$i 1.0 module k46 k46.1.0 $PIN kernel/zdev$i-1.0.pkg; done)"
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+KD=$WORK/ktgt-dev
+"$APKG" -c "$KCONF" -R "$KD" install kernel-k46 >/dev/null 2>&1
+kreset
+run 0 "install -R <target> of a module package with a device entry (/dev/zen0 c 51 0)" \
+    "$APKG" -c "$KCONF" -R "$KD" install z3660eth-k46
+grep -qx "pkgadd -R $KD -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/zeth46-1.0.0-1.pkg zeth46" "$SHIMLOG" \
+    && ok "pkgadd -R got the module datastream (zeth46)" \
+    || bad "module pkgadd argv" "$(cat "$SHIMLOG")"
+KDC=$ROOT$KD/var/sadm/install/contents
+grep -qx "/dev/zen0 c none 51 0 0644 root root zeth46" "$KDC" && [ -e "$ROOT$KD/dev/zen0" ] \
+    && ok "the pkgadd shim laid /dev/zen0 and the contents DB records it as c none 51 0" \
+    || bad "device node not laid or not recorded" "$(cat "$KDC"; ls -l "$ROOT$KD/dev" 2>&1)"
+ZO=$ROOT$KD/etc/conf/mod.d/zeth
+cat > "$WORK/zrec.want" <<EOF
+name z3660eth-k46
+version 1.0.0-1
+role module
+line k46
+kabi k46.1.0
+pin $PIN
+sha256 $(sha "$KR/pkgs/kernel/zeth46-1.0.0-1.pkg")
+source $KR
+installed X
+verified no
+file /etc/conf/mod.d/zeth $(sizeof "$ZO") $(sha "$ZO")
+EOF
+sed 's/^installed [0-9][0-9]*$/installed X/' "$ROOT$KD/var/apkg/kpkg/zeth46" > "$WORK/zrec.got" 2>/dev/null
+cmp -s "$WORK/zrec.want" "$WORK/zrec.got" \
+    && ok "the module's record /var/apkg/kpkg/zeth46: one file line (the object), none for the node" \
+    || bad "module record with a device entry" "$(diff "$WORK/zrec.want" "$WORK/zrec.got" 2>&1)"
+[ "$(grep -c . "$KLOG")" -eq 2 ] && ok "the module install triggered build + commit" \
+    || bad "module+node trigger" "$(cat "$KLOG")"
+kreset
+run 0 "remove -R of the module package" "$APKG" -c "$KCONF" -R "$KD" remove z3660eth-k46
+grep -qx "pkgrm -R $KD -n -a $ROOT/var/apkg/admin zeth46" "$SHIMLOG" && \
+! grep -q "^/dev/zen0 " "$KDC" && [ ! -f "$ROOT$KD/var/apkg/kpkg/zeth46" ] \
+    && ok "pkgrm zeth46 takes the node out of the contents DB; the record is gone" \
+    || bad "module remove with a device entry" "$(cat "$SHIMLOG" "$KDC"; ls "$ROOT$KD/var/apkg/kpkg")"
+kreset
+for i in kerndev zdevb zdevp zdevx zdevm zdevk; do
+    case $i in
+    kerndev) why="an object of type c at /dev/zen0" ;;
+    zdevb) why="an object of type b at /dev/zbd0" ;;
+    zdevp) why="an object of type p at /dev/zpipe" ;;
+    zdevx) why="a device node outside /dev/: /etc/zen0" ;;
+    zdevm) why="a device entry not of the form <major> <minor> <mode> <owner> <group>: /dev/zen0" ;;
+    zdevk) why="an object in class kcls" ;;
+    esac
+    run 3 "$i: $why is refused (exit 3)" "$APKG" -c "$KCONF" install $i
+    echo "$OUT" | grep -qF "$i: not a pure-file kernel-space package: $why" \
+        && ok "the refusal of $i says why" \
+        || bad "device-entry refusal message for $i" "$OUT"
+done
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
+    && ok "no pkgadd, no trigger, no journal for any refused device entry" \
+    || bad "a refused device entry touched something" "$(cat "$SHIMLOG" "$KLOG")"
+grep -qx "name kernel-k46" "$REC/kernel-k46" 2>/dev/null \
+    && ok "the installed kernel-k46 is untouched by the refused kerndev" \
+    || bad "kernel-k46 record after kerndev" "$(ls "$REC")"
+mkkcat "$KR/catalog" "$KCAT_K110"
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
 
 # --- upgrade with several names: ONE transaction, ONE trigger ---------
 # The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and

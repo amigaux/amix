@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.1"
+#define APKG_VERSION "0.3.2"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -413,8 +413,11 @@ extern int kpkg_find(const struct conf *cf, const char *arg, char *key,
 extern int ds_pkginst(const char *path, char *out, unsigned outlen);
 /* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
  * of class none and no install scripts (i: pkginfo, depend, copyright),
- * and at least one f.  0 = pure; -1 = not, or unreadable (why[] says) */
-extern int ds_pure_files(const char *path, char *why, unsigned cap);
+ * and at least one f; with module set, also c entries of class none
+ * under /dev/ (C3-5 v4 §1.2: the driver's device nodes).  0 = pure;
+ * -1 = not, or unreadable (why[] says) */
+extern int ds_pure_files(const char *path, int module, char *why,
+                         unsigned cap);
 /* write the C2-2 v4 §2 record <key> after a successful pkgadd: one
  * `file` line per plain file the contents database lists for pkginst
  * (the datastream's instance), with the size and SHA-256 of the
