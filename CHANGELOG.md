@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — U4 answered; kmem requests at most 256 KiB; kit.conf fix (fca6140, 6c3b581, 134731f)
+
+U4 (N79 k46 at 128 MB, N80 k30 at 64 MB): after multi-user one kmem request gives 256 KiB on k46 and 512 KiB on k30
+(the fixed 4 MiB kernel map shared with page[] and the u-areas; page[] grows with RAM), and a KM_SLEEP request above
+that never returns. Spec 30 §8 and C3-6 §1: a module's requests are at most 256 KiB each, KM_SLEEP only up to that,
+every KM_NOSLEEP checked, larger buffers from pieces; root-class _load at boot keeps U1's rule. U2's probe takes 64 KiB
+chunks (k46 fc7d439c, k30 34c32892) and runs in a boot of its own. README: -L's conslogging word tells the vehicle from
+the kernel. mkkit: MONSW_REV is `repo@commit` (a space broke every `. kit.conf`; kits from 6492c3b..c6c9d02 affected,
+the staged dlmkit -3 at c6ad5bd is not). kit-test 50/50.
+
 ## 2026-10-26 — README S3-41: U2/U4 need a generation with the arena (4041e80)
 
 The S3-41 U2/U4 generation must carry the arena (l14.spec's form with the kernel's own arena and ident, or build's):
