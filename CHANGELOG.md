@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — kit: per-line MODOUT and objects, COMMON warning by prefix, clean guard (d197198)
+
+A build's objects and module live under build/<line> and rebuild when the kit changes, so one module directory builds for
+both kits; the COMMON warning names only symbols outside the module's own names; clean refuses MODOUT=.; modcheck names a
+missing scan060/objdump in one line. C3-6 §2: z3660eth's _load may return ENOMEM, if_detach only with an _unload. kit-test
+31/31; kits rebuilt, KIT_REV=d197198.
+
 ## 2026-10-26 — kernel printf formats %d %x %s only; kit fixes (2c62201, c722e41)
 
 The module core prints only the formats the 1992 kernel printf has: the arena line reads "modules from generation N's manifest"
