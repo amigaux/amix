@@ -1,0 +1,406 @@
+Subject: no-sleep mode for the root pass; every load-path allocation checked
+
+30 section 2 patch 3 (S4-02).  The root pass runs at level 7 with the
+clock stopped (U1), where nothing may sleep.  dlm_nosleep, which the root
+pass sets, makes dlm_zalloc ask KM_NOSLEEP and refuse a request over
+1 MiB.  Every allocation on a load path checks for 0, and the load fails
+with ENOMEM and leaves the kernel as it was; a module another load holds
+is EBUSY instead of a wait.  Outside the mode nothing changes.  The state
+harness fails each allocation of a load in turn and checks that nothing
+is left behind.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -59,10 +59,24 @@
+ 
+ /* ---- small helpers ---- */
+ 
++/*
++ * No-sleep mode (30 section 2 patch 3): the root pass runs at level 7
++ * with the clock stopped (U1), where nothing may sleep.  There a request
++ * may fail, and one over 1 MiB always does; every allocation on a load
++ * path checks for 0 and the load fails with ENOMEM, leaving the kernel
++ * as it was.
++ */
++int	dlm_nosleep;
++
++#define	NOMEM(e)	((e) == ENOMEM && dlm_nosleep)
++
+ char *
+ dlm_zalloc(n)
+ 	long n;
+ {
++	if (dlm_nosleep)
++		return n > DLM_NOSLEEPMAX ? (char *)0 :
++		    (char *)kmem_zalloc((size_t)(n ? n : 1), KM_NOSLEEP);
+ 	return (char *)kmem_zalloc((size_t)(n ? n : 1), KM_SLEEP);
+ }
+ 
+@@ -410,7 +424,8 @@
+ 	struct dlm_lf *lf;
+ 	char *name, **pathp;
+ {
+-	lf->lf_mpath = dlm_zalloc((long)MAXPATHLEN);
++	if ((lf->lf_mpath = dlm_zalloc((long)MAXPATHLEN)) == 0)
++		return ENOMEM;
+ 	lf->lf_sha[0] = 0;
+ 	if (dlm_safe) {			/* the floor and the root controller only */
+ 		printf("dlm: safe mode: %s is refused\n", name);
+@@ -454,7 +469,8 @@
+ 	int resid, e;
+ 	static char hex[] = "0123456789abcdef";
+ 
+-	b = dlm_zalloc(cap);
++	if ((b = dlm_zalloc(cap)) == 0)
++		return ENOMEM;
+ 	for (;;) {
+ 		if (n == cap) {
+ 			if (cap >= dlm_maximage) {
+@@ -462,7 +478,10 @@
+ 				printf("dlm: %s: its file is over the limit\n", lf->lf_mod->m_name);
+ 				return ENOLOAD;
+ 			}
+-			nb = dlm_zalloc(cap * 2);
++			if ((nb = dlm_zalloc(cap * 2)) == 0) {
++				dlm_free(b, cap);
++				return ENOMEM;
++			}
+ 			bcopy(b, nb, n);
+ 			dlm_free(b, cap);
+ 			b = nb;
+@@ -618,7 +637,8 @@
+ 	int e = ENOENT, n, k;
+ 
+ 	/* in lf so that an interrupted open does not leak it */
+-	buf = lf->lf_pbuf = dlm_zalloc((long)MAXPATHLEN);
++	if ((buf = lf->lf_pbuf = dlm_zalloc((long)MAXPATHLEN)) == 0)
++		return ENOMEM;
+ 	if (path[0] == '/') {
+ 		e = lf_open(lf, path);
+ 		strcpy(buf, path);
+@@ -644,8 +664,10 @@
+ 		}
+ 	if (e == 0) {
+ 		m->m_pathsz = strlen(buf) + 1;
+-		m->m_path = dlm_zalloc((long)m->m_pathsz);
+-		strcpy(m->m_path, buf);
++		if ((m->m_path = dlm_zalloc((long)m->m_pathsz)) == 0)
++			e = ENOMEM;
++		else
++			strcpy(m->m_path, buf);
+ 	}
+ 	dlm_free(buf, (long)MAXPATHLEN);
+ 	lf->lf_pbuf = 0;
+@@ -801,6 +823,8 @@
+ 		if (m->m_flags & DM_TRANS) {
+ 			if (m->m_owner == CURPROC())
+ 				return EINVAL;		/* cycle */
++			if (dlm_nosleep)
++				return EBUSY;		/* no waiting in the root pass */
+ 			m->m_flags |= DM_WANTED;
+ 			(void)sleep((caddr_t)m, PZERO);
+ 			goto again;
+@@ -812,6 +836,15 @@
+ 	}
+ 
+ 	m = (struct dlm_mod *)dlm_zalloc((long)sizeof (struct dlm_mod));
++	lf = (struct dlm_lf *)dlm_zalloc((long)sizeof (struct dlm_lf));
++	if (m == 0 || lf == 0) {
++		if (m)
++			dlm_free((char *)m, (long)sizeof (struct dlm_mod));
++		if (lf)
++			dlm_free((char *)lf, (long)sizeof (struct dlm_lf));
++		printf("dlm: %s: no memory for it in the root pass\n", name);
++		return ENOMEM;
++	}
+ 	strcpy(m->m_name, name);
+ 	m->m_flags = DM_LOADING;
+ 	m->m_owner = CURPROC();
+@@ -823,7 +856,6 @@
+ 			;
+ 		dm->m_next = m;
+ 	}
+-	lf = (struct dlm_lf *)dlm_zalloc((long)sizeof (struct dlm_lf));
+ 	lf->lf_mod = m;
+ 	lf->lf_next = g->g_lf;
+ 	g->g_lf = lf;
+@@ -848,14 +880,16 @@
+ 		goto fail;
+ 	/* each refusal names the module and the rule (C3-1 section 4) */
+ 	if ((e = dlm_ld_hdr(ld)) != 0) {
+-		printf("dlm: %s: not a module object as C3-1 says (error %d)\n", name, e);
++		if (!NOMEM(e))
++			printf("dlm: %s: not a module object as C3-1 says (error %d)\n", name, e);
+ 		goto fail;
+ 	}
+ 	if ((e = dlm_ld_moddata(ld)) != 0) {
+-		printf("dlm: %s: .moddata refused, %s (error %d)\n", name,
+-		    e == EBADVER ? "not version 2" : e == ENAMETOOLONG ? "a name over 14" :
+-		    e == ERELOC ? "word 0 is not the wrapper's R_68K_32" :
+-		    "a malformed or missing key, or an unknown critical one", e);
++		if (!NOMEM(e))
++			printf("dlm: %s: .moddata refused, %s (error %d)\n", name,
++			    e == EBADVER ? "not version 2" : e == ENAMETOOLONG ? "a name over 14" :
++			    e == ERELOC ? "word 0 is not the wrapper's R_68K_32" :
++			    "a malformed or missing key, or an unknown critical one", e);
+ 		goto fail;
+ 	}
+ 	if ((e = md_check(ld, name)) != 0)
+@@ -872,12 +906,16 @@
+ 		    (long)sizeof (struct dlm_mod *));
+ 		lf->lf_depsz = n * sizeof (char *);
+ 		lf->lf_deptab = (char **)dlm_zalloc((long)lf->lf_depsz);
++		if (m->m_dep == 0 || lf->lf_deptab == 0) {
++			e = ENOMEM;
++			goto fail;
++		}
+ 	}
+ 	for (pos = 0; dlm_ld_dep(ld, &pos, dep) > 0;) {
+ 		if (isstatic(dep))
+ 			continue;
+-		if (dlm_load(dep, DL_SYS, depth + 1, g, &dm) != 0) {
+-			e = EINVAL;
++		if ((e = dlm_load(dep, DL_SYS, depth + 1, g, &dm)) != 0) {
++			e = NOMEM(e) ? e : EINVAL;
+ 			goto fail;
+ 		}
+ 		dlm_depadd(dm);
+@@ -890,8 +928,9 @@
+ 
+ 	/* symbols, image, relocation */
+ 	if ((e = dlm_ld_syms(ld)) != 0) {
+-		printf("dlm: %s: its symbols are refused, an undefined name outside the allowlist "
+-		    "or a bad symbol table (error %d)\n", name, e);
++		if (!NOMEM(e))
++			printf("dlm: %s: its symbols are refused, an undefined name outside the allowlist "
++			    "or a bad symbol table (error %d)\n", name, e);
+ 		goto fail;
+ 	}
+ 	if (ld->ld_imgsz > (unsigned long)dlm_maximage) {
+@@ -901,17 +940,22 @@
+ 	}
+ 	m->m_size = ld->ld_imgsz;
+ 	m->m_allocsz = m->m_size + 15;
+-	m->m_alloc = dlm_zalloc((long)m->m_allocsz);
++	if ((m->m_alloc = dlm_zalloc((long)m->m_allocsz)) == 0) {
++		e = ENOMEM;
++		goto fail;
++	}
+ 	m->m_base = (char *)(((unsigned long)m->m_alloc + 15) & ~15L);
+ 	m->m_run = DLM_RUNADDR(m);
+ 	ld->ld_img = m->m_base;
+ 	ld->ld_base = m->m_run;
+ 	if ((e = dlm_ld_image(ld)) != 0 || (e = dlm_ld_reloc(ld)) != 0) {
+-		printf("dlm: %s: its relocations are refused (error %d)\n", name, e);
++		if (!NOMEM(e))
++			printf("dlm: %s: its relocations are refused (error %d)\n", name, e);
+ 		goto fail;
+ 	}
+ 	dlm_cacheflush();
+-	(void)dlm_ld_table(ld);
++	if ((e = dlm_ld_table(ld)) != 0)
++		goto fail;
+ 	m->m_tab = ld->ld_tab;
+ 	m->m_tabsz = ld->ld_tabsz;
+ 	ld->ld_tab = 0;
+@@ -951,6 +995,10 @@
+ 		/* the manifest's parameters, as one string, valid during _load (C3-5) */
+ 		char *pa = dlm_zalloc(512L);
+ 
++		if (pa == 0) {
++			e = ENOMEM;
++			goto fail;
++		}
+ 		dlm_man_params(m->m_name, pa, 512);
+ 		e = DLM_CALL(m, c, pa[0] ? pa : (char *)0, 0);
+ 		dlm_free(pa, 512L);
+@@ -978,6 +1026,8 @@
+ 	*mp = m;
+ 	return 0;
+ fail:
++	if (NOMEM(e))
++		printf("dlm: %s: no memory for it in the root pass\n", name);
+ 	lf_fail(g, lf);
+ 	return e;
+ }
+@@ -1112,7 +1162,8 @@
+ 		return ENOSYS;
+ 	if (!suser(u.u_cred))
+ 		return EPERM;
+-	buf = dlm_zalloc((long)MAXPATHLEN);
++	if ((buf = dlm_zalloc((long)MAXPATHLEN)) == 0)
++		return ENOMEM;
+ 	if ((e = copyinstr(uap->path, buf, MAXPATHLEN, &len)) == 0 &&
+ 	    strlen(lastcomp(buf)) > MODMAXNAMELEN - 1)
+ 		e = ENAMETOOLONG;
+--- a/dlm.h
++++ b/dlm.h
+@@ -315,6 +315,8 @@
+ 
+ /* services the loader needs from its environment */
+ extern char *dlm_zalloc();
++extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
++#define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
+ extern void dlm_free();
+ extern void dlm_undef();
+ 
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -77,6 +77,8 @@
+ 	ld->ld_sh = dlm_zalloc((long)ld->ld_shnum * SHSZ);
+ 	ld->ld_secoff = (unsigned long *)dlm_zalloc((long)ld->ld_shnum *
+ 	    (long)sizeof (unsigned long));
++	if (ld->ld_sh == 0 || ld->ld_secoff == 0)
++		return ENOMEM;
+ 	if ((e = rdx(ld, shoff, ld->ld_sh, (long)ld->ld_shnum * SHSZ, ERELOC)) != 0)
+ 		return e;
+ 
+@@ -495,7 +497,8 @@
+ 	long n;
+ 
+ 	ld->ld_modsz = SHW(ld, ld->ld_modsec, SH_SIZE);
+-	ld->ld_mod = dlm_zalloc(ld->ld_modsz + 1);	/* NUL past the end */
++	if ((ld->ld_mod = dlm_zalloc(ld->ld_modsz + 1)) == 0)	/* NUL past the end */
++		return ENOMEM;
+ 	if (rdx(ld, SHW(ld, ld->ld_modsec, SH_OFFSET), ld->ld_mod,
+ 	    ld->ld_modsz, ERELOC))
+ 		return ERELOC;
+@@ -597,6 +600,8 @@
+ 	ld->ld_str = dlm_zalloc(ld->ld_strsz);
+ 	lssz = ld->ld_nsym * (long)sizeof (struct dlm_lsym);
+ 	ld->ld_ls = (struct dlm_lsym *)dlm_zalloc((long)lssz);
++	if (ld->ld_syms == 0 || ld->ld_str == 0 || ld->ld_ls == 0)
++		return ENOMEM;
+ 	if ((e = rdx(ld, SHW(ld, ssec, SH_OFFSET), ld->ld_syms,
+ 	    ld->ld_nsym * SYMSZ, ERELOC)) != 0)
+ 		return ERELOC;
+@@ -607,7 +612,8 @@
+ 		return ERELOC;
+ 
+ 	osz = (DLM_MODBUCKETS + ld->ld_nsym) * (long)sizeof (long);
+-	oh.b = (long *)dlm_zalloc(osz);
++	if ((oh.b = (long *)dlm_zalloc(osz)) == 0)
++		return ENOMEM;
+ 
+ 	/* definitions */
+ 	for (i = 1; i < ld->ld_nsym; i++) {
+@@ -834,7 +840,8 @@
+ 	long n, k, c, j;
+ 
+ 	/* in ld so that an interrupted read does not leak it */
+-	buf = ld->ld_rbuf = dlm_zalloc((long)RCHUNK * RELASZ);
++	if ((buf = ld->ld_rbuf = dlm_zalloc((long)RCHUNK * RELASZ)) == 0)
++		return ENOMEM;
+ 	for (i = 1; i < ld->ld_shnum && e == 0; i++) {
+ 		if (SHW(ld, i, SH_TYPE) != SHT_RELA)
+ 			continue;
+@@ -878,7 +885,8 @@
+ 		if (ld->ld_ls[i].ls_tab)
+ 			n++;
+ 	ld->ld_tabsz = dlm_blksize(n, ld->ld_strsz, (long)DLM_MODBUCKETS);
+-	ld->ld_tab = dlm_zalloc(ld->ld_tabsz);
++	if ((ld->ld_tab = dlm_zalloc(ld->ld_tabsz)) == 0)
++		return ENOMEM;
+ 	dlm_blkinit(ld->ld_tab, n, ld->ld_strsz, (long)DLM_MODBUCKETS,
+ 	    ld->ld_base, M32(ld->ld_base + ld->ld_imgsz));
+ 	bcopy(ld->ld_str, ld->ld_tab + G32(ld->ld_tab + KH_STROFF), ld->ld_strsz);
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -60,6 +60,7 @@
+ #define	PZERO		25
+ #define	HZ		60
+ #define	KM_SLEEP	0
++#define	KM_NOSLEEP	1
+ #define	CE_CONT		0
+ #define	CE_NOTE		1
+ #define	CE_WARN		2
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -3,7 +3,9 @@
+  * for the state harness.
+  *
+  *	files		vn_open maps "/x" to host_root "/x"
+- *	memory		kmem_zalloc/kmem_free with a byte and block count
++ *	memory		kmem_zalloc/kmem_free with a byte and block count;
++ *			host_nomem_after > 0 fails that many-th KM_NOSLEEP
++ *			request, and the requests are counted by flag
+  *	images		each image gets a fake 32-bit run address
+  *	module calls	host_call looks the address up in the module's
+  *			table and runs the handler registered for that
+@@ -29,6 +31,8 @@
+ long		host_kbytes, host_kblocks;
+ int		host_intr_after, host_intr_open;
+ int		host_sleeps;
++int		host_nomem_after;
++long		host_km_sleep, host_km_nosleep;
+ unsigned long	host_nextrun = 0x01000000;
+ int		host_fault;	/* copyin/copyout of (char *)1 fault */
+ 
+@@ -49,8 +53,15 @@
+ 	size_t n;
+ 	int f;
+ {
+-	char *p = calloc(1, n);
++	char *p;
+ 
++	if (f == KM_NOSLEEP) {
++		host_km_nosleep++;
++		if (host_nomem_after > 0 && --host_nomem_after == 0)
++			return 0;
++	} else
++		host_km_sleep++;
++	p = calloc(1, n);
+ 	if (!p) {
+ 		fprintf(stderr, "out of memory\n");
+ 		exit(2);
+--- a/test/state.c
++++ b/test/state.c
+@@ -506,6 +506,40 @@
+ 	dlm_devload = 1;
+ }
+ 
++/* ---- no-sleep mode (30 section 2 patch 3, S4-02) ---- */
++extern long host_kblocks, host_km_sleep, host_km_nosleep;
++extern int host_nomem_after;
++
++void
++nosleep_tests()
++{
++	long bytes, blocks, sl;
++	int id, k, e = -1, n = nloaded(), clean = 1;
++
++	dlm_nosleep = 1;
++	check(dlm_zalloc(DLM_NOSLEEPMAX + 1) == 0, "no-sleep: a request over 1 MiB fails (U1)");
++	bytes = host_kbytes;
++	blocks = host_kblocks;
++	sl = host_km_sleep;
++	for (k = 1; k < 200; k++) {
++		host_nomem_after = k;
++		if ((e = modload("pmf", &id)) == 0)
++			break;
++		if (e != ENOMEM || byname("pmf") || nloaded() != n ||
++		    host_kbytes != bytes || host_kblocks != blocks)
++			clean = 0;
++	}
++	host_nomem_after = 0;
++	check(k > 1 && k < 200 && clean,
++	    "no-sleep: each failing allocation of a load -> ENOMEM, the kernel as it was");
++	check(e == 0 && byname("pmf") && host_km_sleep == sl,
++	    "no-sleep: with memory the load succeeds, and nothing asks to sleep");
++	dlm_nosleep = 0;
++	moduload(id);
++	check(!byname("pmf") && host_kbytes == bytes && host_kblocks == blocks,
++	    "no-sleep: the unload returns every byte");
++}
++
+ /* ---- marc_post (patch 16, C3-5) ---- */
+ static char pb1_params[256];
+ static int pb1_loads, pb3_saw = -1;
+@@ -1417,6 +1451,7 @@
+ 	host_handler("cd_close", h_cdclose);
+ 	drv_tests();
+ 	man_tests();
++	nosleep_tests();
+ 	post_tests();
+ 	intr_tests();
+ 	kinfo_tests();
