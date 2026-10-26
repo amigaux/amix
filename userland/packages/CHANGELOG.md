@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kern30m k30.1.2.261026-11, the kabi 1.2 k30 kernel with the 16-aligned arena (f7f1e18) — not published
+
+K030-U build 68030-261026-11 (kerntools bf221f3 cut on dlm 49239b1, core 0001–0041): -10 plus iodone, ramdisk_image,
+vfs_register, root_defer and the arena at capacity + 16. brel 50996217 (1725952 B, bss 352904), ET_REL 53b17fae, sidecar
+60314796: kabi k30.1.2, arena 0x00109450, abi fea18182, sdcards 4. kabi-sidecar030 and mkident --check pass; build.sh
+refuses a non-16-aligned arena. Pkg md5 d2c4e422 / 1946112 B; staged catalog 5a441729 (-10 root at
+superseded/repo-20261026-2305). Round trip 114/114; gates PASS.
+
 ## 2026-10-26 — kern46m k46.1.2.261026-77, the kabi 1.2 k46 kernel with the 16-aligned arena (fddf560); ramdisk-k30/-k46 1.0.0-1 minted, not staged (7379df6) — not published
 
 kern46m: cut in amix-packages (build/kspace/cut-k46m, the port's S4-22c recipe) from port 12d416c + dlm 49239b1 + base
