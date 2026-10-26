@@ -125,18 +125,28 @@ replaces it in the same journaled transaction:
    because both ship `/stand/<line>/unix`: a `pkgadd` over another
    package's file is a conflict, and a `pkgrm` after it would leave the
    path shared in the contents database.
-4. **`pkgadd` the new package,** then write its record (`installed
-   kernel-k46-m`).
+4. **`pkgadd` the new package,** then write its record (the ordinary
+   `installed kernel-k46-m-<version>` line).
 5. **The trigger** (C2-4 §3) runs once, at the end, as for any
    kernel-space transaction.
 
-A cut between steps 3 and 4 leaves the line without a kernel package. The
-journal finishes the install (`apkg -f recover`), and until then the box
-still boots: the boot store's generations hold their own copies of the
-kernel. Two or more kernel records of one line already present (a box
-damaged by hand) refuse the transaction: `two kernel records for line
-k46 (KERN46Z, KERN46M): remove one`. A package of the same pkginst is an
-upgrade, as before.
+The bracketed name in the plan line and in `removed …` is the pkgrm'd
+instance. A cut between steps 3 and 4 leaves the line without a kernel
+package. `apkg recover` finishes the install from the journal (`apkg -f
+recover` prints and discards the journal, as always, and warns when that
+leaves a line without a kernel); until then the box still boots: the boot
+store's generations hold their own copies of the kernel.
+
+Refused, with nothing changed:
+- two or more kernel records of one line already present (a box damaged
+  by hand), for a kernel install and for a module install of that line
+  alike (pre-flight against "the installed kernel" has no meaning then):
+  `two kernel records for line k46 (KERN46M, KERN46Z): remove one`, the
+  record names sorted;
+- two kernel packages of one line in one transaction.
+
+A package of the same pkginst is an upgrade, as before. apkg 0.3.1
+(amix-packagemanager 06b77c4) implements this section.
 
 ## 3. Settled at agreement
 
