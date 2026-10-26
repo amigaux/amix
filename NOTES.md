@@ -1,5 +1,39 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — APKG 0.3.2 minted for the 1.1 media (STAGED, NOT PUBLISHED)
+
+**Why.** 0.3.2 (a module package may carry `c none /dev/<node>` device entries, amix-dlm C3-5 v4
+§1.2; the section below) replaces 0.3.1 on the 1.1 media, so zeth installs. As with 0.3.0/0.3.1,
+**the public catalog and the publish line of record are unchanged** (still 0.2.3); publishing is the
+owner's decision.
+
+**The mint.** `build/repo-staging-apkg032/base/APKG-0.3.2.pkg` (own staging dir; `build/repo-staging`,
+`repo-staging-apkg031` and every earlier mint untouched), `tools/repo/build-packages.sh --apkg`,
+`VER_APKG="0.3.2"`:
+
+- **sha256 `c971c992d130e4bfdcdd15be9dc1e2a02536b72129ccea71f827cf7cd5f4e11a`**, md5
+  `9d6de726cb96a1ad74f4671346ba21b4`, **198144 B**, mode 444, sidecar `.md5`;
+  `PSTAMP=lucifer20261026105737`; source tree = `reviewed` `7965921` (apkg `abd6d3c`).
+- `apkg.amix` rebuilt from a clean `obj-amix` with gcc-cross-amix (gcc 2.7.2.3): **sha256
+  `c18d6ee2d09e52f19c52334b89b053b67f2184e35a1a67dc2899893830a4a489`**, 113230 B, version string 0.3.2
+  -- the bytes of the 0.3.2 build section (third identical build); no `divsl`/`divul` in the objects.
+  The packaged member is the same.
+- Payload against 0.3.1, member by member: `apkg` (112647 -> 113230 B) and `apkg.1` (23600 -> 24050 B)
+  are new bytes; `contents-fsck` (`4a89f1f3…`), `amix-sadm-migrate`, `/etc/apkg.conf` and
+  `/usr/apkg/lib/apkg.conf` (`324730ae…`), `/var/apkg/admin`, `install/i.apkgconf` byte-identical.
+  pkginfo differs in VERSION and PSTAMP only; pkgmap in those sizes/sums and mtimes only (same entries).
+- Gates (the publish path's, run without publishing): build_one's ≤9-char name check (APKG, 4) and
+  link gate OK (1 link, also re-run on the extracted pkgmap); scan060 0 hits in 2 ELFs; `gen-catalog
+  --scan-private` OK (1 scanned); `payload-licence-gate` OK (2 ELFs; the usual `libnsl.so` note);
+  `publish.sh --dry-run` against a LOCAL scratch destination runs both gates and rc 0.
+- Staging catalog (`gen-catalog`, `catalog.md5` `b0b03fb6e776841a9d8b1e84dda49250`):
+  `apkg|0.3.2|APKG|base/APKG-0.3.2.pkg|9d6de726cb96a1ad74f4671346ba21b4|198144|apkgeng|system|…`
+- Host install of the staged file (heirloom `pkgadd -R` under fakeroot): 0.3.1 installed, conf edited
+  (`repo=/cdrom`), 0.3.2 added with instance=overwrite: rc 0, "kept as it is", the edit survives
+  byte for byte, installed `apkg` is `c18d6ee2…`, VERSION=0.3.2, `pkgchk -n` and plain `pkgchk`
+  clean. Repo tools 367/0 (T23 mints from the same tree).
+- APKGENG stays 1.12.3 (no engine change).
+
 ## 2026-10-26 — module packages carry device entries: apkg 0.3.2, gen-catalog (built, NOT minted, NOT published)
 
 **Why.** amix-dlm C3-5 v4 §1.2 (`568b9ac`): "a driver module's package ships the device nodes of its
