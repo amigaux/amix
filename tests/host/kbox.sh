@@ -143,6 +143,15 @@ chmod u+w $R/etc/default $R/var/kbootset
 grep -q "generation 3 gets its trial boot again" $T/out
 $B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"
 
+# 4c. a kernel without kinfo (a 1.0 kernel): retry does nothing and says
+# nothing, as bcheckrc expects; mark-good refuses and names --booted
+set +e
+KBOOTSET_KINFO=$T/no-kinfo $B/kbootset -R $R retry > $T/out; rc=$?
+[ $rc -eq 0 ] && [ ! -s $T/out ] || { echo "kbox: retry without kinfo: $rc"; exit 1; }
+KBOOTSET_KINFO=$T/no-kinfo $B/kbootset -R $R mark-good > $T/out; rc=$?
+set -e
+[ $rc -eq 3 ] && grep -q "which generation booted is unknown" $T/out
+
 # 5. the controller missing from the card table (the A3000 case): the
 # loader record maps to no card, so every disk is scanned
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,0 ""

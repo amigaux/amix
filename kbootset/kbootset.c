@@ -683,6 +683,12 @@ main(int argc, char **argv)
 					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
 		} else if (!strcmp(cmd[0], "retry") && (booted || (have_kinfo && ki.has_axl1))) {
 			rc = ks_retry(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id);
+		} else if (!strcmp(cmd[0], "retry")) {	/* no booted generation known: nothing to give back (C2-4 §7) */
+			return 0;
+		} else if (!strcmp(cmd[0], "mark-good")) {
+			printf("kbootset: which generation booted is unknown (no kinfo loader record); "
+			       "name it with --booted\n");
+			return 3;
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {
 			rc = ks_rollback(&k, &id);
 		} else if (!strcmp(cmd[0], "next") && argc == 2) {
