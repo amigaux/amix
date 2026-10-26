@@ -24,7 +24,7 @@
 |---|---|---|
 | ~~Core patch for the DDI providers~~ **done, core patch 0011:** the `spl0`…`spl7`/`splx` functions (as `<sys/inline.h>`: spl5–7 = level 4); `if_attach`/`if_detach` on the stock `ifstats` list, with no kernel change; `cons_hook_set`/`cons_hook_clear`, a wrapper at the stock `scrcon_put` (step 7) | the gate needs every allowlisted name defined; a stub in a real kernel would crash the first module that calls it | S3-04's provider half |
 | The other providers: on k46 `__udivdi3`/`__umoddi3`/`__lshrdi3` from gcc-cross-amix's `libgcc.a` (step 7) and `dev_kvmap`/`dev_kvunmap` from the port's own `devkvmap040.o` (KD060-Z lacks them, the A families link them); on k30 `cputype` (`core/plat/k30`). DMA is not in DDI v1.0 (orchestrator, 2026-10-26), so no kernel owes `dma_*`. The port's `dma_prepare`/`dma_complete` stay kernel-internal | as above | — |
-| Core patch for `intr_attach`/`intr_detach` (the INT2 chain walker in `int2_tbl`'s last handler slot, the INT6 chain after CIA-B) | the same name in the allowlist, and z3660eth's interrupt option | S3-09 |
+| ~~Core patch for `intr_attach`/`intr_detach`~~ **done, core patch 0012:** a level-2 walk in `int2_tbl`'s last handler slot; a level-6 chain behind a wrapper at the stock `aciabintr`, spliced in step 7 | the same name in the allowlist, and z3660eth's interrupt option | S3-09 |
 | `core/plat/k46/` and `core/plat/k30/`: `plat_dmainit()` sets `dlm_devload` and `dlm_safe` from the AXL1 flags, `dlm_build` from the kernel's build id, and `dlm_plat_match` from the board list in `bootinfo` | development load, safe mode, the core tier, and `match=` | S3-02's platform half |
 | `tools/mkident.py`: writes the `AXK1` record and the arena's zero block as assembler, then fills `AXK1`'s image offsets after the final link and prints the sidecar's `ident=`, `arena=` and `ksym=` | C3-3: the offsets exist only after the link | S3-10 |
 | The fingerprint `abi=` (C3-3 §4) | the release gate on the kabi tag; **not needed for the first cut**, it comes with the kit (S3-10) before any module ships | S3-10 |
@@ -62,8 +62,8 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
 4. **Compile the core** with
    `$KCC -I<core>/include -I<core> -DDLM_KABI=\"$KABI\" -DDLM_PIN=\"$PIN\"`:
    - from C: `dlm_core`, `dlm_ld`, `dlm_sym`, `dlm_slot`, `dlm_str`,
-     `dlmconf`, `dlmreg`, `dlm_arena`, `dlm_post`, `dlm_ddi`, and
-     `core/plat/<line>`;
+     `dlmconf`, `dlmreg`, `dlm_arena`, `dlm_post`, `dlm_ddi`,
+     `dlm_intr`, and `core/plat/<line>`;
    - from assembler: `dlm_cache.s`, `dlm_hooksw.s`, `dlm_spl.s`;
    - **not `dlmksym.s`**: it is the empty block, and step 6 replaces it;
    - `loader/common/sha256.c` and `crc32.c` with the loader's flags
@@ -78,12 +78,14 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
    `mkksym -a abi/<line>/ddi.list -a abi/<line>/core.list > ksym.s`, then
    assemble it.
 7. **Splice into the base** as the adopted core does (core map §8):
-   - `objcopy --weaken-symbol` on `dmainit`, `execsw`, `fmodsw` and
-     `scrcon_put`;
+   - `objcopy --weaken-symbol` on `dmainit`, `execsw`, `fmodsw`,
+     `scrcon_put` and `aciabintr`;
    - `--add-symbol` `__amix_execsw` and `__amix_fmodsw` as aliases of the
-     stock tables, and `__amix_scrcon_put` at the stock `scrcon_put`'s
-     address. That is `.text` 0x5284 in both kernels of record; read it
-     with `nm`, never hard-code it. `make core` does this splice;
+     stock tables, and `__amix_scrcon_put` and `__amix_aciabintr` at the
+     stock functions' addresses. Those are `.text` 0x5284 for `scrcon_put`
+     in both kernels of record, and for `aciabintr` 0xdf52 on KD060-Z and
+     0x10a7e on K030-U; read them with `nm`, never hard-code them.
+     `p6int` is `aciabintr`'s only caller. `make core` does this splice;
    - `ld -r` with the core objects, `ident.o` and `ksym.o`; on k46 add
      `libgcc.a` and the port's `devkvmap040.o`.
    - Leave the static z3660eth and zz9000 (and monsw) out, so majors 49,

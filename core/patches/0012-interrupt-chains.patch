@@ -1,0 +1,312 @@
+Subject: intr_attach and intr_detach: the level-2 and level-6 chains
+
+The stock level-2 autovector (p2int) calls every entry of int2_tbl with
+a pointer to a zeroed longword and ignores what they return; the level-6
+one (p6int) calls aciabintr, the CIA-B handler, alone.  The core now
+adds a chain to each without moving a stock handler: dlm_intr_init()
+(from dlm_init) puts dlm_int2_walk in int2_tbl's last handler slot,
+which calls the handler it displaced first and then the attached ones;
+the kernel build weakens aciabintr and keeps its body as
+__amix_aciabintr, and the core's aciabintr calls it and then the level-6
+chain (p6int is its only caller in both Amix kernels).
+intr_attach(level, fn, arg, name) and intr_detach(level, fn, arg) are
+DDI v1 (amix-dlm docs/contracts/C3-2-symbols-and-ddi.md); a handler is
+fn(arg), returns nonzero if its board interrupted, and is always called,
+like the stock ones; the claims are counted.  The chains change at IPL 7,
+since the DDI spl7 stops at level 4.  30-module-core.md section 4 (patch
+10 in section 2).
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -1344,6 +1344,7 @@
+ 	dlm_inited = 1;
+ #ifndef DLM_HOST
+ 	dlm_arena_init();		/* the manifest this boot loads from */
++	dlm_intr_init();		/* the level-2 chain walk */
+ #endif
+ 	printf("dlm: %d kernel symbols\n", (int)G32(dlm_ksym + KH_NSYM) - 1);
+ }
+--- a/dlm.h
++++ b/dlm.h
+@@ -347,6 +347,10 @@
+ extern int (*dlm_plat_match)();		/* the platform's: 1 if a match key names a board here */
+ extern void dlm_marc_post(), dlm_man_params();
+ 
++/* interrupt chains (30 section 4) */
++extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_int2_walk();
++extern void dlm_intr_init();
++
+ /* the major registry, generated from the ABI kit's file by tools/mkreg */
+ struct dlm_majreg {
+ 	int	r_type;			/* 'c' or 'b'; 0 ends the table */
+--- a/dlm_intr.c
++++ b/dlm_intr.c
+@@ -0,0 +1,188 @@
++/*
++ * dlm_intr.c -- intr_attach and intr_detach: a module's interrupt handler
++ * on the level-2 or level-6 chain (amix-dlm docs/spec/30-module-core.md
++ * section 4; DDI v1, docs/contracts/C3-2-symbols-and-ddi.md).
++ *
++ * How the stock autovectors call handlers (read from the 2.1c kernels):
++ *
++ *   level 2 (p2int): acknowledges PORTS in INTREQ, then calls every entry
++ *	of int2_tbl, a NULL-terminated table, with one argument (a pointer
++ *	to a zeroed longword), every time, ignoring what each returns.
++ *   level 6 (p6int): acknowledges EXTER in INTREQ, then calls aciabintr,
++ *	the CIA-B handler, alone.
++ *
++ * The core adds to both without moving a stock handler:
++ *
++ *   level 2: dlm_intr_init() puts dlm_int2_walk in int2_tbl's last handler
++ *	slot (the terminator stays); the walk calls the handler it displaced
++ *	first, with the stock argument, then each attached handler.
++ *   level 6: the kernel build weakens aciabintr and keeps its body as
++ *	__amix_aciabintr (as for execsw and fmodsw); the core's aciabintr
++ *	calls it, then each attached handler.  p6int is its only caller.
++ *
++ * A handler is called as fn(arg) at its level and returns nonzero if its
++ * board raised the interrupt; every handler of the chain is called every
++ * time, as the stock ones are, and what they return is counted, not used
++ * to stop the chain.  No spl masks level 6 (C3-2): a level-6 handler's
++ * driver masks at its own board.  A driver with a polled mode keeps it as
++ * the default and attaches only once its board is set up to interrupt;
++ * if intr_attach fails it stays polled.
++ *
++ * K&R C.
++ */
++
++#include "dlm.h"
++
++#define	INTR_MAX	8		/* handlers per chain */
++
++struct dlm_intr {
++	int	(*i_fn)();
++	char	*i_arg;
++	char	i_name[MODMAXNAMELEN];
++	long	i_calls, i_claims;
++};
++
++static struct dlm_intr	int2_chain[INTR_MAX], int6_chain[INTR_MAX];
++static int		(*int2_last)();	/* the stock handler the walk displaced */
++static int		dlm_intr_ready;
++
++extern int	(*int2_tbl[])();
++extern int	__amix_aciabintr();
++
++/* raise to level 7 itself: the DDI spl7 stops at level 4 */
++#ifndef DLM_HOST
++#define	SPLHI(s) do { \
++	__asm__ __volatile__("movew %%sr,%0" : "=d" (s) : : "memory"); \
++	__asm__ __volatile__("movew %0,%%sr" : : "d" ((s) | 0x0700) : "memory"); \
++} while (0)
++#define	SPLX(s)	__asm__ __volatile__("movew %0,%%sr" : : "d" (s) : "memory")
++#else
++#define	SPLHI(s)	((s) = 0)	/* the host harness has no interrupts */
++#define	SPLX(s)		((void)(s))
++#endif
++
++static void
++runchain(c)
++	struct dlm_intr *c;
++{
++	int i;
++
++	for (i = 0; i < INTR_MAX; i++)
++		if (c[i].i_fn) {
++			c[i].i_calls++;
++			if ((*c[i].i_fn)(c[i].i_arg))
++				c[i].i_claims++;
++		}
++}
++
++int
++dlm_int2_walk(a)
++	char *a;
++{
++	if (int2_last)
++		(*int2_last)(a);
++	runchain(int2_chain);
++	return 0;
++}
++
++/* the CIA-B entry p6int calls, wrapped */
++int
++aciabintr(a)
++	char *a;
++{
++	int r = __amix_aciabintr(a);
++
++	runchain(int6_chain);
++	return r;
++}
++
++/* from dlm_init: the walk into int2_tbl's last handler slot */
++void
++dlm_intr_init()
++{
++	int i, s;
++
++	for (i = 0; int2_tbl[i]; i++)
++		;
++	if (i == 0) {
++		printf("dlm: int2_tbl is empty: level-2 attachment disabled\n");
++		return;
++	}
++	SPLHI(s);
++	int2_last = int2_tbl[i - 1];
++	int2_tbl[i - 1] = dlm_int2_walk;
++	dlm_intr_ready = 1;
++	SPLX(s);
++}
++
++int
++intr_attach(level, fn, arg, name)
++	int level;
++	int (*fn)();
++	char *arg, *name;
++{
++	struct dlm_intr *c, *fr = 0;
++	int i, s;
++
++	if (fn == 0 || (level != 2 && level != 6))
++		return EINVAL;
++	if (level == 2 && !dlm_intr_ready)
++		return ENXIO;
++	c = level == 2 ? int2_chain : int6_chain;
++	for (i = 0; i < INTR_MAX; i++) {
++		if (c[i].i_fn == fn && c[i].i_arg == arg)
++			return EEXIST;
++		if (c[i].i_fn == 0 && fr == 0)
++			fr = &c[i];
++	}
++	if (fr == 0)
++		return ECONFIG;
++	SPLHI(s);
++	fr->i_arg = arg;
++	fr->i_calls = fr->i_claims = 0;
++	strncpy(fr->i_name, name ? name : "", MODMAXNAMELEN - 1);
++	fr->i_fn = fn;			/* last: the chain sees a whole entry */
++	SPLX(s);
++	return 0;
++}
++
++int
++intr_detach(level, fn, arg)
++	int level;
++	int (*fn)();
++	char *arg;
++{
++	struct dlm_intr *c;
++	int i, s;
++
++	if (level != 2 && level != 6)
++		return EINVAL;
++	c = level == 2 ? int2_chain : int6_chain;
++	for (i = 0; i < INTR_MAX; i++)
++		if (c[i].i_fn == fn && c[i].i_arg == arg) {
++			SPLHI(s);
++			c[i].i_fn = 0;
++			SPLX(s);
++			return 0;
++		}
++	return ENOENT;
++}
++
++/* a handler's counts, for diagnosis (the harness, modstat later) */
++int
++dlm_intr_count(level, fn, callsp, claimsp)
++	int level;
++	int (*fn)();
++	long *callsp, *claimsp;
++{
++	struct dlm_intr *c = level == 2 ? int2_chain : int6_chain;
++	int i;
++
++	for (i = 0; i < INTR_MAX; i++)
++		if (c[i].i_fn == fn) {
++			*callsp = c[i].i_calls;
++			*claimsp = c[i].i_claims;
++			return 0;
++		}
++	return ENOENT;
++}
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -21,6 +21,13 @@
+ int	dlm_safe = 0;
+ int	(*dlm_plat_match)() = 0;
+ 
++/* a stock int2_tbl of two handlers, and the stock CIA-B entry */
++int	hconf_i2a, hconf_i2b, hconf_ciab;
++static int i2a(a) char *a; { hconf_i2a++; return 0; }
++static int i2b(a) char *a; { hconf_i2b++; return 0; }
++int	(*int2_tbl[])() = { i2a, i2b, 0 };
++int	__amix_aciabintr(a) char *a; { hconf_ciab++; return 0; }
++
+ /* the harness's major registry */
+ struct dlm_majreg dlm_majreg[] = {
+ 	{ 'c', 51, "z3660eth" },
+--- a/test/state.c
++++ b/test/state.c
+@@ -552,6 +552,53 @@
+ 	dlm_devload = 1;
+ }
+ 
++/* ---- interrupt chains (30 section 4) ---- */
++extern int hconf_i2a, hconf_i2b, hconf_ciab;
++extern int (*int2_tbl[])();
++static int h1n, h2n;
++static char *h1a;
++static int ih1(a) char *a; { h1n++; h1a = a; return 1; }
++static int ih2(a) char *a; { h2n++; return 0; }
++
++/* p2int: every int2_tbl entry, with a pointer to a zeroed longword */
++static void
++p2int()
++{
++	long flag = 0;
++	int i;
++
++	for (i = 0; int2_tbl[i]; i++)
++		(*int2_tbl[i])((char *)&flag);
++}
++
++void
++intr_tests()
++{
++	extern int aciabintr();
++	long calls, claims;
++	char x[1];
++
++	dlm_intr_init();
++	check(int2_tbl[1] == dlm_int2_walk && int2_tbl[2] == 0,
++	    "intr: the walk takes int2_tbl's last handler slot, the terminator stays");
++	check(intr_attach(2, ih1, x, "ih1") == 0 && intr_attach(6, ih2, (char *)0, "ih2") == 0,
++	    "intr: a handler on each chain");
++	p2int();
++	check(hconf_i2a == 1 && hconf_i2b == 1 && h1n == 1 && h1a == x,
++	    "intr: level 2 calls the stock handlers, the displaced one first, then the module's with its arg");
++	aciabintr((char *)0);
++	check(hconf_ciab == 1 && h2n == 1, "intr: level 6 calls the stock CIA-B handler, then the module's");
++	check(dlm_intr_count(2, ih1, &calls, &claims) == 0 && calls == 1 && claims == 1 &&
++	    dlm_intr_count(6, ih2, &calls, &claims) == 0 && claims == 0,
++	    "intr: calls and claims are counted per handler");
++	check(intr_attach(2, ih1, x, "ih1") == EEXIST && intr_attach(3, ih1, x, "") == EINVAL &&
++	    intr_attach(2, 0, x, "") == EINVAL, "intr: a second attach, a bad level, no handler -> refused");
++	check(intr_detach(2, ih1, x) == 0 && intr_detach(2, ih1, x) == ENOENT, "intr: detach, then not found");
++	p2int();
++	check(hconf_i2b == 2 && h1n == 1, "intr: a detached handler is not called, the stock ones still are");
++	intr_detach(6, ih2, (char *)0);
++}
++
+ void
+ hook_tests()
+ {
+@@ -1067,6 +1114,7 @@
+ 	drv_tests();
+ 	man_tests();
+ 	post_tests();
++	intr_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
