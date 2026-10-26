@@ -780,6 +780,12 @@ if [ -n "$_want_l11" ]; then
   cp "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg"
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
+  # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
+  if [ -n "$CDBOOT" ]; then
+    echo "cd-boot $CDBOOT, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
+  else
+    echo "# cd-boot: none -- the install kernel boots from the floppy pair; amix-dlm D-3 §10 (option B) adds the CD boot tree (S3-31 part 3)" >> "$STAGE/l11/INPUTS"
+  fi
   cp "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
   # /sbin/bcheckrc with `kbootset retry` before each of the three reboots of its root
   # fsck block (amix-dlm C2-4 v5 §7): a repair reboot must not spend a trial's single
