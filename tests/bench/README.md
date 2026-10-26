@@ -857,3 +857,59 @@ The emulator with 128 MB of Zorro III fast memory, the S3-43-2 rows
 `load`, `dependency` and `relocation oracle` again: the same lines, and
 kinfo's fast memory (`kbootset status`) about 128 MB. The relocation
 oracle's base is then above 64 MB.
+
+## S3-41 — bench measurements on the module kernels (U1, U2, U4)
+
+After the S3-43 sweep, on the same kernels of record and the same slot
+copies. U15 is answered (S3-B5, core patch 0017; 90 §3) and has no row.
+Each row gives a number for 90 §3.
+
+### U1 — the context at dmainit and at the hook
+
+U1 is not a module: it needs the kernel's own early context. The core
+has a measurement build behind `-DDLM_U1` (core patch 0023; without the
+flag `dlm.o` is byte for byte the shipped one). amix-040-060-port and
+amix-kerntools build each line's kernel of record once more, with
+`-DDLM_U1` added where the core's objects are compiled. These are **U1
+kernels**, never kernels of record and never packaged.
+
+| Commands | Expected |
+|---|---|
+| the U1 kernel as a generation by spec (`noarena.spec`'s form, `kernel unix <the U1 kernel> z=deflate`); `kbootset commit --spec`; power-cycle; afterwards mark it bad | after `dlm: … kernel symbols`, from the end of `dlm_init` (dmainit): `dlm: U1 dmainit: sr 0x…, u_procp 0x…, the clock ticked\|stood still after N spins`, then `dlm: U1 dmainit: kmem_zalloc(<n>, KM_NOSLEEP) gave memory\|failed` for 4096, 65536, 262144, 1048576 and 2097152. Then, from the kernel's hook in `rth1_mountroot` after `vfs_mountroot`, the same six lines with `hook` (the status register there was 0x2700 in S3-B5's panic) |
+
+**The numbers:** the status register at each point, whether the clock
+ticks there, and the largest size `KM_NOSLEEP` gives. **The reading
+(30 §3):**
+- `KM_SLEEP` at the hook is safe only if the clock ticks there and the
+  priority level lets a wakeup in. With 0x2700 and a clock that stands
+  still, a sleep could never end, so stage 4's root-class `_load` keeps
+  `KM_NOSLEEP`, as 30 §3 has it.
+- `marc_root` will run earlier in the same function (before
+  `rth1_apply`), in the same process-0 context.
+
+### U2 — kernel memory for copied modules at 128 MB
+
+The probes are built with the line's kit:
+
+```
+sh tests/bench/s3-41/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s41/u2kva, u4big
+```
+
+| Commands | Expected |
+|---|---|
+| the emulator with 128 MB of Zorro III fast memory (as S3-43-7); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload`; power-cycle; run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+
+**The number:** K KiB, with the address range, at 128 MB. That is what
+the core could take for module images, beside the arena. Run it on a
+quiet box: for that moment the kernel has no memory to spare.
+
+### U4 — large kmem requests return
+
+| Commands | Expected |
+|---|---|
+| in the same development-load boot, before U2: `modadmin -l /tmp/s41/u4big`; `modadmin -U u4big` | ten pairs `u4big: kmem_zalloc(<n>, KM_NOSLEEP\|KM_SLEEP) ...` / `u4big: ... memory\|failed at 0x… after T ticks`, for 64 KiB up to 2 MiB, KM_NOSLEEP first. Every request returns (a line `...` with no answer is the hang the row looks for); KM_SLEEP gives memory at each size |
+
+**The numbers:** the ticks for each size and flag, and which sizes fail
+`KM_NOSLEEP`. A request that never returns fails U4. Its size is the
+last `...` line, and 30 §2's routing of large requests is then the
+core's to change.
