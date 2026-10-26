@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 11
+# C3-5 — the module package and the per-module manifest record, version 12
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -16,7 +16,8 @@
   (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1);
   version 10 (2026-10-27): z3660scsi's (as amix-packages minted it) and
   a4091's (§1.1); version 11 (2026-10-27, C4-4 version 5): a root record
-  for the root filesystem's boot-class module (§3).
+  for the root filesystem's boot-class module (§3); version 12
+  (2026-10-27, amix-cdfs): cdfs's short name (§1.1).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -74,6 +75,7 @@ per line**:
 | a4091 | `a4091` | `a409130` / `a409146` |
 | ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
 | gayle | `gayle` | `gayle30` / `gayle46` |
+| cdfs | `cdfs` | `cdfs30` / `cdfs46` |
 
   A new module's owner adds its row in a version bump of this contract.
 
