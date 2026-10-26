@@ -692,6 +692,12 @@ on the terminal as always.
 0` while no syslogd is in `ps` means the console logger never started on
 that boot, which is the vehicle's start-up, not the kernel (S3-43: the
 log driver and syslogd's I_CONSLOG work under both module kernels).
+The likely cause: the stock `/etc/init.d/syslogd` trusts a stale
+`/etc/syslog.pid`. It runs `kill -0` on the previous boot's number, and
+the dlm `sysinit` line together with `S01kbnamelist` shift the early pids
+so that number is a live process, and syslogd is not started. Either
+addition alone misses it (6 of 6 boots on the k46 vehicle). The
+installer's unit is fixed in amix-installng.
 
 From core patch 0025, `modadmin -L` starts with one line of the ring's
 words: `putbuf 0x… (2000 bytes), putbufsz …, wpos …, rpos …,
@@ -721,8 +727,8 @@ line as before. The ring is 2000 bytes and wraps, keeping the newest.
 Read `-L` after each action (`| tail -5`), not once at the end of a long
 row. On a box with a console logger, `-K` makes printf store each line
 directly as well, so a line can then appear up to twice more. `-K` is a
-bench and admin command; whether a shipped script runs it waits for why
-the two vehicles differ.
+bench and admin command, not run by any shipped script: the two vehicles
+differed only by the stale syslogd pid above, not by the kernel.
 
 **Inputs:**
 - the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
