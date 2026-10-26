@@ -186,7 +186,7 @@ kernel line:
 
 | Content | Notes |
 |---|---|
-| Our headers: `mod.h`, `moddefs.h`, `ksym.h` (MIT, from the adopted core, with our changes), `ddi.h` (DDI v1 declarations and contracts) | Ours; MIT. |
+| Our headers: `mod.h`, `moddefs.h`, `ksym.h` (MIT, from the adopted core, with our changes), `amixddi.h` (DDI v1 declarations; named so because the stock SVR4 headers already have a `sys/ddi.h` with the same guard, which the compiler finds first) | Ours; MIT. |
 | The stock Amix kernel headers a module build needs | Commodore's; published in the kit under the project's distribution permission of 2026-09-23 (D-3 §7: "the ABI kit (headers + module tooling) is published in amix-dlm"). Added to the kit at kit build time from the pinned sysroot; not tracked in this repository's history. |
 | The allowlist per line and tier, and the kabi sidecar | Generated from each kernel build. |
 | The registries of §6 | One text file each. |
