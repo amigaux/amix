@@ -109,6 +109,11 @@ MONSW_H=${MONSW_H:-$WS/amix-modules/include/sys/monsw.h}
 [ -f "$MONSW_H" ] || MONSW_H=$PORT/src/sys/monsw.h
 [ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
 cp "$MONSW_H" "$OUT/include/sys/monsw.h"
+# where it came from: the repository's commit, -dirty if the file differs
+MONSW_DIR=$(dirname "$MONSW_H")
+MONSW_REV=$(git -C "$MONSW_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
+git -C "$MONSW_DIR" diff --quiet HEAD -- "$MONSW_H" 2>/dev/null || MONSW_REV=$MONSW_REV-dirty
+MONSW_REPO=$(basename "$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)")
 cp "$R/LICENSE" "$OUT/LICENSE"
 cp "$R/abi/README.md" "$OUT/README.md"
 
@@ -154,6 +159,7 @@ DEFCPU=$DEFCPU
 KIT_REV=$REV
 EOF
 [ "$LINE" = k46 ] && echo "PORT_REV=$PORT_REV" >> "$OUT/kit.conf"
+echo "MONSW_REV=$MONSW_REPO $MONSW_REV" >> "$OUT/kit.conf"
 cat > "$OUT/NOTICE" <<EOF
 The Amix ABI kit for $KABI, built from amix-dlm $REV.
 

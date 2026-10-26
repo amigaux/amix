@@ -23,7 +23,7 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 
 | Path | Content |
 |---|---|
-| `kit.conf` | the line, its kabi tag, the compiler pin, the CPU flag, the amix-dlm commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`) |
+| `kit.conf` | the line, its kabi tag, the compiler pin, the CPU flag, the amix-dlm commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`); the repository and commit `sys/monsw.h` came from (`MONSW_REV`) |
 | `abi.txt` | the line's fingerprint text (C3-3 §4): `abi=` is its SHA-256 |
 | `include/sys/` | `mod.h`, `moddefs.h` (the wrapper macros), `ksym.h`, `amixddi.h` (DDI v1); `monsw.h`, the monitor switch's interface |
 | `sysroot/`, `stock/` | the stock Amix 2.1 kernel headers (see `NOTICE`) |
