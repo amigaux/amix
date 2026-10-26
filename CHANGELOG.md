@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — sha256.c reverted: the restructured round is slower on the 030 (fb77acd, 16f2bde)
+
+Hashbench run 2 on the cycle-exact 25 MHz 68030: the restructured round ran at 237 KiB/s with GCC 2.7.2.3 (was 534) and 176
+with GCC 14 -O2 (was 270); host instruction counts did not predict the 68030. Reverted to the shifting round; GCC 14's factor
+of two on it stands as accepted cost; any later attempt is designed against the bench, hashbench per candidate first. The
+no-kinfo fixes stay.
+
 ## 2026-10-26 — ledger k46 complete; SHA-256 restructured; kbootset without kinfo; C2-4 §9; k30 recipes (8b42bcc..6c69125)
 
 Exit ledger: M-UPG1 k46 passed, the k46 column complete. Hashbench run 1: GCC 14's SHA-256 at half GCC 2.7.2.3's rate on
