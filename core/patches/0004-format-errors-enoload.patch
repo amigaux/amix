@@ -1,0 +1,97 @@
+Subject: a file that is not a loadable module is ENOLOAD
+
+dlm_ld_hdr() refused a file that is not an ELF32 big-endian ET_REL
+EM_68K object, has a bad section-header size, or lacks exactly one
+allocated type-13 section with EINVAL.  amix-dlm's contract
+docs/contracts/C3-1-module-object.md (section 4) gives ENOLOAD (164)
+for these, so the caller can tell a bad object from a bad argument;
+mod.h's comment says so.  The error paths' expectations follow.
+
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -62,16 +62,16 @@
+ 	unsigned long shoff, t, f, al, off, sz;
+ 	int e, i, nmod = 0, nsymtab = 0;
+ 
+-	if ((e = rdx(ld, 0L, eh, (long)EHSZ, EINVAL)) != 0)
++	if ((e = rdx(ld, 0L, eh, (long)EHSZ, ENOLOAD)) != 0)
+ 		return e;
+ 	if (eh[0] != 0x7f || eh[1] != 'E' || eh[2] != 'L' || eh[3] != 'F' ||
+ 	    eh[4] != ELFCLASS32 || eh[5] != ELFDATA2MSB ||
+ 	    G16(eh + 16) != ET_REL || G16(eh + 18) != EM_68K)
+-		return EINVAL;
++		return ENOLOAD;
+ 	shoff = G32(eh + 32);
+ 	ld->ld_shnum = G16(eh + 48);
+ 	if (G16(eh + 46) != SHSZ || ld->ld_shnum < 2)
+-		return EINVAL;
++		return ENOLOAD;
+ 	if ((unsigned long)ld->ld_shnum * SHSZ > (unsigned long)dlm_maximage)
+ 		return ENOMEM;
+ 	ld->ld_sh = dlm_zalloc((long)ld->ld_shnum * SHSZ);
+@@ -88,7 +88,7 @@
+ 			ld->ld_modsec = i;
+ 		}
+ 	if (nmod != 1 || SHW(ld, ld->ld_modsec, SH_SIZE) < 4)
+-		return EINVAL;
++		return ENOLOAD;
+ 
+ 	ld->ld_secoff[0] = NOSEC;
+ 	off = 0;
+--- a/include/sys/mod.h
++++ b/include/sys/mod.h
+@@ -16,7 +16,7 @@
+ 
+ /* errno values: free in AMIX (max 151) and ASV (uses 152-163) */
+ #ifndef ENOLOAD
+-#define	ENOLOAD		164	/* a required module could not be loaded */
++#define	ENOLOAD		164	/* not a loadable module, or a required one could not be loaded */
+ #define	ERELOC		165	/* object-file, symbol or relocation error */
+ #define	ENOMATCH	166	/* symbol not found */
+ #define	EBADVER		167	/* wrapper revision mismatch */
+--- a/test/mkneg.py
++++ b/test/mkneg.py
+@@ -8,7 +8,7 @@
+ # load (and goes through the oracle).
+ import os, struct, sys
+ 
+-EINVAL, ERELOC = 22, 165
++ENOLOAD, ERELOC = 164, 165	# C3-1 section 4: format errors are ENOLOAD
+ good, out = sys.argv[1], sys.argv[2]
+ os.makedirs(out, exist_ok=True)
+ d0 = open(good, 'rb').read()
+@@ -54,16 +54,16 @@
+     return e
+ 
+ 
+-variant('badmagic', EINVAL, 'bad ELF magic', lambda d: d.__setitem__(1, ord('X')))
+-variant('em386', EINVAL, 'EM_386', lambda d: put16(d, 18, 3))
+-variant('etexec', EINVAL, 'ET_EXEC', lambda d: put16(d, 16, 2))
+-variant('class64', EINVAL, 'ELFCLASS64', lambda d: d.__setitem__(4, 2))
+-variant('little', EINVAL, 'ELFDATA2LSB', lambda d: d.__setitem__(5, 1))
+-variant('no13', EINVAL, 'no type-13 section', lambda d: put32(d, shoff + 40 * mod + 4, 1))
+-variant('short13', EINVAL, '2-byte type-13 section', lambda d: put32(d, shoff + 40 * mod + 20, 2))
+-variant('noalloc13', EINVAL, 'type-13 not allocated', lambda d: put32(d, shoff + 40 * mod + 8, 0))
++variant('badmagic', ENOLOAD, 'bad ELF magic', lambda d: d.__setitem__(1, ord('X')))
++variant('em386', ENOLOAD, 'EM_386', lambda d: put16(d, 18, 3))
++variant('etexec', ENOLOAD, 'ET_EXEC', lambda d: put16(d, 16, 2))
++variant('class64', ENOLOAD, 'ELFCLASS64', lambda d: d.__setitem__(4, 2))
++variant('little', ENOLOAD, 'ELFDATA2LSB', lambda d: d.__setitem__(5, 1))
++variant('no13', ENOLOAD, 'no type-13 section', lambda d: put32(d, shoff + 40 * mod + 4, 1))
++variant('short13', ENOLOAD, '2-byte type-13 section', lambda d: put32(d, shoff + 40 * mod + 20, 2))
++variant('noalloc13', ENOLOAD, 'type-13 not allocated', lambda d: put32(d, shoff + 40 * mod + 8, 0))
+ two = [i for i in range(1, shnum) if types[i] == 1 and sh(i, 8) & 2][0]
+-variant('two13', EINVAL, 'two type-13 sections', lambda d: put32(d, shoff + 40 * two + 4, 13))
++variant('two13', ENOLOAD, 'two type-13 sections', lambda d: put32(d, shoff + 40 * two + 4, 13))
+ variant('shtrel', ERELOC, 'SHT_REL section', lambda d: put32(d, shoff + 40 * rela[0] + 4, 9))
+ variant('got', ERELOC, 'R_68K_GOT32 relocation', reltype(7))
+ variant('plt', ERELOC, 'R_68K_PLT32 relocation', reltype(13))
+@@ -113,7 +113,7 @@
+         lambda d: put32(d, shoff + 40 * rela[0] + 24, strtab))
+ variant('strnul', ERELOC, 'string table not NUL-terminated',
+         lambda d: d.__setitem__(sh(strtab, 16) + sh(strtab, 20) - 1, ord('x')))
+-variant('shentsize', EINVAL, 'bad e_shentsize', lambda d: put16(d, 46, 32))
++variant('shentsize', ENOLOAD, 'bad e_shentsize', lambda d: put16(d, 46, 32))
+ 
+ 
+ def trunc(d):
