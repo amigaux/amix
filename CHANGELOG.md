@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2026-10-26 — C4-6 draft: the filesystem module form (7982391)
+
+ufs and s5: class root, match=always, fs=, core tier with the kernel's build=, pinned (s5's _load calls inoinit); cdfs: DDI
+tier, pinned, root class on the CD medium and boot class on a disk-rooted box (the stock mount path has no load-by-type hook,
+so demand class would need stock mount changes; spec 30 §6's word changes after freeze). The kernel build renames the stock
+vfssw/nfstype at the splice as it does execsw; the core owns vfssw[stock + 4] in .data with a live nfstype and copies the
+stock rows at dmainit (U12 checks the walkers read nfstype live). `vfs_register(name, init, ops, flag)`, a DDI name of minor 1
+from a root- or boot-class _load: EINVAL (name ≠ fs=, ops 0, outside a _load), EEXIST (two drivers for one type), ENOSPC;
+init once at level 7 in marc_root (S4-71 confirms the stock inits return there). The core tier (core.list, ~112/108 names)
+is written by the carve (S4-40). rootfstype from the loader record. Agreed with the three choices.
+
 ## 2026-10-26 — Core patch 0039: ramdisk_image, the RAM-disk image for its module (c2ed79c)
 
 `int ramdisk_image(unsigned long *paddr, unsigned long *size)`, a DDI name of minor 1 (any context): core/plat/amiga.c keeps
