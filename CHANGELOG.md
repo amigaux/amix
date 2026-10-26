@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-26 — ZS-05: every piscsi mailbox write armed against the Z3660 address-capture race (9ceada6)
+
+When the 060 issues two board accesses back to back, the FPGA delivers the second at (previous address AND this address).
+Before: W$090→W$240 landed on $000 (a WRITE doorbell with ADDR1 lost → the write goes to the previous LBA, DI-1's picture),
+W$028→W$004 turned a READ into a WRITE doorbell reporting GOOD, descriptor pairs left stale lengths/buffers, attach could
+misread geometry — ten pairs listed in docs/DI-1 §10. Now each write is preceded by a read of an offset covering it in one
+asm block at IPL 7 (so z3660eth's INT6 access cannot fall between), each descriptor cell is read back before the doorbell
+(one rewrite on mismatch, then EIO with no doorbell), USED_DMA is armed by the undefined offset 0xBC. Counters
+z3660_rb_retry/rb_fail/rb_last[3]. Round trips per command READ 6→15, WRITE 5→13. Host harness 230/230 with an
+AND-capture model; seven mutants caught. Objects z3660_040.o b43e36e7, z3660_030.o 0e15a363. Rides the stage-4 cut.
+DI-1 §9.8 "no driver change owed" is superseded.
+
 ## 2026-10-13 — Publication scrub before the first push since August (40da0e8)
 
 README and a new root NOTICE carry the Amiga Corporation trademark wording. Internal report ids, scratch paths and
