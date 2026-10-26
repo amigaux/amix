@@ -44,6 +44,7 @@ against our kernels (M-CORE1).
 | 0014 | `mkmod-for-the-kit` | `mkmod` runs from the ABI kit's directory with the compiler the kit's make fragment sets (`MKMOD_CC`), no toolchain `env.sh` beside it; `$modtype` takes `drv` and `str` as well as `misc`. | not yet |
 | 0015 | `modadmin-symbols-kmem` | `modadmin -k` looks a name up with `getksym` (the kernel's exported names, then each loaded module's globals), `-a` the symbol at an address, `-p` reads longs at a symbol through `/dev/kmem` and `-w` writes one: a module's tunables and counters move with it, so they are reached by name (S3-11). | not yet |
 | 0016 | `pin-by-default` | No unload without `unload=allowed` (C3-1 §2): the record carries the key, `dlm_unload` refuses a pinned module with `EBUSY` (so `moduload(0)` leaves it), `modstat` reports it locked. The state harness's modules declare `unload=allowed`; `pin1` is refused. Plan patch 14 (S3-06), which the parser read but nothing enforced. | not yet |
+| 0017 | `boot-class-from-sysinit` | U15 (S3-B5): loading module files in process 0 after `vfs_mountroot` faults (the hook runs at psw 0x2700). The boot-class load moves to the first sysinit entry: modadm `MOD_C_POST` (`modadmin -B`), root only, once a boot; `dlm_marc_post` loads nothing while interrupts are masked and says where the modules load. | not yet |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order

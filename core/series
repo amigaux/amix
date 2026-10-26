@@ -17,3 +17,4 @@
 0014-mkmod-for-the-kit.patch
 0015-modadmin-symbols-kmem.patch
 0016-pin-by-default.patch
+0017-boot-class-from-sysinit.patch
