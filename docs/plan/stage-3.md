@@ -172,7 +172,7 @@ Estimate:
 | ID | Question | Proposed owner |
 |---|---|---|
 | Q3-1 | **Settled** (orchestrator, 2026-10-26): `intr_attach` is built in stage 3 for the copied modules (S3-09), and stage 4 reuses it for the root controllers. 80 §2 changed after the freeze to say so | — |
-| Q3-2 | Which repository holds monsw (P-8 question (c))? The owner decides. Until then S3-27 is planned where monsw lives today, amix-z3660rtg, and stays movable | owner |
+| Q3-2 | Which repository holds monsw (P-8 question (c))? The owner decides. Until then S3-27 is planned where monsw lives today, amix-z3660rtg, and stays movable. **Open (2026-10-26):** S3-27 waits on it; z3660rtg composes into a generation only with a monsw member (gate 3, `depend=monsw`), so S3-45's graphics half waits too. The stage-3 metal rows (S3-46) wait for the owner's bench time. The exit ledger is `stage-3-exit.md` | owner |
 | Q3-3 | Is one k46 ABI right for the 68040 and the 68060 (OQ-20.2)? M-ABI1 (S3-40) decides before the family is fixed in S3-20 | us; Antti |
 | Q3-4 | **Settled** (orchestrator, 2026-10-26): z3660eth on a K030 kernel, on the Z3660 in 68030 mode, is the 030 line's metal. It is the only real 68030 with an MMU on the benches (the A4000D's 68EC030 has none), so OQ-80.1 closes that way for this stage | — |
 | Q3-5 | Do we offer the patches upstream (OQ-30.6)? Upstream's zz9000 module also takes major 49 (OQ-20.5). Neither blocks the plan | ashnazag; us |
