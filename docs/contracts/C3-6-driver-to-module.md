@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 2
+# C3-6 — what a driver changes to become a module, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -8,7 +8,10 @@
   but `d_str`, interrupts attach at first open with a software self-test
   (§1.3), z3660eth's handlers, `intrl2` and its acknowledge-and-mask
   write (§2), the k46 page-geometry headers in the kit (§1.7);
-  z3660eth's `match=` (§2: a boot-class module needs one, C3-5). The
+  z3660eth's `match=` (§2: a boot-class module needs one, C3-5);
+  version 3 (2026-10-26, from S3-B5): every module has an `_unload`,
+  which the core also calls when a load fails after `_load` succeeded
+  (§1.1, §2). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -52,11 +55,21 @@ packages.
     kept, C3-1 §3), or another errno. On any nonzero return it leaves
     nothing behind: no timeout armed, no handler attached, no hook set,
     no mapping kept, the board's interrupt off.
-- **`_unload()`**: only with `unload=allowed`. It undoes all of `_load`,
-  and every hook, handler, timeout and mapping set since, in reverse
-  order, and returns 0 or `EBUSY`. The core calls it only when nothing
-  holds the module (an open STREAMS queue or device holds it; a module
-  that names it in `depend` holds it).
+- **`_unload()`**: every module has one. It undoes all of `_load`, and
+  every hook, handler, timeout and mapping set since, in reverse order,
+  and returns 0 or `EBUSY`. The core calls it in two cases:
+  - at `moduload`, only with `unload=allowed`, and only when nothing
+    holds the module (an open STREAMS queue or device holds it; a module
+    that names it in `depend` holds it);
+  - whatever `unload=` says, when a load fails after `_load` returned 0
+    (the driver's linkage refused, for example). Its return is then
+    ignored, and the module is freed.
+
+  `unload=never` refuses `moduload`; it does not spare a driver its
+  `_unload`. Anything still pointing into the module after it (an
+  interrupt handler, an `ifstats` link, the console hook) is removed by
+  the core's backstop and named on the console, but a driver must not
+  rely on that.
 - **`_halt()`**: called from the halt pass from stage 4 on, newest module
   first, with no sleep and interrupts perhaps off. A driver whose board
   can interrupt or write memory stops it here (its interrupt off at the
@@ -229,9 +242,9 @@ The module:
 | `_load` | find the board as the first open does today (`autocon(0x144B0001)`, then the AGA fallback); `ENXIO` if none. Map the board here (as the module form does), or lazily at first open; `ENOMEM` when no kernel address space is left for it. Write `ZZ_CONFIG_DISABLE`. `if_attach(&ifstats of the board)` here or at first open (once), instead of linking into `ifstats` |
 | Interrupts | polled stays the default (`intr=0`). `intr=6`, at the first open: `intr_attach(6, z3660eth_int6, board, "z3660eth")`, and with `intrl2=1` also `intr_attach(2, z3660eth_int2, board, "z3660eth")`; the self-test (§1.3); then the board's interrupt on; polled on any failure. `z3660eth_int6` only acknowledges, masks and flags: on this board one write, `ZZ_CONFIG_DISABLE`, both acknowledges and masks (an acknowledge alone does not mask; the firmware treats acknowledge and enable/disable as exclusive). The drain runs at level 4 or below, in `z3660eth_int2` or the poll tick, never at level 6; the static `z3660ethintr`, which drains at its own level, is not attached. M-INT1 on metal decides the default; the emulator raises no INT6 |
 | Memory | unchanged (board window, static buffers); §1.5 holds as is |
-| Symbols | `ifstats` → `if_attach` (`if_detach` only from an `_unload`, which `unload=never` does not have); add `intr_attach`/`intr_detach` |
+| Symbols | `ifstats` → `if_attach`, `if_detach` in `_unload` (§1.1); add `intr_attach`/`intr_detach` |
 | `_halt` | `ZZ_CONFIG_DISABLE`, and stop the poll if it can without sleeping |
-| `_unload` | not offered (`unload=never`). If the station later allows it: `untimeout`, interrupt off, `intr_detach`, `if_detach`, `z3660eth_unmap` (last close does not unmap today), reset `map_verdict` |
+| `_unload` | present, though `unload=never` refuses `moduload`: the core calls it after a failed load (§1.1). `untimeout`, interrupt off, `intr_detach`, `if_detach`, `z3660eth_unmap` (last close does not unmap today), reset `map_verdict` |
 | Kept | `/dev/zen0` (c 51 0) and `S99zen`'s `slink` (S3-31) |
 
 ## 3. z3660rtg (amix-z3660rtg, S3-26)
