@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — module core patch 0009: manifest-only loading and development load (9d1528b)
+
+Every load (modload, dependency, dlm_loadname, first open) resolves a module only as a member of the manifest the loader
+booted: the bytes come from its path=, read once, checked against its sha256=, and that copy is what loads; anything else is
+EPERM with a console line. The manifest is the loader's verbatim copy in the arena, found through AXK1 and checked at dmainit
+(C3-4); with no valid arena no module loads that boot. The development-load flag (from AXL1) lets an off-manifest module load
+and says so each time. New dlm_arena.c; sha256.o and crc32.o from loader/common in the core. 104/104, harness 140/140.
+
 ## 2026-10-26 — module core patches 0006–0008: major registry, fmodsw kept whole, measured layouts (27b471e..95657b0)
 
 DDI v1 review draft gains the module-interface row (as C3-2; still unsent). Patch 0006: a module's majors= must be registered
