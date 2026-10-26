@@ -20,7 +20,7 @@ The DMA services, dev_kvmap and cputype are the platform's.
 
 --- a/dlm_ddi.c
 +++ b/dlm_ddi.c
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,107 @@
 +/*
 + * dlm_ddi.c -- DDI v1 services the module core provides because the
 + * kernel has no callable form of them (amix-dlm
@@ -33,8 +33,10 @@ The DMA services, dev_kvmap and cputype are the platform's.
 + *
 + *   cons_hook_set(fn), cons_hook_clear(): fn(cp, p, n) sees every write to
 + *	the console, from a virtual terminal or from the kernel's printf,
-+ *	before the native screen code; it returns nonzero if it took the
-+ *	write (and should take only those for the screen it shows), zero to
++ *	before the native screen code; cp is the console (struct console *,
++ *	whose screen member is the screen written), p and n the bytes.  It
++ *	returns nonzero if it took the write (and should take only those
++ *	for the screen it shows, cp->screen == displayedscreen), zero to
 + *	let the native code draw it.  One hook at a time: a second set is
 + *	EBUSY.  The hook point is the stock scrcon_put(cp, p, n), the one
 + *	function both getoblk (every VT write) and coputc (the printf

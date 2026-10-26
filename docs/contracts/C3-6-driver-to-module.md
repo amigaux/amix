@@ -1,6 +1,10 @@
-# C3-6 — what a driver changes to become a module, version 1
+# C3-6 — what a driver changes to become a module, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; the driver-change
+- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+  (2026-10-26, from the z3660rtg station's module build): the console
+  hook's `cp` is the console, not the screen (§1.4); `_halt` returns
+  nothing (§1.1); z3660rtg's `_unload`, font, console modes and blitter
+  parameters (§3). The driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -51,8 +55,9 @@ packages.
 - **`_halt()`**: called from the halt pass from stage 4 on, newest module
   first, with no sleep and interrupts perhaps off. A driver whose board
   can interrupt or write memory stops it here (its interrupt off at the
-  board). Write it now; until stage 4 nothing calls it. 0 if there is
-  nothing to stop.
+  board). Write it now; until stage 4 nothing calls it. It returns
+  nothing (`void`, as `mw_halt` in `<sys/moddefs.h>` and C3-1 §2); the
+  wrapper's halt entry may be 0 when there is nothing to stop.
 
 ### 1.2 Majors from `.moddata`, never a switch-table edit
 
@@ -114,10 +119,16 @@ packages.
   shows the console registers `fn` with `cons_hook_set(fn)` and removes it
   with `cons_hook_clear()`; one hook at a time (a second is `EBUSY`).
 - `fn(cp, p, n)` sees every write to the console, from a virtual terminal
-  or from the kernel's `printf`, before the native screen code: `cp` is
-  the screen, `p` and `n` the bytes. It returns nonzero if it took the
-  write, zero to let the native code draw it. It takes only writes to the
-  screen it shows: `cp == displayedscreen` (DDI v1 data, read-only).
+  or from the kernel's `printf`, before the native screen code. These are
+  the stock `scrcon_put`'s arguments: `cp` is the **console**, a
+  `struct console *` (`amiga/console/console.h` in the kit's `stock/usr/sys`;
+  `coputc` passes `&consoles[0]`), and `p` and `n` are the bytes. It
+  returns nonzero if it took the write, zero to let the native code draw
+  it. It takes only writes to the screen it shows:
+  **`cp->screen == displayedscreen`**, the test `c1.c` itself makes.
+  `displayedscreen` is the kernel's `struct screen *` (DDI v1 data,
+  read-only); no stock header declares it, so the driver declares
+  `extern struct screen *displayedscreen;`.
 - It is called with the writer's context and spl, which may be an
   interrupt's, and must not sleep.
 - `_unload` clears the hook first.
@@ -144,7 +155,9 @@ packages.
 - Every undefined symbol of the module object is a name of
   `abi/<line>/ddi.list` (DDI v1, C3-2 §3) or a global of a module named
   in `depend` (C3-2 §1). The core refuses any other (`ERELOC`), and the
-  kit's checker refuses it at build time.
+  kit's checker refuses it at build time. A **weak** undefined symbol is
+  not counted: it resolves to 0 when nothing defines it (C3-1 §1), as the
+  wrapper macros' `<prefix>_conf_data` does.
 - Not in the DDI and gone in the module form: `cdevsw`, `bdevsw`,
   `int2_tbl`, `conputc`, `ifstats` and every other kernel global the
   driver reached directly. `ifstats` becomes `if_attach(ifs)` /
@@ -233,13 +246,14 @@ The module:
 | `.moddata` | `name=z3660rtg`, `class=demand` (it loads at the first open of `/dev/zz9000`), `majors=c:49`, `depend=monsw`, `unload=allowed`, `cpu=68030` / `68040` |
 | Wrapper | `MOD_DRV_WRAPPER(zz9000, …)`, the six entry points in the row, `drv_cmajor` 49 |
 | `_load` | `zz9k_probe(0)`; `ENXIO` if no board. No console at load: as today it is the ioctl's |
-| Console | `ZZ9KIOC_CONSOLE` ENABLE/REDIRECT: `cons_hook_set(zz9k_cons_hook)`, where the hook takes `(cp, p, n)` and returns nonzero only for `cp == displayedscreen` writes it drew (REDIRECT: drawn and not passed on; the per-character `zz9k_conputc` becomes a loop over `p`); DISABLE: `cons_hook_clear()`. No `conputc` |
+| Console | `ZZ9KIOC_CONSOLE` ENABLE and REDIRECT (the same today): `cons_hook_set(zz9k_cons_hook)`, where the hook takes `(cp, p, n)` and returns nonzero only for writes with `cp->screen == displayedscreen` that it drew (not passed on); the per-character `zz9k_conputc` becomes a loop over `p`. DISABLE: `cons_hook_clear()`. No `conputc`. **By design the hook also takes virtual-terminal writes** to the displayed screen, where the `conputc` swap saw only the kernel's `printf`: the RTG then shows that screen as the native code would |
 | Memory | unchanged; `d_mmap` hands out device pages only (§1.5) |
 | Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC` (§5, §6) |
-| Font | `sunfont.o` linked into the module object (§1.7), `ZZ9K_NO_BUILTINFONT` kept |
+| Font | `sunfont.o` linked into the module object (§1.7), and the module built **without** `ZZ9K_NO_BUILTINFONT` (that option stays for the static k46 relinks). The kit provides a `sunfont.o` the cross tools can link (the stock `sunfont.s` is m4 and SVR4 assembler syntax). `builtinfont` is also a stock k30 kernel name: the module makes it local (`objcopy --localize-symbol=builtinfont`, the make fragment's `LOCALIZE`) so it never shadows or exports it |
+| Parameters | the kernel-patchable `zz9k_blit_on` and `zz9k_blit_maxarea` have no patch path in a module: `param=blit:bool:1` and `param=maxarea:int:0:0:<the driver's limit>`, defaults equal to today's patched values |
 | Targets | one module per line serves both targets: the probe tells the ZZ9000 and the Z3660 apart at run time, so the target is no longer a compile-time switch in the module form; one name, one major (§6) |
-| `_unload` | `cons_hook_clear()` if the console is on; the switch back to native (`ZZ9K_MONSW_SET(0)`, as DISABLE does); nothing else is armed. The core does not call it while `/dev/zz9000` is open |
-| `_halt` | 0 (the board neither interrupts nor writes memory) |
+| `_unload` | `cons_hook_clear()` if the console is on; the switch back to native (`ZZ9K_MONSW_SET(0)`, as DISABLE does); `monsw_unregister()` for each board it registered (monsw keeps a pointer to the board's name, which is in this module's `.data`). No timeout and no interrupt is armed. The core does not call it while `/dev/zz9000` is open |
+| `_halt` | none, the wrapper's entry 0 (the board neither interrupts nor writes memory) |
 
 ## 4. monsw (S3-27)
 
@@ -259,7 +273,7 @@ The module:
 | `_load` | `monswinit`'s work; `config` from `params` replaces the patched `monsw_config` (a value other than -1 acts as the patched one does today: `MONSWIOC_SETCFG` returns `EBUSY`). A box's value (the owner's boxes: 34) goes in `/etc/conf/modreg.local.d/monsw` or the installer's `modreg.d` default |
 | Exports | `monsw_set`, `monsw_register`, `monsw_unregister`, `monsw_lastclose` stay globals of the module: z3660rtg reaches them through `depend=monsw`, never through the kernel's allowlist (C3-2 §1) |
 | Symbols | unchanged; all in DDI v1 |
-| `_halt` | 0 |
+| `_halt` | none, the wrapper's entry 0 |
 
 ## 5. Open DDI item (not a stage-3 blocker)
 
@@ -275,7 +289,9 @@ The module:
   maps its windows without it and builds without `-DZZ9K_FB_NC` (§5).
 - **monsw's source location is the owner's decision** (P-8 question (c),
   plan Q3-2). Until he decides, S3-27 stays as the plan says, and nothing
-  on z3660eth or z3660rtg waits on it.
+  on z3660eth or z3660rtg waits on it. `<sys/monsw.h>`, which z3660rtg's
+  module build includes on both lines, goes with that decision; until
+  then the station builds against the port's copy (version 2).
 - **z3660rtg is one module per line with a run-time probe for both
   targets** (ZZ9000 and Z3660): one name, one major.
 - **The INT6 path's second half** (§1.3), the poll tick or a level-2

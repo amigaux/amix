@@ -101,7 +101,7 @@ The second column marks names one of today's two drivers imports
 | console hook | `cons_hook_set`, `cons_hook_clear` | — | proc | core |
 | libgcc | `__udivdi3`, `__umoddi3`, `__lshrdi3` | — | any | stock on k30, core on k46 |
 | identity | `bootinfo`, `cputype` (data, read-only) | `bootinfo` | any | stock; `cputype` core on k30 |
-| console | `displayedscreen` (data, read-only): the screen on display, for a `cons_hook_set` hook to take only its own screen's writes | `displayedscreen` (zz9000's static console hook) | any | stock |
+| console | `displayedscreen` (data, read-only, `struct screen *`): the screen on display. A `cons_hook_set` hook gets the console (`struct console *cp`) and takes only its own screen's writes, `cp->screen == displayedscreen` (C3-6 §1.4) | `displayedscreen` (zz9000's static console hook) | any | stock |
 | module interface | `mod_miscops`, `mod_execops`, `mod_hookops`, `mod_drvops`, `mod_strops` (data), `mod_hold`, `mod_rele` | every module (`mod_miscops` and the like through the wrapper macros, C3-1 §2) | proc | the core itself (`dlm.o`) |
 
 The module interface row was missing from the list as first agreed.
