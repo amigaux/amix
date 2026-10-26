@@ -1053,7 +1053,7 @@ esac
 # FB_REPO_HOST / FB_REPO_IP / FB_REPO_URL / FB_ROOTDEV / FB_SCSI_ID /
 # FB_ROOT_SLICE / FB_SWAP_SLICE / FB_ROOT_FSTYPE / FB_DIALOG / FB_ROOT_TELNET /
 # FB_SYSLOG / FB_NET_CONFIGURED / FB_ZEN_CARDS / FB_STANDUNIX_REG / FB_STANDUNIX_RM /
-# FB_INITTAB_SYS / FB_SDCARDS
+# FB_INITTAB_SYS / FB_SDCARDS / FB_UPGRADED
 . "$CONF"
 
 # FB_TZ is the timezone ZONE NAME (W1). It was a literal `US/Eastern` in this
@@ -1128,8 +1128,14 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${FB_SWAP_SLICE}"
 # SVR4 persists the nodename in /etc/nodename (read at boot) AND the running
 # kernel value is set with `uname -S`. Do both so `uname -n` resolves now and
 # after a reboot. (W5.4 confirms Amix reads /etc/nodename at boot.)
-echo "$FB_NODENAME" > /etc/nodename
-uname -S "$FB_NODENAME" 2>/dev/null || true
+if [ "$FB_UPGRADED" = y ]; then
+	# an upgrade (S4-54): the old box's /etc/nodename is in place; only the running name follows it
+	[ -s /etc/nodename ] && uname -S "`cat /etc/nodename`" 2>/dev/null
+	echo "firstboot: an upgrade -- the node name, time zone, passwords, hosts and network files are the old box's (the installer put them in place)"
+else
+	echo "$FB_NODENAME" > /etc/nodename
+	uname -S "$FB_NODENAME" 2>/dev/null || true
+fi
 
 # --- 2. timezone (zone name from FB_TZ; US/Eastern = index 47) ---------------
 # SVR4 sources TZ from /etc/TIMEZONE at init. Amix's first-boot dialog takes the
@@ -1158,17 +1164,19 @@ uname -S "$FB_NODENAME" 2>/dev/null || true
 # escape: a POSIX rule string like GMT0 is a VALID TZ that must NOT be prefixed
 # with a colon, and the only way this script can never emit `TZ=:GMT0` is to not
 # write the file at all. FB_TZ is empty in exactly that case.
-if [ "$FB_TZ_KEEP" = y ] && [ -f /etc/TIMEZONE ]; then
-	echo "firstboot: /etc/TIMEZONE was set by the first-boot dialog's stock zone menu -- keeping it"
-else
-	{
-		echo "# set by firstboot.sh (zone $FB_TZ, Amix tz index $FB_TZNUM)"
-		echo "TZ=:$FB_TZ"
-		echo "export TZ"
-	} > /etc/TIMEZONE
+if [ "$FB_UPGRADED" != y ]; then
+	if [ "$FB_TZ_KEEP" = y ] && [ -f /etc/TIMEZONE ]; then
+		echo "firstboot: /etc/TIMEZONE was set by the first-boot dialog's stock zone menu -- keeping it"
+	else
+		{
+			echo "# set by firstboot.sh (zone $FB_TZ, Amix tz index $FB_TZNUM)"
+			echo "TZ=:$FB_TZ"
+			echo "export TZ"
+		} > /etc/TIMEZONE
+	fi
+	echo "$FB_TZNUM" > /etc/tz.index 2>/dev/null || true
+	chmod 644 /etc/tz.index 2>/dev/null
 fi
-echo "$FB_TZNUM" > /etc/tz.index 2>/dev/null || true
-chmod 644 /etc/tz.index 2>/dev/null
 
 # --- 3. root password + console -------------------------------------------
 # Root pw hash comes from the payload root.shadow (bench pw `pass`, the
@@ -1181,33 +1189,35 @@ chmod 644 /etc/tz.index 2>/dev/null
 # payload hash here would undo it silently, so the shadow write is skipped once
 # the dialog has completed. If the dialog did NOT complete, the payload hash IS
 # the right answer: the box would otherwise come up with core's shipped root hash.
-if [ "$FB_DIALOG" = y ] && [ -z "$DIALOG_PENDING" ]; then
-	echo "firstboot: root password was set by the first-boot dialog -- not touching /etc/shadow"
-elif [ -f "$FBDIR/root.shadow" ]; then
-	newhash=`sed -n 's/^root:\([^:]*\):.*/\1/p' "$FBDIR/root.shadow"`
-	if [ -n "$newhash" ] && [ -f /etc/shadow ]; then
-		# rewrite the root: line with the new hash, empty aging fields (no expiry)
-		(umask 077; sed "s|^root:[^:]*:.*|root:$newhash:::::::|" /etc/shadow > /etc/shadow.fb$$) \
-			&& mv /etc/shadow.fb$$ /etc/shadow
-		chmod 400 /etc/shadow
+if [ "$FB_UPGRADED" != y ]; then
+	if [ "$FB_DIALOG" = y ] && [ -z "$DIALOG_PENDING" ]; then
+		echo "firstboot: root password was set by the first-boot dialog -- not touching /etc/shadow"
+	elif [ -f "$FBDIR/root.shadow" ]; then
+		newhash=`sed -n 's/^root:\([^:]*\):.*/\1/p' "$FBDIR/root.shadow"`
+		if [ -n "$newhash" ] && [ -f /etc/shadow ]; then
+			# rewrite the root: line with the new hash, empty aging fields (no expiry)
+			(umask 077; sed "s|^root:[^:]*:.*|root:$newhash:::::::|" /etc/shadow > /etc/shadow.fb$$) \
+				&& mv /etc/shadow.fb$$ /etc/shadow
+			chmod 400 /etc/shadow
+		fi
 	fi
-fi
-# Root over the network (FB_ROOT_TELNET, W5; default y = what this always did).
-# `CONSOLE=` in /etc/default/login gates ROOT logins only -- ordinary users can
-# telnet in either way -- and telnet is the only remote login this system has, so
-# the default is PERMIT and turning it off is an explicit answer, never a silent
-# hardening. Both directions are idempotent: the sed either comments the live line
-# or uncomments the commented one, and running it twice changes nothing.
-if [ -f /etc/default/login ]; then
-	if [ "$FB_ROOT_TELNET" = n ]; then
-		sed 's/^#CONSOLE=/CONSOLE=/' /etc/default/login > /etc/default/login.fb$$ \
-			&& mv /etc/default/login.fb$$ /etc/default/login
-		echo "firstboot: root logins RESTRICTED to the console (CONSOLE= in /etc/default/login)"
-	else
-		sed 's/^CONSOLE=/#CONSOLE=/' /etc/default/login > /etc/default/login.fb$$ \
-			&& mv /etc/default/login.fb$$ /etc/default/login
+	# Root over the network (FB_ROOT_TELNET, W5; default y = what this always did).
+	# `CONSOLE=` in /etc/default/login gates ROOT logins only -- ordinary users can
+	# telnet in either way -- and telnet is the only remote login this system has, so
+	# the default is PERMIT and turning it off is an explicit answer, never a silent
+	# hardening. Both directions are idempotent: the sed either comments the live line
+	# or uncomments the commented one, and running it twice changes nothing.
+	if [ -f /etc/default/login ]; then
+		if [ "$FB_ROOT_TELNET" = n ]; then
+			sed 's/^#CONSOLE=/CONSOLE=/' /etc/default/login > /etc/default/login.fb$$ \
+				&& mv /etc/default/login.fb$$ /etc/default/login
+			echo "firstboot: root logins RESTRICTED to the console (CONSOLE= in /etc/default/login)"
+		else
+			sed 's/^CONSOLE=/#CONSOLE=/' /etc/default/login > /etc/default/login.fb$$ \
+				&& mv /etc/default/login.fb$$ /etc/default/login
+		fi
+		chmod 444 /etc/default/login
 	fi
-	chmod 444 /etc/default/login
 fi
 
 # --- 4. /etc/vfstab for the real controller/slice --------------------------
@@ -1377,28 +1387,30 @@ fi
 # nodename (the stray one stock's own dialog leaves on the 127.1 loopback line
 # included) AND any earlier line for the same address. Without the second guard a
 # nodename change would leave two entries claiming one IP.
-if [ -n "$FB_IP" ] && [ -f /etc/inet/hosts ]; then
-	# Drop any stale alias of our nodename (the one stock's own dialog leaves on
-	# the 127.1 loopback line included), then any line already claiming our
-	# address, then append exactly one.
-	#
-	# ★ TWO -e EXPRESSIONS, NOT ONE ALTERNATION. This guard used to read
-	# `s/[ TAB]$FB_NODENAME\([ TAB]\|$\)/\1/g` -- and `\|` is a GNU extension that
-	# SVR4 sed does not have. MEASURED on the box 2026-08-12: the alternation form
-	# matches NOTHING (all three fixture lines survive), so both duplicate guards
-	# in this file have been inert since W6.4c; the repo-host line was appended a
-	# second time on the first re-run and nobody noticed, because the resolver
-	# takes the first match. The two-expression form is the same rule, portably:
-	# one for "token at end of line", one for "token followed by whitespace".
-	sed -e "s/[ 	]$FB_NODENAME\$//" \
-	    -e "s/[ 	]$FB_NODENAME\\([ 	]\\)/\\1/g" \
-		/etc/inet/hosts > /etc/inet/hosts.fb$$
-	sed "/^$FB_IP[ 	]/d" /etc/inet/hosts.fb$$ > /etc/inet/hosts.fb2$$ \
-		&& mv /etc/inet/hosts.fb2$$ /etc/inet/hosts.fb$$
-	echo "$FB_IP	$FB_NODENAME $FB_NODENAME.$FB_DOMAIN" >> /etc/inet/hosts.fb$$
-	mv /etc/inet/hosts.fb$$ /etc/inet/hosts
-	chmod 444 /etc/inet/hosts
-	echo "firstboot: added $FB_IP $FB_NODENAME to /etc/inet/hosts (network-config UNTOUCHED)"
+if [ "$FB_UPGRADED" != y ]; then
+	if [ -n "$FB_IP" ] && [ -f /etc/inet/hosts ]; then
+		# Drop any stale alias of our nodename (the one stock's own dialog leaves on
+		# the 127.1 loopback line included), then any line already claiming our
+		# address, then append exactly one.
+		#
+		# ★ TWO -e EXPRESSIONS, NOT ONE ALTERNATION. This guard used to read
+		# `s/[ TAB]$FB_NODENAME\([ TAB]\|$\)/\1/g` -- and `\|` is a GNU extension that
+		# SVR4 sed does not have. MEASURED on the box 2026-08-12: the alternation form
+		# matches NOTHING (all three fixture lines survive), so both duplicate guards
+		# in this file have been inert since W6.4c; the repo-host line was appended a
+		# second time on the first re-run and nobody noticed, because the resolver
+		# takes the first match. The two-expression form is the same rule, portably:
+		# one for "token at end of line", one for "token followed by whitespace".
+		sed -e "s/[ 	]$FB_NODENAME\$//" \
+		    -e "s/[ 	]$FB_NODENAME\\([ 	]\\)/\\1/g" \
+			/etc/inet/hosts > /etc/inet/hosts.fb$$
+		sed "/^$FB_IP[ 	]/d" /etc/inet/hosts.fb$$ > /etc/inet/hosts.fb2$$ \
+			&& mv /etc/inet/hosts.fb2$$ /etc/inet/hosts.fb$$
+		echo "$FB_IP	$FB_NODENAME $FB_NODENAME.$FB_DOMAIN" >> /etc/inet/hosts.fb$$
+		mv /etc/inet/hosts.fb$$ /etc/inet/hosts
+		chmod 444 /etc/inet/hosts
+		echo "firstboot: added $FB_IP $FB_NODENAME to /etc/inet/hosts (network-config UNTOUCHED)"
+	fi
 fi
 
 # --- 5b. package-repo host -> /etc/inet/hosts (zero-touch `apkg update`) -----
@@ -1413,23 +1425,25 @@ fi
 #   * Duplicate-guarded  -> strip any prior line naming FB_REPO_HOST (as a
 #     whitespace-delimited token) before appending exactly one, so a re-run (or a
 #     repo host already present) can never accumulate duplicate lines.
-if [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_IP" ]; then
-	if [ -f /etc/inet/hosts ]; then
-		# two -e expressions, never `\|` -- SVR4 sed has no alternation (see the
-		# nodename guard above; measured 2026-08-12, this line's alternation form
-		# matched nothing and the repo host was appended twice on a re-run).
-		sed -e "/[ 	]$FB_REPO_HOST[ 	]/d" \
-		    -e "/[ 	]$FB_REPO_HOST\$/d" \
-			/etc/inet/hosts > /etc/inet/hosts.rp$$
-		echo "$FB_REPO_IP	$FB_REPO_HOST" >> /etc/inet/hosts.rp$$
-		mv /etc/inet/hosts.rp$$ /etc/inet/hosts
-		chmod 444 /etc/inet/hosts
-		echo "firstboot: added repo host $FB_REPO_IP $FB_REPO_HOST to /etc/inet/hosts (network-config UNTOUCHED)"
+if [ "$FB_UPGRADED" != y ]; then
+	if [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_IP" ]; then
+		if [ -f /etc/inet/hosts ]; then
+			# two -e expressions, never `\|` -- SVR4 sed has no alternation (see the
+			# nodename guard above; measured 2026-08-12, this line's alternation form
+			# matched nothing and the repo host was appended twice on a re-run).
+			sed -e "/[ 	]$FB_REPO_HOST[ 	]/d" \
+			    -e "/[ 	]$FB_REPO_HOST\$/d" \
+				/etc/inet/hosts > /etc/inet/hosts.rp$$
+			echo "$FB_REPO_IP	$FB_REPO_HOST" >> /etc/inet/hosts.rp$$
+			mv /etc/inet/hosts.rp$$ /etc/inet/hosts
+			chmod 444 /etc/inet/hosts
+			echo "firstboot: added repo host $FB_REPO_IP $FB_REPO_HOST to /etc/inet/hosts (network-config UNTOUCHED)"
+		else
+			echo "firstboot: WARNING: /etc/inet/hosts absent -- cannot bake repo host $FB_REPO_HOST" >&2
+		fi
 	else
-		echo "firstboot: WARNING: /etc/inet/hosts absent -- cannot bake repo host $FB_REPO_HOST" >&2
+		echo "firstboot: no repo host in profile (FB_REPO_HOST/FB_REPO_IP empty) -- skipping repo hosts entry"
 	fi
-else
-	echo "firstboot: no repo host in profile (FB_REPO_HOST/FB_REPO_IP empty) -- skipping repo hosts entry"
 fi
 
 # --- 5c. the package-repo URL -> /etc/apkg.conf (W5) -------------------------
@@ -1438,13 +1452,15 @@ fi
 # URL's host when it does -- so if the conf's URL and the file's `repo=` line have
 # parted company, the file follows the answer. Guarded three ways: no key, no
 # file, or no difference => no write at all, which is every unattended install.
-if [ -n "$FB_REPO_URL" ] && [ -f /etc/apkg.conf ]; then
-	cur=`sed -n 's/^repo=//p' /etc/apkg.conf`
-	if [ "$cur" != "$FB_REPO_URL" ]; then
-		sed "s|^repo=.*|repo=$FB_REPO_URL|" /etc/apkg.conf > /etc/apkg.conf.fb$$ \
-			&& mv /etc/apkg.conf.fb$$ /etc/apkg.conf
-		chmod 644 /etc/apkg.conf
-		echo "firstboot: /etc/apkg.conf repo= now $FB_REPO_URL (was $cur)"
+if [ "$FB_UPGRADED" != y ]; then
+	if [ -n "$FB_REPO_URL" ] && [ -f /etc/apkg.conf ]; then
+		cur=`sed -n 's/^repo=//p' /etc/apkg.conf`
+		if [ "$cur" != "$FB_REPO_URL" ]; then
+			sed "s|^repo=.*|repo=$FB_REPO_URL|" /etc/apkg.conf > /etc/apkg.conf.fb$$ \
+				&& mv /etc/apkg.conf.fb$$ /etc/apkg.conf
+			chmod 644 /etc/apkg.conf
+			echo "firstboot: /etc/apkg.conf repo= now $FB_REPO_URL (was $cur)"
+		fi
 	fi
 fi
 
@@ -1456,16 +1472,18 @@ fi
 # format has exactly one writer. Written ONCE: an existing zen.conf is the
 # operator's and is never touched. S99zen runs later in this same rc2 pass, so the
 # very first boot already comes up at the card's address.
-if [ "$FB_ETHER_IF" = zen0 ] && [ -n "$FB_ZEN_CARDS" ] && [ -f /etc/rc2.d/S99zen ]; then
-	if [ -f /etc/inet/zen.conf ]; then
-		echo "firstboot: /etc/inet/zen.conf already present -- left as it is"
-	elif /sbin/sh /etc/rc2.d/S99zen mkconf $FB_ZEN_CARDS > /etc/inet/zen.cf$$; then
-		mv /etc/inet/zen.cf$$ /etc/inet/zen.conf
-		chmod 644 /etc/inet/zen.conf
-		echo "firstboot: wrote /etc/inet/zen.conf (address by card: $FB_ZEN_CARDS)"
-	else
-		rm -f /etc/inet/zen.cf$$
-		echo "firstboot: WARNING: could not render /etc/inet/zen.conf -- zen0 keeps the laydown address" >&2
+if [ "$FB_UPGRADED" != y ]; then
+	if [ "$FB_ETHER_IF" = zen0 ] && [ -n "$FB_ZEN_CARDS" ] && [ -f /etc/rc2.d/S99zen ]; then
+		if [ -f /etc/inet/zen.conf ]; then
+			echo "firstboot: /etc/inet/zen.conf already present -- left as it is"
+		elif /sbin/sh /etc/rc2.d/S99zen mkconf $FB_ZEN_CARDS > /etc/inet/zen.cf$$; then
+			mv /etc/inet/zen.cf$$ /etc/inet/zen.conf
+			chmod 644 /etc/inet/zen.conf
+			echo "firstboot: wrote /etc/inet/zen.conf (address by card: $FB_ZEN_CARDS)"
+		else
+			rm -f /etc/inet/zen.cf$$
+			echo "firstboot: WARNING: could not render /etc/inet/zen.conf -- zen0 keeps the laydown address" >&2
+		fi
 	fi
 fi
 

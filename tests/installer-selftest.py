@@ -7895,7 +7895,7 @@ def audit_w5_dialog():
          "still ran, so the box boots healthy)"),
         (r'if \[ "\$FB_TZ_KEEP" = y \] && \[ -f /etc/TIMEZONE \]; then',
          "the stock zone menu's own /etc/TIMEZONE is left alone"),
-        (r'if \[ "\$FB_ROOT_TELNET" = n \]; then\n\t\tsed \'s/\^#CONSOLE=/CONSOLE=/\'',
+        (r'if \[ "\$FB_ROOT_TELNET" = n \]; then\n\t+sed \'s/\^#CONSOLE=/CONSOLE=/\'',
          "root-telnet=n RESTRICTS root to the console; y keeps today's `#CONSOLE=`"),
         (r'if \[ "\$FB_SYSLOG" = n \] && \[ -f /etc/init\.d/syslogd \]; then',
          "syslog is only touched when the answer was n"),
@@ -9827,44 +9827,26 @@ def audit_l11():
         gen = os.path.join(d, "gen-s17")
         r = subprocess.run(["/usr/bin/dash", "-c", m.group(1).replace("\t\t", "")],
                            capture_output=True, text=True, timeout=30)
-        for bad in (False, True):
-            root = os.path.join(d, "s17-%s" % ("bad" if bad else "good"))
+        # S4-54: the installer puts the files in place; S17upgrade is a guard that only reports
+        # a cfg/ the install did not finish (no RESTORED), and never applies anything
+        for restored in (True, False):
+            root = os.path.join(d, "s17-%s" % ("restored" if restored else "unrestored"))
             u = os.path.join(root, "var", "adm", "upgrade")
             os.makedirs(os.path.join(u, "cfg", "etc"), exist_ok=True)
             open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("upgbox\n")
-            os.makedirs(os.path.join(u, "cfg", "sbin"), exist_ok=True)
-            open(os.path.join(u, "cfg", "sbin", "bcheckrc"), "w").write("patched\n")
-            for dd in ("sbin", "usr/sbin"):
-                os.makedirs(os.path.join(root, dd), exist_ok=True)
-            open(os.path.join(root, "sbin", "bcheckrc"), "w").write("stock\n")
-            if not os.path.exists(os.path.join(root, "usr", "sbin", "bcheckrc")):
-                os.link(os.path.join(root, "sbin", "bcheckrc"), os.path.join(root, "usr", "sbin", "bcheckrc"))
-            rows = ""
-            for rel in ("etc/nodename", "sbin/bcheckrc"):
-                s = subprocess.run(["sum", "-r", rel], cwd=os.path.join(u, "cfg"),
-                                   capture_output=True, text=True).stdout.split()
-                rows += "%s %s %s\n" % (s[0], s[1], rel)
-            open(os.path.join(u, "SUMS"), "w").write(rows)
-            open(os.path.join(u, "PENDING"), "w").write("")
-            if bad:
-                open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("changed\n")
-            script = (r.stdout.replace("U=/var/adm/upgrade", "U=" + u)
-                      .replace("cpio -pdmu /", "cpio -pdmu " + root)
-                      .replace("> /sbin/bcheckrc", "> " + root + "/sbin/bcheckrc")
-                      .replace("[ -s /etc/nodename ] && uname -S", ": "))
-            open(gen, "w").write(script)
+            open(os.path.join(u, "SUMS"), "w").write("1 1 etc/nodename\n")
+            if restored:
+                open(os.path.join(u, "RESTORED"), "w").write("")
+            open(gen, "w").write(r.stdout.replace("U=/var/adm/upgrade", "U=" + u))
             o = subprocess.run(["/usr/bin/dash", gen, "start"], capture_output=True, text=True, timeout=30)
             applied = os.path.exists(os.path.join(root, "etc", "nodename"))
-            pending = os.path.exists(os.path.join(u, "PENDING"))
-            linked = open(os.path.join(root, "usr", "sbin", "bcheckrc")).read() == "patched\n"
-            if not bad and applied and not pending and linked and "in place" in o.stdout:
-                ok("S17upgrade: good sums -> the saved files are put in place once (PENDING removed), "
-                   "bcheckrc by cat so /usr/sbin/bcheckrc (its link) follows")
-            elif bad and not applied and pending and "NOT applied" in o.stdout:
-                ok("S17upgrade: a changed saved file -> nothing applied, PENDING kept")
+            if restored and not applied and not o.stdout.strip():
+                ok("S17upgrade guard: the install put the configuration in place (RESTORED) -> silent, nothing applied")
+            elif not restored and not applied and "did not put in place" in o.stdout:
+                ok("S17upgrade guard: a cfg/ without RESTORED is reported, nothing applied")
             else:
-                fail("S17upgrade (%s sums): applied=%s pending=%s out=%r"
-                     % ("bad" if bad else "good", applied, pending, o.stdout.strip()))
+                fail("S17upgrade guard (%s): applied=%s out=%r"
+                     % ("restored" if restored else "unrestored", applied, o.stdout.strip()))
 
     # (6) l11_bcheckrc: the stock 2.1 bcheckrc becomes the medium's retry-patched one in
     # place (its hard link follows); a patched one is kept; any other is left alone
@@ -10135,6 +10117,19 @@ def audit_l11():
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
             (ok if want in out and not os.listdir(os.path.join(ct, "tmp")) else fail)(
                 "install.sh's 1.1 m4 check, %s: %s" % (what, "accepted" if "PASSED" in out else "refused"))
+
+    # (15b) S4-54: every file of the upgrade's keep list is matched by the restore's cpio
+    # patterns (a kept file the restore does not extract stops every upgrade at its check)
+    mk = re.search(r'\nL11_KEEP="([^"]*)"', l11, re.S)
+    mp = re.search(r"\| /bin/cpio -icdmu ('etc/\*'(?: '[^']*')*) \) > /tmp/upg\.err", l11)
+    if not mk or not mp:
+        fail("l11.sh: no L11_KEEP list or no restore cpio patterns")
+    else:
+        import fnmatch
+        pats = re.findall(r"'([^']*)'", mp.group(1))
+        miss = [f for f in mk.group(1).split() if not any(fnmatch.fnmatch(f, p) for p in pats)]
+        (ok if not miss else fail)("l11.sh: the restore's cpio patterns %s match every kept file%s"
+                                   % (" ".join(pats), (" -- not: " + " ".join(miss)) if miss else ""))
 
     # (16) C4-1: l11.sh reads the kernel's sd cards from its sidecar (sdcards=4, absent = 2)
     # and install.sh hands FB_SDCARDS=4 to the first boot

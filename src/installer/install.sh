@@ -764,6 +764,11 @@ case "$FIRSTBOOT_DIALOG" in
 	[nN]|[nN][oO]|0)	FIRSTBOOT_DIALOG=n ;;
 	*)			die "profile FIRSTBOOT_DIALOG='$FIRSTBOOT_DIALOG' is not y or n" ;;
 esac
+# an upgrade brings the old box's answers back (S4-54): no dialog to ask them again
+if [ "${INSTALL_UPGRADE:-no}" = yes ] && [ "$FIRSTBOOT_DIALOG" = y ]; then
+	FIRSTBOOT_DIALOG=n
+	msg "upgrade: the first-boot dialog is not armed -- the old box's answers come back with its configuration"
+fi
 # Both default to the behaviour the driver has always had, so a profile that omits
 # them installs a byte-identical tree: root may telnet in (the shipped
 # /etc/default/login already has `#CONSOLE=`), and the laid-down syslog unit stays
@@ -3250,6 +3255,9 @@ else
 	warn "stock /usr/amiga/bin/system.setup absent on the target -- no dialog to disarm (unexpected for a core install)"
 fi
 msg "first-boot armed + wired (rc2.d/S16firstboot; nodename=$FB_NODENAME tz=$FB_TZNUM dialog=$FIRSTBOOT_DIALOG)"
+
+# an upgrade (S4-54): the saved configuration in place, last, over everything laid above
+[ "${INSTALL_UPGRADE:-no}" = yes ] && l11_upgrade_apply
 
 # ===========================================================================
 # 10. FINAL fsck + SUMMARY

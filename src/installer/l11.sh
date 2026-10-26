@@ -568,9 +568,12 @@ l11_apkg()
 # ===========================================================================
 # The target already holds Amix. What survives (docs/upgrade-install.md):
 #   * the configuration set L11_KEEP below, captured from the old root, restored into
-#     /var/adm/upgrade/cfg and checked file by file before the first boot, then put in
-#     place once by /etc/rc2.d/S17upgrade at the first boot, after first-boot's own
-#     identity steps (so the old box's identity wins);
+#     /var/adm/upgrade/cfg and checked file by file, then put in place by the installer
+#     at the end of the install and checked there again (l11_upgrade_apply, S4-54): one
+#     owner per file, and the first boot (FB_UPGRADED=y) skips what the upgrade owns;
+#   * the first-boot dialog's choices that live in package-owned files, kept as states
+#     (L11_STATE_SH) and set again on the new root: the A2024 flag, the keymap link, the
+#     X colour server link, the Netnews flavour; and syslog on/off (FB_SYSLOG);
 #   * /home: on a 1.0 disk (no data slice) captured with the configuration and
 #     restored into the new /home; on a 1.1 disk the data slice s4 is not touched.
 #   * nothing else: the installed packages are the medium's set again, and any other
@@ -586,7 +589,21 @@ l11_apkg()
 L11_KEEP="etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc"
+etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc
+var/adm/firstboot/firstboot.conf"
+# (firstboot.conf is kept as the record of the old box's answers, beside the upgrade's files:
+# /var/adm/upgrade/firstboot.conf.prev; the new one drives this install's first boot)
+#
+# L11_STATE_SH -- run by the old system's (capture) and the new system's (check) /bin/sh
+# under chroot: the dialog's choices kept in package-owned files, one line of key=value
+L11_STATE_SH='ino() { ls -i "$1" 2>/dev/null | ( read n f; echo "$n" ); }
+s=y; if [ -f /etc/init.d/syslogd ] && grep "^exit$" /etc/init.d/syslogd >/dev/null 2>&1; then s=n; fi
+a=-; for t in true false; do if [ -f /usr/amiga/bin/A2024 ] && [ "`ino /usr/amiga/bin/A2024`" = "`ino /usr/bin/$t`" ]; then a=$t; fi; done
+k=-; if [ -f /usr/amiga/lib/kmap/default.kmap ]; then d=`ino /usr/amiga/lib/kmap/default.kmap`; for f in /usr/amiga/lib/kmap/*; do case $f in */default.kmap) ;; *) if [ "`ino $f`" = "$d" ]; then k=`basename $f`; fi ;; esac; done; fi
+x=-; if [ -f /usr/X/bin/X ]; then d=`ino /usr/X/bin/X`; for v in X2410 Xdmi; do if [ "`ino /usr/X/bin/$v`" = "$d" ]; then x=$v; fi; done; fi
+n=-; if [ -f /usr/public/lib/news/inews ]; then c=`sum < /usr/public/lib/news/inews`; if [ "$c" = "`sum < /usr/public/lib/newsbin/inject/inews 2>/dev/null`" ]; then n=cnews; elif [ "$c" = "`sum < /usr/public/lib/newsbin/nntp/inews 2>/dev/null`" ]; then n=nntp; fi; fi
+echo "syslog=$s a2024=$a kmap=$k xcolor=$x news=$n"'
+
 # ... and every file of etc/conf/modreg.local.d (the administrator's module parameters,
 # C3-5 §1), which the restore also puts on the new root before the store is composed
 
@@ -673,6 +690,9 @@ l11_upgrade_capture()
 			msg "upgrade: /home (${_hmb} MB, $_hb blocks) is saved with the configuration"
 		fi
 	fi
+	UPG_STATE=`/mnt/usr/sbin/chroot /mnt /bin/sh -c "$L11_STATE_SH" 2>/dev/null`
+	case "$UPG_STATE" in syslog=*) ;; *) /etc/umount /mnt; die "upgrade: the installed system's dialog choices do not read (got '$UPG_STATE')" ;; esac
+	msg "upgrade: the dialog's choices kept as states: $UPG_STATE"
 	msg "upgrade: NOT kept: every installed package beyond the medium's set, and every other file on the old root"
 	# the archive, by the installed system's own find and cpio
 	/mnt/usr/sbin/chroot /mnt /bin/sh -c "cd / && { cat; if [ $UPG_HOME = y ]; then /usr/bin/find home -print; fi; } | /usr/bin/cpio -oc" \
@@ -696,7 +716,7 @@ l11_upgrade_capture()
 	run sync
 	UPG_SUM=`dd if="/dev/rdsk/c${ID}d0s2" bs=512 count="$UPG_NBLK" 2>/dev/null | "$INST/bin/sum" -r | ( read _s _r; echo "$_s" )`
 	is_num "$UPG_SUM" || die "upgrade: the configuration archive does not read back from the swap slice"
-	echo "AMIXUPG1 $UPG_NBLK $UPG_SUM $UPG_HOME" > /tmp/upg.hdr
+	echo "AMIXUPG1 $UPG_NBLK $UPG_SUM $UPG_HOME $UPG_STATE" > /tmp/upg.hdr
 	_hl=`expr "$OLD_SWAP_LEN" - 1`
 	dd if=/tmp/upg.hdr of="/dev/dsk/c${ID}d0s2" bs=512 oseek="$_hl" count=1 conv=sync 2>/dev/null
 	run sync	# both writes are on the disk before its RDB changes
@@ -727,7 +747,7 @@ l11_upgrade_restore()
 	fi
 	run mkdir -p "$TARGET/var/adm/upgrade/cfg"
 	( cd "$TARGET/var/adm/upgrade/cfg" && dd if="$DISK_RAW" bs=512 iseek="$OLD_SWAP_OFF" count="$UPG_NBLK" 2>/dev/null \
-		| /bin/cpio -icdmu 'etc/*' 'sbin/bcheckrc' ) > /tmp/upg.err 2>&1 || { cat /tmp/upg.err; die "upgrade: restoring the configuration failed"; }
+		| /bin/cpio -icdmu 'etc/*' 'sbin/bcheckrc' 'var/adm/firstboot/firstboot.conf' ) > /tmp/upg.err 2>&1 || { cat /tmp/upg.err; die "upgrade: restoring the configuration failed"; }
 	cp /dev/null /tmp/upg.bad
 	while read _s _n _f
 	do
@@ -760,32 +780,118 @@ l11_upgrade_restore()
 	fi
 	run cp /tmp/upg.sums "$TARGET/var/adm/upgrade/SUMS"
 	run cp /tmp/upg.hdr "$TARGET/var/adm/upgrade/HEADER"
-	: > "$TARGET/var/adm/upgrade/PENDING"
+	# a guard only: the installer puts the files in place (l11_upgrade_apply) and marks
+	# RESTORED; a cfg/ left without it at the first boot is reported, never applied
 	{
 		echo '#!/bin/sh'
-		echo '# S17upgrade -- written by install.sh (an upgrade install). Puts the saved'
-		echo '# configuration in place once, after S16firstboot, so the old identity wins.'
+		echo '# S17upgrade -- written by install.sh (an upgrade install). The installer put the'
+		echo '# saved configuration in place; this only reports one it did not finish.'
 		echo 'U=/var/adm/upgrade'
 		echo 'case $1 in start) ;; *) exit 0 ;; esac'
-		echo '[ -f $U/PENDING ] || exit 0'
-		echo 'cd $U/cfg || exit 0'
-		echo '# a redirect-fed loop is a subshell on this sh: the misses go to a file'
-		echo 'rm -f $U/BAD'
-		echo 'while read s n f; do'
-		echo '	set x `sum -r $f`; shift'
-		echo '	[ "$1" = "$s" ] || echo "$f" >> $U/BAD'
-		echo 'done < $U/SUMS'
-		echo 'if [ -s $U/BAD ]; then echo "upgrade: saved file(s) changed since the install, NOT applied:" `cat $U/BAD`; exit 0; fi'
-		echo '# bcheckrc in place (cat keeps its /usr/sbin link), everything else by cpio'
-		echo 'find . -print | grep -v "^./sbin/bcheckrc$" | cpio -pdmu / 2>/dev/null'
-		echo '[ -f sbin/bcheckrc ] && cat sbin/bcheckrc > /sbin/bcheckrc'
-		echo '[ -s /etc/nodename ] && uname -S `cat /etc/nodename`'
-		echo 'rm -f $U/PENDING'
-		echo 'echo "upgrade: the previous configuration is in place (`wc -l < $U/SUMS` files; $U)"'
+		echo '[ -d $U/cfg ] || exit 0'
+		echo '[ -f $U/RESTORED ] && exit 0'
+		echo 'echo "upgrade: WARNING: $U/cfg holds a saved configuration the install did not put in place -- see $U/SUMS"'
 	} > "$TARGET/etc/rc2.d/S17upgrade" || die "cannot write $TARGET/etc/rc2.d/S17upgrade"
 	run chmod 0744 "$TARGET/etc/rc2.d/S17upgrade"
 	set x `cat /tmp/upg.sums`; shift
 	_nf=`expr $# / 3`
-	msg "upgrade: $_nf configuration file(s) restored to /var/adm/upgrade/cfg and checked; S17upgrade applies them at the first boot"
+	msg "upgrade: $_nf configuration file(s) restored to /var/adm/upgrade/cfg and checked; the end of the install puts them in place"
 	rm -f /tmp/upg.list /tmp/upg.sums /tmp/upg.err /tmp/upg.bad
+}
+
+# l11_upgrade_apply -- at the end of the install, after everything else is laid: the
+# saved configuration in place on the new root and checked there, the dialog's states set
+# again and checked, the password aging rule, and first boot told what the upgrade owns
+l11_upgrade_apply()
+{
+	stage ""
+	stage "Upgrade install: putting the saved configuration in place."
+	U="$TARGET/var/adm/upgrade"
+	cp /dev/null /tmp/upg.names
+	while read _s _n _f
+	do
+		case "$_f" in
+			sbin/bcheckrc|var/adm/firstboot/firstboot.conf) ;;
+			*)	echo "$_f" >> /tmp/upg.names ;;
+		esac
+	done < "$U/SUMS"
+	# by the archive's own cpio entries, so owners, modes and times come back as they were
+	( cd "$TARGET" && dd if="$DISK_RAW" bs=512 iseek="$OLD_SWAP_OFF" count="$UPG_NBLK" 2>/dev/null \
+		| /bin/cpio -icdmu `cat /tmp/upg.names` ) > /tmp/upg.err 2>&1 || { cat /tmp/upg.err; die "upgrade: putting the configuration in place failed"; }
+	# bcheckrc written in place (cat), so its /usr/sbin link keeps the same content
+	[ -f "$U/cfg/sbin/bcheckrc" ] && cat "$U/cfg/sbin/bcheckrc" > "$TARGET/sbin/bcheckrc"
+	[ -f "$U/cfg/var/adm/firstboot/firstboot.conf" ] && run cp "$U/cfg/var/adm/firstboot/firstboot.conf" "$U/firstboot.conf.prev"
+	cp /dev/null /tmp/upg.bad
+	while read _s _n _f
+	do
+		[ "$_f" = var/adm/firstboot/firstboot.conf ] && continue
+		set x `"$INST/bin/sum" -r "$TARGET/$_f"`; shift
+		[ "$1" = "$_s" ] || echo "$_f" >> /tmp/upg.bad
+	done < "$U/SUMS"
+	[ -s /tmp/upg.bad ] && die "upgrade: file(s) in place differ from the saved ones: `cat /tmp/upg.bad` -- NOT arming"
+	# the dialog's choices kept as states: set again with the new system's own files
+	set x `cat "$U/HEADER"`; shift 5
+	for _kv in "$@"
+	do
+		_k=`expr "$_kv" : '\([a-z0-9]*\)='`
+		_v=`expr "$_kv" : '[a-z0-9]*=\(.*\)'`
+		case "$_k=$_v" in
+			syslog=n)	echo "FB_SYSLOG=n" >> "$TARGET/var/adm/firstboot/firstboot.conf" ;;
+			a2024=-|kmap=-|xcolor=-|news=-|syslog=y) ;;
+			a2024=*)	[ -f "$TARGET/usr/bin/$_v" ] && rm -f "$TARGET/usr/amiga/bin/A2024" && ln "$TARGET/usr/bin/$_v" "$TARGET/usr/amiga/bin/A2024" ;;
+			kmap=*)		[ -f "$TARGET/usr/amiga/lib/kmap/$_v" ] && rm -f "$TARGET/usr/amiga/lib/kmap/default.kmap" && ln "$TARGET/usr/amiga/lib/kmap/$_v" "$TARGET/usr/amiga/lib/kmap/default.kmap" ;;
+			xcolor=*)	[ -f "$TARGET/usr/X/bin/$_v" ] && rm -f "$TARGET/usr/X/bin/X" && ln "$TARGET/usr/X/bin/$_v" "$TARGET/usr/X/bin/X" ;;
+			news=cnews)	[ -x "$TARGET/usr/amiga/lib/amixnews" ] && echo 1 | "$TARGET/usr/sbin/chroot" "$TARGET" /usr/amiga/lib/amixnews > /tmp/upg.news 2>&1 ;;
+			news=nntp)	[ -x "$TARGET/usr/amiga/lib/amixnews" ] && echo 2 | "$TARGET/usr/sbin/chroot" "$TARGET" /usr/amiga/lib/amixnews > /tmp/upg.news 2>&1 ;;
+		esac
+	done
+	_now=`"$TARGET/usr/sbin/chroot" "$TARGET" /bin/sh -c "$L11_STATE_SH" 2>/dev/null`
+	_want=`echo "$*" | ( read a b c d e; echo "$b $c $d $e" )`
+	_got=`echo "$_now" | ( read a b c d e; echo "$b $c $d $e" )`
+	# a choice the new system has no files for (no X, no news) cannot come back: said, not fatal
+	[ "$_got" = "$_want" ] || warn "upgrade: the dialog's choices on the new root are '$_got', the old box's were '$_want' (a package the medium does not install cannot carry its choice)"
+	msg "upgrade: the dialog's choices set again: $_now"
+	# password aging survives only behind setclk's plausibility gate and a clock that is
+	# not behind any entry's last change; otherwise the aging fields go (the RTC trap)
+	_clk=`"$TARGET/usr/sbin/chroot" "$TARGET" /usr/amiga/bin/setclk 2>&1`
+	_age=n
+	case "$_clk" in
+		*"system clock set"*)
+			set x `"$TARGET/usr/sbin/chroot" "$TARGET" /usr/bin/date '+%y %j'`; shift
+			_y=`expr "$1" + 0`; _j=`expr "$2" + 0`
+			[ "$_y" -ge 92 ] && _y=`expr "$_y" + 1900` || _y=`expr "$_y" + 2000`
+			_d1=`expr "$_y" - 1970`; _d1=`expr "$_d1" \* 365`
+			_d2=`expr "$_y" - 1969`; _d2=`expr "$_d2" / 4`
+			_today=`expr "$_d1" + "$_d2" + "$_j" - 1`
+			# an entry changed later than today: the clock is behind it (the miniroot's own
+			# sh reads the new root's shadow; a redirect-fed loop only appends to a file)
+			cp /dev/null /tmp/upg.late
+			_ifs="$IFS"; IFS=:
+			while read _n _p _l _r
+			do
+				[ -n "$_l" ] && [ "$_l" -gt "$_today" ] && echo "$_n" >> /tmp/upg.late
+			done < "$TARGET/etc/shadow"
+			IFS="$_ifs"
+			[ -s /tmp/upg.late ] || _age=y
+			rm -f /tmp/upg.late ;;
+	esac
+	if [ "$_age" = y ]; then
+		msg "upgrade: password aging kept (the battery clock is plausible and behind no entry)"
+	else
+		_ifs="$IFS"; IFS=:
+		while read _n _p _r
+		do
+			echo "$_n:$_p:::::::"
+		done < "$TARGET/etc/shadow" > /tmp/upg.shadow
+		IFS="$_ifs"
+		[ -s /tmp/upg.shadow ] && cat /tmp/upg.shadow > "$TARGET/etc/shadow" || die "upgrade: clearing the password aging fields failed"
+		rm -f /tmp/upg.shadow
+		: > "$U/AGING-CLEARED"
+		msg "upgrade: password aging fields CLEARED: the battery clock is not plausible or is behind an entry's last change (`echo $_clk`)"
+	fi
+	echo "FB_UPGRADED=y" >> "$TARGET/var/adm/firstboot/firstboot.conf"
+	: > "$U/RESTORED"
+	set x `cat /tmp/upg.names`; shift
+	msg "upgrade: $# file(s) in place and checked on the new root; the first boot leaves them alone (FB_UPGRADED=y)"
+	rm -f /tmp/upg.names /tmp/upg.err /tmp/upg.bad /tmp/upg.news
 }

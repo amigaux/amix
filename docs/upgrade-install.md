@@ -149,7 +149,8 @@ already holds Amix.
 
 | What | 1.0 disk (no data slice) | 1.1 disk |
 |---|---|---|
-| the configuration set (below) | saved, restored, put in place at the first boot | the same |
+| the configuration set (below) | saved, put in place by the installer and checked there | the same |
+| the first-boot dialog's choices kept in package files (below) | saved as states, set again on the new root and checked | the same |
 | `/home` | saved with the configuration and restored into the new `/home` (into s4 when the new disk has one) | on s4: the slice is not touched; on a 1.1 disk without s4: saved like 1.0 |
 | installed packages | no: the medium's set is installed again | no |
 | anything else on the root | no | no |
@@ -162,8 +163,29 @@ etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
 etc/passwd etc/shadow etc/group etc/default/login
 etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
 etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc
+var/adm/firstboot/firstboot.conf
 etc/conf/modreg.local.d/*
 ```
+
+The old `firstboot.conf` is the record of the old box's answers. It is kept as
+`/var/adm/upgrade/firstboot.conf.prev`, while the new one drives this install's first boot.
+
+The first-boot dialog's other choices live in files that packages own. Each is kept as a
+state, `L11_STATE_SH` in `l11.sh`, detected on the old root at capture and recorded in the
+HEADER. At the end of the install it is set again from the new system's own files, then
+detected on the new root and compared:
+
+| State | Where it lives | Set again by |
+|---|---|---|
+| `syslog=y\|n` | the vendor `exit` line in `/etc/init.d/syslogd` | `FB_SYSLOG=n` in the new `firstboot.conf`; the first boot edits the file, as for a fresh install |
+| `a2024=true\|false` | `/usr/amiga/bin/A2024`, a link to `/usr/bin/true` or `false` | the link |
+| `kmap=<map>` | `/usr/amiga/lib/kmap/default.kmap`, a link to one map | the link |
+| `xcolor=X2410\|Xdmi` | `/usr/X/bin/X` (stock `amixcolorx`) | the link |
+| `news=cnews\|nntp` | the `inews` flavour (stock `amixnews`) | the new system's `amixnews`, answered |
+
+A choice whose package the medium does not install (no X, no `public`) cannot come back.
+The install says so. `/etc/hosts.equiv` and root's dotfiles are not kept: users' own files
+come back with `/home`, and root's are the new system's.
 
 `etc/conf/modreg.local.d` holds the administrator's module parameters (C3-5 §1).
 The restore also puts it on the new root before the store is composed, so the
@@ -175,8 +197,11 @@ pristine generation takes them.
 - A copy the administrator changed comes back as it was, without the lines; the
   install says so.
 
-Password entries are restored as they were, aging fields included (the
-clock-plausibility rule of spec 40 §7 is not implemented).
+Password entries keep their aging fields only if the clock can be trusted (spec 40 §7). The
+install runs the new system's plausibility-gated `setclk` (1992..2037) under chroot, and
+requires that no entry's last change is later than today. Otherwise every entry's aging
+fields are cleared: the install says so and leaves `/var/adm/upgrade/AGING-CLEARED`. A
+clock that was put back after it ran ahead would otherwise lock those accounts out.
 
 ### How
 
@@ -204,16 +229,24 @@ clock-plausibility rule of spec 40 §7 is not implemented).
      and must give back its `sum -r`;
    - `/home` is extracted into place;
    - the configuration goes to `/var/adm/upgrade/cfg`, and every file must
-     match its noted sum;
-   - `/etc/rc2.d/S17upgrade` is armed.
+     match its noted sum.
 
    A mismatch stops the install unarmed. The archive stays where it was, and
    the console names its block.
-5. **First boot.** `/etc/rc2.d/S17upgrade` runs after `S16firstboot`. It
-   re-checks the sums, copies `cfg/` over `/`, sets the
-   node name and removes its `PENDING`. The old box's identity therefore wins
-   over the profile's first-boot values. `bcheckrc` is written with `cat`, so its
-   `/usr/sbin` link keeps the same content.
+5. **Put in place**, at the end of the install, after everything else is laid (S4-54):
+   - every saved file comes back from the archive into its own place, with the archive's
+     owners, modes and times;
+   - `bcheckrc` is written with `cat`, so its `/usr/sbin` link keeps the same content;
+   - each file must match its noted sum on the new root;
+   - the dialog's states are set again and checked, and the aging rule is applied;
+   - `FB_UPGRADED=y` goes into the new `firstboot.conf`, and `RESTORED` into
+     `/var/adm/upgrade`.
+
+   The first-boot dialog is not armed on an upgrade. One owner per file: the first boot
+   skips the node name, time zone, passwords, hosts and network files (sections 1–3 and
+   5–5d), and only sets the running node name from the restored `/etc/nodename`.
+   `/etc/rc2.d/S17upgrade` is a guard: it reports a `cfg/` the install did not finish (no
+   `RESTORED`) and applies nothing.
 
 The unattended erase guard does not stop an upgrade; the upgrade is itself the
 deliberate reinstall.
