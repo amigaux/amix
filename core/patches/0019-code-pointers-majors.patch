@@ -1,0 +1,333 @@
+Subject: code pointers in kernel text or the image; majors from the registry
+
+From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
+section 1.2, 1.4).  Plan patch 13: a switch entry or a qinit routine was
+accepted anywhere in [stext, end), which includes kernel data and the
+arena where other modules live.  dlm_okcode accepts 0, kernel text
+[stext, etext) or the module's own image; a qinit's module_info and
+module_stat must be in the image.  The registry now decides every
+character major: dlm_creg, dlm_sreg and the driver linkage's drv_cmajor
+refuse (ECONFIG) a major not registered to the module, and a row held by
+another is ECONFIG, as C3-1 section 4 says (was EEXIST).  The harness's
+registry names its drivers (pdm moves to its own major, 67); three
+new checks.
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -33,7 +33,7 @@
+ #include "sys/errno.h"
+ #include "sys/cmn_err.h"
+ #include "sys/kmem.h"
+-extern char stext[], end[];
++extern char stext[], etext[], end[];
+ extern char *strcpy(), *strncpy();
+ extern int strcmp(), strlen(), strncmp(), bcmp();
+ extern void bcopy(), bzero();
+@@ -256,6 +256,7 @@
+ 	(*(int (*)())(f))(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7])
+ #define	DLM_KLO		((unsigned long)stext)
+ #define	DLM_KHI		((unsigned long)end)
++#define	DLM_KTEXT	((unsigned long)etext)	/* kernel text is [DLM_KLO, DLM_KTEXT) */
+ #endif
+ 
+ /* wrapper and linkage words */
+@@ -363,5 +364,7 @@
+ 	char	*r_name;		/* the module that owns it */
+ };
+ extern struct dlm_majreg dlm_majreg[];
++extern int dlm_majowned();		/* (type, major, name): 0 or ECONFIG */
++extern int dlm_okcode();		/* (m, a): a module's code pointer */
+ 
+ #endif	/* _DLM_H */
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -660,6 +660,35 @@
+  * (20-module-format-and-abi.md section 6, C3-1 section 4).  The
+  * syntax was checked by dlm_ld_moddata.
+  */
++/* major mj of type 'c' or 'b' is registered to name: 0, else ECONFIG */
++int
++dlm_majowned(type, mj, name)
++	int type, mj;
++	char *name;
++{
++	struct dlm_majreg *r;
++
++	for (r = dlm_majreg; r->r_type; r++)
++		if (r->r_type == type && r->r_major == mj)
++			return strcmp(r->r_name, name) == 0 ? 0 : ECONFIG;
++	return ECONFIG;
++}
++
++/*
++ * A code pointer a module hands the kernel (a switch entry, a qinit
++ * routine): 0, kernel text, or the module's own image.  Kernel data and
++ * the arena, where other modules live, are refused, which
++ * [stext, end) alone did not do (plan patch 13).
++ */
++int
++dlm_okcode(m, a)
++	struct dlm_mod *m;
++	unsigned long a;
++{
++	return a == 0 || (a >= DLM_KLO && a < DLM_KTEXT) ||
++	    (a >= m->m_run && a - m->m_run <= m->m_size - 2 && m->m_size >= 2);
++}
++
+ static int
+ md_majors(v, name)
+ 	char *v, *name;
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -485,12 +485,12 @@
+ 	struct dlm_cslot *cs, *fr;
+ 	int s, error;
+ 
+-	if (mj < 0 || mj >= cdevcnt)
+-		return ECONFIG;
++	if (mj < 0 || mj >= cdevcnt || dlm_majowned('c', mj, name) != 0)
++		return ECONFIG;		/* the registry's (C3-1 section 4) */
+ 	if ((cs = cslot(mj)) != 0)
+-		return strcmp(cs->cs_name, name) == 0 ? 0 : EEXIST;
++		return strcmp(cs->cs_name, name) == 0 ? 0 : ECONFIG;
+ 	if (!cempty(&cdevsw[mj]))
+-		return EEXIST;
++		return ECONFIG;
+ 	fr = (struct dlm_cslot *)dlm_zalloc((long)sizeof *fr);
+ 	if (!fr)
+ 		return ENOMEM;
+@@ -501,9 +501,9 @@
+ 	if (mj < 0 || mj >= cdevcnt)
+ 		error = ECONFIG;
+ 	else if ((cs = cslot(mj)) != 0)
+-		error = strcmp(cs->cs_name, name) == 0 ? 0 : EEXIST;
++		error = strcmp(cs->cs_name, name) == 0 ? 0 : ECONFIG;
+ 	else if (!cempty(&cdevsw[mj]))
+-		error = EEXIST;
++		error = ECONFIG;
+ 	else {
+ 		fr->cs_next = dlm_cslot;
+ 		dlm_cslot = fr;
+@@ -665,6 +665,11 @@
+ 	if (G32(r + DRV_BCOUNT) != 0 || mj < 0 || mj >= cdevcnt ||
+ 	    n < 1 || n > cdevcnt - mj)
+ 		return EINVAL;
++	for (i = 0; i < n; i++)		/* drv_cmajor: the registry's, not the module's word */
++		if (dlm_majowned('c', mj + i, m->m_name) != 0) {
++			printf("dlm: %s: major c:%d is not registered to it\n", m->m_name, mj + i);
++			return ECONFIG;
++		}
+ 	if (G32(DLM_RP(m, c) + CD_TTYS))
+ 		return EINVAL;
+ 	if ((fl = G32(DLM_RP(m, c) + CD_FLAG)) != 0) {
+@@ -682,7 +687,7 @@
+ #endif
+ 	for (k = 0; k < CD_NFN; k++) {
+ 		f = G32(DLM_RP(m, c) + 4 * k);
+-		if (f && (f < DLM_KLO || f >= DLM_KHI) && !inimg(m, f, 2L))
++		if (!dlm_okcode(m, f))
+ 			return ERELOC;
+ 	}
+ 	for (i = 0; i < n; i++) {
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -83,13 +83,13 @@
+ 	return a >= m->m_run && n <= m->m_size && a - m->m_run <= m->m_size - n;
+ }
+ 
+-/* a code or data pointer: 0, kernel, or n bytes in the image */
++/* a data pointer: 0, or n bytes of the module's own image */
+ static int
+-okptr(m, a, n)
++okdata(m, a, n)
+ 	struct dlm_mod *m;
+ 	unsigned long a, n;
+ {
+-	return a == 0 || (a >= DLM_KLO && a < DLM_KHI) || inimg(m, a, n);
++	return a == 0 || inimg(m, a, n);
+ }
+ 
+ /* a module qinit at a: in the image, sane pointers */
+@@ -105,11 +105,11 @@
+ 		return 0;
+ 	q = DLM_RP(m, a);
+ 	for (k = 0; k < QI_MINFO; k += 4)
+-		if (!okptr(m, G32(q + k), 2L))
++		if (!dlm_okcode(m, G32(q + k)))
+ 			return 0;
+-	return G32(q + QI_MINFO) != 0 && okptr(m, G32(q + QI_MINFO),
++	return G32(q + QI_MINFO) != 0 && okdata(m, G32(q + QI_MINFO),
+ 	    (unsigned long)sizeof (struct module_info)) &&
+-	    okptr(m, G32(q + QI_MSTAT), 4L);
++	    okdata(m, G32(q + QI_MSTAT), 4L);
+ }
+ 
+ /* loadable row j of queue q, or -1 */
+@@ -348,12 +348,12 @@
+ 	struct cdevsw *cp;
+ 	int k, s;
+ 
+-	if (mj < 0 || mj >= cdevcnt)
+-		return ECONFIG;
++	if (mj < 0 || mj >= cdevcnt || dlm_majowned('c', mj, name) != 0)
++		return ECONFIG;		/* the registry's (C3-1 section 4) */
+ 	if ((sd = sdmajor(mj)) != 0)
+-		return strcmp(sd->sd_name, name) == 0 ? 0 : EEXIST;
++		return strcmp(sd->sd_name, name) == 0 ? 0 : ECONFIG;
+ 	if (!dlm_cempty(&cdevsw[mj]))
+-		return EEXIST;
++		return ECONFIG;
+ 	for (k = 0; k < SDEV_SLOTS && fr == 0; k++)
+ 		if (sds[k].sd_name[0] == 0)
+ 			fr = &sds[k];
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -114,7 +114,7 @@
+ extern unsigned long host_runaddr();
+ extern int host_call();
+ extern unsigned long host_kaddr();
+-extern unsigned long host_klo, host_khi;
++extern unsigned long host_klo, host_khi, host_ktext;
+ #define	DLM_RP(m, a)		host_rp(m, (unsigned long)(a))
+ #define	DLM_RUNADDR(m)		host_runaddr(m)
+ #define	DLM_CALL(m, f, a, b)	host_call(m, (unsigned long)(f), (char *)(a), (long)(b))
+@@ -124,6 +124,7 @@
+ #define	DLM_CALL8(m, f, a)	host_call(m, (unsigned long)(f), (char *)(a)[0], (long)(a)[1])
+ #define	DLM_KLO			host_klo
+ #define	DLM_KHI			host_khi
++#define	DLM_KTEXT		host_ktext
+ #endif
+ 
+ #endif	/* _DLMHOST_H */
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -24,7 +24,7 @@
+ unsigned	sysentsize = 142;
+ char		dlm_ksym[KSYM_SPACE];
+ long		dlm_ksym_space = KSYM_SPACE;
+-unsigned long	host_klo, host_khi;
++unsigned long	host_klo, host_khi, host_ktext;
+ char		*host_root = ".";
+ long		host_kbytes, host_kblocks;
+ int		host_intr_after, host_intr_open;
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -32,6 +32,12 @@
+ struct dlm_majreg dlm_majreg[] = {
+ 	{ 'c', 51, "z3660eth" },
+ 	{ 'c', 58, "regok" },
++	{ 'c', 60, "cd" },
++	{ 'c', 61, "cdold" },
++	{ 'c', 62, "cdblk" },
++	{ 'c', 63, "zz" },
++	{ 'c', 65, "cdkd" },
++	{ 'c', 67, "pdm" },
+ 	{ 'b', 20, "ramdisk" },
+ 	{ 0, 0, 0 }
+ };
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -137,19 +137,24 @@
+ 
+ # character drivers: cd for major 60 (read, ioctl; no write), cdold is
+ # D_OLD, cdblk also asks for a block major
+-def drvmod(p, major, flag='0', bcount=0):
++def drvmod(p, major, flag='0', bcount=0, read=None):
+     fns = ''.join('\t.globl\t{p}_{f}\n{p}_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(p=p, f=f)
+                   for f in ('open', 'close', 'read', 'ioctl'))
+     flagdef = '{p}_flag:\n\t.long\t{v}\n'.format(p=p, v=flag)
+     mod(p, ops='mod_drvops', pdata=p + '_dd', text=fns,
+         data=flagdef + '{p}_dd:\n\t.space\t32\n\t.long\t0, {bc}\n'
+-        '\t.long\t{p}_open, {p}_close, {p}_read, 0, {p}_ioctl, 0, 0, 0, 0, 0\n'
+-        '\t.long\t0, 0, {p}_flag\n\t.long\t{mj}, 1\n'.format(p=p, bc=bcount, mj=major))
++        '\t.long\t{p}_open, {p}_close, {rd}, 0, {p}_ioctl, 0, 0, 0, 0, 0\n'
++        '\t.long\t0, 0, {p}_flag\n\t.long\t{mj}, 1\n'.format(p=p, bc=bcount, mj=major,
++                                                               rd=read or p + '_read'))
+ 
+ 
+ drvmod('cd', 60)
+ drvmod('cdold', 61, flag='1')
+ drvmod('cdblk', 62, bcount=1)
++# plan patch 13: cdkd's read entry is kernel data (lbolt), not code;
++# cdmaj installs at a major the registry gives no one
++drvmod('cdkd', 65, read='lbolt')
++drvmod('cdmaj', 66)
+ 
+ 
+ # .moddata version 2 (C3-1): each module breaks one rule
+@@ -195,7 +200,7 @@
+ mod('pmdep')
+ 
+ # marc_post (patch 16, C3-5): pb1 matches always and takes parameters, pb2
+-# matches a board this box lacks, pdm is demand class on major 58
++# matches a board this box lacks, pdm is demand class on major 67
+ mod('pb1')
+ mod('pb2')
+ mod('pdm')
+--- a/test/state.c
++++ b/test/state.c
+@@ -533,7 +533,7 @@
+ 	sprintf(man, "GMF1\ngeneration 9\n"
+ 	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=zorro:144b:01,always\n"
+ 	    "module pb2 boot 300 path=/stand/gen/7/mod/pb2 sha256=%s match=zorro:dead:01\n"
+-	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:58\n"
++	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:67\n"
+ 	    "param pb1.x=1\nparam pb2.z=3\nparam pb1.y=two\n", s1, s2, s3);
+ 	mkarena(a, man, 1, 1);
+ 	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
+@@ -544,14 +544,14 @@
+ 	check(pb1_loads == 1 && byname("pb1"), "marc_post: a boot member whose match= is satisfied loads");
+ 	check(strcmp(pb1_params, "x=1 y=two") == 0, "marc_post: its parameters reach _load as one string");
+ 	check(!byname("pb2"), "marc_post: a boot member whose match= names no board here is not loaded");
+-	check(cdevsw[58].d_open == dlm_cdev_open && !byname("pdm"),
++	check(cdevsw[67].d_open == dlm_cdev_open && !byname("pdm"),
+ 	    "marc_post: a demand member's major is registered, the module not yet loaded");
+ 	if ((m = byname("pb1")) != 0)
+ 		moduload(m->m_id);
+ 	dlm_safe = 1;
+ 	dlm_marc_post();
+ 	check(pb1_loads == 1 && !byname("pb1"), "marc_post: in safe mode nothing loads");
+-	check(copen(58, 0, OTYP_CHR) != 0 && !byname("pdm") && modload("pb1", &id) == EPERM &&
++	check(copen(67, 0, OTYP_CHR) != 0 && !byname("pdm") && modload("pb1", &id) == EPERM &&
+ 	    !byname("pb1"), "safe mode: a first open and a modload are refused too");
+ 	dlm_safe = 0;
+ 	/* the first sysinit entry (U15): modadmin -B, once a boot */
+@@ -728,8 +728,9 @@
+ 	    cdevsw[60].d_close == dlm_cdev_close && cdevsw[60].d_read == nodev,
+ 	    "cdev: registration puts the trampolines in the empty row");
+ 	check(creg("cd", 60) == 0, "cdev: re-registration is idempotent");
+-	check(creg("zz", 60) == EEXIST && creg("zz", 3) == EEXIST,
+-	    "cdev: another module's major or a used row -> EEXIST");
++	check(creg("zz", 60) == ECONFIG && creg("zz", 3) == ECONFIG,
++	    "cdev: another module's major or a used row -> ECONFIG (C3-1)");
++	check(creg("cdunreg", 64) == ECONFIG, "cdev: a major the registry gives no one -> ECONFIG");
+ 	check(creg("zz", 70) == ECONFIG && creg("zz", -1) == ECONFIG,
+ 	    "cdev: major outside the switch -> ECONFIG");
+ 	cd_rv = 0;
+@@ -770,6 +771,18 @@
+ 	    "cdev: module that cannot be loaded -> ENXIO");
+ 	check(copen(60, 0, OTYP_CHR) == 0 && byname("cd") && cclose(60, 0, OTYP_CHR) == 0,
+ 	    "cdev: loads again after unload");
++	{
++		unsigned long v, ok = host_ktext;
++		int id;
++
++		dlm_blklookup(dlm_ktab, "lbolt", &v, (int *)0);
++		host_ktext = v;		/* kernel text ends below lbolt, kernel data */
++		check(creg("cdkd", 65) == 0 && modload("cdkd", &id) == ERELOC && !byname("cdkd"),
++		    "cdev: an entry point in kernel data, not text or the image -> ERELOC");
++		host_ktext = ok;
++		check(modload("cdmaj", &id) == ECONFIG && !byname("cdmaj"),
++		    "cdev: drv_cmajor at a major not registered to the module -> ECONFIG");
++	}
+ 	moduload(0);
+ }
+ 
+@@ -829,6 +842,7 @@
+ 	}
+ 	host_klo = G32(dlm_ksym + KH_LO);
+ 	host_khi = G32(dlm_ksym + KH_HI);
++	host_ktext = host_khi;		/* drv_tests moves it to test the text bound */
+ 	(void)s;
+ 	(void)i;
+ }
