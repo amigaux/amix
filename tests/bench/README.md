@@ -948,7 +948,7 @@ sh tests/bench/s3-41/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s41/u2
 
 | Commands | Expected |
 |---|---|
-| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request, so the development load is lost); power-cycle; run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request) and the kernel of record's generation is good and the default (a one-shot request boots the default, never a trial: 10 §7.3); power-cycle; run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 262144 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
 
 **The number:** K KiB, with the address range, at 128 MB. That is what
 the core could take for module images, beside the arena. Run it on a

@@ -614,6 +614,13 @@ write a one-shot request into the control block. boot2 consumes it (writes the
 cleared request) and boots accordingly; the following boot returns to the
 default. This is the shell-command channel of D-3 §6.
 
+A one-shot request takes its boot ahead of a pending trial, which waits,
+unstarted, for the next boot (`select.c`). The safe-mode and
+development-load requests (`kbootset next devload`) boot the **default**
+generation in that mode, never the trial. To boot a new generation under
+development load, mark it good first. A loader that is still on trial
+(§3.1) also boots the default, and its boot consumes a pending request.
+
 ### 7.4 The menu
 
 Entered by: any key on the keyboard or the serial console during the menu
