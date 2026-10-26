@@ -93,8 +93,10 @@ verified no                     the signature hook: always "no" in 1.1
 file <path> <size> <64 hex>     one line per installed file: SHA-256 of the file
 ```
 
-A module package's device node (C3-5 §1.2) gets no `file` line: `pkgadd`
-makes it, and the contents database holds it.
+A module package's record has one `file` line per plain file it installs,
+the object in `/etc/conf/mod.d` and its file in `/etc/conf/modreg.d` alike.
+Its device node (C3-5 §1.2) gets none: `pkgadd` makes it, and the contents
+database holds it.
 
 `kbootset` gate 1 compares each generation member, which is a file such as
 `/stand/k46/unix`, against the `file` line that names it. The gate refuses:

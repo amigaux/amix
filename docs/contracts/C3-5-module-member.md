@@ -85,19 +85,27 @@ per line**:
 
 A module package's scripts (and `modtools`') run where `pkgadd` runs: on a
 box, and on the installer's miniroot, which has no `awk`, `cmp`, `grep` or
-`sed`, under a fixed `PATH`. So they are **pure Bourne shell**: the
-builtins (`read`, `case`, `test`, `echo`, `while`, redirection) and `mv`.
-Any other command runs only after `test -x` finds it, with the script
-still correct without it.
+`sed`, under a fixed `PATH`. The rule, which amix-packages' build gate
+enforces:
+- **Commands:** the sh builtins, plus `mv`, `cat`, `ls`, `dd` and `expr`
+  (all in the miniroot's `/bin`). Each external runs only after `test -x`
+  finds it, and a script that lacks a command it needs refuses, never
+  carries on without it.
+- **`read`:** never in the script's own shell. Each `read` runs in a child,
+  a backquote or a redirected `while read … done < file`, with one
+  redirection of its own. The 1991 sh's `read` keeps buffered input across
+  redirections, so a second `exec <file` continues where the first read
+  stopped. modtools -3's postinstall re-read `/etc/inittab` that way and
+  left only the `dlm` line.
+- **Forbidden:** `exec` redirection, `IFS`, `set -f`, `$(…)`, `${…#…}`
+  and the other pattern expansions, `printf`, and flags to `read` or
+  `echo`.
+- **Files:** `cat` or `dd` copy the bytes, and a size check comes before
+  every `mv` that replaces a file.
 
-Never re-read a file through `exec <file`: the 1991 sh's `read` keeps
-buffered input across the redirection and continues from where the
-previous read stopped. Read a file once per redirection: `while read l;
-do …; done < file`, or `read l < file`. Scripts are proven on the 2.1 sh
-(the installer miniroot), not on a host shell. (modtools -3's
-postinstall re-read `/etc/inittab` that way and left only the `dlm`
-line.) modtools' postinstall, which puts the `modadmin -B` line
-first among the sysinit entries (§5), is written that way from modtools -3.
+Scripts are proven on the 2.1 sh (the installer miniroot), not only on a
+host shell. modtools' postinstall, which puts the `modadmin -B` line first
+among the sysinit entries (§5), follows the rule from modtools -4.
 
 ## 2. What `kbootset build` composes, and what it refuses
 
