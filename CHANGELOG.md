@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patch 0020: registration backstop; C3-1 §4 refusals (314c2aa)
+
+After every _unload and after a failed _load, any interrupt handler, network interface or console hook still pointing into the
+module is removed and named on the console. A section type outside the list and an image over the limit are ENOLOAD; each
+refusal prints one line naming the module and the rule; parameter defaults must be in C3-1 §3's forms; .moddata word 0 must
+be a single R_68K_32 with addend 0. The real modules are unaffected. Harness 175/175 both kernels; make core 123/123; 665 host
+checks. Audit items §1.3 and §1.5 — the audit's kernel items are complete.
+
 ## 2026-10-26 — core patch 0019: code pointers in kernel text or the image; registry majors (dafa9c0)
 
 A switch entry or STREAMS routine must be 0, kernel text [stext, etext) or the module's own image (kernel data and the arena
