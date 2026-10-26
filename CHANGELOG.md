@@ -1,3 +1,10 @@
+## 2026-10-26 — kspace: module packages may ship block device nodes in /dev/dsk (C3-5 v8 §1.2) (abfaaac) — not minted
+
+gen-catalog.py and apkg's ds_pure_files accept `b none /dev/dsk/<node> <maj> <min> <mode> <owner> <group>` for role=module,
+same wording both sides; `c` unchanged (under /dev/); `b` outside /dev/dsk, kernel/loader device nodes and p/s/l still
+refused. Unblocks ramdisk30/46 1.0.0-1. Tests: apkg 457/0 (+15), nohttp 38/0 (+18), tools/repo 409/0 (+9). apkg.amix
+reproducible 226678a5 (113350 B), scan060 CLEAN, not deployed; the next APKG mint bumps APKG_VERSION (still 0.3.2).
+
 ## 2026-10-26 — heirloom: removef's stdin form strips the newline, removes again (75be235)
 
 `removef PKG -` kept fgets' trailing newline on every line, so nothing matched the contents DB and nothing was removed
