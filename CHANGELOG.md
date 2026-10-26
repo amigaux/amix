@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Core patch 0032: sd_register, C4-1's registration (S4-03, a15104e)
+
+`sd_register(queuefn, c, base, name, rank)`: a root-class controller registers each board from its _load; the entries wait
+in the core's table of four until sd's first open takes them (`dlm_sd_close`), later registrations are EBUSY; the rank must
+equal the module's `.moddata` `rank=` class (z3660/zorro/mobo/ide; unknown = ECONFIG); a fifth is ENOSPC; a failed _load's
+entries are swept. DDI name of minor 1 (a new "root" context). Harness 214/214 both kernels; the 1.1 fingerprints unchanged;
+dlm.o 4d0f4815. S4-21's cut of record takes the core at a15104e on both lines with the sd seam (dlm_sd_close in sd's init,
+inert until a root-class module exists) — no third cut.
+
 ## 2026-10-26 — Core patches 0030 (the halt pass) and 0031 (block rows); kabi k46.1.1 / k30.1.1 (3e4c3a0, 99a61ea, 1aba361)
 
 0030 (S4-07): `int dlm_halt(void)` runs each settled module's halt entry newest first, once; the kernel calls it from mdboot
