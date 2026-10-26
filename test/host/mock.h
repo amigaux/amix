@@ -52,6 +52,12 @@ extern int			mock_nlog;
 extern int			mock_dma_alloc_fail;
 extern unsigned long		mock_addr_offset;	/* dma_addr = pa + this */
 extern int			mock_addr_zero;		/* dma_addr = 0: out of reach */
+extern int			mock_forcebounce;	/* the k30 hook: a FROM complete
+							 * copies a stale bounce (0x5a) back */
+extern unsigned char		*mock_status_va;	/* the chip's status byte ... */
+extern unsigned char		mock_status_val;	/* ... written before the first
+							 * complete after a launch */
+extern int			mock_status_done;
 extern void			*mock_dma_va;
 extern size_t			mock_dma_len;
 extern int			mock_dma_allocs, mock_dma_frees;

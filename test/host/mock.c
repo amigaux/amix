@@ -22,6 +22,10 @@ int			mock_nlog;
 int			mock_dma_alloc_fail;
 unsigned long		mock_addr_offset;
 int			mock_addr_zero;
+int			mock_forcebounce;
+unsigned char		*mock_status_va;
+unsigned char		mock_status_val;
+int			mock_status_done;
 void			*mock_dma_va;
 size_t			mock_dma_len;
 int			mock_dma_allocs, mock_dma_frees;
@@ -41,6 +45,9 @@ mock_reset(void)
 	mock_dma_alloc_fail = 0;
 	mock_addr_offset = 0;
 	mock_addr_zero = 0;
+	mock_forcebounce = 0;
+	mock_status_va = NULL;
+	mock_status_done = 0;
 	mock_dma_allocs = mock_dma_frees = 0;
 	mock_autocon_calls = 0;
 }
@@ -222,8 +229,25 @@ dma_prepare(void *r, unsigned long pa, unsigned long len, int dir)
 void
 dma_complete(void *r, unsigned long pa, unsigned long len, int dir)
 {
+	unsigned char *p;
+
 	(void)r;
 	logop(OP_COMPLETE, pa, len, dir, 0);
+	/* the chip finished before the driver completes anything: its status */
+	if (mock_status_va && !mock_status_done) {
+		*mock_status_va = mock_status_val;
+		mock_status_done = 1;
+	}
+	/* the k30 hook (amix-dlm core/plat/k30/line.c): every segment bounced, a
+	 * FROM complete copies the bounce back over [pa, pa + len); a bounce
+	 * the chip never wrote holds stale bytes */
+	if (mock_forcebounce && dir == 1) {
+		if (pa >= MOCK_DMA_PA && pa < MOCK_DMA_PA + mock_dma_len)
+			p = (unsigned char *)mock_dma_va + (pa - MOCK_DMA_PA);
+		else
+			p = (unsigned char *)pa;
+		memset(p, 0x5a, len);
+	}
 }
 
 unsigned long

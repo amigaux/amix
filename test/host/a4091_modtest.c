@@ -132,7 +132,7 @@ t_one_a4091(void)
 	CHECK(mock_reg[0].fn != NULL, "queue function given");
 	CHECK(mock_dma_allocs == 1 && a4091_da == mock_dma_va && a4091_dapa == MOCK_DMA_PA,
 	    "one dma_alloc area, its kernel and physical address kept");
-	memcpy(&w0, (char *)a4091_da + 16, sizeof w0);	/* behind the status line */
+	memcpy(&w0, (char *)a4091_da + 32, sizeof w0);	/* behind the status and clear lines */
 	CHECK(w0 == 0x47000000UL, "SCRIPTS copied into the area (SELECT ATN first)");
 	CHECK(a4091_dmarec[0].magic == DMA_REC_MAGIC && a4091_dmarec[0].version == 2
 	    && a4091_dmarec[0].ctlid == 0x02020054UL && a4091_dmarec[0].unit == 0,
@@ -347,20 +347,24 @@ t_queue_bounce(void)
 	CHECK(raw[0] == (char)0xaa && raw[17] == (char)0xaa, "no byte outside the 16");
 }
 
-/* the status-line sync (C4-5 v5 section 5.4): prepare + complete FROM_DEVICE
- * over a 16-byte line in the area holding the status byte the chip wrote */
+static unsigned char *status_va(struct mock_board *b);
+
+/* the cache-clearing sync (C4-5 v5 section 5.4): prepare + complete FROM_DEVICE
+ * over a 16-byte clear line in the area -- never over the status and message
+ * bytes the chip wrote, which a bounced complete would overwrite (N109) */
 static void
-check_sline(int i)
+check_sline(int i, struct mock_board *b)
 {
-	unsigned char *sl = area_va(mock_log[i].pa);
+	unsigned char *sl = area_va(mock_log[i].pa), *st = status_va(b);
 
 	CHECK(mock_log[i].op == OP_PREPARE && mock_log[i + 1].op == OP_COMPLETE,
-	    "status line: prepare then complete");
+	    "clear line: prepare then complete");
 	CHECK(sl != NULL && (mock_log[i].pa & 15) == 0 && mock_log[i].len == 16
 	    && mock_log[i].dir == 1 && mock_log[i + 1].pa == mock_log[i].pa
 	    && mock_log[i + 1].len == 16 && mock_log[i + 1].dir == 1,
-	    "status line: 16 aligned bytes in the area, FROM_DEVICE");
-	CHECK(sl && sl[0] == 0xff, "status line holds the status byte");
+	    "clear line: 16 aligned bytes in the area, FROM_DEVICE");
+	CHECK(sl && st && (st + 12 <= sl || st >= sl + 16),
+	    "clear line overlaps neither the status nor the message bytes");
 }
 
 /* TEST UNIT READY: no data segment; only the status line is synced */
@@ -373,7 +377,7 @@ t_queue_zero(void)
 	CHECK(run_queue(0, 0, 0, NULL, 0, 0x00), "TUR completes");
 	CHECK(mock_nlog == 2, "no data DMA call, one status-line sync");
 	if (mock_nlog == 2)
-		check_sline(0);
+		check_sline(0, &mock_board[0]);
 	CHECK(a4091_dmarec[0].drv_zero == 1, "drv_zero counted");
 }
 
@@ -392,7 +396,7 @@ t_queue_write(void)
 	    && mock_log[0].pa == (unsigned long)(raw + 2), "prepare(caller pa, TO_DEVICE)");
 	CHECK(mock_log[2].op == OP_COMPLETE && mock_log[2].dir == 0, "data complete first");
 	if (mock_nlog == 5)
-		check_sline(3);
+		check_sline(3, &mock_board[0]);
 }
 
 /* C4-5 v5: dma_addr 0 (out of reach, no bounce) -- never arm, fail the
@@ -425,6 +429,58 @@ t_queue_noreach(void)
 	CHECK(run_queue(0, 0, 1, buf, sizeof buf, 0x28), "the next command runs");
 }
 
+/*
+ * Bench N109 (k30, dma_forcebounce on): the status after a WRITE or a TUR must
+ * be the byte the chip wrote, even when the provider bounces the cache-clearing
+ * sync and copies a stale bounce back.  The chip's status lands before any
+ * complete; the copy-back follows.  cp->status must read the chip's 0x00.
+ */
+static unsigned char *
+status_va(struct mock_board *b)
+{
+	struct ds_mirror *ds = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	unsigned long sp;
+
+	if (!ds)
+		return NULL;
+	memcpy(&sp, (char *)ds + sizeof (unsigned long) + 2 * 16 + 8, sizeof sp);
+	return area_va(sp);	/* p[2].buf: stsbuf */
+}
+
+static int
+run_status(int c, int reading, char *buf, unsigned n, unsigned char op)
+{
+	struct sdcom cp;
+
+	memset(&cp, 0, sizeof cp);
+	cp.reading = reading; cp.cdb[0] = op; cp.addr = buf; cp.nbyte = n;
+	cp.unit = 6; cp.intr = (void (*)())cb;
+	mock_status_done = 0;
+	mock_reg[c].fn(c, &cp);
+	return cp.okay ? cp.status : -1;
+}
+
+static void
+t_forcebounce_status(void)
+{
+	static char raw[600] __attribute__((aligned(16)));
+	struct mock_board *b;
+	unsigned char *sva;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(run_queue(0, 0, 1, raw, 512, 0x28), "a first READ (finds the status line)");
+	sva = status_va(b);
+	CHECK(sva != NULL, "the DSA table's status buffer is in the area");
+	mock_status_va = sva;
+	mock_status_val = 0x00;		/* GOOD */
+	mock_forcebounce = 1;
+	CHECK(run_status(0, 0, raw, 512, 0x2a) == 0x00, "WRITE: status is the chip's 0x00");
+	CHECK(run_status(0, 0, NULL, 0, 0x00) == 0x00, "TUR: status is the chip's 0x00");
+	CHECK(run_status(0, 1, raw, 512, 0x28) == 0x00, "READ: status is the chip's 0x00");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -442,6 +498,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "queue: zero length", t_queue_zero },
 	{ "queue: WRITE", t_queue_write },
 	{ "queue: out of reach (dma_addr 0)", t_queue_noreach },
+	{ "status under force-bounce (N109)", t_forcebounce_status },
 };
 
 int

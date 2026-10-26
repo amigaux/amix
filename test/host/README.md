@@ -32,7 +32,8 @@ make -C test/host clean
 | halt | Every mapped board is aborted, soft-reset and re-initialised |
 | queue: aligned READ | `prepare(pa, 512, FROM)`, then `dma_addr(r, pa)`, then `complete`. `data1buf` is `dma_addr`'s answer, not `pa`. DSA, DSP and the IDENTIFY/CDB pointers are physical addresses inside the area |
 | queue: misaligned READ | A 16-byte sense lands in the driver's bounce: prepared by its physical address (16-aligned, in the area) and copied out by its kernel address, to exactly 16 bytes |
-| queue: zero length / WRITE | No data DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce. Either way, the data step is followed by the status-line sync: prepare and complete FROM_DEVICE over a 16-aligned 16-byte line in the area that holds the status byte (C4-5 v5 §5.4). An aligned or bounced READ has none: its own complete clears the cache |
+| queue: zero length / WRITE | No data DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce. Either way, the data step is followed by the cache-clearing sync: prepare and complete FROM_DEVICE over a 16-aligned 16-byte clear line in the area that overlaps neither the status nor the message bytes (C4-5 v5 §5.4). An aligned or bounced READ has none: its own complete clears the cache |
+| status under force-bounce (N109) | The mock models the k30 hook: the chip's GOOD status (0x00) lands before any complete, then a FROM complete copies a stale bounce (0x5a) over its segment. WRITE, TUR and READ must all return status 0x00. 1.0.0-3, which synced the status line itself, reads 0x5a |
 | queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
 
 ## How the harness works
@@ -50,9 +51,10 @@ make -C test/host clean
 
 ## Mutation check (2026-10-27)
 
-Each of these bugs makes a case fail (the last two added with C4-5 v5):
+Each of these bugs makes a case fail (the last three added with C4-5 v5 and N109):
 - arming with `dpa` instead of `dma_addr(r, dpa)`;
 - indexing the tables by `cp->card` instead of `c`;
 - writing DSA with the table's kernel address;
 - arming past a `dma_addr` of 0;
-- skipping the status-line sync after a WRITE or a TUR.
+- skipping the cache-clearing sync after a WRITE or a TUR;
+- syncing the status line itself instead of the clear line (the N109 bug).
