@@ -254,6 +254,77 @@ The row passes when:
 
 That is stage 2's exit gate (80 §2) on the bench.
 
+### The k30 line: S2-46, S2-41 and one S2-42 cell
+
+The same rows on the 030 line, with the real kernel package
+`kernel-k30-u` (pkginst `kern30u`). Its kernel is K030-U with `kinfo`,
+build id `68030-261026-01`, a brel of 1 270 676 bytes,
+`bss=344916`.
+
+**Vehicle: the installer's l11-k30 disk**, rig row N19's shape (A3000,
+the disk as WD unit 6), with its 64 MiB store, `/dev/kinfo` and the
+`retry` line in `bcheckrc`. The disk must be minted with `kernel-k30-u`
+as its pristine kernel. The v6 disk, with the stand-in `kernel-k030u`
+(the 1.0 r7 kernel), does not serve, for two reasons:
+- generation 1 then has no `kinfo`, so on its boots `mark-good` refuses
+  and `status` cannot say which generation booted;
+- `kernel-k030u`'s record and `kernel-k30-u`'s would both name
+  `/stand/k30/unix`, and gate 1 refuses a path named twice.
+
+The facts come from `kinfo`, so no command takes options. No stand-in
+package is needed: `kbootset build` composes from the installed
+`kernel-k30-u`.
+
+**S2-46 on k30.** The catalog serves `kbootset`, `loader-amix` and
+`kernel-k30-u` at a revision above the one installed (amix-packages
+mints it; the kernel bytes may be the same). Then the S2-46 table above
+applies with:
+- `apkg install kernel-k30-u` on boot 1, an upgrade of the installed
+  package, so its record is replaced, not doubled;
+- `amix-boot: generation 2, kernel unix 1270676 bytes` on boot 2;
+- `amix-boot: generation 1, kernel unix 1270676 bytes` on boot 4.
+
+**S2-41 on k30.** The S2-41 table above applies with:
+- boot 1: `kbootset build; kbootset commit`;
+- the kernel lines: `kernel unix 1270676 bytes` for generations 1 and 2;
+- boot 5: the 64 MiB store has room, so `mark-bad 2` is not needed for
+  space. Keep it, because it exercises `mark-bad`. Then
+  `kbootset commit --spec bad30.spec`.
+
+`bad30.spec` names K030-IDE, a k30 kernel whose only disk driver is
+Gayle IDE, probed as the sole controller on an A4000 only. On the A3000
+it finds no disk, so it cannot mount its root. Copy
+`amix-kerntools/work/k0-chains/K030-IDE/K030-IDE-c0-u6` (1 260 137
+bytes, sha256 `4cb66c1b…`) to `/tmp`:
+
+```
+line k30
+rootfs ufs
+root sd id=00000000 base=00000000 unit=6 slice=1 mobo
+kernel unix /tmp/K030-IDE-c0-u6 bss=280135
+```
+
+(`bss=` from `tests/bench/bss-of.sh` over its `.etrel` and brel.)
+- **Boot 6:** `amix-boot: generation 3, kernel unix 1260137 bytes`,
+  then the kernel stops at
+  `PANIC: vfs_mountroot: cannot mount root: errno <n>` (k46 gave errno
+  89; the 030 value is the row's to record).
+- **If the kernel reboots by itself,** as k46 did, the L8 line and
+  generation 1 follow in the same boot. If it stops, power-cycle, and L8
+  shows on boot 7.
+- **Either way the end state:** default 1, generation 3 bad with 1
+  attempt, generation 2 good.
+
+**One S2-42 cell on k30 (N = 7).** As the S2-42 table above, on the
+l11-k30 disk, with `build` composing from the installed package (no
+stand-in). Boot 2:
+- the loader boots generation 2 (the trial, `kernel unix 1270676
+  bytes`);
+- `status` says the commit had completed;
+- if the root fsck reboots, `retry` gives the attempt back, and the
+  trial boots again (M-GEN3 §4);
+- then `mark-good`.
+
 ### M-GEN2 — `kbootset commit` time, bench upper bound
 
 M-GEN2 times one `kbootset commit` after a `kbootset build`, three times
