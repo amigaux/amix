@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — a4091 module 1.0.0-3: the attach lines name the board, not a card (aa4c278)
+
+sd assigns the card only after registration (Bench N106: the Z3660 ranked first made the A4091 card 1 after the module had
+printed "card 0"), so the k46 attach lines say `a4091: board N at …`; RTH1/kinfo name the card. The static strings are unchanged
+(one macro per message). k46 object 54405c68; k30 byte-identical to 1.0.0-2. Host 16/16 per arm. E1 (N105/N105b) and E2 (N106)
+marked passed in the README.
+
 ## 2026-10-27 — a4091 module: the refused arm also calls dma_complete (drv_prep == drv_cmpl)
 
 dma_complete with nothing prepared only counts cmpl_noprep on both providers (dlm), so the refused arm completes too.
