@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 8
+# C2-4 — `kbootset` as a called program, version 9
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -145,8 +145,13 @@ has run:
   level 2. A trial that is not marked good is taken back by the loader
   on the next boot (L8). That is the try-once rule, and the hook adds
   nothing to it.
-- `retry` (§7) and `mark-good` are the only two calls the base system
-  makes on every boot.
+- **On every boot** (not only a trial), after its own work, `mark-good`
+  writes the booted kernel's namelist as `kbootset namelist` does (§12),
+  and prints its line when it wrote one. A namelist it cannot write does
+  not change the exit status.
+- `retry` (§7), `namelist` (§12) and `mark-good` are the only calls the
+  base system makes on every boot. `retry` writes no namelist: the root
+  is not repaired when it runs.
 
 ## 10. An unchanged generation, and `commit --again`
 
@@ -212,7 +217,7 @@ the module packages installed under the root, as C3-5 §2 says.
   has no module package gets no module record.
 - **`check`** hashes each module copy the manifests name (C2-5).
 - **`status`** lists the booted generation's members, each marked from
-  kinfo's module list (C2-1 offset 536): `module <name> (boot): loaded`;
+  kinfo's module list (C2-1 offset 576, version 3; 536 in version 2): `module <name> (boot): loaded`;
   `… not loaded (the console says why)`; for demand class `… not loaded
   (loads at the first open of its device)`.
 - **The unchanged-generation comparison** (§10) compares the module
@@ -222,4 +227,42 @@ the module packages installed under the root, as C3-5 §2 says.
   loaded modules and reads a module's tunables and counters by
   name (`-s`, `-Q`, `-k`, `-p`, `-w`). `modadmin -B` loads the boot-class
   members, from `/etc/inittab`'s first sysinit entry (C3-5 §5).
+
+## 12. `kbootset namelist` (40 §4.2)
+
+Writes the booted kernel's namelist to the paths the stock `nlist`
+consumers read: `/stand/unix` first, then `/unix` (a hard link to it, a
+copy across filesystems). S3-B5's survey of the stock binaries may add
+paths; they are linked the same way.
+
+- **No options.** The booted generation comes from kinfo (C2-1 version
+  3); the kernel from that generation's manifest, read from the boot
+  store. An ET_REL kernel gives its own symbols, laid out by the loader's
+  relocator at kinfo's text vaddr. A `brel` gives none, so the symbols
+  come from the line's `unix.sym` (C2-3 §2.1), when its SHA-256 matches
+  the sidecar's `sym=` and the generation's kernel is the installed
+  `unix`.
+- **The check:** the layout's text, rodata and data addresses must equal
+  kinfo's bootdata block. Otherwise nothing is written.
+- **What it prints:**
+  - `kbootset: namelist /stand/unix (and /unix) written for generation N,
+    bound at 0x<addr>` when it wrote one;
+  - `kbootset: namelist for generation N is current` when the files
+    already match;
+  - `kbootset: no namelist: <reason>` otherwise: `kinfo version 2 gives no
+    bind address`, `the kernel has no symbols (no unix.sym)`, `the layout
+    does not match kinfo`, `kinfo flags a loader fault (0x8)`.
+- **Exit status:** 0 when written or current, 3 when it cannot, 1 on an
+  I/O error. The base system calls it early in run level 2 and ignores
+  the status:
+
+```
+[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1
+```
+
+- **`status`** adds `namelist: current`, `namelist: stale (kbootset
+  namelist)` or `namelist: none (<reason>)`.
+- **The installer** (S3-31) removes a stock `/stand/unix` and `/unix` from
+  the target and installs the line above in run level 2, before any
+  script that reads kernel memory.
 

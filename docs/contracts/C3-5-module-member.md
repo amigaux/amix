@@ -125,7 +125,7 @@ a new record, with `loader-min` raised. This contract adds none.
   loads nothing; every other load, a first open or a `modload`, is
   refused too (patch 0010).
 - **kinfo** (C2-1, no change):
-  - the module list at offset 536 holds the modules actually loaded
+  - the module list at offset 576 (C2-1 version 3; 536 in version 2) holds the modules actually loaded
     (name, address, size), filled from the core's list;
   - flag 0x4 is safe mode.
   So `kbootset status` lists the manifest's boot-class members, each

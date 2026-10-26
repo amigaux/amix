@@ -53,7 +53,8 @@ caps s1 and s4 at that limit until the limit is lifted (OQ-40.7). A disk laid wi
 
 | Path | Content | Owner |
 |---|---|---|
-| `/stand/k30/unix`, `/stand/k46/unix` + `kabi` | pristine kernel of the line and its sidecar (kabi tag, compiler pin, arena and identity offsets, SHA-256) | kernel package |
+| `/stand/k30/unix`, `/stand/k46/unix` + `kabi` | pristine kernel of the line and its sidecar (kabi tag, compiler pin, arena and identity offsets, SHA-256); `/stand/k30/unix.sym`, the symbols of a `brel` (C2-3 §2.1) | kernel package |
+| `/stand/unix`, `/unix` | the booted kernel's namelist (§4.2), for the stock `nlist` consumers | `kbootset` |
 | `/stand/loader/{boot1,boot2}` + `ldrinfo` | loader bytes and their version and SHA-256 | loader package |
 | `/etc/conf/mod.d/<name>` | module objects | module packages |
 | `/etc/conf/modreg.d/<name>` | the package's registration defaults (class, parameters) | module packages |
@@ -63,8 +64,8 @@ caps s1 and s4 at that limit until the limit is lifted (OQ-40.7). A disk laid wi
 | `/sbin/kbootset` | the composer, statically linked | kbootset package (part of the base set) |
 | `/var/kbootset/journal` | in-flight build/commit record | `kbootset` |
 
-Stock `/stand/unix`, `/stand/boot2.boot` and `updbootpart` are no longer
-read; `updbootpart` becomes a shim that refuses and names `kbootset` (P-28
+Stock `/stand/boot2.boot` and `updbootpart` are no longer read, and no
+loader reads `/stand/unix` (it holds the namelist, §4.2); `updbootpart` becomes a shim that refuses and names `kbootset` (P-28
 D54). Members of a generation come from the package contents database, never
 from a directory listing (`LC`:93).
 
@@ -162,14 +163,57 @@ attempt (M-GEN3).
 - It gives an attempt back at most twice per trial, so a root that never
   stays clean still ends in the try-once fallback.
 
-## 4. `kinfo`
+## 4. `kinfo` and the namelist
+
+### 4.1 `kinfo`
 
 A read-only character device in the static floor (`70-static-floor.md`),
 major per the registry (`20-module-format-and-abi.md` §6). One `read`
 returns a versioned record: CPU type, line, kabi, kernel build id, the
 booted generation id and state, the loader record (`10-boot-loader.md` §6),
 the RTH1 record, the board set (`bootinfo.autocon[]` identities), the sd card
-table (card → controller identity), the loaded-module list.
+table (card → controller identity), where the loader bound the kernel (the
+bootdata block, C2-1 version 3), the loaded-module list.
+
+### 4.2 The namelist
+
+The stock tools that read kernel memory (`netstat`, `ps`, `crash`, `pstat`,
+the `sar` family, Amix's `ifconfig`) find kernel symbols with `nlist` on a
+fixed kernel path. In 1.0 that file was the kernel the stock loader booted,
+linked at the address it ran at. With generations the booted kernel is a
+generation's member, bound by the loader where it chose, and its file on
+disk does not carry those addresses: an ET_REL kernel's symbols are
+section-relative, and a `brel` has none. Without a namelist, `netstat -i`
+reads `ifstats` at another kernel's address (S3-B5).
+
+So **the booted kernel's namelist is at every path the stock consumers
+read**: `/stand/unix` and `/unix`, and any other path S3-B5's survey of
+the stock binaries finds.
+- **What it is:** an ELF32 `ET_EXEC` holding the booted kernel's symbol
+  table, each symbol's value its address in this boot: the bind address
+  plus its offset in the loader's layout (text, rodata, data, bss, COMMON;
+  `10-boot-loader.md` §5). Section headers give each section's address
+  and size, with no contents. It is not a kernel and boots nothing.
+- **Its inputs:** the bind address and the section addresses from kinfo's
+  bootdata block (C2-1 version 3); the symbols from the generation's
+  kernel when it is ET_REL (laid out by the loader's own relocator), or
+  from the kernel package's `unix.sym` (C2-3 §2.1) for a `brel`.
+- **Who writes it:** kbootset, on every boot that reaches `mark-good`
+  (C2-4 §9, §12), and whenever `kbootset namelist` is called. It checks
+  the layout it computes against kinfo's rodata and data addresses. It
+  writes the file only when the content differs, as a new file renamed
+  into place, then makes the other paths hard links to it (a copy when a
+  path is on another filesystem; both ufs and s5 roots link). The base
+  system calls `kbootset namelist` early in run level 2 as well, so
+  nothing typed or started later reads a stale namelist.
+- **When it cannot:** with a version 2 kinfo, no kinfo, a kernel without
+  symbols (a `brel` with no `unix.sym`), or a layout that does not match
+  kinfo, it writes nothing and says why. `kbootset status` reports
+  whether the namelist matches the booted kernel.
+- **The installer** cannot know where the first boot will bind the
+  kernel, so it lays no namelist: it removes a stock `/stand/unix` and
+  `/unix` from the target, so that nothing reads another kernel's
+  symbols, and the first boot's early `kbootset namelist` writes them.
 
 ## 5. Finding the boot disk
 
