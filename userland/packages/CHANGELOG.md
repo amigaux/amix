@@ -8,7 +8,7 @@ history, which the maintainer keeps; they are provenance, not links into this re
 loader-amix 1.0.261025-5 from amix-dlm 26492cf: boot2 001b04a gives a k30 kernel at most 64 MiB of fast memory, and
 Zorro III RAM is never kernel memory. boot2 28392 B, 6147ab3b; boot1 unchanged (c6c380ee, 1024 B). Loader version 2,
 catalog loader=2. Datastream md5 f70310d1 / 35328 B (supersedes -4, never staged). Round trip 106/106 on packagemanager
-124c329.
+124c329. Staged kernel-space catalog regenerated with -5 (build/kspace/repo, md5 3305d908).
 
 ## 2026-10-26 — kbootset -14, modtools -5, dlmkit -3 at c6ad5bd, monsw-k30/-k46 1.0.0-1 (38f9193..5ecf509) — not published
 
