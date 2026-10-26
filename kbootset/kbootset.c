@@ -422,6 +422,32 @@ state(int s)
 	return s >= 0 && s <= 4 ? n[s] : "?";
 }
 
+/* the booted generation's module members, each marked from kinfo's list
+ * of the modules actually loaded (C3-5 section 5); why one did not load is
+ * on the console */
+static void
+status_modules(struct ks *k, const struct kb_kinfo *ki)
+{
+	static struct ax_manifest m;
+	char *buf;
+	int i, j;
+
+	if ((buf = ks_manifest(k, ki->gen_id, &m)) == 0)
+		return;
+	if (m.nmod && (ki->flags & 4))
+		printf("modules: safe mode, none loads this boot\n");
+	for (i = 0; i < m.nmod; i++) {
+		for (j = 0; j < ki->nmods && strcmp(ki->mods[j], m.mod[i].name); j++)
+			;
+		printf("module %s (%s): %s\n", m.mod[i].name,
+		       m.mod[i].cls == AXC_BOOT ? "boot" : m.mod[i].cls == AXC_DEMAND ? "demand" : "root",
+		       j < ki->nmods ? "loaded" : m.mod[i].cls == AXC_DEMAND ?
+		       "not loaded (loads at the first open of its device)" :
+		       "not loaded (the console says why)");
+	}
+	free(buf);
+}
+
 static void
 status(struct ks *k)
 {
@@ -657,12 +683,13 @@ main(int argc, char **argv)
 		k.msg[0] = 0;
 		if (!strcmp(cmd[0], "status")) {
 			status(&k);
-			if (have_kinfo && ki.has_axl1)
+			if (have_kinfo && ki.has_axl1) {
 				printf("booted: generation %lu, by the %s loader; kernel %s, 680%lu, %lu bytes "
 				       "of fast memory\n", (unsigned long)ki.gen_id,
 				       (ki.boot1_choice & 0x200) ? "secondary" : "primary", ki.build,
 				       (unsigned long)ki.cpu, (unsigned long)ki.fast);
-			else if (have_kinfo)
+				status_modules(&k, &ki);
+			} else if (have_kinfo)
 				printf("booted: by the stock loader (no loader record); kernel %s\n", ki.build);
 			printf("facts: line %s, boot %s, root %s, rootfs %s, fast memory %lu\n",
 			       facts.line == 30 ? "k30" : facts.line == 46 ? "k46" : "(unknown)",

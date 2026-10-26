@@ -36,9 +36,9 @@ def rdb(path, parts):            # parts: [(dostype, lowcyl, highcyl)]
         struct.pack_into('>I', p, de + 64, dt)        # de_DosType
         img[(i + 1) * 512:(i + 2) * 512] = p
     open(path, 'wb').write(img)
-def kinfo(path, cards, axl1, fast=16777184):
-    r = bytearray(540)
-    struct.pack_into('>II', r, 0, 0x4b494631, (2 << 16) | 540)
+def kinfo(path, cards, axl1, fast=16777184, mods=()):
+    r = bytearray(540 + 32 * len(mods))
+    struct.pack_into('>II', r, 0, 0x4b494631, (2 << 16) | len(r))
     struct.pack_into('>III', r, 12, 60, 46, 0x000f)
     r[24:30] = b'static'; r[48:63] = b'68060-261025-50'
     flags = 2
@@ -58,7 +58,11 @@ def kinfo(path, cards, axl1, fast=16777184):
     for i, (k, cid, base, fl) in enumerate(cards):
         struct.pack_into('>IIII', r, 464 + 16 * i, k, cid, base, fl)
     struct.pack_into('>II', r, 528, fast, 2097152)
-    s = sum(struct.unpack('>135I', r)) & 0xffffffff
+    struct.pack_into('>I', r, 536, len(mods))
+    for i, m in enumerate(mods):                       # name, address, size
+        r[540 + 32 * i:540 + 32 * i + len(m)] = m.encode()
+        struct.pack_into('>II', r, 540 + 32 * i + 24, 0x08300000 + 0x10000 * i, 4096)
+    s = sum(struct.unpack('>%dI' % (len(r) // 4), r)) & 0xffffffff
     struct.pack_into('>I', r, 8, (-s) & 0xffffffff)
     open(path, 'wb').write(r)
 if sys.argv[1] == 'rdb':
@@ -66,7 +70,8 @@ if sys.argv[1] == 'rdb':
 else:
     cards = [tuple(int(x, 0) for x in c.split(',')) for c in sys.argv[4].split('/') if c]
     axl1 = tuple(int(x, 0) for x in sys.argv[3].split(',')) if sys.argv[3] != '-' else None
-    kinfo(sys.argv[2], cards, axl1)
+    mods = sys.argv[5].split(',') if len(sys.argv) > 5 and sys.argv[5] else ()
+    kinfo(sys.argv[2], cards, axl1, mods=mods)
 EOF
 UNI1=0x554e4901 UNI0=0x554e4900 RESV=0x72657376
 START=$((150 * 32 * 512))		# slice 3 starts at cylinder 150
@@ -180,6 +185,27 @@ set -e
 [ $rc -eq 4 ] && grep -q "gate 9" $T/out
 python3 -I $T/disk.py rdb $T/dev/c6d0s0 $UNI1,10,99 $RESV,100,149 $UNI0,150,849
 
+# 6b. status lists the booted generation's modules, marked from kinfo's
+# list of the loaded ones (C3-5 section 5)
+Z64=0000000000000000000000000000000000000000000000000000000000000000
+cat > $T/mods.spec <<EOF2
+line k46
+kabi k46.1.0
+rootfs ufs
+root sd id=02025400 base=40000000 unit=6 slice=1
+kernel unix $R/stand/k46/unix
+module z3660eth boot 100 path=/stand/gen/9/mod/z3660eth sha256=$Z64 match=always
+module monsw demand 100 path=/stand/gen/9/mod/monsw sha256=$Z64 majors=c:52
+module z3660rtg demand 100 path=/stand/gen/9/mod/z3660rtg sha256=$Z64 majors=c:49 depend=monsw
+EOF2
+g=$($B/kbootset -R $R commit --spec $T/mods.spec 2>/dev/null | sed -n 's/^kbootset: generation \([0-9]*\) committed.*/\1/p')
+[ -n "$g" ] || { echo "kbox: the module generation was not committed"; exit 1; }
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0 z3660eth,monsw
+$B/kbootset -R $R status > $T/out
+grep -qx "module z3660eth (boot): loaded" $T/out
+grep -qx "module monsw (demand): loaded" $T/out
+grep -qx "module z3660rtg (demand): not loaded (loads at the first open of its device)" $T/out
+
 # 7. gate 8: stores on two disks, and no loader record to choose
 cp $T/dev/c6d0s0 $T/dev/ced0s0
 cp $T/dev/c6d0s3 $T/dev/ced0s3
@@ -188,4 +214,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules ok"

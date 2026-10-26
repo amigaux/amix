@@ -194,6 +194,102 @@ cp $T/kabi.static $R/stand/k46/kabi; record
 rm -rf $R/stand/gen/[0-9]*
 echo "kbuild: module kernel (gates 2, 4, 6, 7, the arena and ident records) ok"
 
+# module members (C3-5): the installed module packages go into the
+# generation, gates 1-3, the depend order, the modreg.d parameters, the
+# records and the copies under /stand/gen/<id>/mod/
+MD=$R/etc/conf/mod.d
+mkdir -p $MD $R/etc/conf/modreg.d $R/etc/conf/modreg.local.d
+modpkg() {	# modpkg NAME key=value ...: a module object and its apkg record
+	n=$1; shift
+	python3 tests/host/mkmodobj.py $MD/$n name=$n "$@"
+	cat > $R/var/apkg/kpkg/mod-$n <<EOF
+name mod-$n
+version 1.0.0
+role module
+line k46
+kabi k46.1.0
+pin gcc-2.7.2.3-8949028
+sha256 0000000000000000000000000000000000000000000000000000000000000000
+source /mnt/cdrom
+installed 1761400000
+verified no
+file /etc/conf/mod.d/$n $(size $MD/$n) $(sha $MD/$n)
+EOF
+}
+three() {	# the stage-3 set as C3-6 describes it
+	rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
+	modpkg z3660eth class=boot match=zorro:144b:01,mobo:z3660-window majors=c:51 \
+		param=intr:int:0:0:6 param=intrl2:int:1:0:1
+	modpkg z3660rtg class=demand majors=c:49 depend=monsw unload=allowed \
+		param=blit:bool:1 param=maxarea:int:0:0:3686400
+	modpkg monsw class=demand majors=c:52 param=config:int:-1:-1:51
+}
+msidecar 0x00060000
+three
+# a static kernel takes no module: gate 2 on the kabi family
+cp $T/kabi.static $R/stand/k46/kabi; record
+refused 2 $KB build $FACTS
+grep -q "is built for kabi k46.1.0, the kernel is static" $T/out
+msidecar 0x00060000
+echo "param intr=6" > $R/etc/conf/modreg.d/z3660eth
+echo "param blit=off   # the administrator's" > $R/etc/conf/modreg.local.d/z3660rtg
+$KB build $FACTS > $T/out && id=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
+[ -n "$id" ] || { echo "kbuild: the module generation was not built" >&2; cat $T/out >&2; exit 1; }
+B5=$R/stand/gen/$id/build
+grep -A9 '^kernel unix' $B5 > $T/mods
+# boot class first, then demand class with monsw before the z3660rtg that depends on it
+sed -n 2p $T/mods | grep -q "^module z3660eth boot $(size $MD/z3660eth) path=/stand/gen/$id/mod/z3660eth sha256=$(sha $MD/z3660eth) match=zorro:144b:01,mobo:z3660-window$"
+sed -n 3p $T/mods | grep -q "^module monsw demand $(size $MD/monsw) path=/stand/gen/$id/mod/monsw sha256=[0-9a-f]* majors=c:52$"
+sed -n 4p $T/mods | grep -q "^module z3660rtg demand [0-9]* path=/stand/gen/$id/mod/z3660rtg sha256=[0-9a-f]* majors=c:49 depend=monsw$"
+for p in "z3660eth.intr=6" "z3660eth.intrl2=1" "monsw.config=-1" "z3660rtg.blit=0" "z3660rtg.maxarea=0"; do
+	grep -qx "param $p" $B5 || { echo "kbuild: no param $p" >&2; cat $B5 >&2; exit 1; }
+done
+cmp -s $MD/z3660rtg $R/stand/gen/$id/mod/z3660rtg
+$KB commit 2>/dev/null | grep -q "committed"
+grep -a -q "^module z3660rtg demand .* depend=monsw$" $T/disk.img
+grep -a -qx "param z3660rtg.blit=0" $T/disk.img
+$B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
+$KB check > $T/out
+grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
+# what build refuses
+modpkg monsw class=demand majors=c:52 kabi=k46.1.1
+refused 2 $KB build $FACTS			# a minor above the kernel's
+three; modpkg monsw class=demand majors=c:52 cc=gcc-2.95.3-0000000
+refused 2 $KB build $FACTS			# another compiler
+three; echo "param speed=9" > $R/etc/conf/modreg.d/monsw
+refused 2 $KB build $FACTS			# a parameter the module does not declare
+grep -q "declares no parameter speed" $T/out
+three; echo "param blit=maybe" > $R/etc/conf/modreg.d/z3660rtg
+refused 2 $KB build $FACTS			# not a bool
+three; echo "param maxarea=4000000" > $R/etc/conf/modreg.d/z3660rtg
+refused 2 $KB build $FACTS			# above its max
+three; echo "disable" > $R/etc/conf/modreg.d/monsw
+refused 3 $KB build $FACTS			# z3660rtg depends on the disabled monsw
+grep -q "depends on monsw, which is not in the generation" $T/out
+three; modpkg z3660eth class=boot majors=c:51
+refused 3 $KB build $FACTS			# a boot module without match=
+three; modpkg monsw class=demand
+refused 3 $KB build $FACTS			# a demand module without majors=
+three; modpkg monsw class=demand majors=c:51
+refused 3 $KB build $FACTS			# another module's major
+grep -q "major c:51 is registered to another module" $T/out
+three; modpkg monsw class=demand majors=c:52 depend=z3660rtg
+refused 3 $KB build $FACTS			# a depend cycle
+three; modpkg monsw class=root match=always
+refused 3 $KB build $FACTS			# root class before stage 4
+three; printf 'X' | dd of=$MD/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+refused 1 $KB build $FACTS			# changed after apkg installed it
+# a copy changed between build and commit
+three; $KB build $FACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+printf 'Y' | dd of=$R/stand/gen/$id/mod/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+refused 1 $KB commit
+grep -q "changed since kbootset build" $T/out
+rm -rf "${R:?}/stand/gen/${id:?}"
+rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
+cp $T/kabi.static $R/stand/k46/kabi; record
+echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, commit, check) ok"
+
 # check: every member against its manifest, the default generation against
 # the installed kernel; a damaged member makes it say BAD and exit 1
 $KB check > $T/out

@@ -3,8 +3,9 @@
  * composer.md §3, §3.1): compose the next generation from what the package
  * system installed under a root, refuse it at the first gate it fails, and
  * hand it to commit.  The inputs are the agreed contracts:
- * docs/contracts/C2-2-kpkg.md (apkg's install records) and
- * C2-3-packages.md (the kernel and its kabi sidecar).
+ * docs/contracts/C2-2-kpkg.md (apkg's install records),
+ * C2-3-packages.md (the kernel and its kabi sidecar), C3-3 (a module
+ * kernel's sidecar) and C3-5 (the module packages and their records).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */

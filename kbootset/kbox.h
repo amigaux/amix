@@ -13,6 +13,7 @@
 
 #define KB_MAXBOARD	16
 #define KB_MAXCARD	4
+#define KB_MAXMODS	32	/* C2-1: the module list holds at most 32 */
 
 /* one read of /dev/kinfo, decoded (C2-1 version 2) */
 struct kb_kinfo {
@@ -28,6 +29,8 @@ struct kb_kinfo {
 	int ncards;
 	struct { ax_u32 k, id, base, flags; } card[KB_MAXCARD];
 	ax_u32 fast, chip;
+	int nmods;			/* the modules loaded, from the core's list */
+	char mods[KB_MAXMODS][25];
 };
 
 /* read and check the record at path (/dev/kinfo on the box); 0, or -1

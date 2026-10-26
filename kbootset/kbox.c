@@ -108,6 +108,11 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 	}
 	ki->fast = get32(r + 528);
 	ki->chip = get32(r + 532);
+	ki->nmods = (int)get32(r + 536);
+	if (ki->nmods > KB_MAXMODS || 540 + 32 * (ax_u32)ki->nmods > len)
+		ki->nmods = 0;
+	for (i = 0; i < (ax_u32)ki->nmods; i++)
+		str(ki->mods[i], r + 540 + 32 * i, 24);
 	return 0;
 }
 

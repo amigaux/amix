@@ -28,7 +28,7 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
 # common code that boot2 does not link (CSRC goes into boot2 whole)
 XSRC    := $(COMMON)/sha256.c
 # kbootset's core (userland: host and box)
-KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c
+KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c kbootset/kmod.c kbootset/kreg.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
@@ -61,6 +61,8 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kbox.sh
 	B=$(B) sh tests/host/prfcheck.sh
+	sh tools/mkkreg.sh | cmp -s - kbootset/kreg.c || \
+		{ echo "kbootset/kreg.c differs from abi/registry/majors: sh tools/mkkreg.sh > kbootset/kreg.c"; false; }
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
 	B=$(B) AX_KERNELS="$(AX_KERNELS)" AX_ELF2BREL="$(AX_ELF2BREL)" sh tests/host/rel-kernels.sh
 

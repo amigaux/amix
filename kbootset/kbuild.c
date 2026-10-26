@@ -1,9 +1,11 @@
 /*
  * kbuild.c -- `kbootset build`, `commit` from a build, and the gates (see
- * kbuild.h).  A generation is a kernel: a static one, or a module kernel
+ * kbuild.h).  A generation is a kernel, a static one or a module kernel
  * (sidecar version 5, C3-3), whose manifest gets its arena and identity
- * records for loader version 2.  Root-class modules are stage 4's and are
- * refused here until then.
+ * records for loader version 2, and the boot- and demand-class modules
+ * installed under /etc/conf/mod.d (C3-5): copied to /stand/gen/<id>/mod/,
+ * each with its manifest record and parameters.  Root-class modules are
+ * stage 4's and are refused here until then.
  *
  * Gates 5 (store space) is ks_commit's.  Gates 8 and 9 (the boot disk) are
  * met when the store is named explicitly (--image, --dev); finding it on
@@ -24,6 +26,7 @@
 #include "crc32.h"
 #include "sha256.h"
 #include "kbuild.h"
+#include "kmod.h"
 
 #define MAXFILE	(64UL << 20)
 
@@ -385,6 +388,358 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 	return rc;
 }
 
+/*
+ * Module members (docs/contracts/C3-5-module-member.md section 2): every
+ * module object under /etc/conf/mod.d, unless its modreg file says
+ * disable, through gates 1 to 3; the records in manifest order.
+ */
+struct kb_mod {
+	struct km_info i;
+	ax_u8 *data;
+	ax_u32 size;
+	char sha[65];
+	int np;
+	char pv[KM_MAXPARAM][64];	/* each declared parameter's value */
+	int placed;
+};
+static struct kb_mod mods[AXM_MAXMOD];
+static int nmods;
+
+static void
+mods_free(void)
+{
+	int i;
+
+	for (i = 0; i < nmods; i++)
+		free(mods[i].data);
+	nmods = 0;
+}
+
+/* gate 2 for one module against the kernel (C3-1 section 3) */
+static int
+mod_gate2(struct ks *k, const struct kb_kernel *kk, const struct km_info *mi)
+{
+	char m[300];
+	const char *a = mi->kabi, *b = kk->kabi;
+	size_t fa = strcspn(a, "."), fb = strcspn(b, ".");
+	long ma, mb, na, nb;
+	char *e;
+
+	ma = strtol(a + fa + (a[fa] != 0), &e, 10);
+	na = *e == '.' ? strtol(e + 1, &e, 10) : -1;
+	mb = strtol(b + fb + (b[fb] != 0), &e, 10);
+	nb = *e == '.' ? strtol(e + 1, &e, 10) : -1;
+	if (fa != fb || strncmp(a, b, fa) || ma != mb || na < 0 || nb < 0 || na > nb) {
+		sprintf(m, "module %.15s is built for kabi %s, the kernel is %s", mi->name, a, b);
+		return refuse(k, 2, m);
+	}
+	if (strcmp(mi->cc, kk->pin)) {
+		sprintf(m, "module %.15s is built with %s, the kernel with %s", mi->name, mi->cc, kk->pin);
+		return refuse(k, 2, m);
+	}
+	if (!strcmp(mi->tier, "core") && strcmp(mi->build, kk->build)) {
+		sprintf(m, "core-tier module %.15s is built for kernel %s, this one is %s", mi->name,
+			mi->build, kk->build);
+		return refuse(k, 2, m);
+	}
+	return KS_OK;
+}
+
+/* modreg.d, then modreg.local.d (C3-5 section 1): disable, and the
+ * parameter values, a later line winning */
+static int
+modreg(struct ks *k, const char *root, struct kb_mod *md, int *disabled)
+{
+	static const char *const dir[] = { "/etc/conf/modreg.d/", "/etc/conf/modreg.local.d/" };
+	char p[96], line[300], m[400], v[64];
+	int d, j;
+	FILE *f;
+
+	for (d = 0; d < 2; d++) {
+		sprintf(p, "%s%.15s", dir[d], md->i.name);
+		if ((f = fopen(under(root, p), "r")) == 0)
+			continue;
+		while (fgets(line, sizeof(line), f)) {
+			char *s = line, *eq;
+
+			line[strcspn(line, "#\n")] = 0;
+			while (*s == ' ' || *s == '\t')
+				s++;
+			if (!*s)
+				continue;
+			if (!strncmp(s, "disable", 7) && !s[7 + strspn(s + 7, " \t")]) {
+				*disabled = 1;
+				continue;
+			}
+			if (strncmp(s, "param ", 6) || !(eq = strchr(s + 6, '='))) {
+				fclose(f);
+				sprintf(m, "%s: %.60s: neither param <name>=<value> nor disable", p, s);
+				return refuse(k, 2, m);
+			}
+			*eq = 0;
+			for (s += 6; *s == ' '; s++)
+				;
+			eq[1 + strcspn(eq + 1, " \t\r")] = 0;
+			for (j = 0; j < md->i.nparam && strcmp(md->i.param[j].name, s); j++)
+				;
+			if (j == md->i.nparam) {
+				fclose(f);
+				sprintf(m, "%s: module %s declares no parameter %.31s", p, md->i.name, s);
+				return refuse(k, 2, m);
+			}
+			if (km_value(&md->i.param[j], eq + 1, v)) {
+				fclose(f);
+				sprintf(m, "%s: %.40s=%.60s is not a valid %s value for module %s", p, s,
+					eq + 1, md->i.param[j].type, md->i.name);
+				return refuse(k, 2, m);
+			}
+			strcpy(md->pv[j], v);
+		}
+		fclose(f);
+	}
+	return KS_OK;
+}
+
+static int
+by_name(const void *a, const void *b)
+{
+	return strcmp(((const struct kb_mod *)a)->i.name, ((const struct kb_mod *)b)->i.name);
+}
+
+/* the name is in the comma-separated list */
+static int
+named(const char *list, const char *name)
+{
+	size_t n = strlen(name);
+
+	while (*list) {
+		size_t len = strcspn(list, ",");
+
+		if (len == n && !strncmp(list, name, n))
+			return 1;
+		list += len + (list[len] == ',');
+	}
+	return 0;
+}
+
+/*
+ * The modules for kernel kk, gates 1-3 (C3-5 section 2); their records,
+ * paths under /stand/gen/<id>/mod/, into tail (cap bytes): boot class in
+ * depend order, then demand class, then the param records.  mods[] keeps
+ * the objects for mods_copy.
+ */
+static int
+modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, char *tail,
+	size_t cap)
+{
+	DIR *dd;
+	struct dirent *e;
+	struct kb_rec r;
+	char path[80], m[400], rec[600], sha[65], why[128];
+	int i, j, n, rc = KS_OK, cls, order[AXM_MAXMOD], nparam = 0;
+	size_t tl = 0;
+
+	mods_free();
+	tail[0] = 0;
+	if ((dd = opendir(under(root, "/etc/conf/mod.d"))) == 0)
+		return KS_OK;			/* no module package installed */
+	while (rc == KS_OK && (e = readdir(dd)) != 0) {
+		struct kb_mod *md = &mods[nmods];
+		int disabled = 0;
+
+		if (e->d_name[0] == '.')
+			continue;
+		if (nmods == AXM_MAXMOD) {
+			rc = refuse(k, 0, "more than 32 module packages: over the manifest's limit");
+			break;
+		}
+		memset(md, 0, sizeof(*md));
+		sprintf(path, "/etc/conf/mod.d/%.40s", e->d_name);
+		if ((md->data = slurp(under(root, path), &md->size)) == 0) {
+			sprintf(m, "%s cannot be read", path);
+			rc = refuse(k, 1, m);
+			break;
+		}
+		nmods++;
+		if ((rc = hashed(k, root, path, md->data, md->size, &r, sha)) != KS_OK)
+			break;
+		strcpy(md->sha, sha);
+		if (km_read(md->data, md->size, &md->i, why)) {
+			sprintf(m, "%s: %.120s", path, why);
+			rc = refuse(k, 2, m);
+			break;
+		}
+		if (strcmp(md->i.name, e->d_name)) {
+			sprintf(m, "%s names itself %.15s: the file name is the module's name", path,
+				md->i.name);
+			rc = refuse(k, 2, m);
+			break;
+		}
+		if ((rc = mod_gate2(k, kk, &md->i)) != KS_OK)
+			break;
+		for (j = 0; j < md->i.nparam; j++)
+			if (km_value(&md->i.param[j], md->i.param[j].def, md->pv[j])) {
+				sprintf(m, "module %.15s: its own default %s=%s is not a valid %s value",
+					md->i.name, md->i.param[j].name, md->i.param[j].def,
+					md->i.param[j].type);
+				rc = refuse(k, 2, m);
+				break;
+			}
+		if (rc == KS_OK)
+			rc = modreg(k, root, md, &disabled);
+		if (rc == KS_OK && disabled) {
+			free(md->data);
+			nmods--;
+		}
+	}
+	closedir(dd);
+	if (rc != KS_OK) {
+		mods_free();
+		return rc;
+	}
+	qsort(mods, (size_t)nmods, sizeof(mods[0]), by_name);
+
+	/* gate 3: class, match, majors, depend */
+	for (i = 0; i < nmods && rc == KS_OK; i++) {
+		struct km_info *mi = &mods[i].i;
+		const char *p = mi->majors;
+
+		if (!strcmp(mi->cls, "root"))
+			sprintf(m, "module %.15s is root class: root-class modules are composed from stage 4",
+				mi->name), rc = refuse(k, 3, m);
+		else if (strcmp(mi->cls, "boot") && strcmp(mi->cls, "demand"))
+			sprintf(m, "module %.15s has class %s", mi->name, mi->cls), rc = refuse(k, 3, m);
+		else if (!strcmp(mi->cls, "boot") && !mi->match[0])
+			sprintf(m, "boot-class module %.15s has no match= (one that needs no board says "
+				"match=always)", mi->name), rc = refuse(k, 3, m);
+		else if (!strcmp(mi->cls, "demand") && !mi->majors[0])
+			sprintf(m, "demand-class module %.15s has no majors=", mi->name), rc = refuse(k, 3, m);
+		while (rc == KS_OK && *p) {
+			char *q;
+			long maj = (p[0] == 'c' || p[0] == 'b') && p[1] == ':' ? strtol(p + 2, &q, 10) : -1;
+			const char *own;
+
+			if (maj < 0 || (*q && *q != ',')) {
+				sprintf(m, "module %.15s: majors=%s is malformed", mi->name, mi->majors);
+				rc = refuse(k, 3, m);
+			} else if (p[0] == 'b') {
+				sprintf(m, "module %.15s: block majors come with stage 4", mi->name);
+				rc = refuse(k, 3, m);
+			} else if ((own = km_owner('c', (int)maj)) == 0 || strcmp(own, mi->name)) {
+				sprintf(m, "module %.15s: major c:%ld is %s", mi->name, maj,
+					own ? "registered to another module" : "not in the registry");
+				rc = refuse(k, 3, m);
+			} else
+				p = *q ? q + 1 : q;
+		}
+		for (p = mi->depend; rc == KS_OK && *p; ) {
+			size_t len = strcspn(p, ",");
+
+			for (j = 0; j < nmods && (strlen(mods[j].i.name) != len ||
+						 strncmp(mods[j].i.name, p, len)); j++)
+				;
+			if (j == nmods) {
+				sprintf(m, "module %.15s depends on %.*s, which is not in the generation",
+					mi->name, (int)(len > 15 ? 15 : len), p);
+				rc = refuse(k, 3, m);
+			}
+			p += len + (p[len] == ',');
+		}
+	}
+
+	/* the order: each module after its dependencies, boot class before
+	 * demand class, names breaking ties */
+	for (n = 0, cls = 0; cls < 2 && rc == KS_OK; cls++) {
+		int progress = 1;
+
+		while (progress) {
+			progress = 0;
+			for (i = 0; i < nmods; i++) {
+				int ready = 1;
+
+				if (mods[i].placed || strcmp(mods[i].i.cls, cls ? "demand" : "boot"))
+					continue;
+				for (j = 0; j < nmods; j++)
+					if (!mods[j].placed && j != i && named(mods[i].i.depend, mods[j].i.name))
+						ready = 0;
+				if (ready) {
+					mods[i].placed = 1;
+					order[n++] = i;
+					progress = 1;
+					break;
+				}
+			}
+		}
+	}
+	if (rc == KS_OK && n != nmods) {
+		for (i = 0; i < nmods && mods[i].placed; i++)
+			;
+		sprintf(m, "module %.15s: its depend= closure has a cycle%s", mods[i].i.name,
+			!strcmp(mods[i].i.cls, "boot") ? " or a demand-class dependency" : "");
+		rc = refuse(k, 3, m);
+	}
+
+	for (i = 0; i < n && rc == KS_OK; i++) {
+		struct kb_mod *md = &mods[order[i]];
+		int boot = !strcmp(md->i.cls, "boot");
+
+		sprintf(rec, "module %.15s %s %lu path=/stand/gen/%lu/mod/%s sha256=%s", md->i.name,
+			md->i.cls, (unsigned long)md->size, (unsigned long)id, md->i.name, md->sha);
+		if (boot)
+			sprintf(rec + strlen(rec), " match=%s", md->i.match);
+		else
+			sprintf(rec + strlen(rec), " majors=%s", md->i.majors);
+		if (md->i.depend[0])
+			sprintf(rec + strlen(rec), " depend=%s", md->i.depend);
+		if (!strcmp(md->i.tier, "core"))
+			sprintf(rec + strlen(rec), " tier=core build=%s", md->i.build);
+		if (strlen(rec) > AXM_MAXLINE || tl + strlen(rec) + 2 > cap) {
+			sprintf(m, "module %.15s: its record is longer than the manifest's 255 bytes",
+				md->i.name);
+			rc = refuse(k, 0, m);
+			break;
+		}
+		tl += (size_t)sprintf(tail + tl, "%s\n", rec);
+	}
+	for (i = 0; i < n && rc == KS_OK; i++) {
+		struct kb_mod *md = &mods[order[i]];
+
+		for (j = 0; j < md->i.nparam && rc == KS_OK; j++) {
+			sprintf(rec, "param %s.%s=%s", md->i.name, md->i.param[j].name, md->pv[j]);
+			if (++nparam > AXM_MAXPARAM || strlen(rec) > AXM_MAXLINE || tl + strlen(rec) + 2 > cap)
+				rc = refuse(k, 0, "the modules' parameters are over the manifest's limits "
+					    "(32 param records of 255 bytes)");
+			else
+				tl += (size_t)sprintf(tail + tl, "%s\n", rec);
+		}
+	}
+	if (rc != KS_OK)
+		mods_free();
+	return rc;
+}
+
+/* the composed objects into /stand/gen/<id>/mod/ (mkdirs made the parent) */
+static int
+mods_copy(struct ks *k, const char *root, ax_u32 id)
+{
+	char p[96];
+	FILE *f;
+	int i;
+
+	if (!nmods)
+		return KS_OK;
+	sprintf(p, "/stand/gen/%lu/mod", (unsigned long)id);
+	if (mkdir(under(root, p), 0755) != 0 && errno != EEXIST)
+		return refuse(k, 0, "cannot create /stand/gen/<id>/mod");
+	for (i = 0; i < nmods; i++) {
+		sprintf(p, "/stand/gen/%lu/mod/%.15s", (unsigned long)id, mods[i].i.name);
+		if ((f = fopen(under(root, p), "wb")) == 0 ||
+		    fwrite(mods[i].data, 1, mods[i].size, f) != mods[i].size || fclose(f) != 0)
+			return refuse(k, 0, "cannot write /stand/gen/<id>/mod/<name>");
+	}
+	return KS_OK;
+}
+
 static int
 mkdirs(struct ks *k, const char *root, ax_u32 id)
 {
@@ -562,9 +917,9 @@ same(const char *a, const char *b)
  */
 static int
 same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen, ax_u32 bss,
-		ax_u32 *dflt)
+		const char *tail, ax_u32 *dflt)
 {
-	static char cand[8192 + 512];
+	static char cand[8192 + 512 + 16384];
 	static struct ax_manifest d, n;
 	char *dman, hx[65];
 	int i, errline, eq;
@@ -579,6 +934,7 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 	if (bss)
 		l += (size_t)sprintf(cand + l, " bss=%lu", (unsigned long)bss);
 	cand[l++] = '\n';
+	l += (size_t)sprintf(cand + l, "%.16384s", tail);
 	l += (size_t)sprintf(cand + l, "end crc32=%08lx\n",
 			     (unsigned long)ax_crc32(k->crctab, (ax_u8 *)cand, (ax_u32)l));
 	eq = ax_manifest_parse(k->crctab, cand, (ax_u32)l, &n, &errline) == AXM_OK &&
@@ -602,7 +958,7 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 int
 kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 created, ax_u32 *idp)
 {
-	static char text[8192], facts[2048];
+	static char text[8192 + 16384], facts[2048], mtail[16384];
 	static struct ax_manifest m;
 	struct kb_kernel kk;
 	char rootfs[16], *dman = 0;
@@ -626,13 +982,18 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	rc = gates(k, root, f, rootfs, &kk, &kernel, &klen);
 	if (rc != KS_OK)
 		goto out;
+	if ((rc = modules(k, root, &kk, id, mtail, sizeof(mtail))) != KS_OK) {
+		free(kernel);
+		goto out;
+	}
 	head(text, f, &kk, rootfs, rootrec, swaprec, boards, created);
-	same_default = same_as_default(k, text, kernel, klen, kk.brel ? kk.bss : 0, &dflt);
+	same_default = same_as_default(k, text, kernel, klen, kk.brel ? kk.bss : 0, mtail, &dflt);
 	free(kernel);
-	sprintf(text + strlen(text), "kernel unix /stand/k%d/unix\n", f->line);
+	sprintf(text + strlen(text), "kernel unix /stand/k%d/unix\n%s", f->line, mtail);
 	sprintf(facts, "line=%d\nbootdev=%s\nrootdev=%s\nrootfs=%s\nmem=%lu\ncreated=%lu\n",
 		f->line, f->bootdev, f->rootdev, rootfs, (unsigned long)f->mem, (unsigned long)created);
-	if ((rc = mkdirs(k, root, id)) == KS_OK && (rc = put_text(k, root, id, "build", text)) == KS_OK &&
+	if ((rc = mkdirs(k, root, id)) == KS_OK && (rc = mods_copy(k, root, id)) == KS_OK &&
+	    (rc = put_text(k, root, id, "build", text)) == KS_OK &&
 	    (rc = put_text(k, root, id, "facts", facts)) == KS_OK) {
 		*idp = id;
 		sprintf(k->msg, "generation %lu built in /stand/gen/%lu; kbootset commit writes it",
@@ -643,14 +1004,53 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 				(unsigned long)dflt);
 	}
 out:
+	mods_free();
 	free(dman);
+	return rc;
+}
+
+
+/* commit: a built module record's copy under /stand/gen as it is now: its
+ * size and SHA-256 as recorded, and gate 2 against the kernel again */
+static int
+mod_verify(struct ks *k, const char *root, const struct kb_kernel *kk, const char *line)
+{
+	char buf[600], *tok[16], *p, m[400], sha[65], why[128];
+	const char *path = 0, *want = 0;
+	struct km_info mi;
+	ax_u8 *data;
+	ax_u32 len;
+	int n = 0, i, rc;
+
+	sprintf(buf, "%.590s", line);
+	for (p = strtok(buf, " "); p && n < 16; p = strtok(0, " "))
+		tok[n++] = p;
+	for (i = 4; i < n; i++)
+		if (!strncmp(tok[i], "path=", 5))
+			path = tok[i] + 5;
+		else if (!strncmp(tok[i], "sha256=", 7))
+			want = tok[i] + 7;
+	if (n < 4 || !path || !want)
+		return refuse(k, 0, "a module record of the build lacks path= or sha256=");
+	if ((data = slurp(under(root, path), &len)) == 0) {
+		sprintf(m, "%.200s, built for this generation, is missing", path);
+		return refuse(k, 1, m);
+	}
+	hex(data, len, sha);
+	if (len != (ax_u32)strtoul(tok[3], 0, 10) || strcmp(sha, want)) {
+		free(data);
+		sprintf(m, "%.200s changed since kbootset build", path);
+		return refuse(k, 1, m);
+	}
+	rc = km_read(data, len, &mi, why) ? refuse(k, 2, why) : mod_gate2(k, kk, &mi);
+	free(data);
 	return rc;
 }
 
 int
 kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 {
-	static char head[8192];
+	static char head[8192], tail[16384];
 	static struct ks_member mb;
 	struct kb_facts f;
 	struct kb_kernel kk;
@@ -658,7 +1058,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	char p[80], buf[64], *text, *line, *next;
 	ax_u8 *t, *kernel;
 	ax_u32 len, klen, id = ks_next_id(k), created, dflt;
-	size_t hl = 0;
+	size_t hl = 0, tl = 0;
 	int rc;
 
 	k->gate = 0;
@@ -692,7 +1092,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	memcpy(text, t, len);
 	text[len] = 0;
 	free(t);
-	head[0] = 0;
+	head[0] = tail[0] = 0;
 	for (line = text; *line; line = next) {
 		next = strchr(line, '\n');
 		if (next)
@@ -701,10 +1101,21 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 			next = line + strlen(line);
 		if (!strncmp(line, "kernel ", 7))
 			continue;		/* the kernel is the member checked above */
-		if (!strncmp(line, "module ", 7) || !strncmp(line, "ramdisk ", 8)) {
+		if (!strncmp(line, "module ", 7) || !strncmp(line, "param ", 6)) {
+			if ((line[0] == 'm' && (rc = mod_verify(k, root, &kk, line)) != KS_OK) ||
+			    (tl + strlen(line) + 2 > sizeof(tail) &&
+			     (rc = refuse(k, 0, "the build's module records are too long")) != KS_OK)) {
+				free(text);
+				free(kernel);
+				return rc;
+			}
+			tl += (size_t)sprintf(tail + tl, "%s\n", line);
+			continue;
+		}
+		if (!strncmp(line, "ramdisk ", 8)) {
 			free(text);
 			free(kernel);
-			return refuse(k, 0, "modules and RAM disks are composed from stage 3 on");
+			return refuse(k, 0, "RAM disks are composed from stage 4 on");
 		}
 		if (hl + strlen(line) + 2 > sizeof(head))
 			break;
@@ -723,7 +1134,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 		sprintf(battr, "bss=%lu", (unsigned long)kk.bss);
 		mb.attrs = battr;
 	}
-	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, &dflt)) {
+	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, tail, &dflt)) {
 		/* nothing new: write nothing, and drop the build so the next one
 		 * starts clean (C2-4 §3) */
 		free(kernel);
@@ -740,6 +1151,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	}
 	memset(&g, 0, sizeof(g));
 	g.head = head;
+	g.tail = tail;
 	g.n = 1;
 	g.m = &mb;
 	g.created = created;
