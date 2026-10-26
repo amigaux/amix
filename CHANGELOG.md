@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-26 — C3-6 version 2: the console hook's cp is the console (3d809d7)
+
+A hook takes only writes where cp->screen == displayedscreen (C3-2's row and patch 0011's comment say the same); _halt is
+void; z3660rtg's _unload calls monsw_unregister, the module is built without ZZ9K_NO_BUILTINFONT with builtinfont made local,
+ENABLE equals REDIRECT and the hook takes VT writes by design, params blit:bool:1 and maxarea:int; a weak undefined symbol is
+allowed (§1.6).
+
 ## 2026-10-26 — C3-6: what a driver changes to become a module (e511cdf..4834304)
 
 C3-6 agreed, version 1: the wrapper and _load/_unload/_halt; majors from .moddata; intr_attach with polled as the default and
