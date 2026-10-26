@@ -113,7 +113,8 @@ program against an image file, so media and boxes cannot drift).
 4. **Arena:** the root-class set exceeds the kernel's arena capacity: the
    directory (32 + 48 bytes a record), the manifest copy, and every root
    record's file rounded up to 16 with its `bss=` tail, as boot2 places
-   them all (C4-4 version 3).
+   them all (C4-4 version 3); or the kernel's arena offset is not a
+   multiple of 16, where no root-class module could start (C3-3 version 5).
 5. **Store space:** the new generation does not fit the free store space
    without deleting a member of the kept set. A module kernel carries its
    arena as zeros in `.data` (0x60000 in stage 3, M-MOD1), so its file is
