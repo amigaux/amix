@@ -1107,6 +1107,19 @@ fi
 echo "firstboot: applying identity nodename=$FB_NODENAME domain=$FB_DOMAIN tz=$FB_TZ (index $FB_TZNUM)"
 
 ID="$FB_SCSI_ID"
+# The root as the running kernel names it. A four-card kernel (C4-1) orders the controllers
+# by class, so the installer's id can name another card than the kernel's (the A3000 WD
+# beside an A4091: c6d0 under the install kernel, ced0 under the target's). /etc/devnm maps
+# the mounted root's device number to its /dev/dsk node by stat alone, opening no device;
+# vfstab, the swap name and the atdevs gate then follow the kernel.
+set -- `/etc/devnm / 2>/dev/null`
+_kid=`expr "$1" : '/dev/dsk/c\([0-9a-f]*\)d0s[0-7]$'`
+# before 4d a card-2/3 root still has core's d1 node for its minor: c<X>d1 is c1<X> there
+[ -z "$_kid" ] && [ "$FB_SDCARDS" = 4 ] && _kid=`expr "$1" : '/dev/dsk/c\([0-9a-f]\)d1s[0-7]$'` && _kid=1$_kid
+if [ -n "$_kid" ] && [ "$_kid" != "$ID" ]; then
+	echo "firstboot: the kernel roots on /dev/dsk/c${_kid}d0 (the installer named c${ID}d0) -- the names follow the kernel"
+	ID=$_kid FB_SCSI_ID=$_kid
+fi
 ROOT_BLK="/dev/dsk/c${ID}d0s${FB_ROOT_SLICE}"
 ROOT_RAW="/dev/rdsk/c${ID}d0s${FB_ROOT_SLICE}"
 SWAP_BLK="/dev/dsk/c${ID}d0s${FB_SWAP_SLICE}"

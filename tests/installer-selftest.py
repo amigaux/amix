@@ -1230,6 +1230,9 @@ FIRSTBOOT_EXTRA = {
     # S3-31: a 1.1 disk's /stand/unix out of the core package -- APKGENG's heirloom
     # removef and pkgchk (/usr/apkg/bin), from the APKG set every target carries
     "removef", "pkgchk",
+    # C4-1: the root's name as the running kernel numbers it (stat only, a core member;
+    # updbootpart and bcheckrc use it the same way)
+    "devnm",
 }
 
 # IN-rtc-2: the dialog re-reads the battery clock in the zone just chosen. This is
@@ -10146,6 +10149,27 @@ def audit_l11():
                     + m.group(0) + 'echo "SDC=$L11_SDCARDS"\n')
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
             (ok if want in out else fail)("l11.sh's sd cards from the sidecar, %s: %s" % (what, out.strip()))
+
+    # (18) C4-1: the first boot names the root as the running kernel does (/etc/devnm /), so
+    # vfstab follows a kernel whose card order differs from the install kernel's
+    m = re.search(r'\nset -- `/etc/devnm / 2>/dev/null`\n.*?\nfi\n', fb, re.S)
+    if not m:
+        fail("firstboot.sh does not take the root's name from /etc/devnm")
+    else:
+        dv = os.path.join(d, "devnm")
+        os.makedirs(dv, exist_ok=True)
+        for what, out_dev, sdc, want in (("the same name", "/dev/dsk/c6d0s1 /", "", "ID=6"),
+                                         ("the WD as card 1 under a four-card kernel", "/dev/dsk/ced0s1 /", "4", "ID=e"),
+                                         ("a card-3 root before 4d (core's c6d1 node)", "/dev/dsk/c6d1s1 /", "4", "ID=16"),
+                                         ("a d1 name on a two-card kernel", "/dev/dsk/c6d1s1 /", "", "ID=6"),
+                                         ("no devnm answer", "", "", "ID=6")):
+            open(os.path.join(dv, "devnm"), "w").write("#!/bin/sh\n[ -n '%s' ] && echo '%s'\n" % (out_dev, out_dev))
+            os.chmod(os.path.join(dv, "devnm"), 0o755)
+            body = ("ID=6\nFB_SCSI_ID=6\nFB_SDCARDS=%s\n" % sdc + m.group(0).replace("/etc/devnm", dv + "/devnm")
+                    + 'echo "ID=$ID FB=$FB_SCSI_ID"\n')
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            last = out.strip().splitlines()[-1] if out.strip() else ""
+            (ok if last == "%s FB=%s" % (want, want[3:]) else fail)("firstboot's root name from devnm, %s: %s" % (what, last))
 
     # (17) C4-1 first boot on a four-card kernel: core's 256 d1 nodes out (removef core),
     # the 256 c10-c1f nodes in by §2.1's minor (installf core), sandboxed

@@ -5025,6 +5025,9 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   boot of such a disk (`FB_SDCARDS=4`) takes core's 256 `c<N>d1s<S>` nodes out of the core package. Their minors
   (128 and up) name card-2/3 disks there. In their place it makes and registers the 256 `c10`–`c1f` nodes, with
   APKG's removef/installf, so `pkgchk core` stays quiet.
+- The first boot names the root as the running kernel does: `/etc/devnm /` maps the mounted root's device number to
+  its node by stat, opening nothing. vfstab, the swap name and the atdevs gate follow it. So when the install kernel
+  and the target kernel number the controllers differently, the installed names are the target kernel's.
 
 ### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
 

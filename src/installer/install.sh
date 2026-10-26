@@ -2524,6 +2524,10 @@ fi
 if [ -n "${ROOT_RECORD_DISK:-}" ]; then
 	RD="$ROOT_RECORD_DISK"
 	[ -n "`hexval "$RD"`" ] || die "ROOT_RECORD_DISK='$RD' is not a controller number"
+	# card 0 only: this is the 1.0 hint path, whose kernels are two-card and boot from the
+	# card Kickstart boots; cards 2-3 (10-1f, C4-1) cannot hold this boot disk today. A 1.1
+	# root on card 2/3 is named by identity in the store's root record instead (stage 5:
+	# revisit if a root record ever has to point at a card-2/3 boot disk)
 	case "$RD" in
 		7|f|F|8|9|a|A|b|B|c|C|d|D|e|E|1?)	die "ROOT_RECORD_DISK=$RD: the boot disk must be a card-0 unit 0-6 (Kickstart boots it)" ;;
 	esac
