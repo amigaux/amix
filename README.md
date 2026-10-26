@@ -9,6 +9,21 @@ module there (z3660eth, z3660rtg, a4091, gayle-ide, z3660scsi, cdfs).
 |---|---|---|---|
 | `monsw` | demand | c 52 | the console monitor switch; moved from amix-040-060-port `src/monsw.c` (2026-10-26, D-3 / S3-27) |
 
-Layout: `<module>/` holds the source, `<module>/module/Makefile` (the kit's `mk/module.mk`), `<module>/module/Master`,
-`<module>/module/VERSION` (the package version, one line `x.y.z-rev`), and the module's `keys`. `include/sys/` holds the
-published interface headers (`sys/monsw.h`) the ABI kit carries for module authors. Contracts: amix-dlm `docs/contracts/`.
+Layout, per module (`monsw/README.md` is the worked example):
+
+| Path | Content |
+|---|---|
+| `<module>/src/` | the source; the module glue sits under `-D<NAME>_MODULE`, so a static form can still be built from it |
+| `<module>/module/keys` | the `.moddata` keys, one `key=value` per line |
+| `<module>/module/Master` | the kit's form of `keys`, generated from it |
+| `<module>/module/Makefile` | builds both lines on the kit's `mk/module.mk` |
+| `<module>/module/VERSION` | the package version, one line `x.y.z-rev`, the same on both lines |
+| `<module>/test/` | host tests and on-box instruments |
+| `<module>/build/<line>/mod.d/<name>` | the built module objects (not tracked) |
+
+`include/sys/` holds the published interface headers (`sys/monsw.h`). amix-dlm's ABI kit
+copies them, so a module that calls another module builds against the kit alone.
+
+Build every module of a line with amix-dlm's kit and the pinned gcc-cross-amix
+(`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`, for example `make -C monsw/module`. The
+contracts are in amix-dlm `docs/contracts/`.
