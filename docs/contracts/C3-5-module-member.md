@@ -72,6 +72,10 @@ per line**:
   0755 root sys; `/etc` 0755 root root, as the core packages have it.
 - `/etc/conf/modreg.local.d` is the administrator's and is never shipped
   (§1).
+- **Device nodes:** the package ships the nodes of the majors its driver
+  owns as pkgmap device entries (`c`), no script: z3660eth `/dev/zen0`
+  c 51 0. Network plumbing (`slink`, `ifconfig`) is not the package's: the
+  installer's `S99zen` does it (S3-31).
 - The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
   `.moddata`. **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not
