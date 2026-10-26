@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — dlmkit -4, modtools -6, loader-amix -6 from amix-dlm 2233745 (bf15f58..8ac06af) — not published
+
+dlmkit30/46 -4 (KIT_REV 2233745): kit.conf's MONSW_REV is `amix-modules@c0386d9` and sources in sh (build.sh checks both);
+sys/monsw.h from a pinned archive of amix-modules c0386d9 (dlm-src.sh's amix_dlm_kit takes the commit and answers mkkit's git
+questions for it); modcheck enforces C3-1 v4 (image ≤ 256 KiB, file < 256 KiB). md5 64b1657b / 4056064 B, b8e477bc /
+4072960 B. modtools -6: modadmin 0518fb28 with core patches 0025 (-L prints the buffer's words first) and 0026 (-K keeps
+kernel messages in putbuf); -5's inittab scripts unchanged; md5 d191106f / 59904 B. loader-amix -6: boot2 28356 B 344b8e07,
+boot1 unchanged, loader version 2; md5 446410f6 / 35328 B. Superseded -3/-5/-5 moved aside; staged catalog regenerated in
+the same wave (ba0e1c8c, four rows changed); round trip 106/106; both gate selftests PASS.
+
 ## 2026-10-26 — loader-amix -5 (4a9d646) — not published
 
 loader-amix 1.0.261025-5 from amix-dlm 26492cf: boot2 001b04a gives a k30 kernel at most 64 MiB of fast memory, and
