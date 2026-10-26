@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module built with amix-dlm's ABI kit (3a89f54)
+
+`make -C module` builds build/<line>/mod.d/z3660eth for k30 and k46 through the kit's mk/module.mk (kits from amix-dlm
+6ef133e); Master from module/Master.in; the module form includes sys/amixddi.h; modcheck ok on both lines (34 COMMON warnings:
+ifnet/rawintrq from <net/if.h> plus the driver's own globals); modules 18365 B, k30 8c5cad3c, k46 2bd8654c; static objects
+unchanged (k30 c2d6225e, k46 142e2486). tools/build-module.sh and src/z3660eth.modkeys removed.
+
 ## 2026-10-26 — z3660eth as a loadable module, source half (859dfc1, bee712c; amix-dlm S3-25, C3-6)
 
 Building with -DZ3660ETH_MODULE turns the same source into the module form: z3660eth_load(params) / _unload (EBUSY,
