@@ -48,6 +48,11 @@ The installer:
    exactly one line with the id `dlm`, the first sysinit entry, C3-5's text, and
    the rest core's inittab (`sum -r` against the medium's copy). Anything else
    stops the install and names the postinstall.
+
+   modtools (-4 on) refuses to touch an inittab whose dlm line is misplaced or
+   duplicated, and an inittab that would be left empty: it exits 1 and leaves the
+   file for the administrator. Neither the installer nor the package makes such a
+   file; a fresh install starts from core's.
 4. runs the INSTALLED `/sbin/kbootset` (the package's; there is no other copy):
    - `create 67108864 /stand/loader/boot2 --boot1 /stand/loader/boot1 --version
      <ldrinfo's> --force` lays the loader package's bytes over

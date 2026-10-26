@@ -429,7 +429,7 @@ l11_kpkg_key()
 l11_inittab()
 {
 	_it="$TARGET/etc/inittab"
-	_why="modtools' postinstall (C3-5 section 5) did not leave /etc/inittab as it must be"
+	_why="modtools' postinstall (C3-5 section 5; it refuses, leaving the file, a misplaced or duplicated dlm line) did not leave /etc/inittab as it must be"
 	[ -f "$_it" ] || die "$_why: there is no $_it"
 	rm -f /tmp/.l11it /tmp/.l11dl
 	while read _l
