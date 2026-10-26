@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-26 — m-reg1.py reads a module kernel's stock nfstype as __amix_nfstype (63d33c4)
+
+The core's nfstype is 0 in .data until dmainit copies the stock count; the reader prefers __amix_nfstype when present.
+Stock kernels read as before (13 on k30, 12 on k46).
+
 ## 2026-10-26 — kabi 1.2 opened, 1.1 closed (42411c4, fc4ee89)
 
 The set taken from the minted kernels' KSYM blocks (kern46m -71: 82 names, has sd_register + root_defer; kern30m -10: 79,
