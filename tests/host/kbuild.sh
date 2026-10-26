@@ -439,6 +439,17 @@ grep -q "root-class module .* is for zorro:[0-9a-f:]*, which the kernel drives i
 msidecar 0x00060000
 sed -i -e '/^root=/d' -e '/^rootfs=/d' $R/stand/k46/kabi; record
 sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+# gate 4: a kernel whose arena is 8 mod 16 in the image (an identity
+# record older than C3-3 version 5) can start no root-class module
+msidecar 0x00060000
+sed -i -e '/^root=/d' -e '/^rootfs=/d' -e 's/^arena=0x0009a000 /arena=0x0009a008 /' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+rootset
+refused 4 $KB build $RFACTS
+grep -q "arena is at image offset 0x0009a008, not a multiple of 16" $T/out
+msidecar 0x00060000
+sed -i -e '/^root=/d' -e '/^rootfs=/d' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 # a medium's pristine generation with the root set: mkstore's root lines
 rootset
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \

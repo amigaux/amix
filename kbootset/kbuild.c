@@ -352,7 +352,9 @@ loader_ver(const struct ks *k)
  * A generation with nroot root-class records needs loader version 3,
  * the boot2 that places them (S4-10, 10 §5.1): its loader-min is raised,
  * and gate 7 refuses it on a store whose loader is older, at compose
- * time rather than with L9 at boot.
+ * time rather than with L9 at boot.  Gate 4 refuses a kernel whose arena
+ * is not 16-aligned (C3-3 version 5): boot2 binds on 256 and aligns each
+ * module within the arena, so such a kernel could never start one.
  */
 static int
 root_loader(struct ks *k, struct kb_kernel *kk, int nroot)
@@ -361,6 +363,12 @@ root_loader(struct ks *k, struct kb_kernel *kk, int nroot)
 
 	if (!nroot)
 		return KS_OK;
+	if (kk->arena_off & 15) {
+		sprintf(m, "the kernel's arena is at image offset 0x%08lx, not a multiple of 16: "
+			"no root-class module can start on 16 there (an identity record older "
+			"than C3-3 version 5)", (unsigned long)kk->arena_off);
+		return refuse(k, 4, m);
+	}
 	if (kk->loader_min < AX_LOADER_ROOT)
 		kk->loader_min = AX_LOADER_ROOT;
 	if (loader_ver(k) < AX_LOADER_ROOT) {

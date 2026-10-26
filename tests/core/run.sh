@@ -412,6 +412,31 @@ for IMG; do
 	else
 		fail "$K: mkident: $(cat "$A/ident.log" 2>/dev/null)"
 	fi
+	# C3-3 version 5: the arena is 16-aligned in the image, whatever .text's
+	# size, and a record whose arena is not is refused
+	ao=$(awk '/^arena=/ {print substr($1, 7)}' "$A/sidecar")
+	if [ -n "$ao" ] && [ $((ao % 16)) = 0 ]; then
+		pass "$K: the arena is 16-aligned in the image ($ao; .text $(m68k-elf-size -A "$A/kernel.o" | awk '$1==".text" {printf "0x%x", $2}'))"
+	else
+		fail "$K: the arena offset $ao is not a multiple of 16"
+	fi
+	cp "$A/kernel.o" "$A/kernel-a8.o"
+	python3 - "$A/kernel-a8.o" <<'PY'
+import struct, sys
+b = bytearray(open(sys.argv[1], 'rb').read())
+i = b.find(struct.pack('>II', 0x41584b31, 0x00010040))
+struct.pack_into('>I', b, i + 40, struct.unpack('>I', b[i + 40:i + 44])[0] + 8)
+struct.pack_into('>I', b, i + 8, 0)
+s = sum(struct.unpack('>16I', b[i:i + 64]))
+struct.pack_into('>I', b, i + 8, (0 - s) & 0xffffffff)
+open(sys.argv[1], 'wb').write(b)
+PY
+	if ! python3 "$R/tools/mkident.py" --check "$A/kernel-a8.o" > "$A/a8.log" 2>&1 &&
+	   grep -q "not a multiple of 16" "$A/a8.log"; then
+		pass "$K: an identity record whose arena is 8 mod 16 is refused"
+	else
+		fail "$K: the 8-mod-16 arena: $(cat "$A/a8.log")"
+	fi
 	# the fingerprint (C3-3 section 4) against the line's reference text.
 	# The k46 kernel of record predates the re-cut's `.size cputype,4` (its
 	# cputype has size 0): that one known line is compared as 0, and said

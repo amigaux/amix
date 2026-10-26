@@ -4,9 +4,11 @@
 #
 #   mkident.py --asm LINE KABI CAP [ROOT] > ident.s
 #       dlm_ident (64 bytes: magic, version, kabi tag, line, flags; the
-#       offsets and the check still 0) and dlm_arena (CAP zero bytes), both
-#       4-byte aligned in .data (.data follows .text directly in the
-#       loader's layout; boot2 aligns each module's bytes itself, C3-4);
+#       offsets and the check still 0) and dlm_arena, CAP + 16 zero bytes,
+#       in .data.  .data follows .text directly in the loader's layout, so
+#       no alignment in .data makes the arena 16-aligned in the image:
+#       --fill records the first 16-aligned offset inside dlm_arena (C3-3
+#       version 5), and boot2, binding on 256, aligns each module from it;
 #       then dlm_static_root, the string ROOT: the kernel's built-in root
 #       controllers as the sidecar's root= names them, "" when none.  The
 #       core skips a root-class module for one of them (C4-4 version 4).
@@ -47,11 +49,11 @@ def asm(line, kabi, cap, root=''):
           '\t.long\t0x%08x, 0x%08x, 0\n'
           '\t.long\t%s\n'
           '\t.long\t%d, 0, 0x%x, 0, 0, 1, 0\n'
-          '\t.balign\t4\n\t.globl\tdlm_arena\n\t.type\tdlm_arena,@object\n'
+          '\t.balign\t16\n\t.globl\tdlm_arena\n\t.type\tdlm_arena,@object\n'
           '\t.size\tdlm_arena,%d\ndlm_arena:\n\t.space\t%d\n'
           '\t.globl\tdlm_static_root\n\t.type\tdlm_static_root,@object\n'
           'dlm_static_root:\n\t.asciz\t"%s"\n\t.balign\t4'
-          % (line, kabi, cap, MAGIC, VERLEN, words, int(line[1:]), cap, cap, cap, root))
+          % (line, kabi, cap, MAGIC, VERLEN, words, int(line[1:]), cap, cap + 16, cap + 16, root))
 
 
 def parse(path):
@@ -106,16 +108,17 @@ def fill(path):
     kimg, _, ksz = where(sh, defs, base, 'dlm_ksym')
     if idsz != 64 or u32(b, idf) != MAGIC or u32(b, idf + 4) != VERLEN:
         sys.exit('mkident: dlm_ident is not the record mkident.py --asm wrote')
-    if u32(b, idf + 44) != asz:
-        sys.exit('mkident: dlm_arena is %d bytes, the record says %d' % (asz, u32(b, idf + 44)))
-    struct.pack_into('>I', b, idf + 40, aimg)
+    if u32(b, idf + 44) + 16 != asz:
+        sys.exit('mkident: dlm_arena is %d bytes, the record says %d + 16' % (asz, u32(b, idf + 44)))
+    aoff = (aimg + 15) & ~15        # the arena proper: 16-aligned in the image
+    struct.pack_into('>I', b, idf + 40, aoff)
     struct.pack_into('>II', b, idf + 48, kimg, ksz)
     struct.pack_into('>I', b, idf + 8, 0)
     s = sum(u32(b, idf + 4 * i) for i in range(16))
     struct.pack_into('>I', b, idf + 8, (0 - s) & 0xffffffff)
     open(path, 'wb').write(b)
     print('ident=0x%08x' % where(sh, defs, base, 'dlm_ident')[0])
-    print('arena=0x%08x 0x%08x' % (aimg, asz))
+    print('arena=0x%08x 0x%08x' % (aoff, asz - 16))
     print('ksym=0x%08x 0x%08x' % (kimg, ksz))
 
 
@@ -133,7 +136,10 @@ def check(path):
     kabi = r[12:36].rstrip(b'\0').decode('latin-1')
     if u32(r, 36) not in (30, 46) or not kabi.startswith('k%d.' % u32(r, 36)):
         bad.append('line or kabi tag')
-    if u32(r, 40) != aimg or u32(r, 44) != asz:
+    off, cap = u32(r, 40), u32(r, 44)
+    if off & 15:
+        bad.append('arena offset 0x%08x not a multiple of 16 (C3-3 version 5)' % off)
+    elif off != (aimg + 15) & ~15 or cap + 16 != asz:
         bad.append('arena offset or capacity')
     if u32(r, 48) != kimg or u32(r, 52) != ksz:
         bad.append('symbol block offset or size')
@@ -143,7 +149,7 @@ def check(path):
         print('mkident: %s: %s' % (path, ', '.join(bad)))
         sys.exit(1)
     print('mkident: %s: AXK1 at 0x%08x, %s, arena 0x%08x 0x%x, symbol block 0x%08x %d bytes'
-          % (path, idimg, kabi, aimg, asz, kimg, ksz))
+          % (path, idimg, kabi, off, cap, kimg, ksz))
 
 
 if len(sys.argv) in (5, 6) and sys.argv[1] == '--asm':
