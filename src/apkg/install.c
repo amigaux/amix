@@ -27,6 +27,15 @@
  * site rather than assumed to exist -- the APKG package owns it, so a
  * pkgrm can delete it out from under a later pkgadd.
  *
+ * The one exception is kernel space's "one kernel package per line"
+ * (amix-dlm C2-2 v5 §2.1): every kernel package of a line ships
+ * /stand/<line>/unix, so a new kernel package under another pkginst can
+ * only be added after the other one is removed (a pkgadd over another
+ * package's file is a conflict).  That removal comes after every package
+ * is staged and verified, inside the same journal, and the box still
+ * boots meanwhile: the boot store's generations hold their own copies of
+ * the kernel.
+ *
  * pkgadd/pkgrm are driven with fork/execv rather than system(): no shell
  * quoting surface for paths, exact argv logging, and the child's exit
  * status comes back unmangled.  When cf->target is set the argv grows an
@@ -431,6 +440,43 @@ static int txn_finish(const struct conf *cf, struct txn *t, int failed)
     return rc;
 }
 
+/* pkgrm one package and, for kernel space (key != NULL), delete its
+ * record.  An instance that is already gone only loses its record. */
+static int remove_one(const struct conf *cf, const char *pkgrm,
+                      const char *name, const char *pkginst, const char *key)
+{
+    char iver[128];
+
+    if (!installed_version(cf, pkginst, iver, sizeof(iver))) {
+        warnx2("%s: the record names %s, which is not installed; "
+               "removing the record", name, pkginst);
+    } else if (run_pkgrm(cf, pkgrm, pkginst) != 0) {
+        warnx2("pkgrm failed for %s", pkginst);
+        return EX_PKGCMD;
+    }
+    if (key != NULL && kpkg_remove_record(cf, key) != 0)
+        return EX_USAGE;
+    return EX_OK;
+}
+
+/* the journal entry of a pkgrm that an install makes first: the other
+ * kernel package of a line (C2-2 v5 §2.1); its staged "-" marks it */
+static void txn_add_removal(struct txn *t, const struct kreplace *r)
+{
+    struct pkgent kent;
+
+    memset((char *)&kent, 0, sizeof(kent));
+    kent.name = (char *)r->name;
+    kent.version = (char *)"-";
+    kent.filename = (char *)"-";
+    kent.md5 = (char *)"-";
+    kent.kspace = 1;
+    kent.role = (char *)"kernel";
+    kent.kline = (char *)r->line;
+    kent.pkginst = (char *)r->key;      /* the record's file (txn_add) */
+    txn_add(t, &kent, r->pkginst, "-", 0, "-");
+}
+
 /* pkgadd one staged package and, for kernel space, write its record */
 static int install_one(const struct conf *cf, const char *pkgadd,
                        const char *file, const char *pkginst, int ow,
@@ -449,38 +495,67 @@ static int install_one(const struct conf *cf, const char *pkgadd,
     return rc;
 }
 
-/* the shared phase 2 of install and upgrade: journal, pkgadd in order,
- * the trigger.  files[]/insts[] are the staged datastreams and the
- * pkginst each installs as. */
+/* the shared phase 2 of install and upgrade: journal, the pkgrm of each
+ * other kernel package a new kernel replaces (rep[], C2-2 v5 §2.1), pkgadd
+ * in order, the trigger.  files[]/insts[] are the staged datastreams and
+ * the pkginst each installs as. */
 static int commit_txn(const struct conf *cf, const struct source *src,
                       const char *verb, struct pkgent **todo, int *ow,
                       char **files, char **insts, int nt,
-                      const char *pkgadd)
+                      const char *pkgadd, const struct kreplace *rep,
+                      int nrep)
 {
     struct txn t;
+    struct txnpkg *p;
     char *sid;
+    char *pkgrm;
     char iver[128];
     int i;
     int rc;
     int upgrade;
 
     upgrade = strcmp(verb, "upgrade") == 0;
+    pkgrm = NULL;
+    if (nrep > 0 && (pkgrm = conf_pkgcmd(cf, 1)) == NULL)
+        return EX_USAGE;
     sid = source_id(src);
     txn_init(&t, verb);
+    for (i = 0; i < nrep; i++)
+        txn_add_removal(&t, &rep[i]);
     for (i = 0; i < nt; i++)
         txn_add(&t, todo[i], insts[i], files[i], ow[i], sid);
     free(sid);
     if (txn_save(cf, &t) != 0) {
         txn_free(&t);
+        if (pkgrm != NULL)
+            free(pkgrm);
         return EX_USAGE;
     }
 
+    /* the other kernel package of the line first: both ship
+     * /stand/<line>/unix */
     rc = EX_OK;
-    for (i = 0; i < nt; i++) {
+    for (i = 0; i < nrep; i++) {
+        p = &t.p[i];
+        if (remove_one(cf, pkgrm, p->name, p->pkginst, p->reckey) != EX_OK) {
+            warnx2("%s was not replaced; nothing was installed", p->name);
+            rc = EX_PKGCMD;
+            break;
+        }
+        p->done = 1;
+        (void)txn_save(cf, &t);
+        if (!opt_dryrun)
+            printf("removed %s\n", p->pkginst);
+    }
+    if (pkgrm != NULL)
+        free(pkgrm);
+
+    for (i = 0; i < nt && rc == EX_OK; i++) {
+        p = &t.p[nrep + i];
         if (upgrade)
             (void)ent_installed(cf, todo[i], iver, sizeof(iver));
         if (install_one(cf, pkgadd, files[i], insts[i], ow[i],
-                        &t.p[i]) != EX_OK) {
+                        p) != EX_OK) {
             if (upgrade)
                 warnx2("pkgadd of %s %s failed; the installed %s is "
                        "untouched", todo[i]->name, todo[i]->version,
@@ -490,7 +565,7 @@ static int commit_txn(const struct conf *cf, const struct source *src,
             rc = EX_PKGCMD;
             break;
         }
-        t.p[i].done = 1;
+        p->done = 1;
         (void)txn_save(cf, &t);
         if (!opt_dryrun) {
             if (upgrade)
@@ -560,12 +635,14 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     char **files;
     char **insts;
     struct pkgent *ent;
+    struct kreplace *rep;
     char *pkgadd;
     char *staged;
     char iver[128];
     char inst[64];
     int eph;
     int no, nt;
+    int nrep;
     int i;
     int cmp;
     int named;
@@ -669,11 +746,18 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         return EX_OK;
     }
 
-    /* one transaction at a time on a target; then the kernel-space
-     * pre-flight, before anything is fetched */
+    /* one transaction at a time on a target; then the plan of one kernel
+     * package per line and the kernel-space pre-flight, before anything
+     * is fetched */
+    rep = NULL;
+    nrep = 0;
     rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
-         kspace_preflight(cf, todo, nt);
+         kspace_replaces(cf, todo, nt, &rep, &nrep);
+    if (rc == EX_OK)
+        rc = kspace_preflight(cf, todo, nt);
     if (rc != EX_OK) {
+        if (rep != NULL)
+            free((char *)rep);
         free((char *)todo);
         free((char *)ow);
         return rc;
@@ -682,12 +766,16 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
 
     pkgadd = conf_pkgcmd(cf, 0);
     if (pkgadd == NULL) {
+        if (rep != NULL)
+            free((char *)rep);
         free((char *)todo);
         free((char *)ow);
         return EX_USAGE;
     }
     if (src_open(cf->repo, &src) != 0) {
         free(pkgadd);
+        if (rep != NULL)
+            free((char *)rep);
         free((char *)todo);
         free((char *)ow);
         return EX_USAGE;
@@ -708,6 +796,8 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         if (rc != EX_OK) {
             free_strv(files, i);
             free_strv(insts, i);
+            if (rep != NULL)
+                free((char *)rep);
             free((char *)todo);
             free((char *)ow);
             free(pkgadd);
@@ -719,13 +809,16 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
     }
 
-    /* phase 2: journal, pkgadd in dependency order (stop on the first
-     * failure), then the trigger when kernel space changed */
+    /* phase 2: journal, the pkgrm of the other kernel package of a line,
+     * pkgadd in dependency order (stop on the first failure), then the
+     * trigger when kernel space changed */
     rc = commit_txn(cf, &src, "install", todo, ow, files, insts, nt,
-                    pkgadd);
+                    pkgadd, rep, nrep);
 
     free_strv(files, nt);
     free_strv(insts, nt);
+    if (rep != NULL)
+        free((char *)rep);
     free((char *)todo);
     free((char *)ow);
     free(pkgadd);
@@ -767,12 +860,14 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     int *ow;
     char **files;
     char **insts;
+    struct kreplace *rep;
     char iver[128];
     char inst[64];
     char *pkgadd;
     char *staged;
     int eph;
     int nt;
+    int nrep;
     int i, j;
     int nk;
     int rc;
@@ -826,9 +921,18 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         free((char *)ow);
         return rc;
     }
+    /* an upgrade keeps its pkginst, so it replaces no other kernel
+     * package; kspace_replaces() still refuses a line with two kernel
+     * records (C2-2 v5 §2.1) */
+    rep = NULL;
+    nrep = 0;
     rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
-         kspace_preflight(cf, todo, nt);
+         kspace_replaces(cf, todo, nt, &rep, &nrep);
+    if (rc == EX_OK)
+        rc = kspace_preflight(cf, todo, nt);
     if (rc != EX_OK) {
+        if (rep != NULL)
+            free((char *)rep);
         free((char *)todo);
         free((char *)ow);
         return rc;
@@ -842,6 +946,8 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     if (pkgadd == NULL || src_open(cf->repo, &src) != 0) {
         if (pkgadd != NULL)
             free(pkgadd);
+        if (rep != NULL)
+            free((char *)rep);
         free((char *)todo);
         free((char *)ow);
         return EX_USAGE;
@@ -867,6 +973,8 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                 warnx2("nothing was upgraded");
             free_strv(files, i);
             free_strv(insts, i);
+            if (rep != NULL)
+                free((char *)rep);
             free((char *)todo);
             free((char *)ow);
             free(pkgadd);
@@ -879,9 +987,11 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     }
 
     rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
-                    pkgadd);
+                    pkgadd, rep, nrep);
     free_strv(files, nt);
     free_strv(insts, nt);
+    if (rep != NULL)
+        free((char *)rep);
     free((char *)todo);
     free((char *)ow);
     free(pkgadd);
@@ -951,16 +1061,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
         return EX_USAGE;
     }
 
-    rc = EX_OK;
-    if (!installed_version(cf, pkginst, iver, sizeof(iver))) {
-        warnx2("%s: the record names %s, which is not installed; "
-               "removing the record", name, pkginst);
-    } else if (run_pkgrm(cf, pkgrm, pkginst) != 0) {
-        warnx2("pkgrm failed for %s", pkginst);
-        rc = EX_PKGCMD;
-    }
-    if (rc == EX_OK && kspace && kpkg_remove_record(cf, key) != 0)
-        rc = EX_USAGE;
+    rc = remove_one(cf, pkgrm, name, pkginst, kspace ? key : NULL);
     if (rc == EX_OK) {
         t.p[0].done = 1;
         (void)txn_save(cf, &t);
@@ -1004,13 +1105,51 @@ static int staged_ok(const struct txnpkg *p)
     return 1;
 }
 
+/* a pkgrm entry of the journal: a remove, or the other kernel package
+ * of a line that an install replaces first (C2-2 v5 §2.1) */
+static int is_rmstep(const struct txn *t, const struct txnpkg *p)
+{
+    return strcmp(t->verb, "remove") == 0 || strcmp(p->staged, "-") == 0;
+}
+
+/* `apkg -f recover` after a cut between the removal of the other kernel
+ * package and the new pkgadd: say that the line has no kernel package */
+static void warn_kernelless(const struct txn *t)
+{
+    const struct txnpkg *r;
+    const struct txnpkg *k;
+    int i, j;
+
+    if (strcmp(t->verb, "remove") == 0)
+        return;
+    for (i = 0; i < t->n; i++) {
+        r = &t->p[i];
+        if (!r->done || strcmp(r->staged, "-") != 0 ||
+            strcmp(r->role, "kernel") != 0)
+            continue;
+        for (j = 0; j < t->n; j++) {
+            k = &t->p[j];
+            if (k->done || strcmp(k->staged, "-") == 0 || !k->kspace ||
+                strcmp(k->role, "kernel") != 0 ||
+                strcmp(k->kline, r->kline) != 0)
+                continue;
+            warnx2("line %s has no kernel package now: %s was removed and "
+                   "%s is not installed ('apkg install %s' installs it; "
+                   "the boot store still boots its committed generation)",
+                   r->kline, r->name, k->name, k->name);
+        }
+    }
+}
+
 int cmd_recover(const struct conf *cf)
 {
     struct txn t;
     struct txnpkg *p;
     char iver[128];
-    char *eng;
+    char *addeng;
+    char *rmeng;
     int remove;
+    int rmstep;
     int ndone;
     int i;
     int rc;
@@ -1035,31 +1174,43 @@ int cmd_recover(const struct conf *cf)
            "done, state %s%s\n", t.verb, t.started, ndone, t.n,
            t.n == 1 ? "" : "s", t.state,
            t.kspace ? ", kernel space" : "");
+    remove = strcmp(t.verb, "remove") == 0;
     for (i = 0; i < t.n; i++)
-        printf("  %s %s%s%s\n", t.p[i].done ? "done   " : "pending",
+        printf("  %s %s%s%s%s\n", t.p[i].done ? "done   " : "pending",
                t.p[i].name, strcmp(t.p[i].version, "-") != 0 ? "-" : "",
-               strcmp(t.p[i].version, "-") != 0 ? t.p[i].version : "");
+               strcmp(t.p[i].version, "-") != 0 ? t.p[i].version : "",
+               !remove && is_rmstep(&t, &t.p[i]) ?
+                   " (removed first: one kernel package per line)" : "");
     if (opt_force) {
+        warn_kernelless(&t);
         printf("discarding the journal (-f); nothing else is changed\n");
         txn_clear(cf);
         txn_free(&t);
         return EX_OK;
     }
 
-    remove = strcmp(t.verb, "remove") == 0;
-    eng = conf_pkgcmd(cf, remove);
-    if (eng == NULL) {
-        txn_free(&t);
-        return EX_USAGE;
-    }
+    /* the engines the pending entries need: pkgrm and/or pkgadd */
+    addeng = NULL;
+    rmeng = NULL;
     rc = EX_OK;
+    for (i = 0; i < t.n && rc == EX_OK; i++) {
+        if (t.p[i].done)
+            continue;
+        if (is_rmstep(&t, &t.p[i])) {
+            if (rmeng == NULL && (rmeng = conf_pkgcmd(cf, 1)) == NULL)
+                rc = EX_USAGE;
+        } else if (addeng == NULL && (addeng = conf_pkgcmd(cf, 0)) == NULL) {
+            rc = EX_USAGE;
+        }
+    }
     for (i = 0; i < t.n && rc == EX_OK; i++) {
         p = &t.p[i];
         if (p->done)
             continue;
-        if (remove) {
+        rmstep = is_rmstep(&t, p);
+        if (rmstep) {
             if (installed_version(cf, p->pkginst, iver, sizeof(iver)) &&
-                run_pkgrm(cf, eng, p->pkginst) != 0) {
+                run_pkgrm(cf, rmeng, p->pkginst) != 0) {
                 warnx2("pkgrm failed for %s", p->pkginst);
                 rc = EX_PKGCMD;
                 break;
@@ -1077,7 +1228,7 @@ int cmd_recover(const struct conf *cf)
                 break;
             }
             /* instance=overwrite: replaces whatever a cut pkgadd left */
-            if (install_one(cf, eng, p->staged, p->pkginst, 1, p) !=
+            if (install_one(cf, addeng, p->staged, p->pkginst, 1, p) !=
                 EX_OK) {
                 warnx2("pkgadd failed for %s", p->name);
                 rc = EX_PKGCMD;
@@ -1087,9 +1238,13 @@ int cmd_recover(const struct conf *cf)
         p->done = 1;
         (void)txn_save(cf, &t);
         if (!opt_dryrun)
-            printf("%s %s\n", remove ? "removed" : "installed", p->name);
+            printf("%s %s\n", rmstep ? "removed" : "installed",
+                   rmstep && !remove ? p->pkginst : p->name);
     }
-    free(eng);
+    if (addeng != NULL)
+        free(addeng);
+    if (rmeng != NULL)
+        free(rmeng);
     if (rc != EX_OK) {
         warnx2("the journal %s is kept", cf->txnfile);
         txn_free(&t);

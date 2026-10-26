@@ -1,5 +1,70 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-26 — apkg 0.3.1: one kernel package per line, C2-2 v5 §2.1 (built, NOT minted, NOT published)
+
+**Why.** amix-dlm `0d49ddd` (C2-2 v5 §2.1, C2-3 v6 §1.1): a static family (`kernel-k46-z`) and the
+module kernel (`kernel-k46-m`, pkginst `kern46m`) both install `/stand/<line>/unix` and `kabi`, so two
+kernel records of one line would name one path twice (kbootset gate 1 refuses). 0.3.0 did not handle
+it: on a 0.3.0 box the other package is removed by hand first.
+
+**What.** When a transaction installs a `role=kernel` package and a kernel record of the same line
+exists under another pkginst (`kspace_replaces()`, kspace.c):
+
+1. the plan (and `-n`) prints `kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line`
+   (the instance in brackets is the one pkgrm removes: the owner of the record's first file, else the
+   record's file name);
+2. pre-flight against the new kernel, before anything is fetched; an installed module record and a
+   static new kernel give `zeth46: built for kabi k46.1.0, the new kernel kernel-k46-z is static:
+   remove the module packages first` (exit 5; other mismatches keep the existing messages);
+3. after every package is staged and verified, inside the journal: `pkgrm` of the other package, then
+   its record (`removed KERN46Z`) -- before the new pkgadd, because a pkgadd over another package's
+   file is a conflict;
+4. the new pkgadd (a new instance: plain admin, not overwrite) and its record (`installed
+   kernel-k46-m-<version>`, the ordinary install line);
+5. one kbootset build + commit at the end.
+
+Refusals (exit 5, nothing staged or journaled): two or more kernel records of a line the transaction
+installs a kernel **or a module** for (`two kernel records for line k46 (KERN46M, KERN46Z): remove
+one`, file names sorted; a module's pre-flight against "the installed kernel" is undefined there),
+and two kernels of one line in one transaction (`two kernel packages for line k46 in this transaction
+(…): install one`). The same pkginst is an upgrade/reinstall as before; `upgrade` (same pkginst by
+definition) only gains the two-records refusal.
+
+- **Journal**: no format change (`apkg-txn 3`). The removal is a `pkg` entry with `<staged>` `-`,
+  journaled ahead of the new package; `recover` treats such an entry as a pkgrm whatever the verb,
+  fetches only the engines the pending entries need, and lists it as "(removed first: one kernel
+  package per line)". A cut between steps 3 and 4 leaves the removal done and the install pending;
+  **`apkg recover`** pkgadds the new kernel (instance=overwrite), writes its record and runs the
+  trigger once. `apkg -f recover` still discards, and now says `line k46 has no kernel package now:
+  kernel-k46-m was removed and kernel-k46-z is not installed (…)`. (C2-2 v5 §2.1 writes `apkg -f
+  recover` for "finishes the install"; in apkg `-f recover` has always meant discard, so the plain
+  verb is the one that finishes -- reported back to the contract owner.)
+- `remove_one()` (pkgrm + record) is shared by `remove`, the replace step and recover.
+- The C2-2 v4 test that installs `kernel-k46-zacd` while `kernel-k46` is installed now replaces it
+  (both are k46 kernels); the fixture re-installs `kernel-k46` afterwards for the multi-upgrade case.
+
+**Tests.** `run-tests.sh` **421/0** (376 before). The kernel pkgadd shim now refuses a FILE another
+package owns, as pkgadd does (and a test proves it does), so the order is load-bearing. New: an empty
+line installs the static kernel with no pkgrm; a forced reinstall of the same pkginst is one pkgadd,
+no pkgrm; `-n` prints the plan line and `would run` pkgrm KERN46Z (and the record removal) before the
+pkgadd, changes nothing; static -> module: pkgrm KERN46Z then pkgadd KERN46M exactly, `removed
+KERN46Z`, records and contents (`/stand/k46/unix` owned by KERN46M alone), one build + commit, no
+journal; module -> static with `zeth46` installed refused with the exact message, nothing changed
+(also under `-n`); module -> module (`kernel-k46-n`, k46.1.1) with `zeth46` (k46.1.0) passes and leaves
+the module untouched; two kernels in one transaction; two records (kernel install, module install,
+forced reinstall); module -> static once `zeth46` is removed; the cut between pkgrm and pkgadd
+(journal lines exact, line without a record, kbootset not run, the journal blocks new work, `recover`
+runs only the pending pkgadd with instance=overwrite, then the trigger once); the same cut discarded
+by `-f recover` with the warning, then a plain install. `nohttp-variant.sh` 20/0;
+`kbootset-consumer.sh` 12/0 (amix-dlm `0d49ddd`).
+
+**Builds.** Host `-Wall -Wextra` clean. `make amix` with gcc-cross-amix (gcc 2.7.2.3), twice from a
+clean `obj-amix`: both `apkg.amix` **sha256 `87b0c427f866813ef23f73aa44722cbee86074565d49eccacac515b5abf1a5bf`**,
+md5 `18803534bfed2f4e054cb8a96b04798d`, 112647 B, version string 0.3.1; no bare `divsl`/`divul` in the
+objects. The FILE+RAW static variant (build-amix-static.sh's rule, SRCS minus http.c/dns.c,
+`-DAPKG_NO_HTTP`) links against `libc.a` with 0 undefined symbols. Not minted: `build-packages.sh`
+`VER_APKG` stays 0.3.0 until the APKG 0.3.1 mint.
+
 ## 2026-10-26 — APKG 0.3.0 minted for the 1.1 media (STAGED, NOT PUBLISHED)
 
 **Why.** The 1.1 installs still carried APKG 0.2.3 from the 1.0 media, so on a running box a

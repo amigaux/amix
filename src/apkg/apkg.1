@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "October 2026" "apkg 0.3.0" "Amix User Commands"
+.TH APKG 1 "October 2026" "apkg 0.3.1" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -140,10 +140,15 @@ process) or that ended owing work, from the journal
 every package not yet done is installed again from its staged
 datastream (re-checked against its size and catalog hash first) with
 .BR instance=overwrite ,
-or removed, and a kernel-space transaction ends with the kbootset
+or removed (a remove, or the other kernel package of a line that an
+install replaces first; see
+.BR "KERNEL SPACE" ),
+and a kernel-space transaction ends with the kbootset
 build and commit.  With
 .B \-f
-the journal is printed and discarded and nothing else is changed.
+the journal is printed and discarded and nothing else is changed; when
+that leaves a line without a kernel package (a replacement cut between
+its removal and the new install) it says so.
 While a journal exists,
 .BR install ,
 .B upgrade
@@ -156,7 +161,7 @@ Print the client version.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments (amix-dlm contract
-C2-2, version 4):
+C2-2, version 5):
 .PP
 .RS
 .nf
@@ -205,6 +210,45 @@ the compiler pins must be equal; a static kernel takes no modules; a
 new kernel may not strand an installed module of its line.  A refusal
 exits 5 and changes nothing.  The box's CPU line is checked by
 kbootset (its gate 10), not here.
+.PP
+.B One kernel package per line
+(C2-2 version 5 \(sc2.1).  Every kernel package of a line, a static
+family's and the module kernel's alike, installs
+.BI /stand/ line /unix
+(and its kabi sidecar).  So when a transaction installs a kernel and a
+kernel record of the same line exists under another package instance,
+apkg replaces that package in the same journaled transaction.  The plan
+(and
+.BR \-n )
+says so:
+.PP
+.RS
+.nf
+kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line
+.fi
+.RE
+.PP
+The pre-flight then checks the transaction and every installed module
+against the new kernel; a module that does not fit refuses the
+transaction before anything changes ("zeth46: built for kabi k46.1.0,
+the new kernel kernel-k46-z is static: remove the module packages
+first"), so going back from the module kernel to a static family needs
+the module packages removed first.  Once everything is staged and
+verified, the other package is removed
+.RB ( pkgrm ,
+then its record; "removed KERN46Z") before the new
+.BR pkgadd ,
+because both ship the same files; then the new package is installed and
+recorded, and the kbootset trigger runs once at the end.  A cut between
+the removal and the install leaves the line without a kernel package
+until
+.B apkg recover
+finishes the install; the box still boots meanwhile, from the boot
+store's own copies of the kernel.  Two or more kernel records of one
+line (a box damaged by hand) refuse any kernel or module install of
+that line ("two kernel records for line k46 (KERN46M, KERN46Z): remove
+one"), as do two kernels of one line in the same transaction.  A
+package of the same instance is an upgrade, as before.
 .PP
 A kernel-space package is pure files: once staged, and before anything
 is installed, its pkgmap may hold only

@@ -46,7 +46,7 @@ See [apkg.1](apkg.1) for the full manual.
 
 Kernel, loader and module packages are the kernel-modules campaign's
 (amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
-C2-2 version 4 and C2-4 version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+C2-2 version 5 and C2-4 version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 
@@ -64,6 +64,16 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 - **Pre-flight** before anything is fetched: module kabi family/major/minor
   and compiler pin against the kernel of its line; a static kernel takes no
   modules; a kernel upgrade may not strand an installed module.
+- **One kernel package per line** (C2-2 v5 §2.1, apkg 0.3.1).  Installing a
+  kernel when another package's kernel record of the same line exists
+  replaces that package in the same journaled transaction: the plan (and
+  `-n`) prints `kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel
+  package per line`; pre-flight checks every installed module against the
+  new kernel (a static one takes none: "remove the module packages
+  first"); then `pkgrm` + record removal of the other (`removed KERN46Z`),
+  then the new `pkgadd` + record, one trigger.  A cut between the two is
+  finished by `apkg recover`.  Two kernel records of one line, or two
+  kernels of one line in one transaction, refuse with exit 5.
 - **Pure files** (40 §6): after staging, before the first pkgadd, the
   datastream's pkgmap may hold only `f`/`d` objects of class `none` and no
   install scripts (`i`: pkginfo, depend, copyright), and at least one `f`;

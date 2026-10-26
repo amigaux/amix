@@ -1897,6 +1897,13 @@ awk -v i="\$I" '{ keep = 1
     for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
         sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
     if (keep) print }' \$C > \$C.t && mv \$C.t \$C
+# a pkgadd over another package's file is a conflict (why C2-2 v5 §2.1
+# removes the other kernel package of a line first)
+sed -n 's/^FILE //p' \$F | while read p c; do
+    if awk -v p="\$p" '\$1 == p { f = 1 } END { exit !f }' \$C; then
+        echo "pkgadd: conflict: \$p belongs to another package" >&2; exit 1
+    fi
+done || exit 1
 printf 'PKG=%s\nVERSION=%s\n' "\$I" "\$(sed -n 's/^VERSION //p' \$F)" \
     > \$R/var/sadm/pkg/\$I/pkginfo
 sed -n 's/^DIR //p' \$F | while read d; do
@@ -2437,6 +2444,9 @@ run 0 "recover finishes it" "$APKG" -c "$KCONF" recover
 "$APKG" -c "$KCONF" remove kernel-k46-zacd >/dev/null 2>&1
 mkkcat "$KR/catalog" "$KCAT_K110"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
+# kernel-k46-zacd is a kernel of line k46 too, so its first install above
+# replaced kernel-k46 (C2-2 v5 §2.1, tested below); put kernel-k46 back
+"$APKG" -c "$KCONF" install kernel-k46 >/dev/null 2>&1
 
 # --- upgrade with several names: ONE transaction, ONE trigger ---------
 # The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and
@@ -2493,6 +2503,181 @@ run 0 "everything already current: nothing to do" \
 "$APKG" -c "$KCONF" remove loader >/dev/null 2>&1
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 
+# --- one kernel package per line (C2-2 v5 §2.1, apkg 0.3.1) -----------
+# A static family (kernel-k46-z, KERN46Z) and the module kernel
+# (kernel-k46-m, KERN46M) both install /stand/k46/unix.  Installing one
+# replaces the other in the same journaled transaction: plan line,
+# pre-flight against the new kernel, pkgrm + record removal of the other,
+# then the new pkgadd + record, one trigger.  The pkgadd shim refuses a
+# file another package owns, as pkgadd does, so the order is load-bearing.
+"$APKG" -c "$KCONF" remove kernel-k46 >/dev/null 2>&1
+mkds "$KR/pkgs/kernel/kernel-k46-z-1.0.pkg" KERN46Z 1.0 unix
+mkds "$KR/pkgs/kernel/kernel-k46-m-1.0.pkg" KERN46M 1.0 unix
+mkds "$KR/pkgs/kernel/kernel-k46-n-1.1.pkg" KERN46N 1.1 unix
+mkds "$KR/pkgs/kernel/zeth46-1.0.pkg"       ZETH46  1.0 zeth46
+KR4=$WORK/krepo4; mkdir -p "$KR4"; ln -sfn "$KR/pkgs" "$KR4/pkgs"
+mkkcat "$KR4/catalog" "$KCAT_K110
+$(kline kernel-k46-z 1.0 kernel k46 static $PIN kernel/kernel-k46-z-1.0.pkg pkginst=KERN46Z)
+$(kline kernel-k46-m 1.0 kernel k46 k46.1.0 $PIN kernel/kernel-k46-m-1.0.pkg pkginst=KERN46M)
+$(kline kernel-k46-n 1.1 kernel k46 k46.1.1 $PIN kernel/kernel-k46-n-1.1.pkg pkginst=KERN46N)
+$(kline zeth46 1.0 module k46 k46.1.0 $PIN kernel/zeth46-1.0.pkg pkginst=ZETH46)"
+K4=$WORK/conf-k4
+mkkconf "$K4" "file://$KR4"
+"$APKG" -c "$K4" update >/dev/null 2>&1
+owners() {  # the pkginsts owning <path> in the contents DB
+    awk -v p="$1" '$1 == p { for (k = 10; k <= NF; k++) print $k }' \
+        "$ROOT/var/sadm/install/contents" | tr '\n' ' '
+}
+kreset
+run 0 "install the static kernel-k46-z on an empty line" "$APKG" -c "$K4" install kernel-k46-z
+! echo "$OUT" | grep -q "replaces" && [ -f "$REC/KERN46Z" ] && ! grep -q '^pkgrm' "$SHIMLOG" \
+    && ok "an empty line: no replacement, no pkgrm, the record KERN46Z" \
+    || bad "static kernel on an empty line" "$OUT $(cat "$SHIMLOG")"
+kreset
+OUT=$("$APKG" -c "$K4" -f install kernel-k46-z 2>&1); rc=$?
+[ $rc -eq 0 ] && ! echo "$OUT" | grep -q "replaces" && ! grep -q '^pkgrm' "$SHIMLOG" \
+    && [ "$(grep -c '^pkgadd' "$SHIMLOG")" = 1 ] \
+    && ok "the same pkginst is a reinstall/upgrade as before: one pkgadd, no pkgrm" \
+    || bad "same-pkginst reinstall (rc=$rc)" "$OUT $(cat "$SHIMLOG")"
+# the shim models the conflict the ordering avoids
+"$WORK/bin/kpkgadd-shim" -n -a x -d "$KR/pkgs/kernel/kernel-k46-m-1.0.pkg" KERN46M >/dev/null 2>"$WORK/conflict.err"; rc=$?
+[ $rc -ne 0 ] && grep -q "conflict: /stand/k46/unix" "$WORK/conflict.err" && [ "$(owners /stand/k46/unix)" = "KERN46Z " ] \
+    && ok "(fixture) a pkgadd over another package's /stand/k46/unix is a conflict" \
+    || bad "the pkgadd shim does not model the conflict (rc=$rc)" "$(cat "$WORK/conflict.err")"
+rm -rf "$ROOT/var/sadm/pkg/KERN46M"
+
+# step 1 under -n: the plan line, then the pkgrm before the pkgadd; nothing runs
+kreset
+run 0 "-n install kernel-k46-m over kernel-k46-z" "$APKG" -c "$K4" -n install kernel-k46-m
+echo "$OUT" | grep -qx "kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line" \
+    && ok "the dry run prints the C2-2 v5 §2.1 plan line" || bad "dry-run plan line" "$OUT"
+RMN=$(echo "$OUT" | grep -n "would run: $WORK/bin/kpkgrm-shim -n -a $ROOT/var/apkg/admin KERN46Z$" | cut -d: -f1)
+ADN=$(echo "$OUT" | grep -n "would run: $WORK/bin/kpkgadd-shim -n -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M$" | cut -d: -f1)
+[ -n "$RMN" ] && [ -n "$ADN" ] && [ "$RMN" -lt "$ADN" ] \
+    && echo "$OUT" | grep -q "would remove the record $REC/KERN46Z" \
+    && echo "$OUT" | grep -q "would write the record $REC/KERN46M" \
+    && ok "the dry run shows pkgrm KERN46Z and its record removal before pkgadd KERN46M" \
+    || bad "dry-run order" "$OUT"
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] && [ -f "$REC/KERN46Z" ] && [ ! -f "$REC/KERN46M" ] \
+    && ok "the dry run changes nothing" || bad "the dry run changed something" "$(cat "$SHIMLOG" "$KLOG"; ls "$REC")"
+
+# static -> module: steps 1-5
+kreset
+run 0 "install kernel-k46-m replaces the static kernel-k46-z" "$APKG" -c "$K4" install kernel-k46-m
+echo "$OUT" | grep -qx "kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line" \
+    && ok "step 1: the plan line" || bad "plan line" "$OUT"
+[ "$(sed -n 1p "$SHIMLOG")" = "pkgrm -n -a $ROOT/var/apkg/admin KERN46Z" ] && \
+[ "$(sed -n 2p "$SHIMLOG")" = "pkgadd -n -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] && \
+[ "$(grep -c . "$SHIMLOG")" = 2 ] \
+    && ok "steps 3-4: pkgrm KERN46Z first, then pkgadd KERN46M (plain admin: a new instance)" \
+    || bad "replace order" "$(cat "$SHIMLOG")"
+echo "$OUT" | grep -qx "removed KERN46Z" && echo "$OUT" | grep -q "^installed kernel-k46-m" \
+    && ok "it prints 'removed KERN46Z', then 'installed kernel-k46-m...'" || bad "replace messages" "$OUT"
+[ ! -f "$REC/KERN46Z" ] && grep -qx "name kernel-k46-m" "$REC/KERN46M" 2>/dev/null \
+    && grep -q "^file /stand/k46/unix " "$REC/KERN46M" && [ ! -d "$ROOT/var/sadm/pkg/KERN46Z" ] \
+    && ok "the other record and instance are gone; KERN46M's record names /stand/k46/unix" \
+    || bad "records after the replace" "$(ls "$REC"; ls "$ROOT/var/sadm/pkg")"
+[ "$(owners /stand/k46/unix)" = "KERN46M " ] \
+    && ok "the contents DB names /stand/k46/unix once, owned by KERN46M" \
+    || bad "contents after the replace" "$(owners /stand/k46/unix)"
+[ "$(cat "$KLOG")" = "kbootset --journal /var/kbootset/journal build
+kbootset --journal /var/kbootset/journal commit" ] && [ ! -f "$TXN" ] \
+    && ok "step 5: ONE kbootset build + commit at the end; no journal left" \
+    || bad "replace trigger" "$(cat "$KLOG"; cat "$TXN" 2>&1)"
+
+# a module that fits the module kernel installs; then going back to the
+# static family is refused while it is installed
+kreset
+run 0 "zeth46 (kabi k46.1.0) installs on the module kernel" "$APKG" -c "$K4" install zeth46
+[ -f "$REC/ZETH46" ] && ok "the module record ZETH46" || bad "no ZETH46 record" "$(ls "$REC")"
+kreset
+run 5 "module -> static with zeth46 installed is refused (exit 5)" "$APKG" -c "$K4" install kernel-k46-z
+echo "$OUT" | grep -qx "apkg: zeth46: built for kabi k46.1.0, the new kernel kernel-k46-z is static: remove the module packages first" \
+    && ok "step 2: the refusal names the module, as C2-2 v5 §2.1 words it" || bad "static refusal message" "$OUT"
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] && [ -f "$REC/KERN46M" ] && [ -f "$REC/ZETH46" ] \
+    && [ "$(owners /stand/k46/unix)" = "KERN46M " ] \
+    && ok "the refusal comes before any change: nothing staged, run, journaled or removed" \
+    || bad "the static refusal changed something" "$(cat "$SHIMLOG" "$KLOG"; ls "$REC")"
+run 5 "the same refusal under -n" "$APKG" -c "$K4" -n install kernel-k46-z
+echo "$OUT" | grep -q "zeth46: built for kabi k46.1.0" && ok "-n refuses too" || bad "-n static refusal" "$OUT"
+
+# module -> another module kernel (kabi k46.1.1): the installed zeth46 fits
+kreset
+run 0 "kernel-k46-n replaces kernel-k46-m; zeth46 (k46.1.0) fits k46.1.1" "$APKG" -c "$K4" install kernel-k46-n
+echo "$OUT" | grep -qx "kernel-k46-n replaces kernel-k46-m (KERN46M): one kernel package per line" \
+    && [ "$(sed -n 1p "$SHIMLOG")" = "pkgrm -n -a $ROOT/var/apkg/admin KERN46M" ] \
+    && grep -q "^pkgadd .* KERN46N$" "$SHIMLOG" && [ -f "$REC/KERN46N" ] && [ ! -f "$REC/KERN46M" ] \
+    && [ -f "$REC/ZETH46" ] && ! grep -q ZETH46 "$SHIMLOG" \
+    && ok "a fitting module record passes pre-flight and stays untouched" \
+    || bad "module -> module replace" "$OUT $(cat "$SHIMLOG"; ls "$REC")"
+
+# two kernels of one line in one transaction / two kernel records of a line
+kreset
+run 5 "two kernel packages of one line in one transaction are refused" \
+    "$APKG" -c "$K4" install kernel-k46-m kernel-k46-z
+echo "$OUT" | grep -qx "apkg: two kernel packages for line k46 in this transaction (kernel-k46-m, kernel-k46-z): install one" \
+    && [ ! -s "$SHIMLOG" ] && ok "and say which" || bad "two-in-one message" "$OUT"
+sed 's/^name .*/name kernel-k46-m/' "$REC/KERN46N" > "$REC/KERN46M"     # damage by hand
+kreset
+run 5 "two kernel records of line k46 refuse a kernel install" "$APKG" -c "$K4" install kernel-k46-z
+echo "$OUT" | grep -qx "apkg: two kernel records for line k46 (KERN46M, KERN46N): remove one" \
+    && ok "the refusal is C2-2 v5 §2.1's 'two kernel records for line k46 (...): remove one'" \
+    || bad "two-records message" "$OUT"
+run 5 "... and a module install of that line" "$APKG" -c "$K4" -f install zeth46
+run 5 "... and a forced reinstall of the installed kernel" "$APKG" -c "$K4" -f install kernel-k46-n
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
+    && ok "the two-records refusals run and journal nothing" || bad "two-records refusal ran something" "$(cat "$SHIMLOG")"
+rm -f "$REC/KERN46M"
+
+# back to the static family once the module is removed
+"$APKG" -c "$K4" remove zeth46 >/dev/null 2>&1
+kreset
+run 0 "module -> static after the module package is removed" "$APKG" -c "$K4" install kernel-k46-z
+echo "$OUT" | grep -qx "kernel-k46-z replaces kernel-k46-n (KERN46N): one kernel package per line" \
+    && echo "$OUT" | grep -qx "removed KERN46N" && [ -f "$REC/KERN46Z" ] && [ ! -f "$REC/KERN46N" ] \
+    && [ "$(owners /stand/k46/unix)" = "KERN46Z " ] \
+    && ok "kernel-k46-z replaced kernel-k46-n" || bad "module -> static" "$OUT $(ls "$REC")"
+
+# a cut between step 3 (removed) and step 4 (installed): recover finishes
+kreset; echo KERN46M > "$WORK/kshim.die"
+"$APKG" -c "$K4" install kernel-k46-m > "$WORK/kcut2.out" 2>&1; rc=$?
+[ $rc -eq 137 ] && grep -q "^pkgrm .* KERN46Z$" "$SHIMLOG" && grep -q "^pkgadd .* KERN46M$" "$SHIMLOG" \
+    && ok "the cut: apkg killed in the new pkgadd, after pkgrm KERN46Z" \
+    || bad "the cut did not happen where wanted (rc=$rc)" "$(cat "$WORK/kcut2.out")"
+grep -q "^pkg 1 0 1 -1 kernel-k46-z - KERN46Z - - kernel k46 - - - - - KERN46Z$" "$TXN" 2>/dev/null \
+    && grep -q "^pkg 0 0 1 [0-9]* kernel-k46-m 1.0 KERN46M " "$TXN" \
+    && ok "the journal: the removal of KERN46Z done, kernel-k46-m pending" \
+    || bad "journal after the replace cut" "$(cat "$TXN" 2>&1)"
+[ ! -f "$REC/KERN46Z" ] && [ ! -f "$REC/KERN46M" ] && [ ! -s "$KLOG" ] \
+    && ok "the line has no kernel package; kbootset never ran (the store still boots)" \
+    || bad "state after the replace cut" "$(ls "$REC"; cat "$KLOG")"
+run 1 "the pending journal blocks a new transaction" "$APKG" -c "$K4" install kernel-k46-z
+kreset
+run 0 "apkg recover finishes the replace" "$APKG" -c "$K4" recover
+echo "$OUT" | grep -q "1 of 2 packages done" \
+    && echo "$OUT" | grep -q "done    kernel-k46-z (removed first: one kernel package per line)" \
+    && ok "recover reports the removal done and the install pending" || bad "recover report" "$OUT"
+[ "$(cat "$SHIMLOG")" = "pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] \
+    && ok "recover runs only the pending pkgadd (no second pkgrm)" || bad "recover engine calls" "$(cat "$SHIMLOG")"
+grep -qx "name kernel-k46-m" "$REC/KERN46M" 2>/dev/null && [ ! -f "$REC/KERN46Z" ] && [ "$(grep -c . "$KLOG")" -eq 2 ] \
+    && [ ! -f "$TXN" ] && [ "$(owners /stand/k46/unix)" = "KERN46M " ] \
+    && ok "recover wrote KERN46M's record, ran the trigger once, cleared the journal" \
+    || bad "recover end state" "$(ls "$REC"; cat "$KLOG"; cat "$TXN" 2>&1)"
+
+# the same cut, discarded with -f: it says the line is left without a kernel
+kreset; echo KERN46Z > "$WORK/kshim.die"
+"$APKG" -c "$K4" install kernel-k46-z >/dev/null 2>&1
+kreset
+run 0 "apkg -f recover discards a cut replace" "$APKG" -c "$K4" -f recover
+echo "$OUT" | grep -q "line k46 has no kernel package now: kernel-k46-m was removed and kernel-k46-z is not installed" \
+    && [ ! -f "$TXN" ] && [ ! -s "$SHIMLOG" ] \
+    && ok "-f recover discards it and says line k46 has no kernel package" || bad "-f recover of a cut replace" "$OUT"
+run 0 "a plain install then finishes the job" "$APKG" -c "$K4" install kernel-k46-z
+! echo "$OUT" | grep -q replaces && [ -f "$REC/KERN46Z" ] \
+    && ok "with no other record left it is a plain install" || bad "install after -f recover" "$OUT"
+"$APKG" -c "$K4" remove kernel-k46-z >/dev/null 2>&1
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+
 # --- userland through the new client: no trigger, no journal left ---
 kreset
 run 0 "a userland install through the kernel-space catalog" \
@@ -2500,7 +2685,9 @@ run 0 "a userland install through the kernel-space catalog" \
 [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
     && ok "userland: no kbootset call, no journal left" || bad "userland touched kspace" "$(cat "$KLOG")"
 rm -rf "$REC" "$ROOT$KT" "$ROOT/stand" "$ROOT/var/sadm/install/contents" \
-       "$ROOT/var/sadm/pkg/KERNK46" "$ROOT/var/sadm/pkg/Z3660SCS"
+       "$ROOT/var/sadm/pkg/KERNK46" "$ROOT/var/sadm/pkg/Z3660SCS" \
+       "$ROOT/var/sadm/pkg/KERN46Z" "$ROOT/var/sadm/pkg/KERN46M" \
+       "$ROOT/var/sadm/pkg/KERN46N" "$ROOT/var/sadm/pkg/ZETH46"
 "$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
 
 # ------------------------------------------------ exit-code sanity extras

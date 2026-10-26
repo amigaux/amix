@@ -6,13 +6,14 @@
  * MIT license - see LICENSE in this directory.
  *
  * The interfaces are agreed contracts of the kernel-modules campaign
- * (amix-dlm; C2-2 version 4, C2-3 version 4, C2-4 version 2, 2026-10-26), and this file implements apkg's side
- * of them exactly:
+ * (amix-dlm; C2-2 version 5, C2-3 version 6, C2-4 version 2, 2026-10-26),
+ * and this file implements apkg's side of them exactly:
  *
  *   C2-2 kernel-space catalog entries and the install record
  *        (docs/contracts/C2-2-kpkg.md).  The record /var/apkg/kpkg/<pkginst>
  *        is apkg's alone; kbootset only reads it (gate 1 compares every
- *        generation member with the `file` line naming it).
+ *        generation member with the `file` line naming it).  One kernel
+ *        package per line (§2.1): kspace_replaces().
  *   C2-4 kbootset as a called program (docs/contracts/C2-4-kbootset-cli.md):
  *        five exit statuses, `build` and `commit` as two calls, -R and
  *        --journal.  apkg never writes a boot slice itself.
@@ -1027,6 +1028,16 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
             mname = mr.name[0] != '\0' ? mr.name : de->d_name;
             if (in_todo(todo, nt, mname))
                 continue;
+            /* C2-2 v5 §2.1: going back to a static kernel needs the
+             * module packages removed first */
+            if (kabi_parse(todo[i]->kabi, fam, sizeof(fam), &maj, &min) != 0
+                || maj == 0) {
+                warnx2("%s: built for kabi %s, the new kernel %s is static: "
+                       "remove the module packages first", mname, mr.kabi,
+                       todo[i]->name);
+                bad = 1;
+                continue;
+            }
             if (module_fits(mname, mr.line, mr.kabi, mr.pin,
                             todo[i]->name, todo[i]->kabi,
                             todo[i]->pin) != 0) {
@@ -1039,6 +1050,161 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         closedir(d);
     }
     return bad ? EX_DEPS : EX_OK;
+}
+
+/* ---------------- one kernel package per line (C2-2 v5 §2.1) ----------
+ *
+ * Every kernel package of a line installs the same paths
+ * (/stand/<line>/unix, kabi, on k30 unix.sym): a static family's and the
+ * module kernel's alike.  Two kernel records of one line would name one
+ * path twice, which kbootset's gate 1 refuses.  So a transaction that
+ * installs a role=kernel package replaces the kernel package recorded
+ * under another pkginst on the same line: install.c removes it (pkgrm,
+ * then its record) before the new pkgadd, because a pkgadd over another
+ * package's file is a conflict, in the same journal.  The same pkginst is
+ * an upgrade, as before.
+ */
+
+/* the kernel records of a line, file names sorted; returns the count */
+static int kernel_records(const struct conf *cf, const char *line,
+                          char ***keys)
+{
+    DIR *d;
+    struct dirent *de;
+    struct krec r;
+    char **v;
+    char *t;
+    int n;
+    int i, j;
+
+    v = NULL;
+    n = 0;
+    d = opendir(cf->kpkgdir);
+    if (d != NULL) {
+        while ((de = readdir(d)) != NULL) {
+            if (rec_skip(de->d_name) || rec_read(cf, de->d_name, &r) != 0 ||
+                strcmp(r.role, "kernel") != 0 || strcmp(r.line, line) != 0)
+                continue;
+            v = (char **)xrealloc((char *)v,
+                                  (unsigned)((n + 1) * sizeof(char *)));
+            v[n++] = xstrdup(de->d_name);
+        }
+        closedir(d);
+    }
+    for (i = 1; i < n; i++)
+        for (j = i; j > 0 && strcmp(v[j - 1], v[j]) > 0; j--) {
+            t = v[j];
+            v[j] = v[j - 1];
+            v[j - 1] = t;
+        }
+    *keys = v;
+    return n;
+}
+
+static void free_keys(char **v, int n)
+{
+    int i;
+
+    for (i = 0; i < n; i++)
+        free(v[i]);
+    if (v != NULL)
+        free((char *)v);
+}
+
+static void copystr(char *dst, unsigned cap, const char *src)
+{
+    unsigned n;
+
+    n = (unsigned)strlen(src);
+    if (n >= cap)
+        n = cap - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
+int kspace_replaces(const struct conf *cf, struct pkgent **todo, int nt,
+                    struct kreplace **rep, int *nrep)
+{
+    struct pkgent *k;
+    struct kreplace *x;
+    struct krec r;
+    char **keys;
+    char *list;
+    char *t;
+    int nk;
+    int i, j;
+
+    *rep = NULL;
+    *nrep = 0;
+    /* the transaction itself carries one kernel per line */
+    for (i = 0; i < nt; i++) {
+        if (!todo[i]->kspace || strcmp(todo[i]->role, "kernel") != 0)
+            continue;
+        for (j = i + 1; j < nt; j++)
+            if (todo[j]->kspace && strcmp(todo[j]->role, "kernel") == 0 &&
+                strcmp(todo[j]->kline, todo[i]->kline) == 0) {
+                warnx2("two kernel packages for line %s in this transaction "
+                       "(%s, %s): install one", todo[i]->kline,
+                       todo[i]->name, todo[j]->name);
+                return EX_DEPS;
+            }
+    }
+    /* every line the transaction installs a kernel or a module for */
+    for (i = 0; i < nt; i++) {
+        if (!todo[i]->kspace || strcmp(todo[i]->role, "loader") == 0)
+            continue;
+        for (j = 0; j < i; j++)
+            if (todo[j]->kspace && strcmp(todo[j]->role, "loader") != 0 &&
+                strcmp(todo[j]->kline, todo[i]->kline) == 0)
+                break;
+        if (j < i)
+            continue;                         /* line already seen */
+        nk = kernel_records(cf, todo[i]->kline, &keys);
+        if (nk >= 2) {
+            /* a box damaged by hand: which kernel is installed is unknown */
+            list = xstrdup(keys[0]);
+            for (j = 1; j < nk; j++) {
+                t = cat3(list, ", ", keys[j]);
+                free(list);
+                list = t;
+            }
+            if (nk == 2)
+                warnx2("two kernel records for line %s (%s): remove one",
+                       todo[i]->kline, list);
+            else
+                warnx2("%d kernel records for line %s (%s): remove all but "
+                       "one", nk, todo[i]->kline, list);
+            free(list);
+            free_keys(keys, nk);
+            if (*rep != NULL)
+                free((char *)*rep);
+            *rep = NULL;
+            *nrep = 0;
+            return EX_DEPS;
+        }
+        k = NULL;
+        for (j = 0; j < nt; j++)
+            if (todo[j]->kspace && strcmp(todo[j]->role, "kernel") == 0 &&
+                strcmp(todo[j]->kline, todo[i]->kline) == 0)
+                k = todo[j];
+        /* the record of the new kernel's own pkginst is an upgrade */
+        if (nk == 1 && k != NULL && strcmp(keys[0], k->pkginst) != 0 &&
+            rec_read(cf, keys[0], &r) == 0) {
+            *rep = (struct kreplace *)xrealloc((char *)*rep,
+                (unsigned)((*nrep + 1) * sizeof(struct kreplace)));
+            x = &(*rep)[(*nrep)++];
+            copystr(x->key, sizeof(x->key), keys[0]);
+            copystr(x->name, sizeof(x->name),
+                    r.name[0] != '\0' ? r.name : keys[0]);
+            copystr(x->line, sizeof(x->line), todo[i]->kline);
+            if (kpkg_owner(cf, keys[0], x->pkginst, sizeof(x->pkginst)) != 0)
+                copystr(x->pkginst, sizeof(x->pkginst), keys[0]);
+            printf("%s replaces %s (%s): one kernel package per line\n",
+                   k->name, x->name, x->pkginst);
+        }
+        free_keys(keys, nk);
+    }
+    return EX_OK;
 }
 
 /* ---------------- the kbootset trigger (C2-4) ---------------- */

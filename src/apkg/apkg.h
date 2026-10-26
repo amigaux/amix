@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.0"
+#define APKG_VERSION "0.3.1"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -436,6 +436,24 @@ extern int kpkg_remove_record(const struct conf *cf, const char *key);
  * EX_* on refusal (message printed). */
 extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
                             int nt);
+/* One kernel package per line (C2-2 v5 §2.1).  Every kernel package of a
+ * line installs /stand/<line>/unix, so a transaction that installs a
+ * role=kernel package replaces the kernel package of the same line that
+ * is recorded under another pkginst ("the other kernel package"): its
+ * pkgrm and record removal come first, then the new pkgadd, all in one
+ * journal.  kspace_replaces() finds them and prints the plan line; it
+ * refuses (EX_DEPS, message printed) two kernel packages of one line in
+ * the transaction, and two or more kernel records of a line the
+ * transaction installs a kernel or module for.  *rep is allocated (free
+ * it), *nrep may be 0. */
+struct kreplace {
+    char key[64];       /* the other package's record file (its pkginst=) */
+    char name[256];     /* its record's name line                        */
+    char pkginst[64];   /* the instance pkgrm removes                     */
+    char line[16];      /* k30 | k46                                      */
+};
+extern int kspace_replaces(const struct conf *cf, struct pkgent **todo,
+                           int nt, struct kreplace **rep, int *nrep);
 /* the trigger of C2-4 §3: `kbootset build` then `kbootset commit`
  * (bootset=auto), or print the command (bootset=manual).  Once the
  * build succeeded the journal t (may be NULL) is saved in state
@@ -486,7 +504,9 @@ struct txnpkg {
     char *version;
     char *pkginst;
     char *hash;       /* catalog md5/sha256 of the staged file, or "-" */
-    char *staged;     /* staged datastream, or "-" (remove)            */
+    char *staged;     /* staged datastream, or "-": a pkgrm (a remove,
+                         or the other kernel package an install
+                         replaces, C2-2 v5 §2.1)                      */
     char *role, *kline, *kabi, *pin, *loaderv, *sha256, *source;
                       /* kspace: the record's fields                  */
     char *reckey;     /* kspace: the record's file name (C2-2 v4)      */
