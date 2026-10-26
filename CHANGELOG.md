@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — S3-45's medium: RTG-kit 1.1 profiles and cells; booting the install CD (0f73c0b..02fe6c4)
+
+RTG-kit 1.1 profiles (bench-a4000-z3660-060-cd-l11-rtg, bench-a3000-a4091-l11-rtg) and matrix cells l11-k46-rtg / l11-k30-rtg:
+z3660eth, monsw and z3660rtg 1.1.0-1 composed into the pristine generation with the X stack (Xcore, Xbasic, olcore) and the
+RTG kit (/opt/amix/bin/{Xzz9000,startx-rtg,rtg-kbdback,zz9k_monsw}, /dev/zz9000 c 49 0); the l11 set takes rows of record
+for superseded packages (tools/l11-rows-record.conf). Test disks tmp/2026-10-26-s3-45 (l11-k46-rtg.hdf ecebd6f6, l11-k30-rtg
+86ae863a), both cells PASS 9/9; first boots: syslogd up, conslogging 1, `modadmin -l z3660rtg` loads with monsw as its
+dependency on k46, -L captures the driver's lines. Docs: booting the 1.1 install CD — the installed disk boots first.
+
 ## 2026-10-26 — S3-31 media of record; the syslog unit trusts its pid file only for a running syslogd (513b9c4, cfcdb6a)
 
 Media of record (tmp/2026-10-26-s3-31, SHA256SUMS fff4fd0d): amix21-install-l11-k30-s3-31.iso 98a88d43, -k46- 5ed3bbea;
