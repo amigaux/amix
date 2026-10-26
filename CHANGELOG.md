@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-26 — monsw 1.0.0-2 (b0f75a4)
+
+A packaging release so S3-45 can test `apkg upgrade` of a kernel module: module/VERSION 1.0.0-2; README gains "Size and
+memory" (C3-1 §6 / C3-6 §1): file 5197 B, image 2200 B (.text 1584, .data 432, .moddata 161, .bss 16), load working set
+about 15 KiB, no kmem requests. Objects byte-identical to 1.0.0-1 (k30 01a40342, k46 2c2760e9); modcheck ok both lines.
+
 ## Unreleased
 
 ## 2026-10-26 — monsw: a config that is not a number stays unset (6c407b7)
