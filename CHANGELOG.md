@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27 — S4-54, the upgrade install's survivors (74abe1f)
+
+The installer puts the saved configuration in place at the end of the install (from the archive's own cpio entries) and checks
+every file's sum on the new root; FB_UPGRADED=y makes the first boot leave them alone (S17upgrade is a guard; no dialog on an
+upgrade). The dialog's choices in package-owned files (syslog, A2024, keymap, X colour, Netnews) are kept as states and set again;
+firstboot.conf kept as .prev. Password aging survives only behind setclk's plausibility gate, else cleared with a console line.
+Cells l11-k46-512 and l11-k46-upg11 (1.1 → 1.1, s4 kept) added; all four upgrade cells 9/9; first boots E948/E949/E950 PASS as the
+old box. Spec 40 §7 text proposed to amix-dlm.
+
 ## 2026-10-26 — public-a3000-060-wd-r6 and cell a3000-060-img: a pre-installed 1.0.1 image for an A3000 + 68060 (519d9f6) — not published
 
 The r7 KD060-Z (68060-261021-80) rooted on the onboard WD at id 6 (c6d0s1), the standard set (17 packages, m4 for syslogd)
