@@ -20,8 +20,8 @@ PATH="$PATH:$G14/prefix/bin"
 K46=${1:-$WS/tmp/2026-10-26-s3-20/out/m/unix}
 K30=${2:-$WS/tmp/2026-10-26-s3-21/dlm/usr/sys/unix}
 fails=0
-pass() { echo "PASS $*"; }
-fail() { echo "FAIL $*"; fails=$((fails + 1)); }
+pass() { printf "PASS %s\n" "$*"; }
+fail() { printf "FAIL %s\n" "$*"; fails=$((fails + 1)); }
 W=$B/kit-test
 rm -rf "$W" && mkdir -p "$W"
 
@@ -59,6 +59,7 @@ mkbad() {
 M0='$modtype misc\n$class demand\n$cpu 68020\n'
 # edit FILE OUT: OUT is FILE with python's edit (stdin) applied to its bytes `d`
 edit() {
+	mkdir -p "$(dirname "$2")"
 	python3 -c "
 import struct, sys
 d = bytearray(open(sys.argv[1], 'rb').read())
@@ -67,7 +68,7 @@ u32 = lambda o: struct.unpack('>I', d[o:o+4])[0]
 shoff, shnum = u32(32), u16(48)
 sh = lambda i, f: u32(shoff + 40 * i + f)
 $(cat)
-open(sys.argv[2], 'wb').write(d)" "$1" "$2"
+open(sys.argv[2], 'wb').write(d)" "$1" "$2" || { fail "cannot make $2"; return 1; }
 }
 # a character driver, as the guide's section 4 shows: NAME on MAJOR, and
 # STR=1 for a STREAMS driver (d_str only); built under a registered name
@@ -189,8 +190,12 @@ PY
 i = d.index(b'cpu='); d[i] = ord('x')
 PY
 	mkdir -p "$W/$l-hello"
-	mkbad $l huge "$WRAP"'char huge_space[2200000];\nMOD_MISC_WRAPPER(huge, l, u, "x");\n' "$M0"'huge\thuge\n' &&
-		refused "an image over 2 MiB" $l "$W/$l-huge/out/mod.d/huge" "over 2 MiB"
+	mkbad $l huge "$WRAP"'char huge_space[270000];\nMOD_MISC_WRAPPER(huge, l, u, "x");\n' "$M0"'huge\thuge\n' &&
+		refused "an image over 256 KiB" $l "$W/$l-huge/out/mod.d/huge" "over 256 KiB"
+	# a file of exactly 256 KiB: the core reads it whole into at most that (C3-1 section 6)
+	edit "$H" "$W/$l-fat/hello" <<'PY' && refused "a file of 256 KiB" $l "$W/$l-fat/hello" "not under 256 KiB"
+d += bytes(262144 - len(d))
+PY
 	mkbad $l tierc "$WRAP"'MOD_MISC_WRAPPER(tierc, l, u, "x");\n' "$M0"'$tier core\ntierc\ttierc\n' &&
 		refused "tier=core without build=" $l "$W/$l-tierc/out/mod.d/tierc" "needs build="
 	# a dependency's globals count only when it is named (-d and depend=)

@@ -14,7 +14,7 @@
 # Checks:
 #   - ELF32 big-endian ET_REL EM_68K version 1;
 #   - allocated sections PROGBITS, NOBITS or type 13 only; the image at
-#     most 2 MiB;
+#     most 256 KiB and the file under 256 KiB (C3-1 section 6);
 #   - exactly one .moddata (type 13 once modfix has run), allocated,
 #     12..2048 bytes; word 0 an R_68K_32 against <prefix>_wrapper, addend
 #     0, the wrapper defined once, globally; "MD2\0"; the key strings
@@ -43,7 +43,8 @@ import os, re, struct, subprocess, sys, tempfile
 ALLOC, SHT_RELA, SHT_REL, SHT_SYMTAB = 2, 4, 9, 2
 OK_TYPES = (1, 8, 13)                    # PROGBITS, NOBITS, the .moddata type
 OK_RELOCS = range(0, 7)                  # R_68K_NONE .. R_68K_PC8
-IMAGE_MAX = 2 << 20
+IMAGE_MAX = 256 << 10                    # C3-1 section 6: the image at most this,
+FILE_MAX = 256 << 10                     # the file under this (the core reads it whole)
 CPUS = ('68020', '68030', '68040', '68060')
 PTYPES = ('int', 'bool', 'str', 'hex')
 problems = []
@@ -389,7 +390,9 @@ def main(argv):
             al = max(y['value'], 1)
             image = (image + al - 1) // al * al + y['size']
     if image > IMAGE_MAX:
-        bad('the allocated image is %d bytes, over 2 MiB' % image)
+        bad('the allocated image is %d bytes, over 256 KiB' % image)
+    if len(e.b) >= FILE_MAX:
+        bad('the file is %d bytes, not under 256 KiB' % len(e.b))
     for s, off, sym, rtype, add in e.relas(None):
         if rtype not in OK_RELOCS:
             bad('%s: relocation type %d at 0x%x is outside the list' % (s['nm'], rtype, off))

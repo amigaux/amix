@@ -169,6 +169,12 @@ wrapper's `<prefix>_conf_data` does. Notes on particular names:
 - A stock header's tentative definition (`int ifnet;`) becomes a private
   copy in your module. The checker warns about each COMMON symbol.
 
+**Size and memory.** The module's image is at most 256 KiB, COMMON
+symbols included, and its file is under 256 KiB. The checker refuses
+anything larger (C3-1 §6). Ask `kmem_alloc` or `kmem_zalloc` for at most
+256 KiB at a time. A `KM_SLEEP` request above that on a running box
+never returns. Check every `KM_NOSLEEP` result for 0 (C3-6 §1).
+
 ## 7. Linking other objects in
 
 `EXTRA` names objects linked in as they are. `LOCALIZE` needs a newer
