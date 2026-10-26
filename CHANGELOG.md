@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — core patch 0017: boot-class modules load from the first sysinit entry (cf762a3..bcd6f0d)
+
+S3-B5's panic (N50): the kernel's hook after vfs_mountroot read the module file in process 0 at IPL 7, where the file system
+cannot bring a page in — U15's question, answered. Boot-class modules now load from /etc/inittab's first sysinit line via
+`modadmin -B` (modadm MOD_C_POST, root only, once a boot; a second call is EBUSY); the hook loads nothing while interrupts
+are masked and says so. C3-5 v3, spec 30 §3, U15 in 90, brief step 8, C2-4 §11. Harness 162/162 both kernels; 665 host
+checks; box modadmin a206874d. The media need /sbin/modadmin and `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1`.
+
 ## 2026-10-26 — core patch 0016: pin by default (31e5676)
 
 The module core pins modules by default, as C3-1 §2 says: a module that does not declare unload=allowed is refused by
