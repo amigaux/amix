@@ -129,6 +129,19 @@ else
 fi
 m68k-elf-nm -u "$B/obj/dlm.o" | awk '$1=="U"{print $2}' | sort -u > "$B/obj/dlm.undef"
 
+# the platform hook (core/plat): built as the kernel builds it, and on the host
+for f in amiga k30/cputype; do
+	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
+		-I"$R/loader/common" -c "$R/core/plat/$f.c" -o "$B/obj/plat-$(echo $f | tr / -).o" 2>> "$B/kobj.warn"
+done
+if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -I"$R/loader/common" -o "$B/test-bin/t_plat" \
+	"$R/tests/core/t_plat.c" "$R/core/plat/amiga.c" "$R/loader/common/bootinfo.c" &&
+   "$B/test-bin/t_plat" > "$B/t_plat.log" 2>&1; then
+	pass "core/plat: $(grep -c '^PASS' "$B/t_plat.log") checks (loader record, build id, board matcher)"
+else
+	grep '^FAIL' "$B/t_plat.log"; fail "core/plat"
+fi
+
 # ---- 3. the user side ----
 if for f in modload moduload modpath modstat modadm getksym; do
 	m68k-cbm-sysv4-as -o "$B/target/$f.o" "$DLM/libmod/$f.s" || exit 1; done &&
@@ -303,15 +316,29 @@ for IMG; do
 	else
 		fail "$K: mkksym -a: $(cat "$A/ksym.log")"; continue
 	fi
-	# the core's providers linked for real (dlm_spl, dlm_ddi), with the splice
-	# its console hook needs: scrcon_put weakened, the stock body kept as
-	# __amix_scrcon_put (brief step 7); the rest still to come, stubbed
-	sp=$(m68k-elf-nm "$ORIG" | awk '$3=="scrcon_put" && $2=="T" {print $1}')
-	ci=$(m68k-elf-nm "$ORIG" | awk '$3=="aciabintr" && $2=="T" {print $1}')
-	m68k-elf-objcopy --weaken-symbol=scrcon_put --weaken-symbol=aciabintr \
-		--add-symbol __amix_scrcon_put=.text:0x$sp,global,function \
-		--add-symbol __amix_aciabintr=.text:0x$ci,global,function "$ORIG" "$A/spliced.o"
-	m68k-cbm-sysv4-ld -r -o "$A/prov.o" "$B/obj/dlm_spl.o" "$B/obj/dlm_ddi.o" "$B/obj/dlm_intr.o"
+	# the splice of the brief's step 7, as a module kernel's build does it:
+	# dmainit, execsw, fmodsw, scrcon_put, aciabintr weakened; the stock
+	# tables and functions kept as __amix_*; the whole core (less its empty
+	# dlmksym.o, which ksym.o replaces), the platform hook, and on k46 the
+	# libgcc helpers and the port's dev_kvmap.  Anything still missing is
+	# stubbed and listed.
+	sym() { m68k-elf-nm "$ORIG" | awk -v n="$1" '$3==n {print $1}'; }
+	m68k-elf-objcopy --weaken-symbol=dmainit --weaken-symbol=execsw --weaken-symbol=fmodsw \
+		--weaken-symbol=scrcon_put --weaken-symbol=aciabintr \
+		--add-symbol __amix_execsw=.data:0x$(sym execsw),global,object \
+		--add-symbol __amix_fmodsw=.data:0x$(sym fmodsw),global,object \
+		--add-symbol __amix_scrcon_put=.text:0x$(sym scrcon_put),global,function \
+		--add-symbol __amix_aciabintr=.text:0x$(sym aciabintr),global,function "$ORIG" "$A/spliced.o"
+	prov=$(for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post \
+		dlm_ddi dlm_intr sha256 crc32 dlm_cache dlm_hooksw dlm_spl plat-amiga; do echo "$B/obj/$f.o"; done)
+	if [ $LINE = k30 ]; then
+		prov="$prov $B/obj/plat-k30-cputype.o"
+	else
+		prov="$prov $(dirname "$(command -v m68k-cbm-sysv4-ld)")/../lib/gcc-lib/m68k-cbm-sysv4/2.7.2.3/libgcc.a"
+		[ -f "$WS/amix-040-060-port/build/devkvmap040.o" ] &&
+			prov="$prov $WS/amix-040-060-port/build/devkvmap040.o"
+	fi
+	m68k-cbm-sysv4-ld -r -u __udivdi3 -u __umoddi3 -u __lshrdi3 -o "$A/prov.o" $prov
 	{ m68k-elf-nm "$ORIG"; m68k-elf-nm "$A/prov.o"; } |
 		awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
 	awk '!/^#/ && NF {print $1, $2}' "$L" | while read n k; do
@@ -320,12 +347,37 @@ for IMG; do
 	     $2=="data" {printf "\t.data\n\t.globl\t%s\n%s:\n\t.long\t0\n", $1, $1}' \
 		"$A/stubbed" > "$A/stubs.s"
 	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
-	echo "$K: providers to come (stubbed for the gate): $(awk '{printf "%s ", $1}' "$A/stubbed")"
-	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/stubs.o"
+	if [ -s "$A/stubbed" ]; then
+		echo "$K: providers still missing (stubbed for the gate): $(awk '{printf "%s ", $1}' "$A/stubbed")"
+	else
+		pass "$K: every allowlisted name has its real provider in the spliced kernel"
+	fi
+	python3 "$R/tools/mkident.py" --asm $LINE $KABI 0x60000 > "$A/ident.s"
+	m68k-cbm-sysv4-as -o "$A/ident.o" "$A/ident.s"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/ident.o" "$A/stubs.o"
+	und=$(m68k-elf-nm -u "$A/kernel.o" | awk '{print $2}' | grep -vx 'etext\|edata\|end' | tr '\n' ' ')
+	if [ -z "$und" ]; then
+		pass "$K: the spliced kernel has no undefined symbol but etext, edata, end (as the loader requires)"
+	else
+		fail "$K: undefined in the spliced kernel: $und"
+	fi
+	if [ $LINE = k46 ]; then	# what the 68060 lacks, in anything the splice added
+		if m68k-cbm-sysv4-scan060 "$A/prov.o" > "$A/scan060.log" 2>&1; then
+			pass "$K: the core, platform hook, libgcc helpers and dev_kvmap pass scan060"
+		else
+			fail "$K: scan060: $(tail -3 "$A/scan060.log")"
+		fi
+	fi
 	if "$TB/mkksym" -f "$A/kernel.o" > "$A/fill.log" 2>&1; then
 		pass "$K: mkksym -f: $(sed 's#.*: ##' "$A/fill.log")"
 	else
 		fail "$K: mkksym -f: $(cat "$A/fill.log")"
+	fi
+	if python3 "$R/tools/mkident.py" --fill "$A/kernel.o" > "$A/sidecar" &&
+	   python3 "$R/tools/mkident.py" --check "$A/kernel.o" > "$A/ident.log"; then
+		pass "$K: AXK1 filled and checked: $(tr '\n' ' ' < "$A/sidecar")"
+	else
+		fail "$K: mkident: $(cat "$A/ident.log" 2>/dev/null)"
 	fi
 	if python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel.o" "$L" "$LC" > "$A/gate.log" 2>&1; then
 		pass "$K: post-link gate: $(grep -c '^PASS' "$A/gate.log") checks, bound at 0x00200000 and 0x07f00000"
@@ -340,13 +392,14 @@ for IMG; do
 	else
 		fail "$K: post-link gate passed a block that does not match the lists"
 	fi
-	# a listed name left undefined (the last stub dropped): -f refuses it
-	head -n -4 "$A/stubs.s" > "$A/stubs-short.s"
-	m68k-cbm-sysv4-as -o "$A/stubs-short.o" "$A/stubs-short.s"
-	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$A/spliced.o" "$A/prov.o" "$A/ksym.o" "$A/stubs-short.o"
+	# a listed name nothing defines: -f refuses it
+	{ cat "$L"; echo "no_such_name func 0"; } > "$A/short.list"
+	"$TB/mkksym" -a "$A/short.list" -a "$LC" > "$A/ksym-short.s" 2>/dev/null
+	m68k-cbm-sysv4-as -o "$A/ksym-short.o" "$A/ksym-short.s"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$A/spliced.o" "$A/prov.o" "$A/ksym-short.o" "$A/ident.o" "$A/stubs.o" 2>/dev/null
 	if ! "$TB/mkksym" -f "$A/kernel-short.o" > "$A/short.log" 2>&1 &&
-	   grep -q "listed but not defined" "$A/short.log"; then
-		pass "$K: a listed name left undefined: $(grep -o '[^ ]* is listed but not defined' "$A/short.log" | head -1), refused"
+	   grep -q "no_such_name is listed but not defined" "$A/short.log"; then
+		pass "$K: a listed name nothing defines: mkksym -f refuses it"
 	else
 		fail "$K: mkksym -f accepted a missing name"
 	fi
