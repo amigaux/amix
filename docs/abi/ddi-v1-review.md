@@ -72,6 +72,7 @@ Context means where the function may be called:
 | console hook | `cons_hook_set`, `cons_hook_clear` | proc | core (replaces drivers calling `conputc`) |
 | compiler helpers | `__udivdi3`, `__umoddi3`, `__lshrdi3` | any | core on k46 (the 030 kernels have them) |
 | identity | `bootinfo`, `cputype` (data, read-only) | any | stock |
+| module interface | `mod_miscops`, `mod_execops`, `mod_hookops`, `mod_drvops`, `mod_strops` (data), `mod_hold`, `mod_rele` | proc | the module core itself: every module references its linkage operations through the wrapper macros, and `mod_hold`/`mod_rele` hold a module while it is in use |
 
 **Never exported:**
 - the switch tables and vectors themselves (`cdevsw`, `bdevsw`, `vfssw`,
