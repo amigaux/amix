@@ -79,7 +79,7 @@ so the 1.1 budget is recomputed from the store layout, not inherited.
 | Boot | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
 | Requirement | a boot ROM with a CD filesystem (A4091, A4092); other machines boot the floppy pair and install from the CD |
 | Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel`, each checked against the catalog's SHA-256 |
-| Rescue | boot the CD, choose repair |
+| Rescue | boot the CD, choose repair. An installed disk keeps boot priority 2, which the disc's node only ties, and on the tie the disk boots. So the CD is chosen in the Kickstart early-startup menu (both mouse buttons at power-on), or by lowering the disk's priority below 2. A disc left in the drive never takes over a box |
 | Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id, `MP/02-medium-cdrom-design.md:173`); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
 | Not bootable | an ATAPI CD on the Gayle IDE (no source says any Kickstart boots Amix from it; it stays a package source); a CD on a controller whose ROM offers no CD node |
 | Hazards kept in the design | a second cdfs mount on an absent unit panics — probe by inquiry, then mount once (P-28 D43); a 512-byte read of a CD through the A4092 wedges the bus — only cdfs opens CD units (`MP/02-medium-cdrom-design.md:40-42`) |
