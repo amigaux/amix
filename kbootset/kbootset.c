@@ -53,6 +53,10 @@
  * pair (members deflated) and the CD tree (raw) by mkstore's engine
  * (kmedia.c).  FACTS are the build options above.
  *
+ * --version N is the version of the BOOT2 given, as the store header
+ * records it for gate 7; it defaults to this kbootset's own loader's
+ * (AX_LOADER_VERSION).
+ *
  * Power-cut rows (docs/plan/stage-2.md S2-08): commit prints
  * "kbootset: step N <what>" to stderr before each step of 40 §3.2, and with
  * KBOOTSET_HOLD=N set it flushes, syncs and waits for ever before step N,
@@ -245,12 +249,12 @@ int mkstore_main(int argc, char **argv);
 static int
 media(const char *root, char **cmd, int argc)
 {
-	static char spec[16384], msg[400], specpath[1100];
+	static char spec[16384], msg[400], specpath[1100], vstr[12];
 	static struct ks k;
 	struct kb_facts f;
 	struct file d;
 	const char *disk = 0, *fl1 = 0, *fl2 = 0, *cd = 0, *cdboot = 0, *b1p = 0, *b2p = 0, *rd = 0;
-	unsigned long off = 0, size = 0, version = 1;
+	unsigned long off = 0, size = 0, version = AX_LOADER_VERSION;
 	int force = 0;
 	char *av[16];
 	ax_u8 *b1 = 0, *b2;
@@ -308,6 +312,7 @@ media(const char *root, char **cmd, int argc)
 		perror(specpath);
 		return 1;
 	}
+	sprintf(vstr, "%lu", version);
 	av[n++] = "kbootset-media";
 	if (fl1) {
 		av[n++] = "-f";
@@ -315,7 +320,7 @@ media(const char *root, char **cmd, int argc)
 		av[n++] = "-o"; av[n++] = (char *)fl2;
 		av[n++] = "-1"; av[n++] = (char *)b1p;
 		av[n++] = "-2"; av[n++] = (char *)b2p;
-		av[n++] = "-v"; av[n++] = "1";
+		av[n++] = "-v"; av[n++] = vstr;
 	} else {
 		av[n++] = "-C"; av[n++] = (char *)cd;
 		if (cdboot) {
@@ -541,7 +546,7 @@ main(int argc, char **argv)
 	static char dev[1100], bootset[1100], jdefault[1100];
 	const char *kpath = getenv("KBOOTSET_KINFO");
 	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0, force = 0;
-	unsigned long off = 0, version = 1;
+	unsigned long off = 0, version = AX_LOADER_VERSION;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
 	int i, rc, secondary = 0, create;

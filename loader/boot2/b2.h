@@ -8,8 +8,9 @@
 #define B2_H
 
 #include "axtypes.h"
+#include "store.h"
 
-#define LOADER_VERSION	2
+#define LOADER_VERSION	AX_LOADER_VERSION
 
 /* exec memory flags */
 #define MEMF_PUBLIC	1UL

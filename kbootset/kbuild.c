@@ -1,7 +1,9 @@
 /*
  * kbuild.c -- `kbootset build`, `commit` from a build, and the gates (see
- * kbuild.h).  Stage 2: a generation is a static kernel; root-class modules
- * are composed from stage 3 on and are refused here until then.
+ * kbuild.h).  A generation is a kernel: a static one, or a module kernel
+ * (sidecar version 5, C3-3), whose manifest gets its arena and identity
+ * records for loader version 2.  Root-class modules are stage 4's and are
+ * refused here until then.
  *
  * Gates 5 (store space) is ks_commit's.  Gates 8 and 9 (the boot disk) are
  * met when the store is named explicitly (--image, --dev); finding it on
@@ -155,6 +157,10 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 		kk->arena_off = (ax_u32)strtoul(buf, &e, 0);
 		kk->arena_cap = (ax_u32)strtoul(e, 0, 0);
 		kk->has_arena = 1;
+	}
+	if (value(text, "ident", buf, sizeof(buf))) {
+		kk->ident_off = (ax_u32)strtoul(buf, 0, 0);
+		kk->has_ident = 1;
 	}
 	free(text);
 	return KS_OK;
@@ -322,15 +328,18 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 	if (rc == KS_OK && kk->brel && !kk->bss)
 		rc = refuse(k, 2, "the kernel is a brel, whose bss is not recorded, and its sidecar "
 			    "gives no bss=");
+	/* a module kernel: arena=, ident= and loader-min=2 together (C3-3 §3) */
+	if (rc == KS_OK && (kk->has_arena != kk->has_ident ||
+			    (kk->has_arena && (!kk->arena_cap || kk->loader_min < 2))))
+		rc = refuse(k, 2, "a module kernel's sidecar gives arena=, ident= and loader-min=2 "
+			    "together, a static kernel's none of them");
 	if (rc == KS_OK && (strcmp(rk.kabi, kk->kabi) || strcmp(rk.pin, kk->pin))) {
 		sprintf(m, "the kernel's sidecar says kabi %s pin %s, its package record %s %s",
 			kk->kabi, kk->pin, rk.kabi, rk.pin);
 		rc = refuse(k, 2, m);
 	}
-	/* 3: closure -- a static kernel carries its root controllers and
-	 * filesystems built in; root-class modules come with stage 3 */
-	if (rc == KS_OK && kk->has_arena)
-		rc = refuse(k, 3, "a module kernel needs root-class modules, composed from stage 3 on");
+	/* 3: closure -- the kernel's built-in root controllers and filesystems
+	 * (root=, rootfs=); root-class modules come with stage 4 */
 	if (rc == KS_OK && (!f->bootdev[0] || !f->rootdev[0]))
 		rc = refuse(k, 3, "the boot or root disk's controller is unknown (no kinfo): "
 			    "name --bootdev and --rootdev on a host build");
@@ -349,7 +358,8 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			kk->rootfs[0] ? kk->rootfs : "none");
 		rc = refuse(k, 3, m);
 	}
-	/* 4: arena -- nothing to place in a static kernel */
+	/* 4: arena -- no root-class module to place before stage 4; that the
+	 * manifest copy fits is ks_commit's (C3-4 §4) */
 	/* 6: memory -- about twice the kernel, arena and RAM disk */
 	need = 2 * (*klen + (kk->brel ? kk->bss : 0) + (kk->has_arena ? kk->arena_cap : 0));
 	if (rc == KS_OK && !f->mem)
@@ -494,6 +504,10 @@ head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const cha
 	if (kk->build[0])
 		sprintf(text + strlen(text), "kernel-build %s\n", kk->build);
 	sprintf(text + strlen(text), "rootfs %s\n", rootfs);
+	if (kk->has_arena)
+		sprintf(text + strlen(text), "arena 0x%08lx 0x%08lx\nident 0x%08lx\n",
+			(unsigned long)kk->arena_off, (unsigned long)kk->arena_cap,
+			(unsigned long)kk->ident_off);
 	if (rootrec && rootrec[0])
 		sprintf(text + strlen(text), "root %.120s\n", rootrec);
 	if (swaprec && swaprec[0])
@@ -542,9 +556,9 @@ same(const char *a, const char *b)
  * Does the default generation already hold what head and this kernel
  * describe?  Both sides go through the loader's parser, so the comparison
  * is of what the manifests say (line, kabi, CPUs, loader-min, root,
- * swap, filesystem, boards, arena, every member by size and SHA-256, the
- * parameters), not of their layout; the generation id and created time
- * are not compared.  Sets *dflt to the default's id.
+ * swap, filesystem, boards, arena, identity record, every member by size
+ * and SHA-256, the parameters), not of their layout; the generation id
+ * and created time are not compared.  Sets *dflt to the default's id.
  */
 static int
 same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen, ax_u32 bss,
@@ -572,6 +586,7 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 	     d.loader_min == n.loader_min && same(d.rootfs, n.rootfs) && same(d.root, n.root) &&
 	     same(d.swap, n.swap) && same(d.boards, n.boards) &&
 	     d.has_arena == n.has_arena && d.arena_off == n.arena_off && d.arena_cap == n.arena_cap &&
+	     d.has_ident == n.has_ident && d.ident_off == n.ident_off &&
 	     d.has_kernel && d.kernel.size == n.kernel.size && same(d.kernel.sha256, n.kernel.sha256) &&
 	     d.kernel.bss == n.kernel.bss && d.nmod == n.nmod && d.has_ramdisk == n.has_ramdisk &&
 	     d.nparam == n.nparam;

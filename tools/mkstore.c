@@ -16,7 +16,8 @@
  *   -s SIZE    store (partition) size in bytes (default 64 MiB)
  *   -1 FILE    boot1 bootblock (1024 bytes, from bbframe)
  *   -2 FILE    primary boot2;  -b FILE  secondary boot2 (optional)
- *   -v N       loader version recorded for the boot2 copies (default 1)
+ *   -v N       loader version recorded for the boot2 copies (default
+ *              AX_LOADER_VERSION, the loader built from this tree)
  *   -r         read-only medium (no loader trial, no loader writes)
  *   -d ID      default generation (default: the first good or pristine one)
  *   -c WHAT    console: serial, screen or both (default both)
@@ -483,7 +484,7 @@ main(int argc, char **argv)
 {
 	const char *image[MAXVOL], *b1 = 0, *b2 = 0, *b2b = 0, *cdboot = 0;
 	unsigned long poff = 0;
-	ax_u32 ver = 1, deflt = 0, len, ctloff;
+	ax_u32 ver = AX_LOADER_VERSION, deflt = 0, len, ctloff;
 	int readonly = 0, floppy = 0, nimg = 0, sizeset = 0, ldrtrial = 0, i, v;
 	const char *oneshot = 0;
 	ax_u16 console = AXC_SERIAL | AXC_SCREEN, menu_ds = 20;

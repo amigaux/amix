@@ -25,14 +25,14 @@ struct kb_facts {
 	char swap[128];		/* the swap record, or "": the default generation's */
 };
 
-/* the kernel's sidecar (C2-3 §2) */
+/* the kernel's sidecar (C2-3 §2; a module kernel's, version 5: C3-3 §3) */
 struct kb_kernel {
 	char kabi[24], family[32], line[8], pin[48], build[48], sha256[65];
 	char root[256], rootfs[64];
-	ax_u32 size, loader_min, arena_off, arena_cap;
+	ax_u32 size, loader_min, arena_off, arena_cap, ident_off;
 	ax_u32 bss;		/* bytes past the image to the kernel's end: a brel
 				 * kernel does not record them (C2-3 §2) */
-	int has_arena;
+	int has_arena, has_ident;
 	int brel;		/* the kernel file is a brel (ELF type 0xff00) */
 };
 

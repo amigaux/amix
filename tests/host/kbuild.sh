@@ -96,7 +96,7 @@ refused 3 $KB build --line 46 --bootdev mobo:gayle --rootdev zorro:0202:54 --mem
 refused 3 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs s5 --mem 16777216
 refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 1000000
 refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54
-sidecar 2; record
+sidecar 3; record
 refused 7 $KB build $FACTS
 sidecar; record
 # a kernel changed by hand after apkg installed it
@@ -154,6 +154,45 @@ $B/kbootset --image $T/disk.img --offset 65536 status | grep -q "trial"
 grep -a -q "^kernel unix 700000 at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* bss=283445$" $T/disk.img
 cp $T/unix.keep $R/stand/k46/unix; sidecar; record
 echo "kbuild: brel bss (gate 2, gate 6, the manifest) ok"
+
+# a module kernel (sidecar version 5, C3-3 §3): arena=, ident= and
+# loader-min=2 together; the manifest gets its arena and ident records
+msidecar() {	# msidecar CAP [LOADER-MIN] [ident=...]
+	sed -e 's/^kabi=static$/kabi=k46.1.0/' -e 's/^family=KD060-A$/family=generic/' \
+	    -e "s/^loader-min=.*/loader-min=${2:-2}/" $T/kabi.static > $R/stand/k46/kabi
+	echo "arena=0x0009a000 $1" >> $R/stand/k46/kabi
+	[ "${3-x}" = "" ] || echo "${3:-ident=0x00099fc0}" >> $R/stand/k46/kabi
+	record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+}
+cp $R/stand/k46/kabi $T/kabi.static
+msidecar 0x00060000 2 ""
+refused 2 $KB build $FACTS
+grep -q "arena=, ident= and loader-min=2 together" $T/out
+msidecar 0x00060000 1
+refused 2 $KB build $FACTS
+# gate 6 counts the arena: 700 000 + 393 216 bytes need about 2.19 MB
+msidecar 0x00060000
+refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 2100000
+$KB build $FACTS | grep -q "built"
+grep -q "^arena 0x0009a000 0x00060000$" $R/stand/gen/*/build
+grep -q "^ident 0x00099fc0$" $R/stand/gen/*/build
+grep -q "^loader-min 2$" $R/stand/gen/*/build
+$KB commit 2>/dev/null | grep -q "committed"
+grep -a -q "^ident 0x00099fc0$" $T/disk.img
+$B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
+# the manifest copy must fit the arena behind its directory (C3-4 §4)
+msidecar 0x00000100
+$KB build $FACTS | grep -q "built"
+refused 4 $KB commit
+grep -q "the manifest copy needs" $T/out
+# a store whose loader is version 1 boots no module kernel (gate 7)
+head -c 8454144 /dev/zero > $T/v1.img
+$B/kbootset -R $R --image $T/v1.img --offset 65536 create 8388608 $B/rt/boot2.bin --version 1 >/dev/null
+msidecar 0x00060000
+refused 7 $B/kbootset -R $R --image $T/v1.img --offset 65536 build $FACTS
+cp $T/kabi.static $R/stand/k46/kabi; record
+rm -rf $R/stand/gen/[0-9]*
+echo "kbuild: module kernel (gates 2, 4, 6, 7, the arena and ident records) ok"
 
 # check: every member against its manifest, the default generation against
 # the installed kernel; a damaged member makes it say BAD and exit 1

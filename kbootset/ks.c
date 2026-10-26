@@ -551,6 +551,11 @@ ks_commit(struct ks *k, const struct ks_newgen *g, ax_u32 *idp)
 		    chk.generation != id) {
 			sprintf(line, "the new manifest is refused by the loader's parser at line %d", errline);
 			rc = fail(k, KS_EREFUSE, 0, line);
+		} else if (chk.has_arena && 32 + mlen > chk.arena_cap) {
+			/* boot2 copies the manifest behind the arena directory (C3-4) */
+			sprintf(line, "gate 4 (arena): the manifest copy needs %lu bytes, the arena has %lu",
+				(unsigned long)(32 + mlen), (unsigned long)chk.arena_cap);
+			rc = fail(k, KS_EREFUSE, 4, line);
 		}
 	}
 	if (rc == KS_OK) {
