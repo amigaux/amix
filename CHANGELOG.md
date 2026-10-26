@@ -1,3 +1,11 @@
+## 2026-10-26 — APKG 0.3.3 and APKGENG 1.12.4 minted (e98077a, 499f86b) — not published
+
+APKG 0.3.3 = abfaaac's apkg (block nodes in module packages): apkg.amix d45c24c0 (113350 B, reproducible, scan060 CLEAN);
+APKG-0.3.3.pkg md5 2237f523 / 198144 B in build/repo-staging-apkg033; suites 457/38/12, repo tools 409/0; upgrade over 0.3.2
+keeps the conf. APKGENG 1.12.4 = the removef stdin fix (75be235): installf/removef fdeee971; APKGENG-1.12.4.pkg md5 4433b3a1
+/ 2364416 B in build/repo-staging-apkgeng1124; 11 binaries reproducible; pkgadd/pkgrm/pkginstall/pkgremove differ from 1.12.3
+only in __assert line numbers (+3, the 2026 header). The static set (0.2.3-era apkg) was not rebuilt. Public catalog still 0.2.3 / 1.12.3.
+
 ## 2026-10-26 — kspace: module packages may ship block device nodes in /dev/dsk (C3-5 v8 §1.2) (abfaaac) — not minted
 
 gen-catalog.py and apkg's ds_pure_files accept `b none /dev/dsk/<node> <maj> <min> <mode> <owner> <group>` for role=module,
