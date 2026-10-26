@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — dlmkit -10, loader-amix -8, kbootset -17 from amix-dlm 33ea0c7 (bb947aa, 8e5c4d3, 14f4a65) — not published
+
+dlmkit30 k30.1.2.261027-10 (md5 d654b658 / 4082688 B, manifest c883c4fd) and dlmkit46 (280595b9 / 4099584 B, 749b19b8; PORT_REV
+12d416c): sd.h SDCARDS 4 + the four-card decode, the 13 filesystem names at minor 2, abi.txt 2ab48658 both lines, the k30 DMA
+NOTICE updated; ramdisk, gayle and a4091 modules check ok (a4091 db230fa's objects differ from the 1.0.0-1 pins by its own v5
+source, not the kit). loader-amix -8: boot2 28646 B 61b3feb0 (S4-11), boot1 unchanged, version 3; md5 8dc2c216. kbootset -17:
+fs= promotion, --ramdisk defaults, gate 4; /sbin/kbootset 527b8d59; md5 63573f93 / 195072 B. modadmin unchanged (no modtools
+mint). Catalog a9018242 (roots at superseded/repo-20261027-0048/-0049/-0050). Round trip 142/142 with host kbootset 33ea0c7.
+
 ## 2026-10-27 — kern46m k46.1.2.261027-78 (7be39e3); a4091-k30/-k46 1.0.0-1 (3e42e94) and gayle-k30/-k46 1.1.0-1 (f14c0e7) staged; round trip 142/142 — not published
 
 kern46m -78: cut in build/kspace/cut-k46m from the port's recipe (port 9ead75f, dlm 4acd4a6 = C4-5 v4 dma_alloc through DTT0,
