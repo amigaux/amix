@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -11, modtools -2, ABI kit packages dlmkit30/dlmkit46 (amix-dlm f5ce731) (0c6a4a4..c2c5d3d) — not published
+
+kbootset -11: /sbin/kbootset 013fe25f (= dlm's box build); gate 2 needs abi= on a module kernel, gate 6 counts an ET_REL
+kernel's bss. modtools -2: /sbin/modadmin a206874d with -B; postinstall makes `dlm::sysinit:/sbin/modadmin -B …` the first
+sysinit entry of /etc/inittab (idempotent), preremove takes it out (C3-5 v3 §5). New recipe dlmkit: `make kit` in the pinned
+export, each kit pinned by a manifest digest; dlmkit30 k30.1.0.261026-1.f5ce731 (1065 files) and dlmkit46 k46.1.0.261026-1.f5ce731
+(1069 files) install under /usr/dlm/kit/<line>/ (proposed convention); five names over s5's 14 bytes renamed, listed in
+S5NAMES; the kit sample builds with each kit as installed. Round trip 54/54. Datastream md5s move per roll; payloads do not.
+
 ## 2026-10-26 — kbootset -10 and modtools 1.0.261026-1 from amix-dlm 42df482 (02fa3a2, a2bec2d) — not published
 
 kbootset -10: `kbootset media` composes the installed module packages into the medium's pristine generation; /sbin/kbootset
