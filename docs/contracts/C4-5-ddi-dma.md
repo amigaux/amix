@@ -1,9 +1,9 @@
 # C4-5 — DDI v1.1, the DMA interface, version 1
 
-- **Status:** draft 2026-10-26 (amix-dlm), for the orchestrator's
-  agreement; §5 holds one decision still open. Once agreed, other
-  repositories build against this text, and a change is a contract change
-  with a version bump.
+- **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
+  shape (b) and the loader's clause (§5.2). Other repositories build
+  against this text; a change from here is a contract change with a
+  version bump.
 - **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
   Q4-6): DDI v1.1 DMA in the shape of the 040/060 port's `dma_prepare` /
   `dma_complete`, on both lines, whose 030 provider bounces through
@@ -142,30 +142,57 @@ void  dma_free(char *va, ulong len);
 5. `_halt` stops the chip (C4-2 §5). An owned segment is then abandoned
    with the halt.
 
-## 5. Open: where k30's pool comes from
+## 5. Where k30's pool comes from
 
-The pool must be physical memory a Zorro bus master reaches, sized for
-the bounce buffers and the `dma_alloc` areas (64 KiB–256 KiB). The
-kernel's own allocator cannot ask for a physical range. The candidates:
+### 5.1 What the k30 kernel does with memory
 
-- **(a) boot2 reserves it.** It takes the pool from the top of the
-  largest region a bus master reaches (motherboard fast RAM, or Zorro
-  RAM), shortens that `memory[]` entry as it does for the RAM disk
-  (C4-3 §2; the same code), and hands the address and size to the
-  kernel. The loader record AXL1 is full at 124 bytes, so this needs
-  AXL1 version 2 with 8 more bytes. Room exists: 188 of bootinfo's 244
-  visible reserved bytes follow RTH1. It costs boot2 bytes (measured
-  with S4-11). kbootset asks for it with a `dmapool <size>` manifest
-  record only on a k30 generation with a Zorro bus-master root module.
-- **(b) the kernel reserves it** at `dmainit`, from a `memory[]` region
-  it recognises as reachable, before the page allocator takes the
-  region. This is a change to the K030-U kernel's memory sizing
-  (amix-kerntools), and costs no boot2 bytes.
+From the K030-U relink kit and the stock base (amix-kerntools, read
+2026-10-26):
+- The kernel's allocator takes **only the region it is bound in**.
+  `config()` (`amiga/kernel/support.c`) copies `bootinfo.memory[]` as
+  MemHeaders and sets the main store to the region holding `end`, joined
+  with regions that touch it, reading only `mh_Lower` and `mh_Upper`;
+  `mlsetup`, `kvm_init` and `page_init` then work over that range alone.
+  Every other `memory[]` entry is ignored, so motherboard RAM below a
+  Z3660 bind at 0x08000000 is never on a free list.
+- The kernel never reads `mh_Attributes`: RAM is told apart by address
+  (motherboard RAM ends at 0x08000000, CPU-card RAM starts there).
+- `pstart` maps 0–1 GiB one to one, so motherboard and Zorro II RAM are
+  reachable at a kernel address equal to the physical one. Zorro III RAM
+  at 0x40000000 and above is not mapped, and cannot hold the pool.
 
-**Recommendation: (b)** if the relink kit's memory-sizing code allows a
-reservation by physical range, because it keeps boot2's bytes and the
-loader record as they are. Otherwise (a). amix-kerntools answers which
-from the relink kit before S4-62 starts.
+### 5.2 The pool
+
+**Shape (b):** the k30 provider (`core/plat/k30`, S4-62) makes the pool
+at `dmainit`, with no kernel change and no new loader record:
+- it takes a `memory[]` entry that is not chip RAM, lies below
+  0x08000000 and is outside the main store, and carves the top 64–256 KiB
+  of it, managed with a resource map (the pattern of the kernel's
+  chip-RAM map, `amiga/console/memory.c`);
+- when the main store itself lies below 0x08000000 (no CPU-card bind),
+  everything the kernel allocates is reachable: `dma_alloc` takes kernel
+  memory and nothing is bounced.
+
+**The loader's clause** (10 §3.2): on k30, a region that touches the
+bind region from below ends **one 2 KiB page short** of the bind base in
+the `memory[]` boot2 hands over, instead of being emptied. `config()`'s
+join test then fails, the region stays out of the main store, and its
+range stays intact for the pool. boot2 pays for it in S4-11.
+
+The pool is reachable by a 32-bit Zorro III bus master (the A4091). A
+24-bit master (the A2091) reaches only chip and Zorro II RAM, which this
+pool does not promise.
+
+### 5.3 The k30 provider's acceptance (S4-62)
+
+- **A force-bounce test hook:** a switch that bounces every segment,
+  reachable or not. Amiberry's bank at 0x08000000 is reachable by
+  emulated Zorro DMA, so a missed bounce passes in emulation and only
+  metal shows it.
+- **The cache mode of the identity map:** decode the status bits of the
+  root-table entry 0, which differ from those of entries 2 and 3, before
+  the first `FROM_DEVICE` test, to know whether the 030 data cache is on
+  for the memory the pool and the bounce buffers live in.
 
 ## 6. Not in this contract
 
