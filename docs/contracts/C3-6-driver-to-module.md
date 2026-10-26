@@ -22,7 +22,8 @@
 - **For:**
   - amix-z3660net: z3660eth (S3-25);
   - amix-z3660rtg: z3660rtg, today's static `zz9000` (S3-26);
-  - the monsw owner: monsw (S3-27; P-8 question (c), plan Q3-2).
+  - amix-modules: monsw (S3-27; the owner's decision of 2026-10-26, plan
+    Q3-2).
 - **Built with:** the ABI kit (S3-10, amix-dlm): headers, `mkmod`/`modfix`,
   the checker, the make fragment.
 
@@ -285,6 +286,10 @@ The module:
 
 ## 4. monsw (S3-27)
 
+Its home is **amix-modules** (`monsw/module/`: `Makefile` on the kit's
+fragment, `Master`, `VERSION`), copied from `amix-040-060-port/src/monsw.c`;
+the port keeps its static copy until the static kernels retire.
+
 What it does today (`amix-040-060-port/src/monsw.c`, `src/sys/monsw.h`):
 `/dev/monsw` on major 52 (open, close, ioctl), `monswinit` from the
 `parinit` wrapper, the kernel API `monsw_set`, `monsw_register`,
@@ -315,11 +320,12 @@ The module:
 - §1's rules as written, for every driver turned into a module.
 - **`hat_cm_fb_add` stays out of the stage-3 z3660rtg module.** The module
   maps its windows without it and builds without `-DZZ9K_FB_NC` (§5).
-- **monsw's source location is the owner's decision** (P-8 question (c),
-  plan Q3-2). Until he decides, S3-27 stays as the plan says, and nothing
-  on z3660eth or z3660rtg waits on it. `<sys/monsw.h>`, which z3660rtg's
-  module build includes on both lines, goes with that decision; until
-  then the station builds against the port's copy (version 2).
+- **monsw's source location** (P-8 question (c), plan Q3-2): decided by
+  the owner on 2026-10-26, amix-modules. `<sys/monsw.h>`, which
+  z3660rtg's module build includes on both lines, ships with the ABI kit
+  (`include/sys/monsw.h`): from the port's copy (version 2) today, and
+  from amix-modules once monsw lands there. A module author builds
+  against the kit alone.
 - **z3660rtg is one module per line with a run-time probe for both
   targets** (ZZ9000 and Z3660): one name, one major.
 - **The INT6 path's second half** (§1.3), the poll tick or a level-2
