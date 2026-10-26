@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-26 — C2-2 §2.1 as apkg 0.3.1; C3-5 §1.2 device nodes; the S3-43 hand-over (47941d0, 568b9ac, cb64436)
+
+C2-2 §2.1 follows apkg 0.3.1 (`apkg recover` finishes a cut; the readings confirmed). C3-5 §1.2: a driver module's package
+ships the device nodes of its majors as pkgmap device entries (z3660eth /dev/zen0 c 51 0), no script; S99zen does the network
+plumbing. tests/bench/s3-43/handover.sh writes one line's inputs for the acceptance sweep: the module set (tree/, s43/), the
+checker's and host loader's verdicts, l14.spec, l5.img sized to the vehicle's boot slice (gen 1 good + gen 2 on trial with a
+64-byte arena), SHA256SUMS; L5's line of record is "the arena needs 337 bytes, it has 64" on k46 and 367 on k30.
+
 ## 2026-10-26 — C2-2 v5 one kernel package per line; the stage-3 mint's package conventions (0d49ddd, 2a9cd81)
 
 C2-2 v5 §2.1: installing a kernel package replaces the line's other kernel package in the same transaction (pre-flight of
