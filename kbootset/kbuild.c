@@ -289,6 +289,46 @@ hashed(struct ks *k, const char *root, const char *path, const ax_u8 *data, ax_u
 	return KS_OK;
 }
 
+/*
+ * An ET_REL kernel's bss: its allocated NOBITS sections and its COMMON
+ * symbols, each aligned, which the loader places past the image (as
+ * loader/common/rel.c lays them out).  0 for anything else.
+ */
+static ax_u32
+etrel_bss(const ax_u8 *k, ax_u32 len)
+{
+	ax_u32 shoff, shnum, i, j, n = 0;
+
+#define KG16(p)	((ax_u32)(p)[0] << 8 | (ax_u32)(p)[1])
+#define KG32(p)	(KG16(p) << 16 | KG16((p) + 2))
+	if (len < 52 || memcmp(k, "\177ELF", 4) || KG16(k + 16) != 1)
+		return 0;
+	shoff = KG32(k + 32);
+	shnum = KG16(k + 48);
+	if (KG16(k + 46) != 40 || shoff > len || shnum * 40 > len - shoff)
+		return 0;
+	for (i = 0; i < shnum; i++) {
+		const ax_u8 *s = k + shoff + 40 * i;
+		ax_u32 al = KG32(s + 32) ? KG32(s + 32) : 1;
+
+		if (KG32(s + 4) == 8 && (KG32(s + 8) & 2))		/* NOBITS, ALLOC */
+			n = (n + al - 1) / al * al + KG32(s + 20);
+		if (KG32(s + 4) == 2 && KG32(s + 16) <= len && KG32(s + 20) <= len - KG32(s + 16))
+			for (j = 0; j < KG32(s + 20) / 16; j++) {	/* SYMTAB: COMMONs */
+				const ax_u8 *y = k + KG32(s + 16) + 16 * j;
+
+				if (KG16(y + 14) == 0xfff2) {
+					ax_u32 ca = KG32(y + 4) ? KG32(y + 4) : 1;
+
+					n = (n + ca - 1) / ca * ca + KG32(y + 8);
+				}
+			}
+	}
+#undef KG16
+#undef KG32
+	return n;
+}
+
 /* every gate this module owns, for the kernel of line f->line; on success
  * *kernel holds the kernel's bytes (malloc'd) */
 static int
@@ -370,8 +410,11 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 	}
 	/* 4: arena -- no root-class module to place before stage 4; that the
 	 * manifest copy fits is ks_commit's (C3-4 §4) */
-	/* 6: memory -- about twice the kernel, arena and RAM disk */
-	need = 2 * (*klen + (kk->brel ? kk->bss : 0) + (kk->has_arena ? kk->arena_cap : 0));
+	/* 6: memory -- about twice the kernel, its bss, arena and RAM disk; an
+	 * ET_REL kernel's bss is in its section headers, a brel's only in the
+	 * sidecar's bss= */
+	need = 2 * (*klen + (kk->brel ? kk->bss : etrel_bss(*kernel, *klen)) +
+		    (kk->has_arena ? kk->arena_cap : 0));
 	if (rc == KS_OK && !f->mem)
 		rc = refuse(k, 6, "the box's fast memory is unknown (no kinfo): name --mem on a host build");
 	if (rc == KS_OK && f->mem < need) {

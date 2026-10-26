@@ -155,6 +155,30 @@ grep -a -q "^kernel unix 700000 at=0x[0-9a-f]* crc32=[0-9a-f]* sha256=[0-9a-f]* 
 cp $T/unix.keep $R/stand/k46/unix; sidecar; record
 echo "kbuild: brel bss (gate 2, gate 6, the manifest) ok"
 
+# an ET_REL kernel's bss is in its section headers: gate 6 counts it
+python3 -c '
+import struct, sys
+text = b"\x4e\x75" * 350000                       # 700 000 bytes of image
+shstr = b"\0.text\0.bss\0.shstrtab\0"
+shoff = 52 + len(text) + len(shstr)
+shoff += -shoff % 4
+sh = [(0,) * 10,
+      (1, 1, 6, 0, 52, len(text), 0, 0, 2, 0),
+      (7, 8, 3, 0, 52 + len(text), 1048576, 0, 0, 4, 0),    # 1 MiB NOBITS
+      (12, 3, 0, 0, 52 + len(text), len(shstr), 0, 0, 1, 0)]
+h = b"\x7fELF\x01\x02\x01" + b"\0" * 9 + struct.pack(">HHIIIIIHHHHHH", 1, 4, 1, 0, 0, shoff, 0, 52, 0, 0, 40, 4, 3)
+body = h + text + shstr
+body += b"\0" * (shoff - len(body))
+body += b"".join(struct.pack(">10I", *x) for x in sh)
+open(sys.argv[1], "wb").write(body)' $R/stand/k46/unix
+sidecar; record
+# 700 000 + 1 048 576 bytes need about 3.5 MB: 3 MB is too little
+refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 3000000
+$KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 3600000 | grep -q "built"
+rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+cp $T/unix.keep $R/stand/k46/unix; sidecar; record
+echo "kbuild: ET_REL bss (gate 6) ok"
+
 # a module kernel (sidecar version 5, C3-3 §3): arena=, ident= and
 # loader-min=2 together; the manifest gets its arena and ident records
 ABI=abi=7a90c7d92c2e0882f546d38543b8921d55a42ffd72801449a89b8e70a702dc0b
