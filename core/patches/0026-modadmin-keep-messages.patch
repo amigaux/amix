@@ -1,0 +1,92 @@
+Subject: modadmin -K: keep the kernel's messages in putbuf too
+
+After boot the stock kernel's prt_where is 0x2, the console only: a
+message reaches putbuf only through a registered console logger, so on a
+box without one modadmin -L finds nothing (S3-43, k46).  -K sets bit 0,
+PRW_BUF, found through the namelist /stand/unix and written through
+/dev/kmem.  Root only; the console keeps what it had.  User side only.
+
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -27,6 +27,9 @@
+  *					words: what the core and the modules
+  *					printed, also after the console
+  *					stopped showing kernel messages
++ *	modadmin -K			keep the kernel's messages in that
++ *					buffer too (prt_where's PRW_BUF bit),
++ *					for a box with no console logger (root)
+  *
+  * -k, -p and -w look a name up with getksym: the kernel's exported names
+  * first, then each loaded module's own globals, so a module's tunables
+@@ -208,6 +211,52 @@
+ 	free(buf);
+ }
+ 
++/*
++ * Keep every kernel message in putbuf as well: prt_where (a short) gets
++ * bit 0, PRW_BUF.  After boot the stock kernel leaves only bit 1, the
++ * console, and a message reaches putbuf only through a registered console
++ * logger; on a box without one, -L would find nothing.  The console keeps
++ * what it had.
++ */
++void
++keepmsgs()
++{
++	static char *names[] = { "prt_where" };
++	unsigned long val[1], sz[1];
++	unsigned char w[2];
++	int fd, old;
++
++	if (geteuid() != 0) {
++		errno = EPERM;
++		fail("cannot set", "prt_where");
++		return;
++	}
++	if (namelist(names, 1, val, sz) != 0 || !val[0]) {
++		errno = ENOENT;
++		fail("cannot find prt_where in", "/stand/unix (kbootset namelist)");
++		return;
++	}
++	if ((fd = open("/dev/kmem", O_RDWR)) < 0) {
++		fail("cannot open", "/dev/kmem");
++		return;
++	}
++	if (lseek(fd, (long)val[0], 0) < 0 || read(fd, (char *)w, 2) != 2) {
++		close(fd);
++		fail("cannot read", "prt_where");
++		return;
++	}
++	old = w[0] << 8 | w[1];
++	w[1] |= 1;
++	if (lseek(fd, (long)val[0], 0) < 0 || write(fd, (char *)w, 2) != 2) {
++		close(fd);
++		fail("cannot write", "prt_where");
++		return;
++	}
++	close(fd);
++	printf("prt_where 0x%x -> 0x%x: kernel messages are kept in putbuf too\n", old,
++	    w[0] << 8 | w[1]);
++}
++
+ void
+ fail(what, arg)
+ 	char *what, *arg;
+@@ -368,7 +417,7 @@
+ 	fprintf(stderr, "usage: %s -l name|path ... | -u id ... | -U name ... |\n"
+ 	    "\t-q id ... | -Q name ... | -s | -S | -d dir[:dir] | -D |\n"
+ 	    "\t-r cdev|sdev name major ... | -k name ... | -a addr ... |\n"
+-	    "\t-p name[:n] ... | -w name value | -B | -L\n", progname);
++	    "\t-p name[:n] ... | -w name value | -B | -L | -K\n", progname);
+ 	exit(2);
+ }
+ 
+@@ -477,6 +526,9 @@
+ 	case 'L':
+ 		msgbuf();
+ 		break;
++	case 'K':
++		keepmsgs();
++		break;
+ 	case 'B':
+ 		if (modadm(MOD_TY_NONE, MOD_C_POST, (char *)0) < 0)
+ 			fail("cannot load", "the boot-class modules");

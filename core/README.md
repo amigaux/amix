@@ -53,6 +53,7 @@ against our kernels (M-CORE1).
 | 0023 | `u1-probe` | Test only, under `-DDLM_U1` (the shipped `dlm.o` is unchanged): a measurement build prints, at the end of `dlm_init` and on entry to the kernel's hook in `rth1_mountroot`, the status register, whether the clock ticks, and which `kmem_zalloc` sizes `KM_NOSLEEP` gives. U1, `tests/bench/README.md` S3-41. | no (ours) |
 | 0024 | `modadmin-msgbuf` | `modadmin -L`: the kernel's message buffer (`putbuf`), oldest first, found through the namelist `/stand/unix` (C2-4 §12) and read through `/dev/kmem`. What the core and the modules print after boot reaches `putbuf` but not the console (S3-43). User side only. | no (ours) |
 | 0025 | `modadmin-msgbuf-words` | `modadmin -L` prints one line of the ring's words first (`putbufsz`, `putbufwpos`, `putbufrpos`, `conslogging`, `prt_where`, read by `lseek` on `/dev/kmem`), starts at the byte after `putbufwpos` (the stock printf stores after a pre-increment), and prints text only (the log driver's copies bring binary header bytes). User side only. | no (ours) |
+| 0026 | `modadmin-keep-messages` | `modadmin -K` (root) sets `prt_where`'s bit 0 (PRW_BUF) through the namelist and `/dev/kmem`, so every kernel message is kept in `putbuf` as well as going to the console. Without a registered console logger the stock kernel stores nothing after boot (S3-43, k46). User side only. | no (ours) |
 
 The patches 30 §2 plans (the platform split, `.moddata` v2, the
 allowlisted symbol block and the rest) follow in stage 3's order

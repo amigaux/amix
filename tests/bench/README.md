@@ -697,6 +697,28 @@ ring holds text only in `-L`'s output, because the log driver's copies
 (`logcons`) also put binary header bytes there. A `cmn_err` line can
 appear twice, once from printf and once from the log driver's copy.
 
+**`modadmin -K` (core patch 0026), on a box without a console logger.**
+After boot the stock kernel's `prt_where` is 0x2: printf goes to the
+console only. A message reaches `putbuf` only when a process has
+registered the console logger (`conslogging 1` in `-L`'s first line, as
+on the k30 v10 vehicle). Then the log driver copies it there. Without
+one (`conslogging 0`, the k46 vehicle) run-time lines go to the console
+screen and are stored nowhere, so `-L` finds nothing. Run, as root, once
+per boot after `S01kbnamelist` has made `/stand/unix` current:
+
+```
+/tmp/modadmin -K        # prt_where 0x2 -> 0x3: kernel messages are kept in putbuf too
+```
+
+From then on every kernel, core and module line also goes into `putbuf`.
+`-L`'s first line shows `prt_where 0x3`, and the console still gets every
+line as before. The ring is 2000 bytes and wraps, keeping the newest.
+Read `-L` after each action (`| tail -5`), not once at the end of a long
+row. On a box with a console logger, `-K` makes printf store each line
+directly as well, so a line can then appear up to twice more. `-K` is a
+bench and admin command; whether a shipped script runs it waits for why
+the two vehicles differ.
+
 **Inputs:**
 - the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
   k30: the K030-U cut with `unix.sym`), each through `s3-standin.sh`;
