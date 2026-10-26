@@ -83,10 +83,13 @@ if sh "$DLM/tools/mkoffs" m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -I"$DLM/include
 	grep -h '^#define	\(DRV\|CD_\|SD_\|SDSZ\|STSZ\|QI\)' "$U/dlm_slot.c" "$U/dlm_str.c" |
 		awk '{print $2, $3}' | sort > "$B/offs.upstream"
 	awk '/^#define/ {print $2, $3}' "$DLM/dlm_offs.h" | sort > "$B/offs.measured"
-	if cmp -s "$B/offs.upstream" "$B/offs.measured"; then
-		pass "structure layouts measured by the kernel compiler: $(wc -l < "$B/offs.measured"), all equal to upstream's written-down values"
+	# upstream wrote down only its own names; the block rows' (core patch
+	# 0031) are ours and have no upstream value
+	awk 'NR == FNR { u[$1] = 1; next } $1 in u' "$B/offs.upstream" "$B/offs.measured" > "$B/offs.common"
+	if cmp -s "$B/offs.upstream" "$B/offs.common"; then
+		pass "structure layouts measured by the kernel compiler: $(wc -l < "$B/offs.measured"), upstream's $(wc -l < "$B/offs.common") all equal to its written-down values"
 	else
-		fail "structure layouts differ from upstream's: $(diff "$B/offs.upstream" "$B/offs.measured" | grep '^[<>]' | tr '\n' ' ')"
+		fail "structure layouts differ from upstream's: $(diff "$B/offs.upstream" "$B/offs.common" | grep '^[<>]' | tr '\n' ' ')"
 	fi
 else
 	fail "tools/mkoffs: $(cat "$B/offs.log")"; exit 1
@@ -118,7 +121,7 @@ fi
 
 # ---- 2. kernel objects ----
 PIN=gcc-2.7.2.3-8949028	# toolchain.pin
-KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.0\" -DDLM_PIN=\"$PIN\""
+KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.1\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
 for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post dlm_ddi dlm_intr; do
@@ -177,7 +180,7 @@ fi
 for IMG; do
 	K=$(basename "$IMG")
 	W=$B/test/$K
-	case "$K" in K030*|*k30*) KABI=k30.1.0 LINE=k30 ;; *) KABI=k46.1.0 LINE=k46 ;; esac
+	case "$K" in K030*|*k30*) KABI=k30.1.1 LINE=k30 ;; *) KABI=k46.1.1 LINE=k46 ;; esac
 	ORIG=$IMG
 	export DLM_KABI=$KABI DLM_PIN=$PIN	# mkmod's -K and -P
 	rm -rf "$W"
