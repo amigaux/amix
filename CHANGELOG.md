@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — modadmin -L prints the message buffer's words first (d834597)
+
+Core patch 0025: `modadmin -L` starts with one line of the ring's words (putbufsz, putbufwpos, putbufrpos, conslogging,
+prt_where), each read by lseek on /dev/kmem (a `dd skip` into kmem reads its way there from 0 and hangs the box). The ring
+is printed from the byte after putbufwpos (the stock printf stores after a pre-increment; before, the newest byte came
+first), text only: the log driver's logcons copies strlog data blocks with their header bytes into putbuf, and a cmn_err
+line enters twice (xprintf and the log copy). dlm.o unchanged; box modadmin eeea43b3. Written for the k46 run-time-line gap
+(S3-43): the code and initial data of the five putbuf functions are byte-identical on k46 and k30, so the words decide it.
+
 ## 2026-10-26 — boot2 gets 516 bytes of headroom back (aad576f, ea90332)
 
 ax_ctl_pick parses the control block's copy A into the caller's structure and keeps one 488-byte scratch instead of two
