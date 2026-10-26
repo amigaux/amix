@@ -62,6 +62,7 @@ void dma_complete(struct dma_rec *r, ulong pa, ulong len, int dir);
 | `prepare` | pushes the CPU's dirty lines over `[pa, pa+len)` and takes ownership | if `[pa, pa+len)` is reachable: as k46's, with the 030's cache operations. If not, takes a bounce buffer of `len` from the pool (§3), copies the bytes into it for `TO_DEVICE`, and owns that |
 | `complete` | invalidates the owned lines for `FROM_DEVICE` | for a bounced `FROM_DEVICE`, copies the bounce buffer back to `pa`; then gives the buffer back |
 | `dma_addr` (§2.3) | `pa` | the bounce buffer's physical address when bounced, else `pa` |
+| bounce buffers | the driver's own (its misaligned-read bounce, D42) | 16-byte aligned and rounded up to 16-byte lines, so a driver's own bounce in `dma_alloc` memory is never bounced again, and `edge_shared` stays 0 |
 
 A `prepare` that cannot get a bounce buffer returns nonzero, as the
 port's does when the seam is off, and the driver arms all the same. So
@@ -81,6 +82,22 @@ lines arms with `dma_addr(r)` where the port's driver armed with `pa`.
 This is the one change to the port's call shape, and on k46 it is the
 identity.
 
+**Where the address is taken** (the a4091 station and the port,
+2026-10-26, from `amix-a4091/src/a4091-wr.c` at 27d2079):
+- The A4091 driver has **one** site. The data address reaches the
+  53C710 only through the DSA table (`ds.data1buf`), which a
+  table-indirect MOVE reads; the DSP writes arm SCRIPTS, not data. The
+  short-read recovery re-launch reuses the same table and segment, and
+  there is no reconnect (IDENTIFY 0x80, no disconnect privilege).
+- The order therefore becomes: `dma_prepare`, then
+  `ds.data1buf = dma_addr(r)`, then the DSP write. Today the table is
+  built before `prepare`.
+- The floor's A3091 (the A3000 WD33C93 DMAC), which the port's
+  `dma_cache040.s` wraps, has two arm sites: the initial arm and the
+  reconnect re-arm. If a k30 provider ever serves it, both take
+  `dma_addr`. On k46 the result equals `pa`, so the stock bytes need no
+  change.
+
 ## 3. Reachable memory: `dma_alloc`, `dma_free`
 
 ```c
@@ -92,8 +109,19 @@ void  dma_free(char *va, ulong len);
   address, and its physical address in `*pa`. They are for what lives in
   host memory for the whole life of a transfer queue: SCRIPTS, the
   message and status buffers, the descriptor tables.
-- On k46 it is kernel memory as the port's line uses it today. On k30
-  the memory comes from the pool (§5).
+- On k46 it is kernel memory under the DTT0 identity map
+  (0x00000000–0x3FFFFFFF, cache-inhibited), where the port's line keeps
+  the driver's DMA structures today, as kernel-image statics in the
+  Z3660's RAM. Zorro III bus-master DMA reaches it, proven on metal by
+  the A4092 root rows (the port, 2026-10-26). On k30 the memory comes
+  from the pool (§5).
+- As a module, a driver moves the structures it hands the chip (the
+  DSA table, the SCRIPTS, the ident, CDB, status and message buffers,
+  its own bounce: about 1.3 KiB for the A4091) into one `dma_alloc`
+  area. A module's own `.data` is in the arena or kmem, which C3-6 §1.5
+  forbids handing a board, and on k30 it is unreachable. SCRIPTS that are
+  position-independent (relative jumps, table-indirect moves) copy
+  unchanged, and DSP is their physical address.
 - 16-byte aligned; at most 64 KiB a call; never freed while the device
   may touch it.
 - In the root pass, `dma_alloc` is allowed as `KM_NOSLEEP` is: it never
@@ -104,10 +132,14 @@ void  dma_free(char *va, ulong len);
 1. At `_load` (in the root pass for a root controller): `dma_alloc` the
    SCRIPTS and the per-unit buffers; initialise one `struct dma_rec` per
    controller (`magic`, `version` 2, `ctlid`, `unit`).
-2. Per data transfer: `dma_prepare(r, pa, len, dir)`; arm the device with
-   `dma_addr(r)`; on completion `dma_complete(r, pa, len, dir)`.
-3. Zero-length transfers make no call (`drv_zero`, as the port's).
-4. `_halt` stops the chip (C4-2 §5). An owned segment is then abandoned
+2. Per data transfer: `dma_prepare(r, pa, len, dir)`; then put
+   `dma_addr(r)` where the device takes the data address (for the 53C710,
+   the DSA table); then arm; on completion `dma_complete(r, pa, len,
+   dir)`.
+3. The same calls on both lines. The 030 build, which today makes none,
+   enables the seam too.
+4. Zero-length transfers make no call (`drv_zero`, as the port's).
+5. `_halt` stops the chip (C4-2 §5). An owned segment is then abandoned
    with the halt.
 
 ## 5. Open: where k30's pool comes from
