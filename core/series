@@ -33,3 +33,4 @@
 0030-halt-pass.patch
 0031-block-rows.patch
 0032-sd-register.patch
+0033-arena-load-path.patch

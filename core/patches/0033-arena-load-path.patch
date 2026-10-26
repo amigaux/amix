@@ -1,0 +1,362 @@
+Subject: the arena load path: a root module links where boot2 placed it
+
+30 section 2 patch 2 (S4-01), contract C4-4 version 2 section 4.
+dlm_load_mem(name, p, len, bss) loads a root-class module from its file
+bytes in the arena: no path, no file read, no hash (the root pass checks
+the CRC-32 against the directory).  Its allocated PROGBITS sections are
+relocated where they lie (each at an offset that is a multiple of its
+alignment, at most 16); NOBITS and COMMON go into the zeroed tail boot2
+reserved behind the file, and a layout larger than the reserve is
+ENOLOAD.  The image is that one span, so the range checks stay as they
+are; nothing is allocated for it or freed.  Root class is accepted only
+from the arena, and only root class there; a dependency must already be
+linked.  The state harness loads modules with .bss, a common and data
+relocated against both, and each refusal.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -31,6 +31,8 @@
+ 	char		lf_sha[65];	/* its sha256=, "" when not checked */
+ 	char		*lf_mbuf;	/* the file, read once, hashed, loaded */
+ 	long		lf_mcap, lf_msz;
++	int		lf_arena;	/* lf_mbuf is the arena's: never freed */
++	long		lf_bss;		/* and the tail boot2 reserved behind it */
+ };
+ #define	LF_OPEN		0
+ #define	LF_INLOAD	1	/* inside mw_load */
+@@ -402,7 +404,7 @@
+ lf_mfree(lf)
+ 	struct dlm_lf *lf;
+ {
+-	if (lf->lf_mbuf)
++	if (lf->lf_mbuf && !lf->lf_arena)
+ 		dlm_free(lf->lf_mbuf, lf->lf_mcap);
+ 	if (lf->lf_mpath)
+ 		dlm_free(lf->lf_mpath, (long)MAXPATHLEN);
+@@ -768,9 +770,10 @@
+  * loads (root class comes with the arena load path).
+  */
+ static int
+-md_check(ld, name)
++md_check(ld, name, arena)
+ 	struct dlm_ld *ld;
+ 	char *name;
++	int arena;
+ {
+ 	struct dlm_md *md = &ld->ld_md;
+ 	int fam, major, minor;
+@@ -787,10 +790,14 @@
+ 		printf("dlm: %s: built for another kernel (kabi, compiler pin or build)\n", name);
+ 		return EBADVER;
+ 	}
+-	if (md->md_class == MD_ROOT) {
++	if (md->md_class == MD_ROOT && !arena) {
+ 		printf("dlm: %s: root class is loaded from the arena only\n", name);
+ 		return ECONFIG;
+ 	}
++	if (md->md_class != MD_ROOT && arena) {
++		printf("dlm: %s: in the arena but not root class\n", name);
++		return ECONFIG;
++	}
+ 	if (md->md_majoff >= 0 && md_majors(ld->ld_mod + md->md_majoff, name) != 0)
+ 		return ECONFIG;
+ 	return 0;
+@@ -875,7 +882,21 @@
+ 		u.u_procp->p_cred = dlm_syscred;
+ 		u.u_rdir = 0;
+ 	}
+-	if ((e = lf_gate(lf, name, &path)) != 0 || (e = lf_find(lf, path, m)) != 0 ||
++	if (flags & DL_ARENA) {
++		/* the bytes boot2 placed (C4-4): no file, no path, no hash here */
++		if (g->g_src == 0) {
++			printf("dlm: root module %s is not linked before the module that needs it\n", name);
++			e = ENOENT;
++			goto fail;
++		}
++		lf->lf_mbuf = g->g_src;
++		lf->lf_msz = g->g_srclen;
++		lf->lf_arena = 1;
++		lf->lf_bss = g->g_bss;
++		ld->ld_read = mem_read;
++		ld->ld_inplace = g->g_srclen;
++		g->g_src = 0;
++	} else if ((e = lf_gate(lf, name, &path)) != 0 || (e = lf_find(lf, path, m)) != 0 ||
+ 	    (lf->lf_sha[0] && (e = lf_hashload(lf)) != 0))
+ 		goto fail;
+ 	/* each refusal names the module and the rule (C3-1 section 4) */
+@@ -892,7 +913,7 @@
+ 			    "a malformed or missing key, or an unknown critical one", e);
+ 		goto fail;
+ 	}
+-	if ((e = md_check(ld, name)) != 0)
++	if ((e = md_check(ld, name, (flags & DL_ARENA) != 0)) != 0)
+ 		goto fail;
+ 	if (ld->ld_md.md_unload)		/* pinned unless it says so (C3-1) */
+ 		m->m_flags |= DM_UNLOADOK;
+@@ -915,7 +936,7 @@
+ 	for (pos = 0; dlm_ld_dep(ld, &pos, dep) > 0;) {
+ 		if (isstatic(dep))
+ 			continue;
+-		if ((e = dlm_load(dep, DL_SYS, depth + 1, g, &dm)) != 0) {
++		if ((e = dlm_load(dep, DL_SYS | (flags & DL_ARENA), depth + 1, g, &dm)) != 0) {
+ 			e = NOMEM(e) ? e : EINVAL;
+ 			goto fail;
+ 		}
+@@ -940,12 +961,25 @@
+ 		goto fail;
+ 	}
+ 	m->m_size = ld->ld_imgsz;
+-	m->m_allocsz = m->m_size + 15;
+-	if ((m->m_alloc = dlm_zalloc((long)m->m_allocsz)) == 0) {
+-		e = ENOMEM;
+-		goto fail;
++	if (ld->ld_inplace) {
++		/* the image is the file and its tail, in the arena (C4-4 section 4) */
++		n = (ld->ld_inplace + 15) & ~15L;
++		if (((unsigned long)lf->lf_mbuf & 15) || (long)m->m_size - n > lf->lf_bss) {
++			printf("dlm: root module %s: its bss is over the reserved %d\n", name,
++			    (int)lf->lf_bss);
++			e = ENOLOAD;
++			goto fail;
++		}
++		m->m_base = lf->lf_mbuf;
++		bzero(m->m_base + n, (int)(m->m_size - n));
++	} else {
++		m->m_allocsz = m->m_size + 15;
++		if ((m->m_alloc = dlm_zalloc((long)m->m_allocsz)) == 0) {
++			e = ENOMEM;
++			goto fail;
++		}
++		m->m_base = (char *)(((unsigned long)m->m_alloc + 15) & ~15L);
+ 	}
+-	m->m_base = (char *)(((unsigned long)m->m_alloc + 15) & ~15L);
+ 	m->m_run = DLM_RUNADDR(m);
+ 	ld->ld_img = m->m_base;
+ 	ld->ld_base = m->m_run;
+@@ -1035,6 +1069,33 @@
+ 	return e;
+ }
+ 
++/*
++ * A root-class module from the arena (30 section 2 patch 2, C4-4 section
++ * 4): its file at p, len bytes, 16-aligned, with the zeroed tail of bss
++ * bytes boot2 reserved from len rounded up to 16.  The allocated PROGBITS
++ * sections are relocated where they lie, NOBITS and COMMON go into the
++ * tail, and nothing is allocated for the image or ever freed.  A module
++ * it depends on must already be linked.
++ */
++int
++dlm_load_mem(name, p, len, bss, mp)
++	char *name, *p;
++	long len, bss;
++	struct dlm_mod **mp;
++{
++	struct dlm_guard g;
++
++	if (!dlm_inited)
++		return ENOSYS;
++	if (strlen(name) > MODMAXNAMELEN - 1 || p == 0 || len <= 0 || bss < 0)
++		return EINVAL;
++	bzero((caddr_t)&g, sizeof g);
++	g.g_src = p;
++	g.g_srclen = len;
++	g.g_bss = bss;
++	return dlm_load(name, DL_ARENA, 1, &g, mp);
++}
++
+ /* ---- unload ---- */
+ 
+ static void
+--- a/dlm.h
++++ b/dlm.h
+@@ -179,6 +179,9 @@
+ 	char		*ld_ktab;	/* static kernel */
+ 	long		(*ld_comhook)(); /* test only: common placement */
+ 	/* image */
++	long		ld_inplace;	/* > 0: the file's length; its sections
++					 * run where they lie, NOBITS and
++					 * COMMON in the tail (patch 2) */
+ 	unsigned long	ld_comoff;	/* start of commons */
+ 	unsigned long	ld_imgsz;	/* incl. commons */
+ 	char		*ld_img;	/* where the bytes are written */
+@@ -231,6 +234,7 @@
+ /* dlm_load() flags */
+ #define	DL_SYS		0x01	/* system credentials and root */
+ #define	DL_DEMAND	0x02	/* set the demand mark */
++#define	DL_ARENA	0x04	/* a root module from the arena (patch 2) */
+ 
+ /* dlm_unload() callers */
+ #define	DU_DEMAND	0
+@@ -241,6 +245,8 @@
+ 	struct dlm_lf	*g_lf;		/* active loads, innermost first */
+ 	struct dlm_mod	*g_unl;		/* module being unloaded */
+ 	int		g_unlnl;	/* its linkages removed so far */
++	char		*g_src;		/* DL_ARENA: the file's bytes in the arena */
++	long		g_srclen, g_bss; /* its length, its reserved tail */
+ };
+ 
+ /*
+@@ -330,7 +336,8 @@
+ extern int dlm_nsdreg, dlm_sdclosed;
+ extern int sd_register(), dlm_sd_close();
+ extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
+-extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
++extern int dlm_halt();
++extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
+ #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
+ extern void dlm_free();
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -93,7 +93,8 @@
+ 		return ENOLOAD;
+ 
+ 	ld->ld_secoff[0] = NOSEC;
+-	off = 0;
++	/* in place (patch 2): PROGBITS where they lie, the rest after the file */
++	off = ld->ld_inplace ? ((unsigned long)ld->ld_inplace + 15) & ~15L : 0;
+ 	for (i = 1; i < ld->ld_shnum; i++) {
+ 		t = SHW(ld, i, SH_TYPE);
+ 		f = SHW(ld, i, SH_FLAGS);
+@@ -120,6 +121,15 @@
+ 			return ERELOC;
+ 		if (sz > (unsigned long)dlm_maximage)
+ 			return ENOLOAD;		/* an image over the limit (C3-1 section 4) */
++		if (ld->ld_inplace && al > 16)
++			return ENOLOAD;		/* the arena aligns to 16 (C4-4 section 4) */
++		if (ld->ld_inplace && t != SHT_NOBITS) {
++			t = SHW(ld, i, SH_OFFSET);
++			if (t % al || t + sz > (unsigned long)ld->ld_inplace)
++				return ENOLOAD;
++			ld->ld_secoff[i] = t;
++			continue;
++		}
+ 		off = (off + al - 1) & ~(al - 1);
+ 		ld->ld_secoff[i] = off;
+ 		off += sz;
+@@ -702,6 +712,10 @@
+ 				err = ERELOC;
+ 				goto out;
+ 			}
++			if (ld->ld_inplace && al > 16) {
++				err = ENOLOAD;
++				goto out;
++			}
+ 			v = G32(s + ST_SIZE);
+ 			if (v > (unsigned long)dlm_maximage) {
+ 				err = ENOMEM;
+@@ -750,8 +764,8 @@
+ 
+ 	for (i = 1; i < ld->ld_shnum; i++) {
+ 		t = SHW(ld, i, SH_TYPE);
+-		if (ld->ld_secoff[i] == NOSEC || t == SHT_NOBITS)
+-			continue;
++		if (ld->ld_secoff[i] == NOSEC || t == SHT_NOBITS || ld->ld_inplace)
++			continue;		/* in place: the bytes are already there */
+ 		if (rdx(ld, SHW(ld, i, SH_OFFSET), ld->ld_img + ld->ld_secoff[i],
+ 		    (long)SHW(ld, i, SH_SIZE), ERELOC) != 0)
+ 			return ERELOC;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -78,6 +78,24 @@
+ mod('hl4')
+ 
+ 
++# the arena load path (S4-01): ar1 and ar1b are root class with .bss, a
++# common, and data relocated against both; ar2 needs ar9, never linked
++def armod(p, deps=()):
++    md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root',
++          'match=always', 'rank=z3660'] + (['depend=' + ','.join(deps)] if deps else [])
++    mod(p, md=md,
++        text='\t.bss\n\t.globl\t{p}_bv\n{p}_bv:\n\t.space\t64\n'
++             '\t.comm\t{p}_com,32,4\n\t.text\n'.format(p=p),
++        data='\t.globl\t{p}_ptr\n{p}_ptr:\n\t.long\t{p}_bv\n'
++             '\t.globl\t{p}_cptr\n{p}_cptr:\n\t.long\t{p}_com\n'.format(p=p))
++
++
++armod('ar1')
++armod('ar1b')
++armod('ar2', deps=('ar9',))
++mod('ardm')                         # demand class, offered from the arena
++
++
+ # sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
+ # class), sr3 ide (its _load fails after registering), sr4 zorro (fills
+ # the table), srbad an unknown class
+--- a/test/state.c
++++ b/test/state.c
+@@ -540,6 +540,66 @@
+ 	    "no-sleep: the unload returns every byte");
+ }
+ 
++/* ---- the arena load path (30 section 2 patch 2, S4-01) ---- */
++
++/* a module's file as boot2 places it: 16-aligned, then a zeroed tail */
++static char *
++arfile(name, lenp, tail, skew)
++	char *name;
++	long *lenp, tail;
++	int skew;
++{
++	char path[512], *b;
++	FILE *f;
++	long n;
++
++	sprintf(path, "%s/etc/conf/mod.d/%s", host_root, name);
++	if ((f = fopen(path, "rb")) == 0)
++		return 0;
++	fseek(f, 0L, 2);
++	n = ftell(f);
++	fseek(f, 0L, 0);
++	b = (char *)calloc(1, (size_t)(n + tail + 64));
++	b = (char *)(((unsigned long)b + 15) & ~15UL) + skew;
++	if (fread(b, 1, (size_t)n, f) != (size_t)n)
++		n = 0;
++	fclose(f);
++	*lenp = n;
++	return b;
++}
++
++void
++arena_tests()
++{
++	struct dlm_mod *m;
++	unsigned long t, bv, cm;
++	long len;
++	char *p;
++
++	p = arfile("ar1", &len, 128L, 0);
++	check(p && dlm_load_mem("ar1", p, len, 128L, &m) == 0 && (m = byname("ar1")) != 0 &&
++	    m->m_base == p && m->m_alloc == 0, "arena: a root module links where boot2 put it, nothing allocated");
++	t = m->m_run + ((len + 15) & ~15L);
++	bv = modsym(m, "ar1_bv");
++	cm = modsym(m, "ar1_com");
++	check(bv >= t && bv + 64 <= m->m_run + m->m_size && cm >= t && cm + 32 <= m->m_run + m->m_size,
++	    "arena: its .bss and its common lie in the tail behind the file");
++	check(G32(DLM_RP(m, modsym(m, "ar1_ptr"))) == bv && G32(DLM_RP(m, modsym(m, "ar1_cptr"))) == cm,
++	    "arena: data relocated in place against them");
++	check(moduload(m->m_id) == EBUSY && byname("ar1"), "arena: a root module is pinned");
++	p = arfile("ar1b", &len, 128L, 0);
++	check(p && dlm_load_mem("ar1b", p, len, 16L, &m) == ENOLOAD && !byname("ar1b"),
++	    "arena: a tail smaller than its bss -> ENOLOAD");
++	check(dlm_load_mem("ar1b", arfile("ar1b", &len, 128L, 2), len, 128L, &m) == ENOLOAD &&
++	    !byname("ar1b"), "arena: a file not 16-aligned -> ENOLOAD");
++	p = arfile("ar2", &len, 128L, 0);
++	check(p && dlm_load_mem("ar2", p, len, 128L, &m) != 0 && !byname("ar2") && !byname("ar9"),
++	    "arena: a dependency not linked before it is refused, never read from a file");
++	p = arfile("ardm", &len, 128L, 0);
++	check(p && dlm_load_mem("ardm", p, len, 128L, &m) == ECONFIG && !byname("ardm"),
++	    "arena: a module that is not root class -> ECONFIG");
++}
++
+ /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ static int sr_e[8], sr_n;
+ 
+@@ -1620,6 +1680,7 @@
+ 	intr_tests();
+ 	kinfo_tests();
+ 	halt_tests();
++	arena_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
