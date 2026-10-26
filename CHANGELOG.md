@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-26 — Stage 3 closed (6f38d2e)
+
+S3-46 metal on the A4000D (amix-kerntools ee06634, M3–M7): M3 polled PASS, M5 INT6 on zeth 1.0.0-4 PASS (0 % loss over
+6000 pings + FTP), M6 rtg + monsw PASS; M4 INT6 on zeth 1.0.0-3 FAIL (attachment passed, receive under load failed — the RX
+ring wedge, fixed in -4); M7 k30 in 030 emulation mode unproven on metal (golden firmware line), not a module failure.
+M-THR1: no regression (FTP 277–489 push, 497–582 pull KiB/s against ~185; RTG 69.7 µs per op against 76). Carried into
+stage 4: 030 metal on the 1.1 release firmware (OQ-80.6) and the A4000T's rows after its expansion-bus repair. Findings
+noted: M4's 30 lost directory entries and M3's unplanned stall, both followed up by the tripwire proving boot.
+
 ## 2026-10-26 — Exit ledger: S3-46 progress on the A4000D; 030 mode to stage 4; OQ-80.6/80.7 (0d7777c, 21d506c)
 
 k46: INT6 attachment on metal PASS (221 counted); the interrupt-mode flood failure is a z3660eth defect (the RX ring wedged
