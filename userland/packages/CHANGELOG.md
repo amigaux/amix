@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — dlmkit -7 (root-class kits) and loader-amix -7 (loader version 3) from amix-dlm 05f700a (59fbfca, 4cf39c7) — not published
+
+dlmkit30/46 -7 (KIT_REV 05f700a, core 0001–0038): mkmod writes rank=, modcheck accepts class=root with its rules, the DDI
+list gains root_defer; abi texts unchanged (fea18182); kit-test 74/74 (a root module accepted, six refusals). md5 8ca86960 /
+4064256 B and d1cb76e2 / 4081664 B; replace -6. loader-amix -7: loader version 3 (banner `amix-boot 3:`), which root-class
+generations need; boot2 28526 B a151a252, boot1 unchanged; ldrinfo version=3, catalog loader=3; md5 fb71911c / 35840 B;
+replaces -6. Staged catalog b4865981; round trip 106/106 (loader 3 laid, the m kernels' loader-min 2 satisfied); gates PASS.
+
 ## 2026-10-26 — kern30m k30.1.1.261026-10, the S4-23 k30 root-class kernel (6e5bb14) — not published
 
 K030-U build 68030-261026-10 (kerntools 3405b11) on amix-dlm 4c1acd0 (core 0001–0035, marc_root live): -08's content plus
