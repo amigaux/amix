@@ -125,8 +125,20 @@ extents.
 ## 5. The first cell: CD-booted, disk-rooted
 
 A vehicle slot copy (the k46 or k30 vehicle of the S3 rows), its own boot
-store untouched, the ISO in the A4091's CD unit, the CD unit given boot
-priority over the hard disk (the ROM gives the disc priority 2).
+store untouched, the ISO in the A4091's CD unit, and the CD chosen over the
+hard disk.
+
+**Boot priority (decided 2026-10-26).** The ROM gives the disc priority 2,
+and an installed disk's `UNIX_Boot` partition is also at 2. On the tie the
+disk's node wins (N83: the disk booted). The installed disk **keeps
+priority 2**: a disc left in the drive must never take over a box. The CD
+is chosen in one of two ways:
+- the Kickstart early-startup menu (both mouse buttons held at power-on;
+  D-3 §6's boot-menu channel), choosing the CD's boot node;
+- an administrator lowering the disk's boot priority below 2.
+
+The cell of record used a copy of the vehicle with the disk at priority 1
+(two RDB bytes; the boot store compares identical).
 
 Expected on the console, in order:
 1. AmigaDOS boots from the CD, and the Startup-Sequence runs.
