@@ -264,9 +264,26 @@ root on a loaded image (`review/P-6-compressed-miniroot-ramdisk.md`).
   assume virtual = physical (`STUDY` §2.3). After relocation the core
   publishes code with a full cache push (`cpusha bc`, plus CACR.CABC on the
   68060).
-- **Kernel virtual space:** copied modules consume the fixed kernel map
-  shared with page structures and u-areas; at 128 MB of RAM the headroom is
-  measured (U2; `grimoire-amix/docs/how-it-works/ram-ceiling.md:86-110`).
+- **Kernel virtual space (U2, 2026-10-26):** copied modules consume the
+  fixed kernel map shared with page structures and u-areas
+  (`grimoire-amix/docs/how-it-works/ram-ceiling.md:86-110`). In process
+  context after multi-user a module gets about 320 KiB in total on k46
+  at 128 MB and 640 KiB on k30 at 64 MB (64 KiB `KM_NOSLEEP` pieces;
+  `docs/measurements/2026-10-26-u2.md`).
+  - A load from a file (`modload`, a demand-class first open) holds the
+    core's working set at once, all `KM_SLEEP`: the file rounded up to a
+    power of two, the symbol tables, the image and the module's table.
+    That is about 57 KB for z3660eth, 67 KB for z3660rtg and 232 KB for
+    a cdfs-sized module.
+  - A module loaded in process context keeps that working set well
+    under k46's total. A load past the total waits instead of failing,
+    as U4's `KM_SLEEP` request did. C3-1 §6's 256 KiB is a ceiling, not
+    a budget: a module at it cannot load this way on k46.
+  - A larger module is boot class (the first `sysinit` entry, before
+    multi-user) or root class (stage 4, from the arena: no kmem for its
+    file or image). The totals there are not measured; U1's single
+    `KM_NOSLEEP` requests of 1 MiB (k30) and 2 MiB (k46) succeed at
+    `dmainit` and the hook.
 - **Large requests (U4, 2026-10-26):** in process context after multi-user
   one kmem request gives at most 256 KiB on k46 at 128 MB and 512 KiB on
   k30 at 64 MB. A `KM_SLEEP` request above that sleeps forever.
