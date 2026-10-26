@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2026-10-27 — S4-62 piece 1: the five DMA names in DDI 1.2; the k46 provider half; C4-5 v3 dma_addr(r, pa) (0e4c34f, bbd20b6)
+
+dma_prepare/dma_complete (k46: the port's dma_cache040.s, exported), dma_addr, dma_alloc, dma_free in DDI 1.2 on both lines.
+k46 provider (core/plat/k46): dma_addr = pa; dma_alloc = kmem_alloc KM_NOSLEEP, 16-aligned, ≤ 64 KiB, kept only if
+identity-mapped below 0x40000000 (else freed, 0). k30 placeholder (§5.4): alloc 0, prepare -1, until piece 2. C4-5 v3:
+dma_addr takes pa, because the port's dma_prepare stores no pa on a miss (a still-owned segment leaves the earlier one's).
+Harness 255/255 (+8 k46 DMA checks); kit-test 0 failed (+ the five-name modcheck case); make test 692/0. Kit at bbd20b6.
+
 ## 2026-10-26 — kbootset: a `--root ramdisk` generation marks the ramdisk module safe=1 (57b3832)
 
 C4-4 v4 §2 and C4-3 §1 already said it; kbuild.c's safe-set loop now adds the root-class module owning b:20 (plus its depend
