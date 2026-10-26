@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 2026-10-26 — C2-2 v5 one kernel package per line; the stage-3 mint's package conventions (0d49ddd, 2a9cd81)
+
+C2-2 v5 §2.1: installing a kernel package replaces the line's other kernel package in the same transaction (pre-flight of
+every installed module record against the new kernel; pkgrm and record of the old one before pkgadd and record of the new;
+one trigger; recover finishes a cut; two existing records of one line refuse) — apkg 0.3.1. Conventions: a kernel catalog
+row carries line/kabi/pin from the sidecar and kbootset reads the rest from the installed sidecar; a module row takes
+kabi/pin from .moddata and has no depend= (gate 3 enforces dependencies); file= under base/; module packages CATEGORY
+system with mod.d/modreg.d files and modes as minted, modreg.local.d never shipped; K030-U's version is k30.1.0.261026-01;
+an ET_REL kernel needs no bss= or sym=.
+
 ## 2026-10-26 — kbootset reads unix.sym as ET_EXEC by section name; L5 as L2; C2-3 kernel names (9763024, bb088bb)
 
 kbootset reads unix.sym as an ET_EXEC whose st_value is the address with the kernel bound at 0 (no section base added) and
