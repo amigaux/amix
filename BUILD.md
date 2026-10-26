@@ -176,6 +176,19 @@ has no relation to the board's physical address, so **maintenance disarms rather
 and the arm is declared unsupported with a live data cache. The shipped Z3660 config (fixed base
 `0x10000000`) is always the direct arm.
 
+## 9. The loadable-module form (host-side, cross-compiled)
+The same `src/z3660eth.c` built with `-DZ3660ETH_MODULE` is the module of amix-dlm's
+contract C3-6; the static build above does not change. On the host, with the sibling
+checkouts `gcc-cross-amix`, `amix-dlm` and `amix-040-060-port` present:
+```
+sh tools/build-module.sh            # build/k30/z3660eth.o and build/k46/z3660eth.o
+```
+Each object is gated (undefined symbols against `amix-dlm/abi/<line>/ddi.list`, the
+68060 scan, no 2 KiB page shift on k46) and `build/<line>/z3660eth.keys` holds its
+`.moddata` keys. The ABI kit (amix-dlm S3-10) wraps the object into the module.
+Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with intr=6:
+1 drain in a level-2 handler, the default; 0 in the poll tick). NOTES.md "Module form".
+
 ## Real-world build notes (historical record, validated 2026-06-21 on the WinUAE build box)
 The current build harness is **Amiberry** with `../amix-kerntools/configs/amix-golden.uae` (§0).
 The WinUAE specifics below are kept as the record of where the FTP-asymmetry and clean-gate

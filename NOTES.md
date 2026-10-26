@@ -1,5 +1,66 @@
 # NOTES — amix-z3660net
 
+## Module form (2026-10-26, amix-dlm S3-25, contract C3-6 version 1)
+
+**One source, a switch.** `-DZ3660ETH_MODULE` turns `src/z3660eth.c` into the
+loadable module; without it the file is the static driver, byte for byte (the
+`.o` of both lines is identical before and after, and the preprocessed token
+stream too). `tools/build-module.sh` builds one relocatable object per line
+(`build/k30/z3660eth.o`, `-m68020`, stock sysroot; `build/k46/z3660eth.o`,
+`-m68040`, a mirror sysroot with the port's Model-B `immu.h`/`param.h`), fills
+`src/z3660eth.modkeys` into `build/<line>/z3660eth.keys`, and gates it: every
+undefined symbol on `amix-dlm/abi/<line>/ddi.list`, the 68060 scan, no 2 KiB
+page shift on k46. Wrapping (`.moddata`, the section type) is the ABI kit's
+`mkmod`/`modfix` (S3-10); nothing here does it.
+
+**What changes in the module.**
+- `z3660eth_load(params)` does what the first open did: `z3660eth_map(0)`
+  (autocon, then the AGA fixed base, the MAC probe), `ZZ_CONFIG_DISABLE`,
+  and `if_attach(&board->ifstats)` with the name set. An error returns the
+  map's errno (ENXIO absent, ENOMEM no VA) with nothing armed or attached.
+- Open no longer links `ifstats`; `extern ifstats` is gone. `z3660ethintr()`
+  and `z3660ethinit()` are not compiled.
+- Major 51 is data: `z3660eth_drvdata[]` carries the row (only `d_str`) and
+  `drv_cmajor` 51; the core registers it from `.moddata` `majors=c:51`.
+- `z3660eth_halt()`: the board's interrupt off, the poll stopped.
+  `z3660eth_unload()` returns EBUSY (`unload=never`).
+
+**Interrupts (C3-6 section 1.3).** `intr=0` (default) is the static driver's
+polling. `intr=6` attaches at the first open (process context, board set up,
+its interrupt off): `z3660eth_int6` on level 6 and, with `intrl2=1`
+(default), `z3660eth_int2` on level 2. A self-test then raises EXTER from
+software (INTREQ 0xA000, the way the firmware's INT6 arrives); the level-6
+handler takes the test flag and, with `intrl2`, raises PORTS (0x8008) for the
+level-2 handler's flag. Only when both flags came back is the board's
+interrupt enabled; any failure detaches and stays polled, one console line.
+- `z3660eth_int6` calls nothing: it reads `ZZ_INT_STATUS`, and for ETH writes
+  `ZZ_CONFIG_DISABLE`. In the firmware (`rtg.c` REG_ZZ_CONFIG) that write both
+  clears the ETH interrupt and stops it (`interrupt_enabled_ethernet = 0`), so
+  it is the acknowledge and the mask in one. Then `int_on = 0`,
+  `int_pending = 1`, and with `intrl2` PORTS.
+- The drain stays at IPL 4: `z3660eth_rx_work` from the poll callout, or from
+  `z3660eth_int2` under `splz3660eth()`; `z3660ethrsrv` as before. It clears
+  `int_pending` and writes `ZZ_CONFIG_ENABLE` again. `int_pending` is set only
+  after the board's interrupt is off, so the lower half reads and clears it
+  under the board's mask; `int_on` goes to 1 before every enable, to 0 after
+  every disable.
+- Nothing is lost while the interrupt is off: the firmware re-raises ETH while
+  the backlog is non-empty and the interrupt enabled (`rtg.c`
+  ethernet_thread), and the poll tick still drains every tick in all modes.
+- `intrl2=0` leaves the drain to the next poll tick (the other half M-INT1
+  measures). Counters: `z3660eth_int6_n`, `z3660eth_int2_n`,
+  `z3660eth_intr_mode` (6 = running on interrupts).
+
+**Gate result (2026-10-26, gcc-cross-amix 8949028).** Imports, both lines:
+`OTHERQ RD WR allocb autocon bcmp bcopy bzero canput cmn_err flushq freemsg
+getmajor getminor getq if_attach intr_attach intr_detach lbolt makedevice
+memcpy mod_drvops panicstr putbq putnext putq qreply sptalloc sptfree timeout
+unlinkb untimeout`, all on DDI v1; one weak undefined, the wrapper's own
+`z3660eth_conf_data` (C3-1: resolves to 0). The `.o` defines `ifnet` and
+`rawintrq` as COMMON: tentative definitions in the stock `<net/if.h>`, also in
+the static object; in a module the core allocates private copies, which the
+driver never uses.
+
 ## RX backpressure (2026-10-19, T-47 decision D1)
 
 **Rule: never free a received frame because an upstream queue is full.**
