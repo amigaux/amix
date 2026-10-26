@@ -4994,3 +4994,24 @@ Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-tar
 It also runs `kbootset status` and `kbootset namelist` with a version-3 kinfo made for generation 1. The status
 must say the namelist is missing, and the namelist call (what the first boot runs) must write it. The boot through
 the new loader is a Bench row: N19's shape for k30, N23's for k46.
+
+### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
+
+A 1.1 install CD can also boot by itself through an A4091 or A4092 boot ROM that has a
+CD filesystem. The disc is a plain ISO9660 data CD with System ID `AMIGA BOOT` and Rock
+Ridge:
+- `S/Startup-Sequence` runs `BOOT/amix-cdboot`, which is boot2 built as an AmigaDOS
+  program;
+- `BOOT/K30` or `BOOT/K46` holds the generation (`CONTROL`, `G1.GMF`, `G1K.BIN`).
+  `tools/build-install-iso.sh --cd-boot TREE` puts it there; amix-dlm's
+  `kbootset media --cd` and `mkstore -C … -x amix-cdboot` build the tree.
+
+The CD carries the loader and the kernel. The modules load from the root disk's
+`/stand/gen/<id>/mod`, checked against the CD's manifest. `/install/l11/INPUTS` records
+`amix-cdboot`'s hash, or why there is no CD boot tree.
+
+**The installed disk boots first.** The installer gives the disk's `UNIX_Boot` boot
+priority 2, and the ROM gives the disc priority 2 as well. On that tie the disk's node
+wins, so a box with a disc in the drive still boots its disk: a disc left in the drive
+must not take a box over. To boot the CD, pick it in the Kickstart early-startup boot
+menu. An administrator may lower the disk's priority instead, as a choice of their own.
