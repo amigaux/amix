@@ -1,3 +1,12 @@
+## 2026-10-26 — heirloom: removef's stdin form strips the newline, removes again (75be235)
+
+`removef PKG -` kept fgets' trailing newline on every line, so nothing matched the contents DB and nothing was removed
+(rc 0, silent); each line is now cut to its first whitespace token as installf's stdin form does, blank lines skipped
+(AMIX-PORT.md root cause 13). Host regression test heirloom/tests/removef-stdin as build-host.sh step 6; the fixed Amix
+installf/removef built (157732 B, fdeee971), not minted — ships with the next APKGENG. Stock Amix ships no removef.
+Found, not fixed: a latent upstream use-after-free in removef.c's error paths (a bad path after a good one frees a live
+extlist entry) — a follow-up.
+
 ## 2026-10-26 — package m4: the stock /usr/ccs/bin/m4 alone, shared with Cdev (b70500c)
 
 New package `m4` (pkginst m4, VERSION 2.1): the stock Amix 2.1 /usr/ccs/bin/m4 alone, from the Cdev tape member, so
