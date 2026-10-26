@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-26 — z3660eth module: refusal lines, _unload undoes _load, parser test (be0ef63)
+
+`_load` prints a `zen:` console line before every failure return (if_attach used to fail silently; the probe-failure lines
+end "module not loaded" in the module form). `_unload` (unload=never, reached only by the core's lf_fail) undoes `_load`
+before any open: board interrupt off, if_detach, unmap — it used to return EBUSY, leaving the ifstats link to the core's
+backstop and the sptalloc pages mapped. `make -C module test` runs a host test of the parameter parser (18 cases; no bug
+found). Static objects unchanged. Modules k30 0c5c3580, k46 8356712a. The first module boot's error 22 is the core's
+(a boot-class STREAMS driver gets no slot), not the driver's.
+
 ## 2026-10-26 — z3660eth module on kit d197198: one Master, $match added (e510330)
 
 The kit's mk/module.mk does the per-line work: module/Master (no $cpu; DEFCPU gives 68030/68040), per-line Master generation
