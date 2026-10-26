@@ -17,21 +17,28 @@ plat_buildid(void)
 /*
  * DMA, DDI 1.2 (contract C4-5): dma_prepare and dma_complete are the
  * port's (dma_cache040.s, linked by the kernel build).  The rest is here.
- * On this line the kernel's memory below 0x40000000 is mapped one to one
- * and reached through DTT0 cache-inhibited, which a Zorro III bus master
- * reaches: dma_alloc takes kernel memory and keeps it only when it lies
- * there, so a heap that does not fails a driver's _load instead of
- * handing a board the wrong memory.
+ * The kernel heap's addresses lie in the kernel map above 0x40000000, but
+ * its pages are kernel RAM below it, which DTT0 maps one to one and
+ * cache-inhibited.  So dma_alloc takes heap memory, checks that its pages
+ * are physically contiguous below 0x40000000, and gives the module the
+ * physical address as its pointer: the board and the CPU then see the
+ * same bytes with no cache between.  The heap mapping's own cache lines
+ * are pushed and invalidated by physical line at alloc and at free, so
+ * neither the module nor the heap's next user reads a stale line.
  */
 #ifndef DMA_IDTOP
-#define DMA_IDTOP	0x40000000UL	/* the identity map's top (host tests move it) */
+#define DMA_IDTOP	0x40000000UL	/* DTT0's top (host tests move it) */
 #endif
 #define DMA_MAX		0x10000UL	/* one call */
-#define DMA_HDR		20		/* the block's own pointer, then up to 16 to align */
+#define DMA_HDR		20		/* the heap address, then up to 16 to align */
+#define DMA_PG		4096UL
+#define DMA_RECSZ	0x60		/* struct dma_rec, layout version 2 */
 
 extern char *kmem_alloc(unsigned long, int);
 extern void kmem_free(char *, unsigned long);
 extern unsigned long vtop(char *, char *);
+extern int dma_prepare(char *, unsigned long, unsigned long, int);
+extern void dma_complete(char *, unsigned long, unsigned long, int);
 
 /* the address the device is armed with: on this line the segment's own */
 unsigned long
@@ -41,21 +48,49 @@ dma_addr(char *r, unsigned long pa)
 	return pa;
 }
 
-/* len bytes, 16-aligned, identity-mapped; its physical address in *pa; 0 when none */
+/* push and invalidate n bytes at physical pa: the port's service, FROM_DEVICE */
+static void
+purge(unsigned long pa, unsigned long n)
+{
+	char r[DMA_RECSZ];
+	int i;
+
+	for (i = 0; i < DMA_RECSZ; i++)
+		r[i] = 0;
+	if (dma_prepare(r, pa, n, 1) == 0)
+		dma_complete(r, pa, n, 1);
+}
+
+/* the physical address of n bytes at va if contiguous below DMA_IDTOP, else 0 */
+static unsigned long
+contig(char *va, unsigned long n)
+{
+	unsigned long pa = vtop(va, 0), k;
+
+	if (pa == 0 || pa + n > DMA_IDTOP || pa + n < pa)
+		return 0;
+	for (k = DMA_PG - ((unsigned long)va & (DMA_PG - 1)); k < n; k += DMA_PG)
+		if (vtop(va + k, 0) != pa + k)
+			return 0;
+	return vtop(va + n - 1, 0) == pa + n - 1 ? pa : 0;
+}
+
+/* len bytes, 16-aligned, through DTT0; their physical address in *pa; 0 when none */
 char *
 dma_alloc(unsigned long len, unsigned long *pa)
 {
 	char *p, *va;
-	unsigned long a;
+	unsigned long n = len + DMA_HDR, base, a;
 
-	if (len == 0 || len > DMA_MAX || (p = kmem_alloc(len + DMA_HDR, 1)) == 0)
+	if (len == 0 || len > DMA_MAX || (p = kmem_alloc(n, 1)) == 0)
 		return 0;			/* 1: KM_NOSLEEP, the root pass's rule */
-	a = ((unsigned long)p + 4 + 15) & ~15UL;
-	va = (char *)a;
-	if (a + len > DMA_IDTOP || vtop(va, 0) != a || vtop(va + len - 1, 0) != a + len - 1) {
-		kmem_free(p, len + DMA_HDR);
+	if ((base = contig(p, n)) == 0) {
+		kmem_free(p, n);
 		return 0;
 	}
+	purge(base, n);
+	a = (base + 4 + 15) & ~15UL;		/* the block through DTT0 */
+	va = (char *)a;
 	((char **)va)[-1] = p;
 	*pa = a;
 	return va;
@@ -64,6 +99,12 @@ dma_alloc(unsigned long len, unsigned long *pa)
 void
 dma_free(char *va, unsigned long len)
 {
-	if (va)
-		kmem_free(((char **)va)[-1], len + DMA_HDR);
+	unsigned long n = len + DMA_HDR;
+	char *p;
+
+	if (va == 0)
+		return;
+	p = ((char **)va)[-1];
+	purge(vtop(p, 0), n);
+	kmem_free(p, n);
 }

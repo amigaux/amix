@@ -144,7 +144,7 @@ level-2 handler raised through PORTS or in the poll.
 | `dma_prepare` | `int dma_prepare(r, pa, len, dir)` | any | port (k46), core (k30) | Before the write that arms the device: makes `[pa, pa+len)` coherent for the device and takes ownership in `r` (contract C4-5 §2). 0; nonzero is a miss (seam off, a segment still owned, no bounce buffer), and the driver arms all the same |
 | `dma_complete` | `dma_complete(r, pa, len, dir)` | any | port (k46), core (k30) | After the device stopped, before the completion: for `DMA_FROM_DEVICE` makes the device's bytes visible to the CPU, and gives up the segment |
 | `dma_addr` | `ulong dma_addr(r, pa)` | any | core | The address to arm the device with for the segment at `pa`: `pa`, or on k30 the bounce buffer `r` owns for it |
-| `dma_alloc` | `char *dma_alloc(len, &pa)` | any (never sleeps) | core | `len` bytes (at most 64 KiB), 16-aligned, that a Zorro III bus master reaches, with their physical address: SCRIPTS, tables, message and status buffers. 0 when none. k46: identity-mapped kernel memory, cache-inhibited through DTT0. **k30: none yet** (0 always) until the 030 provider, S4-62 |
+| `dma_alloc` | `char *dma_alloc(len, &pa)` | any (never sleeps) | core | `len` bytes (at most 64 KiB), 16-aligned, that a Zorro III bus master reaches, with their physical address: SCRIPTS, tables, message and status buffers. 0 when none. k46: a heap block through its DTT0 alias, the pointer equal to `pa`, cache-inhibited. **k30: none yet** (0 always) until the 030 provider, S4-62 |
 | `dma_free` | `dma_free(va, len)` | any | core | gives back one `dma_alloc` block, with its `len`. Never while the device may touch it |
 
 `r` is the driver's `struct dma_rec`, one per controller, layout version 2
