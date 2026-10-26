@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-26 — kbootset -6 from amix-dlm fb77acd (a48aa2c) — not published
+
+/sbin/kbootset 870d4752: the original SHA-256 round restored (the -5 restructure was slower on the 030) with the no-kinfo
+fixes kept. Same pkgmap. Round trip pinned to fb77acd: 37/37. Kernel-space set: kern30u -1, kern46z -2, kern46zcd -2,
+ldramix -2, kbootset -6.
+
 ## 2026-10-26 — kbootset -5 from amix-dlm 6c69125 (5c6706a) — not published
 
 /sbin/kbootset 6b76c54c: the restructured SHA-256 round (about 2× on the 030) and the no-kinfo fixes. Same pkgmap as -4.
