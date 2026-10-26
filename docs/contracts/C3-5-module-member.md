@@ -102,6 +102,15 @@ a new record, with `loader-min` raised. This contract adds none.
 
 ## 5. Order, safe mode, and what is reported
 
+- **When:** `marc_post` runs from the first `sysinit` entry of
+  `/etc/inittab`, before every other one:
+  `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1`
+  (`modadmin -B`, the modadm command `MOD_C_POST`, root only, once a boot:
+  a second is `EBUSY`). The module packages' installer (S3-31) and the
+  `modtools` package put that line there. The kernel's own hook after
+  `vfs_mountroot` loads nothing: it runs with interrupts masked, where
+  reading a module file faults (U15, core patch 0017), and prints
+  `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`.
 - **Order:** `marc_post` first registers the demand-class majors, then
   loads the boot-class records in manifest order. A module's
   dependencies load before it in any case.

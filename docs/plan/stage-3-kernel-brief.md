@@ -141,8 +141,12 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
      or `V`, and no undefined symbol but `etext`, `edata` and `end`.
 8. **The kernel hooks** (the kernel tree's own change):
    - `dlm_marc_post()` is called once after `vfs_mountroot` returns (in
-     `rth1_mountroot`), or from the first `sysinit` entry if U15 says
-     loading in process 0 is unsafe. The port's call in `src/rth1.c` is
+     `rth1_mountroot`). U15 found loading there unsafe (S3-B5: interrupts
+     masked, the read faulted), so from core patch 0017 the call loads
+     nothing and prints `dlm: boot-class modules load from the first
+     sysinit entry (modadmin -B)`; the boot-class modules load from
+     `/etc/inittab`'s first sysinit entry (C3-5 §5). Keep the call: it is
+     the line that says so. The port's call in `src/rth1.c` is
      guarded by `RTH1_DLM`. kerntools compiles the same `rth1.c` for the
      030 line, so S3-21 builds it with `-DRTH1_DLM`; the static families
      build it without, and keep no call to a core they do not link;
@@ -216,7 +220,8 @@ gcc-cross-amix (`toolchain.pin`). `PIN` is the sidecar's `pin=`
   `edata` and `end`.
 - **The image boots under loader version 2** with a generation that has
   an `arena` and an `ident` line and no modules. The console shows
-  `dlm: <n> kernel symbols` and `dlm: modules from generation <id>'s
+  `dlm: <n> kernel symbols`, `dlm: boot-class modules load from the
+  first sysinit entry (modadmin -B)` and `dlm: modules from generation <id>'s
   manifest`, then the system comes up as the static family did; `kinfo`
   reports kabi `k46.1.0` / `k30.1.0` and an empty module list. Loader
   version 2 (S3-15) is amix-dlm's, and the boot row waits for it.

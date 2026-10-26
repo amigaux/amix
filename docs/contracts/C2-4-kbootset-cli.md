@@ -220,5 +220,6 @@ the module packages installed under the root, as C3-5 §2 says.
 - **On the box,** `modadmin` (amix-dlm 55722ef on, built with `make box`,
   shipped in its own package `modtools`, not in kbootset's) lists the
   loaded modules and reads a module's tunables and counters by
-  name (`-s`, `-Q`, `-k`, `-p`, `-w`).
+  name (`-s`, `-Q`, `-k`, `-p`, `-w`). `modadmin -B` loads the boot-class
+  members, from `/etc/inittab`'s first sysinit entry (C3-5 §5).
 
