@@ -4,7 +4,11 @@
   (2026-10-26, from the z3660rtg station's module build): the console
   hook's `cp` is the console, not the screen (§1.4); `_halt` returns
   nothing (§1.1); z3660rtg's `_unload`, font, console modes and blitter
-  parameters (§3). The driver-change
+  parameters (§3); from the z3660net station's: the STREAMS row is zeros
+  but `d_str`, interrupts attach at first open with a software self-test
+  (§1.3), z3660eth's handlers, `intrl2` and its acknowledge-and-mask
+  write (§2), the k46 page-geometry headers in the kit (§1.7). The
+  driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -70,8 +74,9 @@ packages.
   `cdevsw` row (`patch_*_cdevsw.py`), and any store into `cdevsw` at run
   time. The module kernel's acceptance asks for majors 49, 51 and 52
   neither used nor filled at boot (the brief, §4).
-- A STREAMS driver keeps its `streamtab`; its row has `d_str` set and the
-  other entries `nodev`. The core installs its own open and close
+- A STREAMS driver keeps its `streamtab`; its row is zeros except
+  `d_str` (`nodev` is not a DDI name: the core reads a zero entry as
+  `nodev`, `dlm_slot.c`). The core installs its own open and close
   trampolines in the row and holds the module from the open that sets
   `q_ptr` to the close.
 - `/dev` nodes are made by the package or the installer (S3-22, S3-31),
@@ -88,10 +93,16 @@ packages.
   raised it, and returns nonzero only when its own board did. It must
   return fast when its board did not.
 - **A driver with a polled mode keeps it as the default** (30 §4). It
-  attaches only once its board is set up to interrupt, enables the
-  board's interrupt only after a self-test of the attached handler
-  passes, and stays polled if either fails. The choice is a module
-  parameter (`param intr:int:0:0:6` or as fits: 0 polled).
+  attaches only once its board is set up to interrupt, in process
+  context (the first open, or `_load` if the board is set up there),
+  enables the board's interrupt only after a self-test of the attached
+  handler passes, and stays polled if either fails. The choice is a
+  module parameter (`param intr:int:0:0:6` or as fits: 0 polled).
+- **The self-test** raises the level from software and checks that the
+  handler ran and claimed: for level 6, `INTREQ` (0xdff09c) = 0xa000
+  (SETCLR | EXTER) with the board's own interrupt-pending state set, as
+  the board would. The stock CIA-B handler runs once as well, as it does
+  for every level-6 interrupt the board raises; that is harmless.
 - **Level 6.** No spl masks level 6 in these kernels: `spl5`–`spl7`
   raise to level 4 only (C3-2 §3). So:
   - a level-6 handler shares no state with its own lower-level code
@@ -171,7 +182,10 @@ packages.
 - The line's pinned gcc-cross-amix (`gcc-2.7.2.3-8949028`) with
   `AMIX_KERNEL_CFLAGS` and the 060-safe rewrite (C3-1 §1), against the
   kit's headers and the pinned sysroot; on k46 also the 4 KiB page
-  geometry the static build uses (`phystopfn`, page counts).
+  geometry the static build uses: the kit's k46 `sys/immu.h` and
+  `sys/param.h` are the port's 4 KiB forms (`include-modelb/`), so
+  `phystopfn` and `btop` are right; page counts the driver writes as
+  numbers are its own to convert.
 - `ld -r` of everything the module needs that the kernel does not
   export (a font object, for example) into the one module object.
 - `mkmod` writes `.moddata` from the driver's key list: `name`, `kabi`
@@ -209,10 +223,10 @@ The module:
 
 | Item | Content |
 |---|---|
-| `.moddata` | `name=z3660eth`, `class=boot`, `majors=c:51`, `unload=never`, `cpu=68030` (k30) / `68040` (k46), `param=intr:int:0:0:6`; no `match` while the AGA fixed-base fallback stays (the board can be present without an AutoConfig entry), else `match=zorro:144b:01` |
-| Wrapper | `MOD_DRV_WRAPPER(z3660eth, …)`, the row `nodev` except `d_str = &z3660ethinfo`, `drv_cmajor` 51 |
+| `.moddata` | `name=z3660eth`, `class=boot`, `majors=c:51`, `unload=never`, `cpu=68030` (k30) / `68040` (k46), `param=intr:int:0:0:6`, `param=intrl2:int:1:0:1` (with `intr=6`: 1 drains in a level-2 handler raised through PORTS, 0 in the poll tick; M-INT1 chooses); no `match` while the AGA fixed-base fallback stays (the board can be present without an AutoConfig entry), else `match=zorro:144b:01` |
+| Wrapper | `MOD_DRV_WRAPPER(z3660eth, …)`, the row zeros except `d_str = &z3660ethinfo`, `drv_cmajor` 51 |
 | `_load` | find the board as the first open does today (`autocon(0x144B0001)`, then the AGA fallback); `ENXIO` if none. The mapping may stay lazy at first open. Write `ZZ_CONFIG_DISABLE`. `if_attach(&ifstats of the board)` here or at first open (once), instead of linking into `ifstats` |
-| Interrupts | polled stays the default (`intr=0`). `intr=6`: `intr_attach(6, z3660ethintr, board, "z3660eth")` once the board is set up, a self-test, then the board's interrupt on; the handler follows §1.3's level-6 rule (ack, mask, flag; the drain runs in the poll tick or a level-2 handler, never at level 6). M-INT1 on metal decides the default after measurement; the emulator raises no INT6 |
+| Interrupts | polled stays the default (`intr=0`). `intr=6`, at the first open: `intr_attach(6, z3660eth_int6, board, "z3660eth")`, and with `intrl2=1` also `intr_attach(2, z3660eth_int2, board, "z3660eth")`; the self-test (§1.3); then the board's interrupt on; polled on any failure. `z3660eth_int6` only acknowledges, masks and flags: on this board one write, `ZZ_CONFIG_DISABLE`, both acknowledges and masks (an acknowledge alone does not mask; the firmware treats acknowledge and enable/disable as exclusive). The drain runs at level 4 or below, in `z3660eth_int2` or the poll tick, never at level 6; the static `z3660ethintr`, which drains at its own level, is not attached. M-INT1 on metal decides the default; the emulator raises no INT6 |
 | Memory | unchanged (board window, static buffers); §1.5 holds as is |
 | Symbols | `ifstats` → `if_attach`/`if_detach`; add `intr_attach`/`intr_detach` |
 | `_halt` | `ZZ_CONFIG_DISABLE`, and stop the poll if it can without sleeping |
