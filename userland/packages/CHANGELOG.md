@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kbootset 1.1.0.261027-21 and modtools 1.0.261027-7 from amix-dlm 4442c76; the static 1.0 kernels leave the kernel-space catalog (S5-03, S5-34) (2b6ba70, d52fdee); catalog b2a0e874, round trip 162/162 — not published
+
+kbootset -21 brings S5-02 (the safe set keeps the card numbers; C4-4 v6, C3-5 v13). Both built on gcc14-cross-amix cf461e3 and
+checked against the pins and the return-value ABI (new recipes/common/gcc14-pin.sh, run by dlm-src.sh before any box build).
+/sbin/kbootset 143cc1d8 (e8250e37 / 202240 B), /sbin/modadmin f51c98d6 (0867b623 / 59904 B). kernel-k30-u, -k46-z, -k46-zacd
+leave the catalog (datastreams kept in superseded/static-1.0/); b198e9e2 kept byte-identical at superseded/repo-20261027-1344.
+
 ## 2026-10-27 — kernel-space catalog of record promoted to b198e9e2 (3028b37): the stage-4 exit set + gayle-k30/-k46 1.1.0-3; the exit root 6e60a128 kept byte-identical at superseded/repo-20261027-1329; round trip 159/159 — not published
 
 ## 2026-10-27 — GCC 14 userland re-minted on gcc14-cross-amix cf461e3: acompat 0.1-4, zlib 1.2.13-4, gzip 1.3.12-4, patch 2.5.9-4, gtar 1.14-4, grep 2.5.1a-5, less 704-5, make 3.81-5, amix-benchmark-gcc14 1.3-2 (de9d3b7..e64a8ee) — not published
