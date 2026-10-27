@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — a4091-k30/-k46 1.0.0-5 (1238713); round trip 157/157 — not published
+
+From amix-a4091 5044872 (a selection timeout is silent, counted in seltimeout — no more "A4091 slow" flood on the installer's bus
+scan); objects k30 6a6b6b3c (4532 B), k46 8655e87a (5524 B), kit c2dc7fb; md5 9c0eae11 / e277608d. Catalog 7c886e7b (-4 root at
+superseded/repo-20261027-0413). Round trip 157/157.
+
 ## 2026-10-27 — kern30m k30.1.2.261027-16 (d8742bf); round trip 157/157 — not published
 
 kerntools f0bbd76 cut on dlm 8b35eb4 (core 0044 + the dma_forcefail self-clearing count) and port d33608d (rth1: swap none on a
