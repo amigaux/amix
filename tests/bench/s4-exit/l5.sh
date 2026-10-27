@@ -29,13 +29,17 @@ CAPD=$((CAP))
 LAST=$(awk '$1 == "module" && $3 == "root" { n = $2 } END { print n }' "$BUILD")
 [ -n "$CAP" ] && [ -n "$LAST" ] ||
 	{ echo "l5.sh: $BUILD is not a module generation with root modules" >&2; exit 1; }
+# a brel kernel's bss is only in its sidecar; kbootset writes it into the
+# kernel record, and so must this spec (N142: "no bss= for this brel")
+LINE=$(awk '$1 == "line" { print $2 }' "$BUILD")
+KBSS=$(sed -n 's/^bss=//p' "$ROOT/stand/$LINE/kabi" 2>/dev/null | head -1)
 mkdir -p "$OUT"
 # a build file as a spec: host paths in place of the sizes, the attributes
 # mkstore writes itself dropped; BIG names the module whose bss= is raised
 spec() {	# spec ID STATE BIG
 	printf 'generation %s\nstate %s\n' "$1" "$2"
-	awk -v R="$ROOT" -v big="$3" -v cap="$CAPD" '
-	$1 == "kernel" { print $1, $2, R $3, "z=deflate"; next }
+	awk -v R="$ROOT" -v big="$3" -v cap="$CAPD" -v kbss="$KBSS" '
+	$1 == "kernel" { print $1, $2, R $3, (kbss != "" ? "bss=" kbss " " : "") "z=deflate"; next }
 	$1 == "module" && $3 == "root" {
 		p = ""; a = ""
 		for (i = 5; i <= NF; i++) {
