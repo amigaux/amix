@@ -9,10 +9,14 @@
 # $rank z3660: sd's class 1 (C4-1 section 4), the argument z3660scsi_load
 # passes to sd_register.  No $majors: sd owns the disk majors.
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
+# $param cache (ZS-06, C4-2 section 1.1): the data-cache arm z3660_cache;
+# -1 = from cputype (30 -> 0, 40 -> 40, 60 -> 60), or 0/40/60 as given;
+# 40/60 is refused on a CPU that is not a 68040/68060.
 $modtype misc
 $class root
 $match zorro:144b:01,mobo:z3660-window
 $rank z3660
 $unload never
+$param cache:int:-1:-1:60
 $desc Z3660 SCSI (piscsi mailbox), root-class disk controller
 z3660scsi	z3660scsi

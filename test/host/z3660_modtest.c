@@ -138,6 +138,8 @@ char	*s, *pat;
 	return n;
 }
 
+static long	g_preset = -7;	/* z3660_cache before _load: the arm decides */
+
 static void arm_cell( cpu, params, want, wsrc, wsaid)
 long	cpu;
 char	*params;
@@ -152,7 +154,7 @@ int	wsaid;
 	mock_spl_reset();
 	mock_add_drive( 0, 0x00, 512UL, 0x10000UL, 256UL * 512);
 	z3660_test_unmap();
-	z3660_cache = -7;			/* whatever was there: the arm decides */
+	z3660_cache = g_preset;
 	if (&z3660_cache_src)
 		z3660_cache_src = -7;
 	cputype = cpu;
@@ -207,8 +209,11 @@ static void test_zs06_arm()
 	arm_cell( 20L, 0, 0L, 0L, 0);
 	arm_cell( 20L, "cache=60", 0L, 0L, 1);
 
-	/* the Bench's check after boot on the 060: armed, checked, pushing */
+	/* the Bench's check after boot on the 060: armed, checked, pushing --
+	 * from the module's .data 0, so an arm set after z3660map() fails here */
+	g_preset = 0;
 	arm_cell( 60L, 0, 60L, 0L, 0);
+	g_preset = -7;
 	CHECK( z3660_ci_ok == 1, "060, no parameter: the attach cache-inhibit check ran and passed (z3660_ci_ok 1)");
 	z3660_push_n = 0;
 	memset( &sc, 0, sizeof sc);

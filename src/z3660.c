@@ -1955,11 +1955,17 @@ z3660intr()
  * bounce, the geometry cache) is single-instance, so c is always 0.
  * Returns 0 linked; ENXIO with no board, silently (no console line: an ECS or
  * OCS machine, or an AGA one whose fixed window has no piscsi mailbox);
- * ENOMEM when the high window cannot be mapped (z3660map names it), EIO from
- * the cache-inhibit assertion (z3660_cache 40/60 only), or sd_register()'s
+ * ENOMEM when the high window cannot be mapped (z3660map names it), ENXIO from
+ * the cache-inhibit assertion (z3660_cache 40/60 with z3660_ci_enforce set
+ * only), or sd_register()'s
  * errno (EBUSY, EINVAL, ENOSPC), which the core prints.  An AutoConfig board
  * whose mailbox does not answer the signature yet is registered with the
  * sweep deferred, as the static driver attaches it.
+ *
+ * Before z3660map() _load sets the cache arm, z3660_cache (ZS-06, C4-2
+ * section 1.1): the static k46 driver gets 60 stamped by the port's f4arms
+ * `--cache 60` pass, which a module kernel does not run, so the module sets
+ * it itself from cputype and the `cache=` parameter (z3660_arm() below).
  *
  * What the root pass cannot do and this module therefore never does there:
  * sleep, timeout(), delay(), a KM_SLEEP allocation, an interrupt self-test,
@@ -1975,12 +1981,119 @@ extern int	sd_register();	/* (bool (*)(), uint, char *, char *, uint) */
 ulong	z3660_halted;		/* kmem-readable: the halt pass ran (count)        */
 ulong	z3660_halt_busy;	/* halt pass found a transaction in flight (never) */
 
+/*
+ * ZS-06 -- the cache arm, set at _load (C4-2 section 1.1).
+ *
+ * The static k46 kernels get z3660_cache = 60 stamped into the linked image
+ * by the port's f4arms pass (patch_z3660_cache.py --set 60).  A module kernel
+ * has no static driver for that pass to find, and the module's own .data word
+ * (-fno-common) stayed 0: on the real 68060 no line op ran, a dirty copyback
+ * line was written back over the data the ARM had just put in DDR, and the
+ * first directory lookup failed (S4-74, swapconf panic; August's ATT4 A/B).
+ *
+ * So _load decides it, before z3660map() (whose cache-inhibit check reads it):
+ *   - cputype 30: 0, always -- cpushl/cinvl are line F on the 030, and the
+ *     Z3660's UAE_030 emulates no 030 data cache;
+ *   - cache= absent or -1: by cputype (40 -> 40, 60 -> 60, anything else 0);
+ *   - cache=0, 40 or 60: as given, but refused (0, one line) when cputype is
+ *     not 40 or 60;
+ *   - anything else (out of range, not a number): by cputype, one line.
+ * z3660_cache_src says which: 0 = by cputype, 1 = the parameter.
+ * module/Master: $param cache:int:-1:-1:60.
+ */
+#ifdef	HOST_TEST
+extern long	cputype;		/* the harness's: 30, 40, 60 */
+#define	DDI_CPUTYPE	cputype
+#endif
+
+long	z3660_cache_src;	/* kmem: 0 = z3660_cache from cputype, 1 = cache= */
+ulong	z3660_cache_bad;	/* kmem: cache= refused or not understood (count) */
+
+/*
+ * The `cache` parameter in the string the core passes to _load: the
+ * manifest's "name=value ..." records, or 0 (C3-6 section 1.1); C3-1's int
+ * form, decimal with an optional '-' (amix-modules monsw_param's shape).
+ * Returns 0 if absent, 1 with *vp set if a decimal (saturating above
+ * 100000), -1 if present but not a decimal.
+ */
+static int
+z3660_param( params, vp)
+char	*params;
+long	*vp;
+{
+	static char	name[] = "cache=";
+	char	*p, *n;
+	long	v;
+	int	neg, nd;
+
+	if ((p = params) == 0)
+		return 0;
+	for (;;) {
+		while (*p == ' ')
+			p++;
+		if (*p == 0)
+			return 0;
+		for (n = name; *n && *p == *n; n++, p++)
+			;
+		if (*n == 0)
+			break;
+		while (*p && *p != ' ')
+			p++;
+	}
+	neg = 0;
+	if (*p == '-') {
+		neg = 1;
+		p++;
+	}
+	for (v = 0, nd = 0; *p >= '0' && *p <= '9'; p++, nd++)
+		v = v < 100000 ? v * 10 + (*p - '0') : 100000;
+	if (nd == 0 || (*p != 0 && *p != ' '))
+		return -1;
+	*vp = neg ? -v : v;
+	return 1;
+}
+
+static void
+z3660_arm( params)
+char	*params;
+{
+	long	cpu, v, bycpu;
+	int	r;
+
+	cpu = DDI_CPUTYPE;
+	bycpu = (cpu == 40 || cpu == 60) ? cpu : 0;
+	z3660_cache = bycpu;
+	z3660_cache_src = 0;
+	r = z3660_param( params, &v);
+	if (r == 0 || (r == 1 && v == -1))
+		return;
+	if (r == 1 && (v == 0 || v == 40 || v == 60)) {
+		if (v != 0 && bycpu == 0) {
+			z3660_cache_bad++;
+			printf( "z3660: cache=%d refused on cputype %d; no cache maintenance\n",
+				(int)v, (int)cpu);
+			return;
+		}
+		z3660_cache = v;
+		z3660_cache_src = 1;
+		return;
+	}
+	z3660_cache_bad++;
+	if (r == 1)
+		printf( "z3660: cache=%d is not 0, 40 or 60; cache %d from cputype %d\n",
+			(int)v, (int)bycpu, (int)cpu);
+	else
+		printf( "z3660: cache= is not a number; cache %d from cputype %d\n",
+			(int)bycpu, (int)cpu);
+}
+
 int
 z3660scsi_load( params)
 char	*params;
 {
 	int	e;
 
+	z3660_arm( params);		/* ZS-06: before z3660map()'s ci_check */
 	z3660_nest_hits += (z3660_nest_depth != 0);
 	z3660_nest_depth++;		/* the accounting of z3660_enter(), no spl */
 	e = z3660map();
