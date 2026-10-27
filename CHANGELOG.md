@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-1 v7: `pkgchk core` is quiet on /dev, not as a whole; the S5-44 ledger row likewise (cc3e43e, a9542a3)
+
 ## 2026-10-27 — kbootset: a disk store's root record keeps a core-tier module's tier=/build=, copied verbatim as C3-5 §3 says (informational; the core decides from .moddata) (e8254e5)
 
 ## 2026-10-27 — the S5-12 recipe pinned at the packaging cuts 68030-261027-20 and 68060-261027-91 (rth1=2, no rootfs=; the modules rebuild byte-identical with the kit at HEAD); M-FL1 re-checked there, sizes within 641 bytes, conclusions unchanged (943b6fd)
