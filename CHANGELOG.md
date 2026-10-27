@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — bench: l5.sh writes a brel kernel's bss= from its sidecar (N142's boot2 had assumed 512 KiB); the damaged-module recipe also damages the module-less generations' kernels (N136) (08c0592, 06893b1)
+
 ## 2026-10-27 — plan: S4-65/S4-66 (stage 5), the Z3660's root record and the 030 DMA pool in 030 mode (M-S474b); bench: the stage-4 exit batch's recipes; measurements: M-MOD1 again and M-FL1 at the exit (94d23a3, 8c57d7f, 0927aae)
 
 Exit-batch recipes: a damaged root module, L5 by root modules (tests/bench/s4-exit/l5.sh), the core's silent skip of an unmatched
