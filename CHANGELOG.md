@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-3 v2: `swap none` means swapconf runs with no device and looks nothing up
+
+§3: the stock swapconf would otherwise look up swapfile.bo_name, a disk node the medium lacks, and panic (rd1e: "swapconf
+lookupname failed - error 2"); the system runs from the RAM disk without swap and the installer configures swap later with
+`swap -a`. The kernel half of the fix is the port's.
+
 ## 2026-10-27 — core patch 0044: block rows as the stock fix_swtbls leaves the switch (rd1's "row 20 is in use") (80e3da7)
 
 At boot the stock fix_swtbls puts gen_strategy (the breakup) over every bdevsw row without D_NOBRKUP, saving d_strategy in
