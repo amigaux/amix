@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — loader-amix 1.0.261025-9 from amix-dlm ea75578 (082c1cd); round trip 159/159 — not published
+
+boot2 L11: the volume-2 prompt re-reads every 4 s when the disk-change counter does not move. boot2 28658 B, sha256 76346d9a;
+boot1 unchanged (c6c380ee); still loader version 3. md5 73f362ab / 35840 B; replaces -8. Catalog 6e60a128 (the -8 root at
+superseded/repo-20261027-0800).
+
 ## 2026-10-27 — kbootset 1.1.0.261027-20 (fd25bc0); round trip 159/159 — not published
 
 From amix-dlm 1da3474 (093b2a7): gate 2 checks the sidecar's build= against the kernel's own build id (buildid on k46,
