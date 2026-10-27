@@ -41,10 +41,11 @@ VERSION=$PATCH_VERSION
 # TOOLCHAIN=gcc14 build is new bytes and so a new revision (the userland
 # switch, owner decision D-3 sec 9 and 2026-10-27): -3 was gcc14-cross-amix
 # e316f1b (never published: pointers came back in %d0 only), -4 is cf461e3
-# (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc);
+# (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc),
+# -5 the same with -mno-strict-align (owner decision 2026-10-27, gcc14-env.sh);
 # pkginfo is retagged in the work copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=4 ;;
+gcc14) PKGREV=5 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV

@@ -9,7 +9,7 @@
 #
 #     build/gcc14/amix-benchmark-gcc14/src/    the pinned sources (git archive)
 #     build/gcc14/amix-benchmark-gcc14/dest/   the staged install tree
-#     build/gcc14/pkg/amixbch14-1.3-2.pkg      the datastream
+#     build/gcc14/pkg/amixbch14-1.3-3.pkg      the datastream
 #
 # ---------------------------------------------------------------------------
 # WHAT THIS PACKAGE IS FOR.  amix-benchmark (PKG amixbench, recipes/
@@ -50,8 +50,9 @@
 #   fpbench   -O0 -Wall, load-bearing (constant folding; build-fieldkit.sh), and
 #             the build counts its FP instructions against the same floor.
 #   iobench, membench, vmbench   -O2 -Wall.
-# All with gcc14-env.sh's -m68020-60 (one binary for the 030 and 060 lines;
-# no 040/060-only FPU form, which the FPU gate re-checks).  build-fieldkit.sh's
+# All with gcc14-env.sh's AMIX_ARCH_FLAGS, -m68020-60 -mno-strict-align (one
+# binary for the 030 and 060 lines; no 040/060-only FPU form, which the FPU
+# gate re-checks).  build-fieldkit.sh's
 # no-fcmp gate is a gcc 2.7 + SGS-operand-order defect gate; GCC 14 hands gas
 # its compares in gas's own order, so it does not apply (the emulator smoke
 # runs fpu.paranoia, which checks comparisons).

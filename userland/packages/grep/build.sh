@@ -69,10 +69,11 @@ VERSION=$GREP_VERSION
 # userland switch, owner decision D-3 sec 9): -3 was -mcpu=68060 (never
 # published; its FPU forms kill make on a 68882), -4 is -m68020-60, -5 the
 # same on gcc14-cross-amix cf461e3 (pointers returned in %a0 and %d0, structs
-# via %a0, as AMIX's compilers and libc do).  pkginfo is retagged in the work
+# via %a0, as AMIX's compilers and libc do), -6 the same with -mno-strict-align
+# (owner decision 2026-10-27, gcc14-env.sh).  pkginfo is retagged in the work
 # copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=5 ;;
+gcc14) PKGREV=6 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$GREP_VERSION-$PKGREV
