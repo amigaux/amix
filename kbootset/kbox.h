@@ -23,6 +23,7 @@ struct kb_kinfo {
 #define KB_MEDIUM(ki)	((ki)->has_axl1 && ((ki)->axl1_flags & 0x08))	/* not from this box's store */
 	ax_u32 boot1_choice, gen_id, gen_state;
 	ax_u32 axl1_flags;		/* AXL1's flags: 0x08 a read-only medium (CD, floppy pair) */
+	ax_u32 dev_namecrc;		/* CRC-32 of the boot device's name (AXL1 +40) */
 	ax_u32 dev_unit, dev_start, dev_base, dev_id;
 	ax_u32 root_kind, root_id, root_base, root_unit, root_slice;
 	char rootfs[17];

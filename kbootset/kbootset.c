@@ -270,6 +270,8 @@ media(const char *root, char **cmd, int argc)
 	FILE *sf;
 
 	facts_of(cmd, argc, &f);
+	kb_canonkey(f.bootdev);
+	kb_canonkey(f.rootdev);
 	for (i = 1; i < argc; i++)
 		if (!strcmp(cmd[i], "--disk") && i + 1 < argc) disk = cmd[++i];
 		else if (!strcmp(cmd[i], "--offset") && i + 1 < argc) off = strtoul(cmd[++i], 0, 0);
@@ -688,6 +690,8 @@ main(int argc, char **argv)
 		for (i = 0; i < ki.ncards; i++)
 			if (ki.card[i].k == (ax_u32)disk / 8)
 				kb_matchkey(ki.card[i].id, facts.bootdev);
+	kb_canonkey(facts.bootdev);		/* the options' and bootset's too */
+	kb_canonkey(facts.rootdev);
 	for (i = 1; i < argc; i++) {		/* the options after the command */
 		if (!strcmp(cmd[i], "--booted") && i + 1 < argc)
 			booted = cmd[++i];

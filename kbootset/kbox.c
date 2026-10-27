@@ -79,6 +79,7 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 		ki->gen_id = get32(a + 28);
 		ki->gen_state = get32(a + 32);
 		ki->axl1_flags = get32(a + 36);
+		ki->dev_namecrc = get32(a + 40);
 		ki->dev_unit = get32(a + 44);
 		ki->dev_start = get32(a + 48);
 		ki->dev_base = get32(a + 52);
@@ -147,18 +148,124 @@ kb_matchkey(ax_u32 id, char out[48])
 		out[0] = 0;
 }
 
-/* the card table entry of a controller: by id and base on a Zorro board,
- * by the motherboard flag when the loader saw no board (base and id 0) */
-static int
-card_of(const struct kb_kinfo *ki, ax_u32 id, ax_u32 base)
+static const char *
+devroot(void)
 {
-	int i;
+	const char *r = getenv("KBOOTSET_DEVROOT");
 
-	for (i = 0; i < ki->ncards; i++)
-		if (id ? (ki->card[i].id == id && ki->card[i].base == base) :
-			 (ki->card[i].flags & 1) != 0)
-			return i;
-	return -1;
+	return r && *r ? r : "/dev/rdsk";
+}
+
+struct part {
+	int slice;
+	ax_u32 start, dostype;
+};
+
+/* the RDB partition list of the disk cX (X = 8 × card + unit): the slice,
+ * byte start and DosType of each; the number of partitions, -1 none */
+static int
+rdb_parts(ax_u32 x, struct part *p)
+{
+	static ax_u8 blk[RDBSCAN * BLK];
+	char path[1100];
+	FILE *f;
+	ax_u32 next, b;
+	int n = 0, i;
+	size_t got;
+
+	sprintf(path, "%.1000s/c%lxd0s0", devroot(), (unsigned long)x);
+	if ((f = fopen(path, "rb")) == 0)
+		return -1;
+	got = fread(blk, 1, sizeof(blk), f);
+	for (b = 0; b < RDBSCAN && (b + 1) * BLK <= got; b++)
+		if (!memcmp(blk + b * BLK, "RDSK", 4))
+			break;
+	if (b == RDBSCAN || (b + 1) * BLK > got) {
+		fclose(f);
+		return -1;
+	}
+	next = get32(blk + b * BLK + 28);	/* rdb_PartitionList */
+	while (next != 0xFFFFFFFFUL && n < MAXPART) {
+		ax_u8 pb[BLK];
+		const ax_u8 *de;
+
+		if (fseek(f, (long)(next * BLK), SEEK_SET) != 0 || fread(pb, 1, BLK, f) != BLK ||
+		    memcmp(pb, "PART", 4))
+			break;
+		de = pb + 128;
+		p[n].slice = n + 1;
+		p[n].start = get32(de + 36) * get32(de + 12) * get32(de + 20) * get32(de + 4) * 4;
+		p[n].dostype = get32(de + 64);
+		n++;
+		for (i = 0; i < n - 1; i++)
+			if (p[i].start == p[n - 1].start)
+				n = MAXPART;	/* a loop: stop */
+		next = get32(pb + 16);
+	}
+	fclose(f);
+	return n;
+}
+
+#define Z3660_ID	0x144B0100UL	/* the Z3660's canonical identity (C4-1 §5.1) */
+#define MOBO_Z3660WIN	4		/* kinfo's id for the card at the window (C2-1 §2.1) */
+
+/*
+ * The card table entry of a controller.  A Zorro board by id and base; the
+ * canonical Z3660 (id 144b0100, base 0, as boot2 names its boot vehicle)
+ * by either of its forms, AutoConfig'd or at the window, when exactly one
+ * card answers (C4-1 §5.1, as RTH1 matches it).  A disk the loader saw no
+ * board for (id 0) is on a motherboard card: the only one, or among
+ * several the one whose disk at unit holds a slice starting at start
+ * (~0: any RDB disk there); when two do and byname is set, the boot
+ * device's name breaks the tie, z3660_scsi.device being the Z3660's
+ * window and any other name a controller of the Kickstart's.  -1 when no
+ * card, or more than one, answers (S5-15).
+ */
+static int
+card_of(const struct kb_kinfo *ki, ax_u32 id, ax_u32 base, ax_u32 unit, ax_u32 start, int byname)
+{
+	static ax_u32 tab[256];
+	struct part p[MAXPART];
+	int i, j, n, c = -1, nc = 0, nmobo = 0, nhit = 0, win, hit[KB_MAXCARD];
+
+	if (id == Z3660_ID && base == 0) {
+		for (i = 0; i < ki->ncards; i++)
+			if (ki->card[i].id == Z3660_ID || ki->card[i].id == MOBO_Z3660WIN)
+				c = i, nc++;
+		return nc == 1 ? c : -1;
+	}
+	if (id) {
+		for (i = 0; i < ki->ncards; i++)
+			if (ki->card[i].id == id && ki->card[i].base == base)
+				return i;
+		return -1;
+	}
+	for (i = 0; i < ki->ncards; i++) {
+		if (!(ki->card[i].flags & 1))
+			continue;
+		nmobo++;
+		c = i;
+		if (unit >= 8 || (n = rdb_parts(8 * ki->card[i].k + unit, p)) <= 0)
+			continue;
+		for (j = 0; j < n; j++)
+			if (start == 0xFFFFFFFFUL || p[j].start == start) {
+				hit[nhit++] = i;
+				break;
+			}
+	}
+	if (nmobo == 1)
+		return c;		/* one motherboard card: it, as before */
+	if (nhit == 1)
+		return hit[0];
+	if (nhit < 2 || !byname)
+		return -1;
+	if (!tab[1])
+		ax_crc32_init(tab);
+	win = ki->dev_namecrc == ax_crc32(tab, (const ax_u8 *)"z3660_scsi.device", 17);
+	for (c = -1, nc = 0, i = 0; i < nhit; i++)
+		if ((ki->card[hit[i]].id == MOBO_Z3660WIN) == win)
+			c = hit[i], nc++;
+	return nc == 1 ? c : -1;
 }
 
 void
@@ -171,11 +278,12 @@ kb_kinfo_facts(const struct kb_kinfo *ki, struct kb_facts *f)
 	if (!f->mem)
 		f->mem = ki->fast;
 	if (ki->has_axl1) {
-		if (!f->bootdev[0] && (c = card_of(ki, ki->dev_id, ki->dev_base)) >= 0)
+		if (!f->bootdev[0] && (c = card_of(ki, ki->dev_id, ki->dev_base, ki->dev_unit,
+						     ki->dev_start, 1)) >= 0)
 			kb_matchkey(ki->card[c].id, f->bootdev);
 		if (!f->rootdev[0] && (ki->root_kind & 0xFF) == 1) {
 			if ((ki->root_kind & 0x100) || !ki->root_id) {
-				if ((c = card_of(ki, 0, 0)) >= 0)
+				if ((c = card_of(ki, 0, 0, ki->root_unit, 0xFFFFFFFFUL, 0)) >= 0)
 					kb_matchkey(ki->card[c].id, f->rootdev);
 			} else {
 				kb_matchkey(ki->root_id, f->rootdev);
@@ -184,6 +292,8 @@ kb_kinfo_facts(const struct kb_kinfo *ki, struct kb_facts *f)
 		if (!f->rootfs[0] && ki->rootfs[0])
 			sprintf(f->rootfs, "%.15s", ki->rootfs);
 	}
+	kb_canonkey(f->bootdev);
+	kb_canonkey(f->rootdev);
 }
 
 int
@@ -257,14 +367,6 @@ bootset_store(const char *path, const char *dev, ax_u32 set_id)
 	return 0;
 }
 
-static const char *
-devroot(void)
-{
-	const char *r = getenv("KBOOTSET_DEVROOT");
-
-	return r && *r ? r : "/dev/rdsk";
-}
-
 /* the store header in a raw slice: its set id, or 0 when there is none */
 static ax_u32
 header_of(const ax_u32 *crctab, const char *dev)
@@ -281,56 +383,6 @@ header_of(const ax_u32 *crctab, const char *dev)
 	if (n != sizeof(h) || ax_hdr_pick(crctab, h, h + AX_HDR_SIZE, &hd) < 0)
 		return 0;
 	return hd.set_id ? hd.set_id : 0xFFFFFFFFUL;
-}
-
-struct part {
-	int slice;
-	ax_u32 start, dostype;
-};
-
-/* the RDB partition list of the disk cX (X = 8 × card + unit): the slice,
- * byte start and DosType of each; the number of partitions, -1 none */
-static int
-rdb_parts(ax_u32 x, struct part *p)
-{
-	static ax_u8 blk[RDBSCAN * BLK];
-	char path[1100];
-	FILE *f;
-	ax_u32 next, b;
-	int n = 0, i;
-	size_t got;
-
-	sprintf(path, "%.1000s/c%lxd0s0", devroot(), (unsigned long)x);
-	if ((f = fopen(path, "rb")) == 0)
-		return -1;
-	got = fread(blk, 1, sizeof(blk), f);
-	for (b = 0; b < RDBSCAN && (b + 1) * BLK <= got; b++)
-		if (!memcmp(blk + b * BLK, "RDSK", 4))
-			break;
-	if (b == RDBSCAN || (b + 1) * BLK > got) {
-		fclose(f);
-		return -1;
-	}
-	next = get32(blk + b * BLK + 28);	/* rdb_PartitionList */
-	while (next != 0xFFFFFFFFUL && n < MAXPART) {
-		ax_u8 pb[BLK];
-		const ax_u8 *de;
-
-		if (fseek(f, (long)(next * BLK), SEEK_SET) != 0 || fread(pb, 1, BLK, f) != BLK ||
-		    memcmp(pb, "PART", 4))
-			break;
-		de = pb + 128;
-		p[n].slice = n + 1;
-		p[n].start = get32(de + 36) * get32(de + 12) * get32(de + 20) * get32(de + 4) * 4;
-		p[n].dostype = get32(de + 64);
-		n++;
-		for (i = 0; i < n - 1; i++)
-			if (p[i].start == p[n - 1].start)
-				n = MAXPART;	/* a loop: stop */
-		next = get32(pb + 16);
-	}
-	fclose(f);
-	return n;
 }
 
 #define UNI0	0x554E4900UL
@@ -384,7 +436,8 @@ kb_find_store(struct ks *k, const struct kb_kinfo *ki, int have_kinfo, const cha
 	}
 	want = have_kinfo && ki->has_axl1 ? ki->dev_start : 0xFFFFFFFFUL;
 	/* 2. the loader record through the card table */
-	if (have_kinfo && ki->has_axl1 && (c = card_of(ki, ki->dev_id, ki->dev_base)) >= 0 &&
+	if (have_kinfo && ki->has_axl1 &&
+	    (c = card_of(ki, ki->dev_id, ki->dev_base, ki->dev_unit, ki->dev_start, 1)) >= 0 &&
 	    ki->dev_unit < 8) {
 		x = 8 * ki->card[c].k + ki->dev_unit;
 		if (store_on(tab, x, want, cand, &nuni, &sid) == 0) {

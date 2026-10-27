@@ -26,6 +26,14 @@ struct kb_facts {
 	char swap[128];		/* the swap record, or "": the default generation's */
 };
 
+/* the Z3660 as one controller (C4-1 §5.1, S5-15): a match key of its
+ * window, mobo:z3660-window, becomes zorro:144b:01, in place; an sd root
+ * or swap record on a Z3660 card (id 144b0100 at any base, id 4, or id 0
+ * at the window 0x10000000) becomes id=144b0100 base=00000000, the rest
+ * kept, into out (128 bytes) */
+void kb_canonkey(char *key);
+void kb_canonrec(const char *rec, char *out);
+
 /* the kernel's sidecar (C2-3 §2; a module kernel's, version 5: C3-3 §3) */
 struct kb_kernel {
 	char kabi[24], family[32], line[8], pin[48], build[48], sha256[65];

@@ -44,13 +44,17 @@ def kinfo(path, cards, axl1, fast=16777184, mods=()):
     flags = 2
     if axl1:
         flags |= 1
-        gen, choice, unit, start, base, did, rid = axl1
+        gen, choice, unit, start, base, did, rid = axl1[:7]
         a = 84
         struct.pack_into('>I', r, a, 0x41584c31)
         struct.pack_into('>IIIIII', r, a + 12, 1, choice, 60, 0xf, gen, 2)
         struct.pack_into('>IIIII', r, a + 44, unit, start, base, did, 0)
         struct.pack_into('>IIIII', r, a + 60, 1, rid, 0, 6, 1)
         r[a + 100:a + 103] = b'ufs'
+        s = sum(struct.unpack('>31I', r[a:a + 124])) & 0xffffffff
+        struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
+    if axl1 and len(axl1) > 7:                         # the boot device's name CRC
+        struct.pack_into('>I', r, a + 40, axl1[7])
         s = sum(struct.unpack('>31I', r[a:a + 124])) & 0xffffffff
         struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
     struct.pack_into('>I', r, 80, flags)
@@ -220,6 +224,34 @@ p1=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out2)
 [ $((p1 - p0)) -eq 1 ] || { echo "kbox: check counted the nodes as $((p1 - p0)) problems"; exit 1; }
 rm -f $R/stand/k30/kabi
 
+# 6d. the Z3660 as one controller (C4-1 §5.1, S5-15).  An A4000 in 030
+# mode: the window (id 4) and Gayle (id 2), both motherboard cards, and
+# a boot disk the loader saw no board for.  The card whose disk at the
+# boot unit holds a slice at AXL1's start is the boot card; with both,
+# the boot device's name decides; the window's key is zorro:144b:01
+crc() { python3 -I -c "import zlib, sys; print(zlib.crc32(sys.argv[1].encode()))" "$1"; }
+WIN=0,4,0x10000000,1/1,2,0,1
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0,0 $WIN
+$B/kbootset -R $R status > $T/out
+grep -q "^facts: line k46, boot zorro:144b:01, root zorro:144b:01," $T/out ||
+	{ echo "kbox: the window's disk not taken as the boot card" >&2; grep facts $T/out >&2; exit 1; }
+cp $T/dev/c6d0s0 $T/dev/ced0s0		# Gayle's unit 6: the same RDB, so both answer
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0,0,$(crc z3660_scsi.device) $WIN
+$B/kbootset -R $R status > $T/out
+grep -q "^facts: line k46, boot zorro:144b:01, root (unknown)," $T/out ||
+	{ echo "kbox: z3660_scsi.device did not pick the window" >&2; grep facts $T/out >&2; exit 1; }
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0,0,$(crc scsi.device) $WIN
+$B/kbootset -R $R status > $T/out
+grep -q "^facts: line k46, boot mobo:gayle," $T/out ||
+	{ echo "kbox: scsi.device did not pick Gayle" >&2; grep facts $T/out >&2; exit 1; }
+rm -f $T/dev/ced0s0
+# the canonical Z3660 (id 144b0100, base 0, boot2's form of its boot
+# vehicle) finds the AutoConfig'd card at its own base
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0x144b0100,0x144b0100 0,0x144b0100,0x10000000,0
+$B/kbootset -R $R status > $T/out
+grep -q "^facts: line k46, boot zorro:144b:01, root zorro:144b:01," $T/out ||
+	{ echo "kbox: the canonical Z3660 did not find its card" >&2; grep facts $T/out >&2; exit 1; }
+
 # 7. gate 8: stores on two disks, and no loader record to choose
 cp $T/dev/c6d0s0 $T/dev/ced0s0
 cp $T/dev/c6d0s3 $T/dev/ced0s3
@@ -228,4 +260,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes, the Z3660 window's card ok"

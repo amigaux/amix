@@ -1411,13 +1411,49 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 	return bad;
 }
 
-/* the generation's records before its members (10 §5.1) */
+void
+kb_canonkey(char *key)
+{
+	if (!strcmp(key, "mobo:z3660-window"))
+		strcpy(key, "zorro:144b:01");
+}
+
+void
+kb_canonrec(const char *rec, char *out)
+{
+	char buf[128], *tok[16], *p;
+	unsigned long id = 0, base = 0;
+	int n = 0, i, hasid = 0, o;
+
+	sprintf(buf, "%.127s", rec);
+	for (p = strtok(buf, " \t"); p && n < 16; p = strtok(0, " \t"))
+		tok[n++] = p;
+	for (i = 1; i < n; i++)
+		if (!strncmp(tok[i], "id=", 3))
+			id = strtoul(tok[i] + 3, 0, 16), hasid = 1;
+		else if (!strncmp(tok[i], "base=", 5))
+			base = strtoul(tok[i] + 5, 0, 16);
+	if (!n || strcmp(tok[0], "sd") || !hasid ||
+	    !(id == 0x144B0100UL || id == 4 || (id == 0 && base == 0x10000000UL))) {
+		sprintf(out, "%.127s", rec);
+		return;
+	}
+	o = sprintf(out, "sd id=144b0100 base=00000000");
+	for (i = 1; i < n; i++)
+		if (strncmp(tok[i], "id=", 3) && strncmp(tok[i], "base=", 5) && strcmp(tok[i], "mobo") &&
+		    o + 1 + (int)strlen(tok[i]) < 128)
+			o += sprintf(out + o, " %s", tok[i]);
+}
+
+/* the generation's records before its members (10 §5.1); a root or swap
+ * record on a Z3660 card in its canonical form (C4-1 §5.1) */
 static void
 head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const char *rootfs,
      const char *rootrec, const char *swaprec, const char *boards, ax_u32 created)
 {
 	time_t t = (time_t)created;
 	struct tm *tm = gmtime(&t);	/* by hand: strftime brings libc's locale tables */
+	char rr[128], sr[128];
 
 	sprintf(text, "line k%d\nkabi %s\ncpu %s\nloader-min %lu\n"
 		"created %04d-%02d-%02dT%02d:%02d:%02dZ\n", f->line, kk->kabi,
@@ -1432,10 +1468,14 @@ head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const cha
 		sprintf(text + strlen(text), "arena 0x%08lx 0x%08lx\nident 0x%08lx\n",
 			(unsigned long)kk->arena_off, (unsigned long)kk->arena_cap,
 			(unsigned long)kk->ident_off);
-	if (rootrec && rootrec[0])
-		sprintf(text + strlen(text), "root %.120s\n", rootrec);
-	if (swaprec && swaprec[0])
-		sprintf(text + strlen(text), "swap %.120s\n", swaprec);
+	if (rootrec && rootrec[0]) {
+		kb_canonrec(rootrec, rr);
+		sprintf(text + strlen(text), "root %.120s\n", rr);
+	}
+	if (swaprec && swaprec[0]) {
+		kb_canonrec(swaprec, sr);
+		sprintf(text + strlen(text), "swap %.120s\n", sr);
+	}
 	if (boards)
 		sprintf(text + strlen(text), "boards %.200s\n", boards);
 }

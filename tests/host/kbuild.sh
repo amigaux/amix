@@ -67,6 +67,23 @@ grep -q "generation 2 built" $T/out
 grep -q "equals the default generation 1: kbootset commit will write nothing (commit --again writes it)" $T/out
 grep -q "^root sd id=02025400" $R/stand/gen/2/build
 grep -q "^rootfs ufs$" $R/stand/gen/2/build
+# the Z3660 is one controller (C4-1 §5.1, S5-15): a root or swap record on
+# a Z3660 card, the window's forms included, is written id=144b0100
+# base=00000000; another board's record is kept as given; the window's key
+# is the board's
+for r in "sd id=00000004 base=10000000 unit=6 slice=1 mobo" "sd id=144b0100 base=40000000 unit=6 slice=1" \
+	"sd id=00000000 base=10000000 unit=6 slice=1"; do
+	$KB build $FACTS --root "$r" --swap "$r" > /dev/null
+	grep -qx "root sd id=144b0100 base=00000000 unit=6 slice=1" $R/stand/gen/2/build ||
+		{ echo "kbuild: $r not written canonically" >&2; grep '^root' $R/stand/gen/2/build >&2; exit 1; }
+	grep -qx "swap sd id=144b0100 base=00000000 unit=6 slice=1" $R/stand/gen/2/build
+done
+$KB build $FACTS --root "sd id=02025400 base=40000000 unit=6 slice=2" > /dev/null
+grep -qx "root sd id=02025400 base=40000000 unit=6 slice=2" $R/stand/gen/2/build
+$KB build --line 46 --bootdev mobo:z3660-window --rootdev mobo:z3660-window --rootfs ufs --mem 16777216 > /dev/null
+grep -qx "bootdev=zorro:144b:01" $R/stand/gen/2/facts && grep -qx "rootdev=zorro:144b:01" $R/stand/gen/2/facts ||
+	{ echo "kbuild: the window's key was not taken as zorro:144b:01" >&2; cat $R/stand/gen/2/facts >&2; exit 1; }
+$KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 16777216 > /dev/null
 cp $T/disk.img $T/before.img
 $KB commit > $T/out 2>&1 || { echo "kbuild: the unchanged commit failed" >&2; cat $T/out >&2; exit 1; }
 tail -1 $T/out | grep -qx "kbootset: the default generation 1 already has these members; nothing to commit"
