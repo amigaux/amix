@@ -1,11 +1,14 @@
-# C4-2 — what a root-class driver changes, version 3
+# C4-2 — what a root-class driver changes, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
   version 2 (2026-10-26, from the a4091 station): the A4770's key in the
   A4091 row, and the A4091 polled in its first module form (§8);
   version 3 (2026-10-26, the kabi 1.2 cut): `root_defer` is minor 2 on
-  k30, whose minted kernel (kern30m -10) does not export it (§3).
+  k30, whose minted kernel (kern30m -10) does not export it (§3);
+  version 4 (2026-10-27, S4-74's first metal row): a module carries
+  every arm the kernel build applied to the static driver it replaces
+  (§1.1).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -38,6 +41,25 @@ run it in place. Every allocated section's file offset must be a multiple
 of its alignment, and no section or COMMON may be aligned above 16
 (C4-4 §4; `kbootset` refuses otherwise, `km_tail`). Its image and file
 stay within C3-1 §6.
+
+### 1.1 The build passes' arms move into the module (version 4)
+
+**A module that replaces a statically linked driver must carry every
+arm, knob or stamp that the kernel's build passes applied to the static
+driver** (cache arms, CPU-type switches, patched constants), set at
+`_load` from the kernel's facts (`cputype`, `kinfo`) or as a parameter
+with the line's default. The kernel build no longer stamps them: a
+module kernel has no static driver for its passes to find. **The
+module's README lists them.**
+
+Found on metal (S4-74, the A4000T with a real 68060, kern46m -81): the
+port's `f4arms --cache 60` pass stamps `z3660_cache` = 60 (the 68060
+data-cache arm) into every static k46 z3660scsi. The module kept its
+common's 0 (no cache maintenance), so the first directory read through
+piscsi came back from a stale data cache and `swapconf` panicked
+(`lookupname /dev/dsk/c6d0s2 failed - error 20`). Emulators need 0, so
+every emulator row passed. The fix is the module's own (ZS-06: the arm
+from `cputype` at `_load`, a `cache=` parameter).
 
 ## 2. `_load` in the root pass
 
