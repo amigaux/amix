@@ -35,6 +35,12 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -11 (amix-dlm c2dc7fb, kabi 1.2) minted 2026-10-27, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
+**Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
+catalog `b198e9e2` since 2026-10-27 13:29 — the stage-4 exit set plus gayle-k30/-k46 1.1.0-3,
+promoted from `build/kspace/next/repo`. A replaced root is kept byte-identical under
+`build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`; the stage-4 exit set (`6e60a128`) is
+`repo-20261027-1329`. `tools/kspace-roundtrip.sh` regenerates the same catalog from `build/kspace/pkg/`.
+
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
 `AMIX_PREFIX=/opt/amix` before sourcing `amix-env.sh`, whose default is still the old `/usr/local`
