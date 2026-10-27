@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger marks S4-32 (Gayle IDE) PASS on both lines in emulation; S4-30…S4-34 per module
+
+kerntools a12120b: the six Gayle rows incl. the first k46 interrupt run (the READ VERIFY self-test); §3's deferred self-test point
+PASS; the CD check with 1.1.0-2 and metal pending. z3660scsi and A4091 PASS both lines; the 53C710 pending; the ramdisk shown.
+
 ## 2026-10-27 — the exit ledger shows M-RD1 and M-RD2 on both lines (installng rd1h on kern46m -81 / kern30m -16)
 
 §5 M-RD1 (the image at 0x9E00000 / 0x7E00000, Available memory 2 MiB below Total) and M-RD2 (the RTH1 ramdisk line, fakeswap,
