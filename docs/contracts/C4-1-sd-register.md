@@ -6,7 +6,8 @@
   behind the Zorro boards is an accepted rename on both lines (§4.3, §6);
   version 3 (2026-10-27, from amix-cdfs's module plan): the level at which
   a controller calls a command's completion (§3.2); version 4 (2026-10-27,
-  S5-08, from M-S474b): the Z3660 is one controller in either mode (§5.1).
+  S5-08, from M-S474b; agreed 2026-10-27 by the port and amix-kerntools):
+  the Z3660 is one controller in either mode (§5.1).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -264,9 +265,11 @@ the wrong one beside a second sd card. So:
 
 1. **kinfo** reports a card that sd took from a registration at the
    window's base as motherboard id 4 (`z3660-window`, C2-1 §2.1) with the
-   motherboard flag, never id 0. On k46 kinfo already names a card with
-   no AutoConfig board by its controller's name; `Z3660 SCSI`, the name
-   both the static row and z3660scsi register, gives id 4.
+   motherboard flag, never id 0. On k30 `kinfo030.c` keys it on the
+   card's base: an unmatched card at `0x10000000` is `MOBO_Z3660WIN` (id 4)
+   as `KC_MOBO`, whatever name sd holds. On k46 kinfo already names a card
+   with no AutoConfig board by its controller's name; `Z3660 SCSI`, the
+   name both the static row and z3660scsi register, gives id 4.
 2. **The canonical identity is `144b0100`, base 0.** `kbootset` composes
    a root or swap record on any Z3660 card, whether id `144b0100` or id 4,
    as `sd id=144b0100 base=00000000 …`, the form boot2 already records
