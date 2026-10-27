@@ -191,8 +191,17 @@ them.
 ## libgcc
 
 `__udivdi3`, `__umoddi3`, `__lshrdi3`: the compiler calls them for 64-bit
-arithmetic. On k30 the kernel provides them, on k46 the core. A module
-never names them.
+arithmetic. A module never names them.
+
+**Provider: libgcc, forced into the module kernel's link by the builder
+(amix-kerntools on k30, the port's relink on k46), not a kernel source
+symbol.** A base has them only when one of its own objects pulled them
+from libgcc: on k30 the static cdfs did, and kern30m -17, without it,
+lost them until the builder named every `__` entry of `ddi.list` and
+`core.list` with `-u` and linked `libgcc.a` in the module-core link,
+whatever the filesystem set. Every builder of a module kernel does the
+same, so no cut on either line can lose them silently; amix-dlm's core
+harness does it too (`tests/core/run.sh`).
 
 ## The module interface
 
