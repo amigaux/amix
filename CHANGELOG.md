@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — S5-44: C4-1 v5 §2.4, a four-card root holds c0-c1f d0 s0-s7 and no d1 nodes, whatever the board set; C2-4 v12 §14 `kbootset nodes` (commit runs it on the running box, check reports it); plan row S5-44 (gate, blocks S5-41) and installng's recipe docs/plan/s5-44-disk-nodes.md (6c82415, 4046392, ebcdb80)
+
 ## 2026-10-27 — modcheck: a COMMON symbol named in the module tier's allowlist is no longer warned as a private copy, since the core binds it to the kernel's definition (the carved ufs's rootvp) (445c12e)
 
 ## 2026-10-27 — the k46 ufs module passes modcheck's page scan with no waiver (the port's fsobj-patch.py object with its module-only conversions); plan S5-37 (s5 on k46 carried, no k46 s5 module) and a 2 KiB-block ufs row in S5-13 (ec1202f)
