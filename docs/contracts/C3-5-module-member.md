@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 13
+# C3-5 — the module package and the per-module manifest record, version 14
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -19,7 +19,8 @@
   for the root filesystem's boot-class module (§3); version 12
   (2026-10-27, amix-cdfs): cdfs's short name (§1.1); version 13
   (2026-10-27, C4-4 version 6, S5-02): `safe=1` on every controller module
-  ranked at or before the root's (§3).
+  ranked at or before the root's (§3); version 14 (2026-10-27, S5-06):
+  a4kt710's short name (§1.1).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -78,6 +79,7 @@ per line**:
 | ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
 | gayle | `gayle` | `gayle30` / `gayle46` |
 | cdfs | `cdfs` | `cdfs30` / `cdfs46` |
+| a4kt710 | `a4kt710` | `a4kt71030` / `a4kt71046` |
 
   A new module's owner adds its row in a version bump of this contract.
 
