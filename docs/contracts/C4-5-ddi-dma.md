@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 9
+# C4-5 — DDI v1.2, the DMA interface, version 10
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -16,7 +16,9 @@
   the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3); version
   8 (2026-10-27, from N109's sense lines): `dma_forcebounce` never
   bounces `dma_alloc` memory (§5.3); version 9 (2026-10-27, from N110):
-  `dma_forcefail` is a count that clears itself (§5.3). Other
+  `dma_forcefail` is a count that clears itself (§5.3); version 10
+  (2026-10-27): a driver whose engine is not a Zorro bus master is
+  outside this contract (§6). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
@@ -293,5 +295,14 @@ pool does not promise.
 
 ## 6. Not in this contract
 
+- **A driver whose engine is not a Zorro bus master** (the Z3660 piscsi
+  mailbox: the card's ARM writes DDR directly) keeps its own cache
+  maintenance; it does not call `dma_prepare`/`dma_complete`. This
+  contract's reach model is a Zorro bus master's: on k30 `dma_prepare`
+  would bounce every DDR segment into the pool below 0x08000000, memory
+  the piscsi firmware cannot reach, and `dma_complete`'s data-cache clear
+  does nothing under the Z3660's 030 interpreter, which has no data
+  cache. The z3660scsi module arms its own maintenance (C4-2 §1.1,
+  ZS-06).
 - The 53C710 drivers' own SCRIPTS and register use (amix-a4091).
 - The port's record layout (its document; version 2 adopted here as is).
