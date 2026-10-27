@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — build-ramdisk-floppy: the loader of record from the staged loader-amix; the set on catalog 6e60a128 (loader -9); S4-52 (b): both pairs boot and install from the CD (8ee24ec)
+
+boot1, boot2 and the loader version come from the staged package's /stand/loader and ldrinfo (sha checked). Pairs k46
+97ccee45/9a8dd84a, k30 9b711840/a8341eb1 (same rd1m images). Rows E958 (k46) / E959 (k30): three L11 volume changes (2, 1, 2),
+the -9 re-read refuses the wrong volume by name, install from rd1m completes, fsck clean, halt pass 2 modules.
+
 ## 2026-10-27 — build-ramdisk-miniroot: --net, the netinstall image's network userland; M-NET1f PASS on both lines on the CD path (fefe74e)
 
 aen, slink, ifconfig, route, ping, libnsl/libsocket and the netdir libraries, netconfig, strcf and the inet/TI nodes from the
