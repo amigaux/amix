@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset gate 2 checks build= against the kernel's own build id; C3-3 v8 (093b2a7, 8eb826c)
+
+buildid on k46, kinfo_buildid through unix.sym on k30, leading blanks ignored; a kernel without the symbol is unchecked. Passes
+on kern46m -82 and kern30m -17 as staged; refuses a wrong build= on both (rc 4). kimports.sh gains the case. For kbootset -20.
+
 ## 2026-10-27 — the exit ledger's arms audit closed on both lines (363a11d): k46 one loss (ZS-06), k30 none; the gayle module's polled default noted
 
 ## 2026-10-27 — C4-2 v5 (the mechanism: a dirty copyback line written back over the ARM's data; push before); C4-5 v10 §6 (piscsi is not a Zorro bus master — keeps its own maintenance)
