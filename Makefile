@@ -38,7 +38,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
+.PHONY: FORCE all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
 
 all: test tools cross boot1 boot2 cdboot axtime box b2test
 
@@ -221,15 +221,27 @@ G14CFLAGS := -std=gnu89 -O2 -Wall -Wextra -Werror -D__svr4__ -DSVR4 -Dunix -D__u
 KBSRC   := kbootset/kbootset.c $(KSRC) $(CSRC) $(XSRC)
 KBOBJ   := $(patsubst %.c,$(B)/box/%.o,$(notdir $(KBSRC)))
 
-$(B)/box/%.o: kbootset/%.c kbootset/*.h $(COMMON)/*.h
+# The box toolchain's identity, the files amix-packages pins
+# (recipes/common/gcc14-pin.sh): rewritten only when one of them changes,
+# so every box object and link is remade with the compiler that is there
+# now (a mixed kbootset -21 once kept three objects of the previous one)
+G14ID   := $(B)/box/toolchain.id
+$(G14ID): FORCE
+	@mkdir -p $(B)/box
+	@(cd $(G14)/prefix && sha256sum libexec/gcc/m68k-elf/14.2.0/cc1 lib/gcc/m68k-elf/14.2.0/libgcc.a \
+		m68k-elf/lib/libamixc99.a lib/gcc/m68k-elf/14.2.0/specs) > $@.new
+	@if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; echo "box: toolchain $$(cut -c1-16 $@ | head -1) (cc1)"; fi
+FORCE:
+
+$(B)/box/%.o: kbootset/%.c kbootset/*.h $(COMMON)/*.h $(G14ID)
 	@mkdir -p $(B)/box
 	$(G14CC) $(G14CFLAGS) -I$(COMMON) -Ikbootset -c -o $@ $<
 
-$(B)/box/%.o: $(COMMON)/%.c $(COMMON)/*.h
+$(B)/box/%.o: $(COMMON)/%.c $(COMMON)/*.h $(G14ID)
 	@mkdir -p $(B)/box
 	$(G14CC) $(G14CFLAGS) -I$(COMMON) -c -o $@ $<
 
-$(B)/box/kbootset: $(KBOBJ)
+$(B)/box/kbootset: $(KBOBJ) $(G14ID)
 	@test -x $(G14CC) || { echo "box: no gcc14-cross-amix at $(G14) (set G14)" >&2; exit 1; }
 	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
 		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
@@ -250,17 +262,17 @@ $(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
 $(B)/box/core/modadmin.c: core/upstream/modadmin.c core/series core/patches/*.patch
 	sh tools/stagecore.sh $(B)/box/core
 
-$(B)/box/modadmin.o: $(B)/box/core/modadmin.c
+$(B)/box/modadmin.o: $(B)/box/core/modadmin.c $(G14ID)
 	$(G14CC) $(G14CFLAGS) -I$(B)/box/core/include -c -o $@ $<
 
-$(B)/box/libmod.o: modtools/libmod.c
+$(B)/box/libmod.o: modtools/libmod.c $(G14ID)
 	@mkdir -p $(B)/box
 	$(G14CC) $(G14CFLAGS) -c -o $@ $<
 
-$(B)/box/modadmin: $(B)/box/modadmin.o $(B)/box/libmod.o
+$(B)/box/modadmin: $(B)/box/modadmin.o $(B)/box/libmod.o $(G14ID)
 	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
 		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
-		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $^ \
+		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $(filter %.o,$^) \
 		-L$(G14LIB) -L$(G14)/prefix/m68k-elf/lib -L$(G14SR)/usr/ccs/lib -lgcc -lamixc99 -lc -lgcc \
 		$(G14LIB)/crtend.o $(G14SR)/usr/ccs/lib/crtn.o
 	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
@@ -272,11 +284,11 @@ box: toolchain-check $(B)/box/kbootset $(B)/box/c89-check $(B)/box/modadmin
 # in memory, once as GCC 14 builds them for kbootset and once as
 # gcc-cross-amix builds them for the loader; both are Amix programs
 HBG14 := $(B)/box/hashbench.o $(B)/box/sha256.o $(B)/box/crc32.o
-$(B)/box/hashbench.o: tools/measure/hashbench.c $(COMMON)/*.h
+$(B)/box/hashbench.o: tools/measure/hashbench.c $(COMMON)/*.h $(G14ID)
 	@mkdir -p $(B)/box
 	$(G14CC) $(G14CFLAGS) -I$(COMMON) -c -o $@ $<
 
-$(B)/box/hashbench: $(HBG14)
+$(B)/box/hashbench: $(HBG14) $(G14ID)
 	$(G14LD) --sysroot=$(G14SR) -static -Ttext-segment=0x80000000 --build-id=none -o $@ \
 		$(G14SR)/usr/ccs/lib/crt1.o $(G14SR)/usr/ccs/lib/crti.o $(G14SR)/usr/ccs/lib/values-Xa.o \
 		$(G14LIB)/crtbegin.o $(G14)/prefix/m68k-elf/lib/amix_init.o $(HBG14) \
