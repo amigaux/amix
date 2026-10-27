@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar, version 7
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 8
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27, S5-12): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -12,6 +12,18 @@
 | `/stand/k30/unix` or `/stand/k46/unix` | the kernel in a form the loader takes (`brel` or ET_REL), uncompressed |
 | `/stand/k30/kabi` or `/stand/k46/kabi` | the sidecar (§2) |
 | `/stand/k30/unix.sym` | the kernel's symbols (§2.1), for a kernel shipped without a symbol table: every `brel`. An ET_REL kernel carries its own and needs none |
+| `/etc/conf/mod.d/ufs`, `/etc/conf/mod.d/s5` | version 8: on a cut without ufs and s5 (no `rootfs=`, C3-3 §3), their modules (C4-6 §4), built with the cut and carrying its `build=`: on k30 both, on k46 ufs only (no k46 s5 module, S5-37) |
+| `/etc/conf/modreg.d/ufs`, `/etc/conf/modreg.d/s5` | their defaults, as a module package's (C3-5 §1.2): comments only |
+
+The filesystem modules are core tier, so they load only on the kernel
+build they were made with (C3-1 §3). They therefore travel in the kernel
+package, never in a module package of their own. A kernel upgrade
+replaces them in the same transaction, and no box ever holds a ufs
+module of another cut. Their files, directories and modes are as C3-5
+§1.2 gives them for a module package. `kbootset build` takes them like
+any module, by their install record (gate 1). The kernel package is the
+only package that names those paths, so a second record for one of them
+is refused at gate 1.
 
 The kernel package does not carry `/dev/kinfo`. A device node is not a
 pure file (the kernel-space packaging rule allows only plain files and
@@ -42,6 +54,11 @@ package, never a revision of a static family's:
   `68030-261026-01`). A re-mint of
   the same build adds `.<r>` (`k46.1.0.261026-58.1`). The build ids above
   are examples; the values come from the sidecar of the kernel minted.
+- **It must sort above the line's kernel of record** (version 8). apkg
+  compares versions, and `upgrade` leaves an installed package alone when
+  the catalog's version is not newer. So a kernel whose build id sorts
+  below one already minted for its line is rebuilt with a new stamp
+  before it is minted. The version rule is not bent to fit it.
 - Like the static families, it installs `/stand/<line>/unix` and `kabi`
   (and on k30 `unix.sym`, §2.1). The k46 module kernel is ET_REL, so its
   sidecar needs no `bss=` (the loader takes the bss from its sections) and
