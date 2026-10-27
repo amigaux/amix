@@ -1,4 +1,4 @@
-# C4-1 — `sd_register` and the four-card contract, version 5
+# C4-1 — `sd_register` and the four-card contract, version 6
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
@@ -9,7 +9,9 @@
   S5-08, from M-S474b; agreed 2026-10-27 by the port and amix-kerntools):
   the Z3660 is one controller in either mode (§5.1); version 5
   (2026-10-27, S5-44, from Bench J4 row M-G3): the device nodes an
-  installed root holds, and who makes them (§2.4).
+  installed root holds, and who makes them (§2.4); version 6
+  (2026-10-27, S5-46, from the port's S5-15 work): a motherboard
+  controller's record names it by its motherboard id (§5.2).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -345,6 +347,54 @@ the port's k46 `kinfo`), item 3 in the RTH1 kernel half (the port, both
 lines' sources), item 2 and item 4 in `kbootset` (amix-dlm). The metal
 row is S5-16: the A4000T in 030 mode with a second sd card, rooted by the
 record.
+
+### 5.2 A motherboard controller's record names it (version 6)
+
+RTH1 matched a record with the `mobo` flag to any card that has no
+AutoConfig board behind it, when exactly one does. kinfo now tells such
+cards apart by their motherboard id (C2-1 §2.1: 1 `a3000-wd`, 2
+`gayle`, 3 `a4000t-710`, 4 `z3660-window`). Two sets of record had two
+such cards, so the root fell back to the built-in one:
+- an A4000 in 030 mode, with Gayle and the Z3660 window;
+- an A4000T, with its 53C710 and Gayle.
+
+So, from version 6:
+1. **The record.** A root or swap record on a motherboard controller is
+   `sd id=0000000N base=00000000 unit=U slice=S`, with N its motherboard
+   id 1–3 and **no `mobo` flag**. boot2's parser already takes that
+   form: a record without `mobo` needs only a nonzero id. It hands the
+   id to the kernel in RTO1 unchanged, so no loader byte changes. A
+   record on the Z3660 window is never written this way: it takes the
+   Z3660's form of §5.1 (`id=144b0100 base=00000000`).
+2. **RTH1** (`src/rth1.c`, both lines). A record whose id has a zero
+   manufacturer and a code 1–3 matches the card with no AutoConfig board
+   whose motherboard id, by the rule kinfo uses for its card table
+   (C2-1 §2.1), is that code. Exactly one card may answer. A `mobo`
+   record in RTO1, the form written before version 6 with id 0, keeps
+   its rule (any card with no AutoConfig board, exactly one), except that
+   it no longer matches the card at the Z3660 window: a Z3660 is never
+   written as `mobo` (§5.1 item 2). The boot device of RTH1 itself
+   (boot2's `RTH_BMOBO`, no id) keeps the old rule. That path is taken
+   only when the manifest has no root record.
+3. **The kernel says it can.** A kernel whose RTH1 does item 2 writes
+   `rth1=2` in its sidecar (C2-3 §2, version 9). A kernel without the key
+   matches only the old forms.
+4. **kbootset** writes the generation's root record in item 1's form
+   when the installed kernel's sidecar says `rth1=2`, the record is
+   `sd id=00000000 base=00000000 … mobo`, and the root controller's key
+   is `mobo:a3000-wd`, `mobo:gayle` or `mobo:a4000t-710`. It takes that
+   key from kinfo, the options or bootset, as for gate 3. So an
+   installed root moves to the new form at its next commit, and the
+   installer needs no change. On a kernel without `rth1=2` it leaves the
+   record as given, so a kbootset-only upgrade never writes a record the
+   running kernel cannot match. A record already in item 1's form loses
+   a stray `mobo` flag, which boot2 would refuse. Swap records are left
+   as given: the swap disk's controller is not among the facts.
+
+Implemented by S5-46: item 2 and the sidecar key in the RTH1 kernel half
+and the sidecar writers (the port: `src/rth1.c` and `kabi-sidecar.py`;
+amix-kerntools: `kabi-sidecar030.py`, the k30 cut taking the port's
+`rth1.c`); item 4 in `kbootset` (amix-dlm, -22). Host cases for both.
 
 ## 6. The card-number gate
 
