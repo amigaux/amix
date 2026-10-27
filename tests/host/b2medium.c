@@ -13,10 +13,13 @@
  * every generation is read through st_read_stored, inflated and checked
  * against its CRC-32.
  *
- * usage: b2medium [-n] VOL1 VOL2 OTHER
+ * usage: b2medium [-n | -f] VOL1 VOL2 OTHER
  *   -n  the device keeps no change counter (TD_CHANGENUM fails): the disk
  *       is re-read every half second, so the volume still in the drive at
  *       the prompt is refused once as well
+ *   -f  the counter never moves, the disks are swapped every 5 s (Kickstart
+ *       3.2.1 under amiberry, E958/E959): the disk is re-read every 4 s
+ *       all the same, and the volume at the prompt is refused once too
  * Prints the number of volume changes; exit status 0 when every member
  * verifies and every change went through the whole script with exactly
  * one message per refused disk and the motor off while waiting.
@@ -45,6 +48,7 @@ static int wanted;		/* the volume the last L11 prompt asked for */
 static int step;		/* where the person is in the swap script; 0 = idle */
 static int changes, refused_set, refused_vol;
 static int nocount;		/* -n: no change counter */
+static int frozen;		/* -f: a counter that never moves */
 static ax_u32 changecount;	/* TD_CHANGENUM */
 static ax_u8 *cachedisk;	/* the disk the track buffer was read from */
 static long cachetrack = -1;	/* the buffered track, -1 = none */
@@ -80,7 +84,7 @@ void x_memset(void *d, int c, ax_u32 n) { memset(d, c, n); }
 static void
 next_disk(void)
 {
-	if (drive)
+	if (drive && !frozen)
 		changecount++;		/* taken out */
 	switch (step) {
 	case 1: drive = 0; break;
@@ -89,10 +93,10 @@ next_disk(void)
 	case 4: drive = disk[wanted == 1 ? 1 : 0]; break;
 	default: drive = disk[wanted - 1]; step = -1; changes++; break;
 	}
-	if (drive)
+	if (drive && !frozen)
 		changecount++;		/* put in */
 	step++;
-	nextat = frames + 60;
+	nextat = frames + (frozen ? 250 : 60);
 }
 
 int
@@ -145,7 +149,7 @@ out(const char *line)
 	if (sscanf(line, "amix-boot: L11 insert boot volume %u", &v) == 1) {
 		wanted = (int)v;
 		step = 1;
-		nextat = frames + 60;
+		nextat = frames + (frozen ? 250 : 60);
 	} else if (strstr(line, ", not ")) {
 		refused_vol++;
 	} else if (strstr(line, "not of this boot set")) {
@@ -285,8 +289,9 @@ main(int argc, char **argv)
 	ax_u8 cb[2048], *man;
 	int i, j, errline, failed = 0;
 
-	if (argc == 5 && !strcmp(argv[1], "-n")) {
-		nocount = 1;
+	if (argc == 5 && (!strcmp(argv[1], "-n") || !strcmp(argv[1], "-f"))) {
+		nocount = argv[1][1] == 'n';
+		frozen = argv[1][1] == 'f';
 		argv++, argc--;
 	}
 	if (argc != 4)
@@ -334,9 +339,9 @@ main(int argc, char **argv)
 	}
 	/* every change refused the blank and the foreign disk, then the wrong volume */
 	/* without a change counter the disk still in the drive at the prompt
-	 * (the other volume) is read and refused too, once */
+	 * (the other volume) is read and refused too, once; so with a frozen one */
 	if (step != 0 || refused_set != 2 * changes ||
-	    refused_vol != (nocount ? 2 : 1) * changes || motorframes)
+	    refused_vol != (nocount || frozen ? 2 : 1) * changes || motorframes)
 		failed = 1;
 	printf("b2medium: %d volume change(s), %d foreign/blank and %d wrong-volume disks refused, "
 	       "motor on for %lu waiting frames: %s\n",

@@ -77,18 +77,19 @@ changenum(void)
  * an extent on another volume asks for that disk and waits until a store
  * header of the same set and the wanted volume can be read (L11).
  * trackdisk keeps the last track it read across a disk change, so the disk
- * is read again only after its change counter moved (or a key asks for
- * it), and always after CMD_CLEAR; the motor stays off while waiting.  A
- * refusal is printed once per disk change, not once per try; a device
- * without a change counter is re-read every half second and says each
- * verdict once (N25b/N26b, 2026-10-25).
+ * is read again when its change counter moved, a key asks, or every 4 s,
+ * always after CMD_CLEAR; the motor stays off while waiting.  The 4 s read
+ * is for a counter that never moves: Kickstart 3.2.1's trackdisk under
+ * amiberry did not count the rig's swap, and the loop waited for ever
+ * (E958/E959, 2026-10-27).  A device without a change counter is re-read
+ * every half second.  Each verdict is said once (N25b/N26b, 2026-10-25).
  */
 static int
 want_volume(ax_u32 vol)
 {
 	ax_u8 *blk;
 	struct ax_header h;
-	ax_u32 said = 0, verdict;
+	ax_u32 said = 0, verdict, t;
 	long last, cn;
 	int f, asked, lmb = 1;
 
@@ -102,24 +103,22 @@ want_volume(ax_u32 vol)
 	motor_off();
 	con_say("L11 insert boot volume %u of %u\n", vol, (ax_u32)hdr.nvolumes);
 	last = changenum();
-	for (;;) {
+	for (t = 1;; t++) {
 		for (f = 0, asked = 0; f < 25 && !asked; f++) {	/* half a second */
 			in_frame();
 			asked = in_key() >= 0 || in_serial() >= 0 || (in_lmb() && !lmb);
 			lmb = in_lmb();
 		}
 		cn = changenum();
-		if (cn >= 0 && cn == last && !asked)
-			continue;		/* the same disk, and nobody asked */
+		if (cn >= 0 && cn == last && !asked && (t & 7))
+			continue;		/* the same disk, nobody asked, not 4 s yet */
 		last = cn;
 		*(ax_u16 *)(iob + IO_COMMAND) = CMD_CLEAR;
 		*(ax_u32 *)(iob + IO_LENGTH) = 0;
 		x_doio(iob);
-		if (io(CMD_READ, 0, blk, 2048) != 0) {
-			motor_off();		/* no disk, or not readable yet */
-			continue;
-		}
-		if (ax_hdr_pick(ax_crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) < 0)
+		if (io(CMD_READ, 0, blk, 2048) != 0)
+			verdict = 4;		/* no disk, or not readable yet */
+		else if (ax_hdr_pick(ax_crctab, blk + AX_HDR_A_OFF, blk + AX_HDR_B_OFF, &h) < 0)
 			verdict = 1;		/* not a boot store at all */
 		else if (h.set_id != hdr.set_id)
 			verdict = 2 | (h.set_id << 8);
@@ -128,12 +127,12 @@ want_volume(ax_u32 vol)
 		else
 			break;
 		motor_off();
-		if (cn < 0 && verdict == said && !asked)
-			continue;		/* no change counter: said already */
+		if (verdict == said && !asked)
+			continue;		/* said already */
 		said = verdict;
 		if ((verdict & 0xFF) == 3)
 			con_say("volume %u, not %u\n", (ax_u32)h.volume, vol);
-		else
+		else if (verdict != 4)
 			con_say("not of this boot set\n");
 	}
 	x_freemem(blk, 2048);
