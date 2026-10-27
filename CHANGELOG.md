@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger's arms audit closed on both lines (363a11d): k46 one loss (ZS-06), k30 none; the gayle module's polled default noted
+
 ## 2026-10-27 — C4-2 v5 (the mechanism: a dirty copyback line written back over the ARM's data; push before); C4-5 v10 §6 (piscsi is not a Zorro bus master — keeps its own maintenance)
 
 ## 2026-10-27 — the exit ledger's arms-audit row: k46 done (one loss, ZS-06), k30 pending (d585e10)
