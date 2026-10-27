@@ -425,6 +425,22 @@ is_num() {
 	esac
 }
 
+# scsi_label ID -- how the interview names a disk. ID is the controller-unit token of the
+# four-card names (C4-1: c<ID>d0, card*8+unit as 0-f, then 10-1f): a card-0 disk keeps the
+# stock "SCSI id N"; a disk on another card is named by its token, which is what the
+# "What is the SCSI id" question takes, with the card and the real SCSI id beside it.
+scsi_label() {
+	case "$1" in
+		[0-7])		echo "SCSI id $1"; return ;;
+		[89a-f])	_c=1 ;;
+		1[0-7])		_c=2 ;;
+		*)		_c=3 ;;
+	esac
+	_u=`expr "$1" : '.*\(.\)$'`
+	case "$_u" in 8) _u=0 ;; 9) _u=1 ;; a) _u=2 ;; b) _u=3 ;; c) _u=4 ;; d) _u=5 ;; e) _u=6 ;; f) _u=7 ;; esac
+	echo "disk $1 (c${1}d0: card $_c, SCSI id $_u)"
+}
+
 # ---------------------------------------------------------------------------
 # 0. THE BASE PROFILE
 # ---------------------------------------------------------------------------
@@ -791,10 +807,10 @@ choose_disk()
 			stext="$ssize megabytes"
 		fi
 		case "$sstate" in
-			ok)		echo "SCSI id $sid		$stext"
+			ok)		echo "`scsi_label $sid`		$stext"
 					echo "$sid" >> "$TOK_F" ;;
-			source)		echo "SCSI id $sid		$stext	source -- not installable" ;;
-			nokernel)	echo "SCSI id $sid		$stext	no kernel on this medium for id $sid" ;;
+			source)		echo "`scsi_label $sid`		$stext	source -- not installable" ;;
+			nokernel)	echo "`scsi_label $sid`		$stext	no kernel on this medium for id $sid" ;;
 		esac
 	done < "$SCAN_F"
 
@@ -2141,7 +2157,7 @@ confirm()
 			echo "Upgrade install:	the configuration and /home are kept"
 		fi
 	fi
-	echo "Install to:		SCSI id $SCSI  (/dev/dsk/c${SCSI}d0s${TARGET_ROOT_SLICE})"
+	echo "Install to:		`scsi_label $SCSI`  (/dev/dsk/c${SCSI}d0s${TARGET_ROOT_SLICE})"
 	echo "Disk size:		$DISK_MB megabytes"
 	echo "Root file system:	$ANS_ROOT megabytes"
 	echo "Swap partition:		$ANS_SWAP megabytes"
