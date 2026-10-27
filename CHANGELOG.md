@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-1 v4 agreed (the port, amix-kerntools): k30's kinfo030.c keys an unmatched card at 0x10000000 as id 4 by its base; plan S5-15: kbootset's card_of() picks among motherboard cards by the boot disk's partition start (975c329, c5f6865)
+
 ## 2026-10-27 — k30 DMA with no reachable memory: dma_alloc gives 0 and bounces miss; C4-5 v11 §5.4 refuses the board, no chip fallback (S5-18 host half) (2a4e4e1, 921bd93)
 
 ## 2026-10-27 — abi/k46/core.list from the port's patched ufs/s5 objects (100 names, the same as k30's); carve.py corelist --skip, wrap --pageshift-ok (bf10683)
