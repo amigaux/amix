@@ -11,7 +11,7 @@
 set -e
 B=${B:-build}
 T=$B/kbox
-rm -rf $T && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/var/apkg/kpkg
+rm -rf $T && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/stand/k30 $T/root/var/apkg/kpkg
 R=$T/root
 export KBOOTSET_DEVROOT=$T/dev KBOOTSET_KINFO=$T/kinfo
 
@@ -206,6 +206,20 @@ grep -qx "module z3660eth (boot): loaded" $T/out
 grep -qx "module monsw (demand): loaded" $T/out
 grep -qx "module z3660rtg (demand): not loaded (loads at the first open of its device)" $T/out
 
+# 6c. check reports the running box's disk nodes when an installed kernel
+# is a four-card one (C2-4 §14), as one problem; a k30 sidecar, so the
+# default generation's files keep their hashes
+set +e
+$B/kbootset -R $R check > $T/out; n0=$?
+printf 'kabi=k30.1.2\nsdcards=4\n' > $R/stand/k30/kabi
+$B/kbootset -R $R check > $T/out2
+set -e
+grep -qx "  nodes: 512 of the four-card set missing or wrong, 0 d1 nodes left: run kbootset nodes" $T/out2
+p0=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out)
+p1=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out2)
+[ $((p1 - p0)) -eq 1 ] || { echo "kbox: check counted the nodes as $((p1 - p0)) problems"; exit 1; }
+rm -f $R/stand/k30/kabi
+
 # 7. gate 8: stores on two disks, and no loader record to choose
 cp $T/dev/c6d0s0 $T/dev/ced0s0
 cp $T/dev/c6d0s3 $T/dev/ced0s3
@@ -214,4 +228,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes ok"

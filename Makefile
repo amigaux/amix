@@ -29,7 +29,7 @@ CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
 XSRC    := $(COMMON)/sha256.c
 # kbootset's core (userland: host and box)
 KSRC    := kbootset/ks.c kbootset/kbuild.c kbootset/kbox.c kbootset/kmod.c kbootset/kreg.c \
-           kbootset/knl.c kbootset/kdeflate.c
+           kbootset/knl.c kbootset/kdeflate.c kbootset/knode.c
 TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
            tests/host/t_manifest.c tests/host/t_inflate.c \
            tests/host/t_select.c tests/host/t_rel.c \
@@ -68,6 +68,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kimports.sh
 	B=$(B) sh tests/host/kbox.sh
+	B=$(B) sh tests/host/knode.sh
 	B=$(B) sh tests/host/namelist.sh
 	B=$(B) sh tests/host/knamelist.sh
 	B=$(B) sh tests/host/prfcheck.sh

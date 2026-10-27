@@ -35,6 +35,9 @@
  *                          never writes; status 1 when a problem is found
  *   mark-good [--booted ID] [--secondary]   end of a full multi-user boot
  *   namelist                            /stand/unix for the booted kernel (C2-4 §12)
+ *   nodes                  the sd disk nodes of a four-card kernel under ROOT
+ *                          (C4-1 §2.4, C2-4 §14); needs no store; commit
+ *                          runs it on the running box, check reports it
  *   retry [--booted ID]    from the base system's fsck-repair reboot path:
  *                          the trial's attempt does not count (40 §3.3);
  *                          writes the boot slice only, nothing on the root
@@ -79,6 +82,7 @@
 #include "kbuild.h"
 #include "kbox.h"
 #include "kdeflate.h"
+#include "knode.h"
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
@@ -396,7 +400,7 @@ usage(void)
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
-		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist\n"
+		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -613,6 +617,13 @@ main(int argc, char **argv)
 	}
 	if (i >= argc)
 		usage();
+	if (!strcmp(argv[i], "nodes") && i + 1 == argc) {	/* no store (C2-4 §14) */
+		char nm[300];
+		int r = kb_nodes(root, 1, nm);
+
+		printf("kbootset: %s\n", nm);
+		return r == KB_ND_FAIL ? 1 : 0;
+	}
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
@@ -733,6 +744,15 @@ main(int argc, char **argv)
 		} else if (!strcmp(cmd[0], "check") && argc == 1) {
 			int bad = ks_check(&k, say) + kb_check(&k, root, say);
 
+			if (image == dev) {	/* the running box's nodes (C2-4 §14) */
+				char nm[300];
+				int r = kb_nodes(root, 0, nm);
+
+				if (r != KB_ND_TWO)
+					say(nm);
+				bad += r == KB_ND_MISSING;
+			}
+
 			printf("kbootset: check: %d problem(s)\n", bad);
 			fclose(d.f);
 			return bad ? 1 : 0;
@@ -740,10 +760,15 @@ main(int argc, char **argv)
 			rc = commit_spec(&k, cmd[2]);
 			if (rc == 2)
 				return 2;
-		} else if (!strcmp(cmd[0], "commit") && argc == 1) {
-			rc = kb_commit(&k, root, &id, 0);
-		} else if (!strcmp(cmd[0], "commit") && argc == 2 && !strcmp(cmd[1], "--again")) {
-			rc = kb_commit(&k, root, &id, 1);
+		} else if (!strcmp(cmd[0], "commit") && (argc == 1 || (argc == 2 && !strcmp(cmd[1], "--again")))) {
+			rc = kb_commit(&k, root, &id, argc == 2);
+			if (rc == KS_OK && image == dev && !root_given) {
+				char nm[300];	/* before the commit's line, which apkg repeats (C2-4 §3, §14) */
+				int r = kb_nodes(root, 1, nm);
+
+				if (r == KB_ND_MADE || r == KB_ND_FAIL)
+					printf("kbootset: %s\n", nm);
+			}
 		} else if (!strcmp(cmd[0], "build")) {
 			rc = kb_build(&k, root, &facts, now(), &id);
 		} else if (!strcmp(cmd[0], "mark-good") && !booted && have_kinfo && KB_MEDIUM(&ki)) {
