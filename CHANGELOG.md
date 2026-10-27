@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — spec 70 §4 (after freeze): safe mode names only the controllers it loads; on the WD + A4091 set the safe root is c6d0s1, ced0s1 normally (N145/N146). Plan: S4-67 (stage 5), kbootset marks safe=1 on the modules of every controller ranked before the root's (0e9a604, ba26d53)
+
 ## 2026-10-27 — bench: l5.sh keeps the box's generation id, the trial at id + 1 (the core loads boot modules from the booted generation's directory only) (113b103)
 
 ## 2026-10-27 — bench: l5.sh writes a brel kernel's bss= from its sidecar (N142's boot2 had assumed 512 KiB); the damaged-module recipe also damages the module-less generations' kernels (N136) (08c0592, 06893b1)
