@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-2 v6: the A4000T onboard 53C710's gate is the running Kickstart's "NCR scsi.device" cold-start tag (§8.1), with a `declared` override; no loader bytes, no DDI name (69ad13d)
+
 ## 2026-10-27 — kbootset: the safe set keeps the card numbers (S5-02; C4-4 v6, C3-5 v13); box binaries on gcc14-cross-amix cf461e3 (S5-01) (74b3e79, 4442c76)
 
 The safe set also takes every controller module ranked at or before the root's class, so safe mode keeps the normal boot's card
