@@ -383,7 +383,10 @@ So, from version 6:
    when the installed kernel's sidecar says `rth1=2`, the record is
    `sd id=00000000 base=00000000 … mobo`, and the root controller's key
    is `mobo:a3000-wd`, `mobo:gayle` or `mobo:a4000t-710`. It takes that
-   key from kinfo, the options or bootset, as for gate 3. So an
+   key from kinfo, the options or bootset, as for gate 3. When that key
+   is the Z3660's (`zorro:144b:01`, the window's included, §5.1 item 4),
+   it writes the Z3660's form instead, since item 2's RTH1 no longer
+   matches a `mobo` record to the window. So an
    installed root moves to the new form at its next commit, and the
    installer needs no change. On a kernel without `rth1=2` it leaves the
    record as given, so a kbootset-only upgrade never writes a record the
