@@ -5,9 +5,15 @@
 # boots the good generation.  kbootset cannot write it (gate 4 refuses
 # such a generation, from `build` and from `commit --spec` alike), so the
 # row writes this image over a slot copy's boot slice, as S3-43's l5.img.
-#   generation 1 (good)   the box's generation as kbootset composed it
-#   generation 2 (trial)  the same, its last root module's bss= raised to
-#                         the arena's capacity: the module cannot fit
+#   generation <id> (good)     the box's generation as kbootset composed
+#                              it, under its own id: its boot- and
+#                              demand-class records name /stand/gen/<id>/
+#                              mod/, and the core loads them only from the
+#                              booted generation's directory (N142)
+#   generation <id>+1 (trial)  the same, its last root module's bss=
+#                              raised to the arena's capacity: the module
+#                              cannot fit, and boot2 refuses it before the
+#                              kernel runs
 # The kernel is deflated (z=deflate) so both fit the slice.
 #
 # usage: l5.sh ROOT BUILD OUTDIR [STORESIZE]
@@ -32,6 +38,9 @@ LAST=$(awk '$1 == "module" && $3 == "root" { n = $2 } END { print n }' "$BUILD")
 # a brel kernel's bss is only in its sidecar; kbootset writes it into the
 # kernel record, and so must this spec (N142: "no bss= for this brel")
 LINE=$(awk '$1 == "line" { print $2 }' "$BUILD")
+ID=$(echo "$BUILD" | sed -n 's#.*/stand/gen/\([0-9][0-9]*\)/build$#\1#p')
+[ -n "$ID" ] || { echo "l5.sh: BUILD must be a /stand/gen/<id>/build" >&2; exit 2; }
+TR=$((ID + 1))
 KBSS=$(sed -n 's/^bss=//p' "$ROOT/stand/$LINE/kabi" 2>/dev/null | head -1)
 mkdir -p "$OUT"
 # a build file as a spec: host paths in place of the sizes, the attributes
@@ -53,22 +62,22 @@ spec() {	# spec ID STATE BIG
 	$1 ~ /^(generation|state|created)$/ { next }
 	{ print }' "$BUILD"
 }
-spec 1 good "" > "$OUT/l5-g1.spec"
-spec 2 trial "$LAST" > "$OUT/l5-g2.spec"
+spec "$ID" good "" > "$OUT/l5-g1.spec"
+spec "$TR" trial "$LAST" > "$OUT/l5-g2.spec"
 grep -q "^module $LAST root .* bss=$((CAP))\( \|$\)" "$OUT/l5-g2.spec" ||
-	{ echo "l5.sh: the raised bss= is not in generation 2's spec" >&2; exit 1; }
+	{ echo "l5.sh: the raised bss= is not in generation $TR's spec" >&2; exit 1; }
 rm -f "$OUT/l5.img"
 "$R/build/mkstore" -o "$OUT/l5.img" -s "$SSIZE" -1 "$R/build/boot1.img" -2 "$R/build/boot2.bin" \
-	-d 1 "$OUT/l5-g1.spec" "$OUT/l5-g2.spec" > "$OUT/mkstore.log"
+	-d "$ID" "$OUT/l5-g1.spec" "$OUT/l5-g2.spec" > "$OUT/mkstore.log"
 "$R/build/lsstore" "$OUT/l5.img" 0 > "$OUT/lsstore.txt"
 grep -q "lsstore: ok" "$OUT/lsstore.txt" || { cat "$OUT/lsstore.txt" >&2; exit 1; }
 {
-	echo "boot 1 (generation 2, the trial):"
+	echo "boot 1 (generation $TR, the trial):"
 	awk '$1 == "module" && $3 == "root" { print "  amix-boot: module " $2 " <size> bytes" }' "$OUT/l5-g1.spec" |
 		sed "/module $LAST /,\$d"
 	echo "  amix-boot: the arena needs <more than $((CAP))> bytes, it has $((CAP))"
-	echo "  amix-boot: L5 arena overflow (generation 2)"
-	echo "  amix-boot: generation 1, kernel ...   (the fallback boots to multi-user)"
-	echo "boot 2: amix-boot: L8 trial not confirmed (generation 2); generation 1 boots"
+	echo "  amix-boot: L5 arena overflow (generation $TR)"
+	echo "  amix-boot: generation $ID, kernel ...   (the fallback boots to multi-user, its boot modules loaded)"
+	echo "boot 2: amix-boot: L8 trial not confirmed (generation $TR); generation $ID boots"
 } > "$OUT/expected.txt"
-echo "l5.sh: $OUT/l5.img (generation 1 good, 2 trial with $LAST's bss=$((CAP)); $SSIZE bytes)"
+echo "l5.sh: $OUT/l5.img (generation $ID good, $TR trial with $LAST's bss=$((CAP)); $SSIZE bytes)"

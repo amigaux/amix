@@ -1249,17 +1249,18 @@ sh tests/bench/s4-exit/l5.sh <root copy> <root copy>/stand/gen/<id>/build <outdi
 ```
 
 Here `<id>` is the vehicle's default generation, as `kbootset build`
-composed it on the box. Generation 1 of the image is that generation;
-generation 2 (trial) is the same, with its last root module's `bss=`
-raised to the arena's capacity. Both still name the boot- and
-demand-class copies under `/stand/gen/<id>/mod/`, so do not collect
-`<id>` on the box. `<outdir>/expected.txt` has the lines for this
-generation:
+composed it on the box. The image keeps it as generation `<id>` (good,
+the default): the core loads boot- and demand-class modules only from
+the booted generation's `/stand/gen/<id>/mod/` (N142's first image
+renumbered it, and z3660eth was refused). Generation `<id>+1` (trial) is
+the same, with its last root module's `bss=` raised to the arena's
+capacity. Do not collect `<id>` on the box. `<outdir>/expected.txt` has
+the lines for this generation:
 
 | Boot | Expected |
 |---|---|
-| 1 | `amix-boot: module <name> <size> bytes` for each root module before the raised one; `amix-boot: the arena needs <n> bytes, it has 393216` (n above 393216); `amix-boot: L5 arena overflow (generation 2)`; then `amix-boot: generation 1, kernel …` and multi-user |
-| 2 | `amix-boot: L8 trial not confirmed (generation 2)`; generation 1 boots |
+| 1 | `amix-boot: module <name> <size> bytes` for each root module before the raised one; `amix-boot: the arena needs <n> bytes, it has 393216` (n above 393216); `amix-boot: L5 arena overflow (generation <id>+1)`; then `amix-boot: generation <id>, kernel …` and multi-user, its boot modules loaded |
+| 2 | `amix-boot: L8 trial not confirmed (generation <id>+1)`; generation `<id>` boots |
 
 **The silent skip.** boot2 places every root record (it evaluates no
 `match=`). The core skips an entry none of whose keys names a board
