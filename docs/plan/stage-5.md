@@ -81,6 +81,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 | S5-35 | **The panic path after a failed root mount** (N149/N150: `ufs_update` +0x58 after `vfs_mountroot` errno 6) | the port | host | — | — | 0.25 |
 | S5-36 | **The Z3660 window probes on a box without one** (22 caught bus timeouts, N149r/N150r): quieter, or a cheaper first check | amix-z3660net; amix-z3660scsi | host | — | — | 0.25 |
 | S5-37 | **s5 on k46** (C4-6 v4: broken under the 4 KiB-page line): no k46 s5 module ships, since no k46 medium needs one (the k46 miniroot is ufs) and the stock code keeps live 2 KiB page sites (`bmap`, about 35 in all by Antti's census, amix-kernel-analysis ee18d5f), while `page_t`'s `p_dblist[4]` and `S5MAXREQ` cannot describe a 4 KiB page over 512-byte blocks. A bounded 1 KiB/2 KiB-block conversion that refuses 512-byte mounts, when one is planned. The k46 cut drops the static s5 (S5-11) | the port; amix-dlm | host + bench | — | — | project |
+| S5-44 | **The disk nodes of cards 2 and 3 on an installed root** (Bench J4, M-G3, the A4000D with Z3660 + A4092 + Gayle, a 1.1 set: Gayle is card 2, and the root held only c0-cf, so IDE-D `c16` and the CD `c15` had no names; hand-made nodes read both): C4-1 v5 §2.4, every four-card root holds c0-c1f d0 s0-s7 and no d1 nodes, whatever the board set; `kbootset nodes` (C2-4 v12 §14) makes them, `commit` runs it on the running box, `check` reports it; firstboot calls it in place of its step 4d (recipe `docs/plan/s5-44-disk-nodes.md`) | amix-dlm (`kbootset` -22); amix-installng | host + bench | kbootset -22 | S5-41 | 0.5 |
 
 ### 2.5 Release acceptance (last)
 
@@ -98,7 +99,7 @@ S5-02, then S5-04, S5-05 and S5-08; amix-a4091 takes S5-06. The mint
 S5-03 waits for S5-01 and S5-02 only. Wave 2 starts when S5-04 lands:
 S5-10 and S5-11 in parallel, then S5-12 and the rows. S5-15 waits for
 S5-08's agreement and for the cuts, so `kbootset` changes once more at
-most. Wave 3's metal follows the box hand-overs and the owner's repair
+most: -22 carries S5-05, S5-09, S5-15 and S5-44. Wave 3's metal follows the box hand-overs and the owner's repair
 and firmware sessions; S5-18's host half may run any time. Release
 acceptance runs last: any row that changes a shipped byte after S5-40
 reopens S5-41 and S5-42 for every medium that carries it (80 §3).

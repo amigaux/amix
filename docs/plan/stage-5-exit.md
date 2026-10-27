@@ -18,7 +18,7 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | its core (`core/series`, `dlm_maximage`) | pending | pending |
 | kernel package, with the ufs and s5 modules (S5-12) | pending | pending |
 | loader (boot2, its size under 28 672) | pending | pending |
-| kbootset (S5-03, S5-15) | pending | pending |
+| kbootset (S5-03, S5-15, S5-44) | pending | pending |
 | modadmin (S5-03) | pending | pending |
 | ABI kit (kabi 1.2, or 1.3 if a stage-5 row needs it) | pending | pending |
 | z3660scsi | pending | pending |
@@ -84,6 +84,7 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | S5-32 the generic 060 target, from its pre-installed images | pending | — (a 68060 target) |
 | S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | pending | pending |
 | S5-34 the static kernel families out of the catalog | pending | the same |
+| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet; a fresh install on a three-controller set names the card-2 disks with no hand-made node | pending (Z3660 + A4092 + Gayle, J4's set) | pending (a k30 set with a card 2) |
 
 ## 6. Release acceptance
 
