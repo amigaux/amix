@@ -61,6 +61,16 @@ The kernel learns it is in safe mode from the loader record
 loading is refused. A stock-controller box needs no module at all in safe
 mode except its root filesystem.
 
+Safe mode names only the controllers it loads (`30-module-core.md`
+§5.3). On a board set whose built-in root controller sorts after a module
+controller, the module's controller is not loaded, so the root's card
+number drops. The A3000 WD beside an A4091 is such a set: the root is
+`c6d0s1` in safe mode and `ced0s1` in a normal boot (N145, N146,
+2026-10-27). The root mounts by its root record either way, but names
+written as `ced0` in `fstab` or for swap point at another disk in safe
+mode. Stage 5 closes this (S4-67): the safe set keeps the modules of the
+controllers ranked before the root's.
+
 ## 5. Open questions
 
 | ID | Question | Proposed owner |
