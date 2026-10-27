@@ -7,6 +7,8 @@
 #     . "$REPO/recipes/common/kfsmod.sh"
 #     amix_kfsmod_check <line> <fs> <object> <sha256> <size> <build> <kabi> <kit> <outdir>
 #     amix_kfsmod_rebuild <line> <fs> <carve dir> <object> <kit> <workdir>
+#     amix_kcore_strips <dlm-rev file> <pinned core commit> <strip commit>
+#     amix_kbuildid3 <unix (ET_REL)> <kabi> <log> <module>...
 #
 # check: the pin (sha256, size); the kit's modcheck (k46: the 68060 scan
 # with the pinned toolchain's scan060); .moddata name=<fs> fs=<fs>
@@ -18,6 +20,14 @@
 # the result byte-equal to the pinned object, modcheck ok, and no warning
 # naming rootvp (the kit's allowlist binds it, amix-dlm 445c12e; COMMON
 # warnings naming the module's own symbols are expected).
+# kcore_strips (S5-13): the cut's module core (the port's build/dlm-rev/.rev)
+# is the pinned amix-dlm commit, and that commit contains <strip commit>
+# (7b07bce: plat_dmainit skips the stamp's leading blank; an older core took
+# " 68060-..." verbatim and refused every core-tier module, EBADVER).
+# kbuildid3: the core's rule over the shipped bytes (kbuildid.py): the
+# image's buildid without its leading blanks == the sidecar's build= == each
+# module's .moddata build=, byte for byte.  tools/kbuildid-selftest.sh
+# proves both refuse.
 
 case "${0##*/}" in
 kfsmod.sh)
@@ -88,4 +98,29 @@ amix_kfsmod_rebuild() {
 		echo "[FAIL] the rebuilt $_kr_fs ($_kr_line) differs from the pinned object" >&2; exit 1; }
 	echo "  rebuilt $_kr_fs from $_kr_carve: byte-equal to the pin; $(grep "^modcheck: $_kr_fs: ok" "$_kr_w.log"); $(grep -c "^modcheck: $_kr_fs: warning: COMMON" "$_kr_w.log") COMMON warnings, none naming rootvp (log $_kr_w.log)"
 	unset _kr_line _kr_fs _kr_carve _kr_obj _kr_kit _kr_w _kr_f
+}
+
+amix_kcore_strips() {
+	_kc_rev=$(cat "$1" 2>/dev/null)
+	_kc_pin=$(git -C "$AMIX_DLM" rev-parse "$2^{commit}" 2>/dev/null)
+	if [ -z "$_kc_rev" ] || [ "$_kc_rev" != "$_kc_pin" ]; then
+		echo "[FAIL] the cut's module core ($1: '$_kc_rev') is not amix-dlm $2" >&2
+		unset _kc_rev _kc_pin; return 1
+	fi
+	if ! git -C "$AMIX_DLM" merge-base --is-ancestor "$3" "$_kc_rev" 2>/dev/null; then
+		echo "[FAIL] the cut's core $2 predates $3: it keeps the stamp's leading blank and refuses every core-tier module (S5-13)" >&2
+		unset _kc_rev _kc_pin; return 1
+	fi
+	echo "  the cut's core: amix-dlm $2 (dlm-rev ${_kc_rev%${_kc_rev#???????}}), contains $3 (skips the stamp's leading blank)"
+	unset _kc_rev _kc_pin
+}
+
+amix_kbuildid3() {
+	_kb_u=$1 _kb_k=$2 _kb_log=$3; shift 3
+	if ! python3 -I "$AMIX_REPO_ROOT/recipes/common/kbuildid.py" "$_kb_u" "$_kb_k" "$@" > "$_kb_log" 2>&1; then
+		cat "$_kb_log" >&2; echo "[FAIL] the core's build-id rule refuses (kbuildid.py)" >&2
+		unset _kb_u _kb_k _kb_log; return 1
+	fi
+	sed 's/^/  /' "$_kb_log"
+	unset _kb_u _kb_k _kb_log
 }

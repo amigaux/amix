@@ -20,7 +20,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
-| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261027-91, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -91 (S5-12) minted 2026-10-27, staged in `build/kspace/next/repo`, not published |
+| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-50, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm 7b07bce), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) minted 2026-10-28, in the candidate root `build/kspace/candidate-6f0c1701`, not promoted, not published; -91 never published |
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261027-20, kabi k30.1.2, brel; no static A4091/Gayle drivers or cdfs, no built-in ufs/s5, rth1=2; rth1 RAM-disk root, swap /dev/fakeswap), unix + kabi + unix.sym verbatim, and the cut's ufs and s5 core-tier modules at `/etc/conf/mod.d` (C2-3 v8 sec 1) | -20 (S5-12) minted 2026-10-27, staged in `build/kspace/next/repo`, not published |
 | [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
 | [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
@@ -46,10 +46,14 @@ ufs/s5. A replaced root is kept byte-identical under `build/kspace/superseded/re
 kernel-k46-z, kernel-k46-zacd left it, S5-34, datastreams in `build/kspace/superseded/static-1.0/`)
 `repo-20261027-1353`, `b198e9e2` (the stage-4 exit set plus gayle-k30/-k46 1.1.0-3)
 `repo-20261027-1344`, the stage-4 exit set (`6e60a128`) `repo-20261027-1329`. No next root is
-staged. `tools/kspace-roundtrip.sh` regenerates the newest set's catalog (the next root's while one
-is staged) from `build/kspace/pkg/` and requires it equal to that root's byte for byte, runs the
-stage-2 static-kernel rows from a second source that adds the static datastreams, and the S5-12 R5
-upgrade from `64d37aaa`'s kernels.
+staged. **Candidate root** (2026-10-28, not promoted): `build/kspace/candidate-6f0c1701`, catalog
+`6f0c1701` = `915e09f3` with the kernel-k46-m row -91 replaced by -50 (the S5-13 re-cut), every other
+row and datastream byte-identical; the Bench proves it in emulation before any promotion.
+`tools/kspace-roundtrip.sh` regenerates the newest set's catalog from `build/kspace/pkg/` and requires
+it equal byte for byte to the staged root's (`KSPACE_ROOT`, else the next root, else the one
+candidate root, else the catalog of record), runs the stage-2 static-kernel rows from a second source
+that adds the static datastreams, and the S5-12 R5 upgrades (`apkg upgrade kbootset <kernel>`, one
+transaction) from `64d37aaa`'s kernels and from `915e09f3`'s (k46 -91 → -50).
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
@@ -72,7 +76,7 @@ Sourced by every recipe so none re-derives a flag and none can bypass the wrappe
 | `fetch.sh` | Checksum-verified fetch. Knows *how* to verify a digest; never knows what any digest should be — that lives in each recipe's own `pin.sh`. Verifies before extract, always. |
 | `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
 | `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` (or `KM_VERSION_FILE`, a repository's second module) checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
-| `kfsmod.sh` | The filesystem modules a kernel package carries (amix-dlm C2-3 v8 sec 1): the pin, the kit's `modcheck`, `.moddata` (`tier=core`, `class=boot`, `fs=`, the line's kabi, `build=` the cut's own), and a rebuild from the cut's carve sources byte-equal to the pinned object (S5-12 R2). |
+| `kfsmod.sh` | The filesystem modules a kernel package carries (amix-dlm C2-3 v8 sec 1): the pin, the kit's `modcheck`, `.moddata` (`tier=core`, `class=boot`, `fs=`, the line's kabi, `build=` the cut's own), and a rebuild from the cut's carve sources byte-equal to the pinned object (S5-12 R2). Since kern46m -50 (S5-13) also `amix_kcore_strips` (the cut's core is the pin and contains amix-dlm 7b07bce, the first core that skips the stamp's leading blank) and `amix_kbuildid3` (`kbuildid.py`: the core's rule over the shipped bytes — the image's buildid without leading blanks == the sidecar's `build=` == each module's `.moddata build=`); `sh tools/kbuildid-selftest.sh` proves both refuse (-91's ufs against the -50 kernel, the -91 cut's core 76f83d8). |
 | `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
 | `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. Before a box binary (kbootset, modadmin) it proves the GCC 14 prefix is the pinned one (`gcc14-pin.sh`) and rebuilds `build/box` when it was built by another. |
 | `gcc14-pin.sh` | The gcc14-cross-amix identity: the pinned commit, the sha256 of cc1/libgcc.a/libamixc99.a/specs, the return-value ABI self-check. Sourced by `gcc14-env.sh` (TOOLCHAIN=gcc14 recipes) and `dlm-src.sh` (box binaries). |
