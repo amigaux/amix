@@ -128,13 +128,17 @@ main(void)
 	dma_complete(r, (unsigned long)near, 64, 0);
 	dma_forcebounce = 0;
 
-	dma_forcefail = 1;
-	check(dma_prepare(r, (unsigned long)ddr, 64, 0) != 0 && dma_addr(r, (unsigned long)ddr) == 0 &&
-	    RW(r, 0x4c) == 1 && dma_prepare(r, (unsigned long)near, 64, 0) == 0 &&
-	    dma_addr(r, (unsigned long)near) == (unsigned long)near,
-	    "the force-fail hook: a bounce misses (dma_addr 0), a reachable segment is untouched");
+	dma_forcefail = 2;
+	check(dma_prepare(r, (unsigned long)near, 64, 0) == 0 &&
+	    dma_addr(r, (unsigned long)near) == (unsigned long)near && dma_forcefail == 2,
+	    "the force-fail hook leaves a reachable segment alone, and its count with it");
 	dma_complete(r, (unsigned long)near, 64, 0);
-	dma_forcefail = 0;
+	check(dma_prepare(r, (unsigned long)ddr, 64, 0) != 0 && dma_addr(r, (unsigned long)ddr) == 0 &&
+	    dma_forcefail == 1 && dma_prepare(r, (unsigned long)ddr, 64, 0) != 0 && dma_forcefail == 0 &&
+	    RW(r, 0x4c) == 2, "the force-fail hook: N bounces miss (dma_addr 0), one off the count each");
+	check(dma_prepare(r, (unsigned long)ddr, 64, 0) == 0 && dma_addr(r, (unsigned long)ddr) != 0,
+	    "and at 0 it has cleared itself: the next bounce is taken");
+	dma_complete(r, (unsigned long)ddr, 64, 0);
 	RW(r, 0x4c) = 0;
 	check(dma_prepare(r, (unsigned long)ddr, POOL, 0) != 0 && RW(r, 0x4c) == 1 &&
 	    dma_addr(r, (unsigned long)ddr) == 0,
