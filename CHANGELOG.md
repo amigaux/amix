@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset's namelist lookup takes the global, never a file static (the k30 cut -18 carries delay as three statics and the global); C2-3 v8: a cut's kernel package carries the ufs/s5 core-tier modules, and its version must sort above the line's kernel of record; the S5-12 packaging recipe docs/plan/s5-12-packaging.md (0735e4d, b8a23e5, 7e9ad63)
+
 ## 2026-10-27 — S5-45: `kbootset media --disk --ramdisk` writes the netinstall raw image's store (gated as media --cd; read-only, members raw; the same bytes as mkstore -r on its spec), C2-4 v13 §13; C4-3 v4 §1: a RAM-disk image serves one generation id, and a shared image for a two-line medium is not in stage 5 (d4d8f1c, eb31c79, c2f406d)
 
 ## 2026-10-27 — S5-44: C4-1 v5 §2.4, a four-card root holds c0-c1f d0 s0-s7 and no d1 nodes, whatever the board set; C2-4 v12 §14 `kbootset nodes` (commit runs it on the running box, check reports it); plan row S5-44 (gate, blocks S5-41) and installng's recipe docs/plan/s5-44-disk-nodes.md (6c82415, 4046392, ebcdb80)
