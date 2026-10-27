@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-6 v4: the media's miniroot is s5 on k30 and ufs on k46
+
+s5 is broken under the 4 KiB-page line (ls -l and /etc/sioc bus errors on the k46 s5 RAM-disk root, rd1g), as every k46 miniroot
+so far has shown; k46 media use --rootfs ufs and promote ufs, k30 media promote s5 with ufs boot class; cdfs boot class on both.
+Spec 30 §6 and the S4-40 plan aligned (whether k46 ships an s5 module at all is a question before the carve).
+
 ## 2026-10-27 — C4-3 v3: `swap none` = /dev/fakeswap
 
 The RTH1 half sets swapfile.bo_name to "/dev/fakeswap" (the stock dummy disk, b 19,0, every I/O fails, nothing paged — the 1.0
