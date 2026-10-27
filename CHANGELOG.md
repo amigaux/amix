@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-2 v4 §1.1: a module replacing a static driver carries every build-pass arm; the ledger's M-S474a line and the arms audit row
+
+The S4-74 finding as the example: f4arms' z3660_cache = 60 on every static k46 z3660scsi, the module kept 0 → a stale 060 data
+cache → the swapconf panic; emulators need 0; the fix is ZS-06. Audit row: z3660scsi ✗; a4091, gayle, z3660eth, z3660rtg, monsw
+to check. kernel-build in the build record comes straight from the sidecar's build=; the -79 sidecar says 68060-… where the kernel's
+own buildid reads 68040-… (the CPU prefix): the sidecar writer's, with a gate-2 belt possible once the strings agree.
+
 ## 2026-10-27 — the exit ledger marks M-RD1/M-RD2 PASS on both lines (N123/N124, kerntools e043755)
 
 Every stage-4 emulation row now passes on both lines; §7 lists what the exit commit waits for: installng's CD-boot install cell,
