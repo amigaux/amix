@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — setup: one disc, two lines — BASE.k30 / BASE.k46 chosen by the kernel's kinfo line (926067f)
+
+build-install-iso.sh writes /install/profiles/BASE.k30 and BASE.k46 (the first --profile of each line, by INSTALL_CPU); setup.sh
+with no argument reads the running kernel's line from /dev/kinfo (KIF1 magic, the C2-1 line long) and picks BASE.<line>, falling
+back to BASE (no kinfo, bad magic, no per-line file); a typed profile still overrides. uname -m cannot tell the lines apart.
+Four new interview selftest cases. The RAM-disk miniroot gains the /dev/kinfo node (c 53 0); disc rd1c 578e05f3 carries it.
+
 ## 2026-10-27 — the 1.1 set moves to the RAM-disk medium's inputs, catalog cdcbff84 (ee1ca6d)
 
 l11-set.conf: dlm 9079989, apkg abfaaac, APKG 0.3.3, APKGENG 1.12.4 (new `apkgeng-pkg` item), kbootset -18, loader-amix -8,
