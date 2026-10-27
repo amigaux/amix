@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — z3660scsi-k30/-k46 1.0.0-2 (7401d53), kern46m k46.1.2.261027-82 (d8ee54b); round trip 157/157 — not published
+
+z3660scsi 1.0.0-2 (amix-z3660scsi 209bdd2, ZS-06: the module arms its data cache from cputype at _load, `param=cache:int:-1:-1:60`,
+always 0 on k30 — the S4-74 metal fix): objects k30 2c9e3803 / k46 21754e70 (7468 B image), now kabi 1.2; md5 51ff85c2 / 6808c875.
+kbootset writes no param token, so the cputype default runs. kern46m -82 (port fcaffcd STAMP_BUILDID_CPU=60, dlm 178a47b): the
+image's .data buildid " 68060-261027-82" = the sidecar's build= (build.sh checks it); unix 435f255f, arena 0x0012c500, abi 2ab48658,
+103 names; md5 97bc0e8a / 2480128 B; the stamper lands as src/stamp_buildid.real.py beside the KT-41 shim. Catalog 6a4b8caa.
+
 ## 2026-10-27 — kern30m k30.1.2.261027-17 (65b98db), gayle-k30/-k46 1.1.0-2 (6bc9f94); round trip 157/157 — not published
 
 kern30m -17 (kerntools 865d357 --no-fstypes, dlm 54e04bd, port d33608d): the static cdfs gone (cdfs-k30 is the only cdfs on k30, as
