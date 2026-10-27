@@ -2,20 +2,25 @@
 """carve.py -- ufs and s5 out of the kernel, as core-tier modules (S5-04;
 docs/plan/s4-40-ufs-s5-carve.md, contract C4-6).
 
-  carve.py wrap --fs ufs|s5 --obj STOCK --filesys FILESYS.o --build ID OUT
+  carve.py wrap --fs ufs|s5 --obj STOCK --filesys FILESYS.o --build ID [--pageshift-ok F,G] OUT
       A module directory for the ABI kit (KIT=... make -C OUT): a
       generated wrapper (MOD_MISC_WRAPPER; _load registers the type with
       vfs_register, s5 calling inoinit first), a Master (class boot,
       match always, tier core, the cut's build id, fs=, unload never, the
       probe parameter) and the stock object linked in as it is (EXTRA).
       The row's vsw_flag is read from the stock vfssw in FILESYS.o.
+      --pageshift-ok names the functions whose shifts by 11 are not page
+      arithmetic on k46 (the kit's PAGESHIFT_OK, modcheck's page scan),
+      as the port's own geometry gate judged them.
 
-  carve.py corelist --ddi DDI.list --namelist KERNEL --tree SYS OBJ...
+  carve.py corelist --ddi DDI.list --namelist KERNEL --tree SYS [--skip P]... OBJ...
       The core tier for the carved objects (C3-2 section 4), sorted, in
       the list format: every name they import outside DDI, and every
       COMMON they share with another stock object under SYS (those stay
       the kernel's; the others go with the modules).  The kind (func or
-      data) is the namelist's.
+      data) is the namelist's.  --skip names a tree object that is one of
+      the carved ones in another form (the stock original of a k46
+      object patched by the port's fsobj-patch.py).
 
 With probe=1 the wrapper prints the level and whether lbolt moved around
 each init call, as tests/bench/s4-71 does (S4-71's ufs/s5 halves).  The
@@ -182,11 +187,14 @@ FIRST = '''	{
 
 
 def wrap(args):
+    if len(args) % 2 == 0:
+        args = args + ['']	# no OUT: the usage below
     opt = dict(zip(args[0:-1:2], args[1:-1:2]))
     out = args[-1]
     fs = opt.get('--fs')
-    if fs not in FS or not all(k in opt for k in ('--obj', '--filesys', '--build')):
-        raise SystemExit('usage: carve.py wrap --fs ufs|s5 --obj STOCK --filesys FILESYS.o --build ID OUT')
+    if fs not in FS or not out or not all(k in opt for k in ('--obj', '--filesys', '--build')):
+        raise SystemExit('usage: carve.py wrap --fs ufs|s5 --obj STOCK --filesys FILESYS.o --build ID '
+                         '[--pageshift-ok F,G] OUT')
     init, ops, first = FS[fs]
     body = Elf(opt['--obj'])
     for need in (init, ops) + ((first,) if first else ()):
@@ -206,24 +214,28 @@ def wrap(args):
         % (fs, opt['--build'], fs, fs, fs, fs))
     open(os.path.join(out, 'Makefile'), 'w').write(
         '# the %s module, carved (tools/carve.py): make KIT=<amix-dlm>/build/kit/<line>\n'
-        'MODULE = %s\nOBJS = %s_wrap.o\nEXTRA = %s\ninclude $(KIT)/mk/module.mk\n'
-        % (fs, fs, fs, os.path.abspath(opt['--obj'])))
+        'MODULE = %s\nOBJS = %s_wrap.o\nEXTRA = %s\n%sinclude $(KIT)/mk/module.mk\n'
+        % (fs, fs, fs, os.path.abspath(opt['--obj']),
+           'PAGESHIFT_OK = %s\n' % opt['--pageshift-ok'] if opt.get('--pageshift-ok') else ''))
     print('carve: %s: %s wraps %s (vfs_register flag %d, build %s)'
           % (fs, out, opt['--obj'], flag, opt['--build']))
 
 
 def corelist(args):
-    opt, objs = {}, []
+    opt, objs, skip = {}, [], []
     i = 0
     while i < len(args):
-        if args[i] in ('--ddi', '--namelist', '--tree'):
+        if args[i] == '--skip':
+            skip.append(args[i + 1])
+            i += 2
+        elif args[i] in ('--ddi', '--namelist', '--tree'):
             opt[args[i]] = args[i + 1]
             i += 2
         else:
             objs.append(args[i])
             i += 1
     if len(opt) != 3 or not objs:
-        raise SystemExit('usage: carve.py corelist --ddi DDI.list --namelist KERNEL --tree SYS OBJ...')
+        raise SystemExit('usage: carve.py corelist --ddi DDI.list --namelist KERNEL --tree SYS [--skip P]... OBJ...')
     ddi = set()
     for line in open(opt['--ddi']):
         w = line.split('#')[0].split()
@@ -242,7 +254,7 @@ def corelist(args):
         commons |= e.commons()
     # a COMMON another stock object also names stays the kernel's
     others = set()
-    real = {os.path.realpath(o) for o in objs}
+    real = {os.path.realpath(o) for o in objs + skip}
     for root, _, files in os.walk(opt['--tree']):
         for f in files:
             p = os.path.join(root, f)
