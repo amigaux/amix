@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — a4kt710-k30 / a4kt710-k46 1.0.0-1 (pkginst a4kt71030 / a4kt71046), the A4000T onboard NCR 53C710 root-class module (a3a287e); catalog 64d37aaa, round trip 172/172 — not published
+
+mobo:a4000t-710, rank mobo, kabi 1.2; it does nothing unless the running Kickstart's "NCR scsi.device" tag is present (C4-2 v6
+§8.1); `param declared=0` in modreg.local.d disables it. Built from a git archive of amix-a4091 a74708e with kit ca8b352: objects
+k46 95bebecb, k30 e65b4f7d (the sibling's working-tree objects were stale and lacked the gate). a4kt71030 ab19897d / 27648 B,
+a4kt71046 77c997e3 / 30208 B. b2a0e874 kept at superseded/repo-20261027-1353. kmodpkg.sh gains an optional KM_VERSION_FILE.
+
 ## 2026-10-27 — kbootset 1.1.0.261027-21 and modtools 1.0.261027-7 from amix-dlm 4442c76; the static 1.0 kernels leave the kernel-space catalog (S5-03, S5-34) (2b6ba70, d52fdee); catalog b2a0e874, round trip 162/162 — not published
 
 kbootset -21 brings S5-02 (the safe set keeps the card numbers; C4-4 v6, C3-5 v13). Both built on gcc14-cross-amix cf461e3 and
