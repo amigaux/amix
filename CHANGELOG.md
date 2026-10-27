@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — the S5-12 recipe pinned at the packaging cuts 68030-261027-20 and 68060-261027-91 (rth1=2, no rootfs=; the modules rebuild byte-identical with the kit at HEAD); M-FL1 re-checked there, sizes within 641 bytes, conclusions unchanged (943b6fd)
+
 ## 2026-10-27 — C2-4 v14: `kbootset status` in a safe boot names the safe set it keeps (from Bench N160); S5-46: C4-1 v6 §5.2 / C2-3 v9, a motherboard controller's record names it by its kinfo id (`sd id=0000000N base=0`, no mobo flag, no loader change), RTH1 matches it and no longer matches a mobo record to the Z3660 window, kernels say `rth1=2`, and kbootset rewrites an old mobo root record only for such a kernel (9c99818, 3f12419, c87fb1b, 698d8c1, c7d69cf, e013b67)
 
 ## 2026-10-27 — S5-15 (amix-dlm half): kbootset writes a root/swap record on any Z3660 card as `sd id=144b0100 base=00000000`, takes the window's key as zorro:144b:01, and card_of() picks a motherboard card by the disk with a slice at AXL1's start, the boot device's name breaking a tie; S5-14: M-FS1's host half and M-FL1 at the cuts -18 and -66 (k30 109 240 bytes less memory than -17; k46 36 634 bytes of file, 5 768 of memory) (8941879, 12739c1)
