@@ -5,5 +5,7 @@
  * page that answers it. */
 typedef unsigned long paddr_t;
 #define PG_V		1
+#define POFFMASK	0x7FF		/* Amix pages are 2 KiB (k30) */
+#define PNUMSHFT	11
 #define phystopfn(x)	((unsigned long)(x))
 #endif

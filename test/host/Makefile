@@ -23,7 +23,10 @@ DRVF   := -DA4091_MODULE -Istubs -I../../src -Dprintf=mock_printf -Dbcopy=mock_b
 STUBS  := $(wildcard stubs/*.h stubs/sys/*.h)
 
 .PHONY: all check clean
-all: $(BUILD)/modtest-k30 $(BUILD)/modtest-k46
+A4KTF  := -DA4091_A4KT -D'A4KT_VPOSR()=mock_vposr()'
+ARMS   := $(BUILD)/modtest-k30 $(BUILD)/modtest-k46 $(BUILD)/modtest-a4kt-k30 $(BUILD)/modtest-a4kt-k46
+
+all: $(ARMS)
 
 $(BUILD)/drv-k30.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 	@mkdir -p $(BUILD)
@@ -32,6 +35,22 @@ $(BUILD)/drv-k30.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 $(BUILD)/drv-k46.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(DRVF) -DA4091_KVA -c $(DRV) -o $@
+
+# the a4kt710 target (S5-06): the same source, -DA4091_A4KT, VPOSR from the mock
+$(BUILD)/drv-a4kt-k30.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(DRVF) $(A4KTF) -c $(DRV) -o $@
+
+$(BUILD)/drv-a4kt-k46.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) $(DRVF) $(A4KTF) -DA4091_KVA -c $(DRV) -o $@
+
+$(BUILD)/test-a4kt-%.o: a4kt_modtest.c mock.h ../../src/a4091_dmarec.h
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -std=gnu11 -DLINE_NAME='"a4kt-$*"' -c a4kt_modtest.c -o $@
+
+$(BUILD)/modtest-a4kt-%: $(BUILD)/drv-a4kt-%.o $(BUILD)/mock.o $(BUILD)/test-a4kt-%.o
+	$(CC) $(CFLAGS) $^ -o $@
 
 $(BUILD)/mock.o: mock.c mock.h
 	@mkdir -p $(BUILD)
@@ -47,6 +66,8 @@ $(BUILD)/modtest-%: $(BUILD)/drv-%.o $(BUILD)/mock.o $(BUILD)/test-%.o
 check: all
 	./$(BUILD)/modtest-k30
 	./$(BUILD)/modtest-k46
+	./$(BUILD)/modtest-a4kt-k30
+	./$(BUILD)/modtest-a4kt-k46
 
 clean:
 	rm -rf $(BUILD)

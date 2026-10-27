@@ -30,6 +30,18 @@ void			*mock_dma_va;
 size_t			mock_dma_len;
 int			mock_dma_allocs, mock_dma_frees;
 int			mock_autocon_calls;
+int			mock_dd_touch;
+int			mock_sptfrees, mock_unmaps;
+unsigned char		*mock_rom;
+int			mock_rom_maps;
+unsigned short		mock_vposr_val = 0x2300;
+static struct mock_board	rom_board;
+
+unsigned short
+mock_vposr(void)
+{
+	return mock_vposr_val;
+}
 
 void
 mock_reset(void)
@@ -50,6 +62,11 @@ mock_reset(void)
 	mock_status_done = 0;
 	mock_dma_allocs = mock_dma_frees = 0;
 	mock_autocon_calls = 0;
+	mock_dd_touch = 0;
+	mock_sptfrees = mock_unmaps = 0;
+	mock_rom = NULL;
+	mock_rom_maps = 0;
+	mock_vposr_val = 0x2300;
 }
 
 int
@@ -59,7 +76,33 @@ mock_add(long prod, unsigned long base)
 
 	b->prod = prod;
 	b->base = base;
+	b->siop_off = MOCK_SIOP_OFF;
+	b->shadow = MOCK_WRSHADOW;
+	b->regs = b->rpage;
 	mock_chip_done(b);
+	return mock_nboard++;
+}
+
+/* the A4000T onboard 53C710 at $DD0000: registers at +0x40 written directly,
+ * the DIP bank at +0x3000 (all switches off: host ID 7), an idle chip as the
+ * ROM driver leaves it (SIEN 0xAF, DIEN 0x3D enabled; DSTAT DFE; revision 2) */
+int
+mock_add_a4kt(void)
+{
+	struct mock_board *b = &mock_board[mock_nboard];
+
+	b->prod = 0;
+	b->base = 0xDD0000;
+	b->acfg_off = 0x3000;
+	b->siop_off = 0x40;
+	b->shadow = 0;
+	b->regs = b->rpage + 0x40;
+	memset(b->acfg, 0xff, sizeof b->acfg);
+	b->regs[0x00] = 0xaf;		/* SIEN */
+	b->regs[0x3a] = 0x3d;		/* DIEN */
+	b->regs[0x0f] = 0x80;		/* DSTAT DFE */
+	b->regs[0x21] = 0x20;		/* CTEST8 revision 2 */
+	b->regs[0x22] = 0x00;		/* ISTAT idle */
 	return mock_nboard++;
 }
 
@@ -100,29 +143,42 @@ mock_wr32(struct mock_board *b, int reg)
 {
 	unsigned long v;
 
-	memcpy(&v, &b->regs[reg + MOCK_WRSHADOW], sizeof v);
+	memcpy(&v, &b->regs[reg + b->shadow], sizeof v);
 	return v;
 }
 
 unsigned char
 mock_wr8(struct mock_board *b, int reg)
 {
-	return b->regs[reg + MOCK_WRSHADOW];
+	return b->regs[reg + b->shadow];
 }
 
+/* the page answering phys: frame = 1 maps by frame (sptalloc: the page's
+ * start), 0 keeps the in-page offset (dev_kvmap) */
 static struct mock_board *
-page(unsigned long phys, unsigned char **p)
+page(unsigned long phys, unsigned char **p, int frame)
 {
 	int i;
+	struct mock_board *b;
+	unsigned long rp;
 
+	if (phys >= 0xDD0000 && phys < 0xDE0000)
+		mock_dd_touch++;
+	if (phys == 0xF80000) {
+		mock_rom_maps++;
+		*p = mock_rom;
+		return mock_rom ? &rom_board : NULL;
+	}
 	for (i = 0; i < mock_nboard; i++) {
-		if (phys == mock_board[i].base) {
-			*p = mock_board[i].acfg;
-			return &mock_board[i];
+		b = &mock_board[i];
+		rp = b->base + b->siop_off;
+		if (phys == b->base + b->acfg_off) {
+			*p = b->acfg;
+			return b;
 		}
-		if (phys == mock_board[i].base + MOCK_SIOP_OFF) {
-			*p = mock_board[i].regs;
-			return &mock_board[i];
+		if (frame ? (phys & ~0x7ffUL) == (rp & ~0x7ffUL) : phys == rp) {
+			*p = frame ? b->rpage : b->regs;
+			return b;
 		}
 	}
 	return NULL;
@@ -149,10 +205,17 @@ char *
 sptalloc(int npages, int mode, unsigned long pfn, int flag)
 {
 	unsigned char *p;
-	struct mock_board *b = page(pfn, &p);
+	struct mock_board *b = page(pfn, &p, 1);
 
 	(void)npages; (void)mode; (void)flag;
 	return (b && !b->dead) ? (char *)p : NULL;
+}
+
+void
+sptfree(char *va, int npages, int flag)
+{
+	(void)va; (void)npages; (void)flag;
+	mock_sptfrees++;
 }
 
 /* k46: dev_kvmap(phys, nbytes, cm, flags) / dev_kvunmap(kva, nbytes) */
@@ -162,13 +225,14 @@ dev_kvmap(long phys, unsigned long nbytes, int cm, int flags)
 	unsigned char *p;
 
 	(void)nbytes; (void)cm; (void)flags;
-	return page((unsigned long)phys, &p) ? (char *)p : NULL;
+	return page((unsigned long)phys, &p, 0) ? (char *)p : NULL;
 }
 
 void
 dev_kvunmap(char *kva, unsigned long nbytes)
 {
 	(void)kva; (void)nbytes;
+	mock_unmaps++;
 }
 
 /* k46: one byte through u_nofault; a dead board's window faults */
@@ -178,6 +242,10 @@ bprobe(char *addr, int v)
 	int i;
 
 	(void)v;
+	for (i = 0; i < mock_nboard; i++)
+		if (mock_board[i].prod == 0 && (unsigned char *)addr >= mock_board[i].rpage
+		    && (unsigned char *)addr < mock_board[i].rpage + sizeof mock_board[i].rpage)
+			mock_dd_touch++;	/* the onboard chip's window */
 	for (i = 0; i < mock_nboard; i++)
 		if ((unsigned char *)addr >= mock_board[i].regs
 		    && (unsigned char *)addr < mock_board[i].regs + MOCK_PAGE)

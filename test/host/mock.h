@@ -18,11 +18,15 @@
 #define MOCK_DMA_PA	0x00f00000UL	/* dma_alloc's physical address: never mapped */
 
 struct mock_board {
-	long		prod;		/* (manufacturer << 16) | product */
+	long		prod;		/* (manufacturer << 16) | product; 0: onboard */
 	unsigned long	base;		/* the physical base autocon reports */
 	int		dead;		/* k46: bprobe faults; k30: sptalloc fails */
+	unsigned long	acfg_off;	/* the page mapped beside the chip */
+	unsigned long	siop_off;	/* the chip's register block from base */
+	int		shadow;		/* 0x40: the A4091's write shadow; 0: direct */
 	unsigned char	acfg[MOCK_PAGE];
-	unsigned char	regs[MOCK_PAGE];	/* reads at +0, writes at +0x40 */
+	unsigned char	rpage[MOCK_PAGE + 0x80];	/* the chip's page */
+	unsigned char	*regs;		/* rpage + (siop_off & 0x7ff) */
 };
 
 struct mock_reg {			/* one sd_register call */
@@ -65,6 +69,13 @@ extern int			mock_autocon_calls;
 
 void	mock_reset(void);
 int	mock_add(long prod, unsigned long base);
+int	mock_add_a4kt(void);		/* the A4000T onboard 53C710, idle */
+extern int	mock_dd_touch;		/* maps and probes under $DD0000-$DDFFFF */
+extern int	mock_sptfrees, mock_unmaps;
+extern unsigned char	*mock_rom;		/* the Kickstart at 0xF80000, or 0 */
+extern int		mock_rom_maps;
+extern unsigned short	mock_vposr_val;		/* VPOSR: 0x2300 = AGA Alice */
+unsigned short	mock_vposr(void);
 void	mock_chip_done(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff00 */
 void	mock_chip_seltimeout(struct mock_board *b);	/* reads: SIP, SSTAT0 STO */
 void	mock_chip_phase(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff05 */

@@ -37,6 +37,33 @@ make -C test/host clean
 | selection timeout is silent | An absent id (ISTAT SIP, SSTAT0 STO, rc -1) fails the command with no `A4091 slow` line; a phase error (DSPS 0xff05, rc -3) still prints one |
 | queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
 
+## The a4kt710 arms (S5-06)
+
+`modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 12/12 cases each:
+
+| Case | What it shows |
+|---|---|
+| no NCR tag; a tag without `RTF_COLDSTART`, with a wrong name, with a wrong `rt_MatchTag`, with `rt_Name` outside the image | `ENXIO`, zero accesses under `$DD0000`, no DMA area, nothing registered |
+| `declared=0` | `ENXIO` with the tag present; the Kickstart is not even read |
+| not AGA | `ENXIO`, zero accesses (G0) |
+| the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3 |
+| `declared=1` | registers without reading the Kickstart |
+| no chip / the fingerprint fails | `ENXIO`, the area given back (and the pages unmapped) |
+| host ID and halt | host ID 5 from the DIP bank; `_halt` writes DCNTL `0x20` and SCID `1 << 5` directly |
+
+The queue path is not repeated: it is the A4091's. This chip's direct writes land where the mock's reads are,
+so a launch's longword writes would overwrite the mock's "command done" state.
+
+The mutation check: each of these makes a case fail on both lines.
+- dropping the tag scan (the parameter alone);
+- dropping the `RTF_COLDSTART` or the `rt_MatchTag` check;
+- dropping G0;
+- keeping the write shadow;
+- rank 2;
+- dropping the attach quiesce;
+- ignoring `declared`.
+
 ## How the harness works
 
 - `mock.c` gives `dma_alloc` a physical address the host never maps
