@@ -66,6 +66,9 @@ extern int			mock_autocon_calls;
 void	mock_reset(void);
 int	mock_add(long prod, unsigned long base);
 void	mock_chip_done(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff00 */
+void	mock_chip_seltimeout(struct mock_board *b);	/* reads: SIP, SSTAT0 STO */
+void	mock_chip_phase(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff05 */
+extern int	mock_trace_lines;		/* printf calls of "A4091 slow" */
 unsigned long	mock_wr32(struct mock_board *b, int reg);	/* last write */
 unsigned char	mock_wr8(struct mock_board *b, int reg);
 

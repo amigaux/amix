@@ -357,6 +357,7 @@ struct a4091_kstat {
 #ifdef	A4091_MODULE			/* appended: the static layout is unchanged */
 	ulong	noreach;		/* dma_addr 0 (C4-5 v5): not armed, failed */
 	ulong	stsync;			/* clear-line syncs after a WRITE or TUR     */
+	ulong	seltimeout;		/* selection timeouts (an absent id): silent */
 #endif
 };
 struct a4091_kstat	a4091_kstat = {
@@ -1091,7 +1092,18 @@ struct sdcom	*cp;
 	 * DSP = terminal SCRIPTS pointer; DBC = residual DMA byte count; DSPS is the
 	 * captured value that drove rc.
 	 */
-	if (poll > a4091_slow_poll || rc != 0 || recovered) {
+#ifdef	A4091_MODULE
+	/* A selection timeout is the normal answer of an absent id to a bus scan
+	 * (the installer's source probe and disk scan select every id): counted,
+	 * not traced.  The trace stays for the anomalies: the poll bound, a
+	 * phase error, a recovery, a slow command. */
+	if (rc == -1)
+		a4091_kstat.seltimeout++;
+#define	A4091_TRACE_RC(rc)	((rc) != 0 && (rc) != -1)
+#else
+#define	A4091_TRACE_RC(rc)	((rc) != 0)
+#endif
+	if (poll > a4091_slow_poll || A4091_TRACE_RC(rc) || recovered) {
 		uchar	di, dd, d0, d1, d2;
 		ulong	dp, db;
 		di = RD8(R_ISTAT);

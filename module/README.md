@@ -52,7 +52,8 @@ unchanged:
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (Bench N109) |
-| Version | `VERSION` (`1.0.0-4`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself |
+| Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, the poll bound (rc -2), a phase error (rc -3) or a short-read recovery. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
+| Version | `VERSION` (`1.0.0-5`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console, RD-1 E955) |
 
 ### The `dma_alloc` area
 
@@ -170,8 +171,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 17/17 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 17/17 cases |
+| H1 | k30 (`sptalloc` arm) | 18/18 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 18/18 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the

@@ -75,6 +75,26 @@ mock_chip_done(struct mock_board *b)
 	memcpy(&b->regs[0x30], &dsps, sizeof dsps);
 }
 
+/* an absent id: the SELECT timed out (ISTAT SIP, SSTAT0 STO) */
+void
+mock_chip_seltimeout(struct mock_board *b)
+{
+	b->regs[0x22] = 0x02;
+	b->regs[0x0e] = 0x20;
+	b->regs[0x0f] = 0x00;
+}
+
+/* an unexpected phase: the SCRIPTS' INT err5 (DSPS 0xff05) */
+void
+mock_chip_phase(struct mock_board *b)
+{
+	unsigned long dsps = 0xff05;
+
+	b->regs[0x22] = 0x01;
+	b->regs[0x0f] = 0x04;
+	memcpy(&b->regs[0x30], &dsps, sizeof dsps);
+}
+
 unsigned long
 mock_wr32(struct mock_board *b, int reg)
 {
@@ -267,6 +287,7 @@ mock_bcopy(const void *from, void *to, size_t n)
 }
 
 int mock_verbose;
+int mock_trace_lines;
 
 int
 mock_printf(const char *fmt, ...)
@@ -274,6 +295,8 @@ mock_printf(const char *fmt, ...)
 	va_list ap;
 	int n = 0;
 
+	if (!strncmp(fmt, "A4091 slow", 10))
+		mock_trace_lines++;
 	if (mock_verbose) {
 		va_start(ap, fmt);
 		n = vfprintf(stderr, fmt, ap);

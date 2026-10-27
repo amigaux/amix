@@ -481,6 +481,25 @@ t_forcebounce_status(void)
 	CHECK(run_status(0, 1, raw, 512, 0x28) == 0x00, "READ: status is the chip's 0x00");
 }
 
+/* an absent id answers a scan with a selection timeout: the command fails,
+ * silently; a phase error still prints the trace */
+static void
+t_seltimeout_silent(void)
+{
+	struct mock_board *b;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	mock_chip_seltimeout(b);
+	mock_trace_lines = 0;
+	CHECK(run_status(0, 1, NULL, 0, 0x12) == -1, "absent id: the command fails");
+	CHECK(mock_trace_lines == 0, "absent id: no trace line");
+	mock_chip_phase(b);
+	CHECK(run_status(0, 1, NULL, 0, 0x12) == -1, "phase error: the command fails");
+	CHECK(mock_trace_lines == 1, "phase error: one trace line");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -499,6 +518,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "queue: WRITE", t_queue_write },
 	{ "queue: out of reach (dma_addr 0)", t_queue_noreach },
 	{ "status under force-bounce (N109)", t_forcebounce_status },
+	{ "selection timeout is silent", t_seltimeout_silent },
 };
 
 int
