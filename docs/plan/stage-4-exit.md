@@ -69,7 +69,7 @@ alignment (fixed in a829c44, C3-3 version 5).
 | L5 arena overflow (a backstop: gate 4 refuses first); an unmatched root entry skipped silently by the core (L7 retired, C4-4 v3) | pending | pending |
 | `sd_register` after sd's first open: `EBUSY` and a console line | pending | pending |
 | a failed root-class `_load` leaves the kernel as it was | pending | pending |
-| the deferred self-test point (S4-05): Gayle IDE leaves polled | **PASS** (N111b-class row of a12120b: READ VERIFY self-test passed, interrupts on, 0 spurious) | **PASS** (the k30 interrupt row of a12120b) |
+| the deferred self-test point (S4-05): Gayle IDE leaves polled | **PASS** — N111 (kern46m -80, `intr=1`: the READ VERIFY self-test passed, 32 755 interrupts, 0 spurious); repeated over three halt and reboot cycles (N115) and in safe mode (N116); amix-kerntools a12120b | **PASS** — N117 (kern30m -15: 27 706 interrupts); N121 (halt and reboot), N122 (safe mode); a12120b |
 
 ## 4. The media (S4-50–S4-56; 50)
 
