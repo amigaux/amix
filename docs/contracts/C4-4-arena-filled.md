@@ -1,4 +1,4 @@
-# C4-4 — the arena filled: what boot2 places and the core links, version 6
+# C4-4 — the arena filled: what boot2 places and the core links, version 7
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, option A of S4-01's design): each root module's NOBITS and
@@ -12,7 +12,8 @@
   version 5 (2026-10-27, the orchestrator's decision on amix-cdfs's plan):
   the root filesystem's boot-class module is placed as a root record
   (§1.3); version 6 (2026-10-27, S5-02): the safe set keeps the card
-  numbers (§2, item 4). Other repositories build against this text; a change from here is a
+  numbers (§2, item 4); version 7 (2026-10-27, S5-09): the owner's safe
+  mark on a boot-class module (§2, item 5). Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
   §5.3, §7.4 (safe mode), §9 (L3, L5, L7); `30-module-core.md` §2 patches 2
@@ -118,7 +119,15 @@ CD medium, C4-6 §5) is one object, with `class=boot`, `fs=` and
    `c6d0` in safe mode (N145, N146; spec 70 §4). "At or before" because
    the order inside a class is by base, which `kbootset` cannot see. A
    member whose board is absent costs arena bytes only: the core skips
-   it. Not for a `root ramdisk` generation.
+   it. Not for a `root ramdisk` generation;
+5. (version 7) a boot-class module the owner marks with a `safe` line in
+   `/etc/conf/modreg.local.d/<module>`, and the boot-class modules it
+   depends on: `safe=1` on their boot records. In safe mode the core's
+   `marc_post` loads those and no other boot or demand module (core
+   patch 0045), after the root is up, so a failing `_load` leaves the
+   rescue shell. The default is none: safe mode stays network-less unless
+   the owner marks the NIC module (S5-09). The vendor's `modreg.d` cannot
+   mark a module, and a root- or demand-class module is refused.
 
 In safe mode (the menu's `s`, 10 §7.4) boot2 places only the records with
 `safe=1`. The safe set's entries carry flag 0x4 in every boot, not only in
