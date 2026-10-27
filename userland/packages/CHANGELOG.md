@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kbootset 1.1.0.261027-20 (fd25bc0); round trip 159/159 — not published
+
+From amix-dlm 1da3474 (093b2a7): gate 2 checks the sidecar's build= against the kernel's own build id (buildid on k46,
+kinfo_buildid via unix.sym on k30, leading blanks ignored). /sbin/kbootset b3e7b987; md5 e18dd5f2 / 200704 B. boot1/boot2/
+modadmin unchanged. Catalog 61181d33 (the -19 root at superseded/repo-20261027-0649; fd25bc0's body names 0646, a copy of the
+round-trip root with the same catalog). Round trip 159/159 with two negative build= rows.
+
 ## 2026-10-27 — z3660scsi-k30/-k46 1.0.0-2 (7401d53), kern46m k46.1.2.261027-82 (d8ee54b); round trip 157/157 — not published
 
 z3660scsi 1.0.0-2 (amix-z3660scsi 209bdd2, ZS-06: the module arms its data cache from cputype at _load, `param=cache:int:-1:-1:60`,
