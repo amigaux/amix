@@ -187,6 +187,7 @@ firmware sessions, and stage 5 proves them (80 §2).
 |---|---|---|---|---|---|---|
 | S4-62 | **The DDI v1.1 DMA providers** (C4-5): the k46 provider over the port's `dma_prepare`/`dma_complete`, the k30 provider bouncing through motherboard RAM; the core's host tests over both | amix-dlm (`core/plat/`) | host + bench | C4-5 | S4-31, S4-33 | 1 |
 | S4-63 | **The register-write rule in C3-6 §1** (80 OQ-80.7), version 5, from the proving boot's per-event table | amix-dlm | host | the proving boot | C4-2 | 0.25 |
+| S4-64 | **A RAM-disk floppy pair in one swap** (stage 5): `mkstore` lays the members out as kernel, image, modules, boot2 reads kernel, modules, image, and the image spans both volumes, so a boot asks 2, 1, 2 (E958/E959, 2026-10-27). Lay the modules before the image in `mkstore` (no boot2 bytes), or read in store order; then `b2medium` counts one change per boot | amix-dlm (`tools/mkstore.c`) | host + bench | S4-52 | — | 0.25 |
 
 ### 2.10 Measurements and rows
 
