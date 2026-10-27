@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — l11-set: catalog 61181d33 — the stage-4 exit medium rd1m 4e1f81e7 (42b204b)
+
+kbootset -20 (dlm 1da3474, the build= gate ran on both generations), kern46m -82, z3660scsi 1.0.0-2 on the rd1k set; same images.
+The CD-boot cells 9/9 and the first boots PASS on both lines (E956 k46 on -82 with z3660scsi 1.0.0-2 as the root module; E957
+k30 on -17). S4-52 budget measured on real floppy pairs: the RAM-disk profile fits both lines with ~570 KiB (k46) / ~764 KiB
+(k30) free on volume 2; each extra MiB of image costs ~200 KB deflated.
+
 ## 2026-10-27 — the 1.1 install path end to end: CDBOOT cells l11-rd-k46 / l11-rd-k30 PASS 9/9, first boots PASS (18693e2…ae1437c); rd1k 88d5212a
 
 install-matrix CDBOOT mode (the disc on the A4091 CD, a blank target, an evidence floppy inserted after power-on, the interactive
