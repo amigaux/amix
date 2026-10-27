@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — tools/carve.py: ufs and s5 wrapped as core-tier boot modules on k30 (S5-04, k30 half) (d6b4381)
+
+vfs_register; s5 after inoinit; a probe=1 parameter for S4-71's init halves. abi/k30/core.list written from the carve (100 names:
+74 functions, 26 data; rootvp stays in the base). ufs 56 636 B, s5 39 964 B, modcheck ok (k30.1.2, boot, tier core).
+
 ## 2026-10-27 — plan: S5-09, a network in safe mode, opted in per box (a `safe` line in modreg.local.d marks a boot-class module safe=1); the default stays network-less (452c245)
 
 ## 2026-10-27 — Makefile: every box object and link depends on build/box/toolchain.id, the sha256 of the GCC 14 files amix-packages pins (2d2288f)
