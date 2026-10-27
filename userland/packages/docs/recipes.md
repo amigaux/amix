@@ -17,8 +17,8 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`tar/`](tar/) | `gtar` 1.14 (catalog name `tar`) — GNU tar, base-256 aware; the first D3 package | **published** 2026-09-26 (`/opt/amix`); 1.14-2 re-mint staged |
 | [`make/`](make/) | `make` 3.81 — GNU make | **published** 2026-09-26 (`/opt/amix`); 3.81-2 re-mint staged |
 | [`amix-benchmark/`](amix-benchmark/) | `amixbench` 1.3 (catalog name `amix-benchmark`) — the amix-bench suite | **published** 2026-09-16 (`/opt/amix`) |
-| [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25, staged, not published |
-| [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26, staged, not published |
+| [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
+| [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
 | [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261027-82, kabi k46.1.2, ET_REL), unix + kabi verbatim | minted 2026-10-27, staged, not published |
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261027-17, kabi k30.1.2, brel; no static A4091/Gayle drivers or cdfs; rth1 RAM-disk root, swap /dev/fakeswap), unix + kabi + unix.sym verbatim | minted 2026-10-26, staged, not published |
@@ -30,16 +30,20 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`gayle/`](gayle/) | `gayle-k30` / `gayle-k46` (`gayle30`/`gayle46`) — the A4000 Gayle IDE driver, a root-class module of each line (kabi 1.2), interrupt I/O by default after a boot self-test (`param intr=0` in `modreg.local.d` selects polled); kern30m -13 drove the Gayle itself, -14 does not; a page-crossing request counted, printed only with `param debug=1`; must not ship before amix-dlm's root-context check passes | 1.1.0-3 (amix-gayle-ide b2935fc) minted 2026-10-27, staged, not published |
 | [`cdfs/`](cdfs/) | `cdfs-k30` / `cdfs-k46` (`cdfs30`/`cdfs46`) — the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), a boot-class module of each line (kabi 1.2, `match=always`, `fs=cdfs`), promoted to a root record on a cdfs-rooted generation; needs kern46m -79 / kern30m -14 or later (the filesystem names) | 1.0.0-1 (amix-cdfs fd6cad8) minted 2026-10-27, staged, not published |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 3 | -9 (amix-dlm ea75578) minted 2026-10-27, staged, not published |
-| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 | -20 (amix-dlm 1da3474) minted 2026-10-27, staged, not published |
-| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries | minted 2026-10-26, staged, not published |
+| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -21 (amix-dlm 4442c76) minted 2026-10-27, staged, not published |
+| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76) minted 2026-10-27, staged, not published |
 | [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -11 (amix-dlm c2dc7fb, kabi 1.2) minted 2026-10-27, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
 **Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
-catalog `b198e9e2` since 2026-10-27 13:29 — the stage-4 exit set plus gayle-k30/-k46 1.1.0-3,
-promoted from `build/kspace/next/repo`. A replaced root is kept byte-identical under
-`build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`; the stage-4 exit set (`6e60a128`) is
-`repo-20261027-1329`. `tools/kspace-roundtrip.sh` regenerates the same catalog from `build/kspace/pkg/`.
+catalog `b2a0e874` since 2026-10-27 13:44 — the first stage-5 catalog: kbootset -21 and modtools
+-7, and no static 1.0 family (kernel-k30-u, kernel-k46-z, kernel-k46-zacd leave it, S5-34; their
+datastreams are kept in `build/kspace/superseded/static-1.0/`); every other row as in `b198e9e2`. A
+replaced root is kept byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`:
+`b198e9e2` (the stage-4 exit set plus gayle-k30/-k46 1.1.0-3) is `repo-20261027-1344`, the
+stage-4 exit set (`6e60a128`) `repo-20261027-1329`. `tools/kspace-roundtrip.sh` regenerates the
+same catalog from `build/kspace/pkg/`, and runs the stage-2 static-kernel rows from a second source
+that adds the static datastreams.
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
@@ -63,7 +67,8 @@ Sourced by every recipe so none re-derives a flag and none can bypass the wrappe
 | `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
 | `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
 | `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
-| `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. |
+| `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. Before a box binary (kbootset, modadmin) it proves the GCC 14 prefix is the pinned one (`gcc14-pin.sh`) and rebuilds `build/box` when it was built by another. |
+| `gcc14-pin.sh` | The gcc14-cross-amix identity: the pinned commit, the sha256 of cc1/libgcc.a/libamixc99.a/specs, the return-value ABI self-check. Sourced by `gcc14-env.sh` (TOOLCHAIN=gcc14 recipes) and `dlm-src.sh` (box binaries). |
 | `gates.sh` | The object-code gates: **D4** (no register/memory-source 64-bit `MUL.L`, no 64-bit-dividend `DIV.L` — classified by **encoding**, and self-tested on a probe before any pass is trusted; see the note below), "is it really an m68k SVR4 ELF", the undefined-symbol listing, and the no-imported-assembly check. |
 | `amix-pwgr.c` | **D3**: `getpwnam`/`getpwuid`/`getgrnam`/`getgrgid` as direct `/etc/passwd`/`/etc/group` parsers, linked as a plain object into any executable that maps uid↔name, so the stock libc's first-call `getpwnam` crash is never reached. MIT (this repo). |
 | `amix-cpp` | A C preprocessor for autoconf's `CPP`. Still used by every recipe so far — see the trap below and the 2026-08-29 fix note that follows it. |
