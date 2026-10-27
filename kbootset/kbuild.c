@@ -1705,7 +1705,9 @@ mod_verify(struct ks *k, const char *root, const struct kb_kernel *kk, const cha
  * A built root-class record (mod_verify has checked its copy) as a store
  * member: its bytes from the copy, and as attributes what C3-5 §3 puts on
  * a root record besides at=, crc32= and sha256= (which ks_commit writes):
- * bss=, match=, depend=, safe=.  Its name and match= for the closure.
+ * bss=, match=, depend=, safe=, and a core-tier module's tier= and build=,
+ * copied as the build wrote them (boot2 skips them; the core decides from
+ * the object's own .moddata).  Its name and match= for the closure.
  */
 static int
 root_member(struct ks *k, const char *root, const char *line, struct ks_member *mb, char *attrs,
@@ -1725,7 +1727,8 @@ root_member(struct ks *k, const char *root, const char *line, struct ks_member *
 		if (!strncmp(tok[i], "path=", 5))
 			path = tok[i] + 5;
 		else if (!strncmp(tok[i], "bss=", 4) || !strncmp(tok[i], "match=", 6) ||
-			 !strncmp(tok[i], "depend=", 7) || !strncmp(tok[i], "safe=", 5)) {
+			 !strncmp(tok[i], "depend=", 7) || !strncmp(tok[i], "safe=", 5) ||
+			 !strncmp(tok[i], "tier=", 5) || !strncmp(tok[i], "build=", 6)) {
 			if (!strncmp(tok[i], "match=", 6))
 				sprintf(match, "%.255s", tok[i] + 6);
 			sprintf(attrs + strlen(attrs), "%s%.200s", attrs[0] ? " " : "", tok[i]);

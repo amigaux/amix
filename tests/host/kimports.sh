@@ -139,4 +139,15 @@ cp $T/unix.plain $R/stand/k46/unix
 sed -i "s|^sha256=.*|sha256=$(sha $R/stand/k46/unix)|; s|^size=.*|size=$(size $R/stand/k46/unix)|" $R/stand/k46/kabi
 sed -i "s|^file /stand/k46/unix .*|file /stand/k46/unix $(size $R/stand/k46/unix) $(sha $R/stand/k46/unix)|; \
 	s|^file /stand/k46/kabi .*|file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)|" $R/var/apkg/kpkg/kernel-k46
-echo "kimports: the import check (gate 2: the kernel's block, dependencies, the core tier; the global build id over a static) ok"
+# a core-tier filesystem module promoted to root (C4-6, C4-4 §1.3): the
+# store's root record keeps tier=core and build=, copied verbatim from the
+# build (C3-5 §3), as the boot record of a build file does
+clean
+modpkg ufsc class=boot match=always fs=ufs tier=core build=68060-261027-99 U:bdevsw
+$KB build $FACTS > $T/out 2>&1 || { cat $T/out >&2; exit 1; }
+$KB commit > $T/out 2>&1 || { echo "kimports: the promoted core-tier module was not committed" >&2; cat $T/out >&2; exit 1; }
+strings -a $T/disk.img | grep "^module ufsc root " | tail -1 > $T/rec
+grep -q " tier=core build=68060-261027-99" $T/rec ||
+	{ echo "kimports: the store's root record lost tier=/build=:" >&2; cat $T/rec >&2; exit 1; }
+rm -rf "${R:?}/stand/gen"
+echo "kimports: the import check (gate 2: the kernel's block, dependencies, the core tier; the global build id over a static; a core-tier root record's tier and build) ok"
