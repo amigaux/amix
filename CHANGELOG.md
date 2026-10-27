@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — S4-52 (a): the RAM-disk floppy pair per line (4a95d3e, d72d173); (b) blocked on boot2's L11
+
+tools/lib/ramdisk-media.sh: the RAM-disk media's shared staging (rd1m's tree rebuilds byte-identical). tools/build-ramdisk-floppy.sh
+--line k46|k30: the pair via kbootset media --floppy (volume 2 free: k46 583 680 B, k30 782 336 B). Booting the pair (E958/E959):
+boot2 v3 prints `L11 insert boot volume 2 of 2` and never takes volume 2 (13 min, no message), on either line; the control
+(kerntools' N25b, boot2 v1, the same rig) takes it — a boot2 regression after 6d76671, routed to amix-dlm.
+
 ## 2026-10-27 — l11-set: catalog 61181d33 — the stage-4 exit medium rd1m 4e1f81e7 (42b204b)
 
 kbootset -20 (dlm 1da3474, the build= gate ran on both generations), kern46m -82, z3660scsi 1.0.0-2 on the rd1k set; same images.
