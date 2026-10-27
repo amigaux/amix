@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern30m k30.1.2.261027-17 (65b98db), gayle-k30/-k46 1.1.0-2 (6bc9f94); round trip 157/157 — not published
+
+kern30m -17 (kerntools 865d357 --no-fstypes, dlm 54e04bd, port d33608d): the static cdfs gone (cdfs-k30 is the only cdfs on k30, as
+on k46); the libgcc helpers linked by -u; brel 3d2e4cb6 (1637928 B), ET_REL 86590a5c, sidecar 90182cfb: kabi k30.1.2, arena
+0x000f6640, abi 2ab48658, root= the three stock rows, rootfs ufs,s5; the 101 names identical to -16's; no cdfs symbols; the
+copyright drops amix-cdfs/LICENSE. Pkg md5 326435f5 / 1848320 B. gayle 1.1.0-2 (d49ad04: the page-crossing note a counter):
+objects k30 a237589d (11948 B), k46 3476bba0 (12732 B); md5 8405263d / 63bd269d. Catalog 92da8ce8. Round trip 157/157.
+
 ## 2026-10-27 — a4091-k30/-k46 1.0.0-5 (1238713); round trip 157/157 — not published
 
 From amix-a4091 5044872 (a selection timeout is silent, counted in seltimeout — no more "A4091 slow" flood on the installer's bus
