@@ -52,4 +52,7 @@ CFLAGS = -DA4091_MODULE $(LINEFLAGS_$(LINE)) -fno-common $(ALIEN) -I$(SRC)
 vpath %.c $(SRC)
 include $(KIT)/mk/module.mk
 
+# the driver's own header, which the pattern rule does not see
+$(MODOUT)/obj/a4091-wr.o: $(SRC)/a4091_dmarec.h
+
 endif
