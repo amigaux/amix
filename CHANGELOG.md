@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — S5-15 (amix-dlm half): kbootset writes a root/swap record on any Z3660 card as `sd id=144b0100 base=00000000`, takes the window's key as zorro:144b:01, and card_of() picks a motherboard card by the disk with a slice at AXL1's start, the boot device's name breaking a tie; S5-14: M-FS1's host half and M-FL1 at the cuts -18 and -66 (k30 109 240 bytes less memory than -17; k46 36 634 bytes of file, 5 768 of memory) (8941879, 12739c1)
+
 ## 2026-10-27 — kbootset's namelist lookup takes the global, never a file static (the k30 cut -18 carries delay as three statics and the global); C2-3 v8: a cut's kernel package carries the ufs/s5 core-tier modules, and its version must sort above the line's kernel of record; the S5-12 packaging recipe docs/plan/s5-12-packaging.md (0735e4d, b8a23e5, 7e9ad63)
 
 ## 2026-10-27 — S5-45: `kbootset media --disk --ramdisk` writes the netinstall raw image's store (gated as media --cd; read-only, members raw; the same bytes as mkstore -r on its spec), C2-4 v13 §13; C4-3 v4 §1: a RAM-disk image serves one generation id, and a shared image for a two-line medium is not in stage 5 (d4d8f1c, eb31c79, c2f406d)
