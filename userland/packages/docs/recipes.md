@@ -27,6 +27,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`z3660scsi/`](z3660scsi/) | `z3660scsi-k30` / `z3660scsi-k46` (`zscsi30`/`zscsi46`) — the Z3660 SCSI driver (piscsi mailbox), a root-class module of each line (kabi 1.2); the data-cache arm set at load from the CPU type (`param cache=` overrides; k30 always 0) | 1.0.0-2 (amix-z3660scsi 209bdd2) minted 2026-10-27, staged, not published |
 | [`ramdisk/`](ramdisk/) | `ramdisk-k30` / `ramdisk-k46` (`ramdisk30`/`ramdisk46`) — the RAM disk, a root-class module of each line (kabi 1.2), with its `/dev/dsk/ram0`–`ram2` block nodes | minted 2026-10-26, staged 2026-10-26 (packagemanager abfaaac), not published |
 | [`a4091/`](a4091/) | `a4091-k30` / `a4091-k46` (`a409130`/`a409146`) — the A4091/A4092/A4770 SCSI driver, a root-class module of each line (kabi 1.2, DDI 1.2 DMA; k30 through the core's 030 provider, kern30m -14 or later; -13 drove the A4091 itself, -14 does not) | 1.0.0-5 (amix-a4091 5044872) minted 2026-10-27, staged, not published |
+| [`a4kt710/`](a4kt710/) | `a4kt710-k30` / `a4kt710-k46` (`a4kt71030`/`a4kt71046`) — the A4000T onboard NCR 53C710, amix-a4091's second module target: root class, `mobo:a4000t-710`, rank `mobo` (kabi 1.2, DDI 1.2 DMA); `_load` touches nothing under `0xDD0000` without the Kickstart's `NCR scsi.device` tag (C4-2 v6 §8.1; `param declared=0` in `modreg.local.d` disables it); built here from a git archive of the pinned commit | 1.0.0-1 (amix-a4091 a74708e) minted 2026-10-27, staged, not published |
 | [`gayle/`](gayle/) | `gayle-k30` / `gayle-k46` (`gayle30`/`gayle46`) — the A4000 Gayle IDE driver, a root-class module of each line (kabi 1.2), interrupt I/O by default after a boot self-test (`param intr=0` in `modreg.local.d` selects polled); kern30m -13 drove the Gayle itself, -14 does not; a page-crossing request counted, printed only with `param debug=1`; must not ship before amix-dlm's root-context check passes | 1.1.0-3 (amix-gayle-ide b2935fc) minted 2026-10-27, staged, not published |
 | [`cdfs/`](cdfs/) | `cdfs-k30` / `cdfs-k46` (`cdfs30`/`cdfs46`) — the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), a boot-class module of each line (kabi 1.2, `match=always`, `fs=cdfs`), promoted to a root record on a cdfs-rooted generation; needs kern46m -79 / kern30m -14 or later (the filesystem names) | 1.0.0-1 (amix-cdfs fd6cad8) minted 2026-10-27, staged, not published |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 3 | -9 (amix-dlm ea75578) minted 2026-10-27, staged, not published |
@@ -36,14 +37,15 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`common/`](common/) | the shared harness — not a package | |
 
 **Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
-catalog `b2a0e874` since 2026-10-27 13:44 — the first stage-5 catalog: kbootset -21 and modtools
--7, and no static 1.0 family (kernel-k30-u, kernel-k46-z, kernel-k46-zacd leave it, S5-34; their
-datastreams are kept in `build/kspace/superseded/static-1.0/`); every other row as in `b198e9e2`. A
-replaced root is kept byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`:
-`b198e9e2` (the stage-4 exit set plus gayle-k30/-k46 1.1.0-3) is `repo-20261027-1344`, the
-stage-4 exit set (`6e60a128`) `repo-20261027-1329`. `tools/kspace-roundtrip.sh` regenerates the
-same catalog from `build/kspace/pkg/`, and runs the stage-2 static-kernel rows from a second source
-that adds the static datastreams.
+catalog `64d37aaa` since 2026-10-27 13:53 — `b2a0e874` plus a4kt710-k30/-k46 1.0.0-1 (S5-06), every
+other row unchanged. `b2a0e874` was the first stage-5 catalog: kbootset -21 and modtools -7, and no
+static 1.0 family (kernel-k30-u, kernel-k46-z, kernel-k46-zacd leave it, S5-34; their datastreams
+are kept in `build/kspace/superseded/static-1.0/`). A replaced root is kept byte-identical under
+`build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`: `b2a0e874` is `repo-20261027-1353`, `b198e9e2`
+(the stage-4 exit set plus gayle-k30/-k46 1.1.0-3) `repo-20261027-1344`, the stage-4 exit set
+(`6e60a128`) `repo-20261027-1329`. `tools/kspace-roundtrip.sh` regenerates the same catalog from
+`build/kspace/pkg/`, and runs the stage-2 static-kernel rows from a second source that adds the
+static datastreams.
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
@@ -65,7 +67,7 @@ Sourced by every recipe so none re-derives a flag and none can bypass the wrappe
 | `amix-env.sh` | The one place a recipe learns what "build for Amix" means: `CC`/`AR`/`NM`/`OBJDUMP`, the standard flags, the sysroot, the host pkgtools, the shared prefix. Refuses if `CC` resolves to `gcc.real`. |
 | `fetch.sh` | Checksum-verified fetch. Knows *how* to verify a digest; never knows what any digest should be — that lives in each recipe's own `pin.sh`. Verifies before extract, always. |
 | `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
-| `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
+| `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` (or `KM_VERSION_FILE`, a repository's second module) checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
 | `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
 | `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. Before a box binary (kbootset, modadmin) it proves the GCC 14 prefix is the pinned one (`gcc14-pin.sh`) and rebuilds `build/box` when it was built by another. |
 | `gcc14-pin.sh` | The gcc14-cross-amix identity: the pinned commit, the sha256 of cc1/libgcc.a/libamixc99.a/specs, the return-value ABI self-check. Sourced by `gcc14-env.sh` (TOOLCHAIN=gcc14 recipes) and `dlm-src.sh` (box binaries). |

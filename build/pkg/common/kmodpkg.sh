@@ -10,6 +10,9 @@
 #     KM_SHORT         C3-5 sec 1.1 short name (pkginst = short + line digits)
 #     KM_REPO          the driver repository (sibling directory name)
 #     KM_VERSION       the module's release, = <repo>/module/VERSION
+#     KM_VERSION_FILE  optional: that file, relative to the siblings, when it
+#                      is not $KM_REPO/module/VERSION (a repository's second
+#                      module, e.g. amix-a4091/module/a4kt710/VERSION)
 #     KM_K30_OBJ / KM_K46_OBJ        the object, relative to the siblings
 #     KM_K30_SHA / KM_K46_SHA        its sha256
 #     KM_K30_DEPS / KM_K46_DEPS      "<path> <sha256>" per line: modules the
@@ -57,10 +60,11 @@ amix_kmodpkg() {
 
 	echo "--- verify the inputs ---"
 	amix_verify "$_km_obj" "$_km_sha"
-	_km_v=$(cat "$AMIX_SIBLINGS/$KM_REPO/module/VERSION")
+	_km_vf=${KM_VERSION_FILE:-$KM_REPO/module/VERSION}
+	_km_v=$(cat "$AMIX_SIBLINGS/$_km_vf")
 	[ "$_km_v" = "$KM_VERSION" ] || {
-		echo "[FAIL] $KM_REPO/module/VERSION says '$_km_v', the pin $KM_VERSION" >&2; exit 1; }
-	echo "  $KM_REPO/module/VERSION = $KM_VERSION"
+		echo "[FAIL] $_km_vf says '$_km_v', the pin $KM_VERSION" >&2; exit 1; }
+	echo "  $_km_vf = $KM_VERSION"
 	echo "$KM_LICENCES" | while read _n _h; do if [ -n "$_n" ]; then amix_verify "$AMIX_SIBLINGS/$_n" "$_h"; fi; done
 	_km_d=
 	echo "$_km_deps" | while read _p _h; do if [ -n "$_p" ]; then amix_verify "$AMIX_SIBLINGS/$_p" "$_h"; fi; done
@@ -135,5 +139,5 @@ PY
 	cp "$_km_dir/prototype" "$_km_work/prototype"
 	amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out"
 	unset _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
-		_km_v _km_d _km_kit _km_kabi _km_pin _km_md _p _n _h
+		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _p _n _h
 }
