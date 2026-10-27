@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger marks M-RD1/M-RD2 PASS on both lines (N123/N124, kerntools e043755)
+
+Every stage-4 emulation row now passes on both lines; §7 lists what the exit commit waits for: installng's CD-boot install cell,
+the Gayle CD-check reruns on 92da8ce8, S4-74 on metal. The exit set is catalog 92da8ce8 (-81/-17 the re-cut of record unless
+metal changes something); the exit commit closes kabi 1.2 per §8.
+
 ## 2026-10-27 — ddi.md: the libgcc helpers' provider; the core harness forces them too
 
 __udivdi3, __umoddi3, __lshrdi3 are provided by libgcc and forced into the module kernel's link by the builder (kerntools on
