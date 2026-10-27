@@ -26,7 +26,11 @@
 #     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
 #     passes the pinned compiler and rejects the pre-fix one;
 #   - dlm-src.sh's check before amix-dlm's box builds (kbootset, modadmin)
-#     uses the same pins: it refuses that prefix and passes the real one.
+#     uses the same pins: it refuses that prefix and passes the real one;
+#   - -mno-strict-align (owner decision 2026-10-27) is enforced: amix-env.sh
+#     refuses flags without it or ending in -mstrict-align, the -S probe
+#     rejects a compiler that still splits an unaligned load, and
+#     amix_gate_g14_strict rejects make-log compile lines without it.
 # Exit 0 only if every check holds.
 
 set -e
@@ -233,5 +237,36 @@ grep 'not the pinned toolchain' "$T/dlmpin.log" >/dev/null && grep 'specs:' "$T/
 (AMIX_G14_BUILD="$AMIX_GCC14_ROOT/build"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin-ok.log" 2>&1 ||
 	{ cat "$T/dlmpin-ok.log" >&2; fail "dlm-src.sh's box check refused the pinned toolchain"; }
 ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes cf461e3"
+
+# -mno-strict-align (owner decision 2026-10-27): the flag sets that lack it, or
+# override it later, are refused by amix-env.sh; a compiler that still splits
+# an unaligned load (a wrapper appending -mstrict-align) fails the -S probe;
+# the make-log half of amix_gate_g14_strict rejects a compile line without it
+# and a log with no compile line.
+case " $AMIX_ARCH_FLAGS " in *" -mno-strict-align "*) ;; *) fail "AMIX_ARCH_FLAGS '$AMIX_ARCH_FLAGS' lacks -mno-strict-align" ;; esac
+amix_g14_align_check "$CC" "$AMIX_ARCH_FLAGS" "$AMIX_CFLAGS" >/dev/null 2>&1 || fail "the align check rejected the recipe flags"
+if (AMIX_ARCH_FLAGS=-m68020-60; unset AMIX_CFLAGS; export AMIX_ARCH_FLAGS; . "$REPO/recipes/common/amix-env.sh") > "$T/al1.log" 2>&1; then
+	fail "amix-env.sh accepted AMIX_ARCH_FLAGS without -mno-strict-align"
+fi
+grep 'does not end with -mno-strict-align' "$T/al1.log" >/dev/null || { cat "$T/al1.log" >&2; fail "al1 refused, but not by the align check"; }
+if (AMIX_CFLAGS="$AMIX_ARCH_FLAGS -O2 -mstrict-align"; export AMIX_CFLAGS; . "$REPO/recipes/common/amix-env.sh") > "$T/al2.log" 2>&1; then
+	fail "amix-env.sh accepted AMIX_CFLAGS ending in -mstrict-align"
+fi
+grep 'does not end with -mno-strict-align' "$T/al2.log" >/dev/null || { cat "$T/al2.log" >&2; fail "al2 refused, but not by the align check"; }
+printf '#!/bin/sh\nexec %s "$@" -mstrict-align\n' "$AMIX_GCC14_CC" > "$T/strictcc"; chmod +x "$T/strictcc"
+if amix_g14_align_check "$T/strictcc $AMIX_PREDEFS" "$AMIX_ARCH_FLAGS" "$AMIX_CFLAGS" > "$T/al3.log" 2>&1; then
+	fail "the align check passed a compiler that keeps strict alignment"
+fi
+grep 'still splits an unaligned load' "$T/al3.log" >/dev/null || { cat "$T/al3.log" >&2; fail "al3 refused, but not by the -S probe"; }
+G="$AMIX_GCC14_CC $AMIX_PREDEFS"
+printf '%s -I. %s -c a.c\n%s -o prog a.o\n' "$G" "$AMIX_CFLAGS" "$G" > "$T/good.log"
+printf '%s -I. %s -c a.c\n%s -I. -m68020-60 -O2 -c b.c\nif %s %s -mstrict-align -MT c.o -c -o c.o c.c; \\\n' \
+	"$G" "$AMIX_CFLAGS" "$G" "$G" "$AMIX_CFLAGS" > "$T/bad.log"
+printf 'make: Nothing to be done for `all'"'"'.\n' > "$T/none.log"
+amix_gate_g14_strict "$T/good.log" >/dev/null 2>&1 || fail "the strict gate rejected a log whose compile lines carry -mno-strict-align"
+if amix_gate_g14_strict "$T/bad.log" > "$T/al4.log" 2>&1; then fail "the strict gate passed compile lines without -mno-strict-align"; fi
+grep '2 of 3 gcc14 compile lines lack' "$T/al4.log" >/dev/null || { cat "$T/al4.log" >&2; fail "the strict gate miscounted the bad log"; }
+if amix_gate_g14_strict "$T/none.log" >/dev/null 2>&1; then fail "the strict gate passed a log with no compile line"; fi
+ok "-mno-strict-align: env refuses flags without it or overriding it, -S probe rejects a strict compiler, make-log gate counts 2/3 bad and refuses an empty log"
 
 echo "gate-gcc14-selftest: PASS ($n checks)"

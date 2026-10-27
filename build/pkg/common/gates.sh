@@ -566,7 +566,9 @@ amix_gate_g14_fpu() {
 }
 
 # amix_gate_g14_strict <makelog> -- the gcc14 build ran with the strict
-# flags: no -Wno-error from configure's lenient run reached a compile line.
+# flags: no -Wno-error from configure's lenient run reached a compile line,
+# and every gcc14 compile line (-c) ends its alignment options with
+# -mno-strict-align; a log with no compile line at all fails too.
 amix_gate_g14_strict() {
 	if grep -- '-Wno-error' "$1" >/dev/null 2>&1; then
 		echo "[FAIL] a -Wno-error flag reached the gcc14 build (configure-only leniency leaked):" >&2
@@ -574,6 +576,29 @@ amix_gate_g14_strict() {
 		return 1
 	fi
 	echo "  STRICT ok  no -Wno-error on any compile line (configure-only leniency did not leak)"
+	# -mno-strict-align (gcc14-env.sh, owner decision 2026-10-27): every GCC 14
+	# compile line in the log carries it as its last alignment option.
+	_gs_cc=$(basename "${AMIX_GCC14_CC:-m68k-elf-gcc}")
+	_gs_out=$(grep -F -- "$_gs_cc" "$1" | grep -E -- '(^|[[:space:]])-c([[:space:]]|$)' | awk '
+		{ n++; last = "";
+		  for (i = 1; i <= NF; i++) if ($i == "-mstrict-align" || $i == "-mno-strict-align") last = $i
+		  if (last != "-mno-strict-align") { bad++; if (bad <= 3) print "BAD " substr($0, 1, 200) } }
+		END { print "N " n + 0 " " bad + 0 }')
+	_gs_n=$(echo "$_gs_out" | sed -n 's/^N \([0-9]*\) .*/\1/p')
+	_gs_bad=$(echo "$_gs_out" | sed -n 's/^N [0-9]* \([0-9]*\)$/\1/p')
+	if [ "$_gs_n" -eq 0 ]; then
+		echo "[FAIL] $1 shows no $_gs_cc compile line (-c): the -mno-strict-align check read nothing" >&2
+		unset _gs_cc _gs_out _gs_n _gs_bad
+		return 1
+	fi
+	if [ "$_gs_bad" -ne 0 ]; then
+		echo "[FAIL] $_gs_bad of $_gs_n gcc14 compile lines lack -mno-strict-align (gcc14-env.sh):" >&2
+		echo "$_gs_out" | sed -n 's/^BAD /         /p' >&2
+		unset _gs_cc _gs_out _gs_n _gs_bad
+		return 1
+	fi
+	echo "  ALIGN ok   $_gs_n of $_gs_n gcc14 compile lines end with -mno-strict-align"
+	unset _gs_cc _gs_out _gs_n _gs_bad
 	return 0
 }
 

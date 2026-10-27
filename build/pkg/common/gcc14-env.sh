@@ -31,6 +31,17 @@
 #              hard-float too (-m68020 also defines __HAVE_68881__); what each
 #              package actually contains is counted at build time
 #              (amix_gate_g14_fpu) and recorded, not assumed.
+#   alignment  -mno-strict-align (owner decision 2026-10-27): all GCC 14
+#              userland drops strict alignment.  GCC 14's m68k default reads
+#              an unaligned int, even a stacked pointer argument, a byte or
+#              a word at a time; with the flag Dhrystone ran 1.60x faster on
+#              a real 68LC060 (amix-bench-g14, d-block j5).  The 68020-68060
+#              do unaligned data accesses in hardware; no layout or calling
+#              convention changes (-malign-int stays).  It sits in
+#              AMIX_ARCH_FLAGS below and nowhere else; amix_g14_align_check
+#              (gcc14-pin.sh) refuses flags without it and proves it from
+#              -S output, amix_gate_g14_strict checks every make-log compile.
+#              Package revisions bumped for it: grep/less/make -6, rest -5.
 #   predefines the specs define only amix/__amix/__amix__.  The period
 #              compiler's platform set is restored here, exactly:
 #              unix __unix __unix__ __svr4__ AMIX __AMIX __AMIX__ m68k __m68k.
@@ -194,12 +205,15 @@ export AMIX_SYSROOT AMIX_CHECK060 AMIX_PREDEFS AMIX_GCC14_CC AMIX_GCC14_ROOT AMI
 # same predefines and the same sysroot headers (no host /lib/cpp fallback).
 export AMIX_CPP="$CC -E"
 
-# -m68020-60: see the header.  -O2 per the evaluation (-Os where a hot loop
+# -m68020-60: see the header.  -mno-strict-align: see "alignment" in the
+# header -- THE one place the flag is set; amix_g14_align_check refuses a
+# build whose flags lack it.  -O2 per the evaluation (-Os where a hot loop
 # must fit the 060's 8 KB I-cache).  Never -mno-align-int or
 # -fpcc-struct-return (ABI).
-AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020-60}"
+AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020-60 -mno-strict-align}"
 AMIX_CFLAGS="${AMIX_CFLAGS:-$AMIX_ARCH_FLAGS -O2 -Wall}"
 export AMIX_ARCH_FLAGS AMIX_CFLAGS
+amix_g14_align_check "$CC" "$AMIX_ARCH_FLAGS" "$AMIX_CFLAGS" || exit 1
 
 # configure only (see the header); never on a make line.
 export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-error=implicit-int -Wno-error=int-conversion -Wno-error=incompatible-pointer-types -Wno-error=return-mismatch"
