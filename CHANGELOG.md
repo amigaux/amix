@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2026-10-27 — k30 DMA with no reachable memory: dma_alloc gives 0 and bounces miss; C4-5 v11 §5.4 refuses the board, no chip fallback (S5-18 host half) (2a4e4e1, 921bd93)
+
+## 2026-10-27 — abi/k46/core.list from the port's patched ufs/s5 objects (100 names, the same as k30's); carve.py corelist --skip, wrap --pageshift-ok (bf10683)
+
+## 2026-10-27 — safe mode can load the boot modules the owner marks with a `safe` line in modreg.local.d (S5-09) (484cdd2, 14cd7b9, 8eee6dd)
+
+Core patch 0045; kbootset writes safe=1 on their boot records; C4-4 v7, C3-5 v15; spec 70 §4. A Z3660 box's NIC opts in for a
+reachable rescue; the default stays network-less.
+
+## 2026-10-27 — C4-1 v4, agreed by the port and kerntools: the Z3660 is one controller in either mode (S5-08) (4f24e59, b2b3cff)
+
+kinfo reports the 030-mode window card as motherboard id 4; kbootset composes any Z3660 card as id=144b0100 base 0; RTH1 matches
+144b0100 against the AutoConfig board or the window base, exactly one such card. The code is S5-15.
+
 ## 2026-10-27 — kbootset: a medium's spec lists the RAM-disk image after the root modules, in boot2's read order, so a floppy pair asks for volume 2 once per boot instead of three times (S5-05) (28fb5a1)
 
 ## 2026-10-27 — C3-5 v14: a4kt710's short name (a4kt71030 / a4kt71046); kit module.mk tracks every file a module's source reads (c9ef1b0, ad84eb8)
