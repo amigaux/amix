@@ -9,7 +9,9 @@
  *     RAM-disk image's physical address and size (C4-3, ramdisk_image);
  *   - the kernel's build id (plat_buildid(), the line's file: buildid on
  *     the 68040/68060 line, kinfo_buildid on the 030 line), for core-tier
- *     modules (C3-1);
+ *     modules (C3-1), without the leading blanks a stamp writes (the
+ *     port's " 68060-...", which uname -m appends): the string kinfo shows
+ *     and kbootset compares the sidecar's build= with (C3-3 section 3);
  *   - match= keys are matched against the boards in bootinfo: a
  *     zorro:MMMM:PP key against each board's manufacturer and product; a
  *     mobo: key always, because the module's gated probe decides, as for
@@ -101,6 +103,8 @@ plat_dmainit(void)
 		if (dlm_devload)
 			printf("dlm: DEVELOPMENT LOAD: modules outside the manifest allowed this boot\n");
 	}
+	while (*bid == ' ')
+		bid++;
 	if (bid[0] != 0)
 		dlm_build = bid;
 	dlm_plat_match = plat_match;

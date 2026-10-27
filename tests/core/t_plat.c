@@ -11,7 +11,8 @@
 #include "rel.h"
 
 char bootinfo[AXB_SIZE];
-static char buildid[] = "68060-261101-01";
+static char k46id[] = " 68060-261101-01", k30id[] = "68030-261101-02", blank[] = " ";
+static char *buildid = k46id;	/* the port's stamp writes a leading blank */
 char *plat_buildid(void) { return buildid; }
 void plat_line_init(void) { }
 int dlm_devload, dlm_safe;
@@ -73,8 +74,15 @@ main(void)
 {
 	boot(AXLF_SAFE | AXLF_DEVLOAD, 1);
 	check(dlm_safe == 1 && dlm_devload == 1, "plat: AXL1's safe and development-load flags reach the core");
-	check(dlm_build && strcmp(dlm_build, "68060-261101-01") == 0, "plat: the build id is the line's");
+	check(dlm_build && strcmp(dlm_build, "68060-261101-01") == 0, "plat: the build id is the line's, without the stamp's leading blank");
 	check(dlm_plat_match == plat_match, "plat: the board matcher is set");
+	buildid = k30id;
+	boot(0, 1);
+	check(dlm_build && strcmp(dlm_build, "68030-261101-02") == 0, "plat: a build id with no blank is taken as it is");
+	buildid = blank;
+	boot(0, 1);
+	check(dlm_build == 0, "plat: a blank build id gives none (a core-tier module is refused)");
+	buildid = k46id;
 	check(plat_match("zorro:144b:01") && plat_match("zorro:0202:54"), "plat: a zorro key of a board here matches");
 	check(!plat_match("zorro:144b:02") && !plat_match("zorro:dead:01"), "plat: other boards do not");
 	check(plat_match("mobo:gayle"), "plat: a mobo key always matches (the module's probe decides)");
