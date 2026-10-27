@@ -45,3 +45,4 @@
 0042-abi-fs-layouts.patch
 0043-rootfs-promotion.patch
 0044-block-rows-breakup.patch
+0045-safe-boot-members.patch

@@ -320,7 +320,20 @@ refused 2 $KB build $FACTS			# below its min
 grep -q "intr=-1 is not a valid int value for module z3660eth" $T/out
 three; echo "intr=6" > $R/etc/conf/modreg.d/z3660eth
 refused 2 $KB build $FACTS			# a malformed line
-grep -q "neither param <name>=<value> nor disable" $T/out
+grep -q "neither param <name>=<value>, disable nor safe" $T/out
+# the owner's safe mark (S5-09): a boot module's record gets safe=1, from
+# modreg.local.d only and for boot class only
+three; echo "safe" > $R/etc/conf/modreg.local.d/z3660eth
+$KB build $FACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module z3660eth boot .* match=zorro:144b:01,mobo:z3660-window safe=1$" $R/stand/gen/$id/build
+grep -q "^module monsw demand .* majors=c:52$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+three; echo "safe" > $R/etc/conf/modreg.d/z3660eth
+refused 2 $KB build $FACTS			# the vendor's file may not mark it
+grep -q "safe is the owner's mark for a boot-class module, in /etc/conf/modreg.local.d only" $T/out
+three; echo "safe" > $R/etc/conf/modreg.local.d/monsw
+refused 2 $KB build $FACTS			# a demand module never loads in safe mode
 three; modpkg monsw class=demand majors=c:52 param=base:hex:0x10:0:0xff param=tag:str:mon
 echo "param base=0x100" > $R/etc/conf/modreg.d/monsw
 refused 2 $KB build $FACTS			# hex above its max

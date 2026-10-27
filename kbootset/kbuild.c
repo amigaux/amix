@@ -817,8 +817,10 @@ mod_gate2(struct ks *k, const struct kb_kernel *kk, const struct km_info *mi)
 	return KS_OK;
 }
 
-/* modreg.d, then modreg.local.d (C3-5 section 1): disable, and the
- * parameter values, a later line winning */
+/* modreg.d, then modreg.local.d (C3-5 section 1): disable, the parameter
+ * values, a later line winning, and in modreg.local.d only `safe` on a
+ * boot-class module: the owner's mark that it loads in safe mode too
+ * (S5-09, C4-4 section 2), its boot-class dependencies with it */
 static int
 modreg(struct ks *k, const char *root, struct kb_mod *md, int *disabled)
 {
@@ -843,9 +845,19 @@ modreg(struct ks *k, const char *root, struct kb_mod *md, int *disabled)
 				*disabled = 1;
 				continue;
 			}
+			if (!strncmp(s, "safe", 4) && !s[4 + strspn(s + 4, " \t")]) {
+				if (d == 0 || strcmp(md->i.cls, "boot")) {
+					fclose(f);
+					sprintf(m, "%s: safe is the owner's mark for a boot-class module, "
+						"in /etc/conf/modreg.local.d only", p);
+					return refuse(k, 2, m);
+				}
+				md->safe = 1;
+				continue;
+			}
 			if (strncmp(s, "param ", 6) || !(eq = strchr(s + 6, '='))) {
 				fclose(f);
-				sprintf(m, "%s: %.60s: neither param <name>=<value> nor disable", p, s);
+				sprintf(m, "%s: %.60s: neither param <name>=<value>, disable nor safe", p, s);
 				return refuse(k, 2, m);
 			}
 			*eq = 0;
@@ -1243,7 +1255,7 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 			sprintf(rec + strlen(rec), " majors=%s", md->i.majors);
 		if (md->i.depend[0])
 			sprintf(rec + strlen(rec), " depend=%s", md->i.depend);
-		if (isroot && md->safe)
+		if ((isroot || boot) && md->safe)
 			strcat(rec, " safe=1");
 		if (!strcmp(md->i.tier, "core"))
 			sprintf(rec + strlen(rec), " tier=core build=%s", md->i.build);
