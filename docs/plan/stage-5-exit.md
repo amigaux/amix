@@ -60,7 +60,7 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | a damaged ufs module selects the menu | pending | pending |
 | S4-71's init halves: ufs and s5 in the root pass and at the first `sysinit` | pending | pending |
 | U12 with a mount of each type | pending | pending |
-| S5-14 M-FS1 and M-FL1, final | pending | pending |
+| S5-14 M-FS1 and M-FL1, final (`docs/measurements/2026-10-27-m-fs1-m-fl1.md`; re-check at the S5-15 cuts, §4; M-FS1's boot half is S5-13's) | -66: file 2 411 588, 36 634 under its control; memory 5 768 less (the carve stays zeroed in place); ufs 56 636 | -18: file 1 534 496, `bss=346388`; 109 240 bytes less than -17; ufs 56 636, s5 39 961 |
 | S5-15 the 030-mode root record: `kbootset` -22 and z3660scsi | — (030 mode) | pending |
 
 ## 4. Wave 3: carried metal
