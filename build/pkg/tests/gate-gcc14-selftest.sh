@@ -24,7 +24,9 @@
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in;
 #   - the toolchain pin refuses a prefix that is not cf461e3's, and the
 #     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
-#     passes the pinned compiler and rejects the pre-fix one.
+#     passes the pinned compiler and rejects the pre-fix one;
+#   - dlm-src.sh's check before amix-dlm's box builds (kbootset, modadmin)
+#     uses the same pins: it refuses that prefix and passes the real one.
 # Exit 0 only if every check holds.
 
 set -e
@@ -218,5 +220,18 @@ if [ -x "$OLDCC" ]; then
 else
 	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes cf461e3 (no e316f1b control prefix to reject)"
 fi
+
+# The same identity guards amix-dlm's box binaries (kbootset, modadmin), which
+# its Makefile links with the prefix directly: dlm-src.sh's check refuses a
+# build dir whose prefix is the one-byte-specs copy, and passes the real one.
+mkdir -p "$T/fakebuild"; ln -s "$FP" "$T/fakebuild/prefix"; ln -s "$AMIX_GCC14_ROOT/build/sysroot" "$T/fakebuild/sysroot"
+if (AMIX_G14_BUILD="$T/fakebuild"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin.log" 2>&1; then
+	fail "dlm-src.sh's box check accepted a prefix whose specs differ from the pin"
+fi
+grep 'not the pinned toolchain' "$T/dlmpin.log" >/dev/null && grep 'specs:' "$T/dlmpin.log" >/dev/null ||
+	{ cat "$T/dlmpin.log" >&2; fail "dlm-src.sh's refusal does not name specs"; }
+(AMIX_G14_BUILD="$AMIX_GCC14_ROOT/build"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin-ok.log" 2>&1 ||
+	{ cat "$T/dlmpin-ok.log" >&2; fail "dlm-src.sh's box check refused the pinned toolchain"; }
+ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes cf461e3"
 
 echo "gate-gcc14-selftest: PASS ($n checks)"

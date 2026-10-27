@@ -13,7 +13,9 @@
 # a pinned revision, never "whatever the working tree holds"), and amix-dlm's
 # own Makefile builds the targets there.  The period cross toolchain comes
 # from gcc-cross-amix's env.sh (boot1/boot2 need it), GCC 14 from the sibling
-# gcc14-cross-amix (kbootset, modadmin).  Each recipe then verifies the
+# gcc14-cross-amix (kbootset, modadmin); a box/ target first proves that
+# prefix is the pinned toolchain (gcc14-pin.sh, the same pins and ABI
+# self-check as TOOLCHAIN=gcc14 recipes).  Each recipe then verifies the
 # outputs against its own sha256 pins, so a commit that builds different
 # bytes fails rather than ships.
 
@@ -41,20 +43,50 @@ amix_dlm_export() {
 	export AMIX_DLM_TREE
 }
 
+# amix_dlm_g14_check -- before a box/ target: amix-dlm's Makefile links the
+# box binaries with $AMIX_G14_BUILD's prefix directly (no gcc14-env.sh), so
+# the prefix must be the pinned toolchain (gcc14-pin.sh: the sha256 pins, the
+# return-value ABI self-check of its compiler) and its sysroot the
+# $AMIX_G14_BUILD/sysroot the Makefile links against.
+amix_dlm_g14_check() {
+	. "$AMIX_REPO_ROOT/recipes/common/gcc14-pin.sh"
+	amix_g14_identity "$AMIX_G14_BUILD/prefix" || return 1
+	_dg_sr=$("$AMIX_G14_BUILD/prefix/bin/m68k-elf-gcc" -print-sysroot 2>/dev/null)
+	[ "$(cd "$_dg_sr" 2>/dev/null && pwd -P)" = "$(cd "$AMIX_G14_BUILD/sysroot" 2>/dev/null && pwd -P)" ] || {
+		echo "[FAIL] gcc14: the compiler's sysroot '$_dg_sr' is not $AMIX_G14_BUILD/sysroot" >&2
+		unset _dg_sr; return 1; }
+	unset _dg_sr
+	echo "  gcc14 identity ok: gcc14-cross-amix $(echo "$AMIX_GCC14_COMMIT" | cut -c1-7) pins, return-value ABI self-check passed ($AMIX_G14_BUILD/prefix)"
+}
+
 amix_dlm_build() {
 	_db_c="$1"; shift
 	amix_dlm_export "$_db_c"
 	_db_t=
 	for _db_x in "$@"; do _db_t="$_db_t build/$_db_x"; done
+	# box/: the pinned toolchain, and no object left from another one --
+	# amix-dlm's object rules do not depend on the compiler, so an export
+	# built before a re-pin would keep its old objects (amix-dlm's own
+	# build/box at 4442c76 links three pre-cf461e3 objects that way)
+	_db_st="$AMIX_DLM_TREE/build/box/.g14-pins"
+	case " $* " in *" box/"*)
+		amix_dlm_g14_check || exit 1
+		if [ -d "$AMIX_DLM_TREE/build/box" ] && [ "$(cat "$_db_st" 2>/dev/null)" != "$AMIX_GCC14_PINS" ]; then
+			echo "  amix-dlm $_db_c: build/box was not built by this toolchain: removed"
+			rm -rf "$AMIX_DLM_TREE/build/box"
+		fi ;;
+	*) _db_st= ;;
+	esac
 	(
 		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
 		make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" $_db_t
 	) > "$AMIX_DLM_TREE.log" 2>&1 || {
 		echo "[FAIL] amix-dlm $_db_c: make$_db_t failed:" >&2
 		tail -15 "$AMIX_DLM_TREE.log" >&2; exit 1; }
+	[ -z "$_db_st" ] || echo "$AMIX_GCC14_PINS" > "$_db_st"
 	echo "  amix-dlm $_db_c built:$_db_t (log $AMIX_DLM_TREE.log)"
 	export AMIX_DLM_TREE
-	unset _db_c _db_t _db_x
+	unset _db_c _db_t _db_x _db_st
 }
 
 # amix_dlm_kit <commit> -- amix-dlm's own `make kit` (tools/mkkit.sh, both
