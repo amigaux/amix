@@ -30,6 +30,7 @@ struct kb_facts {
 struct kb_kernel {
 	char kabi[24], family[32], line[8], pin[48], build[48], sha256[65];
 	char abi[66];		/* the fingerprint, C3-3 section 4: 64 hex or "" */
+	char sym[100];		/* sym= (a brel's unix.sym: name, size, sha256), or "" */
 	char root[256], rootfs[64];
 	ax_u32 size, loader_min, arena_off, arena_cap, ident_off;
 	ax_u32 ksym_off, ksym_len;	/* the kernel's symbol block (C3-2), image offset and size */

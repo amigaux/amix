@@ -157,6 +157,7 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 	value(text, "build", kk->build, sizeof(kk->build));
 	value(text, "sha256", kk->sha256, sizeof(kk->sha256));
 	value(text, "abi", kk->abi, sizeof(kk->abi));
+	value(text, "sym", kk->sym, sizeof(kk->sym));
 	value(text, "root", kk->root, sizeof(kk->root));
 	value(text, "rootfs", kk->rootfs, sizeof(kk->rootfs));
 	kk->size = value(text, "size", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 0;
@@ -436,6 +437,78 @@ kblock_load(struct ks *k, const struct kb_kernel *kk, const ax_u8 *kernel, ax_u3
 	return KS_OK;
 }
 
+/* the value of symbol name in the ELF namelist nl, or 0 */
+static ax_u32
+nl_value(const ax_u8 *nl, ax_u32 len, const char *name)
+{
+	ax_u32 shoff = AX_GET32(nl + 32), shnum = AX_GET16(nl + 48), i, k, so, sz, st, stsz, nm;
+
+	for (i = 1; i < shnum && shoff + 40 * (i + 1) <= len; i++) {
+		const ax_u8 *s = nl + shoff + 40 * i, *t;
+
+		if (AX_GET32(s + 4) != 2 || AX_GET32(s + 24) >= shnum)
+			continue;
+		t = nl + shoff + 40 * AX_GET32(s + 24);
+		so = AX_GET32(s + 16), sz = AX_GET32(s + 20), st = AX_GET32(t + 16), stsz = AX_GET32(t + 20);
+		if (so > len || sz > len - so || st > len || stsz > len - st)
+			return 0;
+		for (k = 1; k < sz / 16; k++) {
+			nm = AX_GET32(nl + so + 16 * k);
+			if (nm < stsz && !strcmp((const char *)nl + st + nm, name))
+				return AX_GET32(nl + so + 16 * k + 4);
+		}
+	}
+	return 0;
+}
+
+/*
+ * The kernel's own build id, the string kinfo and uname -m read (C3-3
+ * section 3): buildid on k46 (ET_REL), kinfo_buildid on k30 through its
+ * unix.sym, without the leading blanks a stamp may write (the port's
+ * " 68060-…").  1 with it in out, 0 when the kernel has no such symbol.
+ */
+static int
+kernel_build(const char *root, const struct kb_kernel *kk, const ax_u8 *kern, ax_u32 klen,
+	     char *out, size_t cap)
+{
+	struct kb_layout lay;
+	struct ax_bootdata bd;
+	struct ax_relerr er;
+	ax_u8 *sym = 0, *nl = 0, *img = 0;
+	ax_u32 slen = 0, nlen, v = 0, o = 0, bind = 0x08000000UL, i;
+	char path[40], why[120];
+	int ok = 0;
+
+	if (kk->brel) {
+		if (strncmp(kk->sym, "unix.sym ", 9))
+			return 0;
+		sprintf(path, "/stand/%.3s/unix.sym", kk->line);
+		if ((sym = slurp(under(root, path), &slen)) == 0)
+			return 0;
+	}
+	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, bind, &lay, &nl, &nlen, why) == 0 &&
+	    ((v = nl_value(nl, nlen, kk->brel ? "kinfo_buildid" : "buildid")) != 0) &&
+	    (img = malloc(klen)) != 0) {
+		memcpy(img, kern, klen);
+		if (ax_rel(img, klen, bind, 1, &bd, &er) == AXR_OK) {
+			if (bd.dsize && v >= bd.dvaddr && v - bd.dvaddr < bd.dsize)
+				o = bd.doffset + (v - bd.dvaddr), ok = 1;
+			else if (!bd.dsize && v >= bd.tvaddr && v - bd.tvaddr < bd.tsize)
+				o = bd.toffset + (v - bd.tvaddr), ok = 1;
+		}
+	}
+	while (ok && o < klen && kern[o] == ' ')
+		o++;
+	for (i = 0; ok && i + 1 < cap && o + i < klen && kern[o + i]; i++)
+		out[i] = (char)kern[o + i];
+	if (ok)
+		out[i] = 0;
+	free(sym);
+	free(nl);
+	free(img);
+	return ok;
+}
+
 /* the block exports name to a module of this tier (0 ddi, 1 core) */
 static int
 kblock_has(const char *name, int tier)
@@ -506,6 +579,15 @@ gates(struct ks *k, const char *root, const struct kb_facts *f, const char *root
 			    "together, a static kernel's none of them");
 	if (rc == KS_OK)
 		rc = kblock_load(k, kk, *kernel, *klen);
+	if (rc == KS_OK && kk->build[0]) {	/* the sidecar's build= is the kernel's own (C3-3 3) */
+		char own[48];
+
+		if (kernel_build(root, kk, *kernel, *klen, own, sizeof(own)) && strcmp(own, kk->build)) {
+			sprintf(m, "the sidecar's build=%.47s is not the kernel's own build id %.47s (C3-3 "
+				"section 3)", kk->build, own);
+			rc = refuse(k, 2, m);
+		}
+	}
 	if (rc == KS_OK && kk->has_arena && !kk->abi[0])
 		rc = refuse(k, 2, "a module kernel's sidecar gives no abi= (the fingerprint, C3-3 "
 			    "section 4)");
