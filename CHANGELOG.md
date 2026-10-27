@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset: a medium's spec lists the RAM-disk image after the root modules, in boot2's read order, so a floppy pair asks for volume 2 once per boot instead of three times (S5-05) (28fb5a1)
+
 ## 2026-10-27 — C3-5 v14: a4kt710's short name (a4kt71030 / a4kt71046); kit module.mk tracks every file a module's source reads (c9ef1b0, ad84eb8)
 
 The .d comes from -E's line markers, since the pinned gcc 2.7.2.3 wrapper passes no -M/-MD, so an included .c or a module header
