@@ -62,9 +62,19 @@ endif
 
 all: $(MODOUT)/mod.d/$(MODULE)
 
+# Each object also depends on every file its source read: the pinned gcc
+# 2.7.2.3's wrapper passes no -M/-MD/-MMD, so the .d beside the object is
+# written from -E's line markers, with an empty rule per file (a header
+# removed later is no error).  A #include'd .c or a module's own header
+# then rebuilds the object (a4kt710's stale object, 2026-10-27).
 $(MODOUT)/obj/%.o: %.c $(KIT)/kit.conf
 	@mkdir -p $(dir $@)
 	$(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -c $< -o $@
+	@$(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -E $< | sed -n 's/^# [0-9][0-9]* "\([^"<][^"]*\)".*/\1/p' | \
+		sort -u | awk -v o=$@ '{ f[NR] = $$0 } END { printf "%s:", o; for (i = 1; i <= NR; i++) \
+		printf " %s", f[i]; print ""; for (i = 1; i <= NR; i++) print f[i] ":" }' > $(@:.o=.d)
+
+-include $(MODOBJS:.o=.d)
 
 $(MODOUT)/mod.d/$(MODULE): $(MODOBJS) $(EXTRA) Master $(DEPS) $(KIT)/kit.conf
 	rm -rf $(MODOUT)/src && mkdir -p $(MODOUT)/src
