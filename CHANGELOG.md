@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-3 v3: `swap none` = /dev/fakeswap
+
+The RTH1 half sets swapfile.bo_name to "/dev/fakeswap" (the stock dummy disk, b 19,0, every I/O fails, nothing paged — the 1.0
+floppy medium's swap); without swapadd anon_resv refuses every reservation and the first fork panics (08-25), and stock swapconf
+with the default name panics on a medium without the node (rd1e). The installer adds the target's slice and deletes the fake;
+the miniroot carries the node. M-RD2: "swap none boots on /dev/fakeswap to multi-user".
+
 ## 2026-10-27 — dma_forcefail is a self-clearing count; C4-5 v9
 
 N > 0 refuses the next N bounces, one off the count each, clearing itself at 0 (set 1 for E6b's exact "noreach +1"); a reachable or
