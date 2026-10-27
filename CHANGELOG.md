@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27 — the 1.1 set moves to the RAM-disk medium's inputs, catalog cdcbff84 (ee1ca6d)
+
+l11-set.conf: dlm 9079989, apkg abfaaac, APKG 0.3.3, APKGENG 1.12.4 (new `apkgeng-pkg` item), kbootset -18, loader-amix -8,
+kern30m -14, kern46m -79, modtools -6, zeth/monsw/zrtg, ramdisk, z3660scsi, a4091 1.0.0-3, gayle, cdfs, dlmkit -11. The k46
+profiles install z3660scsi as a root-class module (kern46m -79 has no static Z3660 SCSI); the bootstore gate checks a root-class
+store member (crc32/sha256, lsstore, kbootset check). Floppy-booted disk-rooted cells l11-k30/l11-k46 9/9; first boots E952
+(k46: z3660scsi root loaded) and E953 (k30: rooted on the WD) PASS; C4-1's §4d d1→c1x swap ran live (sdcards=4). Next: the
+2 MiB s5 miniroot per line, then the CD-booted RAM-disk-rooted cell.
+
 ## 2026-10-27 — S4-58: the interview offers the upgrade install (37422a4)
 
 On a 1.1 medium a chosen disk that holds Amix (slice 1 UNIX_Root + slice 2 UNIX_Swap; 1.1 by the store magic, s4 by UNIX_Data)
