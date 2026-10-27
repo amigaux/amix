@@ -1,7 +1,7 @@
 # Stage 4 — root, filesystems and media: work breakdown
 
 - **Status:** plan, 2026-10-26; the owner's nine answers settled the same
-  day (§4)
+  day (§4); closed 2026-10-27 (`stage-4-exit.md`)
 - **Source:**
   - `docs/spec/80-stages-and-proof.md` §2 stage 4 and §3 (changed after
     the freeze, 2026-10-26: the filesystems and the media's proof are
