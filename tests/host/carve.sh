@@ -24,6 +24,7 @@ for fs in ufs s5; do
 		--build 68030-261101-01 $T/$fs > /dev/null
 	make -s -C $T/$fs KIT=$PWD/$B/kit/k30 > $T/$fs.out 2>&1 || { cat $T/$fs.out >&2; exit 1; }
 	grep -q "modcheck: $fs: ok (k30.1.2, boot, " $T/$fs.out
+	! grep -q "COMMON symbol rootvp," $T/$fs.out	# core tier: bound to the kernel's
 	for k in tier=core build=68030-261101-01 fs=$fs match=always unload=never class=boot; do
 		strings -a $T/$fs/build/k30/mod.d/$fs | grep -qx "$k" || { echo "carve: $fs: no $k in .moddata" >&2; exit 1; }
 	done

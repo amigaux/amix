@@ -39,9 +39,11 @@
 #     allocated PROGBITS at a file offset that is a multiple of its
 #     alignment.
 # Warns (exit status unchanged) on each COMMON symbol outside the module's
-# own names (its name, its wrapper's prefix): a stock header's tentative
-# definition of a kernel name (ifnet, rawintrq) becomes a private copy in
-# a module.  Warns when a demand-class module's load working set (the
+# own names (its name, its wrapper's prefix) and outside the allowlist of
+# its tier: a stock header's tentative definition of a kernel name (ifnet,
+# rawintrq) becomes a private copy in a module.  A COMMON the allowlist
+# names binds to the kernel's definition (the core's dlm_ld, the
+# undefined-and-common pass), as rootvp does in the carved ufs.  Warns when a demand-class module's load working set (the
 # core's KM_SLEEP allocations for a load from a file) passes WSET_WARN,
 # half of what k46 gives a module in process context (U2, 30 section 8).
 # One line per problem; exit status 1 if there is any.
@@ -510,7 +512,7 @@ def main(argv):
     own += [y['name'][:-len('wrapper')] for y in e.syms
             if y['name'].endswith('_wrapper') and y['shndx'] != 0]
     for y in e.syms:
-        if y['shndx'] == 0xfff2 and y['name'] and \
+        if y['shndx'] == 0xfff2 and y['name'] and y['name'] not in allow and \
                 not any(o and y['name'].startswith(o) for o in own):
             warn('COMMON symbol %s, outside the module\'s own names: the core gives the '
                  'module a private copy; if a stock header made it a tentative definition '
