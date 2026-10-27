@@ -5780,7 +5780,11 @@ def _setup_plan_harness():
     ci = next(i for i, l in enumerate(lines) if l.startswith("MINROOT="))
     cj = next(i for i, l in enumerate(lines) if l.startswith("SECS=64"))
     consts = "\n".join(lines[ci:cj + 1])
+    # the 1.1 store as the boot size: the two lines setup.sh runs after the profile
+    li = next(i for i, l in enumerate(lines) if l.startswith("L11_STORE_MB="))
+    consts += "\n" + "\n".join(lines[li:li + 2])
     return (consts + "\n" + _extract_func(src, "is_num") + "\n" +
+            _extract_func(src, "l11_data_mb") + "\n" +
             _extract_func(src, "plan_root_default") + "\n" +
             _extract_func(src, "plan_swap_default") + "\n"
             'if plan_root_default "$1"; then :; else echo "TOOSMALL"; exit 0; fi\n'
@@ -5851,6 +5855,37 @@ def audit_w2_sizing():
                "and the driver" % (label, ra[0], ra[2]))
         else:
             fail("E-BIG cap, %s: 1000 MB disk -> interview %r, driver %r" % (label, ra, rb))
+
+    # 1.1 (INSTALL_LAYOUT=1.1): the boot slice is the 64 MiB store and a data slice may
+    # come off first. The driver half takes both from l11.sh (L11_STORE_MB, l11_plan_data),
+    # the interview half from its own copies; the same numbers on both lines and with a
+    # TARGET_DATA_MB, or the interview offers a root the driver refuses (seen 2026-10-27:
+    # [159] on a 200 MB disk against a ceiling of 105).
+    l11src = open(L11, encoding="utf-8").read()
+    l11store = next(l for l in l11src.splitlines() if l.startswith("L11_STORE_MB="))
+    dp11 = workpath("w2plan-driver-l11.sh")
+    open(dp11, "w").write(l11store + "\n" + _extract_func(l11src, "l11_plan_data") + "\n" + drv)
+    bad = 0
+    n = 0
+    for env_extra in ({}, {"INSTALL_CPU": "060"}, {"TARGET_DATA_MB": "40"}):
+        env = dict(os.environ, INSTALL_LAYOUT="1.1", **env_extra)
+        for mb in (200, 300, 512, 1000, 2000):
+            n += 1
+            ra = subprocess.run([sh, sp, str(mb)], capture_output=True, text=True, env=env).stdout.split()[-4:]
+            rb = subprocess.run([sh, dp11, str(mb)], capture_output=True, text=True, env=env).stdout.split()[-4:]
+            if ra != rb or len(ra) != 4:
+                fail("1.1 %s, %d MB disk: interview offers %r but the driver plans %r"
+                     % (env_extra or "defaults", mb, ra, rb))
+                bad += 1
+    if not bad:
+        ok("1.1 layout: root/swap defaults + bounds agree in %d cases (030, 060, TARGET_DATA_MB=40; "
+           "200..2000 MB)" % n)
+    env = dict(os.environ, INSTALL_LAYOUT="1.1", INSTALL_CPU="060")
+    r200 = subprocess.run([sh, sp, "200"], capture_output=True, text=True, env=env).stdout.split()
+    if r200[:1] == ["105"] and r200[2:3] == ["105"]:
+        ok("non-vacuity: a 200 MB 1.1 disk on the 060 line offers root 105 (ROOTMAX 105): 64 MiB store, 30 MB swap")
+    else:
+        fail("non-vacuity: a 200 MB 1.1 060 disk gave %r, expected root 105 / ROOTMAX 105" % r200)
 
     # a disk too small for boot+root+swap must be REFUSED, not silently planned
     tiny = subprocess.run([sh, sp, "3"], capture_output=True, text=True).stdout.strip()

@@ -520,6 +520,12 @@ if [ -n "$TARGET_BOOT_MB" ]; then
 	[ "$TARGET_BOOT_MB" -ge "$MINBOOT" ] || die "TARGET_BOOT_MB=$TARGET_BOOT_MB is below the minimum boot partition of ${MINBOOT}MB"
 	BOOTSIZE="$TARGET_BOOT_MB"
 fi
+# 1.1 (INSTALL_LAYOUT=1.1): the boot slice is the 64 MiB boot store (l11.sh L11_STORE_MB,
+# fixed by the spec; l11_keys refuses TARGET_BOOT_MB), and a data slice may come off the
+# disk before the root is sized (l11_data_mb, l11.sh's l11_plan_data). The interview plans
+# with install.sh's numbers, or its root default is one install.sh refuses.
+L11_STORE_MB=64
+[ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && BOOTSIZE="$L11_STORE_MB"
 [ -n "$DDSIZE_SAFE" ] || DDSIZE_SAFE=n
 [ -n "$ANSWERS_ECHO_PATH" ] || ANSWERS_ECHO_PATH=/matrix.ans
 [ -n "$INSTALLABLE_IDS" ] || INSTALLABLE_IDS="$TARGET_SCSI_ID"
@@ -1066,6 +1072,26 @@ check_old_boot()
 # ---------------------------------------------------------------------------
 # 2. PARTITION SIZES
 # ---------------------------------------------------------------------------
+# l11_data_mb DISK_MB -- DATA_MB, the 1.1 data slice (s4): l11.sh's l11_plan_data,
+# the same rule on the same keys (TARGET_DATA_MB, else a quarter of a disk of 512 MB
+# or more), capped at 1024 MB and at the stock kernel's on-box ceiling.
+l11_data_mb()
+{
+	if [ -n "$TARGET_DATA_MB" ]; then
+		is_num "$TARGET_DATA_MB" || die "TARGET_DATA_MB='$TARGET_DATA_MB' is not a number"
+		DATA_MB="$TARGET_DATA_MB"
+	elif [ "$1" -ge 512 ]; then
+		DATA_MB=`expr "$1" / 4`
+	else
+		DATA_MB=0
+	fi
+	if [ "$DATA_MB" -gt 1024 ]; then DATA_MB=1024; fi
+	if [ "$KERNEL_SDDEVSIZE" != fixed ]; then
+		_cap=`expr "$SDDEV_CAP_BLOCKS" / "$BLOCKS_PER_MB"`
+		if [ "$DATA_MB" -gt "$_cap" ]; then DATA_MB="$_cap"; fi
+	fi
+}
+
 # plan_root_default DISK_MB -- sets PRE_REMAIN (blocks left after offset
 # rounding and the boot partition), DEFSWAP, ROOTMAX and DEF_ROOT. This is
 # install.sh's plan_partitions, step for step, on the same constants; audit V
@@ -1090,6 +1116,13 @@ plan_root_default()
 		return 1
 	fi
 	PRE_REMAIN=`expr "$PRE_REMAIN" - "$BOOTLEN"`
+	DATA_MB=0
+	if [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ]; then
+		l11_data_mb "$pdisk"
+		datalen=`expr "$DATA_MB" \* "$BLOCKS_PER_MB"`
+		[ "$datalen" -lt "$PRE_REMAIN" ] || return 1
+		PRE_REMAIN=`expr "$PRE_REMAIN" - "$datalen"`
+	fi
 	if [ "$pdisk" -gt "$BREAKPT" ]; then DEFSWAP="$LGSWAP"; else DEFSWAP="$SMSWAP"; fi
 	# r6 (owner 2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile; a shorter
 	# slice 2 leaves the tail of that swap failing with EIO -- so 30 MB is the default AND the floor.
@@ -1151,6 +1184,7 @@ ask_sizes()
 	fi
 
 	echo "\nYour boot partition is $BOOTSIZE megabytes."
+	[ "$DATA_MB" -gt 0 ] && echo "Your data partition is $DATA_MB megabytes."
 
 	ANS_ROOT=
 	while [ "$ANS_ROOT" = "" ]
@@ -2112,6 +2146,7 @@ confirm()
 	echo "Root file system:	$ANS_ROOT megabytes"
 	echo "Swap partition:		$ANS_SWAP megabytes"
 	echo "Boot partition:		$BOOTSIZE megabytes"
+	[ "${DATA_MB:-0}" -gt 0 ] && echo "Data partition:		$DATA_MB megabytes"
 	# Shown on every run, including the prebuilt one where it was not asked --
 	# what filesystem the root will be is a fact about the install whether the
 	# operator chose it or the medium did, and a blind console has no other place
