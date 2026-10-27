@@ -3,6 +3,8 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kernel-space catalog of record promoted to b198e9e2 (3028b37): the stage-4 exit set + gayle-k30/-k46 1.1.0-3; the exit root 6e60a128 kept byte-identical at superseded/repo-20261027-1329; round trip 159/159 — not published
+
 ## 2026-10-27 — GCC 14 userland re-minted on gcc14-cross-amix cf461e3: acompat 0.1-4, zlib 1.2.13-4, gzip 1.3.12-4, patch 2.5.9-4, gtar 1.14-4, grep 2.5.1a-5, less 704-5, make 3.81-5, amix-benchmark-gcc14 1.3-2 (de9d3b7..e64a8ee) — not published
 
 cf461e3 fixes the return-value ABI: pointers in %a0 and %d0, every struct in memory through %a0 (AMIX cc, gcc 2.7, libc div()).
