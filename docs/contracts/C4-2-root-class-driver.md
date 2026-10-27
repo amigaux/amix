@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 5
+# C4-2 — what a root-class driver changes, version 6
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -9,7 +9,9 @@
   version 4 (2026-10-27, S4-74's first metal row): a module carries
   every arm the kernel build applied to the static driver it replaces
   (§1.1); version 5 (2026-10-27): §1.1's example names the mechanism, a
-  dirty copyback line written back over the board's data.
+  dirty copyback line written back over the board's data; version 6
+  (2026-10-27, S5-06): the A4000T onboard 53C710's gate is the running
+  Kickstart's `NCR scsi.device` resident (§8.1).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -165,9 +167,47 @@ nothing for it, and `_load` cannot tell the difference.
 |---|---|---|---|---|---|---|
 | z3660scsi | amix-z3660scsi | `zorro:144b:01,mobo:z3660-window` | `z3660` | none: the piscsi mailbox is synchronous, polled | mailbox idle | ZS-05's armed register access (C3-6 §1, S4-63) |
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
-| A4000T onboard 53C710 | amix-a4091 (second target) | `mobo:a4000t-710` (gated by chipset identity; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
+| A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
 | ramdisk | amix-modules | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
+
+### 8.1 The A4000T onboard 53C710's gate (version 6)
+
+On a Z3660 box any access to `$DD00xx` hangs the bus for ever unless the
+A4000T Kickstart's NCR driver has initialised the chip (amix-a4091's T0).
+No probe can make that safe, and a `mobo:` key always matches (C4-4 §1),
+so `_load` decides before its first access under `$DD0000`:
+
+1. **The declaration: the running Kickstart has the A4000T's NCR
+   driver.** `_load` maps the 512 KiB Kickstart at physical `0xF80000`
+   read-only (k30 `sptalloc`, k46 `dev_kvmap`, both root-context names of
+   §2), then looks for a valid ROM tag: the word `0x4AFC` at an even
+   offset whose `rt_MatchTag` is its own address and whose `rt_Name`
+   points inside the image at exactly `NCR scsi.device`, with
+   `RTF_COLDSTART` set. Every A4000T Kickstart in the workspace's ROM
+   store carries it (3.1 40.70; 3.2.1 47.102, 47.115: idString
+   `A4000T_scsidisk`), and none of the A3000 or A4000 ones does. exec
+   runs every cold-start tag at every boot before the strap starts
+   boot1, so a box that reaches Amix with the tag in its Kickstart has
+   had the chip initialised. No tag found: `ENXIO`, silent, and no
+   access under `$DD0000`. An A4000T booted on an A4000 Kickstart (such
+   as A4kOS323) has no tag and is refused.
+2. **The chipset (G0)**: AGA in `VPOSR`, so an A3000 never gets this far.
+3. **The chip (G1, G2)**: read-only `bprobe` of ISTAT, then amix-a4091's
+   fingerprint (`docs/A4000T-ONBOARD-710.md` §10.2).
+4. **The parameter `declared`** (int, default -1): -1, item 1 decides; 0,
+   never touch the window; 1, touch it without item 1. 1 is the owner's
+   override for a box item 1 cannot read, such as a software MMU remap of
+   a Kickstart other than the one at `0xF80000`. On the Z3660 the ARM
+   serves the mapped Kickstart at that physical address, so a mapped ROM
+   needs no override.
+
+The scan reads at most 512 KiB once, at level 7 in the root pass. It
+costs boot2 nothing and adds no DDI name. The known limit is an A4000T
+Kickstart on hardware without the chip (an A4000 running a T ROM): item 1
+passes there. Whether the ROM's own init then hangs before boot1 depends
+on how it probes, which is not measured. `declared=0` is the override for
+such a box.
 
 ## 9. Not in this contract
 
