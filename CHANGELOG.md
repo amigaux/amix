@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-27 — S5-44 R0 and R1: J4's root predates firstboot step 4d (an S4-55 k46.1.0 disk later upgraded to -82); no current medium reproduces it. The install-matrix `firstboot` gate boots the target once and checks the four-card disk nodes. l11-rd-k46/k30 (rd1n) and l11-ni-k46/k30 (ni7) PASS 10/10 (0407da8, cee9568)
+
 ## 2026-10-27 — S5-33, the netinstall extras: zen0 in the miniroot and a raw RDB image per line. ni7 ebf1205d; raw images ni7-k46 b96dd51c / ni7-k30 ebf41c1f. Cells l11-ni-zen-k46/k30, l11-nr-k46/k30 and l11-ni-k46 PASS 9/9 (e669f46..7f65c07)
 
 The miniroot offers zen0 when /dev/zen0 opens (z3660eth as a boot-class module) and aen0 when it answers; with both it asks, zen0 the default. One raw image per line, because the core loads boot modules only from /stand/gen/<booted id>/mod.
