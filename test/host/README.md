@@ -14,8 +14,11 @@ make -C test/host clean
 
 Current run: **230 gating assertions passed, 0 failed**, plus 6/6 stretch parity
 against the firmware's CD oracle; then `z3660_modtest`, the root-class module
-form (`-DZ3660SCSI_MODULE`, a mock `sd_register`): **11 passed, 0 failed**
-(`module/README.md`).
+form (`-DZ3660SCSI_MODULE`, a mock `sd_register`): **42 passed, 0 failed**
+(`module/README.md`), 31 of them the ZS-06 cache arm: `cputype` 30/40/60 ×
+`cache=` absent, -1, 0, 40, 60, 99 and not a number, the parser's shape, and
+on the 060 with no parameter `z3660_ci_ok` 1 and a READ that pushes. Mutation
+checked: without the arm, or with it after `z3660map()`, the 060 cells fail.
 
 `z3660queue()` is driven with a hand-built `struct sdcom` and completes
 **in-context**: since a5af58a the driver delivers through `z3660_complete()`
