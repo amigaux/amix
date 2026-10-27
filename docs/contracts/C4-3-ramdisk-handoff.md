@@ -1,10 +1,11 @@
-# C4-3 — the RAM-disk hand-off, version 1
+# C4-3 — the RAM-disk hand-off, version 2
 
 - **Status:** agreed 2026-10-26 (orchestrator), with the draft's (a) and
   (b); marked agreed with S4-11's first commit (4003c9f, 2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
-  k46.1.2). Other repositories build against this text; a change from
-  here is a contract change with a version bump.
+  k46.1.2). Version 2 (2026-10-27, from rd1e): what `swap none` asks of
+  the kernel's swap configuration (§3). Other repositories build against
+  this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
   selector), §7 (the RAM disk); `50-media.md` §3–§5 (the media that root
@@ -72,7 +73,12 @@ region's low end and the image at its top.
   `ramdisk_image` (§4).
 - **The RTH1 kernel half** applies the root selector (30 §3, M-RD2):
   - for `ramdisk`, `rootdev` becomes block major 20, minor 0;
-  - for `swap none`, no swap device is configured;
+  - for `swap none`, no swap device is configured: the stock `swapconf`
+    runs with no device and looks nothing up (it would otherwise look up
+    `swapfile.bo_name`, a disk node the medium does not have, and panic:
+    rd1e, `swapconf lookupname failed - error 2`). The system runs from
+    the RAM disk without swap, and the installer configures swap itself
+    later, with `swap -a`, once the target disk is made;
   - `rootfstype` is set from the record, so `vfs_mountroot` tries only
     that type.
   - This runs in `rth1_apply`, after `marc_root` has linked the
