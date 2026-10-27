@@ -422,6 +422,30 @@ grep -q "a block major needs a root-class module" $T/out
 rootset; modpkg ramdisk class=root match=always majors=b:20
 $KB build $RFACTS | grep -q "built"
 rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+# safe mode keeps the card numbers (spec 70 section 4, S5-02): every
+# controller module ranked at or before the root's class joins the safe
+# set; on an A4091 root the Z3660's, on a built-in WD root the Z3660's
+# and the A4091's; Gayle's never (ide sorts last)
+safeset() {	# safeset ROOTDEV MOD...: build, check MOD... safe, gayle not
+	rd=$1; shift
+	$KB build --line 46 --bootdev $rd --rootdev $rd --rootfs ufs --mem 16777216 > $T/out ||
+		{ echo "kbuild: the $rd root was not built" >&2; cat $T/out >&2; exit 1; }
+	id=$(ls $R/stand/gen | sort -n | tail -1)
+	for m in "$@"; do
+		grep -q "^module $m root .* safe=1$" $R/stand/gen/$id/build ||
+			{ echo "kbuild: $m not in the safe set of a $rd root" >&2; cat $R/stand/gen/$id/build >&2; exit 1; }
+	done
+	grep -q "^module gayle root .* match=mobo:gayle$" $R/stand/gen/$id/build ||
+		{ echo "kbuild: gayle in the safe set of a $rd root" >&2; exit 1; }
+	rm -rf "${R:?}/stand/gen/${id:?}"
+}
+rootset; modpkg gayle class=root match=mobo:gayle rank=ide
+safeset zorro:0202:54 a4091 zscsi ufs
+echo "root=mobo:a3000-wd" >> $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+safeset mobo:a3000-wd zscsi a4091 ufs
+sed -i '/^root=/d' $R/stand/k46/kabi; record
+sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 # gate 7: a store whose loader is version 2 cannot place root-class
 # modules, so the generation is refused when it is composed
 head -c 8454144 /dev/zero > $T/v2.img

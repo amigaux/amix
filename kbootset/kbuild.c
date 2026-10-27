@@ -277,6 +277,20 @@ listed(const char *list, const char *key)
 	return 0;
 }
 
+/* a rank class's place in sd's order (C4-1 section 4): 1 z3660, 2 zorro,
+ * 3 mobo, 4 ide; 0 for none */
+static int
+rankof(const char *r)
+{
+	static const char *const cls[] = { "z3660", "zorro", "mobo", "ide" };
+	int i;
+
+	for (i = 0; i < 4; i++)
+		if (!strcmp(r, cls[i]))
+			return i + 1;
+	return 0;
+}
+
 /* one gate-1 check: the file under root against its record */
 static int
 hashed(struct ks *k, const char *root, const char *path, const ax_u8 *data, ax_u32 len,
@@ -1179,6 +1193,25 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		    (listed(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs) ||
 		     (!strcmp(f->root, "ramdisk") && named(mods[i].i.majors, "b:20"))))
 			mods[i].safe = 1;
+	/* and every controller module ranked at or before the root's class,
+	 * so the card numbers stay those of a normal boot (spec 70 section 4,
+	 * S5-02): sd orders by class, then base (C4-1 section 4), and the core
+	 * links none whose board is absent.  The root's class is its module's,
+	 * or a built-in controller's from its key */
+	if (rc == KS_OK && strcmp(f->root, "ramdisk")) {
+		int rk = 0;
+
+		for (i = 0; i < nmods && !rk; i++)
+			if (!strcmp(mods[i].i.cls, "root") && listed(mods[i].i.match, f->rootdev))
+				rk = rankof(mods[i].i.rank);
+		if (!rk)
+			rk = !strncmp(f->rootdev, "zorro:", 6) ? 2 : !strcmp(f->rootdev, "mobo:gayle") ? 4 :
+			     !strncmp(f->rootdev, "mobo:", 5) ? 3 : 0;
+		for (i = 0; i < nmods; i++)
+			if (!strcmp(mods[i].i.cls, "root") && rankof(mods[i].i.rank) &&
+			    rankof(mods[i].i.rank) <= rk)
+				mods[i].safe = 1;
+	}
 	for (cls = 1; cls && rc == KS_OK; ) {
 		for (cls = 0, i = 0; i < nmods; i++)
 			for (j = 0; mods[i].safe && j < nmods; j++)

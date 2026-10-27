@@ -24,6 +24,7 @@ struct km_info {
 	char name[16], kabi[24], cc[48], cpu[8], cls[8];
 	char match[256], majors[128], depend[128], unload[8], tier[8], build[48];
 	char fs[16];		/* the type vfs_register takes (C4-6 section 3), or "" */
+	char rank[8];		/* a disk controller's class (C4-1 section 4.1), or "" */
 	int nparam;
 	struct km_param param[KM_MAXPARAM];
 };
