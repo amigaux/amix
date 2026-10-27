@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — dma_forcefail is a self-clearing count; C4-5 v9
+
+N > 0 refuses the next N bounces, one off the count each, clearing itself at 0 (set 1 for E6b's exact "noreach +1"); a reachable or
+dma_alloc segment never touches it. Reason recorded (N110: 321 misses for one on a Z3660-bound box). 22 k30 DMA checks.
+
 ## 2026-10-27 — C4-3 v2: `swap none` means swapconf runs with no device and looks nothing up
 
 §3: the stock swapconf would otherwise look up swapfile.bo_name, a disk node the medium lacks, and panic (rd1e: "swapconf
