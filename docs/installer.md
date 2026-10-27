@@ -5035,6 +5035,20 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   `sdcards=4`, `build-install-iso.sh` appends the names that move (TARGET_SCSI_ID, CD_SPEC, ROOTDEV) to each staged
   1.1 profile of that line; `tools/sdnames.py` derives them. A floppy-booted 1.1 disc installs under fd0unix
   (two-card), so nothing moves there. The 1.0-layout media stay on the r7 kernels.
+- The disk nodes are checked after the first boot (S5-44 R1). The install-matrix cells of the current media (RAM-disk
+  CD, floppy pair, netinstall, raw image) carry the gate `firstboot`. It boots a copy of the target once on a rig
+  slot (`tools/firstboot-rig.sh`: kerntools' rig-run in the first-boot rows' shape, each dialog answer typed at a
+  detected prompt, `tools/lib/conprompt.py`). On the box it reads `c1fd0s7` = c 40,255, `c10d0s0` = b 18,128, no
+  d1 node, 256 c1x nodes, and `pkgchk core` naming no /dev path (a configured box's editable files always differ
+  from core's rows). Host-side, `tools/l11-nodes-check.py` reads the slot copy the shutdown left: all 512 nodes at
+  their C4-1 minors, the card-2/3 nodes 0600 root root and registered to core, no d1 row in the contents file.
+  A two-card kernel's root must keep core's set.
+- A root installed before step 4d existed keeps core's d1 nodes even after apkg brings a four-card kernel. The
+  A4000D root of bench J4 (M-G3, 2026-10-27) was one: the S4-55 disk (`l11-k46.hdf` 9b2edb36, installed 2026-10-26
+  19:22 with kern46m -61, kabi k46.1.0 and no `sdcards=`; its firstboot.sh had no 4d and its firstboot.conf no
+  `FB_SDCARDS`). Copies of it later got kern46m -82 (`sdcards=4`) through apkg. The current media all lay
+  `FB_SDCARDS=4` and step 4d. Such old roots get the set from `kbootset` -22's commit (C2-4 §14), not from the
+  installer.
 
 ### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
 
