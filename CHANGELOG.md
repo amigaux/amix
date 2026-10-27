@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — docs/plan/s5-12-packaging.md: the k46 inputs of record are the re-cut 68060-261028-50 (core 7b07bce), replacing -91; version k46.1.2.261028-50 (6b1b055)
+
 ## 2026-10-28 — core/plat: the module core takes the kernel's build id without the stamp's leading blank, so a k46 kernel loads its core-tier ufs module (the S5-13 EBADVER; every k46 kernel so far carries " 68060-…"); t_plat tests the port's real format (7b07bce)
 
 ## 2026-10-27 — C4-1 v7: `pkgchk core` is quiet on /dev, not as a whole; the S5-44 ledger row likewise (cc3e43e, a9542a3)
