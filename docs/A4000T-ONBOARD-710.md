@@ -1,6 +1,8 @@
 # A4000T onboard 53C710: design note (A1)
 
-Status: **design only, no code** (2026-10-02). It covers the fixed-address mode of the a4091 driver for the A4000T's
+Status: **design only, no code** (2026-10-02). **§10 (2026-10-27) supersedes §3 and §7 for the module form (S5-06, was S4-33; metal S5-07):**
+the sd rows, the glue and the sort key are replaced by `sd_register` with rank `mobo`, and the static relink
+(KD060-ZT) is not pursued. It covers the fixed-address mode of the a4091 driver for the A4000T's
 onboard 53C710: the presence probe, registration and card order, interrupts, DMA reach, the ROM-driver handover, the
 relink shape (KD060-ZT) and the test plan. Effort is estimated at the end.
 
@@ -383,3 +385,123 @@ T1-T3.
 1. Sort key: default (710 = card 1) vs 0 (710 = card 0).
 2. Row order against an A4092 in the same box.
 3. Whether a KD040-T sibling is wanted.
+
+## 10. The module form (S5-06, 2026-10-27; metal half S5-07)
+
+This section is the design for the module world: contracts C4-1 v3 (sd_register, the rank classes), C4-2 v3 (§8's
+A4000T row), C4-5 v8 (DMA), C2-1 (motherboard id 3, `a4000t-710`), 20 §6 (the `mobo:` registry). §1, §2 (T0), §4,
+§5, §8a still hold. §3 and §7 are superseded.
+
+### 10.1 The target split
+
+- **One source, a second object.** `src/a4091-wr.c` built with `-DA4091_MODULE -DA4091_A4KT` is the module
+  `a4kt710`. The A4091 module and the static driver are unchanged; their objects are pinned.
+- **Why a separate object:** C4-1 §4.1. A module declares one rank class, and the A4091 is `zorro` while the onboard
+  chip is `mobo`.
+- **Proposed names:** module `a4kt710`; C3-5 short name `a4kt710`, so the packages are `a4kt710-k30` / `a4kt710-k46`
+  (pkginst `a4kt71030` / `a4kt71046`, 9 bytes).
+- **The differences are compile-time constants** of the second target, not runtime switches, so neither object
+  carries the other's branches:
+
+| | A4091 / A4092 / A4770 (`a4091`) | A4000T onboard (`a4kt710`) |
+|---|---|---|
+| `.moddata` `match` | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` | `mobo:a4000t-710` |
+| `rank` | `zorro` (class 2) | `mobo` (class 3) |
+| Discovery | `autocon()`, up to 4 boards | none: one controller at the fixed base `$DD0000`, behind the gate (§10.2); c = 0 |
+| Registers | base + `0x800000` | base + `0x40` |
+| Register writes | reg + `0x40` (the write shadow) | direct (offset 0) |
+| DCNTL | `0x00` | `0x20` (EA, "connect _SLACK/_STERM") |
+| Host ID | 7 | DIP bank: longword at `$DD3000`, `& 7`, read once after the gate (amiberry reads `0xff`, so 7) |
+| Attach | first-touch `bprobe` of ISTAT (k46) | the gate, then SIEN = DIEN = 0 and latched SIP/DIP cleared: the A4000T ROM driver leaves SIEN `AF` and DIEN `3D` enabled (variant 3) |
+| D42 `ctlid` | `0x02020054` | `0x00000003` (C2-1 id 3) |
+| sd name | `A4091 SCSI` etc. | `A4000T onboard SCSI` |
+| Map | k46 `dev_kvmap` NCS; k30 `sptalloc` | the same calls, for the `$DD0000` page and the `$DD3000` page. Never the identity alias: the k30 identity map is cacheable (N109's decode) |
+
+### 10.2 The gate (M-A4T1): never touch `$DD00xx` undeclared
+
+T0 (§2) settles the constraint: on a Z3660 box an access to `$DD00xx` hangs the bus forever unless the A4000T ROM's
+NCR driver has initialised the chip. No CPU probe, and no `bprobe`, can make that safe (Gary's timeout is closed
+negative). A `mobo:` key always matches at load (C4-4 §1, `dlm_plat_match`), so the module's `_load` is the gate.
+
+- **G-D, the declaration (required).** `_load` touches nothing under `$DD0000` unless the loader has declared the
+  onboard 53C710 initialised. Proposed channel (dlm and the AmigaOS-side loader decide):
+  - the loader, before it takes over the machine, finds the A4000T ROM's NCR driver in ExecBase's device list (the
+    idString `NCR scsi.device`, as variant 3 listed it), or knows it booted through that driver;
+  - it records C2-1 id 3 in what it hands the kernel (the AXL1 board list, or a flag beside it);
+  - the module reads the record through a DDI accessor or the platform matcher; that interface is dlm's.
+  - Interim fallback, weaker: a module parameter `declared` (bool, default 0) that kbootset sets for an A4000T
+    generation, with "A4000T Kickstart required" documented. It cannot see an A4kOS323 boot, which would then hang,
+    so it is an override, not the rule.
+- **G0, chipset.** VPOSR AGA. Not AGA means no access at all, which keeps the A3000's WD33C93 untouched.
+- **G1, G2: read-only, after G-D.** `bprobe` of ISTAT `$DD0062` (byte), then the fingerprint, all byte reads:
+  - ISTAT reserved bits 0 and not `0xff`;
+  - DSTAT DFE (`0x80`) set while SIP/DIP are clear;
+  - CTEST8's high nibble is the revision (`2` on the tower, variant 3);
+  - the same reads twice agree.
+- **No gate passes:** `ENXIO`, silent, zero accesses under `$DD0000`. The host test asserts the zero with a mock
+  that fails the run on any access to the window.
+- **The stock phantom** (`autocon()` answering `0x0202F003` at `$DD0000`) stays the floor's problem: both module
+  kernels carry the W-D7 gate (kern30m: support.c.patch `a3kscsi`; kern46m: kernel-support-probe-inject). The
+  floor's `mobo:a3000-wd` probe is VPOSR-gated, so it never touches the A4000T's window. M-A4T1 verifies both.
+
+### 10.3 The rank and the card order
+
+`rank=mobo`, C4-1 class 3, after `z3660` and `zorro`, before `ide`. That replaces §3's open decisions (sort key,
+row order):
+
+| Box | Cards |
+|---|---|
+| A4000T + Z3660 root (the tower today) | z3660 card 0; the onboard 710 card 1 (`ced0` for id 6) |
+| A4000T, no Z3660 driver (cardless or a stock accelerator) | the onboard 710 card 0 (`c6d0`) |
+| A4000T + a Zorro SCSI board (once the tower's Zorro bus is repaired) | z3660, then the board, then the 710 |
+| + Gayle IDE | IDE last |
+
+### 10.4 What stays common with the A4091
+
+Everything past discovery is the A4091 path:
+- the queue path and its SCRIPTS;
+- the DSA table, the `dma_alloc` area (status line, clear line);
+- the C4-5 sequence: prepare, `dma_addr`, arm, complete, the refused arm, the clear-line sync;
+- the misaligned-read bounce;
+- the A4-22 bus reset and the A4-24 re-arm;
+- the trace policy (silent selection timeout);
+- `_halt` (the init path's abort and soft reset);
+- the host harness: two more arms, `a4kt-k30` and `a4kt-k46`, with a mock board at `$DD0000`.
+
+### 10.5 Interrupts
+
+v1 is polled, as the A4091 module is (C4-2 §3 allows it): no `root_defer`, the attach quiesce above. INT2 through
+`root_defer` comes with the A4091's, later.
+
+### 10.6 DMA: the open risk
+
+The 710 is a **motherboard bus master** (§5). The port measured an A3000 SDMAC, also a motherboard master,
+reaching a Z3660's DDR at `$08000000` cleanly [M, 2026-10-01]. For the A4000T's 710, though:
+- T0b, its own DMA reach, has no recorded result that I can find;
+- AmigaOS booting from it proves nothing here, because the ROM driver may bounce.
+
+So:
+- **k30:** the provider bounces every segment at or above `$08000000`. That is correct whether or not the 710
+  reaches the DDR.
+- **k46:** the provider is the identity (C4-5), so it **assumes** the 710 reaches the DDR. M-A4T1 must include
+  M-DMA1's byte compare: a raw read of a known region equal to host truth, and `cp` + `sync` identical.
+- **If k46 fails the compare,** the k46 provider needs a bounce for this controller. That is a C4-5 change, dlm's.
+
+### 10.7 Tests
+
+| Row | Where | Shows |
+|---|---|---|
+| H-A4T | host, both lines | gate negative: ENXIO with zero window accesses (no declaration; not AGA; declared but the fingerprint fails); gate positive: one registration (c 0, `$DD0000`, rank 3, the name); +0x40 reads, direct writes, DCNTL `0x20`, host ID from the DIP mock, the attach quiesce; the queue cases of the A4091 arms |
+| N-A4T1 | amiberry, k46 then k30 | `chipset_compatible=A4000T` (or `scsi_a4000t=true`), units `scsi<N>_a4000t`, an A4000T Kickstart (R075/R076): root on the onboard bus, card 0 without a Z3660, card 1 with one; raw read and `cp` + `sync` byte-identical. **The model answers reads without the ROM init, so it cannot reproduce the hang**: emulation covers the data path and the order, not the trap |
+| N-A4T2 | amiberry, an A4000 (D) config | the module in the generation, no declaration: ENXIO, nothing touched, the boot undisturbed |
+| M-A4T1 | the A4000T, metal | (a) A4kOS323 (no NCR init), the module in the generation: ENXIO, no hang, cold boots; (b) A4000T Kickstart: attach line, the onboard 710 as card 1 next to the Z3660 root, M-DMA1's byte compare, halt pass; (c) the onboard root as card 0 (no z3660scsi in the generation) |
+
+### 10.8 Effort, and what is asked
+
+- **Effort:** code and host tests about 1 day; amiberry rows about 0.5 day; the loader declaration is dlm's (size
+  theirs); metal is the Bench's.
+- **Asked of Amix and dlm:**
+  1. the declaration channel (§10.2): the loader check (recommended) or the parameter;
+  2. the names: `a4kt710`, pkginst `a4kt71030` / `a4kt71046`;
+  3. v1 polled.
+
