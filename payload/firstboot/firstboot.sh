@@ -1329,51 +1329,16 @@ fi
 
 # --- 4d. a four-card kernel (C4-1): the card-2/3 disk nodes replace core's d1 nodes ----
 # Minor bit 7 is the card's high bit on a four-card kernel, so core's 256 c<N>d1s<S>
-# nodes (minor 128 + ...) would open card-2/3 disks under names that say otherwise:
-# they leave the core package, and c10..c1f d0 s0..s7 take their minors (C4-1 §2.1:
-# slice*16 + N%16 + 128), registered to core so pkgchk core stays quiet. APKG's tools
-# from /tmp, as in 4c: removef by arguments, 16 paths per id (its stdin form keeps each
-# line's newline and matches nothing); installf's list goes through a file.
-if [ "$FB_SDCARDS" = 4 ]; then
-	for _n in 0 1 2 3 4 5 6 7 8 9 a b c d e f
-	do
-		_p=
-		for _s in 0 1 2 3 4 5 6 7
-		do
-			_p="$_p /dev/dsk/c${_n}d1s$_s /dev/rdsk/c${_n}d1s$_s"
-		done
-		( cd /tmp && /usr/apkg/bin/removef core $_p >/dev/null 2>&1 )
-		rm -f $_p
-	done
-	( cd /tmp && /usr/apkg/bin/removef -f core >/dev/null 2>&1 )
-	_lo=0
-	for _n in 10 11 12 13 14 15 16 17 18 19 1a 1b 1c 1d 1e 1f
-	do
-		for _s in 0 1 2 3 4 5 6 7
-		do
-			_mn=`expr $_s \* 16 + $_lo + 128`
-			mknod /dev/dsk/c${_n}d0s$_s b 18 $_mn
-			mknod /dev/rdsk/c${_n}d0s$_s c 40 $_mn
-			echo "/dev/dsk/c${_n}d0s$_s b 18 $_mn 0600 root root"
-			echo "/dev/rdsk/c${_n}d0s$_s c 40 $_mn 0600 root root"
-		done
-		_lo=`expr $_lo + 1`
-	done > /tmp/c1x.$$
-	chmod 600 /dev/dsk/c1?d0s? /dev/rdsk/c1?d0s?
-	( cd /tmp && /usr/apkg/bin/installf core - < /tmp/c1x.$$ >/dev/null 2>&1 &&
-	  /usr/apkg/bin/installf -f core >/dev/null 2>&1 )
-	set -- /dev/dsk/c?d1s? /dev/rdsk/c?d1s?
-	_left=$#; [ -b "$1" ] || _left=0
-	set -- /dev/dsk/c1?d0s? /dev/rdsk/c1?d0s?
-	_made=$#; [ -b "$1" ] || _made=0
-	if grep '^/dev/r*dsk/c.d1s' /var/sadm/install/contents >/dev/null 2>&1; then
-		echo "firstboot: WARNING: core's contents still name d1 nodes -- pkgchk core will report them missing"
-	elif grep '^/dev/rdsk/c1fd0s7 ' /var/sadm/install/contents >/dev/null 2>&1; then
-		echo "firstboot: four-card kernel: the d1 nodes are gone ($_left left), c10-c1f made ($_made) and registered to core"
-	else
-		echo "firstboot: WARNING: c10-c1f made ($_made) but not registered to core"
-	fi
-	rm -f /tmp/c1x.$$
+# nodes (minor 128 + ...) would open card-2/3 disks under names that say otherwise.
+# `kbootset nodes` (C2-4 v12 §14, S5-44 R2) owns the set: it reads the installed kernel's
+# sidecar (sdcards=4 in /stand/k30/kabi or /stand/k46/kabi) itself, makes c0-c1f d0 s0-s7
+# at their C4-1 minors, removes the d1 nodes and registers the change to core with APKG's
+# removef/installf; on a two-card kernel it says core's nodes stand. Success is exit 0
+# with "the four-card set is complete" or "registered to core".
+if [ -x /sbin/kbootset ]; then
+	_nl=`/sbin/kbootset nodes 2>&1`; _nrc=$?
+	echo "firstboot: $_nl"
+	[ $_nrc -eq 0 ] || echo "firstboot: WARNING: kbootset nodes failed ($_nrc)"
 fi
 
 # --- 5. /etc/inet/hosts (the ONLY networking edit; NEVER network-config) ----

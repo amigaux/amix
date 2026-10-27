@@ -1239,6 +1239,9 @@ FIRSTBOOT_EXTRA = {
     # C4-1: the root's name as the running kernel numbers it (stat only, a core member;
     # updbootpart and bcheckrc use it the same way)
     "devnm",
+    # S5-44 R2: step 4d's `kbootset nodes` (C2-4 §14), the kbootset package every 1.1 disk
+    # installs, behind `[ -x /sbin/kbootset ]`
+    "kbootset",
 }
 
 # IN-rtc-2: the dialog re-reads the battery clock in the zone just chosen. This is
@@ -10280,57 +10283,42 @@ def audit_l11():
             last = out.strip().splitlines()[-1] if out.strip() else ""
             (ok if last == "%s FB=%s" % (want, want[3:]) else fail)("firstboot's root name from devnm, %s: %s" % (what, last))
 
-    # (17) C4-1 first boot on a four-card kernel: core's 256 d1 nodes out (removef core),
-    # the 256 c10-c1f nodes in by §2.1's minor (installf core), sandboxed
-    m = re.search(r'\nif \[ "\$FB_SDCARDS" = 4 \]; then\n.*?\nfi\n', fb, re.S)
+    # (17) S5-44 R2 (C2-4 v12 §14): firstboot's step 4d is `kbootset nodes`, ungated by
+    # FB_SDCARDS (kbootset reads the sidecar itself); its line logged, a failure a WARNING
+    m = re.search(r'\n# --- 4d\..*?\n(if \[ -x /sbin/kbootset \]; then\n.*?\nfi\n)', fb, re.S)
     if not m:
-        fail("firstboot.sh has no FB_SDCARDS=4 section")
+        fail("firstboot.sh's step 4d does not call /sbin/kbootset nodes")
     else:
-        sb = os.path.join(d, "fbsd")
+        blk = m.group(1)
+        (ok if "FB_SDCARDS" not in blk and "mknod" not in blk and "removef" not in blk else fail)(
+            "firstboot 4d: no FB_SDCARDS gate and no node loop of its own (kbootset owns the set)")
+        a4d = fb.index("# --- 4d.")
+        (ok if fb.index("# --- 4c.") < a4d < fb.index("# --- 5. ") else fail)(
+            "firstboot 4d runs after the package steps (4b, 4c) and before the network steps")
+        sb = os.path.join(d, "fbnodes")
         shutil.rmtree(sb, ignore_errors=True)
-        for x in ("dev/dsk", "dev/rdsk", "tmp", "bin", "log"):
-            os.makedirs(os.path.join(sb, x))
-        for n in "0123456789abcdef":
-            for sl in range(8):
-                for k in ("dsk", "rdsk"):
-                    open(os.path.join(sb, "dev", k, "c%sd1s%d" % (n, sl)), "w").close()
-        open(os.path.join(sb, "contents"), "w").write("".join(
-            "/dev/%s/c%sd1s%d %s none %d %d 0600 root root core\n" % (k, n, sl, "b" if k == "dsk" else "c",
-                                                                      18 if k == "dsk" else 40, sl * 16 + int(n, 16) + 128)
-            for n in "0123456789abcdef" for sl in range(8) for k in ("dsk", "rdsk")))
-        for t in ("removef", "installf"):
-            # `-f PKG` finalizes; `PKG -` reads the list on stdin; `PKG path...` takes it as arguments
-            open(os.path.join(sb, "bin", t), "w").write(
-                '#!/bin/sh\nL=%s/log/%s\nif [ "$1" = -f ]; then echo "$*" >> $L.final\n'
-                'elif [ "$2" = - ]; then cat >> $L.$1\nelse p=$1; shift; for a; do echo "$a"; done >> $L.$p; fi\n' % (sb, t))
-            os.chmod(os.path.join(sb, "bin", t), 0o755)
-        open(os.path.join(sb, "bin", "mknod"), "w").write('#!/bin/sh\necho "$*" >> %s/log/mknod\n: > "$1"\n' % sb)
-        os.chmod(os.path.join(sb, "bin", "mknod"), 0o755)
-        blk = (m.group(0).replace("/tmp", "@SB@/tmp").replace("/usr/apkg/bin/", "@SB@/bin/")
-               .replace("/var/sadm/install/contents", "@SB@/contents").replace("/dev/", "@SB@/dev/").replace("@SB@", sb))
-        out = subprocess.run(["/usr/bin/dash", "-c", "PATH=%s/bin:$PATH\nFB_SDCARDS=4\n%s" % (sb, blk)],
-                             capture_output=True, text=True, timeout=60).stdout
-        rm = open(os.path.join(sb, "log", "removef.core")).read().split() if os.path.exists(
-            os.path.join(sb, "log", "removef.core")) else []
-        want_rm = ["%s/dev/%s/c%sd1s%d" % (sb, k, n, sl) for n in "0123456789abcdef" for sl in range(8) for k in ("dsk", "rdsk")]
-        ins = open(os.path.join(sb, "log", "installf.core")).read().splitlines() if os.path.exists(
-            os.path.join(sb, "log", "installf.core")) else []
-        want_ins = []
-        for card in (2, 3):
-            for unit in range(8):
-                nn = card * 8 + unit
-                for sl in range(8):
-                    mn = (card & 1) << 3 | (card >> 1) << 7 | sl << 4 | unit
-                    want_ins += ["%s/dev/dsk/c%xd0s%d b 18 %d 0600 root root" % (sb, nn, sl, mn),
-                                 "%s/dev/rdsk/c%xd0s%d c 40 %d 0600 root root" % (sb, nn, sl, mn)]
-        left = [f for k in ("dsk", "rdsk") for f in os.listdir(os.path.join(sb, "dev", k)) if "d1s" in f]
-        fin = open(os.path.join(sb, "log", "removef.final")).read() if os.path.exists(
-            os.path.join(sb, "log", "removef.final")) else ""
-        (ok if rm == want_rm and fin == "-f core\n" and "removef core -" not in m.group(0) else fail)(
-            "firstboot FB_SDCARDS=4: removef core takes core's 256 d1 nodes by argument, then one removef -f (%d)" % len(rm))
-        (ok if not left else fail)("firstboot FB_SDCARDS=4: no d1 node left (%d)" % len(left))
-        (ok if ins == want_ins else fail)(
-            "firstboot FB_SDCARDS=4: installf core registers the 256 c10-c1f nodes by C4-1 §2.1's minor (%d)" % len(ins))
+        os.makedirs(sb)
+        kb = os.path.join(sb, "kbootset")
+        for what, line, rc, want in (
+                ("a four-card set made", "kbootset: nodes: made 256, removed 256 d1 nodes; registered to core", 0,
+                 ["firstboot: kbootset: nodes: made 256, removed 256 d1 nodes; registered to core"]),
+                ("a two-card kernel", "kbootset: nodes: no four-card kernel installed (no sdcards=4 in /stand/k30/kabi "
+                 "or /stand/k46/kabi): core's nodes stand", 0,
+                 ["firstboot: kbootset: nodes: no four-card kernel installed (no sdcards=4 in /stand/k30/kabi or "
+                  "/stand/k46/kabi): core's nodes stand"]),
+                ("a failed registration", "kbootset: nodes: made 256, removed 256 d1 nodes; WARNING: core's "
+                 "registration failed (APKG's installf, removef)", 1,
+                 ["firstboot: kbootset: nodes: made 256, removed 256 d1 nodes; WARNING: core's registration failed "
+                  "(APKG's installf, removef)", "firstboot: WARNING: kbootset nodes failed (1)"])):
+            open(kb, "w").write('#!/bin/sh\n[ "$*" = nodes ] || { echo "kbootset: bad args $*" >&2; exit 2; }\n'
+                                'echo "%s" >&2\nexit %d\n' % (line, rc))
+            os.chmod(kb, 0o755)
+            out = subprocess.run(["/usr/bin/dash", "-c", blk.replace("/sbin/kbootset", kb)],
+                                 capture_output=True, text=True, timeout=30).stdout
+            (ok if out.splitlines() == want else fail)("firstboot 4d, %s: %s" % (what, out.strip()))
+        out = subprocess.run(["/usr/bin/dash", "-c", blk.replace("/sbin/kbootset", os.path.join(sb, "none"))],
+                             capture_output=True, text=True, timeout=30).stdout
+        (ok if out == "" else fail)("firstboot 4d with no /sbin/kbootset (a 1.0 root): silent (%r)" % out)
 
     # (4) the shim
     r = subprocess.run(["/usr/bin/dash", os.path.join(REPO, "payload", "updbootpart-l11")],
