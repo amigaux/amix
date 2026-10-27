@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — ddi.md: the libgcc helpers' provider; the core harness forces them too
+
+__udivdi3, __umoddi3, __lshrdi3 are provided by libgcc and forced into the module kernel's link by the builder (kerntools on
+k30, the port's relink on k46 — which already -u's them and gets a second belt from ksym.o's references), not kernel source symbols;
+k30's static cdfs had pulled them until -17. The harness forces from libgcc only those a base lacks, on both lines; 260/260.
+
 ## 2026-10-27 — the ledger's Gayle self-test cell cites N111/N117 (and N115/N116, N121/N122)
 
 ## 2026-10-27 — the exit ledger marks S4-32 (Gayle IDE) PASS on both lines in emulation; S4-30…S4-34 per module
