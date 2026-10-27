@@ -9,23 +9,27 @@
 
 ## 1. The inputs of record
 
-These are the cuts of S5-15 and S5-46, which replace the first pins
-(-18, -66). All paths are under `Amix/tmp/`. amix-dlm rebuilt the
-modules on the host with its kits at 3f12419 and later, and they came
+These are the k30 cut of S5-15 and the k46 re-cut of 2026-10-28, which
+replace the first pins (-18, -66) and the k46 cut -91. -91's core took
+the build id with the stamp's leading blank and refused its own ufs
+(S5-13); the re-cut carries the core at amix-dlm 7b07bce, and its ufs
+differs from -91's only in `.moddata` `build=`. All paths are under
+`Amix/tmp/`. amix-dlm rebuilt the modules on the host with its kits (k30
+at 3f12419 and later, k46 at 7b07bce), and they came
 out byte for byte the same as the stations' objects below, with no
 `rootvp` warning. So amix-packages takes these objects as they are; §3
 R2 rebuilds them as a check.
 
-| | k30 (amix-kerntools 224b285, rebuilt byte-identical) | k46 (the port 7459d06 and S5-46) |
+| | k30 (amix-kerntools 224b285, rebuilt byte-identical) | k46 (the port 88dcfc0, core 7b07bce, rebuilt byte-identical) |
 |---|---|---|
-| build id | `68030-261027-20` | `68060-261027-91` |
-| tree | `2026-10-27-s5-10/cut-68030-261027-20/usr/sys/` | `2026-10-27-s5-46-k46/out/c/` |
-| kernel | `unix.brel` `d2e9c687a584613a427c7b169c370209a8f5db0097516c723e64776d7e61c7c6` (1 534 956 bytes) | `unix` (ET_REL) `e26c2df10b3d1cc56deadeece918c3f0cf23adaa2d50af2c6be1e77319b8515d` (2 412 229 bytes) |
+| build id | `68030-261027-20` | `68060-261028-50` |
+| tree | `2026-10-27-s5-10/cut-68030-261027-20/usr/sys/` | `2026-10-28-k46-recut/out/c/` |
+| kernel | `unix.brel` `d2e9c687a584613a427c7b169c370209a8f5db0097516c723e64776d7e61c7c6` (1 534 956 bytes) | `unix` (ET_REL) `b49f63c50d9b35243a25fe434c22e31af0854c8d49c827d2597e856ff2cac2a7` (2 412 245 bytes) |
 | symbols | `unix.sym` `035dbda45e2b1bf2edb6989520cf06e0e07c446730fcf57d3b4cbe49d7faba36` | none (ET_REL) |
-| sidecar | `kabi` `499514df1fabf470271bde9bb927d9fa6da83396b0073fea6842d47fa6d9333e` | `kabi` `9295bae59275d8bcc373a3ef4c331abec645b4b52627772dd699f4cbcc41100d` |
-| ufs | `mod.d/ufs` `419c145c102dc1a7b094579dc77b88a2fbd66ed8a616b701e87ea59af4413c8c`, 78 580 bytes (56 636 allocated) | `out/c/ufs.mod` `b743007ead3dbe00e8ebbd8e61bbfe035b2b6c9911c2a638658b0a73173ae186`, 78 580 bytes (56 636 allocated), from `ufsmod/ufs-exp.k46` `84316ffc…` |
+| sidecar | `kabi` `499514df1fabf470271bde9bb927d9fa6da83396b0073fea6842d47fa6d9333e` | `kabi` `5e59c810af8e4c1a0bf21894e58ad2ac40768de9dff594a93acb2e512304ce82` |
+| ufs | `mod.d/ufs` `419c145c102dc1a7b094579dc77b88a2fbd66ed8a616b701e87ea59af4413c8c`, 78 580 bytes (56 636 allocated) | `out/c/ufs.mod` `4cb82f198a5732342fd87adbf784520f6cfc999212bf41be6c0841aa9b72650c`, 78 580 bytes (56 636 allocated), from `ufsmod/ufs-exp.k46` `84316ffc…` |
 | s5 | `mod.d/s5` `a76a4a4fd40082c5b1e79deb33135e4bc9ac3d4b8ce0369e41074ccdf80c20f7`, 58 310 bytes (39 964 by modcheck) | none (S5-37) |
-| hash list | `2026-10-27-s5-10/SHA256SUMS-68030-261027-20` | `2026-10-27-s5-46-k46/SHA256SUMS` |
+| hash list | `2026-10-27-s5-10/SHA256SUMS-68030-261027-20` | `2026-10-28-k46-recut/SHA256SUMS` |
 
 Both sidecars carry:
 - `kabi=k30.1.2` / `k46.1.2`;
@@ -63,7 +67,7 @@ cut's `build=`.
   not the sidecar's `build=`.
 - **Versions** (C2-3 §1.1):
   - k30: `k30.1.2.261027-20`, above the `-17` of record.
-  - k46: `k46.1.2.261027-91`, above the `-82` of record (§4).
+  - k46: `k46.1.2.261028-50`, above the `-82` of record (§4).
 - **pkginfo DESC / APKG_DESC:** say the cut has no built-in ufs or s5,
   and that the package carries the ufs module (and on k30 the s5 module)
   as core-tier modules built with the cut. The sidecar has no `rootfs=`.
@@ -83,7 +87,7 @@ cut's `build=`.
 
 **R2. Rebuild check, both lines.** Rebuild from the carve directories:
 - k30: `make -C 2026-10-27-s5-10/cut-68030-261027-20/carve/{ufs,s5} KIT=<amix-dlm>/build/kit/k30`;
-- k46: `make -C 2026-10-27-s5-46-k46/ufsmod/ufs KIT=<amix-dlm>/build/kit/k46`;
+- k46: `make -C 2026-10-28-k46-recut/ufsmod/ufs KIT=<amix-dlm>/build/kit/k46`;
 - with a kit built from amix-dlm 445c12e or later.
 
 Then:
@@ -122,8 +126,10 @@ the line's kernel of record:
 
 The first k46 pin, `68060-261027-66`, sorted below the k46 kernel of
 record, `-82`, so it could not be minted. The re-stamp was folded into
-S5-15 and S5-46. Their cut `68060-261027-91` sorts above -82, and its ufs
-was rewrapped with `--build 68060-261027-91`. The k30 cut `-20` sorts
+S5-15 and S5-46. Their cut `68060-261027-91` sorts above -82, but its core
+refused the ufs module (S5-13), so the k46 pin is the re-cut
+`68060-261028-50`, which sorts above both; its ufs was rewrapped with
+`--build 68060-261028-50`. The k30 cut `-20` sorts
 above -17.
 
 ## 5. Not in S5-12
