@@ -376,11 +376,17 @@ for IMG; do
 		dlm_ddi dlm_intr sha256 crc32 dlm_cache dlm_hooksw dlm_spl plat-amiga; do echo "$B/obj/$f.o"; done)
 	prov="$prov $B/obj/plat-$LINE-line.o"
 	if [ $LINE = k46 ]; then
-		prov="$prov $(dirname "$(command -v m68k-cbm-sysv4-ld)")/../lib/gcc-lib/m68k-cbm-sysv4/2.7.2.3/libgcc.a"
 		[ -f "$WS/amix-040-060-port/build/devkvmap040.o" ] &&
 			prov="$prov $WS/amix-040-060-port/build/devkvmap040.o"
 	fi
-	m68k-cbm-sysv4-ld -r -u __udivdi3 -u __umoddi3 -u __lshrdi3 -o "$A/prov.o" $prov
+	# the libgcc helpers the lists name (__udivdi3 and the rest) are not
+	# kernel source symbols: a base has them only if one of its objects
+	# pulled them (k30's static cdfs did).  Force in, from libgcc, each one
+	# the base lacks, on both lines, as the module kernels' builders do
+	ugcc=$(awk '!/^#/ && $1 ~ /^__/ {print $1}' "$L" "$LC" | sort -u | while read n; do
+		m68k-elf-nm "$ORIG" | awk -v n="$n" '$3==n && $2 ~ /[TtDd]/ {f=1} END {exit !f}' || echo "-u $n"; done)
+	prov="$prov $(dirname "$(command -v m68k-cbm-sysv4-ld)")/../lib/gcc-lib/m68k-cbm-sysv4/2.7.2.3/libgcc.a"
+	m68k-cbm-sysv4-ld -r $ugcc -o "$A/prov.o" $prov
 	{ m68k-elf-nm "$ORIG"; m68k-elf-nm "$A/prov.o"; } |
 		awk 'NF==3 && $2 ~ /[A-Z]/ {print $3}' | sort -u > "$A/defined"
 	# on k46 the DMA service is the port's (dma_cache040.o, which the
