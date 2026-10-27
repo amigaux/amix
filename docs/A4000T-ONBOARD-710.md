@@ -423,15 +423,19 @@ T0 (§2) settles the constraint: on a Z3660 box an access to `$DD00xx` hangs the
 NCR driver has initialised the chip. No CPU probe, and no `bprobe`, can make that safe (Gary's timeout is closed
 negative). A `mobo:` key always matches at load (C4-4 §1, `dlm_plat_match`), so the module's `_load` is the gate.
 
-- **G-D, the declaration (required).** `_load` touches nothing under `$DD0000` unless the loader has declared the
-  onboard 53C710 initialised. Proposed channel (dlm and the AmigaOS-side loader decide):
-  - the loader, before it takes over the machine, finds the A4000T ROM's NCR driver in ExecBase's device list (the
-    idString `NCR scsi.device`, as variant 3 listed it), or knows it booted through that driver;
-  - it records C2-1 id 3 in what it hands the kernel (the AXL1 board list, or a flag beside it);
-  - the module reads the record through a DDI accessor or the platform matcher; that interface is dlm's.
-  - Interim fallback, weaker: a module parameter `declared` (bool, default 0) that kbootset sets for an A4000T
-    generation, with "A4000T Kickstart required" documented. It cannot see an A4kOS323 boot, which would then hang,
-    so it is an override, not the rule.
+- **G-D, the declaration (required): the Kickstart's NCR tag** (dlm's choice, contract C4-2 v6 §8.1, 2026-10-27).
+  - `_load` maps the 512 KiB Kickstart at physical `0xF80000` read-only (k30 `sptalloc`, k46 `dev_kvmap`).
+  - It looks for a valid ROM tag: `0x4AFC` at an even offset, `rt_MatchTag` its own address, `RTF_COLDSTART` set,
+    and `rt_Name` inside the image and exactly `NCR scsi.device`.
+  - Every A4000T Kickstart in the ROM store has that tag, and no A3000 or A4000 one does. exec runs every
+    cold-start tag before the strap, so the tag means the chip was initialised. An A4000T on an A4000 Kickstart
+    (A4kOS323) has no tag and is refused.
+  - No loader bytes and no DDI name: kabi stays 1.2.
+  - **The parameter `declared`** (int, default -1): -1, the scan decides; 0, never touch the window; 1, touch it
+    without the scan (the owner's override).
+  - **Known limit, unmeasured:** an A4000 running a T ROM passes the scan. `declared=0` is its override.
+  - kmem: `a4kt_declared`, `a4kt_tagoff` (the tag's offset), `a4kt_gate` (which gate said no: 1 G-D, 2 G0, 3 the
+    map or G1, 4 G2).
 - **G0, chipset.** VPOSR AGA. Not AGA means no access at all, which keeps the A3000's WD33C93 untouched.
 - **G1, G2: read-only, after G-D.** `bprobe` of ISTAT `$DD0062` (byte), then the fingerprint, all byte reads:
   - ISTAT reserved bits 0 and not `0xff`;
@@ -496,12 +500,20 @@ So:
 | N-A4T2 | amiberry, an A4000 (D) config | the module in the generation, no declaration: ENXIO, nothing touched, the boot undisturbed |
 | M-A4T1 | the A4000T, metal | (a) A4kOS323 (no NCR init), the module in the generation: ENXIO, no hang, cold boots; (b) A4000T Kickstart: attach line, the onboard 710 as card 1 next to the Z3660 root, M-DMA1's byte compare, halt pass; (c) the onboard root as card 0 (no z3660scsi in the generation) |
 
-### 10.8 Effort, and what is asked
+### 10.8 Status (2026-10-27)
+
+- Built: `a4kt710` (src/a4kt710.c, module/a4kt710/), modcheck ok on k46.1.2 and k30.1.2. The A4091 module and
+  the static objects are byte-identical.
+- Host: `make -C test/host check`, arms `a4kt-k30` and `a4kt-k46`, 12/12 each (the gate negatives with zero
+  window accesses, `declared` both ways, the attach, the host ID, `_halt`), mutation-checked.
+- Next: N-A4T1/N-A4T2 in amiberry (the Bench), then S5-07 on the tower with M-DMA1's byte compare mandatory.
+
+### 10.9 Effort, and what was asked
 
 - **Effort:** code and host tests about 1 day; amiberry rows about 0.5 day; the loader declaration is dlm's (size
   theirs); metal is the Bench's.
-- **Asked of Amix and dlm:**
-  1. the declaration channel (§10.2): the loader check (recommended) or the parameter;
-  2. the names: `a4kt710`, pkginst `a4kt71030` / `a4kt71046`;
-  3. v1 polled.
+- **Asked of Amix and dlm, answered 2026-10-27:**
+  1. the declaration channel (§10.2): the Kickstart NCR tag, kernel-side (C4-2 v6 §8.1);
+  2. the names `a4kt710`, pkginst `a4kt71030` / `a4kt71046`: agreed;
+  3. v1 polled: agreed.
 

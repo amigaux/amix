@@ -208,6 +208,26 @@ So the A4092 and A4770 identities are host and metal rows only.
 | M4 | M1's box on the k30 line (Z3660 in 030 mode), after S4-62 | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
 | M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (A1, `mobo:a4000t-710`), not this one |
 
+## The second module: a4kt710 (S5-06)
+
+`module/a4kt710/` builds `a4kt710`, the A4000T's onboard NCR 53C710, from the same driver source
+(`src/a4kt710.c` includes `a4091-wr.c` with `-DA4091_A4KT`). `make -C module` builds both modules on both lines.
+The design is `docs/A4000T-ONBOARD-710.md` §10.
+
+| Item | Content |
+|---|---|
+| `.moddata` | `name=a4kt710`, `class=root`, `match=mobo:a4000t-710`, `rank=mobo`, `unload=never`, `param declared:int:-1:-1:1` |
+| Gate (C4-2 v6 §8.1) | the running Kickstart's `NCR scsi.device` cold-start ROM tag (or `declared=1`), then VPOSR AGA, then a read-only `bprobe` of ISTAT and the fingerprint. Any no: `ENXIO`, silent, and nothing under `$DD0000` touched |
+| Chip | `$DD0000`, registers at +0x40 written directly, DCNTL `0x20` (EA), host ID from the DIP bank at +0x3000, SIEN/DIEN 0 at attach; one controller, c 0 |
+| sd | `sd_register(a4091queue, 0, 0xDD0000, "A4000T onboard SCSI", 3)` |
+| Everything else | the A4091 module's: the queue path, the `dma_alloc` area, C4-5, the bounce, the bus reset, `_halt` |
+| Version | `module/a4kt710/VERSION` (`1.0.0-1`) |
+| Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
+
+**Risk carried to S5-07:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is
+unmeasured. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
+M-DMA1's byte compare on the tower.
+
 ## Package (C3-5)
 
 The package carries the module object and its `modreg` line only, with no
