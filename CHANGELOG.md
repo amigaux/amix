@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — C3-5 v14: a4kt710's short name (a4kt71030 / a4kt71046); kit module.mk tracks every file a module's source reads (c9ef1b0, ad84eb8)
+
+The .d comes from -E's line markers, since the pinned gcc 2.7.2.3 wrapper passes no -M/-MD, so an included .c or a module header
+rebuilds its object.
+
 ## 2026-10-27 — tools/carve.py: ufs and s5 wrapped as core-tier boot modules on k30 (S5-04, k30 half) (d6b4381)
 
 vfs_register; s5 after inoinit; a probe=1 parameter for S4-71's init halves. abi/k30/core.list written from the carve (100 names:
