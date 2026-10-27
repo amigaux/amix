@@ -1,0 +1,248 @@
+Subject: block rows: the switch as the stock fix_swtbls leaves it
+
+The first RAM-disk boot (rd1, both lines) refused the ramdisk's row 20
+as in use.  At boot the stock fix_swtbls gives every bdevsw row whose
+flag lacks D_NOBRKUP the breakup gen_strategy and keeps the row's own
+strategy in shadowbsw, so an empty row is gen_strategy over nodev, which
+bempty took for a used one.  bempty now knows that shape; a module's
+row goes in the same way (without D_NOBRKUP its strategy to shadowbsw
+behind gen_strategy, with it direct); a removal puts both back.  The
+state harness has the stock switch and the ramdisk's shape from the
+arena.
+
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -442,14 +442,26 @@
+  * first-open trampoline, so a block driver's row is filled when the
+  * module links, and only a pinned module may have one: the row then
+  * stays until the kernel halts.  A failed load puts the row back.
++ *
++ * The switch is not as the image has it: at boot the stock fix_swtbls
++ * gives every row whose flag lacks D_NOBRKUP the breakup gen_strategy,
++ * the row's own strategy kept in shadowbsw.  So an empty row is
++ * gen_strategy over nodev, and a module's row is installed the same way:
++ * without D_NOBRKUP its strategy goes to shadowbsw behind gen_strategy.
+  */
+ #define	BSLOT_MAX	8
++#ifndef D_NOBRKUP
++#define	D_NOBRKUP	0x10		/* sys/conf.h: no breakup needed */
++#endif
++extern struct bdevsw shadowbsw[];
++extern int gen_strategy();
+ #define	bfn(bp)	((int (**)())&(bp)->d_open)
+ 
+ static struct dlm_bslot {
+ 	struct dlm_mod	*bs_mod;	/* 0: free */
+ 	int		bs_major;
+ 	struct bdevsw	bs_old;		/* the row before */
++	int		(*bs_shadow)();	/* its shadowbsw strategy before */
+ } dlm_bslot[BSLOT_MAX];
+ 
+ static struct dlm_bslot *
+@@ -464,15 +476,18 @@
+ 	return 0;
+ }
+ 
+-/* every routine nodev and no flag set: free for a module */
++/* row i: every routine nodev (the strategy perhaps gen_strategy over a
++ * nodev in shadowbsw) and no flag set: free for a module */
+ static int
+-bempty(bp)
+-	struct bdevsw *bp;
++bempty(i)
++	int i;
+ {
++	struct bdevsw *bp = &bdevsw[i];
+ 	int k;
+ 
+ 	for (k = 0; k < BD_NFN; k++)
+-		if (bfn(bp)[k] != nodev)
++		if (bfn(bp)[k] != nodev && !(&bfn(bp)[k] == &bp->d_strategy &&
++		    bp->d_strategy == gen_strategy && shadowbsw[i].d_strategy == nodev))
+ 			return 0;
+ 	return bp->d_flag == 0 || *bp->d_flag == 0;
+ }
+@@ -710,7 +725,7 @@
+ 			printf("dlm: %s: major b:%d is not registered to it\n", m->m_name, mj + i);
+ 			return ECONFIG;
+ 		}
+-		if (bslot(mj + i) || !bempty(&bdevsw[mj + i])) {
++		if (bslot(mj + i) || !bempty(mj + i)) {
+ 			printf("dlm: %s: block row %d is in use\n", m->m_name, mj + i);
+ 			return ECONFIG;
+ 		}
+@@ -743,6 +758,11 @@
+ 			bfn(bp)[k] = f ? (int (*)())f : nodev;
+ 		}
+ 		bp->d_flag = fl ? (int *)DLM_RP(m, fl) : dlm_cflag;
++		bs->bs_shadow = shadowbsw[mj + i].d_strategy;
++		if (!((fl ? G32(DLM_RP(m, fl)) : 0) & D_NOBRKUP)) {	/* as fix_swtbls: the breakup */
++			shadowbsw[mj + i].d_strategy = bp->d_strategy;
++			bp->d_strategy = gen_strategy;
++		}
+ 		bs->bs_mod = m;
+ 		dlm_splx(s);
+ 	}
+@@ -759,6 +779,7 @@
+ 		if (dlm_bslot[i].bs_mod == m) {
+ 			s = dlm_splhi();
+ 			bdevsw[dlm_bslot[i].bs_major] = dlm_bslot[i].bs_old;
++			shadowbsw[dlm_bslot[i].bs_major].d_strategy = dlm_bslot[i].bs_shadow;
+ 			dlm_bslot[i].bs_mod = 0;
+ 			dlm_splx(s);
+ 		}
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -50,6 +50,7 @@
+ 	{ 'b', 23, "bdused" },
+ 	{ 'b', 23, "bdcf" },
+ 	{ 'b', 24, "bd1" },
++	{ 'b', 25, "bdnb" },
+ 	{ 'c', 59, "bdcf" },
+ 	{ 0, 0, 0 }
+ };
+@@ -115,6 +116,13 @@
+ struct cdevsw cdevsw[70];
+ int bdevcnt = 32;
+ struct bdevsw bdevsw[32];
++struct bdevsw shadowbsw[32];		/* the stock breakup's saved strategies */
++
++int
++gen_strategy()
++{
++	return 0;
++}
+ 
+ int
+ hconf_used()
+@@ -139,4 +147,8 @@
+ 		bdevsw[i].d_flag = zflag;
+ 	}
+ 	bdevsw[23].d_strategy = hconf_used;
++	for (i = 0; i < 32; i++) {	/* as the stock fix_swtbls at boot: no row has D_NOBRKUP */
++		shadowbsw[i].d_strategy = bdevsw[i].d_strategy;
++		bdevsw[i].d_strategy = gen_strategy;
++	}
+ }
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -236,17 +236,17 @@
+ # block drivers (S4-06): bd1 a pinned block-only driver on b:24; bdun is
+ # unpinned; bdreg's b:22 is registered to no one; bdused's b:23 is in use;
+ # bdcf has a character row (c:59) that links, then the used block row
+-def blkmod(p, bmajor, cmajor=0, ccount=0, pinned=True):
++def blkmod(p, bmajor, cmajor=0, ccount=0, pinned=True, flag=0):
+     fns = ''.join('\t.globl\t{p}_{f}\n{p}_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(p=p, f=f)
+                   for f in ('open', 'close', 'strategy'))
+     cd = ('\t.long\t{p}_open, {p}_close, 0, 0, 0, 0, 0, 0, 0, 0\n'.format(p=p) if ccount
+           else '\t.long\t0, 0, 0, 0, 0, 0, 0, 0, 0, 0\n')
+     mod(p, ops='mod_drvops', pdata=p + '_dd', text=fns,
+         extra=() if not pinned else ('unload=never',),
+-        data='\t.globl\t{p}_flag\n{p}_flag:\n\t.long\t0\n{p}_dd:\n'
++        data='\t.globl\t{p}_flag\n{p}_flag:\n\t.long\t{fv}\n{p}_dd:\n'
+         '\t.long\t{p}_open, {p}_close, {p}_strategy, 0, 0, 0, 0, {p}_flag\n'
+         '\t.long\t{bj}, 1\n{cd}\t.long\t0, 0, 0\n\t.long\t{cj}, {cn}\n'.format(
+-            p=p, bj=bmajor, cd=cd, cj=cmajor, cn=ccount))
++            p=p, bj=bmajor, cd=cd, cj=cmajor, cn=ccount, fv=flag))
+ 
+ 
+ blkmod('bd1', 24)
+@@ -254,6 +254,16 @@
+ blkmod('bdreg', 22)
+ blkmod('bdused', 23)
+ blkmod('bdcf', 23, cmajor=59, ccount=1)
++blkmod('bdnb', 25, flag=0x10)       # D_NOBRKUP: no breakup, the strategy direct
++# the ramdisk's shape (C4-2 section 8): a root-class, block-only driver on
++# b:20, linked from the arena in the root pass beside other root modules
++mod('ramdisk', ops='mod_drvops', pdata='ramdisk_dd',
++    md=['name=ramdisk', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root',
++        'match=always', 'majors=b:20'],
++    text=''.join('\t.globl\tramdisk_{f}\nramdisk_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(f=f)
++                 for f in ('open', 'close', 'strategy')),
++    data='ramdisk_dd:\n\t.long\tramdisk_open, ramdisk_close, ramdisk_strategy, 0, 0, 0, 0, 0\n'
++         '\t.long\t20, 1\n\t.long\t0, 0, 0, 0, 0, 0, 0, 0, 0, 0\n\t.long\t0, 0, 0\n\t.long\t0, 0\n')
+ 
+ 
+ def strdrv(p, major):
+--- a/test/state.c
++++ b/test/state.c
+@@ -233,6 +233,8 @@
+ 
+ extern struct execsw execsw[], __amix_execsw[];
+ extern struct vfssw __amix_vfssw[];
++extern struct bdevsw shadowbsw[];
++extern int gen_strategy();
+ extern int nexectype, stock_calls, stock_rv;
+ extern char *h_one, *h_two, h_one_dflt[];
+ 
+@@ -725,6 +727,28 @@
+ }
+ 
+ /* ---- ramdisk_image (C4-3 section 4) ---- */
++/* the ramdisk's shape: a root-class block driver on b:20 from the arena */
++void
++rdblk_tests()
++{
++	static char *n[] = { "ar1", "ramdisk" };
++	static int f[] = { 1, 1 }, d[] = { 0, 0 }, m[] = { 1, 1 };
++	char *man = dlm_man;
++	long manlen = dlm_manlen;
++	struct dlm_mod *rd;
++
++	check(bdevsw[20].d_open == nodev && bdevsw[20].d_strategy == gen_strategy &&
++	    shadowbsw[20].d_strategy == nodev,
++	    "ramdisk: row 20 empty as the stock fix_swtbls leaves it (gen_strategy over nodev)");
++	check(rpbuild(n, f, d, m, 2) == 0 && dlm_root_pass(rp_arena) == 2 && (rd = byname("ramdisk")) &&
++	    bdevsw[20].d_strategy == gen_strategy &&
++	    shadowbsw[20].d_strategy == (int (*)())modsym(rd, "ramdisk_strategy"),
++	    "ramdisk: a root-class block driver on b:20 links from the arena beside another "
++	    "(the rd1 failure: the core took the breakup row for a used one)");
++	dlm_man = man;
++	dlm_manlen = manlen;
++}
++
+ /* a boot-class filesystem from the arena: only as the manifest's rootfs */
+ void
+ promote_tests()
+@@ -1073,14 +1097,21 @@
+ {
+ 	struct dlm_mod *m;
+ 	struct bdevsw b23;
++	int (*s23)() = shadowbsw[23].d_strategy;
+ 	int id;
+ 
+ 	b23 = bdevsw[23];
+ 	check(modload("bd1", &id) == 0 && (m = byname("bd1")) != 0 &&
+ 	    bdevsw[24].d_open == (int (*)())modsym(m, "bd1_open") &&
+-	    bdevsw[24].d_strategy == (int (*)())modsym(m, "bd1_strategy") &&
++	    bdevsw[24].d_strategy == gen_strategy &&
++	    shadowbsw[24].d_strategy == (int (*)())modsym(m, "bd1_strategy") &&
+ 	    bdevsw[24].d_print == nodev && bdevsw[24].d_flag == (int *)DLM_RP(m, modsym(m, "bd1_flag")),
+-	    "bdev: a pinned block-only driver fills its row, 0 entries nodev");
++	    "bdev: a pinned block-only driver fills its row, 0 entries nodev, its strategy behind "
++	    "the stock breakup (no D_NOBRKUP: gen_strategy, the module's in shadowbsw)");
++	check(modload("bdnb", &id) == 0 && (m = byname("bdnb")) != 0 &&
++	    bdevsw[25].d_strategy == (int (*)())modsym(m, "bdnb_strategy") &&
++	    shadowbsw[25].d_strategy == nodev,
++	    "bdev: with D_NOBRKUP the strategy goes in the row itself, as fix_swtbls leaves it");
+ 	check(moduload(id) == EBUSY && byname("bd1"), "bdev: and stays (pinned)");
+ 	check(modload("bdun", &id) == EINVAL && !byname("bdun") && bdevsw[21].d_open == nodev,
+ 	    "bdev: an unpinned block driver -> EINVAL, the row untouched");
+@@ -1090,7 +1121,8 @@
+ 	    bcmp((char *)&bdevsw[23], (char *)&b23, sizeof b23) == 0,
+ 	    "bdev: a block row in use -> ECONFIG, the row as it was");
+ 	check(modload("bdcf", &id) == ECONFIG && !byname("bdcf") &&
+-	    bcmp((char *)&bdevsw[23], (char *)&b23, sizeof b23) == 0 && cdevsw[59].d_read == nodev,
++	    bcmp((char *)&bdevsw[23], (char *)&b23, sizeof b23) == 0 && cdevsw[59].d_read == nodev &&
++	    shadowbsw[23].d_strategy == s23,
+ 	    "bdev: a character row that links, then a block row that cannot: both as before");
+ }
+ 
+@@ -2062,6 +2094,7 @@
+ 	defer_tests();
+ 	rdimg_tests();
+ 	promote_tests();
++	rdblk_tests();
+ 	vfs_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
