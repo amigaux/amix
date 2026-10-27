@@ -451,7 +451,9 @@ kblock_load(struct ks *k, const struct kb_kernel *kk, const ax_u8 *kernel, ax_u3
 	return KS_OK;
 }
 
-/* the value of symbol name in the ELF namelist nl, or 0 */
+/* the value of the global (or weak) symbol name in the ELF namelist nl,
+ * or 0: a kernel may carry the name as file statics too (delay on the k30
+ * cut 68030-261027-18), and the namelist puts its locals first */
 static ax_u32
 nl_value(const ax_u8 *nl, ax_u32 len, const char *name)
 {
@@ -468,7 +470,8 @@ nl_value(const ax_u8 *nl, ax_u32 len, const char *name)
 			return 0;
 		for (k = 1; k < sz / 16; k++) {
 			nm = AX_GET32(nl + so + 16 * k);
-			if (nm < stsz && !strcmp((const char *)nl + st + nm, name))
+			if (nm < stsz && (nl[so + 16 * k + 12] >> 4) != 0 &&
+			    !strcmp((const char *)nl + st + nm, name))
 				return AX_GET32(nl + so + 16 * k + 4);
 		}
 	}

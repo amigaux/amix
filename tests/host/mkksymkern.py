@@ -4,18 +4,23 @@
 # version 2 block (C3-2) of the given names, each name:tier (0 ddi, 1 core).
 # Prints the block's image offset and size for the sidecar's ksym= line.
 #
-#   mkksymkern.py OUT [--build ID] name:tier ...
+#   mkksymkern.py OUT [--build ID [--static ID2]] name:tier ...
 #
 # --build ID puts the kernel's own build id string, buildid, after the
-# block in .data, as a k46 kernel has it.
+# block in .data, as a k46 kernel has it.  --static ID2 adds a file-static
+# buildid before it in the symbol table (locals come first), at another
+# string: a name a kernel carries both as a static and as the global, as
+# the k30 cut 68030-261027-18 carries delay; a reader must take the global.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 import struct, sys
 
 out, args = sys.argv[1], sys.argv[2:]
-build = None
+build = decoy = None
 if args[:1] == ['--build']:
     build, args = args[1], args[2:]
+if args[:1] == ['--static']:
+    decoy, args = args[1], args[2:]
 ents = [(a.split(':')[0], int(a.split(':')[1])) for a in args]
 strs = b'\0'
 syms = b'\0' * 16
@@ -28,14 +33,18 @@ hdr = struct.pack('>10I', 0x4b53594d, 2, nsym, 40, 40 + len(syms), len(strs), 0,
                   40 + len(syms) + len(strs))
 block = hdr + syms + strs
 bid = (b' ' + build.encode() + b'\0').ljust(24, b'\0') if build else b''   # with the stamp's blank
+dbid = (b' ' + decoy.encode() + b'\0').ljust(24, b'\0') if decoy else b''
 text = b'\x4e\x75' * 32
 shstr = b'\0.text\0.data\0.shstrtab\0.symtab\0.strtab\0'
 kstr = b'\0stext\0dlm_ksym\0buildid\0'
-ksyms = b'\0' * 16 + struct.pack('>IIIBBH', 1, 0, 0, 0x12, 0, 1) + \
+ksyms = b'\0' * 16
+if decoy:                       # STB_LOCAL, STT_OBJECT, after the global's string
+    ksyms += struct.pack('>IIIBBH', 16, len(block) + len(bid), len(dbid), 0x01, 0, 2)
+ksyms += struct.pack('>IIIBBH', 1, 0, 0, 0x12, 0, 1) + \
     struct.pack('>IIIBBH', 7, 0, len(block), 0x11, 0, 2)
 if build:
     ksyms += struct.pack('>IIIBBH', 16, len(block), len(bid), 0x11, 0, 2)
-block_and_bid = block + bid
+block_and_bid = block + bid + dbid
 o_t = 52
 o_d = o_t + len(text)
 o_s = o_d + len(block_and_bid)
@@ -46,7 +55,7 @@ sh = [(0,) * 10,
       (1, 1, 6, 0, o_t, len(text), 0, 0, 2, 0),
       (7, 1, 3, 0, o_d, len(block_and_bid), 0, 0, 4, 0),
       (13, 3, 0, 0, o_s, len(shstr), 0, 0, 1, 0),
-      (23, 2, 0, 0, o_y, len(ksyms), 5, 1, 4, 16),
+      (23, 2, 0, 0, o_y, len(ksyms), 5, 2 if decoy else 1, 4, 16),
       (31, 3, 0, 0, o_k, len(kstr), 0, 0, 1, 0)]
 h = b'\x7fELF\x01\x02\x01' + b'\0' * 9 + struct.pack('>HHIIIIIHHHHHH', 1, 4, 1, 0, 0, shoff, 0,
                                                    52, 0, 0, 40, len(sh), 3)

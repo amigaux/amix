@@ -38,7 +38,8 @@ for s in sh:
         for k in range(1, s[5] // 16):
             o = s[4] + 16 * k
             nm = n[st + u32(n, o):n.index(b'\0', st + u32(n, o))].decode()
-            nl.setdefault(nm, u32(n, o + 4))
+            if n[o + 12] >> 4:      # the global: a static of the same name is another symbol
+                nl.setdefault(nm, u32(n, o + 4))
 b = open(sys.argv[2], 'rb').read()
 nsym, so, stro = u32(b, 8), u32(b, 12), u32(b, 16)
 lo, hi = u32(b, 28), u32(b, 32)

@@ -123,4 +123,20 @@ sed -i "s|^file /stand/k46/kabi .*|file /stand/k46/kabi $(size $R/stand/k46/kabi
 refused "the sidecar's build=68060-261027-98 is not the kernel's own build id 68060-261027-99" $KB build $FACTS
 sed -i 's/^build=68060-261027-98$/build=68060-261027-99/' $R/stand/k46/kabi
 sed -i "s|^file /stand/k46/kabi .*|file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)|" $R/var/apkg/kpkg/kernel-k46
-echo "kimports: the import check (gate 2: the kernel's block, dependencies, the core tier) ok"
+# a name that is both a file static and the global (delay on the k30 cut
+# 68030-261027-18): the build id is the global's, whatever comes first
+clean
+cp $R/stand/k46/unix $T/unix.plain
+python3 tests/host/mkksymkern.py $R/stand/k46/unix --build 68060-261027-99 --static 68060-261027-00 \
+	printf:0 kmem_alloc:0 bdevsw:1 > /dev/null
+sed -i "s|^sha256=.*|sha256=$(sha $R/stand/k46/unix)|; s|^size=.*|size=$(size $R/stand/k46/unix)|" $R/stand/k46/kabi
+sed -i "s|^file /stand/k46/unix .*|file /stand/k46/unix $(size $R/stand/k46/unix) $(sha $R/stand/k46/unix)|; \
+	s|^file /stand/k46/kabi .*|file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)|" $R/var/apkg/kpkg/kernel-k46
+$KB build $FACTS > $T/out 2>&1 || { echo "kimports: a static buildid before the global was taken:" >&2; cat $T/out >&2; exit 1; }
+grep -q "built" $T/out
+rm -rf "${R:?}/stand/gen"
+cp $T/unix.plain $R/stand/k46/unix
+sed -i "s|^sha256=.*|sha256=$(sha $R/stand/k46/unix)|; s|^size=.*|size=$(size $R/stand/k46/unix)|" $R/stand/k46/kabi
+sed -i "s|^file /stand/k46/unix .*|file /stand/k46/unix $(size $R/stand/k46/unix) $(sha $R/stand/k46/unix)|; \
+	s|^file /stand/k46/kabi .*|file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)|" $R/var/apkg/kpkg/kernel-k46
+echo "kimports: the import check (gate 2: the kernel's block, dependencies, the core tier; the global build id over a static) ok"
