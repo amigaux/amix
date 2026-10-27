@@ -47,7 +47,11 @@ import sys
 
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4} )+)\s*(\S+)\s*(.*)$")
 LABEL = re.compile(r"^([0-9a-f]+) <([^>]+)>:\s*$")
-DISPATCH = re.compile(r"^%pc@\(([0-9a-f]+)\b[^,)]*,%([da][0-7]):w\)$")
+# The index register can be any data or address register -- including %a6,
+# which objdump names %fp and GCC 14 -O2 uses as a general register (patch
+# 2.5.9's quotearg, 2026-10-27: an %fp-indexed table read as a movep).
+DISPATCH = re.compile(r"^%pc@\(([0-9a-f]+)\b[^,)]*,%([da][0-7]|fp|sp):w\)$")
+PC_INDEXED = re.compile(r"^%pc@\([0-9a-f]+\b[^,)]*,%[a-z0-9]+:[wl]\)$")
 BOUND_CMP = re.compile(r"^#(-?\d+),(\S+)$")                # cmp[i]{b,w,l} #N,<ea>
 MOVEQ = re.compile(r"^#(-?\d+),%(d[0-7])$")
 CMPL_REG = re.compile(r"^%(d[0-7]),%(d[0-7])$")            # cmpl %dX,%dY
@@ -140,6 +144,8 @@ def bound_for(insns, idx):
         cmp[i]{b,w,l} #N,<ea>      ; bhi default     (ea > N)
         moveq #N,%dY ; cmpl <ea>,%dY ; bcs default   (N < ea)
         moveq #N,%dY ; cmpl %dY,<ea> ; bhi default   (ea > N)
+    <ea> may be a memory operand, which objdump prints with its symbol
+    (`cmpl 8003db14 <subcommand_option>,%d6': tar 1.14, 2026-10-27).
     """
     lo = max(0, idx - LOOKBACK)
     for j in range(idx - 1, lo - 1, -1):
@@ -157,7 +163,7 @@ def bound_for(insns, idx):
             elif mn.endswith("w"):
                 n &= 0xffff
             return n + 1
-        m = re.match(r"^(\S+),%(d[0-7])$", ops)
+        m = re.match(r"^(.+),%(d[0-7])$", ops)
         if m and br.startswith("bcs"):
             n = moveq_value(insns, j, "%" + m.group(2))
             if n is not None:
@@ -178,6 +184,8 @@ def find_tables(insns, labels, data, secs, pts):
             continue
         m = DISPATCH.match(ops)
         if not m:
+            if PC_INDEXED.match(ops):                # a dispatch this tool cannot read
+                problems.append("dispatch at 0x%08x: unrecognised indexed jmp '%s'" % (a, ops))
             continue                                 # PLT stubs: %pc@(...)@(0)
         t = int(m.group(1), 16)
         if not (a < t <= a + 64):

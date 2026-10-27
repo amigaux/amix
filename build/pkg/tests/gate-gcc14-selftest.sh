@@ -17,6 +17,10 @@
 #   - the FPU gate rejects the 040/060-only FPU forms -mcpu=68060 emits (an
 #     executable, an archive, and amix_pkgroll's payload) and passes the same
 #     source built with the recipe flags (-m68020-60);
+#   - scan060-g14.py sizes a switch table dispatched through %a6 (objdump's
+#     %fp; GCC 14 -O2 uses it as a general register) and one bound-checked
+#     against a memory operand, instead of reading them as code, and still
+#     reports a real movep after either;
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in.
 # Exit 0 only if every check holds.
 
@@ -141,5 +145,52 @@ if roll fp060 "$T/fp060"; then fail "amix_pkgroll rolled a payload with 040/060-
 [ ! -f "$T/out-fp060.pkg" ] || fail "amix_pkgroll left a datastream for the fd*-form payload"
 grep 'FPU FAIL' "$T/roll-fp060.log" >/dev/null || fail "amix_pkgroll failed, but not at the FPU gate"
 ok "amix_pkgroll refuses a payload with 040/060-only FPU forms, no datastream written"
+
+# scan060-g14.py: two switch shapes GCC 14 emitted that the first version of
+# the tool could not read (2026-10-27).  The dispatch words and tables are
+# copied from the real binaries; entry #0 (0x074c 0x0056) decodes as
+# movepl %a4@(86),%d3 when the table is read as code.
+#   fp   indexed through %a6, which objdump names %fp (patch 2.5.9 quotearg):
+#        the table was not recognised at all and read as a movep;
+#   mem  bound-checked against a MEMORY operand, `moveq #3,%d1; cmpl sw_sel,%d1;
+#        bcs' (tar 1.14 main/start_header): the table was left unsized.
+sw_probe() {	# sw_probe <name> fp|mem <extra asm string or empty>
+	{
+		printf '%s\n' 'int sw_sel;'
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		if [ "$2" = fp ]; then
+			printf '%s\n' '	"\tmove.l 4(%sp),%d1\n\tmove.l %a6,-(%sp)\n"'
+			printf '%s\n' '	"\tcmp.b #3,%d1\n\tbhi.w 9f\n"'
+			printf '%s\n' '	"\tclr.l %d0\n\tmove.b %d1,%d0\n\tadd.l %d0,%d0\n\tmove.l %d0,%a6\n"'
+			printf '%s\n' '	"\t.word 0x3c7b,0xe806\n"'	# moveaw %pc@(T,%a6:l),%a6
+			printf '%s\n' '	"\t.word 0x4efb,0xe002\n"'	# jmp %pc@(T,%a6:w)
+		else
+			printf '%s\n' '	"\tmove.l %a6,-(%sp)\n"'
+			printf '%s\n' '	"\tmoveq #3,%d1\n\tcmp.l sw_sel,%d1\n\tbcs.w 9f\n"'
+			printf '%s\n' '	"\tmove.l sw_sel,%d0\n\tadd.l %d0,%d0\n"'
+			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
+			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		fi
+		printf '%s\n' '	"\t.word 0x074c,0x0056,0x0056,0x0056\n"'
+		[ -z "$3" ] || printf '\t%s\n' "$3"
+		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n"'
+		printf '%s\n' '	"9:\tmove.l (%sp)+,%a6\n\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { sw_sel = c; return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
+}
+G14S="$REPO/recipes/common/gcc14/scan060-g14.py"
+for shape in fp mem; do
+	sw_probe "sw-$shape" "$shape" ''
+	sw_probe "sw-$shape-movep" "$shape" '"\t.word 0x074c,0x0056\n"'
+	out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape") || fail "scan060-g14.py on the $shape switch: $out"
+	echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the $shape table: $out"
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape-movep"); then
+		fail "scan060-g14.py passed a real movep after the $shape table: $out"
+	fi
+	echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the $shape movep probe: $out"
+done
+ok "scan060-g14.py sizes %fp-indexed and memory-bounded switch tables, still catches a real movep after each"
 
 echo "gate-gcc14-selftest: PASS ($n checks)"
