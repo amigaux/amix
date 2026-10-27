@@ -26,7 +26,7 @@ cells of this ledger.
 | z3660scsi | pending | pending |
 | A4091/A4092 | pending | pending |
 | the A4000T 53C710 | pending | — (no A4000T on this line) |
-| Gayle IDE | pending | pending |
+| Gayle IDE | pending (gayle 1.1.0-1 passes its rows, a12120b; the bytes of record at the exit) | pending (as k46) |
 | ramdisk | pending | pending |
 | ufs | pending | pending |
 | s5 | pending | pending |
@@ -69,7 +69,7 @@ alignment (fixed in a829c44, C3-3 version 5).
 | L5 arena overflow (a backstop: gate 4 refuses first); an unmatched root entry skipped silently by the core (L7 retired, C4-4 v3) | pending | pending |
 | `sd_register` after sd's first open: `EBUSY` and a console line | pending | pending |
 | a failed root-class `_load` leaves the kernel as it was | pending | pending |
-| the deferred self-test point (S4-05): Gayle IDE leaves polled | pending | pending |
+| the deferred self-test point (S4-05): Gayle IDE leaves polled | **PASS** (N111b-class row of a12120b: READ VERIFY self-test passed, interrupts on, 0 spurious) | **PASS** (the k30 interrupt row of a12120b) |
 
 ## 4. The media (S4-50–S4-56; 50)
 
@@ -106,7 +106,7 @@ alignment (fixed in a829c44, C3-3 version 5).
 | S4-22, S4-23 the root-class kernels | pending |
 | S4-24 the 1.0 families retire | pending |
 | S4-25 packages | pending |
-| S4-30 … S4-34 the root-class modules | pending |
+| S4-30 … S4-34 the root-class modules | S4-30 z3660scsi: **PASS** both lines (N103r, N104r, §2a). S4-31 the A4091/A4092: **PASS** both lines (N105/N105b, N106 on k46; N109/N109b on k30; E6b on -15, N110). **S4-32 Gayle IDE: PASS** both lines in emulation (amix-kerntools a12120b: N111a–N116 on kern46m -80, N117a–N122 on kern30m -15, gayle 1.1.0-1: the IDE root alone polled and with interrupts, the k46 interrupt path's first run with the READ VERIFY self-test passing, IDE + Z3660 with the IDE as card 1, the A3000 ECS row's silent ENXIO, the ATAPI slave, halt and reboot with interrupts, safe mode); the CD check of record (`mount -F cdfs`) with gayle 1.1.0-2 and metal pending. S4-33 the A4000T 53C710: pending. S4-34 the ramdisk: shown (rd1h, M-RD1/M-RD2) |
 | S4-40 … S4-43 the filesystems and the kernels without them | pending |
 | S4-62 the DDI 1.2 DMA providers | built: k46 (0e4c34f, 01024f5), k30 (e9665e6: the pool, the bounce, the force-bounce hook). **k46 PASS**: N105/N105b, the first A4091 root-class boot (kern46m -78, a4091 1.0.0-1; `cp` and `sync` clean through `dma_alloc` memory; amix-kerntools d1a2e3c), and N106, two root modules ranked with the A4091 root as card 1 (1653ea3). **k30 PASS**: N109/N109b (E6), a4091-k30 1.0.0-3 rooted on the A4091 alone on kern30m -14, the pool at 0x7FDF800, a raw read and `cp`/`sync` identical under `dma_forcebounce` 0 and 1; the entry-0 decode read live, the identity map cacheable (C4-5 v6 §5.3); amix-kerntools c326ccb. E6b (the pool-miss path) is reachable only through `dma_forcefail`: pending on kern30m -15 |
 | S4-63 C3-6 §1, the register-write rule | pending |
