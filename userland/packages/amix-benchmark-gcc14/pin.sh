@@ -29,7 +29,10 @@
 
 AMIX_KERNTOOLS="${AMIX_KERNTOOLS:-$AMIX_SIBLINGS/amix-kerntools}"
 
-AMIXBENCH_G14_VERSION=1.3
+# 1.3 was built on gcc14-cross-amix e316f1b (never published: GCC 14 returned
+# pointers in %d0 only and small structs in registers); 1.3-2 is the same
+# sources on cf461e3, whose return-value ABI is AMIX's.
+AMIXBENCH_G14_VERSION=1.3-2
 
 AMIXBENCH_SRC_COMMIT=c25e0e2178f6eb1e5dc8a36fd8da6d6c1df6cf51
 AMIXBENCH_KIT_COMMIT=8e17364b96a36ee03e9a87fe7fa72dcdb3679eff

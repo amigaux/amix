@@ -37,12 +37,14 @@ VERSION=$PATCH_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 2.5.9-2 above 2.5.9.
-# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
-# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
-# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
-# work copy (amix_pkginfo_retag).
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint); a
+# TOOLCHAIN=gcc14 build is new bytes and so a new revision (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27): -3 was gcc14-cross-amix
+# e316f1b (never published: pointers came back in %d0 only), -4 is cf461e3
+# (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc);
+# pkginfo is retagged in the work copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=3 ;;
+gcc14) PKGREV=4 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV

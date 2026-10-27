@@ -12,7 +12,7 @@
 #     build/pkg/acompat-<VERSION>.pkg    the datastream
 #
 # TOOLCHAIN=gcc14 (owner decision 2026-10-27, the userland switch): the same
-# outputs under build/gcc14/ (libamixcompat/, pkg/acompat-0.1-3.pkg).
+# outputs under build/gcc14/ (libamixcompat/, pkg/acompat-0.1-4.pkg).
 #
 # ORDER OF OPERATIONS, AND WHY.  The host differential test runs FIRST and its
 # failure is fatal.  It compares this exact source against glibc's snprintf over
@@ -44,12 +44,14 @@ PKG=acompat
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 0.1-2 above 0.1.
-# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
-# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
-# switch, owner decision D-3 sec 9 and 2026-10-27).  pkginfo is retagged in
-# the work copy (amix_pkginfo_retag).
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint); a
+# TOOLCHAIN=gcc14 build is new bytes and so a new revision (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27): -3 was gcc14-cross-amix
+# e316f1b (never published: pointers came back in %d0 only), -4 is cf461e3
+# (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc).
+# pkginfo is retagged in the work copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=3 ;;
+gcc14) PKGREV=4 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV

@@ -14,7 +14,7 @@ so one box can run both and compare the compilers.
 | Kit | `/opt/amix/lib/amix-bench/` | `/opt/amix/lib/amix-bench-g14/` |
 | Binaries | fieldkit, gcc 2.7.2.3, verbatim | built here, GCC 14.2.0, stripped |
 | Results header | `build_cc_version=GCC: (GNU) 2.7.2.3` | `build_cc_version=GCC: (GNU) 14.2.0` |
-| Datastream | `build/pkg/amixbench-1.3.pkg` | `build/gcc14/pkg/amixbch14-1.3.pkg` |
+| Datastream | `build/pkg/amixbench-1.3.pkg` | `build/gcc14/pkg/amixbch14-1.3-2.pkg` |
 
 The catalog name `amix-benchmark-gcc14` needs a `names.conf` line in the publish root
 (`amixbch14: amix-benchmark-gcc14`).

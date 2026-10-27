@@ -9,7 +9,7 @@
 #
 #     build/gcc14/amix-benchmark-gcc14/src/    the pinned sources (git archive)
 #     build/gcc14/amix-benchmark-gcc14/dest/   the staged install tree
-#     build/gcc14/pkg/amixbch14-1.3.pkg        the datastream
+#     build/gcc14/pkg/amixbch14-1.3-2.pkg      the datastream
 #
 # ---------------------------------------------------------------------------
 # WHAT THIS PACKAGE IS FOR.  amix-benchmark (PKG amixbench, recipes/
@@ -170,7 +170,8 @@ printf 'int amix_bench_version_probe;\n' > "$OBJ/v.c"
 $CC -S -o "$OBJ/v.s" "$OBJ/v.c"
 CC_VERSION=$(grep -ao 'GCC: ([^)]*)[^"]*' "$OBJ/v.s" | head -1)
 [ -n "$CC_VERSION" ] || { echo "[FAIL] could not read the compiler's .ident" >&2; exit 1; }
-G14_COMMIT=$(git -C "$AMIX_GCC14_ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+# the PINNED toolchain commit (gcc14-env.sh verified the prefix against it)
+G14_COMMIT=$(echo "$AMIX_GCC14_COMMIT" | cut -c1-7)
 BENCH_VERSION_SRC=$(sed -n 's/^#define BENCH_VERSION "\(.*\)"/\1/p' "$S/bench-compat.h" | head -1)
 sum256() { sha256sum "$1" | cut -d' ' -f1; }
 {

@@ -67,10 +67,12 @@ VERSION=$GREP_VERSION
 # Package revision by toolchain: the period build is -2 (the 68060 re-mint);
 # a TOOLCHAIN=gcc14 build is new bytes and so a new revision (phase 2 of the
 # userland switch, owner decision D-3 sec 9): -3 was -mcpu=68060 (never
-# published; its FPU forms kill make on a 68882), -4 is -m68020-60.  pkginfo
-# is retagged in the work copy (amix_pkginfo_retag).
+# published; its FPU forms kill make on a 68882), -4 is -m68020-60, -5 the
+# same on gcc14-cross-amix cf461e3 (pointers returned in %a0 and %d0, structs
+# via %a0, as AMIX's compilers and libc do).  pkginfo is retagged in the work
+# copy (amix_pkginfo_retag).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=4 ;;
+gcc14) PKGREV=5 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$GREP_VERSION-$PKGREV

@@ -90,10 +90,12 @@ VERSION=$TAR_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 1.14-2 above 1.14.
-# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
-# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
-# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
-# work copy (amix_pkginfo_retag).
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint); a
+# TOOLCHAIN=gcc14 build is new bytes and so a new revision (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27): -3 was gcc14-cross-amix
+# e316f1b (never published: pointers came back in %d0 only), -4 is cf461e3
+# (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc);
+# pkginfo is retagged in the work copy (amix_pkginfo_retag).
 #
 # TOOLCHAIN=gcc14 needs no libacompat.  Its one symbol here, gettimeofday,
 # has an owner on that toolchain: GCC 14 links -lc the SVR4 way, through
@@ -106,7 +108,7 @@ VERSION=$TAR_VERSION
 # through __muldi3, which GCC 14's libgcc has; -m68020-60 would not emit the
 # 64-bit form anyway).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=3 ;;
+gcc14) PKGREV=4 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV
@@ -155,8 +157,11 @@ for p in "$HERE"/patches/*.patch; do
 	( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
 		echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
 done
-# TOOLCHAIN=gcc14 only: what GCC 14 rejects in AMIX's own headers (sys/mkdev.h).
-# Applied after the shared patches; the period build never sees them.
+# TOOLCHAIN=gcc14 only: what GCC 14 rejects in tar's own sources (the gnulib
+# Hash_hasher type).  Applied after the shared patches; the period build never
+# sees them.  (AMIX's <sys/mkdev.h> -- extern prototypes, static definitions --
+# needed a patch here until gcc14-cross-amix 8437c53, whose fixincludes makes
+# the prototypes static too.)
 if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
 	for p in "$HERE"/patches-gcc14/*.patch; do
 		echo "  applying gcc14 $(basename "$p")"
