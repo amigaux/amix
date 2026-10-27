@@ -1213,8 +1213,10 @@ boot2 checks every root module it places against the manifest's
 `crc32=` before the kernel starts (`load_member`), so a damaged member
 never reaches the core. A damaged generation is refused, and boot2
 tries the next one in the order; when none loads it says so and opens
-the menu. To reach the menu, damage the member in **every** generation
-of the order: each generation stores its own copy.
+the menu. To reach the menu, no generation of the order may load:
+damage the member in **every** generation that has one (each stores its
+own copy), and the kernel of any module-less generation in the order
+(on k30 the UZ and the pristine K030-U generations; N136).
 
 1. On the host, in a copy of the vehicle: find each generation's
    `module z3660scsi root <size> at=0x<at> …` record (`grep -a` on the
