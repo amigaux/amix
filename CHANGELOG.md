@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27 — ZS-06: the module form sets its own data-cache arm at _load (66e4e14, 472c528, dd32157)
+
+The static k46 kernels get z3660_cache = 60 from the port's f4arms pass; a module kernel runs no such pass, so on the real 68060
+the module ran with 0 and hit S4-74 (a dirty copyback line written back over the ARM's data → swapconf ENOTDIR). The arm now comes
+from cputype (DDI_CPUTYPE) and `$param cache:int:-1:-1:60`, set before z3660map(); k30 always 0; 40/60 refused on another CPU with
+one line; witnesses z3660_cache_src / z3660_cache_bad. Host matrix 42 checks (red on the old module, mutation-checked). modcheck
+ok both lines (7468 B; k30 2c9e3803, k46 21754e70); static objects unchanged. Module 1.0.0-2. Bench check on -82: z3660_cache 0x3c,
+z3660_push_n > 0, z3660_ci_ok 1, swapconf passes.
+
 ## 2026-10-26 — S4-30: z3660scsi as a root-class module (beff392)
 
 `-DZ3660SCSI_MODULE` builds src/z3660.c as the module z3660scsi (module/: Makefile on the ABI kit's fragment, Master, VERSION
