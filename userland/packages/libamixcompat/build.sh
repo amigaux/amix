@@ -11,6 +11,9 @@
 #     build/libamixcompat/host/          the host differential test
 #     build/pkg/acompat-<VERSION>.pkg    the datastream
 #
+# TOOLCHAIN=gcc14 (owner decision 2026-10-27, the userland switch): the same
+# outputs under build/gcc14/ (libamixcompat/, pkg/acompat-0.1-3.pkg).
+#
 # ORDER OF OPERATIONS, AND WHY.  The host differential test runs FIRST and its
 # failure is fatal.  It compares this exact source against glibc's snprintf over
 # five thousand (format, value, buffer-size) combinations, and it costs a
@@ -28,6 +31,8 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
+
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/pkgroll.sh"
 . "$REPO/recipes/common/gates.sh"
@@ -39,13 +44,44 @@ PKG=acompat
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 0.1-2 above 0.1.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27).  pkginfo is retagged in
+# the work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/libamixcompat"
+# THE gcc14 BUILD IS THE SAME LIBRARY, NOT A SUBSET.  libacompat ships to the
+# box for on-box builds, which have no libamixc99, so the gcc14 archive keeps
+# all seven members -- snprintf/strcasecmp/usleep included -- with the same
+# declarations (include/amixcompat.h, unchanged).  Two gcc14-only details:
+#   - GCC 14's fixed <unistd.h> declares usleep(unsigned long); amixcompat.h
+#     declares usleep(unsigned int) (the same 32-bit argument on this ABI, but
+#     two types to a C compiler).  -D_AMIX_HAVE_USLEEP suppresses the fixed
+#     header's declaration in this build only, so the shipped header and the
+#     definition stay as they are.
+#   - the version string says which build it is (acompat-test prints it), so a
+#     smoke cannot mistake the period archive for this one.
+# The ONE-OWNER rule for gcc14 PORTS is untouched: no ported recipe links
+# libacompat (amix_gate_g14_compat).  Its own acceptance test is the exception
+# by design -- it exists to run libacompat's members -- and step 3 proves from
+# the linker's trace that every compat symbol came from libacompat.a.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	ACOMPAT_VERSTR="$PKGVERSION-gcc14"
+	ACOMPAT_G14FLAGS="-D_AMIX_HAVE_USLEEP"
+else
+	ACOMPAT_VERSTR="$VERSION"
+	ACOMPAT_G14FLAGS=
+fi
+
+BUILD="$AMIX_BUILD_ROOT/libamixcompat"
 OBJ="$BUILD/obj"
 DEST="$BUILD/dest"
 HOSTB="$BUILD/host"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 echo "=== libacompat $VERSION ==="
 amix_env_banner
@@ -90,7 +126,7 @@ echo
 # recipe's version and the binary's cannot disagree.
 # ---------------------------------------------------------------------------
 echo "--- cross-compile (m68k-cbm-sysv4) ---"
-CFLAGS="$AMIX_CFLAGS -I$HERE/include -DAMIX_COMPAT_VERSION=\"$VERSION\""
+CFLAGS="$AMIX_CFLAGS $ACOMPAT_G14FLAGS -I$HERE/include -DAMIX_COMPAT_VERSION=\"$ACOMPAT_VERSTR\""
 
 SOURCES="snprintf.c strcase.c env.c mkstemp.c usleep.c timeofday.c version.c"
 for s in $SOURCES; do
@@ -141,10 +177,36 @@ echo
 #      -lc.  Any recipe whose configure fills in LIBS= must append it there too.
 #
 echo "--- link the on-box acceptance test ---"
-$CC $AMIX_CFLAGS -I"$HERE/include" \
+# gcc14: -Wl,-y asks the linker where each compat symbol was defined; every
+# one must come from libacompat.a (the archive under test), not libamixc99.
+set --
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	for s in snprintf vsnprintf strcasecmp strncasecmp usleep setenv unsetenv mkstemp gettimeofday; do
+		set -- "$@" "-Wl,-y,$s"
+	done
+fi
+$CC $AMIX_CFLAGS $ACOMPAT_G14FLAGS -I"$HERE/include" \
 	-o "$DEST/usr/local/bin/acompat-test" \
 	"$HERE/tests/compat-test.c" \
-	-L"$DEST/usr/local/lib" -lacompat -lc
+	-L"$DEST/usr/local/lib" -lacompat -lc "$@" > "$BUILD/link.log" 2>&1 || {
+		echo "[FAIL] acompat-test did not link" >&2; cat "$BUILD/link.log" >&2; exit 1; }
+[ "$AMIX_TOOLCHAIN" = gcc14 ] || cat "$BUILD/link.log"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	echo "  linker trace (definitions):"
+	grep 'definition of' "$BUILD/link.log" | sed 's|.*/||; s/^/    /'
+	for s in snprintf vsnprintf strcasecmp strncasecmp usleep setenv unsetenv mkstemp gettimeofday; do
+		grep -E "libacompat\.a\([a-z]+\.o\): definition of $s\$" "$BUILD/link.log" >/dev/null || {
+			echo "[FAIL] $s in acompat-test is not defined by libacompat.a -- the test" >&2
+			echo "       would exercise another archive's copy (libamixc99 or libc)." >&2
+			exit 1; }
+	done
+	echo "  OWNER ok  all nine compat symbols come from libacompat.a"
+	# acompat-test prints with libc printf, never an ll conversion: every %ll
+	# in its strings goes to snprintf (the member under test).  Reviewed
+	# 2026-10-27 (tests/compat-test.c: printf takes %s/%d/%ld only).
+	AMIX_LL_PRINTF_REVIEWED="acompat-test: every ll conversion goes to libacompat snprintf; printf takes %s/%d/%ld only"
+	export AMIX_LL_PRINTF_REVIEWED
+fi
 # NOT stripped yet.  amix_gate_undef reads the symbol table to list what the
 # binary still needs from the box's libc, and stripping first makes that gate
 # print nothing at all -- a gate that silently reports success because it can no
@@ -206,6 +268,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== libacompat $VERSION built ==="

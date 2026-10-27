@@ -54,6 +54,7 @@ REPO=$(cd "$HERE/../.." && pwd)
 # amix-env.sh, whose AMIX_PREFIX default is still the old /usr/local -- moving
 # that default is the separate patch/libacompat re-mint, not batch-1's job.
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -68,14 +69,28 @@ VERSION=$ZLIB_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 1.2.13-2 above 1.2.13.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+#
+# Under gcc14 snprintf/vsnprintf are declared by GCC 14's fixed <stdio.h> and
+# defined in libamixc99, which the specs link into every program: zlib-test
+# links no libacompat (one owner per symbol, gcc14-env.sh).  libz.a itself
+# still only REFERENCES the two; an on-box consumer resolves them from
+# libacompat (-lacompat -lc after -lz), as with the period archive.
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/zlib"
+BUILD="$AMIX_BUILD_ROOT/zlib"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/zlib-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 # libacompat, built by recipes/libamixcompat (its .a and headers live in that
 # recipe's staged dest under the OLD /usr/local prefix -- that is where the
@@ -87,11 +102,13 @@ echo "=== zlib $VERSION ==="
 amix_env_banner
 echo
 
-[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
-	echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB" >&2
-	echo "       Build recipes/libamixcompat first (ROADMAP D10)." >&2
-	exit 1
-}
+if [ "$AMIX_TOOLCHAIN" != gcc14 ]; then
+	[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
+		echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB" >&2
+		echo "       Build recipes/libamixcompat first (ROADMAP D10)." >&2
+		exit 1
+	}
+fi
 
 mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
@@ -223,9 +240,19 @@ echo
 # MUST end in -lc.  Order: -lz then -lacompat then -lc -- libz references
 # snprintf/vsnprintf (satisfied by acompat), acompat references libc.
 echo "--- link zlib-test ---"
-$CC $AMIX_CFLAGS -I"$TREE" -I"$ACOMPAT_INC" \
-	-o "$TREE/zlib-test" "$HERE/tests/zlib-test.c" \
-	-L"$TREE" -lz -L"$ACOMPAT_LIB" -lacompat -lc
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	# The specs append -lamixc99 -lc; zlib-test calls no gz* printf path, so
+	# nothing compat is pulled in either way (header comment of zlib-test.c).
+	$CC $AMIX_CFLAGS -I"$TREE" \
+		-o "$TREE/zlib-test" "$HERE/tests/zlib-test.c" \
+		-L"$TREE" -lz > "$BUILD/link.log" 2>&1 || {
+			echo "[FAIL] zlib-test did not link" >&2; cat "$BUILD/link.log" >&2; exit 1; }
+	amix_gate_g14_compat "$BUILD/link.log" || exit 1
+else
+	$CC $AMIX_CFLAGS -I"$TREE" -I"$ACOMPAT_INC" \
+		-o "$TREE/zlib-test" "$HERE/tests/zlib-test.c" \
+		-L"$TREE" -lz -L"$ACOMPAT_LIB" -lacompat -lc
+fi
 echo
 
 # ---------------------------------------------------------------------------
@@ -277,6 +304,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== zlib $VERSION built ==="
