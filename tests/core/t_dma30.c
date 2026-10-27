@@ -175,5 +175,20 @@ main(void)
 		dma_free(v, 1300);
 		check(freed == (char *)heap_at, "heap mode: dma_free gives the heap block back");
 	}
+
+	/* no memory a bus master reaches (C4-5 section 5.4; the A4000T in 030
+	 * mode, M-S474b): the kernel's region lies above the reach and no
+	 * other region below it, so neither pool nor heap: DMA is off */
+	memset(bootinfo, 0, sizeof bootinfo);
+	mem(0, 0x0003, RAM, RAM + 0x10000);
+	mem(1, 0x0005, kb < RAM + 0x90000 ? kb : RAM + 0x90000, 0x30000000UL);
+	dma_pool = dma_poolsz = 0;
+	dma_heap = 0;
+	plat_line_init();
+	check(!dma_pool && !dma_heap, "no reachable memory: no pool, no heap mode: DMA is off");
+	check(dma_alloc(64, &pa) == 0, "DMA off: dma_alloc gives 0 (the driver's _load fails)");
+	RW(r, 0x4c) = 0;
+	check(dma_prepare(r, (unsigned long)ddr, 64, 0) != 0 && dma_addr(r, (unsigned long)ddr) == 0 &&
+	    RW(r, 0x4c) == 1, "DMA off: an unreachable segment misses, dma_addr 0: never armed");
 	return fails != 0;
 }

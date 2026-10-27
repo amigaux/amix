@@ -129,13 +129,16 @@ reached(unsigned long pa, unsigned long n)
 	return !dma_forcebounce && pa >= DMA_CHIP && pa + n <= DMA_REACH && pa + n >= pa;
 }
 
-/* n bytes (a multiple of 16) from the pool's map, or 0 */
+/* n bytes (a multiple of 16) from the pool's map, or 0; with no pool,
+ * always 0: bus-master DMA is off (C4-5 section 5.4) */
 static unsigned long
 pool_get(unsigned long n)
 {
 	unsigned long a = 0;
 	int i, s;
 
+	if (!dma_pool)
+		return 0;
 	SPLHI(s);
 	for (i = 0; i < DMA_NMAP && map[i].n; i++)
 		if (map[i].n >= n) {
