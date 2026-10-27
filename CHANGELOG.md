@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — module/a4kt710: rebuild when the included a4091-wr.c changes
+
+A stale object without the C4-2 v6 §8.1 gate had been checked and reported; the mint was built fresh and is correct (k46 95bebecb,
+k30 e65b4f7d). The host tests compile the source directly and were valid; re-run from clean, all pass.
+
 ## 2026-10-27 — S5-06: a4kt710, the A4000T onboard NCR 53C710 as a second module target of the A4091 driver (6cc01e4, d9fe9f7, e9a0257, a74708e)
 
 mobo:a4000t-710, rank mobo. Its gate is C4-2 v6 §8.1: the running Kickstart's "NCR scsi.device" cold-start tag (or declared=1),
