@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern46m k46.1.2.261027-81 (746a916); round trip 157/157 — not published
+
+Port d33608d (rth1: swap none on a RAM-disk root names /dev/fakeswap, the stock dummy disk b 19,0, so the kernel can fork and the
+installer's `swap -a` finds it), dlm 178a47b: unix baf7ac43 (2443217 B), arena 0x0012c500, abi 2ab48658, 103 names; "/dev/fakeswap"
+in the image; md5 c5e9d5d5 / 2480128 B. Catalog 88b88546 (-80 root at superseded/repo-20261027-0346). Round trip 157/157.
+
 ## 2026-10-27 — kern30m k30.1.2.261027-15 (1df034c); round trip 157/157 — not published
 
 kerntools f0bbd76 cut on dlm 178a47b (core 0044; the k30 DMA test hooks dma_forcefail + the force-bounce exemption) + port 0e1f294
