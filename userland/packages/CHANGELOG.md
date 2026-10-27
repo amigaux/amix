@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern46m k46.1.2.261027-80 (78abe7a), a4091 1.0.0-4 (077a4ce), kbootset -19 (8fdaada); round trip 157/157 — not published
+
+kern46m -80 (port 0e1f294: rth1 bb6eaf6 = AXL1's root selector, RAM-disk root b 20,0, swap none, rootfstype from the record;
+d941cd2 = the FAILEXIT print behind krnx_fail_print; dlm 178a47b core 0001–0044): unix e48ae543 (2443113 B), arena 0x0012c4c0,
+abi 2ab48658, 103 names; the RTH1 ramdisk string present; md5 0b4d3927 / 2480128 B. a4091 1.0.0-4 (e35f811; the WRITE/TUR sync over
+a clear line): objects 69929d09 / 3d8cc066; md5 c4c3fa8e / 41741dad. kbootset -19 (fa7a4ab: an absent depend= is gate 3's):
+/sbin/kbootset f537493d; md5 1c72b446 / 199168 B; boot2/boot1/modadmin unchanged. Catalog c4e3f098. Round trip 157/157.
+The RAM-disk root branch is proven on the host only; installng's rd1 medium is the boot.
+
 ## 2026-10-27 — kbootset 1.1.0.261027-18 from amix-dlm d227dbf (0ccddf5); round trip 157/157 — not published
 
 Gate 2 checks every module's imports against the kernel's symbol block (ksym=, C3-3 v7): a module importing a name the kernel
