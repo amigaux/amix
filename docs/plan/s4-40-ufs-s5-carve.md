@@ -7,7 +7,8 @@ K1–K4 read-only** (2026-10-27); §2, §4 and §5.2 carry their corrections.
 **Answered by the orchestrator:** A1 yes (C4-6
   version 3: one boot-class rule, `rootfs` promoted); A2 cdfs is boot
   class on the 1.1 CD medium too, which roots on its RAM disk; A3 the
-  miniroot is s5. P1–P4 and K1–K4 sent to the port and amix-kerntools.
+  miniroot is s5, **amended after rd1g: s5 on k30, ufs on k46** (s5 is
+  broken under the 4 KiB-page line; C4-6 version 4). P1–P4 and K1–K4 sent to the port and amix-kerntools.
 - **Implements:** `docs/spec/30-module-core.md` §6, `70-static-floor.md`
   §2 (OQ-70.1, OQ-70.2), contract C4-6 (`vfs_register`, the core tier),
   C4-4 §1.3 (core patch 0043, the promotion); the plan rows S4-40 (the
@@ -191,9 +192,11 @@ it only wraps, for k46 it also cuts.
 ## 6. The media and the miniroot
 
 The installer media root on a RAM disk (C4-3), whose image is a
-filesystem of the generation's `rootfs`. **Recommendation: s5 for the
-miniroot**: a smaller module (about 38 KB against 51 KB) in the media's
-arena, and the stock miniroot's own type. The installer then loads ufs as
+filesystem of the generation's `rootfs`. **s5 for the miniroot on k30**:
+a smaller module (about 38 KB against 51 KB) in the media's arena, and the
+stock miniroot's own type. **ufs on k46** (amended after rd1g): s5 is
+broken under the 4 KiB-page line, so the k46 media promote ufs, and the
+k46 s5 module's use, if any, is a later question. The installer then loads ufs as
 boot class, to make and mount the target's ufs filesystems, and cdfs as
 boot class to mount the CD after the root is up. So on the CD medium
 cdfs is boot class too, unless a medium roots on the CD itself; C4-6 §1
