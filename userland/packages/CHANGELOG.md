@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — GCC 14 userland: acompat 0.1-3, zlib 1.2.13-3, gzip 1.3.12-3, patch 2.5.9-3, gtar 1.14-3, amix-benchmark-gcc14 1.3 (5c871e1..8ffb88b) — not published
+
+TOOLCHAIN=gcc14 (-m68020-60) builds the remaining userland recipes as revision -3; the period recipes are unchanged (byte-identical
+rebuilds). Smoke: 42 period-vs-gcc14 tests EQUAL on E1 (030+68882) and N6 (060). New amix-benchmark-gcc14 (PKG amixbch14, command
+amix-bench-g14) installs beside amix-benchmark with no shared file and names its compiler. scan060-g14 sizes %fp-indexed and
+memory-bounded switch tables. HOLD zlib -3 and acompat -3: GCC 14 returns pointers in %d0 only (SVR4 uses %a0 too), so their
+archives hand garbage pointers to period-compiled callers — re-mint after the toolchain fix.
+
 ## 2026-10-27 — loader-amix 1.0.261025-9 from amix-dlm ea75578 (082c1cd); round trip 159/159 — not published
 
 boot2 L11: the volume-2 prompt re-reads every 4 s when the disk-change counter does not move. boot2 28658 B, sha256 76346d9a;
