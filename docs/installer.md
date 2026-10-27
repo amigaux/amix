@@ -5021,10 +5021,12 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   adapter is unit 7 of every card (7, f, 17, 1f). The root record's `unit=` is N mod 8, and `tools/mkroot.sh` names
   disks with `%x`.
 - The first boot runs atdevs only for a card-0 root.
-- A kernel package's sidecar says `sdcards=4` on a four-card kernel (absent = 2). `l11.sh` reads it, and the first
-  boot of such a disk (`FB_SDCARDS=4`) takes core's 256 `c<N>d1s<S>` nodes out of the core package. Their minors
-  (128 and up) name card-2/3 disks there. In their place it makes and registers the 256 `c10`–`c1f` nodes, with
-  APKG's removef/installf, so `pkgchk core` stays quiet.
+- A kernel package's sidecar says `sdcards=4` on a four-card kernel (absent = 2). `l11.sh` reads it (FB_SDCARDS
+  still drives the first boot's root-name rewrite). Core's 256 `c<N>d1s<S>` nodes have minors 128 and up, which name
+  card-2/3 disks on such a kernel. The first boot's step 4d runs `/sbin/kbootset nodes` (kbootset -22, C2-4 v12 §14;
+  S5-44 R2): kbootset reads the sidecar itself, makes the 256 `c10`–`c1f` nodes, removes the d1 nodes and registers
+  both to core with APKG's removef/installf, so `pkgchk core` stays quiet on /dev. On a two-card kernel it says
+  core's nodes stand. Its line goes to the first boot's log; a failure is a WARNING there.
 - The first boot names the root as the running kernel does: `/etc/devnm /` maps the mounted root's device number to
   its node by stat, opening nothing. vfstab, the swap name and the atdevs gate follow it. So when the install kernel
   and the target kernel number the controllers differently, the installed names are the target kernel's.
