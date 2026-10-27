@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern30m k30.1.2.261027-15 (1df034c); round trip 157/157 — not published
+
+kerntools f0bbd76 cut on dlm 178a47b (core 0044; the k30 DMA test hooks dma_forcefail + the force-bounce exemption) + port 0e1f294
+(rth1 bb6eaf6: AXL1's RAM-disk root selector and rootfstype). brel 3e3b1c52 (1714644 B), ET_REL 4ff85b29, sidecar 223aff5b:
+kabi k30.1.2, arena 0x001073c0, abi 2ab48658, root= the three stock rows; 101 names; the seam and the RTH1 ramdisk string present;
+three checks pass. Pkg md5 ec791154 / 1936384 B. Catalog f821411e (-14 root at superseded/repo-20261027-0326). Round trip 157/157.
+
 ## 2026-10-27 — kern46m k46.1.2.261027-80 (78abe7a), a4091 1.0.0-4 (077a4ce), kbootset -19 (8fdaada); round trip 157/157 — not published
 
 kern46m -80 (port 0e1f294: rth1 bb6eaf6 = AXL1's root selector, RAM-disk root b 20,0, swap none, rootfstype from the record;
