@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-27 — a4091 module 1.0.0-5: a selection timeout is silent (9dfdf5b)
+
+An absent id answering a bus scan (rc -1) is counted in a4091_kstat.seltimeout and no longer traced; the installer's source probe
+and disk scan had filled the k30 console with "A4091 slow" lines (rd1h E955; the gate traced any failed command, identical on both
+lines). Slow polls, the poll bound, phase errors and short-read recoveries still trace; no debug param added. Host 18/18 per arm,
+mutation-checked; modcheck ok k46 (5524 B, 8655e87a) / k30 (4532 B, 6a6b6b3c); static objects unchanged.
+
 ## 2026-10-27 — a4091 module 1.0.0-4: the WRITE/TUR sync runs over a clear line, not the status line (3ec2ecd, 21d3bac)
 
 Bench N109's NO-SENSE retries under dma_forcebounce: the cache-clearing sync ran over the chip-written status line, so a bounced
