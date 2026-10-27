@@ -1203,6 +1203,9 @@ WRAPPERS = {"run", "runq"}
 
 # install.sh runs on the THIN miniroot: NO target-side extras allowed.
 DRIVER_EXTRA = set()
+# src/miniroot/profile: /sbin/modadmin is on the RAM-disk miniroot only
+# (tools/build-ramdisk-miniroot.sh), and the profile runs it behind `[ -x ]`.
+PROFILE_EXTRA = {"modadmin"}
 # firstboot.sh runs on the FULL installed target (core+base transplanted), so the
 # complete SVR4 userland is present. These are the tools it deliberately uses that
 # the miniroot itself lacks -- documented, and NOT granted to install.sh.
@@ -1566,9 +1569,9 @@ def audit_tool_allowlist():
 
     # src/miniroot/profile -- the strictest of the three: it runs with NOTHING
     # mounted, so /cdrom is not even an escape hatch until its own probe has
-    # succeeded. Same strict allowlist, no extras.
+    # succeeded. Same strict allowlist; one extra, the RAM-disk medium's guarded modadmin.
     mbad = [w for w in mwords if _classify(w, _defined_funcs(read_sh(MINIROOT_PROFILE)),
-                                           proto_tools, DRIVER_EXTRA)]
+                                           proto_tools, PROFILE_EXTRA)]
     if mbad:
         fail("src/miniroot/profile references tool(s) the miniroot does NOT carry: %s"
              % ", ".join(sorted(set(mbad))))

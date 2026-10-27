@@ -48,6 +48,14 @@ echo "Amiga UNIX install script"
 trap '	echo "Running interactive shell..."
 	exec /bin/sh -i' 2
 
+# The boot-class modules (C3-5 section 5: cdfs on a RAM-disk medium). This miniroot's own
+# /bin/init reads no inittab, so its dlm sysinit entry is this line; a miniroot without
+# modadmin (a static kernel's floppy) skips it.
+if [ -x /sbin/modadmin ]
+then
+	/sbin/modadmin -B </dev/console >/dev/console 2>&1
+fi
+
 CDROM=/cdrom
 SETUP=$CDROM/install/bin/setup.sh
 KMAPDIR=/etc/kmap
