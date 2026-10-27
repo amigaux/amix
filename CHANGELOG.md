@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — stage 5 opens (4d4d7a1, docs/plan/stage-5.md): the carried rows and release acceptance with S5 ids; its exit ledger skeleton (docs/plan/stage-5-exit.md)
+
 ## 2026-10-27 — STAGE 4 CLOSES (2db99e1, docs/plan/stage-4-exit.md)
 
 Every ledger cell has its result on the exit set, catalog 6e60a128 (kern46m -82, kern30m -17, kbootset -20, loader -9). Media of
