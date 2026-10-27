@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 10
+# C2-4 — `kbootset` as a called program, version 12
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -321,3 +321,45 @@ gives no boot device (unit 0xFFFFFFFF).
 - `build`, `commit` and the other commands compose for the box's own store
   as on any boot.
 
+## 14. `kbootset nodes`: the disk nodes of a four-card kernel (version 12)
+
+Makes the device nodes C4-1 §2.4 requires on a root whose installed
+kernel is a four-card one. It reads `sdcards=` from `<root>/stand/k30/kabi`
+and `<root>/stand/k46/kabi`; when neither says 4, it does nothing.
+
+- **No store.** It needs neither kinfo nor the boot store, so it works
+  on a root that has none yet.
+- **What it does:** it makes every node of the set that is missing, or
+  is not of the right type, major and minor (it unlinks such a node
+  first). It removes every `c<N>d1s<S>` node. On the running box (no
+  `-R`) it then makes core's registration match: when
+  `/var/sadm/install/contents` still names a d1 node, it runs
+  `/usr/apkg/bin/removef core` with the d1 paths, 16 at a time, and
+  `removef -f core`. When the contents do not name `/dev/rdsk/c1fd0s7`,
+  it runs `installf core -` on the 256 card-2 and card-3 nodes and
+  `installf -f core`. It runs APKG's tools from `/tmp`, because the
+  stock ones take a bus error on the 68060. Under `-R` the registration
+  is left to a run on the booted box.
+- **What it prints** (one line, `kbootset: ` first):
+  - `nodes: no four-card kernel installed (no sdcards=4 in /stand/k30/kabi or /stand/k46/kabi): core's nodes stand`
+  - `nodes: the four-card set is complete (c0-c1f d0 s0-s7, no d1 nodes)`
+  - `nodes: made N, removed M d1 nodes; registered to core`, with
+    `no package database` or `the registration is the booted box's
+    (kbootset nodes there)` in place of the last part where that applies
+  - `nodes: N of T nodes could not be made or removed`
+  - `nodes: made N, removed M d1 nodes; WARNING: core's registration failed (APKG's installf, removef)`
+- **Exit status:** 0, or 1 for either of the last two lines.
+- **`commit`** runs the same step on the running box once the commit
+  has returned 0, whether it wrote a generation or had nothing to
+  commit. It prints the `nodes:` line only when it made, removed or
+  registered something, or failed. That line comes before the commit's
+  own line, so apkg's trigger (§3) still repeats the commit's line.
+  A failed node step leaves the commit's status unchanged.
+- **`check`** on the running box adds the line
+  `nodes: N of the four-card set missing or wrong, M d1 nodes left: run kbootset nodes`
+  (with `, core's registration not done` before the colon when core
+  disagrees) and counts it as one problem. A complete set prints the
+  complete line. A root with no four-card kernel adds nothing.
+- **The host build** writes no node and runs no tool. It prints each
+  node it would make or remove (`would make /dev/rdsk/c16d0s0 c 40 134`),
+  for the host test (`tests/host/knode.sh`).

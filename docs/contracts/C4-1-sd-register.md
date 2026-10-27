@@ -1,4 +1,4 @@
-# C4-1 — `sd_register` and the four-card contract, version 4
+# C4-1 — `sd_register` and the four-card contract, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
@@ -7,7 +7,9 @@
   version 3 (2026-10-27, from amix-cdfs's module plan): the level at which
   a controller calls a command's completion (§3.2); version 4 (2026-10-27,
   S5-08, from M-S474b; agreed 2026-10-27 by the port and amix-kerntools):
-  the Z3660 is one controller in either mode (§5.1).
+  the Z3660 is one controller in either mode (§5.1); version 5
+  (2026-10-27, S5-44, from Bench J4 row M-G3): the device nodes an
+  installed root holds, and who makes them (§2.4).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -121,6 +123,57 @@ the relink kit, `kinfo030.c`). On k46 sd, dd and ct are patched in place
 by the port, now (Q4-3), as a merge request: relocations retargeted to
 four-row tables, the bounds raised, the inline decodes replaced by calls
 of the same length. The static families stay byte-identical.
+
+### 2.4 The device nodes (version 5)
+
+On an installed root whose installed kernel is a four-card one (its
+sidecar says `sdcards=4`, C2-3 §2), `/dev/dsk` and `/dev/rdsk` hold:
+- `c<N>d0s<S>` for every N from `0` to `1f` and every slice 0–7: all
+  four cards, all eight units, 512 nodes. `/dev/dsk` nodes are block
+  device 18, `/dev/rdsk` nodes character device 40, the minor as §2.1
+  gives it (`c16d0s0` is 134, `c1fd0s7` is 255). The card-0 and card-1
+  nodes are core's, as core lays them. The card-2 and card-3 nodes have
+  mode 0600, owner root, group root;
+- no `c<N>d1s<S>` node. Core's 256 d1 names have minors with bit 7 set,
+  which a four-card kernel reads as the card's high bit: `c6d1s0` would
+  open the disk `c16d0s0` names.
+
+The set depends on the kernel only, never on the board set: every card a
+four-card kernel can number has its nodes, so adding or removing a
+board never needs a node change, whichever card numbers it moves. A
+fifth card is refused (§7), so the set never grows. The package database
+says the same: the card-2 and card-3 nodes are registered to core, and
+core no longer names the d1 nodes, so `pkgchk core` stays quiet.
+
+The pristine generation's 1992 kernel reads bit 7 as the LUN, so under
+it `c10`–`c1f` open LUN 1 of cards 0 and 1, as the removed d1 names did.
+A root that holds only two-card kernels keeps core's stock set.
+
+**Who makes them** (the `/dev/kinfo` pattern, C2-3 §1):
+- **`kbootset nodes`** (C2-4 §14) is the one implementation. On the
+  running box it makes every node of the set that is missing or wrong,
+  removes the d1 nodes, and registers both changes in core with APKG's
+  `removef` and `installf`. Under `-R` it makes and removes the nodes and
+  leaves the registration to a run on the booted box.
+- **`kbootset commit`** runs it on the running box after every commit,
+  including one with nothing to commit. A root that already exists
+  reaches a four-card kernel only through a kernel-space transaction,
+  after which apkg runs `build` and `commit` (C2-4 §3). So the set is
+  there before the first boot of that kernel, and installing the
+  kbootset that carries this step (`kbootset` -22) fixes a root like
+  J4's on its own.
+- **The installer** calls `kbootset nodes` on the booted target in
+  firstboot. It runs where firstboot's step 4d now runs its own loop, and
+  it replaces that loop. Until the installed set carries `kbootset` -22,
+  step 4d stays as it is. The install miniroot keeps its own nodes, made
+  on demand for the target's card (`ensure_disk_nodes`).
+- **`kbootset check`** counts an incomplete set as one problem:
+  `nodes: N of the four-card set missing or wrong, M d1 nodes left: run
+  kbootset nodes`.
+
+No package lists nodes per board: card numbers follow the board set
+(§4), so a node list per driver package would be wrong whenever the set
+changes.
 
 ## 3. `sd_register`
 
