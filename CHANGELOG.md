@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27 — the 1.1 install path end to end: CDBOOT cells l11-rd-k46 / l11-rd-k30 PASS 9/9, first boots PASS (18693e2…ae1437c); rd1k 88d5212a
+
+install-matrix CDBOOT mode (the disc on the A4091 CD, a blank target, an evidence floppy inserted after power-on, the interactive
+operator flow with BASE.<line> by kinfo); both cells 9/9 on rd1k (catalog 92da8ce8), the installed disks first-boot to run-level 2
+(E956 k46 on -81, E957 k30 on -17). Found and fixed on the way: the interview sized 1.1 disks with the 1.0 boot slice (root [159]
+on 200 MB vs install.sh's 105 ceiling) — audit V now covers 1.1; the four-card label "disk e (ced0: card 1, SCSI id 6)"; modadmin -B
+once per boot. tools/build-ramdisk-cd.sh is the tracked composer (stages each line, k46 ufs / k30 s5, mkstore -C); build-l11-inputs
+builds amix-cdboot and the host apkg. l11-set on 92da8ce8. Note for kerntools: k30 counts illegal=2 at first boot.
+
 ## 2026-10-27 — the RAM-disk installer medium boots to the interview on both lines: rd1h 9b7348e3 (bd1baf2, 29c1da8, 1ace7d5)
 
 miniroot: the profile runs /sbin/modadmin -B when present (the miniroot's own init reads no inittab), so the boot-class cdfs
