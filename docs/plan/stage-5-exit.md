@@ -45,6 +45,7 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | S5-06 the A4000T 53C710 module: host and emulation | pending | — |
 | S5-07 M-A4T1 on the A4000T, its M-SD1 sets | pending | — |
 | S5-08 C4-1 / C4-4: the root record of a board that is not AutoConfig'd | agreed: pending | the same |
+| S5-09 a network in safe mode, opted in: a safe boot with z3660eth marked `safe` brings zen0 up; without the mark, none | pending | pending |
 
 ## 3. Wave 2: the filesystems leave the kernel
 
