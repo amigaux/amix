@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — core/plat: the module core takes the kernel's build id without the stamp's leading blank, so a k46 kernel loads its core-tier ufs module (the S5-13 EBADVER; every k46 kernel so far carries " 68060-…"); t_plat tests the port's real format (7b07bce)
+
 ## 2026-10-27 — C4-1 v7: `pkgchk core` is quiet on /dev, not as a whole; the S5-44 ledger row likewise (cc3e43e, a9542a3)
 
 ## 2026-10-27 — kbootset: a disk store's root record keeps a core-tier module's tier=/build=, copied verbatim as C3-5 §3 says (informational; the core decides from .moddata) (e8254e5)
