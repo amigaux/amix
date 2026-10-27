@@ -1,4 +1,4 @@
-# C4-6 — the filesystem module form, version 3
+# C4-6 — the filesystem module form, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
@@ -7,7 +7,9 @@
   since kabi 1.1 closed with the minted kernels. Version 3 (2026-10-27,
   the orchestrator's answers to the S4-40 plan): one rule for every
   filesystem module, boot class with the generation's `rootfs` promoted
-  to a root record (§1, §5); the miniroot is s5. Other repositories
+  to a root record (§1, §5); the miniroot is s5. Version 4 (2026-10-27,
+  from installng's rd1g): the miniroot is s5 on k30 and ufs on k46 (§1).
+  Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §2 patch 9 (`vfs_register`
@@ -47,9 +49,13 @@ returns its result. s5's `_load` first calls `inoinit`, which the base's
 both contexts, the root pass and the first `sysinit` entry (S4-71).
 
 **The roots of 1.1:** an installed disk roots on ufs. The media root on
-their RAM disk (C4-3), whose image is s5, the stock miniroot's type; on
-them ufs and cdfs are boot class, to make and mount the target disk and
-to mount the disc.
+their RAM disk (C4-3), whose image is **s5 on k30** (the stock miniroot's
+type) **and ufs on k46**: s5 is broken under the 4 KiB-page line (on the
+k46 s5 RAM-disk root `ls -l` and `/etc/sioc` die with a bus error, rd1g),
+which is why every k46 miniroot has been ufs. So the k46 media's
+generation has `--rootfs ufs` and promotes ufs; on k30, s5 is promoted
+and ufs is boot class to make the target disk. cdfs is boot class on
+both, to mount the disc.
 
 ## 2. The table
 
