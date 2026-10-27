@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — plan: S4-64 (stage 5), a RAM-disk floppy pair booted with one swap instead of three (mkstore lays the modules before the image) (2fedd77)
+
 ## 2026-10-27 — boot2: the floppy pair's volume-2 prompt (L11) re-reads every 4 s as well as on a disk-change count (ea75578)
 
 A trackdisk that does not count the swap (Kickstart 3.2.1 under amiberry, E958/E959) no longer leaves it waiting for ever.
