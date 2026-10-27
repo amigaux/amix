@@ -1207,7 +1207,7 @@ DRIVER_EXTRA = set()
 # (tools/build-ramdisk-miniroot.sh), and the profile runs it behind `[ -x ]`; the network
 # userland (build-ramdisk-miniroot.sh --net) is on the netinstall image only, and the
 # profile reaches it only in net_source, behind the image's /install/NETINSTALL marker.
-PROFILE_EXTRA = {"modadmin", "aen", "date", "ifconfig", "route", "slink"}
+PROFILE_EXTRA = {"modadmin", "aen", "date", "ifconfig", "route", "slink", "sleep"}
 # firstboot.sh runs on the FULL installed target (core+base transplanted), so the
 # complete SVR4 userland is present. These are the tools it deliberately uses that
 # the miniroot itself lacks -- documented, and NOT granted to install.sh.

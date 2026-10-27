@@ -618,6 +618,12 @@ unattended_run()
 # blank means the repository host's address is asked and goes into /etc/inet/hosts.
 # The link rate is measured on one small package (APKG) for the interview's time
 # estimates. Hands over with SRC_KIND=net and INST, NET_REPO, NET_KREPO, NET_RATE.
+# The interface (S5-33): zen0, the Z3660's own ethernet, when its driver answers an open of
+# /dev/zen0 (the boot-class z3660eth loaded: its board matched and its MAC registers read);
+# aen0 when the A2065 answers `aen -S`; both: a choice, zen0 first. Neither: say so, restart.
+# Nothing here reads the card's MAC: the address is the one typed, so a MAC that userland
+# cannot read (zenmac on metal) changes nothing; S99zen's zen.conf lookup is the installed
+# system's, at its first boot.
 net_secs()
 {
 	nsd=`/usr/bin/date '+%H %M %S'`
@@ -630,13 +636,28 @@ net_source()
 {
 	echo "\nNo installation CD or installation disk was found."
 	echo "This medium installs the system over the network."
-	NIF=aen0
-	if [ -c /dev/zen0 ]
+	NZEN=n
+	NAEN=n
+	[ -c /dev/zen0 ] && ( exec < /dev/zen0 ) > /dev/null 2>&1 && NZEN=y
+	/usr/amiga/bin/aen -S > /dev/null 2>&1 && NAEN=y
+	if [ $NZEN = y ] && [ $NAEN = y ]
 	then
-		echo "\n   1)   aen0     A2065 Ethernet"
-		echo "   2)   zen0     Z3660 native Ethernet"
+		echo "\n   1)   zen0     Z3660 native Ethernet"
+		echo "   2)   aen0     A2065 Ethernet"
 		readask "\nWhich interface do you want to use? [1] "
-		case "$ask" in 2) NIF=zen0 ;; esac
+		case "$ask" in 2) NIF=aen0 ;; *) NIF=zen0 ;; esac
+	elif [ $NZEN = y ]
+	then
+		NIF=zen0
+		echo "\nThe network interface is zen0 (Z3660 native Ethernet)."
+	elif [ $NAEN = y ]
+	then
+		NIF=aen0
+		echo "\nThe network interface is aen0 (A2065 Ethernet)."
+	else
+		echo "\nNo network interface was found: neither the Z3660's ethernet (zen0)"
+		echo "nor an A2065 board (aen0) answers."
+		restart
 	fi
 	NIP=
 	while [ "$NIP" = "" ]
@@ -667,10 +688,23 @@ net_source()
 	fi
 
 	echo "\nStarting the network on $NIF..."
-	[ "$NIF" = aen0 ] && /usr/amiga/bin/aen -S
 	/usr/sbin/slink -c /etc/inet/strcf > /dev/null 2>&1
-	/usr/sbin/slink -c /etc/inet/strcf addaen /dev/$NIF $NIF &&
-	/usr/sbin/ifconfig $NIF $NIP netmask $NMASK up ||
+	# the link: zen0 retries it, as S99zen does (addaen can race the base streams)
+	nl=0
+	while :
+	do
+		/usr/sbin/slink -c /etc/inet/strcf addaen /dev/$NIF $NIF && break
+		nl=`expr $nl + 1`
+		if [ "$NIF" = aen0 ] || [ $nl -ge 5 ]
+		then
+			echo "\nThe network interface $NIF could not be linked."
+			restart
+		fi
+		sleep 2
+	done
+	NTR=
+	[ "$NIF" = zen0 ] && NTR=-trailers
+	/usr/sbin/ifconfig $NIF $NIP netmask $NMASK up $NTR ||
 	{
 		echo "\nThe network interface $NIF could not be started."
 		restart
