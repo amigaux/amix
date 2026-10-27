@@ -82,6 +82,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 | S5-36 | **The Z3660 window probes on a box without one** (22 caught bus timeouts, N149r/N150r): quieter, or a cheaper first check | amix-z3660net; amix-z3660scsi | host | — | — | 0.25 |
 | S5-37 | **s5 on k46** (C4-6 v4: broken under the 4 KiB-page line): no k46 s5 module ships, since no k46 medium needs one (the k46 miniroot is ufs) and the stock code keeps live 2 KiB page sites (`bmap`, about 35 in all by Antti's census, amix-kernel-analysis ee18d5f), while `page_t`'s `p_dblist[4]` and `S5MAXREQ` cannot describe a 4 KiB page over 512-byte blocks. A bounded 1 KiB/2 KiB-block conversion that refuses 512-byte mounts, when one is planned. The k46 cut drops the static s5 (S5-11) | the port; amix-dlm | host + bench | — | — | project |
 | S5-44 | **The disk nodes of cards 2 and 3 on an installed root** (Bench J4, M-G3, the A4000D with Z3660 + A4092 + Gayle, a 1.1 set: Gayle is card 2, and the root held only c0-cf, so IDE-D `c16` and the CD `c15` had no names; hand-made nodes read both): C4-1 v5 §2.4, every four-card root holds c0-c1f d0 s0-s7 and no d1 nodes, whatever the board set; `kbootset nodes` (C2-4 v12 §14) makes them, `commit` runs it on the running box, `check` reports it; firstboot calls it in place of its step 4d (recipe `docs/plan/s5-44-disk-nodes.md`) | amix-dlm (`kbootset` -22); amix-installng | host + bench | kbootset -22 | S5-41 | 0.5 |
+| S5-45 | **`kbootset media --disk --ramdisk`** (from amix-installng's S5-33, ni7): the netinstall raw image's store gated by kbootset directly, composed as `media --cd` composes and written by mkstore's engine read-only, members raw (C2-4 v13 §13, C4-3 v4 §1); host only, so the box kbootset and the -22 bytes are unchanged; `build-netinstall.sh` may call it in place of `mkstore` on the `--cd` spec (the same bytes) | amix-dlm; amix-installng (optional switch) | host | — | — | 0.1 |
 
 ### 2.5 Release acceptance (last)
 
@@ -108,3 +109,9 @@ reopens S5-41 and S5-42 for every medium that carries it (80 §3).
 
 Anything outside 80 §2's stage 5: new drivers, new media, a DDI 1.3
 name without a stage-5 row that needs it.
+
+A RAM-disk image shared between generations, as a raw medium for both
+lines in one store would need, is not in stage 5. The core loads a boot
+module only from the booted id's directory, so an image serves one
+generation id (C4-3 v4 §1), and the netinstall ships one raw image per
+line. It becomes a decision when such a medium is wanted.
