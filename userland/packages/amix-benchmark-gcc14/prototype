@@ -1,0 +1,26 @@
+#
+# prototype -- amix-benchmark-gcc14 (PKG amixbch14), authored.
+#
+# Every FILE lives under a path no other package uses (amix-bench-g14), so it
+# installs beside amix-benchmark (PKG amixbench).  The shared directories
+# (/opt, /opt/amix, its bin, lib and doc) carry the same mode/owner/group as
+# in every other package here.  Basenames are <= 14 bytes (s5 dirents).
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/amix-bench-g14 0755 root bin
+d none /opt/amix/lib 0755 root sys
+d none /opt/amix/lib/amix-bench-g14 0755 root sys
+f none /opt/amix/lib/amix-bench-g14/runbench.sh 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/dhry 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/iobench 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/fpbench 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/membench 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/vmbench 0755 root bin
+f none /opt/amix/lib/amix-bench-g14/BUILD-INFO 0644 root bin
+f none /opt/amix/lib/amix-bench-g14/PROVENANCE 0644 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/amix-bench-g14 0755 root sys
+f none /opt/amix/doc/amix-bench-g14/README.txt 0644 root bin

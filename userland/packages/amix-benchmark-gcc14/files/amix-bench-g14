@@ -1,0 +1,15 @@
+#!/bin/sh
+# amix-bench-g14 -- the amix-bench matrix, GCC 14 build (package
+# amix-benchmark-gcc14, PKG amixbch14).
+#
+# The same driver and the same benchmark sources as `amix-bench' (package
+# amix-benchmark, built with gcc 2.7.2.3); only the compiler differs.  The kit
+# lives in /opt/amix/lib/amix-bench-g14 and runbench.sh finds its binaries
+# beside itself, so the two kits never share a file.  The results header says
+# which compiler built the binaries (build_cc_version=...).
+#
+# The name is amix-bench-g14, not amix-bench-gcc14: the Amix root is s5,
+# whose directory entries hold 14 bytes.
+#
+# Written for the SVR4.0 Bourne shell (Amix 2.1): no $(...), no [[ ]].
+exec /opt/amix/lib/amix-bench-g14/runbench.sh "$@"
