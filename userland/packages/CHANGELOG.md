@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — GCC 14 userland re-minted on gcc14-cross-amix cf461e3: acompat 0.1-4, zlib 1.2.13-4, gzip 1.3.12-4, patch 2.5.9-4, gtar 1.14-4, grep 2.5.1a-5, less 704-5, make 3.81-5, amix-benchmark-gcc14 1.3-2 (de9d3b7..e64a8ee) — not published
+
+cf461e3 fixes the return-value ABI: pointers in %a0 and %d0, every struct in memory through %a0 (AMIX cc, gcc 2.7, libc div()).
+gcc14-env.sh pins the toolchain and checks the ABI from the compiler's own -S output on every build (gate-gcc14-selftest 14/14).
+Smoke on E1 (030+68882) and N6 (060): 42/42 EQUAL; period-compiled callers of the GCC 14 zlib/acompat archives now get correct
+pointers; a GCC 14 div()/ldiv() test passes 6/6. tar drops its sys/mkdev.h patch. The zlib/acompat hold is lifted. The -3 builds
+and amixbch14 1.3 are superseded and never published.
+
 ## 2026-10-27 — gayle-k30/-k46 1.1.0-3 (124c578): interrupt I/O by default; round trip 159/159 — not published
 
 From amix-gayle-ide b2935fc (owner decision T-54 item 21: `param intr=0` in modreg.local.d selects polled), kit c2dc7fb; objects
