@@ -163,6 +163,7 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 	kk->size = value(text, "size", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 0;
 	kk->loader_min = value(text, "loader-min", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 10) : 1;
 	kk->bss = value(text, "bss", buf, sizeof(buf)) ? (ax_u32)strtoul(buf, 0, 0) : 0;
+	kk->rth1 = value(text, "rth1", buf, sizeof(buf)) ? atoi(buf) : 0;
 	if (value(text, "arena", buf, sizeof(buf))) {
 		char *e;
 		kk->arena_off = (ax_u32)strtoul(buf, &e, 0);
@@ -1419,11 +1420,12 @@ kb_canonkey(char *key)
 }
 
 void
-kb_canonrec(const char *rec, char *out)
+kb_canonrec(const char *rec, const char *key, char *out)
 {
+	static const char *const mobo[] = { "", "mobo:a3000-wd", "mobo:gayle", "mobo:a4000t-710" };
 	char buf[128], *tok[16], *p;
 	unsigned long id = 0, base = 0;
-	int n = 0, i, hasid = 0, o;
+	int n = 0, i, hasid = 0, hasmobo = 0, o;
 
 	sprintf(buf, "%.127s", rec);
 	for (p = strtok(buf, " \t"); p && n < 16; p = strtok(0, " \t"))
@@ -1433,12 +1435,27 @@ kb_canonrec(const char *rec, char *out)
 			id = strtoul(tok[i] + 3, 0, 16), hasid = 1;
 		else if (!strncmp(tok[i], "base=", 5))
 			base = strtoul(tok[i] + 5, 0, 16);
-	if (!n || strcmp(tok[0], "sd") || !hasid ||
-	    !(id == 0x144B0100UL || id == 4 || (id == 0 && base == 0x10000000UL))) {
+		else if (!strcmp(tok[i], "mobo"))
+			hasmobo = 1;
+	if (n && !strcmp(tok[0], "sd") && id == 0 && base == 0 && hasmobo && key && *key)
+		for (i = 1; i <= 3; i++)	/* an old mobo record, named by its controller (§5.2) */
+			if (!strcmp(key, mobo[i]))
+				id = (unsigned long)i, hasid = 1;
+	if (n && !strcmp(tok[0], "sd") && id == 0 && base == 0 && hasmobo && key &&
+	    !strcmp(key, "zorro:144b:01"))
+		id = 0x144B0100UL, hasid = 1;	/* a Z3660 is never written as mobo (§5.1) */
+	if (!n || strcmp(tok[0], "sd") || !hasid) {
 		sprintf(out, "%.127s", rec);
 		return;
 	}
-	o = sprintf(out, "sd id=144b0100 base=00000000");
+	if (id >= 1 && id <= 3)
+		o = sprintf(out, "sd id=%08lx base=00000000", id);
+	else if (id == 0x144B0100UL || id == 4 || (id == 0 && base == 0x10000000UL))
+		o = sprintf(out, "sd id=144b0100 base=00000000");
+	else {
+		sprintf(out, "%.127s", rec);
+		return;
+	}
 	for (i = 1; i < n; i++)
 		if (strncmp(tok[i], "id=", 3) && strncmp(tok[i], "base=", 5) && strcmp(tok[i], "mobo") &&
 		    o + 1 + (int)strlen(tok[i]) < 128)
@@ -1469,11 +1486,11 @@ head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const cha
 			(unsigned long)kk->arena_off, (unsigned long)kk->arena_cap,
 			(unsigned long)kk->ident_off);
 	if (rootrec && rootrec[0]) {
-		kb_canonrec(rootrec, rr);
+		kb_canonrec(rootrec, kk->rth1 >= 2 ? f->rootdev : "", rr);
 		sprintf(text + strlen(text), "root %.120s\n", rr);
 	}
 	if (swaprec && swaprec[0]) {
-		kb_canonrec(swaprec, sr);
+		kb_canonrec(swaprec, "", sr);
 		sprintf(text + strlen(text), "swap %.120s\n", sr);
 	}
 	if (boards)

@@ -30,9 +30,14 @@ struct kb_facts {
  * window, mobo:z3660-window, becomes zorro:144b:01, in place; an sd root
  * or swap record on a Z3660 card (id 144b0100 at any base, id 4, or id 0
  * at the window 0x10000000) becomes id=144b0100 base=00000000, the rest
- * kept, into out (128 bytes) */
+ * kept, into out (128 bytes).  A motherboard controller's record (C4-1
+ * §5.2, S5-46): with an id 1-3 it drops a mobo flag, which boot2 refuses;
+ * an old mobo record (id 0) on the controller whose key is key
+ * (mobo:a3000-wd, mobo:gayle, mobo:a4000t-710, or the Z3660's
+ * zorro:144b:01) takes that controller's id, when key is not "" (the
+ * caller passes it only for a kernel with rth1=2) */
 void kb_canonkey(char *key);
-void kb_canonrec(const char *rec, char *out);
+void kb_canonrec(const char *rec, const char *key, char *out);
 
 /* the kernel's sidecar (C2-3 §2; a module kernel's, version 5: C3-3 §3) */
 struct kb_kernel {
@@ -46,6 +51,8 @@ struct kb_kernel {
 	ax_u32 bss;		/* bytes past the image to the kernel's end: a brel
 				 * kernel does not record them (C2-3 §2) */
 	int has_arena, has_ident;
+	int rth1;		/* rth1=: 2 when its RTH1 matches a motherboard record by id
+				 * (C2-3 version 9, C4-1 §5.2); 0 absent */
 	int brel;		/* the kernel file is a brel (ELF type 0xff00) */
 };
 

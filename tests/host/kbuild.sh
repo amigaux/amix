@@ -83,6 +83,28 @@ grep -qx "root sd id=02025400 base=40000000 unit=6 slice=2" $R/stand/gen/2/build
 $KB build --line 46 --bootdev mobo:z3660-window --rootdev mobo:z3660-window --rootfs ufs --mem 16777216 > /dev/null
 grep -qx "bootdev=zorro:144b:01" $R/stand/gen/2/facts && grep -qx "rootdev=zorro:144b:01" $R/stand/gen/2/facts ||
 	{ echo "kbuild: the window's key was not taken as zorro:144b:01" >&2; cat $R/stand/gen/2/facts >&2; exit 1; }
+# a motherboard controller's record names it (C4-1 §5.2, S5-46): an old
+# mobo record takes its controller's id only on a kernel whose sidecar
+# says rth1=2; a stray mobo beside an id is dropped (boot2 refuses it);
+# swap records are kept
+MB46="--line 46 --bootdev zorro:0202:54 --rootfs ufs --mem 16777216"
+OLD="sd id=00000000 base=00000000 unit=0 slice=1 mobo"
+sed -i 's/^root=.*/root=zorro:0202:54,zorro:144b:01,mobo:gayle,mobo:a4000t-710/' $R/stand/k46/kabi; record
+$KB build $MB46 --rootdev mobo:gayle --root "$OLD" > /dev/null
+grep -qx "root $OLD" $R/stand/gen/2/build ||
+	{ echo "kbuild: an old mobo record was rewritten for a kernel without rth1=2" >&2; exit 1; }
+$KB build $MB46 --rootdev mobo:gayle --root "sd id=00000002 base=00000000 unit=0 slice=1 mobo" > /dev/null
+grep -qx "root sd id=00000002 base=00000000 unit=0 slice=1" $R/stand/gen/2/build
+echo rth1=2 >> $R/stand/k46/kabi; record
+for k in mobo:gayle:00000002 mobo:a4000t-710:00000003 zorro:144b:01:144b0100; do
+	$KB build $MB46 --rootdev ${k%:*} --root "$OLD" --swap "$OLD" > /dev/null
+	grep -qx "root sd id=${k##*:} base=00000000 unit=0 slice=1" $R/stand/gen/2/build ||
+		{ echo "kbuild: rth1=2, ${k%:*}: the old mobo record not named" >&2; grep '^root' $R/stand/gen/2/build >&2; exit 1; }
+	grep -qx "swap $OLD" $R/stand/gen/2/build
+done
+$KB build $MB46 --rootdev zorro:0202:54 --root "$OLD" > /dev/null
+grep -qx "root $OLD" $R/stand/gen/2/build
+sidecar; record
 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --mem 16777216 > /dev/null
 cp $T/disk.img $T/before.img
 $KB commit > $T/out 2>&1 || { echo "kbuild: the unchanged commit failed" >&2; cat $T/out >&2; exit 1; }

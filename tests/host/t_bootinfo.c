@@ -57,6 +57,11 @@ test_bootinfo(void)
 	T_CHECK(sel_rto1("sd id=c0de0100 unit=1", "52544f310001001c0000000100000000c0de010000000000ecccafb2"));
 	/* --unit 6 --mobo */
 	T_CHECK(sel_rto1("sd mobo unit=6", "52544f310001001c00000006000000000000000000000001adaab0ac"));
+	/* a motherboard controller by its id (C4-1 section 5.2): Gayle, id 2,
+	 * no mobo flag; boot2 takes it and hands the id on unchanged */
+	T_CHECK(sel_rto1("sd id=00000002 base=00000000 unit=0 slice=1",
+			 "52544f310001001c00000000000000000000000200000000adaab0b1"));
+	T_EQ(ax_disksel_parse("sd mobo id=00000002 unit=0", &d), -1);	/* both: kbootset drops mobo */
 	/* --unit 3 --base 0x40000000 --id 0x02025400 */
 	T_CHECK(sel_rto1("sd base=40000000 id=02025400 unit=3 slice=1",
 			 "52544f310001001c000000034000000002025400000000006ba85cb0"));
