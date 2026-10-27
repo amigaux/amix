@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 12
+# C2-4 — `kbootset` as a called program, version 13
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -297,6 +297,17 @@ gives no boot device (unit 0xFFFFFFFF).
   a read-only medium: its loader reads it, the kernel never drives it`.
   The generation carries no boot device either way. `media --disk` keeps
   both checks.
+- **`media --disk --ramdisk`** (version 13): a disk store whose
+  generation roots on the RAM disk, the netinstall raw image (C4-3 §1,
+  50 §5). It is a read-only medium in the same sense: boot2 reads the
+  store and the kernel roots on the RAM disk. So its generation is gated
+  and composed as `media --cd` composes one (gate 3 checks the root
+  controller only, members raw). mkstore's engine writes it into the
+  image at `--offset`, a read-only store of `--size` bytes (mkstore's
+  `-r`); the RDB around it is the media builder's. The bytes are the
+  same as `mkstore -o IMG -p N -s S -1 F -2 F -r` on the spec that
+  kbootset writes beside the image (`IMG.spec`). `--force` is not used
+  there: mkstore writes the store in place.
 
 - **`mark-good`** marks nothing: `kbootset: booted from a read-only medium
   (generation N of a CD|a floppy pair): nothing to mark`, exit 0. It still

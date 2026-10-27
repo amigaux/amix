@@ -1,4 +1,4 @@
-# C4-3 — the RAM-disk hand-off, version 3
+# C4-3 — the RAM-disk hand-off, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), with the draft's (a) and
   (b); marked agreed with S4-11's first commit (4003c9f, 2026-10-27),
@@ -6,7 +6,9 @@
   k46.1.2). Version 2 (2026-10-27, from rd1e): what `swap none` asks of
   the kernel's swap configuration (§3); version 3 (2026-10-27, from the
   port): `swap none` is the stock dummy swap device `/dev/fakeswap`, not
-  no device (§3). Other repositories build against
+  no device (§3); version 4 (2026-10-27, from amix-installng's S5-33):
+  `media --disk --ramdisk` writes the netinstall raw image, and an image
+  serves one generation id (§1). Other repositories build against
   this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
@@ -40,9 +42,19 @@ rootfs <s5 or ufs>
 - The generation also carries the `ramdisk` root-class module
   (`match=always`, `majors=b:20`) and is marked `safe=1` with it, since a
   RAM-disk root's controller is the RAM disk (C4-4 version 4 §2).
-- `kbootset` writes these for a medium's generation (`media --cd`,
-  `--floppy`, the netinstall form) when given `--ramdisk`. An installed
-  disk's generation never roots on a RAM disk.
+- `kbootset` writes these for a medium's generation when given
+  `--ramdisk`: `media --cd`, `media --floppy`, and `media --disk` for the
+  netinstall raw image (C2-4 §13, version 13). An installed disk's
+  generation never roots on a RAM disk.
+- **An image serves one generation id.** The core loads a boot-class or
+  demand-class module only from
+  `/stand/gen/<the booted generation's id>/mod/<name>` (core patch 0018,
+  C3-5 §3), and the image holds those files under one id. A store that
+  holds generations of both lines therefore cannot share one image, and
+  a medium for both lines carries one store per line: the netinstall
+  raw images, one per line. Letting generations share an image would
+  need a change to the core's path rule. No 1.1 medium needs that, so
+  it is a decision to take when a two-line raw medium is wanted.
 
 ## 2. What boot2 does
 
