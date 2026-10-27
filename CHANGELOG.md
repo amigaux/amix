@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset: the safe set keeps the card numbers (S5-02; C4-4 v6, C3-5 v13); box binaries on gcc14-cross-amix cf461e3 (S5-01) (74b3e79, 4442c76)
+
+The safe set also takes every controller module ranked at or before the root's class, so safe mode keeps the normal boot's card
+numbers (skipped on a ramdisk root). kbootset 2c3570a3, modadmin f51c98d6, built on cf461e3; make test 692/0.
+
 ## 2026-10-27 — stage 5 opens (4d4d7a1, docs/plan/stage-5.md): the carried rows and release acceptance with S5 ids; its exit ledger skeleton (docs/plan/stage-5-exit.md)
 
 ## 2026-10-27 — STAGE 4 CLOSES (2db99e1, docs/plan/stage-4-exit.md)
