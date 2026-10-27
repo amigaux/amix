@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — S5-44 R2: the first boot's step 4d is `kbootset nodes`; media re-cut on kbootset -22 (catalog 915e09f3): CD rd1p 6024509a, netinstall ni8 cf25c1ff with raw images ni8-k46 8749938d / ni8-k30 01a2a397, floppy pairs fp-rd1p. Cells l11-rd-k46/k30 (rd1p) and l11-ni-k46/k30 (ni8) PASS 10/10 with the firstboot gate (9d719e8..a862a36)
+
+Kernels stay kern30m -17 / kern46m -82 and modtools -6 as rows of record (one change at a time). build-ramdisk-miniroot empties the box's /tmp/rd-add before each push (a stale tree could leak one image's /install and modules into the next; ecb4175).
+
+## 2026-10-27 — rd1o (amix21-install-l11-rd1o.iso, 51 390 464 B, 13:28): the CD regression run on the new scripts that afternoon (cells l11-rd-k46/k30 9/9, first boots E956/E957 PASS), a stage-5 candidate, never promoted
+
 ## 2026-10-27 — S5-44 R0 and R1: J4's root predates firstboot step 4d (an S4-55 k46.1.0 disk later upgraded to -82); no current medium reproduces it. The install-matrix `firstboot` gate boots the target once and checks the four-card disk nodes. l11-rd-k46/k30 (rd1n) and l11-ni-k46/k30 (ni7) PASS 10/10 (0407da8, cee9568)
 
 ## 2026-10-27 — S5-33, the netinstall extras: zen0 in the miniroot and a raw RDB image per line. ni7 ebf1205d; raw images ni7-k46 b96dd51c / ni7-k30 ebf41c1f. Cells l11-ni-zen-k46/k30, l11-nr-k46/k30 and l11-ni-k46 PASS 9/9 (e669f46..7f65c07)
