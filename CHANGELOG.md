@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — C2-4 v14: `kbootset status` in a safe boot names the safe set it keeps (from Bench N160); S5-46: C4-1 v6 §5.2 / C2-3 v9, a motherboard controller's record names it by its kinfo id (`sd id=0000000N base=0`, no mobo flag, no loader change), RTH1 matches it and no longer matches a mobo record to the Z3660 window, kernels say `rth1=2`, and kbootset rewrites an old mobo root record only for such a kernel (9c99818, 3f12419, c87fb1b, 698d8c1, c7d69cf, e013b67)
+
 ## 2026-10-27 — S5-15 (amix-dlm half): kbootset writes a root/swap record on any Z3660 card as `sd id=144b0100 base=00000000`, takes the window's key as zorro:144b:01, and card_of() picks a motherboard card by the disk with a slice at AXL1's start, the boot device's name breaking a tie; S5-14: M-FS1's host half and M-FL1 at the cuts -18 and -66 (k30 109 240 bytes less memory than -17; k46 36 634 bytes of file, 5 768 of memory) (8941879, 12739c1)
 
 ## 2026-10-27 — kbootset's namelist lookup takes the global, never a file static (the k30 cut -18 carries delay as three statics and the global); C2-3 v8: a cut's kernel package carries the ufs/s5 core-tier modules, and its version must sort above the line's kernel of record; the S5-12 packaging recipe docs/plan/s5-12-packaging.md (0735e4d, b8a23e5, 7e9ad63)
