@@ -12,7 +12,9 @@
 #   --work   staging roots and specs (default: work/ramdisk-floppy)
 #
 # The staging roots and the per-line modules are build-ramdisk-cd.sh's (tools/lib/ramdisk-media.sh);
-# the pair is `kbootset -R ROOT media --floppy V1 V2 --boot1 --boot2 ... --ramdisk IMAGE`, written by
+# boot1, boot2 and the loader version are the staged loader-amix package's (/stand/loader, its
+# ldrinfo): the loader of record, never a separate build. The pair is
+# `kbootset -R ROOT media --floppy V1 V2 --boot1 --boot2 ... --ramdisk IMAGE`, written by
 # mkstore's floppy engine and read back whole by lsstore. The used and free bytes of volume 2 are
 # printed: the image may grow into them (S4-53).
 set -euo pipefail
@@ -34,10 +36,15 @@ IMG="$(cd "$(dirname "$IMG")" && pwd)/$(basename "$IMG")"
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 rd_init "$WD"
 rd_stage "$LINE"
+LD="$W/stage-$LINE/stand/loader"
+LV=$(sed -n 's/^version=//p' "$LD/ldrinfo" 2>/dev/null)
+[ -f "$LD/boot1" ] && [ -f "$LD/boot2" ] && [ -n "$LV" ] || die "the staged loader-amix has no boot1/boot2/ldrinfo"
+[ "$(sha256sum < "$LD/boot2" | cut -d' ' -f1)" = "$(sed -n 's/^boot2-sha256=//p' "$LD/ldrinfo")" ] \
+  || die "the staged boot2 is not the one its ldrinfo records"
 V1="$OUT/amix-rd-$LINE-1.adf" V2="$OUT/amix-rd-$LINE-2.adf"
 rm -f "$V1" "$V2"
-( cd "$W" && "$B/kbootset" -R "stage-$LINE" media --floppy "$V1" "$V2" --boot1 "$B/boot1.img" \
-    --boot2 "$B/boot2.bin" --version 3 --line "${LINE#k}" --rootdev always --rootfs "$FS" --mem "$MEM" \
+( cd "$W" && "$B/kbootset" -R "stage-$LINE" media --floppy "$V1" "$V2" --boot1 "$LD/boot1" \
+    --boot2 "$LD/boot2" --version "$LV" --line "${LINE#k}" --rootdev always --rootfs "$FS" --mem "$MEM" \
     --ramdisk "$IMG" ) > "$W/media-$LINE.log" 2>&1 \
   || { tail -5 "$W/media-$LINE.log" >&2; die "$LINE: kbootset media refused the pair"; }
 "$B/lsstore" "$V1" 0 "$V2" > "$W/lsstore-$LINE.txt" 2>&1 && tail -1 "$W/lsstore-$LINE.txt" | grep -q '^lsstore: ok' \
