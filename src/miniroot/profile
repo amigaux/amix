@@ -60,6 +60,10 @@ fi
 
 CDROM=/cdrom
 SETUP=$CDROM/install/bin/setup.sh
+# The netinstall medium (amix-dlm 50 section 5): its image carries the installer at
+# /install and marks it; with no CD and no installation disk found, the packages come
+# over the network (net_source).
+NETINST=/install
 KMAPDIR=/etc/kmap
 KMAPFILE=/tmp/kmap
 HITS=/tmp/src.hits
@@ -476,7 +480,8 @@ repair()
 probe_cdfs()
 {
 	/usr/lib/fs/cdfs/mount "$1" $CDROM 2>/dev/null
-	[ -f $SETUP ]
+	# a source: its installer, and not the netinstall image's own /cdrom/install link
+	[ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ]
 }
 
 # disk_present DEV -- is this block device really there? ONE bounded 512-byte
@@ -500,7 +505,8 @@ disk_present()
 probe_raw()
 {
 	/etc/mount "$1" $CDROM 0 s5 2>/dev/null
-	[ -f $SETUP ]
+	# a source: its installer, and not the netinstall image's own /cdrom/install link
+	[ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ]
 }
 
 drop_source()
@@ -605,12 +611,130 @@ unattended_run()
 # SRC_KIND + SRC_SPEC, or ends at the restart idiom. The first candidate that
 # answers wins and is left mounted: there is no separate "mount the winner" step
 # to get wrong, and no address is touched twice.
+# net_source -- the network as the installation source (the netinstall medium only):
+# the interface, the address, netmask, gateway and name server (static; no DHCP in 1.1),
+# the repository; the link brought up as /etc/inet/network-config does; then THE GATE:
+# both catalogs read over HTTP before anything is written to a disk. A name server left
+# blank means the repository host's address is asked and goes into /etc/inet/hosts.
+# The link rate is measured on one small package (APKG) for the interview's time
+# estimates. Hands over with SRC_KIND=net and INST, NET_REPO, NET_KREPO, NET_RATE.
+net_secs()
+{
+	nsd=`/usr/bin/date '+%H %M %S'`
+	[ -n "$nsd" ] || { echo 0; return 0; }
+	set -- $nsd
+	expr $1 \* 3600 + $2 \* 60 + $3
+}
+
+net_source()
+{
+	echo "\nNo installation CD or installation disk was found."
+	echo "This medium installs the system over the network."
+	NIF=aen0
+	if [ -c /dev/zen0 ]
+	then
+		echo "\n   1)   aen0     A2065 Ethernet"
+		echo "   2)   zen0     Z3660 native Ethernet"
+		readask "\nWhich interface do you want to use? [1] "
+		case "$ask" in 2) NIF=zen0 ;; esac
+	fi
+	NIP=
+	while [ "$NIP" = "" ]
+	do
+		readask "\nWhat is this machine's network address? "
+		NIP="$ask"
+	done
+	readask "What is the netmask? [255.255.255.0] "
+	NMASK="$ask"; [ "$NMASK" = "" ] && NMASK=255.255.255.0
+	readask "What is the gateway's address? (RETURN for none) "
+	NGW="$ask"
+	readask "What is the name server's address? (RETURN for none) "
+	NNS="$ask"
+	readask "Which package repository? [http://pkg.amigaux.org] "
+	NET_REPO="$ask"; [ "$NET_REPO" = "" ] && NET_REPO=http://pkg.amigaux.org
+	NET_KREPO="$NET_REPO/kspace"
+	# the host part of the URL: http://HOST[:PORT][/...]
+	nhost=`expr "$NET_REPO" : 'http://\([^:/]*\)'`
+	if [ "$NNS" = "" ]
+	then
+		case "$nhost" in
+			[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+			*)	readask "What is the address of $nhost? "
+				echo "$ask	$nhost" >> /etc/inet/hosts ;;
+		esac
+	else
+		echo "nameserver $NNS" > /etc/resolv.conf
+	fi
+
+	echo "\nStarting the network on $NIF..."
+	[ "$NIF" = aen0 ] && /usr/amiga/bin/aen -S
+	/usr/sbin/slink -c /etc/inet/strcf > /dev/null 2>&1
+	/usr/sbin/slink -c /etc/inet/strcf addaen /dev/$NIF $NIF &&
+	/usr/sbin/ifconfig $NIF $NIP netmask $NMASK up ||
+	{
+		echo "\nThe network interface $NIF could not be started."
+		restart
+	}
+	[ "$NGW" = "" ] || /usr/sbin/route add default $NGW 1 > /dev/null
+
+	# THE GATE: both catalogs over HTTP, before any disk is touched (apkg keeps each
+	# catalog beside its cache: /tmp/net/catalog, /tmp/netk/catalog)
+	echo "Reading the package catalogs from $NET_REPO..."
+	mkdir -p /tmp/net/cache /tmp/netk/cache
+	{
+		echo "repo=$NET_REPO"
+		echo "cachedir=/tmp/net/cache"
+	} > /tmp/net.conf
+	{
+		echo "repo=$NET_KREPO"
+		echo "cachedir=/tmp/netk/cache"
+	} > /tmp/netk.conf
+	if $NETINST/bin/apkg -c /tmp/net.conf update > /tmp/net.log 2>&1 &&
+	   $NETINST/bin/apkg -c /tmp/netk.conf update >> /tmp/net.log 2>&1
+	then
+		:
+	else
+		echo "\nThe package repository $NET_REPO could not be read:"
+		cat /tmp/net.log
+		restart
+	fi
+	# the link rate, for the interview's time estimates: one small package, timed (the
+	# miniroot's date has no %s and there is no awk: seconds of the day, ls -l's size)
+	t0=`net_secs`
+	$NETINST/bin/apkg -c /tmp/net.conf download apkg > /dev/null 2>&1
+	t1=`net_secs`
+	nb=0
+	for f in /tmp/net/cache/*.pkg
+	do
+		[ -f "$f" ] || continue
+		nsl=`ls -l "$f"`
+		[ -n "$nsl" ] || continue
+		set -- $nsl
+		nb=`expr $nb + $5`
+	done
+	NET_RATE=0
+	if [ "$nb" -gt 0 ]
+	then
+		dt=`expr $t1 - $t0`
+		[ "$dt" -gt 0 ] || dt=1
+		NET_RATE=`expr $nb / $dt`
+	fi
+	rm -f /tmp/net/cache/*.pkg
+	echo "The repository answers; about `expr $NET_RATE / 1024` KB/s."
+
+	SRC_KIND=net
+	SRC_SPEC="$NET_REPO"
+	INST=$NETINST
+	SETUP=$NETINST/bin/setup.sh
+	export SRC_KIND INST NET_REPO NET_KREPO NET_RATE
+}
+
 find_source()
 {
 	# Already mounted (the boot-time mount, or an operator who mounted it from
 	# the Ctrl-C shell): take it and probe nothing. Unmounting a working source
 	# to go looking for it would be its own bug.
-	if [ -f $SETUP ]
+	if [ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ]
 	then
 		echo "\nThe installation source is already mounted on $CDROM."
 		SRC_KIND=mounted
@@ -648,6 +772,12 @@ find_source()
 			fi
 			drop_source
 		done
+	fi
+
+	if [ "$SRC_KIND" = "" ] && [ -f $NETINST/NETINSTALL ]
+	then
+		net_source
+		return 0
 	fi
 
 	if [ "$SRC_KIND" = "" ]

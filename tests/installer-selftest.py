@@ -1204,8 +1204,10 @@ WRAPPERS = {"run", "runq"}
 # install.sh runs on the THIN miniroot: NO target-side extras allowed.
 DRIVER_EXTRA = set()
 # src/miniroot/profile: /sbin/modadmin is on the RAM-disk miniroot only
-# (tools/build-ramdisk-miniroot.sh), and the profile runs it behind `[ -x ]`.
-PROFILE_EXTRA = {"modadmin"}
+# (tools/build-ramdisk-miniroot.sh), and the profile runs it behind `[ -x ]`; the network
+# userland (build-ramdisk-miniroot.sh --net) is on the netinstall image only, and the
+# profile reaches it only in net_source, behind the image's /install/NETINSTALL marker.
+PROFILE_EXTRA = {"modadmin", "aen", "date", "ifconfig", "route", "slink"}
 # firstboot.sh runs on the FULL installed target (core+base transplanted), so the
 # complete SVR4 userland is present. These are the tools it deliberately uses that
 # the miniroot itself lacks -- documented, and NOT granted to install.sh.

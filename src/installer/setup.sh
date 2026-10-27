@@ -209,7 +209,15 @@
 
 PROG=setup.sh
 CDROOT=/cdrom
-INST=/cdrom/install
+# INST and the catalog: the CD's, or on the netinstall medium (SRC_KIND=net, set by the
+# miniroot's net_source) the installer in the image and the catalog read over HTTP.
+INST="${INST:-/cdrom/install}"
+CATF=$CDROOT/catalog
+KCATF=
+if [ "$SRC_KIND" = net ]; then
+	CATF=/tmp/net/catalog
+	KCATF=/tmp/netk/catalog
+fi
 ANSWERS=/tmp/answers.profile
 # W4: where the miniroot's own /etc/profile leaves the keymap the operator chose
 # (src/miniroot/profile). See "THE KEYMAP" below.
@@ -1479,7 +1487,7 @@ budget()
 order_size_bytes()
 {
 	sfile="$1"
-	[ -f "$CDROOT/catalog" ] || return 0
+	[ -f "$CATF" ] || return 0
 	[ -f "$sfile" ] || return 0
 
 	# (a) wanted pkginst tokens, from the order file -> a space-delimited
@@ -1508,7 +1516,7 @@ order_size_bytes()
 			*" $ci "*)	echo "$cn" >> "$CATN_F" ;;
 			*" $cn "*)	echo "$cn" >> "$CATN_F" ;;
 		esac
-	done < "$CDROOT/catalog"
+	done < "$CATF"
 	[ -s "$CATN_F" ] || return 0
 	set -- `cat "$CATN_F"`
 	CATWANT=" $* "
@@ -1529,7 +1537,7 @@ order_size_bytes()
 		case "$CATWANT" in
 			*" $iname "*)	echo "$ibytes" >> "$ISZ_F" ;;
 		esac
-	done < "$CDROOT/catalog"
+	done < "$CATF"
 	[ -s "$ISZ_F" ] || return 0
 	set -- `cat "$ISZ_F"`
 	[ "$#" = "$ncat" ] || return 0
@@ -1541,6 +1549,81 @@ order_size_bytes()
 	done
 	echo "$tot"
 	return 0
+}
+
+# order_dl_bytes ORDERFILE -- what that set downloads on the netinstall medium: the
+# catalog's datastream size column summed over the order's packages, plus the kernel
+# space (the profile's kernel and modules, kbootset, the loader, modtools) from the
+# kernel-space catalog. Nothing when a package is missing from the catalog.
+order_dl_bytes()
+{
+	[ -f "$CATF" ] && [ -f "$1" ] || return 0
+	cp /dev/null "$TOK_F"
+	while read pkg
+	do
+		case "$pkg" in ""|\#*) continue ;; esac
+		echo "$pkg" >> "$TOK_F"
+	done < "$1"
+	[ -s "$TOK_F" ] || return 0
+	set -- `cat "$TOK_F"`
+	WANT=" $* "
+	nwant="$#"
+	cp /dev/null "$ISZ_F"
+	while read cline
+	do
+		case "$cline" in ""|\#*) continue ;; esac
+		cn=`expr "$cline" : '\([^|]*\)|'`
+		ci=`expr "$cline" : '[^|]*|[^|]*|\([^|]*\)|'`
+		cz=`expr "$cline" : '[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|\([0-9]*\)|'`
+		case "$WANT" in
+			*" $ci "*|*" $cn "*)	echo "$cz" >> "$ISZ_F" ;;
+		esac
+	done < "$CATF"
+	[ -s "$ISZ_F" ] || return 0
+	set -- `cat "$ISZ_F"`
+	[ "$#" = "$nwant" ] || return 0
+	tot=0
+	for b in "$@"
+	do
+		tot=`expr "$tot" + "$b"`
+	done
+	if [ -n "$KCATF" ] && [ -f "$KCATF" ]; then
+		KWANT=" $KERNEL_KPKG $KERNEL_MODPKGS kbootset loader-amix modtools "
+		cp /dev/null "$ISZ_F"
+		while read ktag kname krest
+		do
+			case "$ktag" in
+				"#kpkg")	case "$KWANT" in *" $kname "*) ;; *) continue ;; esac
+						kz=`expr "$krest" : '.* size=\([0-9]*\)'`
+						is_num "$kz" && echo "$kz" >> "$ISZ_F" ;;
+				*)		kn=`expr "$ktag" : '\([^|]*\)|'`
+						case "$KWANT" in *" $kn "*) ;; *) continue ;; esac
+						kz=`expr "$ktag" : '[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|\([0-9]*\)|'`
+						is_num "$kz" && echo "$kz" >> "$ISZ_F" ;;
+			esac
+		done < "$KCATF"
+		if [ -s "$ISZ_F" ]; then
+			for b in `cat "$ISZ_F"`
+			do
+				tot=`expr "$tot" + "$b"`
+			done
+		fi
+	fi
+	echo "$tot"
+}
+
+# set_net_eta ORDERFILE -- on the netinstall medium, " (~N min)" for that set at the
+# link rate net_source measured (NET_RATE bytes/s); nothing otherwise
+set_net_eta()
+{
+	[ "$SRC_KIND" = net ] || return 0
+	is_num "$NET_RATE" && [ "$NET_RATE" -gt 0 ] || return 0
+	dlb=`order_dl_bytes "$1"`
+	is_num "$dlb" || return 0
+	dls=`expr "$dlb" / "$NET_RATE"`
+	dlm=`expr "$dls" + 59`
+	dlm=`expr "$dlm" / 60`
+	echo " (~$dlm min)"
 }
 
 # set_size_mb ORDERFILE -- the menu's MB column: the BUDGETED footprint of that
@@ -1579,7 +1662,27 @@ build_set_table()
 		echo "1 default order y Standard Amiga UNIX installation" >> "$SET_F"
 		echo "2 default order y Everything on the disc" >> "$SET_F"
 	fi
-	echo "3 custom - n Custom selection" >> "$SET_F"
+	# Custom selection follows the last set (three sets on the netinstall medium)
+	echo 0 > "$SET_F.m"
+	while read snum srest
+	do
+		scur=`cat "$SET_F.m"`
+		is_num "$snum" && [ "$snum" -gt "$scur" ] && echo "$snum" > "$SET_F.m"
+	done < "$SET_F"
+	smax=`cat "$SET_F.m"`
+	snext=`expr "$smax" + 1`
+	echo "$snext custom - n Custom selection" >> "$SET_F"
+	rm -f "$SET_F.m"
+	# the default row: 1, or on the network the `standard` set (amix-dlm 50 section 5)
+	DEF_SET=1
+	if [ "$SRC_KIND" = net ]; then
+		while read snum sname srest
+		do
+			[ "$sname" = standard ] && echo "$snum" > "$SET_F.d"
+		done < "$SET_F"
+		[ -s "$SET_F.d" ] && DEF_SET=`cat "$SET_F.d"`
+		rm -f "$SET_F.d"
+	fi
 
 	# Row 1's ORDER FILE and row 2's SET NAME, back in the PARENT.
 	#
@@ -1619,10 +1722,11 @@ show_set_menu()
 			continue
 		fi
 		ssize=`set_size_mb "$INST/$sord"`
+		seta=`set_net_eta "$INST/$sord"`
 		if [ -n "$ssize" ]; then
-			echo "($snum)  `padr "$slbl" 36``pad6 "$ssize"` MB"
+			echo "($snum)  `padr "$slbl" 36``pad6 "$ssize"` MB$seta"
 		else
-			echo "($snum)  $slbl"
+			echo "($snum)  $slbl$seta"
 		fi
 	done < "$SET_F"
 }
@@ -1632,9 +1736,13 @@ pick_set()
 	SET_NUM=
 	while [ "$SET_NUM" = "" ]
 	do
-		readask "Choose: [1] "
+		if [ "$DEF_SET" = 1 ]; then
+			readask "Choose: [1] "
+		else
+			readask "Choose: [$DEF_SET] "
+		fi
 		case "$ask" in
-			"")	ask=1 ;;
+			"")	ask="$DEF_SET" ;;
 		esac
 		# One FILE per field, `cat` back in the parent -- never a redirected
 		# `read`, which this shell may run in a fork (see build_set_table).
@@ -1765,7 +1873,7 @@ ask_set()
 # over this file with no forks per package beyond the padding.
 build_pkg_table()
 {
-	if [ -f "$CDROOT/catalog" ]; then
+	if [ -f "$CATF" ]; then
 		:
 	else
 		echo "\nThis medium carries no package catalog, so packages cannot be listed."
@@ -1808,7 +1916,7 @@ build_pkg_table()
 		[ -n "$cds" ] || cds="-"
 		echo "$cn $ctok $cdp $cds" >> "$CATN_F"
 		echo "$cn" >> "$CATN_F.n"
-	done < "$CDROOT/catalog"
+	done < "$CATF"
 	[ -s "$CATN_F" ] || return 1
 	set -- `cat "$CATN_F.n"`
 	CWANT=" $* "
@@ -1825,7 +1933,7 @@ build_pkg_table()
 		esac
 		is_num "$ibytes" || continue
 		echo "$iname $ibytes" >> "$ISZP_F"
-	done < "$CDROOT/catalog"
+	done < "$CATF"
 	ISZS=" "
 	if [ -s "$ISZP_F" ]; then
 		set -- `cat "$ISZP_F"`

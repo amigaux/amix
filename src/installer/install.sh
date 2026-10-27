@@ -86,7 +86,8 @@
 
 PROG=install.sh
 CDROOT=/cdrom
-INST=/cdrom/install
+# INST: /install on the netinstall medium (set by net_source in the miniroot)
+INST="${INST:-/cdrom/install}"
 TARGET=/mnt
 
 # --- stock install-script constants (mkroot.sh header; DO NOT rederive) -------
@@ -898,7 +899,13 @@ esac
 # a different set of profile keys; validate the right ones. Absent => cdfs, so
 # every pre-W6-RAW.1 profile keeps working unchanged.
 [ -n "$SOURCE_KIND" ] || SOURCE_KIND=cdfs
+# the netinstall medium: the miniroot's net_source read the repository and says so
+[ "$SRC_KIND" = net ] && SOURCE_KIND=net
 case "$SOURCE_KIND" in
+	net)
+		: "${NET_REPO:?SOURCE_KIND=net without NET_REPO (net_source in the miniroot sets it)}"
+		: "${NET_KREPO:?SOURCE_KIND=net without NET_KREPO}"
+		;;
 	cdfs)
 		: "${CD_SPEC:?profile missing CD_SPEC (SOURCE_KIND=cdfs)}"
 		;;
@@ -908,7 +915,7 @@ case "$SOURCE_KIND" in
 		: "${SRC_RAW_SLICE:?profile missing SRC_RAW_SLICE (SOURCE_KIND=raw)}"
 		;;
 	*)
-		die "profile SOURCE_KIND='$SOURCE_KIND' is not 'cdfs' or 'raw'"
+		die "profile SOURCE_KIND='$SOURCE_KIND' is not 'cdfs', 'raw' or 'net'"
 		;;
 esac
 : "${TARGET_SCSI_ID:?profile missing TARGET_SCSI_ID}"
@@ -1092,6 +1099,8 @@ msg "profile      : $PROFILE_NAME"
 msg "  $PROFILE_DESC"
 if [ "$SOURCE_KIND" = raw ]; then
 	msg "install src  : RAW  payload $SRC_PAYLOAD_BLK -> $CDROOT (s5)  packages $SRC_RAW_DEV (apkg SRC_RAW)"
+elif [ "$SOURCE_KIND" = net ]; then
+	msg "install src  : network  $NET_REPO (kernel space $NET_KREPO), installer $INST"
 else
 	msg "install src  : cdfs $CD_SPEC -> $CDROOT"
 fi
@@ -1844,6 +1853,11 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 		/usr/lib/fs/cdfs/mount "$CD_SPEC" "$CDROOT" 2>/dev/null
 	fi
 	[ -f "$CDROOT/catalog" ] || die "install CD not readable at $CDROOT (no catalog after errno-5 retry + stale-mount umount/remount) -- check the CD unit ($CD_SPEC) and media"
+elif [ "$SOURCE_KIND" = net ]; then
+	# the network: the HTTP apkg in the image; the catalogs were read by net_source (the
+	# gate before any disk write), this only checks the client is there
+	[ -x "$INST/bin/apkg" ] || die "network source: no HTTP apkg at $INST/bin/apkg -- not a netinstall medium?"
+	msg "network source: $NET_REPO (apkg $INST/bin/apkg)"
 else
 	# raw: the payload slice must be mounted at /cdrom already (the operator did
 	# `/etc/mount $SRC_PAYLOAD_BLK $CDROOT 0 s5`). Fail closed with the exact
@@ -2123,6 +2137,54 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 	[ "$npkgs" -gt 0 ] || die "installed ZERO packages ($ORDER empty or unparseable) -- refusing to arm a bare disk"
 	rm -f "$pkgok" "$pkgfail"
 	msg "installed $npkgs package(s) via pkgadd -R"
+elif [ "$SOURCE_KIND" = net ]; then
+	# --- net: the image's HTTP apkg drives the SAME pkgadd (amix-dlm 50 section 5) ---
+	# As RAW below, with repo= the repository: the cache is on the TARGET (the RAM disk
+	# holds no package set; apkg's HTTP arm stages each datastream before pkgadd -- it
+	# does not stream), and it is removed after the install. The order's pkginst tokens
+	# map to the repository catalog's names (lowercase there).
+	APKG="$INST/bin/apkg"
+	APKGCACHE="$TARGET/var/apkg/cache"
+	NETCONF="$TARGET/tmp/net.conf"
+	run mkdir -p "$APKGCACHE"
+	{
+		echo "# apkg network source -- written by install.sh (netinstall)"
+		echo "repo=$NET_REPO"
+		echo "cachedir=$APKGCACHE"
+		echo "admin=$INST/admin/pkgadd"
+		echo "pkgadd=$INST/bin/pkgadd"
+	} > "$NETCONF" || die "cannot write $NETCONF"
+	msg "network: apkg update ($NET_REPO)"
+	runq "$APKG" -c "$NETCONF" update || die "network source: apkg update FAILED ($NET_REPO) -- refusing to install"
+	NETCAT="$TARGET/var/apkg/catalog"
+	netnames="$TARGET/tmp/.netnames.$$"
+	: > "$netnames"
+	while read pkg; do
+		case "$pkg" in ""|\#*) continue;; esac
+		nn=
+		while read cline; do
+			case "$cline" in ""|\#*) continue;; esac
+			cn=`expr "$cline" : '\([^|]*\)|'`
+			ci=`expr "$cline" : '[^|]*|[^|]*|\([^|]*\)|'`
+			if [ "$ci" = "$pkg" ] || [ "$cn" = "$pkg" ]; then echo "$cn" >> "$netnames"; break; fi
+		done < "$NETCAT"
+	done < "$ORDER"
+	[ -s "$netnames" ] || die "network source: none of $ORDER's packages is in the repository catalog"
+	set -- `cat "$netnames"`
+	npkgs=$#
+	rm -f "$netnames"
+	# ONE PACKAGE AT A TIME, the cache emptied after each: apkg stages every datastream
+	# of a transaction before its first pkgadd, so a whole set at once needs the set's
+	# datastreams AND its installed files on the target root together (seen: the standard
+	# set filled a 105 MB root). The order is dependency-sorted, so each package's
+	# dependencies are already installed when its turn comes.
+	msg "network: apkg install ($npkgs packages, one at a time) -R $TARGET  [$*]"
+	for pkg in "$@"; do
+		runq "$APKG" -c "$NETCONF" -R "$TARGET" install "$pkg" || die "network source: apkg install $pkg FAILED (apkg rc nonzero) -- refusing to arm a half-installed disk"
+		rm -f "$APKGCACHE"/*.pkg
+	done
+	run rm -rf "$APKGCACHE"
+	msg "installed $npkgs package(s) via apkg over HTTP (-R $TARGET); the download cache removed"
 else
 	# --- raw: the CD-resident static apkg drives the SAME pkgadd (SRC_RAW) ----
 	# apkg reads the self-describing raw distribution slice ($SRC_RAW_DEV): the
@@ -3303,6 +3365,8 @@ msg "=============================================================="
 msg " INSTALL COMPLETE ($PROFILE_NAME)"
 if [ "$SOURCE_KIND" = raw ]; then
 	msg "   packages installed : $npkgs (see $ORDER) via apkg SRC_RAW ($SRC_RAW_DEV)"
+elif [ "$SOURCE_KIND" = net ]; then
+	msg "   packages installed : $npkgs (see $ORDER) via apkg over HTTP ($NET_REPO)"
 else
 	msg "   packages installed : $npkgs (see $ORDER) via pkgadd -R (cdfs $CD_SPEC)"
 fi

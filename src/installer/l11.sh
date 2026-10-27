@@ -48,6 +48,13 @@
 
 L11=$INST/l11
 L11_APKG=$L11/bin/apkg
+# the kernel-space catalog: the medium's, or on the netinstall medium the one net_source
+# read over HTTP (and kernel space over HTTP with the image's HTTP apkg)
+L11_KCAT=$L11/kpkg/catalog
+if [ "$SRC_KIND" = net ]; then
+	L11_APKG=$INST/bin/apkg
+	L11_KCAT=/tmp/netk/catalog
+fi
 L11_BASE_KPKGS="kbootset loader-amix"	# installed with the kernel, every 1.1 disk
 L11_DLM='dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1'	# C3-5 §5
 L11_STORE_MB=64
@@ -57,7 +64,7 @@ L11_STORE_BYTES=67108864
 # after the profile is loaded.
 l11_keys()
 {
-	for _f in "$L11_APKG" "$L11/kpkg/catalog" "$L11/updbootpart" \
+	for _f in "$L11_APKG" "${L11_KCAT:-$L11/kpkg/catalog}" "$L11/updbootpart" \
 		"$L11/bcheckrc" "$L11/bcheckrc.stock" "$L11/inittab" "$L11/2.1_unix.sum"
 	do
 		[ -f "$_f" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $_f -- re-master with tools/build-install-iso.sh"
@@ -260,7 +267,7 @@ l11_bootstore()
 	KCONF="$TARGET/tmp/kpkg.conf"
 	{
 		echo "# apkg 0.3, the medium's kernel-space source -- written by install.sh (1.1)"
-		echo "repo=file://$L11/kpkg"
+		if [ "$SOURCE_KIND" = net ]; then echo "repo=$NET_KREPO"; else echo "repo=file://$L11/kpkg"; fi
 		echo "cachedir=$TARGET/tmp/kpkgcache"
 		echo "admin=$INST/admin/pkgadd"
 		echo "pkgadd=$INST/bin/pkgadd"
@@ -433,7 +440,7 @@ l11_kpkg_key()
 		do
 			case "$_t" in "$2"=*) expr "$_t" : "$2=\\(.*\\)" ;; esac
 		done
-	done ) < "$L11/kpkg/catalog"
+	done ) < "${L11_KCAT:-$L11/kpkg/catalog}"
 }
 
 # l11_inittab -- after modtools' postinstall (C3-5 v4 §5): /etc/inittab holds exactly one
@@ -512,7 +519,7 @@ l11_kpkg_inst()
 			case "$_t" in pkginst=*) _pi=`expr "$_t" : 'pkginst=\(.*\)'` ;; esac
 		done
 		echo "$_pi"
-	done ) < "$L11/kpkg/catalog"
+	done ) < "${L11_KCAT:-$L11/kpkg/catalog}"
 }
 
 # l11_kb ARGS -- one kbootset call on the target's store; any status but 0 stops
