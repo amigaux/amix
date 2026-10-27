@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-27 — the netinstall medium (S4-53, form B): ni6 888ce1cd, cells l11-ni-k46/k30 9/9, first boots PASS — M-NET1g on the bench (e0daf78..92c605f)
+
+- l11 inputs: the HTTP apkg (apkg-http); the medium's kpkg carries catalog.md5; build-install-iso --four-card (e0daf78).
+- installer: the network as the installation source — net_source (static, the catalog gate before any disk write, the link
+  rate), three sets with time estimates (standard default), apkg over HTTP one package at a time, kernel space over HTTP (53f02ee).
+- build-ramdisk-miniroot --install: the netinstall image's installer (dd1db7a).
+- tools/build-netinstall.sh: the boot-only two-line ISO, read back; --mirror-from for the cells' repository snapshot (c8ff393).
+- install-matrix: NETBOOT and the cells l11-ni-k46/k30 (92c605f); first boots E964/E965. The installed apkg.conf names the
+  canonical repository. Carried to stage 5: the raw RDB image, zen0 in the miniroot, the public-host netinstall (owner's gate).
+
 ## 2026-10-27 — install-matrix: FDBOOT and the cells l11-rd-fd-k46/k30 — the RAM-disk floppy pair boots (each L11 volume request followed from the serial port) and installs from the CD; both 9/9 on the loader -9 pairs (39ce8aa)
 
 FDBOOT = a CDBOOT cell whose boot medium is the pair (--fd-pair); rig = the CD-boot config + volume 1 in DF0 at power-on, an
