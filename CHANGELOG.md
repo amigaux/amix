@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2026-10-27 — core patch 0044: block rows as the stock fix_swtbls leaves the switch (rd1's "row 20 is in use") (80e3da7)
+
+At boot the stock fix_swtbls puts gen_strategy (the breakup) over every bdevsw row without D_NOBRKUP, saving d_strategy in
+shadowbsw — so an empty row 20 reads as used at run time and 0031's bempty refused the ramdisk (ECONFIG 168). bempty now knows the
+breakup shape; a module's row goes in as fix_swtbls would (shadowbsw behind gen_strategy, or direct with D_NOBRKUP); a failed
+load restores both tables; the harness applies fix_swtbls to its switch. 260/260 on both kernels. amix-modules unchanged. The
+second gap is the kernels' RTH1 half: rth1.c never reads AXL1's root selector (+60, kind 2 = ramdisk → rootdev makedev(20, 0),
+swap none) — the port's and kerntools' change; next cuts kern46m -80 / kern30m -15.
+
 ## 2026-10-27 — the exit ledger marks S4-71 k30 PASS (N108) and the A4091 rows k30 PASS (N109/N109b)
 
 Both now pass on both lines (kerntools c326ccb); the entry-0 decode recorded; E6b remains, on kern30m -15 through dma_forcefail.
