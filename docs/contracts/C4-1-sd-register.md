@@ -1,11 +1,13 @@
-# C4-1 — `sd_register` and the four-card contract, version 3
+# C4-1 — `sd_register` and the four-card contract, version 4
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
   third-party 68060 runs the 040/060 line with an A3000 WD, so the WD
   behind the Zorro boards is an accepted rename on both lines (§4.3, §6);
   version 3 (2026-10-27, from amix-cdfs's module plan): the level at which
-  a controller calls a command's completion (§3.2). Other repositories build against this text; a change from here is a
+  a controller calls a command's completion (§3.2); version 4 (2026-10-27,
+  S5-08, from M-S474b): the Z3660 is one controller in either mode (§5.1).
+  Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
   compacted order, registration, the card-number gate), D-3 §4 and §11;
@@ -247,6 +249,40 @@ rename on both lines; it is expectation 2 of §6.
   generation was composed for. When the booted set differs, the loader
   prints it and `kbootset check` warns that device names may have moved.
   Nothing new is recorded.
+
+### 5.1 The Z3660 is one controller in either mode (version 4)
+
+The Z3660 is found two ways. In its 68060 mode, and under amiberry, its
+extended ROM AutoConfigs it as `zorro:144b:01`. In its 68030 mode it is
+not an AutoConfig board, and z3660scsi finds it through the registry
+probe `mobo:z3660-window` at the fixed window `0x10000000` (20 §6). One
+box, one disk and one Z3660 are booted in both modes (the A4000T,
+M-S474a and M-S474b). M-S474b's card was `zorro:0000:00` at
+`0x10000000`, so a root record composed as `id=144b0100` matched no card,
+and RTH1 fell back to the built-in `c6d0s1`: the right disk by chance,
+the wrong one beside a second sd card. So:
+
+1. **kinfo** reports a card that sd took from a registration at the
+   window's base as motherboard id 4 (`z3660-window`, C2-1 §2.1) with the
+   motherboard flag. It never reports id 0.
+2. **The canonical identity is `144b0100`, base 0.** `kbootset` composes
+   a root or swap record on any Z3660 card, whether id `144b0100` or id 4,
+   as `sd id=144b0100 base=00000000 …`, the form boot2 already records
+   for the Z3660 boot vehicle (`st_identify`). A medium composed under
+   amiberry then roots the same box in 030 mode.
+3. **RTH1 matches either.** The kernel half matches a root or swap record
+   with `id=144b0100` against a card whose id is `144b0100` or 4, base
+   not compared: there is one Z3660 per box. Every other id still
+   matches id and base exactly.
+4. **The gates** (`kbootset`): the canonical record's key is
+   `zorro:144b:01`, which z3660scsi's `match=` lists, so gate 3 and the
+   safe set (C4-4 §2) see one controller in both modes.
+
+Implemented by S5-15: item 1 in `kinfo` (amix-kerntools `kinfo030.c`,
+the port's k46 `kinfo`), item 3 in the RTH1 kernel half (the port, both
+lines' sources), item 2 and item 4 in `kbootset` (amix-dlm). The metal
+row is S5-16: the A4000T in 030 mode with a second sd card, rooted by the
+record.
 
 ## 6. The card-number gate
 
