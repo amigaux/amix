@@ -85,7 +85,7 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | S5-32 the generic 060 target, from its pre-installed images | pending | — (a 68060 target) |
 | S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | pending | pending |
 | S5-34 the static kernel families out of the catalog | pending | the same |
-| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet; a fresh install on a three-controller set names the card-2 disks with no hand-made node | pending (Z3660 + A4092 + Gayle, J4's set) | pending (a k30 set with a card 2) |
+| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | pending (Z3660 + A4092 + Gayle, J4's set) | pending (a k30 set with a card 2) |
 
 ## 6. Release acceptance
 
