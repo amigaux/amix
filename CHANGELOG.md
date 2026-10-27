@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — C4-2 v5 (the mechanism: a dirty copyback line written back over the ARM's data; push before); C4-5 v10 §6 (piscsi is not a Zorro bus master — keeps its own maintenance)
+
 ## 2026-10-27 — the exit ledger's arms-audit row: k46 done (one loss, ZS-06), k30 pending (d585e10)
 
 ## 2026-10-27 — C4-2 v4 §1.1: a module replacing a static driver carries every build-pass arm; the ledger's M-S474a line and the arms audit row
