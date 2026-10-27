@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — S5-06: a4kt710, the A4000T onboard NCR 53C710 as a second module target of the A4091 driver (6cc01e4, d9fe9f7, e9a0257, a74708e)
+
+mobo:a4000t-710, rank mobo. Its gate is C4-2 v6 §8.1: the running Kickstart's "NCR scsi.device" cold-start tag (or declared=1),
+then AGA, then a read-only fingerprint; otherwise ENXIO with nothing under $DD0000 touched. modcheck ok on k46/k30; host 12/12
+per line, mutation-checked; the a4091 module and the static objects unchanged.
+
 ## 2026-10-27 — a4091 module 1.0.0-5: a selection timeout is silent (9dfdf5b)
 
 An absent id answering a bus scan (rc -1) is counted in a4091_kstat.seltimeout and no longer traced; the installer's source probe
