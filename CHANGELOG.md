@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — the exit ledger shows M-RD1 and M-RD2 on both lines (installng rd1h on kern46m -81 / kern30m -16)
+
+§5 M-RD1 (the image at 0x9E00000 / 0x7E00000, Available memory 2 MiB below Total) and M-RD2 (the RTH1 ramdisk line, fakeswap,
+rootfstype ufs on k46 / s5 on k30, to the interview) with installng's hashes; the Bench's formal rows pending (§7).
+
 ## 2026-10-27 — C4-6 v4: the media's miniroot is s5 on k30 and ufs on k46
 
 s5 is broken under the 4 KiB-page line (ls -l and /etc/sioc bus errors on the k46 s5 RAM-disk root, rd1g), as every k46 miniroot
