@@ -71,6 +71,12 @@ written as `ced0` in `fstab` or for swap point at another disk in safe
 mode. Stage 5 closes this (S4-67): the safe set keeps the modules of the
 controllers ranked before the root's.
 
+Safe mode has no network by default: the NIC of a Z3660 box is a
+boot-class module, and safe mode loads none, since the module that broke
+the boot may be that one. An owner who wants a reachable rescue marks the
+NIC module with a `safe` line in `modreg.local.d`, and a safe boot then
+loads it once the root is up (S5-09, C4-4 §2).
+
 ## 5. Open questions
 
 | ID | Question | Proposed owner |
