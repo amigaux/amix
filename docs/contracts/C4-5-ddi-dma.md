@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 10
+# C4-5 — DDI v1.2, the DMA interface, version 11
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -18,7 +18,9 @@
   bounces `dma_alloc` memory (§5.3); version 9 (2026-10-27, from N110):
   `dma_forcefail` is a count that clears itself (§5.3); version 10
   (2026-10-27): a driver whose engine is not a Zorro bus master is
-  outside this contract (§6). Other
+  outside this contract (§6); version 11 (2026-10-27, S5-18, from
+  M-S474b): with no memory a bus master reaches, the board is refused,
+  not given chip memory (§5.4). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
@@ -292,6 +294,26 @@ pool does not promise.
   entry-0 decode, §5.3), so a driver reads what the chip wrote into
   `dma_alloc` memory (status, message buffers) only after a
   `dma_complete`, which clears the data cache. This is permanent on k30.
+
+### 5.4 No memory a bus master reaches (version 11)
+
+A k30 box whose only fast memory lies above 0x08000000 has neither a
+pool nor heap mode. The A4000T in the Z3660's 68030 mode is one
+(M-S474b): all of its fast memory is the Z3660's bind. There the
+provider says `dma: no memory a bus master reaches: bus-master DMA is
+off` once at `dmainit`. **Chip memory is not used instead.** It lies
+outside the reach §5.2 promises a 32-bit master, and the custom chips
+own its bandwidth. So:
+- `dma_alloc` returns 0. A driver that needs it fails its `_load` with
+  `ENOMEM`, which the core prints, and is not linked. A root on that
+  board then falls back as any unlinked root does (RTH1's built-in root
+  or the menu);
+- `dma_prepare` of an unreachable segment misses and `dma_addr` gives 0,
+  so the driver never arms (§5.3's miss);
+- a segment within the reach is still not bounced.
+z3660scsi is not a bus master (§6), so it roots such a box regardless.
+The metal half, an A4091 on that box, waits for the A4000T's Zorro bus
+(S5-21).
 
 ## 6. Not in this contract
 
