@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — S5-33, the netinstall extras: zen0 in the miniroot and a raw RDB image per line. ni7 ebf1205d; raw images ni7-k46 b96dd51c / ni7-k30 ebf41c1f. Cells l11-ni-zen-k46/k30, l11-nr-k46/k30 and l11-ni-k46 PASS 9/9 (e669f46..7f65c07)
+
+The miniroot offers zen0 when /dev/zen0 opens (z3660eth as a boot-class module) and aen0 when it answers; with both it asks, zen0 the default. One raw image per line, because the core loads boot modules only from /stand/gen/<booted id>/mod.
+install-matrix: ZENNET and RAWBOOT cells, NETBOOT gates on the mirror log; AMIBERRY_BRANCH defaults to amix-v842; build-ramdisk-floppy.sh is 100755.
+
 ## 2026-10-27 — S5-05: the RAM-disk floppy pair in one swap — l11-set on dlm 28fb5a1 (kbootset media puts the image after the root modules); both pairs re-cut, FDBOOT cells 9/9 with one L11 volume request each (ff80490)
 
 The catalog is unchanged; kbootset -20, modtools -6 and gayle 1.1.0-2 are kept as rows of record in tools/l11-rows-record.conf.
