@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — install-matrix: FDBOOT and the cells l11-rd-fd-k46/k30 — the RAM-disk floppy pair boots (each L11 volume request followed from the serial port) and installs from the CD; both 9/9 on the loader -9 pairs (39ce8aa)
+
+FDBOOT = a CDBOOT cell whose boot medium is the pair (--fd-pair); rig = the CD-boot config + volume 1 in DF0 at power-on, an
+empty DF1 for the evidence floppy, serial captured from before launch. Run dirs work/install-matrix/20261027-l11-rd-fd-k46/-k30.
+
 ## 2026-10-27 — build-ramdisk-floppy: the loader of record from the staged loader-amix; the set on catalog 6e60a128 (loader -9); S4-52 (b): both pairs boot and install from the CD (8ee24ec)
 
 boot1, boot2 and the loader version come from the staged package's /stand/loader and ldrinfo (sha checked). Pairs k46
