@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — the k46 ufs module passes modcheck's page scan with no waiver (the port's fsobj-patch.py object with its module-only conversions); plan S5-37 (s5 on k46 carried, no k46 s5 module) and a 2 KiB-block ufs row in S5-13 (ec1202f)
+
 ## 2026-10-27 — C4-1 v4 agreed (the port, amix-kerntools): k30's kinfo030.c keys an unmatched card at 0x10000000 as id 4 by its base; plan S5-15: kbootset's card_of() picks among motherboard cards by the boot disk's partition start (975c329, c5f6865)
 
 ## 2026-10-27 — k30 DMA with no reachable memory: dma_alloc gives 0 and bounces miss; C4-5 v11 §5.4 refuses the board, no chip fallback (S5-18 host half) (2a4e4e1, 921bd93)
