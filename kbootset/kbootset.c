@@ -458,19 +458,24 @@ status_modules(struct ks *k, const struct kb_kinfo *ki)
 {
 	static struct ax_manifest m;
 	char *buf;
-	int i, j;
+	int i, j, n, safe = (ki->flags & 4) != 0;	/* kinfo flag 0x4: a safe boot */
 
 	if ((buf = ks_manifest(k, ki->gen_id, &m)) == 0)
 		return;
-	if (m.nmod && (ki->flags & 4))
-		printf("modules: safe mode, none loads this boot\n");
+	if (m.nmod && safe) {	/* the safe set: the records marked safe=1 (C3-5 §3, C2-4 §11) */
+		for (i = n = 0; i < m.nmod; i++)
+			if (m.mod[i].safe)
+				printf("%s%s", n++ ? ", " : "modules: safe mode: only the safe set loads this boot (",
+				       m.mod[i].name);
+		printf(n ? ")\n" : "modules: safe mode: the safe set is empty; no module loads this boot\n");
+	}
 	for (i = 0; i < m.nmod; i++) {
 		for (j = 0; j < ki->nmods && strcmp(ki->mods[j], m.mod[i].name); j++)
 			;
 		printf("module %s (%s): %s\n", m.mod[i].name,
 		       m.mod[i].cls == AXC_BOOT ? "boot" : m.mod[i].cls == AXC_DEMAND ? "demand" : "root",
-		       j < ki->nmods ? "loaded" : m.mod[i].cls == AXC_DEMAND ?
-		       "not loaded (loads at the first open of its device)" :
+		       j < ki->nmods ? "loaded" : safe && !m.mod[i].safe ? "not loaded (safe mode)" :
+		       m.mod[i].cls == AXC_DEMAND ? "not loaded (loads at the first open of its device)" :
 		       "not loaded (the console says why)");
 	}
 	free(buf);

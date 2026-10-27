@@ -36,7 +36,7 @@ def rdb(path, parts):            # parts: [(dostype, lowcyl, highcyl)]
         struct.pack_into('>I', p, de + 64, dt)        # de_DosType
         img[(i + 1) * 512:(i + 2) * 512] = p
     open(path, 'wb').write(img)
-def kinfo(path, cards, axl1, fast=16777184, mods=()):
+def kinfo(path, cards, axl1, fast=16777184, mods=(), safe=False):
     r = bytearray(540 + 32 * len(mods))
     struct.pack_into('>II', r, 0, 0x4b494631, (2 << 16) | len(r))
     struct.pack_into('>III', r, 12, 60, 46, 0x000f)
@@ -57,7 +57,7 @@ def kinfo(path, cards, axl1, fast=16777184, mods=()):
         struct.pack_into('>I', r, a + 40, axl1[7])
         s = sum(struct.unpack('>31I', r[a:a + 124])) & 0xffffffff
         struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
-    struct.pack_into('>I', r, 80, flags)
+    struct.pack_into('>I', r, 80, flags | (4 if safe else 0))
     struct.pack_into('>I', r, 460, len(cards))
     for i, (k, cid, base, fl) in enumerate(cards):
         struct.pack_into('>IIII', r, 464 + 16 * i, k, cid, base, fl)
@@ -75,7 +75,7 @@ else:
     cards = [tuple(int(x, 0) for x in c.split(',')) for c in sys.argv[4].split('/') if c]
     axl1 = tuple(int(x, 0) for x in sys.argv[3].split(',')) if sys.argv[3] != '-' else None
     mods = sys.argv[5].split(',') if len(sys.argv) > 5 and sys.argv[5] else ()
-    kinfo(sys.argv[2], cards, axl1, mods=mods)
+    kinfo(sys.argv[2], cards, axl1, mods=mods, safe=len(sys.argv) > 6 and sys.argv[6] == 'safe')
 EOF
 UNI1=0x554e4901 UNI0=0x554e4900 RESV=0x72657376
 START=$((150 * 32 * 512))		# slice 3 starts at cylinder 150
@@ -209,6 +209,24 @@ $B/kbootset -R $R status > $T/out
 grep -qx "module z3660eth (boot): loaded" $T/out
 grep -qx "module monsw (demand): loaded" $T/out
 grep -qx "module z3660rtg (demand): not loaded (loads at the first open of its device)" $T/out
+# 6b'. a safe boot (kinfo flag 0x4) names the safe set it keeps, the
+# records marked safe=1, and says why the others did not load (C2-4 §11):
+# a4091 ranked before the root's card loads, as N160 saw
+sed -e 's|^module z3660eth boot \(.*\)$|module z3660eth boot \1 safe=1|' $T/mods.spec > $T/safe.spec
+gs=$($B/kbootset -R $R commit --spec $T/safe.spec 2>/dev/null | sed -n 's/^kbootset: generation \([0-9]*\) committed.*/\1/p')
+[ -n "$gs" ] || { echo "kbox: the safe generation was not committed"; exit 1; }
+python3 -I $T/disk.py kinfo $T/kinfo $gs,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0 z3660eth safe
+$B/kbootset -R $R status > $T/out
+grep -qx "modules: safe mode: only the safe set loads this boot (z3660eth)" $T/out ||
+	{ echo "kbox: the safe set not named" >&2; grep -i "safe\|^module" $T/out >&2; exit 1; }
+grep -qx "module z3660eth (boot): loaded" $T/out
+grep -qx "module monsw (demand): not loaded (safe mode)" $T/out
+grep -qx "module z3660rtg (demand): not loaded (safe mode)" $T/out
+g=$($B/kbootset -R $R commit --spec $T/mods.spec 2>/dev/null | sed -n 's/^kbootset: generation \([0-9]*\) committed.*/\1/p')
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0 "" safe
+$B/kbootset -R $R status > $T/out
+grep -qx "modules: safe mode: the safe set is empty; no module loads this boot" $T/out
+python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0 z3660eth,monsw
 
 # 6c. check reports the running box's disk nodes when an installed kernel
 # is a four-card one (C2-4 §14), as one problem; a k30 sidecar, so the
@@ -260,4 +278,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes, the Z3660 window's card ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes, the Z3660 window's card, the safe set in status ok"
