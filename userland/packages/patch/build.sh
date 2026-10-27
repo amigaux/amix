@@ -22,6 +22,8 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
+
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
 . "$REPO/recipes/common/pkgroll.sh"
@@ -35,14 +37,22 @@ VERSION=$PATCH_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 2.5.9-2 above 2.5.9.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/patch"
+BUILD="$AMIX_BUILD_ROOT/patch"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/patch-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 echo "=== GNU patch $VERSION ==="
 amix_env_banner
@@ -140,13 +150,20 @@ echo
 
 echo "--- cross-configure ---"
 cd "$TREE"
+# TOOLCHAIN=gcc14: no answer needs pinning.  config.h diffed against the period
+# build, the drifts accepted: HAVE_STRNCASECMP (libamixc99 owns strncasecmp, so
+# the bundled strncasecmp.c is not compiled -- one owner per symbol),
+# HAVE_VARARGS_H gone (GCC 14 has no varargs.h; patch takes <stdarg.h> either
+# way), HAVE_STDBOOL_H/HAVE__BOOL/HAVE_STDINT_H (compiler and sysroot
+# headers).  gnulib's malloc.c/realloc.c draw a builtin-mismatch warning from
+# their K&R `char *malloc ()' -- the period build compiles the same wrappers.
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS $AMIX_CONFIGURE_LENIENT" \
 CPPFLAGS="-D_POSIX_SOURCE" \
 LIBS="-lc" \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	--mandir="$AMIX_PREFIX/man" \
 	--disable-nls \
@@ -190,7 +207,10 @@ echo
 # 3. Build.
 # ---------------------------------------------------------------------------
 echo "--- make ---"
-make > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS"
+make "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -20 "$BUILD/make.log" >&2
 	exit 1
@@ -213,6 +233,10 @@ if grep -E 'pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/n
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+fi
 echo
 
 # ---------------------------------------------------------------------------
@@ -255,6 +279,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== GNU patch $VERSION built ==="

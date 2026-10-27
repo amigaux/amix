@@ -44,6 +44,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -58,14 +59,22 @@ VERSION=$GZIP_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 1.3.12-2 above 1.3.12.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/gzip"
+BUILD="$AMIX_BUILD_ROOT/gzip"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/gzip-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 echo "=== GNU gzip $VERSION ==="
 amix_env_banner
@@ -94,6 +103,16 @@ for p in "$HERE"/patches/*.patch; do
 done
 # No .s/.S imported.  gzip's foreign-port dirs (msdos/*.asm, amiga/match.a) are
 # never compiled and carry neither extension the gate scans for.
+# TOOLCHAIN=gcc14 only: fixes for what GCC 14 reads that gcc 2.7 never did
+# (gnulib's lib/time.h).  Applied after the shared patches; the period build
+# never sees them.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	for p in "$HERE"/patches-gcc14/*.patch; do
+		echo "  applying gcc14 $(basename "$p")"
+		( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
+			echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
+	done
+fi
 amix_gate_noasm "$TREE" || {
 	echo "[FAIL] unexpected .s/.S assembly in the gzip tree." >&2; exit 1; }
 echo
@@ -111,12 +130,35 @@ echo
 # gate), which is the smaller, proven path.
 echo "--- cross-configure ---"
 cd "$TREE"
+# TOOLCHAIN=gcc14 pins one configure answer to the period build's: GCC 14 links
+# the SVR4 way (usr/ccs/lib/libc.so is libc.so.1 plus static members), so the
+# lstat probe finds the static lstat.o the period link never saw.  With
+# HAVE_LSTAT gzip would treat symbolic links differently from the bench-proven
+# period build; pinned no (the assertion below requires it).  Accepted as GCC 14
+# finds them, config.h diffed against the period build: HAVE_STDBOOL_H and
+# HAVE__BOOL (the compiler's own C99 bool), HAVE_STDINT_H (the sysroot's compat
+# stdint.h) and `restrict' left a keyword -- compiler features, no behaviour.
+#
+# And two gnulib header paths.  gnulib's replacement lib/fcntl.h includes the
+# system header by its ABSOLUTE path (ABSOLUTE_FCNTL_H, found by preprocessing).
+# GCC 14's include-fixed/fcntl.h and sys/time.h are C++-linkage wrappers that
+# reach AMIX's header with #include_next -- and an #include_next in a file
+# included by absolute path behaves as a plain #include, which finds gnulib's
+# own lib/fcntl.h again (include-guarded), so AMIX's fcntl.h is never read and
+# creat() is undeclared.  For C the wrapper adds nothing, so the two paths are
+# pinned to the sysroot headers the wrappers forward to; the assertion after
+# configure refuses any ABSOLUTE_ header that is an #include_next wrapper.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	export ac_cv_func_lstat=no
+	export gl_cv_absolute_fcntl_h="$AMIX_SYSROOT/usr/include/fcntl.h"
+	export gl_cv_absolute_sys_time_h="$AMIX_SYSROOT/usr/include/sys/time.h"
+fi
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS $AMIX_CONFIGURE_LENIENT" \
 SHELL=/bin/sh \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	--disable-nls \
 	--disable-largefile \
@@ -134,6 +176,14 @@ if grep -q '^#define ASMV' lib/config.h; then
 	exit 1
 fi
 echo "    ASMV undefined (C longest_match)"
+for f in $(sed -n 's/^#define ABSOLUTE_[A-Z_]*_H "\(.*\)"$/\1/p' lib/config.h); do
+	if grep include_next "$f" >/dev/null 2>&1; then
+		echo "[FAIL] config.h names $f as an absolute header; it is an #include_next" >&2
+		echo "       wrapper, so the real header would never be read (see above)." >&2
+		exit 1
+	fi
+done
+echo "    no ABSOLUTE_*_H is an #include_next wrapper"
 for want in 'HAVE_UTIME_H:present' 'HAVE_WORKING_UTIMES:absent' 'HAVE_LSTAT:absent'; do
 	sym=${want%:*}; exp=${want#*:}
 	if grep -q "^#define $sym 1\$" lib/config.h; then got=present; else got=absent; fi
@@ -150,7 +200,10 @@ echo
 # 4. Build.
 # ---------------------------------------------------------------------------
 echo "--- make ---"
-make > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS"
+make "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
@@ -166,6 +219,10 @@ if grep -E 'pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/n
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+fi
 [ -f "$TREE/gzip" ] || { echo "[FAIL] gzip binary not built" >&2; exit 1; }
 echo
 
@@ -231,6 +288,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== GNU gzip $VERSION built ==="

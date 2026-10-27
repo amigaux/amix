@@ -1,0 +1,44 @@
+GCC 14: gnulib's Hash_hasher is size_t (*)(const void *, size_t); tar 1.14's
+three hashers are unsigned (*)(const void *, unsigned), which gcc 2.7 only
+warned about and GCC 14 rejects (-Wincompatible-pointer-types).  Both types
+are 32 bits on this target: the same code.
+
+--- src/create.c
++++ src/create.c
+@@ -1128,8 +1128,8 @@
+ 
+ 
+ /* Calculate the hash of a link.  */
+-static unsigned
+-hash_link (void const *entry, unsigned n_buckets)
++static size_t
++hash_link (void const *entry, size_t n_buckets)
+ {
+   struct link const *l = entry;
+   uintmax_t num = l->dev ^ l->ino;
+--- src/incremen.c
++++ src/incremen.c
+@@ -53,8 +53,8 @@
+ #endif
+ 
+ /* Calculate the hash of a directory.  */
+-static unsigned
+-hash_directory (void const *entry, unsigned n_buckets)
++static size_t
++hash_directory (void const *entry, size_t n_buckets)
+ {
+   struct directory const *directory = entry;
+   return hash_string (directory->name, n_buckets);
+--- src/names.c
++++ src/names.c
+@@ -941,8 +941,8 @@
+ /* Hash tables of strings.  */
+ 
+ /* Calculate the hash of a string.  */
+-static unsigned
+-hash_string_hasher (void const *name, unsigned n_buckets)
++static size_t
++hash_string_hasher (void const *name, size_t n_buckets)
+ {
+   return hash_string (name, n_buckets);
+ }

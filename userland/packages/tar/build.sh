@@ -75,6 +75,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
 export AMIX_PREFIX=/opt/amix
+AMIX_RECIPE_TOOLCHAINS="period gcc14"
 
 . "$REPO/recipes/common/amix-env.sh"
 . "$REPO/recipes/common/fetch.sh"
@@ -89,14 +90,33 @@ VERSION=$TAR_VERSION
 # 68060-unimplemented instructions): the same source rebuilt through the
 # wrapper's 64-bit multiply expansion (gcc-cross-amix 2ab2b22) -- new
 # bytes, so a new catalog version; apkg_vercmp orders 1.14-2 above 1.14.
-PKGVERSION=$VERSION-2
+# Package revision by toolchain: the period build is -2 (the 68060 re-mint);
+# a TOOLCHAIN=gcc14 build is new bytes and so a new revision, -3 (the userland
+# switch, owner decision D-3 sec 9 and 2026-10-27); pkginfo is retagged in the
+# work copy (amix_pkginfo_retag).
+#
+# TOOLCHAIN=gcc14 needs no libacompat.  Its one symbol here, gettimeofday,
+# has an owner on that toolchain: GCC 14 links -lc the SVR4 way, through
+# usr/ccs/lib/libc.so (libc.so.1 plus static members), and its static
+# gettimeofday.o (weak; the stock one-argument _hrtcntl(1, 1, 0, &buf) read,
+# the same contract as libacompat's _abi_gettimeofday wrapper, and it never
+# touches localtime's buffer, so the clobber seed below still holds).
+# Step 5 asserts which archive defined it.  Everything else is the same
+# recipe: the D3 object, the seeds, the seven patches (05-07 route products
+# through __muldi3, which GCC 14's libgcc has; -m68020-60 would not emit the
+# 64-bit form anyway).
+case "$AMIX_TOOLCHAIN" in
+gcc14) PKGREV=3 ;;
+*)     PKGREV=2 ;;
+esac
+PKGVERSION=$VERSION-$PKGREV
 
-BUILD="$REPO/build/tar"
+BUILD="$AMIX_BUILD_ROOT/tar"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/tar-$VERSION"
 DEST="$BUILD/dest"
-PKGOUT="$REPO/build/pkg"
+PKGOUT="$AMIX_BUILD_ROOT/pkg"
 
 ACOMPAT_LIB="$REPO/build/libamixcompat/dest/usr/local/lib"
 
@@ -104,10 +124,15 @@ echo "=== GNU tar $VERSION ==="
 amix_env_banner
 echo
 
-[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
-	echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB (build libamixcompat first)" >&2
-	exit 1
-}
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	TAR_LIBS="$BUILD/amix-pwgr.o -Wl,-y,gettimeofday"
+else
+	[ -f "$ACOMPAT_LIB/libacompat.a" ] || {
+		echo "[FAIL] libacompat.a not found at $ACOMPAT_LIB (build libamixcompat first)" >&2
+		exit 1
+	}
+	TAR_LIBS="$BUILD/amix-pwgr.o -L$ACOMPAT_LIB -lacompat -lc"
+fi
 
 mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
@@ -130,6 +155,15 @@ for p in "$HERE"/patches/*.patch; do
 	( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
 		echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
 done
+# TOOLCHAIN=gcc14 only: what GCC 14 rejects in AMIX's own headers (sys/mkdev.h).
+# Applied after the shared patches; the period build never sees them.
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	for p in "$HERE"/patches-gcc14/*.patch; do
+		echo "  applying gcc14 $(basename "$p")"
+		( cd "$TREE" && patch -p0 --batch --fuzz=0 < "$p" ) || {
+			echo "[FAIL] patch $(basename "$p") did not apply cleanly" >&2; exit 1; }
+	done
+fi
 amix_gate_noasm "$TREE" || {
 	echo "[FAIL] unexpected .s/.S assembly in the tar tree." >&2; exit 1; }
 echo
@@ -139,14 +173,29 @@ echo
 # ---------------------------------------------------------------------------
 echo "--- cross-configure ---"
 cd "$TREE"
+# TOOLCHAIN=gcc14 pins two more answers to the period build's, config.h diffed:
+#   ftruncate -> GCC 14's SVR4-style -lc finds the static truncate.o the period
+#     link never saw; pinned no, so tar keeps gnulib's F_FREESP replacement,
+#     as bench-proven;
+#   stdint.h (the sysroot's compat one) -> pinned no, as grep and make do:
+#     intmax_t/uintmax_t stay configure's `long long' macros (gnulib asks
+#     under three cache names; all three pinned).
+# Accepted as GCC 14 finds them: HAVE_STRCASECMP/HAVE_STRNCASECMP (libamixc99
+# owns both, so gnulib's strcasecmp.c is not compiled), ssize_t (GCC 14's fixed
+# sys/types.h has `typedef int ssize_t', the period's `#define ssize_t int'),
+# HAVE_STDBOOL_H/HAVE__BOOL and `restrict' (compiler features).
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	export ac_cv_func_ftruncate=no ac_cv_header_stdint_h=no gl_cv_header_stdint_h=no \
+		jm_ac_cv_header_stdint_h=no
+fi
 ac_cv_func_lstat=yes \
 ac_cv_have_decl_valloc=no \
 jm_cv_func_gettimeofday_clobber=no \
 CC="$CC" \
-CPP="$REPO/recipes/common/amix-cpp" \
-CFLAGS="$AMIX_CFLAGS" \
+CPP="$AMIX_CPP" \
+CFLAGS="$AMIX_CFLAGS $AMIX_CONFIGURE_LENIENT" \
 ./configure \
-	--host="$AMIX_TARGET" \
+	--host="$AMIX_HOST_TRIPLET" \
 	--prefix="$AMIX_PREFIX" \
 	--disable-nls \
 	--disable-largefile \
@@ -190,19 +239,23 @@ echo
 # configure tests nothing it provides.  The wrapper appends libc.so.1 itself
 # (cc84d5b); the trailing -lc is kept for the older-wrapper rule (recipes/README).
 echo "--- D3 passwd/group parsers ---"
-"$CC" $AMIX_CFLAGS -c "$REPO/recipes/common/amix-pwgr.c" -o "$BUILD/amix-pwgr.o" \
+$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-pwgr.c" -o "$BUILD/amix-pwgr.o" \
 	> "$BUILD/pwgr.log" 2>&1 || {
 		echo "[FAIL] amix-pwgr.c did not compile" >&2; cat "$BUILD/pwgr.log" >&2; exit 1; }
 # Warnings from the 1992 system headers themselves (sys/types.h's nested
 # comment, stat.h's unused static wrappers) are noise; any other is a defect.
-if grep 'warning' "$BUILD/pwgr.log" | grep -v "^$AMIX_SYSROOT/" >/dev/null 2>&1; then
+# (GCC 14 reports the system headers from its include-fixed copies.)
+if grep 'warning' "$BUILD/pwgr.log" | grep -v "^$AMIX_SYSROOT/" | grep -v '/include-fixed/' >/dev/null 2>&1; then
 	echo "[FAIL] amix-pwgr.c compiled with warnings:" >&2; cat "$BUILD/pwgr.log" >&2; exit 1
 fi
 echo "  amix-pwgr.o compiled clean"
 echo
 
 echo "--- make ---"
-make LIBS="$BUILD/amix-pwgr.o -L$ACOMPAT_LIB -lacompat -lc" > "$BUILD/make.log" 2>&1 || {
+# gcc14: configure ran lenient; the build gets the strict CFLAGS back.
+set --
+[ "$AMIX_TOOLCHAIN" = gcc14 ] && set -- CFLAGS="$AMIX_CFLAGS"
+make LIBS="$TAR_LIBS" "$@" > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
@@ -218,6 +271,17 @@ if grep -E 'pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/n
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	amix_gate_g14_strict "$BUILD/make.log" || exit 1
+	amix_gate_g14_compat "$BUILD/make.log" || exit 1
+	# the linker's trace of the final tar link: gettimeofday from libc.so's
+	# static gettimeofday.o (header comment), not from anywhere else
+	grep 'libc\.so(gettimeofday\.o): definition of gettimeofday$' "$BUILD/make.log" >/dev/null || {
+		echo "[FAIL] gettimeofday is not defined by usr/ccs/lib/libc.so(gettimeofday.o):" >&2
+		grep 'gettimeofday' "$BUILD/make.log" | grep -v '^[^ ]*gcc ' >&2
+		exit 1; }
+	echo "  OWNER ok  gettimeofday from libc.so(gettimeofday.o), the stock static member"
+fi
 BIN="$TREE/src/tar"
 [ -f "$BIN" ] || { echo "[FAIL] tar binary not built" >&2; exit 1; }
 echo
@@ -281,6 +345,7 @@ echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$HERE/pkginfo" "$HERE/prototype" "$WORK/"
+amix_pkginfo_retag "$WORK/pkginfo" "$VERSION-2" "$PKGVERSION"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 echo
 echo "=== GNU tar $VERSION built ==="

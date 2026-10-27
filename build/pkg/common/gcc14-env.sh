@@ -71,12 +71,15 @@
 #              strncasecmp, strsignal, __cxa_atexit and __cxa_finalize; the
 #              fixed headers declare them.  So SHIM-SNPRINTF, SHIM-STRCASECMP
 #              and SHIM-USLEEP are the toolchain's under gcc14, and this
-#              repo's libacompat (built by the period compiler) is NEVER
-#              linked into a gcc14 build -- amix_gate_g14_compat fails a
-#              build whose link line names it.  libacompat's
-#              remaining members (setenv/unsetenv, mkstemp, its gettimeofday)
-#              have no gcc14 owner yet: a recipe needing them is not
-#              gcc14-ready.
+#              repo's libacompat (either build) is NEVER linked into a gcc14
+#              port -- amix_gate_g14_compat fails a build whose link line
+#              names it.  (Its own acceptance test, acompat-test, links the
+#              gcc14 libacompat.a by design and proves from the linker trace
+#              that every compat symbol came from it.)  gettimeofday has a
+#              gcc14 owner too: -lc reaches usr/ccs/lib/libc.so, whose static
+#              gettimeofday.o (the stock one-argument _hrtcntl read) defines
+#              it -- tar 1.14 links that.  setenv/unsetenv and mkstemp still
+#              have no gcc14 owner: a recipe needing them is not gcc14-ready.
 #   64-bit     libc printf/fprintf/sprintf/vfprintf treat ll as l (the high
 #   printf     word prints, every later argument is 4 bytes out of step);
 #              only the compat snprintf/vsnprintf are right.  The gate
