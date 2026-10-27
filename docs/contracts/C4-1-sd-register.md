@@ -1,4 +1,4 @@
-# C4-1 — `sd_register` and the four-card contract, version 6
+# C4-1 — `sd_register` and the four-card contract, version 7
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
@@ -11,7 +11,9 @@
   (2026-10-27, S5-44, from Bench J4 row M-G3): the device nodes an
   installed root holds, and who makes them (§2.4); version 6
   (2026-10-27, S5-46, from the port's S5-15 work): a motherboard
-  controller's record names it by its motherboard id (§5.2).
+  controller's record names it by its motherboard id (§5.2); version 7
+  (2026-10-27, from installng's S5-44 R1): what `pkgchk core` says
+  about the nodes is limited to `/dev` (§2.4).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -145,7 +147,10 @@ four-card kernel can number has its nodes, so adding or removing a
 board never needs a node change, whichever card numbers it moves. A
 fifth card is refused (§7), so the set never grows. The package database
 says the same: the card-2 and card-3 nodes are registered to core, and
-core no longer names the d1 nodes, so `pkgchk core` stays quiet.
+core no longer names the d1 nodes, so `pkgchk core` reports nothing
+under `/dev` (version 7). On a configured box `pkgchk core` is never
+quiet as a whole: the editable files, `TZ`, `passwd`, `vfstab` and the
+rest, give several hundred lines. Only `/dev` is this contract's.
 
 The pristine generation's 1992 kernel reads bit 7 as the LUN, so under
 it `c10`–`c1f` open LUN 1 of cards 0 and 1, as the removed d1 names did.
