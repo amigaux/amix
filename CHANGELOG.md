@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-27 — boot2: the floppy pair's volume-2 prompt (L11) re-reads every 4 s as well as on a disk-change count (ea75578)
+
+A trackdisk that does not count the swap (Kickstart 3.2.1 under amiberry, E958/E959) no longer leaves it waiting for ever.
+b2medium -f models the unmoving counter: the old loop hangs on the real pairs, the new one passes nine cases. 28 658 bytes.
+
 ## 2026-10-27 — kbootset gate 2 checks build= against the kernel's own build id; C3-3 v8 (093b2a7, 8eb826c)
 
 buildid on k46, kinfo_buildid through unix.sym on k30, leading blanks ignored; a kernel without the symbol is unchecked. Passes
