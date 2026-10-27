@@ -488,6 +488,29 @@ head -c 4096 /dev/zero > $T/mini.img
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS --root ramdisk --swap none > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always safe=1$" $T/r1.adf.spec
+# one swap per boot (S5-05): the image comes after the root modules, in
+# boot2's read order, so an image that spans the two volumes is the only
+# member to ask for volume 2 (E958/E959's pairs asked 2, 1, 2)
+head -c 300000 /dev/urandom > $T/bigmini.img
+$B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin --ramdisk $T/bigmini.img $RFACTS > /dev/null 2>&1
+tail -1 $T/r1.adf.spec | grep -q "^ramdisk miniroot "
+$B/kbootset -R $R media --floppy $T/o1.adf $T/o2.adf --boot1 $B/rt/boot1.img \
+	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
+$B/b2medium $T/r1.adf $T/r2.adf $T/o1.adf > $T/out ||
+	{ echo "kbuild: the RAM-disk pair did not read" >&2; cat $T/out >&2; exit 1; }
+grep -q "^b2medium: ramdisk miniroot 300000 bytes from 1:0x" $T/out
+grep -q "^b2medium: 1 volume change(s), .*: ok$" $T/out ||
+	{ echo "kbuild: the RAM-disk pair needs more than one swap" >&2; cat $T/out >&2; exit 1; }
+# the control: the same spec with the image before the modules, as it was,
+# makes boot2 go back to volume 1, so this case does span the volumes
+awk '/^ramdisk / { next } { print } /^kernel / { while ((getline l < f) > 0) if (l ~ /^ramdisk /) print l }' \
+	f=$T/r1.adf.spec $T/r1.adf.spec > $T/old.spec
+$B/mkstore -f -o $T/old1.adf -o $T/old2.adf -1 $B/rt/boot1.img -2 $B/rt/boot2.bin $T/old.spec > /dev/null
+$B/b2medium $T/old1.adf $T/old2.adf $T/o1.adf > $T/out || true
+grep -q "^b2medium: [2-9] volume change(s)" $T/out ||
+	{ echo "kbuild: the old order did not need more swaps: the case does not span the volumes" >&2; cat $T/out >&2; exit 1; }
+rm -f "${T:?}"/old1.adf "${T:?}"/old2.adf "${T:?}"/old.spec
 # --ramdisk alone gives root ramdisk and swap none (C4-3 section 1)
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS > /dev/null 2>&1

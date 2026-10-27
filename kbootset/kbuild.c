@@ -1469,9 +1469,12 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	if (kk.brel)
 		sprintf(out + strlen(out), " bss=%lu", (unsigned long)kk.bss);
 	strcat(out, "\n");
+	strcat(out, mtail);
+	/* the RAM-disk image after the root modules: mkstore places members
+	 * in this order and boot2 reads kernel, modules, image, so a floppy
+	 * pair asks for volume 2 once (S5-05; E958/E959 asked 2, 1, 2) */
 	if (ramdisk)
 		sprintf(out + strlen(out), "ramdisk miniroot %.500s%s\n", ramdisk, deflate ? " z=deflate" : "");
-	strcat(out, mtail);
 	msg[0] = 0;
 	return 0;
 }
