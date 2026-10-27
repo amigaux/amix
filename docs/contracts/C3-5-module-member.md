@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 12
+# C3-5 — the module package and the per-module manifest record, version 13
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -17,7 +17,9 @@
   version 10 (2026-10-27): z3660scsi's (as amix-packages minted it) and
   a4091's (§1.1); version 11 (2026-10-27, C4-4 version 5): a root record
   for the root filesystem's boot-class module (§3); version 12
-  (2026-10-27, amix-cdfs): cdfs's short name (§1.1).
+  (2026-10-27, amix-cdfs): cdfs's short name (§1.1); version 13
+  (2026-10-27, C4-4 version 6, S5-02): `safe=1` on every controller module
+  ranked at or before the root's (§3).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -195,7 +197,7 @@ boot-class module whose `fs=` is the generation's `rootfs`, which
 | `path=` | the generation directory | the core: where the bytes come from (patch 0009) |
 | `sha256=` | the object | the core: what they must hash to (patch 0009); `kbootset check` |
 | `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); `marc_root` the same for a root-class record (C4-4 version 3 §4). boot2 does not read it |
-| `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), and the root-class modules those two depend on; absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
+| `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), the root-class modules those two depend on, and (version 13) every controller module ranked at or before the root's class (C4-4 version 6 §2); absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
 | `majors=` | **copied verbatim**; required on demand class | `marc_post`: registers each character major for the module (block majors: stage 4) |
 | `depend=` | **copied verbatim** | `kbootset` gate 3, and the record order |
 | `tier=`, `build=` | **copied verbatim** when `tier=core` | `kbootset status`; the core decides from the object's own `.moddata` (patch 0003) |

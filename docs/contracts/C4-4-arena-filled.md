@@ -1,4 +1,4 @@
-# C4-4 — the arena filled: what boot2 places and the core links, version 5
+# C4-4 — the arena filled: what boot2 places and the core links, version 6
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, option A of S4-01's design): each root module's NOBITS and
@@ -11,7 +11,8 @@
   no root-class module for a controller the kernel drives itself (§4.1);
   version 5 (2026-10-27, the orchestrator's decision on amix-cdfs's plan):
   the root filesystem's boot-class module is placed as a root record
-  (§1.3). Other repositories build against this text; a change from here is a
+  (§1.3); version 6 (2026-10-27, S5-02): the safe set keeps the card
+  numbers (§2, item 4). Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
   §5.3, §7.4 (safe mode), §9 (L3, L5, L7); `30-module-core.md` §2 patches 2
@@ -107,7 +108,17 @@ CD medium, C4-6 §5) is one object, with `class=boot`, `fs=` and
    module is marked for it. A `root ramdisk` generation marks `ramdisk`;
 2. the root filesystem's module: the module named by the manifest's
    `rootfs` (`ufs`, `s5` or `cdfs`);
-3. the root-class modules those two name in `depend`.
+3. the root-class modules those two name in `depend`;
+4. (version 6) every root-class controller module whose `rank` (C4-1
+   §4.1) is at or before the root controller's class: the class of the
+   root controller's module, or for a controller on the floor the class
+   of its key (`zorro:` 2, `mobo:` 3, `mobo:gayle` 4). sd orders cards by
+   class, then base, so without them a safe boot renumbers the root's
+   card. The A3000 WD beside an A4091 is `ced0` in a normal boot and was
+   `c6d0` in safe mode (N145, N146; spec 70 §4). "At or before" because
+   the order inside a class is by base, which `kbootset` cannot see. A
+   member whose board is absent costs arena bytes only: the core skips
+   it. Not for a `root ramdisk` generation.
 
 In safe mode (the menu's `s`, 10 §7.4) boot2 places only the records with
 `safe=1`. The safe set's entries carry flag 0x4 in every boot, not only in
