@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-27 — S5-05: the RAM-disk floppy pair in one swap — l11-set on dlm 28fb5a1 (kbootset media puts the image after the root modules); both pairs re-cut, FDBOOT cells 9/9 with one L11 volume request each (ff80490)
+
+The catalog is unchanged; kbootset -20, modtools -6 and gayle 1.1.0-2 are kept as rows of record in tools/l11-rows-record.conf.
+New pairs in tmp/2026-10-27-rd1/fp-s505 from the same RAM-disk images; the earlier pairs needed three changes (2, 1, 2).
+
 ## 2026-10-27 — the netinstall medium (S4-53, form B): ni6 888ce1cd, cells l11-ni-k46/k30 9/9, first boots PASS — M-NET1g on the bench (e0daf78..92c605f)
 
 - l11 inputs: the HTTP apkg (apkg-http); the medium's kpkg carries catalog.md5; build-install-iso --four-card (e0daf78).
