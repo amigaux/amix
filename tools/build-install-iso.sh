@@ -110,7 +110,7 @@ PROFILES=()
 SET=base
 EXTRA_PKGS=()
 OUT=""
-CDBOOT=""
+CDBOOT="" FOURCARD=""
 STAGE="${STAGE:-$repo/work/install-tree}"
 KEEP_STAGE=0
 STAGE_ONLY=0
@@ -163,6 +163,9 @@ usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
                     (default: required -- a missing sibling is fatal)
   --cd-boot TREE    master a bootable CD: passed to build-iso.sh (amix-dlm's
                     mkstore -C tree, System ID AMIGA BOOT)
+  --four-card       the profiles get the four-card names as on a CD-boot disc,
+                    without a boot tree: the netinstall stage (its RAM-disk
+                    medium boots the same module kernels behind the same A4091)
 EOF
 }
 
@@ -179,6 +182,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --source-hdf) k="${2%%=*}"; v="${2#*=}"; SRC_OVERRIDE["$k"]="$v"; shift 2;;
   --no-require-gate) REQUIRE_GATE=0; shift;;
   --cd-boot)   CDBOOT="$2"; shift 2;;
+  --four-card) FOURCARD=1; shift;;
   -h|--help)   usage; exit 0;;
   *) echo "build-install-iso: unknown argument: $1" >&2; usage >&2; exit 2;;
 esac; done
@@ -792,7 +796,7 @@ if [ -n "$_want_l11" ]; then
     cp "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"
   fi
   cp "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg"
-  cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
+  cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
   # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
   if [ -n "$CDBOOT" ]; then
@@ -970,7 +974,7 @@ esac
 # the two-card values). A floppy-booted 1.1 disc installs under fd0unix (two-card), so
 # nothing moves there; the installed system names its root as its own kernel does
 # (firstboot, /etc/devnm).
-if [ -n "$CDBOOT" ] && [ -n "$_want_l11" ]; then
+if { [ -n "$CDBOOT" ] || [ -n "$FOURCARD" ]; } && [ -n "$_want_l11" ]; then
   for _f in "$STAGE"/profiles/*.profile; do
     [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$_f" | tail -1 | tr -d '"')" = 1.1 ] || continue
     _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_f" | tail -1 | tr -d '"')"
@@ -978,7 +982,7 @@ if [ -n "$CDBOOT" ] && [ -n "$_want_l11" ]; then
     [ -n "$_row" ] || continue
     _kl="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^line=//p')"
     _kf="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^file=//p')"
-    [ -d "$CDBOOT/BOOT/$(echo "$_kl" | tr a-z A-Z)" ] || continue
+    [ -n "$FOURCARD" ] || [ -d "$CDBOOT/BOOT/$(echo "$_kl" | tr a-z A-Z)" ] || continue
     _sc="$(python3 "$here/sdnames.py" --datastream "$L11_IN/kpkg/pkgs/$_kf" --line "$_kl")" \
       || { echo "STOP: cannot read the sd cards of $_kk's sidecar" >&2; exit 1; }
     _mv="$(python3 "$here/sdnames.py" "$_f" --sdcards "$_sc")" \
