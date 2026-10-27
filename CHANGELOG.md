@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — plan: S4-65/S4-66 (stage 5), the Z3660's root record and the 030 DMA pool in 030 mode (M-S474b); bench: the stage-4 exit batch's recipes; measurements: M-MOD1 again and M-FL1 at the exit (94d23a3, 8c57d7f, 0927aae)
+
+Exit-batch recipes: a damaged root module, L5 by root modules (tests/bench/s4-exit/l5.sh), the core's silent skip of an unmatched
+root entry, the sdlate probe for sd_register's EBUSY. M-MOD1: -82's generation uses 53 996 of 393 216 arena bytes; the largest
+composable set about 155 KB. M-FL1: -82 2 443 217 B, -17 1 637 928 B + bss (ufs and s5 still in; final after S4-43).
+
 ## 2026-10-27 — plan: S4-64 (stage 5), a RAM-disk floppy pair booted with one swap instead of three (mkstore lays the modules before the image) (2fedd77)
 
 ## 2026-10-27 — boot2: the floppy pair's volume-2 prompt (L11) re-reads every 4 s as well as on a disk-change count (ea75578)
