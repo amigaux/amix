@@ -1001,6 +1001,17 @@ fi
 # matrix invocation is unaffected.
 printf '%s\n' "${PROFILES[0]}" > "$STAGE/profiles/BASE"
 echo "build-install-iso: /install/profiles/BASE -> ${PROFILES[0]} (setup.sh's default base profile)"
+# /install/profiles/BASE.k30 and BASE.k46: one disc, two CPU lines (the RAM-disk CD boots
+# either line's generation). setup.sh prefers BASE.<line> of the running kernel (its kinfo
+# line) and falls back to BASE. The first --profile of each line wins; the line is the
+# profile's INSTALL_CPU (030 -> k30, 040/060 -> k46).
+for _p in "${PROFILES[@]}"; do
+  _cpu="$(sed -n 's/^INSTALL_CPU=//p' "$repo/profiles/$_p.profile" | tail -1 | tr -d '"')"
+  case "${_cpu:-030}" in 030) _ln=k30 ;; *) _ln=k46 ;; esac
+  [ -f "$STAGE/profiles/BASE.$_ln" ] && continue
+  printf '%s\n' "$_p" > "$STAGE/profiles/BASE.$_ln"
+  echo "build-install-iso: /install/profiles/BASE.$_ln -> $_p"
+done
 
 # ---------------------------------------------------------------------------
 # INSTALL ORDER(S) -- /install/order + one /install/order.<set> per offered set

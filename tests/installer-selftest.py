@@ -167,6 +167,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import struct
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -5997,7 +5998,8 @@ W_BENCH_DIOC = 'echo "A3000 Internal SCSI"'
 
 
 def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
-             matrix_marker=True, sets=None, extra_orders=None, machine=None):
+             matrix_marker=True, sets=None, extra_orders=None, machine=None,
+             base_lines=None, kinfo_line=None):
     """disks: {id: (mb, has_rdb, [(name, start, len), ...])}
 
     sets:         text of the medium's /install/sets table (W3b), or None for a
@@ -6050,6 +6052,14 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
         open(os.path.join(root, "cdrom/catalog"), "w").write(catalog)
     if base_marker:
         open(os.path.join(root, "cdrom/install/profiles/BASE"), "w").write(base_marker + "\n")
+    for ln, name in (base_lines or {}).items():
+        open(os.path.join(root, "cdrom/install/profiles/BASE." + ln), "w").write(name + "\n")
+    if kinfo_line is not None:
+        # the C2-1 record's head: magic, version|length, check, CPU, line (offset 16)
+        os.makedirs(os.path.join(root, "dev"), exist_ok=True)
+        open(os.path.join(root, "dev/kinfo"), "wb").write(
+            b"KIF1" + struct.pack(">IIII", (3 << 16) | 580, 0, kinfo_line + 14, kinfo_line)
+            + bytes(560))
     if matrix_marker:
         open(os.path.join(root, "matrix.up"), "w").close()
 
@@ -6065,6 +6075,7 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
           # src-candidates actually exercises the card-1 derivation branch.
           "/etc/install-src-candidates": root + "/etc/install-src-candidates",
           "/dev/dsk/": root + "/dev/dsk/",
+          "/dev/kinfo": root + "/dev/kinfo",
           "/dev/rdsk/": root + "/dev/rdsk/",
           "/tmp/setup.": root + "/tmp/setup.",
           "/tmp/answers.profile": root + "/tmp/answers.profile",
@@ -6238,6 +6249,26 @@ def audit_w2_interview():
          [], [" MB"], []),
         ("no argument -> the medium's own /install/profiles/BASE names the profile",
          bench, ["y", "", "", "", "", "", ""], {"base_marker": "w2test", "arg": None},
+         [], [], ["TARGET_SCSI_ID=6"]),
+        ("no argument, a k46 kinfo -> BASE.k46 names the profile (BASE does not resolve)",
+         bench, ["y", "", "", "", "", "", ""],
+         {"base_marker": "nosuch", "base_lines": {"k46": "w2test", "k30": "nosuch"},
+          "kinfo_line": 46, "arg": None},
+         [], [], ["TARGET_SCSI_ID=6"]),
+        ("no argument, a k30 kinfo -> BASE.k30 names the profile",
+         bench, ["y", "", "", "", "", "", ""],
+         {"base_marker": "nosuch", "base_lines": {"k46": "nosuch", "k30": "w2test"},
+          "kinfo_line": 30, "arg": None},
+         [], [], ["TARGET_SCSI_ID=6"]),
+        ("no argument, no kinfo -> BASE, never a BASE.<line>",
+         bench, ["y", "", "", "", "", "", ""],
+         {"base_marker": "w2test", "base_lines": {"k46": "nosuch", "k30": "nosuch"},
+          "arg": None},
+         [], [], ["TARGET_SCSI_ID=6"]),
+        ("no argument, a k46 kinfo but no BASE.k46 -> BASE",
+         bench, ["y", "", "", "", "", "", ""],
+         {"base_marker": "w2test", "base_lines": {"k30": "nosuch"}, "kinfo_line": 46,
+          "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no matrix marker and no ANSWERS_ECHO -> no beacon is written",
          bench, ["y", "", "", "", "", "", ""], {"matrix_marker": False},

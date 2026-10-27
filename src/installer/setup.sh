@@ -439,6 +439,12 @@ is_num() {
 #                                    the boot slice was built for), so the W4
 #                                    miniroot handoff can be a bare
 #                                    `exec sh /cdrom/install/bin/setup.sh`.
+#                                    Before BASE: BASE.<line> for the running
+#                                    kernel's line (k30, k46), from /dev/kinfo
+#                                    (C2-1: magic KIF1, the line a big-endian
+#                                    long at offset 16, 30 or 46; byte 19 is
+#                                    '.' only for 46), so a disc that boots
+#                                    both lines names one profile per line.
 SETUP_SELF="$0"
 case "$SETUP_SELF" in
 	*setup.sh) : ;;
@@ -446,7 +452,22 @@ case "$SETUP_SELF" in
 esac
 SETUP_ARG="$1"
 
+kinfo_line() {
+	[ -r /dev/kinfo ] || return 0
+	[ "`dd if=/dev/kinfo bs=4 count=1 2>/dev/null`" = KIF1 ] || return 0
+	if [ "`dd if=/dev/kinfo bs=20 count=1 2>/dev/null | dd bs=1 skip=19 count=1 2>/dev/null`" = . ]; then
+		echo k46
+	else
+		echo k30
+	fi
+}
 PROFILE_ARG="$SETUP_ARG"
+if [ -z "$PROFILE_ARG" ]; then
+	KLINE=`kinfo_line`
+	if [ -n "$KLINE" ] && [ -f "$INST/profiles/BASE.$KLINE" ]; then
+		PROFILE_ARG=`cat "$INST/profiles/BASE.$KLINE"`
+	fi
+fi
 if [ -z "$PROFILE_ARG" ] && [ -f "$INST/profiles/BASE" ]; then
 	PROFILE_ARG=`cat "$INST/profiles/BASE"`
 	# W4: a RAW payload slice is s5, and s5 truncates every name at 14
