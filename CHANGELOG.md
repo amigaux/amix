@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-27 — build-ramdisk-miniroot: --net, the netinstall image's network userland; M-NET1f PASS on both lines on the CD path (fefe74e)
+
+aen, slink, ifconfig, route, ping, libnsl/libsocket and the netdir libraries, netconfig, strcf and the inet/TI nodes from the
+golden box; /etc/inet/hosts written fresh (localhost only). 4 MiB images (k46 9546e3d3, k30 9639a556); rows E960/E961: aen0 up,
+ping by address and by hosts name through libnsl's netdir path. Side result M-NET1e: image at 0x9C00000 (k46, 32 MB) / 0x7C00000 (k30, 64 MB).
+
 ## 2026-10-27 — S4-52 (a): the RAM-disk floppy pair per line (4a95d3e, d72d173); (b) blocked on boot2's L11
 
 tools/lib/ramdisk-media.sh: the RAM-disk media's shared staging (rd1m's tree rebuilds byte-identical). tools/build-ramdisk-floppy.sh
