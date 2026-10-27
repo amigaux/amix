@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — kbootset: a disk store's root record keeps a core-tier module's tier=/build=, copied verbatim as C3-5 §3 says (informational; the core decides from .moddata) (e8254e5)
+
 ## 2026-10-27 — the S5-12 recipe pinned at the packaging cuts 68030-261027-20 and 68060-261027-91 (rth1=2, no rootfs=; the modules rebuild byte-identical with the kit at HEAD); M-FL1 re-checked there, sizes within 641 bytes, conclusions unchanged (943b6fd)
 
 ## 2026-10-27 — C2-4 v14: `kbootset status` in a safe boot names the safe set it keeps (from Bench N160); S5-46: C4-1 v6 §5.2 / C2-3 v9, a motherboard controller's record names it by its kinfo id (`sd id=0000000N base=0`, no mobo flag, no loader change), RTH1 matches it and no longer matches a mobo record to the Z3660 window, kernels say `rth1=2`, and kbootset rewrites an old mobo root record only for such a kernel (9c99818, 3f12419, c87fb1b, 698d8c1, c7d69cf, e013b67)
