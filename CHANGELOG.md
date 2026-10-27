@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — plan: S5-09, a network in safe mode, opted in per box (a `safe` line in modreg.local.d marks a boot-class module safe=1); the default stays network-less (452c245)
+
 ## 2026-10-27 — Makefile: every box object and link depends on build/box/toolchain.id, the sha256 of the GCC 14 files amix-packages pins (2d2288f)
 
 Correction to S5-01's entry: the cf461e3 box build is kbootset 143cc1d8 (not 2c3570a3, a mixed build that kept three objects of
