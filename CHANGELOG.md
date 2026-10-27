@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-27 — STAGE 4 CLOSES (2db99e1, docs/plan/stage-4-exit.md)
+
+Every ledger cell has its result on the exit set, catalog 6e60a128 (kern46m -82, kern30m -17, kbootset -20, loader -9). Media of
+record: CD rd1n, the floppy pairs on -9, netinstall ni6. kabi 1.2 is frozen (abi=2ab48658); the next DDI name is 1.3. Carried to
+stage 5: S4-60, S4-61, the A4000D's rows, T-54 item 22's set (the fs carve, S4-33) and the netinstall extras.
+
 ## 2026-10-27 — spec 70 §4 (after freeze): safe mode names only the controllers it loads; on the WD + A4091 set the safe root is c6d0s1, ced0s1 normally (N145/N146). Plan: S4-67 (stage 5), kbootset marks safe=1 on the modules of every controller ranked before the root's (0e9a604, ba26d53)
 
 ## 2026-10-27 — bench: l5.sh keeps the box's generation id, the trial at id + 1 (the core loads boot modules from the booted generation's directory only) (113b103)
