@@ -1,10 +1,12 @@
-# C4-3 — the RAM-disk hand-off, version 2
+# C4-3 — the RAM-disk hand-off, version 3
 
 - **Status:** agreed 2026-10-26 (orchestrator), with the draft's (a) and
   (b); marked agreed with S4-11's first commit (4003c9f, 2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
   k46.1.2). Version 2 (2026-10-27, from rd1e): what `swap none` asks of
-  the kernel's swap configuration (§3). Other repositories build against
+  the kernel's swap configuration (§3); version 3 (2026-10-27, from the
+  port): `swap none` is the stock dummy swap device `/dev/fakeswap`, not
+  no device (§3). Other repositories build against
   this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
@@ -73,12 +75,20 @@ region's low end and the image at its top.
   `ramdisk_image` (§4).
 - **The RTH1 kernel half** applies the root selector (30 §3, M-RD2):
   - for `ramdisk`, `rootdev` becomes block major 20, minor 0;
-  - for `swap none`, no swap device is configured: the stock `swapconf`
-    runs with no device and looks nothing up (it would otherwise look up
-    `swapfile.bo_name`, a disk node the medium does not have, and panic:
-    rd1e, `swapconf lookupname failed - error 2`). The system runs from
-    the RAM disk without swap, and the installer configures swap itself
-    later, with `swap -a`, once the target disk is made;
+  - for `swap none`, the RTH1 half sets `swapfile.bo_name` to
+    `"/dev/fakeswap"`: the stock dummy disk, block 19,0 (`dumsize`
+    0xffffff, `dumstrategy` fails every I/O, so nothing is ever paged
+    there), the device the 1.0 floppy medium swaps on. Its console line
+    says `swap /dev/fakeswap`. No swap device at all is not an option:
+    without `swapadd`, `anon_resv` refuses every reservation (`ani_max`
+    0) and the first fork panics (`newproc - fork failed`, measured
+    2026-08-25), and the stock `swapconf` with the default name panics on
+    a medium without that disk node (rd1e, `swapconf lookupname failed -
+    error 2`). The installer adds the target disk's swap slice with
+    `swap -a` and deletes the fake, as its early and later target-swap
+    steps do when `swap -l` shows `/dev/fakeswap`. **The miniroot
+    carries the `/dev/fakeswap` node** (the stock miniroot's; both rd1
+    images have it);
   - `rootfstype` is set from the record, so `vfs_mountroot` tries only
     that type.
   - This runs in `rth1_apply`, after `marc_root` has linked the
@@ -116,7 +126,7 @@ The module (C4-2 §8; `match=always`, `majors=b:20`, pinned):
   shortened by the loader; the image's pages are untouched after a full
   boot under load (bench).
 - **M-RD2:** the root selector: a RAM-disk root (block major 20) mounts,
-  and `swap none` boots without a swap device (bench).
+  and `swap none` boots on `/dev/fakeswap` to multi-user (bench).
 
 ## 6. Not in this contract
 
