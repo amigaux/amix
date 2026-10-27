@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — gayle-k30/-k46 1.1.0-3 (124c578): interrupt I/O by default; round trip 159/159 — not published
+
+From amix-gayle-ide b2935fc (owner decision T-54 item 21: `param intr=0` in modreg.local.d selects polled), kit c2dc7fb; objects
+k30 e465bb12 / k46 5c8d7d64, rebuilt byte-identical. gayle30 5870d595 / 29696 B, gayle46 d3c55cf8 / 31232 B. The exit catalog
+6e60a128 is unchanged; the next-catalog root build/kspace/next/repo (b198e9e2) differs from it only in the two gayle rows.
+
 ## 2026-10-27 — GCC 14 userland: acompat 0.1-3, zlib 1.2.13-3, gzip 1.3.12-3, patch 2.5.9-3, gtar 1.14-3, amix-benchmark-gcc14 1.3 (5c871e1..8ffb88b) — not published
 
 TOOLCHAIN=gcc14 (-m68020-60) builds the remaining userland recipes as revision -3; the period recipes are unchanged (byte-identical
