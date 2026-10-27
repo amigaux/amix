@@ -51,6 +51,7 @@
  * from the packages installed under ROOT, every gate run against the
  * medium's facts and the loader it carries:
  *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] [--force] FACTS
+ *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] --ramdisk F FACTS
  *   media --floppy OUT1 OUT2 --boot1 F --boot2 F [--version N] [--ramdisk F] FACTS
  *   media --cd DIR [--cdboot F] [--version N] [--ramdisk F] FACTS
  * A disk store is written by kbootset's own core, members raw; the floppy
@@ -255,14 +256,14 @@ int mkstore_main(int argc, char **argv);
 static int
 media(const char *root, char **cmd, int argc)
 {
-	static char spec[32768], msg[400], specpath[1100], vstr[12];
+	static char spec[32768], msg[400], specpath[1100], vstr[12], ostr[12], sstr[12];
 	static struct ks k;
 	struct kb_facts f;
 	struct file d;
 	const char *disk = 0, *fl1 = 0, *fl2 = 0, *cd = 0, *cdboot = 0, *b1p = 0, *b2p = 0, *rd = 0;
 	unsigned long off = 0, size = 0, version = AX_LOADER_VERSION;
 	int force = 0;
-	char *av[16];
+	char *av[24];
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 l1, l2, id;
 	int i, n = 0, rc;
@@ -283,9 +284,7 @@ media(const char *root, char **cmd, int argc)
 		else if (!strcmp(cmd[i], "--force")) force = 1;
 	if ((!!disk + !!fl1 + !!cd) != 1 || (!cd && (!b1p || !b2p)) || (disk && !size))
 		usage();
-	if (disk) {			/* kbootset's own core: create, build, commit */
-		if (rd)
-			return fprintf(stderr, "kbootset: a disk store carries no RAM disk\n"), 2;
+	if (disk && !rd) {		/* kbootset's own core: create, build, commit */
 		b1 = slurp(b1p, &l1);
 		b2 = slurp(b2p, &l2);
 		if (l1 != AX_BOOT1_MAX)
@@ -308,8 +307,10 @@ media(const char *root, char **cmd, int argc)
 		fclose(d.f);
 		return rc == KS_OK ? 0 : rc == KS_EREFUSE ? (k.gate ? 4 : 3) : 1;
 	}
-	/* the floppy pair and the CD tree: gated here, written by mkstore's engine;
-	 * their loader reads the medium, the kernel never drives it (C2-4 §13) */
+	/* the floppy pair, the CD tree and a disk store that roots on a RAM disk
+	 * (the netinstall raw image, C4-3 §1): gated here, written by mkstore's
+	 * engine; their loader reads the medium, the kernel never drives it
+	 * (C2-4 §13); the disk store is read-only and its members raw, as the CD's */
 	if (f.bootdev[0])
 		fprintf(stderr, "kbootset: --bootdev is not used for a read-only medium: "
 			"its loader reads it, the kernel never drives it\n");
@@ -321,7 +322,7 @@ media(const char *root, char **cmd, int argc)
 		printf("kbootset: %s\n", msg);
 		return rc;
 	}
-	sprintf(specpath, "%.1000s.spec", fl1 ? fl1 : cd);
+	sprintf(specpath, "%.1000s.spec", fl1 ? fl1 : disk ? disk : cd);
 	if (!(sf = fopen(specpath, "w")) || fputs(spec, sf) < 0 || fclose(sf) != 0) {
 		perror(specpath);
 		return 1;
@@ -335,6 +336,16 @@ media(const char *root, char **cmd, int argc)
 		av[n++] = "-1"; av[n++] = (char *)b1p;
 		av[n++] = "-2"; av[n++] = (char *)b2p;
 		av[n++] = "-v"; av[n++] = vstr;
+	} else if (disk) {
+		sprintf(ostr, "%lu", off);
+		sprintf(sstr, "%lu", size);
+		av[n++] = "-o"; av[n++] = (char *)disk;
+		av[n++] = "-p"; av[n++] = ostr;
+		av[n++] = "-s"; av[n++] = sstr;
+		av[n++] = "-1"; av[n++] = (char *)b1p;
+		av[n++] = "-2"; av[n++] = (char *)b2p;
+		av[n++] = "-v"; av[n++] = vstr;
+		av[n++] = "-r";
 	} else {
 		av[n++] = "-C"; av[n++] = (char *)cd;
 		if (cdboot) {

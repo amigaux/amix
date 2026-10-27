@@ -533,6 +533,25 @@ grep -q "^module ramdisk root .* match=always safe=1$" $T/r1.adf.spec
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin $RFACTS > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always$" $T/r1.adf.spec
+# the netinstall raw image (C4-3 section 1): a disk store that roots on
+# the RAM disk, gated as the CD's generation and written by mkstore's
+# engine: read-only, members raw; the same bytes as mkstore on that spec
+modpkg ramdisk class=root match=always majors=b:20
+head -c 8454144 /dev/zero > $T/rdisk.img
+SOURCE_DATE_EPOCH=1793100000 $B/kbootset -R $R media --disk $T/rdisk.img --offset 65536 --size 8388608 \
+	--boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS > $T/out 2>&1 ||
+	{ echo "kbuild: media --disk --ramdisk" >&2; cat $T/out >&2; exit 1; }
+grep -q "^root ramdisk$" $T/rdisk.img.spec
+grep -q "^swap none$" $T/rdisk.img.spec
+grep -q "^module ramdisk root .* match=always safe=1$" $T/rdisk.img.spec
+! grep -q "z=deflate" $T/rdisk.img.spec
+$B/lsstore $T/rdisk.img 65536 > $T/out
+grep -q "lsstore: ok" $T/out
+head -c 8454144 /dev/zero > $T/rdisk2.img
+SOURCE_DATE_EPOCH=1793100000 $B/mkstore -o $T/rdisk2.img -p 65536 -s 8388608 -1 $B/rt/boot1.img \
+	-2 $B/rt/boot2.bin -r $T/rdisk.img.spec > /dev/null
+cmp -s $T/rdisk.img $T/rdisk2.img || { echo "kbuild: media --disk --ramdisk differs from mkstore -r on its spec" >&2; exit 1; }
+rm -f "${T:?}"/rdisk.img "${T:?}"/rdisk2.img "${T:?}"/rdisk.img.spec
 # the root filesystem's module of boot class (cdfs) is composed as a root
 # record on a generation that roots on it, and stays boot class otherwise
 # (C4-4 section 1.3)
