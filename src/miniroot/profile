@@ -49,11 +49,13 @@ trap '	echo "Running interactive shell..."
 	exec /bin/sh -i' 2
 
 # The boot-class modules (C3-5 section 5: cdfs on a RAM-disk medium). This miniroot's own
-# /bin/init reads no inittab, so its dlm sysinit entry is this line; a miniroot without
-# modadmin (a static kernel's floppy) skips it.
-if [ -x /sbin/modadmin ]
+# /bin/init reads no inittab, so its dlm sysinit entry is this line, once per boot (the
+# profile runs again as `sh /etc/profile`); a miniroot without modadmin (a static kernel's
+# floppy) skips it.
+if [ -x /sbin/modadmin ] && [ ! -f /tmp/.modadmin-B ]
 then
 	/sbin/modadmin -B </dev/console >/dev/console 2>&1
+	echo done > /tmp/.modadmin-B
 fi
 
 CDROM=/cdrom
