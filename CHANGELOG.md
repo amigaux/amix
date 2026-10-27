@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-27 — the RAM-disk installer medium boots to the interview on both lines: rd1h 9b7348e3 (bd1baf2, 29c1da8, 1ace7d5)
+
+miniroot: the profile runs /sbin/modadmin -B when present (the miniroot's own init reads no inittab), so the boot-class cdfs
+loads. tools/build-ramdisk-miniroot.sh: the 2 MiB RAM-disk root image, s5 on k30 and ufs on k46 (s5 bus-errors on 4 KiB pages),
+/sbin resolved inside the image (the stock /sbin → /bin symlink had sent modadmin to the golden box), /dev/kinfo, the boot-class
+module copies, gated read-back (modadmin bytes, fakeswap b 19,0, kinfo c 53,0). l11-set: catalog 8e99705e (kern30m -16, kern46m
+-81, kbootset -19, a4091 1.0.0-4). E954 (k46) and E955 (k30): `RTH1: root ramdisk (b 20,0) …, swap /dev/fakeswap, rootfstype
+ufs|s5`, the install script, cdfs loaded (k46), the CD found, the interview up with BASE.<line>'s target. A full install from the
+disc is not yet run. Noise: k30 -16 has cdfs built in (the boot module reports EEXIST); a4091-k30 prints "A4091 slow:" traces.
+
 ## 2026-10-27 — setup: one disc, two lines — BASE.k30 / BASE.k46 chosen by the kernel's kinfo line (926067f)
 
 build-install-iso.sh writes /install/profiles/BASE.k30 and BASE.k46 (the first --profile of each line, by INSTALL_CPU); setup.sh
