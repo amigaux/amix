@@ -222,7 +222,8 @@ generated source on the 030 line (`amix-kerntools/templates/sd.c.in`, per
   record (contract C4-6 version 3 §1, core patch 0043): the stock mount
   path has no load-by-type hook, so a demand class would have nothing to
   trigger it (changed after the freeze, 2026-10-26 and 2026-10-27). The
-  media's miniroot is s5.
+  media's miniroot is s5 on k30 and ufs on k46 (s5 is broken under the
+  4 KiB-page line, C4-6 version 4).
 - **030 line:** the relink kit separates cleanly — ufs has 82 globals and
   only `ufsinit` is referenced from outside (the `vfssw` row); s5 has 53 and
   is referenced through `s5init` and `inoinit` (`init_tbl`) (`L2` §2.5). The
