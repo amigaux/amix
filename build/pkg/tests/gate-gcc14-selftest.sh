@@ -21,7 +21,10 @@
 #     %fp; GCC 14 -O2 uses it as a general register) and one bound-checked
 #     against a memory operand, instead of reading them as code, and still
 #     reports a real movep after either;
-#   - amix-env.sh refuses gcc14 for a recipe that has not opted in.
+#   - amix-env.sh refuses gcc14 for a recipe that has not opted in;
+#   - the toolchain pin refuses a prefix that is not cf461e3's, and the
+#     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
+#     passes the pinned compiler and rejects the pre-fix one.
 # Exit 0 only if every check holds.
 
 set -e
@@ -192,5 +195,28 @@ for shape in fp mem; do
 	echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the $shape movep probe: $out"
 done
 ok "scan060-g14.py sizes %fp-indexed and memory-bounded switch tables, still catches a real movep after each"
+
+# The toolchain identity (gcc14-env.sh): a prefix whose specs differ from the
+# pin by one byte is refused before anything builds; the return-value ABI
+# self-check passes the pinned compiler.  Where gcc14-cross-amix still keeps
+# the pre-fix control prefix (build/prefix-e316f1b: pointers in %d0 only,
+# small structs in registers), the self-check must reject that compiler too.
+FP="$T/fakeprefix"
+cp -as "$AMIX_GCC14_PREFIX" "$FP"
+rm "$FP/lib/gcc/m68k-elf/14.2.0/specs"
+{ cat "$AMIX_GCC14_PREFIX/lib/gcc/m68k-elf/14.2.0/specs"; echo; } > "$FP/lib/gcc/m68k-elf/14.2.0/specs"
+if (AMIX_GCC14_PREFIX="$FP"; export AMIX_GCC14_PREFIX; . "$REPO/recipes/common/amix-env.sh") > "$T/pin.log" 2>&1; then
+	fail "amix-env.sh accepted a prefix whose specs differ from the pin"
+fi
+grep 'not the pinned toolchain' "$T/pin.log" >/dev/null && grep 'specs:' "$T/pin.log" >/dev/null ||
+	{ cat "$T/pin.log" >&2; fail "the pin refusal does not name specs"; }
+amix_g14_abi_selfcheck "$AMIX_GCC14_CC" >/dev/null 2>&1 || fail "the ABI self-check rejected the pinned compiler"
+OLDCC="$AMIX_GCC14_ROOT/build/prefix-e316f1b/bin/m68k-elf-gcc"
+if [ -x "$OLDCC" ]; then
+	if amix_g14_abi_selfcheck "$OLDCC" >/dev/null 2>&1; then fail "the ABI self-check passed the e316f1b compiler"; fi
+	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes cf461e3, rejects e316f1b"
+else
+	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes cf461e3 (no e316f1b control prefix to reject)"
+fi
 
 echo "gate-gcc14-selftest: PASS ($n checks)"

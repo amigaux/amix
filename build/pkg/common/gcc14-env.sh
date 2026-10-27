@@ -106,6 +106,19 @@
 #   outputs    build/gcc14/<recipe>/ and build/gcc14/pkg/, so a gcc14 build
 #              never overwrites a period artifact; the package revision is
 #              the recipe's own (a new revision: different bytes).
+#              AMIX_GCC14_BUILD_ROOT moves them, for a measurement build
+#              that must not touch the shipped artifacts.
+#   identity   the toolchain is PINNED: gcc14-cross-amix cf461e3, and the
+#              sha256 of its cc1, libgcc.a, libamixc99.a and specs in the
+#              prefix (AMIX_GCC14_PINS).  A prefix that differs fails before
+#              anything is built.  cf461e3 fixed two return-value ABI
+#              defects: pointers come back in %a0 AND %d0, and every struct
+#              is returned in memory through %a0 (AMIX cc, gcc 2.7 and libc
+#              -- div()/ldiv() -- do both).  Before it, GCC 14 code handed
+#              garbage pointers to period-compiled callers and read garbage
+#              from libc's div()/ldiv().  amix_g14_abi_selfcheck re-proves
+#              both from the compiler's own -S output on every build, so a
+#              re-pin can never quietly bring the defect back.
 
 case "${0##*/}" in
 gcc14-env.sh)
@@ -152,6 +165,47 @@ done
 	exit 1
 }
 
+# --- the toolchain identity (see the header) --------------------------------
+# path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.  A new
+# toolchain is a re-pin here (and a re-mint of every gcc14 package).
+AMIX_GCC14_COMMIT=cf461e38993100533fa6efe509ad0cbd2a735eea
+AMIX_GCC14_PINS="\
+libexec/gcc/m68k-elf/14.2.0/cc1 d4933e78be410d80a9e216af5ca52ee7db4e9810d36a324513c7a98f988aa57a
+lib/gcc/m68k-elf/14.2.0/libgcc.a 5d81450797fbf1ada217e86a5b643d159ef79c3396274a67e016bb5c5388867f
+m68k-elf/lib/libamixc99.a c73ccc172ce9dd23d818c3f0f71ae5724a3e946fa9d826d8e8e98b9266bf2ce3
+lib/gcc/m68k-elf/14.2.0/specs 93f9574f191ca0074b8af25cbfc910bc5f608392586f2246d6af4ca9a2281f13"
+_g14_pinbad=$(echo "$AMIX_GCC14_PINS" | while read _g14_p _g14_want; do
+	_g14_got=$(sha256sum "$AMIX_GCC14_PREFIX/$_g14_p" 2>/dev/null | cut -d' ' -f1)
+	[ "$_g14_got" = "$_g14_want" ] || echo "$_g14_p: ${_g14_got:-missing}, pinned $_g14_want"
+done)
+[ -z "$_g14_pinbad" ] || {
+	echo "[FAIL] TOOLCHAIN=gcc14: $AMIX_GCC14_PREFIX is not the pinned toolchain" >&2
+	echo "       (gcc14-cross-amix $AMIX_GCC14_COMMIT, gcc14-env.sh AMIX_GCC14_PINS):" >&2
+	echo "$_g14_pinbad" | sed 's/^/         /' >&2
+	exit 1
+}
+
+# amix_g14_abi_selfcheck <cc> -- the return-value ABI, read from <cc>'s own
+# -S output: a pointer return must set %a0 and %d0, a struct return (even a
+# 4-byte one) must store through %a0.  The pre-cf461e3 compiler fails both.
+amix_g14_abi_selfcheck() {
+	_ga_s=$(printf 'char *p(char *s){return s+1;}\n' |
+		$1 -m68020-60 -O2 -S -o - -x c - 2>&1 | sed -n '/^p:/,/rts/p')
+	_ga_t=$(printf 'struct i1 { int a; };\nstruct i1 r(int x){struct i1 v = { x }; return v;}\n' |
+		$1 -m68020-60 -O2 -S -o - -x c - 2>&1 | sed -n '/^r:/,/rts/p')
+	_ga_rc=0
+	case "$_ga_s" in *%a0*) ;; *) _ga_rc=1 ;; esac
+	case "$_ga_s" in *%d0*) ;; *) _ga_rc=1 ;; esac
+	case "$_ga_t" in *'(%a0)'*) ;; *) _ga_rc=1 ;; esac
+	if [ $_ga_rc -ne 0 ]; then
+		echo "[FAIL] $1: the return-value ABI is not AMIX's (pointer in %a0 and %d0, struct via (%a0)):" >&2
+		printf '%s\n%s\n' "$_ga_s" "$_ga_t" | sed 's/^/         /' >&2
+	fi
+	unset _ga_s _ga_t
+	return $_ga_rc
+}
+amix_g14_abi_selfcheck "$AMIX_GCC14_CC" || exit 1
+
 AMIX_CHECK060="${AMIX_CHECK060:-$AMIX_GCC14_ROOT/tools/check-68060-safe.py}"
 [ -f "$AMIX_CHECK060" ] || {
 	echo "[FAIL] TOOLCHAIN=gcc14: $AMIX_CHECK060 not found" >&2
@@ -170,7 +224,7 @@ export OBJDUMP="$_g14_bin/$TARGET-objdump"
 export STRIP="$_g14_bin/$TARGET-strip"
 export READELF="$_g14_bin/$TARGET-readelf"
 export AMIX_TARGET="$TARGET"
-export AMIX_SYSROOT AMIX_CHECK060 AMIX_PREDEFS AMIX_GCC14_CC AMIX_GCC14_ROOT
+export AMIX_SYSROOT AMIX_CHECK060 AMIX_PREDEFS AMIX_GCC14_CC AMIX_GCC14_ROOT AMIX_GCC14_COMMIT
 # autoconf's CPP: the compiler itself preprocesses correctly here, with the
 # same predefines and the same sysroot headers (no host /lib/cpp fallback).
 export AMIX_CPP="$CC -E"
@@ -189,5 +243,5 @@ export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-err
 # opt-in per recipe with -include "$AMIX_GCC14_DECLS".
 export AMIX_GCC14_DECLS="$AMIX_REPO_ROOT/recipes/common/gcc14/amix-decls.h"
 
-export AMIX_BUILD_ROOT="$AMIX_REPO_ROOT/build/gcc14"
-unset _g14_bin _g14_o
+export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/build/gcc14}"
+unset _g14_bin _g14_o _g14_pinbad
