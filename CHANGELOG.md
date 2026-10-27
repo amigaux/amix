@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-27 — the ledger's Gayle self-test cell cites N111/N117 (and N115/N116, N121/N122)
+
 ## 2026-10-27 — the exit ledger marks S4-32 (Gayle IDE) PASS on both lines in emulation; S4-30…S4-34 per module
 
 kerntools a12120b: the six Gayle rows incl. the first k46 interrupt run (the READ VERIFY self-test); §3's deferred self-test point
