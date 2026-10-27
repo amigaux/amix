@@ -3,6 +3,8 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-27 — kern30m k30.1.2.261027-20 and kern46m k46.1.2.261027-91: the kernel packages carry their cut's ufs (and on k30 s5) core-tier modules (S5-12, amix-dlm recipe 59f1a28) (9302dc9); next root catalog 2e7ee51a, round trip 197/197 — not published
+
 ## 2026-10-27 — GCC 14 userland built -mno-strict-align (owner decision 2026-10-27): acompat 0.1-5, zlib 1.2.13-5, gzip 1.3.12-5, patch 2.5.9-5, gtar 1.14-5, grep 2.5.1a-6, less 704-6, make 3.81-6, amix-benchmark-gcc14 1.3-3 (5a4ba57, 67a5674); one flag location, the pin check refuses a build without it; 42/42 EQUAL on the 030 and the 060; next root catalog 8c6a3b4c — not published
 
 ## 2026-10-27 — a4kt710-k30 / a4kt710-k46 1.0.0-1 (pkginst a4kt71030 / a4kt71046), the A4000T onboard NCR 53C710 root-class module (a3a287e); catalog 64d37aaa, round trip 172/172 — not published
