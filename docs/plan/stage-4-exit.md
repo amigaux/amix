@@ -92,8 +92,8 @@ alignment (fixed in a829c44, C3-3 version 5).
 | M-FS1 the carve and the rebuilt base | pending | pending (the relink kit's separation) |
 | U3 execution from `.data` through ITT0 (mapping) | pending | — (U3 is the 040/060 line's, 30 §8) |
 | U12 `vfssw` walkers read `nfstype` live | pending | pending |
-| M-RD1 the shortened `memory[]` region honoured | pending | pending |
-| M-RD2 the root selector: sd cards 0–3, the RAM disk, `swap none` | pending | pending |
+| M-RD1 the shortened `memory[]` region honoured | shown (installng rd1h on kern46m -81: the image at 0x9E00000, Available memory 2 MiB below Total; amix-installng bd1baf2, 29c1da8, 1ace7d5); the Bench's row pending | shown (rd1h on kern30m -16, the same lines); the Bench's row pending |
+| M-RD2 the root selector: sd cards 0–3, the RAM disk, `swap none` | the RAM disk shown (rd1h: `RTH1: root ramdisk (b 20,0) from the loader record, swap /dev/fakeswap, rootfstype ufs`, to the installer's interview); the Bench's row pending | the RAM disk shown (rd1h: rootfstype s5, to the interview); the Bench's row pending |
 | M-HALT1, the bench half | pending | pending |
 
 ## 6. The plan's rows
@@ -102,7 +102,7 @@ alignment (fixed in a829c44, C3-3 version 5).
 |---|---|
 | C4-1 … C4-6 the interfaces | **agreed**: C4-1 v3, C4-2 v3, C4-3 v1 (agreed with S4-11), C4-4 v5, C4-5 v5, C4-6 v2 |
 | S4-01 … S4-08 the core | built (core patches 0029–0043; state harness 257/257 on both kernels); their bench halves are rows above |
-| S4-10 … S4-12 loader and `kbootset` | built: S4-10 (placement), S4-11 (the RAM-disk image, 4003c9f: file 28 646, image + bss 28 420 of 28 672), S4-12 (composition); M-RD1/M-RD2 pending |
+| S4-10 … S4-12 loader and `kbootset` | built: S4-10 (placement), S4-11 (the RAM-disk image, 4003c9f: file 28 646, image + bss 28 420 of 28 672), S4-12 (composition); M-RD1/M-RD2 shown on both lines (rd1h), the Bench's rows pending |
 | S4-22, S4-23 the root-class kernels | pending |
 | S4-24 the 1.0 families retire | pending |
 | S4-25 packages | pending |
@@ -125,8 +125,10 @@ alignment (fixed in a829c44, C3-3 version 5).
 - **cdfs, S4-42**: the module (amix-cdfs ef96470) with its page-shift
   waivers (8fc87de), boot class on disk and promoted to root on the CD
   (core 0043); U12 with its first mount.
-- **M-RD1 / M-RD2 on the installer medium**: the RAM-disk image placed by
-  boot2 (S4-11), `memory[]` honoured, the `ramdisk` root and `swap none`.
+- **The Bench's formal M-RD1 / M-RD2 rows** on the installer medium rd1h:
+  shown on both lines by installng (rd1h on -81/-16: placement, `memory[]`
+  honoured, the `ramdisk` root on `/dev/fakeswap`, to the installer's
+  interview), the Bench's rows after the Gayle rows.
 - **The rest of §1–§5's cells** (the bytes of record, the media, the
   filesystems as modules after S4-40/S4-43, the measurements) and S4-74
   on metal.
