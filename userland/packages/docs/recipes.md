@@ -31,25 +31,25 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`gayle/`](gayle/) | `gayle-k30` / `gayle-k46` (`gayle30`/`gayle46`) — the A4000 Gayle IDE driver, a root-class module of each line (kabi 1.2), interrupt I/O by default after a boot self-test (`param intr=0` in `modreg.local.d` selects polled); kern30m -13 drove the Gayle itself, -14 does not; a page-crossing request counted, printed only with `param debug=1`; must not ship before amix-dlm's root-context check passes | 1.1.0-3 (amix-gayle-ide b2935fc) minted 2026-10-27, staged, not published |
 | [`cdfs/`](cdfs/) | `cdfs-k30` / `cdfs-k46` (`cdfs30`/`cdfs46`) — the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), a boot-class module of each line (kabi 1.2, `match=always`, `fs=cdfs`), promoted to a root record on a cdfs-rooted generation; needs kern46m -79 / kern30m -14 or later (the filesystem names) | 1.0.0-1 (amix-cdfs fd6cad8) minted 2026-10-27, staged, not published |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 3 | -9 (amix-dlm ea75578) minted 2026-10-27, staged, not published |
-| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -21 (amix-dlm 4442c76) minted 2026-10-27, staged, not published |
-| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76) minted 2026-10-27, staged, not published |
+| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -22 (amix-dlm 1308c0b) minted 2026-10-27, staged, not published; upgrade kern30m -20 together with it (an old mobo root record on a 030-mode Z3660 is rewritten only by -22) |
+| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76; 1308c0b builds the same modadmin, f51c98d6) minted 2026-10-27, staged, not published |
 | [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -11 (amix-dlm c2dc7fb, kabi 1.2) minted 2026-10-27, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
 **Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
-catalog `64d37aaa` since 2026-10-27 13:53 — `b2a0e874` plus a4kt710-k30/-k46 1.0.0-1 (S5-06), every
-other row unchanged. `b2a0e874` was the first stage-5 catalog: kbootset -21 and modtools -7, and no
-static 1.0 family (kernel-k30-u, kernel-k46-z, kernel-k46-zacd leave it, S5-34; their datastreams
-are kept in `build/kspace/superseded/static-1.0/`). A replaced root is kept byte-identical under
-`build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`: `b2a0e874` is `repo-20261027-1353`, `b198e9e2`
-(the stage-4 exit set plus gayle-k30/-k46 1.1.0-3) `repo-20261027-1344`, the stage-4 exit set
-(`6e60a128`) `repo-20261027-1329`. **Next kernel-space root** (S5-12, staged for the owner's promotion): `build/kspace/next/repo/`,
-catalog `2e7ee51a` — `64d37aaa` with kernel-k30-m -17 → -20 and kernel-k46-m -82 → -91, the cuts
-without built-in ufs/s5 whose kernel packages carry the filesystem modules; every other row
-unchanged, no module rows for ufs/s5. `64d37aaa` stays the catalog of record until it is promoted.
-`tools/kspace-roundtrip.sh` regenerates the newest set's catalog (the next root's while one is staged) from
-`build/kspace/pkg/`, and runs the stage-2 static-kernel rows from a second source that adds the
-static datastreams.
+catalog `915e09f3` since 2026-10-27 19:48 — the S5-12 set promoted from `build/kspace/next/repo`:
+kernel-k30-m -20 and kernel-k46-m -91 (the cuts without built-in ufs/s5, whose kernel packages carry
+the filesystem modules) and kbootset -22; every other row as in `64d37aaa`, no module rows for
+ufs/s5. A replaced root is kept byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`:
+`64d37aaa` (`b2a0e874` plus a4kt710-k30/-k46 1.0.0-1, S5-06) is `repo-20261027-1948`, `b2a0e874`
+(the first stage-5 catalog: kbootset -21, modtools -7, no static 1.0 family — kernel-k30-u,
+kernel-k46-z, kernel-k46-zacd left it, S5-34, datastreams in `build/kspace/superseded/static-1.0/`)
+`repo-20261027-1353`, `b198e9e2` (the stage-4 exit set plus gayle-k30/-k46 1.1.0-3)
+`repo-20261027-1344`, the stage-4 exit set (`6e60a128`) `repo-20261027-1329`. No next root is
+staged. `tools/kspace-roundtrip.sh` regenerates the newest set's catalog (the next root's while one
+is staged) from `build/kspace/pkg/` and requires it equal to that root's byte for byte, runs the
+stage-2 static-kernel rows from a second source that adds the static datastreams, and the S5-12 R5
+upgrade from `64d37aaa`'s kernels.
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
