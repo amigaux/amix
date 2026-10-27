@@ -264,16 +264,22 @@ the wrong one beside a second sd card. So:
 
 1. **kinfo** reports a card that sd took from a registration at the
    window's base as motherboard id 4 (`z3660-window`, C2-1 §2.1) with the
-   motherboard flag. It never reports id 0.
+   motherboard flag, never id 0. On k46 kinfo already names a card with
+   no AutoConfig board by its controller's name; `Z3660 SCSI`, the name
+   both the static row and z3660scsi register, gives id 4.
 2. **The canonical identity is `144b0100`, base 0.** `kbootset` composes
    a root or swap record on any Z3660 card, whether id `144b0100` or id 4,
    as `sd id=144b0100 base=00000000 …`, the form boot2 already records
    for the Z3660 boot vehicle (`st_identify`). A medium composed under
    amiberry then roots the same box in 030 mode.
-3. **RTH1 matches either.** The kernel half matches a root or swap record
-   with `id=144b0100` against a card whose id is `144b0100` or 4, base
-   not compared: there is one Z3660 per box. Every other id still
-   matches id and base exactly.
+3. **RTH1 matches either.** For a root or swap record with
+   `id=144b0100`, the kernel half (`src/rth1.c`, one source for both
+   lines) takes a card as the Z3660 when the AutoConfig board at its base
+   is `144b0100`, or when its base is the window's `0x10000000`; the
+   record's base is not compared. Exactly one card may answer: two (an
+   AutoConfig row and the window, in a mode that showed both) make the
+   hint fall back to the built-in root rather than guess. Every other id
+   matches as before.
 4. **The gates** (`kbootset`): the canonical record's key is
    `zorro:144b:01`, which z3660scsi's `match=` lists, so gate 3 and the
    safe set (C4-4 §2) see one controller in both modes.
