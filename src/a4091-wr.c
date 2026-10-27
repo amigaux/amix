@@ -77,8 +77,15 @@
  * The static driver hands the chip its own .data by the kernel-.data identity;
  * the module hands it the physical address of its dma_alloc area (C4-5 sec. 3).
  */
+#if	defined(A4091_A4KT) && !defined(A4091_MODULE)
+#error	"A4091_A4KT is a module target: build it with -DA4091_MODULE"
+#endif
 #ifdef	A4091_MODULE
+#ifdef	A4091_A4KT
+#define	A4091_NCARD	1		/* the A4000T has one onboard 53C710 */
+#else
 #define	A4091_NCARD	4
+#endif
 #define	A4091_CARD	c
 #define	A4091_BUS(p)	(a4091_dapa + ((ulong)(p) - (ulong)a4091_da))
 #define	A4091_BUSP(p)	((uchar *)A4091_BUS(p))
@@ -92,8 +99,25 @@
 #endif
 
 #define	A4091_PROD	0x02020054	/* AutoConfig: Commodore(0x0202) product 0x54 */
+#ifdef	A4091_A4KT
+/*
+ * The A4000T onboard 53C710 (S5-06, docs/A4000T-ONBOARD-710.md section 10): the
+ * fixed base $DD0000, registers at +0x40 written directly (no write shadow),
+ * DCNTL EA (connect _SLACK/_STERM), the host ID from the DIP bank at +0x3000,
+ * and the D42 record's ctlid = C2-1's motherboard id 3 (a4000t-710).
+ */
+#define	SIOP_OFF	0x00000040	/* 53C710 register block from $DD0000 */
+#define	WRSHADOW	0		/* direct writes */
+#define	A4091_DCNTL	0x20		/* EA */
+#define	A4091_ACFG(b)	((b) + 0x3000)	/* the page mapped beside the chip: DIP bank */
+#define	A4091_CTLID	0x00000003
+#else
 #define	SIOP_OFF	0x00800000	/* 53C710 register block within the board window */
 #define	WRSHADOW	0x40		/* A4091 write-shadow: writes go to reg+0x40 */
+#define	A4091_DCNTL	0x00
+#define	A4091_ACFG(b)	b		/* the AutoConfig page */
+#define	A4091_CTLID	A4091_PROD	/* the driver family's id, not the board's */
+#endif
 
 /* 53C710 register offsets (native, ARCH_710; read at +0, write at +WRSHADOW) */
 #define	R_SIEN		0x00
@@ -135,7 +159,12 @@
 #define	CTEST1_FMT	0xf0		/* DMA FIFO "byte empty" flags; ==0xf0 -> empty (siopreg.h:483) */
 #define	CTEST8_CLF	0x04		/* clear DMA + SCSI FIFOs (not self-clearing) (siopreg.h:595) */
 
+#ifdef	A4091_A4KT
+#define	HOST_ID		a4kt_hostid
+int		a4kt_hostid = 7;	/* the DIP bank's, read once in _load */
+#else
 #define	HOST_ID		7
+#endif
 
 extern caddr_t	sptalloc();
 extern int	printf();
@@ -285,7 +314,14 @@ ulong	a4091_maxpoll;
  * module by its own board index, since sd ranks the cards only after the
  * registrations close (C4-1 section 3.1): RTH1 and kinfo name the card.
  */
-#ifdef	A4091_MODULE
+#ifdef	A4091_A4KT
+#define	A4091_M_U77	"a4kt710: board %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
+#define	A4091_M_NOBASE	"a4kt710: board %d: no base recorded\n"
+#define	A4091_M_NOMAP	"a4kt710: board %d: cannot map it at 0x%x: no chip\n"
+#define	A4091_M_BERR	"a4kt710: board %d: bus error at 0x%x: no chip\n"
+#define	A4091_M_BWREF	"a4kt710: board %d: byte writes refused: chip not usable\n"
+#define	A4091_M_ATTACH	"a4kt710: board %d at 0x%x, NCS pages, D42 seam %s\n"
+#elif	defined(A4091_MODULE)
 #define	A4091_M_U77	"a4091: board %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
 #define	A4091_M_NOBASE	"a4091: board %d: no base recorded\n"
 #define	A4091_M_NOMAP	"a4091: board %d: cannot map it at 0x%x: no board\n"
@@ -601,7 +637,7 @@ int	card;
 	}
 
 	/* permanent NCS pages, like va2000_map_regs: never sptalloc on this line */
-	a = (volatile uchar *)dev_kvmap( base, A4091_MAPLEN, A4091_CM_NCS, A4091_NOSLEEP);
+	a = (volatile uchar *)dev_kvmap( A4091_ACFG(base), A4091_MAPLEN, A4091_CM_NCS, A4091_NOSLEEP);
 	s = (volatile uchar *)dev_kvmap( base + SIOP_OFF, A4091_MAPLEN, A4091_CM_NCS, A4091_NOSLEEP);
 	if (a == 0 || s == 0) {
 		if (a) dev_kvunmap( (char *)a, A4091_MAPLEN);
@@ -637,7 +673,7 @@ int	card;
 	r = &a4091_dmarec[card];
 	r->magic   = DMA_REC_MAGIC;
 	r->version = DMA_REC_VERSION;
-	r->ctlid   = A4091_PROD;	/* the driver family's id, not the board's */
+	r->ctlid   = A4091_CTLID;	/* the driver family's id, not the board's */
 	r->unit    = (ulong)card;
 	r->off     = (ulong)a4091_dma_off;
 
@@ -687,13 +723,17 @@ int	card;
 		if (base == 0)
 			base = 0x40000000;	/* last-resort guard (A4091 phys base) */
 #endif
-		acfg_tbl[card] = (volatile uchar *)sptalloc( 1, PG_V, phystopfn( (paddr_t)base), 0);
+		acfg_tbl[card] = (volatile uchar *)sptalloc( 1, PG_V, phystopfn( (paddr_t)A4091_ACFG(base)), 0);
 		siop_tbl[card] = (volatile uchar *)sptalloc( 1, PG_V, phystopfn( (paddr_t)base + SIOP_OFF), 0);
 		if (acfg_tbl[card] == 0 || siop_tbl[card] == 0) {
 			acfg_tbl[card] = 0;
 			siop_tbl[card] = 0;
 			return ENOMEM;
 		}
+#ifdef	A4091_A4KT
+		/* sptalloc maps by frame: the chip sits 0x40 into its page */
+		siop_tbl[card] = siop_tbl[card] + (SIOP_OFF & POFFMASK);
+#endif
 		phys_tbl[card] = base;
 	}
 #endif
@@ -719,7 +759,7 @@ a4091init()
 	WR8( R_SIEN,   0x00);
 	WR8( R_SCNTL0, 0xCC);				/* ARB_FULL|EPC|EPG         */
 	WR8( R_SCNTL1, 0x20);				/* ESR enable sel/resel     */
-	WR8( R_DCNTL,  0x00);				/* CF=SCLK/2 @50MHz, no EA   */
+	WR8( R_DCNTL,  A4091_DCNTL);			/* CF=SCLK/2 @50MHz; EA on A4000T */
 	WR8( R_DMODE,  0xE0);				/* burst8|FC2 (A4091)       */
 	WR8( R_SIEN,   0x00);
 	WR8( R_DIEN,   0x00);
@@ -1225,19 +1265,21 @@ a4091intr()
  * prints.  A board that does not map is skipped and the others are registered.
  * ------------------------------------------------------------------------- */
 
-#define	A4091_RANK	2	/* C4-1 section 4: class 2 zorro = .moddata rank=zorro */
-#define	A4091_NPROD	3
-
 extern int	sd_register();	/* (bool (*)(), uint, char *, char *, uint) */
-extern int	autocon();	/* (long prod, int index, long *base, long *size) */
 extern void	bcopy();
-
-static long	a4091_prod[A4091_NPROD] = { 0x02020054, 0xc0de0001, 0xc0de0002 };
-static char	*a4091_name[A4091_NPROD] = { "A4091 SCSI", "A4092 SCSI", "A4770 SCSI" };
 
 void		a4091_halt();
 int		a4091_nboards;	/* kmem-readable: boards registered                */
 ulong		a4091_halted;	/* kmem-readable: the halt pass ran (count)        */
+
+#ifndef	A4091_A4KT
+#define	A4091_RANK	2	/* C4-1 section 4: class 2 zorro = .moddata rank=zorro */
+#define	A4091_NPROD	3
+
+extern int	autocon();	/* (long prod, int index, long *base, long *size) */
+
+static long	a4091_prod[A4091_NPROD] = { 0x02020054, 0xc0de0001, 0xc0de0002 };
+static char	*a4091_name[A4091_NPROD] = { "A4091 SCSI", "A4092 SCSI", "A4770 SCSI" };
 
 int
 a4091_load( params)
@@ -1278,7 +1320,7 @@ char	*params;
 			r = &a4091_dmarec[k];	/* a4091attach does this on k46 */
 			r->magic   = DMA_REC_MAGIC;
 			r->version = DMA_REC_VERSION;
-			r->ctlid   = A4091_PROD;
+			r->ctlid   = A4091_CTLID;
 			r->unit    = (ulong)k;
 			r->off     = (ulong)a4091_dma_off;
 #endif
@@ -1303,6 +1345,248 @@ char	*params;
 	}
 	return 0;
 }
+#endif	/* !A4091_A4KT */
+
+#ifdef	A4091_A4KT
+/* ----------------------------------------------------------------------------
+ * The A4000T onboard 53C710 target (S5-06; docs/A4000T-ONBOARD-710.md section
+ * 10): the module a4kt710, .moddata match=mobo:a4000t-710, rank=mobo.  A mobo:
+ * key always matches at load, so _load is the gate, and the gate's first rule
+ * is absolute: on a Z3660 box any access to $DD00xx hangs the bus for good
+ * unless the A4000T ROM's NCR driver initialised the chip (T0, 2026-10-02), and
+ * neither bprobe nor Gary's timeout can catch that.  So (amix-dlm C4-2 v6
+ * section 8.1):
+ *   G-D  the declaration: the running Kickstart carries the A4000T's NCR driver,
+ *        a valid cold-start ROM tag named exactly "NCR scsi.device".  exec runs
+ *        every cold-start tag before the strap, so its presence means the chip
+ *        was initialised.  The parameter declared overrides it: -1 (default)
+ *        the scan decides, 0 never touch, 1 touch without the scan.  Not
+ *        declared: ENXIO, silent, nothing under $DD0000 touched;
+ *   G0   VPOSR: AGA (keeps the A3000's WD33C93 untouched);
+ *   G1   map the chip page and the DIP page; a first-touch bprobe of ISTAT;
+ *   G2   read-only fingerprint: ISTAT's reserved bits clear and not 0xff,
+ *        DSTAT DFE on an idle chip, CTEST8 (revision) and ISTAT read twice alike.
+ * Then the attach quiesce (the ROM driver leaves SIEN and DIEN enabled), the
+ * host ID from the DIP bank, the D42 record, and one sd_register, rank mobo.
+ * ------------------------------------------------------------------------- */
+
+#define	A4KT_BASE	0x00DD0000L
+#define	A4KT_RANK	3	/* C4-1 section 4: class 3 mobo = .moddata rank=mobo */
+#define	A4KT_ROM	0x00F80000L	/* the running Kickstart, 512 KiB */
+#define	A4KT_ROMLEN	0x00080000L
+#define	A4KT_CM_ROM	0x60		/* dev_kvmap: non-cacheable */
+#define	RTC_MATCHWORD	0x4AFC		/* exec/resident.h */
+#define	RTF_COLDSTART	0x01
+#define	RT_SIZE		26		/* struct Resident */
+#ifndef	A4KT_VPOSR
+#define	A4KT_VPOSR()	(*(volatile ushort *)0xDFF004)
+#endif
+#define	A4KT_IS_AGA(v)	(((((v) >> 8) & 0x7F) & 0x0F) >= 2)	/* as amix-gayle-ide */
+
+extern int	bprobe();
+#ifndef	A4091_KVA
+extern void	sptfree();	/* (va, npages, flag): flag 1 = segkmem_mapout */
+#endif
+
+ulong	a4kt_gate;	/* kmem-readable: the gate that said no (1 G-D, 2 G0, 3 G1, 4 G2) */
+uchar	a4kt_rev;	/* kmem-readable: CTEST8's revision nibble at attach */
+long	a4kt_declared;	/* kmem-readable: the declared parameter as _load took it */
+ulong	a4kt_tagoff;	/* kmem-readable: the NCR tag's offset in the Kickstart, 0 none */
+
+/* declared=<-1|0|1> from _load's "name=value ..." string; -1 when absent */
+static long
+a4kt_param( params)
+char	*params;
+{
+	static char	key[] = "declared=";
+	char	*p;
+	int	i, neg;
+	long	v;
+
+	if (params == 0)
+		return -1;
+	for (p = params; *p; ) {
+		for (i = 0; key[i] && p[i] == key[i]; ++i)
+			;
+		if (key[i] == 0) {
+			p += i;
+			neg = (*p == '-');
+			if (neg)
+				++p;
+			v = 0;
+			while (*p >= '0' && *p <= '9')
+				v = v * 10 + (*p++ - '0');
+			return neg ? -v : v;
+		}
+		while (*p && *p != ' ')
+			++p;
+		while (*p == ' ')
+			++p;
+	}
+	return -1;
+}
+
+#define	A4KT_BE32(q)	((ulong)(q)[0] << 24 | (ulong)(q)[1] << 16 | (ulong)(q)[2] << 8 | (ulong)(q)[3])
+
+/*
+ * G-D's scan: map the Kickstart read-only and look for a valid ROM tag -- the
+ * word 0x4AFC at an even offset, rt_MatchTag its own address, RTF_COLDSTART,
+ * rt_Name inside the image and exactly "NCR scsi.device".  1 = found.
+ */
+static int
+a4kt_romtag()
+{
+	static char	want[] = "NCR scsi.device";
+	volatile uchar	*rom, *t, *n;
+	ulong	off, nm;
+	int	i, found;
+
+#ifdef	A4091_KVA
+	rom = (volatile uchar *)dev_kvmap( A4KT_ROM, A4KT_ROMLEN, A4KT_CM_ROM, A4091_NOSLEEP);
+#else
+	rom = (volatile uchar *)sptalloc( (int)(A4KT_ROMLEN >> PNUMSHFT), PG_V,
+	    phystopfn( (paddr_t)A4KT_ROM), 0);
+#endif
+	if (rom == 0) {
+		printf( "a4kt710: cannot map the Kickstart at 0x%x\n", (int)A4KT_ROM);
+		return 0;
+	}
+	found = 0;
+	for (off = 0; !found && off + RT_SIZE <= A4KT_ROMLEN; off += 2) {
+		t = rom + off;
+		if (t[0] != (RTC_MATCHWORD >> 8) || t[1] != (RTC_MATCHWORD & 0xff))
+			continue;
+		if (A4KT_BE32(t + 2) != A4KT_ROM + off || !(t[10] & RTF_COLDSTART))
+			continue;
+		nm = A4KT_BE32(t + 14);
+		if (nm < A4KT_ROM || nm + sizeof want > A4KT_ROM + A4KT_ROMLEN)
+			continue;
+		n = rom + (nm - A4KT_ROM);
+		for (i = 0; i < sizeof want && n[i] == (uchar)want[i]; ++i)
+			;
+		if (i == sizeof want) {
+			found = 1;
+			a4kt_tagoff = off;
+		}
+	}
+#ifdef	A4091_KVA
+	dev_kvunmap( (char *)rom, A4KT_ROMLEN);
+#else
+	sptfree( (char *)rom, (int)(A4KT_ROMLEN >> PNUMSHFT), 1);
+#endif
+	return found;
+}
+
+static void
+a4kt_unmap()
+{
+	if (siop_tbl[0] == 0)
+		return;
+#ifdef	A4091_KVA
+	dev_kvunmap( (char *)acfg_tbl[0], A4091_MAPLEN);
+	dev_kvunmap( (char *)siop_tbl[0], A4091_MAPLEN);
+#else
+	sptfree( (char *)acfg_tbl[0], 1, 1);
+	sptfree( (char *)(siop_tbl[0] - (SIOP_OFF & POFFMASK)), 1, 1);
+#endif
+	acfg_tbl[0] = 0;
+	siop_tbl[0] = 0;
+}
+
+/* G1 + G2, on the current card's mapping: 1 = a 53C710 answers */
+static int
+a4kt_fingerprint()
+{
+	uchar	i1, i2, c1, c2;
+
+	if (bprobe( (caddr_t)(siop + R_ISTAT), -1))
+		return 0;
+	i1 = RD8(R_ISTAT);
+	if ((i1 & 0x14) != 0 || i1 == 0xff)
+		return 0;
+	c1 = RD8(R_CTEST8);
+	if (!(i1 & (ISTAT_SIP | ISTAT_DIP)) && !(RD8(R_DSTAT) & 0x80))
+		return 0;
+	i2 = RD8(R_ISTAT);
+	c2 = RD8(R_CTEST8);
+	if (i2 != i1 || c2 != c1)
+		return 0;
+	a4kt_rev = (uchar)(c1 >> 4);
+	return 1;
+}
+
+int
+a4kt710_load( params)
+char	*params;
+{
+	int	e;
+	ulong	pa;
+	struct dma_rec	*r;
+
+	a4kt_gate = 1;
+	a4kt_declared = a4kt_param( params);
+	if (a4kt_declared == 0 || (a4kt_declared != 1 && !a4kt_romtag()))
+		return ENXIO;		/* G-D: nothing under $DD0000 is touched */
+	a4kt_gate = 2;
+	if (!A4KT_IS_AGA( A4KT_VPOSR()))
+		return ENXIO;
+
+	a4091_da = (struct a4091_dmaarea *)dma_alloc(
+	    (ulong)sizeof (struct a4091_dmaarea), &pa);
+	if (a4091_da == 0) {
+		printf( "a4kt710: no DMA memory for %d bytes\n",
+		    (int)sizeof (struct a4091_dmaarea));
+		return ENOMEM;
+	}
+	a4091_dapa = pa;
+	bcopy( (char *)a4091_tmpl, (char *)a4091_da->d_script,
+	    sizeof a4091_da->d_script);
+
+	a4kt_gate = 3;
+	a4091_mbase[0] = A4KT_BASE;
+	if (a4091map( 0) != 0)
+		goto out;		/* k46 says why on the console */
+	a4kt_gate = 4;
+	if (!a4kt_fingerprint()) {
+		printf( "a4kt710: no 53C710 answers at 0x%x\n", (int)(A4KT_BASE + SIOP_OFF));
+		a4kt_unmap();
+		goto out;
+	}
+
+	/* the attach quiesce: the A4000T ROM driver leaves SIEN and DIEN enabled */
+	WR8( R_SIEN, 0x00);
+	WR8( R_DIEN, 0x00);
+	{ uchar i = RD8(R_ISTAT);
+	  if (i & ISTAT_SIP) (void)RD8(R_SSTAT0);
+	  if (i & ISTAT_DIP) (void)RD8(R_DSTAT); }
+	a4kt_hostid = (int)(*(volatile ulong *)acfg & 7);	/* the DIP bank, one long */
+
+	r = &a4091_dmarec[0];		/* a4091attach did this on k46 already */
+	r->magic   = DMA_REC_MAGIC;
+	r->version = DMA_REC_VERSION;
+	r->ctlid   = A4091_CTLID;
+	r->unit    = 0;
+	r->off     = (ulong)a4091_dma_off;
+	a4kt_gate = 0;
+	printf( "a4kt710: onboard 53C710 rev %d, host id %d\n", (int)a4kt_rev, a4kt_hostid);
+
+	e = sd_register( a4091queue, (uint)0, (char *)A4KT_BASE,
+	    "A4000T onboard SCSI", A4KT_RANK);
+	if (e) {
+		printf( "a4kt710: sd_register failed (errno %d)\n", e);
+		a4091_halt();
+		dma_free( (char *)a4091_da, (ulong)sizeof (struct a4091_dmaarea));
+		a4091_da = 0;
+		return e;
+	}
+	a4091_nboards = 1;
+	return 0;
+out:
+	dma_free( (char *)a4091_da, (ulong)sizeof (struct a4091_dmaarea));
+	a4091_da = 0;
+	return ENXIO;
+}
+#endif	/* A4091_A4KT */
 
 /*
  * _halt (C4-2 section 5): stop SCRIPTS on every mapped board -- the init path's
@@ -1326,6 +1610,11 @@ a4091_halt()
 }
 
 /* no _unload: unload=never, a root-class module is pinned (C4-2 section 1) */
+#ifdef	A4091_A4KT
+MOD_HDRV_WRAPPER(a4kt710, a4kt710_load, 0, a4091_halt,
+		"A4000T onboard SCSI (NCR 53C710)");
+#else
 MOD_HDRV_WRAPPER(a4091, a4091_load, 0, a4091_halt,
 		"A4091/A4092/A4770 SCSI (NCR 53C710)");
+#endif
 #endif	/* A4091_MODULE */
