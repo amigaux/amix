@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 4
+# C4-2 — what a root-class driver changes, version 5
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -8,7 +8,8 @@
   k30, whose minted kernel (kern30m -10) does not export it (§3);
   version 4 (2026-10-27, S4-74's first metal row): a module carries
   every arm the kernel build applied to the static driver it replaces
-  (§1.1).
+  (§1.1); version 5 (2026-10-27): §1.1's example names the mechanism, a
+  dirty copyback line written back over the board's data.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -55,11 +56,16 @@ module's README lists them.**
 Found on metal (S4-74, the A4000T with a real 68060, kern46m -81): the
 port's `f4arms --cache 60` pass stamps `z3660_cache` = 60 (the 68060
 data-cache arm) into every static k46 z3660scsi. The module kept its
-common's 0 (no cache maintenance), so the first directory read through
-piscsi came back from a stale data cache and `swapconf` panicked
-(`lookupname /dev/dsk/c6d0s2 failed - error 20`). Emulators need 0, so
+.data word's 0 (no cache maintenance), so a dirty copyback line was
+written back over the data the Z3660's ARM had just put in DDR, and the
+first directory read through piscsi failed: `swapconf` panicked
+(`lookupname /dev/dsk/c6d0s2 failed - error 20`). The mechanism is the
+write-back, not a stale read: a whole-cache push between two lookup
+passes gave the same ENOTDIRs (August's ATT4 A/B), and only the arm's
+push before the transfer closes it. So a module must push before the
+transfer; invalidating after a read is not enough. Emulators need 0, so
 every emulator row passed. The fix is the module's own (ZS-06: the arm
-from `cputype` at `_load`, a `cache=` parameter).
+from `cputype` at `_load`, a `cache=` parameter, 0 on k30 always).
 
 ## 2. `_load` in the root pass
 
