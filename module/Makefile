@@ -2,9 +2,10 @@
 # one per kernel line, built with amix-dlm's ABI kit (the kit's docs/guide.md;
 # contracts C3-1, C4-1, C4-2, C4-5).
 #
-#   make -C module            both lines: build/k30/mod.d/a4091 and
-#                             build/k46/mod.d/a4091, each checked by the
-#                             kit's modfix and modcheck.py
+#   make -C module            both lines, both modules: build/<line>/mod.d/a4091
+#                             and build/<line>/mod.d/a4kt710 (module/a4kt710/,
+#                             the A4000T onboard 53C710, S5-06), each checked
+#                             by the kit's modfix and modcheck.py
 #   make -C module k30        one line (or k46)
 #   make -C module clean
 #
@@ -28,11 +29,13 @@ all: $(LINES)
 
 $(LINES):
 	$(MAKE) KIT=$(call kit,$@)
+	$(MAKE) -C a4kt710 KIT=$(call kit,$@)
 
 clean: $(LINES:%=clean-%)
 
 $(LINES:%=clean-%): clean-%:
 	$(MAKE) KIT=$(call kit,$*) clean
+	$(MAKE) -C a4kt710 KIT=$(call kit,$*) clean
 
 .PHONY: all clean $(LINES) $(LINES:%=clean-%)
 
