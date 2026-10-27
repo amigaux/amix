@@ -1198,3 +1198,106 @@ KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-71/build/<line>/mod.d
 init routines returning in this context (C4-6 §3) come with S4-40's
 carved modules. U12, every walker of `vfssw` reading `nfstype` live, is
 measured with cdfs's first mount (S4-42).
+
+## Stage 4: the exit batch (docs/plan/stage-4-exit.md)
+
+The exit ledger's rows that no earlier run covers, in emulation on both
+lines, on the exit set (catalog 6e60a128: kern46m -82, kern30m -17,
+kbootset -20, loader -9). Each starts from a module vehicle rooted
+through z3660scsi (N103r's shape on k46, N104r's on k30) unless it says
+otherwise, and keeps the console log as its evidence.
+
+### A damaged root module selects the menu (S4-04, 80 §2)
+
+boot2 checks every root module it places against the manifest's
+`crc32=` before the kernel starts (`load_member`), so a damaged member
+never reaches the core. A damaged generation is refused, and boot2
+tries the next one in the order; when none loads it says so and opens
+the menu. To reach the menu, damage the member in **every** generation
+of the order: each generation stores its own copy.
+
+1. On the host, in a copy of the vehicle: find each generation's
+   `module z3660scsi root <size> at=0x<at> …` record (`grep -a` on the
+   boot slice, or `kbootset status` on the box beforehand). `at=` is
+   relative to the store, so the byte offset in the image is the boot
+   slice's offset plus `at`.
+2. Flip 16 bytes in the middle of each copy (offset + `at` + size/2) with
+   `dd conv=notrunc`. Leave the manifests alone.
+3. Boot.
+
+| Expected | |
+|---|---|
+| per generation tried | `amix-boot: module z3660scsi <size> bytes`, then `amix-boot: L3 member damaged (generation <id>)` |
+| then | `amix-boot: nothing loaded`, and the menu: the generations, safe mode, the previous generation |
+| not this row | a generation of the order without the damaged copy boots instead: that is the fallback, also right |
+
+The core's own check (`dlm: root module <name> damaged; not linked`) is
+for bytes changed after boot2 checked them. A box cannot produce that,
+so it stays the host harness's (core patch 0034, `rp2`).
+
+### L5 by root modules, and the core's silent skip (C4-4 §4, version 3)
+
+**L5.** `kbootset` refuses a generation whose root set does not fit the
+arena (gate 4), from `build` and from `commit --spec` alike. So, as
+S3-43's L5, the row writes a store built on the host by
+`tests/bench/s4-exit/l5.sh` over a slot copy's boot slice:
+
+```
+sh tests/bench/s4-exit/l5.sh <root copy> <root copy>/stand/gen/<id>/build <outdir> <slice bytes>
+```
+
+Here `<id>` is the vehicle's default generation, as `kbootset build`
+composed it on the box. Generation 1 of the image is that generation;
+generation 2 (trial) is the same, with its last root module's `bss=`
+raised to the arena's capacity. Both still name the boot- and
+demand-class copies under `/stand/gen/<id>/mod/`, so do not collect
+`<id>` on the box. `<outdir>/expected.txt` has the lines for this
+generation:
+
+| Boot | Expected |
+|---|---|
+| 1 | `amix-boot: module <name> <size> bytes` for each root module before the raised one; `amix-boot: the arena needs <n> bytes, it has 393216` (n above 393216); `amix-boot: L5 arena overflow (generation 2)`; then `amix-boot: generation 1, kernel …` and multi-user |
+| 2 | `amix-boot: L8 trial not confirmed (generation 2)`; generation 1 boots |
+
+**The silent skip.** boot2 places every root record (it evaluates no
+`match=`). The core skips an entry none of whose keys names a board
+here, without a line. On the Z3660-only vehicle, install
+`a4091-<line>` 1.0.0-5 beside z3660scsi (no A4091 in the config), then
+`kbootset build` and `kbootset commit`.
+
+| Expected | |
+|---|---|
+| the `build` file | `module a4091 root …` and `module z3660scsi root …` |
+| boot2 | `module a4091 <size> bytes` and `module z3660scsi <size> bytes`: both placed |
+| the kernel | no line naming a4091; `dlm: 1 root module(s) linked`; the root on `c6d0s1`; `modadmin -l` lists z3660scsi and not a4091 |
+
+### sd_register after sd's first open (C4-1 §3)
+
+The probe is `tests/bench/s4-exit/`, the boot-class module `sdlate`
+(`match=always`). Its `_load` runs at the first sysinit entry, after the
+root's open has closed registration, and calls `sd_register` once. It
+returns `ENXIO`, so it is never linked. Build it and its stand-in package
+as S4-71's probe:
+
+```
+make -C tests/bench/s4-exit KIT=<amix-dlm>/build/kit/<line>
+KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-exit/build/<line>/mod.d/sdlate <line> <outdir>
+```
+
+| Expected (every boot with it installed) | |
+|---|---|
+| the core | `sd: sdlate registered after the controllers closed` |
+| the probe | `sdlate: sd_register -> 16, PASS: refused after sd's first open` |
+| then | the boot goes on as without it; no new disk; `modadmin -l` does not list sdlate |
+
+### Not Bench rows
+
+- **M-MOD1, M-FL1** are host computations (S4-70):
+  `docs/measurements/2026-10-27-m-mod1-m-fl1.md`.
+- **U3, the mapping half.** Every k46 root-class boot runs a module's
+  code from the arena in `.data` through ITT0: z3660scsi on N103r first.
+  The ledger cites those rows.
+- **S4-24, the 1.0 families retire.** Not a boot: every 1.1 medium of
+  record carries one kernel image per line (kern46m, kern30m), and from
+  the exit the static families are no longer built for 1.1. A check of
+  the media and the catalog by their owners.
