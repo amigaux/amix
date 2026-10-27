@@ -61,6 +61,7 @@ $(B)/nlmake: tests/host/nlmake.c kbootset/knl.c $(COMMON)/rel.c $(COMMON)/*.h kb
 #   AX_FLOPPIES  boot floppy images, for inflate-kernels.sh
 #   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
 #   AX_STOCK     the stock usr/sys tree and AX_NAMELIST (a k30 unix.sym), for carve.sh
+#   AX_UFS46     the port's fsobj-patch.py ufs object for k46, for carve.sh
 test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(B)/nlmake $(B)/kbootset-nz
 	$(B)/t_host
 	B=$(B) sh tests/host/store-roundtrip.sh
@@ -76,7 +77,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 		{ echo "kbootset/kreg.c differs from abi/registry/majors: sh tools/mkkreg.sh > kbootset/kreg.c"; false; }
 	B=$(B) AX_FLOPPIES="$(AX_FLOPPIES)" sh tests/host/inflate-kernels.sh
 	B=$(B) AX_KERNELS="$(AX_KERNELS)" AX_ELF2BREL="$(AX_ELF2BREL)" sh tests/host/rel-kernels.sh
-	B=$(B) AX_STOCK="$(AX_STOCK)" AX_NAMELIST="$(AX_NAMELIST)" sh tests/host/carve.sh
+	B=$(B) AX_STOCK="$(AX_STOCK)" AX_NAMELIST="$(AX_NAMELIST)" AX_UFS46="$(AX_UFS46)" sh tests/host/carve.sh
 
 $(B)/bbframe: tools/bbframe.c | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<

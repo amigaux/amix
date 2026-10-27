@@ -54,7 +54,8 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | S5-10, S5-11 the cuts without ufs and s5 | pending | pending |
 | S5-12 the kernel packages carry ufs and s5; `core.list` | pending | pending |
 | root on ufs as a module | pending | pending |
-| root on s5 as a module | pending (C4-6 v4: s5 under the 4 KiB-page line) | pending |
+| root on s5 as a module | — (no k46 s5 module, S5-37) | pending |
+| a 2 KiB-block ufs on k46: mount, `mmap` and page I/O through the converted `ufs_allocmap`/`ufs_freemap` | pending | — |
 | safe mode on a ufs root and on an s5 root | pending | pending |
 | a damaged ufs module selects the menu | pending | pending |
 | S4-71's init halves: ufs and s5 in the root pass and at the first `sysinit` | pending | pending |

@@ -29,3 +29,15 @@ for fs in ufs s5; do
 	done
 	echo "carve: $fs wrapped: $(sed -n "s/^modcheck: $fs: ok (k30.1.2, boot, \(.*\))/\1/p" $T/$fs.out)"
 done
+# k46 (S5-04): the stock ufs object as the port's fsobj-patch.py writes it
+# for 4 KiB pages, module sites included (AX_UFS46), passes modcheck's
+# page scan with no waiver.  s5 has no k46 module (a stage-5 carry: its
+# own 2 KiB sites).  Skipped unless AX_UFS46 is set and the k46 kit exists.
+[ -n "$AX_UFS46" ] || { echo "carve: AX_UFS46 unset, the k46 ufs case skipped"; exit 0; }
+[ -d $B/kit/k46 ] || { echo "carve: no $B/kit/k46 (make kit), the k46 ufs case skipped"; exit 0; }
+python3 -I tools/carve.py wrap --fs ufs --obj "$AX_UFS46" --filesys "$AX_STOCK/master.d/filesys.o" \
+	--build 68060-261101-01 $T/ufs46 > /dev/null
+make -s -C $T/ufs46 KIT=$PWD/$B/kit/k46 > $T/ufs46.out 2>&1 || { cat $T/ufs46.out >&2; exit 1; }
+grep -q "modcheck: ufs: ok (k46.1.2, boot, " $T/ufs46.out
+! grep -q "PAGESHIFT_OK" $T/ufs46/Makefile	# no waiver
+echo "carve: ufs wrapped for k46: $(sed -n 's/^modcheck: ufs: ok (k46.1.2, boot, \(.*\))/\1/p' $T/ufs46.out), no waiver"
