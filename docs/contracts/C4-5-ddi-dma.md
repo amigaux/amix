@@ -1,4 +1,4 @@
-# C4-5 — DDI v1.2, the DMA interface, version 8
+# C4-5 — DDI v1.2, the DMA interface, version 9
 
 - **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
@@ -15,7 +15,8 @@
   §5.4's read-after-complete rule stays (§5.3); version 7 (2026-10-27):
   the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3); version
   8 (2026-10-27, from N109's sense lines): `dma_forcebounce` never
-  bounces `dma_alloc` memory (§5.3). Other
+  bounces `dma_alloc` memory (§5.3); version 9 (2026-10-27, from N110):
+  `dma_forcefail` is a count that clears itself (§5.3). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
@@ -235,9 +236,14 @@ pool does not promise.
     missed bounce passes in emulation and only metal shows it. Measured:
     N109 (a4091-k30 1.0.0-3 on kern30m -14), a raw 2 MiB read and `cp` and
     `sync` identical with it 0 and 1;
-  - `dma_forcefail` (version 7) nonzero makes every prepare that would
-    bounce miss: `dma_addr` gives 0 and the driver's path that does not
-    arm (§2.2) runs. The stock kernel never hands a driver more than the
+  - `dma_forcefail` (version 7; a count since version 9): N > 0 makes
+    the next N prepares that would bounce miss, one off the count each,
+    so it clears itself at 0 and can never be left on. `dma_addr` gives 0
+    and the driver's path that does not arm (§2.2) runs. As a plain
+    switch it missed every bounce while set, and on a Z3660-bound box
+    every buffer above 0x08000000 bounces: N110 saw 321 misses for one
+    intended (filesystem fragments, then syslogd writing the miss lines).
+    Set it to 1 for one miss. The stock kernel never hands a driver more than the
     pool can bounce (raw I/O a page a command, block I/O a filesystem
     block, GSIO at most 64 KiB), so only this hook reaches that path from
     the box.
@@ -278,8 +284,8 @@ pool does not promise.
   (CACR CD) before the bounce is copied back or the driver reads the
   bytes.
 - **The test hooks:** the kernel globals `dma_forcebounce` (bounce every
-  segment) and `dma_forcefail` (every bounce misses), both 0 in
-  production (§5.3).
+  segment but `dma_alloc` memory) and `dma_forcefail` (the next N bounces
+  miss, self-clearing), both 0 in production (§5.3).
 - **The read-after-complete rule:** the identity map is cacheable (the
   entry-0 decode, §5.3), so a driver reads what the chip wrote into
   `dma_alloc` memory (status, message buffers) only after a
