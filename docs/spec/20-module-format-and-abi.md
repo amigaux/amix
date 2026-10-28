@@ -211,7 +211,7 @@ checked against the built kernels before they are frozen (M-REG1).
 | Registry | Entries |
 |---|---|
 | System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined, `tmp/2026-10-22-modules-proposal/refute-ashnazag-dlm-init-claim.md`) |
-| Character majors | 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1); stock rows free in the images examined: 7, 38, 39, 42–45, 47–48, 54–69 (`L2`:283) |
+| Character majors | 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1), 54 `paula` (the Paula module, amix-paula, kabi 1.3; free in the stock tables and in the port's static kernels, whose static `/dev/paula` takes 53); stock rows free in the images examined: 7, 38, 39, 42–45, 47–48, 55–69 (`L2`:283) |
 | Block majors | 18 `dd` (stock); 20 `ram` — the stock kmem-backed RAM disk (stock `tmp/2026-08-26-svr4-refs/amix-src/master.d/kernel.c:307`, driver `amiga/driver/ram.c` there), replaced in 1.1 by our `ramdisk` module on the same major (`30-module-core.md` §7); free: 0–15, 21–31 (`L2` §2.3) |
 | Filesystem names | `ufs`, `s5`, `cdfs` (root class); stock rows otherwise unchanged; table grown by the core (`30-module-core.md` §6) |
 | Interrupt chains | INT2 (Zorro/CIA-A level 2), INT6 (Zorro/CIA-B level 6); attachment only through `intr_attach` |
