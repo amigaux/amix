@@ -61,7 +61,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 
 | ID | Item | Owner | Class | Needs | Blocks | Est. |
 |---|---|---|---|---|---|---|
-| S5-16 | **The A4000T in 030 mode with S5-15**: the root record matches the window board, a second sd card beside it keeps the root's name | the Bench | metal | S5-13, S5-15 | — | 0.5 |
+| S5-16 | **The A4000T in 030 mode with S5-15**: the root record matches the window board (passed on metal 2026-10-28, candidate b1f564f4: generation 6 = `68030-261027-20`, root `c6d0s1` from the window board's record, check 0); a second sd card beside it keeps the root's name, on Gayle IDE if a drive is fitted, else in emulation only. **a4kt710 is unsupported in 030 mode**, for three reasons: the A3000 Kickstart has no `NCR scsi.device` tag, so `a4kt710_load` returns ENXIO; the firmware's 030 mode hides the real `$07` SIMMs, so `core/plat/k30/line.c` finds no DMA region; and it maps `$DD0000` to the emulated A3000 SDMAC. No core change; a chip-memory bounce clears only the second (findings `tmp/2026-10-28-s516-dma/`) | the Bench | metal | S5-13, S5-15 | — | 0.5 |
 | S5-17 | **The s5 root on metal** (k30 on the A4000T), and safe mode with it | the Bench | metal | S5-13 | — | 0.5 |
 | S5-18 | **The 030 DMA pool when all fast memory is the Z3660's** (was S4-66): C4-5 at its next version says what the k30 provider does with no reachable pool (chip memory, or the board refused, said once); `core/plat/k30`; host cases | amix-dlm | host | — | S5-21 | 0.5 |
 | S5-20 | **The 030 line on the Z3660's release firmware** (was S4-60): stage 3's M7 again, then z3660scsi as root on the k30 kernel, on metal | Z3660; the Bench | metal | the owner's firmware session | S5-40 | 1 |
