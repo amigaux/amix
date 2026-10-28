@@ -5,16 +5,20 @@
 # executed.
 #
 #     . "$REPO/recipes/common/kfsmod.sh"
-#     amix_kfsmod_check <line> <fs> <object> <sha256> <size> <build> <kabi> <kit> <outdir>
+#     amix_kfsmod_check <line> <fs> <object> <sha256> <size> <build> <kabi> <kit> <outdir> [<module kabi>]
 #     amix_kfsmod_rebuild <line> <fs> <carve dir> <object> <kit> <workdir>
 #     amix_kcore_strips <dlm-rev file> <pinned core commit> <strip commit>
 #     amix_kbuildid3 <unix (ET_REL)> <kabi> <log> <module>...
 #
 # check: the pin (sha256, size); the kit's modcheck (k46: the 68060 scan
 # with the pinned toolchain's scan060); .moddata name=<fs> fs=<fs>
-# class=boot tier=core kabi=<the line's> cc=<the kit's pin> and build= the
+# class=boot tier=core kabi=<module kabi> cc=<the kit's pin> and build= the
 # cut's own (C3-1 sec 3: a core-tier module loads only on the kernel build
-# it was made with, so the package refuses one of another cut).
+# it was made with, so the package refuses one of another cut).  <kabi> is
+# the kernel's and the kit's (kit.conf KABI=); <module kabi>, default
+# <kabi>, what the module says: a module carries the highest minor it
+# imports, never below 1.2 (amix-dlm C3-2 v2), so a filesystem module built
+# with a kabi 1.3 kit says 1.2.
 # rebuild (S5-12 R2): the carve directory's sources (Makefile, Master,
 # <fs>_wrap.c; never its build/) copied into <workdir>, `make KIT=<kit>`,
 # the result byte-equal to the pinned object, modcheck ok, and no warning
@@ -59,6 +63,7 @@ amix_kfsmod_modcheck() {   # <kit> <object copy named <fs>> <out>
 
 amix_kfsmod_check() {
 	_kf_line=$1 _kf_fs=$2 _kf_obj=$3 _kf_sha=$4 _kf_size=$5 _kf_build=$6 _kf_kabi=$7 _kf_kit=$8 _kf_out=$9
+	_kf_mkabi=${10:-$7}
 	amix_verify "$_kf_obj" "$_kf_sha"
 	[ "$(stat -c%s "$_kf_obj")" = "$_kf_size" ] || {
 		echo "[FAIL] $_kf_obj: $(stat -c%s "$_kf_obj") bytes, the pin $_kf_size" >&2; exit 1; }
@@ -68,17 +73,17 @@ amix_kfsmod_check() {
 	rm -rf "$_kf_out"; mkdir -p "$_kf_out"; cp "$_kf_obj" "$_kf_out/$_kf_fs"
 	amix_kfsmod_modcheck "$_kf_kit" "$_kf_out/$_kf_fs" "$_kf_out/modcheck.out" || {
 		cat "$_kf_out/modcheck.out" >&2; echo "[FAIL] modcheck refuses $_kf_fs ($_kf_line)" >&2; exit 1; }
-	grep -q "^modcheck: $_kf_fs: ok ($_kf_kabi, boot, " "$_kf_out/modcheck.out" || {
-		cat "$_kf_out/modcheck.out" >&2; echo "[FAIL] modcheck did not say ok ($_kf_kabi, boot) for $_kf_fs" >&2; exit 1; }
+	grep -q "^modcheck: $_kf_fs: ok ($_kf_mkabi, boot, " "$_kf_out/modcheck.out" || {
+		cat "$_kf_out/modcheck.out" >&2; echo "[FAIL] modcheck did not say ok ($_kf_mkabi, boot) for $_kf_fs" >&2; exit 1; }
 	! grep -q rootvp "$_kf_out/modcheck.out" || {
 		grep rootvp "$_kf_out/modcheck.out" >&2; echo "[FAIL] modcheck names rootvp for $_kf_fs" >&2; exit 1; }
 	_kf_md=$(amix_kfsmod_moddata "$_kf_obj")
-	for _kf_kv in "name=$_kf_fs" "fs=$_kf_fs" class=boot tier=core "kabi=$_kf_kabi" "cc=$_kf_pin" "build=$_kf_build"; do
+	for _kf_kv in "name=$_kf_fs" "fs=$_kf_fs" class=boot tier=core "kabi=$_kf_mkabi" "cc=$_kf_pin" "build=$_kf_build"; do
 		case " $_kf_md " in *" $_kf_kv "*) ;; *)
 			echo "[FAIL] $_kf_fs ($_kf_line): .moddata lacks $_kf_kv: $_kf_md" >&2; exit 1 ;; esac
 	done
 	echo "  $_kf_fs: ${_kf_sha%${_kf_sha#????????}}... $_kf_size B; $(tail -1 "$_kf_out/modcheck.out"); .moddata $_kf_md"
-	unset _kf_line _kf_fs _kf_obj _kf_sha _kf_size _kf_build _kf_kabi _kf_kit _kf_out _kf_pin _kf_md _kf_kv
+	unset _kf_line _kf_fs _kf_obj _kf_sha _kf_size _kf_build _kf_kabi _kf_kit _kf_out _kf_pin _kf_md _kf_kv _kf_mkabi
 }
 
 amix_kfsmod_rebuild() {
