@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-28 — the media on the kernel-space record b1f564f4 (kern30m -20, kern46m -51, kbootset -23, modtools -7; dlm e089c2a): CD rd1q c8cf4446, netinstall ni9 37b2fc61 with raw images ni9-k46 92ea1578 / ni9-k30 61be81eb, floppy pairs fp-rd1q. The k30 RAM-disk image carries the kernel package's ufs as a boot-class module; the k46 evidence floppy is ufs. Cells l11-rd, l11-rd-fd, l11-ni and l11-nr on k46 and k30 PASS 10/10 with the firstboot gate; every installed root runs on the ufs module (e36699e..9fbd9d2)
+
 ## 2026-10-27 — S5-44 R2: the first boot's step 4d is `kbootset nodes`; media re-cut on kbootset -22 (catalog 915e09f3): CD rd1p 6024509a, netinstall ni8 cf25c1ff with raw images ni8-k46 8749938d / ni8-k30 01a2a397, floppy pairs fp-rd1p. Cells l11-rd-k46/k30 (rd1p) and l11-ni-k46/k30 (ni8) PASS 10/10 with the firstboot gate (9d719e8..a862a36)
 
 Kernels stay kern30m -17 / kern46m -82 and modtools -6 as rows of record (one change at a time). build-ramdisk-miniroot empties the box's /tmp/rd-add before each push (a stale tree could leak one image's /install and modules into the next; ecb4175).
