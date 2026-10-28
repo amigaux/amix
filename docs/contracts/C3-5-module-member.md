@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 15
+# C3-5 — the module package and the per-module manifest record, version 16
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -21,7 +21,9 @@
   (2026-10-27, C4-4 version 6, S5-02): `safe=1` on every controller module
   ranked at or before the root's (§3); version 14 (2026-10-27, S5-06):
   a4kt710's short name (§1.1); version 15 (2026-10-27, C4-4 version 7,
-  S5-09): `safe=1` on a boot record the owner marked (§1, §3).
+  S5-09): `safe=1` on a boot record the owner marked (§1, §3); version 16
+  (2026-10-28, amix-paula): paula's short name (§1.1), and a driver's own
+  interface header in its module package (§1.2).
   Every consumer
   is in amix-dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -83,13 +85,15 @@ per line**:
 | gayle | `gayle` | `gayle30` / `gayle46` |
 | cdfs | `cdfs` | `cdfs30` / `cdfs46` |
 | a4kt710 | `a4kt710` | `a4kt71030` / `a4kt71046` |
+| paula | `paula` | `paula30` / `paula46` |
 
   A new module's owner adds its row in a version bump of this contract.
 
 ### 1.2 The package's contents (the stage-3 mint's conventions)
 
 - `CATEGORY` is `system`.
-- Files: `/etc/conf/mod.d/<name>`, and `/etc/conf/modreg.d/<name>`. When
+- Files: `/etc/conf/mod.d/<name>`, `/etc/conf/modreg.d/<name>`, and the
+  driver's own interface headers (below). When
   the package sets no parameter other than the module's own defaults, the
   modreg file is comments only, pointing at the format and at
   `modreg.local.d` for the administrator's overrides.
@@ -97,6 +101,20 @@ per line**:
   0755 root sys; `/etc` 0755 root root, as the core packages have it.
 - `/etc/conf/modreg.local.d` is the administrator's and is never shipped
   (§1).
+- **A driver's own interface header** (version 16) may ship in its module
+  package, so a program on the box can use the driver's ioctls and
+  structures: plain files under `/usr/include` (0644 bin bin, `/usr` and
+  `/usr/include` declared with the core's attributes, 0755 bin bin), the
+  same bytes in the package of each line, named for the driver and owned
+  by no other package: paula ships `/usr/include/paula.h`. Nothing else
+  rides along (no libraries, no programs, nothing under `/etc/conf`,
+  `/dev` or `/stand` beyond the rows above); those are a package of their
+  own. Not a separate headers package: the header changes with the
+  driver's interface, so it travels with the module that implements it,
+  and apkg, the catalog and `kbootset` take the extra file as it is
+  (of a module package `kbootset` reads only `mod.d` and `modreg.d`). The ABI kit's interface
+  headers (`include/sys/monsw.h`) are a different thing: those are for
+  building a module against another module, on the host.
 - **Device nodes:** the package ships the nodes of the majors its driver
   owns as pkgmap device entries, no script: z3660eth `/dev/zen0` c 51 0.
   A block driver's nodes (`b`) are in `/dev/dsk`, and its character
