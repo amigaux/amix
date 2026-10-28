@@ -5127,3 +5127,28 @@ amix-dlm `DMA_REACH 0x08000000` and C4-5; C4-2 / OQ-80.5):
 
 An interactive install that picks a disk on another controller than the profile's
 `TARGET_HBA` gets `TARGET_HBA`'s Mask, as the 1.1 layout's `KBOOTSET_BOOTDEV` does.
+
+### TARGET_HBA names where the disk runs; the A4000T onboard 53C710 (2026-10-28)
+
+Since the Mask, `TARGET_HBA` belongs to the destination, not to the rig an image is authored
+on: the Gayle IDE CF kit (`public-a4000-ide*`, authored on the A3000 WD) says `gayle`, the
+hand-over image (`handover-a4000-z3660`, authored on the A3000, rooted on the A4000+Z3660's
+piscsi as `TARGET_VFSTAB_SCSI_ID=e`) says `z3660scsi`. The A4000T onboard 53C710 has its
+key: `TARGET_HBA=a4000t` (alias `a4kt710`) gives the Mask `0xFFFFFFFC` and, in the 1.1
+layout, `KBOOTSET_BOOTDEV=mobo:a4000t-710`, a4kt710's match key (C4-2 §8). Kickstart boots
+such a disk through the A4000T ROM's `NCR scsi.device`; the root record is the motherboard
+form (C4-1 §5.2, motherboard id 3), which kbootset writes from the `mobo` record l11.sh
+derives. The 1.1 media carry `a4kt710-k30`/`-k46` (and `paula-k30`/`-k46`) for a profile's
+`KERNEL_MODPKGS` or `apkg install`; no profile of record installs them yet.
+
+The first boot of each media cell shows the Mask at work: boot2's boot-device line names its
+buffer (`amix-boot 3: 68060, boot device z3660_scsi.device, partition at …, buffer 807c2d0`
+on a Z3660 target, Mask `0xFFFFFFFC`: Z3660 DDR; `… scsi.device, …, buffer 4037598` on the
+A3000 WD, Mask `0x07FFFFFE`: below `0x08000000`).
+
+The netinstall image's installer is a copy of the stage's (`build-ramdisk-miniroot.sh
+--install`), and until 3d8f34f that copy left `/install/dmamask` behind: install.sh then warned
+and the target kept `/etc/rdb`'s `0xFFFFFFFC` whatever its controller. It showed only off the
+Z3660 (the netinstall `l11-ni-k30` target on the A3000 WD read back `0xFFFFFFFC`, ni10; on a
+Z3660 the two Masks are equal). The copy takes it now, and `ramdisk-image-check.py --zen0` (the
+netinstall images' gate in `build-netinstall.sh`) demands the medium table byte for byte.
