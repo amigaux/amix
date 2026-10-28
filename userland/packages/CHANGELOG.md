@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-28 — paula-k30 / paula-k46 1.0.0-1 (pkginst paula30 / paula46): isoriano's /dev/paula (MIT) as a demand-class module of each line (kabi 1.3, c 54), objects amix-paula 548d258 (k30 147844b4, k46 d2c7d8f4); ships /dev/paula c 54 0 0666 and /usr/include/paula.h; kmodpkg.sh gains optional KM_FILES. paula30 fc0b4516, paula46 dd332b02; not in any catalog. The Bench's ramdisk refusal is apkg 0.3.2 on the box: ramdisk-k30/-k46 need APKG 0.3.3 (d14d36d, c048863)
+
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
