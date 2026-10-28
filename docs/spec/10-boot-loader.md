@@ -150,6 +150,19 @@ syntax), ≤ 1024 bytes including the bootblock framing. It has one job:
    measured 2026-10-25), and a reset loop can leave a real 68060 dead until
    a power cycle.
 
+**Its buffer** (the header's 2048 bytes, the header copy and boot2: 31 232
+bytes) lies where the boot partition's DosEnvec lets the device transfer,
+as FFS takes its buffers. The first boot node in expansion.library's
+mount list whose start and device name are this partition's gives
+`de_BufMemType` (MEMF_PUBLIC when 0) and `de_Mask`. boot1 allocates of
+that type, and takes chip memory instead when the block's end lies
+beyond the Mask, when no node matches or when the node's table is too
+short to hold `de_Mask`. On a 24-bit DMA controller (an A2091, Mask
+0x00FFFFFE) with fast memory above 16 MiB that is chip memory, as
+before. Why: the A4000T's onboard 53C710 hangs the machine when it
+transfers into chip memory with the Z3660 fitted, under AmigaOS too
+(stage c, 2026-10-28), and installng's partitions say Mask 0xFFFFFFFC.
+
 boot1 has no CPU gate and no filesystem knowledge; it reads extents named in
 the header, reads and writes the tally block, and nothing else. On a
 read-only medium the header never marks a loader trial, so boot1 never
@@ -166,15 +179,25 @@ table of its R_68K_32 relocations, and the start-up stub (PC-relative
 assembly) applies the table to itself before calling C. Size budget:
 **28 KiB** per copy in the store (§4.2); the AmigaDOS-hosted CD entry of §4.4 shares its C code.
 
-**Where it runs.** boot1 loads boot2 into chip memory, because the strap's
-device reads by DMA. Run from there, its code competes with the display for
-the chip bus: on a 25 MHz 68030, inflate runs 7 times and CRC-32 25 times
+**Where it runs.** boot1 loads boot2 into its buffer (§3.1), which is chip
+memory unless the partition's DosEnvec allows other memory. Run from chip
+memory, its code competes with the display for the chip bus: on a 25 MHz 68030, inflate runs 7 times and CRC-32 25 times
 slower than from fast memory (M-LD8, `docs/measurements/2026-10-26-m-ld7-m-ld8.md`).
 So the stub first copies boot2 into a MEMF_FAST block, then relocates it
 there, and calls C. A machine without fast memory runs it in place and
 boot2 says so on the console.
-- Device reads still land in a chip bounce buffer, because the controllers
-  need it there.
+- **Device reads follow the partition's DosEnvec**, as FFS's do. boot2
+  takes `de_BufMemType` and `de_Mask` from the boot node its RTH1 walk
+  identifies (device name, start and unit, exactly one match). Its
+  32 KiB bounce buffer is of `de_BufMemType` (MEMF_PUBLIC when 0), or of
+  chip memory when that buffer lies beyond the Mask or no single node
+  matches. A transfer of whole 2048-byte blocks goes straight into its
+  destination when that lies within the Mask (its low bits the
+  alignment, its value the highest address); the rest goes through the
+  bounce buffer and the CPU copies it. No transfer is longer than
+  32 KiB. The boot-device line names the buffer: `amix-boot 3: 68030,
+  boot device scsi.device, partition at 891355136, buffer 7825048` (the
+  A4091 on k30 in emulation, 2026-10-28).
 - Members are read into fast memory and inflated, checked and relocated
   there by code running from fast memory.
 - The kernel's destination (step 6): the base of the largest fast-memory
