@@ -8,7 +8,9 @@
 # no relocations (the build checks both).
 #
 # What it does:
-#   (1) returns into the strap if an A3000 SuperKickstart wants the OS choice
+#   (1) returns into the strap if an A3000 SuperKickstart wants the OS choice;
+#      else takes its buffer where the partition's DosEnvec lets the device
+#      transfer (de_BufMemType, de_Mask, as FFS reads them), else in chip
 #   (2) reads bytes 0..2047 of the partition, takes the valid store header
 #      (AXS1 at 0x400 / 0x600) with the newer sequence number
 #   (3) loader trial: counts the new boot2's start in the tally block, or
@@ -25,7 +27,7 @@
 #   a1 IOStdReq   a0 the chosen store header (512 bytes)   a6 ExecBase
 #   d0 partition start (bytes)   d1 choice: bit 0 = copy taken (1 = secondary),
 #   bit 8 = taken after a CRC failure (B2), bit 9 = taken by the loader-trial
-#   rule (B4)   d2 the memory block holding boot2 (BUFSZ bytes, MEMF_CHIP)
+#   rule (B4)   d2 the memory block holding boot2 (BUFSZ bytes, see (1))
 # If boot2 returns, boot1 says so and stops.
 #
 # Assembler: binutils 2.8.1 for m68k-cbm-sysv4 (SVR4 syntax: & immediate,
@@ -39,8 +41,10 @@
 	.set	B2AREA, 2560
 
 	.set	LVO_ALLOCMEM, -198
+	.set	LVO_FREEMEM, -210
 	.set	LVO_CLOSELIB, -414
 	.set	LVO_DOIO, -456
+	.set	LVO_TYPEOFMEM, -534
 	.set	LVO_OPENLIB, -552
 	.set	LVO_CACHECLEARU, -636
 
@@ -59,37 +63,114 @@ boot1:
 	movem.l	%d2-%d7/%a2-%a6,-(%sp)
 	move.l	(4).w,%a6
 	move.l	%a1,%a5
-
-# (1) A3000 SuperKickstart: when expansion.library's flags ask for the
-#    operating-system choice, step the strap's return address past its boot
-#    call so Kickstart continues, and return 0.
-	lea	(expname,%pc),%a1
-	moveq	&0,%d0
-	jsr	(LVO_OPENLIB,%a6)
-	tst.l	%d0
-	beq.b	nokick
-	move.l	%d0,%a1
-	move.b	(34,%a1),%d2
-	jsr	(LVO_CLOSELIB,%a6)
-	and.b	&0x30,%d2
-	beq.b	nokick
-	add.l	&14,(SAVED,%sp)
-	moveq	&0,%d0
-	bra.w	ret
-nokick:
 # pre-2.0 straps do not set io_Offset
 	cmp.w	&36,(20,%a6)
 	bcc.b	offok
 	clr.l	(IO_OFFSET,%a5)
 offok:	move.l	(IO_OFFSET,%a5),%d7
 
-	move.l	&BUFSZ,%d0
-	move.l	&0x10002,%d1		# MEMF_CHIP | MEMF_CLEAR
+# (1) the buffer's memory as FFS chooses it (spec 10 §3.1): the first
+#    boot node whose start and device name are this partition's gives
+#    de_BufMemType (MEMF_PUBLIC when 0) and de_Mask.  Without one, or
+#    with a table too short for de_Mask, chip memory.
+	moveq	&2,%d5			# MEMF_CHIP
+	moveq	&-1,%d4			# the Mask
+	lea	(expname,%pc),%a1
+	moveq	&0,%d0
+	jsr	(LVO_OPENLIB,%a6)
+	tst.l	%d0
+	beq.w	alloc
+	move.l	%d0,%a2
+	lea	(74,%a2),%a4		# eb_MountList
+	bra.b	walk
+
+# vet: d0 = a pointer from a boot node; a3 = it, Z set when it is not in RAM
+vet:	move.l	%d0,%a3
+	move.l	%d0,%a1
+	jsr	(LVO_TYPEOFMEM,%a6)
+	tst.l	%d0
+	rts
+
+walk:	move.l	(%a4),%a4
+	tst.l	(%a4)
+	beq.b	walked
+	move.l	(16,%a4),%d0		# bn_DeviceNode
+	bsr.b	vet
+	beq.b	walk
+	move.l	(28,%a3),%d0		# dn_Startup: the FileSysStartupMsg
+	lsl.l	&2,%d0
+	bsr.b	vet
+	beq.b	walk
+	move.l	(4,%a3),%a0		# fssm_Device, a BSTR whose length
+	add.l	%a0,%a0			# may count a NUL (spec 10 §2.1): its
+	add.l	%a0,%a0			# text starts with io_Device's name
+	tst.b	(%a0)+
+	move.l	(20,%a5),%a1
+	move.l	(10,%a1),%a1
+nmchar:	move.b	(%a1)+,%d0
+	beq.b	nmend
+	cmp.b	(%a0)+,%d0
+	bne.b	walk
+	bra.b	nmchar
+nmend:
+	move.l	(8,%a3),%d0		# fssm_Environ: the DosEnvec
+	lsl.l	&2,%d0
+	bsr.b	vet
+	beq.b	walk
+	move.w	(14,%a3),%d0		# the start: de_Surfaces *
+	mulu.w	(22,%a3),%d0		# de_BlocksPerTrack (each below
+	move.w	(36,%a3),%d2		# 65536) * de_LowCyl * 512 bytes
+	mulu.w	%d0,%d2
+	mulu.w	(38,%a3),%d0
+	swap	%d2
+	clr.w	%d2
+	add.l	%d2,%d0
+	moveq	&9,%d1
+	lsl.l	%d1,%d0
+	cmp.l	%d7,%d0
+	bne.b	walk
+	moveq	&14,%d0			# de_TableSize reaches de_Mask?
+	cmp.l	(%a3),%d0
+	bhi.b	walked
+	moveq	&1,%d5			# de_BufMemType, MEMF_PUBLIC
+	or.l	(48,%a3),%d5		# when 0
+	move.l	(56,%a3),%d4		# de_Mask
+walked:
+# A3000 SuperKickstart: when expansion.library's flags ask for the
+# operating-system choice, step the strap's return address past its boot
+# call so Kickstart continues, and return 0.
+	move.l	%a2,%a1
+	move.b	(34,%a1),%d2
+	jsr	(LVO_CLOSELIB,%a6)
+	and.b	&0x30,%d2
+	beq.b	alloc
+	add.l	&14,(SAVED,%sp)
+	moveq	&0,%d0
+	bra.w	ret
+
+# the block of that memory, cleared; chip when its end lies beyond the
+# Mask (AllocMem's 8-byte alignment meets the Mask's low bits; any memory
+# serves a Mask of -1, so the chip try is the last one)
+alloc:	move.l	&BUFSZ,%d6
+amem:	move.l	%d6,%d0
+	move.l	%d5,%d1
+	bset	&16,%d1			# MEMF_CLEAR
 	jsr	(LVO_ALLOCMEM,%a6)
 	move.l	%d0,%a4
 	tst.l	%d0
+	beq.b	inchip
+	add.l	%d6,%d0
+	cmp.l	%d4,%d0
+	bls.b	memok
+	move.l	%a4,%a1
+	move.l	%d6,%d0
+	jsr	(LVO_FREEMEM,%a6)
+inchip:	moveq	&2,%d5
+	not.l	%d4
 	beq.w	failmem
-	lea	(HDRCPY,%a4),%a3
+	moveq	&-1,%d4
+	bra.b	amem
+memok:	lea	(HDRCPY,%a4),%a3
 	lea	(B2AREA,%a4),%a2
 
 # (2) the store header
@@ -197,7 +278,13 @@ failb3:	lea	(msgb3,%pc),%a0
 	bra.b	failp
 failmem:
 	lea	(msgmem,%pc),%a0
-failp:	bsr.b	puts
+failp:	move.l	%a0,-(%sp)
+	lea	(msgpfx,%pc),%a0
+	bsr.b	puts
+	move.l	(%sp)+,%a0
+	bsr.b	puts
+	lea	(msgpfx,%pc),%a0
+	bsr.b	puts
 	lea	(msgstop,%pc),%a0
 	bsr.b	puts
 stop:	bra.b	stop			# interrupts stay on; a reset is the user's
@@ -300,10 +387,11 @@ crcnext:
 
 expname:
 	.ascii	"expansion.library\0"
-msgb1:	.ascii	"\r\namix-boot1: B1 no valid store header\r\n\0"
-msgb3:	.ascii	"\r\namix-boot1: B3 no valid boot2\r\n\0"
-msgmem:	.ascii	"\r\namix-boot1: no memory\r\n\0"
-msgret:	.ascii	"\r\namix-boot1: boot2 gave up\r\n\0"
+msgpfx:	.ascii	"\r\namix-boot1: \0"
+msgb1:	.ascii	"B1 no valid store header\0"
+msgb3:	.ascii	"B3 no valid boot2\0"
+msgmem:	.ascii	"no memory\0"
+msgret:	.ascii	"boot2 gave up\0"
 msgstop:
-	.ascii	"amix-boot1: stopped. Reset; both mouse buttons at reset: Kickstart menu\r\n\0"
+	.ascii	"stopped. Reset; both mouse buttons at reset: Kickstart menu\r\n\0"
 	.even

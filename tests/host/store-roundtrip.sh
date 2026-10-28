@@ -74,6 +74,15 @@ grep -q "1 volume change(s), 2 foreign/blank and 1 wrong-volume disks refused, m
 $B/b2medium -n $T/boot1.adf $T/boot2.adf $T/other1.adf | grep -q "disks refused, motor on for 0 waiting frames: ok"
 # and with a counter that never moves (E958/E959): the 4 s re-read finds it
 $B/b2medium -f $T/boot1.adf $T/boot2.adf $T/other1.adf | grep -q "disks refused, motor on for 0 waiting frames: ok"
+# a partition whose Mask reaches the buffers: whole blocks straight into
+# them, the rest through the bounce buffer; one that does not (a 1 MiB
+# Mask, the arena above it): every read through the bounce buffer
+$B/b2medium -m 0xfffffffc $T/boot1.adf $T/boot2.adf $T/other1.adf > $T/m.out
+grep -q "^b2medium: [1-9][0-9]* transfers straight into their buffers, [1-9][0-9]* through the bounce" $T/m.out
+grep -q "motor on for 0 waiting frames: ok" $T/m.out
+$B/b2medium -m 0x000ffffe $T/boot1.adf $T/boot2.adf $T/other1.adf > $T/m.out
+grep -q "^b2medium: 0 transfers straight into their buffers, [1-9][0-9]* through the bounce" $T/m.out
+grep -q "motor on for 0 waiting frames: ok" $T/m.out
 echo "store-roundtrip: floppy pair ok"
 
 # a CD tree (spec 10 §4.4): one generation per line directory, members as

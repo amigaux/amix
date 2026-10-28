@@ -3,11 +3,12 @@
 # where it then lies, clears its bss and calls C.
 # (docs/spec/10-boot-loader.md §3.2; docs/plan/stage-1.md S1-11.)
 #
-# boot1 loads boot2 into chip memory (the strap's device reads by DMA).
-# Run from there, its code competes with the display for the chip bus:
-# inflate 7 times and CRC-32 25 times slower than from fast memory on a
-# 25 MHz 68030 (M-LD8, 2026-10-26).  So the stub copies the image and its
-# table into a MEMF_FAST block first; without fast memory it stays in chip.
+# boot1 loads boot2 into chip memory unless the partition's DosEnvec allows
+# other memory (10 §3.1).  Run from chip, its code competes with the display
+# for the chip bus: inflate 7 times and CRC-32 25 times slower than from
+# fast memory on a 25 MHz 68030 (M-LD8, 2026-10-26).  So the stub copies
+# the image and its table into a MEMF_FAST block first; without fast memory
+# it stays where boot1 put it.
 #
 # boot2 is linked at address 0.  tools/b2link.c appends a table of the
 # offsets of every 32-bit field holding a 0-based address and patches the

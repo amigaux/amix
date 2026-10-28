@@ -148,3 +148,27 @@ moved in the same commit: 10 §7.2, C3-3 §2, the Bench README, the host
 simulator and the round trip. 26 bytes of file and 252 of image + bss
 remain. The next boot2 change starts at §3 item 6 (the code-only L
 table), or at a code size win first.
+
+## 7. The DMA buffers by DosEnvec, and the table that paid for them (2026-10-28)
+
+10 §3.2's DosEnvec rule (de_BufMemType, de_Mask: transfers straight into
+their buffers when the Mask allows it, the bounce buffer of that memory
+or chip) costs boot2 code and 8 bytes of bss. At e45b061 the file had 14
+bytes left, so the file gate paid first, by a code size win that changes
+nothing on the console: the self-relocation table is now one byte a
+field (half the distance from the previous field; 0 and a 16-bit offset
+when the distance is odd or over 510) instead of two.
+
+| Step | image | table | file | bss | image + bss | left (file) | left (image + bss) |
+|---|---|---|---|---|---|---|---|
+| before (e45b061) | 27 532 | 1 126 | 28 658 | 900 | 28 432 | 14 | 240 |
+| the table a byte a field (start.s decodes it: +16 of image) | 27 548 | 583 | 28 131 | 900 | 28 448 | 541 | 224 |
+| the DosEnvec rule, and the buffer on the boot-device line | 27 760 | 589 | 28 349 | 908 | 28 668 | 323 | 4 |
+
+The DosEnvec rule's cost was cut to fit the image + bss gate: the bounce
+pointer through a local, `L4 no memory` (the shared text) for the
+bounce buffer's failure, a write's copy unconditional (onto itself when
+the transfer goes straight), and the early RTH1 walk's four discarded
+outputs in one scratch word. **The image + bss gate now binds, with 4
+bytes left**; the table win does not help it. The next boot2 change
+starts at §3 item 6, or at a code size win in the image.

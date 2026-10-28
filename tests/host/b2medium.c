@@ -13,14 +13,20 @@
  * every generation is read through st_read_stored, inflated and checked
  * against its CRC-32.
  *
- * usage: b2medium [-n | -f] VOL1 VOL2 OTHER
+ * usage: b2medium [-m MASK] [-n | -f] VOL1 VOL2 OTHER
+ *   -m  the partition's de_Mask (default 0: none known): a read goes
+ *       straight into its buffer when the Mask allows it, else through
+ *       the bounce buffer (10 §3.2); each transfer is checked against the
+ *       Mask, and with a Mask above the arena some must go straight, with
+ *       one below it none
  *   -n  the device keeps no change counter (TD_CHANGENUM fails): the disk
  *       is re-read every half second, so the volume still in the drive at
  *       the prompt is refused once as well
  *   -f  the counter never moves, the disks are swapped every 5 s (Kickstart
  *       3.2.1 under amiberry, E958/E959): the disk is re-read every 4 s
  *       all the same, and the volume at the prompt is refused once too
- * Prints the number of volume changes; exit status 0 when every member
+ * Prints the transfers straight and through the bounce buffer, and the
+ * number of volume changes; exit status 0 when every member
  * verifies and every change went through the whole script with exactly
  * one message per refused disk and the motor off while waiting.
  *
@@ -54,6 +60,7 @@ static ax_u8 *cachedisk;	/* the disk the track buffer was read from */
 static long cachetrack = -1;	/* the buffered track, -1 = none */
 static int motor;		/* the drive motor runs */
 static unsigned long frames, nextat, motorframes;
+static unsigned long straight, bounced;	/* reads into their buffer, through bounce */
 
 #define TRACK	5632UL		/* 11 sectors of 512 bytes: one DD track side */
 
@@ -125,6 +132,19 @@ x_doio(void *iobp)
 		return -1;
 	if (off % 2048 || len % 2048 || off + len > disksize)
 		return -1;
+	if (len > BOUNCE) {
+		printf("b2medium: a transfer of %lu bytes: FAILED\n", (unsigned long)len);
+		exit(1);
+	}
+	if (buf == bounce) {
+		bounced++;
+	} else if (((ax_u32)(unsigned long)buf & ~mask) ||
+		   (ax_u32)(unsigned long)buf + len - 1 > mask) {
+		printf("b2medium: a transfer at 0x%lx beyond the Mask: FAILED\n", (unsigned long)buf);
+		exit(1);
+	} else {
+		straight++;
+	}
 	/* sector by sector: a sector of the buffered track comes from the
 	 * buffer, even when another disk is in the drive */
 	for (; len; off += 512, buf += 512, len -= 512) {
@@ -286,9 +306,13 @@ main(int argc, char **argv)
 	static ax_u32 iobuf[IOSTD_SIZE / 4];
 	static struct ax_ctl ctl;
 	static struct ax_manifest m;
-	ax_u8 cb[2048], *man;
+	ax_u8 *cb, *man;
 	int i, j, errline, failed = 0;
 
+	if (argc >= 6 && !strcmp(argv[1], "-m")) {
+		mask = (ax_u32)strtoul(argv[2], 0, 0);
+		argv += 2, argc -= 2;
+	}
 	if (argc == 5 && (!strcmp(argv[1], "-n") || !strcmp(argv[1], "-f"))) {
 		nocount = argv[1][1] == 'n';
 		frozen = argv[1][1] == 'f';
@@ -310,6 +334,7 @@ main(int argc, char **argv)
 	iob = (ax_u8 *)iobuf;
 	part = 0;
 	bounce = x_allocmem(BOUNCE, MEMF_CHIP);
+	cb = x_allocmem(2048, MEMF_PUBLIC);	/* in the arena: a read may go straight in */
 	if (ax_hdr_pick(crctab, disk[0] + AX_HDR_A_OFF, disk[0] + AX_HDR_B_OFF, &hdr) < 0 ||
 	    hdr.nvolumes != 2) {
 		fprintf(stderr, "b2medium: %s is not volume 1 of a pair\n", argv[1]);
@@ -337,6 +362,12 @@ main(int argc, char **argv)
 		if (m.has_ramdisk)
 			failed |= check("ramdisk", &m.ramdisk);
 	}
+	/* the Mask: none known, or below the arena, sends every read through
+	 * the bounce buffer; one above it takes the whole blocks straight */
+	if ((mask <= (unsigned long)arena ? straight != 0 : straight == 0) || !bounced)
+		failed = 1;
+	printf("b2medium: %lu transfers straight into their buffers, %lu through the bounce buffer\n",
+	       straight, bounced);
 	/* every change refused the blank and the foreign disk, then the wrong volume */
 	/* without a change counter the disk still in the drive at the prompt
 	 * (the other volume) is read and refused too, once; so with a frozen one */

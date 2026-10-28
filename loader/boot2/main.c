@@ -1,8 +1,9 @@
 /*
  * main.c -- boot2 behind boot1 (docs/spec/10-boot-loader.md §3.2): the boot
- * store as the medium -- extents read through the strap's IOStdReq via a
- * chip bounce buffer, multi-volume floppy pairs, control-block writes, the
- * RTH1 boot-node walk -- and core.c for everything else.
+ * store as the medium -- extents read through the strap's IOStdReq, into
+ * their buffer or a bounce buffer as the partition's DosEnvec allows,
+ * multi-volume floppy pairs, control-block writes, the RTH1 boot-node
+ * walk -- and core.c for everything else.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -11,11 +12,13 @@
 #include "input.h"
 #include "core.h"
 
-#define BOUNCE	(16 * 2048UL)	/* chip-memory transfer buffer for every read */
+#define BOUNCE	(16 * 2048UL)	/* the transfer buffer, and the longest transfer */
 
 static ax_u8 *iob;		/* the strap's IOStdReq */
 static ax_u32 part;		/* partition start in bytes */
-static ax_u8 *bounce;		/* BOUNCE bytes of chip memory */
+static ax_u8 *bounce;		/* BOUNCE bytes where the device can transfer */
+static ax_u32 mask;		/* the partition's de_Mask; 0 = none known */
+static ax_u32 memtype;		/* its de_BufMemType | MEMF_PUBLIC */
 static ax_u32 curvol = 1;	/* the volume in the drive (floppy pairs) */
 static struct ax_header hdr;
 static int ctlcopy;		/* which control-block copy was read */
@@ -26,26 +29,37 @@ devname(void)
 	return *(const char **)(*(ax_u8 **)(iob + IO_DEVICE) + LN_NAME);
 }
 
-/* device I/O through the chip bounce buffer: off is partition-relative,
- * 2048-aligned; len any; writes are whole 2048-byte blocks */
+/* the device can transfer n bytes at p: FFS's test of de_Mask (its low
+ * bits the alignment, its value the highest address) */
+static int
+dmaok(const void *p, ax_u32 n)
+{
+	return ((ax_u32)p & ~mask) == 0 && (ax_u32)p + n - 1 <= mask;
+}
+
+/* device I/O: off is partition-relative, 2048-aligned; len any; writes are
+ * whole 2048-byte blocks.  At most BOUNCE bytes a transfer, straight into
+ * buf when the Mask allows it, else through the bounce buffer. */
 static int
 io(int cmd, ax_u32 off, ax_u8 *buf, ax_u32 len)
 {
 	ax_u32 n, chunk;
+	ax_u8 *p;
 
 	while (len) {
 		chunk = len < BOUNCE ? len : BOUNCE;
 		n = (chunk + 2047) & ~2047UL;
+		p = n == chunk && dmaok(buf, n) ? buf : bounce;
 		if (cmd == CMD_WRITE)
-			x_memcpy(bounce, buf, chunk);
+			x_memcpy(p, buf, chunk);	/* onto itself when p is buf */
 		*(ax_u16 *)(iob + IO_COMMAND) = (ax_u16)cmd;
 		*(ax_u32 *)(iob + IO_LENGTH) = n;
-		*(ax_u32 *)(iob + IO_DATA) = (ax_u32)bounce;
+		*(ax_u32 *)(iob + IO_DATA) = (ax_u32)p;
 		*(ax_u32 *)(iob + IO_OFFSET) = part + off;
 		if (x_doio(iob) != 0)
 			return -1;
-		if (cmd == CMD_READ)
-			x_memcpy(buf, bounce, chunk);
+		if (cmd == CMD_READ && p != buf)
+			x_memcpy(buf, p, chunk);
 		off += n;
 		buf += chunk;
 		len -= chunk;
@@ -207,7 +221,8 @@ st_write_ctl(const struct ax_ctl *c)
  * RTH1: find the BootNode the strap booted (device name, partition start,
  * unit), exactly as the RTH1 loaders do (amix-040-060-port/docs/contracts/
  * RTH1-ROOT-HINT.md): every pointer vetted with TypeOfMem, at most 64
- * nodes, under Forbid.  Also fills the loader record's boot-device fields.
+ * nodes, under Forbid.  Also fills the loader record's boot-device fields,
+ * and takes the node's de_BufMemType and de_Mask for io().
  */
 static void
 st_identify(ax_u32 *flags, ax_u32 *unit, ax_u32 *base, ax_u32 *id, struct ax_loaderrec *lr)
@@ -264,6 +279,11 @@ st_identify(ax_u32 *flags, ax_u32 *unit, ax_u32 *base, ax_u32 *id, struct ax_loa
 	}
 	x_permit();
 	if (matches == 1) {
+		env = (ax_u8 *)(*(ax_u32 *)(match + 8) << 2);
+		if (*(ax_u32 *)env >= 14) {	/* de_TableSize reaches de_Mask */
+			memtype = *(ax_u32 *)(env + 48) | MEMF_PUBLIC;
+			mask = *(ax_u32 *)(env + 56);
+		}
 		*unit = *(ax_u32 *)match;
 		*flags = RTH_BOOT | RTH_BMOBO;
 		for (cfg = 0; (cfg = x_findconfigdev(expbase, cfg, -1, -1)) != 0;) {
@@ -301,6 +321,9 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 {
 	ax_u8 *cb;	/* both control-block copies, allocated: bss is boot1's space */
 	struct ax_ctl ctl;	/* core_boot keeps its own copy */
+	struct ax_loaderrec lr;	/* st_identify's outputs, unused here */
+	ax_u32 f;
+	ax_u8 *p;
 
 	(void)mem;
 	ax_execbase = execbase;
@@ -318,11 +341,20 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 	if (!infast)
 		con_say("no fast memory: the loader runs from chip memory\n");
 
-	bounce = x_allocmem(BOUNCE, MEMF_CHIP);
-	if (!bounce) {
-		con_say("L4 no chip memory\n");
+	/* the bounce buffer as FFS takes its buffers (spec 10 §3.2): of
+	 * de_BufMemType, or chip when the Mask does not reach it or no boot
+	 * node gave one */
+	st_identify(&f, &f, &f, &f, &lr);
+	p = x_allocmem(BOUNCE, memtype);
+	if (p && !dmaok(p, BOUNCE)) {
+		x_freemem(p, BOUNCE);
+		p = 0;
+	}
+	if (!p && !(p = x_allocmem(BOUNCE, MEMF_CHIP))) {
+		con_say(l4_nomem);
 		return -1;
 	}
+	bounce = p;
 	if (ax_hdr_parse(ax_crctab, (ax_u8 *)hdrp, &hdr) != AX_OK) {
 		con_say("B1 store header lost\n");
 		return -1;
@@ -343,8 +375,8 @@ boot2_main(void *iobp, void *hdrp, ax_u32 partstart, ax_u32 choice, void *mem, v
 		con_say("no valid control block\n");
 		return -1;
 	}
-	con_printf("amix-boot %u: 680%u, boot device %s, partition at %u\n", LOADER_VERSION,
-		   core_cpu, devname(), part);
+	con_printf("amix-boot %u: 680%u, boot device %s, partition at %u, buffer %x\n",
+		   LOADER_VERSION, core_cpu, devname(), part, (ax_u32)p);
 	store.readonly = (hdr.flags & AXF_READONLY) != 0;
 	store.choice = choice;
 	return core_boot(&store, &ctl, *(void **)(iob + 14));	/* the strap's reply port */
