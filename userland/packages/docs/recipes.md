@@ -31,8 +31,8 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`gayle/`](gayle/) | `gayle-k30` / `gayle-k46` (`gayle30`/`gayle46`) — the A4000 Gayle IDE driver, a root-class module of each line (kabi 1.2), interrupt I/O by default after a boot self-test (`param intr=0` in `modreg.local.d` selects polled); kern30m -13 drove the Gayle itself, -14 does not; a page-crossing request counted, printed only with `param debug=1`; must not ship before amix-dlm's root-context check passes | 1.1.0-3 (amix-gayle-ide b2935fc) minted 2026-10-27, staged, not published |
 | [`cdfs/`](cdfs/) | `cdfs-k30` / `cdfs-k46` (`cdfs30`/`cdfs46`) — the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), a boot-class module of each line (kabi 1.2, `match=always`, `fs=cdfs`), promoted to a root record on a cdfs-rooted generation; needs kern46m -79 / kern30m -14 or later (the filesystem names) | 1.0.0-1 (amix-cdfs fd6cad8) minted 2026-10-27, staged, not published |
 | [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 3 | -9 (amix-dlm ea75578) minted 2026-10-27, staged, not published |
-| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -22 (amix-dlm 1308c0b) minted 2026-10-27, staged, not published; upgrade kern30m -20 together with it (an old mobo root record on a 030-mode Z3660 is rewritten only by -22) |
-| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76; 1308c0b builds the same modadmin, f51c98d6) minted 2026-10-27, staged, not published |
+| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -23 (amix-dlm e089c2a: C2-4 v15, mark-good marks a refused default bad when its bytes are damaged) minted 2026-10-28, in the candidate root `build/kspace/candidate-9c670fb4`, not promoted, not published; -22 (1308c0b) in the catalog of record; upgrade kern30m -20 and kern46m -50 together with -22 or later (an old mobo root record on a 030-mode Z3660 is rewritten only from -22 on) |
+| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76; 1308c0b and e089c2a build the same modadmin, f51c98d6) minted 2026-10-27, staged, not published |
 | [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -11 (amix-dlm c2dc7fb, kabi 1.2) minted 2026-10-27, staged, not published |
 | [`common/`](common/) | the shared harness — not a package | |
 
@@ -56,7 +56,14 @@ it equal byte for byte to the staged root's (`KSPACE_ROOT`, else the next root, 
 candidate root, else the catalog of record), runs the stage-2 static-kernel rows from a second source
 that adds the static datastreams, and the S5-12 R5 upgrades (`apkg upgrade kbootset <kernel>`, one
 transaction) from `64d37aaa`'s kernels and from `915e09f3`'s (k46 -91 → -50), both kept in
-`build/kspace/superseded/` (`KSPACE_RECORD_ROOTS` to move them).
+`build/kspace/superseded/` (`KSPACE_RECORD_ROOTS` to move them), and R6 upgrades kbootset alone over a
+root installed from the catalog of record (`KSPACE_CUR_ROOT`) when the staged root's kbootset is newer.
+**Candidate root** (2026-10-28, not promoted): `build/kspace/candidate-9c670fb4`, catalog `9c670fb4` =
+`6f0c1701` with kbootset -22 → -23 and the kernel-k30-m -20 / kernel-k46-m -50 datastreams re-rolled
+with release-note text in their pkginfo only (same versions, same payload bytes; new sha256 in their
+`#kpkg` rows); every other row and datastream byte-identical. The record's two kernel datastreams are
+kept in `build/kspace/rec-6f0c1701-kern/` as well as in the record root. The Bench proves the
+candidate before any promotion.
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
