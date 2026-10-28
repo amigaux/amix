@@ -6,10 +6,11 @@
 #
 #     sh tools/onever-selftest.sh
 #
-# Reads the catalog of record (build/kspace/repo) and its kern46m -50 and
-# kbootset -22 datastreams; writes only under a temporary directory.
+# Reads the catalog of record (build/kspace/repo) and its kern46m and
+# kbootset datastreams (since b1f564f4: -51 and -23); writes only under a
+# temporary directory.
 #
-#   1. a text-only re-roll of kern46m -50 (the recipe's pkginfo at the
+#   1. a text-only re-roll of the record's kern46m (the recipe's pkginfo at the
 #      record's version, the record's payload) through amix_kpkgroll is
 #      refused; the datastream already at
 #      the output path is left as it was, nothing is left in the work dir
@@ -18,7 +19,7 @@
 #      the spool's inode numbers), so any rebuild of a listed version is
 #   3. a byte-identical datastream (the record's) is allowed and says so
 #   4. an unlisted version is allowed as new
-#   5. an ordinary (md5) row: kbootset -22 identical allowed, one byte off
+#   5. an ordinary (md5) row: the record's kbootset identical allowed, one byte off
 #      refused
 #   6. the default root list holds the catalog of record and the superseded
 #      roots
