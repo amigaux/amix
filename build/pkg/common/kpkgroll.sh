@@ -36,7 +36,11 @@ amix_kpkgroll() {
 	_kr_root="$2"
 	_kr_pkg="$3"
 	_kr_ver="$4"
-	_kr_out="$5"
+	_kr_final="$5"
+	# rolled under the work dir; installed at <outfile> only through the
+	# one-version check (onever.sh), which leaves <outfile> as it was on refusal
+	_kr_out="$_kr_work/.roll/$(basename "$_kr_final")"
+	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/onever.sh"
 
 	[ -x "$AMIX_PKGMK" ]    || { echo "[FAIL] host pkgmk missing: $AMIX_PKGMK" >&2; exit 1; }
 	[ -x "$AMIX_PKGTRANS" ] || { echo "[FAIL] host pkgtrans missing: $AMIX_PKGTRANS" >&2; exit 1; }
@@ -127,8 +131,9 @@ amix_kpkgroll() {
 		"$(awk '$1 ~ /^[0-9]+$/ {print $2 "/" $3}' "$_kr_rt/$_kr_pkg/pkgmap" | sort -u | tr '\n' ' ')"
 	rm -rf "$_kr_rt" "$_kr_spool"
 
-	echo "  built   $_kr_out ($(stat -c%s "$_kr_out") bytes, sha256 $(sha256sum "$_kr_out" | cut -c1-64))"
-	unset _kr_work _kr_root _kr_pkg _kr_ver _kr_out _kr_spool _kr_magic _kr_rt _kr_n _kr_p
+	amix_one_version "$_kr_out" "$_kr_pkg" "$_kr_ver" "$_kr_final"
+	echo "  built   $_kr_final ($(stat -c%s "$_kr_final") bytes, sha256 $(sha256sum "$_kr_final" | cut -c1-64))"
+	unset _kr_work _kr_root _kr_pkg _kr_ver _kr_out _kr_final _kr_spool _kr_magic _kr_rt _kr_n _kr_p
 }
 
 # amix_kstage_sidecar <build-sidecar> <shipped-unix> <out> <bss> -- the

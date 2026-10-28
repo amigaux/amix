@@ -54,7 +54,11 @@ amix_pkgroll() {
 	_pr_root="$2"
 	_pr_pkg="$3"
 	_pr_ver="$4"
-	_pr_out="$5"
+	_pr_final="$5"
+	# rolled under the work dir; installed at <outfile> only through the
+	# one-version check (onever.sh), which leaves <outfile> as it was on refusal
+	_pr_out="$_pr_work/.roll/$(basename "$_pr_final")"
+	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/onever.sh"
 
 	[ -x "$AMIX_PKGMK" ] || {
 		echo "[FAIL] host pkgmk missing: $AMIX_PKGMK" >&2
@@ -180,6 +184,7 @@ amix_pkgroll() {
 		exit 1
 	}
 
-	echo "  built   $_pr_out ($(stat -c%s "$_pr_out") bytes, newc verified, md5 $(md5sum "$_pr_out" | cut -d' ' -f1))"
-	unset _pr_work _pr_root _pr_pkg _pr_ver _pr_out _pr_spool _pr_magic _pr_rt
+	amix_one_version "$_pr_out" "$_pr_pkg" "$_pr_ver" "$_pr_final"
+	echo "  built   $_pr_final ($(stat -c%s "$_pr_final") bytes, newc verified, md5 $(md5sum "$_pr_final" | cut -d' ' -f1))"
+	unset _pr_work _pr_root _pr_pkg _pr_ver _pr_out _pr_final _pr_spool _pr_magic _pr_rt
 }

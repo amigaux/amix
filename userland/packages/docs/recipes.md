@@ -73,6 +73,13 @@ their record text, and kbootset -23's DESC carries the notes until then. Re-runn
 at -20 / -50 would write different bytes under the same version: do not. The text re-rolls made by
 cfcfe78 (and its candidate `9c670fb4`, and that commit's first -23 datastream) are withdrawn to
 `build/kspace/withdrawn-20261028/`, outside every path a recipe or the round trip reads.
+Enforced since 2026-10-28 by `common/onever.sh` (`onever.py`): both roll functions (`amix_pkgroll`,
+`amix_kpkgroll`, so every recipe) roll into the work dir and install the datastream at its output
+path only if its pkginst + version is listed in no kspace root (`build/kspace/repo`, `next/repo`,
+`candidate-*`, `superseded/repo-*`; `AMIX_ONEVER_ROOTS` replaces the list) or is listed there with
+these very bytes; otherwise the roll is refused and the datastream already at the output path is
+left as it was. A roll is not bit-reproducible (the newc headers carry the spool's inode numbers),
+so in practice a listed version is never rolled again. `sh tools/onever-selftest.sh` proves it.
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
