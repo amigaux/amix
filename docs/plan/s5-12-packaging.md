@@ -31,6 +31,8 @@ R2 rebuilds them as a check.
 | s5 | `mod.d/s5` `a76a4a4fd40082c5b1e79deb33135e4bc9ac3d4b8ce0369e41074ccdf80c20f7`, 58 310 bytes (39 964 by modcheck) | none (S5-37) |
 | hash list | `2026-10-27-s5-10/SHA256SUMS-68030-261027-20` | `2026-10-28-k46-recut/SHA256SUMS` |
 
+The next k46 cut takes `ufs-exp.k46` `6636b27e…` (the port 87b8a88: ufs refuses a block size under the page size at mount, S5-13); until then the pin is `84316ffc…`.
+
 Both sidecars carry:
 - `kabi=k30.1.2` / `k46.1.2`;
 - `abi=2ab48658596e166a…`;
