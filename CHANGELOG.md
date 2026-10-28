@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-28 — docs: A4000T-ONBOARD-710.md §10.10, a4kt710 unsupported with the Z3660 in 030 mode (no NCR tag in the A3000 Kickstart, SIMMs hidden in amix_mode so no bus-master DMA memory, $DD0000 mapped to the emulated A3000 SCSI); the real-060 k46 line is the supported path (facf889)
+
 ## 2026-10-27 — module/a4kt710: rebuild when the included a4091-wr.c changes
 
 A stale object without the C4-2 v6 §8.1 gate had been checked and reported; the mint was built fresh and is correct (k46 95bebecb,
