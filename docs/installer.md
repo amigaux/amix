@@ -5051,6 +5051,20 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   `FB_SDCARDS`). Copies of it later got kern46m -82 (`sdcards=4`) through apkg. The current media all lay
   `FB_SDCARDS=4` and step 4d. Such old roots get the set from `kbootset` -22's commit (C2-4 §14), not from the
   installer.
+- Since the kernel-space catalog b1f564f4 (2026-10-28: kern30m -20, kern46m -51, kbootset -23, modtools -7) the
+  kernels have no built-in ufs, and k30 none of s5 either (k46 has no s5 at all, S5-37). The kernel package carries
+  them as core-tier modules in `/etc/conf/mod.d` (C2-3 v8), and kbootset composes every generation from them: the
+  `rootfs` filesystem is promoted to a root record (`module ufs root … tier=core build=<cut> safe=1`), any other one
+  stays boot class. An installed disk roots on the ufs module on both lines (on k30 s5 is boot class beside it). A
+  RAM-disk medium's generation roots on its image's filesystem: k46 promotes ufs; k30 promotes s5, so ufs is a
+  boot-class record there that the miniroot's `modadmin -B` loads from the image's `/stand/gen/1/mod/ufs`, and
+  without it the k30 miniroot cannot mount the ufs target. The images therefore carry every boot-class record of
+  their generation: `build-ramdisk-cd.sh --boot-mods DIR` (and `build-netinstall.sh --boot-mods DIR`) hand out the
+  objects kbootset records (cdfs, and ufs on k30; z3660eth, and ufs on k30), and each composer gates its images
+  with `tools/ramdisk-image-check.py` (every boot record's object byte for byte, a ufs image's block size at least
+  4096: the k46 ufs module refuses smaller blocks at mount, S5-13). A k46 CDBOOT cell's evidence floppy is ufs, made
+  by the guest (`mkfs_ufs` on the zeroed floppy), since k46 can no longer mount s5. The `firstboot` gate also reads
+  `modadmin -s` (ufs loaded as a module) and `kbootset check` (0) on the booted box.
 
 ### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
 
