@@ -3,6 +3,8 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-28 — the kspace catalog of record is b1f564f4 (6f0c1701 + kbootset -23 + kern46m -51), proven by the Bench in emulation; 6f0c1701 kept at superseded/repo-20261028-0434, candidate 059c7c53 withdrawn; R5 runs from all three superseded roots, R6 from 6f0c1701; round trip 212/212 (3060b1f) — not published
+
 ## 2026-10-28 — kern46m k46.1.2.261028-51 from the k46 cut 68060-261028-51 (port 87b8a88: the ufs module refuses a ufs with blocks under 4 KiB at mount, EINVAL, where -50 mounted it and panicked in ufs_getapage); core 7b07bce and abi 2ab48658 unchanged; pins unix 0fda887c, kabi 03208ab3, ufs.mod 62cc5250, ufs-exp.k46 6636b27e; first k46 cut with the release notes; candidate root b1f564f4 = 059c7c53 with kern46m -50 → -51, not promoted; round trip 212/212 (dd5359e) — not published
 
 ## 2026-10-28 — the kspace catalog of record is 6f0c1701 (the candidate proven by the Bench's S5-13), 915e09f3 kept at superseded/repo-20261028-0319; R5 runs from both superseded roots (4ef0aec)
