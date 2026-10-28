@@ -81,7 +81,7 @@ program against an image file, so media and boxes cannot drift).
 | `kbootset status` | the kept set, states, the booted generation (from `kinfo`), the boot disk, free store space, warnings |
 | `kbootset build` | compose the next generation in `/stand/gen/<new>/` from installed packages; runs every gate; writes nothing to the store |
 | `kbootset commit` | write the built generation into the store as `trial`; read back; flip the control block; the default generation is not changed (a newer trial replaces an older unbooted one) |
-| `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2 |
+| `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2; after a boot where the loader fell back from the default, verifies the default and marks it bad when its bytes are damaged (§3.3) |
 | `kbootset retry` | called by the base system's fsck-repair reboot path: when the booted generation is the trial, its attempt does not count (at most twice per trial); writes the boot store's control block only, nothing on the root filesystem |
 | `kbootset rollback` | sets the **default** to the newest good generation older than the current default, or to the pristine generation when there is no older good one (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
 | `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
@@ -184,6 +184,27 @@ attempt (M-GEN3).
 - It acts only when kinfo says the booted generation is the trial.
 - It gives an attempt back at most twice per trial, so a root that never
   stays clean still ends in the try-once fallback.
+
+**A default the loader refused.** When the default generation cannot be
+loaded (L2, L3, L5, L6, L13, L14), boot2 boots the next generation in its
+order and sets the loader record's fallback flag (`10-boot-loader.md`
+§7.2). The trial rule does not reach a good generation, so `mark-good`
+judges it on the boot that reaches multi-user (C2-4 §9):
+- It acts only on a fallback the loader took by itself: not after a menu
+  choice or a one-shot request, and not when a trial took its attempt
+  first (the trial was the first choice; L8 takes it back).
+- It verifies the default's manifest and members as `check` does. Damaged
+  bytes prove the refusal: the default is marked `bad` and collected, and
+  the booted generation, which has just reached multi-user, becomes the
+  default.
+- Members that verify leave the default as it is: a lack of memory, a read
+  error or a transfer that failed once is the box's, and costs the
+  generation nothing. The line says so, and the loader's L line of that
+  boot is the reason.
+- The pristine generation is never marked bad.
+
+So a damaged member is never left behind as `good`: the next boot starts
+from the booted generation, and `build` and `commit` compare with it.
 
 ## 4. `kinfo` and the namelist
 

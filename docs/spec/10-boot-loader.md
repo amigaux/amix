@@ -613,6 +613,15 @@ When the chosen generation cannot be loaded (L2, L3, L6), boot2 tries in
 this order: the default generation, the other good generations newest first,
 the pristine generation, then the menu.
 
+boot2 writes nothing about a generation it refused this way, and it sets
+the fallback flag (0x04) in the loader record. The boot that reaches
+multi-user judges the refused default (C2-4 §9): `kbootset mark-good`
+verifies its members in the store, marks it `bad` and makes the booted
+generation the default when the bytes are damaged, and leaves it the
+default when they verify. A refusal the store does not confirm (L4 memory,
+a read error, a transfer that failed only once) is the box's, not the
+generation's, so it does not cost the generation.
+
 ### 7.3 One-shot requests
 
 `kbootset next --previous`, `kbootset next --safe` and `kbootset next <id>`
@@ -699,7 +708,7 @@ a mouse click; where a choice is needed the menu opens.
 | B4 | loader trial: the new boot2 already had its attempt, or the tally write failed | print, use the secondary copy |
 | L1 | CPU line of the generation ≠ probed CPU | name both; menu |
 | L2 | manifest missing or CRC bad | name the generation; continue in the order of §7.2 (default, other good newest first, pristine, menu) |
-| L3 | member CRC bad (kernel or module) | name the member; as L2 |
+| L3 | member CRC bad (kernel, module or RAM-disk image) | name the generation; as L2. The member is the one the progress line just before names (`generation N, kernel unix …`, `module ufs …`); `kbootset check` names it exactly. boot2 has 14 bytes free and naming the member costs 40, so the line does not repeat the name (2026-10-28). The RAM-disk image has no progress line of its own: an L3 after the last module line is that module or the image |
 | L4 | not enough fast memory for kernel + arena (+ RAM disk) | give needed and largest region; menu |
 | L5 | arena overflow | give needed and capacity; as L2 (the next generation in the order: try-once falls back to the good one, and an unattended box does not stop at a menu; the menu stays reachable by key) |
 | L6 | unknown relocation type or out-of-range displacement | give type and offset; as L2 |
