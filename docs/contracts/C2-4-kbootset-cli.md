@@ -1,6 +1,6 @@
 # C2-4 — `kbootset` as a called program, version 14
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -145,6 +145,22 @@ has run:
   level 2. A trial that is not marked good is taken back by the loader
   on the next boot (L8). That is the try-once rule, and the hook adds
   nothing to it.
+- **After a fallback** (version 15). When kinfo's loader record has the
+  fallback flag (0x04) and neither the menu flag (0x02) nor a menu or
+  one-shot state, the loader passed over the default by itself. Unless a
+  trial spent its attempt on that boot (L8 then takes the trial back),
+  `mark-good` verifies the default's manifest and members as `check` does
+  (40 §3.3) and adds one clause to its line:
+  - damaged: `the loader refused the default and the store confirms it
+    (<check's line for the member>): generation D marked bad, the default
+    is generation N`. The default is marked bad and collected, and the
+    booted generation N becomes the default;
+  - intact: `the loader passed over the default, generation D, but its
+    members verify: it stays the default (the loader's L line says why)`.
+    Nothing is written.
+  The pristine generation is never judged. With `--booted`, no loader
+  record is read, so there is no fallback to judge. The exit status is as
+  above; 1 when the control block cannot be written.
 - **On every boot** (not only a trial), after its own work, `mark-good`
   writes the booted kernel's namelist as `kbootset namelist` does (§12),
   and prints its line when it wrote one. A namelist it cannot write does
