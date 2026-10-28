@@ -9627,7 +9627,8 @@ def audit_ide_kit():
                 "BOOTSLICE_SOURCE_HDF": "work/bootslice-donor/ide-K030-IDE-c0-u6.hdf",
                 "BOOTSLICE_IMG": "boot/ide/bootslice.img", "BOOTSLICE_MANIFEST": "boot/ide/bootslice.manifest",
                 "BOOT2_BOOT": "boot/ide/boot2.boot", "TARGET_VFSTAB_SCSI_ID": "6",
-                "IMAGE_KIT": "y", "RTC": "setclk", "KERNEL_SDDEVSIZE": "stock"}
+                "IMAGE_KIT": "y", "RTC": "setclk", "KERNEL_SDDEVSIZE": "stock",
+                "TARGET_HBA": "gayle"}   # where the CF runs: its RDB Mask (tools/lib/dmamask.py)
     twins = {"public-a4000-ide.profile": {}, "public-a4000-ide-unattended.profile": {"INSTALL_UNATTENDED": "yes"}}
     b = _parse_profile(base) if os.path.isfile(base) else None
     for twin, extra in sorted(twins.items()):
@@ -10170,11 +10171,11 @@ def audit_l11():
              _extract_func(l11, "l11_kpkg_key") + "\n" + _extract_func(l11, "l11_keys") +
              '\nl11_keys\necho "XPKGS=$L11_XPKGS MODS=$L11_MODS KMOD=$L11_KMOD"\n')
 
-    def keys(kernel, mods):
+    def keys(kernel, mods, hba="z3660scsi", body=None):
         env = dict(os.environ, KERNEL_KPKG=kernel, KERNEL_MODPKGS=mods, TARGET_FASTMEM_MB="32",
-                   INSTALL_CPU="040", TARGET_HBA="z3660scsi", TARGET_SCSI_ID="6", TARGET_ROOT_SLICE="1",
+                   INSTALL_CPU="040", TARGET_HBA=hba, TARGET_SCSI_ID="6", TARGET_ROOT_SLICE="1",
                    TARGET_BOOT_SLICE="3", TARGET_BOOT_MB="", INSTALL_TARGET_PREBUILT="0")
-        return subprocess.run(["/usr/bin/dash", "-c", kbody], capture_output=True, text=True,
+        return subprocess.run(["/usr/bin/dash", "-c", body or kbody], capture_output=True, text=True,
                               timeout=30, env=env).stdout.strip()
     for what, kernel, mods, want in (
             ("a module kernel and z3660eth-k46", "kernel-k46-m", "z3660eth-k46", "XPKGS=modtools MODS= z3660eth KMOD=y"),
@@ -10187,6 +10188,20 @@ def audit_l11():
             ("a module the catalog lacks", "kernel-k46-m", "absent-k46", "is not a module package")):
         got = keys(kernel, mods)
         (ok if want in got else fail)("l11_keys, %s: %s" % (what, got if want not in got else
+                                      ("refused" if "DIE" in got else want)))
+    # (10b) the controller key and the root record from TARGET_HBA (C4-1 sec 5.2, C4-2 sec 8)
+    hbody = kbody.replace('echo "XPKGS=$L11_XPKGS MODS=$L11_MODS KMOD=$L11_KMOD"',
+                          'echo "BOOTDEV=$KBOOTSET_BOOTDEV REC=$KBOOTSET_ROOTREC"')
+    for hba, want in (("a3000", "BOOTDEV=mobo:a3000-wd REC=sd id=00000000 base=00000000 unit=6 slice=1 mobo"),
+                      ("gayle", "BOOTDEV=mobo:gayle REC=sd id=00000000 base=00000000 unit=6 slice=1 mobo"),
+                      ("a4000t", "BOOTDEV=mobo:a4000t-710 REC=sd id=00000000 base=00000000 unit=6 slice=1 mobo"),
+                      ("a4kt710", "BOOTDEV=mobo:a4000t-710 "),
+                      ("z3660scsi", "BOOTDEV=zorro:144b:01 REC=sd id=144b0100 base=00000000 unit=6 slice=1"),
+                      ("a4091", "BOOTDEV=zorro:0202:54 REC=sd id=02025400 base=00000000 unit=6 slice=1"),
+                      ("a4092", "BOOTDEV=zorro:c0de:01 REC=sd id=c0de0100 base=00000000 unit=6 slice=1"),
+                      ("a2091", "DIE INSTALL_LAYOUT=1.1: no controller key known for TARGET_HBA='a2091'")):
+        got = keys("kernel-k46-m", "", hba, hbody)
+        (ok if want in got else fail)("l11_keys, TARGET_HBA=%s: %s" % (hba, got if want not in got else
                                       ("refused" if "DIE" in got else want)))
 
     # (11) S3-31 l11_kpkg_record for a module: name, role and the file lines of its

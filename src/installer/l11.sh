@@ -107,6 +107,9 @@ l11_keys()
 			a4091)		KBOOTSET_BOOTDEV=zorro:0202:54 ;;
 			a4092)		KBOOTSET_BOOTDEV=zorro:c0de:01 ;;
 			gayle)		KBOOTSET_BOOTDEV=mobo:gayle ;;
+			# the onboard 53C710 Kickstart boots through its ROM's NCR scsi.device;
+			# a4kt710's match key (C4-2 sec 8, C4-1 sec 5.2: motherboard id 3)
+			a4000t|a4kt710)	KBOOTSET_BOOTDEV=mobo:a4000t-710 ;;
 			*)		die "INSTALL_LAYOUT=1.1: no controller key known for TARGET_HBA='$TARGET_HBA'; set KBOOTSET_BOOTDEV" ;;
 		esac
 	fi
