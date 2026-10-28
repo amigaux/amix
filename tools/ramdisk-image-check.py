@@ -12,7 +12,9 @@ built-in ufs or s5: on k30 the kernel package's ufs is such a record (s5 is the 
 root), and without it the miniroot cannot mount the ufs target. A ufs image's block size
 must be at least 4096 (the k46 ufs module refuses a smaller one at mount, S5-13).
 --zen0 (the netinstall images): /dev/zen0 must also be c 51,0 (the z3660eth package's node,
-C3-5 section 1.2). Exit 0 when every image passes, 1 otherwise; one line per finding.
+C3-5 section 1.2), and the image's installer must carry /install/dmamask, the DosEnvec Mask
+table install.sh stamps the target with (tools/dmamask.py medium; without it the target keeps
+/etc/rdb's 0xFFFFFFFC on any controller). Exit 0 when every image passes, 1 otherwise; one line per finding.
 """
 import hashlib
 import os
@@ -20,6 +22,7 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+import dmamask  # noqa: E402
 import s5   # noqa: E402
 import ufs  # noqa: E402
 
@@ -122,6 +125,14 @@ def main(args):
             bad = 1
         else:
             print("ramdisk-image-check: %s: /dev/zen0 c 51,0" % os.path.basename(image))
+        t = get("/install/dmamask")
+        if t != dmamask.medium_rows().encode():
+            print("ramdisk-image-check: %s: /install/dmamask is %s, not tools/dmamask.py medium's table"
+                  % (image, "absent" if t is None else "different"))
+            bad = 1
+        else:
+            print("ramdisk-image-check: %s: /install/dmamask = the medium table (%d rows)"
+                  % (os.path.basename(image), t.count(b"\n")))
     return bad
 
 
