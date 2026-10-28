@@ -25,6 +25,11 @@
 #     KM_PAGESHIFT_OK  optional: the module Makefile's PAGESHIFT_OK, passed
 #                      to modcheck as -w (functions whose shifts by 11 are
 #                      not page arithmetic; kit 8fc87de or later)
+#     KM_FILES         optional: "<installed path> <source> <sha256> <mode>"
+#                      per line, the source relative to the siblings: further
+#                      plain files the package ships beside the module (a
+#                      driver's interface header), verified and copied
+#                      verbatim; the prototype lists each as `f none`
 # and, from the recipe directory: pkginfo.<line>, prototype, modreg.
 #
 # Installs /etc/conf/mod.d/<name> (the object, verbatim) and
@@ -108,6 +113,18 @@ PY
 	mkdir -p "$_km_dest/etc/conf/mod.d" "$_km_dest/etc/conf/modreg.d" "$_km_work"
 	cp "$_km_obj" "$_km_dest/etc/conf/mod.d/$KM_NAME"
 	cp "$_km_dir/modreg" "$_km_dest/etc/conf/modreg.d/$KM_NAME"
+	echo "${KM_FILES:-}" | while read _p _s _h _m; do
+		[ -n "$_p" ] || continue
+		case "$_p" in /etc/conf/*|/dev/*|/stand/*|*/../*|*/./*|[!/]*)
+			echo "[FAIL] KM_FILES: $_p is not a plain path outside /etc/conf, /dev and /stand" >&2; exit 1 ;; esac
+		grep -q "^f none $_p $_m " "$_km_dir/prototype" || {
+			echo "[FAIL] KM_FILES: the prototype has no 'f none $_p $_m'" >&2; exit 1; }
+		amix_verify "$AMIX_SIBLINGS/$_s" "$_h"
+		mkdir -p "$_km_dest${_p%/*}"
+		cp "$AMIX_SIBLINGS/$_s" "$_km_dest$_p"
+		chmod "$_m" "$_km_dest$_p"
+		echo "  $_p = $_s"
+	done || exit 1
 
 	{
 		echo "$_km_cat $KM_VERSION -- the $KM_NAME kernel module of Amiga UNIX (Amix), line $_km_line"
@@ -133,11 +150,15 @@ PY
 	find "$_km_dest" -exec touch -h -d "@$KM_SOURCE_EPOCH" {} +
 	chmod 0644 "$_km_dest/etc/conf/mod.d/$KM_NAME" "$_km_dest/etc/conf/modreg.d/$KM_NAME"
 	cmp -s "$_km_dest/etc/conf/mod.d/$KM_NAME" "$_km_obj" || { echo "[FAIL] staged object differs" >&2; exit 1; }
+	# the payload is exactly the two /etc/conf files and KM_FILES
+	_km_n=$(find "$_km_dest" -type f | wc -l)
+	[ "$_km_n" -eq $((2 + $(echo "${KM_FILES:-}" | awk 'NF' | wc -l))) ] || {
+		echo "[FAIL] $_km_n files staged in $_km_dest" >&2; exit 1; }
 
 	echo "--- package ---"
 	cp "$_km_dir/pkginfo.$_km_line" "$_km_work/pkginfo"
 	cp "$_km_dir/prototype" "$_km_work/prototype"
 	amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out"
 	unset _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
-		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _p _n _h
+		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _km_n _p _n _h _s _m
 }
