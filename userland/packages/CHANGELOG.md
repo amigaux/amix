@@ -3,6 +3,8 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-28 — the kspace catalog of record is fff860dc (b1f564f4 + kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10, paula-k30/-k46 1.0.0-1), proven by the Bench in emulation (kerntools 82f7da2); b1f564f4 kept at superseded/repo-20261028-1602; round trip 253/253 with upgrades from all four superseded roots (7292a37) — not published
+
 ## 2026-10-28 — candidate kernel-space root fff860dc (b1f564f4 + the kabi 1.3 set), not promoted, not published: kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61 (/dev/paula support, bounded /dev/audio open), kbootset 1.1.0.261028-24 (box 0b9b8ec4, c 54 paula in kreg), loader-amix 1.0.261025-10 (boot1 765915a7, boot2 da260a96: DMA buffers by the partition's DosEnvec), paula-k30/-k46 1.0.0-1 added; modtools -7 kept; round trip 253/253 including upgrades from 64d37aaa, 915e09f3, 6f0c1701 and b1f564f4 (5972993)
 
 ## 2026-10-28 — paula-k30 / paula-k46 1.0.0-1 (pkginst paula30 / paula46): isoriano's /dev/paula (MIT) as a demand-class module of each line (kabi 1.3, c 54), objects amix-paula 548d258 (k30 147844b4, k46 d2c7d8f4); ships /dev/paula c 54 0 0666 and /usr/include/paula.h; kmodpkg.sh gains optional KM_FILES. paula30 fc0b4516, paula46 dd332b02; not in any catalog. The Bench's ramdisk refusal is apkg 0.3.2 on the box: ramdisk-k30/-k46 need APKG 0.3.3 (d14d36d, c048863)
