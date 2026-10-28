@@ -743,6 +743,81 @@ ks_mark_good(struct ks *k, ax_u32 booted, int primary_used)
 	return KS_OK;
 }
 
+static char lastline[400];
+
+/* line onto msg, cut at msg's end */
+static void
+append(struct ks *k, const char *line)
+{
+	size_t n = strlen(k->msg);
+
+	while (*line && n + 1 < sizeof(k->msg))
+		k->msg[n++] = *line++;
+	k->msg[n] = 0;
+}
+
+static void
+grab(const char *line)
+{
+	strncpy(lastline, line, sizeof(lastline) - 1);
+	lastline[sizeof(lastline) - 1] = 0;
+}
+
+int
+ks_refused(struct ks *k, ax_u32 booted)
+{
+	static struct ax_manifest m;
+	const struct ax_gen *d = ks_find(k, k->ctl.default_gen), *t = ks_find(k, k->ctl.trial_gen),
+			    *b = ks_find(k, booted);
+	char why[400], line[600], *buf;
+	struct ax_ctl c;
+	int i, rc;
+
+	k->gate = 0;
+	if (!d || !b || d->id == booted || d->state != AXG_GOOD ||
+	    (b->state != AXG_GOOD && b->state != AXG_PRISTINE))
+		return KS_OK;
+	if (t && t->state == AXG_TRIAL && t->attempts)
+		return KS_OK;		/* the trial was tried first: L8 takes it back */
+	if ((rc = writable(k)) != KS_OK)
+		return rc;
+	why[0] = 0;
+	if ((buf = manifest(k, d, &m)) == 0)
+		sprintf(why, "generation %lu: manifest unreadable or damaged", (unsigned long)d->id);
+	else {
+		if (check_member(k, d->id, "kernel", &m.kernel, grab))
+			strcpy(why, lastline);
+		for (i = 0; !why[0] && i < m.nmod; i++)
+			if (check_member(k, d->id, "module", &m.mod[i], grab))
+				strcpy(why, lastline);
+		if (!why[0] && m.has_ramdisk && check_member(k, d->id, "ramdisk", &m.ramdisk, grab))
+			strcpy(why, lastline);
+		free(buf);
+	}
+	if (!why[0]) {
+		sprintf(line, "%sthe loader passed over the default, generation %lu, but its members "
+			"verify: it stays the default (the loader's L line says why)",
+			k->msg[0] ? "; " : "", (unsigned long)d->id);
+		append(k, line);
+		return KS_OK;
+	}
+	c = k->ctl;
+	for (i = 0; i < c.ngen; i++)
+		if (c.gen[i].id == d->id)
+			c.gen[i].state = AXG_BAD;
+	if (c.oneshot == AXO_GEN && c.oneshot_gen == d->id)
+		c.oneshot = AXO_NONE, c.oneshot_gen = 0;
+	c.default_gen = booted;
+	keep(&c);
+	sprintf(line, "%sthe loader refused the default and the store confirms it (%.120s): "
+		"generation %lu marked bad, the default is generation %lu", k->msg[0] ? "; " : "",
+		why, (unsigned long)d->id, (unsigned long)booted);
+	if ((rc = write_ctl(k, &c)) != KS_OK)
+		return rc;
+	append(k, line);
+	return KS_OK;
+}
+
 int
 ks_retry(struct ks *k, ax_u32 booted)
 {

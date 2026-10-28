@@ -55,6 +55,10 @@ def kinfo(path, cards, axl1, fast=16777184, mods=(), safe=False):
         struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
     if axl1 and len(axl1) > 7:                         # the boot device's name CRC
         struct.pack_into('>I', r, a + 40, axl1[7])
+    if axl1 and len(axl1) > 8:                         # AXL1's flags (0x04 fallback, 0x02 menu)
+        struct.pack_into('>I', r, a + 36, axl1[8])
+    if axl1 and len(axl1) > 7:
+        struct.pack_into('>I', r, a + 8, 0)
         s = sum(struct.unpack('>31I', r[a:a + 124])) & 0xffffffff
         struct.pack_into('>I', r, a + 8, (-s) & 0xffffffff)
     struct.pack_into('>I', r, 80, flags | (4 if safe else 0))
@@ -136,6 +140,17 @@ $B/kbootset -R $R commit --again 2>/dev/null | grep -q "generation 2 committed"
 # 4. mark-good with no options: kinfo says generation 2 booted by the primary
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
+
+# 4a. the loader fell back from the default (AXL1 flag 0x04) to the
+# pristine generation: mark-good verifies the default, generation 2, and
+# its intact members keep it; a fallback the menu chose is not judged
+python3 -I $T/disk.py kinfo $T/kinfo 1,0,6,$START,0x40000000,$A4091,$A4091,0,4 0,$A4091,0x40000000,0
+$B/kbootset -R $R mark-good > $T/out
+grep -q "generation 1 is pristine; nothing to mark; the loader passed over the default, generation 2, but its members verify: it stays the default" $T/out ||
+	{ echo "kbox: the fallback boot did not verify the default" >&2; cat $T/out >&2; exit 1; }
+python3 -I $T/disk.py kinfo $T/kinfo 1,0,6,$START,0x40000000,$A4091,$A4091,0,6 0,$A4091,0x40000000,0
+$B/kbootset -R $R mark-good > $T/out
+! grep -q "passed over" $T/out
 
 # 4b. retry: the trial's boot ended in the base system's fsck-repair
 # reboot; with the root read-only, retry gives its attempt back and the
@@ -278,4 +293,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, retry, status's modules, check's nodes, the Z3660 window's card, the safe set in status ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, a fallback boot's verdict, retry, status's modules, check's nodes, the Z3660 window's card, the safe set in status ok"

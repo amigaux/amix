@@ -79,6 +79,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "bootinfo.h"
 #include "ks.h"
 #include "kbuild.h"
 #include "kbox.h"
@@ -806,6 +807,12 @@ main(int argc, char **argv)
 			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */
 			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
 					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
+			/* the loader fell back from the default on its own, not by a
+			 * menu choice or a one-shot request: verify the default */
+			if (rc == KS_OK && have_kinfo && !booted && (ki.axl1_flags & AXLF_FALLBACK) &&
+			    !(ki.axl1_flags & AXLF_MENU) && ki.gen_state != AXL_ONESHOT &&
+			    ki.gen_state != AXL_MENU)
+				rc = ks_refused(&k, ki.gen_id);
 			if (rc == KS_OK && have_kinfo && !booted) {	/* every boot (C2-4 §9) */
 				char nl[300];
 

@@ -108,6 +108,12 @@ ax_u32 ks_arena_need(const struct ax_manifest *m, ax_u32 mlen);
  * the loader trial) */
 int ks_mark_good(struct ks *k, ax_u32 booted, int primary_used);
 
+/* after a boot where the loader fell back from the default (AXL1 flag
+ * 0x04) to generation booted: the default's members are verified as check
+ * does; when its bytes are damaged it is marked bad and booted becomes the
+ * default, otherwise it stays (C2-4 section 9); appends to msg */
+int ks_refused(struct ks *k, ax_u32 booted);
+
 /* the trial's attempt is given back: the boot that spent it ended in the
  * base system's fsck-repair reboot, not in the generation (40 §3.3).  At
  * most KS_RETRIES times per trial; nothing to do for a boot that was not

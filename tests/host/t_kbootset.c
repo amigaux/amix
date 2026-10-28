@@ -216,6 +216,79 @@ retries(void)
 	(void)id;
 }
 
+static void t_quiet(const char *line) { (void)line; }
+
+/* a byte of generation id's kernel flipped in the store */
+static void
+damage(struct ks *k, ax_u32 id)
+{
+	static struct ax_manifest m;
+	static char man[65536];
+	const struct ax_gen *g = ks_find(k, id);
+	int e;
+
+	memcpy(man, img + g->man_off, g->man_len);
+	ax_manifest_parse(k->crctab, man, g->man_len, &m, &e);
+	img[m.kernel.at + 1000] ^= 0x10;
+}
+
+/* the boot after the loader fell back from the default (AXL1 0x04):
+ * mark-good verifies the default; damaged bytes mark it bad and the booted
+ * generation becomes the default, intact ones leave it (C2-4 section 9) */
+static void
+refusals(void)
+{
+	struct ks k;
+	ax_u32 booted, id;
+	const struct ax_gen *g;
+
+	base(&k);			/* pristine 1, good 2 (default), trial 3 */
+	T_EQ(ks_mark_good(&k, 3, 1), KS_OK);	/* 3 the default, 2 good */
+	/* intact: a refusal the store cannot confirm (memory, a read error) */
+	k.msg[0] = 0;
+	writes = 0;
+	T_EQ(ks_refused(&k, 2), KS_OK);
+	T_EQ(writes, 0);
+	T_EQ(k.ctl.default_gen, 3);
+	T_CHECK(strstr(k.msg, "generation 3, but its members verify") != 0);
+	/* the booted generation is the default: nothing to verify */
+	k.msg[0] = 0;
+	T_EQ(ks_refused(&k, 3), KS_OK);
+	T_EQ(k.msg[0], 0);
+	/* damaged: marked bad and collected, the booted one is the default */
+	damage(&k, 3);
+	T_EQ(ks_check(&k, t_quiet), 1);
+	k.msg[0] = 0;
+	T_EQ(ks_refused(&k, 2), KS_OK);
+	T_EQ(k.ctl.default_gen, 2);
+	T_CHECK((g = ks_find(&k, 3)) == 0 || g->state == AXG_BAD);
+	T_CHECK(strstr(k.msg, "kernel unix: CRC-32 BAD") != 0);
+	T_CHECK(strstr(k.msg, "generation 3 marked bad, the default is generation 2") != 0);
+	T_EQ(ks_check(&k, t_quiet), 0);
+	T_CHECK(boots());
+	loader_boot(&k, &booted);
+	T_EQ(booted, 2);
+	/* a trial that spent its attempt was tried first: L8 takes it back,
+	 * the default is not judged by this boot */
+	T_EQ(commit(&k, 4, &id), KS_OK);
+	loader_boot(&k, &booted);
+	T_EQ(booted, 4);
+	damage(&k, 2);
+	k.msg[0] = 0;
+	writes = 0;
+	T_EQ(ks_refused(&k, 1), KS_OK);
+	T_EQ(writes, 0);
+	T_EQ(k.ctl.default_gen, 2);
+	/* the pristine generation is never marked bad */
+	base(&k);
+	T_EQ(ks_rollback(&k, &id), KS_OK);	/* the default is 1, the trial cancelled */
+	damage(&k, 1);
+	writes = 0;
+	T_EQ(ks_refused(&k, 2), KS_OK);
+	T_EQ(writes, 0);
+	T_EQ(k.ctl.default_gen, 1);
+}
+
 static void
 powercuts(void)
 {
@@ -373,6 +446,7 @@ test_kbootset(void)
 	T_CHECK(strstr(k.msg, "generation 42 was interrupted") != 0);
 	T_EQ(jrn[0], 0);
 	retries();
+	refusals();
 	powercuts();
 	free(img);
 }
