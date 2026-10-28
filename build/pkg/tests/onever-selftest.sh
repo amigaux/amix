@@ -9,8 +9,9 @@
 # Reads the catalog of record (build/kspace/repo) and its kern46m -50 and
 # kbootset -22 datastreams; writes only under a temporary directory.
 #
-#   1. a text-only re-roll of kern46m -50 (the recipe's pkginfo, the record's
-#      payload) through amix_kpkgroll is refused; the datastream already at
+#   1. a text-only re-roll of kern46m -50 (the recipe's pkginfo at the
+#      record's version, the record's payload) through amix_kpkgroll is
+#      refused; the datastream already at
 #      the output path is left as it was, nothing is left in the work dir
 #   2. the same with the record's OWN pkginfo and control-file mtimes is
 #      refused too: a roll is not bit-reproducible (the newc headers carry
@@ -63,16 +64,22 @@ reroll() {	# reroll <tag> <pkginfo>: kern46m $K46 through amix_kpkgroll
 }
 
 # --- 1. a text-only re-roll --------------------------------------------------
-grep -q "^VERSION=$K46\$" "$REPO/recipes/kernel-k46-m/pkginfo" || fail "recipe pkginfo is not $K46"
-cmp -s "$REPO/recipes/kernel-k46-m/pkginfo" "$T/x/kern46m/pkginfo" && fail "recipe pkginfo equals the record's: no text change to test"
-if reroll text "$REPO/recipes/kernel-k46-m/pkginfo"; then fail "a text-only re-roll of kern46m $K46 was written"; fi
+# the recipe's pkginfo at the record's version: as it is while the recipe
+# pins the record's cut, else with its version rewritten to the record's
+# (the recipe has moved on to a newer cut, -51 since 2026-10-28)
+RV=$(sed -n 's/^VERSION=//p' "$REPO/recipes/kernel-k46-m/pkginfo")
+[ -n "$RV" ] || fail "recipe pkginfo has no VERSION="
+sed "s/$RV/$K46/g" "$REPO/recipes/kernel-k46-m/pkginfo" > "$T/text-pkginfo"
+grep -q "^VERSION=$K46\$" "$T/text-pkginfo" || fail "recipe pkginfo cannot be set to $K46"
+cmp -s "$T/text-pkginfo" "$T/x/kern46m/pkginfo" && fail "recipe pkginfo equals the record's: no text change to test"
+if reroll text "$T/text-pkginfo"; then fail "a text-only re-roll of kern46m $K46 was written"; fi
 grep -q "one-version: kern46m $K46 is already listed with other bytes" "$T/roll-text.log" \
 	&& grep -q "$REC (catalog $RMD, base/kern46m-$K46.pkg)" "$T/roll-text.log" \
 	&& grep -q "not written to $T/out-text/kern46m-$K46.pkg (left as it was)" "$T/roll-text.log" \
 	|| { cat "$T/roll-text.log" >&2; fail "refusal message"; }
 cmp -s "$T/out-text/kern46m-$K46.pkg" "$KF" || fail "the datastream already at the output path changed"
 [ -z "$(ls -A "$T/w-text/.roll" 2>/dev/null)" ] || fail "the refused roll left $(ls "$T/w-text/.roll")"
-ok "a text-only re-roll of kern46m $K46 (the recipe's pkginfo) is refused by amix_kpkgroll; the output path keeps the record's bytes"
+ok "a text-only re-roll of kern46m $K46 (the recipe's pkginfo, $RV, set to $K46) is refused by amix_kpkgroll; the output path keeps the record's bytes"
 
 # --- 2. a re-roll of the record's own control files --------------------------
 M=$(awk '$2 == "i" && $3 == "pkginfo" {print $6}' "$T/x/kern46m/pkgmap")

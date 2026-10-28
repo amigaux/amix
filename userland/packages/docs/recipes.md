@@ -20,7 +20,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
-| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-50, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm 7b07bce), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) minted 2026-10-28, proven by the Bench (S5-13, emulation), in the catalog of record `6f0c1701` since 2026-10-28 03:19, not published; -91 never published |
+| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-51, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm 7b07bce), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -51 (port 87b8a88: the ufs module refuses a ufs with blocks under 4 KiB at mount, EINVAL, where -50 mounted a 2 KiB-block ufs and panicked in ufs_getapage; carries the release notes) minted 2026-10-28, proven by the Bench in emulation as a cut, in the candidate root `build/kspace/candidate-b1f564f4`, not promoted, not published; -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) in the catalog of record `6f0c1701` since 2026-10-28 03:19, not published; -91 never published |
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261027-20, kabi k30.1.2, brel; no static A4091/Gayle drivers or cdfs, no built-in ufs/s5, rth1=2; rth1 RAM-disk root, swap /dev/fakeswap), unix + kabi + unix.sym verbatim, and the cut's ufs and s5 core-tier modules at `/etc/conf/mod.d` (C2-3 v8 sec 1) | -20 (S5-12) minted 2026-10-27, staged in `build/kspace/next/repo`, not published |
 | [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
 | [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
@@ -55,21 +55,28 @@ staged.
 it equal byte for byte to the staged root's (`KSPACE_ROOT`, else the next root, else the one
 candidate root, else the catalog of record), runs the stage-2 static-kernel rows from a second source
 that adds the static datastreams, and the S5-12 R5 upgrades (`apkg upgrade kbootset <kernel>`, one
-transaction) from `64d37aaa`'s kernels and from `915e09f3`'s (k46 -91 → -50), both kept in
-`build/kspace/superseded/` (`KSPACE_RECORD_ROOTS` to move them), and R6 upgrades kbootset alone over a
+transaction) from `64d37aaa`'s kernels, from `915e09f3`'s, both kept in `build/kspace/superseded/`,
+and from the catalog of record's (k46 -50, since -51; a line whose kernel is the staged root's is
+skipped) (`KSPACE_RECORD_ROOTS` to move them), and R6 upgrades kbootset alone over a
 root installed from the catalog of record (`KSPACE_CUR_ROOT`) when the staged root's kbootset is newer.
-**Candidate root** (2026-10-28, not promoted): `build/kspace/candidate-059c7c53`, catalog `059c7c53` =
+**Candidate roots** (2026-10-28, not promoted): `build/kspace/candidate-059c7c53`, catalog `059c7c53` =
 `6f0c1701` with kbootset -22 → -23 only; every other row and datastream byte-identical to the record's
-(the kernels are the Bench-proven bytes). The Bench proves it before any promotion. While a candidate
-is staged the record's own run is `KSPACE_ROOT=build/kspace/repo
-KSPACE_KBOOTSET_PKG=build/kspace/pkg/kbootset-1.1.0.261027-22.pkg DLM_COMMIT=1308c0b sh
-tools/kspace-roundtrip.sh`.
+(the kernels are the Bench-proven bytes). `build/kspace/candidate-b1f564f4`, catalog `b1f564f4` =
+`059c7c53` with kernel-k46-m -50 → -51 (the ufs mount guard) only; every other row and datastream
+byte-identical. The Bench proves a candidate before any promotion. With two candidates staged the
+round trip's default falls back to the record, so name the root: `KSPACE_ROOT=build/kspace/candidate-b1f564f4
+sh tools/kspace-roundtrip.sh` (R5 from `64d37aaa`, `915e09f3` and the record `6f0c1701`: k46 -82, -91
+and -50 → -51, each with kbootset -23 in one transaction; R6 kbootset -22 → -23 alone). The
+round trip checks the newest datastream of each package in `build/kspace/pkg` against the recipes'
+`dest/`, so since kern46m -51 was minted it runs the -51 set only; the record's and `059c7c53`'s runs
+(kern46m -50) are in `build/kspace/rt-record-6f0c1701c.log` and `rt-cand-059c7c53-onever.log`.
 
 **One version, one set of bytes.** A datastream in the catalog of record is never re-rolled at its
 version. The kernel release notes added 2026-10-28 (upgrade together with kbootset -22 or later; on
 k46, s5 no longer mounts, S5-37) are in `kernel-k30-m/pkginfo` and `kernel-k46-m/pkginfo`, so the
-NEXT cut of each line (a new version) carries them; the shipped kern30m -20 and kern46m -50 keep
-their record text, and kbootset -23's DESC carries the notes until then. Re-running those two recipes
+NEXT cut of each line (a new version) carries them -- kern46m -51 is the first, with one more line
+(a ufs with blocks under 4 KiB is refused at mount on the 68040/68060 line); the shipped kern30m -20
+and kern46m -50 keep their record text, and kbootset -23's DESC carries the notes until then. Re-running those two recipes
 at -20 / -50 would write different bytes under the same version: do not. The text re-rolls made by
 cfcfe78 (and its candidate `9c670fb4`, and that commit's first -23 datastream) are withdrawn to
 `build/kspace/withdrawn-20261028/`, outside every path a recipe or the round trip reads.
