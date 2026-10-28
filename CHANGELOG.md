@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — plan: S5-13's k46 small-block row is now "a block-under-page ufs is refused at mount, EINVAL" (port 87b8a88; the crafted 2 KiB ufs panicked k46 in the stock getapage assertion); S5-37 notes getapage's PAGESIZE/2 arm; the next k46 cut takes ufs-exp.k46 6636b27e (6c62e87)
+
 ## 2026-10-28 — spec 10 §9: L4 goes on to the next generation like L2, as boot2 does; only missing work memory for boot2 itself ends the boot (spec text only) (f8a0da5)
 
 ## 2026-10-28 — C2-4 v15: after a boot the loader fell back from the default, mark-good verifies the default and marks it bad when its bytes are damaged (intact members keep it; a spent trial and the pristine generation are not judged); box kbootset 3c18c3b5 (-23 candidate); spec 10 §9: L3 names the generation and the progress line before it names the member (boot2 has 14 bytes free) (7925b96, df7124b, c614e0b)
