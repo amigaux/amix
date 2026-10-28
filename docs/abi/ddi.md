@@ -1,4 +1,4 @@
-# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2: each name's minor is its `ddi.list` line)
+# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2, stage 5 in minor 3: each name's minor is its `ddi.list` line)
 
 These are the names a module may use from the kernel. The list of record
 is the ABI kit's `ddi.list` (`abi/<line>/ddi.list` here). The kernel's
@@ -23,7 +23,8 @@ So a level-6 handler calls none of these
   `sysroot/` and `stock/`;
 - **core**: the module core, declared by `<sys/amixddi.h>` or
   `<sys/moddefs.h>`;
-- **port**: the 68040/68060 port (k46 only).
+- **port**: the 68040/68060 port (k46 only);
+- **cut**: the kernel cut's own build-time patch of a stock source.
 
 The C is K&R. The kernel compiler runs with `-traditional`.
 
@@ -155,6 +156,22 @@ level-2 handler raised through PORTS or in the poll.
 
 `r` is the driver's `struct dma_rec`, one per controller, layout version 2
 (the port's `DMA040-SERVICE-RECORD.md`). Zero-length transfers make no call.
+
+## Chip memory and Paula (k30.1.3, k46.1.3)
+
+The names the Paula module needs (amix-paula, `/dev/paula` on major 54).
+A kernel exports minor 3 only when its cut defines `paula_busy` and
+`audio_nopen`, the stock audio driver patched by amix-paula's
+`port/src/patch_audio_paula.py` (C3-2 §2: its post-link gate refuses a
+1.3 tag without them).
+
+| Name | Form | Context | Provider | Contract |
+|---|---|---|---|---|
+| `AllocMem` | `void *AllocMem(nbytes, MEMF_CHIP)` (`amiga/inc/memory.h` in the kit's `stock/`) | proc | stock | Chip memory, which Paula's and the blitter's DMA reach: below 0x200000, mapped one to one on both lines. Allocated in 32-byte units from the chip map; 0 when none is left (it does not sleep for it). **Not cleared**: the stock code clears only kernel heap, so `MEMF_CLEAR` does nothing with `MEMF_CHIP`. A module passes `MEMF_CHIP` only; for other memory it calls `kmem_alloc` |
+| `FreeMem` | `FreeMem(p, nbytes)` | proc | stock | gives back one `AllocMem` block, with its `nbytes`. It tells chip memory from kernel heap by address (below 0x200000 is chip), so it is never given anything `AllocMem` did not return |
+| `displaytype` | `unsigned int` (data, read-only) | any | stock | the video standard: 1 NTSC, 2 PAL, as `PAL` in `<sys/param.h>` tests it; 0 before the console has set it. The E clock is 709 379 Hz on PAL and 715 909 Hz on NTSC |
+| `paula_busy` | `int` (data) | proc | cut | nonzero while `/dev/paula` holds Paula's channels; `/dev/audio`'s open fails with `EBUSY` while it is set. **Only the module that owns major 54 (`paula`) writes it**: it sets it in its open after testing `audio_nopen`, without sleeping between the two, and clears it in its close. Every other module only reads it |
+| `audio_nopen` | `int` (data, read-only) | proc | cut | the number of `/dev/audio` clients now open; `/dev/paula`'s open fails with `EBUSY` while it is nonzero |
 
 ## STREAMS
 

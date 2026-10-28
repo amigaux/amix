@@ -1,6 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 1
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) goes to Antti for review through the owner (OQ-20.4, D-3 §8); names his review adds or removes before the kit freezes change the minor, not this version.
+- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) goes to Antti for review through the owner (OQ-20.4, D-3 §8); names his review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -56,6 +56,26 @@ One file per line and tier in the kit: `abi/<line>/ddi.list` and
 ```
 
 `#` comments; sorted by name.
+
+**A kernel lists the names of its own minor** (version 2). Its kabi tag
+is the cut's claim, one value written to the identity record's tag
+(`dlm_ident`, C3-3), to kinfo and to the sidecar's `kabi=`. The block
+generator takes the tag (`mkksym -k <tag>`); the post-link gate
+(`ksymgate.py`) and the fingerprint (`mkabi.py`) read it from
+`dlm_ident`. All three take only the lines whose `since` is at most the
+tag's minor. So:
+- a cut that claims a minor must define every name of that minor, or its
+  gate fails (a listed name undefined) and so does its fingerprint (a data
+  name undefined);
+- a cut of an older minor still builds from a newer list.
+
+**A module carries the minor of what it imports** (version 2): the
+highest `since` among the names it takes from the lists, but not below
+the kit's `KABI_MIN` (`kit.conf`, `modcheck.py --kabi`). `KABI_MIN` is
+the minor the kit carried before it grew, k30.1.2 and k46.1.2 in the 1.3
+kits, so a module that imports nothing newer is built as before and loads
+where it loaded before. The checker refuses a module whose `kabi` is below
+a name it imports.
 
 The **post-link gate** fails the kernel build unless:
 - every listed name is defined in the final link, with the listed kind;
@@ -132,7 +152,30 @@ contract (arguments, errors, memory class of what it returns) is in
 
 **Later stages add to the DDI by minor:**
 - stage 4: `sd_register`, `sdqueue`, `iodone`;
-- stage 5: `vfs_register`.
+- stage 5: `vfs_register`; minor 3, below.
+
+**Minor 3, the Paula module** (version 2; amix-paula, `/dev/paula` on
+character major 54, 20 §6). The contracts are in `docs/abi/ddi.md`.
+
+| Group | Names | Used by | Context | Provider |
+|---|---|---|---|---|
+| chip memory | `AllocMem` (with `MEMF_CHIP` only: chip memory, not cleared, 32-byte units, or 0), `FreeMem` (chip below 0x200000, kernel heap above) | paula | proc | stock |
+| display | `displaytype` (data, read-only: 1 NTSC, 2 PAL) | paula | any | stock |
+| Paula and `/dev/audio` | `paula_busy` (data, written only by the module that owns major 54), `audio_nopen` (data, read-only) | paula | proc | the cut: the stock audio driver patched by amix-paula's `port/src/patch_audio_paula.py` |
+
+A kernel exports minor 3 only when its cut applies that patch. Without
+it, the cut claims 1.2, and the gate holds it there (§2).
+
+The two exclusion flags stay data names, and are not replaced by a
+`paula_claim()`/`paula_release()` pair (decided 2026-10-28). No rule here
+makes a DDI data name read-only: `panicstr`, `lbolt`, `bootinfo`,
+`cputype` and `displayedscreen` are read-only by their own contracts. The
+fingerprint covers the flags' sizes like any data name. The static
+`/dev/paula` and upstream's patch already use these two names. A function
+pair would need new kernel code in every cut for the same two integers.
+`paula_busy` has one writer, the module that owns major 54. It tests
+`audio_nopen` and sets `paula_busy` in its open with no sleep between,
+and clears it in its close.
 
 Adding names raises the minor, never the major (20 §3.1). So the stage-3
 set can freeze as v1.0 without waiting for the root drivers.
@@ -154,3 +197,6 @@ carved (M-FS1).
   names before the freeze; after it, the minor rule holds.
 - `panicstr` and `lbolt` exported read-only as data, as `bootinfo` and
   `cputype` are.
+- Version 2 (2026-10-28): a kernel's lists by its own minor, a module's
+  tag from its imports (§2); minor 3 with `paula_busy` writable by one
+  module (§3).

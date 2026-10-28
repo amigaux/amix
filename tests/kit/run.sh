@@ -208,6 +208,10 @@ for l in k30 k46; do
 		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-dmause/out/mod.d/dmause" > "$W/dma.out" 2>&1; then
 			pass "$l: a module calling dma_prepare, dma_addr, dma_complete, dma_alloc, dma_free passes"
 		else fail "$l: the DMA module"; cat "$W/dma.out"; fi
+	# minor 3 (C3-2 v2 section 2): a module that imports a 1.3 name but
+	# claims 1.2 is refused, naming the minor
+	KABI_OVERRIDE=$l.1.2 mkbad $l chip "$WRAP"'extern char *AllocMem();\nextern unsigned displaytype;\nchar *f() { return displaytype == 2 ? AllocMem(64, 2) : 0; }\nMOD_MISC_WRAPPER(chip, l, u, "x");\n' "$M0"'chip\tchip\n' &&
+		refused "a 1.2 tag on a module that imports minor-3 names" $l "$W/$l-chip/out/mod.d/chip" "of minor 3"
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do
@@ -302,6 +306,21 @@ if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" 
 	pass "one directory, both kits: build/k30 and build/k46 each hold their own line's module"
 else
 	fail "one directory, both kits"; cat "$d"/make*.log
+fi
+# the module's tag from its imports (C3-2 v2 section 2): with the 1.3
+# kits, the sample stays 1.2 (KABI_MIN, above) and a module that imports
+# minor-3 names gets 1.3, through the make fragment alone
+d=$W/chip
+mkdir -p "$d"
+printf '%b' "$WRAP"'extern char *AllocMem();\nextern unsigned displaytype;\nextern int paula_busy, audio_nopen;\nchar *f() { if (audio_nopen) return 0; paula_busy = 1; return displaytype == 2 ? AllocMem(64, 2) : 0; }\nMOD_MISC_WRAPPER(chip, l, u, "x");\n' > "$d/chip.c"
+printf '%b' '$modtype misc\n$class demand\n$unload allowed\nchip\tchip\n' > "$d/Master"
+printf 'MODULE = chip\nOBJS = chip.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: chip: ok (k30.1.3, demand," "$d/make30.log" &&
+   grep -q "modcheck: chip: ok (k46.1.3, demand," "$d/make46.log"; then
+	pass "a module that imports AllocMem, displaytype, paula_busy and audio_nopen is built as k30.1.3 and k46.1.3"
+else
+	fail "the minor-3 module"; cat "$d"/make*.log
 fi
 # S4-71's root-context probe builds and checks on both lines; on k46 it
 # also calls dev_kvmap (tests/bench/README.md, S4-71)

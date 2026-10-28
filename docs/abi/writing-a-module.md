@@ -98,7 +98,11 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 | `$param` | `<name>:<type>:<default>[:<min>:<max>]`, one line each: types `int`, `hex`, `bool`, `str` |
 | `$desc` | one line |
 
-`kabi` and `cc` come from the kit (`kit.conf`). Never write them yourself.
+`kabi` and `cc` come from the kit. Never write them yourself. `cc` is the
+kit's pin. `kabi` is the kit's family and major with the highest minor among
+the kernel names the module imports, never below the kit's `KABI_MIN`
+(`kit.conf`). So a module that uses a newer name needs a kernel of that
+minor, and one that does not loads where it did before.
 
 **Parameter values** reach `_load` as one string, `name=value`
 separated by spaces, or 0. They come from the generation's manifest

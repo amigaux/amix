@@ -525,6 +525,36 @@ PY
 	else
 		fail "$K: mkksym -f accepted a missing name"
 	fi
+	# minor 3 (C3-2 v2 section 2): a kernel that claims it lists the
+	# names of 1.3 and passes the gate and the 1.3 fingerprint with the
+	# audio patch's two flags (int COMMONs, as the patched audio.c has
+	# them); without them the same claim fails both
+	K3=${LINE}.1.3
+	python3 "$R/tools/mkident.py" --asm $LINE $K3 0x60000 > "$A/ident3.s"
+	printf '\t.comm\tpaula_busy,4\n\t.comm\taudio_nopen,4\n' > "$A/paula3.s"
+	"$TB/mkksym" -k $K3 -a "$L" -a "$LC" > "$A/ksym3.s" 2> "$A/ksym3.log"
+	for f in ident3 paula3 ksym3; do m68k-cbm-sysv4-as -o "$A/$f.o" "$A/$f.s"; done
+	m68k-cbm-sysv4-ld -r -o "$A/kernel3.o" "$A/spliced.o" "$A/prov.o" "$A/ksym3.o" "$A/ident3.o" "$A/stubs.o" "$A/paula3.o"
+	m68k-cbm-sysv4-ld -r -o "$A/kernel3n.o" "$A/spliced.o" "$A/prov.o" "$A/ksym3.o" "$A/ident3.o" "$A/stubs.o"
+	REF3=$R/abi/$LINE/abi-$K3.txt
+	[ "$REF" = "$A/abi-ref.txt" ] && { sed 's/^data cputype 4$/data cputype 0/' "$REF3" > "$A/abi-ref3.txt"; REF3=$A/abi-ref3.txt; }
+	if "$TB/mkksym" -f "$A/kernel3.o" > "$A/fill3.log" 2>&1 &&
+	   python3 "$R/tools/mkident.py" --fill "$A/kernel3.o" > /dev/null &&
+	   python3 "$R/tools/mkabi.py" --check "$REF3" "$A/kernel3.o" "$L" "$DLM/dlm_offs.h" > "$A/abi3.log" 2>&1 &&
+	   python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel3.o" "$L" "$LC" > "$A/gate3.log" 2>&1 &&
+	   grep -q '^kabi '$K3': the names of minor 3' "$A/gate3.log"; then
+		pass "$K: a $K3 kernel with paula_busy and audio_nopen: fingerprint as abi-$K3.txt ($(cat "$A/abi3.log")), gate $(grep -c '^PASS' "$A/gate3.log") checks"
+	else
+		fail "$K: the $K3 kernel: $(cat "$A/fill3.log" "$A/abi3.log"; grep '^FAIL' "$A/gate3.log")"
+	fi
+	if ! python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kernel3n.o" "$L" "$LC" > "$A/gate3n.log" 2>&1 &&
+	   grep -q '^FAIL every listed name is defined.*missing audio_nopen paula_busy' "$A/gate3n.log" &&
+	   ! python3 "$R/tools/mkabi.py" --check "$REF3" "$A/kernel3n.o" "$L" "$DLM/dlm_offs.h" > "$A/abi3n.log" 2>&1 &&
+	   grep -q 'data name audio_nopen is not defined' "$A/abi3n.log"; then
+		pass "$K: a $K3 claim without the audio patch's flags fails the gate and the fingerprint"
+	else
+		fail "$K: the $K3 claim without the flags: $(cat "$A/abi3n.log"; grep '^FAIL' "$A/gate3n.log")"
+	fi
 	# modules against the block as the loader leaves it at 0x08000000
 	python3 "$R/tools/ksymgate.py" --extract "$B/test-bin/axrel" "$A/kernel.o" 0x08000000 "$A/ksym.bin"
 	for m in dlmdep dlmtest rall; do

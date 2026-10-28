@@ -38,8 +38,12 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 what the minted kernels kern46m -71 and kern30m -10 export (`sd_register`
 on both lines, `root_defer` on k46). 1.2 holds the rest of stage 4's
 names (`iodone`, `ramdisk_image`, `vfs_register`, `root_defer` on k30,
-and the DMA calls of C4-5 when they come). A module carries the kit's
-minor and loads on a kernel of that minor or later.
+the DMA calls of C4-5 and the filesystem helpers). 1.3 adds what the
+Paula module needs (`AllocMem`, `FreeMem`, `displaytype`, `paula_busy`,
+`audio_nopen`); only a kernel whose cut patches the stock audio driver
+exports it. A module carries the highest minor among the names it
+imports, and never less than `KABI_MIN` (1.2), and it loads on a kernel
+of that minor or later (C3-2 §2).
 
 Every name in the kit is at most 14 bytes, so it unpacks on an s5
 filesystem too.

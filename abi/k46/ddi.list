@@ -3,6 +3,8 @@
 # per name: name, func or data, the kabi minor it entered.  The kernel build
 # generates its block from this file (mkksym -a) and the post-link gate
 # (tools/ksymgate.py) checks every name is defined.  Sorted by name.
+AllocMem func 3
+FreeMem func 3
 OTHERQ func 0
 RD func 0
 WR func 0
@@ -10,6 +12,7 @@ __lshrdi3 func 0
 __udivdi3 func 0
 __umoddi3 func 0
 allocb func 0
+audio_nopen data 3
 autocon func 0
 bcmp func 0
 bcopy func 0
@@ -28,6 +31,7 @@ cputype data 0
 dev_kvmap func 0
 dev_kvunmap func 0
 displayedscreen data 0
+displaytype data 3
 dma_addr func 2
 dma_alloc func 2
 dma_complete func 2
@@ -72,6 +76,7 @@ mod_strops data 0
 msgdsize func 0
 panic func 0
 panicstr data 0
+paula_busy data 3
 printf func 0
 putbq func 0
 putnext func 0
