@@ -517,3 +517,23 @@ So:
   2. the names `a4kt710`, pkginst `a4kt71030` / `a4kt71046`: agreed;
   3. v1 polled: agreed.
 
+### 10.10 Not supported: the Z3660 in 030 mode (2026-10-28)
+
+`a4kt710` is **unsupported** when the Z3660 runs in 030 mode (`UAE_030_MMU`, `amix_mode` on), the k30 boot of
+M-S474b. Three blockers, each enough on its own:
+
+1. **No declaration.** The 030 boot runs the A3000 Kickstart (A3kKS31), which has no `NCR scsi.device` tag
+   (§10.2). With `declared=-1` the gate refuses before `dma_alloc`: `a4kt710_load` returns `ENXIO` at
+   src/a4091-wr.c:1528-1529. `declared=1` does not help: the A3000 Kickstart never initialises the 710, so a read
+   of `$DD0040` on the real bus is the §2 (T0) hang; with `amix_mode` on the read reaches blocker 3 instead.
+2. **No DMA memory.** In `amix_mode` the firmware hides the real motherboard SIMMs at `$07000000` on purpose (one
+   memlist region, no coalesce; Z3660 `Z3660_emu/src/uae/uae_emulator.cpp:1195-1210`). All fast memory is the
+   Z3660's bind above `$08000000`, so the k30 provider finds no region a bus master reaches and turns DMA off
+   (amix-dlm `core/plat/k30/line.c:186-218`; contract C4-5 v11 §5.4). `dma_alloc` returns 0 and `_load` returns
+   `ENOMEM` (src/a4091-wr.c:1534-1539).
+3. **The window is not the 710.** In `amix_mode` the firmware maps `$DD0000` to its emulated A3000
+   WD33C93/SDMAC (Z3660 `uae_emulator.cpp:1101-1105`), so the CPU cannot reach the real 710 at all.
+
+The supported way to use the onboard 710 is the real-060 k46 line (A4000T Kickstart, §10.7 M-A4T1). On the 030
+boot, z3660scsi roots the box (C4-5 §5.4).
+
