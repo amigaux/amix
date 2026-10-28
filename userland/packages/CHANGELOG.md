@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-28 — the kspace catalog of record is 6f0c1701 (the candidate proven by the Bench's S5-13), 915e09f3 kept at superseded/repo-20261028-0319; R5 runs from both superseded roots (4ef0aec)
+
+## 2026-10-28 — kbootset -23 (1.1.0.261028-23) from amix-dlm e089c2a: C2-4 v15, mark-good marks a refused default bad when its bytes are damaged; box 3c18c3b5, modtools -7 kept; its DESC carries the kernel release notes (upgrade with kbootset -22 or later; s5 no longer mounts on the 68040/68060 line, S5-37); candidate root 059c7c53 = 6f0c1701 + kbootset -23 only, not promoted; round trip R6 (kbootset alone) (cfcfe78, 53fed43)
+
+## 2026-10-28 — the kern30m/kern46m recipes carry the release notes for each line's next cut; the shipped -20 and -50 are never re-rolled (cfcfe78's text re-rolls withdrawn, never promoted); one-version guard recipes/common/onever.sh: a roll never rewrites a version a kspace root lists with other bytes (selftest 6/6) (cfcfe78, 53fed43, 371807c)
+
 ## 2026-10-28 — kern46m k46.1.2.261028-50 from the re-cut 68060-261028-50 (module core amix-dlm 7b07bce; -91's core refused its own ufs, S5-13); new gates: the cut's core contains 7b07bce, and image buildid (blanks stripped) == sidecar build= == ufs build= (kbuildid-selftest 10/10); candidate kernel-space root 6f0c1701 (915e09f3 with -91 → -50), not promoted; round trip 202/202 (363e1b9) — not published
 
 ## 2026-10-27 — kbootset 1.1.0.261027-22 from amix-dlm 1308c0b (box 37e78d88; modtools -7 kept, modadmin byte-identical), and the S5-12 next root promoted as the kernel-space catalog of record 915e09f3, 64d37aaa kept at superseded/repo-20261027-1948 (f9b0f08); round trip 198/198 — not published
