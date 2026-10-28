@@ -10,14 +10,16 @@
 # table into a MEMF_FAST block first; without fast memory it stays in chip.
 #
 # boot2 is linked at address 0.  tools/b2link.c appends a table of the
-# offsets of every 32-bit field holding a 0-based address (a 32-bit count,
-# then 16-bit offsets: the image is under 32 KiB) and patches the header
-# below.  The stub adds the load address to each such field, so the
-# C code needs no position-independent code generation.
+# offsets of every 32-bit field holding a 0-based address and patches the
+# header below.  The table is a 32-bit count of the bytes that follow,
+# then the fields in ascending order, a byte each: half the distance from
+# the previous one, or 0 and a 16-bit offset (the image is under 32 KiB).
+# The stub adds the load address to each such field, so the C code needs
+# no position-independent code generation.
 #
 # Header (offsets from the first byte):
-#   +0 bra.w stub    +4 "AXB2"    +8 table offset (= image size, a count
-#   then that many offsets)     +12 bss size    +16 image size
+#   +0 bra.w stub    +4 "AXB2"    +8 table offset (= image size)
+#   +12 bss size    +16 image size
 #
 # Entry from boot1 (see loader/boot1/boot1.s): a1 IOStdReq, a0 store header,
 # d0 partition start, d1 boot1's choice code, d2 the memory block, a6 ExecBase.
@@ -41,10 +43,8 @@ stub:
 	move.l	%a3,%d6			# where boot1 loaded it
 	moveq	&0,%d7			# infast
 	move.l	(8,%a3),%d3		# image + table bytes
-	move.l	(0,%a3,%d3.l),%d4
-	add.l	%d4,%d4			# 2 bytes an entry
-	addq.l	&4,%d4
-	add.l	%d4,%d3
+	add.l	(0,%a3,%d3.l),%d3
+	addq.l	&4,%d3
 	move.l	(16,%a3),%d4		# image + bss bytes
 	add.l	(12,%a3),%d4
 	cmp.l	%d3,%d4
@@ -71,14 +71,23 @@ inplace:
 	move.l	%a3,%d5
 	move.l	(8,%a3),%d3
 	lea	(0,%a3,%d3.l),%a4
-	move.l	(%a4)+,%d3		# entries
+	move.l	(%a4)+,%d3		# table bytes
+	lea	(0,%a4,%d3.l),%a5	# its end
+	moveq	&0,%d4			# the field's offset, below 32768
 	bra.b	relnext
-relone:	move.w	(%a4)+,%d4
-	ext.l	%d4			# offsets are below 32768
-	add.l	%d5,(0,%a3,%d4.l)
+relone:	moveq	&0,%d3
+	move.b	(%a4)+,%d3
+	beq.b	relabs
+	add.l	%d3,%d4			# half the distance
+	add.l	%d3,%d4
+	bra.b	reladd
+relabs:	move.b	(%a4)+,%d4		# 0: the offset itself
+	lsl.w	&8,%d4
+	move.b	(%a4)+,%d4
+reladd:	add.l	%d5,(0,%a3,%d4.l)
 relnext:
-	subq.l	&1,%d3
-	bcc.b	relone
+	cmp.l	%a5,%a4
+	bcs.b	relone
 
 	move.l	(16,%a3),%d3		# bss from the end of the image
 	lea	(0,%a3,%d3.l),%a4

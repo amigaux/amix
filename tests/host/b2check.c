@@ -34,7 +34,7 @@ main(int argc, char **argv)
 	long on, bn;
 	unsigned char *obj, *bin, *mem;
 	unsigned long base;
-	ax_u32 span, cnt, i, off, v;
+	ax_u32 span, cnt, i, off, v, end;
 	struct ax_bootdata bd;
 	struct ax_relerr er;
 
@@ -44,9 +44,19 @@ main(int argc, char **argv)
 	obj = slurp(argv[1], &on);
 	bin = slurp(argv[2], &bn);
 	span = AX_GET32(bin + 8);
-	cnt = AX_GET32(bin + span);
-	for (i = 0; i < cnt; i++) {
-		off = AX_GET16(bin + span + 4 + 2 * i);	/* 16-bit entries */
+	end = span + 4 + AX_GET32(bin + span);
+	if (end != (ax_u32)bn) {
+		fprintf(stderr, "b2check: the table's length is not the file's rest\n");
+		return 1;
+	}
+	/* a byte each: half the distance, or 0 and a 16-bit offset */
+	for (i = span + 4, off = 0, cnt = 0; i < end; cnt++) {
+		if (bin[i]) {
+			off += 2 * bin[i++];
+		} else {
+			off = AX_GET16(bin + i + 1);
+			i += 3;
+		}
 		v = AX_GET32(bin + off) + (ax_u32)base;
 		AX_PUT32(bin + off, v);
 	}

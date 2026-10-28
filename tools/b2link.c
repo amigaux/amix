@@ -2,8 +2,11 @@
  * b2link.c -- turn boot2's relocatable link (ld -r output) into the loaded
  * image: bound at address 0 with the loader's own relocator, followed by the
  * self-relocation table its start-up stub applies (loader/boot2/start.s):
- * a 32-bit count, then one 16-bit offset per field (every field lies below
- * the 28 KiB limit, so below 32768).
+ * a 32-bit count of the bytes that follow, then the fields in ascending
+ * order, one byte each: half the distance from the previous field (the
+ * first from 0), or 0 and the field's 16-bit offset when the distance is
+ * odd or over 510 (every field lies below the 28 KiB limit, so below
+ * 32768).
  * (docs/plan/stage-1.md S1-11.)
  *
  * usage: b2link IN.o OUT.bin       boot2 behind boot1 (self-relocating)
@@ -107,7 +110,7 @@ main(int argc, char **argv)
 	FILE *f;
 	long n;
 	unsigned char *img, *out;
-	ax_u32 span, bss, total, i;
+	ax_u32 span, bss, total, i, prev, d;
 	struct ax_bootdata bd;
 	struct ax_relerr er;
 	int rc, hunk = 0;
@@ -145,8 +148,7 @@ main(int argc, char **argv)
 	span = bd.dsize ? bd.dvaddr + bd.dsize : bd.rsize ? bd.rvaddr + bd.rsize : bd.tsize;
 	span = (span + 3) & ~3UL;
 	bss = bd.end > span ? bd.end - span : 0;
-	total = span + 4 + 2 * noffs;
-	out = calloc(1, total);
+	out = calloc(1, span + 4 + 3 * noffs);
 	memcpy(out + bd.tvaddr, img + bd.toffset, bd.tsize);
 	if (bd.rsize)
 		memcpy(out + bd.rvaddr, img + bd.roffset, bd.rsize);
@@ -173,9 +175,17 @@ main(int argc, char **argv)
 			(unsigned long)span);
 		return 1;
 	}
-	AX_PUT32(out + span, noffs);
-	for (i = 0; i < noffs; i++)
-		AX_PUT16(out + span + 4 + 2 * i, offs[i]);
+	for (i = 0, total = span + 4, prev = 0; i < noffs; prev = offs[i++]) {
+		d = offs[i] - prev;
+		if (d && !(d & 1) && d <= 510) {
+			out[total++] = (unsigned char)(d / 2);
+		} else {
+			out[total++] = 0;
+			AX_PUT16(out + total, offs[i]);
+			total += 2;
+		}
+	}
+	AX_PUT32(out + span, total - span - 4);
 	if (total > AX_BOOT2_MAX || span + bss > AX_BOOT2_MAX) {
 		fprintf(stderr, "b2link: SIZE GATE: file %lu, image + bss %lu; the limit is %lu\n",
 			(unsigned long)total, (unsigned long)(span + bss), (unsigned long)AX_BOOT2_MAX);
@@ -186,7 +196,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 	printf("b2link: boot2 image %lu + table %lu = %lu bytes, bss %lu (limit %lu)\n",
-	       (unsigned long)span, (unsigned long)(4 + 2 * noffs), (unsigned long)total,
+	       (unsigned long)span, (unsigned long)(total - span), (unsigned long)total,
 	       (unsigned long)bss, (unsigned long)AX_BOOT2_MAX);
 	return 0;
 }
