@@ -609,7 +609,7 @@ line, not L8's wording, is the reason of record. In normal use kbootset's
 gates keep such a generation out of the store (gate 7 for L9, gate 10 for
 L1); only `kbootset commit --spec`, which runs no gates, can put one there.
 
-When the chosen generation cannot be loaded (L2, L3, L6), boot2 tries in
+When the chosen generation cannot be loaded (L2 to L6, L13, L14), boot2 tries in
 this order: the default generation, the other good generations newest first,
 the pristine generation, then the menu.
 
@@ -709,7 +709,7 @@ a mouse click; where a choice is needed the menu opens.
 | L1 | CPU line of the generation ≠ probed CPU | name both; menu |
 | L2 | manifest missing or CRC bad | name the generation; continue in the order of §7.2 (default, other good newest first, pristine, menu) |
 | L3 | member CRC bad (kernel, module or RAM-disk image) | name the generation; as L2. The member is the one the progress line just before names (`generation N, kernel unix …`, `module ufs …`); `kbootset check` names it exactly. boot2 has 14 bytes free and naming the member costs 40, so the line does not repeat the name (2026-10-28). The RAM-disk image has no progress line of its own: an L3 after the last module line is that module or the image |
-| L4 | not enough fast memory for kernel + arena (+ RAM disk) | give needed and largest region; menu |
+| L4 | not enough fast memory for kernel + arena (+ RAM disk), or for a member's buffer | give needed and the room there is; as L2 (another generation may fit; when none loads, the menu). Without memory for boot2's own work areas, before any generation is read: `L4 no memory`, and boot2 returns (on a disk boot1 then prints `boot2 gave up` and stops) |
 | L5 | arena overflow | give needed and capacity; as L2 (the next generation in the order: try-once falls back to the good one, and an unattended box does not stop at a menu; the menu stays reachable by key) |
 | L6 | unknown relocation type or out-of-range displacement | give type and offset; as L2 |
 | L7 | retired (C4-4 version 3, 2026-10-26): boot2 no longer matches root-class modules; the kernel names a missing root controller when the root does not mount | — |
