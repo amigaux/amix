@@ -41,15 +41,19 @@
 # Why mkstore and not kbootset: `media --disk` carries no RAM disk, so the store is written
 # from the spec `media --cd` gated. Priority 5 wins over an installed or mkroot'd Amix disk
 # (priority 2) and AmigaOS's 0: take the medium out after the install, as a CD.
+# --raw-hba NAME: the controller the raw image will hang off (tools/lib/dmamask.py names); its
+# DosEnvec Mask is that controller's DMA reach. The image is written to whatever disk the user has,
+# so absent: the conservative 0x07FFFFFE, with a warning.
 # Publication: unpublished; publishing it is a per-artefact owner decision.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
 die() { echo "build-netinstall: STOP: $*" >&2; exit 1; }
 
-I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW=
+I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA=
 while [ $# -gt 0 ]; do case "$1" in
   --boot-mods) BMODS="$2"; shift 2;;
   --raw) RAW="$2"; shift 2;;
+  --raw-hba) RAWHBA="$2"; shift 2;;
   --k46) I46="$2"; shift 2;;
   --k30) I30="$2"; shift 2;;
   --iso) ISO="$2"; shift 2;;
@@ -57,7 +61,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --volid) VOLID="$2"; shift 2;;
   --mirror-from) MFROM="$2"; shift 2;;
   --mirror) MDIR="$2"; shift 2;;
-  *) sed -n '2,43p' "$0"; exit 2;;
+  *) sed -n '2,47p' "$0"; exit 2;;
 esac; done
 L11="${L11_IN:-$repo/work/l11}"
 # the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them)
@@ -113,6 +117,8 @@ echo "build-netinstall: $ISO ($(wc -c < "$ISO") bytes, sha256 $(sha256sum < "$IS
 if [ -n "$RAW" ]; then
   # form B's raw RDB images, one per line: the line's generation in a read-only disk store
   command -v rdbtool > /dev/null || die "rdbtool (amitools) required for --raw"
+  DE_MASK="$(python3 "$here/dmamask.py" mask --hba "$RAWHBA" --what "raw netinstall image")" \
+    || die "no DMA Mask for --raw-hba '$RAWHBA'"
   mkdir -p "$(dirname "$RAW")"; RAW="$(cd "$(dirname "$RAW")" && pwd)/$(basename "$RAW")"
   if git -C "$(dirname "$RAW")" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git -C "$(dirname "$RAW")" check-ignore -q "$RAW-k46.img" || die "$RAW-k46.img is on a git-tracked path: a disk image is never committed"
@@ -135,7 +141,7 @@ if [ -n "$RAW" ]; then
     rm -f "$out" "$out.tmp"
     rdbtool -f "$out.tmp" create "chs=${TOTAL},1,${SECS}" bs=512 + init > /dev/null || die "rdbtool create refused"
     rdbtool "$out.tmp" add "start=$OFFC" "size=$PC" name=UNIX_Boot dostype=0x554e4900 bootable=1 pri=5 \
-      automount=1 boot_blocks=2 mask=0xfffffffc max_transfer=0xffffff num_buffer=30 > /dev/null \
+      automount=1 boot_blocks=2 "mask=$DE_MASK" max_transfer=0xffffff num_buffer=30 > /dev/null \
       || die "rdbtool add refused the boot partition"
     python3 - "$out.tmp" <<'PY' || die "could not clear the RDB flags"
 import sys, struct
@@ -168,6 +174,7 @@ s = sl[0]
 assert s.dostype == rdb.DT_BOOT and s.bootable, "slice 1 is not a bootable UNI\\0"
 assert (s.byte_offset, s.byte_size) == (int(sys.argv[2]), int(sys.argv[3])), (s.byte_offset, s.byte_size)
 PY
+    python3 "$here/dmamask.py" check "$out.tmp" --mask "$DE_MASK" || die "$l: the DosEnvec read-back failed"
     mv "$out.tmp" "$out"
     echo "build-netinstall: $out ($(wc -c < "$out") bytes, sha256 $(sha256sum < "$out" | cut -c1-16)); RDB + UNIX_Boot store at $OFF, $SZ bytes, generation 1 ($l), lsstore ok"
   done

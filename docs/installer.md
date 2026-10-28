@@ -5086,3 +5086,44 @@ priority 2, and the ROM gives the disc priority 2 as well. On that tie the disk'
 wins, so a box with a disc in the drive still boots its disk: a disc left in the drive
 must not take a box over. To boot the CD, pick it in the Kickstart early-startup boot
 menu. An administrator may lower the disk's priority instead, as a choice of their own.
+
+## The DosEnvec Mask by the controller's DMA reach (2026-10-28)
+
+The loaders take their DMA buffers by the boot partition's DosEnvec, as FFS does
+(amix-dlm a6a1511/053c417, spec 10 §3.1/§3.2): boot1 allocates `de_BufMemType` memory and
+takes chip memory when the buffer lies beyond `de_Mask`; boot2 reads straight into any
+buffer the Mask allows. Until now every disk here said Mask `0xFFFFFFFC`. Each partition's
+Mask now says what its controller's DMA really reaches, from one table,
+`tools/lib/dmamask.py` (orchestrator decision 2026-10-28, matching the kernel's DMA reach,
+amix-dlm `DMA_REACH 0x08000000` and C4-5; C4-2 / OQ-80.5):
+
+| Controller (SD_BOARDS name) | Mask | Why |
+|---|---|---|
+| `a4091`, `a4092` | `0x07FFFFFE` | Zorro III DMA: chip + motherboard fast, never the Z3660 DDR at `$08000000+` |
+| `a3000` (SDMAC) | `0x07FFFFFE` | motherboard DMA, held to the kernel's DMA reach |
+| `a2091`, `a2090` | `0x00FFFFFE` | 24-bit Zorro II DMA |
+| `a4000t` (alias `a4kt710`) | `0xFFFFFFFC` | the onboard 53C710 reaches the Z3660 DDR and hangs the A4000T in chip memory |
+| `gayle`, `z3660scsi` | `0xFFFFFFFC` | PIO / emulated |
+| unknown or unnamed | `0x07FFFFFE` | conservative, with a warning |
+
+`de_BufMemType` stays 0 (MEMF_PUBLIC). Where the Mask is written:
+- **Host builders**: `mkroot.sh --hba`, `build-bootonly-hdf.sh --hba`, `build-source-hdf.sh --hba`,
+  `build-netinstall.sh --raw-hba` (the raw image goes to whatever disk the user has, so it
+  defaults to the unknown Mask), and the profile-driven `build-boot-hdf.sh` /
+  `build-raw-source.sh` (`--hba`, else the profile's source controller: `SRC_HBA`, else
+  `TARGET_HBA` on the target's card, else its `SD_BOARDS` entry). `install-matrix.sh` mints
+  its targets with the profile's `TARGET_HBA`. Each builder reads its image back with
+  `tools/dmamask.py check` before publishing it.
+- **On the box**: stock `/etc/rdb` writes `0xFFFFFFFC` and has no flag for it, so author mode
+  stamps every PART block after the RDSK read-back (`dm_target_mask`, install.sh): the row
+  for `TARGET_HBA` in the medium's `/install/dmamask` (staged by `build-install-iso.sh`),
+  the PART checksum moved by the difference, both longwords read back. A medium without the
+  table leaves `/etc/rdb`'s Mask, with a warning.
+- **Read-back**: `tools/dmamask.py check IMAGE --hba NAME` (or `--profile P --role
+  target|src`) prints every PART's BufMemType, MaxTransfer and Mask and fails on any
+  mismatch or open checksum. run-checks carries its self-test; installer-selftest `DMASK`
+  executes `dm_target_mask` under dash on synthetic RDBs and on the stock-authored metal
+  golden's.
+
+An interactive install that picks a disk on another controller than the profile's
+`TARGET_HBA` gets `TARGET_HBA`'s Mask, as the 1.1 layout's `KBOOTSET_BOOTDEV` does.

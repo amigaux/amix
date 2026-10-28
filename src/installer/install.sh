@@ -264,6 +264,128 @@ byte_is()
 	_want=`expr $_d1 \* 64 + $_d2 \* 8 + $_d3`
 	is_num "$_got" && [ "$_got" -eq "$_want" ]
 }
+# --- the DosEnvec Mask (amix-dlm spec 10 sections 3.1/3.2, 2026-10-28) ---------------
+# The loaders take their DMA buffers by the boot partition's DosEnvec, as FFS does:
+# de_BufMemType, and chip memory when a buffer lies beyond de_Mask. Stock /etc/rdb
+# writes Mask 0xFFFFFFFC on every partition and has no flag for it, so after authoring
+# each PART block of the target gets its controller's Mask from the medium's table
+# /install/dmamask (tools/dmamask.py medium: "<hba> <b0> <b1> <b2> <b3> <hex>", '*' =
+# an unknown controller, 0x07FFFFFE). One longword changes, so the block checksum moves
+# by the difference: new = old + oldmask - newmask (mod 2^32), done in 16-bit halves
+# because expr is 32-bit signed. BufMemType stays 0 (MEMF_PUBLIC). Bytes are read with
+# the `sum -r` of a 1-byte file and written by rebuilding the 512-byte block.
+# dm_byte FILE OFFSET -- the value of the byte at OFFSET of FILE
+dm_byte()
+{
+	dd if="$1" of=/tmp/.dmb.$$ bs=1 skip="$2" count=1 2>/dev/null
+	_dv=`"$INST/bin/sum" -r /tmp/.dmb.$$ | ( read s rest; echo "$s" )`
+	rm -f /tmp/.dmb.$$
+	is_num "$_dv" || return 1
+	expr "$_dv" + 0		# expr exits 1 on a zero result: the status is set below
+	return 0
+}
+# dm_u16 FILE OFFSET -- the big-endian 16-bit word at OFFSET of FILE
+dm_u16()
+{
+	_uh=`dm_byte "$1" "$2"` || return 1
+	_uo=`expr "$2" + 1`
+	_ul=`dm_byte "$1" "$_uo"` || return 1
+	expr "$_uh" \* 256 + "$_ul"
+	return 0
+}
+# dm_oct V -- V (0..255) as three octal digits, oct_file's form
+dm_oct()
+{
+	echo "`expr "$1" / 64``expr "$1" / 8 % 8``expr "$1" % 8`"
+}
+# dm_stamp RAWDEV BLOCK HI LO -- set de_Mask (PART +184) of the PART block at BLOCK to
+# HI:LO (16-bit halves), re-close pb_ChkSum (+8), write the block back, read it back
+dm_stamp()
+{
+	_sf=/tmp/.dms.$$
+	dd if="$1" of=$_sf bs=512 skip="$2" count=1 2>/dev/null || return 1
+	[ "`dd if=$_sf bs=4 count=1 2>/dev/null`" = PART ] || return 1
+	_ch=`dm_u16 $_sf 8` && _cl=`dm_u16 $_sf 10` && _mh=`dm_u16 $_sf 184` && _ml=`dm_u16 $_sf 186` || return 1
+	if [ "$_mh" -eq "$3" ] && [ "$_ml" -eq "$4" ]; then
+		rm -f $_sf
+		return 0
+	fi
+	_s=`expr "$_cl" + "$_ml" + 65536 - "$4"`
+	_c=`expr "$_s" / 65536`
+	_cl=`expr "$_s" % 65536`
+	_ch=`expr "$_ch" + "$_mh" + 65535 - "$3" + "$_c"`
+	_ch=`expr "$_ch" % 65536`
+	oct_file /tmp/.dmc.$$ `dm_oct \`expr $_ch / 256\`` `dm_oct \`expr $_ch % 256\`` \
+		`dm_oct \`expr $_cl / 256\`` `dm_oct \`expr $_cl % 256\``
+	oct_file /tmp/.dmm.$$ `dm_oct \`expr $3 / 256\`` `dm_oct \`expr $3 % 256\`` \
+		`dm_oct \`expr $4 / 256\`` `dm_oct \`expr $4 % 256\``
+	{
+		dd if=$_sf bs=8 count=1 2>/dev/null
+		cat /tmp/.dmc.$$
+		dd if=$_sf bs=4 skip=3 count=43 2>/dev/null
+		cat /tmp/.dmm.$$
+		dd if=$_sf bs=4 skip=47 count=81 2>/dev/null
+	} > /tmp/.dmn.$$
+	rm -f /tmp/.dmc.$$ /tmp/.dmm.$$
+	dd if=/tmp/.dmn.$$ of="$1" bs=512 seek="$2" count=1 2>/dev/null || return 1
+	rm -f /tmp/.dmn.$$
+	dd if="$1" of=$_sf bs=512 skip="$2" count=1 2>/dev/null || return 1
+	_rh=`dm_u16 $_sf 184` && _rl=`dm_u16 $_sf 186` && _qh=`dm_u16 $_sf 8` && _ql=`dm_u16 $_sf 10` || return 1
+	rm -f $_sf
+	[ "$_rh" -eq "$3" ] && [ "$_rl" -eq "$4" ] && [ "$_qh" -eq "$_ch" ] && [ "$_ql" -eq "$_cl" ]
+}
+# dm_target_mask RAWDEV HBA -- every partition of RAWDEV gets HBA's Mask (the medium's table)
+dm_target_mask()
+{
+	if [ ! -f "$INST/dmamask" ]; then
+		warn "this medium has no /install/dmamask: the partitions keep /etc/rdb's Mask 0xFFFFFFFC"
+		return 0
+	fi
+	_dhba=$2
+	rm -f /tmp/.dmrow /tmp/.dmdef
+	while read _tn _d0 _d1 _d2 _d3 _dx; do
+		[ -n "$2" ] && [ "$_tn" = "$2" ] && echo "$_d0 $_d1 $_d2 $_d3 $_dx" > /tmp/.dmrow
+		case "$_tn" in
+			"*")	echo "$_d0 $_d1 $_d2 $_d3 $_dx" > /tmp/.dmdef ;;
+		esac
+	done < "$INST/dmamask"
+	if [ ! -s /tmp/.dmrow ]; then
+		[ -s /tmp/.dmdef ] || die "/install/dmamask has no row for an unknown controller"
+		warn "controller '${2}' is not in the DMA table: Mask for an unknown controller (chip + motherboard fast)"
+		cat /tmp/.dmdef > /tmp/.dmrow
+	fi
+	set -- "$1" `cat /tmp/.dmrow`
+	rm -f /tmp/.dmrow /tmp/.dmdef
+	[ "$#" = 6 ] || die "/install/dmamask: a malformed row"
+	_dmh=`expr "$2" \* 256 + "$3"`
+	_dml=`expr "$4" \* 256 + "$5"`
+	_dmx=$6
+	# the RDSK block: the first of 0..15 carrying the magic (as /etc/rdb, sdpart.c)
+	_db=0
+	_dr=
+	while [ "$_db" -lt 16 ]
+	do
+		dd if="$1" of=/tmp/.dmr.$$ bs=512 skip="$_db" count=1 2>/dev/null
+		if [ "`dd if=/tmp/.dmr.$$ bs=4 count=1 2>/dev/null`" = RDSK ]; then
+			_dr=$_db
+			break
+		fi
+		_db=`expr $_db + 1`
+	done
+	[ -n "$_dr" ] || die "DosEnvec Mask: no RDSK in blocks 0-15 of $1"
+	_nh=`dm_u16 /tmp/.dmr.$$ 28` && _nl=`dm_u16 /tmp/.dmr.$$ 30` || die "DosEnvec Mask: cannot read rdb_PartitionList"
+	_dn=0
+	while [ "$_dn" -lt 16 ] && [ "$_nh" -ne 65535 ]
+	do
+		_pb=`expr "$_nh" \* 65536 + "$_nl"`
+		dm_stamp "$1" "$_pb" "$_dmh" "$_dml" || die "DosEnvec Mask: PART block $_pb of $1 was not stamped and read back"
+		dd if="$1" of=/tmp/.dmr.$$ bs=512 skip="$_pb" count=1 2>/dev/null
+		_nh=`dm_u16 /tmp/.dmr.$$ 16` && _nl=`dm_u16 /tmp/.dmr.$$ 18` || die "DosEnvec Mask: cannot read pb_Next of block $_pb"
+		_dn=`expr $_dn + 1`
+	done
+	rm -f /tmp/.dmr.$$
+	msg "DosEnvec Mask $_dmx on $_dn partition(s) of $1 (controller ${_dhba:-unnamed}), checksums re-closed and read back"
+}
 
 count_tokens() {
 	if [ -s "$1" ]; then
@@ -1479,6 +1601,9 @@ build_target_author() {
 			*)	die "RDB read-back: no RDSK at block 0 of $DISK_RAW after /etc/rdb -c -L 0 -- stock Z3660 firmware would not find this RDB" ;;
 		esac
 	fi
+	# the DosEnvec Mask by the target's controller (dm_target_mask above): the loaders
+	# take their DMA buffers by it
+	dm_target_mask "$DISK_RAW" "${TARGET_HBA:-}"
 
 	# REAL SWAP BEFORE mkfs (1.1, 2026-10-10). Until 2c the only swap is /dev/fakeswap
 	# (dummydisk), and mkfs_ufs of a large root pages: on 16 MB (the published A4000/030

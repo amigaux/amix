@@ -350,6 +350,10 @@ cp -p "$STATIC/sadm-helpers/pkginstall" "$STAGE/bin/pkginstall"
 cp -p "$CORE_T/usr/bin/sum" "$STAGE/bin/sum"
 chmod 0755 "$STAGE"/bin/*
 
+# the DosEnvec Mask per disk controller (tools/lib/dmamask.py, the one table): install.sh
+# stamps the authored target's partitions with its controller's row (TARGET_HBA)
+python3 "$here/dmamask.py" medium --out "$STAGE/dmamask" || { echo "STOP: cannot write /install/dmamask" >&2; exit 1; }
+
 # optional static apkg (the parallel dispatch may have landed it)
 if [ -f "$STATIC/bin/apkg" ]; then
   cp -p "$STATIC/bin/apkg" "$STAGE/bin/apkg"; chmod 0755 "$STAGE/bin/apkg"

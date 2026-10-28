@@ -8918,7 +8918,10 @@ def audit_x11kit_k1():
     cd2_keys = {"TARGET_HBA": "a4091", "TARGET_SCSI_ID": "9", "TARGET_VFSTAB_SCSI_ID": "9",
                 "TARGET_SCAN_IDS": "9", "ROOTDEV": "0x00480019", "KERNEL_BREL_SUMR": "27291",
                 "BOOTSLICE_SOURCE_HDF": "work/bootslice-donor/cd2-KD060-ZA-c1-u1.hdf",
-                "TARGET_DISK_MB": "512", "TARGET_ERASE_OK": None}
+                "TARGET_DISK_MB": "512", "TARGET_ERASE_OK": None,
+                # the boot disk stays on the Z3660 while the target moves to card 1, so
+                # its controller is named for its DosEnvec Mask (tools/lib/dmamask.py)
+                "SRC_HBA": "z3660scsi"}
     for twin, base, tag in (("metal-a4000-z3660-060-a4092cd2.profile", "metal-a4000-z3660-060-a4092cd.profile", "AX9"),
                             ("bench-a4000-z3660-060-a4092cd2.profile", "bench-a4000-z3660-060-a4092cd.profile", "AX10")):
         tp, bp = os.path.join(PROFILES_DIR, twin), os.path.join(PROFILES_DIR, base)
@@ -9209,6 +9212,106 @@ def audit_rth1_byte_writer():
            "nothing else in the slice changed")
     else:
         fail("RTO1 write: rec=%r rest_same=%s out=%r" % (rec, rest_same, r.stdout[-200:]))
+
+
+def audit_dmamask_stamp():
+    head("DMASK. the DosEnvec Mask: install.sh's dm_target_mask EXECUTED on /etc/rdb-shaped RDBs")
+    drv = read_sh(DRIVER)
+
+    def fn(name):
+        m = re.search(r"(?ms)^%s\(\)\s*\{\n.*?\n\}\n" % re.escape(name), drv)
+        return m.group(0) if m else None
+    names = ("is_num", "oct_file", "dm_byte", "dm_u16", "dm_oct", "dm_stamp", "dm_target_mask")
+    funcs = [fn(n) for n in names]
+    if None in funcs:
+        fail("could not extract install.sh's DosEnvec Mask helpers (%s)"
+             % ", ".join(n for n, f in zip(names, funcs) if f is None))
+        return
+    code = strip_full_comments(drv)
+    if re.search(r'RDB read-back: no RDSK at block 0[^\n]*\n\s*esac\n\s*fi\n\s*dm_target_mask "\$DISK_RAW" "\$\{TARGET_HBA:-\}"',
+                 code):
+        ok("author mode stamps the target's Mask right after the RDSK read-back (TARGET_HBA's row)")
+    else:
+        fail("build_target_author does not call dm_target_mask \"$DISK_RAW\" \"${TARGET_HBA:-}\" after the RDSK read-back")
+    iso = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
+    if re.search(r'dmamask\.py" medium --out "\$STAGE/dmamask"', iso):
+        ok("build-install-iso.sh stages /install/dmamask from the one table")
+    else:
+        fail("build-install-iso.sh does not stage /install/dmamask (tools/dmamask.py medium)")
+    if not os.path.exists("/usr/bin/dash") or not shutil.which("sum"):
+        skip("dash or sum absent -- the Mask stamper cannot be executed")
+        return
+    sys.path.insert(0, os.path.join(REPO, "tools", "lib"))
+    import dmamask as dm
+    d = workpath("dmask")
+    os.makedirs(os.path.join(d, "inst", "bin"), exist_ok=True)
+    sumbin = os.path.join(d, "inst", "bin", "sum")
+    if not os.path.exists(sumbin):
+        os.symlink(shutil.which("sum"), sumbin)
+    with open(os.path.join(d, "inst", "dmamask"), "w") as fh:
+        fh.write(dm.medium_rows())
+    dev = os.path.join(d, "disk")
+    # a regular file stands in for the raw disk: GNU dd truncates on seek= without notrunc
+    pre = ("PROG=t\nmsg() { echo \"$PROG: $*\"; }\nwarn() { echo \"$PROG: WARNING: $*\"; }\n"
+           "die() { echo \"$PROG: STOP: $*\"; exit 1; }\n"
+           "dd() { case \"$*\" in *of=%s*) command dd \"$@\" conv=notrunc ;; *) command dd \"$@\" ;; esac; }\n"
+           "INST=%s\n" % (dev, os.path.join(d, "inst"))) + "".join(funcs)
+
+    def run(img, hba):
+        open(dev, "wb").write(bytes(img))
+        r = subprocess.run(["/usr/bin/dash", "-c", pre + 'dm_target_mask "$1" "$2"\n', "t", dev, hba],
+                           capture_output=True, text=True, timeout=120)
+        return r, open(dev, "rb").read()
+
+    def only_mask_moved(a, b):
+        """every byte identical except each PART's checksum and Mask longwords"""
+        a, b = bytearray(a), bytearray(b)
+        for _sl, _nm, _bm, _mt, _mk, _dt, pb, _ck in dm.part_fields(bytes(b)):
+            for off in (8, 128 + 4 * dm.DE_MASK):
+                a[pb * 512 + off:pb * 512 + off + 4] = b[pb * 512 + off:pb * 512 + off + 4]
+        return a == b
+
+    cases = [("a4091", dm.synth_rdb(0xFFFFFFFC), 0x07FFFFFE, 3),
+             ("a2091", dm.synth_rdb(0xFFFFFFFC, rdsk_block=2, nparts=4), 0x00FFFFFE, 4),
+             ("z3660scsi", dm.synth_rdb(0x00FFFFFE), 0xFFFFFFFC, 3),
+             ("a4000t", dm.synth_rdb(0x07FFFFFE), 0xFFFFFFFC, 3)]
+    for hba, img, want, n in cases:
+        r, got = run(img, hba)
+        probs = dm.check_image(got, want)[0]
+        if r.returncode == 0 and not probs and only_mask_moved(img, got) and ("on %d partition" % n) in r.stdout:
+            ok("%s: %d PART block(s) -> Mask 0x%08X, checksums close, nothing else moved" % (hba, n, want))
+        else:
+            fail("%s: rc=%d problems=%s out=%r err=%r" % (hba, r.returncode, probs, r.stdout[-200:], r.stderr[-200:]))
+    img = dm.synth_rdb(0x07FFFFFE)
+    r, got = run(img, "a4092")
+    if r.returncode == 0 and got == bytes(img):
+        ok("a disk already at its Mask is left byte-identical (an upgrade's kept layout)")
+    else:
+        fail("re-stamping an already-stamped disk changed it (rc=%d)" % r.returncode)
+    r, got = run(dm.synth_rdb(0xFFFFFFFC), "")
+    if r.returncode == 0 and not dm.check_image(got, 0x07FFFFFE)[0] and "WARNING" in r.stdout:
+        ok("no TARGET_HBA: the unknown row (0x07FFFFFE) and a warning")
+    else:
+        fail("no TARGET_HBA: rc=%d out=%r" % (r.returncode, r.stdout[-200:]))
+    r, _got = run(bytes(64 * 512), "a4091")
+    if r.returncode != 0 and "no RDSK" in r.stdout:
+        ok("a disk with no RDSK in blocks 0-15 stops the install")
+    else:
+        fail("no RDSK did not stop: rc=%d out=%r" % (r.returncode, r.stdout[-200:]))
+    # a genuine stock /etc/rdb RDB (RDSK at block 2): the first MiB of the metal golden, read-only
+    gold = os.path.join(REPO, "..", "amix-images", "masters", "amix-z3660-metal-golden-2026-07-15.hdf")
+    if os.path.isfile(gold):
+        with open(gold, "rb") as fh:
+            img = fh.read(1 << 20)
+        r, got = run(img, "a4092")
+        probs = dm.check_image(got, 0x07FFFFFE)[0]
+        if r.returncode == 0 and not probs and only_mask_moved(img, got):
+            ok("the stock-authored metal golden's RDB (RDSK at 2, /etc/rdb's Mask 0xFFFFFFFC) -> 0x07FFFFFE, "
+               "checksums close, nothing else moved")
+        else:
+            fail("metal golden RDB: rc=%d problems=%s out=%r" % (r.returncode, probs, r.stdout[-200:]))
+    else:
+        skip("amix-images metal golden absent -- the genuine /etc/rdb RDB case is not run")
 
 
 def audit_fd060_omit():
@@ -10370,6 +10473,7 @@ def main():
     audit_fd060_omit()
     audit_cd2_card1_target()
     audit_rth1_byte_writer()
+    audit_dmamask_stamp()
     audit_apkg_conf_order()
     audit_030_rootswap()
     audit_firstboot_perms()
