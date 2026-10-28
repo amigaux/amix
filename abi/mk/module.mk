@@ -33,7 +33,10 @@
 # holds the objects too, so one directory builds for both kits): compiled
 # by the pinned
 # gcc-cross-amix against the kit's headers only, linked, .moddata written
-# by mkmod, checked by modfix and modcheck.py.  The cross tools
+# by mkmod, checked by modfix and modcheck.py.  The module's kabi tag is
+# the highest minor among the kernel names it imports, not below the kit's
+# KABI_MIN (modcheck.py --kabi): a module that imports no name newer than
+# that loads on the kernels it loaded on before.  The cross tools
 # (m68k-cbm-sysv4-*) must be on PATH.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -85,7 +88,8 @@ $(MODOUT)/mod.d/$(MODULE): $(MODOBJS) $(EXTRA) Master $(DEPS) $(KIT)/kit.conf
 	grep -q '^\$$cpu' Master || sed -i '1a $$cpu $(MODCPU)' $(MODOUT)/src/Master
 	for f in Space.c Mtune; do [ ! -f $$f ] || cp $$f $(MODOUT)/src/; done
 	MKMOD_CC="$(KIT_CC) $(KIT_CFLAGS)" DLM_TOOLS=$(KIT)/tools sh $(KIT)/tools/mkmod \
-		-K $(KABI) -P $(PIN) -e $(KIT)/exports $(foreach d,$(DEPS),-d $(d)) \
+		-K $$(python3 $(KIT)/tools/modcheck.py -k $(KIT) --kabi $(MODOUT)/src/Driver.o) \
+		-P $(PIN) -e $(KIT)/exports $(foreach d,$(DEPS),-d $(d)) \
 		-o $(MODOUT) $(MODOUT)/src
 	python3 $(KIT)/tools/modcheck.py -k $(KIT) $(foreach d,$(DEPS),-d $(d)) \
 		$(if $(PAGESHIFT_OK),-w $(PAGESHIFT_OK)) $@

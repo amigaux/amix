@@ -350,7 +350,7 @@ for IMG; do
 	mkdir -p "$A"
 	L="$R/abi/$LINE/ddi.list"
 	LC="$R/abi/$LINE/core.list"
-	if "$TB/mkksym" -a "$L" -a "$LC" > "$A/ksym.s" 2> "$A/ksym.log" &&
+	if "$TB/mkksym" -k $KABI -a "$L" -a "$LC" > "$A/ksym.s" 2> "$A/ksym.log" &&
 	   m68k-cbm-sysv4-as -o "$A/ksym.o" "$A/ksym.s"; then
 		pass "$K: allowlisted block generated and assembled ($(sed 's/^mkksym: //' "$A/ksym.log"))"
 	else
@@ -383,7 +383,7 @@ for IMG; do
 	# kernel source symbols: a base has them only if one of its objects
 	# pulled them (k30's static cdfs did).  Force in, from libgcc, each one
 	# the base lacks, on both lines, as the module kernels' builders do
-	ugcc=$(awk '!/^#/ && $1 ~ /^__/ {print $1}' "$L" "$LC" | sort -u | while read n; do
+	ugcc=$(awk -v m=${KABI##*.} '!/^#/ && $1 ~ /^__/ && $3 <= m {print $1}' "$L" "$LC" | sort -u | while read n; do
 		m68k-elf-nm "$ORIG" | awk -v n="$n" '$3==n && $2 ~ /[TtDd]/ {f=1} END {exit !f}' || echo "-u $n"; done)
 	prov="$prov $(dirname "$(command -v m68k-cbm-sysv4-ld)")/../lib/gcc-lib/m68k-cbm-sysv4/2.7.2.3/libgcc.a"
 	m68k-cbm-sysv4-ld -r $ugcc -o "$A/prov.o" $prov
@@ -396,7 +396,7 @@ for IMG; do
 	DC=$WS/amix-040-060-port/build/dma_cache040.o
 	[ $LINE = k46 ] && [ -f "$DC" ] &&
 		portdma=$(m68k-elf-nm "$DC" | awk '$2=="T" && ($3=="dma_prepare" || $3=="dma_complete") {print $3}' | sort | tr '\n' ' ')
-	awk '!/^#/ && NF {print $1, $2}' "$L" | while read n k; do
+	awk -v m=${KABI##*.} '!/^#/ && NF && $3 <= m {print $1, $2}' "$L" | while read n k; do
 		grep -qx "$n" "$A/defined" || echo "$n $k"; done > "$A/stubbed"
 	for n in $portdma; do echo "$n func"; done > "$A/portdma"
 	grep -vxFf "$A/portdma" "$A/stubbed" > "$A/lost" || true
@@ -516,7 +516,7 @@ PY
 	fi
 	# a listed name nothing defines: -f refuses it
 	{ cat "$L"; echo "no_such_name func 0"; } > "$A/short.list"
-	"$TB/mkksym" -a "$A/short.list" -a "$LC" > "$A/ksym-short.s" 2>/dev/null
+	"$TB/mkksym" -k $KABI -a "$A/short.list" -a "$LC" > "$A/ksym-short.s" 2>/dev/null
 	m68k-cbm-sysv4-as -o "$A/ksym-short.o" "$A/ksym-short.s"
 	m68k-cbm-sysv4-ld -r -o "$A/kernel-short.o" "$A/spliced.o" "$A/prov.o" "$A/ksym-short.o" "$A/ident.o" "$A/stubs.o" 2>/dev/null
 	if ! "$TB/mkksym" -f "$A/kernel-short.o" > "$A/short.log" 2>&1 &&

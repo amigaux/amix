@@ -7,6 +7,9 @@
 #
 #   - every listed name is defined in the kernel, with the listed kind
 #     (a function, or data; an untyped assembler symbol passes either);
+#     the names listed are those whose minor is at most the kernel's own:
+#     the kabi tag in its dlm_ident (mkident.py --asm), all of them in a
+#     kernel without one (C3-2 section 2);
 #   - dlm_ksym holds exactly the listed names, each with its tier;
 #   - bound by the loader's own relocator (axrel, loader/common/rel.c) at
 #     each of two addresses, the block passes the core's checks and every
@@ -60,14 +63,6 @@ def elfhash(name):
     return h
 
 
-# the lists: name -> (kind, tier)
-want = {}
-for tier, path in enumerate(LISTS):
-    for line in open(path):
-        f = line.split()
-        if f and not f[0].startswith('#'):
-            want[f[0]] = (STT_FUNC if f[1] == 'func' else STT_OBJECT, tier)
-
 # the kernel: sections, symbols
 b = open(KERNEL, 'rb').read()
 if b[:4] != b'\x7fELF' or struct.unpack('>H', b[16:18])[0] != 1:
@@ -86,6 +81,27 @@ for s in sh:
             syms.append((name, val, sz, info, shn))
             if name and shn != 0 and info >> 4 != 0:
                 defs[name] = (val, sz, info & 15, shn)
+
+# the kernel's kabi tag, at 12 in dlm_ident (C3-3): it lists the names of
+# its minor and below
+tag = None
+if 'dlm_ident' in defs and defs['dlm_ident'][3] < len(sh):
+    o = sh[defs['dlm_ident'][3]][4] + defs['dlm_ident'][0] + 12
+    tag = b[o:o + 24].split(b'\0')[0].decode('latin-1')
+minor = int(tag.split('.')[2]) if tag and tag.count('.') == 2 and \
+    tag.split('.')[2].isdigit() else None
+
+# the lists: name -> (kind, tier)
+want = {}
+for tier, path in enumerate(LISTS):
+    for line in open(path):
+        f = line.split()
+        if f and not f[0].startswith('#') and \
+                (minor is None or len(f) < 3 or int(f[2]) <= minor):
+            want[f[0]] = (STT_FUNC if f[1] == 'func' else STT_OBJECT, tier)
+if not EXTRACT:
+    print('kabi %s: %s' % (tag, 'the names of minor %d and below' % minor if minor is not None
+                           else 'no tag in dlm_ident, every listed name'))
 
 # the loader's layout (rel.c): the last section of each kind wins
 t = r = d = bs = None

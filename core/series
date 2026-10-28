@@ -46,3 +46,4 @@
 0043-rootfs-promotion.patch
 0044-block-rows-breakup.patch
 0045-safe-boot-members.patch
+0046-mkksym-kabi-minor.patch

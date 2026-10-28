@@ -2,7 +2,9 @@
 # mkabi.py -- a module kernel's binary fingerprint, abi= in its sidecar
 # (docs/contracts/C3-3-kernel-identity.md section 4): the SHA-256 of a
 # text, one line per item, sorted:
-#   data <name> <st_size>   every DDI-tier data name of abi/<line>/ddi.list,
+#   data <name> <st_size>   every DDI-tier data name of abi/<line>/ddi.list
+#                           whose minor is at most the kernel's (the kabi
+#                           tag in its dlm_ident; every name without one),
 #                           with its size in the final link
 #   offs <NAME> <value>     the probe's structure-offset table: dlm_offs.h,
 #                           written by the core's tools/mkoffs from dlmoffs.c
@@ -31,23 +33,31 @@ def sizes(path):
     shoff, = struct.unpack('>I', b[32:36])
     shnum, = struct.unpack('>H', b[48:50])
     sh = [struct.unpack('>10I', b[shoff + 40 * i:shoff + 40 * i + 40]) for i in range(shnum)]
-    out = {}
+    out, minor = {}, None
     for s in sh:
         if s[1] == 2:
             st = sh[s[6]][4]
             for k in range(s[5] // 16):
                 o = s[4] + 16 * k
                 nm, val, sz, info, oth, shn = struct.unpack('>IIIBBH', b[o:o + 16])
+                name = b[st + nm:b.index(b'\0', st + nm)].decode('latin-1')
                 if info >> 4 and shn != 0:
-                    out[b[st + nm:b.index(b'\0', st + nm)].decode('latin-1')] = sz
-    return out
+                    out[name] = sz
+                if name == 'dlm_ident' and shn < len(sh):    # the kabi tag at 12 (C3-3)
+                    tag = b[sh[shn][4] + val + 12:sh[shn][4] + val + 36].split(b'\0')[0]
+                    f = tag.decode('latin-1').split('.')
+                    if len(f) == 3 and f[2].isdigit():
+                        minor = int(f[2])
+    return out, minor
 
 
 def text(kernel, ddilist, offs):
-    have = sizes(kernel)
+    have, minor = sizes(kernel)
     lines = []
     for line in open(ddilist):
         f = line.split('#')[0].split()
+        if len(f) >= 3 and minor is not None and int(f[2]) > minor:
+            continue
         if len(f) >= 2 and f[1] == 'data':
             if f[0] not in have:
                 sys.exit('mkabi: the DDI data name %s is not defined in %s' % (f[0], kernel))

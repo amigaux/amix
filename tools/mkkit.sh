@@ -6,9 +6,11 @@
 # usage: mkkit.sh LINE OUTDIR        LINE: k30 or k46
 #
 # OUTDIR gets:
-#   kit.conf             LINE, KABI, PIN, CPUFLAG, DEFCPU (a module's default
-#                        cpu=), KIT_REV (the amix-dlm commit; -dirty when
-#                        the kit's inputs had uncommitted changes)
+#   kit.conf             LINE, KABI, KABI_MIN (the lowest tag a module
+#                        gets, modcheck.py --kabi), PIN, CPUFLAG, DEFCPU (a
+#                        module's default cpu=), KIT_REV (the amix-dlm
+#                        commit; -dirty when the kit's inputs had
+#                        uncommitted changes)
 #   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
 #                        core/series) and amixddi.h (abi/include)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
@@ -45,8 +47,8 @@
 set -e
 LINE=$1 OUT=$2
 case "$LINE" in
-k30) KABI=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
-k46) KABI=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
+k30) KABI=k30.1.2 KABI_MIN=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
+k46) KABI=k46.1.2 KABI_MIN=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
 *) echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
@@ -165,6 +167,7 @@ cat > "$OUT/kit.conf" <<EOF
 # the ABI kit for $LINE (amix-dlm $REV): read by mk/module.mk and modcheck.py
 LINE=$LINE
 KABI=$KABI
+KABI_MIN=$KABI_MIN
 PIN=$PIN
 CPUFLAG=$CPUFLAG
 DEFCPU=$DEFCPU

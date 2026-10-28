@@ -5,6 +5,13 @@
 # this makes them at build time, with the rule named.
 #
 #   modcheck.py [-k KIT] [-d DEPMODULE]... MODULE
+#   modcheck.py [-k KIT] --kabi OBJECT
+#       the tag a module linked as OBJECT carries (module.mk gives it to
+#       mkmod): the kit's family and major, and the highest minor among
+#       the names it imports (their ddi.list or core.list line), but not
+#       below the kit's KABI_MIN (kit.conf; the kit's own minor in a kit
+#       without one).  So a module that imports no newer name loads on
+#       the kernels it loaded on before (C3-2 section 2)
 #
 #   KIT        the kit directory (kit.conf, ddi.list, core.list,
 #              registry/); default: the directory above this script
@@ -21,8 +28,9 @@
 #     (each at most 255 bytes; lowercase keys; once each but param; an
 #     unknown key starting with ! refused) and every key's value rule;
 #   - name equal to the file name; kabi of the kit's family and major, the
-#     minor not above the kit's; cc the kit's pin; majors registered to
-#     this name; depend naming every -d module;
+#     minor not above the kit's and not below the highest minor among the
+#     names it imports; cc the kit's pin; majors registered to this name;
+#     depend naming every -d module;
 #   - no SHT_REL; RELA types R_68K_NONE, 32, 16, 8, PC32, PC16, PC8 only;
 #   - every undefined non-weak global in the kit's allowlist for the
 #     module's tier, or defined by a -d module;
@@ -148,6 +156,26 @@ def names(path):
     return out
 
 
+def minors(kit):
+    """name -> the minor it entered, from the kit's ddi.list and core.list"""
+    out = {}
+    for f in ('ddi.list', 'core.list'):
+        path = os.path.join(kit, f)
+        if os.path.exists(path):
+            for line in open(path):
+                line = line.split('#')[0].split()
+                if len(line) >= 3 and line[2].isdigit():
+                    out[line[0]] = int(line[2])
+    return out
+
+
+def imported(e, since):
+    """the names e takes from the kernel's lists: its undefined globals
+    and the COMMONs a list names (they bind to the kernel's definition)"""
+    return sorted({y['name'] for y in e.syms if y['name'] in since and
+                   ((y['shndx'] == 0 and y['bind'] == 1) or y['shndx'] == 0xfff2)})
+
+
 def registry(kit):
     reg = {}
     for line in open(os.path.join(kit, 'registry', 'majors')):
@@ -228,6 +256,12 @@ def moddata(e, path, c, reg, kit, depnames):
                 int(m.group(3)) > int(km.group(3)):
             bad('kabi=%s: this kit is %s (same family and major, minor not above)'
                 % (keys['kabi'], c['KABI']))
+        else:
+            since = minors(kit)
+            over = [n for n in imported(e, since) if since[n] > int(m.group(3))]
+            if over:
+                bad('kabi=%s: it imports %s, of minor %d (a kernel of its minor lacks them)'
+                    % (keys['kabi'], ' '.join(over), max(since[n] for n in over)))
     if 'cc' in keys and keys['cc'] != c['PIN']:
         bad('cc=%s: the kit\'s pin is %s' % (keys['cc'], c['PIN']))
     if 'cpu' in keys and keys['cpu'] not in CPUS:
@@ -448,6 +482,20 @@ waived = {}
 def main(argv):
     kit = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     deps = []
+    if len(argv) in (2, 4) and argv[-2] == '--kabi':
+        if len(argv) == 4 and argv[0] != '-k':
+            sys.exit('usage: modcheck.py [-k KIT] --kabi OBJECT')
+        kit = argv[1] if len(argv) == 4 else kit
+        c, since = conf(kit), minors(kit)
+        fam, major, top = c['KABI'].split('.')
+        low = int(c.get('KABI_MIN', c['KABI']).split('.')[2])
+        try:
+            e = Elf(argv[-1])
+        except (ValueError, OSError) as x:
+            sys.exit('modcheck: %s: %s' % (argv[-1], x))
+        need = max([low] + [since[n] for n in imported(e, since)])
+        print('%s.%s.%d' % (fam, major, min(need, int(top))))
+        return 0
     while len(argv) > 1 and argv[0] in ('-k', '-d', '-w'):
         if argv[0] == '-k':
             kit = argv[1]
@@ -459,7 +507,8 @@ def main(argv):
             deps.append(argv[1])
         argv = argv[2:]
     if len(argv) != 1:
-        sys.exit('usage: modcheck.py [-k KIT] [-d DEPMODULE]... [-w FUNC,...] MODULE')
+        sys.exit('usage: modcheck.py [-k KIT] [-d DEPMODULE]... [-w FUNC,...] MODULE\n'
+                 '       modcheck.py [-k KIT] --kabi OBJECT')
     path = argv[0]
     c = conf(kit)
     try:
