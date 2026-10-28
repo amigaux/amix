@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — docs/plan/s5-12-packaging.md: the k46 inputs of record are the ufs-guard cut 68060-261028-51 (port 87b8a88, core 7b07bce; ufs.mod rebuilt byte-identical with the kit at c614e0b), version k46.1.2.261028-51 (6f020a5)
+
 ## 2026-10-28 — plan: S5-13's k46 small-block row is now "a block-under-page ufs is refused at mount, EINVAL" (port 87b8a88; the crafted 2 KiB ufs panicked k46 in the stock getapage assertion); S5-37 notes getapage's PAGESIZE/2 arm; the next k46 cut takes ufs-exp.k46 6636b27e (6c62e87)
 
 ## 2026-10-28 — spec 10 §9: L4 goes on to the next generation like L2, as boot2 does; only missing work memory for boot2 itself ends the boot (spec text only) (f8a0da5)
