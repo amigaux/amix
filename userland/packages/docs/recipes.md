@@ -20,7 +20,7 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
 | [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
-| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-50, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm 7b07bce), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) minted 2026-10-28, in the candidate root `build/kspace/candidate-6f0c1701`, not promoted, not published; -91 never published |
+| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-50, kabi k46.1.2, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm 7b07bce), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37) | -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) minted 2026-10-28, proven by the Bench (S5-13, emulation), in the catalog of record `6f0c1701` since 2026-10-28 03:19, not published; -91 never published |
 | [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261027-20, kabi k30.1.2, brel; no static A4091/Gayle drivers or cdfs, no built-in ufs/s5, rth1=2; rth1 RAM-disk root, swap /dev/fakeswap), unix + kabi + unix.sym verbatim, and the cut's ufs and s5 core-tier modules at `/etc/conf/mod.d` (C2-3 v8 sec 1) | -20 (S5-12) minted 2026-10-27, staged in `build/kspace/next/repo`, not published |
 | [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
 | [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
@@ -37,23 +37,26 @@ Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable
 | [`common/`](common/) | the shared harness — not a package | |
 
 **Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
-catalog `915e09f3` since 2026-10-27 19:48 — the S5-12 set promoted from `build/kspace/next/repo`:
-kernel-k30-m -20 and kernel-k46-m -91 (the cuts without built-in ufs/s5, whose kernel packages carry
-the filesystem modules) and kbootset -22; every other row as in `64d37aaa`, no module rows for
-ufs/s5. A replaced root is kept byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`:
+catalog `6f0c1701` since 2026-10-28 03:19 — the candidate root `build/kspace/candidate-6f0c1701`
+promoted after the Bench's S5-13 in emulation (-82 → -50 and -91 → -50 upgrades, both lines rooted
+on the ufs module, safe mode, the init halves, damaged-module refusal, the k30 s5 root): `915e09f3`
+with the kernel-k46-m row -91 replaced by -50 (the S5-13 re-cut), every other row and datastream
+byte-identical. `915e09f3` (the S5-12 set: kernel-k30-m -20 and kernel-k46-m -91, the cuts without
+built-in ufs/s5, whose kernel packages carry the filesystem modules, and kbootset -22; every other
+row as in `64d37aaa`, no module rows for ufs/s5) is `repo-20261028-0319`. A replaced root is kept
+byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`:
 `64d37aaa` (`b2a0e874` plus a4kt710-k30/-k46 1.0.0-1, S5-06) is `repo-20261027-1948`, `b2a0e874`
 (the first stage-5 catalog: kbootset -21, modtools -7, no static 1.0 family — kernel-k30-u,
 kernel-k46-z, kernel-k46-zacd left it, S5-34, datastreams in `build/kspace/superseded/static-1.0/`)
 `repo-20261027-1353`, `b198e9e2` (the stage-4 exit set plus gayle-k30/-k46 1.1.0-3)
 `repo-20261027-1344`, the stage-4 exit set (`6e60a128`) `repo-20261027-1329`. No next root is
-staged. **Candidate root** (2026-10-28, not promoted): `build/kspace/candidate-6f0c1701`, catalog
-`6f0c1701` = `915e09f3` with the kernel-k46-m row -91 replaced by -50 (the S5-13 re-cut), every other
-row and datastream byte-identical; the Bench proves it in emulation before any promotion.
+staged.
 `tools/kspace-roundtrip.sh` regenerates the newest set's catalog from `build/kspace/pkg/` and requires
 it equal byte for byte to the staged root's (`KSPACE_ROOT`, else the next root, else the one
 candidate root, else the catalog of record), runs the stage-2 static-kernel rows from a second source
 that adds the static datastreams, and the S5-12 R5 upgrades (`apkg upgrade kbootset <kernel>`, one
-transaction) from `64d37aaa`'s kernels and from `915e09f3`'s (k46 -91 → -50).
+transaction) from `64d37aaa`'s kernels and from `915e09f3`'s (k46 -91 → -50), both kept in
+`build/kspace/superseded/` (`KSPACE_RECORD_ROOTS` to move them).
 
 **BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
 not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
