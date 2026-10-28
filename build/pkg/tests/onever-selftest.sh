@@ -7,7 +7,7 @@
 #     sh tools/onever-selftest.sh
 #
 # Reads the catalog of record (build/kspace/repo) and its kern46m and
-# kbootset datastreams (since b1f564f4: -51 and -23); writes only under a
+# kbootset datastreams (since fff860dc: -61 and -24); writes only under a
 # temporary directory.
 #
 #   1. a text-only re-roll of the record's kern46m (the recipe's pkginfo at the
