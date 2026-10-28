@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — C2-4 v15: after a boot the loader fell back from the default, mark-good verifies the default and marks it bad when its bytes are damaged (intact members keep it; a spent trial and the pristine generation are not judged); box kbootset 3c18c3b5 (-23 candidate); spec 10 §9: L3 names the generation and the progress line before it names the member (boot2 has 14 bytes free) (7925b96, df7124b, c614e0b)
+
 ## 2026-10-28 — docs/plan/s5-12-packaging.md: the k46 inputs of record are the re-cut 68060-261028-50 (core 7b07bce), replacing -91; version k46.1.2.261028-50 (6b1b055)
 
 ## 2026-10-28 — core/plat: the module core takes the kernel's build id without the stamp's leading blank, so a k46 kernel loads its core-tier ufs module (the S5-13 EBADVER; every k46 kernel so far carries " 68060-…"); t_plat tests the port's real format (7b07bce)
