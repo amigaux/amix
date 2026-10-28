@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-28 — the r6 package staging pins moved from the workspace scratch into the repo's ignored build/pins (`build/` now gitignored); tools/l11-set.conf points there and the set rebuilds identically (media catalog 49180534) (e212ca3)
+
 ## 2026-10-28 — the media on the kernel-space record fff860dc (kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10; dlm 565de49): CD rd1r ee50b436, netinstall ni11 db0e659a with raw images ni11-k46 36fb9b2a / ni11-k30 c86b1c39, floppy pairs fp-rd1r; a4kt710 and paula on the medium, not installed by default. TARGET_HBA names the controller a disk runs on: a4000t maps to KBOOTSET_BOOTDEV mobo:a4000t-710, public-a4000-ide* use gayle, handover-a4000-z3660 z3660scsi. Fixed: netinstall images lacked /install/dmamask, so targets kept 0xFFFFFFFC on any controller (ni10 never promoted). Cells l11-rd, l11-rd-fd, l11-ni and l11-nr PASS 10/10 on k46 and k30; every first boot's loader buffer matches its target's Mask (41a5d12..2b82343)
 
 ## 2026-10-28 — each RDB partition's DosEnvec Mask matches its controller's DMA reach, from one table (tools/lib/dmamask.py): Zorro III DMA (a4091, a4092) and the A3000 SDMAC 0x07FFFFFE, 24-bit Zorro II (a2091, a2090) 0x00FFFFFE, the A4000T onboard 53C710, Gayle and the Z3660 piscsi 0xFFFFFFFC, unknown 0x07FFFFFE with a warning; BufMemType 0. Host builders read the Mask back before publishing; on-box author mode re-stamps the PARTs /etc/rdb writes. Cell l11-rd-k30 PASS 10/10 on a re-mastered rd1q (b2391fc)
