@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 5
+# C3-6 — what a driver changes to become a module, version 6
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -15,7 +15,8 @@
   each entry runs at, and where a self-test can complete (§1.3); version
   5 (2026-10-27, from the Gayle IDE module plan): a self-test by a real
   command where a software raise cannot set the board's pending state
-  (§1.3). The
+  (§1.3); version 6 (2026-10-28, from the Paula module): a chained
+  level-2 handler cannot see CIA-A's interrupt bits (§1.3). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -170,6 +171,24 @@ packages.
     measures which of the two the driver keeps;
   - level-2 handlers run below level 4 and may call the DDI as the stock
     level-2 drivers do.
+- **A chained level-2 handler cannot see CIA-A's interrupt bits**
+  (version 6). The chain runs after the stock handlers. By then the stock
+  `aciaaintr` has read CIA-A's ICR once, and that read clears every
+  pending bit, including those of sources it ignores (timer B). A module
+  that runs a CIA-A source therefore cannot tell from the ICR that it
+  fired. It infers the event from the source's own state.
+  - The Paula module (amix-paula) runs CIA-A timer B **one-shot**. An
+    underflow stops the timer and clears CRB's START bit. Its level-2
+    handler claims only while the driver is active with START clear, then
+    restarts the timer from the latch and does one tick's work. CIA-A
+    timer A, the clock, calls the chain on every 50 Hz tick, so a missed
+    interrupt is caught within one clock tick.
+  - Each period is longer than a continuous timer's by the time from the
+    underflow to the restart. That is tens of microseconds against a
+    20 ms period (about 0.1 %), and a little more on k30.
+  - A drift-free form needs a core hook that reads the ICR once and hands
+    each module its bits. That is deferred until the Bench has measured
+    the one-shot slowdown.
 - `_unload` and `_halt` turn the board's interrupt off before
   `intr_detach`.
 
