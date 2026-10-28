@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-28 — DDI minor 3 for the Paula module (C3-2 v2): AllocMem, FreeMem, displaytype, paula_busy, audio_nopen on both lines, kits k30.1.3/k46.1.3 (abi 18c0a1c9; 1.2 stays 2ab48658); a kernel lists only the names of its own kabi minor (mkksym -k, core patch 0046), so a 1.3 claim without the audio patch fails its gate; a module carries the highest minor it imports, never below 1.2 (R2 ufs still 62cc5250); c 54 paula in the registry and spec 20 §6 (box kbootset 0b9b8ec4); C3-6 v6: chained level-2 handlers cannot see CIA-A ICR bits (0edbd0f..36c407d)
+
 ## 2026-10-28 — plan: S5-16 root half passed on metal in 030 mode (b1f564f4, gen 6 68030-261027-20, c6d0s1); the second-card goal moves to Gayle IDE or emulation; a4kt710 recorded as unsupported in 030 mode (no NCR tag in the A3000 Kickstart, hidden $07 SIMMs, $DD0000 mapped to the emulated SDMAC); no core change (139b5b0)
 
 ## 2026-10-28 — docs/plan/s5-12-packaging.md: the k46 inputs of record are the ufs-guard cut 68060-261028-51 (port 87b8a88, core 7b07bce; ufs.mod rebuilt byte-identical with the kit at c614e0b), version k46.1.2.261028-51 (6f020a5)
