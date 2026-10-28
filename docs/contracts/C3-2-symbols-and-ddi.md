@@ -175,7 +175,11 @@ fingerprint covers the flags' sizes like any data name. The static
 pair would need new kernel code in every cut for the same two integers.
 `paula_busy` has one writer, the module that owns major 54. It tests
 `audio_nopen` and sets `paula_busy` in its open with no sleep between,
-and clears it in its close.
+and clears it in its close. The provider keeps the other half:
+`/dev/audio`'s open tests `paula_busy` and counts itself in
+`audio_nopen` with no sleep between. The patch of 2026-10-28 tests before
+a `KM_SLEEP` allocation and counts after it, so an open of `/dev/paula`
+can slip into that sleep. The fix belongs to amix-paula.
 
 Adding names raises the minor, never the major (20 §3.1). So the stage-3
 set can freeze as v1.0 without waiting for the root drivers.
