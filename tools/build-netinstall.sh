@@ -12,10 +12,11 @@
 # The chain this disc ends (each step's own header has the details):
 #   1. tools/build-install-iso.sh --profile <the two l11 profiles> --set full --four-card
 #        --stage STAGE --keep-stage --out MASTER.iso   (the installer tree and the full set)
-#   2. this tool, --boot-mods DIR: each line's boot-class module objects (z3660eth, S5-33) at
-#        DIR/<line>/<name> -- the exact bytes the generation records
+#   2. this tool, --boot-mods DIR: each line's boot-class module objects at DIR/<line>/<name>
+#        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
+#        (S5-33) and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
 #   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5120 [--fp-patch] --net
-#        --install STAGE --apkg-http work/l11/apkg/apkg-http --mod z3660eth=DIR/<line>/z3660eth
+#        --install STAGE --apkg-http work/l11/apkg/apkg-http --mod NAME=DIR/<line>/NAME (each)
 #        ...   (one image per line)
 #   4. this tool, with the two images
 # --mirror-from MASTER.iso --mirror DIR: also writes the repository snapshot the matrix's
@@ -25,7 +26,7 @@
 # The generations are build-ramdisk-cd.sh's with the netinstall module lists: the RAM disk,
 # the root controllers and z3660eth as a boot-class module (50 section 5; zen0, S5-33), no
 # cdfs (there is no CD to read packages from). Each image is gated against its generation by
-# tools/netinstall-image-check.py (every boot record's path= holds its sha256=; /dev/zen0 is
+# tools/ramdisk-image-check.py --zen0 (every boot record's path= holds its sha256=; /dev/zen0 is
 # c 51,0). The disc is mastered as tools/build-iso.sh masters a CD-boot disc (System ID
 # AMIGA BOOT, Rock Ridge, the loader 0755) and read back: the boot tree must pass lsstore -C.
 # --raw PREFIX: form B's second half (50 section 5), PREFIX-k46.img and PREFIX-k30.img, each
@@ -62,20 +63,17 @@ L11="${L11_IN:-$repo/work/l11}"
 # the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them)
 export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 z3660eth-k46"
 export K30_MODS="ramdisk-k30 a4091-k30 z3660eth-k30"
-NI_BOOTMODS="z3660eth"
 if [ -n "$BMODS" ]; then
   # step 2: stage each line as its generation will be, and hand out the boot-class objects
   ws="$(dirname "$repo")"
   . "$here/lib/ramdisk-media.sh"
-  mkdir -p "$W"; rd_init "$W/cd"
+  mkdir -p "$W"; rd_init "$W/cd"   # rd_init makes W the staging dir
   for l in k46 k30; do
-    rd_stage "$l"
-    mkdir -p "$BMODS/$l"
-    for m in $NI_BOOTMODS; do
-      f="$W/stage-$l/etc/conf/mod.d/$m"   # rd_init made W the staging dir
-      [ -f "$f" ] || die "$l: the staged packages laid no $f"
-      cp "$f" "$BMODS/$l/$m"
-      echo "build-netinstall: $BMODS/$l/$m ($(wc -c < "$f") bytes, sha256 $(sha256sum < "$f" | cut -c1-16))"
+    rd_bootmods "$l" "$BMODS" > "$W/bm-$l.names"
+    grep -qx z3660eth "$W/bm-$l.names" || die "$l: the netinstall generation records no boot-class z3660eth"
+    for m in $(cat "$W/bm-$l.names"); do
+      f="$BMODS/$l/$m"
+      echo "build-netinstall: $f ($(wc -c < "$f") bytes, sha256 $(sha256sum < "$f" | cut -c1-16))"
     done
   done
   exit 0
@@ -85,7 +83,7 @@ command -v xorriso > /dev/null || die "xorriso required"
 mkdir -p "$W"
 bash "$here/build-ramdisk-cd.sh" --k46 "$I46" --k30 "$I30" --out "$W/tree" --work "$W/cd" \
   || die "build-ramdisk-cd.sh refused the netinstall generations"
-python3 "$here/netinstall-image-check.py" "$W/cd/gen-k46.spec" "$I46" ufs "$W/cd/gen-k30.spec" "$I30" s5 \
+python3 "$here/ramdisk-image-check.py" --zen0 "$W/cd/gen-k46.spec" "$I46" ufs "$W/cd/gen-k30.spec" "$I30" s5 \
   || die "a netinstall image does not hold what its generation records (see above)"
 
 root="$W/root"; rm -rf "$root"; mkdir -p "$root"

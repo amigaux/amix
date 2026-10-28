@@ -15,7 +15,9 @@
 # boot1, boot2 and the loader version are the staged loader-amix package's (/stand/loader, its
 # ldrinfo): the loader of record, never a separate build. The pair is
 # `kbootset -R ROOT media --floppy V1 V2 --boot1 --boot2 ... --ramdisk IMAGE`, written by
-# mkstore's floppy engine and read back whole by lsstore. The used and free bytes of volume 2 are
+# mkstore's floppy engine and read back whole by lsstore; the image is gated against the pair's
+# generation (tools/ramdisk-image-check.py: each boot-class module in it, byte for byte -- on k30
+# since catalog b1f564f4 also the kernel package's ufs). The used and free bytes of volume 2 are
 # printed: the image may grow into them (S4-53).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
@@ -49,6 +51,7 @@ rm -f "$V1" "$V2"
   || { tail -5 "$W/media-$LINE.log" >&2; die "$LINE: kbootset media refused the pair"; }
 "$B/lsstore" "$V1" 0 "$V2" > "$W/lsstore-$LINE.txt" 2>&1 && tail -1 "$W/lsstore-$LINE.txt" | grep -q '^lsstore: ok' \
   || { tail -5 "$W/lsstore-$LINE.txt" >&2; die "lsstore does not pass the $LINE pair"; }
+rd_imgcheck "$V1.spec" "$IMG"
 used=$(sed -n 's/.* \([0-9]*\) bytes used on the last volume.*/\1/p' "$W/media-$LINE.log" | tail -1)
 size=$(wc -c < "$V2")
 echo "build-ramdisk-floppy: $(rd_summary "$LINE" "$V1.spec")"

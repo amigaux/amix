@@ -13,7 +13,7 @@
 
 # rd_init WORKDIR -- the inputs checked, the unpacking pkgadd and the admin file written
 rd_init() {
-	W="$1"
+	mkdir -p "$1"; W="$(cd "$1" && pwd)"	# absolute: the composers run kbootset from inside it
 	L11="${L11_IN:-$repo/work/l11}"
 	B="$L11/dlm/build"; APKG="$L11/apkg/apkg-host"
 	local f
@@ -76,6 +76,41 @@ C
 	# shellcheck disable=SC2086
 	"$APKG" -c "$W/apkg-$l.conf" -R "$t" install loader-amix "kernel-$l-m" $MODS >> "$W/apkg-$l.log" 2>&1 \
 		|| { tail -5 "$W/apkg-$l.log" >&2; die "$l: apkg could not stage $MODS"; }
+}
+
+# rd_bootmods LINE DIR -- DIR/LINE/<name>: every boot-class module the line's generation records
+# (`module NAME boot ... path=P sha256=S`), the exact bytes, for the RAM-disk image's
+# /stand/gen/1/mod (tools/build-ramdisk-miniroot.sh --mod). kbootset decides the list, so it
+# follows the staged packages: since catalog b1f564f4 the kernel package's own ufs is boot class
+# on k30 (s5 is the promoted root there) and the miniroot mounts the ufs target with it. Composed
+# against a placeholder image (the records do not depend on the image); one NAME per line out.
+rd_bootmods() {
+	local l=$1 d="$2/$1" n p s
+	rd_stage "$l"
+	rm -rf "$W/bm-$l" "$W/bm-$l.spec" "$d"
+	head -c 65536 /dev/zero > "$W/bm-$l.img"
+	( cd "$W" && "$B/kbootset" -R "stage-$l" media --cd "bm-$l" --version 3 --line "${l#k}" \
+	    --rootdev always --rootfs "$FS" --mem "$MEM" --ramdisk "bm-$l.img" ) > "$W/bm-$l.log" 2>&1 \
+		|| { tail -5 "$W/bm-$l.log" >&2; die "$l: kbootset media refused the generation"; }
+	mkdir -p "$d"
+	while read -r n p s; do
+		[ -f "$W/stage-$l$p" ] || die "$l: the generation's $n has no object at stage-$l$p"
+		[ "$(sha256sum < "$W/stage-$l$p" | cut -c1-64)" = "$s" ] || die "$l: stage-$l$p is not the $n its generation records"
+		cp "$W/stage-$l$p" "$d/$n"
+		echo "$n"
+	done < <(awk '$1 == "module" && $3 == "boot" { p = s = ""
+		for (i = 5; i <= NF; i++) { if ($i ~ /^path=/) p = substr($i, 6); if ($i ~ /^sha256=/) s = substr($i, 8) }
+		print $2, p, s }' "$W/bm-$l.spec")
+	rm -rf "$W/bm-$l" "$W/bm-$l.img"
+}
+
+# rd_imgcheck SPEC IMAGE [--zen0] -- the image holds every boot-class module SPEC records,
+# byte for byte (tools/ramdisk-image-check.py); --zen0 also asks for /dev/zen0 (netinstall)
+rd_imgcheck() {
+	local fs
+	case "$(sed -n 's/^rootfs //p' "$1")" in s5) fs=s5 ;; ufs) fs=ufs ;; *) die "$1 names no rootfs" ;; esac
+	python3 "$here/ramdisk-image-check.py" ${3:+$3} "$1" "$2" "$fs" \
+		|| die "$2 does not hold what its generation records (see above)"
 }
 
 # rd_summary LINE SPEC -- one line: the kernel build, the rootfs and the modules with their class
