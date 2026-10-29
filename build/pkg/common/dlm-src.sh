@@ -8,10 +8,15 @@
 #     amix_dlm_kit <commit> [<amix-modules commit>] [<port commit>]
 #         `make kit`: $AMIX_DLM_TREE/build/kit/{k30,k46}, KIT_REV=<commit>
 #
-# The sibling checkout ../amix-dlm is only READ: `git archive <commit>` exports
-# the tree into build/kspace/src/amix-dlm-<commit>/ (the fetch-at-build rule:
-# a pinned revision, never "whatever the working tree holds"), and amix-dlm's
-# own Makefile builds the targets there.  The period cross toolchain comes
+# amix-dlm now lives in the amix monorepo under kernel/dlm, amix-modules
+# under kernel/modules (moved in by subtree merge, hashes kept).  The sibling
+# checkout ../amix is only READ: `git archive` exports the pinned commit's
+# tree into build/kspace/src/amix-dlm-<commit>/ (the fetch-at-build rule: a
+# pinned revision, never "whatever the working tree holds"), and amix-dlm's
+# own Makefile builds the targets there.  A commit from before the move-in
+# has the project at its root and is archived whole (the same tree as in the
+# old repository); a later amix commit is archived as <commit>:kernel/dlm
+# (amix_src_treeish).  AMIX_DLM / AMIX_MODULES name another checkout.  The period cross toolchain comes
 # from gcc-cross-amix's env.sh (boot1/boot2 need it), GCC 14 from the sibling
 # gcc14-cross-amix (kbootset, modadmin); a box/ target first proves that
 # prefix is the pinned toolchain (gcc14-pin.sh, the same pins and ABI
@@ -26,20 +31,39 @@ dlm-src.sh)
 	;;
 esac
 
-AMIX_DLM="${AMIX_DLM:-$AMIX_SIBLINGS/amix-dlm}"
+AMIX_DLM="${AMIX_DLM:-$AMIX_SIBLINGS/amix}"
+AMIX_MODULES="${AMIX_MODULES:-$AMIX_SIBLINGS/amix}"
 AMIX_G14_BUILD="${AMIX_G14_BUILD:-$AMIX_SIBLINGS/gcc14-cross-amix/build}"
+
+# amix_src_treeish <checkout> <commit> <subdir> <probe> -- the tree-ish to
+# archive for a project at <commit>: <commit> itself when <probe> is at its
+# root (a commit from before the move-in), <commit>:<subdir> when it is under
+# <subdir> (an amix commit).  Prints it; returns 1 when neither holds.
+amix_src_treeish() {
+	if git -C "$1" cat-file -e "$2:$4" 2>/dev/null; then
+		echo "$2"
+	elif git -C "$1" cat-file -e "$2:$3/$4" 2>/dev/null; then
+		echo "$2:$3"
+	else
+		return 1
+	fi
+}
 
 # amix_dlm_export <commit> -- the git archive of <commit> in
 # build/kspace/src/amix-dlm-<commit>/ (once); sets AMIX_DLM_TREE.
 amix_dlm_export() {
-	[ -d "$AMIX_DLM/.git" ] || { echo "[FAIL] no amix-dlm checkout at $AMIX_DLM" >&2; exit 1; }
+	git -C "$AMIX_DLM" rev-parse --git-dir >/dev/null 2>&1 || {
+		echo "[FAIL] no amix checkout at $AMIX_DLM" >&2; exit 1; }
 	git -C "$AMIX_DLM" cat-file -e "$1^{commit}" 2>/dev/null || {
-		echo "[FAIL] amix-dlm has no commit $1" >&2; exit 1; }
+		echo "[FAIL] amix-dlm has no commit $1 in $AMIX_DLM" >&2; exit 1; }
+	_de_t=$(amix_src_treeish "$AMIX_DLM" "$1" kernel/dlm Makefile) || {
+		echo "[FAIL] amix-dlm $1: no Makefile at the root or under kernel/dlm" >&2; exit 1; }
 	AMIX_DLM_TREE="$AMIX_BUILD_ROOT/kspace/src/amix-dlm-$1"
 	if [ ! -f "$AMIX_DLM_TREE/Makefile" ]; then
 		rm -rf "$AMIX_DLM_TREE"; mkdir -p "$AMIX_DLM_TREE"
-		git -C "$AMIX_DLM" archive "$1" | tar -x -C "$AMIX_DLM_TREE"
+		git -C "$AMIX_DLM" archive "$_de_t" | tar -x -C "$AMIX_DLM_TREE"
 	fi
+	unset _de_t
 	export AMIX_DLM_TREE
 }
 
@@ -132,11 +156,13 @@ amix_dlm_kit() {
 	fi
 	if [ -n "${2:-}" ]; then
 		_dk_mr="$AMIX_BUILD_ROOT/kspace/src/kitmods-$2/amix-modules"
-		git -C "$AMIX_SIBLINGS/amix-modules" cat-file -e "$2^{commit}" 2>/dev/null || {
-			echo "[FAIL] amix-modules has no commit $2" >&2; exit 1; }
+		git -C "$AMIX_MODULES" cat-file -e "$2^{commit}" 2>/dev/null || {
+			echo "[FAIL] amix-modules has no commit $2 in $AMIX_MODULES" >&2; exit 1; }
+		_dk_mt=$(amix_src_treeish "$AMIX_MODULES" "$2" kernel/modules include/sys/monsw.h) || {
+			echo "[FAIL] amix-modules $2: no include/sys/monsw.h at the root or under kernel/modules" >&2; exit 1; }
 		if [ ! -f "$_dk_mr/include/sys/monsw.h" ]; then
 			rm -rf "$_dk_mr"; mkdir -p "$_dk_mr"
-			git -C "$AMIX_SIBLINGS/amix-modules" archive "$2" | tar -x -C "$_dk_mr"
+			git -C "$AMIX_MODULES" archive "$_dk_mt" | tar -x -C "$_dk_mr"
 		fi
 		_dk_mh="$_dk_mr/include/sys/monsw.h"
 	fi
@@ -179,5 +205,5 @@ amix_dlm_kit() {
 			echo "[FAIL] amix-dlm $1: the k46 kit is not labelled PORT_REV=$_dk_pc" >&2; exit 1; }
 	fi
 	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1${_dk_pc:+ PORT_REV=$_dk_pc} (log $AMIX_DLM_TREE.kit.log)"
-	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh _dk_pc _dk_pt _dk_pf
+	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh _dk_mt _dk_pc _dk_pt _dk_pf
 }
