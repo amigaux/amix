@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-29 — Moved into the amix repository as kernel/modules by a subtree merge of amix-modules master dc433b6 (11 commits, hashes kept); the README notes cdfs as a pinned fork (311ed90)
+
 ## 2026-10-26 — ramdisk requires kabi 1.2; VSECT1/phystokv from the kit (cad5ff3)
 
 iodone and ramdisk_image are kabi minor 2 (amix-dlm 42411c4); the local VSECT1/phystokv fallbacks are gone now that the
