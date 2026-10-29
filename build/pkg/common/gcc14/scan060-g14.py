@@ -146,13 +146,16 @@ def bound_for(insns, idx):
         moveq #N,%dY ; cmpl %dY,<ea> ; bhi default   (ea > N)
     <ea> may be a memory operand, which objdump prints with its symbol
     (`cmpl 8003db14 <subcommand_option>,%d6': tar 1.14, 2026-10-27).
+    The compare may be cmpa against an address register: the stock AT&T
+    compiler's `moveq #8,%d1 ; cmpal %d1,%a0 ; bhiw' in libc.so's static
+    getutx.o (_getutxid), linked by coreutils who/users/pinky, 2026-10-29.
     """
     lo = max(0, idx - LOOKBACK)
     for j in range(idx - 1, lo - 1, -1):
         _a, _w, mn, ops = insns[j]
         if mn.startswith(("rts", "jmp", "bra")):
             break                                   # left the dispatch block
-        if not re.match(r"^cmpi?[bwl]$", mn) or j + 1 >= idx:
+        if not re.match(r"^cmp[ai]?[bwl]$", mn) or j + 1 >= idx:
             continue
         br = insns[j + 1][2]
         m = BOUND_CMP.match(ops)

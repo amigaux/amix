@@ -237,6 +237,36 @@ fi
 echo "$out" | grep 'HITS 1 .*2 switch tables sized' >/dev/null || fail "scan060-g14.py on the back-to-back movep probe: $out"
 ok "scan060-g14.py sizes back-to-back switch tables whose bound check the first decode swallowed, still catches a movep"
 
+# The stock AT&T compiler's switch (libc.so's static getutx.o, _getutxid,
+# linked by coreutils who/users/pinky, 2026-10-29), bytes copied from the
+# real binary: the bound check is cmpa (`moveq #8,%d1; cmpal %d1,%a0; bhiw'),
+# the index load a full-format `movew %pc@(T,%a0:l:2),%d1', and an
+# `illegal' word plus the entry count sit between the jmp and the table.
+att_probe() {	# att_probe <name> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l 4(%sp),%a0\n\tmoveq #8,%d1\n\tcmpa.l %d1,%a0\n\tbhi.w 9f\n"'
+		printf '%s\n' '	"\t.word 0x323b,0x8b30,0x0000,0x000e\n"'	# movew %pc@(T,%a0:l:2),%d1
+		printf '%s\n' '	"\t.word 0x4efb,0x1006\n\t.word 0x4afc,0x0009\n"'	# jmp %pc@(T,%d1:w); illegal; 9
+		printf '%s\n' '	"\t.word 0x008a,0x0012,0x0012,0x0012,0x0012,0x0026,0x0026,0x0026,0x0026\n"'
+		[ -z "$2" ] || printf '\t%s\n' "$2"
+		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n"'
+		printf '%s\n' '	"9:\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
+}
+att_probe sw-att ''
+att_probe sw-att-movep '"\t.word 0x074c,0x0056\n"'
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-att") || fail "scan060-g14.py on the AT&T cmpa switch: $out"
+echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the AT&T cmpa table: $out"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-att-movep"); then
+	fail "scan060-g14.py passed a real movep after the AT&T cmpa table: $out"
+fi
+echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the AT&T movep probe: $out"
+ok "scan060-g14.py sizes the stock AT&T compiler's cmpa-bounded switch table, still catches a movep"
+
 # The toolchain identity (gcc14-env.sh): a prefix whose specs differ from the
 # pin by one byte is refused before anything builds; the return-value ABI
 # self-check passes the pinned compiler.  Where gcc14-cross-amix still keeps
