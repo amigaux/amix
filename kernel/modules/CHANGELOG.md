@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-29 — The module builds find the kit in the same repository (12f964c)
+
+`DLM ?= $(abspath $(TOP)/../dlm)` in monsw and ramdisk (was ../amix-dlm); READMEs name kernel/dlm and kernel/modules/include.
+Built with no override: monsw k30 1f53a31b / k46 962709ca (kabi tag 1.2: the kit's KABI_MIN since dlm 0edbd0f; the
+catalog's 01a40342 / 2c2760e9 carry 1.0, code otherwise identical), ramdisk 5523d853 / 054467f6 (= the catalog).
+
 ## 2026-10-29 — Moved into the amix repository as kernel/modules by a subtree merge of amix-modules master dc433b6 (11 commits, hashes kept); the README notes cdfs as a pinned fork (311ed90)
 
 ## 2026-10-26 — ramdisk requires kabi 1.2; VSECT1/phystokv from the kit (cad5ff3)
