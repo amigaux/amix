@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2026-10-29 — amixddi.h's two comments name kernel/dlm instead of amix-dlm (1e243b9)
+
+The kit header changes in comments only; monsw 1f53a31b / 962709ca and ramdisk 5523d853 / 054467f6 are unchanged.
+
 ## 2026-10-29 — The prose names amix's directories (kernel/dlm, kernel/modules) instead of the old repositories amix-dlm and
 amix-modules (765e4b0)
 
