@@ -24,7 +24,7 @@
   register rule (S4-63) on its own schedule.
 - **Read by:** the root-class driver owners: amix-z3660scsi (z3660scsi),
   amix-a4091 (A4091/A4092 and the A4000T onboard 53C710 as its second
-  target), amix-gayle-ide (Gayle IDE), amix-modules (`ramdisk`)
+  target), amix-gayle-ide (Gayle IDE), kernel/modules (`ramdisk`)
 - **Depends on:** C4-1 (`sd_register`), C4-3 (the RAM-disk hand-off),
   C4-4 (the arena), C4-5 (DDI v1.2 DMA); core patches 0029–0034
 
@@ -169,7 +169,7 @@ nothing for it, and `_load` cannot tell the difference.
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
-| ramdisk | amix-modules | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
+| ramdisk | amix `kernel/modules` | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
 
 ### 8.1 The A4000T onboard 53C710's gate (version 6)
 

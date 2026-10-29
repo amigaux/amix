@@ -191,8 +191,8 @@ The Amix ABI kit for $KABI, built from amix commit $REV.
 Under the MIT licence (LICENSE), Copyright (c) 2026 Jussi Alanärä:
 include/sys/amixddi.h, tools/modcheck.py, mk/, sample/, docs/, the lists and
 the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
-tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
-(tools/LICENSE.core).
+tools/modfix come from kdedon's MIT module core, with the changes in
+amix's kernel/dlm (tools/LICENSE.core).
 include/sys/monsw.h, the monitor switch's interface, is Jussi Alanärä's, from
 $MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix ] && printf ' (MIT)' ).
 

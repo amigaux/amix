@@ -22,7 +22,7 @@
   - the module core's platform code: the record read (`core/plat/amiga.c`);
   - the kernel's RTH1 half (amix-040-060-port; amix-kerntools on k30):
     the root selector applied.
-- **Read by:** the `ramdisk` root-class module (amix-modules, C4-2 §8)
+- **Read by:** the `ramdisk` root-class module (kernel/modules, C4-2 §8)
 
 ## 1. The manifest
 

@@ -15,7 +15,7 @@ kit's `docs/contracts/`:
 - The pinned cross compiler, gcc-cross-amix (`m68k-cbm-sysv4-gcc` 2.7.2.3,
   binutils 2.8.1), on `PATH`.
 - The kit for the line: `build/kit/k30` or `build/kit/k46` (`make kit` in
-  amix-dlm).
+  `kernel/dlm` of the amix repository).
 - Python 3, for the checker.
 - For `LOCALIZE` only, a newer objcopy (`m68k-elf-objcopy`, as
   gcc14-cross-amix has).

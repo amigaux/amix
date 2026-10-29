@@ -339,7 +339,7 @@ The module:
 
 ## 4. monsw (S3-27)
 
-Its home is **amix-modules** (`monsw/module/`: `Makefile` on the kit's
+Its home is **kernel/modules** in amix (`monsw/module/`: `Makefile` on the kit's
 fragment, `Master`, `VERSION`), copied from `amix-040-060-port/src/monsw.c`;
 the port keeps its static copy until the static kernels retire.
 

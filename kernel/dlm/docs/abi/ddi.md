@@ -217,7 +217,7 @@ from libgcc: on k30 the static cdfs did, and kern30m -17, without it,
 lost them until the builder named every `__` entry of `ddi.list` and
 `core.list` with `-u` and linked `libgcc.a` in the module-core link,
 whatever the filesystem set. Every builder of a module kernel does the
-same, so no cut on either line can lose them silently; amix-dlm's core
+same, so no cut on either line can lose them silently; kernel/dlm's core
 harness does it too (`tests/core/run.sh`).
 
 ## The module interface

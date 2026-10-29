@@ -213,7 +213,7 @@ def wrap(args):
         '$unload never\n$param probe:bool:0\n$desc %s filesystem (carved)\n%s\t%s\n'
         % (fs, opt['--build'], fs, fs, fs, fs))
     open(os.path.join(out, 'Makefile'), 'w').write(
-        '# the %s module, carved (tools/carve.py): make KIT=<amix-dlm>/build/kit/<line>\n'
+        '# the %s module, carved (tools/carve.py): make KIT=<amix>/kernel/dlm/build/kit/<line>\n'
         'MODULE = %s\nOBJS = %s_wrap.o\nEXTRA = %s\n%sinclude $(KIT)/mk/module.mk\n'
         % (fs, fs, fs, os.path.abspath(opt['--obj']),
            'PAGESHIFT_OK = %s\n' % opt['--pageshift-ok'] if opt.get('--pageshift-ok') else ''))

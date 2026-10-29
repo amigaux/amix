@@ -174,7 +174,7 @@ prints `abi=…` for the sidecar (step 11) when the text equals the
 reference, and otherwise names each line that moved and fails.
 
 **The reference** is the text of the last fingerprint of each tag,
-`abi/<line>/abi-<kabi>.txt`, tracked in amix-dlm and shipped in the kit. A
+`abi/<line>/abi-<kabi>.txt`, tracked in kernel/dlm and shipped in the kit. A
 new tag's first text is written with `mkabi.py --text` and committed
 there with the tag's kit change. The k30.1.0 text was written from the
 S3-21 cut. k46.1.0's was rewritten once, from the stage-3 re-cut

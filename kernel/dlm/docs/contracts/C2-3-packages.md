@@ -2,7 +2,7 @@
 
 - **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27, S5-12): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1); version 9 (2026-10-27, S5-46): `rth1=2`, the kernel matches a motherboard record by its id (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
-- **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in amix-dlm (S2-12)
+- **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in kernel/dlm (S2-12)
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
 
 ## 1. Kernel package (role `kernel`)

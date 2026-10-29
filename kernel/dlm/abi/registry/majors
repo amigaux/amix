@@ -11,5 +11,5 @@ c 52 monsw
 c 53 kinfo
 # c 54: the Paula module (amix-paula, kabi minor 3); the static form's 53 is kinfo's
 c 54 paula
-# b 20: the RAM-disk module's home is amix-modules, when it is written
+# b 20: the RAM-disk module, kernel/modules' ramdisk
 b 20 ramdisk

@@ -20,7 +20,7 @@
   compacted order, registration, the card-number gate), D-3 §4 and §11;
   core patch 8 (30 §2)
 - **Written by:**
-  - amix-dlm: `sd_register` in the core (S4-03), the registry's rank
+  - kernel/dlm: `sd_register` in the core (S4-03), the registry's rank
     classes, `kbootset`'s readers;
   - amix-040-060-port: the k46 sd and dd in-place patch and the RTH1
     kernel half (S4-21);

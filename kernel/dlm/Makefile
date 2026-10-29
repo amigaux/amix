@@ -1,4 +1,4 @@
-# amix-dlm -- loader, module core, kbootset, ABI kit.
+# kernel/dlm -- loader, module core, kbootset, ABI kit.
 #
 #   make test             host unit tests (system C compiler)
 #   make tools            host tools (mkstore, lsstore, bbframe)

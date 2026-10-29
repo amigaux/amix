@@ -48,10 +48,10 @@ of that minor or later (C3-2 §2).
 Every name in the kit is at most 14 bytes, so it unpacks on an s5
 filesystem too.
 
-The interface headers of generic modules (amix-modules: today
+The interface headers of generic modules (kernel/modules: today
 `sys/monsw.h`) ship with the kit, so a module that calls another module
 builds against the kit alone. Each header is versioned with its module's
 release; a kit carries the version current when it was built.
 
-In amix-dlm this directory holds the kit's sources; `make kit` builds the
-kits for both lines into `build/kit/`.
+In the amix repository, `kernel/dlm/abi/` holds the kit's sources; `make
+kit` in `kernel/dlm` builds the kits for both lines into `build/kit/`.
