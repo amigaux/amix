@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-29 — diffutils 2.8.1, the first package in the §10.9 shape (ac02f0f, 209d712, 61a4761)
+
+diffutil 2.8.1-1 (gcc14, /opt/amix), built by the interim driver recipes/common/style-configure.sh with the on-box
+smoke runner tools/pkg-smoke; E1 smoke 24/24, stock pkgadd/pkgchk/pkgrm clean; pkg 2fed5ef9 / 213504 B. scan060-g14.py
+keeps no stale unsized-table verdict after a re-sync, self-test 17/17. Not published.
+
 ## 2026-10-29 — gcc14 re-pinned to the compiler rebuilt from cf461e3 (e42cb91)
 
 AMIX_GCC14_PINS: cc1 9635f67e, libgcc.a e7efa6e6, libamixc99.a 0dd88b3a (were d4933e78, 5d814507, c73ccc17); specs
