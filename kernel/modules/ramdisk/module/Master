@@ -1,0 +1,10 @@
+# generated from keys by module/Makefile
+$modtype drv
+$class root
+$match always
+$majors b:20
+$unload never
+$desc RAM disk /dev/dsk/ram[0-2]
+$param size1:int:512:0:16384
+$param size2:int:2048:0:16384
+ramdisk ramdisk
