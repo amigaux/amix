@@ -13,13 +13,25 @@
 # The cross toolchain is gcc-cross-amix; source its build/env.sh first, or
 # set CROSS to the tool prefix (default m68k-cbm-sysv4- on PATH).  Userland
 # for the box (kbootset) is built with gcc14-cross-amix: G14 names its
-# build directory (default: the sibling checkout).
+# build directory.  The toolchains and the 040/060 port are not part of
+# amix (it pins them in toolchain/ and kernel/port/), so the targets that
+# need one are given it, never a guess:
+#   GCA   gcc-cross-amix's build directory     kit, kit-test, core
+#   G14   gcc14-cross-amix's build directory   box, hashbench, kit-test, core
+#   PORT  the 040/060 port's checkout          kit, kit-test (k46), core (k46)
+# The kernels core runs against are CORE_KERNELS (required), those
+# kit-test loads the sample against KIT_KERNELS (K46 K30; optional).
 
 HOSTCC     ?= cc
 HOSTCFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2
 CROSS      ?= m68k-cbm-sysv4-
-G14        ?= ../gcc14-cross-amix/build
+G14        ?=
+GCA        ?=
+PORT       ?=
 B          := build
+
+# $(call need,VAR,WHAT,PIN): stop unless VAR is set
+need = @test -n "$($(1))" || { echo "$(1) is not set: give $(2) ($(1)=...); it is not part of amix, whose $(3) pins it" >&2; exit 1; }
 
 COMMON  := loader/common
 CSRC    := $(COMMON)/crc32.c $(COMMON)/store.c $(COMMON)/manifest.c \
@@ -38,7 +50,7 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: FORCE all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
+.PHONY: FORCE need-gca need-g14 need-port all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
 
 all: test tools cross boot1 boot2 cdboot axtime box b2test
 
@@ -231,6 +243,7 @@ KBOBJ   := $(patsubst %.c,$(B)/box/%.o,$(notdir $(KBSRC)))
 # now (a mixed kbootset -21 once kept three objects of the previous one)
 G14ID   := $(B)/box/toolchain.id
 $(G14ID): FORCE
+	$(call need,G14,gcc14-cross-amix's build directory,toolchain/)
 	@mkdir -p $(B)/box
 	@(cd $(G14)/prefix && sha256sum libexec/gcc/m68k-elf/14.2.0/cc1 lib/gcc/m68k-elf/14.2.0/libgcc.a \
 		m68k-elf/lib/libamixc99.a lib/gcc/m68k-elf/14.2.0/specs) > $@.new
@@ -307,7 +320,7 @@ $(B)/hb27/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc3
 # the same GCC 14 program at other optimisation levels, to see whether the
 # level is the remedy
 HBOPTS := O1 O3 Os
-$(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c $(COMMON)/*.h
+$(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c $(COMMON)/*.h $(G14ID)
 	@mkdir -p $(B)/hb14-$*
 	for f in tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/crc32.c; do \
 		$(G14CC) $(filter-out -O2,$(G14CFLAGS)) -$* -I$(COMMON) -c -o $(B)/hb14-$*/$$(basename $$f .c).o $$f || exit 1; done
@@ -320,19 +333,26 @@ $(B)/hb14-%/hashbench: tools/measure/hashbench.c $(COMMON)/sha256.c $(COMMON)/cr
 	python3 -I $(G14)/../tools/check-68060-safe.py --68881 $@
 
 # M-CORE1: the module core (core/upstream + core/series) built with the
-# pinned toolchains, upstream's host tests run against the kernels of record
-# (amix-kerntools); not part of `test`, which needs no sibling repository
-core: toolchain-check
-	B=$(B) sh tests/core/run.sh
+# pinned toolchains, upstream's host tests run against the kernels given in
+# CORE_KERNELS; not part of `test`, which needs nothing outside amix
+core: need-gca need-g14 toolchain-check
+	B=$(B) GCA="$(GCA)" G14="$(G14)" PORT="$(PORT)" sh tests/core/run.sh $(CORE_KERNELS)
 
 # the ABI kit (abi/, docs/spec/20-module-format-and-abi.md section 5): one
 # per line, with the stock headers of the pinned sysroot (never tracked)
-kit: toolchain-check
-	sh tools/mkkit.sh k30 $(B)/kit/k30
-	sh tools/mkkit.sh k46 $(B)/kit/k46
+kit: need-gca need-port toolchain-check
+	GCA="$(GCA)" sh tools/mkkit.sh k30 $(B)/kit/k30
+	GCA="$(GCA)" PORT="$(PORT)" sh tools/mkkit.sh k46 $(B)/kit/k46
 
-kit-test: toolchain-check
-	B=$(B) sh tests/kit/run.sh
+kit-test: need-gca need-g14 need-port toolchain-check
+	B=$(B) GCA="$(GCA)" G14="$(G14)" PORT="$(PORT)" sh tests/kit/run.sh $(KIT_KERNELS)
+
+need-gca:
+	$(call need,GCA,gcc-cross-amix's build directory,toolchain/)
+need-g14:
+	$(call need,G14,gcc14-cross-amix's build directory,toolchain/)
+need-port:
+	$(call need,PORT,the 040/060 port's checkout,kernel/port/)
 
 hashbench: toolchain-check $(B)/box/hashbench $(B)/hb27/hashbench $(foreach o,$(HBOPTS),$(B)/hb14-$(o)/hashbench)
 

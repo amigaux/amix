@@ -203,6 +203,15 @@ into the kit artefact, so the published kit is complete while the history of
 this repository stays free of them. (`gcc-cross-amix` keeps its own,
 stricter redistribution notice for its repository.)
 
+**The kit's revision.** `kit.conf` names what a kit was built from.
+`KIT_REV` is the short hash of the amix commit, with `-dirty` when amix had
+uncommitted changes under `kernel/`. `MONSW_REV` is `<repository>@<commit>`
+of `sys/monsw.h` (`amix@<commit>` from `kernel/modules/include/`). On k46
+`PORT_REV` is the 040/060 port commit of the page headers. A kit built
+before the move into amix (2026-10-29) has an amix-dlm commit as its
+`KIT_REV`; amix keeps that history unchanged, so the hash resolves in amix
+too.
+
 ## 6. Registries
 
 Fixed in S0; each is a text file in the kit. Values marked *proposed* are

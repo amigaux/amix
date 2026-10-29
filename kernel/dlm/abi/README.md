@@ -23,7 +23,7 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 
 | Path | Content |
 |---|---|
-| `kit.conf` | the line, its kabi tag and the lowest tag a module gets (`KABI_MIN`), the compiler pin, the CPU flag, the amix-dlm commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`); the repository and commit `sys/monsw.h` came from (`MONSW_REV`) |
+| `kit.conf` | the line, its kabi tag and the lowest tag a module gets (`KABI_MIN`), the compiler pin, the CPU flag, the amix commit (`KIT_REV`); on k46 the port commit of the page headers (`PORT_REV`); the repository and commit `sys/monsw.h` came from (`MONSW_REV`) |
 | `abi.txt` | the line's fingerprint text (C3-3 §4): `abi=` is its SHA-256. It covers the DDI's **data** names with their sizes, the structure layouts the core reads in a module, and those a filesystem module shares with the kernel (`vfs`, `vnode`, `vattr`, `uio`, `dirent`, `statvfs`, `mounta`, `fid`, `sdcom` and the operation tables' sizes), not the function names: a function added to `ddi.list` (its line gives the kabi minor it entered, `root_defer func 1`) leaves `abi.txt` as it is. A module that calls it needs a kernel of that minor, which the kabi rule checks (C3-1 §3), and every listed name is defined in the kernel, which the post-link gate checks (C3-2) |
 | `include/sys/` | `mod.h`, `moddefs.h` (the wrapper macros), `ksym.h`, `amixddi.h` (DDI v1); `monsw.h`, the monitor switch's interface |
 | `sysroot/`, `stock/` | the stock Amix 2.1 kernel headers (see `NOTICE`) |

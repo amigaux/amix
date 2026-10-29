@@ -10,10 +10,9 @@
 # Run from the repository root after `make tools` and store-roundtrip.sh.
 set -e
 B=${B:-build}
-WS=$(cd "$(dirname "$0")/../../.." && pwd)
-K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20d/out/m/unix}
-K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix}
-K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix.brel}
+K46=${NL_K46:-}
+K30E=${NL_K30_ETREL:-}
+K30B=${NL_K30_BREL:-}
 T=$B/knamelist
 rm -rf $T && mkdir -p $T
 sha() { sha256sum "$1" | cut -c1-64; }

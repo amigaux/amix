@@ -6,19 +6,28 @@
 # the sample also loads against each kernel's own symbol block.
 #
 # usage: run.sh [KD060-Z-module-kernel K030-U-module-kernel.etrel]
-#   (default: the S3-20/S3-21 cuts under the workspace's tmp/)
-# Environment: B (build directory), GCA, G14, PORT as tools/mkkit.sh.
+#   (the S3-20/S3-21 cuts; not part of amix: without them that load is
+#   skipped)
+# Environment: B (build directory); GCA, G14 (gcc14-cross-amix's build
+# directory) and PORT, required, as tools/mkkit.sh.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 set -u
 R=$(cd "$(dirname "$0")/../.." && pwd)
-WS=$(cd "$R/.." && pwd)
+# need VAR WHAT PIN: a toolchain or the port, never guessed
+need() {
+	eval "v=\${$1:-}"
+	[ -n "$v" ] || { echo "run.sh: $1 is not set: give $2 ($1=...); it is not part of amix, whose $3 pins it" >&2; exit 1; }
+}
+need GCA "gcc-cross-amix's build directory" toolchain/
+need G14 "gcc14-cross-amix's build directory" toolchain/
+need PORT "the 040/060 port's checkout" kernel/port/
+export GCA PORT
 B=$(mkdir -p "${B:-$R/build}" && cd "${B:-$R/build}" && pwd)
-G14=${G14:-$WS/gcc14-cross-amix/build}
-. "${GCA:-$WS/gcc-cross-amix/build}/env.sh"
+. "$GCA/env.sh"
 PATH="$PATH:$G14/prefix/bin"
-K46=${1:-$WS/tmp/2026-10-26-s3-20/out/m/unix}
-K30=${2:-$WS/tmp/2026-10-26-s3-21/dlm/usr/sys/unix}
+K46=${1:-}
+K30=${2:-}
 fails=0
 pass() { printf "PASS %s\n" "$*"; }
 fail() { printf "FAIL %s\n" "$*"; fails=$((fails + 1)); }

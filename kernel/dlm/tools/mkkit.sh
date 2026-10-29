@@ -8,9 +8,9 @@
 # OUTDIR gets:
 #   kit.conf             LINE, KABI, KABI_MIN (the lowest tag a module
 #                        gets, modcheck.py --kabi), PIN, CPUFLAG, DEFCPU (a
-#                        module's default cpu=), KIT_REV (the amix-dlm
-#                        commit; -dirty when the kit's inputs had
-#                        uncommitted changes)
+#                        module's default cpu=), KIT_REV (the amix
+#                        commit; -dirty when amix had uncommitted
+#                        changes under kernel/), MONSW_REV, on k46 PORT_REV
 #   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
 #                        core/series) and amixddi.h (abi/include)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
@@ -40,8 +40,10 @@
 # published under the distribution permission of 2026-09-23 (D-3 section 7),
 # and never into this repository (build/ is not tracked).
 #
-# Environment: GCA (gcc-cross-amix's build directory, default the sibling
-# checkout), PORT (amix-040-060-port, default the sibling), HOSTCC.
+# Environment: GCA (gcc-cross-amix's build directory) and, for k46, PORT
+# (the 040/060 port's checkout), both required: neither is part of amix,
+# which pins them in toolchain/ and kernel/port/.  MONSW_H (default: amix's
+# kernel/modules/include/sys/monsw.h), HOSTCC.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 set -e
@@ -53,17 +55,24 @@ k46) KABI=k46.1.3 KABI_MIN=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
 R=$(cd "$(dirname "$0")/.." && pwd)
-WS=$(cd "$R/.." && pwd)
-GCA=${GCA:-$WS/gcc-cross-amix/build}
-PORT=${PORT:-$WS/amix-040-060-port}
+# the amix checkout this directory (kernel/dlm) is in: the kit records its commit
+AMIX=$(git -C "$R" rev-parse --show-toplevel 2>/dev/null) ||
+	{ echo "mkkit: $R is not in a git checkout of amix" >&2; exit 1; }
+# need VAR WHAT PIN: a toolchain or the port, never guessed
+need() {
+	eval "v=\${$1:-}"
+	[ -n "$v" ] || { echo "mkkit: $1 is not set: give $2 ($1=...); it is not part of amix, whose $3 pins it" >&2; exit 1; }
+}
+need GCA "gcc-cross-amix's build directory" toolchain/
+[ "$LINE" = k30 ] || need PORT "the 040/060 port's checkout" kernel/port/
+[ -f "$GCA/env.sh" ] || { echo "mkkit: no $GCA/env.sh (GCA: gcc-cross-amix's build directory)" >&2; exit 1; }
 . "$GCA/env.sh"
 PIN=gcc-2.7.2.3-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
-REV=$(git -C "$R" rev-parse --short HEAD 2>/dev/null || echo unknown)
-# a kit built from uncommitted inputs says so in its revision
-if [ -n "$(git -C "$R" status --porcelain -- abi core tools/mkkit.sh tools/sunfont.py \
-	docs/abi/ddi.md docs/abi/writing-a-module.md docs/contracts LICENSE 2>/dev/null)" ]; then
+# KIT_REV: the amix commit, -dirty when kernel/ has uncommitted changes
+REV=$(git -C "$AMIX" rev-parse --short HEAD 2>/dev/null || echo unknown)
+if [ -n "$(git -C "$AMIX" status --porcelain -- kernel 2>/dev/null)" ]; then
 	REV=$REV-dirty
-	echo "mkkit: the kit's inputs have uncommitted changes: KIT_REV=$REV" >&2
+	echo "mkkit: amix has uncommitted changes under kernel/: KIT_REV=$REV" >&2
 fi
 
 rm -rf "$OUT"
@@ -105,17 +114,18 @@ for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
 	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/${c%%-[a-z]*}.md"
 done
 # the interface headers of generic modules, versioned with the module's
-# release: sys/monsw.h from amix-modules' include/sys/ (where every generic
-# module's header sits) once monsw is there, from the port's copy until then
-MONSW_H=${MONSW_H:-$WS/amix-modules/include/sys/monsw.h}
-[ -f "$MONSW_H" ] || MONSW_H=$PORT/src/sys/monsw.h
+# release: sys/monsw.h from amix's kernel/modules/include/sys/ (where every
+# generic module's header sits)
+MONSW_H=${MONSW_H:-$AMIX/kernel/modules/include/sys/monsw.h}
 [ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
 cp "$MONSW_H" "$OUT/include/sys/monsw.h"
-# where it came from: the repository's commit, -dirty if the file differs
+# where it came from: the repository's commit, -dirty if the file differs;
+# the repository is amix when the file is in this checkout
 MONSW_DIR=$(dirname "$MONSW_H")
 MONSW_REV=$(git -C "$MONSW_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
 git -C "$MONSW_DIR" diff --quiet HEAD -- "$MONSW_H" 2>/dev/null || MONSW_REV=$MONSW_REV-dirty
-MONSW_REPO=$(basename "$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)")
+MONSW_TOP=$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)
+if [ "$MONSW_TOP" = "$AMIX" ]; then MONSW_REPO=amix; else MONSW_REPO=$(basename "$MONSW_TOP"); fi
 cp "$R/LICENSE" "$OUT/LICENSE"
 cp "$R/abi/README.md" "$OUT/README.md"
 
@@ -164,7 +174,7 @@ if [ "$LINE" = k46 ]; then
 fi
 
 cat > "$OUT/kit.conf" <<EOF
-# the ABI kit for $LINE (amix-dlm $REV): read by mk/module.mk and modcheck.py
+# the ABI kit for $LINE (amix commit $REV): read by mk/module.mk and modcheck.py
 LINE=$LINE
 KABI=$KABI
 KABI_MIN=$KABI_MIN
@@ -176,7 +186,7 @@ EOF
 [ "$LINE" = k46 ] && echo "PORT_REV=$PORT_REV" >> "$OUT/kit.conf"
 echo "MONSW_REV=$MONSW_REPO@$MONSW_REV" >> "$OUT/kit.conf"
 cat > "$OUT/NOTICE" <<EOF
-The Amix ABI kit for $KABI, built from amix-dlm $REV.
+The Amix ABI kit for $KABI, built from amix commit $REV.
 
 Under the MIT licence (LICENSE), Copyright (c) 2026 Jussi Alanärä:
 include/sys/amixddi.h, tools/modcheck.py, mk/, sample/, docs/, the lists and
@@ -184,7 +194,7 @@ the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
 tools/modfix come from kdedon's MIT module core, with amix-dlm's changes
 (tools/LICENSE.core).
 include/sys/monsw.h, the monitor switch's interface, is Jussi Alanärä's, from
-$MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix-modules ] && printf ' (MIT)' ).
+$MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix ] && printf ' (MIT)' ).
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on
@@ -194,4 +204,4 @@ EOF
 long=$(cd "$OUT" && find . | awk -F/ '{ for (i = 2; i <= NF; i++) if (length($i) > 14) { print; break } }')
 [ -z "$long" ] || { echo "mkkit: names over 14 bytes: $long" >&2; exit 1; }
 n=$(find "$OUT/sysroot" "$OUT/stock" -name '*.h' | wc -l)
-echo "mkkit: $OUT: $LINE $KABI, pin $PIN, $n stock headers, amix-dlm $REV"
+echo "mkkit: $OUT: $LINE $KABI, pin $PIN, $n stock headers, amix commit $REV"

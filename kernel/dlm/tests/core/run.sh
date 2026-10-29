@@ -27,10 +27,15 @@
 #     test modules load, a module using a name off the list is ERELOC, and
 #     a listed name left undefined fails -f.
 #
-# usage: sh tests/core/run.sh [KERNEL.elf ...]
-#   default: the k46 and k30 kernels of record (amix-kerntools k0-chains)
-# Environment: GCA (gcc-cross-amix build dir), G14 (gcc14-cross-amix build
-# dir, for the modern m68k-elf binutils the oracle links with), B.
+# usage: sh tests/core/run.sh KERNEL.elf ...
+#   the kernels of record: KD060-Z-c0-u6, and for k30 the K030-U cut with
+#   kinfo (amix-kerntools 5b5fa21), else K030-U-c0-u6.etrel (a name with
+#   K030 or k30 is a k30 kernel); they are not part of amix
+# Environment, required (none is part of amix, which pins them in
+# toolchain/ and kernel/port/): GCA (gcc-cross-amix build dir), G14
+# (gcc14-cross-amix build dir, for the modern m68k-elf binutils the oracle
+# links with), and with a k46 kernel PORT (the 040/060 port's checkout,
+# whose build/ has devkvmap040.o and dma_cache040.o).  B.
 # One PASS/FAIL line per check; exit 1 if any failed.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.  The checks
@@ -39,18 +44,21 @@ set -e
 
 R=$(cd "$(dirname "$0")/../.." && pwd)
 U=$R/core/upstream
-WS=$(cd "$R/.." && pwd)
-GCA=${GCA:-$WS/gcc-cross-amix/build}
-G14=${G14:-$WS/gcc14-cross-amix/build}
+# need VAR WHAT PIN: a toolchain or the port, never guessed
+need() {
+	eval "v=\${$1:-}"
+	[ -n "$v" ] || { echo "run.sh: $1 is not set: give $2 ($1=...); it is not part of amix, whose $3 pins it" >&2; exit 1; }
+}
+need GCA "gcc-cross-amix's build directory" toolchain/
+need G14 "gcc14-cross-amix's build directory" toolchain/
+[ $# -gt 0 ] || { echo "usage: run.sh KERNEL.elf ... (the kernels of record, not part of amix)" >&2; exit 2; }
+for IMG; do
+	case "$(basename "$IMG")" in K030*|*k30*) ;; *) need PORT "the 040/060 port's checkout" kernel/port/ ;; esac
+done
 B=$(mkdir -p "${B:-$R/build}/core" && cd "${B:-$R/build}/core" && pwd)
 . "$GCA/env.sh"
 PATH="$G14/prefix/bin:$PATH"
 export PATH
-# the k30 module kernel is cut from K030-U with kinfo (amix-kerntools
-# 5b5fa21); without that build at hand, the K030-U of record
-K30=$WS/tmp/2026-10-26-kinfo030/pkg/K030-U-kinfo.etrel
-[ -f "$K30" ] || K30=$WS/amix-kerntools/work/k0-chains/K030-U/K030-U-c0-u6.etrel
-[ $# -gt 0 ] || set -- "$WS/amix-kerntools/work/k0-chains/KD060-Z/KD060-Z-c0-u6" "$K30"
 
 fails=0
 pass() { echo "PASS $*"; }
@@ -376,8 +384,8 @@ for IMG; do
 		dlm_ddi dlm_intr sha256 crc32 dlm_cache dlm_hooksw dlm_spl plat-amiga; do echo "$B/obj/$f.o"; done)
 	prov="$prov $B/obj/plat-$LINE-line.o"
 	if [ $LINE = k46 ]; then
-		[ -f "$WS/amix-040-060-port/build/devkvmap040.o" ] &&
-			prov="$prov $WS/amix-040-060-port/build/devkvmap040.o"
+		[ -f "$PORT/build/devkvmap040.o" ] &&
+			prov="$prov $PORT/build/devkvmap040.o"
 	fi
 	# the libgcc helpers the lists name (__udivdi3 and the rest) are not
 	# kernel source symbols: a base has them only if one of its objects
@@ -393,7 +401,7 @@ for IMG; do
 	# port's kernel links and this k0 base lacks): its names, when that
 	# object defines them, are stubbed here and said, not failed
 	portdma=
-	DC=$WS/amix-040-060-port/build/dma_cache040.o
+	DC=${PORT:-}/build/dma_cache040.o
 	[ $LINE = k46 ] && [ -f "$DC" ] &&
 		portdma=$(m68k-elf-nm "$DC" | awk '$2=="T" && ($3=="dma_prepare" || $3=="dma_complete") {print $3}' | sort | tr '\n' ' ')
 	awk -v m=${KABI##*.} '!/^#/ && NF && $3 <= m {print $1, $2}' "$L" | while read n k; do

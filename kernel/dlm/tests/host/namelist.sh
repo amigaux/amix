@@ -15,11 +15,10 @@
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 set -e
 B=${B:-build}
-WS=$(cd "$(dirname "$0")/../../.." && pwd)
-K46=${NL_K46:-$WS/tmp/2026-10-26-s3-20d/out/m/unix}
-K30E=${NL_K30_ETREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix}
-K30B=${NL_K30_BREL:-$WS/tmp/2026-10-26-s3-21e/dlm/usr/sys/unix.brel}
-K30S=${NL_K30_KABI:-$WS/tmp/2026-10-26-s3-21e/kabi}
+K46=${NL_K46:-}
+K30E=${NL_K30_ETREL:-}
+K30B=${NL_K30_BREL:-}
+K30S=${NL_K30_KABI:-}
 T=$B/namelist
 rm -rf "$T" && mkdir -p "$T"
 
@@ -93,7 +92,7 @@ if [ -f "$K46" ]; then
 	# a layout mismatch is the caller's to refuse: here, the layout given
 	grep -q "^text 0x08000000 " $T/k46-0x08000000.lay
 else
-	echo "namelist: no k46 kernel ($K46), skipped"
+	echo "namelist: no k46 kernel (NL_K46=$K46), skipped"
 fi
 
 if [ -f "$K30E" ] && [ -f "$K30B" ] && [ -f "$K30S" ]; then
