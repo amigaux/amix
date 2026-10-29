@@ -1,10 +1,14 @@
 #!/bin/sh
 #
-# style-configure.sh -- INTERIM driver for a P-31 sec 10.9 package directory.
+# pkgbuild.sh -- INTERIM driver for a P-31 sec 10.9 package directory.
 #
-#     sh recipes/common/style-configure.sh recipes/<name>
+#     sh recipes/common/pkgbuild.sh recipes/<name>
 #
-# INTERIM.  This stands in for amix's build/pkg framework (styles/configure.sh
+# Two build styles (package.sh STYLE): `configure' (./configure --host, then
+# make) and `make' (a plain Makefile: make with CC/AR/RANLIB/CFLAGS given on
+# the command line, no configure step).
+#
+# INTERIM.  This stands in for amix's build/pkg framework (styles/*.sh
 # + env/ + roll + pkgmeta) until the packages move into amix
 # userland/packages/; it is replaced there, not carried over.  It is kept
 # small and generic so the real framework can grow out of what it proves.
@@ -18,6 +22,8 @@
 #                     configure_args     echo extra ./configure arguments
 #                     pre_configure      export configure seeds (ac_cv_...)
 #                     post_configure     assert config.h answers (cwd: tree)
+#                                        (the three run in STYLE=configure only)
+#                     make_args          echo extra make arguments/targets
 #                     post_build         assert the build (cwd: tree)
 #                     stage              copy the payload into $DEST (cwd:
 #                                        tree); binaries unstripped, the
@@ -48,7 +54,7 @@
 set -e
 
 [ $# -eq 1 ] && [ -f "$1/package.sh" ] || {
-	echo "usage: sh recipes/common/style-configure.sh recipes/<name>" >&2
+	echo "usage: sh recipes/common/pkgbuild.sh recipes/<name>" >&2
 	exit 2
 }
 HERE=$(cd "$1" && pwd)
@@ -61,7 +67,9 @@ for k in NAME PKG VERSION PKGREV SUMMARY DESC CATEGORY SET LICENSE URL SHA256; d
 	eval "v=\${$k-}"
 	[ -n "$v" ] || { echo "[FAIL] package.sh: $k is not set" >&2; exit 1; }
 done
-[ "$STYLE" = configure ] || { echo "[FAIL] STYLE=$STYLE -- this driver is the configure style" >&2; exit 1; }
+case "$STYLE" in configure|make) ;;
+*) echo "[FAIL] STYLE=$STYLE -- known: configure, make" >&2; exit 1 ;;
+esac
 [ "$NAME" = "$(basename "$HERE")" ] || { echo "[FAIL] NAME=$NAME is not the directory name" >&2; exit 1; }
 [ "${#PKG}" -le 9 ] || { echo "[FAIL] PKG=$PKG is over 9 characters" >&2; exit 1; }
 echo "$CATEGORY" | grep -Ex '[A-Za-z0-9][A-Za-z0-9+.-]*' >/dev/null || {
@@ -86,6 +94,7 @@ AMIX_RECIPE_TOOLCHAINS=$TOOLCHAIN
 . "$REPO/recipes/common/gates.sh"
 EXTRA_CFLAGS= ASM_REVIEWED= ZERO_OK=
 configure_args() { :; }
+make_args() { :; }
 pre_configure() { :; }
 post_configure() { :; }
 post_build() { :; }
@@ -100,7 +109,7 @@ DEST="$BUILD/dest"
 PKGOUT="$AMIX_BUILD_ROOT/pkg"
 export HERE BUILD TREE DEST
 
-echo "=== $NAME $PKGVERSION ($PKG, $CATEGORY, set $SET) ==="
+echo "=== $NAME $PKGVERSION ($PKG, $CATEGORY, set $SET, style $STYLE) ==="
 amix_env_banner
 echo
 mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
@@ -133,9 +142,10 @@ if ! amix_gate_noasm "$TREE"; then
 fi
 echo
 
-# --- 3. cross-configure (lenient: probes decided by the linker, gcc14-env.sh) ---------
-echo "--- cross-configure ---"
 cd "$TREE"
+# --- 3. cross-configure (lenient: probes decided by the linker, gcc14-env.sh) ---------
+if [ "$STYLE" = configure ]; then
+echo "--- cross-configure ---"
 pre_configure
 CC="$CC" CPP="$AMIX_CPP" \
 CFLAGS="$AMIX_CFLAGS $EXTRA_CFLAGS $AMIX_CONFIGURE_LENIENT" \
@@ -147,10 +157,16 @@ CFLAGS="$AMIX_CFLAGS $EXTRA_CFLAGS $AMIX_CONFIGURE_LENIENT" \
 }
 post_configure
 echo
+fi
 
 # --- 4. build (strict) -------------------------------------------------------------------
 echo "--- make ---"
-make CFLAGS="$AMIX_CFLAGS $EXTRA_CFLAGS" > "$BUILD/make.log" 2>&1 || {
+if [ "$STYLE" = make ]; then
+	set -- CC="$CC" AR="$AR" RANLIB="$RANLIB"
+else
+	set --
+fi
+make "$@" CFLAGS="$AMIX_CFLAGS $EXTRA_CFLAGS" $(make_args) > "$BUILD/make.log" 2>&1 || {
 	echo "[FAIL] make failed; see $BUILD/make.log" >&2
 	tail -25 "$BUILD/make.log" >&2
 	exit 1

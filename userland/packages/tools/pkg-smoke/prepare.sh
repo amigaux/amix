@@ -4,11 +4,14 @@
 #
 #     sh tools/pkg-smoke/prepare.sh recipes/<name>...
 #
-# INTERIM, with recipes/common/style-configure.sh: replaced by amix build/'s
+# INTERIM, with recipes/common/pkgbuild.sh: replaced by amix build/'s
 # framework at move-in.  Writes build/pkg-smoke/stage/, which host-extra.sh
 # pushes to the guest's /tmp/pks:
 #   <PKG>-<VERSION>-<PKGREV>.pkg   each package's datastream (TOOLCHAIN's pkg dir)
-#   <name>/tests/                  each package's tests (smoke.sh runs from <name>/)
+#   <name>/tests/                  each package's tests (smoke.sh runs from <name>/);
+#                                  a tests/fixtures file lists source-tree paths
+#                                  (one per line) copied in beside them, e.g.
+#                                  upstream's own test vectors
 #   PKGLIST                        "<PKG> <datastream> <name>" per package
 #   admin                          the non-interactive admin file (PORTING.md 7)
 #   guest.sh, MANIFEST.sum         sum -r of every file above, for the push check
@@ -31,6 +34,13 @@ for r in "$@"; do
 	  cp "$P/$f" "$S/"
 	  mkdir -p "$S/$NAME"
 	  cp -r "$R/tests" "$S/$NAME/"
+	  if [ -f "$R/tests/fixtures" ]; then
+		  T="$REPO/build/$( [ "$TOOLCHAIN" = gcc14 ] && echo gcc14/ )$NAME/work/${SRCDIR:-$NAME-$VERSION}"
+		  grep -v '^#' "$R/tests/fixtures" | while read -r f; do
+			  [ -n "$f" ] || continue
+			  cp "$T/$f" "$S/$NAME/tests/" || { echo "[FAIL] fixture $T/$f" >&2; exit 1; }
+		  done
+	  fi
 	  echo "$PKG $f $NAME" >> "$S/PKGLIST"
 	  echo "staged $f ($(md5sum "$S/$f" | cut -d' ' -f1)) + $NAME/tests" )
 done
