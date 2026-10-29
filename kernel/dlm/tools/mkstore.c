@@ -260,7 +260,7 @@ generation(const char *spec, struct ax_gen *g)
 	ax_u32 mlen = 0, flen, crc, off = 0;
 	ax_u16 vol = 1;
 	int n, state = -1, i, have_gen = 0, nmod = 0;
-	char fname[16];
+	char fname[40];	/* any %lu and %d; the checks keep CD names 8.3 */
 	ax_u32 res_off = 0, res_len = 0;
 	ax_u16 res_vol = 0;
 	unsigned char *data;
