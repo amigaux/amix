@@ -28,3 +28,10 @@ copies them, so a module that calls another module builds against the kit alone.
 Build every module of a line with amix-dlm's kit and the pinned gcc-cross-amix
 (`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`, for example `make -C monsw/module`. The
 contracts are in amix-dlm `docs/contracts/`.
+
+Pinned fork: `cdfs/` (a read-only CD filesystem), a fork of Stefan Reinauer's
+ODFileSystem. Its directory holds only a README and `cdfs/cdfs.pin`, naming
+the fork and the exact commit the build uses.
+
+A pin file is one line, `<git URL> <full commit hash>`; the build fetches that
+exact commit.
