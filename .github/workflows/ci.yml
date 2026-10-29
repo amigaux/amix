@@ -1,0 +1,68 @@
+# CI for amix: the privacy check over what a push or pull request adds, the
+# privacy check's self-test, and the host tests that need no Amiga and no
+# cross compiler. Not required for merges. See docs/ci.md.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  privacy:
+    name: privacy check (public classes)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: privacy check over the new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # CI has no maintainer's local list: PRIVACY_PATTERNS and
+          # PRIVACY_BLOCKED are unset, so only the public classes run.
+          echo "privacy-check: public rules only (no local list in CI)"
+          if [ "$EVENT" = pull_request ]; then
+            set -- --range "$PR_BASE..$PR_HEAD"
+          elif [ -n "$PUSH_BEFORE" ] && ! expr "$PUSH_BEFORE" : '0*$' >/dev/null \
+              && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            set -- --range "$PUSH_BEFORE..$PUSH_AFTER"
+          else
+            set -- --all "$PUSH_AFTER"
+          fi
+          echo "privacy-check $*"
+          env -u PRIVACY_PATTERNS -u PRIVACY_BLOCKED tools/privacy-check "$@"
+
+  tests:
+    name: host tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: host packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -q -y --no-install-recommends zlib1g-dev
+      - name: privacy-check self-test
+        run: tools/test-privacy-check
+      - name: kernel/dlm host tests
+        run: make -C kernel/dlm test
+      - name: kernel/modules monsw host test
+        run: make -C kernel/modules/monsw/module test
+      - name: kernel/modules ramdisk host test
+        run: make -C kernel/modules/ramdisk/module test
