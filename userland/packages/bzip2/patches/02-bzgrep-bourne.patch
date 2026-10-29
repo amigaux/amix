@@ -1,0 +1,20 @@
+bzgrep: $(...) is not in the 1992 Bourne shell (/bin/sh on AMIX); use
+backticks (inner backslashes doubled), and drop the printf(1) step: the
+newline-to-space conversion now happens in the same pipeline.  The space
+tr makes of echo's trailing newline is removed by a last sed -- after an
+echo, because AMIX sed DISCARDS a final line that has no newline (measured
+on the box: j came out empty).  Output is identical to the original for
+names with \, |, & and spaces (host-checked).
+
+--- a/bzgrep	2026-10-29 21:54:21.573875307 +0200
++++ b/bzgrep	2026-10-29 22:08:09.198201036 +0200
+@@ -63,8 +63,7 @@
+     bzip2 -cdfq "$i" | $grep $opt "$pat"
+     r=$?
+   else
+-    j=$(echo "$i" | sed 's/\\/&&/g;s/|/\\&/g;s/&/\\&/g')
+-    j=`printf "%s" "$j" | tr '\n' ' '`
++    j=`echo "$i" | sed 's/\\\\/&&/g;s/|/\\\\&/g;s/&/\\\\&/g' | { tr '\012' ' '; echo; } | sed 's/ $//'`
+     # A trick adapted from
+     # https://groups.google.com/forum/#!original/comp.unix.shell/x1345iu10eg/Nn1n-1r1uU0J
+     # that has the same effect as the following bash code:

@@ -1,0 +1,27 @@
+bzdiff: AMIX has no mktemp(1).  Make a private directory instead -- mkdir
+fails if the name exists, so a planted file or link cannot be followed --
+mode 700, and remove it afterwards.
+
+--- a/bzdiff	2026-10-29 21:54:21.573850249 +0200
++++ b/bzdiff	2026-10-29 21:54:21.589513912 +0200
+@@ -49,14 +49,17 @@
+                 case "$2" in
+ 	        *.bz2)
+ 			F=`echo "$2" | sed 's|.*/||;s|.bz2$||'`
+-			tmp=`mktemp "${TMPDIR:-/tmp}"/bzdiff.XXXXXXXXXX` || {
+-			      echo 'cannot create a temporary file' >&2
++			tmpd="${TMPDIR:-/tmp}/bzdiff.$$"
++			mkdir "$tmpd" 2>/dev/null || {
++			      echo 'cannot create a temporary directory' >&2
+ 			      exit 1
+ 			}
++			chmod 700 "$tmpd"
++			tmp="$tmpd/$F"
+                         bzip2 -cdfq "$2" > "$tmp"
+                         bzip2 -cdfq "$1" | $comp $OPTIONS - "$tmp"
+                         STAT="$?"
+-			/bin/rm -f "$tmp";;
++			/bin/rm -rf "$tmpd";;
+ 
+                 *)      bzip2 -cdfq "$1" | $comp $OPTIONS - "$2"
+                         STAT="$?";;
