@@ -159,7 +159,7 @@ tests on a plain Linux host, which is where the packaging pipeline and most of t
 (cd src/apkg          && make test)                    # 223 assertions
 (cd src/apkg          && sh tests/nohttp-variant.sh)    # 20 (the FILE+RAW, no-sockets build)
 (cd src/contents-fsck && make test)                     # 19
-sh tools/repo/tests/run-tests.sh                        # 316
+bash tools/repo/tests/run-tests.sh                      # 375 (bash, not sh)
 sh tools/migrate/tests/run-tests.sh                     # 36
 (cd heirloom && ./build-host.sh)         # the pkgmk/pkgtrans that build packages
 ```

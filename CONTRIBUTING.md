@@ -49,7 +49,7 @@ The host build and every test suite run on a plain Linux host:
 (cd src/apkg          && make test)                  # apkg host suite
 (cd src/apkg          && sh tests/nohttp-variant.sh)  # the FILE+RAW, no-sockets build
 (cd src/contents-fsck && make test)
-sh tools/repo/tests/run-tests.sh
+bash tools/repo/tests/run-tests.sh                   # bash, not sh
 sh tools/migrate/tests/run-tests.sh
 (cd heirloom && ./build-host.sh)                      # host engine + compat regression tests
 ```
