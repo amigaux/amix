@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-29 — bzip2 1.0.8; the interim driver is recipes/common/pkgbuild.sh with STYLE=make (3810e35, 343a4b5, 702b57c)
+
+bzip2 1.0.8-1 (gcc14, /opt/amix, category archive): bzip2recover's 64-bit offsets formatted by hand, Bourne-shell bzgrep
+and bzdiff, the -v report out of line so compression runs no FPU instruction (FPU-less LC040/LC060). E1 smoke 23/23 with
+upstream's test vectors; stock pkgadd/pkgchk/pkgrm clean; pkg 65e99c40 / 221696 B. amix-decls.h declares fchmod. 343a4b5
+builds only with 702b57c's STYLE=make. Not published; cats.conf needs archive and utility before a publish.
+
 ## 2026-10-29 — diffutils 2.8.1, the first package in the §10.9 shape (ac02f0f, 209d712, 61a4761)
 
 diffutil 2.8.1-1 (gcc14, /opt/amix), built by the interim driver recipes/common/style-configure.sh with the on-box
