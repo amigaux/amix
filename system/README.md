@@ -14,6 +14,9 @@ one; this directory only describes them.
 | `usr/include` | the system headers |
 | `usr/lib`, `usr/ccs` | the libraries, startup objects and the C compilation system |
 | `usr/X` | X11: headers, libraries, fonts and clients |
+| `floppies/2.1/amix_21_boot.adf` | the retail 2.1 boot floppy: the bootstrap and the installation kernel |
+| `floppies/2.1/amix_21_root.adf` | the retail 2.1 root floppy: the miniroot the installer runs from |
+| `floppies/2.1/amix_21_patch.adf` | the patch disk: a shell script and a compressed archive of patches that bring an installed 2.1 to 2.1p2a; it holds no kernel, and the 2.1c kernel is relinked on the machine when the patches are applied |
 
 The `usr/` tree is AMIX 2.1c at patch level 2a, as installed, with symbolic
 links kept as the installation made them (several point at absolute paths on
@@ -36,7 +39,7 @@ sha256sum -c --strict --quiet /path/to/amix/system/MANIFEST.sha256
 The manifest is regenerated the same way it was made:
 
 ```sh
-find kernels usr -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+find floppies kernels usr -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
 ```
 
 ## Why the hashes are here
