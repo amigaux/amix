@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-29 — module/Makefile: DLM defaults to ../amix/kernel/dlm (ab8eeda)
+
+The dlm kit moved into the amix monorepo; `?=` kept. BUILD.md §9 and the README show the new kit location. Built
+objects byte-identical to an explicit-DLM build (8/8 files).
+
 ## 2026-10-26 — z3660eth module 1.0.0-5: every board register access is armed (ZS-05) (c5f7a46)
 
 The Z3660 FPGA's address capture delivers back-to-back accesses at (previous AND this). In this driver that lost the INT6
