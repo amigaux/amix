@@ -8,6 +8,7 @@
  * headers declare none of the BSD socket calls, select, the syslog family or
  * gethostname (sys/socket.h, sys/select.h and syslog.h define only types and
  * constants), nor fchmod (unistd.h declares fchown, sys/stat.h no fchmod),
+ * nor getrlimit/setrlimit (sys/resource.h has struct rlimit, no prototypes),
  * so ordinary network and file code stops compiling.  The fix is a
  * prototype, never -Wno-error: an undeclared call that compiles is the
  * PORTING.md 3.1 trap.  Opt-in per recipe -- a source that declares one of
@@ -18,8 +19,9 @@
  * (gcc14 evaluation sec 2): socket/connect/... libsocket.so, gethostname
  * libnsl.so -- link -lsocket -lnsl in that order; select and the syslog
  * family are static members of usr/ccs/lib/libc.so, which the specs already
- * reach; fchmod is exported by libc.so.1 (SYS_fchmod 93; bzip2 1.0.8,
- * 2026-10-29).  MIT, this repository.
+ * reach; fchmod and getrlimit/setrlimit are exported by libc.so.1
+ * (SYS_fchmod 93; bzip2 1.0.8 and coreutils 5.2.1 sort, 2026-10-29).
+ * MIT, this repository.
  */
 #ifndef AMIX_PACKAGES_GCC14_DECLS_H
 #define AMIX_PACKAGES_GCC14_DECLS_H
@@ -33,6 +35,7 @@ extern "C" {
 
 struct sockaddr;
 struct timeval;
+struct rlimit;
 
 int socket(int, int, int);
 int connect(int, const struct sockaddr *, int);
@@ -59,6 +62,9 @@ int setlogmask(int);
 int gethostname(char *, int);
 
 int fchmod(int, mode_t);
+
+int getrlimit(int, struct rlimit *);
+int setrlimit(int, const struct rlimit *);
 
 #ifdef __cplusplus
 }
