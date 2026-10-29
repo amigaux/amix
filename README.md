@@ -78,7 +78,7 @@ fast clean boot.
 - `src/z3660ethuser.h` — user‑facing ioctls + status struct (no kernel types).
 - `src/Makefile` — installed as `/usr/sys/amiga/driver/z3660eth/Makefile`.
 - `module/` — the loadable-module form (`-DZ3660ETH_MODULE`) built with
-  amix-dlm's ABI kit: `Makefile` (`make -C module`, one module per kernel
+  the dlm ABI kit (amix `kernel/dlm`): `Makefile` (`make -C module`, one module per kernel
   line) and `Master` (its `.moddata` keys, one for both lines); BUILD.md §9,
   NOTES.md
   "Module form".

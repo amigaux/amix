@@ -182,17 +182,17 @@ contract C3-6; the static build above does not change. The module is built with
 amix-dlm's **ABI kit** (S3-10), one kit per kernel line, and nothing else: the kit's
 headers (its own `sys/moddefs.h` and `sys/amixddi.h`, the stock headers, on k46 the
 port's 4 KiB `immu.h`/`param.h`), its `mk/module.mk`, `mkmod`, `modfix` and
-`modcheck.py`. Build the kits once in the amix-dlm checkout, then the module here:
+`modcheck.py`. Build the kits once in amix's `kernel/dlm`, then the module here:
 ```
 . ../gcc-cross-amix/build/env.sh        # m68k-cbm-sysv4-* on PATH
-make -C ../amix-dlm kit                 # ../amix-dlm/build/kit/{k30,k46}
+make -C ../amix/kernel/dlm kit          # ../amix/kernel/dlm/build/kit/{k30,k46}
 make -C module                          # build/k30/mod.d/z3660eth, build/k46/mod.d/z3660eth
 make -C module k46                      # one line
 make -C module static                   # the static object per line, and its sha256
 make -C module test                     # host test of the _load parameter parser
 make -C module zs05                     # both lines, both forms, then the ZS-05 object gate
 ```
-`DLM=<amix-dlm checkout>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. The kit's
+`DLM=<kernel/dlm directory>` or `KIT_k30=`/`KIT_k46=<kit dir>` point elsewhere. The kit's
 fragment builds each line under `build/<line>/` (objects in `obj/`, the module in
 `mod.d/`), so the two lines never share an object. One `module/Master` serves both:
 no `$cpu` (the kit gives 68030 on k30, 68040 on k46), `kabi` and `cc` from the kit,
