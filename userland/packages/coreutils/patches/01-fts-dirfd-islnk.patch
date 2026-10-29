@@ -1,0 +1,18 @@
+fts.c calls dirfd() and S_ISLNK() but includes neither lib/dirfd.h (whose
+replacement dirfd.c configure already builds: AMIX has no dirfd) nor the
+S_ISLNK fallback system.h/file-type.h carry; AMIX <sys/stat.h> defines
+S_IFLNK but no S_ISLNK.  GCC 14 rejects both implicit declarations.
+
+--- a/lib/fts.c	2003-12-20 20:05:23.000000000 +0200
++++ b/lib/fts.c	2026-10-29 22:18:38.877669672 +0200
+@@ -54,6 +54,10 @@
+ #if HAVE_INTTYPES_H
+ # include <inttypes.h>
+ #endif
++#include "dirfd.h"
++#ifndef S_ISLNK
++# define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
++#endif
+ 
+ #if defined _LIBC
+ # include <dirent.h>

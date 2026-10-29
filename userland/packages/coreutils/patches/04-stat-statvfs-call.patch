@@ -1,0 +1,14 @@
+stat.c picks struct statvfs when it has f_basetype (SVR4) but still calls
+statfs(), which AMIX libc does not have; on such systems the call is
+statvfs.  Map it where the struct is chosen.
+
+--- a/src/stat.c	2004-02-05 15:46:12.000000000 +0200
++++ b/src/stat.c	2026-10-29 22:21:59.512599820 +0200
+@@ -59,6 +59,7 @@
+ 
+ #if HAVE_STRUCT_STATVFS_F_BASETYPE
+ # define STRUCT_STATVFS struct statvfs
++# define statfs statvfs
+ # define HAVE_STRUCT_STATXFS_F_TYPE HAVE_STRUCT_STATVFS
+ # if HAVE_STRUCT_STATVFS_F_NAMEMAX
+ #  define SB_F_NAMEMAX(S) ((uintmax_t) ((S)->f_namemax))

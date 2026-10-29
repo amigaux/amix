@@ -1,0 +1,205 @@
+#
+# prototype -- GNU coreutils 5.2.1 under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>); pkginfo is
+# generated from package.sh.  The stock SVR4 tools in /usr/bin, /sbin and
+# /usr/ucb (owned by core and friends) are NOT touched; ours win by PATH for
+# interactive users, and scripts naming /usr/bin/... keep stock behaviour.
+# `install' is GNU ginstall under its usual name.  Not shipped: uptime (the
+# nlist/kmem load average, PORTING.md 3.3), su (setuid root), hostid, the
+# info manual (no info reader).  No install scripts (D9).  Every basename
+# <= 14 bytes (pkgroll's s5 gate checks the directory listing).
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the programs ------------------------------------------------------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/[ 0755 root bin
+f none /opt/amix/bin/basename 0755 root bin
+f none /opt/amix/bin/cat 0755 root bin
+f none /opt/amix/bin/chgrp 0755 root bin
+f none /opt/amix/bin/chmod 0755 root bin
+f none /opt/amix/bin/chown 0755 root bin
+f none /opt/amix/bin/chroot 0755 root bin
+f none /opt/amix/bin/cksum 0755 root bin
+f none /opt/amix/bin/comm 0755 root bin
+f none /opt/amix/bin/cp 0755 root bin
+f none /opt/amix/bin/csplit 0755 root bin
+f none /opt/amix/bin/cut 0755 root bin
+f none /opt/amix/bin/date 0755 root bin
+f none /opt/amix/bin/dd 0755 root bin
+f none /opt/amix/bin/df 0755 root bin
+f none /opt/amix/bin/dir 0755 root bin
+f none /opt/amix/bin/dircolors 0755 root bin
+f none /opt/amix/bin/dirname 0755 root bin
+f none /opt/amix/bin/du 0755 root bin
+f none /opt/amix/bin/echo 0755 root bin
+f none /opt/amix/bin/env 0755 root bin
+f none /opt/amix/bin/expand 0755 root bin
+f none /opt/amix/bin/expr 0755 root bin
+f none /opt/amix/bin/factor 0755 root bin
+f none /opt/amix/bin/false 0755 root bin
+f none /opt/amix/bin/fmt 0755 root bin
+f none /opt/amix/bin/fold 0755 root bin
+f none /opt/amix/bin/groups 0755 root bin
+f none /opt/amix/bin/head 0755 root bin
+f none /opt/amix/bin/hostname 0755 root bin
+f none /opt/amix/bin/id 0755 root bin
+f none /opt/amix/bin/install 0755 root bin
+f none /opt/amix/bin/join 0755 root bin
+f none /opt/amix/bin/kill 0755 root bin
+f none /opt/amix/bin/link 0755 root bin
+f none /opt/amix/bin/ln 0755 root bin
+f none /opt/amix/bin/logname 0755 root bin
+f none /opt/amix/bin/ls 0755 root bin
+f none /opt/amix/bin/md5sum 0755 root bin
+f none /opt/amix/bin/mkdir 0755 root bin
+f none /opt/amix/bin/mkfifo 0755 root bin
+f none /opt/amix/bin/mknod 0755 root bin
+f none /opt/amix/bin/mv 0755 root bin
+f none /opt/amix/bin/nice 0755 root bin
+f none /opt/amix/bin/nl 0755 root bin
+f none /opt/amix/bin/nohup 0755 root bin
+f none /opt/amix/bin/od 0755 root bin
+f none /opt/amix/bin/paste 0755 root bin
+f none /opt/amix/bin/pathchk 0755 root bin
+f none /opt/amix/bin/pinky 0755 root bin
+f none /opt/amix/bin/pr 0755 root bin
+f none /opt/amix/bin/printenv 0755 root bin
+f none /opt/amix/bin/printf 0755 root bin
+f none /opt/amix/bin/ptx 0755 root bin
+f none /opt/amix/bin/pwd 0755 root bin
+f none /opt/amix/bin/readlink 0755 root bin
+f none /opt/amix/bin/rm 0755 root bin
+f none /opt/amix/bin/rmdir 0755 root bin
+f none /opt/amix/bin/seq 0755 root bin
+f none /opt/amix/bin/sha1sum 0755 root bin
+f none /opt/amix/bin/shred 0755 root bin
+f none /opt/amix/bin/sleep 0755 root bin
+f none /opt/amix/bin/sort 0755 root bin
+f none /opt/amix/bin/split 0755 root bin
+f none /opt/amix/bin/stat 0755 root bin
+f none /opt/amix/bin/stty 0755 root bin
+f none /opt/amix/bin/sum 0755 root bin
+f none /opt/amix/bin/sync 0755 root bin
+f none /opt/amix/bin/tac 0755 root bin
+f none /opt/amix/bin/tail 0755 root bin
+f none /opt/amix/bin/tee 0755 root bin
+f none /opt/amix/bin/test 0755 root bin
+f none /opt/amix/bin/touch 0755 root bin
+f none /opt/amix/bin/tr 0755 root bin
+f none /opt/amix/bin/true 0755 root bin
+f none /opt/amix/bin/tsort 0755 root bin
+f none /opt/amix/bin/tty 0755 root bin
+f none /opt/amix/bin/uname 0755 root bin
+f none /opt/amix/bin/unexpand 0755 root bin
+f none /opt/amix/bin/uniq 0755 root bin
+f none /opt/amix/bin/unlink 0755 root bin
+f none /opt/amix/bin/users 0755 root bin
+f none /opt/amix/bin/vdir 0755 root bin
+f none /opt/amix/bin/wc 0755 root bin
+f none /opt/amix/bin/who 0755 root bin
+f none /opt/amix/bin/whoami 0755 root bin
+f none /opt/amix/bin/yes 0755 root bin
+#
+# --- manual pages --------------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/basename.1 0644 root bin
+f none /opt/amix/man/man1/cat.1 0644 root bin
+f none /opt/amix/man/man1/chgrp.1 0644 root bin
+f none /opt/amix/man/man1/chmod.1 0644 root bin
+f none /opt/amix/man/man1/chown.1 0644 root bin
+f none /opt/amix/man/man1/chroot.1 0644 root bin
+f none /opt/amix/man/man1/cksum.1 0644 root bin
+f none /opt/amix/man/man1/comm.1 0644 root bin
+f none /opt/amix/man/man1/cp.1 0644 root bin
+f none /opt/amix/man/man1/csplit.1 0644 root bin
+f none /opt/amix/man/man1/cut.1 0644 root bin
+f none /opt/amix/man/man1/date.1 0644 root bin
+f none /opt/amix/man/man1/dd.1 0644 root bin
+f none /opt/amix/man/man1/df.1 0644 root bin
+f none /opt/amix/man/man1/dir.1 0644 root bin
+f none /opt/amix/man/man1/dircolors.1 0644 root bin
+f none /opt/amix/man/man1/dirname.1 0644 root bin
+f none /opt/amix/man/man1/du.1 0644 root bin
+f none /opt/amix/man/man1/echo.1 0644 root bin
+f none /opt/amix/man/man1/env.1 0644 root bin
+f none /opt/amix/man/man1/expand.1 0644 root bin
+f none /opt/amix/man/man1/expr.1 0644 root bin
+f none /opt/amix/man/man1/factor.1 0644 root bin
+f none /opt/amix/man/man1/false.1 0644 root bin
+f none /opt/amix/man/man1/fmt.1 0644 root bin
+f none /opt/amix/man/man1/fold.1 0644 root bin
+f none /opt/amix/man/man1/groups.1 0644 root bin
+f none /opt/amix/man/man1/head.1 0644 root bin
+f none /opt/amix/man/man1/hostname.1 0644 root bin
+f none /opt/amix/man/man1/id.1 0644 root bin
+f none /opt/amix/man/man1/install.1 0644 root bin
+f none /opt/amix/man/man1/join.1 0644 root bin
+f none /opt/amix/man/man1/kill.1 0644 root bin
+f none /opt/amix/man/man1/link.1 0644 root bin
+f none /opt/amix/man/man1/ln.1 0644 root bin
+f none /opt/amix/man/man1/logname.1 0644 root bin
+f none /opt/amix/man/man1/ls.1 0644 root bin
+f none /opt/amix/man/man1/md5sum.1 0644 root bin
+f none /opt/amix/man/man1/mkdir.1 0644 root bin
+f none /opt/amix/man/man1/mkfifo.1 0644 root bin
+f none /opt/amix/man/man1/mknod.1 0644 root bin
+f none /opt/amix/man/man1/mv.1 0644 root bin
+f none /opt/amix/man/man1/nice.1 0644 root bin
+f none /opt/amix/man/man1/nl.1 0644 root bin
+f none /opt/amix/man/man1/nohup.1 0644 root bin
+f none /opt/amix/man/man1/od.1 0644 root bin
+f none /opt/amix/man/man1/paste.1 0644 root bin
+f none /opt/amix/man/man1/pathchk.1 0644 root bin
+f none /opt/amix/man/man1/pinky.1 0644 root bin
+f none /opt/amix/man/man1/pr.1 0644 root bin
+f none /opt/amix/man/man1/printenv.1 0644 root bin
+f none /opt/amix/man/man1/printf.1 0644 root bin
+f none /opt/amix/man/man1/ptx.1 0644 root bin
+f none /opt/amix/man/man1/pwd.1 0644 root bin
+f none /opt/amix/man/man1/readlink.1 0644 root bin
+f none /opt/amix/man/man1/rm.1 0644 root bin
+f none /opt/amix/man/man1/rmdir.1 0644 root bin
+f none /opt/amix/man/man1/seq.1 0644 root bin
+f none /opt/amix/man/man1/sha1sum.1 0644 root bin
+f none /opt/amix/man/man1/shred.1 0644 root bin
+f none /opt/amix/man/man1/sleep.1 0644 root bin
+f none /opt/amix/man/man1/sort.1 0644 root bin
+f none /opt/amix/man/man1/split.1 0644 root bin
+f none /opt/amix/man/man1/stat.1 0644 root bin
+f none /opt/amix/man/man1/stty.1 0644 root bin
+f none /opt/amix/man/man1/sum.1 0644 root bin
+f none /opt/amix/man/man1/sync.1 0644 root bin
+f none /opt/amix/man/man1/tac.1 0644 root bin
+f none /opt/amix/man/man1/tail.1 0644 root bin
+f none /opt/amix/man/man1/tee.1 0644 root bin
+f none /opt/amix/man/man1/test.1 0644 root bin
+f none /opt/amix/man/man1/touch.1 0644 root bin
+f none /opt/amix/man/man1/tr.1 0644 root bin
+f none /opt/amix/man/man1/true.1 0644 root bin
+f none /opt/amix/man/man1/tsort.1 0644 root bin
+f none /opt/amix/man/man1/tty.1 0644 root bin
+f none /opt/amix/man/man1/uname.1 0644 root bin
+f none /opt/amix/man/man1/unexpand.1 0644 root bin
+f none /opt/amix/man/man1/uniq.1 0644 root bin
+f none /opt/amix/man/man1/unlink.1 0644 root bin
+f none /opt/amix/man/man1/users.1 0644 root bin
+f none /opt/amix/man/man1/vdir.1 0644 root bin
+f none /opt/amix/man/man1/wc.1 0644 root bin
+f none /opt/amix/man/man1/who.1 0644 root bin
+f none /opt/amix/man/man1/whoami.1 0644 root bin
+f none /opt/amix/man/man1/yes.1 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------------
+# GPL-2.0-or-later: COPYING travels with the binaries.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/coreutils 0755 root sys
+f none /opt/amix/doc/coreutils/COPYING 0644 root bin
+f none /opt/amix/doc/coreutils/NEWS 0644 root bin
+f none /opt/amix/doc/coreutils/README 0644 root bin
+f none /opt/amix/doc/coreutils/THANKS 0644 root bin

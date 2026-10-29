@@ -1,0 +1,25 @@
+date -u did putenv("TZ=UTC0") with a string LITERAL.  putenv keeps the
+pointer, and AMIX libc.so.1's TZ parser (static getzname, reached from
+tzset/localtime) temporarily stores a NUL into the TZ string in place.
+GCC 14 puts literals in read-only .rodata, so every date -u died with
+SIGSEGV writing there (measured on the box: PC in getzname, clrb %a2@,
+fault address = the "0" of the literal).  Use a writable static array.
+
+--- a/src/date.c	2004-02-05 11:36:07.000000000 +0200
++++ b/src/date.c	2026-10-29 23:01:26.035008617 +0200
+@@ -343,8 +343,13 @@
+ 	/* POSIX says that `date -u' is equivalent to setting the TZ
+ 	   environment variable, so this option should do nothing other
+ 	   than setting TZ.  */
+-	if (putenv ("TZ=UTC0") != 0)
+-	  xalloc_die ();
++	{
++	  /* Writable: AMIX libc's TZ parser (getzname) stores a NUL into
++	     the TZ string in place, and putenv keeps the pointer.  */
++	  static char tz_utc0[] = "TZ=UTC0";
++	  if (putenv (tz_utc0) != 0)
++	    xalloc_die ();
++	}
+ 	TZSET;
+ 	break;
+       case_GETOPT_HELP_CHAR;

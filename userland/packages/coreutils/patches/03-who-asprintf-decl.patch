@@ -1,0 +1,13 @@
+who.c calls asprintf (lib/asprintf.c, built because AMIX libc has none)
+without including lib/vasprintf.h, which declares it.
+
+--- a/src/who.c	2004-01-22 00:27:02.000000000 +0200
++++ b/src/who.c	2026-10-29 22:21:59.512572614 +0200
+@@ -32,6 +32,7 @@
+ #include "system.h"
+ 
+ #include "readutmp.h"
++#include "vasprintf.h"
+ #include "error.h"
+ 
+ /* The official name of this program (e.g., no `g' prefix).  */
