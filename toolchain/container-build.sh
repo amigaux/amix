@@ -4,7 +4,8 @@
 # MIT licence, see LICENSE at the top of the repository.
 #
 # Usage: toolchain/container-build.sh AMIX_SYSTEM [TAG]
-#   AMIX_SYSTEM  a checkout of amigaux/amix-system (its AMIX root under usr/)
+#   AMIX_SYSTEM  a checkout of amigaux/amix-system (its AMIX root under usr/),
+#                checked against system/MANIFEST.sha256 and system/SYMLINKS
 #   TAG          image tag (default amix-toolchain:<short gcc14 pin>)
 # Environment:
 #   CONTAINER    docker (default) or podman
@@ -21,6 +22,16 @@ here=$(cd "$(dirname "$0")" && pwd)
 sys=${1:?usage: container-build.sh AMIX_SYSTEM [TAG]}
 [ -d "$sys/usr/include" ] || { echo "container-build.sh: $sys has no usr/include" >&2; exit 2; }
 tool=${CONTAINER:-docker}
+
+# The system input is checked against system/MANIFEST.sha256 and
+# system/SYMLINKS before anything is built.
+top=$(dirname "$here")
+(cd "$sys" && sha256sum -c --strict --quiet "$top/system/MANIFEST.sha256") || {
+	echo "container-build.sh: $sys does not match system/MANIFEST.sha256" >&2; exit 2; }
+links=$(cd "$sys" && find usr -type l | LC_ALL=C sort | while read -r l; do
+	printf '%s -> %s\n' "$l" "$(readlink "$l")"; done)
+[ "$links" = "$(cat "$top/system/SYMLINKS")" ] || {
+	echo "container-build.sh: $sys does not match system/SYMLINKS" >&2; exit 2; }
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT INT TERM

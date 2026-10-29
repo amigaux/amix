@@ -150,8 +150,13 @@ def build(repo):
         "images/disk.adf": b"\0DOS" + b"\0" * 60,
         "images/big.bin": b"\0" * (3 * 1024 * 1024)}, "Add images")
     payload = b"system file payload\n"
+    # Added before the manifest lists it; the manifest at the tip still does.
+    c["early_sys"] = repo.commit(OURS, {"vendor/early.dat": payload},
+                                 "Add a payload before the manifest")
     c["manifest"] = repo.commit(OURS, {"system/MANIFEST.sha256": j(
-        hashlib.sha256(payload).hexdigest(), "  sys/payload.dat\n")}, "Add the manifest")
+        hashlib.sha256(payload).hexdigest(), "  sys/payload.dat\n",
+        hashlib.sha256(b"").hexdigest(), "  sys/empty\n")}, "Add the manifest")
+    c["empty"] = repo.commit(OURS, {"notes/.keep": ""}, "Add an empty file")
     c["sysfile"] = repo.commit(OURS, {"vendor/payload.dat": payload}, "Add a payload")
     c["coauthor"] = repo.commit(OURS, {"tidy/one.txt": "a\n"}, j(
         "Tidy one\n\n", "Co-", "Authored-By: ", "Claude <", "noreply@", "anthropic.com>\n"))
@@ -298,6 +303,7 @@ def main():
             ("images", 4, "images/disk.adf"),
             ("images", 4, "images/big.bin"),
             ("sysfile", 4, "vendor/payload.dat"),
+            ("early_sys", 4, "vendor/early.dat"),
             ("coauthor", 5, "message"),
             ("generated", 5, "message"),
             ("robot", 5, "message"),
@@ -305,7 +311,7 @@ def main():
         tip_plants = [(tip, 2, "CLAUDE.md"), (tip, 2, "sub/.claude/settings.json")]
         controls = ["README.md", "data/blob.bin", "data/fw.bin", "notes/dns.txt",
                     "AGENTS.md", "docs/network.txt", "media/profiles/root.shadow",
-                    "system/MANIFEST.sha256"]
+                    "system/MANIFEST.sha256", "notes/.keep"]
 
         # --all without local extras.
         rc, hits, out = repo.check(["--all", "master"])
@@ -317,7 +323,8 @@ def main():
             t.ok(has(hits, sha, cls, path), "station file at tip: %s" % path, out)
         for path in controls:
             t.ok(not any(h[2] == path for h in hits), "control passes: %s" % path, out)
-        for key in ("readme", "binary", "public", "contrib", "example", "shadow"):
+        for key in ("readme", "binary", "public", "contrib", "example", "shadow",
+                    "empty"):
             t.ok(not any(c[key].startswith(h[0]) for h in hits),
                  "control commit clean: %s" % key, out)
         expected = [(c[k], cls, p) for k, cls, p in plants] + tip_plants
@@ -368,7 +375,7 @@ def main():
         t.ok(rc == 0 and not hits, "--tree on a clean commit exits 0", out)
         rc, hits, out = repo.check(["--tree", "master"])
         t.ok(rc == 1 and has(hits, tip, 2, "CLAUDE.md") and has(hits, tip, 1, "cfg/hosts.txt")
-             and has(hits, tip, 4, "images/disk.adf")
+             and has(hits, tip, 4, "images/disk.adf") and has(hits, tip, 4, "vendor/early.dat")
              and not any(h[1] == 5 or h[2] == "AGENTS.md" for h in hits),
              "--tree on master: files and station files, no messages", out)
 
