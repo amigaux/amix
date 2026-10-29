@@ -17,7 +17,7 @@
   `20-module-format-and-abi.md` §4.1 (the core tier); D-3 §4; measurements
   U12, M-FS1, M-FL1
 - **Written by:**
-  - amix-dlm: `vfs_register` and the grown table in the core (S4-41),
+  - kernel/dlm: `vfs_register` and the grown table in the core (S4-41),
     the carve tool (S4-40);
   - amix-040-060-port and amix-kerntools: the kernel's side of the table
     (§2) and the kernels without ufs/s5 (S4-43);

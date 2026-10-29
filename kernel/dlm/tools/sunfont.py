@@ -16,7 +16,7 @@
 #
 # The stock source is Commodore's and is read, not copied; the object goes
 # into the kit (distribution permission of 2026-09-23), never into
-# amix-dlm's history.
+# amix's history.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 import os, re, struct, subprocess, sys, tempfile

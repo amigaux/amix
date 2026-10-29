@@ -1,5 +1,5 @@
 /*
- * u4big.c -- U4 (amix-dlm docs/spec/90-measurements.md): large kmem
+ * u4big.c -- U4 (kernel/dlm docs/spec/90-measurements.md): large kmem
  * requests, which the kernel routes to sptalloc, return or fail, never
  * hang.  Its _load asks kmem_zalloc for 64 KiB up to 2 MiB (the largest
  * module image, C3-1), first with KM_NOSLEEP and then with KM_SLEEP, in

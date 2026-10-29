@@ -55,7 +55,7 @@ the gap is an open question (OQ-80.1), not a silent skip.
 
 | Code | Repository | How it reaches users |
 |---|---|---|
-| Loader, module core (patch queue), `kbootset`, ABI kit, this specification | amix-dlm (this repository, public on release) | loader and kernel-space packages |
+| Loader, module core (patch queue), `kbootset`, ABI kit, this specification | amix, `kernel/dlm` (this directory) | loader and kernel-space packages |
 | Module recipes (one per driver) | the driver repositories (z3660scsi, a4091, gayle-ide, z3660net, z3660rtg, cdfs) against the ABI kit | module packages |
 | Kernel-side hooks (the `marc_root` call, the arena, the loader record reader, `kinfo`, four-card sd) and the 040/060 base rebuilt without ufs/s5 | built on our line; offered to amix-040-060-port as merge requests, Antti reviews | the kernel packages |
 | apkg 0.3 | amix-packagemanager | the APKG package |

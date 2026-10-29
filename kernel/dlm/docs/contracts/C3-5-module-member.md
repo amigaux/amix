@@ -25,7 +25,7 @@
   (2026-10-28, amix-paula): paula's short name (§1.1), and a driver's own
   interface header in its module package (§1.2).
   Every consumer
-  is in amix-dlm: `kbootset` writes the records, boot2 and the module core
+  is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
   `10-boot-loader.md` §5.1; `30-module-core.md` §2 patches 16 and 17, §3

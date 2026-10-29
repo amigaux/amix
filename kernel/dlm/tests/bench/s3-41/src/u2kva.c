@@ -1,5 +1,5 @@
 /*
- * u2kva.c -- U2 (amix-dlm docs/spec/90-measurements.md): how much kernel
+ * u2kva.c -- U2 (kernel/dlm docs/spec/90-measurements.md): how much kernel
  * memory the module core could take for copied modules.  Its _load takes
  * kmem_zalloc chunks (the core's own allocator for module images) with
  * KM_NOSLEEP until one fails or the table is full, prints the count, the

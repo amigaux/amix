@@ -1167,7 +1167,7 @@ may be built and tested but not shipped there.
   kit of the line under test and make its stand-in package:
 
 ```
-make -C tests/bench/s4-71 KIT=<amix-dlm>/build/kit/<line>
+make -C tests/bench/s4-71 KIT=<amix>/kernel/dlm/build/kit/<line>
 KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-71/build/<line>/mod.d/rprobe <line> <outdir>
 ```
 
@@ -1283,7 +1283,7 @@ returns `ENXIO`, so it is never linked. Build it and its stand-in package
 as S4-71's probe:
 
 ```
-make -C tests/bench/s4-exit KIT=<amix-dlm>/build/kit/<line>
+make -C tests/bench/s4-exit KIT=<amix>/kernel/dlm/build/kit/<line>
 KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-exit/build/<line>/mod.d/sdlate <line> <outdir>
 ```
 

@@ -1,4 +1,4 @@
-# amix-dlm — loadable kernel modules for Amix
+# kernel/dlm — loadable kernel modules for Amix
 
 Amix (Amiga UNIX) is Commodore's port of AT&T System V Release 4 to the
 68030-based Amiga 3000UX, released in 1990–1992. The community distribution
@@ -8,8 +8,9 @@ disk controller, network card, graphics board and filesystem is linked into
 one kernel image, so every new driver means a new kernel and a new install
 medium.
 
-This repository is the home of loadable kernel modules for Amix release 1.1,
-on both CPU lines and on every install medium. It holds five things:
+This directory, `kernel/dlm` in the [amix](https://github.com/amigaux/amix)
+repository, is the home of loadable kernel modules for Amix release 1.1, on
+both CPU lines and on every install medium. It holds five things:
 
 | Part | What it is | Status |
 |---|---|---|
@@ -20,6 +21,11 @@ on both CPU lines and on every install medium. It holds five things:
 | **Specification** | The design every part above is built against. | `docs/spec/` — start at `00-overview.md` |
 
 No code exists yet; the specification comes first.
+
+Until 2026-10-29 this was the standalone repository amix-dlm; its commits
+keep their hashes in amix. Where a contract, decision or commit citation
+says "amix-dlm" ("amix-dlm C3-6", "amix-dlm 1230e8b"), it means this
+directory's project.
 
 ## Toolchain
 
