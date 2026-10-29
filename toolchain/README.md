@@ -12,7 +12,14 @@ repositories; nothing here is vendored.
 | `gcc14-cross-amix.pin` | GCC 14.2.0 and binutils 2.43.1 for `m68k-elf`, with AMIX's return convention (pointers in `%a0` and `%d0`, structs in memory) | userland: C and C++ programs and libraries |
 
 Each pin is one line, `<repository URL> <full commit hash>`, the same format
-as `kernel/port/port.pin`. Kernel-space code is never built with GCC 14: it
+as `kernel/port/port.pin`.
+
+gcc14-cross-amix is pinned in the organisation's fork, on the branch
+`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus two
+commits on their way to it, one that builds the runtime for the whole
+68020–68060 range so it also runs on a 68881/68882 (and checks that it does),
+and one that refuses a sysroot without `stdint.h`. Once upstream has them, the
+pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
 Both toolchains need an AMIX sysroot (the system headers, libraries and

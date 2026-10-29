@@ -39,7 +39,7 @@ RUN apt-get update \
 # gcc-cross-amix: GCC 2.7.2.3 and binutils 2.8.1 for m68k-cbm-sysv4, kernel
 # space. Installed in /opt/amix-cross; its build/env.sh is what GCA names.
 FROM base AS gca
-ARG SOURCE_DATE_EPOCH=1793096666
+ARG SOURCE_DATE_EPOCH=1793303717
 ENV SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH
 COPY --from=amix-system /usr /opt/amix/amix-system/usr
 COPY --from=gca-src / /opt/amix/gcc-cross-amix
@@ -87,6 +87,17 @@ RUN set -e; G=/opt/amix/gcc14-cross-amix; \
       | sha256sum -c -
 RUN toolchain/build-cross.sh \
  && rm -rf /opt/amix/g14-work
+# AMIX's return convention, asked of the installed compiler: a pointer comes
+# back in %a0 and %d0, a struct through the address the caller passes in %a0.
+RUN set -e; cc=build/prefix/bin/m68k-elf-gcc; \
+    printf '%s\n' 'char *p(char *s) { return s + 1; }' \
+      'struct q { int a, b; };' \
+      'struct q r(int x) { struct q v = { x, x }; return v; }' \
+      | "$cc" -O2 -S -o abi.s -x c -; \
+    sed -n '/^p:/,/rts/p' abi.s | grep -q '%a0'; \
+    sed -n '/^p:/,/rts/p' abi.s | grep -q '%d0'; \
+    sed -n '/^r:/,/rts/p' abi.s | grep -q '(%a0)'; \
+    rm abi.s
 
 # ---------------------------------------------------------------------------
 # The members of the archives built here (not the sysroots' AMIX archives,
