@@ -11,5 +11,5 @@ the exact commit the build uses.
 A pin file is one line, `<git URL> <full commit hash>`; the build fetches that
 exact commit.
 
-`port.pin` is added once the fork's address in the amigaux organisation is
-final. The port can move in later with its history.
+`port.pin` names the fork in the amigaux organisation; the pinned commit is on
+its `k46-module` branch. The port can move in later with its history.
