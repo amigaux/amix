@@ -27,11 +27,16 @@ gcc14-pin.sh)
 esac
 
 # path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.
+# Re-pinned 2026-10-29 to the compiler rebuilt from source in the new
+# workspace, still from cf461e3: its generated code is byte-identical to the
+# old compiler's (105/105 objects; evidence in tmp/2026-10-29-gcc14-rebuild/).
+# cc1, libgcc.a and libamixc99.a differ only by embedded paths, DWARF and ar
+# timestamps; specs is unchanged.
 AMIX_GCC14_COMMIT=cf461e38993100533fa6efe509ad0cbd2a735eea
 AMIX_GCC14_PINS="\
-libexec/gcc/m68k-elf/14.2.0/cc1 d4933e78be410d80a9e216af5ca52ee7db4e9810d36a324513c7a98f988aa57a
-lib/gcc/m68k-elf/14.2.0/libgcc.a 5d81450797fbf1ada217e86a5b643d159ef79c3396274a67e016bb5c5388867f
-m68k-elf/lib/libamixc99.a c73ccc172ce9dd23d818c3f0f71ae5724a3e946fa9d826d8e8e98b9266bf2ce3
+libexec/gcc/m68k-elf/14.2.0/cc1 9635f67e59103c2867638910849e410d19bfd9c10a1b52093f9e58e515496bff
+lib/gcc/m68k-elf/14.2.0/libgcc.a e7efa6e655db9700fe73de6bdc360e04da747425ba51fcc2a580d64df6725f69
+m68k-elf/lib/libamixc99.a 0dd88b3ad96d331b0f337f5da79f367dce55ab381b12f465db61b613f4283028
 lib/gcc/m68k-elf/14.2.0/specs 93f9574f191ca0074b8af25cbfc910bc5f608392586f2246d6af4ca9a2281f13"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
