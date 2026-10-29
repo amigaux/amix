@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-29 — README brought to the real state; the stage-5 exit ledger marks the rows done so far (93a1404, a816696, 2fee9ce)
+
+README: the parts are built, the real layout, the toolchain pin's home on jusii/gcc-cross-amix. stage-5-exit.md: each done
+row cites its run id or commit and date; partly done rows keep their pending halves. No kit bytes change.
+
 ## 2026-10-29 — The kit builds under LC_ALL=C; toolchain.pin names jusii/gcc-cross-amix (b4b73ed, 2aeb001)
 
 exports is in the same (bytewise) order on every host; no other kit file changes beyond the revision lines; monsw and
