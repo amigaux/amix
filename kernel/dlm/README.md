@@ -14,13 +14,15 @@ both CPU lines and on every install medium. It holds five things:
 
 | Part | What it is | Status |
 |---|---|---|
-| **Boot loader** | Our own first- and second-stage loaders (`boot1`, `boot2`), written from scratch. The loader reads a *generation manifest*, loads the kernel and the modules the root disk needs as separate files, reads disks, floppies and 2048-byte CD-ROM blocks, and offers a boot menu with a rollback key and a safe mode. | specified (`docs/spec/10-boot-loader.md`) |
-| **Module core** | A patch queue on top of the MIT-licensed DLM ("dynamically loadable modules") core by kdedon, from the [ashnazag](https://github.com/kdedon/ashnazag) project. The upstream code keeps its author's copyright and MIT notice; our patches add pre-root loading, ABI identity, match keys, disk-controller and filesystem registration, interrupt attachment and a halt pass. | specified (`docs/spec/30-module-core.md`) |
-| **kbootset** | The composer. It builds a *generation* (kernel + root modules + manifest + module store) from installed packages, writes it to the boot slice behind fail-closed checks with read-back, keeps the previous generation and the pristine install generation, rolls back, and marks a generation good only after a full multi-user boot. | specified (`docs/spec/40-generations-and-composer.md`) |
-| **ABI kit** | The headers, the exported-symbol allowlist and the module tooling an outside developer needs to build a module for a given kernel line. | specified (`docs/spec/20-module-format-and-abi.md`) |
+| **Boot loader** | Our own first- and second-stage loaders (`boot1`, `boot2`), written from scratch. The loader reads a *generation manifest*, loads the kernel and the modules the root disk needs as separate files, reads disks, floppies and 2048-byte CD-ROM blocks, and offers a boot menu with a rollback key and a safe mode. | built; boots both lines in emulation and on metal (`loader/`; spec `docs/spec/10-boot-loader.md`) |
+| **Module core** | A patch queue on top of the MIT-licensed DLM ("dynamically loadable modules") core by kdedon, from the [ashnazag](https://github.com/kdedon/ashnazag) project. The upstream code keeps its author's copyright and MIT notice; our patches add pre-root loading, ABI identity, match keys, disk-controller and filesystem registration, interrupt attachment and a halt pass. | built; linked into the module kernels of both lines (`core/`; spec `docs/spec/30-module-core.md`) |
+| **kbootset** | The composer. It builds a *generation* (kernel + root modules + manifest + module store) from installed packages, writes it to the boot slice behind fail-closed checks with read-back, keeps the previous generation and the pristine install generation, rolls back, and marks a generation good only after a full multi-user boot. | built; ships as the kbootset package on both lines (`kbootset/`; spec `docs/spec/40-generations-and-composer.md`) |
+| **ABI kit** | The headers, the exported-symbol allowlist and the module tooling an outside developer needs to build a module for a given kernel line. | built for both lines with `make kit` (`abi/`; spec `docs/spec/20-module-format-and-abi.md`) |
 | **Specification** | The design every part above is built against. | `docs/spec/` — start at `00-overview.md` |
 
-No code exists yet; the specification comes first.
+The specification came first; every part above is now built and runs on
+both lines. Where the work stands is in `docs/plan/` (the stage plans and
+their exit ledgers) and `CHANGELOG.md`.
 
 Until 2026-10-29 this was the standalone repository amix-dlm; its commits
 keep their hashes in amix. Where a contract, decision or commit citation
@@ -33,7 +35,8 @@ Everything that runs in kernel space — the kernel, drivers, the loader, the
 module core and every module — is built with the period cross toolchain
 [gcc-cross-amix](https://github.com/isoriano1968/gcc-cross-amix): GCC 2.7.2.3
 targeting `m68k-cbm-sysv4`. Each kernel line pins one compiler, and the ABI
-kit records the pin. The modern GCC 14 cross compiler is used for userland
+kit records the pin. The pinned commit (`toolchain.pin`) is on
+[jusii/gcc-cross-amix](https://github.com/jusii/gcc-cross-amix). The modern GCC 14 cross compiler is used for userland
 only (including `kbootset` and the package tools) and never for kernel space.
 
 ## What is not here
@@ -62,15 +65,22 @@ history.
 ## Layout
 
 ```
+loader/        boot1, boot2 and the code they share (loader/common)
+core/          the patch series over the upstream DLM core, and its platform code
+kbootset/      the composer
+modtools/      the library behind modadmin
+abi/           the ABI kit's sources: headers, lists, registries, make fragment
+tools/         host tools (mkstore, carve.py, mkkit.sh, ...) and tools/measure/
+tests/         host, cross, core-harness, kit and Bench tests
 docs/spec/     the specification, one file per area (00-overview.md first)
+docs/contracts/  the interface contracts with the other projects
+docs/plan/     the stage plans and exit ledgers
 docs/measurements/  records of closed measurements
 docs/          other documentation (see docs/README.md)
-tools/measure/ host-side measurement scripts
 ```
 
-Planned, as the code arrives: `loader/` (boot1, boot2, filesystem readers),
-`core/` (the patch series over the upstream DLM core), `kbootset/`,
-`abi/` (the ABI kit).
+`make test` runs the host tests; `make kit` builds the ABI kit (see the
+`Makefile` for the toolchains each target needs).
 
 ## Licence
 
