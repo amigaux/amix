@@ -212,6 +212,12 @@ def find_tables(insns, labels, data, secs, pts):
     return tables, problems
 
 
+def dispatch_of(problem):
+    """The dispatch address a find_tables problem names, else None."""
+    m = re.match(r"^dispatch at 0x([0-9a-f]+):", problem)
+    return int(m.group(1), 16) if m else None
+
+
 def resync_listing(tool, path, secs, skip):
     out = ""
     for sa, _so, sz in secs:
@@ -244,6 +250,12 @@ def scan(tool, path):
         if not (new - skip):
             break
         skip |= new
+    # A problem an earlier round met at a dispatch that a later, re-synced
+    # round sized is stale: the first table's data had swallowed the next
+    # dispatch's bound check (diffutils 2.8.1 groups_letter_value, two
+    # back-to-back switches, 2026-10-29).
+    sized = {s - 4 for s, _e in skip}
+    problems = [p for p in problems if dispatch_of(p) not in sized]
     # sync: every label inside a code region (not a table) must start an insn
     starts = {i[0] for i in insns}
     desync = []

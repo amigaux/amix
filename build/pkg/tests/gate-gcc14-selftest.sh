@@ -202,6 +202,41 @@ for shape in fp mem; do
 done
 ok "scan060-g14.py sizes %fp-indexed and memory-bounded switch tables, still catches a real movep after each"
 
+# Two dispatches back to back (diffutils 2.8.1 groups_letter_value,
+# 2026-10-29), bytes and table words copied from the real binary: the linear
+# decode of the first table runs on as `oril #...' through the second
+# dispatch's `addib #-101,%d1', so its bound check is only seen after the
+# re-sync, and the first round's "unsized" verdict must not outlive it.
+b2b_probe() {	# b2b_probe <name> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l 4(%sp),%d1\n\tmove.b %d1,%d0\n"'
+		printf '%s\n' '	"\tadd.b #-69,%d0\n\tcmp.b #9,%d0\n\tbhi.w 9f\n"'
+		printf '%s\n' '	"\tand.l #255,%d0\n\tadd.l %d0,%d0\n"'
+		printf '%s\n' '	"\t.word 0x303b,0x0806\n\t.word 0x4efb,0x0002\n"'
+		printf '%s\n' '	"\t.word 0x0044,0x005a,0x0014,0x0014,0x0014,0x0014,0x0014,0x006e,0x0084,0x0098\n"'
+		printf '%s\n' '	"\t.word 0x0601,0xff9b,0x0c01,0x0009\n\tbhi.w 9f\n"'	# addib #-101,%d1; cmpib #9,%d1
+		printf '%s\n' '	"\tand.l #255,%d1\n\tadd.l %d1,%d1\n"'
+		printf '%s\n' '	"\t.word 0x303b,0x1806\n\t.word 0x4efb,0x0002\n"'
+		printf '%s\n' '	"\t.word 0x0018,0x002e,0x0076,0x0076,0x0076,0x0076,0x0076,0x0042,0x0058,0x006c\n"'
+		[ -z "$2" ] || printf '\t%s\n' "$2"
+		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n"'
+		printf '%s\n' '	"9:\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
+}
+b2b_probe sw-b2b ''
+b2b_probe sw-b2b-movep '"\t.word 0x074c,0x0056\n"'
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-b2b") || fail "scan060-g14.py on back-to-back switches: $out"
+echo "$out" | grep ' 2 switch tables sized' >/dev/null || fail "scan060-g14.py did not size both back-to-back tables: $out"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-b2b-movep"); then
+	fail "scan060-g14.py passed a real movep after back-to-back tables: $out"
+fi
+echo "$out" | grep 'HITS 1 .*2 switch tables sized' >/dev/null || fail "scan060-g14.py on the back-to-back movep probe: $out"
+ok "scan060-g14.py sizes back-to-back switch tables whose bound check the first decode swallowed, still catches a movep"
+
 # The toolchain identity (gcc14-env.sh): a prefix whose specs differ from the
 # pin by one byte is refused before anything builds; the return-value ABI
 # self-check passes the pinned compiler.  Where gcc14-cross-amix still keeps
