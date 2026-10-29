@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2026-10-29 — The prose names amix's directories (kernel/dlm, kernel/modules) instead of the old repositories amix-dlm and
+amix-modules (765e4b0)
+
+Citations of contracts, decisions and commits keep "amix-dlm"; the README says what it means. Kit docs change (README,
+guide, ddi, C3-6, NOTICE, registry/majors comment); headers, mk, tools and sysroot are unchanged. make test 719 checks.
+
 ## 2026-10-29 — The ABI kit records the amix commit it was built from (KIT_REV, -dirty for uncommitted changes under kernel/; MONSW_REV amix@<commit>); sys/monsw.h comes from kernel/modules/include/sys/; no sibling-checkout defaults: GCA, G14 and PORT must be given and a missing one stops the build (4cb14c9)
 
 Kits built before the move keep their amix-dlm KIT_REV, which resolves in amix too. boot1/boot2 unchanged (765915a7, da260a96); the kit matches the -61 record's except its revision lines.
