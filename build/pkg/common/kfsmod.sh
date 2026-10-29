@@ -6,7 +6,7 @@
 #
 #     . "$REPO/recipes/common/kfsmod.sh"
 #     amix_kfsmod_check <line> <fs> <object> <sha256> <size> <build> <kabi> <kit> <outdir> [<module kabi>]
-#     amix_kfsmod_rebuild <line> <fs> <carve dir> <object> <kit> <workdir>
+#     amix_kfsmod_rebuild <line> <fs> <carve dir> <object> <kit> <workdir> [<extra>]
 #     amix_kcore_strips <dlm-rev file> <pinned core commit> <strip commit>
 #     amix_kbuildid3 <unix (ET_REL)> <kabi> <log> <module>...
 #
@@ -20,7 +20,9 @@
 # imports, never below 1.2 (amix-dlm C3-2 v2), so a filesystem module built
 # with a kabi 1.3 kit says 1.2.
 # rebuild (S5-12 R2): the carve directory's sources (Makefile, Master,
-# <fs>_wrap.c; never its build/) copied into <workdir>, `make KIT=<kit>`,
+# <fs>_wrap.c; never its build/) copied into <workdir>, `make KIT=<kit>`
+# (with <extra>, also EXTRA=<extra>: the stock exp object where it is now,
+# when the carve's Makefile names it where the cut was made),
 # the result byte-equal to the pinned object, modcheck ok, and no warning
 # naming rootvp (the kit's allowlist binds it, amix-dlm 445c12e; COMMON
 # warnings naming the module's own symbols are expected).
@@ -87,13 +89,13 @@ amix_kfsmod_check() {
 }
 
 amix_kfsmod_rebuild() {
-	_kr_line=$1 _kr_fs=$2 _kr_carve=$3 _kr_obj=$4 _kr_kit=$5 _kr_w=$6
+	_kr_line=$1 _kr_fs=$2 _kr_carve=$3 _kr_obj=$4 _kr_kit=$5 _kr_w=$6 _kr_x=${7:-}
 	rm -rf "$_kr_w"; mkdir -p "$_kr_w"
 	for _kr_f in Makefile Master "${_kr_fs}_wrap.c"; do
 		cp "$_kr_carve/$_kr_f" "$_kr_w/" || { echo "[FAIL] no $_kr_carve/$_kr_f" >&2; exit 1; }
 	done
 	( . "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
-	  make -C "$_kr_w" KIT="$_kr_kit" ) > "$_kr_w.log" 2>&1 || {
+	  make -C "$_kr_w" KIT="$_kr_kit" ${_kr_x:+EXTRA="$_kr_x"} ) > "$_kr_w.log" 2>&1 || {
 		tail -15 "$_kr_w.log" >&2; echo "[FAIL] the $_kr_fs carve ($_kr_line) did not rebuild" >&2; exit 1; }
 	grep -q "^modcheck: $_kr_fs: ok (" "$_kr_w.log" || {
 		tail -5 "$_kr_w.log" >&2; echo "[FAIL] the rebuilt $_kr_fs: no modcheck ok" >&2; exit 1; }
@@ -102,7 +104,7 @@ amix_kfsmod_rebuild() {
 	cmp -s "$_kr_w/build/$_kr_line/mod.d/$_kr_fs" "$_kr_obj" || {
 		echo "[FAIL] the rebuilt $_kr_fs ($_kr_line) differs from the pinned object" >&2; exit 1; }
 	echo "  rebuilt $_kr_fs from $_kr_carve: byte-equal to the pin; $(grep "^modcheck: $_kr_fs: ok" "$_kr_w.log"); $(grep -c "^modcheck: $_kr_fs: warning: COMMON" "$_kr_w.log") COMMON warnings, none naming rootvp (log $_kr_w.log)"
-	unset _kr_line _kr_fs _kr_carve _kr_obj _kr_kit _kr_w _kr_f
+	unset _kr_line _kr_fs _kr_carve _kr_obj _kr_kit _kr_w _kr_f _kr_x
 }
 
 amix_kcore_strips() {

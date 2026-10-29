@@ -6,7 +6,8 @@
 # kernel object.  The period toolchain stays the default (TOOLCHAIN unset).
 #
 # What changes against the period toolchain, and why (evaluation:
-# Amix/tmp/2026-10-25-gcc14-eval/EVALUATION.md sec 5):
+# 2026-10-25-gcc14-eval/EVALUATION.md sec 5, historical: in the old
+# workspace's tmp/, not carried over):
 #
 #   compiler   m68k-elf-gcc 14.2.0 + binutils 2.43.1, configured
 #              --with-sysroot.  No fix_asm wrapper, no gcc.real, no
