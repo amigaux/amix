@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-29 — recipes find their inputs in the new workspace (b5f765b, a0ff4ef)
+
+k46 cuts are read from amix-040-060-port/build/cuts, k30 cuts from amix-kerntools/build/cuts (kernel-k46, -k46-m,
+-k30, -k30-u, -k30-m, kbuildid-selftest, kspace-roundtrip). z3660rtg's check-only monsw dependency points at the
+retired stand-in's new name (pins aa7aace6, bf902e40 unchanged). dlm-src.sh reads dlm and modules from the amix
+monorepo; pre-move commits archive to identical trees. 34/34 pins verified, round trip 253/0; no pinned bytes changed.
+
 ## 2026-10-28 — the kspace catalog of record is fff860dc (b1f564f4 + kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10, paula-k30/-k46 1.0.0-1), proven by the Bench in emulation (kerntools 82f7da2); b1f564f4 kept at superseded/repo-20261028-1602; round trip 253/253 with upgrades from all four superseded roots (7292a37) — not published
 
 ## 2026-10-28 — candidate kernel-space root fff860dc (b1f564f4 + the kabi 1.3 set), not promoted, not published: kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61 (/dev/paula support, bounded /dev/audio open), kbootset 1.1.0.261028-24 (box 0b9b8ec4, c 54 paula in kreg), loader-amix 1.0.261025-10 (boot1 765915a7, boot2 da260a96: DMA buffers by the partition's DosEnvec), paula-k30/-k46 1.0.0-1 added; modtools -7 kept; round trip 253/253 including upgrades from 64d37aaa, 915e09f3, 6f0c1701 and b1f564f4 (5972993)
