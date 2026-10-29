@@ -22,7 +22,7 @@
 #     against a memory operand, instead of reading them as code, and still
 #     reports a real movep after either;
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in;
-#   - the toolchain pin refuses a prefix that is not cf461e3's, and the
+#   - the toolchain pin refuses a prefix that is not the pinned one, and the
 #     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
 #     passes the pinned compiler and rejects the pre-fix one;
 #   - dlm-src.sh's check before amix-dlm's box builds (kbootset, modadmin)
@@ -285,9 +285,9 @@ amix_g14_abi_selfcheck "$AMIX_GCC14_CC" >/dev/null 2>&1 || fail "the ABI self-ch
 OLDCC="$AMIX_GCC14_ROOT/build/prefix-e316f1b/bin/m68k-elf-gcc"
 if [ -x "$OLDCC" ]; then
 	if amix_g14_abi_selfcheck "$OLDCC" >/dev/null 2>&1; then fail "the ABI self-check passed the e316f1b compiler"; fi
-	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes cf461e3, rejects e316f1b"
+	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes the pinned prefix, rejects e316f1b"
 else
-	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes cf461e3 (no e316f1b control prefix to reject)"
+	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes the pinned prefix (no e316f1b control prefix to reject)"
 fi
 
 # The same identity guards amix-dlm's box binaries (kbootset, modadmin), which
@@ -301,7 +301,7 @@ grep 'not the pinned toolchain' "$T/dlmpin.log" >/dev/null && grep 'specs:' "$T/
 	{ cat "$T/dlmpin.log" >&2; fail "dlm-src.sh's refusal does not name specs"; }
 (AMIX_G14_BUILD="$AMIX_GCC14_ROOT/build"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin-ok.log" 2>&1 ||
 	{ cat "$T/dlmpin-ok.log" >&2; fail "dlm-src.sh's box check refused the pinned toolchain"; }
-ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes cf461e3"
+ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes the pinned prefix"
 
 # -mno-strict-align (owner decision 2026-10-27): the flag sets that lack it, or
 # override it later, are refused by amix-env.sh; a compiler that still splits

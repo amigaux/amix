@@ -120,7 +120,7 @@
 #              the recipe's own (a new revision: different bytes).
 #              AMIX_GCC14_BUILD_ROOT moves them, for a measurement build
 #              that must not touch the shipped artifacts.
-#   identity   the toolchain is PINNED: gcc14-cross-amix cf461e3, and the
+#   identity   the toolchain is PINNED: gcc14-cross-amix AMIX_GCC14_COMMIT, and the
 #              sha256 of its cc1, libgcc.a, libamixc99.a and specs in the
 #              prefix (AMIX_GCC14_PINS, in gcc14-pin.sh, which dlm-src.sh's
 #              box builds of kbootset and modadmin check too).  A prefix that

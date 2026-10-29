@@ -27,17 +27,20 @@ gcc14-pin.sh)
 esac
 
 # path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.
-# Re-pinned 2026-10-29 to the compiler rebuilt from source in the new
-# workspace, still from cf461e3: its generated code is byte-identical to the
-# old compiler's (105/105 objects; evidence in tmp/2026-10-29-gcc14-rebuild/).
-# cc1, libgcc.a and libamixc99.a differ only by embedded paths, DWARF and ar
-# timestamps; specs is unchanged.
-AMIX_GCC14_COMMIT=cf461e38993100533fa6efe509ad0cbd2a735eea
+# Re-pinned 2026-10-29 (owner Y3) to the public amigaux/gcc14-cross-amix,
+# branch upstream-58130fe-plus at b51ff39: Antti's 58130fe plus the
+# m68020-60 runtime fix.  cc1 is unchanged; specs now default to
+# -mno-strict-align, and libgcc.a / libamixc99.a were rebuilt under it
+# (word-pair stack reads become one move.l).  Compiled objects are
+# identical with our flags; linked binaries differ only in runtime members
+# (evidence in Amigaux/tmp/2026-10-29-g14-repin/).  The cf461e3 prefix is
+# kept as gcc14-cross-amix/build/prefix-cf461e3.
+AMIX_GCC14_COMMIT=b51ff39c500adadca629d7caf2a1d20a00fced03
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 9635f67e59103c2867638910849e410d19bfd9c10a1b52093f9e58e515496bff
-lib/gcc/m68k-elf/14.2.0/libgcc.a e7efa6e655db9700fe73de6bdc360e04da747425ba51fcc2a580d64df6725f69
-m68k-elf/lib/libamixc99.a 0dd88b3ad96d331b0f337f5da79f367dce55ab381b12f465db61b613f4283028
-lib/gcc/m68k-elf/14.2.0/specs 93f9574f191ca0074b8af25cbfc910bc5f608392586f2246d6af4ca9a2281f13"
+lib/gcc/m68k-elf/14.2.0/libgcc.a 62d061c006cb5652892fde3ccb095bfc211ddd45c5600e8f65539327db20ddfd
+m68k-elf/lib/libamixc99.a fa1e42d4e97bb8b540b9d9ae9d42ebbdeac77f49881e31d6115c93c277dfa601
+lib/gcc/m68k-elf/14.2.0/specs 45f4685908f349b6c1a67e010feb8a83a1bdfc7ba7b5960f636ab6c4ffd3de5d"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
