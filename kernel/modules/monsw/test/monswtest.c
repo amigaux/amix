@@ -2,7 +2,7 @@
  * monswtest.c -- the on-box instrument for /dev/monsw (the monsw module or the 68040/68060
  * port's static monsw), one step per run.
  *
- * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE at the top of amix-modules.
+ * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *
  * WHY ONE STEP PER RUN.  The screen is the instrument for the switching steps: a person (or
  * a camera) looks at it between runs.  Each run prints one MONSW-RESULT line a script can

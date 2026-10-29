@@ -2,7 +2,7 @@
  * monsw.c -- the monitor switch, card-independent: /dev/monsw and the kernel API card drivers
  * call (P-8, 2026-09-28).  sys/monsw.h has the value's meanings and where it comes from.
  *
- * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE at the top of amix-modules.
+ * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *
  * One source, two forms:
  *   static   the 68040/68060 port's relink pass (amix-040-060-port relink-040-monsw.sh) links

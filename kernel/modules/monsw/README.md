@@ -5,7 +5,7 @@ Amiga's native video and an RTG card. It is card-independent. A card driver (z36
 its kernel API, and user programs use `/dev/monsw` (character major 52, minor 0).
 
 It is a loadable kernel module for both Amix kernel lines, `k30` (68030) and `k46`
-(68040/68060), built with amix-dlm's ABI kit. The same source still builds the static object
+(68040/68060), built with the ABI kit from kernel/dlm. The same source still builds the static object
 that the 68040/68060 port links into its static kernels (see "The static form").
 
 ## Layout
@@ -93,7 +93,7 @@ its Makefile's `DEPS`.
 | `majors` | `c:52` (registered to `monsw` in the kit's `registry/majors`) |
 | `unload` | `never` |
 | `param` | `config:int:-1:-1:51` |
-| `cpu`, `kabi`, `cc` | from the kit: `68030` / `k30.1.0` on k30, `68040` / `k46.1.0` on k46 |
+| `cpu`, `kabi`, `cc` | from the kit: `68030` / `k30.1.2` on k30, `68040` / `k46.1.2` on k46 |
 
 The module's entry points:
 - **`_load(params)`** reads `config` from the parameter string and runs `monswinit()`.
@@ -166,7 +166,7 @@ make -C monsw/module static        # the static object per line, with its sha256
 
 The objects are `monsw/build/k30/mod.d/monsw` and `monsw/build/k46/mod.d/monsw`. The kit's
 `modfix` and `modcheck.py` check each one. The build also checks that the `<sys/monsw.h>` the
-compiler took is this repository's `include/sys/monsw.h`. If the kit carries another one, the
+compiler took is `kernel/modules/include/sys/monsw.h`. If the kit carries another one, the
 build stops and asks for the kit to be rebuilt.
 
 ## The static form

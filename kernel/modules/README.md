@@ -1,9 +1,10 @@
-# amix-modules
+# kernel/modules
 
-Generic loadable kernel modules for Amiga UNIX (Amix) that belong to no single hardware driver repository:
-one directory per module, each built for both kernel lines (k30, k46) with amix-dlm's ABI kit and shipped as
-its own packages (`<name>-k30` / `<name>-k46`, C3-5). Hardware drivers with their own repository keep their
-module there (z3660eth, z3660rtg, a4091, gayle-ide, z3660scsi, cdfs).
+`kernel/modules` in the amix repository (https://github.com/amigaux/amix) holds the generic loadable
+kernel modules for Amiga UNIX (Amix) that belong to no single hardware driver: one directory per module,
+each built for both kernel lines (k30, k46) with the ABI kit from kernel/dlm and shipped as its own
+packages (`<name>-k30` / `<name>-k46`, C3-5). A hardware driver keeps its module with the driver
+(z3660eth, z3660rtg, a4091, gayle-ide, z3660scsi).
 
 | Module | Class | Majors | Origin |
 |---|---|---|---|
@@ -29,9 +30,6 @@ Build every module of a line with the kit of `kernel/dlm` and the pinned gcc-cro
 (`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`, for example `make -C monsw/module`. The
 contracts are in `kernel/dlm/docs/contracts/`.
 
-Pinned fork: `cdfs/` (a read-only CD filesystem), a fork of Stefan Reinauer's
-ODFileSystem. Its directory holds only a README and `cdfs/cdfs.pin`, naming
-the fork and the exact commit the build uses.
-
-A pin file is one line, `<git URL> <full commit hash>`; the build fetches that
-exact commit.
+cdfs (a read-only CD filesystem, a fork of Stefan Reinauer's ODFileSystem) is to be pinned
+here: its directory `cdfs/` and the pin `cdfs/cdfs.pin` arrive when the fork moves into the
+amigaux organisation.

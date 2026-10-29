@@ -14,8 +14,8 @@
 # DLM is the kernel/dlm directory whose kits are built (`make kit` there gives build/kit/k30
 # and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.  The pinned cross tools
 # (m68k-cbm-sysv4-*, gcc-cross-amix) and python3 must be on PATH.  The source is
-# monsw/src/monsw.c compiled with -DMONSW_MODULE; <sys/monsw.h> must be this repository's
-# include/sys/monsw.h, which the build checks (the kit carries a copy of it).
+# monsw/src/monsw.c compiled with -DMONSW_MODULE; <sys/monsw.h> must be
+# kernel/modules/include/sys/monsw.h, which the build checks (the kit carries a copy of it).
 # Master is generated from keys; it has no $cpu, so the kit gives each line its own.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../..)
@@ -58,8 +58,8 @@ include $(KIT)/mk/module.mk
 
 $(MODOUT)/obj/monsw.o: $(HDR) $(MODOUT)/hdr.ok
 
-# The <sys/monsw.h> the compiler takes (the kit's include/ is searched first) must be this
-# repository's: read it back from the preprocessor's line markers and compare.
+# The <sys/monsw.h> the compiler takes (the kit's include/ is searched first) must be the one
+# in kernel/modules/include: read it back from the preprocessor's line markers and compare.
 $(MODOUT)/hdr.ok: $(SRC)/monsw.c $(HDR) $(KIT)/kit.conf
 	@mkdir -p $(MODOUT)
 	@h=$$($(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -E $(SRC)/monsw.c | \

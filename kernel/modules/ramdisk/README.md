@@ -13,7 +13,7 @@ the kernel mounts its root from unit 0. An installed disk may carry it for the s
 alone.
 
 It is a loadable kernel module of class `root` for both Amix kernel lines, `k30` (68030) and
-`k46` (68040/68060), built with amix-dlm's ABI kit. The contracts it implements are amix-dlm's
+`k46` (68040/68060), built with the ABI kit from kernel/dlm. The contracts it implements are amix-dlm's
 C4-2 (a root-class driver, §8's ramdisk row) and C4-3 (the RAM-disk hand-off, §4).
 
 Stock Amix 2.1 has a RAM disk on the same major: the `ram` driver, with three kmem-backed units
@@ -170,7 +170,7 @@ kit's `modfix` and `modcheck.py` check each one; `modcheck` prints `ok (k30.1.2,
 bytes)` and `ok (k46.1.2, root, 2944 bytes)`.
 
 An older kit stops the build: one without `iodone` or `ramdisk_image` in its `ddi.list` at
-`modfix: undefined: …`, and one whose `modcheck.py` predates block-only drivers (amix-dlm
+`modfix: undefined: …`, and one whose `modcheck.py` predates block-only drivers (kernel/dlm
 186bd1f) at `drv_cmajor 0 (count 0): c:0 is not in majors=`.
 
 ## Packages (amix-dlm C3-5)

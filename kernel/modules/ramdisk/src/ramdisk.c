@@ -3,7 +3,7 @@
  * (amix-dlm contracts C4-2 section 8 and C4-3 section 4).  ramdisk/README.md has the whole
  * story; this is the short form.
  *
- * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE at the top of amix-modules.
+ * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *
  *   unit 0   the miniroot image the boot loader placed in memory, when there is one
  *            (ramdisk_image() returns 0).  Its memory is the loader's: it lies outside the
@@ -45,7 +45,7 @@
 
 /*
  * The kernel maps physical addresses below VSECT1 one to one, so phystokv() is the
- * identity there; <sys/amixddi.h> gives both names on both lines (amix-dlm docs/abi/ddi.md).
+ * identity there; <sys/amixddi.h> gives both names on both lines (kernel/dlm/docs/abi/ddi.md).
  */
 
 #define RD_MAJOR        20

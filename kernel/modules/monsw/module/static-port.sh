@@ -2,7 +2,7 @@
 # static-port.sh -- prove that monsw/src/monsw.c, compiled without MONSW_MODULE, gives the
 # same object as the 68040/68060 port's static copy (amix-040-060-port src/monsw.c), with the
 # flags of the port's relink pass (relink-040-monsw.sh): AMIX_KERNEL_CFLAGS with -m68040,
-# the port's Model-B sysroot, and <sys/monsw.h> from this repository's include/.
+# the port's Model-B sysroot, and <sys/monsw.h> from kernel/modules/include/.
 #
 #   usage: sh monsw/module/static-port.sh [port-checkout]
 #

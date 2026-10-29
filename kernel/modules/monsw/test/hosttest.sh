@@ -5,7 +5,7 @@
 # counters, the CIA-B PRA/DDRA addresses two bytes of test memory, and the K&R printf
 # declaration goes (the test's printf is a prototyped recorder).  Stub
 # headers stand in for the kernel's sys/cred.h, sys/ddi.h, sys/conf.h and sys/moddefs.h;
-# sys/monsw.h is this repository's include/sys/monsw.h.
+# sys/monsw.h is kernel/modules/include/sys/monsw.h.
 #
 #   usage: sh monsw/test/hosttest.sh        (HOSTCC overrides cc)
 set -e
