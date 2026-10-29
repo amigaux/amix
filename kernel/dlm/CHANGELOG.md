@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2026-10-29 — Moved into the amix repository as kernel/dlm by a subtree merge of amix-dlm master 565de49 (696 commits, hashes kept); the tree is unchanged
+
 ## 2026-10-28 — C3-5 version 16: paula's short name (paula30 / paula46); a driver's own interface header may ship in its module package under /usr/include (0644 bin bin, the same bytes on both lines), as paula.h does (821d101)
 
 ## 2026-10-28 — Loaders: boot1's block and boot2's bounce buffer come from the boot partition's DosEnvec (de_BufMemType, MEMF_PUBLIC when 0; chip when de_Mask does not reach them or no boot node matches); boot2 reads whole blocks straight into a buffer the Mask allows, ≤32 KiB per transfer; the boot-device line names the buffer. For the A4000T, whose onboard 53C710 hangs on DMA into chip with the Z3660 fitted. boot2's self-relocation table is a byte a field (1126 → 583 bytes). boot1.img 765915a7, boot2.bin da260a96; spec 10 §3.1/§3.2 (39240c1, a6a1511, 053c417)
