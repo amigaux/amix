@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-29 — The prose names the monorepo (cc5fe5d)
+
+READMEs and source headers say kernel/modules, kernel/dlm and github.com/amigaux/amix instead of the old standalone
+repos; contract citations kept. The cdfs pin is noted as arriving with the fork's move. monsw README: kabi k30.1.2 /
+k46.1.2, what the current kit builds. Objects unchanged: monsw 1f53a31b / 962709ca, ramdisk 5523d853 / 054467f6.
+
 ## 2026-10-29 — The module builds find the kit in the same repository (12f964c)
 
 `DLM ?= $(abspath $(TOP)/../dlm)` in monsw and ramdisk (was ../amix-dlm); READMEs name kernel/dlm and kernel/modules/include.
@@ -28,8 +34,6 @@ in the DDI (modfix: undefined) and modcheck accepting a block-only driver (drvma
 A packaging release so S3-45 can test `apkg upgrade` of a kernel module: module/VERSION 1.0.0-2; README gains "Size and
 memory" (C3-1 §6 / C3-6 §1): file 5197 B, image 2200 B (.text 1584, .data 432, .moddata 161, .bss 16), load working set
 about 15 KiB, no kmem requests. Objects byte-identical to 1.0.0-1 (k30 01a40342, k46 2c2760e9); modcheck ok both lines.
-
-## Unreleased
 
 ## 2026-10-26 — monsw: a config that is not a number stays unset (6c407b7)
 
