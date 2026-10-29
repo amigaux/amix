@@ -1,3 +1,3 @@
 # toolchain
 
-Compiler pins only: which cross compilers, at which versions, build what. The compilers live in their own repositories.
+Cross-compiler pins and the build-container recipe: which compilers, at which versions, build what. Their sources stay in the collaborators' repositories.
