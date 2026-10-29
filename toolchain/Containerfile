@@ -1,0 +1,111 @@
+# The amix build container: both cross toolchains, built from their pins.
+#
+# Build it with toolchain/container-build.sh, which prepares the three named
+# build contexts this file reads:
+#   gca-src      gcc-cross-amix at the commit in gcc-cross-amix.pin
+#   g14-src      gcc14-cross-amix at the commit in gcc14-cross-amix.pin
+#   amix-system  a checkout of amigaux/amix-system (the AMIX root under usr/)
+#
+# Every path inside the image is fixed, so no build folder, user name or host
+# path of the machine that builds it ends up in the toolchains; dates come from
+# SOURCE_DATE_EPOCH, and archive members are normalised to it.
+# /opt/amix/TOOLCHAIN.sha256 lists every installed file, to compare two builds.
+
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS base
+
+# The Ubuntu archive as it was at this moment, so the host packages are the
+# same on every build. snapshot.ubuntu.com answers only over https, so the CA
+# certificates come first, from the live archive; every package after them
+# comes from the snapshot, whose signatures apt checks as usual.
+ARG SNAPSHOT=20261028T000000Z
+ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 TZ=UTC
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/ubuntu.sources \
+ && printf '%s\n' 'Types: deb' \
+      "URIs: https://snapshot.ubuntu.com/ubuntu/$SNAPSHOT" \
+      'Suites: noble noble-updates noble-security' \
+      'Components: main universe' \
+      'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
+      > /etc/apt/sources.list.d/snapshot.sources \
+ && apt-get -o Acquire::Check-Valid-Until=false update \
+ && apt-get install -y --no-install-recommends \
+      autotools-dev bison bzip2 curl file flex g++ gcc git \
+      gzip libc6-dev m4 make patch perl python3 strip-nondeterminism \
+      xz-utils zlib1g-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# gcc-cross-amix: GCC 2.7.2.3 and binutils 2.8.1 for m68k-cbm-sysv4, kernel
+# space. Installed in /opt/amix-cross; its build/env.sh is what GCA names.
+FROM base AS gca
+ARG SOURCE_DATE_EPOCH=1793096666
+ENV SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH
+COPY --from=amix-system /usr /opt/amix/amix-system/usr
+COPY --from=gca-src / /opt/amix/gcc-cross-amix
+WORKDIR /opt/amix/gcc-cross-amix
+RUN mkdir distfiles \
+ && curl -fsSL -o distfiles/binutils-2.8.1.tar.gz \
+      https://ftp.gnu.org/gnu/binutils/binutils-2.8.1.tar.gz \
+ && curl -fsSL -o distfiles/gcc-2.7.2.3.tar.gz \
+      https://ftp.gnu.org/gnu/gcc/gcc-2.7.2.3.tar.gz \
+ && printf '%s  %s\n' \
+      c7ad94c18f098f0580d0a7cd68638e98aa98571078536934fdc85f5e9047bf5a distfiles/binutils-2.8.1.tar.gz \
+      16166e0f0f2064bb3114716650569065ef3855ae2331d7a29b85d4b9aa73773c distfiles/gcc-2.7.2.3.tar.gz \
+    | sha256sum -c -
+# test-hello builds everything (make all), then links a C program.
+RUN make test-hello PREFIX=/opt/amix-cross AMIX_ROOT=/opt/amix/amix-system \
+ && rm -rf src distfiles build/binutils-* build/gcc-* build/test
+
+# ---------------------------------------------------------------------------
+# gcc14-cross-amix: GCC 14 for m68k-elf with AMIX's return convention,
+# userland only. Installed in its checkout's build/prefix, with its sysroot in
+# build/sysroot; that build/ directory is what G14 names.
+FROM gca AS g14
+COPY --from=g14-src / /opt/amix/gcc14-cross-amix
+WORKDIR /opt/amix/gcc14-cross-amix
+RUN set -e; G=/opt/amix/gcc14-cross-amix; \
+    printf '%s\n' \
+      "AMIX_SYSROOT=\"$G/build/sysroot\"" \
+      'AMIX_CROSS_BIN="/opt/amix-cross/bin"' \
+      "TC_PREFIX=\"$G/build/prefix\"" \
+      'TC_TARGET="m68k-elf"' \
+      'TC_WORK="/opt/amix/g14-work"' \
+      'MODERN_PREFIX="m68k-linux-gnu-"' \
+      'MODERN_GCC="m68k-linux-gnu-gcc-14"' \
+      'AMIX_CPU="-m68020-60"' > config.sh; \
+    mkdir -p build/sysroot /opt/amix/g14-work/src; \
+    cp -R /opt/amix/amix-system/usr build/sysroot/; \
+    chmod -R u+w build/sysroot; \
+    tools/sync-sysroot.sh /opt/amix/amix-system; \
+    cd /opt/amix/g14-work/src; \
+    curl -fsSL -O https://ftp.gnu.org/gnu/binutils/binutils-2.43.1.tar.xz; \
+    curl -fsSL -O https://ftp.gnu.org/gnu/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz; \
+    printf '%s  %s\n' \
+      13f74202a3c4c51118b797a39ea4200d3f6cfbe224da6d1d95bb938480132dfd binutils-2.43.1.tar.xz \
+      a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9 gcc-14.2.0.tar.xz \
+      | sha256sum -c -
+RUN toolchain/build-cross.sh \
+ && rm -rf /opt/amix/g14-work
+
+# ---------------------------------------------------------------------------
+# The members of the archives built here (not the sysroots' AMIX archives,
+# which stay byte for byte) and every file time to SOURCE_DATE_EPOCH, then the
+# hash list.
+FROM g14 AS norm
+RUN find /opt/amix-cross /opt/amix/gcc14-cross-amix/build \
+      -name sysroot -prune -o -name '*.a' -type f -print0 \
+    | xargs -0 -r strip-nondeterminism --normalizers +ar -T "$SOURCE_DATE_EPOCH" \
+ && find /opt -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} + \
+ && cd /opt \
+ && find amix-cross amix -type f ! -name TOOLCHAIN.sha256 -print0 | LC_ALL=C sort -z \
+    | xargs -0 sha256sum > amix/TOOLCHAIN.sha256 \
+ && touch -d "@$SOURCE_DATE_EPOCH" amix/TOOLCHAIN.sha256
+
+# ---------------------------------------------------------------------------
+FROM base
+COPY --from=norm /opt /opt
+ENV GCA=/opt/amix/gcc-cross-amix/build \
+    G14=/opt/amix/gcc14-cross-amix/build \
+    PATH=/opt/amix-cross/bin:/opt/amix/gcc14-cross-amix/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WORKDIR /src
