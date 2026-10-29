@@ -1,5 +1,9 @@
 # amix
 
+> **Work in progress.** This repository is being organised right now: projects
+> move in one at a time, and the layout, the build and the docs still change.
+> It does not build a release yet; follow along, but don't rely on paths.
+
 One repository that builds the Amiga UNIX (Amix) system: the kernels for the
 68030 and the 68040/68060, the loadable-module system, the drivers, the
 generic modules, the package tools, the outside software packaged for Amix,
