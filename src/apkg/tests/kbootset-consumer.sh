@@ -5,9 +5,9 @@
 #
 # run-tests.sh proves the record apkg writes is C2-2 §2 to the byte and
 # that the trigger speaks C2-4 to a mock.  This script closes the loop
-# with the REAL reader: it builds kbootset from the sibling amix-dlm tree
-# with its own Makefile (build dir redirected into tests/work, so the
-# amix-dlm tree is only read), lays an empty boot store in
+# with the REAL reader: it builds kbootset from the dlm kit (amix's
+# kernel/dlm) with its own Makefile (build dir redirected into tests/work,
+# so the kit tree is only read), lays an empty boot store in
 # an image, has tools/repo/gen-catalog.py describe a kernel package from its
 # own sidecar, and lets apkg install it and call that
 # kbootset through a wrapper that adds what a host build needs (--image,
@@ -15,15 +15,18 @@
 # `file` line apkg wrote; gate 2 compares the record's kabi with the
 # kernel's sidecar.
 #
-# Not part of the run-tests.sh count: it needs the amix-dlm checkout, a
-# host cc and zlib.  Without the checkout it says SKIP and exits 0; with it,
-# a kbootset that does not build fails the script.
+# Not part of the run-tests.sh count: it needs the dlm kit, a host cc and
+# zlib.  The kit is the first argument, else $AMIX_DLM, else amix's
+# kernel/dlm in a checkout beside this repository.  Without the kit it
+# says SKIP, names AMIX_DLM, and exits 77 (the automake skip code), so a
+# missing kit is never a silent pass; with it, a kbootset that does not
+# build fails the script.
 #
-# Usage: sh tests/kbootset-consumer.sh [path-to-amix-dlm]
+# Usage: sh tests/kbootset-consumer.sh [path-to-amix/kernel/dlm]
 
 set -u
 SRC=$(cd "$(dirname "$0")/.." && pwd)
-DLM=${1:-$SRC/../../../amix-dlm}
+DLM=${1:-${AMIX_DLM:-$SRC/../../../amix/kernel/dlm}}
 WORK=$SRC/tests/work/kconsumer
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS + 1)); echo "PASS: $1"; }
@@ -31,20 +34,24 @@ bad() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; [ -n "${2:-}" ] && { \
         echo "----- output -----"; echo "$2"; echo "------------------"; }; }
 
 if [ ! -f "$DLM/Makefile" ] || [ ! -d "$DLM/kbootset" ]; then
-    echo "SKIP: no amix-dlm tree (Makefile + kbootset/) at $DLM"; exit 0
+    echo "SKIP: kbootset consumer NOT RUN - no dlm kit (Makefile +" \
+         "kbootset/) at $DLM" >&2
+    echo "SKIP: set AMIX_DLM=<path to amix/kernel/dlm> (or pass it as" \
+         "the first argument)" >&2
+    exit 77
 fi
 DLM=$(cd "$DLM" && pwd)
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 APKG=$SRC/apkg
 rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/cache"
 
-# kbootset is built by amix-dlm's own Makefile, so a source file it gains
-# is picked up here too.  B= points its build directory into tests/work:
-# nothing is written inside the amix-dlm tree.  Once the tree is there, a
-# build that fails is a FAIL, never a SKIP.
+# kbootset is built by the dlm kit's own Makefile, so a source file it
+# gains is picked up here too.  B= points its build directory into
+# tests/work: nothing is written inside the kit tree.  Once the tree is
+# there, a build that fails is a FAIL, never a SKIP.
 make -C "$DLM" B="$WORK/dlm" "$WORK/dlm/kbootset" > "$WORK/kb.err" 2>&1 \
     && [ -x "$WORK/dlm/kbootset" ] \
-    && ok "kbootset built by amix-dlm's Makefile at $(git -C "$DLM" log -1 --format=%h 2>/dev/null)" \
+    && ok "kbootset built by the dlm kit's Makefile at $(git -C "$DLM" log -1 --format=%h 2>/dev/null)" \
     || { bad "kbootset did not build from $DLM" "$(tail -20 "$WORK/kb.err")"
          echo "== kbootset consumer: $PASS passed, $FAIL failed =="; exit 1; }
 cp "$WORK/dlm/kbootset" "$WORK/kbootset"
