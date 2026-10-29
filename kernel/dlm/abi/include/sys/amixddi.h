@@ -3,7 +3,7 @@
  * kernel, and the declarations of those the module core provides.
  *
  * The list of record is the kit's ddi.list; the contract of each name
- * (arguments, context, errors) is docs/abi/ddi.md in amix-dlm
+ * (arguments, context, errors) is docs/abi/ddi.md in kernel/dlm
  * (docs/contracts/C3-2-symbols-and-ddi.md section 3 is its index).  The
  * stock names are declared by the stock headers that define them
  * (<sys/kmem.h>, <sys/stream.h>, <sys/systm.h> and the others); this
@@ -143,7 +143,7 @@ extern void	cons_hook_clear();
 
 /*
  * cputype (data, read-only): 30 on k30; 40 or 60 on k46.  It is a long in
- * these kernels (the port's cputype060.s; amix-dlm core/plat/k30), while
+ * these kernels (the port's cputype060.s; kernel/dlm core/plat/k30), while
  * <sys/systm.h> still declares the stock `short`, so read it with
  * DDI_CPUTYPE, which is right with or without <sys/systm.h>.
  */
