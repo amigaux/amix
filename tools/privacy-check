@@ -28,7 +28,8 @@ Classes:
   3  secrets: private keys, token shapes, passwords in config files,
      password hashes in shadow files, .netrc and SSH key files
   4  disk/ROM images, blobs over the size limit, system files listed in
-     system/MANIFEST.sha256, and locally blocked blobs
+     system/MANIFEST.sha256 (at the commit or at any tip checked; an empty
+     file matches nothing), and locally blocked blobs
   5  AI attribution in our commit messages
 
 Output: one line per hit, "<short sha> <class> <path|message> <detail>".
@@ -354,6 +355,8 @@ class Checker(object):
         self.blocked = load_blocked(pb) if pb else {}
         self.objects = Objects()
         self.manifests = {}
+        self.tip_manifest = {}
+        self.merged = {}
         self.printed = set()
         self.hits = 0
         self.author_cache = {}
@@ -466,6 +469,24 @@ class Checker(object):
             self.manifests[blob.oid] = parse_manifest(blob.head)
         return self.manifests[blob.oid]
 
+    def add_tip_manifests(self, tips):
+        """Judge every commit against the manifests at the tips as well, so
+        a system file added before the manifest lists it is still refused."""
+        for tip in tips:
+            for digest, path in self.manifest_at(tip).items():
+                self.tip_manifest.setdefault(digest, path)
+
+    def manifest_for(self, sha):
+        own = self.manifest_at(sha)
+        if not self.tip_manifest:
+            return own
+        key = id(own)
+        if key not in self.merged:
+            merged = dict(self.tip_manifest)
+            merged.update(own)
+            self.merged[key] = merged
+        return self.merged[key]
+
     def scan_blob(self, sha, path, oid, manifest, base=None):
         """Classes 1-4 on one file. With `base` (the file's blob at the first
         parent), classes 1 and 3 see only the lines added relative to it."""
@@ -479,7 +500,7 @@ class Checker(object):
         if blob.size > self.max_size:
             self.hit(sha, 4, path, "blob of %d bytes is over the %d-byte limit"
                      % (blob.size, self.max_size))
-        if blob.sha256 in manifest:
+        if blob.size and blob.sha256 in manifest:
             self.hit(sha, 4, path, "system file listed in %s as %s"
                      % (MANIFEST_PATH, manifest[blob.sha256]))
         if blob.sha256 in self.blocked:
@@ -554,7 +575,7 @@ class Checker(object):
     def check_commit(self, sha):
         author, parents, message = self.read_commit(sha)
         ours = self.is_ours(author)
-        manifest = self.manifest_at(sha)
+        manifest = self.manifest_for(sha)
         for path, oid, base in self.changed_blobs(sha, len(parents)):
             if ours and is_station_path(path):
                 self.hit(sha, 2, path, "station file in our commit")
@@ -751,6 +772,7 @@ def run(argv):
                 tips = [rev_parse(args.all + "^{commit}")]
             else:
                 commits, tips = plan_pre_push(sys.stdin)
+            checker.add_tip_manifests(tips)
             seen = set()
             for sha in commits:
                 if sha not in seen:

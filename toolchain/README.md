@@ -34,7 +34,8 @@ CONTAINER=podman toolchain/container-build.sh /path/to/amix-system
 It exports each toolchain's tree at the pinned commit with `git archive`,
 fetched from the pin's URL, or from a local clone named by `GCA_REPO` or
 `G14_REPO`. The GNU source tarballs are fetched by the build and checked
-against their sha256. A build from scratch takes about six minutes
+against their sha256, and the system input is checked against
+`system/MANIFEST.sha256` first. A build from scratch takes about six minutes
 on a 32-core machine, most of it GCC 14.
 
 Reproducibility: every path inside the image is fixed (`/opt/amix-cross`,
