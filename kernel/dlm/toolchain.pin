@@ -1,7 +1,7 @@
 # Kernel-space toolchain pin (docs/spec/20-module-format-and-abi.md §3.2).
 # Every Amiga object in this repository is built with this toolchain.
 name     gcc-cross-amix
-url      https://github.com/isoriano1968/gcc-cross-amix
+url      https://github.com/jusii/gcc-cross-amix.git
 commit   8949028
 target   m68k-cbm-sysv4
 gcc      2.7.2.3
