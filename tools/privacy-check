@@ -8,9 +8,18 @@
 Modes (exactly one):
   --range A..B           check the commits in that range
   --pre-push REMOTE URL  read git's pre-push lines on stdin and check every
-                         commit the push would send
+                         commit the push would send that no remote-tracking
+                         ref already has
   --all REF              check the full history of REF
   --tree REF             check only the files at REF
+  --exclude-remotes      with --range or --all: skip commits that any
+                         remote-tracking ref already has
+
+In commit modes, classes 1 and 3 judge only the lines a commit adds: for a
+commit with parents, the lines added relative to its first parent (a merge
+is limited first to the paths that differ from every parent); for a root
+commit, every line. Line numbers are those of the new file. Classes 2 and 4
+judge every added or modified file whole; --tree judges whole files.
 
 Classes:
   1  private network addresses (RFC 1918 IPv4, IPv6 ULA) and local patterns
@@ -383,12 +392,19 @@ class Checker(object):
     # -- text classes -------------------------------------------------------
 
     def scan_text(self, sha, path, text, where, secrets_all=True,
-                  config=False, shadow=False):
-        """Classes 1 and 3 on text. `where` is "" for files, " in message"."""
+                  config=False, shadow=False, first=1, reported=None):
+        """Classes 1 and 3 on text. `where` is "" for files, " in message".
+
+        `first` is the line number of the text's first line; `reported`
+        collects the local patterns already reported for this path, so a
+        file split into blocks reports each pattern once, as a whole file
+        does."""
         prefix = "message line" if where else "line"
+        if reported is None:
+            reported = set()
 
         def at(pos):
-            return "%s %d" % (prefix, line_of(text, pos))
+            return "%s %d" % (prefix, first - 1 + line_of(text, pos))
 
         for m in IPV4_RE.finditer(text):
             if private_ipv4(m.groups()):
@@ -400,8 +416,11 @@ class Checker(object):
                 self.hit(sha, 1, path, "private IPv6 address %s at %s"
                          % (addr, at(m.start())), m.group(0))
         for n, pat in self.patterns:
+            if n in reported:
+                continue
             m = pat.search(text)
             if m:
+                reported.add(n)
                 self.hit(sha, 1, path, "local pattern #%d at %s" % (n, at(m.start())),
                          m.group(0))
         if secrets_all:
@@ -447,7 +466,9 @@ class Checker(object):
             self.manifests[blob.oid] = parse_manifest(blob.head)
         return self.manifests[blob.oid]
 
-    def scan_blob(self, sha, path, oid, manifest):
+    def scan_blob(self, sha, path, oid, manifest, base=None):
+        """Classes 1-4 on one file. With `base` (the file's blob at the first
+        parent), classes 1 and 3 see only the lines added relative to it."""
         self.scan_path(sha, path)
         blob = self.objects.get(oid, self.keep)
         if blob is None:
@@ -468,9 +489,15 @@ class Checker(object):
             return
         if blob.size > len(blob.head):
             raise GitError("text blob %s (%s) was not read whole" % (oid, path))
-        text = blob.head.decode("utf-8", "replace")
-        self.scan_text(sha, path, text, "", config=is_config_like(path),
-                       shadow=is_shadow_file(path))
+        config, shadow = is_config_like(path), is_shadow_file(path)
+        if base is None:
+            text = blob.head.decode("utf-8", "replace")
+            self.scan_text(sha, path, text, "", config=config, shadow=shadow)
+            return
+        reported = set()
+        for first, text in added_blocks(base, oid):
+            self.scan_text(sha, path, text, "", config=config, shadow=shadow,
+                           first=first, reported=reported)
 
     # -- commits ------------------------------------------------------------
 
@@ -498,6 +525,9 @@ class Checker(object):
             return False
 
     def changed_blobs(self, sha, nparents):
+        """(path, new blob, blob at the first parent or None) for every blob
+        the commit adds or modifies; a merge lists only the paths that
+        differ from every parent."""
         args = ["diff-tree", "-r", "-z", "--no-renames", "--no-commit-id",
                 "--no-ext-diff"]
         args += ["-c"] if nparents > 1 else ["--root"]
@@ -514,17 +544,21 @@ class Checker(object):
             mode, oid = fields[k], fields[2 * k + 1]
             if is_zero(oid) or is_zero(mode) or mode == "160000":
                 continue
-            result.append((path, oid))
+            base_mode, base = fields[0], fields[k + 1]
+            if not nparents or is_zero(base) or is_zero(base_mode) \
+                    or base_mode == "160000":
+                base = None
+            result.append((path, oid, base))
         return result
 
     def check_commit(self, sha):
         author, parents, message = self.read_commit(sha)
         ours = self.is_ours(author)
         manifest = self.manifest_at(sha)
-        for path, oid in self.changed_blobs(sha, len(parents)):
+        for path, oid, base in self.changed_blobs(sha, len(parents)):
             if ours and is_station_path(path):
                 self.hit(sha, 2, path, "station file in our commit")
-            self.scan_blob(sha, path, oid, manifest)
+            self.scan_blob(sha, path, oid, manifest, base)
         self.scan_text(sha, "message", message, " in message")
         if ours:
             for kind, rx in AI_RES:
@@ -580,6 +614,43 @@ class Checker(object):
         return count
 
 
+HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+
+
+def added_blocks(old, new):
+    """Runs of lines that blob `new` adds relative to blob `old`, as
+    (line number in `new` of the run's first line, text)."""
+    if old == new:
+        return []
+    out = git("diff", "-U0", "--text", "--no-color", "--no-ext-diff",
+              "--no-textconv", "--no-renames", "--diff-algorithm=myers",
+              old, new)
+    blocks, cur, start, nxt, in_hunk = [], [], 0, 0, False
+    for raw in out.split(b"\n"):
+        if raw.startswith(b"@@"):
+            m = HUNK_RE.match(raw.decode("ascii", "replace"))
+            if not m:
+                raise GitError("diff: unexpected hunk header for %s" % new)
+            if cur:
+                blocks.append((start, "\n".join(cur)))
+                cur = []
+            nxt, in_hunk = int(m.group(1)), True
+        elif not in_hunk:
+            continue
+        elif raw.startswith(b"+"):
+            if not cur:
+                start = nxt
+            cur.append(raw[1:].decode("utf-8", "replace"))
+            nxt += 1
+        elif raw.startswith((b"-", b"\\")) or not raw:
+            continue
+        else:
+            raise GitError("diff: unexpected line for %s" % new)
+    if cur:
+        blocks.append((start, "\n".join(cur)))
+    return blocks
+
+
 def rev_parse(spec):
     try:
         return git("rev-parse", "--verify", "--quiet", spec).decode().strip()
@@ -610,10 +681,11 @@ def plan_pre_push(stream):
         local_ref, local_sha, remote_ref, remote_sha = parts
         if is_zero(local_sha):
             continue
-        if not is_zero(remote_sha) and object_exists(remote_sha):
-            commits += rev_list("%s..%s" % (remote_sha, local_sha))
-        else:
-            commits += rev_list(local_sha, "--not", "--remotes")
+        # Whatever any remote-tracking ref already has is published; only
+        # the rest is new to the world.
+        known = [remote_sha] if (not is_zero(remote_sha)
+                                 and object_exists(remote_sha)) else []
+        commits += rev_list(local_sha, "--not", *(known + ["--remotes"]))
         tips.append(rev_parse(local_sha + "^{commit}"))
     return commits, tips
 
@@ -641,6 +713,9 @@ def build_parser():
                       help="check what a push would send (pre-push lines on stdin)")
     mode.add_argument("--all", metavar="REF", help="check the full history of REF")
     mode.add_argument("--tree", metavar="REF", help="check only the files at REF")
+    p.add_argument("--exclude-remotes", action="store_true",
+                   help="with --range or --all: skip commits any "
+                        "remote-tracking ref already has")
     p.add_argument("--ours", action="append", metavar="'Name <email>'",
                    help="identity whose commits are ours (repeatable; "
                         "replaces the default)")
@@ -655,6 +730,9 @@ def build_parser():
 def run(argv):
     args = build_parser().parse_args(argv)
     git("rev-parse", "--git-dir")
+    if args.exclude_remotes and (args.range is None and args.all is None):
+        raise UsageError("--exclude-remotes needs --range or --all")
+    not_remotes = ["--not", "--remotes"] if args.exclude_remotes else []
     checker = Checker(args)
     try:
         if args.tree is not None:
@@ -665,11 +743,11 @@ def run(argv):
             if args.range is not None:
                 if ".." not in args.range:
                     raise UsageError("--range needs A..B")
-                commits = rev_list(args.range)
+                commits = rev_list(args.range, *not_remotes)
                 tip_spec = args.range.rsplit("..", 1)[1].lstrip(".") or "HEAD"
                 tips = [rev_parse(tip_spec + "^{commit}")]
             elif args.all is not None:
-                commits = rev_list(args.all)
+                commits = rev_list(args.all, *not_remotes)
                 tips = [rev_parse(args.all + "^{commit}")]
             else:
                 commits, tips = plan_pre_push(sys.stdin)
