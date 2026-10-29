@@ -1,3 +1,8 @@
+## 2026-10-29 — Tests find the dlm kit in amix; repo-tools suite runs with bash (ada0a0b, 5831103)
+
+kbootset-consumer.sh defaults to amix's kernel/dlm; a missing kit is a loud SKIP (exit 77), no longer a silent pass.
+README and CONTRIBUTING run tools/repo/tests/run-tests.sh with bash (375/0).
+
 ## 2026-10-26 — APKG 0.3.3 and APKGENG 1.12.4 minted (e98077a, 499f86b) — not published
 
 APKG 0.3.3 = abfaaac's apkg (block nodes in module packages): apkg.amix d45c24c0 (113350 B, reproducible, scan060 CLEAN);
