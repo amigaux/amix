@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-29 — The kit builds under LC_ALL=C; toolchain.pin names jusii/gcc-cross-amix (b4b73ed, 2aeb001)
+
+exports is in the same (bytewise) order on every host; no other kit file changes beyond the revision lines; monsw and
+ramdisk are unchanged. toolchain.pin's url is jusii/gcc-cross-amix, where 8949028 lives; the kit bytes do not read it.
+
 ## 2026-10-29 — mkstore's CD file-name buffer is sized for any id and module count (3c4a95c)
 
 40 bytes, so the host build is clean under gcc 13 with fortify (CI on ubuntu-24.04); names and outputs unchanged, kit
