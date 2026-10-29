@@ -47,6 +47,8 @@
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 set -e
+# the kit's bytes do not depend on the host's locale (exports' sort order)
+export LC_ALL=C
 LINE=$1 OUT=$2
 case "$LINE" in
 k30) KABI=k30.1.3 KABI_MIN=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
