@@ -16,3 +16,6 @@
 # The documentation's example network: one example host and its gateway on
 # a private network, used throughout the install and networking guides.
 1 * \b192\.168\.0\.(10|1)\b
+
+# Emulator user-net defaults (QEMU): 10.0.2.2 gateway/host, 10.0.2.15 guest.
+1 * \b10\.0\.2\.(2|15)\b
