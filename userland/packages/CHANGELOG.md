@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-29 — gcc14 re-pinned to the compiler rebuilt from cf461e3 (e42cb91)
+
+AMIX_GCC14_PINS: cc1 9635f67e, libgcc.a e7efa6e6, libamixc99.a 0dd88b3a (were d4933e78, 5d814507, c73ccc17); specs
+unchanged. The rebuilt compiler's generated code is byte-identical to the old one's (105/105 objects); the hashes differ
+only by embedded paths, DWARF and ar timestamps. Gate 16/16. No package re-mint.
+
 ## 2026-10-29 — recipes find their inputs in the new workspace (b5f765b, a0ff4ef)
 
 k46 cuts are read from amix-040-060-port/build/cuts, k30 cuts from amix-kerntools/build/cuts (kernel-k46, -k46-m,
