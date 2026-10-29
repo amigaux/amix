@@ -57,7 +57,7 @@ part says which half is done and keeps the rest pending.
 | Row | k46 | k30 |
 |---|---|---|
 | S5-10, S5-11 the cuts without ufs and s5 | **PASS** 2026-10-27: -66 (the port abc6080); the packaging cuts since: -91, -50 (the core's build-id fix), -51 (the ufs mount guard), -61 (kabi 1.3) | **PASS** 2026-10-27: -18 (amix-kerntools afde1fd); the packaging cut -20 (224b285, N170c), then -22 (kabi 1.3) |
-| S5-12 the kernel packages carry ufs and s5; `core.list` | **PASS** 2026-10-27: amix-packages mints -91 with ufs, round trip 197/198 (T-51 19:3x, 19:5x); re-minted on -50 (catalog 6f0c1701, 2026-10-28); `core.list` bf10683 | **PASS** 2026-10-27: -20 with ufs and s5, as k46; `core.list` d6b4381 |
+| S5-12 the kernel packages carry ufs and s5; `core.list` | **PASS** 2026-10-27: amix-packages mints -91 with ufs, round trip 197/197 (T-51 19:3x); re-minted on -50 (catalog 6f0c1701, 2026-10-28); `core.list` bf10683 | **PASS** 2026-10-27: -20 with ufs and s5, as k46; `core.list` d6b4381 |
 | root on ufs as a module | **PASS** N191u on -50, candidate 6f0c1701; N191x from -91 (2026-10-28, amix-kerntools 8951642). -91 itself refused its ufs, N181u (the build id, 7b07bce) | **PASS** N180u on -20 (2026-10-28, 8951642) |
 | root on s5 as a module | — (no k46 s5 module, S5-37) | **PASS** N185r (2026-10-28, 8951642) |
 | a 2 KiB-block ufs on k46: mount, `mmap` and page I/O through the converted `ufs_allocmap`/`ufs_freemap` | re-scoped 2026-10-28 to "refused at mount, EINVAL, the box stays up" (plan 6c62e87): stock mkfs makes no such disk (N195k); a crafted one panicked -50 (N199p) and the static -82 alike (N199c). **PASS** as re-scoped on test cut -51, N205g (2026-10-28, amix-kerntools f7ebcbd) | — (k30 runs that disk, N199d) |
