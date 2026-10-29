@@ -1,0 +1,130 @@
+Subject: promotion: the rootfs's boot-class module links from the arena
+
+Contract C4-4 section 1.3 (the orchestrator's decision on amix-cdfs's
+plan): cdfs is boot class on a disk-rooted box and root on the CD
+medium, one object.  kbootset composes it as a root record on a
+generation whose rootfs it is; the core links an arena module of boot
+class only when its fs= is the manifest's rootfs, and refuses any other
+as before.  The state harness checks both.
+
+--- a/dlm_arena.c
++++ b/dlm_arena.c
+@@ -148,6 +148,23 @@
+ 	return g == dlm_mangen && bcmp(p, "/mod/", 5) == 0 && strcmp(p + 5, name) == 0;
+ }
+ 
++/* 1 if the manifest's rootfs record names fs (10 section 5.1) */
++int
++dlm_man_rootfs(fs)
++	char *fs;
++{
++	char *p = dlm_man, *lim = dlm_man + dlm_manlen, *l;
++	int n = strlen(fs);
++
++	for (; p && p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p == 7 + n && bcmp(p, "rootfs ", 7) == 0 && bcmp(p + 7, fs, n) == 0)
++			return 1;
++	}
++	return 0;
++}
++
+ /*
+  * The manifest's record for a boot- or demand-class module: 0 with its
+  * path= (into path, at most cap bytes) and sha256= (64 hex digits into
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -795,7 +795,10 @@
+ 		printf("dlm: %s: root class is loaded from the arena only\n", name);
+ 		return ECONFIG;
+ 	}
+-	if (md->md_class != MD_ROOT && arena) {
++	/* boot class in the arena: only the manifest's root filesystem, which
++	 * kbootset composes as a root record there (C4-4 section 1.3) */
++	if (md->md_class != MD_ROOT && arena &&
++	    !(md->md_class == MD_BOOT && md->md_fs[0] && dlm_man_rootfs(md->md_fs))) {
+ 		printf("dlm: %s: in the arena but not root class\n", name);
+ 		return ECONFIG;
+ 	}
+--- a/dlm.h
++++ b/dlm.h
+@@ -379,7 +379,7 @@
+ extern int dlm_root_pass();		/* (arena): marc_root's root modules */
+ extern void dlm_marc_root();		/* the kernel's hook in rth1_mountroot */
+ extern int dlm_devload;			/* development load this boot */
+-extern int dlm_arena_check(), dlm_man_member();
++extern int dlm_arena_check(), dlm_man_member(), dlm_man_rootfs();
+ extern void dlm_arena_init();
+ extern void ax_sha256();		/* amix-dlm loader/common/sha256.c */
+ 
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -95,6 +95,10 @@
+ armod('ar1b')
+ armod('ar2', deps=('ar9',))
+ mod('ardm')                         # demand class, offered from the arena
++# a boot-class filesystem in the arena (C4-4 section 1.3): linked only as
++# the manifest's rootfs
++mod('pfs', md=['name=pfs', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=boot',
++               'match=always', 'fs=pfs'])
+ # marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
+ # the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
+ # member and rp7 is not
+--- a/test/state.c
++++ b/test/state.c
+@@ -620,7 +620,7 @@
+  * per entry; damage flips a byte after the CRC is taken; inman 0 leaves
+  * the module out of the manifest.
+  */
+-static char *rp_arena, rp_man[2048];
++static char *rp_arena, rp_man[2048], *rp_rootfs;
+ 
+ static int
+ rpbuild(names, flags, damage, inman, count)
+@@ -660,6 +660,10 @@
+ 	}
+ 	P32(a + 12, count);
+ 	P32(a + 24, off);
++	if (rp_rootfs) {
++		sprintf(line, "rootfs %s\n", rp_rootfs);
++		strcat(rp_man, line);
++	}
+ 	strcat(rp_man, "end crc32=00000000\n");
+ 	dlm_man = rp_man;
+ 	dlm_manlen = strlen(rp_man);
+@@ -721,6 +725,26 @@
+ }
+ 
+ /* ---- ramdisk_image (C4-3 section 4) ---- */
++/* a boot-class filesystem from the arena: only as the manifest's rootfs */
++void
++promote_tests()
++{
++	static char *n[] = { "pfs" };
++	static int f[] = { 1 }, d[] = { 0 }, m[] = { 1 };
++	char *man = dlm_man;
++	long manlen = dlm_manlen;
++
++	rp_rootfs = "ufs";
++	check(rpbuild(n, f, d, m, 1) == 0 && dlm_root_pass(rp_arena) == 0 && !byname("pfs"),
++	    "arena: a boot-class filesystem that is not the manifest's rootfs -> not linked");
++	rp_rootfs = "pfs";
++	check(rpbuild(n, f, d, m, 1) == 0 && dlm_root_pass(rp_arena) == 1 && byname("pfs"),
++	    "arena: the manifest's rootfs, a boot-class module, links from the arena (C4-4 1.3)");
++	rp_rootfs = 0;
++	dlm_man = man;
++	dlm_manlen = manlen;
++}
++
+ void
+ rdimg_tests()
+ {
+@@ -2037,6 +2061,7 @@
+ 	root_tests();
+ 	defer_tests();
+ 	rdimg_tests();
++	promote_tests();
+ 	vfs_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);

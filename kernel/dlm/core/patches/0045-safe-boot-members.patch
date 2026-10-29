@@ -1,0 +1,141 @@
+Subject: safe mode: the boot members the owner marked safe=1 load too
+
+Safe mode loaded no boot-class module, so a box whose only NIC is a
+module (every Z3660 box) had no network in a safe boot.  A boot record
+with safe=1 (kbootset writes it from a `safe` line in modreg.local.d,
+S5-09, C4-4 section 2) now loads in safe mode as well: marc_post's boot
+pass takes only those, the demand pass is skipped, and lf_gate lets
+only those through.  Without such a record the old line and behaviour
+stand.  The state harness has the marked and unmarked members.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -429,7 +429,8 @@
+ 	if ((lf->lf_mpath = dlm_zalloc((long)MAXPATHLEN)) == 0)
+ 		return ENOMEM;
+ 	lf->lf_sha[0] = 0;
+-	if (dlm_safe) {			/* the floor and the root controller only */
++	if (dlm_safe && !dlm_man_safeboot(name)) {	/* the floor, the root set, and
++						 * what the owner marked safe */
+ 		printf("dlm: safe mode: %s is refused\n", name);
+ 		return EPERM;
+ 	}
+--- a/dlm.h
++++ b/dlm.h
+@@ -379,7 +379,7 @@
+ extern int dlm_root_pass();		/* (arena): marc_root's root modules */
+ extern void dlm_marc_root();		/* the kernel's hook in rth1_mountroot */
+ extern int dlm_devload;			/* development load this boot */
+-extern int dlm_arena_check(), dlm_man_member(), dlm_man_rootfs();
++extern int dlm_arena_check(), dlm_man_member(), dlm_man_rootfs(), dlm_man_safeboot();
+ extern void dlm_arena_init();
+ extern void ax_sha256();		/* amix-dlm loader/common/sha256.c */
+ 
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -119,8 +119,20 @@
+ 		return;
+ 	dlm_defer_run();	/* root-class drivers' interrupt self-tests (C4-2 section 3) */
+ 	if (dlm_safe) {
+-		printf("dlm: safe mode: no boot- or demand-class module loads this boot\n");
+-		return;
++		/* only the boot members the owner marked safe=1 (S5-09) */
++		for (n = 0, p = dlm_man, lim = dlm_man + dlm_manlen; p < lim && !n; p = l + 1) {
++			for (l = p; l < lim && *l != '\n'; l++)
++				;
++			if (l - p >= 8 && bcmp(p, "module ", 7) == 0) {
++				recname(p + 7, l, name);
++				n = dlm_man_safeboot(name);
++			}
++		}
++		if (!n) {
++			printf("dlm: safe mode: no boot- or demand-class module loads this boot\n");
++			return;
++		}
++		printf("dlm: safe mode: only the boot-class modules marked safe load this boot\n");
+ 	}
+ 	lim = dlm_man + dlm_manlen;
+ 	for (pass = 1; pass <= 2; pass++)
+@@ -131,7 +143,7 @@
+ 				continue;
+ 			recname(p + 7, l, name);
+ 			q = p + 8 + strlen(name);
+-			if (pass == 1 && l - q > 7 && bcmp(q, "demand ", 7) == 0) {
++			if (pass == 1 && !dlm_safe && l - q > 7 && bcmp(q, "demand ", 7) == 0) {
+ 				if (!attr(q, l, "majors=", v, sizeof v))
+ 					continue;
+ 				for (q = v; *q; ) {
+@@ -149,6 +161,8 @@
+ 						q++;
+ 				}
+ 			} else if (pass == 2 && l - q > 5 && bcmp(q, "boot ", 5) == 0) {
++				if (dlm_safe && !dlm_man_safeboot(name))
++					continue;
+ 				if (attr(q, l, "match=", v, sizeof v) && !matches(v)) {
+ 					printf("dlm: boot module %s not loaded: no board matches %s\n",
+ 					    name, v);
+@@ -163,6 +177,35 @@
+ }
+ 
+ /*
++ * Is name a boot-class member the owner marked safe=1 (S5-09, C4-4 section
++ * 2): one that loads in safe mode too?  kbootset writes the mark from a
++ * `safe` line in modreg.local.d, and on the boot members it depends on.
++ */
++int
++dlm_man_safeboot(name)
++	char *name;
++{
++	char rn[MODMAXNAMELEN], v[4], *p, *l, *lim;
++
++	if (dlm_man == 0)
++		return 0;
++	lim = dlm_man + dlm_manlen;
++	for (p = dlm_man; p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p < 8 || bcmp(p, "module ", 7) != 0)
++			continue;
++		recname(p + 7, l, rn);
++		if (strcmp(rn, name) != 0)
++			continue;
++		p += 8 + strlen(rn);
++		return l - p > 5 && bcmp(p, "boot ", 5) == 0 && attr(p, l, "safe=", v, (int)sizeof v) &&
++		    v[0] == '1' && v[1] == 0;
++	}
++	return 0;
++}
++
++/*
+  * A member's parameters from the manifest ("param <name>.<pname>=<value>"
+  * records), as one string "<pname>=<value> ..." into buf; buf[0] is 0 when
+  * there are none.  C3-5: passed to the module's _load.
+--- a/test/state.c
++++ b/test/state.c
+@@ -1268,6 +1268,26 @@
+ 		if ((m = byname("pb1")) != 0)
+ 			moduload(m->m_id);
+ 	}
++	/* the owner's safe=1 on a boot member (S5-09): it loads in safe mode
++	 * too, the unmarked one does not, and demand loading stays refused */
++	sprintf(man, "GMF1\ngeneration 9\n"
++	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=always safe=1\n"
++	    "module pb2 boot 300 path=/stand/gen/7/mod/pb2 sha256=%s match=always\n"
++	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:67\n", s1, s2, s3);
++	mkarena(a, man, 1, 1);
++	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++	pb1_loads = 0;
++	dlm_safe = 1;
++	dlm_marc_run();
++	check(pb1_loads == 1 && byname("pb1") && !byname("pb2"),
++	    "safe mode: a boot member marked safe=1 loads, an unmarked one does not");
++	check(modload("pb2", &id) == EPERM && !byname("pb2") && copen(67, 0, OTYP_CHR) != 0 &&
++	    !byname("pdm"), "safe mode: an unmarked member and demand loading are still refused");
++	check(dlm_man_safeboot("pb1") && !dlm_man_safeboot("pb2") && !dlm_man_safeboot("pdm"),
++	    "dlm_man_safeboot: only a boot record with safe=1");
++	dlm_safe = 0;
++	if ((m = byname("pb1")) != 0)
++		moduload(m->m_id);
+ 	/*
+ 	 * Drivers in boot class: nothing registered their majors for a first
+ 	 * open, so the install registers them.  A STREAMS driver in demand

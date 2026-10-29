@@ -1,0 +1,980 @@
+Subject: .moddata version 2, wrapper revision 2, kabi and compiler-pin checks
+
+A module's .moddata is now version 2 (amix-dlm
+docs/contracts/C3-1-module-object.md): word 0 as before, "MD2\0", then
+NUL-terminated key=value strings ending with an empty one.  The core
+checks every key's syntax, refuses an unknown key that starts with '!',
+and checks the module against this kernel: the name is the file's, the
+kabi family and major are the kernel's and the minor not above it, the
+compiler pin is the kernel's, and a core-tier module carries the
+kernel's build id.  The kernel's kabi and pin come from the kernel build
+(DLM_KABI, DLM_PIN in dlmconf.c), its build id from plat_dmainit().
+Dependencies come from the depend key.  The wrapper revision is 2, so a
+revision-1 core refuses these modules and this core refuses revision 1.
+Root class is refused until the arena load path exists.  mkmod writes
+version 2 from the Master's keys and -K/-P; modfix checks the marker;
+the state harness and test/run.sh gain the C3-1 refusals (modfix -1
+lets the version-1 refusal case through).  30-module-core.md section
+2, patch 4.
+
+--- a/dlmconf.c
++++ b/dlmconf.c
+@@ -20,6 +20,19 @@
+ 	0
+ };
+ 
++/*
++ * This kernel as a module's .moddata names it (C3-1): its kabi tag and
++ * compiler pin, given by the kernel build (C2-3's sidecar kabi= and pin=,
++ * the same values), and its build id, set by the platform's plat_dmainit()
++ * where the kernel has one; a core-tier module needs it.
++ */
++#if !defined(DLM_KABI) || !defined(DLM_PIN)
++#error "the kernel build defines DLM_KABI and DLM_PIN (the sidecar's kabi= and pin=)"
++#endif
++char	*dlm_kabi = DLM_KABI;
++char	*dlm_pin = DLM_PIN;
++char	*dlm_build = 0;
++
+ #ifndef DLM_HOST
+ extern void plat_dmainit();
+ 
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -498,6 +498,63 @@
+  * Load the module named by the last component of path, or find it
+  * loaded.  depth counts dependency levels from 1.
+  */
++/* "k<fam>.<major>.<minor>" into its numbers: 0, or -1 if malformed */
++static int
++sscanf3(s, fam, major, minor)
++	char *s;
++	int *fam, *major, *minor;
++{
++	int *v[3], i;
++
++	v[0] = fam, v[1] = major, v[2] = minor;
++	if (*s++ != 'k')
++		return -1;
++	for (i = 0; i < 3; i++) {
++		if (*s < '0' || *s > '9')
++			return -1;
++		for (*v[i] = 0; *s >= '0' && *s <= '9'; s++)
++			*v[i] = *v[i] * 10 + (*s - '0');
++		if (*s != (i < 2 ? '.' : 0))
++			return -1;
++		s++;
++	}
++	return 0;
++}
++
++/*
++ * What .moddata says against this kernel (C3-1 sections 3-4): the name
++ * is the file's, the kabi family and major are the kernel's and the
++ * minor not above it, the compiler pin is the kernel's, a core-tier
++ * module was built against this kernel, and the class is one this core
++ * loads (root class comes with the arena load path).
++ */
++static int
++md_check(ld, name)
++	struct dlm_ld *ld;
++	char *name;
++{
++	struct dlm_md *md = &ld->ld_md;
++	int fam, major, minor;
++
++	if (strcmp(md->md_name, name) != 0) {
++		printf("dlm: %s: .moddata names %s\n", name, md->md_name);
++		return ECONFIG;
++	}
++	if (dlm_kabi == 0 || dlm_pin == 0 ||
++	    sscanf3(dlm_kabi, &fam, &major, &minor) != 0 || md->md_fam != fam ||
++	    md->md_major != major || md->md_minor > minor ||
++	    strcmp(md->md_cc, dlm_pin) != 0 ||
++	    (md->md_tier && (dlm_build == 0 || strcmp(md->md_build, dlm_build) != 0))) {
++		printf("dlm: %s: built for another kernel (kabi, compiler pin or build)\n", name);
++		return EBADVER;
++	}
++	if (md->md_class == MD_ROOT) {
++		printf("dlm: %s: root class is loaded from the arena only\n", name);
++		return ECONFIG;
++	}
++	return 0;
++}
++
+ int
+ dlm_load(path, flags, depth, g, mp)
+ 	char *path;
+@@ -569,16 +626,13 @@
+ 	}
+ 	if ((e = lf_find(lf, path, m)) != 0)
+ 		goto fail;
+-	if ((e = dlm_ld_hdr(ld)) != 0 || (e = dlm_ld_moddata(ld)) != 0)
++	if ((e = dlm_ld_hdr(ld)) != 0 || (e = dlm_ld_moddata(ld)) != 0 ||
++	    (e = md_check(ld, name)) != 0)
+ 		goto fail;
+ 
+ 	/* dependencies */
+-	for (n = 0, pos = 4; (i = dlm_ld_dep(ld, &pos, dep)) > 0; n++)
++	for (n = 0, pos = 0; dlm_ld_dep(ld, &pos, dep) > 0; n++)
+ 		;
+-	if (i < 0) {
+-		e = EINVAL;
+-		goto fail;
+-	}
+ 	m->m_maxdep = n;
+ 	if (n) {
+ 		m->m_dep = (struct dlm_mod **)dlm_zalloc((long)n *
+@@ -586,7 +640,7 @@
+ 		lf->lf_depsz = n * sizeof (char *);
+ 		lf->lf_deptab = (char **)dlm_zalloc((long)lf->lf_depsz);
+ 	}
+-	for (pos = 4; dlm_ld_dep(ld, &pos, dep) > 0;) {
++	for (pos = 0; dlm_ld_dep(ld, &pos, dep) > 0;) {
+ 		if (isstatic(dep))
+ 			continue;
+ 		if (dlm_load(dep, DL_SYS, depth + 1, g, &dm) != 0) {
+--- a/dlm.h
++++ b/dlm.h
+@@ -35,7 +35,7 @@
+ #include "sys/kmem.h"
+ extern char stext[], end[];
+ extern char *strcpy(), *strncpy();
+-extern int strcmp(), strlen();
++extern int strcmp(), strlen(), strncmp(), bcmp();
+ extern void bcopy(), bzero();
+ #endif
+ 
+@@ -131,6 +131,23 @@
+ #define	LS_REL		1	/* image offset */
+ #define	LS_ABS		2	/* absolute */
+ 
++/* .moddata version 2 as dlm_ld_moddata found it (C3-1 section 3) */
++#define	MD_MAXSZ	2048		/* the whole section */
++#define	MD_MAXSTR	255		/* one key=value string */
++#define	MD_ROOT		1
++#define	MD_BOOT		2
++#define	MD_DEMAND	3
++struct dlm_md {
++	char		md_name[MODMAXNAMELEN];
++	int		md_fam, md_major, md_minor;	/* fam 30 or 46 */
++	char		*md_cc;		/* into ld_mod; valid until dlm_ld_free */
++	char		*md_build;	/* 0 unless given */
++	int		md_class;	/* MD_ROOT, MD_BOOT, MD_DEMAND */
++	int		md_unload;	/* 1: unload=allowed */
++	int		md_tier;	/* 0 ddi, 1 core */
++	long		md_depoff;	/* the depend value in ld_mod, or -1 */
++};
++
+ /* loader state for one file */
+ struct dlm_ld {
+ 	struct dlm_ld	*ld_next;	/* guard chain, innermost first */
+@@ -150,9 +167,10 @@
+ 	char		*ld_str;
+ 	struct dlm_lsym	*ld_ls;
+ 	int		ld_nundef;
+-	/* type-13 contents as read from the file */
++	/* type-13 contents as read from the file, and what they say */
+ 	char		*ld_mod;
+ 	long		ld_modsz;
++	struct dlm_md	ld_md;
+ 	/* resolution: dependency tables, searched last first */
+ 	char		**ld_deptab;
+ 	int		ld_ndep;
+@@ -312,5 +330,6 @@
+ extern int dlm_def_unload_delay;
+ extern int dlm_unload_wake;
+ extern char *dlm_static[];
++extern char *dlm_kabi, *dlm_pin, *dlm_build;	/* this kernel, for .moddata */
+ 
+ #endif	/* _DLM_H */
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -143,20 +143,319 @@
+ 	return 0;
+ }
+ 
+-/* The type-13 section's bytes, as in the file. */
++/* ---- .moddata version 2 (docs/contracts/C3-1-module-object.md) ---- */
++
++/* the first c in s, or 0 (no strchr in every kernel's DDI) */
++static char *
++chr(s, c)
++	char *s;
++	int c;
++{
++	for (; *s; s++)
++		if (*s == c)
++			return s;
++	return 0;
++}
++
++static int
++isname(c)
++	int c;
++{
++	return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
++}
++
++static int
++ishex(c)
++	int c;
++{
++	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
++}
++
++/* a decimal number of 1..5 digits at *pp, up to stop; -1 if none */
++static long
++decnum(pp, stop)
++	char **pp;
++	int stop;
++{
++	char *p = *pp;
++	long v = 0;
++	int n = 0;
++
++	while (*p >= '0' && *p <= '9' && n < 5)
++		v = v * 10 + (*p++ - '0'), n++;
++	if (n == 0 || *p != stop)
++		return -1;
++	*pp = p;
++	return v;
++}
++
++/* comma-separated items of v, each checked by ok(); 0 when all pass */
++static int
++eachitem(v, ok)
++	char *v;
++	int (*ok)();
++{
++	char item[MD_MAXSTR + 1], *p = v;
++	int n;
++
++	if (*v == 0)
++		return ECONFIG;
++	for (;;) {
++		for (n = 0; *p && *p != ','; )
++			item[n++] = *p++;
++		item[n] = 0;
++		if (!(*ok)(item))
++			return ECONFIG;
++		if (*p == 0)
++			return 0;
++		p++;
++	}
++}
++
++static int
++okname(s)
++	char *s;
++{
++	int n;
++
++	for (n = 0; s[n]; n++)
++		if (!isname(s[n]) || n >= MODMAXNAMELEN - 1)
++			return 0;
++	return n > 0;
++}
++
++/* zorro:MMMM:PP (neither all zero), mobo:<probe>, always */
++static int
++okmatch(s)
++	char *s;
++{
++	int i;
++
++	if (strcmp(s, "always") == 0)
++		return 1;
++	if (strncmp(s, "mobo:", 5) == 0)
++		return okname(s + 5);
++	if (strncmp(s, "zorro:", 6) != 0 || strlen(s) != 13 || s[10] != ':')
++		return 0;
++	for (i = 6; i < 13; i++)
++		if (i != 10 && !ishex(s[i]))
++			return 0;
++	return strncmp(s + 6, "0000", 4) != 0 && strncmp(s + 11, "00", 2) != 0;
++}
++
++/* c:<n> or b:<n>, n 0..255 */
++static int
++okmajor(s)
++	char *s;
++{
++	char *p = s + 2;
++	long n;
++
++	if ((s[0] != 'c' && s[0] != 'b') || s[1] != ':')
++		return 0;
++	n = decnum(&p, 0);
++	return n >= 0 && n <= 255;
++}
++
++/* <name>:<int|bool|str|hex>:<default>[:<min>:<max>] */
++static int
++okparam(s)
++	char *s;
++{
++	char *p = chr(s, ':');
++	int n, colons = 0;
++
++	if (p == 0)
++		return 0;
++	*p = 0;
++	n = okname(s);
++	*p = ':';
++	if (!n)
++		return 0;
++	p++;
++	if (strncmp(p, "int:", 4) && strncmp(p, "bool:", 5) && strncmp(p, "str:", 4) &&
++	    strncmp(p, "hex:", 4))
++		return 0;
++	for (; *p; p++)
++		if (*p == ':')
++			colons++;
++	return colons == 1 || colons == 3;
++}
++
++static int
++okparamv(s)
++	char *s;
++{
++	char v[MD_MAXSTR + 1];
++
++	strcpy(v, s);
++	return okparam(v);
++}
++
++#define	K_NAME		0x0001
++#define	K_KABI		0x0002
++#define	K_CC		0x0004
++#define	K_CPU		0x0008
++#define	K_CLASS		0x0010
++#define	K_MATCH		0x0020
++#define	K_RANK		0x0040
++#define	K_MAJORS	0x0080
++#define	K_FS		0x0100
++#define	K_DEPEND	0x0200
++#define	K_UNLOAD	0x0400
++#define	K_TIER		0x0800
++#define	K_BUILD		0x1000
++#define	K_DESC		0x2000
++#define	K_REQUIRED	(K_NAME | K_KABI | K_CC | K_CPU | K_CLASS)
++
++static struct mdkey {
++	char	*k_name;
++	int	k_bit;		/* 0: may repeat (param) */
++} mdkeys[] = {
++	{ "name", K_NAME }, { "kabi", K_KABI }, { "cc", K_CC }, { "cpu", K_CPU },
++	{ "class", K_CLASS }, { "match", K_MATCH }, { "rank", K_RANK },
++	{ "majors", K_MAJORS }, { "fs", K_FS }, { "depend", K_DEPEND },
++	{ "unload", K_UNLOAD }, { "tier", K_TIER }, { "build", K_BUILD },
++	{ "desc", K_DESC }, { "param", 0 }, { 0, 0 }
++};
++
++/* one key=value at s (NUL-terminated, inside ld_mod): 0 or the errno */
++static int
++mdkey(ld, s, seen)
++	struct dlm_ld *ld;
++	char *s;
++	int *seen;
++{
++	struct dlm_md *md = &ld->ld_md;
++	struct mdkey *kp;
++	char *v = chr(s, '='), *p;
++	long n;
++
++	if (v == 0 || v == s)
++		return ECONFIG;
++	*v = 0;
++	for (kp = mdkeys; kp->k_name && strcmp(kp->k_name, s); kp++)
++		;
++	*v++ = '=';
++	if (kp->k_name == 0)		/* unknown: ignored, unless critical */
++		return *s == '!' ? ECONFIG : 0;
++	if (kp->k_bit) {
++		if (*seen & kp->k_bit)
++			return ECONFIG;
++		*seen |= kp->k_bit;
++	}
++	switch (kp->k_bit) {
++	case K_NAME:
++		if (strlen(v) > MODMAXNAMELEN - 1)
++			return ENAMETOOLONG;
++		if (!okname(v))
++			return ECONFIG;
++		strcpy(md->md_name, v);
++		return 0;
++	case K_KABI:
++		if (v[0] != 'k' || (strncmp(v + 1, "30.", 3) && strncmp(v + 1, "46.", 3)))
++			return ECONFIG;
++		md->md_fam = (v[1] - '0') * 10 + (v[2] - '0');
++		p = v + 4;
++		if ((n = decnum(&p, '.')) < 0)
++			return ECONFIG;
++		md->md_major = (int)n;
++		p++;
++		if ((n = decnum(&p, 0)) < 0)
++			return ECONFIG;
++		md->md_minor = (int)n;
++		return 0;
++	case K_CC:
++		if (*v == 0)
++			return ECONFIG;
++		md->md_cc = v;
++		return 0;
++	case K_CPU:
++		return strcmp(v, "68020") && strcmp(v, "68030") && strcmp(v, "68040") &&
++		    strcmp(v, "68060") ? ECONFIG : 0;
++	case K_CLASS:
++		md->md_class = strcmp(v, "root") == 0 ? MD_ROOT : strcmp(v, "boot") == 0 ?
++		    MD_BOOT : strcmp(v, "demand") == 0 ? MD_DEMAND : 0;
++		return md->md_class ? 0 : ECONFIG;
++	case K_MATCH:
++		return eachitem(v, okmatch);
++	case K_MAJORS:
++		return eachitem(v, okmajor);
++	case K_DEPEND:
++		md->md_depoff = v - ld->ld_mod;
++		return eachitem(v, okname);
++	case K_UNLOAD:
++		if (strcmp(v, "allowed") == 0)
++			md->md_unload = 1;
++		else if (strcmp(v, "never"))
++			return ECONFIG;
++		return 0;
++	case K_TIER:
++		if (strcmp(v, "core") == 0)
++			md->md_tier = 1;
++		else if (strcmp(v, "ddi"))
++			return ECONFIG;
++		return 0;
++	case K_BUILD:
++		if (*v == 0)
++			return ECONFIG;
++		md->md_build = v;
++		return 0;
++	case 0:				/* param */
++		return okparamv(v) ? 0 : ECONFIG;
++	default:			/* rank, fs, desc: checked where used */
++		return 0;
++	}
++}
++
++/*
++ * The type-13 section: read, then checked as .moddata version 2.  Word 0
++ * is the wrapper's relocation (checked with the image), bytes 4..7 are
++ * "MD2\0", then NUL-terminated key=value strings end with an empty one.
++ * A file without the marker (version 1) is EBADVER; a malformed or
++ * missing key ECONFIG; a name over 14 characters ENAMETOOLONG.
++ */
+ int
+ dlm_ld_moddata(ld)
+ 	struct dlm_ld *ld;
+ {
++	struct dlm_md *md = &ld->ld_md;
++	char *p, *lim;
++	int seen = 0, e;
++	long n;
++
+ 	ld->ld_modsz = SHW(ld, ld->ld_modsec, SH_SIZE);
+-	ld->ld_mod = dlm_zalloc(ld->ld_modsz);
+-	return rdx(ld, SHW(ld, ld->ld_modsec, SH_OFFSET), ld->ld_mod,
+-	    ld->ld_modsz, ERELOC) ? ERELOC : 0;
++	ld->ld_mod = dlm_zalloc(ld->ld_modsz + 1);	/* NUL past the end */
++	if (rdx(ld, SHW(ld, ld->ld_modsec, SH_OFFSET), ld->ld_mod,
++	    ld->ld_modsz, ERELOC))
++		return ERELOC;
++	bzero((caddr_t)md, sizeof *md);
++	md->md_depoff = -1;
++	if (ld->ld_modsz < 12 || bcmp(ld->ld_mod + 4, "MD2", 4) != 0)
++		return EBADVER;
++	if (ld->ld_modsz > MD_MAXSZ)
++		return ECONFIG;
++	lim = ld->ld_mod + ld->ld_modsz;
++	for (p = ld->ld_mod + 8; ; p += n + 1) {
++		if (p >= lim)
++			return ECONFIG;		/* no closing empty string */
++		n = strlen(p);
++		if (p + n >= lim || n > MD_MAXSTR)
++			return ECONFIG;
++		if (n == 0)
++			break;
++		if ((e = mdkey(ld, p, &seen)) != 0)
++			return e;
++	}
++	if ((seen & K_REQUIRED) != K_REQUIRED || (md->md_tier && md->md_build == 0))
++		return ECONFIG;
++	return 0;
+ }
+ 
+ /*
+- * Next dependency name after *pos (start at 4): 1 with the name copied,
+- * 0 at the end, -1 if a name is longer than MODMAXNAMELEN - 1.
++ * Next dependency name after *pos (start at 0), from the depend key:
++ * 1 with the name copied, 0 at the end.  dlm_ld_moddata checked the
++ * names, so none is longer than MODMAXNAMELEN - 1.
+  */
+ int
+ dlm_ld_dep(ld, pos, name)
+@@ -164,25 +463,21 @@
+ 	long *pos;
+ 	char *name;
+ {
+-	char *p = ld->ld_mod;
+-	long i = *pos, n;
++	char *p;
++	long n;
+ 
+-#define	SEP(c)	((c) == 0 || (c) == ' ' || (c) == '\t')
+-	while (i < ld->ld_modsz && SEP(p[i]))
+-		i++;
+-	if (i >= ld->ld_modsz) {
+-		*pos = i;
++	if (ld->ld_md.md_depoff < 0)
+ 		return 0;
+-	}
+-	for (n = 0; i < ld->ld_modsz && !SEP(p[i]); i++, n++) {
+-		if (n >= MODMAXNAMELEN - 1)
+-			return -1;
+-		name[n] = p[i];
+-	}
++	p = ld->ld_mod + ld->ld_md.md_depoff + *pos;
++	if (*p == 0)
++		return 0;
++	if (*p == ',')
++		p++, (*pos)++;
++	for (n = 0; *p && *p != ','; n++)
++		name[n] = *p++;
+ 	name[n] = 0;
+-	*pos = i;
++	*pos += n;
+ 	return 1;
+-#undef	SEP
+ }
+ 
+ /* own-definition hash, used while resolving */
+@@ -550,7 +845,7 @@
+ 		dlm_free((char *)ld->ld_ls, ld->ld_nsym *
+ 		    (long)sizeof (struct dlm_lsym));
+ 	if (ld->ld_mod)
+-		dlm_free(ld->ld_mod, ld->ld_modsz);
++		dlm_free(ld->ld_mod, ld->ld_modsz + 1);
+ 	if (ld->ld_tab)
+ 		dlm_free(ld->ld_tab, ld->ld_tabsz);
+ 	if (ld->ld_rbuf)
+--- a/include/sys/moddefs.h
++++ b/include/sys/moddefs.h
+@@ -5,7 +5,12 @@
+ #ifndef _SYS_MODDEFS_H
+ #define _SYS_MODDEFS_H
+ 
+-#define	MODREV	1
++/*
++ * Revision 2: .moddata is version 2 (word 0, "MD2\0", key=value strings;
++ * docs/contracts/C3-1-module-object.md in amix-dlm).  A revision-1 core
++ * refuses such a module, and this core refuses revision 1.
++ */
++#define	MODREV	2
+ 
+ struct mod_operations {
+ 	int	(*modm_install)();	/* (struct dlm_mod *, void *typedata) */
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -10,6 +10,9 @@
+ int	dlm_def_unload_delay = 60;
+ int	dlm_unload_wake = 60;
+ char	*dlm_static[] = { "stat1", 0 };
++char	*dlm_kabi = "k46.1.3";		/* the harness's kernel */
++char	*dlm_pin = "gcc-2.7.2.3-8949028";
++char	*dlm_build = "68060-261101-01";
+ 
+ /* stock exec rows and a hook table, as the static kernel has them */
+ int	stock_calls, stock_rv = 42;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -5,15 +5,36 @@
+ #
+ # Each module <p> has global <p>_load and <p>_unload (the harness binds
+ # behaviour to these names), a wrapper with one mod_miscops linkage, and
+-# a .moddata section with its dependency names.  Prints one line per
+-# module: "name file".
++# a .moddata section, version 2 (amix-dlm docs/contracts/C3-1): "MD2\0",
++# name, kabi, cc, cpu, class, its dependencies, extra keys.  md= replaces
++# the key strings, v1=True writes version 1 (the dependency names).
++# Prints one line per module: "name file [modfix flags]".
+ import os, sys
+ 
+ out = sys.argv[1]
+ os.makedirs(out, exist_ok=True)
+ 
+ 
+-def mod(p, deps='', rev=1, text='', data='', ops='mod_miscops', pdata='0'):
++KABI = 'k46.1.3'                  # the harness's kernel (hconf.c)
++PIN = 'gcc-2.7.2.3-8949028'
++
++
++def moddata(p, deps, md, v1):
++    if v1:
++        return '\t.ascii\t"{d}"\n\t.byte\t0\n'.format(d=deps)
++    if md is None:
++        md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand']
++        dl = [d for d in deps.replace('\\t', ' ').split() if d]
++        if dl:
++            md.append('depend=' + ','.join(dl))
++    return '\t.byte\t0x4d, 0x44, 0x32, 0\n' + ''.join(
++        '\t.asciz\t"{k}"\n'.format(k=k) for k in md) + '\t.byte\t0\n'
++
++
++def mod(p, deps='', rev=2, text='', data='', ops='mod_miscops', pdata='0', md=None,
++        v1=False, extra=()):
++    if md is None and extra:
++        md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'] + list(extra)
+     s = '''	.text
+ 	.globl	{p}_load
+ 	.globl	{p}_unload
+@@ -39,11 +60,10 @@
+ 	.section .moddata,"aw",@progbits
+ 	.balign	4
+ 	.long	{p}_wrapper
+-	.ascii	"{deps}"
+-	.byte	0
+-'''.format(p=p, deps=deps, rev=rev, text=text, data=data, ops=ops, pdata=pdata)
++{md}'''.format(p=p, rev=rev, text=text, data=data, ops=ops, pdata=pdata,
++               md=moddata(p, deps, md, v1))
+     open(os.path.join(out, p + '.s'), 'w').write(s)
+-    print(p, os.path.join(out, p + '.s'))
++    print(p, os.path.join(out, p + '.s'), '-1' if v1 else '')
+ 
+ 
+ # a 3-chain for moduload(0): ha -> hb -> hc
+@@ -56,8 +76,8 @@
+ # depth: d1 -> d2 -> ... -> d9
+ for i in range(1, 10):
+     mod('d%d' % i, 'd%d' % (i + 1) if i < 9 else '')
+-# wrapper revision 2
+-mod('rev2', rev=2)
++# wrapper revision 1 (the version-1 core's)
++mod('rev1', rev=1)
+ # shadowing: shu uses bcmp; its dependency shd defines one
+ mod('shd', text='\t.globl\tbcmp\nbcmp:\n\trts\n')
+ mod('shu', 'shd', data='\t.globl\tshu_ref\nshu_ref:\n\t.long\tbcmp\n')
+@@ -124,3 +144,29 @@
+ drvmod('cd', 60)
+ drvmod('cdold', 61, flag='1')
+ drvmod('cdblk', 62, bcount=1)
++
++
++# .moddata version 2 (C3-1): each module breaks one rule
++mod('mdv1', v1=True)                                        # no MD2 marker
++mod('mdfam', md=['name=mdfam', 'kabi=k30.1.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdmaj', md=['name=mdmaj', 'kabi=k46.2.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdmin', md=['name=mdmin', 'kabi=k46.1.4', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdmok', md=['name=mdmok', 'kabi=k46.1.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdcc', md=['name=mdcc', 'kabi=' + KABI, 'cc=gcc-14.2.0', 'cpu=68020', 'class=demand'])
++mod('mdname', md=['name=other', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdnocl', md=['name=mdnocl', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020'])
++mod('mdroot', md=['name=mdroot', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root'])
++mod('mdzero', extra=['match=zorro:0000:00'])
++mod('mdzpr', extra=['match=zorro:144b:00'])
++mod('mdcrit', extra=['!future=1'])
++mod('mdunkn', extra=['future=1'])                           # ignored: loads
++mod('mddup', extra=['class=boot'])
++mod('mdlong', md=['name=mdlongnamemorethan14', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020',
++                  'class=demand'])
++mod('mdtier', extra=['tier=core'])                          # core tier without build
++mod('mdtbad', extra=['tier=core', 'build=68060-000000-00'])
++mod('mdtok', extra=['tier=core', 'build=68060-261101-01'])
++mod('mdkeys', extra=['match=zorro:144b:01,mobo:gayle,always', 'majors=c:51,b:20',
++                     'unload=allowed', 'param=intr:int:6:0:7', 'param=mac:str:-',
++                     'desc=every key'])
++
+--- a/test/mod/dlmdep/Master
++++ b/test/mod/dlmdep/Master
+@@ -1,3 +1,5 @@
+ # dlmdep: test dependency
+ $modtype misc
++$class demand
++$cpu 68020
+ dlmdep	dlmdep	m	0	0	0
+--- a/test/mod/dlmtest/Master
++++ b/test/mod/dlmtest/Master
+@@ -1,4 +1,6 @@
+ # dlmtest: MISC test module
+ $depend dlmdep
+ $modtype misc
++$class demand
++$cpu 68020
+ dlmtest	dlmtest	m	0	0	0
+--- a/test/mod/dlmtest2/Master
++++ b/test/mod/dlmtest2/Master
+@@ -1,4 +1,6 @@
+ # dlmtest2: dlmtest built with -O2 -m68040
+ $depend dlmdep
+ $modtype misc
++$class demand
++$cpu 68040
+ dlmtest2	dlmtest	m	0	0	0
+--- a/test/mod/rall/Master
++++ b/test/mod/rall/Master
+@@ -1,3 +1,5 @@
+ # rall: every relocation type
+ $modtype misc
++$class demand
++$cpu 68020
+ rall	rall	m	0	0	0
+--- a/test/run.sh
++++ b/test/run.sh
+@@ -24,6 +24,8 @@
+ AUX=$(cd "$DLM/../.." && pwd)
+ IMG=$1
+ B=$2
++# mkmod's -K and -P: the kernel the modules are built for (.moddata v2)
++export DLM_KABI=${DLM_KABI:-k46.1.0} DLM_PIN=${DLM_PIN:-gcc-2.7.2.3-8949028}
+ . "$AUX/toolchain/src/gcc-cross-amix/build/env.sh"
+ PATH="$AUX/toolchain/bin:$PATH"
+ export PATH
+@@ -205,8 +207,10 @@
+ mkdir -p "$N"
+ python3 "$T/mkneg.py" "$M/mod.d/rall" "$N" > "$N/list"
+ asmneg() {	# asmneg name errno what source
+-	printf '%s\n\t.data\n\t.globl\t%s_wrapper\n%s_wrapper:\n\t.long\t1,0,0,0,0,0\n' "$4" "$1" "$1" > "$N/$1.s"
++	printf '%s\n\t.data\n\t.globl\t%s_wrapper\n%s_wrapper:\n\t.long\t2,0,0,0,0,0\n' "$4" "$1" "$1" > "$N/$1.s"
+ 	printf '\t.section .moddata,"aw",@progbits\n\t.balign\t4\n\t.long\t%s_wrapper\n' "$1" >> "$N/$1.s"
++	printf '\t.byte\t0x4d, 0x44, 0x32, 0\n\t.asciz\t"name=%s"\n\t.asciz\t"kabi=%s"\n\t.asciz\t"cc=%s"\n\t.asciz\t"cpu=68020"\n\t.asciz\t"class=demand"\n\t.byte\t0\n' \
++		"$1" "$DLM_KABI" "$DLM_PIN" >> "$N/$1.s"
+ 	m68k-cbm-sysv4-as -o "$N/$1.o" "$N/$1.s"
+ 	m68k-cbm-sysv4-ld -r -o "$N/$1" "$N/$1.o"
+ 	"$TB/modfix" -p "$1" -m "$1" "$N/$1"
+@@ -235,10 +239,10 @@
+ R=$W/root/etc/conf/mod.d
+ mkdir -p "$R"
+ python3 "$T/mkmods.py" "$W/hmods" > "$W/hmods.list"
+-while read n s; do
++while read n s f; do
+ 	m68k-cbm-sysv4-as -o "$W/hmods/$n.o" "$s"
+ 	m68k-cbm-sysv4-ld -r -o "$R/$n" "$W/hmods/$n.o"
+-	"$TB/modfix" -p "$n" -m "$n" "$R/$n"
++	"$TB/modfix" $f -p "$n" -m "$n" "$R/$n"
+ done < "$W/hmods.list"
+ if "$B/test-bin/state" "$W/ksym.bin" "$W/root" > "$W/state.log" 2>&1; then
+ 	sed 's/^/state: /' "$W/state.log" | grep -v '^state: PASS'
+--- a/test/state.c
++++ b/test/state.c
+@@ -323,6 +323,38 @@
+ 	(void)id;
+ }
+ 
++/* .moddata version 2 against the harness's kernel k46.1.3 (C3-1) */
++void
++md_tests()
++{
++	int id, n = nloaded();
++
++#define	REFUSED(name, err, what) \
++	check(modload(name, &id) == (err) && !byname(name) && nloaded() == n, what)
++	REFUSED("mdv1", EBADVER, ".moddata version 1 (no MD2) -> EBADVER");
++	REFUSED("mdfam", EBADVER, "kabi family k30 on a k46 kernel -> EBADVER");
++	REFUSED("mdmaj", EBADVER, "kabi major 2 on k46.1 -> EBADVER");
++	REFUSED("mdmin", EBADVER, "kabi minor 4 above the kernel's 3 -> EBADVER");
++	REFUSED("mdcc", EBADVER, "another compiler pin -> EBADVER");
++	REFUSED("mdtbad", EBADVER, "core tier built for another kernel -> EBADVER");
++	REFUSED("mdname", ECONFIG, ".moddata names another module -> ECONFIG");
++	REFUSED("mdnocl", ECONFIG, "no class key -> ECONFIG");
++	REFUSED("mdroot", ECONFIG, "root class outside the arena -> ECONFIG");
++	REFUSED("mdzero", ECONFIG, "zorro:0000:00 match key -> ECONFIG");
++	REFUSED("mdzpr", ECONFIG, "zorro key with product 00 -> ECONFIG");
++	REFUSED("mdcrit", ECONFIG, "unknown critical key -> ECONFIG");
++	REFUSED("mddup", ECONFIG, "a key given twice -> ECONFIG");
++	REFUSED("mdtier", ECONFIG, "core tier without build -> ECONFIG");
++	REFUSED("mdlong", ENAMETOOLONG, ".moddata name over 14 -> ENAMETOOLONG");
++#undef	REFUSED
++	check(modload("mdmok", &id) == 0 && byname("mdmok"), "kabi minor 0 on a minor-3 kernel loads");
++	check(modload("mdunkn", &id) == 0 && byname("mdunkn"), "an unknown key is ignored");
++	check(modload("mdtok", &id) == 0 && byname("mdtok"),
++	    "core tier with this kernel's build loads");
++	check(modload("mdkeys", &id) == 0 && byname("mdkeys"),
++	    "match, majors, unload, param, desc all accepted");
++}
++
+ void
+ hook_tests()
+ {
+@@ -562,8 +594,8 @@
+ 	/* ---- ids, gaps, demand ---- */
+ 	e = modload("m1", &id1);
+ 	check(e == 0 && id1 == 1, "modload m1 -> id 1");
+-	e = modload("rev2", &id);
+-	check(e == EBADVER, "wrapper revision 2 -> EBADVER");
++	e = modload("rev1", &id);
++	check(e == EBADVER, "wrapper revision 1 -> EBADVER");
+ 	e = modload("m2", &id2);
+ 	check(e == 0 && id2 == 3, "failed load consumed id 2; m2 -> id 3");
+ 	e = modload("/etc/conf/mod.d/m1", &id);
+@@ -578,7 +610,7 @@
+ 	/* ---- modstat ---- */
+ 	e = modstat(id1, &st, 0);
+ 	check(e == 0 && st.ms_id == 1 && strcmp(st.ms_name, "m1") == 0 &&
+-	    strcmp(st.ms_path, "/etc/conf/mod.d/m1") == 0 && st.ms_rev == 1 &&
++	    strcmp(st.ms_path, "/etc/conf/mod.d/m1") == 0 && st.ms_rev == MODREV &&
+ 	    st.ms_flags == MS_DEMAND && st.ms_unload_delay == 60 &&
+ 	    strcmp(st.ms_msinfo[0].mss_linkinfo, "m1 test module") == 0 &&
+ 	    st.ms_msinfo[0].mss_type == MOD_TY_MISC &&
+@@ -827,6 +859,7 @@
+ 	check(candok() && dlm_cand && moduload(0) == 0 && dlm_cand == 0,
+ 	    "all released: all candidates, then unloaded");
+ 
++	md_tests();
+ 	host_handler("xa_exec", h_xa);
+ 	exec_tests();
+ 	hook_tests();
+--- a/tools/mkmod
++++ b/tools/mkmod
+@@ -1,11 +1,15 @@
+ #!/bin/sh
+ # mkmod -- build a loadable module from a module directory (MISC type).
+ #
+-#   mkmod [-k kernel.elf | -e exports] [-d depmodule]... [-o outdir] dir
++#   mkmod [-k kernel.elf | -e exports] [-d depmodule]... [-K kabi] [-P pin]
++#         [-o outdir] dir
+ #
+ # dir holds:
+ #   Driver.o   the module's code (any number of objects linked into it)
+ #   Master     "$depend a b ..." lines (any number), "$modtype misc",
++#              the .moddata v2 keys as "$class boot|demand", "$cpu 68020"
++#              (required), "$match", "$majors", "$unload", "$tier",
++#              "$build", "$desc" (one each) and "$param" (any number),
+ #              and a final line "name prefix flags ..." ('#' comments)
+ #   Space.c    optional, compiled and linked in
+ #   Mtune      optional, "PREFIX_UNLOAD_DELAY n" (seconds)
+@@ -19,6 +23,10 @@
+ # Undefined symbols are checked against the kernel's exports (mkksym -x
+ # of the image, or -e file) and the dependencies (-d, or the $depend
+ # modules already in outdir/mod.d); mkmod fails closed.
++#
++# .moddata is version 2 (amix-dlm docs/contracts/C3-1-module-object.md):
++# word 0, "MD2\0", then name=, kabi= and cc= (from -K and -P, or
++# DLM_KABI and DLM_PIN), the Master's keys, and an empty string.
+ set -e
+ 
+ HERE=$(cd "$(dirname "$0")" && pwd)
+@@ -28,11 +36,14 @@
+ TB="${DLM_TOOLS:-$DLM/build/tools}"
+ 
+ KERN= EXP= DEPS= OUT=./build
++KABI=$DLM_KABI PIN=$DLM_PIN
+ while [ $# -gt 1 ]; do
+ 	case "$1" in
+ 	-k) KERN=$2; shift 2 ;;
+ 	-e) EXP=$2; shift 2 ;;
+ 	-d) DEPS="$DEPS -d $2"; shift 2 ;;
++	-K) KABI=$2; shift 2 ;;
++	-P) PIN=$2; shift 2 ;;
+ 	-o) OUT=$2; shift 2 ;;
+ 	*) break ;;
+ 	esac
+@@ -49,6 +60,10 @@
+ DEPEND=$(sed -n 's/^\$depend[ 	]*//p' "$D/Master" | tr '\n' ' ')
+ TYPE=$(sed -n 's/^\$modtype[ 	]*//p' "$D/Master" | tail -1)
+ [ -z "$TYPE" ] || [ "$TYPE" = misc ] || { echo "mkmod: \$modtype $TYPE not supported yet" >&2; exit 1; }
++[ -n "$KABI" ] && [ -n "$PIN" ] || { echo "mkmod: the kernel's kabi and pin (-K, -P or DLM_KABI, DLM_PIN)" >&2; exit 1; }
++key() { sed -n "s/^\\\$$1[ 	]*//p" "$D/Master" | tail -1; }
++CLASS=$(key class) CPU=$(key cpu)
++[ -n "$CLASS" ] && [ -n "$CPU" ] || { echo "mkmod: Master needs \$class and \$cpu" >&2; exit 1; }
+ PU=$(echo "$PREFIX" | tr a-z A-Z)
+ DELAY=
+ [ -f "$D/Mtune" ] && DELAY=$(awk -v k="${PU}_UNLOAD_DELAY" '$1==k{print $2}' "$D/Mtune")
+@@ -75,7 +90,18 @@
+ 	echo '	.section .moddata,"aw",@progbits'
+ 	echo '	.balign	4'
+ 	echo "	.long	${PREFIX}_wrapper"
+-	[ -z "$DEPEND" ] || echo "	.ascii	\"$(echo $DEPEND)\""
++	echo '	.byte	0x4d, 0x44, 0x32, 0'
++	echo "	.asciz	\"name=$NAME\""
++	echo "	.asciz	\"kabi=$KABI\""
++	echo "	.asciz	\"cc=$PIN\""
++	echo "	.asciz	\"cpu=$CPU\""
++	echo "	.asciz	\"class=$CLASS\""
++	[ -z "$DEPEND" ] || echo "	.asciz	\"depend=$(echo $DEPEND | tr ' ' ',')\""
++	for k in match majors unload tier build desc; do
++		v=$(key $k)
++		[ -z "$v" ] || echo "	.asciz	\"$k=$v\""
++	done
++	sed -n 's/^\$param[ 	]*//p' "$D/Master" | while read v; do echo "	.asciz	\"param=$v\""; done
+ 	echo '	.byte	0'
+ } > "$W/moddep.s"
+ m68k-cbm-sysv4-as -o "$W/moddep.o" "$W/moddep.s"
+--- a/tools/modfix.c
++++ b/tools/modfix.c
+@@ -2,18 +2,20 @@
+  * modfix -- last step of mkmod: check a linked module and give its
+  * .moddata section ELF type 13 (binutils 2.8.1 cannot emit it).
+  *
+- *	modfix [-n] [-e exports]... [-d depmodule]... -p prefix -m name file
++ *	modfix [-n] [-1] [-e exports]... [-d depmodule]... -p prefix -m name file
+  *
+  *	-e	file of kernel symbol names, one per line (mkksym -x)
+  *	-d	a dependency module; its defined globals count as exported
+  *	-n	check only, leave the type alone
++ *	-1	allow .moddata version 1 (the state harness's refusal case)
+  *
+  * Fails, leaving the file unchanged, unless:
+  *   - name is 1..14 characters;
+  *   - <prefix>_wrapper is defined exactly once, globally;
+  *   - there is exactly one .moddata (or type-13) section, allocated,
+- *     at least 4 bytes, whose word 0 has an R_68K_32 relocation against
+- *     <prefix>_wrapper with addend 0;
++ *     at least 12 bytes, whose word 0 has an R_68K_32 relocation against
++ *     <prefix>_wrapper with addend 0 and whose bytes 4..7 are "MD2\0"
++ *     (.moddata version 2, amix-dlm docs/contracts/C3-1-module-object.md);
+  *   - there is no SHT_REL section and every RELA type is 0..6;
+  *   - with -e: every undefined, non-weak global is in the export list
+  *     or defined by a -d module.
+@@ -189,7 +191,7 @@
+ 	char **argv;
+ {
+ 	struct elf m, d[16];
+-	int nd = 0, nflag = 0, eflag = 0, i;
++	int nd = 0, nflag = 0, eflag = 0, v1flag = 0, i;
+ 	char *prefix = 0, *name = 0, *path = 0, wrapper[256];
+ 	long k, j, ms = 0, nwrap = 0, wsym = 0, r, n, off;
+ 	unsigned long info;
+@@ -198,6 +200,8 @@
+ 	for (i = 1; i < argc; i++) {
+ 		if (strcmp(argv[i], "-n") == 0)
+ 			nflag = 1;
++		else if (strcmp(argv[i], "-1") == 0)
++			v1flag = 1;
+ 		else if (strcmp(argv[i], "-e") == 0 && i + 1 < argc) {
+ 			readexports(argv[++i]);
+ 			eflag = 1;
+@@ -208,12 +212,12 @@
+ 		else if (strcmp(argv[i], "-m") == 0 && i + 1 < argc)
+ 			name = argv[++i];
+ 		else if (argv[i][0] == '-' || path)
+-			die("usage: modfix [-n] [-e exports] [-d dep] -p prefix -m name file", "");
++			die("usage: modfix [-n] [-1] [-e exports] [-d dep] -p prefix -m name file", "");
+ 		else
+ 			path = argv[i];
+ 	}
+ 	if (!prefix || !name || !path)
+-		die("usage: modfix [-n] [-e exports] [-d dep] -p prefix -m name file", "");
++		die("usage: modfix [-n] [-1] [-e exports] [-d dep] -p prefix -m name file", "");
+ 	if (strlen(name) < 1 || strlen(name) > 14 || strchr(name, '/'))
+ 		complain("module name '%s' must be 1..14 characters", name);
+ 	if (strlen(prefix) > 200)
+@@ -246,8 +250,13 @@
+ 	else {
+ 		if (!(G32(m.sh + ms * SHSZ + 8) & 2))
+ 			complain(".moddata is not allocated", "");
+-		if (G32(m.sh + ms * SHSZ + 20) < 4)
+-			complain(".moddata is shorter than 4 bytes", "");
++		if (v1flag) {
++			if (G32(m.sh + ms * SHSZ + 20) < 4)
++				complain(".moddata is shorter than 4 bytes", "");
++		} else if (G32(m.sh + ms * SHSZ + 20) < 12)
++			complain(".moddata is shorter than 12 bytes", "");
++		else if (memcmp(m.img + G32(m.sh + ms * SHSZ + 16) + 4, "MD2", 4) != 0)
++			complain(".moddata is not version 2 (no MD2 marker)", "");
+ 	}
+ 
+ 	/* relocations */

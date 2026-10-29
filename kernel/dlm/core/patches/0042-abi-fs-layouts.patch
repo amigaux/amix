@@ -1,0 +1,134 @@
+Subject: dlmoffs: a filesystem module's structures in the fingerprint
+
+Contract C4-6, from amix-cdfs's module plan: the size and every member
+offset of fid, vfs, mounta, vnode, vattr, iovec, uio, dirent, statvfs
+and sdcom, and the sizes of vnodeops and vfsops, measured by the kernel
+compiler like the core's own layouts (patch 0015).  The core reads none
+of them; they go into abi= (C3-3 section 4), so a kernel whose headers
+move one of them is refused by the fingerprint check.
+
+--- a/dlmoffs.c
++++ b/dlmoffs.c
+@@ -14,6 +14,13 @@
+ #include "sys/conf.h"
+ #include "sys/stream.h"
+ #include "sys/moddefs.h"
++#include "sys/vfs.h"
++#include "sys/vnode.h"
++#include "sys/uio.h"
++#include "sys/dirent.h"
++#include "sys/statvfs.h"
++#include "amiga/alien/rico.h"	/* bool, uchar: as the stock sd.c */
++#include "amiga/alien/sd.h"
+ 
+ #define	OFF(s, m)	((int)&((struct s *)0)->m)
+ 
+@@ -43,3 +50,108 @@
+ int	dlm_off_QI_CLOSE = OFF(qinit, qi_qclose);
+ int	dlm_off_QI_MINFO = OFF(qinit, qi_minfo);
+ int	dlm_off_QI_MSTAT = OFF(qinit, qi_mstat);
++
++/*
++ * A filesystem module's view of the kernel (contract C4-6, amix-cdfs):
++ * every member of the structures it shares with the kernel, and their
++ * sizes, so the fingerprint (C3-3 section 4) moves when one does.  The
++ * operation tables are given by size.  Not read by the core itself.
++ */
++int	dlm_off_ABI_FID_SZ = sizeof (struct fid);
++int	dlm_off_ABI_FID_FID_LEN = OFF(fid, fid_len);
++int	dlm_off_ABI_FID_FID_DATA = OFF(fid, fid_data);
++int	dlm_off_ABI_VFS_SZ = sizeof (struct vfs);
++int	dlm_off_ABI_VFS_VFS_NEXT = OFF(vfs, vfs_next);
++int	dlm_off_ABI_VFS_VFS_OP = OFF(vfs, vfs_op);
++int	dlm_off_ABI_VFS_VFS_VNODECOVERED = OFF(vfs, vfs_vnodecovered);
++int	dlm_off_ABI_VFS_VFS_FLAG = OFF(vfs, vfs_flag);
++int	dlm_off_ABI_VFS_VFS_BSIZE = OFF(vfs, vfs_bsize);
++int	dlm_off_ABI_VFS_VFS_FSTYPE = OFF(vfs, vfs_fstype);
++int	dlm_off_ABI_VFS_VFS_FSID = OFF(vfs, vfs_fsid);
++int	dlm_off_ABI_VFS_VFS_DATA = OFF(vfs, vfs_data);
++int	dlm_off_ABI_VFS_VFS_DEV = OFF(vfs, vfs_dev);
++int	dlm_off_ABI_VFS_VFS_BCOUNT = OFF(vfs, vfs_bcount);
++int	dlm_off_ABI_VFS_VFS_NSUBMOUNTS = OFF(vfs, vfs_nsubmounts);
++int	dlm_off_ABI_MOUNTA_SZ = sizeof (struct mounta);
++int	dlm_off_ABI_MOUNTA_SPEC = OFF(mounta, spec);
++int	dlm_off_ABI_MOUNTA_DIR = OFF(mounta, dir);
++int	dlm_off_ABI_MOUNTA_FLAGS = OFF(mounta, flags);
++int	dlm_off_ABI_MOUNTA_FSTYPE = OFF(mounta, fstype);
++int	dlm_off_ABI_MOUNTA_DATAPTR = OFF(mounta, dataptr);
++int	dlm_off_ABI_MOUNTA_DATALEN = OFF(mounta, datalen);
++int	dlm_off_ABI_VNODE_SZ = sizeof (struct vnode);
++int	dlm_off_ABI_VNODE_V_FLAG = OFF(vnode, v_flag);
++int	dlm_off_ABI_VNODE_V_COUNT = OFF(vnode, v_count);
++int	dlm_off_ABI_VNODE_V_VFSMOUNTEDHERE = OFF(vnode, v_vfsmountedhere);
++int	dlm_off_ABI_VNODE_V_OP = OFF(vnode, v_op);
++int	dlm_off_ABI_VNODE_V_VFSP = OFF(vnode, v_vfsp);
++int	dlm_off_ABI_VNODE_V_STREAM = OFF(vnode, v_stream);
++int	dlm_off_ABI_VNODE_V_PAGES = OFF(vnode, v_pages);
++int	dlm_off_ABI_VNODE_V_TYPE = OFF(vnode, v_type);
++int	dlm_off_ABI_VNODE_V_RDEV = OFF(vnode, v_rdev);
++int	dlm_off_ABI_VNODE_V_DATA = OFF(vnode, v_data);
++int	dlm_off_ABI_VNODE_V_FILOCKS = OFF(vnode, v_filocks);
++int	dlm_off_ABI_VNODE_V_FILLER = OFF(vnode, v_filler);
++int	dlm_off_ABI_VATTR_SZ = sizeof (struct vattr);
++int	dlm_off_ABI_VATTR_VA_MASK = OFF(vattr, va_mask);
++int	dlm_off_ABI_VATTR_VA_TYPE = OFF(vattr, va_type);
++int	dlm_off_ABI_VATTR_VA_MODE = OFF(vattr, va_mode);
++int	dlm_off_ABI_VATTR_VA_UID = OFF(vattr, va_uid);
++int	dlm_off_ABI_VATTR_VA_GID = OFF(vattr, va_gid);
++int	dlm_off_ABI_VATTR_VA_FSID = OFF(vattr, va_fsid);
++int	dlm_off_ABI_VATTR_VA_NODEID = OFF(vattr, va_nodeid);
++int	dlm_off_ABI_VATTR_VA_NLINK = OFF(vattr, va_nlink);
++int	dlm_off_ABI_VATTR_VA_SIZE_PAD = OFF(vattr, va_size0);	/* mkoffs names: [A-Z_] */
++int	dlm_off_ABI_VATTR_VA_SIZE = OFF(vattr, va_size);
++int	dlm_off_ABI_VATTR_VA_ATIME = OFF(vattr, va_atime);
++int	dlm_off_ABI_VATTR_VA_MTIME = OFF(vattr, va_mtime);
++int	dlm_off_ABI_VATTR_VA_CTIME = OFF(vattr, va_ctime);
++int	dlm_off_ABI_VATTR_VA_RDEV = OFF(vattr, va_rdev);
++int	dlm_off_ABI_VATTR_VA_BLKSIZE = OFF(vattr, va_blksize);
++int	dlm_off_ABI_VATTR_VA_NBLOCKS = OFF(vattr, va_nblocks);
++int	dlm_off_ABI_VATTR_VA_VCODE = OFF(vattr, va_vcode);
++int	dlm_off_ABI_VATTR_VA_FILLER = OFF(vattr, va_filler);
++int	dlm_off_ABI_IOVEC_SZ = sizeof (struct iovec);
++int	dlm_off_ABI_IOVEC_IOV_BASE = OFF(iovec, iov_base);
++int	dlm_off_ABI_IOVEC_IOV_LEN = OFF(iovec, iov_len);
++int	dlm_off_ABI_UIO_SZ = sizeof (struct uio);
++int	dlm_off_ABI_UIO_UIO_IOV = OFF(uio, uio_iov);
++int	dlm_off_ABI_UIO_UIO_IOVCNT = OFF(uio, uio_iovcnt);
++int	dlm_off_ABI_UIO_UIO_OFFSET = OFF(uio, uio_offset);
++int	dlm_off_ABI_UIO_UIO_SEGFLG = OFF(uio, uio_segflg);
++int	dlm_off_ABI_UIO_UIO_FMODE = OFF(uio, uio_fmode);
++int	dlm_off_ABI_UIO_UIO_LIMIT = OFF(uio, uio_limit);
++int	dlm_off_ABI_UIO_UIO_RESID = OFF(uio, uio_resid);
++int	dlm_off_ABI_DIRENT_SZ = sizeof (struct dirent);
++int	dlm_off_ABI_DIRENT_D_INO = OFF(dirent, d_ino);
++int	dlm_off_ABI_DIRENT_D_OFF = OFF(dirent, d_off);
++int	dlm_off_ABI_DIRENT_D_RECLEN = OFF(dirent, d_reclen);
++int	dlm_off_ABI_DIRENT_D_NAME = OFF(dirent, d_name);
++int	dlm_off_ABI_STATVFS_SZ = sizeof (struct statvfs);
++int	dlm_off_ABI_STATVFS_F_BSIZE = OFF(statvfs, f_bsize);
++int	dlm_off_ABI_STATVFS_F_FRSIZE = OFF(statvfs, f_frsize);
++int	dlm_off_ABI_STATVFS_F_BLOCKS = OFF(statvfs, f_blocks);
++int	dlm_off_ABI_STATVFS_F_BFREE = OFF(statvfs, f_bfree);
++int	dlm_off_ABI_STATVFS_F_BAVAIL = OFF(statvfs, f_bavail);
++int	dlm_off_ABI_STATVFS_F_FILES = OFF(statvfs, f_files);
++int	dlm_off_ABI_STATVFS_F_FFREE = OFF(statvfs, f_ffree);
++int	dlm_off_ABI_STATVFS_F_FAVAIL = OFF(statvfs, f_favail);
++int	dlm_off_ABI_STATVFS_F_FSID = OFF(statvfs, f_fsid);
++int	dlm_off_ABI_STATVFS_F_BASETYPE = OFF(statvfs, f_basetype);
++int	dlm_off_ABI_STATVFS_F_FLAG = OFF(statvfs, f_flag);
++int	dlm_off_ABI_STATVFS_F_NAMEMAX = OFF(statvfs, f_namemax);
++int	dlm_off_ABI_STATVFS_F_FSTR = OFF(statvfs, f_fstr);
++int	dlm_off_ABI_STATVFS_F_FILLER = OFF(statvfs, f_filler);
++int	dlm_off_ABI_SDCOM_SZ = sizeof (struct sdcom);
++int	dlm_off_ABI_SDCOM_NEXT = OFF(sdcom, next);
++int	dlm_off_ABI_SDCOM_READING = OFF(sdcom, reading);
++int	dlm_off_ABI_SDCOM_OKAY = OFF(sdcom, okay);
++int	dlm_off_ABI_SDCOM_STATUS = OFF(sdcom, status);
++int	dlm_off_ABI_SDCOM_CDB = OFF(sdcom, cdb);
++int	dlm_off_ABI_SDCOM_ADDR = OFF(sdcom, addr);
++int	dlm_off_ABI_SDCOM_NBYTE = OFF(sdcom, nbyte);
++int	dlm_off_ABI_SDCOM_CARD = OFF(sdcom, card);
++int	dlm_off_ABI_SDCOM_UNIT = OFF(sdcom, unit);
++int	dlm_off_ABI_SDCOM_INTR = OFF(sdcom, intr);
++int	dlm_off_ABI_VNODEOPS_SZ = sizeof (struct vnodeops);
++int	dlm_off_ABI_VFSOPS_SZ = sizeof (struct vfsops);

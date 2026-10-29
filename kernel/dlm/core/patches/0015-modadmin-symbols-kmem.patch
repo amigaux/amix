@@ -1,0 +1,144 @@
+Subject: modadmin: symbols, and a module's tunables through /dev/kmem
+
+A module's tunables and counters move with the module, so a static
+kernel's /dev/kmem habit (adb, a patched address) cannot reach them.
+modadmin -k looks a name up with getksym, which searches the kernel's
+exported names and then each loaded module's own globals; -a gives the
+symbol at an address; -p reads longs at a symbol through /dev/kmem and -w
+writes one (S3-11, amix-dlm docs/plan/stage-3.md).
+
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -13,6 +13,16 @@
+  *	modadmin -r cdev|sdev name major ...
+  *					register character or STREAMS
+  *					driver majors: the first open loads
++ *	modadmin -k name ...		a kernel or module symbol's address
++ *	modadmin -a addr ...		the symbol an address falls in
++ *	modadmin -p name[:n] ...	n longs (default 1) at a symbol, read
++ *					through /dev/kmem: a loaded module's
++ *					tunables and counters by name
++ *	modadmin -w name value		one long written there (root)
++ *
++ * -k, -p and -w look a name up with getksym: the kernel's exported names
++ * first, then each loaded module's own globals, so a module's tunables
++ * and counters, which move with the module, are reached by name.
+  *
+  * Exit status 1 if any operand failed.  Built for AMIX with libmod.a.
+  *
+@@ -25,7 +35,10 @@
+ #include <errno.h>
+ #include <sys/types.h>
+ #include <sys/param.h>
++#include <fcntl.h>
++#include <unistd.h>
+ #include "sys/mod.h"
++#include "sys/ksym.h"
+ 
+ extern int errno;
+ extern char *strerror();
+@@ -153,12 +166,66 @@
+ 	}
+ }
+ 
++/* a kernel or module symbol's address, or 0 with errno set */
++unsigned long
++lookup(name)
++	char *name;
++{
++	unsigned long val = 0, info;
++
++	return getksym(name, &val, &info) < 0 ? 0 : val;
++}
++
++/* n longs at a symbol through /dev/kmem; with wr, write *v there */
++void
++kmem(arg, wr, v)
++	char *arg;
++	int wr;
++	long v;
++{
++	char name[MAXSYMNMLEN], *c;
++	unsigned long a;
++	long buf[64];
++	int fd, n = 1, i;
++
++	strncpy(name, arg, sizeof name - 1);
++	name[sizeof name - 1] = 0;
++	if (!wr && (c = strchr(name, ':')) != 0) {
++		*c = 0;
++		if ((n = atoi(c + 1)) < 1 || n > 64) {
++			errno = EINVAL;
++			fail("cannot read", arg);
++			return;
++		}
++	}
++	if ((a = lookup(name)) == 0) {
++		fail("no symbol", name);
++		return;
++	}
++	if ((fd = open("/dev/kmem", wr ? O_RDWR : O_RDONLY)) < 0) {
++		fail("cannot open", "/dev/kmem");
++		return;
++	}
++	if (lseek(fd, (long)a, 0) < 0 ||
++	    (wr ? write(fd, (char *)&v, sizeof v) != sizeof v :
++	    read(fd, (char *)buf, n * sizeof buf[0]) != (int)(n * sizeof buf[0])))
++		fail(wr ? "cannot write" : "cannot read", name);
++	else if (wr)
++		printf("%s 0x%08lx: 0x%08lx (%ld) written\n", name, a, (unsigned long)v, v);
++	else
++		for (i = 0; i < n; i++)
++			printf("%s+%d 0x%08lx: 0x%08lx (%ld)\n", name, 4 * i,
++			    a + 4 * i, (unsigned long)buf[i], buf[i]);
++	close(fd);
++}
++
+ void
+ usage()
+ {
+ 	fprintf(stderr, "usage: %s -l name|path ... | -u id ... | -U name ... |\n"
+ 	    "\t-q id ... | -Q name ... | -s | -S | -d dir[:dir] | -D |\n"
+-	    "\t-r cdev|sdev name major ...\n", progname);
++	    "\t-r cdev|sdev name major ... | -k name ... | -a addr ... |\n"
++	    "\t-p name[:n] ... | -w name value\n", progname);
+ 	exit(2);
+ }
+ 
+@@ -239,6 +306,36 @@
+ 				fail("cannot register", argv[i]);
+ 			}
+ 		break;
++	case 'k':
++		for (i = 2; i < argc; i++) {
++			unsigned long a = lookup(argv[i]);
++
++			if (a == 0)
++				fail("no symbol", argv[i]);
++			else
++				printf("%s 0x%08lx\n", argv[i], a);
++		}
++		break;
++	case 'a':
++		for (i = 2; i < argc; i++) {
++			char name[MAXSYMNMLEN];
++			unsigned long a = strtoul(argv[i], (char **)0, 0), off;
++
++			if (a == 0 || getksym(name, &a, &off) < 0)
++				fail("no symbol at", argv[i]);
++			else
++				printf("0x%08lx %s+0x%lx\n", a, name, off);
++		}
++		break;
++	case 'p':
++		for (i = 2; i < argc; i++)
++			kmem(argv[i], 0, 0L);
++		break;
++	case 'w':
++		if (argc != 4)
++			usage();
++		kmem(argv[2], 1, strtol(argv[3], (char **)0, 0));
++		break;
+ 	default:
+ 		usage();
+ 	}

@@ -1,0 +1,5 @@
+$modtype misc
+$class demand
+$unload allowed
+$desc S3-43 outside the generation
+t43ext	t43ext

@@ -1,0 +1,104 @@
+# 90 — Measurements
+
+- **Status:** draft (S0), 2026-10-25
+- **Implements:** D-3 §8 (proof order: each stage proven on the emulator and on metal before the next), D-3 §1 ("tested under emulation and on both boxes like a driver"), D-3 §2 (emulation runs the same bytes as metal)
+- **Evidence classes (P-28 D51):** **bench** = the emulator, or a host-side computation over the real build outputs; **metal** = real hardware. Bench decides hook state, memory, relocation, export diffs, the mouse-button read injected over the emulator's control channel, and the A4091-ROM half of ROM questions. Metal decides floppy-rooted boots, the Z3660-ROM half of ROM questions, cache and DMA behaviour, the HID converters, the A4000T onboard-controller probe, and every cold-boot row. Where both are listed, bench comes first and metal confirms.
+- **Stage:** the proof stage of `80-stages-and-proof.md` that needs the result before it can exit (0 = needed to freeze this specification).
+
+Earlier measurement ids from the research record are kept in brackets (U1–U18
+from `tmp/2026-10-14-modules-study/STUDY.md:436-452`, U-N from
+`tmp/2026-10-22-modules-proposal/medium-network.md:110-115`, T-U from
+`tmp/2026-10-22-modules-proposal/tape-medium-design.md:258-267`). None of
+U1–U18 has a result yet (`tmp/2026-10-22-modules-proposal/RESEARCH.md:360`).
+
+## 1. Loader
+
+| ID | Measurement | Class | Stage | Spec |
+|---|---|---|---|---|
+| M-LD1 | Which bootblock header fields (magic, checksum, trailer) the strap checks on a floppy and on an RDB `UNI\0` partition, per Kickstart version in use (3.1, 3.2.x) — **bench half closed 2026-10-26**: on Kickstart 3.1 and 3.2.x, DF0 and the A3000 WD, Gayle and A4091 partitions alike, the strap checks the `DOS` magic (any type byte) and the checksum, not the third longword or the trailer; a `UNI\0` magic is no bootblock (84 cells); evidence `docs/measurements/2026-10-26-m-ld1-m-ld3.md`; the Z3660 ROM is metal | bench (A4091 ROM, WD, Gayle, floppy) + metal (Z3660 boot ROM) | 1 | 10 §2.1 |
+| M-LD2 | CD boot (D-3 §10): an `AMIGA BOOT` ISO boots AmigaDOS through the ROM's CD filesystem; `S/Startup-Sequence` runs `amix-cdboot`, which loads a kernel and miniroot from files and hands off; minimum Kickstart; memory left after AmigaDOS; no AmigaDOS activity (CD filesystem, device DMA, interrupts) survives the take-over | bench (A4091 ROM) + metal (A4092) | 1 | 10 §4.4, 50 §4 |
+| M-LD3 | What the strap does when a bootblock returns a failure code (does Kickstart try the next boot node?) — **bench half, Z3660 boot ROM chain, 2026-10-25:** no; a recoverable alert AN_BootError (3000 0001), the ROM's BootPoint, then a reset, about every 14 s (S1-16, evidence in the workspace's tmp/2026-10-25-s1-16/); boot1 now stops instead of returning. Other boot ROMs and metal open; **boot1 without a valid boot2, bench 2026-10-26**: `B3 no valid boot2`, then it stops, on DF0 and the A3000 WD, Gayle and A4091 rows with Kickstart 3.1 and 3.2.x (12 cells); evidence as M-LD1 | bench + metal (Z3660 ROM) | 1 | 10 §3.1 |
+| M-LD4 | Writes through the strap's IOStdReq on each boot ROM: boot2's control-block write (try-once, one-shot) and boot1's tally-block write (loader trial), with read-back on the next boot — **bench half closed 2026-10-26**: try-once, one-shot and loader trial, each a two-boot lifecycle cell, pass 12 of 12 on the A3000 WD, Gayle and A4091 (68030 and 68060) boot ROMs; evidence `docs/measurements/2026-10-26-m-ld4.md`; the Z3660 ROM and both boxes are metal | bench (A4091, WD, Gayle) + metal (Z3660 ROM, both boxes) | 1 | 10 §4.2, §7 |
+| M-LD5 [U18] | Menu input: keyboard matrix, left/right mouse buttons and serial input at the menu window; through the HID converters on both reference machines; phantom key or button reads on a marginal card — **bench half closed 2026-10-26**: rows M1–M6 (digit, rollback key, mouse click and hold, toggles, `r`, serial input) pass 24 of 24 on the A3000 WD, Gayle and A4091 (68030, 68060) rows; evidence `docs/measurements/2026-10-26-m-ld5.md`; the HID converters are metal | bench (input injected over the emulator's control channel) + metal (HID path) | 1 | 10 §7.4 |
+| M-LD6 | CPU probe gives the right answer on 68030, 68040, LC/full 68060, including a 68060 without SetPatch | bench (030, 040, LC060 models) + metal (real 68060) | 1 | 10 §3.2 |
+| M-LD7 | CRC-32 and SHA-256 time over a 2 MB kernel on a 25 MHz 68030 and a 68060 (decides whether the loader checks SHA-256 too) — **bench half closed 2026-10-26**: on the 25 MHz 68030 model CRC-32 takes 361 / 591 ms and SHA-256 2 290 / 3 750 ms for the k30 / k46 kernel; the loader checks CRC-32 only (10 §5.1); evidence `docs/measurements/2026-10-26-m-ld7-m-ld8.md` | bench (upper bound) + metal (68060; 68030 per OQ-80.1) | 1 | 10 §5.1 |
+| M-LD8 | Deflate vs LZW (`compress -b16`) ratio on K030-U-FD- and KD060-FD-class kernels and on a miniroot image; inflate time on a 68030 — ratio part measured 2026-10-25 on the 1.0 floppy kernels: deflate = 73 % (K030-U-FD) and 71 % (KD060-FD) of the LZW size (`docs/measurements/2026-10-25-m-net1.md`); **bench half closed 2026-10-26**: the table-driven decoder inflates the k30 / k46 kernel in 5 492 / 7 580 ms on the 25 MHz 68030 model (code in fast RAM; 7 times slower from chip RAM, so boot2 moves to fast RAM); a deflated floppy boot reaches the kernel's first prompt in 18 s against 31 s for the stock LZW loader; LZW is not carried (`docs/measurements/2026-10-26-m-ld7-m-ld8.md`) | bench (host computation; decode timing on the emulator as an upper bound) | 1 | 10 §5.5 |
+| M-LD9 | Cold boots of static kernels through our loader from every controller on both boxes, compared with the stock loader (root naming, devices, RTH1 line) | bench + metal | 1 | 80 §2 |
+| M-FD1 | Floppy DMA into chip RAM under the 040/060 caches (DTT0 window) on a real floppy or Gotek | metal | 1 | 70 §2 |
+| M-FP1 | Floppy-pair fit per line in the RAM-disk profile: compressed kernel + root-class modules + compressed miniroot + store overhead against two DD volumes — **static part closed 2026-10-25**: with the trimmed engine, k30 fits with 270 336 B free (15.3 %) and k46 with 212 992 B free (12.0 %); the full 1.0 engine misses the 5 % rule on both lines; the miniroot needs extents that span volumes (10 §4.3); evidence `docs/measurements/2026-10-25-m-fp1.md` | bench (host computation) | 1 (static), again 4 | 10 §4.3, 50 §3 |
+| M-FP2 | Floppy-pair boot on metal, both lines (RAM-disk profile; fd0-root profile if chosen), including the volume change | metal | 1, again 4 | 50 §3 |
+| M-EMU1 | The emulated Z3660 with the autoboot option (DIAGVALID advertised) boots our loader like metal | bench | 1 (prerequisite) | 50 §7 |
+| M-RD1 | The kernel's memory sizing honours a `memory[]` region shortened by the loader (RAM-disk carve-out); the RAM-disk module maps the image | bench | 4 | 10 §5.4, 30 §7 |
+| M-RD2 | The kernel half applies the loader record's root selector: an sd root on cards 0–3 (bit-7 encoding) and a RAM-disk root (block major 20); `swap none` boots without a swap device | bench | 4 | 10 §6, 30 §3, §5.2 |
+
+## 2. Lifecycle
+
+| ID | Measurement | Class | Stage | Spec |
+|---|---|---|---|---|
+| M-GEN1 | Generation size per line (kernel, root-class modules, boot/demand modules; compressed and not) — **stage-2 part closed 2026-10-26**: a static generation is 1.26–1.27 MB (k30) and 1.93–2.08 MB ET_REL or 1.41–1.52 MB brel (k46) raw, one manifest extent more; a 64 MiB store holds at least 32, the 1.0 layout's 10 MiB slice 5 ET_REL k46 generations, just the kept set plus the one being written; evidence `docs/measurements/2026-10-26-m-gen1-m-gen4.md`; stage 3 re-measures with modules | bench (host computation) | 2 | 40 §2.1 |
+| M-GEN2 | `kbootset commit` time on a 68030 and a 68060 — **bench half closed 2026-10-26**: a k30 commit takes 16.7 s (median, 11.2 s CPU) and its `check` 16.0 s on the 25 MHz 68030 model; the box kbootset hashes at about a third of M-SIG2's rate (not yet explained); evidence `docs/measurements/2026-10-26-m-gen2.md`; the disk and the 68060 are metal | bench + metal | 2 | 40 §3.2 |
+| M-GEN3 | Power cut at each commit step (emulator killed; one metal row per box) leaves a booting generation — **bench closed 2026-10-26**: cuts before commit steps 1, 2, 4, 5 and 7 all leave a booting generation; finding: the root fsck's repair reboot spent a trial's only attempt, fixed by `kbootset retry` from `bcheckrc` (10 §7.2, 40 §3.3) and proven by the N = 7 re-run (the trial boots again after the fsck reboot, then mark-good), on k30 too (N = 7 with the rc2 hook); evidence `docs/measurements/2026-10-26-m-gen3.md`; metal one row per box | bench + metal | 2 | 40 §3.2 |
+| M-GEN4 [T-U6, U-N7] | `kbootset` static binary size per line — **closed 2026-10-26**: one GCC 14 static binary for both lines, 110 108 B text, 119 388 B stripped; evidence as M-GEN1 | bench (host computation) | 2 | 40 §3 |
+| M-GEN5 | Upgrade, commit, mark-good, rollback, one-shot previous, try-once fallback on a trial that panics in `rc` — **bench closed 2026-10-26, both lines**: all seven boots as 40 §3 and 10 §7 specify, on k46 and on k30 (the installer's disk with the rc2 hook); a trial that cannot mount its root panics and reboots by itself, and the loader falls back to the good default (L8) on the same boot; evidence `docs/measurements/2026-10-26-m-gen5.md`; metal one row per box per line | bench + metal (one row per box per line) | 2 | 40 §3, 10 §7 |
+| M-UPG1 | Upgrade install of a 1.0 disk: configuration captured and restored, layout re-laid, first boot | bench + metal (one per box) | 2 | 40 §7 |
+| M-SIG1 [U17] | Signature verification time on a 68030 and a 68060 — **deferred with signing** (D-3 §13) | bench (upper bound) + metal | — | 60 §5 |
+| M-SIG2 | SHA-256 throughput on a 68030 and a 68060 (apkg, `kbootset check`) — **bench half closed 2026-10-26**: 540 KiB/s on the 25 MHz 68030 model (fast memory); a `kbootset check` of a k46 generation about 3.8 s; evidence as M-GEN1; the 68060 figure is metal | bench (upper bound) + metal | 2 | 60 §3 |
+| M-PKG1 [U11] | Files dropped by `pkgadd instance=overwrite`; stock `pkgadd` on `/stand` conflicts | bench | 2 | 40 §8 |
+
+## 3. Module core and ABI
+
+| ID | Measurement | Class | Stage | Spec |
+|---|---|---|---|---|
+| U1 | Status register and kmem state at `dmainit` and at the `marc_root` hook; whether `kmem_zalloc(KM_SLEEP)` is safe there. Measured by a `-DDLM_U1` build of each kernel of record (core patch 0023, test only); recipe `tests/bench/README.md` S3-41. **Answered 2026-10-26 (N77 k46, N78 k30):** priority 7 and the clock stopped at both points on both lines, so `KM_SLEEP` is not safe and nothing may sleep there; `KM_NOSLEEP` gives 1 MiB on both lines (k30 refuses 2 MiB at 64 MB, k46 gives 2 MiB at 128 MB); evidence `docs/measurements/2026-10-26-u1.md` | bench | 3 | 30 §3 |
+| U2 | Free kernel virtual space for copied modules at 128 MB of RAM. Probe module `u2kva` (`tests/bench/s3-41`), recipe `tests/bench/README.md` S3-41. **Answered 2026-10-26 (N81 k46, N82 k30, in a boot of its own with 64 KiB chunks):** in process context after multi-user a module gets 320 KiB in total on k46 at 128 MB and 640 KiB on k30 at 64 MB; the first run (N79/N80) is void; evidence `docs/measurements/2026-10-26-u2.md` | bench | 3 | 30 §8 |
+| U3 | Execution from the arena in `.data` through ITT0 on 040/060; cache class of module `.bss` | bench (mapping) + metal (cache behaviour) | 4 | 30 §8 |
+| U4 | Large `kmem` requests routed to `sptalloc` behave (no silent hang). Probe module `u4big` (`tests/bench/s3-41`), recipe `tests/bench/README.md` S3-41. **Answered 2026-10-26 (N79 k46, N80 k30):** after multi-user the largest single request is 256 KiB on k46 at 128 MB and 512 KiB on k30 at 64 MB, and a `KM_SLEEP` request above that never returns; a module's requests are at most 256 KiB each, `KM_SLEEP` only up to 256 KiB (30 §8); evidence `docs/measurements/2026-10-26-u4.md` | bench | 3 | 30 §2 |
+| U5 | `execsw`/`fmodsw`/`vfssw` references are symbol-relative on both lines so tables can be grown — **closed 2026-10-26**: in all ten kernels of record every reference to `execsw`, `fmodsw`, `vfssw`, `cdevsw` and `bdevsw` is a relocation against the table's symbol, none by section offset; evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md` | bench (host computation) | 3 | 30 §6 |
+| U12 | Every walker of `vfssw` reads `nfstype` live; `vfs_mountroot` with module rows | bench | 4 | 30 §6 |
+| U15 | File loading in process 0 after root is mounted (else the first `sysinit` entry). **Answered 2026-10-26 (S3-B5, k30):** unsafe. The hook runs at psw 0x2700 and the read faulted (bus error in uiomove from `lf_hashload`), so the load runs from the first `sysinit` entry (core patch 0017) | bench | 3 | 30 §3 |
+| U16 | The 040/060 port's relocation and page-geometry checks pass with the arena's zero block in `.data` — **closed 2026-10-26**: on the final cut's KD060-Z module kernel, `check_relink_relocs` totals 0, `.data` follows `.text` contiguously, every k0 gate passes, and two emits are byte-identical; evidence `docs/measurements/2026-10-26-u16-m-abi2.md` | bench (host computation) | 3 | 30 §8 |
+| M-ABI1 [U7] | Export and header diff between the 68040 and 68060 kernels of the k46 family — **closed 2026-10-26**: KD040-A and KD060-A differ in one byte (the CPU stamp), 4 458 globals agree in name, kind and size: one k46 family (OQ-20.2); evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md` | bench (host computation) | 3 | 20 §3.1 |
+| M-ABI2 [U6] | `elf2brel` carries the ~1000 `.long` relocations of the exported-symbol block on the 030 line; table cost — **closed (format) 2026-10-26**: `elf2brel` folds every relocation one to one (29 539 in and out on K030-U, output identical to the shipped brel); the allowlisted block adds about 200 relocations, 1 600 bytes; the linked block is checked by the post-link gate (C3-2); evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md`. **Closed with the block 2026-10-26**: the final cut's K030-U brel carries 30 487 pairs, and the loader's relocator binds it at 0x00200000 and 0x07F00000 with `AXK1` passing boot2's check; evidence `docs/measurements/2026-10-26-u16-m-abi2.md` | bench (host computation) | 3 | 20 §1.2 |
+| M-REG1 | Registry values (majors, empty rows, `sysentsize`, `fmodcnt`, structure offsets) against every built kernel — **closed for the kernels of record 2026-10-26**: `sysentsize` 142 with slots 64–69 `nosys`, `fmodcnt` 11, majors 49/51/52/53 free once the static drivers leave, block majors 0–15 and 21–31 free; structure offsets come from the probe object (S3-05); evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md`; re-run on the module kernels | bench (host computation) | 3 | 20 §6 |
+| M-MOD1 | Object sizes of every root-class module (z3660scsi, a4091, gayle-ide, a4000t-710, ufs, s5, cdfs, ramdisk) → arena capacity = 2 × set rounded to 64 KiB — **stage-3 part closed 2026-10-26**: the set is about 191 KB (k30) and 196 KB (k46) from today's objects (stand-ins named), capacity 0x60000 on both lines; evidence `docs/measurements/2026-10-26-m-reg1-m-abi1.md`; re-measured when the modules exist | bench (host computation) | 3 | 10 §5.3, 20 §8 |
+| M-CORE1 [U13] | The adopted core's host tests (relocation oracle, state harness) built with our toolchain — **closed 2026-10-26, both lines**: 87 checks pass against KD060-Z and K030-U (oracle 7 of 7 byte-identical, error paths 29 of 29, state harness 105 of 105); finding: the trampolines' hold across `longjmp` needed `volatile` (core patch 0001); re-run over the queue through 0021: 124 checks, state harness 181 of 181; evidence `docs/measurements/2026-10-26-m-core1.md`, tool `tests/core/run.sh` | bench (host) | 3 | 30 §1 |
+| M-INT1 | INT2 and INT6 chains; z3660eth with interrupt receive; polled fallback | bench (chain logic) + metal (the emulated board raises no INT6) | 3 | 30 §4 |
+| M-SIG3 | The kernel refuses `modload`, dependency loads and first-open loads of any file not a member of the booted manifest or whose SHA-256 differs; the development-load flag lifts this and is printed | bench | 3 | 30 §2 |
+| M-THR1 | z3660eth and RTG throughput as modules vs the static drivers' figures of record | metal | 3 | 80 §2 |
+
+## 4. Root as a module, filesystems, safe mode
+
+| ID | Measurement | Class | Stage | Spec |
+|---|---|---|---|---|
+| M-SD1 | Card-number contract over the board sets of record (`30-module-core.md` §5.3): unchanged-order sets name every disk as the 1.0 static kernel did; the listed changed sets give exactly the listed new names; three- and four-controller sets give the contract's expected names | bench + metal (both boxes' board sets) | 4 | 30 §5 |
+| M-FS1 | The 040/060 base rebuilt without ufs/s5: the carved ufs and s5 objects are self-contained (symbol ranges, relocations), the rebuilt image passes the port's gates, and root on ufs and s5 modules boots | bench (host computation, then emulator) + metal | 4 | 30 §6 |
+| M-A4T1 | The A4000T onboard 53C710 probe: gated, never touches the controller window ungated, hangs nothing | metal | 4 | 20 §6, 30 §5 |
+| M-DMA1 | Cache and DMA behaviour per root controller module (z3660scsi, A4091/A4092, Gayle IDE, 53C710) | metal | 4 | 30 §8 |
+| M-FL1 | Floor kernel size per line once controllers and filesystems leave it | bench (host computation) | 4 | 70 §6 |
+| M-FL2 | Safe-mode boot on every root controller and root filesystem | bench + metal | 4 | 70 §4 |
+| M-HALT1 | The halt pass stops every root controller before power-off (A4091 SCRIPTS stopped) | bench + metal | 4 | 30 §2 |
+
+## 5. Media
+
+| ID | Measurement | Class | Stage | Spec |
+|---|---|---|---|---|
+| M-CD1 | CD boot and install on the A4091 ROM (emulated) and the A4092 (metal), both lines' generations from one disc | bench + metal | 4; the A4092 metal half 5 (carried, 80 §2) | 50 §4 |
+| M-NET1a [U-N3] | Uncompressed netinstall miniroot size per line, from today's binaries — **closed 2026-10-25**: k30 2 562 866 B, k46 2 468 595 B with the trimmed engine (3 265 054 / 3 170 783 B with the full 1.0 engine); evidence `docs/measurements/2026-10-25-m-net1.md`, tool `tools/measure/m-net1.py` | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1b | Its deflate-compressed size — **closed 2026-10-25**: k30 959 940 B, k46 924 595 B trimmed (1 228 315 / 1 192 293 B full); with the deflated 1.0 floppy kernel, margins on two DD volumes +16.1 % / +13.0 % trimmed, +1.1 % / −2.0 % full; evidence as M-NET1a | bench (host computation) | **0** (S0 freeze condition) | 50 §5.1 |
+| M-NET1c | Compressed kernel + root-class modules under the 1.1 floor (DV-1) | bench (host computation) | 4 | 50 §5.1 |
+| M-NET1d | Store overhead and usable bytes per DD volume (DV-1) — **closed 2026-10-25**: volume 1 data from 0x7800 (870 400 B usable; 868 352 B with boot2 at 28 KiB), later volumes from 0x800 (899 072 B), plus a manifest reservation per generation; evidence as M-FP1 | bench (host computation) | 1 (store format frozen) | 50 §5.1 |
+| M-NET1e | RAM needed at boot vs the smallest supported machine per line (DV-1) | bench | 4 | 50 §5.1 |
+| M-NET1f [U-N1] | A single-user miniroot runs the inet STREAMS stack (on a static kernel first; DV-1) | bench | 2 (early, static kernel), again 4 | 50 §5.1 |
+| M-NET1g [U-N2, U-N8] | HTTP throughput and inactivity timeouts from the miniroot (DV-1) | metal | 4 | 50 §5.1 |
+| M-TAPE1 [T-U1, T-U2] | Stock floppies + stock tape image install in the emulator; origin of the old "timeout" | bench | 2 | 50 §6 |
+| M-TAPE2 [T-U5, T-U7] | TAPE1 written from a running box reads back; tape source throughput | bench | 2 | 50 §6 |
+| M-TAPE3 [T-U3] | An emulated tape (ZuluSCSI tape image) behind the A4092: sense data, mode select, filemark spacing at close | metal | 2 | 50 §6 |
+| M-TAPE4 [T-U4] | Tape on card 1 through the A4091 driver on the 060 line | metal | 2 | 50 §6 |
+
+## 6. Retired from the research record
+
+| Old id | Why retired |
+|---|---|
+| U8 (floppy budget for a slotted kernel) | replaced by M-FP1 (the slot is gone; the store changes the prefix) |
+| U10 (Kickstart menu lists a second `UNI\0`) | one boot slice per disk (D-3 §6); relevant only to the proof-period development slice, where it is used as found, not shipped |
+| U14 (`unix_boot040` keeps a large `.data`) | not a supported boot path |

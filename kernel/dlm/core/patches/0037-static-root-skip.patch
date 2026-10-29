@@ -1,0 +1,136 @@
+Subject: marc_root skips a module for a controller the kernel drives itself
+
+Contract C4-4 version 4 section 4.  A root-class module for a board the
+kernel already drives statically would register the same base with sd:
+two drivers on one board.  kbootset's gate 3 refuses such a generation;
+this is the backstop.  The kernel names its built-in root controllers in
+dlm_static_root, which tools/mkident.py writes beside the identity
+record from the sidecar's root= list ("" when none).  The root pass
+skips an entry one of whose match= keys is in it, with one line, before
+its _load touches the board.  The state harness adds such an entry.
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -337,6 +337,7 @@
+ extern int sd_register(), dlm_sd_close();
+ extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
+ extern int dlm_rootpass;		/* set while marc_root links modules */
++extern char dlm_static_root[];		/* the kernel's built-in root controllers (mkident) */
+ extern int root_defer();		/* (fn, arg): C4-2 section 3 */
+ extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
+ extern int dlm_halt();
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -201,6 +201,37 @@
+ int	dlm_rootpass;		/* set while the root pass links modules */
+ 
+ /*
++ * The first of keys (comma-separated) that the kernel drives itself:
++ * dlm_static_root, which the kernel build writes with the identity record
++ * from the sidecar's root= list (tools/mkident.py), names it.  Or 0.
++ */
++static char *
++staticdrv(keys)
++	char *keys;
++{
++	static char key[64];
++	char *p = keys, *s;
++	int n, m;
++
++	while (*p) {
++		for (n = 0; p[n] && p[n] != ','; n++)
++			;
++		if (n > 0 && n < (int)sizeof key) {
++			bcopy(p, key, n);
++			key[n] = 0;
++			for (s = dlm_static_root; *s; s += m + (s[m] == ',')) {
++				for (m = 0; s[m] && s[m] != ','; m++)
++					;
++				if (m == n && bcmp(s, key, n) == 0)
++					return key;
++			}
++		}
++		p += n + (p[n] == ',');
++	}
++	return 0;
++}
++
++/*
+  * The manifest's root record for name: 0 with its bss= (0 if absent) and
+  * its match= keys (into keys, cap bytes) if there is a "module <name>
+  * root" record whose crc32= is crc, else ENOENT.
+@@ -269,7 +300,7 @@
+ 	char *a;
+ {
+ 	struct dlm_mod *m;
+-	char *e, name[16], keys[256];
++	char *e, *sk, name[16], keys[256];
+ 	unsigned long off, len, used, want;
+ 	long i, count, bss;
+ 	int n = 0, err;
+@@ -300,6 +331,13 @@
+ 		}
+ 		if (!matches(keys))
+ 			continue;		/* no such board here: silent, as ENXIO */
++		if ((sk = staticdrv(keys)) != 0) {
++			/* two drivers on one board: kbootset's gate 3 refuses this
++			 * generation; this is the backstop (C4-4 version 4) */
++			printf("dlm: root module %s is for %s, which the kernel drives itself; not linked\n",
++			    name, sk);
++			continue;
++		}
+ 		if ((err = dlm_load_mem(name, a + off, (long)len, bss, &m)) == 0)
+ 			n++;
+ 		else if (err != ENXIO)
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -22,6 +22,7 @@
+ int	dlm_devload = 1;
+ int	dlm_safe = 0;
+ int	(*dlm_plat_match)() = 0;
++char	dlm_static_root[128];	/* the kernel's built-in root controllers: none */
+ 
+ /* a stock int2_tbl of two handlers, and the stock CIA-B entry */
+ int	hconf_i2a, hconf_i2b, hconf_ciab;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -101,7 +101,8 @@
+ # rp8's record names a board that is not here (the core matches, C4-4 v3)
+ # root_defer (S4-05): rd1 defers one call; rd2 asks for nine; rd3 defers
+ # one and then fails its _load
+-for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8', 'rd1', 'rd2', 'rd3'):
++# rp9's board is one the kernel drives itself (dlm_static_root)
++for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8', 'rp9', 'rd1', 'rd2', 'rd3'):
+     armod(p)
+ 
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -650,7 +650,8 @@
+ 			a[off + 8] ^= 1;
+ 		if (inman[i]) {
+ 			sprintf(line, "module %s root %ld at=0 bss=128 crc32=%08lx sha256=0 match=%s\n",
+-			    names[i], len, crc, strcmp(names[i], "rp8") ? "always" : "zorro:dead:01");
++			    names[i], len, crc, !strcmp(names[i], "rp8") ? "zorro:dead:01" :
++			    !strcmp(names[i], "rp9") ? "zorro:feed:01,mobo:feed" : "always");
+ 			strcat(rp_man, line);
+ 		}
+ 		off = (off + len + 15 + 128 + 15) & ~15L;
+@@ -701,6 +702,17 @@
+ 		check(n == 0 && !byname("rp8"),
+ 		    "marc_root: an entry whose match= names no board here is skipped (the core matches)");
+ 	}
++	{
++		static char *n4[] = { "rp9" };
++		static int f4[] = { 1 }, d4[] = { 0 }, m4[] = { 1 };
++
++		check(rpbuild(n4, f4, d4, m4, 1) == 0, "marc_root: a fourth arena built");
++		strcpy(dlm_static_root, "zorro:0202:54,mobo:feed");
++		n = dlm_root_pass(rp_arena);
++		dlm_static_root[0] = 0;
++		check(n == 0 && !byname("rp9"),
++		    "marc_root: a module for a controller the kernel drives itself is not linked");
++	}
+ 	check(dlm_root_pass((char *)0) == 0, "marc_root: no arena, nothing");
+ 	dlm_man = man;
+ 	dlm_manlen = manlen;

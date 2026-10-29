@@ -1,0 +1,7 @@
+# The motherboard probes of 1.1 (docs/spec/20-module-format-and-abi.md
+# section 6): the names a .moddata match= key may give as mobo:<probe>.
+# One name per line.  The probe itself is the platform's (core/plat).
+a3000-wd
+a4000t-710
+gayle
+z3660-window

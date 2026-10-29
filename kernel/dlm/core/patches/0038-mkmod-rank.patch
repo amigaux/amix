@@ -1,0 +1,30 @@
+Subject: mkmod writes rank: a root-class disk controller's sd class
+
+Contract C4-1 section 4.1, C4-2 section 1.  A root-class disk controller
+declares its sd rank class in its Master ($rank z3660, zorro, mobo or
+ide); mkmod's key loop left it out, so .moddata had no rank= and the
+core refused the module's sd_register with EINVAL.  The z3660scsi port
+found it.  mkmod now writes $rank like $match.
+
+--- a/tools/mkmod
++++ b/tools/mkmod
+@@ -9,8 +9,8 @@
+ #   Driver.o   the module's code (any number of objects linked into it)
+ #   Master     "$depend a b ..." lines (any number), "$modtype misc|drv|str"
+ #              (the wrapper macro's type; misc when absent),
+-#              the .moddata v2 keys as "$class boot|demand", "$cpu 68020"
+-#              (required), "$match", "$majors", "$unload", "$tier",
++#              the .moddata v2 keys as "$class root|boot|demand", "$cpu 68020"
++#              (required), "$match", "$rank", "$majors", "$unload", "$tier",
+ #              "$build", "$desc" (one each) and "$param" (any number),
+ #              and a final line "name prefix flags ..." ('#' comments)
+ #   Space.c    optional, compiled and linked in
+@@ -107,7 +107,7 @@
+ 	echo "	.asciz	\"cpu=$CPU\""
+ 	echo "	.asciz	\"class=$CLASS\""
+ 	[ -z "$DEPEND" ] || echo "	.asciz	\"depend=$(echo $DEPEND | tr ' ' ',')\""
+-	for k in match majors unload tier build desc; do
++	for k in match rank majors unload tier build desc; do
+ 		v=$(key $k)
+ 		[ -z "$v" ] || echo "	.asciz	\"$k=$v\""
+ 	done

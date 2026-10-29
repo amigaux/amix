@@ -1,0 +1,313 @@
+Subject: sd_register: disk controller modules register before sd's first open
+
+30 section 2 patch 8 (S4-03), contract C4-1 section 3.  A root-class
+disk controller registers each board from its _load:
+sd_register(queuefn, c, base, name, rank).  The entry waits in the
+core's table of four until sd's first open takes it (dlm_sd_close) and
+ranks it with the floor's controllers; then registration is closed
+(EBUSY).  The rank must be the class the module declares in .moddata
+(rank=z3660, zorro, mobo or ide, now parsed); a fifth is ENOSPC.  A
+_load that fails after registering leaves no entry: the backstop sweep
+removes it.  The state harness covers each case.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -547,7 +547,7 @@
+ 	n += dlm_ddi_sweep(lo, hi);
+ 	if (n)
+ 		printf("dlm: %s left %d registration(s) pointing into it (an interrupt handler, "
+-		    "network interface or console hook): removed\n", m->m_name, n);
++		    "network interface, console hook or disk controller): removed\n", m->m_name, n);
+ }
+ 
+ static void
+@@ -896,6 +896,7 @@
+ 		goto fail;
+ 	if (ld->ld_md.md_unload)		/* pinned unless it says so (C3-1) */
+ 		m->m_flags |= DM_UNLOADOK;
++	m->m_rank = ld->ld_md.md_rank;
+ 
+ 	/* dependencies */
+ 	for (n = 0, pos = 0; dlm_ld_dep(ld, &pos, dep) > 0; n++)
+@@ -1000,7 +1001,9 @@
+ 			goto fail;
+ 		}
+ 		dlm_man_params(m->m_name, pa, 512);
++		dlm_curmod = m;
+ 		e = DLM_CALL(m, c, pa[0] ? pa : (char *)0, 0);
++		dlm_curmod = 0;
+ 		dlm_free(pa, 512L);
+ 		if (e != 0)
+ 			goto fail;
+@@ -1306,6 +1309,7 @@
+  * named and skipped.  Returns how many entries ran.
+  */
+ int	dlm_halted;
++struct dlm_mod	*dlm_curmod;
+ 
+ int
+ dlm_halt()
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -111,7 +111,7 @@
+ 	unsigned long lo, hi;
+ {
+ 	struct ifs_link **pp;
+-	int s, n = 0;
++	int s, i, n = 0;
+ 
+ 	SPLHI(s);
+ 	for (pp = &ifstats; *pp; )
+@@ -124,10 +124,71 @@
+ 		cons_hook = 0;
+ 		n++;
+ 	}
++	for (i = 0; !dlm_sdclosed && i < dlm_nsdreg; )
++		if ((unsigned long)dlm_sdreg[i].sr_f >= lo && (unsigned long)dlm_sdreg[i].sr_f < hi) {
++			dlm_sdreg[i] = dlm_sdreg[--dlm_nsdreg];
++			n++;
++		} else
++			i++;
+ 	SPLX(s);
+ 	return n;
+ }
+ 
++/*
++ * sd_register (C4-1 section 3, 30 section 2 patch 8): a disk controller
++ * module registers each board from its _load in the root pass.  The entry
++ * waits here until sd's first open takes the table (dlm_sd_close) and
++ * ranks it with the floor's controllers; after that registration is
++ * closed.  A failed load's entries go with the backstop above.
++ */
++struct dlm_sdreg dlm_sdreg[DLM_SDREG];
++int	dlm_nsdreg, dlm_sdclosed;
++
++int
++sd_register(f, c, base, name, rank)
++	int (*f)();
++	unsigned c;
++	char *base, *name;
++	unsigned rank;
++{
++	struct dlm_sdreg *r;
++	int s;
++
++	if (dlm_sdclosed) {
++		printf("sd: %s registered after the controllers closed\n", name ? name : "?");
++		return EBUSY;
++	}
++	if (f == 0 || name == 0 || rank < 1 || rank > 4 || dlm_curmod == 0 ||
++	    rank != (unsigned)dlm_curmod->m_rank) {
++		printf("sd: %s: bad rank or entry\n", name ? name : "?");
++		return EINVAL;
++	}
++	SPLHI(s);
++	if (dlm_nsdreg >= DLM_SDREG) {
++		SPLX(s);
++		printf("sd: too many controllers\n");
++		return ENOSPC;
++	}
++	r = &dlm_sdreg[dlm_nsdreg++];
++	r->sr_f = f;
++	r->sr_c = c;
++	r->sr_base = base;
++	r->sr_name = name;
++	r->sr_rank = rank;
++	SPLX(s);
++	return 0;
++}
++
++/* sd's first open: the pending registrations, and registration closes */
++int
++dlm_sd_close(tp)
++	struct dlm_sdreg **tp;
++{
++	dlm_sdclosed = 1;
++	*tp = dlm_sdreg;
++	return dlm_nsdreg;
++}
++
+ #ifndef DLM_HOST
+ /* the stock entry, wrapped: the hook first, then the native screen code */
+ int
+--- a/dlm.h
++++ b/dlm.h
+@@ -145,6 +145,7 @@
+ 	int		md_class;	/* MD_ROOT, MD_BOOT, MD_DEMAND */
+ 	int		md_unload;	/* 1: unload=allowed */
+ 	int		md_tier;	/* 0 ddi, 1 core */
++	int		md_rank;	/* sd rank class 1-4 (C4-1 section 4), 0 none */
+ 	long		md_depoff;	/* the depend value in ld_mod, or -1 */
+ 	long		md_majoff;	/* the majors value in ld_mod, or -1 */
+ };
+@@ -213,6 +214,7 @@
+ 	struct dlm_mod	**m_dep;	/* direct loadable dependencies */
+ 	int		m_ndep, m_maxdep;
+ 	int		m_nlink;	/* linkages installed */
++	int		m_rank;		/* its .moddata rank class, 0 none */
+ };
+ 
+ /* m_flags */
+@@ -315,6 +317,19 @@
+ 
+ /* services the loader needs from its environment */
+ extern char *dlm_zalloc();
++/* sd_register's pending table (C4-1 section 3), taken by sd's first open */
++#define	DLM_SDREG	4		/* SDCARDS */
++struct dlm_sdreg {
++	int		(*sr_f)();	/* the queue function */
++	unsigned	sr_c;		/* handed back to it */
++	char		*sr_base;	/* sdcardbase() */
++	char		*sr_name;	/* sdhardwarename() */
++	unsigned	sr_rank;	/* 1 z3660, 2 zorro, 3 mobo, 4 ide */
++};
++extern struct dlm_sdreg dlm_sdreg[];
++extern int dlm_nsdreg, dlm_sdclosed;
++extern int sd_register(), dlm_sd_close();
++extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
+ extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
+ #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -444,9 +444,13 @@
+ 			return ECONFIG;
+ 		md->md_build = v;
+ 		return 0;
++	case K_RANK:			/* the sd rank class (C4-1 section 4.1) */
++		md->md_rank = strcmp(v, "z3660") == 0 ? 1 : strcmp(v, "zorro") == 0 ? 2 :
++		    strcmp(v, "mobo") == 0 ? 3 : strcmp(v, "ide") == 0 ? 4 : 0;
++		return md->md_rank ? 0 : ECONFIG;
+ 	case 0:				/* param */
+ 		return okparamv(v) ? 0 : ECONFIG;
+-	default:			/* rank, fs, desc: checked where used */
++	default:			/* fs, desc: checked where used */
+ 		return 0;
+ 	}
+ }
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -78,6 +78,16 @@
+ mod('hl4')
+ 
+ 
++# sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
++# class), sr3 ide (its _load fails after registering), sr4 zorro (fills
++# the table), srbad an unknown class
++mod('sr1', extra=['rank=z3660'])
++mod('sr2', extra=['rank=zorro'])
++mod('sr3', extra=['rank=ide'])
++mod('sr4', extra=['rank=zorro'])
++mod('srbad', extra=['rank=scsi'])
++
++
+ # a 3-chain for moduload(0): ha -> hb -> hc
+ mod('ha', 'hb')
+ mod('hb', 'hc')
+--- a/test/state.c
++++ b/test/state.c
+@@ -540,6 +540,96 @@
+ 	    "no-sleep: the unload returns every byte");
+ }
+ 
++/* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
++static int sr_e[8], sr_n;
++
++/* register board k of the calling module, its own _load as the queue entry */
++static int
++sr_reg(m, rank, k)
++	char *m;
++	unsigned rank;
++	int k;
++{
++	struct dlm_mod *dm = (struct dlm_mod *)m;
++	char sym[16];
++
++	sprintf(sym, "%s_load", dm->m_name);
++	return sd_register((int (*)())modsym(dm, sym), (unsigned)k, (char *)0x40000000L + k,
++	    "HBA", rank);
++}
++
++int
++h_sr1(m, a, b)
++	char *m, *a;
++	long b;
++{
++	sr_e[sr_n++] = sr_reg(m, 1, 0);
++	return 0;
++}
++
++int
++h_sr2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	sr_e[sr_n++] = sr_reg(m, 3, 0);		/* declared zorro, registers mobo */
++	return 0;
++}
++
++int
++h_sr3(m, a, b)
++	char *m, *a;
++	long b;
++{
++	sr_e[sr_n++] = sr_reg(m, 4, 0);
++	return EIO;				/* fails after registering */
++}
++
++int
++h_sr4(m, a, b)
++	char *m, *a;
++	long b;
++{
++	int k;
++
++	for (k = 0; k < 4; k++)
++		sr_e[sr_n++] = sr_reg(m, 2, k);
++	return 0;
++}
++
++void
++sdreg_tests()
++{
++	struct dlm_sdreg *t;
++	int i1, i2, i3, i4, n;
++
++	host_handler("sr1_load", h_sr1);
++	host_handler("sr2_load", h_sr2);
++	host_handler("sr3_load", h_sr3);
++	host_handler("sr4_load", h_sr4);
++	check(modload("srbad", &i1) == ECONFIG && !byname("srbad"), "sd: an unknown rank class -> ECONFIG");
++	check(sd_register(nodev, 0, (char *)0, "HBA", 1) == EINVAL && dlm_nsdreg == 0,
++	    "sd: registering outside a module's _load -> EINVAL");
++	sr_n = 0;
++	check(modload("sr1", &i1) == 0 && sr_e[0] == 0 && dlm_nsdreg == 1 && dlm_sdreg[0].sr_rank == 1 &&
++	    dlm_sdreg[0].sr_c == 0 && strcmp(dlm_sdreg[0].sr_name, "HBA") == 0,
++	    "sd: a z3660-class module registers its board from _load");
++	check(modload("sr2", &i2) == 0 && sr_e[1] == EINVAL && dlm_nsdreg == 1,
++	    "sd: a rank other than the module's declared class -> EINVAL");
++	check(modload("sr3", &i3) == EIO && !byname("sr3") && sr_e[2] == 0 && dlm_nsdreg == 1,
++	    "sd: a _load that fails after registering leaves no entry");
++	sr_n = 0;
++	check(modload("sr4", &i4) == 0 && sr_e[0] == 0 && sr_e[1] == 0 && sr_e[2] == 0 &&
++	    sr_e[3] == ENOSPC && dlm_nsdreg == 4, "sd: a fifth controller -> ENOSPC");
++	n = dlm_sd_close(&t);
++	check(n == 4 && t == dlm_sdreg && dlm_sdclosed, "sd: the first open takes the four and closes");
++	check(sd_register(nodev, 0, (char *)0, "HBA", 1) == EBUSY, "sd: after the first open -> EBUSY");
++	dlm_sdclosed = dlm_nsdreg = 0;
++	moduload(i4);
++	moduload(i2);
++	moduload(i1);
++}
++
+ /* ---- block rows (30 section 2 patch 7, S4-06) ---- */
+ void
+ blk_tests()
+@@ -1525,6 +1615,7 @@
+ 	man_tests();
+ 	nosleep_tests();
+ 	blk_tests();
++	sdreg_tests();
+ 	post_tests();
+ 	intr_tests();
+ 	kinfo_tests();

@@ -1,0 +1,145 @@
+Subject: no weak symbols left in a spliced kernel; 4-byte block; kinfo's list
+
+From the 68040/68060 port's first dry run of the module kernel splice:
+- mkksym -a aligns the symbol block to 4, not 16: .data follows .text
+  directly in the loader's layout, and the port keeps it 4-aligned.
+- hooksw (dlm_hooksw.s) is a strong, empty table, and dlm_cache.s no
+  longer carries a weak default plat_dmainit: the platform always
+  provides it.  The port's passes refuse a kernel with a weak symbol.
+- dlm_kinfo_list(buf, max) gives a kinfo driver the loaded modules for
+  its record (amix-dlm docs/contracts/C2-1, offset 536): name, load
+  address, size, 32 bytes each.
+
+--- a/dlm_cache.s
++++ b/dlm_cache.s
+@@ -1,5 +1,6 @@
+-| dlm_cache.s -- publish freshly relocated module text to the CPU, and
+-| the default platform hook called by dmainit.
++| dlm_cache.s -- publish freshly relocated module text to the CPU.  The
++| platform hook dmainit calls, plat_dmainit, is the platform's (on the
++| Amix kernels amix-dlm's core/plat), never a weak default here.
+ |
+ | Whole-cache, at IPL 7:
+ |   68060  cpusha bc, then CACR.CABC (clear the branch cache)
+@@ -37,7 +38,3 @@
+ L4:	movew	%d1,%sr
+ 	rts
+ 
+-	.weak	plat_dmainit
+-	.globl	plat_dmainit
+-plat_dmainit:
+-	rts
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -1125,6 +1125,33 @@
+ 	return e;
+ }
+ 
++/*
++ * The loaded modules for kinfo's record (amix-dlm docs/contracts/C2-1,
++ * offset 536): at most max entries of 32 bytes, the name NUL-padded to 24,
++ * the load address and the size, big-endian; returns the count.  A module
++ * still loading or unloading is left out.  The kinfo driver calls it on
++ * every read, so the list is current.
++ */
++int
++dlm_kinfo_list(buf, max)
++	char *buf;
++	int max;
++{
++	struct dlm_mod *m;
++	int n = 0;
++
++	for (m = dlm_list; m && n < max; m = m->m_next) {
++		if (m->m_flags & DM_TRANS)
++			continue;
++		bzero(buf + 32 * n, 24);
++		strncpy(buf + 32 * n, m->m_name, 23);
++		P32(buf + 32 * n + 24, (unsigned long)m->m_run);
++		P32(buf + 32 * n + 28, (unsigned long)m->m_size);
++		n++;
++	}
++	return n;
++}
++
+ static int
+ dlm_modstat(uap, rvp)
+ 	struct modstata *uap;
+--- a/dlm.h
++++ b/dlm.h
+@@ -351,6 +351,9 @@
+ extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_int2_walk();
+ extern void dlm_intr_init();
+ 
++/* the loaded modules, for kinfo's module list (C2-1 offset 536) */
++extern int dlm_kinfo_list();
++
+ /* the major registry, generated from the ABI kit's file by tools/mkreg */
+ struct dlm_majreg {
+ 	int	r_type;			/* 'c' or 'b'; 0 ends the table */
+--- a/dlm_hooksw.s
++++ b/dlm_hooksw.s
+@@ -1,7 +1,9 @@
+ | dlm_hooksw.s -- an empty hook table, for a kernel without static
+-| shims; theirs replaces it.
++| shims (the Amix kernels); a kernel with shims links its own instead of
++| this file.  A strong symbol: the 68040/68060 port's passes refuse a
++| kernel that carries a weak one.
+ 
+ 	.data
+-	.weak	hooksw
++	.globl	hooksw
+ hooksw:
+ 	.long	0, 0, 0, 0
+--- a/test/state.c
++++ b/test/state.c
+@@ -599,6 +599,30 @@
+ 	intr_detach(6, ih2, (char *)0);
+ }
+ 
++/* kinfo's module list (C2-1 offset 536) from the core */
++void
++kinfo_tests()
++{
++	static char buf[32 * 8];
++	struct dlm_mod *m;
++	int n, i, k = 0;
++
++	n = dlm_kinfo_list(buf, 8);
++	for (m = dlm_list; m; m = m->m_next)
++		if (!(m->m_flags & DM_TRANS))
++			k++;
++	check(n == (k < 8 ? k : 8), "kinfo: one entry per loaded module, at most max");
++	for (i = 0, m = dlm_list; m && i < n; m = m->m_next) {
++		if (m->m_flags & DM_TRANS)
++			continue;
++		if (strcmp(buf + 32 * i, m->m_name) != 0 || G32(buf + 32 * i + 24) != (unsigned long)m->m_run ||
++		    G32(buf + 32 * i + 28) != (unsigned long)m->m_size)
++			break;
++		i++;
++	}
++	check(i == n, "kinfo: each entry is the module's name, load address and size");
++}
++
+ void
+ hook_tests()
+ {
+@@ -1115,6 +1139,7 @@
+ 	man_tests();
+ 	post_tests();
+ 	intr_tests();
++	kinfo_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
+--- a/tools/mkksym.c
++++ b/tools/mkksym.c
+@@ -321,7 +321,7 @@
+ 	dlm_blkhash(b);
+ 	printf("| the kernel symbol block (<sys/ksym.h> version 2), from the allowlist\n"
+ 	    "| by mkksym -a: %ld names, %ld bytes; values are relocations\n"
+-	    "\t.data\n\t.balign\t16\n\t.globl\tdlm_ksym\n\t.type\tdlm_ksym,@object\n"
++	    "\t.data\n\t.balign\t4\n\t.globl\tdlm_ksym\n\t.type\tdlm_ksym,@object\n"
+ 	    "\t.size\tdlm_ksym,%ld\ndlm_ksym:\n", n - 1, size, size);
+ 	for (w = 0; w < size; w += 4) {
+ 		i = w - G32(b + KH_SYMOFF);

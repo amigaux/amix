@@ -1,0 +1,133 @@
+Subject: structure layouts measured by the kernel's compiler, not hard-coded
+
+dlm_slot.c and dlm_str.c read struct mod_drv_data, cdevsw, mod_str_data,
+streamtab and qinit inside module images at offsets written down for
+AMIX 2.1, and the host test of them reused the same macros, so nothing
+checked them against the real headers.  dlmoffs.c now states each
+layout as an expression over the kernel's own headers; tools/mkoffs
+compiles it with the kernel build's compiler and flags and writes
+dlm_offs.h, which both files include (build.sh generates it first).
+On the Amix 2.1 sysroot every value equals the one written down.
+30-module-core.md section 2, patch 15.
+
+--- a/build.sh
++++ b/build.sh
+@@ -63,6 +63,11 @@
+ pass() { echo "PASS $1"; }
+ fail() { echo "FAIL $1: $2 (log: $LOG/$1.log)"; exit 1; }
+ 
++# 0. the structure layouts the core reads in module images, measured by
++# the kernel's compiler (dlm_offs.h; the host tools include it too)
++sh "$DLM/tools/mkoffs" m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -I"$DLM/include" \
++	> "$DLM/dlm_offs.h" || fail offs "tools/mkoffs"
++
+ # 1. host tools
+ {
+ 	$HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$B/tools/mkksym" \
+--- a/dlmoffs.c
++++ b/dlmoffs.c
+@@ -0,0 +1,41 @@
++/*
++ * dlmoffs.c -- the layouts the core reads in a module's image, measured
++ * by the compiler that builds the kernel, against the kernel's own
++ * headers (amix-dlm docs/spec/30-module-core.md section 2, patch 15).
++ * tools/mkoffs compiles this file to assembler and writes dlm_offs.h,
++ * which dlm_slot.c and dlm_str.c include; nothing is hard-coded.  The
++ * file is never linked.
++ *
++ * K&R C.
++ */
++
++#include "sys/types.h"
++#include "sys/param.h"
++#include "sys/conf.h"
++#include "sys/stream.h"
++#include "sys/moddefs.h"
++
++#define	OFF(s, m)	((int)&((struct s *)0)->m)
++
++/* struct mod_drv_data (sys/moddefs.h) and struct cdevsw (sys/conf.h) */
++int	dlm_off_DRVSZ = sizeof (struct mod_drv_data);
++int	dlm_off_DRV_BCOUNT = OFF(mod_drv_data, drv_bcount);
++int	dlm_off_DRV_CDEVSW = OFF(mod_drv_data, drv_cdevsw);
++int	dlm_off_DRV_CMAJOR = OFF(mod_drv_data, drv_cmajor);
++int	dlm_off_DRV_CCOUNT = OFF(mod_drv_data, drv_ccount);
++int	dlm_off_CD_NFN = OFF(cdevsw, d_ttys) / sizeof (int (*)());
++int	dlm_off_CD_TTYS = OFF(cdevsw, d_ttys);
++int	dlm_off_CD_STR = OFF(cdevsw, d_str);
++int	dlm_off_CD_FLAG = OFF(cdevsw, d_flag);
++
++/* struct mod_str_data (sys/moddefs.h), streamtab and qinit (sys/stream.h) */
++int	dlm_off_SD_NAME = OFF(mod_str_data, str_name[0]);
++int	dlm_off_SD_TAB = OFF(mod_str_data, str_tab);
++int	dlm_off_SD_FLAG = OFF(mod_str_data, str_flag);
++int	dlm_off_SDSZ = sizeof (struct mod_str_data);
++int	dlm_off_STSZ = sizeof (struct streamtab);
++int	dlm_off_QISZ = sizeof (struct qinit);
++int	dlm_off_QI_OPEN = OFF(qinit, qi_qopen);
++int	dlm_off_QI_CLOSE = OFF(qinit, qi_qclose);
++int	dlm_off_QI_MINFO = OFF(qinit, qi_minfo);
++int	dlm_off_QI_MSTAT = OFF(qinit, qi_mstat);
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -380,15 +380,8 @@
+ 
+ #define	CDEV_NOPEN	32
+ #define	SDEV_MAX	4		/* majors of one STREAMS driver */
+-#define	DRVSZ		100		/* struct mod_drv_data */
+-#define	DRV_BCOUNT	36
+-#define	DRV_CDEVSW	40
+-#define	DRV_CMAJOR	92
+-#define	DRV_CCOUNT	96
+-#define	CD_NFN		10		/* d_open .. d_xhalt */
+-#define	CD_TTYS		40
+-#define	CD_STR		44
+-#define	CD_FLAG		48
++/* struct mod_drv_data and struct cdevsw: measured, not written down */
++#include "dlm_offs.h"
+ 
+ struct dlm_cslot {
+ 	struct dlm_cslot *cs_next;
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -28,17 +28,8 @@
+ #define	FMOD_RESERVE	16
+ #define	NFMODSW		(FMOD_STATIC + FMOD_RESERVE)
+ 
+-/* struct mod_str_data */
+-#define	SD_NAME		0
+-#define	SD_TAB		12
+-#define	SD_FLAG		16
+-#define	SDSZ		20
+-#define	STSZ		16		/* struct streamtab */
+-#define	QISZ		28		/* struct qinit */
+-#define	QI_OPEN		8
+-#define	QI_CLOSE	12
+-#define	QI_MINFO	20
+-#define	QI_MSTAT	24
++/* struct mod_str_data, streamtab, qinit: measured, not written down */
++#include "dlm_offs.h"
+ 
+ struct fmodsw	fmodsw[NFMODSW] = { { { 0 } } };	/* in .data, as the stock table */
+ extern struct fmodsw __amix_fmodsw[];
+--- a/tools/mkoffs
++++ b/tools/mkoffs
+@@ -0,0 +1,18 @@
++#!/bin/sh
++# mkoffs -- dlm_offs.h: the structure layouts the core reads in module
++# images, measured by the kernel's compiler against the kernel's headers
++# (dlmoffs.c).  Run with the kernel build's compiler and flags:
++#
++#   mkoffs m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -I<core>/include > dlm_offs.h
++#
++# Each "int dlm_off_X = <expression>;" in dlmoffs.c becomes
++# "#define X <value>"; mkoffs fails if any is missing from the output.
++set -e
++[ $# -ge 1 ] || { echo "usage: mkoffs CC [CFLAGS...]" >&2; exit 2; }
++D=$(cd "$(dirname "$0")/.." && pwd)
++n=$(grep -c '^int	dlm_off_' "$D/dlmoffs.c")
++"$@" -S -o - "$D/dlmoffs.c" | awk -v n="$n" '
++/^dlm_off_[A-Z_]*:$/ { name = substr($0, 9, length($0) - 9); next }
++name != "" && $1 == ".long" { printf "#define\t%s\t%s\n", name, $2; got++; name = ""; next }
++BEGIN { print "/* dlm_offs.h -- generated by tools/mkoffs from dlmoffs.c; do not edit */" }
++END { if (got != n) { print "mkoffs: " got " of " n " layouts found" > "/dev/stderr"; exit 1 } }'

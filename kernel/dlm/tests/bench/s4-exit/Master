@@ -1,0 +1,5 @@
+$modtype misc
+$class boot
+$match always
+$desc stage-4 exit: sd_register after the first open
+sdlate	sdlate

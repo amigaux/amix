@@ -1,0 +1,23 @@
+Subject: moddefs.h: a driver may have block rows
+
+The comment on struct mod_drv_data still said character drivers only
+and drv_bcount 0; patch 0031 gave pinned drivers block rows, and a
+block-only driver (drv_ccount 0) is what C4-2 asks of the ramdisk.
+Comment only.
+
+--- a/include/sys/moddefs.h
++++ b/include/sys/moddefs.h
+@@ -60,9 +60,10 @@
+ };
+ 
+ /*
+- * A driver: its switch rows and majors.  Character drivers only, one
+- * or more consecutive majors; drv_bcount must be 0.  d_open and
+- * d_close of a loaded row stay the loader's trampolines.  A STREAMS
++ * A driver: its switch rows and majors, each one or more consecutive
++ * majors; either count may be 0, not both.  d_open and d_close of a
++ * loaded character row stay the loader's trampolines.  Block rows are
++ * filled when the module links, and need a pinned module.  A STREAMS
+  * driver (d_str set) is held from the open that sets q_ptr to the
+  * close, as a STREAMS module; its majors are registered MOD_TY_SDEV.
+  */

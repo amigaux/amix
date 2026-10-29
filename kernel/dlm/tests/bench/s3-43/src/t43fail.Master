@@ -1,0 +1,5 @@
+$modtype misc
+$class boot
+$match always
+$desc S3-43 failing load
+t43fail	t43fail

@@ -1,0 +1,96 @@
+Subject: mkksym -k: the block lists the names of the kernel's minor
+
+A kernel cut lists only the names its kabi minor exports (C3-2 version
+2 section 2): mkksym -k <tag> skips every list line whose since is
+above the tag's minor.  Without -k every name is listed, as before.
+The post-link gate reads the same tag from dlm_ident, so a kernel that
+claims a minor without its providers fails there.
+
+--- a/tools/mkksym.c
++++ b/tools/mkksym.c
+@@ -6,7 +6,7 @@
+  *	mkksym -c [-l] image		check a filled image
+  *	mkksym -x image			print the exported names
+  *	mkksym -o block [-l] image	write the block to a file only
+- *	mkksym -a ddi.list [-a core.list] > ksym.s
++ *	mkksym [-k kabi] -a ddi.list [-a core.list] > ksym.s
+  *					the allowlisted block as assembler
+  *	mkksym -f image			fill st_size in an image's block
+  *
+@@ -25,6 +25,9 @@
+  * and kh_lo and kh_hi, is a .long of the symbol (stext, end), so the
+  * loader relocates them with the rest of .data; the hash depends on the
+  * names only.  A list line is "name func|data since", '#' comments.
++ * With -k (the kernel's kabi tag, k46.1.2) only the names whose since
++ * is at most its minor: a kernel lists what its minor exports, and the
++ * post-link gate checks it against the tag in dlm_ident.
+  *
+  * -f, after the final link: each entry's st_size from the image's
+  * symbol table; fails if a listed name is undefined there or of the
+@@ -258,7 +261,7 @@
+ usage()
+ {
+ 	fprintf(stderr, "usage: %s [-c|-x|-o block|-f] [-l] image\n"
+-	    "       %s -a ddi.list [-a core.list]\n", progname, progname);
++	    "       %s [-k kabi] -a ddi.list [-a core.list]\n", progname, progname);
+ 	exit(2);
+ }
+ 
+@@ -267,6 +270,7 @@
+ #define	MAXLIST	1024
+ char	*lname[MAXLIST];
+ int	lkind[MAXLIST], ltier[MAXLIST], nlist;
++int	kminor = -1;		/* -k: the kernel's minor; -1 every name */
+ 
+ void
+ readlist(path, tier)
+@@ -275,13 +279,16 @@
+ {
+ 	FILE *f = fopen(path, "r");
+ 	char line[512], name[256], kind[16];
+-	int i;
++	int i, since;
+ 
+ 	if (f == 0)
+ 		die("cannot open %s", path);
+ 	while (fgets(line, sizeof line, f)) {
+ 		if (line[0] == '#' || sscanf(line, "%255s %15s", name, kind) != 2)
+ 			continue;
++		if (kminor >= 0 && sscanf(line, "%*s %*s %d", &since) == 1 &&
++		    since > kminor)
++			continue;
+ 		if (nlist == MAXLIST)
+ 			die("too many names in %s", path);
+ 		for (i = 0; i < nlist; i++)
+@@ -393,7 +400,7 @@
+ 	char **argv;
+ {
+ 	int c = 0, x = 0, fl = 0, na = 0, i;
+-	char *out = 0, *path = 0, *b;
++	char *out = 0, *path = 0, *b, *list[2], *k;
+ 	long size, off, sp;
+ 	FILE *f;
+ 
+@@ -407,7 +414,12 @@
+ 		else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc)
+ 			out = argv[++i];
+ 		else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc && na < 2)
+-			readlist(argv[++i], na++);
++			list[na++] = argv[++i];
++		else if (strcmp(argv[i], "-k") == 0 && i + 1 < argc) {
++			if ((k = strrchr(argv[++i], '.')) == 0 || k[1] < '0' || k[1] > '9')
++				die("-k %s: a kabi tag (k46.1.2)", argv[i]);
++			kminor = atoi(k + 1);
++		}
+ 		else if (strcmp(argv[i], "-f") == 0)
+ 			fl = 1;
+ 		else if (argv[i][0] == '-' || path)
+@@ -415,6 +427,8 @@
+ 		else
+ 			path = argv[i];
+ 	}
++	for (i = 0; i < na; i++)
++		readlist(list[i], i);
+ 	if (na)
+ 		return path ? (usage(), 2) : allowblock();
+ 	if (path == 0)

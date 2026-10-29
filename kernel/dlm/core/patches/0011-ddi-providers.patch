@@ -1,0 +1,173 @@
+Subject: the DDI services the core provides: spl functions, if_attach, cons_hook
+
+amix-dlm's DDI v1 (docs/contracts/C3-2-symbols-and-ddi.md) lists names
+the Amix kernels have no callable form of.  This patch provides three
+groups:
+
+- dlm_spl.s: spl0..spl7 and splx as functions, the same as the kernel's
+  inline forms in <sys/inline.h>, including FAST_INTERRUPTS: spl5, spl6
+  and spl7 raise to level 4 only, so no spl masks level 6.
+- dlm_ddi.c, if_attach/if_detach: a driver's struct ifstats onto, or off,
+  the stock ifstats list netstat reads; no kernel change.
+- dlm_ddi.c, cons_hook_set/cons_hook_clear: one hook sees every console
+  write before the native screen code, and takes those it returns
+  nonzero for.  The hook point is the stock scrcon_put(cp, p, n), which
+  both getoblk (every VT write) and coputc (the printf funnel) call: the
+  kernel build weakens scrcon_put and keeps its body as
+  __amix_scrcon_put, and the core's scrcon_put calls the hook, then it.
+
+The DMA services, dev_kvmap and cputype are the platform's.
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -0,0 +1,107 @@
++/*
++ * dlm_ddi.c -- DDI v1 services the module core provides because the
++ * kernel has no callable form of them (amix-dlm
++ * docs/contracts/C3-2-symbols-and-ddi.md section 3): the network
++ * attachment and the console hook.  The spl functions are dlm_spl.s.
++ *
++ *   if_attach(ifs), if_detach(ifs): put a driver's struct ifstats on the
++ *	stock list netstat reads (the kernel's ifstats), or take it off.
++ *	A driver never touches ifstats itself.
++ *
++ *   cons_hook_set(fn), cons_hook_clear(): fn(cp, p, n) sees every write to
++ *	the console, from a virtual terminal or from the kernel's printf,
++ *	before the native screen code; cp is the console (struct console *,
++ *	whose screen member is the screen written), p and n the bytes.  It
++ *	returns nonzero if it took the write (and should take only those
++ *	for the screen it shows, cp->screen == displayedscreen), zero to
++ *	let the native code draw it.  One hook at a time: a second set is
++ *	EBUSY.  The hook point is the stock scrcon_put(cp, p, n), the one
++ *	function both getoblk (every VT write) and coputc (the printf
++ *	funnel) call: the kernel build weakens it and keeps the stock body
++ *	as __amix_scrcon_put, as it does for execsw and fmodsw (core map 8).
++ *
++ * K&R C.
++ */
++
++#include "dlm.h"
++
++struct ifs_link {			/* struct ifstats begins with its link */
++	struct ifs_link	*ifs_next;
++};
++extern struct ifs_link *ifstats;	/* the stock list head (net/if.h) */
++
++#define	SPLHI(s) do { \
++	__asm__ __volatile__("movew %%sr,%0" : "=d" (s) : : "memory"); \
++	__asm__ __volatile__("movew %0,%%sr" : : "d" ((s) | 0x0700) : "memory"); \
++} while (0)
++#define	SPLX(s)	__asm__ __volatile__("movew %0,%%sr" : : "d" (s) : "memory")
++
++int
++if_attach(ifs)
++	struct ifs_link *ifs;
++{
++	struct ifs_link *p;
++	int s;
++
++	SPLHI(s);
++	for (p = ifstats; p; p = p->ifs_next)
++		if (p == ifs) {
++			SPLX(s);
++			return EEXIST;
++		}
++	ifs->ifs_next = ifstats;
++	ifstats = ifs;
++	SPLX(s);
++	return 0;
++}
++
++int
++if_detach(ifs)
++	struct ifs_link *ifs;
++{
++	struct ifs_link **pp;
++	int s;
++
++	SPLHI(s);
++	for (pp = &ifstats; *pp; pp = &(*pp)->ifs_next)
++		if (*pp == ifs) {
++			*pp = ifs->ifs_next;
++			ifs->ifs_next = 0;
++			SPLX(s);
++			return 0;
++		}
++	SPLX(s);
++	return ENOENT;
++}
++
++static int	(*cons_hook)();
++extern int	__amix_scrcon_put();
++
++int
++cons_hook_set(fn)
++	int (*fn)();
++{
++	if (cons_hook && cons_hook != fn)
++		return EBUSY;
++	cons_hook = fn;
++	return 0;
++}
++
++void
++cons_hook_clear()
++{
++	cons_hook = 0;
++}
++
++/* the stock entry, wrapped: the hook first, then the native screen code */
++int
++scrcon_put(cp, p, n)
++	char *cp, *p;
++	int n;
++{
++	int (*h)() = cons_hook;
++
++	if (h && (*h)(cp, p, n))
++		return 0;
++	return __amix_scrcon_put(cp, p, n);
++}
+--- a/dlm_spl.s
++++ b/dlm_spl.s
+@@ -0,0 +1,40 @@
++| dlm_spl.s -- spl0..spl7 and splx as functions, for modules (DDI v1,
++| amix-dlm docs/contracts/C3-2-symbols-and-ddi.md).  The kernel itself
++| uses the inline forms of <sys/inline.h>; these are the same: each sets
++| the status register's priority and returns the previous status
++| register, and, as there (FAST_INTERRUPTS), spl5, spl6 and spl7 raise to
++| level 4 only, so no spl masks level 6 (CIA-B, the INT6 chain).
++| splx(s) restores s and returns the previous status register.
++
++	.text
++	.globl	spl0
++spl0:	movew	%sr,%d0
++	movew	&0x2000,%sr
++	rts
++	.globl	spl1
++spl1:	movew	%sr,%d0
++	movew	&0x2100,%sr
++	rts
++	.globl	spl2
++spl2:	movew	%sr,%d0
++	movew	&0x2200,%sr
++	rts
++	.globl	spl3
++spl3:	movew	%sr,%d0
++	movew	&0x2300,%sr
++	rts
++	.globl	spl4
++	.globl	spl5
++	.globl	spl6
++	.globl	spl7
++spl4:
++spl5:
++spl6:
++spl7:	movew	%sr,%d0
++	movew	&0x2400,%sr
++	rts
++	.globl	splx
++splx:	movew	%sr,%d0
++	movel	%sp@(4),%d1
++	movew	%d1,%sr
++	rts

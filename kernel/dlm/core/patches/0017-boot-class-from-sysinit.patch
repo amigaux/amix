@@ -1,0 +1,148 @@
+Subject: boot-class modules from the first sysinit entry (U15)
+
+S3-B5 (2026-10-26): the first boot-class load panicked in process 0.
+rth1_mountroot calls dlm_marc_post with interrupts masked (psw 0x2700),
+and lf_hashload's vn_rdwr faulted (bus error) on a page the file system
+maps for the read, which cannot be brought in there.  That answers U15
+the way 30 section 3 provided for: the load moves to the first sysinit
+entry.  modadm MOD_C_POST runs it once a boot from a process (modadmin
+-B); dlm_marc_post loads nothing while interrupts are masked and says
+where the modules load.  The harness checks MOD_C_POST and its once.
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -346,7 +346,8 @@
+ /* marc_post (patch 16, C3-5) */
+ extern int dlm_safe;			/* safe mode this boot (the platform, from AXL1) */
+ extern int (*dlm_plat_match)();		/* the platform's: 1 if a match key names a board here */
+-extern void dlm_marc_post(), dlm_man_params();
++extern void dlm_marc_post(), dlm_marc_run(), dlm_man_params();
++extern int dlm_posted;			/* MOD_C_POST has run this boot */
+ 
+ /* interrupt chains (30 section 4) */
+ extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_int2_walk();
+--- a/include/sys/mod.h
++++ b/include/sys/mod.h
+@@ -37,6 +37,7 @@
+ 
+ /* modadm commands */
+ #define	MOD_C_MREG	1
++#define	MOD_C_POST	2		/* the boot-class load: modadmin -B */
+ #define	MOD_C_AUTOUNLD	100
+ 
+ #define	EXF_FIRST	1		/* mod_execreg er_flags */
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -3,9 +3,15 @@
+  * filesystem is mounted (amix-dlm docs/spec/30-module-core.md section 3,
+  * section 2 patch 16; docs/contracts/C3-5-module-member.md).
+  *
+- * The kernel calls dlm_marc_post() once, in process 0 after vfs_mountroot
+- * returns (or from the first sysinit entry, if loading files in process 0
+- * proves unsafe, U15).  It reads the manifest the loader booted:
++ * U15 answered it (S3-B5, 2026-10-26): reading a module file in process 0
++ * after vfs_mountroot, where the kernel's hook dlm_marc_post() is called,
++ * faults: the hook runs with interrupts masked (psw 0x2700), and a page
++ * the file system maps for the read cannot be brought in there.  So the
++ * load runs from the first sysinit entry instead: `modadmin -B`, the
++ * modadm command MOD_C_POST, once a boot, in a process with interrupts
++ * on.  dlm_marc_post() loads nothing when interrupts are masked and says
++ * where the modules load.  dlm_marc_run() reads the manifest the loader
++ * booted:
+  *
+  *   1. every demand-class record's character majors= are registered for
+  *      that module, so the first open of one loads it;
+@@ -74,9 +80,28 @@
+ 	return 0;
+ }
+ 
++int	dlm_posted;
++
++/* the kernel's hook, in process 0 after vfs_mountroot */
+ void
+ dlm_marc_post()
+ {
++#ifndef DLM_HOST
++	unsigned short sr;
++
++	__asm__ __volatile__("movew %%sr,%0" : "=d" (sr));
++	if (sr & 0x0700) {
++		if (dlm_inited && dlm_man)
++			printf("dlm: boot-class modules load from the first sysinit entry (modadmin -B)\n");
++		return;
++	}
++#endif
++	dlm_marc_run();
++}
++
++void
++dlm_marc_run()
++{
+ 	char name[MODMAXNAMELEN], v[MD_MAXSTR + 1], *p, *l, *lim, *q;
+ 	int pass, e, n;
+ 
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -1228,6 +1228,13 @@
+ 		return ENOSYS;
+ 	if (!suser(u.u_cred))
+ 		return EPERM;
++	if (uap->cmd == MOD_C_POST) {	/* the first sysinit entry (U15) */
++		if (dlm_posted)
++			return EBUSY;
++		dlm_posted = 1;
++		dlm_marc_run();
++		return 0;
++	}
+ 	if (uap->cmd != MOD_C_MREG)
+ 		return EINVAL;		/* MOD_C_AUTOUNLD not implemented yet */
+ 	if (uap->type <= MOD_TY_NONE || uap->type > MOD_TY_MAX)
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -19,6 +19,9 @@
+  *					through /dev/kmem: a loaded module's
+  *					tunables and counters by name
+  *	modadmin -w name value		one long written there (root)
++ *	modadmin -B			the boot-class modules of the booted
++ *					generation, once a boot: the first
++ *					sysinit entry runs it (root)
+  *
+  * -k, -p and -w look a name up with getksym: the kernel's exported names
+  * first, then each loaded module's own globals, so a module's tunables
+@@ -225,7 +228,7 @@
+ 	fprintf(stderr, "usage: %s -l name|path ... | -u id ... | -U name ... |\n"
+ 	    "\t-q id ... | -Q name ... | -s | -S | -d dir[:dir] | -D |\n"
+ 	    "\t-r cdev|sdev name major ... | -k name ... | -a addr ... |\n"
+-	    "\t-p name[:n] ... | -w name value\n", progname);
++	    "\t-p name[:n] ... | -w name value | -B\n", progname);
+ 	exit(2);
+ }
+ 
+@@ -331,6 +334,10 @@
+ 		for (i = 2; i < argc; i++)
+ 			kmem(argv[i], 0, 0L);
+ 		break;
++	case 'B':
++		if (modadm(MOD_TY_NONE, MOD_C_POST, (char *)0) < 0)
++			fail("cannot load", "the boot-class modules");
++		break;
+ 	case 'w':
+ 		if (argc != 4)
+ 			usage();
+--- a/test/state.c
++++ b/test/state.c
+@@ -546,6 +546,14 @@
+ 	check(copen(58, 0, OTYP_CHR) != 0 && !byname("pdm") && modload("pb1", &id) == EPERM &&
+ 	    !byname("pb1"), "safe mode: a first open and a modload are refused too");
+ 	dlm_safe = 0;
++	/* the first sysinit entry (U15): modadmin -B, once a boot */
++	check(modadm(MOD_TY_NONE, MOD_C_POST, (char *)0) == 0 && pb1_loads == 2 && byname("pb1"),
++	    "MOD_C_POST (modadmin -B): the boot members load");
++	check(modadm(MOD_TY_NONE, MOD_C_POST, (char *)0) == EBUSY && pb1_loads == 2,
++	    "MOD_C_POST: once a boot, a second is EBUSY");
++	if ((m = byname("pb1")) != 0)
++		moduload(m->m_id);
++	dlm_posted = 0;
+ 	dlm_plat_match = 0;
+ 	dlm_man = om;
+ 	dlm_manlen = ol;

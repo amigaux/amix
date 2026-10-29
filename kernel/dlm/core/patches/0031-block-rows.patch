@@ -1,0 +1,385 @@
+Subject: block rows: a pinned driver's bdevsw rows from its mod_drv_data
+
+30 section 2 patch 7 (S4-06).  The core refused any driver with
+drv_bcount; the ramdisk (block major 20) needs a block row.  A driver
+may now have consecutive block majors, each registered to it (b: in the
+registry), with or without character rows.  The block switch has no
+first-open trampoline, so the row is filled when the module links and
+only a pinned module may have one.  The row must be empty (every routine
+nodev, no flag set), the entries module code or 0 (0 is nodev); a block
+row that cannot link puts the driver's character rows back, and a
+failed load puts the row back.  The bdevsw layout is measured
+(dlmoffs.c: DRV_BDEVSW, DRV_BMAJOR, BD_NFN, BD_FLAG), which is an added
+ABI name: the stage-4 kabi minor, k46.1.1 / k30.1.1.
+
+--- a/dlmoffs.c
++++ b/dlmoffs.c
+@@ -17,8 +17,10 @@
+ 
+ #define	OFF(s, m)	((int)&((struct s *)0)->m)
+ 
+-/* struct mod_drv_data (sys/moddefs.h) and struct cdevsw (sys/conf.h) */
++/* struct mod_drv_data (sys/moddefs.h), struct cdevsw and bdevsw (sys/conf.h) */
+ int	dlm_off_DRVSZ = sizeof (struct mod_drv_data);
++int	dlm_off_DRV_BDEVSW = OFF(mod_drv_data, drv_bdevsw);
++int	dlm_off_DRV_BMAJOR = OFF(mod_drv_data, drv_bmajor);
+ int	dlm_off_DRV_BCOUNT = OFF(mod_drv_data, drv_bcount);
+ int	dlm_off_DRV_CDEVSW = OFF(mod_drv_data, drv_cdevsw);
+ int	dlm_off_DRV_CMAJOR = OFF(mod_drv_data, drv_cmajor);
+@@ -27,6 +29,8 @@
+ int	dlm_off_CD_TTYS = OFF(cdevsw, d_ttys);
+ int	dlm_off_CD_STR = OFF(cdevsw, d_str);
+ int	dlm_off_CD_FLAG = OFF(cdevsw, d_flag);
++int	dlm_off_BD_NFN = OFF(bdevsw, d_flag) / sizeof (int (*)());	/* routines before d_flag */
++int	dlm_off_BD_FLAG = OFF(bdevsw, d_flag);
+ 
+ /* struct mod_str_data (sys/moddefs.h), streamtab and qinit (sys/stream.h) */
+ int	dlm_off_SD_NAME = OFF(mod_str_data, str_name[0]);
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -437,6 +437,46 @@
+ /* the ten routine entries, d_open first */
+ #define	cfn(cp)	((int (**)())&(cp)->d_open)
+ 
++/*
++ * Block rows (30 section 2 patch 7, S4-06).  The block switch has no
++ * first-open trampoline, so a block driver's row is filled when the
++ * module links, and only a pinned module may have one: the row then
++ * stays until the kernel halts.  A failed load puts the row back.
++ */
++#define	BSLOT_MAX	8
++#define	bfn(bp)	((int (**)())&(bp)->d_open)
++
++static struct dlm_bslot {
++	struct dlm_mod	*bs_mod;	/* 0: free */
++	int		bs_major;
++	struct bdevsw	bs_old;		/* the row before */
++} dlm_bslot[BSLOT_MAX];
++
++static struct dlm_bslot *
++bslot(mj)
++	int mj;
++{
++	int i;
++
++	for (i = 0; i < BSLOT_MAX; i++)
++		if (dlm_bslot[i].bs_mod && dlm_bslot[i].bs_major == mj)
++			return &dlm_bslot[i];
++	return 0;
++}
++
++/* every routine nodev and no flag set: free for a module */
++static int
++bempty(bp)
++	struct bdevsw *bp;
++{
++	int k;
++
++	for (k = 0; k < BD_NFN; k++)
++		if (bfn(bp)[k] != nodev)
++			return 0;
++	return bp->d_flag == 0 || *bp->d_flag == 0;
++}
++
+ static int
+ cempty(cp)
+ 	struct cdevsw *cp;
+@@ -642,16 +682,103 @@
+ 	return e;
+ }
+ 
++static int drv_remove();
++
++/* a driver's block rows: consecutive majors, each registered to it */
++static int
++blk_install(m, d, r)
++	struct dlm_mod *m;
++	unsigned long d;
++	char *r;
++{
++	struct dlm_bslot *bs;
++	struct bdevsw *bp;
++	unsigned long b = d + DRV_BDEVSW, fl, f;
++	int mj, n, i, k, s, nfree;
++
++	mj = (int)S32(G32(r + DRV_BMAJOR));
++	n = (int)S32(G32(r + DRV_BCOUNT));
++	if (mj < 0 || mj >= bdevcnt || n < 1 || n > bdevcnt - mj ||
++	    G32(DLM_RP(m, d + DRV_CDEVSW) + CD_STR))
++		return EINVAL;
++	if (m->m_flags & DM_UNLOADOK) {
++		printf("dlm: %s: a block driver must be pinned (no unload=allowed)\n", m->m_name);
++		return EINVAL;
++	}
++	for (i = 0; i < n; i++) {
++		if (dlm_majowned('b', mj + i, m->m_name) != 0) {
++			printf("dlm: %s: major b:%d is not registered to it\n", m->m_name, mj + i);
++			return ECONFIG;
++		}
++		if (bslot(mj + i) || !bempty(&bdevsw[mj + i])) {
++			printf("dlm: %s: block row %d is in use\n", m->m_name, mj + i);
++			return ECONFIG;
++		}
++	}
++	if ((fl = G32(DLM_RP(m, b) + BD_FLAG)) != 0) {
++		if (!inimg(m, fl, 4L))
++			return ERELOC;
++		if (G32(DLM_RP(m, fl)) & D_OLD)
++			return EINVAL;
++	}
++	for (k = 0; k < BD_NFN; k++)
++		if (!dlm_okcode(m, G32(DLM_RP(m, b) + 4 * k)))
++			return ERELOC;
++	for (i = nfree = 0; i < BSLOT_MAX; i++)
++		if (dlm_bslot[i].bs_mod == 0)
++			nfree++;
++	if (nfree < n) {
++		printf("dlm: %s: more than %d block rows taken by modules\n", m->m_name, BSLOT_MAX);
++		return ECONFIG;
++	}
++	for (i = 0, bs = dlm_bslot; i < n; i++, bs++) {
++		while (bs->bs_mod)
++			bs++;
++		bp = &bdevsw[mj + i];
++		bs->bs_major = mj + i;
++		bs->bs_old = *bp;
++		s = dlm_splhi();
++		for (k = 0; k < BD_NFN; k++) {
++			f = G32(DLM_RP(m, b) + 4 * k);
++			bfn(bp)[k] = f ? (int (*)())f : nodev;
++		}
++		bp->d_flag = fl ? (int *)DLM_RP(m, fl) : dlm_cflag;
++		bs->bs_mod = m;
++		dlm_splx(s);
++	}
++	return 0;
++}
++
++static void
++blk_remove(m)
++	struct dlm_mod *m;
++{
++	int i, s;
++
++	for (i = 0; i < BSLOT_MAX; i++)
++		if (dlm_bslot[i].bs_mod == m) {
++			s = dlm_splhi();
++			bdevsw[dlm_bslot[i].bs_major] = dlm_bslot[i].bs_old;
++			dlm_bslot[i].bs_mod = 0;
++			dlm_splx(s);
++		}
++}
++
++static int chr_install();
++
++/*
++ * A driver: character rows (or a STREAMS driver), block rows, or both.
++ * Block rows link after the character ones; if they cannot, the
++ * character rows are put back.
++ */
+ static int
+ drv_install(m, td)
+ 	struct dlm_mod *m;
+ 	unsigned long td;
+ {
+-	struct dlm_cslot *cs;
+-	struct cdevsw *cp;
+-	unsigned long d, c, fl, f;
++	unsigned long d;
+ 	char *r;
+-	int mj, n, i, k, s, e;
++	int bn, n, e;
+ 
+ 	if (!inimg(m, td, 8L))
+ 		return ERELOC;
+@@ -659,11 +786,34 @@
+ 	if (!inimg(m, d, (unsigned long)DRVSZ))
+ 		return ERELOC;
+ 	r = DLM_RP(m, d);
++	bn = (int)S32(G32(r + DRV_BCOUNT));
++	n = (int)S32(G32(r + DRV_CCOUNT));
++	if (bn < 0 || n < 0 || bn + n == 0)
++		return EINVAL;
++	if (n && (e = chr_install(m, d, r)) != 0)
++		return e;
++	if (bn && (e = blk_install(m, d, r)) != 0) {
++		(void)drv_remove(m, td);
++		return e;
++	}
++	return 0;
++}
++
++static int
++chr_install(m, d, r)
++	struct dlm_mod *m;
++	unsigned long d;
++	char *r;
++{
++	struct dlm_cslot *cs;
++	struct cdevsw *cp;
++	unsigned long c, fl, f;
++	int mj, n, i, k, s, e;
++
+ 	c = d + DRV_CDEVSW;
+ 	mj = (int)S32(G32(r + DRV_CMAJOR));
+ 	n = (int)S32(G32(r + DRV_CCOUNT));
+-	if (G32(r + DRV_BCOUNT) != 0 || mj < 0 || mj >= cdevcnt ||
+-	    n < 1 || n > cdevcnt - mj)
++	if (mj < 0 || mj >= cdevcnt || n < 1 || n > cdevcnt - mj)
+ 		return EINVAL;
+ 	for (i = 0; i < n; i++)		/* drv_cmajor: the registry's, not the module's word */
+ 		if (dlm_majowned('c', mj + i, m->m_name) != 0) {
+@@ -728,6 +878,7 @@
+ 	struct dlm_cslot *cs;
+ 	int s;
+ 
++	blk_remove(m);
+ 	dlm_sdev_remove(m);
+ 	for (cs = dlm_cslot; cs; cs = cs->cs_next)
+ 		if (cs->cs_mod == m) {
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -103,6 +103,19 @@
+ };
+ extern struct cdevsw cdevsw[];
+ extern int cdevcnt;
++
++struct bdevsw {
++	int	(*d_open)();
++	int	(*d_close)();
++	int	(*d_strategy)();
++	int	(*d_print)();
++	int	(*d_size)();
++	int	(*d_xpoll)();
++	int	(*d_xhalt)();
++	int	*d_flag;
++};
++extern struct bdevsw bdevsw[];
++extern int bdevcnt;
+ #define	D_OLD		0x01
+ #define	OTYP_CHR	2
+ #define	OTYP_LYR	4
+--- a/test/hconf.c
++++ b/test/hconf.c
+@@ -44,6 +44,11 @@
+ 	{ 'c', 68, "pbcd" },
+ 	{ 'c', 69, "pbsd" },
+ 	{ 'b', 20, "ramdisk" },
++	{ 'b', 21, "bdun" },
++	{ 'b', 23, "bdused" },
++	{ 'b', 23, "bdcf" },
++	{ 'b', 24, "bd1" },
++	{ 'c', 59, "bdcf" },
+ 	{ 0, 0, 0 }
+ };
+ 
+@@ -97,10 +102,12 @@
+ 	{ 0, 0, 0, 0 },
+ };
+ 
+-/* character switch: row 3 in use, the rest empty */
++/* character switch: row 3 in use, the rest empty; block switch: row 23 in use */
+ static int zflag[1];
+ int cdevcnt = 70;
+ struct cdevsw cdevsw[70];
++int bdevcnt = 32;
++struct bdevsw bdevsw[32];
+ 
+ int
+ hconf_used()
+@@ -119,4 +126,10 @@
+ 		cdevsw[i].d_flag = zflag;
+ 	}
+ 	cdevsw[3].d_open = hconf_used;
++	for (i = 0; i < 32; i++) {
++		for (k = 0; k < 7; k++)
++			(&bdevsw[i].d_open)[k] = nodev;
++		bdevsw[i].d_flag = zflag;
++	}
++	bdevsw[23].d_strategy = hconf_used;
+ }
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -174,6 +174,29 @@
+ drvmod('swd', 66)                   # the backstop after a failed linkage
+ 
+ 
++# block drivers (S4-06): bd1 a pinned block-only driver on b:24; bdun is
++# unpinned; bdreg's b:22 is registered to no one; bdused's b:23 is in use;
++# bdcf has a character row (c:59) that links, then the used block row
++def blkmod(p, bmajor, cmajor=0, ccount=0, pinned=True):
++    fns = ''.join('\t.globl\t{p}_{f}\n{p}_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(p=p, f=f)
++                  for f in ('open', 'close', 'strategy'))
++    cd = ('\t.long\t{p}_open, {p}_close, 0, 0, 0, 0, 0, 0, 0, 0\n'.format(p=p) if ccount
++          else '\t.long\t0, 0, 0, 0, 0, 0, 0, 0, 0, 0\n')
++    mod(p, ops='mod_drvops', pdata=p + '_dd', text=fns,
++        extra=() if not pinned else ('unload=never',),
++        data='\t.globl\t{p}_flag\n{p}_flag:\n\t.long\t0\n{p}_dd:\n'
++        '\t.long\t{p}_open, {p}_close, {p}_strategy, 0, 0, 0, 0, {p}_flag\n'
++        '\t.long\t{bj}, 1\n{cd}\t.long\t0, 0, 0\n\t.long\t{cj}, {cn}\n'.format(
++            p=p, bj=bmajor, cd=cd, cj=cmajor, cn=ccount))
++
++
++blkmod('bd1', 24)
++blkmod('bdun', 21, pinned=False)
++blkmod('bdreg', 22)
++blkmod('bdused', 23)
++blkmod('bdcf', 23, cmajor=59, ccount=1)
++
++
+ def strdrv(p, major):
+     fns = ''.join('\t.globl\t{p}_{f}\n{p}_{f}:\n\tmoveq\t&0,%d0\n\trts\n'.format(p=p, f=f)
+                   for f in ('put', 'open', 'close'))
+--- a/test/state.c
++++ b/test/state.c
+@@ -540,6 +540,33 @@
+ 	    "no-sleep: the unload returns every byte");
+ }
+ 
++/* ---- block rows (30 section 2 patch 7, S4-06) ---- */
++void
++blk_tests()
++{
++	struct dlm_mod *m;
++	struct bdevsw b23;
++	int id;
++
++	b23 = bdevsw[23];
++	check(modload("bd1", &id) == 0 && (m = byname("bd1")) != 0 &&
++	    bdevsw[24].d_open == (int (*)())modsym(m, "bd1_open") &&
++	    bdevsw[24].d_strategy == (int (*)())modsym(m, "bd1_strategy") &&
++	    bdevsw[24].d_print == nodev && bdevsw[24].d_flag == (int *)DLM_RP(m, modsym(m, "bd1_flag")),
++	    "bdev: a pinned block-only driver fills its row, 0 entries nodev");
++	check(moduload(id) == EBUSY && byname("bd1"), "bdev: and stays (pinned)");
++	check(modload("bdun", &id) == EINVAL && !byname("bdun") && bdevsw[21].d_open == nodev,
++	    "bdev: an unpinned block driver -> EINVAL, the row untouched");
++	check(modload("bdreg", &id) == ECONFIG && !byname("bdreg") && bdevsw[22].d_open == nodev,
++	    "bdev: a block major the registry gives no one -> ECONFIG");
++	check(modload("bdused", &id) == ECONFIG && !byname("bdused") &&
++	    bcmp((char *)&bdevsw[23], (char *)&b23, sizeof b23) == 0,
++	    "bdev: a block row in use -> ECONFIG, the row as it was");
++	check(modload("bdcf", &id) == ECONFIG && !byname("bdcf") &&
++	    bcmp((char *)&bdevsw[23], (char *)&b23, sizeof b23) == 0 && cdevsw[59].d_read == nodev,
++	    "bdev: a character row that links, then a block row that cannot: both as before");
++}
++
+ /* ---- the halt pass (30 section 2 patch 11, S4-07) ---- */
+ extern int dlm_halted;
+ static char halt_order[16];
+@@ -1060,7 +1087,7 @@
+ 	check(creg("cdold", 61) == 0 && copen(61, 0, OTYP_CHR) == ENXIO && !byname("cdold"),
+ 	    "cdev: D_OLD driver is refused");
+ 	check(creg("cdblk", 62) == 0 && copen(62, 0, OTYP_CHR) == ENXIO && !byname("cdblk"),
+-	    "cdev: block majors are refused");
++	    "cdev: a block row from an unpinned module, at a major the registry gives no one, is refused");
+ 	check(creg("zz", 63) == 0 && copen(63, 0, OTYP_CHR) == ENXIO && !byname("zz"),
+ 	    "cdev: module that cannot be loaded -> ENXIO");
+ 	check(copen(60, 0, OTYP_CHR) == 0 && byname("cd") && cclose(60, 0, OTYP_CHR) == 0,
+@@ -1497,6 +1524,7 @@
+ 	drv_tests();
+ 	man_tests();
+ 	nosleep_tests();
++	blk_tests();
+ 	post_tests();
+ 	intr_tests();
+ 	kinfo_tests();

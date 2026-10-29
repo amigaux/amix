@@ -1,0 +1,175 @@
+Subject: development load as C3-4 says; manifest paths under /stand/gen
+
+From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
+section 1.1, 1.6).  lf_gate honoured development load before it looked
+for a manifest, so development load replaced a missing arena directory
+(C3-4 section 5 forbids it), and it took a member's path= and sha256= even
+under development load, so the SHA-256 rule was not lifted (C3-4 section
+3 lifts it).  Now no manifest refuses first; a member under development
+load loads from its path= unchecked, and says so.  A member whose path=
+is not /stand/gen/<the booted generation>/mod/<name> is refused (C3-5
+section 3).  The harness's manifests use those paths, and it boots an empty
+generation first, since development load needs a manifest; four new
+checks.
+
+--- a/dlm_arena.c
++++ b/dlm_arena.c
+@@ -120,10 +120,26 @@
+ }
+ #endif
+ 
++/* path is /stand/gen/<the booted generation>/mod/<name>, exactly */
++static int
++genpath(path, name)
++	char *path, *name;
++{
++	char *p = path + 11;
++	long g = 0;
++
++	if (bcmp(path, "/stand/gen/", 11) != 0 || *p < '0' || *p > '9')
++		return 0;
++	while (*p >= '0' && *p <= '9')
++		g = g * 10 + (*p++ - '0');
++	return g == dlm_mangen && bcmp(p, "/mod/", 5) == 0 && strcmp(p + 5, name) == 0;
++}
++
+ /*
+  * The manifest's record for a boot- or demand-class module: 0 with its
+  * path= (into path, at most cap bytes) and sha256= (64 hex digits into
+- * sha), ENOENT if the manifest names no such module.
++ * sha), ENOENT if the manifest names no such module, EINVAL if its path=
++ * is not /stand/gen/<the booted generation>/mod/<name> (C3-5 section 3).
+  */
+ int
+ dlm_man_member(name, path, cap, sha)
+@@ -155,7 +171,9 @@
+ 				sha[64] = 0;
+ 			}
+ 		}
+-		return path[0] == '/' && sha[0] ? 0 : ENOENT;
++		if (!sha[0] || !genpath(path, name))
++			return EINVAL;
++		return 0;
+ 	}
+ 	return ENOENT;
+ }
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -398,8 +398,12 @@
+ /*
+  * Manifest-only loading (patch 17): a module loads only as a member of
+  * the manifest the loader booted, from its path=, and only if its bytes
+- * hash to its sha256=.  Development load lets a module outside the
+- * manifest load from the path asked for, and says so every time.
++ * hash to its sha256=.  Development load (C3-4 section 3) lifts the
++ * membership and the SHA-256 rule, and only those: a module outside the
++ * manifest loads from the path asked for, a member loads from its path=
++ * without the SHA-256 check, and each says so.  It never replaces a
++ * missing manifest (C3-4 section 5): with no valid arena directory,
++ * nothing loads.
+  */
+ static int
+ lf_gate(lf, name, pathp)
+@@ -412,19 +416,30 @@
+ 		printf("dlm: safe mode: %s is refused\n", name);
+ 		return EPERM;
+ 	}
+-	if (dlm_man && dlm_man_member(name, lf->lf_mpath, MAXPATHLEN, lf->lf_sha) == 0) {
++	if (dlm_man == 0) {
++		printf("dlm: %s: no booted manifest, so no module loads this boot\n", name);
++		return EPERM;
++	}
++	switch (dlm_man_member(name, lf->lf_mpath, MAXPATHLEN, lf->lf_sha)) {
++	case 0:
+ 		*pathp = lf->lf_mpath;
++		if (dlm_devload) {
++			printf("dlm: DEVELOPMENT LOAD: %s, its SHA-256 not checked\n", name);
++			lf->lf_sha[0] = 0;
++		}
+ 		return 0;
++	case EINVAL:
++		printf("dlm: %s: its manifest path is not /stand/gen/%d/mod/%s\n", name,
++		    (int)dlm_mangen, name);
++		lf->lf_sha[0] = 0;
++		return EPERM;
+ 	}
+ 	lf->lf_sha[0] = 0;
+ 	if (dlm_devload) {
+ 		printf("dlm: DEVELOPMENT LOAD: %s, outside the booted manifest\n", name);
+ 		return 0;
+ 	}
+-	if (dlm_man == 0)
+-		printf("dlm: %s: no booted manifest, so no module loads this boot\n", name);
+-	else
+-		printf("dlm: %s is not a member of the booted generation\n", name);
++	printf("dlm: %s is not a member of the booted generation\n", name);
+ 	return EPERM;
+ }
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -452,9 +452,10 @@
+ 	hexsha("pm1", s1);
+ 	hexsha("pmd", sd);
+ 	sprintf(man, "GMF1\ngeneration 7\nline k46\n"
+-	    "module pm1 boot 300 path=/etc/conf/mod.d/pm1 sha256=%s\n"
+-	    "module pm2 demand 300 path=/etc/conf/mod.d/pm2 sha256=%s\n"
+-	    "module pmd boot 300 path=/etc/conf/mod.d/pmd sha256=%s\n", s1, s1, sd);
++	    "module pm1 boot 300 path=/stand/gen/7/mod/pm1 sha256=%s\n"
++	    "module pm2 demand 300 path=/stand/gen/7/mod/pm2 sha256=%s\n"
++	    "module pmd boot 300 path=/stand/gen/7/mod/pmd sha256=%s\n"
++	    "module pm4 boot 300 path=/stand/gen/6/mod/pm4 sha256=%s\n", s1, s1, sd, s1);
+ 	mkarena(a, man, 1, 1);
+ 	check(dlm_arena_check(a, 4096L, &m, &len, &gen) == 0 && m == a + 32 && gen == 7,
+ 	    "arena: a valid directory and manifest copy");
+@@ -475,12 +476,19 @@
+ 	    "manifest: an absolute path outside it -> EPERM");
+ 	check(modload("pmd", &id) != 0 && !byname("pmd") && !byname("pmdep"),
+ 	    "manifest: a member whose dependency is outside it does not load");
++	check(modload("pm4", &id) == EPERM && !byname("pm4"),
++	    "manifest: a member whose path= is not /stand/gen/<id>/mod/<name> -> EPERM");
+ 	dlm_devload = 1;
+ 	check(modload("pm3", &id) == 0 && byname("pm3"),
+ 	    "development load: a module outside the manifest loads");
+-	dlm_devload = 0;
++	check(modload("pm2", &id) == 0 && byname("pm2"),
++	    "development load: a member whose SHA-256 differs loads (the rule lifted, C3-4)");
++	moduload(id);
+ 	m = dlm_man;
+ 	dlm_man = 0;
++	check(modload("pmdep", &id) == EPERM && !byname("pmdep"),
++	    "development load never replaces a missing manifest (C3-4 section 5)");
++	dlm_devload = 0;
+ 	check(modload("pmdep", &id) == EPERM && !byname("pmdep"), "no booted manifest: nothing loads");
+ 	dlm_man = m;
+ 	dlm_devload = 1;
+@@ -523,9 +531,9 @@
+ 	hexsha("pb2", s2);
+ 	hexsha("pdm", s3);
+ 	sprintf(man, "GMF1\ngeneration 9\n"
+-	    "module pb1 boot 300 path=/etc/conf/mod.d/pb1 sha256=%s match=zorro:144b:01,always\n"
+-	    "module pb2 boot 300 path=/etc/conf/mod.d/pb2 sha256=%s match=zorro:dead:01\n"
+-	    "module pdm demand 300 path=/etc/conf/mod.d/pdm sha256=%s majors=c:58\n"
++	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=zorro:144b:01,always\n"
++	    "module pb2 boot 300 path=/stand/gen/7/mod/pb2 sha256=%s match=zorro:dead:01\n"
++	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:58\n"
+ 	    "param pb1.x=1\nparam pb2.z=3\nparam pb1.y=two\n", s1, s2, s3);
+ 	mkarena(a, man, 1, 1);
+ 	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
+@@ -882,6 +890,16 @@
+ 	check(!dlm_inited, "dlm_init refuses when a claimed slot is not nosys");
+ 	dlm_inited = 1;
+ 	check(strcmp(dlm_path, "/etc/conf/mod.d") == 0, "default path");
++	/* the harness boots a generation with no member: development load
++	 * (hconf.c) lets the test modules load from outside it, and a booted
++	 * manifest must exist for that (C3-4 section 5) */
++	{
++		static char a0[4096];
++
++		mkarena(a0, "GMF1\ngeneration 7\nline k46\n", 1, 1);
++		check(dlm_arena_check(a0, 4096L, &dlm_man, &dlm_manlen, &dlm_mangen) == 0,
++		    "the harness's booted manifest (no member)");
++	}
+ 	base = host_kbytes;
+ 
+ 	/* ---- ids, gaps, demand ---- */

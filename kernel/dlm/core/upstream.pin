@@ -1,0 +1,8 @@
+# The adopted module core (docs/spec/30-module-core.md §1): kdedon's DLM
+# core, MIT licence ("Copyright (c) 2026 kdedon", upstream's LICENSE, kept
+# beside the files).  Earlier commits of that project are GPL-2.0; the
+# queue's base is this commit or a later MIT one, never an earlier one.
+url     https://github.com/kdedon/ashnazag
+commit  b736c59dc79d20b8b007a182a9b03c7b8efa461a
+date    2026-10-14
+path    kernel/dlm (copied whole to core/upstream/, unmodified)

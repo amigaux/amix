@@ -1,0 +1,279 @@
+Subject: root_defer: a root-class driver's call at the first sysinit entry
+
+Contract C4-2 section 3 (S4-05).  The root pass runs at level 7 with the
+clock stopped, where an interrupt self-test cannot run.  root_defer(fn,
+arg), from a root-class module's _load in the root pass only, keeps up
+to 8 calls; dlm_marc_run, at the first sysinit entry (MOD_C_POST), runs
+each once, in order, before any boot-class module loads, in safe mode
+too.  A nonzero return is printed; the module stays linked.  Outside the
+root pass it is EINVAL, a ninth ENOSPC, and a failed load's calls go with
+the backstop sweep.  A DDI name of minor 1.  The state harness covers
+each case.
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -104,6 +104,24 @@
+ 	cons_hook = 0;
+ }
+ 
++/*
++ * root_defer (C4-2 section 3, S4-05): a root-class driver asks for one
++ * call at the first process-context point, where its interrupt
++ * self-test can run (level 0; the root pass runs at level 7 with the
++ * clock stopped).  From the module's _load in the root pass only; up to
++ * 8 calls, run once each, in order, by dlm_defer_run at the first
++ * sysinit entry, before any boot-class module loads.  A failed load's
++ * calls go with the backstop below.
++ */
++#define	DLM_DEFER	8
++
++static struct dlm_defer {
++	unsigned long	df_f;		/* the module's function */
++	char		*df_arg;
++	struct dlm_mod	*df_mod;
++} dlm_defer[DLM_DEFER];
++static int dlm_ndefer;
++
+ /* every ifstats link and the console hook pointing into [lo, hi), removed:
+  * a module's backstop (dlm_core.c sweep); the count */
+ int
+@@ -124,6 +142,12 @@
+ 		cons_hook = 0;
+ 		n++;
+ 	}
++	for (i = 0; i < dlm_ndefer; )
++		if (dlm_defer[i].df_f >= lo && dlm_defer[i].df_f < hi) {
++			dlm_defer[i] = dlm_defer[--dlm_ndefer];
++			n++;
++		} else
++			i++;
+ 	for (i = 0; !dlm_sdclosed && i < dlm_nsdreg; )
+ 		if ((unsigned long)dlm_sdreg[i].sr_f >= lo && (unsigned long)dlm_sdreg[i].sr_f < hi) {
+ 			dlm_sdreg[i] = dlm_sdreg[--dlm_nsdreg];
+@@ -203,3 +227,43 @@
+ 	return __amix_scrcon_put(cp, p, n);
+ }
+ #endif
++
++int
++root_defer(f, arg)
++	int (*f)();
++	char *arg;
++{
++	struct dlm_defer *d;
++
++	if (!dlm_rootpass || dlm_curmod == 0 || f == 0) {
++		printf("dlm: root_defer outside a root-class module's _load\n");
++		return EINVAL;
++	}
++	if (dlm_ndefer >= DLM_DEFER) {
++		printf("dlm: root module %s: more than %d deferred calls\n", dlm_curmod->m_name,
++		    DLM_DEFER);
++		return ENOSPC;
++	}
++	d = &dlm_defer[dlm_ndefer++];
++	d->df_f = (unsigned long)f;
++	d->df_arg = arg;
++	d->df_mod = dlm_curmod;
++	return 0;
++}
++
++/* the first sysinit entry: each deferred call once, in order; safe mode too */
++void
++dlm_defer_run()
++{
++	struct dlm_defer *d;
++	int i, e;
++
++	for (i = 0; i < dlm_ndefer; i++) {
++		d = &dlm_defer[i];
++		if ((e = DLM_CALL(d->df_mod, d->df_f, d->df_arg, 0)) != 0)
++			printf("dlm: root module %s: its deferred call returned error %d\n",
++			    d->df_mod->m_name, e);
++	}
++	dlm_ndefer = 0;
++}
++
+--- a/dlm.h
++++ b/dlm.h
+@@ -336,6 +336,9 @@
+ extern int dlm_nsdreg, dlm_sdclosed;
+ extern int sd_register(), dlm_sd_close();
+ extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
++extern int dlm_rootpass;		/* set while marc_root links modules */
++extern int root_defer();		/* (fn, arg): C4-2 section 3 */
++extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
+ extern int dlm_halt();
+ extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -117,6 +117,7 @@
+ 
+ 	if (!dlm_inited || dlm_man == 0)
+ 		return;
++	dlm_defer_run();	/* root-class drivers' interrupt self-tests (C4-2 section 3) */
+ 	if (dlm_safe) {
+ 		printf("dlm: safe mode: no boot- or demand-class module loads this boot\n");
+ 		return;
+@@ -197,6 +198,8 @@
+ #define	AXA1_ENT	48
+ #define	AXF_SAFE	0x4		/* a safe-mode member */
+ 
++int	dlm_rootpass;		/* set while the root pass links modules */
++
+ /*
+  * The manifest's root record for name: 0 with its bss= (0 if absent) and
+  * its match= keys (into keys, cap bytes) if there is a "module <name>
+@@ -275,7 +278,7 @@
+ 		return 0;
+ 	count = G32(a + 12);
+ 	used = G32(a + 24);
+-	dlm_nosleep = 1;
++	dlm_nosleep = dlm_rootpass = 1;
+ 	for (i = 0; i < count; i++) {
+ 		e = a + AXA1_HDR + AXA1_ENT * i;
+ 		bcopy(e, name, 16);
+@@ -302,7 +305,7 @@
+ 		else if (err != ENXIO)
+ 			printf("dlm: root module %s: error %d\n", name, err);
+ 	}
+-	dlm_nosleep = 0;
++	dlm_nosleep = dlm_rootpass = 0;
+ 	return n;
+ }
+ 
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -84,7 +84,8 @@
+     md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root',
+           'match=always', 'rank=z3660'] + (['depend=' + ','.join(deps)] if deps else [])
+     mod(p, md=md,
+-        text='\t.bss\n\t.globl\t{p}_bv\n{p}_bv:\n\t.space\t64\n'
++        text='\t.globl\t{p}_cb\n{p}_cb:\n\tmoveq\t&0,%d0\n\trts\n'
++             '\t.bss\n\t.globl\t{p}_bv\n{p}_bv:\n\t.space\t64\n'
+              '\t.comm\t{p}_com,32,4\n\t.text\n'.format(p=p),
+         data='\t.globl\t{p}_ptr\n{p}_ptr:\n\t.long\t{p}_bv\n'
+              '\t.globl\t{p}_cptr\n{p}_cptr:\n\t.long\t{p}_com\n'.format(p=p))
+@@ -98,7 +99,9 @@
+ # the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
+ # member and rp7 is not
+ # rp8's record names a board that is not here (the core matches, C4-4 v3)
+-for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8'):
++# root_defer (S4-05): rd1 defers one call; rd2 asks for nine; rd3 defers
++# one and then fails its _load
++for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8', 'rd1', 'rd2', 'rd3'):
+     armod(p)
+ 
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -706,6 +706,100 @@
+ 	dlm_manlen = manlen;
+ }
+ 
++/* ---- root_defer (C4-2 section 3, S4-05) ---- */
++static int rd_calls, rd_lastarg, rd_e[12], rd_n;
++
++int
++h_rdcb(m, a, b)
++	char *m, *a;
++	long b;
++{
++	rd_calls++;
++	rd_lastarg = (int)(long)a;
++	return 0;
++}
++
++static int
++rd_defer(m)
++	char *m;
++{
++	struct dlm_mod *dm = (struct dlm_mod *)m;
++	char sym[16];
++
++	sprintf(sym, "%s_cb", dm->m_name);
++	return root_defer((int (*)())modsym(dm, sym), (char *)7L);
++}
++
++int
++h_rd1(m, a, b)
++	char *m, *a;
++	long b;
++{
++	rd_e[rd_n++] = rd_defer(m);
++	return 0;
++}
++
++int
++h_rd2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	int k;
++
++	for (k = 0; k < 9; k++)
++		rd_e[rd_n++] = rd_defer(m);
++	return 0;
++}
++
++int
++h_rd3(m, a, b)
++	char *m, *a;
++	long b;
++{
++	rd_e[rd_n++] = rd_defer(m);
++	return EIO;
++}
++
++void
++defer_tests()
++{
++	static char *n1[] = { "rd1", "rd3" }, *n2[] = { "rd2" };
++	static int f1[] = { 1, 1 }, d1[] = { 0, 0 }, m1[] = { 1, 1 }, f2[] = { 1 }, d2[] = { 0 }, m2[] = { 1 };
++	char *man = dlm_man;
++	long manlen = dlm_manlen;
++	int n, k, ok;
++
++	host_handler("rd1_load", h_rd1);
++	host_handler("rd2_load", h_rd2);
++	host_handler("rd3_load", h_rd3);
++	host_handler("rd1_cb", h_rdcb);
++	host_handler("rd2_cb", h_rdcb);
++	host_handler("rd3_cb", h_rdcb);
++	check(root_defer(h_rdcb, (char *)0) == EINVAL, "root_defer: outside a root-class _load -> EINVAL");
++	check(rpbuild(n1, f1, d1, m1, 2) == 0, "root_defer: an arena of two built");
++	rd_n = rd_calls = 0;
++	n = dlm_root_pass(rp_arena);
++	check(n == 1 && byname("rd1") && !byname("rd3") && rd_e[0] == 0 && rd_e[1] == 0 && rd_calls == 0,
++	    "root_defer: accepted from _load in the root pass, not called there");
++	dlm_marc_run();
++	check(rd_calls == 1 && rd_lastarg == 7,
++	    "root_defer: called once at the first sysinit entry; a failed load's call is gone");
++	dlm_marc_run();
++	check(rd_calls == 1, "root_defer: and never again");
++	check(rpbuild(n2, f2, d2, m2, 1) == 0, "root_defer: a third arena built");
++	rd_n = rd_calls = 0;
++	dlm_root_pass(rp_arena);
++	for (ok = 1, k = 0; k < 8; k++)
++		ok &= rd_e[k] == 0;
++	check(ok && rd_e[8] == ENOSPC, "root_defer: a ninth call -> ENOSPC");
++	dlm_safe = 1;
++	dlm_marc_run();
++	dlm_safe = 0;
++	check(rd_calls == 8, "root_defer: the calls run in safe mode too");
++	dlm_man = man;
++	dlm_manlen = manlen;
++}
++
+ /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ static int sr_e[8], sr_n;
+ 
+@@ -1788,6 +1882,7 @@
+ 	halt_tests();
+ 	arena_tests();
+ 	root_tests();
++	defer_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;

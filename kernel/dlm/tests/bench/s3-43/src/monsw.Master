@@ -1,0 +1,5 @@
+$modtype drv
+$class demand
+$majors c:52
+$desc S3-43 stand-in for monsw
+monsw	monsw

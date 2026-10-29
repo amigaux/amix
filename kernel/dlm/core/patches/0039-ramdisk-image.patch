@@ -1,0 +1,75 @@
+Subject: ramdisk_image: the RAM-disk image's address and size for its module
+
+Contract C4-3 section 4.  boot2 places the image and puts its physical
+address and size in the loader record (AXL1 offsets 116 and 120);
+core/plat/amiga.c keeps them, and ramdisk_image(&paddr, &size) hands
+them to the ramdisk module, or ENOENT when there is no image.  A DDI
+name of minor 1.  The state harness checks both answers.
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -267,3 +267,21 @@
+ 	dlm_ndefer = 0;
+ }
+ 
++/*
++ * ramdisk_image (C4-3 section 4): the RAM-disk image boot2 placed, its
++ * physical address and size, which the platform code read from the
++ * loader record.  0, or ENOENT when there is none.
++ */
++unsigned long	dlm_rd_addr, dlm_rd_size;
++
++int
++ramdisk_image(paddr, size)
++	unsigned long *paddr, *size;
++{
++	if (dlm_rd_size == 0)
++		return ENOENT;
++	*paddr = dlm_rd_addr;
++	*size = dlm_rd_size;
++	return 0;
++}
++
+--- a/dlm.h
++++ b/dlm.h
+@@ -339,6 +339,8 @@
+ extern int dlm_rootpass;		/* set while marc_root links modules */
+ extern char dlm_static_root[];		/* the kernel's built-in root controllers (mkident) */
+ extern int root_defer();		/* (fn, arg): C4-2 section 3 */
++extern unsigned long dlm_rd_addr, dlm_rd_size;	/* the RAM-disk image (the platform, AXL1) */
++extern int ramdisk_image();		/* (&paddr, &size): C4-3 section 4 */
+ extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
+ extern int dlm_halt();
+ extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+--- a/test/state.c
++++ b/test/state.c
+@@ -718,6 +718,21 @@
+ 	dlm_manlen = manlen;
+ }
+ 
++/* ---- ramdisk_image (C4-3 section 4) ---- */
++void
++rdimg_tests()
++{
++	unsigned long a = 1, z = 1;
++
++	dlm_rd_addr = dlm_rd_size = 0;
++	check(ramdisk_image(&a, &z) == ENOENT && a == 1 && z == 1, "ramdisk_image: no image -> ENOENT");
++	dlm_rd_addr = 0x03f00000UL;
++	dlm_rd_size = 0x000c0000UL;
++	check(ramdisk_image(&a, &z) == 0 && a == 0x03f00000UL && z == 0x000c0000UL,
++	    "ramdisk_image: the loader's address and size");
++	dlm_rd_addr = dlm_rd_size = 0;
++}
++
+ /* ---- root_defer (C4-2 section 3, S4-05) ---- */
+ static int rd_calls, rd_lastarg, rd_e[12], rd_n;
+ 
+@@ -1895,6 +1910,7 @@
+ 	arena_tests();
+ 	root_tests();
+ 	defer_tests();
++	rdimg_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;

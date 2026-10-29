@@ -1,0 +1,134 @@
+Subject: pin by default: no unload without unload=allowed
+
+C3-1 section 2: _unload is called only when the module declares
+unload=allowed and nothing holds it.  The .moddata parser read the key
+but nothing used it, so moduload unloaded any idle module.  The record
+now carries DM_UNLOADOK from unload=allowed; dlm_unload refuses a pinned
+module with EBUSY (moduload(0) leaves it), and modstat reports it locked.
+The state harness's modules declare unload=allowed, since it unloads
+them; pin1 declares nothing and is refused (amix-dlm 30 section 2, patch
+14 of the plan's numbering).
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -223,6 +223,7 @@
+ #define	DM_LOCKED	0x10	/* profiler */
+ #define	DM_SYMOK	0x20	/* table usable */
+ #define	DM_WANTED	0x40	/* someone sleeps on the record */
++#define	DM_UNLOADOK	0x80	/* .moddata unload=allowed; else pinned */
+ #define	DM_TRANS	(DM_LOADING | DM_UNLOADING)
+ 
+ /* dlm_load() flags */
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -781,6 +781,8 @@
+ 	if ((e = dlm_ld_hdr(ld)) != 0 || (e = dlm_ld_moddata(ld)) != 0 ||
+ 	    (e = md_check(ld, name)) != 0)
+ 		goto fail;
++	if (ld->ld_md.md_unload)		/* pinned unless it says so (C3-1) */
++		m->m_flags |= DM_UNLOADOK;
+ 
+ 	/* dependencies */
+ 	for (n = 0, pos = 0; dlm_ld_dep(ld, &pos, dep) > 0; n++)
+@@ -919,6 +921,8 @@
+ 
+ 	if (how == DU_AUTO && (m->m_flags & DM_DEMAND))
+ 		return EBUSY;
++	if (!(m->m_flags & DM_UNLOADOK))	/* pinned: unload=never */
++		return EBUSY;
+ 	if (busy(m))
+ 		return EBUSY;
+ 	m->m_flags |= DM_UNLOADING;
+@@ -1203,7 +1207,7 @@
+ 	}
+ 	strcpy(st->ms_name, m->m_name);
+ 	st->ms_flags = (m->m_flags & DM_DEMAND ? MS_DEMAND : 0) |
+-	    (m->m_flags & DM_LOCKED ? MS_LOCKED : 0) |
++	    (m->m_flags & DM_LOCKED || !(m->m_flags & DM_UNLOADOK) ? MS_LOCKED : 0) |
+ 	    (m->m_flags & DM_CAND ? MS_CAND : 0);
+ 	e = copyout((caddr_t)st, (caddr_t)uap->st, sizeof (struct modstatus)) ?
+ 	    EFAULT : 0;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -6,7 +6,8 @@
+ # Each module <p> has global <p>_load and <p>_unload (the harness binds
+ # behaviour to these names), a wrapper with one mod_miscops linkage, and
+ # a .moddata section, version 2 (amix-dlm docs/contracts/C3-1): "MD2\0",
+-# name, kabi, cc, cpu, class, its dependencies, extra keys.  md= replaces
++# name, kabi, cc, cpu, class, unload=allowed (the harness unloads them),
++# its dependencies, extra keys.  md= replaces
+ # the key strings, v1=True writes version 1 (the dependency names).
+ # Prints one line per module: "name file [modfix flags]".
+ import os, sys
+@@ -23,7 +24,8 @@
+     if v1:
+         return '\t.ascii\t"{d}"\n\t.byte\t0\n'.format(d=deps)
+     if md is None:
+-        md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand']
++        md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand',
++              'unload=allowed']
+         dl = [d for d in deps.replace('\\t', ' ').split() if d]
+         if dl:
+             md.append('depend=' + ','.join(dl))
+@@ -35,6 +37,8 @@
+         v1=False, extra=()):
+     if md is None and extra:
+         md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'] + list(extra)
++        if not any(k.startswith('unload=') for k in extra):
++            md.append('unload=allowed')
+     s = '''	.text
+ 	.globl	{p}_load
+ 	.globl	{p}_unload
+@@ -98,6 +102,8 @@
+ mod('usest', 'stat1')
+ # several dependencies, all honoured, blank/tab/NUL separated
+ mod('multi', 'hc\\tshd  trc')
++# pinning (C3-1 section 2): pin1 says nothing, so unload=never
++mod('pin1', md=['name=pin1', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ # three independent modules for the id and modstat tests
+ mod('m1')
+ mod('m2')
+@@ -151,7 +157,8 @@
+ mod('mdfam', md=['name=mdfam', 'kabi=k30.1.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ mod('mdmaj', md=['name=mdmaj', 'kabi=k46.2.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ mod('mdmin', md=['name=mdmin', 'kabi=k46.1.4', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+-mod('mdmok', md=['name=mdmok', 'kabi=k46.1.0', 'cc=' + PIN, 'cpu=68020', 'class=demand'])
++mod('mdmok', md=['name=mdmok', 'kabi=k46.1.0', 'cc=' + PIN, 'cpu=68020', 'class=demand',
++                  'unload=allowed'])
+ mod('mdcc', md=['name=mdcc', 'kabi=' + KABI, 'cc=gcc-14.2.0', 'cpu=68020', 'class=demand'])
+ mod('mdname', md=['name=other', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=demand'])
+ mod('mdnocl', md=['name=mdnocl', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020'])
+--- a/test/state.c
++++ b/test/state.c
+@@ -817,6 +817,23 @@
+ 	(void)i;
+ }
+ 
++/* pinning (C3-1 section 2): no unload without unload=allowed */
++static void
++pin_tests()
++{
++	struct dlm_mod *m;
++	int id = 0;
++
++	check(modload("pin1", &id) == 0 && (m = byname("pin1")) != 0,
++	    "pin: a module without unload=allowed loads");
++	check(moduload(id) == EBUSY && byname("pin1") == m,
++	    "pin: unload=never (the default) refuses moduload");
++	check(moduload(0) == EBUSY && byname("pin1") == m,
++	    "pin: moduload(0) leaves the pinned module");
++	m->m_flags |= DM_UNLOADOK;		/* the harness's own way out */
++	check(moduload(id) == 0 && !byname("pin1"), "pin: with unload=allowed it unloads");
++}
++
+ int
+ main(argc, argv)
+ 	int argc;
+@@ -1127,6 +1144,7 @@
+ 	check(candok() && dlm_cand && moduload(0) == 0 && dlm_cand == 0,
+ 	    "all released: all candidates, then unloaded");
+ 
++	pin_tests();
+ 	md_tests();
+ 	tier_tests();
+ 	host_handler("xa_exec", h_xa);
