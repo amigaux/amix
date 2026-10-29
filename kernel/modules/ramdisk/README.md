@@ -153,7 +153,7 @@ Its memory, beyond the image:
 You need:
 - the pinned gcc-cross-amix (`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`;
 - `python3`;
-- amix-dlm's built kits (`make kit` there), of kabi k30.1.2 / k46.1.2 or later, which carry
+- the built kits of kernel/dlm (`make kit` there), of kabi k30.1.2 / k46.1.2 or later, which carry
   `iodone` and `ramdisk_image`.
 
 ```sh
@@ -162,8 +162,8 @@ make -C ramdisk/module k46         # one line
 make -C ramdisk/module test        # the host test (any host cc)
 ```
 
-`DLM` names the amix-dlm checkout (default `../amix-dlm`). Alternatively, `KIT_k30` and `KIT_k46`
-name the kits directly.
+`DLM` names the dlm directory (default `../dlm`, that is `kernel/dlm`). Alternatively,
+`KIT_k30` and `KIT_k46` name the kits directly.
 
 The objects are `ramdisk/build/k30/mod.d/ramdisk` and `ramdisk/build/k46/mod.d/ramdisk`. The
 kit's `modfix` and `modcheck.py` check each one; `modcheck` prints `ok (k30.1.2, root, 2944

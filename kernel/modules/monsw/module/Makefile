@@ -1,5 +1,5 @@
 # monsw/module/Makefile -- the monsw loadable module, one per kernel line, built with
-# amix-dlm's ABI kit (the kit's docs/guide.md; contract C3-6 section 4).  GNU make.
+# the ABI kit of kernel/dlm (the kit's docs/guide.md; contract C3-6 section 4).  GNU make.
 #
 #   make -C monsw/module          both lines: monsw/build/k30/mod.d/monsw and
 #                                 monsw/build/k46/mod.d/monsw, each checked by the kit's
@@ -11,7 +11,7 @@
 #   make -C monsw/module clean
 #   sh monsw/module/static-port.sh [port]   the static object against the port's copy
 #
-# DLM is the amix-dlm checkout whose kits are built (`make kit` there gives build/kit/k30
+# DLM is the kernel/dlm directory whose kits are built (`make kit` there gives build/kit/k30
 # and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.  The pinned cross tools
 # (m68k-cbm-sysv4-*, gcc-cross-amix) and python3 must be on PATH.  The source is
 # monsw/src/monsw.c compiled with -DMONSW_MODULE; <sys/monsw.h> must be this repository's
@@ -19,7 +19,7 @@
 # Master is generated from keys; it has no $cpu, so the kit gives each line its own.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../..)
-DLM ?= $(abspath $(TOP)/../amix-dlm)
+DLM ?= $(abspath $(TOP)/../dlm)
 LINES = k30 k46
 kit = $(or $(KIT_$(1)),$(DLM)/build/kit/$(1))
 
@@ -65,7 +65,7 @@ $(MODOUT)/hdr.ok: $(SRC)/monsw.c $(HDR) $(KIT)/kit.conf
 	@h=$$($(KIT_CC) $(KIT_CFLAGS) $(CFLAGS) -E $(SRC)/monsw.c | \
 		sed -n 's/^# *[0-9][0-9]* "\(.*\/sys\/monsw\.h\)".*/\1/p' | head -1); \
 	[ -n "$$h" ] || { echo "monsw: the preprocessor named no sys/monsw.h" >&2; exit 1; }; \
-	cmp -s "$$h" $(HDR) || { echo "monsw: $$h is not $(HDR): rebuild the kit (amix-dlm make kit)" >&2; exit 1; }; \
+	cmp -s "$$h" $(HDR) || { echo "monsw: $$h is not $(HDR): rebuild the kit (make kit in kernel/dlm)" >&2; exit 1; }; \
 	echo "monsw: sys/monsw.h = $$h, equal to include/sys/monsw.h" > $@; cat $@
 
 Master: keys

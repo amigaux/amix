@@ -6,13 +6,14 @@
 #
 #   usage: sh monsw/module/static-port.sh [port-checkout]
 #
-# The port checkout (default ../amix-040-060-port beside this repository) is only read: its
-# src/monsw.c (PORT_MONSW_C overrides) and build/sysroot-modelb (made by the port's
-# src/mk_modelb_sysroot.sh).  AMIX_KERNEL_CFLAGS comes from gcc-cross-amix's build/env.sh,
-# sourced by the caller.  Exit 0 when the two objects are byte-identical.
+# The port checkout (default amix-040-060-port beside the amix checkout, at the commit of
+# kernel/port/port.pin) is only read: its src/monsw.c (PORT_MONSW_C overrides) and
+# build/sysroot-modelb (made by the port's src/mk_modelb_sysroot.sh).  AMIX_KERNEL_CFLAGS
+# comes from gcc-cross-amix's build/env.sh, sourced by the caller.  Exit 0 when the two
+# objects are byte-identical.
 set -e
 top=$(cd "$(dirname "$0")/../.." && pwd)
-port=${1:-$top/../amix-040-060-port}
+port=${1:-$top/../../../amix-040-060-port}
 src=${PORT_MONSW_C:-$port/src/monsw.c}
 [ -n "$AMIX_KERNEL_CFLAGS" ] || { echo "static-port: source gcc-cross-amix's build/env.sh first" >&2; exit 2; }
 [ -f "$src" ] || { echo "static-port: no $src" >&2; exit 2; }

@@ -20,7 +20,7 @@
  *                            EBUSY when forced, and no change on screen
  *
  * The device is /dev/monsw (c 52 0).  K&R C for the guest's cc:
- *   cc -I<amix-modules>/include -o monswtest monswtest.c
+ *   cc -I<amix>/kernel/modules/include -o monswtest monswtest.c
  */
 #include <stdio.h>
 #include <fcntl.h>

@@ -152,7 +152,7 @@ monsw makes no kernel memory requests at all:
 You need:
 - the pinned gcc-cross-amix (`m68k-cbm-sysv4-*`, GCC 2.7.2.3) on `PATH`;
 - `python3`;
-- amix-dlm's built kits (`make kit` there).
+- the built kits of kernel/dlm (`make kit` there).
 
 ```sh
 make -C monsw/module               # both lines
@@ -161,8 +161,8 @@ make -C monsw/module test          # the host test (any host cc)
 make -C monsw/module static        # the static object per line, with its sha256
 ```
 
-`DLM` names the amix-dlm checkout (default `../amix-dlm`), or `KIT_k30` and `KIT_k46` name the
-kits directly.
+`DLM` names the dlm directory (default `../dlm`, that is `kernel/dlm`), or `KIT_k30` and
+`KIT_k46` name the kits directly.
 
 The objects are `monsw/build/k30/mod.d/monsw` and `monsw/build/k46/mod.d/monsw`. The kit's
 `modfix` and `modcheck.py` check each one. The build also checks that the `<sys/monsw.h>` the
@@ -214,5 +214,5 @@ It then checks:
 - the `cdevsw` row.
 
 **`test/monswtest.c`** is the on-box instrument, one step per run: `get`, `rtg [secs]`,
-`native`, `set <value>`, `bad`. Build it with the guest's `cc -I<amix-modules>/include`, or
+`native`, `set <value>`, `bad`. Build it with the guest's `cc -I<amix>/kernel/modules/include`, or
 with the project's userland cross compiler.
