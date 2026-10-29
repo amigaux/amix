@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2026-10-29 — The ABI kit records the amix commit it was built from (KIT_REV, -dirty for uncommitted changes under kernel/; MONSW_REV amix@<commit>); sys/monsw.h comes from kernel/modules/include/sys/; no sibling-checkout defaults: GCA, G14 and PORT must be given and a missing one stops the build (4cb14c9)
+
+Kits built before the move keep their amix-dlm KIT_REV, which resolves in amix too. boot1/boot2 unchanged (765915a7, da260a96); the kit matches the -61 record's except its revision lines.
+
 ## 2026-10-29 — Moved into the amix repository as kernel/dlm by a subtree merge of amix-dlm master 565de49 (696 commits, hashes kept); the tree is unchanged
 
 ## 2026-10-28 — C3-5 version 16: paula's short name (paula30 / paula46); a driver's own interface header may ship in its module package under /usr/include (0644 bin bin, the same bytes on both lines), as paula.h does (821d101)
