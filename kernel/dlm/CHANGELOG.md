@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2026-10-29 — mkstore's CD file-name buffer is sized for any id and module count (3c4a95c)
+
+40 bytes, so the host build is clean under gcc 13 with fortify (CI on ubuntu-24.04); names and outputs unchanged, kit
+bytes unchanged. make test 719 checks on ubuntu 24.04 and 26.04.
+
 ## 2026-10-29 — amixddi.h's two comments name kernel/dlm instead of amix-dlm (1e243b9)
 
 The kit header changes in comments only; monsw 1f53a31b / 962709ca and ramdisk 5523d853 / 054467f6 are unchanged.
