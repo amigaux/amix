@@ -1,0 +1,18 @@
+# privacy-allow.txt: public exemptions for tools/privacy-check.
+#
+# One entry per line: <class> <path-glob> [<regex>]
+#   class      1-5, the class the exemption applies to
+#   path-glob  "*" matches within one path component, "**/" any number of
+#              directories, "?" one character; a glob without "/" is matched
+#              against the file name alone; commit messages have the path
+#              "message"
+#   regex      optional; when given, it must match the flagged text
+# Lines starting with "#" are comments. Give every entry a reason above it.
+
+# The install media ship a root password hash for the documented, public
+# bench password; a fresh install is expected to change it.
+3 media/**/root.shadow
+
+# The documentation's example network: one example host and its gateway on
+# a private network, used throughout the install and networking guides.
+1 * \b192\.168\.0\.(10|1)\b

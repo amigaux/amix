@@ -1,0 +1,711 @@
+#!/usr/bin/env python3
+# privacy-check: refuse commits that must not reach the public repository.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Python 3 standard library plus the git CLI. Run from inside the repository.
+"""Check commits or a tree for material that must not be published.
+
+Modes (exactly one):
+  --range A..B           check the commits in that range
+  --pre-push REMOTE URL  read git's pre-push lines on stdin and check every
+                         commit the push would send
+  --all REF              check the full history of REF
+  --tree REF             check only the files at REF
+
+Classes:
+  1  private network addresses (RFC 1918 IPv4, IPv6 ULA) and local patterns
+  2  station files (CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/) in our
+     commits, and at the tip when the last change to them was ours
+  3  secrets: private keys, token shapes, passwords in config files,
+     password hashes in shadow files, .netrc and SSH key files
+  4  disk/ROM images, blobs over the size limit, system files listed in
+     system/MANIFEST.sha256, and locally blocked blobs
+  5  AI attribution in our commit messages
+
+Output: one line per hit, "<short sha> <class> <path|message> <detail>".
+Exit status: 0 clean, 1 hits, 2 usage or git error (never 0 on error).
+
+Environment:
+  PRIVACY_OURS      extra "Name <email>" identities that count as ours,
+                    one per line
+  PRIVACY_PATTERNS  file of local regexes (class 1); hits print only the
+                    pattern's line number
+  PRIVACY_BLOCKED   file of "sha256  label" lines (class 4)
+Allowlist: privacy-allow.txt next to this script (or --allow FILE), lines
+"<class> <path-glob> [<regex>]".
+"""
+
+import argparse
+import hashlib
+import ipaddress
+import os
+import re
+import subprocess
+import sys
+
+DEFAULT_OURS = ["Jusii <jussi@alanara.fi>"]
+DEFAULT_MAX_SIZE = 2 * 1024 * 1024
+TEXT_PROBE = 8192
+TEXT_LIMIT = 16 * 1024 * 1024
+MANIFEST_PATH = "system/MANIFEST.sha256"
+WITHHELD = "<withheld>"
+
+STATION_NAMES = {"claude.md", "claude.local.md", "agents.md"}
+STATION_DIR = ".claude"
+
+IMAGE_EXTS = {".rom", ".adf", ".adz", ".hdf", ".hdz", ".img", ".iso", ".dms"}
+NETRC_NAMES = {".netrc", "_netrc"}
+SSH_KEY_NAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"}
+CONFIG_EXTS = {".conf", ".cfg", ".cnf", ".ini", ".env", ".yaml", ".yml",
+               ".toml", ".json", ".properties"}
+
+# Class 1: candidate dotted quads; the octets are checked in code.
+IPV4_RE = re.compile(r"(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})"
+                     r"(?!\d|\.\d)")
+# Class 1: candidate IPv6 addresses whose first group is fc00-fdff.
+IPV6_RE = re.compile(r"(?<![0-9A-Za-z:])f[cd][0-9a-f]{2}:[0-9a-f:]*",
+                     re.IGNORECASE)
+
+# Class 3.
+SECRET_RES = [
+    ("private key block",
+     re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----")),
+    ("GitHub token",
+     re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})")),
+    ("AWS access key id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("Slack token", re.compile(r"\bxox[abpr]-[A-Za-z0-9-]{10,}")),
+]
+PASSWORD_RE = re.compile(r"password\s*[:=]\s*\S{6,}", re.IGNORECASE)
+SHADOW_RE = re.compile(r"^[^:\s]+:[^:\s*!]{13,}:", re.MULTILINE)
+
+# Class 5.
+AI_NAMES = (r"claude|anthropic|chatgpt|openai|gpt-?[0-9][\w.]*|copilot|gemini"
+            r"|codex|cursor|devin|aider|codeium|windsurf|tabnine"
+            r"|codewhisperer|amazon q|grok|deepseek|llm|ai assistant"
+            r"|language model")
+AI_RES = [
+    ("Co-Authored-By names an AI assistant",
+     re.compile(r"^[ \t]*co-authored-by:.*\b(?:" + AI_NAMES + r")\b",
+                re.IGNORECASE | re.MULTILINE)),
+    ("generated-with attribution to an AI tool",
+     re.compile(r"\bgenerated\s+(?:with|by|using)\b.{0,60}?\b(?:" + AI_NAMES
+                + r"|ai)\b", re.IGNORECASE)),
+    ("robot-emoji attribution line",
+     re.compile("^.*\U0001F916.*$", re.MULTILINE)),
+    ("AI vendor no-reply address",
+     re.compile(r"\bno-?reply@(?:anthropic|openai)\.com\b"
+                r"|\bcursoragent@cursor\.com\b"
+                r"|[\w.+-]*copilot[\w.+-]*@users\.noreply\.github\.com",
+                re.IGNORECASE)),
+]
+
+
+class GitError(Exception):
+    pass
+
+
+class UsageError(Exception):
+    pass
+
+
+def git(*args, stdin=None):
+    proc = subprocess.run(["git", "--literal-pathspecs"] + list(args),
+                          input=stdin, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        msg = proc.stderr.decode("utf-8", "replace").strip()
+        raise GitError("git %s failed: %s" % (args[0], msg))
+    return proc.stdout
+
+
+def is_zero(sha):
+    return bool(re.fullmatch(r"0+", sha))
+
+
+def norm_ident(text):
+    m = re.fullmatch(r"\s*(.*?)\s*<([^>]*)>\s*", text)
+    if not m:
+        raise UsageError("identity %r is not \"Name <email>\"" % text)
+    return (m.group(1), m.group(2).strip().lower())
+
+
+def line_of(text, pos):
+    return text.count("\n", 0, pos) + 1
+
+
+def basename(path):
+    return path.rsplit("/", 1)[-1]
+
+
+def extension(path):
+    base = basename(path)
+    dot = base.rfind(".")
+    return base[dot:].lower() if dot > 0 else ""
+
+
+def is_station_path(path):
+    for part in path.split("/"):
+        low = part.lower()
+        if low in STATION_NAMES or low == STATION_DIR:
+            return True
+    return False
+
+
+def is_config_like(path):
+    base = basename(path).lower()
+    if extension(path) in CONFIG_EXTS or base.startswith(".env"):
+        return True
+    return base.startswith(".") and base.endswith("rc") and len(base) > 3
+
+
+def is_shadow_file(path):
+    base = basename(path).lower()
+    return base == "shadow" or base.endswith(".shadow")
+
+
+def private_ipv4(octets):
+    a, b, c, d = (int(x) for x in octets)
+    if max(a, b, c, d) > 255:
+        return False
+    return a == 10 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168)
+
+
+def private_ipv6(token):
+    for cand in (token, token[:-1] if token.endswith(":") and
+                 not token.endswith("::") else None):
+        if not cand:
+            continue
+        try:
+            addr = ipaddress.IPv6Address(cand)
+        except ValueError:
+            continue
+        return str(addr) if (int(addr) >> 121) == 0x7E else None
+    return None
+
+
+def glob_to_re(glob):
+    out, i = [], 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif glob.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif glob[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif glob[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(glob[i]))
+            i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def read_lines(path, what):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().splitlines()
+    except (OSError, UnicodeDecodeError) as e:
+        raise UsageError("cannot read %s: %s" % (what, e.__class__.__name__))
+
+
+def load_allowlist(path):
+    entries = []
+    for n, raw in enumerate(read_lines(path, "allowlist " + path), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 2)
+        if len(parts) < 2 or parts[0] not in ("1", "2", "3", "4", "5"):
+            raise UsageError("allowlist line %d is malformed" % n)
+        try:
+            rx = re.compile(parts[2]) if len(parts) == 3 else None
+        except re.error:
+            raise UsageError("allowlist line %d: invalid regex" % n)
+        glob = parts[1]
+        entries.append((int(parts[0]), "/" in glob, glob_to_re(glob), rx))
+    return entries
+
+
+def load_patterns(path):
+    pats = []
+    for n, raw in enumerate(read_lines(path, "PRIVACY_PATTERNS"), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            pats.append((n, re.compile(line, re.IGNORECASE)))
+        except re.error:
+            raise UsageError("PRIVACY_PATTERNS line %d: invalid regex" % n)
+    return pats
+
+
+def load_blocked(path):
+    blocked = {}
+    for n, raw in enumerate(read_lines(path, "PRIVACY_BLOCKED"), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"([0-9A-Fa-f]{64})(?:\s|$)", line)
+        if not m:
+            raise UsageError("PRIVACY_BLOCKED line %d is malformed" % n)
+        blocked.setdefault(m.group(1).lower(), n)
+    return blocked
+
+
+def parse_manifest(data):
+    entries = {}
+    text = data.decode("utf-8", "replace")
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"\\?([0-9A-Fa-f]{64}) [ *](.+)$", line)
+        if not m:
+            raise GitError("%s line %d is malformed" % (MANIFEST_PATH, n))
+        entries.setdefault(m.group(1).lower(), m.group(2))
+    return entries
+
+
+class Blob(object):
+    __slots__ = ("oid", "type", "size", "head", "sha256")
+
+    def __init__(self, oid, typ, size, head, sha256):
+        self.oid, self.type, self.size = oid, typ, size
+        self.head, self.sha256 = head, sha256
+
+
+class Objects(object):
+    """One long-running `git cat-file --batch`."""
+
+    def __init__(self):
+        self.proc = subprocess.Popen(["git", "cat-file", "--batch"],
+                                     stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE)
+
+    def get(self, spec, keep):
+        """Return a Blob (content kept up to `keep` bytes), or None if missing."""
+        self.proc.stdin.write(os.fsencode(spec) + b"\n")
+        self.proc.stdin.flush()
+        header = self.proc.stdout.readline()
+        if not header.endswith(b"\n"):
+            raise GitError("cat-file ended early reading %s" % spec)
+        header = header[:-1]
+        if header.endswith((b" missing", b" ambiguous")):
+            return None
+        parts = header.split(b" ")
+        if len(parts) != 3:
+            raise GitError("cat-file: unexpected reply for %s" % spec)
+        size = int(parts[2])
+        digest = hashlib.sha256()
+        kept, have, left = [], 0, size
+        while left:
+            chunk = self.proc.stdout.read(min(left, 1 << 20))
+            if not chunk:
+                raise GitError("cat-file ended early reading %s" % spec)
+            digest.update(chunk)
+            if have < keep:
+                kept.append(chunk[:keep - have])
+                have += len(kept[-1])
+            left -= len(chunk)
+        if self.proc.stdout.read(1) != b"\n":
+            raise GitError("cat-file: framing error reading %s" % spec)
+        return Blob(parts[0].decode(), parts[1].decode(), size,
+                    b"".join(kept), digest.hexdigest())
+
+    def close(self):
+        try:
+            self.proc.stdin.close()
+        except OSError:
+            pass
+        self.proc.wait()
+
+
+class Checker(object):
+    def __init__(self, args):
+        ours = args.ours if args.ours else list(DEFAULT_OURS)
+        ours += [l for l in os.environ.get("PRIVACY_OURS", "").splitlines()
+                 if l.strip()]
+        self.ours = set(norm_ident(o) for o in ours)
+        self.max_size = args.max_size
+        self.keep = max(TEXT_LIMIT, self.max_size + 1)
+        allow = args.allow
+        if allow is None:
+            here = os.path.dirname(os.path.realpath(__file__))
+            default = os.path.join(here, "privacy-allow.txt")
+            self.allow = load_allowlist(default) if os.path.exists(default) else []
+        else:
+            self.allow = load_allowlist(allow)
+        pp = os.environ.get("PRIVACY_PATTERNS")
+        self.patterns = load_patterns(pp) if pp else []
+        pb = os.environ.get("PRIVACY_BLOCKED")
+        self.blocked = load_blocked(pb) if pb else {}
+        self.objects = Objects()
+        self.manifests = {}
+        self.printed = set()
+        self.hits = 0
+        self.author_cache = {}
+
+    # -- output -----------------------------------------------------------
+
+    def allowed(self, cls, path, text):
+        base = basename(path)
+        for acls, has_slash, glob, rx in self.allow:
+            if acls != cls:
+                continue
+            if not glob.match(path if has_slash else base):
+                continue
+            if rx is None or rx.search(text or ""):
+                return True
+        return False
+
+    def local_match(self, text):
+        return any(p.search(text) for _, p in self.patterns)
+
+    def hit(self, sha, cls, path, detail, text=None):
+        if self.allowed(cls, path, text if text is not None else path):
+            return
+        shown_path = path
+        if path != "message" and self.local_match(path):
+            shown_path = WITHHELD
+        if self.local_match(detail):
+            detail = WITHHELD
+        key = (sha, cls, shown_path, detail)
+        if key in self.printed:
+            return
+        self.printed.add(key)
+        self.hits += 1
+        sys.stdout.write("%s %d %s %s\n" % (sha[:10], cls, shown_path, detail))
+
+    # -- text classes -------------------------------------------------------
+
+    def scan_text(self, sha, path, text, where, secrets_all=True,
+                  config=False, shadow=False):
+        """Classes 1 and 3 on text. `where` is "" for files, " in message"."""
+        prefix = "message line" if where else "line"
+
+        def at(pos):
+            return "%s %d" % (prefix, line_of(text, pos))
+
+        for m in IPV4_RE.finditer(text):
+            if private_ipv4(m.groups()):
+                self.hit(sha, 1, path, "private IPv4 address %s at %s"
+                         % (m.group(0), at(m.start())), m.group(0))
+        for m in IPV6_RE.finditer(text):
+            addr = private_ipv6(m.group(0))
+            if addr:
+                self.hit(sha, 1, path, "private IPv6 address %s at %s"
+                         % (addr, at(m.start())), m.group(0))
+        for n, pat in self.patterns:
+            m = pat.search(text)
+            if m:
+                self.hit(sha, 1, path, "local pattern #%d at %s" % (n, at(m.start())),
+                         m.group(0))
+        if secrets_all:
+            for kind, rx in SECRET_RES:
+                for m in rx.finditer(text):
+                    self.hit(sha, 3, path, "%s at %s" % (kind, at(m.start())),
+                             m.group(0))
+        if config:
+            for m in PASSWORD_RE.finditer(text):
+                self.hit(sha, 3, path, "password in a config file at %s"
+                         % at(m.start()), m.group(0))
+        if shadow:
+            for m in SHADOW_RE.finditer(text):
+                self.hit(sha, 3, path, "password hash in a shadow file at %s"
+                         % at(m.start()), m.group(0))
+
+    def scan_path(self, sha, path):
+        base = basename(path).lower()
+        if base in NETRC_NAMES:
+            self.hit(sha, 3, path, ".netrc file")
+        if base in SSH_KEY_NAMES:
+            self.hit(sha, 3, path, "SSH private key file")
+        ext = extension(path)
+        if ext in IMAGE_EXTS:
+            self.hit(sha, 4, path, "image file extension %s" % ext)
+        for m in IPV4_RE.finditer(path):
+            if private_ipv4(m.groups()):
+                self.hit(sha, 1, path, "private IPv4 address in path", m.group(0))
+        for m in IPV6_RE.finditer(path):
+            if private_ipv6(m.group(0)):
+                self.hit(sha, 1, path, "private IPv6 address in path", m.group(0))
+        for n, pat in self.patterns:
+            if pat.search(path):
+                self.hit(sha, 1, path, "local pattern #%d in path" % n)
+
+    def manifest_at(self, treeish):
+        blob = self.objects.get("%s:%s" % (treeish, MANIFEST_PATH), TEXT_LIMIT)
+        if blob is None or blob.type != "blob":
+            return {}
+        if blob.oid not in self.manifests:
+            if blob.size > TEXT_LIMIT:
+                raise GitError("%s is too large to parse" % MANIFEST_PATH)
+            self.manifests[blob.oid] = parse_manifest(blob.head)
+        return self.manifests[blob.oid]
+
+    def scan_blob(self, sha, path, oid, manifest):
+        self.scan_path(sha, path)
+        blob = self.objects.get(oid, self.keep)
+        if blob is None:
+            raise GitError("object %s (%s) is missing" % (oid, path))
+        if blob.type != "blob":
+            raise GitError("object %s (%s) is a %s, not a blob"
+                           % (oid, path, blob.type))
+        if blob.size > self.max_size:
+            self.hit(sha, 4, path, "blob of %d bytes is over the %d-byte limit"
+                     % (blob.size, self.max_size))
+        if blob.sha256 in manifest:
+            self.hit(sha, 4, path, "system file listed in %s as %s"
+                     % (MANIFEST_PATH, manifest[blob.sha256]))
+        if blob.sha256 in self.blocked:
+            self.hit(sha, 4, path, "blocked list line %d"
+                     % self.blocked[blob.sha256])
+        if b"\0" in blob.head[:TEXT_PROBE]:
+            return
+        if blob.size > len(blob.head):
+            raise GitError("text blob %s (%s) was not read whole" % (oid, path))
+        text = blob.head.decode("utf-8", "replace")
+        self.scan_text(sha, path, text, "", config=is_config_like(path),
+                       shadow=is_shadow_file(path))
+
+    # -- commits ------------------------------------------------------------
+
+    def read_commit(self, sha):
+        obj = self.objects.get(sha, TEXT_LIMIT)
+        if obj is None or obj.type != "commit":
+            raise GitError("%s is not a commit" % sha)
+        raw = obj.head.decode("utf-8", "replace")
+        header, _, message = raw.partition("\n\n")
+        author, parents = None, []
+        for line in header.split("\n"):
+            if line.startswith("parent "):
+                parents.append(line[7:].strip())
+            elif line.startswith("author "):
+                m = re.fullmatch(r"author (.*?) \d+ [+-]\d{4}", line)
+                author = m.group(1) if m else line[7:]
+        if author is None:
+            raise GitError("commit %s has no author" % sha)
+        return author, parents, message
+
+    def is_ours(self, ident):
+        try:
+            return norm_ident(ident) in self.ours
+        except UsageError:
+            return False
+
+    def changed_blobs(self, sha, nparents):
+        args = ["diff-tree", "-r", "-z", "--no-renames", "--no-commit-id",
+                "--no-ext-diff"]
+        args += ["-c"] if nparents > 1 else ["--root"]
+        out = git(*(args + [sha])).split(b"\0")
+        result, i = [], 0
+        while i < len(out) and out[i]:
+            head = out[i].decode()
+            path = os.fsdecode(out[i + 1])
+            i += 2
+            k = len(head) - len(head.lstrip(":"))
+            fields = head[k:].split(" ")
+            if len(fields) < 2 * k + 3:
+                raise GitError("diff-tree: unexpected line for %s" % sha)
+            mode, oid = fields[k], fields[2 * k + 1]
+            if is_zero(oid) or is_zero(mode) or mode == "160000":
+                continue
+            result.append((path, oid))
+        return result
+
+    def check_commit(self, sha):
+        author, parents, message = self.read_commit(sha)
+        ours = self.is_ours(author)
+        manifest = self.manifest_at(sha)
+        for path, oid in self.changed_blobs(sha, len(parents)):
+            if ours and is_station_path(path):
+                self.hit(sha, 2, path, "station file in our commit")
+            self.scan_blob(sha, path, oid, manifest)
+        self.scan_text(sha, "message", message, " in message")
+        if ours:
+            for kind, rx in AI_RES:
+                m = rx.search(message)
+                if m:
+                    self.hit(sha, 5, "message", "%s at message line %d"
+                             % (kind, line_of(message, m.start())), m.group(0))
+
+    def check_tip(self, tip):
+        names = git("ls-tree", "-r", "-z", "--name-only", "--full-tree", tip)
+        for raw in names.split(b"\0"):
+            if not raw:
+                continue
+            path = os.fsdecode(raw)
+            if not is_station_path(path):
+                continue
+            last = git("log", "-1", "--format=%H%x00%an <%ae>", tip, "--", path)
+            last = last.decode("utf-8", "replace").strip()
+            if last:
+                lsha, _, ident = last.partition("\0")
+                if not self.is_ours(ident):
+                    continue
+                detail = "station file at tip, last changed by our commit %s" % lsha[:10]
+            else:
+                detail = "station file at tip, origin unknown"
+            self.hit(tip, 2, path, detail)
+
+    def check_tree(self, ref):
+        commit = None
+        try:
+            commit = rev_parse(ref + "^{commit}")
+        except GitError:
+            pass
+        tree = rev_parse(ref + "^{tree}")
+        label = commit or tree
+        manifest = self.manifest_at(tree)
+        out = git("ls-tree", "-r", "-z", "--full-tree", tree)
+        count = 0
+        for entry in out.split(b"\0"):
+            if not entry:
+                continue
+            meta, _, raw_path = entry.partition(b"\t")
+            mode, typ, oid = meta.decode().split(" ")
+            path = os.fsdecode(raw_path)
+            if typ != "blob":
+                continue
+            count += 1
+            if commit is None and is_station_path(path):
+                self.hit(label, 2, path, "station file in tree")
+            self.scan_blob(label, path, oid, manifest)
+        if commit is not None:
+            self.check_tip(commit)
+        return count
+
+
+def rev_parse(spec):
+    try:
+        return git("rev-parse", "--verify", "--quiet", spec).decode().strip()
+    except GitError:
+        raise GitError("unknown revision %s" % spec)
+
+
+def rev_list(*args):
+    out = git("rev-list", "--reverse", "--topo-order", *args)
+    return [l for l in out.decode().split("\n") if l]
+
+
+def object_exists(sha):
+    proc = subprocess.run(["git", "cat-file", "-e", sha + "^{commit}"],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return proc.returncode == 0
+
+
+def plan_pre_push(stream):
+    commits, tips = [], []
+    for raw in stream:
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 4:
+            raise UsageError("pre-push line is not four fields: %r" % line)
+        local_ref, local_sha, remote_ref, remote_sha = parts
+        if is_zero(local_sha):
+            continue
+        if not is_zero(remote_sha) and object_exists(remote_sha):
+            commits += rev_list("%s..%s" % (remote_sha, local_sha))
+        else:
+            commits += rev_list(local_sha, "--not", "--remotes")
+        tips.append(rev_parse(local_sha + "^{commit}"))
+    return commits, tips
+
+
+def parse_size(text):
+    m = re.fullmatch(r"(\d+)([KkMmGg]?)", text.strip())
+    if not m:
+        raise argparse.ArgumentTypeError("not a size: %r" % text)
+    mult = {"": 1, "k": 1 << 10, "m": 1 << 20, "g": 1 << 30}[m.group(2).lower()]
+    return int(m.group(1)) * mult
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="privacy-check",
+        description="Check commits or a tree for material that must not be "
+                    "published: private addresses (1), station files (2), "
+                    "secrets (3), images and system files (4), AI attribution "
+                    "in our messages (5).",
+        epilog="Exit 0 clean, 1 hits, 2 usage or git error. Environment: "
+               "PRIVACY_OURS, PRIVACY_PATTERNS, PRIVACY_BLOCKED.")
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--range", metavar="A..B", help="check the commits in A..B")
+    mode.add_argument("--pre-push", nargs=2, metavar=("REMOTE", "URL"),
+                      help="check what a push would send (pre-push lines on stdin)")
+    mode.add_argument("--all", metavar="REF", help="check the full history of REF")
+    mode.add_argument("--tree", metavar="REF", help="check only the files at REF")
+    p.add_argument("--ours", action="append", metavar="'Name <email>'",
+                   help="identity whose commits are ours (repeatable; "
+                        "replaces the default)")
+    p.add_argument("--max-size", type=parse_size, default=DEFAULT_MAX_SIZE,
+                   metavar="BYTES", help="blob size limit, K/M/G suffix allowed "
+                                         "(default 2M)")
+    p.add_argument("--allow", metavar="FILE",
+                   help="allowlist (default: privacy-allow.txt beside this script)")
+    return p
+
+
+def run(argv):
+    args = build_parser().parse_args(argv)
+    git("rev-parse", "--git-dir")
+    checker = Checker(args)
+    try:
+        if args.tree is not None:
+            n = checker.check_tree(args.tree)
+            sys.stderr.write("privacy-check: %d file(s), %d hit(s)\n"
+                             % (n, checker.hits))
+        else:
+            if args.range is not None:
+                if ".." not in args.range:
+                    raise UsageError("--range needs A..B")
+                commits = rev_list(args.range)
+                tip_spec = args.range.rsplit("..", 1)[1].lstrip(".") or "HEAD"
+                tips = [rev_parse(tip_spec + "^{commit}")]
+            elif args.all is not None:
+                commits = rev_list(args.all)
+                tips = [rev_parse(args.all + "^{commit}")]
+            else:
+                commits, tips = plan_pre_push(sys.stdin)
+            seen = set()
+            for sha in commits:
+                if sha not in seen:
+                    seen.add(sha)
+                    checker.check_commit(sha)
+            for tip in sorted(set(tips), key=tips.index):
+                checker.check_tip(tip)
+            sys.stderr.write("privacy-check: %d commit(s), %d hit(s)\n"
+                             % (len(seen), checker.hits))
+    finally:
+        checker.objects.close()
+    sys.stdout.flush()
+    return 1 if checker.hits else 0
+
+
+def main():
+    try:
+        sys.stdout.reconfigure(errors="backslashreplace")
+    except AttributeError:
+        pass
+    try:
+        return run(sys.argv[1:])
+    except SystemExit as e:
+        # argparse: 0 for --help, 2 for usage errors; anything else is an error.
+        return e.code if e.code in (0, 2) else 2
+    except (GitError, UsageError) as e:
+        sys.stderr.write("privacy-check: error: %s\n" % e)
+        return 2
+    except BaseException as e:  # fail closed on anything unexpected
+        sys.stderr.write("privacy-check: internal error: %s: %s\n"
+                         % (e.__class__.__name__, e))
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

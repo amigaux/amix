@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+# test-privacy-check: self-test for tools/privacy-check.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Builds a throwaway repository in a temporary directory, plants one hit per
+# class next to clean control commits, runs privacy-check in every mode and
+# checks that each plant is caught with the right class and each control
+# passes. Prints "N/N passed"; exits non-zero on any failure.
+#
+# Fixture strings that would themselves trip the check are assembled at run
+# time (j(...)), so this file passes privacy-check as it stands.
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CHECK = os.path.join(HERE, "privacy-check")
+OURS = ("Jusii", "jussi@alanara.fi")
+OTHER = ("Alice Example", "alice@example.invalid")
+ZERO = "0" * 40
+
+
+def j(*parts):
+    return "".join(parts)
+
+
+def dotted(*octets):
+    return ".".join(str(o) for o in octets)
+
+
+class Env(object):
+    def __init__(self, root):
+        self.root = root
+        self.base = {k: v for k, v in os.environ.items()
+                     if not k.startswith(("GIT_", "PRIVACY_"))}
+        self.base.update(GIT_CONFIG_NOSYSTEM="1",
+                         GIT_CONFIG_GLOBAL=os.path.join(root, "gitconfig"),
+                         HOME=root, LC_ALL="C")
+        with open(os.path.join(root, "gitconfig"), "w") as f:
+            f.write("[core]\n\thooksPath = /dev/null\n"
+                    "[commit]\n\tgpgsign = false\n"
+                    "[init]\n\tdefaultBranch = master\n")
+
+
+class Repo(object):
+    def __init__(self, env, path):
+        self.env, self.path = env, path
+        os.makedirs(path)
+        self.git("init", "-q", "-b", "master")
+
+    def git(self, *args, **kw):
+        e = dict(self.env.base)
+        e.update(kw.get("env", {}))
+        out = subprocess.run(["git"] + list(args), cwd=self.path, env=e,
+                             input=kw.get("input"), stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, check=True)
+        return out.stdout.decode().strip()
+
+    def commit(self, who, files, message):
+        for rel, data in files.items():
+            full = os.path.join(self.path, rel)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as f:
+                f.write(data if isinstance(data, bytes) else data.encode())
+        self.git("add", "-A")
+        ident = {"GIT_AUTHOR_NAME": who[0], "GIT_AUTHOR_EMAIL": who[1],
+                 "GIT_COMMITTER_NAME": who[0], "GIT_COMMITTER_EMAIL": who[1]}
+        self.git("commit", "-q", "-F", "-", env=ident, input=message.encode())
+        return self.git("rev-parse", "HEAD")
+
+    def check(self, args, env=None, stdin=None, cwd=None):
+        e = dict(self.env.base)
+        e.update(env or {})
+        p = subprocess.run([sys.executable, CHECK] + args, cwd=cwd or self.path,
+                           env=e, input=(stdin or "").encode(),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        hits = []
+        out = p.stdout.decode("utf-8", "replace")
+        for line in out.splitlines():
+            parts = line.split(" ", 3)
+            hits.append((parts[0], int(parts[1]), parts[2],
+                         parts[3] if len(parts) > 3 else ""))
+        return p.returncode, hits, out + p.stderr.decode("utf-8", "replace")
+
+
+class Tally(object):
+    def __init__(self):
+        self.passed = self.total = 0
+
+    def ok(self, cond, name, info=""):
+        self.total += 1
+        if cond:
+            self.passed += 1
+            print("PASS %s" % name)
+        else:
+            print("FAIL %s" % name)
+            if info:
+                print("     " + info.replace("\n", "\n     "))
+
+
+def has(hits, sha, cls, path):
+    return any(sha.startswith(h[0]) and h[1] == cls and h[2] == path
+               for h in hits)
+
+
+def build(repo):
+    c = {}
+    # Controls (all must pass).
+    c["readme"] = repo.commit(OURS, {"README.md": "# demo\n\nAn ordinary readme.\n"},
+                              "Add a readme")
+    c["binary"] = repo.commit(OURS, {
+        "data/blob.bin": bytes(range(256)) * 4,
+        "data/fw.bin": b"\0" + j("gw ", dotted(10, 0, 0, 1), "\n").encode()},
+        "Add small binaries")
+    c["public"] = repo.commit(OURS, {"notes/dns.txt": j("resolver ", dotted(8, 8, 8, 8), "\n")},
+                              "Add resolver notes")
+    c["contrib"] = repo.commit(OTHER, {"AGENTS.md": "# notes for agents\n"}, j(
+        "Add agent notes\n\n",
+        "Co-", "Authored-By: ", "Claude <", "noreply@", "anthropic.com>\n"))
+    c["example"] = repo.commit(OURS, {"docs/network.txt": j(
+        "host ", dotted(192, 168, 0, 10), "\ngateway ", dotted(192, 168, 0, 1), "\n")},
+        "Document the example network")
+    c["shadow"] = repo.commit(OURS, {"media/profiles/root.shadow": j(
+        "root:", "ab01FAX.bQRSU", ":19000:0:99999:7:::\n")}, "Add the bench profile")
+    # Plants.
+    c["ipv4"] = repo.commit(OURS, {"cfg/hosts.txt": j("gw ", dotted(10, 0, 0, 1), "\n")},
+                            "Add hosts")
+    c["ipv6"] = repo.commit(OURS, {"cfg/v6.txt": j("prefix ", "fd12", ":3456:789a::1\n")},
+                            "Add v6 notes")
+    c["contrib_ip"] = repo.commit(OTHER, {"contrib/hosts.txt": j(
+        "server ", dotted(172, 16, 5, 4), "\n")}, "Add contributor hosts")
+    c["station"] = repo.commit(OURS, {"CLAUDE.md": "notes\n",
+                                      "sub/.claude/settings.json": "{}\n"},
+                               "Add station files")
+    c["keys"] = repo.commit(OURS, {
+        "keys/deploy.pem": j("-----BEGIN ", "RSA PRIVATE", " KEY-----\nMIIB\n"),
+        "keys/id_ed25519": "key\n",
+        ".netrc": "machine example.invalid\n"}, "Add keys")
+    c["tokens"] = repo.commit(OURS, {
+        "secrets/tokens.txt": j("gh", "p_", "a1B2" * 9, "\n",
+                                "AK", "IA", "ABCDEFGHIJKLMNOP", "\n",
+                                "xo", "xb-", "1234567890-abcdef", "\n"),
+        "app/settings.conf": j("pass", "word = hunter2hunter2\n"),
+        "etc/shadow": j("root:", "ab01FAX.bQRSU", ":19000::::::\n")}, "Add tokens")
+    c["images"] = repo.commit(OURS, {
+        "images/disk.adf": b"\0DOS" + b"\0" * 60,
+        "images/big.bin": b"\0" * (3 * 1024 * 1024)}, "Add images")
+    payload = b"system file payload\n"
+    c["manifest"] = repo.commit(OURS, {"system/MANIFEST.sha256": j(
+        hashlib.sha256(payload).hexdigest(), "  sys/payload.dat\n")}, "Add the manifest")
+    c["sysfile"] = repo.commit(OURS, {"vendor/payload.dat": payload}, "Add a payload")
+    c["coauthor"] = repo.commit(OURS, {"tidy/one.txt": "a\n"}, j(
+        "Tidy one\n\n", "Co-", "Authored-By: ", "Claude <", "noreply@", "anthropic.com>\n"))
+    c["generated"] = repo.commit(OURS, {"tidy/two.txt": "b\n"}, j(
+        "Tidy two\n\n", "Gener", "ated with ", "Claude Code\n"))
+    c["robot"] = repo.commit(OURS, {"tidy/three.txt": "c\n"}, j(
+        "Tidy three\n\n", "\U0001F916", " made by a bot\n"))
+    c["msg_ip"] = repo.commit(OURS, {"tidy/four.txt": "d\n"}, j(
+        "Move the gateway to ", dotted(10, 1, 2, 3), "\n"))
+    c["local"] = repo.commit(OURS, {"local/frobnicator-notes.txt": "ask frobnicator\n",
+                                    "local/plain.txt": "see the frobnicator box\n"},
+                             "Add local notes")
+    c["blocked"] = repo.commit(OURS, {"local/blocked.bin": b"\0blocked payload\n"},
+                               "Add a blocked blob")
+    return c, payload
+
+
+def main():
+    root = tempfile.mkdtemp(prefix="privacy-check-test.")
+    t = Tally()
+    try:
+        env = Env(root)
+        repo = Repo(env, os.path.join(root, "repo"))
+        c, _ = build(repo)
+        tip = c["blocked"]
+
+        pat_file = os.path.join(root, "patterns")
+        with open(pat_file, "w") as f:
+            f.write("# local names\n\nfrobnicator\n")
+        blk_file = os.path.join(root, "blocked")
+        with open(blk_file, "w") as f:
+            f.write("%s  secret-label-xyz\n"
+                    % hashlib.sha256(b"\0blocked payload\n").hexdigest())
+        local_env = {"PRIVACY_PATTERNS": pat_file, "PRIVACY_BLOCKED": blk_file}
+
+        plants = [
+            ("ipv4", 1, "cfg/hosts.txt"),
+            ("ipv6", 1, "cfg/v6.txt"),
+            ("contrib_ip", 1, "contrib/hosts.txt"),
+            ("msg_ip", 1, "message"),
+            ("station", 2, "CLAUDE.md"),
+            ("station", 2, "sub/.claude/settings.json"),
+            ("keys", 3, "keys/deploy.pem"),
+            ("keys", 3, "keys/id_ed25519"),
+            ("keys", 3, ".netrc"),
+            ("tokens", 3, "secrets/tokens.txt"),
+            ("tokens", 3, "app/settings.conf"),
+            ("tokens", 3, "etc/shadow"),
+            ("images", 4, "images/disk.adf"),
+            ("images", 4, "images/big.bin"),
+            ("sysfile", 4, "vendor/payload.dat"),
+            ("coauthor", 5, "message"),
+            ("generated", 5, "message"),
+            ("robot", 5, "message"),
+        ]
+        tip_plants = [(tip, 2, "CLAUDE.md"), (tip, 2, "sub/.claude/settings.json")]
+        controls = ["README.md", "data/blob.bin", "data/fw.bin", "notes/dns.txt",
+                    "AGENTS.md", "docs/network.txt", "media/profiles/root.shadow",
+                    "system/MANIFEST.sha256"]
+
+        # --all without local extras.
+        rc, hits, out = repo.check(["--all", "master"])
+        t.ok(rc == 1, "--all exits 1 on hits", out)
+        for key, cls, path in plants:
+            t.ok(has(hits, c[key], cls, path),
+                 "plant class %d caught: %s (%s)" % (cls, path, key), out)
+        for sha, cls, path in tip_plants:
+            t.ok(has(hits, sha, cls, path), "station file at tip: %s" % path, out)
+        for path in controls:
+            t.ok(not any(h[2] == path for h in hits), "control passes: %s" % path, out)
+        for key in ("readme", "binary", "public", "contrib", "example", "shadow"):
+            t.ok(not any(c[key].startswith(h[0]) for h in hits),
+                 "control commit clean: %s" % key, out)
+        expected = [(c[k], cls, p) for k, cls, p in plants] + tip_plants
+        stray = [h for h in hits
+                 if not any(s.startswith(h[0]) and h[1] == cls and h[2] == p
+                            for s, cls, p in expected)]
+        t.ok(not stray, "no unexpected hits without local extras", "%r" % stray)
+
+        # --all with the local extras.
+        rc, hits, out = repo.check(["--all", "master"], env=local_env)
+        t.ok(has(hits, c["local"], 1, "local/plain.txt"),
+             "PRIVACY_PATTERNS hit on file text, class 1", out)
+        t.ok(has(hits, c["local"], 1, "<withheld>"),
+             "PRIVACY_PATTERNS hit on a path, path withheld", out)
+        t.ok(any(c["local"].startswith(h[0]) and "local pattern #3" in h[3]
+                 for h in hits), "PRIVACY_PATTERNS hit names the pattern line", out)
+        t.ok(has(hits, c["blocked"], 4, "local/blocked.bin"),
+             "PRIVACY_BLOCKED hit, class 4", out)
+        t.ok("frobnicator" not in out and "secret-label-xyz" not in out,
+             "local extras never print their contents", out)
+
+        # --range.
+        rc, hits, out = repo.check(["--range", "%s..%s" % (c["readme"], c["shadow"])])
+        t.ok(rc == 0 and not hits, "--range over the controls exits 0", out)
+        rc, hits, out = repo.check(["--range", "%s..master" % c["shadow"]])
+        t.ok(rc == 1 and has(hits, c["ipv4"], 1, "cfg/hosts.txt")
+             and not any(h[2] in controls for h in hits),
+             "--range over the plants exits 1, controls clean", out)
+
+        # Ours: PRIVACY_OURS adds an identity; --ours replaces the default.
+        rc, hits, out = repo.check(["--range", "%s..%s" % (c["public"], c["contrib"])],
+                                   env={"PRIVACY_OURS": "%s <%s>\n" % OTHER})
+        t.ok(has(hits, c["contrib"], 2, "AGENTS.md") and has(hits, c["contrib"], 5, "message"),
+             "PRIVACY_OURS makes classes 2 and 5 apply", out)
+        rc, hits, out = repo.check(["--range", "%s..%s" % (c["sysfile"], c["coauthor"]),
+                                    "--ours", "Somebody <somebody@example.invalid>"])
+        t.ok(rc == 0 and not hits, "--ours replaces the default identity", out)
+
+        # --max-size.
+        rc, hits, out = repo.check(["--range", "%s..%s" % (c["tokens"], c["images"]),
+                                    "--max-size", "8M"])
+        t.ok(not any(h[2] == "images/big.bin" for h in hits)
+             and has(hits, c["images"], 4, "images/disk.adf"),
+             "--max-size raises the limit; extension still caught", out)
+
+        # --tree.
+        rc, hits, out = repo.check(["--tree", c["shadow"]])
+        t.ok(rc == 0 and not hits, "--tree on a clean commit exits 0", out)
+        rc, hits, out = repo.check(["--tree", "master"])
+        t.ok(rc == 1 and has(hits, tip, 2, "CLAUDE.md") and has(hits, tip, 1, "cfg/hosts.txt")
+             and has(hits, tip, 4, "images/disk.adf")
+             and not any(h[1] == 5 or h[2] == "AGENTS.md" for h in hits),
+             "--tree on master: files and station files, no messages", out)
+
+        # --pre-push: a new branch checks only what no remote-tracking ref has.
+        repo.git("update-ref", "refs/remotes/origin/master", tip)
+        repo.git("checkout", "-q", "-b", "topic", c["shadow"])
+        topic = repo.commit(OURS, {"net/new.txt": j("peer ", dotted(192, 168, 7, 7), "\n")},
+                            "Add a peer")
+        stdin = j("refs/heads/topic ", topic, " refs/heads/topic ", ZERO, "\n",
+                  "(delete) ", ZERO, " refs/heads/gone ", c["shadow"], "\n")
+        rc, hits, out = repo.check(["--pre-push", "origin", "https://example.invalid/r.git"],
+                                   stdin=stdin)
+        t.ok(rc == 1 and [(h[1], h[2]) for h in hits] == [(1, "net/new.txt")]
+             and topic.startswith(hits[0][0]),
+             "--pre-push new branch: only the new commit is checked", out)
+        rc, hits, out = repo.check(["--pre-push", "origin", "https://example.invalid/r.git"],
+                                   stdin=j("(delete) ", ZERO, " refs/heads/gone ", tip, "\n"))
+        t.ok(rc == 0 and not hits, "--pre-push skips a deleted ref", out)
+
+        # Fail closed.
+        rc, _, out = repo.check([])
+        t.ok(rc == 2, "no mode is a usage error (exit 2)", out)
+        rc, _, out = repo.check(["--all", "no-such-ref"])
+        t.ok(rc == 2, "unknown ref exits 2", out)
+        rc, _, out = repo.check(["--all", "master"],
+                                env={"PRIVACY_PATTERNS": os.path.join(root, "missing")})
+        t.ok(rc == 2, "unreadable PRIVACY_PATTERNS exits 2", out)
+        bad = os.path.join(root, "bad-patterns")
+        with open(bad, "w") as f:
+            f.write("(\n")
+        rc, _, out = repo.check(["--all", "master"], env={"PRIVACY_PATTERNS": bad})
+        t.ok(rc == 2 and "line 1" in out, "invalid PRIVACY_PATTERNS regex exits 2", out)
+        empty = os.path.join(root, "not-a-repo")
+        os.makedirs(empty)
+        rc, _, out = repo.check(["--all", "master"], cwd=empty,
+                                env={"GIT_CEILING_DIRECTORIES": root})
+        t.ok(rc == 2, "outside a repository exits 2", out)
+    except Exception as e:
+        t.ok(False, "test harness", "%s: %s" % (e.__class__.__name__, e))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    print("%d/%d passed" % (t.passed, t.total))
+    return 0 if t.total and t.passed == t.total else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
