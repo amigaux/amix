@@ -10,6 +10,11 @@ The stage closes in one commit, when no cell below is empty or pending.
 A row's result is PASS or FAIL with its evidence (a Bench run id), or a
 number for a measurement. The plan is `docs/plan/stage-5.md`.
 
+Cells filled from 2026-10-29 on cite the Bench's run ids (N emulation, M
+metal; the amix-kerntools commit that records them), the commits of the
+other repositories, and the campaign record T-51 by date. A row done only in
+part says which half is done and keeps the rest pending.
+
 ## 1. The bytes of record (the final packages, S5-40)
 
 | What | k46 | k30 |
@@ -37,43 +42,43 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-01 kbootset and modadmin on cf461e3: the box build's tests | pending | the same |
-| S5-02 safe mode keeps the card numbers: the `kbuild` host case | pending | the same |
-| S5-03 kbootset -21, modtools -7; the WD + A4091 safe boot names the root `ced0s1` | pending | pending |
-| S5-04 `tools/carve.py`: the host round trip | pending | pending |
-| S5-05 the floppy pair in one swap: `b2medium` and a re-cut pair | pending | pending |
-| S5-06 the A4000T 53C710 module: host and emulation | pending | — |
-| S5-07 M-A4T1 on the A4000T, its M-SD1 sets | pending | — |
-| S5-08 C4-1 / C4-4: the root record of a board that is not AutoConfig'd | agreed: pending | the same |
-| S5-09 a network in safe mode, opted in: a safe boot with z3660eth marked `safe` brings zen0 up; without the mark, none | pending | pending |
+| S5-01 kbootset and modadmin on cf461e3: the box build's tests | **PASS** 2026-10-27: the box build and its tests on cf461e3 (74b3e79, 4442c76); minted as kbootset -21 / modtools -7 (catalog b2a0e874) | the same |
+| S5-02 safe mode keeps the card numbers: the `kbuild` host case | **PASS** 2026-10-27: the `kbuild` host case (74b3e79, 4442c76; C4-4 v6, C3-5 v13) | the same |
+| S5-03 kbootset -21, modtools -7; the WD + A4091 safe boot names the root `ced0s1` | **PASS** N160, catalog 64d37aaa (2026-10-27, amix-kerntools 677c65e) | **PASS** N161 (as N160) |
+| S5-04 `tools/carve.py`: the host round trip | **PASS** 2026-10-27: the port's module-only 4 KiB ufs conversion and the -66 cut (S5-11); `abi/k46/core.list` (bf10683) | **PASS** 2026-10-27: ufs and s5 wrapped as core-tier modules, round trip (d6b4381) |
+| S5-05 the floppy pair in one swap: `b2medium` and a re-cut pair | **PASS** 2026-10-27: `b2medium` (28fb5a1); amix-installng's re-cut pair asks for volume 2 once (T-51 15:0x) | **PASS** as k46 |
+| S5-06 the A4000T 53C710 module: host and emulation | **PASS** the root alone N162, beside the Z3660 N163, composed on a Z3660 root N162c; on an A4000 it stays out of the way N164 (2026-10-27, amix-kerntools 677c65e; k30 the same, N165c-N168) | — |
+| S5-07 M-A4T1 on the A4000T, its M-SD1 sets | **PASS** but one set: a M31, b and M-DMA1 M32 (2026-10-27, amix-kerntools f01f316); c, the 710 as root, M33 FAIL (the 710 into chip memory), closed by M50 3/3 with loader-amix -10 (2026-10-28, 497f117). The A4092 beside it: pending (S5-21) | — |
+| S5-08 C4-1 / C4-4: the root record of a board that is not AutoConfig'd | **agreed** 2026-10-27: C4-1 v4, by the port and amix-kerntools (4f24e59, b2b3cff) | the same |
+| S5-09 a network in safe mode, opted in: a safe boot with z3660eth marked `safe` brings zen0 up; without the mark, none | host half done 2026-10-27 (484cdd2, 14cd7b9, 8eee6dd; kbootset -22); the safe boot: pending | as k46 |
 
 ## 3. Wave 2: the filesystems leave the kernel
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-10, S5-11 the cuts without ufs and s5 | pending | pending |
-| S5-12 the kernel packages carry ufs and s5; `core.list` | pending | pending |
-| root on ufs as a module | pending | pending |
-| root on s5 as a module | — (no k46 s5 module, S5-37) | pending |
-| a 2 KiB-block ufs on k46: mount, `mmap` and page I/O through the converted `ufs_allocmap`/`ufs_freemap` | pending | — |
-| safe mode on a ufs root and on an s5 root | pending | pending |
-| a damaged ufs module selects the menu | pending | pending |
-| S4-71's init halves: ufs and s5 in the root pass and at the first `sysinit` | pending | pending |
-| U12 with a mount of each type | pending | pending |
+| S5-10, S5-11 the cuts without ufs and s5 | **PASS** 2026-10-27: -66 (the port abc6080); the packaging cuts since: -91, -50 (the core's build-id fix), -51 (the ufs mount guard), -61 (kabi 1.3) | **PASS** 2026-10-27: -18 (amix-kerntools afde1fd); the packaging cut -20 (224b285, N170c), then -22 (kabi 1.3) |
+| S5-12 the kernel packages carry ufs and s5; `core.list` | **PASS** 2026-10-27: amix-packages mints -91 with ufs, round trip 197/198 (T-51 19:3x, 19:5x); re-minted on -50 (catalog 6f0c1701, 2026-10-28); `core.list` bf10683 | **PASS** 2026-10-27: -20 with ufs and s5, as k46; `core.list` d6b4381 |
+| root on ufs as a module | **PASS** N191u on -50, candidate 6f0c1701; N191x from -91 (2026-10-28, amix-kerntools 8951642). -91 itself refused its ufs, N181u (the build id, 7b07bce) | **PASS** N180u on -20 (2026-10-28, 8951642) |
+| root on s5 as a module | — (no k46 s5 module, S5-37) | **PASS** N185r (2026-10-28, 8951642) |
+| a 2 KiB-block ufs on k46: mount, `mmap` and page I/O through the converted `ufs_allocmap`/`ufs_freemap` | re-scoped 2026-10-28 to "refused at mount, EINVAL, the box stays up" (plan 6c62e87): stock mkfs makes no such disk (N195k); a crafted one panicked -50 (N199p) and the static -82 alike (N199c). **PASS** as re-scoped on test cut -51, N205g (2026-10-28, amix-kerntools f7ebcbd) | — (k30 runs that disk, N199d) |
+| safe mode on a ufs root and on an s5 root | **PASS** on ufs, N193s (2026-10-28, 8951642); s5: — (S5-37) | **PASS** on ufs N183s, on s5 N185r (2026-10-28, 8951642) |
+| a damaged ufs module selects the menu | **PASS** N196d: the loader refuses the generation and boots the previous good one (L3, spec 10 §9); kbootset -23 then marks it bad itself, N203d (2026-10-28, 8951642, f7ebcbd) | **PASS** N186d, as k46; kbootset -23 N202d, its negative case N204m |
+| S4-71's init halves: ufs and s5 in the root pass and at the first `sysinit` | **PASS** ufs, N192p (2026-10-28, 8951642) | **PASS** N182p |
+| U12 with a mount of each type | **PASS** ufs, N194m; s5 refused by design (S5-37) (2026-10-28, 8951642) | **PASS** ufs and s5, N184m |
 | S5-14 M-FS1 and M-FL1, final (`docs/measurements/2026-10-27-m-fs1-m-fl1.md`; re-check at the S5-15 cuts, §4; M-FS1's boot half is S5-13's) | -66: file 2 411 588, 36 634 under its control; memory 5 768 less (the carve stays zeroed in place); ufs 56 636 | -18: file 1 534 496, `bss=346388`; 109 240 bytes less than -17; ufs 56 636, s5 39 961 |
-| S5-15 the 030-mode root record: `kbootset` -22 and z3660scsi | — (030 mode) | pending |
-| S5-46 a motherboard controller's record by its id: the cuts with `rth1=2`, `kbootset` -22; a Gayle root beside the Z3660 window (A4000, 030 mode) and a 53C710 root beside Gayle (A4000T) mount by the record, not the built-in root | pending (A4000T) | pending (A4000 in 030 mode) |
+| S5-15 the 030-mode root record: `kbootset` -22 and z3660scsi | — (030 mode) | **PASS** 2026-10-27: kbootset's half 8941879, kinfo030 id 4 (amix-kerntools b747094), the port's RTH1; the record composed and read back N170c, booted on metal M34 (f01f316) |
+| S5-46 a motherboard controller's record by its id: the cuts with `rth1=2`, `kbootset` -22; a Gayle root beside the Z3660 window (A4000, 030 mode) and a 53C710 root beside Gayle (A4000T) mount by the record, not the built-in root | host halves done 2026-10-27 (kbootset -22; the port's -91; amix-kerntools 224b285); the A4000T boot: pending | host halves as k46; the A4000 boot in 030 mode: pending |
 
 ## 4. Wave 3: carried metal
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-16 the A4000T in 030 mode: the root record matches the window board | — | pending |
-| S5-17 the s5 root on metal, and safe mode with it | — | pending |
-| S5-18 the 030 DMA pool with no reachable memory: C4-5, host cases | — | pending |
-| S5-20 the 030 line on the release firmware: M7, z3660scsi root | — | pending |
+| S5-16 the A4000T in 030 mode: the root record matches the window board | — | the root half **PASS** M35: gen 6 = 68030-261027-20, root `c6d0s1` by the window board's record, check 0 (2026-10-28, amix-kerntools 2f73c69). The second card: a4kt710 is unsupported in 030 mode (139b5b0); on Gayle IDE or in emulation: pending |
+| S5-17 the s5 root on metal, and safe mode with it | — | **PASS** M36, multi-user, cp and sync, check clean; safe mode M37 to "The system is ready" (its check not run: no network in safe mode) (2026-10-28, 2f73c69) |
+| S5-18 the 030 DMA pool with no reachable memory: C4-5, host cases | — | **PASS** host cases 2026-10-27 (2a4e4e1, 921bd93; C4-5 v11 §5.4); the metal half is S5-21's |
+| S5-20 the 030 line on the release firmware: M7, z3660scsi root | — | pending (the A4000D's 030 mode still reset-loops, M19, 2026-10-27, daff4dc) |
 | S5-21 the A4000T after its repair: an A4092 root, CD boot on metal, the second bus, the A4091/A4092 module's metal, M-DMA1, S5-18's metal half | pending | pending |
-| S5-22 the A4000D: z3660scsi and Gayle IDE roots, cold boots, M-HALT1 | pending | pending |
+| S5-22 the A4000D: z3660scsi and Gayle IDE roots, cold boots, M-HALT1 | **PASS** 2026-10-27 (amix-kerntools daff4dc): z3660scsi root cold boot M14; M-HALT1 M15; Gayle IDE root M26; Gayle in interrupt mode M20-M25, three halt and cold-boot cycles M22 | pending (the D's 030 mode reset-loops, M19; with S5-20) |
 | S5-23 U3's cache half; M-FP2 | pending | pending |
 
 ## 5. The media
@@ -83,9 +88,9 @@ number for a measurement. The plan is `docs/plan/stage-5.md`.
 | S5-30 rescue from the CD and from the floppy pair | pending | pending |
 | S5-31 disk and SD images with rescue; tape as a package source | pending | pending |
 | S5-32 the generic 060 target, from its pre-installed images | pending | — (a 68060 target) |
-| S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | pending | pending |
-| S5-34 the static kernel families out of the catalog | pending | the same |
-| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | pending (Z3660 + A4092 + Gayle, J4's set) | pending (a k30 set with a card 2) |
+| S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | zen0 in the miniroot and the raw RDB image pass in emulation (amix-installng ni7, 2026-10-27; re-cut ni9 on b1f564f4, install cells 10/10, 2026-10-28); a netinstall from a public host and metal: pending | as k46 |
+| S5-34 the static kernel families out of the catalog | **PASS** 2026-10-27: catalog of record b2a0e874 (amix-packages; T-51 13:5x) | the same |
+| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | kbootset's half 2026-10-27 (6c82415, 4046392); amix-installng's first boot calls `kbootset nodes`, CD rd1p and ni8 leave all four cards' nodes on every installed target (T-51 22:0x). J4's root and the three-controller install: pending (Z3660 + A4092 + Gayle, J4's set) | as k46; the three-controller install: pending (a k30 set with a card 2) |
 
 ## 6. Release acceptance
 
