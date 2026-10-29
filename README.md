@@ -14,7 +14,7 @@ Until a directory holds its project, its README says what will live there.
 
 | Directory | What lives there |
 |-----------|------------------|
-| `kernel/port/` | The 68040/68060 base: Antti Sokero's tree plus our module kernel chain |
+| `kernel/port/` | The 68040/68060 kernel, pinned by commit to a fork of Antti Sokero's port |
 | `kernel/k30/` | The 68030 kernel, cut from Commodore's relink kit |
 | `kernel/dlm/` | Loadable modules: boot loaders, module core, ABI kit, spec, kbootset |
 | `kernel/drivers/` | Hardware drivers, one directory each, recipe inside |
@@ -40,6 +40,8 @@ Until a directory holds its project, its README says what will live there.
   directories.
 - The cross compilers that build Amix are pinned in `toolchain/`; developer
   tools that run on the box are ordinary packages.
+- Projects that other developers lead stay in their own repositories and are
+  pinned here by commit; they can move in later with their history.
 
 ## More
 
