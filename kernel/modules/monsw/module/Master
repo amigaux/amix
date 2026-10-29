@@ -1,0 +1,8 @@
+# generated from keys by module/Makefile
+$modtype drv
+$class demand
+$majors c:52
+$unload never
+$desc monitor switch /dev/monsw
+$param config:int:-1:-1:51
+monsw monsw
