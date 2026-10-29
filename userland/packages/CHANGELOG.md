@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-29 — coreutils 5.2.1; MAKE_CFLAGS and a NEEDED-aware undef gate (c728391, 53707ec, d512466, c62ec2f)
+
+coreutil 5.2.1-1 (gcc14, /opt/amix): 86 programs + groups incl. md5sum/sha1sum, no libm; date -u fixed for AMIX libc
+writing into the TZ string; E1 smoke 95/95, stock pkgadd/pkgchk/pkgrm clean; pkg 81300da8 / 3567104 B. pkgbuild.sh gains
+MAKE_CFLAGS and an undef gate over every NEEDED object; amix-decls.h declares getrlimit/setrlimit; scan060-g14.py sizes
+cmpa-bounded switch tables (self-test 18/18). Not published.
+
 ## 2026-10-29 — bzip2 1.0.8; the interim driver is recipes/common/pkgbuild.sh with STYLE=make (3810e35, 343a4b5, 702b57c)
 
 bzip2 1.0.8-1 (gcc14, /opt/amix, category archive): bzip2recover's 64-bit offsets formatted by hand, Bourne-shell bzgrep
