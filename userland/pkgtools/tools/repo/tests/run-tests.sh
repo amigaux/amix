@@ -727,10 +727,42 @@ check "cats.conf declares exactly the fifteen agreed groups" \
 check "every assigned category is a declared group" \
     bash -c "test -z \"\$(comm -23 <(sort -u '$WORK/cats.values') \
                                    '$WORK/cats.groups')\""
-check "cats.conf covers exactly the packages the install sets name" \
-    bash -c "diff '$WORK/cats.keys' \
-                  <(python3 '$HERE/../sets.py' --all | awk '{print \$2}' \
-                    | sort -u)"
+# the packages layer (amix's userland/packages/conf, generated from the
+# recipes) assigns the userland packages; together the two layers cover
+# exactly the packages the install sets name
+PKGCONF="$HERE/../../../../packages/conf"
+if [ -f "$PKGCONF/cats.conf" ]; then
+    grep -v '^[[:space:]]*#' "$PKGCONF/cats.conf" | grep ':' \
+        > "$WORK/pcats.assign"
+    sed 's/^[^:]*:[[:space:]]*//' "$WORK/pcats.assign" > "$WORK/pcats.values"
+    sed 's/:.*//; s/[[:space:]]//g' "$WORK/pcats.assign" | sort \
+        > "$WORK/pcats.keys"
+    check "the packages layer declares no @group" \
+        bash -c "! grep -q '^[[:space:]]*@' '$PKGCONF/cats.conf'"
+    check "every packages-layer category is a declared group" \
+        bash -c "test -z \"\$(comm -23 <(sort -u '$WORK/pcats.values') \
+                                       '$WORK/cats.groups')\""
+    check "the two layers assign no package twice" \
+        bash -c "test -z \"\$(comm -12 '$WORK/cats.keys' '$WORK/pcats.keys')\""
+    check "the two layers cover exactly the packages the install sets name" \
+        bash -c "diff <(sort -u '$WORK/cats.keys' '$WORK/pcats.keys') \
+                      <(python3 '$HERE/../sets.py' --all | awk '{print \$2}' \
+                        | sort -u)"
+else
+    echo "  skip- packages-layer cats checks (no $PKGCONF/cats.conf)"
+fi
+PKGMETA="$HERE/../../../../../build/pkg/pkgmeta"
+if [ -f "$PKGMETA" ]; then
+    check "pkgmeta's closed category list is this vocabulary" \
+        bash -c "diff '$WORK/cats.groups' <(python3 -c '
+import ast, sys
+for node in ast.parse(open(sys.argv[1]).read()).body:
+    if isinstance(node, ast.Assign) and node.targets[0].id == \"CATEGORIES\":
+        print(\"\\n\".join(sorted(ast.literal_eval(node.value))))
+' '$PKGMETA')"
+else
+    echo "  skip- pkgmeta vocabulary check (no $PKGMETA)"
+fi
 
 # --------------------------------------------------------------- T20 ----
 # names.conf -- the catalog-name override.  Its failure mode is SILENT: with
@@ -759,20 +791,27 @@ check "no names.conf value contains the field separator" \
 # PINNED membership.  A catalog-name mapping is a RENAME as far as every
 # deployed box is concerned -- `apkg install <name>` stops resolving under the
 # old one -- so adding a second mapping must be a deliberate edit of this
-# test, never drift.  Today: amixbench -> amix-benchmark (published 09-16);
-# gtar -> tar (amix-packages batch-2, staged 2026-09-26); diffutil ->
-# diffutils and coreutil -> coreutils (GCC 14 batch, mapped 2026-10-30).
+# test, never drift.  Here: amixbench -> amix-benchmark (published 09-16).
+# The recipe-built ones (gtar -> tar, diffutil -> diffutils, coreutil ->
+# coreutils, amixbch14 -> amix-benchmark-gcc14) are in the packages layer.
 check "names.conf maps exactly the packages that need it" \
-    bash -c "diff '$WORK/names.keys' <(printf '%s\n' amixbench gtar \
-                                       diffutil coreutil | sort)"
+    bash -c "diff '$WORK/names.keys' <(printf '%s\n' amixbench)"
 check "amixbench maps to the published catalog name" \
     grep -q '^amixbench:[[:space:]]*amix-benchmark$' "$NAMES"
-check "gtar maps to the batch-2 catalog name" \
-    grep -q '^gtar:[[:space:]]*tar$' "$NAMES"
-check "diffutil maps to the catalog name diffutils" \
-    grep -q '^diffutil:[[:space:]]*diffutils$' "$NAMES"
-check "coreutil maps to the catalog name coreutils" \
-    grep -q '^coreutil:[[:space:]]*coreutils$' "$NAMES"
+if [ -f "$PKGCONF/names.conf" ]; then
+    grep -v '^[[:space:]]*#' "$PKGCONF/names.conf" | grep ':' \
+        | sed 's/:.*//; s/[[:space:]]//g' | sort > "$WORK/pnames.keys"
+    check "the two layers map no PKG twice" \
+        bash -c "test -z \"\$(comm -12 '$WORK/names.keys' '$WORK/pnames.keys')\""
+    check "gtar maps to the batch-2 catalog name (packages layer)" \
+        grep -q '^gtar:[[:space:]]*tar$' "$PKGCONF/names.conf"
+    check "diffutil maps to diffutils (packages layer)" \
+        grep -q '^diffutil:[[:space:]]*diffutils$' "$PKGCONF/names.conf"
+    check "coreutil maps to coreutils (packages layer)" \
+        grep -q '^coreutil:[[:space:]]*coreutils$' "$PKGCONF/names.conf"
+else
+    echo "  skip- packages-layer names checks (no $PKGCONF/names.conf)"
+fi
 
 # drift guard: staged on every mint, or the authored file is one nobody reads
 check "build-packages.sh stages names.conf into the staging root" \
@@ -811,6 +850,98 @@ python3 "$GEN" "$S20B" >/dev/null 2>"$WORK/t20b.err"
 check "the authored names.conf parses without error" test $? -eq 0
 check "it leaves an unlisted package alone" \
     test "$(field "$S20B/catalog" jutoy 1)" = jutoy
+
+# --------------------------------------------------------------- T21 ----
+# conf layers -- the staging root's confs plus --packages-conf DIR (amix's
+# userland/packages/conf by default).  Neither outranks the other: a package
+# the two give different values is a conflict, every one is named, and no
+# catalog is written (rc 4).  Equal values are no conflict.
+echo "T21: conf layers (staging root + packages conf)"
+S21="$WORK/t21"; P21="$WORK/t21pkgs"; mkdir -p "$S21" "$P21"
+cp "$FIX/TESTpkg.pkg" "$FIX/toy.pkg" "$S21/"
+printf '@group games: games\n@group x11: x11\n@group development: dev\n' \
+    > "$S21/cats.conf"
+printf 'JUTOY: toy\n' > "$P21/names.conf"
+printf 'toy: games\n' > "$P21/cats.conf"
+printf 'toy: testpkg\n' > "$P21/deps.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21a.err"
+check "the packages layer is applied (rc 0)" test $? -eq 0
+check "... its names.conf maps the package" \
+    test "$(field "$S21/catalog" toy 3)" = JUTOY
+check "... its cats.conf, keyed by the mapped name, sets the category" \
+    test "$(field "$S21/catalog" toy 8)" = games
+check "... its deps.conf sets the deps" \
+    test "$(field "$S21/catalog" toy 7)" = testpkg
+printf 'toy: games\n' >> "$S21/cats.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>&1
+check "equal values in both layers are no conflict" \
+    test "$(field "$S21/catalog" toy 8)" = games
+# a conflict: same key, different values
+printf 'toy: x11\n' >> "$S21/cats.conf"
+rm -f "$S21/catalog" "$S21/catalog.md5"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21b.err"
+check "a conflicting value stops the catalog (rc 4)" test $? -eq 4
+check "... no catalog is written" test ! -e "$S21/catalog"
+check "... the package is named as a CONFLICT" \
+    grep -q '^gen-catalog: CONFLICT toy.pkg: cats.conf' "$WORK/t21b.err"
+check "... both values are quoted" \
+    bash -c "grep -q 'staging/cats.conf says toy: x11' '$WORK/t21b.err' &&
+             grep -q 'packages/cats.conf says toy: games' '$WORK/t21b.err'"
+# a conflict across keys: catalog name in one layer, pkginst in the other
+printf '@group games: games\n@group x11: x11\n@group development: dev\nJUTOY: x11\n' \
+    > "$S21/cats.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21c.err"
+check "name in one layer vs pkginst in the other is a conflict too" \
+    test $? -eq 4
+# names.conf: a PKG mapped to two names
+printf 'JUTOY: other\n' > "$S21/names.conf"
+printf '@group games: games\n' > "$S21/cats.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21d.err"
+check "a PKG mapped to different names is a conflict" test $? -eq 4
+check "... named as names.conf" \
+    grep -q 'CONFLICT toy.pkg: names.conf' "$WORK/t21d.err"
+rm -f "$S21/names.conf"
+# every conflicting package is named, not just the first
+printf 'TESTpkg: other\nJUTOY: other\n' > "$S21/names.conf"
+printf 'TESTpkg: testpkg\nJUTOY: toy\n' > "$P21/names.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21e.err"
+check "every conflicting package is named" \
+    test "$(grep -c '^gen-catalog: CONFLICT' "$WORK/t21e.err")" = 2
+rm -f "$S21/names.conf"
+printf 'JUTOY: toy\n' > "$P21/names.conf"
+# the vocabulary is declared in the staging root only
+printf '@group games: games\n' > "$P21/cats.conf"
+python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21f.err"
+check "an @group line in the packages layer is refused" test $? -ne 0
+check "... saying where the vocabulary lives" \
+    grep -q 'declared only in' "$WORK/t21f.err"
+printf 'toy: games\n' > "$P21/cats.conf"
+# off, and absent
+python3 "$GEN" --packages-conf none "$S21" >/dev/null 2>&1
+check "--packages-conf none reads the staging root only" \
+    test "$(field "$S21/catalog" jutoy 3)" = JUTOY
+python3 "$GEN" --packages-conf "$WORK/t21-nosuch" "$S21" >/dev/null \
+    2>"$WORK/t21g.err"
+check "a missing packages conf still catalogs (rc 0)" test $? -eq 0
+check "... and warns, never silent" \
+    grep -q 'no packages conf at' "$WORK/t21g.err"
+check "the default is amix's userland/packages/conf" \
+    python3 -c 'import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("g", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+sys.exit(m.PACKAGES_CONF != os.path.realpath(sys.argv[2]))' \
+        "$GEN" "$HERE/../../../../packages/conf"
+# the real layers agree: the authored confs staged beside the real packages
+# conf give no conflict on a fixture staging
+if [ -d "$PKGCONF" ]; then
+    S21R="$WORK/t21r"; mkdir -p "$S21R"
+    cp "$FIX/toy.pkg" "$S21R/"
+    cp "$HERE/../deps.conf" "$HERE/../names.conf" "$HERE/../cats.conf" \
+       "$HERE/../descs.conf" "$S21R/"
+    python3 "$GEN" "$S21R" >/dev/null 2>&1
+    check "tools/repo's confs and the packages conf load together (rc 0)" \
+        test $? -eq 0
+fi
 
 # --------------------------------------------------------------- T19 ----
 # payload-licence-gate.py -- a Kickstart ROM never leaves; embedded stock
@@ -1008,9 +1139,19 @@ check "no set names a test fixture (amixdemo/demolib)" \
 # pinned to the measured membership so a future batch must touch this test
 # deliberately, not by drift.
 check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
-check "extra is the twelve add-on packages" \
-    test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
-         "acompat amix-benchmark bzip2 coreutils diffutils grep gzip less make patch tar zlib "
+# Since 2026-10-30 the recipe-built members come from the packages layer
+# (rsync and amix-benchmark-gcc14 joined there); this file names
+# amix-benchmark alone.
+if [ -f "$PKGCONF/sets.conf" ]; then
+    check "extra is the fourteen add-on packages" \
+        test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
+             "acompat amix-benchmark amix-benchmark-gcc14 bzip2 coreutils diffutils grep gzip less make patch rsync tar zlib "
+else
+    echo "  skip- extra's full membership (no $PKGCONF/sets.conf)"
+fi
+check "this directory's sets.conf names amix-benchmark alone in extra" \
+    test "$(python3 "$SETS" -f "$SETSCONF" extra | tr '\n' ' ')" = \
+         "amix-benchmark "
 check "extra and full are disjoint" \
     bash -c "test -z \"\$(comm -12 <(python3 '$SETS' extra) \
                                    <(python3 '$SETS' full))\""
@@ -1066,11 +1207,37 @@ while [ -n "$pending" ]; do
 done
 echo $out | tr ' ' '\n' | grep -v '^$' | sort -u
 SHEOF
+# the two layers concatenated are one sets.conf to the sh loop
+cat "$SETSCONF" > "$WORK/sets.both"
+[ -f "$PKGCONF/sets.conf" ] && cat "$PKGCONF/sets.conf" >> "$WORK/sets.both"
 for s in minimal standard full developer x11 extra; do
     check "pre-POSIX sh filter loop agrees with sets.py on '$s'" \
-        bash -c "diff <(sh '$WORK/shsets.sh' '$SETSCONF' $s) \
+        bash -c "diff <(sh '$WORK/shsets.sh' '$WORK/sets.both' $s) \
                       <(python3 '$SETS' $s)"
 done
+
+# the packages layer: adds to sets off the chain, never to the chain
+printf 'a: one\nb: +a,two\nextra: three\n' > "$G16/base.conf"
+printf 'extra: four,three\nnew: five\n' > "$G16/pkgs.conf"
+check "the packages layer adds members to an off-chain set" \
+    test "$(python3 "$SETS" -f "$G16/base.conf" extra | tr '\n' ' ')" = "three " -a \
+         "$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import sets
+print(" ".join(sets.resolve(sets.read_layered(sys.argv[2], sys.argv[3]), "extra")))' \
+            "$HERE/.." "$G16/base.conf" "$G16/pkgs.conf")" = "four three"
+check "-p names the packages layer on the command line" \
+    test "$(python3 "$SETS" -p "$G16/pkgs.conf" new 2>/dev/null)" = "five"
+printf 'b: six\n' > "$G16/chain.conf"
+python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import sets
+sets.read_layered(sys.argv[2], sys.argv[3])' "$HERE/.." "$G16/base.conf" \
+    "$G16/chain.conf" >/dev/null 2>"$WORK/t16.chain"
+check "the packages layer may not touch a chained set" test $? -ne 0
+check "... and the refusal names the chain" \
+    grep -q 'installer chain' "$WORK/t16.chain"
+printf 'extra: +a\n' > "$G16/plus.conf"
+python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import sets
+sets.read_layered(sys.argv[2], sys.argv[3])' "$HERE/.." "$G16/base.conf" \
+    "$G16/plus.conf" >/dev/null 2>"$WORK/t16.plus"
+check "the packages layer may not use '+' includes" test $? -ne 0
 
 # --------------------------------------------------------------- T17 ----
 # s5-collision-scan.py -- the 14-character (s5) name-collision scanner.

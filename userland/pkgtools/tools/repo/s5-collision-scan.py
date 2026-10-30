@@ -366,7 +366,9 @@ def find_packages(paths, setname, sets_conf, catalog):
         catalog = os.path.join(staging, "catalog")
     try:
         names = read_catalog(catalog)
-        members = setsmod.resolve(setsmod.read_sets(sets_conf), setname)
+        sets = setsmod.read_layered() if sets_conf is None \
+            else setsmod.read_sets(sets_conf)
+        members = setsmod.resolve(sets, setname)
     except (OSError, setsmod.SetsError) as exc:
         raise ScanError(str(exc))
 
@@ -395,9 +397,10 @@ def main(argv):
                     help="a staging directory and/or individual *.pkg files")
     ap.add_argument("-s", "--set", dest="setname",
                     help="restrict to the members of a sets.conf install set")
-    ap.add_argument("--sets-conf",
-                    default=os.path.join(HERE, "sets.conf"),
-                    help="sets.conf to read (default: beside this script)")
+    ap.add_argument("--sets-conf", default=None,
+                    help="sets.conf to read alone (default: the one beside "
+                         "this script with amix's userland/packages/conf "
+                         "layer, as sets.py reads them)")
     ap.add_argument("--catalog",
                     help="catalog to resolve set members through "
                          "(default: <staging>/catalog)")

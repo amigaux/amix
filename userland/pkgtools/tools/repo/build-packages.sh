@@ -996,6 +996,10 @@ fi
 # regenerate away.  The expected diff against the live catalog is recorded
 # in NOTES.md (the 2026-09-26 PREPARED publish), so the next publish is
 # reviewed as "these lines change category", not discovered.
+#
+# The recipe-built userland's names, categories and deps are NOT staged here:
+# gen-catalog.py reads them from amix's userland/packages/conf itself
+# (--packages-conf), and refuses a package the two layers disagree on.
 if [ $do_apkg -eq 1 ] || [ $do_eng -eq 1 ] || [ $do_cdfs -eq 1 ] || [ $do_demo -eq 1 ] \
    || [ $do_m4 -eq 1 ]; then
   cp "$REPO/tools/repo/deps.conf" "$STAGING/deps.conf"

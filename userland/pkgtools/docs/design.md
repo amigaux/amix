@@ -350,7 +350,13 @@ Stock Amix metadata has no dependency graph and no useful taxonomy, so both are 
 All of them are pure metadata: editing one and re-running `gen-catalog.py` moves no `.pkg` byte and
 no `.pkg` md5. `gen-catalog.py` reads `deps.conf`, `cats.conf`, `descs.conf` and `names.conf` from
 the **staging root** (`build-packages.sh` copies `deps.conf` and `descs.conf` there); the authored
-copies live in `tools/repo/`.
+copies live in `tools/repo/`. It reads the same four files from amix's `userland/packages/conf/`
+(`--packages-conf`), which `build/pkg/pkgmeta` generates from the recipes: that layer names the
+recipe-built userland, `tools/repo/` the stock, kernel-space and pkgtools packages. Neither layer
+outranks the other: a package the two give different values (by catalog name or pkginst) is a
+conflict, every one is named, and no catalog is written (rc 4). `sets.py` merges the two
+`sets.conf` files the same way; the packages layer may add to `extra` but not to the installer
+chain.
 
 - `deps.conf` — the dependency graph. `core` is essential base and never a declared dep, and there
   are **no "you need a compiler" deps**.
@@ -363,8 +369,8 @@ copies live in `tools/repo/`.
   `@group` line declares nothing and keeps the old permissive behaviour. **Fifteen groups** since
   2026-10-30: `system`, `network`, `utility`, `archive`, `library`, `shell`, `language`, `text`,
   `editor`, `documentation`, `development`, `multimedia`, `x11`, `games`, `source` (`emacs` folded
-  into `editor`, `openlook` into `x11`). Categories say what a package **is**; who wants it is a
-  set.
+  into `editor`, `openlook` into `x11`); `@group` lines are declared in `tools/repo/cats.conf`
+  only. Categories say what a package **is**; who wants it is a set.
 - `descs.conf` — the **description** overrides, the same catalog-level pattern one field over
   (`<name>: <free text>`; only the first colon separates, so the text may hold more). The ninth
   column is the only prose a user ever sees — `apkg list`/`search`/`info` and the installer menu —

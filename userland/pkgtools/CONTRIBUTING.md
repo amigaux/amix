@@ -12,7 +12,7 @@ These were learned on real Amix systems. Violating them fails silently.
 1. **PKG names must be at most 9 characters.** Stock Amix `pkgadd` silently drops a longer one: no
    error, no package. `tools/repo/build-packages.sh` enforces this, and anything that mints a PKG
    name must too. A longer user-facing name goes through `tools/repo/names.conf` (catalog name to
-   pkginst).
+   pkginst), or for a recipe-built package through amix's `userland/packages/conf/names.conf`.
 
 2. **Keep alternate-root paths well under about 110 characters.** `libadm/pkginfo.c` `svr4info()`
    originally used a fixed 128-byte buffer and smashed the stack for `-R` roots longer than about
