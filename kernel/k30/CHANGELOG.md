@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-30 — ufs tail zeroing (grimoire quirk 91), on by default (1be27f8); z3660eth in kernel/drivers (b3a90b8)
+
+src/ufs_vptrunz.c wraps ufs_itrunc's call of pvn_vptrunc (the stock ufs object's reference renamed, four bytes in one
+.strtab string): when a shrink to M cuts into a kept block past the direct blocks, it zeroes [M, end of the block)
+through segkmap and writes it synchronously before the stock pvn_vptrunc runs, with the file's pages cached or not. A
+hard check runs on the wrapped ufs object, the carved module and a base unix. --no-ufs-tailzero reproduces the previous
+kernel byte for byte. Test kernel 68030-261030-54 (not a cut) regrows clean in 136/136 warm, remounted and cold runs.
+amix-build selects the ethernet driver as z3660eth (kernel/drivers/z3660eth).
+
 ## 2026-10-30 — kzero fault catch (grimoire quirk 90), on by default (8b670ad)
 
 src/kzero_nofault.s, the port's routine (k46-module b65b43d, same object bytes), joins the cross build's final link with
