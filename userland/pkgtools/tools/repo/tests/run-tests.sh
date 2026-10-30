@@ -2347,6 +2347,30 @@ else
     echo "  skip- APKG_FSTYPE checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
 fi
 
+# --------------------------------------------------------------- T30 ----
+# The essential mark (docs/design.md section 2c): APKG_ESSENTIAL=yes or no
+# catalogues as any package; any other value SKIPs it, because apkg would
+# count it as yes.
+echo "T30: APKG_ESSENTIAL, the essential mark"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    S30="$WORK/t30"; mkdir -p "$S30"
+    mint28 ESSYES "$S30/ESSYES-1.0.pkg" "APKG_ESSENTIAL=yes"
+    mint28 ESSNO "$S30/ESSNO-1.0.pkg" "APKG_ESSENTIAL=no"
+    mint28 ESSQ "$S30/ESSQ-1.0.pkg" 'APKG_ESSENTIAL="yes"'
+    mint28 ESSBAD "$S30/ESSBAD-1.0.pkg" "APKG_ESSENTIAL=Yes"
+    python3 "$GEN" "$S30" >/dev/null 2>"$WORK/t30.err"
+    check "gen-catalog rc 0 with marked packages" test $? -eq 0
+    check "yes, no and a quoted yes catalogue" \
+        bash -c "grep -q '^essyes|' '$S30/catalog' && grep -q '^essno|' '$S30/catalog' && grep -q '^essq|' '$S30/catalog'"
+    check "a value other than yes or no is SKIPped, naming it" \
+        grep -q "SKIP ESSBAD-1.0.pkg: APKG_ESSENTIAL='Yes' is not yes or no" "$WORK/t30.err"
+    check "  ... and not in the catalog" bash -c "! grep -q '^essbad|' '$S30/catalog'"
+    check "the mark adds no catalog line or trailer" \
+        bash -c "! grep -qi 'essential' '$S30/catalog'"
+else
+    echo "  skip- APKG_ESSENTIAL checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

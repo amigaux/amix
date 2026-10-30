@@ -156,6 +156,13 @@
 # for readers that decide before fetching (an installer, a later apkg);
 # the check itself is apkg's, on the package's own pkginfo (fsreq.c).
 #
+# --------------------------------------------------------- ESSENTIAL ---
+# APKG_ESSENTIAL=yes marks a package the system cannot boot without; apkg
+# refuses to remove or purge it (docs/design.md section 2c).  apkg reads
+# the INSTALLED pkginfo, so the catalog carries nothing.  The value must be
+# yes or no: apkg counts any other value as yes, so a malformed one SKIPs
+# the package here, where the author sees it.
+#
 # ------------------------------------------------- INSTALLED-SIZE BLOCK ---
 # `--isize` appends, after the entry lines:
 #
@@ -220,6 +227,10 @@ KERNEL_MARKER_PARAMS = ("KSUM_R", "BOOT2_SHA")
 # grammar, the same as src/apkg/fsreq.c fstype_list_ok().
 FSTYPE_PARAM = "APKG_FSTYPE"
 FSTYPE_RE = re.compile(r"^[a-z0-9]{1,15}(,[a-z0-9]{1,15})*$")
+
+# The essential mark (ESSENTIAL above), src/apkg/apkg.h APKG_ESSENTIAL_PARAM.
+ESSENTIAL_PARAM = "APKG_ESSENTIAL"
+ESSENTIAL_VALUES = ("yes", "no")
 
 # RAW self-describing layout (must match src/apkg/source.h byte-for-byte):
 # a metadata region at the front (catalog + catalog.md5, NUL-padded),
@@ -988,6 +999,13 @@ def fstype_mark(params):
     return value
 
 
+def essential_check(params):
+    """Refuse a package whose APKG_ESSENTIAL is neither yes nor no."""
+    value = params.get(ESSENTIAL_PARAM)
+    if value is not None and value not in ESSENTIAL_VALUES:
+        raise Malformed("%s=%r is not yes or no" % (ESSENTIAL_PARAM, value))
+
+
 def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
                 descs_conf, verbose):
     """relname: path relative to the staging root (forward slashes);
@@ -1035,6 +1053,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
             raise Malformed("pkginfo lacks required %s parameter" % req)
 
     fstype = fstype_mark(params)
+    essential_check(params)
 
     deps_conf = as_layers("deps.conf", deps_conf, normalize_deps)
     names_conf = as_layers("names.conf", names_conf)
