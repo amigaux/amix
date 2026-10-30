@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — PROTO skips unlisted parent dirs; optional APKG_DESC (651c753)
+
+pkgbuild.sh's prototype check leaves out staged directories that are only parents of listed paths (/usr and /usr/bin
+under PREFIX=/usr/local); staged-only files, links and other directories are still refused, and the ok line names the
+skipped parents. package.sh may set APKG_DESC, written to pkginfo after PSTAMP and used as the catalog description;
+unset, every pkginfo is unchanged. test-pkgmeta 63/63, test-pkgbuild 44/44.
+
 ## 2026-10-30 — the packaging harness in the amix layout (5f48444)
 
 build/pkg/common (moved in with the packages, 5649328) finds itself through AMIX_PKG_COMMON and builds into out/pkg.

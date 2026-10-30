@@ -50,7 +50,8 @@ REQUIRED = ("NAME", "PKG", "VERSION", "PKGREV", "SUMMARY", "DESC", "CATEGORY",
 SOURCE = ("URL", "SHA256")
 DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
-            ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""))
+            ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
+            ("APKG_DESC", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -165,7 +166,7 @@ def problems(recipe, m):
     for s in m["SET"].split():
         if s not in SETS:
             out.append("SET: unknown set '%s' (known: %s)" % (s, " ".join(SETS)))
-    for k in ("SUMMARY", "DESC"):
+    for k in ("SUMMARY", "DESC", "APKG_DESC"):
         if "\n" in m[k]:
             out.append("%s must be one line" % k)
         if "|" in m[k]:
@@ -227,9 +228,11 @@ def pkgversion(m):
 def pkginfo(m):
     v = pkgversion(m)
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
-            "CLASSES=none\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\nDESC=%s\n"
+            "CLASSES=none\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%sDESC=%s\n"
             % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"], VENDOR,
-               VENDOR, m["PKG"], v, m["TOOLCHAIN"], m["DESC"]))
+               VENDOR, m["PKG"], v, m["TOOLCHAIN"],
+               "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
+               m["DESC"]))
 
 
 def parse_pkginfo(text):
