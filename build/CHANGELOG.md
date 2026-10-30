@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — gcc14-pin.sh re-pinned to the container build (5bd9c23)
+
+gcc14-pin.sh pins cc1 ff4241a6, libgcc.a bb531a7d, libamixc99.a 78436c8b, specs 0e0d3ff1 (the container build of
+b51ff39); G14 defaults to the extracted copy in out/toolchain/gcc14-cross-amix. gate-gcc14-selftest runs in CI without
+the skip (PASS 19). Every gcc14 package is re-minted on the new pin before the next publish.
+
 ## 2026-10-30 — PROTO skips unlisted parent dirs; optional APKG_DESC (651c753)
 
 pkgbuild.sh's prototype check leaves out staged directories that are only parents of listed paths (/usr and /usr/bin

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — gcc14 pinned to the build container's build (5bd9c23)
+
+gcc14-cross-amix b51ff39 is pinned to the build container's reproducible build (identity gcc14-cross-amix.tree
+3d3ca2fe, the digest of its file list; two no-cache builds identical). Its sysroot moves inside the prefix, so the
+toolchain is relocatable; extract-g14.sh copies it to out/toolchain/gcc14-cross-amix on the host and checks every
+file. CI checks the image's gcc14 against the pin. Generated code is identical to the old local compiler's; libraries
+differ only in debug info and build-path strings.
+
 ## 2026-10-30 — CI names the runner's uid in the selftests container (63bb482)
 
 CI's packaging harness selftests run with a passwd and group entry for the runner's uid: pkgtools' removef smoke test
