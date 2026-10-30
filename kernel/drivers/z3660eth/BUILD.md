@@ -177,15 +177,16 @@ and the arm is declared unsupported with a live data cache. The shipped Z3660 co
 `0x10000000`) is always the direct arm.
 
 ## 9. The loadable-module form (host-side, cross-compiled)
-The same `src/z3660eth.c` built with `-DZ3660ETH_MODULE` is the module of amix-dlm's
+The same `src/z3660eth.c` built with `-DZ3660ETH_MODULE` is the module of kernel/dlm's
 contract C3-6; the static build above does not change. The module is built with
-amix-dlm's **ABI kit** (S3-10), one kit per kernel line, and nothing else: the kit's
+kernel/dlm's **ABI kit** (S3-10), one kit per kernel line, and nothing else: the kit's
 headers (its own `sys/moddefs.h` and `sys/amixddi.h`, the stock headers, on k46 the
 port's 4 KiB `immu.h`/`param.h`), its `mk/module.mk`, `mkmod`, `modfix` and
-`modcheck.py`. Build the kits once in amix's `kernel/dlm`, then the module here:
+`modcheck.py`. Build the kits once in amix's `kernel/dlm`, then the module here (paths
+from this directory; `GCA` is gcc-cross-amix's `build/`, see `toolchain/README.md`):
 ```
-. ../gcc-cross-amix/build/env.sh        # m68k-cbm-sysv4-* on PATH
-make -C ../amix/kernel/dlm kit          # ../amix/kernel/dlm/build/kit/{k30,k46}
+. $GCA/env.sh                           # m68k-cbm-sysv4-* on PATH
+make -C ../../dlm kit GCA=$GCA PORT=…   # ../../dlm/build/kit/{k30,k46}
 make -C module                          # build/k30/mod.d/z3660eth, build/k46/mod.d/z3660eth
 make -C module k46                      # one line
 make -C module static                   # the static object per line, and its sha256

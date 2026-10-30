@@ -14,15 +14,15 @@
 #                             an armed IPL-7 block; NOTES.md "ZS-05")
 #   make -C module clean
 #
-# DLM is the dlm kit directory, amix's kernel/dlm (default ../amix/kernel/dlm;
+# DLM is the dlm kit directory, amix's kernel/dlm (default this checkout's;
 # `make kit` there gives build/kit/k30 and build/kit/k46); KIT_k30 / KIT_k46
 # name a kit directly.
 # The pinned cross tools (m68k-cbm-sysv4-*) and python3 must be on PATH.
 # The kit's fragment does the rest: objects and the module under
-# build/<line> (MODOUT, here the repo's build/), $cpu from the line.
+# build/<line> (MODOUT, here kernel/drivers/z3660eth/build/), $cpu from the line.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))..)
-DLM ?= $(abspath $(TOP)/../amix/kernel/dlm)
+DLM ?= $(abspath $(TOP)/../../dlm)
 LINES = k30 k46
 kit = $(or $(KIT_$(1)),$(DLM)/build/kit/$(1))
 
