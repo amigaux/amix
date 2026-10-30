@@ -47,6 +47,7 @@ so each fact about a package is written in one place.
 | `PREFIX=/opt/amix` | the install prefix |
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
+| `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
 | `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
@@ -74,7 +75,9 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   the man tree `/opt/amix/man`, `/etc`, `/var` and `SYSTEM_PATHS` (a
   directory above one of them, `/opt` or `/usr`, may be listed), and a
   `SYSTEM_PATHS` entry that is relative, one level deep, already inside those
-  trees, or holds nothing. It refuses a `CONFFILES` path that the
+  trees, or holds nothing. It refuses a `STOCK_ETC` path that is not under
+  `/etc`, not a regular file in `system/MANIFEST.sha256`, or not exactly one
+  `f` or `e` line of the prototype. It refuses a `CONFFILES` path that the
   prototype does not have, has on more than one line, or has as anything but
   an `f` or `e` object; a path not under `/etc` or `/var`;
   an `e` object that `CONFFILES` does not list; one conffile listed by two
@@ -137,6 +140,9 @@ are in this checkout:
   `userland/pkgtools/heirloom/build-host.sh` builds, and
   `userland/pkgtools/tools/repo/scan060.py`;
 - kernel/dlm and kernel/modules in this checkout;
+- `AMIX_SYSTEM`: the amix-system checkout `STOCK_ETC` files come from;
+  unset, the one beside the main working tree (`system/fetch-amix-system`
+  makes one at the pin);
 - the output: `out/pkg` (ignored), or `AMIX_BUILD_ROOT` or
   `AMIX_GCC14_BUILD_ROOT` when set.
 

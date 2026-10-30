@@ -14,6 +14,8 @@ one; this directory only describes them.
 | `usr/include` | the system headers |
 | `usr/lib`, `usr/ccs` | the libraries, startup objects and the C compilation system |
 | `usr/X` | X11: headers, libraries, fonts and clients |
+| `etc` | the stock `/etc` at 2.1p2a, as the packages ship it plus the patch disk's changes: no site edits, users or keys. The defaults the base package carries come from here (P-36 D-N24) |
+| `etc.md` | what git cannot hold for `etc/`: owners, modes, hard links, empty directories and the three named pipes, and how the tree was made |
 | `floppies/2.1/amix_21_boot.adf` | the retail 2.1 boot floppy: the bootstrap and the installation kernel |
 | `floppies/2.1/amix_21_root.adf` | the retail 2.1 root floppy: the miniroot the installer runs from |
 | `floppies/2.1/amix_21_patch.adf` | the patch disk: a shell script and a compressed archive of patches that bring an installed 2.1 to 2.1p2a; it holds no kernel, and the 2.1c kernel is relinked on the machine when the patches are applied |
@@ -28,9 +30,11 @@ built against; see `toolchain/README.md`.
 
 - `amix-system.pin`: the commit of amix-system this tree builds against, as
   `<repository URL> <full commit hash>`.
-- `MANIFEST.sha256`: the sha256 and path of every regular file in
-  amix-system, in `sha256sum` format, sorted by path.
-- `SYMLINKS`: every symbolic link in amix-system, as `path -> target`.
+- `MANIFEST.sha256`: the sha256 and path of every regular file under
+  `etc`, `floppies`, `kernels` and `usr` in amix-system, in `sha256sum`
+  format, sorted by path (its `README.md` and `etc.md` are ours, not
+  Commodore's, and are not listed).
+- `SYMLINKS`: every symbolic link under `etc` and `usr`, as `path -> target`.
 - `fetch-amix-system DIR`: checks out amix-system at the pin into `DIR` (from
   the pin's URL, or from a local clone named by `AMIX_SYSTEM_REPO`) and
   checks it.
@@ -38,11 +42,13 @@ built against; see `toolchain/README.md`.
   `MANIFEST.sha256` and `SYMLINKS`; silent when it matches.
 
 The build container is built only from a checkout that passes the check.
-The manifest is regenerated, from the top of an amix-system checkout, the
-same way it was made:
+The manifest and the link list are regenerated, from the top of an
+amix-system checkout, the same way they were made:
 
 ```sh
-find floppies kernels usr -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+find etc floppies kernels usr -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+find etc usr -type l | LC_ALL=C sort | while read -r l; do
+	printf '%s -> %s\n' "$l" "$(readlink "$l")"; done
 ```
 
 When amix-system changes, the pin, `MANIFEST.sha256` and `SYMLINKS` change

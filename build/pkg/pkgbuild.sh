@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
@@ -213,6 +213,27 @@ echo
 echo "--- stage ---"
 rm -rf "$DEST"; mkdir -p "$DEST"
 stage
+# STOCK_ETC: stock defaults from amix-system's etc/, by path, each checked
+# against system/MANIFEST.sha256 (they never enter this repository)
+for p in $STOCK_ETC; do
+	want=$(awk -v f="${p#/}" 'substr($0, 67) == f { print substr($0, 1, 64) }' "$TOP/system/MANIFEST.sha256")
+	src="${AMIX_SYSTEM:-}/${p#/}"
+	[ -n "${AMIX_SYSTEM:-}" ] && [ -f "$src" ] && [ ! -L "$src" ] || {
+		echo "[FAIL] STOCK_ETC $p: no file $src; AMIX_SYSTEM names an amix-system" >&2
+		echo "       checkout (system/fetch-amix-system)" >&2
+		exit 1
+	}
+	got=$(sha256sum < "$src" | cut -c1-64)
+	[ "$got" = "$want" ] || {
+		echo "[FAIL] STOCK_ETC $p: $src is $got, system/MANIFEST.sha256 ${want:-<none>}" >&2
+		exit 1
+	}
+	[ ! -e "$DEST$p" ] && [ ! -L "$DEST$p" ] || {
+		echo "[FAIL] STOCK_ETC $p: the stage hook staged it too" >&2; exit 1; }
+	mkdir -p "$(dirname "$DEST$p")"
+	cp "$src" "$DEST$p"
+	echo "  STOCK ok  $p (amix-system, sha256 $want)"
+done
 # the prototype is the payload: every f/d/s line staged, nothing staged unlisted
 awk '$1 ~ /^[fdvesl]$/ && NF >= 3 { p = $3; sub(/=.*$/, "", p); print p }' "$HERE/prototype" | LC_ALL=C sort > "$BUILD/proto.list"
 ( cd "$DEST" && find . -mindepth 1 | sed 's|^\.||' ) | LC_ALL=C sort > "$BUILD/dest.list"

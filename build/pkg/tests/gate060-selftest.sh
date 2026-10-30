@@ -116,6 +116,18 @@ roll expand "$T/expand" || { cat "$T/roll-expand.log" >&2; fail "amix_pkgroll re
 [ -f "$T/out-expand.pkg" ] || fail "amix_pkgroll wrote no datastream for the safe payload"
 ok "amix_pkgroll rolls the expanded payload"
 
+# a data-only payload (stock /etc defaults): both gates pass it
+w="$T/roll-data"; r="$T/root-data"
+mkdir -p "$w" "$r/etc"
+echo "id:2:initdefault:" > "$r/etc/inittab"
+printf 'PKG=g060d\nNAME=gate test\nARCH=Amiga\nVERSION=1\nCATEGORY=test\nCLASSES=none\nPSTAMP=gate060\n' > "$w/pkginfo"
+printf 'i pkginfo\nf none /etc/inittab 0664 root sys\n' > "$w/prototype"
+( amix_pkgroll "$w" "$r" g060d 1 "$T/out-data.pkg" ) > "$T/roll-data.log" 2>&1 ||
+	{ cat "$T/roll-data.log" >&2; fail "amix_pkgroll refused a data-only payload"; }
+grep -q 'datastream out-data.pkg -- no m68k ELF or archive (data-only package)' "$T/roll-data.log" ||
+	fail "the datastream gate did not pass the data-only .pkg as data-only"
+ok "amix_pkgroll rolls a data-only payload; the datastream gate passes it as data-only"
+
 # --- 4. the VERSION/name agreement --------------------------------------------
 if ( amix_pkgroll "$T/roll-expand" "$T/root-expand" g060t 2 "$T/out-v2.pkg" ) >/dev/null 2>&1; then
 	fail "amix_pkgroll rolled a datastream whose name disagrees with pkginfo VERSION"
