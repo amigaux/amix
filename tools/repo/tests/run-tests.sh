@@ -760,13 +760,19 @@ check "no names.conf value contains the field separator" \
 # deployed box is concerned -- `apkg install <name>` stops resolving under the
 # old one -- so adding a second mapping must be a deliberate edit of this
 # test, never drift.  Today: amixbench -> amix-benchmark (published 09-16);
-# gtar -> tar (amix-packages batch-2, staged 2026-09-26).
+# gtar -> tar (amix-packages batch-2, staged 2026-09-26); diffutil ->
+# diffutils and coreutil -> coreutils (GCC 14 batch, mapped 2026-10-30).
 check "names.conf maps exactly the packages that need it" \
-    bash -c "diff '$WORK/names.keys' <(printf '%s\n' amixbench gtar | sort)"
+    bash -c "diff '$WORK/names.keys' <(printf '%s\n' amixbench gtar \
+                                       diffutil coreutil | sort)"
 check "amixbench maps to the published catalog name" \
     grep -q '^amixbench:[[:space:]]*amix-benchmark$' "$NAMES"
 check "gtar maps to the batch-2 catalog name" \
     grep -q '^gtar:[[:space:]]*tar$' "$NAMES"
+check "diffutil maps to the catalog name diffutils" \
+    grep -q '^diffutil:[[:space:]]*diffutils$' "$NAMES"
+check "coreutil maps to the catalog name coreutils" \
+    grep -q '^coreutil:[[:space:]]*coreutils$' "$NAMES"
 
 # drift guard: staged on every mint, or the authored file is one nobody reads
 check "build-packages.sh stages names.conf into the staging root" \
