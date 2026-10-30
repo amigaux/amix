@@ -1909,10 +1909,11 @@ else
     bad "T26: no host apkg for the round trip"
 fi
 
-# against amix-packages' stage-3 mint, when that sibling tree is there (read
-# only, copied): every #kpkg row, the four module rows among them, must be
+# against amix-packages' stage-3 mint, when that tree is there (read only,
+# copied; $AMIX_PACKAGES, default the standalone clone beside the amix
+# checkout): every #kpkg row, the four module rows among them, must be
 # the one its round trip wrote (build/kspace/repo/catalog)
-REF26="$HERE/../../../../amix-packages/build/kspace"
+REF26="${AMIX_PACKAGES:-$HERE/../../../../../../amix-packages}/build/kspace"
 if [ -f "$REF26/repo/catalog" ] && [ -d "$REF26/rt/repo/pkgs" ]; then
     cp -r "$REF26/rt/repo/pkgs" "$S26/ref"; mkdir -p "$S26/refout"
     python3 "$GEN" -o "$S26/refout" "$S26/ref" >/dev/null 2>&1
