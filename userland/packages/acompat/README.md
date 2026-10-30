@@ -121,3 +121,11 @@ file as it stood when `0.1-6` was built, kept with the version it ships in.
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode; `libacompat.a` member by member), pkginfo,
 pkgmap (mtimes aside) and catalog line.
+
+## Revision -7: the catalog group and the library's name
+
+`-7` takes the P-31 §10.9 catalog group `library` (it was `development`), and its description now
+starts with the library's name, libamixcompat. Built on the gcc14 container pin (amix 4af93f5).
+The version string the library embeds names the revision (`0.1-7-gcc14`), so `version.o` in
+`libacompat.a` and the banner in `acompat-test` change with it; every other member and file is
+`-6`'s.

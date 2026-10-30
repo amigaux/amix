@@ -3,10 +3,10 @@
 NAME=acompat
 PKG=acompat
 VERSION=0.1
-PKGREV=6   # -6: relinked on gcc14-cross-amix b51ff39 (runtime only)
+PKGREV=7   # -7: CATEGORY library, DESC names libamixcompat; version string 0.1-7
 SUMMARY="libacompat - missing-libc shim for Amix ports"
-DESC="Static library and headers for the libc surface Amix lacks: long-long snprintf/vsnprintf, setenv/unsetenv, strcasecmp/strncasecmp, mkstemp, usleep, gettimeofday. Link -lacompat."
-CATEGORY=development
+DESC="libamixcompat, the static library and headers for the libc surface Amix lacks: long-long snprintf/vsnprintf, setenv/unsetenv, strcasecmp/strncasecmp, mkstemp, usleep, gettimeofday. Link -lacompat."
+CATEGORY=library
 SET=extra
 LICENSE=BSD-2-Clause
 STYLE=hooks
