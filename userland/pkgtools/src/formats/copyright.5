@@ -1,0 +1,33 @@
+.\" copyright.5 - manual page for a package's copyright file.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH COPYRIGHT 5 "October 2026" "APKGENG 1.12.5" "Amix File Formats"
+.SH NAME
+copyright \- the text a package shows when it is installed
+.SH SYNOPSIS
+.B install/copyright
+.SH DESCRIPTION
+A package may carry a
+.B copyright
+file, named in its prototype(5) as
+.BR "i copyright" .
+It is plain text, any number of lines, and holds the package's
+copyright and licence notice.
+.PP
+.BR pkgadd (1M)
+prints it, unchanged, near the start of the installation, before any file
+is installed.  A package without the file prints its
+.B VENDOR
+parameter from
+.BR pkginfo (5)
+instead, when it has one.
+.BR apkg (1)
+passes pkgadd's output through, so the text appears there too.
+.SH EXAMPLE
+.nf
+Copyright (c) 2026 Example Author.
+Distributed under the MIT license; see /opt/amix/share/doc/example.
+.fi
+.SH SEE ALSO
+.BR pkginfo (5),
+.BR prototype (5),
+.BR pkgadd (1M)

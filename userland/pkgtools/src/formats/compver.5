@@ -1,0 +1,49 @@
+.\" compver.5 - manual page for a package's compver file.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH COMPVER 5 "October 2026" "APKGENG 1.12.5" "Amix File Formats"
+.SH NAME
+compver \- versions a package is compatible with
+.SH SYNOPSIS
+.B install/compver
+.SH DESCRIPTION
+A package may carry a
+.B compver
+file, named in its prototype(5) as
+.BR "i compver" .
+It lists earlier versions of the package that this version can stand in
+for, one per line.  Lines starting with
+.B #
+are comments.
+.PP
+.BR pkgadd (1M)
+keeps the file of the installed package in
+.BI /var/sadm/pkg/ pkginst /install/compver\fR.
+When another package's
+.BR depend (5)
+file asks for a version of this package, the request is met if the
+installed version equals it, or else if a line of the installed
+package's
+.B compver
+does.  Versions are compared as text: leading and trailing white space is
+ignored and a run of white space inside a version counts as one space;
+otherwise the characters must match exactly.  There are no ranges and no
+ordering.
+.SH EXAMPLE
+A package at
+.B VERSION=2.1
+that can replace its 2.0 releases:
+.PP
+.nf
+# versions this one is compatible with
+2.0
+2.0.1
+.fi
+.SH FILES
+.TP 40
+.BI /var/sadm/pkg/ pkginst /install/compver
+the installed package's copy
+.SH SEE ALSO
+.BR depend (5),
+.BR pkginfo (5),
+.BR prototype (5),
+.BR pkgadd (1M)

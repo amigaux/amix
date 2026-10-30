@@ -225,7 +225,7 @@ This directory is a mosaic; the map is short.
 
 | Path | License |
 |---|---|
-| `src/apkg/`, `src/conffile/`, `src/contents-fsck/`, `tools/`, and the Amix-specific files added under `heirloom/` (`compat/`, `sslstub/`, `mk.config.amix`, `build-*.sh`) | MIT — [`LICENSE`](LICENSE) |
+| `src/apkg/`, `src/conffile/`, `src/contents-fsck/`, `src/formats/`, `tools/`, and the Amix-specific files added under `heirloom/` (`compat/`, `sslstub/`, `mk.config.amix`, `build-*.sh`) | MIT — [`LICENSE`](LICENSE) |
 | `heirloom/` (vendored engine) | CDDL 1.0, OpenSolaris SVR4 lineage with AT&T notices intact and portions © 2007 Gunnar Ritter, plus the Caldera license for the ancient UNIX parts — [`heirloom/LICENSE/`](heirloom/LICENSE/) |
 | `heirloom/compat/{fnmatch.c,fnmatch.h,charclass.h}` | BSD-3 (VMware, Inc.; the Regents of the University of California), ISC and public domain (Todd C. Miller); OpenBSD via openssh-portable |
 | `heirloom/compat/snprintf.c` | Powell/Weiss permissive |

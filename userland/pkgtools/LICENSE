@@ -30,8 +30,8 @@ NOT ALL OF THIS DIRECTORY IS UNDER THE ABOVE LICENSE
 The MIT license above covers the code written for this project, in
 this directory (amix userland/pkgtools, formerly the repository
 amix-packagemanager): src/apkg/, src/conffile/, src/contents-fsck/,
-tools/, and the Amix-specific files added under heirloom/ (compat/,
-sslstub/, mk.config.amix and the build-*.sh scripts).
+src/formats/, tools/, and the Amix-specific files added under heirloom/
+(compat/, sslstub/, mk.config.amix and the build-*.sh scripts).
 
 Other terms apply to material this project vendored or derived:
 

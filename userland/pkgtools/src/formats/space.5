@@ -1,0 +1,53 @@
+.\" space.5 - manual page for a package's space file.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH SPACE 5 "October 2026" "APKGENG 1.12.5" "Amix File Formats"
+.SH NAME
+space \- disk space a package needs beyond its own files
+.SH SYNOPSIS
+.B install/space
+.SH DESCRIPTION
+.BR pkgadd (1M)
+checks before installing that each file system has room for the files
+the package's pkgmap(5) lists.  A package that will need more \- files
+its scripts create, a database it grows into \- says so in a
+.B space
+file, named in its prototype(5) as
+.BR "i space" .
+.PP
+Each line is
+.PP
+.RS
+.I path blocks inodes
+.RE
+.PP
+separated by white space.  Lines that are empty or start with
+.B #
+are ignored.
+.TP 8
+.I path
+a directory or file; the amount is added to the file system that holds
+it.  A relative path is taken under the package's
+.BR BASEDIR .
+.TP
+.I blocks
+512-byte blocks
+.TP
+.I inodes
+files to be created
+.PP
+The check runs unless the admin file says
+.B space=nocheck
+.RB ( admin (5));
+with
+.B space=quit
+(apkg's default) a package that does not fit is not installed.
+.SH EXAMPLE
+.nf
+# the cache the daemon builds at first start
+/var/example/cache   20480   200
+.fi
+.SH SEE ALSO
+.BR admin (5),
+.BR pkgmap (5),
+.BR prototype (5),
+.BR pkgadd (1M)
