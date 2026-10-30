@@ -36,6 +36,7 @@ so each fact about a package is written in one place.
 | `VERSION`, `PKGREV` | the upstream version and the package revision; the package's version is `VERSION-PKGREV` |
 | `SUMMARY` | one line; pkginfo `NAME` and the catalog description |
 | `DESC` | one line; pkginfo `DESC` |
+| `APKG_DESC=""` | one line; when set, pkginfo `APKG_DESC` (after `PSTAMP`), which the catalog description takes in place of `SUMMARY` |
 | `CATEGORY` | one of the catalog groups: system, network, utility, archive, library, shell, language, text, editor, documentation, development, multimedia, x11, games, source |
 | `SET` | the sets the package belongs to, space-separated: minimal, standard, full, developer, x11, extra |
 | `LICENSE` | an SPDX identifier |

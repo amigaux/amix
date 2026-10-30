@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG=
+URL= SHA256= SRCPKG= APKG_DESC=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
@@ -204,11 +204,20 @@ stage
 # the prototype is the payload: every f/d/s line staged, nothing staged unlisted
 awk '$1 ~ /^[fdvesl]$/ && NF >= 3 { p = $3; sub(/=.*$/, "", p); print p }' "$HERE/prototype" | LC_ALL=C sort > "$BUILD/proto.list"
 ( cd "$DEST" && find . -mindepth 1 | sed 's|^\.||' ) | LC_ALL=C sort > "$BUILD/dest.list"
-if ! LC_ALL=C comm -3 "$BUILD/proto.list" "$BUILD/dest.list" | grep . >/dev/null; then
-	echo "  PROTO ok  $(grep -c . "$BUILD/proto.list") paths, prototype == staged tree"
+# a directory staged only as a parent of listed paths (/usr and /usr/bin under
+# PREFIX=/usr/local) is the system's, not the package's: not compared
+awk '{ p = $0; while (sub(/\/[^\/]*$/, "", p) && p != "") print p }' "$BUILD/proto.list" |
+	LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/proto.list" | LC_ALL=C comm -12 - "$BUILD/dest.list" |
+	while read -r p; do
+		if [ -d "$DEST$p" ] && [ ! -L "$DEST$p" ]; then echo "$p"; fi
+	done > "$BUILD/dest.parents"
+LC_ALL=C comm -23 "$BUILD/dest.list" "$BUILD/dest.parents" > "$BUILD/dest.check"
+if ! LC_ALL=C comm -3 "$BUILD/proto.list" "$BUILD/dest.check" | grep . >/dev/null; then
+	echo "  PROTO ok  $(grep -c . "$BUILD/proto.list") paths, prototype == staged tree$(
+		[ ! -s "$BUILD/dest.parents" ] || echo " (and parent directories:" $(cat "$BUILD/dest.parents")")")"
 else
 	echo "[FAIL] prototype and staged tree differ (left: prototype only, right: staged only):" >&2
-	LC_ALL=C comm -3 "$BUILD/proto.list" "$BUILD/dest.list" >&2
+	LC_ALL=C comm -3 "$BUILD/proto.list" "$BUILD/dest.check" >&2
 	exit 1
 fi
 for z in $( cd "$DEST" && find . -type f -size 0 | sed 's|^\.||' ); do

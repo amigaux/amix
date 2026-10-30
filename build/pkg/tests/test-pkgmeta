@@ -140,6 +140,8 @@ try:
             ("nosum", {"SUMMARY": '""'}, "SUMMARY is not set"),
             ("pipe", {"SUMMARY": '"a|b"'}, "SUMMARY holds '|'"),
             ("twoline", {"DESC": '"one\ntwo"'}, "DESC must be one line"),
+            ("apipe", {"APKG_DESC": '"a|b"'}, "APKG_DESC holds '|'"),
+            ("atwoline", {"APKG_DESC": '"one\ntwo"'}, "APKG_DESC must be one line"),
             ("badrev", {"PKGREV": "2a"}, "PKGREV=2a is not a number"),
             ("baddep", {"DEPENDS": '"zlib b@d"'}, "'b@d' is not a package name")):
         refused("check refuses %s" % name, ("check", recipe(root, name, **over)),
@@ -155,6 +157,21 @@ try:
                        "--md5", "0" * 32, "--size", "1")
     check("DEPENDS reaches the catalog line as a comma list",
           rc == 0 and out.split("|")[6] == "zlib,acompat", err or out)
+
+    # --- APKG_DESC --------------------------------------------------------------------
+    plain = recipe(os.path.join(tmp, "desc0"), "desc")
+    rc, base, err = run("pkginfo", plain)
+    withd = recipe(os.path.join(tmp, "desc1"), "desc",
+                   APKG_DESC='"the catalog\'s own description"')
+    rc, out, err = run("pkginfo", withd)
+    want = base.replace("\nDESC=", "\nAPKG_DESC=the catalog's own description\nDESC=")
+    check("APKG_DESC is written right after PSTAMP",
+          rc == 0 and want != base and out == want
+          and out.split("\n")[7].startswith("PSTAMP="), err or out)
+    rc, out, err = run("catalog", withd, "--md5", "0" * 32, "--size", "1")
+    check("APKG_DESC is the catalog description",
+          rc == 0 and out.rstrip("\n").split("|")[8] == "the catalog's own description",
+          err or out)
 
     # --- sources in the tree ---------------------------------------------------------
     tree = os.path.join(tmp, "tree")

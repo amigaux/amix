@@ -193,6 +193,27 @@ build() {
 	echo "foo.c:1: warning: implicit declaration of function 'bar'" >> "$BUILD/make.log"
 }
 """)
+        # PREFIX=/usr/local with a link in /usr/bin: /usr, /usr/bin, /usr/local
+        # and /usr/local/bin are staged, and listed by no prototype line
+        usr = package(pkgs, "usrloc", "hooks", "PREFIX=/usr/local\n",
+                      build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+        write(os.path.join(usr, "prototype"), """\
+i pkginfo
+f none /usr/local/bin/out.txt 0644 root sys
+s none /usr/bin/out.txt=/usr/local/bin/out.txt
+""")
+        write(os.path.join(usr, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/usr/local/bin" "$DEST/usr/bin"
+	cp out.txt "$DEST/usr/local/bin/out.txt"
+	ln -s /usr/local/bin/out.txt "$DEST/usr/bin/out.txt"
+	case ${STUB_EXTRA:-} in
+	file) echo x > "$DEST/usr/bin/stray" ;;
+	link) ln -s out.txt "$DEST/usr/bin/stray" ;;
+	dir) mkdir "$DEST/usr/share" ;;
+	esac
+}
+""")
 
         base = {k: v for k, v in os.environ.items()
                 if not k.startswith(("AMIX_", "GIT_")) and k not in
@@ -302,6 +323,22 @@ build() {
         rc, out = build("implicit")
         check("refused: the strict gate reads the hook's make.log",
               rc != 0 and "implicit declaration" in out, out)
+
+        # --- the prototype check ----------------------------------------------------
+        rc, out = build("conf")
+        check("PROTO: a package that lists its parents names none extra",
+              rc == 0 and "prototype == staged tree\n" in out, out)
+        rc, out = build("usrloc")
+        check("PROTO: unlisted parent directories of listed paths are not compared",
+              rc == 0 and "(and parent directories: /usr /usr/bin /usr/local "
+              "/usr/local/bin)" in out, out)
+        for extra, what in (("file", "a file"), ("link", "a link"),
+                            ("dir", "a directory that is no listed path's parent")):
+            rc, out = build("usrloc", STUB_EXTRA=extra)
+            check("PROTO: refused: %s staged only" % what,
+                  rc == 1 and "staged only" in out and
+                  ("\t/usr/share\n" if extra == "dir" else "\t/usr/bin/stray\n") in out
+                  and "\t/usr/bin\n" not in out, out)
 
         # --- the harness named by AMIX_PKG_COMMON (amix-packages) ----------------------
         rc, out = build("conf", AMIX_PKG_COMMON=old)
