@@ -34,7 +34,7 @@ licence. It is generated from each package's `package.sh`, as are the catalog li
 | [`diffutils`](diffutils/) (PKG `diffutil`) | `/opt/amix` | `diff -u`, `diff3`, `sdiff`, `cmp`; stock `diff` has no `-u` |
 | [`coreutils`](coreutils/) (PKG `coreutil`) | `/opt/amix` | GNU coreutils, including `md5sum` and `sha1sum` |
 | [`rsync`](rsync/) | `/opt/amix` | rsync, protocol 31, over rsh/ssh or its own daemon |
-| [`amix-benchmark`](amix-benchmark/) (PKG `amixbench`) | `/opt/amix` | The `amix-bench` CPU/IO benchmark suite, period toolchain |
+| [`amix-benchmark`](amix-benchmark/) (PKG `amixbench`) | `/opt/amix` | The `amix-bench` CPU/IO benchmark suite, period toolchain (published 1.3; built outside amix, sources here) |
 | [`amix-benchmark-gcc14`](amix-benchmark-gcc14/) (PKG `amixbch14`) | `/opt/amix` | The same suite built with GCC 14 |
 
 **Published.** Nine packages are in the family catalog at `http://pkg.amigaux.org/` under

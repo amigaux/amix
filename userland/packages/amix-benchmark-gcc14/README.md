@@ -32,4 +32,4 @@ and keeps 14 bytes of a name. Inside the kit the binaries keep their names, beca
 `runbench.sh` finds them by those names beside itself and stays byte-identical to the period
 package's driver; no file is shared between the two packages.
 
-`whet` is not built, for the licence reason in [`../amix-benchmark/pin.sh`](../amix-benchmark/pin.sh).
+`whet` is not built, for the licence reason in [`../amix-benchmark/src/README.md`](../amix-benchmark/src/README.md).
