@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — apt and cache-restore retries; old images pruned (b352285, de7b1e0)
+
+The image build retries apt against snapshot.ubuntu.com (each file 5 times; an update that skipped an index now
+fails and is tried 4 times, 2 minutes apart). CI's kit job tries a failed cache restore once more, and a push that
+saves a new image deletes the cached images of every other key; the tests job's apt retries too.
+
 ## 2026-10-30 — gcc14 pinned to the build container's build (5bd9c23)
 
 gcc14-cross-amix b51ff39 is pinned to the build container's reproducible build (identity gcc14-cross-amix.tree

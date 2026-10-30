@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — the roll makes CONFFILES lines e conffile with their scripts (936af77)
+
+pkgroll's amix_conffiles (P-36 W3, part 2) makes each CONFFILES line of the work prototype `e conffile` and adds
+userland/pkgtools' i.conffile and r.conffile beside it as `i` lines, with no host path in the prototype; a path not
+rewritten exactly once refuses the roll. Without CONFFILES the bytes are unchanged. New host test test-conffile
+14/14; a toy package rolled at -1 and -2 keeps an edited file across pkgadd -R and writes .new.
+
 ## 2026-10-30 — CONFFILES, run-level link bands and man-page warnings (318c390)
 
 package.sh may list CONFFILES (P-36 W3, part 1). pkgmeta check refuses a CONFFILES path that is not an f or e line of
