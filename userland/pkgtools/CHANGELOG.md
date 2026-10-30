@@ -1,3 +1,10 @@
+## 2026-10-30 — docroot, engine notices, shipped version (53911ae, 3f1d1b5, ba1fa53)
+
+NOTES no longer names the package host's docroot path. APKGENG's prototype ships the fnmatch (BSD-3/ISC) and snprintf
+notices as /usr/apkg/doc/FNMATCH.LIC and SNPRINTF.LIC (heirloom/LICENSE/); not minted, so the next engine mint (a new
+version, not 1.12.4) carries them. README names APKG 0.2.3 as the shipped version. Suites 399/0, 497/0, 38/0, 19/0,
+36/0, kbootset 12/0.
+
 ## 2026-10-30 — working in its amix home (673a881 … 3f2c2b6)
 
 The sibling-path defaults fit userland/pkgtools: the cross builds source $GCA/env.sh (gcc-cross-amix at
