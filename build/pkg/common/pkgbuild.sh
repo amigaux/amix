@@ -4,9 +4,10 @@
 #
 #     sh recipes/common/pkgbuild.sh recipes/<name>
 #
-# Two build styles (package.sh STYLE): `configure' (./configure --host, then
-# make) and `make' (a plain Makefile: make with CC/AR/RANLIB/CFLAGS given on
-# the command line, no configure step).
+# Three build styles (package.sh STYLE): `configure' (./configure --host,
+# then make), `make' (a plain Makefile: make with CC/AR/RANLIB/CFLAGS given on
+# the command line, no configure step) and `hooks' (the recipe's own build
+# hook does both; the strict gates still read its $BUILD/make.log).
 #
 # INTERIM.  This stands in for amix's build/pkg framework (styles/*.sh
 # + env/ + roll + pkgmeta) until the packages move into amix
@@ -24,6 +25,9 @@
 #                     post_configure     assert config.h answers (cwd: tree)
 #                                        (the three run in STYLE=configure only)
 #                     make_args          echo extra make arguments/targets
+#                     build              STYLE=hooks only: configure and
+#                                        build (cwd: tree); write every real
+#                                        compile line to $BUILD/make.log
 #                     post_build         assert the build (cwd: tree)
 #                     stage              copy the payload into $DEST (cwd:
 #                                        tree); binaries unstripped, the
@@ -70,8 +74,8 @@ for k in NAME PKG VERSION PKGREV SUMMARY DESC CATEGORY SET LICENSE URL SHA256; d
 	eval "v=\${$k-}"
 	[ -n "$v" ] || { echo "[FAIL] package.sh: $k is not set" >&2; exit 1; }
 done
-case "$STYLE" in configure|make) ;;
-*) echo "[FAIL] STYLE=$STYLE -- known: configure, make" >&2; exit 1 ;;
+case "$STYLE" in configure|make|hooks) ;;
+*) echo "[FAIL] STYLE=$STYLE -- known: configure, make, hooks" >&2; exit 1 ;;
 esac
 [ "$NAME" = "$(basename "$HERE")" ] || { echo "[FAIL] NAME=$NAME is not the directory name" >&2; exit 1; }
 [ "${#PKG}" -le 9 ] || { echo "[FAIL] PKG=$PKG is over 9 characters" >&2; exit 1; }
@@ -101,6 +105,7 @@ make_args() { :; }
 pre_configure() { :; }
 post_configure() { :; }
 post_build() { :; }
+build() { echo "[FAIL] STYLE=hooks and build.sh defines no build hook" >&2; exit 1; }
 stage() { echo "[FAIL] build.sh defines no stage hook" >&2; exit 1; }
 [ -f "$HERE/build.sh" ] && . "$HERE/build.sh"
 
@@ -164,6 +169,10 @@ fi
 
 # --- 4. build (strict) -------------------------------------------------------------------
 echo "--- make ---"
+if [ "$STYLE" = hooks ]; then
+	: > "$BUILD/make.log"
+	build
+else
 if [ "$STYLE" = make ]; then
 	set -- CC="$CC" AR="$AR" RANLIB="$RANLIB"
 else
@@ -174,6 +183,7 @@ make "$@" CFLAGS="$AMIX_CFLAGS $EXTRA_CFLAGS $MAKE_CFLAGS" $(make_args) > "$BUIL
 	tail -25 "$BUILD/make.log" >&2
 	exit 1
 }
+fi
 if grep -E 'implicit declaration|pointer from integer|integer from pointer' "$BUILD/make.log" >/dev/null; then
 	echo "[FAIL] implicit declarations or pointer/integer conversions in the build:" >&2
 	grep -E 'implicit declaration|pointer from integer|integer from pointer' "$BUILD/make.log" | sort -u >&2
