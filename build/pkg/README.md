@@ -47,6 +47,7 @@ so each fact about a package is written in one place.
 | `PREFIX=/opt/amix` | the install prefix |
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
+| `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
 | `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 

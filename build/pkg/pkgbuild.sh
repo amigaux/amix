@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS=
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then

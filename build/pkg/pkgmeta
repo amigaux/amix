@@ -51,7 +51,8 @@ SOURCE = ("URL", "SHA256")
 DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
-            ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""))
+            ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
+            ("ESSENTIAL", "no"))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -351,6 +352,8 @@ def problems(recipe, m):
             out.append("%s holds '|', the catalog field separator" % k)
         if m[k] != m[k].strip():
             out.append("%s has leading or trailing blanks" % k)
+    if m["ESSENTIAL"] not in ("yes", "no"):
+        out.append("ESSENTIAL=%s -- yes or no" % m["ESSENTIAL"])
     if m["SUMMARY"][:1] in ("'", '"') and m["SUMMARY"][-1:] == m["SUMMARY"][:1]:
         out.append("SUMMARY is quoted twice")
     known = styles()
@@ -414,11 +417,12 @@ def pkgversion(m):
 def pkginfo(m):
     v = pkgversion(m)
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
-            "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%sDESC=%s\n"
+            "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%s%sDESC=%s\n"
             % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"],
                "none conffile" if m["CONFFILES"] else "none", VENDOR,
                VENDOR, m["PKG"], v, m["TOOLCHAIN"],
                "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
+               "APKG_ESSENTIAL=yes\n" if m["ESSENTIAL"] == "yes" else "",
                m["DESC"]))
 
 
