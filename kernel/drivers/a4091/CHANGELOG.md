@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-30 — README links k30's patch manifest; stock files from amix-system (38e17df)
+
 ## 2026-10-30 — works in its amix home (2756fa2, a819ab7, 79b70ee, d5a6e38)
 
 README points at kernel/k30, kernel/port/port.pin and toolchain/gcc-cross-amix.pin instead of jusii/* sibling clones;
