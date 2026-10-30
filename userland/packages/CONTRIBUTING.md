@@ -19,8 +19,11 @@ anything. What it takes to build at all (the sibling repositories and host tools
 - **The shared harness** is in `recipes/common/`: `amix-env.sh` (toolchain and sibling discovery),
   `fetch.sh`, `gates.sh`, `pkgroll.sh`, `amix-cpp`, `amix-pwgr.c`.
 - **One registry YAML per candidate package** in `registry/`. The schema is in
-  [`registry/README.md`](registry/README.md). After changing anything under `registry/`,
-  regenerate the index with `sh tools/gen-index.sh > registry/INDEX.md`.
+  [`registry/README.md`](registry/README.md).
+- **After changing any `package.sh`**, regenerate the index and the catalog fragments with
+  `build/pkg/pkgmeta index userland/packages` and
+  `build/pkg/pkgmeta fragments userland/packages -o userland/packages/conf`
+  (from the top of amix); CI's `make -C build check-packages` fails while they are stale.
 - **Everything a build produces** goes under the gitignored `build/`: work trees, fetched source
   tarballs, `.pkg` datastreams, staging roots and logs. Git tracks recipes, tools and docs only.
 
