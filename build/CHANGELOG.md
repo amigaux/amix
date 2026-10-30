@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — the man-page warning reads /opt/amix/man/<sect>/<name> (cdfa4d5)
+
+pkgmeta's man-page warning knows the packages' page layout (userland/packages/docs/man-pages.md): a file under man/
+whose parent is a bare section number is a page named by its whole basename, aliases included; the classic
+man<sect>/<name>.<sect> form still works. check-packages: 0 warnings over 13 recipes (was 13). test-pkgmeta 96/96.
+
 ## 2026-10-30 — the roll makes CONFFILES lines e conffile with their scripts (936af77)
 
 pkgroll's amix_conffiles (P-36 W3, part 2) makes each CONFFILES line of the work prototype `e conffile` and adds
