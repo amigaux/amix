@@ -1,4 +1,4 @@
-# build.sh -- bzip2 hooks for recipes/common/pkgbuild.sh (interim).
+# build.sh -- bzip2 hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
 # The library and the two programs; never `all', whose `test' target runs
@@ -19,7 +19,7 @@ stage() {
 	mkdir -p "$b" "$m" "$d" "$DEST$PREFIX/lib" "$DEST$PREFIX/include"
 	cp bzip2 bzip2recover bzgrep bzmore bzdiff "$b/"
 	# the prototype makes these hard links (l): stock pkgadd mangles a
-	# relative symlink target (PORTING.md 7)
+	# relative symlink target (docs/porting.md 7)
 	ln "$b/bzip2" "$b/bunzip2"; ln "$b/bzip2" "$b/bzcat"
 	ln "$b/bzgrep" "$b/bzegrep"; ln "$b/bzgrep" "$b/bzfgrep"
 	ln "$b/bzmore" "$b/bzless"; ln "$b/bzdiff" "$b/bzcmp"

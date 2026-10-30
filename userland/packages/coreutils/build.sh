@@ -1,4 +1,4 @@
-# build.sh -- coreutils hooks for recipes/common/pkgbuild.sh (interim).
+# build.sh -- coreutils hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
 # select, getrlimit (sort), fchmod: in libc, declared by no AMIX header;
@@ -25,9 +25,9 @@ configure_args() {
 
 pre_configure() {
 	# D3: every program defines getpwnam/getpwuid/getgrnam/getgrgid itself
-	$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
+	$CC $AMIX_CFLAGS -c "$COMMON/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
 	# quirk 90: dd's seek= truncation through an ftruncate that cuts aligned
-	$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-ftruncate.c" -o "$BUILD/amix-ftruncate.o"
+	$CC $AMIX_CFLAGS -c "$COMMON/amix-ftruncate.c" -o "$BUILD/amix-ftruncate.o"
 	export LIBS="$BUILD/amix-pwgr.o $BUILD/amix-ftruncate.o"
 	export ac_cv_header_stdint_h=no jm_ac_cv_header_stdint_h=no
 	export ac_cv_func_vfork=no
@@ -55,7 +55,7 @@ post_configure() {
 stage() {
 	make install DESTDIR="$DEST" > "$BUILD/install.log" 2>&1
 	# uptime: the load average takes the nlist/kmem route that reads garbage
-	# on AMIX (PORTING.md 3.3); su/hostid are not built; no info reader;
+	# on AMIX (docs/porting.md 3.3); su/hostid are not built; no info reader;
 	# charset.alias is an empty table for sysv4
 	rm -f "$DEST$PREFIX/bin/uptime" "$DEST$PREFIX/man/man1/uptime.1" \
 	      "$DEST$PREFIX/man/man1/su.1" "$DEST$PREFIX/man/man1/hostid.1"

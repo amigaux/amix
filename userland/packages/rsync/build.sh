@@ -1,4 +1,4 @@
-# build.sh -- rsync hooks for recipes/common/pkgbuild.sh (interim).
+# build.sh -- rsync hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
 # socket calls, select, syslog, gethostname, fchmod, getrlimit: in libsocket/
@@ -17,7 +17,7 @@ configure_args() {
 
 pre_configure() {
 	# D3: the binary defines getpwnam/getpwuid/getgrnam/getgrgid itself
-	$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
+	$CC $AMIX_CFLAGS -c "$COMMON/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
 	export LIBS="$BUILD/amix-pwgr.o"
 	export ac_cv_func_vfork=no
 }

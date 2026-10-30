@@ -15,7 +15,7 @@
 # is a SEPARATE proof from the recipe's bench smoke (stock pkgadd of a local
 # .pkg): it exercises the catalog lookup, the HTTP fetch, the md5 check, and
 # apkg's own pkgadd/pkgrm wrappers.  Written for the 1992 pre-POSIX Bourne
-# shell (PORTING.md 3.6): backticks, `expr`, no `grep -q`, no printf(1).
+# shell (docs/porting.md 3.6): backticks, `expr`, no `grep -q`, no printf(1).
 # Prints one verdict line, `E2E <name> PASS|FAIL <reason>`, last.
 
 name=$1; pkginst=$2; probe=$3; sdir=$4

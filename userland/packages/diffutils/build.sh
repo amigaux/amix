@@ -1,4 +1,4 @@
-# build.sh -- diffutils hooks for recipes/common/pkgbuild.sh (interim).
+# build.sh -- diffutils hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
 configure_args() {

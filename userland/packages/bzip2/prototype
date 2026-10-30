@@ -4,7 +4,7 @@
 # AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
 # generated from package.sh.  Stock AMIX has no bzip2 at all.  The alias
 # names are HARD links (l): stock pkgadd prepends the root to a relative
-# symlink target (PORTING.md 7).  No install scripts (D9).  Every basename
+# symlink target (docs/porting.md 7).  No install scripts (D9).  Every basename
 # <= 14 bytes.
 #
 i pkginfo

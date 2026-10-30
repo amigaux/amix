@@ -7,7 +7,7 @@
 # Runs in a scratch directory it creates under the current one; fixtures are
 # made here with awk, so nothing but this file is pushed.  Every check reads
 # OUTPUT or FILES, not only an exit status.  Written for the 1992 pre-POSIX
-# Bourne shell (PORTING.md 3.6): backticks, expr, no grep -q, no $(...).
+# Bourne shell (docs/porting.md 3.6): backticks, expr, no grep -q, no $(...).
 # Result lines start with "RES "; the last one is "RES smoke PASS" or
 # "RES smoke FAIL <n>".
 
@@ -43,7 +43,7 @@ $B/diff a same > o1; rc=$?
 [ $rc -eq 0 ] && [ ! -s o1 ] && ok "identical files: rc 0, no output" || bad "identical files rc=$rc"
 
 # 2. unified diff, applied with patch, byte-compared  (diff and patch verify
-#    each other; registry/diffutils.yaml smoke)
+#    each other; the old registry entry's smoke list)
 $B/diff -u a b > u.diff; rc=$?
 [ $rc -eq 1 ] && ok "diff -u differing files: rc 1" || bad "diff -u rc=$rc"
 has u.diff '^--- a' && has u.diff '^+++ b' && has u.diff '^@@ -97,7 +97,7 @@' \

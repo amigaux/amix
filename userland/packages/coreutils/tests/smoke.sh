@@ -24,7 +24,7 @@ echo "== $n files in $B"
 rm -rf csmoke; mkdir csmoke; cd csmoke || exit 1
 $B/ls --version | sed -n 1p
 
-# --- 1. content checksums: the box had none (registry/coreutils.yaml) --------
+# --- 1. content checksums: the box had none (the old registry entry) --------
 awk 'BEGIN { for (i = 1; i <= 20000; i++) printf "%05d line of text %d\n", i, i * 13 }' > big
 eq "fixture size" "`$B/wc -c < big | tr -d ' '`" 511456
 eq "md5sum of 511456 bytes" "`$B/md5sum big`" "3a7bd6cba8abaa05eca271c15ac87af4  big"
