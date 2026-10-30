@@ -3,6 +3,11 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — no bench addresses in tracked files (43408a8)
+
+Docs and tests use TEST-NET-1 (192.0.2.1); the smoke harnesses take the guest and bridge from rig-slot.sh env, with no
+literal default. privacy-check --tree HEAD: 0 hits. perl smoke 53/53 and rsync pkg-smoke re-run PASS.
+
 ## 2026-10-30 — perl 5.8.9 recipe, roll held on the s5/UFS decision (5f1ac42, d07b517, eeac483, 931b691)
 
 Configure measured on the box, GCC 14 cross build with a host perl, stock libm.a (owner) with matherr as shipped.
