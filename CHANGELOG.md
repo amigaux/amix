@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — the media on kern30m -56; this workspace's amiberry (50797a7..3ac92fb)
+
+The media carry kern30m k30.1.3.261030-56 (kzero, ufs tail zeroing, the sendsig FPU gate; catalog fe2154da): CD rd1u
+c1708530, netinstall ni14 bd4bdec5 with raw images ni14-k46 4003cbb1 / ni14-k30 ca311b43, floppy pairs fp-rd1u.
+install-matrix runs this workspace's amiberry (exe checked) and holds rig-slot 0; build-l11-inputs takes the dlm
+from amix; build-core-tree.sh makes the stock core tree in build/core. Cells l11-rd, l11-rd-fd, l11-ni and l11-nr
+PASS 10/10 on k30 (-56) and k46 (-61); rd1t/ni13 and the earlier P-35 cell evidence are void.
+
 ## 2026-10-30 — ufs is the only target filesystem (P-35) (37fbe0e..40a09e7)
 
 install.sh refuses s5 and INSTALL_TARGET_PREBUILT; the interview no longer asks the root type; the upgrade reads the
