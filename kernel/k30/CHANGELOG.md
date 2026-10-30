@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — kzero fault catch (grimoire quirk 90), on by default (8b670ad)
+
+src/kzero_nofault.s, the port's routine (k46-module b65b43d, same object bytes), joins the cross build's final link with
+the stock kzero (= bzero) weakened in the work copy; a hard check wants one strong kzero away from bzero, kzr_magic and
+the expected callers. --no-kzero reproduces all seven -22 sums. Test kernel 68030-261030-50 (not a cut) survives the
+quirk-90 shrinks and the coreutils dd/cp and gtar --delete cases in emulation with data intact.
+
 ## 2026-10-30 — the 68030 cross cut; drivers from kernel/drivers (bc6cc64 … 18d2dce)
 
 The host cross build of the 68030 kernel moved in as new commits: build-cross-kernel.sh, kernel-patches.conf and
