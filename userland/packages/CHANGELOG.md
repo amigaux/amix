@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — kernel-k30-m k30.1.3.261030-56 (611ddc5, 547e801)
+
+The k30 station's cut 68030-261030-56 from amix 4fc583f with kzero (quirk 90), ufs tail zeroing (quirk 91; the ufs
+module from the cut's qz/ufs.exp) and the sendsig FPU gate (quirk 74). kabi k30.1.3 unchanged. Both fs modules rebuild
+byte-equal. 1883136 bytes, md5 aa9714d9. dlm-src.sh builds kits from an amix commit. Not published.
+
 ## 2026-10-30 — no bench addresses in tracked files (43408a8)
 
 Docs and tests use TEST-NET-1 (192.0.2.1); the smoke harnesses take the guest and bridge from rig-slot.sh env, with no
