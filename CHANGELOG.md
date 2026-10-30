@@ -1,3 +1,9 @@
+## 2026-10-30 — archive category; diffutils, coreutils, bzip2 in the catalog conf (67f7cf6, f272fbe)
+
+cats.conf declares archive (thirteen groups); gzip and tar move from utility to archive, catalog field only, no .pkg
+byte moves. diffutils and coreutils file under utility, bzip2 under archive; all three join the extra set (9 → 12).
+names.conf maps the PKG instances diffutil and coreutil to their catalog names. Repo tools 377/0. Live at the next publish.
+
 ## 2026-10-29 — Tests find the dlm kit in amix; repo-tools suite runs with bash (ada0a0b, 5831103)
 
 kbootset-consumer.sh defaults to amix's kernel/dlm; a missing kit is a loud SKIP (exit 77), no longer a silent pass.
