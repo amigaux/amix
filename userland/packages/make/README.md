@@ -1,8 +1,7 @@
 # make — the recipe
 
 **Package `make` 3.81** — GNU make. GPL-2.0-or-later (the bundled `glob/` is LGPL-2.0-or-later;
-both texts ship). Pin:
-[`pin.sh`](pin.sh).
+both texts ship). Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/make
 
@@ -54,3 +53,18 @@ carries on. That is the right outcome: the alternative is `nlist()` + `/dev/kmem
 
 `/opt/amix/bin/make`, `/opt/amix/man/man1/make.1`, and `COPYING`, `COPYING.LIB`, `NEWS`, `README`
 under `/opt/amix/doc/make/`. No info manual (no reader on the box). Pure file payload (D9).
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`, revision `-7`, on gcc14-cross-amix
+b51ff39); the period build stopped at `-2`. GCC 14 links the SVR4 way (`usr/ccs/lib/libc.so` is
+`libc.so.1` plus static members), so four probes find what the period link never saw and are
+pinned to the period answers: `elf_begin` in `-lelf` (it would make `AC_FUNC_GETLOADAVG` take the
+`nlist()`/kmem load average with a setgid-kmem install; the LOADAVG check refuses that), `vfork`
+(make keeps the bench-proven `fork`), `stdint.h` (`make.h` then uses `uintmax_t` without including
+it) and `lstat` (`MAKE_SYMLINKS` needs `lstat`, `readlink` and `S_IFLNK`, which the
+`-D_POSIX_SOURCE` view hides).
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
+the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
