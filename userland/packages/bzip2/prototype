@@ -31,15 +31,20 @@ d none /opt/amix/include 0755 root sys
 f none /opt/amix/include/bzlib.h 0644 root bin
 #
 d none /opt/amix/man 0755 root sys
-d none /opt/amix/man/man1 0755 root sys
-f none /opt/amix/man/man1/bzip2.1 0644 root bin
-f none /opt/amix/man/man1/bzgrep.1 0644 root bin
-f none /opt/amix/man/man1/bzmore.1 0644 root bin
-f none /opt/amix/man/man1/bzdiff.1 0644 root bin
-f none /opt/amix/man/man1/bzegrep.1 0644 root bin
-f none /opt/amix/man/man1/bzfgrep.1 0644 root bin
-f none /opt/amix/man/man1/bzless.1 0644 root bin
-f none /opt/amix/man/man1/bzcmp.1 0644 root bin
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/bunzip2 0644 root bin
+f none /opt/amix/man/1/bzcat 0644 root bin
+f none /opt/amix/man/1/bzcmp 0644 root bin
+f none /opt/amix/man/1/bzdiff 0644 root bin
+f none /opt/amix/man/1/bzegrep 0644 root bin
+f none /opt/amix/man/1/bzfgrep 0644 root bin
+f none /opt/amix/man/1/bzgrep 0644 root bin
+f none /opt/amix/man/1/bzip2 0644 root bin
+f none /opt/amix/man/1/bzip2recover 0644 root bin
+f none /opt/amix/man/1/bzless 0644 root bin
+f none /opt/amix/man/1/bzmore 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/bzip2 0644 root bin
 #
 # bzip2-1.0.6 licence (BSD-style): LICENSE travels with the binaries.
 d none /opt/amix/doc 0755 root sys

@@ -115,3 +115,10 @@ Not run: real 68030/68060 hardware, and an FPU-less part.
 - **Package:** `bzip2-1.0.8-2.pkg`, md5 `2b10de77a92e2da2338972da68a8f6eb`, 218624 bytes.
 - **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 23/23.
 - **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+
+## Revision -3: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/bzip2` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; `bunzip2`, `bzcat` and `bzip2recover` get alias pages to `bzip2(1)`. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

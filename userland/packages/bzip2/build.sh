@@ -33,6 +33,13 @@ stage() {
 	cp LICENSE README CHANGES "$d/"
 	chmod 0755 "$b"/*
 	chmod 0644 "$DEST$PREFIX/lib/libbz2.a" "$DEST$PREFIX/include/bzlib.h" "$m"/* "$d"/*
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_alias bunzip2 1 bzip2
+	amix_man_alias bzcat 1 bzip2
+	amix_man_alias bzip2recover 1 bzip2
+	amix_man_whatis
 }
 
 # fchmod is in libc.so.1 but no AMIX header declares it (amix-decls.h)
