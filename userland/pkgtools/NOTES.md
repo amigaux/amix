@@ -11,8 +11,8 @@ charclass.h public domain) and `SNPRINTF.LIC` (Powell, Weiss), copied from the s
 to `/usr/apkg/doc/` in the APKGENG prototype. Basenames 11 and 12 bytes: `s5-collision-scan.py
 --fail-on-collision` on a scratch build: 0 groups, the two names ≥ 14 bytes are the old ones.
 
-**Next mint.** `VER_ENG` still says 1.12.4, which is minted and staged with the old payload. The
-next APKGENG mint takes a new version; this commit does not choose it.
+**Next mint.** 1.12.4 is minted and staged with the old payload, so `VER_ENG` is now 1.12.5
+(owner, 2026-10-30): one version, one byte set. 1.12.5 mints later, with APKG 0.3.4.
 
 ## 2026-10-30 — the UFS-only mark: `APKG_FSTYPE`, and apkg refuses such a package on s5 (built, NOT minted, NOT published)
 

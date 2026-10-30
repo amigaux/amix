@@ -76,7 +76,10 @@ VER_APKG="0.3.3"
 # token (75be235), so `removef PKG -` removes the listed paths.  Own staging
 # dir (build/repo-staging-apkgeng1124), NOT published; 1.12.3
 # (88a177e5...) stays what it is.  NOTES 2026-10-26.
-VER_ENG="1.12.4"
+# 1.12.5 (2026-10-30, not minted yet) -- /usr/apkg/doc gains FNMATCH.LIC and
+# SNPRINTF.LIC.  1.12.4 is staged with the old payload: one version, one
+# byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
+VER_ENG="1.12.5"
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"
