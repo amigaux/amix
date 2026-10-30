@@ -1,0 +1,119 @@
+.TH INTERFACES 4 "30 October 2026" "amix-base"
+.SH NAME
+interfaces \- how each network interface is set up at boot
+.SH SYNOPSIS
+.B /etc/inet/interfaces
+.SH DESCRIPTION
+.B /etc/inet/interfaces
+says, for every network interface of the machine, whether it is set up and
+how.
+The installer writes it, the administrator edits it, and no package owns it.
+.PP
+Each line describes an interface, or is a global line.
+A
+.B #
+starts a comment that runs to the end of the line; blank lines are ignored.
+Words are separated by blanks or tabs.
+.SS Interface lines
+.nf
+\fIkey  mode\fP  [\fIaddress\fP[\fB/\fP\fIbits\fP]]  [\fBgw\fP \fIrouter\fP]  [\fBname\fP \fIhost\fP]
+.fi
+.TP
+.I key
+which interface the line is for:
+an interface name such as
+.BR aen0 ,
+.B zen0
+or
+.BR hya0 ;
+a station (MAC) address such as
+.BR 00:80:51:01:02:04 ,
+which matches whatever interface has that card, so one disk image can serve
+several machines;
+or
+.BR * ,
+any interface no other line names.
+For an interface the line with its MAC address counts first, then the line
+with its name, then
+.BR * .
+An interface no line matches is left down.
+.TP
+.I mode
+.B static
+sets the
+.I address
+given.
+.B dhcp
+asks a DHCP server for the address; an
+.I address
+given on the line is used if no server answers.
+.B off
+leaves the interface down; anything after it is ignored.
+.TP
+.IR address [ / bits ]
+the interface's address, with the length of the network prefix in bits
+(1 to 30).
+Without
+.IR bits ,
+the old class of the address decides (8, 16 or 24).
+.TP
+.BI gw " router"
+the default router, which must be on the interface's network.
+.TP
+.BI name " host"
+the machine's name, written to
+.B /etc/nodename
+and to this host's line in
+.BR /etc/inet/hosts .
+Letters, digits and
+.BR \- ,
+at most 63.
+.SS Global lines
+.TP
+.BI dns " address ..."
+name servers to use. Several
+.B dns
+lines add up.
+Name servers a DHCP server gives are added to these unless a
+.B dns
+line also says
+.BR static .
+.TP
+.BI domain " name"
+the domain of this host, used only for the full name in
+.BR /etc/inet/hosts ;
+it is never given to the resolver, which would append it to every lookup.
+.TP
+.B hostname dhcp
+take the machine's name from the DHCP server.
+Without this line a DHCP server never changes the name.
+.SH ERRORS
+A mistake in an interface line leaves that interface down, rather than
+letting the
+.B *
+line take it.
+A mistake in a global line causes the line to be ignored.
+Every mistake is reported in the boot log, with its line number, when the
+network is set up.
+.SH EXAMPLE
+.nf
+.ft CW
+# /etc/inet/interfaces
+zen0               dhcp
+aen0               static  192.0.2.38/24  gw 192.0.2.1
+00:80:51:01:02:04  static  192.0.2.39/24  gw 192.0.2.1  name tower
+*                  off
+dns     192.0.2.14 192.0.2.23
+domain  example.com
+.ft R
+.fi
+.SH FILES
+.TP
+.B /etc/inet/interfaces
+this file.
+.TP
+.B /etc/inet/link.d/*
+the network drivers present, one file each, shipped by the driver packages.
+.SH SEE ALSO
+.BR dlpi-mac (1M),
+.BR rc.conf (4)

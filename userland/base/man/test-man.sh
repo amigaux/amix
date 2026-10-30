@@ -85,5 +85,51 @@ if [ ! -w "$T/cat/3" ]; then
 fi
 chmod 755 "$T/cat/3"
 
+# which page for a command: the binary PATH runs decides (owner, 2026-10-30)
+mkdir -p "$T/usr/bin" "$T/usr/sbin" "$T/opt/amix/bin" "$T/usr/amix/bin" "$T/man/1m"
+for b in usr/bin/tar opt/amix/bin/tar usr/bin/printf opt/amix/bin/bzip2 usr/sbin/dlpi-mac usr/amix/bin/man; do
+	printf '#!/bin/sh\n' > "$T/$b"; chmod +x "$T/$b"
+done
+printf '.TH GREP 1\nGNU grep page\n' > "$T/man/1/zgrepx"
+printf '.TH PRINTF 1\nGNU printf page\n' > "$T/man/1/printf"
+printf '.TH DLPI-MAC 1M\ndlpi-mac page\n' > "$T/man/1m/dlpi-mac"
+printf '.TH MAN 1\nour man page\n' > "$T/man/1/man"
+cat > "$T/whatis" <<'EOF2'
+zgrepx(1)        zgrepx - search a file for a pattern
+ls(1)            ls - list contents of directory
+man(1)           man - display reference manual pages
+pkgadd(1M)       pkgadd - transfer software package to the system
+printf(3S)       printf, fprintf, sprintf - print formatted output
+tar(1)           tar - tape file archiver
+zlib(3)          zlib - a stock page of the same name, for the test
+EOF2
+rm -rf "$T/cat/1"/* "$T/cat/3"/*
+stockfirst="$T/usr/bin:$T/usr/sbin:$T/usr/amix/bin:$T/opt/amix/bin:/usr/bin:/bin"
+oursfirst="$T/usr/amix/bin:$T/opt/amix/bin:$T/usr/bin:$T/usr/sbin:/usr/bin:/bin"
+prun() { # prun <PATH> man args...
+	p=$1; shift
+	env AMIX_MANTREE="$T/man" AMIX_CATTREE="$T/cat" AMIX_STOCKMAN="$T/bin/stockman" \
+	    AMIX_NROFF="$T/bin/nroff" AMIX_TBL="$T/bin/tbl" AMIX_EQN=cat PAGER=cat \
+	    AMIX_STOCKWHATIS="$T/whatis" AMIX_OURBIN="$T/opt/amix/ $T/usr/amix/" PATH="$p" \
+	    $SH "$here/man.sh" "$@" 2>&1
+}
+o=$(prun "$stockfirst" tar);       expect "stock binary first: stock page" "STOCK[1 tar]" "$o"; refuse "stock binary first: not ours" "GNU tar page" "$o"
+o=$(prun "$oursfirst" tar);        expect "our binary first: our page" "GNU tar page" "$o"; refuse "our binary first: not stock" "STOCK" "$o"
+o=$(prun "$stockfirst" zgrepx);     expect "no binary on PATH: ours" "GNU grep page" "$o"; refuse "no binary: not stock" "STOCK" "$o"
+o=$(prun "$stockfirst" bzip2);     expect "only ours has it" "bzip2 page" "$o"; refuse "only ours: not stock" "STOCK" "$o"
+o=$(prun "$stockfirst" dlpi-mac);  expect "stock dir, no stock page: ours" "dlpi-mac page" "$o"
+o=$(prun "$stockfirst" ls);        expect "only stock has it" "STOCK[ls]" "$o"
+o=$(prun "$stockfirst" man);       expect "the front-end's own page" "our man page" "$o"
+o=$(prun "$stockfirst" printf);    expect "stock printf only in 3S: ours" "GNU printf page" "$o"; refuse "3S is not the command's page" "STOCK" "$o"
+o=$(prun "$stockfirst" 1 tar);     expect "explicit 1, stock binary" "STOCK[1 tar]" "$o"
+o=$(prun "$oursfirst" 1 tar);      expect "explicit 1, our binary" "GNU tar page" "$o"
+o=$(prun "$stockfirst" 3 zlib);    expect "not a command: ours" "zlib page" "$o"; refuse "not a command: not stock" "STOCK" "$o"
+o=$(prun "$stockfirst" -a tar);    expect "-a: stock" "STOCK[1 tar]" "$o"; expect "-a: ours" "GNU tar page" "$o"
+case "$o" in "STOCK"*"GNU tar page"*) ok ;; *) bad "-a: the chosen page first: $o" ;; esac
+o=$(prun "$oursfirst" -a tar);     case "$o" in *"GNU tar page"*"STOCK[tar]"*) ok ;; *) bad "-a ours first: $o" ;; esac
+o=$(prun "$stockfirst" -a bzip2);  expect "-a, only ours" "bzip2 page" "$o"; refuse "-a, only ours: no stock call" "STOCK" "$o"
+o=$(prun "$stockfirst" -a 3 zlib); expect "-a explicit 3: ours" "zlib page" "$o"; expect "-a explicit 3: stock" "STOCK[3 zlib]" "$o"
+o=$(prun "$stockfirst" -a ls);     expect "-a, only stock" "STOCK[ls]" "$o"
+
 echo "test-man: $pass passed, $fail failed ($SH)"
 [ "$fail" -eq 0 ]

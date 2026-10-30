@@ -6,8 +6,9 @@ Amix's stock `man` reads one tree: `MANPATH` is a single directory with a
 caches the add-on pages into `/usr/catman`, where a page with a stock name
 (a GNU `grep`) then hides the stock one. (The measurements are in the
 grimoire's man-page section.) The owner's direction, 2026-10-30: one `man` that
-finds both, ours first, never writing into `/usr/catman`, with the stock
-`/usr/bin/man` untouched.
+finds both, never writing into `/usr/catman`, with the stock `/usr/bin/man`
+untouched; and, decided the same day, a command's page is the page of the
+binary `PATH` runs.
 
 ## What it is
 
@@ -17,10 +18,21 @@ shell front-end. Its own page is `man/man.1`, installed as
 
 | Request | What happens |
 |---|---|
-| `man [sect] name ...` | for each name: `/opt/amix/man/<sect>/<name>` if it exists (without a section, the sections in the order 1, 1m, 8, 2, 3, 4, 5, 6, 7, then any other directory); else the stock `man` with the same section and name |
+| `man [sect] name ...` | for each name: our page `/opt/amix/man/<sect>/<name>` if it exists (without a section, the sections in the order 1, 1m, 8, 2, 3, 4, 5, 6, 7, then any other directory), unless the stock page wins (below); else the stock `man` with the same section and name |
+| `man -a [sect] name ...` | both pages when both trees have one, the one chosen first |
 | `man -k word`, `man -f name` | the matching lines of `/opt/amix/man/whatis.d/*`, then the stock `man`'s own answer |
 | no argument, any other option | the stock `man`, unchanged |
 
+- **Which page wins** when both trees have one. Our page is in section 1,
+  1m or 8, `PATH` runs a file of that name, the file is outside `/opt/amix`
+  and `/usr/amix`, and the stock index `/usr/share/man/whatis` lists the name
+  in a command section (1, 1m and the other 1x, 8; with an explicit section,
+  that section): then the stock page, asked for by the section the index
+  gives. In every other case ours. So `man tar` describes whichever `tar`
+  runs, a name with no binary on `PATH` shows our page, and our
+  `/usr/sbin` tools (no stock page) show ours. The index check is the stock
+  `man`'s own lookup pattern, so "the stock index lists it" means "the stock
+  `man` would find it".
 - **Formatting** is the stock pipeline, run from the top of the tree:
   `/usr/ucb/tbl | /usr/ucb/eqn | /usr/ucb/nroff -man -T37 | col`, shown
   through `$PAGER` (default `/usr/bin/more`) when the output is a terminal. A page that is only a

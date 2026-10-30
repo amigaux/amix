@@ -1,9 +1,16 @@
 #!/bin/sh
 # man -- one manual command for the add-on userland's pages and the stock ones.
 #
-#   man [section] name ...       our page if we have one, else the stock page
+#   man [section] name ...       one page for each name (which one: below)
+#   man -a [section] name ...    both pages, when both trees have one
 #   man -k keyword ...           both indexes: ours (whatis.d), then stock's
 #   man -f name ...              the same, by name
+#
+# Which page: a command's page (sections 1, 1m, 8) is the page of the binary
+# PATH runs. When that binary is a stock one (outside /opt/amix and
+# /usr/amix) and the stock index has the name, the stock page is shown;
+# otherwise ours. A page in any other section is ours when we have one. A
+# name only one tree has is shown from that tree.
 #
 # Installed as /usr/amix/bin/man, ahead of /usr/bin on PATH. The stock
 # /usr/bin/man is never changed; every name we have no page for, and every
@@ -25,7 +32,14 @@ STOCK=${AMIX_STOCKMAN:-/usr/bin/man}
 NROFF=${AMIX_NROFF:-/usr/ucb/nroff}
 TBL=${AMIX_TBL:-/usr/ucb/tbl}
 EQN=${AMIX_EQN:-/usr/ucb/eqn}
+WHATIS=${AMIX_STOCKWHATIS:-/usr/share/man/whatis}
+OURBIN=${AMIX_OURBIN:-}
+[ -n "$OURBIN" ] || OURBIN="/opt/amix/ /usr/amix/"
 SECTS="1 1m 8 2 3 4 5 6 7"
+# egrep alternations over the stock index's sections: the command sections,
+# and any (kept in variables: the 1991 sh misparses them inside ${...:-...})
+CMDSECTS='1[a-z]*|8'
+ANYSECT='[^)]*'
 
 # A MANPATH aimed at our tree would make the stock man cache our pages in
 # /usr/catman; the stock man only ever gets its own tree.
@@ -112,6 +126,47 @@ index() {
 	cat "$TREE"/whatis.d/* 2>/dev/null | egrep -i "$1"
 }
 
+# which_bin <name>: the file PATH runs for <name>, or nothing
+which_bin() {
+	for wb in `echo "$PATH" | sed -e 's/^:/.:/' -e 's/::/:.:/g' -e 's/:$/:./' -e 's/:/ /g'`
+	do
+		if [ -f "$wb/$1" ] && [ -x "$wb/$1" ]
+		then
+			echo "$wb/$1"
+			return
+		fi
+	done
+}
+
+# stock_sect <name> <sections>: the section of the stock index's first line
+# for <name> in one of <sections> (an egrep alternation), or nothing. The
+# name pattern is the stock man's own lookup.
+stock_sect() {
+	[ -r "$WHATIS" ] || return
+	egrep -i "(^$1[^a-zA-Z0-9]| $1[^a-zA-Z0-9]).*-" "$WHATIS" 2>/dev/null |
+		sed -n 's/^[^ 	(]*(\([^)]*\)).*/\1/p' | egrep -i "^($2)\$" |
+		sed -n 1p | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
+}
+
+# stock_first <our sect> <name>: show the stock page before ours? If so,
+# the section to ask the stock man for is left in ssect.
+stock_first() {
+	case "$1" in
+	1|1m|1M|8) ;;
+	*) return 1 ;;
+	esac
+	sb=`which_bin "$2"`
+	[ -n "$sb" ] || return 1
+	for sp in $OURBIN
+	do
+		case "$sb" in
+		"$sp"*) return 1 ;;
+		esac
+	done
+	ssect=`stock_sect "$2" "${sect:-$CMDSECTS}"`
+	[ -n "$ssect" ]
+}
+
 page() {
 	if [ -t 1 ]
 	then
@@ -121,9 +176,15 @@ page() {
 	fi
 }
 
+all=
 case "${1:-}" in
 "")
 	stock
+	;;
+-a)
+	all=1
+	shift
+	[ $# -gt 0 ] || stock
 	;;
 -k)
 	shift
@@ -170,12 +231,22 @@ rc=0
 for n in "$@"
 do
 	hit=`find_page "$sect" "$n"`
-	if [ -n "$hit" ]
+	if [ -z "$hit" ]
 	then
-		set -- $hit
-		show "$1" "$2" "$n" | page
-	else
 		"$STOCK" ${sect:+"$sect"} "$n" || rc=1
+		continue
+	fi
+	set -- $hit
+	if stock_first "$1" "$n"
+	then
+		"$STOCK" "$ssect" "$n" || rc=1
+		[ -n "$all" ] && show "$1" "$2" "$n" | page
+	else
+		show "$1" "$2" "$n" | page
+		if [ -n "$all" ] && [ -n "`stock_sect "$n" "${sect:-$ANYSECT}"`" ]
+		then
+			"$STOCK" ${sect:+"$sect"} "$n" || rc=1
+		fi
 	fi
 done
 exit $rc

@@ -4,6 +4,8 @@ man \- display a manual page, from the add-on packages or from the stock system
 .SH SYNOPSIS
 .B man
 [
+.B \-a
+] [
 .I section
 ]
 .I name ...
@@ -17,18 +19,33 @@ man \- display a manual page, from the add-on packages or from the stock system
 .B man
 shows the manual page for each
 .IR name .
-It looks first among the pages of the add-on packages, in
+It reaches two sets of pages: those of the add-on packages, in
 .BR /opt/amix/man ,
-and when it finds none there it hands the request to the stock
-.BR /usr/bin/man ,
-which shows the system's own pages.
-So one command reaches both, and a package's page wins over a stock page of
-the same name (a GNU
-.B grep
-page over the stock one, for example).
-To see the stock page in that case, run
-.B /usr/bin/man
-directly.
+and the system's own, which it leaves to the stock
+.BR /usr/bin/man .
+.PP
+When only one set has a page for
+.IR name ,
+that page is shown.
+When both have one, the page of a command (sections 1, 1M and 8) is the
+page of the program your
+.B PATH
+runs: if that program is a stock one (outside
+.B /opt/amix
+and
+.BR /usr/amix ),
+the stock page is shown, and otherwise the package's.
+So with the stock directories first on
+.BR PATH ,
+.B "man tar"
+describes the stock
+.BR tar ,
+the one that
+.B tar
+runs.
+A page in any other section is the package's.
+.B \-a
+shows both pages.
 .PP
 With a
 .I section
@@ -51,6 +68,13 @@ by default
 .BR /usr/bin/more ,
 when the output is a terminal.
 .SH OPTIONS
+.TP
+.B \-a
+Show every page for
+.IR name :
+the one
+.B man
+would choose first, then the other.
 .TP
 .BI \-k " keyword"
 List the pages whose index line contains
@@ -92,6 +116,9 @@ is never written for a package's page.
 .TP
 .B /usr/bin/man
 the stock command, which this one calls; it is never changed.
+.TP
+.B /usr/share/man/whatis
+the stock index, read to know whether a stock page exists.
 .SH ENVIRONMENT
 .TP
 .B PAGER

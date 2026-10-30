@@ -1,0 +1,70 @@
+.TH RC.CONF 4 "30 October 2026" "amix-base"
+.SH NAME
+rc.conf \- which boot services run, and their settings
+.SH SYNOPSIS
+.B /etc/rc.conf
+.SH DESCRIPTION
+.B /etc/rc.conf
+turns the boot services of the add-on packages on and off and holds their
+settings.
+The installer creates it, the administrator edits it, and no package owns
+it, so installing, updating or removing a package never changes it.
+A package can therefore re-create a service's start link in
+.B /etc/rc2.d
+on every update without turning on a service you turned off.
+.PP
+Each line is one of:
+.TP
+.IB service = yes \fR|\fP no
+whether
+.I service
+runs at boot.
+.TP
+.IB service _ key = value
+one setting of
+.IR service ,
+named in that service's own manual page.
+.PP
+A line that starts with
+.B #
+is a comment, and so is the rest of a line from a blank followed by
+.BR # .
+Blank lines are ignored.
+There are no blanks around the
+.BR = .
+A value may be put in double or single quotes, which are removed; nothing
+else in it is interpreted.
+When a name is given twice, the last line counts.
+.PP
+The file is read, never run as a script, so a line in it can do nothing but
+give a value.
+.SH DEFAULTS
+A service that has no line here gets the default its own boot script
+names; each service's manual page says which.
+A value other than
+.B yes
+or
+.B no
+is treated as missing, and the boot log says so.
+.SH EXAMPLE
+.nf
+.ft CW
+# /etc/rc.conf
+syslogd=yes
+xdm=no            # graphical login off
+ifup_timeout=60
+.ft R
+.fi
+.SH FILES
+.TP
+.B /etc/rc.conf
+this file.
+.TP
+.B /var/adm/rc.log
+the boot log, where a bad value is reported.
+.SH SEE ALSO
+.BR rc.subr (1M)
+.SH NOTES
+The stock services in
+.B /etc/rc2.d
+do not read this file; only those of the add-on packages do.
