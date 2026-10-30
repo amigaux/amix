@@ -1683,14 +1683,14 @@ $1
 EOF
     "$APKG" -v -c "$WORK/conf-dnskeys" list 2>&1
 }
-OUT=$(dnsconf "nameserver=10.0.0.1
-nameserver=10.0.0.2:5353
+OUT=$(dnsconf "nameserver=192.0.2.1
+nameserver=192.0.2.2:5353
 dns_timeout=9
 dns_retries=0")
-echo "$OUT" | grep -q "dns: nameserver=10.0.0.1,10.0.0.2:5353 dns_timeout=9s dns_retries=0" \
+echo "$OUT" | grep -q "dns: nameserver=192.0.2.1,192.0.2.2:5353 dns_timeout=9s dns_retries=0" \
     && ok "nameserver is repeatable and order-preserving; both knobs apply" \
     || bad "the resolver keys did not parse as documented" "$OUT"
-OUT=$(dnsconf "nameserver=10.0.0.1
+OUT=$(dnsconf "nameserver=192.0.2.1
 nameserver=")
 echo "$OUT" | grep -q "dns: nameserver=(none, hosts file only)" \
     && ok "an empty nameserver= clears the list" \
@@ -1703,16 +1703,16 @@ OUT=$(dnsconf "dns_retries=-1")
 echo "$OUT" | grep -q "bad dns_retries '-1', keeping 2" \
     && ok "a negative dns_retries warns and keeps the default" \
     || bad "a negative dns_retries was not refused" "$OUT"
-OUT=$(dnsconf "nameserver=10.0.0.1
-nameserver=10.0.0.2
-nameserver=10.0.0.3
-nameserver=10.0.0.4
-nameserver=10.0.0.5
-nameserver=10.0.0.6
-nameserver=10.0.0.7
-nameserver=10.0.0.8
-nameserver=10.0.0.9")
-echo "$OUT" | grep -q "more than 8 nameserver lines, '10.0.0.9' ignored" \
+OUT=$(dnsconf "nameserver=192.0.2.1
+nameserver=192.0.2.2
+nameserver=192.0.2.3
+nameserver=192.0.2.4
+nameserver=192.0.2.5
+nameserver=192.0.2.6
+nameserver=192.0.2.7
+nameserver=192.0.2.8
+nameserver=192.0.2.9")
+echo "$OUT" | grep -q "more than 8 nameserver lines, '192.0.2.9' ignored" \
     && ok "the nameserver list is bounded, and says which line it dropped" \
     || bad "the nameserver list is unbounded" "$OUT"
 
