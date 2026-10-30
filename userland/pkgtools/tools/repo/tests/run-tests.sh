@@ -2418,6 +2418,40 @@ else
     echo "  skip- APKGENG mark check (host pkgmk or heirloom/build-amix missing)"
 fi
 
+# --------------------------------------------------------------- T32 ----
+# BASEDIR in pkginfo: the stock /usr/sbin/pkgadd refuses such a package
+# (rc 5, "requires a base directory", whatever the admin file says;
+# emulated stock 2.1c, 2026-10-31), so gen-catalog warns and says whether
+# the package needs it.  The entry is catalogued either way.
+echo "T32: a package with BASEDIR draws a warning"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    S32="$WORK/t32"; mkdir -p "$S32/stg" "$S32/src"
+    echo hi > "$S32/src/hello"
+    mint32() {  # mint32 <PKG> <basedir|-> <object path>
+        { printf 'PKG=%s\nNAME=%s\nVERSION=1.0\nARCH=Amiga\nCATEGORY=application\nCLASSES=none\n' "$1" "$1"
+          [ "$2" != - ] && echo "BASEDIR=$2"; } > "$S32/pkginfo.$1"
+        printf 'i pkginfo=%s\nf none %s=%s 0644 root bin\n' "$S32/pkginfo.$1" "$3" "$S32/src/hello" \
+            > "$S32/prototype.$1"
+        rm -rf "$S32/spool.$1"; mkdir -p "$S32/spool.$1"
+        ( cd "$S32" && "$HB/pkgmk" -o -d "$S32/spool.$1" -f "prototype.$1" && \
+          "$HB/pkgtrans" -s "$S32/spool.$1" "$S32/stg/$1-1.0.pkg" "$1" ) >>"$WORK/t32.mk" 2>&1
+    }
+    mint32 BDABS / /opt/bdabs/hello
+    mint32 BDREL /opt bdrel/hello
+    mint32 BDNONE - /opt/bdnone/hello
+    python3 "$GEN" "$S32/stg" >/dev/null 2>"$WORK/t32.err"
+    check "gen-catalog rc 0" test $? -eq 0
+    check "BASEDIR with absolute paths: warned, drop it" \
+        grep -q "warning: BDABS-1.0.pkg: pkginfo BASEDIR='/': the stock /usr/sbin/pkgadd refuses .*every object path is absolute: drop BASEDIR" "$WORK/t32.err"
+    check "BASEDIR with a relative path: warned, it needs it" \
+        grep -q "warning: BDREL-1.0.pkg: pkginfo BASEDIR='/opt': .*it has relative paths, which need it" "$WORK/t32.err"
+    check "no BASEDIR: no warning" bash -c "! grep -q BDNONE '$WORK/t32.err'"
+    check "all three are catalogued" \
+        test "$(grep -c '^bd' "$S32/stg/catalog")" = 3
+else
+    echo "  skip- BASEDIR warning checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"
