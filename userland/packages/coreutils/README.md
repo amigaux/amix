@@ -40,6 +40,8 @@ kernel.org mirror serves identical bytes.
 | `05-settime-stime.patch` | `settime.c` calls `settimeofday` unconditionally. AMIX has only `stime(2)`, so `date -s` sets whole seconds. |
 | `06-seq-no-libm.patch` | seq's `floor`/`rint` exist only in the stock static `libm.a`, so a local pair is built over libc.so.1's `modf` (rint is round-half-even). It was host-checked against libm on 15 values. |
 | `07-date-u-writable-tz.patch` | **Found on the box.** `date -u` did `putenv("TZ=UTC0")` with a string literal. AMIX libc.so.1's TZ parser (`getzname`) stores a NUL into the TZ string in place, and GCC 14 puts literals in read-only `.rodata`. So every `date -u` died with SIGSEGV: the PC was in `getzname` at `clrb %a2@`, and the fault address was the `0` of the literal (read from the core's prstatus note). The fix uses a writable array. |
+| `08-copy-sparse-tail-no-ftruncate.patch` | **Found on the box: the stock kernel panics** (grimoire quirk 90). When a sparse copy ends in a hole, cp/mv/install wrote one byte past the end and `ftruncate`d it back: a shrink inside the last block. For a file larger than its direct blocks (~96 KiB) that faults `pvn_vptrunc`. Measured: `cp --sparse=always` of 110017 bytes ending in 3521 zeros took the emulated golden 030 down. The patch takes upstream's other branch: seek back one byte and write the NUL there. |
+| `09-stat-no-ll-printf.patch` | **Found on the box.** `stat` builds its formats at run time: `strcat (pformat, PRIdMAX)` gives `%lld`/`%llu`, which AMIX libc's `printf` reads as 32 bits. The LLPRINTF gate only sees string constants. So `stat -c %s` printed 0 (the high word), and so did `stat -f`'s block and inode counts. Every value fits a long on AMIX (32-bit `off_t`, `unsigned long` statvfs fields), so they print with `%ld`/`%lu`. |
 
 ## Configure answers pinned (`build.sh`), asserted where they reach config.h
 
@@ -57,6 +59,11 @@ kernel.org mirror serves identical bytes.
 - **`MAKE_CFLAGS=-include amix-decls.h`** (select, getrlimit, fchmod): make only. In configure
   the prototypes collide with autoconf's `char f();` probes and turn present functions absent
   (gethostname came out missing that way).
+- **`amix-ftruncate.o` in `LIBS`** (`recipes/common/amix-ftruncate.c`, quirk 90): every executable
+  defines a strong `ftruncate` that calls libc's static `_ftruncate` only with safe lengths. A
+  shrink to an unaligned EOF becomes a cut at the 8 KiB boundary plus a rewrite of the tail. It
+  needs a readable fd, which `dd` has: with `seek=` it opens its output `O_RDWR`. A write-only fd
+  gets EBADF, not a panic. Asserted: every `ftruncate` in the payload is that `T` (86/86).
 - **No `-lm` anywhere** (`SEQ_LIBM= POW_LIB= SQRT_LIBM=`, asserted on every link line). factor
   never calls `sqrt`; `SQRT_LIBM` is a leftover.
 - **The tarball's man pages are kept** (`touch man/*.1`). Otherwise make runs help2man on the
@@ -83,6 +90,8 @@ kernel.org mirror serves identical bytes.
   kernel's FPE on an FPU-less 68LC040/LC060. The other 64 programs have none. This is the
   registry's FP-DOPRNT constraint, recorded rather than patched out.
 - No large files (`--disable-largefile`). `date -s` has 1-second resolution (`stime`).
+- `od -t d8`/`u8`/`x8` print through `%lld`/`%llu` (`PRIdMAX`), which AMIX libc's `printf` reads as
+  32 bits: 8-byte integer dumps are wrong. The 1/2/4-byte types are fine. Recorded, not patched.
 - `stty` needs a terminal. `logname` needs a login tty.
 
 ## Gates (build time)
@@ -160,3 +169,18 @@ Not run: real hardware, and an FPU-less part.
 - **Package:** `coreutil-5.2.1-2.pkg`, md5 `e5552f7e2b7f753932718eb7d7530f2d`, 3557376 bytes.
 - **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 95/95.
 - **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+
+**Revision -3, 2026-10-30: the stock-kernel ftruncate panic (grimoire quirk 90), and stat.**
+- **Probed at -2** on E1, one boot per case:
+  - `dd if=/dev/null of=<480017 bytes> bs=1000 seek=477` panicked;
+  - so did `cp --sparse=always` of 110017 bytes ending in zeros;
+  - aligned `dd seek=` (409600) and a 53000-byte sparse copy did not.
+  - Evidence: `Amigaux/tmp/2026-10-30-ftx/`.
+- **The fix:** patch 08, `amix-ftruncate.o`, and patch 09 for the `stat -c %s` = 0 the new checks
+  exposed.
+- **Bench:** E1 slot 1, rig-run 20261030-112151. Stock pkgadd/pkgchk/pkgrm rc 0, smoke 102/102.
+  - The new checks: `dd seek=` shrink 480020→477000 with the bytes kept, the sparse
+    `cp` of 110017 bytes identical, `stat -c %s` equal to `wc -c`, and `stat -f -c %b` > 0.
+- **Package:** `coreutil-5.2.1-3.pkg`, md5 `d418b45ec9c809a474343d67d1826a0a`, 3694592 bytes.
+- mv across file systems copies through the same `copy.c`. The bench has one file system, so
+  that path is not run.

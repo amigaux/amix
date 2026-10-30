@@ -1,0 +1,85 @@
+stat builds its printf formats at run time: strcat (pformat, PRIdMAX /
+PRIuMAX), which is "lld"/"llu" with intmax_t = long long.  AMIX libc's
+printf reads %lld/%llu as a 32-bit long (the llprintf trap), and the
+build's LLPRINTF gate cannot see a format assembled at run time.  So
+stat -c %s printed 0 (the high word) on the box, and so did stat -f's
+block and inode counts.  Every value here fits a long on AMIX (off_t is
+32-bit, no large files; statvfs fields are unsigned long): print them
+with %ld/%lu.
+
+--- a/src/stat.c
++++ b/src/stat.c
+@@ -55,20 +55,20 @@
+ #include "strftime.h"
+ #include "xreadlink.h"
+ 
+-#define NAMEMAX_FORMAT PRIuMAX
++#define NAMEMAX_FORMAT "lu"   /* AMIX printf has no %llu */
+ 
+ #if HAVE_STRUCT_STATVFS_F_BASETYPE
+ # define STRUCT_STATVFS struct statvfs
+ # define statfs statvfs
+ # define HAVE_STRUCT_STATXFS_F_TYPE HAVE_STRUCT_STATVFS
+ # if HAVE_STRUCT_STATVFS_F_NAMEMAX
+-#  define SB_F_NAMEMAX(S) ((uintmax_t) ((S)->f_namemax))
++#  define SB_F_NAMEMAX(S) ((unsigned long) ((S)->f_namemax))
+ # endif
+ #else
+ # define STRUCT_STATVFS struct statfs
+ # define HAVE_STRUCT_STATXFS_F_TYPE HAVE_STRUCT_STATFS
+ # if HAVE_STRUCT_STATFS_F_NAMELEN
+-#  define SB_F_NAMEMAX(S) ((uintmax_t) ((S)->f_namelen))
++#  define SB_F_NAMEMAX(S) ((unsigned long) ((S)->f_namelen))
+ # endif
+ #endif
+ 
+@@ -385,28 +385,28 @@
+       printf (pformat, human_fstype (statfsbuf));
+       break;
+     case 'b':
+-      strcat (pformat, PRIdMAX);
+-      printf (pformat, (intmax_t) (statfsbuf->f_blocks));
++      strcat (pformat, "ld");
++      printf (pformat, (long) (statfsbuf->f_blocks));
+       break;
+     case 'f':
+-      strcat (pformat, PRIdMAX);
+-      printf (pformat, (intmax_t) (statfsbuf->f_bfree));
++      strcat (pformat, "ld");
++      printf (pformat, (long) (statfsbuf->f_bfree));
+       break;
+     case 'a':
+-      strcat (pformat, PRIdMAX);
+-      printf (pformat, (intmax_t) (statfsbuf->f_bavail));
++      strcat (pformat, "ld");
++      printf (pformat, (long) (statfsbuf->f_bavail));
+       break;
+     case 's':
+       strcat (pformat, "ld");
+       printf (pformat, (long int) (statfsbuf->f_bsize));
+       break;
+     case 'c':
+-      strcat (pformat, PRIdMAX);
+-      printf (pformat, (intmax_t) (statfsbuf->f_files));
++      strcat (pformat, "ld");
++      printf (pformat, (long) (statfsbuf->f_files));
+       break;
+     case 'd':
+-      strcat (pformat, PRIdMAX);
+-      printf (pformat, (intmax_t) (statfsbuf->f_ffree));
++      strcat (pformat, "ld");
++      printf (pformat, (long) (statfsbuf->f_ffree));
+       break;
+ 
+     default:
+@@ -512,8 +512,8 @@
+       printf (pformat, minor (statbuf->st_rdev));
+       break;
+     case 's':
+-      strcat (pformat, PRIuMAX);
+-      printf (pformat, (uintmax_t) (statbuf->st_size));
++      strcat (pformat, "lu");
++      printf (pformat, (unsigned long) (statbuf->st_size));
+       break;
+     case 'B':
+       strcat (pformat, "u");

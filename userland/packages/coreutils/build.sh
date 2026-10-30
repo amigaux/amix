@@ -26,7 +26,9 @@ configure_args() {
 pre_configure() {
 	# D3: every program defines getpwnam/getpwuid/getgrnam/getgrgid itself
 	$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
-	export LIBS="$BUILD/amix-pwgr.o"
+	# quirk 90: dd's seek= truncation through an ftruncate that cuts aligned
+	$CC $AMIX_CFLAGS -c "$REPO/recipes/common/amix-ftruncate.c" -o "$BUILD/amix-ftruncate.o"
+	export LIBS="$BUILD/amix-pwgr.o $BUILD/amix-ftruncate.o"
 	export ac_cv_header_stdint_h=no jm_ac_cv_header_stdint_h=no
 	export ac_cv_func_vfork=no
 	export ac_cv_lib_elf_elf_begin=no
@@ -71,4 +73,13 @@ stage() {
 		n=$((n + 1))
 	done
 	echo "  D3 ok   $n executables define getpwnam/getpwuid/getgrnam/getgrgid (T)"
+	# quirk 90: any ftruncate in a binary is amix-ftruncate.c's (T), never
+	# libc truncate.o's weak one alone
+	n=0
+	for b in $(amix_gate_elfs "$DEST$PREFIX/bin"); do
+		"$NM" "$b" | awk '$NF=="ftruncate" {f=1; if ($(NF-1)!="T") bad=1} END {exit bad}' || {
+			echo "[FAIL] quirk 90: $(basename "$b") links libc's raw ftruncate" >&2; exit 1; }
+		"$NM" "$b" | awk '$NF=="ftruncate" {f=1} END {exit !f}' && n=$((n + 1))
+	done
+	echo "  FREESP ok  $n executables carry the aligned-cut ftruncate (quirk 90)"
 }

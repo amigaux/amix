@@ -74,6 +74,20 @@ cp big shredme; $B/shred -u shredme; [ ! -f shredme ] && ok "shred -u" || bad "s
 $B/ls -la p > la.out; has la.out '^total' && has la.out ' q$' && ok "ls -la" || bad "ls -la"
 eq "dir == ls -C" "`$B/dir d1`" "`$B/ls -C -b d1`"
 $B/dircolors -b > dc.out; has dc.out '^LS_COLORS=' && ok "dircolors -b" || bad "dircolors"
+# quirk 90: the stock kernel panics on ftruncate shrinking a file past its
+# direct blocks inside its last block; both of these took the box down at -2
+awk 'BEGIN { for (i = 0; i < 48002; i++) printf "%09d\n", i }' > q90.dat
+eq "q90 fixture (480020 bytes)" "`$B/wc -c < q90.dat | tr -d ' '`" 480020
+$B/dd if=/dev/null of=q90.dat bs=1000 seek=477 2> /dev/null; rc=$?
+eq "dd seek= shrinks 480020 -> 477000 in its last block (rc $rc)" "`$B/stat -c %s q90.dat`" 477000
+awk 'BEGIN { for (i = 0; i < 48002; i++) printf "%09d\n", i }' | $B/head -c 477000 > q90.want
+cmp q90.want q90.dat > /dev/null 2>&1 && ok "and keeps the bytes before the cut" || bad "dd seek= shrink content"
+# 106496 bytes of data (13 blocks of 8 KiB), then 3521 zeros: cp's last read is a hole
+awk 'BEGIN { for (i = 0; i < 10649; i++) printf "%09d\n", i; printf "12345\n" }' > q90.sp
+$B/dd if=/dev/zero bs=3521 count=1 2> /dev/null >> q90.sp
+$B/cp --sparse=always q90.sp q90.sp2; rc=$?
+eq "cp --sparse=always of 110017 bytes ending in zeros (rc $rc)" "`$B/stat -c %s q90.sp2`" 110017
+cmp q90.sp q90.sp2 > /dev/null 2>&1 && ok "and the copy is identical" || bad "cp --sparse=always content"
 
 # --- 4. file systems: df (getmntent), du, stat -f (statvfs) --------------------
 $B/df / > df.out; rc=$?
@@ -82,6 +96,9 @@ $B/df -k > dfk.out; [ `wc -l < dfk.out` -ge 2 ] && ok "df -k lists `expr \`wc -l
 eq "du -sk on 511457 bytes" "`$B/du -sk big | awk '{print ($1 >= 499 && $1 <= 520) ? "ok" : $1}'`" ok
 $B/stat -f / > sf.out; rc=$?
 [ $rc -eq 0 ] && has sf.out 'Type: ' && ok "stat -f / (statvfs): `sed -n 's/.*\(Type: [a-zA-Z0-9]*\).*/\1/p' sf.out`" || bad "stat -f rc=$rc: `flat sf.out`"
+# patch 09: stat's run-time formats were %lld/%llu, which AMIX printf reads as 32 bits
+eq "stat -c %s (no %llu)" "`$B/stat -c %s big`" "`$B/wc -c < big | tr -d ' '`"
+n=`$B/stat -f -c %b /`; [ "${n:-0}" -gt 0 ] && ok "stat -f -c %b: $n blocks" || bad "stat -f -c %b: '$n'"
 
 # --- 5. text --------------------------------------------------------------------
 awk 'BEGIN { for (i = 30; i >= 1; i--) print i }' > nums
