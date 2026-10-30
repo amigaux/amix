@@ -1,3 +1,12 @@
+## 2026-10-30 — apkg decides config files (P-36 W2); man pages (9da25f4, 85d4e09, 2a2a09f, 6dbbdcc)
+
+apkg 0.3.4 (not minted): after each install or upgrade it lists the config files kept beside a new default and decides
+them — at a terminal keep/new/diff/later; -y/--conf-keep keep; --conf-new installs the default, saves yours as .old and
+records it with `installf -c conffile`; with no terminal and no flag they stay pending. New verbs `conffiles
+[list|resolve]`, `purge` and `remove --purge`; removed packages with kept edits show as [config-files]. i.conffile keeps
+an edited file silently when the package's default did not change. New pages contents-fsck(1M), amix-sadm-migrate(1M)
+and contents(5); APKGENG 1.12.5 ships only its own commands' pages. Tests: conffile e2e 52/0, conffile 86/0, apkg 497/0.
+
 ## 2026-10-30 — conffiles (P-36 W1) (035ca80, 632f11b, 7490ff0, ba7ed9a)
 
 src/conffile: i.conffile and r.conffile, the shared class `conffile`. An upgrade keeps an edited config file and
