@@ -1,7 +1,7 @@
 # Z3660 SCSI → Amix driver — notes
 
-(Repo `amix-z3660scsi`; builds go through the sibling `amix-kerntools` harness +
-golden image — `(cd ../amix-kerntools && ./amix-build z3660scsi)`. Started as
+(Directory `kernel/drivers/z3660scsi` of amix, formerly the repo `amix-z3660scsi`; builds go
+through amix's `kernel/k30` harness + golden image — `(cd ../../k30 && ./amix-build z3660scsi)`. Started as
 scouting notes and is now the **dated engineering journal** — read it
 newest-section-first, and note that a dated section corrects the ones above it rather than
 editing them. The **living state is [`CHANGELOG.md`](CHANGELOG.md)**: every landed change has a
@@ -127,7 +127,7 @@ which Amiberry can't exercise — that waits on the emulator below or real HW.)
   queued buf before `iodone()` in `ihandle()`; see the real-HW findings below). kerntools applies it to
   the stock tree with `patch`, idempotently.
 
-Verified on the Amix build box (`../amix-a4091/hdf/Amix-dbg.hdf`):
+Verified on the Amix build box (`../a4091/hdf/Amix-dbg.hdf`):
 - `z3660.c` compiles clean with the K&R SVR4 `cc` on the first try (`cc -c -O`).
 - `ld -r` links it into the `alien` `exp` with `z3660queue` resolving — no unresolved symbols.
 - Full kernel clean-gated (boot-breaker): converged in 4 relinks, **`sum -r` = 44396**, `checkunix`
@@ -176,7 +176,7 @@ same correction landed in `src/z3660.c`'s comments in 900f095; full derivation i
 ## Sources
 - `repo/z3660-drivers/scsi/z3660_scsi.c`, `z3660_scsi.h`, `z3660_scsi_enums.h`, `bootrom.asm`.
 - `repo/KNOWN_ISSUES.md` (DMA-not-in-EMU, SCSI-SD-emulation bug history).
-- The A4091-on-Amix predecessor project ([`amix-a4091`](https://github.com/jusii/amix-a4091)) — framework, build env, gotchas, clean-gate.
+- The A4091-on-Amix predecessor project ([`a4091`](../a4091)) — framework, build env, gotchas, clean-gate.
 - `a2065.cpp` (WinUAE/Amiberry) — the AutoConfig-board + MMIO-bank emulation model.
 
 ## Real-hardware findings (2026-06-12 overnight session)
@@ -886,7 +886,7 @@ cache (per-longword dirty bits, eviction push), live only with `cpu_compatible=t
 and `cpu_data_cache=true`; device DMA bypasses it (bench evidence,
 not published). So an emulator cell with the cache kept live *can*
 show a missing CPUSH or a missing CINV. The current bench configs keep it off, and the coherence
-**verdict** stays metal-only (D-1 D42).
+**verdict** stays metal-only (a project decision).
 
 ## 2026-08-26: first boot of AMIX off this driver on real 68LC060 silicon
 
@@ -926,7 +926,7 @@ happy with.
 
 ## 2026-09-26: stock-firmware hardening — an unmapped unit is judged by its block size
 
-Owner priority (P-2): Amix must run on **stock** Z3660 firmware. The fork's `c0510a7`
+Project priority: Amix must run on **stock** Z3660 firmware. The fork's `c0510a7`
 ("never divide by an unmapped unit's zero block size", `piscsi_unit_blocks()`) is **not** in
 stock (`git merge-base --is-ancestor c0510a7 upstream/main` → no).
 
@@ -1018,10 +1018,10 @@ byte-identical by requirement.
 
 ## 2026-09-27: ZS-02 — detection a non-Z3660 AGA machine cannot fool
 
-**The hole (P6.2, D-1 D45).** Before this, the fixed-base probe accepted any window where
+**The hole** ("the P6.2 hole" in the code comments, after the review item that raised it). Before this, the fixed-base probe accepted any window where
 `P_DRVTYPE` read 0 or 1. An AGA machine with no Z3660 and an open bus at `0x10000000` reads 0
 there, so a z3660scsi-carrying kernel would claim a board, sweep eight phantom units and hand
-`sd` a card. D45 makes closing it a precondition for one auto-detecting kernel per CPU line.
+`sd` a card. The project made closing it a precondition for one auto-detecting kernel per CPU line.
 
 **Decision order** (`z3660map()`):
 
@@ -1083,7 +1083,7 @@ more trips (the old DRVTYPE probe was 2). On the emulator's `sptalloc` arm the e
   `autocon bcopy printf sptalloc`; scan060 **CLEAN** on `z3660_040.o` (1030 decoded lines), and the
   relinked kernel's candidate count is 53 before and after.
 
-**Open.** A bench cell on a non-Z3660 AGA rig (D45) and the metal re-check of the direct arm are
+**Open.** A bench cell on a non-Z3660 AGA rig (that precondition) and the metal re-check of the direct arm are
 owed; neither was run here. The fork firmware prints nothing for these accesses; stock is read
 from source only.
 
@@ -1326,7 +1326,7 @@ Nothing ships. kerntools cuts the diagnostic sibling from this source.
 
 ## 2026-10-26: ZS-05 — the FPGA address-capture race; every mailbox write is armed
 
-**The firmware fact** (Z3660 station, eth-rxring `22e0dde`/`dd9d179` era; T-51 2026-10-26). On
+**The firmware fact** (from the Z3660-amix firmware work, eth-rxring `22e0dde`/`dd9d179` era, 2026-10-26). On
 the real-CPU path the FPGA hands each 060 access to the ARM as a REG1 word, and `rtg_thread()`
 (rtg.c) takes the address from it: `zaddr = gpio & 0x1FFFFF`, piscsi at `zaddr - 0x2000`. On
 back-to-back cycles the FPGA samples **rising** address bits too early, so the access is

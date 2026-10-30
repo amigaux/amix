@@ -1,5 +1,5 @@
 # module/Makefile -- the z3660scsi root-class loadable module, one per kernel
-# line, built with amix-dlm's ABI kit (the kit's docs/guide.md; contracts
+# line, built with kernel/dlm's ABI kit (the kit's docs/guide.md; contracts
 # C3-1, C4-1, C4-2).
 #
 #   make -C module            both lines: build/k30/mod.d/z3660scsi and
@@ -11,14 +11,14 @@
 #                             driver must not change: README.md)
 #   make -C module clean
 #
-# DLM is the amix-dlm checkout whose kits are built (`make kit` there gives
+# DLM is the kernel/dlm directory whose kits are built (`make kit` there gives
 # build/kit/k30 and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.
 # The pinned cross tools (m68k-cbm-sysv4-*) and python3 must be on PATH.
 # The kit's fragment does the rest: objects and the module under
-# build/<line> (MODOUT, here the repo's build/), $cpu from the line.
+# build/<line> (MODOUT, here kernel/drivers/z3660scsi/build/), $cpu from the line.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))..)
-DLM ?= $(abspath $(TOP)/../amix-dlm)
+DLM ?= $(abspath $(TOP)/../../dlm)
 LINES = k30 k46
 kit = $(or $(KIT_$(1)),$(DLM)/build/kit/$(1))
 

@@ -3,7 +3,7 @@
 **Pre-registration, written 2026-08-24, BEFORE any code in this round. Nothing below is to be
 rewritten to match a later measurement.** Round 1 covers **F3-M0** (assert the free ride) and
 **F3-M1** (real maintenance where the free ride cannot reach) for this driver only; the
-ethernet driver is a separate round in `../amix-z3660net`.
+ethernet driver is a separate round in `amix-z3660net` (moving into amix as `kernel/drivers/z3660eth`).
 
 Confidence tags follow the campaign convention: **measured** (a line of source read, or a
 number off a run, with its file), **derived** (arithmetic over measured facts, shown), and
@@ -26,7 +26,7 @@ number off a run, with its file), **derived** (arithmetic over measured facts, s
 > and `cpu_data_cache=true`; device DMA bypasses it (bench evidence,
 > not published). An emulator cell with the cache live can show a
 > missing CPUSH or CINV; the bench configs to date keep it off. The coherence **verdict** stays
-> metal-only (D-1 D42), so §7 is unchanged as the scoring protocol.
+> metal-only (a project decision), so §7 is unchanged as the scoring protocol.
 
 ---
 
