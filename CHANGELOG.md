@@ -1,3 +1,10 @@
+## 2026-10-30 — payload-licence gate: stock libm is recorded, a Kickstart ROM refuses (dccd3b1, e656915)
+
+Per the owner's 2026-10-29 ruling (the permission covers all of Amix incl. its AT&T parts) and 2026-10-30 decision
+("Yes, stock libm"), the gate no longer refuses a payload ELF that embeds SVR4 libm; it prints one `embeds` line per
+binary so a publish still shows what is inside. A new content test refuses a Kickstart ROM image anywhere in a payload
+($1111/$1114 + JMP header, byte-swapped, AMIROMTYPE1; split halves not seen). Repo tools 387/0, apkg 457/0.
+
 ## 2026-10-30 — archive category; diffutils, coreutils, bzip2 in the catalog conf (67f7cf6, f272fbe)
 
 cats.conf declares archive (thirteen groups); gzip and tar move from utility to archive, catalog field only, no .pkg
