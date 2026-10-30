@@ -1,0 +1,64 @@
+.TH DLPI-MAC 1M "30 October 2026" "amix-base"
+.SH NAME
+dlpi-mac \- print the station address of a network interface
+.SH SYNOPSIS
+.B dlpi-mac
+[
+.B \-p
+.I ppa
+] [
+.B \-s
+.I sap
+] [
+.B \-t
+.I seconds
+]
+.I device
+.SH DESCRIPTION
+.B dlpi-mac
+prints the station (MAC) address of the Ethernet interface whose DLPI
+device is
+.IR device ,
+such as
+.B /dev/aen0
+or
+.BR /dev/zen0 ,
+as six two-digit hexadecimal numbers joined by colons:
+.PP
+.nf
+.ft CW
+00:80:10:ff:ff:ff
+.ft R
+.fi
+.PP
+Nothing else is printed on the standard output, so a script can use it as
+it is.
+It works the same way with every DLPI Ethernet driver and needs no
+driver-specific code.
+It may be run before or after the interface is set up: it sends no frame
+and leaves the device as it found it.
+.SH OPTIONS
+.TP
+.BI \-p " ppa"
+the physical point of attachment to attach to, for a driver that needs one
+(DLPI Style 2); default 0.
+.TP
+.BI \-s " sap"
+the service access point (Ethernet type) to bind while asking; default
+0x88B5, a type no protocol uses.
+.TP
+.BI \-t " seconds"
+how long to wait for each answer from the driver; default 5.
+.SH EXIT STATUS
+.TP
+0
+the address was printed.
+.TP
+1
+a usage error, or the device could not be opened (no such card in this
+machine).
+.TP
+2
+the driver did not answer as DLPI requires, or not in time.
+.SH SEE ALSO
+.BR interfaces (4)
