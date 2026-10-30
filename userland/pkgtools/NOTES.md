@@ -1,5 +1,19 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-30 — APKGENG ships the fnmatch and snprintf notices (NOT MINTED)
+
+**Why.** The engine links `heirloom/compat/fnmatch.c` (BSD-3: a binary carries the notice) and
+`compat/snprintf.c`, but `/usr/apkg/doc` held only the CDDL and Caldera texts. The owner decided
+to add both now; they reach the bytes at the next mint.
+
+**Change.** `heirloom/LICENSE/FNMATCH.LIC` (VMware BSD-3, Todd C. Miller ISC, the Regents' BSD-3,
+charclass.h public domain) and `SNPRINTF.LIC` (Powell, Weiss), copied from the source headers, go
+to `/usr/apkg/doc/` in the APKGENG prototype. Basenames 11 and 12 bytes: `s5-collision-scan.py
+--fail-on-collision` on a scratch build: 0 groups, the two names ≥ 14 bytes are the old ones.
+
+**Next mint.** `VER_ENG` still says 1.12.4, which is minted and staged with the old payload. The
+next APKGENG mint takes a new version; this commit does not choose it.
+
 ## 2026-10-30 — the UFS-only mark: `APKG_FSTYPE`, and apkg refuses such a package on s5 (built, NOT minted, NOT published)
 
 **Why.** The owner decided P-35 Option C (Y7, 2026-10-30): UFS is the only filesystem for new

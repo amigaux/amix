@@ -18,8 +18,9 @@ This directory contains third-party software:
   and Copyright (c) 2008, 2016 Todd C. Miller (ISC); fnmatch.h: Copyright
   (c) 1992, 1993 The Regents of the University of California (BSD-3);
   charclass.h: public domain, Todd C. Miller. heirloom/compat/snprintf.c --
-  Patrick Powell / Holger Weiss permissive license; src/apkg/md5.{c,h} --
-  public domain (Colin Plumb).
+  Patrick Powell / Holger Weiss permissive license. Texts:
+  heirloom/LICENSE/FNMATCH.LIC and SNPRINTF.LIC, shipped in APKGENG's
+  /usr/apkg/doc. src/apkg/md5.{c,h} -- public domain (Colin Plumb).
 
 
 Trademarks

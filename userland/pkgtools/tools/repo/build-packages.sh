@@ -549,6 +549,10 @@ EOF
     echo "d none /usr/apkg/doc 0755 root sys"
     echo "f none /usr/apkg/doc/OPENSOLARIS.LICENSE=$REPO/heirloom/LICENSE/OPENSOLARIS.LICENSE 0644 root sys"
     echo "f none /usr/apkg/doc/CALDERA.LICENSE=$REPO/heirloom/LICENSE/CALDERA.LICENSE 0644 root sys"
+    # compat/fnmatch (BSD-3: binaries carry the notice) and compat/snprintf;
+    # basenames under 14 bytes, distinct on s5 from the two above
+    echo "f none /usr/apkg/doc/FNMATCH.LIC=$REPO/heirloom/LICENSE/FNMATCH.LIC 0644 root sys"
+    echo "f none /usr/apkg/doc/SNPRINTF.LIC=$REPO/heirloom/LICENSE/SNPRINTF.LIC 0644 root sys"
     echo "d none /usr/apkg/man 0755 root sys"
     echo "d none /usr/apkg/man/man1 0755 root sys"
     echo "d none /usr/apkg/man/man1m 0755 root sys"

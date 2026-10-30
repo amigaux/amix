@@ -48,7 +48,9 @@ Other terms apply to material this project vendored or derived:
                        California), ISC and public domain (Todd C.
                        Miller); OpenBSD via openssh-portable;
                        snprintf.c -- Powell/Weiss permissive.
-                       Each keeps its own header.
+                       Each keeps its own header; the notices are
+                       collected in heirloom/LICENSE/FNMATCH.LIC and
+                       SNPRINTF.LIC, shipped in APKGENG's /usr/apkg/doc.
   research/heirloom/   patches and extracts of the above; CDDL-derived and
                        covered by heirloom/LICENSE/.
   src/apkg/md5.c       public domain (Colin Plumb, 1993), vendored with
