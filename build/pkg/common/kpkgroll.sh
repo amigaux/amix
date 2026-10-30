@@ -1,7 +1,7 @@
 # kpkgroll.sh -- roll a KERNEL-SPACE package (kernel or loader, contract
 # amix-dlm C2-3) into an SVR4 .pkg datastream.  Sourced, never executed.
 #
-#     . "$REPO/recipes/common/kpkgroll.sh"
+#     . "$AMIX_PKG_COMMON/kpkgroll.sh"
 #     amix_kpkgroll <workdir> <destroot> <PKG> <version> <outfile>
 #
 # Same pkgmk/pkgtrans path and the same name/arch/s5/newc gates as
@@ -40,7 +40,7 @@ amix_kpkgroll() {
 	# rolled under the work dir; installed at <outfile> only through the
 	# one-version check (onever.sh), which leaves <outfile> as it was on refusal
 	_kr_out="$_kr_work/.roll/$(basename "$_kr_final")"
-	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/onever.sh"
+	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_PKG_COMMON/onever.sh"
 
 	[ -x "$AMIX_PKGMK" ]    || { echo "[FAIL] host pkgmk missing: $AMIX_PKGMK" >&2; exit 1; }
 	[ -x "$AMIX_PKGTRANS" ] || { echo "[FAIL] host pkgtrans missing: $AMIX_PKGTRANS" >&2; exit 1; }

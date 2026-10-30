@@ -24,5 +24,14 @@ The fixtures are the reference the framework has to match:
   those packages; the test passes them to `pkgmeta catalog` and compares the
   whole line.
 
+The harness selftests (`run-selftests`, `make -C build selftests`) prove the
+gates of `build/pkg/common` can fail: `gate060-selftest.sh` (the 68060
+gate), `gate-gcc14-selftest.sh` (the gcc14 gates and the toolchain pin) and
+`onever-selftest.sh` (the one-version guard, against the kernel-space
+catalog of record in an amix-packages checkout, `AMIX_KSPACE_REPO`; without
+one it exits 77, a SKIP). They need both cross toolchains and the host
+pkgtools, which `run-selftests` builds when missing; CI runs them in the
+build container.
+
 When a recipe changes there, copy its `package.sh` and its new references
 here in the same commit.

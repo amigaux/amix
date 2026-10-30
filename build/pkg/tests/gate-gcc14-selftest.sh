@@ -2,9 +2,9 @@
 #
 # gate-gcc14-selftest.sh -- prove the TOOLCHAIN=gcc14 gates can FAIL.
 #
-#     sh tools/gate-gcc14-selftest.sh
+#     sh build/pkg/tests/gate-gcc14-selftest.sh
 #
-# The gcc14 counterpart of tools/gate060-selftest.sh (which stays the period
+# The gcc14 counterpart of gate060-selftest.sh (which stays the period
 # toolchain's).  Builds small probes with gcc14-cross-amix and checks that:
 #   - the 68060 gate (awk scanner, check-68060-safe.py, scan060-g14.py with
 #     scan060.py cross-examined) rejects -m68020 code -- a 64-bit multiply in
@@ -38,7 +38,8 @@
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=$(cd "$HERE/.." && pwd)
+AMIX_TOP=$(cd "$HERE/../../.." && pwd)
+. "$AMIX_TOP/build/pkg/layout.sh"
 export AMIX_PREFIX=/opt/amix
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/gate-g14.XXXXXX")
@@ -48,7 +49,18 @@ fail() { echo "gate-gcc14-selftest: FAIL -- $*" >&2; exit 1; }
 n=0
 ok() { n=$((n + 1)); echo "  ok $n  $*"; }
 
-if (TOOLCHAIN=gcc14; export TOOLCHAIN; unset AMIX_RECIPE_TOOLCHAINS; . "$REPO/recipes/common/amix-env.sh") >/dev/null 2>&1; then
+# The identity gate admits only the pinned prefix's bytes (gcc14-pin.sh). The
+# build container's gcc14 is built from the pinned commit but is not that
+# prefix byte for byte; with AMIX_G14_UNPINNED=skip (the CI kit job) such a
+# prefix is a SKIP, exit 77, instead of a failure.
+. "$AMIX_PKG_COMMON/gcc14-pin.sh"
+if [ "${AMIX_G14_UNPINNED:-}" = skip ] && ! amix_g14_pincheck "$AMIX_GCC14_PREFIX" 2> "$T/unpinned"; then
+	cat "$T/unpinned" >&2
+	echo "gate-gcc14-selftest: SKIP -- $AMIX_GCC14_PREFIX is not the pinned gcc14 build (AMIX_G14_UNPINNED=skip)" >&2
+	exit 77
+fi
+
+if (TOOLCHAIN=gcc14; export TOOLCHAIN; unset AMIX_RECIPE_TOOLCHAINS; . "$AMIX_PKG_COMMON/amix-env.sh") >/dev/null 2>&1; then
 	fail "amix-env.sh accepted TOOLCHAIN=gcc14 for a recipe that did not opt in"
 fi
 ok "amix-env.sh refuses gcc14 unless the recipe declares it"
@@ -56,9 +68,9 @@ ok "amix-env.sh refuses gcc14 unless the recipe declares it"
 TOOLCHAIN=gcc14
 AMIX_RECIPE_TOOLCHAINS="period gcc14"
 export TOOLCHAIN
-. "$REPO/recipes/common/amix-env.sh"
-. "$REPO/recipes/common/gates.sh"
-. "$REPO/recipes/common/pkgroll.sh"
+. "$AMIX_PKG_COMMON/amix-env.sh"
+. "$AMIX_PKG_COMMON/gates.sh"
+. "$AMIX_PKG_COMMON/pkgroll.sh"
 [ "$AMIX_TOOLCHAIN" = gcc14 ] || fail "AMIX_TOOLCHAIN is '$AMIX_TOOLCHAIN'"
 ok "amix-env.sh selected gcc14: $AMIX_GCC14_CC, sysroot $AMIX_SYSROOT"
 
@@ -191,7 +203,7 @@ sw_probe() {	# sw_probe <name> fp|mem <extra asm string or empty>
 	} > "$T/$1.c"
 	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
 }
-G14S="$REPO/recipes/common/gcc14/scan060-g14.py"
+G14S="$AMIX_PKG_COMMON/gcc14/scan060-g14.py"
 for shape in fp mem; do
 	sw_probe "sw-$shape" "$shape" ''
 	sw_probe "sw-$shape-movep" "$shape" '"\t.word 0x074c,0x0056\n"'
@@ -317,7 +329,7 @@ FP="$T/fakeprefix"
 cp -as "$AMIX_GCC14_PREFIX" "$FP"
 rm "$FP/lib/gcc/m68k-elf/14.2.0/specs"
 { cat "$AMIX_GCC14_PREFIX/lib/gcc/m68k-elf/14.2.0/specs"; echo; } > "$FP/lib/gcc/m68k-elf/14.2.0/specs"
-if (AMIX_GCC14_PREFIX="$FP"; export AMIX_GCC14_PREFIX; . "$REPO/recipes/common/amix-env.sh") > "$T/pin.log" 2>&1; then
+if (AMIX_GCC14_PREFIX="$FP"; export AMIX_GCC14_PREFIX; . "$AMIX_PKG_COMMON/amix-env.sh") > "$T/pin.log" 2>&1; then
 	fail "amix-env.sh accepted a prefix whose specs differ from the pin"
 fi
 grep 'not the pinned toolchain' "$T/pin.log" >/dev/null && grep 'specs:' "$T/pin.log" >/dev/null ||
@@ -335,12 +347,12 @@ fi
 # its Makefile links with the prefix directly: dlm-src.sh's check refuses a
 # build dir whose prefix is the one-byte-specs copy, and passes the real one.
 mkdir -p "$T/fakebuild"; ln -s "$FP" "$T/fakebuild/prefix"; ln -s "$AMIX_GCC14_ROOT/build/sysroot" "$T/fakebuild/sysroot"
-if (AMIX_G14_BUILD="$T/fakebuild"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin.log" 2>&1; then
+if (AMIX_G14_BUILD="$T/fakebuild"; . "$AMIX_PKG_COMMON/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin.log" 2>&1; then
 	fail "dlm-src.sh's box check accepted a prefix whose specs differ from the pin"
 fi
 grep 'not the pinned toolchain' "$T/dlmpin.log" >/dev/null && grep 'specs:' "$T/dlmpin.log" >/dev/null ||
 	{ cat "$T/dlmpin.log" >&2; fail "dlm-src.sh's refusal does not name specs"; }
-(AMIX_G14_BUILD="$AMIX_GCC14_ROOT/build"; . "$REPO/recipes/common/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin-ok.log" 2>&1 ||
+(AMIX_G14_BUILD="$AMIX_GCC14_ROOT/build"; . "$AMIX_PKG_COMMON/dlm-src.sh"; amix_dlm_g14_check) > "$T/dlmpin-ok.log" 2>&1 ||
 	{ cat "$T/dlmpin-ok.log" >&2; fail "dlm-src.sh's box check refused the pinned toolchain"; }
 ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes the pinned prefix"
 
@@ -351,11 +363,11 @@ ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs
 # and a log with no compile line.
 case " $AMIX_ARCH_FLAGS " in *" -mno-strict-align "*) ;; *) fail "AMIX_ARCH_FLAGS '$AMIX_ARCH_FLAGS' lacks -mno-strict-align" ;; esac
 amix_g14_align_check "$CC" "$AMIX_ARCH_FLAGS" "$AMIX_CFLAGS" >/dev/null 2>&1 || fail "the align check rejected the recipe flags"
-if (AMIX_ARCH_FLAGS=-m68020-60; unset AMIX_CFLAGS; export AMIX_ARCH_FLAGS; . "$REPO/recipes/common/amix-env.sh") > "$T/al1.log" 2>&1; then
+if (AMIX_ARCH_FLAGS=-m68020-60; unset AMIX_CFLAGS; export AMIX_ARCH_FLAGS; . "$AMIX_PKG_COMMON/amix-env.sh") > "$T/al1.log" 2>&1; then
 	fail "amix-env.sh accepted AMIX_ARCH_FLAGS without -mno-strict-align"
 fi
 grep 'does not end with -mno-strict-align' "$T/al1.log" >/dev/null || { cat "$T/al1.log" >&2; fail "al1 refused, but not by the align check"; }
-if (AMIX_CFLAGS="$AMIX_ARCH_FLAGS -O2 -mstrict-align"; export AMIX_CFLAGS; . "$REPO/recipes/common/amix-env.sh") > "$T/al2.log" 2>&1; then
+if (AMIX_CFLAGS="$AMIX_ARCH_FLAGS -O2 -mstrict-align"; export AMIX_CFLAGS; . "$AMIX_PKG_COMMON/amix-env.sh") > "$T/al2.log" 2>&1; then
 	fail "amix-env.sh accepted AMIX_CFLAGS ending in -mstrict-align"
 fi
 grep 'does not end with -mno-strict-align' "$T/al2.log" >/dev/null || { cat "$T/al2.log" >&2; fail "al2 refused, but not by the align check"; }

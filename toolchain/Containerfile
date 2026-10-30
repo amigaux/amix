@@ -30,7 +30,7 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/snapshot.sources \
  && apt-get -o Acquire::Check-Valid-Until=false update \
  && apt-get install -y --no-install-recommends \
-      autotools-dev bison bzip2 curl file flex g++ gcc git \
+      autotools-dev bison bzip2 cpio curl file flex g++ gcc git \
       gzip libc6-dev m4 make patch perl python3 strip-nondeterminism \
       xz-utils zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*

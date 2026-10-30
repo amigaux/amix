@@ -9,7 +9,7 @@ so each fact about a package is written in one place.
 | `pkgbuild.sh` | the driver: fetch (or copy the source in the tree), patch, configure and make (by style), the gates, stage, check the prototype, roll |
 | `styles/<STYLE>.sh` | the build styles: `configure` (`./configure --host`, then make), `make` (a plain Makefile, tools given on make's command line) and `hooks` (the recipe's own `build` hook) |
 | `layout.sh` | where the harness finds the toolchains, pkgtools and the build output in this checkout |
-| `common/` | the harness: environment, fetcher, gates and roll (comes with the packages) |
+| `common/` | the harness: environment, fetcher, gates and roll |
 | `pkgmeta` | checks `package.sh` and writes pkginfo, the catalog line, our catalog configuration lines and the index; also the one-version guard |
 | `check-packages` | CI's check of `userland/packages` |
 | `tests/` | the host tests, `make -C build test` |

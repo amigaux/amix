@@ -1,6 +1,6 @@
 # onever.sh -- one version, one set of bytes.  Sourced, never executed.
 #
-#     . "$REPO/recipes/common/onever.sh"
+#     . "$AMIX_PKG_COMMON/onever.sh"
 #     amix_one_version <rolled> <pkginst> <version> <outfile>
 #
 # Both roll functions (pkgroll.sh amix_pkgroll, kpkgroll.sh amix_kpkgroll)
@@ -44,7 +44,7 @@ amix_onever_roots() {
 amix_one_version() {
 	[ -f "$1" ] || { echo "[FAIL] one-version: no rolled datastream $1" >&2; exit 1; }
 	# shellcheck disable=SC2046
-	python3 -I "$AMIX_REPO_ROOT/recipes/common/onever.py" "$1" "$2" "$3" $(amix_onever_roots) > "$1.onever" 2>&1 \
+	python3 -I "$AMIX_PKG_COMMON/onever.py" "$1" "$2" "$3" $(amix_onever_roots) > "$1.onever" 2>&1 \
 		&& _ov_rc=0 || _ov_rc=$?     # recipes run under set -e
 	sed 's/^/  /' "$1.onever"; rm -f "$1.onever"
 	if [ "$_ov_rc" -ne 0 ]; then

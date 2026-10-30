@@ -6,7 +6,7 @@
 # '#'-as-comment and constant-folded FP all produce exit 0 and a wrong binary.
 # So each of these reads OBJECT CODE out of the shipped artifact.
 #
-#     . "$REPO/recipes/common/gates.sh"
+#     . "$AMIX_PKG_COMMON/gates.sh"
 #     amix_gate_d4   build/dest/usr/local/bin/patch   (file, archive or dir)
 #     amix_gate_060_tree build/dest                    (pkgroll runs this)
 #     amix_gate_elf  build/dest/usr/local/bin/patch
@@ -346,13 +346,13 @@ D4EOF
 
 # amix_g14_scan3 <linked elf> -- scanner 3 under TOOLCHAIN=gcc14.
 # scan060.py sizes switch tables for gcc 2.7's layout and reads GCC 14's
-# tables as code (recipes/common/gcc14/scan060-g14.py says how), so here
+# tables as code (build/pkg/common/gcc14/scan060-g14.py says how), so here
 # scanner 3 is scan060-g14.py, which sizes each table from its bound check and
 # refuses a verdict on one it cannot size; and scan060.py still runs as an
 # independent decoder: any hit it reports must be explained by scan060-g14.py
 # (inside a sized table, or at an odd address), or the gate fails.
 amix_g14_scan3() {
-	_g3_s="$AMIX_REPO_ROOT/recipes/common/gcc14/scan060-g14.py"
+	_g3_s="$AMIX_PKG_COMMON/gcc14/scan060-g14.py"
 	if ! _g3_out=$(OBJDUMP="$OBJDUMP" python3 "$_g3_s" "$1" 2>&1); then
 		echo "  D4 FAIL $1 -- scan060-g14.py:" >&2
 		echo "$_g3_out" | sed 's/^/          /' >&2
@@ -435,7 +435,7 @@ int main(int c, char **v) { return sw(c, c) + mp(g); }
 D4EOF
 	$CC $AMIX_ARCH_FLAGS -O2 -o "$_gs_d/sw" "$_gs_d/sw.c" || {
 		_gs_fail "switch probe did not link"; return 1; }
-	_gs_g14="$AMIX_REPO_ROOT/recipes/common/gcc14/scan060-g14.py"
+	_gs_g14="$AMIX_PKG_COMMON/gcc14/scan060-g14.py"
 	OBJDUMP="$OBJDUMP" python3 "$_gs_g14" "$_gs_d/expand" >/dev/null 2>&1 || {
 		_gs_fail "scan060-g14.py rejected the $AMIX_ARCH_FLAGS executable"; return 1; }
 	if OBJDUMP="$OBJDUMP" python3 "$_gs_g14" "$_gs_d/keep" >/dev/null 2>&1; then

@@ -1,13 +1,17 @@
-# build/Makefile: host tests of the build framework, and the check of the
-# packages directory.
+# build/Makefile: host tests of the build framework, the selftests of the
+# packaging harness (they need the cross toolchains: run them in the build
+# container), and the check of the packages directory.
 #
 # MIT licence, see LICENSE at the top of the repository.
 
-.PHONY: test check-packages
+.PHONY: test selftests check-packages
 
 test:
 	python3 -I pkg/tests/test-pkgmeta
 	python3 -I pkg/tests/test-pkgbuild
+
+selftests:
+	sh pkg/tests/run-selftests
 
 check-packages:
 	sh pkg/check-packages

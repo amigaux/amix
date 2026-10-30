@@ -2,7 +2,7 @@
 # driver repository's module object for one kernel line.  Sourced, never
 # executed; the recipe (recipes/<module>/build.sh) sources its pin.sh first.
 #
-#     . "$REPO/recipes/common/kmodpkg.sh"
+#     . "$AMIX_PKG_COMMON/kmodpkg.sh"
 #     amix_kmodpkg <recipe dir> <k30|k46>
 #
 # The variables it reads from the recipe's pin.sh:

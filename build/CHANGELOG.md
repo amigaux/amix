@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — the packaging harness in the amix layout (5f48444)
+
+build/pkg/common (moved in with the packages, 5649328) finds itself through AMIX_PKG_COMMON and builds into out/pkg.
+The gate060, gate-gcc14 and onever selftests moved to build/pkg/tests and take the tree from layout.sh; `make -C build
+selftests` runs them in the CI kit job (onever skips without the kspace catalog of record; gate-gcc14 skips because the
+container's gcc14 is not the pinned prefix). The build container gains cpio. diffutils rolls from the amix layout with
+sum -r identical to its recorded build.
+
 ## 2026-10-30 — build/pkg ready for the packages move-in (d9aa6fd)
 
 pkgbuild.sh defaults to build/pkg/common; layout.sh gives the harness the tree: toolchains by GCA/G14 (the harness's

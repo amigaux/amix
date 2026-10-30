@@ -6,7 +6,7 @@
 # prefix directly.  One pin for both: a new toolchain is a re-pin HERE (and a
 # re-mint of every gcc14 package and box binary).
 #
-#     . "$AMIX_REPO_ROOT/recipes/common/gcc14-pin.sh"
+#     . "$AMIX_PKG_COMMON/gcc14-pin.sh"
 #     amix_g14_identity <prefix> || exit 1
 #         the prefix's pinned files, then the ABI self-check of its
 #         bin/m68k-elf-gcc; prints why and returns 1 on any difference

@@ -2,9 +2,9 @@
 #
 # gate060-selftest.sh -- prove the 68060 build gate fires, end to end.
 #
-#     sh tools/gate060-selftest.sh
+#     sh build/pkg/tests/gate060-selftest.sh
 #
-# The gate (recipes/common/gates.sh D4, strict since 2026-10-05) has three
+# The gate (build/pkg/common/gates.sh D4, strict since 2026-10-05) has three
 # layers; each is exercised here against probes built through the real
 # wrapper, and each must REJECT a 68060-unsafe artifact and PASS a safe one:
 #
@@ -16,7 +16,7 @@
 #                        whose payload carries one 64-bit multiply in an
 #                        executable or in an archive member is NOT rolled
 #
-#   4. amix_pkgroll    the rolled datastream, with ../amix-packagemanager/tools/repo/scan060.py
+#   4. amix_pkgroll    the rolled datastream, with userland/pkgtools/tools/repo/scan060.py
 #                        (the scanner of record for linked files and .pkg)
 #
 # Exit 0 and "gate060-selftest: PASS" last, or non-zero on the first miss.
@@ -24,7 +24,8 @@
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=$(cd "$HERE/.." && pwd)
+AMIX_TOP=$(cd "$HERE/../../.." && pwd)
+. "$AMIX_TOP/build/pkg/layout.sh"
 export AMIX_PREFIX=/opt/amix
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/gate060.XXXXXX")
@@ -35,15 +36,15 @@ n=0
 ok() { n=$((n + 1)); echo "  ok $n  $*"; }
 
 # --- 1. the environment ------------------------------------------------------
-if (AMIX_MUL64=keep; export AMIX_MUL64; . "$REPO/recipes/common/amix-env.sh") >/dev/null 2>&1; then
+if (AMIX_MUL64=keep; export AMIX_MUL64; . "$AMIX_PKG_COMMON/amix-env.sh") >/dev/null 2>&1; then
 	fail "amix-env.sh accepted AMIX_MUL64=keep"
 fi
 ok "amix-env.sh refuses AMIX_MUL64=keep"
 
 unset AMIX_MUL64 AMIX_SCAN060
-. "$REPO/recipes/common/amix-env.sh"
-. "$REPO/recipes/common/gates.sh"
-. "$REPO/recipes/common/pkgroll.sh"
+. "$AMIX_PKG_COMMON/amix-env.sh"
+. "$AMIX_PKG_COMMON/gates.sh"
+. "$AMIX_PKG_COMMON/pkgroll.sh"
 [ "$AMIX_SCAN060" = 1 ] && [ "$AMIX_MUL64" = expand ] || fail "amix-env.sh did not export AMIX_SCAN060=1 / AMIX_MUL64=expand"
 ok "amix-env.sh exports AMIX_MUL64=expand AMIX_SCAN060=1"
 echo "  scan060 objdump: $(amix_scan060_objdump)"

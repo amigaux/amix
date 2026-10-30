@@ -1,6 +1,6 @@
 # amix-env.sh -- the one place a recipe learns what "build for Amix" means.
 #
-#     . "$REPO/recipes/common/amix-env.sh"
+#     . "$AMIX_PKG_COMMON/amix-env.sh"
 #
 # Sourced, never executed.  Every recipe sources exactly this and re-derives
 # nothing: PORTING.md sec 5 ("automate the recipe, never automate the porting")
@@ -35,9 +35,10 @@ esac
 # the fallback is $0's grandparent, which is the same directory for a
 # recipes/<tool>/build.sh caller.  Both siblings stay env-overridable below.
 AMIX_REPO_ROOT="${AMIX_REPO_ROOT:-${REPO:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)}}"
-if [ ! -f "$AMIX_REPO_ROOT/recipes/common/amix-env.sh" ]; then
-	echo "[FAIL] cannot locate the amix-packages checkout from '$0'" >&2
-	echo "       Set AMIX_REPO_ROOT (or REPO) to this repository's root." >&2
+AMIX_PKG_COMMON="${AMIX_PKG_COMMON:-$AMIX_REPO_ROOT/build/pkg/common}"
+if [ ! -f "$AMIX_PKG_COMMON/amix-env.sh" ]; then
+	echo "[FAIL] cannot locate the harness from '$0'" >&2
+	echo "       Set AMIX_REPO_ROOT to the top of the amix checkout." >&2
 	exit 1
 fi
 AMIX_SIBLINGS=$(cd "$AMIX_REPO_ROOT/.." && pwd)
@@ -72,7 +73,7 @@ export AMIX_TOOLCHAIN
 export AMIX_HOST_TRIPLET=m68k-cbm-sysv4
 
 if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
-	. "$AMIX_REPO_ROOT/recipes/common/gcc14-env.sh"
+	. "$AMIX_PKG_COMMON/gcc14-env.sh"
 else
 # The period toolchain -- from here to the matching `fi', unindented.
 
@@ -154,8 +155,8 @@ AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020}"
 AMIX_CFLAGS="${AMIX_CFLAGS:-$AMIX_ARCH_FLAGS -O -Wall}"
 export AMIX_ARCH_FLAGS AMIX_CFLAGS
 
-export AMIX_CPP="$AMIX_REPO_ROOT/recipes/common/amix-cpp"
-export AMIX_BUILD_ROOT="$AMIX_REPO_ROOT/build"
+export AMIX_CPP="$AMIX_PKG_COMMON/amix-cpp"
+export AMIX_BUILD_ROOT="${AMIX_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
 export AMIX_CONFIGURE_LENIENT=
 fi
 # --- end of the toolchain selection -----------------------------------------

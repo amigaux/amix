@@ -58,8 +58,7 @@ TOP=$(cd "$PKGDIR/../.." && pwd)
 COMMON=${AMIX_PKG_COMMON:-$PKGDIR/common}
 [ -f "$COMMON/amix-env.sh" ] || {
 	echo "[FAIL] no harness: $COMMON has no amix-env.sh" >&2
-	echo "       build/pkg/common comes with the packages; until then set" >&2
-	echo "       AMIX_PKG_COMMON to an amix-packages recipes/common" >&2
+	echo "       unset AMIX_PKG_COMMON for build/pkg/common, or name a harness" >&2
 	exit 2
 }
 COMMON=$(cd "$COMMON" && pwd)

@@ -1,14 +1,17 @@
 #!/bin/sh
 #
-# onever-selftest.sh -- prove the one-version guard (recipes/common/onever.sh)
+# onever-selftest.sh -- prove the one-version guard (build/pkg/common/onever.sh)
 # refuses a changed datastream under a listed version and allows an
 # identical one, through the real roll path.
 #
-#     sh tools/onever-selftest.sh
+#     [AMIX_KSPACE_REPO=<amix-packages checkout>] sh build/pkg/tests/onever-selftest.sh
 #
 # Reads the catalog of record (build/kspace/repo) and its kern46m and
-# kbootset datastreams (since fff860dc: -61 and -24); writes only under a
-# temporary directory.
+# kbootset datastreams (since fff860dc: -61 and -24), and the kernel-k46-m
+# recipe, from AMIX_KSPACE_REPO: the amix-packages checkout that keeps the
+# kernel-space line until it moves (default: amix-packages beside the main
+# working tree of this checkout). Without one it says SKIP and exits 77.
+# Writes only under a temporary directory.
 #
 #   1. a text-only re-roll of the record's kern46m (the recipe's pkginfo at the
 #      record's version, the record's payload) through amix_kpkgroll is
@@ -29,11 +32,21 @@
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=$(cd "$HERE/.." && pwd)
-export REPO
-. "$REPO/recipes/common/amix-env.sh" >/dev/null
-. "$REPO/recipes/common/kpkgroll.sh"
-. "$REPO/recipes/common/onever.sh"
+AMIX_TOP=$(cd "$HERE/../../.." && pwd)
+. "$AMIX_TOP/build/pkg/layout.sh"
+if [ -z "${AMIX_KSPACE_REPO:-}" ]; then
+	_g=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+		_g=$(cd "$(dirname "$_g")/.." && pwd)/amix-packages && [ -d "$_g" ] && AMIX_KSPACE_REPO=$_g
+fi
+REPO=${AMIX_KSPACE_REPO:-}
+[ -f "$REPO/build/kspace/repo/catalog" ] && [ -f "$REPO/recipes/kernel-k46-m/pkginfo" ] || {
+	echo "onever-selftest: SKIP -- no kspace catalog of record: set AMIX_KSPACE_REPO" \
+		"to an amix-packages checkout with build/kspace/repo and recipes/kernel-k46-m${REPO:+ ($REPO has none)}" >&2
+	exit 77
+}
+. "$AMIX_PKG_COMMON/amix-env.sh" >/dev/null
+. "$AMIX_PKG_COMMON/kpkgroll.sh"
+. "$AMIX_PKG_COMMON/onever.sh"
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/onever.XXXXXX")
 trap 'rm -rf "$T"' EXIT
@@ -118,7 +131,7 @@ grep -q "already listed with other bytes" "$T/kb2.log" && [ ! -e "$T/out-kb2/kb.
 ok "kbootset $KB (an ordinary md5 row): identical allowed, one byte off refused"
 
 # --- 6. the default roots ----------------------------------------------------
-D=$(unset AMIX_ONEVER_ROOTS; amix_onever_roots)
+D=$(unset AMIX_ONEVER_ROOTS; AMIX_REPO_ROOT=$REPO; amix_onever_roots)
 case " $D " in *" $REC "*) ;; *) fail "default roots lack $REC: $D" ;; esac
 NS=$(ls -d "$REPO"/build/kspace/superseded/repo-*/catalog 2>/dev/null | wc -l)
 [ "$(echo "$D" | tr ' ' '\n' | grep -c '/superseded/repo-')" = "$NS" ] || fail "default roots lack superseded roots: $D"

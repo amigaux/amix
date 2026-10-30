@@ -1,6 +1,6 @@
 # fetch.sh -- checksum-verified source fetch.  Sourced, never executed.
 #
-#     . "$REPO/recipes/common/fetch.sh"
+#     . "$AMIX_PKG_COMMON/fetch.sh"
 #     amix_fetch "$URL" "$SHA256" "$BUILD/patch-2.5.9.tar.gz"
 #
 # Modelled on ../amix-040-060-port/tools/netbsd-pin.sh, and it keeps that

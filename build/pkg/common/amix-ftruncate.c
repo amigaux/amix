@@ -1,7 +1,7 @@
 /*
  * amix-ftruncate.c -- an ftruncate that does not panic the stock kernel.
  *
- *     $CC $AMIX_CFLAGS -c recipes/common/amix-ftruncate.c   (put the .o in LIBS)
+ *     $CC $AMIX_CFLAGS -c build/pkg/common/amix-ftruncate.c   (put the .o in LIBS)
  *
  * AMIX 2.1c's ftruncate is fcntl(F_FREESP).  Shrinking a file larger than its
  * direct blocks (~96 KiB) to an EOF that is not block aligned, inside the block
