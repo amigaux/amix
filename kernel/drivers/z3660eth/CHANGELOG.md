@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-30 — builds inside amix (b1be3ea, ba4fb98, f201889, 164d3bb, c2ea34b)
+
+README points at amix's kernel/k30, kernel/dlm and ../z3660scsi, with a builds-inside-amix paragraph (`amix-build
+z3660eth`, the dlm kit). module/Makefile defaults DLM to $(TOP)/../../dlm, as a4091 and z3660scsi do. Sibling paths in
+BUILD.md, driver.conf, docs, NOTES, src comments and tools/ use amix's dirs; the z3660scsi cite 9ceada6 is now 90d03ae.
+Old review ids are worded for outside readers. The userland samples carry no address: ZEN_ADDR, ZEN_NETMASK and
+ZEN_GATEWAY come from the box's /etc/default/zen. Objects unchanged (KIT_REV 084dc21): module k30 af24613d, k46
+86fe050b; static k30 c9370806, k46 37185507.
+
 ## 2026-10-30 — moved in from amix-z3660net
 
 jusii/amix-z3660net rx-backpressure 93fd0d3 (79 commits) moved into amix kernel/drivers/z3660eth by subtree merge after
