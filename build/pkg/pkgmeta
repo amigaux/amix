@@ -51,7 +51,7 @@ SOURCE = ("URL", "SHA256")
 DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
-            ("APKG_DESC", ""))
+            ("APKG_DESC", ""), ("CONFFILES", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -121,6 +121,130 @@ def source_tree(recipe, m):
     return own if os.path.isdir(own) else None
 
 
+# Object lines of a prototype(4): ftype, then (except for i) a class, then
+# the path; l and s paths are "link=target".
+OBJECT_TYPES = "fevdxlspcb"
+
+# The run-level link bands (P-36 section 2.2): S01-S09 stock mounts and
+# kbootset's namelist, S10-S19 first boot and upgrade (the installer's, never
+# a package's), S20-S29 devices and modules, S69 network, S70-S89 daemons,
+# S90-S98 late, S99z* the mark-good step.
+RC_LINK_RE = re.compile(r"^/etc/rc[0-6S]\.d/([^/]+)$")
+
+
+def prototype_objects(recipe):
+    """(ftype, class, path, target) for every object line of RECIPE's
+    prototype, or None when it has no prototype."""
+    proto = os.path.join(recipe, "prototype")
+    if not os.path.isfile(proto):
+        return None
+    out = []
+    with open(proto, encoding="latin-1") as fp:
+        for line in fp:
+            f = line.split()
+            if len(f) < 3 or f[0].startswith(("#", "!")):
+                continue
+            if f[0].isdigit():      # an optional part number first
+                f = f[1:]
+            if len(f) < 3 or f[0] not in OBJECT_TYPES or len(f[0]) != 1:
+                continue
+            path, _, target = f[2].partition("=")
+            out.append((f[0], f[1], path, target))
+    return out
+
+
+def rc_link_problem(name):
+    """Why a run-level directory may not hold NAME, or None."""
+    m = re.match(r"^([SK])(\d\d)(.+)$", name)
+    if not m:
+        return "is not S<nn><name> or K<nn><name>"
+    if m.group(1) == "K":
+        return None
+    n = int(m.group(2))
+    if 10 <= n <= 19:
+        return "S10-S19 are first boot and upgrade, the installer's"
+    if n == 99:
+        return None if m.group(3).startswith("z") else "S99 is S99z*, the mark-good step"
+    if 1 <= n <= 9 or 20 <= n <= 29 or 69 <= n <= 98:
+        return None
+    return ("S%02d is in no band (S01-S09, S20-S29, S69, S70-S89, S90-S98, "
+            "S99z*)" % n)
+
+
+def prototype_problems(recipe, m):
+    """The CONFFILES and run-level link checks against the prototype."""
+    out = []
+    objs = prototype_objects(recipe)
+    conf = words(m["CONFFILES"])
+    if conf and objs is None:
+        return ["CONFFILES is set, but there is no prototype to check it against"]
+    for c in conf:
+        if not c.startswith("/"):
+            out.append("CONFFILES: %s is not an absolute path" % c)
+    for c in sorted(set(c for c in conf if conf.count(c) > 1)):
+        out.append("CONFFILES lists %s twice" % c)
+    prefix = m["PREFIX"].rstrip("/")
+    for c in conf:
+        if prefix and (c == prefix or c.startswith(prefix + "/")):
+            out.append("CONFFILES: %s is under PREFIX=%s; config files live "
+                       "in /etc or /var" % (c, m["PREFIX"]))
+        elif c.startswith("/") and not c.startswith(("/etc/", "/var/")):
+            out.append("CONFFILES: %s is not under /etc or /var" % c)
+    for ftype, _, path, _ in objs or ():
+        if ftype == "e" and path not in conf:
+            out.append("prototype: e %s is not in CONFFILES" % path)
+        rc = RC_LINK_RE.match(path)
+        if rc:
+            why = rc_link_problem(rc.group(1))
+            if why:
+                out.append("prototype: %s: %s" % (path, why))
+        if path == "/etc/rc.d" or path.startswith("/etc/rc.d/"):
+            out.append("prototype: %s: /etc/rc.d is not used; ship "
+                       "/etc/init.d/<svc> and its rc<n>.d links" % path)
+    types = {}
+    for ftype, _, path, _ in objs or ():
+        types.setdefault(path, ftype)
+    lines = [path for _, _, path, _ in objs or ()]
+    for c in conf:
+        if lines.count(c) > 1:
+            out.append("prototype: %s, a conffile, is on %d lines; one line, "
+                       "class conffile at the roll" % (c, lines.count(c)))
+    for c in conf:
+        if c.startswith("/") and c not in types:
+            out.append("CONFFILES: %s is not in the prototype" % c)
+        elif c in types and types[c] not in ("f", "e"):
+            out.append("CONFFILES: %s is a '%s' object, not f or e"
+                       % (c, types[c]))
+    return out
+
+
+def man_warnings(recipe, m):
+    """What RECIPE installs without a man page in its payload: commands (in a
+    bin/ or sbin/ directory) and config files (CONFFILES, and files under
+    /etc other than the run-level scripts and links)."""
+    objs = prototype_objects(recipe) or []
+    pages = set()
+    for ftype, _, path, _ in objs:
+        d = path.split("/")
+        if ftype in "fls" and "man" in d[:-1] and re.match(r"^(man|cat)\w+$", d[-2]):
+            page = re.sub(r"\.(gz|Z|z)$", "", d[-1])
+            pages.add(page.rsplit(".", 1)[0] if "." in page else page)
+    missing = []
+    for ftype, _, path, target in objs:
+        d = path.split("/")
+        if ftype in "fls" and len(d) > 2 and d[-2] in ("bin", "sbin"):
+            # a link is documented by its target's page (bunzip2 by bzip2.1)
+            if d[-1] not in pages and target.rsplit("/", 1)[-1] not in pages:
+                missing.append(path)
+    conf = set(words(m["CONFFILES"]))
+    for ftype, _, path, _ in objs:
+        etc = (ftype in "fev" and path.startswith("/etc/")
+               and not path.startswith(("/etc/init.d/", "/etc/rc"))) or path in conf
+        if etc and path.rsplit("/", 1)[-1] not in pages and path not in missing:
+            missing.append(path)
+    return missing
+
+
 def problems(recipe, m):
     """Every reason the recipe's package.sh is refused, as strings."""
     out = []
@@ -185,6 +309,7 @@ def problems(recipe, m):
         for d in words(m[k]):
             if not TOKEN_RE.match(d):
                 out.append("%s: '%s' is not a package name" % (k, d))
+    out += prototype_problems(recipe, m)
     return out
 
 
@@ -214,6 +339,13 @@ def load_root(root):
             errors.append(str(e))
     errors += one_version([(m["NAME"], m["PKG"], pkgversion(m),
                             os.path.join(root, m["NAME"])) for m in ms])
+    owner = {}
+    for m in ms:
+        for c in words(m["CONFFILES"]):
+            if c in owner and owner[c] != m["NAME"]:
+                errors.append("CONFFILES: %s is listed by %s and %s; a "
+                              "conffile has one owner" % (c, owner[c], m["NAME"]))
+            owner.setdefault(c, m["NAME"])
     if errors:
         raise Refused("\n".join(errors))
     return ms
@@ -228,8 +360,9 @@ def pkgversion(m):
 def pkginfo(m):
     v = pkgversion(m)
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
-            "CLASSES=none\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%sDESC=%s\n"
-            % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"], VENDOR,
+            "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%sDESC=%s\n"
+            % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"],
+               "none conffile" if m["CONFFILES"] else "none", VENDOR,
                VENDOR, m["PKG"], v, m["TOOLCHAIN"],
                "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
                m["DESC"]))
@@ -448,12 +581,19 @@ def main(argv):
     if a.cmd == "check":
         for path in a.paths:
             if os.path.isfile(os.path.join(path, "package.sh")):
-                load(path)
+                ms = [load(path)]
                 print("pkgmeta: %s ok" % path)
             else:
-                n = len(load_root(path))
+                ms = load_root(path)
                 print("pkgmeta: %s ok, %d recipe(s), one version each"
-                      % (path, n))
+                      % (path, len(ms)))
+            for m in ms:
+                r = path if len(ms) == 1 and os.path.isfile(
+                    os.path.join(path, "package.sh")) else os.path.join(path, m["NAME"])
+                miss = man_warnings(r, m)
+                if miss:
+                    sys.stderr.write("pkgmeta: warning: %s: no man page for %s\n"
+                                     % (m["NAME"], " ".join(miss)))
     elif a.cmd == "pkginfo":
         sys.stdout.write(pkginfo(load(a.recipe)))
     elif a.cmd == "catalog":

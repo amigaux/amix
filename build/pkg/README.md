@@ -46,6 +46,7 @@ so each fact about a package is written in one place.
 | `TOOLCHAIN=gcc14` | `gcc14` or `period` |
 | `PREFIX=/opt/amix` | the install prefix |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
+| `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
@@ -67,6 +68,16 @@ build/pkg/pkgmeta index <packages dir> [-o FILE] [--check]
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
 ```
 
+- `check` also reads the prototype. It refuses a `CONFFILES` path that the
+  prototype does not have, has on more than one line, or has as anything but
+  an `f` or `e` object; a path under `PREFIX`, or outside `/etc` and `/var`;
+  an `e` object that `CONFFILES` does not list; one conffile listed by two
+  packages; an object under `/etc/rc.d`; and a run-level link outside the
+  boot bands (P-36 section 2.2): `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
+  and `S99z*`, with `S10`-`S19` the installer's. It warns, without refusing,
+  about every command (in a `bin/` or `sbin/` directory) and every config file
+  (`CONFFILES`, and files in `/etc` other than run-level scripts) that has no
+  man page in the payload.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one
   amix-packagemanager's `gen-catalog.py` writes for the rolled package:
