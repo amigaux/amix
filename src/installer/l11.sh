@@ -659,12 +659,9 @@ l11_upgrade_capture()
 		SWAP_HOLD=y
 	fi
 
-	OLD_FS=
-	for _fs in ufs s5
-	do
-		if /etc/mount "/dev/dsk/c${ID}d0s1" /mnt 1 $_fs > /dev/null 2>&1; then OLD_FS=$_fs; break; fi
-	done
-	[ -n "$OLD_FS" ] || die "upgrade: the installed root c${ID}d0s1 does not mount read-only (ufs or s5) -- check it in repair mode first"
+	# ufs only: no installed system has an s5 root (P-35, 2026-10-30)
+	/etc/mount "/dev/dsk/c${ID}d0s1" /mnt 1 ufs > /dev/null 2>&1 \
+		|| die "upgrade: the installed root c${ID}d0s1 does not mount read-only as ufs -- check it in repair mode first"
 	for _t in /usr/sbin/chroot /usr/bin/find /usr/bin/cpio /usr/bin/du /usr/bin/sum /bin/sh
 	do
 		[ -x "/mnt$_t" ] || { /etc/umount /mnt; die "upgrade: the installed root has no $_t to save itself with"; }
