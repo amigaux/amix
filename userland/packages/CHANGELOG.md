@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — pkg-smoke runs the older recipes' smoke tests (2e08db2)
+
+pkg-smoke runs each smoke.sh where it expects to run (beside its fixtures for gzip, grep, less, make, patch and tar),
+builds host fixtures with tests/mkfixture.py and brings out.tar home; tar's new host half reads the box's archive
+with the host tar. All 13 current revisions install, check, smoke and remove cleanly in one E1 run.
+
 ## 2026-10-30 — man pages in /opt/amix/man with whatis.d; 13 revisions (7feb82c..102cd9e)
 
 Every package's pages move to /opt/amix/man/<sect>/<name> with whatis.d/<PKG> (tools/manpages.sh, docs/man-pages.md,
