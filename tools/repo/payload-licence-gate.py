@@ -121,6 +121,21 @@ LIBM_OBJECTS = {
 LIBM_DISTINCTIVE = {"matherr.c", "reduce.c"}
 LIBM_COOCCURRENCE = 3
 
+# Kickstart ROM images.  The Amix permission (Amiga Corporation, 2026-09-23)
+# covers Amix; it does not cover the Kickstart ROM, and a Kickstart image never
+# goes out.  Read from the content, not the filename: a ROM starts with the
+# magic word $1111 (256K) or $1114 (512K and up) followed by JMP abs.l ($4EF9);
+# a 16-bit byte-swapped dump (EPROM burner order) starts with the same bytes
+# swapped; a Cloanto-encrypted image starts with "AMIROMTYPE1".  Measured
+# 2026-10-30 on a set of 105 Kickstart 1.3-3.2.2 / CDTV / A3000 boot-ROM
+# images: 89 caught, and the 16 missed are all split halves (hi/lo, even/odd
+# chip images); 0 hits on 29 expansion-board ROMs.  An AROS ROM matches
+# too; refusing it is the safe side.  NOT seen: split halves, a ROM inside an
+# archive or disk image, a compressed ROM.
+KICKSTART_HEADERS = (b"\x11\x11\x4e\xf9", b"\x11\x14\x4e\xf9",
+                     b"\x11\x11\xf9\x4e", b"\x14\x11\xf9\x4e")
+KICKSTART_ENCRYPTED = b"AMIROMTYPE1"
+
 ALLOWED_NEEDED = {"/usr/lib/libc.so.1", "libc.so.1"}
 
 # Provenance directories holding VENDOR content -- out of scope (see SCOPE).
@@ -148,6 +163,15 @@ def strings_of(data):
     if len(cur) >= 4:
         out.append(bytes(cur))
     return out
+
+
+def kickstart_rom(data):
+    """A reason string if `data` is a Kickstart ROM image, else None."""
+    if data.startswith(KICKSTART_ENCRYPTED):
+        return "encrypted Kickstart ROM image (AMIROMTYPE1)"
+    if data[:4] in KICKSTART_HEADERS:
+        return "Kickstart ROM image (reset header %s)" % data[:4].hex()
+    return None
 
 
 def readelf_needed(path):
@@ -227,10 +251,17 @@ def scan_tree(root):
             except OSError:
                 continue
             n_file += 1
+            rel = os.path.relpath(full, root)
+            rom = kickstart_rom(data)
+            if rom:
+                findings.append((rel, REFUSE, [rom + " -- not covered by "
+                                               "the Amix permission; never "
+                                               "shipped"]))
+                worst = REFUSE
+                continue
             if not data.startswith(ELF_MAGIC):
                 continue
             n_elf += 1
-            rel = os.path.relpath(full, root)
             v, why, notes = inspect_elf(full, data)
             for n in notes:
                 allnotes.append((rel, n))
@@ -331,6 +362,13 @@ def self_test():
                                                 or "nothing (correct)"))
     if clean & LIBM_OBJECTS:
         print("  FAIL: fired on a clean binary"); ok = False
+    rom = b"\x11\x14\x4e\xf9\x00\xf8\x00\xd2" + b"\x00" * (512 * 1024 - 8)
+    print("  known-positive Kickstart header -> %s"
+          % (kickstart_rom(rom) or "NOTHING"))
+    if not kickstart_rom(rom) or not kickstart_rom(b"AMIROMTYPE1\x1b"):
+        print("  FAIL: the Kickstart ROM test did not fire"); ok = False
+    if kickstart_rom(fake):
+        print("  FAIL: the Kickstart ROM test fired on an ELF"); ok = False
     print("self-test: %s" % ("PASS" if ok else "FAIL"))
     return 0 if ok else 2
 

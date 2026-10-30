@@ -864,6 +864,36 @@ check "vendor stock/ is skipped by provenance path" \
 check "the skip is visible in the output, never silent" \
     bash -c "python3 '$PLG' '$T19W/scoped' 2>&1 | grep -q 'include-stock'"
 
+# a Kickstart ROM image refuses, loose or inside a real datastream.  The image
+# is synthetic: the reset header of a 512K Kickstart and zeros, no ROM bytes.
+mkdir -p "$T19W/rom" "$T19W/rompkg/spool" "$T19W/romswap"
+python3 -c 'import sys; open(sys.argv[1],"wb").write(b"\x11\x14\x4e\xf9\x00\xf8\x00\xd2"+bytes(524280))' \
+    "$T19W/rom/kick.bin"
+python3 -c 'import sys; open(sys.argv[1],"wb").write(b"\x14\x11\xf9\x4e"+bytes(262140))' \
+    "$T19W/romswap/kick.bin"
+python3 "$PLG" "$T19W/rom" >"$WORK/t19rom.out" 2>&1
+check "a loose Kickstart ROM image refuses (rc 2)" test $? -eq 2
+check "... and says why" grep -q 'Kickstart ROM image' "$WORK/t19rom.out"
+python3 "$PLG" "$T19W/romswap" >/dev/null 2>&1
+check "a byte-swapped Kickstart ROM image refuses (rc 2)" test $? -eq 2
+T19HB="$HERE/../../../heirloom/build-host/bin"
+if [ -x "$T19HB/pkgmk" ] && [ -x "$T19HB/pkgtrans" ]; then
+    printf 'PKG=ROMTEST\nNAME=rom fixture\nVERSION=1.0\nARCH=m68k\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' \
+        > "$T19W/rompkg/pkginfo"
+    printf 'i pkginfo=%s\nd none /opt/romtest 0755 root sys\nf none /opt/romtest/kick.rom=%s 0644 root sys\n' \
+        "$T19W/rompkg/pkginfo" "$T19W/rom/kick.bin" > "$T19W/rompkg/prototype"
+    mkdir -p "$T19W/romstg"
+    ( cd "$T19W/rompkg" && "$T19HB/pkgmk" -o -d "$T19W/rompkg/spool" -f prototype && \
+      "$T19HB/pkgtrans" -s "$T19W/rompkg/spool" "$T19W/romstg/ROMTEST-1.0.pkg" ROMTEST ) \
+        >"$WORK/t19rom.mk" 2>&1
+    python3 "$PLG" "$T19W/romstg" >"$WORK/t19rompkg.out" 2>&1
+    check "a Kickstart ROM inside a .pkg payload refuses (rc 2)" test $? -eq 2
+    check "... named by its path inside the package" \
+        grep -q 'ROMTEST-1.0.pkg!.*kick.rom.*Kickstart ROM image' "$WORK/t19rompkg.out"
+else
+    echo "  skip- Kickstart ROM in a datastream (host pkgmk/pkgtrans missing)"
+fi
+
 # publish.sh must actually call it -- a gate nobody runs is not a gate
 check "publish.sh invokes the payload licence gate" \
     grep -q 'payload-licence-gate.py' "$HERE/../publish.sh"
