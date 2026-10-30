@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — works in its amix home (2117886, 93eda8e, 5bd7cbe, 45fac1b)
+
+README points at amix's kernel/k30, kernel/dlm and kernel/drivers/a4091; module/Makefile defaults DLM to amix's
+kernel/dlm; sibling-repo paths in notes, docs and comments use amix's dirs; old review ids and station names reworded
+for outside readers. Module and static objects equal the standalone build: module k30 2c9e3803, k46 21754e70.
+
 ## 2026-10-30 — moved in from amix-z3660scsi
 
 jusii/amix-z3660scsi master 209bdd2 (77 commits) moved into amix kernel/drivers/z3660scsi by subtree merge after a
