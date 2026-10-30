@@ -13,10 +13,10 @@ portable bundle you transfer + run; --push/--run automate that over FTP + telnet
 
 Usage:
   amix-build --list                       # show discovered drivers
-  amix-build a4091 z3660scsi z3660net     # bundle these
+  amix-build a4091 z3660scsi z3660eth     # bundle these
   amix-build --all                        # bundle every discovered driver
   amix-build                              # interactive menu (on a TTY)
-  amix-build a4091 z3660scsi z3660net --push --run --host <box-ip> --install
+  amix-build a4091 z3660scsi z3660eth --push --run --host <box-ip> --install
 
 Drivers:   every subdirectory with a driver.conf in --drivers DIR, else $AMIX_DRIVERS,
            else amix's kernel/drivers/.

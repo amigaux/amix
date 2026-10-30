@@ -26,25 +26,25 @@ for the driver-author contract and [`REPOS.md`](REPOS.md) for where each driver 
 ## The drivers
 
 `amix-build` combines independent, MIT-licensed drivers into one kernel. They live in amix under
-`kernel/drivers/`; a driver that has not moved in yet lives in its own repository. `Z3660-amix` is
+`kernel/drivers/`, and each is selected by its directory's name. `Z3660-amix` is
 the firmware/emulator that owns the protocol the Z3660 drivers follow (reference — not built here):
 
 | Driver | What | Kind | Where it lives |
 |---|---|---|---|
 | `a4091` | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver | [`kernel/drivers/a4091`](../drivers/a4091) (formerly `jusii/amix-a4091`) |
 | `z3660scsi` | Z3660 (PiStorm piscsi mailbox) | SCSI driver | [`kernel/drivers/z3660scsi`](../drivers/z3660scsi) (formerly `jusii/amix-z3660scsi`) |
-| `z3660net` | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | net driver | [`jusii/amix-z3660net`](https://github.com/jusii/amix-z3660net), moving into amigaux/amix as `kernel/drivers/z3660eth` |
+| `z3660eth` | Z3660 STREAMS/DLPI ethernet | net driver | [`kernel/drivers/z3660eth`](../drivers/z3660eth) (formerly `jusii/amix-z3660net`) |
 | `Z3660-amix` | Z3660 firmware + emulator — owns the piscsi / ethernet protocol the drivers re-implement against (fork of `shanshe/Z3660`) | firmware | [`jusii/Z3660-amix`](https://github.com/jusii/Z3660-amix), its own repository |
 
 `amix-build` finds every driver with a `driver.conf` under amix's `kernel/drivers/`; nothing
-beside the amix checkout is needed. To build from driver checkouts kept elsewhere (a driver that
-has not moved in yet, or a working copy of your own), point it at their folder with `--drivers`
-(or `AMIX_DRIVERS`) -- an explicit override that replaces `kernel/drivers/`:
+beside the amix checkout is needed. A driver's name is its directory's name, with a leading `amix-`
+dropped. To build from driver checkouts kept elsewhere (a working copy of your own), point it at
+their folder with `--drivers` (or `AMIX_DRIVERS`) -- an explicit override that replaces
+`kernel/drivers/`:
 
 ```sh
 git clone https://github.com/amigaux/amix && cd amix/kernel/k30
-./amix-build --list                                  # a4091, z3660scsi from kernel/drivers/
-git clone https://github.com/jusii/amix-z3660net ~/amix-drivers/amix-z3660net
+./amix-build --list                                  # a4091, z3660eth, z3660scsi from kernel/drivers/
 ./amix-build --drivers ~/amix-drivers --list         # only what is in ~/amix-drivers
 ```
 
@@ -77,7 +77,7 @@ the box.
 
 ```sh
 ./amix-build --list                          # what drivers are discoverable
-./amix-build a4091 z3660scsi z3660net         # assemble a bundle for these three
+./amix-build a4091 z3660scsi z3660eth         # assemble a bundle for these three
 ./amix-build --all                            # every discovered driver
 ./amix-build                                  # interactive menu (on a TTY)
 ./amix-build --config drivers.list            # selection from a file (one name per line)
@@ -88,14 +88,14 @@ and run it on the box:
 
 ```sh
 #   (copy the tar to the box's /tmp, then on the box:)
-cd /tmp && tar xf amix-kernel-a4091+z3660scsi+z3660net.tar && sh amix-build/build.sh
+cd /tmp && tar xf amix-kernel-a4091+z3660scsi+z3660eth.tar && sh amix-build/build.sh
 ```
 
 …or let `amix-build` deploy it (FTP push + telnet launch + poll to done):
 
 ```sh
 export AMIX_HOST=<box-ip> AMIX_USER=root AMIX_PASS=...
-./amix-build a4091 z3660scsi z3660net --push --run --install
+./amix-build a4091 z3660scsi z3660eth --push --run --install
 ```
 
 Flags: `--drivers <dir>` (where the driver checkouts are; default `kernel/drivers/`),

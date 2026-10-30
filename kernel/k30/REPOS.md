@@ -4,19 +4,19 @@
 MIT-licensed device drivers are built into a kernel by `kernel/k30` in the
 [amix](https://github.com/amigaux/amix) repository. Each driver has a single responsibility and
 they reference each other by path — **no submodules**. The drivers live in amix under
-`kernel/drivers/`; a driver that has not moved in yet lives in its own repository:
+`kernel/drivers/`:
 
 | Part | Owns | Kind | Where it lives |
 |---|---|---|---|
 | **`kernel/k30`** (this directory) | The **on-box build**: kernel-assembly harness, `driver.conf` discovery, generated SCSI selector wiring, the D245 clean-gate, and the host↔box tools. No driver source, no Amix. | build | [amigaux/amix](https://github.com/amigaux/amix), `kernel/k30` (formerly the repository `amix-kerntools`) |
 | **a4091** | The Amix **SCSI** driver for the Commodore A4091 / A4092 / A4770 (NCR 53C710). | driver (SCSI) | [amigaux/amix](https://github.com/amigaux/amix), `kernel/drivers/a4091` (formerly jusii/amix-a4091) |
 | **z3660scsi** | The Amix **SCSI** driver for the Z3660 PiStorm `piscsi` mailbox. | driver (SCSI) | [amigaux/amix](https://github.com/amigaux/amix), `kernel/drivers/z3660scsi` (formerly jusii/amix-z3660scsi) |
-| **z3660net** | The Amix **ethernet** driver for the Z3660 (`z3660eth`, STREAMS/DLPI). | driver (net) | [jusii/amix-z3660net](https://github.com/jusii/amix-z3660net), moving into amigaux/amix as `kernel/drivers/z3660eth` |
+| **z3660eth** | The Amix **ethernet** driver for the Z3660 (STREAMS/DLPI). | driver (net) | [amigaux/amix](https://github.com/amigaux/amix), `kernel/drivers/z3660eth` (formerly jusii/amix-z3660net) |
 | **Z3660-amix** | The Z3660 **firmware + emulator** (Zynq ARM firmware, 68030 PMMU + emulated A3000 SCSI so a Z3660 can boot Amix). Owns the piscsi / ethernet **protocol spec** the `z3660*` drivers re-implement against. Fork of `shanshe/Z3660`. | firmware | [jusii/Z3660-amix](https://github.com/jusii/Z3660-amix), its own repository |
 
 Each driver is independently MIT-licensed and ships only its `driver.conf` + its own `src/` +
 `kernel-patches/` (unified diffs against stock Amix files) — never any full Amix source, and never
-the generated `sd.c` / kernel `Makefile`. The `z3660scsi` / `z3660net` drivers re-implement
+the generated `sd.c` / kernel `Makefile`. The `z3660scsi` / `z3660eth` drivers re-implement
 against [`Z3660-amix`](https://github.com/jusii/Z3660-amix)'s protocol headers (citation discipline —
 no shared include tree).
 
