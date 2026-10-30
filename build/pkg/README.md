@@ -38,13 +38,14 @@ so each fact about a package is written in one place.
 | `DESC` | one line; pkginfo `DESC` |
 | `APKG_DESC=""` | one line; when set, pkginfo `APKG_DESC` (after `PSTAMP`), which the catalog description takes in place of `SUMMARY` |
 | `CATEGORY` | one of the catalog groups: system, network, utility, archive, library, shell, language, text, editor, documentation, development, multimedia, x11, games, source |
-| `SET` | the sets the package belongs to, space-separated: minimal, standard, full, developer, x11, extra |
+| `SET` | the sets the package belongs to, space-separated: base, minimal, standard, full, developer, x11, extra. `base` (P-36) is in every install, beside whichever set is chosen |
 | `LICENSE` | an SPDX identifier |
 | `URL`, `SHA256` | the source tarball and its sha256; neither, when the source is in the tree |
 | `SRCPKG=""` | build from another package's `src/` (`amix-benchmark-gcc14` from `amix-benchmark`) |
 | `STYLE=configure` | `styles/<STYLE>.sh` |
-| `TOOLCHAIN=gcc14` | `gcc14` or `period` |
+| `TOOLCHAIN=gcc14` | `gcc14`, or `period` (gcc-cross-amix) for a tool that must link only the stock libraries |
 | `PREFIX=/opt/amix` | the install prefix |
+| `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
 | `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
@@ -68,9 +69,13 @@ build/pkg/pkgmeta index <packages dir> [-o FILE] [--check]
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
 ```
 
-- `check` also reads the prototype. It refuses a `CONFFILES` path that the
+- `check` also reads the prototype. It refuses an object outside `PREFIX`,
+  the man tree `/opt/amix/man`, `/etc`, `/var` and `SYSTEM_PATHS` (a
+  directory above one of them, `/opt` or `/usr`, may be listed), and a
+  `SYSTEM_PATHS` entry that is relative, one level deep, already inside those
+  trees, or holds nothing. It refuses a `CONFFILES` path that the
   prototype does not have, has on more than one line, or has as anything but
-  an `f` or `e` object; a path under `PREFIX`, or outside `/etc` and `/var`;
+  an `f` or `e` object; a path not under `/etc` or `/var`;
   an `e` object that `CONFFILES` does not list; one conffile listed by two
   packages; an object under `/etc/rc.d`; and a run-level link outside the
   boot bands (P-36 section 2.2): `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
@@ -124,7 +129,9 @@ are in this checkout:
   `gcc-cross-amix` checkout beside the main working tree, and `G14` the
   container's gcc14 as `toolchain/extract-g14.sh` copies it, in the main
   working tree's `out/toolchain/gcc14-cross-amix`. The harness's gcc14 pin
-  must be the commit in `toolchain/gcc14-cross-amix.pin`;
+  must be the commit in `toolchain/gcc14-cross-amix.pin`, and a
+  `gcc-cross-amix` checkout the commit in `toolchain/gcc-cross-amix.pin` (the
+  container's copy is made from the pin and has no history);
 - pkgtools: the host `pkgmk` and `pkgtrans` that
   `userland/pkgtools/heirloom/build-host.sh` builds, and
   `userland/pkgtools/tools/repo/scan060.py`;
