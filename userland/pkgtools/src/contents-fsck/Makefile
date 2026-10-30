@@ -6,8 +6,8 @@
 # Targets:
 #   host   (default) build ./contents-fsck with the host gcc, strict C89
 #   amix   cross-build ./contents-fsck.amix for Amix (m68k SVR4)
-#          (sources CROSS_ENV, default ../gcc-cross-amix/build/env.sh beside
-#           this repo, automatically if the toolchain is not on PATH)
+#          (sources CROSS_ENV, default $(GCA)/env.sh -- gcc-cross-amix at
+#           amix's toolchain/gcc-cross-amix.pin -- if it is not on PATH)
 #   test   run the test suite (builds host first)
 #   kat    build + mechanically verify the known-answer branch/switch
 #          battery for the cross pipeline (tests/kat-branch.c)
@@ -36,7 +36,7 @@ CROSS_GCCREAL = m68k-cbm-sysv4-gcc.real
 CROSS_AS      = m68k-cbm-sysv4-as
 CROSS_LD      = m68k-cbm-sysv4-ld
 CROSS_CFLAGS  = -O
-CROSS_ENV    ?= $(CURDIR)/../../../gcc-cross-amix/build/env.sh
+CROSS_ENV    ?= $(if $(GCA),$(GCA)/env.sh)
 CROSS_SYSROOT = $(HOME)/opt/amix-cross/m68k-cbm-sysv4/sysroot
 CROSS_CRTDIR  = $(CROSS_SYSROOT)/usr/ccs/lib
 
@@ -53,7 +53,11 @@ amix: contents-fsck.amix
 
 contents-fsck.amix: $(SRC) tools/asmfix.pl
 	@( command -v $(CROSS_GCCREAL) >/dev/null 2>&1 || \
-	    { echo "sourcing $(CROSS_ENV)"; . $(CROSS_ENV); }; \
+	    { [ -n "$(CROSS_ENV)" ] && [ -r "$(CROSS_ENV)" ] || \
+	      { echo "no cross toolchain: set GCA to the build/ directory of" \
+	        "gcc-cross-amix at toolchain/gcc-cross-amix.pin, or CROSS_ENV" \
+	        "to its env.sh" >&2; exit 1; }; \
+	      echo "sourcing $(CROSS_ENV)"; . $(CROSS_ENV); }; \
 	  set -e; \
 	  $(CROSS_GCCREAL) -S $(CROSS_CFLAGS) \
 		-I$(CROSS_SYSROOT)/usr/include \

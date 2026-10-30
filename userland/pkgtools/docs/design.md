@@ -16,7 +16,7 @@ docs/                design docs & findings
 research/            dive artifacts (read-only reference)
 ```
 
-Toolchain: `. <gcc-cross-amix>/build/env.sh` → `m68k-cbm-sysv4-gcc`
+Toolchain: `. "$GCA/env.sh"` (gcc-cross-amix at amix's `toolchain/gcc-cross-amix.pin`) → `m68k-cbm-sysv4-gcc`
 (sysroot already populated). Host builds use plain `gcc -std=gnu89` for parity testing.
 
 ## 1. Heirloom engine port (`heirloom/`)

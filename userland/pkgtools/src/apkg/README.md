@@ -113,7 +113,7 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 make            # host build (Linux, gcc -std=gnu89) -> ./apkg
 make test       # host build + full functional suite (tests/run-tests.sh)
 
-. <gcc-cross-amix>/build/env.sh   # a gcc-cross-amix checkout
+. "$GCA/env.sh"  # gcc-cross-amix at amix's toolchain/gcc-cross-amix.pin
 make amix       # cross build -> ./apkg.amix (m68k MSB ELF)
 ```
 

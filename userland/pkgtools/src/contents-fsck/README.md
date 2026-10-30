@@ -111,8 +111,8 @@ Deliberate decisions:
 
 ```
 make            # host build: gcc -std=c89 -pedantic -Wall -Wextra
-make amix       # cross build for Amix (sources gcc-cross-amix/build/env.sh
-                #   automatically if the toolchain is not on PATH)
+make amix       # cross build for Amix (sources $GCA/env.sh, gcc-cross-amix
+                #   at amix's toolchain/gcc-cross-amix.pin, if not on PATH)
 make test       # run the test suite
 make kat        # build + verify the known-answer branch/switch battery
 ```

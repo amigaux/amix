@@ -38,15 +38,16 @@ else
 fi
 
 # ---------------- cross build ----------------
-# default: a gcc-cross-amix checkout beside this repo
-CROSS_ENV=${CROSS_ENV:-$DIR/../../../../gcc-cross-amix/build/env.sh}
+# gcc-cross-amix at amix's toolchain/gcc-cross-amix.pin: CROSS_ENV, else
+# $GCA/env.sh (GCA = its build/ directory)
+CROSS_ENV=${CROSS_ENV:-${GCA:+$GCA/env.sh}}
 SYSROOT=${AMIX_SYSROOT:-$HOME/opt/amix-cross/m68k-cbm-sysv4/sysroot}
 CRT=$SYSROOT/usr/ccs/lib
 
 command -v m68k-cbm-sysv4-gcc.real >/dev/null 2>&1 || \
-    { [ -r "$CROSS_ENV" ] && . "$CROSS_ENV"; }
+    { [ -n "$CROSS_ENV" ] && [ -r "$CROSS_ENV" ] && . "$CROSS_ENV"; }
 if ! command -v m68k-cbm-sysv4-gcc.real >/dev/null 2>&1; then
-    echo "SKIP: cross toolchain not available"
+    echo "SKIP: cross toolchain not available (set GCA, see toolchain/gcc-cross-amix.pin)"
     exit `expr $fails + 0`
 fi
 
