@@ -203,8 +203,8 @@ echo "tolerant parser:   OK (corrupt factory record in contents tolerated)"
 echo "VERSION relaxed:   OK (listed as \"(none)\")"
 
 # ------------------------------------------------------------------
-# 5. compat pw/gr parser regression against the Amix /etc/passwd and
-#    a stock-format /etc/group fixture (the libc-passwd sidestep)
+# 5. compat pw/gr parser regression against stock-format /etc/passwd
+#    and /etc/group fixtures of ours (the libc-passwd sidestep)
 # ------------------------------------------------------------------
 echo "== pw/gr parser regression (Amix-format fixtures) =="
 "$TOP/compat/tests/test-pwgr.sh" || { echo "SMOKE FAIL: pw/gr parser"; exit 1; }
