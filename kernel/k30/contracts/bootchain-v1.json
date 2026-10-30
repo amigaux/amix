@@ -1,0 +1,563 @@
+{
+  "contract": "amix-bootchain",
+  "version": 1,
+  "status": "authoritative",
+  "owner": "kernel/k30",
+  "updated": "2026-08-11",
+
+  "revisions": [
+    { "date": "2026-07-19", "change": "initial: checksum, infoblock, profiles, boot2_identities, rootdev.configs" },
+    { "date": "2026-08-11", "change": "ADDITIVE: rootdev.patch -- the install-time rootdev/swapfile data patch. No existing key changed.",
+      "version_stays_1": "DELIBERATE. `version` is a compatibility handshake, not an edit counter: amix-installng's tools/bootchain-conform.py refuses outright when `version` differs from the value its tools/lib/bootchain.py was written against (die(), exit 2), so bumping it for an ADDITIVE section would break a sibling repo's check suite for no gain. Bump `version` only when an existing key changes meaning. Use `revisions` for additions." },
+    { "date": "2026-08-18", "change": "ADDITIVE: rootdev.rootfstype (the root-fs-type selector, asserted-not-stamped) and rootdev.patch.site_derivation.by_symbol (the 040/060 line's symbol-located site, anchor demoted to cross-check). No existing key changed; `version` stays 1 per the 2026-08-11 note." },
+    { "date": "2026-08-19", "change": "CORRECTION (informational field, no gate read it): reference_artifacts.boot2_good.svr4_sum was 38011 and is 37995. The decimal was a transcription error in the initial revision that never matched its own svr4_sum_hex (0x946b == 37995) nor the medium; re-measured on the reference golden image, where iblk(boot2).ib_chksum reads 37995 and a fresh svr4-sum over the 8192 stored bytes recomputes 37995. `sum -r 14193` was re-verified against the system sum(1) and is unchanged. See that key's svr4_sum_corrected note." },
+    { "date": "2026-08-19", "change": "ADDITIVE: boot2_identities.good_040 -- the 68040/68060 second-stage loader, metal-proven -- recorded BESIDE `good`, which is byte-for-byte untouched. With it: the machine-readable `proven` list, `default_identity`, and `consumer_policy`, which separate the question 'is this loader proven' from 'is this the loader I asked for'; and reference_artifacts.boot2_good_040 (its measured svr4-sum, the iblk stamp a builder can cross-check against). No existing key changed value; the only edits to existing keys are the `covers` bullet and `unknown_policy`, both of which were written when there was exactly one good identity and were merely incomplete. `version` stays 1 per the 2026-08-11 note: amix-installng's write-bootchain.py / build-bootslice.py read boot2_identities.good and are unaffected by an added sibling key -- see consumer_policy for why they must NOT be widened." },
+    { "date": "2026-10-05", "change": "ADDITIVE: boot2_identities.good_rth (030) and good_040_rth (040/060), the RTH1 root-hint loaders, recorded BESIDE good/good_040 (both byte-for-byte untouched) on a new `candidate` list: emulator-observed, NOT metal-proven, so they are not in `proven` and install-boot2 still needs --allow-unproven-boot2 for them. A gate accepts a candidate only when its caller names it (--identity); the default stays `good`. Promotion to `proven` follows a metal boot. `version` stays 1 per the 2026-08-11 note." },
+    { "date": "2026-10-07", "change": "RE-CUT (after the first metal boot of the RTH1 loaders): good_rth and good_040_rth now name the loaders whose rth.s (1) compares fssm_Device as a C string -- Kickstart's MakeDosNode (V36 on) counts the NUL into the BSTR length, and the first cut's name test then read the byte after the device's ln_Name NUL, 'Z' on the Z3660 driver: on metal it printed 'no boot node' -- and (2) reports a booted node on the Z3660 Zorro II boot vehicle (144b/03) as id 144b0100, base 0 (good_rth ded98398, good_040_rth bc549dc9; an intermediate build with (2) only, 20419742 / 718bf836, never shipped). The first cut stays listed as candidates good_rth_kt51 / good_040_rth_kt51 so media mastered with it can still be named. good/good_040 byte-for-byte untouched." },
+    { "date": "2026-10-08", "change": "RE-CUT (a loader stall on an A4000T): good_rth and good_040_rth now name the loaders whose rth.s walk is guarded -- TypeOfMem() on bn_DeviceNode, the FSSM, the DosEnvec and the BSTR before each read, a node whose chain leaves RAM skipped, a walk past 64 nodes ending as AMBIG (good_rth ae721707, good_040_rth 035fe768). Never-guess preserved: a skip or the cap can only remove a hint, never create a match (walk_guard). The 2026-10-07 loaders stay listed as candidates good_rth_v2 / good_040_rth_v2 (ded98398 / bc549dc9) so media mastered with them can still be named. good/good_040 byte-for-byte untouched." },
+    { "date": "2026-10-08", "change": "v4: the walk now also runs under Forbid()/Permit(), on top of the v3 guard -- good_rth 5cc3ad2c, good_040_rth c14f7cd7. The v3 builds ae721707 / 035fe768 were never mastered (test images only) and are not listed. On the A4000T the v2 walk completed with one match when the loader ran slowly, and the previous release's loader also stalled once, so the A4000T stall is not shown to be the walk; the guard and Forbid are defences." },
+    { "date": "2026-10-09", "change": "PROMOTION: good_040_rth (c14f7cd7, v4) joins `proven` -- every boot row PASS on a real A4000D (68060 + Z3660). good_rth (5cc3ad2c) stays `candidate`: that test put no 030 loader on metal." }
+  ],
+
+  "covers": [
+    "The byte layout of an Amix boot chain: where boot1, the infoblocks (IBLK) and the payloads sit, for both the disk (bootpart) and the floppy media profiles.",
+    "The field offsets and semantics inside struct infoblock.",
+    "The ib_chksum algorithm (SVR4 `sum`), specified exactly enough to reimplement independently, including its 32-bit accumulator wrap.",
+    "The identity (sha256) of every known-good second-stage loader (boot2) and of the known-foreign one, so a build can refuse the foreign one and can name which proven loader it means (boot2_identities.proven).",
+    "How a destination SCSI id is written INTO an already-gated kernel image (rootdev.patch): the anchor rule that locates the two fields, the preconditions that must hold before a byte is written, and the per-id expected-sum table that keeps every downstream checksum gate fail-closed."
+  ],
+  "does_not_cover": [
+    "The RDB/partition-table layout that locates the boot slice in the first place -- that is tools/rdb-verify.sh's domain; this contract starts at the boot slice's first byte.",
+    "The ELF relocation semantics boot2 applies to the kernel -- see relsim.py/reltest; this contract only asserts the payload IS an ELF at the right offset.",
+    "The content of boot1, boot2 or the kernel. Those are proprietary Commodore blobs; this contract names them by hash only and no repo may commit their bytes.",
+    "How a kernel's rootdev is chosen -- see tools/rootdev-assert.py and contracts.rootdev below for the pairing, but the dev_t derivation lives in the config sources."
+  ],
+
+  "intent": "This file is the single DEFINITION shared across repos, deliberately NOT shared code. kernel/k30, amix-installng and grimoire-amix each implement it independently and must agree on the vectors in contracts/bootchain-vectors/. Two independent implementations that must agree on real artifacts is a stronger guarantee than one shared module that can be wrong in both places at once.",
+
+  "conformance_protocol": {
+    "rule": "EACH CONSUMER REPO SUPPLIES ITS OWN CONFORMANCE RUNNER. The runner imports ITS OWN implementation and reads this contract + the vectors by path (kernel/k30/contracts/... in amix). Never import an implementation across repos.",
+    "runners": {
+      "amix-kerntools": "tools/bootchain-conform.py -> tools/bootchain-verify.py chksum()",
+      "amix-installng": "tools/bootchain-conform.py -> tools/lib/bootchain.py svr4_sum()  [the working reference]"
+    },
+    "generator_grammar": "Reimplement the vector generator grammar locally too -- it is small, and importing it would reintroduce the cross-repo code dependency this design exists to avoid.",
+    "trap": "A runner must name the implementation it actually loaded, and must refuse when its caller has evidently misunderstood the scope. A runner that imports its implementation from its own directory while accepting --contract/--vectors overrides, run from a sibling repo, redirects the DEFINITION but not the IMPLEMENTATION: it prints PASS having executed zero sibling code. It PASSes either way, which is what makes it invisible. kernel/k30's runner therefore refuses a foreign-repo CWD (exit 2) instead of greening it.",
+    "principle": "The cross-repo guarantee comes from N independent implementations each running the same vectors -- never from one runner reaching sideways into another repo."
+  },
+
+  "checksum": {
+    "name": "svr4-sum",
+    "aka": ["SVR4 sum(1)", "ib_chksum", "chksum()"],
+    "transcribed_from": "usr/sys/amiga/boot/chksum.c (Copyright (C) 1991, Commodore Business Machines)",
+    "returns": "a value in [0, 0xFFFF]",
+    "algorithm": [
+      "1. Sum every byte of the buffer, each treated as UNSIGNED, into an accumulator.",
+      "2. The accumulator is a C `unsigned long` on m68k SVR4 = 32 bits, so it WRAPS: take the total modulo 2**32 before folding.",
+      "3. Fold once:  temp = (sum >> 16) + (sum & 0xFFFF)",
+      "4. Fold TWICE: sum  = (temp >> 16) + (temp & 0xFFFF)",
+      "5. Return sum. After two folds the result is always <= 0xFFFF, so a trailing & 0xFFFF is a no-op (harmless, not required)."
+    ],
+    "reference_c": "unsigned long chksum(unsigned char *m, unsigned long n){ unsigned long sum=0,temp; while(n-->0) sum += *m++; temp=(sum>>16)+(sum&0xFFFF); sum=(temp>>16)+(temp&0xFFFF); return sum; }",
+    "traps": [
+      "THE 32-BIT WRAP IS LOAD-BEARING AND EASY TO LOSE. In a language with arbitrary-precision integers (Python), `sum(buf)` does NOT wrap. An implementation that omits the modulo-2**32 step agrees with this contract for every buffer whose byte total stays under 2**32 -- i.e. under ~16 MiB of 0xFF, or ~33 MiB of typical data -- and then silently diverges. Kernels (~2 MB) never reach it; a miniroot or a whole-slice image can. Vector ff-16843010 pins this exact boundary.",
+      "WHY IT STAYED HIDDEN. Two of the four historical transcriptions (the kernel/k30 chksum(), grimoire-amix fold()) omitted the wrap; amix-installng svr4_sum() had it right. The bug was INVISIBLE because every buffer ever checksummed was a ~2 MB kernel or a ~700 KB compressed floppy stream -- three to four binary orders of magnitude below the 2**32 threshold. It becomes REACHABLE the moment the checksum is applied to a miniroot or a whole-slice image (see rootdev.configs.*.miniroot). It was found by transcribing chksum.c to write this contract, not by a failure -- writing the definition down is what surfaced it, before it could produce a corrupt descriptor on real media.",
+      "The double fold is not decorative. A single fold is wrong for any buffer whose byte total reaches 0xFFFFFFFF; vector ff-16843009 pins that.",
+      "Folding in a `while (s >> 16)` loop happens to match this contract ONLY when the accumulator has already been wrapped to 32 bits. Unwrapped + looped is a third, distinct, wrong answer."
+    ]
+  },
+
+  "infoblock": {
+    "magic": "IBLK",
+    "magic_bytes": "49424c4b",
+    "struct_size": 512,
+    "transcribed_from": "usr/sys/amiga/boot/infoblock.h",
+    "byte_order": "big-endian",
+    "fields": {
+      "ib_ident":    { "offset": "0x00", "size": 8, "note": "identification, 'IBLK\\0' padded to 8 bytes; only the first 4 bytes are checked" },
+      "ib_size":     { "offset": "0x08", "size": 4, "note": "size in bytes of the payload that FOLLOWS this infoblock, as stored on the medium (compressed size when the profile compresses)" },
+      "ib_fullsize": { "offset": "0x0c", "size": 4, "note": "size of the payload after decompression; 0 when the payload is stored uncompressed" },
+      "ib_chksum":   { "offset": "0x10", "size": 4, "note": "svr4-sum over exactly ib_size bytes of the payload AS STORED (see profile.checksum_covers)" },
+      "ib_bind":     { "offset": "0x14", "size": 4, "note": "text binding address; not gated by this contract" }
+    }
+  },
+
+  "profiles": {
+    "bootpart": {
+      "description": "The disk path: an Amix RDB boot slice (DosType UNI\\0 = 0x554e4900). The kernel is stored UNCOMPRESSED and byte-identical. All offsets are FIXED and relative to the first byte of the boot slice.",
+      "offsets_relative_to": "the first byte of the UNI\\0 boot slice",
+      "offsets_fixed": true,
+      "compression": "none",
+      "checksum_covers": "the payload bytes exactly as stored on the medium (== the raw payload, since nothing is compressed)",
+      "kernel_ib_fullsize": 0,
+      "map": {
+        "boot1":     { "offset": "0x0000", "size": 1024, "note": "first-stage loader; STARTOFFSET=1024. Stock -- reported informationally, never gated." },
+        "iblk_boot2":{ "offset": "0x0400", "size": 512,  "describes": "boot2" },
+        "boot2":     { "offset": "0x0600", "size": 8192, "note": "second-stage loader; the proven flags-based loader is exactly 8192 B" },
+        "iblk_unix": { "offset": "0x2600", "size": 512,  "describes": "unix", "note": "0x0600 + 8192 -- follows from boot2's size" },
+        "unix":      { "offset": "0x2800", "size": "ib_size of iblk_unix", "note": "the ET_REL kernel ELF; must start with 7f 45 4c 46" }
+      },
+      "plausibility": {
+        "boot2_size": 8192,
+        "kernel_min_size": 262144,
+        "kernel_must_fit_in_image": true
+      }
+    },
+
+    "floppy": {
+      "description": "The 880 KB DD boot-floppy path. The kernel is LZW-COMPRESSED and the checksum covers the COMPRESSED stream, not the raw kernel. Conflating this with bootpart is a known trap. Unlike bootpart, the offsets here are DISCOVERED, not fixed: the builder works from a donor floppy whose bootstrap length is not a constant.",
+      "offsets_relative_to": "the first byte of the floppy image",
+      "offsets_fixed": false,
+      "medium_size": 901120,
+      "compression": {
+        "format": "LZW, Unix compress(1) .Z",
+        "command": "compress -b 16",
+        "bits": 16,
+        "block_mode": true,
+        "stream_magic": "1f9d"
+      },
+      "checksum_covers": "the COMPRESSED (.Z) stream, exactly ib_size bytes from the payload offset -- NOT the decompressed kernel",
+      "kernel_ib_fullsize": "the DECOMPRESSED size of the kernel (nonzero, unlike bootpart)",
+      "discovery": {
+        "iblk_unix": "scan for the 'IBLK' magic within the first 0x2800 bytes. Several byte sequences spell IBLK by coincidence, so a candidate is only genuine when its own ib_chksum matches svr4-sum over its own declared ib_size bytes at the payload offset; fall back to field plausibility only if no candidate self-verifies.",
+        "payload": "the first occurrence of the LZW stream magic 1f 9d at or after offset 0x800"
+      },
+      "plausibility": {
+        "_note": "HEURISTIC, NOT SPEC. These bounds are reverse-engineered -- no Commodore document specifies a legal ib_fullsize range. They exist only to reject a wildly wrong descriptor when picking the genuine IBLK out of coincidental 'IBLK' byte sequences, and they must NOT be promoted to a hard gate on a number nobody has specified. If a legitimate kernel ever falls outside them, widen the bounds; do not reject the kernel.",
+        "_datum": "Measured: a combined kernel (cdfs + z3660scsi + z3660net + a3091) is 1258355 B brel -> 729345 B after `compress -b16`, against an 890880 B floppy payload budget. So a real ib_fullsize sits at ~1.26 MB, comfortably inside these bounds, and the compressed stream uses ~82% of the budget.",
+        "comp_len_max": "medium_size - payload_offset",
+        "fullsize_min": 524288,
+        "fullsize_max": 3145728
+      }
+    }
+  },
+
+  "boot2_identities": {
+    "note": "boot2 is a PROPRIETARY Commodore blob. It is identified here by hash ONLY; its bytes must never be committed to any repo. Builders extract it at runtime from a local-only image master, or build it from src/boot2-patches/ with tools/build-boot2.sh.",
+    "size": 8192,
+
+    "proven": ["good", "good_040", "good_040_rth"],
+    "candidate": ["good_rth", "good_rth_v2", "good_040_rth_v2", "good_rth_kt51", "good_040_rth_kt51"],
+    "default_identity": "good",
+    "proven_note": "`proven` lists the KEYS in this object that name a metal-proven loader, oldest first. A consumer must read this list rather than iterating the object's keys: `size`, `note`, `proven`, `candidate`, `default_identity`, `proven_note`, `candidate_note`, `consumer_policy`, `known_foreign` and `unknown_policy` are metadata, not identities, and a key-iterating consumer would classify them as loaders. `default_identity` is the identity a gate expects when its caller names none -- so an unqualified check still pins exactly one hash, and asking for a different one is a deliberate, visible act (boot2-sha-gate.sh --identity, bootchain-verify.py --identity, bootpart-kernel.py install-boot2's mandatory --expect-sha256).",
+    "candidate_note": "`candidate` lists the KEYS of loaders that are built, gated and emulator-observed but NOT metal-proven. They are never in `proven` until a metal boot promotes them; bootpart-kernel.py install-boot2 refuses them without --allow-unproven-boot2. boot2-sha-gate.sh and bootchain-verify.py accept a candidate only when the caller names it with --identity, and say CANDIDATE when they do.",
+    "consumer_policy": "PROVEN IS NOT THE SAME QUESTION AS MAY-SHIP, and the two must not be collapsed. `proven` answers 'is this loader known to run on metal at all'. That is the right set for a gate whose caller has ALREADY pinned the exact loader it means -- bootpart-kernel.py install-boot2, where --expect-sha256 is mandatory and states the identity before the policy gate is consulted. A gate that instead decides what goes onto a PARTICULAR medium must keep pinning ONE identity: amix-installng's write-bootchain.py and build-bootslice.py read `good` alone and refuse everything else, and that stays correct because installer media carry the 030 line. Widening a may-ship gate to the whole proven set would silently admit an 040/060 loader into an 030 medium -- a fault no downstream gate is watching for.",
+
+    "good": {
+      "sha256": "f287ff3a759d6f80304fa35bb53e1479fc98056836b44a16824bd3e3f8fdba78",
+      "kind": "flags-based",
+      "status": "metal-proven",
+      "line": "68030 -- the shipping golden line, and the default identity",
+      "note": "Resolves the kernel by ELF section FLAGS. Matches the sysroot amiga/boot/boot2.c + rel.c. This is the only loader that may ship in an 030 golden image or in installer media (see consumer_policy); `good_040` is proven but is a different loader for a different line, never a substitute here."
+    },
+
+    "good_040": {
+      "sha256": "fd7dacf67acccb97f7c0cc0ef37bf62fe4f371dbce6ba5430ee34ebf35ba838c",
+      "kind": "flags-based, 68040/68060-capable",
+      "status": "metal-proven",
+      "added": "2026-08-19",
+      "line": "68040/68060 -- and it loads the 030 line unchanged",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh from src/boot2-patches/, ON AN AMIX BOX (boot2 is -fpcrel PIC in SGS assembler syntax; the cross toolchain can neither generate nor assemble it), behind a byte-identical fidelity gate: the UNPATCHED tree is rebuilt first and must reproduce `good` byte-for-byte before a patched round is built at all.",
+      "derived_from": "`good` -- the same amiga/boot tree, +180 bytes inside the same 8192 B slot. copyit.s gains an ExecBase->AttnFlags CPU dispatch that turns translation off with MOVEC on a 68040/68060 (pmove is an F-line ILLEGAL instruction there) plus a %d7-gated `cpusha bc` at callkernel; rel.c gains R_68K_PC32/PC16/PC8 via S + A - P, reproducing the loader's own range checks so an out-of-range displacement takes the COMPLAIN dead end rather than being truncated into a silent wild branch. The 030 arm is INSTRUCTION-IDENTICAL to `good` and falls through the same sequence with %d7 = 0.",
+      "note": "The loader the 040/060 kernel line REQUIRES: unix-040/unix-060 carry 330 PC-relative relocations, every one of which `good` sends to COMPLAIN = Alert('RELA'|AT_DeadEnd) = the D245 4C41 Guru.",
+      "provenance": {
+        "metal_proven": "2026-08-19, real A4000 + Z3660",
+        "what_was_booted": "the STOCK 030 kernel (`sum -r` 55482), unchanged, out of a COPY of a metal golden image's boot slice with boot2-040 written into the boot2 slot and the kernel slot left byte-untouched",
+        "result": "booted to MULTIUSER LOGIN, indistinguishable from the stock `good` loader (f287ff3a). This is the strongest available 030-side result: the 040 MMU-off block is never entered on an 030 and %d7 = 0 skips `cpusha`, so what it proves is that the parts which did NOT need to change did not regress.",
+        "firmware": "Z3660 beta-21, BOOT.BIN crc32 CEEC4984",
+        "bench_control": "an earlier 030-regression control established that the 030 path is instruction-identical (the boot2-040 build, its disassembly evidence, and the byte-identical pristine gate).",
+        "installed_by": "tools/bootpart-kernel.py install-boot2 --expect-sha256 fd7dacf6... ; the first metal test additionally needed --allow-unproven-boot2 because this entry did not yet exist. After this promotion it does not.",
+        "not_proven": "This entry records that the LOADER runs on metal. It does NOT record that unix-040 or unix-060 boot -- that is the 040/060 kernel line's own proof, on its own hardware, and the two claims must never be conflated."
+      },
+      "may_ship_in_golden": "The 68040/68060 line's media only. The 030 golden line's loader of record stays `good`, so a gate that expects `good` must keep REFUSING this one -- see consumer_policy."
+    },
+    "good_rth": {
+      "sha256": "5cc3ad2c86d7cf85c6635e96eba3caf9813db043ff977dfa9fed9140c32469e7",
+      "kind": "flags-based, RTH1 root hint",
+      "status": "candidate (emulator-observed, not metal-proven)",
+      "added": "2026-10-08",
+      "supersedes": "good_rth_v2 ded98398",
+      "line": "68030 -- `good` + the RTH1 v1 root hint (amix-040-060-port docs/contracts/RTH1-ROOT-HINT.md)",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth30) on an Amix box behind the `good` fidelity gate (good f287ff3a and good_040 fd7dacf6 reproduced): the stock tree + boot2.c.rth.patch (the rth() call and seven shorter boot2.c message texts, each keeping its arguments and %M wait; one patch for both lines since v3) + alloc.c.short.patch + decompress.c.short.patch + Makefile.rth.patch + rth.s (the C-string name compare and the 144b/03 vehicle mapping of v2, and the v3/v4 walk guard). Built twice, cmp-identical.",
+      "slot": "content end 0x1efc (7932) of 0x1ffc: 256 bytes free",
+      "walk_guard": "Never-guess preserved: before each dereference the walk asks exec TypeOfMem() about bn_DeviceNode, the FileSysStartupMsg, the DosEnvec and the fssm_Device BSTR, and SKIPS a node whose pointer lies in no MemHeader -- a node behind an unreadable chain cannot be the one the strap opened, so a skip never creates a match. A walk of more than 64 nodes without the list tail (a cycle) ends as AMBIG: no hint, the kernel keeps its built-in root. The match tests (start, C-string name, OpenDevice io_Unit) are unchanged and all still required, so no MountList yields a match the unguarded walk would not have made. Since v4 the whole walk runs under Forbid()/Permit(), so no task can enqueue or unlink a boot node while it is read (OpenDevice of the already-open boot device and TypeOfMem() are legal under Forbid).",
+      "observed": "Emulator (v4): all 9 root-hint cases as expected -- boot disk, identical twin unit-exact (unit 5, not AMBIG), RTO1 rows, the 030 A3000-WD and A4091 rows. tools/rth-harness.py 16/16, incl. the A4000T shapes the v2 loader hangs on (an integer or a string dn_Startup, a cycle), with the walk under one balanced Forbid()/Permit(). No 030 loader has been booted on metal with these bytes, so this stays `candidate`.",
+      "may_ship_in_golden": "As an EMULATOR-PROVEN candidate: its only metal path is the Z3660's emulated 030, which is blocked for 1.0, so it ships on the release media as `candidate` and stays so until a metal 030 boot exists. Consumers name it with --identity / --allow-unproven-boot2. The 030 golden line's loader of record stays `good`."
+    },
+    "good_040_rth": {
+      "sha256": "c14f7cd741efbaf7b4d3243520c5d21892bb2c8ab21447fd0b5c02c62bec7e61",
+      "kind": "flags-based, 68040/68060-capable, RTH1 root hint",
+      "status": "metal-proven",
+      "promoted": "2026-10-09, on a real A4000D (68060 + Z3660), every boot row PASS",
+      "added": "2026-10-08",
+      "supersedes": "good_040_rth_v2 bc549dc9",
+      "line": "68040/68060 -- `good_040` + shortened loader messages + the RTH1 v1 root hint; loads the 030 line unchanged",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth40) on an Amix box behind the `good` fidelity gate (good f287ff3a and good_040 fd7dacf6 reproduced): the boot2-040 tree + boot2.c.rth.patch (the rth() call and seven shorter boot2.c message texts, each keeping its arguments and %M wait; one patch for both lines since v3) + alloc.c.short.patch + decompress.c.short.patch + Makefile.rth.patch + rth.s (the C-string name compare and the 144b/03 vehicle mapping of v2, and the v3/v4 walk guard). Built twice, cmp-identical.",
+      "slot": "content end 0x1fb0 (8112) of 0x1ffc: 76 bytes free",
+      "walk_guard": "Never-guess preserved: before each dereference the walk asks exec TypeOfMem() about bn_DeviceNode, the FileSysStartupMsg, the DosEnvec and the fssm_Device BSTR, and SKIPS a node whose pointer lies in no MemHeader -- a node behind an unreadable chain cannot be the one the strap opened, so a skip never creates a match. A walk of more than 64 nodes without the list tail (a cycle) ends as AMBIG: no hint, the kernel keeps its built-in root. The match tests (start, C-string name, OpenDevice io_Unit) are unchanged and all still required, so no MountList yields a match the unguarded walk would not have made. Since v4 the whole walk runs under Forbid()/Permit(), so no task can enqueue or unlink a boot node while it is read (OpenDevice of the already-open boot device and TypeOfMem() are legal under Forbid).",
+      "observed": "Emulator (v4): all 9 root-hint cases as expected -- boot disk, identical twin unit-exact (unit 5, not AMBIG), RTO1 rows, the 030 A3000-WD and A4091 rows. tools/rth-harness.py 16/16, incl. the A4000T shapes the v2 loader hangs on (an integer or a string dn_Startup, a cycle), with the walk under one balanced Forbid()/Permit(). METAL (A4000D, real 68060 + Z3660, every boot row PASS): these bytes are the boot2 of every medium in that test set (desktop, install and unattended-install disks, the CD boot image, both CD ISOs; checked by sha256). Root records (kmem rth1_used): 1 = from the boot disk (roots c3d0s1, c2d0s1, c0d0s1); 2 = the root record in the A4092-root case (RTH1 root c9d0s1, board 40000000 id C0DE01 unit 1 = card 1). The CD installer's RTH1 c6d0s1 line was read by eye. Emulator CD and floppy install cells 10/10 (amix-installng). The A4000T is outside the 1.0 acceptance (its Z3660 card's stage-7 copyback-push fault).",
+      "may_ship_in_golden": "The 68040/68060 line's media (its loader of record). Proven on the A4000D alone (the A4000T is outside the 1.0 acceptance). The 030 golden line's loader of record stays `good`, so a gate that expects `good` keeps REFUSING this one -- see consumer_policy."
+    },
+    "good_rth_v2": {
+      "sha256": "ded98398ed581fec2e4755abf64d4c991d22a36f794624253db9eb1445b588af",
+      "kind": "flags-based, RTH1 root hint",
+      "status": "candidate, SUPERSEDED 2026-10-08 by `good_rth` (the unguarded MountList walk hangs the A4000T -- 3 of 3 cold boots of an unattended-install medium, while the previous release's loader on the same disk installs. A boot node whose chain leaves RAM (a dn_Startup that is no FSSM BPTR) makes it read empty bus space, and a list that never ends (a node enqueued twice) makes it spin)",
+      "added": "2026-10-07",
+      "supersedes": "good_rth_kt51 2ba8e21a",
+      "line": "68030 -- `good` + the RTH1 v1 root hint (amix-040-060-port docs/contracts/RTH1-ROOT-HINT.md)",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth30) on an Amix box behind the `good` fidelity gate: the stock tree + src/boot2-patches/rth.s (hand-written SGS assembler; fssm_Device compares as a C string, as the strap opened it -- a NUL counted into the BSTR length ends it (Kickstart's MakeDosNode (V36 on) adds 1 to fssm_Device's length; the first cut then tested the byte after the device's ln_Name NUL, which on the Z3660 driver is not 0); and a booted node whose ConfigDev is the Z3660 Zorro II boot vehicle 144b/03 is reported as id 144b0100, base 0 -- the card the kernel's sd knows, resolved through its autocon entry) + boot2.c.rth.patch (one call after bootinfo is filled) + Makefile.rth.patch (rth.o linked). Stock messages kept. Built twice, cmp-identical.",
+      "slot": "content end 0x1fcc (8140) of 0x1ffc: 48 bytes free",
+      "observed": "Emulator (v2), a K030-U kernel: the A3000 WD, root c6d0s1 from the boot disk, rth1_used 1; identical twin at units 6/5 -> unit 5; an A4000/030 + A4091 booting its own disk, root c6d0s1 from the boot disk. tools/rth-harness.py 11/11.",
+      "may_ship_in_golden": "No (superseded). Listed so media mastered with it can still be named and verified. Was: an emulator-proven `candidate` (its only metal path, the Z3660's emulated 030, is blocked for 1.0). The 030 golden line's loader of record stays `good`."
+    },
+    "good_040_rth_v2": {
+      "sha256": "bc549dc95b54d8f22d47a4ff55a231beb30d421595d6904e26900c315069c958",
+      "kind": "flags-based, 68040/68060-capable, RTH1 root hint",
+      "status": "candidate, SUPERSEDED 2026-10-08 by `good_040_rth` (the unguarded MountList walk hangs the A4000T -- 3 of 3 cold boots of an unattended-install medium, while the previous release's loader on the same disk installs. A boot node whose chain leaves RAM (a dn_Startup that is no FSSM BPTR) makes it read empty bus space, and a list that never ends (a node enqueued twice) makes it spin)",
+      "added": "2026-10-07",
+      "supersedes": "good_040_rth_kt51 b14ba6b5",
+      "line": "68040/68060 -- `good_040` + shortened loader messages + the RTH1 v1 root hint; loads the 030 line unchanged",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth40) behind the `good` fidelity gate: the boot2-040 tree + boot2.c.rth040.patch (seven shorter message texts, each keeping its arguments and %M wait, -192 B; and the rth() call) + alloc.c.short.patch + decompress.c.short.patch + Makefile.rth.patch + rth.s (fssm_Device compares as a C string, as the strap opened it -- a NUL counted into the BSTR length ends it (Kickstart's MakeDosNode (V36 on) adds 1 to fssm_Device's length; the first cut then tested the byte after the device's ln_Name NUL, which on the Z3660 driver is not 0); and a booted node whose ConfigDev is the Z3660 Zorro II boot vehicle 144b/03 is reported as id 144b0100, base 0 -- the card the kernel's sd knows, resolved through its autocon entry). Built twice, cmp-identical.",
+      "slot": "content end 0x1fc4 (8132) of 0x1ffc: 56 bytes free",
+      "observed": "Emulator (v2), KD060 kernels: the A4091 ROM booting its own KD060-ZA disk, root ced0s1 from the boot disk, rth1_used 1; the same on Kickstart 3.2.3 (47.115) with the first cut; identical twin at units 6/5, this loader on unit 5 -> unit 5 (cdd0s1), not AMBIG; RTO1 rows (Z3660 u0, c0d0s1) and (A4091 u6, ced0s1), rth1_used 2. The MakeDosNode BSTR + Z3660 ln_Name shape and the 144b/03 branch are not reachable in emulation; tools/rth-harness.py runs this blob's assembled rth() against them (11/11: the metal shape -> boot disk unit 0, id 144b0100, base 0). METAL: an A4000D, real 68060 + Z3660 boot ROM (Kickstart 3.2.3, bootmode CPU, autoconfig_rtg NO), a KD060-Z kernel from Z3660 unit 0: 'RTH1: root c0d0s1 from the boot disk (board 10000000 id 144B01 unit 0 = card 0)', first-boot dialog.",
+      "may_ship_in_golden": "No (superseded). Listed so media mastered with it can still be named and verified. Was: the 68040/68060 line's media as `candidate`, with its metal line on record (install-boot2 --allow-unproven-boot2)."
+    },
+    "good_rth_kt51": {
+      "sha256": "2ba8e21a542920bbb929e376c0b753ccfcf5f85e16e788fafa22a7bafbf9bcc1",
+      "kind": "flags-based, RTH1 root hint",
+      "status": "candidate, SUPERSEDED 2026-10-07 by `good_rth` (emulator-observed, not metal-proven; on metal it finds no boot node on the Z3660 -- Kickstart's MakeDosNode counts the NUL into fssm_Device, and its name test then reads past the driver's ln_Name; and it would report the Z3660 boot vehicle 144b/03 as the controller, where the kernel finds no card)",
+      "added": "2026-10-05",
+      "line": "68030 -- `good` + the RTH1 v1 root hint (amix-040-060-port docs/contracts/RTH1-ROOT-HINT.md)",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth30) on an Amix box behind the `good` fidelity gate: the stock tree + src/boot2-patches/rth.s (hand-written SGS assembler) + boot2.c.rth.patch (one call after bootinfo is filled) + Makefile.rth.patch (rth.o linked). Stock messages kept. Built twice, cmp-identical.",
+      "slot": "content end 0x1fb8 (8120) of 0x1ffc: 68 bytes free",
+      "observed": "Emulator (an A3000, the unmodified K030-U-c0-u6 kernel): boots to multiuser exactly as with `good`, root c6d0s1; kernel bootinfo+0x678 = RTH1, verlen 0x00010038, flags 5 (BOOT|BMOBO: the A3000 WD has no ConfigDev), boot_unit 6, check 0xadaab78c (the seven longs sum to 0). Unit-exact with an identical twin: two copies of the same disk at ids 6 and 5 on the WD, this loader on unit 5 -> unit 5 booted, record BOOT|BMOBO boot_unit 5 (not AMBIG, not the twin); this loader on unit 6 -> the stock unit 5 booted, no record.",
+      "may_ship_in_golden": "No (superseded). Listed so media mastered with it can still be named and verified. Was: Not until promoted to `proven`. The 030 line's loader of record stays `good`."
+    },
+    "good_040_rth_kt51": {
+      "sha256": "b14ba6b5efd1e867eb228dd5c99ce117cbf2ee4d8d1b71650ff8e02d7bd3cb79",
+      "kind": "flags-based, 68040/68060-capable, RTH1 root hint",
+      "status": "candidate, SUPERSEDED 2026-10-07 by `good_040_rth` (emulator-observed, not metal-proven; on metal it finds no boot node on the Z3660 -- Kickstart's MakeDosNode counts the NUL into fssm_Device, and its name test then reads past the driver's ln_Name; and it would report the Z3660 boot vehicle 144b/03 as the controller, where the kernel finds no card)",
+      "added": "2026-10-05",
+      "line": "68040/68060 -- `good_040` + shortened loader messages + the RTH1 v1 root hint; loads the 030 line unchanged",
+      "size": 8192,
+      "built_by": "kernel/k30 tools/build-boot2.sh --rth (round rth40) behind the `good` fidelity gate: the boot2-040 tree + boot2.c.rth040.patch (seven shorter message texts, each keeping its arguments and %M wait, -192 B; and the rth() call) + alloc.c.short.patch + decompress.c.short.patch + Makefile.rth.patch + rth.s. Built twice, cmp-identical.",
+      "slot": "content end 0x1fb0 (8112) of 0x1ffc: 76 bytes free",
+      "observed": "Emulator (an A3000 + emulated Z3660 LC060, an unmodified KD060-Z-c0-u6 kernel booted from the A3000 WD vehicle): multiuser, root c6d0s1 on the Z3660, identical to `good_040`; kernel bootinfo+0x678 = RTH1, verlen 0x00010038, flags 5 (BOOT|BMOBO), boot_unit 6, check 0xadaab78c.",
+      "may_ship_in_golden": "No (superseded). Listed so media mastered with it can still be named and verified. Was: The 68040/68060 line's media once promoted to `proven`."
+    },
+
+    "known_foreign": [
+      {
+        "sha256_prefix": "5ab360b1",
+        "kind": "name-based",
+        "status": "REFUSE",
+        "origin": "the Amix 2.1 install media",
+        "diagnosis": "This is the Amix 2.1 install-media loader. It is NAME-based: it resolves the kernel by segment names (.kvsysseg/.kvsegmap/.kvsegu/.uvblock) and CANNOT relocate this project's standard FLAGS-based ET_REL kernels. On metal it fires Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru at boot, before the kernel ever executes.",
+        "must": "Any build that finds this loader on disk MUST fail closed and MUST print this diagnosis. reltest/relsim validate rel.c SOURCE semantics and green a kernel regardless of which loader is on disk -- this identity check is the only thing that closes that blind spot."
+      }
+    ],
+    "unknown_policy": "A boot2 whose sha256 is none of the `proven` identities and none of the listed known-foreign ones is REFUSED as an unproven loader. A boot2 that IS one of the proven identities but is not the one the gate was asked for is ALSO refused -- and the diagnosis must NAME it, because 'the proven 040/060 loader where the 030 one was expected' and 'an unrecognised blob' are different faults with different fixes, and reporting the first as the second sends the reader hunting for a corruption that is not there."
+  },
+
+  "reference_artifacts": {
+    "note": "Reference data for real artifacts, recorded as hashes and checksums ONLY -- a hash is not the content. No proprietary bytes here or anywhere in this repo.",
+    "boot2_good": {
+      "sha256": "f287ff3a759d6f80304fa35bb53e1479fc98056836b44a16824bd3e3f8fdba78",
+      "size": 8192,
+      "svr4_sum": 37995,
+      "svr4_sum_hex": "0x946b",
+      "svr4_sum_corrected": "Corrected 2026-08-19: this decimal read 38011 in the initial revision -- a transcription error, 16 too high, that never matched its own `svr4_sum_hex` (0x946b == 37995). Re-measured on the reference golden image: the boot slice's own iblk(boot2).ib_chksum reads 37995 and a fresh svr4-sum over the 8192 stored bytes recomputes 37995, so the hex and the medium always agreed and only the decimal was wrong. Found by tools/boot2-identity-selftest.py, which asserts the two spellings agree -- nothing had ever compared them.",
+      "observed_in": "the reference metal golden image, iblk(boot2).ib_chksum at slice+0x400"
+    },
+    "boot2_good_040": {
+      "sha256": "fd7dacf67acccb97f7c0cc0ef37bf62fe4f371dbce6ba5430ee34ebf35ba838c",
+      "size": 8192,
+      "svr4_sum": 57120,
+      "svr4_sum_hex": "0xdf20",
+      "observed_in": "the first metal-test boot chain of this loader, iblk(boot2).ib_chksum at slice+0x400 -- the value install-boot2 restamps when it writes this loader",
+      "note": "Recorded for the same reason as boot2_good: a builder that writes this loader can check the iblk stamp it produced against an independently measured number instead of against its own recomputation. Added 2026-08-19 with the good_040 promotion."
+    },
+    "boot1_stock": {
+      "sha256": "e0f7ee9c111115f2c1e44ad2900d8772eba160bae5f5e62254245029b26d748a",
+      "size": 1024,
+      "note": "informational only -- boot1 is stock and is never gated"
+    }
+  },
+
+  "rootdev": {
+    "note": "Which kernel config pairs with which root medium. The dev_t values are DERIVED from the config sources amiga/config/<name>.c plus makedevice() in sys/sysmacros.h -- not guessed. Enforced by tools/rootdev-assert.py.",
+    "makedevice": "((major) << L_BITSMINOR) | ((minor) & L_MAXMIN)",
+    "L_BITSMINOR": 18,
+    "L_MAXMIN": "0x3ffff",
+    "configs": {
+      "fd0unix": {
+        "rootdev": "0x00400008",
+        "major": 16, "minor": 8,
+        "symbol": "FD0P",
+        "source": "amiga/config/fd0unix.c: dev_t rootdev = FD0P;",
+        "media": "floppy",
+        "miniroot": true,
+        "note": "install/boot-floppy root; pairs with the `floppy` profile"
+      },
+      "c0s1unix": {
+        "rootdev": "0x00480010",
+        "major": 18, "minor": 16,
+        "symbol": "C0D0S1",
+        "source": "amiga/config/c0s1unix.c: dev_t rootdev = C0D0S1;",
+        "media": "scsi-slice",
+        "miniroot": true,
+        "note": "root on c0d0s1 = SCSI target 0, slice 1; the raw-RDB-slice miniroot"
+      },
+      "c6s1unix": {
+        "rootdev": "0x00480016",
+        "major": 18, "minor": 22,
+        "symbol": "C6D0S1",
+        "source": "amiga/config/c6s1unix.c: dev_t rootdev = C6D0S1;",
+        "media": "scsi-slice",
+        "miniroot": true,
+        "note": "root on c6d0s1 = SCSI target 6, slice 1; the disk the metal Z3660 presents"
+      }
+    },
+    "excluded": {
+      "unix": "amiga/config/unix.c takes rootdev from the -DROOTDEV compile macro -- a PLACEHOLDER with no fixed value. Deliberately NOT in the table so it fails closed as an unknown config."
+    },
+    "why": "A kernel carrying the wrong rootdev PANICs the metal box at s5mountroot (`VOP_OPEN error 6` / `vfs_mountroot errno 30`). Regression guarded since 2026-07-13.",
+
+    "rootfstype": {
+      "added": "2026-08-18",
+      "status": "authoritative -- READ-ONLY ASSERTION, never stamped",
+      "symbol": "rootfstype",
+      "section": ".data",
+      "empty_means": "every byte NUL over the symbol's whole st_size",
+      "note": "The SVR4 root-fs-type selector: a char[] naming the fstype vfs_mountroot() mounts the root with. When it is EMPTY (all-NUL), vfs_mountroot iterates the vfssw table and mounts the first fstype whose own mountroot succeeds -- ufs, on this project's kernels (the 030 metal-proven c6s1unix/c0s1unix kernels all ship it empty and the box mounts ufs). A NON-empty value forces that exact fstype.",
+      "the_040_line": "The 040/060 line is UFS-root by ruling (s5 is structurally broken under 4 KiB pages). Measured on an early 040/060 build: `rootfstype` is a 15-byte GLOBAL OBJECT in .data (sym value 0x9970), all-NUL in BOTH unix-040 and unix-060, with no relocation over it. The 12 override bindings are all MMU/FPU/fault paths (resume, hardbus, copyout, fpu_save/restore/setup, vtop, mprotect, segvn_faultpage, krnxmemflt, usrxmemflt, nullvect); vfs_mountroot/vfssw/rootfstype are STOCK 2.1c, byte-inherited -- the identical code path the 030 UFS-root kernels are metal-proven on.",
+      "stamp_needed": false,
+      "why_not": "Empty already selects ufs by iteration, exactly as the metal-proven 030 line, so nothing needs writing. A stamp would only be required to FORCE a non-default fstype, which this line never wants. The symbol-located stamper therefore ASSERTS rootfstype is empty (fail-closed, so a future non-empty value cannot slip a wrong root fstype past the gate) and NEVER writes it."
+    },
+
+    "floppy": {
+      "added": "2026-10-02",
+      "status": "authoritative -- HOST-SIDE ONLY",
+      "implemented_by": "kernel/k30 tools/kernel-rootdev-stamp.py `stamp --floppy` (proved by its selftest)",
+      "what": "The 040/060 INSTALL-FLOPPY kernel roots on the floppy, as fd0unix does on the 030 line: rootdev = FD0P and the swapfile names the dummydisk. Exactly TWO fields are written into an unstamped sd-6 base (rootdev c6d0s1, swap /dev/dsk/c6d0s2, by symbol as in patch.site_derivation.by_symbol): rootdev and swapfile.bo_name. Nothing else, ever.",
+      "rootdev": "0x00400008",
+      "major": 16,
+      "minor": 8,
+      "symbol": "FD0P",
+      "bo_name": "/dev/fakeswap",
+      "bo_size": "NEVER written: it stays the family's fixed swap length (61440 on the 040/060 line). The 030 fd0unix's 20479 is an inherited NSWAP the gates refuse.",
+      "swap_why": "The UFS miniroot's /dev/fakeswap is block major 19 = dummydisk (amix-installng docs/metal-install-runbook.md section 5), present in KD060-Z's bdevsw[19] (dum* entries). Its dumsize answers 0xffffff blocks, so swapadd takes the family's fixed swap length without EINVAL; its strategy fails every I/O, so nothing is ever paged to it -- the installer adds the real swap (`swap -a` on the target's slice 2) and deletes fakeswap. Leaving /dev/dsk/c6d0s2 would swap onto the install target's slice 2 while the installer repartitions it, or panic swapconf when that slice does not exist yet. dumpdev stays c6d0s2 and do_sysdump is 0, so nothing dumps there unasked.",
+      "media": "Only for a family whose kernel-families contract entry says media_class `floppy`. Never for the per-id table (a floppy has no SCSI id to vary), never for the boot-slice profile (the anchor rule of `patch` is unchanged and still refuses a floppy miniroot kernel there).",
+      "refusals": [
+        "the input is not an unstamped sd-6 base (rootdev 0x00480016 and bo_name /dev/dsk/c6d0s2 by symbol): stamp floppies from the base, never from a variant",
+        "the input already carries FD0P (re-stamping is meaningless)",
+        "a per-id stamp or a table from a floppy-stamped kernel"
+      ],
+      "chip_ram": "Paula's floppy DMA into chip RAM: DTT0 = 0x003FC060 maps logical 0-1 GB non-cacheable on this line (pstart040.s), and the fd driver's track buffer is AllocMem(MEMF_CHIP), so the CPU cannot read a stale line; the 060's store buffer is off (CACR 0x80008000). Emulator-unprovable (no copyback model): the first fd0-root boot belongs on metal (the A4000D Gotek)."
+    },
+
+    "patch": {
+      "added": "2026-08-11",
+      "status": "authoritative -- HOST-SIDE ONLY",
+      "implemented_by": "kernel/k30 tools/kernel-rootdev-patch.py (proved by tools/kernel-rootdev-patch-selftest.py)",
+      "derived_from": "the root-by-identity investigation: the measured struct bootobj, the brel has no symtab, the two-byte measurement, and the sum-gate interplay -- each summarised in this section.",
+
+      "why": "An Amix kernel built for root c0d0s1 and the same kernel built for root c6d0s1 differ in EXACTLY TWO BYTES: the low byte of `rootdev` and the id digit inside swapfile.bo_name. Writing those two fields into an already-gated kernel reproduces the independently cross-built other kernel BYTE-FOR-BYTE (measured on a pair of cross-built brels; both directions are a standing regression oracle in the selftest). 'Build a kernel per destination id' and 'patch the destination id into one kernel' are therefore the same bytes by two routes -- which is what lets the installer offer a free destination id without surrendering the metal-proven pedigree of the kernel it ships.",
+
+      "precedent": "Commodore's own Amix 2.1 installer did exactly this, with `adb -w /mnt/stand/unix` (root floppy /etc/profile, lines 815-830: `rootdev ?W 4800${ROOTPART}${SCSI}` / `swapfile+18` / `swapfile+1c` / `swapfile+98`). Our measured struct bootobj offsets match that script offset-for-offset. We cannot reuse `adb`: stock /stand/unix carried a symbol table, ours is a brel and has none (see representations.brel), so the same edit has to be located by anchor instead of by symbol.",
+
+      "scope": {
+        "patches": ["rootdev -- 4 B dev_t", "swapfile.bo_name -- the 128 B device pathname"],
+        "never_patches": ["swapfile.bo_size (SWAPLEN)", "every other struct bootobj field", "every other symbol in the image"],
+        "why_not_bo_size": "The stock script patched bo_size from the live RDB (`swapfile+98 ?W 0t${SWAPLEN}`). A CONTINUOUS value cannot be enumerated into a per-id expected-sum table, and that table is the only thing that keeps the downstream checksum gates fail-closed (see sum_gate_interplay). Our installer creates the partitions itself, so the swap length is a build-time constant. A future variable-size swap must come from /etc/vfstab + `swap -a` at first boot, NOT from a kernel patch. This is a deliberate behavioural divergence from stock and is recorded as one.",
+        "card": "CARD 0 ONLY (`sdcard` is minor bit 3). Card 1 (c8-c14) is out of scope: the installer cannot know at install time which controller will win sd.c init()'s address sort at boot time. Pinning the root CONTROLLER is a different mechanism (root-product-ID in templates/sd.c.in) and does not belong in this patch.",
+        "media": "bootpart profile only. fd0unix roots on FD0P and its swap is the fake `/dev/fakeswap` -- no id to patch and no `/dev/dsk/c` anchor to find, so a floppy miniroot kernel is refused by the anchor rule itself. The 040/060 install floppy is NOT an id patch: it is the separate two-field write of rootdev.floppy (2026-10-02), from the sd-6 base, by symbol."
+      },
+
+      "representations": {
+        "brel": {
+          "e_type": "0xff00 (ET_LOPROC)",
+          "note": "WHAT SHIPS: /stand/unix and the boot-slice payload. tools/elf2brel.py merges .text + .rodata + .data into one contiguous section and DISCARDS symtab/strtab, so `rootdev` is not a symbol here -- the anchor rule is the only way to find it.",
+          "byte_identity": "The two-byte finding is a BREL property: a patched brel equals the independently cross-built brel for the target id byte-for-byte.",
+          "relocations": "the compact table in the SHT_LOUSER (0x80000000) `.rel.boot` section, entsize 8: (nr_offset, nr_value) big-endian pairs, nr_offset's MSB hijacked as an absolute-value flag, offsets relative to the start of the combined section."
+        },
+        "et_rel": {
+          "e_type": "1 (ET_REL)",
+          "note": "the relink/link output; gate input only (relsim.py, rootdev-assert.py). `rootdev` and `swapfile` ARE symbols here, so the anchor-derived site must be cross-checked against .symtab -- the belt-and-braces check. Patching one is supported so the gate-input twin can be kept in step.",
+          "byte_identity": "DOES NOT HOLD for ET_REL, and this is expected: .strtab also carries the config source file name (`c6s1unix.c` vs `c0s1unix.c`) as a STT_FILE symbol, so a patched ET_REL differs from its cross-built twin in that string as well as in .data. Measured on a cross-built pair: 3 differing bytes, of which 2 are the patch site and 1 is the file-name digit. Never assert byte identity on an ET_REL.",
+          "relocations": "standard SHT_RELA sections; the one that matters targets .data (sh_info)."
+        }
+      },
+
+      "anchor": {
+        "string": "/dev/dsk/c",
+        "occurrences_required": 1,
+        "forbidden_strings": ["/dev/rdsk/c"],
+        "why": "swapfile.bo_name is the ONLY occurrence of `/dev/dsk/c` in the whole ~1.25 MB image. Verified across four independent artifacts (cross-built c6s1 and c0s1 brels, an extracted boot-slice brel, and the ET_REL combined kernel): every one gives count 1 for `/dev/dsk/c` and 0 for `/dev/rdsk/c`.",
+        "refuse": "Anchor count != 1, or any forbidden string present, is a REFUSAL -- never a 'pick the first one'. An image with two anchors is an image this rule does not understand."
+      },
+
+      "site_derivation": {
+        "bo_name": "anchor",
+        "swapfile": "anchor - 0x10",
+        "rootdev": "anchor - 0x14",
+        "bo_name_delta": 0,
+        "swapfile_delta": -16,
+        "rootdev_delta": -20,
+        "rootdev_size": 4,
+        "basis": "bo_name sits at bootobj + 0x10 (bo_fstype[16] precedes it), and `rootdev` is declared immediately before `swapfile` in every amiga/config/c*unix.c, so the linker lays them adjacent: rootdev(4) then swapfile(160), with swapfile ending exactly at the end of .data. The three *_delta values are the same three numbers as machine-readable bytes-from-anchor, so an implementation reads them instead of transcribing them.",
+        "never": "NEVER hardcode an absolute file offset. It moves with every relink -- 0x0f9f6c, 0x0f9f3c and 0x0fa280 in three different builds (a cross-built brel, a boot-slice brel and an ET_REL combined kernel).",
+
+        "by_symbol": {
+          "added": "2026-08-18",
+          "status": "authoritative -- the 040/060 kernel line only",
+          "implemented_by": "kernel/k30 tools/kernel-rootdev-stamp.py (proved by its --selftest)",
+          "when": "Use THIS derivation, not the anchor rule above, for the 040/060 line -- an ET_REL that retains its full .symtab. On that line four globals (dumpdev, char_special, do_sysdump, no_interactive) sit BETWEEN `rootdev` and `swapfile`, so `rootdev` is NOT anchor-0x14: the anchor lands 16 bytes past it, on no_interactive. Measured on an early 040/060 build: anchor-minus-rootdev = 0x24, not 0x14. The anchor derivation above is for the 030 line's shipped brel, which has no .symtab and cannot be located by symbol at all.",
+          "rootdev": "the file offset of the `rootdev` GLOBAL symbol (.data, st_size 4)",
+          "swapfile": "the file offset of the `swapfile` GLOBAL symbol (.data, st_size 160 = struct bootobj)",
+          "bo_name": "swapfile + bootobj.fields.bo_name.offset (0x10)",
+          "anchor_is_cross_check": "The anchor `/dev/dsk/c` is DEMOTED to a cross-check: it must still occur exactly once, with no forbidden `/dev/rdsk/c`, and must land at exactly `swapfile + 0x10` (bo_name). It no longer SOURCES the site; the symbol does.",
+          "relocation_invariant": "Re-expressed over the DISJOINT written ranges, not the single [rootdev, swapfile+160) span the anchor rule uses: NO relocation may overlap [rootdev, rootdev+4) or [bo_name, bo_name+128). The intervening globals are never written, so they are not covered. rootfstype (rootdev.rootfstype) is asserted empty but never written, and is also checked reloc-free.",
+          "representations": "ET_REL (e_type 1) only. A brel (0xff00) has discarded its .symtab, so it cannot be located by symbol -- it is refused here and handled by the anchor rule instead. The two derivations have disjoint domains.",
+          "no_twin_oracle": "Unlike the 030 anchor path, the 040 line is built from a stock BINARY with no config source, so the 'patched brel equals independently cross-built brel' byte-identity oracle does not exist here. Safety comes instead from: the coherence gate below, the disjoint-range relocation invariant, a re-read whole-image diff proving only the intended bytes moved, and the deterministic per-id sum table.",
+          "never": "NEVER hardcode the absolute offsets. rootdev is 0x10294c and swapfile 0x102960 in one early build; both are OUTPUTS of the symbol lookup and move with every relink.",
+          "cards": {
+            "added": "2026-09-27",
+            "values": [0, 1],
+            "device_name_format": "/dev/dsk/c%xd0s%d",
+            "regex": "^/dev/dsk/c([0-9a-f]|1[0-9a-f])d0s([0-7])\\x00",
+            "why": "FIXED-ORDER FAMILIES. The scope.card objection is that the installer cannot know which controller wins sd.c's address sort. On the Z3660 families that order is not unknown: stock support.c registers the phantom A3000 controller at $DD0000 as card 0, so the Z3660 piscsi controller is deterministically card 1 (measured: c8d0s0 and ced0s1 read the root disk). So the by_symbol line may stamp card 1 for those families, and card 0 for the others. The default stays convention.card (0); card 1 is only ever an explicit request.",
+            "controller_digit": "8 * card + unit rendered in hex, one digit for cards 0-1 (card 1 unit 6 is `ced0s1`, never `c14d0s1`) and two for cards 2-3 (c10-c1f, C4-1 section 2.2). For card 0 the hex and decimal formats are the same bytes, so card-0 chains are unchanged.",
+            "scope": "by_symbol (040/060 ET_REL) ONLY. The anchor path above (the 030 brel, tools/kernel-rootdev-patch.py) stays card 0 and keeps device_name.regex."
+          }
+        }
+      },
+
+      "bootobj": {
+        "transcribed_from": "vm/bootconf.h (@(#)kernel:vm/bootconf.h 1.5)",
+        "struct_size": 160,
+        "fields": {
+          "bo_fstype": { "offset": "0x00", "size": 16,  "note": "MAXFSNAME; empty (all NUL) in every kernel measured" },
+          "bo_name":   { "offset": "0x10", "size": 128, "note": "MAXOBJNAME; the swap device pathname, NUL-terminated and NUL-padded -- THE PATCHED FIELD" },
+          "bo_flags":  { "offset": "0x90", "size": 4 },
+          "bo_offset": { "offset": "0x94", "size": 4 },
+          "bo_size":   { "offset": "0x98", "size": 4, "note": "swap length in 512 B blocks; 20479 (0x4fff) in this project. READ AND REPORTED, NEVER PATCHED" },
+          "bo_vp":     { "offset": "0x9c", "size": 4, "note": "struct vnode *; 0 as stored" }
+        }
+      },
+
+      "minor_encoding": {
+        "transcribed_from": "amiga/alien/sd.h (SDCARDS 2, SDUNITS 8)",
+        "sdunit": "(dev >> 0) & 07   -- SCSI target id, 0-7",
+        "sdcard": "C4-1 section 2.1: ((dev >> 3) & 1) | ((dev >> 6) & 2) -- card low bit 3, card high bit 7; four cards (kernel/dlm docs/contracts/C4-1-sd-register.md). Cards 0 and 1 keep their 1.0 minors (bit 7 zero)",
+        "sdpart": "(dev >> 4) & 07   -- slice, 0-7",
+        "compose": "minor = (slice << 4) | (card << 3) | unit",
+        "block_major": 18,
+        "block_major_note": "the `sd` block-device major -- the same value every scsi-slice entry in rootdev.configs carries. A site whose major is not this is not an sd root and is refused.",
+        "stock_equivalent": "the stock installer's ROOTMINOR = ROOTPART*16 + SCSI, and the same arithmetic updbootpart's gate 5d decodes."
+      },
+
+      "device_name": {
+        "format": "/dev/dsk/c%xd0s%d  %% (controller, slice)",
+        "controller": "8 * card + unit, in lowercase hex without leading zeros (C4-1 section 2.2): card 0 gives c0-c7, card 1 c8-cf, cards 2-3 c10-c1f; never c%d (card 1 unit 6 is ce, not c14) and never minor & 0x0F",
+        "regex": "^/dev/dsk/c([0-7])d0s([0-7])\\x00",
+        "note": "The `d0` is fixed: the sd minor has no drive dimension (SDUNITS is targets, not drives)."
+      },
+
+      "convention": {
+        "root_slice": 1,
+        "swap_slice": 2,
+        "card": 0,
+        "note": "The project's fixed slice convention, and what keeps the per-id table enumerable at 8 rows. A patcher may accept other slices, but media metadata that offers arbitrary slices reopens the enumerability problem the table exists to close."
+      },
+
+      "preconditions": [
+        "The image is a big-endian 32-bit m68k ELF whose e_type is 1 (ET_REL) or 0xff00 (brel). Anything else is refused.",
+        "The anchor rule above holds exactly.",
+        "The site derived from the anchor lies wholly inside the section that carries it (the combined section for a brel, .data for an ET_REL).",
+        "The 4 bytes at `rootdev` decode as makedevice(block_major, minor) with sdcard == 0 and sdunit/sdpart in range.",
+        "The string at the anchor matches device_name.regex, and the remainder of the 128 B bo_name field is NUL.",
+        "bo_fstype is all NUL; bo_flags, bo_offset and bo_vp are 0; bo_size is non-zero.",
+        "THE CONSISTENCY CHECK: the controller digit in bo_name equals `rootdev`'s minor & 0x0F. The two fields must already agree about the id before either is rewritten -- if they disagree, the image is not what the anchor implies and no byte may be written.",
+        "For an ET_REL: .symtab exists, and the `rootdev`/`swapfile` symbols resolve to exactly the anchor-derived offsets with sizes 4 and 160. The symbol and the anchor must agree.",
+        "The relocation invariant below holds."
+      ],
+
+      "invariants": {
+        "no_relocation_in_range": "NO relocation entry may target any byte of [rootdev, swapfile + 160). A slot is 4 bytes wide, so the test is overlap, not containment: reject when entry_offset < range_end and entry_offset + 4 > range_start.",
+        "why": "It is what makes a data patch safe: the stored bytes are the final values and nothing rewrites them at load time. Measured on a pair of cross-built kernels -- 29 249 compact brel entries and 3 897 .rela.data entries, zero in range. A patcher that does not re-check this per image is asserting a property of one build about another.",
+        "check_it_per_image": true
+      },
+
+      "sum_gate_interplay": {
+        "problem": "A patch moves three of the four checksums pinned over the kernel bytes: iblk_unix.ib_chksum (svr4-sum), the bootslice.manifest `chain` region (BSD sum -r), and KSUM_R (pkgparam, updbootpart gate 5b). boot1/boot2 sums and BOOT2_SHA are id-invariant.",
+        "rejected_1": "Compute the sums post-patch ON THE BOX. Cheap and WRONG: a gate that checksums whatever it just produced proves only that the box agrees with itself, converting every fail-closed gate in the chain into a tautology.",
+        "rejected_2": "Exclude the patched range from the checksums. Not possible: ib_chksum is verified by boot2 itself over ib_size bytes, and `sum -r` is computed on-box by the stock sum(1). Neither takes a skip list.",
+        "adopted": "PER-ID EXPECTED-SUM TABLE, computed host-side at media-build time over the gated golden kernel. At install time the installer looks up the row for the chosen id and gates against THAT exact expected value. Every gate stays fail-closed and every expected value still descends from a host-side computation over a metal-proven kernel.",
+        "gate_gets_stronger": "updbootpart gate 5d already decodes the packaged ROOTDEV and refuses unless it resolves to the running root's cN and slice 1. Re-keyed per id it goes from 'is the packaged rootdev consistent with this disk' to 'is the installed kernel bit-for-bit the expected image for this disk'."
+      },
+
+      "table": {
+        "name": "amix-rootdev-patch-table",
+        "schema_version": 1,
+        "emitted_by": "tools/kernel-rootdev-patch.py table",
+        "is_a_build_artifact": "PER DRIVER MIX. A different kernel build gives different sums, so this table is computed when the media is built and shipped as media metadata. It is NEVER a constant and must never be pinned anywhere except by the build that produced it. `sum -r` is not linear, so the values look random; they are deterministic and cheap to precompute.",
+        "formats": ["json (default -- the machine-readable form)", "pkginfo (KEY=VALUE lines for the kernel package / on-box gates)", "text (the human table)"],
+        "json": {
+          "table": "amix-rootdev-patch-table",
+          "schema_version": "integer, 1",
+          "contract": "amix-bootchain",
+          "generated_by": "tool identity string",
+          "base": "the unpatched kernel's identity: file (basename), representation, size, rootdev, swap_device, bo_size, sum_r, svr4_sum, md5, sha256",
+          "convention": "root_slice, swap_slice, card actually used for the rows",
+          "rows": "one object per id: id, rootdev (0xHEX), root_device, swap_device, size, sum_r, sum_r_blocks, svr4_sum, svr4_sum_hex, md5, sha256"
+        },
+        "pkginfo_keys": {
+          "ROOTDEV_IDS": "space-separated list of the ids the table covers",
+          "ROOTDEV_<id>": "0xHEX dev_t for that id -- what updbootpart gate 5d decodes",
+          "KSUM_R_<id>": "BSD `sum -r` of the patched kernel -- what updbootpart gate 5b pins /stand/unix against",
+          "KSVR4_<id>": "svr4-sum of the patched kernel -- the value iblk_unix.ib_chksum must carry once it is reframed",
+          "KMD5_<id>": "md5 of the patched kernel (the box has md5; it has no sha256)",
+          "KSIZE_<id>": "size in bytes -- id-invariant, emitted per id so a row is self-contained"
+        },
+        "consumers": "amix-installng: bootslice.manifest gains a per-id `chain` row; install.sh picks the row for TARGET_SCSI_ID; updbootpart gates 5b/5d select the per-id KSUM_R/ROOTDEV; the installer-selftest drift lock becomes 'the id-6 row still reads 0x00480016' instead of 'the profile is id 6'. Consumers READ this table; they do not reimplement the patch."
+      },
+
+      "vectors": {
+        "note": "Encoding vectors for the id <-> dev_t <-> device-name arithmetic, which is the one piece of this section a consumer really does reimplement (updbootpart gate 5d decodes ROOTDEV back to a cN and a slice). SYNTHETIC by construction -- arithmetic only, not one byte of Commodore content. They live HERE rather than in contracts/bootchain-vectors/ because both repos' bootchain-conform runners glob that directory and require every file in it to carry the svr4-sum vector schema; a second schema there would break amix-installng's check suite.",
+        "valid": [
+          { "id": 0, "root_slice": 1, "swap_slice": 2, "rootdev": "0x00480010", "root_device": "/dev/dsk/c0d0s1", "swap_device": "/dev/dsk/c0d0s2", "why": "the cross-built c0s1unix config, independently in rootdev.configs" },
+          { "id": 6, "root_slice": 1, "swap_slice": 2, "rootdev": "0x00480016", "root_device": "/dev/dsk/c6d0s1", "swap_device": "/dev/dsk/c6d0s2", "why": "the cross-built c6s1unix config, independently in rootdev.configs -- the two configs pin the arithmetic at both ends" },
+          { "id": 1, "root_slice": 1, "swap_slice": 2, "rootdev": "0x00480011", "root_device": "/dev/dsk/c1d0s1", "swap_device": "/dev/dsk/c1d0s2", "why": "an id no kernel was ever built for" },
+          { "id": 7, "root_slice": 1, "swap_slice": 2, "rootdev": "0x00480017", "root_device": "/dev/dsk/c7d0s1", "swap_device": "/dev/dsk/c7d0s2", "why": "the top of the unit range" },
+          { "id": 3, "root_slice": 3, "swap_slice": 4, "rootdev": "0x00480033", "root_device": "/dev/dsk/c3d0s3", "swap_device": "/dev/dsk/c3d0s4", "why": "slice != the project convention -- proves the slice really is bits 4-6 and not a constant" },
+          { "id": 5, "root_slice": 0, "swap_slice": 7, "rootdev": "0x00480005", "root_device": "/dev/dsk/c5d0s0", "swap_device": "/dev/dsk/c5d0s7", "why": "slice 0 must not be confused with 'unset'" }
+        ],
+        "invalid": [
+          { "id": 8,  "why": "SCSI target ids are 0-7 (sdunit is 3 bits); 8 would silently become card 1 unit 0" },
+          { "id": -1, "why": "negative ids are not an encoding" },
+          { "root_slice": 8, "why": "sdpart is 3 bits" },
+          { "swap_slice": 8, "why": "sdpart is 3 bits" },
+          { "card": 1, "why": "out of scope by design -- see scope.card" }
+        ]
+      },
+
+      "refusals": [
+        "not a big-endian 32-bit m68k ELF, or an e_type that is neither ET_REL nor brel",
+        "anchor count != 1, or a forbidden string present",
+        "any precondition above failing -- explicitly including the bo_name/rootdev consistency check",
+        "any relocation overlapping the patched range",
+        "an id, slice or card outside the encoding above",
+        "an ET_REL whose .symtab disagrees with the anchor, or has no .symtab at all",
+        "a declared twin image whose site disagrees with the image being patched",
+        "an unreadable or incomplete contract -- a gate that cannot read its own definition must never pass"
+      ]
+    }
+  }
+}
