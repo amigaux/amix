@@ -35,7 +35,7 @@ for r in "$@"; do
 	  [ -f "$P/$f" ] || { echo "[FAIL] $P/$f not built" >&2; exit 1; }
 	  cp "$P/$f" "$S/"
 	  mkdir -p "$S/$NAME"
-	  cp -r "$R/tests" "$S/$NAME/"
+	  [ -d "$R/tests" ] && cp -r "$R/tests" "$S/$NAME/"
 	  if [ -f "$R/tests/fixtures" ]; then
 		  T="$OUT/$NAME/work/${SRCDIR:-$NAME-$VERSION}"
 		  grep -v '^#' "$R/tests/fixtures" | while read -r f; do
@@ -44,7 +44,7 @@ for r in "$@"; do
 		  done
 	  fi
 	  echo "$PKG $f $NAME" >> "$S/PKGLIST"
-	  echo "staged $f ($(md5sum "$S/$f" | cut -d' ' -f1)) + $NAME/tests" )
+	  echo "staged $f ($(md5sum "$S/$f" | cut -d' ' -f1))$( [ -f "$R/tests/smoke.sh" ] && echo " + $NAME/tests" || echo ", no smoke test" )" )
 done
 cat > "$S/admin" <<'ADM'
 mail=

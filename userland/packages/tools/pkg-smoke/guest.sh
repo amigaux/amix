@@ -23,8 +23,12 @@ while read P F N; do
 	pkgchk $P > $D/chk.$P 2>&1; echo "RES pkgchk $P rc=$?"
 	n=`awk '$2 == "f" { for (i = 10; i <= NF; i++) if ($i == "'$P'") n++ } END { print n + 0 }' $C`
 	echo "RES files $P $n"
-	( cd $D/$N && sh tests/smoke.sh ) > $D/smoke.$P 2>&1; echo "RES smoke-rc $P $?"
-	grep '^RES ' $D/smoke.$P
+	if [ -f $D/$N/tests/smoke.sh ]; then
+		( cd $D/$N && sh tests/smoke.sh ) > $D/smoke.$P 2>&1; echo "RES smoke-rc $P $?"
+		grep '^RES ' $D/smoke.$P
+	else
+		echo "RES smoke $P none (the package has no tests/smoke.sh)"
+	fi
 	pkgrm -n -a $D/admin $P > $D/rm.$P 2>&1; echo "RES pkgrm $P rc=$?"
 	if pkginfo $P > /dev/null 2>&1; then echo "RES after-rm $P still installed"; else echo "RES after-rm $P gone"; fi
 	# (the header comment names the last package pkgrm touched: skipped)
