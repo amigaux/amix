@@ -1,3 +1,10 @@
+## 2026-10-30 — heirloom: scriptvfy.c is never regenerated (754571c)
+
+CI on 0c537a4 failed linking pkgchk: make's built-in %.c: %.l rule re-ran flex whenever a checkout left scriptvfy.l
+a clock tick newer than the committed scanner, dropping its yywrap(). An empty scriptvfy.c rule stops the
+regeneration (host and Amix builds) and scriptvfy.l carries yywrap() too. 10/10 builds clean in the CI base image
+with the .l forced newer.
+
 ## 2026-10-30 — APKG and APKGENG are essential (cd8aa5e)
 
 build-packages.sh marks both packages APKG_ESSENTIAL=yes, as dpkg marks itself: without them the box cannot manage
