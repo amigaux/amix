@@ -3,7 +3,7 @@
 The Z3660 SCSI driver (`src/z3660.c`) as an Amix loadable kernel module of
 class `root`: the module core's root pass (`marc_root`) loads it before the
 root filesystem is mounted, and it registers the board with sd. The
-contracts are amix-dlm's C4-2 (the root-class driver form, version 1), C4-1
+contracts are kernel/dlm's C4-2 (the root-class driver form, version 1), C4-1
 (`sd_register` and the four cards, version 2), C3-1 (the object) and C3-6
 (what a driver changes). One source: `-DZ3660SCSI_MODULE` selects the module
 form; without it the file is the static driver, byte for byte.
@@ -17,8 +17,8 @@ make -C module static          # the static object compiled against each kit, an
 make -C module clean
 ```
 
-The kits are amix-dlm's ABI kits (`DLM=…/amix-dlm`, default the sibling
-checkout's `build/kit/<line>`), or name them with `KIT_k30=` / `KIT_k46=`.
+The kits are kernel/dlm's ABI kits (`DLM=…/kernel/dlm`, default this amix
+checkout's `kernel/dlm/build/kit/<line>`), or name them with `KIT_k30=` / `KIT_k46=`.
 Build against kabi `k30.1.1` / `k46.1.1` or later (KIT_REV 96205b6 or
 later; 1.0.0-2 was built with KIT_REV 230a1e8, which stamps `k30.1.2` /
 `k46.1.2`). Every name the module imports (`autocon`, `bcopy`, `cputype`,
@@ -72,7 +72,7 @@ the attach check that the board window is reached cache-inhibited,
 `docs/BLIZZARD-F3.md`). The static k46 kernels get 60 stamped into the
 linked image by the 040/060 port's `f4arms --cache 60` pass. A module
 kernel runs no such pass, so the module sets the arm itself at `_load`, as
-amix-dlm C4-2 §1.1 requires of every module that replaces a static driver.
+kernel/dlm C4-2 §1.1 requires of every module that replaces a static driver.
 
 **Why:** the first module kernel on the A4000T's real 68060 (S4-74, kern46m
 -81) ran with the module's own `.data` word, 0. No line op ran, a dirty
