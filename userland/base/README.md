@@ -38,9 +38,11 @@ outside the package database.
 | [`docs/dhcp-probe.md`](docs/dhcp-probe.md) | what the 1991 DLPI path was measured to do, the facts the DHCP client is built on | measured |
 | [`dhcpc/probe/`](dhcpc/probe/) | `dhcprobe`, the stage-0 probe, and `tapdhcpd.py`, the test DHCP responder it runs against | tool |
 | [`man/`](man/) | `man`, one manual command for the add-on pages and the stock ones ([`docs/man.md`](docs/man.md)), its page and its host test | written, not yet packaged |
+| [`rc/`](rc/) | `rc.subr`, the boot scripts' helper library; the pages `rc.subr(1M)` and `rc.conf(4)`; its host test | written, not yet packaged |
+| [`net/`](net/) | `ifup.subr`'s `interfaces` parser and the page `interfaces(4)`; [`dlpi-mac`](net/dlpi-mac/), the generic MAC reader, and its page | written, not yet packaged |
 
-The rest (`rc/`, `net/`, the client in `dhcpc/`, `etc/`) arrives with the packages; see
-`docs/plan.md`.
+The rest (`ifup`/`ifdown`, the new `inetinit`, the client in `dhcpc/`, `etc/`)
+arrives with the packages; see `docs/plan.md`.
 
 ## Building
 
@@ -51,7 +53,10 @@ against the stock headers and libraries only, so they need nothing from
 
 ```sh
 userland/base/dhcpc/probe/build.sh          # writes out/base/dhcprobe
+userland/base/net/dlpi-mac/build.sh         # writes out/base/dlpi-mac
 sh userland/base/man/test-man.sh            # host tests of the man front-end
+sh userland/base/rc/test-rc.sh              # host tests of rc.subr
+sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
 ```
 
 ## Licence

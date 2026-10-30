@@ -10,8 +10,8 @@ page proposes something P-36 left open, it says so.
 
 | | base | dhcp-client |
 |---|---|---|
-| Catalog name | `amix-base` (proposed; P-36 §2.2's working name was `amix-rc`, before D-N24 added the config files) | `dhcp-client` (D-N18) |
-| pkginst (≤ 9 characters) | `amxbase` (proposed) | `dhcpc` (D-N18) |
+| Catalog name | `amix-base` (owner, 2026-10-30; P-36 §2.2's working name was `amix-rc`, before D-N24 added the config files) | `dhcp-client` (D-N18) |
+| pkginst (≤ 9 characters) | `amxbase` | `dhcpc` (D-N18) |
 | Licence | MIT | MIT |
 | Toolchain | period (gcc-cross-amix) for `dlpi-mac`; the rest is Bourne sh | period, for `dhcpc` |
 | Depends on | nothing but the stock system | `amix-base` (it calls the base package's hook) |
@@ -23,8 +23,9 @@ page proposes something P-36 left open, it says so.
   `/etc/init.d/inetinit` and its `S69inet`/`K69inet` links (`l` objects,
   written in place so the hard links survive); `/usr/sbin/ifup`, `ifdown`,
   `dlpi-mac`; `/usr/lib/inet/ifup.subr` and `dhcpc-hook`; the swap step; the `man` front-end
-  `/usr/amix/bin/man` (`man.md`), its page `/opt/amix/man/1/man` and index
-  fragment `/opt/amix/man/whatis.d/amxbase`, the shared `/opt/amix/man`
+  `/usr/amix/bin/man` (`man.md`); the pages `man(1)`, `rc.subr(1M)`,
+  `dlpi-mac(1M)`, `rc.conf(4)` and `interfaces(4)` under `/opt/amix/man`, with
+  their index fragment `/opt/amix/man/whatis.d/amxbase`; the shared `/opt/amix/man`
   directories and the cache directories `/var/opt/amix/catman/<sect>` (`d`).
 - **Vendor data** (`f`): `/etc/inet/link.d/aen`, the stock A2065's entry.
   Every other network driver ships its own `link.d` entry in its own package.
