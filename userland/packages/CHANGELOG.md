@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — prngd 0.9.29 recipe, held on a kernel bug (cc61d24)
+
+Built and gated; stock pkgadd/pkgchk/pkgrm rc 0. Amix AF_UNIX fix: DONT_CHMOD_SOCKET honoured (chmod on a bound
+socket's FIFO makes connect fail ENOTSOCK). prngd traffic while it gathers panics the stock k30 kernel in queuerun (a
+deferred STREAMS put through a garbage qi_putp); the kernel fix is routed. Not published.
+
 ## 2026-10-30 — kernel-k30-m k30.1.3.261030-56 (611ddc5, 547e801)
 
 The k30 station's cut 68030-261030-56 from amix 4fc583f with kzero (quirk 90), ufs tail zeroing (quirk 91; the ufs
