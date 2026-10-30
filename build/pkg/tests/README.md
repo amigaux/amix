@@ -1,7 +1,9 @@
 # build/pkg/tests
 
 `test-pkgmeta` is the host test of `pkgmeta` and `check-packages`;
-`test-pkgbuild` is the host test of the driver and `layout.sh`. Run both with
+`test-pkgbuild` is the host test of the driver and `layout.sh`;
+`test-s5mark` is the host test of `pkgroll.sh`'s GATE 3, the s5 rule and
+the UFS mark (`APKG_FSTYPE=ufs`, P-35). Run them with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 

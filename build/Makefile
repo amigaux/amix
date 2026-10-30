@@ -9,6 +9,7 @@
 test:
 	python3 -I pkg/tests/test-pkgmeta
 	python3 -I pkg/tests/test-pkgbuild
+	python3 -I pkg/tests/test-s5mark
 
 selftests:
 	sh pkg/tests/run-selftests

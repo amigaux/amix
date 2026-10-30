@@ -49,6 +49,66 @@ amix_pkginfo_retag() {
 	echo "  pkginfo retagged for gcc14: VERSION=$3, $(grep '^PSTAMP=' "$1")"
 }
 
+# amix_s5_mark <prototype> <pkginfo> -- GATE 3, s5's 14-byte directory
+# entries (P-35 Option C; userland/pkgtools/docs/design.md sec 2b).  s5 cuts
+# a name at 14 bytes, so on s5 an object with a longer basename installs under
+# a truncated name, and two objects in one directory sharing their first 14
+# bytes collide.  UFS has neither limit, and is the filesystem for new
+# installs.  So a package with any object basename over 14 bytes is marked
+# UFS-only: pkginfo gets APKG_FSTYPE=ufs, apkg refuses it on s5, and the s5
+# rule does not apply to it (long names and 14-byte collisions are allowed).
+# A package without one is left unmarked and must pass the s5 rule, which then
+# only a human can fix (PORTING.md sec 5.8): this gate refuses, never renames.
+# Keyed on (dirname, basename[:14]): a collision is a property of a DIRECTORY.
+# An APKG_FSTYPE the pkginfo already carries is kept if it is a well-formed
+# list, as apkg reads it (names of 1-15 [a-z0-9], comma-separated); one that
+# names s5 cannot carry long names.  Every pkgadd ignores the parameter.
+amix_s5_mark() {
+	awk '
+		$1 ~ /^[fdvexlsbcp]$/ && NF >= 3 {
+			p = $3; sub(/=.*$/, "", p);
+			n = split(p, seg, "/"); base = seg[n];
+			dir = substr(p, 1, length(p) - length(base));
+			key = dir "\001" substr(base, 1, 14);
+			if (key in seen && seen[key] != base)
+				printf "COLLIDE %s %s %s\n", dir, seen[key], base;
+			seen[key] = base;
+			if (length(base) > 14)
+				printf "TRUNC %s (%d bytes -> %s)\n", p, length(base), substr(base, 1, 14);
+		}
+	' "$1" > "$1.s5scan" 2>/dev/null
+	_s5_fs=$(sed -n 's/^[ 	]*APKG_FSTYPE[ 	]*=[ 	]*//p' "$2" | head -1 |
+		sed 's/[ 	]*$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/')
+	if grep '^[ 	]*APKG_FSTYPE[ 	]*=' "$2" >/dev/null &&
+	   ! echo "$_s5_fs" | grep -E '^[a-z0-9]{1,15}(,[a-z0-9]{1,15})*$' >/dev/null; then
+		echo "[FAIL] $2: APKG_FSTYPE=$_s5_fs is not a list of filesystem types" >&2
+		rm -f "$1.s5scan"; exit 1
+	fi
+	if grep '^TRUNC' "$1.s5scan" >/dev/null; then
+		if [ -z "$_s5_fs" ]; then
+			echo "APKG_FSTYPE=ufs" >> "$2"
+			_s5_fs=ufs
+		fi
+		case ",$_s5_fs," in
+		*,s5,*)
+			echo "[FAIL] $2: APKG_FSTYPE=$_s5_fs names s5, but object basenames exceed s5's 14 bytes:" >&2
+			grep '^TRUNC' "$1.s5scan" >&2
+			rm -f "$1.s5scan"; exit 1
+			;;
+		esac
+		echo "  UFS mark  APKG_FSTYPE=$_s5_fs: $(grep -c '^TRUNC' "$1.s5scan") object basename(s) over 14 bytes; apkg refuses it on s5"
+	else
+		if grep '^COLLIDE' "$1.s5scan" >/dev/null; then
+			echo "[FAIL] s5 14-byte name collision in $1:" >&2
+			grep '^COLLIDE' "$1.s5scan" >&2
+			rm -f "$1.s5scan"; exit 1
+		fi
+		echo "  S5 ok     every object basename within 14 bytes${_s5_fs:+, APKG_FSTYPE=$_s5_fs as authored}"
+	fi
+	rm -f "$1.s5scan"
+	unset _s5_fs
+}
+
 amix_pkgroll() {
 	_pr_work="$1"
 	_pr_root="$2"
@@ -103,39 +163,8 @@ amix_pkgroll() {
 		exit 1
 	}
 
-	# GATE 3 -- s5 truncates a directory entry at 14 bytes, so two objects in
-	# one directory sharing a 14-byte prefix cannot coexist on the target root.
-	# Only a human can resolve a real collision (PORTING.md sec 5.8), so this
-	# gate refuses rather than renames.  Keyed on (dirname, basename[:14]) --
-	# a collision is a property of a DIRECTORY, which is the correction
-	# amix-packagemanager's s5-collision-scan.py made to its own first scan.
-	awk '
-		$1 ~ /^[fdvexlsbcp]$/ && NF >= 3 {
-			p = $3; sub(/=.*$/, "", p);
-			n = split(p, seg, "/"); base = seg[n];
-			dir = substr(p, 1, length(p) - length(base));
-			key = dir "\001" substr(base, 1, 14);
-			if (key in seen && seen[key] != base)
-				printf "COLLIDE %s %s %s\n", dir, seen[key], base;
-			seen[key] = base;
-			if (length(base) > 14)
-				printf "TRUNC %s (%d bytes -> %s)\n", p, length(base), substr(base, 1, 14);
-		}
-	' "$_pr_work/prototype" > "$_pr_work/.s5scan" 2>/dev/null
-	if grep -q '^COLLIDE' "$_pr_work/.s5scan" 2>/dev/null; then
-		echo "[FAIL] s5 14-byte name collision in $_pr_work/prototype:" >&2
-		grep '^COLLIDE' "$_pr_work/.s5scan" >&2
-		exit 1
-	fi
-	if grep -q '^TRUNC' "$_pr_work/.s5scan" 2>/dev/null; then
-		echo "[FAIL] object basename exceeds the s5 14-byte dirent limit:" >&2
-		grep '^TRUNC' "$_pr_work/.s5scan" >&2
-		echo "       The file installs under a TRUNCATED name on the box, so anything" >&2
-		echo "       looking it up by its full name will not find it.  Rename it in the" >&2
-		echo "       recipe -- do not ship it and hope." >&2
-		exit 1
-	fi
-	rm -f "$_pr_work/.s5scan"
+	# GATE 3 -- the s5 14-byte rule, or the UFS mark (amix_s5_mark above).
+	amix_s5_mark "$_pr_work/prototype" "$_pr_work/pkginfo"
 
 	_pr_spool="$_pr_work/.spool"
 	rm -rf "$_pr_spool"

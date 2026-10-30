@@ -122,6 +122,11 @@ are in this checkout:
 `AMIX_PKG_COMMON` names another harness. An amix-packages `recipes/common`
 finds its repository and siblings itself, and the driver leaves it to do so.
 
+The roll's s5 gate (`common/pkgroll.sh`, `amix_s5_mark`): a package whose
+object names all fit s5's 14 bytes must have no two in one directory that
+share their first 14; a package with a longer name is marked UFS-only,
+`APKG_FSTYPE=ufs` in its pkginfo, which apkg refuses to install on s5.
+
 Outputs: `<build root>/<name>/` (the source, the build tree, the staged
 payload, the logs, `BUILD.txt` and `catalog.line`, the package's catalog
 line) and `<build root>/pkg/<PKG>-<VERSION>-<PKGREV>.pkg`.

@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# test-s5mark: host test of pkgroll.sh's GATE 3, amix_s5_mark (P-35).
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Sources the real build/pkg/common/pkgroll.sh in /bin/sh and runs
+# amix_s5_mark on small prototypes and pkginfo files: a package whose object
+# basenames all fit s5's 14 bytes is left unmarked and must pass the s5 rule;
+# one with a longer basename gets APKG_FSTYPE=ufs (userland/pkgtools/docs/
+# design.md sec 2b) and is exempt from the rule; an authored APKG_FSTYPE is
+# kept when well formed, refused when malformed or when it names s5 for a
+# package with long names; the mark is read back with userland/pkgtools'
+# gen-catalog.py, the catalog's reader of it. Prints "N/N passed"; exits non-zero on any failure.
+
+import os
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+PKGROLL = os.path.join(os.path.dirname(HERE), "common", "pkgroll.sh")
+GENCAT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))),
+                      "userland", "pkgtools", "tools", "repo", "gen-catalog.py")
+
+PKGINFO = ("PKG=t\nNAME=t\nARCH=Amiga\nVERSION=1-1\nCATEGORY=utility\n"
+           "CLASSES=none\nVENDOR=amix-packages\nPSTAMP=amix-packages-t-1-1-gcc14\n"
+           "DESC=t\n")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def mark(tmp, proto_lines, pkginfo=PKGINFO, runs=1):
+    """(rc, output, pkginfo after) of amix_s5_mark over a prototype."""
+    proto = os.path.join(tmp, "prototype")
+    info = os.path.join(tmp, "pkginfo")
+    with open(proto, "w") as fp:
+        fp.write("i pkginfo\n" + "".join(l + "\n" for l in proto_lines))
+    with open(info, "w") as fp:
+        fp.write(pkginfo)
+    script = ('. "$1"\n' + 'amix_s5_mark "$2" "$3"\n' * runs)
+    r = subprocess.run(["/bin/sh", "-c", script, "sh", PKGROLL, proto, info],
+                       capture_output=True, text=True)
+    with open(info) as fp:
+        after = fp.read()
+    left = [f for f in os.listdir(tmp) if f.endswith(".s5scan")]
+    return r.returncode, r.stdout + r.stderr, after, left
+
+
+def main():
+    d = "d none /opt/amix/bin 0755 root sys"
+    short = "f none /opt/amix/bin/fourteen-bytes 0755 root bin"      # 14
+    long_ = "f none /opt/amix/bin/fifteen-bytes-x 0755 root bin"     # 15
+    long2 = "f none /opt/amix/bin/fifteen-bytes-y 0755 root bin"     # collides
+    link = "s none /opt/amix/bin/a-symlink-name-long=/opt/amix/bin/x"
+    with tempfile.TemporaryDirectory() as t:
+        rc, out, info, left = mark(t, [d, short])
+        check("short names: passes", rc == 0, out)
+        check("short names: pkginfo unchanged", info == PKGINFO, info)
+        check("short names: says S5 ok", "S5 ok" in out, out)
+        check("short names: no scan file left", not left, str(left))
+
+        rc, out, info, left = mark(t, [d, long_])
+        check("long name: passes", rc == 0, out)
+        check("long name: APKG_FSTYPE=ufs appended",
+              info == PKGINFO + "APKG_FSTYPE=ufs\n", info)
+        check("long name: says UFS mark", "UFS mark  APKG_FSTYPE=ufs: 1 object" in out, out)
+
+        # the consumer's reading of the mark: gen-catalog.py's fstype_mark
+        if os.path.exists(GENCAT):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("gencat", GENCAT)
+            gc = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(gc)
+            params = dict(l.split("=", 1) for l in info.splitlines() if "=" in l)
+            check("long name: gen-catalog.py reads the mark as ufs",
+                  gc.fstype_mark(params) == "ufs", info)
+
+        rc, out, info, left = mark(t, [d, long_, long2])
+        check("14-byte collision in a marked package: passes", rc == 0, out)
+        check("14-byte collision: marked once", info.count("APKG_FSTYPE=") == 1, info)
+
+        rc, out, info, left = mark(t, [d, short, link])
+        check("long symlink name: marked", rc == 0 and info.endswith("APKG_FSTYPE=ufs\n"), out + info)
+
+        rc, out, info, left = mark(t, [d, long_], runs=2)
+        check("re-run: one APKG_FSTYPE line", rc == 0 and info.count("APKG_FSTYPE=") == 1, info)
+
+        rc, out, info, left = mark(t, [d, long_], PKGINFO + "APKG_FSTYPE=ufs,nfs\n")
+        check("authored ufs,nfs with long names: kept", rc == 0 and
+              info == PKGINFO + "APKG_FSTYPE=ufs,nfs\n", out + info)
+
+        rc, out, info, left = mark(t, [d, short], PKGINFO + 'APKG_FSTYPE="ufs"\n')
+        check("authored quoted ufs, short names: kept as authored", rc == 0 and
+              "as authored" in out and info == PKGINFO + 'APKG_FSTYPE="ufs"\n', out + info)
+
+        for bad in ("UFS", "ufs nfs", "ufs,", "a234567890123456", ""):
+            rc, out, info, left = mark(t, [d, short], PKGINFO + "APKG_FSTYPE=%s\n" % bad)
+            check("malformed APKG_FSTYPE=%r: refused" % bad,
+                  rc != 0 and "is not a list of filesystem types" in out, out)
+            check("malformed APKG_FSTYPE=%r: no scan file left" % bad, not left, str(left))
+
+        rc, out, info, left = mark(t, [d, long_], PKGINFO + "APKG_FSTYPE=ufs,s5\n")
+        check("authored list naming s5 with long names: refused",
+              rc != 0 and "names s5" in out and "fifteen-bytes-x" in out, out)
+
+        rc, out, info, left = mark(t, [d, short], PKGINFO + "APKG_FSTYPE=s5\n")
+        check("authored s5 with short names: passes", rc == 0, out)
+
+    print("%d/%d passed" % (passed, passed + failed))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
