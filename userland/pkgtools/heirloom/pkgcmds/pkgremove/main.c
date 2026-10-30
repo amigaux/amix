@@ -1298,9 +1298,16 @@ rmclass(char *aclass, int rm_remote, char *a_zoneName)
 			/* Directories are rmdir()'d. */
 
 			if (rmdir(ept->path)) {
+				/*
+				 * AMIX PORT: a directory that still holds
+				 * entries is EEXIST on SVR4 and ENOTEMPTY on
+				 * Linux; both are "not empty", not a failure
+				 * (a conffile kept by r.conffile stays there).
+				 */
 				if (errno == EBUSY) {
 					echo(MSG_DIRBUSY, ept->path);
-				} else if (errno == EEXIST) {
+				} else if (errno == EEXIST ||
+				    errno == ENOTEMPTY) {
 					echo(MSG_NOTEMPTY, ept->path);
 				} else if (errno != ENOENT) {
 					progerr(ERR_RMDIR, ept->path);
