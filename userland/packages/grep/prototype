@@ -31,10 +31,12 @@ f none /opt/amix/bin/fgrep 0755 root bin
 #
 # --- manual pages ----------------------------------------------------------
 d none /opt/amix/man 0755 root sys
-d none /opt/amix/man/man1 0755 root sys
-f none /opt/amix/man/man1/grep.1 0644 root bin
-f none /opt/amix/man/man1/egrep.1 0644 root bin
-f none /opt/amix/man/man1/fgrep.1 0644 root bin
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/egrep 0644 root bin
+f none /opt/amix/man/1/fgrep 0644 root bin
+f none /opt/amix/man/1/grep 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/grep 0644 root bin
 #
 # --- licence and upstream notes --------------------------------------------
 #

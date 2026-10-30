@@ -67,7 +67,7 @@ path D4 moved — and passed on the emulated golden 030. Staged for publication 
 
 ## Package shape
 
-`/opt/amix/bin/{grep,egrep,fgrep}`, man pages under `/opt/amix/man/man1/`,
+`/opt/amix/bin/{grep,egrep,fgrep}`, man pages under `/opt/amix/man/1/` with `whatis.d/grep`,
 `COPYING`/`NEWS`/`README` under `/opt/amix/doc/grep/`. `egrep`/`fgrep` are grep's own `/bin/sh`
 wrappers, rewritten to `exec /opt/amix/bin/grep -E|-F …` by **absolute** path so they work regardless
 of PATH. Pure file payload (D9), nothing outside `/opt/amix`, no symlink into a stock tree.
@@ -87,3 +87,10 @@ fails and `off_t` becomes a macro.
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt `-7` has
 the recorded `-7`'s payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/grep` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; the pages are upstream's; `egrep` and `fgrep` are aliases. Built on the gcc14 container pin: every other payload file is the previous
+revision's.
