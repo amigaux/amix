@@ -128,9 +128,13 @@ def word_at(data, secs, a):
 
 def moveq_value(insns, j, reg):
     """The constant in %reg at insns[j], if the last write to it before j is a
-    moveq #N,%reg within a few instructions; else None."""
+    moveq #N,%reg within a few instructions; else None.  A compare or test
+    names the register without writing it (perl 5.8.9's Perl_pv_uni_display:
+    `moveq #6,%d7 ; cmpl %d0,%d7 ; ... ; cmpl %d1,%d7 ; bcs')."""
     for k in range(j - 1, max(0, j - 6) - 1, -1):
         mn, ops = insns[k][2], insns[k][3]
+        if mn.startswith(("cmp", "tst", "btst")):
+            continue
         if ops.endswith("," + reg) or ops == reg:
             m = MOVEQ.match(ops) if mn == "moveq" else None
             return int(m.group(1)) if m and m.group(2) == reg[1:] else None
@@ -151,10 +155,12 @@ def bound_for(insns, idx):
     getutx.o (_getutxid), linked by coreutils who/users/pinky, 2026-10-29.
     """
     lo = max(0, idx - LOOKBACK)
+    block = None
     for j in range(idx - 1, lo - 1, -1):
         _a, _w, mn, ops = insns[j]
         if mn.startswith(("rts", "jmp", "bra")):
-            break                                   # left the dispatch block
+            block = j + 1                           # left the dispatch block
+            break
         if not re.match(r"^cmp[ai]?[bwl]$", mn) or j + 1 >= idx:
             continue
         br = insns[j + 1][2]
@@ -176,7 +182,77 @@ def bound_for(insns, idx):
             n = moveq_value(insns, j, "%" + m.group(1))
             if n is not None:
                 return n + 1
+    # no compare bounds it: a mask in the block, else the ways into the block
+    for j in range(idx - 1, (block if block is not None else lo) - 1, -1):
+        n = mask_bound(insns, j)
+        if n is not None:
+            return n
+    if block is not None:
+        return entry_bound(insns, block, idx)
     return None
+
+
+def mask_bound(insns, j):
+    """Entry count M+1 when insns[j] masks a data register with M = 2^k - 1:
+    `andi{b,w,l} #M,%dX', or `andl %dA,%dB' after a moveq #M into either --
+    switch (x & 7), e.g. Duff's device (perl 5.8.9's sdbm, Perl_ck_fun)."""
+    mn, ops = insns[j][2], insns[j][3]
+    if not re.match(r"^andi?[bwl]$", mn):
+        return None
+    m = re.match(r"^#(\d+),%d[0-7]$", ops)
+    if m:
+        n = int(m.group(1))
+    else:
+        m = re.match(r"^%(d[0-7]),%(d[0-7])$", ops)
+        if not m:
+            return None
+        n = moveq_value(insns, j, "%" + m.group(1))
+        if n is None:
+            n = moveq_value(insns, j, "%" + m.group(2))
+    if n is None or n < 0 or (n + 1) & n:
+        return None
+    return n + 1
+
+
+def entry_bound(insns, start, idx):
+    """Entry count for a dispatch block at insns[start] that is entered only by
+    branches: each must be a bounded conditional one --
+        cmp[i]{b,w,l} #N,<ea> ; bls block       (ea <= N)
+        moveq #N,%dY ; cmpl <ea>,%dY ; bcc block (N >= ea)
+        moveq #N,%dY ; cmpl %dY,<ea> ; bls block (ea <= N)
+    (perl 5.8.9's Perl_ref: `cmpiw #15,%d1 ; blsw' far above the block)."""
+    if start >= idx:
+        return None
+    target = "%x" % insns[start][0]
+    found = set()
+    for k, (_a, _w, mn, ops) in enumerate(insns):
+        if not re.match(r"^b(ra|sr|hi|ls|cc|cs|ne|eq|vc|vs|pl|mi|ge|lt|gt|le)[bswl]?$", mn):
+            continue
+        if ops.split(" ")[0] != target:
+            continue
+        if k == 0 or not mn.startswith(("bls", "bcc")):
+            return None                             # an unbounded way in
+        pmn, pops = insns[k - 1][2], insns[k - 1][3]
+        if not re.match(r"^cmp[ai]?[bwl]$", pmn):
+            return None
+        n = None
+        m = BOUND_CMP.match(pops)
+        if m and mn.startswith("bls"):
+            n = int(m.group(1))
+            if pmn.endswith("b"):
+                n &= 0xff
+            elif pmn.endswith("w"):
+                n &= 0xffff
+        m = re.match(r"^(.+),%(d[0-7])$", pops)
+        if n is None and m and mn.startswith("bcc"):
+            n = moveq_value(insns, k - 1, "%" + m.group(2))
+        m = re.match(r"^%(d[0-7]),(\S+)$", pops)
+        if n is None and m and mn.startswith("bls"):
+            n = moveq_value(insns, k - 1, "%" + m.group(1))
+        if n is None:
+            return None
+        found.add(n + 1)
+    return found.pop() if len(found) == 1 else None
 
 
 def find_tables(insns, labels, data, secs, pts):

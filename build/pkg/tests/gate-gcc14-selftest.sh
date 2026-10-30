@@ -17,6 +17,8 @@
 #   - the FPU gate rejects the 040/060-only FPU forms -mcpu=68060 emits (an
 #     executable, an archive, and amix_pkgroll's payload) and passes the same
 #     source built with the recipe flags (-m68020-60);
+#   - scan060-g14.py sizes the mask-, entry- and compare-interleaved-bounded
+#     switch tables of perl 5.8.9, and still catches a movep after each
 #   - scan060-g14.py sizes a switch table dispatched through %a6 (objdump's
 #     %fp; GCC 14 -O2 uses it as a general register) and one bound-checked
 #     against a memory operand, instead of reading them as code, and still
@@ -266,6 +268,45 @@ if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-att-movep"); then
 fi
 echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the AT&T movep probe: $out"
 ok "scan060-g14.py sizes the stock AT&T compiler's cmpa-bounded switch table, still catches a movep"
+
+# Three more shapes from perl 5.8.9 (2026-10-30), each dispatched the GCC 14
+# way (`addl %d1,%d1; movew %pc@(T,%d1:l),%d1; jmp %pc@(T,%d1:w)'):
+#   mask   switch (x & 3) -- `moveq #3,%d0; andl %d0,%d1', no compare at all
+#          (sdbm's Duff's device, Perl_ck_fun);
+#   entry  the dispatch block is only entered by `cmpiw #3,%d1; blsw' above
+#          an rts (Perl_ref);
+#   cmpmid the bound `moveq #2,%d7; ...; cmpl %d1,%d7; bcs' with another
+#          compare of %d7 in between (Perl_pv_uni_display).
+shape_probe() {	# shape_probe <name> <prologue asm> <entries> <extra asm or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '\t%s\n' "$2"
+		printf '%s\n' '	"\t.word 0xd281,0x323b,0x1806,0x4efb,0x1002\n"'
+		printf '\t"\\t.word %s\\n"\n' "$3"
+		[ -z "$4" ] || printf '\t%s\n' "$4"
+		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n"'
+		printf '%s\n' '	"9:\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
+}
+for shape in mask entry cmpmid; do
+	case $shape in
+	mask)   pro='"\tmove.l 4(%sp),%d1\n\tmoveq #3,%d0\n\tand.l %d0,%d1\n"'; ent='0x0040,0x0040,0x0040,0x0040' ;;
+	entry)  pro='"\tmove.l 4(%sp),%d1\n\tcmp.w #3,%d1\n\tbls.w 1f\n\trts\n1:\n"'; ent='0x0040,0x0040,0x0040,0x0040' ;;
+	cmpmid) pro='"\tmove.l 4(%sp),%d0\n\tmoveq #2,%d7\n\tcmp.l %d0,%d7\n\tbcc.w 9f\n\tmove.l %d0,%d1\n\tsubq.l #3,%d1\n\tcmp.l %d1,%d7\n\tbcs.w 9f\n"'; ent='0x0040,0x0040,0x0040' ;;
+	esac
+	shape_probe "sw-$shape" "$pro" "$ent" ''
+	shape_probe "sw-$shape-movep" "$pro" "$ent" '"\t.word 0x074c,0x0056\n"'
+	out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape") || fail "scan060-g14.py on the $shape switch: $out"
+	echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the $shape table: $out"
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape-movep"); then
+		fail "scan060-g14.py passed a real movep after the $shape table: $out"
+	fi
+	echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the $shape movep probe: $out"
+done
+ok "scan060-g14.py sizes mask-bounded, entry-bounded and compare-interleaved switch tables, still catches a movep after each"
 
 # The toolchain identity (gcc14-env.sh): a prefix whose specs differ from the
 # pin by one byte is refused before anything builds; the return-value ABI
