@@ -18,6 +18,10 @@
 #   dst differs from both      (edited)         keep dst, write dst.new,
 #   dst present, no baseline   (written by        store baseline, add to
 #                               someone else)     PENDING, say so
+#   dst edited, src equal to   (default         keep dst, leave any .new
+#   the baseline                unchanged)       and PENDING line as they
+#                                               are; silent (dpkg: ask only
+#                                               when the default changed)
 #   dst missing, baseline      (user deleted)   copy src, store baseline,
 #                                               say so
 #
@@ -74,6 +78,9 @@ do
 		elif [ -f "$b" ] && cmp -s "$b" "$dst"
 		then
 			state=unedited
+		elif [ -f "$b" ] && cmp -s "$src" "$b"
+		then
+			state=kept
 		else
 			state=edited
 		fi
@@ -95,7 +102,8 @@ do
 	cp "$src" "$b" || rc=2
 
 	# PENDING: drop this file's line, then add it back if a .new waits
-	if [ -f "$pending" ]
+	# (an unchanged default leaves an undecided .new pending as it is)
+	if [ $state != kept -a -f "$pending" ]
 	then
 		while read p f
 		do
@@ -111,6 +119,8 @@ do
 	deleted)
 		rm -f "$dst.new"
 		echo "$rel: you had removed it; the package's default is back"
+		;;
+	kept)
 		;;
 	*)
 		rm -f "$dst.new"

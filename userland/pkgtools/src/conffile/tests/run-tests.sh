@@ -152,6 +152,19 @@ add "$R" 3
 check "edited, re-added: still kept" is "$R/etc/toy.conf" 'v=mine'
 check "  ... PENDING holds one line" test "$(pend "$R" | wc -l)" = 1
 
+# edited, and the package's default has not changed since: silent, and a
+# fresh root shows no .new and nothing pending (dpkg asks only when the
+# default changed)
+R6="$WORK/r6"; newroot "$R6"
+add "$R6" 1; printf 'v=mine\n' > "$R6/etc/toy.conf"; add "$R6" 1
+check "edited, default unchanged: still kept" is "$R6/etc/toy.conf" 'v=mine'
+check "  ... silent" quiet
+check "  ... no .new and nothing pending" \
+    bash -c "test ! -e '$R6/etc/toy.conf.new' && test -z \"\$(cat '$R6/var/sadm/conffiles/PENDING' 2>/dev/null)\""
+add "$R6" 2
+check "  ... the next changed default does pend" \
+    bash -c "test \"\$(cat '$R6/etc/toy.conf.new')\" = v=2 && grep -q '^CONFT /etc/toy.conf\$' '$R6/var/sadm/conffiles/PENDING'"
+
 # the user takes the new default by hand: identical again
 cp "$R/etc/toy.conf.new" "$R/etc/toy.conf"
 add "$R" 3

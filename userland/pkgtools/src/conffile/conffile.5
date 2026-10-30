@@ -57,6 +57,11 @@ and pkgadd prints
 .RS
 .IB file ": kept your version; the new default is " file .new
 .RE
+.IP
+If the package's default has not changed since the last install, an
+edited file is simply kept, with no message and no new
+.B .new
+file.
 .TP
 \(bu
 The file is gone but its baseline exists (you removed it): the package

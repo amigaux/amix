@@ -1687,9 +1687,9 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "re-add over an edited conf: pkgadd rc 0" test $? -eq 0
     check "re-add over an edited conf: the edit is kept" \
         test "$(cat "$R1/etc/apkg.conf")" = "$EDIT"
-    check "  ... the default is beside it as apkg.conf.new" \
-        cmp -s "$R1/etc/apkg.conf.new" "$R1/usr/apkg/lib/apkg.conf"
-    check "  ... PENDING names it" test "$(pend "$R1")" = "APKG /etc/apkg.conf"
+    # the same version again: the default did not change, so nothing pends
+    check "  ... silently: the default did not change, no .new, nothing pending" \
+        bash -c "test ! -e '$R1/etc/apkg.conf.new' && test -z \"\$(cat '$R1/var/sadm/conffiles/PENDING' 2>/dev/null)\""
     chk "$R1"; check "re-add over an edited conf: plain pkgchk APKG clean" test $? -eq 0
     chkn "$R1"; check "re-add over an edited conf: pkgchk -n APKG clean" test $? -eq 0
     check "re-add over an edited conf: conf is mode 0644" mode644 "$R1/etc/apkg.conf"
@@ -1702,17 +1702,15 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "re-add over an edited admin file: pkgadd rc 0" test $? -eq 0
     check "re-add over an edited admin file: the edit is kept" \
         test "$(head -2 "$R1/var/apkg/admin" | tr '\n' ' ')" = "mail= instance=overwrite "
-    check "  ... its default is beside it as admin.new" \
-        grep -q '^instance=quit$' "$R1/var/apkg/admin.new"
-    check "  ... PENDING names both files" \
-        test "$(pend "$R1" | sort | tr '\n' ' ')" = "APKG /etc/apkg.conf APKG /var/apkg/admin "
+    check "  ... silently, nothing pending" \
+        bash -c "test ! -e '$R1/var/apkg/admin.new' && test -z \"\$(cat '$R1/var/sadm/conffiles/PENDING' 2>/dev/null)\""
     chk "$R1"; check "  ... plain pkgchk APKG clean" test $? -eq 0
     # pkgrm keeps both edits and their baselines, drops the .new files
     fr "$HB/pkgrm" -R "$R1" -n -a "$S23/admin" APKG >"$WORK/t23.rm" 2>&1
     check "pkgrm APKG with both files edited: rc 0" test $? -eq 0
     check "  ... both edited files are kept" \
         bash -c "test \"\$(cat '$R1/etc/apkg.conf')\" = '$EDIT' && test -f '$R1/var/apkg/admin'"
-    check "  ... their .new files are gone, PENDING is empty" \
+    check "  ... no .new files, PENDING is empty" \
         bash -c "test ! -e '$R1/etc/apkg.conf.new' && test ! -e '$R1/var/apkg/admin.new' && test -z \"\$(cat '$R1/var/sadm/conffiles/PENDING')\""
     check "  ... their baselines stay" \
         test -f "$R1/var/sadm/conffiles/APKG/etc/apkg.conf"

@@ -29,6 +29,7 @@ does it by hand for `/etc/apkg.conf` and `/var/apkg/admin`. The paths
 | equal to the new default | (nothing to copy) | none |
 | equal to the baseline (unedited) | install the new default | none |
 | differs from both (edited, or written by someone else) | keep it; new default to `<path>.new`; add `<pkginst> <path>` to `/var/sadm/conffiles/PENDING` | `<path>: kept your version; the new default is <path>.new` |
+| edited, and the new default equals the baseline (the default did not change) | keep it; leave any `.new` and its `PENDING` line as they are | none |
 | gone, baseline present (user removed it) | install the new default | `<path>: you had removed it; the package's default is back` |
 
 In every case the new default becomes the baseline, and a file that is no longer pending loses its
