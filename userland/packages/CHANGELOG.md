@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — moved into amix userland/packages; INDEX.md and conf fragments (5649328, d2ee2b1)
+
+amix-packages master 5cc0e5d moved in by a filter-repo rewrite (197 commits kept, 61 pruned; map in
+docs/history-map.txt); the registry, roadmap, publish records, kernel-space and held recipes stay in the old repo; the
+shared harness is build/pkg/common. pkgmeta generates INDEX.md and conf/{names,cats,deps,sets}.conf from the recipes.
+
 ## 2026-10-30 — prngd 0.9.29 recipe, held on a kernel bug (cc61d24)
 
 Built and gated; stock pkgadd/pkgchk/pkgrm rc 0. Amix AF_UNIX fix: DONT_CHMOD_SOCKET honoured (chmod on a bound
