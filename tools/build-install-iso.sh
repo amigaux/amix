@@ -31,7 +31,8 @@
 #                                                 ENABLED (vendor exit commented, §5)
 #
 # Sources (read-only): ../amix-packagemanager heirloom/build-amix-static (engine),
-# its repo-staging/stock/.t/core (sum + the 183-B admin), and this repo's
+# the stock core tree build/core/root (tools/build-core-tree.sh: sum, the 183-B
+# admin, boot1.boot, bcheckrc), and this repo's
 # src/installer, payload/firstboot, profiles/, deps via the sibling's deps.conf.
 #
 # The staged tree + the ISO are build artefacts (Commodore boot-slice chain, sum
@@ -53,7 +54,7 @@ LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench'
 
 PKGMGR="${PKGMGR:-$repo/../amix-packagemanager}"
 STATIC="${STATIC:-$PKGMGR/heirloom/build-amix-static}"
-CORE_T="${CORE_T:-$PKGMGR/build/repo-staging/stock/.t/core}"
+CORE_T="${CORE_T:-$repo/build/core/root}"   # tools/build-core-tree.sh
 STAGING="${STAGING:-$PKGMGR/build/repo-staging}"
 # Authored metadata comes from the sibling's REPO TREE, never its build staging:
 # the staging copy of deps.conf has been observed lagging (it predates the kernel-
@@ -195,6 +196,7 @@ command -v python3 >/dev/null || { echo "STOP: python3 required" >&2; exit 1; }
 need_file() { [ -f "$1" ] || { echo "STOP: missing $2: $1" >&2; exit 1; }; }
 for b in pkgadd pkgtrans pkginfo pkgchk contents-fsck; do need_file "$STATIC/bin/$b" "static engine $b"; done
 need_file "$STATIC/sadm-helpers/pkginstall" "static pkginstall"
+[ -d "$CORE_T" ] || { echo "STOP: no stock core tree at $CORE_T -- run tools/build-core-tree.sh" >&2; exit 1; }
 need_file "$CORE_T/usr/bin/sum" "core /usr/bin/sum (on-target verifier)"
 need_file "$CORE_T/var/sadm/install/admin/default" "core 183-B admin default"
 need_file "$CORE_T/stand/boot1.boot" "core /stand/boot1.boot (framing source)"
