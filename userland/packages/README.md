@@ -43,7 +43,7 @@ and `amix-benchmark` 1.3 are already clean. Each `registry/<name>.yaml` `remint_
 the record; the bench smoke and a 68060 run are still owed.
 
 Registry-wide that is 9 `published` of 31 entries; the rest are triage
-([`registry/INDEX.md`](registry/INDEX.md)). Publishing to pkg.amigaux.org is a manual maintainer
+([`INDEX.md`](INDEX.md)). Publishing to pkg.amigaux.org is a manual maintainer
 step.
 
 Most packages install under **`/opt/amix`**, which no stock package owns, so they coexist with stock
@@ -122,7 +122,7 @@ No package here edits `/etc/profile` or symlinks into a stock directory. The rea
 | [`BATCH-1.md`](BATCH-1.md) | How the first batches were chosen and published, and the staged 68060 re-mint |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Recipe layout, the rules every recipe follows, and how publishing works |
 | [`CHANGELOG.md`](CHANGELOG.md) | What landed, when, and what it cost |
-| [`registry/`](registry/) | One YAML per candidate package — the machine-readable half of the roadmap, projecting into the packagemanager's catalog format ([INDEX](registry/INDEX.md)) |
+| [`INDEX.md`](INDEX.md), [`conf/`](conf/) | The package table and our catalog configuration lines, generated from each `package.sh` by `build/pkg/pkgmeta` (`index`, `fragments`); never edited by hand |
 | [`recipes/`](recipes/) | One directory per port, plus the shared build harness in [`recipes/common/`](recipes/common/) |
 
 **On citations.** `../<repo>/…` citations name sibling Amix repositories (see
