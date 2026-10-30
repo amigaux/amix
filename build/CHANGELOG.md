@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-30 — the man-page warning reads /opt/amix/man/<sect>/<name> (cdfa4d5)
+## 2026-10-30 — the man-page warning reads /opt/amix/man/<sect>/<name> (92e2f36)
 
 pkgmeta's man-page warning knows the packages' page layout (userland/packages/docs/man-pages.md): a file under man/
 whose parent is a bare section number is a page named by its whole basename, aliases included; the classic
