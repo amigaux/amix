@@ -119,3 +119,12 @@ Stock diff has no unified format, so this package is the box's only unified diff
 
 Not run: real 68030/68060 hardware. The 68060 lane rests on the build gates: all three
 scanners are clean, and the binaries contain no FPU instructions.
+
+**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin, owner Y3).
+- **Objects:** every object is byte-identical to the cf461e3 build.
+- **Relink proof:** relinking them against the cf461e3 runtime reproduces the -1 executables
+  byte for byte. All the new bytes are runtime: libgcc and libamixc99 were rebuilt under
+  -mno-strict-align.
+- **Package:** `diffutil-2.8.1-2.pkg`, md5 `baffdea7f68d4017b46e2a4fcb8606d5`, 212992 bytes.
+- **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 24/24.
+- **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.

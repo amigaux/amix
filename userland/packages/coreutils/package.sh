@@ -2,7 +2,7 @@
 NAME=coreutils
 PKG=coreutil
 VERSION=5.2.1
-PKGREV=1
+PKGREV=2   # -2: relinked on gcc14-cross-amix b51ff39 (runtime only)
 SUMMARY="GNU coreutils 5.2.1"
 DESC="GNU coreutils 5.2.1 beside the stock SVR4 tools, which it does NOT replace: GNU ls, cp, mv, rm, sort, date, df, du, install, stat and the rest, plus md5sum and sha1sum (the box has no content checksum otherwise). Installs /opt/amix/bin; add /opt/amix/bin to PATH."
 CATEGORY=utility

@@ -151,3 +151,12 @@ bench-golden kernel 46759dcc), slot 1, rig-run 20261029-230323.
   with the core file) isolated it to patch 07's cause; the run2 `putenv` seed was not the cause.
 
 Not run: real hardware, and an FPU-less part.
+
+**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin, owner Y3).
+- **Objects:** every object is byte-identical to the cf461e3 build.
+- **Relink proof:** relinking them against the cf461e3 runtime reproduces the -1 executables
+  byte for byte. All the new bytes are runtime: libgcc and libamixc99 were rebuilt under
+  -mno-strict-align.
+- **Package:** `coreutil-5.2.1-2.pkg`, md5 `e5552f7e2b7f753932718eb7d7530f2d`, 3557376 bytes.
+- **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 95/95.
+- **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.

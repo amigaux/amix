@@ -44,8 +44,10 @@ VERSION=$PATCH_VERSION
 # (pointers in %a0 and %d0, structs via %a0, as AMIX's compilers and libc),
 # -5 the same with -mno-strict-align (owner decision 2026-10-27, gcc14-env.sh);
 # pkginfo is retagged in the work copy (amix_pkginfo_retag).
+# -6: the same objects relinked on gcc14-cross-amix b51ff39 (the public pin,
+# owner Y3, 2026-10-29): only the runtime it links (libgcc, libamixc99) differs.
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=5 ;;
+gcc14) PKGREV=6 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV

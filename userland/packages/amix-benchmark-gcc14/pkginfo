@@ -1,12 +1,12 @@
 PKG=amixbch14
-NAME=amix-benchmark-gcc14 1.3-3 - the amix-bench suite built with GCC 14
+NAME=amix-benchmark-gcc14 1.3-4 - the amix-bench suite built with GCC 14
 ARCH=Amiga
-VERSION=1.3-3
+VERSION=1.3-4
 CATEGORY=utility
 CLASSES=none
 VENDOR=amix-packages
 # Authored PSTAMP -- an unset one leaks the build host into a distributed file.
-PSTAMP=amix-packages-amixbch14-1.3-3-gcc14
+PSTAMP=amix-packages-amixbch14-1.3-4-gcc14
 # The SVR4 PKG instance is `amixbch14' (<= 9 chars; stock pkgadd silently drops
 # a longer name).  The catalog/apkg name is `amix-benchmark-gcc14' (a
 # names.conf line in the publish root: amixbch14: amix-benchmark-gcc14).

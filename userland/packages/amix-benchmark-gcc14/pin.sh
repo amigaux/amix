@@ -33,7 +33,9 @@ AMIX_KERNTOOLS="${AMIX_KERNTOOLS:-$AMIX_SIBLINGS/amix-kerntools}"
 # pointers in %d0 only and small structs in registers); 1.3-2 is the same
 # sources on cf461e3, whose return-value ABI is AMIX's; 1.3-3 the same with
 # -mno-strict-align (owner decision 2026-10-27, gcc14-env.sh AMIX_ARCH_FLAGS).
-AMIXBENCH_G14_VERSION=1.3-3
+# 1.3-4: the same objects relinked on gcc14-cross-amix b51ff39 (owner Y3,
+# 2026-10-29): only the runtime and the toolchain name in BUILD-INFO differ.
+AMIXBENCH_G14_VERSION=1.3-4
 
 AMIXBENCH_SRC_COMMIT=c25e0e2178f6eb1e5dc8a36fd8da6d6c1df6cf51
 AMIXBENCH_KIT_COMMIT=8e17364b96a36ee03e9a87fe7fa72dcdb3679eff

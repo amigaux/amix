@@ -9,7 +9,7 @@
 #
 #     build/gcc14/amix-benchmark-gcc14/src/    the pinned sources (git archive)
 #     build/gcc14/amix-benchmark-gcc14/dest/   the staged install tree
-#     build/gcc14/pkg/amixbch14-1.3-3.pkg      the datastream
+#     build/gcc14/pkg/amixbch14-1.3-4.pkg      the datastream
 #
 # ---------------------------------------------------------------------------
 # WHAT THIS PACKAGE IS FOR.  amix-benchmark (PKG amixbench, recipes/

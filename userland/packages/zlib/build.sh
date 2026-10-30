@@ -82,8 +82,10 @@ VERSION=$ZLIB_VERSION
 # links no libacompat (one owner per symbol, gcc14-env.sh).  libz.a itself
 # still only REFERENCES the two; an on-box consumer resolves them from
 # libacompat (-lacompat -lc after -lz), as with the period archive.
+# -6: the same objects relinked on gcc14-cross-amix b51ff39 (the public pin,
+# owner Y3, 2026-10-29): only the runtime it links (libgcc, libamixc99) differs.
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=5 ;;
+gcc14) PKGREV=6 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV
