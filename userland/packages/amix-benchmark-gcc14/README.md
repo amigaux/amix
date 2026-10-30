@@ -54,3 +54,10 @@ recipe always meant; the recorded build's catalog row said `amixbch14` because t
 lacked the `names.conf` line (the package was never published). `PROVENANCE` still names the
 recipe as `amix-packages recipes/amix-benchmark-gcc14`, as `1.3-4` was built; the next revision
 names its amix home.
+
+## Revision 1.3-5: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/amixbch14` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; [`man/amix-bench-g14.1`](man/amix-bench-g14.1) is new. `BUILD-INFO` names `1.3-5`, and `PROVENANCE` names the recipe and the sources by their amix home; the binaries are `1.3-4`'s. Built on the gcc14 container pin: every other payload file is the previous
+revision's.
