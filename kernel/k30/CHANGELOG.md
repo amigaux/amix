@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-30 — cut -56 reproduces at the port pin (613d7fc)
+
+Cut 68030-261030-56 also reproduces, all seven sums, with the port at d0e8857 (kernel/port/port.pin): the port files the
+recipe reads are unchanged from 88dcfc0. Cuts take the port at port.pin unless their README names another.
+
 ## 2026-10-30 — cut of record 68030-261030-56 (fe544a2)
 
 The k30 module kernel, kabi k30.1.3 (abi 18c0a1c9), with kzero, ufs tail zeroing and the sendsig FPU gate.
