@@ -1,3 +1,10 @@
+## 2026-10-30 — APKG and APKGENG are essential (cd8aa5e)
+
+build-packages.sh marks both packages APKG_ESSENTIAL=yes, as dpkg marks itself: without them the box cannot manage
+its packages. apkg refuses to remove or purge itself (exit 5) unless given --force-remove-essential; tested against
+the real build-packages mint installed by the host engine (T31). An apkg older than 0.3.4 ignores the mark. Repo
+tools 461/0. Not minted.
+
 ## 2026-10-30 — the essential-package mark, APKG_ESSENTIAL (75c33d4, 12832c6)
 
 P-36 W2 follow-up. A package whose installed pkginfo says APKG_ESSENTIAL=yes (the base package: its r.conffile
