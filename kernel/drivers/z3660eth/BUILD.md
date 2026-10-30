@@ -6,9 +6,9 @@ kernel-integration edits + its own driver subtree. `kernel/k30`'s `amix-build z3
 automates everything below; this file is the authoritative manual procedure and the
 fallback if the automation hits anything unexpected on the live tree.
 
-The build/clean-gate runs **on a networked AMIX box** (the WinUAE/Amiberry build box
-at `192.0.2.38`). The real A4000+Z3660 has no network — the clean `relocunix` is
-shuttled to it via `transfer.hdf` (the two-tier routine is spelled out in §7).
+The build/clean-gate runs **on a networked AMIX box** (a WinUAE/Amiberry build box). The real
+A4000+Z3660 has no network — the clean `relocunix` is shuttled to it via `transfer.hdf` (the
+two-tier routine is spelled out in §7).
 
 ## 0. Prereqs
 - Build box up: your own Amix box (real, or an Amiberry/WinUAE config with an a2065 NIC on tap0) +
@@ -212,24 +212,16 @@ zs05` checks every object's board register accesses (`module/check-zs05.py`).
 Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with
 intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).
 
-## Real-world build notes (historical record, validated 2026-06-21 on the WinUAE build box)
-The current build harness is **Amiberry** with the build hub's golden-image config (§0).
-The WinUAE specifics below are kept as the record of where the FTP-asymmetry and clean-gate
-lessons were learned; `AmigaUnix-z3660.uae` is that box's own config, not a kerntools one.
-The box is **WinUAE on Xvfb :101**, config `AmigaUnix-z3660.uae` (a2065=tap:tap0, guest **192.0.2.38**), root disk
-`Amix-z3660-work.hdf` = the build tree. Launch: `sudo /usr/local/sbin/amix-lan-up.sh` + `DISPLAY=:101 winuae -config=…`.
-Set `AMIX_PASS` to the build-image root password → `export AMIX_HOST=192.0.2.38 AMIX_USER=root AMIX_PASS=<pw>`.
-
-- **★ FTP asymmetry:** `amixsync.py` **push (PUT) works for 30 KB+**, but **pull (GET) is flaky >~1 KB** (the a2065
-  drops large GETs); `amixsh.py` (telnet) only returns small command output reliably. So: push the driver fine, but
-  patch `kernel.c` **on the box with `ed`** (`tools/patch-kernel.sh`, no pull) and patch the small `driver/Makefile`
-  locally + push. **NFS is the reliable channel** (host `/Amix` = `nas:/Amix`, nas=192.0.2.4; the guest mounts it
-  with `mount -F nfs 192.0.2.4:/Amix /mnt`, **nfsvers=2**) — use it to pull the clean `relocunix` and large files.
-- **★ rico.h-isms:** a STREAMS driver must spell out `unsigned char/long/short` — **NOT** `uchar`/`ulong`/`ushort`
-  (those are `rico.h`-only, which the SCSI driver includes but this one shouldn't). Don't re-declare `untimeout`
-  (it's in `systm.h`). Always **single-compile** (`cd …/z3660eth; make`) to catch compile errors before the slow gate.
-- **★ clean-gate reality:** on this (larger) kernel the D245 `ld` corruption rate is high, so relink until clean. The
-  correct accept bar is **`nm -h -u unix` empty (no undefined symbols) AND `checkunix`-clean** — `sum -r` recurrence does
-  *not* converge at this kernel size and is **not** the gate here (it still works for the small SCSI kernels). `checkunix`
-  alone is insufficient (it only validates `.symtab`; a code/data shift passes it).
-  `../../k30/tools/build-clean-net-kernel.sh` implements the `nm -u` bar; run it at a high cap.
+## Build notes
+- **Moving files to and from the box.** Over an emulated a2065, FTP push (PUT) has been reliable
+  for 30 KB+ files while pull (GET) is flaky above ~1 KB, and telnet returns only small command
+  output reliably. So push the driver, patch `kernel.c` on the box with `ed`
+  (`tools/patch-kernel.sh`, no pull), and patch the small `driver/Makefile` locally and push it.
+  For large files and the clean `relocunix`, an NFS share is the reliable channel (Amix is
+  NFSv2-only: `mount -F nfs <host>:<path> /mnt`).
+- **Spell out the types.** A STREAMS driver must spell out `unsigned char/long/short`, not
+  `uchar`/`ulong`/`ushort` (those come from `rico.h`, which the SCSI drivers include and this one
+  does not). Don't re-declare `untimeout` (it is in `systm.h`). Single-compile
+  (`cd …/z3660eth; make`) to catch compile errors before the slow gate.
+- **`checkunix` alone is not a gate**: it validates only `.symtab`, so a code/data shift passes
+  it. The net kernel's bar is §4's: `nm -h -u unix` empty **and** `checkunix`-clean.
