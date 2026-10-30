@@ -205,7 +205,10 @@ stricter redistribution notice for its repository.)
 
 **The kit's revision.** `kit.conf` names what a kit was built from.
 `KIT_REV` is the short hash of the amix commit, with `-dirty` when amix had
-uncommitted changes under `kernel/`. `MONSW_REV` is `<repository>@<commit>`
+uncommitted changes under `kernel/`. A kit built from an archive of amix
+(`git archive`, `make dist`) records the `KIT_REV` its environment gives,
+else `unknown`; a git checkout around the archive that is not amix is never
+taken for it. `MONSW_REV` is `<repository>@<commit>`
 of `sys/monsw.h` (`amix@<commit>` from `kernel/modules/include/`). On k46
 `PORT_REV` is the 040/060 port commit of the page headers. A kit built
 before the move into amix (2026-10-29) has an amix-dlm commit as its
