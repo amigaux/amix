@@ -113,8 +113,18 @@ jobs:
         run: |
           # the container's gcc14 is not the pinned prefix byte for byte yet:
           # gate-gcc14-selftest skips (docs/ci.md)
+          # The runner's uid has no name in the image, and the pkgtools smoke
+          # tests ask for one: the image's passwd and group, plus that uid.
+          ids=$RUNNER_TEMP/ids; mkdir -p "$ids"
+          docker run --rm amix-toolchain:ci cat /etc/passwd > "$ids/passwd"
+          docker run --rm amix-toolchain:ci cat /etc/group > "$ids/group"
+          awk -F: -v u="$(id -u)" '$3 == u { f = 1 } END { exit !f }' "$ids/passwd" ||
+            echo "builder:x:$(id -u):$(id -g)::/tmp:/bin/sh" >> "$ids/passwd"
+          awk -F: -v g="$(id -g)" '$3 == g { f = 1 } END { exit !f }' "$ids/group" ||
+            echo "builder:x:$(id -g):" >> "$ids/group"
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e GITHUB_ACTIONS \
             -e AMIX_G14_UNPINNED=skip \
+            -v "$ids/passwd:/etc/passwd:ro" -v "$ids/group:/etc/group:ro" \
             -v "$PWD:/src" -w /src amix-toolchain:ci make -C build selftests
       - name: kit and module hashes
         run: |
