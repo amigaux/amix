@@ -15,7 +15,7 @@ SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from kernel/dlm `656d155`.
 ## Verbs and options
 
 ```
-apkg [-n] [-f] [-v] [-c conffile] <verb> [args]
+apkg [-n] [-f] [-v] [-c conffile] [-R root] [-y|--conf-keep|--conf-new] <verb> [args]
 
 update                  fetch <repo>/catalog -> /var/apkg/catalog (tmp+rename)
 list [installed|all]    catalog entries with installed-version column
@@ -26,18 +26,30 @@ install <name>...       resolve deps -> download+verify all -> pkgadd each
 upgrade <name>...       catalog newer than installed: ONE pkgadd over each
                         installed instance (instance=overwrite, no pkgrm);
                         several names = one transaction, one kbootset trigger
-remove <name>           pkgrm wrapper
+remove [--purge] <name> pkgrm wrapper; edited config files stay
+purge <name>            remove, and delete the config files remove keeps
+conffiles [list|resolve] [<name>]
+                        pending/edited config files; decide pending ones
 recover                 finish an interrupted transaction from /var/apkg/txn
                         (-f: print and discard the journal)
 version                 client version
 
 -n dry run   -f force reinstall (NAMED packages only)   -v verbose
--c <conffile>
+-c <conffile>   -R <root> install target
+-y / --conf-keep keep edited config files   --conf-new take new defaults
 ```
+
+After an install or upgrade, apkg lists the config files a package's
+`i.conffile` kept beside a new default (`<file>.new`, listed in
+`/var/sadm/conffiles/PENDING`) and decides them: at a terminal it asks
+(keep / new / diff / later), `-y`/`--conf-keep` keep, `--conf-new` takes the
+new default (yours becomes `<file>.old`, and `installf -c conffile` records
+it); with no terminal and no flag they stay pending. See
+[../conffile/README.md](../conffile/README.md) and `conffile(5)`.
 
 Exit codes: `0` ok · `1` usage/config · `2` network · `3` verify
 (md5/sha256/size/catalog, a malformed `APKG_FSTYPE`) · `4` pkgadd/pkgrm/zcat
-failure · `5` dependency cycle or missing dependency, a kernel-space
+(or installf for `--conf-new`) failure · `5` dependency cycle or missing dependency, a kernel-space
 pre-flight refusal, or a UFS-only package on another filesystem · `6`
 kbootset could not run or failed (status 1/2; `apkg recover` retries) ·
 `7` kbootset refused (status 3/4; the committed generation is unchanged).

@@ -36,7 +36,7 @@
 #     SONAME /usr/lib/libc.so.1) and is passed by path.
 
 # One line: heirloom/build-amix-static.sh reads SRCS with awk.
-SRCS = main.c util.c conf.c vercmp.c catalog.c md5.c http.c dns.c install.c source.c kspace.c txn.c sha256.c fsreq.c
+SRCS = main.c util.c conf.c vercmp.c catalog.c md5.c http.c dns.c install.c source.c kspace.c txn.c sha256.c fsreq.c conffile.c
 
 # ---------------- host ----------------
 

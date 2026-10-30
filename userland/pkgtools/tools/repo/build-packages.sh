@@ -511,6 +511,9 @@ EOF
   # The admin file is no longer reset by `apkg upgrade apkg` (P-36 F1).
   # New pages: apkg.conf(5), admin(5), conffile(5) and contents(5) in
   # /usr/apkg/man/man5; contents-fsck(1M) and amix-sadm-migrate(1M) in man1m.
+  # The apkg binary (0.3.4) reports and decides the pending config files
+  # after each transaction and adds -y/--conf-keep/--conf-new, `conffiles`,
+  # `purge` and the [config-files] state (P-36 W2).
   # The template bytes are unchanged (md5 8dada8d9..., T23).
   cat > "$A/prototype" <<EOF
 i pkginfo

@@ -7,10 +7,12 @@
  * Verbs (docs/design.md section 2):
  *   update, list [installed|all], search <substr>, info <name>,
  *   download <name>, install <name>..., upgrade <name>...,
- *   remove <name>, version
+ *   remove [--purge] <name>, purge <name>, conffiles [list|resolve]
+ *   [<name>], recover, version
  * Options (before the verb): -n dry-run, -f force (applies to the
  *   packages NAMED on the command line, never to their dependencies),
- *   -v verbose, -c <conffile>.
+ *   -v verbose, -c <conffile>, -R <root>, -y / --conf-keep, --conf-new
+ *   (conffile.c).
  *
  * Option scanning is hand-rolled (design allows getopt or hand-rolled):
  * GNU getopt permutes argv while the SVR4 one does not, and identical
@@ -44,13 +46,19 @@ static void usage(void)
         "  upgrade <name>...   pkgadd over the installed instances when the\n"
         "                      catalog is newer, one transaction (no pkgrm;\n"
         "                      never uninstalls)\n"
-        "  remove <name>       pkgrm wrapper\n"
+        "  remove [--purge] <name>  pkgrm; edited config files stay\n"
+        "  purge <name>        remove, and delete its config files too\n"
+        "  conffiles [list|resolve] [<name>]\n"
+        "                      list pending and edited config files, or\n"
+        "                      decide the pending ones\n"
         "  recover             finish (or with -f discard) an interrupted\n"
         "                      transaction from the journal /var/apkg/txn\n"
         "  version             print client version\n"
         "options: -n dry-run, -f force reinstall of the NAMED packages only,\n"
         "         -v verbose, -c conffile,\n"
-        "         -R root install into an alternate target root (pkgadd -R)\n");
+        "         -R root install into an alternate target root (pkgadd -R),\n"
+        "         -y or --conf-keep keep edited config files without asking,\n"
+        "         --conf-new take every new config default (yours -> .old)\n");
 }
 
 /* ---------------- update ---------------- */
@@ -218,7 +226,12 @@ static void inst_marker(const struct conf *cf, const struct pkgent *e,
     const char *v;
 
     if (!ent_installed_v(cf, e, iver, sizeof(iver))) {
-        strcpy(buf, e->refused != NULL ? "[refused]" : "-");
+        if (e->refused != NULL)
+            strcpy(buf, "[refused]");
+        else if (!e->kspace && conffile_state(cf, e->pkginst))
+            strcpy(buf, "[config-files]");  /* removed, edits kept */
+        else
+            strcpy(buf, "-");
         return;
     }
     v = iver[0] == '\0' ? "(none)" : iver;
@@ -254,7 +267,9 @@ static int cmd_list(const struct conf *cf, struct catalog *cat,
     }
     for (i = 0; i < cat->n; i++) {
         if (installed_only &&
-            !ent_installed_v(cf, &cat->ents[i], iver, sizeof(iver)))
+            !ent_installed_v(cf, &cat->ents[i], iver, sizeof(iver)) &&
+            (cat->ents[i].kspace ||
+             !conffile_state(cf, cat->ents[i].pkginst)))
             continue;
         list_line(cf, &cat->ents[i]);
     }
@@ -321,9 +336,49 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     if (ent_installed_v(cf, e, iver, sizeof(iver)))
         printf("Installed:   yes, version %s\n",
                iver[0] == '\0' ? "(none)" : iver);
+    else if (!e->kspace && conffile_state(cf, e->pkginst))
+        printf("Installed:   no (config-files: edited config files kept;"
+               " apkg purge %s deletes them)\n", e->name);
     else
         printf("Installed:   no\n");
     return EX_OK;
+}
+
+/* ---------------- purge / conffiles ---------------- */
+
+/* a catalog name to its pkginst; anything else is taken as a pkginst */
+static const char *to_pkginst(struct catalog *cat, const char *name)
+{
+    struct pkgent *e;
+
+    if (cat == NULL)
+        return name;
+    e = catalog_find(cat, name);
+    return e != NULL ? e->pkginst : name;
+}
+
+/* remove, then delete the config files remove keeps (conffile(5)) */
+static int cmd_purge(const struct conf *cf, struct catalog *cat,
+                     const char *name)
+{
+    const char *pkginst;
+    char iver[128];
+    int rc;
+
+    pkginst = to_pkginst(cat, name);
+    if (installed_version(cf, pkginst, iver, sizeof(iver))) {
+        rc = cmd_remove(cf, cat, name);
+        if (rc != EX_OK)
+            return rc;
+    } else if (!conffile_state(cf, pkginst)) {
+        warnx2("%s (pkginst %s) is not installed and has no config files",
+               name, pkginst);
+        return EX_USAGE;
+    }
+    rc = conffile_purge(cf, pkginst);
+    if (rc == EX_OK && !opt_dryrun)
+        printf("purged %s\n", pkginst);
+    return rc;
 }
 
 /* ---------------- catalog loading with user-facing errors -------- */
@@ -368,6 +423,19 @@ int main(int argc, char **argv)
     root_opt = NULL;
     i = 1;
     while (i < argc && argv[i][0] == '-' && argv[i][1] != '\0') {
+        if (argv[i][1] == '-') {
+            if (strcmp(argv[i], "--conf-keep") == 0) {
+                opt_conf = CONF_KEEP;
+            } else if (strcmp(argv[i], "--conf-new") == 0) {
+                opt_conf = CONF_NEW;
+            } else {
+                warnx2("unknown option %s", argv[i]);
+                usage();
+                return EX_USAGE;
+            }
+            i++;
+            continue;
+        }
         for (p = argv[i] + 1; *p != '\0'; p++) {
             switch (*p) {
             case 'n':
@@ -378,6 +446,9 @@ int main(int argc, char **argv)
                 break;
             case 'v':
                 opt_verbose = 1;
+                break;
+            case 'y':
+                opt_conf = CONF_KEEP;
                 break;
             case 'c':
                 if (p[1] != '\0') {
@@ -510,7 +581,14 @@ int main(int argc, char **argv)
         return rc;
     }
 
-    if (strcmp(verb, "remove") == 0) {
+    if (strcmp(verb, "remove") == 0 || strcmp(verb, "purge") == 0) {
+        int purge;
+
+        purge = strcmp(verb, "purge") == 0;
+        if (!purge && argc - i == 2 && strcmp(argv[i], "--purge") == 0) {
+            purge = 1;
+            i++;
+        }
         if (argc - i != 1) {
             usage();
             return EX_USAGE;
@@ -518,12 +596,38 @@ int main(int argc, char **argv)
         /* the catalog is optional for remove: it only maps a friendly
          * name to a pkginst */
         if (catalog_load(cf.catalog, &cat) == CAT_OK) {
-            rc = cmd_remove(&cf, &cat, argv[i]);
+            rc = purge ? cmd_purge(&cf, &cat, argv[i])
+                       : cmd_remove(&cf, &cat, argv[i]);
             catalog_free(&cat);
         } else {
-            rc = cmd_remove(&cf, NULL, argv[i]);
+            rc = purge ? cmd_purge(&cf, NULL, argv[i])
+                       : cmd_remove(&cf, NULL, argv[i]);
         }
         return rc;
+    }
+
+    if (strcmp(verb, "conffiles") == 0) {
+        int resolve;
+        const char *name;
+
+        resolve = 0;
+        if (i < argc && strcmp(argv[i], "list") == 0) {
+            i++;
+        } else if (i < argc && strcmp(argv[i], "resolve") == 0) {
+            resolve = 1;
+            i++;
+        }
+        if (argc - i > 1) {
+            usage();
+            return EX_USAGE;
+        }
+        name = i < argc ? argv[i] : NULL;
+        if (name != NULL && catalog_load(cf.catalog, &cat) == CAT_OK) {
+            rc = cmd_conffiles(&cf, resolve, to_pkginst(&cat, name));
+            catalog_free(&cat);
+            return rc;
+        }
+        return cmd_conffiles(&cf, resolve, name);
     }
 
     if (strcmp(verb, "recover") == 0) {

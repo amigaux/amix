@@ -165,12 +165,13 @@ a few more checks), which is where the packaging pipeline and most of the test s
 
 ```
 heirloom/build-host.sh                                  # host engine + compat tests
-bash tools/repo/tests/run-tests.sh                      # 445 (bash, not sh)
+bash tools/repo/tests/run-tests.sh                      # 443 (bash, not sh)
 (cd src/apkg          && make test)                     # 497
 (cd src/apkg          && sh tests/nohttp-variant.sh)    # 38 (the FILE+RAW, no-sockets build)
 (cd src/contents-fsck && make test)                     # 19
 sh tools/migrate/tests/run-tests.sh                     # 36
-bash src/conffile/tests/run-tests.sh                    # 82 (the conffile class)
+bash src/conffile/tests/run-tests.sh                    # 86 (the conffile class)
+bash src/apkg/tests/conffile-e2e.sh                     # 52 (apkg + the engine, fakeroot)
 sh src/apkg/tests/kbootset-consumer.sh                  # 12, against amix's kernel/dlm
 ```
 

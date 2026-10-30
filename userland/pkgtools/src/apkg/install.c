@@ -580,6 +580,13 @@ static int commit_txn(const struct conf *cf, const struct source *src,
     }
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);
+    /* the config files a class action script kept beside a new default
+     * (conffile(5)): reported, and decided here, after the engine ran */
+    if (!opt_dryrun) {
+        i = conffile_after(cf, insts, nt);
+        if (rc == EX_OK)
+            rc = i;
+    }
     return rc;
 }
 

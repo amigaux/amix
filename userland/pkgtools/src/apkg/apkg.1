@@ -14,6 +14,15 @@ apkg \- remote package client for Amiga Unix (SVR4)
 ] [
 .B \-c
 .I conffile
+] [
+.B \-R
+.I root
+] [
+.B \-y
+|
+.B \-\-conf\-keep
+|
+.B \-\-conf\-new
 ]
 .I verb
 [
@@ -53,7 +62,11 @@ installed marker with the installed version (or
 for VERSION-less stock packages), category and description.
 .B installed
 restricts the list to packages present in
-.BR /var/sadm/pkg .
+.BR /var/sadm/pkg ,
+and to packages removed with edited config files kept, which show as
+.B [config-files]
+(see
+.BR "CONFIG FILES" ).
 .TP
 .BI search " substr"
 Case-insensitive substring match against package names and
@@ -124,10 +137,15 @@ upgrade into one generation).  A name not in the catalog (exit 5) or not
 installed (exit 1) refuses the whole call before anything is fetched.  No
 dependency is pulled in: only the named packages move.
 .TP
-.BI remove " name"
+.BR remove " [" \-\-purge ]
+.I name
 Wrapper around
 .B pkgrm \-n \-a
 .IR admin .
+Config files you edited are kept; with
+.B \-\-purge
+it is
+.BR purge .
 The name is mapped to its package instance through the catalog when
 one is available; otherwise it is used as the instance name directly.
 A kernel-space package is known by its record (see
@@ -136,6 +154,38 @@ it is removed with
 .B pkgrm
 of the instance owning its recorded files, its record is deleted, and
 the next generation is built and committed without it.
+.TP
+.BI purge " name"
+Remove the package if it is installed, then delete the config files
+.B remove
+keeps: your edited files, their
+.B .new
+and
+.B .old
+files, their
+.B PENDING
+lines and the package's baselines.  A package already removed with its
+config files kept
+.RB ( [config-files] )
+is purged without a pkgrm.
+.TP
+.BR conffiles " [" list | resolve "] [\fIname\fR]"
+.B list
+(the default) shows the config files of every package, or of
+.IR name ,
+that wait with a new default beside them
+.RB ( pending )
+or that you have edited
+.RB ( edited ),
+also for packages already removed.
+.B resolve
+decides the pending ones: at a terminal it asks file by file, as after
+an upgrade; with
+.B \-\-conf\-keep
+or
+.B \-\-conf\-new
+it decides without asking.  Without a terminal and without either flag it
+refuses (exit 1).
 .TP
 .B recover
 Finish a transaction that was interrupted (a power cut, a killed
@@ -388,6 +438,90 @@ Read configuration from
 .I conffile
 instead of
 .BR /etc/apkg.conf .
+.TP
+.BI \-R " root"
+Install into, remove from and read the state of the system under
+.I root
+(the engine runs with
+.BR "\-R \fIroot\fR" );
+see
+.BR FILESYSTEM .
+.TP
+.BR \-y ", " \-\-conf\-keep
+Keep every edited config file without asking, and delete the new
+default's
+.B .new
+file (see
+.BR "CONFIG FILES" ).
+For batch runs and the installer.
+.TP
+.B \-\-conf\-new
+Take every new config default without asking; your file is saved as
+.IB file .old\fR.
+.SH "CONFIG FILES"
+A package may mark files you edit in place, such as
+.BR /etc/apkg.conf ,
+as config files
+.RB ( conffile (5)).
+The package's own scripts keep an edited one in every
+.B pkgadd
+and write the new default beside it as
+.IB file .new\fR;
+the file is then listed in
+.BR /var/sadm/conffiles/PENDING .
+The package tools cannot ask anything while they run, so
+.B apkg
+asks afterwards.  After an
+.B install
+or
+.B upgrade
+it lists the pending files of the packages it installed and then, per
+file:
+.TP 4
+\(bu
+at a terminal, with no flag, asks:
+.BR k eep
+yours (the default answer),
+install the
+.BR n ew
+default, show the
+.BR d iff
+of yours against it, or decide
+.BR l ater;
+.TP
+\(bu
+with
+.B \-y
+or
+.BR \-\-conf\-keep ,
+keeps yours;
+.TP
+\(bu
+with
+.BR \-\-conf\-new ,
+installs the new default;
+.TP
+\(bu
+otherwise (no terminal, no flag) changes nothing: the file stays pending
+for
+.BR "apkg conffiles resolve" .
+.PP
+Keeping yours deletes the
+.B .new
+file; the default stays in the package's baseline under
+.BR /var/sadm/conffiles .
+Taking the new default renames yours to
+.IB file .old\fR,
+moves the
+.B .new
+file into place and records it in the package database with
+.BR "installf \-c conffile" .
+A file you have edited is asked about only when the package's default
+changed.
+.B remove
+keeps the files you edited;
+.B purge
+deletes them.
 .SH CONFIGURATION
 .B /etc/apkg.conf
 holds
@@ -779,7 +913,9 @@ is not pure files, a malformed
 .BR APKG_FSTYPE .
 .TP
 .B 4
-pkgadd/pkgrm (or the zcat decompression step) failed.
+pkgadd/pkgrm (or the zcat decompression step) failed, or installf failed
+to record a new config default taken with
+.BR \-\-conf\-new .
 .TP
 .B 5
 Dependency cycle, or a dependency (or install target) missing from
@@ -822,6 +958,13 @@ the conffiles whose new default waits in a
 .B .new
 file; see
 .BR conffile (5)
+.TP
+.BI /var/sadm/conffiles/ pkginst /
+the baselines: the config defaults each package last shipped
+.TP
+.IB file .new\fR, " " \fIfile\fB.old
+a new default waiting beside your file; your file after
+.B \-\-conf\-new
 .TP
 .B /var/apkg/admin.overwrite
 derived from the above with instance=overwrite, for the

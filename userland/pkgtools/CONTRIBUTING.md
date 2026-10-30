@@ -53,6 +53,7 @@ bash tools/repo/tests/run-tests.sh                   # bash, not sh
 (cd src/contents-fsck && make test)
 sh tools/migrate/tests/run-tests.sh
 bash src/conffile/tests/run-tests.sh                 # the conffile class (fakeroot)
+bash src/apkg/tests/conffile-e2e.sh                  # apkg's config-file handling (fakeroot)
 sh src/apkg/tests/kbootset-consumer.sh               # against amix's kernel/dlm
 ```
 

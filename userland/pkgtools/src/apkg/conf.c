@@ -379,6 +379,7 @@ int conf_load(const char *conffile_opt, const char *target_opt,
     cf->contents = cat2(rootpfx, "/var/sadm/install/contents");
     cf->kpkgdir = cat2(rootpfx, "/var/apkg/kpkg");
     cf->txnfile = cat2(rootpfx, "/var/apkg/txn");
+    cf->cfdir = cat2(rootpfx, "/var/sadm/conffiles");
     cf->bootsetconf = cat2(rootpfx, "/etc/default/bootset");
     free(rootpfx);
 

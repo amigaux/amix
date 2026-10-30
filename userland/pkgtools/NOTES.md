@@ -1,5 +1,32 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-30 — apkg decides the config files (P-36 W2; apkg 0.3.4, NOT MINTED)
+
+**What.** After an `install`/`upgrade`, apkg reads `/var/sadm/conffiles/PENDING` and lists the
+files the class action scripts kept beside a new default, for the packages of that transaction
+(others: one line pointing at `apkg conffiles`). Then per file: at a terminal with no flag it
+asks keep (default) / new / diff / later; `-y` and `--conf-keep` keep (the `.new` is deleted, the
+same bytes stay in the baseline); `--conf-new` renames yours to `.old`, moves `.new` into place
+and runs `installf -c conffile <pkginst> <path> e` + `installf -f`; no terminal and no flag
+decides nothing (they stay pending). `apkg conffiles [list|resolve] [name]` lists pending and
+edited files (also of removed packages) and decides pending ones (resolve without a terminal
+needs a flag, else exit 1). `apkg purge` / `remove --purge` removes, then deletes the kept files,
+`.new`/`.old`, PENDING lines and baselines. A removed package with baselines shows as
+`[config-files]` in `apkg list [installed]` and in `info`. Code: `src/apkg/conffile.c`.
+
+**i.conffile refined (85d4e09).** An edited file whose new default equals its baseline (the
+package's default did not change) is kept silently, as dpkg does: no `.new`, no PENDING line,
+so a reinstall of the same version asks nothing. Found while writing W2; P-36's table did not
+separate this case.
+
+**Tests.** `src/apkg/tests/conffile-e2e.sh` **52/0**: apkg drives heirloom pkgadd/pkgrm/installf
+`-R` under fakeroot from a FILE repository, the questions answered on a pty (`ptyrun.py`). Covers
+the report, no-terminal pending, `conffiles` list/resolve, `-n`, `--conf-keep`, `--conf-new` with
+pkgchk clean and class conffile after installf, d/n/l/Enter at a terminal, `-y` asking nothing,
+remove keeping edits, `[config-files]`, purge (and again: exit 1), `remove --purge`. apkg 497/0,
+nohttp 38/0, conffile 86/0, repo tools 443/0. Cross: `make amix` links (opendir/readdir/isatty
+from libc.so.1), the static FILE+RAW apkg has zero undefined symbols; both scan060 CLEAN.
+
 ## 2026-10-30 — conffiles: i.conffile/r.conffile, and APKG's two config files on them (P-36 W1; NOT MINTED)
 
 **Why.** P-36 (owner, D-N1 to D-N6): a config file edited in place survives an upgrade, under

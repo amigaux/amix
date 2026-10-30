@@ -1755,7 +1755,7 @@ echo "== building the sha256 driver =="
 SHADRV=$WORK/sha256-driver
 ( cd "$SRC" && gcc -std=gnu89 -O2 -Wall -Wextra -o "$SHADRV" \
     tests/sha256-driver.c util.c conf.c vercmp.c catalog.c md5.c http.c \
-    dns.c install.c source.c kspace.c txn.c sha256.c fsreq.c ) 2>"$WORK/shadrv.err" \
+    dns.c install.c source.c kspace.c txn.c sha256.c fsreq.c conffile.c ) 2>"$WORK/shadrv.err" \
     && [ ! -s "$WORK/shadrv.err" ] \
     && ok "the sha256 driver builds clean (-Wall -Wextra)" \
     || bad "sha256 driver build failed or warned" "$(cat "$WORK/shadrv.err")"

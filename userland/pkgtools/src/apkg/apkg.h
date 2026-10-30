@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.3"
+#define APKG_VERSION "0.3.4"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -201,6 +201,13 @@
 extern int opt_dryrun;   /* -n */
 extern int opt_force;    /* -f */
 extern int opt_verbose;  /* -v */
+/* what to do with a config file kept beside a new default (conffile.c):
+ * ask at a terminal (else leave it pending), keep (-y, --conf-keep) or
+ * take the new default (--conf-new) */
+#define CONF_ASK  0
+#define CONF_KEEP 1
+#define CONF_NEW  2
+extern int opt_conf;
 
 /* -------- configuration (conf.c) -------- */
 
@@ -231,6 +238,7 @@ struct conf {
     char *contents;    /* <root><target>/var/sadm/install/contents     */
     char *kpkgdir;     /* <root><target>/var/apkg/kpkg (C2-2 records)  */
     char *txnfile;     /* <root><target>/var/apkg/txn (the journal)    */
+    char *cfdir;       /* <root><target>/var/sadm/conffiles (conffile(5)) */
     char *bootsetconf; /* <root><target>/etc/default/bootset           */
     char *kbootset;    /* kbootset binary (engine-like: NOT -R prefixed) */
     char *kbootset_journal; /* --journal handed to kbootset; "" = the
@@ -385,6 +393,19 @@ extern int cmd_upgrade(const struct conf *cf, struct catalog *cat,
 extern int cmd_remove(const struct conf *cf, struct catalog *cat,
                       const char *name);
 extern int cmd_recover(const struct conf *cf);
+
+/* -------- config files (conffile.c) -------- */
+
+/* after install/upgrade: report and decide the pending config files of
+ * insts[0..n-1] */
+extern int conffile_after(const struct conf *cf, char **insts, int n);
+/* `apkg conffiles` (resolve 0: list) for one pkginst or all (NULL) */
+extern int cmd_conffiles(const struct conf *cf, int resolve,
+                         const char *pkginst);
+/* 1 when pkginst has baselines (installed, or "config-files") */
+extern int conffile_state(const struct conf *cf, const char *pkginst);
+/* delete a package's kept config files, .new/.old and baselines */
+extern int conffile_purge(const struct conf *cf, const char *pkginst);
 
 /* -------- the filesystem a package needs (fsreq.c) --------
  *
