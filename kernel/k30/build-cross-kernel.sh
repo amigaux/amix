@@ -159,6 +159,15 @@
 #                mi_hiwat 4096 -> 16384 (tcpm_info[3], one .data longword, located through tcplrinit) -- the
 #                030 kit never passes through relink-040-fpe.sh, whose step 8.8 does this for the 060 line.
 #                After the ttcompat fix, before elf2brel; --check after; exactly one byte may change.
+#   --no-kzero   build WITHOUT the kzero fault catch (on by default; KZERO=0 does the same).  By default
+#                src/kzero_nofault.s (grimoire quirk 90; from the port's k46-module b65b43d) joins the final
+#                link and the stock kzero -- a second name for bzero, ml/exp .text+0x302 -- is weakened in the
+#                work copy's ml/exp (one symbol-table byte), so pvn_vptrunc, rwip, writei, rwvp and spec_write
+#                reach a kzero that returns -1 on an unresolvable fault instead of panicking.  A hard check
+#                after the link: one strong kzero, not at bzero's stock 0x302, kzr_magic in .data, and exactly
+#                the five callers' relocations (fewer by rwip / writei when --carve-fs takes ufs / s5 out;
+#                the carved module imports kzero and binds to this one).  --no-kzero is the kernel without
+#                it, byte for byte.
 #   --object-baseline <file> --object-allow "<obj>..."  after the final link, every built
 #                object must have the baseline's sha256 (`sha256  path` lines, paths under usr/sys)
 #                EXCEPT exactly the allowed ones, which must differ; an object the baseline does not
@@ -198,6 +207,7 @@ DLM_CORE="${DLM_CORE:-}"        # --dlm-core <kernel/dlm dir>: the module core s
 DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed providers stubbed
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
+KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
 OBJ_BASELINE="${OBJ_BASELINE:-}"  # --object-baseline <sha256 list>: every object must match it ...
 OBJ_ALLOW="${OBJ_ALLOW:-}"        # --object-allow "<obj> ...": ... except EXACTLY these (the object gate)
@@ -234,6 +244,7 @@ while [ "$#" -gt 0 ]; do
     --object-absent) OBJ_ABSENT="${2?--object-absent needs a list}"; shift 2 ;;
     --no-scsi-drivers) NO_SCSI_DRV=1; shift ;;
     --no-fstypes) FSTYPES_CONF=/dev/null; shift ;;
+    --no-kzero) KZERO=0; shift ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
     -*)         echo "unknown option: $1" >&2; exit 2 ;;
@@ -253,6 +264,7 @@ else
 fi
 [ -z "$OBJ_ABSENT" ] || [ -n "$OBJ_BASELINE" ] || { echo "--object-absent needs --object-baseline" >&2; exit 2; }
 SD_CARDS="${SD_CARDS:-2}"
+case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
 case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3)" >&2; exit 2 ;; esac
@@ -1279,14 +1291,78 @@ if [ -n "$KINFO_C" ]; then
   echo "  kinfo.o $(sha256sum "$BUILD/kinfo.o" | cut -c1-16): imports/exports exact, no COMMON, scan060 CLEAN, == the AMIX_MUL64=keep build"
   KINFO_OBJ="kinfo.o"
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $FS_LGCC; chmod +r unix )
+KZERO_OBJ=""
+if [ "$KZERO" = 1 ]; then
+  # === 8e. the kzero fault catch (grimoire quirk 90): src/kzero_nofault.s + the stock kzero weakened ======
+  echo "--- kzero: assembling $KT/src/kzero_nofault.s; the stock kzero (= bzero) weakened in ml/exp ---"
+  "$AS" -o "$BUILD/kzero_nofault.o" "$KT/src/kzero_nofault.s" || { echo "--kzero: kzero_nofault.s did not assemble" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/kzero_nofault.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "bzero cmn_err u" ] || { echo "--kzero: kzero_nofault.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/kzero_nofault.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "kzero kzr_alien_n kzr_calls kzr_fail_n kzr_last_addr kzr_magic" ] \
+    || { echo "--kzero: kzero_nofault.o exports '$GOTX'" >&2; exit 1; }
+  # the stock ml/exp defines kzero and bzero at the same .text+0x302: kzero becomes weak, bzero stays as it is
+  [ "$("$NM" "$BUILD/ml/exp" | awk '$3=="kzero" || $3=="bzero" {print $1 $2 $3}' | LC_ALL=C sort | tr '\n' ' ')" = "00000302Tbzero 00000302Tkzero " ] \
+    || { echo "--kzero: ml/exp does not define kzero and bzero together at 0x302 (not the stock ml/exp)" >&2; exit 1; }
+  cp "$BUILD/ml/exp" "$BUILD/ml/exp.pre-kzero"
+  python3 - "$BUILD/ml/exp" <<'PYW' || { echo "--kzero: could not weaken kzero in ml/exp" >&2; exit 1; }
+import struct, sys
+p = sys.argv[1]; b = bytearray(open(p, 'rb').read())
+assert b[:4] == b'\x7fELF' and b[4] == 1 and b[5] == 2, 'not ELF32 big-endian'
+shoff, = struct.unpack_from('>I', b, 32); shentsize, shnum = struct.unpack_from('>HH', b, 46)
+sh = [struct.unpack_from('>IIIIIIIIII', b, shoff + i * shentsize) for i in range(shnum)]
+hits = []
+for s in sh:
+    if s[1] != 2:                      # SHT_SYMTAB
+        continue
+    stroff = sh[s[6]][4]
+    for o in range(s[4], s[4] + s[5], 16):
+        name, = struct.unpack_from('>I', b, o)
+        if bytes(b[stroff + name:b.index(0, stroff + name)]) == b'kzero' and b[o + 12] >> 4 == 1:   # STB_GLOBAL
+            hits.append(o)
+assert len(hits) == 1, 'global kzero symbols: %d' % len(hits)
+b[hits[0] + 12] = (2 << 4) | (b[hits[0] + 12] & 15)                                                # STB_WEAK
+open(p, 'wb').write(b)
+PYW
+  D="$(cmp -l "$BUILD/ml/exp.pre-kzero" "$BUILD/ml/exp" | wc -l)"
+  [ "$D" = 1 ] || { echo "--kzero: weakening changed $D bytes of ml/exp (want exactly 1)" >&2; exit 1; }
+  [ "$("$NM" "$BUILD/ml/exp" | awk '$3=="kzero" || $3=="bzero" {print $1 $2 $3}' | LC_ALL=C sort | tr '\n' ' ')" = "00000302Tbzero 00000302Wkzero " ] \
+    || { echo "--kzero: ml/exp after the weakening is not 'bzero T, kzero W' at 0x302" >&2; exit 1; }
+  rm -f "$BUILD/ml/exp.pre-kzero"
+  echo "  kzero_nofault.o $(sha256sum "$BUILD/kzero_nofault.o" | cut -c1-16): imports/exports exact; ml/exp: kzero weak (1 byte), bzero strong"
+  KZERO_OBJ="kzero_nofault.o"
+else
+  echo "--- kzero: --no-kzero -- the stock kzero (= bzero), no fault catch ---"
+fi
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FS_LGCC; chmod +r unix )
+# HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
+# modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
+kzero_check() {
+  local u="$1" want callers kz bz
+  kz="$("$NM" "$u" | awk '$3=="kzero" && $2=="T" {print $1}')"
+  bz="$("$NM" "$u" | awk '$3=="bzero" && $2=="T" {print $1}')"
+  [ "$("$NM" "$u" | awk '$3=="kzero"' | wc -l)" = 1 ] && [ -n "$kz" ] \
+    || { echo "[FAIL] kzero: $u does not have exactly one strong kzero" >&2; exit 1; }
+  [ "$bz" = 00000302 ] || { echo "[FAIL] kzero: bzero is at '$bz', not the stock 0x302" >&2; exit 1; }
+  [ "$kz" != "$bz" ] || { echo "[FAIL] kzero: kzero is still bzero (0x$bz) -- the weaken was lost" >&2; exit 1; }
+  "$NM" "$u" | awk '$3=="kzr_magic" && $2=="D" {f=1} END{exit !f}' || { echo "[FAIL] kzero: no kzr_magic in .data" >&2; exit 1; }
+  want="pvn_vptrunc rwvp spec_write"
+  case ",$CARVE_FS," in *,ufs,*) ;; *) want="$want rwip";; esac
+  case ",$CARVE_FS," in *,s5,*) ;; *) want="$want writei";; esac
+  want="$(echo $want | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  callers="$("$OBJDUMP" -dr "$u" | awk '/^[0-9a-f]+ <[^>]*>:$/ {fn=substr($2, 2, length($2) - 3)} /R_68K_32[ \t]+kzero$/ {print fn}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$callers" = "$want" ] || { echo "[FAIL] kzero: relocations naming kzero are in '$callers', want exactly '$want'" >&2; exit 1; }
+  echo "  [OK] kzero fault catch bound in $(basename "$u"): kzero @0x$kz, bzero stock @0x302, kzr_magic; callers: $callers"
+}
+if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
+kzero = set(sys.argv[7].split())
 want = {}
 for ln in open(base):
     h, p = ln.split(None, 1); want[p.strip()] = h
@@ -1297,7 +1373,7 @@ for d, _, fs in os.walk(build):
             p = os.path.relpath(os.path.join(d, f), build)
             got[p] = hashlib.sha256(open(os.path.join(d, f), 'rb').read()).hexdigest()
 extra = set(got) - set(want) - ({'rth1.o', 'rth1-mul64keep.o', 'rth1-nomarc.o'} if rth else set()) \
-    - ({'kinfo.o', 'kinfo-mul64keep.o'} if kinfo else set())
+    - ({'kinfo.o', 'kinfo-mul64keep.o'} if kinfo else set()) - kzero
 missing = set(want) - set(got)
 differ = {p for p in want if p in got and got[p] != want[p]}
 bad = []
@@ -1347,6 +1423,7 @@ if [ -n "$DLM_CORE" ]; then
   bash "$KT/tools/dlm-core-link.sh" "$BUILD/unix.static" "$WORK/dlm-core" --dlm "$DLM_CORE" --line k30 --kabi "$KABI" ${RTH1_DIR:+--rth1-dir "$RTH1_DIR"} \
     $([ "$DLM_STUB" = 1 ] && echo --stub-providers) || { echo "--dlm-core: a step FAILed ($WORK/dlm-core/steps.tsv)" >&2; exit 1; }
   cp "$WORK/dlm-core/unix" "$BUILD/unix"
+  if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
   # the sd seam, checked on the objects (a lost seam leaves a root module registered and never taken: S4-73's
   # "RTH1: root c6d0s1 built in (controller not present)"): a four-card base must call a core's dlm_sd_close
   if [ "$SD_CARDS" = 4 ] && "$NM" "$WORK/dlm-core/obj/dlm.o" | awk '$2=="T" && $3=="dlm_sd_close" {f=1} END{exit !f}'; then
