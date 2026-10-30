@@ -176,6 +176,12 @@
 #                synchronously (SM_WRITE), then calls the stock pvn_vptrunc.
 #                A hard check: ufs_vptrunz defined once, qz_magic, ufs_itrunc its only caller and no longer a caller
 #                of pvn_vptrunc.  --no-ufs-tailzero is the kernel without it, byte for byte.
+#   --no-fpu-gate  build WITHOUT the sendsig FPU gate (on by default; FPU_GATE=0 does the same).  By default
+#                src/fpugate030.s (grimoire quirk 74) joins the final link and tools/fpugate-sendsig.py retargets the one
+#                relocation of sendsig's jsr fpu_setup to fpu_setup_gated, which returns at once when fpu_present is 0:
+#                a 68030 without an FPU then survives its first signal.  --check after the link and after the dlm
+#                splice (sendsig its only caller, every other fpu_setup caller untouched).  --no-fpu-gate is the
+#                kernel without it, byte for byte.
 #   --object-baseline <file> --object-allow "<obj>..."  after the final link, every built
 #                object must have the baseline's sha256 (`sha256  path` lines, paths under usr/sys)
 #                EXCEPT exactly the allowed ones, which must differ; an object the baseline does not
@@ -215,6 +221,7 @@ DLM_CORE="${DLM_CORE:-}"        # --dlm-core <kernel/dlm dir>: the module core s
 DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed providers stubbed
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
+FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
@@ -255,6 +262,7 @@ while [ "$#" -gt 0 ]; do
     --no-fstypes) FSTYPES_CONF=/dev/null; shift ;;
     --no-kzero) KZERO=0; shift ;;
     --no-ufs-tailzero) UFS_TAILZERO=0; shift ;;
+    --no-fpu-gate) FPU_GATE=0; shift ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
     -*)         echo "unknown option: $1" >&2; exit 2 ;;
@@ -274,6 +282,7 @@ else
 fi
 [ -z "$OBJ_ABSENT" ] || [ -n "$OBJ_BASELINE" ] || { echo "--object-absent needs --object-baseline" >&2; exit 2; }
 SD_CARDS="${SD_CARDS:-2}"
+case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
@@ -1413,8 +1422,22 @@ PYW
 else
   echo "--- kzero: --no-kzero -- the stock kzero (= bzero), no fault catch ---"
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FS_LGCC; chmod +r unix )
+FPUG_OBJ=""
+if [ "$FPU_GATE" = 1 ]; then
+  # === 8f. the sendsig FPU gate (grimoire quirk 74): src/fpugate030.s; the relocation is retargeted after the link ===
+  echo "--- fpu gate: assembling $KT/src/fpugate030.s (fpu_setup_gated, for sendsig) ---"
+  "$AS" -o "$BUILD/fpugate030.o" "$KT/src/fpugate030.s" || { echo "--fpu-gate: fpugate030.s did not assemble" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/fpugate030.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "fpu_present fpu_setup" ] || { echo "--fpu-gate: fpugate030.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/fpugate030.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "fpg_magic fpg_pass_n fpg_skip_n fpu_setup_gated" ] || { echo "--fpu-gate: fpugate030.o exports '$GOTX'" >&2; exit 1; }
+  echo "  fpugate030.o $(sha256sum "$BUILD/fpugate030.o" | cut -c1-16): imports/exports exact"
+  FPUG_OBJ="fpugate030.o"
+else
+  echo "--- fpu gate: --no-fpu-gate -- sendsig calls fpu_setup ungated, as stock ---"
+fi
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FS_LGCC; chmod +r unix )
 # HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
 # modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
 kzero_check() {
@@ -1436,9 +1459,14 @@ kzero_check() {
 }
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
+if [ "$FPU_GATE" = 1 ]; then
+  echo "--- fpu gate: sendsig's jsr fpu_setup -> fpu_setup_gated (tools/fpugate-sendsig.py) ---"
+  python3 "$KT/tools/fpugate-sendsig.py" "$BUILD/unix"
+  python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"
+fi
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
@@ -1504,6 +1532,7 @@ if [ -n "$DLM_CORE" ]; then
     $([ "$DLM_STUB" = 1 ] && echo --stub-providers) || { echo "--dlm-core: a step FAILed ($WORK/dlm-core/steps.tsv)" >&2; exit 1; }
   cp "$WORK/dlm-core/unix" "$BUILD/unix"
   if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
+  if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   # the sd seam, checked on the objects (a lost seam leaves a root module registered and never taken: S4-73's
   # "RTH1: root c6d0s1 built in (controller not present)"): a four-card base must call a core's dlm_sd_close
   if [ "$SD_CARDS" = 4 ] && "$NM" "$WORK/dlm-core/obj/dlm.o" | awk '$2=="T" && $3=="dlm_sd_close" {f=1} END{exit !f}'; then
