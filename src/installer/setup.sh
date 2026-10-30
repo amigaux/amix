@@ -78,12 +78,9 @@
 #                            stock floors (MINROOT 16 / MINSWAP 5) and stock
 #                            validation messages, landing in W1's driver keys
 #                            TARGET_ROOT_MB / TARGET_SWAP_MB.
-#   3. Root fs type       -- the stock s5/ufs menu, restored verbatim except for
-#                            its default: stock offered `[s5]`, we offer `[ufs]`.
-#                            See "THE ROOT FILESYSTEM QUESTION" below for why the
-#                            question came back and why the default moved. Lands
-#                            in the driver key TARGET_ROOT_FSTYPE. ASKED ONLY
-#                            WHEN THE TARGET WILL ACTUALLY BE AUTHORED.
+#   3. Root fs type       -- NOT asked: ufs, the only target filesystem (P-35).
+#                            See "THE ROOT FILESYSTEM" below. Lands in the driver
+#                            key TARGET_ROOT_FSTYPE.
 #   4. Package set        -- amixpkg's THREE-TIER menu (W3b), data-driven from
 #                            the medium's /install/sets table and its per-set
 #                            /install/order.<set> files, sized from the catalog's
@@ -102,50 +99,15 @@
 #     password and has no network userland.
 #
 # ===========================================================================
-# ★ THE ROOT FILESYSTEM QUESTION -- restored, with its default moved
+# ★ THE ROOT FILESYSTEM -- ufs, not asked
 # ===========================================================================
-# This question used to be listed above as "SUPPRESSED while the chain is
-# s5-only". That premise was wrong in one respect and is now obsolete in the
-# other, and both halves were measured rather than argued (the whole file of
-# evidence is docs/ufs-target-scoping.md, and the kernel half is
-# ../amix-kerntools/docs/ufs-root-kernel-capability.md):
-#
-#   * "the chain is s5-only" was never true of the MEDIUM. /bin/mkfs_ufs and
-#     /bin/fsck_ufs have been on this miniroot since W5.2 -- byte-identical to
-#     the stock root floppy's, every undefined symbol resolving against the
-#     miniroot's own libc -- because the build starts from a byte copy of the
-#     stock image and the proto preserves them. Nothing had to be added to the
-#     floppy, which matters: it has 46 free blocks.
-#   * nor of the KERNEL. `ufs` sits at vfssw[2] in all ten kernels examined,
-#     including this medium's own fd0unix install kernel, and `rootfstype` is
-#     compiled EMPTY ("Empty means try them all"), so vfs_mountroot probes s5
-#     first and ufs second and takes the first that mounts. A ufs root costs
-#     zero kernel bytes and zero configuration.
-#   * nor of the INSTALLED SYSTEM. core-2.1.pkg ships the complete ufs back end
-#     (mkfs, fsck, mount, labelit + 17 more) -- a LARGER suite than the s5 one.
-#
-# ★ THE ONE DELIBERATE DIVERGENCE FROM STOCK IS THE DEFAULT. Stock's prompt read
-# `[s5]` and ufs had to be typed; ours reads `[ufs]` and s5 has to be typed. The
-# menu text, the branch structure and the option constant are stock's, verbatim.
-# The reason for moving it is stock's own documentation, which recommends ufs
-# over s5 -- advice whoever built the Amix install this project INHERITED
-# evidently took: both goldens carry a UFS1 big-endian root whose superblock
-# reads back fs_minfree=2 / fs_optim=SPACE, the exact fingerprint of the
-# `-o free=2,opt=s` this script hands the driver. s5's 14-character names and
-# 65,535-inode ceiling are the concrete cost of the other answer; s5 stays
-# selectable because it is what every attested digest was measured on and what
-# the miniroot itself is.
-# (This is the same class of divergence as W4's "Suomi / Svenska" relabel: stock
-# shape, one deliberate word changed, recorded as such.)
-#
-# ★ AND IT IS ASKED ONLY WHEN IT CAN BE HONOURED. With INSTALL_TARGET_PREBUILT=1
-# the target's filesystem was already minted host-side by tools/mkroot.sh, which
-# writes s5 and only s5 -- there is no host-side ufs writer and deliberately none
-# planned. Asking there would be exactly the locked question the stock idiom
-# forbids, so the question is skipped and s5 is composed. That is not a
-# reduced-function mode in the field: a person installing from this disc onto
-# their own blank disk is in AUTHOR mode, which is where the question belongs and
-# where mkfs_ufs actually runs.
+# Stock asked `What file system type is the root partition? [s5]`; this interview
+# restored that menu with the default moved to `[ufs]` (2026-08-14), and P-35
+# (owner, 2026-10-30) removed it: s5 is no longer a target -- no install base
+# runs on it, its 14-byte names block perl and later ports, and the 040/060
+# line cannot use it at all. The root is always ufs, laid by the miniroot's own
+# stock mkfs_ufs (docs/ufs-target-scoping.md), so there is nothing to ask. The
+# stock menu's shape is recorded in docs/installer.md.
 #
 # ===========================================================================
 # ★ WHY THE DISK SCAN DOES NOT CALL /etc/ddsize
@@ -1006,7 +968,7 @@ upgrade_sizes()
 	ANS_ROOT="$DEF_ROOT"
 	plan_swap_default "$ANS_ROOT"
 	ANS_SWAP="$DEF_SWAP"
-	ANS_FSYS="${TARGET_ROOT_FSTYPE:-ufs}"
+	ANS_FSYS=ufs
 }
 
 # ---------------------------------------------------------------------------
@@ -1256,100 +1218,6 @@ ask_sizes()
 					echo "\nYou only have $MAXSWAP remaining megabytes available."
 					ANS_SWAP=
 				fi
-		esac
-	done
-}
-
-# ---------------------------------------------------------------------------
-# 3. ROOT FILESYSTEM TYPE -- the stock menu, default moved to ufs
-# ---------------------------------------------------------------------------
-# ★ STOCK, QUOTED RATHER THAN IMITATED. Extracted from /etc/profile on the stock
-# root floppy (floppies/orig/amix_21_root.adf, ino 166, 19,351 B, md5
-# 97f800ec7bcd627bfed2322fdc19f86b) with tools/lib/s5.py, verbatim -- every echo,
-# every blank line, the prompt, and the case arms:
-#
-#     UFS_OPT="-o free=2,opt=s"	#options for mkfs_ufs
-#     ...
-#     if [ "$OLD_BOOT" = "0" ]
-#     then
-#         unset ANS
-#         while [ "$ANS" = "" ]
-#         do
-#             unset ROOT_OPT
-#             echo "\nChoose a file system type for the root partition:"
-#             echo ""
-#             echo "    s5:  Traditional UNIX file system"
-#             echo "   ufs:  Berkeley file system"
-#             echo ""
-#             readask "What file system type is the root partition? [s5] "
-#             case $ask in
-#             "")     ANS="s5" ;;
-#             "s5")   ANS="s5" ;;
-#             "ufs")  ANS="ufs" ; ROOT_OPT="$UFS_OPT" ;;
-#             "*")    echo "Available file system types are s5 and ufs."
-#             esac
-#         done
-#         ROOT_FSYS="$ANS"
-#     else
-#         ROOT_FSYS="s5"		# Johann ROM can only boot s5 filesystem
-#     fi
-#
-# Two things about that block are worth keeping straight, because the story
-# "stock forced s5" is half true and the half that is true is not this:
-#
-#   * the WHOLE block sits inside `if [ "$OLD_BOOT" = "0" ]`, and the else arm is
-#     `ROOT_FSYS="s5"   # Johann ROM can only boot s5 filesystem`. THAT is the
-#     force -- and it applies to a machine class we refuse outright, by name,
-#     before any of this runs (check_old_boot above). So the branch that forces
-#     s5 is one we never take.
-#   * the option constant is carried by the ANSWER, not by the filesystem: only
-#     the ufs arm sets ROOT_OPT. Our driver holds the same constant on its own
-#     side (install.sh, the mkfs_ufs arm), so this script hands over a TYPE and
-#     nothing else -- one fact in one place.
-#
-# We keep stock's shape, its blank lines and its strings, and change ONE WORD:
-# the default is `[ufs]`.
-#
-# One repair comes with it. Stock QUOTED its `*` glob, and in a `case` a quoted
-# `"*"` matches a LITERAL asterisk -- so that arm never fired. A typo therefore
-# fell through the whole case with ANS unset, the `while [ "$ANS" = "" ]` loop
-# went round again, and the message nobody wrote to be unreachable was never
-# printed in 1991. Ours is unquoted, so the typo is caught and the string finally
-# does what it says. (Its text is stock's, to the byte.)
-ask_fstype()
-{
-	# ★ NEVER SHOW A LOCKED QUESTION (the stock idiom, and this file's own rule).
-	# The 040/060 install line is UFS-ONLY: s5 is structurally broken under the
-	# 4 KiB pages that line runs (docs/miniroot.md "The UFS miniroot"; the 040/060
-	# campaign plan §1). So on that line there is nothing to decide -- the ufs
-	# miniroot is what booted, and the driver would refuse an s5 target here
-	# anyway. Lock it, exactly as the prebuilt case below does. INSTALL_CPU comes
-	# from the base profile this script already sourced (absent => the 030 line).
-	if [ "${INSTALL_CPU:-030}" = 040 ] || [ "${INSTALL_CPU:-030}" = 060 ]; then
-		ANS_FSYS=ufs
-		return 0
-	fi
-	# A prebuilt target already HAS its filesystem -- mkroot.sh minted it
-	# host-side, in s5 -- so there is nothing to decide and the driver would
-	# refuse any other answer anyway.
-	if [ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ]; then
-		ANS_FSYS=s5
-		return 0
-	fi
-	ANS_FSYS=
-	while [ "$ANS_FSYS" = "" ]
-	do
-		echo "\nChoose a file system type for the root partition:"
-		echo ""
-		echo "    s5:  Traditional UNIX file system"
-		echo "   ufs:  Berkeley file system"
-		echo ""
-		readask "What file system type is the root partition? [ufs] "
-		case "$ask" in
-			"")	ANS_FSYS=ufs ;;
-			s5)	ANS_FSYS=s5 ;;
-			ufs)	ANS_FSYS=ufs ;;
-			*)	echo "Available file system types are s5 and ufs." ;;
 		esac
 	done
 }
@@ -2331,10 +2199,7 @@ do
 		upgrade_sizes
 	else
 		ask_sizes
-		# Stock's position too, and it is load-bearing in both directions: AFTER the
-		# sizes (the reserve is a percentage of a root that has to exist first) and
-		# BEFORE the package menu (check_space subtracts that reserve).
-		ask_fstype
+		ANS_FSYS=ufs	# the only target filesystem (P-35); not asked
 	fi
 	ask_set
 	ask_verbose

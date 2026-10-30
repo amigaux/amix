@@ -6189,7 +6189,7 @@ def audit_w2_interview():
     # name, disks, answers, kwargs, expect-in-stdout, forbid-in-stdout, expect-in-answers
     cases = [
         ("bench shape: one eligible disk, id question SKIPPED, erase confirmed",
-         bench, ["y", "79", "18", "", "1", "n", "n"], {},
+         bench, ["y", "79", "18", "1", "n", "n"], {},
          ["Scanning SCSI bus for hard disks...",
           "Hard disks attached to this system:",
           "SCSI id 6\t\t108 megabytes",
@@ -6204,10 +6204,10 @@ def audit_w2_interview():
           "TARGET_SWAP_MB=18", "INSTALL_VERBOSE=n",
           "W2-ANSWERS-BEGIN", "W2-ANSWERS-END"]),
         ("all-defaults (bare RETURNs) reproduce the stock layout",
-         bench, ["y", "", "", "", "", "", ""], {}, [], [],
+         bench, ["y", "", "", "", "", ""], {}, [], [],
          ["TARGET_ROOT_MB=79", "TARGET_SWAP_MB=18", "INSTALL_VERBOSE=n"]),
         ("`Verbose install? y` lands as INSTALL_VERBOSE=y",
-         bench, ["y", "", "", "", "", "y", ""], {}, [], [], ["INSTALL_VERBOSE=y"]),
+         bench, ["y", "", "", "", "y", ""], {}, [], [], ["INSTALL_VERBOSE=y"]),
         ("two eligible disks: the stock id question IS asked and honoured",
          multi, ["5", "y", "", "", "", "", "", ""], {"profile": p_multi},
          ["What is the SCSI id of the disk you want to install? ",
@@ -6218,14 +6218,14 @@ def audit_w2_interview():
         ("the source disk is excluded and a kernel-less id is annotated",
          {0: (500, True, [("Payload", 128, 900000)]), 5: (80, False, []),
           6: (100, True, W_BENCH_PARTS)},
-         ["y", "", "", "", "", "", ""], {"profile": p_src},
+         ["y", "", "", "", "", ""], {"profile": p_src},
          ["source -- not installable", "no kernel on this medium for id 5"],
          [], ["TARGET_SCSI_ID=6"]),
         # route B (2026-10-08): ids 2/3 are miniroot CD candidates -- never opened when not installable
         ("a non-installable CD-candidate id (3) is never scanned",
          {0: (500, True, [("Payload", 128, 900000)]), 3: (80, False, []),
           6: (100, True, W_BENCH_PARTS)},
-         ["y", "", "", "", "", "", ""], {"profile": p_src},
+         ["y", "", "", "", "", ""], {"profile": p_src},
          ["source -- not installable"],
          ["for id 3"], ["TARGET_SCSI_ID=6"]),
         ("no disks at all -> stock's refusal + the restart idiom",
@@ -6248,7 +6248,7 @@ def audit_w2_interview():
          ["Sizing the disk", "Your disk is 250 megabytes."],
          ["How many megabytes is this disk?"], ["TARGET_DISK_MB=250"]),
         ("RDB present, no profile pin -> the size comes from the RDB extent",
-         bench, ["y", "", "", "", "", "", ""], {"profile": p_blank},
+         bench, ["y", "", "", "", "", ""], {"profile": p_blank},
          ["SCSI id 6\t\t99 megabytes", "Your disk is 99 megabytes."],
          ["How many megabytes is this disk?"], ["TARGET_DISK_MB=99"]),
         ("a disk too small for boot+root+swap is REFUSED, not asked about "
@@ -6259,72 +6259,72 @@ def audit_w2_interview():
           "Press RETURN to restart the installation script. "],
          ["How many megabytes for the root file system?"], []),
         ("root under MINROOT -> stock's message, then the question re-asks",
-         bench, ["y", "8", "79", "", "", "", "", ""], {},
+         bench, ["y", "8", "79", "", "", "", ""], {},
          ["Your root partition must be at least 16 megabytes."], [],
          ["TARGET_ROOT_MB=79"]),
         ("root over ROOTMAX -> stock's swap-space message, then re-asks",
-         bench, ["y", "95", "79", "", "", "", "", ""], {},
+         bench, ["y", "95", "79", "", "", "", ""], {},
          ["You must leave at least 5 megabytes free for swap space."], [],
          ["TARGET_ROOT_MB=79"]),
         ("swap under MINSWAP -> stock's message, then re-asks",
-         bench, ["y", "79", "2", "18", "", "", "", ""], {},
+         bench, ["y", "79", "2", "18", "", "", ""], {},
          ["You must have at least 5 megabytes of swap space."], [],
          ["TARGET_SWAP_MB=18"]),
         ("swap over MAXSWAP -> stock's remaining-megabytes message, then re-asks",
-         bench, ["y", "79", "40", "18", "", "", "", ""], {},
+         bench, ["y", "79", "40", "18", "", "", ""], {},
          ["You only have 18 remaining megabytes available."], [],
          ["TARGET_SWAP_MB=18"]),
         ("`change any of these? y` re-runs the whole interview",
-         bench, ["y", "79", "18", "", "1", "n", "y", "y", "40", "10", "", "1", "y", "n"],
+         bench, ["y", "79", "18", "1", "n", "y", "y", "40", "10", "1", "y", "n"],
          {}, [], [],
          ["TARGET_ROOT_MB=40", "TARGET_SWAP_MB=10", "INSTALL_VERBOSE=y"]),
         ("catalog #isize block -> amixpkg's MB column lights up, right-aligned "
          "(BUDGETED at ~1.10x: 34.5 MB of payload is a 37.9 MB s5 footprint)",
-         bench, ["y", "", "", "", "", "", ""], {"catalog": W_CATALOG},
+         bench, ["y", "", "", "", "", ""], {"catalog": W_CATALOG},
          ["(1)  Standard Amiga UNIX installation      37.9 MB"], [], []),
         ("catalog with NO isize block -> no figure at all, never 0.0",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"catalog": "\n".join(W_CATALOG.splitlines()[:9]) + "\n"},
          ["(1)  Standard Amiga UNIX installation"], [" MB"], []),
         ("one package missing from the isize block -> no partial sum is printed",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"catalog": W_CATALOG.replace("#isize apkg 200000\n", "")},
          [], [" MB"], []),
         ("no argument -> the medium's own /install/profiles/BASE names the profile",
-         bench, ["y", "", "", "", "", "", ""], {"base_marker": "w2test", "arg": None},
+         bench, ["y", "", "", "", "", ""], {"base_marker": "w2test", "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no argument, a k46 kinfo -> BASE.k46 names the profile (BASE does not resolve)",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"base_marker": "nosuch", "base_lines": {"k46": "w2test", "k30": "nosuch"},
           "kinfo_line": 46, "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no argument, a k30 kinfo -> BASE.k30 names the profile",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"base_marker": "nosuch", "base_lines": {"k46": "nosuch", "k30": "w2test"},
           "kinfo_line": 30, "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no argument, no kinfo -> BASE, never a BASE.<line>",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"base_marker": "w2test", "base_lines": {"k46": "nosuch", "k30": "nosuch"},
           "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no argument, a k46 kinfo but no BASE.k46 -> BASE",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"base_marker": "w2test", "base_lines": {"k30": "nosuch"}, "kinfo_line": 46,
           "arg": None},
          [], [], ["TARGET_SCSI_ID=6"]),
         ("no matrix marker and no ANSWERS_ECHO -> no beacon is written",
-         bench, ["y", "", "", "", "", "", ""], {"matrix_marker": False},
+         bench, ["y", "", "", "", "", ""], {"matrix_marker": False},
          [], ["answers echoed to"], []),
         ("ANSWERS_ECHO=y -> the beacon is written even with no matrix marker",
-         bench, ["y", "", "", "", "", "", ""],
+         bench, ["y", "", "", "", "", ""],
          {"profile": W_PROFILE + "ANSWERS_ECHO=y\n", "matrix_marker": False},
          ["answers echoed to"], [], []),
 
         # ---- W3b: the three-tier menu -------------------------------------
         ("W3b tiers: the medium's /install/sets drives amixpkg's THREE rows, "
          "each sized from the catalog",
-         bench, ["y", "", "", "", "1", "", ""], dict(w3),
+         bench, ["y", "", "", "1", "", ""], dict(w3),
          ["(1)  Standard Amiga UNIX installation      33.5 MB",
           "(2)  Everything on the disc                37.9 MB",
           "(3)  Custom selection"], [],
@@ -6332,19 +6332,19 @@ def audit_w2_interview():
           "install/order.standard"]),
         ("W3b tiers: row 1 points the driver at that set's OWN order file, "
          "row 2 at the medium's",
-         bench, ["y", "", "", "", "2", "", ""], dict(w3), [], [],
+         bench, ["y", "", "", "2", "", ""], dict(w3), [], [],
          ["INSTALL_SET=minimal", "INSTALL_ATTESTED=y"]),
         ("W3b attestation: an ATTESTED row says nothing about attestation",
-         bench, ["y", "", "", "", "1", "", ""], dict(w3),
+         bench, ["y", "", "", "1", "", ""], dict(w3),
          ["Package set:\t\tstandard"], ["unattested selection"], []),
         ("W3b attestation: a row the medium marks n is called an UNATTESTED "
          "SELECTION on the confirmation screen and in the profile",
-         bench, ["y", "", "", "", "2", "", ""], dict(w3u),
+         bench, ["y", "", "", "2", "", ""], dict(w3u),
          ["Package set:\t\tmedia -- unattested selection"], [],
          ["INSTALL_SET=media", "INSTALL_ATTESTED=n"]),
         ("W3b tiers: a pre-W3b medium (no /install/sets) still shows three "
          "rows with the same numbering",
-         bench, ["y", "", "", "", "1", "", ""], {"catalog": W_CATALOG},
+         bench, ["y", "", "", "1", "", ""], {"catalog": W_CATALOG},
          ["(1)  Standard Amiga UNIX installation      37.9 MB",
           "(2)  Everything on the disc",
           "(3)  Custom selection"], [],
@@ -6353,7 +6353,7 @@ def audit_w2_interview():
         # ---- W3b: the custom table ----------------------------------------
         ("W3b custom: the frozen amixpkg table renders, opens on the standard "
          "set, and GO composes a Custom selection",
-         bench, ["y", "", "", "", "3", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "GO", "", ""], dict(w3),
          ["Inst     Name       Description",
           "yes      core       Amiga Unix essentials",
           "no       APKG       Remote client",
@@ -6363,33 +6363,33 @@ def audit_w2_interview():
           "Package set:\t\tcustom -- unattested selection"], [],
          ["INSTALL_SET=custom", "INSTALL_ATTESTED=n", "tmp/setup.order"]),
         ("W3b custom: `all` selects everything on the disc",
-         bench, ["y", "", "", "", "3", "all", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "all", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (8 packages)"], [], []),
         ("W3b custom: `none` leaves the mandatory core and nothing else",
-         bench, ["y", "", "", "", "3", "none", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "none", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (1 packages)"], [], []),
         ("W3b custom: `standard` restores the medium's row-1 set",
-         bench, ["y", "", "", "", "3", "all", "standard", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "all", "standard", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (5 packages)"], [], []),
         ("W3b custom: DESELECTING a package takes its DEPENDENTS with it "
          "(APKGENG off -> APKG off; the catalog's apkg->apkgeng edge)",
-         bench, ["y", "", "", "", "3", "all", "APKGENG", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "all", "APKGENG", "GO", "", ""], dict(w3),
          ["no       APKG       Remote client",
           "Software:\t\tCustom selection (6 packages)"], [], []),
         ("W3b custom: SELECTING a package brings its DEPENDENCIES in "
          "(APKG on -> APKGENG on)",
-         bench, ["y", "", "", "", "3", "none", "APKG", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "none", "APKG", "GO", "", ""], dict(w3),
          ["yes      APKGENG",
           "Software:\t\tCustom selection (3 packages)"], [], []),
         ("W3b custom: core is mandatory and refuses to be deselected",
-         bench, ["y", "", "", "", "3", "core", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "core", "GO", "", ""], dict(w3),
          ["core is required and cannot be deselected."], [], []),
         ("W3b custom: an unknown name gets amixpkg's own message, not a crash",
-         bench, ["y", "", "", "", "3", "zzz", "GO", "", ""], dict(w3),
+         bench, ["y", "", "", "3", "zzz", "GO", "", ""], dict(w3),
          ["Unknown package:  zzz"], [], []),
         ("W3b custom: no #isize block -> every size is `?` and NO total is "
          "printed (a partial total is worse than none)",
-         bench, ["y", "", "", "", "3", "GO", "", ""],
+         bench, ["y", "", "", "3", "GO", "", ""],
          {"sets": w3_sets, "extra_orders": w3_orders,
           "catalog": "\n".join(W_CATALOG.splitlines()[:9]) + "\n"},
          ["Inst     Name       Description"], [" Total: "], []),
@@ -6397,16 +6397,16 @@ def audit_w2_interview():
         # ---- W3b: the free-space check ------------------------------------
         ("W3b space: an overcommitted selection gets stock's WARNING and its "
          "override, and declining goes back to the menu",
-         bench, ["y", "30", "", "", "2", "n", "1", "y", "", ""], dict(w3),
+         bench, ["y", "30", "", "2", "n", "1", "y", "", ""], dict(w3),
          ["WARNING:  Your allocated space for installation is 30 MB,",
           "but you have selected to install 37 MB.",
           "Go ahead with the installation anyway? [n] "], [],
          ["INSTALL_SET=standard", "TARGET_ROOT_MB=30"]),
         ("W3b space: the stock override is honoured -- `y` installs anyway",
-         bench, ["y", "30", "", "", "2", "y", "", ""], dict(w3), [], [],
+         bench, ["y", "30", "", "2", "y", "", ""], dict(w3), [], [],
          ["INSTALL_SET=minimal", "TARGET_ROOT_MB=30"]),
         ("W3b space: a selection that FITS is never questioned",
-         bench, ["y", "", "", "", "2", "", ""], dict(w3), [],
+         bench, ["y", "", "", "2", "", ""], dict(w3), [],
          ["Go ahead with the installation anyway?"], []),
 
         # ---- W6: the two COVERAGE HOLES, surfaced in-product (plan sec. 6) --
@@ -6439,83 +6439,47 @@ def audit_w2_interview():
          ["How many megabytes for the root file system"], []),
         ("W6 coverage: the MEASURED bench answers (524288 / `A3000 Internal "
          "SCSI`) are NOT refused -- the threshold is cleared by zero margin",
-         bench, ["y", "", "", "", "1", "", ""],
+         bench, ["y", "", "", "1", "", ""],
          {"machine": {}}, ["Software:"],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
         ("W6 coverage: FAILS OPEN when romsize cannot answer (its own "
          "`Can't get ROM size` error is not a number)",
-         bench, ["y", "", "", "", "1", "", ""],
+         bench, ["y", "", "", "1", "", ""],
          {"machine": {"rom": 'echo "Can\'t get ROM size"'}}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
         ("W6 coverage: FAILS OPEN when dioc says nothing at all (the shape a "
          "node with no disk behind it produced on the bench)",
-         bench, ["y", "", "", "", "1", "", ""],
+         bench, ["y", "", "", "1", "", ""],
          {"machine": {"controller": ":"}}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
         ("W6 coverage: FAILS OPEN when neither probe is installed at all",
-         bench, ["y", "", "", "", "1", "", ""], {}, [],
+         bench, ["y", "", "", "1", "", ""], {}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
 
-        # ---- UFS: the restored stock s5/ufs question ------------------------
-        # Every case ABOVE already answers this question with a bare RETURN --
-        # that is the empty token inserted between the swap answer and the
-        # package menu -- so the default is exercised forty times over. These
-        # cases are about the question itself.
-        ("UFS: the stock menu is SHOWN, in the stock position (after the sizes, "
-         "before the package menu), and a bare RETURN takes ufs",
-         bench, ["y", "79", "18", "", "1", "n", "n"], {},
-         ["Choose a file system type for the root partition:",
-          "    s5:  Traditional UNIX file system",
-          "   ufs:  Berkeley file system",
-          "What file system type is the root partition? [ufs] ",
-          "Root file system type:\tufs"], [],
+        # ---- UFS: the root filesystem is not asked (P-35) -------------------
+        ("UFS: the root filesystem is NOT asked -- the summary and the beacon "
+         "say ufs, and no s5/ufs menu is shown",
+         bench, ["y", "79", "18", "1", "n", "n"], {},
+         ["Root file system type:\tufs"],
+         ["What file system type is the root partition?",
+          "Traditional UNIX file system"],
          ["TARGET_ROOT_FSTYPE=ufs"]),
-        ("UFS: `s5` is still typeable -- the legacy filesystem stays selectable",
-         bench, ["y", "79", "18", "s5", "1", "n", "n"], {},
-         ["Root file system type:\ts5"], [],
-         ["TARGET_ROOT_FSTYPE=s5"]),
-        ("UFS: `ufs` typed EXPLICITLY lands the same as the default (this is "
-         "what the install matrix types -- an explicit answer proves the "
-         "keystroke arrived where an accepted default cannot)",
-         bench, ["y", "79", "18", "ufs", "1", "n", "n"], {}, [], [],
-         ["TARGET_ROOT_FSTYPE=ufs"]),
-        ("UFS: an unrecognised type gets stock's own message and RE-ASKS "
-         "(stock's `*` glob was QUOTED, so it matched a literal asterisk and "
-         "never fired -- a typo there fell through with ROOT_FSYS empty)",
-         bench, ["y", "79", "18", "zfs", "s5", "1", "n", "n"], {},
-         ["Available file system types are s5 and ufs."], [],
-         ["TARGET_ROOT_FSTYPE=s5"]),
-        ("UFS: a PREBUILT target is not asked a question it could not honour -- "
-         "the menu never appears and s5 is composed (mkroot.sh mints s5 and "
-         "only s5; the driver refuses any other answer in that mode)",
-         bench, ["y", "79", "18", "1", "n", "n"],
-         {"env": {"INSTALL_TARGET_PREBUILT": "1"}},
-         ["Root file system type:\ts5"],
-         ["What file system type is the root partition?"],
-         ["TARGET_ROOT_FSTYPE=s5", "TARGET_ROOT_MB=79", "INSTALL_SET=default"]),
-        # The 2% superuser reserve, as a PAIR: identical medium, identical root
-        # size, one typed word different. W_CATALOG_79 sizes the disc's own set
-        # at exactly 79 budgeted MB against a 79 MB root -- the one megabyte
-        # where `-o free=2` decides the answer.
+        # The 2% superuser reserve: W_CATALOG_79 sizes the disc's own set at
+        # exactly 79 budgeted MB against a 79 MB root -- the one megabyte where
+        # `-o free=2` decides the answer.
         ("UFS: the 2% superuser reserve is subtracted from the free-space check "
          "-- 79 MB of packages into a 79 MB ufs root is an OVERCOMMIT, and the "
          "operator is told the honest 78",
-         bench, ["y", "79", "18", "", "1", "y", "n", "n"],
+         bench, ["y", "79", "18", "1", "y", "n", "n"],
          {"catalog": W_CATALOG_79},
          ["WARNING:  Your allocated space for installation is 78 MB,",
           "but you have selected to install 79 MB.",
           "Go ahead with the installation anyway? [n] "], [],
          ["TARGET_ROOT_FSTYPE=ufs", "TARGET_ROOT_MB=79"]),
-        ("UFS: the SAME 79 MB into a 79 MB s5 root is NOT an overcommit -- the "
-         "reserve is charged on ufs and only on ufs",
-         bench, ["y", "79", "18", "s5", "1", "n", "n"],
-         {"catalog": W_CATALOG_79}, [],
-         ["Go ahead with the installation anyway?"],
-         ["TARGET_ROOT_FSTYPE=s5", "TARGET_ROOT_MB=79"]),
     ]
 
     npass = 0
@@ -9356,10 +9320,11 @@ def audit_fd060_omit():
     # The s5 arms must really be the ELSE of a ufs test on the paths the 040/060 line runs.
     drv = strip_full_comments(open(DRIVER, encoding="latin-1").read())
     setup = strip_full_comments(open(SETUP, encoding="latin-1").read())
-    if re.search(r'if \[ "\$\{INSTALL_CPU:-030\}" = 040 \] \|\| \[ "\$\{INSTALL_CPU:-030\}" = 060 \]; then\s+ANS_FSYS=ufs', setup):
-        ok("fd060.omit: the interview locks the 040/060 line to ufs (ask_fstype)")
+    if re.search(r'^\s*ANS_FSYS=ufs\b', setup, re.M) and "ANS_FSYS=s5" not in setup \
+            and "What file system type" not in setup:
+        ok("fd060.omit: the interview composes ufs and never asks (P-35) -- the s5 tools are unreachable")
     else:
-        fail("fd060.omit: setup.sh ask_fstype no longer locks 040/060 to ufs -- the s5 tools would be reachable")
+        fail("fd060.omit: setup.sh can compose a non-ufs root again -- the s5 tools would be reachable")
 
 
 def audit_firstboot_perms():
