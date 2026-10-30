@@ -6,10 +6,13 @@ so each fact about a package is written in one place.
 
 | File | What |
 |------|------|
-| `pkgbuild.sh` | the driver: fetch, patch, configure and make (by style), the gates, stage, check the prototype, roll |
-| `styles/<STYLE>.sh` | the build styles: `configure` (`./configure --host`, then make) and `make` (a plain Makefile, tools given on make's command line) |
+| `pkgbuild.sh` | the driver: fetch (or copy the source in the tree), patch, configure and make (by style), the gates, stage, check the prototype, roll |
+| `styles/<STYLE>.sh` | the build styles: `configure` (`./configure --host`, then make), `make` (a plain Makefile, tools given on make's command line) and `hooks` (the recipe's own `build` hook) |
+| `layout.sh` | where the harness finds the toolchains, pkgtools and the build output in this checkout |
+| `common/` | the harness: environment, fetcher, gates and roll (comes with the packages) |
 | `pkgmeta` | checks `package.sh` and writes pkginfo, the catalog line, our catalog configuration lines and the index; also the one-version guard |
-| `tests/` | the host test, `make -C build test` |
+| `check-packages` | CI's check of `userland/packages` |
+| `tests/` | the host tests, `make -C build test` |
 
 ## The package directory
 
@@ -17,6 +20,7 @@ so each fact about a package is written in one place.
 <name>/
   package.sh        the metadata: KEY=value assignments only
   build.sh          optional hooks only (see the top of pkgbuild.sh)
+  src/              our own source, when there is no upstream tarball
   prototype         the hand-written SVR4 payload; `i pkginfo' is generated
   patches/*.patch   applied in name order, each with its reason in its header
   tests/smoke.sh    the on-box acceptance test
@@ -35,7 +39,8 @@ so each fact about a package is written in one place.
 | `CATEGORY` | one of the catalog groups: system, network, utility, archive, library, shell, language, text, editor, documentation, development, multimedia, x11, games, source |
 | `SET` | the sets the package belongs to, space-separated: minimal, standard, full, developer, x11, extra |
 | `LICENSE` | an SPDX identifier |
-| `URL`, `SHA256` | the source tarball and its sha256 |
+| `URL`, `SHA256` | the source tarball and its sha256; neither, when the source is in the tree |
+| `SRCPKG=""` | build from another package's `src/` (`amix-benchmark-gcc14` from `amix-benchmark`) |
 | `STYLE=configure` | `styles/<STYLE>.sh` |
 | `TOOLCHAIN=gcc14` | `gcc14` or `period` |
 | `PREFIX=/opt/amix` | the install prefix |
@@ -45,14 +50,19 @@ so each fact about a package is written in one place.
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
 driver does, so the two never disagree about a value.
 
+A package has one source: the tarball at `URL`, or the source in the tree.
+That is the package's own `src/`, or, with `SRCPKG`, the `src/` of the
+package it names. The driver copies it to the build tree, so patches and
+builds never touch the checkout. `BUILD.txt` records a digest of the copy.
+
 ## pkgmeta
 
 ```sh
 build/pkg/pkgmeta check <package dir>|<packages dir>
 build/pkg/pkgmeta pkginfo <package dir>
 build/pkg/pkgmeta catalog <package dir> --pkg <rolled .pkg>
-build/pkg/pkgmeta fragments <packages dir> [-o DIR]
-build/pkg/pkgmeta index <packages dir> > <packages dir>/README.md
+build/pkg/pkgmeta fragments <packages dir> [-o DIR [--check]]
+build/pkg/pkgmeta index <packages dir> [-o FILE] [--check]
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
 ```
 
@@ -64,7 +74,12 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   catalog name is not the lowercased instance), `cats.conf`, `deps.conf` and
   `sets.conf`. They are merged with the hand-written lines for the stock
   packages when the catalog is generated.
-- `index` writes the table of packages for the packages directory's README.
+- `index` writes the table of packages to `INDEX.md` in the packages
+  directory, never to its README, which is written by hand.
+- With `--check`, `fragments` and `index` compare instead of writing.
+  `check-packages` uses them on `userland/packages`: every `package.sh`
+  passes `check`, and `INDEX.md` and `conf/` (the fragments) are current.
+  It has nothing to check until the first `package.sh` lands.
 
 ## One version per name
 
@@ -83,13 +98,28 @@ already in a catalog of record is not rolled again with other bytes.
 ## Building
 
 ```sh
-AMIX_PKG_COMMON=/path/to/amix-packages/recipes/common \
-	sh build/pkg/pkgbuild.sh /path/to/<package dir>
+sh build/pkg/pkgbuild.sh userland/packages/<name>
 ```
 
-`AMIX_PKG_COMMON` names the build environment, the fetcher, the gates and
-the roll the driver uses. Until the packages move into `userland/packages`
-those are amix-packages' `recipes/common`. With `AMIX_GCC14_BUILD_ROOT` set,
-everything a build writes goes under that directory. Besides the package,
-the driver leaves `catalog.line` with the package's catalog line in the
-build directory.
+The driver uses the harness in `build/pkg/common`: the build environment, the
+fetcher, the gates and the roll. `layout.sh` tells the harness where things
+are in this checkout:
+
+- the toolchains: `GCA` and `G14` name their `build/` directories, as in the
+  build container (`toolchain/README.md`). Unset, they are the
+  `gcc-cross-amix` and `gcc14-cross-amix` checkouts beside the main working
+  tree. The harness's gcc14 pin must be the commit in
+  `toolchain/gcc14-cross-amix.pin`;
+- pkgtools: the host `pkgmk` and `pkgtrans` that
+  `userland/pkgtools/heirloom/build-host.sh` builds, and
+  `userland/pkgtools/tools/repo/scan060.py`;
+- kernel/dlm and kernel/modules in this checkout;
+- the output: `out/pkg` (ignored), or `AMIX_BUILD_ROOT` or
+  `AMIX_GCC14_BUILD_ROOT` when set.
+
+`AMIX_PKG_COMMON` names another harness. An amix-packages `recipes/common`
+finds its repository and siblings itself, and the driver leaves it to do so.
+
+Outputs: `<build root>/<name>/` (the source, the build tree, the staged
+payload, the logs, `BUILD.txt` and `catalog.line`, the package's catalog
+line) and `<build root>/pkg/<PKG>-<VERSION>-<PKGREV>.pkg`.

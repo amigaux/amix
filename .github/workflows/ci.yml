@@ -67,8 +67,10 @@ jobs:
         run: make -C kernel/modules/monsw/module test
       - name: kernel/modules ramdisk host test
         run: make -C kernel/modules/ramdisk/module test
-      - name: build/pkg pkgmeta host test
+      - name: build/pkg host tests
         run: make -C build test
+      - name: userland/packages check
+        run: make -C build check-packages
 
   kit:
     name: kit build (container)

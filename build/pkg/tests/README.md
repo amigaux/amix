@@ -1,7 +1,14 @@
 # build/pkg/tests
 
-`test-pkgmeta` is the host test of `pkgmeta`; run it with `make -C build test`
-from the top of the repository. It needs only Python 3 and `/bin/sh`.
+`test-pkgmeta` is the host test of `pkgmeta` and `check-packages`;
+`test-pkgbuild` is the host test of the driver and `layout.sh`. Run both with
+`make -C build test` from the top of the repository. They need Python 3,
+`/bin/sh`, git, make and tar.
+
+`test-pkgbuild` copies the driver into a throwaway amix tree and builds small
+packages against a stub harness that records the environment it is given.
+That covers both harness layouts, the three styles, sources from a tarball,
+from `src/` and from `SRCPKG`, and one refusal per check.
 
 The fixtures are the reference the framework has to match:
 

@@ -1,0 +1,25 @@
+#!/bin/sh
+# check-packages: CI's check of a packages directory.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh build/pkg/check-packages [<packages dir>]    (default userland/packages)
+#
+# Every package.sh passes pkgmeta check, one version each, and the generated
+# files are current: <packages dir>/INDEX.md (pkgmeta index) and the catalog
+# fragments in <packages dir>/conf/ (pkgmeta fragments). Nothing to check,
+# and exit 0, while the directory holds no package.sh.
+set -e
+
+here=$(cd "$(dirname "$0")" && pwd)
+root=${1:-$(cd "$here/../.." && pwd)/userland/packages}
+pkgmeta() { python3 -I "$here/pkgmeta" "$@"; }
+
+set -- "$root"/*/package.sh
+[ -f "$1" ] || {
+	echo "check-packages: no package.sh under $root yet; nothing to check"
+	exit 0
+}
+pkgmeta check "$root"
+pkgmeta index "$root" --check
+pkgmeta fragments "$root" -o "$root/conf" --check

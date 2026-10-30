@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+# test-pkgbuild: host test for build/pkg/pkgbuild.sh and layout.sh.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Runs the real driver, copied into a throwaway amix tree, against a stub
+# harness that records the environment it is given and builds with the host's
+# tools: the harness found at build/pkg/common (layout.sh's values) or named
+# by AMIX_PKG_COMMON as an amix-packages recipes/common (left alone), the
+# three styles, sources from a tarball, from the package's src/ and from
+# SRCPKG's, and one refusal per check. Prints "N/N passed"; exits non-zero on
+# any failure.
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+PKG = os.path.dirname(HERE)
+TOP = os.path.dirname(os.path.dirname(PKG))
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def read(path):
+    with open(path) as fp:
+        return fp.read()
+
+
+# The stub harness: what amix-env.sh, fetch.sh, gates.sh and pkgroll.sh
+# provide, with the host's tools; it records the exported environment.
+STUB = {
+    "amix-env.sh": """\
+env | LC_ALL=C sort > "$STUB_LOG/env.txt"
+echo "REPO=${REPO:-}" > "$STUB_LOG/repo.txt"
+AMIX_TOOLCHAIN=${TOOLCHAIN:-period}
+[ "$AMIX_TOOLCHAIN" = period ] || AMIX_GCC14_COMMIT=$STUB_G14_COMMIT
+if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
+	AMIX_BUILD_ROOT=${AMIX_GCC14_BUILD_ROOT:-$REPO/build/gcc14}
+else
+	AMIX_BUILD_ROOT=${AMIX_BUILD_ROOT:-$REPO/build}
+fi
+export AMIX_TOOLCHAIN AMIX_BUILD_ROOT
+export CC=cc CPP="cc -E" AMIX_CPP="cc -E" NM=nm OBJDUMP=objdump STRIP=strip
+export AMIX_CFLAGS=-O AMIX_HOST_TRIPLET=m68k-cbm-sysv4 AMIX_CONFIGURE_LENIENT=
+amix_env_banner() { echo "  stub harness"; }
+""",
+    "fetch.sh": """\
+amix_fetch() {
+	cp "${1#file://}" "$3"
+	echo "$2  $3" | sha256sum -c --quiet
+}
+""",
+    "gates.sh": """\
+amix_gate_noasm() { return 0; }
+amix_gate_elfs() { :; }
+amix_gate_g14_strict() { :; }
+amix_gate_g14_compat() { :; }
+""",
+    "pkgroll.sh": """\
+amix_pkgroll() {
+	cp "$1/pkginfo" "$STUB_LOG/pkginfo"
+	tar cf "$5" -C "$2" .
+}
+""",
+}
+
+PROTOTYPE = """\
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/share 0755 root sys
+f none /opt/amix/share/out.txt 0644 root sys
+"""
+
+
+def package(root, name, style, extra="", build="", src=None):
+    d = os.path.join(root, name)
+    write(os.path.join(d, "package.sh"), """\
+NAME=%s
+PKG=%s
+VERSION=1.0
+PKGREV=1
+SUMMARY="the %s test package"
+DESC="A test package for pkgbuild.sh."
+CATEGORY=utility
+SET=extra
+LICENSE=MIT
+STYLE=%s
+%s""" % (name, name[:9], name, style, extra))
+    write(os.path.join(d, "prototype"), PROTOTYPE)
+    write(os.path.join(d, "build.sh"), build + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	cp out.txt "$DEST/opt/amix/share/out.txt"
+}
+""")
+    for rel, text in (src or {}).items():
+        write(os.path.join(d, "src", rel), text)
+    return d
+
+
+HOOKS_BUILD = """\
+build() {
+	cp greet.txt out.txt
+	echo "cc -c greet.c (the hook's compile line)" >> "$BUILD/make.log"
+}
+"""
+
+
+def main():
+    tmp = tempfile.mkdtemp(prefix="test-pkgbuild.")
+    try:
+        amix = os.path.join(tmp, "amix")
+        dst = os.path.join(amix, "build", "pkg")
+        os.makedirs(dst)
+        for f in ("pkgbuild.sh", "pkgmeta", "layout.sh"):
+            shutil.copy2(os.path.join(PKG, f), dst)
+        shutil.copytree(os.path.join(PKG, "styles"), os.path.join(dst, "styles"))
+        os.makedirs(os.path.join(amix, "toolchain"))
+        for f in ("gcc-cross-amix.pin", "gcc14-cross-amix.pin"):
+            shutil.copy2(os.path.join(TOP, "toolchain", f),
+                         os.path.join(amix, "toolchain", f))
+        g14_pin = read(os.path.join(TOP, "toolchain",
+                                    "gcc14-cross-amix.pin")).split()[1]
+        gca_pin = read(os.path.join(TOP, "toolchain",
+                                    "gcc-cross-amix.pin")).split()[1]
+        bindir = os.path.join(amix, "userland", "pkgtools", "heirloom",
+                              "build-host", "bin")
+        for t in ("pkgmk", "pkgtrans"):
+            write(os.path.join(bindir, t), "#!/bin/sh\nexit 0\n", 0o755)
+        subprocess.run(["git", "init", "-q", amix], check=True)
+
+        common = os.path.join(dst, "common")
+        old = os.path.join(tmp, "old", "recipes", "common")
+        for d in (common, old):
+            for f, text in STUB.items():
+                write(os.path.join(d, f), text)
+        log = os.path.join(tmp, "log")
+        os.makedirs(log)
+
+        # a tarball with a configure script and a Makefile
+        srcdir = os.path.join(tmp, "dist", "conf-1.0")
+        write(os.path.join(srcdir, "configure"), """\
+#!/bin/sh
+echo "$@" > configure.args
+printf 'all:\\n\\techo "$(CFLAGS)" > out.txt\\n' > Makefile
+""", 0o755)
+        tarball = os.path.join(tmp, "dist", "conf-1.0.tar.gz")
+        with tarfile.open(tarball, "w:gz") as t:
+            t.add(srcdir, arcname="conf-1.0")
+        sha = hashlib.sha256(open(tarball, "rb").read()).hexdigest()
+        mk_dir = os.path.join(tmp, "dist", "mk-1.0")
+        write(os.path.join(mk_dir, "Makefile"),
+              'all:\n\techo "$(CC) $(CFLAGS)" > out.txt\n')
+        mk_tar = os.path.join(tmp, "dist", "mk-1.0.tar.gz")
+        with tarfile.open(mk_tar, "w:gz") as t:
+            t.add(mk_dir, arcname="mk-1.0")
+        mk_sha = hashlib.sha256(open(mk_tar, "rb").read()).hexdigest()
+
+        pkgs = os.path.join(amix, "userland", "packages")
+        package(pkgs, "conf", "configure",
+                "URL=file://%s\nSHA256=%s\n" % (tarball, sha),
+                'configure_args() { echo --with-test; }\n')
+        package(pkgs, "mk", "make", "URL=file://%s\nSHA256=%s\n" % (mk_tar, mk_sha))
+        package(pkgs, "inside", "hooks", build=HOOKS_BUILD,
+                src={"greet.txt": "hello from src/\n", "sub dir/a b": "x\n"})
+        package(pkgs, "inside2", "hooks", "SRCPKG=inside\n", build=HOOKS_BUILD)
+        package(pkgs, "nohook", "hooks", src={"greet.txt": "x\n"})
+        package(pkgs, "implicit", "hooks", src={"greet.txt": "x\n"}, build="""\
+build() {
+	cp greet.txt out.txt
+	echo "foo.c:1: warning: implicit declaration of function 'bar'" >> "$BUILD/make.log"
+}
+""")
+
+        base = {k: v for k, v in os.environ.items()
+                if not k.startswith(("AMIX_", "GIT_")) and k not in
+                ("GCA", "G14", "TOOLCHAIN", "REPO")}
+        base.update(STUB_LOG=log, STUB_G14_COMMIT=g14_pin, LC_ALL="C")
+
+        def build(name, **env):
+            e = dict(base)
+            e.update(env)
+            for k in [k for k, v in e.items() if v is None]:
+                del e[k]
+            for f in os.listdir(log):
+                os.remove(os.path.join(log, f))
+            p = subprocess.run(["sh", os.path.join(dst, "pkgbuild.sh"),
+                                os.path.join(pkgs, name)], env=e,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            return p.returncode, p.stdout.decode("utf-8", "replace")
+
+        def seen():
+            env = {}
+            for line in read(os.path.join(log, "env.txt")).splitlines():
+                k, _, v = line.partition("=")
+                env[k] = v
+            return env
+
+        out_pkg = os.path.join(amix, "out", "pkg")
+
+        # --- the harness at build/pkg/common: layout.sh ------------------------------
+        rc, out = build("conf")
+        check("amix layout: configure style builds", rc == 0, out)
+        env = seen() if rc == 0 else {}
+        sib = os.path.realpath(tmp)
+        for k, want in (
+                ("AMIX_REPO_ROOT", amix), ("AMIX_PKG_COMMON", common),
+                ("AMIX_BUILD_ROOT", out_pkg), ("AMIX_GCC14_BUILD_ROOT", out_pkg),
+                ("AMIX_CROSS_ENV", os.path.join(sib, "gcc-cross-amix", "build", "env.sh")),
+                ("AMIX_GCC14_ROOT", os.path.join(sib, "gcc14-cross-amix")),
+                ("AMIX_GCC14_PREFIX", os.path.join(sib, "gcc14-cross-amix", "build", "prefix")),
+                ("AMIX_GCA_PIN", gca_pin), ("AMIX_G14_PIN", g14_pin),
+                ("AMIX_PKGMGR", os.path.join(amix, "userland", "pkgtools")),
+                ("AMIX_PKGMK", os.path.join(bindir, "pkgmk")),
+                ("AMIX_PKGTRANS", os.path.join(bindir, "pkgtrans")),
+                ("AMIX_PM_SCAN060", os.path.join(amix, "userland", "pkgtools",
+                                                 "tools", "repo", "scan060.py")),
+                ("AMIX_DLM", amix), ("AMIX_MODULES", amix)):
+            check("amix layout: %s" % k, env.get(k) == want,
+                  "got %r, want %r" % (env.get(k), want))
+        check("amix layout: REPO is the top of the checkout",
+              read(os.path.join(log, "repo.txt")) == "REPO=%s\n" % amix)
+        built = os.path.join(out_pkg, "pkg", "conf-1.0-1.pkg")
+        check("amix layout: the package lands in out/pkg", os.path.isfile(built), out)
+        work = os.path.join(out_pkg, "conf", "work", "conf-1.0")
+        check("configure style: configure_args reach ./configure",
+              "--with-test" in read(os.path.join(work, "configure.args")))
+        pkginfo = subprocess.run(
+            [sys.executable, "-I", os.path.join(dst, "pkgmeta"), "pkginfo",
+             os.path.join(pkgs, "conf")], stdout=subprocess.PIPE).stdout.decode()
+        check("the rolled pkginfo is pkgmeta's",
+              read(os.path.join(log, "pkginfo")) == pkginfo)
+        line = read(os.path.join(out_pkg, "conf", "catalog.line"))
+        check("catalog.line names the package", line.startswith(
+            "conf|1.0-1|conf|conf-1.0-1.pkg|"), line)
+
+        rc, out = build("conf", GCA="/x/gca/build", G14="/x/g14/build")
+        env = seen() if rc == 0 else {}
+        check("GCA and G14 name the toolchains",
+              rc == 0 and env.get("AMIX_CROSS_ENV") == "/x/gca/build/env.sh"
+              and env.get("AMIX_GCC14_ROOT") == "/x/g14"
+              and env.get("AMIX_GCC14_PREFIX") == "/x/g14/build/prefix", out)
+        rc, out = build("conf", AMIX_BUILD_ROOT=os.path.join(tmp, "elsewhere"))
+        check("AMIX_BUILD_ROOT set beforehand is kept",
+              rc == 0 and os.path.isfile(os.path.join(
+                  tmp, "elsewhere", "pkg", "conf-1.0-1.pkg")), out)
+        rc, out = build("conf", STUB_G14_COMMIT="0" * 40)
+        check("refused: the harness's gcc14 pin is not toolchain/'s",
+              rc == 1 and "toolchain/gcc14-cross-amix.pin" in out, out)
+        os.rename(os.path.join(bindir, "pkgmk"), os.path.join(bindir, "pkgmk.x"))
+        rc, out = build("conf")
+        os.rename(os.path.join(bindir, "pkgmk.x"), os.path.join(bindir, "pkgmk"))
+        check("refused: no host pkgmk", rc == 1 and "build-host.sh" in out, out)
+
+        rc, out = build("mk")
+        check("make style builds",
+              rc == 0 and read(os.path.join(out_pkg, "mk", "work", "mk-1.0",
+                                            "out.txt")).split() == ["cc", "-O"],
+              out)
+
+        # --- hooks and sources in the tree -------------------------------------------
+        rc, out = build("inside")
+        check("hooks style with src/ and no URL builds", rc == 0, out)
+        b = os.path.join(out_pkg, "inside")
+        check("hooks style: the hook's make.log is kept",
+              rc == 0 and "the hook's compile line" in read(os.path.join(b, "make.log")))
+        check("src/ is copied whole, odd names included",
+              rc == 0 and read(os.path.join(b, "work", "inside-1.0", "sub dir", "a b")) == "x\n")
+        check("BUILD.txt records the in-tree source and its digest",
+              rc == 0 and "source userland/packages/inside/src digest " in
+              read(os.path.join(b, "BUILD.txt")), out)
+        rc, out = build("inside2")
+        check("SRCPKG builds from the other package's src/",
+              rc == 0 and read(os.path.join(out_pkg, "inside2", "work",
+                                            "inside2-1.0", "out.txt"))
+              == "hello from src/\n", out)
+        rc, out = build("nohook")
+        check("refused: STYLE=hooks without a build hook",
+              rc != 0 and "defines no build hook" in out, out)
+        rc, out = build("implicit")
+        check("refused: the strict gate reads the hook's make.log",
+              rc != 0 and "implicit declaration" in out, out)
+
+        # --- the harness named by AMIX_PKG_COMMON (amix-packages) ----------------------
+        rc, out = build("conf", AMIX_PKG_COMMON=old)
+        env = seen() if rc == 0 else {}
+        oldrepo = os.path.dirname(os.path.dirname(old))
+        check("amix-packages layout builds", rc == 0, out)
+        check("amix-packages layout: REPO is that repository",
+              read(os.path.join(log, "repo.txt")) == "REPO=%s\n" % oldrepo)
+        check("amix-packages layout: layout.sh is not applied",
+              not any(k in env for k in ("AMIX_REPO_ROOT", "AMIX_PKGMGR",
+                                         "AMIX_GCC14_BUILD_ROOT", "AMIX_G14_PIN")),
+              " ".join(sorted(k for k in env if k.startswith("AMIX_"))))
+        check("amix-packages layout: output under that repository's build/",
+              os.path.isfile(os.path.join(oldrepo, "build", "gcc14", "pkg",
+                                          "conf-1.0-1.pkg")), out)
+
+        shutil.rmtree(common)
+        rc, out = build("conf")
+        check("refused: no build/pkg/common and no AMIX_PKG_COMMON",
+              rc == 2 and "AMIX_PKG_COMMON" in out, out)
+        rc, out = build("conf", AMIX_PKG_COMMON=os.path.join(tmp, "nowhere"))
+        check("refused: AMIX_PKG_COMMON without amix-env.sh",
+              rc == 2 and "no amix-env.sh" in out, out)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print("%d/%d passed" % (passed, passed + failed))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
