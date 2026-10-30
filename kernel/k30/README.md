@@ -1,42 +1,49 @@
-# amix-kerntools — the Amiga UNIX kernel build hub
+# kernel/k30 — the 68030 Amix kernel build
 
 **Amix** is Commodore's port of AT&T System V Release 4 (SVR4.0) UNIX to the 68030 Amiga
-(the A3000UX and A4000). `amix-kerntools` is the **build hub** for a family of MIT-licensed
-device drivers for it: it owns *how* an Amix kernel is built. It discovers driver repos by
-their `driver.conf`, generates the SCSI controller-selector wiring, applies each driver's
-kernel patches, links the kernel, and runs a clean-gate that defeats an intermittent
-emulator linker-corruption bug.
+(the A3000UX and A4000). `kernel/k30` is the directory of the
+[amix](https://github.com/amigaux/amix) repository that owns *how* a 68030 Amix kernel is built
+with drivers in it. It discovers driver checkouts by their `driver.conf`, generates the SCSI
+controller-selector wiring, applies each driver's kernel patches, links the kernel, and runs a
+clean-gate that defeats an intermittent emulator linker-corruption bug.
 
-It ships **no driver source** (those live in the sibling driver repos) and **no Amix** — you
-bring your own licensed Amix 2.1 install. See [`AGENTS.md`](AGENTS.md) for the driver-author
-contract and [`REPOS.md`](REPOS.md) for the ecosystem map.
+What is here today is the **on-box** build: the compile and link run on an Amix machine with its
+native toolchain. It came from the former standalone repository `amix-kerntools`, with its history
+(the old→new commit map is [`docs/history-map.txt`](docs/history-map.txt)). The host-side cross
+build of the 68030 kernel follows here.
 
-## The driver ecosystem
+It holds **no driver source** (each driver has its own directory or repository) and **no Amix** —
+you bring your own licensed Amix 2.1 install. See [`docs/driver-contract.md`](docs/driver-contract.md)
+for the driver-author contract and [`REPOS.md`](REPOS.md) for where each driver lives.
 
-This hub combines the sibling driver repos into one kernel. Each driver is independent and
-MIT-licensed; `Z3660-amix` is the firmware/emulator that owns the protocol the drivers follow
-(reference — not built here):
+## The drivers
 
-| Repo | What | Kind |
-|---|---|---|
-| [`amix-a4091`](https://github.com/jusii/amix-a4091) | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver |
-| [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) | Z3660 (PiStorm piscsi mailbox) | SCSI driver |
-| [`amix-z3660net`](https://github.com/jusii/amix-z3660net) | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | net driver |
-| [`Z3660-amix`](https://github.com/jusii/Z3660-amix) | Z3660 firmware + emulator — owns the piscsi / ethernet protocol the drivers re-implement against (fork of `shanshe/Z3660`) | firmware |
+`amix-build` combines independent, MIT-licensed drivers into one kernel. They are moving into amix
+under `kernel/drivers/`; until each one has moved, it lives in its own repository. `Z3660-amix` is
+the firmware/emulator that owns the protocol the Z3660 drivers follow (reference — not built here):
 
-Clone the whole ecosystem as siblings (the hub finds the drivers by relative path — no submodules):
+| Driver | What | Kind | Where it lives |
+|---|---|---|---|
+| `a4091` | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver | [`jusii/amix-a4091`](https://github.com/jusii/amix-a4091), moving into amigaux/amix as `kernel/drivers/a4091` |
+| `z3660scsi` | Z3660 (PiStorm piscsi mailbox) | SCSI driver | [`jusii/amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi), moving into amigaux/amix as `kernel/drivers/z3660scsi` |
+| `z3660net` | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | net driver | [`jusii/amix-z3660net`](https://github.com/jusii/amix-z3660net), moving into amigaux/amix as `kernel/drivers/z3660eth` |
+| `Z3660-amix` | Z3660 firmware + emulator — owns the piscsi / ethernet protocol the drivers re-implement against (fork of `shanshe/Z3660`) | firmware | [`jusii/Z3660-amix`](https://github.com/jusii/Z3660-amix), its own repository |
+
+`amix-build` looks for drivers in amix's `kernel/drivers/`. Until they have moved in, clone them
+into one folder and point it there with `--drivers` (or `AMIX_DRIVERS`):
 
 ```sh
-for r in amix-kerntools amix-a4091 amix-z3660scsi amix-z3660net; do
-  git clone https://github.com/jusii/$r; done
-cd amix-kerntools && ./amix-build --list
+git clone https://github.com/amigaux/amix && cd amix/kernel/k30
+mkdir -p ~/amix-drivers && for r in amix-a4091 amix-z3660scsi amix-z3660net; do
+  git clone https://github.com/jusii/$r ~/amix-drivers/$r; done
+./amix-build --drivers ~/amix-drivers --list
 ```
 
 ## Prerequisites — bring your own Amix
 
 You need your **own** licensed Amix 2.1 install with its native development system: the
 `cc`/`ld`/`make` toolchain and the `/usr/sys` kernel source tree. The kernel compile and link
-happen **on the box** with that native toolchain — nothing in this repo cross-compiles. The
+happen **on the box** with that native toolchain — this path cross-compiles nothing. The
 patches in the driver repos apply against your own stock `/usr/sys` files with `patch`.
 
 The Amix box must be reachable over **FTP and telnet** (the harness uses an `ftpd` for the file
@@ -54,7 +61,7 @@ emulation does.
 
 ## Quick build — `amix-build`
 
-`amix-build` is the front door. It **discovers** the sibling driver repos, lets you **pick**
+`amix-build` is the front door. It **discovers** the driver checkouts, lets you **pick**
 which to include, and assembles a self-contained **bundle** (a tar + an on-box `build.sh`) that
 integrates the drivers into `/usr/sys`, runs the clean-gate, and optionally installs — all on
 the box.
@@ -82,7 +89,8 @@ export AMIX_HOST=<box-ip> AMIX_USER=root AMIX_PASS=...
 ./amix-build a4091 z3660scsi z3660net --push --run --install
 ```
 
-Flags: `--install` (stage + write the boot partition after a clean gate), `--no-gate`,
+Flags: `--drivers <dir>` (where the driver checkouts are; default `kernel/drivers/`),
+`--install` (stage + write the boot partition after a clean gate), `--no-gate`,
 `--push` / `--run` / `--host <box-ip>`, `--timeout <min>`, `--config <file>`.
 
 ## How the bundle + on-box build + clean-gate work
@@ -93,7 +101,7 @@ copy of `tools/onbox-build.sh`) does the integration that can't be done off-box:
 1. **Integrate** the drivers into your `/usr/sys`. For **SCSI** drivers it patches your **own
    stock** `amiga/alien/sd.c` (adds the `scsicard[]` controller-selector rows + externs + a
    `sdcardbase()` helper) and the alien `Makefile` `OBJ` list — generated, idempotent, anchored on
-   stock lines, so the repo ships no Amix source. For a **net** driver it wires the driver's
+   stock lines, so nothing here ships Amix source. For a **net** driver it wires the driver's
    `streamtab` into `master.d/kernel.c`'s `cdevsw[]` via the driver's own idempotent patch script,
    and builds it in its own `amiga/driver/<subdir>/` subtree. Driver-supplied `kernel-patches/*.patch`
    are applied to your stock files with `patch`.
@@ -134,12 +142,12 @@ own MIT `src/` plus the substantive shared-kernel edits it needs as unified diff
 `kernel-patches/*.patch`. It never ships the generated `sd.c`/`Makefile` or any full Amix file.
 Two dialects:
 
-- **SCSI** — `<product-number> <queue-func> "<name>" <source under src/> [probe=<fn>]`. The hub
+- **SCSI** — `<product-number> <queue-func> "<name>" <source under src/> [probe=<fn>]`. `amix-build`
   generates the `scsicard[]` rows, externs, `sdcardbase()` helper and the `OBJ` list from these.
 - **Net** — `net <subdir> <src> <streamtab> <cdevsw-major> <iface> "<desc>"`. Wired into
   `master.d/kernel.c`'s `cdevsw[]`.
 
-The full, authoritative contract for driver authors is in [`AGENTS.md`](AGENTS.md).
+The full, authoritative contract for driver authors is in [`docs/driver-contract.md`](docs/driver-contract.md).
 
 ## `tools/`
 
@@ -157,7 +165,7 @@ The full, authoritative contract for driver authors is in [`AGENTS.md`](AGENTS.m
 
 ## No proprietary Amix is shipped — bring your own
 
-This repo contains **only** original MIT tooling and patches. It ships no Commodore/AT&T Amix
+This directory contains **only** original MIT tooling and patches. It ships no Commodore/AT&T Amix
 source, no proprietary binaries, and no files derived from them — only unified diffs that apply
 against the stock files in **your own** licensed Amix 2.1 `/usr/sys` tree. You must supply that
 install yourself.

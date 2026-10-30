@@ -1,14 +1,14 @@
-# AGENTS.md — how to write a driver repo `amix-kerntools` can build
+# The driver contract — how to write a driver `kernel/k30` can build
 
 This is the contract for **driver authors**. If your repo follows it, `amix-build` discovers your
 driver, generates the kernel wiring, applies your patches, and links it into an Amiga UNIX (Amix
-2.1) kernel alongside the other drivers — with no edits to the hub.
+2.1) kernel alongside the other drivers — with no edits to the hub (`kernel/k30`).
 
 Amix is Commodore's port of AT&T SVR4.0 to the 68030 Amiga. The kernel is built **on the Amix box**
 with its native `cc`/`ld`/`make` against the `/usr/sys` source tree. The hub never ships Amix; it
 patches the builder's own stock files. Your driver must do the same.
 
-## What you ship vs. what kerntools generates
+## What you ship vs. what kernel/k30 generates
 
 A driver repo ships **only**:
 
@@ -16,7 +16,7 @@ A driver repo ships **only**:
 - `src/` — your own MIT driver source (`*.c` / `*.h`). For a net driver, all of `src/` is pushed.
 - `kernel-patches/*.patch` — the substantive edits to **shared** stock kernel files that your
   driver needs, as unified diffs (paths relative to `/usr/sys`, applying to a stock Amix 2.1 tree
-  with `patch`). One patch per stock file. Ship only edits that kerntools cannot generate.
+  with `patch`). One patch per stock file. Ship only edits that kernel/k30 cannot generate.
 - `LICENSE` (MIT) and a `README.md`.
 
 A driver repo **never** ships:
@@ -95,7 +95,7 @@ A SCSI driver may call **only** these symbols exported by the kernel / generated
 | `timeout` | schedule a callback |
 | `sdcardbase(card)` | the per-card physical AutoConfig base recorded for this card, so one queue function can drive several boards routed to it |
 
-Needing a symbol outside this set is a **kerntools change**, not something a driver patches in
+Needing a symbol outside this set is a **kernel/k30 change**, not something a driver patches in
 unilaterally — open it against the hub so the ABI stays a known surface.
 
 ## Canonical repo shape
