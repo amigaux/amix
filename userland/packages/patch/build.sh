@@ -32,4 +32,8 @@ stage() {
 	cp COPYING NEWS README "$DEST$PREFIX/doc/patch/"
 	chmod 0755 "$DEST$PREFIX/bin/patch"
 	chmod 0644 "$DEST$PREFIX/man/man1/patch.1" "$DEST$PREFIX/doc/patch"/*
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }

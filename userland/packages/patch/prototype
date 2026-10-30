@@ -70,9 +70,13 @@ s none /usr/bin/patch=/usr/local/bin/patch
 # man tree would put our file inside a directory the `man` package owns, and
 # the parallel-prefix rule this family follows exists to keep stock and
 # add-on trees separable.  Add /usr/local/man to MANPATH to read it.
-d none /usr/local/man 0755 root sys
-d none /usr/local/man/man1 0755 root sys
-f none /usr/local/man/man1/patch.1 0644 root bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/patch 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/patch 0644 root bin
 #
 # --- licence and upstream notes ---------------------------------------------
 #
