@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — perl 5.8.9 recipe, roll held on the s5/UFS decision (5f1ac42, d07b517, eeac483, 931b691)
+
+Configure measured on the box, GCC 14 cross build with a host perl, stock libm.a (owner) with matherr as shipped.
+E1: perl core suite 227/231 scripts (68673 tests), smoke 53/53. amix-decls.h prototypes (socketpair, netdb
+set/end*ent, munmap, isnan, _sysconf); scan060-g14 sizes mask- and entry-bounded switch tables (self-test 19/19);
+pkgbuild.sh STYLE=hooks. No .pkg rolled; not published.
+
 ## 2026-10-30 — quirk 90 worked around in the landed packages (cad15e4, 97bbcf1, cbd8c25)
 
 The stock-kernel ftruncate panic (grimoire quirk 90) reached dd seek=, sparse cp/mv/install and tar -b 1 --delete on E1.
