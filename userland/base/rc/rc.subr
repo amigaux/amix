@@ -1,0 +1,170 @@
+# rc.subr -- the helpers every one of our boot scripts shares.
+#
+# Sourced, never run; installed as /usr/lib/amix/rc.subr. A packaged service
+# script begins
+#
+#	. /usr/lib/amix/rc.subr
+#	rc_enabled syslogd yes || exit 0
+#
+#   rc_log <svc> <message ...>       one line in /var/adm/rc.log, with the time
+#   rc_enabled <svc> [yes|no]        is <svc> on? rc.conf's "<svc>=" line,
+#                                    else the default given (no if none)
+#   rc_conf <svc> <key> [default]    the value of rc.conf's "<svc>_<key>=" line
+#   rc_bg <secs> <svc> <cmd ...>     run <cmd> in the background, stopped
+#                                    after <secs>; its output goes to
+#                                    /var/adm/rclog/<svc>, its start and end
+#                                    to the log
+#   rc_mknod <node> c|b <major> <minor> [<module> [<mode>]]
+#                                    make <node> unless it is already that
+#                                    device; the major comes from the kernel's
+#                                    registry when kbootset can say it
+#
+# /etc/rc.conf is owned by no package: the installer creates it and the
+# administrator edits it. It is read, never sourced, so nothing in it runs.
+# Its format is in rc.conf(4).
+#
+# Bourne sh of 1991: no $(...), no local, no test -nt. Every variable the
+# helpers set begins with _rc, so a script's own names are left alone.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_CONF=${RC_CONF:-/etc/rc.conf}
+RC_LOG=${RC_LOG:-/var/adm/rc.log}
+RC_KBOOTSET=${RC_KBOOTSET:-/sbin/kbootset}
+RC_BGLOG=${RC_BGLOG:-/var/adm/rclog}
+RC_GRACE=${RC_GRACE:-5}
+RC_RUN=${RC_RUN:-/tmp}
+
+rc_log() {
+	_rc_s=$1
+	shift
+	echo "`date '+%Y-%m-%d %H:%M:%S'` $_rc_s: $*" >> "$RC_LOG" 2>/dev/null
+}
+
+# _rc_has <name>: does rc.conf have a "<name>=" line?
+_rc_has() {
+	[ -r "$RC_CONF" ] && grep "^[ 	]*$1=" "$RC_CONF" > /dev/null 2>&1
+}
+
+# _rc_get <name>: the value of the last "<name>=" line of rc.conf, without
+# blanks around it, a trailing " # comment" or one pair of quotes
+_rc_get() {
+	sed -n -e "s/^[ 	]*$1=//p" "$RC_CONF" | sed -n '$p' |
+		sed -e 's/[ 	][ 	]*#.*//' -e 's/^[ 	]*//' -e 's/[ 	]*$//' \
+		-e 's/^"\(.*\)"$/\1/' -e "s/^'\\(.*\\)'\$/\\1/"
+}
+
+rc_enabled() {
+	_rc_d=${2:-no}
+	_rc_e=$_rc_d
+	_rc_has "$1" && _rc_e=`_rc_get "$1"`
+	case "$_rc_e" in
+	yes)
+		return 0
+		;;
+	no)
+		return 1
+		;;
+	esac
+	rc_log "$1" "rc.conf: $1=$_rc_e is neither yes nor no; using $_rc_d"
+	[ "$_rc_d" = yes ]
+}
+
+rc_conf() {
+	if _rc_has "$1_$2"
+	then
+		_rc_get "$1_$2"
+	else
+		echo "$3"
+	fi
+}
+
+# The command runs in the foreground of a background subshell, so its exit
+# status is exact (the 1991 sh's wait loses the status of a child that ended
+# before the wait). A one-line sh records the command's pid and then execs
+# it, so the watcher signals exactly that process. TERM first; the 1991 sh
+# holds a TERM while it waits for a child, so KILL follows after a grace.
+# Once the command ends the pid file is removed before the watcher is
+# killed, so a timer that has not fired never stops anything.
+#
+# The command's output goes to a file of its own: this sh opens ">>" without
+# O_APPEND, so two long-lived writers of one file overwrite each other.
+rc_bg() {
+	_rc_t=$1
+	_rc_s=$2
+	shift
+	shift
+	_rc_f=$RC_RUN/rc_bg.$$.$_rc_s
+	[ -d "$RC_BGLOG" ] || mkdir -p "$RC_BGLOG" 2>/dev/null
+	rc_log "$_rc_s" "started, bound $_rc_t s: $*"
+	(
+		rm -f "$_rc_f"
+		(
+			sleep $_rc_t
+			if [ -s "$_rc_f" ]
+			then
+				rc_log "$_rc_s" "still running after $_rc_t s; stopped"
+				kill `cat "$_rc_f"` 2>/dev/null
+				sleep $RC_GRACE
+				[ -s "$_rc_f" ] && kill -9 `cat "$_rc_f"` 2>/dev/null
+			fi
+		) &
+		_rc_w=$!
+		_RC_PF=$_rc_f sh -c '[ "$1" = _rc ] && shift; echo $$ > "$_RC_PF"; exec "$@"' _rc "$@"
+		_rc_r=$?
+		rm -f "$_rc_f"
+		kill $_rc_w 2>/dev/null
+		rc_log "$_rc_s" "finished, status $_rc_r"
+	) < /dev/null >> "$RC_BGLOG/$_rc_s" 2>&1 &
+}
+
+# _rc_node <path>: "<type> <major> <minor>" of a device node, or nothing.
+# ls -l prints "51,  0" or, with a wide minor, "51,255" in one field.
+_rc_node() {
+	[ -c "$1" ] || [ -b "$1" ] || return 1
+	ls -l "$1" 2>/dev/null | awk '{
+		t = substr($1, 1, 1)
+		if ($5 ~ /,$/) {
+			ma = substr($5, 1, length($5) - 1)
+			mi = $6
+		} else {
+			split($5, a, ",")
+			ma = a[1]
+			mi = a[2]
+		}
+		print t, ma, mi
+	}'
+}
+
+# The caller's major is the static fallback (a link.d column, a package's
+# own constant). When kbootset names the module's major in the kernel's
+# registry, that one is used, and a disagreement is a packaging error said
+# on the console as well as in the log.
+rc_mknod() {
+	_rc_n=$1
+	_rc_ty=$2
+	_rc_ma=$3
+	_rc_mi=$4
+	_rc_mo=$5
+	_rc_md=${6:-0666}
+	if [ -n "$_rc_mo" ] && [ -x "$RC_KBOOTSET" ]
+	then
+		_rc_k=`"$RC_KBOOTSET" major "$_rc_mo" 2>/dev/null |
+			sed -n "s/^$_rc_ty[ 	][ 	]*\([0-9][0-9]*\)[ 	]*$/\1/p" | sed -n 1p`
+		if [ -n "$_rc_k" ] && [ "$_rc_k" != "$_rc_ma" ]
+		then
+			rc_log mknod "packaging error: $_rc_n: given major $_rc_ma, but the registry gives $_rc_mo $_rc_ty $_rc_k; using $_rc_k"
+			echo "rc_mknod: packaging error: $_rc_n: given major $_rc_ma, registry says $_rc_k" >&2
+			_rc_ma=$_rc_k
+		fi
+	fi
+	[ "`_rc_node "$_rc_n"`" = "$_rc_ty $_rc_ma $_rc_mi" ] && return 0
+	rm -f "$_rc_n"
+	if mknod "$_rc_n" "$_rc_ty" "$_rc_ma" "$_rc_mi" && chmod "$_rc_md" "$_rc_n"
+	then
+		rc_log mknod "made $_rc_n $_rc_ty $_rc_ma $_rc_mi"
+		return 0
+	fi
+	rc_log mknod "cannot make $_rc_n $_rc_ty $_rc_ma $_rc_mi"
+	return 1
+}

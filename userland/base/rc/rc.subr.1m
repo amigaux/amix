@@ -1,0 +1,152 @@
+.TH RC.SUBR 1M "30 October 2026" "amix-base"
+.SH NAME
+rc.subr \- shell functions for the boot scripts of the add-on packages
+.SH SYNOPSIS
+.nf
+.ft CW
+\&. /usr/lib/amix/rc.subr
+rc_enabled \fIservice\fP [ yes | no ] || exit 0
+.ft R
+.fi
+.PP
+.B rc_log
+.I service message ...
+.br
+.B rc_enabled
+.I service
+[
+.B yes
+|
+.B no
+]
+.br
+.B rc_conf
+.I service key
+[
+.I default
+]
+.br
+.B rc_bg
+.I seconds service command
+[
+.I argument ...
+]
+.br
+.B rc_mknod
+.I node
+.B c
+|
+.B b
+.I major minor
+[
+.I module
+[
+.I mode
+] ]
+.SH DESCRIPTION
+.B /usr/lib/amix/rc.subr
+is read by the boot script of every service an add-on package installs in
+.BR /etc/init.d .
+It gives each script the same way to be turned on and off, the same log and
+the same way to run something slow without holding up the boot.
+It is written for the system's own
+.BR /bin/sh .
+.TP
+.B rc_log
+appends one line to the boot log: the date and time, the
+.IR service ,
+and the
+.IR message .
+.TP
+.B rc_enabled
+succeeds when
+.I service
+is on: when
+.BR /etc/rc.conf 's
+line
+.IB service =
+says
+.BR yes ,
+or, with no such line, when the default given here is
+.B yes
+(without one, the default is
+.BR no ).
+A script names its own default, so the package decides whether a new
+service starts until the administrator says otherwise.
+.TP
+.B rc_conf
+prints the value of the line
+.IB service _ key =
+in
+.BR /etc/rc.conf ,
+or
+.I default
+when there is none.
+.TP
+.B rc_bg
+runs
+.I command
+in the background and returns at once.
+The command's output is appended to
+.BI /var/adm/rclog/ service\fR;
+the boot log gets one line when it starts and one with its exit status
+when it ends.
+If it is still running after
+.I seconds
+it is sent a terminate signal, and five seconds later a kill signal if it
+is still there; the log says so.
+Only the command itself is stopped, not programs it started, so a script
+given to
+.B rc_bg
+should bound what it runs.
+.TP
+.B rc_mknod
+makes the device
+.I node
+of type
+.B c
+or
+.BR b ,
+with the given numbers and
+.I mode
+(default 0666), unless it already exists as exactly that device.
+When
+.I module
+is given and
+.B kbootset major
+names that module's major number in the running kernel's registry, that
+number is used; if it differs from
+.IR major ,
+the difference is reported on the console and in the log as a packaging
+error.
+Otherwise
+.I major
+is used as given.
+.SH FILES
+.TP
+.B /usr/lib/amix/rc.subr
+this library.
+.TP
+.B /etc/rc.conf
+the services' switches and settings.
+.TP
+.B /var/adm/rc.log
+the boot log.
+.TP
+.BI /var/adm/rclog/ service
+the output of a command run with
+.BR rc_bg .
+.SH SEE ALSO
+.BR rc.conf (4),
+.BR kbootset (1M)
+.SH NOTES
+The helpers need
+.B /usr
+mounted, so they serve scripts that start after the file systems are
+mounted (from
+.B S20
+on in
+.BR /etc/rc2.d ).
+Every variable they set begins with
+.BR _rc ,
+so a script's own variables are left alone.
