@@ -1,0 +1,464 @@
+#!/usr/bin/env python3
+# pkgmeta: package metadata generated from each recipe's package.sh.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Python 3 standard library plus /bin/sh (package.sh is sourced, not parsed).
+"""Generate and check package metadata from package.sh.
+
+Commands:
+  check RECIPE|ROOT...      validate recipes; a ROOT (a directory of recipe
+                            directories) also gets the one-version guard
+  pkginfo RECIPE            the pkginfo(4) the roll packs
+  catalog RECIPE (--pkg FILE | --md5 HEX --size N) [--filename PATH]
+                            the package's catalog v1 line
+  fragments ROOT [-o DIR]   our lines of names.conf, cats.conf, deps.conf
+                            and sets.conf (to stdout, or one file each in DIR)
+  index ROOT                the index README of ROOT (markdown, to stdout)
+  guard PATH...             the one-version guard over built output: every
+                            PATH is a catalog file or a directory of *.pkg
+                            datastreams; refused if one package name or
+                            instance appears with two versions
+
+A RECIPE is a directory holding package.sh; a ROOT is a directory whose
+subdirectories are recipes (userland/packages). The catalog line is the one
+amix-packagemanager's gen-catalog.py writes for the rolled package with our
+names.conf, cats.conf and deps.conf lines in place.
+
+Exit status: 0 good, 1 refused (each reason on stderr), 2 usage error.
+"""
+
+import argparse
+import hashlib
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+STYLES_DIR = os.path.join(HERE, "styles")
+
+# package.sh keys, in the order a recipe writes them, and the defaults the
+# driver sets before sourcing it.
+REQUIRED = ("NAME", "PKG", "VERSION", "PKGREV", "SUMMARY", "DESC", "CATEGORY",
+            "SET", "LICENSE", "URL", "SHA256")
+DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
+            ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
+            ("SRCDIR", ""), ("PATCH_STRIP", "1"))
+KEYS = REQUIRED + tuple(k for k, _ in DEFAULTS)
+
+# The closed category list: one catalog group per package.
+CATEGORIES = ("system", "network", "utility", "archive", "library", "shell",
+              "language", "text", "editor", "documentation", "development",
+              "multimedia", "x11", "games", "source")
+# The installer's sets, plus extra (the add-on userland).
+SETS = ("minimal", "standard", "full", "developer", "x11", "extra")
+TOOLCHAINS = ("gcc14", "period")
+
+TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
+VENDOR = "amix-packages"
+ARCH = "Amiga"
+
+
+class Refused(Exception):
+    pass
+
+
+# ------------------------------------------------------------ package.sh ---
+
+def source(recipe):
+    """The package.sh values after sourcing it the way the driver does."""
+    path = os.path.join(recipe, "package.sh")
+    if not os.path.isfile(path):
+        raise Refused("%s: no package.sh" % recipe)
+    script = "".join("%s=%s\n" % (k, sh_quote(v)) for k, v in DEFAULTS)
+    script += '. "$1" || exit 1\n'
+    script += "".join('printf "%%s\\0" "${%s-}"\n' % k for k in KEYS)
+    proc = subprocess.run(["/bin/sh", "-c", script, "package.sh", path],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+    if proc.returncode != 0:
+        raise Refused("%s: sourcing failed: %s" % (
+            path, proc.stderr.decode("utf-8", "replace").strip()))
+    values = proc.stdout.decode("utf-8").split("\0")[:-1]
+    if len(values) != len(KEYS):
+        raise Refused("%s: unexpected output from sh" % path)
+    return dict(zip(KEYS, values))
+
+
+def sh_quote(s):
+    return "'" + s.replace("'", "'\\''") + "'"
+
+
+def styles():
+    try:
+        names = os.listdir(STYLES_DIR)
+    except OSError:
+        return ()
+    return tuple(sorted(n[:-3] for n in names if n.endswith(".sh")))
+
+
+def words(value):
+    """DEPENDS-style lists: names separated by spaces or commas."""
+    return [w for w in re.split(r"[\s,]+", value) if w]
+
+
+def problems(recipe, m):
+    """Every reason the recipe's package.sh is refused, as strings."""
+    out = []
+    for k in REQUIRED:
+        if not m[k]:
+            out.append("%s is not set" % k)
+    name = m["NAME"]
+    if name and name != os.path.basename(os.path.normpath(recipe)):
+        out.append("NAME=%s is not the directory name" % name)
+    if name and not TOKEN_RE.match(name):
+        out.append("NAME=%s is not one [A-Za-z0-9][A-Za-z0-9+.-]* token" % name)
+    pkg = m["PKG"]
+    if pkg and not TOKEN_RE.match(pkg):
+        out.append("PKG=%s is not one [A-Za-z0-9][A-Za-z0-9+.-]* token" % pkg)
+    if len(pkg) > 9:
+        out.append("PKG=%s is over 9 characters" % pkg)
+    for k in ("VERSION", "PKGREV"):
+        if m[k] and not TOKEN_RE.match(m[k]):
+            out.append("%s=%s is not one token" % (k, m[k]))
+    if m["PKGREV"] and not m["PKGREV"].isdigit():
+        out.append("PKGREV=%s is not a number" % m["PKGREV"])
+    if m["CATEGORY"] and m["CATEGORY"] not in CATEGORIES:
+        out.append("CATEGORY=%s is not one of: %s"
+                   % (m["CATEGORY"], " ".join(CATEGORIES)))
+    for s in m["SET"].split():
+        if s not in SETS:
+            out.append("SET: unknown set '%s' (known: %s)" % (s, " ".join(SETS)))
+    for k in ("SUMMARY", "DESC"):
+        if "\n" in m[k]:
+            out.append("%s must be one line" % k)
+        if "|" in m[k]:
+            out.append("%s holds '|', the catalog field separator" % k)
+        if m[k] != m[k].strip():
+            out.append("%s has leading or trailing blanks" % k)
+    if m["SUMMARY"][:1] in ("'", '"') and m["SUMMARY"][-1:] == m["SUMMARY"][:1]:
+        out.append("SUMMARY is quoted twice")
+    known = styles()
+    if m["STYLE"] not in known:
+        out.append("STYLE=%s -- known: %s" % (m["STYLE"], ", ".join(known)))
+    if m["TOOLCHAIN"] not in TOOLCHAINS:
+        out.append("TOOLCHAIN=%s -- known: %s"
+                   % (m["TOOLCHAIN"], ", ".join(TOOLCHAINS)))
+    for k in ("DEPENDS", "BUILD_DEPENDS"):
+        for d in words(m[k]):
+            if not TOKEN_RE.match(d):
+                out.append("%s: '%s' is not a package name" % (k, d))
+    return out
+
+
+def load(recipe):
+    m = source(recipe)
+    bad = problems(recipe, m)
+    if bad:
+        raise Refused("\n".join("%s: %s" % (recipe, b) for b in bad))
+    return m
+
+
+def recipes(root):
+    """The recipe directories of ROOT, sorted."""
+    if not os.path.isdir(root):
+        raise Refused("%s: not a directory" % root)
+    return [os.path.join(root, d) for d in sorted(os.listdir(root))
+            if os.path.isfile(os.path.join(root, d, "package.sh"))]
+
+
+def load_root(root):
+    """Every recipe of ROOT, checked, plus the one-version guard over them."""
+    errors, ms = [], []
+    for r in recipes(root):
+        try:
+            ms.append(load(r))
+        except Refused as e:
+            errors.append(str(e))
+    errors += one_version([(m["NAME"], m["PKG"], pkgversion(m),
+                            os.path.join(root, m["NAME"])) for m in ms])
+    if errors:
+        raise Refused("\n".join(errors))
+    return ms
+
+
+# ------------------------------------------------------------- generators ---
+
+def pkgversion(m):
+    return "%s-%s" % (m["VERSION"], m["PKGREV"])
+
+
+def pkginfo(m):
+    v = pkgversion(m)
+    return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
+            "CLASSES=none\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\nDESC=%s\n"
+            % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"], VENDOR,
+               VENDOR, m["PKG"], v, m["TOOLCHAIN"], m["DESC"]))
+
+
+def parse_pkginfo(text):
+    """pkginfo(4) as gen-catalog.py reads it: first occurrence wins, values
+    stripped, one pair of matching quotes removed."""
+    params = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+            val = val[1:-1]
+        params.setdefault(key, val)
+    return params
+
+
+def clean_field(value):
+    return " ".join(value.replace("|", "/").split())
+
+
+def catalog_line(m, filename, md5, size):
+    """name|version|pkginst|filename|md5|size|deps|category|description,
+    each field derived as gen-catalog.py derives it from the rolled
+    package's pkginfo and our conf lines."""
+    p = parse_pkginfo(pkginfo(m))
+    deps = ",".join(words(m["DEPENDS"])) or "none"
+    return "|".join((m["NAME"], clean_field(p["VERSION"]), p["PKG"],
+                     filename, md5, str(size), deps,
+                     clean_field(m["CATEGORY"]),
+                     clean_field(p.get("APKG_DESC", p["NAME"])))) + "\n"
+
+
+GENERATED = "# Generated by build/pkg/pkgmeta from package.sh; do not edit.\n"
+
+
+def fragments(ms):
+    """{conf file: text} -- our packages' lines, sorted by catalog name."""
+    ms = sorted(ms, key=lambda m: m["NAME"])
+    names = ["%s: %s\n" % (m["PKG"], m["NAME"]) for m in ms
+             if m["NAME"] != m["PKG"].lower()]
+    cats = ["%s: %s\n" % (m["NAME"], m["CATEGORY"]) for m in ms]
+    deps = ["%s: %s\n" % (m["NAME"], ",".join(words(m["DEPENDS"])))
+            for m in ms if words(m["DEPENDS"])]
+    members = {}
+    for m in ms:
+        for s in m["SET"].split():
+            members.setdefault(s, []).append(m["NAME"])
+    sets = ["%s: %s\n" % (s, ",".join(members[s]))
+            for s in SETS if s in members]
+    return {f: GENERATED + "".join(lines) for f, lines in
+            (("names.conf", names), ("cats.conf", cats),
+             ("deps.conf", deps), ("sets.conf", sets))}
+
+
+def index(ms):
+    ms = sorted(ms, key=lambda m: m["NAME"])
+    out = ["# Packages\n", "\n",
+           "Generated by `build/pkg/pkgmeta index` from each package's\n",
+           "`package.sh`; do not edit.\n", "\n",
+           "| Package | Version | PKG | Category | Set | Toolchain | Licence | Summary |\n",
+           "|---|---|---|---|---|---|---|---|\n"]
+    for m in ms:
+        out.append("| [%s](%s/) | %s | `%s` | %s | %s | %s | %s | %s |\n" % (
+            m["NAME"], m["NAME"], pkgversion(m), m["PKG"], m["CATEGORY"],
+            " ".join(m["SET"].split()), m["TOOLCHAIN"], m["LICENSE"],
+            m["SUMMARY"]))
+    out.append("\n%d package(s).\n" % len(ms))
+    return "".join(out)
+
+
+# ---------------------------------------------------------- the guard ---
+
+def one_version(entries):
+    """entries: (name, pkginst, version, where). A package name or instance
+    with two versions is refused; one version listed twice is not."""
+    errors = []
+    for i, what in ((0, "package name"), (1, "package instance")):
+        seen = {}
+        for e in entries:
+            if e[i] is None:
+                continue
+            seen.setdefault(e[i], {}).setdefault(e[2], []).append(e[3])
+        for key in sorted(seen):
+            if len(seen[key]) > 1:
+                errors.append("one version per name: %s %s has %d versions: %s"
+                              % (what, key, len(seen[key]), "; ".join(
+                                  "%s (%s)" % (v, ", ".join(w))
+                                  for v, w in sorted(seen[key].items()))))
+    # a name used as another package's instance, or the other way round,
+    # would let two recipes claim one installed package
+    by_name = {e[0]: e for e in entries if e[0] is not None}
+    for e in entries:
+        o = by_name.get(e[1].lower()) if e[1] else None
+        if o is not None and o[1] != e[1]:
+            errors.append("one version per name: instance %s (%s) is also "
+                          "the name of %s (%s)" % (e[1], e[3], o[0], o[3]))
+    return errors
+
+
+def catalog_entries(path):
+    out = []
+    with open(path, encoding="latin-1") as fp:
+        for n, line in enumerate(fp, 1):
+            line = line.rstrip("\n")
+            if line.startswith("#kpkg "):
+                t = line.split()
+                kv = dict(x.split("=", 1) for x in t[3:] if "=" in x)
+                if len(t) > 2:
+                    out.append((t[1], kv.get("pkginst"), t[2],
+                                "%s:%d" % (path, n)))
+            elif line and not line.startswith("#"):
+                c = line.split("|")
+                if len(c) >= 3:
+                    out.append((c[0], c[2], c[1], "%s:%d" % (path, n)))
+    return out
+
+
+def datastream_pkginfo(buf):
+    """(pkginst, pkginfo text) of an SVR4 datastream package."""
+    if not buf.startswith(b"# PaCkAgE DaTaStReAm\n"):
+        raise Refused("not a package datastream")
+    end = buf.find(b"# end of header\n")
+    if end < 0:
+        raise Refused("datastream header has no end")
+    pkginst = buf.split(b"\n", 2)[1].split()[0].decode("latin-1")
+    off = (end + 511) // 512 * 512
+    want = (pkginst + "/pkginfo").encode()
+    while off < len(buf):
+        magic = buf[off:off + 6]
+        if magic == b"070707":
+            hdr, nlen, flen = 76, int(buf[off + 59:off + 65], 8), \
+                int(buf[off + 65:off + 76], 8)
+            name = buf[off + hdr:off + hdr + nlen - 1]
+            data = off + hdr + nlen
+            nxt = data + flen
+        elif magic in (b"070701", b"070702"):
+            flen = int(buf[off + 54:off + 62], 16)
+            nlen = int(buf[off + 94:off + 102], 16)
+            name = buf[off + 110:off + 110 + nlen - 1]
+            data = (off + 110 + nlen + 3) // 4 * 4
+            nxt = (data + flen + 3) // 4 * 4
+        else:
+            break
+        if name == b"TRAILER!!!":
+            break
+        if name == want:
+            return pkginst, buf[data:data + flen].decode("latin-1")
+        off = nxt
+    raise Refused("no %s in the first archive" % want.decode())
+
+
+def staging_entries(path):
+    out = []
+    for root, dirs, files in os.walk(path):
+        dirs.sort()
+        for f in sorted(files):
+            if not f.endswith(".pkg"):
+                continue
+            p = os.path.join(root, f)
+            with open(p, "rb") as fp:
+                try:
+                    pkginst, text = datastream_pkginfo(fp.read())
+                except Refused as e:
+                    raise Refused("%s: %s" % (p, e))
+            v = parse_pkginfo(text).get("VERSION")
+            if not v:
+                raise Refused("%s: pkginfo has no VERSION" % p)
+            # a staging tree carries no catalog names; the instance decides
+            out.append((None, pkginst, v, p))
+    return out
+
+
+# ------------------------------------------------------------------ main ---
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="pkgmeta", description=__doc__.split(
+        "\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("check")
+    p.add_argument("paths", nargs="+")
+    p = sub.add_parser("pkginfo")
+    p.add_argument("recipe")
+    p = sub.add_parser("catalog")
+    p.add_argument("recipe")
+    p.add_argument("--pkg")
+    p.add_argument("--md5")
+    p.add_argument("--size", type=int)
+    p.add_argument("--filename")
+    p = sub.add_parser("fragments")
+    p.add_argument("root")
+    p.add_argument("-o", "--output-dir")
+    p = sub.add_parser("index")
+    p.add_argument("root")
+    p = sub.add_parser("guard")
+    p.add_argument("paths", nargs="+")
+    a = ap.parse_args(argv)
+
+    if a.cmd == "check":
+        for path in a.paths:
+            if os.path.isfile(os.path.join(path, "package.sh")):
+                load(path)
+                print("pkgmeta: %s ok" % path)
+            else:
+                n = len(load_root(path))
+                print("pkgmeta: %s ok, %d recipe(s), one version each"
+                      % (path, n))
+    elif a.cmd == "pkginfo":
+        sys.stdout.write(pkginfo(load(a.recipe)))
+    elif a.cmd == "catalog":
+        m = load(a.recipe)
+        if a.pkg:
+            if a.md5 or a.size is not None:
+                ap.error("--pkg excludes --md5 and --size")
+            with open(a.pkg, "rb") as fp:
+                raw = fp.read()
+            md5, size = hashlib.md5(raw).hexdigest(), len(raw)
+            filename = a.filename or os.path.basename(a.pkg)
+        else:
+            if not a.md5 or a.size is None:
+                ap.error("catalog needs --pkg, or --md5 and --size")
+            if not re.match(r"^[0-9a-f]{32}$", a.md5):
+                ap.error("--md5 is not 32 lowercase hex digits")
+            md5, size = a.md5, a.size
+            filename = a.filename or "%s-%s.pkg" % (m["PKG"], pkgversion(m))
+        if "|" in filename or "\n" in filename:
+            ap.error("--filename holds '|' or a newline")
+        sys.stdout.write(catalog_line(m, filename, md5, size))
+    elif a.cmd == "fragments":
+        frags = fragments(load_root(a.root))
+        if a.output_dir:
+            os.makedirs(a.output_dir, exist_ok=True)
+            for f, text in frags.items():
+                with open(os.path.join(a.output_dir, f), "w") as fp:
+                    fp.write(text)
+        else:
+            for f, text in frags.items():
+                sys.stdout.write("==> %s <==\n%s" % (f, text))
+    elif a.cmd == "index":
+        sys.stdout.write(index(load_root(a.root)))
+    elif a.cmd == "guard":
+        entries = []
+        for path in a.paths:
+            if os.path.isdir(path):
+                entries += staging_entries(path)
+            elif os.path.isfile(path):
+                entries += catalog_entries(path)
+            else:
+                raise Refused("%s: no such catalog or directory" % path)
+        errors = one_version(entries)
+        if errors:
+            raise Refused("\n".join(errors))
+        print("pkgmeta: one version per name: %d package(s) in %s"
+              % (len(entries), " ".join(a.paths)))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Refused as e:
+        for line in str(e).splitlines():
+            print("pkgmeta: %s" % line, file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print("pkgmeta: %s" % e, file=sys.stderr)
+        sys.exit(2)

@@ -1,0 +1,4 @@
+#apkg-catalog 1
+bzip2|1.0.8-2|bzip2|bzip2-1.0.8-2.pkg|2b10de77a92e2da2338972da68a8f6eb|218624|none|archive|bzip2 1.0.8
+coreutils|5.2.1-2|coreutil|coreutil-5.2.1-2.pkg|e5552f7e2b7f753932718eb7d7530f2d|3557376|none|utility|GNU coreutils 5.2.1
+diffutils|2.8.1-2|diffutil|diffutil-2.8.1-2.pkg|baffdea7f68d4017b46e2a4fcb8606d5|212992|none|utility|GNU diffutils 2.8.1

@@ -1,0 +1,9 @@
+PKG=bzip2
+NAME=bzip2 1.0.8
+ARCH=Amiga
+VERSION=1.0.8-2
+CATEGORY=archive
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-bzip2-1.0.8-2-gcc14
+DESC=bzip2 1.0.8 block-sorting compressor: bzip2, bunzip2, bzcat, bzip2recover, the bzgrep/bzmore/bzdiff wrappers, and libbz2.a with bzlib.h. Installs under /opt/amix; add /opt/amix/bin to PATH.
