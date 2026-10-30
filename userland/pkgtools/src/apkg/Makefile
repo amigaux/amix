@@ -15,8 +15,8 @@
 # little-endian host.  Building the host tools on a big-endian host?
 # Add HOST_ENDIAN_FLAGS=-DHIGHFIRST.
 #
-# sha256.c, sha256.h and axtypes.h are amix-dlm's loader/common SHA-256
-# (FIPS 180-4, C89), copied verbatim from amix-dlm 656d155 and kept
+# sha256.c, sha256.h and axtypes.h are kernel/dlm's loader/common SHA-256
+# (FIPS 180-4, C89), copied verbatim from kernel/dlm 656d155 and kept
 # byte-identical; update them only by copying again.
 #
 # Amix link notes (all discovered against the real sysroot + bench):

@@ -9,8 +9,8 @@ coexists with the native tools and with the Heirloom engine port.
 
 MIT licensed (see [LICENSE](LICENSE)); `md5.c`/`md5.h` are Colin
 Plumb's public-domain MD5 (1993), vendored with the original notice;
-`sha256.c`/`sha256.h`/`axtypes.h` are amix-dlm's `loader/common`
-SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from amix-dlm `656d155`.
+`sha256.c`/`sha256.h`/`axtypes.h` are kernel/dlm's `loader/common`
+SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from kernel/dlm `656d155`.
 
 ## Verbs and options
 
@@ -55,8 +55,8 @@ base when it has no long name).  Unmarked packages are not checked.
 ## Kernel space (0.3)
 
 Kernel, loader and module packages are the kernel-modules campaign's
-(amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
-C2-2 version 5 and C2-4 version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+(kernel/dlm, decision D-3).  apkg implements its side of two agreed contracts,
+C2-2 version 5 and C2-4 version 2 (2026-10-26): `kernel/dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 
@@ -113,7 +113,7 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 make            # host build (Linux, gcc -std=gnu89) -> ./apkg
 make test       # host build + full functional suite (tests/run-tests.sh)
 
-. <gcc-cross-amix>/build/env.sh   # a gcc-cross-amix checkout
+. "$GCA/env.sh"  # gcc-cross-amix at amix's toolchain/gcc-cross-amix.pin
 make amix       # cross build -> ./apkg.amix (m68k MSB ELF)
 ```
 
@@ -484,8 +484,8 @@ assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.
 [tests/kbootset-consumer.sh](tests/kbootset-consumer.sh) (**12**, not in
-the count; reads the dlm kit from `$AMIX_DLM`, default amix's `kernel/dlm`
-beside this repository, and without it says SKIP and exits 77) builds the
+the count; reads the dlm kit from `$AMIX_DLM`, default `kernel/dlm` of
+the amix checkout this directory is in, and without it says SKIP and exits 77) builds the
 real kbootset with the kit's Makefile, has `tools/repo/gen-catalog.py`
 describe a kernel package from its own sidecar, and lets apkg install it
 and trigger it: gate 1 accepts apkg's record, gate 2 accepts the sidecar's

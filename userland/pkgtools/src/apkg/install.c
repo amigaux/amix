@@ -29,7 +29,7 @@
  * pkgrm can delete it out from under a later pkgadd.
  *
  * The one exception is kernel space's "one kernel package per line"
- * (amix-dlm C2-2 v5 §2.1): every kernel package of a line ships
+ * (kernel/dlm C2-2 v5 §2.1): every kernel package of a line ships
  * /stand/<line>/unix, so a new kernel package under another pkginst can
  * only be added after the other one is removed (a pkgadd over another
  * package's file is a conflict).  That removal comes after every package
@@ -311,7 +311,7 @@ static int is_named(char **names, int nnames, const struct pkgent *ent)
 
 /* ---------------- kernel space and the journal ----------------
  *
- * apkg 0.3 (amix-dlm contracts C2-2 and C2-4, spec 40 §6).  A
+ * apkg 0.3 (kernel/dlm contracts C2-2 and C2-4, spec 40 §6).  A
  * kernel-space package (an entry of the catalog's #ext kpkg block) is
  * installed by the same pkgadd as any other, with four differences:
  *
@@ -878,7 +878,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     int rc;
 
     /* Several names, ONE transaction (one journal, one kbootset build +
-     * commit): the stage-2 exit row (amix-dlm S2-46) upgrades a kernel,
+     * commit): the stage-2 exit row (kernel/dlm S2-46) upgrades a kernel,
      * the loader and kbootset together, and one name per call meant one
      * generation per package.  Every name is checked before anything is
      * fetched: one that is not in the catalog (exit 5) or not installed

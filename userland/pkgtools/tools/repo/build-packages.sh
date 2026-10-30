@@ -37,7 +37,7 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # the class action script src/apkg/i.apkgconf, so an upgrade keeps the box's
 # own file; the default also ships as /usr/apkg/lib/apkg.conf.  0.2.2
 # (feb57752...) stays what it is.  NOTES 2026-10-06.
-# 0.3.0 (2026-10-26): kernel space (amix-dlm C2-2 v4, C2-3 v4, C2-4 v2) --
+# 0.3.0 (2026-10-26): kernel space (kernel/dlm C2-2 v4, C2-3 v4, C2-4 v2) --
 # the #ext kpkg block, SHA-256, /var/apkg/kpkg records, the kbootset
 # trigger, the journal and `apkg recover`, `upgrade` of several names.
 # STAGED FOR THE 1.1 MEDIA, NOT PUBLISHED: minted into its own staging dir
@@ -48,12 +48,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # kernel install pkgrm's the other package of its line first.  Same rule:
 # its own staging dir (build/repo-staging-apkg031), NOT published; 0.3.0
 # (e6e7b7d5...) stays what it is.  NOTES 2026-10-26.
-# 0.3.2 (2026-10-26): a module package may carry device entries (amix-dlm
+# 0.3.2 (2026-10-26): a module package may carry device entries (kernel/dlm
 # C3-5 v4 sec 1.2: `c none /dev/<node>`).  Same rule: its own staging dir
 # (build/repo-staging-apkg032), NOT published; 0.3.1 (45b809cd...) stays
 # what it is.  NOTES 2026-10-26.
 # 0.3.3 (2026-10-26): a module package may also carry block nodes under
-# /dev/dsk (amix-dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
+# /dev/dsk (kernel/dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
 # dir (build/repo-staging-apkg033), NOT published; 0.3.2 (9d6de726...)
 # stays what it is.  NOTES 2026-10-26.
 VER_APKG="0.3.3"
@@ -585,7 +585,8 @@ if [ $do_cdfs -eq 1 ]; then
   # the helper `chmod 755`, matching.
   #
   # PROVENANCE (recorded + asserted):
-  #   binary           : ../amix-cdfs/build/amix/mount
+  #   binary           : $CDFS_REPO/build/amix/mount (default: an amix-cdfs
+  #                      checkout beside the amix checkout)
   #   amix-cdfs commit : 8de83cf  (its 'reviewed' tag; ODFileSystem->Amix port)
   #   sum -r           : 33315  5        (BSD 16-bit rotate sum / 512-blk count)
   #   size             : 5026 bytes
@@ -603,7 +604,7 @@ if [ $do_cdfs -eq 1 ]; then
   # >= 31e8c3b, the page-crossing-DMA fix lineage -- older cdfs DMAs into
   # buffers that can cross a page and zero unrelated physical frames.  We
   # assert 8de83cf descends from 31e8c3b before packaging; fail closed if not.
-  CDFS_REPO="$REPO/../amix-cdfs"
+  CDFS_REPO="${CDFS_REPO:-$REPO/../../../amix-cdfs}"
   CDFS_MOUNT="$CDFS_REPO/build/amix/mount"
   CDFS_PROV_COMMIT="8de83cf"      # amix-cdfs 'reviewed' HEAD this was built at
   CDFS_MIN_COMMIT="31e8c3b"       # page-crossing-DMA fix (Gate 3 floor)
@@ -753,7 +754,10 @@ EOF
 fi
 
 KPKG="$REPO/build/kernel-packages"
-BOOT2_GATE="$REPO/../amix-kerntools/tools/boot2-sha-gate.sh"
+# The private kerntools repo (the boot2 gate and the rig's kernels) is not
+# in amix: KERNTOOLS, default a checkout beside the amix checkout.
+KERNTOOLS="${KERNTOOLS:-$REPO/../../../amix-kerntools}"
+BOOT2_GATE="$KERNTOOLS/tools/boot2-sha-gate.sh"
 BOOT2_SHA="f287ff3a759d6f80304fa35bb53e1479fc98056836b44a16824bd3e3f8fdba78"
 
 if [ $do_kernbench -eq 1 ] || [ $do_kernz3660 -eq 1 ]; then
@@ -761,7 +765,7 @@ if [ $do_kernbench -eq 1 ] || [ $do_kernz3660 -eq 1 ]; then
   # The gate REFUSES the name-based install-media loader (5ab360b1...) that
   # D245s on metal, and any unknown sha.  The blob is never committed.
   [ -x "$BOOT2_GATE" ] || { echo "FATAL: boot2 gate missing: $BOOT2_GATE" >&2; exit 1; }
-  BOOT2_SRC="${BOOT2_SRC:-$REPO/../amix-kerntools/work/boot2-proven.bin}"
+  BOOT2_SRC="${BOOT2_SRC:-$KERNTOOLS/work/boot2-proven.bin}"
   mkdir -p "$KPKG"
   bash "$BOOT2_GATE" --boot2 "$BOOT2_SRC" --out "$KPKG/boot2.boot" --quiet \
     || { echo "FATAL: boot2 acquisition/verification failed (need the proven" >&2
@@ -771,13 +775,13 @@ fi
 
 if [ $do_kernbench -eq 1 ]; then
   KB_DST="$KPKG/bench/unix"
-  KB_SRC="${KERNBENCH_SRC:-$REPO/../amix-kerntools/work/p54r4-bench-smoke/relocunix}"
+  KB_SRC="${KERNBENCH_SRC:-$KERNTOOLS/work/p54r4-bench-smoke/relocunix}"
   mkdir -p "$KPKG/bench"
   [ -f "$KB_SRC" ] || {
     echo "FATAL: KERNBENCH payload missing: $KB_SRC" >&2
     echo "       the P5.4r4 bench kernel (sum -r 49667, 1586312 B) is expected" >&2
-    echo "       at ../amix-kerntools/work/p54r4-bench-smoke/relocunix," >&2
-    echo "       or set KERNBENCH_SRC." >&2
+    echo "       at \$KERNTOOLS/work/p54r4-bench-smoke/relocunix," >&2
+    echo "       or set KERNBENCH_SRC (or KERNTOOLS)." >&2
     exit 1; }
   # Gate the SOURCE first, then copy, then re-gate the staged copy.  Gating
   # only the destination (as this did until 2026-08-16) meant a REFUSED mint
@@ -864,13 +868,13 @@ fi
 
 if [ $do_kernz3660 -eq 1 ]; then
   KZ_DST="$KPKG/onbox/unix"
-  KZ_SRC="${KERNZ3660_SRC:-$REPO/../amix-kerntools/work/kernel-packages/p54r4-combined/unix}"
+  KZ_SRC="${KERNZ3660_SRC:-$KERNTOOLS/work/kernel-packages/p54r4-combined/unix}"
   mkdir -p "$KPKG/onbox"
   [ -f "$KZ_SRC" ] || {
     echo "FATAL: KERNZ3660 payload missing: $KZ_SRC" >&2
     echo "       the P5.4r4 combined metal kernel (sum -r 60364, 1587524 B) is" >&2
-    echo "       expected at ../amix-kerntools/work/kernel-packages/p54r4-combined/unix," >&2
-    echo "       or set KERNZ3660_SRC." >&2
+    echo "       expected at \$KERNTOOLS/work/kernel-packages/p54r4-combined/unix," >&2
+    echo "       or set KERNZ3660_SRC (or KERNTOOLS)." >&2
     exit 1; }
   # Gate the SOURCE before it overwrites the staged payload -- see the
   # KERNBENCH arm above for why the destination-only gate was not enough.

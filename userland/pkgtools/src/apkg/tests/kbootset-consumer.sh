@@ -16,8 +16,8 @@
 # kernel's sidecar.
 #
 # Not part of the run-tests.sh count: it needs the dlm kit, a host cc and
-# zlib.  The kit is the first argument, else $AMIX_DLM, else amix's
-# kernel/dlm in a checkout beside this repository.  Without the kit it
+# zlib.  The kit is the first argument, else $AMIX_DLM, else kernel/dlm
+# of the amix checkout this directory is in.  Without the kit it
 # says SKIP, names AMIX_DLM, and exits 77 (the automake skip code), so a
 # missing kit is never a silent pass; with it, a kbootset that does not
 # build fails the script.
@@ -26,7 +26,7 @@
 
 set -u
 SRC=$(cd "$(dirname "$0")/.." && pwd)
-DLM=${1:-${AMIX_DLM:-$SRC/../../../amix/kernel/dlm}}
+DLM=${1:-${AMIX_DLM:-$SRC/../../../../kernel/dlm}}
 WORK=$SRC/tests/work/kconsumer
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS + 1)); echo "PASS: $1"; }

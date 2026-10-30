@@ -1,7 +1,12 @@
-# amix-packagemanager
+# userland/pkgtools
 
 Remote package management for **Amiga Unix (Amix)** — Commodore's 1992 SVR4.0 port to the
 68030 Amiga.
+
+This directory of amix was the standalone repository amix-packagemanager until 2026-10-30, when
+it moved in with its history and its commit hashes kept: a hash cited in NOTES.md or
+CHANGELOG.md resolves in amix as it is. Commits from before the move have their paths at the
+top level (`src/apkg/...`), so archive one from amix's top directory.
 
 Amix ships the stock SVR4 `pkg` tooling — `pkgadd`, `pkgrm`, `pkginfo`, `pkgtrans`, the `.pkg`
 datastream format and the `/var/sadm` installed-product database — and that is all it ships.
@@ -11,7 +16,7 @@ X11R5 package installed a file literally named `TrueType Fonts`, and because `co
 whitespace-delimited with no quoting, that one record makes every stock tool that fully parses the
 database abort — `pkgrm` and `pkginfo -l` are dead on a factory install.
 
-This repository fixes both, without replacing the packaging model Amix already has. The SVR4 `pkg`
+This directory fixes both, without replacing the packaging model Amix already has. The SVR4 `pkg`
 model and the live `/var/sadm` database stay; a repaired engine and a small HTTP client are added
 beside them, under a parallel prefix, so the stock tools keep working the whole time.
 
@@ -152,28 +157,41 @@ already skips. One exists today: `isize`, the per-package installed size in byte
 
 ## Building from source
 
-The Amix targets need the `m68k-cbm-sysv4` cross toolchain
-([gcc-cross-amix](https://github.com/isoriano1968/gcc-cross-amix): binutils 2.8.1 + GCC 2.7.2.3)
-with a sysroot populated from an Amix 2.1 system (see gcc-cross-amix). Everything also builds and
-tests on a plain Linux host, which is where the packaging pipeline and most of the test suites run:
+Everything builds and tests on a plain Linux host (gcc, python3, cpio, rsync; fakeroot unlocks
+a few more checks), which is where the packaging pipeline and most of the test suites run. From
+`userland/pkgtools`, build the host engine first, because the repo tools' tests use its
+`pkgmk`/`pkgtrans`:
 
 ```
-(cd src/apkg          && make test)                    # 223 assertions
-(cd src/apkg          && sh tests/nohttp-variant.sh)    # 20 (the FILE+RAW, no-sockets build)
+heirloom/build-host.sh                                  # host engine + compat tests
+bash tools/repo/tests/run-tests.sh                      # 369 (bash, not sh)
+(cd src/apkg          && make test)                     # 497
+(cd src/apkg          && sh tests/nohttp-variant.sh)    # 38 (the FILE+RAW, no-sockets build)
 (cd src/contents-fsck && make test)                     # 19
-bash tools/repo/tests/run-tests.sh                      # 375 (bash, not sh)
 sh tools/migrate/tests/run-tests.sh                     # 36
-(cd heirloom && ./build-host.sh)         # the pkgmk/pkgtrans that build packages
+sh src/apkg/tests/kbootset-consumer.sh                  # 12, against amix's kernel/dlm
 ```
 
-Cross builds: `. <path-to>/gcc-cross-amix/build/env.sh`, then `make amix` in either `src/`
-directory, and `heirloom/build-amix.sh` for the engine. The scripts expect **sibling checkouts**
-beside this repository and fall back to them when nothing is set:
+The counts are those of a full amix checkout; a repo-tools check whose input is absent (a
+fakeroot, the factory tape, another project's build output) is skipped and named. One apkg test
+builds the 0.2.3 client from commit `cc02d52`, so a tarball without git history skips it.
 
-* `../gcc-cross-amix` — the cross toolchain's `build/env.sh`; override with `AMIX_CROSS_ENV`
-  (heirloom scripts) or `CROSS_ENV` (contents-fsck), and the sysroot with `AMIX_SYSROOT`.
-* `../amix-cdfs` — the built cdfs `mount` helper that `tools/repo/build-packages.sh --cdfs`
-  packages (only that option needs it).
+The Amix targets need the `m68k-cbm-sysv4` cross toolchain, gcc-cross-amix (binutils 2.8.1 + GCC
+2.7.2.3), pinned in amix's `toolchain/gcc-cross-amix.pin` (see `toolchain/README.md`), with a
+sysroot populated from an Amix 2.1 system. As everywhere in amix, `GCA` names its `build/`
+directory: the heirloom scripts and contents-fsck source `$GCA/env.sh` when the tools are not on
+`PATH` (`AMIX_CROSS_ENV` or `CROSS_ENV` still name an `env.sh` directly, and `AMIX_SYSROOT` the
+sysroot). Then `make amix` in either `src/` directory (apkg wants `. "$GCA/env.sh"` first), and
+`heirloom/build-amix.sh` for the engine, `heirloom/build-amix-static.sh` for the install CD's
+static set.
+
+Two package builders read projects that are not in amix, from a checkout beside the amix
+checkout unless a variable names it:
+
+* `CDFS_REPO` — the cdfs port (amix-cdfs, a fork of ODFileSystem), whose built `mount` helper
+  `tools/repo/build-packages.sh --cdfs` packages.
+* `KERNTOOLS` — the private kerntools repository, for the `--kernbench`/`--kernz3660` kernel
+  packages, which are never published.
 
 Test runs on an Amix box use a WinUAE or Amiberry guest reachable over telnet/ftp;
 [`configs/amix-winuae.example.uae`](configs/amix-winuae.example.uae) is the reference emulator
@@ -200,13 +218,13 @@ hard constraints: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Licensing
 
-This repository is a mosaic; the map is short.
+This directory is a mosaic; the map is short.
 
 | Path | License |
 |---|---|
 | `src/apkg/`, `src/contents-fsck/`, `tools/`, and the Amix-specific files added under `heirloom/` (`compat/`, `sslstub/`, `mk.config.amix`, `build-*.sh`) | MIT — [`LICENSE`](LICENSE) |
 | `heirloom/` (vendored engine) | CDDL 1.0, OpenSolaris SVR4 lineage with AT&T notices intact and portions © 2007 Gunnar Ritter, plus the Caldera license for the ancient UNIX parts — [`heirloom/LICENSE/`](heirloom/LICENSE/) |
-| `heirloom/compat/{fnmatch.c,fnmatch.h,charclass.h}` | BSD/ISC/public domain (OpenBSD via openssh-portable) |
+| `heirloom/compat/{fnmatch.c,fnmatch.h,charclass.h}` | BSD-3 (VMware, Inc.; the Regents of the University of California), ISC and public domain (Todd C. Miller); OpenBSD via openssh-portable |
 | `heirloom/compat/snprintf.c` | Powell/Weiss permissive |
 | `research/heirloom/` | patches and extracts of the vendored engine; CDDL-derived |
 | `src/apkg/md5.{c,h}` | public domain (Colin Plumb, 1993) |
@@ -217,7 +235,7 @@ file carries a "Portions Copyright" contributor line below its CDDL header.
 
 Amiga UNIX is Commodore's; on 2026-09-23 Amiga Corporation approved distributing the Commodore
 Amiga binaries this project builds on (see [`NOTICE`](NOTICE), which also carries the trademark
-notices and the third-party attributions). This tree carries no Amix source, binary, manual, tape
+notices and the third-party attributions). This directory carries no Amix source, binary, manual, tape
 or disk image; where the work needs to refer to factory material it does so by name, checksum and
 pointer. Running the tools needs an Amix 2.1 system, real or emulated, and repackaging the factory
 set needs a copy of the 2.1 install tape.

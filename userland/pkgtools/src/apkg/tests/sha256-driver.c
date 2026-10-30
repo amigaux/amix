@@ -1,6 +1,6 @@
 /*
  * sha256-driver.c - test vehicle for apkg's sha256_file() (kspace.c over
- * the amix-dlm loader/common SHA-256).
+ * the kernel/dlm loader/common SHA-256).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT license - see ../LICENSE.
  *

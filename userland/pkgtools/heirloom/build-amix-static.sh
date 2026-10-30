@@ -76,18 +76,23 @@
 set -eu
 
 TOP="$(cd "$(dirname "$0")" && pwd)"
-# Default: a gcc-cross-amix checkout beside this repo (set AMIX_CROSS_ENV
-# to point elsewhere).
-CROSS_ENV="${AMIX_CROSS_ENV:-$TOP/../../gcc-cross-amix/build/env.sh}"
+# The cross toolchain is gcc-cross-amix at amix's toolchain/gcc-cross-amix.pin.
+# Unless it is already on PATH, its env.sh is sourced: AMIX_CROSS_ENV names
+# that file, else GCA (its build/ directory, as everywhere in amix) does.
+CROSS_ENV="${AMIX_CROSS_ENV:-${GCA:+$GCA/env.sh}}"
 
 if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
-	if [ -r "$CROSS_ENV" ]; then
+	if [ -n "$CROSS_ENV" ] && [ -r "$CROSS_ENV" ]; then
 		# shellcheck disable=SC1090
 		. "$CROSS_ENV"
+	elif [ -n "$CROSS_ENV" ]; then
+		echo "build-amix-static.sh: cannot read $CROSS_ENV" >&2
 	fi
 fi
 command -v m68k-cbm-sysv4-ld >/dev/null 2>&1 || {
-	echo "build-amix-static.sh: m68k-cbm-sysv4-ld not in PATH (set AMIX_CROSS_ENV)" >&2
+	echo "build-amix-static.sh: m68k-cbm-sysv4-ld not in PATH: set GCA to the build/" >&2
+	echo "  directory of gcc-cross-amix at toolchain/gcc-cross-amix.pin, or" >&2
+	echo "  AMIX_CROSS_ENV to its env.sh" >&2
 	exit 1
 }
 

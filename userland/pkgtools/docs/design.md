@@ -16,7 +16,7 @@ docs/                design docs & findings
 research/            dive artifacts (read-only reference)
 ```
 
-Toolchain: `. <gcc-cross-amix>/build/env.sh` → `m68k-cbm-sysv4-gcc`
+Toolchain: `. "$GCA/env.sh"` (gcc-cross-amix at amix's `toolchain/gcc-cross-amix.pin`) → `m68k-cbm-sysv4-gcc`
 (sysroot already populated). Host builds use plain `gcc -std=gnu89` for parity testing.
 
 ## 1. Heirloom engine port (`heirloom/`)
@@ -273,7 +273,7 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 
 ### 5.1 Catalog and publishing
 
-- **Kernel space** (apkg 0.3, amix-dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
+- **Kernel space** (apkg 0.3, kernel/dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
   one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
   block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
   that sidecar inside the package byte for byte (kbootset gate 2 compares them), `size=`/`sha256=`
