@@ -851,12 +851,12 @@ check "the authored names.conf parses without error" test $? -eq 0
 check "it leaves an unlisted package alone" \
     test "$(field "$S20B/catalog" jutoy 1)" = jutoy
 
-# --------------------------------------------------------------- T21 ----
+# --------------------------------------------------------------- T29 ----
 # conf layers -- the staging root's confs plus --packages-conf DIR (amix's
 # userland/packages/conf by default).  Neither outranks the other: a package
 # the two give different values is a conflict, every one is named, and no
 # catalog is written (rc 4).  Equal values are no conflict.
-echo "T21: conf layers (staging root + packages conf)"
+echo "T29: conf layers (staging root + packages conf)"
 S21="$WORK/t21"; P21="$WORK/t21pkgs"; mkdir -p "$S21" "$P21"
 cp "$FIX/TESTpkg.pkg" "$FIX/toy.pkg" "$S21/"
 printf '@group games: games\n@group x11: x11\n@group development: dev\n' \
