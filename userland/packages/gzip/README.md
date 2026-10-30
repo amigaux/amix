@@ -46,7 +46,7 @@ opens directly in gzip's own `gzip.h` (`struct timespec`, `O_BINARY`/`O_NOFOLLOW
 
 ## Package shape
 
-`/opt/amix/bin/{gzip,gunzip,zcat}`, man pages under `/opt/amix/man/man1/`, `COPYING`/`NEWS`/`README`
+`/opt/amix/bin/{gzip,gunzip,zcat}`, man pages under `/opt/amix/man/1/` with `whatis.d/gzip`, `COPYING`/`NEWS`/`README`
 under `/opt/amix/doc/gzip/`. `gunzip` and `zcat` are gzip's own `/bin/sh` wrapper scripts
 (`exec gzip -d` / `exec gzip -cd`) — gzip's `argv[0]` mode-detection is compiled out under the
 default `GNU_STANDARD=1`, so they are wrappers, not symlinks. Their shebang is rewritten from the
@@ -78,3 +78,10 @@ catalog line.
 is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
 previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
 `PSTAMP` only, and the pkgmap only in its `i pkginfo` line.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/gzip` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; the pages are upstream's; `gunzip` and `zcat` are aliases. Built on the gcc14 container pin: every other payload file is the previous
+revision's.
