@@ -81,7 +81,8 @@ VER_APKG="0.3.4"
 # dir (build/repo-staging-apkgeng1124), NOT published; 1.12.3
 # (88a177e5...) stays what it is.  NOTES 2026-10-26.
 # 1.12.5 (2026-10-30, not minted yet) -- /usr/apkg/doc gains FNMATCH.LIC and
-# SNPRINTF.LIC.  1.12.4 is staged with the old payload: one version, one
+# SNPRINTF.LIC; pkgrm takes ENOTEMPTY as "not empty" (035ca80); only the
+# shipped commands' pages ship (no ck*, dispgid, dispuid, pkgadm).  1.12.4 is staged with the old payload: one version, one
 # byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
 VER_ENG="1.12.5"
 VER_DEMO="1.0"
@@ -585,14 +586,16 @@ EOF
     echo "d none /usr/apkg/man/man1 0755 root sys"
     echo "d none /usr/apkg/man/man1m 0755 root sys"
     echo "d none /usr/apkg/man/man5 0755 root sys"
-    for m in "$REPO"/heirloom/man/*.1; do
-      [ -f "$m" ] && echo "f none /usr/apkg/man/man1/$(basename "$m")=$m 0644 root sys"
-    done
-    for m in "$REPO"/heirloom/man/*.1m; do
-      [ -f "$m" ] && echo "f none /usr/apkg/man/man1m/$(basename "$m")=$m 0644 root sys"
-    done
-    for m in "$REPO"/heirloom/man/*.5; do
-      [ -f "$m" ] && echo "f none /usr/apkg/man/man5/$(basename "$m")=$m 0644 root sys"
+    # the pages of the commands this package ships, and the formats they
+    # read -- not every page heirloom/man holds (its ck*, dispgid, dispuid
+    # and pkgadm pages name commands APKGENG does not ship; dropped in
+    # 1.12.5).  A listed page that is missing fails the build.
+    for m in pkginfo.1 pkgparam.1 pkgtrans.1 pkgmk.1 pkgproto.1 \
+             pkgadd.1m pkgrm.1m installf.1m pkgchk.1m pkgask.1m removef.1m \
+             depend.5 pkginfo.5 pkgmap.5 prototype.5; do
+      [ -f "$REPO/heirloom/man/$m" ] || { echo "man page heirloom/man/$m missing" >&2; exit 1; }
+      sec="${m##*.}"
+      echo "f none /usr/apkg/man/man$sec/$m=$REPO/heirloom/man/$m 0644 root sys"
     done
   } > "$E/prototype"
   build_one APKGENG "$VER_ENG" base
