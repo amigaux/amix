@@ -9,7 +9,7 @@
  * gethostname (sys/socket.h, sys/select.h and syslog.h define only types and
  * constants), nor fchmod (unistd.h declares fchown, sys/stat.h no fchmod),
  * nor getrlimit/setrlimit (sys/resource.h has struct rlimit, no prototypes),
- * so ordinary network and file code stops compiling.  The fix is a
+ * nor seteuid/setegid (unistd.h declares only setuid/setgid), so ordinary network and file code stops compiling.  The fix is a
  * prototype, never -Wno-error: an undeclared call that compiles is the
  * PORTING.md 3.1 trap.  Opt-in per recipe -- a source that declares one of
  * these itself, with a different spelling of the same type, would collide.
@@ -20,7 +20,9 @@
  * libnsl.so -- link -lsocket -lnsl in that order; select and the syslog
  * family are static members of usr/ccs/lib/libc.so, which the specs already
  * reach; fchmod and getrlimit/setrlimit are exported by libc.so.1
- * (SYS_fchmod 93; bzip2 1.0.8 and coreutils 5.2.1 sort, 2026-10-29).
+ * (SYS_fchmod 93; bzip2 1.0.8 and coreutils 5.2.1 sort, 2026-10-29);
+ * seteuid/setegid are the static member seteguid.o of usr/ccs/lib/libc.so
+ * (trap #0, SYS 141/136; rsync 3.1.3's daemon, 2026-10-30).
  * MIT, this repository.
  */
 #ifndef AMIX_PACKAGES_GCC14_DECLS_H
@@ -65,6 +67,9 @@ int fchmod(int, mode_t);
 
 int getrlimit(int, struct rlimit *);
 int setrlimit(int, const struct rlimit *);
+
+int seteuid(uid_t);
+int setegid(gid_t);
 
 #ifdef __cplusplus
 }
