@@ -2,7 +2,7 @@
 
 The driver is a **STREAMS/DLPI network driver**, so it does **not** use the SCSI
 `build-kernel.sh` (which generates `scsicard[]` rows into `sd.c`). It needs three
-kernel-integration edits + its own driver subtree. `../amix-kerntools/build-net-kernel.sh`
+kernel-integration edits + its own driver subtree. `kernel/k30`'s `amix-build z3660eth`
 automates everything below; this file is the authoritative manual procedure and the
 fallback if the automation hits anything unexpected on the live tree.
 
@@ -11,9 +11,10 @@ at `192.0.2.38`). The real A4000+Z3660 has no network — the clean `relocunix` 
 shuttled to it via `transfer.hdf` (the two-tier routine is spelled out in §7).
 
 ## 0. Prereqs
-- Build box up: `amiberry --config ../amix-kerntools/configs/amix-golden.uae` + the
-  grimoire `amix-lan-up.sh` bridge. Verify: `python3 ../amix-kerntools/tools/amixsync.py ls /usr/sys`.
-- Tools: `../amix-kerntools/tools/amixsync.py` (FTP push/pull), `../grimoire-amix/tools/host-net/amixsh.py` (run commands).
+- Build box up: your own Amix box (real, or an Amiberry/WinUAE config with an a2065 NIC on tap0) +
+  the grimoire `amix-lan-up.sh` bridge. Verify: `python3 ../../k30/tools/amixsync.py ls /usr/sys`.
+- Tools: `../../k30/tools/amixsync.py` (FTP push/pull), `../../../../grimoire-amix/tools/host-net/amixsh.py`
+  (run commands; the [grimoire-amix](https://github.com/jusii/grimoire-amix) clone beside the amix checkout).
 
 ## 1. Push the driver subtree
 Create `/usr/sys/amiga/driver/z3660eth/` and push `src/z3660eth.c`, `src/z3660eth.h`,
@@ -48,7 +49,7 @@ the empty `/*51*/` row (`…,notty,nostr,nullflag,`) before writing, then replac
 > collision, 1992). Slots **7, 38, 39, 44, 45** are traps (reserved markers, or
 > `KERNEL_DEBUGGER`-only), and **≥ 70 does not exist** — `CDEVSIZE` is 70, so a higher major
 > needs the array extended. That leaves 51–67 and 69; we take the lowest.
-> Convention and full cross-tree evidence: **`../grimoire-amix/docs/reference/major-number-registry.md`**
+> Convention and full cross-tree evidence: **`docs/reference/major-number-registry.md`** in [grimoire-amix](https://github.com/jusii/grimoire-amix)
 > (the Major-Number Registry — "take 51–67 or 69; respect an existing community claim, even a
 > weak one"). Renumbering was cheap for us and free for them: only the `/dev/zen0` node and the
 > cdevsw row move. **48 is vacated — do not reuse it.**
@@ -73,7 +74,7 @@ z3660eth/exp :                  # <-- add this rule
 
 ## 3b. The two on-box patch scripts — outcomes, and how to test them without a box
 Steps 2 and 3 are what `tools/patch-kernel.sh` and `tools/patch-makefile.sh` do on the box
-(pushed and run by `../amix-kerntools/build-net-kernel.sh` / `build-combined-kernel.sh` /
+(pushed and run by `kernel/k30`'s `amix-build`, whose on-box `build.sh` is its
 `tools/onbox-build.sh`). Both are pre-POSIX-`/bin/sh` + SVR4-`ed` only, both are idempotent,
 and since 2026-07-31 both are **fail-closed**: each edit is a separately guarded arm that is
 **post-verified in the file**, because SVR4 `ed` reports an address-search miss with a bare
@@ -103,19 +104,19 @@ bash tools/patch-selftest.sh      # ~20 fixture scenarios, exits non-zero on the
 It runs the battery under every plain shell on the host (`sh`, `dash`), lints both scripts for
 bashisms (`$(…)`, `[[`, `local`, arrays, `printf`, `grep -q/-E`, `sed -i/-E`), drives the
 post-verify with an `ed` shim that deliberately drops an arm, and checks the replacement
-cdevsw row is still the single column-0 line that
-`../amix-kerntools/tools/cdevsw-gate-selftest.sh` lifts out of `patch-kernel.sh`. **That row
+cdevsw row is still the single column-0 line that the cdevsw gate's self-test
+(`cdevsw-gate-selftest.sh` in amix-kerntools, not part of `kernel/k30`) lifts out of `patch-kernel.sh`. **That row
 text and its `/*51=z3660eth*/` tag are a cross-repo contract — do not reshape them.**
 
 ## 4. Clean-gate relink (the D245 boot-breaker workaround)
 On-box `ld` corrupts ~70% of kernel links under emulation, so relink until the kernel is
 provably clean. For this (larger) net kernel the bar is **`nm -h -u unix` empty +
 `checkunix`-clean** — `sum -r` recurrence does *not* converge at this size — the bar is
-implemented by `../amix-kerntools/tools/build-clean-net-kernel.sh`, whose header states it.
+implemented by `../../k30/tools/build-clean-net-kernel.sh`, whose header states it.
 The net-aware gate removes the right stale objects (the SCSI gate is hardcoded to
 `alien/` and will NOT rebuild a `driver/` subdir or `kernel.c`):
 ```
-amixsync.py push ../amix-kerntools/tools/build-clean-net-kernel.sh /tmp/build-clean-net-kernel.sh
+amixsync.py push ../../k30/tools/build-clean-net-kernel.sh /tmp/build-clean-net-kernel.sh
 amixsh.py "nohup sh /tmp/build-clean-net-kernel.sh z3660eth > /tmp/bcnk.log 2>&1 &"
 # poll /tmp/bcnk.log for 'STABLE after N builds' (clean) or 'FAILED'
 ```
@@ -212,7 +213,7 @@ Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with
 intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).
 
 ## Real-world build notes (historical record, validated 2026-06-21 on the WinUAE build box)
-The current build harness is **Amiberry** with `../amix-kerntools/configs/amix-golden.uae` (§0).
+The current build harness is **Amiberry** with the build hub's golden-image config (§0).
 The WinUAE specifics below are kept as the record of where the FTP-asymmetry and clean-gate
 lessons were learned; `AmigaUnix-z3660.uae` is that box's own config, not a kerntools one.
 The box is **WinUAE on Xvfb :101**, config `AmigaUnix-z3660.uae` (a2065=tap:tap0, guest **192.0.2.38**), root disk
@@ -231,4 +232,4 @@ Set `AMIX_PASS` to the build-image root password → `export AMIX_HOST=192.0.2.3
   correct accept bar is **`nm -h -u unix` empty (no undefined symbols) AND `checkunix`-clean** — `sum -r` recurrence does
   *not* converge at this kernel size and is **not** the gate here (it still works for the small SCSI kernels). `checkunix`
   alone is insufficient (it only validates `.symtab`; a code/data shift passes it).
-  `../amix-kerntools/tools/build-clean-net-kernel.sh` implements the `nm -u` bar; run it at a high cap.
+  `../../k30/tools/build-clean-net-kernel.sh` implements the `nm -u` bar; run it at a high cap.

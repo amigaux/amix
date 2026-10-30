@@ -3,7 +3,7 @@
 **Pre-registration, written 2026-08-24, BEFORE any code in this round. Nothing below is to be
 rewritten to match a later measurement.** Round 2 covers **F3-M0** (assert the free ride) and
 **F3-M2** (repair the cache block, run it under a gate) for the ethernet driver only. Round 1 —
-`../amix-z3660scsi/docs/BLIZZARD-F3.md` — did the same for the SCSI driver and is the template
+`../../z3660scsi/docs/BLIZZARD-F3.md` — did the same for the SCSI driver and is the template
 this round follows; where this round departs from it, the departure is derived and marked.
 
 Confidence tags follow the campaign convention: **measured** (a line of source read, or a number

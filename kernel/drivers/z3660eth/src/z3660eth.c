@@ -29,7 +29,7 @@
  * interrupt-driven path (int2_tbl via board-mod, or a p6int/int6_tbl change) but
  * is not wired into kernel.c.  TX is synchronous and needs no interrupt.
  *
- * Built with -DZ3660ETH_MODULE the same source is the loadable module (amix-dlm
+ * Built with -DZ3660ETH_MODULE the same source is the loadable module (kernel/dlm
  * C3-6; the section at the end of this file): if_attach instead of the ifstats
  * link, and an optional INT6 receive path whose level-6 handler only
  * acknowledges, masks and flags, the drain staying at IPL 4.  z3660ethintr()
@@ -62,7 +62,7 @@
  * misses and open() returns ENXIO -- the compile/link/boot/register gate.
  *
  * Refs: hydra-amix aen/aen.c + hydra/hydra.c (STREAMS/DLPI skeleton),
- *       amix-z3660scsi/src/z3660.c (Z3660 mailbox/sptalloc idiom), ETHERNET-SCOPING.md.
+ *       ../z3660scsi/src/z3660.c (Z3660 mailbox/sptalloc idiom), ETHERNET-SCOPING.md.
  */
 #include "sys/types.h"
 #include "sys/param.h"
@@ -89,7 +89,7 @@
 #include "z3660eth.h"
 #ifdef Z3660ETH_MODULE
 #include "sys/conf.h"		/* struct cdevsw, for struct mod_drv_data */
-#include "sys/moddefs.h"	/* the ABI kit's wrapper (amix-dlm C3-1, C3-6) */
+#include "sys/moddefs.h"	/* the ABI kit's wrapper (kernel/dlm C3-1, C3-6) */
 #include "sys/amixddi.h"	/* the kit's DDI v1: if_attach, intr_attach, ... */
 #endif
 
@@ -199,7 +199,7 @@ unsigned long z3660eth_rx_resyncs, z3660eth_rx_resync_last;
 
 #ifdef Z3660ETH_MODULE
 /*
- * Module form only (amix-dlm C3-6 section 2): the interrupt path the static
+ * Module form only (kernel/dlm C3-6 section 2): the interrupt path the static
  * kernels never had.  The parameters come from the manifest through _load:
  *   z3660eth_intr    0 = polled (the default), 6 = the INT6 chain
  *   z3660eth_intrl2  with intr=6: 1 = the drain runs in a level-2 handler the
@@ -236,7 +236,7 @@ static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
 
 /* ----------------------------------------------------------------------------
  * ZS-05 -- the address-capture rule (Z3660 FPGA, real-CPU path; 2026-10-26;
- * amix-z3660scsi 9ceada6 is the reference, its NOTES.md 2026-10-26).
+ * kernel/drivers/z3660scsi 90d03ae is the reference, its NOTES.md 2026-10-26).
  *
  * The FPGA captures a register access's address for the ARM (rtg.c
  * rtg_thread(): zaddr = gpio & 0x1FFFFF) and on back-to-back cycles samples
@@ -2042,7 +2042,7 @@ z3660ethinit()
 
 #ifdef Z3660ETH_MODULE
 /* ----------------------------------------------------------------------------
- * The module form (amix-dlm docs/contracts/C3-6-driver-to-module.md, version 1,
+ * The module form (kernel/dlm docs/contracts/C3-6-driver-to-module.md, version 1,
  * section 2).  Built with -DZ3660ETH_MODULE, once per kernel line (k30, k46);
  * without it this file is the static driver, byte for byte.  The ABI kit's
  * mkmod adds .moddata (module/Master) and modfix the section type.

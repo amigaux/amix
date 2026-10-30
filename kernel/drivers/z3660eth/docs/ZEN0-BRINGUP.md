@@ -1,7 +1,7 @@
 # Bringing up `zen0` on Amix — the field-proven procedure
 
 **Who this is for:** you have an Amiga running Amix on a Z3660 card whose firmware is the
-**Amix-interop fork** (`jusii/Z3660-amix`), and you want the box on the LAN.
+**Amix-interop fork** ([`Z3660-amix`](https://github.com/jusii/Z3660-amix)), and you want the box on the LAN.
 
 **Provenance.** Every command below was run on real hardware on **2026-09-09** — an Amiga 4000
 with a Z3660 (card 3), a real **68LC060**, **Amix 2.1c**, kernel `68060-260828-50` — and the
@@ -282,7 +282,7 @@ A current image carries one more row that is **not** part of the identity: the p
 host, `pkg.amigaux.org` — the canonical Amix package channel (plain HTTP for `apkg`) since
 2026-09-14. The images are DNS-free, so firstboot bakes that host's address into this file; the
 address and the firstboot step are owned by [amix-installng](https://github.com/jusii/amix-installng) (its profiles' `FB_REPO_HOST` /
-`FB_REPO_IP`), not by this repo. Leave that row alone when re-addressing the box.
+`FB_REPO_IP`), not by this directory. Leave that row alone when re-addressing the box.
 
 **3. ★ `/etc/net/{ticlts,ticots,ticotsord}/hosts`** — the one that is easy to miss. Three separate
 files, one per local transport, each `@(#)rpcsvc:net_files/hosts 1.2`, each holding:

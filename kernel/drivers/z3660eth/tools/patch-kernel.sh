@@ -129,7 +129,7 @@ EOF
 	echo "$ROW51" | sed 's/^/    /' >&2
 	cat >&2 <<EOF
   Something else claims it.  Do not overwrite a claim: pick another free major from
-  the 51-67 / 69 set -- grimoire-amix/docs/reference/major-number-registry.md, the
+  the 51-67 / 69 set -- grimoire-amix's docs/reference/major-number-registry.md, the
   Major-Number Registry -- and renumber, or clear the row deliberately by hand.
   Nothing was written.
 EOF
