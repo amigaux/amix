@@ -8,9 +8,36 @@ that populates `/install/`; **W5.4** was the first end-to-end on-box run. Every
 wave since is a further section below.
 
 > **This document is wave-chronological.** Every `W…` section records what was true
-> **when that wave landed** and is deliberately left standing. The two sections
-> immediately below are *current state* and **win over any figure quoted inside a
-> wave section**.
+> **when that wave landed** and is deliberately left standing. The three sections
+> immediately below are *current state* and **win over any figure or s5 statement
+> quoted inside a wave section**.
+
+## The target filesystem — current (P-35, 2026-10-30)
+
+**ufs is the only target filesystem**, on every line (owner decision P-35, Option C;
+there is no install base on s5).
+
+- `install.sh`: `TARGET_ROOT_FSTYPE` defaults to `ufs`; `s5` is refused with that
+  reason. The root and the 1.1 data slice are laid by the miniroot's stock
+  `mkfs_ufs -o free=2,opt=s` on the block node; there is no `mkfs_s5`, `fsck_s5` or
+  `labelit` call left in the driver.
+- **Prebuilt mode is retired.** `INSTALL_TARGET_PREBUILT=1` mounted an s5 root
+  `tools/mkroot.sh` had minted host-side; the driver refuses the key. Every install
+  is **author** mode.
+- `setup.sh` no longer asks *"What file system type is the root partition?"*; the
+  composed answer is always `TARGET_ROOT_FSTYPE=ufs`.
+- The upgrade install (and the interview's upgrade offer) mounts the old root as
+  **ufs only**.
+- `install-matrix.sh`: the eleven prebuilt cells (`cd`, `cd-interactive`,
+  `cd-interrupt`, `cd-suomi`, `cd-standard`, `cd-public`, `cd-public-r6`, `raw`,
+  `fd-a4091-aga`, `fd-a4091-pub-r6`, `fd-ide-raw`) are **RETIRED** with their reason;
+  no canned answer types a filesystem name.
+- **Still s5, and not targets:** the 030 line's install miniroot (`MINIROOT_FSTYPE`,
+  the `/etc/mnttab` seed line), the raw source disks' payload slices, and the
+  miniroot repair path's s5 arm. The k30 kernel package keeps its s5 module.
+
+The installed-tree digest has no filesystem field, so every attested set's reference
+stands (proven for `minimal` by `cd-ufs`, `full`/`developer`/`x11` on the ufs rig).
 
 ## Canonical digests — current
 
@@ -241,18 +268,18 @@ different path — that identity *is* the regression test.
 
 | cell | status | source | target build | note |
 |------|--------|--------|--------------|------|
-| `cd` | RUNNABLE | cdfs install CD at `1,3` | prebuilt (`mkroot.sh`) | the canonical acceptance arm |
-| `cd-interactive` | RUNNABLE | cdfs install CD at `1,3` | prebuilt | the same media and the same target-build path as `cd`, driven through the **whole operator flow** — since W4 that starts at the miniroot's own `/etc/profile` (keymap, install-or-repair, the source auto-probe) and continues into the interview. Gated on the answers beacon *before* the transplant runs |
-| `cd-suomi` | RUNNABLE | cdfs install CD at `1,3` | prebuilt | `cd-interactive` with **keymap 11 (Suomi / Svenska)** instead of 12. Proves the keymap reaches the target (`default.kmap` hard-linked to `kmap/s`, same inode; `FB_KMAP=s` in `firstboot.conf`) **and** that it does not fork the attestation — the link is driver-written, so the digest must not move |
-| `cd-interrupt` | RUNNABLE | cdfs install CD at `1,3` | prebuilt | **W5's resilience cell**, and the only one that can prove the contract: the same install as `cd-interactive`, but the first cold boot is **power-cycled part-way through the first-boot dialog**. The next boot must come up healthy (S16 applied the mechanical keys anyway), the dialog must re-run **from the top** (`chmod -x` fires only at the clean exit), completing it must leave a clean third boot — and the digest must not move |
-| `cd-standard` | RUNNABLE | cdfs install CD mastered `--set standard` | prebuilt | the second attested set (17 packages), and the heaviest-I/O memory-headroom measurement for it |
-| `cd-public` | RUNNABLE | cdfs install CD mastered for the **public** profile | prebuilt | **W6 / P8.3.** `cd-interactive` on a disc mastered from the distro-neutral profile — no nodename, no address, no netmask, no gateway, no resolver, no repository address, no disk size, dialog armed. The disc names `public-a3000-a4091` in `/install/profiles/BASE`, so the miniroot hands off to it with no argument, exactly as a stranger booting the disc would. The assertion is that **nothing moves**: same answers, and the installed tree is still the canonical `minimal` digest. A profile is data; if emptying the `FB_*` seam moved one installed byte, the seam was not where we thought it was |
+| `cd` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt (`mkroot.sh`) | the canonical acceptance arm |
+| `cd-interactive` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | the same media and the same target-build path as `cd`, driven through the **whole operator flow** — since W4 that starts at the miniroot's own `/etc/profile` (keymap, install-or-repair, the source auto-probe) and continues into the interview. Gated on the answers beacon *before* the transplant runs |
+| `cd-suomi` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | `cd-interactive` with **keymap 11 (Suomi / Svenska)** instead of 12. Proves the keymap reaches the target (`default.kmap` hard-linked to `kmap/s`, same inode; `FB_KMAP=s` in `firstboot.conf`) **and** that it does not fork the attestation — the link is driver-written, so the digest must not move |
+| `cd-interrupt` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | **W5's resilience cell**, and the only one that can prove the contract: the same install as `cd-interactive`, but the first cold boot is **power-cycled part-way through the first-boot dialog**. The next boot must come up healthy (S16 applied the mechanical keys anyway), the dialog must re-run **from the top** (`chmod -x` fires only at the clean exit), completing it must leave a clean third boot — and the digest must not move |
+| `cd-standard` | RETIRED (P-35: prebuilt s5) | cdfs install CD mastered `--set standard` | prebuilt | the second attested set (17 packages), and the heaviest-I/O memory-headroom measurement for it |
+| `cd-public` | RETIRED (P-35: prebuilt s5) | cdfs install CD mastered for the **public** profile | prebuilt | **W6 / P8.3.** `cd-interactive` on a disc mastered from the distro-neutral profile — no nodename, no address, no netmask, no gateway, no resolver, no repository address, no disk size, dialog armed. The disc names `public-a3000-a4091` in `/install/profiles/BASE`, so the miniroot hands off to it with no argument, exactly as a stranger booting the disc would. The assertion is that **nothing moves**: same answers, and the installed tree is still the canonical `minimal` digest. A profile is data; if emptying the `FB_*` seam moved one installed byte, the seam was not where we thought it was |
 | ★ `cd-full` | RUNNABLE (**10/10 2026-08-14**) | cdfs install CD mastered `--set full` | **author** (**512 MB**, ufs) | All thirty packages, ~276 MB declared / 292.8 MiB realised. The heaviest install, the first run *with* W5.5's real swap, and the only set s5 cannot hold at all. The rig was 400 MB and **overran it by 8.5 MiB on 2026-08-14** — `pkgadd` spools each datastream onto the target, so peak = tree + largest package, and the largest installs last. 512 MB puts ~97 MiB over that peak |
 | `cd-developer` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set developer` | **author** (**512 MB**, ufs) | **W6.** 19 packages — standard plus `xdev`/`oldev`, with `conf` deliberately excluded (§8.4) |
 | `cd-x11` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set x11` | **author** (**512 MB**, ufs) | **W6.** 18 packages — standard plus `xtras` |
-| `cd-author` | RUNNABLE | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_s5`) | the other target-build path: the blank target is partitioned + `mkfs_s5`-ed **on the box** and must still reach the same digest. Was RED on 2026-07-30 — its first run exposed three shipped defects; green since 2026-07-31, see *What the author cell found* below |
+| `cd-author` | RUNNABLE | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_s5`; `mkfs_ufs` since P-35) | the other target-build path: the blank target is partitioned + `mkfs_s5`-ed **on the box** and must still reach the same digest. Was RED on 2026-07-30 — its first run exposed three shipped defects; green since 2026-07-31, see *What the author cell found* below |
 | ★ `cd-ufs` | RUNNABLE (**green 2026-08-14, 10/10**) | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_ufs`) | **the UFS lane.** Same media, same rig, same 100 MB target, same `minimal` set as `cd` — the operator answers the restored stock s5/ufs question and gets a **Berkeley** root. It *must* be author mode: `mkfs_ufs` runs on the box, there is no host-side UFS writer, and the driver refuses a `ufs` prebuilt target rather than mounting `mkroot`'s s5 root under the wrong type. The assertion is that **nothing moves** — still `e483b0cb…` / 4859 with base-5 exact, because the digest is contents-DB-derived and the contents DB has no filesystem field. What *does* move is the disk, and the new `rootfs` gate is the only one that can see it. Read against two neighbours: `cd-author` is the same author path on s5, `cd-interactive` the same interview on prebuilt s5 |
-| `raw` | NEEDS-MEDIA | raw distribution slice (`apkg SRC_RAW`) | prebuilt | implemented; needs a **bench** raw source disk (`--src-hdf`). None exists — W6-RAW.1 built one and did not keep it, and building one is *mastering media* |
+| `raw` | RETIRED (P-35: prebuilt s5) | raw distribution slice (`apkg SRC_RAW`) | prebuilt | implemented; needs a **bench** raw source disk (`--src-hdf`). None exists — W6-RAW.1 built one and did not keep it, and building one is *mastering media* |
 | `z3660-raw` | INFEASIBLE | self-booting metal source `.hdf` at id 0 | author | the bench cannot boot the metal source disk **by design** (runbook §0). Bench proves its contents; metal proves its boot |
 | `tape` | RETIRED | dist tape on the A4091 | stock | timeout-prone, and the stock tape path does not run this driver at all |
 
@@ -627,6 +654,10 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
 `tools/mkroot.sh` authors a target disk **host-side**: partition arithmetic →
 `rdbtool` RDB → `s5` mkfs → read-back gate → `layout.json`. The driver does the
 **on-box** equivalent with the miniroot's own tools. Two supported modes:
+
+> **Since P-35 (2026-10-30) only author mode exists, and it lays ufs**
+> (`/bin/mkfs_ufs`); the prebuilt mode below is retired and the driver refuses it.
+> The text below is the record of how both modes came to be.
 
 - **author** (default): the driver partitions + `mkfs_s5` the blank target with
   `/etc/rdb` + `/bin/mkfs_s5` + `/usr/lib/fs/s5/labelit`, using the stock
@@ -1895,8 +1926,8 @@ miniroot shell
   └─ sh /cdrom/install/bin/setup.sh [base-profile]
        ├─ destination disk   (stock table, stock question, stock erase confirm)
        ├─ partition sizes    (stock arithmetic, stock floors, stock messages)
-       ├─ root fs type       (stock s5/ufs menu — default moved to [ufs]; asked
-       │                      only when the target will be AUTHORED)
+       ├─ root fs type       (NOT asked since P-35: always ufs; until then the
+       │                      stock s5/ufs menu with its default moved to [ufs])
        ├─ package set        (data-driven from /install/order*)
        ├─ verbose install?
        ├─ confirmation + "Do you wish to change any of these? [n]"
