@@ -176,6 +176,12 @@ The header of `build-cross-kernel.sh` documents every option. The module kernel 
 ../dlm`, with `--kinfo`, `--rth1`, `--kabi`, `--carve-fs`) also
 needs a built kit in `kernel/dlm` (`make -C ../dlm tools kit`).
 
+### Cuts
+
+A cut of record is a directory `cuts/<build id>/`: its `SHA256SUMS-<build id>` (paths relative to the cut's
+`usr/sys`), the `cut.sh` that rebuilds those bytes from an amix commit and named inputs, and a README with the inputs.
+The bytes themselves live outside the repository (`build/cuts/`, gitignored).
+
 ### Self-tests
 
 ```sh
