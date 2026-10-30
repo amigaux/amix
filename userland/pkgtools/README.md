@@ -44,11 +44,11 @@ onto the box (FTP is the proven bridge; mounting a modern NFS server does not wo
 client is NFSv2 over UDP only) and, as root:
 
 ```
-# pkgadd -d APKG-0.2.2.pkg APKG
+# pkgadd -d APKG-0.2.3.pkg APKG
 ```
 
-(`0.2.2` is the current shipped version at `pkg.amigaux.org`; earlier `APKG-0.1.pkg`/`APKG-0.2.pkg`
-stay served, decatalogued, for recovery fetches only — NOTES.md.)
+(`0.2.3` is the current shipped version at `pkg.amigaux.org`; earlier `APKG-0.1.pkg`, `APKG-0.2.pkg`
+and `APKG-0.2.2.pkg` stay served, decatalogued, for recovery fetches only — NOTES.md.)
 
 That lays down `/usr/apkg/bin/{apkg,contents-fsck,amix-sadm-migrate}`, `/etc/apkg.conf`,
 `/var/apkg/`, the man page, and a single `/usr/bin/apkg` symlink so the client is on the default
