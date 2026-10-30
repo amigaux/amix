@@ -1,6 +1,6 @@
 amix userland/packages (formerly amix-packages)
 Copyright (c) 2026 Jussi Alanärä. Own content: MIT (LICENSE).
-libamixcompat: BSD-2-Clause (libamixcompat/LICENSE).
+acompat (the libamixcompat library): BSD-2-Clause (acompat/LICENSE).
 
 Packages built by these recipes contain third-party programs under their own
 licences (GPL-2.0-or-later: grep, gzip, tar, patch, make, diffutils,

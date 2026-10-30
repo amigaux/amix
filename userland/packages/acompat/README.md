@@ -1,9 +1,10 @@
-# libamixcompat — the recipe
+# acompat — libamixcompat, the recipe
 
 **Package `acompat` 0.1** — the missing-libc shim every other port in this repo links.
-First-party C89, BSD-2-Clause, no upstream.
+First-party C89, BSD-2-Clause, no upstream. The library is libamixcompat; the directory takes the
+package's catalog name, `acompat`, so the catalog name users install by never changed.
 
-    sh build/pkg/pkgbuild.sh userland/packages/libamixcompat
+    sh build/pkg/pkgbuild.sh userland/packages/acompat
 
 ## Why this exists
 
@@ -102,3 +103,21 @@ for NULL, the SVR4/BSD spelling, not glibc's `(nil)`.
   first package that maps uid→name. Recorded in the registry, not silently dropped.
 - `inttypes.h`, `stdbool.h`, `wchar.h`, `fnmatch`, `glob`, `random`, `daemon`, `getrusage` and
   `nanosleep` are in the registry's eventual scope and are **not** in 0.1.
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`, revision `-6`, on gcc14-cross-amix
+b51ff39); the period build stopped at `-2`. It is the same library, not a subset: on-box builds have
+no `libamixc99`, so the archive keeps all seven members with the same declarations. GCC 14's fixed
+`<unistd.h>` declares `usleep(unsigned long)` where `amixcompat.h` says `unsigned int` (the same
+32-bit argument on this ABI); `-D_AMIX_HAVE_USLEEP` suppresses the fixed header's declaration in
+this build only. The version string names the build (`0.1-6-gcc14`; `acompat-test` prints it), so
+each revision changes `version.o`. `acompat-test` links libacompat on purpose, the one exception to
+the one-owner rule, and the link trace proves all nine compat symbols come from `libacompat.a`.
+
+The README the package ships (`/usr/local/doc/acompat/README`) is [`doc/README`](doc/README): this
+file as it stood when `0.1-6` was built, kept with the version it ships in.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
+the recorded one's payload (every file's sha256 and mode; `libacompat.a` member by member), pkginfo,
+pkgmap (mtimes aside) and catalog line.

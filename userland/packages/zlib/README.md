@@ -36,7 +36,7 @@ only — it never threads `LDFLAGS`/`LIBS` — so it cannot see `libamixcompat`,
 absent, and would bake `-DNO_vsnprintf -DNO_snprintf` into the Makefile, switching `gzprintf()` to
 the **unbounded** `vsprintf`/`sprintf` path (the SHIM-SNPRINTF blocker). So this recipe runs
 configure only for what it does right — generate `zconf.h`, report the platform — and **compiles
-the fixed object list itself** (exactly as `libamixcompat/` does), with *no* `NO_*` macro, so
+the fixed object list itself** (exactly as `acompat/`, the libamixcompat library, does), with *no* `NO_*` macro, so
 `gzwrite.c`/`gzlib.c` take their default **secure** `vsnprintf(next, state->size, …)` path. The two
 symbols resolve from `libamixcompat` at the consumer's final link, and the build **asserts via
 `nm`** that libz.a really references `vsnprintf`/`snprintf` — checking the artifact, not the

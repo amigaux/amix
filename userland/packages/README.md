@@ -22,7 +22,7 @@ licence. It is generated from each package's `package.sh`, as are the catalog li
 
 | Package | Prefix | What it adds over stock Amix |
 |---|---|---|
-| [`libamixcompat`](libamixcompat/) (PKG `acompat`) | `/usr/local` | Shim for the libc symbols and headers SVR4.0 lacks — `snprintf`, `setenv`, `strcasecmp`, `mkstemp`, `usleep`, `<stdint.h>` … |
+| [`acompat`](acompat/) (the libamixcompat library) | `/usr/local` | Shim for the libc symbols and headers SVR4.0 lacks — `snprintf`, `setenv`, `strcasecmp`, `mkstemp`, `usleep`, `<stdint.h>` … |
 | [`patch`](patch/) | `/usr/local` | Supersedes the stock Larry Wall patch 12u4 (1990) in `public` |
 | [`zlib`](zlib/) | `/opt/amix` | The deflate/inflate library (static `libz.a`); stock has none |
 | [`gzip`](gzip/) | `/opt/amix` | The first `.gz` on the box; stock has only 1985 LZW `compress` |
@@ -68,7 +68,7 @@ from `userland/pkgtools`. Host tools: a POSIX shell, `python3`, `curl` or `wget`
 `m68k-linux-gnu-objdump` for the 68060 scanner.
 
 Sources are **never vendored**. Each `package.sh` carries one upstream URL and one sha256, and the
-fetcher verifies the digest *before* extracting; our own code (`libamixcompat`, `amix-benchmark`)
+fetcher verifies the digest *before* extracting; our own code (`acompat`, the libamixcompat library; `amix-benchmark`)
 is in the package's `src/`.
 
 Every build ends in object-code gates rather than an exit status: an m68k SVR4 ELF check, the
@@ -128,8 +128,8 @@ before 2026-10-13 refer to the pre-public development history.
 - **Upstream packages** keep their own licences, listed per package in `INDEX.md`. Every package
   ships its upstream licence text under `<prefix>/doc/<tool>/`. Nothing SVR4-derived is committed
   here, and no upstream source tree is vendored.
-- **`libamixcompat`** is first-party and BSD-2-Clause; its text is
-  [`libamixcompat/LICENSE`](libamixcompat/LICENSE).
+- **`acompat`** (the libamixcompat library) is first-party and BSD-2-Clause; its text is
+  [`acompat/LICENSE`](acompat/LICENSE).
 - **The rest of this directory** — the recipes, `tools/`, the benchmark sources and the
   documentation — is **MIT**, copyright 2026 Jussi Alanärä ([`LICENSE`](LICENSE)), except where a
   file says otherwise. The MIT grant does **not** extend to any packaged upstream program, its

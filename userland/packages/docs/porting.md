@@ -915,7 +915,7 @@ Two caveats:
 
 ### The smoke loop, as it was actually run (2026-08-28)
 
-The first end-to-end run of this loop is `libamixcompat/` + `patch/`. What it took,
+The first end-to-end run of this loop is `acompat/` (libamixcompat) + `patch/`. What it took,
 so the next one is cheaper:
 
 - **A non-interactive `admin` file is required.** `pkgadd -n` alone aborts on the first question,

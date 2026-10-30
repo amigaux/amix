@@ -3,7 +3,7 @@
 **Package `gtar` 1.14** (catalog name `tar`) — GNU tar with base-256 header reads, long names and
 `-z`. GPL-2.0-or-later. Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
-    sh build/pkg/pkgbuild.sh userland/packages/libamixcompat   # once: tar links gettimeofday from libacompat
+    sh build/pkg/pkgbuild.sh userland/packages/acompat   # once: tar links gettimeofday from libacompat
     sh build/pkg/pkgbuild.sh userland/packages/tar
 
 ## Coexistence

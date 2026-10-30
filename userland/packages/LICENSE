@@ -29,8 +29,8 @@ our own sources in <name>/src/, tools/, and the documentation.
 
 It does NOT cover:
 
-  * libamixcompat/ -- first-party, but BSD-2-Clause; see
-    libamixcompat/LICENSE.
+  * acompat/ (the libamixcompat library) -- first-party, but BSD-2-Clause; see
+    acompat/LICENSE.
   * */patches/ -- changes to upstream programs; each patch is offered
     under the licence of the program it modifies.
   * Any packaged upstream program, its source, or the binaries built from it.
