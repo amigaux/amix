@@ -803,3 +803,14 @@ checkscripts(char *inst_dir, int silent)
 
 	return (retval);
 }
+
+/*
+ * AMIX PORT NOTE: yywrap() supplied here so that neither lex nor
+ * libl/libfl is needed at build time (the build uses the pre-generated
+ * scriptvfy.c, which carries the same function; see AMIX-PORT.md).
+ */
+int
+yywrap(void)
+{
+	return (1);
+}

@@ -193,6 +193,11 @@ qstrdup.o: qstrdup.c ../libpkg/pkglib.h ../hdrs/pkgdev.h \
   ../hdrs/install.h
 resolvepath.o: resolvepath.c
 scriptvfy.o: scriptvfy.c ../libpkg/pkglib.h
+# AMIX PORT: scriptvfy.c is the committed pre-generated scanner (with its
+# yywrap()), never rebuilt from scriptvfy.l.  This empty rule stops make's
+# built-in %.c: %.l, which re-ran lex whenever a checkout left the .l a
+# clock tick newer and linked a scanner without yywrap().
+scriptvfy.c: ;
 setadmin.o: setadmin.c ../hdrs/pkglocs.h ../libpkg/pkglib.h \
   ../hdrs/pkgdev.h ../hdrs/pkgstrct.h ../libpkg/pkgerr.h \
   ../libpkg/keystore.h ../libpkg/cfext.h ../libpkg/pkgerr.h \

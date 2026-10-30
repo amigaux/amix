@@ -647,7 +647,10 @@ All Amix-behavior changes are marked `AMIX PORT` in the code.
 - `libinst/scriptvfy.c` — pre-generated flex scanner copied from
   `research/heirloom/de-openssl/scriptvfy-pregen.c`; `yywrap()`
   appended so neither lex nor libl/libfl is needed;
-  `libinst/Makefile.mk` scriptvfy.l rule and clean entry removed;
+  `libinst/Makefile.mk` scriptvfy.l rule and clean entry removed, and an
+  empty `scriptvfy.c: ;` rule added so make's built-in `%.c: %.l` never
+  regenerates it (a checkout that left the .l newer re-ran lex and broke
+  the link, CI 2026-10-30); scriptvfy.l carries the same `yywrap()`;
   `-L$(CCSDIR)/lib -ll` removed from 13 pkgcmds/valtools Makefile.mk.
 
 **VERSION trio (factory packages have no VERSION):**
