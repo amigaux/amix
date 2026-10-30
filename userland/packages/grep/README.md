@@ -1,7 +1,7 @@
 # grep — the recipe
 
 **Package `grep` 2.5.1a** — GNU grep with recursive/`-o`/`--color`. GPL-2.0-or-later.
-Pin: [`pin.sh`](pin.sh).
+Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/grep
 
@@ -71,3 +71,19 @@ path D4 moved — and passed on the emulated golden 030. Staged for publication 
 `COPYING`/`NEWS`/`README` under `/opt/amix/doc/grep/`. `egrep`/`fgrep` are grep's own `/bin/sh`
 wrappers, rewritten to `exec /opt/amix/bin/grep -E|-F …` by **absolute** path so they work regardless
 of PATH. Pure file payload (D9), nothing outside `/opt/amix`, no symlink into a stock tree.
+
+## GCC 14 revisions
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`); the period build stopped at `-2`.
+Each revision is new bytes, so a new version: `-3` was `-mcpu=68060` (never published; its FPU
+forms kill make on a 68882), `-4` `-m68020-60`, `-5` the same on gcc14-cross-amix cf461e3
+(pointers returned in `%a0` and `%d0`, structs via `%a0`, as AMIX's compilers and libc do), `-6`
+the same with `-mno-strict-align`, `-7` the same objects relinked on the public pin b51ff39 (only
+the runtime it links differs). Under GCC 14 `strcasecmp` comes from the toolchain runtime
+`libamixc99`, which the specs link, so nothing from libamixcompat is linked; and configure's
+`stdint.h` answer is pinned to the period one (`no`): with the compat `stdint.h` the `off_t` probe
+fails and `off_t` becomes a macro.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt `-7` has
+the recorded `-7`'s payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
