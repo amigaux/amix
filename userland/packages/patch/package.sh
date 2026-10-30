@@ -13,5 +13,6 @@ SHA256=ecb5c6469d732bcf01d6ec1afe9e64f1668caba5bfdb103c28d7f537ba3cdb8a
 STYLE=configure
 TOOLCHAIN=gcc14
 PREFIX=/usr/local
+SYSTEM_PATHS=/usr/bin/patch
 DEPENDS=""
 BUILD_DEPENDS=""
