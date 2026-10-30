@@ -4,10 +4,21 @@
 set -e
 B=${B:-build}
 T=$B/rt
+# flip FILE OFFSET: complement one byte, so it changes whatever it held (a
+# constant written over random data is the same byte one time in 256), and
+# check that exactly that byte changed
+flip() {
+	cp "$1" "$1.orig"
+	v=$(od -An -tu1 -j "$2" -N1 "$1" | tr -d ' ')
+	printf "\\$(printf %03o $((255 - v)))" | dd of="$1" bs=1 seek="$2" conv=notrunc 2>/dev/null
+	[ "$(cmp -l "$1.orig" "$1" | wc -l)" -eq 1 ] ||
+		{ echo "store-roundtrip: $1 not changed at $2" >&2; exit 1; }
+	rm -f "$1.orig"
+}
 rm -rf $T && mkdir -p $T
 head -c 1267397 /dev/urandom > $T/unix
 # a compressible module, stored deflated
-yes "amix z3660scsi module text" | head -c 45678 > $T/z3660scsi
+yes "amix z3660scsi module text" 2>/dev/null | head -c 45678 > $T/z3660scsi
 head -c 20000 /dev/urandom > $T/boot2.bin
 head -c 1008 /dev/zero > $T/b1.bin
 $B/bbframe $T/b1.bin $T/boot1.img >/dev/null
@@ -32,10 +43,13 @@ module z3660eth boot 30212 path=/stand/gen/41/mod/z3660eth
 SPEC
 # an image with the store at a partition offset of 1 MiB
 $B/mkstore -o $T/disk.img -p 1048576 -s 16777216 -1 $T/boot1.img -2 $T/boot2.bin $T/g12.spec $T/g41.spec
-$B/lsstore $T/disk.img 1048576
-# corrupt one byte of the kernel of generation 12 and expect a failure
-off=$((1048576 + 65536 + 100))
-printf '\377' | dd of=$T/disk.img bs=1 seek=$off conv=notrunc 2>/dev/null
+$B/lsstore $T/disk.img 1048576 > $T/d.out
+cat $T/d.out
+# corrupt one byte of the kernel of generation 12, where lsstore places it
+# (inside its CRC), and expect a failure
+at=$(sed -n '/^  generation 12 /,/^  generation/s/^    kernel  unix .* at 1:\(0x[0-9a-f]*\) .*/\1/p' $T/d.out)
+[ -n "$at" ]
+flip $T/disk.img $((1048576 + at + 100))
 if $B/lsstore $T/disk.img 1048576 >/dev/null; then
 	echo "store-roundtrip: corruption NOT detected" >&2; exit 1
 fi
@@ -91,7 +105,7 @@ echo "store-roundtrip: floppy pair ok"
 C=$T/cd
 sed 's/^state good/state pristine/' $T/g41.spec > $T/c41.spec
 # a compressible miniroot: data that deflate does not shrink is stored raw
-yes "amix miniroot file system text" | head -c 500000 > $T/cminiroot
+yes "amix miniroot file system text" 2>/dev/null | head -c 500000 > $T/cminiroot
 cat > $T/c12.spec <<SPEC
 generation 12
 state pristine
@@ -112,7 +126,7 @@ grep -q "module  z3660scsi .* file G41M01.BIN (deflate)  crc .* ok" $T/c.out
 [ -f $C/BOOT/K30/G12.GMF ] && [ -f $C/BOOT/K46/G41.GMF ] && [ -f $C/BOOT/amix-cdboot ]
 grep -q "^SYS:BOOT/amix-cdboot$" $C/S/Startup-Sequence
 grep -q "^kernel unix 600000 file=G12K.BIN crc32=" $C/BOOT/K30/G12.GMF
-printf '\377' | dd of=$C/BOOT/K46/G41K.BIN bs=1 seek=100 conv=notrunc 2>/dev/null
+flip $C/BOOT/K46/G41K.BIN 100
 if $B/lsstore -C $C >/dev/null; then
 	echo "store-roundtrip: CD corruption NOT detected" >&2; exit 1
 fi
@@ -196,7 +210,7 @@ set -e
 [ $r1 -eq 3 ] && [ $r2 -eq 4 ]
 $B/lsstore $W/kb.img 65536 | grep -q "lsstore: ok"
 # a deflated member (media built on the host): check inflates and verifies it
-yes "amix kbootset deflate check" | head -c 300000 > $W/kb.z
+yes "amix kbootset deflate check" 2>/dev/null | head -c 300000 > $W/kb.z
 printf 'line k30\nkernel unix %s z=deflate\n' $W/kb.z > $W/kb.zspec
 $KB commit --spec $W/kb.zspec >/dev/null 2>&1
 $B/lsstore $W/kb.img 65536 | grep -q "kernel  unix .*(deflate)  crc .* ok"
