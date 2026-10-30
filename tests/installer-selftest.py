@@ -8197,23 +8197,20 @@ def _ufs_checks(code):
     """The driver-text predicates, as {name: bool}. Taking the TEXT (not the
     path) is what lets the negative fixtures below drive the same code."""
     return {
-        "default_s5": bool(re.search(
-            r'^\[ -n "\$TARGET_ROOT_FSTYPE" \] \|\| TARGET_ROOT_FSTYPE=s5$',
+        "default_ufs": bool(re.search(
+            r'^\[ -n "\$TARGET_ROOT_FSTYPE" \] \|\| TARGET_ROOT_FSTYPE=ufs$',
             code, re.M)),
         "validated": bool(re.search(
-            r'case "\$TARGET_ROOT_FSTYPE" in\s*\n\s*s5\|ufs\)\s*: ;;\s*\n\s*\*\)\s*die ',
-            code)),
+            r'case "\$TARGET_ROOT_FSTYPE" in\s*\n\s*ufs\)\s*: ;;\s*\n'
+            r'\s*s5\)\s*die [^\n]*\n\s*\*\)\s*die ', code)),
         "mkfs_ufs_block": bool(re.search(
             r'run /bin/mkfs_ufs %s "\$ROOT_BLK" "\$ROOTLEN"'
             % re.escape(_UFS_OPT), code)),
-        "mkfs_s5_raw": bool(re.search(
-            r'run /bin/mkfs_s5 "\$ROOT_RAW" "\$ROOTLEN"', code)),
+        "no_s5_tools": not re.search(r'\b(?:mkfs|fsck)_s5\b|/usr/lib/fs/s5/', code),
         "no_composed_name": not re.search(r'\b(?:mkfs|fsck)_\$\{?[A-Za-z_]', code),
-        "labelit_s5_only": (
-            code.count("/usr/lib/fs/s5/labelit") == 1
-            and "/usr/lib/fs/ufs/labelit" not in code),
-        "prebuilt_refuses": bool(re.search(
-            r'\[ "\$TARGET_ROOT_FSTYPE" = s5 \] \|\| die ', code)),
+        "no_labelit": "labelit" not in code,
+        "prebuilt_retired": bool(re.search(
+            r'^\[ "\$\{INSTALL_TARGET_PREBUILT:-0\}" = 1 \] && die ', code, re.M)),
         "mnttab_miniroot_fstype": bool(re.search(
             r'^echo "/dev/root / \$MINIROOT_FSTYPE rw 0" > /etc/mnttab$', code, re.M)),
         "install_cpu_default_030": bool(re.search(
@@ -8224,8 +8221,7 @@ def _ufs_checks(code):
         "mount_parameterised": bool(re.search(
             r'run /etc/mount "\$ROOT_BLK" "\$TARGET" 0 "\$TARGET_ROOT_FSTYPE"',
             code)),
-        "final_fsck_both": ("run /bin/fsck_ufs \"$ROOT_RAW\"" in code
-                            and "run /bin/fsck_s5 \"$ROOT_RAW\"" in code),
+        "final_fsck_ufs": "run /bin/fsck_ufs \"$ROOT_RAW\"" in code,
         "emits_fb_key": bool(re.search(
             r'echo "FB_ROOT_FSTYPE=\$TARGET_ROOT_FSTYPE"', code)),
     }
@@ -8239,28 +8235,25 @@ def audit_ufs_target():
     got = _ufs_checks(code)
 
     for key, msg in (
-        ("default_s5",
-         "TARGET_ROOT_FSTYPE defaults to s5 -- the COMPATIBILITY floor (a profile "
-         "or medium written before the key installs the identical tree); the "
-         "PRODUCT default is the interview's `[ufs]`"),
+        ("default_ufs",
+         "TARGET_ROOT_FSTYPE defaults to ufs -- s5 is not a target (P-35)"),
         ("validated",
-         "an unknown TARGET_ROOT_FSTYPE fails the install CLOSED (case s5|ufs, "
-         "else die) -- never a silent fallback"),
+         "TARGET_ROOT_FSTYPE=s5 is refused with its reason and anything else but "
+         "ufs fails CLOSED -- never a silent fallback"),
         ("mkfs_ufs_block",
-         "the ufs arm is stock's line: `mkfs_ufs %s` on the BLOCK node, size in "
+         "the mkfs is stock's line: `mkfs_ufs %s` on the BLOCK node, size in "
          "512-blocks" % _UFS_OPT),
-        ("mkfs_s5_raw",
-         "the s5 arm still passes the RAW node -- the path every attested digest "
-         "was measured through, unchanged"),
+        ("no_s5_tools",
+         "no mkfs_s5, fsck_s5 or s5 back end anywhere in the driver's code"),
         ("no_composed_name",
          "no `mkfs_$VAR` / `fsck_$VAR` composed program name anywhere -- every "
          "first word stays a literal audit G can resolve against the proto"),
-        ("labelit_s5_only",
-         "labelit is called on the s5 path only, exactly once, and never on ufs "
-         "(stock ran it on neither)"),
-        ("prebuilt_refuses",
-         "INSTALL_TARGET_PREBUILT=1 REFUSES a non-s5 target rather than mounting "
-         "mkroot's s5 filesystem under the wrong type"),
+        ("no_labelit",
+         "no labelit (there is no ufs labelit on the medium; stock ran it on "
+         "neither filesystem)"),
+        ("prebuilt_retired",
+         "INSTALL_TARGET_PREBUILT=1 is refused -- mkroot.sh mints s5 only, and s5 "
+         "is not a target"),
         ("mnttab_miniroot_fstype",
          "the /etc/mnttab seed line names the running MINIROOT's own fs "
          "($MINIROOT_FSTYPE) -- not the target, so it must never take "
@@ -8274,11 +8267,10 @@ def audit_ufs_target():
          "MINIROOT_FSTYPE is DERIVED from INSTALL_CPU (030 => s5, 040|060 => ufs, "
          "else die) -- ONE source of truth, and the 040/060 line is UFS-only"),
         ("mount_parameterised",
-         "the target mount passes the chosen type straight to mount(2) "
+         "the target mount passes the type straight to mount(2) "
          "(/etc/mount has no type table of its own)"),
-        ("final_fsck_both",
-         "the post-unmount fsck has both literal arms (on ufs it is the ONLY "
-         "fsck of the run -- the pre-mount one is s5-only by design)"),
+        ("final_fsck_ufs",
+         "the post-unmount fsck_ufs is there (the ONLY fsck of the run)"),
         ("emits_fb_key",
          "the type is handed to the first boot as FB_ROOT_FSTYPE"),
     ):
@@ -8292,7 +8284,7 @@ def audit_ufs_target():
     if tools is None:
         fail("miniroot.proto missing -- cannot check the ufs back end is on the medium")
     else:
-        for t in ("mkfs_ufs", "fsck_ufs", "mkfs_s5", "fsck_s5"):
+        for t in ("mkfs_ufs", "fsck_ufs"):
             if t in tools:
                 ok("miniroot.proto carries /bin/%s (so audit G's allowlist covers "
                    "it the moment the driver names it -- no proto change was "
@@ -8365,12 +8357,12 @@ def audit_ufs_target():
     for pf in profs:
         d = _parse_profile(os.path.join(PROFILES_DIR, pf))
         v = d.get("TARGET_ROOT_FSTYPE")
-        if v in ("s5", "ufs"):
+        if v == "ufs":
             ok("%s declares TARGET_ROOT_FSTYPE=%s" % (pf, v))
         else:
-            fail("%s declares TARGET_ROOT_FSTYPE=%r -- must be s5 or ufs "
-                 "(an absent key silently falls back to a driver default, which "
-                 "is exactly the drift the key exists to end)" % (pf, v))
+            fail("%s declares TARGET_ROOT_FSTYPE=%r -- must be ufs (s5 is not a "
+                 "target, P-35; an absent key falls back to a driver default, "
+                 "which is exactly the drift the key exists to end)" % (pf, v))
         # INSTALL_CPU is OPTIONAL (absent => 030, the compatibility floor). When
         # present it must be legal, and the 040/060 line is UFS-only -- s5 is
         # structurally broken under 4 KiB pages, so a 040/060 profile that laid an
@@ -8419,28 +8411,35 @@ def audit_ufs_target():
          code.replace('run /bin/mkfs_ufs %s "$ROOT_BLK"' % _UFS_OPT,
                       'run /bin/mkfs_ufs %s "$ROOT_RAW"' % _UFS_OPT),
          "mkfs_ufs_block"),
-        ("the two literal arms collapsed into `mkfs_${TARGET_ROOT_FSTYPE}` (the "
-         "obvious refactor, and one the tool allowlist can no longer resolve)",
-         code.replace('run /bin/mkfs_s5 "$ROOT_RAW" "$ROOTLEN"',
-                      'run /bin/mkfs_${TARGET_ROOT_FSTYPE} "$ROOT_RAW" "$ROOTLEN"'),
+        ("the mkfs composed as `mkfs_${TARGET_ROOT_FSTYPE}` (the obvious "
+         "refactor, and one the tool allowlist can no longer resolve)",
+         code.replace('run /bin/mkfs_ufs %s "$ROOT_BLK"' % _UFS_OPT,
+                      'run /bin/mkfs_${TARGET_ROOT_FSTYPE} %s "$ROOT_BLK"' % _UFS_OPT),
          "no_composed_name"),
-        ("the prebuilt-mode refusal dropped, so a ufs answer would mount "
-         "mkroot's s5 root and write a vfstab that lies about it",
-         re.sub(r'\t\[ "\$TARGET_ROOT_FSTYPE" = s5 \] \|\| die [^\n]*\n(?:\t[^\n]*\n)*?(?=\tmsg "prebuilt mode)',
-                "", code),
-         "prebuilt_refuses"),
-        ("labelit called on the ufs path too (there is no ufs back end on the "
+        ("an s5 arm brought back beside the ufs mkfs",
+         code.replace('run /bin/mkfs_ufs %s "$ROOT_BLK" "$ROOTLEN"' % _UFS_OPT,
+                      'run /bin/mkfs_ufs %s "$ROOT_BLK" "$ROOTLEN"\n'
+                      '\trun /bin/mkfs_s5 "$ROOT_RAW" "$ROOTLEN"' % _UFS_OPT),
+         "no_s5_tools"),
+        ("the prebuilt-mode refusal dropped, so the driver would mount whatever "
+         "mkroot.sh minted (s5) under a ufs vfstab",
+         re.sub(r'^\[ "\$\{INSTALL_TARGET_PREBUILT:-0\}" = 1 \] && die [^\n]*\n', "",
+                code, flags=re.M),
+         "prebuilt_retired"),
+        ("labelit called after the mkfs (there is no ufs back end on the "
          "medium, so this dies mid-install with the target half-built)",
          code.replace('run /bin/mkfs_ufs %s "$ROOT_BLK" "$ROOTLEN"' % _UFS_OPT,
                       'run /bin/mkfs_ufs %s "$ROOT_BLK" "$ROOTLEN"\n'
-                      '\t\trun /usr/lib/fs/ufs/labelit "$ROOT_RAW" root ROOT'
+                      '\trun /usr/lib/fs/ufs/labelit "$ROOT_RAW" root ROOT'
                       % _UFS_OPT),
-         "labelit_s5_only"),
-        ("the fail-closed validation replaced by a silent fallback",
-         re.sub(r'case "\$TARGET_ROOT_FSTYPE" in\n\ts5\|ufs\)\t: ;;\n\t\*\)\tdie [^\n]*\nesac',
-                'case "$TARGET_ROOT_FSTYPE" in\n\ts5|ufs)\t: ;;\n\t*)\tTARGET_ROOT_FSTYPE=s5 ;;\nesac',
-                code),
+         "no_labelit"),
+        ("s5 accepted again instead of refused",
+         re.sub(r'(case "\$TARGET_ROOT_FSTYPE" in\n\tufs\)\t: ;;\n)\ts5\)\tdie [^\n]*\n',
+                r'\1\ts5)\t: ;;\n', code),
          "validated"),
+        ("the fallback reverted to s5",
+         code.replace('|| TARGET_ROOT_FSTYPE=ufs', '|| TARGET_ROOT_FSTYPE=s5'),
+         "default_ufs"),
     ):
         if broken == code:
             fail("negative fixture did not modify the driver at all (%s) -- the "

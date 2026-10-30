@@ -62,21 +62,16 @@
 # rdbtool RDB -> s5 mkfs (tools/lib/s5.py) -> read-back gate -> layout.json.
 # This driver does the ON-BOX equivalent with the miniroot's own tools:
 #   arithmetic in `expr` (the SAME stock constants) -> /etc/rdb RDB authoring ->
-#   /bin/mkfs_{s5,ufs} -> (s5 only) /usr/lib/fs/s5/labelit -> mount(2) via
-#   /etc/mount.
-# Two supported target-build modes:
-#   author   (default) -- this driver partitions + mkfs the blank target on-box.
-#            THE ONLY MODE THAT CAN LAY DOWN A UFS ROOT, because `mkfs_ufs` runs
-#            on the box; there is no host-side UFS writer and deliberately none
+#   /bin/mkfs_ufs -> mount(2) via /etc/mount.
+# One target-build mode:
+#   author -- this driver partitions + mkfs the blank target on-box. It is the
+#            only mode that can lay down a UFS root, because `mkfs_ufs` runs on
+#            the box; there is no host-side UFS writer and deliberately none
 #            planned (docs/ufs-target-scoping.md §3.3 costs one at 600-900 lines
 #            against a 20 KB C program we already ship).
-#   prebuilt (INSTALL_TARGET_PREBUILT=1) -- the target was fully built host-side
-#            by tools/mkroot.sh (RDB + s5 root, read-back-gated); the driver
-#            skips authoring/mkfs and only fscks + mounts. This is the LOW-RISK
-#            path recommended for the W5.4 canonical run (mkroot.sh is proven and
-#            has its own read-back gate; it also runs identically for metal).
-#            mkroot.sh mints s5 and only s5, so this mode REFUSES a ufs target
-#            rather than mounting an s5 filesystem under the wrong type.
+#   prebuilt (INSTALL_TARGET_PREBUILT=1) is RETIRED (P-35, 2026-10-30): it
+#            mounted a root tools/mkroot.sh had minted host-side, and mkroot.sh
+#            mints s5 only. The driver refuses the key.
 # The whole author sequence -- the `/etc/rdb` create/geometry primitive included
 # -- is transcribed from the stock installer (grimoire anatomy-root-adf; the
 # script itself is /etc/profile on the stock root floppy) and, since 2026-07-31,
@@ -916,21 +911,18 @@ case "$INSTALL_ATTESTED" in
 esac
 
 # --- UFS INPUT KEY: which filesystem the TARGET ROOT gets ---------------------
-#   TARGET_ROOT_FSTYPE  s5   the filesystem laid on the target root slice.
-#                            `ufs` is the Berkeley filesystem the 1991
-#                            documentation itself recommends, and it is what the
-#                            INTERVIEW now defaults to (setup.sh, `[ufs]`); `s5`
-#                            is the traditional one and stays fully selectable.
+#   TARGET_ROOT_FSTYPE  ufs  the filesystem laid on the target root slice (and on
+#                            the 1.1 data slice). ufs is the ONLY value accepted.
 #
-# ★ THE DEFAULT HERE IS s5 AND THAT IS NOT THE PRODUCT DEFAULT. It is the
-# compatibility floor, the same seam law every other key in this file follows: a
-# profile (or a medium) written before this key existed must install the
-# byte-identical tree it always did. The PRODUCT default -- what a person at the
-# console gets by pressing RETURN -- is `ufs`, and it arrives here as an ANSWER,
-# appended to the profile by setup.sh. An unattended profile says what it means.
+# ★ s5 IS NOT A TARGET (P-35, owner 2026-10-30). There is no install base on s5,
+# its 14-byte names block perl and every later port, and the 040/060 line cannot
+# run it at all, so the installer lays ufs and nothing else: an absent key means
+# ufs, and `s5` is refused with that reason rather than quietly overridden. What
+# stays s5 is NOT a target: the 030 line's own miniroot (MINIROOT_FSTYPE below)
+# and the payload slices the miniroot reads its packages from.
 #
 # What the fs type does and does NOT reach:
-#   * mkfs / labelit / the pre-mount check / the mount type  -- section 2 below.
+#   * mkfs / the mount type                                  -- section 2 below.
 #   * the target's /etc/vfstab column 4                      -- FB_ROOT_FSTYPE,
 #     emitted into firstboot.conf in section 9 and consumed by firstboot.sh.
 #   * NOT the running miniroot's own /etc/mnttab seed line (section 4) -- that
@@ -948,10 +940,11 @@ esac
 # ../amix-kerntools/docs/ufs-root-kernel-capability.md (the kernel half: `ufs`
 # sits at vfssw[2] in every kernel we build, rootfstype is compiled EMPTY so
 # vfs_mountroot probes s5 then ufs, and a ufs root costs zero kernel bytes).
-[ -n "$TARGET_ROOT_FSTYPE" ] || TARGET_ROOT_FSTYPE=s5
+[ -n "$TARGET_ROOT_FSTYPE" ] || TARGET_ROOT_FSTYPE=ufs
 case "$TARGET_ROOT_FSTYPE" in
-	s5|ufs)	: ;;
-	*)	die "profile TARGET_ROOT_FSTYPE='$TARGET_ROOT_FSTYPE' is not s5 or ufs" ;;
+	ufs)	: ;;
+	s5)	die "profile TARGET_ROOT_FSTYPE=s5: s5 is no longer an install target (P-35) -- the root is ufs; drop the key or set it to ufs" ;;
+	*)	die "profile TARGET_ROOT_FSTYPE='$TARGET_ROOT_FSTYPE' is not ufs" ;;
 esac
 
 # --- TARGET_RDB_BLOCK: where the author path puts the RDSK block (2026-09-26) ---
@@ -1537,8 +1530,6 @@ build_target_author() {
 		msg "non-blank guard: target c${ID}d0 read as BLANK (no RDB) -- authoring."
 	fi
 	warn "author mode: writing the RDB slice map with /etc/rdb on $DISK_RAW."
-	warn "  If author mode fails on this miniroot, prefer"
-	warn "  INSTALL_TARGET_PREBUILT=1 with a tools/mkroot.sh target (see docs)."
 	# Create a blank RDB. Stock line, verbatim (its $DISKLEN comes from
 	# `/etc/ddsize $rDISK` and is the disk length in 512-BYTE BLOCKS -- the same
 	# unit, and for the profile's disk the same number, that plan_partitions
@@ -1631,108 +1622,66 @@ build_target_author() {
 	}
 	early_target_swap
 
-	# The filesystem on the root slice. BOTH mkfs back-ends take their size
-	# operand in 512-byte blocks -- SVR4 mkfs(1M), and the stock script passes
-	# its $ROOTLEN (which is `MB * 2048`, i.e. 512-blocks) straight through to
-	# `mkfs_${ROOT_FSYS}`. mkfs converts to logical blocks itself: mkfs_s5 prints
-	# "total logical blocks" = ROOTLEN/2 at its 1 KB default, the same count
-	# tools/mkroot.sh mints host-side. Passing the 1 KB count here (what this
-	# line used to do) would have built a filesystem over only HALF the slice.
+	# The filesystem on the root slice. mkfs takes its size operand in 512-byte
+	# blocks -- SVR4 mkfs(1M), and the stock script passes its $ROOTLEN (which is
+	# `MB * 2048`, i.e. 512-blocks) straight through to `mkfs_${ROOT_FSYS}`.
+	# Passing a 1 KB count here (what this line once did) would build a
+	# filesystem over only HALF the slice.
 	#
 	# STOCK STAGE STRING (verbatim, /etc/profile on the stock root floppy): the
 	# original printed this immediately before its own mkfs_${ROOT_FSYS} run.
 	stage ""
 	stage "Making filesystems.  This will take a few minutes."
-	# ★ NO `mkfs_${TARGET_ROOT_FSTYPE}` INTERPOLATION, deliberately. Two literal
-	# arms cost three lines and keep every command's first word a LITERAL PATH,
-	# which is what installer-selftest audit G (the miniroot-tool allowlist,
-	# derived from miniroot.proto) can actually resolve. A composed program name
-	# is a name no audit can check, on a filesystem with no `sed` to check it
-	# with. Both binaries are already on the medium: /bin/mkfs_ufs (19,664 B) and
-	# /bin/fsck_ufs (45,548 B) have been stock-miniroot proto members since W5.2,
-	# byte-identical to the ones on the stock root floppy, and their only
-	# DT_NEEDED is the miniroot's own /usr/lib/libc.so.1.
-	if [ "$TARGET_ROOT_FSTYPE" = ufs ]; then
-		# STOCK'S UFS RECIPE, verbatim (stock /etc/profile:
-		#     UFS_OPT="-o free=2,opt=s"
-		#     mkfs_${ROOT_FSYS} $ROOT_OPT $UPART $ROOTLEN
-		# with $UPART = /dev/dsk/cXd0sN, i.e. the BLOCK node -- NOT the raw node
-		# our s5 arm passes). Three deliberate fidelities to that line:
-		#   1. the BLOCK node. mkfs_ufs carries its own "%s is not special
-		#      device, can't mkfs" check and we have never run this binary; the
-		#      node stock fed it is the one with 34 years of evidence behind it.
-		#      It also keeps mkfs and the mount that follows on the SAME node, so
-		#      no write goes through the raw path and no read through the cached
-		#      one.
-		#   2. `-o free=2,opt=s` and nothing else -- NO geometry operands. The
-		#      superblock on amix-images' 1991-installed golden reads back
-		#      fs_minfree=2 and fs_optim=FS_OPTSPACE, which IS this option pair's
-		#      fingerprint, with mkfs_ufs's own default geometry beside it.
-		#   3. the same $ROOTLEN in 512-blocks the s5 arm passes, which that same
-		#      golden confirms: its fs_size x fs_fsize equals its slice size to
-		#      the byte.
-		# NO labelit on this path. The miniroot carries only the s5 back-end
-		# (/usr/lib/fs/s5/labelit, a core-2.1.pkg proto member); there is no
-		# /usr/lib/fs/ufs/labelit on the medium -- and STOCK RAN labelit ON
-		# NEITHER FILESYSTEM. The s5 call below is our own addition, so dropping
-		# it here removes nothing stock did and costs the floppy nothing (adding
-		# the ufs back-end would have eaten 5,400 of its 46 free KB for a step
-		# its author considered unnecessary).
-		run /bin/mkfs_ufs -o free=2,opt=s "$ROOT_BLK" "$ROOTLEN"
-	else
-		run /bin/mkfs_s5 "$ROOT_RAW" "$ROOTLEN"
-		# label the root fs (miniroot has only the s5 back-end labelit)
-		run /usr/lib/fs/s5/labelit "$ROOT_RAW" root ROOT
-	fi
+	# The mkfs path is a LITERAL, which is what installer-selftest audit G (the
+	# miniroot-tool allowlist, derived from miniroot.proto) can resolve. The binary
+	# is already on the medium: /bin/mkfs_ufs (19,664 B) has been a stock-miniroot
+	# proto member since W5.2, byte-identical to the stock root floppy's, and its
+	# only DT_NEEDED is the miniroot's own /usr/lib/libc.so.1.
+	# STOCK'S UFS RECIPE, verbatim (stock /etc/profile:
+	#     UFS_OPT="-o free=2,opt=s"
+	#     mkfs_${ROOT_FSYS} $ROOT_OPT $UPART $ROOTLEN
+	# with $UPART = /dev/dsk/cXd0sN, i.e. the BLOCK node). Three deliberate
+	# fidelities to that line:
+	#   1. the BLOCK node. mkfs_ufs carries its own "%s is not special
+	#      device, can't mkfs" check and we have never run this binary; the
+	#      node stock fed it is the one with 34 years of evidence behind it.
+	#      It also keeps mkfs and the mount that follows on the SAME node, so
+	#      no write goes through the raw path and no read through the cached
+	#      one.
+	#   2. `-o free=2,opt=s` and nothing else -- NO geometry operands. The
+	#      superblock on amix-images' 1991-installed golden reads back
+	#      fs_minfree=2 and fs_optim=FS_OPTSPACE, which IS this option pair's
+	#      fingerprint, with mkfs_ufs's own default geometry beside it.
+	#   3. $ROOTLEN in 512-blocks, which that same golden confirms: its
+	#      fs_size x fs_fsize equals its slice size to the byte.
+	# NO labelit: there is no /usr/lib/fs/ufs/labelit on the medium, and
+	# STOCK RAN labelit ON NEITHER FILESYSTEM.
+	run /bin/mkfs_ufs -o free=2,opt=s "$ROOT_BLK" "$ROOTLEN"
 	[ "$INSTALL_LAYOUT" = 1.1 ] && l11_mkfs_data
 	return 0
 }
 
-build_target_prebuilt() {
-	# ★ PREBUILT IS AN s5-ONLY MODE, and it fails closed rather than quietly.
-	# tools/mkroot.sh mints the root filesystem host-side with tools/lib/s5.py --
-	# an s5 minter, the only filesystem writer this project owns host-side. If a
-	# profile or an interview answer asked for ufs and we simply carried on, the
-	# mount below would either refuse the filesystem or, far worse, succeed
-	# against the s5 image mkroot left there and produce a box whose vfstab says
-	# ufs about an s5 root. Neither is a diagnosis anybody wants at cold boot.
-	[ "$TARGET_ROOT_FSTYPE" = s5 ] || die "TARGET_ROOT_FSTYPE=$TARGET_ROOT_FSTYPE, but INSTALL_TARGET_PREBUILT=1 and tools/mkroot.sh mints an s5 root host-side.
-	A $TARGET_ROOT_FSTYPE root can only be AUTHORED on the box, where its mkfs binary is: re-run without INSTALL_TARGET_PREBUILT."
-	msg "prebuilt mode: target RDB + s5 root assumed already authored by mkroot.sh."
-	[ -b "$ROOT_BLK" ] || warn "root block device $ROOT_BLK not present -- is the target attached at id ${ID}?"
-}
+# INSTALL_TARGET_PREBUILT=1 mounted an s5 root tools/mkroot.sh had minted
+# host-side; with s5 no longer a target (P-35) there is nothing for it to mount.
+[ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ] && die "INSTALL_TARGET_PREBUILT=1 is retired (P-35): mkroot.sh mints s5 roots only, and s5 is no longer a target -- install in author mode (drop the key)"
+TARGET_BUILD_MODE="authored on-box"
+build_target_author
 
-if [ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ]; then
-	TARGET_BUILD_MODE="prebuilt host-side by mkroot.sh"
-	build_target_prebuilt
-else
-	TARGET_BUILD_MODE="authored on-box"
-	build_target_author
-fi
-
-# fsck the root s5 (the stock fs is marked dirty after mkfs; a pre-mount fsck is
-# required before a rw mount is allowed) then mount at /mnt via direct mount(2).
+# Mount the new root at /mnt via direct mount(2).
 # STOCK STAGE STRING (verbatim): the original printed this before its own
 # pre-mount partition check.
 stage ""
 stage "Please wait while the partitions are checked..."
-# ★ THE PRE-MOUNT fsck IS OURS, AND IT IS s5-ONLY ON PURPOSE.
-# Stock ran `fsck_${ROOT_FSYS}` in exactly ONE place -- repairdisk() -- and never
-# between its mkfs and its mount, on EITHER filesystem. Our s5 arm keeps the
-# check because that is the sequence every attested s5 digest was produced by and
-# nothing here is worth re-litigating; the ufs arm follows stock instead, for a
-# reason beyond fidelity: mkfs_ufs above writes through the BLOCK node, so a
+# ★ NO PRE-MOUNT fsck. Stock ran `fsck_${ROOT_FSYS}` in exactly ONE place --
+# repairdisk() -- and never between its mkfs and its mount. There is a reason
+# beyond fidelity: mkfs_ufs above writes through the BLOCK node, so a
 # `fsck_ufs $ROOT_RAW` here would read the raw path for bytes that are still in
 # the buffer cache -- reading a filesystem through a node the writer never used
 # is how you manufacture the corruption you were checking for. (Stock's own
 # repairdisk passes the BLOCK node to fsck for the same reason.) The
-# post-unmount fsck at the end of this script checks the ufs root for real, on a
+# post-unmount fsck at the end of this script checks the root for real, on a
 # synced and unmounted filesystem, where the raw node is the correct one.
-if [ "$TARGET_ROOT_FSTYPE" = ufs ]; then
-	msg "ufs target: no pre-mount fsck (stock ran none between mkfs and mount, on either fs); the post-unmount fsck at the end checks it"
-else
-	run /bin/fsck_s5 "$ROOT_RAW"
-fi
+msg "ufs target: no pre-mount fsck (stock ran none between mkfs and mount); the post-unmount fsck at the end checks it"
 # /etc/mount is the miniroot's direct-mount(2) tool. Its usage as printed on the box
 # is `mount spec dir [nflag [fstyp [data]]]`: nflag=0 => rw, fstyp=s5|ufs. The bare
 # 2-arg form omits nflag+fstyp and mount(2) rejects it (EINVAL "Invalid argument");
@@ -3473,17 +3422,10 @@ RUNOUT=
 rm -rf "$TARGET/tmp/apkgcache" "$TARGET/tmp/raw.conf"
 msg "unmounting target and running a final fsck..."
 /etc/umount "$TARGET" 2>/dev/null || umount "$TARGET" 2>/dev/null || warn "umount $TARGET returned nonzero"
-# Two literal arms, not `fsck_${TARGET_ROOT_FSTYPE}` -- same reason as the mkfs
-# above: the allowlist audit resolves first words, and a composed program name is
-# one it cannot resolve. On the ufs path this is the ONLY fsck of the run (the
-# pre-mount one is s5-only, see section 2), and it is the right place for it: the
-# filesystem has been synced and UNMOUNTED, so the raw node is now the correct
-# one to read it through.
-if [ "$TARGET_ROOT_FSTYPE" = ufs ]; then
-	run /bin/fsck_ufs "$ROOT_RAW"
-else
-	run /bin/fsck_s5 "$ROOT_RAW"
-fi
+# The ONLY fsck of the run (there is no pre-mount one, see section 2), and the
+# right place for it: the filesystem has been synced and UNMOUNTED, so the raw
+# node is now the correct one to read it through.
+run /bin/fsck_ufs "$ROOT_RAW"
 
 echo
 msg "=============================================================="
