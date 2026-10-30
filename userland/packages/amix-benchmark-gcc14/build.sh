@@ -128,4 +128,12 @@ stage() {
 	for b in $BENCHES; do chmod 0755 "$kit/$b"; done
 	chmod 0644 "$kit/BUILD-INFO" "$kit/PROVENANCE" "$DEST$PREFIX/doc/amix-bench-g14/README.txt"
 	find "$DEST" -exec touch -h -d "@$AMIXBENCH_SOURCE_EPOCH" {} +
+	# nothing shipped names a home directory or this build host (BUILD-INFO
+	# and PROVENANCE record the compiler by identity, never by path)
+	h=$(hostname 2>/dev/null || uname -n)
+	leak=$(find "$DEST" -type f | while read -r f; do
+		strings -a "$f" | grep -E "/home/|/Users/|$h" | sed "s|^|${f#$DEST}: |"
+	done)
+	[ -z "$leak" ] || { echo "[FAIL] a build-host string ships:" >&2; echo "$leak" >&2; exit 1; }
+	echo "  HOST ok   no /home/, /Users/ or the build host's name in any staged file"
 }

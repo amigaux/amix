@@ -42,7 +42,10 @@ then linked. `dhry.c` stays exactly as Weicker published it, so GCC 14 warns twi
 pre-ANSI `char *malloc ()` and its undeclared `strcpy` mismatch the compiler's built-ins; the
 build accepts those two and nothing else, and our four sources must be warning-free. The
 binaries are stripped before `BUILD-INFO` and `PROVENANCE` are written, so `PROVENANCE` lists the
-shipped sha256s, and every payload file's mtime is the kit 1.2 date (1789516800).
+shipped sha256s, and every payload file's mtime is the kit 1.2 date (1789516800). They name the
+compiler by identity (`m68k-elf-gcc`, its version and the gcc14-cross-amix commit), never by
+path, and the stage hook refuses any staged file whose strings contain `/home/`, `/Users/` or
+the build host's name, the same gate as the period package's build.
 
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt `1.3-4`
 has the recorded one's payload (every file's sha256 and mode, `BUILD-INFO` and `PROVENANCE`
