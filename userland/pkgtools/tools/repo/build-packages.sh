@@ -275,6 +275,7 @@ VERSION=$VER_APKG
 CATEGORY=application
 CLASSES=none conffile
 APKG_DESC=Remote package client: update/list/search/install over HTTP
+APKG_ESSENTIAL=yes
 EOF
   cat > "$A/apkg.conf" <<EOF
 # apkg configuration
@@ -563,6 +564,7 @@ VERSION=$VER_ENG
 CATEGORY=application
 CLASSES=none
 APKG_DESC=Heirloom SVR4 pkg tools: tolerant contents parser, removef/pkgask, man pages
+APKG_ESSENTIAL=yes
 EOF
   {
     echo "i pkginfo"
