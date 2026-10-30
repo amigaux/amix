@@ -10,7 +10,9 @@
 #                        gets, modcheck.py --kabi), PIN, CPUFLAG, DEFCPU (a
 #                        module's default cpu=), KIT_REV (the amix
 #                        commit; -dirty when amix had uncommitted
-#                        changes under kernel/), MONSW_REV, on k46 PORT_REV
+#                        changes under kernel/; from an archive of amix,
+#                        the environment's KIT_REV, else unknown),
+#                        MONSW_REV, on k46 PORT_REV
 #   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
 #                        core/series) and amixddi.h (abi/include)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
@@ -43,7 +45,8 @@
 # Environment: GCA (gcc-cross-amix's build directory) and, for k46, PORT
 # (the 040/060 port's checkout), both required: neither is part of amix,
 # which pins them in toolchain/ and kernel/port/.  MONSW_H (default: amix's
-# kernel/modules/include/sys/monsw.h), HOSTCC.
+# kernel/modules/include/sys/monsw.h), HOSTCC, and KIT_REV for a build
+# from an archive of amix (a git checkout records its own commit).
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
 set -e
@@ -57,9 +60,15 @@ k46) KABI=k46.1.3 KABI_MIN=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
 R=$(cd "$(dirname "$0")/.." && pwd)
-# the amix checkout this directory (kernel/dlm) is in: the kit records its commit
-AMIX=$(git -C "$R" rev-parse --show-toplevel 2>/dev/null) ||
-	{ echo "mkkit: $R is not in a git checkout of amix" >&2; exit 1; }
+# the amix tree this directory (kernel/dlm) is in: a git checkout of amix,
+# whose commit the kit records, or an archive of one (git archive, make dist),
+# which records KIT_REV from the environment, else unknown
+AMIX=$(git -C "$R" rev-parse --show-toplevel 2>/dev/null) || AMIX=
+ARCHIVE=
+if [ -z "$AMIX" ] || [ "$(cd "$AMIX/kernel/dlm" 2>/dev/null && pwd -P)" != "$(cd "$R" && pwd -P)" ]; then
+	AMIX=$(cd "$R/../.." && pwd -P) ARCHIVE=${KIT_REV:-unknown}
+	echo "mkkit: $AMIX is not a git checkout of amix: KIT_REV=$ARCHIVE" >&2
+fi
 # need VAR WHAT PIN: a toolchain or the port, never guessed
 need() {
 	eval "v=\${$1:-}"
@@ -71,10 +80,14 @@ need GCA "gcc-cross-amix's build directory" toolchain/
 . "$GCA/env.sh"
 PIN=gcc-2.7.2.3-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
 # KIT_REV: the amix commit, -dirty when kernel/ has uncommitted changes
-REV=$(git -C "$AMIX" rev-parse --short HEAD 2>/dev/null || echo unknown)
-if [ -n "$(git -C "$AMIX" status --porcelain -- kernel 2>/dev/null)" ]; then
-	REV=$REV-dirty
-	echo "mkkit: amix has uncommitted changes under kernel/: KIT_REV=$REV" >&2
+if [ -n "$ARCHIVE" ]; then
+	REV=$ARCHIVE
+else
+	REV=$(git -C "$AMIX" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	if [ -n "$(git -C "$AMIX" status --porcelain -- kernel 2>/dev/null)" ]; then
+		REV=$REV-dirty
+		echo "mkkit: amix has uncommitted changes under kernel/: KIT_REV=$REV" >&2
+	fi
 fi
 
 rm -rf "$OUT"
@@ -122,12 +135,21 @@ MONSW_H=${MONSW_H:-$AMIX/kernel/modules/include/sys/monsw.h}
 [ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
 cp "$MONSW_H" "$OUT/include/sys/monsw.h"
 # where it came from: the repository's commit, -dirty if the file differs;
-# the repository is amix when the file is in this checkout
+# the repository is amix when the file is in this checkout, or in this archive
+# (which has amix's KIT_REV)
 MONSW_DIR=$(dirname "$MONSW_H")
-MONSW_REV=$(git -C "$MONSW_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
-git -C "$MONSW_DIR" diff --quiet HEAD -- "$MONSW_H" 2>/dev/null || MONSW_REV=$MONSW_REV-dirty
-MONSW_TOP=$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)
-if [ "$MONSW_TOP" = "$AMIX" ]; then MONSW_REPO=amix; else MONSW_REPO=$(basename "$MONSW_TOP"); fi
+case "$(cd "$MONSW_DIR" && pwd -P)/" in
+"$AMIX"/*) MONSW_IN=$ARCHIVE ;;
+*) MONSW_IN= ;;
+esac
+if [ -n "$MONSW_IN" ]; then
+	MONSW_REPO=amix MONSW_REV=$REV
+else
+	MONSW_REV=$(git -C "$MONSW_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	git -C "$MONSW_DIR" diff --quiet HEAD -- "$MONSW_H" 2>/dev/null || MONSW_REV=$MONSW_REV-dirty
+	MONSW_TOP=$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)
+	if [ "$MONSW_TOP" = "$AMIX" ]; then MONSW_REPO=amix; else MONSW_REPO=$(basename "$MONSW_TOP"); fi
+fi
 cp "$R/LICENSE" "$OUT/LICENSE"
 cp "$R/abi/README.md" "$OUT/README.md"
 
