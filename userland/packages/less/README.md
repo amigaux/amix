@@ -1,7 +1,7 @@
 # less — the recipe
 
 **Package `less` 704** — the backward-scrolling pager. Dual-licensed
-GPL-3.0-or-later OR BSD-2-Clause. Pin: [`pin.sh`](pin.sh).
+GPL-3.0-or-later OR BSD-2-Clause. Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/less
 
@@ -52,3 +52,15 @@ over a real tty.
 `/opt/amix/bin/{less,lesskey,lessecho}`, man pages under `/opt/amix/man/man1/`,
 `LICENSE`/`COPYING`/`NEWS` under `/opt/amix/doc/less/`. Pure file payload (D9), nothing outside
 `/opt/amix`, no scripts, no symlinks.
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`, revision `-7`, on gcc14-cross-amix
+b51ff39); the period build stopped at `-2`. [`patches/04-pattern-regcmp-type.patch`](patches/04-pattern-regcmp-type.patch)
+(formerly `patches-gcc14/01`) fixes a type gcc 2.7 merely warned about and GCC 14 rejects. The link
+set is `-lgen -lcurses -lc`, set in the configured Makefile; the sanitizer libraries the Makefile
+names by default (`LIBSAN`) do not exist for this target and are cleared.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
+the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
