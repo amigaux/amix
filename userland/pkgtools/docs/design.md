@@ -273,7 +273,7 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 
 ### 5.1 Catalog and publishing
 
-- **Kernel space** (apkg 0.3, amix-dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
+- **Kernel space** (apkg 0.3, kernel/dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
   one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
   block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
   that sidecar inside the package byte for byte (kbootset gate 2 compares them), `size=`/`sha256=`

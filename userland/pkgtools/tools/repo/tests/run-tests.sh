@@ -1592,11 +1592,11 @@ else
     echo "  skip- installf white-space checks (T23 did not run)"
 fi
 
-# T25: the kernel-space block (amix-dlm C2-2 v2, C2-3).  A kernel package
+# T25: the kernel-space block (kernel/dlm C2-2 v2, C2-3).  A kernel package
 # never becomes an ordinary entry; its #kpkg line takes line=, kabi= and pin=
 # from the package's OWN sidecar /stand/<line>/kabi, byte for byte, because
 # kbootset gate 2 compares apkg's record (the catalog's values) with that
-# sidecar.  The sidecar below has the shape of amix-dlm tests/host/kbuild.sh.
+# sidecar.  The sidecar below has the shape of kernel/dlm tests/host/kbuild.sh.
 echo "T25: kernel-space block from the package's own sidecar"
 MKDS="$HERE/../../../src/apkg/tests/mkds.py"
 S25="$WORK/t25"; mkdir -p "$S25/src/stand/k46" "$S25/stg/kernel"

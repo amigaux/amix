@@ -137,7 +137,7 @@ static void ent_free(struct pkgent *e)
 
 /* ---------------- the kernel-space block (#ext kpkg 1) ----------------
  *
- * amix-dlm docs/contracts/C2-2-kpkg.md §1, version 3 (2026-10-26):
+ * kernel/dlm/docs/contracts/C2-2-kpkg.md §1, version 3 (2026-10-26):
  *
  *   #ext kpkg 1
  *   #kpkg <name> <version> role=<kernel|module> line=<k30|k46>

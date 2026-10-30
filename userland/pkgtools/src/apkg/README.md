@@ -9,8 +9,8 @@ coexists with the native tools and with the Heirloom engine port.
 
 MIT licensed (see [LICENSE](LICENSE)); `md5.c`/`md5.h` are Colin
 Plumb's public-domain MD5 (1993), vendored with the original notice;
-`sha256.c`/`sha256.h`/`axtypes.h` are amix-dlm's `loader/common`
-SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from amix-dlm `656d155`.
+`sha256.c`/`sha256.h`/`axtypes.h` are kernel/dlm's `loader/common`
+SHA-256 (FIPS 180-4, C89, MIT), copied verbatim from kernel/dlm `656d155`.
 
 ## Verbs and options
 
@@ -55,8 +55,8 @@ base when it has no long name).  Unmarked packages are not checked.
 ## Kernel space (0.3)
 
 Kernel, loader and module packages are the kernel-modules campaign's
-(amix-dlm, decision D-3).  apkg implements its side of two agreed contracts,
-C2-2 version 5 and C2-4 version 2 (2026-10-26): `amix-dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
+(kernel/dlm, decision D-3).  apkg implements its side of two agreed contracts,
+C2-2 version 5 and C2-4 version 2 (2026-10-26): `kernel/dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
 

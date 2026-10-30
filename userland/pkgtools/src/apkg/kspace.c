@@ -6,7 +6,7 @@
  * MIT license - see LICENSE in this directory.
  *
  * The interfaces are agreed contracts of the kernel-modules campaign
- * (amix-dlm; C2-2 version 5, C2-3 version 6, C2-4 version 2, 2026-10-26),
+ * (kernel/dlm; C2-2 version 5, C2-3 version 6, C2-4 version 2, 2026-10-26),
  * and this file implements apkg's side of them exactly:
  *
  *   C2-2 kernel-space catalog entries and the install record

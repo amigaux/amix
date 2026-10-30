@@ -185,7 +185,7 @@
 /* Catalog header line required on the first line of every catalog. */
 #define CATALOG_MAGIC "#apkg-catalog 1"
 
-/* The kernel-space block (amix-dlm docs/contracts/C2-2-kpkg.md §1):
+/* The kernel-space block (kernel/dlm/docs/contracts/C2-2-kpkg.md §1):
  *     #ext kpkg 1
  *     #kpkg <name> <version> role= line= kabi= pin= size= sha256= file=
  *     #ksig <key-id> <file>

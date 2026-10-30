@@ -1741,14 +1741,14 @@ fi
 
 # ======================================= kernel space (apkg 0.3)
 #
-# amix-dlm contracts, version 2 (2026-10-26): C2-2 (the #ext kpkg block and
+# kernel/dlm contracts, version 2 (2026-10-26): C2-2 (the #ext kpkg block and
 # the install record /var/apkg/kpkg/<name>) and C2-4 (kbootset as a called
 # program).  Integrity in 1.1 is SHA-256 + size per kernel-space package,
 # no signature (D-3 §13); the hook records "unverified".  kbootset does not
 # exist on a box yet, so a mock stands in for it here: it logs its argv and
 # answers with the status the test asks for (C2-4 §1: 0 done, 1 I/O,
 # 2 usage, 3 rule, 4 gate).  tests/kbootset-consumer.sh runs the record
-# apkg writes through the REAL kbootset build (amix-dlm), separately.
+# apkg writes through the REAL kbootset build (kernel/dlm), separately.
 
 # --- SHA-256: FIPS 180-4 vectors and agreement with sha256sum ---
 echo "== building the sha256 driver =="
@@ -2587,7 +2587,7 @@ mkkcat "$KR/catalog" "$KCAT_K110"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 
 # --- upgrade with several names: ONE transaction, ONE trigger ---------
-# The stage-2 exit row (amix-dlm S2-46) upgrades a kernel, the loader and
+# The stage-2 exit row (kernel/dlm S2-46) upgrades a kernel, the loader and
 # kbootset together; with one name per call that was one generation per
 # package.  Here: kernel-k46 1.1.0 -> 1.1.1, loader 3 -> 4, and the userland
 # oldpkg 1.0 -> 2.0, in one call.

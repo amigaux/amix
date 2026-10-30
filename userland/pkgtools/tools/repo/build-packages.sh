@@ -37,7 +37,7 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # the class action script src/apkg/i.apkgconf, so an upgrade keeps the box's
 # own file; the default also ships as /usr/apkg/lib/apkg.conf.  0.2.2
 # (feb57752...) stays what it is.  NOTES 2026-10-06.
-# 0.3.0 (2026-10-26): kernel space (amix-dlm C2-2 v4, C2-3 v4, C2-4 v2) --
+# 0.3.0 (2026-10-26): kernel space (kernel/dlm C2-2 v4, C2-3 v4, C2-4 v2) --
 # the #ext kpkg block, SHA-256, /var/apkg/kpkg records, the kbootset
 # trigger, the journal and `apkg recover`, `upgrade` of several names.
 # STAGED FOR THE 1.1 MEDIA, NOT PUBLISHED: minted into its own staging dir
@@ -48,12 +48,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # kernel install pkgrm's the other package of its line first.  Same rule:
 # its own staging dir (build/repo-staging-apkg031), NOT published; 0.3.0
 # (e6e7b7d5...) stays what it is.  NOTES 2026-10-26.
-# 0.3.2 (2026-10-26): a module package may carry device entries (amix-dlm
+# 0.3.2 (2026-10-26): a module package may carry device entries (kernel/dlm
 # C3-5 v4 sec 1.2: `c none /dev/<node>`).  Same rule: its own staging dir
 # (build/repo-staging-apkg032), NOT published; 0.3.1 (45b809cd...) stays
 # what it is.  NOTES 2026-10-26.
 # 0.3.3 (2026-10-26): a module package may also carry block nodes under
-# /dev/dsk (amix-dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
+# /dev/dsk (kernel/dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
 # dir (build/repo-staging-apkg033), NOT published; 0.3.2 (9d6de726...)
 # stays what it is.  NOTES 2026-10-26.
 VER_APKG="0.3.3"

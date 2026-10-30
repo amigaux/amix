@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mkmodobj.py -- write a test module object (amix-dlm C3-1): an ELF32
+# mkmodobj.py -- write a test module object (kernel/dlm C3-1): an ELF32
 # big-endian ET_REL EM_68K file whose .moddata section (type 13) holds a
 # zero word, "MD2\0" and NUL-terminated key=value strings ending with an
 # empty one.  Only what gen-catalog reads is real; there is no code.

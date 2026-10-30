@@ -59,7 +59,7 @@
 #   OPT-IN (no flag => the catalog is byte-for-byte what it always was).
 #
 # ------------------------------------------------- KERNEL-SPACE BLOCK ---
-# A kernel, loader or module package (amix-dlm contracts C2-2 v3, C2-3 v2,
+# A kernel, loader or module package (kernel/dlm contracts C2-2 v3, C2-3 v2,
 # C3-1, C3-5, D-3) is
 # NEVER an ordinary entry: a deployed 0.2.x apkg must not see kernel space.
 # It goes into a block after the ordinary entries (and after --isize), every
