@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — mkkit builds from an archive of amix (39acfa7)
+
+mkkit builds from an archive of amix (git archive, make dist), with or without a surrounding git repo: it no longer
+takes the surrounding repo's commit or kernel/modules as amix's. Such kits record KIT_REV from the environment, else
+unknown, and MONSW_REV=amix@<that>; checkout kits are unchanged. make test 719/0.
+
 ## Unreleased
 
 ## 2026-10-29 — README brought to the real state; the stage-5 exit ledger marks the rows done so far (93a1404, a816696, 2fee9ce)
