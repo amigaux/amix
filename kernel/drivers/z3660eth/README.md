@@ -89,7 +89,8 @@ shipped body, the three identity files (and why `setuname -n` is *not* one of th
 and a triage section for telling which path a box is on. Auto-bring-up at boot =
 `userland/S99zen` (→ `/etc/rc2.d/S99zen`); it runs a bare `slink` first and retries
 `slink addaen`, because the bring-up can otherwise race the inet base streams on a
-fast clean boot.
+fast clean boot. The userland files are examples: the address is the box's own, set in
+its `/etc/default/zen` (`userland/S99zen`'s header shows the form).
 
 ## Layout
 - `src/z3660eth.c` — the driver (STREAMS/DLPI skeleton adapted from the stock

@@ -120,11 +120,11 @@ mknod /dev/zen0 c 51 0
 /usr/sbin/route add default <gw> 1
 ```
 
-With the project's own addresses that is `ifconfig zen0 192.0.2.39 netmask 255.255.255.0 up
+With RFC 5737 documentation addresses that is `ifconfig zen0 192.0.2.39 netmask 255.255.255.0 up
 -trailers` and `route add default 192.0.2.1 1`.
 
 `userland/bringup.sh` in this directory is the same sequence with a `zen -S` presence gate in front and
-the values factored out to variables.
+the values taken from the box's `/etc/default/zen` (or its command line).
 
 ### 2.1 The notes that matter
 
@@ -137,7 +137,7 @@ and `BUILD.md` §2(b) carry the reasoning: 51 is the lowest slot of the ecosyste
 `[ -c /dev/zen0 ] ||` guard in the boot script exists to suppress it.
 
 **The bare `slink`, on its own line, before `slink addaen`, is load-bearing.** ✅ This is a real-HW
-finding from 2026-06-21, recorded in this directory at `userland/S99zen:10-14` and
+finding from 2026-06-21, recorded in this directory at `userland/S99zen:11-15` and
 the project's 2026-06 handoff notes (§7.4, unpublished): on a fast clean boot `slink addaen` can race ahead of the base inet
 STREAMS plumbing. The proven manual bring-up always ran a bare `slink` **first** to (re)link the
 base streams, then `slink addaen`. Do not fold the two into one command and do not drop the first.
@@ -149,7 +149,7 @@ correct behaviour.** 🟡 The exact text observed on 2026-09-09 was:
 Function "tp", command 3: link: Device busy
 ```
 
-(The wording is from the 2026-09-09 field session; this directory's prior note at `userland/S99zen:14`
+(The wording is from the 2026-09-09 field session; this directory's prior note at `userland/S99zen:15`
 records the same condition more loosely as *"'Device busy' from the bare slink is expected and
 harmless"*.) **It means the base inet STREAMS are already up — which is the good case. Do not
 "fix" it.** Suppressing it, or making the script bail on it, removes the very race protection the
@@ -184,7 +184,9 @@ The shipped file is **`/etc/rc2.d/S99zen`**, mode **744**, owner **root**:
 Reproduced verbatim so it survives the scratch directory being cleared. Note it has **no shebang
 and no comments** — that is what makes it 371 bytes and what the checksum above is of. (The
 annotated variant with the full comment header is `userland/S99zen` in this directory; it is the same
-logic, it is just a different number of bytes.)
+logic, except that it reads the address, netmask and gateway from the box's `/etc/default/zen`.
+The addresses below are RFC 5737 documentation addresses; the shipped file carried the box's own,
+and the size and checksum above are of that file.)
 
 ```sh
 [ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0
@@ -203,18 +205,19 @@ logic, it is just a different number of bytes.)
 ) > /tmp/zen-bringup.log 2>&1 &
 ```
 
-Substitute your own address, netmask and gateway on the `ifconfig` and `route` lines.
+Substitute your own address, netmask and gateway on the `ifconfig` and `route` lines, or use
+`userland/S99zen` and put them in `/etc/default/zen`.
 
 ### 3.2 Why it is shaped like that — three deliberate choices
 
 1. **It retries `slink addaen` up to 20 times, 3 s apart.** The STREAMS stack is not ready the
    instant `rc2` runs. ✅ Same 2026-06-21 race as §2.1; the loop plus the leading bare `slink` is
-   the mitigation (`userland/S99zen:10-14`, loop at `:19-26`; internal provenance
+   the mitigation (`userland/S99zen:11-15`, loop at `:33-38`; internal provenance
    the project's 2026-06 handoff notes §7.4, §9.2 — unpublished). The initial `sleep 5`
    gives the base streams a head start before the first attempt. Worst case the loop spends ~60 s and gives up — in the
    background, where it costs nothing.
 
-2. **The whole bring-up is backgrounded (`( … ) &`).** ✅ `userland/S99zen:6-8`: a datapath problem
+2. **The whole bring-up is backgrounded (`( … ) &`).** ✅ `userland/S99zen:7-9`: a datapath problem
    must never be able to hang the boot. The box still reaches login even if `zen0` never comes up.
    On a board-less box the driver simply `ENXIO`s and the script is harmless.
 
@@ -232,8 +235,8 @@ so every lookup burns the full resolver retransmit — **~90 s per lookup**, mea
 boot going from 210 s to 29 s once the literal IP replaced the name. A literal IP skips name
 resolution entirely.
 
-This applies to `S99zen` exactly as it applies to `network-config`, and it is why every address in
-this directory's userland files is spelled out.
+This applies to `S99zen` exactly as it applies to `network-config`, and it is why the userland
+samples in this directory take a literal number from `/etc/default/zen`, never a name.
 
 ### 3.4 Measured bring-up times
 
@@ -246,7 +249,7 @@ treat them as order-of-magnitude expectations rather than a spec:
 | emulated 040 | **t+156 s** from power-on |
 
 The practical consequence is the one this directory has warned about since 2026-06: ✅ *"it can take the
-full boot for `zen0` to appear — don't conclude 'broken' from an early check"* (`userland/S99zen:15-16`).
+full boot for `zen0` to appear — don't conclude 'broken' from an early check"* (`userland/S99zen:16-17`).
 If the SD image is dirty and `fsck` forces a reboot, it takes longer still.
 
 ---
@@ -373,9 +376,10 @@ running `/usr/amiga/bin/aen -S; echo $?` by hand: a bare `1` with no message is 
 
 ## 6. Related files in this directory
 
-- `userland/bringup.sh` — the §2 sequence as a runnable script, with a `zen -S` gate.
+- `userland/bringup.sh` — the §2 sequence as a runnable script, with a `zen -S` gate; the address
+  from `/etc/default/zen` or the command line.
 - `userland/S99zen` — the §3 boot script, annotated (same logic, more comments than the 371-byte
-  shipped `S99zen.min`).
+  shipped `S99zen.min`), reading the box's address from `/etc/default/zen`; its header shows the form.
 - `userland/network-config.zen` — the `/etc/inet/network-config` snippet, for a box that prefers to
   hang `zen0` off the stock chain rather than use a separate rc2 script. Note its in-file warning
   about editing `network-config` in place: it is hardlinked with `S69inet`/`inetinit`, so never
