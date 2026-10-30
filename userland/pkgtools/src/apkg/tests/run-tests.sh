@@ -2060,13 +2060,16 @@ run 3 "a 2048-byte block line is refused (C2-2: every line under 2048 B)" \
     "$APKG" -c "$WORK/conf-kbad" update
 
 # --- the OLD client skips the block unharmed (built from 0.2.3's source) ---
+# cc02d52 predates the move into amix (its paths are at the root), so it is
+# archived from the git toplevel: a pathspec given from userland/pkgtools
+# would be read relative to it and match nothing.
 OLDC=cc02d52                       # amix-packagemanager: APKG 0.2.3 source
 OLDDIR=$WORK/old-apkg
-REPOTOP=$(cd "$SRC/../.." && pwd)
-if command -v git >/dev/null 2>&1 && \
-   git -C "$REPOTOP" cat-file -e "$OLDC:src/apkg/catalog.c" 2>/dev/null; then
+GITTOP=$(git -C "$SRC" rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$GITTOP" ] && \
+   git -C "$GITTOP" cat-file -e "$OLDC:src/apkg/catalog.c" 2>/dev/null; then
     rm -rf "$OLDDIR"; mkdir -p "$OLDDIR"
-    git -C "$REPOTOP" archive "$OLDC" src/apkg | tar -x -C "$OLDDIR"
+    git -C "$GITTOP" archive "$OLDC" src/apkg | tar -x -C "$OLDDIR"
     make -C "$OLDDIR/src/apkg" host >/dev/null 2>&1
     OLDAPKG=$OLDDIR/src/apkg/apkg
     [ "$("$OLDAPKG" version 2>&1)" = "apkg 0.2.3" ] \
@@ -2094,7 +2097,8 @@ if command -v git >/dev/null 2>&1 && \
         "$OLDAPKG" -c "$WORK/conf-kbad" update
     "$APKG" -c "$KCONF" update >/dev/null 2>&1
 else
-    bad "cannot build the 0.2.3 client: git or commit $OLDC unavailable"
+    echo "SKIP: the 0.2.3 client (commit $OLDC) - no git history here"
+    "$APKG" -c "$KCONF" update >/dev/null 2>&1
 fi
 
 # --- install a kernel: SHA-256 verify, pkgadd, the record, the trigger ---
