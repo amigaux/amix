@@ -20,18 +20,12 @@ set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 sys=${1:?usage: container-build.sh AMIX_SYSTEM [TAG]}
-[ -d "$sys/usr/include" ] || { echo "container-build.sh: $sys has no usr/include" >&2; exit 2; }
 tool=${CONTAINER:-docker}
 
 # The system input is checked against system/MANIFEST.sha256 and
 # system/SYMLINKS before anything is built.
 top=$(dirname "$here")
-(cd "$sys" && sha256sum -c --strict --quiet "$top/system/MANIFEST.sha256") || {
-	echo "container-build.sh: $sys does not match system/MANIFEST.sha256" >&2; exit 2; }
-links=$(cd "$sys" && find usr -type l | LC_ALL=C sort | while read -r l; do
-	printf '%s -> %s\n' "$l" "$(readlink "$l")"; done)
-[ "$links" = "$(cat "$top/system/SYMLINKS")" ] || {
-	echo "container-build.sh: $sys does not match system/SYMLINKS" >&2; exit 2; }
+"$top/system/check-amix-system" "$sys"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT INT TERM
