@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — the recipes converted to the §10.9 shape (20c8a84 … 0be17e7)
+
+Docs for the amix home; $COMMON paths for the amix harness. grep, gzip, less, make, zlib (STYLE=hooks), tar, patch and
+acompat (directory renamed from libamixcompat so the catalog name stays acompat) take package.sh and hooks, each proven
+against its recorded build: payload sha256 and modes equal, pkginfo byte-identical, pkgmap equal with the build-time
+mtimes masked, .a files equal member by member. diffutils, bzip2, coreutils and rsync re-proven. amix-benchmark's
+sources are in src/ (from kerntools, byte-identical, scanned); the published period amixbench 1.3 stays built outside
+amix. No revision changed; nothing published.
+
 ## 2026-10-30 — moved into amix userland/packages; INDEX.md and conf fragments (5649328, d2ee2b1)
 
 amix-packages master 5cc0e5d moved in by a filter-repo rewrite (197 commits kept, 61 pruned; map in
