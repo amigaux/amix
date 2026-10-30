@@ -168,6 +168,14 @@
 #                the five callers' relocations (fewer by rwip / writei when --carve-fs takes ufs / s5 out;
 #                the carved module imports kzero and binds to this one).  --no-kzero is the kernel without
 #                it, byte for byte.
+#   --no-ufs-tailzero  build WITHOUT the ufs truncation fix (on by default; UFS_TAILZERO=0 does the same).  By default
+#                the ufs object the kernel uses -- fs/ufs/exp in the base, or the carved ufs module's object -- is the
+#                stock one with ufs_itrunc's reference to pvn_vptrunc renamed to ufs_vptrunz (one .strtab string of
+#                the same length) and src/ufs_vptrunz.c linked in (grimoire quirk 91): when a shrink to M cuts into a
+#                kept block past the direct blocks it zeroes [M, end of the block) through segkmap and writes it
+#                synchronously (SM_WRITE), then calls the stock pvn_vptrunc.
+#                A hard check: ufs_vptrunz defined once, qz_magic, ufs_itrunc its only caller and no longer a caller
+#                of pvn_vptrunc.  --no-ufs-tailzero is the kernel without it, byte for byte.
 #   --object-baseline <file> --object-allow "<obj>..."  after the final link, every built
 #                object must have the baseline's sha256 (`sha256  path` lines, paths under usr/sys)
 #                EXCEPT exactly the allowed ones, which must differ; an object the baseline does not
@@ -207,6 +215,7 @@ DLM_CORE="${DLM_CORE:-}"        # --dlm-core <kernel/dlm dir>: the module core s
 DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed providers stubbed
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
+UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
 OBJ_BASELINE="${OBJ_BASELINE:-}"  # --object-baseline <sha256 list>: every object must match it ...
@@ -245,6 +254,7 @@ while [ "$#" -gt 0 ]; do
     --no-scsi-drivers) NO_SCSI_DRV=1; shift ;;
     --no-fstypes) FSTYPES_CONF=/dev/null; shift ;;
     --no-kzero) KZERO=0; shift ;;
+    --no-ufs-tailzero) UFS_TAILZERO=0; shift ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
     -*)         echo "unknown option: $1" >&2; exit 2 ;;
@@ -264,6 +274,7 @@ else
 fi
 [ -z "$OBJ_ABSENT" ] || [ -n "$OBJ_BASELINE" ] || { echo "--object-absent needs --object-baseline" >&2; exit 2; }
 SD_CARDS="${SD_CARDS:-2}"
+case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
@@ -1043,6 +1054,74 @@ PYC
   case ",$CARVE_FS," in *,s5,*) compile_patched_obj master.d kernel.c kernel.o "-D__STDC__=0" ;; esac
 fi
 
+# HARD CHECK (quirk 91): in an object holding the ufs code -- the wrapped ufs object, the base unix, the ufs module --
+# ufs_vptrunz is defined once, qz_magic is there, ufs_itrunc is ufs_vptrunz's only caller and no longer calls
+# pvn_vptrunc itself, and ufs_vptrunz does.  A lost rename leaves the stock call and quirk 91 in place, silently.
+qz_check() {   # qz_check FILE [NM OBJDUMP]: the packaged module needs gcc14's m68k-elf- tools (2.8.1's cannot read it)
+  local o="$1" nm="${2:-$NM}" od="${3:-$OBJDUMP}" calls
+  [ "$("$nm" "$o" | awk '$3=="ufs_vptrunz" && $2=="T"' | wc -l)" = 1 ] || { echo "[FAIL] ufs-tailzero: $o does not define ufs_vptrunz once" >&2; exit 1; }
+  "$nm" "$o" | awk '$3=="qz_magic" && $2=="D" {f=1} END{exit !f}' || { echo "[FAIL] ufs-tailzero: no qz_magic in $o" >&2; exit 1; }
+  calls="$("$od" -dr "$o" | awk '/^[0-9a-f]+ <[^>]*>:$/ {fn=substr($2, 2, length($2) - 3)} /R_68K_32[ \t]+(pvn_vptrunc|ufs_vptrunz)$/ {print fn ">" $NF}' | LC_ALL=C sort -u)"
+  echo "$calls" | grep -qx 'ufs_itrunc>ufs_vptrunz' || { echo "[FAIL] ufs-tailzero: ufs_itrunc does not call ufs_vptrunz in $o" >&2; exit 1; }
+  ! echo "$calls" | grep -qx 'ufs_itrunc>pvn_vptrunc' || { echo "[FAIL] ufs-tailzero: ufs_itrunc still calls pvn_vptrunc in $o" >&2; exit 1; }
+  [ "$(echo "$calls" | grep -c '>ufs_vptrunz$')" = 1 ] || { echo "[FAIL] ufs-tailzero: ufs_vptrunz has callers other than ufs_itrunc in $o" >&2; exit 1; }
+  echo "$calls" | grep -qx 'ufs_vptrunz>pvn_vptrunc' || { echo "[FAIL] ufs-tailzero: ufs_vptrunz does not call pvn_vptrunc in $o" >&2; exit 1; }
+  echo "  [OK] ufs tail zeroing bound in $(basename "$o"): ufs_itrunc -> ufs_vptrunz -> pvn_vptrunc, qz_magic"
+}
+# --- 7b-qz. (grimoire quirk 91) the ufs object with ufs_itrunc's pvn_vptrunc call wrapped: the stock fs/ufs/exp, its
+# reference renamed to ufs_vptrunz (same-length .strtab string), ld -r with src/ufs_vptrunz.c.  A carved ufs module wraps
+# this object (step 10's carve); otherwise it replaces the work copy's fs/ufs/exp before 7c relinks fs/exp.
+UFS_OBJ="$SYSROOT_SYS/fs/ufs/exp"
+if [ "$UFS_TAILZERO" = 1 ]; then
+  echo "--- ufs tail zeroing (quirk 91): $KT/src/ufs_vptrunz.c + the stock fs/ufs/exp, pvn_vptrunc -> ufs_vptrunz ---"
+  QZ="$WORK/qz"; rm -rf "$QZ"; mkdir -p "$QZ"
+  ( cd "$BUILD/fs/ufs"
+    "$CC" -c -O $CFLAGS_K -I../.. "$KT/src/ufs_vptrunz.c" -o "$QZ/ufs_vptrunz.o"
+    AMIX_MUL64=keep "$CC" -c -O $CFLAGS_K -I../.. "$KT/src/ufs_vptrunz.c" -o "$QZ/ufs_vptrunz-mul64keep.o" )
+  cmp -s "$QZ/ufs_vptrunz.o" "$QZ/ufs_vptrunz-mul64keep.o" \
+    || { echo "--ufs-tailzero: ufs_vptrunz.o differs with AMIX_MUL64=keep -- the wrapper rewrote a multiply in it" >&2; exit 1; }
+  GOT="$("$NM" "$QZ/ufs_vptrunz.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "kzero pvn_vptrunc segkmap segmap_getmap segmap_release" ] || { echo "--ufs-tailzero: ufs_vptrunz.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$QZ/ufs_vptrunz.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "qz_calls qz_cold qz_kzfail qz_magic qz_puterr qz_tail ufs_vptrunz" ] \
+    || { echo "--ufs-tailzero: ufs_vptrunz.o exports '$GOTX'" >&2; exit 1; }
+  # its only COMMONs are ufs_inode.h's tentatives, which the stock ufs object carries as COMMON too
+  [ "$("$NM" "$QZ/ufs_vptrunz.o" | awk '$2=="C"{print $3}' | LC_ALL=C sort | tr '\n' ' ')" = "inodeNINODE iuniqtime ufs_inode " ] \
+    || { echo "--ufs-tailzero: ufs_vptrunz.o has COMMONs other than ufs_inode.h's" >&2; exit 1; }
+  cp "$SYSROOT_SYS/fs/ufs/exp" "$QZ/ufs-renamed.exp"; chmod u+w "$QZ/ufs-renamed.exp"
+  python3 - "$QZ/ufs-renamed.exp" <<'PYQ' || { echo "--ufs-tailzero: could not rename pvn_vptrunc in the ufs object" >&2; exit 1; }
+import struct, sys
+p = sys.argv[1]; b = bytearray(open(p, 'rb').read())
+assert b[:4] == b'\x7fELF' and b[4] == 1 and b[5] == 2, 'not ELF32 big-endian'
+shoff, = struct.unpack_from('>I', b, 32); shentsize, shnum = struct.unpack_from('>HH', b, 46)
+sh = [struct.unpack_from('>IIIIIIIIII', b, shoff + i * shentsize) for i in range(shnum)]
+hits = []
+for s in sh:
+    if s[1] != 2:                      # SHT_SYMTAB: the strings its symbols name
+        continue
+    stroff = sh[s[6]][4]
+    for o in range(s[4], s[4] + s[5], 16):
+        name, = struct.unpack_from('>I', b, o)
+        if bytes(b[stroff + name:b.index(0, stroff + name)]) == b'pvn_vptrunc':
+            hits.append(stroff + name)
+assert len(hits) == 1, 'symbols named pvn_vptrunc: %d' % len(hits)
+assert b.count(b'pvn_vptrunc') == 1, 'pvn_vptrunc appears elsewhere in the object'
+b[hits[0]:hits[0] + 11] = b'ufs_vptrunz'
+open(p, 'wb').write(b)
+PYQ
+  D="$(cmp -l "$SYSROOT_SYS/fs/ufs/exp" "$QZ/ufs-renamed.exp" | wc -l)"
+  [ "$D" = 4 ] || { echo "--ufs-tailzero: the rename changed $D bytes (want 4: pvn_vptrunc -> ufs_vptrunz)" >&2; exit 1; }
+  "$LD" -r -o "$QZ/ufs.exp" "$QZ/ufs-renamed.exp" "$QZ/ufs_vptrunz.o"
+  qz_check "$QZ/ufs.exp"
+  UFS_OBJ="$QZ/ufs.exp"
+  case ",$CARVE_FS," in
+    *,ufs,*) echo "  the carved ufs module wraps $UFS_OBJ" ;;
+    *) cp "$UFS_OBJ" "$BUILD/fs/ufs/exp"; echo "  fs/ufs/exp in the work copy replaced by $UFS_OBJ" ;;
+  esac
+else
+  echo "--- ufs tail zeroing: --no-ufs-tailzero -- the stock fs/ufs/exp ---"
+fi
+
 # --- 7c. relink fs/exp (now incl. any fs/<name>/exp) + master.d/exp (fresh filesys.o) + local/exp
 FS_SUB="$(mkvar "$BUILD/fs/Makefile" OPT_SUBEXP)"   # bfs/exp s5/exp ... rfs/exp [+ <fstype>/exp]
 ( cd "$BUILD/fs"; "$LD" -r -o exp fs.exp $FS_SUB )
@@ -1356,6 +1435,7 @@ kzero_check() {
   echo "  [OK] kzero fault catch bound in $(basename "$u"): kzero @0x$kz, bzero stock @0x302, kzr_magic; callers: $callers"
 }
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
+case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
   python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ" <<'PYG' || exit 1
@@ -1503,13 +1583,14 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   mkdir -p "$BUILD/mod.d"
   for f in ${CARVE_FS//,/ }; do
     rm -rf "$WORK/carve/$f"
-    python3 "$DLM_CORE/tools/carve.py" wrap --fs "$f" --obj "$SYSROOT_SYS/fs/$f/exp" --filesys "$SYSROOT_SYS/master.d/filesys.o" \
+    python3 "$DLM_CORE/tools/carve.py" wrap --fs "$f" --obj "$([ "$f" = ufs ] && echo "$UFS_OBJ" || echo "$SYSROOT_SYS/fs/$f/exp")" --filesys "$SYSROOT_SYS/master.d/filesys.o" \
       --build "$KINFO_BUILD" "$WORK/carve/$f" || { echo "FATAL: carve.py wrap --fs $f failed" >&2; exit 1; }
     make -C "$WORK/carve/$f" KIT="$DLM_CORE/build/kit/k30" > "$WORK/carve/$f.make.log" 2>&1 \
       || { tail -15 "$WORK/carve/$f.make.log" >&2; echo "FATAL: the $f module did not build (or modcheck refused it)" >&2; exit 1; }
     m="$WORK/carve/$f/build/k30/mod.d/$f"
     [ -f "$m" ] || { echo "FATAL: no $m after make" >&2; exit 1; }
     strings -a "$m" | grep -q "$KINFO_BUILD" || { echo "FATAL: the $f module does not carry the build id $KINFO_BUILD" >&2; exit 1; }
+    if [ "$f" = ufs ] && [ "$UFS_TAILZERO" = 1 ]; then qz_check "$m" m68k-elf-nm m68k-elf-objdump; fi
     cp "$m" "$BUILD/mod.d/$f"
     echo "  mod.d/$f: $(wc -c < "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-16), bound to $KINFO_BUILD; $(grep -a -i 'modcheck' "$WORK/carve/$f.make.log" | tail -1)"
   done
