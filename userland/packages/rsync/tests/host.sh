@@ -10,13 +10,13 @@
 #                    the peer's log
 #
 # Env (host-extra.sh): HOSTWORK (scratch for this cell), AMIX_HOST (the
-# guest), RIG_SLOT.  The modern peer is the host's own rsync (3.4.x,
+# guest), RIG_GW (the bench bridge, where the host daemon listens), RIG_SLOT.  The modern peer is the host's own rsync (3.4.x,
 # protocol 32).  Every verdict is the box's: the peer hands the box what
 # it measured (sum -r lists) and smoke.sh compares.
 
 set -u
 W=$HOSTWORK
-HOSTIP=192.0.2.1
+HOSTIP=${RIG_GW:?host.sh: no RIG_GW (the bench bridge address; host-extra.sh sets it)}
 PORT=$((8870 + RIG_SLOT))
 
 # "<sum -r> <path>" for every regular file under $1, by path
