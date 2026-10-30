@@ -2,10 +2,10 @@
 NAME=gzip
 PKG=gzip
 VERSION=1.3.12
-PKGREV=6   # -6: relinked on gcc14-cross-amix b51ff39 (runtime only)
+PKGREV=7   # -7: CATEGORY archive (P-31 sec 10.9 groups); payload as -6
 SUMMARY="GNU gzip 1.3.12 - the .gz compressor"
 DESC="GNU gzip 1.3.12 reads and writes the universal .gz (deflate) format, which stock Amix cannot -- stock ships only 1985 LZW compress/.Z. Installs /opt/amix/bin/{gzip,gunzip,zcat}. Integer-only; links nothing outside the stock libc. Add /opt/amix/bin to PATH to use it."
-CATEGORY=utility
+CATEGORY=archive
 SET=extra
 LICENSE=GPL-2.0-or-later
 URL=http://ftp.gnu.org/gnu/gzip/gzip-1.3.12.tar.gz
