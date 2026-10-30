@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — sendsig FPU gate (grimoire quirk 74), on by default (2a3e894)
+
+src/fpugate030.s adds fpu_setup_gated, which returns at once when fpu_present is 0; tools/fpugate-sendsig.py retargets
+the one relocation of sendsig's jsr fpu_setup to it (no .text byte moves; every other fpu_setup caller untouched). A
+hard check runs after the link and after the dlm splice. --no-fpu-gate reproduces the previous kernel byte for byte. On
+test kernel 68030-261030-55 (not a cut) an emulated 68030 without an FPU boots to multi-user and survives signals; the
+stock kernel panics there at frestore (vector 0xB). Floating point without an FPU still dies with SIGSYS (quirk 31).
+
 ## 2026-10-30 — ufs tail zeroing (grimoire quirk 91), on by default (1be27f8); z3660eth in kernel/drivers (b3a90b8)
 
 src/ufs_vptrunz.c wraps ufs_itrunc's call of pvn_vptrunc (the stock ufs object's reference renamed, four bytes in one
