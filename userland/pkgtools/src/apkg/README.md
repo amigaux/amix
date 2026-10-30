@@ -251,11 +251,12 @@ against test vectors in the suite.
 
 ## Configuration
 
-`/etc/apkg.conf`, `key=value`, `#` comments. Since APKG 0.2.3 the package delivers it as
-`e apkgconf`, installed by the class action script `i.apkgconf`: an existing file is kept on
-install and upgrade, the shipped default is `/usr/apkg/lib/apkg.conf`, and a key the file does
-not name takes its built-in default. A kept file that differs from the default shows in a plain
-`pkgchk APKG`, like any edited SVR4 `e` file; `pkgchk -n APKG` is clean (NOTES.md 2026-10-06).
+`/etc/apkg.conf`, `key=value`, `#` comments (`apkg.conf(5)`). Since APKG 0.3.4 it and
+`/var/apkg/admin` are conffiles, `e conffile`, installed and removed by the shared class action
+scripts in [`../conffile/`](../conffile/README.md) (they replace 0.2.3's `i.apkgconf`): an
+unedited file takes the new default, an edited one is kept and the new default is written beside
+it as `<file>.new` and listed in `/var/sadm/conffiles/PENDING`. The shipped default is also
+`/usr/apkg/lib/apkg.conf`, and a key the file does not name takes its built-in default.
 
 | key      | default                              |
 |----------|--------------------------------------|

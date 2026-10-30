@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# i.conffile -- class action script for class "conffile": a config file the
+# administrator edits in place survives an upgrade (P-36 section 1.2).
+#
+# pkgadd runs this with "<src> <dst>" pairs on stdin, one per line; on the
+# last volume the same call also has $1 = ENDOFCLASS, so stdin is read
+# whatever the argument.  <dst> carries the install root under -R.
+#
+# A pristine copy of the default this package last shipped (the baseline) is
+# kept at $PKG_INSTALL_ROOT/var/sadm/conffiles/$PKGINST/<path>, outside
+# /var/sadm/pkg so that it survives pkgrm.  For each pair:
+#
+#   dst missing, no baseline   (first install)  copy src, store baseline
+#   dst equal to src           (identical)      store baseline
+#   dst equal to the baseline  (unedited)       copy src, store baseline
+#   dst differs from both      (edited)         keep dst, write dst.new,
+#   dst present, no baseline   (written by        store baseline, add to
+#                               someone else)     PENDING, say so
+#   dst missing, baseline      (user deleted)   copy src, store baseline,
+#                                               say so
+#
+# A deleted file cannot stay deleted: after this script the engine verifies
+# every object of the class and fails the install on one that does not
+# exist (heirloom instvol.c, cverify after the script; the stock pkginstall
+# shares the code).  So the package's default comes back, and the message
+# says so.
+#
+# PENDING is $PKG_INSTALL_ROOT/var/sadm/conffiles/PENDING, one
+# "<pkginst> <path>" line per file whose new default waits in <path>.new;
+# apkg reads it after the transaction.  A file that is equal to the new
+# default again leaves PENDING and loses its stale .new.
+#
+# Must run under the stock Amix 2.1 pkginstall (/sbin/sh) and the heirloom
+# engine alike: Bourne sh and cp, cmp, mkdir, rm, mv, expr, echo -- the
+# i.apkgconf discipline (no ${var#}, no $( ), no local).
+
+PATH=/sbin:/usr/sbin:/usr/bin:/bin:$PATH
+export PATH
+
+root=$PKG_INSTALL_ROOT
+pkg=$PKGINST
+if [ -z "$pkg" ]
+then
+	echo "i.conffile: PKGINST is not set" >&2
+	exit 2
+fi
+base=$root/var/sadm/conffiles/$pkg
+pending=$root/var/sadm/conffiles/PENDING
+
+rc=0
+while read src dst
+do
+	[ -n "$dst" ] || continue
+	# <path> is <dst> without the install root; refuse what does not split
+	rel=`expr "x$dst" : "x$root\(/.*\)"`
+	if [ -z "$rel" -o "$root$rel" != "$dst" ]
+	then
+		echo "i.conffile: $dst: not under the install root '$root'" >&2
+		rc=2
+		continue
+	fi
+	b=$base$rel
+	bdir=`expr "x$b" : 'x\(.*\)/[^/]*$'`
+	mkdir -p "$bdir" || { rc=2; continue; }
+
+	state=new
+	if [ -f "$dst" ]
+	then
+		if cmp -s "$src" "$dst"
+		then
+			state=same
+		elif [ -f "$b" ] && cmp -s "$b" "$dst"
+		then
+			state=unedited
+		else
+			state=edited
+		fi
+	elif [ -f "$b" ]
+	then
+		state=deleted
+	fi
+
+	case $state in
+	new|unedited|deleted)
+		ddir=`expr "x$dst" : 'x\(.*\)/[^/]*$'`
+		[ -d "$ddir" ] || mkdir -p "$ddir" || { rc=2; continue; }
+		cp "$src" "$dst" || { rc=2; continue; }
+		;;
+	edited)
+		cp "$src" "$dst.new" || { rc=2; continue; }
+		;;
+	esac
+	cp "$src" "$b" || rc=2
+
+	# PENDING: drop this file's line, then add it back if a .new waits
+	if [ -f "$pending" ]
+	then
+		while read p f
+		do
+			[ "$p $f" = "$pkg $rel" ] || echo "$p $f"
+		done < "$pending" > "$pending.tmp" &&
+		mv "$pending.tmp" "$pending"
+	fi
+	case $state in
+	edited)
+		echo "$pkg $rel" >> "$pending"
+		echo "$rel: kept your version; the new default is $rel.new"
+		;;
+	deleted)
+		rm -f "$dst.new"
+		echo "$rel: you had removed it; the package's default is back"
+		;;
+	*)
+		rm -f "$dst.new"
+		;;
+	esac
+done
+exit $rc

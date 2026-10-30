@@ -877,6 +877,12 @@ is ≥ 14 characters (2026-08-14):**
   removed stropts.h/termio.h); the SVR4 termio/ioctl form is kept for
   Amix (native).  From host-build-fixes.patch, made conditional.
 - `-std=gnu89 -fcommon`, no `-m32` → `mk.config.host` (FIXLOG [0][2][5]).
+- `pkgcmds/pkgremove/main.c` (rmclass) — a package directory that still
+  holds entries is "not empty" for `ENOTEMPTY` as well as `EEXIST`.
+  SVR4 rmdir(2) returns EEXIST, Linux ENOTEMPTY, so on the host a
+  directory kept non-empty (a conffile r.conffile kept, P-36) failed the
+  pkgrm "partially" and left the package "partially installed".  No
+  change on Amix, where rmdir gives EEXIST (2026-10-30).
 - `libadm/Makefile.mk` — hardcoded RedHat `-I/usr/lib/x86_64-redhat-
   linux5E/include` deleted; `$(COMPATOBJ)` + compat build rules added.
 
