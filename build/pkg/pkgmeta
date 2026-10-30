@@ -218,6 +218,10 @@ def prototype_problems(recipe, m):
     return out
 
 
+# Commands documented under another name: [ is test(1).
+MAN_ALIASES = {"[": "test"}
+
+
 def man_warnings(recipe, m):
     """What RECIPE installs without a man page in its payload: commands (in a
     bin/ or sbin/ directory) and config files (CONFFILES, and files under
@@ -234,7 +238,8 @@ def man_warnings(recipe, m):
         d = path.split("/")
         if ftype in "fls" and len(d) > 2 and d[-2] in ("bin", "sbin"):
             # a link is documented by its target's page (bunzip2 by bzip2.1)
-            if d[-1] not in pages and target.rsplit("/", 1)[-1] not in pages:
+            if (d[-1] not in pages and MAN_ALIASES.get(d[-1]) not in pages
+                    and target.rsplit("/", 1)[-1] not in pages):
                 missing.append(path)
     conf = set(words(m["CONFFILES"]))
     for ftype, _, path, _ in objs:

@@ -232,6 +232,10 @@ try:
           and "/opt/amix/bin/foo" in err and "/etc/foo.conf" in err, err)
     rc, out, err = run("check", conf("man", "mlink", PROTO + "l none /opt/amix/bin/unfoo=/opt/amix/bin/foo\n"))
     check("man: a link to a documented command counts", rc == 0 and "warning" not in err, err)
+    rc, out, err = run("check", conf("man", "mbrack", PROTO + "f none /opt/amix/bin/test 0755 root bin\n"
+                                     "f none /opt/amix/bin/[ 0755 root bin\n"
+                                     "f none /opt/amix/man/man1/test.1 0644 root bin\n"))
+    check("man: [ is documented by test.1", rc == 0 and "warning" not in err, err)
     rc, out, err = run("check", conf("man", "mgz", PROTO.replace("foo.1 ", "foo.1.gz ")))
     check("man: a compressed page counts", rc == 0 and "warning" not in err, err)
 
