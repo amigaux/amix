@@ -1,0 +1,9 @@
+PKG=diffutil
+NAME=GNU diffutils 2.8.1
+ARCH=Amiga
+VERSION=2.8.1-2
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-diffutil-2.8.1-2-gcc14
+DESC=GNU diffutils 2.8.1 beside the stock SVR4 diff tools, which it does NOT replace: diff with unified (-u) and recursive (-r) output, diff3, sdiff and cmp. Installs /opt/amix/bin/{diff,diff3,sdiff,cmp}; add /opt/amix/bin to PATH.

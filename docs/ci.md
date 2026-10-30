@@ -13,6 +13,7 @@ finding to fix, not a gate.
 | tests | kernel/dlm host tests | `make -C kernel/dlm test` |
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |
+| tests | build/pkg pkgmeta host test | `make -C build test` |
 
 The range of the privacy check is the pull request's base to its head, or for
 a push the previous tip of `master` to the new one. When there is no previous

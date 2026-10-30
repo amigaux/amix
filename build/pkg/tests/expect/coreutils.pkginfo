@@ -1,0 +1,9 @@
+PKG=coreutil
+NAME=GNU coreutils 5.2.1
+ARCH=Amiga
+VERSION=5.2.1-2
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-coreutil-5.2.1-2-gcc14
+DESC=GNU coreutils 5.2.1 beside the stock SVR4 tools, which it does NOT replace: GNU ls, cp, mv, rm, sort, date, df, du, install, stat and the rest, plus md5sum and sha1sum (the box has no content checksum otherwise). Installs /opt/amix/bin; add /opt/amix/bin to PATH.
