@@ -119,3 +119,10 @@ no libamixcompat is linked. The link set is set in every configured Makefile's `
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -8: the catalog group
+
+`-8` takes the P-31 §10.9 catalog group `archive` (it was `utility`), as a new revision because the category
+is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
+previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
+`PSTAMP` only, and the pkgmap only in its `i pkginfo` line.

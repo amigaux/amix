@@ -74,3 +74,10 @@ removed before the build (`ASM_REVIEWED`): it holds only x86 assembly.
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode; `libz.a` member by member, the member headers carrying build-time mtimes), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -7: the catalog group
+
+`-7` takes the P-31 §10.9 catalog group `library` (it was `development`), as a new revision because the category
+is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
+previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
+`PSTAMP` only, and the pkgmap only in its `i pkginfo` line.
