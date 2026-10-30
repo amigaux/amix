@@ -154,12 +154,19 @@ amix_dlm_kit() {
 		fi
 		_dk_port="$_dk_pt"
 	fi
-	if [ -n "${2:-}" ]; then
-		_dk_mr="$AMIX_BUILD_ROOT/kspace/src/kitmods-$2/amix-modules"
-		git -C "$AMIX_MODULES" cat-file -e "$2^{commit}" 2>/dev/null || {
-			echo "[FAIL] amix-modules has no commit $2 in $AMIX_MODULES" >&2; exit 1; }
-		_dk_mt=$(amix_src_treeish "$AMIX_MODULES" "$2" kernel/modules include/sys/monsw.h) || {
-			echo "[FAIL] amix-modules $2: no include/sys/monsw.h at the root or under kernel/modules" >&2; exit 1; }
+	# an amix commit (after the move-in) carries kernel/modules beside
+	# kernel/dlm: with no modules commit given, the kit takes sys/monsw.h
+	# from the same commit
+	_dk_mc="${2:-}"
+	if [ -z "$_dk_mc" ] && git -C "$AMIX_DLM" cat-file -e "$1:kernel/modules/include/sys/monsw.h" 2>/dev/null; then
+		_dk_mc=$1
+	fi
+	if [ -n "$_dk_mc" ]; then
+		_dk_mr="$AMIX_BUILD_ROOT/kspace/src/kitmods-$_dk_mc/amix-modules"
+		git -C "$AMIX_MODULES" cat-file -e "$_dk_mc^{commit}" 2>/dev/null || {
+			echo "[FAIL] amix-modules has no commit $_dk_mc in $AMIX_MODULES" >&2; exit 1; }
+		_dk_mt=$(amix_src_treeish "$AMIX_MODULES" "$_dk_mc" kernel/modules include/sys/monsw.h) || {
+			echo "[FAIL] amix-modules $_dk_mc: no include/sys/monsw.h at the root or under kernel/modules" >&2; exit 1; }
 		if [ ! -f "$_dk_mr/include/sys/monsw.h" ]; then
 			rm -rf "$_dk_mr"; mkdir -p "$_dk_mr"
 			git -C "$AMIX_MODULES" archive "$_dk_mt" | tar -x -C "$_dk_mr"
@@ -177,7 +184,7 @@ amix_dlm_kit() {
 			echo "\"-C $_dk_port rev-parse --short HEAD\"|\"-C $_dk_port diff --quiet HEAD -- \"*) exec $_dk_git \"\$@\" ;;"
 		fi
 		if [ -n "$_dk_mh" ]; then
-			echo "\"-C $_dk_mr/include/sys rev-parse --short HEAD\") echo $2 ;;"
+			echo "\"-C $_dk_mr/include/sys rev-parse --short HEAD\") echo $_dk_mc ;;"
 			echo "\"-C $_dk_mr/include/sys diff --quiet HEAD -- $_dk_mh\") exit 0 ;;"
 			echo "\"-C $_dk_mr/include/sys rev-parse --show-toplevel\") echo $_dk_mr ;;"
 		fi
@@ -190,8 +197,10 @@ amix_dlm_kit() {
 	(
 		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
 		if [ -n "$_dk_mh" ]; then export MONSW_H="$_dk_mh"; fi
+		# KIT_REV: an archive of an amix commit is no git checkout, so
+		# its mkkit takes the commit from the environment
 		PATH="$_dk_shim:$PATH" GCA="$AMIX_SIBLINGS/gcc-cross-amix/build" \
-			PORT="$_dk_port" \
+			PORT="$_dk_port" KIT_REV="$1" \
 			make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" kit
 	) > "$AMIX_DLM_TREE.kit.log" 2>&1 || {
 		echo "[FAIL] amix-dlm $1: make kit failed:" >&2
@@ -205,5 +214,5 @@ amix_dlm_kit() {
 			echo "[FAIL] amix-dlm $1: the k46 kit is not labelled PORT_REV=$_dk_pc" >&2; exit 1; }
 	fi
 	echo "  amix-dlm $1 built: kit k30 k46, KIT_REV=$1${_dk_pc:+ PORT_REV=$_dk_pc} (log $AMIX_DLM_TREE.kit.log)"
-	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh _dk_mt _dk_pc _dk_pt _dk_pf
+	unset _dk_shim _dk_l _dk_port _dk_git _dk_mr _dk_mh _dk_mt _dk_pc _dk_pt _dk_pf _dk_mc
 }
