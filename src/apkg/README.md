@@ -173,7 +173,7 @@ against test vectors in the suite.
   from the repository's authored taxonomy
   ([tools/repo/cats.conf](../../tools/repo/cats.conf)), not from the
   package's own `pkginfo` — stock Amix ships every package as
-  `CATEGORY=system`, so the catalog is where the twelve-group vocabulary is
+  `CATEGORY=system`, so the catalog is where the thirteen-group vocabulary is
   applied.  A catalog may also carry **extension blocks** after the entry
   lines (`#ext <name> <version>` + `#<name> <key> <value>`); the only one
   minted today is `isize`, the per-package installed size in bytes from

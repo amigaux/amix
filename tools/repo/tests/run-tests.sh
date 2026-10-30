@@ -719,9 +719,9 @@ check "every @group token is a single token" \
 # contract the sibling amix-packages registry validates its per-package
 # `category:` against (its roadmap item X3).  `editor` still carries no
 # package in THIS repo (BATCH-1 populated `utility`/`development` instead)
-# and must not be pruned as unused.
-check "cats.conf declares exactly the twelve agreed groups" \
-    bash -c "diff '$WORK/cats.groups' <(printf '%s\n' development \
+# and must not be pruned as unused.  `archive` added 2026-10-30 (owner).
+check "cats.conf declares exactly the thirteen agreed groups" \
+    bash -c "diff '$WORK/cats.groups' <(printf '%s\n' archive development \
         documentation editor emacs games network openlook source system \
         text utility x11)"
 check "every assigned category is a declared group" \
@@ -933,13 +933,14 @@ check "no set names a test fixture (amixdemo/demolib)" \
 # package in the catalog", and the metal installer's regression identity is
 # built on that.  Populated 2026-09-16 with BATCH-1 (published 2026-09-15,
 # catalog 32 -> 38), amix-benchmark (published 2026-09-16, catalog 38 -> 39)
-# and batch-2's make + tar (staged 2026-09-26, catalog -> 41); pinned to the
-# measured membership so a future batch must touch this test deliberately,
-# not by drift.
+# and batch-2's make + tar (staged 2026-09-26, catalog -> 41), then the GCC 14
+# batch's bzip2, coreutils and diffutils (assigned 2026-10-30, unpublished);
+# pinned to the measured membership so a future batch must touch this test
+# deliberately, not by drift.
 check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
-check "extra is the nine published add-on packages" \
+check "extra is the twelve add-on packages" \
     test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
-         "acompat amix-benchmark grep gzip less make patch tar zlib "
+         "acompat amix-benchmark bzip2 coreutils diffutils grep gzip less make patch tar zlib "
 check "extra and full are disjoint" \
     bash -c "test -z \"\$(comm -12 <(python3 '$SETS' extra) \
                                    <(python3 '$SETS' full))\""
