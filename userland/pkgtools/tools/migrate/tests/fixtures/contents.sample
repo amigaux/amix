@@ -1,0 +1,12 @@
+/etc d none 0755 root sys base
+/opt d none 0755 root sys TESTpkg
+/opt/test d none 0755 root sys TESTpkg
+/opt/test/bin d none 0755 root sys TESTpkg
+/opt/test/bin/data.txt f none 0644 root sys 10 888 1783153352 TESTpkg
+/opt/test/bin/hello f none 0755 root sys 21 1693 1783153352 TESTpkg
+/opt/test/bin/hello.lnk=hello s none TESTpkg
+/usr d none 0755 root sys base
+/usr/bin d none 0755 root sys base
+/usr/bin/ls f none 0755 bin bin 14032 28381 679609720 base
+# Last modified by pkgadd for TESTpkg package
+# Sat Jul  4 11:28:41 2026

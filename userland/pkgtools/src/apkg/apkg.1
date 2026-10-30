@@ -1,0 +1,846 @@
+.\" apkg.1 - manual page for apkg, the Amix remote package client.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH APKG 1 "October 2026" "apkg 0.3.3" "Amix User Commands"
+.SH NAME
+apkg \- remote package client for Amiga Unix (SVR4)
+.SH SYNOPSIS
+.B apkg
+[
+.B \-n
+] [
+.B \-f
+] [
+.B \-v
+] [
+.B \-c
+.I conffile
+]
+.I verb
+[
+.I args
+]
+.SH DESCRIPTION
+.B apkg
+fetches SVR4 datastream packages from a remote repository over plain
+HTTP and drives the local
+.BR pkgadd (1M)
+and
+.BR pkgrm (1M)
+to install and remove them.  Installed state is read from the stock
+.B /var/sadm/pkg
+database, so
+.B apkg
+coexists with the native tools.
+.SH VERBS
+.TP
+.B update
+Fetch
+.IB repo /catalog
+into
+.B /var/apkg/catalog
+(temporary file plus rename).  When the repository also publishes
+.BR catalog.md5 ,
+the download is verified against it; a missing (404)
+.B catalog.md5
+is not an error.  A catalog whose first line is not
+.B "#apkg-catalog 1"
+is rejected.
+.TP
+.B list \fR[\fBinstalled\fR|\fBall\fR]
+List catalog packages, one per line: name, catalog version, an
+installed marker with the installed version (or
+.B (none)
+for VERSION-less stock packages), category and description.
+.B installed
+restricts the list to packages present in
+.BR /var/sadm/pkg .
+.TP
+.BI search " substr"
+Case-insensitive substring match against package names and
+descriptions.
+.TP
+.BI info " name"
+Print the full catalog entry and installed state of one package.
+.TP
+.BI download " name"
+Fetch the package file into the cache directory and verify its md5
+checksum against the catalog.
+.TP
+.BI install " name ..."
+Resolve dependencies recursively from the catalog, download and
+verify every needed package first, then run
+.B pkgadd \-n \-a
+.I admin
+.B \-d
+.I file pkginst
+for each in dependency order.  Packages already installed at the same
+version are skipped unless
+.B \-f
+is given.  A package that is installed at an
+.I older
+version than the catalog's is not silently skipped: if it was named on
+the command line,
+.B install
+refuses and points at
+.BR upgrade ;
+if it only arrived as somebody's dependency, the version gap is
+reported, the dependency counts as satisfied, and nothing is upgraded
+behind your back.  Filenames ending in
+.B .Z
+are decompressed with
+.BR zcat (1)
+before being handed to
+.BR pkgadd .
+A package that names the filesystems it needs (see
+.B FILESYSTEM
+below) and would land on another is refused before anything is
+installed.
+.TP
+.BI upgrade " name" ...
+For each named package whose catalog version is newer than the installed
+one, download and verify the new package and then run a single
+.B pkgadd
+over the installed instance, with an
+.B instance=overwrite
+.BR admin (4)
+file.  There is no
+.B pkgrm
+step: nothing is removed before its replacement is in place, so a
+failed fetch, a failed checksum or a failed
+.B pkgadd
+all leave the installed package exactly where it was.  (The earlier
+pkgrm-then-pkgadd sequence could, and on real hardware did, leave the
+machine with the package uninstalled and unreplaceable.)  An installed
+package without a VERSION field counts as older than any catalog
+version.  When the installed version is equal or newer, say so and
+leave that name out (exit 0 when nothing is left).
+.IP
+Several names are ONE transaction: every package is fetched and verified
+before the first
+.BR pkgadd ,
+one journal covers them, and a transaction that changes kernel space ends
+with one kbootset build and commit (so a kernel, the loader and kbootset
+upgrade into one generation).  A name not in the catalog (exit 5) or not
+installed (exit 1) refuses the whole call before anything is fetched.  No
+dependency is pulled in: only the named packages move.
+.TP
+.BI remove " name"
+Wrapper around
+.B pkgrm \-n \-a
+.IR admin .
+The name is mapped to its package instance through the catalog when
+one is available; otherwise it is used as the instance name directly.
+A kernel-space package is known by its record (see
+.BR "KERNEL SPACE" );
+it is removed with
+.B pkgrm
+of the instance owning its recorded files, its record is deleted, and
+the next generation is built and committed without it.
+.TP
+.B recover
+Finish a transaction that was interrupted (a power cut, a killed
+process) or that ended owing work, from the journal
+.BR /var/apkg/txn :
+every package not yet done is installed again from its staged
+datastream (re-checked against its size and catalog hash first) with
+.BR instance=overwrite ,
+or removed (a remove, or the other kernel package of a line that an
+install replaces first; see
+.BR "KERNEL SPACE" ),
+and a kernel-space transaction ends with the kbootset
+build and commit.  With
+.B \-f
+the journal is printed and discarded and nothing else is changed; when
+that leaves a line without a kernel package (a replacement cut between
+its removal and the new install) it says so.
+While a journal exists,
+.BR install ,
+.B upgrade
+and
+.B remove
+refuse to start.
+.TP
+.B version
+Print the client version.
+.SH FILESYSTEM
+A package whose
+.B pkginfo
+carries
+.B APKG_FSTYPE=ufs
+(a comma-separated list of filesystem types as
+.BR statvfs (2)
+names them) installs only onto those filesystems.  Packages with file
+names longer than 14 bytes carry it, because s5 cuts every name at 14
+bytes.  Before the first
+.B pkgadd
+of an
+.B install
+or
+.BR upgrade ,
+apkg checks the directory of every such long name (or, when the
+package has none, its install base), under the
+.B \-R
+target, by its nearest existing directory, and refuses the whole
+transaction with exit 5 when one is on another filesystem type:
+.PP
+.RS
+.nf
+apkg: perl: refused: it installs only on ufs, and
+/opt/amix/lib/perl5 is on s5, which cuts file names at 14 bytes
+.fi
+.RE
+.PP
+(one line).  A malformed value refuses the package with exit 3.
+.B \-f
+does not override the check; an unmarked package is never checked.
+.SH KERNEL SPACE
+Kernel, loader and module packages are listed in a block of the
+catalog that every older client skips as comments (amix-dlm contract
+C2-2, version 5):
+.PP
+.RS
+.nf
+#ext kpkg 1
+#kpkg <name> <version> role=kernel|module line=k30|k46
+      kabi=<tag> pin=<compiler pin> size=<bytes> sha256=<64 hex>
+      file=<datastream>
+#kpkg <name> <version> role=loader line=any loader=<n>
+      size=<bytes> sha256=<64 hex> file=<datastream>
+#ksig <key-id> <file>
+#end kpkg
+.fi
+.RE
+.PP
+(one
+.B #kpkg
+line per package, every line under 2048 bytes; optional
+.B pkginst=
+and
+.BR offset= ).
+The keys depend on the role: an entry that lacks a key its role
+requires, or carries one its role excludes
+.RB ( kabi=
+or
+.B pin=
+on a loader), is refused.  An unknown key is
+ignored; an unknown key starting with
+.B !
+refuses that entry.  A structural error (an unterminated block, an
+ordinary entry inside it, a second block, a name used twice) rejects
+the catalog.  A block of another version is skipped.
+.PP
+A kernel-space package is verified by
+.B SHA-256
+and size after download (userland packages stay md5 and size).
+There is no signature in this release: a
+.B #ksig
+line is recorded and not acted on, the catalog block is reported
+"unverified", and every record says
+.BR "verified no" .
+.PP
+Before anything is fetched, a transaction is pre-flighted: a module
+must match the kernel of its line (in the transaction, or installed)
+in kabi family and major, its minor must not exceed the kernel's, and
+the compiler pins must be equal; a static kernel takes no modules; a
+new kernel may not strand an installed module of its line.  A refusal
+exits 5 and changes nothing.  The box's CPU line is checked by
+kbootset (its gate 10), not here.
+.PP
+.B One kernel package per line
+(C2-2 version 5 \(sc2.1).  Every kernel package of a line, a static
+family's and the module kernel's alike, installs
+.BI /stand/ line /unix
+(and its kabi sidecar).  So when a transaction installs a kernel and a
+kernel record of the same line exists under another package instance,
+apkg replaces that package in the same journaled transaction.  The plan
+(and
+.BR \-n )
+says so:
+.PP
+.RS
+.nf
+kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line
+.fi
+.RE
+.PP
+The pre-flight then checks the transaction and every installed module
+against the new kernel; a module that does not fit refuses the
+transaction before anything changes ("zeth46: built for kabi k46.1.0,
+the new kernel kernel-k46-z is static: remove the module packages
+first"), so going back from the module kernel to a static family needs
+the module packages removed first.  Once everything is staged and
+verified, the other package is removed
+.RB ( pkgrm ,
+then its record; "removed KERN46Z") before the new
+.BR pkgadd ,
+because both ship the same files; then the new package is installed and
+recorded, and the kbootset trigger runs once at the end.  A cut between
+the removal and the install leaves the line without a kernel package
+until
+.B apkg recover
+finishes the install; the box still boots meanwhile, from the boot
+store's own copies of the kernel.  Two or more kernel records of one
+line (a box damaged by hand) refuse any kernel or module install of
+that line ("two kernel records for line k46 (KERN46M, KERN46Z): remove
+one"), as do two kernels of one line in the same transaction.  A
+package of the same instance is an upgrade, as before.
+.PP
+A kernel-space package is pure files: once staged, and before anything
+is installed, its pkgmap may hold only
+.B f
+and
+.B d
+objects of class
+.B none
+and no install scripts (of the
+.B i
+entries only pkginfo, depend and copyright), and at least one file.
+A module package may also carry the device nodes of its driver's majors
+(C3-5 version 4) as
+.B c
+entries of class
+.B none
+under
+.BR /dev/ ,
+in full
+.RB ( "c none /dev/zen0 51 0 0644 root root" );
+pkgadd makes the node and records it in the contents database.
+Anything else
+.RB ( e ,
+.BR v ,
+links, block devices, a character device in a kernel or loader package
+or outside
+.BR /dev/ ,
+another class, a script) refuses the transaction with
+exit 3.
+.PP
+After each kernel-space
+.BR pkgadd ,
+apkg writes the record
+.BI /var/apkg/kpkg/ pkginst
+\(em the file is named by the entry's
+.B pkginst=
+(else its name), because an s5 root keeps 14 characters of a file name
+and a long name and its
+.B .new
+would collide; the full name is the record's
+.B name
+line (C2-2 version 4) \(em
+(name, version, role, line, then kabi and pin for a kernel or module or
+loader for the loader, the datastream's sha256, the
+source, the install time,
+.BR "verified no" ,
+and one
+.BI "file " "path size sha256"
+line per installed plain file, taken from the contents database and hashed
+on disk; a module's device node has no bytes and no
+.B file
+line: the contents database records it, and pkgrm removes it).  The instance pkgadd installs comes from the datastream's header and
+must equal
+.B pkginst=
+when the entry gives one.
+.PP
+After a transaction that installed or removed kernel space, and only
+when every package in it is done, apkg calls
+.B kbootset build
+and then
+.B kbootset commit
+(two calls, with
+.B \-R
+.I target
+under
+.B \-R
+and an explicit
+.BR \-\-journal ).
+apkg never writes a boot slice itself.  With
+.B bootset=manual
+in
+.B /etc/default/bootset
+it prints the two commands instead.  On success it repeats kbootset's
+last line ("generation N committed; power-cycle to boot it").  A refusal
+(kbootset status 3 or 4) exits 7 with kbootset's line and "the committed
+generation is unchanged"; an error (status 1 or 2), or a kbootset that
+cannot run, exits 6 and keeps the journal, so
+.B apkg recover
+runs the build and commit again.  A failure after a good build leaves
+the built generation uncommitted.
+.SH OPTIONS
+.TP
+.B \-n
+Dry run: print what would be fetched and which commands would run,
+change nothing.
+.TP
+.B \-f
+Force: reinstall the packages
+.I named on the command line
+even when they are already installed.  It does
+.B not
+propagate to their dependencies \- an already-satisfied dependency is
+left alone (forcing the whole closure meant re-installing the multi-
+megabyte engine package on every run, minutes of pointless work on a
+68k).  A dependency that is genuinely missing is still installed.
+.TP
+.B \-v
+Verbose: progress notes, HTTP details, exact command lines.
+.TP
+.BI \-c " conffile"
+Read configuration from
+.I conffile
+instead of
+.BR /etc/apkg.conf .
+.SH CONFIGURATION
+.B /etc/apkg.conf
+holds
+.B key=value
+lines;
+.B #
+starts a comment.  Installing or upgrading the APKG package keeps an
+existing
+.B /etc/apkg.conf
+as it is; the default of the installed version is
+.BR /usr/apkg/lib/apkg.conf .
+A key the file does not name takes its built-in default.  Keys and defaults:
+.TP
+.B repo
+Repository base URL (default
+.BR http://pkg.amigaux.org ).
+The host is a name-based virtual host, so the repository must be named by
+hostname; a bare IP address is answered 404.  Stock Amix has no resolver, so
+either add the address to
+.B /etc/inet/hosts
+or configure
+.B nameserver
+below (see
+.BR "NAME RESOLUTION" ).
+The catalog is fetched from
+.IB repo /catalog
+and packages from
+.IB repo /pkgs/ filename\fR.
+.TP
+.B cachedir
+Package download cache (default
+.BR /var/apkg/cache ).
+The catalog lives next to it, in the cache directory's parent.
+.TP
+.B pkgadd
+pkgadd binary (default
+.BR /usr/apkg/bin/pkgadd ;
+falls back to
+.B /usr/sbin/pkgadd
+when the default is missing).
+.TP
+.B pkgrm
+pkgrm binary (default
+.BR /usr/apkg/bin/pkgrm ,
+fallback
+.BR /usr/sbin/pkgrm ).
+.TP
+.B admin
+.BR admin (4)
+file passed to pkgadd/pkgrm with
+.B \-a
+(default
+.BR /var/apkg/admin ).
+.B apkg
+creates this file if it is missing \- it is shipped by the APKG package
+itself, so a
+.B pkgrm APKG
+deletes it, and an engine call that merely assumed it was there would
+fail with
+.RB \(lq "unable to open admin file" \(rq.
+An existing file is never rewritten.  For an
+.B upgrade
+(and for a
+.B \-f
+install over a different version)
+.B apkg
+derives a second file,
+.IR admin.overwrite ,
+from it: every key you set is carried across and only
+.B instance=
+is replaced with
+.BR overwrite .
+.PP
+The remaining keys tune the fetch path.  Every constant that path uses
+is one of these \- there is no compiled-in number an operator cannot
+move.
+.TP
+.B kbootset
+The generation composer called after a kernel-space transaction;
+default
+.BR /sbin/kbootset .
+Like pkgadd it runs from this system and is told
+.B \-R
+.I target
+under
+.BR \-R .
+.TP
+.B kbootset_journal
+The
+.B \-\-journal
+path handed to kbootset; empty (the default) means
+.IB target /var/kbootset/journal ,
+the contract's own default, passed explicitly.
+.TP
+.B timeout
+Seconds of network
+.I silence
+tolerated during a transfer (default 300).  This is an
+.B inactivity
+timeout, not a cap on how long a transfer may take: the timer is
+re-armed by every chunk that arrives, so a slow but flowing transfer
+never trips it however long it runs.  A multi-megabyte package over a
+period link is minutes of perfectly healthy transfer; size it against
+the longest legitimate
+.I gap
+instead.
+.TP
+.B connect_timeout
+Seconds allowed for host resolution plus the TCP connect (default 30).
+Separate from
+.B timeout
+so a dead host fails in seconds rather than inheriting the patience a
+mid-transfer stall needs.
+.TP
+.B retries
+Extra attempts after a
+.I network
+failure (default 2; 0 disables).  A non-200 HTTP status is the server
+answering, not a failure, and is never retried.
+.TP
+.B retry_delay
+Seconds before the first retry (default 5); it doubles before each
+further one.  0 retries immediately.
+.TP
+.B progress
+Bytes between progress lines on stderr (default 262144).  0 silences
+them;
+.B \-v
+quarters the interval.  Nothing is printed for a transfer smaller than
+one interval, so ordinary runs stay quiet.
+.TP
+.B bufsize
+Socket read buffer in bytes (default 8192).  Clamped to the range
+512\-262144; a value outside it is clamped with a warning.
+.TP
+.B redirects
+Number of 301/302 hops followed (default 1).  0 refuses to follow any.
+.TP
+.B rcvbuf
+The TCP receive window, in bytes.
+.B The default is 0 \- leave the stack's window alone \- and that is a
+.BR "measured result, not caution" .
+.IP
+Amix's compiled-in 4096-byte window looks exactly like the thing
+capping a single stream on a bandwidth-delay-bound path (throughput is
+at most window divided by round-trip time).  It is not.  Two
+server-side packet captures of a real 68LC060 A4000D fetching from
+.B pkg.amigaux.org
+over the Z3660 ethernet driver (2026\-09\-14/15) found:
+.RS
+.IP \(bu 3
+.B SO_RCVBUF
+64 KB requested before
+.BR connect (3N);
+the box advertised win 4096 in its SYN and in all 2999 steady-state
+ACKs.  The socket option does not reach this
+.B tcp
+module at all.
+.IP \(bu
+Raising the window really does work through the ioctl below \- 16384
+was seen on the wire \- and it is
+.BR slower :
+4096 gives about 54 KB/s, 8192 about 32 KB/s, 16384 about 36\-40 KB/s,
+with server-side retransmits rising from 1.0% to 3.6%.
+.IP \(bu
+The cause is an RX-path loss cliff at roughly 8 segments in flight
+(about 10 KB outstanding): up to 7 segments per burst lose 2\-3%, 8
+lose about 60%, 9 or more lose about 100%, and every loss costs a
+server retransmission timeout.  The stock 4096 window admits at most 8
+segments (7 x 536 + 344) and so sits exactly at the loss-free edge \-
+near-optimal for this driver as it stands.
+.RE
+.IP
+The real lever is the RX drop mechanism (the Z3660 firmware discarding
+its whole backlog on overflow, and the 16.67 ms poll quantum), and it
+is not in this client.
+.B Do not raise this expecting speed.
+.IP
+Setting it above 0 is an
+.I operator knob,
+and it does two things:
+.RS
+.TP 3
+1.
+.B STREAMS INITQPARMS.
+.B apkg
+issues the privileged
+.B INITQPARMS
+ioctl (from
+.BR <net/strioc.h> ,
+.BR iqp_type " = " IQP_RQ | IQP_HIWAT )
+with
+.BR I_STR (7)
+on a TCP stream, asking the
+.B tcp
+module for a receive high-water mark of
+.BR rcvbuf .
+This is the mechanism that actually moves the window.  It requires
+.B root
+\-
+.B apkg install
+already runs as root, and a non-root
+.B apkg
+falls back to mechanism 2 and says so.
+.B It rewrites the tcp module's default high-water mark, not this one
+.BR stream's ,
+so every TCP stream opened on the box afterwards inherits it \-
+box-wide, not
+.B apkg
+wide, and standing until reboot.
+.B apkg
+therefore says so at warning level, not only under
+.BR \-v .
+Nothing can read the previous value back (the ioctl is set-only, and
+.BR sockmod 's
+cached
+.B SO_RCVBUF
+starts at 0 rather than at the module's high-water mark), so
+.B apkg
+does not restore it:
+.B put it back with a root run at rcvbuf=4096, or by rebooting.
+The value is capped at 65535 because the ioctl carries a 16-bit field.
+.TP
+2.
+.B SO_RCVBUF
+requested with
+.BR setsockopt (3N)
+before
+.BR connect (3N),
+kept as the unprivileged fallback and for non-Amix hosts.
+.B On Amix this alone does not reach the tcp module.
+The
+.BR getsockopt (3N)
+value
+.B \-v
+prints can come from
+.BR sockmod 's
+own cached copy while TCP below it still runs at 4096; read that line
+as "what was asked, and what the socket layer says", never as "what
+TCP is using".
+.RE
+.IP
+If you do set it, 16384 is the highest worth considering.  Nothing
+above 65535 can be advertised in any case (Amix predates RFC 1323, so
+there is no window scaling), and the practical limit is lower still:
+MSS to a non-local host is pinned at 536 and the Z3660 firmware's RX
+ring has 32 usable slots, so past 32 x 536, about 17 KB, the ring
+itself overruns \- and that firmware discards its entire queued
+backlog rather than back-pressuring, which TCP sees as a full-window
+loss and a retransmission timeout.
+.TP
+.B sndbuf
+.B SO_SNDBUF
+in bytes (default 0, i.e. leave the stack default).  apkg sends
+requests and receives bodies, so this has no effect on fetch
+throughput; it is here because the receive side is configurable and an
+asymmetric pair would be a trap.
+.TP
+.B nameserver
+IPv4 address of a nameserver for apkg's stub resolver.
+.B The default list is empty,
+i.e. no DNS at all \- exactly the behaviour apkg has always had.  The key
+is
+.B repeatable
+and the servers are tried in the order written; a line with an empty value
+clears the list.  A
+.BI : port
+suffix is accepted after the address and exists for testing; leave it off.
+A name is not accepted here \- resolving the resolver is a bootstrap
+problem.  See
+.B NAME RESOLUTION
+below.
+.TP
+.B dns_timeout
+Seconds to wait for one DNS query
+.I attempt
+(default 5).  Not per name and not per nameserver: a UDP query comes back
+quickly or it is lost.
+.TP
+.B dns_retries
+Extra attempts per nameserver (default 2).  Every configured nameserver is
+asked in turn regardless, so a name nothing answers costs at most
+nameservers x (dns_retries + 1) x dns_timeout seconds.  A server that
+answers
+.I "no such name"
+has answered: it is not retried.
+.SH NAME RESOLUTION
+.B Stock Amix has no resolver.
+The system
+.BR gethostbyname (3N)
+reads
+.B /etc/inet/hosts
+and nothing else; a
+.B resolv.conf
+on an Amix box is inert, because nothing reads it.  The package repository
+is a
+.B name-based virtual host
+\- a request whose
+.B Host:
+header carries a bare IP address is answered 404 \- so the repository has
+to be named by hostname, and on a stock box that means somebody must add a
+line to
+.B /etc/inet/hosts
+by hand before apkg can reach it at all.
+.PP
+apkg therefore carries its own
+.B stub resolver.
+A host name is resolved in three steps:
+.RS
+.IP 1. 4
+an IPv4 literal is used as it stands;
+.IP 2. 4
+the host database is consulted \- that is
+.BR gethostbyname (3N),
+i.e.
+.B /etc/inet/hosts
+on Amix;
+.IP 3. 4
+only if that says nothing, each configured
+.B nameserver
+is asked, in order.
+.RE
+.PP
+The hosts file is consulted
+.B first
+on purpose: a box that resolves today cannot regress when a nameserver is
+configured, and a line an operator wrote by hand can never be shadowed by
+DNS.
+.PP
+The resolver is a stub in the strict sense: one UDP query per attempt, A
+records only, recursion requested, no EDNS, no cache beyond the process, no
+search list, no TCP fallback and no
+.BR resolv.conf .
+It follows a CNAME chain to an A record and ignores TTLs.  A reply that does
+not match the query it answers \- wrong transaction id, wrong question,
+malformed, or a compression pointer that does not point backwards \- is
+discarded and the next attempt or nameserver is tried; a partial answer is
+never used.  Root privilege is not required.
+.PP
+.B It resolves apkg's own lookups and nothing else.
+.BR telnet (1),
+.BR ftp (1)
+and the rest of the box still read
+.B /etc/inet/hosts
+and are entirely unaffected by
+.BR nameserver .
+Keep that file as you need it.
+.PP
+.B \-v
+reports which of the three steps answered, and for DNS which nameserver
+did.
+.SH ENVIRONMENT
+.TP
+.B APKG_ROOT
+Prefix prepended to every compiled-in default path
+.RB ( /etc/apkg.conf ,
+.BR /var/apkg/... ,
+.BR /var/sadm/pkg ,
+and the pkgadd/pkgrm defaults with their fallbacks).  Lets tests and
+image builds point the whole client at a fake root.  Values read from
+the configuration file are never prefixed.
+.SH EXIT STATUS
+.TP
+.B 0
+Success (including "nothing to do").
+.TP
+.B 1
+Usage or configuration error.
+.TP
+.B 2
+Network failure (name not resolved by the hosts file or any configured
+nameserver, connect, inactivity timeout with the configured retries
+exhausted, HTTP error status).
+.TP
+.B 3
+Verification failure: md5, sha256 or size mismatch, bad catalog
+header, malformed catalog, a refused kernel-space entry, a datastream
+whose header contradicts the catalog, a kernel-space datastream that
+is not pure files, a malformed
+.BR APKG_FSTYPE .
+.TP
+.B 4
+pkgadd/pkgrm (or the zcat decompression step) failed.
+.TP
+.B 5
+Dependency cycle, or a dependency (or install target) missing from
+the catalog; a kernel-space pre-flight refusal (kabi, pin, line); a
+package refused for the filesystem it would land on (see
+.BR FILESYSTEM ).
+.TP
+.B 6
+kbootset could not run, failed (status 1) or rejected its arguments
+(status 2).  The packages are installed; the journal is kept for
+.BR "apkg recover" .
+.TP
+.B 7
+kbootset refused the build or commit by a rule (status 3) or at a gate
+(status 4); the committed generation is unchanged.
+.SH FILES
+.PD 0
+.TP 24
+.B /etc/apkg.conf
+configuration; kept by an upgrade
+.TP
+.B /usr/apkg/lib/apkg.conf
+the shipped default of the installed version (not read by apkg)
+.TP
+.B /var/apkg/catalog
+local copy of the repository catalog
+.TP
+.B /var/apkg/cache
+downloaded packages
+.TP
+.B /var/apkg/admin
+permissive admin(4) file used for non-interactive pkgadd/pkgrm;
+created on demand if absent
+.TP
+.B /var/apkg/admin.overwrite
+derived from the above with instance=overwrite, for the
+.B upgrade
+verb; rewritten on every use
+.TP
+.B /etc/inet/hosts
+the host database, consulted before any nameserver (read only, and never
+written by apkg)
+.TP
+.B /var/sadm/pkg/*/pkginfo
+installed-package state (read only)
+.TP
+.B /var/sadm/install/contents
+the files of each installed kernel-space package (read only)
+.TP
+.B /var/apkg/kpkg/*
+apkg's install records of kernel-space packages; kbootset reads them
+.TP
+.B /var/apkg/txn
+the transaction journal
+.TP
+.B /etc/default/bootset
+.B bootset=auto
+(the default) or
+.B manual
+.PD
+.SH SEE ALSO
+.BR pkgadd (1M),
+.BR pkgrm (1M),
+.BR pkginfo (1),
+.BR pkgtrans (1),
+.BR admin (4),
+.BR kbootset (1M)
+.SH NOTES
+Only plain
+.B http://
+URLs are supported; the transport uses HTTP/1.0 with a
+.B Host:
+header and follows at most one 301/302 redirect.

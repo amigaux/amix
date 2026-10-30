@@ -1,0 +1,5 @@
+apkg
+apkg.amix
+obj-host/
+obj-amix/
+tests/work/

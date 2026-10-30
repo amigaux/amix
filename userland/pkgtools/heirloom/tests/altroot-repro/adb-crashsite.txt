@@ -1,0 +1,21 @@
+adb command scripts used on the box to localize the -R add_cache SIGSEGV.
+Run as:  adb <unstripped pkginstall> <core>  < <file>
+(the deployed pkginstall must be UNSTRIPPED for symbol names; build-amix
+leaves the pre-strip binary at pkgcmds/pkginstall/pkginstall).
+
+--- registers + C stack backtrace (names the faulting function) ---
+$r
+$c
+
+--- disassemble the faulting function (HASH's modulo is the defect) ---
+HASH,40?ia
+add_cache,26?ia
+
+--- dump the grnam_cache Cache struct (hsz,bsz,bp,hfunc,cfunc) ---
+0x801848d0,5/X          (address is run-specific; read it from 'grnam_cache/X')
+grnam_cache/X
+pwnam_cache/X
+
+--- minimal end-to-end miscompile check (no core needed) ---
+mymod,12?ia             (adb <mod_prog_O0|mod_prog_O>; shows divs.l drops the
+                         remainder register vs gcc.real -S 'tdivs.l ea,Dr:Dq')

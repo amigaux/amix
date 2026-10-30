@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# mk.config.host - build configuration for the Linux HOST build of
+# heirloom-pkgtools (parity/tooling build: the repo's package-building
+# pipeline uses the host pkgmk/pkgtrans/pkgproto/pkginfo).
+#
+# Used by build-host.sh exactly like mk.config.amix is used by
+# build-amix.sh:  { echo "TOPDIR=<abs>"; cat mk.config.host; \
+#                   cat <dir>/Makefile.mk; } > <dir>/Makefile
+#
+# Carries the validated host fixes from research/heirloom/FIXLOG.txt:
+# no -m32, -std=gnu89 (C89 tree; gcc 15 defaults to C23), -fcommon
+# (tentative-definition collisions, e.g. installf/libinst 'eptnum').
+#
+
+CC=gcc
+AR=ar
+RANLIB=ranlib
+STRIP=strip -s
+
+SHELL = /bin/sh
+INSTALL=/usr/bin/install
+CCSDIR=/usr/ccs
+
+#
+# Prefixes: everything the host tools touch at RUNTIME is kept inside
+# build-host/ so a stray invocation can never write to the host's real
+# /var or /etc.
+#
+PREFIX=$(TOPDIR)/build-host
+VAR=$(TOPDIR)/build-host/var
+
+#
+# BINDIR is compiled in as the directory of the EXTERNAL commands the
+# tools exec (cpio, rm, rmdir, ...).  build-host/bindir contains the
+# SVR4->GNU cpio translating wrapper (hostshims/cpio - emits newc
+# datastream members, the only format stock Amix pkgadd accepts) plus
+# symlinks to the ordinary system tools.
+#
+BINDIR=$(TOPDIR)/build-host/bindir
+
+SBINDIR=$(PREFIX)/bin
+ETCDIR=$(PREFIX)/etc
+SADMDIR=$(PREFIX)/sadm
+VSADMDIR=$(VAR)/sadm
+MANDIR=$(PREFIX)/man
+
+#
+# Compiler flags (see FIXLOG: gnu89 + fcommon are required with
+# modern gcc; the tree itself is C89).
+#
+#
+# SANFLAGS is injected by build-host.sh (empty unless SANITIZE=1 is set
+# in its environment, in which case it carries
+# -fsanitize=address,undefined ...).  It must land in BOTH CFLAGS and
+# LDFLAGS or the sanitizer runtime will not be linked in.
+#
+CFLAGS=-O -std=gnu89 -fcommon $(SANFLAGS)
+MERGPATH_OPT=$(CFLAGS)
+PKGDBMERG_OPT=$(CFLAGS)
+
+#
+# sslstub replaces the OpenSSL headers (keystore/security/pkgweb are
+# excised from libpkg, so no real OpenSSL is needed on the host
+# either).
+#
+CPPFLAGS=-D_GNU_SOURCE -I$(TOPDIR)/sslstub
+
+#WARN=
+LDFLAGS=$(SANFLAGS)
+LIBS=
+
+#
+# Compat objects are Amix-only; empty here.
+#
+COMPATOBJ=
+
+LNS = ln -s
+
+#
+# Do not modify anything below here.
+#
+PATHS = \
+	-DSHELL='"$(SHELL)"' \
+	-DETCDIR='"$(ETCDIR)"' \
+	-DBINDIR='"$(BINDIR)"' \
+	-DSBINDIR='"$(SBINDIR)"' \
+	-DSADMDIR='"$(SADMDIR)"' \
+	-DVSADMDIR='"$(VSADMDIR)"' \
+	-DVSADMREL='"$(VSADMDIR:/%=%)"'

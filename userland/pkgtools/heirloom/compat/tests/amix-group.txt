@@ -1,0 +1,16 @@
+root::0:root
+other::1:
+bin::2:bin,daemon
+sys::3:bin,sys,adm
+adm::4:adm,daemon
+uucp::5:uucp,daemon
+mail::6:
+tty::7:
+daemon::12:daemon
+games::30:
+news::31:
+amiga::32:
+nntp::33:
+lp::100:
+sccs::1000:
+nobody::60001:

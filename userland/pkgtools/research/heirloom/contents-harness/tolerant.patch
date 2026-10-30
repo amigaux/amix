@@ -1,0 +1,48 @@
+--- tree/libpkg/srchcfile.c	2026-07-04 11:04:07.750778690 +0300
++++ srchcfile_tolerant.c	2026-07-04 11:09:32.369189512 +0300
+@@ -777,9 +777,45 @@
+ 		 */
+ 
+ 		if (n == 0 && rdpath == 0) {
++	retry_ftype:
+ 			while (isspace((c = vfpGetc(cfVfp))))
+ 				;
+ 
++			/*
++			 * TOLERANT-MODE ADDITION (Amix space-in-pathname fix):
++			 * a real ftype token is exactly one character followed
++			 * by whitespace. If the token is anything else, assume
++			 * the pathname contained an embedded space and re-join:
++			 * extend the pathname over this token and re-try the
++			 * ftype parse on the next token.
++			 */
++			if ((c != '\0') && (c != '\n') &&
++			    (strchr("?fvelspcbdx", c) == NULL ||
++			    !isspace((unsigned char)vfpGetcNoInc(cfVfp)))) {
++				char	*pe = vfpGetCurrCharPtr(cfVfp);
++
++				/* find end of the bogus token */
++				while (ISPKGPATHSEP[(int)*pe] == 0) {
++					pe++;
++				}
++
++				/* advance current pointer past the token */
++				vfpIncCurrPtrBy(cfVfp,
++					vfpGetCurrPtrDelta(cfVfp, pe));
++
++				/* extend pathname over space(s) + token */
++				cpath_len = (ptrdiff_t)pe -
++						(ptrdiff_t)cpath_start;
++
++				if (vfpGetcNoInc(cfVfp) == '\0') {
++					COPYPATH(lpath, cpath_start, cpath_len);
++					setErrstr(ERR_INCOMPLETE_ENTRY);
++					return (-1);
++				}
++
++				goto retry_ftype;
++			}
++
+ 			switch (c) {
+ 			case '?': case 'f': case 'v': case 'e': case 'l':
+ 			case 's': case 'p': case 'c': case 'b': case 'd':

@@ -1,0 +1,1346 @@
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/hdrs/stropts.h b/hdrs/stropts.h
+--- a/hdrs/stropts.h	1970-01-01 02:00:00.000000000 +0200
++++ b/hdrs/stropts.h	2026-07-04 11:08:36.204822370 +0300
+@@ -0,0 +1,3 @@
++#ifndef _FAKE_STROPTS_H
++#define _FAKE_STROPTS_H
++#endif
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/hdrs/termio.h b/hdrs/termio.h
+--- a/hdrs/termio.h	1970-01-01 02:00:00.000000000 +0200
++++ b/hdrs/termio.h	2026-07-04 11:09:03.353607112 +0300
+@@ -0,0 +1,6 @@
++#include <termios.h>
++#include <sys/ioctl.h>
++#ifndef NCC
++#define NCC 8
++struct termio { unsigned short c_iflag, c_oflag, c_cflag, c_lflag; char c_line; unsigned char c_cc[NCC]; };
++#endif
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/libadm/Makefile.mk b/libadm/Makefile.mk
+--- a/libadm/Makefile.mk	2026-07-04 09:59:26.030227919 +0300
++++ b/libadm/Makefile.mk	2026-07-04 11:08:24.073194625 +0300
+@@ -1,5 +1,5 @@
+ .c.o:
+-	$(CC) -c $(CFLAGS) $(CPPFLAGS) -I/usr/lib/x86_64-redhat-linux5E/include \
++	$(CC) -c $(CFLAGS) $(CPPFLAGS) \
+   -I../hdrs $(PATHS) $(WARN) $<
+ 
+ 
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/libpkg/dstream.c b/libpkg/dstream.c
+--- a/libpkg/dstream.c	2026-07-04 09:59:26.035023985 +0300
++++ b/libpkg/dstream.c	2026-07-04 11:21:05.493766487 +0300
+@@ -496,7 +496,7 @@
+ 	}
+ 	/* this could break, thanks to cpio command limit */
+ #ifndef SUNOS41
+-	(void) sprintf(cmd, "%s -icdumD -C %d", CPIOPROC, (int)BLK_SIZE);
++	(void) sprintf(cmd, "%s -icdum -C %d", CPIOPROC, (int)BLK_SIZE);
+ #else
+ 	(void) sprintf(cmd, "%s -icdum -C %d", CPIOPROC, (int)BLK_SIZE);
+ #endif
+@@ -717,7 +717,7 @@
+ 			ds_curpartcnt += index;
+ 		}
+ #ifndef SUNOS41
+-		(void) sprintf(cmd, "%s -icdumD -C %d",
++		(void) sprintf(cmd, "%s -icdum -C %d",
+ #else
+ 		(void) sprintf(cmd, "%s -icdum -C %d",
+ #endif
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/libpkg/Makefile.mk b/libpkg/Makefile.mk
+--- a/libpkg/Makefile.mk	2026-07-04 09:59:26.033736354 +0300
++++ b/libpkg/Makefile.mk	2026-07-04 11:15:28.384768970 +0300
+@@ -5,11 +5,11 @@
+ 
+ 
+ OBJ = canonize.o ckparam.o ckvolseq.o cvtpath.o dbsql.o devtype.o \
+-	dstream.o fmkdir.o gpkglist.o gpkgmap.o isdir.o keystore.o \
++	dstream.o fmkdir.o gpkglist.o gpkgmap.o isdir.o nokeystore.o \
+ 	logerr.o mappath.o ncgrpw.o nhash.o pkgerr.o \
+ 	pkgexecl.o pkgexecv.o pkgmount.o pkgstr.o pkgtrans.o pkgweb.o \
+ 	pkgxpand.o ppkgmap.o progerr.o putcfile.o rrmdir.o runcmd.o \
+-	security.o srchcfile.o tputcfent.o verify.o vfpops.o
++	srchcfile.o tputcfent.o verify.o vfpops.o
+ 
+ all: libpkg.a
+ 
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/libpkg/nokeystore.c b/libpkg/nokeystore.c
+--- a/libpkg/nokeystore.c	1970-01-01 02:00:00.000000000 +0200
++++ b/libpkg/nokeystore.c	2026-07-04 11:18:37.255869490 +0300
+@@ -0,0 +1,32 @@
++/*
++ * nokeystore.c - no-op replacements for security.c/keystore.c entry
++ * points, for builds without OpenSSL (e.g. Amix/SVR4.0 target).
++ * Any attempt to actually use signing (pkgtrans -g, https download)
++ * fails cleanly.
++ */
++#include <stdio.h>
++#include "pkglib.h"
++#include "keystore.h"
++
++void
++sec_init(void)
++{
++}
++
++int
++open_keystore(PKG_ERR *err, char *keystore_file, char *app,
++	keystore_passphrase_cb cb, long flags, keystore_handle_t *result)
++{
++	(void)keystore_file; (void)app; (void)cb; (void)flags; (void)result;
++	pkgerr_add(err, PKGERR_UNSUP,
++	    "package signing support not compiled in");
++	return (1);
++}
++
++int
++close_keystore(PKG_ERR *err, keystore_handle_t handle,
++	keystore_passphrase_cb cb)
++{
++	(void)err; (void)handle; (void)cb;
++	return (0);
++}
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/mk.config b/mk.config
+--- a/mk.config	2026-07-04 09:59:26.042253678 +0300
++++ b/mk.config	2026-07-04 11:28:00.864269303 +0300
+@@ -34,7 +34,7 @@
+ # Where to place binaries. This must be the same place
+ # where the Heirloom Toolchest binaries are installed.
+ #
+-BINDIR=$(PREFIX)/5bin
++BINDIR=/usr/bin
+ 
+ #
+ # Where to place superuser-only binaries. This may be
+@@ -50,7 +50,7 @@
+ #
+ # Where to place (read-only) helper files.
+ #
+-SADMDIR=$(PREFIX)/sadm
++SADMDIR=/tmp/pkgsadm
+ 
+ #
+ # Where to place the database of installed packages.
+@@ -70,7 +70,7 @@
+ #
+ # Compiler flags.
+ #
+-CFLAGS=-m32 -O
++CFLAGS=-O -std=gnu89 -fcommon -Wdeclaration-after-statement
+ 
+ #
+ # C preprocessor flags.
+@@ -78,7 +78,7 @@
+ # Use -D_GNU_SOURCE for Linux with GNU libc.
+ # Use -D_INCLUDE__STDC_A1_SOURCE for HP-UX.
+ #
+-CPPFLAGS=-m32 -D_GNU_SOURCE
++CPPFLAGS=-D_GNU_SOURCE -include sys/sysmacros.h -I<builddir>/sslstub
+ 
+ #
+ # Warning flags for the compiler.
+@@ -88,7 +88,7 @@
+ #
+ # Linker flags.
+ #
+-LDFLAGS=-m32
++LDFLAGS=
+ 
+ #
+ # Additional libraries to link with.
+Binary files a/pkgcmds/installf/installf and b/pkgcmds/installf/installf differ
+Binary files a/pkgcmds/pkgadd/pkgadd and b/pkgcmds/pkgadd/pkgadd differ
+Binary files a/pkgcmds/pkgchk/pkgchk and b/pkgcmds/pkgchk/pkgchk differ
+Binary files a/pkgcmds/pkginfo/pkginfo and b/pkgcmds/pkginfo/pkginfo differ
+Binary files a/pkgcmds/pkginstall/pkginstall and b/pkgcmds/pkginstall/pkginstall differ
+Binary files a/pkgcmds/pkgmk/pkgmk and b/pkgcmds/pkgmk/pkgmk differ
+Binary files a/pkgcmds/pkgname/pkgname and b/pkgcmds/pkgname/pkgname differ
+Binary files a/pkgcmds/pkgparam/pkgparam and b/pkgcmds/pkgparam/pkgparam differ
+Binary files a/pkgcmds/pkgproto/pkgproto and b/pkgcmds/pkgproto/pkgproto differ
+Binary files a/pkgcmds/pkgremove/pkgremove and b/pkgcmds/pkgremove/pkgremove differ
+Binary files a/pkgcmds/pkgrm/pkgrm and b/pkgcmds/pkgrm/pkgrm differ
+Binary files a/pkgcmds/pkgscripts/cmdexec and b/pkgcmds/pkgscripts/cmdexec differ
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/default b/pkgcmds/pkgscripts/default
+--- a/pkgcmds/pkgscripts/default	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/default	2026-07-04 11:18:39.195318669 +0300
+@@ -0,0 +1,47 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2004 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris default	1.8	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)default.in	1.2 (gritter) 2/24/07
++#
++mail=
++instance=unique
++partial=ask
++runlevel=ask
++idepend=ask
++rdepend=ask
++space=ask
++setuid=ask
++conflict=ask
++action=ask
++networktimeout=60
++networkretries=3
++authentication=quit
++keystore=@VSADMREL@/security
++proxy=
++basedir=default
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/i.awk b/pkgcmds/pkgscripts/i.awk
+--- a/pkgcmds/pkgscripts/i.awk	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/i.awk	2026-07-04 11:18:39.185318483 +0300
+@@ -0,0 +1,75 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# frop OpenSolaris i.awk	1.6	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)i.awk.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read src dest
++do
++	[ "$src" = /dev/null ] && continue
++
++	echo "Modifying $dest"
++
++	# Strip PKG_INSTALL_ROOT from dest if installation is to an
++	# alternate root.
++
++	if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++		client_dest=`echo $dest | \
++			/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				{ print substr($0, length(rootdir)+1)} }'`
++		savepath=$PKGSAV/awk${client_dest}
++	else
++		savepath=$PKGSAV/awk${dest}
++	fi
++
++	dirname=`dirname $savepath`
++	if [ $? -ne 0 ]
++	then
++		error=yes
++		continue
++	fi
++	if [ ! -d $dirname ]
++	then
++		# ignore return code since mkdir has bug
++		mkdir -p $dirname
++	fi
++
++	cp $src $savepath &&
++	/usr/sadm/install/scripts/cmdexec /usr/5bin/awk install $savepath $dest
++
++	if [ $? -ne 0 ]
++	then
++		error=yes
++		continue
++	fi
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/i.build b/pkgcmds/pkgscripts/i.build
+--- a/pkgcmds/pkgscripts/i.build	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/i.build	2026-07-04 11:18:39.187409173 +0300
+@@ -0,0 +1,86 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris i.build	1.7	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)i.build.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read src dest
++do
++	[ "$src" = /dev/null ] && continue
++
++	echo "Modifying $dest"
++
++	# Strip PKG_INSTALL_ROOT from dest if installation is to an
++	# alternate root.
++
++	if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++		client_dest=`echo $dest | \
++			/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				{ print substr($0, length(rootdir)+1)} }'`
++		savepath=$PKGSAV/build${client_dest}
++	else
++		savepath=$PKGSAV/build${dest}
++	fi
++
++	dirname=`dirname $savepath`
++	if [ $? -ne 0 ]
++	then
++		error=yes
++		continue
++	fi
++
++	if [ ! -d $dirname ]
++	then
++		# ignore return since mkdir has bug
++		mkdir -p $dirname
++	fi
++
++	cp $src $savepath &&
++		chmod 500 $savepath
++	if [ $? -ne 0 ]
++	then
++		error=yes
++		continue
++	fi
++
++	if $savepath install > /tmp/$$build
++	then
++		if [ -s /tmp/$$build ]
++		then
++			cp /tmp/$$build $dest || error=yes
++		fi
++	else
++		error=yes
++	fi
++	rm -f /tmp/$$build
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/i.CompCpio b/pkgcmds/pkgscripts/i.CompCpio
+--- a/pkgcmds/pkgscripts/i.CompCpio	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/i.CompCpio	2026-07-04 11:18:39.183318446 +0300
+@@ -0,0 +1,543 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2005 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris i.CompCpio	1.10	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)i.CompCpio.in	1.3 (gritter) 2/24/07
++#
++
++# i.CompCpio 
++#
++# This shell script uncompresses and installs files archived in
++# old-style WOS packages using the utilities cpio and compress. It
++# looks in the PKGSRC directory for the archives which may be called
++# out in one of eight ways :
++#
++#	reloc.cpio.Z	relocatable paths, less old style
++#	root.cpio.Z	absolute paths, less old style
++#	reloc.cpio	relocatable paths less old style, not compressed
++#	root.cpio	absolute paths, less old style, not compressed
++#	reloc.Z		relocatable paths, old style, compressed
++#	root.Z		absolute paths, old style, compressed
++#	reloc		relocatable paths, old style, not compressed
++#	root		absolute paths, old style, not compressed
++#
++# stdin carries the source directory as the first entry followed by the
++# paths of the files to be installed as indicated in the pkgmap. Since
++# all operations take place from the declared base directory, both relative
++# and absolute paths will install correctly. There are three methods and
++# since speed is of the essence, we skip straight to the right one :
++#
++#	If it's an initial install
++#		do a full cpio for each archive
++#	else
++#		If there's only the reloc archive
++#			make a file list, rm executables, do a selective cpio
++#		else
++#			rm executables, do a full cpio for each archive
++#
++# Since the old-style archives contain no execute permissions, this
++# script saves the executables it requires so it can clean up after
++# unloading the archive. If /usr/lib/ld.so or .so.1 is included in the
++# package, no cleanup will be possible (nothing will run) so we clean
++# up first and then unload the entire archive without a file list.
++#
++NAME="i.CompCpio"
++FILELIST=${PKGSAV:?undefined}/filelist
++BD=${BASEDIR:-/}
++IR=${PKG_INSTALL_ROOT:-/}
++MAXLIST=550	# This is arbitrary based upon 2.4 cpio
++count=0
++
++reloc_cpio_Z=0
++root_cpio_Z=0
++reloc_cpio=0
++root_cpio=0
++Reloc_Arch=""
++Root_Arch=""
++is_an_archive=0
++is_a_filelist=0
++mk_filelist=0
++list_empty=1
++local_install=0
++Spcl_init=0
++Rm_alt_sav=0
++
++# critical archived dynamic libraries and executables
++Spcl_lib=0
++Spcl_exec=0
++Movelist=""
++Ld_Preload=""
++Ld1=usr/lib/ld.so.1
++Ld=usr/lib/ld.so
++Libintl=usr/lib/libintl.so.1
++Libmalloc=usr/lib/libmapmalloc.so.1
++Libc=usr/lib/libc.so.1	
++Libw=usr/lib/libw.so.1
++Libdl=usr/lib/libdl.so.1
++Cpio=usr/5bin/cpio
++Rm=usr/5bin/rm
++Ln=usr/5bin/ln
++Mv=usr/5bin/mv
++Nawk=usr/5bin/nawk
++Zcat=usr/5bin/zcat
++
++# Set up the default paths
++MV_xpath=/usr/5bin
++MV_cmd=$MV_xpath/mv
++CPIO_xpath=/usr/5bin
++CPIO_cmd=$CPIO_xpath/cpio
++ZCAT_xpath=/usr/5bin
++ZCAT_cmd=$ZCAT_xpath/zcat
++LN_xpath=/usr/5bin
++LN_cmd=$LN_xpath/ln
++NAWK_xpath=/usr/5bin
++NAWK_cmd=$NAWK_xpath/nawk
++RM_xpath=/usr/5bin
++RM_cmd=$RM_xpath/rm
++Tmp_xpath=/usr/tmp$$dir
++Tmp_Creat=0
++rm_cpio=0
++rm_ln=0
++rm_zcat=0
++rm_nawk=0
++rm_rm=0
++rm_mv=0
++no_select=0
++
++# Functions
++
++#
++# This creates the temporary directory for holding the old dynamic
++# libraries and executables.
++#
++mktempdir() {
++	if [ ! -d $Tmp_xpath ]; then
++		mkdir $Tmp_xpath
++		if [ $? -ne 0 ]; then
++			echo `gettext "ERROR : $NAME cannot create $Tmp_xpath."`
++			exit 1
++		fi
++	fi
++	Tmp_Creat=1
++}
++
++#
++# Test a path to see if it represents a dynamic library or executable that
++# we use in this script. If it is, deal with the special case.
++#
++spclcase() {	# $1 is the pathname to special case
++	if [ $local_install -eq 1 ]; then
++		case $1 in
++			$Ld)		no_select=1;;
++			$Ld1)		no_select=1;;
++			$Libintl)	Spcl_lib=1; file=libintl.so.1;;
++			$Libmalloc)	Spcl_lib=1; file=libmapmalloc.so.1;;
++			$Libc)		Spcl_lib=1; file=libc.so.1;;
++			$Libw)		Spcl_lib=1; file=libw.so.1;;
++			$Libdl)		Spcl_lib=1; file=libdl.so.1;;
++			$Cpio)		rm_cpio=1; Spcl_exec=1;;
++			$Ln)		rm_ln=1; Spcl_exec=1;;
++			$Zcat)		rm_zcat=1; Spcl_exec=1;;
++			$Nawk)		rm_nawk=1; Spcl_exec=1;;
++			$Rm)		rm_rm=1; Spcl_exec=1;;
++			$Mv)		rm_mv=1; Spcl_exec=1;;
++		esac
++
++		if [ $no_select -eq 1 ]; then
++			is_a_filelist=0
++			list_empty=1
++			$RM_cmd $FILELIST
++			if [ $Rm_alt_sav -eq 1 ]; then
++				$RM_cmd -r $PKGSAV
++				Rm_alt_sav=0
++			fi
++			exec_clean 1
++			return 1
++		elif [ $Spcl_lib -eq 1 ]; then
++			if [ $Tmp_Creat -eq 0 ]; then
++				mktempdir
++			fi
++
++			if [ $Spcl_init -eq 0 ]; then
++				Org_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
++				LD_LIBRARY_PATH="$Org_LD_LIBRARY_PATH $Tmp_xpath"
++				export LD_LIBRARY_PATH
++				Spcl_init=1
++			fi
++			Ld_Preload="$Ld_Preload $Tmp_xpath/$file"
++			LD_PRELOAD=$Ld_Preload
++			export LD_PRELOAD
++			Movelist="$1 $file $Movelist"
++			$MV_cmd $1 $Tmp_xpath
++			$LN_cmd -s ../..$Tmp_xpath/$file $1
++			Spcl_lib=0
++		elif [ $Spcl_exec -eq 1 ]; then
++			if [ $Tmp_Creat -eq 0 ]; then
++				mktempdir
++			fi
++
++			$MV_cmd $1 $Tmp_xpath
++			if [ $rm_cpio -eq 1 ]; then
++				$LN_cmd -s ../..$Tmp_xpath/cpio $1
++				CPIO_cmd="$Tmp_xpath/cpio"
++				Movelist="$1 cpio $Movelist"
++				rm_cpio=0
++			elif [ $rm_ln -eq 1 ]; then
++				$Tmp_xpath/ln -s ../..$Tmp_xpath/ln $1
++				LN_cmd="$Tmp_xpath/ln"
++				Movelist="$1 ln $Movelist"
++				rm_ln=0
++			elif [ $rm_nawk -eq 1 ]; then
++				$LN_cmd -s ../..$Tmp_xpath/nawk $1
++				NAWK_cmd="$Tmp_xpath/nawk"
++				Movelist="$1 nawk $Movelist"
++				rm_nawk=0
++			elif [ $rm_zcat -eq 1 ]; then
++				$LN_cmd -s ../..$Tmp_xpath/zcat $1
++				ZCAT_cmd="$Tmp_xpath/zcat"
++				Movelist="$1 zcat $Movelist"
++				rm_zcat=0
++			elif [ $rm_rm -eq 1 ]; then
++				$LN_cmd -s ../..$Tmp_xpath/rm $1
++				RM_cmd="$Tmp_xpath/rm"
++				Movelist="$Movelist $1 rm"
++				rm_rm=0
++			elif [ $rm_mv -eq 1 ]; then
++				$LN_cmd -s ../..$Tmp_xpath/mv $1
++				MV_cmd="$Tmp_xpath/mv"
++				Movelist="$Movelist $1 mv"
++				rm_mv=0
++			fi
++			Spcl_exec=0
++		fi
++	fi
++
++	return 0
++}
++
++#
++# Clean up the libraries and executables that were moved.
++#
++exec_clean() {	# $1 =1 means be quiet
++	if [ ! -z "${Movelist}" ]; then
++		echo $Movelist | $NAWK_cmd '
++			{ split ($0, line)
++			for (n=1; n <= NF; n++) {
++				print line[n]
++			}
++		}' | while read path; do
++			read file
++			if [ -h $path ]; then	# If it's our slink
++				# then put the original back
++				if [ $1 -eq 0 ]; then
++					echo `gettext "WARNING : $path not found in archive."`
++				fi
++				$MV_cmd $Tmp_xpath/$file $path
++			else	# if the archive put something down
++				# remove the temporary copy
++				$RM_cmd $Tmp_xpath/$file
++			fi
++		done
++		for path in $Movelist; do
++			if [ -x $path ]; then
++				case $path in
++					$Cpio)	CPIO_cmd="$CPIO_xpath/cpio";;
++					$Ln)	LN_cmd="$LN_xpath/ln";;
++					$Zcat)	ZCAT_cmd="$ZCAT_xpath/zcat";;
++					$Nawk)	NAWK_cmd="$NAWK_xpath/nawk";;
++					$Rm)	RM_cmd="$RM_xpath/rm";;
++					$Mv)	MV_cmd="$MV_xpath/mv";;
++				esac
++			fi
++		done
++		Movelist=""
++
++		if [ $Tmp_Creat -eq 1 ]; then
++			$RM_cmd -r $Tmp_xpath
++			Tmp_Creat=0
++		fi
++	fi
++}
++
++#
++# Figure out what kind of package this is
++#
++eval_pkg() {
++
++	# Any archive, whether compressed or not needs to be handled
++	# the same. i.e. reloc.cpio.Z and root.cpio.Z should cause
++	# the global is_an_archive to be set to 1.
++
++	read path
++	if [ ${path:-NULL} != NULL ]; then # get the package source directory
++		PKGSRC=${path:?undefined}
++
++		if [ ${PKG_INSTALL_ROOT:-/} = "/" ]; then
++			local_install=1
++		fi
++
++		if [ -r $PKGSRC/reloc.cpio.Z ]; then
++			reloc_cpio_Z=1
++			Reloc_Arch=$PKGSRC/reloc.cpio.Z
++			is_an_archive=1
++		fi
++
++		if [ -r $PKGSRC/root.cpio.Z ]; then
++			root_cpio_Z=1
++			Root_Arch=$PKGSRC/root.cpio.Z
++			is_an_archive=1
++		fi
++
++		if [ -r $PKGSRC/reloc.cpio ]; then
++			reloc_cpio=1
++			Reloc_Arch=$PKGSRC/reloc.cpio
++			is_an_archive=1
++		fi
++
++		if [ -r $PKGSRC/root.cpio ]; then
++			root_cpio=1
++			Root_Arch=$PKGSRC/root.cpio
++			is_an_archive=1
++		fi
++
++		if [ -r $PKGSRC/reloc.Z ]; then
++			reloc_cpio_Z=1
++			Reloc_Arch=$PKGSRC/reloc.Z
++			is_an_archive=2
++		fi
++
++		if [ -r $PKGSRC/root.Z ]; then
++			root_cpio_Z=1
++			Root_Arch=$PKGSRC/root.Z
++			is_an_archive=2
++		fi
++
++		if [ -f $PKGSRC/reloc ]; then
++			reloc_cpio=1
++			Reloc_Arch=$PKGSRC/reloc
++			is_an_archive=2
++		fi
++
++		if [ -f $PKGSRC/root ]; then
++			root_cpio=1
++			Root_Arch=$PKGSRC/root
++			is_an_archive=2
++		fi
++	else
++		exit 0	# empty pipe, we're done
++	fi
++}
++
++#
++# main
++#
++
++eval_pkg
++
++if [ $BD = "/" ]; then
++	Client_BD=""
++else
++	Client_BD=`echo $BD | sed s@/@@`
++fi
++
++if [ $is_an_archive -eq 0 ]; then
++	echo `gettext "ERROR : $NAME cannot find archived files in $PKGSRC."`
++	exit 1
++fi
++
++if [ ! -d $PKGSAV ]; then
++	echo `gettext "WARNING : $NAME cannot find save directory $PKGSAV."`
++	PKGSAV=/tmp/$PKG.sav
++
++	if [ ! -d $PKGSAV ]; then
++		/usr/5bin/mkdir $PKGSAV
++	fi
++
++	if [ $? -eq 0 ]; then
++		echo `gettext "  Using alternate save directory" $PKGSAV`
++		FILELIST=$PKGSAV/filelist
++		Rm_alt_sav=1
++	else
++		echo `gettext "ERROR : cannot create alternate save directory"` $PKGSAV
++		exit 1
++	fi
++fi
++
++if [ -f $FILELIST ]; then
++	rm $FILELIST
++fi
++
++cd $BD
++
++# If there's one old-style archive and it is relocatable and this is
++# not an initial install then make a file list for extraction.
++if [ $is_an_archive -eq 1 -a ${PKG_INIT_INSTALL:-null} = null ]; then
++	mk_filelist=1
++fi
++
++# If this is not an initial install then clear out potentially executing
++# files and libraries for cpio and create an extraction list if necessary
++if [ ${PKG_INIT_INSTALL:-null} = null ]; then
++	if [ $local_install -eq 1 ]; then
++		# If extraction list is desired, create it
++		if [ $mk_filelist -eq 1 ]; then
++			is_a_filelist=1
++			while	read path
++			do
++				echo $path >> $FILELIST
++				list_empty=0
++				if [ -x ${path:-NULL} ]; then
++					full_path=`echo $Client_BD/$path | sed s@//@/@g`
++					spclcase $full_path
++					if [ $? -eq 1 ]; then
++						break
++					fi
++				fi
++			done
++
++			# If there's a path containing a '$' then we can't
++			# use the extraction list because of the shell
++			if [ $list_empty -eq 0 ]; then
++				s=`LD_PRELOAD="$Ld_Preload" $NAWK_cmd ' /\\$/ { print } ' $FILELIST`
++
++				if [ ! -z "${s}" ]; then
++					is_a_filelist=0
++				fi
++			fi
++		else	# No extraction list is desired
++			while	read  path
++			do
++				if [ -x ${path:-NULL} ]; then
++					full_path=`echo $Client_BD/$path | sed s@//@/@g`
++					spclcase $full_path
++					if [ $? -eq 1 ]; then
++						break
++					fi
++				fi
++			done
++		fi	# $mk_filelist -eq 1
++	else	# ! ($local_install -eq 1)
++		# If extraction list is desired, create it
++		if [ $mk_filelist -eq 1 ]; then
++			is_a_filelist=1
++			while	read path
++			do
++				echo $path >> $FILELIST
++				list_empty=0
++			done
++
++			# If there's a path containing a '$' then we can't
++			# use the extraction list because of the shell
++			if [ $list_empty -eq 0 ]; then
++				s=`LD_PRELOAD="$Ld_Preload" $NAWK_cmd ' /\\$/ { print } ' $FILELIST`
++
++				if [ ! -z "${s}" ]; then
++					is_a_filelist=0
++				fi
++			fi
++		fi	# $mk_filelist -eq 1
++	fi	# $local_install -eq 1
++fi	# ${PKG_INIT_INSTALL:-null} = null
++
++# Now extract the data from the archive(s)
++# extract compressed cpio relocatable archive
++if [ $reloc_cpio_Z -eq 1 ]; then
++	cd $BD
++	if [ $is_a_filelist -eq 1 ]; then
++		if [ $list_empty -eq 0 ]; then
++			$ZCAT_cmd $Reloc_Arch | $CPIO_cmd -idukm -E $FILELIST
++			if [ $? -ne 0 ]; then
++				echo `gettext "cpio of $Reloc_Arch failed with error $?."`
++				exit 1
++		   	 fi
++
++		fi
++	else
++		$ZCAT_cmd $Reloc_Arch | $CPIO_cmd -idukm
++	fi
++fi
++
++# extract compressed cpio absolute archive
++if [ $root_cpio_Z -eq 1 ]; then
++	cd $IR
++	$ZCAT_cmd $Root_Arch | $CPIO_cmd -idukm
++		if [ $? -ne 0 ]; then
++			echo `gettext "cpio of $Root_Arch failed with error $?."`
++			exit 1
++		fi
++fi
++
++# extract cpio relocatable archive
++if [ $reloc_cpio -eq 1 ]; then
++	cd $BD
++	if [ $is_a_filelist -eq 1 ]; then
++		if [ $list_empty -eq 0 ]; then
++			$CPIO_cmd -idukm -I $Reloc_Arch -E $FILELIST
++
++			if [ $? -ne 0 ]; then
++				echo `gettext "cpio of $Reloc_Arch failed with error $?."`
++				exit 1
++			fi
++		fi
++	else
++		$CPIO_cmd -idukm -I $Reloc_Arch
++	fi
++fi
++
++# extract cpio absolute archive
++if [ $root_cpio -eq 1 ]; then
++	cd $IR
++	$CPIO_cmd -idukm -I $Root_Arch
++		if [ $? -ne 0 ]; then
++			echo `gettext "cpio of $Root_Arch failed with error $?."`
++			exit 1
++		fi
++fi
++
++if [ -f $FILELIST ]; then
++	$RM_cmd $FILELIST
++fi
++
++if [ $Rm_alt_sav -eq 1 ]; then
++	$RM_cmd -r $PKGSAV
++	Rm_alt_sav=0
++fi
++
++exec_clean 0
++
++if [ $Tmp_Creat -eq 1 ]; then
++	$RM_cmd -r $Tmp_xpath
++fi
++
++if [ $Spcl_init -eq 1 ]; then
++	LD_LIBRARY_PATH=$Org_LD_LIBRARY_PATH
++	export LD_LIBRARY_PATH
++	Spcl_init=0
++fi
++
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/i.sed b/pkgcmds/pkgscripts/i.sed
+--- a/pkgcmds/pkgscripts/i.sed	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/i.sed	2026-07-04 11:18:39.188318538 +0300
+@@ -0,0 +1,75 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris i.sed	1.6	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)i.sed.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read src dest
++do
++	[ "$src" = /dev/null ] && continue
++
++	echo "Modifying $dest"
++
++	# Strip PKG_INSTALL_ROOT from dest if installation is to an
++	# alternate root.
++
++	if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++		client_dest=`echo $dest | \
++			/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				{ print substr($0, length(rootdir)+1)} }'`
++		savepath=$PKGSAV/sed${client_dest}
++	else
++		savepath=$PKGSAV/sed${dest}
++	fi
++
++	dirname=`dirname $savepath`
++	if [ $? -ne 0 ]
++	then
++		error=yes
++		continue
++	fi
++
++	if [ ! -d $dirname ]
++	then
++		# ignore return since mkdir has bug
++		mkdir -p $dirname
++	fi
++
++	cp $src $savepath &&
++		/usr/sadm/install/scripts/cmdexec /usr/5bin/sed install $savepath $dest 
++
++	if [ $? -ne 0 ]
++	then
++		error=yes
++	fi
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/r.awk b/pkgcmds/pkgscripts/r.awk
+--- a/pkgcmds/pkgscripts/r.awk	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/r.awk	2026-07-04 11:18:39.190318576 +0300
+@@ -0,0 +1,65 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris r.awk	1.6	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)r.awk.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read dest
++do
++	if [ -d $dest ]
++	then
++		echo "$dest"
++		rmdir $dest || error=yes
++	elif [ -f $dest ]
++	then
++		echo "Modifying $dest"
++
++		# Strip PKG_INSTALL_ROOT from dest if installation is to an
++		# alternate root.
++
++		if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++			client_dest=`echo $dest | \
++				/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				    { print substr($0, length(rootdir)+1)} }'`
++			savepath=$PKGSAV/awk${client_dest}
++		else
++			savepath=$PKGSAV/awk${dest}
++		fi
++
++		/usr/sadm/install/scripts/cmdexec /usr/5bin/awk remove $savepath $dest ||
++			error=yes
++	else
++		[ -r $dest ] && echo "$dest"
++		rm -f $dest || error=yes
++	fi
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/r.build b/pkgcmds/pkgscripts/r.build
+--- a/pkgcmds/pkgscripts/r.build	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/r.build	2026-07-04 11:18:39.192268170 +0300
+@@ -0,0 +1,76 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris r.build	1.7	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)r.build.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read dest
++do
++	if [ -d $dest ]
++	then
++		echo "$dest"
++		rmdir $dest || error=yes
++	elif [ -f $dest ]
++	then
++		echo "Modifying $dest"
++
++		# Strip PKG_INSTALL_ROOT from dest if installation is to an
++		# alternate root.
++
++		if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++			client_dest=`echo $dest | \
++				/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				    { print substr($0, length(rootdir)+1)} }'`
++			savepath=$PKGSAV/build${client_dest}
++		else
++			savepath=$PKGSAV/build${dest}
++		fi
++
++		chmod +x $savepath
++		if $savepath remove > /tmp/$$build
++		then
++			if [ ! -s /tmp/$$build ]
++			then
++				rm -f $dest
++			else
++				cp /tmp/$$build $dest || error=yes
++			fi
++		else
++			error=yes
++		fi
++		rm -f /tmp/$$build
++	else
++		[ -r $dest ] && echo "$dest"
++		rm -f $dest || error=yes
++	fi
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/pkgcmds/pkgscripts/r.sed b/pkgcmds/pkgscripts/r.sed
+--- a/pkgcmds/pkgscripts/r.sed	1970-01-01 02:00:00.000000000 +0200
++++ b/pkgcmds/pkgscripts/r.sed	2026-07-04 11:18:39.193318631 +0300
+@@ -0,0 +1,65 @@
++#
++# CDDL HEADER START
++#
++# The contents of this file are subject to the terms of the
++# Common Development and Distribution License (the "License").
++# You may not use this file except in compliance with the License.
++#
++# You can obtain a copy of the license at src/OPENSOLARIS.LICENSE
++# or http://www.opensolaris.org/os/licensing.
++# See the License for the specific language governing permissions
++# and limitations under the License.
++#
++# When distributing Covered Code, include this CDDL HEADER in each
++# file and include the License file at src/OPENSOLARIS.LICENSE.
++# If applicable, add the following below this CDDL HEADER, with the
++# fields enclosed by brackets "[]" replaced with your own identifying
++# information: Portions Copyright [yyyy] [name of copyright owner]
++#
++# CDDL HEADER END
++#
++
++#
++# Copyright 2002 Sun Microsystems, Inc.  All rights reserved.
++# Use is subject to license terms.
++#
++# from OpenSolaris r.sed	1.6	06/02/27 SMI
++#
++# Portions Copyright (c) 2007 Gunnar Ritter, Freiburg i. Br., Germany
++#
++# Sccsid @(#)r.sed.in	1.3 (gritter) 2/24/07
++#
++
++error=no
++while read dest
++do
++	if [ -d $dest ]
++	then
++		echo "$dest"
++		rmdir $dest || error=yes
++	elif [ -f $dest ]
++	then
++		echo "Modifying $dest"
++
++		# Strip PKG_INSTALL_ROOT from dest if installation is to an
++		# alternate root.
++
++		if [ -n "$PKG_INSTALL_ROOT" -a "$PKG_INSTALL_ROOT" != "/" ]; then
++			client_dest=`echo $dest | \
++				/usr/5bin/nawk -v rootdir="$PKG_INSTALL_ROOT" '{
++				    { print substr($0, length(rootdir)+1)} }'`
++			savepath=$PKGSAV/sed${client_dest}
++		else
++			savepath=$PKGSAV/sed${dest}
++		fi
++
++		/usr/sadm/install/scripts/cmdexec /bin/sed remove $savepath $dest ||
++			error=yes
++	else
++		[ -r $dest ] && echo "$dest"
++		rm -f $dest || error=yes
++	fi
++done
++[ "$error" = yes ] &&
++	exit 2
++exit 0
+Binary files a/pkgcmds/pkgtrans/pkgtrans and b/pkgcmds/pkgtrans/pkgtrans differ
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/asn1.h b/sslstub/openssl/asn1.h
+--- a/sslstub/openssl/asn1.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/asn1.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/bio.h b/sslstub/openssl/bio.h
+--- a/sslstub/openssl/bio.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/bio.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/crypto.h b/sslstub/openssl/crypto.h
+--- a/sslstub/openssl/crypto.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/crypto.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/err.h b/sslstub/openssl/err.h
+--- a/sslstub/openssl/err.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/err.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/evp.h b/sslstub/openssl/evp.h
+--- a/sslstub/openssl/evp.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/evp.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/ocsp.h b/sslstub/openssl/ocsp.h
+--- a/sslstub/openssl/ocsp.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/ocsp.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/pem.h b/sslstub/openssl/pem.h
+--- a/sslstub/openssl/pem.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/pem.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/pkcs12.h b/sslstub/openssl/pkcs12.h
+--- a/sslstub/openssl/pkcs12.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/pkcs12.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/pkcs7.h b/sslstub/openssl/pkcs7.h
+--- a/sslstub/openssl/pkcs7.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/pkcs7.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/rand.h b/sslstub/openssl/rand.h
+--- a/sslstub/openssl/rand.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/rand.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/safestack.h b/sslstub/openssl/safestack.h
+--- a/sslstub/openssl/safestack.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/safestack.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/ssl.h b/sslstub/openssl/ssl.h
+--- a/sslstub/openssl/ssl.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/ssl.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/stack.h b/sslstub/openssl/stack.h
+--- a/sslstub/openssl/stack.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/stack.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/stubtypes.h b/sslstub/openssl/stubtypes.h
+--- a/sslstub/openssl/stubtypes.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/stubtypes.h	2026-07-04 11:17:47.994505960 +0300
+@@ -0,0 +1,24 @@
++#ifndef STUB_TYPES_H
++#define STUB_TYPES_H
++#include <stddef.h>
++#include <stdarg.h>
++typedef struct BIO_st BIO;
++typedef struct X509_st X509;
++typedef struct evp_md_st EVP_MD;
++typedef struct evp_pkey_st EVP_PKEY;
++typedef struct pkcs7_st PKCS7;
++typedef struct pkcs12_st PKCS12;
++typedef int pem_password_cb(char *buf, int size, int rwflag, void *userdata);
++struct stack_st_X509;
++struct stack_st_EVP_PKEY;
++#define STACK_OF(type) struct stack_st_##type
++#define DECLARE_STACK_OF(type)
++#define SKM_sk_new_null(t) (NULL)
++#define SKM_sk_free(t, st)
++#define SKM_sk_num(t, st) (0)
++#define SKM_sk_value(t, st, i) (NULL)
++#define SKM_sk_push(t, st, v) (0)
++#define SKM_sk_find(t, st, v) (-1)
++#define SKM_sk_pop_free(t, st, f)
++#define SKM_sk_dup(t, st) (NULL)
++#endif
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/ui.h b/sslstub/openssl/ui.h
+--- a/sslstub/openssl/ui.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/ui.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/x509.h b/sslstub/openssl/x509.h
+--- a/sslstub/openssl/x509.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/x509.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+diff -ruN '--exclude=*.o' '--exclude=*.a' '--exclude=Makefile' '--exclude=*.pkg' '--exclude=.git' '--exclude=scriptvfy.c' a/sslstub/openssl/x509v3.h b/sslstub/openssl/x509v3.h
+--- a/sslstub/openssl/x509v3.h	1970-01-01 02:00:00.000000000 +0200
++++ b/sslstub/openssl/x509v3.h	2026-07-04 11:10:35.283166090 +0300
+@@ -0,0 +1 @@
++#include "stubtypes.h"
+Binary files a/valtools/ckdate and b/valtools/ckdate differ
+Binary files a/valtools/ckgid and b/valtools/ckgid differ
+Binary files a/valtools/ckint and b/valtools/ckint differ
+Binary files a/valtools/ckitem and b/valtools/ckitem differ
+Binary files a/valtools/ckkeywd and b/valtools/ckkeywd differ
+Binary files a/valtools/ckpath and b/valtools/ckpath differ
+Binary files a/valtools/ckrange and b/valtools/ckrange differ
+Binary files a/valtools/ckstr and b/valtools/ckstr differ
+Binary files a/valtools/cktime and b/valtools/cktime differ
+Binary files a/valtools/ckuid and b/valtools/ckuid differ
+Binary files a/valtools/ckyorn and b/valtools/ckyorn differ
+Binary files a/valtools/puttext and b/valtools/puttext differ

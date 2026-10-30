@@ -1,0 +1,4 @@
+/etc/lp d none 0775 lp lp lp
+/opt/dup f none 0444 bin bin 10 20 690829200 PKGA PKGA
+/opt/dup2 d none 0755 bin bin PKGB PKGB PKGB
+/opt/nodup f none 0444 bin bin 10 20 690829200 PKGA PKGB

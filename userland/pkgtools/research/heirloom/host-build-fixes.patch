@@ -1,0 +1,130 @@
+--- a/libadm/getpass.c	2026-07-04 09:59:26.030736301 +0300
++++ b/libadm/getpass.c	2026-07-04 11:04:32.161367998 +0300
+@@ -40,8 +40,10 @@
+ #include <stdlib.h>
+ #include <signal.h>
+ #include <unistd.h>
+-#include <stropts.h>
+-#include <termio.h>
++/* FIXLOG[1]: <stropts.h> removed in glibc 2.30, <termio.h> removed in glibc
++ * 2.42; converted struct termio/ioctl(TCGETA...) to POSIX termios below.
++ * NOTE: original code is the *native* form on SVR4 (Amix has termio.h). */
++#include <termios.h>
+ 
+ static void catch(int);
+ static int intrupt;
+@@ -66,8 +68,8 @@
+ static char *
+ __getpass(const char *prompt, int size)
+ {
+-	struct termio ttyb;
+-	unsigned short flags;
++	struct termios ttyb;
++	tcflag_t flags;
+ 	char *p;
+ 	int c;
+ 	FILE	*fi;
+@@ -87,10 +89,10 @@
+ 	setbuf(fi, NULL);
+ 	sig = signal(SIGINT, catch);
+ 	intrupt = 0;
+-	(void) ioctl(fileno(fi), TCGETA, &ttyb);
++	(void) tcgetattr(fileno(fi), &ttyb);
+ 	flags = ttyb.c_lflag;
+ 	ttyb.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
+-	(void) ioctl(fileno(fi), TCSETAF, &ttyb);
++	(void) tcsetattr(fileno(fi), TCSAFLUSH, &ttyb);
+ #ifdef	__sun
+ 	FLOCKFILE(lk, stderr);
+ #else
+@@ -105,7 +107,7 @@
+ 	}
+ 	*p = '\0';
+ 	ttyb.c_lflag = flags;
+-	(void) ioctl(fileno(fi), TCSETAW, &ttyb);
++	(void) tcsetattr(fileno(fi), TCSADRAIN, &ttyb);
+ 	(void) putc('\n', stderr);
+ #ifdef	__sun
+ 	FUNLOCKFILE(lk);
+--- a/libpkg/p12lib.h	2026-07-04 09:59:26.035736389 +0300
++++ b/libpkg/p12lib.h	2026-07-04 11:07:39.507034896 +0300
+@@ -81,6 +81,10 @@
+ #endif
+ 
+ /* These declarations allow us to make stacks of EVP_PKEY objects */
++/* FIXLOG[3]: OpenSSL >= 1.1.0 removed DECLARE_STACK_OF/SKM_sk_* macros */
++#if OPENSSL_VERSION_NUMBER >= 0x10100000L
++DEFINE_STACK_OF(EVP_PKEY)
++#else
+ DECLARE_STACK_OF(EVP_PKEY)
+ #define	sk_EVP_PKEY_new_null() SKM_sk_new_null(EVP_PKEY)
+ #define	sk_EVP_PKEY_free(st) SKM_sk_free(EVP_PKEY, (st))
+@@ -94,6 +98,7 @@
+ #define	sk_EVP_PKEY_pop_free(st, free_func) SKM_sk_pop_free(EVP_PKEY, (st), \
+ 	    (free_func))
+ #define	sk_EVP_PKEY_pop(st) SKM_sk_pop(EVP_PKEY, (st))
++#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+ 
+ /* Error reporting routines required by OpenSSL */
+ #define	SUNW_LIB_NAME	"SUNW_PKCS12"
+--- a/libpkg/verify.c	2026-07-04 09:59:26.036736407 +0300
++++ b/libpkg/verify.c	2026-07-04 11:08:33.342273622 +0300
+@@ -44,6 +44,9 @@
+ #include <utime.h>
+ #include <malloc.h>
+ #include <sys/types.h>
++#ifdef __linux__
++#include <sys/sysmacros.h>	/* FIXLOG[4]: glibc 2.28+ moved makedev/major/minor here */
++#endif
+ #include <sys/param.h>
+ #include <sys/stat.h>
+ #include <sys/statvfs.h>
+--- a/mk.config	2026-07-04 09:59:26.042253678 +0300
++++ b/mk.config	2026-07-04 11:21:17.388085494 +0300
+@@ -27,8 +27,8 @@
+ #
+ # Prefixes.
+ #
+-PREFIX=/usr
+-VAR=/var
++PREFIX=/usr/local/heirloom-test/usr
++VAR=/usr/local/heirloom-test/var
+ 
+ #
+ # Where to place binaries. This must be the same place
+@@ -45,7 +45,7 @@
+ #
+ # Where to place configuration files.
+ #
+-ETCDIR=/etc
++ETCDIR=/usr/local/heirloom-test/etc
+ 
+ #
+ # Where to place (read-only) helper files.
+@@ -70,7 +70,7 @@
+ #
+ # Compiler flags.
+ #
+-CFLAGS=-m32 -O
++CFLAGS=-O -std=gnu89 -fcommon -Wdeclaration-after-statement
+ 
+ #
+ # C preprocessor flags.
+@@ -78,7 +78,7 @@
+ # Use -D_GNU_SOURCE for Linux with GNU libc.
+ # Use -D_INCLUDE__STDC_A1_SOURCE for HP-UX.
+ #
+-CPPFLAGS=-m32 -D_GNU_SOURCE
++CPPFLAGS=-D_GNU_SOURCE
+ 
+ #
+ # Warning flags for the compiler.
+@@ -88,7 +88,7 @@
+ #
+ # Linker flags.
+ #
+-LDFLAGS=-m32
++LDFLAGS=
+ 
+ #
+ # Additional libraries to link with.

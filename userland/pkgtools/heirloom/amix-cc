@@ -1,0 +1,147 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# amix-cc - compile shim around the m68k-cbm-sysv4-gcc wrapper for the
+# heirloom Amix build (set as CC by mk.config.amix).
+#
+# WHY: the toolchain's gcc wrapper compiles via "gcc.real -S", applies
+# asm fixups (fix_asm: 3-arg .lcomm, integer cmp operand order), and
+# assembles.  The wrapper does NOT handle FLOATING-POINT compares, so
+# any double comparison miscompiles:
+#   - "fcmp.d %fpN,&<imm>" is rejected outright by gas
+#     ("operands mismatch"), breaking e.g. compat/snprintf.c;
+#   - register-register "fcmp.x %fpM,%fpN" assembles but with the
+#     INVERTED sense (MC68881: FCMP <ea>,FPn computes FPn - <ea>;
+#     gcc prints the SUN order, condition = first - second).
+#   - "fsgldiv.s %fpM,%fpN" (reg-to-reg float ops with .s/.d size)
+#     is rejected; this gas wants the .x size there.
+#
+# This shim reproduces the wrapper's compile flow for "-c" invocations:
+# it EXTRACTS the wrapper's own fix_asm function at runtime (so any
+# fix to the wrapper's integer-cmp rewriting is picked up
+# automatically - it was reported buggy for some comparison forms and
+# is being corrected) and then applies the float fixups on top.
+# Everything else (linking, -S, -E) is delegated to the wrapper
+# untouched.
+#
+set -e
+
+REALCC="${AMIX_REAL_CC:-m68k-cbm-sysv4-gcc}"
+AS="${AMIX_AS:-m68k-cbm-sysv4-as}"
+
+has_c=no
+for a in "$@"; do
+	[ "$a" = "-c" ] && has_c=yes
+done
+
+if [ "$has_c" != yes ]; then
+	exec "$REALCC" "$@"
+fi
+
+# split argv: source file, -o target, remaining flags
+src=
+out=
+flags=()
+skip=
+for a in "$@"; do
+	if [ "$skip" = o ]; then out="$a"; skip=; continue; fi
+	case "$a" in
+	-c) ;;
+	-o) skip=o ;;
+	*.c) src="$a" ;;
+	*) flags+=("$a") ;;
+	esac
+done
+
+if [ -z "$src" ]; then
+	# object-only invocation etc.: let the wrapper deal with it
+	exec "$REALCC" -c "$@"
+fi
+[ -n "$out" ] || out="$(basename "${src%.c}").o"
+
+tmps="$(mktemp "${TMPDIR:-/tmp}/amix-cc.XXXXXX.s")"
+trap 'rm -f "$tmps"' EXIT INT TERM
+
+# The wrapper passes -S straight to gcc.real with the sysroot -I
+# prepended, preserving the exact include-search order of a normal
+# wrapper compile.
+"$REALCC" -S "${flags[@]}" "$src" -o "$tmps"
+
+# Fixup 0: .swbeg -> 4-byte filler (switch jump-table dispatch; see
+# src/contents-fsck/tools/asmfix.pl for the full analysis).  Applied
+# HERE, before the wrapper's fix_asm, because the installed wrapper's
+# own swbeg rule is broken: it uses line-by-line "perl -p" where the
+# trailing \s*$ also consumes the NEWLINE, merging ".long N" with the
+# following table label (gas: "Rest of line ignored. First ignored
+# character is `.'").  This slurp-mode /mg rule is byte-identical to
+# the validated contents-fsck one and keeps its newline; afterwards no
+# .swbeg lines remain, so the wrapper's broken rule matches nothing.
+perl -0pi -e 's/^(\s*)\.swbeg\s+&(\d+)\s*$/$1.long $2/mg' "$tmps"
+
+# Apply the wrapper's own fix_asm (extracted at runtime so this shim
+# always matches the installed wrapper's integer fixups).
+wrapper_path="$(command -v "$REALCC")"
+fixfn="$(sed -n '/^fix_asm()/,/^}$/p' "$wrapper_path")"
+if [ -n "$fixfn" ]; then
+	eval "$fixfn"
+	fix_asm "$tmps"
+else
+	echo "amix-cc: WARNING: could not extract fix_asm from $wrapper_path" >&2
+fi
+
+# Float fixup 1: swap operands of fcmp.[sdx] - gcc prints the SUN
+# order "fcmp A,B" (condition = A-B) while this gas encodes the
+# Motorola order (FCMP <ea>,FPn computes FPn - <ea>), and rejects
+# immediate operands in the destination position outright.
+# SKIPPED when the wrapper's fix_asm already swaps fcmp (gcc-cross-amix
+# 8dbc8d7, 2026-09): a second swap restores the rejected form for
+# immediates and silently INVERTS reg-reg compares.
+case "$fixfn" in
+*fcmp*) wrapper_fcmp=yes ;;
+*)      wrapper_fcmp=no ;;
+esac
+[ "$wrapper_fcmp" = yes ] || perl -0pi -e '
+	sub split_operands {
+		my ($s) = @_;
+		my $depth = 0;
+		for (my $i = 0; $i < length($s); $i++) {
+			my $ch = substr($s, $i, 1);
+			$depth++ if $ch eq "(";
+			$depth-- if $ch eq ")";
+			if ($ch eq "," && $depth == 0) {
+				return (substr($s, 0, $i), substr($s, $i + 1));
+			}
+		}
+		return;
+	}
+	s{^(\s*fcmp\.[sdx]\s+)([^\n]+)$}{
+		my ($prefix, $ops) = ($1, $2);
+		my ($left, $right) = split_operands($ops);
+		defined $right ? "$prefix$right,$left" : "$prefix$ops";
+	}egm;
+' "$tmps"
+
+# Float fixup 2: register-to-register float ops must use the .x size
+# for this gas (gcc emits e.g. "fsgldiv.s %fp0,%fp2").
+perl -pi -e 's{^(\s*f[a-z]+)\.[bwlsd](\s+%fp[0-9]+,%fp[0-9]+\s*)$}{$1.x$2}' "$tmps"
+
+# 68060 (AMIX PORT, 2026-10-05): the 32x32->64 multiply.  gcc 2.7.2.3
+# emits "muls.l/mulu.l <ea>,%dH:%dL" for every divide or modulo by a
+# constant and for (u64)a*b; the 68060 does not implement it (vector 61,
+# Amix SIGKILLs the process; NOTES.md 2026-10-05).  The expansion into
+# 16x16 mulu.w products lives in ONE place: the toolchain wrapper's
+# fix_asm (gcc-cross-amix 2ab2b22, rule 11, on by default), which ran
+# above.  This shim carried its own copy for APKGENG 1.12.1; it was
+# removed for 1.12.2 so there is one implementation.  What stays here is
+# the gate: a wrapper older than 2ab2b22, or AMIX_MUL64=keep, leaves the
+# 64-bit form in and the compile fails below instead of shipping it.
+# Fail closed on anything 64-bit left: an unexpanded 64-bit multiply, a
+# 64-bit-dividend divide (the 32-bit-remainder form is divsl.l/divul.l),
+# or an SGS tdivs/tdivu the wrapper did not rewrite.
+if grep -nE '^\s*(mul[su]\.l\s.*,%d[0-7]:%d[0-7]\s*$|div[su]\.l\s.*:|tdiv[su])' "$tmps" >&2; then
+	echo "amix-cc: $src: 68060-unimplemented 64-bit mul/div left (above); needs the gcc-cross-amix 2ab2b22 wrapper, AMIX_MUL64 unset" >&2
+	exit 1
+fi
+
+exec "$AS" -m68020 -o "$out" "$tmps"

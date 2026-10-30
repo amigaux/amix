@@ -1,0 +1,191 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# mk.config.amix - build configuration for the Amiga Unix (Amix,
+# SVR4.0 m68k) cross build of heirloom-pkgtools.
+#
+# Used by build-amix.sh, which generates each subdirectory's Makefile as
+#
+#	{ echo "TOPDIR=<abs path of this dir>"; cat mk.config.amix; \
+#	  cat <dir>/Makefile.mk; } > <dir>/Makefile
+#
+# i.e. exactly the stock "cat mk.config Makefile.mk" scheme with this
+# file substituted and TOPDIR prepended (TOPDIR carries the absolute
+# location of compat/ and sslstub/ so that the -I/-include flags work
+# from every subdirectory depth).
+#
+# See AMIX-PORT.md for the full port documentation.
+#
+
+#
+# Cross toolchain (expected in PATH; source gcc-cross-amix env.sh first).
+#
+CROSS=m68k-cbm-sysv4-
+# CC is the amix-cc shim: it reproduces the gcc wrapper compile flow
+# and extends its asm fixups to floating-point compares (fcmp), which
+# the wrapper misses (rejected or sense-inverted by gas otherwise).
+CC=$(TOPDIR)/amix-cc
+STRIP=$(CROSS)strip
+# The binutils-2.8.1 cross ar aborts ("buffer overflow detected") under
+# modern glibc fortify; the HOST ar/ranlib write the same portable
+# "!<arch>" format + symbol index that GNU ld 2.8.1 reads (verified).
+AR=ar
+RANLIB=ranlib
+
+#
+# Shell used during compilation AND compiled into the tools
+# (exec path for request/class-action scripts).  Amix /bin/sh.
+#
+SHELL = /bin/sh
+
+#
+# A BSD-compatible install command (host side; only used by the
+# stock "install" targets, which the Amix build does not run).
+#
+INSTALL=/usr/bin/install
+
+#
+# Historic knob for the Heirloom dev tools; unused on Amix (the
+# pre-generated scriptvfy.c carries its own yywrap, so no lex/libl).
+#
+CCSDIR=/usr/ccs
+
+#
+# Prefixes.  Everything of ours lives under /usr/apkg on the guest;
+# /var/sadm remains the shared installed-package database.
+#
+PREFIX=/usr/apkg
+VAR=/var
+
+#
+# BINDIR is compiled into the tools as the directory holding the
+# EXTERNAL commands they exec: cpio, rm, rmdir, nawk, ...
+# On Amix these are the native SVR4.0 tools in /usr/bin.
+# (Our own binaries are NOT installed here - build-amix.sh collects
+# them into build-amix/bin for deployment to /usr/apkg/bin.)
+#
+BINDIR=/usr/bin
+
+#
+# Where to place superuser-only binaries (install rules only; unused).
+#
+SBINDIR=$(PREFIX)/bin
+
+#
+# Where to place configuration files (device.tab lookup).
+#
+ETCDIR=/etc
+
+#
+# Read-only helper files - PARALLEL sadm prefix, per design.md:
+# pkgadd execs $(SADMDIR)/install/bin/pkginstall; never overwrite the
+# stock /usr/sadm/install/bin of Amix.
+#
+SADMDIR=$(PREFIX)/sadm
+
+#
+# The installed-package database - shared with the stock tools.
+#
+VSADMDIR=$(VAR)/sadm
+
+#
+# Where to place manual pages.
+#
+MANDIR=$(PREFIX)/man
+
+#
+# Compiler flags.  gcc 2.7.2.3, plain C89 + GNU extensions.
+#
+CFLAGS=-O
+
+#
+# MERGPATH_OPT / PKGDBMERG_OPT: the optimization level for the eight
+# files once force-built at -O0 (pkgdbmerg/eptstat/listmgr,
+# putcfile/verify/ncgrpw/nhash, compat/snprintf) as a codegen
+# precaution.  That precaution is RETIRED.  The on-box pkginstall/-R
+# crash was NOT an -O miscompilation - it was a toolchain ASSEMBLER
+# defect: GNU as 2.8.1 dropped the remainder register of the SGS
+# tdivs.l/tdivu.l remainder-divide (nhash.c HASH()'s "hv % hsz"),
+# fixed in the m68k-cbm-sysv4-gcc wrapper (gcc-cross-amix 984192a,
+# box-verified 2026-07-20).  The bug was opt-level-INDEPENDENT, so
+# -O0 never helped; snprintf.c convert()'s 64-bit "value % base" was
+# never at risk anyway - it compiles to a __umoddi3 libcall (immune),
+# and its constant /10 divides strength-reduce to mulsl+asr.  These
+# eight files now build at -O like the rest of the tree; the per-file
+# rules and this alias are kept only as a documented opt-level hook.
+# See AMIX-PORT.md item 0 (RESOLVED) + tests/altroot-repro/.
+#
+MERGPATH_OPT=$(CFLAGS)
+PKGDBMERG_OPT=$(MERGPATH_OPT)
+
+#
+# C preprocessor flags:
+#  - sslstub: 17 stub OpenSSL headers (no real OpenSSL on Amix;
+#    keystore/security/pkgweb are excised from libpkg)
+#  - compat:  fnmatch.h, libintl.h, wchar.h, wctype.h shim headers
+#
+# NOTE: compat/amixcompat.h (snprintf/vsnprintf mapping, LFS64->plain
+# mapping, missing-libc declarations) is NOT force-included with
+# -include: the m68k-cbm-sysv4-gcc driver is a wrapper script that
+# does not pass -include through.  Instead build-amix.sh constructs a
+# SHADOW SYSROOT (build-amix/sysroot) whose stdio.h/stdlib.h/string.h/
+# ctype.h/sys/types.h are tiny wrappers that chain to the real header
+# and then include amixcompat.h; the shadow also OMITS the stock SVR4
+# pkg headers (pkgstrct.h, pkginfo.h, ...) that would otherwise shadow
+# heirloom's hdrs/ copies, because the wrapper always puts
+# $AMIX_SYSROOT/usr/include ahead of all -I directories.
+#
+# -D_XOPEN_SOURCE: the SVR4.0 headers hide the POSIX/XPG declarations
+# (popen, fdopen, fileno, MAX_INPUT, PATH_MAX, ...) behind
+# "#if __STDC__ == 0 || defined(_POSIX_SOURCE) || defined(_XOPEN_SOURCE)"
+# and gcc defines __STDC__=1; _XOPEN_SOURCE is purely additive there.
+CPPFLAGS=-I$(TOPDIR)/sslstub -I$(TOPDIR)/compat -D_XOPEN_SOURCE
+
+#
+# Warning flags for the compiler.
+#
+#WARN=
+
+#
+# Linker flags.
+#
+LDFLAGS=
+
+#
+# Additional libraries to link with.  With pkgweb.c removed nothing in
+# the built set uses sockets, so no -lsocket -lnsl.  The two libraries
+# here are load-bearing quirks of the gcc wrapper driver:
+#  -lamix: runtime support archive built by build-amix.sh
+#         (build-amix/lib/libamix.a): 64-bit integer helpers
+#         (__udivdi3 & co - the toolchain ships NO libgcc.a) from
+#         compat/di_ops.c, plus getutx.o/getut.o extracted from the
+#         static SVR4.0 libc.a (the shared libc.so.1 lacks the
+#         getutx*() family that pkginstall's run-level check uses).
+#  -lc:   the wrapper links libc automatically ONLY when no -l flags
+#         are present at all; every tool links -linst/-lpkg/... so
+#         libc must be named explicitly (last).
+#
+LIBS=-L$(TOPDIR)/build-amix/lib -lamix -lc
+
+#
+# Compat shim objects compiled into libadm.a (rules live in
+# libadm/Makefile.mk; empty for the host build).
+#
+COMPATOBJ=snprintf.o amixcompat.o fnmatch.o
+
+#
+# Use this if you prefer hard links between installed files.
+#
+LNS = ln -s
+
+#
+# Do not modify anything below here.
+#
+PATHS = \
+	-DSHELL='"$(SHELL)"' \
+	-DETCDIR='"$(ETCDIR)"' \
+	-DBINDIR='"$(BINDIR)"' \
+	-DSBINDIR='"$(SBINDIR)"' \
+	-DSADMDIR='"$(SADMDIR)"' \
+	-DVSADMDIR='"$(VSADMDIR)"' \
+	-DVSADMREL='"$(VSADMDIR:/%=%)"'

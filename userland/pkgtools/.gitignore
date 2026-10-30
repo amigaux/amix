@@ -1,0 +1,68 @@
+hdf/
+tmp/
+*.hdf
+*.adf
+configs/.winuae-amix.*
+heirloom/build-amix/
+heirloom/build-amix-static/
+heirloom/build-amix-static-*/
+heirloom/build-host/
+src/apkg/obj-*/
+src/apkg/apkg
+src/apkg/apkg.amix
+src/contents-fsck/contents-fsck
+src/contents-fsck/contents-fsck.amix
+# cross-built KAT probe: kat-verify.sh links it beside the source (statically
+# against the Amix libc, so it must never be committed)
+src/contents-fsck/tests/kat-branch.amix
+# disposable suite output: run-tests.sh does `rm -rf out; mkdir out` and a run
+# regenerates only the cases it exercises, so tracking it leaves spurious
+# deletions in git status (`make clean` removes it too).
+src/contents-fsck/tests/out/
+heirloom/**/*.o
+heirloom/**/*.a
+heirloom/*/Makefile
+heirloom/pkgcmds/*/Makefile
+heirloom/build-amix-*.log
+heirloom/build-host-*.log
+build/
+
+# in-tree build artifacts (binaries link beside their source)
+heirloom/pkgcmds/installf/installf
+heirloom/pkgcmds/pkgadd/pkgadd
+heirloom/pkgcmds/pkgadm/pkgadm
+heirloom/pkgcmds/pkgchk/pkgchk
+heirloom/pkgcmds/pkgcond/pkgcond
+heirloom/pkgcmds/pkginfo/pkginfo
+heirloom/pkgcmds/pkginstall/pkginstall
+heirloom/pkgcmds/pkgmk/pkgmk
+heirloom/pkgcmds/pkgname/pkgname
+heirloom/pkgcmds/pkgparam/pkgparam
+heirloom/pkgcmds/pkgproto/pkgproto
+heirloom/pkgcmds/pkgremove/pkgremove
+heirloom/pkgcmds/pkgrm/pkgrm
+heirloom/pkgcmds/pkgscripts/pkgscripts
+heirloom/pkgcmds/pkgtrans/pkgtrans
+heirloom/version/version
+__pycache__/
+*.pyc
+
+# local-only: agent/session rules and settings never enter the public tree
+CLAUDE.md
+.claude/
+# emulator configs carry host paths and ROM locations; ship *.example.uae only
+configs/*.uae
+!configs/*.example.uae
+# ROMs, media and images never enter git (hdf/ and *.hdf/*.adf above)
+*.rom
+*.ROM
+*.iso
+*.img
+*.cue
+# cross-built Amix binaries and minted datastreams (test fixtures excepted)
+*.amix
+!research/heirloom/contents-harness/contents.amix
+!heirloom/mk.config.amix
+*.pkg
+!tools/repo/tests/fixtures/*.pkg
+*.log

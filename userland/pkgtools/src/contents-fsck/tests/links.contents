@@ -1,0 +1,3 @@
+/bin=/usr/bin s none core
+/opt/hard=/opt/target l none PKGA
+/opt/spaced link=/opt/real target s none PKGA

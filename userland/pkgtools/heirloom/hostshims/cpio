@@ -1,0 +1,61 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# hostshims/cpio - SVR4-cpio -> GNU-cpio translating wrapper for the
+# HOST build of heirloom-pkgtools (installed into build-host/bindir,
+# which is compiled into the host tools as BINDIR).
+#
+# The pkg tools exec "$BINDIR/cpio" with SVR4 flag clusters:
+#     -oc / -ocL  -C 512      write, "-c" = ASCII header
+#     -icdum      -C 512      read, create dirs, unconditional, keep mtime
+#     -ict        -C 512      list
+#     -pdum / -pudm ...       pass mode
+#
+# CRITICAL DIFFERENCE: SVR4 "-c" means the EXPANDED ASCII (newc,
+# magic 070701) format - the only member format the stock Amix pkgadd
+# accepts inside datastreams (bench-verified: odc datastreams fail
+# with rc=5).  GNU cpio's "-c" means ODC (070707), so a naive
+# passthrough would build packages Amix cannot install.  This wrapper
+# maps every write invocation to "GNU cpio -H newc" and lets GNU cpio
+# auto-detect the member format on read.
+#
+# MIT license; see compat/amixcompat.h.
+#
+GNUCPIO="${GNUCPIO:-/usr/bin/cpio}"
+
+cluster="$1"
+shift
+
+out=""
+case "$cluster" in
+-o*)
+	out="-o -H newc"
+	case "$cluster" in *L*) out="$out -L" ;; esac
+	;;
+-i*)
+	case "$cluster" in
+	*t*)	out="-i -t" ;;
+	*)	out="-i" ;;
+	esac
+	case "$cluster" in *d*) out="$out -d" ;; esac
+	case "$cluster" in *u*) out="$out -u" ;; esac
+	case "$cluster" in *m*) out="$out --preserve-modification-time" ;; esac
+	# GNU cpio auto-detects newc/odc/crc members on input
+	;;
+-p*)
+	out="-p"
+	case "$cluster" in *d*) out="$out -d" ;; esac
+	case "$cluster" in *u*) out="$out -u" ;; esac
+	case "$cluster" in *m*) out="$out --preserve-modification-time" ;; esac
+	case "$cluster" in *l*) out="$out -l" ;; esac
+	;;
+*)
+	echo "hostshims/cpio: unrecognized flag cluster: $cluster" >&2
+	exit 2
+	;;
+esac
+
+# Remaining args (-C <n>, directory for -p, ...) pass through: GNU
+# cpio's -C <n> is the same I/O block size knob as SVR4's.
+exec "$GNUCPIO" --quiet $out "$@"
