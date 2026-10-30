@@ -13,7 +13,8 @@
 #                                  a tests/fixtures file lists source-tree paths
 #                                  (one per line) copied in beside them, e.g.
 #                                  upstream's own test vectors
-#   PKGLIST                        "<PKG> <datastream> <name>" per package
+#   PKGLIST                        "<PKG> <datastream> <name> <pkg|tests>" per
+#                                  package: where its smoke.sh runs from
 #   admin                          the non-interactive admin file (docs/porting.md 7)
 #   guest.sh, MANIFEST.sum         sum -r of every file above, for the push check
 
@@ -36,6 +37,15 @@ for r in "$@"; do
 	  cp "$P/$f" "$S/"
 	  mkdir -p "$S/$NAME"
 	  [ -d "$R/tests" ] && cp -r "$R/tests" "$S/$NAME/"
+	  # where smoke.sh runs: a script whose usage line is `sh tests/smoke.sh'
+	  # runs from <name>/, an older one (`sh smoke.sh') from <name>/tests/,
+	  # beside its fixtures; a tests/mkfixture.py makes tests/fixture.tar here
+	  M=tests
+	  grep '^#  *sh tests/smoke.sh' "$R/tests/smoke.sh" >/dev/null 2>&1 && M=pkg
+	  if [ -f "$R/tests/mkfixture.py" ]; then
+		  python3 -I "$R/tests/mkfixture.py" "$S/$NAME/tests/fixture.tar" >/dev/null ||
+			  { echo "[FAIL] $NAME/tests/mkfixture.py" >&2; exit 1; }
+	  fi
 	  if [ -f "$R/tests/fixtures" ]; then
 		  T="$OUT/$NAME/work/${SRCDIR:-$NAME-$VERSION}"
 		  grep -v '^#' "$R/tests/fixtures" | while read -r f; do
@@ -43,7 +53,7 @@ for r in "$@"; do
 			  cp "$T/$f" "$S/$NAME/tests/" || { echo "[FAIL] fixture $T/$f" >&2; exit 1; }
 		  done
 	  fi
-	  echo "$PKG $f $NAME" >> "$S/PKGLIST"
+	  echo "$PKG $f $NAME $M" >> "$S/PKGLIST"
 	  echo "staged $f ($(md5sum "$S/$f" | cut -d' ' -f1))$( [ -f "$R/tests/smoke.sh" ] && echo " + $NAME/tests" || echo ", no smoke test" )" )
 done
 cat > "$S/admin" <<'ADM'
