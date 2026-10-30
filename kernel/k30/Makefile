@@ -10,3 +10,9 @@ test:
 	python3 tools/mksym030.py --selftest
 	python3 tools/kinfo-cdevsw.py --selftest
 	python3 tools/kabi-sidecar030.py --selftest
+	python3 tools/check-chain-stamp.py --selftest
+	python3 tools/kernel-rootdev-stamp.py --selftest
+	python3 tools/kernel-cputype-stamp.py --selftest
+	python3 tools/kernel-sddevsize-inject.py --selftest
+	python3 tools/kernel-support-probe-inject.py --selftest
+	python3 tools/k0-gates.py --selftest
