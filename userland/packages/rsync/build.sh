@@ -46,4 +46,8 @@ stage() {
 			echo "[FAIL] D3: $f not defined in rsync" >&2; exit 1; }
 	done
 	echo "  D3 ok   rsync defines getpwnam/getpwuid/getgrnam/getgrgid (T)"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }

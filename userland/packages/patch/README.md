@@ -134,7 +134,7 @@ dependency that does not exist is worse than declaring none.
 
 ## Package shape
 
-`/usr/local/bin/patch`, the man page at `/usr/local/man/man1/patch.1`, `COPYING`/`NEWS`/`README`
+`/usr/local/bin/patch`, the man page at `/opt/amix/man/1/patch` (where `man` finds it; docs/man-pages.md), `COPYING`/`NEWS`/`README`
 under `/usr/local/doc/patch/`, and one symlink:
 
     s none /usr/bin/patch=../local/bin/patch
@@ -170,3 +170,10 @@ lists it; `/usr` and `/usr/bin` are stock directories the package does not own.
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -7: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/patch` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; `patch(1)` is upstream's; it moves from `/usr/local/man`. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

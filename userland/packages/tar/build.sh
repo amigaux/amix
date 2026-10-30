@@ -71,4 +71,9 @@ stage() {
 	cp COPYING NEWS README "$DEST$PREFIX/doc/tar/"
 	chmod 0755 "$DEST$PREFIX/bin/tar"
 	chmod 0644 "$DEST$PREFIX/doc/tar"/*
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man "$HERE/man/tar.1" 1
+	amix_man_whatis
 }

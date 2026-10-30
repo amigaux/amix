@@ -184,3 +184,10 @@ Not run: real hardware, and an FPU-less part.
 - **Package:** `coreutil-5.2.1-3.pkg`, md5 `d418b45ec9c809a474343d67d1826a0a`, 3694592 bytes.
 - mv across file systems copies through the same `copy.c`. The bench has one file system, so
   that path is not run.
+
+## Revision -4: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/coreutil` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; the 86 pages are upstream's, unchanged. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

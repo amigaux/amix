@@ -1,0 +1,300 @@
+The man pages for the 1991 nroff that formats them on Amix.
+
+less 704 ships its pages twice: *.man is a page already formatted for a
+modern terminal (ANSI colour escapes, UTF-8 hyphens), *.nro the troff
+source.  The package ships the source, and the stock pipeline
+(tbl | /usr/ucb/nroff -man -T37) knows neither the newer man macros
+.EX/.EE nor groff's \[dq] escape.  .EX/.EE become .nf/.fi (examples stay
+unfilled), and each quoted macro argument holding \[dq] becomes an
+unquoted one with \&" for the double quote.  Comment lines are untouched.
+Text only; no code changes.
+
+--- less.nro
++++ less.nro
+@@ -489,7 +489,7 @@
+ If the filename contains one or more spaces,
+ the entire filename should be enclosed in double quotes
+ (also see the
+-.B "\-\[dq]"
++.B \-\&"
+ option).
+ .IP "\*^X\*^V or E"
+ Same as :e.
+@@ -557,7 +557,7 @@
+ and print a message describing the new setting.
+ (The "\-+\fIX\fP" command does the same thing
+ as
+-.RB "\[dq]" "\-+X" "\[dq]"
++.RB \&" "\-+X" \&"
+ on the command line.)
+ This does not work for string-valued options.
+ .IP \-\-+
+@@ -654,11 +654,11 @@
+ For example, if you wish to open https links by invoking a program
+ called "mybrowser" with a "\-\-new\-window" option, you could set
+ .PP
+-.EX
++.nf
+ .nf
+ LESS_OSC8_OPEN_https="mybrowser \-\-new\-window"
+ .fi
+-.EE
++.fi
+ .PP
+ If the handler command begins with "\-",
+ the command is not displayed before it is executed.
+@@ -777,7 +777,7 @@
+ If an option appears in the LESS variable, it can be reset
+ to its default value on the command line by beginning the command
+ line option with
+-.RB "\[dq]" "\-+" "\[dq]."
++.RB \&" "\-+" \&".
+ .PP
+ Some options like
+ .B "\-k"
+@@ -789,9 +789,9 @@
+ .B "\-D"
+ options like this:
+ .PP
+-.EX
++.nf
+ LESS="Dnwb$Dsbw"
+-.EE
++.fi
+ .PP
+ If the
+ .B "\-\-use\-backslash"
+@@ -1168,7 +1168,7 @@
+ or
+ .BR "\-A" "."
+ For example, if
+-.RB "\[dq]" "\-j4" "\[dq]"
++.RB \&" "\-j4" \&"
+ is used, the target line is the
+ fourth line on the screen, so forward searches begin at the fifth line
+ on the screen.
+@@ -1449,9 +1449,9 @@
+ .IP
+ ANSI color escape sequences are sequences of the form:
+ .IP
+-.EX
++.nf
+ 	ESC [ \&...\& m
+-.EE
++.fi
+ .IP
+ where the "...\&" is zero or more color specification characters.
+ Color escape sequences are only supported when the color
+@@ -1472,9 +1472,9 @@
+ .IP
+ OSC sequences are of the form:
+ .IP
+-.EX
++.nf
+ 	ESC ] N ; \&...\& \e7
+-.EE
++.fi
+ .IP
+ where the OSC type number N is a decimal integer.
+ The terminating sequence may be either a BEL character (\e7)
+@@ -1602,11 +1602,11 @@
+ Position numbers are zero-based: the leftmost position is 0,
+ the next is 1, etc.
+ For example,
+-.RB "\[dq]" "\-x8,16" "\[dq]"
++.RB \&" "\-x8,16" \&"
+ is the same as
+-.RB "\[dq]" "\-x8" "\[dq]"
++.RB \&" "\-x8" \&"
+ and sets tabs at position 8, 16, 24, 32, etc.
+-.RB "\[dq]" "\-x10,14,20" "\[dq]"
++.RB \&" "\-x10,14,20" \&"
+ will set tabs at position 10, 14, 20, 26, 32, etc.
+ The default for \fIn\fP is 8.
+ .IP "\fB\-X\fP or \fB\-\-no\-init\fP"
+@@ -1837,10 +1837,10 @@
+ .B "\-\-header"
+ option has been given on the command line).
+ The special form
+-.RB "\[dq]" "\-\-header=\-" "\[dq]"
++.RB \&" "\-\-header=\-" \&"
+ disables header lines and header columns, 
+ and is equivalent to
+-.RB "\[dq]" "\-\-header=0,0" "\[dq]."
++.RB \&" "\-\-header=0,0" \&".
+ .PP
+ When \fIL\fP is nonzero, the first \fIL\fP lines at the top
+ of the screen are replaced with the \fIL\fP lines of the file beginning at line \fIN\fP,
+@@ -2141,7 +2141,7 @@
+ The default is to wrap at any character.
+ .IP \fB\-\-\fP
+ A command line argument of
+-.RB "\[dq]" "\-\-" "\[dq]"
++.RB \&" "\-\-" \&"
+ marks the end of option arguments.
+ Any arguments following this are interpreted as filenames.
+ This can be useful when viewing a file whose name begins with a "\-" or "+".
+@@ -2641,11 +2641,11 @@
+ .PP
+ For example, setting LESSUTFCHARDEF to
+ .PP
+-.EX
++.nf
+ .nf
+ 	E000\-F8FF:p,F0000\-FFFFD:p,100000\-10FFFD:p
+ .fi
+-.EE
++.fi
+ .PP
+ would make all Private Use Area characters be treated as printable.
+ .PP
+@@ -2656,11 +2656,11 @@
+ to treat them as composing characters.
+ For example, this sets them all to composing characters:
+ .PP
+-.EX
++.nf
+ .nf
+ 	FE00\-FE0F:c,1F3FB\-1F3FF:c,1F9B0\-1F9B3:c,E0100\-E01EF:c
+ .fi
+-.EE
++.fi
+ .SH "PROMPTS"
+ The
+ .B "\-P"
+@@ -2816,16 +2816,16 @@
+ .PP
+ Some examples:
+ .PP
+-.EX
++.nf
+ ?f%f:Standard input.
+-.EE
++.fi
+ .PP
+ This prompt prints the filename, if known;
+ otherwise the string "Standard input".
+ .PP
+-.EX
++.nf
+ ?f%f \&.?ltLine %lt:?pt%pt\e%:?btByte %bt:\-...
+-.EE
++.fi
+ .PP
+ This prompt would print the filename, if known.
+ The filename is followed by the line number, if known,
+@@ -2835,9 +2835,9 @@
+ and how the % after the %pt
+ is included literally by escaping it with a backslash.
+ .PP
+-.EX
++.nf
+ ?n?f%f\ .?m(%T %i of %m)\ ..?e(END)\ ?x\-\ Next\e:\ %x..%t
+-.EE
++.fi
+ .PP
+ This prints the filename if this is the first prompt in a file,
+ followed by the "file N of N" message if there is more
+@@ -2854,7 +2854,7 @@
+ respectively).
+ Each is broken into two lines here for readability only.
+ .PP
+-.EX
++.nf
+ .nf
+ ?n?f%f\ .?m(%T\ %i\ of\ %m)\ ..?e(END)\ ?x\-\ Next\e:\ %x.:
+ 	?pB%pB\e%:byte\ %bB?s/%s...%t
+@@ -2862,16 +2862,16 @@
+ ?f%f\ .?n?m(%T\ %i\ of\ %m)\ ..?ltlines\ %lt\-%lb?L/%L.\ :
+ 	byte\ %bB?s/%s.\ .?e(END)\ ?x\-\ Next\e:\ %x.:?pB%pB\e%..?c\ (column\ %c).%t
+ .fi
+-.EE
++.fi
+ .PP
+ And here is the default message produced by the = command:
+ .PP
+-.EX
++.nf
+ .nf
+ ?f%f\ .?m(%T\ %i\ of\ %m)\ .?ltlines\ %lt\-%lb?L/%L.\ .
+ 	byte\ %bB?s/%s.\ ?e(END)\ :?pB%pB\e%..?c\ (column\ %c).%t
+ .fi
+-.EE
++.fi
+ .PP
+ The prompt expansion features are also used for another purpose:
+ if an environment variable LESSEDIT is defined, it is used
+@@ -2879,11 +2879,11 @@
+ The LESSEDIT string is expanded in the same way as the prompt strings.
+ The default value for LESSEDIT is:
+ .PP
+-.EX
++.nf
+ .nf
+ 	%E\ ?lm+%lm.\ %g
+ .fi
+-.EE
++.fi
+ .PP
+ Note that this expands to the editor name, followed by a + and the
+ line number, followed by the shell-escaped file name.
+--- lesskey.nro
++++ lesskey.nro
+@@ -170,11 +170,11 @@
+ For example, if this line were in a lesskey file, pressing the "B" key
+ would first set the "b" mark and then search for the string "next":
+ .PP
+-.EX
++.nf
+ .nf
+     B set\-mark b/next\en
+ .fi
+-.EE
++.fi
+ .PP
+ The extra string has a special meaning for the "quit" action:
+ when
+@@ -385,9 +385,9 @@
+ .SH "LINE EDITING SECTION"
+ The line-editing section begins with the line:
+ .PP
+-.EX
++.nf
+ #line\-edit
+-.EE
++.fi
+ .PP
+ This section specifies new key bindings for the line editing commands,
+ in a manner similar to the way key bindings for
+@@ -520,11 +520,11 @@
+ .B less
+ which support it. The line would be ignored by versions earlier than 777.
+ .PP
+-.EX
++.nf
+ .nf
+ 	#version >= 777  Q sideways\-search
+ .fi
+-.EE
++.fi
+ .PP
+ These six operators are supported:
+ .RS 5m
+@@ -551,7 +551,7 @@
+ .B less
+ is run and, on version 595 and higher, adds a \-\-color option.
+ .PP
+-.EX
++.nf
+ .nf
+ 	#env
+ 	## (Note that there must be a space at the end of the next line,
+@@ -559,7 +559,7 @@
+ 	LESS = \-i\ \-S\ 
+ 	#version\ >=\ 595\ \ LESS\ +=\ \-\-color=Hkc
+ .fi
+-.EE
++.fi
+ .
+ .SH "SEE ALSO"
+ .BR less (1)

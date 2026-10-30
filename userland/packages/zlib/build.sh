@@ -65,4 +65,9 @@ stage() {
 	chmod 0644 "$DEST$PREFIX/lib/libz.a" "$DEST$PREFIX/include"/*.h \
 		"$DEST$PREFIX/man/man3/zlib.3" "$DEST$PREFIX/doc/zlib"/*
 	chmod 0755 "$DEST$PREFIX/bin/zlib-test"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man "$HERE/man/zlib-test.1" 1
+	amix_man_whatis
 }

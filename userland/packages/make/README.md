@@ -51,7 +51,7 @@ carries on. That is the right outcome: the alternative is `nlist()` + `/dev/kmem
 
 ## Package shape
 
-`/opt/amix/bin/make`, `/opt/amix/man/man1/make.1`, and `COPYING`, `COPYING.LIB`, `NEWS`, `README`
+`/opt/amix/bin/make`, `/opt/amix/man/1/make` (and `whatis.d/make`), and `COPYING`, `COPYING.LIB`, `NEWS`, `README`
 under `/opt/amix/doc/make/`. No info manual (no reader on the box). Pure file payload (D9).
 
 ## GCC 14 build
@@ -68,3 +68,10 @@ it) and `lstat` (`MAKE_SYMLINKS` needs `lstat`, `readlink` and `S_IFLNK`, which 
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/make` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; `make(1)` is upstream's. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

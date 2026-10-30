@@ -54,4 +54,19 @@ stage() {
 	cp "$HERE/doc/README" "$DEST$PREFIX/doc/acompat/README"
 	chmod 0644 "$DEST$PREFIX/include"/*.h "$DEST$PREFIX/doc/acompat"/* "$DEST$PREFIX/lib/libacompat.a"
 	chmod 0755 "$DEST$PREFIX/bin/acompat-test"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man "$HERE/man/acompat.3" 3
+	amix_man "$HERE/man/acompat-test.1" 1
+	amix_man_alias snprintf 3 acompat
+	amix_man_alias vsnprintf 3 acompat
+	amix_man_alias setenv 3 acompat
+	amix_man_alias unsetenv 3 acompat
+	amix_man_alias strcasecmp 3 acompat
+	amix_man_alias strncasecmp 3 acompat
+	amix_man_alias mkstemp 3 acompat
+	amix_man_alias usleep 3 acompat
+	amix_man_alias gettimeofday 3 acompat
+	amix_man_whatis
 }

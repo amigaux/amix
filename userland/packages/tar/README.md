@@ -78,7 +78,7 @@ GCC 14 only (`patches-gcc14/`; the period build is frozen):
 ## Package shape
 
 `/opt/amix/bin/tar` and `COPYING`/`NEWS`/`README` under `/opt/amix/doc/tar/`. No `rmt` (remote tape
-is not built), no man page (tar 1.14 documents itself in texinfo only; `tar --help` is the
+is not built), the man page `/opt/amix/man/1/tar`, written here since tar 1.14 documents itself in texinfo only (`tar --help` is the
 reference). Pure file payload (D9). `-z` runs `gzip` from `PATH` — install the `gzip` package and
 put `/opt/amix/bin` on `PATH`.
 
@@ -126,3 +126,10 @@ catalog line.
 is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
 previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
 `PSTAMP` only, and the pkgmap only in its `i pkginfo` line.
+
+## Revision -9: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/gtar` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; [`man/tar.1`](man/tar.1) is new: tar 1.14 has a texinfo manual only, so the page documents 1.14 as built here. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

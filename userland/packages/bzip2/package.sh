@@ -2,7 +2,7 @@
 NAME=bzip2
 PKG=bzip2
 VERSION=1.0.8
-PKGREV=2   # -2: relinked on gcc14-cross-amix b51ff39 (runtime only)
+PKGREV=3   # -3: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
 SUMMARY="bzip2 1.0.8"
 DESC="bzip2 1.0.8 block-sorting compressor: bzip2, bunzip2, bzcat, bzip2recover, the bzgrep/bzmore/bzdiff wrappers, and libbz2.a with bzlib.h. Installs under /opt/amix; add /opt/amix/bin to PATH."
 CATEGORY=archive

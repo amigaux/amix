@@ -25,10 +25,12 @@ f none /opt/amix/bin/lessecho 0755 root bin
 #
 # --- manual pages ----------------------------------------------------------
 d none /opt/amix/man 0755 root sys
-d none /opt/amix/man/man1 0755 root sys
-f none /opt/amix/man/man1/less.1 0644 root bin
-f none /opt/amix/man/man1/lesskey.1 0644 root bin
-f none /opt/amix/man/man1/lessecho.1 0644 root bin
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/less 0644 root bin
+f none /opt/amix/man/1/lessecho 0644 root bin
+f none /opt/amix/man/1/lesskey 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/less 0644 root bin
 #
 # --- licence and upstream notes --------------------------------------------
 #

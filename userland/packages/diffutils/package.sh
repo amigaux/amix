@@ -2,7 +2,7 @@
 NAME=diffutils
 PKG=diffutil
 VERSION=2.8.1
-PKGREV=2   # -2: relinked on gcc14-cross-amix b51ff39 (runtime only)
+PKGREV=3   # -3: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
 SUMMARY="GNU diffutils 2.8.1"
 DESC="GNU diffutils 2.8.1 beside the stock SVR4 diff tools, which it does NOT replace: diff with unified (-u) and recursive (-r) output, diff3, sdiff and cmp. Installs /opt/amix/bin/{diff,diff3,sdiff,cmp}; add /opt/amix/bin to PATH."
 CATEGORY=utility

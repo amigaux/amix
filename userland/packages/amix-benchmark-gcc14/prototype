@@ -24,3 +24,8 @@ f none /opt/amix/lib/amix-bench-g14/PROVENANCE 0644 root bin
 d none /opt/amix/doc 0755 root sys
 d none /opt/amix/doc/amix-bench-g14 0755 root sys
 f none /opt/amix/doc/amix-bench-g14/README.txt 0644 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/amix-bench-g14 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/amixbch14 0644 root bin

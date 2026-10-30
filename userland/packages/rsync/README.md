@@ -158,3 +158,10 @@ bench-golden kernel 46759dcc), slot 1, rig-run 20261030-102808. The peer was the
 
 Not run: real 68030/68060 hardware, an FPU-less part, the 040/060 kernel line, and rsync over
 `rsh` to a real remote host.
+
+## Revision -2: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/rsync` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; `rsync(1)` and `rsyncd.conf(5)` are upstream's, unchanged. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

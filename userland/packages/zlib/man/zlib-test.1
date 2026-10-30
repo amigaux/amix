@@ -1,0 +1,30 @@
+.\" zlib-test.1 -- userland/packages/zlib.  MIT, see LICENSE in userland/packages.
+.TH ZLIB-TEST 1 "2026-10-30" "zlib 1.2.13" "Amix add-on commands"
+.SH NAME
+zlib\-test \- check the installed zlib library on this machine
+.SH SYNOPSIS
+.B /opt/amix/bin/zlib\-test
+.SH DESCRIPTION
+.B zlib\-test
+is linked against the installed
+.B /opt/amix/lib/libz.a
+and checks, on this machine:
+.IP 1. 3
+the
+.B crc32
+and
+.B adler32
+checksums of a fixed string against their known values, which catch a
+byte-order mistake;
+.IP 2. 3
+a deflate and inflate round trip of four megabytes of mixed repeating and
+pseudo-random data, compared byte for byte;
+.IP 3. 3
+inflating a stream another zlib produced.
+.PP
+It prints one line per check, with the version of zlib it is linked against,
+and a verdict.
+.SH EXIT STATUS
+0 when every check passed, 1 otherwise.
+.SH SEE ALSO
+.BR zlib (3)

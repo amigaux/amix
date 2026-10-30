@@ -1,0 +1,443 @@
+.\" tar.1 -- GNU tar 1.14 as built for Amix (userland/packages/tar).
+.\" Written for this package: GNU tar 1.14 documents itself in texinfo only.
+.\" MIT licence, see LICENSE in userland/packages.
+.TH TAR 1 "2026-10-30" "GNU tar 1.14" "Amix add-on commands"
+.SH NAME
+tar \- GNU tape archiver
+.SH SYNOPSIS
+.B tar
+.I operation
+[\fIoption\fR]... [\fIfile\fR]...
+.SH DESCRIPTION
+.B tar
+saves many files together in a single archive, and restores single files or
+all of them from it.
+This is GNU
+.B tar
+1.14, installed as
+.BR /opt/amix/bin/tar .
+It does not replace the stock SVR4
+.B tar
+in
+.BR /usr/sbin ,
+which stays as it is; this one is used when
+.B /opt/amix/bin
+comes before
+.B /usr/sbin
+in
+.BR PATH .
+.PP
+Exactly one operation is given.
+Options may be given as long options
+.RB ( \-\-file=archive.tar ),
+as short options
+.RB ( "\-f archive.tar" ),
+or in the old style, bundled into the first argument without a dash
+.RB ( "tar cvf archive.tar dir" ).
+An argument that is mandatory for a long option is mandatory for its short
+option too.
+.PP
+The default archive is the standard input or output
+.RB ( \-f\ \- ),
+the default record size is 20 blocks of 512 bytes, and the default format for
+new archives is
+.BR gnu .
+.SH OPERATIONS
+.TP
+.BR \-c ", " \-\-create
+Create a new archive from the named files and directories.
+.TP
+.BR \-t ", " \-\-list
+List the members of an archive.
+.TP
+.BR \-x ", " \-\-extract ", " \-\-get
+Extract members from an archive.
+.TP
+.BR \-d ", " \-\-diff ", " \-\-compare
+Report differences between the archive and the file system.
+.TP
+.BR \-r ", " \-\-append
+Append files to the end of an archive.
+.TP
+.BR \-u ", " \-\-update
+Append only files newer than their copy in the archive.
+.TP
+.BR \-A ", " \-\-catenate ", " \-\-concatenate
+Append other tar archives to an archive.
+.TP
+.B \-\-delete
+Delete members from an archive (not on a tape).
+.SH OPTIONS
+.SS Archive and device
+.TP
+.BR \-f ", " \-\-file= \fIarchive\fR
+Use \fIarchive\fR: a file, a device, or
+.B \-
+for standard input or output.
+.TP
+.BR \-b ", " \-\-blocking\-factor= \fIn\fR
+Write records of \fIn\fR x 512 bytes (default 20).
+.TP
+.BI \-\-record\-size= size
+Write records of \fIsize\fR bytes, a multiple of 512.
+.TP
+.BR \-i ", " \-\-ignore\-zeros
+Ignore zeroed blocks in the archive, which normally mean its end.
+.TP
+.BR \-B ", " \-\-read\-full\-records
+Reblock as the archive is read (for pipes).
+.TP
+.BR \-M ", " \-\-multi\-volume
+Create, list or extract a multi-volume archive.
+.TP
+.BR \-L ", " \-\-tape\-length= \fIn\fR
+Change volumes after \fIn\fR x 1024 bytes.
+.TP
+.BR \-F ", " \-\-info\-script= \fIfile\fR ", " \-\-new\-volume\-script= \fIfile\fR
+Run \fIfile\fR at the end of each volume (implies
+.BR \-M ).
+.TP
+.BI \-\-volno\-file= file
+Keep the volume number in \fIfile\fR.
+.TP
+.B \-\-force\-local
+Treat an archive name with a colon as a local file.
+.TP
+.BI \-\-rsh\-command= command ", \-\-rmt\-command=" command
+The remote shell and the remote tape server for a
+.IB host : file
+archive; see BUGS.
+.SS Compression
+.TP
+.BR \-z ", " \-\-gzip ", " \-\-ungzip
+Filter the archive through
+.BR gzip ,
+found on
+.BR PATH .
+Install the
+.B gzip
+package for it.
+.TP
+.BR \-j ", " \-\-bzip2
+Filter the archive through
+.BR bzip2 ,
+found on
+.B PATH
+(the
+.B bzip2
+package).
+.TP
+.BR \-Z ", " \-\-compress ", " \-\-uncompress
+Filter the archive through the stock
+.BR compress .
+.TP
+.BI \-\-use\-compress\-program= program
+Filter the archive through \fIprogram\fR, which must accept
+.BR \-d .
+.SS Format
+.TP
+.BI \-\-format= format
+Create the archive in \fIformat\fR:
+.B v7
+(the old V7 format),
+.B oldgnu
+(GNU tar 1.12 and older),
+.B gnu
+(GNU tar 1.13, the default),
+.B ustar
+(POSIX 1003.1-1988) or
+.B posix
+(POSIX 1003.1-2001, pax).
+.TP
+.BR \-\-old\-archive ", " \-\-portability
+The same as
+.BR \-\-format=v7 .
+.TP
+.B \-\-posix
+The same as
+.BR \-\-format=posix .
+.TP
+.BI \-\-pax\-option " keyword" [[:]= value ][, ...]
+Control the pax keywords of a
+.B posix
+archive.
+.TP
+.BR \-V ", " \-\-label= \fIname\fR
+Give a new archive the volume name \fIname\fR; when reading, a pattern the
+volume name must match.
+.SS File selection
+.TP
+.BR \-C ", " \-\-directory= \fIdir\fR
+Change to \fIdir\fR before the following names.
+.TP
+.BR \-T ", " \-\-files\-from= \fIfile\fR
+Read the names to archive or extract from \fIfile\fR.
+.TP
+.B \-\-null
+The names read by
+.B \-T
+are terminated by NUL characters.
+.TP
+.BI \-\-exclude= pattern
+Leave out files matching \fIpattern\fR.
+.TP
+.BR \-X ", " \-\-exclude\-from= \fIfile\fR
+Leave out files matching the patterns listed in \fIfile\fR.
+.TP
+.BR \-\-anchored ", " \-\-no\-anchored ", " \-\-ignore\-case ", " \-\-no\-ignore\-case ", " \-\-wildcards ", " \-\-no\-wildcards ", " \-\-wildcards\-match\-slash ", " \-\-no\-wildcards\-match\-slash
+How exclusion patterns match: from the start of the name (the default) or
+after any
+.BR / ;
+case sensitive (the default) or not; with wildcards (the default) or as
+plain strings; wildcards matching
+.B /
+(the default) or not.
+.TP
+.BR \-P ", " \-\-absolute\-names
+Keep the leading
+.B /
+of file names.
+.TP
+.BR \-h ", " \-\-dereference
+Archive the files symbolic links point to, not the links.
+.TP
+.B \-\-no\-recursion
+Do not descend into directories.
+.TP
+.BR \-l ", " \-\-one\-file\-system
+Stay in the file system of each named directory when creating.
+.TP
+.BR \-K ", " \-\-starting\-file= \fIname\fR
+Begin at member \fIname\fR of the archive.
+.TP
+.BI \-\-strip\-path= n
+Strip \fIn\fR leading components from member names when extracting.
+.TP
+.BR \-N ", " \-\-newer= \fIdate\fR ", " \-\-after\-date= \fIdate\fR
+Archive only files newer than \fIdate\fR, a date or the name of a file
+starting with
+.B /
+or
+.B .
+whose date is taken.
+.TP
+.BI \-\-newer\-mtime= date
+The same, comparing the modification time only.
+.TP
+.BR \-G ", " \-\-incremental
+Handle an old GNU-format incremental backup.
+.TP
+.BR \-g ", " \-\-listed\-incremental= \fIfile\fR
+Handle a new GNU-format incremental backup, keeping its state in \fIfile\fR.
+.TP
+.BR \-\-occurrence [= \fIn\fR ]
+With
+.BR \-\-delete ,
+.BR \-\-diff ,
+.B \-\-extract
+or
+.B \-\-list
+and named members, act on the \fIn\fRth occurrence of each (default 1).
+.SS Extraction
+.TP
+.BR \-k ", " \-\-keep\-old\-files
+Do not replace existing files.
+.TP
+.B \-\-keep\-newer\-files
+Do not replace existing files that are newer than their archive copies.
+.TP
+.B \-\-overwrite
+Overwrite existing files.
+.TP
+.B \-\-no\-overwrite\-dir
+Keep the metadata of existing directories.
+.TP
+.BR \-U ", " \-\-unlink\-first
+Remove each file before extracting over it.
+.TP
+.B \-\-recursive\-unlink
+Empty a directory hierarchy before extracting a directory over it.
+.TP
+.BR \-O ", " \-\-to\-stdout
+Extract to the standard output.
+.TP
+.BR \-m ", " \-\-modification\-time
+Do not restore the modification time.
+.TP
+.BR \-p ", " \-\-same\-permissions ", " \-\-preserve\-permissions
+Restore the permissions recorded in the archive.
+.TP
+.B \-\-no\-same\-permissions
+Do not restore the recorded permissions.
+.TP
+.BR \-s ", " \-\-same\-order ", " \-\-preserve\-order
+The names to extract are in the archive's order.
+.TP
+.B \-\-preserve
+The same as
+.B \-p
+and
+.BR \-s .
+.TP
+.BR \-\-same\-owner ", " \-\-no\-same\-owner
+Restore the recorded owners (the default for root), or extract as yourself.
+.TP
+.BR \-\-backup [= \fIcontrol\fR "], \-\-suffix=" \fIsuffix\fR
+Back up a file before replacing it; see ENVIRONMENT.
+.SS Creation
+.TP
+.BI \-\-owner= name ", \-\-group=" name
+Record \fIname\fR as the owner or group of added files.
+.TP
+.BI \-\-mode= changes
+Record the symbolic mode \fIchanges\fR applied to added files.
+.TP
+.B \-\-numeric\-owner
+Record and use numeric user and group ids only.
+.TP
+.B \-\-atime\-preserve
+Keep the access times of archived files.
+.TP
+.BR \-S ", " \-\-sparse
+Handle sparse files efficiently.
+.TP
+.B \-\-remove\-files
+Remove files after adding them.
+.TP
+.BR \-W ", " \-\-verify
+Verify the archive after writing it.
+.TP
+.B \-\-ignore\-failed\-read
+Do not exit non-zero for unreadable files.
+.SS Output
+.TP
+.BR \-v ", " \-\-verbose
+List the files processed; twice for a long listing.
+.TP
+.B \-\-totals
+Print the bytes written when creating.
+.TP
+.BR \-\-checkpoint ", " \-\-check\-links ", " \-\-utc
+Print directory names while reading; report hard links not all archived;
+print dates in UTC.
+.TP
+.BI \-\-index\-file= file
+Write the verbose output to \fIfile\fR.
+.TP
+.BR \-R ", " \-\-block\-number
+Show the block number in each message.
+.TP
+.BR \-w ", " \-\-interactive ", " \-\-confirmation
+Ask before every action.
+.TP
+.B \-o
+When creating, the same as
+.BR \-\-old\-archive ;
+when extracting, the same as
+.BR \-\-no\-same\-owner .
+.TP
+.BR \-\-help ", " \-\-version
+Print the full option list, or the version, and exit.
+.SH ENVIRONMENT
+.TP
+.B TAR_OPTIONS
+Options read before those on the command line.
+.TP
+.BR SIMPLE_BACKUP_SUFFIX ", " VERSION_CONTROL
+The backup suffix (default
+.BR ~ )
+and the kind of backup:
+.BR t " or " numbered ,
+.BR nil " or " existing ,
+.BR never " or " simple .
+.TP
+.B PATH
+Where
+.BR gzip ,
+.B bzip2
+and
+.B compress
+are found for
+.BR \-z ,
+.B \-j
+and
+.BR \-Z .
+.SH AMIX NOTES
+.B tar
+reads and writes the base-256 sizes and ids, and the long names, of modern
+GNU and POSIX archives.
+.PP
+Owner and group names are looked up by
+.BR tar 's
+own readers of
+.B /etc/passwd
+and
+.BR /etc/group ,
+not by the stock C library.
+.PP
+An archive id above the range of the SVR4 user id type is read and listed
+exactly, but the kernel refuses to set it: such a file is extracted owned by
+root, and
+.B tar
+exits with status 2.
+.PP
+Shrinking an archive in place
+.RB ( \-\-delete )
+truncates it on a block boundary and writes the tail back, so the stock
+kernel's truncation fault is not reached.
+.SH EXAMPLES
+.TP
+.B tar \-cf archive.tar foo bar
+Create
+.B archive.tar
+from
+.B foo
+and
+.BR bar .
+.TP
+.B tar \-tvf archive.tar
+List
+.B archive.tar
+verbosely.
+.TP
+.B tar \-xzf src.tar.gz \-C /tmp
+Extract a gzip-compressed archive into
+.BR /tmp .
+.SH EXIT STATUS
+0 on success, 1 when some files differ
+.RB ( \-\-diff ),
+2 on a fatal error.
+.SH FILES
+.TP
+.B /opt/amix/bin/tar
+This program.
+.TP
+.B /opt/amix/doc/tar
+Its licence, NEWS and README.
+.SH BUGS
+Remote archives
+.RI ( host : file )
+have no default remote shell in this build: one must be given with
+.BR \-\-rsh\-command ,
+and the remote host must provide
+.B rmt
+.RB ( \-\-rmt\-command );
+no
+.B rmt
+is installed here.
+Remote archives are untested on Amix.
+.PP
+Tape ioctls are not built (the system has no
+.BR <sys/mtio.h> ).
+.PP
+.B \-\-totals
+shows the rate as
+.B ?/s
+for a run under one second.
+.SH SEE ALSO
+.BR gzip (1),
+.BR bzip2 (1),
+.BR compress (1).
+The full manual is GNU tar's texinfo manual; this build ships its NEWS and
+README in
+.BR /opt/amix/doc/tar .

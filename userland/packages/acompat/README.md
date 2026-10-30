@@ -129,3 +129,10 @@ starts with the library's name, libamixcompat. Built on the gcc14 container pin 
 The version string the library embeds names the revision (`0.1-7-gcc14`), so `version.o` in
 `libacompat.a` and the banner in `acompat-test` change with it; every other member and file is
 `-6`'s.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/acompat` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; [`man/acompat.3`](man/acompat.3) (the library and each function it provides, also as aliases `snprintf(3)` … `gettimeofday(3)`) and [`man/acompat-test.1`](man/acompat-test.1) are new. The version string names the revision (`0.1-8-gcc14`), so `version.o` and the `acompat-test` banner change with it. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

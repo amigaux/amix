@@ -42,7 +42,10 @@ then linked. `dhry.c` stays exactly as Weicker published it, so GCC 14 warns twi
 pre-ANSI `char *malloc ()` and its undeclared `strcpy` mismatch the compiler's built-ins; the
 build accepts those two and nothing else, and our four sources must be warning-free. The
 binaries are stripped before `BUILD-INFO` and `PROVENANCE` are written, so `PROVENANCE` lists the
-shipped sha256s, and every payload file's mtime is the kit 1.2 date (1789516800).
+shipped sha256s, and every payload file's mtime is the kit 1.2 date (1789516800). They name the
+compiler by identity (`m68k-elf-gcc`, its version and the gcc14-cross-amix commit), never by
+path, and the stage hook refuses any staged file whose strings contain `/home/`, `/Users/` or
+the build host's name, the same gate as the period package's build.
 
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt `1.3-4`
 has the recorded one's payload (every file's sha256 and mode, `BUILD-INFO` and `PROVENANCE`
@@ -51,3 +54,10 @@ recipe always meant; the recorded build's catalog row said `amixbch14` because t
 lacked the `names.conf` line (the package was never published). `PROVENANCE` still names the
 recipe as `amix-packages recipes/amix-benchmark-gcc14`, as `1.3-4` was built; the next revision
 names its amix home.
+
+## Revision 1.3-5: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/amixbch14` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; [`man/amix-bench-g14.1`](man/amix-bench-g14.1) is new. `BUILD-INFO` names `1.3-5`, and `PROVENANCE` names the recipe and the sources by their amix home; the binaries are `1.3-4`'s. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

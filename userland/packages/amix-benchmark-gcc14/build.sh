@@ -105,19 +105,21 @@ stage() {
 		echo "======================================="
 		echo "package        : $NAME (SVR4 PKG instance: $PKG)"
 		echo "version        : $VERSION-$PKGREV"
-		echo "recipe         : amix-packages recipes/amix-benchmark-gcc14"
+		echo "recipe         : amix userland/packages/amix-benchmark-gcc14"
 		echo "compiler       : $cc_version, gcc14-cross-amix $g14"
-		echo "benchmarks     : amix-kerntools $AMIXBENCH_SRC_COMMIT tools/amix-bench/src"
+		echo "benchmarks     : amix userland/packages/amix-benchmark/src, as amix-kerntools"
+		echo "                 $AMIXBENCH_SRC_COMMIT tools/amix-bench/src"
 		echo "                 (the sources amix-benchmark's gcc 2.7.2.3 binaries were"
 		echo "                 built from; their sha256s match that kit's BUILD-INFO)"
-		echo "driver, README : amix-kerntools $AMIXBENCH_KIT_COMMIT tools/amix-bench/fieldkit"
+		echo "driver, README : amix userland/packages/amix-benchmark/src/fieldkit, as"
+		echo "                 amix-kerntools $AMIXBENCH_KIT_COMMIT tools/amix-bench/fieldkit"
 		echo "                 (byte-identical to the files amix-benchmark ships)"
 		echo
 		echo "The two packages differ only in the compiler.  Each results header"
 		echo "carries the BUILD-INFO keys, so build_cc_version names it."
 		echo
 		echo "whet (Whetstone) is not built: it would statically link the stock SVR4"
-		echo "libm.a, which this repository does not ship; fpu.whet reports skipped."
+		echo "libm.a, which this package does not ship; fpu.whet reports skipped."
 		echo
 		echo "sha256 of each shipped file:"
 		for f in runbench.sh $BENCHES BUILD-INFO; do
@@ -127,5 +129,18 @@ stage() {
 	chmod 0755 "$DEST$PREFIX/bin/amix-bench-g14" "$kit/runbench.sh"
 	for b in $BENCHES; do chmod 0755 "$kit/$b"; done
 	chmod 0644 "$kit/BUILD-INFO" "$kit/PROVENANCE" "$DEST$PREFIX/doc/amix-bench-g14/README.txt"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man "$HERE/man/amix-bench-g14.1" 1
+	amix_man_whatis
 	find "$DEST" -exec touch -h -d "@$AMIXBENCH_SOURCE_EPOCH" {} +
+	# nothing shipped names a home directory or this build host (BUILD-INFO
+	# and PROVENANCE record the compiler by identity, never by path)
+	h=$(hostname 2>/dev/null || uname -n)
+	leak=$(find "$DEST" -type f | while read -r f; do
+		strings -a "$f" | grep -E "/home/|/Users/|$h" | sed "s|^|${f#$DEST}: |"
+	done)
+	[ -z "$leak" ] || { echo "[FAIL] a build-host string ships:" >&2; echo "$leak" >&2; exit 1; }
+	echo "  HOST ok   no /home/, /Users/ or the build host's name in any staged file"
 }

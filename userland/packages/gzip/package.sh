@@ -2,7 +2,7 @@
 NAME=gzip
 PKG=gzip
 VERSION=1.3.12
-PKGREV=7   # -7: CATEGORY archive (P-31 sec 10.9 groups); payload as -6
+PKGREV=8   # -8: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
 SUMMARY="GNU gzip 1.3.12 - the .gz compressor"
 DESC="GNU gzip 1.3.12 reads and writes the universal .gz (deflate) format, which stock Amix cannot -- stock ships only 1985 LZW compress/.Z. Installs /opt/amix/bin/{gzip,gunzip,zcat}. Integer-only; links nothing outside the stock libc. Add /opt/amix/bin to PATH to use it."
 CATEGORY=archive

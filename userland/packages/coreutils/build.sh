@@ -82,4 +82,8 @@ stage() {
 		"$NM" "$b" | awk '$NF=="ftruncate" {f=1} END {exit !f}' && n=$((n + 1))
 	done
 	echo "  FREESP ok  $n executables carry the aligned-cut ftruncate (quirk 90)"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }
