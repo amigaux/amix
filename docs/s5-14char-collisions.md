@@ -5,6 +5,18 @@ one option. Nothing in `sets.conf`, the catalogs or the packages has been
 changed. Raised by `amix-installng` W6 (2026-08-12), when `cd-full` became the
 first run ever to lay down all thirty packages and `gnusrc2` failed with `rc=2`.
 
+> **UFS-only packages are exempt (2026-10-30).** Under the owner's decision P-35
+> Option C, UFS is the only filesystem for new installs and s5 stays readable. A
+> package whose pkginfo carries **`APKG_FSTYPE=ufs`** (the UFS-only mark,
+> [design.md §2b](design.md)) may hold basenames over 14 bytes and names that
+> share their first 14 bytes in one directory: apkg refuses it on s5 instead of
+> letting s5 cut its names. The 14-byte rule below therefore binds only
+> **unmarked** packages. `s5-collision-scan.py` names the marked packages it
+> scans and reports a collision group made only of their objects as exempt (it
+> does not fail `--fail-on-collision`); its counts and pinned constants are
+> unchanged. The stock packages measured here are unmarked, and everything below
+> about them still holds for a box that keeps an s5 root.
+
 ---
 
 ## 0. Executive summary

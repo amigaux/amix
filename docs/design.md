@@ -88,7 +88,8 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
   entry order, giving the **installed size in bytes**, summed from the package's pkgmap(4) sized
   objects (ftypes `f`/`v`/`e` plus `i`). Blocks are **opt-in** (`gen-catalog.py --isize`; without
   the flag the catalog is byte-for-byte what it always was) and invisible to a v1 field parser, so
-  they need no format-version bump and cost no field. (Historical note: opt-in was load-bearing
+  they need no format-version bump and cost no field. A second one, `fstype` (section 2b), lists the
+  UFS-only packages; it is not opt-in but appears only when a package is marked. (Historical note: opt-in was load-bearing
   while a non-conforming consumer existed — `amix-installng`'s `isocheck.parse_catalog` originally
   did not skip `#` lines. That parser conforms since installng W3b, 2026-08-11, and the ISO path
   now passes `--isize`; no known non-conforming consumer remains.) A package whose pkgmap cannot be summed gets
@@ -122,7 +123,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
 - **.Z transparency**: filename ends `.Z` → pipe through native `zcat` before pkgadd.
 - **admin file** shipped at `/var/apkg/admin`: `instance=quit`, all checks `nocheck`, `action=nocheck`,
   `mail=`; install runs `pkgadd -n -a /var/apkg/admin -d <file> <pkginst>`.
-- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify, 4 pkgadd/pkgrm failure, 5 dep cycle/missing (and the kernel-space pre-flight), 6 kbootset error (status 1/2, or not runnable), 7 kbootset refusal (status 3/4). Kernel space (apkg 0.3): NOTES.md 2026-10-25.
+- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify (also a malformed `APKG_FSTYPE`), 4 pkgadd/pkgrm failure, 5 dep cycle/missing (and the kernel-space pre-flight, and a UFS-only package on another filesystem, section 2b), 6 kbootset error (status 1/2, or not runnable), 7 kbootset refusal (status 3/4). Kernel space (apkg 0.3): NOTES.md 2026-10-25.
 - Host-testable: builds with `gcc -std=gnu89` on Linux (sockets are portable); tests run against
   `python3 -m http.server` + a fake pkgadd shim.
 
@@ -155,6 +156,91 @@ the *install target* root: it prefixes only the "is it installed?" DB (`/var/sad
 passed through to `pkgadd -R` — it deliberately does **not** move the engine (which runs from the
 miniroot/CD and installs *into* the target; prefixing it would be the classic bootstrap bug).
 The engine argv is byte-identical to before when `-R` is unset, and grows `-R <target>` when set.
+
+### 2b. The filesystem a package needs: `APKG_FSTYPE` (UFS-only packages)
+
+The owner's decision P-35 Option C (2026-10-30): UFS is the only filesystem for new installs, and
+s5 stays readable. s5 cuts every directory entry at 14 bytes, so a package may now carry longer
+file names if it says so; apkg then refuses it on s5. This section is the interface between the
+packages' build (amix-packages `pkgroll`, which sets the mark) and this repository (apkg, which
+enforces it, and the repo tools, which carry and report it).
+
+**The mark.** One pkginfo(4) parameter in the package's own `pkginfo`:
+
+```
+APKG_FSTYPE=ufs
+```
+
+- **Value:** a comma-separated list of filesystem type names, as `statvfs(2)` `f_basetype` gives
+  them (`ufs`, `s5`, `nfs`, ...). Each name is 1 to 15 characters of `[a-z0-9]` (`FSTYPSZ` is
+  16); no spaces in the list (blanks around the value and one pair of quotes are tolerated, as
+  for any pkginfo value). Today the packages emit exactly one value: **`ufs`**. A list such as
+  `ufs,nfs` is valid, for a later package that is fine on either.
+- **Meaning:** the package installs only onto a filesystem of one of the listed types. Absent
+  means no requirement: the package installs anywhere, exactly as every package did before.
+- **When a package carries it** (the rule for `pkgroll`): a package with **any object whose
+  basename is over 14 bytes** carries `APKG_FSTYPE=ufs`. A package without one may leave it out,
+  and then it must still pass the s5 rule (no basename over 14 bytes, no two names in one
+  directory sharing their first 14 bytes). A marked package is exempt from the s5 rule: long
+  names and 14-byte collisions are allowed in it (`docs/s5-14char-collisions.md` §0).
+- **Where it lives:** the datastream's first archive, `<PKG>/pkginfo`, beside `APKG_DEPS` and
+  `APKG_DESC`. The installed copy lands in `/var/sadm/pkg/<PKG>/pkginfo` like every other
+  parameter.
+
+**Every pkgadd ignores it.** An unknown pkginfo parameter is legal in pkginfo(4); stock and
+heirloom pkgadd only export it to the install scripts' environment (a marked package has none).
+So a marked package installs with stock `pkgadd -d` on a UFS root, unchanged, and our packages
+already ship such parameters (`APKG_DESC` in every APKG/APKGENG since the first mint). The host
+heirloom pkgadd installing a marked package is tested (`tools/repo/tests/run-tests.sh` T28). A
+`pkgadd` by hand checks nothing: on s5 it installs the package with truncated names, as it
+always would have.
+
+**apkg's check** (`src/apkg/fsreq.c`, `fs_check()`). For `install` and `upgrade`, in the staging
+phase (after the package is staged and verified, before the first `pkgadd` of the
+transaction), apkg reads the staged datastream's `pkginfo`. Unmarked: nothing changes. Marked:
+
+1. The value must be a well-formed list, else the package is refused, **exit 3**:
+   `apkg: <name>: refused: APKG_FSTYPE=<value> is not a list of filesystem types`.
+2. The directories checked are those of every pkgmap(4) object whose basename is over 14 bytes
+   (relative pkgmap paths under `BASEDIR`; `i` lines are not objects), under the install target
+   (`-R`). A package with no such object is checked at its install base, `<target><BASEDIR>`
+   (`BASEDIR` from the same pkginfo, `/` when absent). Checking where the long names go, rather
+   than `BASEDIR`, is what lets a perl-shaped package (`BASEDIR=/`, files under `/opt/amix`)
+   install on an s5 root whose `/opt` is a mounted UFS slice.
+3. Each directory is checked by its **nearest existing ancestor** (a directory the package
+   creates lands on its parent's filesystem), `statvfs()` `f_basetype`. A type not in the list
+   refuses the package, **exit 5**, before anything is installed, with one line:
+   `apkg: perl: refused: it installs only on ufs, and /opt/amix/lib/perl5 is on s5, which cuts
+   file names at 14 bytes`.
+
+One refusal stops the whole transaction: in a dependency closure, nothing is added. An upgrade
+refused this way leaves the installed version as it is. `-f` does not override the check. With
+`-n` the check runs whenever the datastream is already readable (a mounted medium in place, a
+cached download); a not-yet-downloaded HTTP package is checked on the real run. A file that is
+not a readable datastream has no pkginfo to read, so pkgadd judges it, as it always has. The
+host build has no `f_basetype` (Linux): there the type comes from the test-only environment
+variable `APKG_TEST_FSTYPE` (`<dir>=<type>,...`, the longest matching directory wins) and is
+`unknown` otherwise; the box build has no such variable.
+
+**The catalog.** `gen-catalog.py` validates the mark exactly as apkg does (a malformed value
+SKIPs the package) and, when any package is marked, lists them after the entries (after `--isize`,
+before the kernel-space block):
+
+```
+#ext fstype 1
+#fstype <catalog-name> <types>
+```
+
+Every line starts with `#`, so every catalog v1 reader skips it: apkg 0.1, 0.2.3 and 0.3.3 were
+run against such a catalog and update, list and install as before (NOTES.md 2026-10-30). A
+staging root without a marked package gives a byte-identical catalog. Nothing reads the trailer
+yet: it is there for a reader that decides before fetching (an installer offering packages for a
+target, a later apkg checking before a download). apkg's check needs no catalog support and
+works from any source, FILE and RAW included.
+
+**What an old client does.** apkg 0.1 to 0.3.3 do not read the mark: on s5 they install a marked
+package with truncated names. The refusal reaches a box with the first APKG minted from this
+source.
 
 ## 3. contents-fsck (`src/contents-fsck/`)
 
@@ -212,7 +298,9 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   package a 512-aligned byte offset, appends it as the catalog's 10th field, and packs a
   self-describing `raw.img` (to the `source.h` layout) for the RAW source. `--isize` appends the
   installed-size extension block (section 2); it is **opt-in**, so without the flag the catalog is
-  byte-for-byte what it always was. `--scan-private` builds nothing — it is the licensing gate,
+  byte-for-byte what it always was. A package whose pkginfo carries `APKG_FSTYPE` (section 2b)
+  is validated (malformed: SKIP), listed in the `#ext fstype 1` trailer and named in the summary
+  line (`1 UFS-only (perl=ufs)`). `--scan-private` builds nothing — it is the licensing gate,
   below.
 - `publish.sh`: rsync staging → `$PUBLISH_DEST` (`<user>@<host>:<docroot>`; `catalog`,
   `catalog.md5`, `pkgs/`), verify via `curl http://pkg.amigaux.org/catalog`. `PUBLISH_DEST` is
@@ -330,7 +418,9 @@ The gates are Bourne sh so they run on the box (euid 0), and they all fail close
 - `s5-collision-scan.py` — host-side analysis: read published datastreams' pkgmaps and find the
   objects a set cannot lay down on a 14-character s5 filesystem, keyed on `(dirname,
   basename[:14])` because a collision is a property of a *directory*. Feeds
-  `docs/s5-14char-collisions.md`.
+  `docs/s5-14char-collisions.md`. It names the UFS-only packages (`APKG_FSTYPE`, section 2b) it
+  scans; a collision group made only of their objects is reported as exempt and does not fail
+  `--fail-on-collision`. The counts and the pinned constants are unchanged.
 
 ## 6. Packaging & bootstrap
 

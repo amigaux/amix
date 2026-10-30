@@ -1,5 +1,53 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-30 — the UFS-only mark: `APKG_FSTYPE`, and apkg refuses such a package on s5 (built, NOT minted, NOT published)
+
+**Why.** The owner decided P-35 Option C (Y7, 2026-10-30): UFS is the only filesystem for new
+installs, s5 stays readable. Packages may now carry file names over 14 bytes if they are marked,
+and apkg refuses a marked package on s5. Step 1 of P-35, the package half; it unblocks perl 5.8.9
+(73 names over 14 bytes, no collisions). This repository is the provider: amix-packages' `pkgroll`
+emits the mark from the interface in `docs/design.md` section 2b.
+
+**The interface.** pkginfo parameter `APKG_FSTYPE=ufs`: a comma-separated list of `statvfs`
+`f_basetype` names, each 1-15 of `[a-z0-9]`; absent = no requirement. A package with any basename
+over 14 bytes carries it; a marked package is exempt from the s5 rule (long names and 14-byte
+collisions allowed). Every pkgadd ignores the parameter (heirloom pkgadd installs a marked package
+under fakeroot, T28; our APKG/APKGENG already ship `APKG_DESC` through stock pkgadd).
+
+**apkg** (`src/apkg/fsreq.c`, new; `ds_member()` in `kspace.c` now reads any member of the first
+archive, `ds_pure_files()` uses it, messages unchanged). In the staging phase of `install` and
+`upgrade`, after verify and before the first pkgadd: the staged datastream's pkginfo is read; a
+marked package has the directory of every object named over 14 bytes checked (its install base
+`<target><BASEDIR>` when it has none), each by its nearest existing ancestor, `statvfs`
+`f_basetype`. Not in the list: exit 5, one line (`apkg: perl: refused: it installs only on ufs,
+and /opt/amix/lib/perl5 is on s5, which cuts file names at 14 bytes`), nothing installed. A
+malformed value: exit 3. Unmarked or unreadable datastreams: untouched. Checking the long names'
+directories, not BASEDIR, lets an s5 root with a UFS `/opt` take perl (`BASEDIR=/`). The host has
+no `f_basetype`; the host build reads `APKG_TEST_FSTYPE` (tests only, not in the box build).
+
+**Repo tools.** `gen-catalog.py` validates the mark like apkg (malformed: SKIP), lists marked
+packages in a `#ext fstype 1` / `#fstype <name> <types>` trailer (after `--isize`, before the
+kernel-space block; only when one is marked, else the catalog is byte-identical) and names them in
+the summary line. `s5-collision-scan.py` names marked packages and exempts a collision group made
+only of their objects from `--fail-on-collision`; counts and pinned constants unchanged.
+
+**Old clients.** apkg 0.1 (f16823d^), 0.2.3 (a2c88b9) and 0.3.3 (dd0db44), built for the host and
+run against gen-catalog's catalog with the trailer and a marked datastream: `update` rc 0 "2
+packages", `list` both rows, `install` of the marked package goes to pkgadd (they do not read the
+mark). This tree's apkg on the same catalog: refused on s5, rc 5, no pkgadd; installed on ufs.
+So the refusal reaches a box only with an APKG minted from this tree; until then a 0.2.3/0.3.x box
+on s5 installs a marked package with truncated names.
+
+**Builds.** host `make host` clean (-Wall -Wextra); `make amix` links (statvfs from libc.so.1),
+scan060 CLEAN; the static FILE+RAW link (SRCS less http.c/dns.c + libc.a, the media recipe) has
+zero undefined symbols, scan060 CLEAN. No version bump, no mint.
+
+**Tests.** apkg `run-tests.sh` **497/0** (457 + 40: refusal and pass, the closure, -R with and
+without a UFS `/opt`, lists, quoted value, malformed, unknown type, relative BASEDIR paths, the
+base fallback, a long name in `/`, `-n`, upgrade); `nohttp-variant.sh` 38/0;
+`kbootset-consumer.sh` 12/0; repo tools **409/0** (387 + T28's 22). Not run on a box: an emulator
+cell (UFS root installs, an s5 mount refuses) needs the rig, outside this repository.
+
 ## 2026-10-30 — payload-licence gate: stock libm is recorded, not refused; a Kickstart ROM refuses
 
 **Why.** The owner's ruling of 2026-10-29: the permission (Amiga Corporation, 2026-09-23) covers
