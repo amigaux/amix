@@ -26,7 +26,7 @@ number off a run, with its file), **derived** (arithmetic over measured facts, s
 > and `cpu_data_cache=true`; device DMA bypasses it (bench evidence,
 > not published). An emulator cell with the cache live can show a
 > missing CPUSH or CINV; the bench configs to date keep it off. The coherence **verdict** stays
-> metal-only (D-1 D42), so §7 is unchanged as the scoring protocol.
+> metal-only (a project decision), so §7 is unchanged as the scoring protocol.
 
 ---
 
