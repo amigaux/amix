@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — build notes, evidence voice, NOTICE credit (aa9de1b, 2f350c2, 49a8bba)
+
+BUILD.md drops the old build box's notes and keeps three points as plain advice (FTP push/pull with NFSv2 for large
+files, spelling out the types instead of rico.h's, checkunix alone is not a gate). The evidence dossier's first-person
+process lines are reworded as neutral documentation; ZEN0-BRINGUP's citations into it follow. NOTICE credits the
+STREAMS/DLPI skeleton of src/z3660eth.c: Commodore's aen.c (Keith Gabryelski) by way of Ignacio Soriano's hydra-amix;
+no stock code is quoted. NOTICE sha256 7bf25198 → f7c22823; objects unchanged.
+
 ## 2026-10-30 — builds inside amix (b1be3ea, ba4fb98, f201889, 164d3bb, c2ea34b)
 
 README points at amix's kernel/k30, kernel/dlm and ../z3660scsi, with a builds-inside-amix paragraph (`amix-build
