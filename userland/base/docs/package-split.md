@@ -22,7 +22,10 @@ page proposes something P-36 left open, it says so.
 - **Code, replaced freely on update** (`f` objects): `/usr/lib/amix/rc.subr`;
   `/etc/init.d/inetinit` and its `S69inet`/`K69inet` links (`l` objects,
   written in place so the hard links survive); `/usr/sbin/ifup`, `ifdown`,
-  `dlpi-mac`; `/usr/lib/inet/ifup.subr` and `dhcpc-hook`; the swap step.
+  `dlpi-mac`; `/usr/lib/inet/ifup.subr` and `dhcpc-hook`; the swap step; the `man` front-end
+  `/usr/amix/bin/man` (`man.md`), its page `/opt/amix/man/1/man` and index
+  fragment `/opt/amix/man/whatis.d/amxbase`, the shared `/opt/amix/man`
+  directories and the cache directories `/var/opt/amix/catman/<sect>` (`d`).
 - **Vendor data** (`f`): `/etc/inet/link.d/aen`, the stock A2065's entry.
   Every other network driver ships its own `link.d` entry in its own package.
 - **Conffiles** (`e`, the shared keep-your-edits scripts): the two legacy

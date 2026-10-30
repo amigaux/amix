@@ -1,0 +1,125 @@
+.TH MAN 1 "30 October 2026" "amix-base"
+.SH NAME
+man \- display a manual page, from the add-on packages or from the stock system
+.SH SYNOPSIS
+.B man
+[
+.I section
+]
+.I name ...
+.br
+.B man \-k
+.I keyword ...
+.br
+.B man \-f
+.I name ...
+.SH DESCRIPTION
+.B man
+shows the manual page for each
+.IR name .
+It looks first among the pages of the add-on packages, in
+.BR /opt/amix/man ,
+and when it finds none there it hands the request to the stock
+.BR /usr/bin/man ,
+which shows the system's own pages.
+So one command reaches both, and a package's page wins over a stock page of
+the same name (a GNU
+.B grep
+page over the stock one, for example).
+To see the stock page in that case, run
+.B /usr/bin/man
+directly.
+.PP
+With a
+.I section
+(a section number such as 1 or 3, or the name of a section directory) only that
+section is searched. Without one, the sections are tried in the order
+1, 1m, 8, 2, 3, 4, 5, 6, 7, then any other.
+.PP
+A page is formatted with
+.BR tbl ,
+.BR eqn ,
+.B nroff
+.B \-man
+and
+.BR col ,
+the same way the stock
+.B man
+formats a page, and shown through the pager named by
+.BR PAGER ,
+by default
+.BR /usr/bin/more ,
+when the output is a terminal.
+.SH OPTIONS
+.TP
+.BI \-k " keyword"
+List the pages whose index line contains
+.IR keyword :
+the packages' lines first, then the stock index.
+.TP
+.BI \-f " name"
+List the index lines for the page
+.IR name ,
+in the same order.
+.PP
+Any other option goes to the stock
+.B man
+unchanged.
+.SH FILES
+.TP
+.BI /opt/amix/man/ section / name
+a package's page: plain troff with the
+.B \-man
+macros. A page that is only the line
+.BI ".so " path
+shows the page at
+.I path
+(an alias).
+.TP
+.BI /opt/amix/man/whatis.d/ package
+the index lines of one package, in the stock
+.I whatis
+format:
+.br
+.BI "    " name ( section ) "     names \- description"
+.TP
+.BI /var/opt/amix/catman/ section / name
+formatted pages kept to show them faster. Only a user who can write there
+(root) keeps them; a page is formatted again when its source is newer. The
+stock cache,
+.BR /usr/catman ,
+is never written for a package's page.
+.TP
+.B /usr/bin/man
+the stock command, which this one calls; it is never changed.
+.SH ENVIRONMENT
+.TP
+.B PAGER
+the pager for terminal output.
+.TP
+.B MANPATH
+passed to the stock
+.B man
+as it is, unless it points into
+.BR /opt/amix ;
+then it is dropped, with
+.BR CATPATH ,
+so that the stock
+.B man
+never caches a package's page in
+.BR /usr/catman .
+.SH SEE ALSO
+.BR more (1),
+.BR eqn (1),
+.BR nroff (1),
+.BR tbl (1)
+.SH NOTES
+This command is installed as
+.BR /usr/amix/bin/man .
+.B /usr/amix/bin
+comes before
+.B /usr/bin
+on the login
+.BR PATH ;
+it holds only commands like this one, which pass every request they do not
+handle to the stock command of the same name.

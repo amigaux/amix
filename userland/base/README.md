@@ -37,8 +37,9 @@ outside the package database.
 | [`docs/package-split.md`](docs/package-split.md) | the packages: base (boot and network) and `dhcp-client`, and the contract between them | design |
 | [`docs/dhcp-probe.md`](docs/dhcp-probe.md) | what the 1991 DLPI path was measured to do, the facts the DHCP client is built on | measured |
 | [`dhcpc/probe/`](dhcpc/probe/) | `dhcprobe`, the stage-0 probe, and `tapdhcpd.py`, the test DHCP responder it runs against | tool |
+| [`man/`](man/) | `man`, one manual command for the add-on pages and the stock ones ([`docs/man.md`](docs/man.md)), its page and its host test | written, not yet packaged |
 
-The rest (`rc/`, `net/`, `dhcpc/`, `etc/`) arrives with the packages; see
+The rest (`rc/`, `net/`, the client in `dhcpc/`, `etc/`) arrives with the packages; see
 `docs/plan.md`.
 
 ## Building
@@ -50,6 +51,7 @@ against the stock headers and libraries only, so they need nothing from
 
 ```sh
 userland/base/dhcpc/probe/build.sh          # writes out/base/dhcprobe
+sh userland/base/man/test-man.sh            # host tests of the man front-end
 ```
 
 ## Licence

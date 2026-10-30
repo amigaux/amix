@@ -46,6 +46,15 @@ the network chain stay untouched.
 The client follows the rules of P-36 §4.4 with no per-driver code; the probe
 confirmed them on the A2065 (`dhcp-probe.md`).
 
+### Manual pages: `man/`
+
+| Piece | Installed as | Kind | What it does |
+|---|---|---|---|
+| `man.sh` | `/usr/amix/bin/man` | code | one `man` for the add-on pages and the stock ones (`man.md`) |
+| `man.1` | `/opt/amix/man/1/man`, index line in `/opt/amix/man/whatis.d/amxbase` | page | its manual page |
+| cache directories | `/var/opt/amix/catman/<sect>`, root, 0755 | `d` objects | the formatted-page cache |
+| PATH drop-in | `/etc/profile.d/` | code | puts `/usr/amix/bin` after `/usr/local/bin` and before `/usr/bin` |
+
 ### Base config files: `etc/` (D-N24)
 
 The stock config files `core` owns move into the base package as conffiles,
