@@ -1,3 +1,8 @@
+## 2026-10-30 — APKGENG version 1.12.5 (d373696)
+
+build-packages.sh sets VER_ENG to 1.12.5, for the engine that ships the fnmatch and snprintf notices; 1.12.4 stays
+staged with its old payload and is never rebuilt. Not minted.
+
 ## 2026-10-30 — docroot, engine notices, shipped version (53911ae, 3f1d1b5, ba1fa53)
 
 NOTES no longer names the package host's docroot path. APKGENG's prototype ships the fnmatch (BSD-3/ISC) and snprintf
