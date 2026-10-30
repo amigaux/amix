@@ -1,3 +1,8 @@
+## 2026-10-30 — compver(5), copyright(5), space(5) (ed99eb4)
+
+Written from the engine source (src/formats, MIT) and shipped by APKGENG 1.12.5 (not minted) beside the other
+section-5 package formats.
+
 ## 2026-10-30 — apkg decides config files (P-36 W2); man pages (9da25f4, 85d4e09, 2a2a09f, 6dbbdcc)
 
 apkg 0.3.4 (not minted): after each install or upgrade it lists the config files kept beside a new default and decides
