@@ -55,7 +55,8 @@ repository's 10 GB cache, and only the newest is useful: when a push to
 (it has `actions: write` for that alone). A restore that fails on the cache
 service's side is tried once more before the image is built from scratch,
 and the build retries apt against the Ubuntu snapshot service, which answers
-503 at times. The step summary lists the digest of
+5xx at times, for minutes: an index it cannot fetch fails the update, which
+is tried again. The step summary lists the digest of
 each kit and the sha256 of each module object; `kit.conf` and `NOTICE` name
 the amix commit, so the kit's second digest leaves them out.
 
