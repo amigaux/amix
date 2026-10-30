@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-30 — kbootset(1M) (4f854d9)
+
+The manual page, for /opt/amix/man/1m/kbootset with whatis.d/kbootset: every subcommand of C2-4 v16, the gates, the
+exit statuses and the files, in plain -man that the 1991 nroff formats (rendered on the emulator, row N161).
+
 ## 2026-10-30 — kbuild.sh flips the bytes it corrupts (cdd160a)
 
 The test wrote a constant 'X'/'Y' over a random fixture kernel, a no-op one time in 256, so gate 1 passed (CI on
