@@ -61,7 +61,8 @@ else
 	AMIX_BUILD_ROOT=${AMIX_BUILD_ROOT:-$REPO/build}
 fi
 export AMIX_TOOLCHAIN AMIX_BUILD_ROOT
-export CC=cc CPP="cc -E" AMIX_CPP="cc -E" NM=nm OBJDUMP=objdump STRIP=strip
+export CC=cc CPP="cc -E" AMIX_CPP="cc -E" NM=${STUB_NM:-nm} OBJDUMP=${STUB_OBJDUMP:-objdump} STRIP=${STUB_STRIP:-strip}
+export AMIX_SYSROOT=${STUB_SYSROOT:-}
 export AMIX_CFLAGS=-O AMIX_HOST_TRIPLET=m68k-cbm-sysv4 AMIX_CONFIGURE_LENIENT=
 amix_env_banner() { echo "  stub harness"; }
 """,
@@ -73,7 +74,8 @@ amix_fetch() {
 """,
     "gates.sh": """\
 amix_gate_noasm() { return 0; }
-amix_gate_elfs() { :; }
+amix_gate_elfs() { [ -z "${STUB_NM:-}" ] || find "$1" -name '*.elf'; }
+amix_gate_elf() { :; }
 amix_gate_g14_strict() { :; }
 amix_gate_g14_compat() { :; }
 """,
@@ -195,7 +197,8 @@ build() {
 """)
         # PREFIX=/usr/local with a link in /usr/bin: /usr, /usr/bin, /usr/local
         # and /usr/local/bin are staged, and listed by no prototype line
-        usr = package(pkgs, "usrloc", "hooks", "PREFIX=/usr/local\n",
+        usr = package(pkgs, "usrloc", "hooks",
+                      "PREFIX=/usr/local\nSYSTEM_PATHS=/usr/bin/out.txt\n",
                       build=HOOKS_BUILD, src={"greet.txt": "x\n"})
         write(os.path.join(usr, "prototype"), """\
 i pkginfo
@@ -214,6 +217,61 @@ stage() {
 	esac
 }
 """)
+
+        # a base package: set base, the period toolchain, /usr/sbin, a conffile
+        for name, knob in (("sysbase", "SYSTEM_PATHS=/usr/sbin\n"), ("sysnone", "")):
+            d = package(pkgs, name, "hooks", "SET=base\nTOOLCHAIN=period\n"
+                        "CONFFILES=/etc/out.conf\n" + knob,
+                        build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+            write(os.path.join(d, "prototype"), """\
+i pkginfo
+d none /usr/sbin 0755 root sys
+f none /usr/sbin/out.txt 0755 root sys
+f none /etc/out.conf 0644 root sys
+f none /opt/amix/man/1/out.txt 0644 root bin
+f none /opt/amix/man/5/out.conf 0644 root bin
+""")
+            write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/usr/sbin" "$DEST/etc" "$DEST/opt/amix/man/1" "$DEST/opt/amix/man/5"
+	for f in usr/sbin/out.txt etc/out.conf opt/amix/man/1/out.txt opt/amix/man/5/out.conf; do
+		cp out.txt "$DEST/$f"
+	done
+}
+""")
+        # an executable whose libc the nm cannot read with -D, as the period
+        # nm (binutils 2.8.1) cannot read the stock libc.so.1
+        elfy = package(pkgs, "elfy", "hooks", build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+        write(os.path.join(elfy, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
+        write(os.path.join(elfy, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
+}
+""")
+        sysroot = os.path.join(tmp, "sysroot")
+        write(os.path.join(sysroot, "usr", "lib", "libc.so.1"), "stub libc\n")
+        tools = os.path.join(tmp, "tools")
+        write(os.path.join(tools, "nm"), """\
+#!/bin/sh
+case $1 in
+-D) echo "nm: $2: Invalid operation" >&2; exit 1 ;;
+-u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}" ;;
+*) echo "00018cac T printf"; echo "00001000 T exit" ;;
+esac
+""", 0o755)
+        write(os.path.join(tools, "objdump"),
+              "#!/bin/sh\necho '  NEEDED      /usr/lib/libc.so.1'\n", 0o755)
+
+        # gcc-cross-amix checkouts: one at another commit than the pin, and a
+        # build/ inside some other repository's tree
+        gcax = os.path.join(tmp, "gcax")
+        os.makedirs(os.path.join(gcax, "build"))
+        subprocess.run(["git", "init", "-q", gcax], check=True)
+        subprocess.run(["git", "-C", gcax, "-c", "user.name=t", "-c",
+                        "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+                        "commit", "-q", "--allow-empty", "-m", "t"], check=True)
+        os.makedirs(os.path.join(amix, "sub", "build"))
 
         base = {k: v for k, v in os.environ.items()
                 if not k.startswith(("AMIX_", "GIT_")) and k not in
@@ -343,6 +401,44 @@ stage() {
                   rc == 1 and "staged only" in out and
                   ("\t/usr/share\n" if extra == "dir" else "\t/usr/bin/stray\n") in out
                   and "\t/usr/bin\n" not in out, out)
+
+        # --- a base package: period toolchain, SYSTEM_PATHS ---------------------------
+        rc, out = build("sysbase")
+        env = seen() if rc == 0 else {}
+        check("base package: builds with TOOLCHAIN=period", rc == 0 and
+              env.get("TOOLCHAIN") == "period" and env.get("AMIX_CROSS_ENV") ==
+              os.path.join(sib, "gcc-cross-amix", "build", "env.sh") and
+              "sysbase 1.0-1 (sysbase) toolchain period\n" in out, out)
+        check("base package: lands in out/pkg", os.path.isfile(
+            os.path.join(out_pkg, "pkg", "sysbase-1.0-1.pkg")), out)
+        rolled = read(os.path.join(log, "pkginfo")) if rc == 0 else ""
+        check("base package: pkginfo says period and the conffile class",
+              "\nPSTAMP=amix-packages-sysbase-1.0-1-period\n" in rolled
+              and "\nCLASSES=none conffile\n" in rolled, rolled)
+        check("base package: /usr/sbin and /etc staged as listed",
+              rc == 0 and "prototype == staged tree (and parent directories: "
+              "/etc /opt /opt/amix /opt/amix/man /opt/amix/man/1 /opt/amix/man/5 /usr)" in out, out)
+        rc, out = build("sysnone")
+        check("refused: /usr/sbin without SYSTEM_PATHS",
+              rc == 1 and "/usr/sbin/out.txt is outside PREFIX=/opt/amix" in out, out)
+        rc, out = build("sysbase", GCA=os.path.join(gcax, "build"))
+        check("refused: the period toolchain's checkout is not at the pin",
+              rc == 1 and "toolchain/gcc-cross-amix.pin " + gca_pin in out, out)
+        rc, out = build("conf", GCA=os.path.join(gcax, "build"))
+        check("the period pin is not asked of a gcc14 build", rc == 0, out)
+        rc, out = build("sysbase", GCA=os.path.join(amix, "sub", "build"))
+        check("a GCA inside another repository is not taken for a checkout",
+              rc == 0, out)
+
+        elf_env = dict(STUB_NM=os.path.join(tools, "nm"), STUB_SYSROOT=sysroot, STUB_STRIP="true",
+                       STUB_OBJDUMP=os.path.join(tools, "objdump"))
+        rc, out = build("elfy", **elf_env)
+        check("UNDEF: a library nm -D cannot read is read without -D",
+              rc == 0 and "UNDEF ok  out.elf: every undefined symbol is defined "
+              "by its NEEDED: /usr/lib/libc.so.1" in out, out)
+        rc, out = build("elfy", STUB_UNDEF="nosuch", **elf_env)
+        check("UNDEF: refused: a symbol libc does not define",
+              rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
 
         # --- the harness named by AMIX_PKG_COMMON (amix-packages) ----------------------
         rc, out = build("conf", AMIX_PKG_COMMON=old)

@@ -51,15 +51,17 @@ SOURCE = ("URL", "SHA256")
 DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
-            ("APKG_DESC", ""), ("CONFFILES", ""))
+            ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
+            ("ESSENTIAL", "no"))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
 CATEGORIES = ("system", "network", "utility", "archive", "library", "shell",
               "language", "text", "editor", "documentation", "development",
               "multimedia", "x11", "games", "source")
-# The installer's sets, plus extra (the add-on userland).
-SETS = ("minimal", "standard", "full", "developer", "x11", "extra")
+# base (P-36: in every install, whichever set is picked), the installer's
+# sets, and extra (the add-on userland).
+SETS = ("base", "minimal", "standard", "full", "developer", "x11", "extra")
 TOOLCHAINS = ("gcc14", "period")
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
@@ -171,6 +173,48 @@ def rc_link_problem(name):
             "S99z*)" % n)
 
 
+# The shared man tree every package's pages go to, whatever its PREFIX
+# (userland/packages/docs/man-pages.md).
+MAN_TREE = "/opt/amix/man"
+
+
+def under(path, root):
+    return path == root or path.startswith(root + "/")
+
+
+def layout_problems(m, objs):
+    """Every object is under PREFIX, the man tree, /etc or /var, or under a
+    path that SYSTEM_PATHS names (a base package's /usr/sbin/ifup); a
+    directory that is a parent of one of those (/opt, /usr) may be listed
+    too."""
+    out = []
+    roots = [r for r in (m["PREFIX"].rstrip("/"), MAN_TREE, "/etc", "/var") if r]
+    system = []
+    for p in words(m["SYSTEM_PATHS"]):
+        if not p.startswith("/") or os.path.normpath(p) != p:
+            out.append("SYSTEM_PATHS: %s is not a normalised absolute path" % p)
+        elif p.count("/") < 2:
+            out.append("SYSTEM_PATHS: %s is a whole top-level tree; name the "
+                       "directories or files (/usr/sbin, /usr/bin/patch)" % p)
+        elif any(under(p, r) for r in roots):
+            out.append("SYSTEM_PATHS: %s is under PREFIX, the man tree, /etc "
+                       "or /var, which need no entry" % p)
+        elif not any(under(path, p) for _, _, path, _ in objs):
+            out.append("SYSTEM_PATHS: %s holds nothing in the prototype" % p)
+        else:
+            system.append(p)
+    roots += system
+    for ftype, _, path, _ in objs:
+        if any(under(path, r) for r in roots):
+            continue
+        if ftype in "dx" and any(r.startswith(path.rstrip("/") + "/") for r in roots):
+            continue
+        out.append("prototype: %s is outside PREFIX=%s, %s, /etc and /var; "
+                   "a system path is named in SYSTEM_PATHS"
+                   % (path, m["PREFIX"], MAN_TREE))
+    return out
+
+
 def prototype_problems(recipe, m):
     """The CONFFILES and run-level link checks against the prototype."""
     out = []
@@ -183,13 +227,10 @@ def prototype_problems(recipe, m):
             out.append("CONFFILES: %s is not an absolute path" % c)
     for c in sorted(set(c for c in conf if conf.count(c) > 1)):
         out.append("CONFFILES lists %s twice" % c)
-    prefix = m["PREFIX"].rstrip("/")
     for c in conf:
-        if prefix and (c == prefix or c.startswith(prefix + "/")):
-            out.append("CONFFILES: %s is under PREFIX=%s; config files live "
-                       "in /etc or /var" % (c, m["PREFIX"]))
-        elif c.startswith("/") and not c.startswith(("/etc/", "/var/")):
+        if c.startswith("/") and not c.startswith(("/etc/", "/var/")):
             out.append("CONFFILES: %s is not under /etc or /var" % c)
+    out += layout_problems(m, objs or ())
     for ftype, _, path, _ in objs or ():
         if ftype == "e" and path not in conf:
             out.append("prototype: e %s is not in CONFFILES" % path)
@@ -311,6 +352,8 @@ def problems(recipe, m):
             out.append("%s holds '|', the catalog field separator" % k)
         if m[k] != m[k].strip():
             out.append("%s has leading or trailing blanks" % k)
+    if m["ESSENTIAL"] not in ("yes", "no"):
+        out.append("ESSENTIAL=%s -- yes or no" % m["ESSENTIAL"])
     if m["SUMMARY"][:1] in ("'", '"') and m["SUMMARY"][-1:] == m["SUMMARY"][:1]:
         out.append("SUMMARY is quoted twice")
     known = styles()
@@ -374,11 +417,12 @@ def pkgversion(m):
 def pkginfo(m):
     v = pkgversion(m)
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
-            "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%sDESC=%s\n"
+            "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%s%sDESC=%s\n"
             % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"],
                "none conffile" if m["CONFFILES"] else "none", VENDOR,
                VENDOR, m["PKG"], v, m["TOOLCHAIN"],
                "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
+               "APKG_ESSENTIAL=yes\n" if m["ESSENTIAL"] == "yes" else "",
                m["DESC"]))
 
 
