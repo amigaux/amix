@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — rsync 3.1.3; seteuid/setegid declared; pkg-smoke host side (0814dda, 3676e4a, e7ac916)
+
+rsync 3.1.3-1 (gcc14, /opt/amix, protocol 31, bundled zlib/popt/getaddrinfo). Patch 01 works around a stock-kernel
+panic (ftruncate shrinking a file past its direct blocks inside its last block, grimoire quirk 90): --inplace cuts at
+the block boundary and rewrites the tail. Patch 02 parses dotted quads before gethostbyname, which AMIX's fails on.
+Daemon defaults to nobody/nobody. E1 golden 030 against the host's rsync 3.4.1: smoke 44/44; pkg 192e5bbe / 685568 B.
+amix-decls.h declares seteuid/setegid; pkg-smoke runs an optional per-package tests/host.sh. Not published.
+
 ## 2026-10-30 — gcc14 re-pinned to amigaux/gcc14-cross-amix b51ff39; the gcc14 set re-minted (a6b124c, d53600f)
 
 Public pin b51ff39: cc1 unchanged (9635f67e); libgcc and libamixc99 rebuilt under -mno-strict-align (specs 45f46859
