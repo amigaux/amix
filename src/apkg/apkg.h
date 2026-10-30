@@ -386,6 +386,18 @@ extern int cmd_remove(const struct conf *cf, struct catalog *cat,
                       const char *name);
 extern int cmd_recover(const struct conf *cf);
 
+/* -------- the filesystem a package needs (fsreq.c) --------
+ *
+ * The pkginfo parameter APKG_FSTYPE=<type>[,<type>...] (docs/design.md
+ * section 2b): the package installs only onto those filesystem types,
+ * as statvfs(2) f_basetype names them.  fs_check() reads the staged
+ * datastream; an unmarked (or unreadable) package passes untouched.
+ * EX_OK, EX_DEPS (refused: the target filesystem is not one of them) or
+ * EX_VERIFY (the parameter is malformed); message printed. */
+#define APKG_FSTYPE_PARAM "APKG_FSTYPE"
+extern int fs_check(const struct conf *cf, const char *name,
+                    const char *staged);
+
 /* -------- kernel space (kspace.c) -------- */
 
 /* SHA-256 of a file as 64 lowercase hex chars; 0 ok / -1 unreadable */
@@ -411,6 +423,10 @@ extern int kpkg_find(const struct conf *cf, const char *arg, char *key,
                      unsigned cap);
 /* the pkginst a datastream carries (its header); 0 ok / -1 */
 extern int ds_pkginst(const char *path, char *out, unsigned outlen);
+/* the member <pkginst>/<member> of the datastream's first archive, whole,
+ * NUL-terminated, into *text (free it); 0 ok / -1 (why[] says) */
+extern int ds_member(const char *path, const char *member, char **text,
+                     char *why, unsigned cap);
 /* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
  * of class none and no install scripts (i: pkginfo, depend, copyright),
  * and at least one f; with module set, also c entries of class none

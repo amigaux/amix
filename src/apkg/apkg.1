@@ -91,6 +91,10 @@ are decompressed with
 .BR zcat (1)
 before being handed to
 .BR pkgadd .
+A package that names the filesystems it needs (see
+.B FILESYSTEM
+below) and would land on another is refused before anything is
+installed.
 .TP
 .BI upgrade " name" ...
 For each named package whose catalog version is newer than the installed
@@ -158,6 +162,37 @@ refuse to start.
 .TP
 .B version
 Print the client version.
+.SH FILESYSTEM
+A package whose
+.B pkginfo
+carries
+.B APKG_FSTYPE=ufs
+(a comma-separated list of filesystem types as
+.BR statvfs (2)
+names them) installs only onto those filesystems.  Packages with file
+names longer than 14 bytes carry it, because s5 cuts every name at 14
+bytes.  Before the first
+.B pkgadd
+of an
+.B install
+or
+.BR upgrade ,
+apkg checks the directory of every such long name (or, when the
+package has none, its install base), under the
+.B \-R
+target, by its nearest existing directory, and refuses the whole
+transaction with exit 5 when one is on another filesystem type:
+.PP
+.RS
+.nf
+apkg: perl: refused: it installs only on ufs, and
+/opt/amix/lib/perl5 is on s5, which cuts file names at 14 bytes
+.fi
+.RE
+.PP
+(one line).  A malformed value refuses the package with exit 3.
+.B \-f
+does not override the check; an unmarked package is never checked.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments (amix-dlm contract
@@ -731,14 +766,17 @@ exhausted, HTTP error status).
 Verification failure: md5, sha256 or size mismatch, bad catalog
 header, malformed catalog, a refused kernel-space entry, a datastream
 whose header contradicts the catalog, a kernel-space datastream that
-is not pure files.
+is not pure files, a malformed
+.BR APKG_FSTYPE .
 .TP
 .B 4
 pkgadd/pkgrm (or the zcat decompression step) failed.
 .TP
 .B 5
 Dependency cycle, or a dependency (or install target) missing from
-the catalog; a kernel-space pre-flight refusal (kabi, pin, line).
+the catalog; a kernel-space pre-flight refusal (kabi, pin, line); a
+package refused for the filesystem it would land on (see
+.BR FILESYSTEM ).
 .TP
 .B 6
 kbootset could not run, failed (status 1) or rejected its arguments

@@ -60,7 +60,7 @@ APKGNH=$WORK/apkg-nohttp
 # -Wall coverage; the #ifdef'd-out HTTP arms leave a few unused locals).
 ( cd "$SRC" && gcc -std=gnu89 -O2 -DAPKG_NO_HTTP -o "$APKGNH" \
     main.c util.c conf.c vercmp.c catalog.c md5.c install.c source.c \
-    kspace.c txn.c sha256.c ) \
+    kspace.c txn.c sha256.c fsreq.c ) \
     || { echo "nohttp build failed"; exit 1; }
 ok "nohttp apkg builds with http.c excluded (-DAPKG_NO_HTTP)"
 

@@ -16,8 +16,9 @@
  * a mounted FILE tree (/cdrom), or a RAW slice.  cmd_install stages and
  * verifies EVERY package (md5 + size; SHA-256 + size for kernel space)
  * before the first pkgadd, so a bad source cannot leave a half-installed
- * chain.  Kernel space, the journal and `apkg recover`: see the section
- * "kernel space and the journal" below.
+ * chain.  The same phase checks the filesystem a package marked
+ * APKG_FSTYPE needs (fsreq.c).  Kernel space, the journal and `apkg
+ * recover`: see the section "kernel space and the journal" below.
  *
  * NOTHING IS EVER REMOVED BEFORE ITS REPLACEMENT IS IN PLACE.  The
  * upgrade verb is a single pkgadd over the installed instance
@@ -794,6 +795,9 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
             free(staged);
             rc = EX_VERIFY;
         }
+        if (rc == EX_OK &&
+            (rc = fs_check(cf, todo[i]->name, staged)) != EX_OK)
+            free(staged);           /* the filesystem it needs (fsreq.c) */
         if (rc != EX_OK) {
             free_strv(files, i);
             free_strv(insts, i);
@@ -966,6 +970,9 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
             free(staged);
             rc = EX_VERIFY;
         }
+        if (rc == EX_OK &&
+            (rc = fs_check(cf, todo[i]->name, staged)) != EX_OK)
+            free(staged);           /* the filesystem it needs (fsreq.c) */
         if (rc != EX_OK) {
             (void)ent_installed(cf, todo[i], iver, sizeof(iver));
             warnx2("%s not fetched; the installed %s %s is untouched",

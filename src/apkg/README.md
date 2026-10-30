@@ -36,11 +36,21 @@ version                 client version
 ```
 
 Exit codes: `0` ok · `1` usage/config · `2` network · `3` verify
-(md5/sha256/size/catalog) · `4` pkgadd/pkgrm/zcat failure · `5` dependency
-cycle or missing dependency, or a kernel-space pre-flight refusal · `6`
+(md5/sha256/size/catalog, a malformed `APKG_FSTYPE`) · `4` pkgadd/pkgrm/zcat
+failure · `5` dependency cycle or missing dependency, a kernel-space
+pre-flight refusal, or a UFS-only package on another filesystem · `6`
 kbootset could not run or failed (status 1/2; `apkg recover` retries) ·
 `7` kbootset refused (status 3/4; the committed generation is unchanged).
 See [apkg.1](apkg.1) for the full manual.
+
+## UFS-only packages (`APKG_FSTYPE`)
+
+A package whose pkginfo says `APKG_FSTYPE=ufs` (file names over 14 bytes,
+which s5 cuts; P-35 Option C) is refused, exit 5, before any `pkgadd` of the
+transaction, when the directory of one of its long names, under the `-R`
+target, is on another filesystem type (`statvfs` `f_basetype`; the install
+base when it has no long name).  Unmarked packages are not checked.
+`fsreq.c`; the interface is `docs/design.md` section 2b.
 
 ## Kernel space (0.3)
 

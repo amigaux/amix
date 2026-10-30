@@ -15,6 +15,8 @@
 #   BDEV <path> <maj> <min>    pkgmap "1 b none <path> <maj> <min> 0600 root
 #                              root" (a block node, C3-5 v8 section 1.2)
 #   PKGMAP <pkgmap line>       an extra pkgmap line, verbatim (no directive)
+#   PKGINFO <KEY=VALUE>        an extra pkginfo line, verbatim (APKG_FSTYPE=,
+#                              BASEDIR=, ...)
 # A second archive carries the payload as pkgtrans lays it out (pkginfo,
 # pkgmap, then root/<path> for every DIR/FILE/SHARED/COPY), so
 # gen-catalog.py can read a kernel package's sidecar out of it.  The
@@ -35,7 +37,10 @@ def newc(name, data):
 out, pkg, ver = sys.argv[1:4]
 directives = sys.stdin.read().splitlines()
 pkginfo = ("PKG=%s\nNAME=test %s\nVERSION=%s\nARCH=m68k\nCATEGORY=system\n"
-           "CLASSES=none\n" % (pkg, pkg, ver)).encode()
+           "CLASSES=none\n" % (pkg, pkg, ver))
+pkginfo += "".join(d.split(None, 1)[1] + "\n" for d in directives
+                   if d.split(None, 1)[:1] == ["PKGINFO"])
+pkginfo = pkginfo.encode()
 pm = [": 1 20"]
 for d in directives:
     t = d.split(None, 2)
@@ -61,7 +66,7 @@ arc += b"\0" * ((512 - len(arc) % 512) % 512)
 pay = newc("pkginfo", pkginfo) + newc("pkgmap", pkgmap) + newc("root", b"")
 for d in directives:
     t = d.split(None, 2)
-    if not t or t[0] in ("PKGMAP", "CDEV", "BDEV"):
+    if not t or t[0] in ("PKGMAP", "PKGINFO", "CDEV", "BDEV"):
         continue
     if t[0] == "DIR":
         pay += newc("root" + t[1], b"")

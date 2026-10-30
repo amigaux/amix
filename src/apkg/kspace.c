@@ -501,22 +501,30 @@ static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
     return 0;
 }
 
-int ds_pure_files(const char *path, int module, char *why, unsigned cap)
+/* The member <pkginst>/<member> (or a bare <member>) of the datastream's
+ * first cpio archive (newc or odc), read whole into a NUL-terminated
+ * buffer *text (xmalloc'd; the caller frees it).  0 = read, -1 = not
+ * (why[] says: not a datastream, no such member, truncated, ...). */
+int ds_member(const char *path, const char *member, char **text,
+              char *why, unsigned cap)
 {
     FILE *fp;
     char hdr[8193];
     char name[256];
-    char *text;
+    char *buf;
     unsigned long off;
     unsigned long fsz;
     unsigned long nsz;
     unsigned long dataoff;
+    unsigned mlen;
     unsigned n;
     unsigned i;
     int odc;
     int rc;
 
     why[0] = '\0';
+    *text = NULL;
+    mlen = (unsigned)strlen(member);
     fp = fopen(path, "rb");
     if (fp == NULL) {
         setwhy(why, cap, "cannot read the datastream", NULL);
@@ -542,7 +550,9 @@ int ds_pure_files(const char *path, int module, char *why, unsigned cap)
         return -1;
     }
     rc = -1;
-    setwhy(why, cap, "no pkgmap in the first archive", NULL);
+    setwhy(why, cap, "no ", member);
+    n = (unsigned)strlen(why);
+    setwhy(why + n, cap - n, " in the first archive", NULL);
     for (;;) {
         if (fseek(fp, (long)off, SEEK_SET) != 0 ||
             fread(hdr, 1, 110, fp) < 76) {
@@ -579,23 +589,24 @@ int ds_pure_files(const char *path, int module, char *why, unsigned cap)
         if (strcmp(name, "TRAILER!!!") == 0)
             break;
         n = (unsigned)strlen(name);
-        if ((n == 6 && strcmp(name, "pkgmap") == 0) ||
-            (n > 7 && strcmp(name + n - 7, "/pkgmap") == 0 &&
-             strchr(name, '/') == name + n - 7)) {
+        if ((n == mlen && strcmp(name, member) == 0) ||
+            (n > mlen + 1 && strcmp(name + n - mlen, member) == 0 &&
+             strchr(name, '/') == name + n - mlen - 1)) {
             if (fsz > 1048576UL) {
-                setwhy(why, cap, "pkgmap too large", NULL);
+                setwhy(why, cap, member, " too large");
                 break;
             }
-            text = xmalloc((unsigned)fsz + 1);
+            buf = xmalloc((unsigned)fsz + 1);
             if (fseek(fp, (long)dataoff, SEEK_SET) != 0 ||
-                fread(text, 1, (unsigned)fsz, fp) != (unsigned)fsz) {
-                free(text);
-                setwhy(why, cap, "truncated pkgmap", NULL);
+                fread(buf, 1, (unsigned)fsz, fp) != (unsigned)fsz) {
+                free(buf);
+                setwhy(why, cap, "truncated ", member);
                 break;
             }
-            text[fsz] = '\0';
-            rc = pkgmap_pure(text, module, why, cap);
-            free(text);
+            buf[fsz] = '\0';
+            *text = buf;
+            why[0] = '\0';
+            rc = 0;
             break;
         }
         off = dataoff + fsz;
@@ -603,6 +614,18 @@ int ds_pure_files(const char *path, int module, char *why, unsigned cap)
             off = (off + 3) & ~3UL;
     }
     fclose(fp);
+    return rc;
+}
+
+int ds_pure_files(const char *path, int module, char *why, unsigned cap)
+{
+    char *text;
+    int rc;
+
+    if (ds_member(path, "pkgmap", &text, why, cap) != 0)
+        return -1;
+    rc = pkgmap_pure(text, module, why, cap);
+    free(text);
     return rc;
 }
 

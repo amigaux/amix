@@ -1755,7 +1755,7 @@ echo "== building the sha256 driver =="
 SHADRV=$WORK/sha256-driver
 ( cd "$SRC" && gcc -std=gnu89 -O2 -Wall -Wextra -o "$SHADRV" \
     tests/sha256-driver.c util.c conf.c vercmp.c catalog.c md5.c http.c \
-    dns.c install.c source.c kspace.c txn.c sha256.c ) 2>"$WORK/shadrv.err" \
+    dns.c install.c source.c kspace.c txn.c sha256.c fsreq.c ) 2>"$WORK/shadrv.err" \
     && [ ! -s "$WORK/shadrv.err" ] \
     && ok "the sha256 driver builds clean (-Wall -Wextra)" \
     || bad "sha256 driver build failed or warned" "$(cat "$WORK/shadrv.err")"
@@ -2822,6 +2822,179 @@ rm -rf "$REC" "$ROOT$KT" "$ROOT/stand" "$ROOT/var/sadm/install/contents" \
        "$ROOT/var/sadm/pkg/KERNK46" "$ROOT/var/sadm/pkg/Z3660SCS" \
        "$ROOT/var/sadm/pkg/KERN46Z" "$ROOT/var/sadm/pkg/KERN46M" \
        "$ROOT/var/sadm/pkg/KERN46N" "$ROOT/var/sadm/pkg/ZETH46"
+"$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
+
+# ======================================= UFS-only packages (APKG_FSTYPE)
+#
+# P-35 Option C (2026-10-30): a package with file names over 14 bytes says
+# APKG_FSTYPE=ufs in its pkginfo; apkg refuses it on any other filesystem,
+# after staging and before the first pkgadd of the transaction (fsreq.c,
+# docs/design.md section 2b).  The box reads statvfs f_basetype; the host
+# has none, so the host build takes the type from APKG_TEST_FSTYPE
+# ("<dir>=<type>,...", the longest matching existing directory wins;
+# "unknown" otherwise).  Every test above ran with it unset: an unmarked
+# package is untouched by the check.
+FR=$WORK/fsrepo
+mkdir -p "$FR/pkgs"
+fsds() {    # fsds <file> <PKG> <directive>...  (one directive per argument)
+    _f=$1; _p=$2; shift 2
+    printf '%s\n' "$@" | python3 "$TESTS/mkds.py" "$FR/pkgs/$_f" "$_p" 1.0
+}
+fsds ufsonly-1.0.pkg UFSONLY "PKGINFO APKG_FSTYPE=ufs" \
+    "DIR /opt/amix/bin" "DIR /opt/amix/lib/perl5" "FILE /opt/amix/bin/perl p" \
+    "FILE /opt/amix/lib/perl5/ExtUtils-Constant.pm c"
+fsds longplain-1.0.pkg LONGPLN "DIR /opt/amix/lib" \
+    "FILE /opt/amix/lib/averyverylongname.h h"
+fsds needsufs-1.0.pkg NEEDSUFS "FILE /opt/amix/bin/needsufs n"
+fsds multi-1.0.pkg MULTI "PKGINFO APKG_FSTYPE=nfs,ufs" \
+    "FILE /opt/amix/share/averyverylongname.txt t"
+fsds quoted-1.0.pkg QUOTED 'PKGINFO   APKG_FSTYPE = "ufs"' \
+    "FILE /opt/amix/share/anotherlongname.txt t"
+fsds badmark-1.0.pkg BADMARK "PKGINFO APKG_FSTYPE=UFS;rm" \
+    "FILE /opt/amix/share/badmarklongname.txt t"
+fsds reloc-1.0.pkg RELOC "PKGINFO APKG_FSTYPE=ufs" "PKGINFO BASEDIR=/opt/amix" \
+    "PKGMAP 1 d none lib/perl5 0755 root sys" \
+    "PKGMAP 1 f none lib/perl5/relocatedlongname.pm 0644 root sys 1 1 1"
+fsds shortmk-1.0.pkg SHORTMK "PKGINFO APKG_FSTYPE=ufs" "PKGINFO BASEDIR=/opt/amix" \
+    "PKGMAP 1 f none bin/short 0644 root sys 1 1 1"
+fsds rootlong-1.0.pkg ROOTLONG "PKGINFO APKG_FSTYPE=ufs" \
+    "FILE /averyverylongtopname f"
+# not a datastream at all: no pkginfo to read, so pkgadd judges it, as before
+printf 'fake SVR4 datastream for opaque\n' > "$FR/pkgs/opaque-1.0.pkg"
+fsline() {  # fsline <name> <PKG> [deps]
+    printf '%s|1.0|%s|%s-1.0.pkg|%s|%s|%s|system|APKG_FSTYPE fixture\n' \
+        "$1" "$2" "$1" "$(md5of "$FR/pkgs/$1-1.0.pkg")" \
+        "$(sizeof "$FR/pkgs/$1-1.0.pkg")" "${3:-none}"
+}
+{
+    echo "#apkg-catalog 1"
+    fsline badmark BADMARK
+    fsline longplain LONGPLN
+    fsline multi MULTI
+    fsline needsufs NEEDSUFS longplain,ufsonly
+    fsline opaque OPAQUE
+    fsline quoted QUOTED
+    fsline reloc RELOC
+    fsline rootlong ROOTLONG
+    fsline shortmk SHORTMK
+    fsline ufsonly UFSONLY
+    # the trailer gen-catalog.py writes for marked packages: '#' lines,
+    # comments to every catalog v1 reader (apkg 0.1-0.3 skip them)
+    echo "#ext fstype 1"
+    for n in badmark multi quoted reloc rootlong shortmk ufsonly; do
+        echo "#fstype $n ufs"
+    done
+} > "$FR/catalog"
+FSCONF=$WORK/conf-fs
+mkconf "$FSCONF" "file://$FR" "$WORK/bin/pkgadd-shim"
+run 0 "a catalog carrying the #ext fstype trailer loads" \
+    "$APKG" -c "$FSCONF" update
+echo "$OUT" | grep -q "catalog updated: 10 packages" \
+    && ok "the fstype trailer adds no entry and refuses none" \
+    || bad "the fstype trailer changed the catalog's entries" "$OUT"
+
+FT=$WORK/fstgt              # an -R target; the check sees $ROOT$FT/...
+mkdir -p "$ROOT$FT/var/apkg" "$ROOT$FT/var/sadm/pkg"
+fsrun() {   # fsrun <rc> <desc> <APKG_TEST_FSTYPE> <apkg args...>
+    _w=$1; _d=$2; _t=$3; shift 3
+    : > "$SHIMLOG"
+    run "$_w" "$_d" env APKG_TEST_FSTYPE="$_t" "$APKG" -c "$FSCONF" "$@"
+}
+
+fsrun 5 "a UFS-only package is refused on s5 (exit 5)" "$ROOT=s5" \
+    install ufsonly
+[ "$OUT" = "apkg: ufsonly: refused: it installs only on ufs, and $ROOT/opt/amix/lib/perl5 is on s5, which cuts file names at 14 bytes" ] \
+    && ok "one line naming the package, the directory and its filesystem" \
+    || bad "the s5 refusal message" "$OUT"
+[ ! -s "$SHIMLOG" ] && ok "refused before pkgadd ran" \
+    || bad "pkgadd ran for a refused package" "$(cat "$SHIMLOG")"
+fsrun 0 "the same package installs on ufs" "$ROOT=ufs" install ufsonly
+grep -q "^pkgadd .* -d $FR/pkgs/ufsonly-1.0.pkg UFSONLY$" "$SHIMLOG" \
+    && ok "on ufs it reaches pkgadd unchanged" \
+    || bad "no pkgadd on ufs" "$(cat "$SHIMLOG")"
+fsrun 0 "an unmarked package with long names installs on s5, as before" \
+    "$ROOT=s5" install longplain
+grep -q "^pkgadd .* LONGPLN$" "$SHIMLOG" \
+    && ok "the unmarked package reached pkgadd" || bad "unmarked package" "$(cat "$SHIMLOG")"
+fsrun 0 "an unreadable datastream is left to pkgadd, as before" \
+    "$ROOT=s5" install opaque
+grep -q "^pkgadd .* OPAQUE$" "$SHIMLOG" \
+    && ok "the opaque file reached pkgadd" || bad "opaque file" "$(cat "$SHIMLOG")"
+
+# the transaction: a dependency closure with one UFS-only member installs
+# nothing at all on s5, not even the members that would fit
+fsrun 5 "a closure holding a UFS-only package is refused on s5" "$ROOT=s5" \
+    install needsufs
+[ ! -s "$SHIMLOG" ] \
+    && ok "nothing of the closure was installed (longplain staged, never added)" \
+    || bad "part of the closure was installed" "$(cat "$SHIMLOG")"
+fsrun 0 "the closure installs on ufs" "$ROOT=ufs" install needsufs
+[ "$(grep -c '^pkgadd ' "$SHIMLOG")" -eq 3 ] \
+    && ok "all three packages added on ufs" || bad "closure on ufs" "$(cat "$SHIMLOG")"
+
+# -R: the check looks under the target; the nearest existing directory
+# decides, so a ufs slice mounted on /opt of an s5 root is enough
+mkdir -p "$ROOT$FT/opt"
+fsrun 0 "-R: an s5 root with a ufs /opt takes the UFS-only package" \
+    "$ROOT$FT=s5,$ROOT$FT/opt=ufs" -R "$FT" install ufsonly
+grep -q "^pkgadd -R $FT .* UFSONLY$" "$SHIMLOG" \
+    && ok "-R reaches pkgadd with the target" || bad "-R pkgadd" "$(cat "$SHIMLOG")"
+rmdir "$ROOT$FT/opt"
+fsrun 5 "-R: without the /opt mount the s5 root refuses it" \
+    "$ROOT$FT=s5,$ROOT$FT/opt=ufs" -R "$FT" install ufsonly
+echo "$OUT" | grep -q "and $ROOT$FT/opt/amix/lib/perl5 is on s5" \
+    && ok "-R: the refusal names the directory under the target" \
+    || bad "-R refusal message" "$OUT"
+
+# the parameter's forms
+fsrun 5 "a list: refused on a filesystem it does not name" "$ROOT=s5" \
+    install multi
+echo "$OUT" | grep -q "installs only on nfs,ufs, and" \
+    && ok "the refusal quotes the whole list" || bad "list refusal" "$OUT"
+fsrun 0 "a list: any filesystem it names is accepted" "$ROOT=nfs" install multi
+fsrun 5 "quoted and spaced (APKG_FSTYPE = \"ufs\") is read" "$ROOT=s5" \
+    install quoted
+fsrun 0 "... and passes on ufs" "$ROOT=ufs" install quoted
+fsrun 3 "a malformed APKG_FSTYPE refuses the package (exit 3)" "$ROOT=ufs" \
+    install badmark
+echo "$OUT" | grep -q "badmark: refused: APKG_FSTYPE=UFS;rm is not a list of filesystem types" \
+    && [ ! -s "$SHIMLOG" ] \
+    && ok "it says why, and nothing was added" || bad "malformed mark" "$OUT"
+fsrun 5 "unknown filesystem type (no f_basetype): refused" "" install ufsonly
+echo "$OUT" | grep -q "is on unknown$" \
+    && ok "... naming it unknown" || bad "unknown type message" "$OUT"
+
+# which directory decides: a relative pkgmap path under BASEDIR; the base
+# itself only when no name is over 14 bytes; a long name in /
+mkdir -p "$ROOT/opt"
+fsrun 0 "BASEDIR=/opt/amix, relative path: /opt on ufs passes" \
+    "$ROOT=s5,$ROOT/opt=ufs" -v install reloc
+echo "$OUT" | grep -q "reloc: $ROOT/opt/amix/lib/perl5 is on ufs (APKG_FSTYPE=ufs)" \
+    && ok "the relative path is checked at BASEDIR/lib/perl5" || bad "relative path" "$OUT"
+rmdir "$ROOT/opt"
+fsrun 5 "a marked package with no long name: its install base decides" \
+    "$ROOT=s5" install shortmk
+echo "$OUT" | grep -q "and $ROOT/opt/amix is on s5" \
+    && ok "... and the refusal names BASEDIR" || bad "base check" "$OUT"
+fsrun 5 "a long name in / is checked at /" "$ROOT=s5" install rootlong
+echo "$OUT" | grep -q "and $ROOT is on s5" \
+    && ok "... naming the root" || bad "root long name" "$OUT"
+
+# -n with a medium in place: the dry run already says no
+fsrun 5 "-n predicts the refusal from the medium" "$ROOT=s5" -n install ufsonly
+[ ! -s "$SHIMLOG" ] && ok "-n ran nothing" || bad "-n ran pkgadd" "$(cat "$SHIMLOG")"
+
+# upgrade: the installed version stays when the new one is refused
+mkdir -p "$ROOT/var/sadm/pkg/UFSONLY"
+printf 'PKG=UFSONLY\nVERSION=0.9\n' > "$ROOT/var/sadm/pkg/UFSONLY/pkginfo"
+fsrun 5 "upgrade to a UFS-only version on s5 is refused" "$ROOT=s5" \
+    upgrade ufsonly
+echo "$OUT" | grep -q "the installed ufsonly 0.9 is untouched" && [ ! -s "$SHIMLOG" ] \
+    && ok "the installed 0.9 is untouched, nothing ran" || bad "upgrade refusal" "$OUT"
+fsrun 0 "upgrade on ufs proceeds" "$ROOT=ufs" upgrade ufsonly
+grep -q "^pkgadd .*admin.overwrite -d $FR/pkgs/ufsonly-1.0.pkg UFSONLY$" "$SHIMLOG" \
+    && ok "upgrade reached pkgadd with instance=overwrite" || bad "upgrade on ufs" "$(cat "$SHIMLOG")"
+rm -rf "$ROOT/var/sadm/pkg/UFSONLY" "$ROOT$FT"
 "$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
 
 # ------------------------------------------------ exit-code sanity extras
