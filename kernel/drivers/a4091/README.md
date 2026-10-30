@@ -155,9 +155,10 @@ each file); a newer Amiberry loads them and renumbers the version when it saves.
      **generates** the `amiga/alien/sd.c` registration rows + `sdcardbase()` and the `alien` Makefile
      `OBJ` entries — you do not write those by hand;
    - it applies **every** patch in [`src/kernel-patches/`](src/kernel-patches/) through its `kpatch`
-     pipeline (its `kernel-patches.conf`): verify-then-apply against a vendored
-     pristine stock tree, with a content-derived revision stamp per patch, so a patch that has been
-     *revised* is re-applied rather than skipped as already-present.
+     pipeline ([the patch manifest](../../k30/docs/driver-contract.md#the-patch-manifest--kernelk30kernel-patchesconf),
+     `kernel/k30/kernel-patches.conf`): verify-then-apply against the pristine stock file from the
+     `AMIX_SYSTEM` input (a checkout of `amigaux/amix-system`), with a content-derived revision stamp
+     per patch, so a patch that has been *revised* is re-applied rather than skipped as already-present.
 
    **Manual fallback** (no harness — you then also write the `sd.c` rows and Makefile `OBJ` entries
    yourself). All four patches are `patch -p0` diffs against stock Amix 2.1; Amix 2.1 is a single
