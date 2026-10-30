@@ -716,14 +716,14 @@ check "every @group token is a single token" \
     bash -c "test -z \"\$(grep -v '^[A-Za-z0-9][A-Za-z0-9+.-]*\$' \
                           '$WORK/cats.groups')\""
 # The vocabulary is LOCKED, the way the set memberships are: it is the
-# contract the sibling amix-packages registry validates its per-package
-# `category:` against (its roadmap item X3).  `editor` still carries no
-# package in THIS repo (BATCH-1 populated `utility`/`development` instead)
-# and must not be pruned as unused.  `archive` added 2026-10-30 (owner).
-check "cats.conf declares exactly the thirteen agreed groups" \
+# contract the recipes' CATEGORY is checked against (build/pkg/pkgmeta's
+# closed list).  Fifteen groups since 2026-10-30 (owner): archive, library,
+# shell, language and multimedia added, emacs folded into editor and
+# openlook into x11.  Groups with no package yet must not be pruned.
+check "cats.conf declares exactly the fifteen agreed groups" \
     bash -c "diff '$WORK/cats.groups' <(printf '%s\n' archive development \
-        documentation editor emacs games network openlook source system \
-        text utility x11)"
+        documentation editor games language library multimedia network \
+        shell source system text utility x11)"
 check "every assigned category is a declared group" \
     bash -c "test -z \"\$(comm -23 <(sort -u '$WORK/cats.values') \
                                    '$WORK/cats.groups')\""

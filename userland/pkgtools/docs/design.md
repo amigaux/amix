@@ -360,9 +360,10 @@ copies live in `tools/repo/`.
   the vocabulary: an assignment naming an undeclared group is refused per-package (SKIP, as a
   category containing a space already was, since apkg rejects such a catalog whole), and a package
   falling through to a pkginfo `CATEGORY` outside the vocabulary warns. A `cats.conf` with no
-  `@group` line declares nothing and keeps the old permissive behaviour. **Thirteen groups** today:
-  `system`, `network`, `utility`, `archive` (added 2026-10-30), `text`, `editor`, `documentation`, `development`, `x11`,
-  `openlook`, `emacs`, `games`, `source`. Categories say what a package **is**; who wants it is a
+  `@group` line declares nothing and keeps the old permissive behaviour. **Fifteen groups** since
+  2026-10-30: `system`, `network`, `utility`, `archive`, `library`, `shell`, `language`, `text`,
+  `editor`, `documentation`, `development`, `multimedia`, `x11`, `games`, `source` (`emacs` folded
+  into `editor`, `openlook` into `x11`). Categories say what a package **is**; who wants it is a
   set.
 - `descs.conf` — the **description** overrides, the same catalog-level pattern one field over
   (`<name>: <free text>`; only the first colon separates, so the text may hold more). The ninth
