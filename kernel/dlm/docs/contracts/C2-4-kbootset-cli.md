@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 14
+# C2-4 — `kbootset` as a called program, version 16
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30, P-36 D-N21): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -399,3 +399,26 @@ and `<root>/stand/k46/kabi`; when neither says 4, it does nothing.
 - **The host build** writes no node and runs no tool. It prints each
   node it would make or remove (`would make /dev/rdsk/c16d0s0 c 40 134`),
   for the host test (`tests/host/knode.sh`).
+
+## 15. `kbootset major`: a module's majors (version 16)
+
+`kbootset major <name>` prints the majors the major registry gives the
+module `<name>`, for a boot script that re-creates a missing `/dev` node
+(P-36 D-N21) without carrying a number of its own.
+
+- **The source** is the registry compiled into kbootset (`kbootset/kreg.c`,
+  generated from `abi/registry/majors`). The kernel gives a module no other
+  major: core patch 0006 refuses at load a module whose `majors=` the
+  registry does not give it, and gate 3 refuses it at build (C3-5 §2).
+- **No store, no kinfo.** It opens neither, nor the root, so it answers the
+  same on a static kernel, in safe mode, on a boot from a read-only medium
+  and under `-R` or `--image`.
+- **What it prints:** one line per major, in the registry's order, `c <n>`
+  for a character major and `b <n>` for a block major, with no
+  `kbootset: ` prefix (the lines are for a script):
+  - `kbootset major z3660eth` prints `c 51`;
+  - `kbootset major ramdisk` prints `b 20`.
+- **Exit status:** 0; 1 for a name the registry does not know, with
+  `kbootset: no major is registered to <name>` on standard error and
+  nothing on standard output; 2 for usage (no name, or more than one).
+- **The host test** is `tests/host/kmajor.sh`.
