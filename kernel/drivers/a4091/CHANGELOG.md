@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — works in its amix home (2756fa2, a819ab7, 79b70ee, d5a6e38)
+
+README points at kernel/k30, kernel/port/port.pin and toolchain/gcc-cross-amix.pin instead of jusii/* sibling clones;
+Credits unchanged. Test scripts default KERNTOOLS to ../../k30 and GRIM to the grimoire clone, both overridable.
+build-a4091-040.sh takes GCC_CROSS_ENV and PORT_DIR from amix's pins and warns when a checkout is off its pin (objects
+unchanged, c9f0e467, 7d75ab42 with --d42). module/Makefile defaults DLM to $(TOP)/../../dlm. Module bytes equal the
+standalone build: k30 a4091 6a6b6b3c, a4kt710 e65b4f7d; k46 a4091 8655e87a, a4kt710 95bebecb. Host tests pass.
+
 ## 2026-10-30 — moved in from amix-a4091
 
 jusii/amix-a4091 master 9a2753a (99 commits) moved into amix kernel/drivers/a4091 by subtree merge after a filter-repo
