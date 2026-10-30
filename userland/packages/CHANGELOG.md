@@ -3,6 +3,10 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — patch names /usr/bin/patch in SYSTEM_PATHS (3799b4a)
+
+Ready for build/pkg's SYSTEM_PATHS check; pkginfo, INDEX.md and the package are unchanged, so no revision bump.
+
 ## 2026-10-30 — pkg-smoke runs the older recipes' smoke tests (2e08db2)
 
 pkg-smoke runs each smoke.sh where it expects to run (beside its fixtures for gzip, grep, less, make, patch and tar),
