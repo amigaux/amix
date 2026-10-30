@@ -48,8 +48,8 @@ The only tolerated implicit declarations are `snprintf`/`vsnprintf` in the two g
 
 ## Package shape
 
-`/opt/amix/lib/libz.a`, headers `/opt/amix/include/{zlib.h,zconf.h}`, the man page at
-`/opt/amix/man/man3/zlib.3`, `LICENSE`/`README`/`ChangeLog` under `/opt/amix/doc/zlib/`, and the
+`/opt/amix/lib/libz.a`, headers `/opt/amix/include/{zlib.h,zconf.h}`, the man pages
+`/opt/amix/man/3/zlib` and `/opt/amix/man/1/zlib-test`, `LICENSE`/`README`/`ChangeLog` under `/opt/amix/doc/zlib/`, and the
 on-box acceptance binary `/opt/amix/bin/zlib-test`. Nothing lands outside `/opt/amix`; there is no
 stock file to conflict with. Pure file payload (`CLASSES=none`, D9).
 
@@ -81,3 +81,10 @@ catalog line.
 is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
 previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
 `PSTAMP` only, and the pkgmap only in its `i pkginfo` line.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/zlib` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; `zlib(3)` is upstream's and [`man/zlib-test.1`](man/zlib-test.1) is new. Built on the gcc14 container pin: every other payload file is the previous
+revision's.

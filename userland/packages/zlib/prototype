@@ -49,8 +49,12 @@ f none /opt/amix/bin/zlib-test 0755 root bin
 #
 # --- manual page -----------------------------------------------------------
 d none /opt/amix/man 0755 root sys
-d none /opt/amix/man/man3 0755 root sys
-f none /opt/amix/man/man3/zlib.3 0644 root bin
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/zlib-test 0644 root bin
+d none /opt/amix/man/3 0755 root sys
+f none /opt/amix/man/3/zlib 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/zlib 0644 root bin
 #
 # --- licence and upstream notes --------------------------------------------
 #
