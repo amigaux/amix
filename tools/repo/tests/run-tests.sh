@@ -2027,6 +2027,126 @@ else
     echo "  skip- m4 checks (host engine, fakeroot, hdf/tape21 or the staged Cdev-2.1.pkg missing)"
 fi
 
+# --------------------------------------------------------------- T28 ----
+# The UFS-only mark (P-35 Option C, 2026-10-30; docs/design.md section 2b):
+# pkginfo APKG_FSTYPE=ufs on a package with a name over 14 bytes.  The
+# real host engine mints a perl-shaped package (BASEDIR=/, /opt/amix,
+# long names and a 14-byte collision); gen-catalog lists it in the
+# '#ext fstype 1' trailer, the host heirloom pkgadd installs it as any
+# other (the parameter is invisible to pkgadd), apkg reads the catalog,
+# and s5-collision-scan reports the package and exempts its collision.
+echo "T28: APKG_FSTYPE, the UFS-only mark"
+S28="$WORK/t28"; mkdir -p "$S28/stg" "$S28/src/opt/amix/lib/perl5" "$S28/src/opt/amix/bin"
+HB="$HERE/../../../heirloom/build-host/bin"
+echo perl > "$S28/src/opt/amix/bin/perl"
+echo pm > "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant.pm"
+echo pm2 > "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant-Base.pm"
+mint28() {  # mint28 <PKG> <out> [pkginfo line]: a real datastream
+    printf 'PKG=%s\nNAME=%s\nVERSION=1.0\nARCH=Amiga\nCATEGORY=development\nCLASSES=none\nBASEDIR=/\n%s\n' \
+        "$1" "$1" "${3:-}" > "$S28/pkginfo.$1"
+    printf 'i pkginfo=%s\nd none /opt 0755 root sys\nd none /opt/amix 0755 root sys\nd none /opt/amix/bin 0755 root sys\nd none /opt/amix/lib 0755 root sys\nd none /opt/amix/lib/perl5 0755 root sys\nf none /opt/amix/bin/perl=%s 0755 root sys\nf none /opt/amix/lib/perl5/ExtUtils-Constant.pm=%s 0444 root sys\nf none /opt/amix/lib/perl5/ExtUtils-Constant-Base.pm=%s 0444 root sys\n' \
+        "$S28/pkginfo.$1" "$S28/src/opt/amix/bin/perl" \
+        "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant.pm" \
+        "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant-Base.pm" > "$S28/prototype.$1"
+    rm -rf "$S28/spool.$1"; mkdir -p "$S28/spool.$1" "$(dirname "$2")"
+    ( cd "$S28" && "$HB/pkgmk" -o -d "$S28/spool.$1" -f "prototype.$1" && \
+      "$HB/pkgtrans" -s "$S28/spool.$1" "$2" "$1" ) >>"$WORK/t28.mk" 2>&1
+}
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
+    mint28 UFSPERL "$S28/stg/extra/UFSPERL-1.0.pkg" "APKG_FSTYPE=ufs"
+    check "a marked datastream minted by the host pkgmk/pkgtrans" \
+        test -s "$S28/stg/extra/UFSPERL-1.0.pkg"
+    cp "$FIX/TESTpkg.pkg" "$S28/stg/"
+    python3 "$GEN" --isize "$S28/stg" >"$WORK/t28.out" 2>"$WORK/t28.err"
+    check "gen-catalog rc 0 with a marked package" test $? -eq 0
+    check "the entry line is an ordinary 9-field line" \
+        test "$(grep '^ufsperl|' "$S28/stg/catalog" | awk -F'|' '{print NF}')" = 9
+    check "the trailer: '#ext fstype 1' then '#fstype ufsperl ufs'" \
+        test "$(grep -A1 -x '#ext fstype 1' "$S28/stg/catalog" | tail -1)" = "#fstype ufsperl ufs"
+    check "only the marked package is listed" \
+        test "$(grep -c '^#fstype ' "$S28/stg/catalog")" = 1
+    check "the fstype trailer follows the isize trailer" \
+        test "$(grep -n -x '#ext fstype 1' "$S28/stg/catalog" | cut -d: -f1)" -gt \
+             "$(grep -n -x '#ext isize 1' "$S28/stg/catalog" | cut -d: -f1)"
+    check "the summary names it: 1 UFS-only (ufsperl=ufs)" \
+        grep -q '1 UFS-only (ufsperl=ufs)' "$WORK/t28.out"
+
+    # the same staging without the mark: no trailer, entries unchanged
+    S28B="$WORK/t28b"; mkdir -p "$S28B/extra"
+    mint28 UFSPERL "$S28B/extra/UFSPERL-1.0.pkg"
+    cp "$FIX/TESTpkg.pkg" "$S28B/"
+    python3 "$GEN" "$S28B" >"$WORK/t28b.out" 2>&1
+    check "unmarked: no fstype trailer at all" \
+        bash -c "! grep -q '^#ext fstype\|^#fstype' '$S28B/catalog'"
+    check "unmarked: no UFS-only in the summary" \
+        bash -c "! grep -q 'UFS-only' '$WORK/t28b.out'"
+    check "the testpkg entry is byte-identical with and without a marked neighbour" \
+        test "$(grep '^testpkg|' "$S28B/catalog")" = "$(grep '^testpkg|' "$S28/stg/catalog")"
+
+    # a malformed mark: per-package SKIP, the rest catalogues
+    S28C="$WORK/t28c"; mkdir -p "$S28C"
+    mint28 BADFS "$S28C/BADFS-1.0.pkg" "APKG_FSTYPE=UFS"
+    cp "$FIX/TESTpkg.pkg" "$S28C/"
+    python3 "$GEN" "$S28C" >/dev/null 2>"$WORK/t28c.err"
+    check "malformed APKG_FSTYPE: rc 0, the package SKIPped" \
+        grep -q "SKIP BADFS-1.0.pkg: APKG_FSTYPE='UFS' is not a list of filesystem types" "$WORK/t28c.err"
+    check "  ... and not in the catalog" \
+        bash -c "! grep -q '^badfs|' '$S28C/catalog' && grep -q '^testpkg|' '$S28C/catalog'"
+
+    # pkgadd ignores the parameter: the host heirloom engine installs the
+    # marked package, long names intact (the host filesystem has them)
+    if command -v fakeroot >/dev/null 2>&1; then
+        R28="$S28/root"; mkdir -p "$R28/etc" "$R28/var/sadm/install"
+        printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$R28/etc/passwd"
+        printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$R28/etc/group"
+        printf 'mail=\ninstance=overwrite\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' \
+            > "$S28/admin"
+        fakeroot "$HB/pkgadd" -R "$R28" -n -a "$S28/admin" \
+            -d "$S28/stg/extra/UFSPERL-1.0.pkg" UFSPERL >"$WORK/t28.add" 2>&1
+        check "heirloom pkgadd installs the marked package (rc 0)" test $? -eq 0
+        check "  ... the long names land whole" \
+            test -f "$R28/opt/amix/lib/perl5/ExtUtils-Constant-Base.pm"
+        check "  ... and the installed pkginfo keeps APKG_FSTYPE=ufs" \
+            bash -c "grep -rqx 'APKG_FSTYPE=ufs' '$R28' --include=pkginfo"
+    else
+        echo "  skip- heirloom pkgadd of the marked package (no fakeroot)"
+    fi
+
+    # this apkg reads gen-catalog's catalog, trailer and all
+    APKG28="$HERE/../../../src/apkg/apkg"
+    if [ -x "$APKG28" ]; then
+        mkdir -p "$S28/aroot/etc" "$S28/aroot/var/apkg" "$S28/aroot/var/sadm/pkg"
+        mkdir -p "$S28/repo/pkgs"; cp -r "$S28/stg/." "$S28/repo/pkgs/"
+        cp "$S28/stg/catalog" "$S28/stg/catalog.md5" "$S28/repo/"
+        printf 'repo=file://%s\ncachedir=%s/var/apkg/cache\n' "$S28/repo" "$S28/aroot" > "$S28/aconf"
+        APKG_ROOT="$S28/aroot" "$APKG28" -c "$S28/aconf" update >"$WORK/t28.apkg" 2>&1
+        check "apkg update reads the catalog (rc 0, 2 packages)" \
+            grep -q 'catalog updated: 2 packages' "$WORK/t28.apkg"
+    else
+        echo "  skip- apkg reading the catalog (src/apkg/apkg not built)"
+    fi
+
+    # s5-collision-scan: the marked package is named, its collision exempt
+    python3 "$HERE/../s5-collision-scan.py" --fail-on-collision \
+        "$S28/stg/extra/UFSPERL-1.0.pkg" >"$WORK/t28.scan" 2>&1
+    check "scan: a collision only inside a UFS-only package passes --fail-on-collision" \
+        test $? -eq 0
+    check "scan: the collision is still counted (1 group)" \
+        grep -qE '^collision groups \(dir, base\[:14\]\) +1$' "$WORK/t28.scan"
+    check "scan: the package is named UFS-only" \
+        grep -qE '^UFS-only packages \(APKG_FSTYPE\) +1 +UFSPERL=ufs$' "$WORK/t28.scan"
+    check "scan: its group is exempt" \
+        grep -qE '^collision groups of those only +1 ' "$WORK/t28.scan"
+    python3 "$HERE/../s5-collision-scan.py" --fail-on-collision \
+        "$S28B/extra/UFSPERL-1.0.pkg" >"$WORK/t28b.scan" 2>&1
+    check "scan: the same collision unmarked still fails --fail-on-collision" \
+        test $? -eq 1
+    check "scan: no UFS-only line when nothing is marked" \
+        bash -c "! grep -q 'UFS-only' '$WORK/t28b.scan'"
+else
+    echo "  skip- APKG_FSTYPE checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

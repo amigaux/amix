@@ -47,6 +47,15 @@
 #                        differ -- if they ever do, believe the object
 #                        universe.
 #
+# UFS-ONLY PACKAGES.  A package whose pkginfo carries APKG_FSTYPE (e.g.
+# APKG_FSTYPE=ufs; gen-catalog.py's UFS-ONLY BLOCK, docs/design.md section
+# 2b) never installs on s5: apkg refuses it there.  The s5 rule does not
+# apply to it (P-35 Option C, 2026-10-30).  Its objects still count in
+# every universe above -- the count identity is about objects, not
+# filesystems -- but the scan names the marked packages, and a collision
+# group made only of their objects is reported as exempt and does not
+# fail --fail-on-collision.
+#
 # usage:
 #   s5-collision-scan.py <staging-dir>              scan every package found
 #   s5-collision-scan.py -s full <staging-dir>      scan one install set
@@ -178,27 +187,32 @@ def read_catalog(path):
 
 
 def collect(pkgfiles, gen):
-    """Scan the packages; return (objects, owners).
+    """Scan the packages; return (objects, owners, marked).
 
     objects[path] = set of ftypes declaring it
     owners[path]  = set of package instances declaring it
+    marked[pkginst] = the APKG_FSTYPE value of a UFS-only package
     """
     objects = {}
     owners = {}
+    marked = {}
     for pkgfile in pkgfiles:
         try:
             with open(pkgfile, "rb") as fp:
                 raw = fp.read()
             buf = gen.decompress_z(pkgfile) if pkgfile.endswith(".Z") else raw
-            pkginst, _params, pkgmap = gen.parse_datastream(buf)
+            pkginst, params, pkgmap = gen.parse_datastream(buf)
+            mark = gen.fstype_mark(params)
         except (OSError, gen.Malformed) as exc:
             raise ScanError("%s: %s" % (pkgfile, exc))
+        if mark is not None:
+            marked[pkginst] = mark
         if pkgmap is None:
             raise ScanError("%s: no pkgmap in the datastream" % pkgfile)
         for ftype, path in parse_pkgmap(pkgmap, os.path.basename(pkgfile)):
             objects.setdefault(path, set()).add(ftype)
             owners.setdefault(path, set()).add(pkginst)
-    return objects, owners
+    return objects, owners, marked
 
 
 def group_by_directory(paths):
@@ -234,12 +248,15 @@ def group_by_basename(paths):
 
 def scan(pkgfiles, gen):
     """Do the whole measurement; return a dict of results."""
-    objects, owners = collect(pkgfiles, gen)
+    objects, owners, marked = collect(pkgfiles, gen)
     truncation = [p for p, ftypes in objects.items()
                   if not (ftypes & DEVICE_FTYPES)]
 
     groups = group_by_directory(truncation)
     groups_all = group_by_directory(list(objects))
+    # a group whose every object belongs to UFS-only packages only
+    exempt = [k for k, paths in groups.items()
+              if all(owners[p] <= set(marked) for p in paths)]
 
     return {
         "packages": len(pkgfiles),
@@ -255,6 +272,8 @@ def scan(pkgfiles, gen):
         "collision_groups": len(groups),
         "collision_groups_all_ftypes": len(groups_all),
         "basename_key_groups": len(group_by_basename(truncation)),
+        "marked": marked,
+        "exempt_groups": len(exempt),
     }
 
 
@@ -274,6 +293,13 @@ def report(res, quiet):
         % res["basename_key_groups"])
     out("  (that last line is the W6 defect reproduced for reference:\n"
         "   the directory discarded.  It is never the number to fix by.)\n")
+
+    if res["marked"]:
+        out("UFS-only packages (APKG_FSTYPE)     %8d   %s\n"
+            % (len(res["marked"]), " ".join(
+                "%s=%s" % (k, res["marked"][k]) for k in sorted(res["marked"]))))
+        out("collision groups of those only      %8d   (exempt: never on s5)\n"
+            % res["exempt_groups"])
 
     if res["collision_groups_all_ftypes"] != res["collision_groups"]:
         out("\nNOTE: over the FULL object universe (device nodes and pipes\n"
@@ -378,7 +404,8 @@ def main(argv):
     ap.add_argument("--check", action="store_true",
                     help="assert the pinned regression constants for --set")
     ap.add_argument("--fail-on-collision", action="store_true",
-                    help="exit 1 if any collision group exists")
+                    help="exit 1 if any collision group exists (groups made "
+                         "only of UFS-only packages' objects excepted)")
     ap.add_argument("-q", "--quiet", action="store_true",
                     help="counts only; do not list the colliding groups")
     args = ap.parse_args(argv)
@@ -416,9 +443,10 @@ def main(argv):
             sys.stdout.write("\npinned constants for set %r: all %d match\n"
                              % (args.setname, len(PINNED[args.setname])))
 
-    if args.fail_on_collision and res["collision_groups"]:
+    failing = res["collision_groups"] - res["exempt_groups"]
+    if args.fail_on_collision and failing:
         sys.stderr.write("s5-collision-scan: %d collision group(s) present\n"
-                         % res["collision_groups"])
+                         % failing)
         rc = 1
     return rc
 

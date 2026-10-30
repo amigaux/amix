@@ -130,6 +130,26 @@
 #   depending on build; both are handled.  A malformed package is reported
 #   and skipped, never fatal.
 #
+# ------------------------------------------------------ UFS-ONLY BLOCK ---
+# A package whose pkginfo carries APKG_FSTYPE=<type>[,<type>...] installs
+# only onto those filesystem types (statvfs f_basetype names: ufs, s5,
+# nfs, ...).  The packages set APKG_FSTYPE=ufs on a package with a file
+# name over 14 bytes, which s5 cuts (P-35 Option C, 2026-10-30;
+# docs/design.md section 2b).  The value is validated here exactly as
+# apkg validates it (1..15 of [a-z0-9] per type, comma-separated); a
+# malformed one SKIPs the package.  Every marked package is listed after
+# the entries (after --isize, before the kernel-space block):
+#
+#     #ext fstype 1
+#     #fstype <catalog-name> <types>
+#
+# Not opt-in, and like the kernel-space block it is emitted only when
+# there is something to say: a staging root without a marked package gives
+# a catalog byte-for-byte as before.  Every line starts with '#', so every
+# catalog v1 reader skips it (apkg 0.1-0.3 included).  It is information
+# for readers that decide before fetching (an installer, a later apkg);
+# the check itself is apkg's, on the package's own pkginfo (fsreq.c).
+#
 # ------------------------------------------------- INSTALLED-SIZE BLOCK ---
 # `--isize` appends, after the entry lines:
 #
@@ -189,6 +209,11 @@ PKG_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
 # the redistributable catalog AND the publish path (the amix-installng Gate-17
 # posture, applied to packages): fail closed, no --force.
 KERNEL_MARKER_PARAMS = ("KSUM_R", "BOOT2_SHA")
+
+# The UFS-only mark (UFS-ONLY BLOCK above): the pkginfo parameter and its
+# grammar, the same as src/apkg/fsreq.c fstype_list_ok().
+FSTYPE_PARAM = "APKG_FSTYPE"
+FSTYPE_RE = re.compile(r"^[a-z0-9]{1,15}(,[a-z0-9]{1,15})*$")
 
 # RAW self-describing layout (must match src/apkg/source.h byte-for-byte):
 # a metadata region at the front (catalog + catalog.md5, NUL-padded),
@@ -881,6 +906,22 @@ def normalize_deps(raw):
 
 # ---------------------------------------------------------------- main ---
 
+def fstype_mark(params):
+    """The package's APKG_FSTYPE value, or None when it carries none.
+
+    A malformed value refuses the package (per-package SKIP): apkg refuses
+    it too, so cataloguing it would publish a package nobody can install.
+    """
+    if FSTYPE_PARAM not in params:
+        return None
+    value = params[FSTYPE_PARAM]
+    if not FSTYPE_RE.match(value):
+        raise Malformed("%s=%r is not a list of filesystem types (1-15 of "
+                        "[a-z0-9] each, comma-separated, e.g. ufs)"
+                        % (FSTYPE_PARAM, value))
+    return value
+
+
 def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
                 descs_conf, verbose):
     """relname: path relative to the staging root (forward slashes);
@@ -927,6 +968,8 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         if req not in params or not params[req].strip():
             raise Malformed("pkginfo lacks required %s parameter" % req)
 
+    fstype = fstype_mark(params)
+
     name = names_conf.get(pkginst, pkginst.lower())
     if not PKG_TOKEN_RE.match(name) or "|" in name:
         raise Malformed("bad catalog name %r for pkginst %s" %
@@ -959,6 +1002,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
             "size": str(len(raw)),
             "sha256": hashlib.sha256(raw).hexdigest(),
             "md5": hashlib.md5(raw).hexdigest(),
+            "fstype": fstype,
         }
         if verbose:
             print("  %s: kernel space role=%s line=%s %s" % (
@@ -1050,6 +1094,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         "deps": normalize_deps(deps_raw),
         "category": category,
         "description": description,
+        "fstype": fstype,
     }
     isize = installed_size(pkgmap_text)
     entry["isize"] = None if isize is None else str(isize)
@@ -1059,10 +1104,11 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
               % (fname, entry["version"]), file=sys.stderr)
     if verbose:
         print("  %s: pkginst=%s version=%s deps=%s category=%s isize=%s "
-              "desc=%s" %
+              "desc=%s%s" %
               (fname, pkginst, entry["version"], entry["deps"],
                entry["category"], entry["isize"] or "unknown",
-               "descs.conf" if desc_override is not None else "pkginfo"))
+               "descs.conf" if desc_override is not None else "pkginfo",
+               (" %s=%s" % (FSTYPE_PARAM, fstype)) if fstype else ""))
     return entry
 
 
@@ -1328,6 +1374,23 @@ def main(argv):
                 continue
             body += "#isize %s %s\n" % (e["name"], e["isize"])
 
+    # The UFS-only block (see the top): emitted only when a package is
+    # marked, so a catalog without one is byte-for-byte as before.  Gate 8
+    # holds here too.
+    marked = [e for e in entries + kentries if e.get("fstype")]
+    if marked:
+        body += "#ext fstype 1\n"
+        for e in marked:
+            line = "#fstype %s %s" % (e["name"], e["fstype"])
+            if len(line.encode("utf-8")) > CATALOG_MAX_ENTRY:
+                print("gen-catalog: FATAL %s: #fstype line is %d bytes "
+                      "(limit %d)" % (e["filename"], len(line.encode("utf-8")),
+                                      CATALOG_MAX_ENTRY), file=sys.stderr)
+                print("gen-catalog: catalog NOT written (Gate 8: entry line "
+                      "too long)", file=sys.stderr)
+                return 2
+            body += line + "\n"
+
     # The kernel-space block (see the top): emitted only when there is
     # kernel space, so a catalog without it is byte-for-byte as before.
     # Gate 8 holds here too: a '#' line of 2048 bytes would brick 0.2.x.
@@ -1361,9 +1424,12 @@ def main(argv):
         fp.write(md5_bytes)
     os.replace(tmp_path, md5_path)
 
-    print("gen-catalog: wrote %s: %d package(s)%s, %d skipped"
+    print("gen-catalog: wrote %s: %d package(s)%s%s, %d skipped"
           % (cat_path, len(entries),
              (", %d kernel-space" % len(kentries)) if kentries else "",
+             (", %d UFS-only (%s)" % (len(marked), " ".join(
+                 "%s=%s" % (e["name"], e["fstype"]) for e in marked)))
+             if marked else "",
              skipped))
 
     if args.raw:
