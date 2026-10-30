@@ -264,7 +264,9 @@ APKG_ESSENTIAL=yes
   any pkginfo value). Absent or `no`: not essential. `gen-catalog.py` SKIPs a package with any
   other value; apkg counts any other value as `yes`, the safe reading.
 - **Who carries it:** a package whose removal leaves a system that does not boot or cannot be
-  administered, such as the base package (inittab, login defaults, the shells).
+  administered, such as the base package (inittab, login defaults, the shells). APKG and
+  APKGENG carry it (`tools/repo/build-packages.sh`), as dpkg marks itself: without them the box
+  cannot manage its packages.
 - **Where it lives:** the datastream's first archive, `<PKG>/pkginfo`, like `APKG_FSTYPE`; the
   engine copies it into `/var/sadm/pkg/<PKG>/pkginfo` (heirloom pkgadd under `-R`, tested in
   `src/apkg/tests/conffile-e2e.sh`).

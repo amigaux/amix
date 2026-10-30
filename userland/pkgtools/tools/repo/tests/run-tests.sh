@@ -2371,6 +2371,53 @@ else
     echo "  skip- APKG_ESSENTIAL checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
 fi
 
+# --------------------------------------------------------------- T31 ----
+# APKG and APKGENG are essential (docs/design.md section 2c), as dpkg marks
+# itself: without them the box cannot manage its packages.  The real
+# build-packages.sh mints the mark; the host engine installs T23's APKG
+# under -R and the host apkg then refuses to remove it.
+echo "T31: APKG and APKGENG carry APKG_ESSENTIAL=yes"
+APKGH="$HERE/../../../src/apkg/apkg"
+if [ -n "${P23:-}" ] && [ -f "$P23" ] && [ -x "$APKGH" ]; then
+    check "the minted APKG pkginfo says APKG_ESSENTIAL=yes" \
+        grep -aqx 'APKG_ESSENTIAL=yes' "$P23"
+    VS31="$(cd "$HB/.." && pwd)/var/sadm"
+    R5="$S23/r5"; newroot "$R5"
+    rm -rf "$R5/var/sadm/install"; mkdir -p "$R5$VS31/pkg" "$R5$VS31/install"
+    ln -s "$R5$VS31/pkg" "$R5/var/sadm/pkg"; ln -s "$R5$VS31/install" "$R5/var/sadm/install"
+    add "$R5" "$P23"
+    check "the host engine installs it" test -f "$R5/var/sadm/pkg/APKG/pkginfo"
+    check "  ... keeping the mark in the installed pkginfo" \
+        grep -qx 'APKG_ESSENTIAL=yes' "$R5/var/sadm/pkg/APKG/pkginfo"
+    C31="$S23/client"; mkdir -p "$C31/var/apkg/cache"
+    printf 'repo=%s\ncachedir=%s\nadmin=%s\npkgadd=%s\npkgrm=%s\n' "$S23/stg" \
+        "$C31/var/apkg/cache" "$S23/admin" "$HB/pkgadd" "$HB/pkgrm" > "$C31/apkg.conf"
+    python3 "$GEN" --packages-conf none "$S23/stg" >"$WORK/t31.gen" 2>&1
+    ap31() { fr "$APKGH" -c "$C31/apkg.conf" -R "$R5" "$@" </dev/null >"$WORK/t31.out" 2>&1; }
+    ap31 update; check "apkg update from the minted staging root" test $? -eq 0
+    ap31 list installed
+    check "apkg lists itself essential" grep -q '^apkg .*\[installed .*, essential\]' "$WORK/t31.out"
+    ap31 remove apkg; check "apkg remove apkg: rc 5" test $? -eq 5
+    check "  ... naming the mark" grep -q 'apkg (pkginst APKG) is essential (APKG_ESSENTIAL=yes)' "$WORK/t31.out"
+    ap31 purge apkg; check "apkg purge apkg: rc 5" test $? -eq 5
+    check "  ... apkg is still installed, its conf in place" \
+        bash -c "test -f '$R5/var/sadm/pkg/APKG/pkginfo' && test -f '$R5/etc/apkg.conf' && test -f '$R5/usr/apkg/bin/apkg'"
+    ap31 --force-remove-essential remove apkg
+    check "--force-remove-essential removes it: rc 0" test $? -eq 0
+    check "  ... and it is gone" test ! -e "$R5/var/sadm/pkg/APKG"
+else
+    echo "  skip- APKG self-removal checks (T23 did not run or no host apkg)"
+fi
+if [ -x "$HB/pkgmk" ] && [ -f "$HERE/../../../heirloom/build-amix/bin/pkgadd" ]; then
+    S31="$WORK/t31"; mkdir -p "$S31"
+    bash "$BP" --eng "$S31/stg" >"$WORK/t31.eng" 2>&1
+    check "build-packages.sh --eng mints into a scratch staging root" test $? -eq 0
+    check "the minted APKGENG pkginfo says APKG_ESSENTIAL=yes" \
+        grep -aqx 'APKG_ESSENTIAL=yes' "$(ls "$S31"/stg/*/APKGENG-*.pkg 2>/dev/null | head -1)"
+else
+    echo "  skip- APKGENG mark check (host pkgmk or heirloom/build-amix missing)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"
