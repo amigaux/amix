@@ -49,7 +49,13 @@ Building the container is most of the time, so the image is cached: a
 `docker save` of it, compressed with zstd, under a key made from the files
 it is built from (`Containerfile`, the pins, `container-build.sh` and the
 `system/` pin, manifest and check). Any change to those builds a new image;
-anything else loads the cached one. The step summary lists the digest of
+anything else loads the cached one. The image is about 650 MB of the
+repository's 10 GB cache, and only the newest is useful: when a push to
+`master` saves a new image, the job deletes the images of every other key
+(it has `actions: write` for that alone). A restore that fails on the cache
+service's side is tried once more before the image is built from scratch,
+and the build retries apt against the Ubuntu snapshot service, which answers
+503 at times. The step summary lists the digest of
 each kit and the sha256 of each module object; `kit.conf` and `NOTICE` name
 the amix commit, so the kit's second digest leaves them out.
 

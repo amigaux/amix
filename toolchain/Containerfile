@@ -16,11 +16,16 @@ FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce
 # The Ubuntu archive as it was at this moment, so the host packages are the
 # same on every build. snapshot.ubuntu.com answers only over https, so the CA
 # certificates come first, from the live archive; every package after them
-# comes from the snapshot, whose signatures apt checks as usual.
+# comes from the snapshot, whose signatures apt checks as usual. The snapshot
+# service answers 503 at times: apt retries each file up to 10 times, backing
+# off to 2 minutes, and each update or install is tried 3 times.
 ARG SNAPSHOT=20261028T000000Z
 ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 TZ=UTC
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+RUN printf '%s\n' 'Acquire::Retries "10";' 'Acquire::Retries::Delay::Maximum "120";' \
+      > /etc/apt/apt.conf.d/80retries \
+ && try() { n=1; until "$@"; do [ $n -lt 3 ] || return 1; n=$((n + 1)); sleep 60; done; } \
+ && try apt-get update \
+ && try apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/ubuntu.sources \
  && printf '%s\n' 'Types: deb' \
       "URIs: https://snapshot.ubuntu.com/ubuntu/$SNAPSHOT" \
@@ -28,8 +33,8 @@ RUN apt-get update \
       'Components: main universe' \
       'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
       > /etc/apt/sources.list.d/snapshot.sources \
- && apt-get -o Acquire::Check-Valid-Until=false update \
- && apt-get install -y --no-install-recommends \
+ && try apt-get -o Acquire::Check-Valid-Until=false update \
+ && try apt-get install -y --no-install-recommends \
       autotools-dev bison bzip2 cpio curl file flex g++ gcc git \
       gzip libc6-dev m4 make patch perl python3 strip-nondeterminism \
       xz-utils zlib1g-dev \
