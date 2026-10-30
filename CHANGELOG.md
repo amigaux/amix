@@ -1,3 +1,11 @@
+## 2026-10-30 — the UFS-only package mark, APKG_FSTYPE (f9b20e8, 544b830, eeb9f2f)
+
+P-35 Option C, step 1. A package whose pkginfo says APKG_FSTYPE=ufs may carry file names over 14 bytes; apkg refuses it
+on any other filesystem before the first pkgadd (exit 5, one line naming the package, directory and filesystem; a
+malformed value exits 3); unmarked packages behave as before. gen-catalog validates the mark and lists marked packages
+in a `#ext fstype 1` trailer that every catalog v1 reader skips (apkg 0.1, 0.2.3, 0.3.3 checked). s5-collision-scan
+exempts marked packages. Interface: docs/design.md §2b. apkg 497/0, repo tools 409/0. Not minted, not published.
+
 ## 2026-10-30 — payload-licence gate: stock libm is recorded, a Kickstart ROM refuses (dccd3b1, e656915)
 
 Per the owner's 2026-10-29 ruling (the permission covers all of Amix incl. its AT&T parts) and 2026-10-30 decision
