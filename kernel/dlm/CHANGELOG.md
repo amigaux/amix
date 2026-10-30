@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-30 — store-roundtrip complements the byte it corrupts (9ce8f6d)
+
+The test wrote a constant 0xff over random kernel data, so one run in 256 changed nothing and passed "corruption NOT
+detected" (CI run 41099115013). It now complements the byte at lsstore's kernel offset (and in the CD kernel) and
+checks exactly one byte changed. 200 looped runs, 0 failed.
+
 ## 2026-10-30 — mkkit builds from an archive of amix (39acfa7)
 
 mkkit builds from an archive of amix (git archive, make dist), with or without a surrounding git repo: it no longer
