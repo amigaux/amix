@@ -180,7 +180,8 @@ needs a built kit in `kernel/dlm` (`make -C ../dlm tools kit`).
 
 A cut of record is a directory `cuts/<build id>/`: its `SHA256SUMS-<build id>` (paths relative to the cut's
 `usr/sys`), the `cut.sh` that rebuilds those bytes from an amix commit and named inputs, and a README with the inputs.
-The bytes themselves live outside the repository (`build/cuts/`, gitignored).
+The bytes themselves live outside the repository (`build/cuts/`, gitignored). A cut takes the port at the commit in
+`kernel/port/port.pin` unless its README names another.
 
 ### Self-tests
 

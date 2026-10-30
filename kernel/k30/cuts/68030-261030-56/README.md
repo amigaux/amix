@@ -17,6 +17,9 @@ Inputs (`cut.sh` names each by an environment variable):
 - amix-040-060-port at `88dcfc0` (rth1.c, the ttcompat and tcp-hiwat fixes, the k46 kit headers);
 - amix-paula at `548d258` (`--audio-paula`: audio.c 1f43c5ff, as in -22).
 
+The cut also reproduces, all seven sums, with the port at `d0e8857` (`kernel/port/port.pin` at `4fc583f`, nine
+commits after `88dcfc0`): the files the recipe reads (rth1.c, the two patchers, the k46 kit headers) are the same.
+
 `unix.brel` is the form shipped (as `/stand/k30/unix`), `kabi` its sidecar, `unix.sym` its symbols, `unix` the
 ET_REL it was made from. `mod.d/ufs` and `mod.d/s5` are the carved core-tier modules bound to this build (module
 kabi k30.1.2); their carve sources are in the cut's `carve/`. Against -22: the kernel adds the three fixes and keeps
