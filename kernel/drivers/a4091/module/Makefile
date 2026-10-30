@@ -1,5 +1,5 @@
 # module/Makefile -- the a4091 root-class loadable module (A4091, A4092, A4770),
-# one per kernel line, built with amix-dlm's ABI kit (the kit's docs/guide.md;
+# one per kernel line, built with kernel/dlm's ABI kit (the kit's docs/guide.md;
 # contracts C3-1, C4-1, C4-2, C4-5).
 #
 #   make -C module            both lines, both modules: build/<line>/mod.d/a4091
@@ -9,17 +9,17 @@
 #   make -C module k30        one line (or k46)
 #   make -C module clean
 #
-# DLM is the amix-dlm checkout whose kits are built (`make kit` there gives
+# DLM is the kernel/dlm directory whose kits are built (`make kit` there gives
 # build/kit/k30 and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.
 # The pinned cross tools (m68k-cbm-sysv4-*) and python3 must be on PATH.
 # The kit's fragment does the rest: objects and the module under
-# build/<line> (MODOUT, here the repo's build/), $cpu from the line.
+# build/<line> (MODOUT, here kernel/drivers/a4091/build/), $cpu from the line.
 #
 # The static objects are not built here: tools/build-a4091-040.sh (040/060)
-# and amix-kerntools (030) build them, and -DA4091_MODULE leaves them unchanged.
+# and kernel/k30 (030) build them, and -DA4091_MODULE leaves them unchanged.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))..)
-DLM ?= $(abspath $(TOP)/../amix-dlm)
+DLM ?= $(abspath $(TOP)/../../dlm)
 LINES = k30 k46
 kit = $(or $(KIT_$(1)),$(DLM)/build/kit/$(1))
 

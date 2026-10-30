@@ -4,14 +4,15 @@
 # driver: write a pattern with gsio, read it back via gsio AND via the kernel
 # block path (dd /dev/rdsk/c8d0s0) to prove it persisted to the disk image.
 #
-# Requires sibling repos amix-kerntools and grimoire-amix; set AMIX_HOST/USER/PASS
-# for your Amix box (override GRIM/KERNTOOLS if the siblings live elsewhere).
+# Requires amix's kernel/k30 and a grimoire-amix clone beside the amix checkout;
+# set AMIX_HOST/USER/PASS for your Amix box (override KERNTOOLS/GRIM if they live
+# elsewhere).
 set -u
-cd "$(dirname "$0")/.." || exit 9          # repo root
+cd "$(dirname "$0")/.." || exit 9          # kernel/drivers/a4091
 : "${AMIX_PASS:?set AMIX_PASS to your Amix box password}"
-GRIM="${GRIM:-../grimoire-amix}"
+GRIM="${GRIM:-../../../../grimoire-amix}"
 SH="python3 $GRIM/tools/host-net/amixsh.py"
-SYNC="python3 ${KERNTOOLS:-../amix-kerntools}/tools/amixsync.py"
+SYNC="python3 ${KERNTOOLS:-../../k30}/tools/amixsync.py"
 g(){ $SH "/root/a4091/gsio $* 2>&1" 2>&1 | sed 's/\r$//' | grep -iE 'okay|status=|first longword'; }
 
 echo "### push + build WRITE-capable gsio"

@@ -3,15 +3,15 @@
 # gsio-test.sh -- push+build the updated gsio tool on the box, then exercise the
 # generic a4091queue: INQUIRY regression, then READ(10) of blocks off the A4091 disk.
 #
-# Requires sibling repos amix-kerntools (build/sync harness) and grimoire-amix
-# (host-net bridge). Set AMIX_HOST/AMIX_USER/AMIX_PASS for your Amix box;
-# override GRIM/KERNTOOLS if the siblings live elsewhere.
+# Requires amix's kernel/k30 (build/sync harness) and a grimoire-amix clone
+# beside the amix checkout (host-net bridge). Set AMIX_HOST/AMIX_USER/AMIX_PASS
+# for your Amix box; override KERNTOOLS/GRIM if they live elsewhere.
 set -u
-cd "$(dirname "$0")/.." || exit 9          # repo root
+cd "$(dirname "$0")/.." || exit 9          # kernel/drivers/a4091
 : "${AMIX_PASS:?set AMIX_PASS to your Amix box password}"
-GRIM="${GRIM:-../grimoire-amix}"
+GRIM="${GRIM:-../../../../grimoire-amix}"
 SH="python3 $GRIM/tools/host-net/amixsh.py"
-SYNC="python3 ${KERNTOOLS:-../amix-kerntools}/tools/amixsync.py"
+SYNC="python3 ${KERNTOOLS:-../../k30}/tools/amixsync.py"
 clean(){ sed 's/\r$//' | grep -vE 'DONE_|amixsh|^======|echo D'; }
 
 echo "### push + build updated gsio"
