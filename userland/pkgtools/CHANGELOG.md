@@ -1,3 +1,9 @@
+## 2026-10-31 — the compat group fixture is ours (a87d8cc)
+
+heirloom/compat/tests/amix-group.txt was byte for byte the stock /etc/group, which system/MANIFEST.sha256 now lists,
+so privacy-check --tree flagged it. It is replaced by a stock-format fixture of our own with the same group names,
+gids and multi-member groups, plus a test group; the pw/gr parser test gains two checks (19/0). History unchanged.
+
 ## 2026-10-30 — heirloom: scriptvfy.c is never regenerated (754571c)
 
 CI on 0c537a4 failed linking pkgchk: make's built-in %.c: %.l rule re-ran flex whenever a checkout left scriptvfy.l
