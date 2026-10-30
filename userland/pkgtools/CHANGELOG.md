@@ -1,3 +1,10 @@
+## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
+
+heirloom/compat/tests/amix-passwd.txt was a box's /etc/passwd (the stock file with box-side edits). It is replaced
+by a stock-format fixture of our own with the stock account names and ids and the quirks the parser test reads (user
+x at uid 91, eight uid-0 entries, uucp and nuucp sharing uid 5) and no real account; the parser test gains two
+checks (21/0). privacy-check --tree HEAD clean. History unchanged.
+
 ## 2026-10-31 — the compat group fixture is ours (a87d8cc)
 
 heirloom/compat/tests/amix-group.txt was byte for byte the stock /etc/group, which system/MANIFEST.sha256 now lists,
