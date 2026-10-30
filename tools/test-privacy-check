@@ -126,9 +126,20 @@ def build(repo):
         "Document the example network")
     c["shadow"] = repo.commit(OURS, {"media/profiles/root.shadow": j(
         "root:", "ab01FAX.bQRSU", ":19000:0:99999:7:::\n")}, "Add the bench profile")
+    apkg_ns = j("nameserver ", dotted(10, 0, 0, 1), "\n",
+                "nameserver ", dotted(10, 0, 0, 2), "\n")
+    c["apkg"] = repo.commit(OURS, {"src/apkg/tests/run-tests.sh": apkg_ns,
+                                   "vendor/pkgtools/src/apkg/tests/run-tests.sh": apkg_ns},
+                            "Add the apkg resolver tests")
     # Plants.
     c["ipv4"] = repo.commit(OURS, {"cfg/hosts.txt": j("gw ", dotted(10, 0, 0, 1), "\n")},
                             "Add hosts")
+    c["apkg_other"] = repo.commit(OURS, {
+        "src/apkg/tests/other-tests.sh": apkg_ns,
+        "src/apkg/run-tests.sh": apkg_ns,
+        "vendor/pkgtools/src/apkg/tests/run-tests.sh": j(
+            apkg_ns, "nameserver ", dotted(10, 0, 1, 1), "\n")},
+        "Add the apkg resolver tests elsewhere")
     c["ipv6"] = repo.commit(OURS, {"cfg/v6.txt": j("prefix ", "fd12", ":3456:789a::1\n")},
                             "Add v6 notes")
     c["contrib_ip"] = repo.commit(OTHER, {"contrib/hosts.txt": j(
@@ -289,6 +300,9 @@ def main():
 
         plants = [
             ("ipv4", 1, "cfg/hosts.txt"),
+            ("apkg_other", 1, "src/apkg/tests/other-tests.sh"),
+            ("apkg_other", 1, "src/apkg/run-tests.sh"),
+            ("apkg_other", 1, "vendor/pkgtools/src/apkg/tests/run-tests.sh"),
             ("ipv6", 1, "cfg/v6.txt"),
             ("contrib_ip", 1, "contrib/hosts.txt"),
             ("msg_ip", 1, "message"),
@@ -311,6 +325,7 @@ def main():
         tip_plants = [(tip, 2, "CLAUDE.md"), (tip, 2, "sub/.claude/settings.json")]
         controls = ["README.md", "data/blob.bin", "data/fw.bin", "notes/dns.txt",
                     "AGENTS.md", "docs/network.txt", "media/profiles/root.shadow",
+                    "src/apkg/tests/run-tests.sh",
                     "system/MANIFEST.sha256", "notes/.keep"]
 
         # --all without local extras.
@@ -324,7 +339,7 @@ def main():
         for path in controls:
             t.ok(not any(h[2] == path for h in hits), "control passes: %s" % path, out)
         for key in ("readme", "binary", "public", "contrib", "example", "shadow",
-                    "empty"):
+                    "apkg", "empty"):
             t.ok(not any(c[key].startswith(h[0]) for h in hits),
                  "control commit clean: %s" % key, out)
         expected = [(c[k], cls, p) for k, cls, p in plants] + tip_plants
@@ -332,6 +347,14 @@ def main():
                  if not any(s.startswith(h[0]) and h[1] == cls and h[2] == p
                             for s, cls, p in expected)]
         t.ok(not stray, "no unexpected hits without local extras", "%r" % stray)
+
+        # Without the allowlist the exempted controls hit.
+        no_allow = os.path.join(root, "no-allow")
+        open(no_allow, "w").close()
+        rc, hits, out = repo.check(["--all", "master", "--allow", no_allow])
+        t.ok(has(hits, c["apkg"], 1, "src/apkg/tests/run-tests.sh")
+             and has(hits, c["apkg"], 1, "vendor/pkgtools/src/apkg/tests/run-tests.sh"),
+             "an empty allowlist exempts nothing", out)
 
         # --all with the local extras.
         rc, hits, out = repo.check(["--all", "master"], env=local_env)

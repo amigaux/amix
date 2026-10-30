@@ -19,3 +19,6 @@
 
 # Emulator user-net defaults (QEMU): 10.0.2.2 gateway/host, 10.0.2.15 guest.
 1 * \b10\.0\.2\.(2|15)\b
+
+# apkg's DNS config-parser tests: made-up nameserver values, never contacted (the tests run against 127.0.0.1).
+1 **/src/apkg/tests/run-tests.sh \b10\.0\.0\.[1-9]\b
