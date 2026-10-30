@@ -3,6 +3,7 @@
 #
 #     . "$AMIX_PKG_COMMON/pkgroll.sh"
 #     amix_pkgroll <workdir> <destroot> <PKG> <version> <outfile>
+#     (with $CONFFILES, the package.sh list, in the environment or the shell)
 #
 # <workdir>   holds the recipe's AUTHORED pkginfo and prototype
 # <destroot>  the staged tree: <destroot>/usr/local/bin/patch etc.
@@ -109,6 +110,52 @@ amix_s5_mark() {
 	unset _s5_fs
 }
 
+# amix_conffiles <workdir> <paths> -- the config files the administrator edits
+# in place (package.sh CONFFILES, P-36 section 1.2).  Their lines of the WORK
+# prototype become `e conffile', and the shared class action scripts of
+# userland/pkgtools (src/conffile, i.conffile and r.conffile: keep an edited
+# file, write the new default beside it) are copied next to the prototype
+# and named on `i' lines, so no host path enters it.  pkgmeta has already
+# checked the list against the prototype; here every path must be rewritten
+# once, and pkginfo must say CLASSES=none conffile.  No paths: nothing.
+amix_conffiles() {
+	_cf_list=$(echo "$2" | tr ',' ' ' | tr -s ' ' | sed 's/^ //; s/ $//')
+	[ -n "$_cf_list" ] || return 0
+	_cf_dir="${AMIX_CONFFILE_DIR:-$AMIX_PKGMGR/src/conffile}"
+	for _cf_s in i.conffile r.conffile; do
+		[ -f "$_cf_dir/$_cf_s" ] || {
+			echo "[FAIL] CONFFILES: no $_cf_dir/$_cf_s (userland/pkgtools src/conffile)" >&2
+			exit 1
+		}
+		cp "$_cf_dir/$_cf_s" "$1/$_cf_s"
+	done
+	grep '^CLASSES=none conffile$' "$1/pkginfo" >/dev/null || {
+		echo "[FAIL] CONFFILES: $1/pkginfo does not say CLASSES=none conffile" >&2; exit 1; }
+	awk -v list=" $_cf_list " '
+		$1 ~ /^[fe]$/ && NF >= 3 {
+			p = $3; sub(/=.*$/, "", p)
+			if (index(list, " " p " ")) { $1 = "e"; $2 = "conffile"; n[p]++ }
+		}
+		{ print }
+		END {
+			print "i i.conffile"; print "i r.conffile"
+			k = split(substr(list, 2, length(list) - 2), want, " ")
+			for (i = 1; i <= k; i++)
+				if (n[want[i]] != 1) {
+					printf "%s is on %d prototype line(s), not 1\n", want[i], n[want[i]] > "/dev/stderr"
+					bad = 1
+				}
+			exit bad
+		}' "$1/prototype" > "$1/prototype.cf" || {
+		rm -f "$1/prototype.cf"
+		echo "[FAIL] CONFFILES: the prototype does not hold each listed path once" >&2
+		exit 1
+	}
+	mv "$1/prototype.cf" "$1/prototype"
+	echo "  CONFFILES $(echo "$_cf_list" | wc -w): e conffile, with i.conffile and r.conffile ($_cf_dir)"
+	unset _cf_list _cf_dir _cf_s
+}
+
 amix_pkgroll() {
 	_pr_work="$1"
 	_pr_root="$2"
@@ -165,6 +212,9 @@ amix_pkgroll() {
 
 	# GATE 3 -- the s5 14-byte rule, or the UFS mark (amix_s5_mark above).
 	amix_s5_mark "$_pr_work/prototype" "$_pr_work/pkginfo"
+
+	# Config files: CONFFILES from package.sh, when the driver set it.
+	amix_conffiles "$_pr_work" "${CONFFILES:-}"
 
 	_pr_spool="$_pr_work/.spool"
 	rm -rf "$_pr_spool"
