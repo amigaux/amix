@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do case "$1" in
 	--stub-providers) STUB=1; shift;; --rth1-dir) RTH1_DIR="$2"; shift 2;;
 	*) echo "dlm-core-link: unknown option $1" >&2; exit 2;; esac; done
 RTH1_DIR="${RTH1_DIR:-}"
-GCA="${GCA:?dlm-core-link: set GCA to gcc-cross-amix's build/ directory (toolchain/README.md)}"; G14="${G14:-}"
+GCA="${GCA:?dlm-core-link: set GCA to the build/ directory of gcc-cross-amix (toolchain/README.md)}"; G14="${G14:-}"
 . "$GCA/env.sh"; [ -z "$G14" ] || PATH="$PATH:$G14/prefix/bin"; export PATH
 rm -rf "$OUT"; mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; C="$OUT/core"; O="$OUT/obj"; mkdir -p "$O"
 ST="$OUT/steps.tsv"; : > "$ST"; fails=0
