@@ -1,3 +1,10 @@
+## 2026-10-31 — the stock pkgadd refuses BASEDIR; gen-catalog warns (494d477)
+
+On the emulated stock 2.1c, /usr/sbin/pkgadd refuses any package whose pkginfo carries BASEDIR ("requires a base
+directory", rc 5), whatever the admin file says; without the line the same package installs, and the heirloom engine
+installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
+BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
+
 ## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
 
 heirloom/compat/tests/amix-passwd.txt was a box's /etc/passwd (the stock file with box-side edits). It is replaced
