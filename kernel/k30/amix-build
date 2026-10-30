@@ -1,0 +1,518 @@
+#!/usr/bin/env python3
+"""amix-build -- one command to build an Amix kernel from a selected set of drivers.
+
+Discovers the sibling driver repos (those with a driver.conf), lets you pick which
+to include, generates the amiga/alien sd.c + Makefile (SCSI) and stages the net
+driver, then assembles a SELF-CONTAINED bundle: a tar + an on-box build.sh that
+integrates the drivers into /usr/sys, runs the D245 clean-gate, and (optionally)
+installs.  No LLM in the loop; the heavy, finicky parts (codegen templates, the
+idempotent net patch scripts, the clean-gate, checkunix) are reused untouched.
+
+Compilation happens ON the box (native cc/ld/make).  So the default output is a
+portable bundle you transfer + run; --push/--run automate that over FTP + telnet.
+
+Usage:
+  amix-build --list                       # show discovered drivers
+  amix-build a4091 z3660scsi z3660net     # bundle these
+  amix-build --all                        # bundle every discovered driver
+  amix-build                              # interactive menu (on a TTY)
+  amix-build a4091 z3660scsi z3660net --push --run --host <box-ip> --install
+
+Selection: names (repo basename, 'amix-' optional) / --all / --config FILE
+           (default drivers.list if present, one name per line) / interactive menu.
+Flags:     --install   on-box build.sh installs after a clean gate
+           --no-gate    bundle + integrate only; skip the clean-gate
+           --push       FTP the tar to the box (needs --host or AMIX_HOST)
+           --run        push, extract, launch build.sh on the box, poll to done
+           --host IP    box address (sets AMIX_HOST)
+           --timeout M  host-side poll budget for --run, minutes (default 150)
+
+Env (box creds, shared with tools/amixsync.py + tools/amixrun.py):
+  AMIX_HOST  AMIX_USER=root  AMIX_PASS   (set your box's root password; no default)
+"""
+import argparse, os, shutil, subprocess, sys, tarfile, time
+
+KT = os.path.dirname(os.path.abspath(__file__))
+TOOLS = os.path.join(KT, "tools")
+WORK = os.path.join(KT, "work")
+SIBLINGS = os.path.dirname(KT)          # parent dir holding the amix-* repos
+
+
+def die(msg):
+    sys.stderr.write("amix-build: %s\n" % msg)
+    sys.exit(2)
+
+
+def shortname(path):
+    b = os.path.basename(path.rstrip("/"))
+    return b[5:] if b.startswith("amix-") else b
+
+
+def base_of(fn):
+    """On-box object base from a queue function: a4091queue -> a4091 (== ${fn%queue})."""
+    return fn[:-len("queue")] if fn.endswith("queue") else fn
+
+
+class Drv:
+    def __init__(self, path):
+        self.path = path
+        self.name = shortname(path)
+        self.scsi = []      # [dict(pn, fn, name, src, probe)]
+        self.net = None     # dict(subdir, src, streamtab, major, iface, desc)
+
+    @property
+    def kind(self):
+        k = []
+        if self.scsi:
+            k.append("scsi")
+        if self.net:
+            k.append("net")
+        return "+".join(k) or "empty"
+
+    @property
+    def summary(self):
+        if self.scsi:
+            return "scsi: " + ", ".join(r["pn"] for r in self.scsi)
+        if self.net:
+            return "net: %s (cdevsw %s, %s0)" % (self.net["subdir"], self.net["major"], self.net["iface"])
+        return ""
+
+
+def parse_conf(path):
+    scsi, net = [], None
+    with open(path) as f:
+        for ln in f:
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                continue
+            toks = s.split()
+            if toks[0] == "net":
+                if len(toks) < 6:
+                    raise ValueError("net stanza needs: net <subdir> <src> <streamtab> <major> <iface> \"desc\"")
+                desc = s.split('"')[1] if '"' in s else ""
+                net = dict(subdir=toks[1], src=toks[2], streamtab=toks[3],
+                           major=toks[4], iface=toks[5], desc=desc)
+            else:
+                name = s.split('"')[1] if s.count('"') >= 2 else ""
+                tail = s.split('"')[2].split() if s.count('"') >= 2 else toks[2:]
+                src, probe = "", ""
+                for t in tail:
+                    if t.startswith("probe="):
+                        probe = t[len("probe="):]
+                    elif not src:
+                        src = t
+                scsi.append(dict(pn=toks[0], fn=toks[1], name=name, src=src, probe=probe))
+    return scsi, net
+
+
+def discover():
+    drvs = []
+    for entry in sorted(os.listdir(SIBLINGS)):
+        d = os.path.join(SIBLINGS, entry)
+        conf = os.path.join(d, "driver.conf")
+        if os.path.isdir(d) and os.path.isfile(conf):
+            drv = Drv(d)
+            try:
+                drv.scsi, drv.net = parse_conf(conf)
+            except Exception as e:
+                sys.stderr.write("warn: skipping %s (driver.conf: %s)\n" % (d, e))
+                continue
+            drvs.append(drv)
+    return drvs
+
+
+def git_dirty(path):
+    try:
+        out = subprocess.run(["git", "-C", path, "status", "--porcelain"],
+                             capture_output=True, text=True, timeout=5)
+        return bool(out.stdout.strip())
+    except Exception:
+        return False
+
+
+def print_list(drvs):
+    print("discovered drivers (in %s):\n" % SIBLINGS)
+    for d in drvs:
+        print("  %-12s [%-8s] %-34s %s%s" % (
+            d.name, d.kind, d.summary, os.path.relpath(d.path, KT),
+            "  (uncommitted changes)" if git_dirty(d.path) else ""))
+    print("\nbuild: amix-build <name> [<name>...]   |   amix-build --all")
+
+
+# ---- SCSI codegen (deduped; matches build-kernel.sh's awk output) -----------
+def gen_scsi(scsi_drv):
+    externs = cards = objs = srclist = probes = ""
+    seen, srcs = set(), []
+    for d in scsi_drv:
+        for r in d.scsi:
+            pn, fn, nm, src, probe = r["pn"], r["fn"], r["name"], r["src"], r["probe"]
+            b = base_of(fn)
+            srcpath = os.path.join(d.path, "src", src)
+            if not os.path.isfile(srcpath):
+                die("missing %s (from %s/driver.conf)" % (srcpath, d.path))
+            cards += "\t%s, &%s, \"%s\",\n" % (pn, fn, nm)        # one row per product id
+            if b in seen:
+                print("      + also %s \"%s\" -> %s (shares %s.o)" % (pn, nm, fn, b))
+                continue
+            seen.add(b)
+            externs += ", %s()" % fn
+            objs += " %s.o" % b
+            srclist += " %s.c" % b
+            srcs.append((srcpath, b + ".c"))
+            if probe:
+                probes += "\t\t{ extern int %s(); char *pa; uint pi;\n" % probe
+                probes += "\t\t  for (pi=0; pi<nel( queue); ++pi)\n"
+                probes += "\t\t\tif (queue[pi].f == &%s) break;\n" % fn
+                probes += "\t\t  if (pi == nel( queue) && %s( &pa))\n" % probe
+                probes += "\t\t\tinsert( &%s, 0, pa, \"%s\"); }\n" % (fn, nm)
+            print("scsi driver: %s %s \"%s\"  <- %s  (on-box %s.c)%s" % (
+                pn, fn, nm, srcpath, b, ("  probe=%s" % probe if probe else "")))
+    return dict(externs=externs, cards=cards, objs=objs,
+                srclist=srclist.strip(), probes=probes, srcs=srcs)
+
+
+# The sdcardbase() helper kerntools adds to sd.c -- ORIGINAL code (not Amix-derived):
+# a getter on the per-card AutoConfig base init()/insert() already record, so a driver
+# can map several boards routed to one queue function (A4091 + A4092/A4770).
+SDCARDBASE = (
+    "\n\n"
+    "/*\n"
+    " * Per-card AutoConfig base recorded by init()/insert() -- lets a driver map\n"
+    " * several boards routed to one queue function (e.g. an A4091 + an A4092/A4770).\n"
+    " */\n"
+    "char *\n"
+    "sdcardbase( card)\n"
+    "uint\tcard;\n"
+    "{\n"
+    "\n"
+    "\treturn queue[card].a;\n"
+    "}"
+)
+
+
+def gen_sd_patch(externs, cards, probes):
+    """An idempotent ed script that adds the kerntools SCSI-selector edits to a STOCK
+    Amix amiga/alien/sd.c. Anchored on stock lines -- ships NO Amix source, only the
+    additions (externs, scsicard[] rows, the original sdcardbase() helper, probes)."""
+    ed = []
+    # 1. externs: extend the stock `extern bool a3091queue(), a2090queue(), a2091queue();`
+    ed.append("/a2091queue();/s/a2091queue();/a2091queue()%s;/" % externs)
+    # 2. scsicard[] rows: append after the last stock row (a2091)
+    ed.append("/0x02020003, &a2091queue/a")
+    ed.append(cards.rstrip("\n"))
+    ed.append(".")
+    # 3. sdcardbase(): append after sdhardwarename()'s closing brace
+    ed.append(r"/return queue\[card\].hardwarename;/+1a")
+    ed.append(SDCARDBASE)
+    ed.append(".")
+    # 4. probe fallbacks (if any): stock init()'s `if (not queue->f)` has NO braces, so
+    #    add one and close it after the autocon loop, wrapping the probe block(s).
+    if probes:
+        ed.append("/if (not queue->f)$/s/$/ {/")
+        ed.append(r"/insert( scsicard\[i\].f, c++, a, scsicard\[i\].hardwarename);/+1a")
+        ed.append(probes.rstrip("\n") + "\n\t}")
+        ed.append(".")
+    ed.append("w")
+    ed.append("q")
+    return ("#!/bin/sh\n"
+            "# Patch a STOCK Amix amiga/alien/sd.c with the kerntools SCSI selector edits.\n"
+            "# Idempotent, ed-based, anchored on stock lines (ships no Amix source).\n"
+            "SD=${1:-/usr/sys/amiga/alien/sd.c}\n"
+            'if grep sdcardbase "$SD" >/dev/null 2>&1; then echo "sd.c: already patched"; exit 0; fi\n'
+            'cp "$SD" "$SD.orig" 2>/dev/null\n'
+            'ed - "$SD" <<\'AMIXEOF\'\n'
+            + "\n".join(ed) + "\n"
+            "AMIXEOF\n"
+            'echo "sd.c: patched (kerntools SCSI selector)"\n')
+
+
+def gen_makefile_patch(objs):
+    """Idempotent ed script: insert the driver .o's into a STOCK alien Makefile OBJ line."""
+    first = objs.split()[0] if objs.split() else ""
+    return ("#!/bin/sh\n"
+            "# Insert the driver objects into a STOCK Amix amiga/alien/Makefile OBJ line.\n"
+            "MF=${1:-/usr/sys/amiga/alien/Makefile}\n"
+            'if grep "%s" "$MF" >/dev/null 2>&1; then echo "Makefile: already patched"; exit 0; fi\n'
+            'cp "$MF" "$MF.orig" 2>/dev/null\n'
+            'ed - "$MF" <<\'AMIXEOF\'\n'
+            "/^OBJ/s/a3091.o /a3091.o%s /\n"
+            "w\n"
+            "q\n"
+            "AMIXEOF\n"
+            'echo "Makefile: patched (added%s)"\n' % (first, objs, objs))
+
+
+def patch_target(path):
+    """On-box-relative target of a unified diff: the path on its first '+++' line."""
+    with open(path) as f:
+        for line in f:
+            if line.startswith("+++ "):
+                return line[4:].split()[0]
+    die("no '+++ <path>' target line in patch %s" % path)
+
+
+def build_bundle(sel_names, selected, gate, install):
+    scsi_drv = [d for d in selected if d.scsi]
+    net_drv = [d for d in selected if d.net]
+    if len(net_drv) > 1:
+        die("more than one net driver selected (%s) -- multi-net is deferred; pick at most one"
+            % ", ".join(d.name for d in net_drv))
+    net = net_drv[0] if net_drv else None
+
+    bundle = os.path.join(WORK, "bundle")
+    if os.path.isdir(bundle):
+        shutil.rmtree(bundle)
+    os.makedirs(bundle)
+
+    has_scsi = bool(scsi_drv)
+    objs = srclist = alien_objs = ""
+    if has_scsi:
+        cg = gen_scsi(scsi_drv)
+        adir = os.path.join(bundle, "alien")
+        os.makedirs(adir)
+        # patch the builder's OWN stock sd.c + Makefile (ship no derived Amix)
+        with open(os.path.join(adir, "patch-sd.sh"), "w") as f:
+            f.write(gen_sd_patch(cg["externs"], cg["cards"], cg["probes"]))
+        with open(os.path.join(adir, "patch-scsi-makefile.sh"), "w") as f:
+            f.write(gen_makefile_patch(cg["objs"]))
+        for srcpath, remote in cg["srcs"]:
+            shutil.copyfile(srcpath, os.path.join(adir, remote))
+        objs, srclist = cg["objs"], cg["srclist"]
+        alien_objs = ("sd.o" + objs).strip()        # "sd.o a4091.o z3660.o"
+
+    net_subdir = ""
+    if net:
+        net_subdir = net.net["subdir"]
+        ddir = os.path.join(bundle, "driver", net_subdir)
+        os.makedirs(ddir)
+        srcdir = os.path.join(net.path, "src")
+        for fn in sorted(os.listdir(srcdir)):
+            if fn.endswith(".c") or fn.endswith(".h") or fn == "Makefile":
+                shutil.copyfile(os.path.join(srcdir, fn), os.path.join(ddir, fn))
+        sdir = os.path.join(bundle, "scripts")
+        os.makedirs(sdir)
+        for s in ("patch-kernel.sh", "patch-makefile.sh"):
+            sp = os.path.join(net.path, "tools", s)
+            if not os.path.isfile(sp):
+                die("net driver %s missing tools/%s (needed to wire kernel.c/Makefile)" % (net.name, s))
+            dst = os.path.join(sdir, s)
+            shutil.copyfile(sp, dst)
+            os.chmod(dst, 0o755)
+        print("net driver: %s  subdir=%s streamtab=%s cdevsw=%s iface=%s" % (
+            net.name, net.net["subdir"], net.net["streamtab"], net.net["major"], net.net["iface"]))
+
+    gdir = os.path.join(bundle, "gate")
+    os.makedirs(gdir)
+    for g in ("build-clean-net-kernel.sh", "build-clean-kernel.sh"):
+        dst = os.path.join(gdir, g)
+        shutil.copyfile(os.path.join(TOOLS, g), dst)
+        os.chmod(dst, 0o755)
+    shutil.copyfile(os.path.join(TOOLS, "checkunix.c"), os.path.join(bundle, "checkunix.c"))
+    bsh = os.path.join(bundle, "build.sh")
+    shutil.copyfile(os.path.join(TOOLS, "onbox-build.sh"), bsh)
+    os.chmod(bsh, 0o755)
+
+    # driver-supplied kernel patches (kernel-patches/*.patch) -> applied to the
+    # builder's own stock /usr/sys at integrate time (see Contracts.md build
+    # contract: drivers ship only the substantive edits kerntools can't generate).
+    kpatches = []
+    for d in selected:
+        pdir = os.path.join(d.path, "src", "kernel-patches")
+        if not os.path.isdir(pdir):
+            continue
+        for fn in sorted(os.listdir(pdir)):
+            if not fn.endswith(".patch"):
+                continue
+            kd = os.path.join(bundle, "kpatch")
+            if not os.path.isdir(kd):
+                os.makedirs(kd)
+            dst = "%s-%s" % (d.name, fn)
+            shutil.copyfile(os.path.join(pdir, fn), os.path.join(kd, dst))
+            target = patch_target(os.path.join(pdir, fn))
+            obj = (target[:-2] + ".o") if target.endswith(".c") else ""
+            kpatches.append(("kpatch/" + dst, obj))
+            print("kernel-patch: %s/%s -> /usr/sys/%s%s" % (
+                d.name, fn, target, ("  (rebuild %s)" % obj if obj else "")))
+
+    env_alien = alien_objs if (net and has_scsi) else ""    # --alien only for combined kernels
+    with open(os.path.join(bundle, "bundle.env"), "w") as f:
+        f.write("# amix-build bundle manifest (generated -- sourced by build.sh)\n")
+        f.write('SEL="%s"\n' % " ".join(sel_names))
+        f.write("HAS_SCSI=%d\n" % (1 if has_scsi else 0))
+        f.write('NET_SUBDIR="%s"\n' % net_subdir)
+        f.write('ALIEN_OBJS="%s"\n' % env_alien)
+        f.write('SCSI_SRCLIST="%s"\n' % srclist)
+        f.write("GATE=%d\n" % (1 if gate else 0))
+        f.write("INSTALL=%d\n" % (1 if install else 0))
+        f.write('KPATCHES="%s"\n' % " ".join(p for p, _ in kpatches))
+        f.write('KPATCH_OBJS="%s"\n' % " ".join(o for _, o in kpatches if o))
+    return bundle
+
+
+def make_tar(bundle, sel_names):
+    tarname = "amix-kernel-%s.tar" % "+".join(sel_names)
+    tarpath = os.path.join(WORK, tarname)
+    with tarfile.open(tarpath, "w", format=tarfile.USTAR_FORMAT) as t:
+        t.add(bundle, arcname="amix-build")
+    return tarpath
+
+
+# ---- host -> box dispatch ----------------------------------------------------
+def amixsync(*args):
+    subprocess.check_call([sys.executable, os.path.join(TOOLS, "amixsync.py"), *args])
+
+
+def amixrun(*cmds, cmd_timeout=None):
+    env = os.environ.copy()
+    if cmd_timeout:
+        env["AMIX_CMD_TIMEOUT"] = str(cmd_timeout)
+    r = subprocess.run([sys.executable, os.path.join(TOOLS, "amixrun.py"), *cmds],
+                       env=env, capture_output=True, text=True)
+    return r.stdout + r.stderr
+
+
+def push_and_run(tarpath, do_run, timeout_min):
+    tarname = os.path.basename(tarpath)
+    print("\npushing %s to the box (FTP) ..." % tarname)
+    amixsync("push", tarpath, "/tmp/" + tarname)
+    if not do_run:
+        print("pushed. On the box:  cd /tmp && tar xf %s && sh amix-build/build.sh" % tarname)
+        return 0
+
+    print("extracting + launching build.sh on the box ...")
+    out = amixrun("cd /tmp && rm -rf amix-build && tar xf %s && echo EXTRACTED_OK" % tarname)
+    if "EXTRACTED_OK" not in out:
+        sys.stderr.write(out + "\nFAILED: could not extract the bundle on the box\n")
+        return 1
+    amixrun("rm -f /tmp/amix-build.log",
+            "nohup sh /tmp/amix-build/build.sh > /tmp/amix-build.log 2>&1 & echo LAUNCHED")
+
+    deadline = time.time() + timeout_min * 60
+    while True:
+        time.sleep(30)
+        out = amixrun("tail -8 /tmp/amix-build.log")
+        last = ""
+        for line in out.splitlines():
+            if any(k in line for k in ("build ", "gate:", "scsi:", "net:", "STABLE", "DONE", "INSTALLED", "FAILED")):
+                last = line.strip()
+        print("  box: %s" % (last or "(no output yet)"))
+        if "INSTALLED" in out or "DONE --" in out:
+            print("\nBUILD OK -- clean kernel on the box.")
+            return 0
+        if "FAILED" in out:
+            sys.stderr.write("\nBUILD FAILED on the box. Full log:\n")
+            sys.stderr.write(amixrun("cat /tmp/amix-build.log"))
+            return 1
+        if time.time() >= deadline:
+            sys.stderr.write("\nTIMEOUT after %d min. Last log:\n" % timeout_min)
+            sys.stderr.write(amixrun("tail -20 /tmp/amix-build.log"))
+            return 1
+
+
+def interactive_select(drvs):
+    if not sys.stdin.isatty():
+        return None
+    print("Select drivers to build into the kernel:\n")
+    for i, d in enumerate(drvs, 1):
+        print("  %d) %-12s [%-8s] %s" % (i, d.name, d.kind, d.summary))
+    print("  a) all")
+    try:
+        ans = input("\nselect (e.g. 1 3 4, or 'all'): ").strip()
+    except EOFError:
+        return None
+    if not ans:
+        return None
+    if ans.lower() in ("a", "all"):
+        return list(drvs)
+    picked = []
+    for tok in ans.replace(",", " ").split():
+        if tok.isdigit() and 1 <= int(tok) <= len(drvs):
+            picked.append(drvs[int(tok) - 1])
+        else:
+            die("bad selection: %r" % tok)
+    return picked
+
+
+def resolve(names, drvs):
+    by = {}
+    for d in drvs:
+        by[d.name] = d
+        by[os.path.basename(d.path)] = d
+    out = []
+    for n in names:
+        n = n.strip()
+        if n not in by:
+            die("unknown driver %r. Available: %s" % (n, ", ".join(d.name for d in drvs)))
+        if by[n] not in out:
+            out.append(by[n])
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("names", nargs="*")
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--config")
+    ap.add_argument("--install", action="store_true")
+    ap.add_argument("--no-gate", dest="gate", action="store_false")
+    ap.add_argument("--push", action="store_true")
+    ap.add_argument("--run", action="store_true")
+    ap.add_argument("--host")
+    ap.add_argument("--timeout", type=int, default=150)
+    ap.add_argument("-h", "--help", action="store_true")
+    a = ap.parse_args()
+
+    if a.help:
+        print(__doc__)
+        return 0
+
+    drvs = discover()
+    if not drvs:
+        die("no driver repos with a driver.conf found under %s" % SIBLINGS)
+    if a.list:
+        print_list(drvs)
+        return 0
+
+    # selection
+    if a.names:
+        selected = resolve(a.names, drvs)
+    elif a.all:
+        selected = list(drvs)
+    else:
+        cfg = a.config or (os.path.join(KT, "drivers.list") if os.path.isfile(os.path.join(KT, "drivers.list")) else None)
+        if cfg:
+            with open(cfg) as f:
+                names = [ln.split("#", 1)[0].strip() for ln in f]
+            selected = resolve([n for n in names if n], drvs)
+        else:
+            selected = interactive_select(drvs)
+    if not selected:
+        print_list(drvs)
+        return 0
+
+    sel_names = [d.name for d in selected]
+    print("building kernel bundle for: %s\n" % " ".join(sel_names))
+    bundle = build_bundle(sel_names, selected, a.gate, a.install)
+    tarpath = make_tar(bundle, sel_names)
+    print("\nbundle:  %s/" % os.path.relpath(bundle, KT))
+    print("tar:     %s   (%d KB)" % (os.path.relpath(tarpath, KT), os.path.getsize(tarpath) // 1024))
+
+    if a.push or a.run:
+        if a.host:
+            os.environ["AMIX_HOST"] = a.host
+        if not os.environ.get("AMIX_HOST"):
+            die("--push/--run needs the box address: pass --host <ip> or set AMIX_HOST")
+        if not os.environ.get("AMIX_PASS"):
+            die("--push/--run needs the box root password: export AMIX_PASS=...")
+        return push_and_run(tarpath, a.run, a.timeout)
+
+    print("\nNot pushed. Transfer the tar to the box and run:")
+    print("  cd /tmp && tar xf %s && sh amix-build/build.sh" % os.path.basename(tarpath))
+    print("Or auto-deploy:  amix-build %s --push --run --host <ip>%s" % (
+        " ".join(sel_names), " --install" if a.install else ""))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

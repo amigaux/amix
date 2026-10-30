@@ -1,0 +1,11 @@
+# kernel/k30 history map (2026-10-30)
+#
+# The public history of jusii/amix-kerntools (release-master 578ff79) was rewritten at move-in
+# with git filter-repo: CLAUDE.md dropped, AGENTS.md renamed docs/driver-contract.md. 578ff79
+# ("Remove CLAUDE.md") became empty and was pruned; its tree equals d0f0630's plus the rename.
+# old (jusii/amix-kerntools) -> new (this directory's history)
+05ab943199e42d1aa066eaf06956082b35f78c07 d0f063038b127a319da0ba61af73d7e33b91f3d9
+1db44f41bb34d9e26ee9cf7b63c0ecf5a88f662d 34cdb5ce4080e4376051c69709f123fb5f04ad18
+578ff79d109d2f308336fb6f1a9601baf9fd590c 0000000000000000000000000000000000000000
+84eee7df2ab77cf5edd459639b8e4064c7d824b5 8ceb0b713b32736ac1fb9bbcf8f83b45b0b8ef5a
+aea7d0aba40402afb9656e55aeb29dea6a781b91 eaa1c9336cf080d8efc260fb54dd336e603913d4
