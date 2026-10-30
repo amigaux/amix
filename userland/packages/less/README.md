@@ -49,7 +49,7 @@ over a real tty.
 
 ## Package shape
 
-`/opt/amix/bin/{less,lesskey,lessecho}`, man pages under `/opt/amix/man/man1/`,
+`/opt/amix/bin/{less,lesskey,lessecho}`, man pages under `/opt/amix/man/1/` with `whatis.d/less` (the troff sources, `patches/05`),
 `LICENSE`/`COPYING`/`NEWS` under `/opt/amix/doc/less/`. Pure file payload (D9), nothing outside
 `/opt/amix`, no scripts, no symlinks.
 
@@ -64,3 +64,10 @@ names by default (`LIBSAN`) do not exist for this target and are cleared.
 The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
 the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
 catalog line.
+
+## Revision -8: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/less` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; the pages are now the troff sources (`less.nro` …): -7 shipped upstream's copies pre-formatted for a modern terminal, which the stock `nroff` cannot show. [`patches/05-man-svr4-nroff.patch`](patches/05-man-svr4-nroff.patch) replaces the two things the 1991 `nroff` lacks (`.EX`/`.EE`, `\[dq]`). Built on the gcc14 container pin: every other payload file is the previous
+revision's.

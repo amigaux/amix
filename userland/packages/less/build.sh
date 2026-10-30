@@ -53,9 +53,13 @@ stage() {
 	mkdir -p "$DEST$PREFIX/bin" "$DEST$PREFIX/man/man1" "$DEST$PREFIX/doc/less"
 	for b in less lesskey lessecho; do
 		cp "$b" "$DEST$PREFIX/bin/$b"
-		cp "$b.man" "$DEST$PREFIX/man/man1/$b.1"
+		cp "$b.nro" "$DEST$PREFIX/man/man1/$b.1"	# the troff source, patches/05
 	done
 	cp LICENSE COPYING NEWS "$DEST$PREFIX/doc/less/"
 	chmod 0755 "$DEST$PREFIX/bin"/*
 	chmod 0644 "$DEST$PREFIX/man/man1"/*.1 "$DEST$PREFIX/doc/less"/*
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }
