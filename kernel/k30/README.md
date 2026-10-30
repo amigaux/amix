@@ -7,10 +7,17 @@ with drivers in it. It discovers driver checkouts by their `driver.conf`, genera
 controller-selector wiring, applies each driver's kernel patches, links the kernel, and runs a
 clean-gate that defeats an intermittent emulator linker-corruption bug.
 
-What is here today is the **on-box** build: the compile and link run on an Amix machine with its
-native toolchain. It came from the former standalone repository `amix-kerntools`, with its history
-(the old→new commit map is [`docs/history-map.txt`](docs/history-map.txt)). The host-side cross
-build of the 68030 kernel follows here.
+There are two ways to build:
+
+- the **host cross build**, `build-cross-kernel.sh`: the whole kernel is linked on a development
+  machine with the pinned cross toolchain, against Commodore's relink kit taken from
+  `amigaux/amix-system`. No Amiga is involved. This is how the 68030 kernels are cut today (see
+  [the host cross build](#the-host-cross-build--build-cross-kernelsh) below).
+- the **on-box** build, `amix-build`: the compile and link run on an Amix machine with its native
+  toolchain.
+
+The on-box build came from the former standalone repository `amix-kerntools`, with its history
+(the old→new commit map is [`docs/history-map.txt`](docs/history-map.txt)).
 
 It holds **no driver source** (each driver has its own directory or repository) and **no Amix** —
 you bring your own licensed Amix 2.1 install. See [`docs/driver-contract.md`](docs/driver-contract.md)
@@ -39,7 +46,7 @@ mkdir -p ~/amix-drivers && for r in amix-a4091 amix-z3660scsi amix-z3660net; do
 ./amix-build --drivers ~/amix-drivers --list
 ```
 
-## Prerequisites — bring your own Amix
+## The on-box build: prerequisites — bring your own Amix
 
 You need your **own** licensed Amix 2.1 install with its native development system: the
 `cc`/`ld`/`make` toolchain and the `/usr/sys` kernel source tree. The kernel compile and link
@@ -135,6 +142,50 @@ The gate relinks until the image proves clean. Two variants — pick by kernel s
 the net driver into **one** kernel — the two integrations touch disjoint files (`amiga/alien/*` vs
 `master.d/kernel.c` + `amiga/driver/`), so they compose; it uses the net gate.
 
+## The host cross build — `build-cross-kernel.sh`
+
+`build-cross-kernel.sh` links a 68030 Amix kernel entirely on the host, with the
+`m68k-cbm-sysv4` cross toolchain (`toolchain/gcc-cross-amix.pin`). It never touches an Amiga.
+It cuts the kernel from Commodore's relink kit the way `usr/sys/Makefile` does: the stock
+pre-linked objects are relinked as they are, and only the objects a change touches are
+compiled fresh (the generated `sd.c`, patched stock sources, the config object, `kinfo030.c`
+and the RTH1 half). The result is `unix` (ET_REL) and `unix.brel`, the boot-ready form
+`elf2brel` makes, under `work/cross-kernel/usr/sys/` (gitignored).
+
+Its inputs are named by environment variables, so nothing in this directory points at a
+particular machine:
+
+| Variable | What |
+|---|---|
+| `AMIX_SYSTEM` | a checkout of [amigaux/amix-system](https://github.com/amigaux/amix-system) (`system/README.md`): `usr/sys` is the relink kit, and the stock bases the kernel patches apply to (`kernel-patches.conf`) are read from it. Nothing Commodore's is copied here. |
+| `GCA` | gcc-cross-amix's `build/` directory; `. "$GCA/env.sh"` puts the cross tools on `PATH` |
+| `G14` | gcc14-cross-amix's `build/` (only for the module kernel's splice, which uses its `m68k-elf-*` binutils) |
+| `PORT` | a checkout of the 68040/68060 port (`kernel/port/port.pin`), for `--rth1` and the port's opt-in fixes |
+| `AMIX_DRIVERS` | where the driver checkouts are (default `kernel/drivers/`) |
+| `CDFS` | a built checkout of the cdfs fork [jusii/amix-cdfs](https://github.com/jusii/amix-cdfs) (the pinned commit lives there), for the in-kernel cdfs of `fstypes.conf` (its object is pinned by md5); `--no-fstypes` builds without it |
+
+```sh
+. "$GCA/env.sh"
+export AMIX_SYSTEM=/path/to/amix-system
+./build-cross-kernel.sh --config c6s1unix "$AMIX_DRIVERS/amix-a4091"     # an a4091 kernel, root on c6d0s1
+```
+
+The header of `build-cross-kernel.sh` documents every option. The module kernel (`--dlm-core
+../dlm`, with `--kinfo`, `--rth1`, `--kabi`, `--carve-fs`) also
+needs a built kit in `kernel/dlm` (`make -C ../dlm tools kit`).
+
+### Self-tests
+
+```sh
+make test
+```
+
+runs every host self-test here (`tools/kpatch-selftest.sh`, `tools/fstype-selftest.sh`,
+`tools/elf2brel-selftest.py`, and `--selftest` of `relsim.py`, `mksym030.py`, `kinfo-cdevsw.py` and
+`kabi-sidecar030.py`). Each prints `SELFTEST PASS`. None needs an Amiga or the cross compiler; a
+case that needs an input from outside this repository (`AMIX_SYSTEM`, `CDFS`, a driver checkout)
+skips itself and says so.
+
 ## The `driver.conf` contract (brief)
 
 Each driver repo declares its identity in a one-line-per-driver `driver.conf`, and ships only its
@@ -162,13 +213,20 @@ The full, authoritative contract for driver authors is in [`docs/driver-contract
 | `tools/checkunix.c` | on-box kernel symbol-table / relocation sanity check |
 | `tools/relsim.py` | host-side reimplementation of `boot/rel.c` — predicts which COMPLAIN/D245 a kernel image would trip |
 | `tools/amishot.sh` | screenshot the running emulator framebuffer via its IPC socket |
+| `build-cross-kernel.sh` | host cross build of the 68030 kernel (above); `kernel-patches.conf`, `fstypes.conf` and `templates/` are its inputs |
+| `tools/kpatch-lib.sh` | the `kernel-patches.conf` grammar and the conditional/unconditional patch reconciliation |
+| `tools/fstype-lib.sh` | the `fstypes.conf` grammar: in-kernel filesystems staged into the link |
+| `tools/elf2brel.py` | the ET_REL kernel to the boot-ready brel form (a port of `amiga/boot/elf2brel.c`) |
+| `tools/dlm-core-link.sh` | splices kernel/dlm's module core into a linked kernel (the module kernel) |
+| `tools/kinfo-cdevsw.py`, `tools/kabi-sidecar030.py`, `tools/mksym030.py` | `/dev/kinfo`'s cdevsw row, the kabi sidecar, `unix.sym` |
+| `tools/bootchain-verify.py` | checks a boot partition or floppy image against `contracts/bootchain-v1.json` |
 
-## No proprietary Amix is shipped — bring your own
+## No Commodore files here
 
 This directory contains **only** original MIT tooling and patches. It ships no Commodore/AT&T Amix
-source, no proprietary binaries, and no files derived from them — only unified diffs that apply
-against the stock files in **your own** licensed Amix 2.1 `/usr/sys` tree. You must supply that
-install yourself.
+source, no binaries, and no files derived from them — only unified diffs that apply against the
+stock files: those of the Amix 2.1 install on the box (on-box build), or the `usr/sys` tree of
+[amigaux/amix-system](https://github.com/amigaux/amix-system) (cross build).
 
 ## License
 
