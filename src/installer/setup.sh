@@ -948,17 +948,14 @@ upgrade_offer()
 	rm -f /tmp/.upo
 	uhome=
 	if [ -z "$udata" ]; then
-		for ufs in ufs s5
-		do
-			if /etc/mount "/dev/dsk/c${SCSI}d0s1" /mnt 1 $ufs > /dev/null 2>&1; then
-				if [ -d /mnt/home ] && [ -x /mnt/usr/sbin/chroot ]; then
-					set x `/mnt/usr/sbin/chroot /mnt /usr/bin/du -s /home 2>/dev/null`; shift
-					uhome="$1"
-				fi
-				/etc/umount /mnt
-				break
+		# ufs only: no installed system has an s5 root (P-35)
+		if /etc/mount "/dev/dsk/c${SCSI}d0s1" /mnt 1 ufs > /dev/null 2>&1; then
+			if [ -d /mnt/home ] && [ -x /mnt/usr/sbin/chroot ]; then
+				set x `/mnt/usr/sbin/chroot /mnt /usr/bin/du -s /home 2>/dev/null`; shift
+				uhome="$1"
 			fi
-		done
+			/etc/umount /mnt
+		fi
 	fi
 	echo "\nThis disk holds an Amiga UNIX $ukind installation."
 	echo "An upgrade installs this disc's system again and keeps the configuration:"
