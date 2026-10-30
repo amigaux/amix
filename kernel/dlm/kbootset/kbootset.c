@@ -35,6 +35,10 @@
  *                          never writes; status 1 when a problem is found
  *   mark-good [--booted ID] [--secondary]   end of a full multi-user boot
  *   namelist                            /stand/unix for the booted kernel (C2-4 §12)
+ *   major NAME             the majors the registry gives module NAME, one
+ *                          `c N` or `b N` line each (C2-4 §15); needs no
+ *                          store and no kinfo; status 1 for a name the
+ *                          registry does not know
  *   nodes                  the sd disk nodes of a four-card kernel under ROOT
  *                          (C4-1 §2.4, C2-4 §14); needs no store; commit
  *                          runs it on the running box, check reports it
@@ -83,6 +87,7 @@
 #include "ks.h"
 #include "kbuild.h"
 #include "kbox.h"
+#include "kmod.h"
 #include "kdeflate.h"
 #include "knode.h"
 #ifdef KS_ZLIB
@@ -415,6 +420,7 @@ usage(void)
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
+		"  major NAME\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -642,6 +648,19 @@ main(int argc, char **argv)
 
 		printf("kbootset: %s\n", nm);
 		return r == KB_ND_FAIL ? 1 : 0;
+	}
+	if (!strcmp(argv[i], "major")) {	/* the registry only (C2-4 §15) */
+		int j, n, t, found = 0;
+		const char *own;
+
+		if (i + 2 != argc)
+			usage();
+		for (j = 0; (own = km_entry(j, &t, &n)) != 0; j++)
+			if (!strcmp(own, argv[i + 1]))
+				printf("%c %d\n", t, n), found = 1;
+		if (!found)
+			fprintf(stderr, "kbootset: no major is registered to %s\n", argv[i + 1]);
+		return found ? 0 : 1;
 	}
 	cmd = argv + i;
 	argc -= i;

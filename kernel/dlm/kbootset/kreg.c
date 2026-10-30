@@ -28,3 +28,17 @@ km_owner(int type, int n)
 			return reg[i].name;
 	return 0;
 }
+
+const char *
+km_entry(int i, int *type, int *n)
+{
+	int j;
+
+	for (j = 0; j < i && reg[j].type; j++)
+		;
+	if (i < 0 || !reg[j].type)
+		return 0;
+	*type = reg[j].type;
+	*n = reg[j].n;
+	return reg[j].name;
+}

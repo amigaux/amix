@@ -62,4 +62,8 @@ int km_value(const struct km_param *p, const char *in, char *out);
  * that owns major n of type 'c' or 'b', or 0 */
 const char *km_owner(int type, int n);
 
+/* entry i of that registry, in its order: the owner, with its type ('c' or
+ * 'b') and number; 0 past the end (kbootset major, C2-4 section 15) */
+const char *km_entry(int i, int *type, int *n);
+
 #endif
