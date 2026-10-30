@@ -1,0 +1,14 @@
+--- lib/gettime.c	2002-03-02 01:54:52.000000000 +0200
++++ lib/gettime.c	2026-09-26 09:52:33.788511885 +0300
+@@ -23,6 +23,11 @@
+ 
+ #include "timespec.h"
+ 
++/* Amix (SVR4.0): libc.so.1 has no gettimeofday (only _abi_gettimeofday, which
++   <rpc/types.h> maps it to) and no header declares it; the symbol comes from
++   libacompat, which takes the BSD two-argument form.  */
++int gettimeofday (struct timeval *, void *);
++
+ /* Get the system time.  */
+ 
+ int

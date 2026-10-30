@@ -1,0 +1,18 @@
+--- lib/utimens.h	2007-02-23 20:25:21.000000000 +0200
++++ lib/utimens.h	2026-08-30 15:01:29.473526563 +0300
+@@ -1,3 +1,15 @@
+ #include <time.h>
++
++/* SVR4.0 (Amix, 1992) declares no `struct timespec` anywhere in its headers
++   (it carries the equivalent under its own name timestruc_t).  gzip needs the
++   type only to name whole-second stamps: lib/config.h leaves HAVE_WORKING_UTIMES,
++   HAVE_FUTIMES and HAVE_FUTIMESAT all unset, so utimens.c compiles down to a
++   plain utime(file, &utimbuf) that reads only .tv_sec.  Declare the type the
++   package names; do not pull in any nanosecond machinery the platform lacks. */
++#if !defined HAVE_STRUCT_TIMESPEC && !defined _STRUCT_TIMESPEC && !defined __timespec_defined
++struct timespec { time_t tv_sec; long tv_nsec; };
++# define _STRUCT_TIMESPEC
++#endif
++
+ int futimens (int, char const *, struct timespec const [2]);
+ int utimens (char const *, struct timespec const [2]);

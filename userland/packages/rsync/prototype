@@ -1,0 +1,26 @@
+#
+# prototype -- rsync 3.1.3 under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  The stock system has no rsync.  No install
+# scripts (D9); no rsyncd.conf is installed (the daemon is the admin's to
+# configure, /etc/rsyncd.conf by default).  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/rsync 0755 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/rsync.1 0644 root bin
+d none /opt/amix/man/man5 0755 root sys
+f none /opt/amix/man/man5/rsyncd.conf.5 0644 root bin
+#
+# GPL-3.0-or-later: COPYING travels with the binary.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/rsync 0755 root sys
+f none /opt/amix/doc/rsync/COPYING 0644 root bin
+f none /opt/amix/doc/rsync/NEWS 0644 root bin
+f none /opt/amix/doc/rsync/README 0644 root bin

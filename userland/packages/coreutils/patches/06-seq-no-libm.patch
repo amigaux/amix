@@ -1,0 +1,36 @@
+seq calls floor() and rint(), which on AMIX exist only in the stock static
+/usr/ccs/lib/libm.a: linking it would put SVR4 libm object code into the
+published binary (the reason whet stays out of amix-benchmark).  Two local
+functions over libc.so.1's modf; rint rounds half to even like the default
+rounding mode (host-checked against libm on 15 values incl. halves, negatives
+and -0.0).  The recipe links seq without -lm.
+
+--- a/src/seq.c	2004-02-23 23:22:06.000000000 +0200
++++ b/src/seq.c	2026-10-29 22:21:59.512642435 +0200
+@@ -29,6 +29,26 @@
+ #include "xstrtol.h"
+ #include "xstrtod.h"
+ 
++/* AMIX: floor and rint live only in the stock static libm.a, whose SVR4
++   object code this package does not link; libc.so.1 has modf.  rint
++   rounds half to even, as the default rounding mode does.  */
++static double
++seq_floor (double x)
++{
++  double i;
++  return modf (x, &i) < 0 ? i - 1 : i;
++}
++static double
++seq_rint (double x)
++{
++  double f = seq_floor (x), d = x - f;
++  if (d > 0.5 || (d == 0.5 && seq_floor (f / 2) * 2 != f))
++    f += 1;
++  return f;
++}
++#define floor seq_floor
++#define rint seq_rint
++
+ /* The official name of this program (e.g., no `g' prefix).  */
+ #define PROGRAM_NAME "seq"
+ 

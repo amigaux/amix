@@ -1,0 +1,88 @@
+compressStream holds the -v ratio report, the only floating point in it,
+and GCC 14 saves %fp2-%fp3 (fmovem) in compressStream's PROLOGUE for it: every
+compression executes an FPU instruction, which kills bzip2 on an FPU-less
+68LC040/68LC060 without the kernel FPE even when -v is not given.  Move the
+report to a noinline function; the FP save then happens only under -v.
+Decompression and the library never needed the FPU on their main paths.
+
+--- a/bzip2.c	2026-10-29 21:54:21.572043355 +0200
++++ b/bzip2.c	2026-10-29 21:57:32.606038910 +0200
+@@ -325,6 +325,43 @@
+ 
+ 
+ /*---------------------------------------------*/
++/* The -v report is the only floating point in compressStream.  Kept out
++   of line so that the FP register save it needs is not in compressStream's
++   own prologue, where every compression would execute it. */
++static
++#ifdef __GNUC__
++__attribute__ ((noinline))
++#endif
++void reportRatio ( UInt32 nbytes_in_lo32, UInt32 nbytes_in_hi32,
++                   UInt32 nbytes_out_lo32, UInt32 nbytes_out_hi32 )
++{
++   if (nbytes_in_lo32 == 0 && nbytes_in_hi32 == 0) {
++      fprintf ( stderr, " no data compressed.\n");
++   } else {
++      Char   buf_nin[32], buf_nout[32];
++      UInt64 nbytes_in,   nbytes_out;
++      double nbytes_in_d, nbytes_out_d;
++      uInt64_from_UInt32s ( &nbytes_in, 
++                            nbytes_in_lo32, nbytes_in_hi32 );
++      uInt64_from_UInt32s ( &nbytes_out, 
++                            nbytes_out_lo32, nbytes_out_hi32 );
++      nbytes_in_d  = uInt64_to_double ( &nbytes_in );
++      nbytes_out_d = uInt64_to_double ( &nbytes_out );
++      uInt64_toAscii ( buf_nin, &nbytes_in );
++      uInt64_toAscii ( buf_nout, &nbytes_out );
++      fprintf ( stderr, "%6.3f:1, %6.3f bits/byte, "
++                "%5.2f%% saved, %s in, %s out.\n",
++                nbytes_in_d / nbytes_out_d,
++                (8.0 * nbytes_out_d) / nbytes_in_d,
++                100.0 * (1.0 - nbytes_out_d / nbytes_in_d),
++                buf_nin,
++                buf_nout
++              );
++   }
++}
++
++
++/*---------------------------------------------*/
+ static 
+ void compressStream ( FILE *stream, FILE *zStream )
+ {
+@@ -378,31 +415,9 @@
+    ret = fclose ( stream );
+    if (ret == EOF) goto errhandler_io;
+ 
+-   if (verbosity >= 1) {
+-      if (nbytes_in_lo32 == 0 && nbytes_in_hi32 == 0) {
+-	 fprintf ( stderr, " no data compressed.\n");
+-      } else {
+-	 Char   buf_nin[32], buf_nout[32];
+-	 UInt64 nbytes_in,   nbytes_out;
+-	 double nbytes_in_d, nbytes_out_d;
+-	 uInt64_from_UInt32s ( &nbytes_in, 
+-			       nbytes_in_lo32, nbytes_in_hi32 );
+-	 uInt64_from_UInt32s ( &nbytes_out, 
+-			       nbytes_out_lo32, nbytes_out_hi32 );
+-	 nbytes_in_d  = uInt64_to_double ( &nbytes_in );
+-	 nbytes_out_d = uInt64_to_double ( &nbytes_out );
+-	 uInt64_toAscii ( buf_nin, &nbytes_in );
+-	 uInt64_toAscii ( buf_nout, &nbytes_out );
+-	 fprintf ( stderr, "%6.3f:1, %6.3f bits/byte, "
+-		   "%5.2f%% saved, %s in, %s out.\n",
+-		   nbytes_in_d / nbytes_out_d,
+-		   (8.0 * nbytes_out_d) / nbytes_in_d,
+-		   100.0 * (1.0 - nbytes_out_d / nbytes_in_d),
+-		   buf_nin,
+-		   buf_nout
+-		 );
+-      }
+-   }
++   if (verbosity >= 1)
++      reportRatio ( nbytes_in_lo32, nbytes_in_hi32,
++                    nbytes_out_lo32, nbytes_out_hi32 );
+ 
+    return;
+ 

@@ -1,0 +1,56 @@
+bzip2recover prints its 64-bit block offsets with "%Lu".  AMIX libc's printf
+family reads %Lu/%llu as a 32-bit long (the high word prints, and every
+later argument is 4 bytes out of step), so the offsets are formatted by a
+small decimal routine and printed with %s.  No 64-bit conversion is left
+for the gcc14 llprintf gate to find.
+
+--- a/bzip2recover.c	2026-10-29 21:54:21.572079560 +0200
++++ b/bzip2recover.c	2026-10-29 21:54:21.589462083 +0200
+@@ -59,6 +59,16 @@
+ 
+ #define BZ_MAX_FILENAME 2000
+ 
++/* AMIX libc's printf family reads %Lu/%llu as a 32-bit long, so the
++   64-bit block offsets are formatted here, into buf (>= 21 bytes). */
++static char *u64str ( MaybeUInt64 v, char *buf )
++{
++   char *p = buf + 20;
++   *p = 0;
++   do { *--p = (char)('0' + v % 10); v /= 10; } while (v);
++   return p;
++}
++
+ Char inFileName[BZ_MAX_FILENAME];
+ Char outFileName[BZ_MAX_FILENAME];
+ Char progName[BZ_MAX_FILENAME];
+@@ -372,10 +382,12 @@
+          if (bitsRead >= bStart[currBlock] &&
+             (bitsRead - bStart[currBlock]) >= 40) {
+             bEnd[currBlock] = bitsRead-1;
+-            if (currBlock > 0)
+-               fprintf ( stderr, "   block %d runs from " MaybeUInt64_FMT 
+-                                 " to " MaybeUInt64_FMT " (incomplete)\n",
+-                         currBlock,  bStart[currBlock], bEnd[currBlock] );
++            if (currBlock > 0) {
++               char s1[21], s2[21];
++               fprintf ( stderr, "   block %d runs from %s to %s (incomplete)\n",
++                         currBlock,  u64str(bStart[currBlock], s1),
++                         u64str(bEnd[currBlock], s2) );
++            }
+          } else
+             currBlock--;
+          break;
+@@ -395,9 +407,10 @@
+          }
+          if (currBlock > 0 &&
+ 	     (bEnd[currBlock] - bStart[currBlock]) >= 130) {
+-            fprintf ( stderr, "   block %d runs from " MaybeUInt64_FMT 
+-                              " to " MaybeUInt64_FMT "\n",
+-                      rbCtr+1,  bStart[currBlock], bEnd[currBlock] );
++            char s1[21], s2[21];
++            fprintf ( stderr, "   block %d runs from %s to %s\n",
++                      rbCtr+1,  u64str(bStart[currBlock], s1),
++                      u64str(bEnd[currBlock], s2) );
+             rbStart[rbCtr] = bStart[currBlock];
+             rbEnd[rbCtr] = bEnd[currBlock];
+             rbCtr++;

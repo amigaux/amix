@@ -1,0 +1,35 @@
+settime.c calls settimeofday unconditionally; SVR4.0 AMIX has no
+settimeofday, only stime(2) (whole seconds, declared in <unistd.h>).
+configure never checks for settimeofday, so HAVE_SETTIMEOFDAY is unset and
+stime is used.  Only date -s / --set (as root) reaches this.
+
+--- a/lib/settime.c	2002-03-02 01:20:20.000000000 +0200
++++ b/lib/settime.c	2026-10-29 22:22:19.523250713 +0200
+@@ -22,6 +22,7 @@
+ #endif
+ 
+ #include "timespec.h"
++#include <unistd.h>
+ 
+ /* Set the system time.  */
+ 
+@@ -33,6 +34,7 @@
+     return 0;
+ #endif
+ 
++#if HAVE_SETTIMEOFDAY
+   {
+     struct timeval tv;
+ 
+@@ -40,4 +42,11 @@
+     tv.tv_usec = ts->tv_nsec / 1000;
+     return settimeofday (&tv, 0);
+   }
++#else
++  /* SVR4.0: no settimeofday; stime sets whole seconds.  */
++  {
++    time_t t = ts->tv_sec;
++    return stime (&t);
++  }
++#endif
+ }

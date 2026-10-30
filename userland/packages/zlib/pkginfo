@@ -1,0 +1,16 @@
+PKG=zlib
+NAME=zlib 1.2.13 - the deflate/inflate compression library
+ARCH=Amiga
+VERSION=1.2.13-2
+CATEGORY=development
+CLASSES=none
+VENDOR=amix-packages
+# PSTAMP is authored rather than left to pkgmk.  Unset, pkgmk stamps the package
+# with <build-host-name><timestamp>, which leaks the build machine into a file
+# meant for distribution.
+PSTAMP=amix-packages-zlib-1.2.13-2
+# The first zlib on Amix -- stock ships no libz at all.  Static archive; ship it
+# under /opt/amix and add /opt/amix/lib to a consumer's -L (headers in
+# /opt/amix/include).  gzprintf() uses the secure snprintf/vsnprintf path, whose
+# symbols come from libacompat (link -lacompat -lc after -lz).
+DESC=zlib 1.2.13 static compression library (libz.a) plus headers, under /opt/amix. The first zlib on Amix; rsync, wget and git link it. Ships /opt/amix/bin/zlib-test, an on-box acceptance check (crc32/adler32 canaries, a multi-MB deflate/inflate round trip, and inflate of a host-produced stream).

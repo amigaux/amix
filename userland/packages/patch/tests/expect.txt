@@ -1,0 +1,9 @@
+The Amix package production line
+================================
+
+This file exists to be patched.
+
+Line four HAS BEEN CHANGED by GNU patch.
+Line five stays where it is.
+An extra line was appended by the same hunk.
+Line six stays too.

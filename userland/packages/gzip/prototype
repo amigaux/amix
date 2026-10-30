@@ -1,0 +1,47 @@
+#
+# prototype -- GNU gzip 1.3.12's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it, so
+# the pkgadd conflict machinery never fires and no stock-owned path is touched.
+# /opt is the one declared shared parent the stock contents DB already co-owns.
+#
+# NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object -- a pure file
+# payload (D9).  gunzip and zcat are gzip's own /bin/sh wrapper scripts (`exec
+# gzip -d` / `exec gzip -cd`), shipped as ordinary files: gzip's argv[0]
+# mode-detection is compiled out under the default GNU_STANDARD=1, so they are
+# wrappers rather than symlinks.  Their shebang was rewritten from the build
+# host's /bin/bash to /bin/sh (build.sh step 5); the body is pure Bourne and safe
+# under Amix's 1992 pre-POSIX sh.
+#
+# NO SYMLINK INTO /usr/bin -- /opt/amix/bin reaches PATH by a documented edit
+# (COEXISTENCE.md 3), never a package side effect.  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the programs ----------------------------------------------------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/gzip 0755 root bin
+f none /opt/amix/bin/gunzip 0755 root bin
+f none /opt/amix/bin/zcat 0755 root bin
+#
+# --- manual pages ----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/gzip.1 0644 root bin
+f none /opt/amix/man/man1/gunzip.1 0644 root bin
+f none /opt/amix/man/man1/zcat.1 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------
+#
+# GPL-2.0-or-later: the COPYING text (GPLv2) travels with the binary, and the
+# gzip.c source headers read "version 2, or (at your option) any later version".
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/gzip 0755 root sys
+f none /opt/amix/doc/gzip/COPYING 0644 root bin
+f none /opt/amix/doc/gzip/NEWS 0644 root bin
+f none /opt/amix/doc/gzip/README 0644 root bin

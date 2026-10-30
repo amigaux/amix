@@ -1,0 +1,18 @@
+AMIX libc has no mkstemp; configure builds lib/mkstemp.c and config.h maps
+mkstemp to rpl_mkstemp, but nothing declares it, and sort.c/tac.c call it.
+GCC 14 rejects the implicit declaration.  Declare it in system.h, only
+when the replacement is in use.
+
+--- a/src/system.h	2004-02-05 11:23:23.000000000 +0200
++++ b/src/system.h	2026-10-29 22:21:59.512523387 +0200
+@@ -136,6 +136,10 @@
+ #include <stdlib.h>
+ #undef getopt
+ 
++#if !HAVE_MKSTEMP
++int mkstemp (char *);
++#endif
++
+ /* The following test is to work around the gross typo in
+    systems like Sony NEWS-OS Release 4.0C, whereby EXIT_FAILURE
+    is defined to 0, not 1.  */

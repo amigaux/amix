@@ -1,0 +1,15 @@
+diff.c calls posix2_version() (lib/posixver.c) without including its header.
+gcc 2.7 compiled the call as an implicit int function and it happened to work;
+GCC 14 makes an implicit declaration an error.  Upstream added the include
+after 2.8.1.
+
+--- a/src/diff.c	2026-10-29 21:27:38.352599915 +0200
++++ b/src/diff.c	2026-10-29 21:27:38.358324339 +0200
+@@ -31,6 +31,7 @@
+ #include <freesoft.h>
+ #include <getopt.h>
+ #include <hard-locale.h>
++#include <posixver.h>
+ #include <prepargs.h>
+ #include <quotesys.h>
+ #include <regex.h>

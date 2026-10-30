@@ -1,0 +1,25 @@
+--- lib/strtol.c	2003-09-12 23:22:47.000000000 +0300
++++ lib/strtol.c	2026-09-26 09:59:23.251552743 +0300
+@@ -119,6 +119,7 @@
+ /* If QUAD is defined, we are defining `strtoll' or `strtoull',
+    operating on `long long int's.  */
+ #ifdef QUAD
++long long __muldi3 (long long, long long);	/* Amix D4, see below */
+ # define LONG long long
+ # define STRTOL_LONG_MIN LONG_LONG_MIN
+ # define STRTOL_LONG_MAX LONG_LONG_MAX
+@@ -363,7 +364,14 @@
+ 	overflow = 1;
+       else
+ 	{
++#ifdef QUAD
++	  /* Amix D4 (68LC060): an open-coded 64-bit product is MULU.L <reg>,Dh:Dl,
++	     which the 060 kernel does not emulate -- SIGKILL.  libgcc's __muldi3
++	     uses 32-bit multiplies only.  */
++	  i = (unsigned LONG int) __muldi3 ((long long) i, (long long) base);
++#else
+ 	  i *= (unsigned LONG int) base;
++#endif
+ 	  i += c;
+ 	}
+     }

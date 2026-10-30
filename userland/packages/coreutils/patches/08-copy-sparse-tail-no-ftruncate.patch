@@ -1,0 +1,19 @@
+cp/mv/install of a file that ends in a hole wrote one byte past the end
+and ftruncate'd it back.  On AMIX 2.1c that ftruncate (fcntl F_FREESP)
+shrinks the file inside its last block, and for a file larger than its
+direct blocks (~96 KiB) the kernel panics (grimoire quirk 90).  Measured
+on the box: cp --sparse=always of a 110017-byte file whose last 3521
+bytes are zero brought the emulated golden 030 down.  Take upstream's
+own other branch: seek back one byte and write the NUL there.
+
+--- a/src/copy.c
++++ b/src/copy.c
+@@ -389,7 +389,7 @@
+ 
+   if (last_write_made_hole)
+     {
+-#if HAVE_FTRUNCATE
++#if 0 /* AMIX: an unaligned ftruncate shrink can panic the kernel */
+       /* Write a null character and truncate it again.  */
+       if (full_write (dest_desc, "", 1) != 1
+ 	  || ftruncate (dest_desc, n_read_total) < 0)

@@ -1,0 +1,47 @@
+--- less.h	2026-05-31 02:55:06.000000000 +0300
++++ less.h	2026-08-30 15:36:41.532429928 +0300
+@@ -40,6 +40,13 @@
+ #if HAVE_SYS_TYPES_H
+ #include <sys/types.h>
+ #endif
++
++/* Amix (SVR4.0/m68k, 1992): <sys/types.h> declares no ssize_t.  A signed long
++   is the right width on this ILP32 ABI (matching the libamixcompat header). */
++#ifndef _AMIX_HAVE_SSIZE_T
++#define _AMIX_HAVE_SSIZE_T
++typedef long ssize_t;
++#endif
+ #if HAVE_STDIO_H
+ #include <stdio.h>
+ #endif
+@@ -706,3 +713,30 @@
+ #if !HAVE_STRSTR
+ char * strstr(constant char *haystack, constant char *needle);
+ #endif
++
++/* --- Amix (SVR4.0/m68k, 1992) declarations ------------------------------
++   Two families of function are real on this box but reach a strict-ANSI cross
++   compile undeclared: (1) libc entries hidden behind the <stdio.h>/<signal.h>
++   __STDC__ gate (fileno, popen, kill) or declared by no SVR4 header (fchmod),
++   and (2) the BSD termcap API, which libcurses exports (D2) but for which Amix
++   ships no <termcap.h>.  Without these, gcc 2.7 invents `int f()' and TRUNCATES
++   the pointer returns of popen/strdup/tgetstr/tgoto.  Declared here so the port
++   builds with zero implicit declarations. */
++#ifndef _AMIX_LESS_DECLS
++#define _AMIX_LESS_DECLS
++#ifndef fileno
++extern int fileno(FILE *);
++#endif
++extern int fchmod(int, mode_t);
++extern int kill(pid_t, int);
++extern FILE *popen(constant char *, constant char *);
++extern int pclose(FILE *);
++extern char *strdup(constant char *);
++/* BSD termcap API (from libcurses); signatures match less's own calls. */
++extern int tgetent(char *, constant char *);
++extern int tgetflag(constant char *);
++extern int tgetnum(constant char *);
++extern char *tgetstr(constant char *, char **);
++extern char *tgoto(constant char *, int, int);
++extern int tputs(constant char *, int, int (*)(int));
++#endif /* _AMIX_LESS_DECLS */

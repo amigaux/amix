@@ -1,0 +1,41 @@
+#
+# prototype -- less 704's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it, so
+# the pkgadd conflict machinery never fires and no stock-owned path is touched.
+# /opt is the one declared shared parent the stock contents DB already co-owns.
+#
+# NO INSTALL SCRIPTS (D9): CLASSES=none, class `none` on every object -- a pure
+# file payload.  Three binaries, no scripts, no symlinks.  lesskey compiles a
+# key-binding file; lessecho is less's own filename-metacharacter helper.
+# Every basename <= 14 bytes.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the programs ----------------------------------------------------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/less 0755 root bin
+f none /opt/amix/bin/lesskey 0755 root bin
+f none /opt/amix/bin/lessecho 0755 root bin
+#
+# --- manual pages ----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/less.1 0644 root bin
+f none /opt/amix/man/man1/lesskey.1 0644 root bin
+f none /opt/amix/man/man1/lessecho.1 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------
+#
+# Dual-licensed GPL-3.0-or-later OR BSD-2-Clause: both texts travel with the
+# package (LICENSE is the Less/BSD-2 grant, COPYING is the GPLv3).
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/less 0755 root sys
+f none /opt/amix/doc/less/LICENSE 0644 root bin
+f none /opt/amix/doc/less/COPYING 0644 root bin
+f none /opt/amix/doc/less/NEWS 0644 root bin

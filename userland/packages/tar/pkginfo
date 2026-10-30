@@ -1,0 +1,13 @@
+PKG=gtar
+NAME=GNU tar 1.14 - base-256 aware tar
+ARCH=Amiga
+VERSION=1.14-2
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+# Authored PSTAMP -- an unset one leaks the build host into a distributed file.
+PSTAMP=amix-packages-gtar-1.14-2
+# Coexists with stock: stock SVR4 tar is /usr/sbin/tar (+ /etc/tar), owned by
+# core, which this package does NOT touch.  Ours is /opt/amix/bin/tar and wins
+# by PATH.  PKG is gtar so the catalog never shows two packages named tar.
+DESC=GNU tar 1.14 beside stock SVR4 tar, which it does NOT replace (stock /usr/sbin/tar is untouched; ours wins by PATH). Reads base-256 headers from modern tars, long names, -z via gzip on PATH (install gzip). Owner names are looked up by its own /etc/passwd and /etc/group parsers, not the stock libc (D3). Installs /opt/amix/bin/tar; add /opt/amix/bin to PATH.

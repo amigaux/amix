@@ -1,0 +1,85 @@
+#
+# prototype -- GNU patch 2.5.9's installed layout.
+#
+# AUTHORED, NOT GENERATED, and carrying no host paths: build.sh runs
+# `pkgmk -r <destroot>`, which resolves each path below against the staged
+# tree.  pkgproto could not have produced this file anyway -- it silently omits
+# symlinks, and the symlink is the line that makes the package usable.
+#
+# NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object.  SVR4
+# install scripts have never been run on Amix under its 1992 pre-POSIX
+# /bin/sh, so this is a pure file payload (D9).
+#
+i pkginfo
+#
+# --- the program ------------------------------------------------------------
+#
+# /usr/local exists on a stock Amix root (dated Nov 1991, with an empty bin/),
+# and it is this repo's shared prefix.  It is declared rather than assumed:
+# SVR4's contents DB handles a directory owned by more than one package, and a
+# package that silently depends on a directory it did not declare is a package
+# that fails on the one box where somebody removed it.
+d none /usr/local 0755 root sys
+d none /usr/local/bin 0755 root sys
+f none /usr/local/bin/patch 0755 root bin
+#
+# ★ THE SYMLINK, AND WHY ITS TARGET IS ABSOLUTE
+#
+# It is belt-and-braces rather than load-bearing: measured on the box, the stock
+# Amix PATH already begins with /usr/local/bin --
+#
+#   PATH=/usr/local/bin:/usr/bin:/usr/ccs/bin:/sbin:/usr/sbin:/etc:/usr/ucb:
+#        /usr/amiga/bin:/usr/public/bin:/usr/hosts
+#
+# -- so `patch` resolves to ours without any link at all, and ahead of the
+# Larry Wall patch 12u4 that the stock `public` package puts in
+# /usr/public/bin.  The link exists for a root whose PATH has been trimmed.
+#
+# ★ THE TARGET IS ABSOLUTE BECAUSE STOCK pkgadd CORRUPTS A RELATIVE ONE.
+#
+# Measured on the golden 030 box, same .pkg, same admin file, both engines:
+#
+#   stock    /usr/sbin/pkgadd   -> /usr/bin/patch -> /../local/bin/patch  DANGLING
+#   heirloom /usr/apkg/bin/pkgadd -> /usr/bin/patch -> ../local/bin/patch  correct
+#
+# The pkgmap line was byte-identical in both runs (`s none
+# /usr/bin/patch=../local/bin/patch`), so this is an ENGINE defect, not a
+# packaging one: stock pkgadd prepends the install root to a relative symlink
+# target.  It reports "Installation was successful" either way -- the link just
+# does not resolve, and /../local/bin/patch is a path that cannot exist.
+#
+# The package manager's own APKG ships `s none /usr/bin/apkg=../apkg/bin/apkg`
+# and is fine on this box because it was installed by the heirloom engine.  A
+# package this repo ships must work on a BARE box, where the only engine is the
+# stock one -- so the relative form is not available to us.
+#
+# The cost is alt-root correctness: an absolute target is wrong under
+# `pkgadd -R`.  That is the right trade here.  Nobody alt-root-installs a
+# developer tool, whereas a dangling /usr/bin/patch on a stock box is a real,
+# silent failure -- and stock `core` itself uses absolute targets for exactly
+# this reason (`s none /usr/bin/uname=/sbin/uname`).
+#
+# An `s` line carries NO mode/owner/group -- that is the pkgmap(4) grammar for
+# a symlink.  /usr/bin is NOT re-declared: it exists and belongs to `core`, so
+# this adds exactly one contents record and touches no core-owned object.
+s none /usr/bin/patch=/usr/local/bin/patch
+#
+# --- manual page ------------------------------------------------------------
+#
+# Under the package's own prefix, not /usr/share/man: writing into the stock
+# man tree would put our file inside a directory the `man` package owns, and
+# the parallel-prefix rule this family follows exists to keep stock and
+# add-on trees separable.  Add /usr/local/man to MANPATH to read it.
+d none /usr/local/man 0755 root sys
+d none /usr/local/man/man1 0755 root sys
+f none /usr/local/man/man1/patch.1 0644 root bin
+#
+# --- licence and upstream notes ---------------------------------------------
+#
+# GPL-2.0-or-later: the licence text travels with the binary, which is both the
+# licence's requirement and this repo's rule.
+d none /usr/local/doc 0755 root sys
+d none /usr/local/doc/patch 0755 root sys
+f none /usr/local/doc/patch/COPYING 0644 root bin
+f none /usr/local/doc/patch/NEWS 0644 root bin
+f none /usr/local/doc/patch/README 0644 root bin

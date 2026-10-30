@@ -1,0 +1,7 @@
+gzip on-box smoke fixture.
+The quick brown fox jumps over the lazy dog.
+0123456789 0123456789 0123456789 0123456789 0123456789
+The quick brown fox jumps over the lazy dog.
+Amiga Unix (Amix) SVR4.0 / m68k, 1992.
+The quick brown fox jumps over the lazy dog.
+zlib deflate is the format stock cannot read.

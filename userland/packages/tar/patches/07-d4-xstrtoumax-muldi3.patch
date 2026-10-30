@@ -1,0 +1,27 @@
+--- lib/xstrtol.c	2003-11-13 07:17:20.000000000 +0200
++++ lib/xstrtol.c	2026-09-26 09:59:23.251579322 +0300
+@@ -90,7 +90,14 @@
+       *x = STRTOL_T_MAXIMUM;
+       return LONGINT_OVERFLOW;
+     }
++#ifdef AMIX_BKM_MUL64
++  /* Amix D4 (68LC060): the uintmax_t instance would open-code MULU.L
++     <reg>,Dh:Dl, which the 060 kernel does not emulate -- SIGKILL.  libgcc's
++     __muldi3 uses 32-bit multiplies only.  */
++  *x = (__strtol_t) __muldi3 ((long long) *x, (long long) scale_factor);
++#else
+   *x *= scale_factor;
++#endif
+   return LONGINT_OK;
+ }
+ 
+--- lib/xstrtoumax.c	2003-10-14 23:08:26.000000000 +0300
++++ lib/xstrtoumax.c	2026-09-26 09:59:23.251594931 +0300
+@@ -34,4 +34,7 @@
+ # define STRTOL_T_MINIMUM 0
+ # define STRTOL_T_MAXIMUM UINTMAX_MAX
+ #endif
++/* Amix D4: route bkm_scale's 64-bit product through libgcc (see xstrtol.c). */
++#define AMIX_BKM_MUL64 1
++long long __muldi3 (long long, long long);
+ #include "xstrtol.c"

@@ -1,0 +1,8 @@
+# upstream's own test vectors (the Makefile's `test' target), from the
+# source tree; copied in by tools/pkg-smoke/prepare.sh
+sample1.ref
+sample2.ref
+sample3.ref
+sample1.bz2
+sample2.bz2
+sample3.bz2

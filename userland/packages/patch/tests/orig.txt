@@ -1,0 +1,8 @@
+The Amix package production line
+================================
+
+This file exists to be patched.
+
+Line four is the one that changes.
+Line five stays where it is.
+Line six stays too.

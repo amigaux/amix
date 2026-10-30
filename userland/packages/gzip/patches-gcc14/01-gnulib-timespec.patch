@@ -1,0 +1,28 @@
+--- gzip.h
++++ gzip.h
+@@ -53,7 +53,9 @@
+    -I./lib, so gnulib replacement <fcntl.h>/<time.h> headers never shadow the
+    system ones -- gzip sees a pure 1992 SVR4 libc.  Provide the four gaps that
+    opens directly, rather than through the bypassed gnulib wrappers. */
+-#ifndef _STRUCT_TIMESPEC
++/* GCC 14 does read gnulib's lib/time.h, which declares the type already
++   (`#define timespec rpl_timespec'). */
++#if !defined _STRUCT_TIMESPEC && !defined timespec
+ # define _STRUCT_TIMESPEC
+ struct timespec { time_t tv_sec; long tv_nsec; }; /* SVR4 carries only timestruc_t */
+ #endif
+--- lib/utimens.h
++++ lib/utimens.h
+@@ -6,7 +6,11 @@
+    HAVE_FUTIMES and HAVE_FUTIMESAT all unset, so utimens.c compiles down to a
+    plain utime(file, &utimbuf) that reads only .tv_sec.  Declare the type the
+    package names; do not pull in any nanosecond machinery the platform lacks. */
+-#if !defined HAVE_STRUCT_TIMESPEC && !defined _STRUCT_TIMESPEC && !defined __timespec_defined
++/* Under GCC 14 <time.h> is gnulib's lib/time.h, which already declares the
++   type as `#define timespec rpl_timespec'; the period compiler never read
++   that file.  Declare it only when nobody has. */
++#if !defined HAVE_STRUCT_TIMESPEC && !defined _STRUCT_TIMESPEC && !defined __timespec_defined \
++    && !defined timespec
+ struct timespec { time_t tv_sec; long tv_nsec; };
+ # define _STRUCT_TIMESPEC
+ #endif

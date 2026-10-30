@@ -1,0 +1,20 @@
+sdiff -o hands the diff child's wait status to ck_editor_status, which
+treats any nonzero status as failure -- but diff exits 1 whenever the files
+differ, so every completed merge of differing files ended with "subsidiary
+program failed" and exit 2 (measured on the box, 2026-10-29).  diffutils 2.9
+fixed it (check_child_status with max_ok_status EXIT_FAILURE); this is that
+rule, backported.
+
+--- a/src/sdiff.c	2026-10-29 21:27:38.352680726 +0200
++++ b/src/sdiff.c	2026-10-29 21:40:34.608764498 +0200
+@@ -724,7 +724,9 @@
+ 	if (! interact_ok)
+ 	  exiterr ();
+ 
+-	ck_editor_status (werrno, wstatus);
++	/* diff exits 1 when the files differ, which is success here.  */
++	if (werrno || ! WIFEXITED (wstatus) || EXIT_FAILURE < WEXITSTATUS (wstatus))
++	  ck_editor_status (werrno, wstatus);
+ 	untrapsig (0);
+ 	checksigs ();
+ 	exit (WEXITSTATUS (wstatus));

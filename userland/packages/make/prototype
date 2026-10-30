@@ -1,0 +1,40 @@
+#
+# prototype -- GNU make 3.81's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it.
+#
+# COEXISTENCE.  Stock ships /usr/ccs/bin/make, owned by `core`.  This package
+# does NOT claim, overwrite or symlink it -- ours is /opt/amix/bin/make and wins
+# for interactive users purely by PATH order; stock scripts naming
+# /usr/ccs/bin/make keep stock behaviour.  No stock package is named `make`, so
+# the PKG name does not collide.
+#
+# NO INSTALL SCRIPTS (D9).  No info manual (the box has no info reader); the
+# man page is make.1.  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the program -----------------------------------------------------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/make 0755 root bin
+#
+# --- manual page -----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/man1 0755 root sys
+f none /opt/amix/man/man1/make.1 0644 root bin
+#
+# --- licence and upstream notes --------------------------------------------
+#
+# GPL-2.0-or-later: COPYING (GPLv2) travels with the binary; COPYING.LIB
+# (LGPLv2) covers the bundled glob/ library linked into it.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/make 0755 root sys
+f none /opt/amix/doc/make/COPYING 0644 root bin
+f none /opt/amix/doc/make/COPYING.LIB 0644 root bin
+f none /opt/amix/doc/make/NEWS 0644 root bin
+f none /opt/amix/doc/make/README 0644 root bin

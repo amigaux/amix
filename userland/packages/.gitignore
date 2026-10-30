@@ -1,0 +1,20 @@
+# local-only maintainer files (never tracked)
+/CLAUDE.md
+/.claude/
+# build outputs: work trees, fetched source tarballs, .pkg datastreams, staging/publish roots, logs
+/build/
+/tmp/
+*.pkg
+*.log
+# disk images, ROMs and bench media never belong here
+*.hdf
+*.adf
+*.img
+*.iso
+*.rom
+*.bin
+# fetched upstream archives, should one land outside build/
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tar.xz

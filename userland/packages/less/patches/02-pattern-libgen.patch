@@ -1,0 +1,15 @@
+--- pattern.h	2026-05-31 02:55:07.000000000 +0300
++++ pattern.h	2026-08-30 15:28:16.100214873 +0300
+@@ -54,8 +54,10 @@
+ 
+ /* ---- REGCMP  ---- */
+ #if HAVE_REGCMP
+-char *regcmp(char*);
+-char *regex(char**, char*);
++/* Amix/SVR4: regcmp/regex are variadic in <libgen.h> (regcmp(const char*,...),
++   regex(const char*, const char*, ...)); less's own fixed-arg protos below were
++   wrong for this platform and caused "too many arguments".  Use the system ones. */
++#include <libgen.h>
+ extern char *__loc1;
+ #define PATTERN_TYPE             char **
+ #define SET_NULL_PATTERN(name)   name = NULL

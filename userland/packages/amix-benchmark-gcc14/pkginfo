@@ -1,0 +1,15 @@
+PKG=amixbch14
+NAME=amix-benchmark-gcc14 1.3-4 - the amix-bench suite built with GCC 14
+ARCH=Amiga
+VERSION=1.3-4
+CATEGORY=utility
+CLASSES=none
+VENDOR=amix-packages
+# Authored PSTAMP -- an unset one leaks the build host into a distributed file.
+PSTAMP=amix-packages-amixbch14-1.3-4-gcc14
+# The SVR4 PKG instance is `amixbch14' (<= 9 chars; stock pkgadd silently drops
+# a longer name).  The catalog/apkg name is `amix-benchmark-gcc14' (a
+# names.conf line in the publish root: amixbch14: amix-benchmark-gcc14).
+# It installs beside amix-benchmark (PKG amixbench): no file is shared.
+APKG_DESC=amix-bench benchmark suite built with GCC 14: run 'amix-bench-g14'. The same sources and driver as amix-benchmark (gcc 2.7.2.3), installable beside it, so the two compilers can be compared on one box; the fpu.whet row reports skipped.
+DESC=The amix-bench standard benchmark matrix, built with GCC 14 (gcc14-cross-amix, -m68020-60): Dhrystone 2.1 CPU, an FP-only loop and an FP paranoia check, memory bandwidth, three VM rows and the iobench disk speedtest. The benchmark sources are the ones the amix-benchmark package's binaries were built from with gcc 2.7.2.3, and the runbench driver is the same file, so the two packages differ only in the compiler. Installs beside amix-benchmark without sharing a file: entry command /opt/amix/bin/amix-bench-g14, kit in /opt/amix/lib/amix-bench-g14. Every results header names the compiler (build_cc_version). whet (Whetstone) is not built: it would link the stock SVR4 libm, so the fpu.whet row reports status=skipped. See /opt/amix/lib/amix-bench-g14/PROVENANCE.

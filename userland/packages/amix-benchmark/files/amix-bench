@@ -1,0 +1,22 @@
+#!/bin/sh
+# amix-bench -- run the amix-bench standard benchmark matrix.
+#
+# This is the entry command installed on PATH (/opt/amix/bin/amix-bench).  The
+# kit itself -- the runbench driver, the six benchmark binaries, and BUILD-INFO
+# -- lives together in /opt/amix/lib/amix-bench.  runbench.sh finds its binaries
+# RELATIVE TO ITS OWN LOCATION (`dirname $0`), so this wrapper just execs it by
+# its absolute path and hands over every argument unchanged.  Nothing here
+# hard-codes a binary path or a foreign directory: the tools are found beside
+# runbench.sh wherever the package installed it.
+#
+#   amix-bench                     the safe default suite -- CPU (Dhrystone),
+#                                  floating point, memory bandwidth and VM.
+#                                  NO disk rows run: there is no default disk
+#                                  target and never will be (see --help).
+#   amix-bench --help              usage, on stdout
+#   amix-bench --read-target FILE  add the iobench disk READ rows against FILE
+#   amix-bench --write-target FILE --create-scratch   add the disk WRITE rows
+#                                  against a SCRATCH file (never a raw device)
+#
+# Written for the SVR4.0 Bourne shell (Amix 2.1): no $(...), no [[ ]].
+exec /opt/amix/lib/amix-bench/runbench.sh "$@"
