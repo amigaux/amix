@@ -287,6 +287,12 @@ An infeasible cell stays **in** the table with its reason. A cell that is merely
 absent reads as "we covered everything we could", which is how coverage quietly
 shrinks.
 
+**Coverage the P-35 retirement took with it** (not wanted back for now, orchestrator
+2026-10-30): the Suomi keymap reaching the target (`cd-suomi`) and the interrupted
+first-boot dialog (`cd-interrupt`). Both were prebuilt only because their rig was;
+either can come back as an **author-mode** cell on the same profile (`cd-ufs`'s shape,
+`PREBUILT=0`, `EXPECT_FSTYPE=ufs`) with its old `INTERVIEW_PRE` and dialog keys.
+
 **The 68060 cells run on an emulated LC060.** Every 060 rig
 (`configs/accept-z3660-060-*.uae`, `configs/boot-z3660-060-*.uae`) pins
 `cpu_model=68060`, `fpu_model=0` (no FPU), `cpu_no_unimplemented=true`,
