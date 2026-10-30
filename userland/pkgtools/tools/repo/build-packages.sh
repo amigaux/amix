@@ -508,7 +508,8 @@ EOF
   # takes the new default; an edited one is kept, the new default goes
   # to <file>.new and the file is listed in /var/sadm/conffiles/PENDING.
   # The admin file is no longer reset by `apkg upgrade apkg` (P-36 F1).
-  # New pages: apkg.conf(5), admin(5) and conffile(5) in /usr/apkg/man/man5.
+  # New pages: apkg.conf(5), admin(5), conffile(5) and contents(5) in
+  # /usr/apkg/man/man5; contents-fsck(1M) and amix-sadm-migrate(1M) in man1m.
   # The template bytes are unchanged (md5 8dada8d9..., T23).
   cat > "$A/prototype" <<EOF
 i pkginfo
@@ -523,7 +524,11 @@ f none /usr/apkg/bin/amix-sadm-migrate=$REPO/tools/migrate/amix-sadm-migrate.sh 
 d none /usr/apkg/man 0755 root sys
 d none /usr/apkg/man/man1 0755 root sys
 f none /usr/apkg/man/man1/apkg.1=$REPO/src/apkg/apkg.1 0644 root sys
+d none /usr/apkg/man/man1m 0755 root sys
+f none /usr/apkg/man/man1m/contents-fsck.1m=$REPO/src/contents-fsck/contents-fsck.1m 0644 root sys
+f none /usr/apkg/man/man1m/amix-sadm-migrate.1m=$REPO/tools/migrate/amix-sadm-migrate.1m 0644 root sys
 d none /usr/apkg/man/man5 0755 root sys
+f none /usr/apkg/man/man5/contents.5=$REPO/src/contents-fsck/contents.5 0644 root sys
 f none /usr/apkg/man/man5/apkg.conf.5=$REPO/src/apkg/apkg.conf.5 0644 root sys
 f none /usr/apkg/man/man5/admin.5=$REPO/src/apkg/admin.5 0644 root sys
 f none /usr/apkg/man/man5/conffile.5=$REPO/src/conffile/conffile.5 0644 root sys

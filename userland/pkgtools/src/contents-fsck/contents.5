@@ -1,0 +1,126 @@
+.\" contents.5 - manual page for /var/sadm/install/contents.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH CONTENTS 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.SH NAME
+contents \- the installed-software database
+.SH SYNOPSIS
+.B /var/sadm/install/contents
+.SH DESCRIPTION
+The
+.B contents
+file lists every object installed packages own: one line per path name,
+in sorted path name order.
+.BR pkgadd (1M),
+.BR installf (1M)
+and
+.BR removef (1M)
+write it;
+.BR pkgrm (1M),
+.BR pkgchk (1M)
+and
+.BR pkginfo (1)
+read it.  Edit it only with those tools.
+.PP
+Fields are separated by white space, and there is no quoting: a path name
+cannot contain a space (the package tools refuse one).  A line starting
+with
+.B #
+is a comment; the tools add one at the end saying when and by what the file
+was last written.
+.SH RECORDS
+Every record starts with the path name and the file type, then the
+installation class, then fields that depend on the type, and ends with
+the names of the packages that own the object:
+.PP
+.nf
+.ta 8n
+f v e	path ftype class mode owner group size cksum modtime pkg...
+d x p	path ftype class mode owner group pkg...
+c b	path ftype class major minor mode owner group pkg...
+s l	path=target ftype class pkg...
+.fi
+.TP 10
+.I ftype
+.B f
+file,
+.B e
+file the administrator may edit,
+.B v
+file whose contents change (a log),
+.B d
+directory,
+.B x
+exclusive directory accessible only by this package,
+.B p
+named pipe,
+.B c
+and
+.B b
+character and block device,
+.B s
+symbolic link,
+.B l
+hard link
+.TP
+.I class
+the installation class;
+.B none
+unless the package names one (see
+.BR conffile (5))
+.TP
+.I mode
+the permissions, in octal
+.TP
+.IR owner ", " group
+by name
+.TP
+.IR size ", " cksum ", " modtime
+the size in bytes, the
+.BR sum (1)
+checksum, and the modification time in seconds since 1970; for an
+.B e
+file installed by a class action script these describe the file as it is
+on disk after the script
+.TP
+.I pkg
+an owning package instance; several names mean the object is shared.  A
+name may carry one status character in front:
+.B +
+ready for
+.BR "installf \-f" ,
+.B \-
+ready for
+.BR "removef \-f" ,
+.B !
+not found,
+.B %
+on a file server's read-only partition;
+.B *
+and
+.B ~
+are further states the tools accept.  A
+.B ?
+stands for a value the tool did not know.
+.SH EXAMPLE
+.nf
+/etc/apkg.conf e conffile 0644 root sys 1521 51934 1793368699 APKG
+/usr/apkg d none 0755 root sys APKG APKGENG
+/usr/bin/apkg=/usr/apkg/bin/apkg s none APKG
+/dev/console c none ? ? 0620 root tty core
+.fi
+.SH NOTES
+The Amix 2.1 factory file holds a record for a file named
+.B "TrueType Fonts"
+and a repeated package name, which the stock tools cannot read;
+.BR contents-fsck (1M)
+finds and repairs such records.
+.SH FILES
+.TP 34
+.B /var/sadm/install/contents
+this file
+.SH SEE ALSO
+.BR contents-fsck (1M),
+.BR pkgchk (1M),
+.BR installf (1M),
+.BR pkgmap (5),
+.BR conffile (5)

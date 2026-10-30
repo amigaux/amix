@@ -1,0 +1,123 @@
+.\" contents-fsck.1m - manual page for contents-fsck.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH CONTENTS-FSCK 1M "October 2026" "contents-fsck 1.0" "Amix System Administration"
+.SH NAME
+contents-fsck \- check and repair the installed-software database
+.SH SYNOPSIS
+.B contents-fsck
+.I file
+.br
+.B contents-fsck \-r
+[
+.B \-s
+] [
+.B \-b
+] [
+.B \-o
+.I out
+]
+.I file
+.br
+.B contents-fsck \-V
+.SH DESCRIPTION
+.B contents-fsck
+checks a
+.BR contents (5)
+database, normally
+.BR /var/sadm/install/contents ,
+the record of every file installed packages own.  The Amix 2.1 factory
+database ships with records the stock package tools cannot read (a file
+named
+.B "TrueType Fonts"
+with a space in its name, and a duplicated package field); one such record
+makes
+.BR pkgrm (1M)
+and
+.B pkginfo \-l
+abort.
+.PP
+Without
+.BR \-r ,
+.B contents-fsck
+only reports.  It prints the number of records of each file type and each
+finding with its line number:
+.TP 16
+.B [unparseable]
+no reading of the record is valid; the reason is given
+.TP
+.B [spaced-path]
+a path name that holds a space, recovered by trying each split
+.TP
+.B [dup-pkg]
+a package name repeated at the end of the record
+.TP
+.B [sort-order]
+a path name out of sorted order
+.TP
+.B [eq-hazard]
+a
+.B =
+in the path name of a record that is not a link; the stock tools split
+such a record at the
+.B =
+.TP
+.B [long-line]
+a line over 4096 bytes
+.SH OPTIONS
+.TP
+.B \-r
+Repair: write the repaired database to
+.IB file .fixed
+(through a temporary file and a rename).  The input is never changed.
+Repeated package names are removed, the white space between fields becomes
+one space, and comment lines, the record order and records it cannot parse
+are kept as they are.
+.TP
+.B \-s
+With
+.BR \-r :
+drop records with a space in the path name, and print those path names so
+the files can be renamed first.  Use it on a system that only has the stock
+tools; by default such records are kept.
+.TP
+.B \-b
+With
+.BR \-r :
+copy the input to
+.IB file .bak
+first.
+.TP
+.BI \-o " out"
+With
+.BR \-r :
+write the result to
+.I out
+instead of
+.IB file .fixed\fR.
+.TP
+.B \-V
+Print the version.
+.SH EXIT STATUS
+.TP 4
+.B 0
+the database is clean
+.TP
+.B 1
+findings were reported
+.TP
+.B 2
+a usage or I/O error
+.SH EXAMPLE
+.nf
+# contents-fsck /var/sadm/install/contents
+# contents-fsck \-r \-b /var/sadm/install/contents
+# cp /var/sadm/install/contents.fixed /var/sadm/install/contents
+.fi
+.SH FILES
+.TP 30
+.B /var/sadm/install/contents
+the installed-software database
+.SH SEE ALSO
+.BR contents (5),
+.BR pkgchk (1M),
+.BR amix-sadm-migrate (1M)

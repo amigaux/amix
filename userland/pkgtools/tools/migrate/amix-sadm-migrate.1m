@@ -1,0 +1,80 @@
+.\" amix-sadm-migrate.1m - manual page for amix-sadm-migrate.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH AMIX-SADM-MIGRATE 1M "October 2026" "apkg 0.3.4" "Amix System Administration"
+.SH NAME
+amix-sadm-migrate \- prepare the stock package database for apkg
+.SH SYNOPSIS
+.B amix-sadm-migrate
+[
+.B \-n
+]
+.SH DESCRIPTION
+.B amix-sadm-migrate
+brings the package database of a stock Amix 2.1 system,
+.BR /var/sadm ,
+into the shape
+.BR apkg (1)
+and the package tools expect.  Run it once as root after installing the
+APKG package; running it again changes nothing and says so.  It:
+.TP 4
+1.
+copies
+.B /var/sadm/install/contents
+to
+.B contents.pre-migrate
+once, before any other change;
+.TP
+2.
+adds
+.B VERSION=2.1
+to every
+.BI /var/sadm/pkg/ pkg /pkginfo
+that has no
+.B VERSION=
+line (the factory packages have none, so apkg could not compare them);
+.TP
+3.
+creates every missing
+.BI /var/sadm/pkg/ pkg /install
+directory;
+.TP
+4.
+sets the mode of
+.B /var/sadm/install/contents
+to 644 (the factory ships it writable by everyone);
+.TP
+5.
+prints a summary of what it did.
+.SH OPTIONS
+.TP
+.B \-n
+Dry run: print what would be done and change nothing.
+.SH ENVIRONMENT
+.TP
+.B SADM_ROOT
+a directory prefixed to
+.BR /var/sadm ,
+for working on a tree other than the running system's
+.SH EXIT STATUS
+.B 0
+on success, also when there was nothing to do;
+.B 1
+on a usage error, when
+.B /var/sadm
+is missing, or when the backup fails (then nothing was changed).
+.SH FILES
+.PD 0
+.TP 36
+.B /var/sadm/install/contents
+the installed-software database
+.TP
+.B /var/sadm/install/contents.pre-migrate
+the copy made before the first change
+.TP
+.BI /var/sadm/pkg/ pkg /pkginfo
+each installed package's parameters
+.PD
+.SH SEE ALSO
+.BR apkg (1),
+.BR contents-fsck (1M),
+.BR contents (5)
