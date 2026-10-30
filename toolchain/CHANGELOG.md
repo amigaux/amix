@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-30 — CI names the runner's uid in the selftests container (63bb482)
+
+CI's packaging harness selftests run with a passwd and group entry for the runner's uid: pkgtools' removef smoke test
+asks `id -un` and failed under the unnamed uid 1001 (run 41091764355).
+
 ## 2026-10-30 — CI kit job (5b376ee)
 
 CI fetches amix-system at system/amix-system.pin (62f7132) and checks it against MANIFEST.sha256 and SYMLINKS
