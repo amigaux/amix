@@ -62,4 +62,8 @@ stage() {
 	cp COPYING glob/COPYING.LIB NEWS README "$DEST$PREFIX/doc/make/"
 	chmod 0755 "$DEST$PREFIX/bin/make"
 	chmod 0644 "$DEST$PREFIX/man/man1/make.1" "$DEST$PREFIX/doc/make"/*
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }

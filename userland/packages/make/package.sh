@@ -2,7 +2,7 @@
 NAME=make
 PKG=make
 VERSION=3.81
-PKGREV=7   # -7: relinked on gcc14-cross-amix b51ff39 (runtime only)
+PKGREV=8   # -8: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
 SUMMARY="GNU make 3.81"
 DESC="GNU make 3.81 beside the stock SVR4 make, which it does NOT replace (stock /usr/ccs/bin/make is untouched; ours wins by PATH). Pattern rules, VPATH, \$(shell), \$(eval), order-only prerequisites, -j with the jobserver. make -l only warns (no load average on Amix). Installs /opt/amix/bin/make; add /opt/amix/bin to PATH."
 CATEGORY=development
