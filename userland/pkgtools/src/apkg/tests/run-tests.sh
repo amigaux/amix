@@ -620,6 +620,66 @@ else
 fi
 run 1 "remove of not-installed package fails with exit 1" "$APKG" remove foo
 
+# ------------------------------------------------ essential packages
+# APKG_ESSENTIAL=yes in the installed pkginfo (docs/design.md 2c): remove
+# and purge refuse it, exit 5, before the journal or pkgrm; only
+# --force-remove-essential overrides.  fdep stands in for the base package.
+cp "$ROOT/var/sadm/pkg/FDEP/pkginfo" "$WORK/fdep.pkginfo.save"
+setess() {
+    cp "$WORK/fdep.pkginfo.save" "$ROOT/var/sadm/pkg/FDEP/pkginfo"
+    [ -n "$1" ] && echo "$1" >> "$ROOT/var/sadm/pkg/FDEP/pkginfo"
+    : > "$SHIMLOG"
+}
+setess "APKG_ESSENTIAL=yes"
+OUT=$("$APKG" list installed 2>&1)
+echo "$OUT" | grep -q "^fdep .*\[installed 1.0, essential\]" \
+    && echo "$OUT" | grep -q "^ftop .*\[installed 1.0\] " \
+    && ok "list marks the essential package, and only it" \
+    || bad "list essential marker" "$OUT"
+OUT=$("$APKG" info fdep 2>&1)
+echo "$OUT" | grep -qx "Essential:   yes (APKG_ESSENTIAL=yes; remove and purge refuse it)" \
+    && ok "info says Essential: yes" || bad "info essential line" "$OUT"
+OUT=$("$APKG" info ftop 2>&1)
+echo "$OUT" | grep -q "^Essential:" && bad "info marks a plain package" "$OUT" \
+    || ok "info of a plain package has no Essential line"
+run 5 "remove of an essential package is refused (exit 5)" "$APKG" remove fdep
+echo "$OUT" | grep -qx "apkg: fdep (pkginst FDEP) is essential (APKG_ESSENTIAL=yes): the system may not boot without it; not removed (--force-remove-essential overrides)" \
+    && ok "... naming the package, the mark and the override" || bad "refusal text" "$OUT"
+[ ! -s "$SHIMLOG" ] && [ ! -f "$ROOT/var/apkg/txn" ] \
+    && [ -f "$ROOT/var/sadm/pkg/FDEP/pkginfo" ] \
+    && ok "... before pkgrm or the journal" || bad "refusal ran something" "$(cat "$SHIMLOG")"
+run 5 "remove by the pkginst is refused too" "$APKG" remove FDEP
+run 5 "-n remove predicts the refusal" "$APKG" -n remove fdep
+run 5 "purge of an essential package is refused" "$APKG" purge fdep
+run 5 "remove --purge of an essential package is refused" "$APKG" remove --purge fdep
+run 5 "-f does not override the mark" "$APKG" -f remove fdep
+[ ! -s "$SHIMLOG" ] && ok "none of them ran pkgrm" || bad "pkgrm ran" "$(cat "$SHIMLOG")"
+setess "APKG_ESSENTIAL=\"yes\""
+run 5 "a quoted \"yes\" is essential" "$APKG" remove fdep
+setess "APKG_ESSENTIAL=Yes"
+run 5 "an unknown value counts as yes" "$APKG" remove fdep
+echo "$OUT" | grep -q "is essential (APKG_ESSENTIAL=Yes)" \
+    && ok "... and the refusal shows the value" || bad "unknown value text" "$OUT"
+setess "APKG_ESSENTIAL=no"
+run 0 "APKG_ESSENTIAL=no is not essential" "$APKG" remove fdep
+grep -q "^pkgrm .* FDEP$" "$SHIMLOG" && ok "... pkgrm ran" || bad "no pkgrm" "$(cat "$SHIMLOG")"
+setess "APKG_ESSENTIAL= no "
+run 0 "blanks around no are tolerated" "$APKG" remove fdep
+setess "APKG_ESSENTIAL=yes "
+run 5 "blanks around yes are tolerated" "$APKG" remove fdep
+echo "$OUT" | grep -q "is essential (APKG_ESSENTIAL=yes):" \
+    && ok "... and the refusal shows the trimmed value" || bad "trimmed value" "$OUT"
+setess "APKG_ESSENTIALX=yes"
+run 0 "a longer parameter name is not the mark" "$APKG" remove fdep
+setess "APKG_ESSENTIAL=yes"
+run 1 "--force-remove-essential after the verb is a usage error" \
+    "$APKG" remove --force-remove-essential fdep
+run 0 "--force-remove-essential removes it" "$APKG" --force-remove-essential remove fdep
+echo "$OUT" | grep -qx "apkg: fdep (pkginst FDEP) is essential (APKG_ESSENTIAL=yes); removing it (--force-remove-essential)" \
+    && grep -q "^pkgrm .* FDEP$" "$SHIMLOG" \
+    && ok "... with a warning, and pkgrm ran" || bad "forced remove" "$OUT $(cat "$SHIMLOG")"
+setess ""
+
 # ------------------------------------------------ .Z transparency
 : > "$SHIMLOG"
 run 0 ".Z package is zcat-decompressed before pkgadd" "$APKG" install zpkg

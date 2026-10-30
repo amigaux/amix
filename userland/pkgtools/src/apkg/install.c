@@ -10,7 +10,8 @@
  * pkginfo exists (cf->sadmpkg already carries the APKG_ROOT + -R target
  * prefix); its VERSION= line (absent on stock Amix packages until the
  * migration script has run) gives the installed version, displayed as
- * "(none)" when missing.
+ * "(none)" when missing.  Its APKG_ESSENTIAL=yes marks a package remove
+ * and purge refuse (pkg_essential, cmd_remove; docs/design.md 2c).
  *
  * Fetching + staging is delegated to the SOURCE layer (source.c): HTTP,
  * a mounted FILE tree (/cdrom), or a RAW slice.  cmd_install stages and
@@ -70,16 +71,22 @@
 
 /* ---------------- installed state ---------------- */
 
-int installed_version(const struct conf *cf, const char *pkginst,
-                      char *ver, unsigned verlen)
+int opt_force_essential = 0;   /* --force-remove-essential (main.c) */
+
+/* the value of parameter key (e.g. "VERSION") in the installed pkginfo,
+ * CR/LF and one level of quotes stripped, "" when the line is absent:
+ * 0 = not installed (no pkginfo), 1 = installed */
+static int installed_param(const struct conf *cf, const char *pkginst,
+                           const char *key, char *val, unsigned vallen)
 {
     char *path;
     FILE *fp;
     char line[512];
-    char *val;
+    char *v;
+    unsigned klen;
     unsigned len;
 
-    ver[0] = '\0';
+    val[0] = '\0';
     path = cat3(cf->sadmpkg, "/", pkginst);
     {
         char *p2;
@@ -92,28 +99,53 @@ int installed_version(const struct conf *cf, const char *pkginst,
     free(path);
     if (fp == NULL)
         return 0;
+    klen = (unsigned)strlen(key);
     while (fgets(line, (int)sizeof(line), fp) != NULL) {
-        if (strncmp(line, "VERSION=", 8) != 0)
+        if (strncmp(line, key, klen) != 0 || line[klen] != '=')
             continue;
-        val = line + 8;
-        len = (unsigned)strlen(val);
-        while (len > 0 && (val[len - 1] == '\n' || val[len - 1] == '\r'))
-            val[--len] = '\0';
+        v = line + klen + 1;
+        len = (unsigned)strlen(v);
+        while (len > 0 && (v[len - 1] == '\n' || v[len - 1] == '\r'))
+            v[--len] = '\0';
         /* strip one level of surrounding quotes */
-        if (len >= 2 && (val[0] == '"' || val[0] == '\'') &&
-            val[len - 1] == val[0]) {
-            val[len - 1] = '\0';
-            val++;
+        if (len >= 2 && (v[0] == '"' || v[0] == '\'') &&
+            v[len - 1] == v[0]) {
+            v[len - 1] = '\0';
+            v++;
             len -= 2;
         }
-        if (len >= verlen)
-            len = verlen - 1;
-        memcpy(ver, val, len);
-        ver[len] = '\0';
+        if (len >= vallen)
+            len = vallen - 1;
+        memcpy(val, v, len);
+        val[len] = '\0';
         break;
     }
     fclose(fp);
     return 1;
+}
+
+int installed_version(const struct conf *cf, const char *pkginst,
+                      char *ver, unsigned verlen)
+{
+    return installed_param(cf, pkginst, "VERSION", ver, verlen);
+}
+
+int pkg_essential(const struct conf *cf, const char *pkginst,
+                  char *val, unsigned vallen)
+{
+    unsigned len;
+    unsigned i;
+
+    if (!installed_param(cf, pkginst, APKG_ESSENTIAL_PARAM, val, vallen))
+        return 0;
+    /* blanks around the value, as gen-catalog tolerates them */
+    len = (unsigned)strlen(val);
+    while (len > 0 && (val[len - 1] == ' ' || val[len - 1] == '\t'))
+        val[--len] = '\0';
+    for (i = 0; val[i] == ' ' || val[i] == '\t'; i++)
+        ;
+    memmove(val, val + i, len - i + 1);
+    return val[0] != '\0' && strcmp(val, "no") != 0;
 }
 
 /* version string for display: "(none)" for VERSION-less packages */
@@ -1024,6 +1056,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
     struct txn t;
     const char *pkginst;
     char iver[128];
+    char ess[64];
     char kinst[64];
     char key[256];
     char *pkgrm;
@@ -1053,6 +1086,18 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
     if (!installed_version(cf, pkginst, iver, sizeof(iver)) && !kspace) {
         warnx2("%s (pkginst %s) is not installed", name, pkginst);
         return EX_USAGE;
+    }
+    if (pkg_essential(cf, pkginst, ess, sizeof(ess))) {
+        if (!opt_force_essential) {
+            warnx2("%s (pkginst %s) is essential (%s=%s): the system may "
+                   "not boot without it; not removed "
+                   "(--force-remove-essential overrides)", name, pkginst,
+                   APKG_ESSENTIAL_PARAM, ess);
+            return EX_DEPS;
+        }
+        warnx2("%s (pkginst %s) is essential (%s=%s); removing it "
+               "(--force-remove-essential)", name, pkginst,
+               APKG_ESSENTIAL_PARAM, ess);
     }
     if (txn_refuse_if_pending(cf) != 0)
         return EX_USAGE;

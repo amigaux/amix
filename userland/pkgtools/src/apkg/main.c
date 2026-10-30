@@ -12,7 +12,8 @@
  * Options (before the verb): -n dry-run, -f force (applies to the
  *   packages NAMED on the command line, never to their dependencies),
  *   -v verbose, -c <conffile>, -R <root>, -y / --conf-keep, --conf-new
- *   (conffile.c).
+ *   (conffile.c), --force-remove-essential (remove and purge of a package
+ *   whose pkginfo says APKG_ESSENTIAL=yes, install.c).
  *
  * Option scanning is hand-rolled (design allows getopt or hand-rolled):
  * GNU getopt permutes argv while the SVR4 one does not, and identical
@@ -46,7 +47,8 @@ static void usage(void)
         "  upgrade <name>...   pkgadd over the installed instances when the\n"
         "                      catalog is newer, one transaction (no pkgrm;\n"
         "                      never uninstalls)\n"
-        "  remove [--purge] <name>  pkgrm; edited config files stay\n"
+        "  remove [--purge] <name>  pkgrm; edited config files stay; an\n"
+        "                      essential package is refused\n"
         "  purge <name>        remove, and delete its config files too\n"
         "  conffiles [list|resolve] [<name>]\n"
         "                      list pending and edited config files, or\n"
@@ -58,7 +60,9 @@ static void usage(void)
         "         -v verbose, -c conffile,\n"
         "         -R root install into an alternate target root (pkgadd -R),\n"
         "         -y or --conf-keep keep edited config files without asking,\n"
-        "         --conf-new take every new config default (yours -> .old)\n");
+        "         --conf-new take every new config default (yours -> .old),\n"
+        "         --force-remove-essential remove or purge an essential "
+        "package\n");
 }
 
 /* ---------------- update ---------------- */
@@ -223,7 +227,9 @@ static void inst_marker(const struct conf *cf, const struct pkgent *e,
                         char *buf, unsigned buflen)
 {
     char iver[128];
+    char ess[64];
     const char *v;
+    int essential;
 
     if (!ent_installed_v(cf, e, iver, sizeof(iver))) {
         if (e->refused != NULL)
@@ -235,9 +241,11 @@ static void inst_marker(const struct conf *cf, const struct pkgent *e,
         return;
     }
     v = iver[0] == '\0' ? "(none)" : iver;
-    if (strlen(v) + 13 > buflen)         /* "[installed ]" + NUL */
+    essential = pkg_essential(cf, e->pkginst, ess, sizeof(ess));
+    if (strlen(v) + 24 > buflen)         /* "[installed , essential]" */
         v = "?";
-    sprintf(buf, "[installed %s]", v);   /* bounded: checked above */
+    sprintf(buf, "[installed %s%s]", v,  /* bounded: checked above */
+            essential ? ", essential" : "");
 }
 
 static void list_line(const struct conf *cf, const struct pkgent *e)
@@ -294,6 +302,7 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
 {
     struct pkgent *e;
     char iver[128];
+    char ess[64];
     int i;
 
     e = catalog_find(cat, name);
@@ -333,9 +342,13 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     }
     printf("Category:    %s\n", e->category);
     printf("Description: %s\n", e->desc);
-    if (ent_installed_v(cf, e, iver, sizeof(iver)))
+    if (ent_installed_v(cf, e, iver, sizeof(iver))) {
         printf("Installed:   yes, version %s\n",
                iver[0] == '\0' ? "(none)" : iver);
+        if (pkg_essential(cf, e->pkginst, ess, sizeof(ess)))
+            printf("Essential:   yes (%s=%s; remove and purge refuse it)\n",
+                   APKG_ESSENTIAL_PARAM, ess);
+    }
     else if (!e->kspace && conffile_state(cf, e->pkginst))
         printf("Installed:   no (config-files: edited config files kept;"
                " apkg purge %s deletes them)\n", e->name);
@@ -428,6 +441,8 @@ int main(int argc, char **argv)
                 opt_conf = CONF_KEEP;
             } else if (strcmp(argv[i], "--conf-new") == 0) {
                 opt_conf = CONF_NEW;
+            } else if (strcmp(argv[i], "--force-remove-essential") == 0) {
+                opt_force_essential = 1;
             } else {
                 warnx2("unknown option %s", argv[i]);
                 usage();

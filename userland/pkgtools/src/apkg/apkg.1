@@ -23,6 +23,8 @@ apkg \- remote package client for Amiga Unix (SVR4)
 .B \-\-conf\-keep
 |
 .B \-\-conf\-new
+] [
+.B \-\-force\-remove\-essential
 ]
 .I verb
 [
@@ -59,7 +61,11 @@ is rejected.
 List catalog packages, one per line: name, catalog version, an
 installed marker with the installed version (or
 .B (none)
-for VERSION-less stock packages), category and description.
+for VERSION-less stock packages), category and description.  An
+installed essential package shows as
+.B "[installed \fIversion\fB, essential]"
+(see
+.BR "ESSENTIAL PACKAGES" ).
 .B installed
 restricts the list to packages present in
 .BR /var/sadm/pkg ,
@@ -73,7 +79,10 @@ Case-insensitive substring match against package names and
 descriptions.
 .TP
 .BI info " name"
-Print the full catalog entry and installed state of one package.
+Print the full catalog entry and installed state of one package, with
+an
+.B Essential:
+line when the installed package is essential.
 .TP
 .BI download " name"
 Fetch the package file into the cache directory and verify its md5
@@ -154,6 +163,8 @@ it is removed with
 .B pkgrm
 of the instance owning its recorded files, its record is deleted, and
 the next generation is built and committed without it.
+An essential package is refused (see
+.BR "ESSENTIAL PACKAGES" ).
 .TP
 .BI purge " name"
 Remove the package if it is installed, then delete the config files
@@ -167,7 +178,9 @@ files, their
 lines and the package's baselines.  A package already removed with its
 config files kept
 .RB ( [config-files] )
-is purged without a pkgrm.
+is purged without a pkgrm.  An installed essential package is refused,
+as by
+.BR remove .
 .TP
 .BR conffiles " [" list | resolve "] [\fIname\fR]"
 .B list
@@ -243,6 +256,59 @@ apkg: perl: refused: it installs only on ufs, and
 (one line).  A malformed value refuses the package with exit 3.
 .B \-f
 does not override the check; an unmarked package is never checked.
+.SH "ESSENTIAL PACKAGES"
+A package the system cannot boot or run without, such as the base
+package that owns
+.B /etc/inittab
+and
+.BR /etc/default/login ,
+carries
+.PP
+.RS
+.B APKG_ESSENTIAL=yes
+.RE
+.PP
+in its
+.BR pkginfo (5).
+Removing such a package would delete its files, and its
+.BR conffile (5)
+class script deletes every config file still equal to its default.
+.B remove
+and
+.B purge
+(also with
+.BR \-n )
+refuse an installed essential package before the journal or
+.B pkgrm
+is touched, with exit 5:
+.PP
+.RS
+.nf
+apkg: base (pkginst BASE) is essential (APKG_ESSENTIAL=yes): the
+system may not boot without it; not removed
+(\-\-force\-remove\-essential overrides)
+.fi
+.RE
+.PP
+(one line).  The mark is read from the installed
+.BI /var/sadm/pkg/ pkginst /pkginfo\fR,
+so it is the installed version that decides.
+.B no
+or no line at all means not essential; any other value counts as
+.BR yes .
+.B \-f
+does not override the refusal;
+.B \-\-force\-remove\-essential
+does, with a warning.  Installing over the package, and the swap of
+one kernel package of a line for another (see
+.BR "KERNEL SPACE" ),
+are not removals and are not affected.
+.PP
+Only
+.B apkg
+honours the mark.  The engine ignores the parameter, and the stock
+.BR pkgrm (1M)
+removes an essential package like any other when asked to directly.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments (kernel/dlm contract
@@ -458,6 +524,15 @@ For batch runs and the installer.
 .B \-\-conf\-new
 Take every new config default without asking; your file is saved as
 .IB file .old\fR.
+.TP
+.B \-\-force\-remove\-essential
+Let
+.B remove
+and
+.B purge
+remove an essential package (see
+.BR "ESSENTIAL PACKAGES" ).
+Like the other long options it comes before the verb.
 .SH "CONFIG FILES"
 A package may mark files you edit in place, such as
 .BR /etc/apkg.conf ,
@@ -921,7 +996,9 @@ to record a new config default taken with
 Dependency cycle, or a dependency (or install target) missing from
 the catalog; a kernel-space pre-flight refusal (kabi, pin, line); a
 package refused for the filesystem it would land on (see
-.BR FILESYSTEM ).
+.BR FILESYSTEM );
+the removal of an essential package refused (see
+.BR "ESSENTIAL PACKAGES" ).
 .TP
 .B 6
 kbootset could not run, failed (status 1) or rejected its arguments

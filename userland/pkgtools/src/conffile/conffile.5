@@ -112,6 +112,15 @@ file and its
 .B PENDING
 line are removed in both cases.  Installing the package again finds the
 kept file and its baseline, and the rules above apply.
+.PP
+Removing a package therefore deletes every conffile of it you never
+edited.  A package the system cannot boot without carries
+.B APKG_ESSENTIAL=yes
+in its pkginfo, and
+.BR apkg (1)
+refuses to remove it; the stock
+.B pkgrm
+does not look at the mark.
 .SH FILES
 .PD 0
 .TP 36

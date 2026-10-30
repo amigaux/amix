@@ -37,7 +37,9 @@ stale `.new` and its `PENDING` line.
 
 `r.conffile`, per path: an unedited file is removed with its baseline; an edited one is kept with
 its baseline (the config-files state) and pkgrm says so; `.new` and the `PENDING` line go either way;
-empty baseline directories are pruned.
+empty baseline directories are pruned.  So removing a package deletes every config file of it you
+never edited; a package the system cannot boot without (the base package, with `/etc/inittab`)
+carries `APKG_ESSENTIAL=yes` and apkg refuses to remove it (`docs/design.md` section 2c).
 
 Departures from P-36's table, and why:
 

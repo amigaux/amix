@@ -175,7 +175,9 @@
 #define EX_VERIFY  3   /* md5/size/catalog verification failure */
 #define EX_PKGCMD  4   /* pkgadd/pkgrm (or zcat step) failure */
 #define EX_DEPS    5   /* dependency cycle or missing dependency; also a
-                          kernel-space pre-flight refusal (kabi, pin, line) */
+                          kernel-space pre-flight refusal (kabi, pin, line),
+                          a UFS-only package elsewhere, or an essential
+                          package's removal */
 #define EX_BOOTSET 6   /* kbootset could not run, failed (status 1) or
                           rejected its arguments (2); the packages are
                           installed, `apkg recover` retries the build */
@@ -201,6 +203,7 @@
 extern int opt_dryrun;   /* -n */
 extern int opt_force;    /* -f */
 extern int opt_verbose;  /* -v */
+extern int opt_force_essential;  /* --force-remove-essential */
 /* what to do with a config file kept beside a new default (conffile.c):
  * ask at a terminal (else leave it pending), keep (-y, --conf-keep) or
  * take the new default (--conf-new) */
@@ -383,6 +386,15 @@ extern void apkg_ipv4_str(unsigned long addr, char *buf);  /* buf >= 16 */
  * (empty string when the pkginfo has no VERSION= line) */
 extern int installed_version(const struct conf *cf, const char *pkginst,
                              char *ver, unsigned verlen);
+
+/* The pkginfo parameter APKG_ESSENTIAL=yes (docs/design.md section 2c):
+ * the system may not boot without the package, so remove and purge
+ * refuse it, exit EX_DEPS, unless --force-remove-essential.  1 when the
+ * installed pkginfo carries the parameter with any value but "no" (an
+ * unknown value counts as yes; val gets it), 0 otherwise. */
+#define APKG_ESSENTIAL_PARAM "APKG_ESSENTIAL"
+extern int pkg_essential(const struct conf *cf, const char *pkginst,
+                         char *val, unsigned vallen);
 
 extern int cmd_download(const struct conf *cf, struct catalog *cat,
                         const char *name);

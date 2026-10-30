@@ -50,7 +50,8 @@ it); with no terminal and no flag they stay pending. See
 Exit codes: `0` ok · `1` usage/config · `2` network · `3` verify
 (md5/sha256/size/catalog, a malformed `APKG_FSTYPE`) · `4` pkgadd/pkgrm/zcat
 (or installf for `--conf-new`) failure · `5` dependency cycle or missing dependency, a kernel-space
-pre-flight refusal, or a UFS-only package on another filesystem · `6`
+pre-flight refusal, a UFS-only package on another filesystem, or the removal of an essential
+package · `6`
 kbootset could not run or failed (status 1/2; `apkg recover` retries) ·
 `7` kbootset refused (status 3/4; the committed generation is unchanged).
 See [apkg.1](apkg.1) for the full manual.
@@ -63,6 +64,14 @@ transaction, when the directory of one of its long names, under the `-R`
 target, is on another filesystem type (`statvfs` `f_basetype`; the install
 base when it has no long name).  Unmarked packages are not checked.
 `fsreq.c`; the interface is `docs/design.md` section 2b.
+
+## Essential packages (`APKG_ESSENTIAL`)
+
+A package whose installed pkginfo says `APKG_ESSENTIAL=yes` (the base package: its `r.conffile`
+would delete an unedited `/etc/inittab`) is refused by `remove`, `purge` and `remove --purge`,
+exit 5, before the journal or `pkgrm`; `-f` does not override it, `--force-remove-essential` does.
+`list` shows `[installed <version>, essential]`. Stock `pkgrm` ignores the mark. The interface
+is `docs/design.md` section 2c.
 
 ## Kernel space (0.3)
 

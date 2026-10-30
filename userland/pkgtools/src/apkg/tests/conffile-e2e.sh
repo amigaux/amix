@@ -205,6 +205,46 @@ ap remove --purge conft; check "remove --purge: rc 0" test $? -eq 0
 check "  ... package and edited file both gone" \
     bash -c "test ! -e '$T/etc/toy.conf' && test ! -d '$T/var/sadm/pkg/CONFT' && test ! -e '$T/var/sadm/conffiles/CONFT'"
 
+# ------------------------------------------------- essential packages ---
+# APKG_ESSENTIAL=yes reaches the installed pkginfo through the engine, and
+# remove and purge refuse the package, so r.conffile never runs on its
+# unedited config files; --force-remove-essential removes it.
+echo "essential packages"
+d=$WORK/src-ess; mkdir -p "$d" "$WORK/spool-ess"
+printf 'boot=1\n' > "$d/ess.conf"
+printf 'PKG=ESSENT\nNAME=essential test\nARCH=m68k\nVERSION=1\nCATEGORY=system\nCLASSES=none conffile\nBASEDIR=/\nAPKG_ESSENTIAL=yes\n' \
+    > "$d/pkginfo"
+cat > "$d/prototype" <<EOF
+i pkginfo=$d/pkginfo
+i i.conffile=$CFS/i.conffile
+i r.conffile=$CFS/r.conffile
+e conffile /etc/ess.conf=$d/ess.conf 0644 root sys
+EOF
+( cd "$d" && "$HB/pkgmk" -o -d "$WORK/spool-ess" -f prototype &&
+  "$HB/pkgtrans" -s "$WORK/spool-ess" "$WORK/pkgs/ESSENT-1.pkg" ESSENT ) \
+    >>"$WORK/mk.log" 2>&1 || { echo "FAIL: building ESSENT"; cat "$WORK/mk.log"; exit 1; }
+rm -rf "$WORK/repo"; mkdir -p "$WORK/repo/pkgs"
+cp "$WORK/pkgs/ESSENT-1.pkg" "$WORK/repo/pkgs/"
+python3 "$GEN" --packages-conf none -o "$WORK/repo" "$WORK/repo/pkgs" >>"$WORK/gen.log" 2>&1
+ap update >/dev/null
+ap install essent; check "install of an essential package: rc 0" test $? -eq 0
+check "  ... the engine keeps the mark in the installed pkginfo" \
+    grep -qx 'APKG_ESSENTIAL=yes' "$T/var/sadm/pkg/ESSENT/pkginfo"
+ap list installed; check "list marks it essential" says '[installed 1, essential]'
+ap remove essent; check "remove: rc 5" test $? -eq 5
+check "  ... says why and how to override" \
+    says 'essent (pkginst ESSENT) is essential (APKG_ESSENTIAL=yes): the system may not boot without it; not removed (--force-remove-essential overrides)'
+check "  ... the package and its unedited config file stay" \
+    bash -c "test -f '$T/etc/ess.conf' && test -f '$T/var/sadm/pkg/ESSENT/pkginfo'"
+ap purge essent; check "purge: rc 5" test $? -eq 5
+ap remove --purge essent; check "remove --purge: rc 5" test $? -eq 5
+check "  ... still installed" test -f "$T/etc/ess.conf"
+ap --force-remove-essential remove essent
+check "--force-remove-essential remove: rc 0" test $? -eq 0
+check "  ... warns" says 'is essential (APKG_ESSENTIAL=yes); removing it (--force-remove-essential)'
+check "  ... gone, and r.conffile took the unedited config file" \
+    bash -c "test ! -e '$T/etc/ess.conf' && test ! -d '$T/var/sadm/pkg/ESSENT'"
+
 echo
 echo "== conffile e2e: $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

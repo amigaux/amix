@@ -123,7 +123,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
 - **.Z transparency**: filename ends `.Z` → pipe through native `zcat` before pkgadd.
 - **admin file** shipped at `/var/apkg/admin`: `instance=quit`, all checks `nocheck`, `action=nocheck`,
   `mail=`; install runs `pkgadd -n -a /var/apkg/admin -d <file> <pkginst>`.
-- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify (also a malformed `APKG_FSTYPE`), 4 pkgadd/pkgrm failure (or installf recording a `--conf-new` default), 5 dep cycle/missing (and the kernel-space pre-flight, and a UFS-only package on another filesystem, section 2b), 6 kbootset error (status 1/2, or not runnable), 7 kbootset refusal (status 3/4). Kernel space (apkg 0.3): NOTES.md 2026-10-25.
+- Exit codes: 0 ok, 1 usage/config, 2 network, 3 verify (also a malformed `APKG_FSTYPE`), 4 pkgadd/pkgrm failure (or installf recording a `--conf-new` default), 5 dep cycle/missing (and the kernel-space pre-flight, a UFS-only package on another filesystem, section 2b, and the removal of an essential package, section 2c), 6 kbootset error (status 1/2, or not runnable), 7 kbootset refusal (status 3/4). Kernel space (apkg 0.3): NOTES.md 2026-10-25.
 - Host-testable: builds with `gcc -std=gnu89` on Linux (sockets are portable); tests run against
   `python3 -m http.server` + a fake pkgadd shim.
 
@@ -241,6 +241,50 @@ works from any source, FILE and RAW included.
 **What an old client does.** apkg 0.1 to 0.3.3 do not read the mark: on s5 they install a marked
 package with truncated names. The refusal reaches a box with the first APKG minted from this
 source.
+
+### 2c. Packages the system cannot do without: `APKG_ESSENTIAL`
+
+P-36 W2 follow-up (2026-10-30). Removing the base package would run its `r.conffile`, which deletes
+every config file still equal to its default: an unedited `/etc/inittab` or `/etc/default/login`
+would go and the box would not boot. dpkg's `Essential: yes` answers the same problem. This
+section is the interface between the packages' build (`build/pkg`, which sets the mark) and apkg
+(which enforces it).
+
+**The mark.** One pkginfo(4) parameter in the package's own `pkginfo`:
+
+```
+APKG_ESSENTIAL=yes
+```
+
+- **Name:** pkginfo(4) has no such standard parameter, and an unknown one is legal (every pkgadd
+  only exports it to the install scripts' environment and copies it into the installed
+  `pkginfo`). The `APKG_` prefix is ours, as for `APKG_DEPS`, `APKG_DESC` and `APKG_FSTYPE`, and
+  keeps clear of any name SVR4 or a later vendor (Solaris prefixes its own `SUNW_`) may define.
+- **Value:** `yes` or `no` (blanks around the value and one pair of quotes are tolerated, as for
+  any pkginfo value). Absent or `no`: not essential. `gen-catalog.py` SKIPs a package with any
+  other value; apkg counts any other value as `yes`, the safe reading.
+- **Who carries it:** a package whose removal leaves a system that does not boot or cannot be
+  administered, such as the base package (inittab, login defaults, the shells).
+- **Where it lives:** the datastream's first archive, `<PKG>/pkginfo`, like `APKG_FSTYPE`; the
+  engine copies it into `/var/sadm/pkg/<PKG>/pkginfo` (heirloom pkgadd under `-R`, tested in
+  `src/apkg/tests/conffile-e2e.sh`).
+
+**apkg's check** (`src/apkg/install.c`, `pkg_essential()`, `cmd_remove()`). The mark is read from
+the **installed** `pkginfo`, so the installed version decides and no catalog support is needed.
+`remove`, `purge` and `remove --purge` of an installed essential package are refused, **exit 5**,
+before the journal is written or `pkgrm` runs, also under `-n`, with one line:
+`apkg: base (pkginst BASE) is essential (APKG_ESSENTIAL=yes): the system may not boot without it;
+not removed (--force-remove-essential overrides)`. `-f` does not override it; the long option
+`--force-remove-essential` (before the verb, like the other long options; dpkg's
+`--force-remove-essential`) does, with a warning, and the removal then runs as for any package.
+`purge` of a package already removed (the config-files state) is not refused. Installing or
+upgrading over the package, and the swap of a line's kernel package (C2-2 v5 §2.1), are not
+removals and are not affected. `apkg list` shows `[installed <version>, essential]`, and `apkg
+info` adds `Essential:   yes (APKG_ESSENTIAL=yes; remove and purge refuse it)`.
+
+**What is not stopped.** The engine ignores the parameter: stock and heirloom `pkgrm` remove an
+essential package like any other when asked to directly, and an apkg before 0.3.4 does not read
+it. The mark protects the path users take, not every path.
 
 ## 3. contents-fsck (`src/contents-fsck/`)
 
