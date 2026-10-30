@@ -69,6 +69,7 @@ loader/        boot1, boot2 and the code they share (loader/common)
 core/          the patch series over the upstream DLM core, and its platform code
 kbootset/      the composer
 modtools/      the library behind modadmin
+man/           kbootset(1M) and its whatis line, as /opt/amix/man installs them
 abi/           the ABI kit's sources: headers, lists, registries, make fragment
 tools/         host tools (mkstore, carve.py, mkkit.sh, ...) and tools/measure/
 tests/         host, cross, core-harness, kit and Bench tests
