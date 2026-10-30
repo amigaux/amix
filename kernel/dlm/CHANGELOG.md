@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-30 — kbuild.sh flips the bytes it corrupts (cdd160a)
+
+The test wrote a constant 'X'/'Y' over a random fixture kernel, a no-op one time in 256, so gate 1 passed (CI on
+de0ec40 and 5e06e1a). It now complements each byte and checks it changed, at six sites; 200 runs, 0 failed.
+
 ## 2026-10-30 — kbootset major <module> (bf90a17)
 
 `kbootset major <module>` prints the majors the compiled-in registry gives a module, one `c <n>`/`b <n>` line each
