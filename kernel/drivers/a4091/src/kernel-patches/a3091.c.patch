@@ -1,0 +1,259 @@
+Two fixes to the A3000 internal-SCSI driver, amiga/alien/a3091.c: make the
+chip-mem DMA bounce PER-UNIT so concurrent transfers to different targets can
+no longer copy a bounce buffer back to the wrong unit (first section), and
+repair the start-queue lifecycle across disconnect/reselect so a resumed unit
+can never be restarted after its command chain has drained (second section).
+
+FIRST fix -- per-unit chip-mem DMA bounce:
+
+amiga/alien/a3091.c drives the A3000 onboard "super-DMAC" + WD33C93 (autocon
+0x0202F003 @ 0xDD0000).  The super-DMAC cannot reach Fast RAM at or above
+0x1000000, so any caller buffer there must be bounced through chip RAM: on a
+write, copy the caller's data into a chip buffer and point the DMAC at it; on a
+read, DMA into the chip buffer and copy it back to the caller when the transfer
+stops.  Chip RAM is always DMA-reachable, so the bounce is always safe.  (This
+is the same bounce the A2091 card driver has always carried; see a2091.c.patch.)
+
+The FIRST cut of this bounce (commit e70c1d7) kept the in-flight bounce state in
+two FILE STATICS -- `chipaddr` (the chip buffer, 0 when none) and `dma_tc` (its
+byte count).  That is safe for a single stream but WRONG for this driver, which
+is multi-target: the WD33C93 runs a disconnect/reselect DFA (a3091intr) and the
+driver already keeps the saved SCSI transfer count PER UNIT (units[].tc0/tc1/tc2)
+precisely because targets interleave on the bus.  A target can disconnect
+mid-transfer and another reselect before the first completes; case 2/3 of the
+DFA switch `curunitp` from one units[] entry to another and re-arm the DMAC for
+the newly reselected unit.  The bounce buffer pointer and its copy-back length
+have exactly the same lifetime requirement as tc0/1/2 -- they must survive an
+excursion to another target -- but as file statics there was only ONE copy for
+all eight units.  stopdma() copies `dma_tc` bytes from `chipaddr` to
+`curunitp->comhead->addr + nbyte - dma_tc`; once a reselect has moved curunitp
+to unit B while the single chipaddr/dma_tc still describe unit A's transfer (or
+B's startdma has overwritten them under A's still-pending copy-back), the three
+operands no longer name one unit.  The copy-back then writes one unit's buffer
+to another unit's address with a mismatched length: `addr + nbyte - dma_tc`
+lands outside the target buffer -> wild write -> `hat_pt2ptdat` panic /
+`User BUS ERROR`.  Reproduced by `dd if=/dev/rdsk/c5d0s1 of=/dev/null` (unit 5)
+looped while `cp` writes DH0 (unit 6); either stream alone is clean.
+
+Fix: move the bounce state into the per-unit `struct unit`, exactly like
+tc0/1/2.  Each unit gets its own `chipaddr` (the buffer in use for THIS unit's
+in-flight bounced DMA, 0 otherwise) and `dma_tc` (that DMA's byte count).
+startdma(up) writes up->chipaddr/up->dma_tc; stopdma() reads them back through
+curunitp -- so source buffer, destination address and length are structurally
+the same unit's, and no reselect that flips curunitp between units[] can ever
+cross them.  Walk the path: startdma(A) sets A->chipaddr/A->dma_tc; a reselect
+to B (case 2 stopdma -> case 3) copies A's buffer back to A using A's own
+chipaddr/dma_tc, then startdma(B) sets B->chipaddr/B->dma_tc; B's later stopdma
+copies B's buffer using B's own state.  A and B never touch each other's bounce.
+
+The buffer is also now a PERSISTENT per-unit chip buffer allocated ONCE in
+initialize() rather than AllocMem'd/FreeMem'd inside startdma()/stopdma() on
+every high-buffer DMA.  Those routines run in the a3091intr (INT2) handler, and
+allocating from the interrupt is itself fragile; a fixed buffer removes it.  The
+buffer is sized BOUNCESZ = one page (0x1000): amiga_dma_pageio() chunks every
+block/raw disk and tape transfer to a page, and the only larger consumer
+(scsi.c GSIO, <=64 KB) bounces through a low kernel iobuf that never trips the
+>=0x1000000 test, so nothing above a page ever reaches this path.  A guard
+(`if (n > BOUNCESZ) panic`) fails loud rather than overrunning the buffer should
+that ever change.  Eight units * one page = 32 KB of chip RAM reserved for the
+life of the driver -- negligible on any A3000.  The `>= 0x1000000` bounce
+trigger and the chip-RAM semantics are unchanged; buffers below it still go
+direct (up->chipaddr = 0, so stopdma copies nothing back).
+
+SECOND fix -- start-queue lifecycle across disconnect/reselect (found
+2026-08-07 by instruction-level analysis of the interrupt path during the
+P5.4 cdfs root-cause hunt):
+
+The driver keeps a queue of units waiting to be (re)started (starthead/
+starttail, linked through unit.next).  Case 2 of the DFA -- a reselection
+arriving while another unit's select-and-transfer is still STARTING --
+correctly puts the preempted unit back on that queue (uqueue) and falls into
+case 3 to resume the reselecting unit.  But case 3 resumes `units[reg(SI)]`
+WITHOUT removing it from the start queue, and nothing else ever does.  If the
+reselecting unit is one that is still linked there -- in particular when SI
+resolves to the very unit case 2 just requeued -- that unit is now
+simultaneously ACTIVE (curunitp, RESUMING) and QUEUED.  When its command chain
+then drains (case 0 pops comhead and, with no successor command, does not
+re-queue), the stale queue link survives; the next startany() pops it, reads
+`cp = up->comhead` == 0, fetches the CDB bytes through the null pointer and
+computes `device->sac = cp->addr + cp->nbyte - n` from garbage -- a wild DMA.
+A second corruption shape comes for free: uqueue() unconditionally does
+`up->next = 0`, so re-queueing a unit that is already linked mid-queue
+truncates the start queue and strands every unit queued behind it.  Only
+workloads with real disconnect/reselect traffic (concurrent multi-unit I/O --
+the same dd+cp rig that exposed the bounce aliasing above) can reach this.
+
+Fix, three mutually reinforcing pieces:
+  * unqueue() on the reselect-resume path (case 3, including the fall-through
+    from case 2): a resuming unit is unlinked from the start queue, restoring
+    the invariant "linked on the start queue XOR active on the chip".  For the
+    normal shape -- a disconnected, unqueued unit reselecting -- it is a no-op.
+  * uqueue() refuses to double-link (new unit.onq membership flag), so no path
+    can truncate the queue by re-linking an already-linked unit.
+  * startany() skips (drops) a popped entry whose comhead has drained instead
+    of dereferencing it -- defense in depth: a stale entry, however produced,
+    now costs nothing instead of a wild DMA.
+Normal-path behavior is unchanged: units are linked and popped exactly as
+before, the resume sequence itself (CP=0x44, saved tc0/1/2 reload) is
+untouched, and the fix is disjoint from the per-unit bounce state above
+(startdma/stopdma are not modified by it).
+
+Apply against a stock Amix 2.1 source tree:
+    cd /usr/sys && patch -p0 < a3091.c.patch      # target: amiga/alien/a3091.c
+
+--- amiga/alien/a3091.c.orig
++++ amiga/alien/a3091.c
+@@ -7,9 +7,19 @@
+  */
+ 
+ #include	"sys/types.h"
++#include	"memory.h"
+ #include	"rico.h"
+ #include	"sd.h"
+ 
++/*
++ * Largest transfer that can reach the chip-mem bounce path (a caller buffer at
++ * or above 0x1000000).  amiga_dma_pageio() chunks all block/raw disk & tape
++ * I/O to one page, and the only larger consumer (scsi.c GSIO, <=64 KB) bounces
++ * through a low kernel iobuf that never trips the >=0x1000000 test.  A guard in
++ * startdma() panics rather than overrun the buffer should that ever change.
++ */
++#define	BOUNCESZ	0x1000		/* NBPP: one 68030 page */
++
+ 
+ static volatile struct hardware *device;
+ 
+@@ -71,6 +81,10 @@
+ 	uchar		tc0,
+ 			tc1,
+ 			tc2;
++	uint		*bounce,	/* persistent MEMF_CHIP bounce buffer */
++			*chipaddr;	/* == bounce while a bounced DMA runs, else 0 */
++	uint		dma_tc;		/* byte count of this unit's bounced DMA */
++	bool		onq;		/* linked on the start queue */
+ };
+ 
+ 
+@@ -172,6 +186,9 @@
+ volatile struct unit	*up;
+ {
+ 
++	if (up->onq)			/* already linked: re-linking would */
++		return;			/* clobber ->next and truncate the queue */
++	up->onq = TRUE;
+ 	up->next = 0;
+ 	if (starthead) {
+ 		starttail->next = up;
+@@ -185,6 +202,35 @@
+ }
+ 
+ 
++/*
++ * Unlink a unit from the start queue if it is on it.  Called on the
++ * reselect-resume path (case 3): a unit that case 2 just requeued can be
++ * the very unit now reselecting, and resuming it while it stays linked
++ * lets a later startany() restart it after its command chain has drained
++ * (comhead == 0 -> CDB fetched through a null pointer, wild DMA address).
++ */
++static
++unqueue( up)
++volatile struct unit	*up;
++{
++	volatile struct unit	*p;
++
++	unless (up->onq)
++		return;
++	up->onq = FALSE;
++	if (starthead == up)
++		starthead = up->next;
++	else
++		for (p = starthead; p; p = p->next)
++			if (p->next == up) {
++				unless (p->next = up->next)
++					starttail = p;
++				break;
++			}
++	up->next = 0;
++}
++
++
+ static
+ startany( )
+ {
+@@ -192,11 +238,16 @@
+ 	volatile struct sdcom	*cp;
+ 	uint		i;
+ 
+-	unless ((istate == IDLE)
+-	and (up = starthead))
++	unless (istate == IDLE)
+ 		return;
+-	starthead = up->next;
+-	cp = up->comhead;
++	for (;;) {			/* skip entries drained while queued */
++		unless (up = starthead)
++			return;
++		starthead = up->next;
++		up->onq = FALSE;
++		if (cp = up->comhead)
++			break;
++	}
+ 	curunitp = up;
+ 	for (i=0; i<nel( cp->cdb); ++i)
+ 		setreg( CDB+i, cp->cdb[i]);
+@@ -249,6 +300,7 @@
+ 		uqueue( curunitp);
+ 	case 3:
+ 		up = &units[reg( SI)&SDUNITS-1];
++		unqueue( up);		/* resuming: it must not stay startable */
+ 		unless (cp = up->comhead) {
+ 			istate = badhardware( ss);
+ 			break;
+@@ -334,7 +386,19 @@
+ 		device->cntr = 1<<3 | 1<<2;
+ 	else
+ 		device->cntr = 1<<3 | 1<<2 | 1<<1;
+-	device->sac = cp->addr + cp->nbyte - n;
++	up->dma_tc = n;
++	if (cp->addr >= (caddr_t)0x1000000) {
++		if (n > BOUNCESZ)
++			panic( "a3091: DMA too big");
++		up->chipaddr = up->bounce;
++		unless (cp->reading)
++			bcopy( cp->addr+cp->nbyte-n, up->chipaddr, n);
++		device->sac = up->chipaddr;
++	}
++	else {
++		up->chipaddr = 0;
++		device->sac = cp->addr + cp->nbyte - n;
++	}
+ 	device->sdma = TRUE;
+ 	dma_on = TRUE;
+ }
+@@ -352,6 +416,13 @@
+ 	device->cint = TRUE;
+ 	device->srst = TRUE;
+ 	dma_on = FALSE;
++	if (curunitp->chipaddr) {
++		volatile struct sdcom	*cp = curunitp->comhead;
++		if (cp->reading)
++			bcopy( curunitp->chipaddr,
++			       cp->addr+cp->nbyte-curunitp->dma_tc, curunitp->dma_tc);
++		curunitp->chipaddr = 0;
++	}
+ }
+ 
+ 
+@@ -377,6 +448,12 @@
+ 		startcom = 0x08;
+ 	setreg( SI, ER);
+ 	setreg( TP, 0xFF);
++	{
++		int	u;
++		for (u = 0; u < SDUNITS; ++u)
++			unless (units[u].bounce = AllocMem( BOUNCESZ, MEMF_CHIP))
++				panic( "a3091: no chip mem");
++	}
+ }
+ 
+ 

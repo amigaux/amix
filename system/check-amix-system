@@ -1,0 +1,19 @@
+#!/bin/sh
+# check-amix-system: check a checkout of amix-system against this directory.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: system/check-amix-system DIR
+# Every regular file must match MANIFEST.sha256 and every symbolic link
+# SYMLINKS. Silent and 0 when it does; a reason on stderr and 2 otherwise.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+sys=${1:?usage: check-amix-system DIR}
+[ -d "$sys/usr/include" ] || { echo "check-amix-system: $sys has no usr/include" >&2; exit 2; }
+(cd "$sys" && sha256sum -c --strict --quiet "$here/MANIFEST.sha256") || {
+	echo "check-amix-system: $sys does not match system/MANIFEST.sha256" >&2; exit 2; }
+links=$(cd "$sys" && find usr -type l | LC_ALL=C sort | while read -r l; do
+	printf '%s -> %s\n' "$l" "$(readlink "$l")"; done)
+[ "$links" = "$(cat "$here/SYMLINKS")" ] || {
+	echo "check-amix-system: $sys does not match system/SYMLINKS" >&2; exit 2; }

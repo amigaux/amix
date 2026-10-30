@@ -1,6 +1,7 @@
 # CI for amix: the privacy check over what a push or pull request adds, the
-# privacy check's self-test, and the host tests that need no Amiga and no
-# cross compiler. Not required for merges. See docs/ci.md.
+# privacy check's self-test, the host tests that need no Amiga and no cross
+# compiler, and the dlm kit and modules built in the build container with
+# the pinned toolchains. Not required for merges. See docs/ci.md.
 name: ci
 
 on:
@@ -68,3 +69,49 @@ jobs:
         run: make -C kernel/modules/ramdisk/module test
       - name: build/pkg pkgmeta host test
         run: make -C build test
+
+  kit:
+    name: kit build (container)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash   # -eo pipefail: a failure before | tee fails the step
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: amix-system at its pin, checked
+        run: system/fetch-amix-system "$RUNNER_TEMP/amix-system"
+      - name: restore the toolchain image
+        id: image
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: amix-toolchain-${{ hashFiles('toolchain/Containerfile', 'toolchain/*.pin', 'toolchain/container-build.sh', 'system/amix-system.pin', 'system/MANIFEST.sha256', 'system/SYMLINKS', 'system/check-amix-system') }}
+      - name: build the toolchain image
+        if: steps.image.outputs.cache-hit != 'true'
+        run: |
+          toolchain/container-build.sh "$RUNNER_TEMP/amix-system" amix-toolchain:ci
+          mkdir -p "$RUNNER_TEMP/toolchain-image"
+          docker save amix-toolchain:ci | zstd -q -T0 -o "$RUNNER_TEMP/toolchain-image/image.tar.zst"
+          ls -l "$RUNNER_TEMP/toolchain-image"
+      - name: save the toolchain image
+        if: steps.image.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: ${{ steps.image.outputs.cache-primary-key }}
+      - name: load the toolchain image
+        if: steps.image.outputs.cache-hit == 'true'
+        run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
+      - name: dlm kit, kit tests and modules
+        run: toolchain/container-kit.sh amix-toolchain:ci | tee "$RUNNER_TEMP/kit.txt"
+      - name: kit and module hashes
+        run: |
+          {
+            echo '### Kit and module hashes'
+            echo '```'
+            grep -E '^(port|kit|module) ' "$RUNNER_TEMP/kit.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

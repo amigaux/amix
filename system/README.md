@@ -26,21 +26,27 @@ built against; see `toolchain/README.md`.
 
 ## The files here
 
+- `amix-system.pin`: the commit of amix-system this tree builds against, as
+  `<repository URL> <full commit hash>`.
 - `MANIFEST.sha256`: the sha256 and path of every regular file in
   amix-system, in `sha256sum` format, sorted by path.
 - `SYMLINKS`: every symbolic link in amix-system, as `path -> target`.
+- `fetch-amix-system DIR`: checks out amix-system at the pin into `DIR` (from
+  the pin's URL, or from a local clone named by `AMIX_SYSTEM_REPO`) and
+  checks it.
+- `check-amix-system DIR`: checks a checkout of amix-system against
+  `MANIFEST.sha256` and `SYMLINKS`; silent when it matches.
 
-Check a checkout of amix-system against them from its top directory:
-
-```sh
-sha256sum -c --strict --quiet /path/to/amix/system/MANIFEST.sha256
-```
-
-The manifest is regenerated the same way it was made:
+The build container is built only from a checkout that passes the check.
+The manifest is regenerated, from the top of an amix-system checkout, the
+same way it was made:
 
 ```sh
 find floppies kernels usr -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
 ```
+
+When amix-system changes, the pin, `MANIFEST.sha256` and `SYMLINKS` change
+together in one commit.
 
 ## Why the hashes are here
 

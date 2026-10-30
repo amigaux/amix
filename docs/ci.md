@@ -14,6 +14,9 @@ finding to fix, not a gate.
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |
 | tests | build/pkg pkgmeta host test | `make -C build test` |
+| kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
+| kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
+| kit | the dlm kit, its tests and every module, in the container | `toolchain/container-kit.sh amix-toolchain:ci` |
 
 The range of the privacy check is the pull request's base to its head, or for
 a push the previous tip of `master` to the new one. When there is no previous
@@ -29,16 +32,31 @@ environment variables. The local list never enters this repository, so CI
 runs the public classes only and says so in its log. Every maintainer's push
 still runs the full check, local list included, from the pre-push hook.
 
-## What it does not run yet
+## The kit job
 
-Everything that needs the cross compilers: the dlm kit (`make kit`,
-`kit-test`, the boot loaders), the module objects, and the kernels. Those run
-once the build container of `toolchain/` is in CI. Host-test cases that need
-inputs outside this repository (stock kernels, floppies) skip themselves and
-say so.
+The kit job builds the build container of `toolchain/` from the two
+toolchain pins and the AMIX system files, then the dlm ABI kit for both
+kernel lines, its tests and both lines of every module in kernel/modules,
+all with the pinned compilers. The system files come from
+`amigaux/amix-system` at the commit in `system/amix-system.pin`, checked
+against `system/MANIFEST.sha256` and `system/SYMLINKS` before anything is
+built; the 68040/68060 port comes from `kernel/port/port.pin`.
+
+Building the container is most of the time, so the image is cached: a
+`docker save` of it, compressed with zstd, under a key made from the files
+it is built from (`Containerfile`, the pins, `container-build.sh` and the
+`system/` pin, manifest and check). Any change to those builds a new image;
+anything else loads the cached one. The step summary lists the digest of
+each kit and the sha256 of each module object; `kit.conf` and `NOTICE` name
+the amix commit, so the kit's second digest leaves them out.
+
+What CI does not build yet: the kernels and the boot media. Host-test cases
+that need inputs outside this repository (stock kernels, floppies) skip
+themselves and say so.
 
 ## Running it locally
 
 Each step is an ordinary command; run it from the top of the repository. The
 host tests need a C compiler, `make`, `python3` and zlib's headers
-(`zlib1g-dev` on Debian and Ubuntu).
+(`zlib1g-dev` on Debian and Ubuntu). The kit job needs docker (or podman,
+with `CONTAINER=podman`) and network access to GitHub and the GNU mirrors.

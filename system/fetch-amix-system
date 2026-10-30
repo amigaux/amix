@@ -1,0 +1,20 @@
+#!/bin/sh
+# fetch-amix-system: check out amix-system at its pin and check it.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: system/fetch-amix-system DIR
+# DIR must not exist. The commit in amix-system.pin is fetched from the
+# pin's URL (or from a local clone named by AMIX_SYSTEM_REPO) and checked
+# against MANIFEST.sha256 and SYMLINKS.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+dir=${1:?usage: fetch-amix-system DIR}
+[ ! -e "$dir" ] || { echo "fetch-amix-system: $dir exists" >&2; exit 2; }
+read -r url commit < "$here/amix-system.pin"
+git init -q "$dir"
+git -C "$dir" fetch -q --depth 1 "${AMIX_SYSTEM_REPO:-$url}" "$commit"
+git -C "$dir" -c advice.detachedHead=false checkout -q "$commit"
+"$here/check-amix-system" "$dir"
+echo "amix-system: $url $commit, $(wc -l < "$here/MANIFEST.sha256") files and $(wc -l < "$here/SYMLINKS") links checked"

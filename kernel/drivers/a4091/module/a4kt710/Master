@@ -1,0 +1,18 @@
+# a4kt710: its .moddata keys (amix-dlm C3-1 section 3, C4-2 section 1 and the
+# A4000T row of section 8) and the definition line.  One Master for both lines:
+# no $cpu, the kit's fragment gives the line's.
+# $match mobo:a4000t-710: a registry probe (20 section 6, C2-1 id 3).  A mobo:
+# key always matches at load; a4kt710_load is the gate (docs/A4000T-ONBOARD-710.md
+# section 10.2) and touches nothing under $DD0000 undeclared.
+# $param declared (C4-2 v6 section 8.1): -1 the Kickstart's NCR ROM tag decides,
+# 0 never touch the window, 1 the owner's override (touch without the tag).
+# $rank mobo: sd's class 3 (C4-1 section 4).  No $majors: sd owns them.
+# $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
+$modtype misc
+$class root
+$match mobo:a4000t-710
+$rank mobo
+$unload never
+$param declared:int:-1:-1:1
+$desc A4000T onboard SCSI (NCR 53C710), root-class disk controller
+a4kt710	a4kt710

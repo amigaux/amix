@@ -34,6 +34,7 @@ snapshot, the same release as CI's runner). `container-build.sh` prepares its
 inputs and runs the build:
 
 ```sh
+system/fetch-amix-system /path/to/amix-system                 # at its pin
 toolchain/container-build.sh /path/to/amix-system            # docker
 CONTAINER=podman toolchain/container-build.sh /path/to/amix-system
 ```
@@ -97,6 +98,12 @@ docker run --rm -v "$PWD":/src amix-toolchain:<tag> sh -c '
   . "$GCA/env.sh" &&
   make -C kernel/dlm kit GCA="$GCA" PORT=/path/to/port'
 ```
+
+`container-kit.sh IMAGE` does the same from the top of a checkout: it
+fetches the port at its pin, runs `make kit kit-test` in kernel/dlm and
+builds both lines of every module in kernel/modules in the container, as the
+calling user. It then prints a digest of each kit and the sha256 of each
+module object. CI runs it on every push; see `docs/ci.md`.
 
 The install prefix does not enter the kit's bytes. A kit built in the
 container can still differ from one built elsewhere in the host-compiled
