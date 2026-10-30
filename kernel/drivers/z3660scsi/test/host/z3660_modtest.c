@@ -1,6 +1,6 @@
 /*
  * z3660_modtest.c -- host test of the root-class module form of src/z3660.c
- * (-DZ3660SCSI_MODULE; amix-dlm contracts C4-1, C4-2).
+ * (-DZ3660SCSI_MODULE; kernel/dlm contracts C4-1, C4-2).
  *
  * The same driver source as z3660_test.c, built with the module switch and
  * HOST_TEST, against the same mock piscsi mailbox.  sd_register() is mocked

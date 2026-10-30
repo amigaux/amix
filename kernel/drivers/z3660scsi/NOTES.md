@@ -1,7 +1,7 @@
 # Z3660 SCSI → Amix driver — notes
 
-(Repo `amix-z3660scsi`; builds go through the sibling `amix-kerntools` harness +
-golden image — `(cd ../amix-kerntools && ./amix-build z3660scsi)`. Started as
+(Directory `kernel/drivers/z3660scsi` of amix, formerly the repo `amix-z3660scsi`; builds go
+through amix's `kernel/k30` harness + golden image — `(cd ../../k30 && ./amix-build z3660scsi)`. Started as
 scouting notes and is now the **dated engineering journal** — read it
 newest-section-first, and note that a dated section corrects the ones above it rather than
 editing them. The **living state is [`CHANGELOG.md`](CHANGELOG.md)**: every landed change has a
@@ -127,7 +127,7 @@ which Amiberry can't exercise — that waits on the emulator below or real HW.)
   queued buf before `iodone()` in `ihandle()`; see the real-HW findings below). kerntools applies it to
   the stock tree with `patch`, idempotently.
 
-Verified on the Amix build box (`../amix-a4091/hdf/Amix-dbg.hdf`):
+Verified on the Amix build box (`../a4091/hdf/Amix-dbg.hdf`):
 - `z3660.c` compiles clean with the K&R SVR4 `cc` on the first try (`cc -c -O`).
 - `ld -r` links it into the `alien` `exp` with `z3660queue` resolving — no unresolved symbols.
 - Full kernel clean-gated (boot-breaker): converged in 4 relinks, **`sum -r` = 44396**, `checkunix`
@@ -176,7 +176,7 @@ same correction landed in `src/z3660.c`'s comments in 900f095; full derivation i
 ## Sources
 - `repo/z3660-drivers/scsi/z3660_scsi.c`, `z3660_scsi.h`, `z3660_scsi_enums.h`, `bootrom.asm`.
 - `repo/KNOWN_ISSUES.md` (DMA-not-in-EMU, SCSI-SD-emulation bug history).
-- The A4091-on-Amix predecessor project ([`amix-a4091`](https://github.com/jusii/amix-a4091)) — framework, build env, gotchas, clean-gate.
+- The A4091-on-Amix predecessor project ([`a4091`](../a4091)) — framework, build env, gotchas, clean-gate.
 - `a2065.cpp` (WinUAE/Amiberry) — the AutoConfig-board + MMIO-bank emulation model.
 
 ## Real-hardware findings (2026-06-12 overnight session)

@@ -72,14 +72,14 @@
  * I/O fails gracefully, just like the A4091 driver when no A4091 is present.
  *
  * Built with -DZ3660SCSI_MODULE the same source is the root-class loadable
- * module z3660scsi (amix-dlm contracts C4-1, C4-2; the section at the end of
+ * module z3660scsi (kernel/dlm contracts C4-1, C4-2; the section at the end of
  * this file): _load probes the board polled in the root pass and registers it
  * with sd_register(); the sd.c probe hook z3660present() and the empty
  * z3660intr() are not in the module.  Without the switch this file is the
  * static driver, byte for byte.
  *
  * Refs: repo/z3660-drivers/scsi/{z3660_scsi.c,z3660_scsi_enums.h},
- *       repo/KNOWN_ISSUES.md, ../amix-a4091/src/a4091-wr.c (Amix framework).
+ *       repo/KNOWN_ISSUES.md, ../a4091/src/a4091-wr.c (Amix framework).
  */
 #include	"sys/types.h"
 #include	"sys/immu.h"		/* PG_V, phystopfn, paddr_t */
@@ -91,7 +91,7 @@
 #include	"rico.h"
 #include	"sd.h"
 #if	defined(Z3660SCSI_MODULE) && !defined(HOST_TEST)
-#include	"sys/moddefs.h"		/* the ABI kit's wrapper (amix-dlm C3-1, C4-2) */
+#include	"sys/moddefs.h"		/* the ABI kit's wrapper (kernel/dlm C3-1, C4-2) */
 #include	"sys/amixddi.h"		/* the kit's DDI: sd_register (C4-1) */
 #endif
 
@@ -1932,7 +1932,7 @@ z3660intr()
 
 #ifdef	Z3660SCSI_MODULE
 /* ----------------------------------------------------------------------------
- * The root-class module form (amix-dlm docs/contracts/C4-2-root-class-driver.md
+ * The root-class module form (kernel/dlm docs/contracts/C4-2-root-class-driver.md
  * version 1, C4-1 version 2).  Built with -DZ3660SCSI_MODULE once per kernel
  * line (k30, k46); module/Master gives the .moddata keys: class=root,
  * match=zorro:144b:01,mobo:z3660-window, rank=z3660, unload=never, no majors
@@ -2012,7 +2012,7 @@ ulong	z3660_cache_bad;	/* kmem: cache= refused or not understood (count) */
 /*
  * The `cache` parameter in the string the core passes to _load: the
  * manifest's "name=value ..." records, or 0 (C3-6 section 1.1); C3-1's int
- * form, decimal with an optional '-' (amix-modules monsw_param's shape).
+ * form, decimal with an optional '-' (kernel/modules monsw_param's shape).
  * Returns 0 if absent, 1 with *vp set if a decimal (saturating above
  * 100000), -1 if present but not a decimal.
  */

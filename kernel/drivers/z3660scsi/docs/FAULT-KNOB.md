@@ -116,7 +116,7 @@ echo '0x<LBA>/W 0t34312'  | adb -w - /dev/kmem     # LAST: arms it
 kmemdump <LBA-hex> 16                              # lba mode n shift, as longs
 ```
 
-`kmemdump` is amix-a4091's `src/kmemdump.c`. It only reads. Mind the no-unit-filter rule: a
+`kmemdump` is a4091's `src/kmemdump.c` (`kernel/drivers/a4091`). It only reads. Mind the no-unit-filter rule: a
 write by the arming session itself can fire the knob if it starts at the same LBA.
 
 **Fired?** `z3660_fault_n` went up by exactly 1 and `z3660_fault_lba` reads 0. If the LBA still

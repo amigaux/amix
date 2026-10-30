@@ -3,7 +3,7 @@
 **Pre-registration, written 2026-08-24, BEFORE any code in this round. Nothing below is to be
 rewritten to match a later measurement.** Round 1 covers **F3-M0** (assert the free ride) and
 **F3-M1** (real maintenance where the free ride cannot reach) for this driver only; the
-ethernet driver is a separate round in `../amix-z3660net`.
+ethernet driver is a separate round in `amix-z3660net` (moving into amix as `kernel/drivers/z3660eth`).
 
 Confidence tags follow the campaign convention: **measured** (a line of source read, or a
 number off a run, with its file), **derived** (arithmetic over measured facts, shown), and
