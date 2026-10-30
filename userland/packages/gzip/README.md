@@ -1,7 +1,7 @@
 # gzip — the recipe
 
 **Package `gzip` 1.3.12** — GNU gzip, the `.gz` compressor. GPL-2.0-or-later.
-Pin: [`pin.sh`](pin.sh).
+Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/gzip
 
@@ -52,3 +52,22 @@ under `/opt/amix/doc/gzip/`. `gunzip` and `zcat` are gzip's own `/bin/sh` wrappe
 default `GNU_STANDARD=1`, so they are wrappers, not symlinks. Their shebang is rewritten from the
 build host's `/bin/bash` to `/bin/sh`; the body is pure Bourne, safe under Amix's 1992 shell. Pure
 file payload, nothing outside `/opt/amix` (D9).
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`, revision `-6`, on gcc14-cross-amix
+b51ff39); the period build stopped at `-2`. Three configure answers are pinned for it: `lstat`
+(GCC 14 links the SVR4 way, `usr/ccs/lib/libc.so` being `libc.so.1` plus static members, so the
+probe finds a static `lstat.o` the period link never saw; with `HAVE_LSTAT` gzip would treat
+symbolic links differently from the bench-proven period build), and the absolute paths of
+`fcntl.h` and `sys/time.h`. GCC 14's own copies of those two are C++-linkage wrappers that reach
+AMIX's header with `#include_next`, which behaves as a plain `#include` in a file included by
+absolute path, so gnulib's `lib/fcntl.h` would find itself again and `creat()` would be undeclared;
+the configure assertion refuses any `ABSOLUTE_` header that is such a wrapper.
+[`patches/03-gnulib-timespec.patch`](patches/03-gnulib-timespec.patch) (formerly
+`patches-gcc14/01`) lets `gzip.h` and `lib/utimens.h` accept the `timespec` that gnulib's
+`lib/time.h` declares under GCC 14.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt `-6` has
+the recorded `-6`'s payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
