@@ -1450,7 +1450,7 @@ kzero_check() {
   [ "$kz" != "$bz" ] || { echo "[FAIL] kzero: kzero is still bzero (0x$bz) -- the weaken was lost" >&2; exit 1; }
   "$NM" "$u" | awk '$3=="kzr_magic" && $2=="D" {f=1} END{exit !f}' || { echo "[FAIL] kzero: no kzr_magic in .data" >&2; exit 1; }
   want="pvn_vptrunc rwvp spec_write"
-  case ",$CARVE_FS," in *,ufs,*) ;; *) want="$want rwip";; esac
+  case ",$CARVE_FS," in *,ufs,*) ;; *) want="$want rwip"; [ "$UFS_TAILZERO" = 1 ] && want="$want ufs_vptrunz";; esac
   case ",$CARVE_FS," in *,s5,*) ;; *) want="$want writei";; esac
   want="$(echo $want | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
   callers="$("$OBJDUMP" -dr "$u" | awk '/^[0-9a-f]+ <[^>]*>:$/ {fn=substr($2, 2, length($2) - 3)} /R_68K_32[ \t]+kzero$/ {print fn}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
