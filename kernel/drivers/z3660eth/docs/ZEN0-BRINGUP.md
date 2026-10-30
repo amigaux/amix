@@ -31,7 +31,7 @@ This is not a tuning problem and there is no key that fixes it. Both ends are se
 `aen` probes lazily, on the first `open()`, by asking Amiga Zorro autoconfig for one specific
 board id:
 
-- ✅ `docs/ETHERNET-SCOPING-evidence.md:1191` records it from the driver source:
+- ✅ `docs/ETHERNET-SCOPING-evidence.md:1185` records it from the driver source:
   `aenautoconfig()` (`aen.c:1421`) calls `autocon(productcode, …)` with **`AEN_BOARD =
   0x02020070`** (`aen.h:66-67`).
 - 📋 The same constant read out of the *shipped kernel binary* — `aenautoconfig` at
@@ -159,7 +159,7 @@ line exists to provide.
 `aen0` bring-up passes it too.
 
 **The trailing `1` on `route add default` is the metric, and it is mandatory** on SVR4.0 — it is
-not an option flag (✅ `docs/ETHERNET-SCOPING-evidence.md:1681` table, from the golden image's
+not an option flag (✅ `docs/ETHERNET-SCOPING-evidence.md:1673` table, from the golden image's
 `rc.inet:42`).
 
 **This is SVR4.0: there is no `ifconfig plumb`.** The STREAMS multiplexor link *is* `slink addaen`.
@@ -228,7 +228,7 @@ Substitute your own address, netmask and gateway on the `ifconfig` and `route` l
 ### 3.3 ⚠ Use a literal address — never `` `uname -n` ``
 
 The stock `network-config` form is `` ifconfig aen0 `uname -n` up -trailers ``. **Do not copy that
-shape.** ✅ `docs/ETHERNET-SCOPING-evidence.md:1684-1685` documents why, from the golden image's own
+shape.** ✅ `docs/ETHERNET-SCOPING-evidence.md:1676-1677` documents why, from the golden image's own
 8-line in-file comment: with DNS enabled, `` `uname -n` `` forces a `gethostbyname()` that tries DNS
 **first**, but this runs *before* the default route exists (the route is set later, in `rc.inet`),
 so every lookup burns the full resolver retransmit — **~90 s per lookup**, measured elsewhere as a
@@ -342,7 +342,7 @@ TX/RX/error counters.
 ### 5.1 ⚠ Why a broken network produces NO console output at all
 
 The stock `/etc/inet/network-config` bring-up is a three-command `&&` chain (✅
-`docs/ETHERNET-SCOPING-evidence.md:1665`):
+`docs/ETHERNET-SCOPING-evidence.md:1657`):
 
 ```sh
 /usr/amiga/bin/aen -S &&
@@ -356,7 +356,7 @@ The stock `/etc/inet/network-config` bring-up is a three-command `&&` chain (✅
   communicate only through the exit status. This repo's own `zen.c` shows the convention exactly —
   `userland/zen.c:31-39` guards the only `fprintf` with `if (!silent)` and then `exit(1)`. The
   evidence dossier records the same for the stock tools: hydra's `hya -S` is *"exit 0 if a board
-  found else 1, **silent**"* (`docs/ETHERNET-SCOPING-evidence.md:1356`), and `aen -S` is *"the
+  found else 1, **silent**"* (`docs/ETHERNET-SCOPING-evidence.md:1350`), and `aen -S` is *"the
   presence gate … exit 0 only if a board answers"* (`:1670`).
 - **A short-circuited `&&` chain is silent by construction.** `cmd1 && cmd2` where `cmd1` exits
   non-zero simply does not run `cmd2`, and the shell says nothing about it.

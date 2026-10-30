@@ -1,6 +1,6 @@
 # DRAFT DESIGN (pre-review)
 
-I have a comprehensive evidence base from the six surveys. Let me produce the authoritative design document. This is a synthesis task — the surveys already cite the source files, so I'll reconcile them into one buildable spec rather than re-reading everything.
+Synthesised from the six surveys below, which carry the source citations; this draft reconciles them into one buildable spec.
 
 # AMIX Native STREAMS/DLPI Ethernet Driver for the Z3660 — Design & Scoping Document (DRAFT)
 
@@ -216,7 +216,7 @@ ping 192.0.2.1
 6. **Q5: Multicast/promiscuous.** No hardware filter register exists. Decide: best-effort (rely on firmware GEM passing broadcast+own-MAC) vs NAK `DL_ENABMULTI`/`DL_PROMISCON`. For ARP+ping+single-host this is moot (broadcast flows); matters for multicast-dependent services.
 7. **Q6: RX backlog overrun.** 64-slot ring (128 KB) overruns into TX window at `0x07EE0000` (latent firmware sizing bug). Mitigation = eager drain (we do). Low risk unless RX is starved; flag for the coherency soak.
 8. **★ Q7: Single shared TX buffer under STREAMS concurrency.** One `txwin` — must serialize. Validate no two contexts race the buffer.
-9. **Q8: `/dev` node minor convention** — confirm aen's actual node/minor on the golden image (the golden mount was I/O-locked this session; verify on-box `ls -l /dev`).
+9. **Q8: `/dev` node minor convention** — confirm aen's actual node/minor on the golden image (the golden mount was I/O-locked during the survey; verify on-box `ls -l /dev`).
 
 ---
 
@@ -258,12 +258,10 @@ Guest protocol: `z3660-drivers/eth/device.c` (78-92, 161-211, 495-850), `common/
 # ADVERSARIAL REVIEW (4 lenses)
 
 ## LENS — protocol-correctness
-I now have full verification. Let me write up the adversarial review.
-
 # ADVERSARIAL REVIEW — Protocol-Correctness Lens
 ## AMIX Z3660 Ethernet Driver Design vs. actual guest + firmware source
 
-I re-read the actual guest (`z3660-drivers/eth/device.c`, `common/z3660_regs.h`) and firmware (`Z3660/src/ethernet.c`, `rtg/rtg.c`, `interrupt.{c,h}`, `Z3660_emu/src/memorymap.h`) source. The design's register map, offsets, header format, and IRQ semantics are **almost entirely correct** — but there are **two genuine correctness bugs** in the design's RX model that would break receive, plus several incompletenesses. Details below.
+Re-read against the actual guest (`z3660-drivers/eth/device.c`, `common/z3660_regs.h`) and firmware (`Z3660/src/ethernet.c`, `rtg/rtg.c`, `interrupt.{c,h}`, `Z3660_emu/src/memorymap.h`) source: the design's register map, offsets, header format, and IRQ semantics are **almost entirely correct** — but there are **two genuine correctness bugs** in the design's RX model that would break receive, plus several incompletenesses. Details below.
 
 ---
 
@@ -374,17 +372,17 @@ Design §2.6: read 6 bytes from `_HI`/`_LO`. Confirmed (`rtg.c:858-874`). The gu
 **Net:** the static contract (registers/offsets/header/TX/MAC/IRQ-level) is solid. The **RX dynamics** are where the design has real bugs: the drain loop must re-read `0x1A4` per strobe (B1), the empty-ring sentinel rests on a firmware serial-stamp hack that must be documented (B2), and the FCS/min-frame question (I4) is answerable now (no FCS, min 60) rather than deferred. Fix B1/B2/I4 before Phase 3.
 
 ## LENS — coherency-mmu
-I now have a fully source-grounded review. Critically, observe the contradiction the design rests on:
+The contradiction the design rests on:
 
 - The design claims (§2.7, §5.1) the eth window is/must-be **cache-inhibited** in the 030 MMU, and that "SCSI works because the window is CI."
 - But the **actual TT registers are `CI=0` (cacheable)** (`ttrap.s:327,329`), and **`sptalloc(...,PG_V,...,0)`** — the SCSI/A4091 mapping primitive — passes `PG_V` with flag `0`, with **no evidence of a CI bit** anywhere in the readable source.
 - And the SCSI mailbox doesn't actually need 030-side coherency because **firmware always bounces through MMIO at `board+0x80000` and the transfer is fully synchronous** (the command write completes the whole DMA before it returns) — there is no producer/consumer race between CPU caches and an async DMA agent. The eth RX path is fundamentally different (async, interrupt-delivered, no synchronous completion).
 
-This breaks the design's "mirror z3660.c exactly" prescription. Let me confirm one more thing: that the SCSI completion is synchronous and there's no async coherency window (already confirmed in z3660.c lines 28-32, 220, 225). I have enough. Writing the review.
+This breaks the design's "mirror z3660.c exactly" prescription. The SCSI completion is synchronous, with no async coherency window (z3660.c lines 28-32, 220, 225).
 
 # ADVERSARIAL REVIEW — "coherency-mmu" lens
 
-**Scope:** §2.7, §5 (whole), §8 Q-COHERENCY, plus the §9 Phase-0/4 coherency claims and the §3 "no firmware change" coherency caveat. I re-read the actual AMIX MMU/TT setup, the `sptalloc` mapping primitive as used by every Zorro III driver, `z3660.c` (the cited precedent), `zz9000.c`, `a2091.c`, and the firmware/guest cache notes. The verdict: **the section's factual foundation is inverted on one load-bearing point, and the cited precedent does not transfer.** Details below.
+**Scope:** §2.7, §5 (whole), §8 Q-COHERENCY, plus the §9 Phase-0/4 coherency claims and the §3 "no firmware change" coherency caveat. Re-read against the actual AMIX MMU/TT setup, the `sptalloc` mapping primitive as used by every Zorro III driver, `z3660.c` (the cited precedent), `zz9000.c`, `a2091.c`, and the firmware/guest cache notes. The verdict: **the section's factual foundation is inverted on one load-bearing point, and the cited precedent does not transfer.** Details below.
 
 ---
 
@@ -511,8 +509,6 @@ The section correctly *names* the risk (async shared-DDR coherency, lpsched-clas
 ## LENS — dlpi-streams-completeness
 The firmware never calls `XEmacPs_SetOptions` to set FCS strip, and the guest never subtracts CRC. The most likely reality: the Xilinx EmacPs init default (via `XEmacPs_CfgInitialize` and the BSP `xemacps_example_util` flow) commonly enables `XEMACPS_NWCFG_FCSREM` in the network config, OR the guest tolerates trailing FCS. This is genuinely ambiguous from source alone — exactly why the design correctly flagged it as a real-HW-gated question. My finding refines it: the **working SANA-II guest does NOT subtract CRC**, so the aen `count - ETH_CRC_LEN` convention may be WRONG for Z3660 and would truncate 4 payload bytes. That's a concrete, important correction.
 
-I now have all evidence needed. Let me write the adversarial review.
-
 # ADVERSARIAL REVIEW — "dlpi-streams-completeness" lens
 
 Scope: STREAMS/DLPI write-put + primitive set, RX SAP demux, frame-size/CRC boundary, MTU/trailers, flow control, open/close races, streamtab/qinit shape — design §4.2/§4.3/§4.4/§4.5 vs the **actual** `aen.c`/`hydra.c` source. Verdict up front: the skeleton choice is sound, but the design's DLPI primitive set is **incomplete in a way that will break IP attach**, its RX length/CRC arithmetic is **stated wrong vs both reference drivers AND the working Z3660 guest**, and several flow-control/race details are glossed. Findings below, severity-tagged.
@@ -631,11 +627,9 @@ Both deliver paths gate on `canput(aen->q->q_next)` (`aen.c:1245,1289`) and bump
 ## LENS — build-integration
 The empty filler row is confirmed (13 fields + trailing comma = 14 tokens). The design's choice of an unlabelled `nostr` slot with the 13-field replacement is correct — the row *shape* verified here is index-independent, so it survives the later renumber to **51** (see the banner). The "major 7" alternative the survey mentioned is wrong (slot 7 `/*7=win?*/` is a real reserved entry, but it's `nostr` so technically replaceable — still, an unlabelled filler row is cleaner). 
 
-I now have all the evidence needed. Let me compile the adversarial review.
-
 # ADVERSARIAL REVIEW — Build-Integration Lens
 
-I re-read the actual sources: `master.d/kernel.c`, the top-level + `amiga/` + `driver/` + `aen`/`hydra` Makefiles, `build-kernel.sh`, `build-clean-kernel.sh`, `driver.conf`, and the kerntools README/templates. Findings below, ranked.
+Sources re-read: `master.d/kernel.c`, the top-level + `amiga/` + `driver/` + `aen`/`hydra` Makefiles, `build-kernel.sh`, `build-clean-kernel.sh`, `driver.conf`, and the kerntools README/templates. Findings below, ranked.
 
 ---
 
@@ -749,7 +743,7 @@ Key files: `../hydra-amix/usr/sys/master.d/kernel.c` (reference, lines 38/61/185
 # SURVEY EVIDENCE (6 deep-reads)
 
 ## SURVEY A — Z3660 GUEST protocol
-I have everything needed for a precise protocol contract. Both the guest driver (what AMIX must speak) and the firmware (what the guest is talking to) are fully cross-verified. Here is my survey.
+Both the guest driver (what AMIX must speak) and the firmware (what the guest is talking to) are cross-verified below.
 
 ---
 
@@ -913,13 +907,13 @@ Firmware default MAC `EmacPsMAC = {0x00,0x80,0x10,0x00,0x01,0x00}` (`ethernet.c:
 - TX is **fully synchronous** (busy-wait in firmware up to ~1 ms) — the AMIX driver's TX path will block the calling context for the round-trip; consider whether to serialize TX behind the STREAMS write-side queue to avoid holding locks across the ~ms stall.
 
 ## SURVEY B — Z3660 FIRMWARE eth path
-The full contract is confirmed. The key insight: `ZZ3660_REGS = cd->cd_BoardAddr` (the Zorro III autoconfig base, which the firmware maps to `RTG_BASE`), and the guest accesses both registers (`ZZ3660_REGS + REG_ZZ_*` where REG offsets are 0x190-0x1A8) AND the frame buffers (`ZZ3660_REGS + TX_FRAME_ADDRESS` = board+0x07EE0000, and `ZZ3660_REGS + address_of_rx_buff` where `address_of_rx_buff` is the RTG-relative value returned by `REG_ZZ_ETH_RX_ADDRESS`). All consistent with the firmware's `RTG_BASE`-relative pointers. I have everything needed.
+The key insight: `ZZ3660_REGS = cd->cd_BoardAddr` (the Zorro III autoconfig base, which the firmware maps to `RTG_BASE`), and the guest accesses both registers (`ZZ3660_REGS + REG_ZZ_*` where REG offsets are 0x190-0x1A8) AND the frame buffers (`ZZ3660_REGS + TX_FRAME_ADDRESS` = board+0x07EE0000, and `ZZ3660_REGS + address_of_rx_buff` where `address_of_rx_buff` is the RTG-relative value returned by `REG_ZZ_ETH_RX_ADDRESS`). All consistent with the firmware's `RTG_BASE`-relative pointers.
 
 ---
 
 # SURVEY B — Z3660 FIRMWARE ethernet path (the ARM/Zynq end of the protocol)
 
-The firmware-side contract an AMIX STREAMS/DLPI driver must speak. All paths under `Z3660-amix/z3660-firmware/Z-TURN/vitis_ide/`. The built project is **`Z3660_emu`**, but the eth sources I cite live in `Z3660/src/*` and `Z3660/src/rtg/*` (the project's `main.c` pulls `Z3660_emu/src/defines.h` via `#include "../../Z3660_emu/src/defines.h"` — `Z3660/src/main.c:42`).
+The firmware-side contract an AMIX STREAMS/DLPI driver must speak. All paths under `Z3660-amix/z3660-firmware/Z-TURN/vitis_ide/`. The built project is **`Z3660_emu`**, but the eth sources cited live in `Z3660/src/*` and `Z3660/src/rtg/*` (the project's `main.c` pulls `Z3660_emu/src/defines.h` via `#include "../../Z3660_emu/src/defines.h"` — `Z3660/src/main.c:42`).
 
 ## 0. The shared register/buffer window — one Zorro III BAR == `RTG_BASE`
 
@@ -1021,7 +1015,7 @@ Constants the driver must hard-code (all window-relative unless noted): `RTG_BAS
 **Open risks for the coherency analysis:** (1) 030-side cache-inhibit of the board window is the driver's job — firmware does no 030 cache maintenance (§4). (2) `FRAME_MAX_BACKLOG=64` vs the 64 KB map comment = potential 128 KB overrun into `TX_FRAME_ADDRESS` if RX is not drained — driver should drain eagerly (§3). (3) TX register write blocks the ARM ~1 ms — design AMIX TX to tolerate the stall (§5).
 
 ## SURVEY C — AEN LANCE STREAMS/DLPI skeleton
-I have read every relevant file in full. Below is the complete skeleton extraction.
+Every relevant file was read in full; the complete skeleton extraction follows.
 
 ---
 
@@ -1242,7 +1236,7 @@ Broadcast/multicast is handled implicitly: a broadcast frame's `ether_type` stil
 - `count`/`length` bookkeeping in `receive_interrupt` is subtle (`aen.c:1114-1141`) and the `count` passed to `toss_packet_up_stream` is the **last descriptor's byte count**, not total — re-derive cleanly for Z3660 rather than copying the quirk.
 
 ## SURVEY D — HYDRA driver (closest precedent)
-Confirmed. The seam is identical between aen and hydra (same function-name skeleton, `spl2`, `BOARD_RUNNING` deferred-init-on-open, `toss_packet_up_stream`). I have all the evidence needed.
+The seam is identical between aen and hydra (same function-name skeleton, `spl2`, `BOARD_RUNNING` deferred-init-on-open, `toss_packet_up_stream`).
 
 ---
 
@@ -1386,8 +1380,6 @@ Copy `hydra.c` → `z3660eth.c`, rename `hydra`→`z3660eth`, and **delete the c
 **Files cited:** `hydra-amix/usr/sys/amiga/driver/hydra/{hydra.c, hydra.h, hydrauser.h, ne2000.h, Makefile, hya/hya.c, hya/Makefile}`; `hydra-amix/usr/sys/amiga/driver/aen/{aen.c, aen.h}`; `hydra-amix/usr/sys/master.d/kernel.c` (lines 38, 61, 187, 194, 266, 357, 397); `grimoire-amix/docs/drivers/case-studies/hydra.md`.
 
 ## SURVEY E — Kernel integration + kerntools STREAMS path
-I now have everything required. Producing the survey.
-
 ---
 
 # SURVEY E — Kernel Integration + the kerntools STREAMS path we must build
@@ -1553,7 +1545,7 @@ Surveyed exhaustively:
 
 - **No name→major map / no `master`/`mdevice`/`sdevice`/`system` file.** `ls master.d/` shows per-subsystem `.c`/`.o` and module dirs, but **no SVR4-style `mdevice`/`sdevice`/`system` config** — this 4.0 tree predates the config-file driver model. The major-number↔streamtab binding is *only* the position in `cdevsw[]` (slot index = major number; the trailing `/*18=aen*/`,`/*47=hydra*/` comments are just documentation). **Confirmed: registration is wholly via `cdevsw[].d_str` (+ the two boot/intr tables). There is no second registry to keep in sync.**
 
-- **/dev node** — required at runtime but is **userland, not a kernel table**: a `mknod /dev/<name> c <major> <minor>` (char-special, the major matching the cdevsw slot). The golden `/dev` was unreadable this session (stale NFS handle), so I could not confirm aen's exact node name/minor on the golden image; this needs an on-box `ls -l /dev` check. The driver itself does not create the node. `slink`+`ifconfig <if> <ip> up -trailers` (SVR4.0, no `plumb`) then attaches the DLPI stream over that node — that's the userland bring-up the project context already establishes.
+- **/dev node** — required at runtime but is **userland, not a kernel table**: a `mknod /dev/<name> c <major> <minor>` (char-special, the major matching the cdevsw slot). The golden `/dev` was unreadable during the survey (stale NFS handle), so it could not confirm aen's exact node name/minor on the golden image; this needs an on-box `ls -l /dev` check. The driver itself does not create the node. `slink`+`ifconfig <if> <ip> up -trailers` (SVR4.0, no `plumb`) then attaches the DLPI stream over that node — that's the userland bring-up the project context already establishes.
 
 - **`unix.c`** (`amiga/config/unix.c`) — only root/swap/dump bootobj config (`rootdev`, `dumpdev`, `swapfile`). **Not touched** by a net driver. (The task hypothesis that it carries cdevsw/streamtab refs is not borne out — those are all in `kernel.c`.)
 
@@ -1639,14 +1631,14 @@ Unlike SCSI (regenerate the whole `sd.c` from a template), the net path **anchor
 - unix.c (root/swap only) — `amiga/config/unix.c:8-22`.
 - kerntools — `build-kernel.sh:63-164`; `templates/sd.c.in:24-33,92`; `templates/alien-Makefile.in`; `tools/build-clean-kernel.sh` (whole file); SCSI contrast `amix-z3660scsi/driver.conf` and `src/z3660.c:38-41,164,258`.
 
-**Could not confirm this session:** the golden image's actual `/dev` net-device node name/minor (stale NFS handle on `/tmp/amixgold`) — verify on-box with `ls -l /dev` for the aen node before choosing our minor convention.
+**Could not confirm during the survey:** the golden image's actual `/dev` net-device node name/minor (stale NFS handle on `/tmp/amixgold`) — verify on-box with `ls -l /dev` for the aen node before choosing our minor convention.
 
 ## SURVEY F — Userland bring-up + DLPI/IP plumbing
-I now have the complete DLPI/datapath contract. The TX path (aenxmit): dest MAC from `dl_dest_addr_offset`, source MAC from the board's own address, ethertype from `aen->sap` (the bound SAP). This confirms the full minimum contract. I have everything needed. Let me write up the survey.
+The TX path (aenxmit): dest MAC from `dl_dest_addr_offset`, source MAC from the board's own address, ethertype from `aen->sap` (the bound SAP). This confirms the full minimum contract.
 
 # SURVEY F: USERLAND bring-up + DLPI/IP plumbing
 
-> **MOUNT CAVEAT (read first).** The requested RO golden HDF at `/tmp/amixgold` (loop29 → `amix-kerntools/hdf/Amix-golden.hdf`) is **mounted but I/O-locked** — its UFS hit a read error and `onerror=lock` froze it (`StaleNetworkFileHandle` on every path below the root). The **identical golden image content is readable at `/mnt`** (loop33 → `amix-kerntools/hdf/Amix-golden-raw.hdf`, same Amix root FS), so every `/tmp/amixgold/...` path in my task maps 1:1 to a verified `/mnt/...` path below. **All file:line citations for runtime files are from `/mnt`.** If a later agent needs `/tmp/amixgold` live, it must be unmounted and remounted (the lock is sticky).
+> **MOUNT CAVEAT (read first).** The requested RO golden HDF at `/tmp/amixgold` (loop29 → `amix-kerntools/hdf/Amix-golden.hdf`) is **mounted but I/O-locked** — its UFS hit a read error and `onerror=lock` froze it (`StaleNetworkFileHandle` on every path below the root). The **identical golden image content is readable at `/mnt`** (loop33 → `amix-kerntools/hdf/Amix-golden-raw.hdf`, same Amix root FS), so every `/tmp/amixgold/...` path in the survey's brief maps 1:1 to a verified `/mnt/...` path below. **All file:line citations for runtime files are from `/mnt`.** If `/tmp/amixgold` is needed live, it must be unmounted and remounted (the lock is sticky).
 
 ---
 
