@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — ufs is the only target filesystem (P-35) (37fbe0e..40a09e7)
+
+install.sh refuses s5 and INSTALL_TARGET_PREBUILT; the interview no longer asks the root type; the upgrade reads the
+old root as ufs only; the eleven prebuilt matrix cells are retired and the five s5 profiles are ufs. Media re-cut on
+fff860dc: CD rd1s e2265a99, netinstall ni12 dca1e001 with raw images ni12-k46 ed288f2f / ni12-k30 fdb0b43c; cells
+l11-rd, l11-rd-fd, l11-ni and l11-nr PASS 10/10 on k46 and k30. The frozen 1.0 media are untouched.
+
 ## 2026-10-28 — the r6 package staging pins moved from the workspace scratch into the repo's ignored build/pins (`build/` now gitignored); tools/l11-set.conf points there and the set rebuilds identically (media catalog 49180534) (e212ca3)
 
 ## 2026-10-28 — the media on the kernel-space record fff860dc (kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10; dlm 565de49): CD rd1r ee50b436, netinstall ni11 db0e659a with raw images ni11-k46 36fb9b2a / ni11-k30 c86b1c39, floppy pairs fp-rd1r; a4kt710 and paula on the medium, not installed by default. TARGET_HBA names the controller a disk runs on: a4000t maps to KBOOTSET_BOOTDEV mobo:a4000t-710, public-a4000-ide* use gayle, handover-a4000-z3660 z3660scsi. Fixed: netinstall images lacked /install/dmamask, so targets kept 0xFFFFFFFC on any controller (ni10 never promoted). Cells l11-rd, l11-rd-fd, l11-ni and l11-nr PASS 10/10 on k46 and k30; every first boot's loader buffer matches its target's Mask (41a5d12..2b82343)
