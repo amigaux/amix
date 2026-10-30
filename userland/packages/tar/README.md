@@ -1,8 +1,7 @@
 # tar — the recipe
 
 **Package `gtar` 1.14** (catalog name `tar`) — GNU tar with base-256 header reads, long names and
-`-z`. GPL-2.0-or-later. Pin:
-[`pin.sh`](pin.sh).
+`-z`. GPL-2.0-or-later. Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/libamixcompat   # once: tar links gettimeofday from libacompat
     sh build/pkg/pkgbuild.sh userland/packages/tar
@@ -104,3 +103,19 @@ put `/opt/amix/bin` on `PATH`.
   - X4 (GCC 14 tar only; the period tar would panic): `-b 1 --delete` 215040 → 214016, two
     members left, `t/b` extracts byte-exact.
 - **Package:** `gtar-1.14-7.pkg`, md5 `44e79c678a475cd6c96f7a7ade8afe9a`, 221696 bytes.
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`); the period build stopped at `-2`.
+[`patches/08-hasher-size-t.patch`](patches/08-hasher-size-t.patch) and
+[`patches/09-ftruncate-freesp-aligned.patch`](patches/09-ftruncate-freesp-aligned.patch) were
+`patches-gcc14/02` and `03`. Two configure answers are pinned to the period build's: `ftruncate`
+(GCC 14's SVR4-style `-lc` finds the static `truncate.o` the period link never saw; tar keeps
+gnulib's `F_FREESP` replacement, which since `-7` cuts block-aligned and rewrites the tail, grimoire
+quirk 90) and `stdint.h` (all three cache names). `gettimeofday` comes from the static member of
+`usr/ccs/lib/libc.so` (the stock one-argument `_hrtcntl` read), proven by a `-Wl,-y` link trace;
+no libamixcompat is linked. The link set is set in every configured Makefile's `LIBS`.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
+the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
