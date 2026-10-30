@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — STREAMS freeq guard (grimoire quirk 92), on by default (f4aef26, 6e8a7fe)
+
+src/freeqguard030.c joins the final link; tools/freeqguard-retarget.py retargets every freeq relocation (qdetach,
+strclose x2, stropen x2) to freeq_guarded, which takes the pair off the run and scan lists at spl7 and calls the
+stock freeq. It closes stock qattach's undo of a failed open (qdetach clmode 0), which freed a queue still on qhead
+(prngd + prngd-ctl: KERNEL FAULT from queuerun). --no-freeq-guard reproduces all six -56 sums. Test kernel
+68030-261030-62 (not a cut) passes the quirk 90/91, FPU/FPU-less, ftx and smoke sets in emulation. 6e8a7fe: the
+kzero check wants ufs_vptrunz on non-carved builds.
+
 ## 2026-10-30 — cut -56 reproduces at the port pin (613d7fc)
 
 Cut 68030-261030-56 also reproduces, all seven sums, with the port at d0e8857 (kernel/port/port.pin): the port files the
