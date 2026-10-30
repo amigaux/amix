@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# r.conffile -- removal script for class "conffile" (P-36 section 1.2).
+#
+# pkgrm runs this with the class's paths on stdin, one per line, and removes
+# none of them itself.  For each path, against the baseline i.conffile kept
+# at $PKG_INSTALL_ROOT/var/sadm/conffiles/$PKGINST/<path>:
+#
+#   equal to the baseline (unedited)   remove it and its baseline
+#   differs, or no baseline (edited)   keep it and its baseline, say so
+#   already gone                       remove its baseline
+#   in every case                      remove <path>.new and its PENDING line
+#
+# Only a kept file keeps its baseline (the "config-files" state): a later
+# install finds both and the i.conffile table applies, and apkg's purge
+# removes them.  Every other baseline goes, with the directories it leaves
+# empty, so a reinstall is a first install.  pkgrm drops the contents entry,
+# so a kept file belongs to no package until then.
+#
+# Bourne sh and rm, rmdir, cmp, mv, expr, echo only, as i.conffile.
+
+PATH=/sbin:/usr/sbin:/usr/bin:/bin:$PATH
+export PATH
+
+root=$PKG_INSTALL_ROOT
+pkg=$PKGINST
+if [ -z "$pkg" ]
+then
+	echo "r.conffile: PKGINST is not set" >&2
+	exit 2
+fi
+base=$root/var/sadm/conffiles/$pkg
+pending=$root/var/sadm/conffiles/PENDING
+
+rc=0
+while read path
+do
+	[ -n "$path" ] || continue
+	rel=`expr "x$path" : "x$root\(/.*\)"`
+	if [ -z "$rel" -o "$root$rel" != "$path" ]
+	then
+		echo "r.conffile: $path: not under the install root '$root'" >&2
+		rc=2
+		continue
+	fi
+	b=$base$rel
+	keep=no
+	if [ -f "$path" ]
+	then
+		if [ -f "$b" ] && cmp -s "$b" "$path"
+		then
+			rm -f "$path" || rc=2
+		else
+			keep=yes
+			echo "$rel: kept your edited version"
+		fi
+	fi
+	rm -f "$path.new"
+	if [ $keep = no ]
+	then
+		rm -f "$b"
+		# prune the directories that leaves empty, up to the package's
+		d=`expr "x$b" : 'x\(.*\)/[^/]*$'`
+		while [ "$d" != "$base" ] && rmdir "$d" 2>/dev/null
+		do
+			d=`expr "x$d" : 'x\(.*\)/[^/]*$'`
+		done
+		rmdir "$base" 2>/dev/null
+	fi
+	if [ -f "$pending" ]
+	then
+		while read p f
+		do
+			[ "$p $f" = "$pkg $rel" ] || echo "$p $f"
+		done < "$pending" > "$pending.tmp" &&
+		mv "$pending.tmp" "$pending"
+	fi
+done
+exit $rc

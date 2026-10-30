@@ -1,0 +1,147 @@
+.\" conffile.5 - manual page for the conffile mechanism of Amix packages.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH CONFFILE 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.SH NAME
+conffile \- package configuration files that keep your edits across upgrades
+.SH DESCRIPTION
+A
+.I conffile
+is a configuration file that a package ships with a default and that the
+administrator edits in place, such as
+.B /etc/apkg.conf
+or a daemon's own configuration.  A package marks it as an editable
+object of class
+.B conffile
+in its pkgmap(5)
+.RB ( "e conffile /etc/rsyncd.conf" ),
+and carries the two class action scripts
+.B i.conffile
+and
+.BR r.conffile .
+They run under every
+.BR pkgadd (1M)
+and
+.BR pkgrm (1M),
+the stock ones included, and under
+.BR apkg (1).
+.PP
+Most of the system's own settings do not need this: a package ships its
+defaults in a file it owns, and your changes go in a separate file that
+no package owns (as module parameters do in
+.BR modreg.local.d ).
+Conffiles are for files that have to be edited where they are.
+.SS Installing and upgrading
+For each conffile,
+.B i.conffile
+compares three things: the file on disk, the new default in the package,
+and the
+.I baseline
+\- a copy of the default the package shipped last time, kept in
+.BI /var/sadm/conffiles/ pkginst / path\fR.
+.TP 4
+\(bu
+No file and no baseline (first install): the default is installed.
+.TP
+\(bu
+The file equals the new default, or still equals the old baseline (you
+never edited it): the new default is installed, silently.
+.TP
+\(bu
+The file differs from both (you edited it, or something other than the
+package wrote it): your file is kept.  The new default is written beside
+it as
+.IB file .new\fR,
+the file is listed in
+.BR /var/sadm/conffiles/PENDING ,
+and pkgadd prints
+.RS
+.IB file ": kept your version; the new default is " file .new
+.RE
+.TP
+\(bu
+The file is gone but its baseline exists (you removed it): the package
+puts its default back and says so.  The package tools require every file
+a package owns to exist after the install, so a removed conffile cannot
+stay removed.
+.PP
+In every case the new default becomes the baseline.
+.SS What to do with a .new file
+Compare the two, for example with
+.BR diff (1):
+.RS
+.B diff /etc/apkg.conf /etc/apkg.conf.new
+.RE
+.PP
+Then either keep your file and delete the
+.B .new
+file, or move the
+.B .new
+file over yours (and carry your changes into it).  The next install or
+upgrade of the package notices either choice: a file equal to the new
+default leaves
+.B PENDING
+and loses its stale
+.BR .new .
+.B apkg
+lists the pending files after each transaction.
+.PP
+A plain
+.BR pkgchk (1M)
+reports a conffile you replaced by hand until the package database is
+told about it, with
+.B installf \-c conffile
+.I pkginst path
+.B e
+and then
+.B installf \-f
+.IR pkginst ;
+.B pkgchk \-n
+skips editable files and is always the clean post-install check.
+.SS Removing
+.B r.conffile
+removes a conffile you never edited, together with its baseline.  A file
+you edited is kept, with its baseline, and pkgrm says so; it then belongs
+to no package.  Any
+.B .new
+file and its
+.B PENDING
+line are removed in both cases.  Installing the package again finds the
+kept file and its baseline, and the rules above apply.
+.SH FILES
+.PD 0
+.TP 36
+.BI /var/sadm/conffiles/ pkginst / path
+the baseline: the default the package last shipped for
+.I path
+.TP
+.B /var/sadm/conffiles/PENDING
+one
+.RI \(lq "pkginst path" \(rq
+line per conffile whose new default waits in
+.IB path .new
+.TP
+.IB path .new
+the new default beside a kept file
+.PD
+.SH SEE ALSO
+.BR apkg (1),
+.BR pkgadd (1M),
+.BR pkgrm (1M),
+.BR pkgchk (1M),
+.BR installf (1M),
+.BR apkg.conf (5),
+.BR admin (5),
+.BR pkgmap (5)
+.SH NOTES
+The scripts use only Bourne
+.BR sh (1)
+and core commands
+.RB ( cp ,
+.BR cmp ,
+.BR mkdir ,
+.BR rm ,
+.BR rmdir ,
+.BR mv ,
+.BR expr ),
+so a package keeps your file under any installer.  One conffile has one
+owning package.

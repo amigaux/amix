@@ -52,6 +52,7 @@ bash tools/repo/tests/run-tests.sh                   # bash, not sh
 (cd src/apkg          && sh tests/nohttp-variant.sh)  # the FILE+RAW, no-sockets build
 (cd src/contents-fsck && make test)
 sh tools/migrate/tests/run-tests.sh
+bash src/conffile/tests/run-tests.sh                 # the conffile class (fakeroot)
 sh src/apkg/tests/kbootset-consumer.sh               # against amix's kernel/dlm
 ```
 
