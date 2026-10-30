@@ -1,8 +1,8 @@
-# amix-z3660net — native AMIX ethernet driver for the Z3660
+# z3660eth — native AMIX ethernet driver for the Z3660
 
 A native **Commodore Amiga Unix (AMIX, SVR4.0, m68k 68030) STREAMS/DLPI ethernet
 driver** for the **Z3660 accelerator's onboard ethernet** — the network analogue
-of the [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi) SCSI driver. It is **not** NIC emulation: the
+of the [`z3660scsi`](../z3660scsi) SCSI driver. It is **not** NIC emulation: the
 Z3660 firmware already moves whole ethernet frames between the 68k guest and the
 Zynq GEM (for AmigaOS's SANA-II `Z3660Net.device`); this driver speaks that same
 firmware mailbox and presents it to AMIX as a DLPI Style‑1 connectionless
@@ -15,14 +15,36 @@ evidence dossier in [`docs/ETHERNET-SCOPING-evidence.md`](docs/ETHERNET-SCOPING-
 
 ## Scope / responsibility
 
-This repo is **the AMIX ethernet driver (`z3660eth`) for the Z3660, plus its design
-docs, and nothing else.** Its siblings: SCSI driver → [`amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi);
-firmware / 68k-emulator → [`Z3660-amix`](https://github.com/jusii/Z3660-amix); build harness + golden image +
-host-ops → [`amix-kerntools`](https://github.com/jusii/amix-kerntools).
+This directory, `kernel/drivers/z3660eth` of the amix monorepo (formerly the repo
+`amix-z3660net`), is **the AMIX ethernet driver (`z3660eth`) for the Z3660, plus its
+design docs, and nothing else.** Its siblings: SCSI driver → [`z3660scsi`](../z3660scsi);
+firmware / 68k-emulator → [`Z3660-amix`](https://github.com/jusii/Z3660-amix), the Z3660
+firmware fork, which stays its own repository; build harness + golden image + host-ops →
+amix's [`kernel/k30`](../../k30) build hub. The full map is in
+[`kernel/k30/REPOS.md`](../../k30/REPOS.md).
 
-Compilation and kernel integration are handled by the **`amix-kerntools`** build hub,
-which reads this repo's `driver.conf` by relative path. This repo carries only the
-driver source, its `driver.conf`, the userland bring-up, and the design docs.
+Compilation and kernel integration are handled by the `kernel/k30` build hub, which
+reads this directory's `driver.conf`. This directory carries only the driver source,
+its `driver.conf`, the loadable-module form, the userland bring-up, and the design docs.
+
+## Building
+
+The kernel build goes through `kernel/k30`'s harness: bring up your Amix box (real
+hardware, or your own WinUAE/Amiberry config with an a2065 NIC on tap0), then
+
+```sh
+(cd ../../k30 && ./amix-build z3660eth)                     # the net driver alone
+(cd ../../k30 && ./amix-build a4091 z3660scsi z3660eth)     # combined kernel
+```
+
+`BUILD.md` is the manual procedure the harness automates.
+
+The loadable module ([`module/`](module/Makefile)) builds inside amix against
+[`kernel/dlm`](../../dlm)'s ABI kit: build the kit there (`make kit`, see
+[`toolchain/README.md`](../../../toolchain/README.md)), then run `make -C module` here,
+`make -C module test` for the host test of its parameter parser, and
+`bash tools/patch-selftest.sh` for the on-box patch scripts' host battery.
+`DLM=` or `KIT_k30=`/`KIT_k46=` point at a kit elsewhere.
 
 `z3660eth` registers at **cdevsw major 51** (renumbered from 48 on 2026-07-30 —
 48 turned out to be contested; see `BUILD.md` §2(b)), and its device node is
@@ -89,7 +111,7 @@ fast clean boot.
   the cdevsw row, `patch-makefile.sh` the driver `OBJ` list) plus
   `patch-selftest.sh`, their benchless host‑side fixture battery.
 - `BUILD.md` — the exact on‑box build + kernel‑integration steps (the manual
-  procedure that `amix-kerntools` automates).
+  procedure that `kernel/k30` automates).
 - `docs/ZEN0-BRINGUP.md` — the field-proven bring-up runbook: why `aen` can never
   work under this firmware, the five-command sequence, `S99zen` persistence, the
   identity files, and how to tell which path a box is on.
@@ -115,7 +137,7 @@ callout** by default (`z3660ethintr()` exists for a future interrupt path).
 
 ## License
 MIT — see [`LICENSE`](LICENSE). The STREAMS/DLPI scaffolding was originally adapted
-from Commodore's stock AMIX `aen`/`hydra` drivers; the MIT grant covers this repo's
+from Commodore's stock AMIX `aen`/`hydra` drivers; the MIT grant covers this directory's
 own work. AMIX itself (SVR4.0) is proprietary — you need a licensed AMIX system and a
 Z3660 accelerator to build and run this driver.
 
