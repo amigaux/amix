@@ -77,7 +77,9 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   and `S99z*`, with `S10`-`S19` the installer's. It warns, without refusing,
   about every command (in a `bin/` or `sbin/` directory) and every config file
   (`CONFFILES`, and files in `/etc` other than run-level scripts) that has no
-  man page in the payload.
+  man page in the payload: a file `…/man/<sect>/<name>`, the packages' layout
+  (`userland/packages/docs/man-pages.md`; an alias is a page file too), or
+  `…/man<sect>/<name>.<sect>`.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one
   amix-packagemanager's `gen-catalog.py` writes for the rolled package:

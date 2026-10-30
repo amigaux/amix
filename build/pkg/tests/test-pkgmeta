@@ -236,6 +236,19 @@ try:
                                      "f none /opt/amix/bin/[ 0755 root bin\n"
                                      "f none /opt/amix/man/man1/test.1 0644 root bin\n"))
     check("man: [ is documented by test.1", rc == 0 and "warning" not in err, err)
+    lay = (PROTO.replace("f none /opt/amix/man/man1/foo.1 0644 root bin\n",
+                         "f none /opt/amix/man/1/foo 0644 root bin\n"
+                         "f none /opt/amix/man/1/unfoo 0644 root bin\n")
+           .replace("f none /opt/amix/man/man4/foo.conf.4 0644 root bin\n",
+                    "f none /opt/amix/man/5/foo.conf 0644 root bin\n")
+           + "f none /opt/amix/bin/unfoo 0755 root bin\n")
+    rc, out, err = run("check", conf("man", "mlayout", lay))
+    check("man: the packages' layout (man/<sect>/<name>, aliases as pages) counts",
+          rc == 0 and "warning" not in err, err)
+    rc, out, err = run("check", conf("man", "mlaygap", lay.replace(
+        "f none /opt/amix/man/1/unfoo 0644 root bin\n", "")))
+    check("man: the packages' layout still finds a gap",
+          rc == 0 and "no man page for /opt/amix/bin/unfoo" in err, err)
     rc, out, err = run("check", conf("man", "mgz", PROTO.replace("foo.1 ", "foo.1.gz ")))
     check("man: a compressed page counts", rc == 0 and "warning" not in err, err)
 

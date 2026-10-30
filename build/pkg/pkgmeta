@@ -225,12 +225,21 @@ MAN_ALIASES = {"[": "test"}
 def man_warnings(recipe, m):
     """What RECIPE installs without a man page in its payload: commands (in a
     bin/ or sbin/ directory) and config files (CONFFILES, and files under
-    /etc other than the run-level scripts and links)."""
+    /etc other than the run-level scripts and links). A page is a file in
+    .../man/<sect>/<name> (the packages' layout, docs/man-pages.md there) or
+    .../man<sect>/<name>.<sect>[.gz]; a page's name is its command's."""
     objs = prototype_objects(recipe) or []
     pages = set()
     for ftype, _, path, _ in objs:
         d = path.split("/")
-        if ftype in "fls" and "man" in d[:-1] and re.match(r"^(man|cat)\w+$", d[-2]):
+        if ftype not in "fls" or len(d) < 4:
+            continue
+        if d[-3] == "man" and re.match(r"^\d\w*$", d[-2]):
+            # the packages' layout (userland/packages/docs/man-pages.md):
+            # <tree>/man/<sect>/<name>, no suffix; an alias is a page file too
+            pages.add(d[-1])
+        elif "man" in d[:-1] and re.match(r"^(man|cat)\w+$", d[-2]):
+            # the classic one: man<sect>/<name>.<sect>[.gz]
             page = re.sub(r"\.(gz|Z|z)$", "", d[-1])
             pages.add(page.rsplit(".", 1)[0] if "." in page else page)
     missing = []
