@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — §10.9 categories as new revisions; amix-benchmark-gcc14 converted; pkg-smoke from out/pkg (12c7e08 … 6ab6a35)
+
+gzip 1.3.12-7 and gtar 1.14-8 file under archive, zlib 1.2.13-7 and acompat 0.1-7 under library (acompat's
+description names libamixcompat); payloads identical to the previous revisions except acompat's embedded version
+string. amix-benchmark-gcc14 converted (1.3-4 unchanged). pkg-smoke stages from out/pkg. All built on the container
+gcc14 pin; the other gcc14 packages rebuild byte-identical there and keep their revisions. Not published.
+
 ## 2026-10-30 — the recipes converted to the §10.9 shape (20c8a84 … 0be17e7)
 
 Docs for the amix home; $COMMON paths for the amix harness. grep, gzip, less, make, zlib (STYLE=hooks), tar, patch and
