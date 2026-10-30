@@ -1,0 +1,72 @@
+AMIX 2.1c panics (KERNEL FAULT, bus error in pvn_vptrunc's bzero) when
+F_FREESP shrinks a file larger than its direct blocks (~96 KiB) to an EOF
+that is not block aligned, inside the block that holds the old EOF
+(grimoire quirk 90).  tar 1.14 truncates with gnulib's F_FREESP
+ftruncate after --delete (and rewriting a --listed-incremental snapshot):
+measured on the box, tar -b 1 --delete of a 512-byte member from a
+214528-byte archive (new EOF 213504, same 8 KiB block) brought the
+emulated golden 030 down.  Cut at the block boundary below the new EOF
+and write the bytes up to it back, read first.  The period build keeps
+the same hazard; it is frozen, so this is gcc14 only.
+
+--- lib/ftruncate.c
++++ lib/ftruncate.c
+@@ -49,11 +49,38 @@
+   else
+     {
+ 
+-      /* Truncate length. */
++      /* Truncate length.  AMIX 2.1c: F_FREESP that shrinks a file past
++	 its direct blocks to an EOF not block aligned, inside the block
++	 holding the old EOF, panics the kernel (grimoire quirk 90).  Cut
++	 at the block boundary below LENGTH and write the bytes up to
++	 LENGTH back, read first; aligned lengths go straight through.  */
++      off_t blk = filebuf.st_blksize > 8192 ? filebuf.st_blksize : 8192;
++      off_t base = length - length % blk, pos = 0;
++      char tail[8192];
++      long want = (long) (length - base), n, k;
++
++      if (want > (long) sizeof tail)
++	{
++	  errno = EIO;
++	  return -1;
++	}
++      if (want > 0)
++	{
++	  if ((pos = lseek (fd, (off_t) 0, SEEK_CUR)) < 0
++	      || lseek (fd, base, SEEK_SET) != base)
++	    return -1;
++	  for (n = 0; n < want; n += k)
++	    if ((k = read (fd, tail + n, want - n)) <= 0)
++	      {
++		if (k == 0)
++		  errno = EIO;
++		return -1;
++	      }
++	}
+ 
+       fl.l_whence = 0;
+       fl.l_len = 0;
+-      fl.l_start = length;
++      fl.l_start = base;
+       fl.l_type = F_WRLCK;	/* write lock on file space */
+ 
+       /* This relies on the *undocumented* F_FREESP argument to fcntl,
+@@ -62,6 +89,17 @@
+ 
+       if (fcntl (fd, F_FREESP, &fl) < 0)
+ 	return -1;
++
++      if (want > 0)
++	{
++	  if (lseek (fd, base, SEEK_SET) != base)
++	    return -1;
++	  for (n = 0; n < want; n += k)
++	    if ((k = write (fd, tail + n, want - n)) <= 0)
++	      return -1;
++	  if (lseek (fd, pos, SEEK_SET) < 0)
++	    return -1;
++	}
+     }
+ 
+   return 0;

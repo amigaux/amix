@@ -69,6 +69,13 @@ this toolchain: `libgcc.a` has no `__mulsi3`/`__divsi3`/`__udivsi3`/`__umodsi3`.
 | `04-gettime-decl` | `gettimeofday` is in no header and not in `libc.so.1`; the symbol comes from libacompat |
 | `05`–`07` `-d4-*` | the four D4 multiply sites above |
 
+GCC 14 only (`patches-gcc14/`; the period build is frozen):
+
+| Patch | Why |
+|---|---|
+| `02-hasher-size-t` | gnulib's `Hash_hasher` takes `size_t`; GCC 14 rejects tar's `unsigned` hashers (both 32 bits) |
+| `03-ftruncate-freesp-aligned` | **The stock kernel panics** (grimoire quirk 90). gnulib's `ftruncate` is `fcntl(F_FREESP)`. Shrinking a file larger than its direct blocks (~96 KiB) to an EOF that is not block-aligned, inside the block holding the old EOF, faults `pvn_vptrunc`. tar truncates that way after `--delete`, and when it rewrites a `--listed-incremental` snapshot. Measured at 1.14-6: `tar -b 1 --delete` of a small member from a 215040-byte archive (new EOF 214016, same 8 KiB block) took the emulated golden 030 down. With the default `-b 20` an archive shrinks by whole 10240-byte records, so the new EOF is always in an earlier block, and that case survived. The patch cuts at the block boundary below the new EOF and writes the bytes up to it back, read first. |
+
 ## Package shape
 
 `/opt/amix/bin/tar` and `COPYING`/`NEWS`/`README` under `/opt/amix/doc/tar/`. No `rmt` (remote tape
@@ -82,3 +89,18 @@ put `/opt/amix/bin` on `PATH`.
   and the value handed to `chown(2)` are exact — but the kernel refuses to set it (`EINVAL`), so
   tar extracts the file as root-owned and exits 2. That is the OS, not the port.
 - `--totals` shows `?/s` for a sub-second run (no sub-second clock in the rate).
+- The period build (1.14-2) keeps the quirk 90 hazard: `-b <small> --delete` on a large archive
+  can panic the stock kernel. Use the GCC 14 build (1.14-7 or later).
+
+**Revision 1.14-7, 2026-10-30 (GCC 14): the stock-kernel ftruncate panic (grimoire quirk 90).**
+- **Probed at -6** on E1, one boot per case:
+  - `tar -b 1 --delete` of a small member from a 215040-byte archive panicked;
+  - the same from a 214016-byte archive survived, because its new EOF (212992) is 8 KiB-aligned;
+  - default-blocking `--delete` survived.
+  - Evidence: `Amigaux/tmp/2026-10-30-ftx/`.
+- **The fix:** `patches-gcc14/03`.
+- **Bench:** E1 slot 1, rig-run 20261030-113242, `tools/gcc14-smoke`.
+  - All 42 period-versus-GCC 14 comparisons EQUAL.
+  - X4 (GCC 14 tar only; the period tar would panic): `-b 1 --delete` 215040 → 214016, two
+    members left, `t/b` extracts byte-exact.
+- **Package:** `gtar-1.14-7.pkg`, md5 `44e79c678a475cd6c96f7a7ade8afe9a`, 221696 bytes.

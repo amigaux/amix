@@ -110,8 +110,10 @@ VERSION=$TAR_VERSION
 # 64-bit form anyway).
 # -6: the same objects relinked on gcc14-cross-amix b51ff39 (the public pin,
 # owner Y3, 2026-10-29): only the runtime it links (libgcc, libamixc99) differs.
+# -7: patches-gcc14/03, gnulib's F_FREESP ftruncate cuts block aligned (grimoire
+# quirk 90: tar -b 1 --delete panicked the stock kernel, 2026-10-30).
 case "$AMIX_TOOLCHAIN" in
-gcc14) PKGREV=6 ;;
+gcc14) PKGREV=7 ;;
 *)     PKGREV=2 ;;
 esac
 PKGVERSION=$VERSION-$PKGREV
