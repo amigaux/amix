@@ -128,3 +128,10 @@ scanners are clean, and the binaries contain no FPU instructions.
 - **Package:** `diffutil-2.8.1-2.pkg`, md5 `baffdea7f68d4017b46e2a4fcb8606d5`, 212992 bytes.
 - **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 24/24.
 - **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+
+## Revision -3: man pages where `man` finds them
+
+The man pages move to `/opt/amix/man/<sect>/<name>` with the package's whatis fragment
+`/opt/amix/man/whatis.d/diffutil` (docs/man-pages.md), where the base package's `man` and the stock
+`man` find them; the four pages are upstream's, unchanged. Built on the gcc14 container pin: every other payload file is the previous
+revision's.
