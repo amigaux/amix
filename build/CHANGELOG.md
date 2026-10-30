@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-30 — SYSTEM_PATHS, the base set, period builds, ESSENTIAL (ccb02f3, 9dbd943)
+
+pkgmeta check refuses a prototype object outside PREFIX, /opt/amix/man, /etc, /var and the paths a new SYSTEM_PATHS
+key names (a base package's /usr paths). SET gains `base` (P-36: every install), written first in sets.conf.
+CONFFILES must be under /etc or /var. TOOLCHAIN=period builds through the driver: binutils 2.8.1's nm has no -D for
+the stock libc.so.1, which had emptied the undefined-symbol gate and refused every period executable. ESSENTIAL=yes
+writes APKG_ESSENTIAL=yes into pkginfo (apkg then refuses removal); any value but yes or no is refused.
+test-pkgmeta 118/118, test-pkgbuild 55/55; a period base-style package rolls and installs under heirloom pkgadd -R.
+
 ## 2026-10-30 — the man-page warning reads /opt/amix/man/<sect>/<name> (92e2f36)
 
 pkgmeta's man-page warning knows the packages' page layout (userland/packages/docs/man-pages.md): a file under man/
