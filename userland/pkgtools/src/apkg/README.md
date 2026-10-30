@@ -484,8 +484,8 @@ assertions**, all required to PASS. A companion suite,
 [tests/nohttp-variant.sh](tests/nohttp-variant.sh), builds the `-DAPKG_NO_HTTP` (FILE+RAW-only,
 no-sockets) variant and adds **20** more.
 [tests/kbootset-consumer.sh](tests/kbootset-consumer.sh) (**12**, not in
-the count; reads the dlm kit from `$AMIX_DLM`, default amix's `kernel/dlm`
-beside this repository, and without it says SKIP and exits 77) builds the
+the count; reads the dlm kit from `$AMIX_DLM`, default `kernel/dlm` of
+the amix checkout this directory is in, and without it says SKIP and exits 77) builds the
 real kbootset with the kit's Makefile, has `tools/repo/gen-catalog.py`
 describe a kernel package from its own sidecar, and lets apkg install it
 and trigger it: gate 1 accepts apkg's record, gate 2 accepts the sidecar's
