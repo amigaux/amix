@@ -1,0 +1,16 @@
+# z3660eth: its .moddata keys (amix-dlm C3-1 section 3, C3-6 section 2)
+# and the definition line, as the ABI kit's mkmod reads a Master.  One
+# Master for both lines: no $cpu, the kit's fragment gives the line's
+# (68030 on k30, 68040 on k46); kabi and cc come from the kit.
+# $match: a boot module must carry one (C3-5 section 2, gate 3); the
+# AutoConfig board, or the AGA fixed-base fallback in z3660eth_map
+# (the board present without an AutoConfig entry) = mobo:z3660-window.
+$modtype drv
+$class boot
+$match zorro:144b:01,mobo:z3660-window
+$majors c:51
+$unload never
+$param intr:int:0:0:6
+$param intrl2:int:1:0:1
+$desc Z3660 ethernet zen0 (STREAMS/DLPI)
+z3660eth	z3660eth
