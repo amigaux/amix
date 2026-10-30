@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — quirk 90 worked around in the landed packages (cad15e4, 97bbcf1, cbd8c25)
+
+The stock-kernel ftruncate panic (grimoire quirk 90) reached dd seek=, sparse cp/mv/install and tar -b 1 --delete on E1.
+recipes/common/amix-ftruncate.c: a strong ftruncate that cuts block-aligned and rewrites the tail. coreutil 5.2.1-3
+links it in all 86 programs; copy.c writes the trailing NUL instead of write+ftruncate (patch 08); stat sizes without a
+run-time %llu (patch 09). gtar 1.14-7: gnulib's F_FREESP path cuts aligned. E1: coreutils smoke 102/102 (d418b45e),
+gcc14-smoke PASS with X4 (gtar 44e79c67). The published period gtar 1.14-2 keeps the hazard. Not published.
+
 ## 2026-10-30 — rsync 3.1.3; seteuid/setegid declared; pkg-smoke host side (0814dda, 3676e4a, e7ac916)
 
 rsync 3.1.3-1 (gcc14, /opt/amix, protocol 31, bundled zlib/popt/getaddrinfo). Patch 01 works around a stock-kernel
