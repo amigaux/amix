@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — cut of record 68030-261030-56 (fe544a2)
+
+The k30 module kernel, kabi k30.1.3 (abi 18c0a1c9), with kzero, ufs tail zeroing and the sendsig FPU gate.
+cuts/68030-261030-56/ holds SHA256SUMS-68030-261030-56 (seven files), cut.sh (a git archive of amix 4fc583f's kernel/,
+the -22 recipe, port 88dcfc0, amix-paula 548d258) and a README of its inputs; the bytes stay outside the repository in
+build/cuts/. brel 14ad54ee, unix 759a928f, unix.sym 6ca52072, kabi da737229, ufs e2fb88fe, s5 b2086574, audio.c
+1f43c5ff. cut.sh reproduces all seven sums of the emulator-tested build. Not yet accepted on hardware or published.
+
 ## 2026-10-30 — sendsig FPU gate (grimoire quirk 74), on by default (2a3e894)
 
 src/fpugate030.s adds fpu_setup_gated, which returns at once when fpu_present is 0; tools/fpugate-sendsig.py retargets
