@@ -24,13 +24,14 @@ SOFTWARE.
 
 
 ================================================================
-NOT ALL OF THIS REPOSITORY IS UNDER THE ABOVE LICENSE
+NOT ALL OF THIS DIRECTORY IS UNDER THE ABOVE LICENSE
 ================================================================
 
-The MIT license above covers the code written for this project:
-src/apkg/, src/contents-fsck/, tools/, and the Amix-specific files
-added under heirloom/ (compat/, sslstub/, mk.config.amix and the
-build-*.sh scripts).
+The MIT license above covers the code written for this project, in
+this directory (amix userland/pkgtools, formerly the repository
+amix-packagemanager): src/apkg/, src/contents-fsck/, tools/, and the
+Amix-specific files added under heirloom/ (compat/, sslstub/,
+mk.config.amix and the build-*.sh scripts).
 
 Other terms apply to material this project vendored or derived:
 
@@ -42,8 +43,10 @@ Other terms apply to material this project vendored or derived:
                        heirloom/LICENSE/CALDERA.LICENSE.  Per-file
                        headers are authoritative and are kept intact;
                        every Amix change is marked "AMIX PORT".
-  heirloom/compat/     fnmatch.c, fnmatch.h, charclass.h -- BSD/ISC/public
-                       domain (OpenBSD via openssh-portable);
+  heirloom/compat/     fnmatch.c, fnmatch.h, charclass.h -- BSD-3
+                       (VMware, Inc.; the Regents of the University of
+                       California), ISC and public domain (Todd C.
+                       Miller); OpenBSD via openssh-portable;
                        snprintf.c -- Powell/Weiss permissive.
                        Each keeps its own header.
   research/heirloom/   patches and extracts of the above; CDDL-derived and

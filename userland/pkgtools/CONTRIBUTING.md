@@ -1,4 +1,4 @@
-# Contributing to amix-packagemanager
+# Contributing to userland/pkgtools
 
 This is a shipped system under maintenance, not an investigation. Before changing anything, read
 [`NOTES.md`](NOTES.md): it is the session-by-session record and **the authority on current
@@ -43,24 +43,25 @@ carry the CDDL "Portions Copyright" line below their CDDL header.
 
 ## Building and testing
 
-The host build and every test suite run on a plain Linux host:
+The host build and every test suite run on a plain Linux host, from `userland/pkgtools`:
 
 ```
+heirloom/build-host.sh                               # host engine + compat tests; first
+bash tools/repo/tests/run-tests.sh                   # bash, not sh
 (cd src/apkg          && make test)                  # apkg host suite
 (cd src/apkg          && sh tests/nohttp-variant.sh)  # the FILE+RAW, no-sockets build
 (cd src/contents-fsck && make test)
-bash tools/repo/tests/run-tests.sh                   # bash, not sh
 sh tools/migrate/tests/run-tests.sh
-(cd heirloom && ./build-host.sh)                      # host engine + compat regression tests
+sh src/apkg/tests/kbootset-consumer.sh               # against amix's kernel/dlm
 ```
 
 Run them; they are fast and they catch real regressions. The Amix (m68k) targets need the
-`m68k-cbm-sysv4` cross toolchain from
-[gcc-cross-amix](https://github.com/isoriano1968/gcc-cross-amix). The build scripts look for its
-`build/env.sh` in a checkout **beside** this repository (`../gcc-cross-amix`); point
-`AMIX_CROSS_ENV` (heirloom scripts) or `CROSS_ENV` (contents-fsck) elsewhere if yours lives
-somewhere else, and `AMIX_SYSROOT` at the populated sysroot. The cdfs package
-(`build-packages.sh --cdfs`) likewise expects an amix-cdfs checkout at `../amix-cdfs`.
+`m68k-cbm-sysv4` cross toolchain, gcc-cross-amix at amix's `toolchain/gcc-cross-amix.pin`. Set
+`GCA` to its `build/` directory, as for the rest of amix; the build scripts source `$GCA/env.sh`
+(`AMIX_CROSS_ENV` for the heirloom scripts and `CROSS_ENV` for contents-fsck still name an
+`env.sh` directly, and `AMIX_SYSROOT` the populated sysroot). The cdfs package
+(`build-packages.sh --cdfs`) reads an amix-cdfs checkout named by `CDFS_REPO`, by default one
+beside the amix checkout.
 
 ## Licensing boundary
 
