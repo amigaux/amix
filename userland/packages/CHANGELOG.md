@@ -3,6 +3,15 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — gcc14 re-pinned to amigaux/gcc14-cross-amix b51ff39; the gcc14 set re-minted (a6b124c, d53600f)
+
+Public pin b51ff39: cc1 unchanged (9635f67e); libgcc and libamixc99 rebuilt under -mno-strict-align (specs 45f46859
+adds the default). Every package object is byte-identical to the cf461e3 build; a relink with the old runtime reproduces
+the old executables, so every new byte is runtime. One name = one byte set, so all twelve take a new revision: acompat
+0.1-6, zlib 1.2.13-6, gzip 1.3.12-6, patch 2.5.9-6, gtar 1.14-6, grep 2.5.1a-7, less 704-7, make 3.81-7,
+amix-benchmark-gcc14 1.3-4, diffutils 2.8.1-2, bzip2 1.0.8-2, coreutils 5.2.1-2. E1 gcc14-smoke PASS (all checks EQUAL,
+dhry 151514/s, paranoia 24/24); pkg-smoke diffutils 24/24, bzip2 23/23, coreutils 95/95. Not published.
+
 ## 2026-10-29 — coreutils 5.2.1; MAKE_CFLAGS and a NEEDED-aware undef gate (c728391, 53707ec, d512466, c62ec2f)
 
 coreutil 5.2.1-1 (gcc14, /opt/amix): 86 programs + groups incl. md5sum/sha1sum, no libm; date -u fixed for AMIX libc
