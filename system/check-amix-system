@@ -10,10 +10,12 @@ set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 sys=${1:?usage: check-amix-system DIR}
-[ -d "$sys/usr/include" ] || { echo "check-amix-system: $sys has no usr/include" >&2; exit 2; }
+for d in usr/include etc; do
+	[ -d "$sys/$d" ] || { echo "check-amix-system: $sys has no $d" >&2; exit 2; }
+done
 (cd "$sys" && sha256sum -c --strict --quiet "$here/MANIFEST.sha256") || {
 	echo "check-amix-system: $sys does not match system/MANIFEST.sha256" >&2; exit 2; }
-links=$(cd "$sys" && find usr -type l | LC_ALL=C sort | while read -r l; do
+links=$(cd "$sys" && find etc usr -type l | LC_ALL=C sort | while read -r l; do
 	printf '%s -> %s\n' "$l" "$(readlink "$l")"; done)
 [ "$links" = "$(cat "$here/SYMLINKS")" ] || {
 	echo "check-amix-system: $sys does not match system/SYMLINKS" >&2; exit 2; }
