@@ -3,6 +3,16 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-30 — man pages in /opt/amix/man with whatis.d; 13 revisions (7feb82c..102cd9e)
+
+Every package's pages move to /opt/amix/man/<sect>/<name> with whatis.d/<PKG> (tools/manpages.sh, docs/man-pages.md,
+the contract shared with userland/base): grep -8, gzip -8, less -8, make -8, patch -7, gtar -9, zlib -8, acompat -8,
+amixbch14 1.3-5, bzip2 -3, diffutil -3, rsync -2, coreutil -4. New pages tar(1), acompat(3) with nine aliases,
+acompat-test(1), zlib-test(1), amix-bench-g14(1); bunzip2/bzcat/bzip2recover aliases. less -8 ships the troff
+sources (-7 shipped pre-formatted pages). All 129 pages render through E1's stock nroff; other payload files are
+unchanged. amix-benchmark-gcc14 refuses a home path or build host in its payload (abebb49); pkg-smoke installs and
+checks a package without a smoke test (d41d0bb).
+
 ## 2026-10-30 — §10.9 categories as new revisions; amix-benchmark-gcc14 converted; pkg-smoke from out/pkg (12c7e08 … 6ab6a35)
 
 gzip 1.3.12-7 and gtar 1.14-8 file under archive, zlib 1.2.13-7 and acompat 0.1-7 under library (acompat's
