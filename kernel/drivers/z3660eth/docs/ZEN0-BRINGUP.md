@@ -6,17 +6,17 @@
 **Provenance.** Every command below was run on real hardware on **2026-09-09** — an Amiga 4000
 with a Z3660 (card 3), a real **68LC060**, **Amix 2.1c**, kernel `68060-260828-50` — and the
 five-command sequence in §2 worked **first try**. The same sequence also works on the emulated
-`UAE_040_MMU` path. The campaign's full evidence file is
-`Amix/tmp/2026-09-08-card3-amix-image/DEVSD-GROUND-TRUTH.md` (durable scratch, not a repo — which
-is why the durable parts of it live here).
+`UAE_040_MMU` path. The campaign's full evidence file,
+`DEVSD-GROUND-TRUTH.md`, is a working file that was never published, which is why the durable
+parts of it live here; its sections are cited below.
 
 **Evidence markers used throughout:**
 
 | mark | meaning |
 |---|---|
-| ✅ | **Verified from source** — checked in this repo or a sibling repo, path and line given |
+| ✅ | **Verified from source** — checked in this directory or a sibling repo, path and line given |
 | 📋 | **Measured on metal 2026-09-09** — a result recorded in `DEVSD-GROUND-TRUTH.md`; not re-checkable from source |
-| 🟡 | **Reported, not verified** — asserted by the campaign; no artifact in this repo or the referenced tree confirms it |
+| 🟡 | **Reported, not verified** — asserted by the campaign; no artifact in this directory or the referenced tree confirms it |
 
 ---
 
@@ -123,7 +123,7 @@ mknod /dev/zen0 c 51 0
 With the project's own addresses that is `ifconfig zen0 192.0.2.39 netmask 255.255.255.0 up
 -trailers` and `route add default 192.0.2.1 1`.
 
-`userland/bringup.sh` in this repo is the same sequence with a `zen -S` presence gate in front and
+`userland/bringup.sh` in this directory is the same sequence with a `zen -S` presence gate in front and
 the values factored out to variables.
 
 ### 2.1 The notes that matter
@@ -137,8 +137,8 @@ and `BUILD.md` §2(b) carry the reasoning: 51 is the lowest slot of the ecosyste
 `[ -c /dev/zen0 ] ||` guard in the boot script exists to suppress it.
 
 **The bare `slink`, on its own line, before `slink addaen`, is load-bearing.** ✅ This is a real-HW
-finding from 2026-06-21, recorded in this repo at `userland/S99zen:10-14` and
-`GRIMOIRE-HANDOFF.md` §7.4: on a fast clean boot `slink addaen` can race ahead of the base inet
+finding from 2026-06-21, recorded in this directory at `userland/S99zen:10-14` and
+the project's 2026-06 handoff notes (§7.4, unpublished): on a fast clean boot `slink addaen` can race ahead of the base inet
 STREAMS plumbing. The proven manual bring-up always ran a bare `slink` **first** to (re)link the
 base streams, then `slink addaen`. Do not fold the two into one command and do not drop the first.
 
@@ -149,7 +149,7 @@ correct behaviour.** 🟡 The exact text observed on 2026-09-09 was:
 Function "tp", command 3: link: Device busy
 ```
 
-(The wording is from the 2026-09-09 field session; this repo's prior note at `userland/S99zen:14`
+(The wording is from the 2026-09-09 field session; this directory's prior note at `userland/S99zen:14`
 records the same condition more loosely as *"'Device busy' from the bare slink is expected and
 harmless"*.) **It means the base inet STREAMS are already up — which is the good case. Do not
 "fix" it.** Suppressing it, or making the script bail on it, removes the very race protection the
@@ -174,8 +174,8 @@ rc2 script.
 
 The shipped file is **`/etc/rc2.d/S99zen`**, mode **744**, owner **root**:
 
-- ✅ **371 bytes**, and ✅ **`sum -r` = `56264     1`** — both re-verified in this session against
-  the shipped copy at `Amix/tmp/2026-09-08-card3-amix-image/netfix/S99zen.min`.
+- ✅ **371 bytes**, and ✅ **`sum -r` = `56264     1`** — both verified when this runbook was written
+  against the shipped copy, `S99zen.min`, kept with the campaign's unpublished evidence.
 - 🟡 The **744 / root** mode-and-owner is the on-box installed state as reported; the host-side
   copy carries the host's own mode, so it is not checkable from the file.
 
@@ -183,7 +183,7 @@ The shipped file is **`/etc/rc2.d/S99zen`**, mode **744**, owner **root**:
 
 Reproduced verbatim so it survives the scratch directory being cleared. Note it has **no shebang
 and no comments** — that is what makes it 371 bytes and what the checksum above is of. (The
-annotated variant with the full comment header is `userland/S99zen` in this repo; it is the same
+annotated variant with the full comment header is `userland/S99zen` in this directory; it is the same
 logic, it is just a different number of bytes.)
 
 ```sh
@@ -210,7 +210,7 @@ Substitute your own address, netmask and gateway on the `ifconfig` and `route` l
 1. **It retries `slink addaen` up to 20 times, 3 s apart.** The STREAMS stack is not ready the
    instant `rc2` runs. ✅ Same 2026-06-21 race as §2.1; the loop plus the leading bare `slink` is
    the mitigation (`userland/S99zen:10-14`, loop at `:19-26`; internal provenance
-   `GRIMOIRE-HANDOFF.md` §7.4, §9.2 — gitignored, not part of this repo). The initial `sleep 5`
+   the project's 2026-06 handoff notes §7.4, §9.2 — unpublished). The initial `sleep 5`
    gives the base streams a head start before the first attempt. Worst case the loop spends ~60 s and gives up — in the
    background, where it costs nothing.
 
@@ -233,7 +233,7 @@ boot going from 210 s to 29 s once the literal IP replaced the name. A literal I
 resolution entirely.
 
 This applies to `S99zen` exactly as it applies to `network-config`, and it is why every address in
-this repo's userland files is spelled out.
+this directory's userland files is spelled out.
 
 ### 3.4 Measured bring-up times
 
@@ -245,7 +245,7 @@ treat them as order-of-magnitude expectations rather than a spec:
 | real 68060 | **t+72 s** from power-on |
 | emulated 040 | **t+156 s** from power-on |
 
-The practical consequence is the one this repo has warned about since 2026-06: ✅ *"it can take the
+The practical consequence is the one this directory has warned about since 2026-06: ✅ *"it can take the
 full boot for `zen0` to appear — don't conclude 'broken' from an early check"* (`userland/S99zen:15-16`).
 If the SD image is dirty and `fsck` forces a reboot, it takes longer still.
 
@@ -371,7 +371,7 @@ running `/usr/amiga/bin/aen -S; echo $?` by hand: a bare `1` with no message is 
 
 ---
 
-## 6. Related files in this repo
+## 6. Related files in this directory
 
 - `userland/bringup.sh` — the §2 sequence as a runnable script, with a `zen -S` gate.
 - `userland/S99zen` — the §3 boot script, annotated (same logic, more comments than the 371-byte
@@ -387,8 +387,8 @@ running `/usr/amiga/bin/aen -S; echo $?` by hand: a bare `1` with no message is 
   comes up, where the static IP/hostname/netmask/gateway live, and what `slink addaen` actually does
   (it links the driver stream under **two** multiplexors, IP *and* ARP).
 
-> ⚠ **`GRIMOIRE-HANDOFF.md` was a frozen 2026-06 handoff document that until 2026-09-09 still
+> ⚠ **The project's 2026-06 handoff notes (unpublished) until 2026-09-09 still
 > said `mknod /dev/zen0 c 48 0`** (§6, §9.2) — 48 was stale, superseded by the 2026-07-30
-> renumber to **51**. It has since been corrected in place (its own top-of-document correction
+> renumber to **51**. They have since been corrected in place (their own top-of-document correction
 > note explains why); the authoritative value remains `driver.conf`, `README.md` and this file.
-> Its `slink`/race material (§7.4, §9.2) was and still is current and is cited above.
+> Their `slink`/race material (§7.4, §9.2) was and still is current and is cited above.

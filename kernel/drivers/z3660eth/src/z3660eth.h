@@ -166,7 +166,7 @@ typedef struct ether_header ether_header_t;
  * AMIX has none and no-opped them; that was wrong -- the UNDEF seen in the first
  * kernel link came from not including inline.h, and until gcc-cross-amix 7a1d727
  * (-Dvolatile=__volatile__) the -traditional cross build would have deleted the
- * asm anyway (review T-9).  On this kernel spl5/spl6/spl7/spltty/splhi all map
+ * asm anyway (a code review).  On this kernel spl5/spl6/spl7/spltty/splhi all map
  * to _spl4, i.e. SR = 0x2400 (inline.h:239-251): IPL 4, which blocks the level-2
  * CIA-A clock and therefore every callout, including the RX poll.
  *
