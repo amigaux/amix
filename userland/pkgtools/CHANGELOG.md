@@ -1,3 +1,11 @@
+## 2026-10-30 — the essential-package mark, APKG_ESSENTIAL (75c33d4, 12832c6)
+
+P-36 W2 follow-up. A package whose installed pkginfo says APKG_ESSENTIAL=yes (the base package: its r.conffile
+would delete an unedited /etc/inittab) is refused by apkg remove, purge and remove --purge, exit 5, before the
+journal or pkgrm; --force-remove-essential overrides, -f does not. list and info show the mark. gen-catalog skips a
+package whose value is neither yes nor no. Stock pkgrm ignores the mark. Interface: docs/design.md §2c. apkg 521/0,
+conffile e2e 64/0, repo tools 448/0. Not minted.
+
 ## 2026-10-30 — compver(5), copyright(5), space(5) (ed99eb4)
 
 Written from the engine source (src/formats, MIT) and shipped by APKGENG 1.12.5 (not minted) beside the other
