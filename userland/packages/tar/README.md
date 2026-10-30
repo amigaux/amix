@@ -1,11 +1,11 @@
 # tar — the recipe
 
 **Package `gtar` 1.14** (catalog name `tar`) — GNU tar with base-256 header reads, long names and
-`-z`. GPL-2.0-or-later. Registry entry: [`registry/tar.yaml`](../../registry/tar.yaml) · pin:
+`-z`. GPL-2.0-or-later. Pin:
 [`pin.sh`](pin.sh).
 
-    sh recipes/libamixcompat/build.sh   # once: tar links gettimeofday from libacompat
-    sh recipes/tar/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/libamixcompat   # once: tar links gettimeofday from libacompat
+    sh build/pkg/pkgbuild.sh userland/packages/tar
 
 ## Coexistence
 
@@ -25,9 +25,9 @@ byte-for-byte by the host's GNU tar (`sum -r` identical both sides).
 ## ★ D3 — the first package that needed it
 
 `tar -c` maps uid→name (`getpwuid`), and `tar -x` as root maps name→uid (`getpwnam`) — and the
-**first `getpwnam()` of a process crashes in the stock shared libc** (PORTING.md §3.1, ROADMAP D3).
+**first `getpwnam()` of a process crashes in the stock shared libc** (docs/porting.md §3.1, ROADMAP D3).
 The executable therefore **defines** all four lookups itself —
-[`recipes/common/amix-pwgr.c`](../common/amix-pwgr.c), linked as a plain object — and `build.sh`
+[`build/pkg/common/amix-pwgr.c`](../../../build/pkg/common/amix-pwgr.c), linked as a plain object — and `build.sh`
 asserts via `nm` that they are `T` in the binary and never `U`. On the box: an archive entry owned
 by `bin` with a wrong numeric id (4242) extracts owned by the box's own `bin` (uid 2), an unknown
 name keeps its number, and a box-made archive records owner names.
@@ -51,7 +51,7 @@ cross-default "gettimeofday clobbers localtime" wrapper is not needed over libac
 
 The shared D4 gate grepped for `mulu.l …,%dH:%dL`, a spelling binutils 2.8.1's objdump never
 prints (it writes `mulul %fp@(12),%d1,%d2`), so it passed everything. Fixed in
-[`recipes/common/gates.sh`](../common/gates.sh) to classify by **encoding** (MUL.L/DIV.L opword +
+[`build/pkg/common/gates.sh`](../../../build/pkg/common/gates.sh) to classify by **encoding** (MUL.L/DIV.L opword +
 extension-word bit 10), with a self-test that must see it fail on a probe first. Under the real gate
 tar had four register/memory-source 64-bit multiplies — `human.c` ×2 (`--totals`), `bkm_scale` in
 the `uintmax_t` instance of `xstrtol.c` (size suffixes), and `strtoull` (every numeric option) — each

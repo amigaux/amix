@@ -1,136 +1,18 @@
-# recipes/ — one directory per port
+# Recipes — the traps they encode, and why they are hand-written
 
-Plan and package selection: [`../ROADMAP.md`](../ROADMAP.md) · machine-readable entries:
-[`../registry/`](../registry/) · the constraints every recipe inherits:
-[`../PORTING.md`](../PORTING.md).
+The package directory, the `package.sh` keys and the driver are described in
+[`build/pkg/README.md`](../../../build/pkg/README.md); the shared harness (the build environment,
+the fetcher, the gates, the roll, `amix-cpp` and the C shims) is in `build/pkg/common/`. The
+packages and their versions are in [`../INDEX.md`](../INDEX.md). The constraints every recipe
+inherits are in [`porting.md`](porting.md).
 
-## What is here
+This file keeps what the recipes and the harness encode, and why: the toolchain traps that shaped
+them, the prototype rules, and the two rules that keep recipes hand-written. Paths are relative to
+`userland/packages`, except `build/…` and `userland/pkgtools/…`, which are relative to the top of
+amix. The traps below were found on the period toolchain (GCC 2.7.2.3); the gates they produced
+run on every build, GCC 14 included.
 
-| Recipe | Package | Status |
-|---|---|---|
-| [`libamixcompat/`](libamixcompat/) | `acompat` 0.1 — the missing-libc shim | **published** 2026-09-15 (`/usr/local`); 0.1-2 re-mint staged |
-| [`patch/`](patch/) | `patch` 2.5.9 — GNU patch | **published** 2026-09-15 (`/usr/local`); 2.5.9-2 re-mint staged |
-| [`zlib/`](zlib/) | `zlib` 1.2.13 — the deflate/inflate library (static) | **published** 2026-09-15 (`/opt/amix`); 1.2.13-2 re-mint staged |
-| [`gzip/`](gzip/) | `gzip` 1.3.12 — the `.gz` compressor | **published** 2026-09-15 (`/opt/amix`); 1.3.12-2 re-mint staged |
-| [`grep/`](grep/) | `grep` 2.5.1a — recursive/color GNU grep | **published** 2026-09-15; 2.5.1a-2 (68060-clean) published 2026-09-26 (`/opt/amix`) |
-| [`less/`](less/) | `less` 704 — the backward-scrolling pager | **published** 2026-09-15 (`/opt/amix`); 704-2 re-mint staged |
-| [`tar/`](tar/) | `gtar` 1.14 (catalog name `tar`) — GNU tar, base-256 aware; the first D3 package | **published** 2026-09-26 (`/opt/amix`); 1.14-2 re-mint staged |
-| [`make/`](make/) | `make` 3.81 — GNU make | **published** 2026-09-26 (`/opt/amix`); 3.81-2 re-mint staged |
-| [`amix-benchmark/`](amix-benchmark/) | `amixbench` 1.3 (catalog name `amix-benchmark`) — the amix-bench suite | **published** 2026-09-16 (`/opt/amix`) |
-| [`kernel-k46/`](kernel-k46/) | `kernel-k46-z` / `kernel-k46-zacd` — stage-2 static 040/060 kernels (brel + sidecar); kernel-space recipes overview in its README | minted 2026-10-25; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
-| [`kernel-k30-u/`](kernel-k30-u/) | `kernel-k30-u` — the K030-U with kinfo (build 68030-261026-01), unix + kabi verbatim | minted 2026-10-26; **retired** (S4-24), out of the catalog since 2026-10-27 (S5-34), datastreams in `build/kspace/superseded/static-1.0/` |
-| [`kernel-k30/`](kernel-k30/) | the r7 K030-U stand-in | **superseded** by `kernel-k30-u/`, never shipped |
-| [`kernel-k46-m/`](kernel-k46-m/) | `kernel-k46-m` (`kern46m`) — the 040/060 module kernel (build 68060-261028-61, kabi k46.1.3, ET_REL; no built-in ufs/s5, rth1=2; core amix-dlm e45b061; the audio driver with amix-paula's patches), unix + kabi verbatim, and the cut's ufs core-tier module at `/etc/conf/mod.d/ufs` (C2-3 v8 sec 1; no k46 s5, S5-37; the module says kabi k46.1.2) | -61 (port d76a7f0/1c58661: kabi 1.3, DDI minor 3 for the paula module; the patched audio driver, the /dev/paula exclusion and a bounded /dev/audio open; carries those release notes) minted 2026-10-28, proven by the Bench in emulation (kerntools 82f7da2: upgrades from `b1f564f4` and `6f0c1701`, ufs root, check 0), in the catalog of record `fff860dc` since 2026-10-28 16:02, not published; -51 (port 87b8a88: the ufs module refuses a ufs with blocks under 4 KiB at mount, EINVAL, where -50 mounted a 2 KiB-block ufs and panicked in ufs_getapage; carries the release notes) minted 2026-10-28, proven by the Bench in emulation (-82/-50 → -51 with kbootset -23), in the record `b1f564f4` 04:34–16:02, never published; -50 (the S5-13 re-cut: -91's core kept the stamp's blank and refused its own ufs) in the record `6f0c1701` 03:19–04:34, never published; -91 never published |
-| [`kernel-k30-m/`](kernel-k30-m/) | `kernel-k30-m` (`kern30m`) — the 030 module kernel (build 68030-261030-56, kabi k30.1.3, brel; core amix kernel/dlm 4fc583f; the audio driver with amix-paula's patches; no static A4091/Gayle drivers or cdfs, no built-in ufs/s5, rth1=2; rth1 RAM-disk root, swap /dev/fakeswap), unix + kabi + unix.sym verbatim, and the cut's ufs and s5 core-tier modules at `/etc/conf/mod.d` (C2-3 v8 sec 1) | -56 (the k30 station's cut 68030-261030-56, amix 4fc583f: kzero, quirk 90; ufs tail zeroing, quirk 91 -- the ufs module carved from the cut's `qz/ufs.exp`; the sendsig FPU gate, quirk 74; carries those release notes) minted 2026-10-30, in no catalog yet, not published; -22 (kerntools 22d3261: kabi 1.3, DDI minor 3 for the paula module; the patched audio driver, the /dev/paula exclusion and a bounded /dev/audio open; carries those release notes) minted 2026-10-28, proven by the Bench in emulation (kerntools 82f7da2: upgrades from `b1f564f4` and `6f0c1701`, ufs root, check 0), in the catalog of record `fff860dc` since 2026-10-28 16:02, not published; -20 (S5-12) minted 2026-10-27, in the records `915e09f3` to `b1f564f4` (2026-10-27 19:48 – 2026-10-28 16:02), never published |
-| [`z3660eth/`](z3660eth/) | `z3660eth-k30` / `z3660eth-k46` (`zeth30`/`zeth46`) — the Z3660 ethernet module of each line, `/etc/conf/mod.d` + `modreg.d` (C3-5 v4) | minted 2026-10-26, staged, not published |
-| [`z3660rtg/`](z3660rtg/) | `z3660rtg-k30` / `z3660rtg-k46` (`zrtg30`/`zrtg46`) — the Z3660 RTG module of each line; `depend=monsw`, composable once a monsw package exists | minted 2026-10-26, staged, not published |
-| [`z3660scsi/`](z3660scsi/) | `z3660scsi-k30` / `z3660scsi-k46` (`zscsi30`/`zscsi46`) — the Z3660 SCSI driver (piscsi mailbox), a root-class module of each line (kabi 1.2); the data-cache arm set at load from the CPU type (`param cache=` overrides; k30 always 0) | 1.0.0-2 (amix-z3660scsi 209bdd2) minted 2026-10-27, staged, not published |
-| [`ramdisk/`](ramdisk/) | `ramdisk-k30` / `ramdisk-k46` (`ramdisk30`/`ramdisk46`) — the RAM disk, a root-class module of each line (kabi 1.2), with its `/dev/dsk/ram0`–`ram2` block nodes | minted 2026-10-26, staged 2026-10-26 (packagemanager abfaaac), not published; installs only with apkg 0.3.3 or later (packagemanager abfaaac, APKG-0.3.3 minted e98077a): 0.3.2 refuses its block nodes, "not a pure-file kernel-space package: an object of type b at /dev/dsk/ram0", `-f` included |
-| [`paula/`](paula/) | `paula-k30` / `paula-k46` (`paula30`/`paula46`) — native Paula audio, isoriano's `/dev/paula` driver (MIT), a demand-class module of each line (kabi **1.3**, `majors=c:54`, `unload=allowed`); ships `/dev/paula` (c 54 0, 0666) and `/usr/include/paula.h` (`KM_FILES`); `/dev/audio` is refused while it is open and the other way round; apkg refuses it on a kabi 1.2 kernel | 1.0.0-1 (amix-paula 548d258, kit e45b061) minted 2026-10-28, proven by the Bench in emulation (refused on 1.2, rc 5; installs and paulatest passes on 1.3), in the catalog of record `fff860dc` since 2026-10-28 16:02 (refused on the kabi 1.2 kernels of every earlier root, installs on kern30m -22 / kern46m -61), not published |
-| [`a4091/`](a4091/) | `a4091-k30` / `a4091-k46` (`a409130`/`a409146`) — the A4091/A4092/A4770 SCSI driver, a root-class module of each line (kabi 1.2, DDI 1.2 DMA; k30 through the core's 030 provider, kern30m -14 or later; -13 drove the A4091 itself, -14 does not) | 1.0.0-5 (amix-a4091 5044872) minted 2026-10-27, staged, not published |
-| [`a4kt710/`](a4kt710/) | `a4kt710-k30` / `a4kt710-k46` (`a4kt71030`/`a4kt71046`) — the A4000T onboard NCR 53C710, amix-a4091's second module target: root class, `mobo:a4000t-710`, rank `mobo` (kabi 1.2, DDI 1.2 DMA); `_load` touches nothing under `0xDD0000` without the Kickstart's `NCR scsi.device` tag (C4-2 v6 §8.1; `param declared=0` in `modreg.local.d` disables it); built here from a git archive of the pinned commit | 1.0.0-1 (amix-a4091 a74708e) minted 2026-10-27, staged, not published |
-| [`gayle/`](gayle/) | `gayle-k30` / `gayle-k46` (`gayle30`/`gayle46`) — the A4000 Gayle IDE driver, a root-class module of each line (kabi 1.2), interrupt I/O by default after a boot self-test (`param intr=0` in `modreg.local.d` selects polled); kern30m -13 drove the Gayle itself, -14 does not; a page-crossing request counted, printed only with `param debug=1`; must not ship before amix-dlm's root-context check passes | 1.1.0-3 (amix-gayle-ide b2935fc) minted 2026-10-27, staged, not published |
-| [`cdfs/`](cdfs/) | `cdfs-k30` / `cdfs-k46` (`cdfs30`/`cdfs46`) — the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), a boot-class module of each line (kabi 1.2, `match=always`, `fs=cdfs`), promoted to a root record on a cdfs-rooted generation; needs kern46m -79 / kern30m -14 or later (the filesystem names) | 1.0.0-1 (amix-cdfs fd6cad8) minted 2026-10-27, staged, not published |
-| [`loader-amix/`](loader-amix/) | `loader-amix` — boot1 + boot2 + `ldrinfo`, loader version 3 | -10 (amix-dlm 565de49: boot1/boot2 take their DMA buffers by the boot partition's DosEnvec, a6a1511; boot1 765915a7, boot2 da260a96) minted 2026-10-28, proven by the Bench in emulation (-9 → -10 and `kbootset loader-install`: the buffer in fast memory with Mask 0xFFFFFFFC, in chip memory with 0x00FFFFFE, in motherboard fast memory with an A4091 disk at 0x07FFFFFE), in the catalog of record `fff860dc` since 2026-10-28 16:02, not published; -9 (amix-dlm ea75578) in the records up to `b1f564f4` |
-| [`kbootset/`](kbootset/) | `kbootset` — `/sbin/kbootset`, static, GCC 14 (gcc14-cross-amix cf461e3, checked against `common/gcc14-pin.sh`) | -24 (amix-dlm 565de49: c 54 paula in the major registry, 6fe9c60; box 0b9b8ec4; DESC carries the 1.3 kernels' and loader-amix -10's notes) minted 2026-10-28, proven by the Bench in emulation (one `apkg upgrade kernel-k?-m kbootset` on both lines), in the catalog of record `fff860dc` since 2026-10-28 16:02, not published; -23 (amix-dlm e089c2a: C2-4 v15, mark-good marks a refused default bad when its bytes are damaged) minted 2026-10-28, proven by the Bench in emulation (members verify; upgrades alone), in the record `b1f564f4` 04:34–16:02, never published; its DESC carries the kernels' release notes (below); -22 (1308c0b) in the records up to `6f0c1701`; upgrade kern30m -20 and kern46m -50 together with -22 or later (an old mobo root record on a 030-mode Z3660 is rewritten only from -22 on) |
-| [`modtools/`](modtools/) | `modtools` — `/sbin/modadmin`, the module administrator, static, GCC 14; postinstall/preremove keep its `modadmin -B` line first among `/etc/inittab`'s sysinit entries; GCC 14 cf461e3 as kbootset | -7 (amix-dlm 4442c76; 1308c0b, e089c2a and 565de49 build the same modadmin, f51c98d6) minted 2026-10-27, staged, not published |
-| [`dlmkit/`](dlmkit/) | `dlmkit30` / `dlmkit46` — the amix-dlm ABI kit of each kernel line (`make kit`, manifest-pinned) under `/usr/dlm/kit/<line>/`, under the kit's own names (all within s5's 14 bytes since -2) | -11 (amix-dlm c2dc7fb, kabi 1.2) minted 2026-10-27, staged, not published |
-| [`common/`](common/) | the shared harness — not a package | |
-
-**Kernel-space catalog of record** (gitignored, staged, not published): `build/kspace/repo/`,
-catalog `fff860dc` since 2026-10-28 16:02 — the candidate root `build/kspace/candidate-fff860dc`
-promoted after the Bench proved it in emulation (kerntools 82f7da2: one `apkg upgrade kernel-k?-m
-kbootset` from `b1f564f4` and from `6f0c1701` on both lines, kabi .1.3, builds 68030-261028-22 /
-68060-261028-61, ufs root, check 0; loader-amix -9 → -10 and `kbootset loader-install`, the boot
-buffer in fast memory with Mask 0xFFFFFFFC, in chip memory with 0x00FFFFFE, in motherboard fast
-memory with an A4091 disk at 0x07FFFFFE; paula refused on 1.2 (rc 5), installed and paulatest
-passing on 1.3; ramdisk installs once APKG is 0.3.3): `b1f564f4` with kernel-k30-m -20 → -22 and
-kernel-k46-m -51 → -61 (kabi 1.3), kbootset -23 → -24, loader-amix -9 → -10, and the two new rows
-paula-k30/-k46 1.0.0-1 (kabi 1.3); every other row and datastream byte-identical (27 datastreams,
-4 ordinary rows and 23 kernel-space rows). `b1f564f4` (`6f0c1701` with kbootset -22 → -23 and
-kernel-k46-m -50 → -51, the ufs mount guard) is `repo-20261028-1602`. A replaced root is kept
-byte-identical under `build/kspace/superseded/repo-<YYYYMMDD-HHMM>/`: `6f0c1701` (`915e09f3` with
-kernel-k46-m -91 → -50, the S5-13 re-cut the Bench proved in S5-13) is `repo-20261028-0434`,
-`915e09f3` (the S5-12 set: kernel-k30-m -20 and
-kernel-k46-m -91, the cuts without built-in ufs/s5, whose kernel packages carry the filesystem
-modules, and kbootset -22; every other row as in `64d37aaa`, no module rows for ufs/s5) is
-`repo-20261028-0319`, `64d37aaa` (`b2a0e874` plus a4kt710-k30/-k46 1.0.0-1, S5-06) is
-`repo-20261027-1948`, `b2a0e874` (the first stage-5 catalog: kbootset -21, modtools -7, no static
-1.0 family — kernel-k30-u, kernel-k46-z, kernel-k46-zacd left it, S5-34, datastreams in
-`build/kspace/superseded/static-1.0/`) `repo-20261027-1353`, `b198e9e2` (the stage-4 exit set plus
-gayle-k30/-k46 1.1.0-3) `repo-20261027-1344`, the stage-4 exit set (`6e60a128`)
-`repo-20261027-1329`. No next root and no candidate root is staged; the never-promoted candidate
-`059c7c53` (`6f0c1701` with kbootset -23 only, superseded by `b1f564f4`) is withdrawn to
-`build/kspace/withdrawn-20261028/candidate-059c7c53` (every datastream it held is in `6f0c1701` or
-`b1f564f4`). The promotions' before/after manifests are in `build/kspace/promote-fff860dc/` and
-`build/kspace/promote-b1f564f4/`.
-`tools/kspace-roundtrip.sh` regenerates the newest set's catalog from `build/kspace/pkg/` and requires
-it equal byte for byte to the staged root's (`KSPACE_ROOT`, else the next root, else the one
-candidate root, else the catalog of record), runs the stage-2 static-kernel rows from a second source
-that adds the static datastreams, the S5-12 R5 upgrades (`apkg upgrade kbootset <kernel>`, one
-transaction) from `64d37aaa`'s kernels, from `915e09f3`'s, from `6f0c1701`'s and from `b1f564f4`'s,
-all four kept in `build/kspace/superseded/` (`KSPACE_RECORD_ROOTS` to move them; a line whose kernel
-is the staged root's is skipped): k46 -82, -91, -50 and -51 → -61, k30 -17 and -20 → -22, each with
-kbootset -24, paula refused on each old 1.2 kernel and installed after; R6, which upgrades kbootset
-alone (-23 → -24) over a root installed from the previous record `b1f564f4` (`KSPACE_CUR_ROOT`) when
-the staged root's kbootset is newer; and R7, loader-amix alone (-9 → -10) then `kbootset
-loader-install`. The record's run is `build/kspace/rt-record-fff860dc.log` (253/253); the earlier
-records' runs are `rt-record-b1f564f4.log` and, for kern46m -50, `rt-record-6f0c1701c.log` and
-`rt-cand-059c7c53-onever.log`.
-
-**One version, one set of bytes.** A datastream in the catalog of record is never re-rolled at its
-version. The kernel release notes added 2026-10-28 (upgrade together with kbootset -22 or later; on
-k46, s5 no longer mounts, S5-37) are in `kernel-k30-m/pkginfo` and `kernel-k46-m/pkginfo`, so the
-NEXT cut of each line (a new version) carries them -- kern46m -51 is the first, with one more line
-(a ufs with blocks under 4 KiB is refused at mount on the 68040/68060 line); the shipped kern30m -20
-and kern46m -50 keep their record text, and kbootset -23's DESC carries the notes until then. Re-running those two recipes
-at -20 / -50 would write different bytes under the same version: do not. The text re-rolls made by
-cfcfe78 (and its candidate `9c670fb4`, and that commit's first -23 datastream) are withdrawn to
-`build/kspace/withdrawn-20261028/`, outside every path a recipe or the round trip reads.
-Enforced since 2026-10-28 by `common/onever.sh` (`onever.py`): both roll functions (`amix_pkgroll`,
-`amix_kpkgroll`, so every recipe) roll into the work dir and install the datastream at its output
-path only if its pkginst + version is listed in no kspace root (`build/kspace/repo`, `next/repo`,
-`candidate-*`, `superseded/repo-*`; `AMIX_ONEVER_ROOTS` replaces the list) or is listed there with
-these very bytes; otherwise the roll is refused and the datastream already at the output path is
-left as it was. A roll is not bit-reproducible (the newc headers carry the spool's inode numbers),
-so in practice a listed version is never rolled again. `sh tools/onever-selftest.sh` proves it.
-
-**BATCH-1 (zlib, gzip, grep, less)** install under **`/opt/amix`** (`COEXISTENCE.md`, ROADMAP D11),
-not the `/usr/local` the two Wave-0 recipes above still use — each batch-1 recipe exports
-`AMIX_PREFIX=/opt/amix` before sourcing `amix-env.sh`, whose default is still the old `/usr/local`
-(moving that default, and the `patch`/`libamixcompat` re-mint, is the separate prefix follow-up). So
-the `/usr/local` sections below describe the two earlier recipes; the four batch-1 prototypes emit
-no path outside `/opt/amix`, declare `/opt` as the one shared parent, and add no `/usr/bin` symlink.
-
-All six were built, rolled to `.pkg`, installed with the **stock** `pkgadd` on the emulated golden
-030, exercised, and removed again. The pipeline works end to end; what each recipe learned doing it
-is in its own README, and the constraints it corrected are in `PORTING.md`.
-
-## The shared harness — `common/`
-
-Sourced by every recipe so none re-derives a flag and none can bypass the wrapper.
-
-| File | What it is |
-|---|---|
-| `amix-env.sh` | The one place a recipe learns what "build for Amix" means: `CC`/`AR`/`NM`/`OBJDUMP`, the standard flags, the sysroot, the host pkgtools, the shared prefix. Refuses if `CC` resolves to `gcc.real`. |
-| `fetch.sh` | Checksum-verified fetch. Knows *how* to verify a digest; never knows what any digest should be — that lives in each recipe's own `pin.sh`. Verifies before extract, always. |
-| `pkgroll.sh` | `pkgmk` + `pkgtrans` with five gates: PKG name ≤ 9 chars, `ARCH=Amiga`, the **s5 14-byte** basename/collision scan, `070701` magic at offset 512, and a round-trip unpack. |
-| `kmodpkg.sh` | One module package (amix-dlm C3-5 v4 sec 1) per line: the driver repository's object verbatim at `/etc/conf/mod.d/<name>`, the recipe's `modreg` at `/etc/conf/modreg.d/<name>`, `module/VERSION` (or `KM_VERSION_FILE`, a repository's second module) checked, the ABI kit's `modcheck.py` (k46: the 68060 scan), rolled by `amix_kpkgroll`. |
-| `kfsmod.sh` | The filesystem modules a kernel package carries (amix-dlm C2-3 v8 sec 1): the pin, the kit's `modcheck`, `.moddata` (`tier=core`, `class=boot`, `fs=`, the line's kabi, `build=` the cut's own), and a rebuild from the cut's carve sources byte-equal to the pinned object (S5-12 R2). Since kern46m -50 (S5-13) also `amix_kcore_strips` (the cut's core is the pin and contains amix-dlm 7b07bce, the first core that skips the stamp's leading blank) and `amix_kbuildid3` (`kbuildid.py`: the core's rule over the shipped bytes — the image's buildid without leading blanks == the sidecar's `build=` == each module's `.moddata build=`); `sh tools/kbuildid-selftest.sh` proves both refuse (-91's ufs against the -50 kernel, the -91 cut's core 76f83d8). |
-| `kpkgroll.sh` | The kernel-space roll (kernel and loader packages, amix-dlm C2-3): `pkgroll.sh`'s name/arch/s5/newc gates, a pure-files gate (f/d class none only), a byte-for-byte payload round trip, no userland 68060 gate; `amix_kstage_sidecar` restates a sidecar's `size=`/`sha256=` for the brel form shipped. |
-| `dlm-src.sh` | Builds amix-dlm artefacts (boot1, boot2, kbootset, modadmin, the ABI kits) from a pinned commit: `git archive` into `build/kspace/src/`, amix-dlm's own Makefile (`make kit` labelled with the pinned commit through a git shim); the sibling checkout is only read. Before a box binary (kbootset, modadmin) it proves the GCC 14 prefix is the pinned one (`gcc14-pin.sh`) and rebuilds `build/box` when it was built by another. |
-| `gcc14-pin.sh` | The gcc14-cross-amix identity: the pinned commit, the sha256 of cc1/libgcc.a/libamixc99.a/specs, the return-value ABI self-check. Sourced by `gcc14-env.sh` (TOOLCHAIN=gcc14 recipes) and `dlm-src.sh` (box binaries). |
-| `gates.sh` | The object-code gates: **D4** (no register/memory-source 64-bit `MUL.L`, no 64-bit-dividend `DIV.L` — classified by **encoding**, and self-tested on a probe before any pass is trusted; see the note below), "is it really an m68k SVR4 ELF", the undefined-symbol listing, and the no-imported-assembly check. |
-| `amix-pwgr.c` | **D3**: `getpwnam`/`getpwuid`/`getgrnam`/`getgrgid` as direct `/etc/passwd`/`/etc/group` parsers, linked as a plain object into any executable that maps uid↔name, so the stock libc's first-call `getpwnam` crash is never reached. MIT (this repo). |
-| `amix-cpp` | A C preprocessor for autoconf's `CPP`. Still used by every recipe so far — see the trap below and the 2026-08-29 fix note that follows it. |
-
-`amix-env.sh` resolves the two sibling repositories it needs — `../gcc-cross-amix` for the toolchain
-and `../amix-packagemanager` for the Heirloom `pkgmk`/`pkgtrans` — **relative to this checkout**, so
-a clone works wherever the workspace layout holds rather than only in one developer's tree. Override
-either with `AMIX_CROSS_ENV` / `AMIX_PKGMGR`, or the checkout root itself with `AMIX_REPO_ROOT`; a
-sibling that is missing fails loudly with the path it looked for.
-
-### ★ The trap that makes `amix-cpp` exist
+## ★ The trap that makes `amix-cpp` exist
 
 `m68k-cbm-sysv4-gcc -E` **did not** preprocess. The wrapper had cases for `-c` and `-S`; `-E` fell
 through to its "unrecognised dash argument is an ld flag" branch, so it **linked** the file and
@@ -150,7 +32,7 @@ with the sysroot include path added by hand, which is exactly what the wrapper n
 — it was never broken by the wrapper's old defect and is not made redundant by the fix, so nothing
 here needs to change. A *new* recipe may pass `$CC` directly as `CPP` instead.
 
-### ★ The D4 gate could not fire until 2026-09-26
+## ★ The D4 gate could not fire until 2026-09-26
 
 It grepped `objdump -d` for `mulu.l …,%dH:%dL`. binutils 2.8.1's objdump prints MIT syntax —
 `mulul %fp@(12),%d1,%d2`, no dot, no colon — so the pattern never matched and every package
@@ -164,7 +46,7 @@ the product through libgcc's `__muldi3` (built from 32-bit multiplies only) — 
 "build the TU `-m68000`" does not work here, because this `libgcc.a` has no
 `__mulsi3`/`__divsi3`/`__udivsi3`/`__umodsi3`.
 
-### ★ 2026-10-05: D4 is strict — no 64-bit multiply in any form
+## ★ 2026-10-05: D4 is strict — no 64-bit multiply in any form
 
 The `#imm` source form the gate used to allow is what gcc 2.7.2.3 emits for every divide or modulo
 by a constant, and a 68060 traps it like the others (Amix SIGKILLs; the release ships nothing that
@@ -175,13 +57,13 @@ rewrites each 64-bit multiply into 16x16 `mulu.w` partial products. `amix-env.sh
 scanners: the awk one, the toolchain's `m68k-cbm-sysv4-scan060` (run with a modern
 `m68k-linux-gnu-objdump`: binutils 2.8.1 prints a linked binary's `0x8000xxxx` addresses
 sign-extended, the scanner then misses every switch table and reports table words as `movep`) and
-`../amix-packagemanager/tools/repo/scan060.py` (the scanner of record for linked files and `.pkg`;
+`userland/pkgtools/tools/repo/scan060.py` (the scanner of record for linked files and `.pkg`;
 it does not open `ar` archives). `amix_pkgroll` runs the gate over the whole staged payload before
 `pkgmk` and `scan060.py` over the rolled datastream after, and checks pkginfo `VERSION` against the
-datastream name. `sh tools/gate060-selftest.sh` proves every layer rejects an unsafe artifact.
+datastream name. `build/pkg/tests/gate060-selftest.sh` proves every layer rejects an unsafe artifact.
 The `__muldi3` routing in `grep`/`tar` patches stays (harmless, and still correct).
 
-### ★ Two wrapper link rules, both silent when broken
+## ★ Two wrapper link rules, both silent when broken
 
 1. **An archive named on the command line lands *before* the objects.** The wrapper collects
    `foo.a` while parsing, then *appends* the objects it compiles from `.c` sources, so
@@ -193,32 +75,17 @@ The `__muldi3` routing in `grep`/`tar` patches stays (harmless, and still correc
    than a missing flag. **Always end the library list with `-lc`**, including in a configure-filled
    `LIBS=`.
 
-## Layout
-
-One subdirectory per tool, named for its registry entry (`recipes/<name>/`, matching
-`registry/<name>.yaml`'s `recipe:` field). Each holds four things, per [`CONTRIBUTING.md`](../CONTRIBUTING.md):
-
-| Piece | What it is |
-|---|---|
-| **Source pin** | Upstream URL **plus a sha256**, verified **before** extraction. Never a vendored source tree in git — fetch at build time. `../amix-040-060-port/tools/netbsd-pin.sh` is the established family pattern to imitate. |
-| **Patches** | Unified diffs applied in a stated order. Each patch's reason belongs in a comment or a per-patch note — a patch nobody can explain is a patch nobody can rebase. |
-| **Build script** | The entry point. Sets `CC=m68k-cbm-sysv4-gcc` **explicitly** (unset, you silently get gcc 1.4.2) plus the standard flags and sysroot, so no recipe re-derives them and none can bypass the wrapper. |
-| **`pkginfo` / `prototype`** | Authored, not generated. `PKG` name **≤ 9 characters** or stock `pkgadd` silently drops the package; `ARCH=Amiga`, never `m68k`. `pkgproto` silently omits symlinks, so a generated prototype is a starting point at best. |
-
-Everything a build produces — source tarballs and `.pkg` artifacts alike — lands under the
-gitignored `build/`. Git tracks recipes and docs only.
-
-### How an authored prototype stays free of host paths
+## How an authored prototype stays free of host paths
 
 The obvious prototype line is
 `f none /usr/local/bin/patch=/home/…/build/dest/usr/local/bin/patch`, and it makes the file
-*generated*, because half of it is one developer's home directory. `pkgroll.sh` runs
+*generated*, because half of it is one developer's home directory. `build/pkg/common/pkgroll.sh` runs
 **`pkgmk -r <destroot>`**, which resolves each prototype path against the staged tree instead — so
 what is committed is exactly the package's installed layout and nothing about anybody's machine.
 
-### Why the two Wave-0 recipes sit at `/usr/local`
+## Why the two oldest packages sit at `/usr/local`
 
-**Superseded as policy.** The shared prefix is `/opt/amix` (`../COEXISTENCE.md` §1, ROADMAP D11).
+**Superseded as policy.** The shared prefix is `/opt/amix` ([`coexistence.md`](coexistence.md) §1, ROADMAP D11).
 What follows is the reasoning that put `libamixcompat` and `patch` there before that policy was
 settled, kept because those two packages are still minted at `/usr/local`.
 
@@ -232,7 +99,7 @@ so a package installed there takes precedence over `/usr/public/bin` without dis
 and `/usr/local` plus `/usr/local/bin` already exist on a stock root (dated Nov 1991). `/usr/apkg`
 is taken by the package manager's own parallel prefix.
 
-### ★ Symlink targets must be ABSOLUTE
+## ★ Symlink targets must be ABSOLUTE
 
 Measured on the box, same `.pkg`, same admin file, only the engine differing:
 
@@ -243,14 +110,14 @@ Measured on the box, same `.pkg`, same admin file, only the engine differing:
 
 The pkgmap line was byte-identical in both runs, so this is an **engine defect**: stock `pkgadd`
 prepends the install root to a *relative* symlink target, and reports "Installation was successful"
-either way. A package shipped from this repo must survive a bare box, where the only engine is the
+either way. A package shipped from here must survive a bare box, where the only engine is the
 stock one — so relative targets are not available to us. The cost is `pkgadd -R` correctness, which
 is the right trade for a developer tool; stock `core` uses absolute targets for the same reason
 (`s none /usr/bin/uname=/sbin/uname`).
 
 ## The two rules that make recipes hand-written
 
-Both are argued in full in `PORTING.md §5`; they are restated here because they are what this
+Both are argued in full in `porting.md` §5; they are restated here because they are what this
 directory's shape encodes.
 
 1. **Automate the recipe. Never automate the porting.** Checksum-verified fetch, the shared build
@@ -260,4 +127,4 @@ directory's shape encodes.
 2. **Verify the encoding, never the exit status.** The family law. A build that exits 0 proves
    nothing on this toolchain: `fcmp` operand order, SGS `#`-as-comment, and constant-folded FP all
    produce clean exits and wrong binaries. Every recipe ends in an `objdump -d` gate, including the
-   060 lane's `mulu.l`/`muls.l` `Dh:Dl` check (`ROADMAP.md` D4).
+   060 lane's `mulu.l`/`muls.l` `Dh:Dl` check (ROADMAP D4).

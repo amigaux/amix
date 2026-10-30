@@ -1,13 +1,13 @@
 # zlib — the recipe
 
 **Package `zlib` 1.2.13** — the deflate/inflate compression library, static. SPDX `Zlib`.
-Registry entry: [`registry/zlib.yaml`](../../registry/zlib.yaml) · pin: [`pin.sh`](pin.sh).
+Pin: [`pin.sh`](pin.sh).
 
-    sh recipes/zlib/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/zlib
 
 The first library this line ships, and BATCH-1's sole remaining Wave-0 item. It is the foundation
 `rsync`, `wget` and (one day) `git` link. Shipped **static** in the first cut — the `-G`/`-h` SONAME
-shared path is unproven here and a library is the wrong place to debug it (`PORTING.md §2.5`).
+shared path is unproven here and a library is the wrong place to debug it (`docs/porting.md §2.5`).
 
 ## Result
 
@@ -36,7 +36,7 @@ only — it never threads `LDFLAGS`/`LIBS` — so it cannot see `libamixcompat`,
 absent, and would bake `-DNO_vsnprintf -DNO_snprintf` into the Makefile, switching `gzprintf()` to
 the **unbounded** `vsprintf`/`sprintf` path (the SHIM-SNPRINTF blocker). So this recipe runs
 configure only for what it does right — generate `zconf.h`, report the platform — and **compiles
-the fixed object list itself** (exactly as `recipes/libamixcompat` does), with *no* `NO_*` macro, so
+the fixed object list itself** (exactly as `libamixcompat/` does), with *no* `NO_*` macro, so
 `gzwrite.c`/`gzlib.c` take their default **secure** `vsnprintf(next, state->size, …)` path. The two
 symbols resolve from `libamixcompat` at the consumer's final link, and the build **asserts via
 `nm`** that libz.a really references `vsnprintf`/`snprintf` — checking the artifact, not the

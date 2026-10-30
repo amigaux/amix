@@ -1,9 +1,9 @@
 # libamixcompat — the recipe
 
 **Package `acompat` 0.1** — the missing-libc shim every other port in this repo links.
-First-party C89, BSD-2-Clause, no upstream. Registry entry: [`registry/libamixcompat.yaml`](../../registry/libamixcompat.yaml).
+First-party C89, BSD-2-Clause, no upstream.
 
-    sh recipes/libamixcompat/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/libamixcompat
 
 ## Why this exists
 
@@ -51,9 +51,9 @@ to fill it from. Details and the disassembly are in [`src/timeofday.c`](src/time
 directory entries truncate at 14 bytes. `libamixcompat.a` is 15, so it would install as
 `libamixcompat.` and no `-l` flag would ever find it — a package that installs cleanly and is
 unusable. Every basename in the prototype is now checked against that limit mechanically by
-`recipes/common/pkgroll.sh`, so the next recipe cannot rediscover this the hard way.
+`build/pkg/common/pkgroll.sh`, so the next recipe cannot rediscover this the hard way.
 
-**3. `-U__STDC__` is not needed here, and the build says so on purpose.** PORTING.md §2.4 says to
+**3. `-U__STDC__` is not needed here, and the build says so on purpose.** docs/porting.md §2.4 says to
 try it before believing a header. This library was built both ways and the objects compared
 byte-for-byte: identical, because nothing in this source touches a `__STDC__`-gated declaration
 (`struct timeval` is gated on `_POSIX_SOURCE`, not on `__STDC__`). The flag is therefore *not*

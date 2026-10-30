@@ -155,8 +155,8 @@ figures — see that tree's `VALIDATION.md`.
 ## Build
 
 ```
-sh recipes/amix-benchmark/build.sh          # -> build/pkg/amixbench-1.3.pkg
-sh recipes/amix-benchmark/tests/smoke.sh    # offline structural + driver smoke
+sh build/pkg/pkgbuild.sh userland/packages/amix-benchmark
+sh userland/packages/amix-benchmark/tests/smoke.sh    # offline structural + driver smoke
 ```
 
 The build fetches nothing over the network — it verifies a pinned copy of the

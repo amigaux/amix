@@ -5,7 +5,7 @@ and the same `runbench.sh` driver, compiled with GCC 14 (`gcc14-cross-amix`, `-m
 instead of shipped as the gcc 2.7.2.3 fieldkit binaries. The two packages install side by side,
 so one box can run both and compare the compilers.
 
-    sh recipes/amix-benchmark-gcc14/build.sh        # TOOLCHAIN=gcc14 implied
+    sh build/pkg/pkgbuild.sh userland/packages/amix-benchmark-gcc14        # TOOLCHAIN=gcc14 implied
 
 | | `amix-benchmark` | `amix-benchmark-gcc14` |
 |---|---|---|

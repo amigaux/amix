@@ -7,8 +7,8 @@ roles:
 
 The stock system has no rsync.
 
-    sh recipes/common/pkgbuild.sh recipes/rsync      # build + roll (interim driver)
-    sh tools/pkg-smoke/prepare.sh recipes/rsync      # stage the on-box acceptance
+    sh build/pkg/pkgbuild.sh userland/packages/rsync      # build + roll
+    sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/rsync      # stage the on-box acceptance
 
 Package: `rsync`, catalog name `rsync`, category `network`, set `extra`, GPL-3.0-or-later
 (COPYING ships in `/opt/amix/doc/rsync`). Built with GCC 14 (`-m68020-60 -mno-strict-align

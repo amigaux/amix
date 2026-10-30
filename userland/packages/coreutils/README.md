@@ -5,8 +5,8 @@ install stat md5sum sha1sum …`. They sit beside the stock SVR4 tools, which th
 does not touch; ours win by PATH. The headline is **`md5sum` and `sha1sum`**: the box had
 no content checksum at all, only `sum`.
 
-    sh recipes/common/pkgbuild.sh recipes/coreutils     # build + roll (interim driver)
-    sh tools/pkg-smoke/prepare.sh recipes/coreutils     # stage the on-box acceptance
+    sh build/pkg/pkgbuild.sh userland/packages/coreutils     # build + roll
+    sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/coreutils     # stage the on-box acceptance
 
 Package: `coreutil` (PKG ≤ 9 characters), catalog name `coreutils`, category `utility`, set
 `extra`, GPL-2.0-or-later (COPYING ships in `/opt/amix/doc/coreutils`). Built with GCC 14
@@ -14,7 +14,7 @@ Package: `coreutil` (PKG ≤ 9 characters), catalog name `coreutils`, category `
 
 **Not shipped:**
 - `uptime`: its load average takes the nlist//dev/kmem route, which reads garbage on Amix
-  (PORTING.md 3.3);
+  (docs/porting.md 3.3);
 - `su`: a setuid-root binary from an add-on package is out;
 - `hostid`: not built;
 - the info manual: the box has no info reader;
@@ -59,7 +59,7 @@ kernel.org mirror serves identical bytes.
 - **`MAKE_CFLAGS=-include amix-decls.h`** (select, getrlimit, fchmod): make only. In configure
   the prototypes collide with autoconf's `char f();` probes and turn present functions absent
   (gethostname came out missing that way).
-- **`amix-ftruncate.o` in `LIBS`** (`recipes/common/amix-ftruncate.c`, quirk 90): every executable
+- **`amix-ftruncate.o` in `LIBS`** (`build/pkg/common/amix-ftruncate.c`, quirk 90): every executable
   defines a strong `ftruncate` that calls libc's static `_ftruncate` only with safe lengths. A
   shrink to an unaligned EOF becomes a cut at the 8 KiB boundary plus a rewrite of the tail. It
   needs a readable fd, which `dd` has: with `seek=` it opens its output `O_RDWR`. A write-only fd

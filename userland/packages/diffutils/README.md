@@ -3,8 +3,8 @@
 `diff`, `diff3`, `sdiff` and `cmp` under `/opt/amix/bin`, beside the stock SVR4 tools in
 `/usr/bin` (owned by `core`), which this package does not touch. Ours win by PATH.
 
-    sh recipes/common/pkgbuild.sh recipes/diffutils        # build + roll (interim driver)
-    sh tools/pkg-smoke/prepare.sh recipes/diffutils          # stage the on-box acceptance
+    sh build/pkg/pkgbuild.sh userland/packages/diffutils        # build + roll
+    sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/diffutils          # stage the on-box acceptance
 
 Package: `diffutil` (PKG ≤ 9 characters), catalog name `diffutils`, category `utility`, set
 `extra`, GPL-2.0-or-later (COPYING ships in `/opt/amix/doc/diffutils`). Built with GCC 14

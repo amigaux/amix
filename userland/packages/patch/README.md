@@ -1,9 +1,9 @@
 # patch — the recipe
 
 **Package `patch` 2.5.9** — GNU patch, re-minted for Amix. GPL-2.0-or-later.
-Registry entry: [`registry/patch.yaml`](../../registry/patch.yaml) · pin: [`pin.sh`](pin.sh).
+Pin: [`pin.sh`](pin.sh).
 
-    sh recipes/patch/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/patch
 
 Wave 0 for a structural reason rather than a popularity one: without a `patch` on the box, every
 other recipe's patches can only be applied host-side — workable for a cross-build, impossible for
@@ -30,7 +30,7 @@ rather than empty so nobody has to wonder whether one went missing.
 
 ## This is the family's first completed cross-`configure`
 
-`PORTING.md` §4 said the route was derived from the constraints and had never been run. It has now.
+`docs/porting.md` §4 said the route was derived from the constraints and had never been run. It has now.
 Three things bit that no amount of reading would have found.
 
 ### ★ Trap 1 — the wrapper cannot preprocess, so configure used the *host's* preprocessor
@@ -57,7 +57,7 @@ checking for wchar.h... yes
 cross-compiling. This one failed loudly. The same mechanism sets `HAVE_*` for anything that merely
 *looks* present on a modern Linux host, and most of those fail quietly.
 
-Fix: [`recipes/common/amix-cpp`](../common/amix-cpp), passed as `CPP`. It calls `gcc.real -E` with
+Fix: [`build/pkg/common/amix-cpp`](../../../build/pkg/common/amix-cpp), passed as `CPP`. It calls `gcc.real -E` with
 the sysroot include path — the one place calling `gcc.real` is safe by construction, since `fix_asm`
 post-processes *assembly* and `-E` never produces any. `build.sh` then **asserts** five `config.h`
 answers, so if `CPP` ever regresses the build stops instead of shipping a binary that will not run.
@@ -66,7 +66,7 @@ answers, so if `CPP` ever regresses the build stops instead of shipping a binary
 
 ### ★ Trap 2 — the `__STDC__` header gate has three keys, and they are not interchangeable
 
-`PORTING.md` §2.4 documents `-U__STDC__` and warns against `-D_POSIX_SOURCE`. Measured on this
+`docs/porting.md` §2.4 documents `-U__STDC__` and warns against `-D_POSIX_SOURCE`. Measured on this
 sysroot, each key opens and closes a *different* set of doors:
 
 | feature | default | `-U__STDC__` | `-D_POSIX_SOURCE` | `-D_XOPEN_SOURCE` |

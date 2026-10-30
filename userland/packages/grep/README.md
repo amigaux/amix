@@ -1,16 +1,16 @@
 # grep — the recipe
 
 **Package `grep` 2.5.1a** — GNU grep with recursive/`-o`/`--color`. GPL-2.0-or-later.
-Registry entry: [`registry/grep.yaml`](../../registry/grep.yaml) · pin: [`pin.sh`](pin.sh).
+Pin: [`pin.sh`](pin.sh).
 
-    sh recipes/grep/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/grep
 
 ## ★ Coexistence, the worked case
 
 Stock ships SVR4 `grep` at `/usr/bin/grep` (→`/sbin/grep`), owned by `core`, with no
 `-r`/`-o`/`--color` and a shaky `-E`. This package **does not touch it** — ours installs to
 `/opt/amix/bin/grep` and wins for interactive users purely by PATH order, while stock scripts that
-hard-code `/usr/bin/grep` keep stock behaviour (`COEXISTENCE.md §2–3`). Nothing lands outside
+hard-code `/usr/bin/grep` keep stock behaviour (`docs/coexistence.md §2–3`). Nothing lands outside
 `/opt/amix`, so the `pkgadd` conflict machinery never fires and a stock `pkgrm` can never take our
 binary with it.
 
@@ -47,7 +47,7 @@ stands (unlike gzip/less).
 
 ## ★ D4 — the published package fails it (found 2026-09-26)
 
-The "D4-clean" above was reported by a gate that could not fire (`recipes/README.md`). Under the
+The "D4-clean" above was reported by a gate that could not fire (`docs/recipes.md`). Under the
 corrected, encoding-based gate the published `grep-2.5.1a.pkg` carries **two** register/memory-
 source 64-bit multiplies — gnulib's `strtoull` (`lib/strtol.c`, QUAD instance) and the `uintmax_t`
 `bkm_scale` in `lib/xstrtol.c` — both on the `-A`/`-B`/`-C`/`-m` argument path (`xstrtoumax`). The

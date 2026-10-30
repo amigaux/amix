@@ -4,8 +4,8 @@
 their `bzegrep`/`bzfgrep`/`bzless`/`bzcmp` names), and `libbz2.a` + `bzlib.h`, under
 `/opt/amix`. Stock Amix has no bzip2 at all.
 
-    sh recipes/common/pkgbuild.sh recipes/bzip2      # build + roll (interim driver, STYLE=make)
-    sh tools/pkg-smoke/prepare.sh recipes/bzip2      # stage the on-box acceptance
+    sh build/pkg/pkgbuild.sh userland/packages/bzip2      # build + roll
+    sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/bzip2      # stage the on-box acceptance
 
 Package: `bzip2`, catalog name `bzip2`, category `archive` (P-31 §10.9 decision 3, which names
 bzip2 under archive; the live `cats.conf` declares the group at the next owner-approved
@@ -36,14 +36,14 @@ maintainer since 1.0.7). The kernel.org mirror serves identical bytes.
 
 - **`-include amix-decls.h`**: bzip2.c calls `fchmod` (to copy the input's mode). libc.so.1
   exports it (`SYS_fchmod` 93), but no AMIX header declares it. The prototype is now in
-  `recipes/common/gcc14/amix-decls.h`.
+  `build/pkg/common/gcc14/amix-decls.h`.
 - **No large files**: the driver's CFLAGS replace the Makefile's `-D_FILE_OFFSET_BITS=64`,
   and `post_build` asserts it never reached a compile line. Files over 2 GB are out, as
   everywhere on Amix.
 - **Targets `libbz2.a bzip2 bzip2recover` only**: `all` includes `test`, which would run the
   cross binary on the host. Upstream's test vectors run on the box instead (below).
 - **The alias names are hard links** (prototype `l`), because stock pkgadd prepends the root to
-  a relative symlink target (PORTING.md 7). Upstream's `ln -s` would have broken.
+  a relative symlink target (docs/porting.md 7). Upstream's `ln -s` would have broken.
 
 ## Limits
 

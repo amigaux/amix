@@ -1,13 +1,15 @@
-amix-packages
+amix userland/packages (formerly amix-packages)
 Copyright (c) 2026 Jussi Alanärä. Own content: MIT (LICENSE).
-recipes/libamixcompat: BSD-2-Clause (recipes/libamixcompat/LICENSE).
+libamixcompat: BSD-2-Clause (libamixcompat/LICENSE).
 
 Packages built by these recipes contain third-party programs under their own
-licences (GPL-2.0-or-later: grep, gzip, tar, patch, make; GPL-3.0-or-later OR
-BSD-2-Clause: less; Zlib: zlib). Each package ships its upstream licence text
-under <prefix>/doc/<tool>/, and each recipe pins the exact upstream source
-(URL + sha256) and carries its patches, which together are the corresponding
-source of the published binaries.
+licences (GPL-2.0-or-later: grep, gzip, tar, patch, make, diffutils,
+coreutils; GPL-3.0-or-later: rsync; GPL-3.0-or-later OR BSD-2-Clause: less;
+Zlib: zlib; bzip2-1.0.6: bzip2); INDEX.md lists each package's licence. Each
+package ships its upstream licence text under <prefix>/doc/<tool>/, and each
+package.sh pins the exact upstream source (URL + sha256) beside the patches
+in its directory; together they are the corresponding source of the
+published binaries.
 
 Built binaries link the startup objects and the shared libc of the stock Amiga
 UNIX (Amix) SVR4 system. On 2026-09-23 Amiga Corporation approved the

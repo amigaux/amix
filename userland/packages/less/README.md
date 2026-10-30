@@ -1,10 +1,9 @@
 # less — the recipe
 
 **Package `less` 704** — the backward-scrolling pager. Dual-licensed
-GPL-3.0-or-later OR BSD-2-Clause. Registry entry: [`registry/less.yaml`](../../registry/less.yaml) ·
-pin: [`pin.sh`](pin.sh).
+GPL-3.0-or-later OR BSD-2-Clause. Pin: [`pin.sh`](pin.sh).
 
-    sh recipes/less/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/less
 
 Fills a genuine gap: stock Amix has only `more`/`pg`/`page`. less adds backward scroll, incremental
 search and no-write paging. The best demonstration of D5 in the whole roadmap — a **2026** release

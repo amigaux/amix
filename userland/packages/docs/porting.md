@@ -1,6 +1,6 @@
-# PORTING.md — what porting modern software to Amix actually takes
+# Porting — what porting modern software to Amix actually takes
 
-The standing guide every port recipe in this repo inherits. It exists to answer one question
+The standing guide every package recipe in this directory inherits. It exists to answer one question
 before anybody writes a recipe: *why can't we just fetch this from the net and build it?*
 
 **Citation policy.** Every hard claim carries a source. Sibling-repo citations are
@@ -8,11 +8,16 @@ workspace-relative (`../gcc-cross-amix/Makefile:589`). Claims proved by running 
 this machine are marked **[measured]** with the command that proves them. Claims the family has
 not established are marked **UNVERIFIED** and must not be repeated as fact.
 
-**What a `../…` citation is, and is not.** `../<repo>/…` names a **sibling Amix repository**
-checked out beside this one — `../gcc-cross-amix`, `../amix-packagemanager`, `../grimoire-amix`,
-`../amix-kerntools`, `../amix-040-060-port` (see github.com/jusii; not all of them are public yet) —
-and `../tmp/<date>-<topic>/…` names one of the **maintainer's dated research notes, which are not in
-version control**. A citation here is a **provenance record, not a followable link**: it says where a claim was measured, precisely enough
+**What a citation is, and is not.** Package paths (`zlib/README.md:19-24`, `tar/build.sh`) are
+relative to `userland/packages`; `userland/pkgtools/…` (the package manager, formerly
+amix-packagemanager) and `build/pkg/…` (the build framework and the shared harness, formerly
+`recipes/common/`) are relative to the top of amix. `../<repo>/…` names a **sibling Amix
+repository** checked out beside amix — `../gcc-cross-amix`, `../grimoire-amix`, `../amix-kerntools`,
+`../amix-040-060-port` (not all of them are public) — and `../tmp/<date>-<topic>/…` names one of the
+**maintainer's dated research notes, which are not in version control**. `ROADMAP` Dn/Xn and
+`registry/` citations name the planning records of the former amix-packages repository, which stay
+with the maintainer. Line numbers are as of the citation's date. A citation here is a **provenance
+record, not a followable link**: it says where a claim was measured, precisely enough
 for a maintainer to re-derive it, not that a reader can click through to it. Stripping them would
 make a measured claim indistinguishable from a repeated one, which is the one discipline this guide
 exists to enforce — so the highest-value claims carry their measurement *inline* as well as cited.
@@ -33,16 +38,16 @@ Two citation hazards worth knowing:
 
 | Fact | Value | Source |
 |---|---|---|
-| OS | Amiga Unix (Amix) 2.1 / 2.1c — AT&T **SVR4.0**, 1992 | `../amix-packagemanager/docs/design.md:4-5`; stock kernel dated `Mar 20 1992` (`../tmp/2026-08-27-metal-opportunistic/RESULTS.md:28`) |
+| OS | Amiga Unix (Amix) 2.1 / 2.1c — AT&T **SVR4.0**, 1992 | `userland/pkgtools/docs/design.md:4-5`; stock kernel dated `Mar 20 1992` (`../tmp/2026-08-27-metal-opportunistic/RESULTS.md:28`) |
 | CPU (stock) | **68020 or 68030 with a real MMU**. Stock Amix has **no 68040/68060 support** | `../grimoire-amix/llms-full.txt:162` |
 | FPU (stock) | **68881 or 68882 mandatory — there is no soft-float build** | `../grimoire-amix/llms-full.txt:207`, `:1019`, `:4463` |
 | RAM (stock) | **Retracted 2026-09-15: the old "4–16 MB Fast RAM, >16 MB mis-maps the SCSI drive" claim had no first-party observation anywhere in the family.** The real limit is **describable RAM**, which fails silently rather than corrupting disk — **≈64 MB on the stock 030 kernel** (the bench golden runs 64 MB daily; the owner runs the stock 030 line at ≥80 MB), **≈128 MB on the 040/060 kernels** on real silicon | `llms-full.txt:162` (retracted); `../amix-kerntools/docs/ram-limits-reconciliation.md` |
-| RAM (family rigs) | Both configs are measured working points, not the ceiling: 16 MB proven for early packaging work; the bench golden runs 64 MB daily; 128 MB proven on the Z3660 metal rig under the 040/060 kernel | `../amix-packagemanager/NOTES.md`; `../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:361-362`; `../amix-kerntools/docs/ram-limits-reconciliation.md` |
+| RAM (family rigs) | Both configs are measured working points, not the ceiling: 16 MB proven for early packaging work; the bench golden runs 64 MB daily; 128 MB proven on the Z3660 metal rig under the 040/060 kernel | `userland/pkgtools/NOTES.md`; `../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:361-362`; `../amix-kerntools/docs/ram-limits-reconciliation.md` |
 | Disk | **~44 MB free** on the metal box's root (`31420 used / 44419 avail` KB) | `B-amix-feasibility.md:358-359` |
 | Binaries | **ELF 32-bit MSB, Motorola m68k, version 1 (SYSV), dynamically linked** | `../gcc-cross-amix/README.md:104-108` |
 | Clock tick | `HZ` = **60** | `../amix-kerntools/tools/amix-bench/build-fieldkit.sh:41-44` |
 | Page size | **Measured 2048** on the stock 2.1 kernel; 040/060 kernels expected 4096. **Never hard-code it.** | `../amix-kerntools/CHANGELOG.md` (2026-08-27 amix-bench entry) |
-| Root filesystem | **s5** — directory entries truncate to **14 bytes** | `../amix-packagemanager/NOTES.md:92-95` |
+| Root filesystem | **s5** — directory entries truncate to **14 bytes** | `userland/pkgtools/NOTES.md:92-95` |
 | System date | **Capped at 1999** by a kernel Y2K limitation | `llms-full.txt:4735` |
 
 The metal box this family now runs (A4000 + Z3660, socketed **MC68LC060 rev 4, no FPU** —
@@ -189,7 +194,7 @@ Here it failed loudly. The `fcmp` register/register shape would not have.
 
 - **The D4 gate was itself a victim of this law.** Until 2026-09-26 it grepped `objdump -d`
   for `mulu.l …,%dH:%dL`; binutils 2.8.1 prints `mulul %fp@(12),%d1,%d2`, so it never matched and
-  passed everything. It now reads opword + extension word and self-tests (`recipes/README.md`).
+  passed everything. It now reads opword + extension word and self-tests (`docs/recipes.md`).
 - **The family law: verify the *encoding*, never the exit status.** *"the toolchain has a family
   of silent mis-encodes, and the rule that covers all of them is: verify the encoding
   (`objdump -d`), never the exit status"*
@@ -212,10 +217,10 @@ the fourth by `gzip` in BATCH-1.
 
 | # | Behaviour | What it looks like |
 |---|---|---|
-| 1 | **`-E` was not implemented.** It fell through the arg parser's catch-all into the *ld-flag* bucket, so the wrapper **linked** instead of preprocessing — exit 0, linker complaint on stderr, nothing on stdout. **FIXED 2026-08-29** (`gcc-cross-amix` 3c2d272) — `-E` is now dispatched to the real compiler with the wrapper's own target include path, exactly as `-S` was already dispatched. Row kept for history: this defect is the reason `recipes/common/amix-cpp` exists (`recipes/README.md`) | autoconf silently falls back to `/lib/cpp`, the **host's** preprocessor, and every header test then probes the host (§4.1 trap A) — the historical failure mode, before the fix above |
+| 1 | **`-E` was not implemented.** It fell through the arg parser's catch-all into the *ld-flag* bucket, so the wrapper **linked** instead of preprocessing — exit 0, linker complaint on stderr, nothing on stdout. **FIXED 2026-08-29** (`gcc-cross-amix` 3c2d272) — `-E` is now dispatched to the real compiler with the wrapper's own target include path, exactly as `-S` was already dispatched. Row kept for history: this defect is the reason `build/pkg/common/amix-cpp` exists (`docs/recipes.md`) | autoconf silently falls back to `/lib/cpp`, the **host's** preprocessor, and every header test then probes the host (§4.1 trap A) — the historical failure mode, before the fix above |
 | 2 | **An archive named on the command line lands BEFORE the objects.** `foo.a` is collected into `objects[]` while parsing; objects compiled from `.c` sources are then *appended*. So `gcc prog.c libfoo.a` links as `libfoo.a prog.o` | single-pass `ld` extracts no members; every symbol in the archive comes back `undefined reference`. Use `-L`/`-l`, which the wrapper places *after* the objects |
 | 3 | **Any explicit `-l` suppresses the implicit libc.** The default `libs=(c)` applies only when *no* `-l` was given at all | `-lacompat` alone drops libc entirely, and the first casualties are `crt1.o`'s own `atexit`/`exit`/`_environ`/`__fpstart` — which reads as a broken toolchain rather than a missing flag. **Always end the library list with `-lc`**, including in a configure-filled `LIBS=` |
-| 4 | **★ The sysroot include dir is hard-coded at the FRONT of every compile.** `common_cflags=(-I"$sysroot/usr/include")` (`amix-gcc-wrapper.sh:13`) is passed *before* `"$@"` on the real compiler's command line (`:231`), so a package's own `-I` can never shadow a system header | **gnulib header replacement silently does nothing.** gzip 1.3.12 ships `lib/fcntl.h` and `lib/time.h` — gnulib wrappers meant to reach the compiler through the package's `-I./lib` and supply `O_BINARY=0`, `O_NOFOLLOW=0` and `struct timespec`. They are dead here: `<fcntl.h>` and `<time.h>` resolve to the 1992 SVR4 headers, the package sees a pure SVR4 libc, and nothing warns (`recipes/gzip/README.md:29-46`, `recipes/gzip/build.sh:28-39`) |
+| 4 | **★ The sysroot include dir is hard-coded at the FRONT of every compile.** `common_cflags=(-I"$sysroot/usr/include")` (`amix-gcc-wrapper.sh:13`) is passed *before* `"$@"` on the real compiler's command line (`:231`), so a package's own `-I` can never shadow a system header | **gnulib header replacement silently does nothing.** gzip 1.3.12 ships `lib/fcntl.h` and `lib/time.h` — gnulib wrappers meant to reach the compiler through the package's `-I./lib` and supply `O_BINARY=0`, `O_NOFOLLOW=0` and `struct timespec`. They are dead here: `<fcntl.h>` and `<time.h>` resolve to the 1992 SVR4 headers, the package sees a pure SVR4 libc, and nothing warns (`gzip/README.md:29-46`, `gzip/build.sh:28-39`) |
 
 Numbers 2 and 3 are the ones a Makefile will walk into on its own, since `LIBS=-lfoo` and
 `$(OBJS) $(LIBS)` are how every autoconf build links. All four are `gcc-cross-amix` items.
@@ -241,10 +246,10 @@ Both BATCH-1 packages that offered an asm fast path had it turned off, and in bo
 
 - **gzip 1.3.12** — the longest-match inner loop has an assembler implementation (`match.S`). The
   recipe seeds `gzip_cv_assembler=no` to force the C path and asserts the generated `config.h`
-  carries no `ASMV` (`recipes/gzip/README.md:20-25`, `recipes/gzip/build.sh:23-26`).
+  carries no `ASMV` (`gzip/README.md:20-25`, `gzip/build.sh:23-26`).
 - **zlib 1.2.13** — all bundled `contrib/` match/inflate assembler paths stay off. At this version
   the only assembler is x86-64 and the default build never reaches it, which is one more reason
-  1.2.13 was the version chosen (`recipes/zlib/README.md:19-24`).
+  1.2.13 was the version chosen (`zlib/README.md:19-24`).
 
 **Recipe rule:** if a package offers an asm path, disable it — then *assert* the disable in the
 generated config or the object list. A configure flag that was silently ignored looks exactly like
@@ -385,7 +390,7 @@ on the first change. `libamixcompat`'s header carries the macro.
 Maths is static-only: *"Amix's SHARED libc has
 none of them: they live in the static `/usr/ccs/lib/libm.a` … So the link order is `whetstone.o,
 libm.a, libc.so.1, libc.a`"* (`../amix-kerntools/tools/amix-bench/build-fieldkit.sh:109-116`).
-Sockets need `-lsocket -lnsl` (`../amix-packagemanager/docs/design.md:4-5`).
+Sockets need `-lsocket -lnsl` (`userland/pkgtools/docs/design.md:4-5`).
 
 **★ Some functions exist only as `static` wrappers IN THE HEADERS — a link probe calls them
 absent.** **[measured 2026-09-26]** `<sys/stat.h>` defines `stat`, `lstat`, `fstat` and `mknod` as
@@ -393,9 +398,9 @@ absent.** **[measured 2026-09-26]** `<sys/stat.h>` defines `stat`, `lstat`, `fst
 underscored names. autoconf's `AC_CHECK_FUNCS(lstat)` links against a prototype-less `char
 lstat();` and fails, so tar's `config.h` said no `lstat` and tar did `#define lstat stat` —
 archiving what every symlink points at, silently. Seed `ac_cv_func_lstat=yes` and assert it
-(`recipes/tar/build.sh`). The opposite lie is common too: `valloc` and `_sys_siglist` are
+(`tar/build.sh`). The opposite lie is common too: `valloc` and `_sys_siglist` are
 *declared* by the headers but not exported by `libc.so.1`, so a declaration probe says yes and the
-link fails (`recipes/tar`, `recipes/make`).
+link fails (`tar/`, `make/`).
 
 **★ `getpwnam()` crashes on first call in the stock shared libc.** Explicitly framed as a porting
 hazard: the first `getpwnam()` of a process crashes inside libc's passwd-record handling, while
@@ -406,7 +411,7 @@ globals win at static link time (`../grimoire-amix/docs/drivers/toolchain.md:262
 `llms-full.txt:7583`). **Any tool that maps uid→name — `ls -l`, `ps`, a top-class monitor — hits
 this.**
 
-**D3 is proven** (`recipes/tar`, 2026-09-26): `recipes/common/amix-pwgr.c` defines the four
+**D3 is proven** (`tar/`, 2026-09-26): `build/pkg/common/amix-pwgr.c` defines the four
 lookups, linked as a plain object into a still-**dynamic** executable; the build asserts via `nm`
 that they are `T`, never `U`.
 
@@ -516,7 +521,7 @@ database, so nothing else is needed (D2). Two measured details a screen-oriented
 - `libcurses.a` lives in **`/usr/ccs/lib`**, not the wrapper's default `/usr/lib`, so the link needs
   `-L<sysroot>/usr/ccs/lib` — and, per §2.2.1 number 3, an explicit `-lc` after it.
 
-(`recipes/less/README.md:24-35`, `recipes/less/build.sh:21-32`.) Still **UNVERIFIED**: real screen
+(`less/README.md:24-35`, `less/build.sh:21-32`.) Still **UNVERIFIED**: real screen
 handling — less paints with termcap escapes and never calls `initscr`/`newwin` — and ncurses itself,
 which nothing here has built.
 
@@ -582,7 +587,7 @@ tool insists on a POSIX shell, run it under `ksh` explicitly (`llms-full.txt:741
 **UNVERIFIED:** SVR4 package **install scripts** (preinstall/postinstall/request/class-action) have
 never actually been run on Amix — the packagemanager repo still tags that path **BENCH** (unrun),
 and no package the family ships contains one
-(`../amix-packagemanager/docs/heirloom-pkgtools-dive.md:140`, `:157-158`). A recipe needing an
+(`userland/pkgtools/docs/heirloom-pkgtools-dive.md:140`, `:157-158`). A recipe needing an
 install script is doing something nobody here has proved works. **Prefer packages that are pure
 file payloads.**
 
@@ -610,17 +615,17 @@ Two routes, and BATCH-1 proved both:
 1. **Bundle a regex** — the safe default, and the reason `grep` **2.5.1a** is the chosen version:
    it carries its own `regex.c`. The trap `REGEX-NONE` names is that a *compile-test* for a system
    regex succeeds under gcc 2.7's implicit declarations even when the symbol is absent (§3.1), so a
-   configure run can cheerfully "find" a regex that does not exist. `recipes/grep` passes
+   configure run can cheerfully "find" a regex that does not exist. `grep/` passes
    `--with-included-regex` and then **asserts** via `config.status` that `regex.o` really entered
-   `LIBOBJS` (`recipes/grep/README.md:25-33`).
+   `LIBOBJS` (`grep/README.md:25-33`).
 2. **Use `regcmp`, where the program already has a backend for it** — `less` 704 does. Its configure
    selects the regcmp backend (`HAVE_REGCMP=1`, which less reports as *"V8 regular expressions"* in
    `--version`), and the recipe gates on the configure log saying so rather than on an exit status
-   (`recipes/less/build.sh:122-129`). Two costs, both measured: `libgen.a` is in `/usr/ccs/lib` so
+   (`less/build.sh:122-129`). Two costs, both measured: `libgen.a` is in `/usr/ccs/lib` so
    the link needs `-L<sysroot>/usr/ccs/lib` (and a trailing `-lc`, §2.2.1); and SVR4's `regcmp` is
    **variadic**, while less shipped a stale fixed-arg prototype for it — the reason
    `regcmp(pattern, 0)` failed with *"too many arguments"* and the reason
-   `recipes/less/patches/02-pattern-libgen.patch` exists (`recipes/less/README.md:44-46`).
+   `less/patches/02-pattern-libgen.patch` exists (`less/README.md:44-46`).
 
 **Recipe rule:** prefer a bundled regex, and assert it was actually compiled in. Reach for `regcmp`
 only when the program already supports it, and take the prototypes from `<libgen.h>` rather than
@@ -645,7 +650,7 @@ package from a 1990s Solaris/SVR4 archive), that is worth more than any amount o
 stubs `gzprintf()`** unless the build defines `-DZLIB_INSECURE`: the call still links, still
 returns, and writes nothing. That is why this repo ships **1.2.13** — a compression library that
 quietly produces no output is precisely the failure class this campaign exists to avoid — and the
-older release is also integer-only and carries no gnulib (`recipes/zlib/README.md:19-24`).
+older release is also integer-only and carries no gnulib (`zlib/README.md:19-24`).
 
 Choosing the old version is only half of it; its **build system** has to be watched too. zlib's
 hand-written `./configure` probes `vs[n]printf` by linking with `$CC $CFLAGS` alone, never threading
@@ -654,7 +659,7 @@ hand-written `./configure` probes `vs[n]printf` by linking with `$CC $CFLAGS` al
 `vsprintf`/`sprintf` path. The recipe therefore runs configure only for what it does right (generate
 `zconf.h`, report the platform), compiles the fixed object list itself with no `NO_*` macro, and
 **asserts via `nm`** that `libz.a` really references `vsnprintf`/`snprintf` — checking the artifact,
-not the configure log (`recipes/zlib/README.md:26-47`). Two lessons generalise: a `NO_*`/`HAVE_*`
+not the configure log (`zlib/README.md:26-47`). Two lessons generalise: a `NO_*`/`HAVE_*`
 macro can silently *remove* a feature rather than fail, and a probe that does not thread the
 recipe's own `LDFLAGS` cannot see the shim every package here links.
 
@@ -677,7 +682,7 @@ The corollary is *not* that autotools are unusable — check before assuming:
 ### ★ 4.1 What a real cross-`configure` actually did — GNU patch 2.5.9, 2026-08-28
 
 This section used to end "**UNVERIFIED:** no port in this repo has yet been driven through a real
-cross-`configure`." One has now (`recipes/patch`). The good news first: **the route is far less
+cross-`configure`." One has now (`patch/`). The good news first: **the route is far less
 hostile than the constraints suggested.** patch's autoconf-2.57 `configure` has seven `AC_TRY_RUN`
 sites and *every one already carries a cross-compilation fallback*; exactly one of those defaults
 was wrong. The tarball ships no `config.sub` at all, so the triplet never came up.
@@ -702,16 +707,16 @@ checking for wchar.h... yes
 `config.h` then declared `HAVE_WCHAR_H 1` for a header Amix does not have. This one failed loudly
 (`quotearg.c: wchar.h: No such file or directory`) — but the same mechanism sets `HAVE_*` for
 anything that merely *looks* present on a modern Linux host, and most of those fail quietly. **Any
-cross-`configure` here must pass an explicit `CPP`** (`recipes/common/amix-cpp`), and should assert
+cross-`configure` here must pass an explicit `CPP`** (`build/pkg/common/amix-cpp`), and should assert
 a few known-absent `HAVE_*` afterwards so a regression stops the build. Fixing `-E` in the wrapper
 was a `gcc-cross-amix` item.
 
 **★ FIXED 2026-08-29** (`gcc-cross-amix` 3c2d272): `-E` is now dispatched to the real cross
 compiler with the wrapper's own target include path, so `$CC -E` preprocesses correctly and
 autoconf no longer falls back to the host's `/lib/cpp`. This trap is now historical — it is kept
-here, in full, because it is the reason `recipes/common/amix-cpp` exists (`recipes/README.md`).
+here, in full, because it is the reason `build/pkg/common/amix-cpp` exists (`docs/recipes.md`).
 `amix-cpp` is not deleted or made a no-op by the fix: it calls `gcc.real -E` directly with the
-sysroot include path added by hand (`recipes/common/amix-cpp`), which is exactly what the wrapper
+sysroot include path added by hand (`build/pkg/common/amix-cpp`), which is exactly what the wrapper
 now does internally — so it still works, unchanged, and existing recipes keep passing it as `CPP`.
 There is no reason to touch a build that already works. A *new* recipe may pass `$CC` directly as
 `CPP` instead, now that the wrapper handles `-E` itself.
@@ -756,12 +761,12 @@ result" pipeline cannot work here because:
 7. **Packaging is not generic.** A `.pkg` needs an authored `pkginfo` (`ARCH=Amiga`, **PKG name
    ≤ 9 characters** or stock `pkgadd` *silently drops the package*) and an authored `prototype`
    that cannot represent a path containing a space, `=` or `$`
-   (`../amix-packagemanager/NOTES.md`;
-   `../amix-packagemanager/docs/s5-14char-collisions.md:274-278`). And **`pkgproto` silently omits
+   (`userland/pkgtools/NOTES.md`;
+   `userland/pkgtools/docs/s5-14char-collisions.md:274-278`). And **`pkgproto` silently omits
    symlinks** from generated prototypes (`llms-full.txt:7611`).
 8. **The target filesystem truncates filenames to 14 bytes**, so two files in one directory sharing
    a 14-byte prefix cannot coexist — only a human can resolve that
-   (`../amix-packagemanager/NOTES.md:92-95`; `docs/s5-14char-collisions.md:219-220`).
+   (`userland/pkgtools/NOTES.md:92-95`; `docs/s5-14char-collisions.md:219-220`).
 
 **Therefore: every port is a hand-crafted recipe.** Per this repo's conventions (`CONTRIBUTING.md`): a
 per-tool subdirectory holding source provenance, patches, a build script, and
@@ -781,9 +786,9 @@ The recipe is hand-written; everything consuming it should be mechanical.
   count and FP-instruction floor (`build-fieldkit.sh:281-322`), and `gcc-cross-amix`'s five
   `make test-*` gates, each checking **object code**, not that the file compiled.
 - **`.pkg` rolling** — host-side Heirloom `pkgmk` + `pkgtrans`, both proven to run on Linux
-  (`../amix-packagemanager/docs/design.md:178`), plus the structural checks that already exist: the
+  (`userland/pkgtools/docs/design.md:178`), plus the structural checks that already exist: the
   PKG-name length gate and the `070701`-at-offset-512 magic check
-  (`../amix-packagemanager/tools/repo/build-packages.sh`).
+  (`userland/pkgtools/tools/repo/build-packages.sh`).
 - **Bench smoke** — push over FTP, `pkgadd`, run, `pkgrm`.
 
 > Automate the **recipe**. Never automate the **porting**.
@@ -806,11 +811,11 @@ several together mean *pick a different version* or *write a native tool instead
 | 7 | **`/proc` or kernel statistics?** | Rewrite against `PIOC*` ioctls; `nlist()` is untrustworthy and the count is off by one (§3.2, §3.3). |
 | 8 | **Float parsing?** `atof`/`strtod` on user input? | Exact below 1e50, drifting above, DBL_MAX catastrophically wrong (§3.5). Document the limit. |
 | 9 | **Shell scripts in the package?** | Pre-POSIX sh (§3.6). Install scripts are an **unproven** path — prefer pure file payloads. |
-| 10 | **Size on target?** | **~44 MB free root** (§1) is the binding disk constraint; RAM is generous on the guests this family actually runs — **64 MB on the stock 030 bench golden, 128 MB on 040/060 metal** (§1; the old 16 MB RAM ceiling is retracted) — so budget disk, not RAM, unless targeting a minimally-configured low-RAM stock box (courtesy figure **8 MB**). Budget **~1.10×** the payload byte sum for s5 on-disk footprint (`../amix-packagemanager/NOTES.md:240-241`). |
+| 10 | **Size on target?** | **~44 MB free root** (§1) is the binding disk constraint; RAM is generous on the guests this family actually runs — **64 MB on the stock 030 bench golden, 128 MB on 040/060 metal** (§1; the old 16 MB RAM ceiling is retracted) — so budget disk, not RAM, unless targeting a minimally-configured low-RAM stock box (courtesy figure **8 MB**). Budget **~1.10×** the payload byte sum for s5 on-disk footprint (`userland/pkgtools/NOTES.md:240-241`). |
 | 11 | **Filenames?** Two files in one directory sharing a 14-byte prefix? Any path with a space, `=` or `$`? Any symlinks? | s5 truncation, `prototype` grammar, and `pkgproto`'s silent symlink omission (§5.7, §5.8). |
 | 12 | **License text included?** | GPL/BSD upstream is fine to build and distribute; **each package carries its own license text** (`CONTRIBUTING.md`). Nothing SVR4-derived is ever committed here. |
-| 13 | **Dependency packages?** | Dependencies are **catalog-level**, not `depend(4)` files — authored host-side in `deps.conf`, resolved recursively by `apkg` (`../amix-packagemanager/NOTES.md:372-374`). Order the campaign provider-before-consumer. |
-| 14 | **PKG name ≤ 9 chars? `ARCH=Amiga`?** | Longer names are **silently dropped** by stock `pkgadd`; `ARCH=m68k` is wrong (`../amix-packagemanager/docs/kernel-packages.md:147-149`). |
+| 13 | **Dependency packages?** | Dependencies are **catalog-level**, not `depend(4)` files — authored host-side in `deps.conf`, resolved recursively by `apkg` (`userland/pkgtools/NOTES.md:372-374`). Order the campaign provider-before-consumer. |
+| 14 | **PKG name ≤ 9 chars? `ARCH=Amiga`?** | Longer names are **silently dropped** by stock `pkgadd`; `ARCH=m68k` is wrong (`userland/pkgtools/docs/kernel-packages.md:147-149`). |
 
 ---
 
@@ -837,9 +842,9 @@ environment; the A4000 + Z3660 metal box is the verdict. Never debug a new port 
   under `/pkgs/<set>/…` — grouped by **provenance** (`stock`/`base`/`test`/`extra`), not by
   `cats.conf` category; this repo's own packages land under `/pkgs/extra/…`, matching the `extra`
   set in `sets.conf`) — the on-box client has no TLS, so this stays plain HTTP with an
-  explicit `Host` header, never HTTPS (`../amix-packagemanager/docs/design.md:103-105`,
+  explicit `Host` header, never HTTPS (`userland/pkgtools/docs/design.md:103-105`,
   `requirements.md:23-26`; repo history: `CHANGELOG.md`; publish record:
-  `../amix-packagemanager/NOTES.md` 2026-09-15).
+  `userland/pkgtools/NOTES.md` 2026-09-15).
 
 ### ★ The throttle law — this shapes every test harness
 
@@ -881,13 +886,13 @@ Blowing the budget costs **ten minutes** of lockout per service. Design for it u
 Push over FTP → `pkgadd` → run the tool → `pkgrm` → confirm `/var/sadm` is clean. `pkgadd` inserts
 each object into `/var/sadm/install/contents` in sorted position and creates
 `/var/sadm/pkg/<PKG>/{pkginfo,install,save}`
-(`../amix-packagemanager/docs/stock-pkg-system.md:111-114`).
+(`userland/pkgtools/docs/stock-pkg-system.md:111-114`).
 
 Two caveats:
 
 - **Test fresh install; treat upgrade as unproven.** Re-install/upgrade of a file whose basename is
   ≥ 14 characters was broken in the deployed engine and is fixed only in source, not in any
-  deployed `/usr/apkg` (`../amix-packagemanager/NOTES.md:99-102`, `:126-129`).
+  deployed `/usr/apkg` (`userland/pkgtools/NOTES.md:99-102`, `:126-129`).
 - **`pkgadd -R` needs a real `/` line in `/etc/mnttab`.** `libinst`'s `get_mntinfo()` sorts the
   mount table by mount-point-name length and asserts the shortest entry is exactly `/`. A normally
   booted box always lists `/`, so this never fires there — but in a **minimal installer
@@ -910,7 +915,7 @@ Two caveats:
 
 ### The smoke loop, as it was actually run (2026-08-28)
 
-The first end-to-end run of this loop is `recipes/libamixcompat` + `recipes/patch`. What it took,
+The first end-to-end run of this loop is `libamixcompat/` + `patch/`. What it took,
 so the next one is cheaper:
 
 - **A non-interactive `admin` file is required.** `pkgadd -n` alone aborts on the first question,

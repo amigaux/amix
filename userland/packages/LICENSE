@@ -23,19 +23,19 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 Scope of this licence
 
-This MIT licence covers this repository's OWN content: the port recipes
-(build.sh, pin.sh, pkginfo, prototype, tests, READMEs), the shared harness in
-recipes/common/, tools/, the registry, and the documentation.
+This MIT licence covers this directory's OWN content (userland/packages in
+amix): the package recipes (package.sh, build.sh, prototype, tests, READMEs),
+our own sources in <name>/src/, tools/, and the documentation.
 
 It does NOT cover:
 
-  * recipes/libamixcompat/ -- first-party, but BSD-2-Clause; see
-    recipes/libamixcompat/LICENSE.
-  * recipes/*/patches/ -- changes to upstream programs; each patch is offered
+  * libamixcompat/ -- first-party, but BSD-2-Clause; see
+    libamixcompat/LICENSE.
+  * */patches/ -- changes to upstream programs; each patch is offered
     under the licence of the program it modifies.
-  * Any packaged upstream program, its source, or the binaries built from it
-    (and amix-benchmark's prebuilt binaries, which come from amix-kerntools).
+  * Any packaged upstream program, its source, or the binaries built from it.
     Those keep their own licences, which travel inside each package (the
-    licence text under <prefix>/doc/<tool>/, and the pkginfo / PROVENANCE
-    record), and are listed per package in registry/<name>.yaml (license.spdx).
+    licence text under <prefix>/doc/<tool>/, and the pkginfo record), and are
+    named per package in <name>/package.sh (LICENSE, an SPDX identifier).
     No upstream source tree is vendored here; recipes fetch at build time.
+  * Any file that names a different licence in its own header.

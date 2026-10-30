@@ -1,17 +1,22 @@
-# COEXISTENCE.md — how our packages sit beside stock Amix
+# Coexistence — how our packages sit beside stock Amix
 
-Amix 2.1 ships a general SVR4 userland. Some of the tools this repo ports already exist on a stock
+Amix 2.1 ships a general SVR4 userland. Some of the tools this directory ports already exist on a stock
 box at 1980s/1990s versions; most do not. This file is the **standing policy** for how a ported
 package coexists with stock — the prefix it installs under, the files it must never touch, how the
 newer tool wins for interactive users, and what `pkgadd` actually does when two packages claim one
 path. Every recipe inherits it (cited from `ROADMAP.md` **D11**); a recipe that wants to diverge
 argues here first, in the commit that changes this file.
 
+`ROADMAP` Dn/Xn and `registry/<name>.yaml` citations name the planning records of the former
+amix-packages repository, which stay with the maintainer and are not in amix. Package paths
+(`patch/prototype`) are relative to `userland/packages`; `userland/pkgtools/…` and `build/…` paths
+are relative to the top of amix.
+
 Confidence tags follow the `ROADMAP.md` legend: **[MEASURED]** by this family on the bench,
 **[PROVEN-AMIX]** an artifact ran on Amix, **[UNVERIFIED]** believed with a reason but unchecked,
 **[OPEN]** a decision with a named owner. Stock-side facts here are read out of
-`../amix-packagemanager` — the authority on what stock ships (its `docs/stock-pkg-system.md`, the
-repackaged factory catalog, and the `hdf/tape21/` install-tape extraction), never re-invented.
+`userland/pkgtools` — the authority on what stock ships (its `docs/stock-pkg-system.md`, the
+repackaged factory catalog, and the install-tape extraction), never re-invented.
 
 ---
 
@@ -43,7 +48,7 @@ that pull the same way:
   ported-tool distribution under one `/opt/<vendor>` prefix is exactly the established pattern:
   OpenCSW's **`/opt/csw`** and Sun's freeware **`/opt/sfw`** are the prior art. It aligns with the
   packagemanager side's `extra` install-set, which is the named handle for precisely this
-  add-on userland (`../amix-packagemanager/tools/repo/sets.conf`).
+  add-on userland (`userland/pkgtools/tools/repo/sets.conf`).
 - **`/usr/local` is reserved for the user's own hand-installed, non-packaged binaries.** Mixing
   `pkgadd`-owned files into `/usr/local` would intermingle package-managed and manually-managed
   trees in one directory — the thing that makes `/usr/local` impossible to reason about later.
@@ -60,7 +65,7 @@ the newer-tool-wins story unmanageable. `--prefix=/opt/amix` for every recipe; `
 
 **That `/opt` works as a `pkgadd` target is [PROVEN-AMIX]:** the packagemanager side installed and
 removed a throwaway package that dropped `/opt/amixtst` cleanly with the stock engine
-(`../amix-packagemanager/docs/stock-pkg-system.md` §5). `/opt/amix` itself is **unowned by any
+(`userland/pkgtools/docs/stock-pkg-system.md` §5). `/opt/amix` itself is **unowned by any
 stock package** — creating it is ours to do.
 
 **Relationship to the other parallel prefixes.** Three trees stay disjoint on a full box, and that
@@ -68,7 +73,7 @@ is the whole point:
 
 | Tree | Owner | What lives there |
 |---|---|---|
-| `/opt/amix` | **this repo** (`amix-packages`) | the ported GNU/BSD userland |
+| `/opt/amix` | **this directory** (`userland/packages`, formerly amix-packages) | the ported GNU/BSD userland |
 | `/usr/apkg` | `amix-packagemanager` | the package *system* itself (apkg client + heirloom engine) |
 | `/usr/local` | the **user** | hand-built, non-packaged binaries |
 | `/usr/bin`, `/sbin`, `/usr/ccs/bin`, `/usr/ucb`, `/usr/public/bin`, … | Commodore (`core`, `public`, …) | stock SVR4 |
@@ -135,7 +140,7 @@ not a silent package side effect:
   and SVR4 package install scripts are an **[UNVERIFIED]** path on Amix's 1992 `/bin/sh` (**D9**).
 - **Do not:** symlink `/opt/amix/bin/<tool>` from `/usr/bin/<tool>` to force precedence — it
   re-enters `/usr/bin` (§2), and stock `pkgadd` **corrupts a relative symlink target**
-  ([MEASURED], `recipes/patch/prototype`), so it would also demand absolute-target care for no gain.
+  ([MEASURED], `patch/prototype`), so it would also demand absolute-target care for no gain.
 
 **[OPEN — owner: this repo, a maintainer decision]** how `/opt/amix/bin` reaches PATH out of the box (manual
 line vs. a bootstrap-package profile snippet vs. left entirely to the user). See §7.
@@ -146,7 +151,7 @@ line vs. a bootstrap-package profile snippet vs. left entirely to the user). See
 
 Because our policy never claims a stock path, we never reach this code in practice — but the
 question "does `pkgadd` refuse / prompt / overwrite?" has a definite answer, read out of the engine
-(`../amix-packagemanager/heirloom/`) and the stock admin file, and it is *why* the policy is shaped
+(`userland/pkgtools/heirloom/`) and the stock admin file, and it is *why* the policy is shaped
 the way it is.
 
 **Path-conflict handling is governed by the `admin(4)` `conflict` parameter**, resolved at
@@ -204,7 +209,7 @@ already has is one we should decline, and this field is where that decision is w
 
 ## 6. The stock-userland audit (Wave 0/1)
 
-**[MEASURED]** against `../amix-packagemanager` — the authoritative `core` package manifest (the
+**[MEASURED]** against `userland/pkgtools` — the authoritative `core` package manifest (the
 complete 28,866-member repackaging), the `hdf/tape21/` tape extraction, and the bench-verified
 `patch` finding. `core` is in every install; `public` is in the standard 17-package set.
 
@@ -262,21 +267,21 @@ box one-liner).
   and `editor` groups for this repo) and created the `extra` set in `sets.conf`. This repo has now
   reconciled against it: all 23 `registry/*.yaml` carry `category_status: agreed`, and the five
   stale `category:` values were corrected (`diffutils`/`grep`/`less` → `utility`; `elvis`/`joe` →
-  `editor`), which also removes the contradiction with the already-minted `recipes/grep/pkginfo`
-  and `recipes/less/pkginfo` (both `CATEGORY=utility`). Nothing further is owed on the taxonomy;
+  `editor`), which also removes the contradiction with the already-minted `grep/pkginfo`
+  and `less/pkginfo` (both `CATEGORY=utility`). Nothing further is owed on the taxonomy;
   the **prefix** item above is what is still open.
 
 ---
 
 ## Sources
 
-- `../amix-packagemanager/docs/stock-pkg-system.md` — stock `pkg` behaviour, the admin(4) default
+- `userland/pkgtools/docs/stock-pkg-system.md` — stock `pkg` behaviour, the admin(4) default
   (`conflict=ask`), the `/opt/amixtst` install proof. [MEASURED, firsthand]
-- `../amix-packagemanager/heirloom/pkgcmds/pkgadd/check.c`, `libinst/pkgdbmerg.c` — the conflict
+- `userland/pkgtools/heirloom/pkgcmds/pkgadd/check.c`, `libinst/pkgdbmerg.c` — the conflict
   resolution and shared-ownership recording.
-- `../amix-packagemanager/tools/repo/{cats.conf,sets.conf,deps.conf}` and the repackaged factory
+- `userland/pkgtools/tools/repo/{cats.conf,sets.conf,deps.conf}` and the repackaged factory
   `catalog` — the stock package roster, the agreed taxonomy, the `extra` set.
-- `../amix-packagemanager/hdf/tape21/` — the Amix 2.1 install-tape extraction (partial for
+- the Amix 2.1 install-tape extraction, kept outside the public tree (partial for
   `public`; complete `core` via the repackaging manifest).
-- `registry/patch.yaml`, `recipes/patch/prototype` — the bench-verified stock `patch` 12u4 finding
+- `registry/patch.yaml`, `patch/prototype` — the bench-verified stock `patch` 12u4 finding
   and the stock-`pkgadd` relative-symlink-corruption measurement.

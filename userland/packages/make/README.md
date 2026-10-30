@@ -1,10 +1,10 @@
 # make — the recipe
 
 **Package `make` 3.81** — GNU make. GPL-2.0-or-later (the bundled `glob/` is LGPL-2.0-or-later;
-both texts ship). Registry entry: [`registry/make.yaml`](../../registry/make.yaml) · pin:
+both texts ship). Pin:
 [`pin.sh`](pin.sh).
 
-    sh recipes/make/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/make
 
 ## Coexistence
 
@@ -23,7 +23,7 @@ C program built with the box's own `cc`.
 ## ★ `-D_POSIX_SOURCE` — the right key of the `__STDC__` gate, for once
 
 make's job control needs `sigset_t`/`sigprocmask`/`sigemptyset`/`kill`, all hidden in the default
-ANSI view (`job.c` does not even parse). PORTING.md §2.4.1's matrix picks the key: `-U__STDC__`
+ANSI view (`job.c` does not even parse). docs/porting.md §2.4.1's matrix picks the key: `-U__STDC__`
 breaks gcc's `<stdarg.h>`, `-D_XOPEN_SOURCE` breaks `<signal.h>`, and `-D_POSIX_SOURCE` opens every
 door make walks through. What it closes is either unused (`struct timeval` — make falls back to
 `time()`), not wanted by default (`lstat`, only for `-L`), or put back by
@@ -33,7 +33,7 @@ diffed with and without the key: identical.
 `patches/01` (appended to `config.h.in`, so every TU including `glob/` sees it): declares `strdup`
 (hidden) and `getrlimit`/`setrlimit` (declared by no SVR4 header outside `_KERNEL`), defines
 `SA_RESTART` (a kernel ABI value the POSIX view hides), and `#define environ _environ` —
-`libc.so.1` exports only `_environ` (PORTING.md §3.1).
+`libc.so.1` exports only `_environ` (docs/porting.md §3.1).
 
 ## Two configure answers that were wrong
 
@@ -47,7 +47,7 @@ diffed with and without the key: identical.
 `getloadavg.c` finds no OS branch for SVR4.0/m68k and compiles to a stub, so `make -l` warns and
 carries on. That is the right outcome: the alternative is `nlist()` + `/dev/kmem`, and on Amix
 `nlist()` returns an **alignment** for the COMMON `avenrun` symbol and reports success
-(PORTING.md §3.3) — make would throttle on garbage. The build asserts no `nlist` and no
+(docs/porting.md §3.3) — make would throttle on garbage. The build asserts no `nlist` and no
 `/dev/kmem` reference.
 
 ## Package shape

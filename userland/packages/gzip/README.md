@@ -1,9 +1,9 @@
 # gzip — the recipe
 
 **Package `gzip` 1.3.12** — GNU gzip, the `.gz` compressor. GPL-2.0-or-later.
-Registry entry: [`registry/gzip.yaml`](../../registry/gzip.yaml) · pin: [`pin.sh`](pin.sh).
+Pin: [`pin.sh`](pin.sh).
 
-    sh recipes/gzip/build.sh
+    sh build/pkg/pkgbuild.sh userland/packages/gzip
 
 The highest day-one user value in batch 1: the first tool on the box that reads and writes the
 universal `.gz`/deflate format, which **stock cannot touch** — stock compression is 1985 BSD/Spencer
