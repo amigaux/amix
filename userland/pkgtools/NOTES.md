@@ -3020,7 +3020,7 @@ dated records. From here on, the repository is:
 ```
 http://pkg.amigaux.org/          catalog at /catalog, packages at /pkgs/<group>/…
   address   52.59.174.203
-  docroot   /var/www/pkg.amigaux.org   owned by the publishing user — rsync as that user, no root
+  docroot   owned by the publishing user — rsync as that user, no root
 ```
 
 **Why.** The old mirror was LAN-only. The catalog is
