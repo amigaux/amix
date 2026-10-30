@@ -1,0 +1,22 @@
+--- amiga/alien/dd.c.orig
++++ amiga/alien/dd.c
+@@ -78,6 +78,9 @@
+ 
+ 	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
+ 		return 0;
++	/* a request that STARTS past the end must fail, not go on with a negative residue */
++	if (uiop->uio_offset > sddevsize( dev)*BSIZE)
++		return ENXIO;
+ 	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
+ 		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
+ 	return uiophysio( breakup, (struct buf *)0, dev, B_READ, uiop);
+@@ -92,6 +95,9 @@
+ 
+ 	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
+ 		return 0;
++	/* a request that STARTS past the end must fail, not go on with a negative residue */
++	if (uiop->uio_offset > sddevsize( dev)*BSIZE)
++		return ENXIO;
+ 	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
+ 		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
+ 	return uiophysio( breakup, (struct buf *)0, dev, B_WRITE, uiop);

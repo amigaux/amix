@@ -1,0 +1,6 @@
+The *.patch files here are unified diffs against stock Amix 2.1 kernel sources
+(paths relative to /usr/sys). The context lines a patch quotes from a stock file
+remain under their original Commodore/AT&T SVR4 copyright; kernel/k30's MIT
+license covers only the added and changed lines and the explanatory text.
+The stock files themselves are not in this repository: they are the AMIX_SYSTEM
+input (amigaux/amix-system, usr/sys).

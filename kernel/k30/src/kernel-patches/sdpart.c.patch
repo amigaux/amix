@@ -1,0 +1,23 @@
+--- amiga/alien/sdpart.c.orig
++++ amiga/alien/sdpart.c
+@@ -102,12 +102,19 @@
+ 
+ 
+ /* Returns size of a partition, or a large number for a device which has never been opened. */
++/*
++ * "Large" was 1234567 blocks (602.8 MiB): dd.c clamps every raw transfer to this size, so on-box
++ * mkfs failed ENXIO on any slice ending past it.
++ * 0x3FFFFF is the largest block count whose byte size (*BSIZE) still fits a signed 32-bit offset.
++ */
++#define	SDBIGSIZE	0x3FFFFF
++
+ uint
+ sddevsize( dev)
+ dev_t	dev;
+ {
+ 
+-	return partab[MINOR( dev)].len ? partab[MINOR( dev)].len : 1234567;
++	return partab[MINOR( dev)].len ? partab[MINOR( dev)].len : SDBIGSIZE;
+ }
+ 
+ 

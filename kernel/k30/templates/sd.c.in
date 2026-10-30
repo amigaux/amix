@@ -1,0 +1,207 @@
+
+
+/*
+ * scsi interface selector
+ *
+ * All scsi device drivers call here to queue requests.  The call is routed
+ * to the controller of the right type.
+ */
+#include	"sys/types.h"
+#include	"sys/errno.h"
+#include	"rico.h"
+#include	"sd.h"
+
+
+extern bool a3091queue(), a2090queue(), a2091queue()@DRIVER_EXTERNS@;
+
+static void
+	init( ),
+	insert( );
+
+/*
+ * Register your scsi controller cards here.
+ */
+static struct {
+	uint	pn;				/* product number */
+	bool	(*f)( );			/* queuing function */
+	char	*hardwarename;
+@SD4_BEGIN@
+	uint	rank;				/* C4-1 rank class: 1 z3660, 2 zorro, 3 mobo, 4 ide */
+@SD4_END@
+} scsicard[] = {
+	0x0202F003, &a3091queue, "A3000 Internal SCSI"@R:3@,
+	0x02020001, &a2090queue, "A2090 SCSI"@R:2@,
+	0x02020003, &a2091queue, "A2091 SCSI"@R:2@,
+@DRIVER_CARDS@
+};
+
+struct queue {
+	bool	(*f)( );
+	uint	c;
+	char	*a;
+	char	*hardwarename;
+@SD4_BEGIN@
+	uint	r;				/* the rank class the order sorts on first */
+@SD4_END@
+};
+static struct queue	queue[SDCARDS];
+@SDREG_BEGIN@
+
+/*
+ * The module core's pending controller registrations (kernel/dlm core patch 0032, C4-1 section 3):
+ * sd_register() fills the core's table until sd's first open takes it here and closes registration.
+ * The layout is the core's dlm.h struct dlm_sdreg.
+ */
+struct dlm_sdreg {
+	bool	(*sr_f)( );			/* the queue function */
+	uint	sr_c;				/* handed back to it */
+	char	*sr_base;			/* sdcardbase() */
+	char	*sr_name;			/* sdhardwarename() */
+	uint	sr_rank;			/* 1 z3660, 2 zorro, 3 mobo, 4 ide */
+};
+extern int	dlm_sd_close( );
+@SDREG_END@
+
+
+int
+sdopen( card)
+{
+
+	init( );
+	unless (card < nel( queue) && queue[card].f)
+		return ENXIO;
+	return 0;
+}
+
+
+void
+sdqueue( cp)
+struct sdcom	*cp;
+{
+
+	(*queue[cp->card].f)( queue[cp->card].c, cp);
+}
+
+
+char *
+sdhardwarename( card)
+uint	card;
+{
+
+	return queue[card].hardwarename;
+}
+
+
+/*
+ * Physical AutoConfig base address init()/insert() recorded for this card.
+ * A driver that maps a board's register window from this can drive several
+ * boards routed to the same queue function (e.g. an A4091 and an A4092/A4770)
+ * at once.  Harmless for drivers that never call it.
+ */
+char *
+sdcardbase( card)
+uint	card;
+{
+
+@SD4_BEGIN@
+	unless (card < nel( queue))
+		return 0;
+@SD4_END@
+	return queue[card].a;
+}
+
+
+static void
+init( )
+{
+	char	*a,
+		*o;
+	uint	i;
+
+	if (not queue->f) {
+		for (i=0; i<nel( scsicard); ++i) {
+			int c = 0;
+			while (autocon( scsicard[i].pn, c, &a, &o))
+@SD2_BEGIN@
+				insert( scsicard[i].f, c++, a, scsicard[i].hardwarename);
+@SD2_END@
+@SD4_BEGIN@
+				insert( scsicard[i].f, c++, a, scsicard[i].hardwarename, scsicard[i].rank);
+@SD4_END@
+		}
+		/*
+		 * Direct-probe fallbacks (driver.conf probe= field): boards the
+		 * bootinfo autocon table misses -- unreliable on 2.1 real metal,
+		 * and some boards sit at a fixed address outside the autoconfig
+		 * chain entirely.  Each probe verifies its own hardware safely.
+		 */
+@SDREG_BEGIN@
+		{ struct dlm_sdreg *t; int n, k;	/* the modules' controllers, then registration closes */
+		  n = dlm_sd_close( &t);
+		  for (k=0; k<n; ++k)
+			insert( t[k].sr_f, t[k].sr_c, t[k].sr_base, t[k].sr_name, t[k].sr_rank); }
+@SDREG_END@
+@DRIVER_PROBES@	}
+}
+
+
+@SD2_BEGIN@
+static void
+insert( f, c, a, n)
+bool	(*f)( );
+char	*a, *n;
+{
+	struct queue	*q;
+
+	q = endof( queue) - 1;
+	if (not q[0].f) {
+		while ((q > queue)
+		and (not q[-1].f || q[-1].a > a)) {
+			q[0] = q[-1];
+			--q;
+		}
+		q[0].f = f;
+		q[0].c = c;
+		q[0].a = a;
+		q[0].hardwarename = n;
+	}
+	else
+		printf( "sd: too many controllers\n");
+}
+@SD2_END@
+@SD4_BEGIN@
+/*
+ * C4-1 section 3.1/4 (kernel/dlm docs/contracts/C4-1-sd-register.md): SDCARDS slots kept in
+ * (rank class, base) order, ascending, over the controllers present.  When the table is
+ * full, whichever of the newcomer and the last slot sorts later is dropped, by name.
+ */
+#define	later( q, r, a)	((q)->r > (r) || (q)->r == (r) && (q)->a > (a))
+
+static void
+insert( f, c, a, n, r)
+bool	(*f)( );
+char	*a, *n;
+uint	r;
+{
+	struct queue	*q;
+
+	q = endof( queue) - 1;
+	if (q[0].f) {
+		unless (later( q, r, a)) {
+			printf( "sd: too many controllers, %s dropped\n", n);
+			return;
+		}
+		printf( "sd: too many controllers, %s dropped\n", q[0].hardwarename);
+	}
+	while ((q > queue)
+	and (not q[-1].f || later( q - 1, r, a))) {
+		q[0] = q[-1];
+		--q;
+	}
+	q[0].f = f;
+	q[0].c = c;
+	q[0].a = a;
+	q[0].hardwarename = n;
+	q[0].r = r;
+}
+@SD4_END@

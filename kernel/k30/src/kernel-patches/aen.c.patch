@@ -1,0 +1,564 @@
+Close the security defects in the STOCK A2065 ethernet driver: the 4.2BSD
+trailer RX arm (out-of-bounds read + mblk heap overflow, both reachable from
+the wire), the unguarded b_cont dereferences in aenioctl() (kernel NULL
+dereference reachable from any process that can open the device), and three
+broken exits from aenioctl()'s switch that hand the SAME message to the shared
+ACK epilogue twice (one double free, two use-after-handoff double putnext()s).
+
+amiga/driver/aen/aen.c is the stock Amix 2.1 STREAMS/DLPI driver for the A2065
+ethernet card (`en0` / `aen0`).  It is linked into EVERY Amix kernel -- aen/exp
+is an unconditional entry in amiga/driver/Makefile's OBJ list -- so the defects
+are live in emulation and on any stock install, whether or not the
+machine has an A2065 fitted (the driver is present; only the board probe fails).
+
+The first two were found in 2026-07 while auditing amix-z3660net's z3660eth, the
+native Z3660 ethernet driver, which had inherited them verbatim from this file
+(fixed there in z3660eth commits 54729bb and cd97e53).  The third group was found
+by sweeping this switch afterwards; z3660eth does NOT inherit it (its
+CLEAR_STATUS is an EINVAL stub and it has no AEN_SET_CONFIG analogue).  The LOW-
+severity quality items also fixed in z3660eth are deliberately NOT ported: stock
+aen is not ours to improve beyond safety.  Everything here is memory safety.
+
+--------------------------------------------------------------------------
+[HIGH] the trailer RX arm -- toss_packet_up_stream()
+--------------------------------------------------------------------------
+
+Stock decodes the 4.2BSD trailer encapsulation for any received frame whose
+ethertype falls in ETHERTYPE_TRAIL (0x1000) .. +ETHERTYPE_NTRAILER (0x1010):
+
+    length = (sap - ETHERTYPE_TRAIL) * 512;                     /* up to 8192 */
+    trailn = (*((unsigned short *)
+                &packet[sizeof(ether_header_t) + length + ETH_TYPE_SIZE]) -
+              ETH_TYPE_SIZE - ETH_LENGTH_SIZE);
+
+`packet` is the driver's static `rxbuff[MAX_BUFFER_LENGTH]` -- 1518 bytes.  With
+the maximum in-range ethertype 0x1010 the trailer-count word is read at offset
+14 + 8192 + 2 = 8208, i.e. 6690 bytes (~6.7 KB) PAST the end of the buffer.
+That is defect one: an out-of-bounds read of adjacent kernel BSS, driven purely
+by two bytes an attacker puts in the ethertype field.
+
+Defect two follows from it.  `trailn` is whatever those out-of-bounds bytes
+happened to contain, minus 4 -- so it can be NEGATIVE.  The payload block is
+then allocated as
+
+    mp->b_cont = allocb(length + trailn, BPRI_MED)
+
+while the copy that follows is unconditionally
+
+    bcopy(&packet[sizeof(ether_header_t)], mp->b_cont->b_wptr, length)
+
+so a negative `trailn` makes the destination mblk SMALLER than the copy: an
+mblk heap overflow, again with attacker-influenced length.
+
+The arm is dead code for legitimate traffic -- SVR4 IP never negotiates
+trailers, aenopen() advertises IFF_NOTRAILERS, and interface bring-up is
+`ifconfig en0 ... -trailers` -- but "unused" is not "unreachable": the decode
+runs off the received ethertype alone, before any of that matters, so a single
+crafted frame off the LAN reaches it.  It is therefore strictly worse than no
+code, and it is DELETED rather than repaired.  Nothing on any network this
+kernel will see speaks trailers.
+
+Normal RX is byte-for-byte unchanged.  The guard is a two-way split on the
+ethertype and only the taken arm is removed: every other ethertype (IP 0x0800,
+ARP 0x0806, ...) already fell through to the else-arm, and that else-arm --
+`length = count - ETH_CRC_LEN; trailn = 0;` -- is exactly what is now
+unconditional.  With trailn == 0 the deleted `if (trailn)` bcopy block never
+ran and allocb(length + trailn) == allocb(length), so both surviving statements
+are unchanged in effect.  Confirmed by cross-disassembly of the compiled object
+(m68k-cbm-sysv4 gcc 2.7.2.3, the aen Makefile's own CFLAGS): in the patched
+toss_packet_up_stream() the range test (addiw #-4096 / cmpiw #16 / bhi), the
+x512 shift (moveq #9 / asll) and the indexed out-of-bounds read
+(movew %a1@(0x10,%d6:l)) are all gone, and the entry path falls straight into
+the former else-arm (movel count / subql #4).  Every other function in the
+object is instruction-for-instruction identical.
+
+Trailer-tagged frames now take the ordinary delivery path: `sap` keeps its
+0x1000..0x1010 value instead of being replaced by the encapsulated type, no
+stream is bound to those SAPs, and the frame is simply not delivered -- correct
+handling for an encapsulation this stack never negotiated.  One visible
+consequence: aen_status.trailers is now always 0.  The field is KEPT because it
+is part of aen_status_t, which AEN_GET_STATUS copies out to userland; removing
+it would change a userland-visible struct layout for no benefit.
+
+--------------------------------------------------------------------------
+[MED] the ioctl NULL dereference -- aenioctl()
+--------------------------------------------------------------------------
+
+Five sites opened by dereferencing the ioctl's data block with no check at all:
+
+    caddr_t arg = *(caddr_t *)mp->b_cont->b_rptr;    /* AEN_GET_STATUS,
+                                                        AEN_GET_CONFIG,
+                                                        AEN_NUMBER_OF_BOARDS */
+    creq->cq_addr = *(caddr_t *)mp->b_cont->b_rptr;  /* AEN_SET_CONFIG,
+                                                        TRANSPARENT arm */
+    (void)pullupmsg(mp->b_cont, -1);                 /* AEN_SET_CONFIG,
+                                                        non-TRANSPARENT arm */
+
+An M_IOCTL legitimately arrives with b_cont == NULL: that is precisely what a
+non-TRANSPARENT I_STR ioctl carrying zero bytes of data looks like.  For the
+first three cases the dereference happens BEFORE any TRANSPARENT test, so
+
+    struct strioctl s;
+    s.ic_cmd = AEN_GET_STATUS; s.ic_len = 0; s.ic_dp = 0; s.ic_timout = 0;
+    ioctl(fd, I_STR, &s);
+
+is a kernel NULL dereference -- a panic -- from any process that can open the
+device.  A b_cont that is present but shorter than a pointer would likewise be
+over-read.  (The AEN_SET_CONFIG cq_addr site sits inside its TRANSPARENT branch,
+so it is not reachable that way; it is guarded here anyway, at zero behavioural
+cost, so the file has one uniform rule.)
+
+The fifth site is the same defect wearing a disguise, and it is NOT on a
+TRANSPARENT path.  The non-TRANSPARENT AEN_SET_CONFIG arm reads
+
+    (void)pullupmsg(mp->b_cont, -1);
+    if (!mp->b_cont || blklen(mp->b_cont) != sizeof(*aen_config))
+
+-- the NULL test is written one line too late.  pullupmsg() dereferences its
+argument immediately (disassembly of the staged io/exp: `moveal %fp@(8),%a5`
+then `tstl %a5@(8)`, no NULL check anywhere), so on exactly the message shape
+the next line exists to reject, the panic has already happened and the test is
+unreachable.  The test is simply moved ahead of the call.
+
+Fixed with two new statics that follow the shapes already used in this file:
+
+  aen_ioc_nak()   the single NAK path, byte-identical in effect to the NAK
+      stanza aenioctl()'s own `default:` case already used (M_IOCNAK,
+      freemsg(unlinkb(mp)), ioc_count = ioc_rval = 0, ioc_error = err,
+      putnext(RD(q), mp)).
+  aen_ioc_arg()   fetches the user address only when the message is the
+      M_IOCTL+TRANSPARENT case that actually USES it -- the same condition as
+      each use site, which also avoids reading ioc_count out of an M_IOCDATA
+      message, where that block is really a struct copyresp.  It checks b_cont
+      is non-NULL and at least sizeof(caddr_t) long, and reports failure so the
+      caller can NAK.  For the non-TRANSPARENT case there is no user address to
+      fetch, so it yields 0 and succeeds -- which is what makes b_cont == NULL
+      safe rather than fatal.
+
+All five sites now NAK EINVAL on a malformed message instead of panicking.
+Behaviour for well-formed ioctls is unchanged: for a TRANSPARENT ioctl with a
+valid argument the helper returns exactly the value the open-coded dereference
+produced, and for every other message shape `arg` was never used.
+
+--------------------------------------------------------------------------
+[HIGH] three broken exits from the switch -- aenioctl()
+--------------------------------------------------------------------------
+
+aenioctl() ends in a shared ACK epilogue that every `break` in its switch falls
+into:
+
+    mp->b_datap->db_type = M_IOCACK;
+    freemsg(unlinkb(mp));
+    iocbp->ioc_count = 0; iocbp->ioc_rval = 0; iocbp->ioc_error = 0;
+    putnext(RD(q), mp);
+
+So `break` means "I have NOT disposed of mp; ACK it for me", and any case that
+has already freed the data block, or already handed the whole message upstream,
+must `return` instead.  Three did not.  All three are memory-safety bugs, not
+protocol nits, and all three are reachable from userland.
+
+ 1. AEN_CLEAR_STATUS -- DOUBLE FREE.  The case ended
+
+        freemsg(mp->b_cont);
+        break;
+
+    which frees the data block but leaves mp->b_cont still pointing at it.
+    unlinkb() in the epilogue then returns that same stale pointer (disassembly:
+    it loads b_cont from offset 8, clears the field, returns the old value), and
+    freemsg() frees it a second time.  Any process that can open the device
+    triggers it with one I_STR carrying a non-zero-length payload -- the payload
+    is what creates the b_cont this case frees.  Fixed by making the free
+    detach as it goes, `freemsg(unlinkb(mp));`, which is this file's own idiom
+    (six existing sites) and leaves the epilogue a proven no-op: freemsg() NULL-
+    tests its argument at entry (`tstl %a0 / beq`).  Deliberately NOT routed
+    through aen_ioc_nak(): this case SUCCEEDS and must ACK, and it takes no
+    argument, so neither helper fits it.
+
+ 2. AEN_SET_CONFIG, malformed non-TRANSPARENT message -- DOUBLE PUTNEXT.  The
+    arm built an M_IOCNAK by hand, called putnext(RD(q), mp), and then `break`,
+    so the epilogue re-typed the message to M_IOCACK, unlinkb()ed and freemsg()ed
+    it, and putnext()ed it a SECOND time -- after the stream head had already
+    taken ownership of it and freed it.  Rewritten as
+    `aen_ioc_nak(q, mp, EINVAL); return;`, which is the same NAK the arm was
+    hand-rolling (plus the ioc_rval = 0 and the data-block drop the file's other
+    NAK sites do), with the exit corrected.
+
+ 3. AEN_SET_CONFIG, success -- DOUBLE PUTNEXT, on the MAINLINE path.  The arm
+    unlinkb()s and freeb()s the data block, putnext()es its M_IOCACK, then reuses
+    `mp` as scratch for the DL_BIND_ACK / DL_INFO_ACK messages it qreply()s round
+    the AEN_MAXDEV loop -- and then `break`s into the epilogue, which writes
+    db_type into, unlinkb()s, freemsg()es and re-putnext()es whichever of those
+    already-handed-off messages `mp` last pointed at.  Changed to `return`.
+
+    This one is not a corner: a TRANSPARENT ioctl(fd, AEN_SET_CONFIG, &cfg)
+    comes back as the M_IOCDATA leg of the copyin, which is not M_IOCTL, so it
+    takes this same arm.  Every successful AEN_SET_CONFIG, transparent or not,
+    ended in a use-after-free plus a double putnext of one mblk -- precisely the
+    shape that corrupts the STREAMS freelist and surfaces later, far from here,
+    as an "out of blocks" wedge.
+
+The three cases that still `break` (AEN_CLEAR_STATUS, and the non-TRANSPARENT
+tails of AEN_GET_STATUS / AEN_GET_CONFIG / AEN_NUMBER_OF_BOARDS) all reach the
+epilogue holding a message they have not disposed of, which is what it is for.
+Proof that the sweep is complete and surgical: in the compiled object the number
+of branches into the epilogue drops from 10 to 8, the two that disappear are
+exactly the two `braw` sites above, and the remaining eight are unmoved.
+
+(Not fixed, because it is a functional wart and not a safety defect: those three
+non-TRANSPARENT tails build a reply block into b_cont and then let the epilogue
+free it and zero ioc_count, so a non-TRANSPARENT I_STR AEN_GET_STATUS returns no
+data.  Stock aen is not ours to improve beyond safety.)
+
+--------------------------------------------------------------------------
+
+Verified: host cross-build only (m68k-cbm-sysv4 gcc 2.7.2.3, the aen Makefile's
+CFLAGS + -D__STDC__=0, staged /usr/sys sysroot).  Compiles clean with
+diagnostics identical to the pre-patch baseline apart from the line numbers this
+patch shifts, and an unchanged `nm -u` set (26 symbols).  Splitting the object
+per function, aenioctl() and toss_packet_up_stream() differ, aen_ioc_arg() and
+aen_ioc_nak() are new, and every other function is instruction-for-instruction
+identical.  Not yet validated at run time: no emulated or real-hardware RX soak or
+ioctl exercise has been run.
+
+Apply against a stock Amix 2.1 source tree:
+    cd /usr/sys && patch -p0 < aen.c.patch        # target: amiga/driver/aen/aen.c
+
+--- amiga/driver/aen/aen.c.orig
++++ amiga/driver/aen/aen.c
+@@ -48,7 +48,8 @@
+ 
+ int aen_initialize();
+ static int aenopen(), aenclose(), aenwput(), aenwsrv(), count_aen_boards();
+-static void aenioctl();
++static void aenioctl(), aen_ioc_nak();
++static int aen_ioc_arg();
+ static int aenproto(), setup_lance();
+ static void initialize_and_go(), receive_interrupt(), transmit_interrupt();
+ static void toss_packet_up_stream();
+@@ -418,6 +419,64 @@
+ static int aenwsrv() { return 0; }
+ 
+ /*
++** aen_ioc_nak  -  NAK an M_IOCTL the way the rest of aenioctl() does
++**		   (M_IOCNAK + errno back up the read side), dropping any
++**		   data block still attached to it.
++*/
++static void
++aen_ioc_nak(q, mp, err)
++queue_t *q;
++mblk_t *mp;
++int err;
++{
++    register struct iocblk *iocbp = (struct iocblk *)mp->b_rptr;
++
++    mp->b_datap->db_type = M_IOCNAK;
++    freemsg(unlinkb(mp));
++    iocbp->ioc_count = 0;
++    iocbp->ioc_rval = 0;
++    iocbp->ioc_error = err;
++    putnext(RD(q), mp);
++}
++
++/*
++** aen_ioc_arg  -  fetch the user-address argument of a TRANSPARENT M_IOCTL out
++**		   of its b_cont, with the checks this driver used to omit.
++**
++** AEN_GET_STATUS, AEN_GET_CONFIG, AEN_SET_CONFIG and AEN_NUMBER_OF_BOARDS all
++** opened with an unconditional
++**	caddr_t arg = *(caddr_t *)mp->b_cont->b_rptr;
++** An M_IOCTL legitimately arrives with b_cont == NULL -- that is exactly what a
++** non-TRANSPARENT I_STR ioctl carrying zero bytes of data looks like -- so any
++** process able to open /dev/en0 could panic the kernel with a two-line ioctl()
++** call.  A b_cont present but shorter than a pointer would likewise over-read it.
++**
++** The argument is only ever USED on the M_IOCTL+TRANSPARENT path (the M_COPYIN /
++** M_COPYOUT setup), so that is the only case in which it is fetched: the test
++** below is the same condition as the use site, which also keeps us from reading
++** ioc_count out of an M_IOCDATA message (where the block is a struct copyresp).
++**
++** Returns 1 with *argp set (0 for the non-TRANSPARENT case, where there is no
++** user address to fetch and the caller does not use it -- which is what makes
++** the b_cont == NULL case safe rather than fatal), or 0 => the caller must NAK.
++*/
++static int
++aen_ioc_arg(mp, iocbp, argp)
++mblk_t *mp;
++struct iocblk *iocbp;
++caddr_t *argp;
++{
++    *argp = (caddr_t)0;
++
++    if (!(mp->b_datap->db_type == M_IOCTL && iocbp->ioc_count == TRANSPARENT))
++	return 1;
++    if (mp->b_cont == NULL || blklen(mp->b_cont) < (int)sizeof(caddr_t))
++	return 0;
++    *argp = *(caddr_t *)mp->b_cont->b_rptr;
++    return 1;
++}
++
++/*
+ ** aenioctl  -	process I/O control requests
+ */
+ static void
+@@ -472,13 +531,31 @@
+ 	board->aen_status.overflow = 0;
+ 	board->aen_status.framming = 0;
+ 	board->aen_status.crc = 0;
+-	freemsg(mp->b_cont);
++	/*
++	** DETACH as well as free.  This used to be a bare
++	**	freemsg(mp->b_cont);
++	** which left mp->b_cont pointing at the block it had just freed.  The
++	** shared ACK epilogue at the bottom of this function then runs
++	**	freemsg(unlinkb(mp));
++	** and unlinkb() returns exactly that stale pointer -- a DOUBLE FREE of
++	** the ioctl's data block, reachable from any process that can open this
++	** device with an I_STR carrying a non-zero-length payload.  unlinkb()
++	** clears b_cont as it detaches, so the epilogue's freemsg() then gets a
++	** NULL, which is a no-op.  Do not turn this back into freemsg(b_cont).
++	*/
++	freemsg(unlinkb(mp));
+ 	break;
+ 
+     case AEN_GET_STATUS:
+     {
+ 	aen_status_t *status;
+-	caddr_t arg = *(caddr_t *)mp->b_cont->b_rptr;
++	caddr_t arg;
++
++	if (!aen_ioc_arg(mp, iocbp, &arg))
++	{
++	    aen_ioc_nak(q, mp, EINVAL);
++	    return;
++	}
+ 
+ 	freemsg(mp->b_cont);
+ 
+@@ -520,7 +597,13 @@
+     case AEN_GET_CONFIG:
+     {
+ 	aen_config_t *aen_config;
+-	caddr_t arg = *(caddr_t *)mp->b_cont->b_rptr;
++	caddr_t arg;
++
++	if (!aen_ioc_arg(mp, iocbp, &arg))
++	{
++	    aen_ioc_nak(q, mp, EINVAL);
++	    return;
++	}
+ 
+ 	freemsg(mp->b_cont);
+ 
+@@ -572,8 +655,15 @@
+ 	if (mp->b_datap->db_type == M_IOCTL && iocbp->ioc_count == TRANSPARENT)
+ 	{
+ 	    struct copyreq *creq = (struct copyreq *)mp->b_rptr;
++	    caddr_t arg;
++
++	    if (!aen_ioc_arg(mp, iocbp, &arg))
++	    {
++		aen_ioc_nak(q, mp, EINVAL);
++		return;
++	    }
+ 	    mp->b_datap->db_type = M_COPYIN;
+-	    creq->cq_addr = *(caddr_t *)mp->b_cont->b_rptr;
++	    creq->cq_addr = arg;
+ 	    mp->b_wptr = mp->b_rptr + sizeof(*creq);
+ 	    creq->cq_size = sizeof(*aen_config);
+ 	    creq->cq_flag = 0;
+@@ -586,15 +676,35 @@
+ 	    mblk_t *bp1;
+ 	    register int i;
+ 
++	    /*
++	    ** The b_cont NULL test MUST come first.  Stock ran
++	    **	    (void)pullupmsg(mp->b_cont, -1);
++	    ** BEFORE testing !mp->b_cont, and pullupmsg() dereferences its
++	    ** argument immediately (it reads mp->b_cont to decide whether the
++	    ** chain is already contiguous), so on the very message shape the
++	    ** next line was written to reject -- a non-TRANSPARENT I_STR with
++	    ** no data block -- the panic had already happened and the test was
++	    ** unreachable.  Same defect class as the aen_ioc_arg() guard above;
++	    ** this is the one site of it that is not on a TRANSPARENT path.
++	    */
++	    if (mp->b_cont == NULL)
++	    {
++		aen_ioc_nak(q, mp, EINVAL);
++		return;
++	    }
++
+ 	    (void)pullupmsg(mp->b_cont, -1);
+ 
+-	    if (!mp->b_cont || blklen(mp->b_cont) != sizeof(*aen_config))
++	    if (blklen(mp->b_cont) != sizeof(*aen_config))
+ 	    {
+-		iocbp->ioc_error = EINVAL;
+-		mp->b_datap->db_type = M_IOCNAK;
+-		iocbp->ioc_count = 0;
+-		putnext(RD(q), mp);
+-		break;
++		/*
++		** ...and RETURN, do not break.  aen_ioc_nak() hands mp to
++		** putnext(); breaking out of the switch would drop it into the
++		** shared ACK epilogue, which would then re-type, unlinkb() and
++		** re-putnext() a message this queue no longer owns.
++		*/
++		aen_ioc_nak(q, mp, EINVAL);
++		return;
+ 	    }
+ 
+ 	    aen_config = (aen_config_t *)mp->b_cont->b_rptr;
+@@ -703,12 +813,35 @@
+ 		}
+ 	    }
+ 	}
+-	break;
++	/*
++	** RETURN, do not break.  Every path through this case has already
++	** disposed of the request: the TRANSPARENT arm putnext()s its M_COPYIN
++	** and returns, the malformed arm NAKs and returns, and the arm that
++	** falls to here putnext()ed its M_IOCACK above (after unlinkb()ing the
++	** data block) and then reused `mp` as scratch for the DL_BIND_ACK /
++	** DL_INFO_ACK messages it qreply()s round the loop.
++	**
++	** Stock had `break;` here, which dropped all of that into the shared
++	** ACK epilogue below -- so the epilogue wrote db_type into, unlinkb()ed
++	** and freemsg()ed, and then putnext()ed a SECOND time, a message that
++	** had already been handed upstream and freed by the stream head.  A
++	** use-after-free plus a double putnext of the same mblk, i.e. exactly
++	** the kind of thing that corrupts the STREAMS freelist.  It was on the
++	** MAINLINE path: a transparent ioctl(AEN_SET_CONFIG) comes back here as
++	** the M_IOCDATA leg, which is not M_IOCTL, so it takes this arm too.
++	*/
++	return;
+     }
+ 
+     case AEN_NUMBER_OF_BOARDS:
+     {
+-	caddr_t arg = *(caddr_t *)mp->b_cont->b_rptr;
++	caddr_t arg;
++
++	if (!aen_ioc_arg(mp, iocbp, &arg))
++	{
++	    aen_ioc_nak(q, mp, EINVAL);
++	    return;
++	}
+ 
+ 	freemsg(mp->b_cont);
+ 
+@@ -1170,7 +1303,7 @@
+ char *packet;
+ int board_index, count;
+ {
+-    int j, length, trailn;
++    int j, length;
+     unsigned short sap;
+     aen_board_t *board = &aen_board[board_index];
+     aen_info_t *aen_info = &board->aen_info;
+@@ -1183,35 +1316,35 @@
+ 
+     sap = packet_header->ether_type;
+ 
+-    /* Dude! I'm seeing trails.... */
+-    if (sap >= ETHERTYPE_TRAIL &&
+-	sap <= (unsigned short)(ETHERTYPE_TRAIL+ETHERTYPE_NTRAILER))
+-    {
+-	/*
+-	** Ethernet trailers are types (inclusive)
+-	**
+-	**  ETHERTYPE_TRAIL to (ETHERTYPE_TRAIL+ETHERTYPE_NTRAILER)
+-	**
+-	** where ((Ether->et_Type - ETHERTYPE_TRAIL) * 512) is the
+-	** number of bytes of data in this packet followed by the
+-	** actual Ethernet TYPE followed by a revised length
+-	** (including the new EtherNet TYPE and LENGTH) then the
+-	** variable header (eg: ip, arp, or ?).
+-	*/
+-
+-	length = (sap - ETHERTYPE_TRAIL) * 512;
+-	trailn = (*((unsigned short *)
+-		    &packet[sizeof(ether_header_t) + length + ETH_TYPE_SIZE]) -
+-		  ETH_TYPE_SIZE - ETH_LENGTH_SIZE);
+-
+-	sap = *((unsigned short *)&packet[sizeof(ether_header_t)+length]);
+-	board->aen_status.trailers++;
+-    }
+-    else
+-    {
+-	length = count - ETH_CRC_LEN;
+-	trailn = 0;
+-    }
++    /*
++    ** NO TRAILER DECODE -- deliberately.  The 4.2BSD trailer-encapsulation arm
++    ** that used to stand here (ethertypes ETHERTYPE_TRAIL 0x1000 ..
++    ** +ETHERTYPE_NTRAILER 0x1010) has been DELETED because it was doubly unsafe:
++    **
++    **   length = (sap - ETHERTYPE_TRAIL) * 512;		    -- up to 8192
++    **   trailn = *(u_short *)&packet[14 + length + ETH_TYPE_SIZE] - 4;
++    **
++    ** read the trailer-count word at up to offset 8208 of `rxbuff`, which is
++    ** MAX_BUFFER_LENGTH (1518) bytes -- a ~6.7 KB out-of-bounds read.  `trailn`
++    ** was then whatever those out-of-bounds bytes happened to contain, so it
++    ** could be NEGATIVE, making the payload allocb(length + trailn) SMALLER than
++    ** the bcopy(..., length) that followed it: an mblk heap overflow.
++    **
++    ** It was dead for legitimate traffic -- SVR4 IP never negotiates trailers,
++    ** open() advertises IFF_NOTRAILERS and bring-up is `ifconfig en0 -trailers`
++    ** -- but it was reachable by any crafted frame off the wire, so it was
++    ** strictly worse than no code.  Deleted rather than repaired.
++    **
++    ** Normal RX is unaffected: every ethertype outside 0x1000..0x1010 (IP 0x0800,
++    ** ARP 0x0806, ...) already took the else-arm, which is exactly what is now
++    ** unconditional -- and with trailn == 0 the deleted `if (trailn)` block never
++    ** ran and allocb(length + trailn) == allocb(length).  Trailer-tagged frames
++    ** now take the ordinary path: `sap` stays 0x1000..0x1010, no stream binds
++    ** those SAPs, so they are simply not delivered.  aen_status.trailers is
++    ** consequently always 0 (the field is kept: it is part of aen_status_t, which
++    ** AEN_GET_STATUS copies out to userland).  Do not reintroduce a decode arm.
++    */
++    length = count - ETH_CRC_LEN;
+ 
+ #ifdef DEBUG2
+     if (BUGGYBUTTON&DEBUG2)
+@@ -1222,13 +1355,7 @@
+ 	      ad[2] == 0xFF && ad[3] == 0xFF &&
+ 	      ad[4] == 0xFF && ad[5] == 0xFF))
+ 	{
+-	    hexdump((char *)packet, length + trailn, "Receiving Packet:\n");
+-
+-	    if (trailn)
+-		hexdump((char *) &packet[sizeof(ether_header_t) + length +
+-					 ETH_TYPE_SIZE + ETH_LENGTH_SIZE],
+-			trailn - ETH_TYPE_SIZE - ETH_LENGTH_SIZE,
+-			"Receiving Trailer:\n");
++	    hexdump((char *)packet, length, "Receiving Packet:\n");
+ 	}
+     }
+ #endif /* DEBUG2 */
+@@ -1291,7 +1418,7 @@
+ 		if ((mp=allocb(sizeof(union DL_primitives) +
+ 			       (2 * sizeof(ether_addr_t)),
+ 			       BPRI_MED)) != NULL &&
+-		    (mp->b_cont = allocb(length + trailn, BPRI_MED)) != NULL)
++		    (mp->b_cont = allocb(length, BPRI_MED)) != NULL)
+ 		{
+ 		    register dl_unitdata_ind_t
+ 			*dp = (dl_unitdata_ind_t *)mp->b_wptr;
+@@ -1321,17 +1448,6 @@
+ 
+ 		    mp->b_datap->db_type = M_PROTO;
+ 
+-		    if (trailn)
+-		    {
+-			bcopy((caddr_t)
+-			      &packet[sizeof(ether_header_t) + length +
+-				      ETH_TYPE_SIZE + ETH_LENGTH_SIZE],
+-			      (caddr_t)mp->b_cont->b_wptr,
+-			      trailn);
+-
+-			mp->b_cont->b_wptr += trailn;
+-		    }
+-
+ 		    bcopy((caddr_t)&packet[sizeof(ether_header_t)],
+ 			  (caddr_t)mp->b_cont->b_wptr,
+ 			  length);
