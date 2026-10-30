@@ -230,11 +230,14 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   refuses the whole staging (`exit 4`); a scan that cannot run also refuses. The same gate fires
   inside a catalog build (`rc 3`, no catalog written). Detail: `docs/kernel-packages.md`.
 - **Payload-licence gate — a different question, independently checked.** `publish.sh` also runs
-  `payload-licence-gate.py`, which refuses (exit 5, no `--force`) a package whose payload binaries
-  statically embed *foreign* object code (e.g. stock SVR4 `libm`, detected via embedded `STT_FILE`
-  source names) — a property `--scan-private` cannot see, since it keys on pkginfo markers, not
-  binary contents. A stripped payload binary reports UNKNOWN, never a clean pass. Full history and
-  the four ways the gate was wrong before it was right: NOTES.md 2026-09-16.
+  `payload-licence-gate.py`, which reads payload contents — a property `--scan-private` cannot
+  see, since it keys on pkginfo markers. It refuses (exit 5, no `--force`) a Kickstart ROM image,
+  which the Amix permission does not cover. Stock Amix object code statically linked into a
+  payload binary (SVR4 `libm`, detected via embedded `STT_FILE` source names) was refused until
+  2026-10-30; since the owner's decision that day (ports link the stock `libm.a`; the permission
+  covers all of Amix, ruling 2026-10-29) it is recorded as an `embeds` line, not refused. A
+  stripped payload binary reports UNKNOWN, never a clean pass. Detail: NOTES.md 2026-10-30; the
+  history and the four ways the gate was wrong before it was right: NOTES.md 2026-09-16.
 
 ### 5.2 Building packages
 

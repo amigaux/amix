@@ -125,8 +125,10 @@ them. The scan keys on pkginfo markers rather than pathnames, so stock packages 
 cannot run also refuses, and there is **no `--force`**.
 
 A second, independent gate, `tools/repo/payload-licence-gate.py`, answers a different question —
-does a payload embed *someone else's* object code (e.g. stock SVR4 `libm`)? — and refuses (exit 5,
-no `--force`) if it finds one. Detail and history: NOTES.md 2026-09-16.
+what does a payload carry? It refuses (exit 5, no `--force`) a Kickstart ROM image, which the
+Amix permission does not cover. Stock Amix object code statically linked into a payload binary
+(SVR4 `libm`) is permitted since 2026-10-30 and is recorded, one `embeds` line per binary, not
+refused. Detail and history: NOTES.md 2026-10-30 and 2026-09-16.
 
 ### Catalog format (v1)
 

@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-# payload-licence-gate.py -- refuse a package that carries FOREIGN object code.
+# payload-licence-gate.py -- refuse a payload the public repository may not
+# ship (a Kickstart ROM image), and record the stock Amix object code a
+# payload binary embeds (stock SVR4 libm).
 #
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# Usage: payload-licence-gate.py <pkg-or-dir> [...]
+# Usage: payload-licence-gate.py [--strict] [--include-stock] <pkg-or-dir> [...]
 #        payload-licence-gate.py --self-test
 #
-# Exit: 0 all clean (possibly with UNKNOWNs -- see below), 2 a REFUSE,
+# Exit: 0 nothing refused (possibly with UNKNOWNs -- see below), 2 a REFUSE,
 #       1 a usage/parse error.
 #
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS.  On 2026-09-16 `amixbench-1.2.pkg` was staged for the public
 # repository carrying a `whet` binary that statically embedded the stock SVR4
-# /usr/ccs/lib/libm.a -- Commodore/AT&T object code, which we may not
-# redistribute.  It was caught by a human reading the recipe.  Every automated
-# gate passed it, including the one whose name sounds like it should have
-# caught it:
+# /usr/ccs/lib/libm.a -- Commodore/AT&T object code, which at the time we
+# could not redistribute.  It was caught by a human reading the recipe.  Every
+# automated gate passed it, including the one whose name sounds like it
+# should have caught it:
 #
 #   gen-catalog.py --scan-private keys on the KSUM_R / BOOT2_SHA pkginfo
 #   markers that OUR OWN kernel mints carry.  Its contract is "our private
@@ -24,73 +26,83 @@
 #   linked into someone's payload binary carries no marker, so 1.2 passed it
 #   clean.
 #
-# "Our kernel packages never leave" and "no foreign object code goes out" are
+# "Our kernel packages never leave" and "what is inside a payload" are
 # DIFFERENT properties.  Only the first was checked.  This tool checks the
 # second, and the two are deliberately kept in separate files so neither can
 # quietly absorb and weaken the other.
 #
+# ★ THE RULE CHANGED ON 2026-10-30.  The permission (Amiga Corporation,
+# 2026-09-23) covers all of Amix including its AT&T parts (owner's ruling
+# 2026-10-29; amigaux/amix-system publishes them), and on 2026-10-30 the
+# owner decided that ports link the stock /usr/ccs/lib/libm.a statically.
+# Embedded stock libm is therefore no longer refused: it is RECORDED, one
+# "embeds" line per binary, so a publish still shows what is inside.  What
+# the permission does not cover -- a Kickstart ROM image -- refuses.
+#
 # ---------------------------------------------------------------------------
 # WHAT IT LOOKS FOR, and what that is worth.
 #
-# 1. libm STT_FILE names.  A static link from an archive leaves the member's
-#    source-file symbol behind: `whet` carries atan.c exp.c log.c matherr.c
-#    reduce.c sin.c sqrt.c beside its own whetstone.c.  This is the signature
-#    that actually caught the real defect, so it is the primary test.
+# 1. Kickstart ROM images, in ANY payload file -- REFUSE.  Read from the
+#    content, not the filename (see KICKSTART_HEADERS for what is and is not
+#    seen).
 #
-# 2. DT_NEEDED beyond the allowed set -- reported as a NOTE, never a refusal.
+# 2. libm STT_FILE names -- RECORDED, never a refusal.  A static link from an
+#    archive leaves the member's source-file symbol behind: `whet` carries
+#    atan.c exp.c log.c matherr.c reduce.c sin.c sqrt.c beside its own
+#    whetstone.c.  A distinctive SVR4 marker (matherr.c, reduce.c) is recorded
+#    as "embeds stock Amix object code: libm"; three or more libm names
+#    without one are recorded as embedded libm objects of unnamed origin
+#    (another libm, e.g. musl's, trips that too).
+#
+# 3. DT_NEEDED beyond the allowed set -- reported as a NOTE, never a refusal.
 #    This was a REFUSE in the first draft and that was WRONG: the very first
 #    run over the already-published packages refused APKG 0.2 for NEEDED
 #    libnsl.so.  A DT_NEEDED is dynamic linkage against a library that lives
-#    on the box; it redistributes none of the vendor's code, which is the
-#    opposite of statically embedding libm.a.  apkg legitimately needs libnsl
-#    for its sockets.  Conflating the two would have blocked the next APKG
-#    publish with a bogus licensing accusation -- so the NEEDED list is
-#    informational (it is still worth seeing an unexpected one), and only
-#    embedded object code can refuse.
+#    on the box; it redistributes none of the vendor's code.  apkg
+#    legitimately needs libnsl for its sockets.  The NEEDED list is
+#    informational (it is still worth seeing an unexpected one).
 #
 # ---------------------------------------------------------------------------
 # ★ THE BLINDNESS, STATED WHERE IT IS CLAIMED.
 #
-# Test 1 reads a SYMBOL TABLE.  A stripped binary has none, so this tool
+# Test 2 reads a SYMBOL TABLE.  A stripped binary has none, so this tool
 # cannot see embedded objects in one.  That is not a corner case: of the
 # twelve packages we had published when this was written, four (gzip, less,
 # AMIXDEMO, DEMOLIB) carry no source-file symbols at all.
 #
-# So a stripped ELF is reported UNKNOWN, never "clean".  A clean bill from
-# this tool means "no foreign object code that a symbol table would reveal",
-# and for a stripped binary that is no statement at all.  The tool prints the
-# distinction rather than letting a reader infer a guarantee it cannot give;
-# `--strict` turns UNKNOWN into a refusal for a caller that wants the strong
-# reading.  The honest fix for an UNKNOWN is upstream: ship unstripped (which
-# is what our own mints already do), or attest the link line in the recipe.
+# So a stripped ELF is reported UNKNOWN, never "clean": what it embeds is not
+# recorded.  The tool prints the distinction rather than letting a reader
+# infer a record it cannot give; `--strict` turns UNKNOWN into a refusal for
+# a caller that wants the strong reading.  The honest fix for an UNKNOWN is
+# upstream: ship unstripped (which is what our own mints already do), or
+# attest the link line in the recipe.  Test 1 reads file contents and is not
+# affected by stripping.
 #
 # ---------------------------------------------------------------------------
 # ★ SCOPE: this gate polices OUR builds, not the vendor's.
 #
 # `pkgs/stock/` is the 27 repackaged Amix 2.1 factory packages -- Commodore's
 # own binaries.  Of course they contain SVR4 libm objects: 39 of them do, and
-# the X11 ones carry the whole archive.  That is not "we linked someone else's
-# object code into our build"; it IS the vendor's code, and whether it may be
-# served at all is a SEPARATE, explicit licensing decision the maintainer has taken
-# (demo-only from 2026-09-14; since the 2026-09-23 licensing outcome -- Amiga
-# Corporation approved distributing the Commodore binaries -- they are listed
-# in the public catalog) -- not a question this gate is entitled to re-answer.  Scanning it would refuse every publish forever and
-# teach everyone to pass a --force that must not exist.
+# the X11 ones carry the whole archive.  It IS the vendor's code, and whether
+# it may be served at all is a SEPARATE, explicit licensing decision the
+# maintainer has taken (demo-only from 2026-09-14; since the 2026-09-23
+# licensing outcome -- Amiga Corporation approved distributing the Commodore
+# binaries -- they are listed in the public catalog) -- not a question this
+# gate is entitled to re-answer.
 #
 # So `stock/` is skipped BY PROVENANCE PATH, loudly (the skip is printed, never
 # silent), and `--include-stock` scans it anyway for anyone auditing it
 # deliberately.  Everything else -- base/, extra/, test/ and any new group --
-# is in scope, because those are the ones we build and therefore the ones we
-# can accidentally contaminate.
+# is in scope, because those are the ones we build.
 #
-# That the detector lights up on genuine SVR4 X11 binaries it was never tuned
-# against is, incidentally, the strongest evidence we have that it works.
+# That the libm detector lights up on genuine SVR4 X11 binaries it was never
+# tuned against is, incidentally, the strongest evidence we have that it works.
 #
 # ---------------------------------------------------------------------------
 # A broken version of this tool -- wrong path, unreadable package, a regex
-# that matches nothing -- would print exactly the same "all clean" as a
-# healthy one over a clean input.  So --self-test runs it against the known
-# CONTAMINATED signature and fails if it does NOT fire.
+# that matches nothing -- would print exactly the same "nothing refused" as a
+# healthy one over a clean input.  So --self-test runs both detectors against
+# known positives and fails if either does NOT fire.
 
 import os
 import re
@@ -115,9 +127,10 @@ LIBM_OBJECTS = {
 # Names that are DISTINCTIVE to the SVR4 libm.a and are not plausible source
 # filenames in someone else's project.  `matherr` is SVR4's math error hook and
 # `reduce` its argument-reduction helper; neither shows up by accident.
-# Refusing on a bare `log.c` or `exp.c` would be a false positive waiting to
-# happen -- plenty of honest programs have one -- so a refusal needs either a
-# distinctive marker or enough libm names co-occurring to rule out coincidence.
+# Recording a bare `log.c` or `exp.c` would be a false positive -- plenty of
+# honest programs have one -- so a record needs either a distinctive marker or
+# enough libm names co-occurring to rule out coincidence.  (Until 2026-10-30
+# these thresholds decided a REFUSE; now they decide an "embeds" record.)
 LIBM_DISTINCTIVE = {"matherr.c", "reduce.c"}
 LIBM_COOCCURRENCE = 3
 
@@ -147,7 +160,7 @@ ELF_MAGIC = b"\x7fELF"
 INCLUDE_STOCK = False
 
 CLEAN, UNKNOWN, REFUSE = "clean", "UNKNOWN", "REFUSE"
-NOTE = "note"
+NOTE, EMBEDS = "note", "embeds"
 
 
 def strings_of(data):
@@ -197,8 +210,21 @@ def has_symtab(path):
     return ".symtab" in r.stdout
 
 
+def libm_record(names):
+    """The "embeds" record for a set of STT_FILE names, or None."""
+    hits = sorted(set(names) & LIBM_OBJECTS)
+    distinctive = sorted(set(hits) & LIBM_DISTINCTIVE)
+    if distinctive:
+        return ("embeds stock Amix object code: libm (%s; SVR4 marker %s)"
+                % (" ".join(hits), " ".join(distinctive)))
+    if len(hits) >= LIBM_COOCCURRENCE:
+        return ("embeds libm objects: %s (no SVR4 marker: stock or another "
+                "libm)" % " ".join(hits))
+    return None
+
+
 def inspect_elf(path, data):
-    """-> (verdict, [reasons], [notes])"""
+    """-> (verdict, [reasons], [(kind, text)] notes and records)"""
     notes = []
     needed = readelf_needed(path)
     if needed is not None:
@@ -206,25 +232,15 @@ def inspect_elf(path, data):
         if extra:
             # Informational ONLY -- see the header. Dynamic linkage ships no
             # vendor object code.
-            notes.append("links box libraries beyond libc: " + " ".join(extra))
+            notes.append((NOTE, "links box libraries beyond libc: "
+                          + " ".join(extra)))
 
     names = {s.decode("ascii") for s in strings_of(data) if SRCNAME_RE.match(s)}
-    hits = sorted(names & LIBM_OBJECTS)
-    distinctive = sorted(set(hits) & LIBM_DISTINCTIVE)
-    if distinctive or len(hits) >= LIBM_COOCCURRENCE:
-        why = "embeds libm objects: " + " ".join(hits)
-        if distinctive:
-            why += "  (distinctive SVR4 libm marker: %s)" % " ".join(distinctive)
-        else:
-            why += "  (%d libm names co-occur; >=%d rules out coincidence)" % (
-                len(hits), LIBM_COOCCURRENCE)
-        return REFUSE, [why], notes
-    if hits:
-        # One or two generic names: could be this project's own source file.
-        # Not a refusal, but a human should look.
-        return UNKNOWN, ["carries libm-ish source name(s) %s -- too few and too "
-                         "generic to call, check the link line by hand"
-                         % " ".join(hits)], notes
+    # Stock libm is permitted since 2026-10-30 (see the header): a FACT to
+    # record, never a refusal.
+    rec = libm_record(names)
+    if rec:
+        notes.append((EMBEDS, rec))
 
     sym = has_symtab(path)
     if sym is False:
@@ -263,8 +279,8 @@ def scan_tree(root):
                 continue
             n_elf += 1
             v, why, notes = inspect_elf(full, data)
-            for n in notes:
-                allnotes.append((rel, n))
+            for k, n in notes:
+                allnotes.append((rel, k, n))
             if v != CLEAN:
                 findings.append((rel, v, why))
                 if v == REFUSE:
@@ -319,7 +335,7 @@ def scan_package(path):
             pv, pf, pn, pnn = scan_package(pk)
             rel = os.path.relpath(pk, path)
             findings += [("%s!%s" % (rel, r), v, w) for r, v, w in pf]
-            notes += [("%s!%s" % (rel, r), t) for r, t in pn]
+            notes += [("%s!%s" % (rel, r), k, t) for r, k, t in pn]
             n_elf += pnn[0]
             n_file += pnn[1]
             if pv == REFUSE:
@@ -343,7 +359,7 @@ def scan_package(path):
 
 
 def self_test():
-    """Fire the detector at the known CONTAMINATED signature.
+    """Fire both detectors at known positives.
 
     A detector that matches nothing prints the same 'clean' as a healthy one,
     so prove it fires before trusting a pass.
@@ -352,16 +368,16 @@ def self_test():
     fake = b"\x7fELF" + b"\x00" * 64 + b"\x00".join(
         [b"whetstone.c", b"sqrt.c", b"matherr.c", b"exp.c"]) + b"\x00"
     names = {s.decode() for s in strings_of(fake) if SRCNAME_RE.match(s)}
-    hits = names & LIBM_OBJECTS
-    print("  known-positive signature -> %s" % (sorted(hits) or "NOTHING"))
-    if hits != {"sqrt.c", "matherr.c", "exp.c"}:
-        print("  FAIL: the libm signature did not fire"); ok = False
+    rec = libm_record(names)
+    print("  known-positive libm signature -> %s" % (rec or "NOTHING"))
+    if not rec or not rec.startswith("embeds stock Amix object code: libm"):
+        print("  FAIL: the libm record did not fire"); ok = False
     clean = {s.decode() for s in strings_of(b"\x7fELF\x00dhry.c\x00")
              if SRCNAME_RE.match(s)}
-    print("  known-negative signature -> %s" % (sorted(clean & LIBM_OBJECTS)
+    print("  known-negative signature -> %s" % (libm_record(clean)
                                                 or "nothing (correct)"))
-    if clean & LIBM_OBJECTS:
-        print("  FAIL: fired on a clean binary"); ok = False
+    if libm_record(clean):
+        print("  FAIL: recorded libm on a clean binary"); ok = False
     rom = b"\x11\x14\x4e\xf9\x00\xf8\x00\xd2" + b"\x00" * (512 * 1024 - 8)
     print("  known-positive Kickstart header -> %s"
           % (kickstart_rom(rom) or "NOTHING"))
@@ -391,8 +407,9 @@ def main(argv):
     for t in targets:
         verdict, findings, notes, (n_elf, n_file) = scan_package(t)
         label = os.path.basename(t.rstrip("/"))
-        for rel, n in notes:
-            print("  %-7s %s: %s" % ("note", rel, n))
+        for rel, k, n in notes:
+            print("  %-7s %s: %s" % (k, rel, n))
+        n_embeds = sum(1 for _, k, _ in notes if k == EMBEDS)
         for rel, v, why in findings:
             for w in why:
                 print("  %-7s %s: %s" % (v, rel, w))
@@ -401,14 +418,13 @@ def main(argv):
             else:
                 n_unknown += 1
         if verdict == REFUSE:
-            print("payload-licence-gate: REFUSE %s -- it carries foreign "
-                  "object code; the public repo ships only our own builds"
-                  % label)
+            print("payload-licence-gate: REFUSE %s -- it carries content the "
+                  "public repo may not ship (above)" % label)
             rc = 2
         elif verdict == UNKNOWN:
-            print("payload-licence-gate: %s: no foreign object code FOUND, "
-                  "but some binaries could not be inspected (above). This is "
-                  "not a clean bill." % label)
+            print("payload-licence-gate: %s: nothing refused, but some "
+                  "binaries could not be inspected (above): what they embed "
+                  "is not recorded. This is not a clean bill." % label)
             if strict and rc == 0:
                 rc = 2
         elif n_file == 0:
@@ -426,8 +442,9 @@ def main(argv):
             print("payload-licence-gate: OK %s (%d file(s), no ELF binaries "
                   "-- nothing for this gate to police)" % (label, n_file))
         else:
-            print("payload-licence-gate: OK %s (%d ELF(s) inspected; no "
-                  "embedded foreign object code)" % (label, n_elf))
+            print("payload-licence-gate: OK %s (%d ELF(s) inspected; nothing "
+                  "refused; %d embed libm objects, recorded above)"
+                  % (label, n_elf, n_embeds))
     if n_unknown and not n_refuse:
         print("payload-licence-gate: %d uninspectable binary/binaries. A "
               "stripped ELF hides the symbol table this test reads, so "

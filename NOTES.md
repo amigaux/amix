@@ -1,5 +1,45 @@
 # amix-packagemanager — lab notes
 
+## 2026-10-30 — payload-licence gate: stock libm is recorded, not refused; a Kickstart ROM refuses
+
+**Why.** The owner's ruling of 2026-10-29: the permission (Amiga Corporation, 2026-09-23) covers
+all of Amix including its AT&T parts — `amigaux/amix-system` already publishes them. On 2026-10-30
+the owner decided ("Yes, stock libm") that ports link Commodore's stock `/usr/ccs/lib/libm.a`
+statically; perl 5.8.9 (amix-packages) carries the `matherr.c`/`reduce.c` `STT_FILE` markers and
+the libm names. The 2026-09-16 rule — refuse a payload that embeds stock SVR4 libm — no longer
+holds, and the gate would have refused perl.
+
+**What changed in `tools/repo/payload-licence-gate.py`.**
+
+- **Embedded libm is a recorded fact.** The detector is unchanged (same names, same
+  `matherr.c`/`reduce.c` markers, same three-name co-occurrence threshold), but it prints an
+  `embeds` line per binary instead of refusing: `embeds stock Amix object code: libm (<names>;
+  SVR4 marker <markers>)`, or, for three or more libm names without a marker, `embeds libm
+  objects: … (no SVR4 marker: stock or another libm)` — musl's libm trips that one. The OK line
+  counts them (`nothing refused; N embed libm objects, recorded above`), so a publish log still
+  shows what is inside.
+- The old "one or two libm-ish names → UNKNOWN, check by hand" case is gone: it existed to flag
+  a possible refusal, and there is none to flag.
+- **A Kickstart ROM image refuses** (rc 2 → `publish.sh` exit 5, no `--force`), in any payload
+  file, by content: `$1111`/`$1114` + `JMP abs.l`, the 16-bit byte-swapped form, or
+  `AMIROMTYPE1` (encrypted). On the workspace's 105 Kickstart/CDTV/A3000 boot-ROM images: 89
+  caught; the 16 missed are all split halves (hi/lo, even/odd), which the gate states it does not
+  see; 0 hits on 29 expansion-board ROMs. Before this the gate had no ROM test at all
+  (commit e656915).
+- Unchanged: `gen-catalog.py --scan-private` (our kernel packages, exit 4), the `stock/` scope
+  skip, UNKNOWN for stripped binaries and `--strict`, NOTHING INSPECTED as a refusal, `NEEDED`
+  as a note.
+
+**Evidence.** Over the perl libm probes (`tmp/2026-10-30-perl/libmtest`, 22 ELFs): the old gate
+REFUSEs; the new one passes rc 0 with 18 `embeds` lines — `mt-stock` recorded as stock Amix
+libm (`matherr.c reduce.c` markers), `mt-musl` as libm of unnamed origin.
+
+**Tests.** T19 now: the whet signature, a lone marker and three co-occurring names are
+*recorded*; a host-built ELF carrying `matherr.c`/`reduce.c`/`sqrt.c` passes rc 0 and is
+recorded, loose and inside a real `pkgmk`/`pkgtrans` datastream; a Kickstart ROM image refuses
+rc 2 loose, byte-swapped and inside a datastream. `tools/repo/tests/run-tests.sh`: 387 passed,
+0 failed.
+
 ## 2026-10-26 — APKGENG 1.12.4: the removef stdin fix minted (STAGED, NOT PUBLISHED)
 
 **Why.** 75be235 (`removef PKG -` kept fgets' newline, removed nothing; the section further down)
@@ -1598,6 +1638,9 @@ object code?** `gen-catalog.py --scan-private` answers "is this one of OUR priva
 packages" — different property, and the `amixbench-1.2` withdrawal proved a package can pass the
 first while failing the second. Two properties, two files, deliberately not merged: an overloaded
 gate is one whose failure nobody can reason about.
+
+*(Superseded 2026-10-30: stock libm is recorded, not refused, and a Kickstart ROM image is
+what refuses — see that section. Kept as written.)*
 
 **What refuses.** libm object code statically linked into a payload binary, detected by the
 `STT_FILE` source names the link leaves behind (`whet` carried `atan.c exp.c log.c matherr.c

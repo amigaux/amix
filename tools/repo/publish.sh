@@ -97,28 +97,32 @@ elif [[ $SCAN_RC -ne 0 ]]; then
     exit 4
 fi
 
-# ---- licensing gate 2: FOREIGN object code in a payload ------------------
+# ---- licensing gate 2: what is INSIDE a payload --------------------------
 # The scan above answers "is this one of OUR private kernel packages".  It
-# does NOT answer "does this package carry somebody else's object code", and
-# on 2026-09-16 that gap let amixbench-1.2 -- whose `whet` statically embedded
-# the stock SVR4 libm.a -- through every automated check; a human reading the
-# recipe caught it.  Two different properties, so two separate gates rather
-# than one overloaded one.
+# does NOT answer "what does this package's payload carry", and on 2026-09-16
+# that gap let amixbench-1.2 -- whose `whet` statically embedded the stock
+# SVR4 libm.a -- through every automated check; a human reading the recipe
+# caught it.  Two different properties, so two separate gates rather than
+# one overloaded one.
 #
-# REFUSE (rc 2) is embedded foreign object code and is fatal here, for the
-# same reason the kernel gate is: this DEST is public and the mistake is not
-# retractable once fetched.  UNKNOWN (a stripped binary, whose symbol table
-# the test cannot read) is NOT fatal -- most of the add-on set is stripped --
-# but it prints, because "not inspected" must never read as "clean".
+# REFUSE (rc 2) is a Kickstart ROM image in the payload -- not covered by the
+# Amix permission -- and is fatal here, for the same reason the kernel gate
+# is: this DEST is public and the mistake is not retractable once fetched.
+# Embedded stock Amix object code (libm) is NOT refused since 2026-10-30
+# (owner: ports link the stock libm.a; the permission covers all of Amix,
+# ruling 2026-10-29): the gate prints an "embeds" line per binary so the
+# publish log shows it.  UNKNOWN (a stripped binary, whose symbol table the
+# test cannot read) is NOT fatal -- most of the add-on set is stripped -- but
+# it prints, because "not inspected" must never read as "clean".
 echo "publish: payload licence gate"
 PLG="$SELFDIR/payload-licence-gate.py"
 if [[ -f "$PLG" ]]; then
     PLG_RC=0
     python3 "$PLG" "$STAGING" || PLG_RC=$?
     if [[ $PLG_RC -eq 2 ]]; then
-        echo "publish: REFUSING to publish $STAGING -- a payload binary carries" >&2
-        echo "         foreign object code (see above). The public repo ships" >&2
-        echo "         only our own builds. Fix the mint; there is no --force." >&2
+        echo "publish: REFUSING to publish $STAGING -- a payload carries" >&2
+        echo "         content the public repo may not ship (a Kickstart ROM;" >&2
+        echo "         see above). Fix the mint; there is no --force." >&2
         exit 5
     elif [[ $PLG_RC -ne 0 ]]; then
         echo "publish: REFUSING -- payload licence gate could not run (rc=$PLG_RC)." >&2

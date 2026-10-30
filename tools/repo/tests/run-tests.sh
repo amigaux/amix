@@ -813,7 +813,8 @@ check "it leaves an unlisted package alone" \
     test "$(field "$S20B/catalog" jutoy 1)" = jutoy
 
 # --------------------------------------------------------------- T19 ----
-# payload-licence-gate.py -- "no foreign object code leaves in OUR builds".
+# payload-licence-gate.py -- a Kickstart ROM never leaves; embedded stock
+# Amix object code (libm) is recorded, not refused (owner, 2026-10-30).
 # A gate that inspects nothing prints the same thing as a gate that inspects
 # everything and finds nothing, so every check here is paired: it must FIRE on
 # the known positive as well as pass the negatives.
@@ -822,32 +823,72 @@ PLG="$HERE/../payload-licence-gate.py"
 check "tools/repo/payload-licence-gate.py exists" test -f "$PLG"
 check "its own self-test passes" python3 "$PLG" --self-test
 
-# the detector, exercised directly on signatures (no package needed)
+# the libm detector, exercised directly on signatures (no package needed).
+# Since 2026-10-30 (owner: ports link the stock libm.a statically; the
+# permission covers all of Amix) embedded libm is RECORDED, never refused.
 plg_verdict() {
     python3 - "$PLG" "$@" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("g", sys.argv[1])
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-hits = sorted(set(sys.argv[2:]) & m.LIBM_OBJECTS)
-dist = sorted(set(hits) & m.LIBM_DISTINCTIVE)
-print("REFUSE" if (dist or len(hits) >= m.LIBM_COOCCURRENCE)
-      else ("look" if hits else "clean"))
+r = m.libm_record(sys.argv[2:])
+print("stock" if r and r.startswith("embeds stock Amix object code: libm")
+      else ("libm" if r else "clean"))
 PY
 }
-check "FIRES on the real whet signature" \
+check "RECORDS the real whet signature as stock Amix libm" \
     test "$(plg_verdict atan.c exp.c log.c matherr.c reduce.c sin.c sqrt.c)" \
-       = REFUSE
-check "a distinctive marker alone is enough" \
-    test "$(plg_verdict matherr.c)" = REFUSE
-check "three co-occurring libm names are enough" \
-    test "$(plg_verdict sin.c sqrt.c exp.c)" = REFUSE
-# the false positive that would have made this gate unusable
-check "an honest project's own log.c does NOT refuse" \
-    test "$(plg_verdict log.c main.c util.c)" = look
+       = stock
+check "a distinctive marker alone is enough to record" \
+    test "$(plg_verdict matherr.c)" = stock
+check "three co-occurring libm names are recorded, origin unnamed" \
+    test "$(plg_verdict sin.c sqrt.c exp.c)" = libm
+# the false record that would make the record worthless
+check "an honest project's own log.c is NOT recorded" \
+    test "$(plg_verdict log.c main.c util.c)" = clean
 check "a clean binary is clean" test "$(plg_verdict dhry.c main.c)" = clean
 
+# a real ELF carrying the matherr.c/reduce.c STT_FILE markers PASSES and is
+# recorded -- loose and inside a datastream.  Host cc builds it: readelf
+# needs a real section table; the gate never looks at the architecture.
+T19W="$WORK/t19"; mkdir -p "$T19W/libm" "$T19W/libmsrc"
+T19HB="$HERE/../../../heirloom/build-host/bin"
+if command -v cc >/dev/null 2>&1; then
+    printf 'int main(void){return 0;}\n' > "$T19W/libmsrc/whetstone.c"
+    printf 'int matherr_(void){return 1;}\n' > "$T19W/libmsrc/matherr.c"
+    printf 'int reduce_(void){return 2;}\n' > "$T19W/libmsrc/reduce.c"
+    printf 'int sqrt_(void){return 3;}\n' > "$T19W/libmsrc/sqrt.c"
+    ( cd "$T19W/libmsrc" && cc -o "$T19W/libm/whet" whetstone.c matherr.c reduce.c sqrt.c ) \
+        >/dev/null 2>&1
+    python3 "$PLG" "$T19W/libm" >"$WORK/t19libm.out" 2>&1
+    check "an ELF with the matherr.c/reduce.c markers passes (rc 0)" test $? -eq 0
+    check "... and is recorded as embedding stock Amix libm" \
+        grep -q '^  embeds  whet: embeds stock Amix object code: libm (matherr.c reduce.c sqrt.c; SVR4 marker matherr.c reduce.c)' \
+        "$WORK/t19libm.out"
+    check "... and the OK line counts the record" \
+        grep -q 'OK libm (1 ELF(s) inspected; nothing refused; 1 embed libm objects' "$WORK/t19libm.out"
+    if [ -x "$T19HB/pkgmk" ] && [ -x "$T19HB/pkgtrans" ]; then
+        mkdir -p "$T19W/libmpkg/spool" "$T19W/libmstg"
+        printf 'PKG=LIBMTEST\nNAME=libm fixture\nVERSION=1.0\nARCH=m68k\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' \
+            > "$T19W/libmpkg/pkginfo"
+        printf 'i pkginfo=%s\nd none /opt/libmtest 0755 root sys\nf none /opt/libmtest/whet=%s 0755 root sys\n' \
+            "$T19W/libmpkg/pkginfo" "$T19W/libm/whet" > "$T19W/libmpkg/prototype"
+        ( cd "$T19W/libmpkg" && "$T19HB/pkgmk" -o -d "$T19W/libmpkg/spool" -f prototype && \
+          "$T19HB/pkgtrans" -s "$T19W/libmpkg/spool" "$T19W/libmstg/LIBMTEST-1.0.pkg" LIBMTEST ) \
+            >"$WORK/t19libm.mk" 2>&1
+        python3 "$PLG" "$T19W/libmstg" >"$WORK/t19libmpkg.out" 2>&1
+        check "a .pkg whose payload embeds stock libm passes (rc 0)" test $? -eq 0
+        check "... recorded by its path inside the package" \
+            grep -q 'LIBMTEST-1.0.pkg!.*whet: embeds stock Amix object code: libm' "$WORK/t19libmpkg.out"
+    else
+        echo "  skip- stock libm in a datastream (host pkgmk/pkgtrans missing)"
+    fi
+else
+    echo "  skip- stock libm ELF checks (no host cc)"
+fi
+
 # anti-vacuity: an empty path must not pass, a binary-free package must
-T19W="$WORK/t19"; mkdir -p "$T19W/empty" "$T19W/nobin"
+mkdir -p "$T19W/empty" "$T19W/nobin"
 cp "$HERE/fixtures/toy.pkg" "$T19W/nobin/"
 python3 "$PLG" "$T19W/empty" >/dev/null 2>&1
 check "an empty path is NOT a pass" test $? -ne 0
@@ -876,7 +917,6 @@ check "a loose Kickstart ROM image refuses (rc 2)" test $? -eq 2
 check "... and says why" grep -q 'Kickstart ROM image' "$WORK/t19rom.out"
 python3 "$PLG" "$T19W/romswap" >/dev/null 2>&1
 check "a byte-swapped Kickstart ROM image refuses (rc 2)" test $? -eq 2
-T19HB="$HERE/../../../heirloom/build-host/bin"
 if [ -x "$T19HB/pkgmk" ] && [ -x "$T19HB/pkgtrans" ]; then
     printf 'PKG=ROMTEST\nNAME=rom fixture\nVERSION=1.0\nARCH=m68k\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' \
         > "$T19W/rompkg/pkginfo"
