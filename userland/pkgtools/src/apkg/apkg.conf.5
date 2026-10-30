@@ -1,0 +1,97 @@
+.\" apkg.conf.5 - manual page for /etc/apkg.conf.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH APKG.CONF 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.SH NAME
+apkg.conf \- configuration file of the apkg package client
+.SH SYNOPSIS
+.B /etc/apkg.conf
+.SH DESCRIPTION
+.BR apkg (1)
+reads
+.B /etc/apkg.conf
+(or the file named with
+.BR "apkg \-c" )
+at start.  Each line is
+.IB key = value\fR;
+a line starting with
+.B #
+is a comment, and blank lines are ignored.  A key the file does not name
+takes its built-in default, so the file only needs the keys you change.
+.PP
+The file is a
+.BR conffile (5)
+of the APKG package: an upgrade keeps your edited file and puts the new
+default beside it as
+.BR /etc/apkg.conf.new .
+The default of the installed version is also always readable as
+.BR /usr/apkg/lib/apkg.conf .
+.SH KEYS
+Each key, its default and its full meaning are in
+.BR apkg (1),
+section CONFIGURATION.
+.TP 18
+.B repo
+repository base URL (http://pkg.amigaux.org)
+.TP
+.B cachedir
+package download cache (/var/apkg/cache)
+.TP
+.B pkgadd\fR, \fBpkgrm
+the engine binaries (/usr/apkg/bin/pkgadd, /usr/apkg/bin/pkgrm, falling
+back to /usr/sbin)
+.TP
+.B admin
+the
+.BR admin (5)
+file for pkgadd and pkgrm (/var/apkg/admin)
+.TP
+.B kbootset\fR, \fBkbootset_journal
+the generation composer run after a kernel-space transaction, and its
+journal
+.TP
+.B timeout\fR, \fBconnect_timeout
+seconds of silence on a transfer, and for a connect
+.TP
+.B retries\fR, \fBretry_delay
+further attempts of a failed fetch, and the seconds between them
+.TP
+.B progress
+progress output during a download
+.TP
+.B bufsize\fR, \fBrcvbuf\fR, \fBsndbuf
+the transfer buffer and the socket buffer sizes
+.TP
+.B redirects
+how many HTTP redirects to follow
+.TP
+.B nameserver
+a DNS server to ask when
+.B /etc/inet/hosts
+has no answer (repeatable)
+.TP
+.B dns_timeout\fR, \fBdns_retries
+seconds per DNS query attempt, and further attempts per nameserver
+.SH EXAMPLE
+.nf
+# apkg configuration
+repo=http://pkg.amigaux.org
+cachedir=/var/apkg/cache
+admin=/var/apkg/admin
+nameserver=192.0.2.53
+.fi
+.SH FILES
+.PD 0
+.TP 28
+.B /etc/apkg.conf
+this file
+.TP
+.B /etc/apkg.conf.new
+the new default after an upgrade that kept your file
+.TP
+.B /usr/apkg/lib/apkg.conf
+the default of the installed version (not read by apkg)
+.PD
+.SH SEE ALSO
+.BR apkg (1),
+.BR admin (5),
+.BR conffile (5)

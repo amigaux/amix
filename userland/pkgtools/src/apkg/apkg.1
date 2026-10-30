@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "October 2026" "apkg 0.3.3" "Amix User Commands"
+.TH APKG 1 "October 2026" "apkg 0.3.4" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -394,10 +394,14 @@ holds
 .B key=value
 lines;
 .B #
-starts a comment.  Installing or upgrading the APKG package keeps an
-existing
-.B /etc/apkg.conf
-as it is; the default of the installed version is
+starts a comment
+.RB ( apkg.conf (5)).
+It is a
+.BR conffile (5)
+of the APKG package: an upgrade installs the new default over a file you
+never edited, and keeps one you did, writing the new default beside it as
+.BR /etc/apkg.conf.new .
+The default of the installed version is also
 .BR /usr/apkg/lib/apkg.conf .
 A key the file does not name takes its built-in default.  Keys and defaults:
 .TP
@@ -445,10 +449,15 @@ file passed to pkgadd/pkgrm with
 creates this file if it is missing \- it is shipped by the APKG package
 itself, so a
 .B pkgrm APKG
-deletes it, and an engine call that merely assumed it was there would
-fail with
+deletes it if you never edited it, and an engine call that merely assumed
+it was there would fail with
 .RB \(lq "unable to open admin file" \(rq.
-An existing file is never rewritten.  For an
+An existing file is never rewritten, and it is a
+.BR conffile (5)
+like
+.BR /etc/apkg.conf ,
+so an upgrade of APKG keeps your edits (see
+.BR admin (5)).  For an
 .B upgrade
 (and for a
 .B \-f
@@ -790,7 +799,10 @@ kbootset refused the build or commit by a rule (status 3) or at a gate
 .PD 0
 .TP 24
 .B /etc/apkg.conf
-configuration; kept by an upgrade
+configuration; a conffile, kept by an upgrade when edited
+.TP
+.B /etc/apkg.conf.new
+the new default, when an upgrade kept your edited file
 .TP
 .B /usr/apkg/lib/apkg.conf
 the shipped default of the installed version (not read by apkg)
@@ -802,8 +814,14 @@ local copy of the repository catalog
 downloaded packages
 .TP
 .B /var/apkg/admin
-permissive admin(4) file used for non-interactive pkgadd/pkgrm;
-created on demand if absent
+permissive admin(5) file used for non-interactive pkgadd/pkgrm;
+created on demand if absent; a conffile, kept by an upgrade when edited
+.TP
+.B /var/sadm/conffiles/PENDING
+the conffiles whose new default waits in a
+.B .new
+file; see
+.BR conffile (5)
 .TP
 .B /var/apkg/admin.overwrite
 derived from the above with instance=overwrite, for the
@@ -836,7 +854,9 @@ the transaction journal
 .BR pkgrm (1M),
 .BR pkginfo (1),
 .BR pkgtrans (1),
-.BR admin (4),
+.BR apkg.conf (5),
+.BR admin (5),
+.BR conffile (5),
 .BR kbootset (1M)
 .SH NOTES
 Only plain

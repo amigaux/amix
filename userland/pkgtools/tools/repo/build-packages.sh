@@ -56,7 +56,11 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # /dev/dsk (kernel/dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
 # dir (build/repo-staging-apkg033), NOT published; 0.3.2 (9d6de726...)
 # stays what it is.  NOTES 2026-10-26.
-VER_APKG="0.3.3"
+# 0.3.4 (2026-10-30, not minted yet): /etc/apkg.conf and /var/apkg/admin
+# move onto the shared conffile class (src/conffile/i.conffile and
+# r.conffile, P-36 W1), so an upgrade keeps an edited admin file too.
+# 0.3.3 is staged with the old payload: one version, one byte set.
+VER_APKG="0.3.4"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -267,7 +271,7 @@ NAME=apkg - Amix remote package client
 ARCH=Amiga
 VERSION=$VER_APKG
 CATEGORY=application
-CLASSES=none apkgconf
+CLASSES=none conffile
 APKG_DESC=Remote package client: update/list/search/install over HTTP
 EOF
   cat > "$A/apkg.conf" <<EOF
@@ -478,6 +482,7 @@ EOF
   # makes every such box's kept conf differ from its new record.
   # /var/apkg/admin stays `e none`, so an upgrade still replaces an edited
   # admin file -- out of this change's scope, a follow-up in NOTES 2026-10-06.
+  # (Fixed in 0.3.4, below.)
   #
   # Version 0.3.0 (2026-10-26).  The apkg binary and apkg.1 change (kernel
   # space, see VER_APKG); every other payload byte, the /etc/apkg.conf
@@ -495,9 +500,20 @@ EOF
   # Version 0.3.3 (2026-10-26).  The apkg binary and apkg.1 change again
   # (block nodes under /dev/dsk); every other payload byte is 0.3.2's.
   # Staged for the 1.1 media, NOT published.
+  #
+  # Version 0.3.4 (2026-10-30, not minted).  /etc/apkg.conf and
+  # /var/apkg/admin are `e conffile`, installed and removed by the shared
+  # class action scripts src/conffile/i.conffile and r.conffile (P-36 W1;
+  # src/conffile/README.md), which replace i.apkgconf.  An unedited file
+  # takes the new default; an edited one is kept, the new default goes
+  # to <file>.new and the file is listed in /var/sadm/conffiles/PENDING.
+  # The admin file is no longer reset by `apkg upgrade apkg` (P-36 F1).
+  # New pages: apkg.conf(5), admin(5) and conffile(5) in /usr/apkg/man/man5.
+  # The template bytes are unchanged (md5 8dada8d9..., T23).
   cat > "$A/prototype" <<EOF
 i pkginfo
-i i.apkgconf=$REPO/src/apkg/i.apkgconf
+i i.conffile=$REPO/src/conffile/i.conffile
+i r.conffile=$REPO/src/conffile/r.conffile
 d none /usr/apkg 0755 root sys
 d none /usr/apkg/bin 0755 root sys
 f none /usr/apkg/bin/apkg=$REPO/src/apkg/apkg.amix 0755 root sys
@@ -507,12 +523,16 @@ f none /usr/apkg/bin/amix-sadm-migrate=$REPO/tools/migrate/amix-sadm-migrate.sh 
 d none /usr/apkg/man 0755 root sys
 d none /usr/apkg/man/man1 0755 root sys
 f none /usr/apkg/man/man1/apkg.1=$REPO/src/apkg/apkg.1 0644 root sys
+d none /usr/apkg/man/man5 0755 root sys
+f none /usr/apkg/man/man5/apkg.conf.5=$REPO/src/apkg/apkg.conf.5 0644 root sys
+f none /usr/apkg/man/man5/admin.5=$REPO/src/apkg/admin.5 0644 root sys
+f none /usr/apkg/man/man5/conffile.5=$REPO/src/conffile/conffile.5 0644 root sys
 d none /usr/apkg/lib 0755 root sys
 f none /usr/apkg/lib/apkg.conf=$A/apkg.conf 0644 root sys
-e apkgconf /etc/apkg.conf=$A/apkg.conf 0644 root sys
+e conffile /etc/apkg.conf=$A/apkg.conf 0644 root sys
 d none /var/apkg 0755 root sys
 d none /var/apkg/cache 0755 root sys
-e none /var/apkg/admin=$A/admin 0644 root sys
+e conffile /var/apkg/admin=$A/admin 0644 root sys
 EOF
   build_one APKG "$VER_APKG" base
   gate_060 "$out"

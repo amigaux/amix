@@ -1,0 +1,128 @@
+.\" admin.5 - manual page for the package installation admin file.
+.\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
+.TH ADMIN 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.SH NAME
+admin \- installation defaults for pkgadd and pkgrm; apkg's /var/apkg/admin
+.SH SYNOPSIS
+.B /var/apkg/admin
+.SH DESCRIPTION
+An admin file answers in advance the questions
+.BR pkgadd (1M)
+and
+.BR pkgrm (1M)
+would otherwise ask, so they can run without a terminal.  It is passed
+with
+.B \-a
+.IR file .
+Each line is
+.IB keyword = value\fR.
+.PP
+.BR apkg (1)
+runs every pkgadd and pkgrm with
+.B /var/apkg/admin
+(the
+.B admin
+key of
+.BR apkg.conf (5)),
+because the engine's input is not a terminal.  The file is a
+.BR conffile (5)
+of the APKG package: an upgrade keeps your edited file and puts the new
+default beside it as
+.BR /var/apkg/admin.new .
+.B apkg
+re-creates the file with the default contents if it is missing, and never
+rewrites an existing one.
+.SH KEYWORDS
+Each keyword takes
+.B nocheck
+(do not check),
+.B quit
+(stop the installation) or
+.B ask
+(ask; with no terminal this is a failure), except where noted.
+.TP 12
+.B mail
+users to mail when an installation finishes (empty: nobody)
+.TP
+.B instance
+what to do when the package is already installed:
+.B quit
+(stop),
+.B overwrite
+(install over it), or
+.B unique
+(install a second instance)
+.TP
+.B partial
+an earlier installation of the package was not completed
+.TP
+.B runlevel
+the system is not at the run level the package asks for
+.TP
+.B idepend
+a package this one depends on is not installed
+.TP
+.B rdepend
+removing the package would break a package that depends on it
+.TP
+.B space
+the file systems lack the space the package needs
+.TP
+.B setuid
+the package installs setuid or setgid files
+.TP
+.B conflict
+the package installs files another package owns
+.TP
+.B action
+the package runs install scripts
+.TP
+.B basedir
+the installation base directory
+.RB ( default :
+the package's own
+.BR BASEDIR )
+.SH APKG'S DEFAULT
+.nf
+mail=
+instance=quit
+partial=nocheck
+runlevel=nocheck
+idepend=nocheck
+rdepend=nocheck
+space=quit
+setuid=nocheck
+conflict=nocheck
+action=nocheck
+basedir=default
+.fi
+.PP
+Dependencies are checked by
+.B apkg
+itself before the engine runs, so the engine's own checks are off.
+For an upgrade,
+.B apkg
+derives
+.B /var/apkg/admin.overwrite
+from this file: every keyword you set is carried across and only
+.B instance
+becomes
+.BR overwrite .
+.SH FILES
+.PD 0
+.TP 28
+.B /var/apkg/admin
+apkg's admin file
+.TP
+.B /var/apkg/admin.new
+the new default after an upgrade that kept your file
+.TP
+.B /var/apkg/admin.overwrite
+derived for upgrades; rewritten on every use
+.PD
+.SH SEE ALSO
+.BR apkg (1),
+.BR apkg.conf (5),
+.BR conffile (5),
+.BR pkgadd (1M),
+.BR pkgrm (1M)

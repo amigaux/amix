@@ -1624,7 +1624,7 @@ fi
 # regular file as a directory.  The host engine keeps its DB under
 # <root>/<repo>/heirloom/build-host/var/sadm (VSADMDIR is relocated under
 # -R), which is why the DB is found, not named.
-echo "T23: /etc/apkg.conf is kept by install and upgrade (class apkgconf)"
+echo "T23: /etc/apkg.conf and /var/apkg/admin are conffiles (class conffile)"
 HB="$HERE/../../../heirloom/build-host/bin"
 A22="$HERE/../../../build/repo-staging-apkg022/base/APKG-0.2.2.pkg"
 if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
@@ -1653,15 +1653,19 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     mode644() { test "$(stat -c %a "$1")" = 644; }
     cdb() { find "$1" -path '*/var/sadm/install/contents' -newer "$S23/admin" | head -1; }
     # the DB record carries the bytes on disk: size and sum(1) checksum
-    ondisk() { grep -q "^/etc/apkg.conf e apkgconf 0644 root sys $(stat -c %s "$1/etc/apkg.conf") $(sum -s "$1/etc/apkg.conf" | cut -d' ' -f1) " "$(cdb "$1")"; }
+    ondisk() { grep -q "^/etc/apkg.conf e conffile 0644 root sys $(stat -c %s "$1/etc/apkg.conf") $(sum -s "$1/etc/apkg.conf" | cut -d' ' -f1) " "$(cdb "$1")"; }
     EDIT='repo=http://example.invalid/edited-by-hand'
 
-    check "the minted pkgmap delivers /etc/apkg.conf as e apkgconf" \
-        grep -aq '^1 e apkgconf /etc/apkg.conf 0644 root sys' "$P23"
-    check "  ... with the class action script in install/" \
-        grep -aq '^1 i i.apkgconf ' "$P23"
+    pend() { cat "$1/var/sadm/conffiles/PENDING" 2>/dev/null; }
+    check "the minted pkgmap delivers /etc/apkg.conf as e conffile" \
+        grep -aq '^1 e conffile /etc/apkg.conf 0644 root sys' "$P23"
+    check "  ... and /var/apkg/admin as e conffile (P-36 F1)" \
+        grep -aq '^1 e conffile /var/apkg/admin 0644 root sys' "$P23"
+    check "  ... with i.conffile and r.conffile in install/" \
+        bash -c "grep -aq '^1 i i.conffile ' '$P23' && grep -aq '^1 i r.conffile ' '$P23'"
+    check "  ... no i.apkgconf any more" bash -c "! grep -aq '^1 i i.apkgconf ' '$P23'"
     check "  ... and pkginfo CLASSES names the class" \
-        grep -aq '^CLASSES=none apkgconf$' "$P23"
+        grep -aq '^CLASSES=none conffile$' "$P23"
 
     # 1. fresh install: the default lands, and equals the reference copy
     R1="$S23/r1"; newroot "$R1"
@@ -1683,10 +1687,38 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "re-add over an edited conf: pkgadd rc 0" test $? -eq 0
     check "re-add over an edited conf: the edit is kept" \
         test "$(cat "$R1/etc/apkg.conf")" = "$EDIT"
+    check "  ... the default is beside it as apkg.conf.new" \
+        cmp -s "$R1/etc/apkg.conf.new" "$R1/usr/apkg/lib/apkg.conf"
+    check "  ... PENDING names it" test "$(pend "$R1")" = "APKG /etc/apkg.conf"
     chk "$R1"; check "re-add over an edited conf: plain pkgchk APKG clean" test $? -eq 0
     chkn "$R1"; check "re-add over an edited conf: pkgchk -n APKG clean" test $? -eq 0
     check "re-add over an edited conf: conf is mode 0644" mode644 "$R1/etc/apkg.conf"
     check "  ... the contents DB records the kept file's size and cksum" ondisk "$R1"
+
+    # 2b. P-36 F1: an edited admin file survives the re-add (it was `e none`
+    #     and reset by every `apkg upgrade apkg`)
+    printf 'mail=\ninstance=overwrite\n' > "$R1/var/apkg/admin"
+    add "$R1" "$P23"
+    check "re-add over an edited admin file: pkgadd rc 0" test $? -eq 0
+    check "re-add over an edited admin file: the edit is kept" \
+        test "$(head -2 "$R1/var/apkg/admin" | tr '\n' ' ')" = "mail= instance=overwrite "
+    check "  ... its default is beside it as admin.new" \
+        grep -q '^instance=quit$' "$R1/var/apkg/admin.new"
+    check "  ... PENDING names both files" \
+        test "$(pend "$R1" | sort | tr '\n' ' ')" = "APKG /etc/apkg.conf APKG /var/apkg/admin "
+    chk "$R1"; check "  ... plain pkgchk APKG clean" test $? -eq 0
+    # pkgrm keeps both edits and their baselines, drops the .new files
+    fr "$HB/pkgrm" -R "$R1" -n -a "$S23/admin" APKG >"$WORK/t23.rm" 2>&1
+    check "pkgrm APKG with both files edited: rc 0" test $? -eq 0
+    check "  ... both edited files are kept" \
+        bash -c "test \"\$(cat '$R1/etc/apkg.conf')\" = '$EDIT' && test -f '$R1/var/apkg/admin'"
+    check "  ... their .new files are gone, PENDING is empty" \
+        bash -c "test ! -e '$R1/etc/apkg.conf.new' && test ! -e '$R1/var/apkg/admin.new' && test -z \"\$(cat '$R1/var/sadm/conffiles/PENDING')\""
+    check "  ... their baselines stay" \
+        test -f "$R1/var/sadm/conffiles/APKG/etc/apkg.conf"
+    add "$R1" "$P23"
+    check "re-install after pkgrm: rc 0, the edit still kept" \
+        test "$(cat "$R1/etc/apkg.conf")" = "$EDIT"
 
     # 3. a conf written BEFORE the first install (installer shape) is kept
     R2="$S23/r2"; newroot "$R2"
@@ -1695,6 +1727,8 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     add "$R2" "$P23"
     check "pre-written conf: pkgadd rc 0" test $? -eq 0
     check "pre-written conf: kept byte for byte" cmp -s "$R2/etc/apkg.conf" "$S23/pre.conf"
+    check "  ... the default is beside it as apkg.conf.new, PENDING names it" \
+        bash -c "test -f '$R2/etc/apkg.conf.new' && grep -q '^APKG /etc/apkg.conf\$' '$R2/var/sadm/conffiles/PENDING'"
     chk "$R2"; check "pre-written conf: plain pkgchk APKG clean" test $? -eq 0
     chkn "$R2"; check "pre-written conf: pkgchk -n APKG clean" test $? -eq 0
     check "  ... the contents DB records the kept file's size and cksum" ondisk "$R2"

@@ -32,10 +32,11 @@ bench-verified on a real Amix 2.1c system; the live package repository is at
 | **apkg** | [`src/apkg/`](src/apkg/) | The remote client. A single C89 binary (`update`/`list`/`search`/`info`/`download`/`install`/`upgrade`/`remove`) that fetches a catalog and packages over plain HTTP/1.0, md5-verifies them, resolves dependencies recursively, and drives the local `pkgadd`/`pkgrm`. Also installs from a mounted CD or a raw disk slice. |
 | **the engine** | [`heirloom/`](heirloom/) | [Heirloom pkgtools](http://heirloom.sourceforge.net/pkgtools.html) — the open (CDDL) SVR4 `pkg` implementation — cross-ported to m68k SVR4 ELF, with eleven bench-verified root causes fixed. Notably its `contents` parser tolerates the factory corruption that kills the stock tools. Port log: [`heirloom/AMIX-PORT.md`](heirloom/AMIX-PORT.md). |
 | **contents-fsck** | [`src/contents-fsck/`](src/contents-fsck/) | Standalone checker/repairer for `/var/sadm/install/contents`. Single C89 file, libc only. Report mode names every malformed record with a reason; repair mode never writes in place. Run against the live 28,716-record factory database. |
+| **conffile** | [`src/conffile/`](src/conffile/) | The shared class action scripts `i.conffile`/`r.conffile` every package with an edit-in-place config file carries: an upgrade keeps an edited file and writes the new default beside it as `<file>.new` (`conffile(5)`). Bourne sh and core tools only, so they run under any installer. |
 | **migration** | [`tools/migrate/`](tools/migrate/) | One-time `/var/sadm` migration: populate `VERSION=` into the installed database (the factory packages have none), create the missing `install/` directories, un-world-write the contents file. Pre-POSIX Bourne sh, idempotent. |
 | **repo tools** | [`tools/repo/`](tools/repo/) | The host side: catalog generator, publisher, package builders, the authored dependency graph / category taxonomy / install sets, and the acceptance gates. Runs on Linux, python3 + sh. |
 
-Architecture for all five: [`docs/design.md`](docs/design.md).
+Architecture: [`docs/design.md`](docs/design.md).
 
 ## Installing apkg on a stock Amix box
 
@@ -164,11 +165,12 @@ a few more checks), which is where the packaging pipeline and most of the test s
 
 ```
 heirloom/build-host.sh                                  # host engine + compat tests
-bash tools/repo/tests/run-tests.sh                      # 369 (bash, not sh)
+bash tools/repo/tests/run-tests.sh                      # 445 (bash, not sh)
 (cd src/apkg          && make test)                     # 497
 (cd src/apkg          && sh tests/nohttp-variant.sh)    # 38 (the FILE+RAW, no-sockets build)
 (cd src/contents-fsck && make test)                     # 19
 sh tools/migrate/tests/run-tests.sh                     # 36
+bash src/conffile/tests/run-tests.sh                    # 82 (the conffile class)
 sh src/apkg/tests/kbootset-consumer.sh                  # 12, against amix's kernel/dlm
 ```
 
@@ -222,7 +224,7 @@ This directory is a mosaic; the map is short.
 
 | Path | License |
 |---|---|
-| `src/apkg/`, `src/contents-fsck/`, `tools/`, and the Amix-specific files added under `heirloom/` (`compat/`, `sslstub/`, `mk.config.amix`, `build-*.sh`) | MIT — [`LICENSE`](LICENSE) |
+| `src/apkg/`, `src/conffile/`, `src/contents-fsck/`, `tools/`, and the Amix-specific files added under `heirloom/` (`compat/`, `sslstub/`, `mk.config.amix`, `build-*.sh`) | MIT — [`LICENSE`](LICENSE) |
 | `heirloom/` (vendored engine) | CDDL 1.0, OpenSolaris SVR4 lineage with AT&T notices intact and portions © 2007 Gunnar Ritter, plus the Caldera license for the ancient UNIX parts — [`heirloom/LICENSE/`](heirloom/LICENSE/) |
 | `heirloom/compat/{fnmatch.c,fnmatch.h,charclass.h}` | BSD-3 (VMware, Inc.; the Regents of the University of California), ISC and public domain (Todd C. Miller); OpenBSD via openssh-portable |
 | `heirloom/compat/snprintf.c` | Powell/Weiss permissive |
