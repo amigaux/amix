@@ -52,7 +52,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
-            ("ESSENTIAL", "no"))
+            ("ESSENTIAL", "no"), ("STOCK_ETC", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -173,6 +173,53 @@ def rc_link_problem(name):
             "S99z*)" % n)
 
 
+# The sha256 of every Commodore file in amix-system at its pin; STOCK_ETC
+# files are taken from there, by path, and checked against it.
+SYSTEM_MANIFEST = os.path.join(os.path.dirname(os.path.dirname(HERE)),
+                               "system", "MANIFEST.sha256")
+
+
+def system_manifest():
+    """{path: sha256} of system/MANIFEST.sha256, or None without one."""
+    try:
+        with open(SYSTEM_MANIFEST) as fp:
+            return {line[66:].rstrip("\n"): line[:64] for line in fp
+                    if len(line) > 66}
+    except FileNotFoundError:
+        return None
+
+
+def stock_problems(m, objs):
+    """STOCK_ETC: stock /etc files the driver copies from amix-system's etc/
+    after the stage hook. Each is an f or e line of the prototype and a
+    regular file in system/MANIFEST.sha256."""
+    stock = words(m["STOCK_ETC"])
+    if not stock:
+        return []
+    out = []
+    manifest = system_manifest()
+    if manifest is None:
+        return ["STOCK_ETC is set, but there is no %s to check it against"
+                % SYSTEM_MANIFEST]
+    types = {}
+    for ftype, _, path, _ in objs:
+        types.setdefault(path, []).append(ftype)
+    for p in sorted(set(p for p in stock if stock.count(p) > 1)):
+        out.append("STOCK_ETC lists %s twice" % p)
+    for p in stock:
+        if not p.startswith("/etc/") or os.path.normpath(p) != p:
+            out.append("STOCK_ETC: %s is not a normalised path under /etc" % p)
+        elif p[1:] not in manifest:
+            out.append("STOCK_ETC: %s is not a regular file of amix-system "
+                       "(system/MANIFEST.sha256)" % p)
+        elif p not in types:
+            out.append("STOCK_ETC: %s is not in the prototype" % p)
+        elif len(types[p]) > 1 or types[p][0] not in ("f", "e"):
+            out.append("STOCK_ETC: %s must be one f or e line of the "
+                       "prototype" % p)
+    return out
+
+
 # The shared man tree every package's pages go to, whatever its PREFIX
 # (userland/packages/docs/man-pages.md).
 MAN_TREE = "/opt/amix/man"
@@ -231,6 +278,7 @@ def prototype_problems(recipe, m):
         if c.startswith("/") and not c.startswith(("/etc/", "/var/")):
             out.append("CONFFILES: %s is not under /etc or /var" % c)
     out += layout_problems(m, objs or ())
+    out += stock_problems(m, objs or ())
     for ftype, _, path, _ in objs or ():
         if ftype == "e" and path not in conf:
             out.append("prototype: e %s is not in CONFFILES" % path)

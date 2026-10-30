@@ -273,6 +273,36 @@ try:
         refused("check refuses %s" % name,
                 ("check", conf("lbad", name, proto, **over)), needle)
 
+    # --- STOCK_ETC: stock defaults from amix-system's etc/ ------------------------
+    STK = PROTO + ("f none /etc/inittab 0664 root sys\n"
+                   "e conffile /etc/inet/hosts 0444 root sys\n")
+    rc, out, err = run("check", conf("stock", "sok", STK,
+                                     STOCK_ETC='"/etc/inittab /etc/inet/hosts"',
+                                     CONFFILES="/etc/inet/hosts"))
+    check("STOCK_ETC: an f and an e line of manifest files pass", rc == 0, err)
+    for name, proto, over, needle in (
+            ("snoman", STK + "f none /etc/nosuch 0644 root sys\n",
+             {"STOCK_ETC": "/etc/nosuch"},
+             "/etc/nosuch is not a regular file of amix-system"),
+            ("slink", STK + "s none /etc/hosts=/etc/inet/hosts\n",
+             {"STOCK_ETC": "/etc/hosts"}, "/etc/hosts is not a regular file"),
+            ("snoproto", PROTO, {"STOCK_ETC": "/etc/inittab"},
+             "/etc/inittab is not in the prototype"),
+            ("sdir", PROTO + "d none /etc/default 0755 root sys\n"
+             "f none /etc/default/login 0444 root sys\n",
+             {"STOCK_ETC": "/etc/default"}, "is not a regular file"),
+            ("stwoline", STK + "f none /etc/inittab 0644 root sys\n",
+             {"STOCK_ETC": "/etc/inittab"}, "must be one f or e line"),
+            ("sstype", PROTO + "s none /etc/inittab=/etc/x\n",
+             {"STOCK_ETC": "/etc/inittab"}, "must be one f or e line"),
+            ("susr", STK, {"STOCK_ETC": "/usr/include/stdio.h"},
+             "/usr/include/stdio.h is not a normalised path under /etc"),
+            ("srel", STK, {"STOCK_ETC": "etc/inittab"}, "is not a normalised path"),
+            ("stwice", STK, {"STOCK_ETC": '"/etc/inittab /etc/inittab"'},
+             "STOCK_ETC lists /etc/inittab twice")):
+        refused("check refuses %s" % name,
+                ("check", conf("sbad", name, proto, **over)), needle)
+
     # --- run-level links ---------------------------------------------------------
     for link, ok in (("S20monsw", True), ("S69inet", True), ("S75syslogd", True),
                      ("S95display", True), ("S05kbnamelist", True),
