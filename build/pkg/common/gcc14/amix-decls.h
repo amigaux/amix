@@ -1,6 +1,6 @@
 /*
  * amix-decls.h -- prototypes the AMIX headers never declare, for
- * TOOLCHAIN=gcc14 builds (recipes/common/gcc14-env.sh).
+ * TOOLCHAIN=gcc14 builds (build/pkg/common/gcc14-env.sh).
  *
  *     CFLAGS="$AMIX_CFLAGS -include $AMIX_GCC14_DECLS"
  *

@@ -2,7 +2,7 @@
 #
 # amix-cpp -- a C preprocessor for the Amix cross target, for autoconf's CPP.
 #
-#     CPP="$REPO/recipes/common/amix-cpp" ./configure --host=m68k-cbm-sysv4 ...
+#     CPP="$AMIX_PKG_COMMON/amix-cpp" ./configure --host=m68k-cbm-sysv4 ...
 #
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS: THE WORST CROSS-CONFIGURE TRAP FOUND SO FAR

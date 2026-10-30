@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """kbuildid.py -- the module core's build-id rule, as a packaging gate.
 
-    python3 -I recipes/common/kbuildid.py <unix (ET_REL)> <kabi> <module>...
+    python3 -I build/pkg/common/kbuildid.py <unix (ET_REL)> <kabi> <module>...
 
 A core-tier module loads only on the kernel build it was made with (C3-1
 sec 3).  The module core takes the kernel's build id from the image's own

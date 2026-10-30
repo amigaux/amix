@@ -64,7 +64,7 @@
 #   C dialect  gnu17.  An implicit function declaration is an ERROR (the
 #              specs demote implicit-int only).  The AMIX headers declare
 #              none of socket/connect/select/syslog/gethostname: a recipe
-#              that calls them includes recipes/common/gcc14/amix-decls.h
+#              that calls them includes build/pkg/common/gcc14/amix-decls.h
 #              (-include), it does not pass -Wno-error.
 #   configure  autoconf probes of the era call functions they never declare
 #              (less's terminal-library test calls tgetent() bare; AMIX has no
@@ -179,7 +179,7 @@ done
 }
 
 # --- the toolchain identity (see the header): gcc14-pin.sh ------------------
-. "$AMIX_REPO_ROOT/recipes/common/gcc14-pin.sh"
+. "$AMIX_PKG_COMMON/gcc14-pin.sh"
 amix_g14_pincheck "$AMIX_GCC14_PREFIX" || exit 1
 amix_g14_abi_selfcheck "$AMIX_GCC14_CC" || exit 1
 
@@ -221,7 +221,7 @@ export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-err
 
 # Declarations the AMIX headers lack (socket/select/syslog/gethostname):
 # opt-in per recipe with -include "$AMIX_GCC14_DECLS".
-export AMIX_GCC14_DECLS="$AMIX_REPO_ROOT/recipes/common/gcc14/amix-decls.h"
+export AMIX_GCC14_DECLS="$AMIX_PKG_COMMON/gcc14/amix-decls.h"
 
-export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/build/gcc14}"
+export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
 unset _g14_bin _g14_o

@@ -4,7 +4,7 @@
 # kernel.  Sourced by recipes/kernel-k30-m and recipes/kernel-k46-m, never
 # executed.
 #
-#     . "$REPO/recipes/common/kfsmod.sh"
+#     . "$AMIX_PKG_COMMON/kfsmod.sh"
 #     amix_kfsmod_check <line> <fs> <object> <sha256> <size> <build> <kabi> <kit> <outdir> [<module kabi>]
 #     amix_kfsmod_rebuild <line> <fs> <carve dir> <object> <kit> <workdir> [<extra>]
 #     amix_kcore_strips <dlm-rev file> <pinned core commit> <strip commit>
@@ -124,7 +124,7 @@ amix_kcore_strips() {
 
 amix_kbuildid3() {
 	_kb_u=$1 _kb_k=$2 _kb_log=$3; shift 3
-	if ! python3 -I "$AMIX_REPO_ROOT/recipes/common/kbuildid.py" "$_kb_u" "$_kb_k" "$@" > "$_kb_log" 2>&1; then
+	if ! python3 -I "$AMIX_PKG_COMMON/kbuildid.py" "$_kb_u" "$_kb_k" "$@" > "$_kb_log" 2>&1; then
 		cat "$_kb_log" >&2; echo "[FAIL] the core's build-id rule refuses (kbuildid.py)" >&2
 		unset _kb_u _kb_k _kb_log; return 1
 	fi

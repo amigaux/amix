@@ -2,7 +2,7 @@
 # ABI kits) from a PINNED commit, in this repository's build/.  Sourced,
 # never executed.
 #
-#     . "$REPO/recipes/common/dlm-src.sh"
+#     . "$AMIX_PKG_COMMON/dlm-src.sh"
 #     amix_dlm_build <commit> <target>...
 #         e.g. boot1.img boot2.bin box/kbootset box/modadmin
 #     amix_dlm_kit <commit> [<amix-modules commit>] [<port commit>]
@@ -73,7 +73,7 @@ amix_dlm_export() {
 # return-value ABI self-check of its compiler) and its sysroot the
 # $AMIX_G14_BUILD/sysroot the Makefile links against.
 amix_dlm_g14_check() {
-	. "$AMIX_REPO_ROOT/recipes/common/gcc14-pin.sh"
+	. "$AMIX_PKG_COMMON/gcc14-pin.sh"
 	amix_g14_identity "$AMIX_G14_BUILD/prefix" || return 1
 	_dg_sr=$("$AMIX_G14_BUILD/prefix/bin/m68k-elf-gcc" -print-sysroot 2>/dev/null)
 	[ "$(cd "$_dg_sr" 2>/dev/null && pwd -P)" = "$(cd "$AMIX_G14_BUILD/sysroot" 2>/dev/null && pwd -P)" ] || {

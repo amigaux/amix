@@ -1,7 +1,7 @@
 # pkgroll.sh -- roll a staged install tree into an SVR4 .pkg datastream.
 # Sourced, never executed.
 #
-#     . "$REPO/recipes/common/pkgroll.sh"
+#     . "$AMIX_PKG_COMMON/pkgroll.sh"
 #     amix_pkgroll <workdir> <destroot> <PKG> <version> <outfile>
 #
 # <workdir>   holds the recipe's AUTHORED pkginfo and prototype
@@ -58,7 +58,7 @@ amix_pkgroll() {
 	# rolled under the work dir; installed at <outfile> only through the
 	# one-version check (onever.sh), which leaves <outfile> as it was on refusal
 	_pr_out="$_pr_work/.roll/$(basename "$_pr_final")"
-	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/onever.sh"
+	command -v amix_one_version >/dev/null 2>&1 || . "$AMIX_PKG_COMMON/onever.sh"
 
 	[ -x "$AMIX_PKGMK" ] || {
 		echo "[FAIL] host pkgmk missing: $AMIX_PKGMK" >&2
@@ -95,7 +95,7 @@ amix_pkgroll() {
 	# GATE 2b -- the 68060 gate over the WHOLE staged payload (gates.sh D4,
 	# strict since 2026-10-05).  Run here, not only in the recipes, so that no
 	# datastream can be rolled around a 68060-unimplemented instruction.
-	command -v amix_gate_060_tree >/dev/null 2>&1 || . "$AMIX_REPO_ROOT/recipes/common/gates.sh"
+	command -v amix_gate_060_tree >/dev/null 2>&1 || . "$AMIX_PKG_COMMON/gates.sh"
 	amix_gate_060_tree "$_pr_root" || {
 		echo "[FAIL] 68060 gate: the payload of $_pr_pkg carries instructions a 68060" >&2
 		echo "       SIGKILLs on, or (gcc14) a gate above failed -- e.g. 040/060-only FPU" >&2

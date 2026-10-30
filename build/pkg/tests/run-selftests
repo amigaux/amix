@@ -1,0 +1,46 @@
+#!/bin/sh
+# run-selftests: the harness selftests that need the cross toolchains.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh build/pkg/tests/run-selftests    (make -C build selftests)
+#
+# Builds the host pkgmk/pkgtrans (userland/pkgtools/heirloom/build-host.sh)
+# unless AMIX_PKGMK is already executable, then runs gate060-selftest.sh,
+# gate-gcc14-selftest.sh and onever-selftest.sh. A selftest that exits 77
+# is a SKIP: it says so (a warning annotation under GitHub Actions) and does
+# not fail the run. Exit 0 when every selftest passed or skipped.
+set -u
+
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(cd "$here/../../.." && pwd)
+pm=${AMIX_PKGMK:-$top/userland/pkgtools/heirloom/build-host/bin/pkgmk}
+
+if [ ! -x "$pm" ]; then
+	echo "== host pkgtools: userland/pkgtools/heirloom/build-host.sh"
+	(cd "$top/userland/pkgtools/heirloom" && ./build-host.sh) > "${TMPDIR:-/tmp}/build-host.$$.log" 2>&1 || {
+		cat "${TMPDIR:-/tmp}/build-host.$$.log" >&2
+		echo "run-selftests: FAIL -- build-host.sh" >&2
+		exit 1
+	}
+	rm -f "${TMPDIR:-/tmp}/build-host.$$.log"
+fi
+
+failed= skipped=
+for t in gate060 gate-gcc14 onever; do
+	echo "== $t-selftest.sh"
+	rc=0
+	sh "$here/$t-selftest.sh" || rc=$?
+	case $rc in
+	0) ;;
+	77)
+		skipped="$skipped $t"
+		[ -z "${GITHUB_ACTIONS:-}" ] || echo "::warning title=$t-selftest skipped::$t-selftest.sh did not run (exit 77); see its SKIP line"
+		;;
+	*) failed="$failed $t" ;;
+	esac
+done
+
+[ -z "$skipped" ] || echo "run-selftests: SKIPPED:$skipped"
+[ -z "$failed" ] || { echo "run-selftests: FAIL:$failed" >&2; exit 1; }
+echo "run-selftests: PASS${skipped:+ (with skips)}"

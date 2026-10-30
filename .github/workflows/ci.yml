@@ -109,6 +109,13 @@ jobs:
         run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
       - name: dlm kit, kit tests and modules
         run: toolchain/container-kit.sh amix-toolchain:ci | tee "$RUNNER_TEMP/kit.txt"
+      - name: packaging harness selftests
+        run: |
+          # the container's gcc14 is not the pinned prefix byte for byte yet:
+          # gate-gcc14-selftest skips (docs/ci.md)
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e GITHUB_ACTIONS \
+            -e AMIX_G14_UNPINNED=skip \
+            -v "$PWD:/src" -w /src amix-toolchain:ci make -C build selftests
       - name: kit and module hashes
         run: |
           {

@@ -225,9 +225,10 @@ try:
                            stderr=subprocess.STDOUT)
         return p.returncode, p.stdout.decode()
 
-    rc, out = check_packages(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.dirname(HERE))), "userland", "packages"))
-    check("check-packages: nothing to check in the skeleton userland/packages",
+    empty = os.path.join(tmp, "empty")
+    write(os.path.join(empty, "README.md"), "# no packages\n")
+    rc, out = check_packages(empty)
+    check("check-packages: nothing to check in a directory with no package.sh",
           rc == 0 and "nothing to check" in out, out)
     cp = os.path.join(tmp, "cp")
     shutil.copytree(RECIPES, cp)
