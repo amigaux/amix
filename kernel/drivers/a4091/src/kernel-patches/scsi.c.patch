@@ -1,0 +1,33 @@
+Enlarge the /dev/scsi GSIO passthrough bounce buffer so it can carry a full
+2048-byte CD-ROM data block (and multi-sector chunks) instead of clamping at 1024.
+
+gsioctl() in amiga/alien/scsi.c copies the user request through a single static
+bounce buffer, iobuf[], and rejects any transfer whose nbyte exceeds sizeof iobuf.
+At 1024 bytes a 2048-byte READ(10) for a CD data block cannot pass, so a CD/optical
+filesystem driver (/dev/scsi GSIO consumer) is stuck at 512/1024-byte transfers.
+
+This grows iobuf to 65536 (64 KB), which is enough to bounce a 2048-byte CD block
+and multi-sector reads in one GSIO call, while leaving BOTH existing guards in
+place:
+  * (nbyte % DMA_GRANULARITY)  -- DMA alignment; DMA_GRANULARITY is 4, and both
+    2048 and 65536 are multiples of 4, so 2048-byte transfers satisfy it.
+  * (nbyte > sizeof iobuf)     -- bounds clamp; now permits up to 64 KB but still
+    rejects anything larger, so the buffer can never be overrun.
+
+The buffer is a static kernel BSS array, so the only cost is ~63 KB more resident
+kernel data -- no allocation path, no per-request cost. Real-HW-safe.
+
+Apply against a stock Amix 2.1 source tree:
+    cd /usr/sys && patch -p0 < scsi.c.patch       # target: amiga/alien/scsi.c
+
+--- amiga/alien/scsi.c.orig	2026-07-08 07:08:48.256631701 +0300
++++ amiga/alien/scsi.c	2026-07-08 07:08:48.259086170 +0300
+@@ -19,7 +19,7 @@
+ gsioctl( dev, cmd, args)
+ {
+ 	static struct sdcom	sdcom;
+-	static uchar		iobuf[1024];
++	static uchar		iobuf[65536];
+ 	uint			ua;
+ 	int			error;
+ 

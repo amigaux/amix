@@ -1,0 +1,127 @@
+amix-a4091 -- NOTICE
+====================
+
+This repository mixes the author's original work with a small amount of
+third-party material. Each part below keeps its own copyright and licence;
+only part 1 is covered by this repository's MIT licence (LICENSE).
+
+
+1. Original contribution -- MIT License
+---------------------------------------
+
+The driver (src/), the kernel changes expressed by the four patches in
+src/kernel-patches/ (the added lines and the patch descriptions), the SCRIPTS
+sources (reference/scripts/*.ss), the host tooling (tools/), the documentation
+and the sample configurations are the author's own work:
+
+    Copyright (c) 2026 Jussi Alanärä
+
+released under the MIT License; the full text is in LICENSE.
+
+
+2. Stock Amix context in src/kernel-patches/*.patch -- NOT MIT
+---------------------------------------------------------------
+
+Files: src/kernel-patches/support.c.patch, scsi.c.patch, a3091.c.patch,
+       a2091.c.patch
+
+Each patch carries, besides the author's added lines, the minimal verbatim
+stock text a unified diff needs in order to apply: 135 unchanged context
+lines plus the 25 stock lines the patches replace ("-" lines), 160 lines in
+all, taken from amiga/kernel/support.c, amiga/alien/scsi.c,
+amiga/alien/a3091.c and amiga/alien/a2091.c.
+
+Provenance: Commodore Amiga UNIX (Amix) System V Release 4, version 2.1 --
+Commodore's port of AT&T / UNIX System Laboratories (USL) SVR4. That text is
+Commodore- and AT&T/USL-derived. It is redistributed here under the approval
+Mike Battilana, CEO of Amiga Corporation, gave this project on 2026-09-19
+(confirmed by email 2026-09-23) to distribute the Commodore Amiga binaries,
+which the project reads as lifting the earlier restriction on releasing
+Amiga UNIX material (see the disclaimer at https://amigaux.org/about/). It
+is NOT relicensed: the MIT licence in LICENSE does not apply to it, and all
+rights in it remain with their holders.
+
+No stock Amix source file, disk image, ROM or manual is included in this
+repository.
+
+
+3. NetBSD ncr53cxxx material in reference/scripts/*.out -- BSD licence
+-----------------------------------------------------------------------
+
+Files: reference/scripts/inq.out, reference/scripts/inq-wr.out
+
+These are the output of the ncr53cxxx SCSI SCRIPTS assembler (from NetBSD,
+as vendored by the a4091-software project) run over the author's .ss
+sources. Each begins with the assembler's identification line
+
+    /*	$NetBSD: ncr53cxxx.c,v 1.17 2022/04/21 21:31:11 andvar Exp $	*/
+
+The assembler itself (ncr53cxxx.c) carries this notice, reproduced verbatim:
+
+ * Copyright (c) 1995,1999 Michael L. Hitch
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The assembler's source is not included in this repository.
+
+
+4. reference/a4091-software -- upstream project, not distributed here
+-----------------------------------------------------------------------
+
+reference/a4091-software/ is a local, read-only checkout of the upstream
+a4091-software project (https://github.com/A4091/a4091-software), used for
+reference and as the source of the A4091 autoboot ROM and the ncr53cxxx
+assembler. It is git-ignored: none of its files are part of this repository
+or covered by its MIT licence.
+
+The upstream project has no repository-wide LICENSE file; licensing is per
+file (as of upstream commit 3428168c, 2026-04-30):
+
+  - Its own sources carry a BSD-style notice, e.g. device.c, attach.c,
+    bootmenu.c:
+        Copyright 2022-2025 Stefan Reinauer & Chris Hooper
+    (sd.c: "Copyright 2022-2025 Chris Hooper & Stefan Reinauer";
+    romtool.c: "Copyright 2023 Stefan Reinauer").
+  - Files taken from NetBSD keep their NetBSD BSD notices, e.g. siop.c:
+        Copyright (c) 1990 The Regents of the University of California.
+    and ncr53cxxx.c (Michael L. Hitch, quoted in part 3).
+  - util/a4092flash/ is under the GNU General Public License, version 2
+    (its own LICENSE file).
+  - The submodules under 3rdparty/ (bffs, devtest, RDBFlags, mounter,
+    salvador, ODFileSystem, TinySetPatch) each carry their own LICENSE.
+
+Consult the upstream repository for the authoritative terms.
+
+
+5. Trademarks
+-------------
+
+The wording Amiga Corporation asked us to carry:
+
+This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
+
+This project is likewise not affiliated with, endorsed by, or sponsored by
+Commodore or any other trademark holder. AmigaOS and Amiga UNIX are
+trademarks of their respective owners; UNIX is a registered trademark of
+The Open Group. Amiga UNIX is Commodore's port of AT&T UNIX System V
+Release 4; portions are copyright AT&T, UNIX System Laboratories and their
+successors. This repository ships no Amiga or Amiga UNIX binaries.
