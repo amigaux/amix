@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — The 040/060 family tools, from amix-kerntools 989e30b (b52b4b8)
+
+tools/: emit-family-chains, k0-gates, the rootdev and cputype stamps, check-chain-stamp, rootdev-assert, the
+sddevsize and support-probe injectors, comaddr; contracts/: the shipped families (K060, KD060-Z), the svr4-sum
+vectors, the scan060 set, the spl fixtures. k0-gates finds the port as $PORT and the toolchain as $GCA. The port's -51
+cut reproduces with the tools taken from amix (KT unset), and k0-gates is ALL GREEN; make test runs the new selftests.
+
 ## 2026-10-31 — Cut 68030-261031-63, the freeq guard on (a0e2ab4)
 
 cuts/68030-261031-63: from amix c1b7842 with the -56 recipe; the four defaults on (kzero, ufs tail zeroing, FPU
