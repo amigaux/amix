@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — Cut 68030-261031-63, the freeq guard on (a0e2ab4)
+
+cuts/68030-261031-63: from amix c1b7842 with the -56 recipe; the four defaults on (kzero, ufs tail zeroing, FPU
+gate, freeq guard). unix 660e4d12, brel eda4dcdf, sym 9eae436f, kabi fc3d99a7 (k30.1.3, abi 18c0a1c9), ufs 3e2507e5,
+s5 1c9711b9. cut.sh reproduces all seven. C1 (68882), C0 (no FPU) and the prngd trigger pass in emulation.
+
 ## 2026-10-31 — STREAMS freeq guard (grimoire quirk 92), on by default (f4aef26, 6e8a7fe)
 
 src/freeqguard030.c joins the final link; tools/freeqguard-retarget.py retargets every freeq relocation (qdetach,
