@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-30 — kbootset major <module> (bf90a17)
+
+`kbootset major <module>` prints the majors the compiled-in registry gives a module, one `c <n>`/`b <n>` line each
+(z3660eth `c 51`, ramdisk `b 20`); an unknown name exits 1. It reads no store or kinfo, so it works on a static
+kernel, in safe mode and on a medium boot. For the base system's rc_mknod (P-36 D-N21). C2-4 v16 §15;
+tests/host/kmajor.sh; emulator N161 (k30) and N160 (k46 static -82).
+
 ## 2026-10-30 — store-roundtrip complements the byte it corrupts (9ce8f6d)
 
 The test wrote a constant 0xff over random kernel data, so one run in 256 changed nothing and passed "corruption NOT
