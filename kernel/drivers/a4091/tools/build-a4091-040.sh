@@ -7,12 +7,14 @@
 #
 #   sh tools/build-a4091-040.sh [--d42]        # --d42: import dma_prepare/dma_complete
 #                                              # instead of the local stubs
-# Environment (defaults in brackets):
-#   GCC_CROSS_ENV   gcc-cross-amix build/env.sh  [../gcc-cross-amix/build/env.sh]
+# Environment (defaults in brackets; <amix> is the top of the amix checkout):
+#   GCC_CROSS_ENV   gcc-cross-amix build/env.sh, at toolchain/gcc-cross-amix.pin
+#                   [$GCA/env.sh, else <amix>/../gcc-cross-amix/build/env.sh]
 #   MODELB_SYSROOT  the port's Model-B mirror sysroot (build/sysroot-modelb of a port checkout
 #                   or archive)  [required]
-#   PORT_DIR        a port checkout, for tools/spl-gate.py and test-tools/scan060.py
-#                   [../amix-040-060-port]  (read only)
+#   PORT_DIR        a port checkout at kernel/port/port.pin, for tools/spl-gate.py and
+#                   test-tools/scan060.py  [$PORT, else <amix>/../amix-040-060-port]  (read only)
+# A git checkout at another commit than its pin is reported, not refused.
 #
 # Gates (any failure exits 1):
 #   G1/G2   the port's spl-gate: volatile survives -traditional; every spl-calling function
@@ -23,10 +25,19 @@
 #   no sptalloc, no fixed 0x40000000 in the 040 arm.
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)
+AMIX=$(cd "$HERE/../../.." && pwd)
 D42=
 [ "$1" = "--d42" ] && D42=-DA4091_D42
-: "${GCC_CROSS_ENV:=$HERE/../gcc-cross-amix/build/env.sh}"
-: "${PORT_DIR:=$HERE/../amix-040-060-port}"
+: "${GCC_CROSS_ENV:=${GCA:-$AMIX/../gcc-cross-amix/build}/env.sh}"
+: "${PORT_DIR:=${PORT:-$AMIX/../amix-040-060-port}}"
+pin_check() {	# pin_check <pin file> <checkout>
+	read -r _url _want < "$1"
+	[ -e "$2/.git" ] || return 0
+	_have=$(git -C "$2" rev-parse HEAD 2>/dev/null) || return 0
+	[ "$_have" = "$_want" ] || echo "[warn] $2 is at $_have, ${1#$AMIX/} pins $_want"
+}
+pin_check "$AMIX/toolchain/gcc-cross-amix.pin" "$(dirname "$GCC_CROSS_ENV")/.."
+pin_check "$AMIX/kernel/port/port.pin" "$PORT_DIR"
 [ -n "$MODELB_SYSROOT" ] || { echo "[FAIL] MODELB_SYSROOT not set (the port's build/sysroot-modelb)"; exit 1; }
 . "$GCC_CROSS_ENV"
 AMIX_SYSROOT=$MODELB_SYSROOT; export AMIX_SYSROOT
