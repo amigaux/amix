@@ -1,6 +1,6 @@
 #!/bin/sh
 # Host test of z3660eth_param(), the module's _load parameter parser, on the
-# strings the core passes (amix-dlm C3-5 v3 section 3: the manifest's param
+# strings the core passes (kernel/dlm C3-5 v3 section 3: the manifest's param
 # records as one "name=value ..." string, values in C3-1 section 3's forms,
 # or 0 when there are none).  The function is cut out of src/z3660eth.c as
 # it is, so the test runs the shipped text.  Usage: module/test-params.sh

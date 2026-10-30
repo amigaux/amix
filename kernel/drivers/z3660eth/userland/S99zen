@@ -1,5 +1,6 @@
 #!/bin/sh
-# S99zen -- bring up the Z3660 native ethernet (zen0) at boot.
+# S99zen -- bring up the Z3660 native ethernet (zen0) at boot.  An EXAMPLE:
+# the box's own address comes from its /etc/default/zen, never from this file.
 #
 # Install as /etc/rc2.d/S99zen on the AMIX root.  cdevsw major for z3660eth = 51.
 #
@@ -14,6 +15,17 @@
 #    ("Device busy" from the bare slink is expected and harmless.)
 #  * It can take the full boot (incl. fsck+reboot if the SD image is dirty) for zen0
 #    to appear -- don't conclude "broken" from an early check.
+#
+# /etc/default/zen sets the box's values as LITERAL numbers (a name would cost a
+# boot-stalling DNS lookup: docs/ZEN0-BRINGUP.md section 3.3), for example with the
+# RFC 5737 documentation addresses -- use your own LAN's:
+#   ZEN_ADDR=192.0.2.39
+#   ZEN_NETMASK=255.255.255.0
+#   ZEN_GATEWAY=192.0.2.1
+# Without ZEN_ADDR the stream is linked but zen0 is left unaddressed; without
+# ZEN_GATEWAY no default route is added.
+ZEN_ADDR= ZEN_NETMASK=255.255.255.0 ZEN_GATEWAY=
+[ -r /etc/default/zen ] && . /etc/default/zen
 [ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0
 (
   sleep 5
@@ -24,7 +36,11 @@
     sleep 3
     i=`expr $i + 1`
   done
-  /usr/sbin/ifconfig zen0 192.0.2.39 netmask 255.255.255.0 up -trailers
-  /usr/sbin/route add default 192.0.2.1 1
+  if [ -z "$ZEN_ADDR" ]; then
+    echo "S99zen: no ZEN_ADDR in /etc/default/zen -- zen0 left unaddressed"
+    exit 0
+  fi
+  /usr/sbin/ifconfig zen0 $ZEN_ADDR netmask $ZEN_NETMASK up -trailers
+  [ -n "$ZEN_GATEWAY" ] && /usr/sbin/route add default $ZEN_GATEWAY 1
   /usr/sbin/ifconfig zen0
 ) > /tmp/zen-bringup.log 2>&1 &

@@ -1,8 +1,8 @@
-# NOTES — amix-z3660net
+# NOTES — z3660eth (kernel/drivers/z3660eth, formerly amix-z3660net)
 
 ## ZS-05 — every board register access is armed (2026-10-26, module 1.0.0-5)
 
-**The firmware fact** (Z3660 FPGA, real-CPU path; amix-z3660scsi `9ceada6` is the reference
+**The firmware fact** (Z3660 FPGA, real-CPU path; kernel/drivers/z3660scsi `90d03ae` (`9ceada6` before its move-in) is the reference
 implementation, its NOTES.md 2026-10-26 and `docs/DI-1-misplaced-write.md` §10). The FPGA hands
 each 060 access to the ARM as a REG1 word and `rtg_thread()` takes the address from it
 (`zaddr = gpio & 0x1FFFFF`). On back-to-back cycles it samples **rising** address bits too early:
@@ -110,12 +110,12 @@ the mechanical check instead: it proves the shape on the shipped objects, and th
 is the address arithmetic. Metal proof belongs to the tripwire firmware (Z3660 `dd9d179`): with
 ZS-05 this driver's own MODE/ACC_OP phantoms should be 0.
 
-## Module form (2026-10-26, amix-dlm S3-25, contract C3-6 version 1)
+## Module form (2026-10-26, kernel/dlm S3-25, contract C3-6 version 1)
 
 **One source, a switch.** `-DZ3660ETH_MODULE` turns `src/z3660eth.c` into the
 loadable module; without it the file is the static driver, byte for byte (the
 `.o` of both lines is identical before and after, and the preprocessed token
-stream too). The module is built with amix-dlm's ABI kit (S3-10), one kit per
+stream too). The module is built with kernel/dlm's ABI kit (S3-10), one kit per
 line: `make -C module` builds `build/<line>/mod.d/z3660eth` through the kit's
 `mk/module.mk` (its headers, `mkmod`, `modfix`, `modcheck.py`) from the one
 `module/Master` (no `$cpu`: the kit's DEFCPU gives 68030 on k30, 68040 on k46).
@@ -195,7 +195,7 @@ spun on both and printed "interrupt self-test failed; polled" every time.
   lost strobe has a known cause, the R `$1A4` → W `$194` address capture, and
   every form arms the strobe ("ZS-05" above).
 
-**Kit result (2026-10-26, amix-dlm 6ef133e kits, gcc-cross-amix 8949028).**
+**Kit result (2026-10-26, kernel/dlm 6ef133e kits, gcc-cross-amix 8949028).**
 `modcheck.py` passes on both lines (`ok (k30.1.0, boot, 12444 bytes)`, the
 same for k46.1.0). Imports, both lines: `OTHERQ RD WR allocb autocon bcmp bcopy
 bzero canput cmn_err flushq freemsg getmajor getminor getq if_attach
@@ -217,10 +217,10 @@ at a kernel address the static kernel's `nm` gives. In the module they live
 wherever the core placed the module at load; their addresses are in the
 module's symbol table the core builds at load (`getksym`, the kit's
 `sys/ksym.h`), not in the kernel's. How a tool on the box reads them is
-amix-dlm's side (S3-11, `modadmin`); until then the documented `/dev/kmem`
+kernel/dlm's side (S3-11, `modadmin`); until then the documented `/dev/kmem`
 pokes (BUILD.md section 8) apply to the static driver only.
 
-## RX backpressure (2026-10-19, T-47 decision D1)
+## RX backpressure (2026-10-19, decided in the RX throughput investigation)
 
 **Rule: never free a received frame because an upstream queue is full.**
 
@@ -228,7 +228,7 @@ pokes (BUILD.md section 8) apply to the static driver only.
 upstream queue failed (`couldnt_put`), after the drain had already released the
 firmware slot, so the frame was gone. The drain runs at IPL 4, where IP's service
 procedure cannot run, so every frame past IP's queue high-water mark in one drain
-was lost. On metal (T-47, A4000D, real 060) the firmware and the driver had every
+was lost. On metal (that investigation, an A4000D with a real 060) the firmware and the driver had every
 frame while IP got 329 of 2000 datagrams at 1600/s, and the 4 MiB TCP push ran at
 22–31 KB/s with 319–372 retransmits.
 
@@ -274,7 +274,7 @@ round open, so it is bounded:
 drainers never interleave on the ring cursor, `last_serial` or `rxbuff`.
 
 **Not changed:** the firmware protocol, the poll period, the TX path. The ACK
-timing of T-47 H4 (ACKs leave from inside the drain, so the sender's next burst
+timing the investigation also flagged (ACKs leave from inside the drain, so the sender's next burst
 waits for a poll) is unchanged; resuming from the service procedure only adds
 drains between ticks.
 
@@ -310,7 +310,7 @@ reads 0 would.
 - `close()` never unmaps (a mapped board stays mapped; `map()` returns early on it),
   and the direct-map arm has nothing to free, so `z3660eth_unmap()` is the only teardown.
 
-**Object proof** (040 driver line, gcc-cross-amix env.sh with the T-9 flags, the
+**Object proof** (040 driver line, gcc-cross-amix env.sh with the interrupt-masking flags below, the
 `relink-040-z3660.sh` compile — that script lives on a private branch of the
 040/060 port repo, not published; HEAD 47092ee source rebuilds to `b93ce42d`, as pinned):
 `z3660eth_040.o` sha256 `a1f49c54d114cf76241abfa88bd60e46e500ada123a9c788d44cba5e153a2a4d`,
@@ -321,7 +321,7 @@ flag 0), reached from the sptalloc-failure path in `z3660eth_map` and from
 all `movel`. The only new undefined symbol is `sptfree`, which the driver-line
 kernel defines. `relink-040-z3660.sh` reports no unresolved symbols and 0 complaints.
 
-## Interrupt masking (2026-09-27, review T-9)
+## Interrupt masking (2026-09-27, from a code review)
 
 **Premise corrected.** `spl6()`/`splx()` exist: they are `static inline` in the
 stock `<sys/inline.h>` (`:112-260`). The old header no-opped them because a link

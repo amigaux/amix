@@ -3,7 +3,7 @@
 **Pre-registration, written 2026-08-24, BEFORE any code in this round. Nothing below is to be
 rewritten to match a later measurement.** Round 2 covers **F3-M0** (assert the free ride) and
 **F3-M2** (repair the cache block, run it under a gate) for the ethernet driver only. Round 1 —
-`../amix-z3660scsi/docs/BLIZZARD-F3.md` — did the same for the SCSI driver and is the template
+`../../z3660scsi/docs/BLIZZARD-F3.md` — did the same for the SCSI driver and is the template
 this round follows; where this round departs from it, the departure is derived and marked.
 
 Confidence tags follow the campaign convention: **measured** (a line of source read, or a number
@@ -36,8 +36,8 @@ The driver does contain a cache block, and it has never been built. `src/Makefil
 `CFLAGS = -O -D_KERNEL -DSVR40 -DSVR4 …` with no `-DZ3660ETH_CACHE_FLUSH` (**measured**), and
 none is injected by the relink scripts. The repo says so in its own words: metal bring-up needed
 *"no cache maintenance … either"* (`README.md` §"Status", **measured**), and the flush helper
-was *"Untested, because it was never needed"* (internal handoff `GRIMOIRE-HANDOFF.md:264` —
-gitignored, not part of this repo).
+was *"Untested, because it was never needed"* (the project's 2026-06 handoff notes, line 264 —
+unpublished).
 
 So the block is not a working feature that is switched off. It is **four defects in a dead
 branch**, and BLIZZARD §G/D8 rules that it is repaired rather than deleted, because the device it
@@ -82,8 +82,8 @@ CPU↔CPU aliasing class here at all — no S5/S6, no S8, no page-cross law, bec
 The driver's own file header has this backwards, and so does the handoff: both argue from *"the
 window is cacheable"* to *"we got away with it because the 030 data cache is effectively off"*
 (**measured** — the header's *"the 030 data cache is effectively off in every validated config"*,
-`src/z3660eth.c:46-47`; the handoff argues the same at `GRIMOIRE-HANDOFF.md:256-260`, which is
-gitignored and not part of this repo). That reasoning is correct **for the 030** and is the
+`src/z3660eth.c:46-47`; the handoff notes argue the same at lines 256-260, which are
+unpublished). That reasoning is correct **for the 030** and is the
 weaker of the two positions. On the 040/060 line the same window is cache-inhibited by a kernel
 constant no code in this repo names.
 
@@ -155,7 +155,7 @@ that cannot exist, because the window is cache-inhibited. Three reasons it lands
 
 ## 3. SUSPECT DISPOSITION
 
-Every N-item from `Amix/tmp/2026-08-24-lc060-recon/RECON.md`, re-verified in-tree today against
+Every N-item from the 2026-08-24 LC060 reconnaissance notes (unpublished), re-verified in-tree today against
 `src/z3660eth.c` and `src/z3660eth.h` as they stand at `fc35b8f`.
 
 | # | claim | re-verified? | disposition |
@@ -530,7 +530,7 @@ Same kernel, same driver object, both arms, arm A first:
 > - every transferred file byte-identical, both directions;
 > - **40/40 flood ping, 0% loss** — the bar the 2026-06-21 metal soak was accepted at
 >   (**measured**: *"laptop→box flood ping 40/40, 0% loss"*, `README.md` §"Status";
->   internal provenance `GRIMOIRE-HANDOFF.md:56`);
+>   internal provenance: the handoff notes, line 56);
 > - `netstat -in` showing **0 input errors, 0 output errors, 0 collisions** — same source;
 > - **8/8 canary binaries byte-identical.**
 >
@@ -541,7 +541,7 @@ Same kernel, same driver object, both arms, arm A first:
 >
 > **Recorded, not gated:** sustained FTP throughput both arms. The 030 metal reference is
 > **~185 KiB/s** (**measured**: *"sustained FTP throughput ~185 KiB/s (stable across runs)"*,
-> `README.md` §"Status"; internal provenance `GRIMOIRE-HANDOFF.md:61`); the
+> `README.md` §"Status"; internal provenance: the handoff notes, line 61); the
 > arm-A-vs-arm-B delta is the price of
 > the belt and belongs in the record, but a throughput regression is not a correctness failure and
 > must not be allowed to masquerade as one.

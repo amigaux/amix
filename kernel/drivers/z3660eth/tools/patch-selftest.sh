@@ -44,7 +44,7 @@ ok()   { echo "  ok: $*"; }
 # row is ever reshaped, both self-tests must move with it).
 ROWRE='^ND,.*&z3660ethinfo,.*/\*51=z3660eth\*/'
 NROW="$(grep -cE "$ROWRE" "$PK" || true)"
-[ "$NROW" -eq 1 ] || fail "patch-kernel.sh carries $NROW lines matching kerntools' drift-guard regex $ROWRE (need exactly 1, at column 0) -- ../amix-kerntools/tools/cdevsw-gate-selftest.sh would fail"
+[ "$NROW" -eq 1 ] || fail "patch-kernel.sh carries $NROW lines matching kerntools' drift-guard regex $ROWRE (need exactly 1, at column 0) -- kerntools' cdevsw-gate-selftest.sh would fail"
 OURSROW="$(grep -E "$ROWRE" "$PK")"
 
 # ---------------------------------------------------------------- fixtures ------
@@ -410,17 +410,17 @@ command -v dash >/dev/null 2>&1 && SHELLS+=(dash)
 for SH in "${SHELLS[@]}"; do battery; done
 
 # ---------------------------------------------- the real staged tree, if present --
-# Opportunistic: when a kerntools cross-kernel staging tree happens to be lying around,
+# Opportunistic: when a kernel/k30 cross-kernel staging tree happens to be lying around,
 # assert the pre-flight classifies the REAL 14 KB kernel.c the way its shape says it
 # should.  Never required -- the synthetic battery above is the contract.
 echo "== real staged tree (opportunistic) =="
 SH=sh
 REALKC=""
-for c in "$HERE"/../../amix-kerntools/work/*/usr/sys/master.d/kernel.c; do
+for c in "$HERE"/../../../k30/work/*/usr/sys/master.d/kernel.c; do
 	[ -f "$c" ] && { REALKC="$c"; break; }
 done
 if [ -z "$REALKC" ]; then
-	ok "no staged kernel.c under ../amix-kerntools/work -- skipped (synthetic battery stands alone)"
+	ok "no staged kernel.c under kernel/k30/work -- skipped (synthetic battery stands alone)"
 else
 	D="$TMP/real"; mkdir -p "$D"; cp "$REALKC" "$D/kernel.c"
 	n="$(grep notty "$D/kernel.c" | grep -c '/\*51[*=]' || true)"
