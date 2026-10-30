@@ -2,7 +2,7 @@
 NAME=tar
 PKG=gtar
 VERSION=1.14
-PKGREV=8   # -8: CATEGORY archive (P-31 sec 10.9 groups); payload as -7
+PKGREV=9   # -9: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
 SUMMARY="GNU tar 1.14 - base-256 aware tar"
 DESC="GNU tar 1.14 beside stock SVR4 tar, which it does NOT replace (stock /usr/sbin/tar is untouched; ours wins by PATH). Reads base-256 headers from modern tars, long names, -z via gzip on PATH (install gzip). Owner names are looked up by its own /etc/passwd and /etc/group parsers, not the stock libc (D3). Installs /opt/amix/bin/tar; add /opt/amix/bin to PATH."
 CATEGORY=archive

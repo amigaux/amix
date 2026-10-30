@@ -32,3 +32,8 @@ d none /opt/amix/doc/tar 0755 root sys
 f none /opt/amix/doc/tar/COPYING 0644 root bin
 f none /opt/amix/doc/tar/NEWS 0644 root bin
 f none /opt/amix/doc/tar/README 0644 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/tar 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/gtar 0644 root bin
