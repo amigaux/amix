@@ -27,6 +27,27 @@ A driver repo **never** ships:
   from a stock file remain under their original Commodore/AT&T SVR4 copyright, and your repo's MIT
   license covers only the added/changed lines. Add a short `NOTICE` in `kernel-patches/` saying so.
 
+## The patch manifest — `kernel/k30/kernel-patches.conf`
+
+Every `src/kernel-patches/*.patch` of the driver dirs a build is given is applied to the stock tree
+before the clean-gate. [`kernel/k30/kernel-patches.conf`](../kernel-patches.conf) (parsed by
+`kernel/k30/tools/kpatch-lib.sh`) records, per patch, what the builders need beyond the diff:
+
+```
+kpatch <driver-repo> <patch-rel-to-repo> <onbox-target> <marker> <stock> [exp=<path>]
+```
+
+- `<driver-repo>` names the owning driver; it matches a driver dir when the basenames agree after
+  stripping a leading `amix-` (`amix-a4091` matches `kernel/drivers/a4091`). A row applies only
+  when that driver is part of the build. `always:<repo>` applies to every build and then requires
+  the driver to be present (a build dir, else under `kernel/drivers/`); `k30` is kernel/k30's own.
+- `<marker>` is a fixed token present in the target if and only if the patch is applied (the
+  on-box idempotency guard); `<stock>` is the pristine file the patch applies to, normally
+  `usr/sys/<onbox-target>` in the `AMIX_SYSTEM` input (amigaux/amix-system).
+
+A driver adding or revising a patch under `src/kernel-patches/` asks kernel/k30 for the matching
+row. The file's header comment is the full reference.
+
 ## `driver.conf` grammar
 
 One driver per line; `#` starts a comment. Two dialects.

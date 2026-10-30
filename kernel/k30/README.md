@@ -25,25 +25,27 @@ for the driver-author contract and [`REPOS.md`](REPOS.md) for where each driver 
 
 ## The drivers
 
-`amix-build` combines independent, MIT-licensed drivers into one kernel. They are moving into amix
-under `kernel/drivers/`; until each one has moved, it lives in its own repository. `Z3660-amix` is
+`amix-build` combines independent, MIT-licensed drivers into one kernel. They live in amix under
+`kernel/drivers/`; a driver that has not moved in yet lives in its own repository. `Z3660-amix` is
 the firmware/emulator that owns the protocol the Z3660 drivers follow (reference — not built here):
 
 | Driver | What | Kind | Where it lives |
 |---|---|---|---|
-| `a4091` | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver | [`jusii/amix-a4091`](https://github.com/jusii/amix-a4091), moving into amigaux/amix as `kernel/drivers/a4091` |
-| `z3660scsi` | Z3660 (PiStorm piscsi mailbox) | SCSI driver | [`jusii/amix-z3660scsi`](https://github.com/jusii/amix-z3660scsi), moving into amigaux/amix as `kernel/drivers/z3660scsi` |
+| `a4091` | Commodore A4091 / A4092 / A4770 (NCR 53C710) | SCSI driver | [`kernel/drivers/a4091`](../drivers/a4091) (formerly `jusii/amix-a4091`) |
+| `z3660scsi` | Z3660 (PiStorm piscsi mailbox) | SCSI driver | [`kernel/drivers/z3660scsi`](../drivers/z3660scsi) (formerly `jusii/amix-z3660scsi`) |
 | `z3660net` | Z3660 STREAMS/DLPI ethernet (`z3660eth`) | net driver | [`jusii/amix-z3660net`](https://github.com/jusii/amix-z3660net), moving into amigaux/amix as `kernel/drivers/z3660eth` |
 | `Z3660-amix` | Z3660 firmware + emulator — owns the piscsi / ethernet protocol the drivers re-implement against (fork of `shanshe/Z3660`) | firmware | [`jusii/Z3660-amix`](https://github.com/jusii/Z3660-amix), its own repository |
 
-`amix-build` looks for drivers in amix's `kernel/drivers/`. Until they have moved in, clone them
-into one folder and point it there with `--drivers` (or `AMIX_DRIVERS`):
+`amix-build` finds every driver with a `driver.conf` under amix's `kernel/drivers/`; nothing
+beside the amix checkout is needed. To build from driver checkouts kept elsewhere (a driver that
+has not moved in yet, or a working copy of your own), point it at their folder with `--drivers`
+(or `AMIX_DRIVERS`) -- an explicit override that replaces `kernel/drivers/`:
 
 ```sh
 git clone https://github.com/amigaux/amix && cd amix/kernel/k30
-mkdir -p ~/amix-drivers && for r in amix-a4091 amix-z3660scsi amix-z3660net; do
-  git clone https://github.com/jusii/$r ~/amix-drivers/$r; done
-./amix-build --drivers ~/amix-drivers --list
+./amix-build --list                                  # a4091, z3660scsi from kernel/drivers/
+git clone https://github.com/jusii/amix-z3660net ~/amix-drivers/amix-z3660net
+./amix-build --drivers ~/amix-drivers --list         # only what is in ~/amix-drivers
 ```
 
 ## The on-box build: prerequisites — bring your own Amix
@@ -161,13 +163,13 @@ particular machine:
 | `GCA` | gcc-cross-amix's `build/` directory; `. "$GCA/env.sh"` puts the cross tools on `PATH` |
 | `G14` | gcc14-cross-amix's `build/` (only for the module kernel's splice, which uses its `m68k-elf-*` binutils) |
 | `PORT` | a checkout of the 68040/68060 port (`kernel/port/port.pin`), for `--rth1` and the port's opt-in fixes |
-| `AMIX_DRIVERS` | where the driver checkouts are (default `kernel/drivers/`) |
+| `AMIX_DRIVERS` | only to override: where `kpatch` looks for the driver an `always:` row of `kernel-patches.conf` names when it is not among the driver dirs given (default `kernel/drivers/`) |
 | `CDFS` | a built checkout of the cdfs fork [jusii/amix-cdfs](https://github.com/jusii/amix-cdfs) (the pinned commit lives there), for the in-kernel cdfs of `fstypes.conf` (its object is pinned by md5); `--no-fstypes` builds without it |
 
 ```sh
 . "$GCA/env.sh"
 export AMIX_SYSTEM=/path/to/amix-system
-./build-cross-kernel.sh --config c6s1unix "$AMIX_DRIVERS/amix-a4091"     # an a4091 kernel, root on c6d0s1
+./build-cross-kernel.sh --config c6s1unix ../drivers/a4091               # an a4091 kernel, root on c6d0s1
 ```
 
 The header of `build-cross-kernel.sh` documents every option. The module kernel (`--dlm-core

@@ -99,10 +99,10 @@
 #     --bempty-ram        (S4-21, kernel/dlm core 0031) bdevsw row 20, the stock ramdisk, becomes an empty row (every
 #                         routine nodev, nullflag) so a module's registered b: major can fill it.  An exact-line
 #                         edit of master.d/kernel.c, which then recompiles.  Off by default.
-#   A driver dir is kernel/drivers/<name> (e.g. ../drivers/a4091) once the driver has moved
-#   into amix, until then a checkout of its repository (e.g. $AMIX_DRIVERS/amix-a4091):
+#   A driver dir is kernel/drivers/<name> (e.g. ../drivers/a4091); a checkout kept elsewhere
+#   (a driver not moved into amix yet, e.g. ~/amix-drivers/amix-z3660net) is given by its path:
 #   ./build-cross-kernel.sh ../drivers/a4091 ../drivers/z3660scsi          # fd0unix (default)
-#   ./build-cross-kernel.sh --config unix "$AMIX_DRIVERS/amix-a4091" "$AMIX_DRIVERS/amix-z3660scsi"
+#   ./build-cross-kernel.sh --config unix ../drivers/a4091 ../drivers/z3660scsi
 #   # full metal-bootable combined kernel: SCSI + net + cdfs, root on c6d0s1 --
 #   ./build-cross-kernel.sh --net ../drivers/z3660eth --config c6s1unix ../drivers/z3660scsi
 #
