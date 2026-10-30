@@ -158,6 +158,83 @@ try:
     check("DEPENDS reaches the catalog line as a comma list",
           rc == 0 and out.split("|")[6] == "zlib,acompat", err or out)
 
+    # --- CONFFILES and the prototype ----------------------------------------------
+    PROTO = ("i pkginfo\n"
+             "d none /etc 0755 root sys\n"
+             "f none /etc/foo.conf 0644 root sys\n"
+             "f none /opt/amix/bin/foo 0755 root bin\n"
+             "f none /opt/amix/man/man1/foo.1 0644 root bin\n"
+             "f none /opt/amix/man/man4/foo.conf.4 0644 root bin\n")
+
+    def conf(where, name, proto=PROTO, **over):
+        r = recipe(os.path.join(tmp, where), name, **over)
+        write(os.path.join(r, "prototype"), proto)
+        return r
+
+    good = conf("conf", "cgood", CONFFILES='"/etc/foo.conf"')
+    rc, out, err = run("check", good)
+    check("CONFFILES: a listed f object under /etc passes, no man warning",
+          rc == 0 and "warning" not in err, err)
+    rc, out, err = run("pkginfo", good)
+    check("CONFFILES: pkginfo says CLASSES=none conffile",
+          rc == 0 and "\nCLASSES=none conffile\n" in out, err or out)
+    rc, out, err = run("pkginfo", conf("conf", "cnone"))
+    check("no CONFFILES: CLASSES=none", rc == 0 and "\nCLASSES=none\n" in out,
+          err or out)
+    e_proto = PROTO.replace("f none /etc/foo.conf", "e conffile /etc/foo.conf")
+    rc, out, err = run("check", conf("conf", "cecls", e_proto, CONFFILES='"/etc/foo.conf"'))
+    check("CONFFILES: a listed e object passes", rc == 0, err)
+    for name, proto, over, needle in (
+            ("cmiss", PROTO, {"CONFFILES": '"/etc/bar.conf"'},
+             "/etc/bar.conf is not in the prototype"),
+            ("cdir", PROTO, {"CONFFILES": '"/etc"'}, "is a 'd' object, not f or e"),
+            ("cunlisted", e_proto, {}, "e /etc/foo.conf is not in CONFFILES"),
+            ("cprefix", PROTO, {"CONFFILES": '"/opt/amix/bin/foo"'},
+             "is under PREFIX=/opt/amix"),
+            ("cusr", PROTO + "f none /usr/lib/foo.rc 0644 root sys\n",
+             {"CONFFILES": '"/usr/lib/foo.rc"'}, "is not under /etc or /var"),
+            ("crel", PROTO, {"CONFFILES": '"etc/foo.conf"'}, "is not an absolute path"),
+            ("ctwice", PROTO, {"CONFFILES": '"/etc/foo.conf /etc/foo.conf"'},
+             "lists /etc/foo.conf twice"),
+            ("ctwoline", PROTO + "f none /etc/foo.conf 0600 root sys\n",
+             {"CONFFILES": '"/etc/foo.conf"'}, "is on 2 lines")):
+        refused("check refuses %s" % name,
+                ("check", conf("cbad", name, proto, **over)), needle)
+    r = recipe(os.path.join(tmp, "cnoproto"), "cnoproto", CONFFILES='"/etc/foo.conf"')
+    refused("check refuses CONFFILES without a prototype", ("check", r),
+            "no prototype to check it against")
+    two = os.path.join(tmp, "ctwo")
+    conf("ctwo", "cone", PKG="cone", CONFFILES='"/etc/foo.conf"')
+    conf("ctwo", "ctwo", PKG="ctwo", CONFFILES='"/etc/foo.conf"')
+    refused("check refuses one conffile listed by two packages", ("check", two),
+            "is listed by cone and ctwo; a conffile has one owner")
+
+    # --- run-level links ---------------------------------------------------------
+    for link, ok in (("S20monsw", True), ("S69inet", True), ("S75syslogd", True),
+                     ("S95display", True), ("S05kbnamelist", True),
+                     ("S99zkbootset", True), ("K69inet", True),
+                     ("S16firstboot", False), ("S40foo", False), ("S99foo", False),
+                     ("S00foo", False), ("Sxxfoo", False)):
+        proto = PROTO + "l none /etc/rc2.d/%s=/etc/init.d/foo\n" % link
+        rc, out, err = run("check", conf("rc", "rc" + link.lower(), proto))
+        check("rc link %s %s" % (link, "passes" if ok else "is refused"),
+              (rc == 0) if ok else (rc == 1 and "/etc/rc2.d/" + link in err), err)
+    refused("check refuses an object under /etc/rc.d",
+            ("check", conf("rc", "rcd", PROTO + "f none /etc/rc.d/foo 0755 root sys\n")),
+            "/etc/rc.d is not used")
+
+    # --- man pages (a warning, not a refusal) ----------------------------------------
+    rc, out, err = run("check", conf("man", "mnone", PROTO.replace(
+        "f none /opt/amix/man/man1/foo.1 0644 root bin\n", "").replace(
+        "f none /opt/amix/man/man4/foo.conf.4 0644 root bin\n", "")))
+    check("man: a command and an /etc file without pages are warned about",
+          rc == 0 and "warning: mnone: no man page for " in err
+          and "/opt/amix/bin/foo" in err and "/etc/foo.conf" in err, err)
+    rc, out, err = run("check", conf("man", "mlink", PROTO + "l none /opt/amix/bin/unfoo=/opt/amix/bin/foo\n"))
+    check("man: a link to a documented command counts", rc == 0 and "warning" not in err, err)
+    rc, out, err = run("check", conf("man", "mgz", PROTO.replace("foo.1 ", "foo.1.gz ")))
+    check("man: a compressed page counts", rc == 0 and "warning" not in err, err)
+
     # --- APKG_DESC --------------------------------------------------------------------
     plain = recipe(os.path.join(tmp, "desc0"), "desc")
     rc, base, err = run("pkginfo", plain)
