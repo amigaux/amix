@@ -5,3 +5,7 @@ The wording Amiga Corporation asked us to carry:
 This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
 
 This repository is source code only and ships no Amiga or Amiga UNIX binaries; AmigaOS and Amiga UNIX are trademarks of their respective owners, and UNIX is a registered trademark of The Open Group.
+
+Credit: the STREAMS/DLPI skeleton
+
+The STREAMS/DLPI skeleton of src/z3660eth.c (the clone open machinery, the put-procedure dispatch and the DLPI primitive handling) descends from Commodore's stock Amix ethernet driver aen.c (usr/sys/amiga/driver/aen; Copyright 1989-1992 Commodore Business Machines, written by Keith Gabryelski), by way of Ignacio Soriano's hydra-amix driver (https://github.com/isoriano1968/hydra-amix), which carried the same skeleton to the Hydra AmigaNet card. The lines that remain from aen.c (about 15% of the file) are Commodore-derived: the MIT licence in LICENSE covers the author's own work here, not them, and all rights in them remain with their holders. They are redistributed under the approval Amiga Corporation gave this project in September 2026 (see the disclaimer at https://amigaux.org/about/). tools/patch-selftest.sh likewise carries two short stock-shaped fixture slices (master.d/kernel.c table rows and amiga/driver/Makefile lines) as test context, on the same terms.
