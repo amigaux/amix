@@ -1,0 +1,157 @@
+.\" acompat.3 -- libacompat (libamixcompat), userland/packages/acompat.
+.\" BSD-2-Clause, see acompat/LICENSE.
+.TH ACOMPAT 3 "2026-10-30" "acompat 0.1" "Amix add-on libraries"
+.SH NAME
+acompat \- libamixcompat, the C library functions and headers Amix lacks
+.SH SYNOPSIS
+.nf
+.B #include <amixcompat.h>
+.PP
+.BI "int snprintf(char *" str ", size_t " size ", const char *" format ", ...);"
+.BI "int vsnprintf(char *" str ", size_t " size ", const char *" format ", va_list " ap );
+.BI "int setenv(const char *" name ", const char *" value ", int " overwrite );
+.BI "int unsetenv(const char *" name );
+.BI "int strcasecmp(const char *" s1 ", const char *" s2 );
+.BI "int strncasecmp(const char *" s1 ", const char *" s2 ", size_t " n );
+.BI "int mkstemp(char *" template );
+.BI "int usleep(unsigned int " usec );
+.BI "int gettimeofday(struct timeval *" tp ", void *" tzp );
+.B "const char *amix_compat_version(void);"
+.PP
+.B #include <stdint.h>
+.B #include <strings.h>
+.PP
+.B cc \-I/usr/local/include ... \-L/usr/local/lib \-lacompat
+.fi
+.SH DESCRIPTION
+.B libacompat
+is a static library of the C library functions the Amix (SVR4.0) libc does not
+have, with the headers that declare them.
+Each one was measured absent from
+.BR /usr/lib/libc.so.1 .
+The archive is named
+.B libacompat.a
+because the s5 root file system keeps 14 bytes of a name, and
+.B libamixcompat.a
+is 15.
+.TP
+.BR snprintf ", " vsnprintf
+C99 formatted output into a buffer of
+.I size
+bytes, always terminated, returning the length the full output would have.
+They handle the
+.BR ll ,
+.BR j ,
+.B z
+and
+.B t
+length modifiers, so 64-bit integers print correctly; the stock
+.BR printf (3S)
+has no
+.B ll
+modifier.
+Floating-point conversions are done by the stock
+.BR sprintf (3S),
+and need a 68881 or 68882.
+.B %n
+is not implemented: it is printed as written.
+A null string prints as
+.BR (null) ,
+truncated by a precision; a null pointer prints as
+.BR 0x0 .
+.TP
+.BR setenv ", " unsetenv
+Add, change or remove an environment variable; the strings are copied.
+.TP
+.BR strcasecmp ", " strncasecmp
+Compare strings ignoring ASCII case.
+.TP
+.B mkstemp
+Replace the trailing
+.B XXXXXX
+of
+.I template
+and create the file exclusively, mode 0600; returns its descriptor.
+.TP
+.B usleep
+Sleep for
+.I usec
+microseconds, rounded up to the clock tick; built on
+.BR poll (2),
+so it leaves the caller's timers alone.
+.TP
+.B gettimeofday
+The time of day, seconds and microseconds, from the stock one-argument
+.BR _abi_gettimeofday ;
+.I tzp
+is ignored.
+.TP
+.B amix_compat_version
+The library's version string, e.g.
+.BR 0.1\-7\-gcc14 .
+.PP
+.B <stdint.h>
+gives the exact-width integer types of this ILP32 big-endian target, and
+.B <strings.h>
+declares
+.B strcasecmp
+and
+.B strncasecmp
+only; neither header exists on a stock system.
+.B <amixcompat.h>
+also defines
+.BR ssize_t .
+.SH RETURN VALUE
+.B snprintf
+and
+.B vsnprintf
+return the length the output would have had, or \-1 with
+.I errno
+set to ENOMEM when a floating-point conversion cannot get its buffer.
+.BR setenv ,
+.BR unsetenv ,
+.B usleep
+and
+.B gettimeofday
+return 0, or \-1 with
+.I errno
+set.
+.B mkstemp
+returns a file descriptor, or \-1.
+.SH NOTES
+Do not compile with
+.B \-ansi
+or
+.BR \-D_POSIX_SOURCE :
+many Amix headers hide declarations in their ANSI view, among them
+.BR "struct timeval" ,
+which
+.B gettimeofday
+needs.
+.PP
+.B strcasecmp
+is absent from libc but present in
+.BR libresolv.a ,
+declared in no system header.
+Linking both
+.B \-lresolv
+and
+.BR \-lacompat ,
+the archive the linker reaches first wins; both agree on ASCII.
+.PP
+Programs built with GCC 14 get these functions from the toolchain's own
+runtime, and do not link
+.BR libacompat .
+.SH FILES
+.TP
+.B /usr/local/lib/libacompat.a
+The library.
+.TP
+.B /usr/local/include/{amixcompat.h,stdint.h,strings.h}
+The headers.
+.TP
+.B /usr/local/bin/acompat-test
+The on-box acceptance test,
+.BR acompat\-test (1).
+.SH SEE ALSO
+.BR acompat\-test (1)

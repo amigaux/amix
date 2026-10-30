@@ -1,0 +1,37 @@
+.\" acompat-test.1 -- userland/packages/acompat.  BSD-2-Clause, see acompat/LICENSE.
+.TH ACOMPAT-TEST 1 "2026-10-30" "acompat 0.1" "Amix add-on commands"
+.SH NAME
+acompat\-test \- check libacompat (libamixcompat) on this machine
+.SH SYNOPSIS
+.B /usr/local/bin/acompat\-test
+.SH DESCRIPTION
+.B acompat\-test
+is linked against the installed
+.B libacompat.a
+and calls every function it provides:
+.BR snprintf ,
+.BR vsnprintf ,
+.BR setenv ,
+.BR unsetenv ,
+.BR strcasecmp ,
+.BR strncasecmp ,
+.BR mkstemp ,
+.B usleep
+and
+.BR gettimeofday .
+It proves the library on this machine's processor and C library, which a
+test on the build host cannot.
+.PP
+It prints the library's version, then one
+.B ok
+or
+.B FAIL
+line per check, then a summary
+.RI ( n " passed, " m " failed" ).
+The floating-point check runs last and says so first: on a machine with no
+68881 or 68882 any floating-point conversion in the stock C library dies with
+SIGSYS, and the earlier results are already printed.
+.SH EXIT STATUS
+0 when every check passed, 1 otherwise.
+.SH SEE ALSO
+.BR acompat (3)
