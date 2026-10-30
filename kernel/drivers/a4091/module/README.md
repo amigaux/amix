@@ -25,8 +25,8 @@ make -C module clean
 make -C test/host check        # the module form's host tests, both map arms
 ```
 
-The kits are amix-dlm's ABI kits (`DLM=…/amix-dlm`, default the sibling
-checkout's `build/kit/<line>`). You can also name them with `KIT_k30=` /
+The kits are kernel/dlm's ABI kits (`DLM=…/kernel/dlm`, default this amix
+checkout's `kernel/dlm/build/kit/<line>`). You can also name them with `KIT_k30=` /
 `KIT_k46=`.
 - Build against kabi `k30.1.2` / `k46.1.2`, KIT_REV bbd20b6 or later: the
   first kit whose DDI lists the five DMA names.
@@ -37,7 +37,7 @@ checkout's `build/kit/<line>`). You can also name them with `KIT_k30=` /
 
 The static objects are built elsewhere, and the module switch leaves them
 unchanged:
-- 030: `b5042e96…`, by amix-kerntools;
+- 030: `b5042e96…`, by kernel/k30;
 - 040/060: `c9f0e467…`, and `7d75ab42…` with `--d42`, by
   `tools/build-a4091-040.sh`.
 
