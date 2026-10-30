@@ -1,3 +1,13 @@
+## 2026-10-30 — working in its amix home (673a881 … 3f2c2b6)
+
+The sibling-path defaults fit userland/pkgtools: the cross builds source $GCA/env.sh (gcc-cross-amix at
+toolchain/gcc-cross-amix.pin; AMIX_CROSS_ENV/CROSS_ENV still override); kbootset-consumer.sh defaults to this
+checkout's kernel/dlm; apkg's 0.2.3 test archives cc02d52 from the git toplevel and skips cleanly without history;
+build-packages.sh takes KERNTOOLS and CDFS_REPO; the repo tests take AMIX_PACKAGES. "amix-dlm" is cited as kernel/dlm;
+the resolver tests use 192.0.2.1-9. README, CONTRIBUTING, LICENSE and NOTICE describe the directory; NOTICE names
+fnmatch's holders. Suites 369/0, 497/0, 38/0, 19/0, 36/0, kbootset 12/0; the static set and apkg.amix are
+byte-identical to a d7f4871 build.
+
 ## 2026-10-30 — moved in from amix-packagemanager
 
 jusii/amix-packagemanager master d7f4871 (52 commits) moved into amix userland/pkgtools by subtree merge with its
