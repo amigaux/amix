@@ -1,7 +1,7 @@
 # patch — the recipe
 
 **Package `patch` 2.5.9** — GNU patch, re-minted for Amix. GPL-2.0-or-later.
-Pin: [`pin.sh`](pin.sh).
+Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](build.sh).
 
     sh build/pkg/pkgbuild.sh userland/packages/patch
 
@@ -159,3 +159,14 @@ the byte-exact expected result. [`tests/smoke.sh`](tests/smoke.sh) — written f
 Bourne shell — applies it, byte-compares against the host's expected output, then **reverses** the
 patch and byte-compares back to the original. Forward-only would pass for a patch that mangles a
 file consistently; the round trip would not.
+
+## GCC 14 build
+
+The current package is built with GCC 14 (`TOOLCHAIN=gcc14`, revision `-6`, on gcc14-cross-amix
+b51ff39); the period build stopped at `-2`. Nothing in the recipe differs between the two
+toolchains. The `/usr/bin/patch` symlink is staged with its absolute target, as the prototype
+lists it; `/usr` and `/usr/bin` are stock directories the package does not own.
+
+The recipe moved to `package.sh` and hooks on 2026-10-30 without a revision: the rebuilt package has
+the recorded one's payload (every file's sha256 and mode), pkginfo, pkgmap (mtimes aside) and
+catalog line.
