@@ -57,8 +57,8 @@ jobs:
           persist-credentials: false
       - name: host packages
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -q -y --no-install-recommends zlib1g-dev
+          sudo apt-get -o Acquire::Retries=10 update -q
+          sudo apt-get -o Acquire::Retries=10 install -q -y --no-install-recommends zlib1g-dev
       - name: privacy-check self-test
         run: tools/test-privacy-check
       - name: kernel/dlm host tests
@@ -76,6 +76,9 @@ jobs:
     name: kit build (container)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: write   # only to drop superseded toolchain images from the cache
     defaults:
       run:
         shell: bash   # -eo pipefail: a failure before | tee fails the step
@@ -91,21 +94,45 @@ jobs:
         with:
           path: ${{ runner.temp }}/toolchain-image
           key: amix-toolchain-${{ hashFiles('toolchain/Containerfile', 'toolchain/*.pin', 'toolchain/container-build.sh', 'system/amix-system.pin', 'system/MANIFEST.sha256', 'system/SYMLINKS', 'system/check-amix-system') }}
-      - name: build the toolchain image
+      # A restore can fail on the cache service's side ("Egress is over the
+      # account limit", a throttle) though the entry exists: try once more
+      # before building the image from scratch.
+      - name: restore the toolchain image, second try
+        id: image2
         if: steps.image.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: ${{ steps.image.outputs.cache-primary-key }}
+      - name: build the toolchain image
+        if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
         run: |
           toolchain/container-build.sh "$RUNNER_TEMP/amix-system" amix-toolchain:ci
           mkdir -p "$RUNNER_TEMP/toolchain-image"
           docker save amix-toolchain:ci | zstd -q -T0 -o "$RUNNER_TEMP/toolchain-image/image.tar.zst"
           ls -l "$RUNNER_TEMP/toolchain-image"
       - name: save the toolchain image
-        if: steps.image.outputs.cache-hit != 'true'
+        if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.temp }}/toolchain-image
           key: ${{ steps.image.outputs.cache-primary-key }}
+      # One image is about 650 MB of the repository's 10 GB cache: once master
+      # has saved a new one, the images of older keys go.
+      - name: drop the superseded toolchain images
+        if: github.event_name == 'push' && steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: ${{ steps.image.outputs.cache-primary-key }}
+        run: |
+          gh cache list --repo "$GITHUB_REPOSITORY" --key amix-toolchain- --limit 100 \
+              --json id,key --jq '.[] | select(.key != env.KEEP) | "\(.id) \(.key)"' |
+            while read -r id key; do
+              echo "dropping $key"
+              gh cache delete --repo "$GITHUB_REPOSITORY" "$id"
+            done
       - name: load the toolchain image
-        if: steps.image.outputs.cache-hit == 'true'
+        if: steps.image.outputs.cache-hit == 'true' || steps.image2.outputs.cache-hit == 'true'
         run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
       - name: the image's gcc14 is the pinned build
         run: toolchain/extract-g14.sh --check amix-toolchain:ci

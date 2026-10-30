@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+# test-conffile: host test of pkgroll.sh's amix_conffiles (P-36 section 1.2).
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Sources the real build/pkg/common/pkgroll.sh in /bin/sh and runs
+# amix_conffiles on a work directory: each CONFFILES path's prototype line
+# becomes `e conffile', i.conffile and r.conffile are copied beside the
+# prototype and named on `i' lines (AMIX_CONFFILE_DIR stands in for
+# userland/pkgtools' src/conffile), and pkginfo must say CLASSES=none
+# conffile; without CONFFILES the work directory is left as it was.
+# Prints "N/N passed"; exits non-zero on any failure.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+PKGROLL = os.path.join(os.path.dirname(HERE), "common", "pkgroll.sh")
+
+PROTO = ("i pkginfo\n"
+         "d none /etc 0755 root sys\n"
+         "f none /etc/foo.conf 0644 root sys\n"
+         "f none /var/foo/state 0600 root sys\n"
+         "f none /opt/amix/bin/foo 0755 root bin\n")
+PKGINFO = "PKG=foo\nCLASSES=none conffile\nDESC=t\n"
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text):
+    with open(path, "w") as fp:
+        fp.write(text)
+
+
+def read(path):
+    with open(path) as fp:
+        return fp.read()
+
+
+def roll(tmp, conffiles, proto=PROTO, pkginfo=PKGINFO, scripts=True):
+    """(rc, output, work dir) of amix_conffiles over a fresh work dir."""
+    work = os.path.join(tmp, "work")
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    write(os.path.join(work, "prototype"), proto)
+    write(os.path.join(work, "pkginfo"), pkginfo)
+    sdir = os.path.join(tmp, "conffile")
+    shutil.rmtree(sdir, ignore_errors=True)
+    os.makedirs(sdir)
+    if scripts:
+        for s in ("i.conffile", "r.conffile"):
+            write(os.path.join(sdir, s), "# %s stand-in\n" % s)
+    env = dict(os.environ, AMIX_CONFFILE_DIR=sdir, AMIX_PKGMGR="/nonexistent")
+    r = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_conffiles "$2" "$3"',
+                        "sh", PKGROLL, work, conffiles],
+                       capture_output=True, text=True, env=env)
+    return r.returncode, r.stdout + r.stderr, work
+
+
+def main():
+    tmp = tempfile.mkdtemp(prefix="test-conffile.")
+    try:
+        rc, out, work = roll(tmp, "")
+        check("no CONFFILES: prototype unchanged",
+              rc == 0 and read(os.path.join(work, "prototype")) == PROTO, out)
+        check("no CONFFILES: no scripts copied",
+              sorted(os.listdir(work)) == ["pkginfo", "prototype"], str(os.listdir(work)))
+
+        rc, out, work = roll(tmp, "/etc/foo.conf /var/foo/state")
+        proto = read(os.path.join(work, "prototype")) if rc == 0 else ""
+        check("two conffiles: rolled", rc == 0, out)
+        check("listed lines become e conffile",
+              "e conffile /etc/foo.conf 0644 root sys\n" in proto
+              and "e conffile /var/foo/state 0600 root sys\n" in proto, proto)
+        check("other lines are left alone",
+              "d none /etc 0755 root sys\n" in proto
+              and "f none /opt/amix/bin/foo 0755 root bin\n" in proto, proto)
+        check("i.conffile and r.conffile are named, without a host path",
+              proto.endswith("i i.conffile\ni r.conffile\n"), proto)
+        check("the scripts are copied beside the prototype",
+              all(read(os.path.join(work, s)) == "# %s stand-in\n" % s
+                  for s in ("i.conffile", "r.conffile")) if rc == 0 else False)
+        check("says what it did", "CONFFILES 2: e conffile" in out, out)
+
+        rc, out, work = roll(tmp, "/etc/foo.conf,/var/foo/state")
+        check("a comma-separated list works too", rc == 0 and read(os.path.join(
+            work, "prototype")).count("e conffile ") == 2, out)
+
+        e = PROTO.replace("f none /etc/foo.conf", "e none /etc/foo.conf")
+        rc, out, work = roll(tmp, "/etc/foo.conf", e)
+        check("an e line already there gets class conffile", rc == 0 and
+              "e conffile /etc/foo.conf 0644" in read(os.path.join(work, "prototype")), out)
+
+        rc, out, work = roll(tmp, "/etc/foo.conf", pkginfo="PKG=foo\nCLASSES=none\nDESC=t\n")
+        check("refused: pkginfo without CLASSES=none conffile",
+              rc != 0 and "CLASSES=none conffile" in out, out)
+        rc, out, work = roll(tmp, "/etc/bar.conf")
+        check("refused: a path the prototype does not hold",
+              rc != 0 and "/etc/bar.conf is on 0 prototype line(s)" in out
+              and not os.path.exists(os.path.join(work, "prototype.cf")), out)
+        rc, out, work = roll(tmp, "/etc/foo.conf", PROTO + "f none /etc/foo.conf 0600 root sys\n")
+        check("refused: a path on two lines", rc != 0 and "is on 2 prototype" in out, out)
+        rc, out, work = roll(tmp, "/etc/foo.conf", scripts=False)
+        check("refused: no class action scripts",
+              rc != 0 and "i.conffile (userland/pkgtools src/conffile)" in out, out)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print("%d/%d passed" % (passed, passed + failed))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

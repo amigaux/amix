@@ -16,11 +16,20 @@ FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce
 # The Ubuntu archive as it was at this moment, so the host packages are the
 # same on every build. snapshot.ubuntu.com answers only over https, so the CA
 # certificates come first, from the live archive; every package after them
-# comes from the snapshot, whose signatures apt checks as usual.
+# comes from the snapshot, whose signatures apt checks as usual. The snapshot
+# service answers 5xx at times, for minutes: apt retries each file 5 times,
+# backing off to 2 minutes; an update fails on any index it could not fetch
+# (apt would go on without it), and each update or install is tried 4 times,
+# 2 minutes apart.
 ARG SNAPSHOT=20261028T000000Z
 ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 TZ=UTC
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+RUN printf '%s\n' 'Acquire::Retries "5";' 'Acquire::Retries::Delay::Maximum "120";' \
+      > /etc/apt/apt.conf.d/80retries \
+ && try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
+ && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
+      cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
+ && try upd \
+ && try apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/ubuntu.sources \
  && printf '%s\n' 'Types: deb' \
       "URIs: https://snapshot.ubuntu.com/ubuntu/$SNAPSHOT" \
@@ -28,12 +37,12 @@ RUN apt-get update \
       'Components: main universe' \
       'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
       > /etc/apt/sources.list.d/snapshot.sources \
- && apt-get -o Acquire::Check-Valid-Until=false update \
- && apt-get install -y --no-install-recommends \
+ && try upd -o Acquire::Check-Valid-Until=false \
+ && try apt-get install -y --no-install-recommends \
       autotools-dev bison bzip2 cpio curl file flex g++ gcc git \
       gzip libc6-dev m4 make patch perl python3 strip-nondeterminism \
       xz-utils zlib1g-dev \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log
 
 # ---------------------------------------------------------------------------
 # gcc-cross-amix: GCC 2.7.2.3 and binutils 2.8.1 for m68k-cbm-sysv4, kernel

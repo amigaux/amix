@@ -46,7 +46,7 @@ so each fact about a package is written in one place.
 | `TOOLCHAIN=gcc14` | `gcc14` or `period` |
 | `PREFIX=/opt/amix` | the install prefix |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
-| `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile` |
+| `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the

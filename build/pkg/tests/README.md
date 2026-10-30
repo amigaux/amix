@@ -3,7 +3,9 @@
 `test-pkgmeta` is the host test of `pkgmeta` and `check-packages`;
 `test-pkgbuild` is the host test of the driver and `layout.sh`;
 `test-s5mark` is the host test of `pkgroll.sh`'s GATE 3, the s5 rule and
-the UFS mark (`APKG_FSTYPE=ufs`, P-35). Run them with
+the UFS mark (`APKG_FSTYPE=ufs`, P-35); `test-conffile` the host test of its
+`CONFFILES` step (P-36), with stand-ins for userland/pkgtools' class action
+scripts. Run them with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 
