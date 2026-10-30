@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-30 — CONFFILES, run-level link bands and man-page warnings (318c390)
+
+package.sh may list CONFFILES (P-36 W3, part 1). pkgmeta check refuses a CONFFILES path that is not an f or e line of
+the prototype or is on two of its lines, one under PREFIX or outside /etc and /var or relative, an e object CONFFILES
+does not list, one conffile listed by two packages, an object under /etc/rc.d, and a run-level link outside the boot
+bands; pkginfo says CLASSES=none conffile for such a package and is unchanged otherwise. pkgmeta check warns about
+commands and config files without a man page (5 current packages flagged). test-pkgmeta 93/93.
+
 ## 2026-10-30 — the s5 gate marks long-named packages UFS-only (a77c318); interim driver removed (ca7a835)
 
 pkgroll.sh's s5 gate (GATE 3, amix_s5_mark) marks a package with an object basename over 14 bytes UFS-only:
