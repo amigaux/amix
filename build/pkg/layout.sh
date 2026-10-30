@@ -13,8 +13,9 @@
 #   AMIX_BUILD_ROOT       where builds write: out/pkg (ignored); also
 #   AMIX_GCC14_BUILD_ROOT   for TOOLCHAIN=gcc14
 #   AMIX_CROSS_ENV        $GCA/env.sh, the period toolchain
-#   AMIX_GCC14_ROOT       the gcc14-cross-amix checkout holding $G14, and
-#   AMIX_GCC14_PREFIX       $G14/prefix, the compiler
+#   AMIX_GCC14_ROOT       the gcc14-cross-amix checkout holding $G14,
+#   AMIX_GCC14_PREFIX       $G14/prefix, the compiler, and
+#   AMIX_G14_BUILD          $G14 itself (dlm-src.sh's box builds)
 #   AMIX_GCA_PIN          the commits in toolchain/gcc-cross-amix.pin and
 #   AMIX_G14_PIN            toolchain/gcc14-cross-amix.pin
 #   AMIX_PKGMGR           userland/pkgtools; AMIX_PKGMK and AMIX_PKGTRANS
@@ -23,8 +24,10 @@
 #   AMIX_DLM, AMIX_MODULES  this checkout (kernel/dlm and kernel/modules)
 #
 # GCA and G14 name the toolchains' build/ directories as in the build
-# container (toolchain/README.md). Unset, they default to gcc-cross-amix and
-# gcc14-cross-amix checkouts beside the main working tree of this checkout.
+# container (toolchain/README.md). Unset, GCA is the gcc-cross-amix checkout
+# beside the main working tree of this checkout, and G14 the container's
+# gcc14 that toolchain/extract-g14.sh copies into that main working tree's
+# out/toolchain/gcc14-cross-amix.
 
 case "${0##*/}" in
 layout.sh)
@@ -48,7 +51,7 @@ if [ -z "${GCA:-}" ] || [ -z "${G14:-}" ]; then
 		_l_sib=$(dirname "$(dirname "$_l_git")") || _l_sib=
 	if [ -n "$_l_sib" ]; then
 		GCA="${GCA:-$_l_sib/gcc-cross-amix/build}"
-		G14="${G14:-$_l_sib/gcc14-cross-amix/build}"
+		G14="${G14:-$(dirname "$_l_git")/out/toolchain/gcc14-cross-amix/build}"
 	fi
 fi
 if [ -n "${GCA:-}" ]; then
@@ -57,6 +60,7 @@ fi
 if [ -n "${G14:-}" ]; then
 	export AMIX_GCC14_ROOT="${AMIX_GCC14_ROOT:-$(dirname "$G14")}"
 	export AMIX_GCC14_PREFIX="${AMIX_GCC14_PREFIX:-$G14/prefix}"
+	export AMIX_G14_BUILD="${AMIX_G14_BUILD:-$G14}"
 fi
 read -r _l_url AMIX_GCA_PIN < "$AMIX_TOP/toolchain/gcc-cross-amix.pin"
 read -r _l_url AMIX_G14_PIN < "$AMIX_TOP/toolchain/gcc14-cross-amix.pin"

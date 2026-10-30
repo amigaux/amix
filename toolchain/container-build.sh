@@ -12,6 +12,8 @@
 #   GCA_REPO     a local clone of gcc-cross-amix to take the pinned commit
 #                from, instead of fetching it from the pin's URL
 #   G14_REPO     the same for gcc14-cross-amix
+#   NO_CACHE     1: build every stage again, using no cached layer (to
+#                compare two builds' TOOLCHAIN.sha256)
 #
 # Each toolchain's source is exported with `git archive` at the pinned commit
 # into a scratch directory, so nothing but the tree at that commit reaches
@@ -51,7 +53,9 @@ export_pin g14 "$here/gcc14-cross-amix.pin" "${G14_REPO:-}"
 read -r _ g14 < "$here/gcc14-cross-amix.pin"
 tag=${2:-amix-toolchain:$(printf %.7s "$g14")}
 
-"$tool" build -f "$here/Containerfile" \
+set --
+[ "${NO_CACHE:-}" != 1 ] || set -- --no-cache
+"$tool" build "$@" -f "$here/Containerfile" \
 	--build-context gca-src="$work/gca" \
 	--build-context g14-src="$work/g14" \
 	--build-context amix-system="$sys" \

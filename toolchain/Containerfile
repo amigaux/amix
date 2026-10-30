@@ -59,14 +59,17 @@ RUN make test-hello PREFIX=/opt/amix-cross AMIX_ROOT=/opt/amix/amix-system \
 
 # ---------------------------------------------------------------------------
 # gcc14-cross-amix: GCC 14 for m68k-elf with AMIX's return convention,
-# userland only. Installed in its checkout's build/prefix, with its sysroot in
-# build/sysroot; that build/ directory is what G14 names.
+# userland only. Installed in its checkout's build/prefix; that build/
+# directory is what G14 names. The sysroot is inside the prefix
+# (prefix/m68k-elf/sysroot, and build/sysroot links to it), so the compiler
+# and the linker find it relative to themselves: the build/ directory works
+# wherever it is copied (toolchain/extract-g14.sh).
 FROM gca AS g14
 COPY --from=g14-src / /opt/amix/gcc14-cross-amix
 WORKDIR /opt/amix/gcc14-cross-amix
 RUN set -e; G=/opt/amix/gcc14-cross-amix; \
     printf '%s\n' \
-      "AMIX_SYSROOT=\"$G/build/sysroot\"" \
+      "AMIX_SYSROOT=\"$G/build/prefix/m68k-elf/sysroot\"" \
       'AMIX_CROSS_BIN="/opt/amix-cross/bin"' \
       "TC_PREFIX=\"$G/build/prefix\"" \
       'TC_TARGET="m68k-elf"' \
@@ -74,9 +77,10 @@ RUN set -e; G=/opt/amix/gcc14-cross-amix; \
       'MODERN_PREFIX="m68k-linux-gnu-"' \
       'MODERN_GCC="m68k-linux-gnu-gcc-14"' \
       'AMIX_CPU="-m68020-60"' > config.sh; \
-    mkdir -p build/sysroot /opt/amix/g14-work/src; \
+    mkdir -p build/prefix/m68k-elf/sysroot /opt/amix/g14-work/src; \
+    ln -s prefix/m68k-elf/sysroot build/sysroot; \
     cp -R /opt/amix/amix-system/usr build/sysroot/; \
-    chmod -R u+w build/sysroot; \
+    chmod -R u+w build/sysroot/; \
     tools/sync-sysroot.sh /opt/amix/amix-system; \
     cd /opt/amix/g14-work/src; \
     curl -fsSL -O https://ftp.gnu.org/gnu/binutils/binutils-2.43.1.tar.xz; \

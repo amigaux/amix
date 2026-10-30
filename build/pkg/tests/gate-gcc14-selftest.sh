@@ -49,17 +49,6 @@ fail() { echo "gate-gcc14-selftest: FAIL -- $*" >&2; exit 1; }
 n=0
 ok() { n=$((n + 1)); echo "  ok $n  $*"; }
 
-# The identity gate admits only the pinned prefix's bytes (gcc14-pin.sh). The
-# build container's gcc14 is built from the pinned commit but is not that
-# prefix byte for byte; with AMIX_G14_UNPINNED=skip (the CI kit job) such a
-# prefix is a SKIP, exit 77, instead of a failure.
-. "$AMIX_PKG_COMMON/gcc14-pin.sh"
-if [ "${AMIX_G14_UNPINNED:-}" = skip ] && ! amix_g14_pincheck "$AMIX_GCC14_PREFIX" 2> "$T/unpinned"; then
-	cat "$T/unpinned" >&2
-	echo "gate-gcc14-selftest: SKIP -- $AMIX_GCC14_PREFIX is not the pinned gcc14 build (AMIX_G14_UNPINNED=skip)" >&2
-	exit 77
-fi
-
 if (TOOLCHAIN=gcc14; export TOOLCHAIN; unset AMIX_RECIPE_TOOLCHAINS; . "$AMIX_PKG_COMMON/amix-env.sh") >/dev/null 2>&1; then
 	fail "amix-env.sh accepted TOOLCHAIN=gcc14 for a recipe that did not opt in"
 fi
@@ -322,9 +311,10 @@ ok "scan060-g14.py sizes mask-bounded, entry-bounded and compare-interleaved swi
 
 # The toolchain identity (gcc14-env.sh): a prefix whose specs differ from the
 # pin by one byte is refused before anything builds; the return-value ABI
-# self-check passes the pinned compiler.  Where gcc14-cross-amix still keeps
-# the pre-fix control prefix (build/prefix-e316f1b: pointers in %d0 only,
-# small structs in registers), the self-check must reject that compiler too.
+# self-check passes the pinned compiler.  Where a pre-fix control compiler is
+# at hand (AMIX_G14_E316F1B, default the gcc14-cross-amix checkout beside the
+# main working tree, build/prefix-e316f1b: pointers in %d0 only, small
+# structs in registers), the self-check must reject that compiler too.
 FP="$T/fakeprefix"
 cp -as "$AMIX_GCC14_PREFIX" "$FP"
 rm "$FP/lib/gcc/m68k-elf/14.2.0/specs"
@@ -335,7 +325,11 @@ fi
 grep 'not the pinned toolchain' "$T/pin.log" >/dev/null && grep 'specs:' "$T/pin.log" >/dev/null ||
 	{ cat "$T/pin.log" >&2; fail "the pin refusal does not name specs"; }
 amix_g14_abi_selfcheck "$AMIX_GCC14_CC" >/dev/null 2>&1 || fail "the ABI self-check rejected the pinned compiler"
-OLDCC="$AMIX_GCC14_ROOT/build/prefix-e316f1b/bin/m68k-elf-gcc"
+if [ -z "${AMIX_G14_E316F1B:-}" ]; then
+	_g=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+		AMIX_G14_E316F1B=$(dirname "$(dirname "$_g")")/gcc14-cross-amix/build/prefix-e316f1b
+fi
+OLDCC="${AMIX_G14_E316F1B:-}/bin/m68k-elf-gcc"
 if [ -x "$OLDCC" ]; then
 	if amix_g14_abi_selfcheck "$OLDCC" >/dev/null 2>&1; then fail "the ABI self-check passed the e316f1b compiler"; fi
 	ok "toolchain pin refuses a one-byte specs change; ABI self-check passes the pinned prefix, rejects e316f1b"

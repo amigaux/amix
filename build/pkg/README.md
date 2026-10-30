@@ -107,10 +107,11 @@ fetcher, the gates and the roll. `layout.sh` tells the harness where things
 are in this checkout:
 
 - the toolchains: `GCA` and `G14` name their `build/` directories, as in the
-  build container (`toolchain/README.md`). Unset, they are the
-  `gcc-cross-amix` and `gcc14-cross-amix` checkouts beside the main working
-  tree. The harness's gcc14 pin must be the commit in
-  `toolchain/gcc14-cross-amix.pin`;
+  build container (`toolchain/README.md`). Unset, `GCA` is the
+  `gcc-cross-amix` checkout beside the main working tree, and `G14` the
+  container's gcc14 as `toolchain/extract-g14.sh` copies it, in the main
+  working tree's `out/toolchain/gcc14-cross-amix`. The harness's gcc14 pin
+  must be the commit in `toolchain/gcc14-cross-amix.pin`;
 - pkgtools: the host `pkgmk` and `pkgtrans` that
   `userland/pkgtools/heirloom/build-host.sh` builds, and
   `userland/pkgtools/tools/repo/scan060.py`;

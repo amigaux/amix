@@ -107,12 +107,12 @@ jobs:
       - name: load the toolchain image
         if: steps.image.outputs.cache-hit == 'true'
         run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
+      - name: the image's gcc14 is the pinned build
+        run: toolchain/extract-g14.sh --check amix-toolchain:ci
       - name: dlm kit, kit tests and modules
         run: toolchain/container-kit.sh amix-toolchain:ci | tee "$RUNNER_TEMP/kit.txt"
       - name: packaging harness selftests
         run: |
-          # the container's gcc14 is not the pinned prefix byte for byte yet:
-          # gate-gcc14-selftest skips (docs/ci.md)
           # The runner's uid has no name in the image, and the pkgtools smoke
           # tests ask for one: the image's passwd and group, plus that uid.
           ids=$RUNNER_TEMP/ids; mkdir -p "$ids"
@@ -123,7 +123,6 @@ jobs:
           awk -F: -v g="$(id -g)" '$3 == g { f = 1 } END { exit !f }' "$ids/group" ||
             echo "builder:x:$(id -g):" >> "$ids/group"
           docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e GITHUB_ACTIONS \
-            -e AMIX_G14_UNPINNED=skip \
             -v "$ids/passwd:/etc/passwd:ro" -v "$ids/group:/etc/group:ro" \
             -v "$PWD:/src" -w /src amix-toolchain:ci make -C build selftests
       - name: kit and module hashes

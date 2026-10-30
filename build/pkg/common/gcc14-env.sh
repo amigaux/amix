@@ -149,7 +149,7 @@ AMIX_GCC14_CXX="$_g14_bin/$TARGET-g++"
 
 [ -x "$AMIX_GCC14_CC" ] || {
 	echo "[FAIL] TOOLCHAIN=gcc14: $AMIX_GCC14_CC not found" >&2
-	echo "       Build ../gcc14-cross-amix (toolchain/build-cross.sh) or set AMIX_GCC14_PREFIX." >&2
+	echo "       Copy the build container's gcc14 (toolchain/extract-g14.sh) or set G14." >&2
 	exit 1
 }
 

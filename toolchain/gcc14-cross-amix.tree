@@ -1,0 +1,6 @@
+# The gcc14-cross-amix build that amix pins: the sha256 of the gcc14 part of
+# the build container's /opt/amix/TOOLCHAIN.sha256 (its lines under
+# amix/gcc14-cross-amix/, that prefix removed), built by Containerfile from
+# the commit in gcc14-cross-amix.pin. toolchain/extract-g14.sh checks an image
+# against it; build/pkg/common/gcc14-pin.sh pins four of its files.
+3d3ca2fe62f70d376ea294bd9773edcaab0d495391c4033f854af696e86811c3

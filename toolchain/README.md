@@ -10,6 +10,7 @@ repositories; nothing here is vendored.
 |------|-----------|--------|
 | `gcc-cross-amix.pin` | GCC 2.7.2.3 and binutils 2.8.1 for `m68k-cbm-sysv4` | kernel space: kernels, loadable modules, drivers, the dlm kit |
 | `gcc14-cross-amix.pin` | GCC 14.2.0 and binutils 2.43.1 for `m68k-elf`, with AMIX's return convention (pointers in `%a0` and `%d0`, structs in memory) | userland: C and C++ programs and libraries |
+| `gcc14-cross-amix.tree` | the build of that commit amix uses: the digest of the container's gcc14 file list (below) | |
 
 Each pin is one line, `<repository URL> <full commit hash>`, the same format
 as `kernel/port/port.pin`.
@@ -68,12 +69,44 @@ The image holds the AMIX sysroot, so it is built locally from a checkout of
 | `/opt/amix-cross/m68k-cbm-sysv4/sysroot` | its sysroot |
 | `/opt/amix/gcc-cross-amix/build/env.sh` | its environment (`PATH`, `AMIX_SYSROOT`, `AMIX_ROOT`) |
 | `/opt/amix/gcc14-cross-amix/build/prefix/bin/m68k-elf-*` | GCC 14 |
-| `/opt/amix/gcc14-cross-amix/build/sysroot` | its sysroot, with the X11 pieces and `stdint.h` |
+| `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`; `build/sysroot` links to it |
 | `/opt/amix/amix-system/usr` | the AMIX root both were built from |
 | `/opt/amix/TOOLCHAIN.sha256` | the hash list |
 
 `GCA` and `G14` are set in the image's environment, and both toolchains are
 on `PATH`.
+
+## GCC 14 on the host
+
+The gcc14 every package is built with is the container's: the build of the
+commit in `gcc14-cross-amix.pin` that this Containerfile makes, pinned by
+`gcc14-cross-amix.tree`. Its sysroot is inside the prefix, so the compiler
+and the linker find it relative to where they are, and a copy outside the
+container builds the same bytes. `extract-g14.sh` makes that copy:
+
+```sh
+toolchain/extract-g14.sh amix-toolchain:<tag>            # into out/toolchain/
+toolchain/extract-g14.sh --check amix-toolchain:<tag>    # only check the image
+```
+
+It refuses an image whose gcc14 file list does not have the pinned digest,
+checks every copied file against that list, and keeps the list as
+`TOOLCHAIN.sha256` in the copy. The default place is
+`out/toolchain/gcc14-cross-amix` in the main working tree (ignored), one copy
+for every worktree of the checkout; `G14` is its `build/`, and that is
+build/pkg's default (`build/pkg/layout.sh`). The packaging harness pins four
+of its files (`build/pkg/common/gcc14-pin.sh`) and refuses any other
+compiler.
+
+Until 2026-10-30 the pin was a build of the same commit on a workstation.
+The container's differs from it in every file the harness pins, none of it
+in generated code: `specs` has no `-gz=zstd` (the container's binutils are
+built without zstd); `cc1` and the other host programs were built by another
+host compiler, and carry other build paths; `libgcc.a` and `libstdc++.a`
+differ in their members' debug information and, in two `libstdc++.a`
+members, in `__FILE__` strings, both of which name the build directory
+(`/opt/amix/g14-work` here); `libamixc99.a` differs only in its archive
+headers.
 
 ## How kernel/dlm uses them
 

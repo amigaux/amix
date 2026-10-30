@@ -246,12 +246,15 @@ stage() {
         check("amix layout: configure style builds", rc == 0, out)
         env = seen() if rc == 0 else {}
         sib = os.path.realpath(tmp)
+        g14x = os.path.join(os.path.realpath(amix), "out", "toolchain",
+                            "gcc14-cross-amix")
         for k, want in (
                 ("AMIX_REPO_ROOT", amix), ("AMIX_PKG_COMMON", common),
                 ("AMIX_BUILD_ROOT", out_pkg), ("AMIX_GCC14_BUILD_ROOT", out_pkg),
                 ("AMIX_CROSS_ENV", os.path.join(sib, "gcc-cross-amix", "build", "env.sh")),
-                ("AMIX_GCC14_ROOT", os.path.join(sib, "gcc14-cross-amix")),
-                ("AMIX_GCC14_PREFIX", os.path.join(sib, "gcc14-cross-amix", "build", "prefix")),
+                ("AMIX_GCC14_ROOT", g14x),
+                ("AMIX_GCC14_PREFIX", os.path.join(g14x, "build", "prefix")),
+                ("AMIX_G14_BUILD", os.path.join(g14x, "build")),
                 ("AMIX_GCA_PIN", gca_pin), ("AMIX_G14_PIN", g14_pin),
                 ("AMIX_PKGMGR", os.path.join(amix, "userland", "pkgtools")),
                 ("AMIX_PKGMK", os.path.join(bindir, "pkgmk")),
@@ -282,7 +285,8 @@ stage() {
         check("GCA and G14 name the toolchains",
               rc == 0 and env.get("AMIX_CROSS_ENV") == "/x/gca/build/env.sh"
               and env.get("AMIX_GCC14_ROOT") == "/x/g14"
-              and env.get("AMIX_GCC14_PREFIX") == "/x/g14/build/prefix", out)
+              and env.get("AMIX_GCC14_PREFIX") == "/x/g14/build/prefix"
+              and env.get("AMIX_G14_BUILD") == "/x/g14/build", out)
         rc, out = build("conf", AMIX_BUILD_ROOT=os.path.join(tmp, "elsewhere"))
         check("AMIX_BUILD_ROOT set beforehand is kept",
               rc == 0 and os.path.isfile(os.path.join(

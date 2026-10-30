@@ -17,6 +17,7 @@ finding to fix, not a gate.
 | tests | userland/packages: every package.sh, `INDEX.md` and `conf/` current | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
 | kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
+| kit | the image's gcc14 is the pinned build (`toolchain/gcc14-cross-amix.tree`) | `toolchain/extract-g14.sh --check amix-toolchain:ci` |
 | kit | the dlm kit, its tests and every module, in the container | `toolchain/container-kit.sh amix-toolchain:ci` |
 | kit | the packaging harness selftests (68060 and gcc14 gates, one-version guard), in the container | `make -C build selftests` |
 
@@ -59,12 +60,10 @@ amix-packages clone until the kernel-space packages move; CI has none, so it
 skips (exit 77) with a warning on the run. Locally it finds amix-packages
 beside the main working tree, or `AMIX_KSPACE_REPO`.
 
-The gcc14 gates' selftest skips in CI too, with a warning. The harness admits
-only the gcc14 prefix whose files `build/pkg/common/gcc14-pin.sh` pins by
-sha256; the container builds gcc14 from the pinned commit, but not to the
-same bytes (its binutils have no zstd, for one). The step sets
-`AMIX_G14_UNPINNED=skip`, which turns that refusal into a SKIP. Until the
-two agree, gcc14 packages are built outside the container.
+The container's gcc14 is the one gcc14 packages are built with, in CI and
+on the host (`toolchain/extract-g14.sh` copies it out). The kit job checks
+the image against its pin first, so the gcc14 gates' selftest runs against
+the pinned compiler.
 
 What CI does not build yet: the kernels and the boot media. Host-test cases
 that need inputs outside this repository (stock kernels, floppies) skip

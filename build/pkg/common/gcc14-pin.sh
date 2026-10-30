@@ -27,20 +27,21 @@ gcc14-pin.sh)
 esac
 
 # path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.
-# Re-pinned 2026-10-29 (owner Y3) to the public amigaux/gcc14-cross-amix,
-# branch upstream-58130fe-plus at b51ff39: Antti's 58130fe plus the
-# m68020-60 runtime fix.  cc1 is unchanged; specs now default to
-# -mno-strict-align, and libgcc.a / libamixc99.a were rebuilt under it
-# (word-pair stack reads become one move.l).  Compiled objects are
-# identical with our flags; linked binaries differ only in runtime members
-# (evidence in Amigaux/tmp/2026-10-29-g14-repin/).  The cf461e3 prefix is
-# kept as gcc14-cross-amix/build/prefix-cf461e3.
+# Re-pinned 2026-10-30 (owner, option b) to the build container's gcc14:
+# toolchain/Containerfile builds b51ff39 (the public amigaux/gcc14-cross-amix,
+# branch upstream-58130fe-plus: Antti's 58130fe plus the m68020-60 runtime
+# fix) reproducibly, with the sysroot inside the prefix, and
+# toolchain/gcc14-cross-amix.tree pins the whole tree.
+# toolchain/extract-g14.sh puts it on the host, where it builds the same
+# bytes as in the container. The earlier pin was a workstation build of the
+# same commit; these four files differ from it by how they were built (see
+# toolchain/README.md), not by source.
 AMIX_GCC14_COMMIT=b51ff39c500adadca629d7caf2a1d20a00fced03
 AMIX_GCC14_PINS="\
-libexec/gcc/m68k-elf/14.2.0/cc1 9635f67e59103c2867638910849e410d19bfd9c10a1b52093f9e58e515496bff
-lib/gcc/m68k-elf/14.2.0/libgcc.a 62d061c006cb5652892fde3ccb095bfc211ddd45c5600e8f65539327db20ddfd
-m68k-elf/lib/libamixc99.a fa1e42d4e97bb8b540b9d9ae9d42ebbdeac77f49881e31d6115c93c277dfa601
-lib/gcc/m68k-elf/14.2.0/specs 45f4685908f349b6c1a67e010feb8a83a1bdfc7ba7b5960f636ab6c4ffd3de5d"
+libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
+lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
+m68k-elf/lib/libamixc99.a 78436c8b23eb9bb28bd4de4eb0fb1f2195caa3df9729a5938cae9fffa7035ca5
+lib/gcc/m68k-elf/14.2.0/specs 0e0d3ff1ca55cd4ece6428b39e10bccfa732cc0d5ce0c1c4abce7ce6ca5498e3"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
