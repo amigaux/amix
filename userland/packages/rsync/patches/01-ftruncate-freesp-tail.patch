@@ -1,0 +1,87 @@
+AMIX 2.1c panics (KERNEL FAULT, bus error in bzero) when a file larger
+than its direct blocks (~96 KiB) is shrunk to an EOF that is not block
+aligned inside the block that holds the old EOF: ftruncate is fcntl
+F_FREESP -> ufs_space -> ufs_freesp -> ufs_itrunc -> pvn_vptrunc, whose
+bzero of the tail faults.  Measured on the emulated golden 030 (kernel
+46759dcc): 480017->480000, 480017->477000 and 110017->110000 panic;
+90017->90000, 480017->470000 and block-aligned cuts do not.  rsync
+--inplace ends every shrinking update with exactly that ftruncate.
+do_ftruncate now cuts at the block boundary below the new EOF and writes
+the remaining bytes back; the --inplace file is opened O_RDWR so they
+can be read first.
+
+--- a/syscall.c
++++ b/syscall.c
+@@ -243,6 +243,51 @@
+ }
+ 
+ #ifdef HAVE_FTRUNCATE
++/* AMIX 2.1c: shrinking a large file to an EOF that is not block aligned,
++ * inside the block that holds the old EOF, faults the kernel (ftruncate is
++ * fcntl F_FREESP; pvn_vptrunc's bzero of the tail takes a bus error and the
++ * box panics).  Cut at the block boundary below the new EOF instead, which
++ * has no tail to zero, and write the bytes up to the new EOF back.  The fd
++ * must be readable (receiver.c opens the --inplace file O_RDWR). */
++static int amix_ftruncate(int fd, OFF_T size)
++{
++	STRUCT_STAT st;
++	OFF_T blk, base, pos;
++	char *tail;
++	int len, n, k, ret;
++
++	if (do_fstat(fd, &st) < 0)
++		return -1;
++	blk = st.st_blksize > 8192 ? st.st_blksize : 8192;
++	if (size % blk == 0 || st.st_size <= size)
++		return ftruncate(fd, size);
++	base = size - size % blk;
++	len = (int)(size - base);
++	if (!(tail = new_array(char, len)))
++		out_of_memory("amix_ftruncate");
++	ret = -1;
++	if ((pos = lseek(fd, 0, SEEK_CUR)) < 0 || lseek(fd, base, SEEK_SET) != base)
++		goto out;
++	for (n = 0; n < len; n += k) {
++		if ((k = read(fd, tail + n, len - n)) <= 0) {
++			if (k < 0 && errno == EINTR) { k = 0; continue; }
++			goto out;
++		}
++	}
++	if (ftruncate(fd, base) < 0 || lseek(fd, base, SEEK_SET) != base)
++		goto out;
++	for (n = 0; n < len; n += k) {
++		if ((k = write(fd, tail + n, len - n)) <= 0) {
++			if (k < 0 && errno == EINTR) { k = 0; continue; }
++			goto out;
++		}
++	}
++	ret = lseek(fd, pos, SEEK_SET) < 0 ? -1 : 0;
++  out:
++	free(tail);
++	return ret;
++}
++
+ int do_ftruncate(int fd, OFF_T size)
+ {
+ 	int ret;
+@@ -251,7 +296,7 @@
+ 	RETURN_ERROR_IF_RO_OR_LO;
+ 
+ 	do {
+-		ret = ftruncate(fd, size);
++		ret = amix_ftruncate(fd, size);
+ 	} while (ret < 0 && errno == EINTR);
+ 
+ 	return ret;
+--- a/receiver.c
++++ b/receiver.c
+@@ -812,7 +812,8 @@
+ 
+ 		/* We now check to see if we are writing the file "inplace" */
+ 		if (inplace)  {
+-			fd2 = do_open(fname, O_WRONLY|O_CREAT, 0600);
++			/* O_RDWR: do_ftruncate reads the tail back (syscall.c) */
++			fd2 = do_open(fname, O_RDWR|O_CREAT, 0600);
+ 			if (fd2 == -1) {
+ 				rsyserr(FERROR_XFER, errno, "open %s failed",
+ 					full_fname(fname));

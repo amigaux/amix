@@ -1,0 +1,26 @@
+rsync's bundled getaddrinfo (used: the box has none) accepts a numeric
+host only under AI_NUMERICHOST and otherwise hands it to gethostbyname.
+AMIX's gethostbyname searches /etc/hosts only (truss on the box: it opens
+/etc/hosts, no resolver traffic) and fails on a dotted quad, so
+rsync://192.0.2.1/ died "getaddrinfo: 192.0.2.1 8871: Unknown server
+error" (rc 10) while a name from /etc/hosts worked.  Real getaddrinfo
+never looks a numeric address up: try inet_pton first.
+
+--- a/lib/getaddrinfo.c
++++ b/lib/getaddrinfo.c
+@@ -302,6 +302,15 @@
+ 					&hints,
+ 					res);
+ 		} else {
++			/* A dotted quad is an address, not a name: AMIX's
++			 * gethostbyname only searches /etc/hosts and fails on
++			 * "192.0.2.1", where real getaddrinfo never asks. */
++			struct in_addr ip;
++			if (inet_pton(AF_INET, node, &ip) > 0)
++				return getaddr_info_single_addr(service,
++						ntohl(ip.s_addr),
++						&hints,
++						res);
+ 			return getaddr_info_name(node,
+ 						service,
+ 						&hints,
