@@ -10,23 +10,30 @@
 #     KM_SHORT         C3-5 sec 1.1 short name (pkginst = short + line digits)
 #     KM_REPO          the driver repository (sibling directory name)
 #     KM_VERSION       the module's release, = <repo>/module/VERSION
-#     KM_VERSION_FILE  optional: that file, relative to the siblings, when it
+#     KM_ROOT          the directory every path below is relative to: the
+#                      checkout's siblings by default (amix-packages' recipes,
+#                      `amix/kernel/...`); a recipe inside amix sets
+#                      KM_ROOT=$AMIX_REPO_ROOT and gives paths relative to the
+#                      checkout (`kernel/drivers/...`), so a worktree and the
+#                      build container find them
+#     KM_VERSION_FILE  optional: that file, relative to KM_ROOT, when it
 #                      is not $KM_REPO/module/VERSION (a repository's second
 #                      module, e.g. amix-a4091/module/a4kt710/VERSION)
-#     KM_K30_OBJ / KM_K46_OBJ        the object, relative to the siblings
+#     KM_K30_OBJ / KM_K46_OBJ        the object, relative to KM_ROOT
 #     KM_K30_SHA / KM_K46_SHA        its sha256
-#     KM_K30_DEPS / KM_K46_DEPS      "<path> <sha256>" per line: modules the
+#     KM_K30_DEPS / KM_K46_DEPS      "<path> <sha256>" per line, relative to
+#                      KM_ROOT: modules the
 #                      object names in depend=, for modcheck -d only (never
 #                      packaged)
 #     KM_KIT_COMMIT    amix-dlm commit whose `make kit` gives modcheck
-#     KM_LICENCES      "<path> <sha256>" per line, relative to the siblings
+#     KM_LICENCES      "<path> <sha256>" per line, relative to KM_ROOT
 #     KM_SOURCE_EPOCH
 #     KM_EXTRA_NOTE    optional: a paragraph for the copyright file
 #     KM_PAGESHIFT_OK  optional: the module Makefile's PAGESHIFT_OK, passed
 #                      to modcheck as -w (functions whose shifts by 11 are
 #                      not page arithmetic; kit 8fc87de or later)
 #     KM_FILES         optional: "<installed path> <source> <sha256> <mode>"
-#                      per line, the source relative to the siblings: further
+#                      per line, the source relative to KM_ROOT: further
 #                      plain files the package ships beside the module (a
 #                      driver's interface header), verified and copied
 #                      verbatim; the prototype lists each as `f none`
@@ -52,10 +59,12 @@ esac
 AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh}"
 
 amix_kmodpkg() {
+	_km_root="${KM_ROOT:-$AMIX_SIBLINGS}"
+	[ -d "$_km_root" ] || { echo "[FAIL] KM_ROOT=$_km_root is not a directory" >&2; exit 1; }
 	_km_dir="$1"; _km_line="$2"
 	case "$_km_line" in
-	k30) _km_obj="$AMIX_SIBLINGS/$KM_K30_OBJ"; _km_sha=$KM_K30_SHA; _km_deps=$KM_K30_DEPS ;;
-	k46) _km_obj="$AMIX_SIBLINGS/$KM_K46_OBJ"; _km_sha=$KM_K46_SHA; _km_deps=$KM_K46_DEPS ;;
+	k30) _km_obj="$_km_root/$KM_K30_OBJ"; _km_sha=$KM_K30_SHA; _km_deps=$KM_K30_DEPS ;;
+	k46) _km_obj="$_km_root/$KM_K46_OBJ"; _km_sha=$KM_K46_SHA; _km_deps=$KM_K46_DEPS ;;
 	*) echo "[FAIL] no kernel line '$_km_line' (k30, k46)" >&2; exit 1 ;;
 	esac
 	_km_cat="$KM_NAME-$_km_line"
@@ -70,14 +79,15 @@ amix_kmodpkg() {
 	echo "--- verify the inputs ---"
 	amix_verify "$_km_obj" "$_km_sha"
 	_km_vf=${KM_VERSION_FILE:-$KM_REPO/module/VERSION}
-	_km_v=$(cat "$AMIX_SIBLINGS/$_km_vf")
+	_km_v=$(cat "$_km_root/$_km_vf")
 	[ "$_km_v" = "$KM_VERSION" ] || {
 		echo "[FAIL] $_km_vf says '$_km_v', the pin $KM_VERSION" >&2; exit 1; }
 	echo "  $_km_vf = $KM_VERSION"
-	echo "$KM_LICENCES" | while read _n _h; do if [ -n "$_n" ]; then amix_verify "$AMIX_SIBLINGS/$_n" "$_h"; fi; done
+	# (each loop is a subshell: a refused input must stop the roll here)
+	echo "$KM_LICENCES" | while read _n _h; do if [ -n "$_n" ]; then amix_verify "$_km_root/$_n" "$_h"; fi; done || exit 1
 	_km_d=
-	echo "$_km_deps" | while read _p _h; do if [ -n "$_p" ]; then amix_verify "$AMIX_SIBLINGS/$_p" "$_h"; fi; done
-	for _p in $(echo "$_km_deps" | awk 'NF {print $1}'); do _km_d="$_km_d -d $AMIX_SIBLINGS/$_p"; done
+	echo "$_km_deps" | while read _p _h; do if [ -n "$_p" ]; then amix_verify "$_km_root/$_p" "$_h"; fi; done || exit 1
+	for _p in $(echo "$_km_deps" | awk 'NF {print $1}'); do _km_d="$_km_d -d $_km_root/$_p"; done
 
 	echo "--- modcheck (the kit of amix-dlm $KM_KIT_COMMIT) ---"
 	amix_dlm_kit "$KM_KIT_COMMIT" >/dev/null
@@ -123,9 +133,9 @@ PY
 			echo "[FAIL] KM_FILES: $_p is not a plain path outside /etc/conf, /dev and /stand" >&2; exit 1 ;; esac
 		grep -q "^f none $_p $_m " "$_km_dir/prototype" || {
 			echo "[FAIL] KM_FILES: the prototype has no 'f none $_p $_m'" >&2; exit 1; }
-		amix_verify "$AMIX_SIBLINGS/$_s" "$_h"
+		amix_verify "$_km_root/$_s" "$_h"
 		mkdir -p "$_km_dest${_p%/*}"
-		cp "$AMIX_SIBLINGS/$_s" "$_km_dest$_p"
+		cp "$_km_root/$_s" "$_km_dest$_p"
 		chmod "$_m" "$_km_dest$_p"
 		echo "  $_p = $_s"
 	done || exit 1
@@ -145,7 +155,7 @@ PY
 		echo "$KM_LICENCES" | while read _n _h; do
 			[ -n "$_n" ] || continue
 			echo; echo "======== $_n ========"; echo
-			cat "$AMIX_SIBLINGS/$_n"
+			cat "$_km_root/$_n"
 		done
 		echo; echo "======== the amix-dlm ABI kit (module wrapper, headers): LICENSE ========"; echo
 		cat "$_km_kit/LICENSE"
@@ -165,6 +175,6 @@ PY
 	# the recipe's epoch is the time of every stamp of the datastream too
 	( SOURCE_DATE_EPOCH=$KM_SOURCE_EPOCH; export SOURCE_DATE_EPOCH
 	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out" ) || exit 1
-	unset _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
+	unset _km_root _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
 		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _km_n _p _n _h _s _m
 }
