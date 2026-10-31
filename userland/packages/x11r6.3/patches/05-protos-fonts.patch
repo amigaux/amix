@@ -1,0 +1,872 @@
+Ours.  Declarations gcc 14 needs in the font libraries (lib/font, FSlib):
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  lib/font/Type1/scanfont.c: objFormatReal(float value -> double); objFormatBoolean(boolean value -> int)
+  lib/font/bitmap/bdfread.c: bdfSpecialProperty(char isString -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): client_auth_generation 
+ClientSignal _FontTransClose _FSDisconnectServer _FSTransGetConnectionNumber 
+init_fs_handlers remove_fs_handlers Type1OpenScalable XpClientIsBitmapClient 
+XpClientIsPrintClient 
+Headers whose macros call a function get a declaration beside the macro: 
+lib/font/include/fntfilio.h lib/font/include/fontmisc.h lib/font/Speedo/spdo_prv.h 
+lib/font/Type1/objects.h lib/font/Type1/t1stdio.h lib/FS/FSlibint.h 
+
+--- a/lib/font/bitmap/bdfread.c
++++ b/lib/font/bitmap/bdfread.c
+@@ -59,6 +59,20 @@
+ #include "bitmap.h"
+ #include "bdfint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void BitOrderInvert (register unsigned char *buf, register int nbytes);
++void TwoByteSwap (register unsigned char *buf, register int nbytes);
++void FourByteSwap (register unsigned char *buf, register int nbytes);
++int bdfIsInteger (char *str);
++Bool bdfSpecialProperty (FontPtr pFont, FontPropPtr prop, int isString, bdfFileState *bdfState);
++int FontCouldBeTerminal (FontInfoPtr pFontInfo);
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++Bool bitmapAddInkMetrics (FontPtr pFont);
++int bitmapComputeWeight (FontPtr pFont);
++int bdfFreeFontBits (FontPtr pFont);
++int FontCharReshape (FontPtr pFont, CharInfoPtr pSrc, CharInfoPtr pDst);
++
++
+ #define INDICES 256
+ #define MAXENCODING 0xFFFF
+ #define BDFLINELEN  1024
+--- a/lib/font/bitmap/bitmapfunc.c
++++ b/lib/font/bitmap/bitmapfunc.c
+@@ -34,6 +34,12 @@
+ #include "fntfilst.h"
+ #include "bitmap.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontDefaultFormat (int *bit, int *byte, int *glyph, int *scan);
++int CheckFSFormat (fsBitmapFormat format, fsBitmapFormatMask fmask, int *bit_order, int *byte_order, int *scan, int *glyph, int *image);
++Bool FontFileRegisterRenderer (FontRendererPtr renderer);
++
++
+ typedef struct _BitmapFileFunctions {
+     int         (*ReadFont) ( /* pFont, file, bit, byte, glyph, scan */ );
+     int         (*ReadInfo) ( /* pFontInfo, file */ );
+--- a/lib/font/bitmap/bitmaputil.c
++++ b/lib/font/bitmap/bitmaputil.c
+@@ -33,6 +33,10 @@
+ #include "fntfilst.h"
+ #include "bitmap.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontCharInkMetrics (FontPtr pFont, CharInfoPtr pCI, xCharInfo *pInk);
++
++
+ #ifndef MAXSHORT
+ #define MAXSHORT    32767
+ #endif
+--- a/lib/font/bitmap/bitscale.c
++++ b/lib/font/bitmap/bitscale.c
+@@ -36,6 +36,15 @@
+ 
+ #include "fntfilst.h"
+ #include "bitmap.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontFileCountDashes (char *name, int namelen);
++Bool FontFileCompleteXLFD (register FontScalablePtr vals, FontScalablePtr def);
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++int BitmapGetRenderIndex (FontRendererPtr renderer);
++int FontFileOpenBitmap (FontPathElementPtr fpe, FontPtr *pFont, int flags, FontEntryPtr entry, int format, int fmask);
++int FontFileCloseFont (FontPathElementPtr fpe, FontPtr pFont);
++
+ #ifdef _XOPEN_SOURCE
+ #include <math.h>
+ #else
+--- a/lib/font/bitmap/pcfread.c
++++ b/lib/font/bitmap/pcfread.c
+@@ -37,6 +37,14 @@
+ #include "fntfilst.h"
+ #include "bitmap.h"
+ #include "pcf.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++void BitOrderInvert (register unsigned char *buf, register int nbytes);
++void TwoByteSwap (register unsigned char *buf, register int nbytes);
++void FourByteSwap (register unsigned char *buf, register int nbytes);
++int RepadBitmap (char *pSrc, char *pDst, unsigned int srcPad, unsigned int dstPad, int width, int height);
++
+ #ifndef MAX
+ #define   MAX(a,b)    (((a)>(b)) ? a : b)
+ #endif
+--- a/lib/font/bitmap/snfread.c
++++ b/lib/font/bitmap/snfread.c
+@@ -57,6 +57,16 @@
+ #include "bitmap.h"
+ #include "snfstr.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++int SnfGetFormat (int *bit, int *byte, int *glyph, int *scan);
++void BitOrderInvert (register unsigned char *buf, register int nbytes);
++void TwoByteSwap (register unsigned char *buf, register int nbytes);
++void FourByteSwap (register unsigned char *buf, register int nbytes);
++int RepadBitmap (char *pSrc, char *pDst, unsigned int srcPad, unsigned int dstPad, int width, int height);
++int FontDefaultFormat (int *bit, int *byte, int *glyph, int *scan);
++
++
+ static void snfUnloadFont();
+ 
+ static int
+--- a/lib/font/fc/fsconvert.c
++++ b/lib/font/fc/fsconvert.c
+@@ -33,6 +33,14 @@
+ #include	"fontstruct.h"
+ #include	"fservestr.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++int FontCouldBeTerminal (FontInfoPtr pFontInfo);
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++int add_range (fsRange *newrange, int *nranges, fsRange **range, Bool charset_subset);
++int fs_load_all_glyphs (FontPtr pfont);
++
++
+ extern char _fs_glyph_undefined;
+ extern char _fs_glyph_requested;
+ extern char _fs_glyph_zero_length;
+--- a/lib/font/fc/fserve.c
++++ b/lib/font/fc/fserve.c
+@@ -64,6 +64,39 @@
+ #include	"fontstruct.h"
+ #include	"fservestr.h"
+ #include	<errno.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++int RegisterFPEFunctions (Bool (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), void (*)());
++int _fs_write (FSFpePtr conn, char *data, long unsigned int size);
++int _fs_write_pad (FSFpePtr conn, char *data, int len);
++int _fs_read (FSFpePtr conn, char *data, long unsigned int size);
++int _fs_eat_rest_of_error (FSFpePtr conn, fsError *err);
++int _FontTransClose ();	/* unprototyped: its types are not defined here */
++int init_fs_handlers ();	/* unprototyped: its types are not defined here */
++void remove_fs_handlers ();	/* unprototyped: its types are not defined here */
++Bool ClientSignal ();	/* unprototyped: its types are not defined here */
++int _fs_clean_aborted_loadglyphs (FontPtr pfont, int num_expected_ranges, fsRange *expected_ranges);
++void DeleteFontClientID (Font id);
++void _fs_init_fontinfo (FSFpePtr conn, FontInfoPtr pfi);
++int _fs_drain_bytes (FSFpePtr conn, int len);
++int _fs_read_pad (FSFpePtr conn, char *data, int len);
++int _fs_convert_props (fsPropInfo *pi, fsPropOffset *po, pointer pd, FontInfoPtr pfi);
++void _fs_convert_char_info (fsXCharInfo *src, xCharInfo *dst);
++Bool _fs_reopen_server (FSFpePtr conn);
++Font GetNewFontClientID (void);
++int CheckFSFormat (fsBitmapFormat format, fsBitmapFormatMask fmask, int *bit_order, int *byte_order, int *scan, int *glyph, int *image);
++void _fs_init_font (FontPtr pfont);
++int StoreFontClientFont (FontPtr pfont, Font id);
++int _fs_drain_bytes_pad (FSFpePtr conn, int len);
++int _fs_load_glyphs (pointer client, FontPtr pfont, Bool range_flag, unsigned int nchars, int item_size, unsigned char *data);
++int _fs_wait_for_readable (FSFpePtr conn);
++int fs_build_range (FontPtr pfont, Bool range_flag, register unsigned int count, int item_size, register unsigned char *data, int *nranges, fsRange **ranges);
++int _fs_convert_lfwi_reply (FSFpePtr conn, FontInfoPtr pfi, fsListFontsWithXInfoReply *fsrep, fsPropInfo *pi, fsPropOffset *po, pointer pd);
++int client_auth_generation ();	/* unprototyped: its types are not defined here */
++int set_font_authorizations (char **authorizations, int *authlen, pointer client);
++Bool XpClientIsBitmapClient ();	/* unprototyped: its types are not defined here */
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #define Time_t long
+--- a/lib/font/fc/fsio.c
++++ b/lib/font/fc/fsio.c
+@@ -46,6 +46,13 @@
+ #include	<sys/socket.h>
+ #endif
+ #include	<errno.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _fs_write (FSFpePtr conn, char *data, long unsigned int size);
++int _fs_read (FSFpePtr conn, char *data, long unsigned int size);
++int _fs_read_pad (FSFpePtr conn, char *data, int len);
++void _fs_connection_died (FSFpePtr conn);
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #endif 
+--- a/lib/font/fontfile/bitsource.c
++++ b/lib/font/fontfile/bitsource.c
+@@ -33,6 +33,10 @@
+ 
+ #include "fntfilst.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontFileOpenBitmap (FontPathElementPtr fpe, FontPtr *pFont, int flags, FontEntryPtr entry, int format, int fmask);
++
++
+ BitmapSourcesRec	FontFileBitmapSources;
+ 
+ Bool
+--- a/lib/font/fontfile/dirfile.c
++++ b/lib/font/fontfile/dirfile.c
+@@ -45,6 +45,15 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <errno.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int CopyISOLatin1Lowered (char *dst, char *src, int len);
++int FontFileFreeDir (FontDirectoryPtr dir);
++Bool FontFileAddFontFile (FontDirectoryPtr dir, char *fontName, char *fileName);
++int FontFileSortDir (FontDirectoryPtr dir);
++int FontFileCountDashes (char *name, int namelen);
++Bool FontFileAddFontAlias (FontDirectoryPtr dir, char *aliasName, char *fontName);
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #endif
+--- a/lib/font/fontfile/ffcheck.c
++++ b/lib/font/fontfile/ffcheck.c
+@@ -34,6 +34,20 @@
+ 
+ #include    "fntfilst.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int RegisterFPEFunctions (Bool (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), void (*)());
++Bool XpClientIsBitmapClient ();	/* unprototyped: its types are not defined here */
++int FontFileOpenFont (pointer client, FontPathElementPtr fpe, int flags, char *name, int namelen, fsBitmapFormat format, fsBitmapFormatMask fmask, XID id, FontPtr *pFont, char **aliasName, FontPtr non_cachable_font);
++int FontFileListFonts (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, FontNamesPtr names);
++int FontFileStartListFontsWithInfo (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, pointer *privatep);
++int FontFileListNextFontWithInfo (pointer client, FontPathElementPtr fpe, char **namep, int *namelenp, FontInfoPtr *pFontInfo, int *numFonts, pointer private);
++int FontFileStartListFontsAndAliases (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, pointer *privatep);
++int FontFileListNextFontOrAlias (pointer client, FontPathElementPtr fpe, char **namep, int *namelenp, char **resolvedp, int *resolvedlenp, pointer private);
++int BitmapRegisterFontFileFunctions (void);
++int SpeedoRegisterFontFileFunctions (void);
++int Type1RegisterFontFileFunctions (void);
++
++
+ /*
+  * Map FPE functions to renderer functions
+  */
+--- a/lib/font/fontfile/fontdir.c
++++ b/lib/font/fontfile/fontdir.c
+@@ -34,6 +34,14 @@
+ #include    "fntfilst.h"
+ #include    <X11/keysym.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int CopyISOLatin1Lowered (char *dst, char *src, int len);
++int FontFileSwitchStringsToBitmapPointers (FontDirectoryPtr dir);
++int GetDefaultPointSize (void);
++Bool FontFileCompleteXLFD (register FontScalablePtr vals, FontScalablePtr def);
++Bool FontFileAddScaledInstance (FontEntryPtr entry, FontScalablePtr vals, FontPtr pFont, char *bitmapName);
++
++
+ Bool
+ FontFileInitTable (table, size)
+     FontTablePtr    table;
+--- a/lib/font/fontfile/fontfile.c
++++ b/lib/font/fontfile/fontfile.c
+@@ -34,6 +34,25 @@
+ 
+ #include    "fntfilst.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int CopyISOLatin1Lowered (char *dst, char *src, int len);
++int RegisterFPEFunctions (Bool (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), void (*)());
++int FontFileReadDirectory (char *directory, FontDirectoryPtr *pdir);
++Bool FontFileRegisterBitmapSource (FontPathElementPtr fpe);
++int FontFileFreeFPE (FontPathElementPtr fpe);
++Bool FontFileDirectoryChanged (FontDirectoryPtr dir);
++void FontFileUnregisterBitmapSource (FontPathElementPtr fpe);
++int FontFileFreeDir (FontDirectoryPtr dir);
++int FontFileCountDashes (char *name, int namelen);
++Bool FontFileCompleteXLFD (register FontScalablePtr vals, FontScalablePtr def);
++int FontFileOpenBitmapNCF (FontPathElementPtr fpe, FontPtr *pFont, int flags, FontEntryPtr entry, int format, int fmask, FontPtr non_cachable_font);
++int FontFileMatchBitmapSource (FontPathElementPtr fpe, FontPtr *pFont, int flags, FontEntryPtr entry, FontNamePtr zeroPat, FontScalablePtr vals, fsBitmapFormat format, fsBitmapFormatMask fmask, Bool noSpecificSize);
++Bool FontFileAddScaledInstance (FontEntryPtr entry, FontScalablePtr vals, FontPtr pFont, char *bitmapName);
++void FontFileRemoveScaledInstance (FontEntryPtr entry, FontPtr pFont);
++Bool FontFileMatchName (char *name, int length, FontNamePtr pat);
++int FontFileFindNamesInScalableDir (FontTablePtr table, FontNamePtr pat, int max, FontNamesPtr names, FontScalablePtr vals, int alias_behavior, int *newmax);
++
++
+ /*
+  * Map FPE functions to renderer functions
+  */
+--- a/lib/font/fontfile/printerfont.c
++++ b/lib/font/fontfile/printerfont.c
+@@ -34,6 +34,19 @@
+ 
+ #include    "fntfilst.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int RegisterFPEFunctions (Bool (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), int (*)(), void (*)());
++int FontFileReadDirectory (char *directory, FontDirectoryPtr *pdir);
++Bool FontFileRegisterBitmapSource (FontPathElementPtr fpe);
++Bool XpClientIsPrintClient ();	/* unprototyped: its types are not defined here */
++int FontFileOpenFont (pointer client, FontPathElementPtr fpe, int flags, char *name, int namelen, fsBitmapFormat format, fsBitmapFormatMask fmask, XID id, FontPtr *pFont, char **aliasName, FontPtr non_cachable_font);
++int FontFileListFonts (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, FontNamesPtr names);
++int FontFileStartListFontsWithInfo (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, pointer *privatep);
++int FontFileListNextFontWithInfo (pointer client, FontPathElementPtr fpe, char **namep, int *namelenp, FontInfoPtr *pFontInfo, int *numFonts, pointer private);
++int FontFileStartListFontsAndAliases (pointer client, FontPathElementPtr fpe, char *pat, int len, int max, pointer *privatep);
++int FontFileListNextFontOrAlias (pointer client, FontPathElementPtr fpe, char **namep, int *namelenp, char **resolvedp, int *resolvedlenp, pointer private);
++
++
+ /*
+  * Map FPE functions to renderer functions
+  */
+--- a/lib/font/fontfile/register.c
++++ b/lib/font/fontfile/register.c
+@@ -1,3 +1,10 @@
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int BitmapRegisterFontFileFunctions (void);
++int SpeedoRegisterFontFileFunctions (void);
++int Type1RegisterFontFileFunctions (void);
++int FontFileRegisterLocalFpeFunctions (void);
++
+ /* $XConsortium: register.c,v 1.3 94/04/17 20:17:07 gildea Exp $ */
+ 
+ /*
+--- a/lib/font/include/fntfilio.h
++++ b/lib/font/include/fntfilio.h
+@@ -37,6 +37,8 @@
+ 
+ #define FontFileGetc(f)	    BufFileGet(f)
+ #define FontFilePutc(c,f)   BufFilePut(c,f)
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern int BufFileRead(), BufFileWrite();
+ #define FontFileRead(f,b,n) BufFileRead(f,b,n)
+ #define FontFileWrite(f,b,n)	BufFileWrite(f,b,n)
+ #define FontFileSkip(f,n)   (BufFileSkip (f, n) != BUFFILEEOF)
+--- a/lib/font/include/fontmisc.h
++++ b/lib/font/include/fontmisc.h
+@@ -67,6 +67,9 @@
+ extern char	    *NameForAtom ();
+ 
+ #define xalloc(n)   Xalloc ((unsigned) n)
++/* AMIX: declared for gcc 14 (the macro above calls it) */
++extern unsigned long *Xalloc(), *Xrealloc();
++extern void Xfree();
+ #define xfree(p)    Xfree ((pointer) p)
+ #define xrealloc(p,n)	Xrealloc ((pointer)p,n)
+ #define lowbit(x) ((x) & (~(x) + 1))
+--- a/lib/font/Speedo/spdo_prv.h
++++ b/lib/font/Speedo/spdo_prv.h
+@@ -26,6 +26,8 @@
+ 
+ /***************************** S P D O _ P R V . H *******************************/
+  
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern void sp_report_error();
+ #include "speedo.h"  /* include public definitions */
+ 
+ /*****  CONFIGURATION DEFINITIONS *****/
+--- a/lib/font/Speedo/sperr.c
++++ b/lib/font/Speedo/sperr.c
+@@ -56,6 +56,10 @@
+ */
+ #include	"spint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void ErrorF (char *f, ...);
++
++
+ #if NeedVarargsPrototypes
+ #include <stdarg.h>
+ 
+--- a/lib/font/Speedo/spfont.c
++++ b/lib/font/Speedo/spfont.c
+@@ -59,6 +59,10 @@
+ #include	"FSproto.h"
+ #include	"spint.h"
+ #include	<servermd.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++
+ #ifdef _XOPEN_SOURCE
+ #include <math.h>
+ #else
+--- a/lib/font/Speedo/spfuncs.c
++++ b/lib/font/Speedo/spfuncs.c
+@@ -56,6 +56,12 @@
+ #include "fntfilst.h"
+ #include "spint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int SpeedoFontLoad (FontPtr *ppfont, char *fontname, char *filename, FontEntryPtr entry, FontScalablePtr vals, fsBitmapFormat format, fsBitmapFormatMask fmask, Mask flags);
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++Bool FontFileRegisterRenderer (FontRendererPtr renderer);
++
++
+ /* ARGSUSED */
+ SpeedoOpenScalable (fpe, pFont, flags, entry, fileName, vals, format, fmask,
+ 		    non_cachable_font)
+--- a/lib/font/Speedo/spglyph.c
++++ b/lib/font/Speedo/spglyph.c
+@@ -55,6 +55,12 @@
+ #include	<X11/X.h>	/* for bit order #defines */
+ #include	"spint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void TwoByteSwap (register unsigned char *buf, register int nbytes);
++void FourByteSwap (register unsigned char *buf, register int nbytes);
++int CheckFSFormat (fsBitmapFormat format, fsBitmapFormatMask fmask, int *bit_order, int *byte_order, int *scan, int *glyph, int *image);
++
++
+ #undef	CLIP_BBOX_NOISE
+ 
+ static CurrentFontValuesRec current_font_values;
+--- a/lib/font/Speedo/spinfo.c
++++ b/lib/font/Speedo/spinfo.c
+@@ -56,6 +56,10 @@
+ #include "spint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++
++
+ /* percentage of pointsize used to specify ascent & descent */
+ #define	STRETCH_FACTOR	120
+ 
+--- a/lib/font/Type1/fontfcn.c
++++ b/lib/font/Type1/fontfcn.c
+@@ -35,6 +35,11 @@
+ #include "util.h"
+ #include "fontfcn.h"
+ #include "fontmisc.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++boolean Init_BuiltInEncoding (void);
++void objFormatName (psobj *objP, int length, char *valueP);
++
+  
+ extern xobject Type1Char();
+ /***================================================================***/
+--- a/lib/font/Type1/objects.c
++++ b/lib/font/Type1/objects.c
+@@ -72,6 +72,10 @@
+ #include  "pictures.h"
+ #include  "strokes.h"
+ #include  "cluts.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void xiFree (register long int *addr);
++
+ static char *TypeFmt();
+ static ObjectPostMortem();
+ 
+--- a/lib/font/Type1/objects.h
++++ b/lib/font/Type1/objects.h
+@@ -52,6 +52,9 @@
+ /*END SHARED*/
+ /*SHARED*/
+  
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern void FatalError();
++extern void xiFree();
+ #define   abort(line)       FatalError(line)
+ #define   Allocate(n,t,s)   t1_Allocate(n,t,s)
+ #define   Free(obj)         t1_Free(obj)
+--- a/lib/font/Type1/scanfont.c
++++ b/lib/font/Type1/scanfont.c
+@@ -35,6 +35,18 @@
+ #include "token.h"
+ #include "fontfcn.h"
+ #include "blues.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void objFormatName (psobj *objP, int length, char *valueP);
++void objFormatReal (psobj *objP, double value);
++void objFormatInteger (psobj *objP, int value);
++void objFormatArray (psobj *objP, int length, psobj *valueP);
++void objFormatEncoding (psobj *objP, int length, psobj *valueP);
++void objFormatString (psobj *objP, int length, char *valueP);
++void objFormatBoolean (psobj *objP, int value);
++int SearchDictName (psdict *dictP, psobj *keyP);
++void objFormatFile (psobj *objP, FILE *valueP);
++
+  
+  
+  
+--- a/lib/font/Type1/t1funcs.c
++++ b/lib/font/Type1/t1funcs.c
+@@ -104,6 +104,18 @@
+ #include "t1stdio.h"
+ #include "util.h"
+ #include "fontfcn.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void ErrorF (char *f, ...);
++int FontDefaultFormat (int *bit, int *byte, int *glyph, int *scan);
++int CheckFSFormat (fsBitmapFormat format, fsBitmapFormatMask fmask, int *bit_order, int *byte_order, int *scan, int *glyph, int *image);
++void addmemory (register long int *addr, register long int size);
++void delmemory (void);
++int Type1ReturnCodeToXReturnCode (int rc);
++void T1FillFontInfo (FontPtr pFont, FontScalablePtr Vals, char *Filename, char *Fontname, long int sWidth);
++void T1InitStdProps (void);
++Bool FontFileRegisterRenderer (FontRendererPtr renderer);
++
+  
+ int         Type1OpenScalable ();
+ static int  Type1GetGlyphs();
+--- a/lib/font/Type1/t1info.c
++++ b/lib/font/Type1/t1info.c
+@@ -90,6 +90,14 @@
+ #include "FSproto.h"
+ #include "t1intf.h"
+ #include <math.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Atom MakeAtom (char *string, unsigned int len, int makeit);
++int FontComputeInfoAccelerators (FontInfoPtr pFontInfo);
++void QueryFontLib (char *env, char *infoName, pointer infoValue, int *rcodeP);
++int Type1OpenScalable ();	/* unprototyped: called with fewer arguments than it is defined with */
++void Type1CloseFont (FontPtr pFont);
++
+  
+ #define DECIPOINTSPERINCH 722.7
+ #define DEFAULTRES 75
+--- a/lib/font/Type1/t1stdio.h
++++ b/lib/font/Type1/t1stdio.h
+@@ -54,6 +54,8 @@
+ #define EOF (-1)     /* end of file */
+ #define F_BUFSIZ (512)
+  
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern int T1Getc(), T1Ungetc();
+ #define getc(f) \
+   ( \
+    ( ((f)->b_cnt > 0) && ((f)->flags == 0) ) ? \
+--- a/lib/font/util/fontxlfd.c
++++ b/lib/font/util/fontxlfd.c
+@@ -51,6 +51,10 @@
+ #include	<ctype.h>
+ #include	<stdio.h>	/* for sprintf() */
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int add_range (fsRange *newrange, int *nranges, fsRange **range, Bool charset_subset);
++
++
+ static char *
+ GetInt(ptr, val)
+     char       *ptr;
+--- a/lib/font/util/patcache.c
++++ b/lib/font/util/patcache.c
+@@ -34,6 +34,10 @@
+ #include    <fontmisc.h>
+ #include    <fontstruct.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int EmptyFontPatternCache (FontPatternCachePtr cache);
++
++
+ /*
+  * Static sized hash table for looking up font name patterns
+  *
+--- a/lib/FS/FSClServ.c
++++ b/lib/FS/FSClServ.c
+@@ -54,6 +54,12 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FSSync (FSServer *svr, int discard);
++int _FSDisconnectServer ();	/* unprototyped: its types are not defined here */
++int _FSFreeServerStructure (FSServer *svr);
++
++
+ extern FSServer *_FSHeadOfServerList;
+ 
+ FSCloseServer(svr)
+--- a/lib/FS/FSConnServ.c
++++ b/lib/FS/FSConnServ.c
+@@ -55,6 +55,12 @@
+ #include	<stdio.h>
+ #include	"FSlibint.h"
+ #include	"X11/Xpoll.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSRead (register FSServer *svr, register char *data, register long int size);
++int _FSError (FSServer *svr, fsError *rep);
++int _FSEnq (register FSServer *svr, register fsEvent *event);
++
+ #ifdef NCD
+ #include	<fcntl.h>
+ #endif
+--- a/lib/FS/FSErrDis.c
++++ b/lib/FS/FSErrDis.c
+@@ -56,6 +56,10 @@
+ #include "FSlibint.h"
+ #include <X11/Xos.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FSGetErrorDatabaseText (FSServer *svr, register char *name, register char *type, char *defaultp, char *buffer, int nbytes);
++
++
+ char       *FSErrorList[] = {
+      /* FSBadRequest	 */ "BadRequest, invalid request code or no such operation",
+      /* FSBadFormat	 */ "BadFormat, bad font format mask",
+--- a/lib/FS/FSFlush.c
++++ b/lib/FS/FSFlush.c
+@@ -53,6 +53,10 @@
+ */
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSFlush (register FSServer *svr);
++
++
+ FSFlush(svr)
+     FSServer     *svr;
+ {
+--- a/lib/FS/FSFontInfo.c
++++ b/lib/FS/FSFontInfo.c
+@@ -52,6 +52,13 @@
+ */
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSRead (register FSServer *svr, register char *data, register long int size);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ char      **
+ FSListFontsWithXInfo(svr, pattern, maxNames, count, info, pprops, offsets, prop_data)
+     FSServer   *svr;
+--- a/lib/FS/FSFtNames.c
++++ b/lib/FS/FSFtNames.c
+@@ -54,6 +54,13 @@
+ 
+ #include "FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int FSFree (char *data);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ char      **
+ FSListFonts(svr, pattern, maxNames, actualCount)
+     FSServer   *svr;
+--- a/lib/FS/FSGetCats.c
++++ b/lib/FS/FSGetCats.c
+@@ -54,6 +54,11 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ char      **
+ FSGetCatalogues(svr, num)
+     FSServer   *svr;
+--- a/lib/FS/FSlibInt.c
++++ b/lib/FS/FSlibInt.c
+@@ -60,6 +60,16 @@
+ #include "FSlibint.h"
+ #include <X11/Xos.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSWaitForWritable (FSServer *svr);
++int _FSRead (register FSServer *svr, register char *data, register long int size);
++int _FSError (FSServer *svr, fsError *rep);
++int _FSEnq (register FSServer *svr, register fsEvent *event);
++int _FSWaitForReadable (FSServer *svr);
++int FSGetErrorText (register FSServer *svr, register int code, char *buffer, int nbytes);
++int FSGetErrorDatabaseText (FSServer *svr, register char *name, register char *type, char *defaultp, char *buffer, int nbytes);
++
++
+ static void _EatData32();
+ 
+ /* check for both EAGAIN and EWOULDBLOCK, because some supposedly POSIX
+--- a/lib/FS/FSlibint.h
++++ b/lib/FS/FSlibint.h
+@@ -133,6 +133,8 @@
+  */
+ 
+ #if (defined(__STDC__) && !defined(UNIXCPP)) || defined(ANSICPP)
++/* AMIX: declared for gcc 14 (the macros below call it) */
++extern int _FSFlush();
+ #define GetReq(name, req) \
+         WORD64ALIGN\
+ 	if ((svr->bufptr + SIZEOF(fs##name##Req)) > svr->bufmax)\
+--- a/lib/FS/FSListCats.c
++++ b/lib/FS/FSListCats.c
+@@ -54,6 +54,13 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int FSFree (char *data);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ char      **
+ FSListCatalogues(svr, pattern, maxNames, actualCount)
+     FSServer   *svr;
+--- a/lib/FS/FSListExt.c
++++ b/lib/FS/FSListExt.c
+@@ -54,6 +54,11 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ char      **
+ FSListExtensions(svr, next)
+     FSServer     *svr;
+--- a/lib/FS/FSNextEv.c
++++ b/lib/FS/FSNextEv.c
+@@ -54,6 +54,10 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSReadEvents (register FSServer *svr);
++
++
+ extern _FSQEvent *_FSqfree;
+ 
+ FSNextEvent(svr, event)
+--- a/lib/FS/FSOpenFont.c
++++ b/lib/FS/FSOpenFont.c
+@@ -54,6 +54,11 @@
+ 
+ #include "FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++
++
+ Font
+ FSOpenBitmapFont(svr, hint, fmask, name, otherid)
+     FSServer   *svr;
+--- a/lib/FS/FSOpenServ.c
++++ b/lib/FS/FSOpenServ.c
+@@ -60,6 +60,15 @@
+ #include	"FSlibint.h"
+ #include 	<X11/Xtrans.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSTransGetConnectionNumber ();	/* unprototyped: its types are not defined here */
++int _FSRead (register FSServer *svr, register char *data, register long int size);
++int FSFree (char *data);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++int _FSDisconnectServer ();	/* unprototyped: its types are not defined here */
++int _FSFreeServerStructure (FSServer *svr);
++
++
+ int         _FSdebug = 0;
+ 
+ static fsReq _dummy_request = {
+--- a/lib/FS/FSQGlyphs.c
++++ b/lib/FS/FSQGlyphs.c
+@@ -54,6 +54,12 @@
+ 
+ #include "FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ int
+ FSQueryXBitmaps8(svr, fid, format, range_type, str, str_len, offsets, glyphdata)
+     FSServer   *svr;
+--- a/lib/FS/FSQuExt.c
++++ b/lib/FS/FSQuExt.c
+@@ -54,6 +54,11 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++
++
+ Bool
+ FSQueryExtension(svr, name, major_opcode, first_event, first_error)
+     FSServer   *svr;
+--- a/lib/FS/FSQXExt.c
++++ b/lib/FS/FSQXExt.c
+@@ -54,6 +54,12 @@
+ 
+ #include "FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ static void
+ _FS_convert_char_info(src, dst)
+     fsXCharInfo *src;
+--- a/lib/FS/FSQXInfo.c
++++ b/lib/FS/FSQXInfo.c
+@@ -54,6 +54,11 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++int _FSReadPad (register FSServer *svr, register char *data, register long int size);
++
++
+ /*
+  * Note:  only the range in the first FSQuery is sent to the server.
+  * the others exist as return values only.
+--- a/lib/FS/FSSetCats.c
++++ b/lib/FS/FSSetCats.c
+@@ -54,6 +54,10 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSSend (register FSServer *svr, char *data, register long int size);
++
++
+ int
+ FSSetCatalogues(svr, num, cats)
+     FSServer   *svr;
+--- a/lib/FS/FSSync.c
++++ b/lib/FS/FSSync.c
+@@ -54,6 +54,10 @@
+ 
+ #include "FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _FSReply (register FSServer *svr, register fsReply *rep, int extra, int discard);
++
++
+ extern _FSQEvent *_FSqfree;
+ 
+ /* synchronize with errors and events */
+--- a/lib/FS/FSSynchro.c
++++ b/lib/FS/FSSynchro.c
+@@ -54,6 +54,10 @@
+ 
+ #include	"FSlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FSSync (FSServer *svr, int discard);
++
++
+ int
+ _FSSyncFunction(svr)
+     FSServer     *svr;
