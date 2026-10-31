@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kbootset -30 recipe: built at 97c4003, knows c 48 random (ea2176e)
+
+kbootset's recipe moves to -30 (unminted, the release-prep revision): the box binary 6da558d0, built at amix 97c4003,
+whose compiled registry has c 48 random (a8719fb). -28 and -29 (01f1520) refuse the random module at gate 3. -30 is the
+minimum kbootset for random-k30/-k46, with kernels k30 -64 or k46 -53 or later.
+
 ## 2026-10-31 — dlmkit -13 recipe: pinned to the build container's kit (1427c27)
 
 make dist's container builds the kit with amix-system's pinned 2.1c p2a headers and its own tools/modfix, where -12's
