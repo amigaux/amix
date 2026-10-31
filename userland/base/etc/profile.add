@@ -1,0 +1,3 @@
+
+# amix-base: the packages' environment, one drop-in each (P-36 D-N23)
+if [ -d /etc/profile.d ]; then for _amx_f in /etc/profile.d/*.sh; do [ -r "$_amx_f" ] && . "$_amx_f"; done; unset _amx_f; fi
