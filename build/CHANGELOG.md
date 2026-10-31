@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — gcc14 remaps build paths; a host path in its payload refused (655529c)
+
+gcc14-env.sh puts -ffile-prefix-map on CC and CXX (P-38 S1.3): the build tree becomes /build, the checkout /src and the
+toolchain /gcc14, the build tree's map last. The roll refuses a build-host path in a gcc14 payload; for the period
+compiler, which has no such flag and gets fixed paths from make dist's container, it still only reports one.
+repro-selftest 7/7.
+
 ## 2026-10-31 — the roll refuses a class CLASSES does not list; module node classes (e9f43c6)
 
 The roll refuses, before pkgmk, an object whose class pkginfo's CLASSES does not list (stock pkgadd installs only the
