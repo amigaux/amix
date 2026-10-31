@@ -183,6 +183,8 @@ A cut of record is a directory `cuts/<build id>/`: its `SHA256SUMS-<build id>` (
 The bytes themselves live outside the repository (`build/cuts/`, gitignored). A cut takes the port at the commit in
 `kernel/port/port.pin` unless its README names another.
 
+A cut ships as the `kern30m` package: `pkg/` holds its recipe, make dist's `kspace` hook (`pkg/README.md`).
+
 ### Self-tests
 
 ```sh

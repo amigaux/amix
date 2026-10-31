@@ -1,0 +1,7 @@
+# /etc/conf/modreg.d/ufs -- the defaults of the ufs filesystem module the
+# kernel package carries (amix-dlm C2-3 v8 sec 1, C3-5 sec 1.2): one
+# `param <name>=<value>` per default other than the module's own, `disable`
+# to ship it off.  None: the module keeps its own defaults (probe=0).  The
+# module is core tier, built with this kernel's cut, and is replaced with
+# the kernel.  Local settings belong in /etc/conf/modreg.local.d/ufs, which
+# no package owns; then kbootset build and commit.
