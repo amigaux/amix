@@ -965,7 +965,8 @@ check_old_boot()
 # ---------------------------------------------------------------------------
 # l11_data_mb DISK_MB -- DATA_MB, the 1.1 data slice (s4): l11.sh's l11_plan_data,
 # the same rule on the same keys (TARGET_DATA_MB, else a quarter of a disk of 512 MB
-# or more), capped at 1024 MB and at the stock kernel's on-box ceiling.
+# or more), capped at 2047 MB (the ufs ceiling, 4194303 blocks: measured 2026-10-31) and at
+# the stock kernel's on-box ceiling.
 l11_data_mb()
 {
 	if [ -n "$TARGET_DATA_MB" ]; then
@@ -976,7 +977,7 @@ l11_data_mb()
 	else
 		DATA_MB=0
 	fi
-	if [ "$DATA_MB" -gt 1024 ]; then DATA_MB=1024; fi
+	if [ "$DATA_MB" -gt 2047 ]; then DATA_MB=2047; fi
 	if [ "$KERNEL_SDDEVSIZE" != fixed ]; then
 		_cap=`expr "$SDDEV_CAP_BLOCKS" / "$BLOCKS_PER_MB"`
 		if [ "$DATA_MB" -gt "$_cap" ]; then DATA_MB="$_cap"; fi

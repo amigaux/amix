@@ -20,8 +20,11 @@ Stage-2 work item S2-30.
 | s3 | `UNI\0` | the boot store, the only `UNI\0` on the disk | 64 MiB |
 | s4 | `UNI\1` | data, mounted at `/home` | `TARGET_DATA_MB`; by default a quarter of a disk of 512 MB or more, none below |
 
-Each filesystem stays at or under 1024 MiB (`mkfs_ufs`'s limit), and under the
-stock kernel's cap when `KERNEL_SDDEVSIZE` is not `fixed`.
+Each filesystem stays at or under 2047 MiB, 4194303 blocks (measured 2026-10-31: a
+2047 MiB slice makes, fills and reads back; at 2048 MiB `mkfs_ufs` fails in `wtfs` with ENXIO
+at the driver's raw-I/O clamp, at 3072 MiB with EINVAL at a 32-bit seek; spec 40 §2.1's 1024
+was the old guess), and under the stock kernel's cap when `KERNEL_SDDEVSIZE` is not `fixed`.
+A file over 256 MiB needs the login `ulimit` raised (amix-base 1.0-11: 4194303).
 
 The installer:
 1. authors that RDB. Before writing, it refuses a disk that already carries two

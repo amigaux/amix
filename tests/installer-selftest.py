@@ -5136,9 +5136,10 @@ def _audit_w1_disksize(code, profiles, proto_tools):
         ok("every profile carries TARGET_ROOT_MB + TARGET_SWAP_MB")
     else:
         fail("profile(s) missing the size-override keys: %s" % ", ".join(bad))
+    # an IMAGE_KIT=y profile's layout IS its product (the pre-installed images)
     nonempty = ["%s(root=%r swap=%r)" % (pf, d.get("TARGET_ROOT_MB"), d.get("TARGET_SWAP_MB"))
                 for pf, d in profiles
-                if d.get("TARGET_ROOT_MB") or d.get("TARGET_SWAP_MB")]
+                if (d.get("TARGET_ROOT_MB") or d.get("TARGET_SWAP_MB")) and d.get("IMAGE_KIT") != "y"]
     if not nonempty:
         ok("every tracked profile leaves the size overrides EMPTY -- the attested "
            "layouts are the stock arithmetic, unchanged")
@@ -6958,7 +6959,7 @@ def audit_w3b_metadata():
                 if k not in keys]
         if miss:
             fail("profile %s does not declare %s (the W3b set keys)" % (f, miss))
-        elif keys.get("INSTALL_ORDER") or keys.get("INSTALL_SET"):
+        elif (keys.get("INSTALL_ORDER") or keys.get("INSTALL_SET")) and keys.get("IMAGE_KIT") != "y":
             fail("profile %s pins INSTALL_ORDER=%r / INSTALL_SET=%r -- the tracked "
                  "profiles must keep the medium's own default, or a re-mastered "
                  "disc would install the set the profile remembers"
@@ -8009,7 +8010,9 @@ def _public_flavor_problems(name, d):
         if v:
             probs.append("%s bakes %s=%r (%s)" % (name, key, v, what))
     node = d.get("FB_NODENAME") or ""
-    if not node:
+    if not node and d.get("INSTALL_LAYOUT") == "1.1":
+        pass   # a 1.1 first boot accepts an empty name (DHCP's, else amix-xxxx)
+    elif not node:
         probs.append("%s has no FB_NODENAME at all -- the dialog needs a default "
                      "to offer" % name)
     elif node in PUBLIC_FORBIDDEN_NODENAMES:
@@ -8747,7 +8750,7 @@ def audit_x11kit_k1():
     pubimg = {"public-a3000-060-wd-r6.profile"}
     r6bad = [c for c in r6c if not (c in pubcd and pubcd[c] in r6c) and c not in pubimg
              and re.sub(r"-r6(-[a-z0-9]+)?\.profile$", ".profile", c) not in _base]
-    carriers = [c for c in carriers if "-r6" not in c]
+    carriers = [c for c in carriers if "-r6" not in c and not c.startswith("image-")]   # the pre-installed images: own class
     if r6bad:
         fail("r6 profile(s) carry X11KIT but their r5 base does not: %s" % r6bad)
     elif r6c:

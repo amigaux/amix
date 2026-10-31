@@ -150,8 +150,10 @@ l11_plan_data()
 	else
 		DATA_MB=0
 	fi
-	# the 1.0 filesystem limit (spec 40 §2.1, OQ-40.7), and a stock kernel's own cap
-	if [ "$DATA_MB" -gt 1024 ]; then DATA_MB=1024; fi
+	# the ufs ceiling, 4194303 blocks (2047 MiB): mkfs of 2048 MiB fails at the driver's raw-I/O
+	# clamp, 3072 MiB at a 32-bit seek (measured 2026-10-31; spec 40 §2.1's 1024 was the
+	# 1.0 figure), and a stock kernel's own cap
+	if [ "$DATA_MB" -gt 2047 ]; then DATA_MB=2047; fi
 	if [ "$KERNEL_SDDEVSIZE" != fixed ]; then
 		_cap=`expr "$SDDEV_CAP_BLOCKS" / "$BLOCKS_PER_MB"`
 		if [ "$DATA_MB" -gt "$_cap" ]; then DATA_MB="$_cap"; fi

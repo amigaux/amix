@@ -8,7 +8,7 @@ that populates `/install/`; **W5.4** was the first end-to-end on-box run. Every
 wave since is a further section below.
 
 > **This document is wave-chronological.** Every `W…` section records what was true
-> **when that wave landed** and is deliberately left standing. The four sections
+> **when that wave landed** and is deliberately left standing. The five sections
 > immediately below are *current state* and **win over any figure or s5 statement
 > quoted inside a wave section**.
 
@@ -62,6 +62,34 @@ code"). A disk that holds Amix is erased and installed afresh.
 
 The disk itself: `docs/l11-disk.md`. The removed upgrade install
 (`docs/upgrade-install.md` and its code) is in git up to 3ac92fb.
+
+## The 1.1 install from packages — current (2026-10-31)
+
+The installer lays the 1.1 system down from packages; it writes only what no package owns.
+
+- **Tools.** Nothing in 1.1 reads the frozen amix-packagemanager: `build-l11-inputs.sh`
+  builds amix `userland/pkgtools` at the set's `pkgtools` revision (the host pkgtrans,
+  the miniroot's static pkgadd set, apkg, `make dist`'s APKG and APKGENG, held to their
+  md5) into `work/l11/pkgtools`, which every 1.1 tool reads.
+- **The set.** `tools/l11-set.conf`: the kernel-space candidate root of amix-packages,
+  and amix-base, dhcp-client and syslog rolled at the set's `base` amix revision
+  (reproducible; their sha256 pinned).
+- **The install.** After core and the base set, the base packages under the target's
+  chroot (seeded baselines, `removef core`); the admin files `/etc/inet/interfaces`,
+  `/etc/rc.conf`, `/etc/display`; no S99zen, S20monsw, syslog unit, S89rootswap,
+  S01kbnamelist or S99zkbootset (their packages carry them). `docs/l11-disk.md`.
+- **The first boot** (`FB_L11=y`): DHCP or one static interface, the answers into
+  `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed.
+- **Checks.** `tools/l11-target-check.py` reads all of it host-side; the first-boot rig's
+  answers include the DHCP and DNS questions.
+- **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
+  the old cap was 1024); `docs/l11-disk.md`.
+- **The pre-installed images**: `tools/build-preinstalled.sh` masters the image
+  medium (`profiles/image-k46-4g`, `image-k30-4g`, set x11), installs it in the
+  `l11-img-<line>` cell onto a 3600 MiB target (root 2047, swap 256, store 64, /home
+  1232 MiB), proves it with `bootstore`, first-boots a copy, and keeps the unbooted
+  target with its manifest in `work/images`. `l11-img-k30-r2048` asks for a 2048 MiB
+  root and is expected to fail at mkfs.
 
 ## Canonical digests — current
 
