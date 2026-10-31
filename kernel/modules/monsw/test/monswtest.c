@@ -1,6 +1,5 @@
 /*
- * monswtest.c -- the on-box instrument for /dev/monsw (the monsw module or the 68040/68060
- * port's static monsw), one step per run.
+ * monswtest.c -- the on-box instrument for /dev/monsw (the monsw module), one step per run.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *

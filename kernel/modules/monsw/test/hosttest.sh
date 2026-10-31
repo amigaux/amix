@@ -1,7 +1,7 @@
 #!/bin/sh
 # hosttest.sh -- host test of the monsw module's parameter parser and of the switch semantics
-# it feeds (monsw/README.md), without a box.  The shipped monsw/src/monsw.c is compiled with
-# -DMONSW_MODULE by the host cc after mechanical substitutions: the two IPL macros become
+# it feeds (monsw/README.md), without a box.  The shipped monsw/src/monsw.c is compiled by the
+# host cc after mechanical substitutions: the two IPL macros become
 # counters, the CIA-B PRA/DDRA addresses two bytes of test memory, and the K&R printf
 # declaration goes (the test's printf is a prototyped recorder).  Stub
 # headers stand in for the kernel's sys/cred.h, sys/ddi.h, sys/conf.h and sys/moddefs.h;
@@ -333,6 +333,6 @@ main(void)
 	return 0;
 }
 C
-${HOSTCC:-cc} -std=gnu89 -w -DMONSW_MODULE -I"$tmp/inc" -I"$top/include" -I"$tmp" \
+${HOSTCC:-cc} -std=gnu89 -w -I"$tmp/inc" -I"$top/include" -I"$tmp" \
 	-o "$tmp/t" "$tmp/t.c"
 "$tmp/t"

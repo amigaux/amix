@@ -4,16 +4,10 @@
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *
- * One source, two forms:
- *   static   the 68040/68060 port's relink pass (amix-040-060-port relink-040-monsw.sh) links
- *            the object into a kernel: a free cdevsw row for open/close/ioctl and monswinit()
- *            from the parinit hook.  The text outside the MONSW_MODULE block compiles to the
- *            same object as the port's copy of this file (monsw/README.md).
- *   module   -DMONSW_MODULE adds the loadable-module glue at the end of the file (amix-dlm
- *            contract C3-6 section 4): the cdevsw row and major 52 come from .moddata, _load
- *            reads the `config` parameter into monsw_config and runs monswinit().
- * Everything here is initialised data, so a card driver may register before monswinit() has
- * run -- the io_init[] order is not this file's to choose.
+ * A loadable module (amix-dlm contract C3-6 section 4), the glue at the end of the file: the
+ * cdevsw row and major 52 come from .moddata, _load reads the `config` parameter into
+ * monsw_config and runs monswinit().  Everything here is initialised data, so a card driver
+ * may register before monswinit() has run.
  *
  * The line.  CIA-B's PRA/DDRA at their fixed addresses, reached through the kernel's
  * transparent translation (cache-inhibited, as the serial driver reaches the same port).  Only
@@ -42,7 +36,7 @@
 /*
  * IPL 4 around the read-modify-write.  Written out as __asm__ __volatile__ rather than taken
  * from sys/inline.h: the kernel is compiled -traditional, where a plain `volatile` asm can be
- * dropped as dead (T-9).  The relink pass checks that both SR writes are in the object.
+ * dropped as dead (T-9).
  */
 #define MONSW_SPLTTY(s) __asm__ __volatile__("mov.w %%sr,%0;mov.w &0x2400,%%sr" : "=d"(s))
 #define MONSW_SPLX(s)   __asm__ __volatile__("mov.w %0,%%sr" : : "d"(s))
@@ -50,7 +44,7 @@
 extern int printf();
 extern int copyout();
 
-int monsw_config = -1;                  /* patchable (module: param config); >= 0 forces the value */
+int monsw_config = -1;                  /* the param config; >= 0 forces the value */
 
 static int monsw_setval = -1;           /* from MONSWIOC_SETCFG */
 static int monsw_seed = -1;             /* from the first card that offered one */
@@ -286,7 +280,6 @@ int *rvp;
 	return EINVAL;
 }
 
-#ifdef MONSW_MODULE
 /*
  * The loadable module (amix-dlm C3-6 section 4), built with the ABI kit of each line by
  * monsw/module/Makefile.  .moddata (monsw/module/keys): class demand, majors c:52,
@@ -345,7 +338,7 @@ char **tp;
 
 /*
  * The value _load gives monsw_config (monsw/README.md): absent or negative = -1, unset; 0 and
- * up forces it, as the patched static variable does: monswinit() takes an invalid bit sum as
+ * up forces it: monswinit() takes an invalid bit sum as
  * 0 and says so once, and MONSWIOC_SETCFG answers EBUSY.  A value that is not a number (never
  * from kbootset, which normalizes) is said here and left unset, so it never blocks SETCFG.
  */
@@ -406,4 +399,3 @@ struct mod_drv_data monsw_drvdata[] = {
 
 /* _halt: none (C3-6 section 4): nothing here interrupts or writes memory. */
 MOD_DRV_WRAPPER(monsw, monsw_load, monsw_unload, 0, "monitor switch /dev/monsw");
-#endif /* MONSW_MODULE */

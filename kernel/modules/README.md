@@ -16,7 +16,7 @@ Layout, per module (`monsw/README.md` is the worked example):
 
 | Path | Content |
 |---|---|
-| `<module>/src/` | the source; where a module also has a static form, its module glue sits under `-D<NAME>_MODULE` (monsw) |
+| `<module>/src/` | the source, with its module glue |
 | `<module>/module/keys` | the `.moddata` keys, one `key=value` per line |
 | `<module>/module/Master` | the kit's form of `keys`, generated from it |
 | `<module>/module/Makefile` | builds both lines on the kit's `mk/module.mk` |
