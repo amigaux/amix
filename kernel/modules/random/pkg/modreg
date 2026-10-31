@@ -1,0 +1,3 @@
+# /etc/conf/modreg.d/random -- the random module package's defaults (amix-dlm
+# C3-5 sec 1): one `param <name>=<value>` per default other than the module's
+# own, `disable` to ship it off.  None: the module takes no parameter.

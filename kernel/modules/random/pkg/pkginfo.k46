@@ -1,0 +1,15 @@
+PKG=random46
+NAME=random-k46 1.0.0-1 - /dev/random and /dev/urandom module, k46 line
+ARCH=Amiga
+VERSION=1.0.0-1
+CATEGORY=system
+CLASSES=none random
+VENDOR=amix
+PSTAMP=amix-random46-1.0.0-1
+# Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
+# #ext kpkg block (line=k46), never an ordinary entry.  Catalog name
+# random-k46, pkginst random46; VERSION is the module's own release
+# (kernel/modules/random/module/VERSION), the same on both lines.  The nodes
+# are in class random (C3-5 v18 sec 1.2).
+APKG_DESC=/dev/random and /dev/urandom (ChaCha20 with fast key erasure) as a demand-class kernel module for the 68040/68060 line module kernel kernel-k46-m, with the boot step randseed that keeps the seed across reboots: /etc/conf/mod.d/random, /dev/random, /dev/urandom, /etc/init.d/randseed.
+DESC=The kernel/modules random driver built as an amix-dlm kernel module for the 68040/68060 line: demand class, loaded at the first open of /dev/random or /dev/urandom; character major 48, its nodes /dev/random (c 48 0) and /dev/urandom (c 48 1) shipped by the package; never unloaded.  Neither device blocks.  The boot step /etc/init.d/randseed (S21randseed, K02randseed) writes the seed saved at the last shutdown into /dev/urandom and saves a fresh one in /etc/random-seed.  Pages random(7) and randseed(1M).  /etc/conf/modreg.d/random holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
