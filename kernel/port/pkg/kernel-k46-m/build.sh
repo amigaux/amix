@@ -44,8 +44,8 @@ echo "=== $K46M_CATALOG_NAME $K46M_VERSION (PKG=$K46M_PKG, build $K46M_BUILDID) 
 
 # the cut's output is an input from outside the recipe: absent, the roll is
 # not failed but missing (exit 3, build.sh)
-[ -n "${K46M_SRC:-}" ] && [ -f "$K46M_SRC/$K46M_SUMS" ] || {
-	echo "[MISSING] kspace: kernel/port: $K46M_PKG: no cut $K46M_BUILDID${K46M_SRC:+ at $K46M_SRC}; K46M_SRC names the output of the port's cuts/$K46M_BUILDID/cut.sh (P-38 S2.3, the port station)" >&2
+[ -f "$K46M_SRC/$K46M_SUMS" ] || {
+	echo "[MISSING] kspace: kernel/port: $K46M_PKG: no cut $K46M_BUILDID at $K46M_SRC (P-38 S2.3: make kernel-k46)" >&2
 	exit 3; }
 case "$K46M_PORT_COMMIT" in "$K46M_KIT_PORT"*) ;; *)
 	echo "[FAIL] pin.sh: K46M_PORT_COMMIT is not K46M_KIT_PORT in full" >&2; exit 1 ;; esac
