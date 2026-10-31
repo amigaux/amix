@@ -1,3 +1,4 @@
+devnodes(1m)     devnodes - re-create missing device nodes at boot
 dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
 ifdown(1m)       ifup, ifdown - bring network interfaces up or down
 ifup(1m)         ifup, ifdown - bring network interfaces up or down

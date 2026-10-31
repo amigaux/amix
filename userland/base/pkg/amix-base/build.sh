@@ -29,6 +29,9 @@ stage() {
 		mkdir -p "$DEST/etc/`dirname $l`"
 		ln "$DEST/etc/rc2.d/S69inet" "$DEST/etc/$l"
 	done
+	put 0444 rc/devnodes /etc/init.d/devnodes
+	mkdir -p "$DEST/etc/rc2.d"
+	ln "$DEST/etc/init.d/devnodes" "$DEST/etc/rc2.d/S20devnodes"
 	put 0444 net/network-config /etc/inet/network-config
 	put 0444 net/rc.inet /etc/inet/rc.inet
 	put 0444 net/link.d/aen /etc/inet/link.d/aen
@@ -42,6 +45,7 @@ stage() {
 	chmod 0664 "$DEST/etc/inittab"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
+	put 0644 rc/devnodes.1m /opt/amix/man/1m/devnodes
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac
 	put 0644 net/ifup.1m /opt/amix/man/1m/ifup
 	put 0644 net/ifdown.1m /opt/amix/man/1m/ifdown
