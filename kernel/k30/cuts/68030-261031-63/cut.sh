@@ -10,11 +10,12 @@
 #   PAULA        amix-paula at 548d258 (--audio-paula)
 # OUT gets tree/ (the archive, dlm tools + kit built in it), cut-68030-261031-63/ (WORK: usr/sys, carve/, dlm-core/)
 # and SHA256SUMS-68030-261031-63; the sums must equal ./SHA256SUMS-68030-261031-63.
-# Since 2192470 two files of the archive come from TOOLS (no byte of the cut changes): build-cross-kernel.sh, whose
-# cmp counts stopped the build where cmp exits 1 into a pipe (diffutils 3.10, the build container), and
-# tools/kabi-sidecar030.py, which takes the toolchain pin from AMIX_GCA_PIN when gcc-cross-amix has no git.
+# Two files of the archive come from TOOLS (no byte of the cut changes): build-cross-kernel.sh, whose cmp counts
+# stopped the build where cmp exits 1 into a pipe (diffutils 3.10, the build container; 2192470) and whose carve
+# build-id check failed now and then on a SIGPIPE under pipefail (89ebcf7, a1b9b6c), and tools/kabi-sidecar030.py,
+# which takes the toolchain pin from AMIX_GCA_PIN when gcc-cross-amix has no git (2192470).
 set -eu
-REV=c1b7842 KB=68030-261031-63 TOOLS=2192470
+REV=c1b7842 KB=68030-261031-63 TOOLS=a1b9b6c
 OUT=${1:?usage: cut.sh OUT}; : "${AMIX:?}" "${AMIX_SYSTEM:?}" "${GCA:?}" "${G14:?}" "${PORT:?}" "${PAULA:?}"
 OUT=$(mkdir -p "$OUT" && cd "$OUT" && pwd); T=$OUT/tree
 rm -rf "$T" "$OUT/cut-$KB"; mkdir -p "$T"
