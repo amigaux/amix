@@ -14,7 +14,7 @@
 #                                    after <secs>; its output goes to
 #                                    /var/adm/rclog/<svc>, its start and end
 #                                    to the log
-#   rc_mknod <node> c|b <major> <minor> [<module> [<mode>]]
+#   rc_mknod <node> c|b <major|-> <minor> [<module> [<mode>]]
 #                                    make <node> unless it is already that
 #                                    device; the major comes from the kernel's
 #                                    registry when kbootset can say it
@@ -137,9 +137,9 @@ _rc_node() {
 }
 
 # The caller's major is the static fallback (a link.d column, a package's
-# own constant). When kbootset names the module's major in the kernel's
-# registry, that one is used, and a disagreement is a packaging error said
-# on the console as well as in the log.
+# record), or "-" for none. When kbootset names the module's major in the
+# kernel's registry, that one is used, and a disagreement with a given one is
+# a packaging error said on the console as well as in the log.
 rc_mknod() {
 	_rc_n=$1
 	_rc_ty=$2
@@ -153,10 +153,18 @@ rc_mknod() {
 			sed -n "s/^$_rc_ty[ 	][ 	]*\([0-9][0-9]*\)[ 	]*$/\1/p" | sed -n 1p`
 		if [ -n "$_rc_k" ] && [ "$_rc_k" != "$_rc_ma" ]
 		then
-			rc_log mknod "packaging error: $_rc_n: given major $_rc_ma, but the registry gives $_rc_mo $_rc_ty $_rc_k; using $_rc_k"
-			echo "rc_mknod: packaging error: $_rc_n: given major $_rc_ma, registry says $_rc_k" >&2
+			if [ "$_rc_ma" != - ]
+			then
+				rc_log mknod "packaging error: $_rc_n: given major $_rc_ma, but the registry gives $_rc_mo $_rc_ty $_rc_k; using $_rc_k"
+				echo "rc_mknod: packaging error: $_rc_n: given major $_rc_ma, registry says $_rc_k" >&2
+			fi
 			_rc_ma=$_rc_k
 		fi
+	fi
+	if [ "$_rc_ma" = - ]
+	then
+		rc_log mknod "cannot make $_rc_n: the registry gives ${_rc_mo:-it} no major, and none was given"
+		return 1
 	fi
 	[ "`_rc_node "$_rc_n"`" = "$_rc_ty $_rc_ma $_rc_mi" ] && return 0
 	rm -f "$_rc_n"

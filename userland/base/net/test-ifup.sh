@@ -280,5 +280,24 @@ expect "bad row reported" "ifup: interfaces:1: aen0: the mode must be dhcp, stat
 expect "bad row: off" "ifup: aen0 (00:80:10:ff:ff:01): off" "$o"
 refuse "not the * address" "192.0.2.50" "$o"
 
+# --- link.d without the major column: the registry's, or no node made
+mkdir -p "$T/link2.d"
+printf 'aen %s/dev/aen 0 true\n' "$T" > "$T/link2.d/aen"
+printf '#!/bin/sh\n[ "$1 $2" = "major aen" ] && echo "c 18" && exit 0\nexit 1\n' > "$B/kb18"
+chmod +x "$B/kb18"
+links() { # links <kbootset>: if_links over link2.d
+	: > "$T/st/calls"; : > "$T/rc.log"
+	env PATH="$B:$PATH" RC_LOG="$T/rc.log" RC_KBOOTSET="$1" IF_LINKD="$T/link2.d" DLPIMAC="$B/dlpi-mac" \
+	    $SH -c ". '$here/../rc/rc.subr'; . '$here/ifup.subr'; if_links" 2>&1
+}
+o=$(links "$B/kb18")
+expect "no major column: the unit found" "aen0 $T/dev/aen0 00:80:10:ff:ff:01" "$o"
+expect "no major column: the registry's major" "mknod $T/dev/aen0 c 18 0" "$(cat "$T/st/calls")"
+refuse "no major column: no packaging error" "packaging error" "$(cat "$T/rc.log")"
+o=$(links "$T/none")
+expect "no major, no registry: the unit still probed" "aen0 $T/dev/aen0 00:80:10:ff:ff:01" "$o"
+refuse "no major, no registry: no mknod" "mknod" "$(cat "$T/st/calls")"
+expect "no major, no registry: said" "cannot make $T/dev/aen0: the registry gives aen no major" "$(cat "$T/rc.log")"
+
 echo "test-ifup: $pass passed, $fail failed ($SH, $AWK)"
 [ "$fail" -eq 0 ]

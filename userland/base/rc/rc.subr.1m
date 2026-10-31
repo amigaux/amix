@@ -37,7 +37,8 @@ rc_enabled \fIservice\fP [ yes | no ] || exit 0
 .B c
 |
 .B b
-.I major minor
+.IR major | \-
+.I minor
 [
 .I module
 [
@@ -121,7 +122,10 @@ the difference is reported on the console and in the log as a packaging
 error.
 Otherwise
 .I major
-is used as given.
+is used as given;
+.B \-
+says there is none, and then a module the registry does not know gets no
+node, which the log says.
 .SH FILES
 .TP
 .B /usr/lib/amix/rc.subr

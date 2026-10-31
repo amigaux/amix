@@ -20,7 +20,7 @@ The file holds one line (a
 starts a comment):
 .PP
 .nf
-.IB "prefix  node  first  major" " [" "presence command ..." ]
+.IB "prefix  node  first" " [" major "] [" "presence command ..." ]
 .fi
 .TP
 .I prefix
@@ -39,8 +39,12 @@ for
 the first unit number, usually 0.
 .TP
 .I major
-the node's major number, used to make a missing node when the running
-kernel's registry does not name the module.
+the node's major number, needed only when the running kernel's registry
+does not name the module (the stock drivers, such as
+.BR aen );
+a module's major is the registry's
+.RB ( "kbootset major" ),
+and the column is then left out.
 .TP
 .I presence command
 optional: a command that fails when no such card is fitted; the driver's
@@ -51,9 +55,15 @@ opens the units one after another, from
 .IR first ,
 and stops at the first that does not open.
 .SH EXAMPLE
+The stock A2065's entry,
+.BR /etc/inet/link.d/aen ,
+and a module driver's,
+.BR /etc/inet/link.d/z3660eth :
+.PP
 .nf
 .ft CW
 aen     /dev/aen    0   18   /usr/amiga/bin/aen -S
+zen     /dev/zen    0
 .ft R
 .fi
 .SH SEE ALSO

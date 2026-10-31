@@ -337,8 +337,9 @@ _if_say() {
 	rc_log ifup "$*"
 }
 
-# A link.d entry is one line: <if prefix> <node prefix> <first unit> <major>
-# [<presence command ...>]; its file is named for the driver's module.
+# A link.d entry is one line: <if prefix> <node prefix> <first unit> [<major>]
+# [<presence command ...>]; its file is named for the driver's module. The
+# major is needed only when the registry does not name the module.
 _if_entry() {
 	sed -e 's/#.*//' -e '/^[ 	]*$/d' "$1" | sed -n 1p
 }
@@ -354,12 +355,20 @@ _if_units() {
 	_if_pre=$2
 	_if_node=$3
 	_if_n=$4
-	_if_maj=$5
 	shift
 	shift
 	shift
 	shift
-	shift
+	# the major column is optional: a module the registry names needs none
+	case $1 in
+	[0-9]*)
+		_if_maj=$1
+		shift
+		;;
+	*)
+		_if_maj=-
+		;;
+	esac
 	# the presence command, if the entry has one (no "!": not in this sh)
 	if [ $# -gt 0 ]
 	then
