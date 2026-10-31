@@ -29,6 +29,7 @@ test:
 	python3 -I pkg/tests/test-arnorm
 	python3 -I pkg/tests/test-dlmsrc
 	python3 -I pkg/tests/test-fetch
+	python3 -I pkg/tests/test-kfsmod
 	python3 -I tests/test-dist
 	python3 -I tests/test-lock
 

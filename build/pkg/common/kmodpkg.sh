@@ -47,6 +47,10 @@ kmodpkg.sh)
 	;;
 esac
 
+# The period cross toolchain (modcheck's scan060) is layout.sh's
+# AMIX_CROSS_ENV; without layout.sh, the sibling gcc-cross-amix.
+AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh}"
+
 amix_kmodpkg() {
 	_km_dir="$1"; _km_line="$2"
 	case "$_km_line" in
@@ -82,7 +86,7 @@ amix_kmodpkg() {
 	_km_pin=$(sed -n 's/^PIN=//p' "$_km_kit/kit.conf")
 	mkdir -p "$_km_build"
 	rm -rf "$_km_build/chk"; mkdir -p "$_km_build/chk"; cp "$_km_obj" "$_km_build/chk/$KM_NAME"
-	( . "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1
 	  command -v m68k-cbm-sysv4-scan060 >/dev/null || { echo "no scan060 on PATH"; exit 1; }
 	  python3 -I "$_km_kit/tools/modcheck.py" -k "$_km_kit" $_km_d \
 		${KM_PAGESHIFT_OK:+-w "$KM_PAGESHIFT_OK"} "$_km_build/chk/$KM_NAME" ) \

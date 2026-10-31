@@ -42,6 +42,11 @@ kfsmod.sh)
 	;;
 esac
 
+# The period cross toolchain is layout.sh's AMIX_CROSS_ENV, so a worktree and
+# the build container work as the main checkout does; without layout.sh it
+# is the sibling gcc-cross-amix.
+AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh}"
+
 # the .moddata keys of an object, space-separated (desc=/param= left out)
 amix_kfsmod_moddata() {
 	python3 -I - "$1" <<'PY'
@@ -58,7 +63,7 @@ PY
 }
 
 amix_kfsmod_modcheck() {   # <kit> <object copy named <fs>> <out>
-	( . "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1
 	  command -v m68k-cbm-sysv4-scan060 >/dev/null || { echo "no scan060 on PATH"; exit 1; }
 	  python3 -I "$1/tools/modcheck.py" -k "$1" "$2" ) > "$3" 2>&1
 }
@@ -94,7 +99,7 @@ amix_kfsmod_rebuild() {
 	for _kr_f in Makefile Master "${_kr_fs}_wrap.c"; do
 		cp "$_kr_carve/$_kr_f" "$_kr_w/" || { echo "[FAIL] no $_kr_carve/$_kr_f" >&2; exit 1; }
 	done
-	( . "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1
 	  make -C "$_kr_w" KIT="$_kr_kit" ${_kr_x:+EXTRA="$_kr_x"} ) > "$_kr_w.log" 2>&1 || {
 		tail -15 "$_kr_w.log" >&2; echo "[FAIL] the $_kr_fs carve ($_kr_line) did not rebuild" >&2; exit 1; }
 	grep -q "^modcheck: $_kr_fs: ok (" "$_kr_w.log" || {

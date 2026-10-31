@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+# test-kfsmod: host test of the period toolchain the kernel-space helpers use.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# kfsmod.sh's amix_kfsmod_modcheck and amix_kfsmod_rebuild must take the
+# period toolchain from AMIX_CROSS_ENV, never from the checkout's siblings
+# (a worktree, the build container); a stand-in env.sh, kit and carve are
+# made here and AMIX_SIBLINGS points at nothing. And no harness script may
+# source a toolchain through $AMIX_SIBLINGS itself (kmodpkg.sh's modcheck
+# included); a ${...:-...} fallback for the old layout is allowed. Prints
+# "N/N passed"; exits non-zero on any failure.
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+COMMON = os.path.join(os.path.dirname(HERE), "common")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+tmp = tempfile.mkdtemp(prefix="test-kfsmod.")
+try:
+    gca = os.path.join(tmp, "gca", "build")
+    write(os.path.join(gca, "bin", "m68k-cbm-sysv4-scan060"), "#!/bin/sh\nexit 0\n", 0o755)
+    write(os.path.join(gca, "env.sh"), 'PATH="%s/bin:$PATH"; STUB_CROSS=yes; export PATH STUB_CROSS\n' % gca)
+    kit = os.path.join(tmp, "kit", "k30")
+    write(os.path.join(kit, "tools", "modcheck.py"), """\
+import os, sys
+print("modcheck: %s: ok (k30.1.2, boot, 1 bytes) cross=%s" % (os.path.basename(sys.argv[-1]),
+      os.environ.get("STUB_CROSS")))
+""")
+    obj = os.path.join(tmp, "ufs")
+    write(obj, "the ufs module\n")
+
+    def run(script, *args):
+        e = {k: v for k, v in os.environ.items() if not k.startswith("AMIX_")}
+        e.update(AMIX_PKG_COMMON=COMMON, AMIX_SIBLINGS=os.path.join(tmp, "nothing-here"),
+                 AMIX_CROSS_ENV=os.path.join(gca, "env.sh"))
+        p = subprocess.run(["/bin/sh", "-c", '. "$AMIX_PKG_COMMON/fetch.sh"; . "$AMIX_PKG_COMMON/kfsmod.sh"; '
+                            + script, "sh"] + list(args), env=e,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    out = os.path.join(tmp, "modcheck.out")
+    rc, o = run('amix_kfsmod_modcheck "$1" "$2" "$3"', kit, obj, out)
+    got = open(out).read() if os.path.exists(out) else ""
+    check("amix_kfsmod_modcheck: AMIX_CROSS_ENV's toolchain (scan060 on PATH), not the siblings",
+          rc == 0 and "modcheck: ufs: ok (k30.1.2, boot, 1 bytes) cross=yes" in got, o + got)
+
+    carve = os.path.join(tmp, "carve")
+    write(os.path.join(carve, "Makefile"), """\
+all:
+\tmkdir -p build/k30/mod.d
+\tcp %s build/k30/mod.d/ufs
+\t@echo "modcheck: ufs: ok (k30.1.2, boot) cross=$$STUB_CROSS"
+""" % obj)
+    write(os.path.join(carve, "Master"), "ufs\n")
+    write(os.path.join(carve, "ufs_wrap.c"), "/* wrap */\n")
+    w = os.path.join(tmp, "work")
+    rc, o = run('amix_kfsmod_rebuild k30 ufs "$1" "$2" "$3" "$4"', carve, obj, kit, w)
+    log = open(w + ".log").read() if os.path.exists(w + ".log") else ""
+    check("amix_kfsmod_rebuild: the carve rebuilt with AMIX_CROSS_ENV's toolchain, byte-equal",
+          rc == 0 and "cross=yes" in log and "byte-equal to the pin" in o, o + log)
+
+    direct = []
+    for f in sorted(os.listdir(COMMON)):
+        if not f.endswith(".sh"):
+            continue
+        for n, line in enumerate(open(os.path.join(COMMON, f)), 1):
+            if re.search(r'^\s*\(?\s*\.\s+"?\$AMIX_SIBLINGS/', line) or \
+               re.search(r'\(\s*\.\s+"\$AMIX_SIBLINGS/', line):
+                direct.append("%s:%d: %s" % (f, n, line.strip()))
+    check("no harness script sources a toolchain through $AMIX_SIBLINGS", not direct, "\n".join(direct))
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)
