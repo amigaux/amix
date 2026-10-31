@@ -14,7 +14,8 @@ sh kernel/k30/pkg/build.sh [kernel-k30-m]
 rolls it with the harness in `build/pkg` (`common.sh` sources it) into
 `$AMIX_BUILD_ROOT/kspace/pkg/` (`out/pkg/kspace/pkg/` by default), logs in
 `kspace/log/`, and prints `pkg <file> <sha256>` per datastream: the contract
-of make dist's `kspace` step (docs/BUILDING.md).
+of make dist's `kspace` step (docs/BUILDING.md). With no cut output it exits
+3 and names the step that makes it (`[MISSING]`, P-38 S2.2).
 
 The kernel is not built here. The recipe packages the output of the cut
 record `cuts/<build id>/cut.sh` (`K30M_SRC`; by default the station's copy in
