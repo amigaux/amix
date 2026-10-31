@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kabi-sidecar030.py labels pin= from amix's compiler pin (04c0b65, 9eb8d03)
+
+tools/kabi-sidecar030.py takes the sidecar's pin= from AMIX_GCA_PIN when it is set and checks the installed wrapper
+against amix-gcc-wrapper.sh at that commit, so a local compiler checkout that has moved on no longer relabels the
+same compiler. Cuts -63 and -64 take it from 04c0b65 and reproduce all seven sums on the host and in the container.
+
 ## 2026-10-31 — comments, docs and package descriptions state facts without internal ids (24cf96d, e900c1c)
 
 No binary change: cut -64 reproduces its seven sums with the edited build script. kern30m -64's description text
