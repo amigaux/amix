@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # prfcheck.py -- the formats kernel-side code may give the Amix kernel's
 # printf and cmn_err: %d, %x, %s and %% only.  The 1992 printf has no
-# length modifier, so "%ld" prints "d" (the S3-20 boot row's acceptance
+# length modifier, so "%ld" prints "d" (the stage-3 boot rows' acceptance
 # line read "generation d"), and the metal-proven drivers use nothing but
 # these three.  Host test harnesses print through the host libc and never
 # show the difference, so this checks the source.

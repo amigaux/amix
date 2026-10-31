@@ -364,7 +364,7 @@ for IMG; do
 	else
 		fail "$K: mkksym -a: $(cat "$A/ksym.log")"; continue
 	fi
-	# the splice of the brief's step 7, as a module kernel's build does it:
+	# the splice, as a module kernel's build does it:
 	# dmainit, execsw, fmodsw, vfssw, nfstype, scrcon_put, aciabintr
 	# weakened; the stock tables and functions kept as __amix_*; the whole
 	# core (less its empty dlmksym.o, which ksym.o replaces), the platform

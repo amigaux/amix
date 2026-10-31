@@ -1,5 +1,5 @@
 /*
- * t43fail.c -- S3-43: a module whose _load attaches an interrupt handler
+ * t43fail.c -- a module whose _load attaches an interrupt handler
  * and then fails (EIO).  The core calls its _unload, which forgets the
  * handler too; the backstop removes it, and the kernel is as it was
  * (80 section 3).
@@ -35,4 +35,4 @@ t43fail_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t43fail, t43fail_load, t43fail_unload, "S3-43 failing load");
+MOD_MISC_WRAPPER(t43fail, t43fail_load, t43fail_unload, "t43 failing load");

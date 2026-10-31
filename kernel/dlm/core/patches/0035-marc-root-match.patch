@@ -1,12 +1,13 @@
 Subject: marc_root evaluates match=: boot2 places, the core selects
 
-Contract C4-4 version 3 section 4 (S4-10's other half).  boot2 now
-places every root-class record and selects none, so the root pass reads
-each record's match= keys from the manifest copy and checks them with
-marc_post's platform matcher (zorro:MMMM:PP against the board list,
-mobo: and always always).  An entry none of whose keys names a board
-here is skipped silently, as an ENXIO from its _load would be.  The
-state harness adds an entry whose record names an absent board.
+Contract C4-4 version 3 section 4, the core's half (boot2's placement is
+10 section 5.1).  boot2 now places every root-class record and selects
+none, so the root pass reads each record's match= keys from the manifest
+copy and checks them with marc_post's platform matcher (zorro:MMMM:PP
+against the board list, mobo: and always always).  An entry none of
+whose keys names a board here is skipped silently, as an ENXIO from its
+_load would be.  The state harness adds an entry whose record names an
+absent board.
 
 --- a/dlm_post.c
 +++ b/dlm_post.c
@@ -78,7 +79,7 @@ state harness adds an entry whose record names an absent board.
 --- a/test/mkmods.py
 +++ b/test/mkmods.py
 @@ -97,7 +97,8 @@
- # marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
+ # marc_root: rp1 links; rp2's bytes are damaged; rp3 is not in
  # the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
  # member and rp7 is not
 -for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7'):
@@ -91,7 +92,7 @@ state harness adds an entry whose record names an absent board.
 +++ b/test/state.c
 @@ -602,6 +602,7 @@
  
- /* ---- marc_root (30 section 3, section 2 patch 16; C4-4, S4-04) ---- */
+ /* ---- marc_root (30 section 3, section 2 patch 16; C4-4) ---- */
  extern long host_km_sleep;
 +int hmatch();
  

@@ -1,20 +1,17 @@
 # 20 — Module format and ABI
 
 - **Status:** draft (S0), 2026-10-25
-- **Implements:** D-3 §3 (both lines get the same module format), D-3 §4 (controllers and filesystems as modules need match keys, registries and a published ABI), D-3 §7 (the ABI kit is published in amix-dlm), D-3 §8 (Emre builds Gayle IDE against the kit; Antti reviews the ABI), D-3 §9 (kernel space on gcc-cross-amix; the ABI kit pins it)
-- **Builds on:** P-28 D5, D6, D8, D10, D20, D58 (unchanged in substance); the adopted core's format (`tmp/2026-10-22-modules-proposal/ashnazag-dlm-core-map.md` §3)
+- **Implements:** release decisions 3 (both lines get the same module format), 4 (controllers and filesystems as modules need match keys, registries and a published ABI), 7 (the ABI kit is published in amix-dlm), 8 (Emre builds Gayle IDE against the kit; Antti reviews the ABI) and 9 (kernel space on gcc-cross-amix; the ABI kit pins it) (`00-overview.md` §2)
+- **Builds on:** the earlier proposal's kabi per family, allowlisted symbol table and DDI, `.moddata` v2, syscalls, own object format and `kinfo` major (unchanged in substance); the adopted core's format
 
-Paths are relative to the Amix project workspace. `MAP` =
-`tmp/2026-10-22-modules-proposal/ashnazag-dlm-core-map.md`, `STUDY` =
-`tmp/2026-10-14-modules-study/STUDY.md`, `L2` =
-`tmp/2026-10-14-modules-study/L2-our-kernels.md`.
+Paths follow `00-overview.md`, "Sources".
 
 ## 1. Object format
 
 ### 1.1 Modules (both lines)
 
 A module is one ELF32 big-endian relocatable object (`ET_REL`, `EM_68K`),
-the format the adopted core loads (`MAP` §3):
+the format the adopted core loads:
 
 - RELA relocations only (a `SHT_REL` section is refused); types
   `R_68K_NONE`, `32`, `16`, `8`, `PC32`, `PC16`, `PC8`, range-checked;
@@ -39,19 +36,18 @@ exported symbols.
 Because the 030 kernel has no symbol table, everything a module needs from
 the kernel comes through the exported-symbol block (§4), which is itself a
 table of R_68K_32 `.long` relocations inside `.data` and therefore survives
-`elf2brel` (to be confirmed for ~1000 entries, M-ABI2 = STUDY U6). The arena
+`elf2brel` (to be confirmed for ~1000 entries, M-ABI2). The arena
 offset and the identity record offset come from the kernel package's sidecar,
 not from symbols (`10-boot-loader.md` §5.2).
 
-Facts the format must respect on both lines (`tmp/2026-10-22-modules-proposal/refute-rel-c-last-writable-section.md`):
+Facts the format must respect on both lines:
 every kernel in the tree has exactly one writable PROGBITS section, `.data`;
 the arena and the exported-symbol block live inside it.
 
 ## 2. `.moddata` version 2
 
 The adopted core's `.moddata` is a relocation to the wrapper followed by
-dependency names, and `MODREV == 1` in the wrapper is its only version check
-(`MAP` §3). Version 2 keeps word 0 and adds a typed record list. The wrapper
+dependency names, and `MODREV == 1` in the wrapper is its only version check. Version 2 keeps word 0 and adds a typed record list. The wrapper
 revision becomes 2, so a version-1 core refuses a version-2 module with
 `EBADVER` instead of misreading it.
 
@@ -80,8 +76,7 @@ then        NUL-terminated key=value strings, ending with an empty string
 | `desc` | one-line description | tools |
 
 The exact syntax, limits and refusals are contract C3-1
-(`docs/contracts/C3-1-module-object.md`). Rules: a zero match key is refused (a zeroed autoconfig row must never match,
-P-28 risk 8); `mobo:` keys name a gated, positively identifying probe listed
+(`docs/contracts/C3-1-module-object.md`). Rules: a zero match key is refused (a zeroed autoconfig row must never match); `mobo:` keys name a gated, positively identifying probe listed
 in the registry (§6), never an address; a root-class module must carry
 `match`, `rank` (disk controllers) or `fs` (filesystems).
 
@@ -94,8 +89,7 @@ module at load.
 
 ### 3.1 The tag
 
-`kabi=<fam>.<major>.<minor>`, families `k30` and `k46` (P-28 D5;
-`STUDY` §2.9). A kernel accepts a module of the same family and major whose
+`kabi=<fam>.<major>.<minor>`, families `k30` and `k46`. A kernel accepts a module of the same family and major whose
 minor is ≤ its own. The major changes when any of these change: a DDI
 structure or calling convention, the wrapper, `.moddata`, a switch-table row
 layout, the page size, the exported-symbol set (removal or semantic change).
@@ -106,10 +100,10 @@ The kernel package's sidecar records, next to the tag: the base identity (for
 k46, the 040/060 port's base commit and build id), the compiler pin, the
 semantic contract version, and a binary fingerprint (sizes of exported data
 objects and a probe module's structure-offset table). The build fails when
-the fingerprint moves and the tag does not (`STUDY` §2.9).
+the fingerprint moves and the tag does not.
 
 Whether the 68040 and 68060 kernels of the k46 family export the same ABI is
-measured before the family is fixed (M-ABI1 = STUDY U7).
+measured before the family is fixed (M-ABI1).
 
 ### 3.2 One compiler per kernel line, pinned
 
@@ -121,7 +115,7 @@ pinned build of gcc-cross-amix (GCC 2.7.2.3, binutils 2.8.1,
 The pin is a short id naming the toolchain commit and the flag set; it is
 stored in the kabi sidecar and in each module's `cc` key. apkg and `kbootset`
 refuse a module whose pin differs from its kernel line's. GCC 14 is never used
-for kernel space (D-3 §9; its own README says so,
+for kernel space (release decision 9; its own README says so,
 `gcc14-cross-amix/README.md:57-62`).
 
 Changing the pin is a kabi major change for that line.
@@ -131,9 +125,9 @@ Changing the pin is a kabi major change for that line.
 ### 4.1 The allowlisted table
 
 Modules resolve kernel symbols only through an exported-symbol block
-embedded in the kernel's `.data`, never through `/stand/unix` (P-28 D6). The
-adopted core's block exports every global (160 KiB, `MAP` §4); ours exports
-an allowlist of two tiers (`STUDY` §2.3):
+embedded in the kernel's `.data`, never through `/stand/unix`. The
+adopted core's block exports every global (160 KiB); ours exports
+an allowlist of two tiers:
 
 - **DDI tier** — the stable interface for outside modules. Version 1 is
   about 75 names: console and errors (`printf`, `cmn_err`, `panic`),
@@ -152,8 +146,8 @@ an allowlist of two tiers (`STUDY` §2.3):
 - **Core tier** — what the root filesystem modules (ufs, s5, cdfs) need from
   the base: 112 undefined symbols in the stock ufs object and 108 in s5,
   among them `bdevsw` and `vfssw` (checked with `nm -u` on
-  `amix-kerntools/work/cross-kernel-k030u-c6s1/usr/sys/fs/{ufs,s5}/exp`);
-  cdfs imports `vfssw`, `nfstype`, `sdopen` and `sdqueue` (`L2`:462). The
+  the 030 relink kit's stock `usr/sys/fs/{ufs,s5}/exp`);
+  cdfs imports `vfssw`, `nfstype`, `sdopen` and `sdqueue`. The
   core tier therefore exports `bdevsw`, `vfssw` and `nfstype`. The exported
   `vfssw` entry names the **grown** table the core installs
   (`30-module-core.md` §6), not the stock one, and `nfstype` is read live, so
@@ -170,7 +164,7 @@ Several DDI providers are not in today's kernels (`dev_kvmap` exists only
 where the A4091 pass linked it, `sdcardbase` only after the RTH1/A4091
 passes, the libgcc helpers nowhere, every spl but one is inline), so the core
 pass links its own providers and a post-link gate checks that every
-allowlisted name is defined in every kernel built (`STUDY` §2.3, C2-F6).
+allowlisted name is defined in every kernel built.
 
 ### 4.2 DDI v1 semantics
 
@@ -178,7 +172,7 @@ Each DDI function has a written contract in the ABI kit: context (may it
 sleep, which spl), memory class of what it returns (cache-inhibited DMA
 memory vs ordinary kmem; `30-module-core.md` §8), and error returns. Root-
 class module `_load` routines run before process 1 exists and may not sleep,
-touch a disk or wait for a timeout; they may arm one (`STUDY` §2.2, C2-F9).
+touch a disk or wait for a timeout; they may arm one.
 
 ## 5. What the ABI kit publishes
 
@@ -188,7 +182,7 @@ kernel line:
 | Content | Notes |
 |---|---|
 | Our headers: `mod.h`, `moddefs.h`, `ksym.h` (MIT, from the adopted core, with our changes), `amixddi.h` (DDI v1 declarations; named so because the stock SVR4 headers already have a `sys/ddi.h` with the same guard, which the compiler finds first) | Ours; MIT. |
-| The stock Amix kernel headers a module build needs | Commodore's; published in the kit under the project's distribution permission of 2026-09-23 (D-3 §7: "the ABI kit (headers + module tooling) is published in amix-dlm"). Added to the kit at kit build time from the pinned sysroot; not tracked in this repository's history. |
+| The stock Amix kernel headers a module build needs | Commodore's; published in the kit under the project's distribution permission of 2026-09-23 (release decision 7: the ABI kit, headers and module tooling, is published in amix-dlm). Added to the kit at kit build time from the pinned sysroot; not tracked in this repository's history. |
 | The allowlist per line and tier, and the kabi sidecar | Generated from each kernel build. |
 | The registries of §6 | One text file each. |
 | Module tooling: `mkmod`, `modfix`, a `.moddata` v2 writer, a module checker (format, relocation types, undefined symbols against the allowlist, 68060 instruction scan) | Host tools; MIT. |
@@ -196,8 +190,8 @@ kernel line:
 | A probe module and a sample driver module | For the fingerprint and as a template. |
 | The DDI contracts and a "writing a module" guide | `docs/abi/`. |
 
-The stock headers are part of the published kit, as D-3 §7 decided
-(this settles P-28 D30 and P-22 D1 for the kit). The repository itself keeps
+The stock headers are part of the published kit, as release decision 7
+has it; this settles the kit's stock-header question. The repository itself keeps
 no Commodore text: the kit build copies the headers from the pinned sysroot
 into the kit artefact, so the published kit is complete while the history of
 this repository stays free of them. (`gcc-cross-amix` keeps its own,
@@ -222,9 +216,9 @@ checked against the built kernels before they are frozen (M-REG1).
 
 | Registry | Entries |
 |---|---|
-| System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined, `tmp/2026-10-22-modules-proposal/refute-ashnazag-dlm-init-claim.md`) |
-| Character majors | 48 `random` (the random module, kernel/modules' random: `/dev/random` minor 0, `/dev/urandom` minor 1; free in the stock tables and in 68030-261031-63 and 68060-261031-52, M-REG1 re-run 2026-10-31; isoriano's static random driver used it too), 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1), 54 `paula` (the Paula module, amix-paula, kabi 1.3; free in the stock tables and in the port's static kernels, whose static `/dev/paula` takes 53); stock rows free in the images examined: 7, 38, 39, 42–45, 47, 55–69 (`L2`:283) |
-| Block majors | 18 `dd` (stock); 20 `ram` — the stock kmem-backed RAM disk (stock `tmp/2026-08-26-svr4-refs/amix-src/master.d/kernel.c:307`, driver `amiga/driver/ram.c` there), replaced in 1.1 by our `ramdisk` module on the same major (`30-module-core.md` §7); free: 0–15, 21–31 (`L2` §2.3) |
+| System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined) |
+| Character majors | 48 `random` (the random module, kernel/modules' random: `/dev/random` minor 0, `/dev/urandom` minor 1; free in the stock tables and in 68030-261031-63 and 68060-261031-52, M-REG1 re-run 2026-10-31; isoriano's static random driver used it too), 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1), 54 `paula` (the Paula module, amix-paula, kabi 1.3; free in the stock tables and in the port's static kernels, whose static `/dev/paula` takes 53); stock rows free in the images examined: 7, 38, 39, 42–45, 47, 55–69 |
+| Block majors | 18 `dd` (stock); 20 `ram` — the stock kmem-backed RAM disk (stock `master.d/kernel.c:307`, driver `amiga/driver/ram.c`), replaced in 1.1 by our `ramdisk` module on the same major (`30-module-core.md` §7); free: 0–15, 21–31 |
 | Filesystem names | `ufs`, `s5`, `cdfs` (root class); stock rows otherwise unchanged; table grown by the core (`30-module-core.md` §6) |
 | Interrupt chains | INT2 (Zorro/CIA-A level 2), INT6 (Zorro/CIA-B level 6); attachment only through `intr_attach` |
 | Motherboard probes (`mobo:`) | `z3660-window` (above), `gayle` (VPOSR AGA gate + task-file write/readback at 0xDD2020, `amix-gayle-ide/README.md:44`), `a4000t-710` (gated by chipset identity; probe to be designed, `amix-kerntools/docs/k0-families.md:1190-1195`), `a3000-wd` (floor driver; VPOSR gate + two-register readback) |
@@ -233,14 +227,14 @@ checked against the built kernels before they are frozen (M-REG1).
 
 ## 7. Open questions
 
-| ID | Question | Proposed owner |
+| ID | Question | Proposed answerer |
 |---|---|---|
-| OQ-20.4 | Exact DDI v1 list and contracts; Antti reviews before the kit is frozen (D-3 §8). | us; Antti reviews |
+| OQ-20.4 | Exact DDI v1 list and contracts; Antti reviews before the kit is frozen (release decision 8). | us; Antti reviews |
 | OQ-20.5 | Whether ashnazag's author wants the shared major/syscall registry to be common to both projects (his zz9000 and our z3660rtg both use 49). | ashnazag |
 
 Closed by measurement (2026-10-26): OQ-20.2 — one k46 family: the 68040 and 68060 kernels of record differ in one byte, the CPU stamp, and export the same symbols with the same sizes (M-ABI1, `docs/measurements/2026-10-26-m-reg1-m-abi1.md`); the fingerprint (C3-3) guards it if the two ever diverge.
 
-Closed in the review pass (T-52): OQ-20.1 — the stock headers are published in the kit (D-3 §7, §5 above); OQ-20.3 — z3660eth matches 144b:01 like its two siblings (§6).
+Closed in the specification review: OQ-20.1 — the stock headers are published in the kit (release decision 7, §5 above); OQ-20.3 — z3660eth matches 144b:01 like its two siblings (§6).
 
 ## 8. Measurements
 

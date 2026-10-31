@@ -1,7 +1,7 @@
 #!/bin/sh
 # s2-standin.sh -- a stand-in kernel package for the stage-2 rows, until the
-# real kernel packages (docs/plan/stage-2.md S2-12) and apkg's catalog
-# (S2-23) exist: the kernel and its kabi sidecar as the package would
+# real kernel packages and apkg's catalog
+# exist: the kernel and its kabi sidecar as the package would
 # install them (docs/contracts/C2-3-packages.md), and the install record
 # apkg would write (C2-2), so kbootset's gates 1 and 2 accept them.  The
 # rows copy OUTDIR's tree onto the box's root.

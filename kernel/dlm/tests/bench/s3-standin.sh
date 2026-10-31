@@ -1,9 +1,9 @@
 #!/bin/sh
 # s3-standin.sh -- a stand-in package for a stage-3 module kernel, until the
-# real kernel packages carry one (docs/plan/stage-3.md S3-22): the kernel
+# real kernel packages carry one: the kernel
 # and the sidecar its build wrote (C2-3 version 5, C3-3 §3), as the package
 # would install them, and the install record apkg would write (C2-2), so
-# kbootset's gates 1 and 2 accept them.  The boot rows of S3-20 and S3-21
+# kbootset's gates 1 and 2 accept them.  The stage-3 boot rows
 # copy OUTDIR's tree onto the box's root (tests/bench/README.md, stage 3).
 #
 # usage: s3-standin.sh KERNEL SIDECAR OUTDIR [ROOTREC]

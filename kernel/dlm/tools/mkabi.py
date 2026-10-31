@@ -8,7 +8,7 @@
 #                           with its size in the final link
 #   offs <NAME> <value>     the probe's structure-offset table: dlm_offs.h,
 #                           written by the core's tools/mkoffs from dlmoffs.c
-#                           against the kernel's headers (the brief's step 2)
+#                           against the kernel's headers
 #
 #   mkabi.py --text OUT KERNEL DDILIST OFFS
 #       write the text to OUT and print abi=<64 hex>

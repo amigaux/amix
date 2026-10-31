@@ -1,5 +1,5 @@
 /*
- * kbox.h -- kbootset on the running box (docs/plan/stage-2.md S2-06): the
+ * kbox.h -- kbootset on the running box: the
  * kinfo record (docs/contracts/C2-1-kinfo.md), the box facts it gives,
  * finding the boot store (docs/spec/40-generations-and-composer.md §5,
  * gates 8 and 9), and /etc/default/bootset (C2-4 §6).

@@ -1,6 +1,6 @@
 #!/bin/sh
-# mkprobes.sh -- S3-41's probe modules, built with one line's ABI kit
-# (tests/bench/README.md, S3-41): u2kva (U2) and u4big (U4), for /tmp/s41
+# mkprobes.sh -- the U2 and U4 probe modules, built with one line's ABI kit
+# (tests/bench/README.md, U2 and U4): u2kva (U2) and u4big (U4), for /tmp/s41
 # on the box, loaded under development load.  U1 is not a module: it is a
 # measurement build of the kernel with -DDLM_U1 (core patch 0023).
 #

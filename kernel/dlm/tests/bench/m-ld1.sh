@@ -1,12 +1,12 @@
 #!/bin/sh
 # m-ld1.sh -- vehicles for M-LD1: which bootblock fields the Kickstart strap
 # checks, on a floppy and on an RDB UNI\0 partition, per Kickstart version
-# (docs/spec/10-boot-loader.md §2.1; docs/plan/stage-1.md S1-20).
+# (docs/spec/10-boot-loader.md §2.1).
 #
 # Seven bootblocks: the good one and six that each differ in one field
 # (bbframe -x).  For DF0, a one-volume floppy store per line and per
 # bootblock.  For a disk, the same bootblock written over the first 1024
-# bytes of the boot slice of a copy of a proven vehicle (rows N19-N26):
+# bytes of the boot slice of a copy of a proven vehicle (the loader rows):
 # the script prints the dd line, so the slot's own copy is patched and the
 # 0.5-0.9 GB vehicle is not copied seven times.
 #
@@ -78,7 +78,7 @@ cat > "$OUT/EXPECTED" <<EOF
 #
 # Disks: a fresh slot copy of the controller's proven vehicle, then
 #   dd if=$OUT/bb-<variant>.img of=<slot copy> bs=1024 seek=<slice offset / 1024> conv=notrunc
-# with the S1-19 vehicles' boot slices:
+# with the loader vehicles' boot slices:
 #   ld-a3000-030, ld-gayle-030   seek=521280   (slice at 533790720)
 #   ld-a4091-030, ld-a4091-060   seek=870464   (slice at 891355136)
 # The store header after the bootblock is untouched; the rest of the row

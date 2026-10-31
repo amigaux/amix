@@ -1,8 +1,8 @@
 # C2-3 — kernel and loader package layout, the kabi sidecar, version 9
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27, S5-12): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1); version 9 (2026-10-27, S5-46): `rth1=2`, the kernel matches a motherboard record by its id (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25, version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1); version 9 (2026-10-27): `rth1=2`, the kernel matches a motherboard record by its id (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
-- **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in kernel/dlm (S2-12)
+- **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in kernel/dlm
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
 
 ## 1. Kernel package (role `kernel`)
@@ -12,7 +12,7 @@
 | `/stand/k30/unix` or `/stand/k46/unix` | the kernel in a form the loader takes (`brel` or ET_REL), uncompressed |
 | `/stand/k30/kabi` or `/stand/k46/kabi` | the sidecar (§2) |
 | `/stand/k30/unix.sym` | the kernel's symbols (§2.1), for a kernel shipped without a symbol table: every `brel`. An ET_REL kernel carries its own and needs none |
-| `/etc/conf/mod.d/ufs`, `/etc/conf/mod.d/s5` | version 8: on a cut without ufs and s5 (no `rootfs=`, C3-3 §3), their modules (C4-6 §4), built with the cut and carrying its `build=`: on k30 both, on k46 ufs only (no k46 s5 module, S5-37) |
+| `/etc/conf/mod.d/ufs`, `/etc/conf/mod.d/s5` | version 8: on a cut without ufs and s5 (no `rootfs=`, C3-3 §3), their modules (C4-6 §4), built with the cut and carrying its `build=`: on k30 both, on k46 ufs only (no k46 s5 module) |
 | `/etc/conf/modreg.d/ufs`, `/etc/conf/modreg.d/s5` | their defaults, as a module package's (C3-5 §1.2): comments only |
 
 The filesystem modules are core tier, so they load only on the kernel
@@ -103,7 +103,7 @@ What the gates read:
 
 **`sdcards=`** (version 7) is the number of sd cards the kernel's sd layer
 was built for: `4` for a kernel with contract C4-1's four cards (the
-S4-21 kernels on both lines and every later one), `2` or absent for every
+four-card kernels of stage 4 on both lines and every later one), `2` or absent for every
 earlier kernel. The minor layout depends on it (C4-1 §2.1): on a
 two-card kernel bit 7 is not a card bit, so a `c10` node there would
 open card 0. It is an explicit key, never read from the kabi minor:
@@ -154,7 +154,7 @@ it:
   kbootset refuses a `unix.sym` that is not `ET_EXEC`;
 - a namelist kbootset makes at bind 0 has this form (`tests/host/nlmake`),
   and for the 1.1 kernels the loader's layout of the ELF before conversion
-  is the `brel`'s (S3-B5: K030-U's 78 block names agree);
+  is the `brel`'s (K030-U's 78 block names agree);
 - the same names, kinds (`STT_FUNC`, `STT_OBJECT`, …) and sizes as the
   ELF before conversion.
 
@@ -184,14 +184,14 @@ boots as before, with no namelist.
 
 ## 4. kbootset package
 
-`/sbin/kbootset` is statically linked, built with GCC 14 (D-3 §9), and
+`/sbin/kbootset` is statically linked, built with GCC 14, and
 part of the base set. It is a userland package, not kernel space: it is
 listed among the catalog's ordinary entries, with no kpkg entry and no
 apkg kernel-space record.
 
 It executes FPU instructions: the GCC 14 runtime's `snprintf` saves and
 restores FPU registers. On a 68LC040 or 68LC060 without an FPU, the
-kernel's FPU emulation, which is in the static floor (D-3 §4), takes
+kernel's FPU emulation, which is in the static floor (`70-static-floor.md`), takes
 them. A kernel without that emulation cannot run kbootset.
 
 ## 5. Settled at agreement
@@ -203,7 +203,7 @@ them. A kernel without that emulation cannot run kbootset.
 - Version 4: the sidecar describes the form shipped. When the build ships
   a `brel`, it writes `size=`, `sha256=` and `bss=` of that `brel`, and
   packaging still copies the sidecar verbatim.
-- Version 6 (2026-10-26, from S3-B5): a `brel` kernel ships `unix.sym`
+- Version 6 (2026-10-26): a `brel` kernel ships `unix.sym`
   and its sidecar says `sym=` (amix-kerntools makes both; amix-packages
   installs the file). An ET_REL kernel's sidecar may say `sym=` too, and
   then kbootset reads that file instead of the kernel. From kerntools' first

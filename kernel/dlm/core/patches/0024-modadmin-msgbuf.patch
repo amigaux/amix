@@ -1,10 +1,11 @@
 Subject: modadmin -L: the kernel's message buffer, oldest first
 
-What the core and the modules print after boot reaches putbuf but not the
-console (S3-43, 2026-10-26).  -L finds putbuf, putbufsz and putbufwpos in
-the namelist /stand/unix that kbootset writes for the booted kernel
-(amix-dlm C2-4 section 12), reads them through /dev/kmem and prints the
-ring from the write position round.  User side only: dlm.o is unchanged.
+What the core and the modules print after boot reaches putbuf but not
+the console (the stage-3 emulator rows, 2026-10-26).  -L finds putbuf,
+putbufsz and putbufwpos in the namelist /stand/unix that kbootset writes
+for the booted kernel (amix-dlm C2-4 section 12), reads them through
+/dev/kmem and prints the ring from the write position round.  User side
+only: dlm.o is unchanged.
 
 --- a/modadmin.c
 +++ b/modadmin.c

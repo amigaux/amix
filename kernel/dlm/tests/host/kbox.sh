@@ -1,5 +1,5 @@
 #!/bin/sh
-# kbox.sh -- kbootset on the "running box" (docs/plan/stage-2.md S2-06), on
+# kbox.sh -- kbootset on the "running box" (kbootset/kbox.c), on
 # the host: a kinfo record (docs/contracts/C2-1-kinfo.md) and raw disks are
 # files under a directory that KBOOTSET_KINFO and KBOOTSET_DEVROOT point
 # kbootset at.  Covered: finding the store through the loader record and
@@ -226,7 +226,7 @@ grep -qx "module monsw (demand): loaded" $T/out
 grep -qx "module z3660rtg (demand): not loaded (loads at the first open of its device)" $T/out
 # 6b'. a safe boot (kinfo flag 0x4) names the safe set it keeps, the
 # records marked safe=1, and says why the others did not load (C2-4 §11):
-# a4091 ranked before the root's card loads, as N160 saw
+# a4091 ranked before the root's card loads, as seen on a bench boot
 sed -e 's|^module z3660eth boot \(.*\)$|module z3660eth boot \1 safe=1|' $T/mods.spec > $T/safe.spec
 gs=$($B/kbootset -R $R commit --spec $T/safe.spec 2>/dev/null | sed -n 's/^kbootset: generation \([0-9]*\) committed.*/\1/p')
 [ -n "$gs" ] || { echo "kbox: the safe generation was not committed"; exit 1; }
@@ -257,7 +257,7 @@ p1=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out2)
 [ $((p1 - p0)) -eq 1 ] || { echo "kbox: check counted the nodes as $((p1 - p0)) problems"; exit 1; }
 rm -f $R/stand/k30/kabi
 
-# 6d. the Z3660 as one controller (C4-1 §5.1, S5-15).  An A4000 in 030
+# 6d. the Z3660 as one controller (C4-1 §5.1).  An A4000 in 030
 # mode: the window (id 4) and Gayle (id 2), both motherboard cards, and
 # a boot disk the loader saw no board for.  The card whose disk at the
 # boot unit holds a slice at AXL1's start is the boot card; with both,

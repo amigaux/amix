@@ -2,7 +2,7 @@ Subject: drivers loaded at boot register their majors; ddi and str on the host
 
 A driver loaded at boot or by modload found no slot: only a demand-class
 registration or modadmin -r made one, so its linkage failed with EINVAL
-(S3-B5 on k30: z3660eth, "error 22").  drv_install now registers the
+(the first z3660eth boot on k30: "error 22").  drv_install now registers the
 module's own registry majors, dlm_sreg for a STREAMS driver and dlm_creg
 otherwise; a STREAMS driver in demand class is refused with a console
 line.  The state harness builds dlm_str.c and dlm_ddi.c (host stand-ins

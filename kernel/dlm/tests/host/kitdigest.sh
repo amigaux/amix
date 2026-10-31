@@ -1,6 +1,6 @@
 #!/bin/sh
 # kitdigest.sh -- tools/kitdigest.sh, the kit digests of the release lock
-# (P-38 S2.1): on a made-up kit of both lines, the line's fields from
+# (release/): on a made-up kit of both lines, the line's fields from
 # kit.conf (PORT_REV "-" when absent); the manifest digest equal to one
 # computed here independently (python, the dlmkit recipe's rule: "<x|->
 # <sha256> <path>" per file, C order); a new KIT_REV changes the manifest

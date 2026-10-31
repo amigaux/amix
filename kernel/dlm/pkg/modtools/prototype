@@ -1,10 +1,10 @@
 #
-# prototype -- modtools: /sbin/modadmin (amix-dlm S3-11).
+# prototype -- modtools: /sbin/modadmin .
 #
 # AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.  /sbin is
 # the stock core's directory, declared with core's attributes (0755 bin bin).
 # Since -9 no scripts: the `dlm::sysinit:/sbin/modadmin -B ...' line in
-# /etc/inittab is amix-base's (P-36 W8).
+# /etc/inittab is amix-base's.
 #
 i pkginfo
 i copyright

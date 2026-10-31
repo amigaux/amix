@@ -1,5 +1,5 @@
 #!/bin/sh
-# oracle.sh -- S3-43's relocation oracle on the box (80's stage-3 rows):
+# oracle.sh -- the relocation oracle on the box (80's stage-3 rows):
 # the bytes the module core left in memory for t43rel against the host
 # loader's image of the same object at the same base, resolved against the
 # kernel's own symbol block bound where the loader bound the kernel.  The

@@ -1,6 +1,6 @@
 /*
  * mkstore.c -- build a boot store (docs/spec/10-boot-loader.md §4.2) into an
- * image file: the seed of `kbootset --image` (docs/plan/stage-1.md S1-06).
+ * image file: the seed of `kbootset --image`.
  *
  * usage: mkstore -o IMAGE [-o IMAGE2 ...] [-p OFFSET] [-s SIZE] [-f]
  *                -1 BOOT1.IMG -2 BOOT2.BIN [-b BOOT2B.BIN] [-v LOADERVER]

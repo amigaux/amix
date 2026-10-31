@@ -127,7 +127,7 @@ arena.
 --- a/test/mkmods.py
 +++ b/test/mkmods.py
 @@ -236,17 +236,17 @@
- # block drivers (S4-06): bd1 a pinned block-only driver on b:24; bdun is
+ # block drivers: bd1 a pinned block-only driver on b:24; bdun is
  # unpinned; bdreg's b:22 is registered to no one; bdused's b:23 is in use;
  # bdcf has a character row (c:59) that links, then the used block row
 -def blkmod(p, bmajor, cmajor=0, ccount=0, pinned=True):

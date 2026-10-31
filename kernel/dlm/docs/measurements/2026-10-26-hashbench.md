@@ -13,7 +13,7 @@
   - gcc-cross-amix (GCC 2.7.2.3) with the loader's flags, the code axtime
     timed.
 - **Recipe:** `tests/bench/README.md` "M-GEN2 follow-up".
-- **Evidence:** the workspace's `tmp/2026-10-26-hashbench/run/N40/`
+- **Evidence:** the bench run of 2026-10-26 (logs kept outside the repository)
 
 ## 1. Run 1: the shifting round (sha256.c before this change)
 
@@ -65,9 +65,9 @@ boot2 does not link `sha256.c`, so its size gate was never involved.
 
 ## 3. Run 2: the restructured round
 
-The same cell with the rebuilt binaries
-(`tmp/2026-10-26-hashbench/run2/N40/03-host.txt`; the binaries are
-snapshotted beside it, and their hashes match the build). `times(2)`
+The same cell with the rebuilt binaries (a second bench run, its logs
+kept outside the repository; the binaries are snapshotted beside them, and
+their hashes match the build). `times(2)`
 counts in 1/60 s on this kernel. Every build printed the host's digests.
 
 | Build | SHA-256 before | SHA-256 after |
@@ -96,6 +96,6 @@ the instruction cache with no reuse.
   machine, once per kernel-space transaction. The loader does not hash
   with SHA-256 at all (M-LD7). The kernel's module checks in stage 3 use
   the GCC 2.7.2.3 build.
-- **Any later attempt** is designed against the bench: the Bench runs
+- **Any later attempt** is designed against the bench: the bench runs
   hashbench on each candidate before anything else changes. It is low
   priority.

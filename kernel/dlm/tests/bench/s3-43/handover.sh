@@ -1,6 +1,6 @@
 #!/bin/sh
-# handover.sh -- one line's S3-43 inputs for the Bench, in one directory
-# (tests/bench/README.md, S3-43): the module set (mkset.sh), the loader
+# handover.sh -- one line's inputs for the stage-3 emulator rows, in one
+# directory (tests/bench/README.md): the module set (mkset.sh), the loader
 # rows (boot2.sh), and a list of what is there with SHA-256s.
 #
 # usage: handover.sh LINE KERNEL SIDECAR ETREL "ROOTREC" SLICEBYTES OUTDIR

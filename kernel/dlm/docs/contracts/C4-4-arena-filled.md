@@ -1,18 +1,18 @@
 # C4-4 — the arena filled: what boot2 places and the core links, version 7
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
-  (2026-10-26, option A of S4-01's design): each root module's NOBITS and
+- **Status:** agreed 2026-10-26, version 1; version 2
+  (2026-10-26): each root module's NOBITS and
   COMMON lie in a zeroed tail boot2 reserves behind its file, from the
-  record's `bss=` (§1.2, §4); version 3 (2026-10-26, from S4-10's
-  measurement): boot2 places every root record and the core evaluates
+  record's `bss=` (§1.2, §4); version 3 (2026-10-26, from a
+  measurement of boot2): boot2 places every root record and the core evaluates
   `match=`; `kbootset` marks the safe set (`safe=1`) and checks the whole
   root set against the capacity; boot2 writes no parameter strings; L7
-  leaves boot2 (§1–§4); version 4 (2026-10-26, from the port's S4-22 cut):
+  leaves boot2 (§1–§4); version 4 (2026-10-26, from a 040/060 port cut):
   no root-class module for a controller the kernel drives itself (§4.1);
-  version 5 (2026-10-27, the orchestrator's decision on amix-cdfs's plan):
+  version 5 (2026-10-27, for the amix-cdfs module):
   the root filesystem's boot-class module is placed as a root record
-  (§1.3); version 6 (2026-10-27, S5-02): the safe set keeps the card
-  numbers (§2, item 4); version 7 (2026-10-27, S5-09): the owner's safe
+  (§1.3); version 6 (2026-10-27): the safe set keeps the card
+  numbers (§2, item 4); version 7 (2026-10-27): the administrator's safe
   mark on a boot-class module (§2, item 5). Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1 (`module … root`),
@@ -20,10 +20,10 @@
   and 16, §3 (`marc_root`); `70-static-floor.md` §4
 - **Layout:** C3-4 version 1, unchanged. This contract fills it; it adds
   no field, so `AXA1` stays version 1.
-- **Written by:** boot2 and `amix-cdboot` (S4-10); `kbootset`, which
+- **Written by:** boot2 and `amix-cdboot`; `kbootset`, which
   writes the manifest's `module … root` records, their `bss=` and
-  `safe=1` (S4-12, C3-5 version 7)
-- **Read by:** the module core at `marc_root` (S4-01, S4-04); `kinfo`,
+  `safe=1` (C3-5 version 7)
+- **Read by:** the module core at `marc_root`; `kinfo`,
   nothing new
 
 ## 1. What boot2 places
@@ -46,7 +46,7 @@ and placed on every boot, including the filesystems the root does not
 use and the controllers the box lacks. On a disk store that is a few
 hundred KB more read per boot. A floppy pair or netinstall medium
 carries only its own controllers anyway. The arena holds the whole set
-(M-MOD1 sized it at twice the set), and S4-70's measured number is the
+(M-MOD1 sized it at twice the set), and the measured arena use is the
 check on that.
 
 ### 1.1 Order
@@ -116,17 +116,17 @@ CD medium, C4-6 §5) is one object, with `class=boot`, `fs=` and
    of its key (`zorro:` 2, `mobo:` 3, `mobo:gayle` 4). sd orders cards by
    class, then base, so without them a safe boot renumbers the root's
    card. The A3000 WD beside an A4091 is `ced0` in a normal boot and was
-   `c6d0` in safe mode (N145, N146; spec 70 §4). "At or before" because
+   `c6d0` in safe mode (spec 70 §4). "At or before" because
    the order inside a class is by base, which `kbootset` cannot see. A
    member whose board is absent costs arena bytes only: the core skips
    it. Not for a `root ramdisk` generation;
-5. (version 7) a boot-class module the owner marks with a `safe` line in
+5. (version 7) a boot-class module the administrator marks with a `safe` line in
    `/etc/conf/modreg.local.d/<module>`, and the boot-class modules it
    depends on: `safe=1` on their boot records. In safe mode the core's
    `marc_post` loads those and no other boot or demand module (core
    patch 0045), after the root is up, so a failing `_load` leaves the
    rescue shell. The default is none: safe mode stays network-less unless
-   the owner marks the NIC module (S5-09). The vendor's `modreg.d` cannot
+   the administrator marks the NIC module. The vendor's `modreg.d` cannot
    mark a module, and a root- or demand-class module is refused.
 
 In safe mode (the menu's `s`, 10 §7.4) boot2 places only the records with
@@ -212,4 +212,4 @@ a kernel cut without it.
 
 - The RAM-disk image (C4-3): it is placed outside the arena.
 - How a controller registers once linked (C4-1).
-- The deferred self-test point (S4-05, C4-2).
+- The deferred self-test point (C4-2).

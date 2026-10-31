@@ -1,16 +1,15 @@
 Subject: registrations swept after a module goes; C3-1 section 4 refusals
 
-From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
-section 1.3, 1.5).  A failed _load that attached, or an _unload that
-forgot, left an interrupt-chain entry, an ifstats link or the console
-hook pointing into freed memory.  The core now sweeps them after every
-_unload and after a failed _load, and names what it removed (plan patch
-14, "every registration tracked").  C3-1 section 4: a section type
-outside the list and an image over the limit are ENOLOAD (were ERELOC,
-ENOMEM); each refusal prints one line naming the module and the rule;
-parameter defaults are checked against C3-1 section 3's value forms;
-word 0 of .moddata must be one R_68K_32 with addend 0.  New harness and
-error-path cases.
+From the audit of the stage-3 core (2026-10-26).  A failed _load that
+attached, or an _unload that forgot, left an interrupt-chain entry, an
+ifstats link or the console hook pointing into freed memory.  The core
+now sweeps them after every _unload and after a failed _load, and names
+what it removed (30 section 2 patch 14, "every registration tracked").
+C3-1 section 4: a section type outside the list and an image over the
+limit are ENOLOAD (were ERELOC, ENOMEM); each refusal prints one line
+naming the module and the rule; parameter defaults are checked against
+C3-1 section 3's value forms; word 0 of .moddata must be one R_68K_32
+with addend 0.  New harness and error-path cases.
 
 --- a/dlm.h
 +++ b/dlm.h

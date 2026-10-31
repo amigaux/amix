@@ -1,6 +1,6 @@
 #!/bin/sh
 # kitdigest.sh -- the digests of a built ABI kit, for the release lock
-# (P-38 S2.1) and the dlmkit package's pin.
+# (release/) and the dlmkit package's pin.
 #
 # usage: kitdigest.sh KITDIR...      one line per kit
 #        kitdigest.sh -l KITDIR      the file list the manifest digest is of

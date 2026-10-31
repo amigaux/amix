@@ -2,7 +2,7 @@
 # m-reg1.py -- M-REG1 and U5: the registry facts the module core relies on,
 # read from each built kernel's ELF relocatable form (the k46 kernels as
 # shipped, the k30 kernels' .etrel before elf2brel).  Host-side, read-only.
-# See docs/measurements/2026-10-26-m-reg1.md.
+# See docs/measurements/2026-10-26-m-reg1-m-abi1.md.
 #
 #   - sysentsize, and whether sysent[64..69] hold nosys (the core's syscalls,
 #     20 §6);

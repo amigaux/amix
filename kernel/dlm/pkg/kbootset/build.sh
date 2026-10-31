@@ -41,7 +41,7 @@ amix_verify "$AMIX_DLM_TREE/man/1m/kbootset" "$KB_MAN_SHA"
 amix_verify "$AMIX_DLM_TREE/man/whatis.d/kbootset" "$KB_WHATIS_SHA"
 cp "$AMIX_DLM_TREE/man/1m/kbootset" "$M/1m/kbootset"
 cp "$AMIX_DLM_TREE/man/whatis.d/kbootset" "$M/whatis.d/kbootset"
-# the rc scripts (-26, P-36 W8) and their run-level names, hard links of
+# the rc scripts (since -26) and their run-level names, hard links of
 # the one script as in stock and amix-base
 mkdir -p "$DEST/etc/init.d" "$DEST/etc/rc2.d"
 amix_verify "$AMIX_DLM_TREE/kbootset/rc/kbnamelist" "$KB_RC_KBNAMELIST_SHA"

@@ -1,8 +1,8 @@
 # C2-1 — the `kinfo` record, version 3
 
-- **Status:** agreed 2026-10-25 (orchestrator), version 2 (2026-10-26): the memory sizes at 528 and 532, so the module list moves by 8 (gate 6, 40 §3.1); version 3 (2026-10-26): the loader's bootdata block at 536, where the kernel was bound, for the namelist (40 §4.2), so the module list moves by 40. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25, version 2 (2026-10-26): the memory sizes at 528 and 532, so the module list moves by 8 (gate 6, 40 §3.1); version 3 (2026-10-26): the loader's bootdata block at 536, where the kernel was bound, for the namelist (40 §4.2), so the module list moves by 40. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §4, `70-static-floor.md` (`kinfo` in the floor), `20-module-format-and-abi.md` §6 (major 53)
-- **Built by:** the kernels of both lines: the 040/060 families (amix-040-060-port) and the 030 families (amix-kerntools), stage-2 static kernels included (S2-10, S2-11)
+- **Built by:** the kernels of both lines: the 040/060 families (amix-040-060-port) and the 030 families (amix-kerntools), the static kernels of stage 2 included
 - **Read by:** `kbootset` (the booted generation, the boot disk, the namelist), apkg 0.3 (line, kabi), the installer
 
 ## 1. The device
@@ -83,12 +83,12 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
 
 ## 4. Settled at agreement
 
-- Major 53 and `/dev/kinfo`. The port and kerntools stations confirm that
-  nothing in their trees uses 53 before they build.
+- Major 53 and `/dev/kinfo`. amix-040-060-port and amix-kerntools confirm
+  that nothing in their trees uses 53 before they build.
 - The board entry is 12 bytes as above.
 - At stage 2 the card table is filled from the static drivers' own card
   numbering. The four-card sd contract (stage 4) defines it from then on.
-- From the port station's implementation (wording, version 2 unchanged):
+- From the 040/060 port's implementation (wording, version 2 unchanged):
   - the motherboard ids of §2.1;
   - the build id is the buildid string that `uname -m` shows;
   - the card number is the sd card index;
@@ -96,7 +96,7 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
   - the record is built on first open.
 - The module entry stays name, address and size. The header's length field
   leaves room to grow.
-- From the port station's implementation (2026-10-26; wording, version 2
+- From the 040/060 port's implementation (2026-10-26; wording, version 2
   and the record's version field unchanged): the module list holds at most
   32 entries, as the port's kinfo builds it. Readers size their buffer for
   1 564 bytes (kbootset reads 2 048). Version 3: 1 604 bytes.
@@ -107,8 +107,8 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
   one (the port's refreshes on every read). A reader that wants one
   consistent record reads it whole, in one read from offset 0, as
   kbootset does.
-- Version 3 (2026-10-26, from S3-B5: the stock `nlist` consumers read a
-  kernel image whose symbols are not the booted kernel's): the bootdata
+- Version 3 (2026-10-26; the stock `nlist` consumers read a kernel image
+  whose symbols are not the booted kernel's): the bootdata
   block at 536, copied as the AXL1 and RTH1 records are. For a `brel`
   boot2 fills only entry and the text triple (the text is the whole image);
   for an ET_REL kernel all three.

@@ -26,7 +26,7 @@ for m in $(cat $T/names); do
 	$B/kbootset --image $T/none.img --offset 65536 major $m | cmp -s $T/want -
 	n=$((n + 1))
 done
-# the ones other stations hard-code today (C3-6, C3-5 §2)
+# the ones other directories' drivers hard-code today (C3-6, C3-5 §2)
 [ "$($B/kbootset major z3660eth)" = "c 51" ]
 [ "$($B/kbootset major ramdisk)" = "b 20" ]
 [ "$($B/kbootset major kinfo)" = "c 53" ]

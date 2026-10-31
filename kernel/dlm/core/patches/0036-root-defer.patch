@@ -1,6 +1,6 @@
 Subject: root_defer: a root-class driver's call at the first sysinit entry
 
-Contract C4-2 section 3 (S4-05).  The root pass runs at level 7 with the
+Contract C4-2 section 3.  The root pass runs at level 7 with the
 clock stopped, where an interrupt self-test cannot run.  root_defer(fn,
 arg), from a root-class module's _load in the root pass only, keeps up
 to 8 calls; dlm_marc_run, at the first sysinit entry (MOD_C_POST), runs
@@ -17,7 +17,7 @@ each case.
  }
  
 +/*
-+ * root_defer (C4-2 section 3, S4-05): a root-class driver asks for one
++ * root_defer (C4-2 section 3): a root-class driver asks for one
 + * call at the first process-context point, where its interrupt
 + * self-test can run (level 0; the root pass runs at level 7 with the
 + * clock stopped).  From the module's _load in the root pass only; up to
@@ -104,7 +104,7 @@ each case.
 +extern int root_defer();		/* (fn, arg): C4-2 section 3 */
 +extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
  extern int dlm_halt();
- extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_load_mem();		/* a root module from the arena */		/* the halt pass, from mdboot */
  extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
 --- a/dlm_post.c
 +++ b/dlm_post.c
@@ -160,7 +160,7 @@ each case.
  # member and rp7 is not
  # rp8's record names a board that is not here (the core matches, C4-4 v3)
 -for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8'):
-+# root_defer (S4-05): rd1 defers one call; rd2 asks for nine; rd3 defers
++# root_defer: rd1 defers one call; rd2 asks for nine; rd3 defers
 +# one and then fails its _load
 +for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8', 'rd1', 'rd2', 'rd3'):
      armod(p)
@@ -172,7 +172,7 @@ each case.
  	dlm_manlen = manlen;
  }
  
-+/* ---- root_defer (C4-2 section 3, S4-05) ---- */
++/* ---- root_defer (C4-2 section 3) ---- */
 +static int rd_calls, rd_lastarg, rd_e[12], rd_n;
 +
 +int
@@ -266,7 +266,7 @@ each case.
 +	dlm_manlen = manlen;
 +}
 +
- /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ /* ---- sd_register (C4-1, 30 section 2 patch 8) ---- */
  static int sr_e[8], sr_n;
  
 @@ -1788,6 +1882,7 @@

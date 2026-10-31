@@ -1,12 +1,11 @@
 # C4-3 — the RAM-disk hand-off, version 4
 
-- **Status:** agreed 2026-10-26 (orchestrator), with the draft's (a) and
-  (b); marked agreed with S4-11's first commit (4003c9f, 2026-10-27),
+- **Status:** agreed 2026-10-26; in force from commit 4003c9f (2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
-  k46.1.2). Version 2 (2026-10-27, from rd1e): what `swap none` asks of
+  k46.1.2). Version 2 (2026-10-27, from a RAM-disk installer boot): what `swap none` asks of
   the kernel's swap configuration (§3); version 3 (2026-10-27, from the
   port): `swap none` is the stock dummy swap device `/dev/fakeswap`, not
-  no device (§3); version 4 (2026-10-27, from amix-installng's S5-33):
+  no device (§3); version 4 (2026-10-27, from amix-installng):
   `media --disk --ramdisk` writes the netinstall raw image, and an image
   serves one generation id (§1). Other repositories build against
   this text; a change from here is a contract change with a version bump.
@@ -15,9 +14,9 @@
   selector), §7 (the RAM disk); `50-media.md` §3–§5 (the media that root
   on it); measurements M-RD1, M-RD2
 - **Written by:**
-  - `kbootset` (S4-12): the manifest's `ramdisk` record, `root ramdisk`
+  - `kbootset`: the manifest's `ramdisk` record, `root ramdisk`
     and `swap none` on a medium's generation;
-  - boot2 and `amix-cdboot` (S4-11): the image placed, `memory[]`
+  - boot2 and `amix-cdboot`: the image placed, `memory[]`
     shortened, the loader record filled;
   - the module core's platform code: the record read (`core/plat/amiga.c`);
   - the kernel's RTH1 half (amix-040-060-port; amix-kerntools on k30):
@@ -62,7 +61,7 @@ After the kernel is relocated and before the hand-off copy:
 1. it decompresses the image (CRC-32 checked, L3 on a mismatch, as any
    member) to **the top of the largest fast-memory region the kernel can
    use**: below 0x40000000, and on k30 within the 64 MiB the kernel can
-   describe (`AX_K30_MEMCAP`, S3-43-9). The image starts on a 64 KiB
+   describe (`AX_K30_MEMCAP`). The image starts on a 64 KiB
    boundary;
 2. it shortens that region's entry in `bootinfo.memory[]` by the image's
    size rounded up to 64 KiB, so the kernel never uses those pages;
@@ -95,7 +94,7 @@ region's low end and the image at its top.
     without `swapadd`, `anon_resv` refuses every reservation (`ani_max`
     0) and the first fork panics (`newproc - fork failed`, measured
     2026-08-25), and the stock `swapconf` with the default name panics on
-    a medium without that disk node (rd1e, `swapconf lookupname failed -
+    a medium without that disk node (`swapconf lookupname failed -
     error 2`). The installer adds the target disk's swap slice with
     `swap -a` and deletes the fake, as its early and later target-swap
     steps do when `swap -l` shows `/dev/fakeswap`. **The miniroot
@@ -106,7 +105,7 @@ region's low end and the image at its top.
   - This runs in `rth1_apply`, after `marc_root` has linked the
     `ramdisk` module, which then owns block row 20 (core patch 0031).
 
-On k46 the second stage-4 cut freed `bdevsw` row 20 (Q4-4, S4-21): the
+On k46 the second stage-4 cut freed `bdevsw` row 20: the
 stock `ram` entry is out of the switch. On k30 the stock `ram` is out of
 `kernel.c`.
 
@@ -142,5 +141,5 @@ The module (C4-2 §8; `match=always`, `majors=b:20`, pinned):
 
 ## 6. Not in this contract
 
-- The media that carry the image (50 §3–§5; S4-50–S4-53).
-- How boot2 pays for the placement in bytes (S4-11; the headroom note).
+- The media that carry the image (50 §3–§5).
+- How boot2 pays for the placement in bytes (`docs/measurements/2026-10-26-boot2-headroom.md` §6).

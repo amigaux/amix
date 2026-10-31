@@ -184,7 +184,7 @@ state harness covers each case.
 +extern void dlm_vfs_init();
  extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
  extern int dlm_halt();
- extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_load_mem();		/* a root module from the arena */		/* the halt pass, from mdboot */
 --- a/dlm_ld.c
 +++ b/dlm_ld.c
 @@ -458,9 +458,16 @@
@@ -249,7 +249,7 @@ state harness covers each case.
  mod('srbad', extra=['rank=scsi'])
  
  
-+# vfs_register (C4-6, S4-41): each fs module has <p>_init and <p>_ops.
++# vfs_register (C4-6): each fs module has <p>_init and <p>_ops.
 +# vf1 registers its own type; vf2 a name not its fs=; vf3 the stock ufs;
 +# vf4 fails its _load after registering; vf5 is unloadable; vf6-vf9 fill
 +# the spare rows
@@ -291,7 +291,7 @@ state harness covers each case.
  	moduload(i1);
  }
  
-+/* ---- vfs_register (C4-6 section 3, S4-41) ---- */
++/* ---- vfs_register (C4-6 section 3) ---- */
 +static int vf_e[8], vf_n, vf_inits, vf_idx;
 +static char *vf_row;
 +
@@ -415,7 +415,7 @@ state harness covers each case.
 +	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
 +}
 +
- /* ---- block rows (30 section 2 patch 7, S4-06) ---- */
+ /* ---- block rows (30 section 2 patch 7) ---- */
  void
  blk_tests()
 @@ -1911,6 +2037,7 @@

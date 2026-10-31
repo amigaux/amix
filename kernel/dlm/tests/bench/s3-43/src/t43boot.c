@@ -1,5 +1,5 @@
 /*
- * t43boot.c -- S3-43: a boot-class misc module that may be unloaded.  It
+ * t43boot.c -- a boot-class misc module that may be unloaded.  It
  * prints its parameters when it loads (the manifest's param records reach
  * _load as one string) and says goodbye when it unloads.
  *
@@ -26,4 +26,4 @@ t43boot_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t43boot, t43boot_load, t43boot_unload, "S3-43 boot-class module");
+MOD_MISC_WRAPPER(t43boot, t43boot_load, t43boot_unload, "t43 boot-class module");

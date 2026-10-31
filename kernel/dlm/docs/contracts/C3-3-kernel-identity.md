@@ -1,15 +1,15 @@
 # C3-3 — the module kernel's identity record and the sidecar (C2-3 version 5), version 8
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4); version 5 (2026-10-26, S4-72-1 N103): the arena offset is a multiple of 16 (§2); version 6 (2026-10-27, S4-40): `root=` and `rootfs=` each list only what is linked in, so a kernel without ufs and s5 omits `rootfs=` (§3); version 7 (2026-10-27): `kbootset` reads the symbol block through `ksym=` and checks every module's imports against it (§3, gate 2). version 8 (2026-10-27): gate 2 checks `build=` against the kernel's own build id (§3). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
+- **Status:** agreed 2026-10-26, version 1; version 2 (2026-10-26): a stage-3 module kernel writes `root=`/`rootfs=`, and the first root-class module in a generation is what ends that (§3); version 3 (2026-10-26): the fingerprint's text, reference, tool and checks (§4); version 4 (2026-10-26): abi= required on a module kernel, k46.1.0's one rewrite done, equal fingerprints across lines (§4); version 5 (2026-10-26, from a bench run): the arena offset is a multiple of 16 (§2); version 6 (2026-10-27): `root=` and `rootfs=` each list only what is linked in, so a kernel without ufs and s5 omits `rootfs=` (§3); version 7 (2026-10-27): `kbootset` reads the symbol block through `ksym=` and checks every module's imports against it (§3, gate 2). version 8 (2026-10-27): gate 2 checks `build=` against the kernel's own build id (§3). Other repositories build against this text; a change from here is a contract change with a version bump. §3 is version 5 of C2-3 (the sidecar).
 - **Implements:** `docs/spec/10-boot-loader.md` §5.1–§5.3,
   `20-module-format-and-abi.md` §1.2, §3.1, `40-generations-and-composer.md`
   §3.1 (gates 2, 4, 6, 7)
-- **Built by:** the module kernels: k46 in amix-040-060-port (S3-20), k30
-  in amix-kerntools (S3-21)
+- **Built by:** the module kernels: k46 in amix-040-060-port, k30
+  in amix-kerntools
 - **Read by:**
-  - boot2, loader version 2 (S3-15): the record, before it fills the
+  - boot2, loader version 2: the record, before it fills the
     arena;
-  - `kbootset` (S3-16): the sidecar;
+  - `kbootset`: the sidecar;
   - the module core: its own record, at `dmainit`;
   - `kinfo`: the kabi and build id, as today.
 
@@ -50,8 +50,8 @@ core runs it in place only at an absolute multiple of 16 (C3-4 §2). No
 alignment inside `.data` gives that, since `.data` follows `.text` and
 `.rodata` with no padding. So `dlm_arena` is the capacity plus 16 bytes,
 and the record's arena is the first 16-aligned image offset inside it;
-`mkident.py --fill` writes it and `--check` refuses any other. On
-S4-72-1 (N103) both cuts of record had an arena 8 mod 16, and the core
+`mkident.py --fill` writes it and `--check` refuses any other. In a
+bench run both cuts of record had an arena 8 mod 16, and the core
 refused the root module on both lines.
 
 The record holds no addresses, only image offsets. Its bytes are therefore
@@ -118,14 +118,14 @@ tells the two cases apart from the manifest alone:
 
 **Each lists only what is linked in** (version 6). The two keys are
 independent: a kernel that still links a root controller writes `root=`
-for it, and one that links no root filesystem (the S4-40 cut, without
+for it, and one that links no root filesystem (the cut without
 ufs and s5) omits `rootfs=`, even when its kernel package ships the ufs
 and s5 modules. Those are modules, and gate 3 finds them as such: the
 generation's `rootfs` is promoted (C4-6 §1), so its module is a root
 record that closes the gate. Naming them in `rootfs=` would let a
 generation without the module pass gate 3 and fail at the root mount.
 
-What `kbootset` does with them (S3-16):
+What `kbootset` does with them:
 - gate 2: `kabi`, `pin`, and each module's `kabi`/`cc` against them; and
   (version 7) through `ksym=`, the symbol block in the kernel's image:
   every undefined global of every module must be exported there, at the
@@ -160,24 +160,24 @@ lines sorted bytewise:
 ```
 data <name> <st_size>     each name abi/<line>/ddi.list marks data, from the final link
 offs <NAME> <value>       each #define of dlm_offs.h: tools/mkoffs over dlmoffs.c (the probe),
-                          compiled against the kernel's headers (the brief's step 2)
+                          compiled against the kernel's headers
 ```
 
 `abi=` is the SHA-256 of that text, 64 lowercase hex digits. The core tier
 (C3-2 §4, stage 5) adds its data names when it is written.
 
 **The tool** is `tools/mkabi.py` (the kit ships it, with the probe
-`dlmoffs.c` and `tools/mkoffs`). It runs at the brief's step 9, on the
-final link as it ships:
+`dlmoffs.c` and `tools/mkoffs`). It runs on the final link as it
+ships:
 `mkabi.py --check abi/<line>/abi-<kabi>.txt <kernel> abi/<line>/ddi.list dlm_offs.h`
-prints `abi=…` for the sidecar (step 11) when the text equals the
+prints `abi=…` for the sidecar when the text equals the
 reference, and otherwise names each line that moved and fails.
 
 **The reference** is the text of the last fingerprint of each tag,
 `abi/<line>/abi-<kabi>.txt`, tracked in kernel/dlm and shipped in the kit. A
 new tag's first text is written with `mkabi.py --text` and committed
 there with the tag's kit change. The k30.1.0 text was written from the
-S3-21 cut. k46.1.0's was rewritten once, from the stage-3 re-cut
+first k30 module-kernel cut. k46.1.0's was rewritten once, from the stage-3 re-cut
 (KD060-Z build 68060-261026-54), when the port gave `cputype` its size:
 `data cputype 0` became `4`, and nothing else moved. The rule binds both
 tags from now on.
@@ -214,7 +214,7 @@ and the core never read it.
 - Version 2: `root`/`rootfs` on a module kernel through stage 3; the first
   root-class module in a generation is the stage-4 trigger for gate 3.
 - Version 3: the fingerprint's text form, the reference per tag in
-  amix-dlm and the kit, `tools/mkabi.py` at the brief's step 9, and the
+  amix-dlm and the kit, `tools/mkabi.py` on the final link, and the
   checks of §4 (build time; kbootset the form only).
 - Version 4: `abi=` required on a module kernel's sidecar (gate 2), once
   both re-cut kernels carried it; k46.1.0's one rewrite; equal

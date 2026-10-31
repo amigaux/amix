@@ -22,7 +22,7 @@
 #define AX_LOADER_VERSION	3	/* boot2's version, as the header records it and
 				 * a manifest's loader-min asks for (10 §5.1):
 				 * 2 the arena (stage 3), 3 root-class modules
-				 * placed in it (S4-10) */
+				 * placed in it */
 #define AX_LOADER_ROOT		3	/* the loader-min of a generation with a
 				 * root-class record */
 #define AX_TALLY_OFF	0x7800UL

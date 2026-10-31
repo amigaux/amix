@@ -1,13 +1,13 @@
 # C3-2 — the exported-symbol block, the allowlist and DDI v1, version 2
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) goes to Antti for review through the owner (OQ-20.4, D-3 §8); names his review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
-  - the kit's allowlist files (S3-10);
-  - the block generator and post-link gate (S3-04);
-  - the kernel builds that link the block: amix-040-060-port (k46,
-    S3-20) and amix-kerntools (k30, S3-21).
+  - the kit's allowlist files;
+  - the block generator and post-link gate;
+  - the kernel builds that link the block: amix-040-060-port (k46)
+    and amix-kerntools (k30).
 - **Read by:** the module core at every symbol lookup; the kit's checker;
   `getksym`.
 
@@ -94,8 +94,8 @@ Context means where the function may be called.
 - `no-sleep`: never sleeps, safe at any spl.
 
 The "Today" column names the provider:
-- **stock**: defined in all ten kernels of record (S3-40,
-  `docs/measurements/2026-10-26-m-reg1-m-abi1.md` §3);
+- **stock**: defined in all ten kernels of record
+  (`docs/measurements/2026-10-26-m-reg1-m-abi1.md` §3);
 - **core**: the core pass links its own provider, because a kernel lacks
   it (20 §4.1).
 
@@ -115,7 +115,7 @@ The second column marks names one of today's two drivers imports
 | privilege, devices | `suser`, `drv_priv`, `getmajor`, `getminor`, `makedevice` | `getmajor`, `getminor`, `makedevice` | proc for the first two; the rest any | stock |
 | autoconfig | `autocon`, `bprobe` | `autocon` | proc | stock |
 | interrupt level | `spl0`…`spl7`, `splx` as functions; **spl5, spl6 and spl7 raise to level 4 only**, as the kernel's own inline forms (`<sys/inline.h>`, `FAST_INTERRUPTS`), so no spl masks level 6 | — | any | core (`dlm_spl.s`) |
-| interrupts | `intr_attach`, `intr_detach` | — | proc | core (S3-09) |
+| interrupts | `intr_attach`, `intr_detach` | — | proc | core |
 | STREAMS | `allocb`, `freemsg`, `freeb`, `dupmsg`, `copymsg`, `linkb`, `unlinkb`, `msgdsize`, `putq`, `getq`, `putbq`, `putnext`, `qreply`, `canput`, `flushq`, `OTHERQ`, `RD`, `WR` | all but `freeb`, `dupmsg`, `copymsg`, `linkb`, `msgdsize` | any, except where the STREAMS rules say otherwise | stock |
 | network attachment | `if_attach`, `if_detach` | — | proc | core |
 | console hook | `cons_hook_set`, `cons_hook_clear` | — | proc | core |
@@ -127,7 +127,7 @@ The second column marks names one of today's two drivers imports
 The module interface row was missing from the list as first agreed.
 Every module references its linkage ops through the wrapper macros, so
 the list cannot work without it. It was added on 2026-10-26, while v1.0
-was still open for review, so it needs no minor (S3-04).
+was still open for review, so it needs no minor.
 
 **Level 6 and spl.** An INT6 interrupt (CIA-B, and the Z3660 firmware's
 ethernet interrupt) is never masked by an spl in this kernel. A driver on
@@ -136,7 +136,7 @@ before touching shared state, and enables it again after. It does not
 rely on spl7.
 
 **DMA is not in DDI v1.0.** `dma_alloc`, `dma_free`, `dma_prepare` and
-`dma_complete` were taken out on 2026-10-26 (orchestrator): no stage-3
+`dma_complete` were taken out on 2026-10-26: no stage-3
 module uses them. The 68040/68060 port's `dma_prepare` and
 `dma_complete` (`dma_cache040.o`, the A3091 copy-back hooks) are
 kernel-internal, not DDI. A DMA interface is designed with the port in
@@ -148,7 +148,7 @@ minor.
 z3660eth uses `ifstats` and zz9000 uses `conputc`. Their module forms move
 to `if_attach` and `cons_hook_set` (C3-6). Each DDI function's written
 contract (arguments, errors, memory class of what it returns) is in
-`docs/abi/ddi.md` in the kit (S3-10). This table is its index.
+`docs/abi/ddi.md` in the kit. This table is its index.
 
 **Later stages add to the DDI by minor:**
 - stage 4: `sd_register`, `sdqueue`, `iodone`;
@@ -167,7 +167,7 @@ A kernel exports minor 3 only when its cut applies that patch. Without
 it, the cut claims 1.2, and the gate holds it there (§2).
 
 The two exclusion flags stay data names, and are not replaced by a
-`paula_claim()`/`paula_release()` pair (decided 2026-10-28). No rule here
+`paula_claim()`/`paula_release()` pair (2026-10-28). No rule here
 makes a DDI data name read-only: `panicstr`, `lbolt`, `bootinfo`,
 `cputype` and `displayedscreen` are read-only by their own contracts. The
 fingerprint covers the flags' sizes like any data name. The static
@@ -197,8 +197,8 @@ carved (M-FS1).
 - Values as relocations, the block generated before the final link from
   the allowlist, `KSYM_VERSION` 2, the tier in `st_other`.
 - The allowlist file format, and the post-link gate at two bind addresses.
-- The stage-3 DDI set above as v1.0. Antti's review may add or remove
-  names before the freeze; after it, the minor rule holds.
+- The stage-3 DDI set above as v1.0. The ABI review (OQ-20.4) may add or
+  remove names before the freeze; after it, the minor rule holds.
 - `panicstr` and `lbolt` exported read-only as data, as `bootinfo` and
   `cputype` are.
 - Version 2 (2026-10-28): a kernel's lists by its own minor, a module's

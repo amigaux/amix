@@ -23,7 +23,7 @@
  *       is re-read every half second, so the volume still in the drive at
  *       the prompt is refused once as well
  *   -f  the counter never moves, the disks are swapped every 5 s (Kickstart
- *       3.2.1 under amiberry, E958/E959): the disk is re-read every 4 s
+ *       3.2.1 under amiberry): the disk is re-read every 4 s
  *       all the same, and the volume at the prompt is refused once too
  * Prints the transfers straight and through the bounce buffer, and the
  * number of volume changes; exit status 0 when every member

@@ -1,6 +1,6 @@
 # C2-5 — the checksum contract, version 2
 
-- **Status:** agreed 2026-10-25 (orchestrator). Other repositories build against this text; a change from here is a contract change with a version bump. Closes OQ-40.5.
+- **Status:** agreed 2026-10-25. Other repositories build against this text; a change from here is a contract change with a version bump. Closes OQ-40.5.
 - **Replaces:** the `sum_gate_interplay` part of `amix-kerntools/contracts/bootchain-v1.json` for 1.1 boot stores
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3 (`check`), `60-signing-and-publishing.md` §3
 

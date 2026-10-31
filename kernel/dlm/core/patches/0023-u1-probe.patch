@@ -1,7 +1,7 @@
 Subject: U1: a measurement build reports the context at dmainit and the hook
 
 Test only, under -DDLM_U1: the shipped dlm.o is unchanged (amix-dlm
-docs/spec/90-measurements.md U1, tests/bench/README.md S3-41).  At the end
+docs/spec/90-measurements.md U1, tests/bench/README.md U1).  At the end
 of dlm_init and on entry to the kernel's hook in rth1_mountroot it prints
 the status register, the proc pointer, whether lbolt advances in a spin,
 and which kmem_zalloc sizes KM_NOSLEEP gives (each freed again).

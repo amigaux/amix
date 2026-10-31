@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# m-ld9.py -- M-LD9 bench half (docs/plan/stage-1.md S1-25): compare a row
+# m-ld9.py -- M-LD9 bench half (docs/spec/90-measurements.md): compare a row
 # that booted a static kernel through our loader with the row that booted
 # the same kernel and root through the stock loader.  Read only: it reads
 # two rig evidence directories (amix-kerntools/docs/rig-slots.md).

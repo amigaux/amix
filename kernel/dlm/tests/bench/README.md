@@ -5,18 +5,17 @@ or on real machines, not on the build host. Each script builds the
 vehicles and writes the expected outcome next to them. The rows run on
 the project's emulator rig, which holds the slots, lifecycle cells, input
 schedules and serial capture (see `amix-kerntools/docs/rig-slots.md` §5).
-Evidence classes and IDs: `docs/spec/90-measurements.md`. Work items:
-`docs/plan/stage-1.md`.
+Evidence classes and IDs: `docs/spec/90-measurements.md`.
 
-| Script | Rows | Item |
-|---|---|---|
-| `m-ld1.sh` | bootblock variants on DF0 and on disks (M-LD1, which header fields the strap checks) | S1-20 |
-| `ld-rows.sh` | W1–W3 (M-LD4, control-block and tally writes); vehicle M (M-LD5, menu input) | S1-22, S1-21 |
-| `m-ld9.py` | our loader against the stock loader, same kernel and root (M-LD9 bench half) | S1-25 |
-| `df0-pair.sh` | the DF0 floppy pair per line (M-FD1, M-FP2) | S1-27 |
-| `../../tools/measure/m-ld7.sh` | axtime runs (M-LD7, M-LD8) | S1-23 |
+| Script | Rows |
+|---|---|
+| `m-ld1.sh` | bootblock variants on DF0 and on disks (M-LD1, which header fields the strap checks) |
+| `ld-rows.sh` | W1–W3 (M-LD4, control-block and tally writes); vehicle M (M-LD5, menu input) |
+| `m-ld9.py` | our loader against the stock loader, same kernel and root (M-LD9 bench half) |
+| `df0-pair.sh` | the DF0 floppy pair per line (M-FD1, M-FP2) |
+| `../../tools/measure/m-ld7.sh` | axtime runs (M-LD7, M-LD8) |
 
-## M-LD1: which bootblock fields the strap checks (S1-20)
+## M-LD1: which bootblock fields the strap checks
 
 `m-ld1.sh <workspace> <outdir>` writes seven bootblocks: the good one, and
 six that each differ in one field (`bbframe -x`). The changed fields are
@@ -34,7 +33,7 @@ controller, with Kickstart 3.1 and 3.2.x. Each row ends in one word:
 
 `<outdir>/EXPECTED` repeats this with the offsets.
 
-## M-LD9: our loader against the stock loader (S1-25)
+## M-LD9: our loader against the stock loader
 
 `m-ld9.py OURS STOCK` compares two rig evidence directories. OURS is a
 loader row; STOCK is the row with the same machine shape, kernel and root
@@ -51,26 +50,18 @@ It prints SAME or DIFFERENT (exit status 0 or 1). It does not judge a
 batch command that only one row ran, so give both rows the same batch:
 at least `mount`, `uname -a`, `sum -r /stand/unix`, `swap -l` and `df`.
 
-Pairs from the rig matrix:
+Each loader row of the rig matrix pairs with the stock-loader row of the
+same machine shape, kernel and root (on the Z3660, a stock autoboot row;
+on a floppy, the stock floppy boot of K030-U-FD). The 030 line's Z3660
+loader row has no root (the 030 line has no Z3660 driver) and ends at
+the kernel banner, so there is nothing to compare. Tried on the first
+loader evidence, a right pair gives SAME. A pair whose kernels' uname
+build tags differ gives DIFFERENT: that is a wrong pair, and the check
+catches it.
 
-| Loader row | Stock row |
-|---|---|
-| N19 | E1 |
-| N20 | E12u |
-| N21 | N6 |
-| N22 | N9u |
-| N23 | a stock Z3660 autoboot row (to be named) |
-| N25 | E1's floppy boot of K030-U-FD |
-| N26 | E29 |
+## M-LD4: writes, read back on the next boot
 
-N24 has no root (the 030 line has no Z3660 driver) and ends at the kernel
-banner, so there is nothing to compare. Tried on the S1-19 evidence, N21
-against N6 gives SAME. N20 against N6 gives DIFFERENT, because the kernels'
-uname build tags differ; that is the wrong pair, and the check catches it.
-
-## M-LD4: writes, read back on the next boot (S1-22)
-
-`ld-rows.sh` rewrites the store of a proven loader vehicle (rows N19–N26)
+`ld-rows.sh` rewrites the store of a proven loader vehicle (the loader rows)
 for each row. Run each row as a **lifecycle cell of 2 boots** with serial
 capture, on each disk controller of the bench half: A3000 WD, A4091 with
 its ROM, Gayle IDE. The Z3660 boot ROM half is metal.
@@ -90,12 +81,12 @@ the tally. That read-back is the M-LD4 result. A 1.0 kernel never marks
 anything good, so each row's second boot is the one that shows the first
 boot's write.
 
-## M-LD5: menu input (S1-21)
+## M-LD5: menu input
 
 Vehicle `M.hdf`: generations 1 and 2, both good, default 2, menu window
 60 s (`-m 600`). With nothing pressed, generation 2 boots after 60 s. One
 schedule per row, played from reset. `T` is the time from reset to the
-`amix-boot 1:` line on the serial log, known from the N19–N26 runs on the
+`amix-boot 1:` line on the serial log, known from the loader rows on the
 same controller. Every first event below is at 25 s, which must lie
 between `T` and `T + 60`: move it if `T` is longer. Keys are typed with
 the rig's US keymap.
@@ -114,7 +105,7 @@ selects: mouse actions count only after the first release (10 §7.4). M6
 needs the rig to *send* bytes on the serial port. Serial capture alone
 cannot do it, so until the rig can send, M6 stays open.
 
-## Metal (S1-26, S1-27)
+## Metal
 
 Metal rows run the same images as their bench rows (80 §1). The scripts
 here fix `SOURCE_DATE_EPOCH`, so a vehicle rebuilt from the same inputs
@@ -132,9 +123,9 @@ machine. The lines to judge by are those of the bench rows.
 | M-LD6, a real 68060 | any vehicle | every cold boot | `amix-boot 1: 68060 (AttnFlags …)`; AttnFlags printed beside the probe, including without SetPatch |
 | M-LD7, M-LD8 on a 68060 | `tools/measure/m-ld7.sh` | `axtime` and `axtime-chip` under AmigaOS on the 68060 | the EXPECTED digests; the timings go into the record |
 | M-LD9, cold boots | the controller's loader vehicle and its stock-loader image | a cold boot of each, from every controller of each box | `m-ld9.py OURS STOCK` → SAME |
-| M-FD1, M-FP2 (S1-27) | `df0-pair.sh` | below | below |
+| M-FD1, M-FP2 | `df0-pair.sh` | below | below |
 
-## The DF0 pair (S1-27, metal)
+## The DF0 pair (metal)
 
 `df0-pair.sh <workspace> <outdir>` builds one pair per line with the 1.0
 floppy kernel stored uncompressed, so the kernel runs on from volume 1
@@ -145,7 +136,7 @@ DF0 then takes the 1.0 root floppy of that line. A stage-1 loader refuses
 RAM-disk generations, so the RAM-disk profile (M-FP1) boots only from
 stage 4 on.
 
-## Stage 2: the lifecycle rows (S2-41, S2-42, S2-46) and M-GEN2
+## Stage 2: the lifecycle rows (M-GEN5, M-GEN3, the exit row) and M-GEN2
 
 **`commit --again` in these rows** (C2-4 v7, kbootset from 1.1.0.261025-7
 on). These rows build a generation from the same packages as the
@@ -157,7 +148,7 @@ on kbootset -6 or earlier uses a plain `commit`.
 
 The rows run the box kbootset (`make box`, copied to the box as
 `/tmp/kbootset` until the kbootset package exists) on a kinfo kernel's row
-under our loader (the port's E5 shape, KD060-Z). One rig lifecycle cell
+under our loader (the 040/060 port's Z3660 shape, KD060-Z). One rig lifecycle cell
 spans the boots of a row. The rig runs `kbootset mark-good` after its
 login, standing in for the end of run level 2 until the rc hook is
 installed. Until the kernel packages exist, `s2-standin.sh` gives a kernel
@@ -168,7 +159,7 @@ then:
 sh tests/bench/s2-standin.sh <KD060-Z kernel> k46 zorro:144b:01 ufs,s5 68060-261025-50 <outdir>
 ```
 
-### S2-41 — M-GEN5: upgrade, mark-good, rollback, one-shot, try-once
+### M-GEN5: upgrade, mark-good, rollback, one-shot, try-once
 
 | Boot | Before power-cycling | Expected on the serial log / from kbootset |
 |---|---|---|
@@ -202,11 +193,11 @@ the point here: it is how a row gets a trial that panics before rc.
 
 Do not use another kernel family for the trial. A family whose sd layer
 keeps the stock rows still drives the vehicle's controller and mounts
-root: K030-IDE does on the A3000 (row N43). A 1.0 kernel has no `kinfo`
+root: K030-IDE does on the A3000. A 1.0 kernel has no `kinfo`
 either, so its "fallback" comes from `mark-good` refusing, not from the
 root.
 
-The first k46 run (row N36, `2026-10-26-m-gen5.md`) used KD060-A, whose
+The first k46 run (`docs/measurements/2026-10-26-m-gen5.md`) used KD060-A, whose
 A4091 root controller the Z3660 vehicle lacks. That works on k46, but
 the unit-5 spec is the recipe from now on.
 
@@ -221,7 +212,7 @@ frees its extents for generation 3. That also exercises `mark-bad`.
 The installer's 1.1-layout disks (64 MiB stores) hold the whole row
 without it.
 
-### S2-42 — M-GEN3: a power cut at each commit step
+### M-GEN3: a power cut at each commit step
 
 These rows run on the rig's cut (`rig-run --cut-at`, amix-kerntools
 `docs/rig-slots.md` §5), with the stand-in kernel package; the commit
@@ -261,9 +252,9 @@ boot 2 batch: /tmp/kbootset status > /dev/term/ser 2>&1
   judge the row by the boot and the store state.
 - kbootset creates `/var/kbootset` itself when the system has none.
 
-### S2-46 — the exit row: upgrade and roll back with apkg alone
+### The exit row: upgrade and roll back with apkg alone
 
-The packages are amix-packages' S2-12 set: `kbootset`, `loader-amix` and
+The packages are amix-packages' stage-2 set: `kbootset`, `loader-amix` and
 `kernel-k46-z`, catalogued by `gen-catalog`, with the kernel-space block.
 The kernel sidecar must carry `bss=` (C2-3 v4) and the kbootset package
 must be built from amix-dlm 1230e8b or later. Vehicle: the kinfo row's.
@@ -285,15 +276,15 @@ The row passes when:
 
 That is stage 2's exit gate (80 §2) on the bench.
 
-### The k30 line: S2-46, S2-41 and one S2-42 cell
+### The k30 line: the exit row, M-GEN5 and one M-GEN3 cell
 
 The same rows on the 030 line, with the real kernel package
 `kernel-k30-u` (pkginst `kern30u`). Its kernel is K030-U with `kinfo`,
 build id `68030-261026-01`, a brel of 1 270 676 bytes,
 `bss=344916`.
 
-**Vehicle: the installer's l11-k30 disk**, rig row N19's shape (A3000,
-the disk as WD unit 6), with its 64 MiB store, `/dev/kinfo` and the
+**Vehicle: the installer's l11-k30 disk**, the rig's A3000 shape (the
+disk as WD unit 6), with its 64 MiB store, `/dev/kinfo` and the
 `retry` line in `bcheckrc`. The disk must be minted with `kernel-k30-u`
 as its pristine kernel. The v6 disk, with the stand-in `kernel-k030u`
 (the 1.0 r7 kernel), does not serve, for two reasons:
@@ -306,7 +297,7 @@ The facts come from `kinfo`, so no command takes options. No stand-in
 package is needed: `kbootset build` composes from the installed
 `kernel-k30-u`.
 
-**S2-46 on k30.** On the installer's v10 disk. Three things make that
+**The exit row on k30.** On the installer's v10 disk. Three things make that
 disk the one:
 - its record for the installed kernel is named by its pkginst
   (`kern30u`, C2-2 v4);
@@ -318,7 +309,7 @@ disk the one:
 
 The catalog serves `kbootset`, `loader-amix` and `kernel-k30-u` at
 revisions above the installed ones (amix-packages mints them; the kernel
-bytes may be the same). Then the S2-46 table above applies with:
+bytes may be the same). Then the exit row's table above applies with:
 - **on boot 1, one call:** `apkg update; apkg upgrade kernel-k30-u
   loader-amix kbootset`.
   - apkg 0.3 makes one transaction of an `upgrade` with several names,
@@ -327,7 +318,7 @@ bytes may be the same). Then the S2-46 table above applies with:
     refuses without `-f`.
   - Each kernel-space transaction triggers its own build and commit, a
     loader-only one included. Separate calls therefore spend a commit
-    and a generation number each: in the renamed-record variant (N45)
+    and a generation number each: in the renamed-record variant
     the loader's call committed generation 2 and the kernel's generation
     3, and generation 2 never booted.
 - apkg reports `loader-amix` -2 and `kbootset` -6 as up to date, and
@@ -342,17 +333,17 @@ bytes changes nothing the default holds. The trigger then answers
 commit`, and no generation 2 is made. That is the right answer for apkg.
 A re-run of this row on kbootset -7 needs a `kernel-k30-u` whose bytes
 differ from the installed one, a rebuild with a new build id, say. The
-row of record (N45) ran on kbootset -6.
+row of record ran on kbootset -6.
 
 **The variant for a 1.1 disk installed before the packages existed**
 (kbootset and the loader as bare files, as on v8 and v9) is
 `apkg -f install kbootset loader-amix kernel-k30-u`. It is also one
-transaction ("kernel space: 2 packages"), with `-f` as the Bench ran
-it over the bare files. The Bench's v8a and v9f runs
-passed the whole row this way. It is supporting evidence, not the row of
+transaction ("kernel space: 2 packages"), with `-f`, run over the bare
+files. The v8a and v9f runs passed the whole row this way. It is
+supporting evidence, not the row of
 record.
 
-**S2-41 on k30.** The S2-41 table above applies with:
+**M-GEN5 on k30.** The M-GEN5 table above applies with:
 - boot 1: `kbootset build; kbootset commit --again`;
 - the kernel lines: `kernel unix 1270676 bytes` for every generation,
   the trial included (it is the same kernel);
@@ -369,7 +360,7 @@ record.
 - **Either way the end state:** default 1, generation 3 bad with 1
   attempt. Generation 2 is gone, because `mark-bad 2` collected it.
 
-**One S2-42 cell on k30 (N = 7).** As the S2-42 table above, on the
+**One M-GEN3 cell on k30 (N = 7).** As the M-GEN3 table above, on the
 l11-k30 disk, with `build` composing from the installed package (no
 stand-in). Boot 2:
 - the loader boots generation 2 (the trial, `kernel unix 1270676
@@ -395,10 +386,10 @@ time a program under Amix.)
 | Line | Model | Vehicle | kbootset | Kernel package |
 |---|---|---|---|---|
 | k30 | the cycle-exact 25 MHz 68030 with a 68882 (M-LD7's model) | the A4091 68030 vehicle of M-LD1, under our loader | `/tmp/kbootset` from `make box` | `s2-standin.sh <its K030 kernel> k30 zorro:0202:54 ufs,s5 <its build id> <outdir> <its bss>` now (`bss-of.sh` gives the bss; `uname -m` dumps core on the 1.0 K030 kernels, so the build id is `uname -a`'s last field); the k30 kernel package once it exists |
-| k46 | the 68060 model | the kinfo row's (KD060-Z, a 4 MiB store) | `/sbin/kbootset` from the package, or `/tmp/kbootset` | the S2-46 set, or the stand-in made from the same KD060-Z kernel |
+| k46 | the 68060 model | the kinfo row's (KD060-Z, a 4 MiB store) | `/sbin/kbootset` from the package, or `/tmp/kbootset` | the exit row's set, or the stand-in made from the same KD060-Z kernel |
 
 A 2 MiB boot slice holds the k30 trial only beside a deflated generation 1.
-The 1.0 K030 kernels have no `kinfo` until S2-11, so the k30 build names
+The 1.0 K030 kernels have no `kinfo`, so the k30 build names
 the box facts instead: `--line 30 --bootdev zorro:0202:54 --rootdev
 zorro:0202:54 --rootfs ufs --mem <the model's fast memory>`. kbootset
 finds the store by its scan of the disks (C2-4 §2). The k46 build needs no
@@ -442,7 +433,7 @@ The record gives per line:
   once (about 2.6 MB of transfer for a k30 kernel).
 - The 68060 model runs at the emulator's speed, so its figure is for the
   record only, as M-SIG2's was.
-- The disk-inclusive figures, and the 68060 figure, are metal (S2-47).
+- The disk-inclusive figures, and the 68060 figure, are metal rows.
 
 ### M-GEN2 follow-up — the hashing rate apart from I/O (hashbench)
 
@@ -485,9 +476,9 @@ A different line means a wrong build, not a slow one.
 - The 68060 model runs at emulator speed, so a run there is for the
   record only.
 
-## Stage 3: the module kernel's boot rows (S3-20, S3-21)
+## Stage 3: the module kernel's boot rows
 
-The acceptance rows of `docs/plan/stage-3-kernel-brief.md` §4. Each line's
+The acceptance rows of the stage-3 module kernels (80 §3). Each line's
 module kernel boots a generation with an `arena` and an `ident` record and
 no modules: under loader version 2, the core finds the arena that boot2
 filled. Three controls show the other loaders do no harm: under loader
@@ -514,8 +505,8 @@ named by two apkg records`.
 
 | Line | Kernel | Vehicle |
 |---|---|---|
-| k46 | KD060-Z module kernel, ET_REL, 2 426 952 bytes, build `68060-261026-51` | the kinfo row's (the port's E5 shape, KD060-Z): generation 1 good and **deflated** (the vehicle built with `--deflate`), a 4 MiB store, loader version 1 |
-| k30 | K030-U module kernel, brel, 1 712 168 bytes, `bss=349320`, build `68030-261026-01` | the installer's l11-k30 disk (rig row N19's shape: A3000, WD unit 6), its 64 MiB store, loader version 1 |
+| k46 | KD060-Z module kernel, ET_REL, 2 426 952 bytes, build `68060-261026-51` | the kinfo row's (the 040/060 port's Z3660 shape, KD060-Z): generation 1 good and **deflated** (the vehicle built with `--deflate`), a 4 MiB store, loader version 1 |
+| k30 | K030-U module kernel, brel, 1 712 168 bytes, `bss=349320`, build `68030-261026-01` | the installer's l11-k30 disk (the rig's A3000 shape, WD unit 6), its 64 MiB store, loader version 1 |
 
 A 4 MiB store holds the module generation only beside a deflated
 generation 1. A raw KD060-Z generation 1 (1 998 273 bytes) and the
@@ -523,7 +514,7 @@ generation 1. A raw KD060-Z generation 1 (1 998 273 bytes) and the
 free`); the host rehearsal had used a smaller stand-in generation 1. It
 holds no third generation. Each row starts from a fresh slot copy, and
 every box command runs `/tmp/kbootset`, or `/sbin/kbootset` where the
-Bench installs it so that the rc2 hook and `bcheckrc` run the same binary.
+row installs it so that the rc2 hook and `bcheckrc` run the same binary.
 
 **The rc2 hook marks good first** on disks that carry it (the installer's
 from v7): its `generation N is good and the default` goes to the
@@ -543,7 +534,7 @@ dd if=/dev/kinfo bs=4 skip=134 count=1 2>/dev/null | od -x    # modules at 536: 
 dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null | od -x    # kinfo version 3 (the -58 cut on): at 576
 ```
 
-### S3-B1 — loader version 2, the module generation (three boots)
+### B1 — loader version 2, the module generation (three boots)
 
 | Boot | Commands | Expected |
 |---|---|---|
@@ -559,7 +550,7 @@ The loader must be accepted before build. While the new loader is on
 trial, gate 7 also counts the secondary boot2, which is version 1. The
 gate refuses until then.
 
-### S3-B2 — loader version 1 refuses the generation (L9)
+### B2 — loader version 1 refuses the generation (L9)
 
 | Boot | Commands | Expected |
 |---|---|---|
@@ -567,7 +558,7 @@ gate refuses until then.
 | 2 | `kbootset status` | `amix-boot 1: …`; `amix-boot: L9 loader too old (generation 2)`; then `amix-boot: generation 1, kernel …` in the same boot. Status: generation 2 `trial`, 1 attempt: the attempt is spent before boot2 reads the generation (10 §7.2), and the L9 line is the reason of record |
 | 3 | — | `amix-boot: L8 trial not confirmed (generation 2)`, generation 2 marked bad, generation 1 boots (10 §7.2) |
 
-### S3-B3 — loader version 1, the core finds no arena
+### B3 — loader version 1, the core finds no arena
 
 | Boot | Commands | Expected |
 |---|---|---|
@@ -576,13 +567,13 @@ gate refuses until then.
 
 `noarena.spec` is the same kernel as a version-1 generation: no `arena`,
 no `ident`, `loader-min 1`. Loader version 2 boots it the same way, so
-S3-B3 also holds after S3-B1.
+B3 also holds after B1.
 
-### S3-B4 — the stock loader
+### B4 — the stock loader
 
 The line's stock-loader row, with the module kernel as the kernel it
 loads: on k46, a stock-loader row of the kinfo kernel's shape; on k30,
-E1. Expected on the console:
+the A3000's stock-loader row. Expected on the console:
 `dlm: no valid arena directory; modules are refused this boot`, then
 `dlm: 80 kernel symbols` (k30: 78), then multi-user. The kinfo reads as
 above (kabi, 0 modules). The stock media carry no boot store, so
@@ -592,12 +583,12 @@ above (kabi, 0 modules). The stock media carry no boot store, so
 dd if=/dev/kinfo bs=1 skip=84 count=4 2>/dev/null | od -c     # not "A X L 1"
 ```
 
-### S3-B5 — the first module: z3660eth from the generation (S3-16)
+### B5 — the first module: z3660eth from the generation
 
 The first composed module generation. The module kernel boots with
 z3660eth as a boot-class member, and the network comes from the module.
 z3660eth goes alone: z3660rtg's `depend=monsw` needs a monsw member, and
-no monsw module exists yet (S3-27).
+no monsw module existed yet.
 
 - **Inputs:**
   - the kernels of the cut with kinfo version 3 (C2-1): KD060-Z -58
@@ -609,7 +600,7 @@ no monsw module exists yet (S3-27).
     -12, with `kbootset namelist` (C2-4 §12);
   - core patch 0022 or later in the kernels: a boot-class STREAMS driver
     registers its own major (the first run's `error 22`);
-  - the module the z3660net station built with the kit of the cut
+  - the module amix-z3660net built with the kit of the cut
     (`build/<line>/mod.d/z3660eth`, z3660net be0ef63 on kit e84878e):
     k30 `0c5c3580…`, k46 `8356712a…`, 18 787 bytes; the earlier build
     against the dirty kit gave the same bytes. Its stand-in package:
@@ -618,31 +609,31 @@ no monsw module exists yet (S3-27).
 sh tests/bench/s3-modpkg.sh <z3660eth> k46 <outdir>          # or k30
 ```
 
-- **Vehicle:** a fresh slot copy, as S3-B1's. On the 4 MiB k46 store the
-  module kernel's generation fits only once: so S3-B5 composes the module
-  generation as the first one after generation 1, in place of S3-B1's
-  generation 2. On the k30 disk's 64 MiB store it can follow S3-B1.
+- **Vehicle:** a fresh slot copy, as B1's. On the 4 MiB k46 store the
+  module kernel's generation fits only once: so B5 composes the module
+  generation as the first one after generation 1, in place of B1's
+  generation 2. On the k30 disk's 64 MiB store it can follow B1.
 
 | Boot | Commands | Expected |
 |---|---|---|
 | 1 | copy both trees (s3-standin's and s3-modpkg's); install `build/box/modadmin` (amix-dlm with core patch 0017 or later) as `/sbin/modadmin`, and put `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1` in `/etc/inittab` before every other `sysinit` line; install `/tmp/kbootset` as `/sbin/kbootset` and `/etc/rc2.d/S01kbnamelist` (its one line, C2-4 §12); `ls -li /stand/unix /stand/2.1_unix`; `kbootset loader-install /tmp/boot2.bin --version 2` | the two names one inode (the stock kernel, as 1.0 left it); `loader version 2 installed on trial; power-cycle to boot it` |
-| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as S3-B1. Early in run level 2, from `S01kbnamelist`: `kbootset: no namelist: kinfo version 2 gives no bind address` (generation 1 is the vehicle's static kernel, whose kinfo is version 2). `build`'s generation has, after the kernel's record, `module z3660eth boot <size> path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
-| 3 | `kbootset status`; `ls -li /stand/unix /stand/2.1_unix`; `netstat -i`; `ifconfig -a`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix …`. On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`; then, from init's first sysinit entry, `dlm: boot module z3660eth loaded`; then, from `S01kbnamelist`, `kbootset: namelist /stand/unix written for generation <id>, bound at 0x…`. `/stand/unix` is now its own inode, `/stand/2.1_unix` unchanged with a link count of 1. `netstat -i` lists aen0 and zen0 with sane counters and no `read error on ifstats element`; `ifconfig -a` lists both with no `SIOCGIFFLAGS` error. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded` and `namelist: /stand/unix is generation <id>'s, bound at 0x…`. kinfo: kabi as S3-B1, module count 1, read at offset 576 now (version 3): `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` gives `0000 0001` |
+| 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | the loader accepted, as B1. Early in run level 2, from `S01kbnamelist`: `kbootset: no namelist: kinfo version 2 gives no bind address` (generation 1 is the vehicle's static kernel, whose kinfo is version 2). `build`'s generation has, after the kernel's record, `module z3660eth boot <size> path=/stand/gen/<id>/mod/z3660eth sha256=… match=zorro:144b:01,mobo:z3660-window`, `param z3660eth.intr=0` and `param z3660eth.intrl2=1` (in `/stand/gen/<id>/build`); `generation <id> committed` |
+| 3 | `kbootset status`; `ls -li /stand/unix /stand/2.1_unix`; `netstat -i`; `ifconfig -a`; `ifconfig zen0` (or the vehicle's network check); the two `dd` reads | `amix-boot: generation <id>, kernel unix …`. On the console: `dlm: modules from generation <id>'s manifest`, `dlm: 80 kernel symbols` (k30: 78), `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`; then, from init's first sysinit entry, `dlm: boot module z3660eth loaded`; then, from `S01kbnamelist`, `kbootset: namelist /stand/unix written for generation <id>, bound at 0x…`. `/stand/unix` is now its own inode, `/stand/2.1_unix` unchanged with a link count of 1. `netstat -i` lists aen0 and zen0 with sane counters and no `read error on ifstats element`; `ifconfig -a` lists both with no `SIOCGIFFLAGS` error. zen0 up by the module (polled, `intr=0`): telnet and ftp reach the box. `kbootset status`: `module z3660eth (boot): loaded` and `namelist: /stand/unix is generation <id>'s, bound at 0x…`. kinfo: kabi as B1, module count 1, read at offset 576 now (version 3): `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` gives `0000 0001` |
 
 **Needs the final cut's kernels** (core patch 0017). On a kernel without
-it the hook loads in process 0 and panics (the S3-B5 exploratory run on
-the old k30 cut, N50): `PANIC: KERNEL FAULT psw=0x2700 … (Bus Error)`
+it the hook loads in process 0 and panics (B5's exploratory run on
+the old k30 cut): `PANIC: KERNEL FAULT psw=0x2700 … (Bus Error)`
 under `lf_hashload`.
 
 If the console says `dlm: boot module z3660eth not loaded: no board
 matches …` or `… error <n>`, the reason is on that line. The row then
 fails, and the number goes in the report.
 
-### S3-B6 — modadmin on the box (S3-11), after S3-B5
+### B6 — modadmin on the box, after B5
 
 modadmin is built for the box (`make box`: `build/box/modadmin`, GCC 14,
 static, the core's own modadmin with core patch 0015). The row copies it
-as `/tmp/modadmin` onto S3-B5's box after boot 3, with z3660eth loaded:
+as `/tmp/modadmin` onto B5's box after boot 3, with z3660eth loaded:
 
 | Command | Expected |
 |---|---|
@@ -654,7 +645,7 @@ as `/tmp/modadmin` onto S3-B5's box after boot 3, with z3660eth loaded:
 | `/tmp/modadmin -a <the address -k printed for z3660eth_intr_mode>` | `0x… z3660eth_intr_mode+0x0` |
 | `/tmp/modadmin -k no_such_name` | `modadmin: no symbol no_such_name: symbol not found`, exit status 1 |
 
-The z3660net station's M-INT1 reads `z3660eth_intr_mode`, `z3660eth_int6_n`
+amix-z3660net's M-INT1 rows read `z3660eth_intr_mode`, `z3660eth_int6_n`
 and `z3660eth_int2_n` this way (the module's globals move with each load).
 
 ### Host rehearsal (2026-10-26)
@@ -667,13 +658,13 @@ Both kernels were checked on the host:
 - `s3-standin.sh` with `kbootset create`, then a static generation 1, then
   `build` and `commit`, in a 4 MiB store. The rehearsal's generation 1
   was a 1 459 584-byte stand-in, smaller than the vehicle's raw
-  1 998 273, which is why the Bench needed the deflated one. Generation 2's manifest carries
+  1 998 273, which is why the vehicle needed the deflated one. Generation 2's manifest carries
   `loader-min 2`, `arena` and `ident`, and `lsstore` gives `ok`.
 - With a version-1 store, `build` is refused by gate 7.
 
-## S3-43 — the stage-3 emulator rows (80 §3)
+## The stage-3 emulator rows (80 §3)
 
-The rows that break the module rules on purpose, after S3-B5 and S3-B6
+The rows that break the module rules on purpose, after B5 and B6
 of record pass, on both lines, in one campaign per line. Each row names
 the line of record; a different line, or a box that stops, fails the row.
 
@@ -681,7 +672,7 @@ the line of record; a different line, or a box that stops, fails the row.
 up to and including init's sysinit entries (`modadmin -B`), are on the
 console and the serial port. Lines the kernel, the core or a module print
 later, after a `modadmin` action in multi-user, reach only the kernel's
-message buffer (`putbuf`), not the console (S3-43's first run). Read them
+message buffer (`putbuf`), not the console (the first run of these rows). Read them
 with `modadmin -L` (core patch 0024, modtools with it), the buffer oldest
 first, after the action: `modadmin -L | tail -5`. `modadmin -L` finds the
 buffer through `/stand/unix`, so `kbootset status` must show a current
@@ -690,7 +681,7 @@ on the terminal as always.
 
 `-L`'s first line also tells the vehicle from the kernel: `conslogging
 0` while no syslogd is in `ps` means the console logger never started on
-that boot, which is the vehicle's start-up, not the kernel (S3-43: the
+that boot, which is the vehicle's start-up, not the kernel (these rows: the
 log driver and syslogd's I_CONSLOG work under both module kernels).
 The likely cause: the stock `/etc/init.d/syslogd` trusts a stale
 `/etc/syslog.pid`. It runs `kill -0` on the previous boot's number, and
@@ -736,9 +727,9 @@ bench and admin command, not run by any shipped script: the two vehicles
 differed only by the stale syslogd pid above, not by the kernel.
 
 **Inputs:**
-- the kernels of S3-B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
+- the kernels of B5 (k46: KD060-Z -58, `8459eaee…`, kinfo version 3;
   k30: the K030-U cut with `unix.sym`), each through `s3-standin.sh`;
-  kbootset -12 and modadmin as S3-B5;
+  kbootset -12 and modadmin as B5;
 - the module set, built with the line's kit (`make kit`, KIT_REV
   e84878e):
 
@@ -770,22 +761,22 @@ sh tests/bench/s3-43/handover.sh k30 <K030-U unix.brel> <its kabi> <its .etrel> 
 Each holds `tree/`, `s43/`, `verdicts.txt`, `l14.spec`, `l5.img` (the
 vehicle's boot slice size: the 4 MiB k46 store, the 64 MiB k30 v10
 store) and `SHA256SUMS`. The relocation oracle runs on the host after
-S3-43-2, from the repository root:
+row 2, from the repository root:
 
 ```
 sh tests/bench/s3-43/oracle.sh <outdir>/tree/etc/conf/mod.d/t43rel <unix> <kabi> <bind> q p
 ```
 
 with the kernel and sidecar as shipped, the bind address from kinfo,
-and the box's `q` and `p` files (S3-43-2's last row). It needs
+and the box's `q` and `p` files (the last line of row 2's table). It needs
 `build/axrel` and `build/core/test-bin/reloc` (`make test`, `make core`).
 
 **The set** (`tests/bench/s3-43/src/`):
 
 | Member | Class | What it is for |
 |---|---|---|
-| `monsw` | demand, `c:52`, pinned | stand-in for S3-27: the dependency, the pinned unload |
-| `z3660rtg` | demand, `c:49`, `depend=monsw`, `unload=allowed` | stand-in for S3-26: the dependency order, the allowed unload, the first open |
+| `monsw` | demand, `c:52`, pinned | stand-in for the real monsw: the dependency, the pinned unload |
+| `z3660rtg` | demand, `c:49`, `depend=monsw`, `unload=allowed` | stand-in for the real z3660rtg: the dependency order, the allowed unload, the first open |
 | `t43boot` | boot, `match=always`, `unload=allowed`, `param tag` (modreg.d `s3-43`), `count` (3) | load, parameters, the allowed unload, M-SIG3 at `modload` |
 | `t43leak` | boot, `unload=allowed` | its `_unload` forgets its level-6 handler: the backstop |
 | `t43fail` | boot | its `_load` attaches a handler and fails (EIO): the kernel as it was |
@@ -795,23 +786,23 @@ and the box's `q` and `p` files (S3-43-2's last row). It needs
 registry gives their majors to those names. The rows run on a slot copy
 that has no real `monsw` or `z3660rtg` package.
 
-**The vehicle:** a fresh slot copy in S3-B5's state after its boot 1:
+**The vehicle:** a fresh slot copy in B5's state after its boot 1:
 - loader version 2 accepted;
 - `/sbin/modadmin`, the `modadmin -B` inittab line, `/sbin/kbootset` and
   `S01kbnamelist` installed.
 
 On the 4 MiB k46 store only one module generation fits beside
-generation 1. So the S3-43 generation takes the place of S3-B5's, and a
+generation 1. So this generation takes the place of B5's, and a
 row that commits another generation first marks the previous one bad and
 runs `kbootset collect`. The 64 MiB k30 store needs neither.
 
-### S3-43-1 — the generation (boot 1)
+### Row 1 — the generation (boot 1)
 
 | Commands | Expected |
 |---|---|
 | copy the stand-in trees and `<outdir>/tree/`; copy `<outdir>/s43/` to `/tmp/s43`; `mknod /dev/t43rtg c 49 0`; `mknod /dev/t43monsw c 52 0`; `kbootset build`; `kbootset commit` | the build's records, after the kernel's: `t43boot`, `t43fail`, `t43leak`, `t43rel` (boot class, by name), then `monsw` and `z3660rtg … majors=c:49 depend=monsw` (demand class); `param t43boot.tag=s3-43`, `param t43boot.count=3`; `generation A committed` |
 
-### S3-43-2 — load, the backstop, unload, the dependency (boot 2, generation A)
+### Row 2 — load, the backstop, unload, the dependency (boot 2, generation A)
 
 From init's first sysinit entry, in this order:
 
@@ -827,7 +818,7 @@ t43rel: loaded at 0x…
 dlm: boot module t43rel loaded
 ```
 
-Then multi-user as S3-B5 (the keyboard and the timers keep working: the
+Then multi-user as B5 (the keyboard and the timers keep working: the
 level-6 chain is as it was after t43fail).
 
 | Row | Commands | Expected |
@@ -839,12 +830,12 @@ level-6 chain is as it was after t43fail).
 | M-SIG3, `modload` | `cp /stand/gen/A/mod/t43boot /tmp/t43boot.keep`; `echo x >> /stand/gen/A/mod/t43boot`; `modadmin -l t43boot`; then `cp /tmp/t43boot.keep /stand/gen/A/mod/t43boot`; `modadmin -l t43boot` | `dlm: t43boot: SHA-256 differs from the booted manifest`, modadmin `cannot load t43boot` (EPERM); after the copy is restored, `t43boot: loaded, params "tag=s3-43 count=3"` |
 | M-SIG3, dependency | `cp /stand/gen/A/mod/monsw /tmp/monsw.keep`; `echo x >> /stand/gen/A/mod/monsw`; `cat /dev/t43rtg`; then restore it | `dlm: monsw: SHA-256 differs from the booted manifest`; `cat` cannot open `/dev/t43rtg` (ENXIO); neither module in `modadmin -s` |
 | M-SIG3, first open | the same with `/stand/gen/A/mod/z3660rtg`; `cat /dev/t43rtg`; then restore it | `dlm: z3660rtg: SHA-256 differs from the booted manifest`; ENXIO |
-| dependency | `cat /dev/t43rtg`; `modadmin -s` | `monsw: the S3-43 stand-in, loaded`, then `z3660rtg: the S3-43 stand-in, loaded` (the dependency first); an empty read; both listed, monsw with one dependent (DEPS 1) |
-| allowed unload, demand | `modadmin -U z3660rtg` | `z3660rtg: the S3-43 stand-in, unloaded`; gone |
+| dependency | `cat /dev/t43rtg`; `modadmin -s` | `monsw: the bench stand-in, loaded`, then `z3660rtg: the bench stand-in, loaded` (the dependency first); an empty read; both listed, monsw with one dependent (DEPS 1) |
+| allowed unload, demand | `modadmin -U z3660rtg` | `z3660rtg: the bench stand-in, unloaded`; gone |
 | pinned | `modadmin -U monsw` | modadmin `cannot unload monsw` (EBUSY); still listed |
 | relocation oracle | `modadmin -Q t43rel > /tmp/q`; `modadmin -p t43rel_first:64 t43rel_fns:64 > /tmp/p`; `dd if=/dev/kinfo bs=4 skip=135 count=1 2>/dev/null \| od -x` (the bind address, kinfo bootdata's text vaddr); copy `/tmp/q` and `/tmp/p` to the host | on the host, `sh tests/bench/s3-43/oracle.sh <tree>/etc/conf/mod.d/t43rel <unix> <kabi> <bind> q p`: `oracle: t43rel at 0x…: 83 words, 332 bytes of 332, identical to the host loader` |
 
-### S3-43-3 — development load (boot 3)
+### Row 3 — development load (boot 3)
 
 Before the reboot, `echo x >> /stand/gen/A/mod/t43boot` (the copy kept as
 above), then `kbootset next devload` and power-cycle. The flag is for
@@ -873,7 +864,7 @@ moddata 78, `bv1` moddata 167, `bsym` syms 165. The kabi breakers pass
 the host loader, which has no kernel to compare against: the core's
 check is `md_check`.
 
-### S3-43-4 — a dependency outside the generation (boot 4)
+### Row 4 — a dependency outside the generation (boot 4)
 
 Generation B is A without monsw, written as given:
 
@@ -898,30 +889,30 @@ B is the next numeric id, A + 1. B's kernel is deflated, so it may fit
 beside generations 1 and A on the 4 MiB k46 store. If gate 5 refuses
 there, the row runs on k30 only, and the report says so. After the row,
 `kbootset mark-good` on B: B is then the generation L14 falls back to
-(S3-43-5), on both lines.
+(row 5), on both lines.
 
 | Commands | Expected |
 |---|---|
 | (boot B) `cat /dev/t43rtg` | `dlm: monsw is not a member of the booted generation`; ENXIO. A first open of a module that is in no generation cannot happen: only a member's majors are registered for one |
 
-### S3-43-5 — L14 (boot 5)
+### Row 5 — L14 (boot 5)
 
 | Commands | Expected |
 |---|---|
-| copy `l14.spec`; `kbootset commit --spec l14.spec` (on k46, if the store refuses it for space: `kbootset mark-bad A`, `kbootset collect`, commit again); power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 identity mismatch (generation N)`; the default generation, B, boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as S3-B2) |
+| copy `l14.spec`; `kbootset commit --spec l14.spec` (on k46, if the store refuses it for space: `kbootset mark-bad A`, `kbootset collect`, commit again); power-cycle | `amix-boot: generation N, kernel unix …`, `amix-boot: L14 identity mismatch (generation N)`; the default generation, B, boots in the same boot. Next boot: `L8 trial generation did not reach multi-user (generation N)`, N marked bad (as B2) |
 
-### S3-43-6 — L5 (boot 6, last: it replaces the store)
+### Row 6 — L5 (boot 6, last: it replaces the store)
 
 | Commands | Expected |
 |---|---|
 | on the host, write `l5.img` over a slot copy's boot slice (the campaign's last, or a fresh copy: the image replaces the whole store); boot | `amix-boot: generation 2, kernel unix …`, `amix-boot: the arena needs 337 bytes, it has 64` (k30: 367; 32 + the manifest, which `lsstore l5.img 0` gives: 305 and 335 bytes with the hand-over's root records), `amix-boot: L5 arena overflow (generation 2)`; then generation 1 boots (`dlm: modules from generation 1's manifest`) |
 
-L5 is handled as L2 (10 §9, ruled 2026-10-26): the next generation in
+L5 is handled as L2 (10 §9, since 2026-10-26): the next generation in
 the order boots, with no menu. That fallback is the line of record.
 
-### S3-43-8 — Zorro III memory: the kernel binds below 0x40000000
+### Row 8 — Zorro III memory: the kernel binds below 0x40000000
 
-The finding of S3-43-7's first run (N69, N70). With the emulator's
+The finding of row 7's first run. With the emulator's
 `+z3=128`, a 128 MB Zorro III board at 0x40000000 was the largest fast
 region. Loader version 1 and the stock rule bound the kernel there, and
 it never started on either line. boot2 from amix-dlm 9f6f0bb on (28 136
@@ -932,22 +923,22 @@ bytes, loader version 2) counts only memory below 0x40000000 (10 §3).
 | the slot copy with the fixed boot2 installed (`kbootset loader-install /tmp/boot2.bin --version 2`, accepted at the next boot), the emulator with `+z3=128` beside the CPU board's fast memory; boot | `amix-boot: kernel bound at <an address below 0x40000000: the CPU board's region>`, the banner, multi-user. kinfo's fast memory (`kbootset status`) is the bind region alone (k46 with a 32 MB mbres bank: 33 554 400 bytes; k30 in its 64 MB a3000 bank: 67 108 832): Zorro III RAM beside is never kernel memory on either line (10 §3) |
 | the same with the Zorro III board as the only fast memory, if the emulator allows it | `amix-boot: no fast memory below 0x40000000 to run the kernel in`, `amix-boot: L4 no memory (generation N)`; the next generation in the order, or the menu |
 
-### S3-43-9 — k30 in a region over 64 MB
+### Row 9 — k30 in a region over 64 MB
 
 | Commands | Expected |
 |---|---|
-| k30 with boot2 from amix-dlm 001b04a on, the emulator with a 128 MB bank at 0x08000000; boot | `amix-boot: kernel bound at 08000000`, the banner, multi-user; kinfo's fast memory 64 MiB less the MemHeader's 32 bytes (67 108 832, `kbootset status`). Before the fix this box never started the kernel (N70) |
+| k30 with boot2 from amix-dlm 001b04a on, the emulator with a 128 MB bank at 0x08000000; boot | `amix-boot: kernel bound at 08000000`, the banner, multi-user; kinfo's fast memory 64 MiB less the MemHeader's 32 bytes (67 108 832, `kbootset status`). Before the fix this box never started the kernel |
 
-### S3-43-7 — 128 MB
+### Row 7 — 128 MB
 
 The emulator with 128 MB in the CPU board's bank at 0x08000000 (not
-Zorro III memory, which is never kernel memory: S3-43-8), the S3-43-2
+Zorro III memory, which is never kernel memory: row 8), row 2's
 rows `load`, `dependency` and `relocation oracle` again: the same lines.
 kinfo's fast memory (`kbootset status`): about 128 MB on k46; on k30 64 MB,
-the line's maximum, which boot2 caps the bank to (S3-43-9). On k46 the
+the line's maximum, which boot2 caps the bank to (row 9). On k46 the
 relocation oracle's base is then above 64 MB.
 
-## S3-44 — M-INT1, bench half: the interrupt chains on the module kernels
+## M-INT1, bench half: the interrupt chains on the module kernels
 
 The host harness proves the chains' logic: order, claims counted but not
 stopping the chain, a full chain, refusals (`make core`, `intr:` cases).
@@ -956,13 +947,13 @@ These rows prove the same on the kernels of record: the level-2 walk in
 called by real and software-raised interrupts. They also prove a driver's
 fallback to polled mode.
 
-- **Already covered (S3-43-2, N65/N66):** a boot-class `intr_attach(6, …)`
+- **Already covered (the stage-3 emulator rows, row 2):** a boot-class `intr_attach(6, …)`
   returns 0. The box runs to multi-user with a declining level-6 handler
   attached. The backstop removes a handler an unload forgot, and the
   keyboard still works.
 - **Not on the emulator:** interrupt receive from the board itself (the
-  emulated board raises no INT6). That is S3-46, on metal.
-- **No z3660net build is owed:** z3660eth 1.0.0-2 already carries
+  emulated board raises no INT6). That is a metal row.
+- **No new z3660eth build is needed:** z3660eth 1.0.0-2 already carries
   `param intr:int:0:0:6`. With `intr=6`, the first open attaches its
   level-6 handler (and a level-2 one, `intrl2=1`), raises EXTER once from
   software as a self-test, and falls back to polled on any failure. The
@@ -980,7 +971,7 @@ sh tests/bench/s3-44/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s44/t4
 | `t44fill` | `_load` attaches declining level-6 handlers until `intr_attach` refuses, and keeps them. `_unload` detaches them |
 
 **The vehicle:**
-- each line's slot copy in S3-B5's state: z3660eth from zeth 1.0.0-2 as
+- each line's slot copy in B5's state: z3660eth from zeth 1.0.0-2 as
   a boot-class member, the kernels of record;
 - `/sbin/modadmin` with core patch 0026 (`-K`);
 - `<outdir>/s44` copied to `/tmp/s44`.
@@ -992,25 +983,25 @@ hand, after `modadmin -K`. Then its lines are read with
 
 | Boot | Commands | Expected |
 |---|---|---|
-| 1 | `echo 'param intr=6' > /etc/conf/modreg.local.d/z3660eth`; `kbootset build`; `kbootset commit` (on the 4 MiB k46 store, mark the previous module generation bad first, as S3-43 does); power-cycle | `build`'s generation has `param intr=6` in z3660eth's record |
-| 2 (the new generation) | `kbootset mark-good` once the loader is accepted; `modadmin -K`; plumb zen0 by hand (the held-back script's steps); `modadmin -L \| tail -3`; host ping 3/3, telnet, ftp a file | **S3-44-3:** `zen: INT6 receive, drain at level 2`; zen0 carries ping, telnet and ftp (the poll tick drains, since the emulated board raises no INT6) |
-| 3 (`kbootset next devload`; the generation is good and the default, 10 §7.3) | `modadmin -K`; `modadmin -l /tmp/s44/t44intr`; type a few keys on the console for about 10 s; `modadmin -U t44intr`; `modadmin -L \| tail -5` | **S3-44-1:** `dlm: DEVELOPMENT LOAD: t44intr, outside the booted manifest`; `t44intr: attached: level 2 counter 0, level 6 claimer 0, counter 0`; `t44intr: software PORTS seen after N spins, EXTER after M (-1: never)` with N and M not -1; at the unload, `t44intr: level 2: A calls; level 6: claimer B calls, counter B calls` with A ≥ 1 and the two level-6 counts **equal** and ≥ 1; `t44intr: detached 0 0 0; again 2` (ENOENT); the keyboard still works |
-| 3, continued | `modadmin -l /tmp/s44/t44fill`; plumb zen0 by hand; `modadmin -L \| tail -3`; host ping 3/3; `modadmin -U t44fill` | **S3-44-2:** `t44fill: level 6 took 8 handlers, then error 168` (ECONFIG; 8 is the chain's size while nothing else is attached); `zen: level-6 attach failed (errno 168); polled`; zen0 carries ping, polled; `t44fill: 8 of 8 detached` |
+| 1 | `echo 'param intr=6' > /etc/conf/modreg.local.d/z3660eth`; `kbootset build`; `kbootset commit` (on the 4 MiB k46 store, mark the previous module generation bad first, as the stage-3 emulator rows do); power-cycle | `build`'s generation has `param intr=6` in z3660eth's record |
+| 2 (the new generation) | `kbootset mark-good` once the loader is accepted; `modadmin -K`; plumb zen0 by hand (the held-back script's steps); `modadmin -L \| tail -3`; host ping 3/3, telnet, ftp a file | **I3:** `zen: INT6 receive, drain at level 2`; zen0 carries ping, telnet and ftp (the poll tick drains, since the emulated board raises no INT6) |
+| 3 (`kbootset next devload`; the generation is good and the default, 10 §7.3) | `modadmin -K`; `modadmin -l /tmp/s44/t44intr`; type a few keys on the console for about 10 s; `modadmin -U t44intr`; `modadmin -L \| tail -5` | **I1:** `dlm: DEVELOPMENT LOAD: t44intr, outside the booted manifest`; `t44intr: attached: level 2 counter 0, level 6 claimer 0, counter 0`; `t44intr: software PORTS seen after N spins, EXTER after M (-1: never)` with N and M not -1; at the unload, `t44intr: level 2: A calls; level 6: claimer B calls, counter B calls` with A ≥ 1 and the two level-6 counts **equal** and ≥ 1; `t44intr: detached 0 0 0; again 2` (ENOENT); the keyboard still works |
+| 3, continued | `modadmin -l /tmp/s44/t44fill`; plumb zen0 by hand; `modadmin -L \| tail -3`; host ping 3/3; `modadmin -U t44fill` | **I2:** `t44fill: level 6 took 8 handlers, then error 168` (ECONFIG; 8 is the chain's size while nothing else is attached); `zen: level-6 attach failed (errno 168); polled`; zen0 carries ping, polled; `t44fill: 8 of 8 detached` |
 
 **The numbers:** N and M (the spins until a software-raised interrupt
 reaches the chain), A and B over the 10 s, and the 8.
 
 **Failure readings:**
-- `-1` in S3-44-1: that level's chain is not called (the walk is not in
+- `-1` in I1: that level's chain is not called (the walk is not in
   `int2_tbl`, or the kernel build did not weaken `aciabintr`).
 - Unequal level-6 counts: a claim stops the chain, against 30 §4.
-- In S3-44-3, `zen: interrupt self-test failed; polled` with the chain
-  working in S3-44-1 is z3660eth's to read.
+- In I3, `zen: interrupt self-test failed; polled` with the chain
+  working in I1 is z3660eth's to read.
 
-## S3-41 — bench measurements on the module kernels (U1, U2, U4)
+## Bench measurements on the module kernels (U1, U2, U4)
 
-After the S3-43 sweep, on the same kernels of record and the same slot
-copies. U15 is answered (S3-B5, core patch 0017; 90 §3) and has no row.
+After the stage-3 emulator rows, on the same kernels of record and the same slot
+copies. U15 is answered (row B5, core patch 0017; 90 §3) and has no row.
 Each row gives a number for 90 §3.
 
 ### U1 — the context at dmainit and at the hook
@@ -1024,7 +1015,7 @@ kernels**, never kernels of record and never packaged.
 
 | Commands | Expected |
 |---|---|
-| the U1 kernel as a generation by spec (`noarena.spec`'s form, `kernel unix <the U1 kernel> z=deflate`); `kbootset commit --spec`; power-cycle; afterwards mark it bad | after `dlm: … kernel symbols`, from the end of `dlm_init` (dmainit): `dlm: U1 dmainit: sr 0x…, u_procp 0x…, the clock ticked\|stood still after N spins`, then `dlm: U1 dmainit: kmem_zalloc(<n>, KM_NOSLEEP) gave memory\|failed` for 4096, 65536, 262144, 1048576 and 2097152. Then, from the kernel's hook in `rth1_mountroot` after `vfs_mountroot`, the same six lines with `hook` (the status register there was 0x2700 in S3-B5's panic) |
+| the U1 kernel as a generation by spec (`noarena.spec`'s form, `kernel unix <the U1 kernel> z=deflate`); `kbootset commit --spec`; power-cycle; afterwards mark it bad | after `dlm: … kernel symbols`, from the end of `dlm_init` (dmainit): `dlm: U1 dmainit: sr 0x…, u_procp 0x…, the clock ticked\|stood still after N spins`, then `dlm: U1 dmainit: kmem_zalloc(<n>, KM_NOSLEEP) gave memory\|failed` for 4096, 65536, 262144, 1048576 and 2097152. Then, from the kernel's hook in `rth1_mountroot` after `vfs_mountroot`, the same six lines with `hook` (the status register there was 0x2700 in B5's panic) |
 
 **The numbers:** the status register at each point, whether the clock
 ticks there, and the largest size `KM_NOSLEEP` gives. **The reading
@@ -1046,7 +1037,7 @@ sh tests/bench/s3-41/mkprobes.sh build/kit/<line> <outdir>     # <outdir>/s41/u2
 
 | Commands | Expected |
 |---|---|
-| the emulator with 128 MB in the CPU board's bank (as S3-43-7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request) and the kernel of record's generation is good and the default (a one-shot request boots the default, never a trial: 10 §7.3); that generation carries the arena (`l14.spec`'s form with the kernel's own `arena` and `ident`, or `kbootset build`'s): development load widens what may load, it does not replace the manifest, so a generation in `noarena.spec`'s form refuses every load (`dlm: u4big: no booted manifest, so no module loads this boot`, modadmin `Not owner`); power-cycle; on that boot `modadmin -K` first (a box without a console logger); run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 65536 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
+| the emulator with 128 MB in the CPU board's bank (as emulator row 7; on k30 the kernel gets 64 MB of it, the line's maximum); copy `<outdir>/s41` to `/tmp/s41`; `kbootset next devload` only once the installed loader is accepted (a loader on trial boots the default generation and spends the one-shot request) and the kernel of record's generation is good and the default (a one-shot request boots the default, never a trial: 10 §7.3); that generation carries the arena (`l14.spec`'s form with the kernel's own `arena` and `ident`, or `kbootset build`'s): development load widens what may load, it does not replace the manifest, so a generation in `noarena.spec`'s form refuses every load (`dlm: u4big: no booted manifest, so no module loads this boot`, modadmin `Not owner`); power-cycle; on that boot `modadmin -K` first (a box without a console logger); run U4 first, then `modadmin -l /tmp/s41/u2kva`; `modadmin -U u2kva` | `dlm: DEVELOPMENT LOAD: u2kva, outside the booted manifest`; `u2kva: N chunks of 65536 bytes (K KiB) with KM_NOSLEEP, from 0x… to 0x…`; `u2kva: all N given back`; the box carries on |
 
 Run U2 in a boot of its own, without U4: a stuck `KM_SLEEP` request
 holds memory and makes U2's figure low (the first run). The chunk is
@@ -1067,26 +1058,26 @@ quiet box: for that moment the kernel has no memory to spare.
 last `...` line, and 30 §2's routing of large requests is then the
 core's to change.
 
-## Stage 4: the first root-class boot (S4-72-1)
+## Stage 4: the first root-class boot
 
 The first boot whose root disk is reached through a module. boot2 places
 z3660scsi in the arena (C4-4 version 3), the core links it in
 `marc_root` before the root is mounted (core patches 0033–0035), it
 registers its board with sd (C4-1, patch 0032), and the root mounts
 through it. ufs is still the kernel's own: the filesystems leave the base
-with S4-43. k46 first; k30 follows with S4-23's kernel in the same
-shape.
+later in stage 4. k46 first; k30 follows with its root-class kernel in
+the same shape.
 
 - **Inputs:**
-  - the S4-22 k46 root-class kernel and the sidecar its build wrote: kabi
+  - the k46 root-class kernel and the sidecar its build wrote: kabi
     `k46.1.1`, `sdcards=4`, `arena=`, `ident=`, `abi=fea18182…`, and a
     `root=` that names no Z3660 controller (z3660scsi is not linked in),
-    with `rootfs=ufs`. Through `s3-standin.sh`, as S3-B5's kernels;
+    with `rootfs=ufs`. Through `s3-standin.sh`, as B5's kernels;
   - `/tmp/boot2.bin` from amix-dlm ec99e40 or later (`make boot2`,
-    S4-10's placement, loader version 3; loader-amix -7 at the next
-    mint), and `/tmp/kbootset` from ec99e40 or later (`make box`, S4-12's
-    composition and the loader-3 gate);
-  - the z3660scsi root-class module (S4-30), built with the stage-4 kit
+    root-class placement, loader version 3; loader-amix -7 at the next
+    mint), and `/tmp/kbootset` from ec99e40 or later (`make box`, the
+    root-class composition and the loader-3 gate);
+  - the z3660scsi root-class module, built with the stage-4 kit
     (kabi `k46.1.1`): `.moddata` `class=root`,
     `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`, no `unload=`.
     Its stand-in package:
@@ -1096,18 +1087,18 @@ KABI=k46.1.1 sh tests/bench/s3-modpkg.sh <z3660scsi> k46 <outdir>
 ```
 
   - optionally z3660eth 1.0.0-5 (kabi `k46.1.0`, which a `k46.1.1`
-    kernel accepts) through `s3-modpkg.sh` as in S3-B5, so the network
+    kernel accepts) through `s3-modpkg.sh` as in B5, so the network
     comes up too.
-- **Vehicle:** S3-B5's k46 vehicle: a fresh slot copy, generation 1
+- **Vehicle:** B5's k46 vehicle: a fresh slot copy, generation 1
   static and deflated in a 4 MiB store, the root on the emulated Z3660's
   piscsi disk at SCSI id 6, with `dlm::sysinit:/sbin/modadmin -B …`
-  first in `/etc/inittab` and `S01kbnamelist`, as S3-B5 set them.
+  first in `/etc/inittab` and `S01kbnamelist`, as B5 set them.
 
 | Boot | Commands | Expected |
 |---|---|---|
 | 1 | copy the trees (s3-standin's, s3-modpkg's); `kbootset loader-install /tmp/boot2.bin --version 3` | `loader version 3 installed on trial; power-cycle to boot it`. A build before the loader is accepted refuses: `gate 7 … root-class modules, which need loader version 3` |
 | 2 | `kbootset mark-good` (or the hook's); `kbootset build`; `kbootset commit` | `build`'s record in `/stand/gen/<id>/build`, after the kernel's: `module z3660scsi root <size> at=0x10000 crc32=00000000 sha256=… path=/stand/gen/<id>/mod/z3660scsi bss=<n> match=zorro:144b:01,mobo:z3660-window safe=1`. The box's `--rootdev` is the Z3660 from kinfo's card table, and no built-in driver names it, so gate 3 is met by the module and it is the safe set. `generation <id> committed` |
-| 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of S3-B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot 3: …` (the version is in the banner), `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
+| 3 | `kbootset status`; `mount`; `ls /`; the two `dd` reads of B1; `dd if=/dev/kinfo bs=4 skip=144 count=1 2>/dev/null \| od -x` | **boot2:** `amix-boot 3: …` (the version is in the banner), `amix-boot: generation <id>, kernel unix <size> bytes`, then `module z3660scsi <size> bytes`. **The kernel**, before the root mounts: `dlm: modules from generation <id>'s manifest`, `dlm: <n> kernel symbols` (the names of `abi/k46/ddi.list` at the cut), z3660scsi's own `_load` lines, `dlm: 1 root module(s) linked`, then the RTH1 kernel half's root line for `c6d0s1` (the root found by identity, card 0 unit 6, as before: a box with one controller keeps the stock names, C4-1 §4); multi-user from that root. From the first sysinit entry: z3660scsi has no deferred call (C4-2 §8); then `dlm: boot module z3660eth loaded` if it was composed. `kbootset status`: `module z3660scsi (root): loaded`. kinfo: kabi `k46.1.1`; the module count 1 (2 with z3660eth). The disk works under load: a large `cp` and `sync` on the root |
 | 4 | `shutdown -i0 -g0 -y` | `dlm: halt pass: 1 module(s) stopped` if z3660scsi has a `_halt` (C4-2 §5: the mailbox left idle), then `The system is halted` |
 
 **The kernel must not drive the Z3660 itself.** A cut that still links
@@ -1116,7 +1107,7 @@ cannot take the module: boot 2's `kbootset build` refuses with `gate 3
 (closure): root-class module z3660scsi is for zorro:144b:01, which the
 kernel drives itself (its sidecar's root=): two drivers on one board`
 (C4-4 version 4 §4.1). That refusal is the row's first expected line on
-such a cut, and it ends the row there. The root-class boot needs S4-22's
+such a cut, and it ends the row there. The root-class boot needs a
 cut without the static z3660scsi. If a generation built elsewhere
 carries both anyway, the kernel says `dlm: root module z3660scsi is for
 zorro:144b:01, which the kernel drives itself; not linked` and roots on
@@ -1135,7 +1126,7 @@ its static driver.
 - No `root module(s) linked` line and a hang or panic at the root mount:
   the kernel has no `marc_root` hook before `rth1_apply`, or z3660scsi's
   board did not register (C4-1: `sd: … registered after the controllers
-  closed`). Measured on the S4-22 kernel with no root module (the port's
+  closed`). Measured on the root-class kernel with no root module (the port's
   negative control, -71): `RTH1: root c6d0s1 built in (controller not
   present)`, then `PANIC: vfs_mountroot: cannot mount root: errno 89`,
   and the next boot is the loader's L8 fallback to the good generation.
@@ -1149,7 +1140,7 @@ its store extent changed: `L3`, then generation 1 boots); and the
 card-number cells of M-SD1 on the emulated board sets (30 §5.3).
 
 
-## Stage 4: the root context (S4-71, C4-2 section 2)
+## Stage 4: the root context (C4-2 section 2)
 
 C4-2 §2 lets a root-class `_load` call `autocon`, `bprobe`,
 `sptalloc`/`sptfree` and on k46 `dev_kvmap`, which `ddi.md` marks *proc*,
@@ -1194,20 +1185,20 @@ KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-71/build/<line>/mod.d
 - No `rprobe:` line at all: the generation carries no root record for it
   (the `build` file), or boot2 is older than version 3.
 
-**Later rows on the same probe** (S4-71, other halves): the ufs and s5
-init routines returning in this context (C4-6 §3) come with S4-40's
-carved modules. U12, every walker of `vfssw` reading `nfstype` live, is
-measured with cdfs's first mount (S4-42).
+**Later rows on the same probe:** the ufs and s5 init routines
+returning in this context (C4-6 §3) come with the carved modules
+(`tools/carve.py`). U12, every walker of `vfssw` reading `nfstype`
+live, is measured with cdfs's first mount.
 
-## Stage 4: the exit batch (docs/plan/stage-4-exit.md)
+## Stage 4: the exit batch
 
-The exit ledger's rows that no earlier run covers, in emulation on both
+The stage-4 exit rows that no earlier run covers, in emulation on both
 lines, on the exit set (catalog 6e60a128: kern46m -82, kern30m -17,
 kbootset -20, loader -9). Each starts from a module vehicle rooted
-through z3660scsi (N103r's shape on k46, N104r's on k30) unless it says
-otherwise, and keeps the console log as its evidence.
+through z3660scsi, on each line, unless it says otherwise, and keeps
+the console log as its evidence.
 
-### A damaged root module selects the menu (S4-04, 80 §2)
+### A damaged root module selects the menu (80 §2)
 
 boot2 checks every root module it places against the manifest's
 `crc32=` before the kernel starts (`load_member`), so a damaged member
@@ -1216,7 +1207,7 @@ tries the next one in the order; when none loads it says so and opens
 the menu. To reach the menu, no generation of the order may load:
 damage the member in **every** generation that has one (each stores its
 own copy), and the kernel of any module-less generation in the order
-(on k30 the UZ and the pristine K030-U generations; N136).
+(on k30 the UZ and the pristine K030-U generations).
 
 1. On the host, in a copy of the vehicle: find each generation's
    `module z3660scsi root <size> at=0x<at> …` record (`grep -a` on the
@@ -1241,7 +1232,7 @@ so it stays the host harness's (core patch 0034, `rp2`).
 
 **L5.** `kbootset` refuses a generation whose root set does not fit the
 arena (gate 4), from `build` and from `commit --spec` alike. So, as
-S3-43's L5, the row writes a store built on the host by
+the stage-3 emulator rows' L5, the row writes a store built on the host by
 `tests/bench/s4-exit/l5.sh` over a slot copy's boot slice:
 
 ```
@@ -1251,7 +1242,7 @@ sh tests/bench/s4-exit/l5.sh <root copy> <root copy>/stand/gen/<id>/build <outdi
 Here `<id>` is the vehicle's default generation, as `kbootset build`
 composed it on the box. The image keeps it as generation `<id>` (good,
 the default): the core loads boot- and demand-class modules only from
-the booted generation's `/stand/gen/<id>/mod/` (N142's first image
+the booted generation's `/stand/gen/<id>/mod/` (a first image
 renumbered it, and z3660eth was refused). Generation `<id>+1` (trial) is
 the same, with its last root module's `bss=` raised to the arena's
 capacity. Do not collect `<id>` on the box. `<outdir>/expected.txt` has
@@ -1280,7 +1271,7 @@ The probe is `tests/bench/s4-exit/`, the boot-class module `sdlate`
 (`match=always`). Its `_load` runs at the first sysinit entry, after the
 root's open has closed registration, and calls `sd_register` once. It
 returns `ENXIO`, so it is never linked. Build it and its stand-in package
-as S4-71's probe:
+as the root-context probe:
 
 ```
 make -C tests/bench/s4-exit KIT=<amix>/kernel/dlm/build/kit/<line>
@@ -1293,14 +1284,14 @@ KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-exit/build/<line>/mod
 | the probe | `sdlate: sd_register -> 16, PASS: refused after sd's first open` |
 | then | the boot goes on as without it; no new disk; `modadmin -l` does not list sdlate |
 
-### Not Bench rows
+### Not bench rows
 
-- **M-MOD1, M-FL1** are host computations (S4-70):
+- **M-MOD1, M-FL1** are host computations:
   `docs/measurements/2026-10-27-m-mod1-m-fl1.md`.
 - **U3, the mapping half.** Every k46 root-class boot runs a module's
-  code from the arena in `.data` through ITT0: z3660scsi on N103r first.
-  The ledger cites those rows.
-- **S4-24, the 1.0 families retire.** Not a boot: every 1.1 medium of
+  code from the arena in `.data` through ITT0, z3660scsi's first root
+  boot above among them; those boots are the evidence.
+- **The 1.0 families retire.** Not a boot: every 1.1 medium of
   record carries one kernel image per line (kern46m, kern30m), and from
   the exit the static families are no longer built for 1.1. A check of
-  the media and the catalog by their owners.
+  the media and the catalog.

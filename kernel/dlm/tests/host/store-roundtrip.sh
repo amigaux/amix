@@ -86,7 +86,7 @@ $B/b2medium $T/boot1.adf $T/boot2.adf $T/other1.adf | tee $T/m.out
 grep -q "1 volume change(s), 2 foreign/blank and 1 wrong-volume disks refused, motor on for 0 waiting frames: ok" $T/m.out
 # the same on a device without a change counter (re-read every half second)
 $B/b2medium -n $T/boot1.adf $T/boot2.adf $T/other1.adf | grep -q "disks refused, motor on for 0 waiting frames: ok"
-# and with a counter that never moves (E958/E959): the 4 s re-read finds it
+# and with a counter that never moves: the 4 s re-read finds it
 $B/b2medium -f $T/boot1.adf $T/boot2.adf $T/other1.adf | grep -q "disks refused, motor on for 0 waiting frames: ok"
 # a partition whose Mask reaches the buffers: whole blocks straight into
 # them, the rest through the bounce buffer; one that does not (a 1 MiB

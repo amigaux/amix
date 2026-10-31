@@ -1,6 +1,6 @@
 #!/bin/sh
-# df0-pair.sh -- the floppy pairs for the DF0 rows (M-FD1, M-FP2; docs/plan/
-# stage-1.md S1-27): one per line, the 1.0 static floppy kernel stored
+# df0-pair.sh -- the floppy pairs for the DF0 rows (M-FD1, M-FP2):
+# one per line, the 1.0 static floppy kernel stored
 # uncompressed so it is larger than volume 1 and runs on into volume 2.
 # The boot then reads about 1.3-1.5 MB through the floppy DMA and asks for
 # volume 2 in the middle of the kernel.  A stage-1 loader refuses RAM-disk

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# build.sh -- the ABI kit packages dlmkit30 and dlmkit46 (amix-dlm S3-22):
+# build.sh -- the ABI kit packages dlmkit30 and dlmkit46:
 # USERLAND packages, rolled by the ordinary amix_pkgroll with every
 # userland gate, one per kernel line.
 #

@@ -4,8 +4,7 @@
   needs them. The next ones are the stage-4 RAM-disk member (10 §5.4) and
   any CD-boot fix.
 - **The gate:** `b2link` refuses a boot2 whose file, or whose image plus
-  bss, exceeds 28 672 bytes. That is the area boot1 loads it into (10 §3,
-  S3-15).
+  bss, exceeds 28 672 bytes. That is the area boot1 loads it into (10 §3).
 - **Class:** host measurement (`make boot2` with gcc-cross-amix, `-O2
   -m68020`), boot2 at amix-dlm 001b04a and after.
 
@@ -63,12 +62,12 @@ spec lines that quote it, in the same commit. Item 6 is the last resort.
 | Old form | New form | Quoted |
 |---|---|---|
 | `the kernel needs %u bytes, the largest fast memory region has %u` | `the kernel needs %u bytes, the region has %u` | nowhere in amix-dlm |
-| `a brel kernel without bss= in its manifest: 512 KiB assumed` | `no bss= for this brel: 512 KiB assumed` | `tests/bench/README.md` S3-43-4, which now gives both forms. The CHANGELOG's 2026-10-25 entry describes the line without quoting it |
+| `a brel kernel without bss= in its manifest: 512 KiB assumed` | `no bss= for this brel: 512 KiB assumed` | `tests/bench/README.md`, which now gives both forms. The CHANGELOG's 2026-10-25 entry describes the line without quoting it |
 
-Bench evidence recorded before 001b04a (the S3-43 cells' serial logs)
+Bench evidence recorded before 001b04a (the memory-cap cells' serial logs)
 shows the old form. That is history, not a pattern to grep for.
 
-## 5. Stage 4: the two gates, and what root placement costs (S4-10)
+## 5. Stage 4: the two gates, and what root placement costs
 
 **Both gates bind, and the file binds first.** `b2link` refuses a boot2
 whose file (image plus its self-relocation table) or whose image plus
@@ -103,8 +102,8 @@ controller id, so boot2 could not tell the A3000 WD, Gayle and the
 53C710 apart without it.
 
 With the second variant, §3's items 1 and 2 (about 240–340 bytes, no
-change on the console) cover S4-10. S4-11's RAM-disk placement is not
-measured yet; §3's items 3–5 (about 260 bytes) are the budget for it.
+change on the console) cover the root placement. The RAM-disk image
+placement is not measured yet; §3's items 3–5 (about 260 bytes) are the budget for it.
 
 **§3's items 1 and 2, taken (2026-10-26).** Nothing changes on the
 console:
@@ -115,33 +114,34 @@ console:
 | item 1: `rel.c`'s notes only under `AX_RELNOTE` (b2link) | 28 218 | 28 020 | 454 |
 | item 2: the loader build of `manifest.c` (`AX_LOADER`) skips `boards`, `cpu`, `created`, `param` | 28 042 | 27 852 | 630 |
 
-Item 1 gave 138 bytes, not the estimated 40. Item 2 gave 176. With S4-10's
-measured +448, 182 bytes of file stay for S4-11, before items 3–5.
+Item 1 gave 138 bytes, not the estimated 40. Item 2 gave 176. With the root
+placement's measured +448, 182 bytes of file stay for the RAM-disk image
+placement, before items 3–5.
 
-## 6. S4-11: the RAM-disk image, and what paid for it (2026-10-27)
+## 6. The RAM-disk image, and what paid for it (2026-10-27)
 
-S4-11 (C4-3 §2) costs boot2 the image's placement: exec `AllocAbs` at the
+The RAM-disk image (C4-3 §2) costs boot2 its placement: exec `AllocAbs` at the
 top of the kernel's region, the read into place, `memory[]` ended below
 the image, the loader record's address and size, and the `ramdisk` root
 selector. Measured on the prototype, +464 bytes of file and +424 of
 image + bss, over both gates. 10 §3.2's `ax_memcap` clause (the region
 under the bind base one 2 KiB page short) adds 4. The budget came from
-§3, as the orchestrator decided: a code-only search first, then items
-3–5 with their quotes.
+§3, in this order: a code-only search first, then items 3–5 with their
+quotes.
 
 | Step | file | image + bss | left (file) |
 |---|---|---|---|
-| before (S4-10, 2026-10-26) | 28 526 | 28 312 | 146 |
-| S4-11's prototype with the `ax_memcap` clause | 28 994 | 28 740 | −322 |
+| before (root placement, 2026-10-26) | 28 526 | 28 312 | 146 |
+| the RAM-disk placement's prototype with the `ax_memcap` clause | 28 994 | 28 740 | −322 |
 | the L table as one packed string (15 pointers and their relocations gone) | −74 | −44 | |
 | items 3–5: each L text at most 20 characters after its code; the menu's key line to `digit, Return, mouse` (10 §7.4 has the keys); `volume %u, not %u`, `not of this boot set`, `no return to Kickstart: reset by hand` | −228 | −228 | |
 | the kernel's room line through the shared `needs` format | −26 | −28 | |
 | one `L4 no memory` line for core.c and main.c | −12 | −12 | |
-| the savings alone on S4-10's tree (4295d81) | 28 192 | 28 004 | 480 |
-| S4-11, with the claim freed when the image fails its CRC (4003c9f) | 28 646 | 28 420 | 26 |
+| the savings alone on the root-placement tree (4295d81) | 28 192 | 28 004 | 480 |
+| the RAM-disk placement, with the claim freed when the image fails its CRC (4003c9f) | 28 646 | 28 420 | 26 |
 
-The deltas were measured one after another on the prototype; on S4-10's
-tree the savings come to 334 bytes of file and 308 of image + bss.
+The deltas were measured one after another on the prototype; on the
+root-placement tree the savings come to 334 bytes of file and 308 of image + bss.
 
 Nothing else changes on the console. The quotes of the changed lines
 moved in the same commit: 10 §7.2, C3-3 §2, the Bench README, the host

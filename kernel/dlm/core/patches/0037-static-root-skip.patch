@@ -96,7 +96,7 @@ its _load touches the board.  The state harness adds such an entry.
 +++ b/test/mkmods.py
 @@ -101,7 +101,8 @@
  # rp8's record names a board that is not here (the core matches, C4-4 v3)
- # root_defer (S4-05): rd1 defers one call; rd2 asks for nine; rd3 defers
+ # root_defer: rd1 defers one call; rd2 asks for nine; rd3 defers
  # one and then fails its _load
 -for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7', 'rp8', 'rd1', 'rd2', 'rd3'):
 +# rp9's board is one the kernel drives itself (dlm_static_root)

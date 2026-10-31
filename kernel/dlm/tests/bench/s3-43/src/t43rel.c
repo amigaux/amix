@@ -1,5 +1,5 @@
 /*
- * t43rel.c -- S3-43: the relocation oracle's module.  Its image holds
+ * t43rel.c -- the relocation oracle's module.  Its image holds
  * absolute references to its own text, data and strings and to kernel
  * names (printf, lbolt, bootinfo, kmem_zalloc), and nothing in it is
  * written after the load, so the bytes the core left in memory can be
@@ -46,4 +46,4 @@ t43rel_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t43rel, t43rel_load, t43rel_unload, "S3-43 relocation oracle");
+MOD_MISC_WRAPPER(t43rel, t43rel_load, t43rel_unload, "t43 relocation oracle");

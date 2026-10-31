@@ -12,7 +12,7 @@
  *
  * Gates 5 (store space) is ks_commit's.  Gates 8 and 9 (the boot disk) are
  * met when the store is named explicitly (--image, --dev); finding it on
- * the box is S2-06.
+ * the box is kbox.c's.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -373,7 +373,7 @@ loader_ver(const struct ks *k)
 
 /*
  * A generation with nroot root-class records needs loader version 3,
- * the boot2 that places them (S4-10, 10 §5.1): its loader-min is raised,
+ * the boot2 that places them (10 §5.1): its loader-min is raised,
  * and gate 7 refuses it on a store whose loader is older, at compose
  * time rather than with L9 at boot.  Gate 4 refuses a kernel whose arena
  * is not 16-aligned (C3-3 version 5): boot2 binds on 256 and aligns each
@@ -823,8 +823,8 @@ mod_gate2(struct ks *k, const struct kb_kernel *kk, const struct km_info *mi)
 
 /* modreg.d, then modreg.local.d (C3-5 section 1): disable, the parameter
  * values, a later line winning, and in modreg.local.d only `safe` on a
- * boot-class module: the owner's mark that it loads in safe mode too
- * (S5-09, C4-4 section 2), its boot-class dependencies with it */
+ * boot-class module: the local mark that it loads in safe mode too
+ * (C4-4 section 2), its boot-class dependencies with it */
 static int
 modreg(struct ks *k, const char *root, struct kb_mod *md, int *disabled)
 {
@@ -1210,8 +1210,8 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		     (!strcmp(f->root, "ramdisk") && named(mods[i].i.majors, "b:20"))))
 			mods[i].safe = 1;
 	/* and every controller module ranked at or before the root's class,
-	 * so the card numbers stay those of a normal boot (spec 70 section 4,
-	 * S5-02): sd orders by class, then base (C4-1 section 4), and the core
+	 * so the card numbers stay those of a normal boot (spec 70 section 4):
+	 * sd orders by class, then base (C4-1 section 4), and the core
 	 * links none whose board is absent.  The root's class is its module's,
 	 * or a built-in controller's from its key */
 	if (rc == KS_OK && strcmp(f->root, "ramdisk")) {
@@ -1544,7 +1544,7 @@ kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, ax_u3
 	strcat(out, mtail);
 	/* the RAM-disk image after the root modules: mkstore places members
 	 * in this order and boot2 reads kernel, modules, image, so a floppy
-	 * pair asks for volume 2 once (S5-05; E958/E959 asked 2, 1, 2) */
+	 * pair asks for volume 2 once (the other order asked 2, 1, 2) */
 	if (ramdisk)
 		sprintf(out + strlen(out), "ramdisk miniroot %.500s%s\n", ramdisk, deflate ? " z=deflate" : "");
 	msg[0] = 0;

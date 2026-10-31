@@ -1,5 +1,5 @@
 #!/bin/sh
-# carve.sh -- tools/carve.py on the stock k30 objects (S5-04): the core
+# carve.sh -- tools/carve.py on the stock k30 objects: the core
 # tier it computes is abi/k30/core.list exactly, and each of ufs and s5,
 # wrapped, builds with the k30 kit and passes modcheck as a core-tier boot
 # module carrying fs= and the build id.  Inputs are not part of this
@@ -30,7 +30,7 @@ for fs in ufs s5; do
 	done
 	echo "carve: $fs wrapped: $(sed -n "s/^modcheck: $fs: ok (k30.1.2, boot, \(.*\))/\1/p" $T/$fs.out)"
 done
-# k46 (S5-04): the stock ufs object as the port's fsobj-patch.py writes it
+# k46: the stock ufs object as the port's fsobj-patch.py writes it
 # for 4 KiB pages, module sites included (AX_UFS46), passes modcheck's
 # page scan with no waiver.  s5 has no k46 module (a stage-5 carry: its
 # own 2 KiB sites).  Skipped unless AX_UFS46 is set and the k46 kit exists.

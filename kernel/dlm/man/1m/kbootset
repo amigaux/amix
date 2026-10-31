@@ -452,7 +452,7 @@ an installed module object.
 .B /etc/conf/modreg.d/\fIname\fP
 a module's parameters from its package;
 .B /etc/conf/modreg.local.d/\fIname\fP
-holds the owner's, which win.
+holds the administrator's, which win.
 .TP
 .B /etc/init.d/kbnamelist
 run as

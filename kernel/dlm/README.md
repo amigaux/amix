@@ -21,8 +21,7 @@ both CPU lines and on every install medium. It holds five things:
 | **Specification** | The design every part above is built against. | `docs/spec/` — start at `00-overview.md` |
 
 The specification came first; every part above is now built and runs on
-both lines. Where the work stands is in `docs/plan/` (the stage plans and
-their exit ledgers) and `CHANGELOG.md`.
+both lines. Where the work stands is in `CHANGELOG.md`.
 
 Until 2026-10-29 this was the standalone repository amix-dlm; its commits
 keep their hashes in amix. Where a contract, decision or commit citation
@@ -76,14 +75,13 @@ pkg/           the kernel-space package recipes (loader-amix, kbootset, modtools
 tests/         host, cross, core-harness, kit and Bench tests
 docs/spec/     the specification, one file per area (00-overview.md first)
 docs/contracts/  the interface contracts with the other projects
-docs/plan/     the stage plans and exit ledgers
 docs/measurements/  records of closed measurements
 docs/          other documentation (see docs/README.md)
 ```
 
 `make test` runs the host tests; `make kit` builds the ABI kit (see the
 `Makefile` for the toolchains each target needs) and writes
-`build/kit.digests`, one line per kit for the release lock (P-38 S2.1):
+`build/kit.digests`, one line per kit for the release lock:
 
 ```
 kit <line> <kabi> <manifest> <norev> KIT_REV=<amix commit> PORT_REV=<port commit>|-

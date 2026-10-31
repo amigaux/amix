@@ -1,7 +1,7 @@
 #
 # prototype -- dlmkit30 / dlmkit46: the ABI kit of one kernel line under
-# /usr/dlm/kit/<line>/ (amix-dlm S3-22; the prefix is this repository's
-# proposal, the plan and the kit docs leave it open).
+# /usr/dlm/kit/<line>/ (the prefix is this repository's
+# choice; the kit docs leave it open).
 #
 # AUTHORED HEAD, GENERATED BODY: this file is the head; build.sh appends one
 # line per directory and file of the staged kit, in C sort order

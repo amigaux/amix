@@ -1,11 +1,10 @@
 # 50 — Media
 
 - **Status:** draft (S0), 2026-10-25
-- **Implements:** D-3 §2 (disk/SD images, the floppy pair on both lines and the CD-ROM boot and install; a Linux-style netinstall medium; no boot ROM and no netboot; tape a package source only; floppies never a package source and no floppy-only install; emulation runs the same bytes as metal), D-3 §3 (the 060 floppy pair is supported), D-3 §6 (every install medium is the rescue medium)
-- **Replaces:** P-28's media table rows for the CD (package source only), the 060 floppy (bench only), the module floppy (P-28 D40) and the netinstall disk image as the only network form (P-28 D47)
+- **Implements:** release decisions 2 (disk/SD images, the floppy pair on both lines and the CD-ROM boot and install; a Linux-style netinstall medium; no boot ROM and no netboot; tape a package source only; floppies never a package source and no floppy-only install; emulation runs the same bytes as metal), 3 (the 060 floppy pair is supported) and 6 (every install medium is the rescue medium) (`00-overview.md` §2)
+- **Replaces:** the earlier proposal's media rows for the CD (package source only), the 060 floppy (bench only), the module floppy and the netinstall disk image as the only network form
 
-Paths are relative to the Amix project workspace. `MP/` =
-`tmp/2026-10-22-modules-proposal/`, `IN/` = `amix-installng/`.
+Paths follow `00-overview.md`, "Sources". `IN/` = `amix-installng/`.
 
 ## 1. Common rules
 
@@ -21,7 +20,7 @@ Paths are relative to the Amix project workspace. `MP/` =
   target's copy is unusable, the medium's own `kbootset` is used.
 - **Hashes for kernel space.** A medium that carries packages carries the
   catalog with the SHA-256 of every kernel-space package; signing is not in
-  1.1 (D-3 §13; `60-signing-and-publishing.md`).
+  1.1 (release decision 13; `60-signing-and-publishing.md`).
 - **Same bytes in the emulator and on metal** (§7).
 
 ## 2. Disk and SD images
@@ -41,7 +40,7 @@ Paths are relative to the Amix project workspace. `MP/` =
 | | 030 line | 040/060 line |
 |---|---|---|
 | Today (1.0) | published: boot ADF with the stock bootblock and loader and an LZW `brel` kernel (K030-U-FD: 1 266 585 B → 735 353 B compressed of an 890 880 B budget); root ADF = 880-block s5 miniroot with 46 free 1 KB blocks (`IN/docs/universal-bootfloppy.md:42-63`; `IN/docs/miniroot.md:105-110`) | built, not published: KD060-FD 874 819 B of 890 880 B (about 16 KB free); UFS root ADF with 63 KB free; emulator cell passed 10/10; floppy-rooted boot never run on metal (`amix-kerntools/docs/k0-families.md:871-898`; `IN/docs/miniroot.md:467-502`) |
-| 1.1 | supported medium | supported medium (D-3 §3) |
+| 1.1 | supported medium | supported medium (release decision 3) |
 
 **Content.** Volume 1 starts with boot1, the store header and boot2; the
 store spans both volumes (`10-boot-loader.md` §4.3). The generation holds the
@@ -59,30 +58,29 @@ in the RAM-disk profile — a compressed miniroot with the installer.
 **Install.** The floppy pair boots the installer, which then needs a package
 source: the CD, a raw source disk, the network (if the miniroot carries the
 network userland, §5) or a tape (§6). Floppies are never a package source and
-there is no floppy-only install (D-3 §2).
+there is no floppy-only install (release decision 2).
 
 **Rescue.** Boot the pair, choose repair.
 
 **Budget of record.** 890 880 bytes of payload per DD volume after the
 1.0 prefix is the figure both 1.0 framers enforce; a second figure
-(748 544 B) in the kerntools notes has no recorded origin
-(`MP/CLAIMS.md` C21). Our store format changes the prefix (boot2 ≤ 28 KiB),
+(748 544 B) in the kerntools notes has no recorded origin. Our store format changes the prefix (boot2 ≤ 28 KiB),
 so the 1.1 budget is recomputed from the store layout, not inherited.
 
 ## 4. The CD-ROM
 
 | | |
 |---|---|
-| Today (1.0) | ISO9660 with Rock Ridge, 2048-byte sectors, `/catalog`, `/pkgs/{stock,base}`, `/install/…`; System Identifier deliberately blank so the CD never outranks the hard disk; never a boot device — the 060 route boots an install hard-file image on the Z3660 SD and reads the CD through cdfs (`IN/docs/install-iso.md:7-33`; `MP/02-medium-cdrom-design.md:9-34`) |
-| 1.1 | **bootable** (D-3 §2, §10): the boot ROM's CD filesystem boots AmigaDOS from the disc and its startup-sequence starts the loader (`10-boot-loader.md` §4.4) |
+| Today (1.0) | ISO9660 with Rock Ridge, 2048-byte sectors, `/catalog`, `/pkgs/{stock,base}`, `/install/…`; System Identifier deliberately blank so the CD never outranks the hard disk; never a boot device — the 060 route boots an install hard-file image on the Z3660 SD and reads the CD through cdfs (`IN/docs/install-iso.md:7-33`) |
+| 1.1 | **bootable** (release decisions 2 and 10): the boot ROM's CD filesystem boots AmigaDOS from the disc and its startup-sequence starts the loader (`10-boot-loader.md` §4.4) |
 | Layout | ISO9660, System Identifier `AMIGA BOOT`; `S/Startup-Sequence` runs `amix-cdboot`; `/BOOT/K30/` and `/BOOT/K46/` hold a read-only control file and the generation files (kernel, root-class modules including cdfs and the RAM disk, compressed miniroot); `/catalog`, `/pkgs/{stock,base,kernel}` |
 | Boot | ROM boots AmigaDOS from the disc → `amix-cdboot` picks the line by CPU → kernel + root-class modules + RAM-disk miniroot; cdfs (root class on this medium) mounts the disc as the package source |
 | Requirement | a boot ROM with a CD filesystem (A4091, A4092); other machines boot the floppy pair and install from the CD |
 | Install | packages from the disc through apkg's file source, kernel space from `/pkgs/kernel`, each checked against the catalog's SHA-256 |
 | Rescue | boot the CD, choose repair. An installed disk keeps boot priority 2, which the disc's node only ties, and on the tie the disk boots. So the CD is chosen in the Kickstart early-startup menu (both mouse buttons at power-on), or by lowering the disk's priority below 2. A disc left in the drive never takes over a box |
-| Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id, `MP/02-medium-cdrom-design.md:173`); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
+| Other routes kept | the Z3660 ISO slot (an ISO on the SD presented as a CD unit; slot number must equal the SCSI id); booting an install hard-file image and reading the CD (the 1.0 route) for machines whose CD sits behind a controller with no CD boot |
 | Not bootable | an ATAPI CD on the Gayle IDE (no source says any Kickstart boots Amix from it; it stays a package source); a CD on a controller whose ROM offers no CD node |
-| Hazards kept in the design | a second cdfs mount on an absent unit panics — probe by inquiry, then mount once (P-28 D43); a 512-byte read of a CD through the A4092 wedges the bus — only cdfs opens CD units (`MP/02-medium-cdrom-design.md:40-42`) |
+| Hazards kept in the design | a second cdfs mount on an absent unit panics — probe by inquiry, then mount once; a 512-byte read of a CD through the A4092 wedges the bus — only cdfs opens CD units |
 
 The bootable profile sets `AMIGA BOOT`; an image meant to sit in a drive
 while the box boots from disk keeps the System Identifier blank. The first
@@ -90,7 +88,7 @@ measurement of this medium is M-LD2.
 
 ## 5. The netinstall medium
 
-D-3 §2: a minimal kernel plus a miniroot with the network userland and the
+Release decision 2: a minimal kernel plus a miniroot with the network userland and the
 installer, on its own small medium; packages over HTTP from
 `pkg.amigaux.org`. No boot ROM, no netboot.
 
@@ -99,11 +97,11 @@ installer, on its own small medium; packages over HTTP from
 | Content | a generation with the floor kernel (the A2065 is on the floor), the root-class modules for the medium's controllers, z3660eth as a boot-class module, and a compressed RAM-disk miniroot containing: the installer, the network userland (STREAMS link setup, `ifconfig`, `route`, `ping`), the socket and name-service libraries the HTTP client needs, apkg with its HTTP source, `kbootset`, the public key |
 | Form A — floppy pair | the floppy-pair RAM-disk profile (§3) with the network miniroot, **if it fits** (M-NET1a–g, §5.1) |
 | Form B — small disk image + CD image | if form A does not fit: a raw RDB image (Z3660 SD, ZuluSCSI, CompactFlash) and a small bootable ISO, both carrying the same generation |
-| Network setup | address, netmask, gateway and name server asked at the interview (no DHCP client in 1.0's miniroot; a hosts-file line as fallback, P-28 D47) |
+| Network setup | address, netmask, gateway and name server asked at the interview (no DHCP client in 1.0's miniroot; a hosts-file line as fallback) |
 | Gate | before any disk write beyond partitioning: reach the repository and read its catalog |
 | Install | `apkg -R /mnt` streaming install of the chosen set, then `kbootset -R /mnt build/commit` |
 | Rescue | the same medium, repair mode, with the option to re-fetch kernel space |
-| Transport figures | 37–54 KB/s on metal with the stock TCP window; the r7 kernels carry a larger window, rate to be measured; minimal set about 26 MB, full set about 300 MB (`MP/medium-network.md:76-79`) |
+| Transport figures | 37–54 KB/s on metal with the stock TCP window; the r7 kernels carry a larger window, rate to be measured; minimal set about 26 MB, full set about 300 MB |
 
 ### 5.1 What must be measured to decide form A
 
@@ -119,8 +117,7 @@ and on the RAM-disk root. Measure:
 1. **M-NET1a** — the miniroot's uncompressed size with installer + network
    userland + apkg + `kbootset` + public key, per line, after stripping.
 2. **M-NET1b** — its deflate-compressed size (no ratio for binaries and
-   libraries is recorded; the kernel's LZW ratio is about 0.58,
-   `MP/medium-floppy-design.md:77`).
+   libraries is recorded; the kernel's LZW ratio is about 0.58).
 3. **M-NET1c** — the compressed kernel + root-class modules per line under
    the 1.1 floor (no root filesystem or controllers linked in).
 4. **M-NET1d** — the store's fixed overhead per volume (boot1, header,
@@ -129,7 +126,7 @@ and on the RAM-disk root. Measure:
    + the loader's working memory, against the smallest supported machine of
    each line.
 6. **M-NET1f** — whether a single-user miniroot can run the inet STREAMS
-   stack at all (U-N1; never tried, `MP/CLAIMS.md` C22) — an emulator row on a
+   stack at all (U-N1; never tried) — an emulator row on a
    static kernel first.
 7. **M-NET1g** — HTTP throughput and inactivity timeouts from the miniroot
    (U-N2, U-N8).
@@ -165,12 +162,12 @@ is larger than one volume, so it runs on from volume 1 into volume 2
 (`10-boot-loader.md` §4.3). `kbootset`, the installer's netinstall
 additions and M-NET1c still come out of these margins.
 
-**When.** D-3 §2 says the fit is "measured in S0". M-NET1a and M-NET1b are a
+**When.** Release decision 2 has the fit "measured in S0". M-NET1a and M-NET1b are a
 host computation over today's binaries and were **stage 0, the S0 freeze
 condition**; they are closed (above).
 M-NET1c–g cannot close in S0 — c and d depend on the 1.1 floor kernel and
 the store format, e on both, f and g need a running miniroot — and are
-recorded as **deviation DV-1** from D-3 §2, approved by the owner (D-3 §12):
+recorded as **deviation DV-1** from release decision 2, accepted as release decision 12:
 they are confirmed in stage 1 as they exist, and if they take the margin below
 5 % the netinstall medium becomes form B (`00-overview.md` §5).
 
@@ -178,27 +175,27 @@ they are confirmed in stage 1 as they exist, and if they take the margin below
 
 | | |
 |---|---|
-| Role | a package source behind a boot medium (the floppy pair, a disk image, the CD); never boots (D-3 §2) |
-| Today | the stock distribution tape (a cpio stream at SCSI id 4, read by the stock installer only); our installer's tape row was retired (`IN/docs/installer.md:257`); no tape built by us (`MP/tape-medium-design.md:18-21`) |
-| Driver | `ct` on the floor (`70-static-floor.md`); positionless fixed-block I/O, no seek, a close mid-file spaces to the next filemark (`MP/refute-tape-seof-raw-claim.md`) |
-| Format | TAPE1: 512-byte records, a filemark after each file; file 0 catalog (with the hidden kernel-space block), file 1 checksums (and the signature file once signing exists, D-3 §13), file 2 installer tools, files 3…N one package each, kernel space last (`MP/tape-medium-design.md:155-176`) |
+| Role | a package source behind a boot medium (the floppy pair, a disk image, the CD); never boots (release decision 2) |
+| Today | the stock distribution tape (a cpio stream at SCSI id 4, read by the stock installer only); our installer's tape row was retired (`IN/docs/installer.md:257`); no tape built by us |
+| Driver | `ct` on the floor (`70-static-floor.md`); positionless fixed-block I/O, no seek, a close mid-file spaces to the next filemark |
+| Format | TAPE1: 512-byte records, a filemark after each file; file 0 catalog (with the hidden kernel-space block), file 1 checksums (and the signature file once signing exists, release decision 13), file 2 installer tools, files 3…N one package each, kernel space last |
 | Reader | a sequential `tape:` source in apkg 0.3: stage every package in tape order, verify, then install |
-| Devices | the tape must be reachable on an sd card with device nodes for it; new nodes for a tape on card 1 (A4092 on the 060 line) are proposed (`MP/tape-medium-design.md:146-147,180-184`) |
-| Proof | emulator rows first (stock tape image, then TAPE1), then an emulated tape behind the A4092 on metal, then one real drive at a collaborator (P-28 D46) |
+| Devices | the tape must be reachable on an sd card with device nodes for it; new nodes for a tape on card 1 (A4092 on the 060 line) are proposed |
+| Proof | emulator rows first (stock tape image, then TAPE1), then an emulated tape behind the A4092 on metal, then one real drive at a collaborator |
 
 ## 7. Emulation
 
 | | |
 |---|---|
 | Rule | the emulator boots the same image files that metal boots |
-| Emulator | the project's Amiberry fork: A3000 WD SCSI, A4091 with its real ROM, the A4000T onboard 53C710 model, Gayle IDE and ATAPI, the Z3660 SCSI board, A2065, SCSI tape (`MP/medium-emulation.md:7-23`; `grimoire-amix/docs/getting-started/emulation-amiberry.md`). WinUAE covers the 030 shape only |
-| Z3660 boot | the fork serves the Z3660 boot ROM but leaves DIAGVALID clear, so the emulated board offers no boot node; an autoboot option advertises it but was never exercised (`MP/refute-z3660-no-boot-rom.md`). Enabling and proving it is a stage-1 prerequisite so emulator rows boot the Z3660 like metal (M-EMU1) |
-| Lifecycle rows | a row that keeps one vehicle image across boots (the 1.0 matrix re-copies the vehicle, which would discard a `kbootset` write, `MP/medium-emulation.md:50`) |
-| What the emulator cannot prove | interrupts from the emulated Z3660 network board, copy-back cache and DMA behaviour, 68040 bus-error frames, the HID converters (`MP/medium-emulation.md:13-23`) — those are metal rows (`90-measurements.md`) |
+| Emulator | the project's Amiberry fork: A3000 WD SCSI, A4091 with its real ROM, the A4000T onboard 53C710 model, Gayle IDE and ATAPI, the Z3660 SCSI board, A2065, SCSI tape (`grimoire-amix/docs/getting-started/emulation-amiberry.md`). WinUAE covers the 030 shape only |
+| Z3660 boot | the fork serves the Z3660 boot ROM but leaves DIAGVALID clear, so the emulated board offers no boot node; an autoboot option advertises it but was never exercised. Enabling and proving it is a stage-1 prerequisite so emulator rows boot the Z3660 like metal (M-EMU1) |
+| Lifecycle rows | a row that keeps one vehicle image across boots (the 1.0 matrix re-copies the vehicle, which would discard a `kbootset` write) |
+| What the emulator cannot prove | interrupts from the emulated Z3660 network board, copy-back cache and DMA behaviour, 68040 bus-error frames, the HID converters — those are metal rows (`90-measurements.md`) |
 
 ## 8. Open questions
 
-| ID | Question | Proposed owner |
+| ID | Question | Proposed answerer |
 |---|---|---|
 | OQ-50.1 | Floppy profile: RAM-disk or fd0 root, per line (M-FP1/M-FP2). | us |
 | OQ-50.2 | Narrowed by M-NET1a/b: form A (trimmed engine) chosen; confirm the margin stays ≥ 5 % once M-NET1c, M-NET1d, `kbootset` and the installer's network additions are known, else form B (§5.1). | us |

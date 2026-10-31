@@ -1,7 +1,7 @@
 # 00 — Overview
 
 - **Status:** draft (S0), 2026-10-25
-- **Implements:** the S0 specification for loadable kernel modules in Amix 1.1, against the project's release decisions of 2026-10-25 (decision record D-3, items 1–9)
+- **Implements:** the S0 specification for loadable kernel modules in Amix 1.1, against the project's release decisions of 2026-10-25 (§2, items 1–9)
 
 ## 1. What this specification is
 
@@ -11,12 +11,13 @@ kernel plus the modules the root disk needs — as separate files; the module
 core (a patch queue on kdedon's MIT DLM core) loads root-class modules before
 root is mounted and everything else after; the composer `kbootset` builds,
 commits and rolls back generations behind fail-closed gates; packages carry
-kernel space with a SHA-256 per package (signing is not in 1.1, D-3 §13). The decision record behind it
-(D-3) takes nine decisions; this directory turns each into a design that can
-be built and proven. No code is part of S0.
+kernel space with a SHA-256 per package (signing is not in 1.1, decision 13
+in §2). Nine release decisions are behind it, and four more were taken after
+the freeze (§2); this directory turns each into a design that can be built
+and proven. No code is part of S0.
 
-Where D-3 and the earlier proposal P-28 differ, D-3 wins; each file names the
-P-28 decisions it replaces or keeps. P-24 and P-28 remain the research record.
+Where the release decisions differ from the earlier design proposal, the
+release decisions win; §6 lists what became of the earlier proposal's choices.
 
 ### Reading order
 
@@ -34,19 +35,18 @@ P-28 decisions it replaces or keeps. P-24 and P-28 remain the research record.
 
 ### Sources
 
-Facts are cited by path, relative to the Amix project workspace — the
-directory that holds this repository beside its sibling repositories
-(amix-kerntools, amix-installng, amix-packagemanager, amix-040-060-port,
-amix-gayle-ide, amix-cdfs, grimoire-amix and others), the project's review
-records (`review/`) and its research notes (`tmp/2026-10-22-modules-proposal/`,
-`tmp/2026-10-14-modules-study/`). Some of those are not yet public; the paths
-are given so every fact can be traced. Anything not established by a cited
-source is an open question below, never a fact. Stock Commodore material is
+Facts are cited by path. A path that does not start in this repository
+names one of its sibling projects (amix-kerntools, amix-installng,
+amix-packagemanager, amix-040-060-port, amix-gayle-ide, amix-cdfs,
+grimoire-amix and others). Some of those are not yet public; the paths are
+given so every fact can be traced. Facts that came from the project's
+research notes and bench runs are stated where they are used. Anything not
+established by a cited source is an open question below, never a fact. Stock Commodore material is
 described and referenced, never reproduced.
 
-## 2. Traceability: D-3 item → specification
+## 2. Traceability: release decision → specification
 
-| D-3 | Decision (short) | Implemented in |
+| # | Decision (short) | Implemented in |
 |---|---|---|
 | 1 | Own the boot loader: boot1/boot2 from our source and toolchain; manifest; kernel and root-class modules as separate files; 2048-byte CD blocks; menu and rollback key; tested like a driver; stock loader kept on the early-startup route and 1.0 media until proven; the in-kernel slot retired | **10** (all); 40 §3 (`loader-install`), §5; 80 §2 stage 1; 90 §1 |
 | 2 | Media: disk/SD, floppy pair (both lines), CD-ROM boot and install; netinstall medium (floppy pair if it fits, else small disk + CD image), packages over HTTP; no boot ROM, no netboot; tape a source only; floppies never a source; emulation = same bytes as metal | **50** (all); 10 §4; 70 §2 (floppy, tape on the floor); 90 §5 |
@@ -84,12 +84,11 @@ Kickstart strap ─► boot1 (1 KB) ─► boot2 (≤ 28 KiB, self-relocating, o
 
 ## 4. Open questions, collected
 
-Owner proposals: **us** = this project's maintainers; **Antti** = Antti
+Who answers: **us** = this project's maintainers; **Antti** = Antti
 Sokero, the 68040/68060 port; **ashnazag** = kdedon, author of the adopted DLM
-core; **Emre** = Emre Bastuz, author of the Gayle IDE driver; **owner** = a
-decision reserved to the project owner.
+core; **Emre** = Emre Bastuz, author of the Gayle IDE driver.
 
-| ID | Question (short) | Proposed owner |
+| ID | Question (short) | Proposed answerer |
 |---|---|---|
 | OQ-10.1 | What the strap does with a bootblock's return value (Z3660 ROM chain answered by M-LD3: alert and reset; other ROMs open) | us |
 | OQ-10.2 | Which bootblock header fields the strap checks on a `UNI\0` partition | us |
@@ -108,11 +107,11 @@ decision reserved to the project owner.
 | OQ-30.5 | The 040/060 halt path before the halt pass (answered: no crash; the pass hooks mdboot) | Antti; us |
 | OQ-30.6 | Which core patches go upstream | ashnazag |
 | OQ-30.7 | Re-check upstream's `rth1.c` before the merge request | us |
-| OQ-40.1 | The exact surviving-configuration set (P-29) | us |
+| OQ-40.1 | The exact surviving-configuration set | us |
 | OQ-40.2 | Data slice default size and mount point | us |
 | OQ-40.3 | A rescue RAM-disk generation in every boot store | us |
 | OQ-40.4 | Stock `pkgadd` on `/stand` conflicts and overwrite orphans | us |
-| OQ-40.5 | Checksum contract version 2 for generations (P-28 D23 re-scoped) — **closed** by `docs/contracts/C2-5-checksum-v2.md` | us |
+| OQ-40.5 | Checksum contract version 2 for generations — **closed** by `docs/contracts/C2-5-checksum-v2.md` | us |
 | OQ-40.6 | Swap slice size cap for the configuration archive | us |
 | OQ-40.7 | The 1024 MiB filesystem limit before the layout freezes | us |
 | OQ-50.1 | Floppy profile per line: RAM-disk or fd0 root | us |
@@ -121,7 +120,7 @@ decision reserved to the project owner.
 | OQ-50.5 | Tape device nodes on card 1 | us |
 | OQ-50.6 | One real tape drive row | Antti |
 | OQ-50.7 | One ISO for both lines (proposed) or one per line | us |
-| OQ-60.1 | For the release that adds signing: scheme and file format (Ed25519, minisign/signify layout proposed) | us; owner holds the key |
+| OQ-60.1 | For the release that adds signing: scheme and file format (Ed25519, minisign/signify layout proposed) | us; the project holds the one offline key |
 | OQ-60.4 | Hashing tools on the box for administrators | us |
 | OQ-70.1 | Can the root filesystems leave the 040/060 kernel (symbol surface) | us; Antti reviews |
 | OQ-70.2 | Boot-time consumers of ufs inside the base in safe mode | us |
@@ -134,52 +133,52 @@ decision reserved to the project owner.
 | OQ-80.6 | A 1.1 Z3660 release firmware that runs the 68030 MMU mode on metal | Z3660 |
 | OQ-80.7 | A spacer between back-to-back Z3660 register writes, for every driver | Z3660; the driver repos |
 
-Closed in the review pass (T-52): OQ-20.1 (stock headers are published in the ABI kit, D-3 §7) and OQ-20.3 (z3660eth matches 144b:01). Closed by the owner after the freeze: OQ-60.2 and OQ-60.3 (moot, D-3 §13), OQ-30.2 (D-3 §11), OQ-10.9 (D-3 §10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
+Closed in the specification review: OQ-20.1 (stock headers are published in the ABI kit, decision 7) and OQ-20.3 (z3660eth matches 144b:01). Closed after the freeze: OQ-60.2 and OQ-60.3 (moot, decision 13), OQ-30.2 (decision 11), OQ-10.9 (decision 10) and with it OQ-50.4 (the CD boots where the boot ROM has a CD filesystem; other machines use the floppy pair).
 
 ## 5. Measurements
 
-Every measurement, with its evidence class (bench or metal, P-28 D51) and the
+Every measurement, with its evidence class (bench or metal) and the
 stage that needs it, is in `90-measurements.md`.
 
 **S0 freeze condition — met 2026-10-25.** The specification freezes when
 every stage-0 measurement is closed: **M-NET1a and M-NET1b** (the netinstall
-miniroot's raw and compressed size; D-3 §2 says the netinstall fit is
-"measured in S0"). Both are closed
+miniroot's raw and compressed size; release decision 2 has the netinstall
+fit "measured in S0"). Both are closed
 (`docs/measurements/2026-10-25-m-net1.md`): with the installer engine trimmed
 to what the installer calls, miniroot plus a deflated kernel fills two DD
 volumes with 16.1 % (k30) and 13.0 % (k46) to spare, so form A is chosen
 (`50-media.md` §5.1, OQ-50.2 narrowed).
 
-**Deviation DV-1 (approved, D-3 §12).** The rest of the netinstall fit
+**Deviation DV-1 (accepted after the freeze, decision 12).** The rest of the netinstall fit
 — M-NET1c (compressed floor kernel and root modules), M-NET1d (store overhead
 per volume), M-NET1e (RAM at boot), M-NET1f (inet in a miniroot), M-NET1g
 (HTTP from the miniroot) — cannot close in S0: c–e depend on the 1.1 floor
 kernel and the store format, f and g on a running miniroot. They are scheduled
 in stages 1–5 (`90-measurements.md` §5) and confirm or overturn the form-A choice made in S0 (OQ-50.2): if they take the margin below 5 %, the netinstall medium becomes the small disk + CD image (form B).
 
-**Owner decisions open at the freeze:** none left. OQ-10.9 (CD mechanism),
-OQ-30.2 (030 card order) and DV-1 were decided as D-3 §10–§12; signing was
-taken out of 1.1 (D-3 §13), which makes OQ-60.2 and OQ-60.3 moot. The first measurements after the freeze
+**Decisions open at the freeze:** none left. OQ-10.9 (CD mechanism),
+OQ-30.2 (030 card order) and DV-1 were decided as decisions 10–12 (§2); signing was
+taken out of 1.1 (decision 13), which makes OQ-60.2 and OQ-60.3 moot. The first measurements after the freeze
 are the stage-1 loader items (M-LD1–M-LD9, M-EMU1).
 
-## 6. P-28 decisions and where they went
+## 6. The earlier proposal's choices and where they went
 
-| P-28 | Fate |
+| Earlier choice | Fate |
 |---|---|
-| D1, D3, D5, D6, D8, D10, D12, D14, D16, D18, D19/D55, D24, D27, D43, D45, D46, D51, D59, D61, D63 | kept (cited where used) |
-| D2, D7, D20, D57 (slot inside the kernel; slot format; slot capacity) | replaced: our loader fills an arena; capacity rule kept for the arena (10 §5.3) |
-| D4 | kept in substance: root class resident (arena), the rest copied |
-| D9 | replaced: four controllers in 1.1, one compacted rank order on both lines (D-3 §11; 30 §5) |
-| D11, D54, D60 | kept, adapted to the loader record (40 §2.2, §5) |
-| D13, D30, D48 | settled by D-3 §7 and §13 (60): kernel space in the public catalog with SHA-256, signing deferred past 1.1; the ABI kit publishes the stock headers too (20 §5, 60 §8) |
-| D15, D32, D56 | retired: one boot slice per disk; 1.0 boxes reinstall |
-| D17, D37, D38, D39, D40 | replaced: floppy pair supported on both lines, store-based, profile by measurement (50 §3) |
-| D21, D25, D49, D52, D53 | replaced by the proof order of 80 and D-3 §3 |
-| D22, D26, D28 | replaced by D-3 §4: our line rebuilds the 040/060 base without ufs/s5 (70, 30 §6) |
-| D23 | re-scoped: checksum contract version 2 (OQ-40.5) |
-| D29, D33 | replaced: safe mode chosen in the loader and passed in the loader record (10 §6–§7) |
-| D31, D34, D35, D36, D62 | replaced: host `kbootset --image` composes every medium; the installer runs `kbootset -R` (40 §3, 50 §1) |
-| D41, D42, D44 | replaced: the CD boots, with boot2 as an AmigaDOS program (D-3 §10; 10 §4.4, 50 §4) |
-| D47 | replaced: netinstall medium (50 §5) |
-| D50 | kept as stage-1 prerequisite M-EMU1 |
-| D58 | settled: `kinfo` major 53 proposed (20 §6) |
+| The adopted MIT core as a named patch queue; the load points (`dmainit` arms, the root class inside `rth1_mountroot`, the boot class after root); one kabi per family; the allowlisted symbol table and DDI v1; `.moddata` v2; syscalls 64–69; kernel space in a hidden `#ext kpkg 1` catalog block; `bootset=auto`; modules pinned by default; module recipes in the driver repos; one previous kabi kept served; `kinfo` in every kernel; FPE never a module; no blind CD probing; tape a package source only, and its proof order; bench or metal per measurement; streaming installs from media; the mountroot hook ours; kernel-space atomicity | kept (cited where used) |
+| A slot inside the kernel image, its own slot format and a measured slot capacity | replaced: our loader fills an arena; capacity rule kept for the arena (10 §5.3) |
+| Resident only for the root class, copied for everything else | kept in substance: root class resident (arena), the rest copied |
+| Two controllers in a fixed order, four-card naming later | replaced: four controllers in 1.1, one compacted rank order on both lines (decision 11; 30 §5) |
+| Kernels in `/stand/k0x0` with `kbootset` replacing `updbootpart`; a generation marked good late, `updbootpart` retired; `kbootset` finding the boot disk from RTH1 | kept, adapted to the loader record (40 §2.2, §5) |
+| Kernel space through the private package gate; signing-key custody and the ABI kit's stock headers; the net module class and timing | settled by decisions 7 and 13 (60): kernel space in the public catalog with SHA-256, signing deferred past 1.1; the ABI kit publishes the stock headers too (20 §5, 60 §8) |
+| A second boot slice on new installs; legacy 2 MiB boot slices | retired: one boot slice per disk; 1.0 boxes reinstall |
+| Floppy delivery measured first, with its budget, ladder, a bench-only 060 pair and a module floppy | replaced: floppy pair supported on both lines, store-based, profile by measurement (50 §3) |
+| The earlier stage order, the k46 ship condition, one kernel line, the root device as a module, the 030 line static | replaced by the proof order of 80 and decision 3 |
+| Root filesystems static until the collaborator's base separates them; the static floor; one CPU line per root filesystem | replaced by decision 4: our line rebuilds the 040/060 base without ufs/s5 (70, 30 §6) |
+| An amended checksum contract for composed generations | re-scoped: checksum contract version 2 (OQ-40.5) |
+| Safe mode by the mouse button at the hook, the flag an RTO1 bit | replaced: safe mode chosen in the loader and passed in the loader record (10 §6–§7) |
+| The rescue core in 1.1, media sizing, what the installer writes, who owns the composer, one install boot image per line | replaced: host `kbootset --image` composes every medium; the installer runs `kbootset -R` (40 §3, 50 §1) |
+| No bootable CD in 1.1; kernel space on the CD as packages; extra CD routes | replaced: the CD boots, with boot2 as an AmigaDOS program (decision 10; 10 §4.4, 50 §4) |
+| Network: HTTP from the package repository | replaced: netinstall medium (50 §5) |
+| The bench shape (the emulated board advertises its boot ROM) | kept as stage-1 prerequisite M-EMU1 |
+| `kinfo`'s major assigned from the registry | settled: `kinfo` major 53 proposed (20 §6) |

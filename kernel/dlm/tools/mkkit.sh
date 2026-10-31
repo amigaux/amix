@@ -1,6 +1,6 @@
 #!/bin/sh
 # mkkit.sh -- build the ABI kit for one kernel line (docs/spec/20-module-
-# format-and-abi.md section 5; plan item S3-10): everything a module build
+# format-and-abi.md section 5): everything a module build
 # needs, with no Amix tree beside it.
 #
 # usage: mkkit.sh LINE OUTDIR        LINE: k30 or k46
@@ -39,7 +39,7 @@
 # own mirror sysroot does.
 #
 # The stock headers are Commodore's: they go into the kit, which is
-# published under the distribution permission of 2026-09-23 (D-3 section 7),
+# published under the distribution permission of 2026-09-23,
 # and never into this repository (build/ is not tracked).
 #
 # Environment: GCA (gcc-cross-amix's build directory) and, for k46, PORT
@@ -121,8 +121,7 @@ cp "$R/abi/registry/"* "$OUT/registry/"
 cp -R "$R/abi/sample/hello" "$OUT/sample/"
 sed -i 's|^KIT    ?= .*|KIT    ?= ../..|' "$OUT/sample/hello/Makefile"
 
-# the guides by name: docs/abi/ also holds the DDI review draft, which
-# leaves this repository only on the owner's word
+# the guides by name, not the whole of docs/abi/
 cp "$R/docs/abi/ddi.md" "$OUT/docs/"
 cp "$R/docs/abi/writing-a-module.md" "$OUT/docs/guide.md"
 for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do

@@ -1,9 +1,9 @@
 #!/bin/sh
 # s3-modpkg.sh -- a stand-in module package (docs/contracts/C3-5-module-
-# member.md section 1), until amix-packages makes the real ones (S3-22):
+# member.md section 1), until amix-packages makes the real ones:
 # the module object as the package installs it and the apkg record, so
 # kbootset build composes it into the next generation (gate 1).  The rows
-# copy OUTDIR's tree onto the box's root (tests/bench/README.md, S3-B5).
+# copy OUTDIR's tree onto the box's root (tests/bench/README.md, row B5).
 #
 # usage: s3-modpkg.sh MODULE LINE OUTDIR [modreg-line ...]
 #   MODULE   the module object built with the ABI kit (build/<line>/mod.d/<name>)

@@ -1,5 +1,5 @@
 /*
- * monsw.c -- S3-43: a stand-in for monsw (S3-27), a character driver on
+ * monsw.c -- a bench stand-in for monsw (kernel/modules), a character driver on
  * major 52 (registered to monsw), demand class and pinned as C3-6 has it,
  * so the dependency row (monsw before z3660rtg) runs before the real
  * module exists.  Its device reads as empty.  The rows install it on a
@@ -24,7 +24,7 @@ static int
 monsw_load(params)
 	char *params;
 {
-	printf("monsw: the S3-43 stand-in, loaded\n");
+	printf("monsw: the bench stand-in, loaded\n");
 	return 0;
 }
 
@@ -37,4 +37,4 @@ monsw_unload()
 struct mod_drv_data monsw_drvdata[] = {
 	{ { 0 }, 0, 0, { monsw_open, monsw_close, monsw_read, monsw_write, monsw_ioctl }, 52, 1 }
 };
-MOD_DRV_WRAPPER(monsw, monsw_load, monsw_unload, 0, "S3-43 stand-in for monsw");
+MOD_DRV_WRAPPER(monsw, monsw_load, monsw_unload, 0, "bench stand-in for monsw");

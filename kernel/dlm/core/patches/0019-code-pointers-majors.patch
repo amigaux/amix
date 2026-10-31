@@ -1,16 +1,15 @@
 Subject: code pointers in kernel text or the image; majors from the registry
 
-From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
-section 1.2, 1.4).  Plan patch 13: a switch entry or a qinit routine was
-accepted anywhere in [stext, end), which includes kernel data and the
-arena where other modules live.  dlm_okcode accepts 0, kernel text
-[stext, etext) or the module's own image; a qinit's module_info and
-module_stat must be in the image.  The registry now decides every
-character major: dlm_creg, dlm_sreg and the driver linkage's drv_cmajor
-refuse (ECONFIG) a major not registered to the module, and a row held by
-another is ECONFIG, as C3-1 section 4 says (was EEXIST).  The harness's
-registry names its drivers (pdm moves to its own major, 67); three
-new checks.
+From the audit of the stage-3 core (2026-10-26).  30 section 2 patch 13:
+a switch entry or a qinit routine was accepted anywhere in [stext, end),
+which includes kernel data and the arena where other modules live.
+dlm_okcode accepts 0, kernel text [stext, etext) or the module's own
+image; a qinit's module_info and module_stat must be in the image.  The
+registry now decides every character major: dlm_creg, dlm_sreg and the
+driver linkage's drv_cmajor refuse (ECONFIG) a major not registered to
+the module, and a row held by another is ECONFIG, as C3-1 section 4 says
+(was EEXIST).  The harness's registry names its drivers (pdm moves to
+its own major, 67); three new checks.
 
 --- a/dlm.h
 +++ b/dlm.h

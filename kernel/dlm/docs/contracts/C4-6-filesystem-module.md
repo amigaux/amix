@@ -1,27 +1,26 @@
 # C4-6 — the filesystem module form, version 4
 
-- **Status:** agreed 2026-10-26 (orchestrator), with this draft's three
+- **Status:** agreed 2026-10-26, with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
-  and cdfs boot class on disk (§5). Implemented by core patch 0040
-  (S4-41). Version 2 (2026-10-26): `vfs_register` is minor 2 (§3),
-  since kabi 1.1 closed with the minted kernels. Version 3 (2026-10-27,
-  the orchestrator's answers to the S4-40 plan): one rule for every
+  and cdfs boot class on disk (§5). Implemented by core patch 0040.
+  Version 2 (2026-10-26): `vfs_register` is minor 2 (§3),
+  since kabi 1.1 closed with the minted kernels. Version 3 (2026-10-27): one rule for every
   filesystem module, boot class with the generation's `rootfs` promoted
   to a root record (§1, §5); the miniroot is s5. Version 4 (2026-10-27,
-  from installng's rd1g): the miniroot is s5 on k30 and ufs on k46 (§1).
+  from an amix-installng RAM-disk image): the miniroot is s5 on k30 and ufs on k46 (§1).
   Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §2 patch 9 (`vfs_register`
   and a grown `vfssw`), §6 (filesystems as modules), §3 (`rootfstype`);
-  `20-module-format-and-abi.md` §4.1 (the core tier); D-3 §4; measurements
+  `20-module-format-and-abi.md` §4.1 (the core tier); measurements
   U12, M-FS1, M-FL1
 - **Written by:**
-  - kernel/dlm: `vfs_register` and the grown table in the core (S4-41),
-    the carve tool (S4-40);
+  - kernel/dlm: `vfs_register` and the grown table in the core,
+    the carve tool;
   - amix-040-060-port and amix-kerntools: the kernel's side of the table
-    (§2) and the kernels without ufs/s5 (S4-43);
-  - amix-cdfs: cdfs as a module (S4-42).
+    (§2) and the kernels without ufs/s5;
+  - amix-cdfs: cdfs as a module.
 - **Read by:** the ufs, s5 and cdfs modules; every stock walker of `vfssw`
 
 ## 1. A filesystem module
@@ -46,12 +45,12 @@ and the arena holds one filesystem at most.
 **`_load`** calls `vfs_register` once with its `vfssw` row (§3) and
 returns its result. s5's `_load` first calls `inoinit`, which the base's
 `init_tbl` called before the base lost s5 (30 §6). It must be safe in
-both contexts, the root pass and the first `sysinit` entry (S4-71).
+both contexts, the root pass and the first `sysinit` entry.
 
 **The roots of 1.1:** an installed disk roots on ufs. The media root on
 their RAM disk (C4-3), whose image is **s5 on k30** (the stock miniroot's
 type) **and ufs on k46**: s5 is broken under the 4 KiB-page line (on the
-k46 s5 RAM-disk root `ls -l` and `/etc/sioc` die with a bus error, rd1g),
+k46 s5 RAM-disk root `ls -l` and `/etc/sioc` die with a bus error),
 which is why every k46 miniroot has been ufs. So the k46 media's
 generation has `--rootfs ufs` and promotes ufs; on k30, s5 is promoted
 and ufs is boot class to make the target disk. cdfs is boot class on
@@ -62,7 +61,7 @@ both, to mount the disc.
 The stock `vfssw` has no free row: 12 rows on the 040/060 line, 13 on the
 030 line (30 §6). The kernel build renames the stock table to
 `__amix_vfssw` and its count to `__amix_nfstype`, as it renames `execsw`
-(the brief's step 7 rule: symbol weakening at the splice). The core
+(symbol weakening at the splice). The core
 defines:
 - `vfssw[NVFSSW]`, with NVFSSW the stock count + 4, in `.data`;
 - `nfstype`, a live count.
@@ -70,7 +69,7 @@ defines:
 At `dmainit` the core copies the stock rows and sets `nfstype` to their
 count. Every stock reference to `vfssw` and `nfstype` resolves to the
 core's, so every walker sees the grown table. Each walker reads
-`nfstype` live (U12, measured in S4-71); one that held a copy would miss
+`nfstype` live (U12); one that held a copy would miss
 a module's row.
 
 The 040/060 line's cdfs, which takes the RFS row by a relocation retarget
@@ -108,12 +107,12 @@ registrations are (C3-6 v3).
 
 **Context.** In `marc_root`, `init` runs at level 7 with the clock
 stopped, as the stock `init_tbl` and `vfsinit` ran it. The stock ufs and
-s5 init routines are therefore run in the context they always had; S4-71
-confirms that they return there on both lines.
+s5 init routines are therefore run in the context they always had; a
+root-class probe module confirms that they return there on both lines.
 
 ## 4. The core tier
 
-A stock filesystem object, carved from the base (S4-40, M-FS1), imports
+A stock filesystem object, carved from the base (M-FS1), imports
 more than the DDI: about 112 names for ufs and 108 for s5 (20 §4.1),
 among them `bdevsw`, `vfssw` and `nfstype`. These are the core tier,
 `abi/<line>/core.list`, written by the carve:
@@ -136,7 +135,7 @@ before `mountall`, in process context; cdfs's 69 KB image and the
 boot-class one of ufs and s5 are well inside U2's process-context total.
 The root filesystem cannot wait for `sysinit`, so it is promoted (§1). A
 load-by-type hook in the mount path would be a change to stock code that
-this avoids. The 1.1 CD medium roots on its RAM disk (D-3 §10, option B),
+this avoids. The 1.1 CD medium roots on its RAM disk,
 so cdfs is boot class there too; a medium that roots on the CD itself
 would promote it by the same rule.
 

@@ -1,6 +1,6 @@
 Subject: marc_root: link the arena's root modules before the root mounts
 
-30 section 3, section 2 patch 16's root half (S4-04), contract C4-4
+30 section 3, section 2 patch 16's root half, contract C4-4
 section 4.  dlm_marc_root(), the kernel's hook in rth1_mountroot before
 rth1_apply, walks the arena directory in order in no-sleep mode (level 7,
 the clock stopped, U1).  Each entry's CRC-32 is taken again: bytes that
@@ -77,7 +77,7 @@ each case.
   * Each outcome is one console line; what loaded is in kinfo's module list.
   * In safe mode nothing loads (70-static-floor.md section 4).
   *
-+ * marc_root (S4-04, contract C4-4 section 4) is here too: the root-class
++ * marc_root (contract C4-4 section 4) is here too: the root-class
 + * modules boot2 placed in the arena, linked before the root is mounted.
 + *
   * K&R C.
@@ -210,21 +210,21 @@ each case.
  armod('ar1b')
  armod('ar2', deps=('ar9',))
  mod('ardm')                         # demand class, offered from the arena
-+# marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
++# marc_root: rp1 links; rp2's bytes are damaged; rp3 is not in
 +# the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
 +# member and rp7 is not
 +for p in ('rp1', 'rp2', 'rp3', 'rp5', 'rp6', 'rp7'):
 +    armod(p)
  
  
- # sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
+ # sd_register (C4-1): sr1 z3660, sr2 zorro (registers another
 --- a/test/state.c
 +++ b/test/state.c
 @@ -600,6 +600,99 @@
  	    "arena: a module that is not root class -> ECONFIG");
  }
  
-+/* ---- marc_root (30 section 3, section 2 patch 16; C4-4, S4-04) ---- */
++/* ---- marc_root (30 section 3, section 2 patch 16; C4-4) ---- */
 +extern long host_km_sleep;
 +
 +int
@@ -317,7 +317,7 @@ each case.
 +	dlm_manlen = manlen;
 +}
 +
- /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ /* ---- sd_register (C4-1, 30 section 2 patch 8) ---- */
  static int sr_e[8], sr_n;
  
 @@ -1681,6 +1774,7 @@

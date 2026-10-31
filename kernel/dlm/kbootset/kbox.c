@@ -219,7 +219,7 @@ rdb_parts(ax_u32 x, struct part *p)
  * (~0: any RDB disk there); when two do and byname is set, the boot
  * device's name breaks the tie, z3660_scsi.device being the Z3660's
  * window and any other name a controller of the Kickstart's.  -1 when no
- * card, or more than one, answers (S5-15).
+ * card, or more than one, answers (C4-1 §5.1).
  */
 static int
 card_of(const struct kb_kinfo *ki, ax_u32 id, ax_u32 base, ax_u32 unit, ax_u32 start, int byname)

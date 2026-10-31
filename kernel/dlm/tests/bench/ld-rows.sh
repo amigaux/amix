@@ -1,9 +1,9 @@
 #!/bin/sh
 # ld-rows.sh -- vehicles and expected outcomes for the loader's write rows
-# (M-LD4, docs/plan/stage-1.md S1-22) and menu rows (M-LD5, S1-21).
+# (M-LD4) and menu rows (M-LD5).
 #
 # Each vehicle is a copy of a proven loader vehicle (a disk image whose
-# UNI\0 boot slice already holds a store, rows N19-N26) with that store
+# UNI\0 boot slice already holds a store, the loader rows) with that store
 # rewritten in place by mkstore: same slice, same kernel, different
 # generations and control state.  For the write rows, axsim then plays the
 # loader's own selection and write rules over a copy for the row's number

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # m-mod1.py -- M-MOD1: the size of every root-class module per line, from
 # today's static driver and filesystem objects, and the arena capacity that
-# follows: 2 x the line's root set, rounded up to 64 KiB (10 §5.3, P-28
-# D57).  A module's size is its allocated sections (PROGBITS and NOBITS)
+# follows: 2 x the line's root set, rounded up to 64 KiB (10 §5.3).
+# A module's size is its allocated sections (PROGBITS and NOBITS)
 # plus its COMMON symbols, each at its alignment.  Host-side, read-only.
 # See docs/measurements/2026-10-26-m-reg1-m-abi1.md.
 #

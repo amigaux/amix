@@ -1,6 +1,6 @@
 Subject: the halt pass: dlm_halt runs each module's halt entry, newest first
 
-30 section 2 patch 11 (S4-07).  The wrapper's halt entry was filled by
+30 section 2 patch 11.  The wrapper's halt entry was filled by
 the macros and never called.  dlm_halt() runs each settled module's halt
 entry, newest first, once, so a board that can interrupt or write memory
 is stopped before the kernel halts or reboots (M-HALT1).  The kernel
@@ -17,7 +17,7 @@ nothing.
  }
  
 +/*
-+ * The halt pass (30 section 2 patch 11, S4-07).  Before the kernel halts
++ * The halt pass (30 section 2 patch 11).  Before the kernel halts
 + * or reboots, each settled module's halt entry runs, newest first, so a
 + * board that can interrupt or write memory is stopped (M-HALT1).  The
 + * kernel calls it from mdboot, before haltsys or rtnfirm, for uadmin's
@@ -64,7 +64,7 @@ nothing.
  
  /* services the loader needs from its environment */
  extern char *dlm_zalloc();
-+extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
++extern int dlm_halt();		/* the halt pass, from mdboot */
  extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
  #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
  extern void dlm_free();
@@ -98,7 +98,7 @@ nothing.
      print(p, os.path.join(out, p + '.s'), '-1' if v1 else '')
  
  
-+# the halt pass (S4-07): hl1 and hl2 have halt entries, hl3's points at
++# the halt pass: hl1 and hl2 have halt entries, hl3's points at
 +# kernel data (lbolt), hl4 has none
 +for p in ('hl1', 'hl2'):
 +    mod(p, halt=p + '_halt', text='\t.globl\t{p}_halt\n{p}_halt:\n\trts\n'.format(p=p))
@@ -115,7 +115,7 @@ nothing.
  	    "no-sleep: the unload returns every byte");
  }
  
-+/* ---- the halt pass (30 section 2 patch 11, S4-07) ---- */
++/* ---- the halt pass (30 section 2 patch 11) ---- */
 +extern int dlm_halted;
 +static char halt_order[16];
 +

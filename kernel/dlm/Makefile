@@ -5,10 +5,10 @@
 #   make toolchain-check  the pinned cross toolchain is present (toolchain.pin)
 #   make cross            cross-compile the shared loader code; 68060 scan gate
 #   make boot1            assemble boot1 and apply the 1 KB size gate
-#   make box              kbootset and modadmin for the box: GCC 14, static (D-3 §9)
+#   make box              kbootset and modadmin for the box: GCC 14, static
 #   make all              all of the above
-#   make kit              the ABI kit for both lines into build/kit/ (S3-10),
-#                         its digests into build/kit.digests (P-38 S2.1)
+#   make kit              the ABI kit for both lines into build/kit/,
+#                         its digests into build/kit.digests (the release lock)
 #   make kit-test         the kit: build, the sample, the checker's refusals
 #
 # The cross toolchain is gcc-cross-amix; source its build/env.sh first, or
@@ -227,13 +227,13 @@ $(B)/amix-cdboot: $(B)/cdboot.r.o $(B)/b2link $(B)/hunkcheck
 
 cdboot: toolchain-check $(B)/amix-cdboot
 
-# kbootset for the box (docs/plan/stage-2.md S2-07): GCC 14, statically
+# kbootset for the box: GCC 14, statically
 # linked by hand, since the driver's specs always link dynamically; the
 # objects and archives are the driver's own, plus values-Xa.o for
 # _lib_version.  The GCC 14 runtime's snprintf (libamixc99) saves and
 # restores FPU registers, so kbootset executes FPU instructions; on an
-# FPU-less 68LC040/68LC060 the kernel's FPU emulation (in the floor, D-3
-# §4) takes them.  The sources also compile with gcc-cross-amix (GCC
+# FPU-less 68LC040/68LC060 the kernel's FPU emulation (in the floor, 70
+# §2) takes them.  The sources also compile with gcc-cross-amix (GCC
 # 2.7.2.3) as a C89 check; that build is not shipped.
 G14CC   := $(G14)/prefix/bin/m68k-elf-gcc
 G14LD   := $(G14)/prefix/bin/m68k-elf-ld
@@ -280,7 +280,7 @@ $(B)/box/c89-check: $(KBSRC) kbootset/*.h $(COMMON)/*.h
 		-c -o $(B)/box/c89/$$(basename $$f .c).o $$f || exit 1; done
 	touch $@
 
-# modadmin for the box (S3-11): the core's own modadmin.c (core/series
+# modadmin for the box: the core's own modadmin.c (core/series
 # applied), its six system calls through the stock syscall() (modtools/)
 $(B)/box/core/modadmin.c: core/upstream/modadmin.c core/series core/patches/*.patch
 	sh tools/stagecore.sh $(B)/box/core

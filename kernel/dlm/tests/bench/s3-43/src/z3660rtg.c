@@ -1,5 +1,5 @@
 /*
- * z3660rtg.c -- S3-43: a stand-in for z3660rtg (S3-26), a character
+ * z3660rtg.c -- a bench stand-in for z3660rtg (amix-z3660rtg), a character
  * driver on major 49 (registered to z3660rtg), demand class, depending on
  * monsw and allowed to unload as C3-6 has it: its first open loads monsw
  * first.  Its device reads as empty.  The rows install it on a test box
@@ -24,18 +24,18 @@ static int
 zrtg_load(params)
 	char *params;
 {
-	printf("z3660rtg: the S3-43 stand-in, loaded\n");
+	printf("z3660rtg: the bench stand-in, loaded\n");
 	return 0;
 }
 
 static int
 zrtg_unload()
 {
-	printf("z3660rtg: the S3-43 stand-in, unloaded\n");
+	printf("z3660rtg: the bench stand-in, unloaded\n");
 	return 0;
 }
 
 struct mod_drv_data z3660rtg_drvdata[] = {
 	{ { 0 }, 0, 0, { zrtg_open, zrtg_close, zrtg_read, zrtg_write, zrtg_ioctl }, 49, 1 }
 };
-MOD_DRV_WRAPPER(z3660rtg, zrtg_load, zrtg_unload, 0, "S3-43 stand-in for z3660rtg");
+MOD_DRV_WRAPPER(z3660rtg, zrtg_load, zrtg_unload, 0, "bench stand-in for z3660rtg");

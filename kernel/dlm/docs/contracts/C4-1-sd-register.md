@@ -1,31 +1,32 @@
 # C4-1 — `sd_register` and the four-card contract, version 7
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
-  (2026-10-26, from the generic 060 target, S4-57): an A3000 with a
+- **Status:** agreed 2026-10-26, version 1; version 2
+  (2026-10-26, from the generic 060 target): an A3000 with a
   third-party 68060 runs the 040/060 line with an A3000 WD, so the WD
   behind the Zorro boards is an accepted rename on both lines (§4.3, §6);
-  version 3 (2026-10-27, from amix-cdfs's module plan): the level at which
+  version 3 (2026-10-27, for the amix-cdfs module): the level at which
   a controller calls a command's completion (§3.2); version 4 (2026-10-27,
-  S5-08, from M-S474b; agreed 2026-10-27 by the port and amix-kerntools):
+  from a 68030-mode boot on metal; agreed 2026-10-27 with the 040/060
+  port and amix-kerntools):
   the Z3660 is one controller in either mode (§5.1); version 5
-  (2026-10-27, S5-44, from Bench J4 row M-G3): the device nodes an
+  (2026-10-27, from a bench run): the device nodes an
   installed root holds, and who makes them (§2.4); version 6
-  (2026-10-27, S5-46, from the port's S5-15 work): a motherboard
+  (2026-10-27, from the 040/060 port's work): a motherboard
   controller's record names it by its motherboard id (§5.2); version 7
-  (2026-10-27, from installng's S5-44 R1): what `pkgchk core` says
+  (2026-10-27, from amix-installng): what `pkgchk core` says
   about the nodes is limited to `/dev` (§2.4).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
-  compacted order, registration, the card-number gate), D-3 §4 and §11;
+  compacted order, registration, the card-number gate);
   core patch 8 (30 §2)
 - **Written by:**
-  - kernel/dlm: `sd_register` in the core (S4-03), the registry's rank
+  - kernel/dlm: `sd_register` in the core, the registry's rank
     classes, `kbootset`'s readers;
   - amix-040-060-port: the k46 sd and dd in-place patch and the RTH1
-    kernel half (S4-21);
+    kernel half;
   - amix-kerntools: `templates/sd.c.in`, the k30 dd and ct sources and
-    `kinfo030.c` (S4-21).
+    `kinfo030.c`.
 - **Read by:** the root-class disk controller modules (amix-z3660scsi,
   amix-a4091 with its A4000T 53C710 target, amix-gayle-ide), `kinfo`
   (C2-1's card table), amix-installng and every tool that names a disk.
@@ -91,9 +92,9 @@ that names, parses or builds a disk name:
 That includes `updbootpart`, the installer, the first-boot dialog, the
 `/etc/devnm` readers, `kbootset`, and the RTH1 kernel half's `bo_name`
 rewrite, which today writes one character. The sites are enumerated per
-repository (the port station's map, 2026-10-26: amix-040-060-port,
-amix-kerntools, amix-installng, amix-a4091, amix-dlm), and each is fixed
-in its own repository in the same wave as S4-21.
+repository (2026-10-26: amix-040-060-port, amix-kerntools,
+amix-installng, amix-a4091, amix-dlm), and each is fixed in its own
+repository together with the four-card kernels.
 
 The stock dd prints `c%d` of 8 × card + unit in **decimal** in its console
 messages. That is a stock wart, not a name any tool reads; the stock
@@ -111,7 +112,7 @@ Everything indexed by the sd card:
 - the RTH1 kernel half: four cards, the root minor by §2.1's formula,
   and a `bo_name` with a one- or two-digit card;
 - every driver array indexed by `cp->card` (the A4091 driver has seven,
-  sized 2: S4-31 sizes them 4 or bounds them).
+  sized 2: the four-card change sizes them 4 or bounds them).
 
 `sdcom.card` stays the card number, 0–3, never a minor-shaped code: sd
 and the drivers index tables with it.
@@ -124,7 +125,7 @@ four cards); `scsi.o`.
 
 On k30 they come from source (`sd.c.in`, the stock `dd.c` and `ct.c` in
 the relink kit, `kinfo030.c`). On k46 sd, dd and ct are patched in place
-by the port, now (Q4-3), as a merge request: relocations retargeted to
+by the port, as a merge request: relocations retargeted to
 four-row tables, the bounds raised, the inline decodes replaced by calls
 of the same length. The static families stay byte-identical.
 
@@ -167,8 +168,8 @@ A root that holds only two-card kernels keeps core's stock set.
   reaches a four-card kernel only through a kernel-space transaction,
   after which apkg runs `build` and `commit` (C2-4 §3). So the set is
   there before the first boot of that kernel, and installing the
-  kbootset that carries this step (`kbootset` -22) fixes a root like
-  J4's on its own.
+  kbootset that carries this step (`kbootset` -22) fixes a root
+  without them on its own.
 - **The installer** calls `kbootset nodes` on the booted target in
   firstboot. It runs where firstboot's step 4d now runs its own loop, and
   it replaces that loop. Until the installed set carries `kbootset` -22,
@@ -240,7 +241,7 @@ no DDI function). The completion may then `wakeup`, as a filesystem's
 
 ## 4. The order
 
-One rule on both lines (D-3 §11), by rank class, then by base within a
+One rule on both lines, by rank class, then by base within a
 class, compacted over the controllers present:
 
 | Class | `rank` | Controllers |
@@ -280,8 +281,8 @@ the controllers the module kernels link in) is ranked by product:
 | A4091 (0202:54), A4092 (c0de:01), static | 2 `zorro` |
 | Gayle IDE (the glue's row), static | 4 `ide`, sorted by its task-file base 0xDD2020 |
 
-The IDE glue's sort key (0xfffffff0) gives way to the class: from S4-21
-no address is used as a rank.
+The IDE glue's sort key (0xfffffff0) gives way to the class: from the
+four-card kernels on, no address is used as a rank.
 
 ### 4.3 Against 1.0
 
@@ -298,8 +299,8 @@ and the class order agree: Z3660 alone, and Z3660 + A4091/A4092. Where
 the Z3660 and the Zorro boards. On the 040/060 line that is an A3000
 with a third-party 68060 and a Zorro SCSI board: 1.0 made its WD card 0,
 and the class order makes the board card 0 and the WD card 1, so the
-WD's disks are renamed (`c6d0` becomes `ced0`). D-3 §11 accepted this
-rename on both lines; it is expectation 2 of §6.
+WD's disks are renamed (`c6d0` becomes `ced0`). This rename is
+accepted on both lines; it is expectation 2 of §6.
 
 ## 5. The board set and the card table
 
@@ -317,8 +318,8 @@ The Z3660 is found two ways. In its 68060 mode, and under amiberry, its
 extended ROM AutoConfigs it as `zorro:144b:01`. In its 68030 mode it is
 not an AutoConfig board, and z3660scsi finds it through the registry
 probe `mobo:z3660-window` at the fixed window `0x10000000` (20 §6). One
-box, one disk and one Z3660 are booted in both modes (the A4000T,
-M-S474a and M-S474b). M-S474b's card was `zorro:0000:00` at
+box, one disk and one Z3660 are booted in both modes (the A4000T).
+In the 68030 mode the card was `zorro:0000:00` at
 `0x10000000`, so a root record composed as `id=144b0100` matched no card,
 and RTH1 fell back to the built-in `c6d0s1`: the right disk by chance,
 the wrong one beside a second sd card. So:
@@ -347,10 +348,10 @@ the wrong one beside a second sd card. So:
    `zorro:144b:01`, which z3660scsi's `match=` lists, so gate 3 and the
    safe set (C4-4 §2) see one controller in both modes.
 
-Implemented by S5-15: item 1 in `kinfo` (amix-kerntools `kinfo030.c`,
+Implemented: item 1 in `kinfo` (amix-kerntools `kinfo030.c`,
 the port's k46 `kinfo`), item 3 in the RTH1 kernel half (the port, both
 lines' sources), item 2 and item 4 in `kbootset` (amix-dlm). The metal
-row is S5-16: the A4000T in 030 mode with a second sd card, rooted by the
+test is the A4000T in 030 mode with a second sd card, rooted by the
 record.
 
 ### 5.2 A motherboard controller's record names it (version 6)
@@ -399,14 +400,14 @@ So, from version 6:
    a stray `mobo` flag, which boot2 would refuse. Swap records are left
    as given: the swap disk's controller is not among the facts.
 
-Implemented by S5-46: item 2 and the sidecar key in the RTH1 kernel half
+Implemented: item 2 and the sidecar key in the RTH1 kernel half
 and the sidecar writers (the port: `src/rth1.c` and `kabi-sidecar.py`;
 amix-kerntools: `kabi-sidecar030.py`, the k30 cut taking the port's
 `rth1.c`); item 4 in `kbootset` (amix-dlm, -22). Host cases for both.
 
 ## 6. The card-number gate
 
-M-SD1 (S4-72) judges every board set of record (30 §5.3) against one of
+M-SD1 judges every board set of record (30 §5.3) against one of
 three expectations:
 1. **order unchanged from 1.0:** every disk has its 1.0 name;
 2. **accepted changes** (on k30, A3000 onboard + Zorro SCSI, and Gayle IDE
