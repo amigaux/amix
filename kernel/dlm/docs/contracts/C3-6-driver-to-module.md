@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 8
+# C3-6 — what a driver changes to become a module, version 9
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -21,7 +21,9 @@
   the one DHCP client and `ifup` rely on instead of per-driver code
   (§1.8); version 8 (2026-10-31): the `link.d` major is
   optional for a registry module, and a node's class is its module's
-  (§1.8). The
+  (§1.8); version 9 (2026-10-31): the memory rule covers every entry
+  point that runs in a user's call, not only `_load`, and at first use
+  a module prefers `KM_NOSLEEP` with a clean `ENOMEM` (§1.1). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -55,7 +57,8 @@ packages.
   - kmem: at most 256 KiB per request, `KM_SLEEP` only up to that, and a
     `KM_NOSLEEP` request checked. A running box gives no more than 256 KiB
     in one piece on k46, and a `KM_SLEEP` request above what it can give
-    never returns (30 §8, U4). A larger buffer is built from pieces;
+    never returns (30 §8, U4). A larger buffer is built from pieces. The
+    rule is the module's in every entry point, below;
   - called **before** the core installs the linkages, so the `cdevsw`
     row does not exist yet: nothing in `_load` may rely on it;
   - `params` is the manifest's `param <module>.<name>=<value>` records as
@@ -68,6 +71,22 @@ packages.
     kept, C3-1 §3), or another errno. On any nonzero return it leaves
     nothing behind: no timeout armed, no handler attached, no hook set,
     no mapping kept, the board's interrupt off.
+- **Memory in every entry point** (version 9). The kmem rule above holds
+  in every routine the kernel calls in a user's process, not only
+  `_load`: a device's open, close, read, write and ioctl; a STREAMS
+  open; a filesystem's `vfs_mount` and the other vfs and vnode
+  operations. A demand-class module's `_load` and its first entry point
+  run at first use, after multi-user, where the core itself takes no
+  memory it cannot fail on (core patch 0049). In those paths a module
+  prefers `KM_NOSLEEP` and fails the call cleanly with `ENOMEM`, leaving
+  nothing half-built, over a `KM_SLEEP` that may wait for good when the
+  kernel map is short. A buffer whose size the caller decides (a
+  directory read, a transfer) is bounded, not grown without limit. A
+  boot- or root-class module's `_load`, before multi-user, may use
+  `KM_SLEEP` up to 256 KiB as before. Whether a `KM_SLEEP` request of a
+  page or less (the buddy pools) can wait for good when the pools
+  cannot grow is not measured; until it is, the same preference holds
+  for small requests at first use.
 - **`_unload()`**: every module has one. It undoes all of `_load`, and
   every hook, handler, timeout and mapping set since, in reverse order,
   and returns 0 or `EBUSY`. The core calls it in two cases:
