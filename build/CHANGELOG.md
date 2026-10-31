@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — KM_ROOT (a7e3dd8); the catalogs step (c8f419a)
+
+amix_kmodpkg reads a recipe's object, VERSION, licences, depend= modules and KM_FILES at $KM_ROOT/<path>: the siblings
+by default (amix-packages), the checkout for an in-amix recipe. A refused licence or depend= input now stops the roll
+(it ran in a subshell and carried on). make dist's catalogs step (P-38 S5.1) calls pkgtools' gen-catalog.py as it is
+over out/kspace/pkgs and out/userland/pkgs, with the staging root's confs and each space's own, into
+out/{kspace,userland}/{catalog,catalog.md5}; the catalogs carry no time stamp, two runs are identical, and the lock's
+catalog line is `catalog <space> md5 <md5> sha256 <sha256>`. test-kmroot 6/6, test-dist 30/30, test-lock 13/13.
+
 ## 2026-10-31 — a source from AMIX_DISTFILES (b880adb); kfsmod.sh and kmodpkg.sh take the toolchain from layout.sh (281127d)
 
 amix_fetch reads $AMIX_DISTFILES/<the URL's last component> first and copies it in when it holds the pinned bytes;
