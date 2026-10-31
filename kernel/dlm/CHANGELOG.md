@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kernel/dlm/pkg: the port from AMIX_PORT_REPO (0e10fb2)
+
+The recipes drop their sibling override and use dlm-src.sh's AMIX_CROSS_ENV and AMIX_PORT_REPO (38feabe); without
+AMIX_PORT_REPO, a repository of their own is filled from port.pin's URL. dlmkit's pin carries its port commit's full
+hash, which git needs to fetch it. The same datastreams as 3d867f9.
+
 ## 2026-10-31 — P-38 S3.3: dlm's kernel-space recipes move into kernel/dlm/pkg (3d867f9)
 
 loader-amix, kbootset, modtools and dlmkit (dlmkit30/46) move in from amix-packages' recipes (bea8828). They are rolled
