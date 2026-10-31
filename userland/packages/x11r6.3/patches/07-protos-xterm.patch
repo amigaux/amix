@@ -1,0 +1,372 @@
+Ours.  Declarations gcc 14 needs in xterm:
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  programs/xterm/Tekproc.c: set_tek_visibility(Boolean on -> int)
+  programs/xterm/button.c: ScrnRefresh(Boolean force -> int)
+  programs/xterm/charproc.c: ScrnRefresh(Boolean force -> int); VTReset(Boolean full -> int); unparseputc(char c -> int); set_vt_visibility(Boolean on -> int)
+  programs/xterm/input.c: unparseputc(char c -> int)
+  programs/xterm/menu.c: set_tek_visibility(Boolean on -> int); VTReset(Boolean full -> int); set_vt_visibility(Boolean on -> int)
+  programs/xterm/scrollbar.c: ScrnRefresh(Boolean force -> int)
+  programs/xterm/util.c: ScrnRefresh(Boolean force -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): Error 
+
+--- a/programs/xterm/button.c
++++ b/programs/xterm/button.c
+@@ -40,6 +40,19 @@
+ #include "error.h"
+ #include "menu.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int v_write (int f, char *d, int len);
++int HideCursor (void);
++int TrackText (register int frow, register int fcol, register int trow, register int tcol);
++int DisownSelection (register XtermWidget termw);
++int ScrnRefresh (register TScreen *screen, int toprow, int leftcol, int nrows, int ncols, int force);
++int SysError (int i);
++int ScrnGetAttributes (TScreen *screen, int row, int col, Char *str, register int length);
++int Bell (int which, int percent);
++int TekEnqMouse (int c);
++int TekGINoff (void);
++
++
+ /* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ 
+ extern void DoSecureKeyboard();
+--- a/programs/xterm/charproc.c
++++ b/programs/xterm/charproc.c
+@@ -73,6 +73,75 @@
+ #include "error.h"
+ #include "menu.h"
+ #include "main.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int in_put (void);
++int Bell (int which, int percent);
++int CursorBack (register TScreen *screen, int n);
++int CarriageReturn (register TScreen *screen);
++int Index (register TScreen *screen, register int amount);
++int xevents (void);
++int TabNext (unsigned int *tabs, int col);
++int InsertChar (register TScreen *screen, register int n);
++int CursorUp (register TScreen *screen, int n);
++int CursorDown (register TScreen *screen, int n);
++int CursorForward (register TScreen *screen, int n);
++int CursorSet (register TScreen *screen, register int row, register int col, unsigned int flags);
++int ClearBelow (register TScreen *screen);
++int ClearAbove (register TScreen *screen);
++int ClearScreen (register TScreen *screen);
++int ClearRight (register TScreen *screen);
++int ClearLeft (register TScreen *screen);
++int ClearLine (register TScreen *screen);
++int InsertLine (register TScreen *screen, register int n);
++int DeleteLine (register TScreen *screen, register int n);
++int DeleteChar (register TScreen *screen, register int n);
++int unparseseq (register ANSI *ap, int fd);
++int TabClear (unsigned int *tabs, int col);
++int TabZonk (unsigned int *tabs);
++int ansi_modes (XtermWidget termw, void (*func) (/* ??? */));
++int FlushScroll (register TScreen *screen);
++int dpmodes (XtermWidget termw, void (*func) (/* ??? */));
++int HideCursor (void);
++int ScrnRefresh (register TScreen *screen, int toprow, int leftcol, int nrows, int ncols, int force);
++int CursorSave (register XtermWidget term, register SavedCursor *sc);
++int CursorRestore (register XtermWidget term, register SavedCursor *sc);
++int TabSet (unsigned int *tabs, int col);
++int RevIndex (register TScreen *screen, register int amount);
++int do_osc (int (*func) (/* ??? */));
++int VTReset (int full);
++int savemodes (XtermWidget termw);
++int restoremodes (XtermWidget termw);
++int Cleanup (int code);
++int Panic (char *s, int a);
++int WindowScroll (register TScreen *screen, int top);
++int ShowCursor (void);
++int SysError (int i);
++int AddToRefresh (register TScreen *screen);
++int ScreenWrite (TScreen *screen, char *str, register unsigned int flags, register int length);
++int ScreenResize (register TScreen *screen, int width, int height, unsigned int *flags);
++int ReverseVideo (XtermWidget termw);
++int unparseputc (int c, int fd);
++int unparseputn (unsigned int n, int fd);
++int SwitchBufPtrs (register TScreen *screen);
++int TrackText (register int frow, register int fcol, register int trow, register int tcol);
++void set_vt_visibility (int on);
++int HandleExposure (register TScreen *screen, register XEvent *event);
++int set_character_class (register char *s);
++int ScrollBarOn (XtermWidget xw, int init, int doalloc);
++int TabReset (unsigned int *tabs);
++int LoadNewFont (TScreen *screen, char *nfontname, char *bfontname, int doresize, int fontnum);
++void Exit (int n);
++int recolor_cursor (Cursor cursor, long unsigned int fg, long unsigned int bg);
++int set_cursor_gcs (TScreen *screen);
++int set_vt_box (TScreen *screen);
++int ScrollBarOff (register TScreen *screen);
++int SetCharacterClassRange (register int low, register int high, register int value);
++int VisualBell (void);
++void DoResizeScreen (register XtermWidget xw);
++int ResizeScrollBar (register Widget scrollWidget, int x, int y, unsigned int height);
++int Redraw (void);
++
+ #ifndef NO_ACTIVE_ICON
+ #include <X11/Shell.h>
+ #endif /* NO_ACTIVE_ICON */
+--- a/programs/xterm/cursor.c
++++ b/programs/xterm/cursor.c
+@@ -29,6 +29,12 @@
+ 
+ #include "ptyx.h"		/* also gets Xlib.h */
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int DisownSelection (register XtermWidget termw);
++int Scroll (register TScreen *screen, register int amount);
++int RevScroll (register TScreen *screen, register int amount);
++
++
+ static void _CheckSelection(screen)
+ register TScreen *screen;
+ {
+--- a/programs/xterm/input.c
++++ b/programs/xterm/input.c
+@@ -34,6 +34,15 @@
+ #include <stdio.h>
+ #include "data.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int WindowScroll (register TScreen *screen, int top);
++int Bell (int which, int percent);
++int unparseseq (register ANSI *ap, int fd);
++int unparseputc (int c, int fd);
++int TekEnqMouse (int c);
++int TekGINoff (void);
++
++
+ static char *kypd_num = " XXXXXXXX\tXXX\rXXXxxxxXXXXXXXXXXXXXXXXXXXXX*+,-./0123456789XXX=";
+ static char *kypd_apl = " ABCDEFGHIJKLMNOPQRSTUVWXYZ??????abcdefghijklmnopqrstuvwxyzXXX";
+ static char *cur = "DACB";
+--- a/programs/xterm/main.c
++++ b/programs/xterm/main.c
+@@ -322,6 +322,22 @@
+ 
+ #include <signal.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void hide_vt_window (void);
++void hide_tek_window (void);
++int TekInit (void);
++int get_terminal (void);
++int spawn (void);
++int Error ();	/* unprototyped: called with varying arguments */
++int TekRun (void);
++int VTRun (void);
++int SysError (int i);
++int VTInit (void);
++int resize (TScreen *screen, char *TermName, register char *oldtc, register char *newtc);
++int Setenv (register char *var, register char *value);
++int Cleanup (int code);
++
++
+ #if defined(sco) || defined(ISC)
+ #undef SIGTSTP			/* defined, but not the BSD way */
+ #endif
+--- a/programs/xterm/menu.c
++++ b/programs/xterm/menu.c
+@@ -38,6 +38,30 @@
+ #include <stdio.h>
+ #include <signal.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Bell (int which, int percent);
++int ReverseVideo (XtermWidget termw);
++int Redraw (void);
++int Cleanup (int code);
++int ScrollBarOff (register TScreen *screen);
++int ScrollBarOn (XtermWidget xw, int init, int doalloc);
++int FlushScroll (register TScreen *screen);
++void set_tek_visibility (int on);
++void end_tek_mode (void);
++int VTReset (int full);
++int ScrollBarDrawThumb (register Widget scrollWidget);
++void switch_modes (int tovt);
++void hide_vt_window (void);
++void SetVTFont (int i, int doresize, char *name1, char *name2);
++void TekSetFontSize (int newitem);
++void TekSimulatePageButton (int reset);
++int TekCopy (void);
++void set_vt_visibility (int on);
++int dorefresh (void);
++void end_vt_mode (void);
++void hide_tek_window (void);
++
++
+ extern void FindFontSelection();
+ 
+ Arg menuArgs[2] = {{ XtNleftBitmap, (XtArgVal) 0 },
+--- a/programs/xterm/misc.c
++++ b/programs/xterm/misc.c
+@@ -47,6 +47,30 @@
+ #include "error.h"
+ #include "menu.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FlushScroll (register TScreen *screen);
++int recolor_cursor (Cursor cursor, long unsigned int fg, long unsigned int bg);
++int Input (register TKeyboard *keyboard, register TScreen *screen, register XKeyEvent *event, int eightbit);
++int StringInput (register TScreen *screen, register char *string, int nbytes);
++int selectwindow (register TScreen *screen, register int flag);
++int unselectwindow (register TScreen *screen, register int flag);
++int Bell (int which, int percent);
++int ReverseVideo (XtermWidget termw);
++int TCursorToggle (int toggle);
++int HideCursor (void);
++int ShowCursor (void);
++int VisualBell (void);
++void TekExpose (Widget w, XEvent *event, Region region);
++int Changename (register char *name);
++int Changetitle (register char *name);
++void SetVTFont (int i, int doresize, char *name1, char *name2);
++int Cleanup (int code);
++void Exit (int n);
++int VTInit (void);
++int TekInit (void);
++int dorefresh (void);
++
++
+ extern jmp_buf Tekend;
+ extern jmp_buf VTend;
+ 
+--- a/programs/xterm/resize.c
++++ b/programs/xterm/resize.c
+@@ -85,6 +85,12 @@
+ #include <signal.h>
+ #include <pwd.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Usage (void);
++int checkdigits (register char *str);
++int readstring (register FILE *fp, register char *buf, char *str);
++
++
+ #ifdef SIGNALRETURNSINT
+ #define SIGNAL_T int
+ #else
+--- a/programs/xterm/screen.c
++++ b/programs/xterm/screen.c
+@@ -33,6 +33,15 @@
+ 
+ #include <stdio.h>
+ #include <signal.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int SysError (int i);
++int HideCursor (void);
++int SwitchBufPtrs (register TScreen *screen);
++int ScrollSelection (register TScreen *screen, register int amount);
++int ResizeScrollBar (register Widget scrollWidget, int x, int y, unsigned int height);
++int ResizeSelection (TScreen *screen, int rows, int cols);
++
+ #ifdef SVR4
+ #include <termios.h>
+ #else
+--- a/programs/xterm/scrollbar.c
++++ b/programs/xterm/scrollbar.c
+@@ -40,6 +40,16 @@
+ #include "error.h"
+ #include "menu.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int HideCursor (void);
++int scrolling_copy_area (TScreen *screen, int firstline, int nlines, int amount);
++int ScrollSelection (register TScreen *screen, register int amount);
++int ScrnRefresh (register TScreen *screen, int toprow, int leftcol, int nrows, int ncols, int force);
++int Bell (int which, int percent);
++int Error ();	/* unprototyped: called with varying arguments */
++int Redraw (void);
++
++
+ /* Event handlers */
+ 
+ static void ScrollTextTo();
+--- a/programs/xterm/tabs.c
++++ b/programs/xterm/tabs.c
+@@ -29,6 +29,11 @@
+ 
+ #include "ptyx.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int TabSet (unsigned int *tabs, int col);
++int Index (register TScreen *screen, register int amount);
++
++
+ /*
+  * This file presumes 32bits/word.  This is somewhat of a crock, and should
+  * be fixed sometime.
+--- a/programs/xterm/Tekproc.c
++++ b/programs/xterm/Tekproc.c
+@@ -73,6 +73,31 @@
+ #include "error.h"
+ #include "menu.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int TekGINoff (void);
++int TekEnqMouse (int c);
++int Bell (int which, int percent);
++int TCursorBack (void);
++int TCursorForward (void);
++int TekFlush (void);
++int TCursorUp (void);
++int TekCopy (void);
++int TekPage (void);
++int TekDraw (int x, int y);
++int TCursorDown (void);
++int xevents (void);
++int do_osc (int (*func) (/* ??? */));
++int Cleanup (int code);
++int Panic (char *s, int a);
++int TCursorToggle (int toggle);
++int SysError (int i);
++int dorefresh (void);
++int v_write (int f, char *d, int len);
++void Exit (int n);
++void set_tek_visibility (int on);
++int TekBackground (register TScreen *screen);
++
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #define Time_t long
+--- a/programs/xterm/util.c
++++ b/programs/xterm/util.c
+@@ -34,6 +34,30 @@
+ 
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int HideCursor (void);
++int ScrollBarDrawThumb (register Widget scrollWidget);
++int scrolling_copy_area (TScreen *screen, int firstline, int nlines, int amount);
++int ScrollSelection (register TScreen *screen, register int amount);
++int ScrnRefresh (register TScreen *screen, int toprow, int leftcol, int nrows, int ncols, int force);
++int ClearScreen (register TScreen *screen);
++int CopyWait (register TScreen *screen);
++int ScrnDeleteLine (register ScrnBuf sb, register int last, int where, register int n, register int size);
++int ScrnInsertLine (register ScrnBuf sb, int last, register int where, register int n, register int size);
++int non_blank_line (ScrnBuf sb, register int row, register int col, register int len);
++int ScrnInsertChar (ScrnBuf sb, int row, register int col, register int n, int size);
++int ScrnDeleteChar (ScrnBuf sb, register int row, register int col, register int n, register int size);
++int ClearLeft (register TScreen *screen);
++int ClearBufRows (register TScreen *screen, register int first, register int last);
++int ClearRight (register TScreen *screen);
++int HandleExposure (register TScreen *screen, register XEvent *event);
++int handle_translated_exposure (register TScreen *screen, register int rect_x, register int rect_y, register unsigned int rect_width, register unsigned int rect_height);
++int recolor_cursor (Cursor cursor, long unsigned int fg, long unsigned int bg);
++int ScrollBarReverseVideo (register Widget scrollWidget);
++int TekReverseVideo (register TScreen *screen);
++void TekExpose (Widget w, XEvent *event, Region region);
++
++
+ static void horizontal_copy_area();
+ static void vertical_copy_area();
+ 
