@@ -18,8 +18,10 @@ of make dist's `kspace` step (docs/BUILDING.md). With no cut output it exits
 3 and names the step that makes it (`[MISSING]`, P-38 S2.2).
 
 The kernel is not built here. The recipe packages the output of the cut
-record `cuts/<build id>/cut.sh` (`K30M_SRC`; by default the station's copy in
-`kernel/k30/build/cuts/`) and checks every byte of it against `pin.sh`:
+record `cuts/<build id>/cut.sh` (`K30M_SRC`; by default
+`kernel/k30/build/cuts/<build id>/`, where make dist's `kernel-k30` step,
+`kernel/k30/cuts/build.sh`, writes it) and checks every byte of it against
+`pin.sh`:
 the brel, its sidecar and `unix.sym`, the ET_REL elf2brel makes the brel
 from, and the ufs and s5 modules, which it rebuilds from the cut's carve
 sources with the kit of the pinned commit. `elf2brel.py` and the licences of

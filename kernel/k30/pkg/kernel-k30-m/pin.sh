@@ -74,9 +74,9 @@
 # kernel/k30's tools/elf2brel.py (0026fb59) and amix-kerntools' (af80bd6c,
 # pinned until the move) both make the shipped brel from the ET_REL.
 
-# the cut's output: kernel/k30/cuts/68030-261031-63/cut.sh writes it (the
-# station's copy is kernel/k30/build/cuts/2026-10-31-k30-63, gitignored)
-K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/2026-10-31-k30-63}"
+# the cut's output: kernel/k30/cuts/build.sh (make kernel-k30) writes it
+# there, from cuts/68030-261031-63/cut.sh (gitignored)
+K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261031-63}"
 K30M_SYSDIR=cut-68030-261031-63/usr/sys   # the cut's kernel tree under K30M_SRC
 K30M_SUMS=SHA256SUMS-68030-261031-63      # under K30M_SRC; names relative to K30M_SYSDIR
 K30M_CARVE=cut-68030-261031-63/carve      # the carve sources of ufs and s5 (R2)

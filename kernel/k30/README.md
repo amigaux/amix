@@ -183,7 +183,12 @@ A cut of record is a directory `cuts/<build id>/`: its `SHA256SUMS-<build id>` (
 The bytes themselves live outside the repository (`build/cuts/`, gitignored). A cut takes the port at the commit in
 `kernel/port/port.pin` unless its README names another.
 
-A cut ships as the `kern30m` package: `pkg/` holds its recipe, make dist's `kspace` hook (`pkg/README.md`).
+`cuts/CURRENT` names the cut of record make dist builds. `sh cuts/build.sh [OUT]` (make dist's `kernel-k30` hook)
+runs that cut's `cut.sh` on this checkout with the port and paula at `kernel/port/port.pin` and
+`kernel/drivers/paula/paula.pin` (each fetched by hash), writes its output to `build/cuts/<build id>/` by default,
+and fails unless its sums equal the record's; it prints `kernel k30 <path> <sha256>` per file. The cut ships as
+the `kern30m` package: `pkg/` holds its recipe, make dist's `kspace` hook (`pkg/README.md`), which reads that
+output; `tools/cuts-selftest.sh` checks that the two name the same build and sums.
 
 ### Self-tests
 
