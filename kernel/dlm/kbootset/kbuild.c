@@ -792,6 +792,18 @@ mods_free(void)
 }
 
 /* gate 2 for one module against the kernel (C3-1 section 3) */
+/* the minor of a kabi tag (k46.1.4 -> 4), or -1 */
+static long
+kabi_minor(const char *t)
+{
+	const char *d = strchr(t, '.');
+	char *e;
+
+	if (d == 0 || (d = strchr(d + 1, '.')) == 0)
+		return -1;
+	return strtol(d + 1, &e, 10);
+}
+
 static int
 mod_gate2(struct ks *k, const struct kb_kernel *kk, const struct km_info *mi)
 {
@@ -1069,12 +1081,16 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		}
 		if ((rc = mod_gate2(k, kk, &md->i)) != KS_OK)
 			break;
-		/* the root filesystem's module, boot class elsewhere (cdfs), is
+		/* the root filesystem's module, boot or demand class elsewhere, is
 		 * root class on a generation that roots on it: the core links a
-		 * boot-class module from the arena only for the manifest's rootfs
+		 * filesystem module from the arena only for the manifest's rootfs
 		 * (C4-4 section 1.3) */
-		if (!strcmp(md->i.cls, "boot") && md->i.fs[0] && rootfs && !strcmp(md->i.fs, rootfs))
+		if ((!strcmp(md->i.cls, "boot") || !strcmp(md->i.cls, "demand")) && md->i.fs[0] &&
+		    rootfs && !strcmp(md->i.fs, rootfs)) {
 			strcpy(md->i.cls, "root");
+			if (!md->i.match[0])	/* a filesystem needs no board */
+				strcpy(md->i.match, "always");
+		}
 		if (!strcmp(md->i.cls, "root") && km_tail(md->data, md->size, &md->bss, why)) {
 			sprintf(m, "%s: %.120s", path, why);
 			rc = refuse(k, 2, m);
@@ -1127,8 +1143,20 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		else if (!strcmp(mi->cls, "boot") && !mi->match[0])
 			sprintf(m, "boot-class module %.15s has no match= (one that needs no board says "
 				"match=always)", mi->name), rc = refuse(k, 3, m);
-		else if (!strcmp(mi->cls, "demand") && !mi->majors[0])
-			sprintf(m, "demand-class module %.15s has no majors=", mi->name), rc = refuse(k, 3, m);
+		else if (!strcmp(mi->cls, "demand") && !mi->majors[0] && !mi->fs[0])
+			sprintf(m, "demand-class module %.15s has no majors= and no fs=: nothing would load it",
+				mi->name), rc = refuse(k, 3, m);
+		else if (!strcmp(mi->cls, "demand") && mi->majors[0] && mi->fs[0])
+			sprintf(m, "demand-class module %.15s has majors= and fs=: it loads by one of them",
+				mi->name), rc = refuse(k, 3, m);
+		else if (!strcmp(mi->cls, "demand") && mi->fs[0] && kabi_minor(kk->kabi) < 4)
+			sprintf(m, "demand-class filesystem %.15s needs a kernel that loads a filesystem at "
+				"its first mount, kabi minor 4 or later (the kernel is %s)", mi->name, kk->kabi),
+				rc = refuse(k, 3, m);
+		for (j = 0; rc == KS_OK && mi->fs[0] && j < i; j++)
+			if (!strcmp(mods[j].i.fs, mi->fs))
+				sprintf(m, "modules %.15s and %.15s are both filesystem type %.15s",
+					mods[j].i.name, mi->name, mi->fs), rc = refuse(k, 3, m);
 		while (rc == KS_OK && *p) {
 			char *q;
 			long maj = (p[0] == 'c' || p[0] == 'b') && p[1] == ':' ? strtol(p + 2, &q, 10) : -1;
@@ -1255,6 +1283,8 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 				md->i.cls, (unsigned long)md->size, (unsigned long)id, md->i.name, md->sha);
 		if (boot)
 			sprintf(rec + strlen(rec), " match=%s", md->i.match);
+		else if (!isroot && md->i.fs[0])	/* loaded by its first mount (C4-6 section 5) */
+			sprintf(rec + strlen(rec), " fs=%s", md->i.fs);
 		else if (!isroot)
 			sprintf(rec + strlen(rec), " majors=%s", md->i.majors);
 		if (md->i.depend[0])

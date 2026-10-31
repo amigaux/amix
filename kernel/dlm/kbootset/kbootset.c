@@ -484,7 +484,8 @@ status_modules(struct ks *k, const struct kb_kinfo *ki)
 		printf("module %s (%s): %s\n", m.mod[i].name,
 		       m.mod[i].cls == AXC_BOOT ? "boot" : m.mod[i].cls == AXC_DEMAND ? "demand" : "root",
 		       j < ki->nmods ? "loaded" : safe && !m.mod[i].safe ? "not loaded (safe mode)" :
-		       m.mod[i].cls == AXC_DEMAND ? "not loaded (loads at the first open of its device)" :
+		       m.mod[i].cls == AXC_DEMAND ? "not loaded (loads at first use: an open of its device or a "
+		       "mount of its filesystem type)" :
 		       "not loaded (the console says why)");
 	}
 	free(buf);

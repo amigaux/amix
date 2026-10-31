@@ -223,7 +223,7 @@ python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0x40000000,$A4091,$A4091 0,$A
 $B/kbootset -R $R status > $T/out
 grep -qx "module z3660eth (boot): loaded" $T/out
 grep -qx "module monsw (demand): loaded" $T/out
-grep -qx "module z3660rtg (demand): not loaded (loads at the first open of its device)" $T/out
+grep -qx "module z3660rtg (demand): not loaded (loads at first use: an open of its device or a mount of its filesystem type)" $T/out
 # 6b'. a safe boot (kinfo flag 0x4) names the safe set it keeps, the
 # records marked safe=1, and says why the others did not load (C2-4 §11):
 # a4091 ranked before the root's card loads, as seen on a bench boot

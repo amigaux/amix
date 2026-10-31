@@ -407,7 +407,8 @@ grep -q "depends on monsw, which is not in the generation" $T/out
 three; modpkg z3660eth class=boot majors=c:51
 refused 3 $KB build $FACTS			# a boot module without match=
 three; modpkg monsw class=demand
-refused 3 $KB build $FACTS			# a demand module without majors=
+refused 3 $KB build $FACTS			# a demand module without majors= or fs=
+grep -q "has no majors= and no fs=: nothing would load it" $T/out
 three; modpkg monsw class=demand majors=c:51
 refused 3 $KB build $FACTS			# another module's major
 grep -q "major c:51 is registered to another module" $T/out
@@ -616,6 +617,35 @@ $KB build $RFACTS | grep -q "built"
 id=$(ls $R/stand/gen | sort -n | tail -1)
 grep -q "^module cdfs boot [0-9]* path=/stand/gen/$id/mod/cdfs .* match=always$" $R/stand/gen/$id/build
 rm -rf "${R:?}/stand/gen/${id:?}"
+# a demand-class filesystem (C4-6 section 5): it needs a kernel at kabi
+# minor 4, whose core loads a filesystem at its first mount; its record
+# carries fs= and no majors=; majors= with fs= and a second module of the
+# same type are refused; as the rootfs it is still promoted to a root record
+rootset
+modpkg cdfs class=demand fs=cdfs
+refused 3 $KB build $RFACTS
+grep -q "demand-class filesystem cdfs needs a kernel that loads a filesystem at its first mount, kabi minor 4" $T/out
+sed -i 's/^kabi=k46.1.0$/kabi=k46.1.4/' $R/stand/k46/kabi
+record; sed -i 's/^kabi static$/kabi k46.1.4/' $R/var/apkg/kpkg/kernel-kd060a
+$KB build $RFACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module cdfs demand [0-9]* path=/stand/gen/$id/mod/cdfs sha256=[0-9a-f]* fs=cdfs$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+$KB build --line 46 --bootdev zorro:144b:01 --rootdev zorro:144b:01 --rootfs cdfs --mem 16777216 |
+	grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module cdfs root [0-9]* at=0x10000 .* match=" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+modpkg cdfs class=demand fs=cdfs majors=c:52
+refused 3 $KB build $RFACTS
+grep -q "demand-class module cdfs has majors= and fs=" $T/out
+modpkg cdfs class=demand fs=cdfs
+modpkg cdfs2 class=boot match=always fs=cdfs
+refused 3 $KB build $RFACTS
+grep -q "modules cdfs and cdfs2 are both filesystem type cdfs" $T/out
+rm -f "${MD:?}"/cdfs2 "${R:?}"/var/apkg/kpkg/mod-cdfs2
+sed -i 's/^kabi=k46.1.4$/kabi=k46.1.0/' $R/stand/k46/kabi
+record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 # gate 4: the whole root set against an arena that holds the directory
 # and the manifest copy (about 1 000 bytes) but not the modules too
 rootset
