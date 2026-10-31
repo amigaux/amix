@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh -- make dist's kernel-k46 hook (P-38 S2.3): the port fork's cut of
+# build.sh -- make dist's kernel-k46 hook: the port fork's cut of
 # record, cuts/CURRENT's build id, rebuilt by its own cut.sh as the fork has
 # it at kernel/port/port.pin, its sums checked against the record's.
 #
