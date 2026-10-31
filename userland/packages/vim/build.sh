@@ -8,7 +8,7 @@ configure_args() {
 	echo --with-features=normal --disable-gui --without-x --enable-gpm=no \
 		--disable-netbeans --disable-channel --disable-sysmouse --disable-canberra \
 		--disable-libsodium --disable-xsmp --disable-selinux --disable-acl --disable-smack \
-		--with-tlib=ncurses
+		--with-tlib=ncurses --with-compiledby=amix
 }
 
 pre_configure() {
@@ -30,6 +30,15 @@ post_configure() {
 		echo "[FAIL] vim does not link ncurses" >&2; exit 1; }
 	# two switch tables the 060 gate's scanner cannot bound: compare chains instead
 	printf '\nobjects/insexpand.o objects/scriptfile.o: override CFLAGS += -fno-jump-tables\n' >> src/Makefile
+	# :version records the compile and link lines (build-host paths) and, without
+	# --with-compiledby, the build's user and host name: made now, then neutral
+	make -C src auto/pathdef.c > /dev/null
+	sed -e 's|^char_u \*all_cflags = .*|char_u *all_cflags = (char_u *)"m68k-elf-gcc (gcc14-cross-amix) -m68020-60 -mno-strict-align -O2";|' \
+	    -e 's|^char_u \*all_lflags = .*|char_u *all_lflags = (char_u *)"m68k-elf-gcc (gcc14-cross-amix), ncurses 6.6 static";|' \
+	    -e 's|^char_u \*compiled_sys = .*|char_u *compiled_sys = (char_u *)"";|' \
+	    src/auto/pathdef.c > src/auto/pathdef.c.new && mv src/auto/pathdef.c.new src/auto/pathdef.c
+	grep -E 'compiled_user = \(char_u \*\)"amix"' src/auto/pathdef.c > /dev/null || {
+		echo "[FAIL] pathdef.c: compiled_user is not amix" >&2; exit 1; }
 	echo "  TERMINFO, -lncurses; insexpand.o and scriptfile.o without jump tables"
 }
 
