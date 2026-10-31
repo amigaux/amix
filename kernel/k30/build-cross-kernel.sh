@@ -1225,7 +1225,7 @@ print("".join(b[off+k] for k in range(n)))
       "$actual" "$amaj" "$amin" "$cfg" "${sec#.}" "$off" "$((16#$sz))"
 
   # resolve the EXPECTED value from the config source
-  tok="$(sed -n 's/.*rootdev[ \t]*=[ \t]*\([A-Za-z0-9_]*\).*/\1/{p;q}' "$csrc")"
+  tok="$(sed -n '/rootdev[ \t]*=/{s/.*rootdev[ \t]*=[ \t]*\([A-Za-z0-9_]*\).*/\1/p;q}' "$csrc")"
   [ -n "$tok" ] || { echo "FATAL: no 'rootdev =' initializer in $csrc" >&2; exit 1; }
   # Does the SOURCE locally #define this token?  If NOT, the token is an external compile
   # macro (the `unix` placeholder's -DROOTDEV) -- the ONLY case allowed to skip the metal
@@ -1337,7 +1337,7 @@ if [ -n "$RTH1_C" ]; then
   # by its ROOTFSTYPE_LEN, which must equal rootfstype's size in this base (master.d/kernel.o, char[15] in the stock)
   ROOTFS=""
   if [ -n "$DLM_CORE" ] && echo " $GOT " | grep -q " rootfstype "; then
-    RL="$(sed -n 's/^#define[[:space:]]*ROOTFSTYPE_LEN[[:space:]]*\([0-9]*\).*/\1/{p;q}' "$RTH1_C")"
+    RL="$(sed -n '/^#define[[:space:]]*ROOTFSTYPE_LEN/{s/^#define[[:space:]]*ROOTFSTYPE_LEN[[:space:]]*\([0-9]*\).*/\1/p;q}' "$RTH1_C")"
     KL="$("$OBJDUMP" -t "$BUILD/master.d/kernel.o" | awk '$NF=="rootfstype" && $(NF-2)==".data" {print $(NF-1)}')"
     [ -n "$RL" ] && [ -n "$KL" ] && [ "$RL" = "$((16#$KL))" ] \
       || { echo "--rth1: rth1.c bounds rootfstype at '${RL:-?}' bytes, the base's rootfstype is '${KL:-?}' (hex)" >&2; exit 1; }
