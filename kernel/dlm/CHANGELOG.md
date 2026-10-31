@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — P-36 W8: the kbootset package owns its boot scripts; C3-6 v7, C3-5 v17 (b165fd7, ce80a05, fa5efe0, 151803d)
+
+kbootset/rc/kbnamelist and kbmarkgood become /etc/init.d scripts with the links S01kbnamelist and S99zkbootset, which
+the installer used to write. They use amix-base's rc.subr when it is present (rc.conf kbnamelist=/kbmarkgood=, default
+yes; status in rc.log) and make the same call of record otherwise (C2-4 v17 §16, kbootset(1M), tests/host/rcscripts.sh).
+C3-6 v7 §1.8 is a network driver's DLPI checklist (P-36 §4.4) with what its package carries. C3-5 v17: amix-base's
+/etc/inittab carries the dlm line, and modtools has no package scripts and is ESSENTIAL. make test 719/0.
+
 ## 2026-10-31 — the kit test leaves the kit tree unchanged (864e01b)
 
 The kit test builds the sample in a copy against KIT and checks that each kit tree (entries, modes, SHA-256) is as
