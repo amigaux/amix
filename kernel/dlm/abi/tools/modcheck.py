@@ -5,7 +5,7 @@
 # this makes them at build time, with the rule named.
 #
 #   modcheck.py [-k KIT] [-d DEPMODULE]... MODULE
-#   modcheck.py [-k KIT] --kabi OBJECT
+#   modcheck.py [-k KIT] --kabi OBJECT [MASTER]
 #       the tag a module linked as OBJECT carries (module.mk gives it to
 #       mkmod): the kit's family and major, and the highest minor among
 #       the names it imports (their ddi.list or core.list line), but not
@@ -161,6 +161,22 @@ def names(path):
     return out
 
 
+FSDEMAND = 4		# the minor whose core loads a filesystem at its first mount
+
+
+def master_fsdemand(path):
+    """a Master that says $class demand and names an $fs"""
+    cls = fs = None
+    with open(path) as f:
+        for line in f:
+            w = line.split()
+            if len(w) >= 2 and w[0] == '$class':
+                cls = w[1]
+            elif len(w) >= 2 and w[0] == '$fs':
+                fs = w[1]
+    return cls == 'demand' and bool(fs)
+
+
 def minors(kit):
     """name -> the minor it entered, from the kit's ddi.list and core.list"""
     out = {}
@@ -267,6 +283,9 @@ def moddata(e, path, c, reg, kit, depnames):
             if over:
                 bad('kabi=%s: it imports %s, of minor %d (a kernel of its minor lacks them)'
                     % (keys['kabi'], ' '.join(over), max(since[n] for n in over)))
+        if keys.get('class') == 'demand' and keys.get('fs') and int(m.group(3)) < FSDEMAND:
+            bad('kabi=%s: a demand-class filesystem loads at its first mount, which needs '
+                'kabi minor %d (C3-2 section 3)' % (keys['kabi'], FSDEMAND))
     if 'cc' in keys and keys['cc'] != c['PIN']:
         bad('cc=%s: the kit\'s pin is %s' % (keys['cc'], c['PIN']))
     if 'cpu' in keys and keys['cpu'] not in CPUS:
@@ -536,18 +555,22 @@ def main(argv):
         if len(argv) == 4 and argv[0] != '-k':
             sys.exit('usage: modcheck.py [-k KIT] --kernel KABI')
         return kernel(argv[1] if len(argv) == 4 else kit, argv[-1])
-    if len(argv) in (2, 4) and argv[-2] == '--kabi':
-        if len(argv) == 4 and argv[0] != '-k':
-            sys.exit('usage: modcheck.py [-k KIT] --kabi OBJECT')
-        kit = argv[1] if len(argv) == 4 else kit
+    if '--kabi' in argv[:-1] and len(argv) in (2, 3, 4, 5):
+        k = argv.index('--kabi')
+        rest = argv[k + 1:]
+        if k not in (0, 2) or (k == 2 and argv[0] != '-k') or len(rest) not in (1, 2):
+            sys.exit('usage: modcheck.py [-k KIT] --kabi OBJECT [MASTER]')
+        kit = argv[1] if k == 2 else kit
         c, since = conf(kit), minors(kit)
         fam, major, top = c['KABI'].split('.')
         low = int(c.get('KABI_MIN', c['KABI']).split('.')[2])
         try:
-            e = Elf(argv[-1])
+            e = Elf(rest[0])
         except (ValueError, OSError) as x:
-            sys.exit('modcheck: %s: %s' % (argv[-1], x))
+            sys.exit('modcheck: %s: %s' % (rest[0], x))
         need = max([low] + [since[n] for n in imported(e, since)])
+        if len(rest) == 2 and master_fsdemand(rest[1]):
+            need = max(need, FSDEMAND)	# loads at its first mount (C3-2 section 3)
         print('%s.%s.%d' % (fam, major, min(need, int(top))))
         return 0
     while len(argv) > 1 and argv[0] in ('-k', '-d', '-w'):

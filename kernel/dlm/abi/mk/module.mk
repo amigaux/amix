@@ -36,7 +36,9 @@
 # by mkmod, checked by modfix and modcheck.py.  The module's kabi tag is
 # the highest minor among the kernel names it imports, not below the kit's
 # KABI_MIN (modcheck.py --kabi): a module that imports no name newer than
-# that loads on the kernels it loaded on before.  The cross tools
+# that loads on the kernels it loaded on before.  A demand-class filesystem
+# module ($class demand with $fs) is tagged minor 4 at least: it needs a
+# kernel whose core loads it at its first mount.  The cross tools
 # (m68k-cbm-sysv4-*) must be on PATH.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -88,7 +90,7 @@ $(MODOUT)/mod.d/$(MODULE): $(MODOBJS) $(EXTRA) Master $(DEPS) $(KIT)/kit.conf
 	grep -q '^\$$cpu' Master || sed -i '1a $$cpu $(MODCPU)' $(MODOUT)/src/Master
 	for f in Space.c Mtune; do [ ! -f $$f ] || cp $$f $(MODOUT)/src/; done
 	MKMOD_CC="$(KIT_CC) $(KIT_CFLAGS)" DLM_TOOLS=$(KIT)/tools sh $(KIT)/tools/mkmod \
-		-K $$(python3 $(KIT)/tools/modcheck.py -k $(KIT) --kabi $(MODOUT)/src/Driver.o) \
+		-K $$(python3 $(KIT)/tools/modcheck.py -k $(KIT) --kabi $(MODOUT)/src/Driver.o $(MODOUT)/src/Master) \
 		-P $(PIN) -e $(KIT)/exports $(foreach d,$(DEPS),-d $(d)) \
 		-o $(MODOUT) $(MODOUT)/src
 	python3 $(KIT)/tools/modcheck.py -k $(KIT) $(foreach d,$(DEPS),-d $(d)) \

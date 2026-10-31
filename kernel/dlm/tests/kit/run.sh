@@ -231,6 +231,17 @@ for l in k30 k46; do
 	# claims 1.2 is refused, naming the minor
 	KABI_OVERRIDE=$l.1.2 mkbad $l chip "$WRAP"'extern char *AllocMem();\nextern unsigned displaytype;\nchar *f() { return displaytype == 2 ? AllocMem(64, 2) : 0; }\nMOD_MISC_WRAPPER(chip, l, u, "x");\n' "$M0"'chip\tchip\n' &&
 		refused "a 1.2 tag on a module that imports minor-3 names" $l "$W/$l-chip/out/mod.d/chip" "of minor 3"
+	# minor 4 (C3-2 v3 section 3): a demand-class filesystem module is
+	# tagged 1.4 whatever it imports (it loads at its first mount), passes
+	# at 1.4, and is refused when it claims 1.3
+	FSM="$M0"'$fs dfs\ndfs\tdfs\n'
+	mkbad $l dfs "$WRAP"'MOD_MISC_WRAPPER(dfs, l, u, "x");\n' "$FSM" &&
+		if [ "$(python3 "$K/tools/modcheck.py" -k "$K" --kabi "$W/$l-dfs/src/Driver.o" "$W/$l-dfs/src/Master")" = "$l.1.4" ] &&
+		   python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-dfs/out/mod.d/dfs" > "$W/dfs.out" 2>&1; then
+			pass "$l: a demand-class filesystem module is tagged $l.1.4 from its Master and passes"
+		else fail "$l: the demand-class filesystem module's tag"; cat "$W/dfs.out"; fi
+	KABI_OVERRIDE=$l.1.3 mkbad $l dfs3 "$WRAP"'MOD_MISC_WRAPPER(dfs3, l, u, "x");\n' "$M0"'$fs dfs3\ndfs3\tdfs3\n' &&
+		refused "a 1.3 tag on a demand-class filesystem module" $l "$W/$l-dfs3/out/mod.d/dfs3" "needs kabi minor 4"
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do

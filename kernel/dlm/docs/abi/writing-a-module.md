@@ -90,7 +90,7 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 | Line | Value |
 |---|---|
 | `$modtype` | `misc`, `drv` or `str`: the wrapper macro you use |
-| `$class` | `boot` (loaded after the root is mounted), `demand` (at the first open of one of its majors) or `root` (placed by the loader and linked before the root is mounted: a disk controller, a root filesystem, the RAM disk; `docs/contracts/C4-2-root-class-driver.md`) |
+| `$class` | `boot` (loaded after the root is mounted), `demand` (at the first open of one of its majors, or for a filesystem with `$fs`, at the first mount of its type, on a kabi 1.4 kernel) or `root` (placed by the loader and linked before the root is mounted: a disk controller, a root filesystem, the RAM disk; `docs/contracts/C4-2-root-class-driver.md`) |
 | `$cpu` | the lowest CPU it runs on: `68020`, `68030`, `68040`, `68060`. Leave it out and the make fragment gives the line's (68030 on k30, 68040 on k46, or `MODCPU`), so one Master serves both kits |
 | `$majors` | `c:<n>` per character major and `b:<n>` per block major, each registered to this module's name in the kit's `registry/majors`. A block major needs a root-class, pinned module |
 | `$match` | for a boot module that needs a board, and always for a root module: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated |
