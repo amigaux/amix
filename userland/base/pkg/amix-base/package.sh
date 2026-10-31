@@ -2,9 +2,9 @@
 NAME=amix-base
 PKG=amxbase
 VERSION=1.0
-PKGREV=5
+PKGREV=6
 SUMMARY="Amix base system: boot helpers, the network set-up, the base config files"
-DESC="rc.subr and /etc/rc.conf, ifup/ifdown over /etc/inet/interfaces, dlpi-mac, the DHCP hook, the new inetinit, man, and the stock /etc base files as conffiles"
+DESC="rc.subr and /etc/rc.conf, ifup/ifdown over /etc/inet/interfaces, dlpi-mac, the DHCP hook, the new inetinit, the device-node boot step, man, and the stock /etc base files as conffiles"
 CATEGORY=system
 SET=base
 LICENSE=MIT

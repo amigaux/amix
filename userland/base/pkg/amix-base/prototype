@@ -14,6 +14,8 @@ f none /etc/rc2.d/S69inet 0444 root sys
 l none /etc/init.d/inetinit=/etc/rc2.d/S69inet
 l none /etc/rc0.d/K69inet=/etc/rc2.d/S69inet
 l none /etc/rc1.d/K69inet=/etc/rc2.d/S69inet
+f none /etc/init.d/devnodes 0444 root sys
+l none /etc/rc2.d/S20devnodes=/etc/init.d/devnodes
 f none /etc/inet/network-config 0444 root sys
 f none /etc/inet/rc.inet 0444 root sys
 d none /etc/inet/link.d 0755 root sys
@@ -35,6 +37,7 @@ d none /opt/amix/man/4 0755 root bin
 d none /opt/amix/man/whatis.d 0755 root bin
 f none /opt/amix/man/1/man 0644 root bin
 f none /opt/amix/man/1m/rc.subr 0644 root bin
+f none /opt/amix/man/1m/devnodes 0644 root bin
 f none /opt/amix/man/1m/dlpi-mac 0644 root bin
 f none /opt/amix/man/1m/ifup 0644 root bin
 f none /opt/amix/man/1m/ifdown 0644 root bin

@@ -143,6 +143,17 @@ same "no kbootset: the given major" "$T/dev/zz c 49 0" "$(cat "$T/mknod.log")"
 R "rc_mknod $T/dev/ram0 b 99 0 ramdisk" > /dev/null
 same "block major from the registry" "$T/dev/ram0 b 20 0" "$(cat "$T/mknod.log")"
 
+# no major given ("-"): the registry's, quietly; none there, no node
+: > "$T/rc.log"; : > "$T/mknod.log"
+o=$(R "rc_mknod $T/dev/zen1 c - 1 z3660eth 0600")
+same "no major: the registry's" "$T/dev/zen1 c 51 1" "$(cat "$T/mknod.log")"
+same "no major: no packaging error" "" "$o$(grep 'packaging' "$T/rc.log")"
+: > "$T/mknod.log"
+o=$(R "rc_mknod $T/dev/aen0 c - 0 aen; echo \$?")
+same "no major, unknown module: not made" "" "$(cat "$T/mknod.log")"
+same "no major, unknown module: status 1" "1" "$o"
+expect "no major, unknown module: logged" "cannot make $T/dev/aen0: the registry gives aen no major" "$(cat "$T/rc.log")"
+
 # _rc_node reads ls -l; a fake ls shows a node already right, one wrong
 cat > "$T/bin/ls" <<'EOF'
 #!/bin/sh

@@ -181,14 +181,13 @@ order, on the target root:
    file with amix-base's default instead. A box whose `modtools` already
    added the line holds exactly that default, and the class takes it
    silently.
-6. **`removef core`** the paths amix-base took over (the engine's: stock 2.1
-   has no `removef`). Until then the conffiles are listed by both packages,
-   and a `pkgrm` of amxbase can delete an unedited one that `core` still
-   lists.
-7. **Re-type the conffiles `e`.** Stock `pkgadd` keeps `core`'s `f` in their
-   records (`/etc/inittab f conffile …`), so `pkgchk` reports every edit as
-   an error. `installf -c conffile amxbase <path> e` per file, then
-   `installf -f amxbase` (the engine's; tried there, not yet on stock).
+6. **`removef core`** the paths amix-base took over, with APKGENG's
+   `/usr/apkg/bin/removef`: stock 2.1 has none. Until then the conffiles are
+   listed by both packages; stock `pkgadd` records each as `f … core:none
+   amxbase\` (the `\` is the per-package edit flag, so `pkgchk` skips
+   amxbase's entry), and `pkgchk` reports an edited one through `core`'s.
+   After the `removef` that goes quiet. No re-typing step: the stock
+   `installf -f` crashes after `installf -c conffile … e` (pkgtools, E1).
 
 The installer does not write `/etc/nodename`, the host's line in
 `/etc/inet/hosts`, `/etc/resolv.conf` or any `ifconfig` line: `ifup` writes

@@ -1,0 +1,57 @@
+.TH DEVNODES 1M "31 October 2026" "amix-base"
+.SH NAME
+devnodes \- re-create missing device nodes at boot
+.SH SYNOPSIS
+.B /etc/init.d/devnodes start
+.SH DESCRIPTION
+.B devnodes
+runs at every boot as
+.BR /etc/rc2.d/S20devnodes ,
+after the file systems are mounted and before the devices are used.
+It makes again each device node that a package installed and that is no
+longer there.
+.PP
+The nodes that should exist are the character and block special files
+under
+.B /dev
+that the installed packages list in
+.BR /var/sadm/install/contents :
+every driver package ships its nodes as package objects.
+A missing node is made with the minor number, mode, owner and group of its
+record, and with this major number:
+.TP
+.I a stock node
+(class
+.BR none )
+the major number of its record.
+.TP
+.I a module's node
+(its class is the name of the kernel module that drives it)
+the major number the running kernel's registry gives that module, as
+.B kbootset major
+prints it.
+A node that is there at another major number is made again, and a record
+that disagrees with the registry is reported as a packaging error.
+When the registry does not know the module, the record's major is used.
+.PP
+A stock node that is there but differs from its record is left as it is,
+and reported.
+Nodes made outside the packages, such as the disk nodes
+.B kbootset nodes
+makes and
+.BR /dev/kinfo ,
+are not looked at.
+.PP
+Each node made and each one left is written to
+.BR /var/adm/rc.log ,
+with a count at the end; a boot with nothing to do writes nothing.
+.SH FILES
+.TP
+.B /var/sadm/install/contents
+the installed objects, and with them the nodes.
+.TP
+.B /var/adm/rc.log
+what was made.
+.SH SEE ALSO
+.BR rc.subr (1M),
+.BR kbootset (1M)

@@ -1,0 +1,133 @@
+#!/bin/sh
+# devnodes -- re-create the device nodes the packages installed that are
+# missing: /etc/init.d/devnodes, run as /etc/rc2.d/S20devnodes (P-36 D-N21).
+#
+# The nodes that should exist are the c and b objects under /dev in the
+# installed-objects database, /var/sadm/install/contents: every driver
+# package ships its nodes as package objects. A missing one is made with its
+# record's minor, mode, owner and group. Its major:
+#
+#   class none     the record's (the stock system's own nodes)
+#   class <module> the one the running kernel's registry gives the module
+#                  (rc_mknod asks kbootset); a node that is there at another
+#                  major is made again, and the record's disagreement is
+#                  logged as a packaging error
+#
+# A node of class none that is there but differs from its record is left
+# and logged; a record without a number ("?") is never made from. Nothing
+# here carries a major number. One pass: the records, one ls of their paths,
+# and work only for those that need it. Log: /var/adm/rc.log ("devnodes:"
+# and "mknod:" lines).
+#
+# This file is written in place on update, never moved, so the S link stays
+# the same file.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+DEVNODES_DB=${DEVNODES_DB:-/var/sadm/install/contents}
+DEVNODES_ROOT=${DEVNODES_ROOT:-}
+
+case "$1" in
+start)
+	;;
+stop)
+	exit 0
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+. "$RC_SUBR"
+[ -r "$DEVNODES_DB" ] || exit 0
+
+# "<path> <type> <class> <major> <minor> <mode> <owner> <group>" per record
+want=`grep '^/dev/[^ ]* [cb] ' "$DEVNODES_DB" |
+	awk '{ print $1, $2, $3, $4, $5, $6, $7, $8 }'`
+[ -n "$want" ] || exit 0
+
+# the records that need work: "<why> <record>", why = missing or differs
+todo=`
+	{
+		echo "$want"
+		echo ===
+		echo "$want" | awk '{ print r $1 }' r="$DEVNODES_ROOT" | xargs ls -ld 2>/dev/null
+	} | awk '
+	$0 == "===" { ls = 1; next }
+	!ls { rec[$1] = $0; n[++k] = $1; next }
+	{
+		t = substr($1, 1, 1)
+		if ($5 ~ /,$/) { ma = substr($5, 1, length($5) - 1); mi = $6; p = $NF }
+		else { split($5, a, ","); ma = a[1]; mi = a[2]; p = $NF }
+		if (root != "" && index(p, root) == 1) p = substr(p, length(root) + 1)
+		have[p] = t " " ma " " mi
+	}
+	END {
+		for (i = 1; i <= k; i++) {
+			p = n[i]; split(rec[p], f, " ")
+			# a "?" (the 1991 pkgmk writes one for a minor of 0) matches any
+			if (!(p in have)) { print "missing", rec[p]; continue }
+			split(have[p], h, " ")
+			if (h[1] != f[2] || (f[4] != "?" && h[2] != f[4]) || (f[5] != "?" && h[3] != f[5]))
+				print "differs", rec[p]
+		}
+	}' root="$DEVNODES_ROOT"
+`
+[ -n "$todo" ] || exit 0
+
+made=0
+bad=0
+IFS='
+'
+for l in $todo
+do
+	IFS=' 	'
+	set -- $l
+	# $1 why, $2 path, $3 type, $4 class, $5 major, $6 minor, $7 mode, $8 owner, $9 group
+	n=$DEVNODES_ROOT$2
+	if [ "$6" = "?" ] || { [ "$5" = "?" ] && [ $4 = none ]; }
+	then
+		rc_log devnodes "$2: its record gives no number ($3 $5 $6); not made"
+		bad=`expr $bad + 1`
+		IFS='
+'
+		continue
+	fi
+	d=`dirname "$n"`
+	[ -d "$d" ] || mkdir -p "$d"
+	if [ $4 = none ]
+	then
+		if [ $1 = differs ]
+		then
+			rc_log devnodes "$2 is not $3 $5 $6 as recorded; left"
+			IFS='
+'
+			continue
+		fi
+		rm -f "$n"
+		if mknod "$n" $3 $5 $6 && chmod $7 "$n"
+		then
+			rc_log mknod "made $n $3 $5 $6"
+		else
+			rc_log mknod "cannot make $n $3 $5 $6"
+			false
+		fi
+	else
+		rc_mknod "$n" $3 $5 $6 $4 $7
+	fi
+	if [ $? -eq 0 ]
+	then
+		chown $8 "$n" 2>/dev/null
+		chgrp $9 "$n" 2>/dev/null
+		made=`expr $made + 1`
+	else
+		bad=`expr $bad + 1`
+	fi
+	IFS='
+'
+done
+IFS='
+'
+rc_log devnodes "$made node(s) made, $bad failed"
+exit 0
