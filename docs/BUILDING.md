@@ -85,6 +85,8 @@ out/media/{cd,netinstall,floppies}/
 out/lock
 out/cache/                    distfiles and the port at its pin
 out/build/                    work trees and logs
+out/build/pkgtools-host/      make dist's own host pkgmk and pkgtrans, built from a
+                              copy of userland/pkgtools (never the checkout's build-host/)
 ```
 
 `out/` is ignored by git.

@@ -345,20 +345,37 @@ roll_recipe() {	# roll_recipe <package dir>
 	grep '^pkg ' "$out/build/userland/$(basename "$1")/BUILD.txt" | sed "s|$out/||"
 }
 
-# host_pkgtools: the host pkgmk and pkgtrans every roll uses, built by
-# pkgtools' own heirloom/build-host.sh when the checkout has none (a clean
-# clone), as run-selftests does
+# host_pkgtools: the host pkgmk and pkgtrans every roll uses, make dist's
+# own: pkgtools' heirloom/build-host.sh run in a copy of userland/pkgtools
+# (build-host.sh reads ../research) under out/build/pkgtools-host/, never the
+# checkout's build-host/. build-host.sh
+# compiles its absolute directory into the tools (BINDIR, where pkgtrans finds
+# its cpio), so tools built in the checkout on the host name a path the
+# container lacks. A stamp of the copied files' digest skips a rebuild of the
+# same sources.
 host_pkgtools() {
-	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] && return 0
-	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh"
-	mkdir -p "$out/build"
-	( cd "$top/userland/pkgtools/heirloom" && ./build-host.sh ) > "$out/build/pkgtools-host.log" 2>&1 || {
+	_hp=$out/build/pkgtools-host
+	_hp_files=$(cd "$top/userland/pkgtools" && git ls-files -co --exclude-standard | LC_ALL=C sort)
+	_hp_sum=$(cd "$top/userland/pkgtools" && echo "$_hp_files" | while read -r f; do
+		sha256sum "$f"; done | sha256sum | cut -c1-64)
+	AMIX_PKGMK=$_hp/pkgtools/heirloom/build-host/bin/pkgmk AMIX_PKGTRANS=$_hp/pkgtools/heirloom/build-host/bin/pkgtrans
+	export AMIX_PKGMK AMIX_PKGTRANS
+	if [ "$(cat "$_hp/stamp" 2>/dev/null)" = "$_hp_sum" ] && [ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ]; then
+		return 0
+	fi
+	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh, in out/build/pkgtools-host"
+	rm -rf "$_hp"
+	mkdir -p "$_hp/pkgtools"
+	( cd "$top/userland/pkgtools" && echo "$_hp_files" | tr '\n' '\0' |
+		tar --null -T - -cf - ) | tar -x -C "$_hp/pkgtools"
+	( cd "$_hp/pkgtools/heirloom" && ./build-host.sh ) > "$out/build/pkgtools-host.log" 2>&1 || {
 		tail -20 "$out/build/pkgtools-host.log" >&2
 		echo "[FAIL] host pkgtools did not build; log out/build/pkgtools-host.log" >&2
 		exit 1
 	}
 	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] || {
 		echo "[FAIL] build-host.sh left no $AMIX_PKGMK" >&2; exit 1; }
+	echo "$_hp_sum" > "$_hp/stamp"
 }
 
 # step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
