@@ -87,6 +87,25 @@ else
 fi
 PKGVERSION=$VERSION-$PKGREV
 
+# --- the epoch ---------------------------------------------------------------------
+# The package version's own epoch, so one version is one set of bytes in
+# every release: package.sh SOURCE_EPOCH, else the time of the last commit
+# that changed the package directory.  Exported for the whole build, not
+# only the roll: GCC's __DATE__/__TIME__ (vim's version string), configure
+# and the tools the build runs read it, and every time stamp of the
+# datastream is it.  Never the environment's SOURCE_DATE_EPOCH (the build
+# container sets one for its own files).
+if [ -n "$SOURCE_EPOCH" ]; then
+	SOURCE_DATE_EPOCH=$SOURCE_EPOCH _pb_from="package.sh SOURCE_EPOCH"
+else
+	SOURCE_DATE_EPOCH=$(git -C "$HERE" log -1 --format=%ct -- . 2>/dev/null) && [ -n "$SOURCE_DATE_EPOCH" ] || {
+		echo "[FAIL] no epoch: package.sh sets no SOURCE_EPOCH and $HERE has no commit to take it from" >&2
+		exit 1
+	}
+	_pb_from="the package directory's last commit"
+fi
+export SOURCE_DATE_EPOCH
+
 # --- environment, style and hooks -------------------------------------------------
 export AMIX_PREFIX="$PREFIX"
 export TOOLCHAIN
@@ -312,21 +331,6 @@ WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
 cp "$HERE/prototype" "$WORK/prototype"
-# Every time stamp of the datastream is the package version's own epoch, so
-# one version is one set of bytes in every release: package.sh SOURCE_EPOCH,
-# else the time of the last commit that changed the package directory.
-# Never the environment's SOURCE_DATE_EPOCH (the build container sets one
-# for its own files); the roll is given the package's.
-if [ -n "$SOURCE_EPOCH" ]; then
-	SOURCE_DATE_EPOCH=$SOURCE_EPOCH _pb_from="package.sh SOURCE_EPOCH"
-else
-	SOURCE_DATE_EPOCH=$(git -C "$HERE" log -1 --format=%ct -- . 2>/dev/null) && [ -n "$SOURCE_DATE_EPOCH" ] || {
-		echo "[FAIL] no epoch: package.sh sets no SOURCE_EPOCH and $HERE has no commit to take it from" >&2
-		exit 1
-	}
-	_pb_from="the package directory's last commit"
-fi
-export SOURCE_DATE_EPOCH
 echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 
