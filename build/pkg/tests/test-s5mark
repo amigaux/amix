@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# test-s5mark: host test of pkgroll.sh's GATE 3, amix_s5_mark (P-35).
+# test-s5mark: host test of pkgroll.sh's GATE 3, amix_s5_mark.
 #
 # MIT licence, see LICENSE at the top of the repository.
 # Sources the real build/pkg/common/pkgroll.sh in /bin/sh and runs

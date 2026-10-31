@@ -1,6 +1,6 @@
 #!/bin/sh
 # dist-proof: make dist twice, from two clean clones of one commit at two
-# different paths, and the two locks compared (P-38 S7.2).
+# different paths, and the two locks compared.
 #
 # MIT licence, see LICENSE at the top of the repository.
 #

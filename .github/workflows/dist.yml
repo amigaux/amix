@@ -1,4 +1,4 @@
-# The proof of make dist (P-38 S7.2): two make dist runs of one commit, from
+# The proof of make dist: two make dist runs of one commit, from
 # two clean clones at two different paths, in the pinned build container, and
 # their locks compared; with a lock of record, each run is also checked
 # against it. Run by hand for now. See docs/ci.md.

@@ -46,8 +46,8 @@ AMIX_SIBLINGS=$(cd "$AMIX_REPO_ROOT/.." && pwd)
 # --- which toolchain ---------------------------------------------------------
 # TOOLCHAIN=period (the default): gcc-cross-amix, gcc 2.7.2.3 behind the
 # fix_asm wrapper -- the toolchain every published package was built with.
-# TOOLCHAIN=gcc14: gcc14-cross-amix, GCC 14 (owner decision D-3 sec 9,
-# 2026-10-25: the USERLAND compiler; kernel space stays on the period one).
+# TOOLCHAIN=gcc14: gcc14-cross-amix, GCC 14 (the USERLAND compiler; kernel
+# space stays on the period one).
 # Everything gcc14 changes is in gcc14-env.sh.  A recipe opts in by setting
 # AMIX_RECIPE_TOOLCHAINS="period gcc14" before sourcing this file; one that
 # has not been ported refuses gcc14 rather than half-building.
@@ -182,13 +182,11 @@ export AMIX_PKGMK="${AMIX_PKGMK:-$AMIX_PKGMGR/heirloom/build-host/bin/pkgmk}"
 export AMIX_PKGTRANS="${AMIX_PKGTRANS:-$AMIX_PKGMGR/heirloom/build-host/bin/pkgtrans}"
 
 # --- the installation prefix -------------------------------------------------
-# THE SETTLED POLICY IS /opt/amix (COEXISTENCE.md sec 1, ROADMAP D11).  This
-# default is still the older /usr/local because the two Wave-0 packages
-# (libamixcompat, patch) were built and bench-proven there, and moving the
-# default is coupled to the decision on whether those two get re-minted -- see
-# BATCH-1.md's caveats.  Until that is decided, every BATCH-1 recipe exports
-# AMIX_PREFIX=/opt/amix before sourcing this file, and a NEW recipe must do the
-# same.  Recipes must not hard-code a prefix; they interpolate $AMIX_PREFIX so
+# The prefix is /opt/amix (userland/packages/docs/coexistence.md sec 1).  This
+# default is still the older /usr/local because the two earliest packages
+# (libamixcompat, patch) were built and tested on the box there; every recipe
+# exports AMIX_PREFIX=/opt/amix before sourcing this file, and a NEW recipe
+# must do the same.  Recipes must not hard-code a prefix; they interpolate $AMIX_PREFIX so
 # moving it stays one edit.
 export AMIX_PREFIX="${AMIX_PREFIX:-/usr/local}"
 

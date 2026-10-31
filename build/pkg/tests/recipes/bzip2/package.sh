@@ -1,4 +1,4 @@
-# package.sh -- bzip2 1.0.8 (P-31 sec 10.9); assignments only.
+# package.sh -- bzip2 1.0.8; assignments only.
 NAME=bzip2
 PKG=bzip2
 VERSION=1.0.8

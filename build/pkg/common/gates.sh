@@ -19,7 +19,7 @@ gates.sh)
 	;;
 esac
 
-# amix_gate_d4 <file|dir...> -- ROADMAP D4, the 68060 gate.  STRICT since
+# amix_gate_d4 <file|dir...> -- the 68060 gate.  STRICT since
 # 2026-10-05: ANY 68060-unimplemented integer instruction fails the build.
 #
 # The 68060 does not implement MULU.L/MULS.L <ea>,Dh:Dl (64-bit product),
@@ -594,9 +594,9 @@ amix_gate_g14_llprintf() {
 # amix_gate_g14_fpu <elf|archive> -- the FPU gate.  FAILS on any 68040/68060-only
 # FPU form: fsmove/fdmove, fsadd/fdadd, fssub/fdsub, fsmul/fdmul, fsdiv/fddiv,
 # fssqrt/fdsqrt, fsabs/fdabs, fsneg/fdneg (single/double-rounding variants).
-# A 68881/68882 does not have them: on the 030 golden row (68030 + 68882,
-# stock 2.1c kernel) the first one kills the process with SIGSYS ("Bad System
-# Call", PHASE2 2026-10-25, gcc14 make built -mcpu=68060).  -m68020-60 keeps
+# A 68881/68882 does not have them: on a 68030 with a 68882 (stock 2.1c
+# kernel) the first one kills the process with SIGSYS ("Bad System Call",
+# 2026-10-25, gcc14 make built -mcpu=68060).  -m68020-60 keeps
 # them out of compiled code; the toolchain runtime (libgcc, libamixc99) built
 # --with-cpu=68060 still carries them, so a binary that links such a member
 # fails here and the gate names the symbol it sits in.  Then it counts the
@@ -641,7 +641,7 @@ amix_gate_g14_strict() {
 		return 1
 	fi
 	echo "  STRICT ok  no -Wno-error on any compile line (configure-only leniency did not leak)"
-	# -mno-strict-align (gcc14-env.sh, owner decision 2026-10-27): every GCC 14
+	# -mno-strict-align (gcc14-env.sh): every GCC 14
 	# compile line in the log carries it as its last alignment option.
 	_gs_cc=$(basename "${AMIX_GCC14_CC:-m68k-elf-gcc}")
 	_gs_out=$(grep -F -- "$_gs_cc" "$1" | grep -E -- '(^|[[:space:]])-c([[:space:]]|$)' | awk '

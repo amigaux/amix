@@ -15,7 +15,7 @@ byte for byte.  It prints the three (or more) values and exits 0 when they
 are equal, 1 when any differs, 2 on an unreadable input.
 
 The rule is the core's from 7b07bce on; a core before it compared the
-blank too and refused every k46 core-tier module (S5-13).  Which core a cut
+blank too and refused every k46 core-tier module.  Which core a cut
 links is the recipe's second gate (the cut's dlm-rev against the pin).
 """
 import struct

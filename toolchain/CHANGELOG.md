@@ -26,7 +26,7 @@ AMIX_DISTFILES lacked the file). test-tools 12/12, now offline.
 ## 2026-10-31 — gcc14 in the container builds dlm's box binaries byte-identical (38feabe)
 
 toolchain/README.md records that the container's gcc14 builds kernel/dlm's box binaries byte-identical to the
-workstation build: kbootset 1511ef9b (-28's) and modadmin 74aa6272 (-9's), as measured by dlm.
+workstation build: kbootset 1511ef9b (-28's) and modadmin 74aa6272 (-9's).
 
 ## 2026-10-31 — container-kit.sh prints kernel/dlm's kit.digests (bfcfe76)
 
@@ -38,7 +38,7 @@ unchanged.
 netbsd-syssrc.distfile pins NetBSD 10.1's syssrc.tgz (79497697 B, sha256 76a600e7…) at our copy on
 amigaux/amix-distfiles; a distfile pin is `<URL> <sha256>`, named .distfile so the image's cache key does not read it.
 fetch-distfile puts the file in out/cache only when its sha256 matches; AMIX_DISTFILES=<dir> is a local override.
-m68k-gnu-bin links the m68k-linux-gnu-* tools the port's scripts call to gcc14's m68k-elf-* (P-38 S1.4); the port's
+m68k-gnu-bin links the m68k-linux-gnu-* tools the port's scripts call to gcc14's m68k-elf-*; the port's
 FPSP/ISP objects build byte-identical through it. New host test toolchain/test-tools 12/12 (a CI step).
 
 ## 2026-10-30 — apt and cache-restore retries; old images pruned (b352285, de7b1e0)

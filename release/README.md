@@ -1,10 +1,10 @@
 # release
 
 Lock files: the exact inputs and outputs of each release. None is here yet:
-the lock of record for 1.1 is written when the 1.1 set is frozen (P-38 S7.1).
+the lock of record for 1.1 is written when the 1.1 set is frozen.
 `release/amix-<version>.lock` is the lock of the promoted candidate, written
-by `make lock` (`build/mklock`) at the end of the make dist that built it
-(P-38 S1.6). A rebuild is proven against it:
+by `make lock` (`build/mklock`) at the end of the make dist that built it.
+A rebuild is proven against it:
 
 ```sh
 make dist SYSTEM=../amix-system LOCK=release/amix-1.1.lock
@@ -23,7 +23,7 @@ each sorted in C order, so one build has one lock.
 ```
 #amix-lock 1
 amix <commit>                         the amix commit built
-epoch package-version (...)           the epoch rule (P-38 D-b)
+epoch package-version (...)           the epoch rule
 dirty <sha256>                        only when tracked files differ from the commit
 image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.sha256, or "host"
 

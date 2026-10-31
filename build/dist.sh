@@ -1,5 +1,5 @@
 #!/bin/sh
-# dist.sh: the steps of make dist (P-38 S1.5).
+# dist.sh: the steps of make dist.
 #
 # MIT licence, see LICENSE at the top of the repository.
 #
@@ -18,8 +18,8 @@
 #                kernel/port/build/cuts/<id>/ (where kern46m reads it); its sums
 #                in out/kernels/k46.list
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
-#   drivers      every driver module on both lines, on the kit (P-38 S3.2,
-#                D-e): kernel/drivers/{a4091,z3660scsi,z3660eth}/module and
+#   drivers      every driver module on both lines, on the kit:
+#                kernel/drivers/{a4091,z3660scsi,z3660eth}/module and
 #                the forks at their pins (cdfs, gayle-ide, paula, z3660rtg):
 #                out/modules/<line>/<name>
 #   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
@@ -32,7 +32,7 @@
 #   catalogs     both catalogs, by pkgtools' gen-catalog.py over
 #                out/{kspace,userland}/pkgs with their conf layers:
 #                out/{kspace,userland}/{catalog,catalog.md5}
-#   media        CD, netinstall, floppies (P-38 S6.1)      not in make dist yet
+#   media        CD, netinstall, floppies                  not in make dist yet
 #   lock         out/lock, every input and output (release/README.md); with
 #                LOCK=<file>, refuses a build that is not that lock
 #
@@ -52,7 +52,7 @@
 # Before any step: SYSTEM (or AMIX_SYSTEM; default the amix-system checkout
 # beside the main working tree) must match system/MANIFEST.sha256, and the
 # checkout must not be shallow, since a package's epoch is its directory's
-# last commit (P-38 D-b). Exit 0 done, 1 failed, 2 usage, 3 a step that is
+# last commit. Exit 0 done, 1 failed, 2 usage, 3 a step that is
 # not in make dist yet.
 set -eu
 
@@ -72,8 +72,8 @@ for s; do
 	esac
 done
 
-missing() {	# missing <step> <P-38 step and owner>
-	echo "[MISSING] $1: not in make dist yet ($2)" >&2
+missing() {	# missing <step>
+	echo "[MISSING] $1: not in make dist yet" >&2
 	exit 3
 }
 
@@ -94,7 +94,7 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	"$top/system/check-amix-system" "$sys" || exit 1
 	[ "$(git -C "$top" rev-parse --is-shallow-repository 2>/dev/null)" = false ] || {
 		echo "[FAIL] make dist: $top is a shallow clone, or not a git checkout; a package's epoch" >&2
-		echo "       is its directory's last commit, so make dist needs the history (P-38 D-b)" >&2
+		echo "       is its directory's last commit, so make dist needs the history" >&2
 		exit 1
 	}
 	if [ -n "${DIST_HOST:-}" ]; then
@@ -378,11 +378,11 @@ host_pkgtools() {
 	echo "$_hp_sum" > "$_hp/stamp"
 }
 
-# step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
-# (P-38 S3.3). Each rolls all its recipes, writes its .pkg files to
+# step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh.
+# Each rolls all its recipes, writes its .pkg files to
 # $AMIX_BUILD_ROOT/kspace/pkg/ and prints a `pkg <file> <sha256>` line for
 # each; exit 0, 3 when an input outside the recipe is absent (with a
-# [MISSING] line naming the P-38 step and owner), or another code for a
+# [MISSING] line naming the input), or another code for a
 # failure. Run in provider order; the directories that have none yet, or
 # exit 3, are named, the others still run, and the step then exits 3.
 kspace_dirs() {
@@ -396,16 +396,6 @@ kspace_dirs() {
 		[ -d "$d" ] && echo "kernel/drivers/$(basename "$d")"
 	done
 	return 0
-}
-
-kspace_owner() {
-	case $1 in
-	kernel/dlm) echo "the dlm station" ;;
-	kernel/k30) echo "the k30 station" ;;
-	kernel/port) echo "the port station" ;;
-	kernel/modules/*) echo "the modules station" ;;
-	*) echo "${1#kernel/drivers/}'s station" ;;
-	esac
 }
 
 step_kspace() {
@@ -448,7 +438,7 @@ step_kspace() {
 		python3 -I "$here/pkg/pkgmeta" guard "$out/kspace/pkgs"
 	fi
 	for d in $missing; do
-		echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
+		echo "[MISSING] kspace: $d has no pkg/build.sh yet" >&2
 	done
 	for d in $waiting; do
 		echo "[MISSING] kspace: $d/pkg/build.sh is waiting for an input (its [MISSING] line above)" >&2
@@ -487,7 +477,7 @@ run() {
 		done
 		;;
 	catalogs) step_catalogs ;;
-	media) missing media "P-38 S6.1, installng after its move-in" ;;
+	media) missing media ;;
 	lock)
 		# LOCK=<lock of record>: refuse a build that differs from it
 		python3 -I "$here/mklock" "$top" "$out" ${LOCK:+--check "$LOCK"}

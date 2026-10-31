@@ -19,14 +19,14 @@
 # <kabi>, what the module says: a module carries the highest minor it
 # imports, never below 1.2 (amix-dlm C3-2 v2), so a filesystem module built
 # with a kabi 1.3 kit says 1.2.
-# rebuild (S5-12 R2): the carve directory's sources (Makefile, Master,
+# rebuild: the carve directory's sources (Makefile, Master,
 # <fs>_wrap.c; never its build/) copied into <workdir>, `make KIT=<kit>`
 # (with <extra>, also EXTRA=<extra>: the stock exp object where it is now,
 # when the carve's Makefile names it where the cut was made),
 # the result byte-equal to the pinned object, modcheck ok, and no warning
 # naming rootvp (the kit's allowlist binds it, amix-dlm 445c12e; COMMON
 # warnings naming the module's own symbols are expected).
-# kcore_strips (S5-13): the cut's module core (the port's build/dlm-rev/.rev)
+# kcore_strips: the cut's module core (the port's build/dlm-rev/.rev)
 # is the pinned amix-dlm commit, and that commit contains <strip commit>
 # (7b07bce: plat_dmainit skips the stamp's leading blank; an older core took
 # " 68060-..." verbatim and refused every core-tier module, EBADVER).
@@ -120,7 +120,7 @@ amix_kcore_strips() {
 		unset _kc_rev _kc_pin; return 1
 	fi
 	if ! git -C "$AMIX_DLM" merge-base --is-ancestor "$3" "$_kc_rev" 2>/dev/null; then
-		echo "[FAIL] the cut's core $2 predates $3: it keeps the stamp's leading blank and refuses every core-tier module (S5-13)" >&2
+		echo "[FAIL] the cut's core $2 predates $3: it keeps the stamp's leading blank and refuses every core-tier module" >&2
 		unset _kc_rev _kc_pin; return 1
 	fi
 	echo "  the cut's core: amix-dlm $2 (dlm-rev ${_kc_rev%${_kc_rev#???????}}), contains $3 (skips the stamp's leading blank)"

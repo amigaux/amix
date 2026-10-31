@@ -1,4 +1,4 @@
-# build/Makefile: make dist and its partial targets (dist.sh, P-38 S1.5), the
+# build/Makefile: make dist and its partial targets (dist.sh), the
 # host tests of the build framework, the selftests of the packaging harness
 # (they need the cross toolchains: run them in the build container), and the
 # check of the packages directories.

@@ -27,7 +27,7 @@ gcc14-pin.sh)
 esac
 
 # path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.
-# Re-pinned 2026-10-30 (owner, option b) to the build container's gcc14:
+# Re-pinned 2026-10-30 to the build container's gcc14:
 # toolchain/Containerfile builds b51ff39 (the public amigaux/gcc14-cross-amix,
 # branch upstream-58130fe-plus: Antti's 58130fe plus the m68020-60 runtime
 # fix) reproducibly, with the sysroot inside the prefix, and
@@ -81,7 +81,7 @@ amix_g14_abi_selfcheck() {
 }
 
 # amix_g14_align_check <cc> <arch flags> <cflags> -- the userland alignment
-# flag (owner decision 2026-10-27): every GCC 14 USERLAND compile drops strict
+# flag: every GCC 14 USERLAND compile drops strict
 # alignment.  GCC 14's m68k-elf default is strict: it reads an unaligned int
 # (and even a stacked pointer argument) a byte or word at a time; on a real
 # 68LC060 Dhrystone ran 1.60x faster with -mno-strict-align.  The 68020
@@ -101,7 +101,7 @@ amix_g14_align_check() {
 		done | tail -1)
 		[ "$_gal_last" = -mno-strict-align ] || {
 			echo "[FAIL] TOOLCHAIN=gcc14: '$_gal_set' does not end with -mno-strict-align" >&2
-			echo "       (gcc14-env.sh AMIX_ARCH_FLAGS; owner decision 2026-10-27)" >&2
+			echo "       (gcc14-env.sh AMIX_ARCH_FLAGS)" >&2
 			_gal_rc=1
 		}
 	done

@@ -7,7 +7,7 @@
  * ships the sidestep in every binary of the ported pkg toolchain; written
  * afresh here so a recipe can link it as one plain object.)
  *
- * WHY (ROADMAP.md D3, PORTING.md 3.1).  The FIRST getpwnam() of a process
+ * WHY (userland/packages/docs/porting.md sec 3.1).  The FIRST getpwnam() of a process
  * crashes inside the stock shared libc.so.1's passwd-record handling; the group
  * path survives, but nothing about the passwd side is debuggable off-box, and
  * interposition is ruled out because libc calls its internal helpers through

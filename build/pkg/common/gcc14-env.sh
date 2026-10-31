@@ -1,13 +1,11 @@
 # gcc14-env.sh -- TOOLCHAIN=gcc14: build a recipe with GCC 14 (gcc14-cross-amix).
 #
-# Sourced by amix-env.sh only, never by a recipe and never executed.  Owner
-# decision D-3 sec 9 (2026-10-25): gcc14-cross-amix is the USERLAND compiler;
-# kernel space stays on gcc-cross-amix.  Nothing built through this file is a
-# kernel object.  The period toolchain stays the default (TOOLCHAIN unset).
+# Sourced by amix-env.sh only, never by a recipe and never executed.
+# gcc14-cross-amix is the USERLAND compiler; kernel space stays on
+# gcc-cross-amix.  Nothing built through this file is a kernel object.  The
+# period toolchain stays the default (TOOLCHAIN unset).
 #
-# What changes against the period toolchain, and why (evaluation:
-# 2026-10-25-gcc14-eval/EVALUATION.md sec 5, historical: in the old
-# workspace's tmp/, not carried over):
+# What changes against the period toolchain, and why:
 #
 #   compiler   m68k-elf-gcc 14.2.0 + binutils 2.43.1, configured
 #              --with-sysroot.  No fix_asm wrapper, no gcc.real, no
@@ -16,14 +14,14 @@
 #              interpreter /usr/lib/libc.so.1, -Ttext-segment=0x80000000,
 #              SysV hash, no RELRO, -malign-int, and
 #              -L usr/ccs/lib -L usr/lib -lamixc99 -lc.
-#   CPU        -m68020-60 (PHASE2, 2026-10-25): code for the 68020 through
+#   CPU        -m68020-60: code for the 68020 through
 #              the 68060, tuned for the 060.  GCC then never emits the 64-bit
 #              MUL.L/DIV.L forms the 68060 removed, and its FPU code is the
 #              68881 set.  NOT the toolchain's --with-cpu=68060 default:
 #              -mcpu=68060 also emits the 040/060-only FPU forms (fdmove,
 #              fdadd, fdmul, fddiv, ...), which a 68881/68882 lacks -- the
-#              gcc14 make built that way died with SIGSYS on the 030 golden
-#              row (68030 + 68882).  068060-only codegen is never the default;
+#              gcc14 make built that way died with SIGSYS on a 68030 with a
+#              68882.  068060-only codegen is never the default;
 #              amix_gate_g14_fpu refuses any such form in a payload, whatever
 #              the flags.  It is HARD-FLOAT (__HAVE_68881__): any FP
 #              instruction needs a 68881/2 or an 040/060 FPU, so a binary that
@@ -32,11 +30,11 @@
 #              hard-float too (-m68020 also defines __HAVE_68881__); what each
 #              package actually contains is counted at build time
 #              (amix_gate_g14_fpu) and recorded, not assumed.
-#   alignment  -mno-strict-align (owner decision 2026-10-27): all GCC 14
-#              userland drops strict alignment.  GCC 14's m68k default reads
+#   alignment  -mno-strict-align: all GCC 14 userland drops strict
+#              alignment.  GCC 14's m68k default reads
 #              an unaligned int, even a stacked pointer argument, a byte or
 #              a word at a time; with the flag Dhrystone ran 1.60x faster on
-#              a real 68LC060 (amix-bench-g14, d-block j5).  The 68020-68060
+#              a real 68LC060 (amix-bench-g14).  The 68020-68060
 #              do unaligned data accesses in hardware; no layout or calling
 #              convention changes (-malign-int stays).  It sits in
 #              AMIX_ARCH_FLAGS below and nowhere else; amix_g14_align_check
@@ -225,7 +223,7 @@ export AMIX_GCC14_DECLS="$AMIX_PKG_COMMON/gcc14/amix-decls.h"
 
 export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
 
-# Path remapping (P-38 S1.3): what the compiler writes of a path (__FILE__,
+# Path remapping: what the compiler writes of a path (__FILE__,
 # debug info) names /build for the build tree, /src for the checkout and
 # /gcc14 for the toolchain, wherever they are on this host, so a build at
 # another path gives the same bytes. On CC itself, since a recipe's own

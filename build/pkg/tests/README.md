@@ -3,8 +3,8 @@
 `test-pkgmeta` is the host test of `pkgmeta` and `check-packages`;
 `test-pkgbuild` is the host test of the driver and `layout.sh`;
 `test-s5mark` is the host test of `pkgroll.sh`'s GATE 3, the s5 rule and
-the UFS mark (`APKG_FSTYPE=ufs`, P-35); `test-conffile` the host test of its
-`CONFFILES` step (P-36), with stand-ins for userland/pkgtools' class action
+the UFS mark (`APKG_FSTYPE=ufs`); `test-conffile` the host test of its
+`CONFFILES` step, with stand-ins for userland/pkgtools' class action
 scripts; `test-dsnorm` the host test of `common/dsnorm.py`, the spool and
 datastream normalising of the reproducible roll, on datastreams it makes
 itself; `test-classes` the host test of the roll's class gates (every class
