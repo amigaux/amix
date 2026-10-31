@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — a filesystem module can load at its first mount; kabi 1.4 (44ccad1, 5d03abe, 5d80c50, 6bb7dd6, 931fff2)
+
+Core patch 0048: a demand-class record with fs=<type> gets a stub vfssw row at the first sysinit entry. The first
+mount of that type loads the module and mounts through the row it fills in place. No stock code changes, nothing in
+safe mode, and filesystem modules stay pinned. kbootset composes such modules: fs= in the record, kabi minor 4
+required, one module per type, promotion as the rootfs. The kit moves to kabi 1.4, which adds no DDI name; a
+demand-class filesystem module is tagged 1.4. Contracts C3-1 v6, C3-2 v3, C3-5 v20, C4-6 v5, C2-4 v20. Unminted
+recipes: kbootset -31, dlmkit -14.
+
 ## 2026-10-31 — spec 50: the CD medium's cdfs is boot class; the medium roots on its RAM disk (f3d8ca2)
 
 ## 2026-10-31 — kbootset -30 and dlmkit -13 recipes re-pinned to 4ccb3f0 (0ad4faa)
