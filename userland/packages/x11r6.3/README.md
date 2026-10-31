@@ -85,7 +85,8 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   built for the build host (`build.sh`'s `hostx`), never the host's X install. They are built
   from a copy of the configured tree with the host cc and `-DLONG64` (R6.3's font code otherwise
   assumes 32-bit longs). The font side keeps `-DAMIX -Dm68k`, so `servermd.h` gives the PCF
-  files Amix's MSB-first layout, the server's own. `patches/host/` applies to that copy only:
+  files Amix's MSB-first layout, the server's own. The server's default font path is these three directories
+  (`amix.cf`'s `DefaultFontPath`), so it starts without `-fp`. `patches/host/` applies to that copy only:
   glibc's `stdin`/`stderr` cannot initialise xkbcomp's statics.
 - **xdm** links its greeter in (`SharedLibXdmGreet NO`): there are no shared libraries to
   `dlopen`.
