@@ -82,3 +82,20 @@ XMULIB = -lXmu
  * .dir/.pag format no build-host tool writes (README) */
 #undef UseRgbTxt
 #define UseRgbTxt YES
+/* man pages in the stock section names (svr4.cf would use 1x/3x): the stage
+ * hook moves them to /opt/amix/man/<sect>/<name> */
+#undef ManSuffix
+#define ManSuffix	1
+#undef LibManSuffix
+#define LibManSuffix	3
+#undef FileManSuffix
+#define FileManSuffix	4
+#undef MiscManSuffix
+#define MiscManSuffix	5
+/* the tree's BSD-style install script (bsdinst.sh calls an SVR4 install): the
+ * stage hook installs as the build user, -c and -m only */
+#undef InstallCmd
+#define InstallCmd $(SHELL) $(CONFIGSRC)/util/install.sh
+/* xdm's greeter linked in, not a shared library it dlopens (static libraries) */
+#undef SharedLibXdmGreet
+#define SharedLibXdmGreet NO

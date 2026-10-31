@@ -10,9 +10,10 @@ It coexists with the stock X11R4/R5 in `/usr/X`.
     AMIX_USR_AMIGA=<dir with amiga/ and ucblib/> sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
 **Status: work in progress.** The whole tree (libraries, server, clients) compiles under the gcc14
-strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on all
-1237 compile lines. Staging the payload is next: install, fonts, rgb, XKB data, man pages, the
-`/usr/X11R6` link and the profile.d drop-in. The package does not roll yet.
+strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on every
+compile line. It stages, and the prototype matches the payload (1077 paths). The roll stops at the
+NEEDED gate. `Xzz9000` needs `/usr/amiga/lib/libscreen.so`, the stock screen manager, which every
+Amix box has but the gcc14 sysroot does not carry yet.
 
 Package: `x11r63`, category `x11`, set `extra`. Licence: the X Consortium's (`X11`) for X11R6.3,
 MIT for isoriano's port. Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
@@ -50,5 +51,18 @@ at a directory that holds both.
   imake runs through `imakecpp.sh`, and config files go through a plain host `cpp -traditional`.
 - **rgb.** The server's colour database reader is Amix's classic `dbm`, whose `.dir`/`.pag` format
   no build-host tool writes. So the server reads `rgb.txt` itself (`UseRgbTxt`).
+- **Installs** go through the tree's BSD-style `config/util/install.sh`, because `bsdinst.sh` calls
+  an SVR4 `install`.
+- **Fonts** misc, 75dpi and 100dpi are compiled and indexed by the build host's `bdftopcf` and
+  `mkfontdir`. PCF records its own byte order, and `fonts.dir` is text. The XKB data's `.dir`
+  listings come from the build host's `xkbcomp -lfhlpR`.
+- **xdm** links its greeter in (`SharedLibXdmGreet NO`): there are no shared libraries to
+  `dlopen`.
+- **X** is a hard link to `Xzz9000`. `/usr/X11R6` is an absolute symlink to `/opt/amix/X11R6`.
+  `/etc/profile.d/x11r63.sh` puts `/opt/amix/X11R6/bin` last on `PATH`, behind the stock X in
+  `/usr/X/bin`.
+- **Man pages** go to sections 1/3/4/5 (not svr4.cf's `1x`/`3x`), then into
+  `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`.
+- The XIE and PEX client libraries are not shipped: their extensions are off.
 - **MIT-SHM** is built in. The 68040/68060 kernel's shared-memory fixes make it safe; on a kernel
   without them, clients must not use it.

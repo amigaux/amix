@@ -168,13 +168,25 @@ XdmcpReallocARRAYofARRAY8
  {
 --- a/programs/xdm/greeter/greet.c
 +++ b/programs/xdm/greeter/greet.c
-@@ -45,6 +45,11 @@
+@@ -45,6 +45,23 @@
  #include "greet.h"
  #include "Login.h"
  
 +/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
 +int DrawFail (Widget ctx);
 +int Verify (struct display *d, struct greet_info *greet, struct verify_info *verify);
++int PingServer (struct display *d, Display *alternateDpy);
++int SessionPingFailed (struct display *d);
++int Debug (char *fmt, ...);
++int LogError (char *fmt, ...);
++int RegisterCloseOnFork (int fd);
++int ClearCloseOnFork (int fd);
++int SecureDisplay (struct display *d, Display *dpy);
++int UnsecureDisplay (struct display *d, Display *dpy);
++int SetupDisplay (struct display *d);
++int SessionExit (struct display *d, int status, int removeAuth);
++int DeleteXloginResources (struct display *d, Display *dpy);
++int source (char **environ, char *file);
 +
 +
  #if GREET_LIB
@@ -182,18 +194,34 @@ XdmcpReallocARRAYofARRAY8
   * Function pointers filled in by the initial call ito the library
 --- a/programs/xdm/greeter/Login.c
 +++ b/programs/xdm/greeter/Login.c
-@@ -47,6 +47,11 @@
+@@ -47,6 +47,13 @@
  # include "greet.h"
  # include "LoginP.h"
  
 +/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
 +int ResetLogin (LoginWidget w);
 +int RedrawFail (LoginWidget w);
++int Debug (char *fmt, ...);
++int LogOutOfMem (char *fmt, ...);
 +
 +
  #define offset(field) XtOffsetOf(LoginRec, login.field)
  #define goffset(field) XtOffsetOf(WidgetRec, core.field)
  
+--- a/programs/xdm/greeter/verify.c
++++ b/programs/xdm/greeter/verify.c
+@@ -50,6 +50,11 @@
+ 
+ # include	"greet.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int printEnv (char **e);
++
++
+ #ifdef X_NOT_STDC_ENV
+ char *getenv();
+ #endif
 --- a/programs/xdm/mitauth.c
 +++ b/programs/xdm/mitauth.c
 @@ -42,6 +42,10 @@

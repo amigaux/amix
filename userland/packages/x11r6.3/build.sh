@@ -74,6 +74,40 @@ XCC
 		"$(grep -c ' error: ' "$BUILD/make.log") errors"
 }
 
+xinst() {	# xinst <log> <dir> <targets...>: an imake install into the payload
+	_xi_log=$1 _xi_dir=$2; shift 2
+	make -C "$_xi_dir" DESTDIR="$DEST" "$@" > "$BUILD/$_xi_log" 2>&1 < /dev/null &&
+	! grep -E 'Usage: install|install: |No such file|cannot (stat|create)|Error [0-9]' "$BUILD/$_xi_log" > /dev/null || {
+		echo "[FAIL] install in $_xi_dir; see $BUILD/$_xi_log" >&2; exit 1; }
+}
+
 stage() {
-	:
+	xinst i-include.log include install
+	xinst i-lib.log lib install
+	xinst i-nls.log nls install
+	xinst i-server.log programs/Xserver install install.man
+	# X is Xzz9000 under its usual name: a hard link (stock pkgadd mangles a relative symlink)
+	rm -f "$DEST$PREFIX/bin/X" && ln "$DEST$PREFIX/bin/Xzz9000" "$DEST$PREFIX/bin/X"
+	# the XIE and PEX client libraries: their extensions are not built
+	rm -f "$DEST$PREFIX/lib/libXIE.a" "$DEST$PREFIX/lib/libPEX5.a"
+	for c in $XCLIENTS; do
+		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR: the build host's
+		xinst i-$c.log programs/$c install install.man XKBCOMPCMD=xkbcomp
+	done
+	# fonts: compiled and indexed by the build host's bdftopcf and mkfontdir
+	for f in misc 75dpi 100dpi; do
+		xinst i-font-$f.log fonts/bdf/$f install FONTC=bdftopcf MKFONTDIR=mkfontdir
+	done
+	mkdir -p "$DEST$PREFIX/lib/X11"
+	cp programs/rgb/rgb.txt "$DEST$PREFIX/lib/X11/rgb.txt"
+	# the system profile drop-in and the /usr/X11R6 link (prototype)
+	mkdir -p "$DEST/etc/profile.d" "$DEST/usr"
+	cp "$HERE/etc/x11r63.sh" "$DEST/etc/profile.d/x11r63.sh"
+	chmod 0444 "$DEST/etc/profile.d/x11r63.sh"
+	ln -s "$PREFIX" "$DEST/usr/X11R6"
+	echo "  staged: $(cd "$DEST" && find . -type f | wc -l) files"
+	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
+	. "$HERE/../tools/manpages.sh"
+	amix_man_relayout
+	amix_man_whatis
 }
