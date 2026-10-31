@@ -1,0 +1,368 @@
+Ours.  Declarations gcc 14 needs in the X server (dix, os, Xext, xkb, mi, the Amiga DDX):
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  programs/Xserver/Xext/security.c: RemoveAuthorization(short unsigned int name_length -> int); RemoveAuthorization(short unsigned int data_length -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): ClientSleepUntil 
+WriteSConnSetupPrefix XdmcpAllocARRAY8 XdmcpReallocARRAY16 XdmcpReallocARRAYofARRAY8 
+XkbFilterEvents XkbFreeInfo XkbFreeSrvLedInfo XpUnsetFontResFunc 
+
+--- a/programs/Xserver/cfb/cfbimage.c
++++ b/programs/Xserver/cfb/cfbimage.c
+@@ -56,6 +56,10 @@
+ #include "cfbmskbits.h"
+ #include "servermd.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void miGetImage (DrawablePtr pDraw, int sx, int sy, int w, int h, unsigned int format, long unsigned int planeMask, char *pDst);
++
++
+ void
+ cfbPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage)
+     DrawablePtr pDraw;
+--- a/programs/Xserver/dix/devices.c
++++ b/programs/Xserver/dix/devices.c
+@@ -61,6 +61,12 @@
+ #include "cursorstr.h"
+ #include "dixstruct.h"
+ #include "site.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XkbFreeInfo ();	/* unprototyped: its types are not defined here */
++void XkbFreeSrvLedInfo ();	/* unprototyped: its types are not defined here */
++int XkbFinishDeviceInit (DeviceIntPtr pXDev);
++
+ #define	XKB_IN_SERVER
+ #ifdef XKB
+ #include "XKBsrv.h"
+--- a/programs/Xserver/dix/dispatch.c
++++ b/programs/Xserver/dix/dispatch.c
+@@ -60,6 +60,10 @@
+ #include "servermd.h"
+ #include "extnsionst.h"
+ #include "dixfont.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void ProcessWorkQueueZombies (void);
++
+ #ifdef XCSECURITY
+ #define _SECURITY_SERVER
+ #include "extensions/security.h"
+--- a/programs/Xserver/dix/dixfonts.c
++++ b/programs/Xserver/dix/dixfonts.c
+@@ -36,6 +36,15 @@
+ #include "dixfontstr.h"
+ #include "closestr.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int EmptyFontPatternCache (FontPatternCachePtr cache);
++int PrinterFontRegisterFpeFunctions (void);
++int FontFileCheckRegisterFpeFunctions (void);
++void check_fs_register_fpe_functions (void);
++int FontFileRegisterFpeFunctions (void);
++void fs_register_fpe_functions (void);
++
++
+ #ifdef DEBUG
+ #include	<stdio.h>
+ #endif
+--- a/programs/Xserver/dix/events.c
++++ b/programs/Xserver/dix/events.c
+@@ -62,6 +62,10 @@
+ 
+ #include "dixstruct.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Bool XkbFilterEvents ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef XKB
+ #include "XKBsrv.h"
+ #endif
+--- a/programs/Xserver/dix/initatoms.c
++++ b/programs/Xserver/dix/initatoms.c
+@@ -5,6 +5,10 @@
+ 
+ #include "X.h"
+ #include "Xatom.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void AtomError (void);
++
+ extern Atom MakeAtom();
+ MakePredeclaredAtoms()
+ {
+--- a/programs/Xserver/hw/amix/amixInit.c
++++ b/programs/Xserver/hw/amix/amixInit.c
+@@ -54,6 +54,12 @@
+ #include    "opaque.h"
+ #include    "mipointer.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Bool mieqInit (DevicePtr pKbd, DevicePtr pPtr);
++int amixDisableCursor (ScreenPtr pScreen);
++Bool amixCursorInitialize (ScreenPtr pScreen);
++
++
+ extern int amixMouseProc();
+ extern int amixKbdProc();
+ extern Bool amixMonoProbe(), amixMonoCreate();
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -51,6 +51,14 @@
+ #include    "opaque.h"
+ #include    "rtg/zz9000/zz9000.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int mieqProcessInputEvents (void);
++void miPointerUpdate (void);
++void amixMouseEnqueueEvent (DevicePtr pMouse, struct InputEvent *fe);
++void amixKbdEnqueueEvent (DevicePtr pKeyboard, struct InputEvent *fe);
++int amixDisableCursor (ScreenPtr pScreen);
++
++
+ int	    	lastEventTime = 0;
+ extern int      screenIsSaved;
+ extern void	SaveScreens();
+--- a/programs/Xserver/hw/amix/amixKbd.c
++++ b/programs/Xserver/hw/amix/amixKbd.c
+@@ -58,6 +58,13 @@
+ #include <fcntl.h>
+ #include <sys/wait.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void mieqEnqueue (xEvent *e);
++Bool amixZaphodHack (ScreenPtr *pScreen, int *x, int *y, int index);
++void miPointerAbsoluteCursor (int x, int y, long unsigned int time);
++int amixEnqueueEvents (void);
++
++
+ /*
+ ** The bell: a square wave on /dev/audio, the Amiga's Paula through the
+ ** AMIX audio driver (one signed 8-bit mono channel per open(); the sample
+--- a/programs/Xserver/hw/amix/amixMono.c
++++ b/programs/Xserver/hw/amix/amixMono.c
+@@ -1,6 +1,13 @@
+ #include    "amix.h"
+ #include    "resource.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++Bool mfbScreenInit (register ScreenPtr pScreen, pointer pbits, int xsize, int ysize, int dpix, int dpiy, int width);
++Bool amixScreenAllocate (ScreenPtr pScreen);
++Bool amixSaveScreen (ScreenPtr pScreen, int on);
++Bool mfbCreateDefColormap (ScreenPtr pScreen);
++
++
+ struct scrtype DefaultScrType =
+ {
+     SF_LESSRES|SF_LESSPLANES,
+--- a/programs/Xserver/hw/amix/amixMouse.c
++++ b/programs/Xserver/hw/amix/amixMouse.c
+@@ -51,6 +51,11 @@
+ #include    "amix.h"
+ #include    "mipointer.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void mieqEnqueue (xEvent *e);
++Bool amixZaphodHack (ScreenPtr *pScreen, int *x, int *y, int index);
++
++
+ Bool ActiveZaphod = TRUE;
+ int amixFlushScreenInputIndex = -1;
+ 
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
+@@ -28,6 +28,10 @@
+ #include "../rtg.h"
+ #include "zz9000.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int miClipSpans (RegionPtr prgnDst, register DDXPointPtr ppt, register int *pwidth, int nspans, register DDXPointPtr pptNew, int *pwidthNew, int fSorted);
++
++
+ /* Uncomment to dump the first 40 ZZ9000FillSpans() calls (y/x/width of
+ ** each clipped span) to the server log - diagnostic for text/glyph
+ ** rendering corruption.  Text and the software cursor both reach the
+--- a/programs/Xserver/mi/miinitext.c
++++ b/programs/Xserver/mi/miinitext.c
+@@ -49,6 +49,10 @@
+ 
+ #include "misc.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void RecordExtensionInit (void);
++
++
+ #ifdef NOPEXEXT /* sleaze for Solaris cpp building XsunMono */
+ #undef PEXEXT
+ #endif
+--- a/programs/Xserver/mi/miscrinit.c
++++ b/programs/Xserver/mi/miscrinit.c
+@@ -39,6 +39,10 @@
+ #include "dix.h"
+ #include "miline.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void ShmRegisterFbFuncs (ScreenPtr pScreen);
++
++
+ /* We use this structure to propogate some information from miScreenInit to
+  * miCreateScreenResources.  miScreenInit allocates the structure, fills it
+  * in, and puts it into pScreen->devPrivate.  miCreateScreenResources 
+--- a/programs/Xserver/os/access.c
++++ b/programs/Xserver/os/access.c
+@@ -111,6 +111,11 @@
+ #include "dixstruct.h"
+ #include "osdep.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XdmcpRegisterConnection (int type, char *address, int addrlen);
++void XdmcpRegisterBroadcastAddress (struct sockaddr_in *addr);
++
++
+ #ifdef XCSECURITY
+ #define _SECURITY_SERVER
+ #include "extensions/security.h"
+--- a/programs/Xserver/os/auth.c
++++ b/programs/Xserver/os/auth.c
+@@ -43,6 +43,10 @@
+ # include   "dixstruct.h"
+ # include   <sys/types.h>
+ # include   <sys/stat.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XdmcpRegisterAuthorization (char *name, int namelen);
++
+ #ifdef XCSECURITY
+ #define _SECURITY_SERVER
+ # include   "extensions/security.h"
+--- a/programs/Xserver/os/mitauth.c
++++ b/programs/Xserver/os/mitauth.c
+@@ -38,6 +38,10 @@
+ #include "os.h"
+ #include "dixstruct.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void GenerateRandomData (int len, char *buf);
++
++
+ static struct auth {
+     struct auth	*next;
+     unsigned short	len;
+--- a/programs/Xserver/os/secauth.c
++++ b/programs/Xserver/os/secauth.c
+@@ -32,6 +32,10 @@
+ #include "osdep.h"
+ #include "dixstruct.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void WriteSConnSetupPrefix ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef XCSECURITY
+ #define _SECURITY_SERVER
+ #include "extensions/security.h"
+--- a/programs/Xserver/os/utils.c
++++ b/programs/Xserver/os/utils.c
+@@ -82,6 +82,15 @@
+ #include <time.h>
+ #include <sys/stat.h>
+ #include <ctype.h>    /* for isspace */
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XdmcpUseMsg (void);
++void XkbUseMsg (void);
++Bool ParseGlyphCachingMode (char *str);
++int XkbProcessArguments (int argc, char **argv, int i);
++int XdmcpOptions (int argc, char **argv, int i);
++int XSecurityOptions (int argc, char **argv, int i);
++
+ #if NeedVarargsPrototypes
+ #include <stdarg.h>
+ #endif
+--- a/programs/Xserver/os/xdmcp.c
++++ b/programs/Xserver/os/xdmcp.c
+@@ -44,6 +44,12 @@
+ #include "dixstruct.h"
+ #include "opaque.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XdmcpAllocARRAY8 ();	/* unprototyped: its types are not defined here */
++int XdmcpReallocARRAYofARRAY8 ();	/* unprototyped: its types are not defined here */
++int XdmcpReallocARRAY16 ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef STREAMSCONN
+ #include <tiuser.h>
+ #include <netconfig.h>
+--- a/programs/Xserver/Xext/mbuf.c
++++ b/programs/Xserver/Xext/mbuf.c
+@@ -45,6 +45,10 @@
+ #include "regionstr.h"
+ #include "gcstruct.h"
+ #include "inputstr.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int ClientSleepUntil ();	/* unprototyped: its types are not defined here */
++
+ #ifndef WIN32
+ #include <sys/time.h>
+ #endif
+--- a/programs/Xserver/Xext/security.c
++++ b/programs/Xserver/Xext/security.c
+@@ -38,6 +38,13 @@
+ #include <stdio.h>  /* for file reading operations */
+ #include "Xatom.h"  /* for XA_STRING */
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void AuditPrefix (char *f);
++void VErrorF (char *f, va_list args);
++int AuthorizationFromID (XID id, short unsigned int *name_lenp, char **namep, short unsigned int *data_lenp, char **datap);
++int RemoveAuthorization (int name_length, char *name, int data_length, char *data);
++
++
+ #ifndef DEFAULTPOLICYFILE
+ # define DEFAULTPOLICYFILE NULL
+ #endif
+--- a/programs/Xserver/Xext/xprint.c
++++ b/programs/Xserver/Xext/xprint.c
+@@ -82,6 +82,10 @@
+ #undef _XP_PRINT_SERVER_
+ #include "../Xprint/DiPrint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XpUnsetFontResFunc ();	/* Xprint's, unprototyped: its types are not defined here */
++
++
+ extern WindowPtr *WindowTable; /* declared in dix:globals.c */
+ 
+ extern WindowPtr XpDiValidatePrinter();
+--- a/programs/Xserver/Xext/xtest.c
++++ b/programs/Xserver/Xext/xtest.c
+@@ -42,6 +42,10 @@
+ #define _XTEST_SERVER_
+ #include "XTest.h"
+ #include "xteststr.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int ClientSleepUntil ();	/* unprototyped: its types are not defined here */
++
+ #ifdef XINPUT
+ #include "XI.h"
+ #include "XIproto.h"
+--- a/programs/Xserver/xkb/xkb.c
++++ b/programs/Xserver/xkb/xkb.c
+@@ -38,6 +38,11 @@
+ 
+ #include "XI.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XkbSendNewKeyboardNotify (DeviceIntPtr kbd, xkbNewKeyboardNotify *pNKN);
++void XkbFreeSrvLedInfo ();	/* unprototyped: its types are not defined here */
++
++
+ 	int	XkbEventBase;
+ 	int	XkbErrorBase;
+ 	int	XkbReqCode;
