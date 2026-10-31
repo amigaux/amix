@@ -57,7 +57,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
-            ("ESSENTIAL", "no"), ("STOCK_ETC", ""))
+            ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -462,6 +462,8 @@ def problems(recipe, m):
             out.append("%s has leading or trailing blanks" % k)
     if m["ESSENTIAL"] not in ("yes", "no"):
         out.append("ESSENTIAL=%s -- yes or no" % m["ESSENTIAL"])
+    if m["SOURCE_EPOCH"] and not re.match(r"^[1-9][0-9]*$", m["SOURCE_EPOCH"]):
+        out.append("SOURCE_EPOCH=%s is not a number of seconds" % m["SOURCE_EPOCH"])
     if m["SUMMARY"][:1] in ("'", '"') and m["SUMMARY"][-1:] == m["SUMMARY"][:1]:
         out.append("SUMMARY is quoted twice")
     known = styles()
