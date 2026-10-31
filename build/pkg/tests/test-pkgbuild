@@ -193,6 +193,12 @@ printf 'all:\\n\\techo "$(CFLAGS)" > out.txt\\n' > Makefile
                 src={"greet.txt": "hello from src/\n", "sub dir/a b": "x\n"})
         package(pkgs, "inside2", "hooks", "SRCPKG=inside\n", build=HOOKS_BUILD)
         package(pkgs, "nohook", "hooks", src={"greet.txt": "x\n"})
+        # vim's version string: __DATE__ __TIME__, which GCC takes from
+        # SOURCE_DATE_EPOCH -- so the build sees the package's epoch
+        package(pkgs, "datetime", "hooks", src={"greet.txt": "x\n"}, build=HOOKS_BUILD.replace(
+            "\n}\n", '\n\techo "$SOURCE_DATE_EPOCH" > "$STUB_LOG/build-epoch"\n'
+            "\tif command -v gcc >/dev/null; then printf '__DATE__ __TIME__\\n' | gcc -E -P - "
+            '> "$STUB_LOG/datetime"; fi\n}\n'))
         package(pkgs, "noepoch", "hooks", build=HOOKS_BUILD, src={"greet.txt": "x\n"},
                 epoch=False)
         package(pkgs, "implicit", "hooks", src={"greet.txt": "x\n"}, build="""\
@@ -383,6 +389,13 @@ esac
         line = read(os.path.join(out_pkg, "conf", "catalog.line"))
         check("catalog.line names the package", line.startswith(
             "conf|1.0-1|conf|conf-1.0-1.pkg|"), line)
+        rc, out = build("datetime")
+        check("the build itself runs under package.sh SOURCE_EPOCH, not the environment's",
+              rc == 0 and read(os.path.join(log, "build-epoch")) == "1793303717\n", out)
+        if os.path.exists(os.path.join(log, "datetime")):
+            check("so GCC's __DATE__ __TIME__ is the package's epoch (2026-10-29T19:55:17Z)",
+                  read(os.path.join(log, "datetime")).strip() == '"Oct 29 2026" "19:55:17"',
+                  read(os.path.join(log, "datetime")))
         rc, out = build("noepoch")
         check("no SOURCE_EPOCH and no commit of the package: refused, whatever the environment",
               rc != 0 and "[FAIL] no epoch: package.sh sets no SOURCE_EPOCH" in out, out)
