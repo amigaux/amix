@@ -1,0 +1,404 @@
+Ours.  Declarations gcc 14 needs in xdm:
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  programs/xdm/choose.c: ForEachChooserHost(CARD16 connectionType -> int)
+  programs/xdm/policy.c: ValidAuthorization(short unsigned int name_length -> int); AcceptableDisplayAddress(CARD16 connectionType -> int)
+  programs/xdm/xdmcp.c: RememberIndirectClient(CARD16 connectionType -> int); ForgetIndirectClient(CARD16 connectionType -> int); ForEachMatchingIndirectHost(CARD16 connectionType -> int); SetProtoDisplayAuthorization(short unsigned int authorizationNameLen -> int); IsIndirectClient(CARD16 connectionType -> int); UseChooser(CARD16 connectionType -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): 
+AcceptableDisplayAddress CheckAuthentication ForEachChooserHost 
+ForEachMatchingIndirectHost ForgetIndirectClient IsIndirectClient 
+RememberIndirectClient SelectAuthorizationTypeIndex send_accept send_decline 
+send_unwilling send_willing UseChooser XdmcpAllocARRAY8 XdmcpReallocARRAY8 
+XdmcpReallocARRAYofARRAY8 
+
+--- a/programs/xdm/access.c
++++ b/programs/xdm/access.c
+@@ -34,6 +34,13 @@
+ 
+ # include   "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XdmcpAllocARRAY8 ();	/* unprototyped: its types are not defined here */
++int Debug (char *fmt, ...);
++int LogError (char *fmt, ...);
++int LogOutOfMem (char *fmt, ...);
++
++
+ #ifdef XDMCP
+ 
+ # include   <X11/Xos.h>
+--- a/programs/xdm/auth.c
++++ b/programs/xdm/auth.c
+@@ -89,6 +89,14 @@
+ #endif
+ #include <net/if.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int LogError (char *fmt, ...);
++void XSetAuthorization (char *name, int namelen, char *data, int datalen);
++int LogOutOfMem (char *fmt, ...);
++int ConvertAddr (XdmcpNetaddr saddr, int *len, char **addr);
++
++
+ extern int	MitInitAuth ();
+ extern Xauth	*MitGetAuth ();
+ 
+--- a/programs/xdm/choose.c
++++ b/programs/xdm/choose.c
+@@ -35,6 +35,16 @@
+ 
+ #include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int GetChooserAddr (char *addr, int *lenp);
++int LogError (char *fmt, ...);
++int Debug (char *fmt, ...);
++int NetaddrFamily (XdmcpNetaddr netaddrp);
++int SetTitle (char *name, ...);
++int LoadXloginResources (struct display *d);
++int ForEachChooserHost ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef XDMCP
+ 
+ #include <X11/X.h>
+--- a/programs/xdm/chooser.c
++++ b/programs/xdm/chooser.c
+@@ -110,6 +110,12 @@
+ 
+ #include    <netdb.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XdmcpAllocARRAY8 ();	/* unprototyped: its types are not defined here */
++int FromHex (char *s, char *d, int len);
++int XdmcpReallocARRAYofARRAY8 ();	/* unprototyped: its types are not defined here */
++
++
+ Widget	    toplevel, label, viewport, paned, list, box, cancel, acceptit, ping;
+ 
+ static void	CvtStringToARRAY8();
+--- a/programs/xdm/daemon.c
++++ b/programs/xdm/daemon.c
+@@ -52,6 +52,10 @@
+ extern int errno;
+ #endif
+ #include <sys/types.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int LogError (char *fmt, ...);
++
+ #ifdef X_NOT_POSIX
+ #define Pid_t int
+ #else
+--- a/programs/xdm/dm.c
++++ b/programs/xdm/dm.c
+@@ -60,6 +60,41 @@
+ # include	<sys/stat.h>
+ # include	<errno.h>
+ # include	<X11/Xfuncproto.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int InitResources (int argc, char **argv);
++int SetConfigFileTime (void);
++int LoadDMResources (void);
++int BecomeOrphan (void);
++int BecomeDaemon (void);
++int StorePid (void);
++int LogError (char *fmt, ...);
++int InitErrorLog (void);
++int CreateWellKnownSockets (void);
++int SetAccessFileTime (void);
++int ScanAccessDatabase (void);
++int AnyWellKnownSockets (void);
++int AnyDisplaysLeft (void);
++int WaitForSomething (void);
++int Debug (char *fmt, ...);
++int ParseDisplay (char *source, DisplayType *acceptableTypes, int numAcceptable);
++int LogInfo (char *fmt, ...);
++int ForEachDisplay (void (*f) (/* ??? */));
++int ReinitResources (void);
++int DestroyWellKnownSockets (void);
++int SendFailed (struct display *d, char *reason);
++int RemoveDisplay (struct display *old);
++int TerminateProcess (int pid, int signal);
++int LoadServerResources (struct display *d);
++int StartServer (struct display *d);
++int SaveServerAuthorizations (struct display *d, Xauth **auths, int count);
++int CleanUpChild (void);
++int LoadSessionResources (struct display *d);
++int SetAuthorization (struct display *d);
++int WaitForServer (struct display *d);
++int RunChooser (struct display *d);
++int ManageSession (struct display *d);
++
+ #if NeedVarargsPrototypes
+ # include <stdarg.h>
+ # define Va_start(a,b) va_start(a,b)
+--- a/programs/xdm/dpylist.c
++++ b/programs/xdm/dpylist.c
+@@ -38,6 +38,11 @@
+ 
+ # include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int addressEqual (XdmcpNetaddr a1, int len1, XdmcpNetaddr a2, int len2);
++int LogOutOfMem (char *fmt, ...);
++
++
+ static struct display	*displays;
+ 
+ AnyDisplaysLeft ()
+--- a/programs/xdm/file.c
++++ b/programs/xdm/file.c
+@@ -39,6 +39,11 @@
+ # include	"dm.h"
+ # include	<ctype.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int LogError (char *fmt, ...);
++int Debug (char *fmt, ...);
++
++
+ DisplayTypeMatch (d1, d2)
+ DisplayType	d1, d2;
+ {
+--- a/programs/xdm/greeter/greet.c
++++ b/programs/xdm/greeter/greet.c
+@@ -45,6 +45,11 @@
+ #include "greet.h"
+ #include "Login.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int DrawFail (Widget ctx);
++int Verify (struct display *d, struct greet_info *greet, struct verify_info *verify);
++
++
+ #if GREET_LIB
+ /*
+  * Function pointers filled in by the initial call ito the library
+--- a/programs/xdm/greeter/Login.c
++++ b/programs/xdm/greeter/Login.c
+@@ -47,6 +47,11 @@
+ # include "greet.h"
+ # include "LoginP.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int ResetLogin (LoginWidget w);
++int RedrawFail (LoginWidget w);
++
++
+ #define offset(field) XtOffsetOf(LoginRec, login.field)
+ #define goffset(field) XtOffsetOf(WidgetRec, core.field)
+ 
+--- a/programs/xdm/mitauth.c
++++ b/programs/xdm/mitauth.c
+@@ -42,6 +42,10 @@
+ # include   <X11/Xos.h>
+ # include   "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int GenerateAuthData (char *auth, int len);
++
++
+ # define AUTH_DATA_LEN	16	/* bytes of authorization data */
+ static char	auth_name[256];
+ static int	auth_name_len;
+--- a/programs/xdm/netaddr.c
++++ b/programs/xdm/netaddr.c
+@@ -39,6 +39,10 @@
+ 
+ #include <X11/X.h>		/* FamilyInternet, etc. */
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++
++
+ #ifdef XDMCP
+ 
+ #include <sys/socket.h>		/* struct sockaddr */
+--- a/programs/xdm/policy.c
++++ b/programs/xdm/policy.c
+@@ -38,6 +38,11 @@
+ 
+ # include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int ValidAuthorization (int name_length, char *name);
++int AcceptableDisplayAddress ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef XDMCP
+ 
+ # include <X11/X.h>
+--- a/programs/xdm/protodpy.c
++++ b/programs/xdm/protodpy.c
+@@ -37,6 +37,11 @@
+ 
+ #include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int addressEqual (XdmcpNetaddr a1, int len1, XdmcpNetaddr a2, int len2);
++
++
+ #ifdef XDMCP
+ 
+ #include <sys/types.h>
+--- a/programs/xdm/reset.c
++++ b/programs/xdm/reset.c
+@@ -42,6 +42,11 @@
+ # include	<X11/Xlib.h>
+ # include	<signal.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int LogError (char *fmt, ...);
++
++
+ /*ARGSUSED*/
+ static int
+ ignoreErrors (dpy, event)
+--- a/programs/xdm/resource.c
++++ b/programs/xdm/resource.c
+@@ -40,6 +40,15 @@
+ # include <X11/Intrinsic.h>
+ # include <X11/Xmu/CharSet.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int LogOutOfMem (char *fmt, ...);
++int freeArgs (char **argv);
++int ReinitResources (void);
++int LogPanic (char *fmt, ...);
++int LogError (char *fmt, ...);
++
++
+ char	*config;
+ 
+ char	*servers;
+--- a/programs/xdm/server.c
++++ b/programs/xdm/server.c
+@@ -43,6 +43,14 @@
+ # include	<signal.h>
+ # include	<errno.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int CleanUpChild (void);
++int LogError (char *fmt, ...);
++int RegisterCloseOnFork (int fd);
++int pseudoReset (Display *dpy);
++
++
+ static receivedUsr1;
+ 
+ #ifdef X_NOT_STDC_ENV
+--- a/programs/xdm/session.c
++++ b/programs/xdm/session.c
+@@ -44,6 +44,19 @@
+ #include <errno.h>
+ #include <stdio.h>
+ #include <ctype.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++char *_SysErrorMsg (int n);
++int XmuPrintDefaultErrorMessage (Display *dpy, XErrorEvent *event, FILE *fp);
++int SetTitle (char *name, ...);
++int LoadXloginResources (struct display *d);
++int runAndWait (char **args, char **environ);
++int freeArgs (char **argv);
++int freeEnv (char **env);
++int pseudoReset (Display *dpy);
++int ResetServer (struct display *d);
++int CleanUpChild (void);
++
+ #ifdef AIXV3
+ # include <usersec.h>
+ #endif
+--- a/programs/xdm/sessreg.c
++++ b/programs/xdm/sessreg.c
+@@ -53,6 +53,10 @@
+ # include	<stdio.h>
+ # include	<utmp.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int set_utmp (struct utmp *u, char *line, char *user, char *host, time_t date, int addp);
++
++
+ #if defined(SYSV)
+ #define NO_LASTLOG
+ #endif
+--- a/programs/xdm/socket.c
++++ b/programs/xdm/socket.c
+@@ -38,6 +38,12 @@
+ 
+ #include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int LogError (char *fmt, ...);
++int RegisterCloseOnFork (int fd);
++
++
+ #ifdef XDMCP
+ #ifndef STREAMSCONN
+ 
+--- a/programs/xdm/util.c
++++ b/programs/xdm/util.c
+@@ -39,6 +39,13 @@
+  */
+ 
+ # include   "dm.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Debug (char *fmt, ...);
++int LogOutOfMem (char *fmt, ...);
++int CloseOnFork (void);
++int XmuGetHostname (char *buf, int maxlen);
++
+ #ifdef X_POSIX_C_SOURCE
+ #define _POSIX_C_SOURCE X_POSIX_C_SOURCE
+ #include <signal.h>
+--- a/programs/xdm/xdmcp.c
++++ b/programs/xdm/xdmcp.c
+@@ -38,6 +38,36 @@
+ 
+ # include "dm.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XdmcpAllocARRAY8 ();	/* unprototyped: its types are not defined here */
++int ConvertAddr (XdmcpNetaddr saddr, int *len, char **addr);
++int Debug (char *fmt, ...);
++int RememberIndirectClient ();	/* unprototyped: its types are not defined here */
++int ForgetIndirectClient ();	/* unprototyped: its types are not defined here */
++int send_willing ();	/* unprototyped: its types are not defined here */
++int send_unwilling ();	/* unprototyped: its types are not defined here */
++int ForEachMatchingIndirectHost ();	/* unprototyped: its types are not defined here */
++int broadcast_respond (struct sockaddr *from, int fromlen, int length);
++int query_respond (struct sockaddr *from, int fromlen, int length);
++int forward_respond (struct sockaddr *from, int fromlen, int length);
++int request_respond (struct sockaddr *from, int fromlen, int length);
++int manage (struct sockaddr *from, int fromlen, int length);
++int send_alive (struct sockaddr *from, int fromlen, int length);
++int ProcessChooserSocket (int fd);
++int WaitForChild (void);
++int XdmcpReallocARRAY8 ();	/* unprototyped: its types are not defined here */
++int SelectAuthorizationTypeIndex ();	/* unprototyped: its types are not defined here */
++int CheckAuthentication ();	/* unprototyped: its types are not defined here */
++int SetProtoDisplayAuthorization (struct protoDisplay *pdpy, int authorizationNameLen, char *authorizationName);
++int send_accept ();	/* unprototyped: its types are not defined here */
++int send_decline ();	/* unprototyped: its types are not defined here */
++int send_refuse (struct sockaddr *from, int fromlen, CARD32 sessionID);
++int send_failed (struct sockaddr *from, int fromlen, char *name, CARD32 sessionID, char *reason);
++int IsIndirectClient ();	/* unprototyped: its types are not defined here */
++int UseChooser ();	/* unprototyped: its types are not defined here */
++int LogError (char *fmt, ...);
++
++
+ #ifdef XDMCP
+ 
+ # include	<X11/X.h>
