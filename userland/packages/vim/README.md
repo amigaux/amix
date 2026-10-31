@@ -41,13 +41,8 @@ group and mode, `uname`).
 - **ncurses** comes from its own build in the same build root
   (`$AMIX_BUILD_ROOT/ncurses/dest`). `pre_configure` stops if it is missing; `post_configure` checks
   `TERMINFO` and `-lncurses`.
-- **`-include amix-decls.h`** declares `select`. **`amix-isinf.h`** maps `isinf` to gcc's
-  builtin; Amix's `<math.h>` has no C99 `isinf`.
-- **Two files without jump tables.** In `ins_compl_prep` (insexpand.c) and `get_scriptname`
-  (scriptfile.c), gcc emits switch tables whose size the 060 gate's scanner cannot find, so the gate
-  refuses the binary as untrustworthy. Those two files are compiled `-fno-jump-tables`
-  (compare chains). The rest of Vim is unchanged. The scanner case is with infra; when it is fixed,
-  the line in `post_configure` goes.
+- **`-include amix-decls.h`** declares `select` and maps `isinf` to gcc's builtin (Amix's
+  `<math.h>` has no C99 `isinf`).
 - **Not shipped:** `vimtutor`, a shell script that needs a POSIX shell (it uses `$(...)` and
   `mktemp`); start the tutor with `vim` and `:Tutor` instead. Also not shipped: the `lang/` message
   catalogues (NLS is off) and `tools/`.

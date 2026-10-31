@@ -28,8 +28,6 @@ post_configure() {
 		echo "[FAIL] TERMINFO is not set (vim_cv_terminfo)" >&2; exit 1; }
 	grep -- '-lncurses' src/auto/config.mk >/dev/null || {
 		echo "[FAIL] vim does not link ncurses" >&2; exit 1; }
-	# two switch tables the 060 gate's scanner cannot bound: compare chains instead
-	printf '\nobjects/insexpand.o objects/scriptfile.o: override CFLAGS += -fno-jump-tables\n' >> src/Makefile
 	# :version records the compile and link lines (build-host paths) and, without
 	# --with-compiledby, the build's user and host name: made now, then neutral
 	make -C src auto/pathdef.c > /dev/null
@@ -39,7 +37,7 @@ post_configure() {
 	    src/auto/pathdef.c > src/auto/pathdef.c.new && mv src/auto/pathdef.c.new src/auto/pathdef.c
 	grep -E 'compiled_user = \(char_u \*\)"amix"' src/auto/pathdef.c > /dev/null || {
 		echo "[FAIL] pathdef.c: compiled_user is not amix" >&2; exit 1; }
-	echo "  TERMINFO, -lncurses; insexpand.o and scriptfile.o without jump tables"
+	echo "  TERMINFO, -lncurses; :version neutral"
 }
 
 make_args() {
@@ -70,8 +68,8 @@ stage() {
 	amix_man_whatis
 }
 
-# select (amix-decls.h); isinf, C99 math Amix lacks, as gcc's builtin
-MAKE_CFLAGS="-include $AMIX_GCC14_DECLS -include $HERE/amix-isinf.h"
+# select, and isinf as gcc's builtin (amix-decls.h)
+MAKE_CFLAGS="-include $AMIX_GCC14_DECLS"
 
 # the ll conversions in vim's strings are vim_snprintf formats (messages, :echo);
 # vim_snprintf formats each through snprintf, libamixc99's (patches/01); vim
