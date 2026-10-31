@@ -1,0 +1,416 @@
+Subject: demand filesystems: a filesystem module loads at its first mount
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -55,6 +55,30 @@
+ int		nfstype = 0;
+ static int	vstatic;
+ 
++/*
++ * Demand filesystems (C4-6 section 5): a demand-class record with fs=<type>
++ * puts a stub row for <type> into a spare row at the first sysinit entry.
++ * The first mount of the type reaches the stub's vfs_mount, which loads the
++ * module as a demand major's first open does and hands the mount to the row
++ * the module's vfs_register fills in place.  One stub table per spare row,
++ * so the stub knows its type from the vfs's ops pointer.  The other entries
++ * answer without loading: sync 0 (the stock sync() calls every row's), the
++ * rest EINVAL (vfs_mountroot tries only rootfstype, and nothing else
++ * reaches a row no vfs is mounted from).
++ */
++struct dlm_fsdem {
++	char	fd_mod[MODMAXNAMELEN];		/* the module */
++	char	fd_type[MODMAXNAMELEN];		/* its fs= */
++};
++static struct dlm_fsdem dlm_fsdem[VFS_SPARE];
++int		dlm_nfsdem;
++static int	fsstub_mount(), fsstub_zero(), fsstub_inval();
++#define	FSSTUB	{ fsstub_mount, fsstub_inval, fsstub_inval, fsstub_inval, \
++		  fsstub_zero, fsstub_inval, fsstub_inval, fsstub_inval }
++struct vfsops	dlm_fsstub[VFS_SPARE] = { FSSTUB, FSSTUB, FSSTUB, FSSTUB };
++#define	ISSTUB(o)	((struct vfsops *)(o) >= dlm_fsstub && \
++			 (struct vfsops *)(o) < dlm_fsstub + VFS_SPARE)
++
+ int
+ if_attach(ifs)
+ 	struct ifs_link *ifs;
+@@ -158,6 +182,18 @@
+ 			i++;
+ 	for (i = vstatic; i < nfstype; )
+ 		if ((unsigned long)vfssw[i].vsw_vfsops >= lo && (unsigned long)vfssw[i].vsw_vfsops < hi) {
++			for (k = 0; k < dlm_nfsdem; k++)
++				if (strcmp(vfssw[i].vsw_name, dlm_fsdem[k].fd_type) == 0)
++					break;
++			if (k < dlm_nfsdem) {	/* a demand type: back to its stub */
++				vfssw[i].vsw_name = dlm_fsdem[k].fd_type;
++				vfssw[i].vsw_init = 0;
++				vfssw[i].vsw_vfsops = &dlm_fsstub[k];
++				vfssw[i].vsw_flag = 0;
++				n++;
++				i++;
++				continue;
++			}
+ 			for (k = i; k + 1 < nfstype; k++)
+ 				vfssw[k] = vfssw[k + 1];
+ 			nfstype--;
+@@ -350,20 +386,108 @@
+ 	}
+ 	for (i = 1; i < nfstype; i++)
+ 		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, name) == 0) {
++			if (ISSTUB(vfssw[i].vsw_vfsops))
++				break;		/* a demand type's stub: filled in place */
+ 			printf("dlm: %s: filesystem type %s is there already\n", m->m_name, name);
+ 			return EEXIST;
+ 		}
+-	if (nfstype >= vstatic + VFS_SPARE) {
++	if (i == nfstype && nfstype >= vstatic + VFS_SPARE) {
+ 		printf("dlm: %s: the %d spare vfssw rows are taken\n", m->m_name, VFS_SPARE);
+ 		return ENOSPC;
+ 	}
+-	v = &vfssw[nfstype];
++	v = &vfssw[i];
+ 	v->vsw_name = name;
+ 	v->vsw_init = init;
+ 	v->vsw_vfsops = ops;
+ 	v->vsw_flag = flag;
+ 	if (init)			/* as vfsinit: no result (the stock ones are void) */
+-		(void)DLM_CALL(m, init, (char *)v, nfstype);
+-	nfstype++;
++		(void)DLM_CALL(m, init, (char *)v, i);
++	if (i == nfstype)
++		nfstype++;
++	return 0;
++}
++
++/*
++ * A demand type's stub row (the first sysinit entry, from the manifest's
++ * demand record with fs=).  EEXIST when the kernel or a module has the type
++ * already: the module would never load.  ENOSPC when the spare rows are
++ * taken.
++ */
++int
++dlm_fsreg(mod, type)
++	char *mod, *type;
++{
++	struct vfssw *v;
++	int i, k;
++
++	if (*type == 0 || strlen(mod) >= MODMAXNAMELEN || strlen(type) >= MODMAXNAMELEN)
++		return EINVAL;
++	for (i = 1; i < nfstype; i++)
++		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, type) == 0)
++			return EEXIST;
++	if (nfstype >= vstatic + VFS_SPARE || dlm_nfsdem >= VFS_SPARE)
++		return ENOSPC;
++	k = dlm_nfsdem++;
++	strcpy(dlm_fsdem[k].fd_mod, mod);
++	strcpy(dlm_fsdem[k].fd_type, type);
++	v = &vfssw[nfstype++];
++	v->vsw_name = dlm_fsdem[k].fd_type;
++	v->vsw_init = 0;
++	v->vsw_vfsops = &dlm_fsstub[k];
++	v->vsw_flag = 0;
+ 	return 0;
+ }
++
++/*
++ * The stub's vfs_mount, in the mount system call's process context: load
++ * the module, then mount through the row it filled.  A mount that took the
++ * stub while another loaded the module finds the row filled and goes on.
++ */
++static int
++fsstub_mount(vfsp, mvp, uap, cr)
++	struct vfs *vfsp;
++	char *mvp, *uap, *cr;
++{
++	struct dlm_fsdem *f;
++	struct dlm_mod *m;
++	long a[8];
++	int i, k, e;
++
++	k = (struct vfsops *)vfsp->vfs_op - dlm_fsstub;
++	if (k < 0 || k >= dlm_nfsdem)
++		return EINVAL;
++	f = &dlm_fsdem[k];
++	e = dlm_loadname(f->fd_mod);
++	for (i = vstatic; i < nfstype; i++)
++		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, f->fd_type) == 0 &&
++		    !ISSTUB(vfssw[i].vsw_vfsops))
++			break;
++	for (m = dlm_list; m && strcmp(m->m_name, f->fd_mod); m = m->m_next)
++		;
++	if (i == nfstype || m == 0) {
++		if (e == 0)
++			e = ENXIO;
++		printf("dlm: demand module %s not loaded for a %s mount (error %d)\n",
++		    f->fd_mod, f->fd_type, e);
++		return e;
++	}
++	vfsp->vfs_op = vfssw[i].vsw_vfsops;
++	a[0] = (long)vfsp;
++	a[1] = (long)mvp;
++	a[2] = (long)uap;
++	a[3] = (long)cr;
++	a[4] = a[5] = a[6] = a[7] = 0;
++	return DLM_CALL8(m, G32(DLM_RP(m, vfsp->vfs_op)), a);
++}
++
++static int
++fsstub_zero()
++{
++	return 0;
++}
++
++static int
++fsstub_inval()
++{
++	return EINVAL;
++}
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -14,7 +14,8 @@
+  * booted:
+  *
+  *   1. every demand-class record's character majors= are registered for
+- *      that module, so the first open of one loads it;
++ *      that module, so the first open of one loads it, and its fs= gets a
++ *      stub row, so the first mount of that type loads it;
+  *   2. every boot-class record is loaded, in manifest order (kbootset
+  *      writes them in depend order, and a dependency loads first anyway),
+  *      unless its match= keys name no board in this box.
+@@ -144,6 +145,13 @@
+ 			recname(p + 7, l, name);
+ 			q = p + 8 + strlen(name);
+ 			if (pass == 1 && !dlm_safe && l - q > 7 && bcmp(q, "demand ", 7) == 0) {
++				if (attr(q, l, "fs=", v, sizeof v)) {
++					/* a filesystem: loaded by its first mount (C4-6 5) */
++					if ((e = dlm_fsreg(name, v)) != 0)
++						printf("dlm: demand module %s: filesystem type %s not "
++						    "registered (error %d)\n", name, v, e);
++					continue;
++				}
+ 				if (!attr(q, l, "majors=", v, sizeof v))
+ 					continue;
+ 				for (q = v; *q; ) {
+--- a/dlm.h
++++ b/dlm.h
+@@ -359,6 +359,7 @@
+ extern int dlm_creg(), dlm_sreg();
+ extern int dlm_autoload();
+ extern int dlm_loadname();
++extern int dlm_fsreg();
+ 
+ /* dlm_str.c */
+ extern void dlm_str_init();
+--- a/test/include/sys/vfs.h
++++ b/test/include/sys/vfs.h
+@@ -1,7 +1,22 @@
+-/* vfs.h -- the host harness's stand-in for the stock sys/vfs.h: vfssw */
++/* vfs.h -- the host harness's stand-in for the stock sys/vfs.h: vfssw,
++ * vfsops in the stock order, and a vfs with the stock first two members */
+ #ifndef _HOST_VFS_H
+ #define _HOST_VFS_H
+-struct vfsops;
++typedef struct vfsops {
++	int	(*vfs_mount)();
++	int	(*vfs_unmount)();
++	int	(*vfs_root)();
++	int	(*vfs_statvfs)();
++	int	(*vfs_sync)();
++	int	(*vfs_vget)();
++	int	(*vfs_mountroot)();
++	int	(*vfs_swapvp)();
++	int	(*vfs_filler[8])();
++} vfsops_t;
++typedef struct vfs {
++	struct vfs	*vfs_next;
++	struct vfsops	*vfs_op;
++} vfs_t;
+ typedef struct vfssw {
+ 	char		*vsw_name;
+ 	int		(*vsw_init)();
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -124,10 +124,12 @@
+ # vf1 registers its own type; vf2 a name not its fs=; vf3 the stock ufs;
+ # vf4 fails its _load after registering; vf5 is unloadable; vf6-vf9 fill
+ # the spare rows
+-def fsmod(p, fs, unload='never'):
++def fsmod(p, fs, unload='never', mount=False):
++    m = '\t.globl\t{p}_mount\n{p}_mount:\n\trts\n' if mount else ''
++    first = '{p}_mount' if mount else '0'
+     mod(p, extra=['fs=' + fs, 'unload=' + unload],
+-        text='\t.globl\t{p}_init\n{p}_init:\n\trts\n'
+-             '\t.globl\t{p}_ops\n{p}_ops:\n\t.long\t0, 0, 0, 0\n'.format(p=p))
++        text=('\t.globl\t{p}_init\n{p}_init:\n\trts\n' + m +
++              '\t.globl\t{p}_ops\n{p}_ops:\n\t.long\t' + first + ', 0, 0, 0\n').format(p=p))
+ 
+ 
+ for p in ('vf1', 'vf2', 'vf4', 'vf6', 'vf7', 'vf8', 'vf9'):
+@@ -135,6 +137,11 @@
+ fsmod('vf3', 'ufs')
+ fsmod('vf5', 'vf5', unload='allowed')
+ mod('vfbad', extra=['fs=Bad-Name'])
++# demand filesystems (C4-6 section 5): fd1 registers its type when the
++# first mount loads it, and mounts; fd2 fails its _load after registering;
++# fd3 loads without registering
++for p in ('fd1', 'fd2', 'fd3'):
++    fsmod(p, p, mount=True)
+ 
+ 
+ # a 3-chain for moduload(0): ha -> hb -> hc
+--- a/test/state.c
++++ b/test/state.c
+@@ -1091,6 +1091,145 @@
+ 	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
+ }
+ 
++/* ---- demand filesystems: load on the first mount (C4-6 section 5) ---- */
++static int fd_mounts;
++static char *fd_vfsp;
++
++int
++h_fdmount(m, a, b)
++	char *m, *a;
++	long b;
++{
++	fd_mounts++;
++	fd_vfsp = a;
++	return 0;
++}
++
++int
++h_fd2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	vf_e[vf_n++] = vf_reg(m, "fd2");
++	return EIO;
++}
++
++/* the stock smount's part: the row's ops into the vfs, then VFS_MOUNT (a
++ * module's ops are run addresses here, so its vfs_mount goes by host_call) */
++static int
++fdmount(type, vfsp)
++	char *type;
++	struct vfs *vfsp;
++{
++	extern struct vfsops dlm_fsstub[];
++	struct vfssw *v = 0;
++	struct dlm_mod *m;
++	int i;
++
++	for (i = 1; i < nfstype; i++)
++		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, type) == 0)
++			v = &vfssw[i];
++	if (v == 0)
++		return EINVAL;
++	bzero((caddr_t)vfsp, sizeof *vfsp);
++	vfsp->vfs_op = v->vsw_vfsops;
++	if (vfsp->vfs_op >= dlm_fsstub && vfsp->vfs_op < dlm_fsstub + 4)
++		return (*vfsp->vfs_op->vfs_mount)(vfsp, (char *)0, (char *)0, (char *)0);
++	if ((m = byname(type)) == 0)
++		return EINVAL;
++	return DLM_CALL(m, G32(DLM_RP(m, vfsp->vfs_op)), (char *)vfsp, 0L);
++}
++
++static int
++rowof(type)
++	char *type;
++{
++	int i;
++
++	for (i = 1; i < nfstype; i++)
++		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, type) == 0)
++			return i;
++	return -1;
++}
++
++void
++fsdem_tests()
++{
++	static char a[4096], man[2048], s1[65], s2[65], s3[65];
++	extern struct vfsops dlm_fsstub[];
++	extern int dlm_nfsdem;
++	char *om = dlm_man;
++	long ol = dlm_manlen, gen;
++	struct vfs v1, v2, v3;
++	struct dlm_mod *m;
++	int base = nfstype, r1, r2, r3, ok, i, odev = dlm_devload;
++
++	dlm_devload = 0;
++	host_handler("fd1_load", h_vfown);
++	host_handler("fd1_mount", h_fdmount);
++	host_handler("fd2_load", h_fd2);
++	hexsha("fd1", s1);
++	hexsha("fd2", s2);
++	hexsha("fd3", s3);
++	sprintf(man, "GMF1\ngeneration 9\n"
++	    "module fd1 demand 300 path=/stand/gen/7/mod/fd1 sha256=%s fs=fd1\n"
++	    "module fd2 demand 300 path=/stand/gen/7/mod/fd2 sha256=%s fs=fd2\n"
++	    "module fd3 demand 300 path=/stand/gen/7/mod/fd3 sha256=%s fs=fd3\n"
++	    "module fdu demand 300 path=/stand/gen/7/mod/fdu sha256=%s fs=ufs\n", s1, s2, s3, s3);
++	mkarena(a, man, 1, 1);
++	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++	dlm_marc_run();
++	r1 = rowof("fd1");
++	r2 = rowof("fd2");
++	r3 = rowof("fd3");
++	check(r1 == base && r2 == base + 1 && r3 == base + 2 && nfstype == base + 3 &&
++	    vfssw[r1].vsw_vfsops == &dlm_fsstub[0] && vfssw[r1].vsw_init == 0 && !byname("fd1"),
++	    "fsdem: a demand record's fs= gets a stub row; the module is not loaded");
++	check(rowof("ufs") < base, "fsdem: a type the kernel has (ufs) gets no stub row");
++	for (ok = 1, i = 0; i < 3; i++)
++		ok &= (*dlm_fsstub[i].vfs_sync)((char *)0, 0, (char *)0) == 0 &&
++		    (*dlm_fsstub[i].vfs_mountroot)((char *)0, 0) == EINVAL;
++	check(ok && !byname("fd1") && !byname("fd2"),
++	    "fsdem: a stub's sync is 0 and its mountroot EINVAL, and neither loads the module");
++	fd_mounts = 0;
++	check(fdmount("fd1", &v1) == 0 && (m = byname("fd1")) != 0 && fd_mounts == 1 &&
++	    fd_vfsp == (char *)&v1, "fsdem: the first mount loads the module and mounts through it");
++	check(m && rowof("fd1") == r1 && nfstype == base + 3 &&
++	    (unsigned long)vfssw[r1].vsw_vfsops == modsym(m, "fd1_ops") &&
++	    (unsigned long)v1.vfs_op == modsym(m, "fd1_ops"),
++	    "fsdem: the module's row is the stub's, filled in place; the vfs has its ops");
++	check(fdmount("fd1", &v2) == 0 && fd_mounts == 2 && byname("fd1") == m,
++	    "fsdem: a second mount goes to the module's row directly");
++	bzero((caddr_t)&v3, sizeof v3);
++	v3.vfs_op = &dlm_fsstub[0];
++	check((*v3.vfs_op->vfs_mount)(&v3, (char *)0, (char *)0, (char *)0) == 0 && fd_mounts == 3 &&
++	    (unsigned long)v3.vfs_op == modsym(m, "fd1_ops"),
++	    "fsdem: a mount that took the stub before the load finds the row filled");
++	vf_n = 0;
++	check(fdmount("fd2", &v1) == EIO && !byname("fd2") && vf_e[0] == 0 &&
++	    vfssw[r2].vsw_vfsops == &dlm_fsstub[1] && rowof("fd2") == r2 && nfstype == base + 3,
++	    "fsdem: a _load that fails after registering -> its error; the row is the stub again");
++	check(fdmount("fd3", &v1) == ENXIO && vfssw[r3].vsw_vfsops == &dlm_fsstub[2],
++	    "fsdem: a module that registers no row -> ENXIO; the stub stays");
++	if ((m = byname("fd3")) != 0)
++		moduload(m->m_id);
++	/* safe mode: no demand registration, so no stub row and no load */
++	nfstype = base;
++	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
++	dlm_nfsdem = 0;
++	dlm_safe = 1;
++	dlm_marc_run();
++	dlm_safe = 0;
++	check(nfstype == base && rowof("fd2") < 0 && fdmount("fd2", &v1) == EINVAL && !byname("fd2"),
++	    "fsdem: in safe mode no stub row: a mount of the type is EINVAL, nothing loads");
++	nfstype = base;			/* fd1 stays, pinned */
++	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
++	dlm_nfsdem = 0;
++	dlm_man = om;
++	dlm_manlen = ol;
++	dlm_devload = odev;
++}
++
+ /* ---- block rows (30 section 2 patch 7) ---- */
+ void
+ blk_tests()
+@@ -2116,6 +2255,7 @@
+ 	promote_tests();
+ 	rdblk_tests();
+ 	vfs_tests();
++	fsdem_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;

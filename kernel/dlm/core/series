@@ -48,3 +48,4 @@
 0045-safe-boot-members.patch
 0046-mkksym-kabi-minor.patch
 0047-modadmin-locked-delay.patch
+0048-demand-filesystems.patch
