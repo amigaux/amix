@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 17
+# C3-5 — the module package and the per-module manifest record, version 18
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -25,7 +25,8 @@
   (2026-10-28, amix-paula): paula's short name (§1.1), and a driver's own
   interface header in its module package (§1.2); version 17 (2026-10-31,
   P-36 W8, D-N24): amix-base's `/etc/inittab` carries the `dlm` line, and
-  modtools has no package scripts (§1.3, §5).
+  modtools has no package scripts (§1.3, §5); version 18 (2026-10-31,
+  P-36 D-N21): a device node's pkgmap class is its module's name (§1.2).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -119,11 +120,32 @@ per line**:
   building a module against another module, on the host.
 - **Device nodes:** the package ships the nodes of the majors its driver
   owns as pkgmap device entries, no script: z3660eth `/dev/zen0` c 51 0.
+- **A node's class is its module's name** (version 18, P-36 D-N21): the
+  module's file name in `/etc/conf/mod.d`, which is the registry's owner
+  of the major (`abi/registry/majors`), for example
+  `c z3660eth /dev/zen0 51 0 0600 root root` in the prototype.
+  - The class has no class action script, so stock `pkgadd` lays the node
+    and `pkgrm` removes it as it does a `none` object.
+  - `pkginfo`'s `CLASSES` lists it. Stock `pkgadd` installs only the
+    classes `CLASSES` lists (pkginfo(4)) and skips the rest without a
+    word, so the packaging gate (build/pkg) refuses a `c` or `b` object
+    whose class is missing from `CLASSES`.
+  - The major written is the registry's. The class is what links the
+    node to its module in `/var/sadm/install/contents`: amix-base's boot
+    step re-creates a missing node with the major `kbootset major <class>`
+    gives (C2-4 §15), and with the recorded one when the registry does not
+    know the class.
+  - Module names are short enough for a class (the longest,
+    `z3660scsi`, is 9 characters).
+  - A package minted before version 18 has its nodes in class `none`; the
+    boot step re-creates such a node from its record as installed. Each
+    module package moves to its module's class at its next mint.
   A block driver's nodes (`b`) are in `/dev/dsk`, and its character
   (raw) nodes in `/dev/rdsk` only when the driver has a character row:
   the ramdisk, block only, ships `/dev/dsk/ram0`–`ram2`, b 20 0–2, 0600
-  root root, and no `/dev/rdsk` node. Network plumbing (`slink`, `ifconfig`) is not the package's: the
-  installer's `S99zen` does it (S3-31).
+  root root, and no `/dev/rdsk` node. Network plumbing (`slink`, `ifconfig`) is not the package's
+  beyond its `link.d` line: `ifup` does it (C3-6 §1.8; until P-36 W6, the
+  installer's `S99zen`, S3-31).
 - The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
   `.moddata`. **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not

@@ -306,7 +306,7 @@ or
 .BR /stand/k46/kabi .
 It needs neither kinfo nor a store.
 .TP
-.BI major " name"
+.BI "major " name " \fR|\fP major \-l"
 Prints the majors that the major registry gives module
 .IR name ,
 one line each,
@@ -320,7 +320,14 @@ prints
 It reads neither the store nor kinfo nor the root, so it answers the same
 on a static kernel, in safe mode and after a boot from a CD or a floppy pair.
 Exit status 1, with a message on the standard error and nothing on the
-standard output, for a name the registry does not know.
+standard output, for a name the registry does not know; the registry names
+only modules, never a stock driver such as
+.BR aen .
+With
+.B \-l
+it prints every row of the registry instead, as
+.I "module type n"
+.RB ( "z3660eth c 51" ).
 .TP
 .B "media \fR...\fP"
 Builds the pristine generation of a new medium (a disk image, a floppy
