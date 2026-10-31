@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cut 68030-261031-64, the cut of record; kern30m -64 (1ac1a49)
+
+-63's recipe from amix b391504; the module core's major registry carries c 48 random (a8719fb). kabi k30.1.3, abi
+18c0a1c9. Sums reproduced on the host and twice in the container: unix 278d4d0f, unix.brel 03c4e122, unix.sym 0745df74,
+kabi cf7c8a31, ufs 5938bb62, s5 7dcca81e. kern30m k30.1.3.261031-64 (8c217239…) packages it ("New in -64: the kernel
+knows the random module's major (c 48)"); two rolls byte-identical. Emulation acceptance pending.
+
 ## 2026-10-31 — kern30m re-roots its carve objects (2bfd72d)
 
 pkg/kernel-k30-m: the ufs and s5 carve rebuilds link their objects where the cut (K30M_SRC) and amix-system
