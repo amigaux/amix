@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kern30m -64 asks for kbootset -30 or later; -64 emulation acceptance complete (ce80e2c)
+
+kern30m k30.1.3.261031-64 asks for kbootset -30 or later: kbootset's own registry must know c 48 random for a
+generation to carry the random module. -64 is not minted, so its pkginfo changed in place (roll 777f259b). Emulation
+acceptance of -64: C1-64, C0-64, T64 and the random cell N235c (urandom 1 MiB 0.55 s; seed kept across reboot) pass.
+
 ## 2026-10-31 — build-cross-kernel.sh: no SIGPIPE races; each cut pins its own port and paula (89ebcf7, a1b9b6c, e27aae0)
 
 The carve's build-id check no longer fails at random: `strings | grep -q` under pipefail died of SIGPIPE when grep
