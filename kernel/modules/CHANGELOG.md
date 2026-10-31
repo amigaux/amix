@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — monsw.h: SETCFG comes from /etc/display's monsw at boot (a56cf4b)
+
+include/sys/monsw.h's comment names /etc/display's monsw (else the older /etc/monsw), written in at boot by
+/etc/rc2.d/S20monsw. Comment only; the kit's copy follows at its next rebuild, and the module objects are unchanged.
+
 ## 2026-10-31 — monsw: monswctl, the boot step and the pages move into kernel/modules (36a3004)
 
 monsw/tool/monswctl.c is copied from kerntools tools/monsw (7996e07) with only comments changed; the cross build

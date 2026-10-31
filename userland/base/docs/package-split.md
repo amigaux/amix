@@ -189,6 +189,13 @@ order, on the target root:
    After the `removef` that goes quiet. No re-typing step: the stock
    `installf -f` crashes after `installf -c conffile … e` (pkgtools, E1).
 
+The installer no longer lays its syslog unit down: the `syslog` package
+ships `init.d/syslogd` and its `S70`/`K50` links, `/etc/syslog.conf` (a
+conffile), `/var/log` and `/dev/conslog`, and makes the log files at boot.
+It writes `syslogd=no` to `/etc/rc.conf` where the profile turns the log off,
+instead of restoring the vendor `exit` line. It keeps overwriting
+`/usr/sbin/syslogd` with the 2.1c daemon, which no package carries.
+
 The installer does not write `/etc/nodename`, the host's line in
 `/etc/inet/hosts`, `/etc/resolv.conf` or any `ifconfig` line: `ifup` writes
 them from `/etc/inet/interfaces` at the first boot. `/etc/rc.conf` is
