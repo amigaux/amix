@@ -129,19 +129,25 @@ def default_pin():
     if not os.environ.get("GCA"):
         die("set GCA to gcc-cross-amix's build/ directory (toolchain/README.md), or give --pin")
     gca = os.path.dirname(os.path.abspath(os.environ["GCA"]))
+    # the pin of record is amix's toolchain/gcc-cross-amix.pin (build/pkg/layout.sh exports it as AMIX_GCA_PIN),
+    # not whatever commit a local checkout has moved to; the installed wrapper must be that commit's
+    pin = os.environ.get("AMIX_GCA_PIN", "")
     try:
-        # a checkout's HEAD; an export (the build container's) has no git, and its commit is the
-        # toolchain pin build/pkg/layout.sh exports
-        try:
+        if pin:
+            head = pin[:7]
+            try:
+                wrapper = subprocess.run(["git", "-C", gca, "show", pin + ":amix-gcc-wrapper.sh"],
+                                         capture_output=True, text=True, check=True).stdout
+            except (OSError, subprocess.CalledProcessError):
+                # an export of the pin (the build container's) has no git: its own wrapper file
+                wrapper = open(os.path.join(gca, "amix-gcc-wrapper.sh")).read()
+        else:
             head = subprocess.run(["git", "-C", gca, "rev-parse", "--short=7", "HEAD"],
                                   capture_output=True, text=True, check=True).stdout.strip()
-        except (OSError, subprocess.CalledProcessError):
-            head = os.environ.get("AMIX_GCA_PIN", "")[:7]
-            if not head:
-                raise
-        wrapper = open(os.path.join(gca, "amix-gcc-wrapper.sh")).read().replace("@TARGET@", "m68k-cbm-sysv4")
+            wrapper = open(os.path.join(gca, "amix-gcc-wrapper.sh")).read()
     except (OSError, subprocess.CalledProcessError):
         die("cannot read gcc-cross-amix at %s; give --pin" % gca)
+    wrapper = wrapper.replace("@TARGET@", "m68k-cbm-sysv4")
     cc = shutil.which("m68k-cbm-sysv4-gcc") or "m68k-cbm-sysv4-gcc"
     if not os.path.exists(cc) or open(cc).read() != wrapper:
         die("the installed m68k-cbm-sysv4-gcc (%s) is not gcc-cross-amix %s's wrapper; give --pin" % (cc, head))
