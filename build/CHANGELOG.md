@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — check-packages covers userland/base/pkg; stock and directory man pages (f5b513b)
+
+pkgmeta check, index and fragments take several packages directories as one catalog: one version guard and one owner
+per conffile across them, one INDEX.md and conf/ in the first, other directories' packages linked by relative path.
+check-packages checks userland/packages and userland/base/pkg together and skips a missing directory. The man-page
+warning counts a directory's page for the files in it and the stock page of a STOCK_ETC file's name (case blind), from
+build/pkg/stock-pages (3558 names, made by `pkgmeta stock-pages <whatis>`); it still warns where no page exists.
+test-pkgmeta 145/145.
+
 ## 2026-10-31 — STOCK_ETC takes stock /etc defaults from amix-system (1608a4a)
 
 A package.sh key STOCK_ETC names stock /etc files by path; after the stage hook the driver copies each from the
