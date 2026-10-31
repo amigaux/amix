@@ -1,0 +1,65 @@
+#!/bin/sh
+# dist-proof: make dist twice, from two clean clones of one commit at two
+# different paths, and the two locks compared (P-38 S7.2).
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh build/dist-proof WORKDIR [COMMIT]
+#
+# COMMIT (default this checkout's HEAD) is cloned from this checkout into
+# WORKDIR/a/amix and WORKDIR/elsewhere/a/much/longer/path/b/amix, and each
+# clone runs every make dist step in order, each its own `build/dist.sh
+# <step>`, with SYSTEM (or AMIX_SYSTEM), AMIX_IMAGE, AMIX_DISTFILES and LOCK
+# passed on: with LOCK=<lock of record>, each run's lock step also refuses a
+# lock that differs from it. A step that exits 3 (not in make dist yet, or a
+# recipe still [MISSING]) is a known gap and the run goes on; any other
+# failure stops the proof. Each step's log is WORKDIR/<run>/step-<step>.log,
+# and WORKDIR/summary says what each step did. Exit 0 when both runs end
+# with the same lock, 1 when a step failed or the locks differ, 2 usage.
+set -u
+
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(dirname "$here")
+work=${1:-}
+[ -n "$work" ] && [ $# -le 2 ] || { sed -n '/^#     sh/p' "$0" | sed 's/^# *//' >&2; exit 2; }
+commit=$(git -C "$top" rev-parse --verify "${2:-HEAD}^{commit}") || exit 2
+sys=${SYSTEM:-${AMIX_SYSTEM:-}}
+[ -n "$sys" ] && [ -d "$sys" ] || { echo "dist-proof: SYSTEM=<amix-system checkout> (system/fetch-amix-system makes one)" >&2; exit 2; }
+sys=$(cd "$sys" && pwd)
+[ ! -e "$work" ] || [ -z "$(ls -A "$work")" ] || { echo "dist-proof: $work is not empty" >&2; exit 2; }
+mkdir -p "$work"
+work=$(cd "$work" && pwd)
+STEPS="kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock"
+
+run() {	# run <name> <dir>: one make dist in <dir>/amix, its logs in <dir>
+	git clone -q --no-local "$top" "$2/amix" &&
+		git -C "$2/amix" -c advice.detachedHead=false checkout -q "$commit" || return 1
+	echo "$1: amix $commit at $2/amix" >> "$work/summary"
+	start=$(date +%s)
+	for s in $STEPS; do
+		rc=0
+		( cd "$2/amix" && SYSTEM=$sys sh build/dist.sh "$s" ) > "$2/step-$s.log" 2>&1 || rc=$?
+		case $rc in
+		0) what=ok ;;
+		3) what="known gap: $(grep -h '^\[MISSING\]' "$2/step-$s.log" | wc -l | tr -d ' ') [MISSING]" ;;
+		*) what="FAILED, exit $rc" ;;
+		esac
+		echo "$1: $s $what ($(($(date +%s) - start)) s)" >> "$work/summary"
+		case $rc in 0|3) ;; *) tail -20 "$2/step-$s.log" >&2; return 1 ;; esac
+	done
+	[ -s "$2/amix/out/lock" ] || { echo "$1: no out/lock" >> "$work/summary"; return 1; }
+}
+
+: > "$work/summary"
+a=$work/a b=$work/elsewhere/a/much/longer/path/b
+mkdir -p "$a" "$b"
+run a "$a" && run b "$b" || { cat "$work/summary"; echo "dist-proof: a run failed" >&2; exit 1; }
+if cmp -s "$a/amix/out/lock" "$b/amix/out/lock"; then
+	echo "the two locks are identical: $(wc -l < "$a/amix/out/lock" | tr -d ' ') lines, sha256 $(sha256sum < "$a/amix/out/lock" | cut -c1-64)" >> "$work/summary"
+	cat "$work/summary"
+	exit 0
+fi
+echo "the two locks differ:" >> "$work/summary"
+diff "$a/amix/out/lock" "$b/amix/out/lock" >> "$work/summary"
+cat "$work/summary"
+exit 1

@@ -101,7 +101,7 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.temp }}/toolchain-image
-          key: amix-toolchain-${{ hashFiles('toolchain/Containerfile', 'toolchain/*.pin', 'toolchain/container-build.sh', 'system/amix-system.pin', 'system/MANIFEST.sha256', 'system/SYMLINKS', 'system/check-amix-system') }}
+          key: amix-toolchain-${{ hashFiles('toolchain/Containerfile', 'toolchain/*.pin', 'toolchain/container-build.sh', 'toolchain/sysroot-links', 'system/amix-system.pin', 'system/MANIFEST.sha256', 'system/SYMLINKS', 'system/check-amix-system') }}
       # A restore can fail on the cache service's side ("Egress is over the
       # account limit", a throttle) though the entry exists: try once more
       # before building the image from scratch.
