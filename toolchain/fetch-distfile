@@ -1,0 +1,37 @@
+#!/bin/sh
+# fetch-distfile: fetch a pinned distfile into the cache, checked.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     toolchain/fetch-distfile <name>.distfile [<cache dir>]   (default out/cache)
+#
+# A distfile pin (a .distfile, not a .pin: that is a repository and a commit,
+# and the build image's cache key) is one line, `<URL> <sha256>`: the URL of our copy on
+# amigaux/amix-distfiles (a release asset), never the original site, which
+# moves (NetBSD 10.1 has left cdn.netbsd.org). The file lands in the cache
+# under the URL's last component, and only after its sha256 matches; a file
+# already there and matching is not fetched again. AMIX_DISTFILES names a
+# local directory to take the file from instead of the URL, for a mirror or
+# before the asset is uploaded. Prints the cached file's path last.
+set -e
+
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(dirname "$here")
+pin=${1:?usage: fetch-distfile <pin> [<cache dir>]}
+cache=${2:-$top/out/cache}
+read -r url sha < "$pin" || :
+case "$url" in https://*) ;; *) echo "[FAIL] $pin: no https URL on its line" >&2; exit 1 ;; esac
+echo "$sha" | grep -Eq '^[0-9a-f]{64}$' || { echo "[FAIL] $pin: no sha256 on its line" >&2; exit 1; }
+name=${url##*/}
+. "$top/build/pkg/common/fetch.sh"
+if [ -f "$cache/$name" ] && [ "$(amix_sha256 "$cache/$name")" = "$sha" ]; then
+	echo "  cached  $cache/$name" >&2
+	echo "$cache/$name"
+	exit 0
+fi
+if [ -n "${AMIX_DISTFILES:-}" ]; then
+	[ -f "$AMIX_DISTFILES/$name" ] || { echo "[FAIL] AMIX_DISTFILES=$AMIX_DISTFILES has no $name" >&2; exit 1; }
+	url="file://$(cd "$AMIX_DISTFILES" && pwd)/$name"
+fi
+amix_fetch "$url" "$sha" "$cache/$name" >&2
+echo "$cache/$name"

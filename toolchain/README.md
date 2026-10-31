@@ -143,6 +143,41 @@ container can still differ from one built elsewhere in the host-compiled
 `modfix` and in the revision lines of `kit.conf` and `NOTICE`, so compare a
 container kit with a container kit.
 
+## What the kernel cuts take from here
+
+The 68040/68060 port's cut and relink scripts need two things the image does
+not carry as such (P-38 S1.4):
+
+- **NetBSD 10.1's `syssrc.tgz`** (the FPSP, the 060 package, the FPE),
+  pinned in `netbsd-syssrc.distfile`: one line, `<URL> <sha256>`. A distfile
+  pin is not a `.pin` (a repository and a commit), and the image's cache key
+  does not read it. The URL is our copy, a release asset of
+  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles), never
+  NetBSD's own site (10.1 has already moved from cdn.netbsd.org to
+  archive.netbsd.org). It is the file NetBSD publishes as
+  `NetBSD-10.1/source/sets/syssrc.tgz`, 79497697 bytes, sha512
+  `766ac21f…8c06926` as in NetBSD's `SHA512`, the same sha256 the port's
+  `tools/netbsd-pin.sh` checks.
+
+  ```sh
+  toolchain/fetch-distfile toolchain/netbsd-syssrc.distfile    # -> out/cache/syssrc-10.1.tgz
+  ```
+
+  It is fetched at cut time into `out/cache` (ignored), not baked into the
+  image, and only kept once its sha256 matches. `AMIX_DISTFILES=<dir>` takes
+  the file from a local directory instead (a mirror, or before the asset is
+  uploaded).
+- **The `m68k-linux-gnu` tools** the scripts call by name (gcc as an
+  assembler with cpp, as, ld, ar, nm, objcopy, objdump, readelf, size).
+  `toolchain/m68k-gnu-bin <dir>` links each to gcc14's `m68k-elf-*` of the
+  same name, so one set of binutils serves both; the directory goes first on
+  `PATH`. The FPSP 040, FPSP 060 and ISP 060 objects the port builds are
+  byte-identical with these and with Ubuntu's m68k-linux-gnu gcc 15.2 and
+  binutils 2.46 (measured 2026-10-31); the whole cut's proof is that its
+  sums reproduce.
+
+`sh toolchain/test-tools` is the host test of both.
+
 ## Updating a pin
 
 Change the commit in the `.pin` file, rebuild the container, and compare
