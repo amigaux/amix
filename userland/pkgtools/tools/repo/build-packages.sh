@@ -86,6 +86,16 @@ VER_APKG="0.3.4"
 # compver(5), copyright(5) and space(5) from src/formats.  1.12.4 is staged with the old payload: one version, one
 # byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
 VER_ENG="1.12.5"
+# EPOCH_APKG, EPOCH_ENG: each version's own epoch (P-38 D-b, T-56 D1): every
+# time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
+# (heirloom 21072b2), so one version is one set of bytes wherever and
+# whenever it is rolled.  Pinned beside the version and moved with it, never
+# taken from the environment (a build container sets its own) nor from this
+# file's last commit (which every arm here shares).  Both: 2026-10-30
+# 00:00:00 UTC, the day 0.3.4 and 1.12.5 were set.  The other arms roll
+# without one, as before.
+EPOCH_APKG=1793318400
+EPOCH_ENG=1793318400
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"
@@ -199,14 +209,17 @@ STAGING="$(cd "$STAGING" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# build <name> <version> <subdir> [stagingdir] — expects
+# build <name> <version> <subdir> [stagingdir] [epoch] — expects
 # $WORK/<name>/{pkginfo,prototype} prepared and produces
 # <stagingdir>/<subdir>/<name>-<version>.pkg (datastream, newc members).
 # <subdir> is the categorized repo directory (base/, test/, ...) that ends up
 # in the catalog filename field; <stagingdir> defaults to $STAGING (the
 # redistributable staging) and is overridden to $KSTAGING for kernel packages.
+# With <epoch>, pkgmk and pkgtrans roll under SOURCE_DATE_EPOCH=<epoch>;
+# without, under none (the environment's is never used).
 build_one() {
-  name="$1"; ver="$2"; subdir="$3"; stg="${4:-$STAGING}"
+  name="$1"; ver="$2"; subdir="$3"; stg="${4:-$STAGING}"; ep="${5:-}"
+  if [ -n "$ep" ]; then roll_env="SOURCE_DATE_EPOCH=$ep"; else roll_env="-u SOURCE_DATE_EPOCH"; fi
   # PKG name <= 9 chars (CONTRIBUTING.md hard constraint 1): stock Amix pkgadd
   # SILENTLY drops longer names.  Fail closed for anything this script mints.
   if [ "${#name}" -gt 9 ]; then
@@ -215,7 +228,8 @@ build_one() {
   fi
   spool="$WORK/spool-$name"
   mkdir -p "$spool" "$stg/$subdir"
-  ( cd "$WORK/$name" && "$PKGMK" -o -d "$spool" -f prototype )
+  # shellcheck disable=SC2086  # roll_env is two words or one
+  ( cd "$WORK/$name" && env $roll_env "$PKGMK" -o -d "$spool" -f prototype )
   # Link gate (fail closed): every `s`/`l` entry in the MINTED pkgmap must
   # carry an absolute target that resolves to a path this package itself
   # declares.  APKG 0.2 shipped a relative symlink target that the stock
@@ -224,7 +238,8 @@ build_one() {
   python3 "$REPO/tools/repo/pkgmap-symlink-gate.py" "$spool/$name/pkgmap"
   out="$stg/$subdir/$name-$ver.pkg"
   rm -f "$out"
-  "$PKGTRANS" -s "$spool" "$out" "$name"
+  # shellcheck disable=SC2086
+  env $roll_env "$PKGTRANS" -s "$spool" "$out" "$name"
   # verify the datastream carries newc (070701) members at offset 512
   magic="$(dd if="$out" bs=1 skip=512 count=6 2>/dev/null)"
   if [ "$magic" != "070701" ]; then
@@ -274,6 +289,7 @@ ARCH=Amiga
 VERSION=$VER_APKG
 CATEGORY=application
 CLASSES=none conffile
+PSTAMP=amix-pkgtools-APKG-$VER_APKG-period
 APKG_DESC=Remote package client: update/list/search/install over HTTP
 APKG_ESSENTIAL=yes
 EOF
@@ -545,7 +561,7 @@ d none /var/apkg 0755 root sys
 d none /var/apkg/cache 0755 root sys
 e conffile /var/apkg/admin=$A/admin 0644 root sys
 EOF
-  build_one APKG "$VER_APKG" base
+  build_one APKG "$VER_APKG" base "" "$EPOCH_APKG"
   gate_060 "$out"
 fi
 
@@ -563,6 +579,7 @@ ARCH=Amiga
 VERSION=$VER_ENG
 CATEGORY=application
 CLASSES=none
+PSTAMP=amix-pkgtools-APKGENG-$VER_ENG-period
 APKG_DESC=Heirloom SVR4 pkg tools: tolerant contents parser, removef/pkgask, man pages
 APKG_ESSENTIAL=yes
 EOF
@@ -609,7 +626,7 @@ EOF
       echo "f none /usr/apkg/man/man5/$m=$REPO/src/formats/$m 0644 root sys"
     done
   } > "$E/prototype"
-  build_one APKGENG "$VER_ENG" base
+  build_one APKGENG "$VER_ENG" base "" "$EPOCH_ENG"
   gate_060 "$out"
 fi
 
