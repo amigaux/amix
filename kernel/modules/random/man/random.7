@@ -66,3 +66,11 @@ echo something only I know > /dev/urandom
 .fi
 .SH SEE ALSO
 .BR randseed (1M)
+.SH NOTES
+The module needs a kernel cut with c 48 (k30 -64 or later, k46 -53 or
+later) and
+.B kbootset
+1.1.0.261031-30 or later, the first whose registry has random.
+An older kernel refuses to load it, and an older
+.B kbootset
+refuses a generation that holds it.
