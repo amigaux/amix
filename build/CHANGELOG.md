@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — gcc14-pin.sh at f40055b; make dist's locks re-measured (3162004, 5d2e382, b8e8252)
+
+build/pkg/common/gcc14-pin.sh pins f40055b and its two changed files. dist-proof gives two identical locks; against
+the previous lock only the amix commit, the image, the gcc14 pin and the kits' KIT_REV label differ, and of the
+packages only amixbch14's BUILD-INFO and PROVENANCE text files (the toolchain line) move. make dist's [MISSING] lines
+name the missing input only; the privacy check's class 2 is "local tool files". A top-level CONTRIBUTING.md covers
+sending a change, the licence, what never goes in, building and testing, commit messages and bugs.
+
 ## 2026-10-31 — make dist builds its own host pkgtools in out/build (781d869)
 
 make dist builds its host pkgmk and pkgtrans in a copy of userland/pkgtools under out/build/pkgtools-host/, never

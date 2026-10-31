@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — gcc14-cross-amix pinned at f40055b: gcc -shared (3162004)
+
+f40055b adds `gcc -shared`, libamixc99's __cxa_finalize for shared libraries, and library constructors run after the
+program's start-up. The tree digest is 5a0dbb99 (5967 files); libamixc99.a (1ac4df85) and the specs (3dd30d46)
+change, cc1 and libgcc.a do not. The image runs the fork's test-shared.sh and test-compat-host.sh and keeps no test
+output. Comments, docs and messages state the technical fact without internal ids (5d2e382).
+
 ## 2026-10-31 — the gcc14 sysroot's links into /usr/amiga and /usr/ucblib resolve (857c7cb)
 
 The new toolchain/sysroot-links, run by the Containerfile, makes the sysroot's absolute links whose target is inside
