@@ -28,7 +28,15 @@ The installer:
    `UNI\0` partitions, and it clears the whole RDB area (blocks 0–127).
    Afterwards it checks there is exactly one `UNI\0`, counting PART blocks by
    their DosType.
-2. installs the medium's package set as for 1.0.
+2. installs the medium's package set as for 1.0, then the base packages:
+   amix-base, dhcp-client and syslog, from `/install/l11/base` (built by amix's
+   reproducible roll at the set's `base` revision). They go in under the target's own
+   chroot with APKGENG's engine (`/usr/apkg/bin/pkgadd`): their conffile class needs
+   `cmp`, which the miniroot lacks. Before each package, `seed.sh` seeds the baseline
+   (`/var/sadm/conffiles/<pkginst><path>`) of every conffile still equal to its contents
+   record, so the class takes the new default silently. Then `removef core` hands
+   amix-base's conffiles over from core (APKGENG's `removef`; stock 2.1 has none), and a
+   fresh install that leaves a `PENDING` is refused.
 3. installs, in one apkg transaction, the packages of the disk:
    - `kbootset` (userland, `/sbin/kbootset`);
    - `loader-amix` (kernel space, `/stand/loader/{boot1,boot2,ldrinfo}`);
@@ -49,17 +57,12 @@ The installer:
    prints the commands. Neither the loader nor the kernel commits anything, and the
    store gets exactly one generation, the pristine one, in step 4.
 
-   modtools' postinstall puts `dlm::sysinit:/sbin/modadmin -B </dev/console
-   >/dev/console 2>&1` in `/etc/inittab` before its first sysinit entry (C3-5
-   §5): the boot-class modules load there. The installer then checks the file:
-   exactly one line with the id `dlm`, the first sysinit entry, C3-5's text, and
-   the rest core's inittab (`sum -r` against the medium's copy). Anything else
-   stops the install and names the postinstall.
-
-   modtools (-4 on) refuses to touch an inittab whose dlm line is misplaced or
-   duplicated, and an inittab that would be left empty: it exits 1 and leaves the
-   file for the administrator. Neither the installer nor the package makes such a
-   file; a fresh install starts from core's.
+   amix-base ships `/etc/inittab` with `dlm::sysinit:/sbin/modadmin -B </dev/console
+   >/dev/console 2>&1` before its first sysinit entry (C3-5 §5): the boot-class modules
+   load there. modtools (-9 on) has no package scripts and never edits the file. The
+   installer checks it: exactly one line with the id `dlm`, the first sysinit entry,
+   C3-5's text, and the file amix-base's default (`sum -r` against the medium's copy,
+   taken from amix-base's datastream). Anything else stops the install.
 4. runs the INSTALLED `/sbin/kbootset` (the package's; there is no other copy):
    - `create 67108864 /stand/loader/boot2 --boot1 /stand/loader/boot1 --version
      <ldrinfo's> --force` lays the loader package's bytes over
@@ -95,17 +98,15 @@ The installer:
      hard link to `/stand/2.1_unix`, the 1992 kernel. `netstat`, `ifconfig` and
      `crash` read their kernel addresses from it, and on a 1.1 disk it is never the
      booted kernel. The name goes; `/stand/2.1_unix` stays, its `sum -r` checked;
-   - `/etc/rc2.d/S01kbnamelist`, the one line
-     `[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1`. It
-     sorts after `S01MOUNTFSYS` and before every other run-level-2 script, and
-     writes the booted generation's namelist to `/stand/unix` at every boot. The
-     installer cannot write it: where the kernel is bound is known only once it
-     has booted;
-   - `/etc/rc2.d/S99zen` when the z3660eth module is installed, on either line.
-     A profile whose interface is zen0 brings zen0 up at `FB_IP`. Otherwise zen0
-     comes up beside that interface at its own `FB_ZEN_IP` (`FB_ZEN_NETMASK`,
-     optional `FB_ZEN_GATEWAY`), or is left down when there is none. It never takes
-     `FB_IP`.
+   - `/etc/inet/interfaces`, `/etc/rc.conf` and `/etc/display`, the admin files no
+     package owns (below).
+
+   kbootset's package (-26 on) carries `/etc/rc2.d/S01kbnamelist`: it sorts
+   after `S01MOUNTFSYS` and before every other run-level-2 script, and writes the
+   booted generation's namelist to `/stand/unix` at every boot. The installer only
+   checks that it is there. z3660eth's package (-7 on) carries
+   `/etc/inet/link.d/z3660eth` and `/dev/zen0`; zen0 is a line of
+   `/etc/inet/interfaces`.
 
    It lays none of the 1.0 boot-chain pieces: `/stand/boot2.boot`, the framed
    chain, the RTO1 record or the reframe tools.
@@ -133,9 +134,9 @@ runs cannot find the store, so recover still exits 6 after it reinstalls the
 packages. Then compose the store from the repair shell:
 `/mnt/sbin/kbootset -R /mnt --dev <store=> build`, then `commit`.
 
-`/etc/rc2.d/S99zkbootset`, the last run-level-2 script (it sorts after `S99zen`),
-runs C2-4 §9's `[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1`,
-with no options. kbootset takes the booted
+`/etc/rc2.d/S99zkbootset`, the last run-level-2 script, kbootset's link of
+`/etc/init.d/kbmarkgood` (-26 on), runs C2-4 §9's
+`/sbin/kbootset mark-good >/dev/console 2>&1`, with no options. kbootset takes the booted
 generation from the loader record through kinfo, so a box that came all the way up
 marks its trial good (spec 40 §3.3). One that panics or hangs in `rc` never gets
 there, and the loader's try-once rule boots the previous good generation. On the
@@ -146,6 +147,38 @@ The repair path of the install miniroot (`install or repair` → `repair`) mount
 the root. On a 1.1 disk it then offers `status`, `rollback` and `mark-bad`
 through the disk's own `/sbin/kbootset`, using the store named in its
 `/etc/default/bootset`.
+
+## The admin files and the first boot
+
+Three files no package owns are written by the installer from the profile, each
+checked by its reader under the target's chroot:
+
+| File | From | Checked by |
+|---|---|---|
+| `/etc/inet/interfaces` (`interfaces(4)`) | a static profile (`FB_IP` set: bench, metal, matrix): `FB_ETHER_IF static FB_IP/bits gw FB_GATEWAY name FB_NODENAME`, a `zen0` line from `FB_ZEN_IP`, a MAC line per `FB_ZEN_CARDS` row, `dns`, `domain`. A public profile (no `FB_IP`): `* dhcp`, with its name or `hostname dhcp` | `ifup -n` |
+| `/etc/rc.conf` (`rc.conf(4)`) | `syslogd=yes` or `no` (`FB_SYSLOG`) | |
+| `/etc/display` (`display(4)`) | `card auto`, `monsw` from `MONSW`, `start manual` | `xstart -n` |
+
+amix-base's `ifup` (S69inet) brings the interfaces up from `/etc/inet/interfaces`, and
+writes this host's row of `/etc/inet/hosts` and the DNS parts. The packages carry what
+the installer used to write: S99zen and zen.conf (z3660eth and `interfaces`), S20monsw
+and `/etc/monsw` (monsw; the bits are `/etc/display`'s), the syslog unit (syslog: it
+reads `syslogd=`; the 2.1c daemon stays the installer's overwrite, since no package
+carries it), S89rootswap (amix-base's swap step, S90swap), S01kbnamelist and
+S99zkbootset (kbootset). `/dev/kinfo` stays installer-written until kbootset -29
+carries it.
+
+The first boot of a 1.1 disk (`FB_L11=y` in `firstboot.conf`):
+- the dialog asks `Use DHCP to configure the network?` (`* dhcp`) or one static
+  interface, and offers DNS on every interface. Its answers become
+  `/etc/inet/interfaces`; the syslog answer is `syslogd=` in `/etc/rc.conf`;
+- the name may be left empty: it is then the name a DHCP server offers
+  (`hostname dhcp`), else `amix-` and the last four hex digits of the first interface's
+  MAC (`dlpi-mac`, zen0 first);
+- it writes no host row, no S99zen, no rc.inet route and no DNS parts (ifup's), and
+  does not edit `/etc/profile` (amix-base's conffile): the X11 and apkg PATH go in
+  `/etc/profile.d/x11.sh` and `opt-amix.sh`. The desktop session is amix-base's
+  `xstart`.
 
 ## Over a disk that holds Amix
 

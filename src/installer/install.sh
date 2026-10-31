@@ -2111,9 +2111,12 @@ rm -f "$TARGET/tmp/.apkgord.$$"
 while read _p _rest; do
 	if [ "$_p" = APKG ]; then echo y > "$TARGET/tmp/.apkgord.$$"; fi
 done < "$ORDER"
+# 1.1: APKG 0.3.4 delivers /etc/apkg.conf through the shared conffile class; a
+# file already there with no baseline counts as edited (.new and a PENDING line), so the
+# package installs its default and the repo line is written after it (below), an edit.
 if [ -f "$TARGET/tmp/.apkgord.$$" ]; then
 	rm -f "$TARGET/tmp/.apkgord.$$"
-	write_apkg_conf
+	[ "$INSTALL_LAYOUT" = 1.1 ] || write_apkg_conf
 fi
 if [ "$INSTALL_ATTESTED" = n ]; then
 	# Plan §5.7: named sets WITH a reference digest are gated; an unattested
@@ -2448,6 +2451,9 @@ if [ -x "$TARGET/usr/apkg/bin/apkg" ]; then
 	if [ -f "$TARGET/tmp/.apkgrepo.$$" ]; then
 		rm -f "$TARGET/tmp/.apkgrepo.$$"
 		msg "$APKG_CONF kept by the APKG package (repo=$FB_REPO_URL)"
+	elif [ "$INSTALL_LAYOUT" = 1.1 ]; then
+		write_apkg_conf
+		msg "$APKG_CONF: the APKG package's default, the profile's repo line written after it (a conffile edit)"
 	else
 		warn "$APKG_CONF lost its repo line in the package install (APKG older than 0.2.3?) -- writing it again"
 		write_apkg_conf
@@ -2460,6 +2466,9 @@ fi
 # 6-8c, 1.1: the kernel package and the boot store (l11.sh) REPLACE sections 6 to 8c
 # ===========================================================================
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	# the base packages (amix-base, dhcp-client, syslog) after core and the base
+	# set, before the kernel-space transaction
+	l11_base
 	l11_bootstore
 else
 # ===========================================================================
@@ -2726,7 +2735,9 @@ fi	# INSTALL_LAYOUT 1.0: sections 6-8c
 # The 040/060 line never gets the file (INSTALL_CPU=040 there).
 K030_BOOTSWAP=20476
 K030_SWAPTAIL=20480	# the next 16-block boundary past K030_BOOTSWAP
-if [ "${INSTALL_CPU:-030}" = 030 ]; then
+# 1.1: amix-base's swap step (/etc/init.d/swap, S90swap, 1.0-9 on) applies the same rule from
+# vfstab and the RDB, so the installer no longer writes the file.
+if [ "${INSTALL_CPU:-030}" = 030 ] && [ "$INSTALL_LAYOUT" != 1.1 ]; then
 	RSLEN="$SWAPBLKS"
 	is_num "$RSLEN" || RSLEN="$SWAPLEN"
 	RSSTART=$K030_SWAPTAIL
@@ -2857,6 +2868,9 @@ run chmod 600 "$TARGET/var/adm/firstboot/root.shadow"
 	# 1.1: l11_namelist removed the name /stand/unix; first boot takes it out of core's
 	# contents too. modtools rewrote /etc/inittab by rename, so it lost core's group.
 	[ "$INSTALL_LAYOUT" = 1.1 ] && echo "FB_STANDUNIX_RM=y"
+	# 1.1: the first boot writes /etc/inet/interfaces and /etc/rc.conf, not
+	# hosts, network-config, S99zen or the syslog exit line (firstboot.sh's FB_L11 branches)
+	[ "$INSTALL_LAYOUT" = 1.1 ] && echo "FB_L11=y"
 	[ "${L11_KMOD:-n}" = y ] && echo "FB_INITTAB_SYS=y"
 	# a four-card kernel (C4-1): first boot swaps core's d1 nodes for c10-c1f
 	[ "${L11_SDCARDS:-2}" = 4 ] && echo "FB_SDCARDS=4"
@@ -2882,6 +2896,8 @@ run chmod 600 "$TARGET/var/adm/firstboot/root.shadow"
 echo "+ : > $TARGET/var/adm/firstboot/PENDING"
 : > "$TARGET/var/adm/firstboot/PENDING" || die "cannot create the first-boot PENDING marker"
 run chmod 600 "$TARGET/var/adm/firstboot/firstboot.conf" "$TARGET/var/adm/firstboot/PENDING"
+# /etc/inet/interfaces, /etc/rc.conf and /etc/display, from the profile (1.1)
+[ "$INSTALL_LAYOUT" = 1.1 ] && l11_admin
 
 # --- WIRE first-boot into the target's init (W5.4f) --------------------------
 # Two moves, both proven against an s5 read of the installed target's init flow:
@@ -2986,6 +3002,15 @@ fi	# INSTALL_LAYOUT 1.0: updbootpart + /stand framing
 #     files; the vendor patch ships them as zero-length stubs), and
 #     /dev/conslog (c 25 0, mode 222) mirrors the vendor patch's own
 #     "device node added to support syslogd". /dev/log is already a core member.
+if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	# the syslog package ships the unit (init.d/syslogd and its links, syslog.conf as a
+	# conffile, /var/log, /dev/conslog; it makes the log files at each start and reads
+	# syslogd= from /etc/rc.conf). No package carries the 2.1c daemon (amix-system has none),
+	# so its overwrite of core's 2.1 copy stays the installer's.
+	run cp "$INST/syslog/syslogd" "$TARGET/usr/sbin/syslogd"
+	run chmod 0100 "$TARGET/usr/sbin/syslogd"
+	msg "syslog: the syslog package's unit; /usr/sbin/syslogd is the 2.1c daemon (the installer's overwrite)"
+else
 run cp "$INST/syslog/syslog.conf" "$TARGET/etc/syslog.conf"
 run chmod 0444 "$TARGET/etc/syslog.conf"
 [ -d "$TARGET/etc/init.d" ] || run mkdir -p "$TARGET/etc/init.d"
@@ -3023,6 +3048,7 @@ done
 [ -c "$TARGET/dev/conslog" ] || run mknod "$TARGET/dev/conslog" c 25 0
 run chmod 0222 "$TARGET/dev/conslog"
 msg "laid down the syslog unit (2.1c conf+daemon, init ENABLED, S70/K50 hard links, 8 /var/log stubs, /dev/conslog) -- fresh installs log from day one"
+fi	# INSTALL_LAYOUT 1.1: the syslog package
 
 # --- LAY DOWN the zen0 (Z3660 native ethernet) bring-up (METAL-FIX.4) --------
 # The installed metal kernel already contains z3660eth, but a base install ships
@@ -3041,7 +3067,11 @@ msg "laid down the syslog unit (2.1c conf+daemon, init ENABLED, S70/K50 hard lin
 # zen0 LINK is metal-only-testable (no z3660eth under emulation) -- the laydown is
 # bench-provable, and the actual traffic was PROVEN on metal by M-RUN3 (2026-07-24:
 # zen0 UP, ping 3/3, bidirectional telnet, surviving 4 cold boots).
-if [ "$FB_ETHER_IF" = zen0 ]; then
+if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	# /etc/inet/interfaces (l11_admin) and amix-base's ifup bring every interface up;
+	# z3660eth ships /etc/inet/link.d/z3660eth and /dev/zen0, and dlpi-mac replaces zenmac
+	msg "network: /etc/inet/interfaces and amix-base's ifup (no S99zen, no zenmac)"
+elif [ "$FB_ETHER_IF" = zen0 ]; then
 	# P-15 I2: the public flavor (FIRSTBOOT_DIALOG=y) may leave BOTH FB_IP and
 	# FB_GATEWAY empty -- an address-less laydown the dialog's 8a re-point fills in;
 	# zen0 stays down until it has an address. Every unattended profile keeps the
@@ -3101,7 +3131,11 @@ fi
 # The major is 52 (port driver line b9992ed; 50 is the stock SAD STREAMS row).
 # kernel without the monsw driver boots this unchanged: S20monsw prints one
 # console line and the boot goes on. MONSW empty or "none" lays down nothing.
-if [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
+if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	# the monsw package ships its boot step and /dev/monsw (a node of its class), and
+	# the bits are /etc/display's monsw line (l11_admin)
+	msg "monitor switch: the monsw package's boot step; the bits in /etc/display (MONSW='$MONSW')"
+elif [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
 	for mf in S20monsw monswctl monsw.h; do
 		[ -f "$INST/monsw/$mf" ] || die "profile $PROFILE_NAME sets MONSW=$MONSW but this medium has no $INST/monsw/$mf (re-master with tools/build-install-iso.sh)"
 	done

@@ -13,7 +13,7 @@
 # it (C2-2, C2-3, C2-4). Nothing here frames a kernel or writes a loader by hand.
 #
 # THE MEDIUM (/install/l11, tools/build-install-iso.sh):
-#   bin/apkg       apkg 0.3, static, FILE+RAW (amix-packagemanager)
+#   bin/apkg       apkg 0.3, static, FILE+RAW (amix userland/pkgtools)
 #   kpkg/catalog kpkg/pkgs/...   the FILE source: the packages kbootset (userland) and
 #                  loader-amix and the kernel (kernel space, the #ext kpkg 1 block), as
 #                  amix-packages mints them. They are installed like any package, so the
@@ -24,8 +24,11 @@
 #   recover.conf   apkg's conf for `apkg -R /mnt recover` from the repair path
 #   bcheckrc bcheckrc.stock   /sbin/bcheckrc with `kbootset retry` before each root
 #                  fsck reboot (C2-4 v5 §7), and the stock file's `sum -r`
-#   inittab        core's /etc/inittab with C3-5 §5's dlm line before its first sysinit
-#                  entry: what modtools' postinstall must leave on the target
+#   inittab        amix-base's /etc/inittab (it carries C3-5 §5's dlm line before its first
+#                  sysinit entry): what the target holds once amix-base is in
+#   base/          the base packages: order (their pkginsts, in order), each
+#                  <pkginst>.pkg, <pkginst>.cf (its pkgmap's `e conffile` paths; s5-safe names)
+#                  and seed.sh (payload/l11-seed.sh)
 #   2.1_unix.sum   the `sum -r` of core's /stand/2.1_unix, which stays when the name
 #                  /stand/unix goes (C2-4 v9 §12)
 #
@@ -321,6 +324,155 @@ l11_bootstore()
 	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
 }
 
+# l11_base -- after core and the base set, the base packages in base/order (amix-base, then
+# dhcp-client and syslog; amix userland/base/docs/package-split.md).
+# Under the target's own chroot: its /bin/sh, grep, sum, cmp and APKGENG's engine
+# (/usr/apkg/bin/pkgadd and removef). The miniroot carries none of the conffile class's tools,
+# and stock 2.1 has no removef. For each package: seed the baselines of its conffiles that
+# still match their contents record (seed.sh), then pkgadd it. Then `removef core` the paths
+# amix-base took over and `removef -f core`. A fresh install leaves no PENDING.
+l11_base()
+{
+	_bd="$TARGET/tmp/l11base" _cr="$TARGET/usr/sbin/chroot"
+	[ -x "$_cr" ] || die "base packages: the target has no /usr/sbin/chroot"
+	[ -x "$TARGET/usr/apkg/bin/pkgadd" ] && [ -x "$TARGET/usr/apkg/bin/removef" ] \
+		|| die "base packages: the target has no APKGENG engine (/usr/apkg/bin/pkgadd, removef) -- APKGENG must be in the set"
+	[ -f "$L11/base/order" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $L11/base/order -- re-master with tools/build-install-iso.sh"
+	run mkdir -p "$_bd"
+	# the installer's TMPDIR is /mnt/tmp, which does not exist inside the chroot: the engine
+	# could not make its unpack directory ("Bad file number" on a test install)
+	_tmpd="$TMPDIR"; TMPDIR=/tmp; export TMPDIR
+	# the engine reads the mount table for its space check; core ships /etc/mnttab empty, so
+	# it gets the root line the miniroot's has (install.sh section 4), emptied again below
+	echo "/dev/root / $TARGET_ROOT_FSTYPE rw 0" > "$TARGET/etc/mnttab" || die "cannot write $TARGET/etc/mnttab"
+	run cp "$L11/base/seed.sh" "$_bd/seed.sh"
+	run cp "$INST/admin/pkgadd" "$_bd/admin"
+	_n=0
+	for _p in `cat "$L11/base/order"`
+	do
+		_f="$_p.pkg"
+		[ -f "$L11/base/$_f" ] || die "base packages: no $_p datastream ($_f) in $L11/base"
+		run cp "$L11/base/$_f" "$_bd/$_f"
+		if [ -s "$L11/base/$_p.cf" ]; then
+			"$_cr" "$TARGET" /bin/sh /tmp/l11base/seed.sh "$_p" `cat "$L11/base/$_p.cf"` > "$_bd/seed.out" 2>&1 \
+				|| { cat "$_bd/seed.out"; die "base packages: seeding $_p's conffile baselines failed"; }
+			logline "+ seed $_p:"
+			cat "$_bd/seed.out" >> "$LOGFILE"
+		fi
+		stage "Installing $_p"
+		runq "$_cr" "$TARGET" /usr/apkg/bin/pkgadd -n -a /tmp/l11base/admin -d "/tmp/l11base/$_f" "$_p" \
+			|| die "base packages: pkgadd $_p failed (rc=$?) -- refusing to arm"
+		[ -d "$TARGET/var/sadm/pkg/$_p" ] || die "base packages: pkgadd $_p returned 0 but $_p is not installed"
+		_n=`expr $_n + 1`
+	done
+	[ "$_n" -gt 0 ] || die "base packages: $L11/base/order names none"
+	# the ownership transfer: amix-base's conffiles leave core
+	if [ -s "$L11/base/amxbase.cf" ]; then
+		runq "$_cr" "$TARGET" /usr/apkg/bin/removef core `cat "$L11/base/amxbase.cf"` \
+			|| die "base packages: removef core failed (rc=$?)"
+		runq "$_cr" "$TARGET" /usr/apkg/bin/removef -f core || die "base packages: removef -f core failed (rc=$?)"
+	fi
+	TMPDIR="$_tmpd"; export TMPDIR
+	run cp /dev/null "$TARGET/etc/mnttab"
+	[ -s "$TARGET/var/sadm/conffiles/PENDING" ] \
+		&& die "base packages: a fresh install left conffiles PENDING: `cat "$TARGET/var/sadm/conffiles/PENDING"`"
+	run rm -rf "$_bd"
+	msg "base pkgs    : $_n added under the target's chroot (`cat "$L11/base/order"`); core gave up amix-base's conffiles"
+}
+
+# l11_bits MASK -- _bits: the prefix length of a dotted netmask (empty: none); dies on
+# another. Called directly, never in backticks, so the die stops the install.
+l11_bits()
+{
+	case "$1" in
+		"")			_bits="" ;;
+		255.0.0.0)		_bits=8 ;;
+		255.255.0.0)		_bits=16 ;;
+		255.255.240.0)		_bits=20 ;;
+		255.255.248.0)		_bits=21 ;;
+		255.255.252.0)		_bits=22 ;;
+		255.255.254.0)		_bits=23 ;;
+		255.255.255.0)		_bits=24 ;;
+		255.255.255.128)	_bits=25 ;;
+		255.255.255.192)	_bits=26 ;;
+		255.255.255.224)	_bits=27 ;;
+		255.255.255.240)	_bits=28 ;;
+		255.255.255.248)	_bits=29 ;;
+		255.255.255.252)	_bits=30 ;;
+		*)	die "netmask '$1' is not one of the prefix lengths 8, 16, 20-30" ;;
+	esac
+}
+
+# l11_admin -- the three admin files no package owns, from the profile, each
+# checked by its own reader under the target's chroot (amix-base's ifup -n, xstart -n).
+#   /etc/inet/interfaces (interfaces(4)): FB_IP set (bench, metal, matrix) gives a
+#     static line for FB_ETHER_IF, a zen0 line beside it from FB_ZEN_IP, a MAC line per
+#     FB_ZEN_CARDS row (the address-by-card table, docs/address-by-card.md), and dns/domain;
+#     FB_IP empty (public) gives `* dhcp`, with the profile's name, else `hostname dhcp`.
+#   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; every other service keeps
+#     its own default.
+#   /etc/display (display(4)): card auto (the first card whose device answers, the chipset
+#     display last), monsw from MONSW, start manual (no xdm is packaged yet).
+l11_admin()
+{
+	_cr="$TARGET/usr/sbin/chroot" _if="$TARGET/etc/inet/interfaces"
+	l11_bits "$FB_ZEN_NETMASK"; _zbits=$_bits
+	l11_bits "$FB_NETMASK"; _b=$_bits
+	{
+		echo "# /etc/inet/interfaces -- written by install.sh from profile $PROFILE_NAME; see interfaces(4)"
+		if [ -n "$FB_IP" ]; then
+			echo "$FB_ETHER_IF static $FB_IP${_b:+/$_b}${FB_GATEWAY:+ gw $FB_GATEWAY}${FB_NODENAME:+ name $FB_NODENAME}"
+			if [ -n "$FB_ZEN_IP" ] && [ "$FB_ETHER_IF" != zen0 ]; then
+				_zb=$_zbits
+				echo "zen0 static $FB_ZEN_IP${_zb:+/$_zb}${FB_ZEN_GATEWAY:+ gw $FB_ZEN_GATEWAY}"
+			fi
+			for _w in $FB_ZEN_CARDS
+			do
+				_mac=`expr "$_w" : '\([^=]*\)='` _ad=`expr "$_w" : '[^=]*=\([^=]*\)'` _nm=`expr "$_w" : '[^=]*=[^=]*=\(.*\)'`
+				case "$_mac" in default|"") continue ;; esac
+				echo "$_mac static $_ad${_b:+/$_b}${FB_GATEWAY:+ gw $FB_GATEWAY}${_nm:+ name $_nm}"
+			done
+		elif [ -n "$FB_NODENAME" ]; then
+			echo "* dhcp name $FB_NODENAME"
+		else
+			echo "* dhcp"
+			echo "hostname dhcp"
+		fi
+		[ -z "$FB_DNS1$FB_DNS2" ] || echo "dns `echo $FB_DNS1 $FB_DNS2`"
+		[ -z "$FB_DOMAIN" ] || echo "domain $FB_DOMAIN"
+	} > "$_if" || die "cannot write $_if"
+	run chmod 0644 "$_if"
+	{
+		echo "# /etc/rc.conf -- written by install.sh from profile $PROFILE_NAME; see rc.conf(4)"
+		case "$FB_SYSLOG" in n) echo "syslogd=no" ;; *) echo "syslogd=yes" ;; esac
+	} > "$TARGET/etc/rc.conf" || die "cannot write $TARGET/etc/rc.conf"
+	run chmod 0644 "$TARGET/etc/rc.conf"
+	{
+		echo "# /etc/display -- written by install.sh from profile $PROFILE_NAME; see display(4)"
+		echo "card auto"
+		case "$MONSW" in ""|none) ;; *) echo "monsw $MONSW" ;; esac
+		echo "start manual"
+	} > "$TARGET/etc/display" || die "cannot write $TARGET/etc/display"
+	run chmod 0644 "$TARGET/etc/display"
+	_tmpd="$TMPDIR"; TMPDIR=/tmp; export TMPDIR   # the chroot has no /mnt/tmp (l11_base)
+	"$_cr" "$TARGET" /usr/sbin/ifup -n > /tmp/.l11if 2>&1 \
+		|| { cat /tmp/.l11if; die "/etc/inet/interfaces does not pass ifup -n"; }
+	# xstart -n also checks the card's X server, so only a set with X can pass it; without X
+	# the file is checked by xstart when X is added (the minimal set has no X)
+	if [ -d "$TARGET/usr/X/bin" ]; then
+		"$_cr" "$TARGET" /usr/amix/bin/xstart -n > /tmp/.l11dp 2>&1 \
+			|| { cat /tmp/.l11dp; die "/etc/display does not pass xstart -n"; }
+		_xs="xstart -n passes"
+	else
+		_xs="no X in this set: xstart checks it when X is added"
+	fi
+	TMPDIR="$_tmpd"; export TMPDIR
+	rm -f /tmp/.l11if /tmp/.l11dp
+	# no backquoted `if` inside the double quotes: the 1991 sh cannot parse it
+	if [ -n "$FB_IP" ]; then _ifd="$FB_ETHER_IF static $FB_IP"; else _ifd="* dhcp"; fi
+	msg "admin files  : /etc/inet/interfaces ($_ifd), /etc/rc.conf, /etc/display; ifup -n passes; $_xs"
+}
+
 # l11_bcheckrc FILE -- FILE becomes the medium's bcheckrc, with `kbootset retry`
 # before each of the root fsck block's three `/sbin/uadmin 1 1` (C2-4 v5 §7: a repair
 # reboot gives a trial its attempt back instead of spending it), only while FILE is
@@ -352,20 +504,13 @@ l11_bcheckrc()
 # S99zen): a box that came all the way up marks the booted generation good (spec 40
 # §3.3, D-3 §6, P-28 D54), with C2-4 §9's line. kbootset takes the booted generation from the loader record
 # through kinfo; a box that panics or hangs in rc never gets here, and the loader's
-# try-once rule boots the previous good generation instead.
+# try-once rule boots the previous good generation instead. kbootset's package ships it (-26
+# on: init.d/kbmarkgood with its rc2.d link); this checks it.
 l11_markgood()
 {
-	{
-		echo '#!/bin/sh'
-		echo '# S99zkbootset -- written by install.sh (1.1). The last run-level-2 script: the boot'
-		echo '# got this far, so the generation it booted is good (amix-dlm spec 40 section 3.3).'
-		echo 'case $1 in start) ;; *) exit 0 ;; esac'
-		echo '# the call of record (C2-4 section 9): no options; it never stops run level 2'
-		echo '[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1'
-		echo 'exit 0'
-	} > "$TARGET/etc/rc2.d/S99zkbootset" || die "cannot write $TARGET/etc/rc2.d/S99zkbootset"
-	run chmod 0744 "$TARGET/etc/rc2.d/S99zkbootset"
-	msg "mark-good    : /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
+	[ -f "$TARGET/etc/init.d/kbmarkgood" ] && [ -f "$TARGET/etc/rc2.d/S99zkbootset" ] \
+		|| die "the kbootset package laid no /etc/init.d/kbmarkgood and rc2.d/S99zkbootset -- kbootset -26 or later ships them"
+	msg "mark-good    : kbootset's /etc/rc2.d/S99zkbootset runs kbootset mark-good at the end of run level 2"
 }
 
 # l11_kpkg_record NAME ROLE -- the kernel-space record of NAME: /var/apkg/kpkg/<pkginst>
@@ -410,15 +555,15 @@ l11_kpkg_key()
 	done ) < "${L11_KCAT:-$L11/kpkg/catalog}"
 }
 
-# l11_inittab -- after modtools' postinstall (C3-5 v4 §5): /etc/inittab holds exactly one
-# line with the id dlm, it is the first sysinit entry, with C3-5's text, and the rest of
-# the file is core's (the medium's inittab: core's with that one line before the first
-# sysinit entry). The miniroot has no grep or awk: read, expr and sum only, and a
+# l11_inittab -- once amix-base is in (it ships /etc/inittab as a conffile; modtools
+# -9 has no scripts and never edits it): /etc/inittab holds exactly one line with the id
+# dlm, it is the first sysinit entry, with C3-5 §5's text, and the file is amix-base's
+# default (the medium's inittab, taken from amix-base's datastream). The miniroot has no grep or awk: read, expr and sum only, and a
 # redirect-fed loop is a subshell, so what it finds goes to files.
 l11_inittab()
 {
 	_it="$TARGET/etc/inittab"
-	_why="modtools' postinstall (C3-5 section 5; it refuses, leaving the file, a misplaced or duplicated dlm line) did not leave /etc/inittab as it must be"
+	_why="/etc/inittab is not amix-base's default (C3-5 section 5: one dlm line, the first sysinit entry)"
 	[ -f "$_it" ] || die "$_why: there is no $_it"
 	rm -f /tmp/.l11it /tmp/.l11dl
 	while read _l
@@ -444,9 +589,9 @@ l11_inittab()
 	set x `"$INST/bin/sum" -r "$_it"`; shift
 	_ih=$1
 	set x `"$INST/bin/sum" -r "$L11/inittab"`; shift
-	[ "$_ih" = "$1" ] || die "$_why: beside the dlm line it is not core's inittab (sum -r $_ih, expected $1)"
+	[ "$_ih" = "$1" ] || die "$_why: it is not amix-base's inittab (sum -r $_ih, expected $1)"
 	rm -f /tmp/.l11it /tmp/.l11dl
-	msg "inittab      : the dlm line (modadmin -B) once, the first sysinit entry; the rest core's (sum -r $_ih)"
+	msg "inittab      : amix-base's default: the dlm line (modadmin -B) once, the first sysinit entry (sum -r $_ih)"
 }
 
 # l11_namelist -- /stand/unix is the namelist the stock nlist users read (netstat,
@@ -454,7 +599,8 @@ l11_inittab()
 # the booted one on a 1.1 disk: the name goes (2.1_unix stays, checked), and so does any
 # /unix. /etc/rc2.d/S01kbnamelist -- after S01MOUNTFSYS, before every other rc2 script --
 # writes the booted generation's namelist on every boot (C2-4 v9 §12, spec 40 §4.2): the
-# installer cannot, it does not know where the first boot binds the kernel.
+# installer cannot, it does not know where the first boot binds the kernel. kbootset's
+# package ships it (-26 on: init.d/kbnamelist with its rc2.d link); this checks it.
 l11_namelist()
 {
 	rm -f "$TARGET/stand/unix" "$TARGET/unix"
@@ -463,14 +609,9 @@ l11_namelist()
 	_us=`( read _s _r; echo "$_s" ) < "$L11/2.1_unix.sum"`
 	set x `"$INST/bin/sum" -r "$TARGET/stand/2.1_unix"`; shift
 	[ "$1" = "$_us" ] || die "/stand/2.1_unix is not core's 2.1 kernel (sum -r $1, core $_us)"
-	{
-		echo '#!/bin/sh'
-		echo '# S01kbnamelist -- written by install.sh (1.1). The booted generation'"'"'s namelist'
-		echo '# at /stand/unix before anything in run level 2 reads it (amix-dlm C2-4 section 12).'
-		echo '[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1'
-	} > "$TARGET/etc/rc2.d/S01kbnamelist" || die "cannot write $TARGET/etc/rc2.d/S01kbnamelist"
-	run chmod 0744 "$TARGET/etc/rc2.d/S01kbnamelist"
-	msg "namelist     : /stand/unix and /unix removed (/stand/2.1_unix kept, sum -r $_us); /etc/rc2.d/S01kbnamelist writes it at every boot"
+	[ -f "$TARGET/etc/init.d/kbnamelist" ] && [ -f "$TARGET/etc/rc2.d/S01kbnamelist" ] \
+		|| die "the kbootset package laid no /etc/init.d/kbnamelist and rc2.d/S01kbnamelist -- kbootset -26 or later ships them"
+	msg "namelist     : /stand/unix and /unix removed (/stand/2.1_unix kept, sum -r $_us); kbootset's S01kbnamelist writes it at every boot"
 }
 
 # l11_kpkg_inst NAME -- the pkginst of catalog entry NAME on the medium: its pkginst=

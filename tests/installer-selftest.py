@@ -199,8 +199,10 @@ METAL_RAW_PROFILE = os.path.join(PROFILES_DIR, "metal-a4000-z3660-raw.profile")
 WRITE_BOOTCHAIN = os.path.join(HERE, "write-bootchain.py")
 GEN_ORDER = os.path.join(HERE, "gen-install-order.py")
 MKROOT = os.path.join(HERE, "mkroot.sh")
-DEPS = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "build", "repo-staging", "deps.conf"))
+# amix userland/pkgtools at the set's revision (tools/build-l11-inputs.sh): the
+# authored repo metadata build-install-iso.sh reads (deps.conf, sets.conf, cats.conf)
+PT_REPO = os.path.join(REPO, "work", "l11", "pkgtools", "tools", "repo")
+DEPS = os.path.join(PT_REPO, "deps.conf")
 
 FAILS = []
 NOTES = []
@@ -1242,6 +1244,9 @@ FIRSTBOOT_EXTRA = {
     # S5-44 R2: step 4d's `kbootset nodes` (C2-4 §14), the kbootset package every 1.1 disk
     # installs, behind `[ -x /sbin/kbootset ]`
     "kbootset",
+    # 1.1: amix-base's ifup (the dialog's /etc/inet/interfaces checked with
+    # `ifup -n`) and dlpi-mac (the amix-xxxx fallback name), and head, a core member
+    "ifup", "dlpi-mac", "head",
 }
 
 # IN-rtc-2: the dialog re-reads the battery clock in the zone just chosen. This is
@@ -5476,11 +5481,9 @@ STOCK_AMIXPKG_STRINGS = [
     ("Go ahead with the installation anyway? [n] ", None),
 ]
 # system.setup is a CORE PACKAGE member, not a floppy file, so its summary
-# question is cross-checked against the sibling repo's extracted core when that
-# is present (SKIP, never a silent pass, when it is not).
-STOCK_SYSSETUP = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "build", "repo-staging", "stock",
-    ".t", "core", "usr", "amiga", "bin", "system.setup"))
+# question is cross-checked against the extracted core (tools/build-core-tree.sh) when
+# that is present (SKIP, never a silent pass, when it is not).
+STOCK_SYSSETUP = os.path.join(REPO, "build", "core", "root", "usr", "amiga", "bin", "system.setup")
 STOCK_SUMMARY_STRING = "Do you wish to change any of these? [n] "
 
 SCAN_PATH_FUNCS = ("scan_disks", "disk_size_hint", "rdb_present", "rdb_extent_mb")
@@ -6552,12 +6555,9 @@ def audit_w2_interview():
 #       changes no package line -- the driver and the interview both skip '#',
 #       so it is documentation, never input.
 
-SETS_CONF = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "tools", "repo", "sets.conf"))
-SETS_PY = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "tools", "repo", "sets.py"))
-CATS_CONF = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "tools", "repo", "cats.conf"))
+SETS_CONF = os.path.join(PT_REPO, "sets.conf")
+SETS_PY = os.path.join(PT_REPO, "sets.py")
+CATS_CONF = os.path.join(PT_REPO, "cats.conf")
 MATRIX = os.path.join(HERE, "install-matrix.sh")
 BUILD_ISO = os.path.join(HERE, "build-iso.sh")
 
@@ -6715,7 +6715,7 @@ def audit_w3b_metadata():
             fail("build-install-iso: MISSING -- %s (no /%s/)" % (why, pat))
 
     if not (os.path.isfile(SETS_CONF) and os.path.isfile(SETS_PY)):
-        skip("../amix-packagemanager/tools/repo/sets.{conf,py} absent -- the set "
+        skip("work/l11/pkgtools/tools/repo/sets.{conf,py} absent (tools/build-l11-inputs.sh) -- the set "
              "memberships are not cross-checked (not a pass)")
     else:
         bad = 0
@@ -7409,10 +7409,8 @@ def audit_w4_miniroot_profile():
 # against -- NOT the dialog. See the here-doc law (Z0) for why.
 DIALOG_STUB = os.path.join(REPO, "payload", "firstboot", "system.setup")
 # Stock artifacts the dialog quotes. Each string must appear BYTE-FOR-BYTE in the
-# named recovered file; a missing sibling repo is a SKIP, never a silent pass.
-STOCK_CORE = os.path.normpath(os.path.join(
-    REPO, os.pardir, "amix-packagemanager", "build", "repo-staging", "stock",
-    ".t", "core"))
+# named recovered file; a missing core tree is a SKIP, never a silent pass.
+STOCK_CORE = os.path.join(REPO, "build", "core", "root")   # tools/build-core-tree.sh
 DIALOG_STOCK_STRINGS = [
     ("usr/amiga/lib/amixnode",
      "What is the nodename of this machine? ["),
@@ -9051,10 +9049,11 @@ def audit_cd2_card1_target():
 def audit_030_rootswap():
     head("SWAP030. the 030 line adds slice 2's tail past K030-U's boot swap at boot: S89rootswap, 030 only")
     drv = read_sh(DRIVER)
-    m = re.search(r'if \[ "\$\{INSTALL_CPU:-030\}" = 030 \]; then\n\tRSLEN="\$SWAPBLKS"(.*?)\nfi\n', drv, re.S)
+    m = re.search(r'if \[ "\$\{INSTALL_CPU:-030\}" = 030 \] && \[ "\$INSTALL_LAYOUT" != 1\.1 \]; then\n\tRSLEN="\$SWAPBLKS"(.*?)\nfi\n', drv, re.S)
     if not m:
-        fail("SWAP030: install.sh has no INSTALL_CPU=030-gated S89rootswap block")
+        fail("SWAP030: install.sh has no INSTALL_CPU=030-gated, 1.0-only S89rootswap block")
         return
+    ok("SWAP030: S89rootswap is the 1.0 030 line's only; a 1.1 disk has amix-base's swap step (S90swap)")
     blk = m.group(1)
     need = ['/etc/rc2.d/S89rootswap', '`/etc/devnm / 2>/dev/null | sed -e "s: .*::"`', 's:s[0-9a-fA-F]*', 'case "$s" in /dev/dsk/c*s2) ;; *) exit 0 ;; esac',
             '/usr/sbin/swap -l', 'grep "^/dev/"', '/usr/sbin/swap -a $s 0 $LEN',
@@ -9081,16 +9080,21 @@ def audit_apkg_conf_order():
     seed = drv.find('msg "install set: ')
     ends = [i for i in (drv.find('ADMIN="$INST/admin/pkgadd"'), drv.find('msg "RAW: apkg update')) if i >= 0]
     sec5 = min(ends) if ends else -1
-    calls = [m.start() for m in re.finditer(r"(?m)^\s*write_apkg_conf\s*$", drv)]
+    # 1.0 only (APKG 0.2.3 keeps it); on 1.1 APKG 0.3.4's conffile class would count it edited
+    calls = [m.start() for m in re.finditer(r'(?m)^\s*\[ "\$INSTALL_LAYOUT" = 1\.1 \] \|\| write_apkg_conf\s*$', drv)]
     gate = re.search(r'while read _p _rest; do\s*\n\s*if \[ "\$_p" = APKG \]', drv)
     if seed < 0 or sec5 < 0 or not calls:
         fail("APKGCONF: could not find the install-set / package-loop markers or a write_apkg_conf call")
         return
     first = calls[0]
     if seed < first < sec5 and gate and seed < gate.start() < sec5:
-        ok("the conf is written after the install-set line and before either package path (cdfs pkgadd loop / RAW apkg), gated on APKG in the order file")
+        ok("the conf is written after the install-set line and before either package path (cdfs pkgadd loop / RAW apkg), gated on APKG in the order file (1.0 only)")
     else:
         fail("APKGCONF: the first write_apkg_conf call (offset %d) is not between the install-set line (%d) and the first package path (%d), or the order gate is missing" % (first, seed, sec5))
+    if re.search(r'elif \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n\t\twrite_apkg_conf\n', drv):
+        ok("1.1: the repo line is written after APKG installs its default (a conffile edit, no PENDING)")
+    else:
+        fail("APKGCONF: 1.1 does not write the repo line after the APKG package")
     if re.search(r'repo=\$FB_REPO_URL" \]; then echo y', drv) and "lost its repo line" in drv:
         ok("after the install the conf is re-checked and written again only if an older APKG replaced it")
     else:
@@ -9999,12 +10003,149 @@ def audit_l11():
             good = want in out and (want == "PASSED" or "fresh install, P-36" in out)
             (ok if good else fail)("install.sh, INSTALL_UPGRADE=%s: %s" % (val or "(unset)", out.strip()[:90]))
 
+    # (5b) the base packages. l11_base adds base/order's packages under the
+    # target's chroot with APKGENG's engine (the miniroot has no cmp for the conffile class),
+    # seeds each one's conffile baselines first, transfers amix-base's conffiles from core
+    # with removef, refuses a PENDING; install.sh calls it before the kernel-space step; the
+    # medium stages base/ from the pkgmaps and takes inittab from amix-base
+    lb = _extract_func(l11, "l11_base") or ""
+    iso = open(os.path.join(HERE, "build-install-iso.sh"), encoding="utf-8").read()
+    for what, good in (
+            ("l11_base runs seed.sh then APKGENG's pkgadd under the target's chroot, per base/order",
+             re.search(r'for _p in `cat "\$L11/base/order"`.*?"\$_cr" "\$TARGET" /bin/sh /tmp/l11base/seed\.sh'
+                       r'.*?runq "\$_cr" "\$TARGET" /usr/apkg/bin/pkgadd -n -a /tmp/l11base/admin', lb, re.S)),
+            ("l11_base transfers amix-base's conffiles from core (removef core, removef -f core)",
+             '/usr/apkg/bin/removef core `cat "$L11/base/amxbase.cf"`' in lb
+             and '/usr/apkg/bin/removef -f core' in lb),
+            ("l11_base refuses a PENDING after a fresh install",
+             '[ -s "$TARGET/var/sadm/conffiles/PENDING" ]' in lb),
+            ("install.sh calls l11_base before l11_bootstore in its 1.1 block",
+             re.search(r'if \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n(?:\t#[^\n]*\n)*\tl11_base\n\tl11_bootstore', src)),
+            ("build-install-iso stages base/ (order, datastreams, pkgmap conffiles, seed.sh) and amix-base's inittab",
+             "awk '$2 == \"e\" && $3 == \"conffile\" { print $4 }'" in iso
+             and 'cp "$repo/payload/l11-seed.sh" "$STAGE/l11/base/seed.sh"' in iso
+             and '_it="$_bw/amxbase/root/etc/inittab"' in iso and "06b13538" not in iso),
+            ("install.sh, 1.1: the syslog package's unit (only the 2.1c daemon overwrite stays the installer's)",
+             re.search(r'if \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n(?:\t#[^\n]*\n)*\trun cp "\$INST/syslog/syslogd" '
+                       r'"\$TARGET/usr/sbin/syslogd"\n\trun chmod 0100 [^\n]*\n\tmsg [^\n]*\nelse\n', src)),
+            ("install.sh, 1.1: no S99zen and no zenmac (interfaces and amix-base's ifup bring zen0 up)",
+             re.search(r'if \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n(?:\t#[^\n]*\n)*\tmsg "network: [^\n]*\nelif \[ "\$FB_ETHER_IF" = zen0 \]', src)),
+            ("install.sh, 1.1: no S20monsw, /etc/monsw or /dev/monsw (the monsw package; /etc/display's monsw)",
+             re.search(r'if \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n(?:\t#[^\n]*\n)*\tmsg "monitor switch: [^\n]*\nelif \[ -n "\$MONSW" \]', src))):
+        (ok if good else fail)(what)
+
+    # (5c) l11_admin writes /etc/inet/interfaces, /etc/rc.conf and /etc/display from
+    # the profile and checks them with ifup -n / xstart -n under the target's chroot (stubbed)
+    la = _extract_func(l11, "l11_admin")
+    lbits = _extract_func(l11, "l11_bits")
+    if not la or not lbits:
+        fail("l11.sh has no l11_admin or l11_bits")
+    else:
+        at = os.path.join(d, "admin")
+        def admin(x11=False, **kv):
+            shutil.rmtree(at, ignore_errors=True)
+            os.makedirs(os.path.join(at, "etc", "inet"))
+            os.makedirs(os.path.join(at, "usr", "sbin"))
+            if x11:
+                os.makedirs(os.path.join(at, "usr", "X", "bin"))
+            cr = os.path.join(at, "usr", "sbin", "chroot")
+            open(cr, "w").write("#!/bin/sh\necho \"CHROOT $*\" >> %s/chroot.log\nexit 0\n" % at)
+            os.chmod(cr, 0o755)
+            env = dict(PROFILE_NAME="t", FB_ETHER_IF="aen0", FB_IP="", FB_NETMASK="", FB_GATEWAY="",
+                       FB_NODENAME="", FB_ZEN_IP="", FB_ZEN_NETMASK="", FB_ZEN_GATEWAY="", FB_ZEN_CARDS="",
+                       FB_DNS1="", FB_DNS2="", FB_DOMAIN="", FB_SYSLOG="y", MONSW="")
+            env.update(kv)
+            sets = "".join("%s='%s'\n" % (k, v) for k, v in env.items())
+            body = ('msg() { :; }\ndie() { echo "DIE $*"; exit 3; }\nrun() { "$@"; }\nTARGET=%s\n%s%s\n%s\nl11_admin\n'
+                    % (at, sets, lbits, la))
+            r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
+            rd = lambda *p: open(os.path.join(at, *p)).read() if os.path.exists(os.path.join(at, *p)) else ""
+            body_if = [l for l in rd("etc", "inet", "interfaces").splitlines() if not l.startswith("#")]
+            return r.stdout, body_if, rd("etc", "rc.conf"), rd("etc", "display"), rd("chroot.log")
+        out, ifs, rc, disp, crl = admin(x11=True, FB_IP="192.0.2.38", FB_NETMASK="255.255.255.0", FB_GATEWAY="192.0.2.1",
+                                        FB_NODENAME="uaeamix", FB_ZEN_IP="192.0.2.39", FB_ZEN_NETMASK="255.255.255.0",
+                                        FB_DOMAIN="example.net", FB_SYSLOG="n", MONSW="34")
+        (ok if ifs == ["aen0 static 192.0.2.38/24 gw 192.0.2.1 name uaeamix", "zen0 static 192.0.2.39/24",
+                       "domain example.net"] and "syslogd=no" in rc and "monsw 34" in disp
+              and "start manual" in disp and "card auto" in disp
+              and "/usr/sbin/ifup -n" in crl and "/usr/amix/bin/xstart -n" in crl else fail)(
+            "l11_admin, the bench profile: aen0 static, zen0 beside it, domain; syslogd=no; monsw; checked: %r %r" % (ifs, out))
+        out, ifs, rc, disp, crl = admin(FB_ETHER_IF="zen0", FB_IP="192.0.2.38", FB_NETMASK="255.255.255.0",
+                                        FB_GATEWAY="192.0.2.1",
+                                        FB_ZEN_CARDS="00:80:51:01:02:03=192.0.2.39=a4000d default=192.0.2.38")
+        (ok if ifs == ["zen0 static 192.0.2.38/24 gw 192.0.2.1",
+                       "00:80:51:01:02:03 static 192.0.2.39/24 gw 192.0.2.1 name a4000d"] else fail)(
+            "l11_admin, a zen0 profile with the address-by-card table: one MAC line per card: %r" % (ifs,))
+        out, ifs, *_ = admin(FB_NODENAME="amixbox")
+        (ok if ifs == ["* dhcp name amixbox"] else fail)("l11_admin, public with a name: * dhcp name: %r" % (ifs,))
+        out, ifs, rc, disp, crl = admin()
+        (ok if ifs == ["* dhcp", "hostname dhcp"] else fail)("l11_admin, public without a name: * dhcp, hostname dhcp: %r" % (ifs,))
+        (ok if "/usr/sbin/ifup -n" in crl and "xstart" not in crl and "card auto" in disp else fail)(
+            "l11_admin, a set without X: /etc/display written, ifup -n run, xstart -n not (it checks the X server)")
+        out, *_ = admin(FB_IP="192.0.2.38", FB_NETMASK="255.255.255.7")
+        (ok if "DIE netmask '255.255.255.7'" in out else fail)("l11_admin refuses a netmask that is no prefix: %r" % out.strip())
+
+    # (5d) firstboot on a 1.1 disk (FB_L11=y), executed from firstboot.sh's own text:
+    # the dialog's DHCP choice, /etc/inet/interfaces from the answers, the amix-xxxx name
+    # and syslogd= in /etc/rc.conf
+    fbt = open(FIRSTBOOT, encoding="utf-8").read()
+    fr = os.path.join(d, "fb11")
+    def fbrun(code, answers=(), **kv):
+        shutil.rmtree(fr, ignore_errors=True)
+        for sub in ("etc/inet", "usr/sbin", "dev"):
+            os.makedirs(os.path.join(fr, sub))
+        open(os.path.join(fr, "etc", "rc.conf"), "w").write("# rc.conf\nsyslogd=yes\n")
+        for tool, body in (("ifup", "exit 0"), ("dlpi-mac", "echo 00:80:10:0a:3f:12")):
+            open(os.path.join(fr, "usr", "sbin", tool), "w").write("#!/bin/sh\n%s\n" % body)
+            os.chmod(os.path.join(fr, "usr", "sbin", tool), 0o755)
+        open(os.path.join(fr, "dev", "zen0"), "w").write("")
+        open(os.path.join(fr, "answers"), "w").write("".join(a + "\n" for a in answers))
+        sets = "".join("%s='%s'\n" % (k, v) for k, v in kv.items())
+        # /tmp first: the scratch root itself lies under /tmp
+        code = (code.replace("/tmp/", fr + "/").replace("/etc/", fr + "/etc/").replace("/usr/sbin/", fr + "/usr/sbin/")
+                .replace('[ -c "$d" ]', '[ -f "$d" ]').replace("/dev/zen0 /dev/aen0", fr + "/dev/zen0 " + fr + "/dev/aen0"))
+        body = ('i=1\nreadask() { ask=`sed -n "${i}p" %s/answers`; i=`expr $i + 1`; }\nuname() { :; }\n'
+                'valid_ip() { case "$1" in *.*.*.*) return 0 ;; esac; return 1; }\nclassful_mask() { echo 255.255.255.0; }\n'
+                '%s%s\n' % (fr, sets, code))
+        r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
+        rd = lambda *p: open(os.path.join(fr, *p)).read() if os.path.exists(os.path.join(fr, *p)) else ""
+        return r.stdout + r.stderr, rd
+    net = _extract_func(fbt, "ask_network") + "\n" + _extract_func(fbt, "ask_repo")
+    out, rd = fbrun(net + '\nask_network\necho "MODE=$FB_NET_MODE CONF=$FB_NET_CONFIGURED IP=$FB_IP REPO=$FB_REPO_HOST"\n',
+                    answers=("y", "y", "pkg.example", ""), FB_L11="y", FB_IP="", FB_REPO_HOST="", FB_REPO_IP="")
+    (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example" in out else fail)(
+        "firstboot dialog (1.1): `Use DHCP? y` takes no address, keeps the repository questions: %r" % out.strip()[-120:])
+    m8 = re.search(r'\nfb_bits\(\)\n\{.*?\n\}\nif \[ "\$FB_L11" = y \] && \[ "\$FB_NET_CONFIGURED" = y \]; then\n(.*?)\nelif ', fbt, re.S)
+    m1 = re.search(r'\nif \[ "\$FB_L11" = y \] && \[ -z "\$FB_NODENAME" \]; then\n.*?\nuname -S "\$FB_NAME_EFF" 2>/dev/null \|\| true\n', fbt, re.S)
+    m7 = re.search(r'\nif \[ "\$FB_L11" = y \]; then\n\tsv=yes;.*?\nelif ', fbt, re.S)
+    if not (m8 and m1 and m7):
+        fail("firstboot.sh: no 1.1 nodename, interfaces or rc.conf step (%s)" % [bool(m8), bool(m1), bool(m7)])
+    else:
+        s8 = m8.group(0)[:m8.group(0).rindex("\nelif ")] + "\nfi\n"
+        s1 = m1.group(0)
+        for what, kv, want in (
+                ("DHCP, no name", dict(FB_NET_MODE="dhcp", FB_NODENAME=""), ["* dhcp", "hostname dhcp"]),
+                ("DHCP with a name", dict(FB_NET_MODE="dhcp", FB_NODENAME="box"), ["* dhcp name box"]),
+                ("static", dict(FB_NET_MODE="static", FB_NODENAME="box", FB_ETHER_IF="aen0", FB_IP="203.0.113.11",
+                                FB_NETMASK="255.255.255.0", FB_GATEWAY="203.0.113.1", FB_DNS1="203.0.113.1"),
+                 ["aen0 static 203.0.113.11/24 gw 203.0.113.1 name box", "dns 203.0.113.1"])):
+            base = dict(FB_L11="y", FB_NET_CONFIGURED="y", FB_DNS1="", FB_DNS2="", FB_DOMAIN="")
+            base.update(kv)
+            out, rd = fbrun(s1 + s8, **base)
+            got = [l for l in rd("etc", "inet", "interfaces").splitlines() if not l.startswith("#")]
+            (ok if got == want else fail)("firstboot (1.1) interfaces, %s: %r" % (what, got))
+        out, rd = fbrun(s1, FB_L11="y", FB_NODENAME="")
+        (ok if rd("etc", "nodename").strip() == "amix-3f12" else fail)(
+            "firstboot (1.1): no name -> amix- + the MAC's last four hex digits (dlpi-mac): %r" % rd("etc", "nodename").strip())
+        out, rd = fbrun(m7.group(0)[:m7.group(0).rindex("\nelif ")] + "\nfi\n", FB_L11="y", FB_SYSLOG="n")
+        (ok if rd("etc", "rc.conf").splitlines() == ["# rc.conf", "syslogd=no"] else fail)(
+            "firstboot (1.1): FB_SYSLOG=n -> syslogd=no in /etc/rc.conf, the line replaced: %r" % rd("etc", "rc.conf"))
+
     # (6) l11_bcheckrc: the stock 2.1 bcheckrc becomes the medium's retry-patched one in
     # place (its hard link follows); a patched one is kept; any other is left alone
-    core = os.path.join(REPO, "..", "amix-packagemanager", "build", "repo-staging", "stock", ".t",
-                        "core", "sbin", "bcheckrc")
+    core = os.path.join(STOCK_CORE, "sbin", "bcheckrc")
     if not os.path.exists(core):
-        skip("no stock core bcheckrc in ../amix-packagemanager staging -- l11_bcheckrc not executed")
+        skip("no stock core bcheckrc in build/core (tools/build-core-tree.sh) -- l11_bcheckrc not executed")
     else:
         inst = os.path.join(d, "inst")
         lroot = os.path.join(inst, "l11")
@@ -10042,24 +10183,21 @@ def audit_l11():
             else:
                 fail("l11_bcheckrc on a %s bcheckrc: %r" % (case, r.stdout.strip()))
 
-    # (7) /etc/rc2.d/S99zkbootset, generated from l11.sh's own echo lines: a valid script
-    # that, started, calls `/sbin/kbootset mark-good` with no options and nothing else
-    m = re.search(r"\n\t\{\n((?:\t\techo .*\n)+)\t\} > \"\$TARGET/etc/rc2\.d/S99zkbootset\"", l11)
-    if not m:
-        fail("could not extract the S99zkbootset generator from l11.sh")
-    else:
-        r = subprocess.run(["/usr/bin/dash", "-c", m.group(1).replace("\t\t", "")],
-                           capture_output=True, text=True, timeout=30)
-        gen = os.path.join(d, "S99zkbootset")
-        open(gen, "w").write(r.stdout)
-        syn = subprocess.run(["/usr/bin/dash", "-n", gen], capture_output=True, text=True)
-        calls = [l for l in r.stdout.splitlines() if "kbootset" in l and not l.startswith("#")]
-        want = "[ -x /sbin/kbootset ] && /sbin/kbootset mark-good >/dev/console 2>&1"
-        if syn.returncode == 0 and calls[-1:] == [want] and "S99zkbootset" > "S99zen":
-            ok("S99zkbootset: a valid rc2 script whose start runs C2-4 section 9's mark-good line "
-               "(no options, to the console) and sorts after S99zen")
-        else:
-            fail("S99zkbootset generator: rc %d, calls %r" % (syn.returncode, calls))
+    # (7) /etc/rc2.d/S99zkbootset is kbootset's package object (-26 on); l11_markgood
+    # only checks that the package laid it, and stops the install when it did not
+    mg = _extract_func(l11, "l11_markgood")
+    mt = os.path.join(d, "mg")
+    for present in (True, False):
+        shutil.rmtree(mt, ignore_errors=True)
+        os.makedirs(os.path.join(mt, "etc", "init.d")); os.makedirs(os.path.join(mt, "etc", "rc2.d"))
+        if present:
+            open(os.path.join(mt, "etc", "init.d", "kbmarkgood"), "w").write("#!/bin/sh\n")
+            os.link(os.path.join(mt, "etc", "init.d", "kbmarkgood"), os.path.join(mt, "etc", "rc2.d", "S99zkbootset"))
+        out = subprocess.run(["/usr/bin/dash", "-c", 'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n'
+                              "TARGET=%s\n%s\nl11_markgood\n" % (mt, mg)], capture_output=True, text=True, timeout=30).stdout
+        good = ("MSG" in out and "DIE" not in out) if present else ("DIE" in out and "kbootset -26" in out)
+        (ok if good else fail)("l11_markgood: %s" % ("kbootset's S99zkbootset present -> passes" if present else
+                               "no kbmarkgood/S99zkbootset -> the install stops naming kbootset -26") + ("" if good else " -- %r" % out))
 
     # (8) l11_kpkg_inst: the record's name is the catalog row's pkginst=, else its name
     kl = os.path.join(d, "kl11")
@@ -10076,14 +10214,13 @@ def audit_l11():
     else:
         fail("l11_kpkg_inst: %r" % (got,))
 
-    # (9) S3-31 l11_inittab: modtools' result on core's inittab -- the dlm line once, the
-    # first sysinit entry, C3-5's text, the rest core's (sum -r against the medium's
-    # inittab); each way it can be wrong stops the install naming modtools' postinstall
-    core_it = os.path.join(REPO, "..", "amix-packagemanager", "build", "repo-staging", "stock", ".t",
-                           "core", "etc", "inittab")
+    # (9) l11_inittab: amix-base's default (here: core's with the dlm line, the
+    # same shape) -- the dlm line once, the first sysinit entry, C3-5's text, the file the
+    # medium's inittab (sum -r); each way it can be wrong stops the install naming amix-base
+    core_it = os.path.join(STOCK_CORE, "etc", "inittab")
     dlm = "dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1"
     if not os.path.exists(core_it):
-        skip("no stock core inittab in ../amix-packagemanager staging -- l11_inittab not executed")
+        skip("no stock core inittab in build/core (tools/build-core-tree.sh) -- l11_inittab not executed")
     else:
         inst = os.path.join(d, "inst")
         lroot = os.path.join(inst, "l11")
@@ -10102,21 +10239,21 @@ def audit_l11():
                 "INST=%s\nL11=%s\nTARGET=%s\n%s\n" % (inst, lroot, tgt, dlm_line.split("\t")[0]) +
                 _extract_func(l11, "l11_inittab") + "\nl11_inittab\n")
         cases = (
-            ("as modtools leaves it", good, "MSG inittab"),
+            ("as amix-base ships it", good, "MSG inittab"),
             ("no dlm line", "".join(stock), "0 line(s) with the id dlm"),
             ("the dlm line twice", good.replace(dlm + "\n", dlm + "\n" + dlm + "\n"), "2 line(s) with the id dlm"),
             ("the dlm line after S0", "".join(stock[:first + 1] + [dlm + "\n"] + stock[first + 1:]),
              "not the first sysinit entry"),
             ("another dlm text", good.replace(dlm, dlm.replace(" -B", "")), "the dlm line reads"),
-            ("another line changed", good.replace("S2::sysinit", "S2::sysinit:"), "not core's inittab"),
+            ("another line changed", good.replace("S2::sysinit", "S2::sysinit:"), "not amix-base's inittab"),
         )
         for what, text, want in cases:
             open(os.path.join(tgt, "etc", "inittab"), "w").write(text)
             r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
-            okc = want in r.stdout and (("DIE" in r.stdout and "modtools' postinstall" in r.stdout)
+            okc = want in r.stdout and (("DIE" in r.stdout and "is not amix-base's default" in r.stdout)
                                         if want != "MSG inittab" else "DIE" not in r.stdout)
             (ok if okc else fail)("l11_inittab, %s: %s" % (what, "passes" if want == "MSG inittab" else
-                                  "stops naming modtools' postinstall" if okc else repr(r.stdout.strip())))
+                                  "stops naming amix-base's default" if okc else repr(r.stdout.strip())))
 
     # (10) S3-31 l11_keys' module half: a module kernel brings modtools; KERNEL_MODPKGS
     # must be role=module rows of the kernel's line named <module>-k<line>, and only with
@@ -10203,6 +10340,9 @@ def audit_l11():
         shutil.rmtree(nt, ignore_errors=True)
         os.makedirs(os.path.join(nt, "stand"))
         os.makedirs(os.path.join(nt, "etc", "rc2.d"))
+        os.makedirs(os.path.join(nt, "etc", "init.d"))
+        open(os.path.join(nt, "etc", "init.d", "kbnamelist"), "w").write("#!/bin/sh\n")
+        os.link(os.path.join(nt, "etc", "init.d", "kbnamelist"), os.path.join(nt, "etc", "rc2.d", "S01kbnamelist"))
         open(os.path.join(nt, "stand", "2.1_unix"), "w").write("the 1992 kernel\n")
         os.link(os.path.join(nt, "stand", "2.1_unix"), os.path.join(nt, "stand", "unix"))
         open(os.path.join(nt, "unix"), "w").write("x")
@@ -10214,17 +10354,20 @@ def audit_l11():
         nbody = ('msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\nrun() { "$@"; }\n'
                  "INST=%s\nL11=%s\nTARGET=%s\n" % (kc, kc, nt) + _extract_func(l11, "l11_namelist") + "\nl11_namelist\n")
         out = subprocess.run(["/usr/bin/dash", "-c", nbody], capture_output=True, text=True, timeout=30).stdout
-        s01 = os.path.join(nt, "etc", "rc2.d", "S01kbnamelist")
-        body_l = [x for x in open(s01).read().splitlines() if x and not x.startswith("#")] if os.path.exists(s01) else []
         gone = not os.path.exists(os.path.join(nt, "stand", "unix")) and not os.path.exists(os.path.join(nt, "unix"))
         kept = open(os.path.join(nt, "stand", "2.1_unix")).read() == "the 1992 kernel\n"
         if case == "core":
-            good = (gone and kept and "DIE" not in out and oct(os.stat(s01).st_mode & 0o777) == "0o744"
-                    and body_l == ["[ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1"]
+            good = (gone and kept and "DIE" not in out
                     and "S01kbnamelist" > "S01MOUNTFSYS" and "S01kbnamelist" < "S02PRESERVE")
             (ok if good else fail)("l11_namelist: /stand/unix and /unix removed, 2.1_unix kept (sum -r checked), "
-                                   "S01kbnamelist 0744 the one kbootset namelist line, sorted after S01MOUNTFSYS and "
-                                   "before S02PRESERVE" if good else "l11_namelist: %r" % out.strip())
+                                   "kbootset's S01kbnamelist checked (it sorts after S01MOUNTFSYS and before "
+                                   "S02PRESERVE)" if good else "l11_namelist: %r" % out.strip())
+            os.remove(os.path.join(nt, "etc", "rc2.d", "S01kbnamelist"))
+            os.link(os.path.join(nt, "stand", "2.1_unix"), os.path.join(nt, "stand", "unix"))
+            out = subprocess.run(["/usr/bin/dash", "-c", nbody], capture_output=True, text=True, timeout=30).stdout
+            (ok if "kbootset -26" in out and "DIE" in out else fail)(
+                "l11_namelist: no S01kbnamelist from the kbootset package stops the install" +
+                ("" if "kbootset -26" in out else " -- %r" % out.strip()))
         else:
             (ok if "is not core's 2.1 kernel" in out else fail)(
                 "l11_namelist: a 2.1_unix that is not core's stops the install" if "is not core's" in out

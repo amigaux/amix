@@ -311,6 +311,7 @@ write_conf()
 			-e '/^FB_DNS1=/d' \
 			-e '/^FB_DNS2=/d' \
 			-e '/^FB_NET_CONFIGURED=/d' \
+			-e '/^FB_NET_MODE=/d' \
 			-e '/^FB_REPO_HOST=/d' \
 			-e '/^FB_REPO_IP=/d' \
 			-e '/^FB_REPO_URL=/d' \
@@ -334,6 +335,7 @@ write_conf()
 		echo "FB_DNS1=$FB_DNS1"
 		echo "FB_DNS2=$FB_DNS2"
 		echo "FB_NET_CONFIGURED=$FB_NET_CONFIGURED"
+		echo "FB_NET_MODE=$FB_NET_MODE"
 		echo "FB_REPO_HOST=$FB_REPO_HOST"
 		echo "FB_REPO_IP=$FB_REPO_IP"
 		echo "FB_REPO_URL=$FB_REPO_URL"
@@ -354,6 +356,22 @@ write_conf()
 ask_nodename()
 {
 	NDEF="$FB_NODENAME"
+	if [ "$FB_L11" = y ]; then
+		# an empty answer is allowed: the name DHCP offers (`hostname dhcp`), else
+		# amix- and the last four hex digits of the first interface's MAC (section 1)
+		if [ -n "$NDEF" ]; then
+			readask "\nWhat is the nodename of this machine? [$NDEF] "
+		else
+			readask "\nWhat is the nodename of this machine? (RETURN: the name DHCP gives, else amix-xxxx) "
+		fi
+		if [ "$ask" != "" ]; then
+			FB_NODENAME="$ask"
+		else
+			FB_NODENAME="$NDEF"
+		fi
+		[ -n "$FB_NODENAME" ] && uname -S "$FB_NODENAME" 2>/dev/null
+		return 0
+	fi
 	[ -n "$NDEF" ] || NDEF=`uname -n`
 	readask "\nWhat is the nodename of this machine? [$NDEF] "
 	if [ "$ask" != "" ]; then
@@ -456,6 +474,25 @@ ask_network()
 			return 0
 			;;
 	esac
+
+	# 1.1: every interface a driver finds asks a DHCP server (`* dhcp`),
+	# or one interface gets a static address. Default: static when the installation set
+	# an address, else DHCP.
+	FB_NET_MODE=static
+	if [ "$FB_L11" = y ]; then
+		DHDEF=y
+		[ -n "$FB_IP" ] && DHDEF=n
+		readask "\nUse DHCP to configure the network? [$DHDEF] "
+		[ "$ask" != "" ] || ask=$DHDEF
+		case $ask in
+			[yY]* )
+				FB_NET_MODE=dhcp FB_IP= FB_NETMASK= FB_GATEWAY= FB_DNS1= FB_DNS2=
+				ask_repo
+				FB_NET_CONFIGURED=y
+				return 0
+				;;
+		esac
+	fi
 
 	# Interface detection with what an installed box carries TODAY.
 	#   aen0 -- the stock A2065 probe, `aen -S`. This IS the stock convention:
@@ -586,7 +623,7 @@ ask_network()
 	# applied by S16, atomically, and only where all five parts are reachable.
 	# On aen0 the fifth part is the /etc/inet/network-config ifconfig -- the ONE
 	# file this project never edits -- so DNS is not offered there yet.
-	if [ "$FB_ETHER_IF" = zen0 ]; then
+	if [ "$FB_ETHER_IF" = zen0 ] || [ "$FB_L11" = y ]; then
 		DNSOK=
 		while [ "$DNSOK" = "" ]
 		do
@@ -635,6 +672,13 @@ ask_network()
 		echo "edits.  Name resolution stays /etc/inet/hosts."
 	fi
 
+	ask_repo
+	FB_NET_CONFIGURED=y
+	return 0
+}
+
+ask_repo()
+{
 	# The package repository. Its name has to resolve without DNS, so the address
 	# is asked for too and S16 bakes the pair into /etc/inet/hosts.
 	readask "\nWhat is the package repository host? [$FB_REPO_HOST] "
@@ -686,9 +730,6 @@ ask_network()
 			fi
 		done
 	fi
-
-	FB_NET_CONFIGURED=y
-	return 0
 }
 
 ask_passwords()
@@ -894,7 +935,11 @@ ask_syslog()
 summary()
 {
 	echo ""
-	echo "Nodename:		`uname -n`"
+	if [ "$FB_L11" = y ] && [ -z "$FB_NODENAME" ]; then
+		echo "Nodename:		from DHCP, else amix-xxxx"
+	else
+		echo "Nodename:		`uname -n`"
+	fi
 	# NOT `cat /etc/domain`, which stock used: this system deliberately leaves
 	# that file alone (a set domain is appended to every resolver lookup), so the
 	# domain lives in the /etc/inet/hosts FQDN alias S16 writes from this value.
@@ -905,7 +950,9 @@ summary()
 	else
 		echo "Timezone:		`sed -n 's/^TZ=//p' /etc/TIMEZONE 2>/dev/null`"
 	fi
-	if [ "$FB_NET_CONFIGURED" = y ]; then
+	if [ "$FB_NET_CONFIGURED" = y ] && [ "$FB_NET_MODE" = dhcp ]; then
+		echo "Network:		DHCP on every interface"
+	elif [ "$FB_NET_CONFIGURED" = y ]; then
 		echo "Network:		$FB_ETHER_IF $FB_IP netmask $FB_NETMASK"
 		if [ -n "$FB_GATEWAY" ]; then
 			echo "Gateway:		$FB_GATEWAY"
@@ -1053,7 +1100,7 @@ esac
 # FB_REPO_HOST / FB_REPO_IP / FB_REPO_URL / FB_ROOTDEV / FB_SCSI_ID /
 # FB_ROOT_SLICE / FB_SWAP_SLICE / FB_ROOT_FSTYPE / FB_DIALOG / FB_ROOT_TELNET /
 # FB_SYSLOG / FB_NET_CONFIGURED / FB_ZEN_CARDS / FB_STANDUNIX_REG / FB_STANDUNIX_RM /
-# FB_INITTAB_SYS / FB_SDCARDS
+# FB_INITTAB_SYS / FB_SDCARDS / FB_L11 / FB_NET_MODE
 . "$CONF"
 
 # FB_TZ is the timezone ZONE NAME (W1). It was a literal `US/Eastern` in this
@@ -1128,8 +1175,28 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${FB_SWAP_SLICE}"
 # SVR4 persists the nodename in /etc/nodename (read at boot) AND the running
 # kernel value is set with `uname -S`. Do both so `uname -n` resolves now and
 # after a reboot. (W5.4 confirms Amix reads /etc/nodename at boot.)
-echo "$FB_NODENAME" > /etc/nodename
-uname -S "$FB_NODENAME" 2>/dev/null || true
+# 1.1: no name given -> amix- and the last four hex digits of the first interface's
+# MAC (amix-base's dlpi-mac; zen0 first, the Z3660's own), which ifup replaces with the name a
+# DHCP server offers when /etc/inet/interfaces says `hostname dhcp`
+if [ "$FB_L11" = y ] && [ -z "$FB_NODENAME" ]; then
+	FB_NAME_EFF=
+	for d in /dev/zen0 /dev/aen0
+	do
+		[ -c "$d" ] || continue
+		m=`/usr/sbin/dlpi-mac -t 2 "$d" 2>/dev/null`
+		case "$m" in
+			??:??:??:??:??:??)
+				FB_NAME_EFF=amix-`echo "$m" | sed -e 's/://g' -e 's/^........//'`
+				break ;;
+		esac
+	done
+	[ -n "$FB_NAME_EFF" ] || FB_NAME_EFF=amix-0000
+	echo "firstboot: no name given -- $FB_NAME_EFF until a DHCP server offers one"
+else
+	FB_NAME_EFF="$FB_NODENAME"
+fi
+echo "$FB_NAME_EFF" > /etc/nodename
+uname -S "$FB_NAME_EFF" 2>/dev/null || true
 
 # --- 2. timezone (zone name from FB_TZ; US/Eastern = index 47) ---------------
 # SVR4 sources TZ from /etc/TIMEZONE at init. Amix's first-boot dialog takes the
@@ -1342,7 +1409,8 @@ fi
 # nodename (the stray one stock's own dialog leaves on the 127.1 loopback line
 # included) AND any earlier line for the same address. Without the second guard a
 # nodename change would leave two entries claiming one IP.
-if [ -n "$FB_IP" ] && [ -f /etc/inet/hosts ]; then
+# 1.1: amix-base's ifup writes this host's row from /etc/inet/interfaces' `name`
+if [ "$FB_L11" != y ] && [ -n "$FB_IP" ] && [ -f /etc/inet/hosts ]; then
 	# Drop any stale alias of our nodename (the one stock's own dialog leaves on
 	# the 127.1 loopback line included), then any line already claiming our
 	# address, then append exactly one.
@@ -1486,7 +1554,15 @@ esac
 # topology). A `mv` would replace the inode behind the name we edited and leave
 # the two rc links pointing at the OLD content, so the change would appear to work
 # and then not survive a reboot. `cp` writes THROUGH the existing inode.
-if [ "$FB_SYSLOG" = n ] && [ -f /etc/init.d/syslogd ]; then
+# 1.1: the syslog package's unit reads syslogd= from /etc/rc.conf (the installer
+# wrote it from the profile); the dialog's answer replaces that one line
+if [ "$FB_L11" = y ]; then
+	sv=yes; [ "$FB_SYSLOG" = n ] && sv=no
+	{ grep -v '^syslogd=' /etc/rc.conf 2>/dev/null; echo "syslogd=$sv"; } > /etc/rc.conf.fb$$ \
+		&& cp /etc/rc.conf.fb$$ /etc/rc.conf && chmod 644 /etc/rc.conf
+	rm -f /etc/rc.conf.fb$$
+	echo "firstboot: /etc/rc.conf syslogd=$sv"
+elif [ "$FB_SYSLOG" = n ] && [ -f /etc/init.d/syslogd ]; then
 	if grep '^#exit$' /etc/init.d/syslogd > /dev/null 2>&1; then
 		chmod 644 /etc/init.d/syslogd
 		sed 's/^#exit$/exit/' /etc/init.d/syslogd > /tmp/syslogd.fb$$ \
@@ -1506,7 +1582,44 @@ fi
 # An unattended install therefore behaves exactly as it did before W5: its
 # /etc/inet/hosts entry (section 5) and, for zen0 flavors, the installer's own
 # S99zen laydown are the whole of its networking.
-if [ "$FB_NET_CONFIGURED" = y ]; then
+# 1.1: the dialog's answers become /etc/inet/interfaces; amix-base's ifup (S69inet,
+# after this script) brings the interfaces up from it, writes this host's hosts row and the
+# DNS parts. 8a-8c below are 1.0's.
+fb_bits()
+{
+	case "$1" in
+		255.0.0.0) echo 8 ;; 255.255.0.0) echo 16 ;; 255.255.240.0) echo 20 ;;
+		255.255.248.0) echo 21 ;; 255.255.252.0) echo 22 ;; 255.255.254.0) echo 23 ;;
+		255.255.255.0) echo 24 ;; 255.255.255.128) echo 25 ;; 255.255.255.192) echo 26 ;;
+		255.255.255.224) echo 27 ;; 255.255.255.240) echo 28 ;; 255.255.255.248) echo 29 ;;
+		255.255.255.252) echo 30 ;; *) echo "" ;;
+	esac
+}
+if [ "$FB_L11" = y ] && [ "$FB_NET_CONFIGURED" = y ]; then
+	b=`fb_bits "$FB_NETMASK"`
+	{
+		echo "# /etc/inet/interfaces -- written by firstboot.sh from the first-boot dialog; see interfaces(4)"
+		if [ "$FB_NET_MODE" = dhcp ]; then
+			if [ -n "$FB_NODENAME" ]; then
+				echo "* dhcp name $FB_NODENAME"
+			else
+				echo "* dhcp"
+				echo "hostname dhcp"
+			fi
+		else
+			echo "$FB_ETHER_IF static $FB_IP${b:+/$b}${FB_GATEWAY:+ gw $FB_GATEWAY} name $FB_NAME_EFF"
+		fi
+		[ -z "$FB_DNS1$FB_DNS2" ] || echo "dns `echo $FB_DNS1 $FB_DNS2`"
+		[ -z "$FB_DOMAIN" ] || echo "domain $FB_DOMAIN"
+	} > /etc/inet/interfaces.fb$$ && mv /etc/inet/interfaces.fb$$ /etc/inet/interfaces && chmod 644 /etc/inet/interfaces
+	if /usr/sbin/ifup -n > /tmp/ifup.fb$$ 2>&1; then
+		echo "firstboot: /etc/inet/interfaces from the dialog (`grep -v '^#' /etc/inet/interfaces | head -1`)"
+	else
+		echo "firstboot: WARNING: /etc/inet/interfaces from the dialog does not pass ifup -n:" >&2
+		cat /tmp/ifup.fb$$ >&2
+	fi
+	rm -f /tmp/ifup.fb$$
+elif [ "$FB_L11" != y ] && [ "$FB_NET_CONFIGURED" = y ]; then
 
 	# 8a. zen0: the laydown was written at INSTALL time from the profile's
 	# address. If the operator named a different one, re-point the two
@@ -1639,6 +1752,44 @@ if [ "$FB_NET_CONFIGURED" = y ]; then
 	fi
 fi
 
+# --- 8b (1.1): the X11 and apkg PATH as /etc/profile.d drop-ins ------------
+# /etc/profile is amix-base's conffile now; an edit would make the next update leave a .new.
+# amix-base's /etc/profile reads /etc/profile.d/*.sh, so the two PATH additions go
+# there, written by no package, until APKG and the X stack ship their own drop-ins. The
+# desktop session is amix-base's xstart and its xsession: no /.xinitrc, no startx here.
+if [ "$FB_L11" = y ]; then
+	[ -d /etc/profile.d ] || mkdir /etc/profile.d
+	if [ ! -f /etc/profile.d/x11.sh ]; then
+		{
+			echo "# /etc/profile.d/x11.sh -- written by firstboot.sh: the X server and clients"
+			echo "# (/usr/bin/X11) and olwm's libXol.so (/usr/lib), for login shells only"
+			echo 'case "$0" in'
+			echo '"-rsh" | "-rksh" )	;;'
+			echo '* )'
+			echo '	PATH=$PATH:/usr/bin/X11'
+			echo '	LD_LIBRARY_PATH=/usr/lib'
+			echo '	export PATH LD_LIBRARY_PATH'
+			echo '	;;'
+			echo 'esac'
+		} > /etc/profile.d/x11.sh
+		chmod 644 /etc/profile.d/x11.sh
+	fi
+	if [ ! -f /etc/profile.d/opt-amix.sh ]; then
+		{
+			echo "# /etc/profile.d/opt-amix.sh -- written by firstboot.sh: apkg's /opt/amix/bin"
+			echo "# LAST on PATH (stock tools keep precedence), for login shells only"
+			echo 'case "$0" in'
+			echo '"-rsh" | "-rksh" )	;;'
+			echo '* )'
+			echo '	PATH=$PATH:/opt/amix/bin'
+			echo '	export PATH'
+			echo '	;;'
+			echo 'esac'
+		} > /etc/profile.d/opt-amix.sh
+		chmod 644 /etc/profile.d/opt-amix.sh
+	fi
+	echo "firstboot: /etc/profile.d/x11.sh and opt-amix.sh (X11 and apkg PATH; /etc/profile untouched)"
+else
 # --- 8b. X11 easy-start: /usr/bin/X11 on PATH, libXol on the linker path, and a
 #         one-command `startx` (W6) -------------------------------------------
 # The X packages (xcore/xbasic/olcore) install under /usr/X, with /usr/bin/X11 ->
@@ -1755,6 +1906,7 @@ then
 	chmod 755 /usr/local/bin/startx
 	echo "firstboot: X easy-start ready -- /.xinitrc + /etc/skel + /usr/local/bin/startx (after: apkg install xcore xbasic olcore, run 'startx')"
 fi
+fi	# FB_L11: 8b and 8b(ii) are 1.0's
 
 # --- done: disarm so this runs exactly once --------------------------------
 # ...unless the first-boot dialog is armed and has not completed yet: then the
