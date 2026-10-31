@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — monsw and ramdisk packages roll from kernel/modules; monswctl stripped (9957b28, 1162892, e5011e7, 7b40bc9)
+
+monswctl ships stripped: 8732 → 7028 B, sha256 23739ba2. The module package recipes share kernel/modules/pkg/kmod.sh.
+monsw 1.0.0-5 carries the kabi-1.2 objects, /dev/monsw, monswctl, the S20monsw boot step and the pages monsw(7) and
+monswctl(1M). ramdisk 1.0.0-4 carries 1.0.0-3's object and payload. make dist rolls both, and random, in the container.
+
 ## 2026-10-31 — random: the docs name what the module needs (7a841fd)
 
 random/README and random(7) name what the module needs: a kernel cut with c 48 (k30 -64, k46 -53 or later) and
