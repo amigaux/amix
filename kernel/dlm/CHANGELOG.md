@@ -1,5 +1,7 @@
 # Changelog
 
+## 2026-10-31 — spec 50: the CD medium's cdfs is boot class; the medium roots on its RAM disk (f3d8ca2)
+
 ## 2026-10-31 — kbootset -30 and dlmkit -13 recipes re-pinned to 4ccb3f0 (0ad4faa)
 
 Their payloads take the restated text: kbootset(1M) and kbmarkgood (the binary is unchanged, 6da558d0) and the
