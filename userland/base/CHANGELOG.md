@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — dhcpc 1.0 and the dhcp-client package; profile(4), profile.d(4), nodename(4) (6199cc3, 22e309d, 8a0bddf)
+
+dhcpc 1.0 (/usr/sbin/dhcpc, dhcpc(1M)): DLPI for INIT, INIT-REBOOT and after a lease ends; from BOUND a UDP socket on
+port 68 renews at T1 by unicast and rebinds at T2 by broadcast; every change goes through dhcpc-hook; no option 61; CLI
+and files as frozen in T-55. The dhcp-client package (dhcpc 1.0-1: SET=base, DEPENDS amix-base, not essential). One-hour
+soak on the 2.1c bench image: 112 renewals, 4 rebinds, no ICMP. Pages profile(4), profile.d(4) and nodename(4);
+amxbase 1.0-3. tapdhcpd.py gains a control file (silent / norenew / nak), --dns and --hostname.
+
 ## 2026-10-31 — our own /etc/profile; amxbase 1.0-2 (720849d)
 
 amix-base ships its own /etc/profile: the stock 2.1p2a file plus the guarded line that sources /etc/profile.d/*.sh
