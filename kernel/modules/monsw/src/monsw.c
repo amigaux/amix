@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/errno.h>
+#include <sys/file.h>
 #include <sys/cred.h>
 #include <sys/ddi.h>
 #include <sys/monsw.h>
@@ -245,6 +246,11 @@ int *rvp;
 	struct monsw_info mi;
 	int h, e;
 
+	/* switching and setting need the device open for writing, which the node's mode
+	   (0644 root) leaves to root; GETCFG needs only a read-only open */
+	if ((req == MONSWIOC_RTG || req == MONSWIOC_NATIVE || req == MONSWIOC_SETCFG) &&
+	    !(fmode & FWRITE))
+		return EBADF;
 	switch (req) {
 	case MONSWIOC_RTG:
 		monsw_want = 1;

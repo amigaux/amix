@@ -30,6 +30,10 @@ cat > "$tmp/inc/sys/cred.h" <<'H'
 struct cred { int cr_uid; };
 H
 : > "$tmp/inc/sys/ddi.h"
+cat > "$tmp/inc/sys/file.h" <<'H'
+#define FREAD  0x01
+#define FWRITE 0x02
+H
 cat > "$tmp/inc/sys/conf.h" <<'H'
 #ifndef _SYS_CONF_H
 #define _SYS_CONF_H
@@ -98,17 +102,24 @@ fresh(unsigned char pra, unsigned char ddra)
 	td_pra = pra; td_ddra = ddra; td_lines[0] = 0; td_nlines = 0; td_root = 1;
 }
 
+/* an ioctl on a descriptor opened for reading and writing, or (ioc_ro) for reading only */
 static int
 ioc(int req, int a)
 {
-	return monswioctl(0, req, a, 0, (struct cred *)0, (int *)0);
+	return monswioctl(0, req, a, FREAD | FWRITE, (struct cred *)0, (int *)0);
+}
+
+static int
+ioc_ro(int req, int a)
+{
+	return monswioctl(0, req, a, FREAD, (struct cred *)0, (int *)0);
 }
 
 static int
 getcfg(void)
 {
 	memset(&td_out, 0xff, sizeof td_out);
-	return monswioctl(0, MONSWIOC_GETCFG, 0, 0, (struct cred *)0, (int *)0);
+	return monswioctl(0, MONSWIOC_GETCFG, 0, FREAD, (struct cred *)0, (int *)0);
 }
 
 /* the parser alone: what _load gives monsw_config, and whether it said anything */
@@ -282,6 +293,26 @@ main(void)
 	CHECK(monsw_wrapper.unload() == 0 && monsw_state == 0 && td_pra == 0x00 &&
 	    monsw_config == -1, "unload: state %d pra %02x config %d", monsw_state, td_pra,
 	    monsw_config);
+
+	/* 10b. a read-only open may read the value but not switch or set it: EBADF, nothing
+	   driven, nothing changed; read-write it may */
+	fresh(0x00, 0x00);
+	monsw_wrapper.load("config=-1");
+	CHECK(ioc_ro(MONSWIOC_SETCFG, 2) == EBADF && monsw_cfg == 0 && monsw_src == MONSW_SRC_NONE,
+	    "read-only SETCFG: cfg %d src %d", monsw_cfg, monsw_src);
+	ioc(MONSWIOC_SETCFG, 2);
+	monswopen((dev_t *)0, 0, 0, (struct cred *)0);
+	CHECK(ioc_ro(MONSWIOC_RTG, 0) == EBADF && monsw_state != 1 && monsw_want == 0 &&
+	    td_pra == 0x00 && td_ddra == 0x00, "read-only RTG: state %d want %d pra %02x ddra %02x",
+	    monsw_state, monsw_want, td_pra, td_ddra);
+	CHECK(ioc(MONSWIOC_RTG, 0) == 0 && monsw_state == 1, "read-write RTG: state %d", monsw_state);
+	CHECK(ioc_ro(MONSWIOC_NATIVE, 0) == EBADF && monsw_state == 1 && td_pra == 0x04,
+	    "read-only NATIVE: state %d pra %02x", monsw_state, td_pra);
+	CHECK(getcfg() == 0 && td_out.f[2] == 1, "read-only GETCFG: %d, state %d", 0, td_out.f[2]);
+	CHECK(ioc_ro(77, 0) == EINVAL, "read-only unknown ioctl is not EINVAL");
+	CHECK(ioc(MONSWIOC_NATIVE, 0) == 0 && monsw_state == 0, "read-write NATIVE: state %d",
+	    monsw_state);
+	monswclose(0, 0, 0, (struct cred *)0);
 
 	/* 11. the driver row and the wrapper */
 	CHECK(monsw_drvdata[0].drv_cmajor == 52 && monsw_drvdata[0].drv_ccount == 1 &&

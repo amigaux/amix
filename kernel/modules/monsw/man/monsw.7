@@ -81,6 +81,15 @@ The switch returns to the chipset's picture at the last close of the device
 when the program that asked for the card's picture holds it, so a program
 that dies cannot leave the monitor on the card.
 .SH IOCTLS
+.BR MONSWIOC_RTG ,
+.B MONSWIOC_NATIVE
+and
+.B MONSWIOC_SETCFG
+need the device open for writing, and give
+.B EBADF
+on a descriptor opened only for reading;
+.B MONSWIOC_GETCFG
+needs only a read-only open.
 .TP
 .B MONSWIOC_RTG
 switch to the card's picture.
@@ -106,16 +115,8 @@ while a value is forced by the parameter.
 .TP
 .B /dev/monsw
 character major 52, minor 0, mode 0644, owner root: any user can open it
-for reading, which is all
-.B monswctl get
-and
-.B status
-need; its
-.BR set ,
-.B rtg
-and
-.B native
-open it for writing, which is root's.
+for reading and read the value; switching and setting it need it open for
+writing, which is root's.
 .TP
 .B /etc/conf/mod.d/monsw
 the module.

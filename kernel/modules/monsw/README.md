@@ -69,7 +69,9 @@ The value is a sum of four bits. They have the same meanings as the Z3660 firmwa
 
 **The device.** Open `/dev/monsw` and use these ioctls. The node is 0644 root, so any user can
 open it read-only for `MONSWIOC_GETCFG` (`monswctl get` and `status` do), and only root opens
-it for writing:
+it for writing. `MONSWIOC_RTG`, `MONSWIOC_NATIVE` and `MONSWIOC_SETCFG` need a descriptor
+opened for writing (`FWRITE`) and give `EBADF` on a read-only one, so the node's mode is what
+keeps switching and setting root's:
 - `MONSWIOC_RTG` and `MONSWIOC_NATIVE` switch.
 - `MONSWIOC_GETCFG` fills a `struct monsw_info`: the value, its source, the state, the
   holder flag and the number of cards.
@@ -156,8 +158,8 @@ far below both. The figures are from the built objects; they are the same on bot
 
 | | monsw | Limit |
 |---|---|---|
-| file (`mod.d/monsw`) | 5,197 bytes | under 256 KiB |
-| allocated image (the size `modcheck` prints) | 2,200 bytes: `.text` 1,584, `.data` 432, `.moddata` 161, `.bss` 16; no COMMON symbols | at most 256 KiB |
+| file (`mod.d/monsw`) | 5,269 bytes | under 256 KiB |
+| allocated image (the size `modcheck` prints) | 2,240 bytes: `.text` 1,622, `.data` 432, `.moddata` 161, `.bss` 16; no COMMON symbols | at most 256 KiB |
 | the core's working set for a load from a file (file buffer, tables, image; `modcheck`'s estimate) | about 15 KiB | `modcheck` warns above 160 KiB for a demand-class module |
 
 monsw makes no kernel memory requests at all:
@@ -247,6 +249,8 @@ It then checks:
 - the port bits driven for 34, 17, 1 and 2;
 - the native-first change in RTG state;
 - the last-close rules;
+- that a descriptor opened only for reading gets `EBADF` for RTG, NATIVE and SETCFG, with nothing
+  driven or changed, and may still GETCFG;
 - `_unload`;
 - the `cdevsw` row.
 

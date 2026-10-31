@@ -15,16 +15,18 @@
 # code as 1.0.0-2's kabi 1.0 objects), monswctl, /etc/init.d/monsw, the pages.
 # 1.0.0-6 (2026-10-31): monswctl opens /dev/monsw read-only for get and status,
 # so any user's `monswctl status` works at the node's 0644; the pages say so.
+# 1.0.0-7 (2026-10-31): the driver gives EBADF for RTG, NATIVE and SETCFG on a
+# descriptor opened only for reading; objects bb900ef8 / 287ee3ad.
 
 KM_NAME=monsw
 KM_SHORT=monsw
 KM_REPO=kernel/modules/monsw
-KM_VERSION=1.0.0-6
+KM_VERSION=1.0.0-7
 
 KM_K30_OBJ=kernel/modules/monsw/build/k30/mod.d/monsw
-KM_K30_SHA=1f53a31b0d55778c4ae23536bbb30776d9ec2efabf0a86214b9e9525c69b522d
+KM_K30_SHA=bb900ef80ee652755efd1677f6cb2bcb285f7b64f32c6194931a7752926587cc
 KM_K46_OBJ=kernel/modules/monsw/build/k46/mod.d/monsw
-KM_K46_SHA=962709ca0d0b98cfb541504ef685e9046a55d8671cb90a3cae1a35d1ce2e5c84
+KM_K46_SHA=287ee3adb222e13df9b35b2d651e9099246e7992fc11075643e5769baf6132da
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -39,7 +41,7 @@ KM_FILES_COMMON="\
 /usr/sbin/monswctl kernel/modules/monsw/build/tool/monswctl dd05a6ba5ca62f25f70e7f2679ee73c7c43a7a13fdcc5dca817e28c657f87355 0755
 /etc/init.d/monsw kernel/modules/monsw/rc/monsw f050017fa2ef0dafe6c4daedc5837a5b887df8b1b384b48b997bbdf16925bcd7 0744
 /etc/rc2.d/S20monsw kernel/modules/monsw/rc/monsw f050017fa2ef0dafe6c4daedc5837a5b887df8b1b384b48b997bbdf16925bcd7 0744
-/opt/amix/man/7/monsw kernel/modules/monsw/man/monsw.7 f2b587b8a7dfdc65936ceffed7188f024ac274b42132df9eb3585db71948f3ed 0644
+/opt/amix/man/7/monsw kernel/modules/monsw/man/monsw.7 1d18b042ef37647135cbb3cdff07caf3c3097c7a2faea63e37aae9a1e6d9a570 0644
 /opt/amix/man/1m/monswctl kernel/modules/monsw/man/monswctl.1m 2e4faec8a5b596cb69121cc38fa0d5742ed8ac43aec7b64664900a707c0aad45 0644"
 KM_WHATIS=kernel/modules/monsw/pkg/monsw.whatis
 KM_WHATIS_SHA=4d0289ad1e7c4c52c824210a55e6c8fbbaabd3a8f6bf588a6bdd25019f3a9c08
