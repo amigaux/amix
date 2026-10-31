@@ -354,7 +354,7 @@ The module:
 | Symbols | `ifstats` → `if_attach`, `if_detach` in `_unload` (§1.1); add `intr_attach`/`intr_detach` |
 | `_halt` | `ZZ_CONFIG_DISABLE`, and stop the poll if it can without sleeping |
 | `_unload` | present, though `unload=never` refuses `moduload`: the core calls it after a failed load (§1.1). `untimeout`, interrupt off, `intr_detach`, `if_detach`, `z3660eth_unmap` (last close does not unmap today), reset `map_verdict` |
-| Kept | `/dev/zen0` (c 51 0). `S99zen`'s `slink` (S3-31) until P-36 W6, when the package ships `link.d/z3660eth` and `ifup` brings zen0 up (§1.8) |
+| Kept | `/dev/zen0` (c 51 0). `S99zen` (S3-31) went at P-36 W6 (amix f0385cb): the package ships `link.d/z3660eth` (`zen /dev/zen 0 51`) and `ifup` brings zen0 up (§1.8) |
 
 ## 3. z3660rtg (amix-z3660rtg, S3-26)
 
