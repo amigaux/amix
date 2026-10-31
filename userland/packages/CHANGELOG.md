@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — prngd 0.9.29-2; INDEX lists syslog (c0230bd, 4bfe915)
+
+prngd 0.9.29-2: LICENSE names the tarball's own terms (the author's permissive notice for the whole; BSD-4-Clause-UC
+only for bsd-daemon.c; BSD-3-Clause for prngd-ctl.c; sha1.c's free-use notice); payload unchanged. INDEX/cats/deps/sets
+list syslog 1.0-1 (system, set base, depends on amix-base); 20 packages.
+
 ## 2026-10-31 — vim 9.1.0000-1; INDEX lists amix-base 1.0-10 (ed7e9ea, eb67143, 4687423, 11780fe)
 
 vim 9.1.0000-1: terminal only, normal features, ncurses 6.6 static; vim with ex/view/vimdiff/rvim/rview as hard links,
