@@ -2,7 +2,7 @@
 # xstart -- start X on this machine's display, as /etc/display says.
 #
 #   xstart [-n] [:N] [WxH] [key=value ...]   a session, here, now
-#   xstart -xdm                              the graphical login (S95display)
+#   xstart -xdm | -dtlogin                   the graphical login (S95display)
 #
 # Reads /etc/display (display(4)); an argument overrides one field for this
 # run (WxH is mode=WxH). The card is /etc/display.d/<card> (display.d(4)),
@@ -13,7 +13,9 @@
 # runs through xinit (X11R6's, else the stock one) with ~/.xsession, then
 # ~/.xinitrc, then /etc/display's session, then /usr/lib/amix/xsession.
 # -n says what would run, and every mistake in the files; -xdm runs X11R6's
-# xdm with that server instead of a session. The stock startx is not touched.
+# xdm with that server instead of a session, -dtlogin CDE's dtlogin the same
+# way (it takes xdm's -server, which outranks its Xconfig). The stock startx
+# is not touched.
 #
 # Installed as /usr/amix/bin/xstart. Exit 0 when the session (or xdm) ran,
 # 1 when the display cannot be set up, 2 on a usage mistake.
@@ -24,6 +26,7 @@ DISP_SUBR=${DISP_SUBR:-/usr/lib/amix/display.subr}
 . "$DISP_SUBR"
 XINITS=${XINITS:-"/opt/amix/X11R6/bin/xinit /usr/X/bin/xinit"}
 XDMS=${XDMS:-/opt/amix/X11R6/bin/xdm}
+DTLOGINS=${DTLOGINS:-/opt/amix/dt/bin/dtlogin}
 XSESSION=${XSESSION:-/usr/lib/amix/xsession}
 MONSWCTL=${MONSWCTL:-/usr/sbin/monswctl}
 
@@ -42,6 +45,7 @@ first() {
 
 dry=
 xdm=
+dtlogin=
 disp=:0
 over=
 for a
@@ -49,11 +53,12 @@ do
 	case $a in
 	-n) dry=1 ;;
 	-xdm) xdm=1 ;;
+	-dtlogin) dtlogin=1 ;;
 	:[0-9]*) disp=$a ;;
 	[0-9]*x[0-9]*) over="$over mode=$a" ;;
 	card=*|mode=*|depth=*|session=*|monsw=*) over="$over $a" ;;
 	*)
-		echo "usage: xstart [-n] [:N] [WxH] [key=value ...] | xstart -xdm" >&2
+		echo "usage: xstart [-n] [:N] [WxH] [key=value ...] | xstart -xdm | xstart -dtlogin" >&2
 		exit 2
 		;;
 	esac
@@ -202,6 +207,9 @@ then
 	if [ -n "$xdm" ]
 	then
 		echo "xdm      `first "$XDMS"` -server \"$disp local $xline\""
+	elif [ -n "$dtlogin" ]
+	then
+		echo "dtlogin  `first "$DTLOGINS"` -server \"$disp local $xline\""
 	else
 		echo "xinit    ${xinit:-none} $s -- $line"
 	fi
@@ -225,6 +233,13 @@ then
 	# X11R6's xdm only: the system's own xdm runs only as a SAF port monitor
 	# (its _sactab entry, amixadm) and exits when started any other way
 	x=`first "$XDMS"` || { say "start xdm needs X11R6's xdm ($XDMS); the system's xdm runs only under SAF"; exit 1; }
+	[ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
+	exec $x -server "$disp local $xline"
+fi
+
+if [ -n "$dtlogin" ]
+then
+	x=`first "$DTLOGINS"` || { say "start dtlogin needs CDE's dtlogin ($DTLOGINS); not started"; exit 1; }
 	[ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
 	exec $x -server "$disp local $xline"
 fi

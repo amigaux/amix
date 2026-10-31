@@ -25,7 +25,7 @@ refuse() { case "$3" in *"$2"*) bad "$1: unwanted [$2] in [$3]" ;; *) ok ;; esac
 
 B=$T/bin
 mkdir -p "$B" "$T/d" "$T/home" "$T/dev" "$T/log"
-for p in Xzz Xnat xinit xdm tool; do
+for p in Xzz Xnat xinit xdm dtlogin tool; do
 	printf '#!/bin/sh\necho "%s $*" >> %s/calls\n' $p "$T" > "$B/$p"
 done
 printf '#!/bin/sh\nexit 1\n' > "$B/monswctl-no"
@@ -57,7 +57,7 @@ conf() { cat > "$T/display"; }
 run() { # run <args...>: xstart, its output and status
 	: > "$T/calls"
 	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="$T/d" HOME="$T/home" \
-	    XINITS="$B/xinit" XDMS="$B/xdm" XSESSION="$T/xsession" MONSWCTL="${MCTL:-$B/monswctl-no}" \
+	    XINITS="$B/xinit" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="$T/xsession" MONSWCTL="${MCTL:-$B/monswctl-no}" \
 	    $SH "$here/xstart" "$@" 2>&1
 	echo "rc=$?"
 }
@@ -153,6 +153,19 @@ printf 'card z3660\nmode 1920x1080\n' | conf
 o=$(run -xdm)
 same "-xdm" "xdm -server :0 local $B/Xzz :0 -mode 1920x1080 -w 1920 -h 1080 -bpp 16 -n 0" "$(cat "$T/calls")"
 
+# --- -dtlogin: CDE's dtlogin with the same server line; absent, said
+o=$(run -dtlogin)
+same "-dtlogin" "dtlogin -server :0 local $B/Xzz :0 -mode 1920x1080 -w 1920 -h 1080 -bpp 16 -n 0" "$(cat "$T/calls")"
+o=$(run -n -dtlogin)
+expect "-n -dtlogin" "dtlogin  $B/dtlogin -server" "$o"
+o=$(DTL=$T/none run -dtlogin)
+expect "no dtlogin: said" "start dtlogin needs CDE's dtlogin ($T/none); not started" "$o"
+expect "no dtlogin: status 1" "rc=1" "$o"
+same "no dtlogin: nothing run" "" "$(cat "$T/calls")"
+printf 'card z3660\nstart dtlogin\n' | conf
+o=$(run -n)
+refuse "start dtlogin is a valid value" "start is manual" "$o"
+
 # --- mistakes: said by -n, which then exits 1
 conf <<'EOF'
 card    z3660
@@ -162,7 +175,7 @@ colour  blue
 EOF
 o=$(run -n)
 expect "bad mode said" "$T/display:2: mode is W x H" "$o"
-expect "bad start said" "$T/display:3: start is manual or xdm" "$o"
+expect "bad start said" "$T/display:3: start is manual, xdm or dtlogin" "$o"
 expect "unknown key said" "$T/display:4: unknown key \"colour\"" "$o"
 echo "colour blue" >> "$T/d/native"
 o=$(run -n card=z3660 mode=640x480)
@@ -199,6 +212,10 @@ same "boot: manual, nothing" "" "$(cat "$T/calls")"
 printf 'card z3660\nstart xdm\n' | conf
 boot
 expect "boot: start xdm" "xstart -xdm" "$(cat "$T/calls")"
+printf 'card z3660\nstart dtlogin\n' | conf
+: > "$T/rc.conf"
+boot
+expect "boot: start dtlogin" "xstart -dtlogin" "$(cat "$T/calls")"
 echo "display=no" > "$T/rc.conf"
 boot
 same "boot: rc.conf display=no" "" "$(cat "$T/calls")"

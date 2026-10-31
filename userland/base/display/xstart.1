@@ -6,6 +6,10 @@ xstart \- start X on this machine's display
 [
 .B \-n
 ] [
+.B \-xdm
+|
+.B \-dtlogin
+] [
 .BI : N
 ] [
 .IR W x H
@@ -67,6 +71,20 @@ is still there and unchanged.
 say what would be run, and every mistake in
 .B /etc/display
 and the card files, and run nothing.
+.TP
+.B \-xdm \fR|\fP \-dtlogin
+instead of a session, start X11R6's
+.B xdm
+or CDE's
+.B dtlogin
+with the same server line; the boot step
+.B S95display
+does this when
+.B /etc/display
+says
+.B start xdm
+or
+.BR "start dtlogin" .
 .SH EXIT STATUS
 0 when the session ran (with
 .BR \-n :

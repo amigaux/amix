@@ -52,7 +52,7 @@ disp_errors() {
 	k == "card" { if (NF != 2) print at "card takes one name"; next }
 	k == "mode" { if (NF != 2 || v !~ /^[0-9]+x[0-9]+$/) print at "mode is W x H, as 1024x768"; next }
 	k == "depth" { if (NF != 2 || v !~ /^[0-9]+$/) print at "depth is a number of bits"; next }
-	k == "start" { if (NF != 2 || (v != "manual" && v != "xdm")) print at "start is manual or xdm"; next }
+	k == "start" { if (NF != 2 || (v != "manual" && v != "xdm" && v != "dtlogin")) print at "start is manual, xdm or dtlogin"; next }
 	k == "session" { if (NF != 2 || v !~ /^\//) print at "session is a full path"; next }
 	k == "monsw" { if (NF != 2 || v !~ /^[0-9]+$/) print at "monsw is a bit sum, as 34"; next }
 	{ print at "unknown key \"" k "\"" }

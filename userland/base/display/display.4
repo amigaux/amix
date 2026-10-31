@@ -42,7 +42,7 @@ A card that picks its own mode (the chipset display) ignores it.
 the number of bits a pixel; it must be one of the card's depths.
 Default: the card's first.
 .TP
-.B start manual \fR|\fP xdm
+.B start manual \fR|\fP xdm \fR|\fP dtlogin
 .B manual
 (the default): X starts only when a user runs
 .BR xstart .
@@ -54,6 +54,22 @@ the system's own
 runs only as a port monitor of the service access facility, set up with
 .BR amixadm ,
 and is not started from here.
+.BR dtlogin :
+the same with CDE's login screen,
+.BR /opt/amix/dt/bin/dtlogin .
+Either display manager is given the server's line from this file and the
+card's on its command line
+.RB ( \-server ),
+which outranks its own configuration; no display manager file is edited.
+When the one named is not installed, the boot log says so and the machine
+stays at its text logins.
+A session started by a display manager does not pass through
+.BR login (1);
+CDE's session start sets the file limit of
+.B /etc/default/login
+and runs
+.B /etc/profile
+itself.
 The line
 .B display=no
 in
