@@ -1,4 +1,6 @@
 devnodes(1m)     devnodes - re-create missing device nodes at boot
+display(4)       display - which screen X uses on this machine, and how it starts
+display.d(4)     display.d - the display cards X can use, one file each
 dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
 ifdown(1m)       ifup, ifdown - bring network interfaces up or down
 ifup(1m)         ifup, ifdown - bring network interfaces up or down
@@ -13,3 +15,4 @@ profile.d(4)     profile.d - the packages' additions to the login environment
 rc.conf(4)       rc.conf - which boot services run, and their settings
 rc.inet(4)       network-config, rc.inet - network commands run at every boot
 rc.subr(1m)      rc.subr - shell functions for the boot scripts of the add-on packages
+xstart(1)        xstart - start X on this machine's display

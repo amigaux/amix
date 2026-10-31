@@ -51,8 +51,8 @@ is treated as missing, and the boot log says so.
 .ft CW
 # /etc/rc.conf
 syslogd=yes
-xdm=no            # graphical login off
-ifup_timeout=60
+display=no        # no graphical login, whatever /etc/display says
+ifup_dhcpwait=30  # wait longer for a DHCP lease at boot
 .ft R
 .fi
 .SH FILES
@@ -63,7 +63,9 @@ this file.
 .B /var/adm/rc.log
 the boot log, where a bad value is reported.
 .SH SEE ALSO
-.BR rc.subr (1M)
+.BR rc.subr (1M),
+.BR display (4),
+.BR ifup (1M)
 .SH NOTES
 The stock services in
 .B /etc/rc2.d

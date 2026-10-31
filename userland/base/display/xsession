@@ -1,0 +1,19 @@
+#!/bin/sh
+# xsession -- the X session of a user with no ~/.xsession or ~/.xinitrc,
+# run by xstart (/usr/lib/amix/xsession): the user's resources, an xterm,
+# and the first window manager found. The session ends with the manager.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+PATH=$PATH:/opt/amix/X11R6/bin:/usr/X/bin
+export PATH
+[ -r "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
+xterm &
+for wm in twm tvtwm olwm
+do
+	for d in /opt/amix/X11R6/bin /usr/X/bin
+	do
+		[ -x $d/$wm ] && exec $d/$wm
+	done
+done
+exec xterm

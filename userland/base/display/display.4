@@ -1,0 +1,105 @@
+.TH DISPLAY 4 "31 October 2026" "amix-base"
+.SH NAME
+display \- which screen X uses on this machine, and how it starts
+.SH SYNOPSIS
+.B /etc/display
+.SH DESCRIPTION
+.B /etc/display
+says which display card X runs on, in which mode, and whether a graphical
+login starts at boot.
+The installer writes it, the administrator edits it, and no package owns it.
+.BR xstart (1)
+reads it for every session, and the boot step
+.B /etc/rc2.d/S95display
+for the graphical login.
+.PP
+Each line is a key and its value, separated by blanks or tabs.
+A
+.B #
+starts a comment that runs to the end of the line; blank lines are ignored.
+When a key is given twice, the last line counts.
+A key that is missing takes the default given below.
+.TP
+.BI card " name"
+the card, by the name of its file in
+.BR /etc/display.d ,
+or
+.B auto
+(the default): the first card whose device answers, in name order, with
+.B native
+(the chipset display) last.
+See
+.BR display.d (4).
+.TP
+.BI mode " W" x H
+the screen size, as
+.BR 1024x768 ;
+it must be one of the card's modes.
+Default: the card's first.
+A card that picks its own mode (the chipset display) ignores it.
+.TP
+.BI depth " bits"
+the number of bits a pixel; it must be one of the card's depths.
+Default: the card's first.
+.TP
+.B start manual \fR|\fP xdm
+.B manual
+(the default): X starts only when a user runs
+.BR xstart .
+.BR xdm :
+the graphical login starts at boot, on this card and mode, with X11R6's
+.BR xdm ;
+the system's own
+.B xdm
+runs only as a port monitor of the service access facility, set up with
+.BR amixadm ,
+and is not started from here.
+The line
+.B display=no
+in
+.BR /etc/rc.conf
+turns the boot step off whatever this says (see
+.BR rc.conf (4)).
+.TP
+.BI session " path"
+the session for a user who has neither
+.B ~/.xsession
+nor
+.BR ~/.xinitrc .
+Default:
+.BR /usr/lib/amix/xsession ,
+which starts an
+.B xterm
+and the first window manager it finds.
+.TP
+.BI monsw " sum"
+for a card that shares the monitor with the chipset display, the monitor
+switch: the sum of the bits that say which lines switch it and at which
+level (1 CTS, 2 SEL, 16 and 32 their levels; 34 is SEL, the card's picture
+when low), the value of the Z3660's own setting.
+Absent: the value the card itself offers.
+.PP
+Every mistake in the file is reported, with its line number, by
+.BR "xstart \-n" ;
+a line with a mistake is ignored.
+.SH EXAMPLE
+.nf
+.ft CW
+# /etc/display
+card     auto
+mode     1920x1080
+start    xdm
+monsw    34
+.ft R
+.fi
+.SH FILES
+.TP
+.B /etc/display
+this file.
+.TP
+.B /etc/display.d/*
+the cards.
+.SH SEE ALSO
+.BR xstart (1),
+.BR display.d (4),
+.BR rc.conf (4)
