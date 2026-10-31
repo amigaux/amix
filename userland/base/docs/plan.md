@@ -40,7 +40,7 @@ the network chain stay untouched.
 | `probe/dhcprobe`, `probe/tapdhcpd.py` | not installed | test tools | S0, done: `dhcp-probe.md` |
 | `dhcpc` | `/usr/sbin/dhcpc` | C, period compiler, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback; a one-hour soak |
 | lease state | `/var/inet/dhcpc/<if>.lease`, `<if>.pid`; log `/var/adm/dhcpc.log` | runtime | S1 |
-| `ifup` dhcp mode | in `ifup` | code | S2 |
+| `ifup` dhcp mode | in `ifup` | code | S2: on the emulator with both packages installed by stock `pkgadd`: DHCP from `inetinit` at boot, `ifdown` releasing, `ifup` taking a new lease, INIT-REBOOT at the next boot |
 | RELEASE at `ifdown`, ARP check and DECLINE, several interfaces at once | in `dhcpc`, `ifdown` | code | S3, later |
 
 The client follows the rules of P-36 §4.4 with no per-driver code; the probe
@@ -66,7 +66,7 @@ then `removef -f core`), as it does for the network chain. The list (owner,
 
 | File | Why it moves |
 |---|---|
-| `/etc/inittab` | with the `dlm` line our installer adds today |
+| `/etc/inittab` | carries the `dlm` line, `modadmin -B` as the first `sysinit` entry (C3-5 §5). Ours, built at package time: amix-system's stock bytes (sha256-checked) with that one line after the `initdefault` entry (`etc/mkinittab.sh`, test `etc/test-inittab.sh`); `modtools` no longer edits the file |
 | `/etc/TIMEZONE` | the colon form is mandatory; validated wherever it is written |
 | `/etc/nodename` | written by `ifup` when an `interfaces` line says `name`, or by the install dialog |
 | `/etc/inet/hosts` | `ifup` rewrites this host's own line |
@@ -105,7 +105,12 @@ itself changed.
    fallback. Soak passed: one hour with a 60 s lease, 112 renewals, 4
    rebinds, no ICMP, and the daemon was still the same process at the end.
 6. **`ifup` dhcp mode** (S2) and, in the installer, DHCP as the default of the
-   public install. Then metal: leases on the Z3660 Ethernet, two renewals seen.
+   public install. This directory's half is done: on the emulator, both
+   packages installed by stock `pkgadd` over `core`, the network up by DHCP
+   from `inetinit` at boot, `ifdown` releasing and `ifup` taking a new lease,
+   INIT-REBOOT at the next boot. The installer's half is W7's, to the steps in
+   `package-split.md`. Then metal: leases on the Z3660 Ethernet, two
+   renewals seen.
 
 Testing: the shell parts are tested on the host under a Bourne-compatible
 shell, then on the emulator against the 1991 `/bin/sh`; the C parts on the

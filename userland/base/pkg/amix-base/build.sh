@@ -21,11 +21,13 @@ stage() {
 	put 0444 net/ifup.subr /usr/lib/inet/ifup.subr
 	put 0555 net/dhcpc-hook /usr/lib/inet/dhcpc-hook
 	put 0555 man/man.sh /usr/amix/bin/man
-	put 0444 net/inetinit /etc/init.d/inetinit
-	# the run-level names are hard links of the one script, as in stock
-	for l in rc2.d/S69inet rc0.d/K69inet rc1.d/K69inet; do
+	# the one script and its hard links, recorded as stock core records them
+	# (the file is S69inet, the rest link to it): another shape is an
+	# "object type change" stock pkgadd ignores, leaving the old file
+	put 0444 net/inetinit /etc/rc2.d/S69inet
+	for l in init.d/inetinit rc0.d/K69inet rc1.d/K69inet; do
 		mkdir -p "$DEST/etc/`dirname $l`"
-		ln "$DEST/etc/init.d/inetinit" "$DEST/etc/$l"
+		ln "$DEST/etc/rc2.d/S69inet" "$DEST/etc/$l"
 	done
 	put 0444 net/network-config /etc/inet/network-config
 	put 0444 net/rc.inet /etc/inet/rc.inet
@@ -35,6 +37,9 @@ stage() {
 	mkdir -p "$DEST/etc"
 	sh etc/mkprofile.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/profile"
 	chmod 0644 "$DEST/etc/profile"
+	# the stock /etc/inittab with the dlm line first among sysinit (C3-5 5)
+	sh etc/mkinittab.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/inittab"
+	chmod 0664 "$DEST/etc/inittab"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac
