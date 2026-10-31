@@ -1,0 +1,2 @@
+random(7)        random, urandom - random numbers from the kernel
+randseed(1m)     randseed - keep the random generator's seed across reboots

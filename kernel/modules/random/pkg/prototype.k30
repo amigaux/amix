@@ -1,0 +1,39 @@
+# prototype.k30 -- random-k30 (random30): the module object, the package's
+# defaults, the nodes of its major, the boot step, the pages and the whatis
+# fragment (amix-dlm C3-5 sec 1).  prototype.k30 and prototype.k46 differ only
+# in the whatis fragment's name, the package instance.
+#
+# AUTHORED, NOT GENERATED: build.sh hands it to kmodpkg, which runs pkgmk.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright
+# only, no scripts and no links, so the boot step's rc2.d and rc0.d names are
+# copies of /etc/init.d/randseed; and the nodes of the driver's major as device
+# entries in the module's class, random (C3-5 v18 sec 1.2).  The stock
+# directories are declared with the stock attributes (amix-system etc.md);
+# /etc/conf and below are shared by every module package, /opt/amix/man by the
+# packages with pages (userland/packages/docs/man-pages.md).
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/random 0644 root sys
+f none /etc/conf/modreg.d/random 0644 root sys
+d none /etc/init.d 0755 bin bin
+d none /etc/rc0.d 0755 bin bin
+d none /etc/rc2.d 0755 bin bin
+f none /etc/init.d/randseed 0744 root sys
+f none /etc/rc2.d/S21randseed 0744 root sys
+f none /etc/rc0.d/K02randseed 0744 root sys
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+d none /opt/amix/man/7 0755 root sys
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/7/random 0644 root sys
+f none /opt/amix/man/1m/randseed 0644 root sys
+f none /opt/amix/man/whatis.d/random30 0644 root sys
+d none /dev 0755 bin bin
+c random /dev/random 48 0 0666 root root
+c random /dev/urandom 48 1 0666 root root
