@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — dlm-src.sh takes the toolchain and the port from layout.sh (38feabe)
+
+amix_dlm_build and amix_dlm_kit source layout.sh's AMIX_CROSS_ENV and pass its directory as GCA, instead of reaching
+the checkout's siblings (wt/ in a worktree, / in the container). The ABI kit's port is AMIX_PORT_REPO; a recipe's
+pinned port commit missing from it is fetched by hash from AMIX_PORT_URL. make dist's kspace step sets both (a cache
+repository and port.pin's URL). test-dlmsrc 6/6.
+
 ## 2026-10-31 — make dist's kspace step calls each kernel/<dir>/pkg/build.sh (880ede1)
 
 The kspace step runs every kernel/<dir>/pkg/build.sh in provider order (kernel/dlm, kernel/k30, kernel/port, each

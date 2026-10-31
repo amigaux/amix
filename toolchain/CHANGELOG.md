@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — gcc14 in the container builds dlm's box binaries byte-identical (38feabe)
+
+toolchain/README.md records that the container's gcc14 builds kernel/dlm's box binaries byte-identical to the
+workstation build: kbootset 1511ef9b (-28's) and modadmin 74aa6272 (-9's), as measured by dlm.
+
 ## 2026-10-31 — container-kit.sh prints kernel/dlm's kit.digests (bfcfe76)
 
 container-kit.sh prints kernel/dlm's kit.digests lines instead of computing its own digests; CI's `^kit ` grep is
