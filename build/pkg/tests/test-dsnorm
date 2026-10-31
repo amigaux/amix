@@ -121,6 +121,15 @@ try:
         check("refused, and named, file unchanged: %s" % what,
               rc == 1 and needle in err and same, err or out)
 
+    def ar(date):
+        return (b"!<arch>\n" + b"a.o/".ljust(16) + date.ljust(12) + b"0".ljust(6)
+                + b"0".ljust(6) + b"644".ljust(8) + b"2".ljust(10) + b"`\n" + b"x\n")
+    rc, out, err, same = verdict(stream(a=ar(b"0")))
+    check("a payload ar archive as ar D writes it passes", rc == 0, err or out)
+    rc, out, err, same = verdict(stream(a=ar(b"1793443915")))
+    check("refused, and named: a payload ar archive with a build time in its headers",
+          rc == 1 and "root/opt/a: an ar archive whose member headers carry" in err, err or out)
+
     rc, out, err, same = verdict(b"not a package")
     check("not a datastream is refused", rc == 1 and "not a package datastream" in err, err)
     with open(f, "wb") as fp:

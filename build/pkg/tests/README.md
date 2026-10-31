@@ -9,7 +9,9 @@ scripts; `test-dsnorm` the host test of `common/dsnorm.py`, the spool and
 datastream normalising of the reproducible roll, on datastreams it makes
 itself; `test-classes` the host test of the roll's class gates (every class
 in pkginfo's CLASSES, a PSTAMP, a module's device nodes in its module's
-class, C3-5 v18). Run them with
+class, C3-5 v18); `test-arnorm` the host test of `common/arnorm.py`, which
+gives a payload's static libraries the member headers `ar D` writes. Run
+them with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 

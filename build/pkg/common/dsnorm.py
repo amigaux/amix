@@ -13,7 +13,8 @@ in every archive, every member is newc 070701; the members are in C sort
 order; ino runs from 1 in archive order, members that share one (hard
 links) sharing the new one; uid, gid and dev are 0 and mtime is EPOCH; a
 directory's nlink is 2 plus its subdirectories in the archive; a payload
-member's mode is the one pkgmap gives it; and pkgmap's modtime column says
+member's mode is the one pkgmap gives it; an ar archive's member headers
+are as `ar D` writes them (arnorm.py); and pkgmap's modtime column says
 EPOCH. A PATH found in the control files (pkginfo, pkgmap, install/) is
 refused; in the payload it is reported, or refused with --refuse-payload (a
 gcc14 build, whose paths the compiler remaps). A PATH is found where it
@@ -22,9 +23,19 @@ starts a path (/src, not /usr/src) and ends at a component's end.
 Exit status: 0 good, 1 refused (each reason on stderr), 2 usage.
 """
 
+import importlib.util
+import os
 import re
 import stat
 import sys
+
+# arnorm.py beside this file: what a deterministic ar archive is (loaded
+# without leaving a __pycache__ in the harness)
+sys.dont_write_bytecode = True
+_spec = importlib.util.spec_from_file_location(
+    "arnorm", os.path.join(os.path.dirname(os.path.realpath(__file__)), "arnorm.py"))
+arnorm = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(arnorm)
 
 MAGIC = b"070701"
 FIELDS = ("ino", "mode", "uid", "gid", "nlink", "mtime", "filesize",
@@ -122,6 +133,14 @@ def check_archive(ms, epoch, bad):
             bad.append("%s: nlink %d, not %d" % (n, v["nlink"], 2 + subdirs.get(n, 0)))
         if n in modes and stat.S_IMODE(v["mode"]) != modes[n]:
             bad.append("%s: mode %04o, pkgmap says %04o" % (n, stat.S_IMODE(v["mode"]), modes[n]))
+    for v, n, d in real:
+        if d.startswith(arnorm.MAGIC):
+            try:
+                if arnorm.normalise(d) is not None:
+                    bad.append("%s: an ar archive whose member headers carry a time, uid or mode"
+                               " (not as ar D writes them)" % n)
+            except ValueError as e:
+                bad.append("%s: %s" % (n, e))
 
 
 def stream(path, epoch, hosts, refuse_payload=False):

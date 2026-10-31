@@ -11,6 +11,9 @@
 # epoch: pkgmap's modtime column and every spool time are the epoch, spool
 # modes are pkgmap's, the members are archived in sorted order, and each
 # newc header says ino in archive order, uid, gid and dev 0, mtime the epoch.
+# Before pkgmk, arnorm.py gives every ar archive of the payload the member
+# headers `ar D` writes (date, uid and gid 0, mode 644), since a recipe's
+# make runs `$(AR) rc` and gcc14's ar is not deterministic.
 # dsnorm.py then checks the datastream for all of that, and never writes:
 # anything else is refused.  It also refuses a control file that names
 # <workdir>, <destroot>, the build root or the checkout.  The same paths in
@@ -72,6 +75,8 @@ amix_dsroll() {
 	esac
 	export SOURCE_DATE_EPOCH
 	amix_classes "$_ds_work/prototype" "$_ds_work/pkginfo"
+	# a static library's member headers carry the build's time and uid
+	python3 -I "$AMIX_PKG_COMMON/arnorm.py" "$_ds_root" || exit 1
 
 	_ds_spool="$_ds_work/.spool"
 	rm -rf "$_ds_spool"

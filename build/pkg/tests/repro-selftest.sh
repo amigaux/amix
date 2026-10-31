@@ -5,8 +5,9 @@
 #
 #     sh build/pkg/tests/repro-selftest.sh
 #
-# One recipe (a gcc14 program that prints its __FILE__, a data file and a
-# conffile, so the datastream has install/ scripts too) is built and rolled by pkgbuild.sh from two
+# One recipe (a gcc14 program that prints its __FILE__, a static library made
+# by `$AR rc`, a data file and a conffile, so the datastream has install/
+# scripts too) is built and rolled by pkgbuild.sh from two
 # copies of build/ at different paths, seconds apart, under umasks 022 and
 # 077, with the second build tree on another filesystem (/dev/shm when it is
 # one) so the spool's directory order, inodes and device differ. The two
@@ -67,10 +68,13 @@ build() {
 	echo "$CC $AMIX_CFLAGS -c $PWD/rtest.c" >> "$BUILD/make.log"
 	$CC $AMIX_CFLAGS -c "$PWD/rtest.c"
 	$CC $AMIX_CFLAGS -o rtest rtest.o
+	# a static library the way make builds one: $(AR) rc, the build's time in it
+	$AR rc librtest.a rtest.o
 }
 stage() {
 	mkdir -p "$DEST/opt/amix/bin" "$DEST/opt/amix/share/rtest" "$DEST/etc" "$DEST/opt/amix/man/1"
 	cp rtest "$DEST/opt/amix/bin/rtest"
+	mkdir -p "$DEST/opt/amix/lib"; cp librtest.a "$DEST/opt/amix/lib/librtest.a"
 	for f in b a c; do echo "$f" > "$DEST/opt/amix/share/rtest/$f"; done
 	echo "level=1" > "$DEST/etc/rtest.conf"
 	printf '.TH RTEST 1\n.SH NAME\nrtest \\- a test\n' > "$DEST/opt/amix/man/1/rtest"
@@ -86,6 +90,8 @@ d none /opt 0755 root sys
 d none /opt/amix 0755 root sys
 d none /opt/amix/bin 0755 root sys
 f none /opt/amix/bin/rtest 0755 root bin
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/librtest.a 0644 root bin
 d none /opt/amix/man 0755 root bin
 d none /opt/amix/man/1 0755 root bin
 f none /opt/amix/man/1/rtest 0644 root bin
