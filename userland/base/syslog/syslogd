@@ -1,0 +1,61 @@
+#!/bin/sh
+# syslogd -- the system log daemon: /etc/init.d/syslogd, run as
+# /etc/rc2.d/S70syslogd and /etc/rc0.d/K50syslogd.
+#
+# start: on unless /etc/rc.conf says syslogd=no. The daemon appends only to
+# files that exist, so each file /etc/syslog.conf sends messages to is made
+# empty first when it is missing (/var/log made too); then /usr/sbin/syslogd,
+# unless one is running. It reads /etc/syslog.conf through m4: without
+# /usr/ccs/bin/m4 it starts but files nothing, which the boot log says.
+# stop: the daemon, by the process id it wrote.
+#
+# This file is written in place on update, never moved, so the S and K
+# links stay the same file.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+SYSLOGD=${SYSLOGD:-/usr/sbin/syslogd}
+SYSLOG_CONF=${SYSLOG_CONF:-/etc/syslog.conf}
+SYSLOG_PID=${SYSLOG_PID:-/etc/syslog.pid}
+SYSLOG_DIR=${SYSLOG_DIR:-/var/log}
+M4=${M4:-/usr/ccs/bin/m4}
+
+pid=`cat "$SYSLOG_PID" 2>/dev/null`
+
+case "$1" in
+start)
+	. "$RC_SUBR"
+	rc_enabled syslogd yes || exit 0
+	if [ ! -x "$SYSLOGD" ] || [ ! -r "$SYSLOG_CONF" ]
+	then
+		rc_log syslogd "no $SYSLOGD or no $SYSLOG_CONF; not started"
+		exit 0
+	fi
+	[ -x "$M4" ] || rc_log syslogd "no $M4: syslogd reads $SYSLOG_CONF through it and files nothing"
+	[ -d "$SYSLOG_DIR" ] || mkdir -p "$SYSLOG_DIR"
+	# each action that is a file (not a device, a host or a user): made
+	# when missing, with cp, because the 1991 sh does a redirection of
+	# ":" in a loop only on the first pass
+	for f in `sed -e 's/#.*//' "$SYSLOG_CONF" | awk '$2 ~ /^\// && $2 !~ /^\/dev\// { print $2 }' | sort -u`
+	do
+		if [ ! -f "$f" ] && [ -d "`dirname $f`" ]
+		then
+			cp /dev/null "$f" && chmod 644 "$f" && rc_log syslogd "made $f"
+		fi
+	done
+	if [ -n "$pid" ] && kill -0 $pid 2>/dev/null
+	then
+		exit 0
+	fi
+	"$SYSLOGD" && rc_log syslogd "started"
+	;;
+stop)
+	[ -n "$pid" ] && kill $pid 2>/dev/null
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0

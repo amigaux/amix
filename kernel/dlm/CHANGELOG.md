@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-31 — registry: c 48 for the random module (a8719fb)
+
+c 48 goes to `random` (kernel/modules' random module: /dev/random 0, /dev/urandom 1). It is free in the stock tables
+and in 68030-261031-63 and 68060-261031-52 (M-REG1 re-run). kbootset's table is regenerated, and C3-5 v19 gives the
+short name `random` (random30/random46). The kernels compile the registry in, so the module loads only on cuts made
+from a kit with this change.
+
+## 2026-10-31 — kbootset -29 recipe: the package owns /dev/kinfo (0f60a0e)
+
+kbootset's recipe moves to -29, its release-prep revision (P-38 D-g, not minted): -28's payload plus /dev/kinfo as
+`c kinfo /dev/kinfo 53 0 0444 root sys`, in the class of its registry owner (C3-5 v18), CLASSES "none kinfo" (C2-4
+v19). The installer writes the node until the media carry -29.
+
 ## 2026-10-31 — kernel/dlm/pkg: the port from AMIX_PORT_REPO (0e10fb2)
 
 The recipes drop their sibling override and use dlm-src.sh's AMIX_CROSS_ENV and AMIX_PORT_REPO (38feabe); without

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — amix-decls.h declares readv, writev, cbrt, copysign, isinf (a651b24); scan060-g14 sizes vim's switch tables (8bfb296)
+
+amix-decls.h declares readv/writev (libc.so.1), cbrt and copysign (libm.a) and makes isinf gcc's builtin, as C99 has it
+(isinf is in no AMIX library); what the X11/CDE trial needed for GNU Pth, FFmpeg and vim. The gcc14 060 scanner reads a
+bound check before a bias and sizes a constant-index table from its entries (a NOTE names the limit); vim's gate is
+CLEAN. gate-gcc14-selftest 20/20.
+
 ## 2026-10-31 — the kspace catalog names its packages from kernel/conf (0acf9a5); kernel-k30 runs k30's hook (e39cd58)
 
 The catalogs step passes kernel/conf as the kernel-space catalog's --packages-conf, so a kernel package is catalogued

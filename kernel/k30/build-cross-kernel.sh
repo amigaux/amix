@@ -1128,7 +1128,9 @@ assert b.count(b'pvn_vptrunc') == 1, 'pvn_vptrunc appears elsewhere in the objec
 b[hits[0]:hits[0] + 11] = b'ufs_vptrunz'
 open(p, 'wb').write(b)
 PYQ
-  D="$(cmp -l "$SYSROOT_SYS/fs/ufs/exp" "$QZ/ufs-renamed.exp" | wc -l)"
+  # count the differing bytes only: under pipefail cmp's own status would end the build, and diffutils 3.12 exits
+  # 0 into a pipe on a larger file where 3.10 exits 1 (so only some hosts got past these checks)
+  D="$({ cmp -l "$SYSROOT_SYS/fs/ufs/exp" "$QZ/ufs-renamed.exp" || :; } | wc -l)"
   [ "$D" = 4 ] || { echo "--ufs-tailzero: the rename changed $D bytes (want 4: pvn_vptrunc -> ufs_vptrunz)" >&2; exit 1; }
   "$LD" -r -o "$QZ/ufs.exp" "$QZ/ufs-renamed.exp" "$QZ/ufs_vptrunz.o"
   qz_check "$QZ/ufs.exp"
@@ -1422,7 +1424,7 @@ assert len(hits) == 1, 'global kzero symbols: %d' % len(hits)
 b[hits[0] + 12] = (2 << 4) | (b[hits[0] + 12] & 15)                                                # STB_WEAK
 open(p, 'wb').write(b)
 PYW
-  D="$(cmp -l "$BUILD/ml/exp.pre-kzero" "$BUILD/ml/exp" | wc -l)"
+  D="$({ cmp -l "$BUILD/ml/exp.pre-kzero" "$BUILD/ml/exp" || :; } | wc -l)"
   [ "$D" = 1 ] || { echo "--kzero: weakening changed $D bytes of ml/exp (want exactly 1)" >&2; exit 1; }
   [ "$("$NM" "$BUILD/ml/exp" | awk '$3=="kzero" || $3=="bzero" {print $1 $2 $3}' | LC_ALL=C sort | tr '\n' ' ')" = "00000302Tbzero 00000302Wkzero " ] \
     || { echo "--kzero: ml/exp after the weakening is not 'bzero T, kzero W' at 0x302" >&2; exit 1; }
@@ -1536,7 +1538,7 @@ if [ -n "$TTC_FIX" ]; then
   cp "$BUILD/unix" "$BUILD/unix.pre-ttcompat"
   python3 "$TTC_FIX" "$BUILD/unix"
   python3 "$TTC_FIX" --check "$BUILD/unix"
-  D="$(cmp -l "$BUILD/unix.pre-ttcompat" "$BUILD/unix" | wc -l)"
+  D="$({ cmp -l "$BUILD/unix.pre-ttcompat" "$BUILD/unix" || :; } | wc -l)"
   [ "$D" -le 64 ] || { echo "--ttcompat-fix: $D bytes changed (more than the 64-byte span)" >&2; exit 1; }
   echo "  bytes changed: $D (inside ttcompatopen)"
 fi
@@ -1546,7 +1548,7 @@ if [ -n "$HIWAT_FIX" ]; then
   cp "$BUILD/unix" "$BUILD/unix.pre-hiwat"
   python3 "$HIWAT_FIX" "$BUILD/unix"
   python3 "$HIWAT_FIX" --check "$BUILD/unix"
-  D="$(cmp -l "$BUILD/unix.pre-hiwat" "$BUILD/unix" | wc -l)"
+  D="$({ cmp -l "$BUILD/unix.pre-hiwat" "$BUILD/unix" || :; } | wc -l)"
   [ "$D" -eq 1 ] || { echo "--tcp-hiwat-fix: $D bytes changed (want exactly 1, the hiwat word's 0x10 -> 0x40)" >&2; exit 1; }
   echo "  bytes changed: 1 (tcpm_info[3].mi_hiwat)"
 fi

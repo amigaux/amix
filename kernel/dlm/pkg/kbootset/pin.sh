@@ -12,6 +12,11 @@
 # 6c243ef6; no 040/060-only FPU form), equal to the station's
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -29 (not minted; the release-prep revision, P-38 D-g): -28's payload
+# plus /dev/kinfo, `c kinfo /dev/kinfo 53 0 0444 root sys`, CLASSES none
+# kinfo (C2-4 v19 sec 2), which the installer wrote before; the box binary,
+# page and rc scripts as -28.
+#
 # -28 (2026-10-31, D-N21): amix 01f1520 -- `kbootset major -l` lists the
 # whole major registry; the box binary 1511ef9b (156608 bytes, gcc14
 # b51ff39), kbootset(1M) b3c79fa5; the rc scripts and whatis as -26/-27;
@@ -179,5 +184,5 @@ KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=70816e6d90253d51c9d0e1e2bd59e98e46f60b2eda2b777d8de266d9ca5e7dff
 
-KB_VERSION=1.1.0.261031-28
+KB_VERSION=1.1.0.261031-29
 KB_SOURCE_EPOCH=1793404800

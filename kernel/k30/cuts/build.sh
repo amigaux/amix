@@ -43,8 +43,14 @@ mkdir -p "$(dirname "$OUT")"
 . "$AMIX_TOP/build/pkg/layout.sh"
 GCA=${GCA:-$(dirname "$AMIX_CROSS_ENV")}
 G14=${G14:-$AMIX_G14_BUILD}
+export G14
 [ -n "${AMIX_SYSTEM:-}" ] && [ -d "$AMIX_SYSTEM/usr/sys" ] || {
 	echo "[FAIL] no amix-system at '${AMIX_SYSTEM:-}' (AMIX_SYSTEM)" >&2; exit 1; }
+mkdir -p "$SRC"
+# the m68k-linux-gnu tools the cut's checks disassemble with: gcc14's
+# binutils through toolchain/m68k-gnu-bin, on the host as in the container
+"$AMIX_TOP/toolchain/m68k-gnu-bin" "$SRC/gnu-bin" > /dev/null
+PATH=$SRC/gnu-bin:$PATH
 
 # fork_at <name> <pin file> <repo> <url> -- the git archive of the pinned
 # commit under $SRC/<name>-<commit>/, made once; prints its directory
