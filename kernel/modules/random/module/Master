@@ -1,0 +1,7 @@
+# generated from keys by module/Makefile
+$modtype drv
+$class demand
+$majors c:48
+$unload never
+$desc random numbers /dev/random, /dev/urandom
+random random
