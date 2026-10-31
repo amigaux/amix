@@ -56,9 +56,10 @@
 # its tier: a stock header's tentative definition of a kernel name (ifnet,
 # rawintrq) becomes a private copy in a module.  A COMMON the allowlist
 # names binds to the kernel's definition (the core's dlm_ld, the
-# undefined-and-common pass), as rootvp does in the carved ufs.  Warns when a demand-class module's load working set (the
-# core's KM_SLEEP allocations for a load from a file) passes WSET_WARN,
-# half of what k46 gives a module in process context (U2, 30 section 8).
+# undefined-and-common pass), as rootvp does in the carved ufs.  Warns when a demand-class module's load peak (the
+# core's allocations for a load from a file, all held at once) passes
+# WSET_WARN, half of what k46 gives a module in process context (U2, 30
+# section 8), and says what stays resident after it.
 # One line per problem; exit status 1 if there is any.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
@@ -128,18 +129,18 @@ class Elf:
 
 
 def wset(e, image):
-    """The core's working set for a load from a file, all held at once
-    (docs/measurements/2026-10-26-u2.md): lf_hashload's buffer (the file
-    rounded up to a power of two, at least 8 KiB), the section, symbol and
-    string tables, the image and the module's symbol table; upper bounds."""
-    buf = 8192
-    while buf <= len(e.b):
-        buf *= 2
+    """The core's peak for a load from a file and what stays after it, upper
+    bounds (docs/measurements/2026-10-26-u2.md, core patch 0049): at the
+    peak, the file's copy (its size plus one byte), the section, symbol and
+    string tables, the image and the module's symbol table at once; the
+    copy and the tables are freed before _load, and the image (bss
+    included) and the module's symbol table stay."""
     nsym = len(e.syms)
     strsz = sum(e.sh[s['link']]['size'] for s in e.sh if s['type'] == SHT_SYMTAB)
     tables = len(e.sh) * 44 + nsym * 24 + strsz + (101 + nsym) * 4
     modtab = nsym * 16 + strsz + 4 * (103 + nsym)
-    return buf + tables + image + 15 + modtab
+    resident = image + 15 + modtab
+    return len(e.b) + 1 + tables + resident, resident
 
 
 def conf(kit):
@@ -644,10 +645,12 @@ def main(argv):
             warn('COMMON symbol %s, outside the module\'s own names: the core gives the '
                  'module a private copy; if a stock header made it a tentative definition '
                  'of a kernel global, the module does not see the kernel\'s' % y['name'])
-    if keys.get('class') == 'demand' and wset(e, image) > WSET_WARN:
-        warn('a demand-class load holds about %d bytes of kernel memory (file buffer, tables, '
-             'image), over 160 KiB, half of what k46 gives a module after multi-user (U2): '
-             'make it boot class or, from stage 4, root class (30 section 8)' % wset(e, image))
+    peak, resident = wset(e, image)
+    if keys.get('class') == 'demand' and peak > WSET_WARN:
+        warn('a demand-class load peaks at about %d bytes of kernel memory (its file, tables, '
+             'image and symbol table at once) and keeps about %d; the peak is over 160 KiB, half '
+             'of what k46 gives a module after multi-user (U2), and when memory is that short '
+             'the load fails with ENOMEM (core patch 0049)' % (peak, resident))
     if c['LINE'] == 'k46':
         scan(e, path)
     for w in warnings:

@@ -295,9 +295,9 @@ PY
 	# a demand-class module whose load needs over 160 KiB: warned, not refused (30 section 8)
 	mkbad $l wide "$WRAP"'char wide_space[170000];\nMOD_MISC_WRAPPER(wide, l, u, "x");\n' "$M0"'wide\twide\n' &&
 		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-wide/out/mod.d/wide" > "$W/wide.out" 2>&1 &&
-		   grep -q "warning: a demand-class load holds about" "$W/wide.out" &&
+		   grep -q "warning: a demand-class load peaks at about [0-9]* bytes .* and keeps about [0-9]*" "$W/wide.out" &&
 		   ! grep -q "demand-class load" "$W/hello-$l.log"; then
-			pass "$l: a demand-class module over 160 KiB of load working set is warned about, not refused"
+			pass "$l: a demand-class module whose load peaks over 160 KiB is warned about, with what it keeps, not refused"
 		else
 			fail "$l: working-set warning"; cat "$W/wide.out"
 		fi
