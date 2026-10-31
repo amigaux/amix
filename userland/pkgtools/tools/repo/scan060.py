@@ -10,6 +10,9 @@
 # Exit: 0 every inspected ELF is clean, 2 at least one hit (or nothing was
 #       inspected at all), 1 a usage/tool error.
 #
+# Env:  AMIX_PKGTRANS  the host pkgtrans that unpacks a datastream (as in
+#       build/pkg/layout.sh); unset or empty, heirloom/build-host/bin/pkgtrans.
+#
 # ---------------------------------------------------------------------------
 # WHY.  The 68060 does not implement, and traps through vector 61 (offset
 # 0xF4, "unimplemented integer instruction"), these 68020/030 forms:
@@ -48,7 +51,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-PKGTRANS = os.path.join(REPO, "heirloom", "build-host", "bin", "pkgtrans")
+PKGTRANS_DEFAULT = os.path.join(REPO, "heirloom", "build-host", "bin",
+                                "pkgtrans")
 ELF_MAGIC = b"\x7fELF"
 VENDOR_DIRS = ("stock/",)
 INCLUDE_STOCK = False
@@ -56,6 +60,20 @@ INCLUDE_STOCK = False
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{4} )+)\s*(\S+)\s*(.*)$")
 SYM = re.compile(r"^([0-9a-f]+) <([^>]+)>:\s*$")
 MNEM_OTHER = re.compile(r"^(movep|cmp2|chk2|cas2)")
+
+
+def pkgtrans_tool():
+    """AMIX_PKGTRANS when set, else this tree's host build; exits if absent."""
+    env = os.environ.get("AMIX_PKGTRANS", "")
+    if env:
+        if not (os.path.isfile(env) and os.access(env, os.X_OK)):
+            raise SystemExit("scan060: AMIX_PKGTRANS=%s is not an executable"
+                             % env)
+        return env
+    if not os.path.isfile(PKGTRANS_DEFAULT):
+        raise SystemExit("scan060: %s missing -- run heirloom/build-host.sh "
+                         "or set AMIX_PKGTRANS" % PKGTRANS_DEFAULT)
+    return PKGTRANS_DEFAULT
 
 
 def objdump_tool():
@@ -249,12 +267,10 @@ def targets_of(path, tmpdirs):
             return []
         return [(os.path.basename(path), path)]
     if head.startswith(b"# PaCkAgE DaTaStReAm"):
-        if not os.path.isfile(PKGTRANS):
-            raise SystemExit("scan060: %s missing -- run heirloom/build-host.sh"
-                             % PKGTRANS)
+        pkgtrans = pkgtrans_tool()
         tmp = tempfile.mkdtemp(prefix="scan060.")
         tmpdirs.append(tmp)
-        subprocess.run([PKGTRANS, "-o", path, tmp, datastream_pkginst(path)],
+        subprocess.run([pkgtrans, "-o", path, tmp, datastream_pkginst(path)],
                        capture_output=True, text=True, timeout=600)
         if not os.listdir(tmp):
             raise SystemExit("scan060: %s: pkgtrans unpacked nothing" % path)

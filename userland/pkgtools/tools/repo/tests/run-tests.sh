@@ -1606,6 +1606,24 @@ if command -v m68k-linux-gnu-objdump >/dev/null 2>&1 &&
     : > "$S22/empty"
     python3 "$SCAN060" "$S22/empty" >/dev/null 2>&1
     check "inspecting nothing is not a pass, rc 2" test $? -eq 2
+    # AMIX_PKGTRANS names the pkgtrans that unpacks a datastream (as in
+    # build/pkg/layout.sh); unset, the tree's heirloom/build-host one
+    printf '#!/bin/sh\necho "$@" >> %s\n' "$S22/pt.log" > "$S22/pkgtrans-shim"
+    chmod +x "$S22/pkgtrans-shim"
+    AMIX_PKGTRANS="$S22/pkgtrans-shim" python3 "$SCAN060" "$FIX/TESTpkg.pkg" >"$WORK/t22.env" 2>&1
+    check "AMIX_PKGTRANS is the pkgtrans a datastream goes through" \
+        grep -q "^-o $FIX/TESTpkg.pkg .* TESTpkg\$" "$S22/pt.log"
+    check "  ... (the shim unpacks nothing, and that is reported)" \
+        grep -q 'pkgtrans unpacked nothing' "$WORK/t22.env"
+    AMIX_PKGTRANS="$S22/no-such-pkgtrans" python3 "$SCAN060" "$FIX/TESTpkg.pkg" >"$WORK/t22.bad" 2>&1
+    check "an AMIX_PKGTRANS that is not there: rc 1, named" \
+        bash -c "test $? -eq 1 && grep -q 'AMIX_PKGTRANS=$S22/no-such-pkgtrans is not an executable' '$WORK/t22.bad'"
+    if [ -x "$HERE/../../../heirloom/build-host/bin/pkgtrans" ]; then
+        rm -f "$S22/pt.log"
+        AMIX_PKGTRANS= python3 "$SCAN060" "$FIX/TESTpkg.pkg" >"$WORK/t22.def" 2>&1
+        check "unset: the tree's pkgtrans unpacks it (no ELF in it: rc 2)" \
+            bash -c "test $? -eq 2 && grep -q 'NOTHING INSPECTED' '$WORK/t22.def' && test ! -e '$S22/pt.log'"
+    fi
 else
     echo "  skip- scan060 checks (no m68k-linux-gnu-objdump/as on PATH)"
 fi
