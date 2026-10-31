@@ -151,7 +151,18 @@ KIT="$AMIX_DLM_TREE/build/kit/k30"
 # and as the cut's carve/stock.sha256 names it -- or, for a filesystem named
 # in K30M_FSEXTRA, the cut's own object built from the stock one (-56: ufs
 # links qz/ufs.exp, the quirk-91 fix), pinned by sha256; the stock object
-# is still checked against stock.sha256 either way
+# is still checked against stock.sha256 either way.  The carve Makefile names
+# that object by the absolute path of the cut's run (the host's or the build
+# container's): its EXTRA= must end in the same name, and the object checked
+# and linked is the one where the cut and amix-system are now (k30m_fsobj)
+k30m_fsobj() {
+	_fo=$(echo "$K30M_FSEXTRA" | awk -v f="$1" '$1 == f {print $2}')
+	if [ -n "$_fo" ]; then
+		echo "$K30M_SRC/${K30M_CARVE%/carve}/$_fo"
+	else
+		echo "$AMIX_SYSTEM/usr/sys/fs/$1/exp"
+	fi
+}
 echo "$K30M_FSSTOCK" | while read n h; do
 	[ -n "$n" ] || continue
 	fs=${n#fs/}; fs=${fs%/exp}
@@ -160,10 +171,10 @@ echo "$K30M_FSSTOCK" | while read n h; do
 	if [ -n "$x" ]; then
 		set -- $x
 		case "$e" in */${K30M_CARVE%/carve}/$1) ;; *) echo "[FAIL] carve/$fs/Makefile links '$e', not the cut's $1" >&2; exit 1 ;; esac
-		amix_verify "$e" "$2"
+		amix_verify "$(k30m_fsobj "$fs")" "$2"
 	else
 		case "$e" in */usr/sys/$n) ;; *) echo "[FAIL] carve/$fs/Makefile links '$e', not the stock $n" >&2; exit 1 ;; esac
-		amix_verify "$e" "$h"
+		amix_verify "$(k30m_fsobj "$fs")" "$h"
 	fi
 	grep -qx "$h  $n" "$K30M_SRC/$K30M_CARVE/stock.sha256" || {
 		echo "[FAIL] the cut's carve/stock.sha256 does not name $n $h" >&2; exit 1; }
@@ -171,7 +182,7 @@ done
 echo "$K30M_FSMODS" | while read fs h sz; do
 	[ -n "$fs" ] || continue
 	amix_kfsmod_check k30 "$fs" "$SRC/mod.d/$fs" "$h" "$sz" "$K30M_BUILDID" "$K30M_KABI" "$KIT" "$WORK/chk-$fs" "$K30M_FSKABI"
-	amix_kfsmod_rebuild k30 "$fs" "$K30M_SRC/$K30M_CARVE/$fs" "$SRC/mod.d/$fs" "$KIT" "$WORK/carve-$fs"
+	amix_kfsmod_rebuild k30 "$fs" "$K30M_SRC/$K30M_CARVE/$fs" "$SRC/mod.d/$fs" "$KIT" "$WORK/carve-$fs" "$(k30m_fsobj "$fs")"
 done
 mkdir -p "$DEST/etc/conf/mod.d" "$DEST/etc/conf/modreg.d"
 for fs in $(echo "$K30M_FSMODS" | awk 'NF {print $1}'); do
