@@ -13,9 +13,12 @@
 #     holds only `f`/`d` objects of class none and `i` entries pkginfo,
 #     depend or copyright.  No install scripts, no links, no classes.
 #     A module package (an f under /etc/conf/mod.d/) may also carry the
-#     device nodes of its driver's majors as `c none /dev/<node> <major>
+#     device nodes of its driver's majors as `c <class> /dev/<node> <major>
 #     <minor> <mode> <owner> <group>` (amix-dlm C3-5 sec 1.2, 568b9ac), and
-#     a block driver's as `b none /dev/dsk/<node> ...` (C3-5 v8 sec 1.2).
+#     a block driver's as `b <class> /dev/dsk/<node> ...` (C3-5 v8 sec 1.2).
+#     The class is the module's name, its file name in /etc/conf/mod.d
+#     (C3-5 v18 sec 1.2), and pkginfo's CLASSES lists it (dsroll.sh
+#     amix_classes); `none` stays legal for a package minted before v18.
 #  2. NO USERLAND 68060 GATE.  A kernel image is not a userland program: the
 #     040/060 kernel carries fpsp060/isp060 tables a scanner reads as movep,
 #     and a k30 kernel never runs on a 68060.  Kernel objects are gated by
@@ -70,18 +73,23 @@ amix_kpkgroll() {
 		$1 == "i" { if ($2 !~ /^(pkginfo|depend|copyright)$/) print "BAD i " $2; next }
 		$1 == "f" || $1 == "d" { if ($2 != "none") print "BAD class " $2 " " $3;
 		                          if ($1 == "f") nf++;
-		                          if ($1 == "f" && $3 ~ /^\/etc\/conf\/mod\.d\//) mod++; next }
-		$1 == "c" { if ($2 != "none") print "BAD class " $2 " " $3;
-		            if ($3 !~ /^\/dev\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
+		                          if ($1 == "f" && $3 ~ /^\/etc\/conf\/mod\.d\//) {
+		                              mod++; m = $3; sub(/.*\//, "", m); sub(/=.*$/, "", m) }
+		                          next }
+		$1 == "c" { if ($3 !~ /^\/dev\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
 		                print "BAD device entry " $0;
-		            nc++; next }
-		$1 == "b" { if ($2 != "none") print "BAD class " $2 " " $3;
-		            if ($3 !~ /^\/dev\/dsk\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
+		            nc++; node[nc] = $2 " " $3; next }
+		$1 == "b" { if ($3 !~ /^\/dev\/dsk\// || NF != 8 || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/)
 		                print "BAD block device entry " $0;
-		            nc++; next }
+		            nc++; node[nc] = $2 " " $3; next }
 		{ print "BAD type " $1 " " $3 }
 		END { if (!nf) print "BAD no file"
-		      if (nc && !mod) print "BAD device entries outside a module package" }
+		      if (nc && !mod) print "BAD device entries outside a module package"
+		      for (i = 1; i <= nc; i++) {
+		          split(node[i], f, " ")
+		          if (f[1] != "none" && f[1] != m)
+		              print "BAD class " f[1] " " f[2] " (a node'"'"'s class is its module'"'"'s name, " m ", or none before C3-5 v18)"
+		      } }
 	' "$_kr_work/prototype" > "$_kr_work/.pure"
 	if [ -s "$_kr_work/.pure" ]; then
 		echo "[FAIL] kernel-space package is not pure files (40 sec 6):" >&2

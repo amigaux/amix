@@ -12,6 +12,7 @@ test:
 	python3 -I pkg/tests/test-s5mark
 	python3 -I pkg/tests/test-conffile
 	python3 -I pkg/tests/test-dsnorm
+	python3 -I pkg/tests/test-classes
 
 selftests:
 	sh pkg/tests/run-selftests

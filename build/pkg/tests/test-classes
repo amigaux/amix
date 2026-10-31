@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+# test-classes: host test of the roll's class gates.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# dsroll.sh amix_classes: every object's class is in pkginfo's CLASSES
+# (stock pkgadd skips the rest without a word), and pkginfo has a PSTAMP
+# (else pkgmk writes the build host's name and the date). kpkgroll.sh's
+# pure-files gate: a module's device node is in class none (minted before
+# C3-5 v18) or its module's name (v18 section 1.2). amix_kpkgroll runs with
+# a pkgmk that fails, so "pkgmk failed" means every gate before it passed.
+# Prints "N/N passed"; exits non-zero on any failure.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+COMMON = os.path.join(os.path.dirname(HERE), "common")
+
+INFO = ("PKG=zeth30\nNAME=z\nARCH=Amiga\nVERSION=1.0.0-6\nCATEGORY=system\n"
+        "CLASSES=%s\nVENDOR=amix-packages\nPSTAMP=amix-packages-zeth30-1.0.0-6\n")
+MOD = ("i pkginfo\n"
+       "d none /etc 0755 root root\n"
+       "d none /etc/conf 0755 root sys\n"
+       "d none /etc/conf/mod.d 0755 root sys\n"
+       "f none /etc/conf/mod.d/z3660eth 0644 root sys\n")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def setup(tmp, proto, info):
+    w = os.path.join(tmp, "work")
+    shutil.rmtree(w, ignore_errors=True)
+    os.makedirs(w)
+    with open(os.path.join(w, "prototype"), "w") as fp:
+        fp.write(proto)
+    with open(os.path.join(w, "pkginfo"), "w") as fp:
+        fp.write(info)
+    return w
+
+
+def classes(tmp, proto, info):
+    w = setup(tmp, proto, info)
+    r = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_classes "$2/prototype" "$2/pkginfo"',
+                        "sh", os.path.join(COMMON, "dsroll.sh"), w],
+                       capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr, os.listdir(w)
+
+
+def kroll(tmp, proto, info):
+    w = setup(tmp, proto, info)
+    root = os.path.join(tmp, "root")
+    env = dict(os.environ, AMIX_PKG_COMMON=COMMON, AMIX_PKGMK="/bin/false",
+               AMIX_PKGTRANS="/bin/false", SOURCE_DATE_EPOCH="1793303717")
+    r = subprocess.run(["/bin/sh", "-c", '. "$1/kpkgroll.sh"; amix_kpkgroll "$2" "$3" zeth30 1.0.0-6 "$4"',
+                        "sh", COMMON, w, root, os.path.join(tmp, "out", "zeth30.pkg")],
+                       capture_output=True, text=True, env=env)
+    return r.returncode, r.stdout + r.stderr
+
+
+tmp = tempfile.mkdtemp(prefix="test-classes.")
+try:
+    os.makedirs(os.path.join(tmp, "root", "etc", "conf", "mod.d"))
+    node = "c z3660eth /dev/zen0 51 0 0600 root root\n"
+
+    # --- amix_classes ------------------------------------------------------------------
+    rc, out, left = classes(tmp, MOD + node, INFO % "none z3660eth")
+    check("CLASSES lists every class: passes, nothing left behind",
+          rc == 0 and sorted(left) == ["pkginfo", "prototype"], out)
+    rc, out, _ = classes(tmp, MOD + node, INFO % "none")
+    check("a node whose class CLASSES does not list is refused, and named",
+          rc == 1 and "stock pkgadd skips them" in out
+          and "c z3660eth /dev/zen0" in out, out)
+    rc, out, _ = classes(tmp, MOD + node, INFO % "z3660eth")
+    check("so is a file whose class none CLASSES does not list",
+          rc == 1 and "f none /etc/conf/mod.d/z3660eth" in out, out)
+    rc, out, _ = classes(tmp, MOD + "1 " + node, INFO % "none")
+    check("an object line with a part number is read the same",
+          rc == 1 and "c z3660eth /dev/zen0" in out, out)
+    rc, out, _ = classes(tmp, MOD + node, INFO.replace("CLASSES=%s\n", ""))
+    check("no CLASSES line: passes (pkgmk lists every class itself)", rc == 0, out)
+    rc, out, _ = classes(tmp, MOD + node, INFO.replace(
+        "PSTAMP=amix-packages-zeth30-1.0.0-6\n", "") % "none z3660eth")
+    check("no PSTAMP is refused", rc == 1 and "has no PSTAMP" in out, out)
+    rc, out, _ = classes(tmp, MOD, INFO.replace("CLASSES=%s", 'CLASSES="none"'))
+    check("a quoted CLASSES is read", rc == 0, out)
+
+    # --- kpkgroll's pure-files gate -------------------------------------------------------
+    rc, out = kroll(tmp, MOD + node, INFO % "none z3660eth")
+    check("v18: a node in its module's class, listed in CLASSES, passes the gates",
+          rc != 0 and "pkgmk failed" in out and "not pure files" not in out, out)
+    rc, out = kroll(tmp, MOD + node.replace("c z3660eth", "c none"), INFO % "none")
+    check("before v18: a node in class none still passes",
+          rc != 0 and "pkgmk failed" in out and "not pure files" not in out, out)
+    rc, out = kroll(tmp, MOD + node, INFO % "none")
+    check("a node in its module's class that CLASSES does not list is refused",
+          rc != 0 and "stock pkgadd skips them" in out and "pkgmk failed" not in out, out)
+    rc, out = kroll(tmp, MOD + node.replace("c z3660eth", "c z3660et"), INFO % "none z3660et")
+    check("a node in another class than its module's name is refused",
+          rc != 0 and "BAD class z3660et /dev/zen0" in out and "module's name, z3660eth" in out, out)
+    rc, out = kroll(tmp, MOD + "b ramdisk /dev/dsk/ram0 20 0 0600 root root\n"
+                    .replace("ramdisk", "z3660eth", 1), INFO % "none z3660eth")
+    check("a block node in its module's class passes the gates",
+          rc != 0 and "pkgmk failed" in out and "not pure files" not in out, out)
+    rc, out = kroll(tmp, MOD.replace("f none /etc/conf/mod.d", "f z3660eth /etc/conf/mod.d")
+                    + node, INFO % "none z3660eth")
+    check("a file still must be class none",
+          rc != 0 and "BAD class z3660eth /etc/conf/mod.d/z3660eth" in out, out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

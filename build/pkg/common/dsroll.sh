@@ -25,6 +25,13 @@
 #
 # pkgmk sorts pkgmap by path, and pkginfo is pkgmeta's, so with one epoch two
 # rolls of one recipe are byte-identical (build/pkg/tests/repro-selftest.sh).
+#
+# Before pkgmk, amix_classes checks what pkgmk would otherwise decide: a
+# pkginfo without PSTAMP gets the build host's name and the date from pkgmk,
+# and a class the prototype uses but pkginfo's CLASSES does not list is only
+# a pkgmk warning, while stock pkgadd installs only the listed classes and
+# skips the rest without a word (pkginfo(4); a module's device nodes, C3-5
+# section 1.2).  Without a CLASSES line pkgmk lists every class itself.
 
 case "${0##*/}" in
 dsroll.sh)
@@ -32,6 +39,29 @@ dsroll.sh)
 	exit 1
 	;;
 esac
+
+# amix_classes <prototype> <pkginfo> -- refuses a pkginfo without PSTAMP, and
+# an object of a class that pkginfo's CLASSES does not list.
+amix_classes() {
+	grep '^PSTAMP=.' "$2" >/dev/null || {
+		echo "[FAIL] $2 has no PSTAMP; pkgmk would write the build host's name and the date" >&2
+		exit 1
+	}
+	_cl_list=$(sed -n 's/^CLASSES=//p' "$2" | head -1 | sed 's/^"\(.*\)"$/\1/')
+	grep '^CLASSES=' "$2" >/dev/null || return 0
+	awk -v list=" $_cl_list " '
+		/^[ \t]*[#!]/ || NF < 3 { next }
+		{ t = $1; c = $2; if (t ~ /^[0-9]+$/) { t = $2; c = $3 } }
+		t ~ /^[fevdxlspcb]$/ && index(list, " " c " ") == 0 { printf "%s %s %s\n", t, c, (t == $1 ? $3 : $4) }
+	' "$1" | sed 's/^/       /' > "$1.classes"
+	if [ -s "$1.classes" ]; then
+		echo "[FAIL] objects of a class pkginfo's CLASSES ($_cl_list) does not list; stock pkgadd skips them:" >&2
+		cat "$1.classes" >&2
+		rm -f "$1.classes"; exit 1
+	fi
+	rm -f "$1.classes"
+	unset _cl_list
+}
 
 amix_dsroll() {
 	_ds_work="$1"
@@ -48,6 +78,8 @@ amix_dsroll() {
 	_ds_find=$(command -v find) || { echo "[FAIL] roll: no find" >&2; exit 1; }
 	case "$_ds_find" in "$AMIX_PKG_COMMON/sortedfind/"*)
 		echo "[FAIL] roll: sortedfind/ is already on PATH" >&2; exit 1 ;; esac
+
+	amix_classes "$_ds_work/prototype" "$_ds_work/pkginfo"
 
 	find "$_ds_root" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +
 	find "$_ds_work" -maxdepth 1 -type f -exec touch -d "@$SOURCE_DATE_EPOCH" {} +

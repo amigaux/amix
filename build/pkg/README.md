@@ -175,6 +175,13 @@ prototype (`common/dsnorm.py`). A control file that names the build tree or
 the checkout is refused; the same path in the payload, a compiler's
 `__FILE__`, is reported. `tests/repro-selftest.sh` proves it in CI.
 
+Before pkgmk the roll refuses a pkginfo without `PSTAMP` (pkgmk would write
+the build host's name and the date) and an object whose class pkginfo's
+`CLASSES` does not list: stock pkgadd installs only the listed classes and
+skips the others without a word. A kernel-space package's device nodes are
+in their module's class, its file name in `/etc/conf/mod.d` (amix-dlm C3-5
+v18 section 1.2), or in `none` for a package minted before v18.
+
 The roll's s5 gate (`common/pkgroll.sh`, `amix_s5_mark`): a package whose
 object names all fit s5's 14 bytes must have no two in one directory that
 share their first 14; a package with a longer name is marked UFS-only,
