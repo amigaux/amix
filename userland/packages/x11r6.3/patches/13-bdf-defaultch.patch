@@ -1,0 +1,18 @@
+Ours.  bdfReadFont left info.defaultCh as the caller had it when the BDF has no
+DEFAULT_CHAR property; bdftopcf's FontRec is on its stack, so such fonts got a
+stack byte as their default character, and two builds differed.  It starts at
+NO_SUCH_CHAR, as the PCF readers expect for "none".
+
+--- a/lib/font/bitmap/bdfread.c
++++ b/lib/font/bitmap/bdfread.c
+@@ -798,6 +798,10 @@
+     bitmapFont->bitmapExtra->glyphNames = 0;
+     bitmapFont->bitmapExtra->sWidths = 0;
+ 
++    /* AMIX: no DEFAULT_CHAR property means no default character, not what the
++     * caller's FontRec held (bdftopcf's is on the stack: PCFs varied run to run) */
++    pFont->info.defaultCh = (unsigned short) NO_SUCH_CHAR;
++
+     if (!bdfReadProperties(file, pFont, &state))
+ 	goto BAILOUT;
+ 

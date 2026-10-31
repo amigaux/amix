@@ -43,6 +43,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `04`–`10-protos-*.patch` | Ours: the prototypes gcc 14 needs, by area (the libraries, the fonts, the server, xterm, twm, xdm, the small clients). Each comes from the definition the call links with (`gcc -aux-info`). A K&R definition's narrow parameters (char, short, their typedefs, float) are default-promoted in the prototype, so caller and callee agree. Each patch's header lists every promotion and every function left unprototyped, with the reason. |
 | `11-mfb-fakepixmap-privates.patch` | Ours: the stack pixmaps of `00`'s `mfbimage.c` get `devPrivates` NULL rather than stack garbage (the server is built with `PIXPRIV`). |
 | `12-rstart-prefix.patch` | Ours: `rstartd` goes to the package's `bin` rather than `/usr/bin`, and the `rstart` client calls it by that path on the `rsh` command line. |
+| `13-bdf-defaultch.patch` | Ours: a BDF without a `DEFAULT_CHAR` property gets no default character (`NO_SUCH_CHAR`) rather than whatever the caller's font record held; `bdftopcf`'s is on its stack, so such fonts differed from build to build. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
