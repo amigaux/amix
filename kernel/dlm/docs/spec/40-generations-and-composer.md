@@ -1,13 +1,11 @@
 # 40 — Generations and the composer
 
 - **Status:** draft (S0), 2026-10-25
-- **Implements:** D-3 §5 (upgrade install that keeps a data slice and restores the surviving configuration; a 1.1 layout that never needs a re-lay), D-3 §6 (two kept generations plus the pristine install generation; good only after a full multi-user boot; one-shot previous; safe mode; one boot slice per disk), D-3 §7 (kernel-space packages trigger a generation build and a reboot)
-- **Replaces:** P-28 D7/D11 (slot composition), D15/D32 (second boot slice), D31/D35 (installer writes host bytes), D54 (mark good late — kept), D56 (2 MiB slices — moot, 1.0 boxes reinstall), D60 (finding the boot disk — simplified by the loader record)
-- **Keeps:** P-28 D12, D14, D16, D19/D55, D59, D63
+- **Implements:** release decisions 5 (upgrade install that keeps a data slice and restores the surviving configuration; a 1.1 layout that never needs a re-lay), 6 (two kept generations plus the pristine install generation; good only after a full multi-user boot; one-shot previous; safe mode; one boot slice per disk) and 7 (kernel-space packages trigger a generation build and a reboot) (`00-overview.md` §2)
+- **Replaces:** the earlier proposal's slot composition, second boot slice, installer writing host bytes, mark good late (kept), 2 MiB slices (moot, 1.0 boxes reinstall), and its way of finding the boot disk (simplified by the loader record)
+- **Keeps:** the earlier proposal's hidden catalog block, `bootset=auto`, modules pinned by default, one previous kabi served, streaming installs and kernel-space atomicity
 
-Paths are relative to the Amix project workspace. `LC` =
-`tmp/2026-10-22-modules-proposal/07-installed-box-lifecycle-design.md`,
-`PK` = `tmp/2026-10-22-modules-proposal/packaging-kernel-lifecycle-facts.md`.
+Paths follow `00-overview.md`, "Sources".
 
 ## 1. Vocabulary
 
@@ -38,13 +36,13 @@ The 1.0 installer lays root, swap and a 10 MiB boot slice and no data slice
 holds the kept set four times over at today's kernel sizes (a k46 kernel is
 about 2.0–2.1 MB uncompressed, `amix-kerntools/docs/k0-families.md:1107-1120`)
 and leaves room for larger kernels, more root modules and a rescue RAM-disk
-generation without a re-lay. Smaller boot slices are not a 1.1 target (D-3 §5: 1.0 boxes reinstall).
+generation without a re-lay. Smaller boot slices are not a 1.1 target (release decision 5: 1.0 boxes reinstall).
 They still boot, but the kept set does not fit them. A 4 MiB slice, as the
 stage-1 test vehicles have, holds two raw k46 generations (M-GEN1): the
 first and one upgrade. A third needs a generation marked bad first, and
 `collect` alone frees nothing, since the default and the two newest good
 ones are all kept. The data slice exists so a later reinstall can
-keep user data (D-3 §5). Each filesystem stays under the 1.0 limit of
+keep user data (release decision 5). Each filesystem stays under the 1.0 limit of
 1024 MiB (`mkfs_ufs` fails at 65 536 cylinders,
 `amix-installng/docs/releases/1.0.md:265-301`); on larger disks the installer
 caps s1 and s4 at that limit until the limit is lifted (OQ-40.7). A disk laid without s4 can only carry the surviving configuration through a later reinstall.
@@ -66,13 +64,13 @@ caps s1 and s4 at that limit until the limit is lifted (OQ-40.7). A disk laid wi
 | `/var/kbootset/journal` | in-flight build/commit record | `kbootset` |
 
 Stock `/stand/boot2.boot` and `updbootpart` are no longer read, and no
-loader reads `/stand/unix` (it holds the namelist, §4.2); `updbootpart` becomes a shim that refuses and names `kbootset` (P-28
-D54). Members of a generation come from the package contents database, never
-from a directory listing (`LC`:93).
+loader reads `/stand/unix` (it holds the namelist, §4.2); `updbootpart` becomes a shim that refuses and names `kbootset`. Members of a
+generation come from the package contents database, never from a directory
+listing.
 
 ## 3. `kbootset`
 
-A userland program (built with the project's userland compiler, D-3 §9),
+A userland program (built with the project's userland compiler, release decision 9),
 statically linked, run on the box and on the host (media builds use the same
 program against an image file, so media and boxes cannot drift).
 
@@ -100,7 +98,7 @@ program against an image file, so media and boxes cannot drift).
    apkg recorded at install, or no entry was recorded
    (`60-signing-and-publishing.md` §3). The gate also reads the entry's
    `verified=` field, the hook for a later signature policy (§4 there); 1.1
-   has no signing (D-3 §13).
+   has no signing (release decision 13).
 2. **kabi:** members disagree on family, major, or compiler pin; a module's
    minor exceeds the kernel's; or a module imports a name that neither a
    module it depends on defines nor the kernel's symbol block exports (the
@@ -172,7 +170,7 @@ new) by construction (`10-boot-loader.md` §4.2).
 `mark-good` runs from the last run-level-2 script. A box that panics or hangs
 in `rc` never reaches it, so the trial stays unmarked and the loader's
 try-once rule boots the previous good generation next time
-(`10-boot-loader.md` §7.2; P-28 D54).
+(`10-boot-loader.md` §7.2).
 
 One reboot before that point is not the generation's fault: the root fsck's
 repair reboot in `/sbin/bcheckrc` after an unclean shutdown. The base
@@ -223,14 +221,14 @@ bootdata block, C2-1 version 3), the loaded-module list.
 
 The stock tools that read kernel memory find kernel symbols with `nlist`
 on `/stand/unix`: `netstat`, `ifconfig` ("no namelist /stand/unix") and
-`crash` (S3-B5's survey of the stock binaries: nothing reads `/unix`,
+`crash` (a survey of the stock binaries: nothing reads `/unix`,
 `ps` reads no kernel file, there is no `/dev/ksyms`). In 1.0 that file was
 a hard link to `/stand/2.1_unix`, the kernel the stock loader booted,
 linked at the address it ran at. With generations the booted kernel is a
 generation's member, bound by the loader where it chose, and its file on
 disk does not carry those addresses: an ET_REL kernel's symbols are
 section-relative, and a `brel` has none. Without a namelist, `netstat -i`
-reads `ifstats` at another kernel's address (S3-B5).
+reads `ifstats` at another kernel's address.
 
 So **`/stand/unix` is the booted kernel's namelist.**
 - **What it is:** an ELF32 `ET_EXEC` holding the booted kernel's symbol
@@ -271,29 +269,29 @@ So **`/stand/unix` is the booted kernel's namelist.**
    assumed to be s3, `amix-installng/tools/write-bootchain.py:403-406`).
 2. With no loader record (a box booted by the stock loader during the proof
    period), from the RTH1 boot fields when the boot flag is set and the
-   controller is registered (P-28 D60).
+   controller is registered.
 3. Otherwise an RDB scan of every disk for `UNI\0`; exactly one candidate
    whose store header matches is accepted; more than one is refused.
 
 The result is recorded in `/etc/default/bootset` and re-checked at every run.
 The 1.0 tool derived the boot slice as s3 of the root disk, wrong whenever
-boot and root disks differ (`tmp/2026-10-22-modules-proposal/refute-updbootpart-s3-claim.md`).
+boot and root disks differ.
 
 ## 6. apkg integration
 
 Requires apkg 0.3 (amix-packagemanager); deployed 0.2.3 cannot see kernel
-space at all (`tmp/2026-10-22-modules-proposal/refute-apkg-stage-and-comment-skip.md`).
+space at all.
 
 | Item | Rule |
 |---|---|
-| Kernel-space packages | roles `kernel`, `loader`, `module`; published in the public catalog inside a hidden `#ext kpkg 1` block (every line < 2048 bytes, `#` in column 0, header unchanged), so older clients never see them (P-28 D12) |
+| Kernel-space packages | roles `kernel`, `loader`, `module`; published in the public catalog inside a hidden `#ext kpkg 1` block (every line < 2048 bytes, `#` in column 0, header unchanged), so older clients never see them |
 | Pure files | kernel-space packages carry files only (class `none`, no scripts) and never write a boot slice; `kbootset` does |
 | Pre-flight | apkg checks kabi family/major, compiler pin and line before staging, and each kernel-space package's SHA-256 after download |
-| Transaction | stage and verify every package, then install; a journal (`/var/apkg/txn`) and `apkg recover` finish or undo an interrupted transaction (P-28 D63). Atomicity for the boot path comes from the generation commit: a half-installed set never reaches the store |
-| Trigger | after a transaction that changed a kernel-space package, apkg runs `kbootset build && kbootset commit` when `bootset=auto` (default), else prints the command. A failed gate exits with a distinct code and the message "the committed generation is unchanged" (`tmp/2026-10-14-modules-study/L4-packaging-with-apkg.md:608-640`) |
+| Transaction | stage and verify every package, then install; a journal (`/var/apkg/txn`) and `apkg recover` finish or undo an interrupted transaction. Atomicity for the boot path comes from the generation commit: a half-installed set never reaches the store |
+| Trigger | after a transaction that changed a kernel-space package, apkg runs `kbootset build && kbootset commit` when `bootset=auto` (default), else prints the command. A failed gate exits with a distinct code and the message "the committed generation is unchanged" |
 | User message | "generation N committed; power-cycle to boot it" |
-| Superseded packages | the repository keeps exactly one previous kabi's kernel-space packages served (P-28 D55) |
-| Streaming installs | from media, `apkg -R /mnt` fetches, verifies, installs and deletes one package at a time (P-28 D59); never arms a half-installed disk |
+| Superseded packages | the repository keeps exactly one previous kabi's kernel-space packages served |
+| Streaming installs | from media, `apkg -R /mnt` fetches, verifies, installs and deletes one package at a time; never arms a half-installed disk |
 
 ## 7. The upgrade install
 
@@ -303,23 +301,23 @@ holds an Amix installation.
 | Target found | What is kept | What is replaced |
 |---|---|---|
 | a 1.1-layout disk (s4 data slice present) | s4 untouched; the surviving configuration (below) captured from s1 | s1 re-made, s3 re-written with a new pristine generation, swap re-made |
-| a 1.0-layout disk (no data slice) | the surviving configuration only | the whole disk re-laid to the 1.1 layout (D-3 §5: 1.0 boxes reinstall) |
+| a 1.0-layout disk (no data slice) | the surviving configuration only | the whole disk re-laid to the 1.1 layout (release decision 5: 1.0 boxes reinstall) |
 
 On a 1.0 disk the user's own data lives on the root filesystem, because 1.0
 lays no data slice; the installer cannot keep it in place. Before re-laying it
 prints what it will not keep and the size of `/home` and offers to stop.
 
-**Surviving configuration** (OQ-40.1, answered by S4-54). What the first-boot dialog and the interview write: the node name and domain; the time zone (TIMEZONE, TZ, tz.index, clkzone); users and passwords (passwd, shadow, group) and the console login rule (default/login); the network: hosts, rc.inet, zen.conf, resolv.conf, netconfig, S99zen; the package client's configuration (apkg.conf); bcheckrc and the administrator's module parameters (modreg.local.d); the dialog's record (firstboot.conf), kept beside the new one. The dialog's choices that live in files packages own (syslog on or off, the A2024 flag, the keymap, the X colour server, the Netnews flavour) are kept as states and set again with the new system's own files. A choice whose package the new install lacks is reported, not forced. Everything is captured into a checksummed archive written to the swap slice before any filesystem is made. It is restored after the new root is made, put in place by the installer at the end of the install and verified there (each file's sum on the new root), before the first boot; the first boot leaves those files alone. Restored password entries keep their aging fields only if the battery clock passes setclk's plausibility gate and no entry's last change is later than today; otherwise every entry's aging fields are cleared, and the installer says so.
+**Surviving configuration** (OQ-40.1, answered by amix-installng 74abe1f). What the first-boot dialog and the interview write: the node name and domain; the time zone (TIMEZONE, TZ, tz.index, clkzone); users and passwords (passwd, shadow, group) and the console login rule (default/login); the network: hosts, rc.inet, zen.conf, resolv.conf, netconfig, S99zen; the package client's configuration (apkg.conf); bcheckrc and the administrator's module parameters (modreg.local.d); the dialog's record (firstboot.conf), kept beside the new one. The dialog's choices that live in files packages own (syslog on or off, the A2024 flag, the keymap, the X colour server, the Netnews flavour) are kept as states and set again with the new system's own files. A choice whose package the new install lacks is reported, not forced. Everything is captured into a checksummed archive written to the swap slice before any filesystem is made. It is restored after the new root is made, put in place by the installer at the end of the install and verified there (each file's sum on the new root), before the first boot; the first boot leaves those files alone. Restored password entries keep their aging fields only if the battery clock passes setclk's plausibility gate and no entry's last change is later than today; otherwise every entry's aging fields are cleared, and the installer says so.
 
 ## 8. Open questions
 
-| ID | Question | Proposed owner |
+| ID | Question | Proposed answerer |
 |---|---|---|
-| OQ-40.1 | The exact surviving-configuration set and its format (P-29 is parked and defines only package-conffile policy, `review/P-29-config-files-and-network-setup.md`). **Answered by S4-54** (amix-installng 74abe1f): §7, "Surviving configuration". | us |
+| OQ-40.1 | The exact surviving-configuration set and its format (the parked configuration-files proposal defines only package-conffile policy). **Answered** by amix-installng 74abe1f: §7, "Surviving configuration". | us |
 | OQ-40.2 | Data slice default size and mount point (`/home` proposed). | us |
-| OQ-40.3 | Whether the boot store should also hold a rescue RAM-disk generation so every installed disk can rescue itself without a medium. Not required by D-3 ("every install medium is the rescue medium"). | us |
+| OQ-40.3 | Whether the boot store should also hold a rescue RAM-disk generation so every installed disk can rescue itself without a medium. Not required by the release decisions ("every install medium is the rescue medium"). | us |
 | OQ-40.4 | Stock `pkgadd` behaviour on `/stand` conflicts and on files dropped by `instance=overwrite` (E1); `kbootset` already avoids depending on either. | us |
-| OQ-40.5 | The checksum contract (`amix-kerntools/contracts/bootchain-v1.json`, `sum_gate_interplay`) needs a version 2 for generations: identity = SHA-256 per member from the packages plus the manifest; `kbootset check` as the second reader (P-28 D23 re-scoped). Written as a decision record when the store format is frozen. **Closed 2026-10-25** by `docs/contracts/C2-5-checksum-v2.md`. | us |
+| OQ-40.5 | The checksum contract (`amix-kerntools/contracts/bootchain-v1.json`, `sum_gate_interplay`) needs a version 2 for generations: identity = SHA-256 per member from the packages plus the manifest; `kbootset check` as the second reader. Written as a decision record when the store format is frozen. **Closed 2026-10-25** by `docs/contracts/C2-5-checksum-v2.md`. | us |
 | OQ-40.6 | Whether the swap slice is always large enough for the configuration archive (18 MB minimum) — it is for any plausible configuration; a size cap and refusal are specified. | us |
 | OQ-40.7 | Lifting the 1024 MiB filesystem limit, or laying several data filesystems on large disks; must be settled before the 1.1 layout freezes so no later release needs a re-lay. | us |
 

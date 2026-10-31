@@ -1,18 +1,17 @@
 # 60 — Integrity, signing and publishing
 
-- **Status:** draft (S0), 2026-10-25; changed after the freeze by D-3 §13 — **signing is not in 1.1**
-- **Implements:** D-3 §7 as amended by D-3 §13 (kernel, loader and module packages in the public catalog, marked kernel-space; the ABI kit published in amix-dlm; integrity by per-package SHA-256; no catalog signature, no key custody and no refusal of unsigned kernel space in 1.1; a verification hook kept so signing can be added later without a format change)
-- **Builds on:** P-28 D10, D12, D13, D30, D48
+- **Status:** draft (S0), 2026-10-25; changed after the freeze by release decision 13 — **signing is not in 1.1**
+- **Implements:** release decision 7 as amended by release decision 13 (`00-overview.md` §2) (kernel, loader and module packages in the public catalog, marked kernel-space; the ABI kit published in amix-dlm; integrity by per-package SHA-256; no catalog signature, no key custody and no refusal of unsigned kernel space in 1.1; a verification hook kept so signing can be added later without a format change)
+- **Builds on:** the earlier proposal's signed-catalog plan, hidden catalog block, re-scoped package gate, key custody and net module class
 
-Paths are relative to the Amix project workspace. `PM/` =
-`amix-packagemanager/`.
+Paths follow `00-overview.md`, "Sources". `PM/` = `amix-packagemanager/`.
 
 ## 1. What 1.1 does
 
 | Item | 1.1 |
 |---|---|
 | Integrity | every kernel-space catalog entry carries the package's **SHA-256**; apkg 0.3 checks it after download, `kbootset` checks every member against it, the kernel checks every module load against the booted manifest (§3) |
-| Signature | **none** (D-3 §13): no catalog signature, no signing key, no public key in the installer or client, no refusal of unsigned kernel space |
+| Signature | **none** (release decision 13): no catalog signature, no signing key, no public key in the installer or client, no refusal of unsigned kernel space |
 | Hook | the catalog format, apkg and `kbootset` keep a defined place for a signature check (§4), so a later release adds signing without changing a format |
 | Userland packages | unchanged |
 
@@ -26,18 +25,16 @@ kernel-space entries is new in apkg 0.3.
 The package repository is served over plain HTTP, because the 1992-era client
 has no TLS (`grimoire-amix/docs/how-it-works/package-repository.md:27-43`). A
 kernel or module altered on the network path is written into the boot store
-and survives a userland reinstall
-(`tmp/2026-10-14-modules-study/C1-longterm-critique.md:282-296`). SHA-256 in
-the catalog detects damage, not an attacker who also alters the catalog. The
-owner accepted that for 1.1 (D-3 §13, the second deliberate exception beside
-§5); the signing design in §5 is kept for the release that adds it.
+and survives a userland reinstall. SHA-256 in
+the catalog detects damage, not an attacker who also alters the catalog.
+1.1 accepts that deliberately (release decision 13); the signing design in
+§5 is kept for the release that adds it.
 
 ## 3. What is checked in 1.1
 
 **Kernel-space entries** sit in the hidden `#ext kpkg 1` block of the catalog
 (every line under 2048 bytes, `#` in column 0, the `#apkg-catalog 1` header
-unchanged, so deployed clients skip it and never see kernel space,
-`tmp/2026-10-22-modules-proposal/refute-apkg-stage-and-comment-skip.md`). Each
+unchanged, so deployed clients skip it and never see kernel space). Each
 entry carries, beside the normal fields, `role=kernel|loader|module`, the
 line, the kabi tag, the compiler pin and the package's **SHA-256**.
 
@@ -68,16 +65,16 @@ Kept in 1.1 so that adding signing changes no format:
 
 ## 5. Signing — not in 1.1 (kept for a later release)
 
-The design below was part of S0 and is suspended by D-3 §13. It is kept so
+The design below was part of S0 and is suspended by release decision 13. It is kept so
 the release that adds signing starts from it.
 
 | Item | Rule |
 |---|---|
-| Algorithm | Ed25519 detached signatures (proposed; a small portable verifier in C89, no FPU, 68060-safe); verification time measured (M-SIG1 = STUDY U17) |
-| Signing key | one; held by the owner offline; never on a build host, never in a repository |
+| Algorithm | Ed25519 detached signatures (proposed; a small portable verifier in C89, no FPU, 68060-safe); verification time measured (M-SIG1) |
+| Signing key | one; held offline by the project; never on a build host, never in a repository |
 | Public key | baked into apkg, the installer's static apkg, `kbootset`, and every medium, each with its key id |
 | Keyring | the verifier accepts a list of key ids |
-| A second key | only by the owner's decision, through a new release of apkg, the installer and `kbootset` signed by the existing key |
+| A second key | only by a deliberate project decision, through a new release of apkg, the installer and `kbootset` signed by the existing key |
 | Compromise | a release signed by the remaining key that removes the compromised id |
 | Signed object | the catalog; the signature file named by `#ksig` covers the catalog bytes exactly |
 
@@ -86,7 +83,7 @@ the release that adds signing starts from it.
 CD, tape, netinstall media and install disk images carry the catalog; the
 installer checks each kernel-space package's SHA-256 against it before
 installing, exactly as over the network. Floppies carry no packages
-(D-3 §2). A medium built by the host `kbootset --image` composes its
+(release decision 2). A medium built by the host `kbootset --image` composes its
 generations only from packages whose SHA-256 matches the catalog.
 
 ## 7. What the public catalog and site show
@@ -96,31 +93,32 @@ generations only from packages whose SHA-256 matches the catalog.
   involved and that a generation build and a power cycle follow.
 - The repository's private-package gate, which refuses kernel packages today
   (`PM/tools/repo/gen-catalog.py:128-130,358-368`), is re-scoped so that
-  kernel-space packages enter the public catalog's hidden block, on the
-  owner's per-action publish decision (P-28 D13).
+  kernel-space packages enter the public catalog's hidden block; each
+  publish is a separate maintainer action.
 - The public site lists kernel-space packages in their own section with the
   line and kabi, and links the ABI kit.
 - The repository keeps exactly one previous kabi's kernel-space packages
-  served after a kabi change (P-28 D55).
+  served after a kabi change.
 
 ## 8. Publishing the ABI kit
 
 The ABI kit (`20-module-format-and-abi.md` §5) is published in this
 repository and as one package per kernel line. It includes the stock Amix
-kernel headers a module build needs (D-3 §7: "the ABI kit (headers + module
-tooling) is published in amix-dlm"; distribution permission of 2026-09-23);
+kernel headers a module build needs (release decision 7: the ABI kit, headers
+and module tooling, is published in amix-dlm; distribution permission of
+2026-09-23);
 they are added at kit build time and are not tracked in this repository's
-history. Every publication — repository, catalog, site — remains a per-action
-owner decision.
+history. Every publication — repository, catalog, site — remains a separate
+maintainer action.
 
 ## 9. Open questions
 
-| ID | Question | Proposed owner |
+| ID | Question | Proposed answerer |
 |---|---|---|
-| OQ-60.1 | For the release that adds signing: Ed25519 (proposed) or another scheme, and the signature file format (minisign/signify-compatible proposed). | us; owner holds the key |
+| OQ-60.1 | For the release that adds signing: Ed25519 (proposed) or another scheme, and the signature file format (minisign/signify-compatible proposed). | us; the project holds the one offline key |
 | OQ-60.4 | Which hashing tools exist on the box for administrators (none recorded besides `sum`). `kbootset` carries its own SHA-256 either way. | us |
 
-Closed by D-3 §13 as moot for 1.1: OQ-60.2 (admitting a second key by a
+Closed by release decision 13 as moot for 1.1: OQ-60.2 (admitting a second key by a
 repository-fetched statement) and OQ-60.3 (signed userland packages).
 
 ## 10. Measurements
