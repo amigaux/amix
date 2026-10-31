@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — public text states facts only (c846ca0)
+
+Internal ids and run labels in docs, comments and this changelog become dates and plain wording; citations of
+unpublished notes are dropped where a public source carries the fact; .gitignore keeps only build products. Objects
+unchanged: module k30 af24613d, k46 86fe050b; static k30 c9370806, k46 37185507.
+
 ## 2026-10-31 — link.d entry; zen0 configured through /etc/inet/interfaces (f0385cb, c69b2bf)
 
 The driver ships its /etc/inet/link.d entry, link.d/z3660eth: `zen	/dev/zen	0	51` (tab-separated, three # header
