@@ -111,6 +111,11 @@ RUN set -e; cc=build/prefix/bin/m68k-elf-gcc; \
     sed -n '/^p:/,/rts/p' abi.s | grep -q '%d0'; \
     sed -n '/^r:/,/rts/p' abi.s | grep -q '(%a0)'; \
     rm abi.s
+# amix-system's absolute links into usr/amiga and usr/ucblib (libscreen.so,
+# include/amiga, libdbm.a, libucb.a) made relative, so they resolve in the
+# sysroot; the script is bind-mounted, not left in the image
+RUN --mount=type=bind,source=sysroot-links,target=/tmp/sysroot-links \
+    sh /tmp/sysroot-links build/sysroot
 
 # ---------------------------------------------------------------------------
 # The members of the archives built here (not the sysroots' AMIX archives,

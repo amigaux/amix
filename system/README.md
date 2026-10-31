@@ -14,6 +14,9 @@ one; this directory only describes them.
 | `usr/include` | the system headers |
 | `usr/lib`, `usr/ccs` | the libraries, startup objects and the C compilation system |
 | `usr/X` | X11: headers, libraries, fonts and clients |
+| `usr/amiga` | the Amiga-specific part: tools, `/usr/amiga/include/amiga` headers, `libscreen.so` and the sources Commodore shipped |
+| `usr/ucblib` | the BSD compatibility part: `libucb.a`, `libdbm.a` and the other BSD libraries, doctools and the dictionary |
+| `usr/sbin/syslogd` | the 2.1p2a `syslogd`, from the patch disk |
 | `etc` | the stock `/etc` at 2.1p2a, as the packages ship it plus the patch disk's changes: no site edits, users or keys. The defaults the base package carries come from here (P-36 D-N24) |
 | `etc.md` | what git cannot hold for `etc/`: owners, modes, hard links, empty directories and the three named pipes, and how the tree was made |
 | `floppies/2.1/amix_21_boot.adf` | the retail 2.1 boot floppy: the bootstrap and the installation kernel |

@@ -85,6 +85,7 @@ etc/whodo -> /usr/sbin/whodo
 etc/wtmp -> /var/adm/wtmp
 etc/wtmpx -> /var/adm/wtmpx
 usr/X/lib/Xol -> /usr/X/include/Xol/bitmaps
+usr/amiga/lib/scrmon -> /usr/lib/saf/ttymon
 usr/ccs/lib/libdbm.a -> /usr/ucblib/libdbm.a
 usr/ccs/lib/libucb.a -> /usr/ucblib/libucb.a
 usr/include/X11 -> /usr/X/include

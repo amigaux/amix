@@ -1,5 +1,6 @@
 #!/bin/sh
-# test-tools: host test of toolchain/fetch-distfile and toolchain/m68k-gnu-bin.
+# test-tools: host test of toolchain/fetch-distfile, toolchain/m68k-gnu-bin and
+# toolchain/sysroot-links.
 #
 # MIT licence, see LICENSE at the top of the repository.
 #
@@ -73,6 +74,35 @@ rm "$T/g14/prefix/bin/m68k-elf-objcopy"
 refused "m68k-gnu-bin: a missing gcc14 tool is refused" "no $T/g14/prefix/bin/m68k-elf-objcopy" \
 	env G14="$T/g14" sh "$here/m68k-gnu-bin" "$T/gnu2"
 refused "m68k-gnu-bin: G14 unset is refused" "G14 is not set" env -u G14 sh "$here/m68k-gnu-bin" "$T/gnu3"
+
+# --- sysroot-links -----------------------------------------------------------
+# a stand-in sysroot: empty files where amix-system has the real ones
+sr=$T/sysroot
+mkdir -p "$sr/usr/amiga/include/amiga" "$sr/usr/amiga/lib" "$sr/usr/ucblib" "$sr/usr/lib" \
+	"$sr/usr/include" "$sr/usr/ccs/lib" "$sr/usr/X/include"
+: > "$sr/usr/amiga/include/amiga/screen.h"
+: > "$sr/usr/amiga/lib/libscreen.so"
+: > "$sr/usr/ucblib/libdbm.a"
+ln -s /usr/amiga/lib/libscreen.so "$sr/usr/lib/libscreen.so"
+ln -s /usr/amiga/include/amiga "$sr/usr/include/amiga"
+ln -s /usr/ucblib/libdbm.a "$sr/usr/ccs/lib/libdbm.a"
+ln -s /usr/ucblib/libucb.a "$sr/usr/ccs/lib/libucb.a"
+ln -s /usr/X/include "$sr/usr/include/X11"
+check "sysroot-links: the links into usr/amiga and usr/ucblib become relative and resolve" \
+	sh -c 'sh "$0" "$1" >/dev/null && cd "$1" &&
+		[ "$(readlink usr/lib/libscreen.so)" = ../amiga/lib/libscreen.so ] &&
+		[ "$(readlink usr/include/amiga)" = ../amiga/include/amiga ] &&
+		[ "$(readlink usr/ccs/lib/libdbm.a)" = ../../ucblib/libdbm.a ] &&
+		[ -e usr/lib/libscreen.so ] && [ -e usr/include/amiga/screen.h ] && [ -e usr/ccs/lib/libdbm.a ]' \
+	"$here/sysroot-links" "$sr"
+check "sysroot-links: a target not in the sysroot and a link elsewhere stay as they were" \
+	sh -c '[ "$(readlink "$0/usr/ccs/lib/libucb.a")" = /usr/ucblib/libucb.a ] &&
+		[ "$(readlink "$0/usr/include/X11")" = /usr/X/include ]' "$sr"
+check "sysroot-links: a second run changes nothing" \
+	sh -c '[ -z "$(sh "$0" "$1")" ]' "$here/sysroot-links" "$sr"
+mkdir -p "$T/oldsys/usr/amiga"
+refused "sysroot-links: a sysroot without usr/ucblib is refused" "has no usr/ucblib" \
+	sh "$here/sysroot-links" "$T/oldsys"
 
 echo "$pass/$((pass + fail)) passed"
 [ "$fail" -eq 0 ]
