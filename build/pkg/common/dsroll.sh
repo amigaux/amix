@@ -20,8 +20,10 @@
 #   3. pkgtrans runs with sortedfind/ first on its PATH: its find sorts;
 #   4. dsnorm.py rewrites each newc header in place (ino renumbered, uid,
 #      gid and dev 0, mtime the epoch), and refuses a control file that
-#      names <workdir>, <destroot> or the checkout; the same paths in the
-#      payload are reported (a compiler's __FILE__, not the roll's).
+#      names <workdir>, <destroot>, the build root or the checkout. The same
+#      paths in the payload are refused for a gcc14 build, whose compiler
+#      remaps them (gcc14-env.sh), and reported for the period compiler,
+#      which cannot (make dist gives it fixed paths in the container).
 #
 # pkgmk sorts pkgmap by path, and pkginfo is pkgmeta's, so with one epoch two
 # rolls of one recipe are byte-identical (build/pkg/tests/repro-selftest.sh).
@@ -98,6 +100,7 @@ amix_dsroll() {
 	[ -f "$_ds_out" ] || { echo "[FAIL] pkgtrans produced no $_ds_out" >&2; exit 1; }
 	python3 -I "$AMIX_PKG_COMMON/dsnorm.py" stream "$_ds_out" "$SOURCE_DATE_EPOCH" \
 		--host "$(cd "$_ds_work" && pwd -P)" --host "$(cd "$_ds_root" && pwd -P)" \
-		--host "${AMIX_REPO_ROOT:-}" || { rm -f "$_ds_out"; exit 1; }
+		--host "${AMIX_REPO_ROOT:-}" --host "${AMIX_BUILD_ROOT:-}" \
+		${AMIX_PREFIX_MAP:+--refuse-payload} || { rm -f "$_ds_out"; exit 1; }
 	unset _ds_work _ds_root _ds_pkg _ds_out _ds_find _ds_spool
 }

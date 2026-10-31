@@ -5,8 +5,8 @@
 #
 #     sh build/pkg/tests/repro-selftest.sh
 #
-# One recipe (a gcc14 program, a data file and a conffile, so the datastream
-# has install/ scripts too) is built and rolled by pkgbuild.sh from two
+# One recipe (a gcc14 program that prints its __FILE__, a data file and a
+# conffile, so the datastream has install/ scripts too) is built and rolled by pkgbuild.sh from two
 # copies of build/ at different paths, seconds apart, under umasks 022 and
 # 077, with the second build tree on another filesystem (/dev/shm when it is
 # one) so the spool's directory order, inodes and device differ. The two
@@ -63,8 +63,9 @@ SOURCE_EPOCH=1793303717
 EOF
 	cat > "$r/build.sh" <<'EOF'
 build() {
-	echo "$CC $AMIX_CFLAGS -c rtest.c" >> "$BUILD/make.log"
-	$CC $AMIX_CFLAGS -c rtest.c
+	# by absolute path, as a VPATH build does: __FILE__ names the build tree
+	echo "$CC $AMIX_CFLAGS -c $PWD/rtest.c" >> "$BUILD/make.log"
+	$CC $AMIX_CFLAGS -c "$PWD/rtest.c"
 	$CC $AMIX_CFLAGS -o rtest rtest.o
 }
 stage() {
@@ -76,7 +77,7 @@ stage() {
 	cp "$DEST/opt/amix/man/1/rtest" "$DEST/opt/amix/man/1/rtest.conf"
 }
 EOF
-	printf '#include <stdio.h>\nint main(void) { puts("rtest"); return 0; }\n' > "$r/src/rtest.c"
+	printf '#include <stdio.h>\nint main(void) { puts(__FILE__); return 0; }\n' > "$r/src/rtest.c"
 	cat > "$r/prototype" <<'EOF'
 i pkginfo
 d none /etc 0755 root sys
@@ -115,6 +116,10 @@ roll "$B" 077 "$B/out/pkg" "$T/two.log"
 pb="$B/out/pkg/pkg/rtest-1.0-1.pkg"
 ok "rolled again 2 s later from $B, umask 077, on $(stat -f -c %T "$S")"
 
+grep -q '/build/rtest/work/rtest-1.0/rtest\.c' "$A/out/pkg/rtest/dest/opt/amix/bin/rtest" ||
+	fail "the program's __FILE__ is not the remapped /build/rtest/work/rtest-1.0/rtest.c"
+grep -qF "$A" "$A/out/pkg/rtest/dest/opt/amix/bin/rtest" && fail "the program names its checkout, $A"
+ok "the compiler remaps the build tree: __FILE__ is /build/rtest/work/rtest-1.0/rtest.c in both"
 cmp "$pa" "$pb" || fail "the two rolls differ"
 ok "the two .pkg are byte-identical: $(stat -c%s "$pa") bytes, md5 $(md5sum "$pa" | cut -c1-32)"
 

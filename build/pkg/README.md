@@ -172,8 +172,15 @@ files). The members are archived in sorted order
 (pkgtrans's `find` sorts, `common/sortedfind/find`); their headers say
 uid, gid and device 0, inode numbers in archive order, modes from the
 prototype (`common/dsnorm.py`). A control file that names the build tree or
-the checkout is refused; the same path in the payload, a compiler's
-`__FILE__`, is reported. `tests/repro-selftest.sh` proves it in CI.
+the checkout is refused.
+
+The gcc14 compiler remaps the paths it writes (`__FILE__`, debug
+information): `common/gcc14-env.sh` puts `-ffile-prefix-map` on `CC` and
+`CXX`, so the build tree is `/build`, the checkout `/src` and the toolchain
+`/gcc14`, wherever they are. A build-host path left in a gcc14 payload is
+refused. The period compiler, gcc 2.7.2.3, has no such flag: in its payload
+the same path is reported, and make dist gives it fixed paths in the build
+container. `tests/repro-selftest.sh` proves all of it in CI.
 
 Before pkgmk the roll refuses a pkginfo without `PSTAMP` (pkgmk would write
 the build host's name and the date) and an object whose class pkginfo's
