@@ -19,7 +19,8 @@
 #                out/userland/pkgs/*.pkg, one version per name
 #   catalogs     both catalogs (P-38 S5.1, pkgtools)       not in make dist yet
 #   media        CD, netinstall, floppies (P-38 S6.1)      not in make dist yet
-#   lock         out/lock (P-38 S1.6)                      not in make dist yet
+#   lock         out/lock, every input and output (release/README.md); with
+#                LOCK=<file>, refuses a build that is not that lock
 #
 # and `dist` (all of them, stopping at the first that fails or is not in
 # make dist yet), `tools` (the build container, toolchain/container-build.sh),
@@ -86,7 +87,7 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	fi
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
-	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 \
+	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 -e LOCK \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" \
 		-w /src "${AMIX_IMAGE:-amix-toolchain:dist}" sh build/dist.sh "$@"
 fi
@@ -182,7 +183,10 @@ run() {
 		;;
 	catalogs) missing catalogs "P-38 S5.1, pkgtools: gen-catalog over out/" ;;
 	media) missing media "P-38 S6.1, installng after its move-in" ;;
-	lock) missing lock "P-38 S1.6, infra: out/lock" ;;
+	lock)
+		# LOCK=<lock of record>: refuse a build that differs from it
+		python3 -I "$here/mklock" "$top" "$out" ${LOCK:+--check "$LOCK"}
+		;;
 	dist)
 		# each step its own process: set -e holds inside it
 		for s in kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock; do

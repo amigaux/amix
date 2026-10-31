@@ -9,8 +9,9 @@ STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland cat
 
 .PHONY: $(STEPS) test selftests check-packages
 
-# SYSTEM=<amix-system checkout> is passed on to dist.sh in the environment.
-export SYSTEM
+# SYSTEM=<amix-system checkout> and LOCK=<lock of record> are passed on to
+# dist.sh in the environment.
+export SYSTEM LOCK
 
 $(STEPS):
 	sh dist.sh $@
@@ -27,6 +28,7 @@ test:
 	python3 -I pkg/tests/test-classes
 	python3 -I pkg/tests/test-arnorm
 	python3 -I tests/test-dist
+	python3 -I tests/test-lock
 
 selftests:
 	sh pkg/tests/run-selftests

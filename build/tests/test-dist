@@ -85,7 +85,7 @@ try:
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
     for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("drivers", "S3.2"),
                         ("drivers/a4091", "S3.2"), ("kspace", "S3.3"), ("catalogs", "S5.1"),
-                        ("media", "S6.1"), ("lock", "S1.6")):
+                        ("media", "S6.1")):
         rc, out = run(step)
         check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
               rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)

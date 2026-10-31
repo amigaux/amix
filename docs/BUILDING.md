@@ -48,9 +48,13 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
 | `catalogs` | the kernel-space and userland catalogs | `out/{kspace,userland}/catalog` | S5.1, pkgtools | not yet |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
-| `lock` | `out/lock`, every input and output of the build | `out/lock` | S1.6, infra | not yet |
+| `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
 
 `make tools` builds the container (`toolchain/container-build.sh`).
+
+A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`
+rebuilds everything and refuses the result if any line of its lock differs
+(`release/README.md`).
 
 ## out/
 
