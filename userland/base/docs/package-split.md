@@ -121,8 +121,7 @@ From the DLPI probe's measurements (`dhcp-probe.md`):
 
 - **The packaging harness.** A package whose files are under `/etc`, `/usr`
   and `/var` with no `/opt/amix` prefix; `TOOLCHAIN=gcc14` (a recipe that
-  compiles nothing uses `period`, since the gcc14 gates want a compile
-  line); the `CONFFILES` gate's "not under `PREFIX`" rule restated as "under
+  compiles nothing, as `syslog`'s, uses `none`); the `CONFFILES` gate's "not under `PREFIX`" rule restated as "under
   `/etc` or `/var`". The set: both packages belong in every install.
 - **The shared conffile script.** `/etc/nodename`, `/etc/inet/hosts` and
   `/etc/TIMEZONE` differ from the shipped default on every installed system.

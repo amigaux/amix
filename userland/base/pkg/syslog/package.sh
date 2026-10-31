@@ -9,8 +9,8 @@ CATEGORY=system
 SET=base
 LICENSE=MIT
 STYLE=hooks
-# nothing is compiled; gcc14 refuses a log with no compile line
-TOOLCHAIN=period
+# nothing is compiled: no cross toolchain, and any compile is refused
+TOOLCHAIN=none
 DEPENDS="amix-base"
 SYSTEM_PATHS="/dev/conslog"
 # the stock bytes, from amix-system (sha256-checked); the admin edits it
