@@ -17,11 +17,12 @@
 # so any user's `monswctl status` works at the node's 0644; the pages say so.
 # 1.0.0-7 (2026-10-31): the driver gives EBADF for RTG, NATIVE and SETCFG on a
 # descriptor opened only for reading; objects bb900ef8 / 287ee3ad.
+# 1.0.0-8 (2026-10-31): rc/monsw's header comment; objects and monswctl unchanged.
 
 KM_NAME=monsw
 KM_SHORT=monsw
 KM_REPO=kernel/modules/monsw
-KM_VERSION=1.0.0-7
+KM_VERSION=1.0.0-8
 
 KM_K30_OBJ=kernel/modules/monsw/build/k30/mod.d/monsw
 KM_K30_SHA=bb900ef80ee652755efd1677f6cb2bcb285f7b64f32c6194931a7752926587cc
@@ -39,8 +40,8 @@ kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec4
 # pure files
 KM_FILES_COMMON="\
 /usr/sbin/monswctl kernel/modules/monsw/build/tool/monswctl dd05a6ba5ca62f25f70e7f2679ee73c7c43a7a13fdcc5dca817e28c657f87355 0755
-/etc/init.d/monsw kernel/modules/monsw/rc/monsw f050017fa2ef0dafe6c4daedc5837a5b887df8b1b384b48b997bbdf16925bcd7 0744
-/etc/rc2.d/S20monsw kernel/modules/monsw/rc/monsw f050017fa2ef0dafe6c4daedc5837a5b887df8b1b384b48b997bbdf16925bcd7 0744
+/etc/init.d/monsw kernel/modules/monsw/rc/monsw 8744a32609ab00f94dcb00ade98db4f06c8596088293ae560b687a8474102652 0744
+/etc/rc2.d/S20monsw kernel/modules/monsw/rc/monsw 8744a32609ab00f94dcb00ade98db4f06c8596088293ae560b687a8474102652 0744
 /opt/amix/man/7/monsw kernel/modules/monsw/man/monsw.7 1d18b042ef37647135cbb3cdff07caf3c3097c7a2faea63e37aae9a1e6d9a570 0644
 /opt/amix/man/1m/monswctl kernel/modules/monsw/man/monswctl.1m 2e4faec8a5b596cb69121cc38fa0d5742ed8ac43aec7b64664900a707c0aad45 0644"
 KM_WHATIS=kernel/modules/monsw/pkg/monsw.whatis

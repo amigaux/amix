@@ -145,7 +145,7 @@ the first value it finds with `monswctl set`:
 A value that cannot be set (a bad sum, no node, a kernel without monsw, a forced value) is one
 line on the console and in the boot log, and the boot goes on. The log is `/var/adm/rc.log`
 through amix-base's `/usr/lib/amix/rc.subr` (`rc.subr(1M)`); without it, the console. The
-step carries no major number and makes no node (P-36 D-N21). A card's `display.d` entry says
+step carries no major number and makes no node: `S20devnodes` makes the package's. A card's `display.d` entry says
 only whether the card uses the switch (`monsw yes`), not a value.
 
 ## Size and memory

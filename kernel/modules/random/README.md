@@ -28,7 +28,7 @@ It is a loadable kernel module of class `demand` for both Amix kernel lines, `k3
 | `man/random.7`, `man/randseed.1m` | the pages `random(7)` and `randseed(1M)` |
 | `test/hosttest.sh` | host test of the driver; it runs `test/rctest.sh` too |
 | `test/rctest.sh` | host test of the boot step |
-| `pkg/` | the package recipe (P-38 S3.3): `build.sh`, `pin.sh`, `pkginfo.<line>`, `prototype.<line>`, `modreg`, `random.whatis` |
+| `pkg/` | the package recipe, rolled by make dist's kspace step: `build.sh`, `pin.sh`, `pkginfo.<line>`, `prototype.<line>`, `modreg`, `random.whatis` |
 
 ## The generator
 

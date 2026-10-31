@@ -233,7 +233,7 @@ size (2 KiB) and once with the k46 one (4 KiB). It checks:
 - `_unload`: `EBUSY` while a unit is open, otherwise the scratch memory freed.
 
 **What cannot be tested here.** Unit 0 end to end needs boot2 to place an image and the kernel
-to root on it. That is amix-dlm's S4-11 (boot2's placement), and the bench row S4-50. Until
+to root on it: boot2's placement of the image (kernel/dlm), then a run on a box. Until
 then:
 - the root mount from unit 0 has not run anywhere;
 - neither has a scratch disk on a box: `mkfs`, mount and `/tmp` on unit 1 or 2.

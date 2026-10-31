@@ -1,5 +1,5 @@
 /*
- * sys/monsw.h -- the monitor switch: /dev/monsw and its kernel API (P-8, 2026-09-28).
+ * sys/monsw.h -- the monitor switch: /dev/monsw and its kernel API.
  *
  * One machine resource, the CIA-B line(s) that flip a monitor or KVM between the native
  * video and an RTG card, owned by one card-independent driver (src/monsw.c) instead of by

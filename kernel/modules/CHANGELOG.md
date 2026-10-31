@@ -25,10 +25,10 @@ kbootset 1.1.0.261031-30 or later. The packages carry no dependency for it, sinc
 
 ## 2026-10-31 — random: the package recipe random-k30 / random-k46; no credit lines (948305e, 69afdfa)
 
-kernel/modules/random/pkg (P-38 S3.3), kmodpkg with KM_ROOT the checkout: it ships the object, modreg, /dev/random and
+kernel/modules/random/pkg, kmodpkg with KM_ROOT the checkout: it ships the object, modreg, /dev/random and
 /dev/urandom (c 48 0/1, class random), randseed with S21/K02 copies, the pages random(7) and randseed(1M) under
 /opt/amix/man, and whatis.d/<PKG>. Trial roll random30 b2b39b83, random46 934be87a, reproducible; rolling in make dist
-waits for three build/pkg fixes. The random module is new code: its credit lines are removed (owner).
+waits for three build/pkg fixes. The random module is new code and carries no credit lines.
 
 ## 2026-10-31 — random 1.0.0-1: /dev/random and /dev/urandom as a module (3d4a48d)
 
@@ -47,7 +47,7 @@ include/sys/monsw.h's comment names /etc/display's monsw (else the older /etc/mo
 
 monsw/tool/monswctl.c is copied from kerntools tools/monsw (7996e07) with only comments changed; the cross build
 b1915b96 equals kerntools' pin. rc/monsw (/etc/init.d/monsw, S20monsw) sets /etc/display's monsw, else /etc/monsw with
-a log line naming the older file, else nothing so the card's seed applies, and never fails the boot (P-36 W9). Pages
+a log line naming the older file, else nothing so the card's seed applies, and never fails the boot. Pages
 monsw(7) and monswctl(1M). tooltest.sh 35 checks. Module objects unchanged: monsw 1f53a31b / 962709ca.
 
 ## 2026-10-29 — The prose names the monorepo (cc5fe5d)
@@ -72,7 +72,7 @@ kit's amixddi.h provides them on both lines (8b0e43e); the host test's stub head
 
 ## 2026-10-26 — ramdisk 1.0.0-1: the root-class RAM disk module (80d8b2e) — builds only against a kit with iodone
 
-Block driver on major 20 (C4-2 §8, C4-3 §4; S4-34). Unit 0 = the loader-placed miniroot from `ramdisk_image` at
+Block driver on major 20 (C4-2 §8, C4-3 §4). Unit 0 = the loader-placed miniroot from `ramdisk_image` at
 phystokv of its physical address (identity below VSECT1; never allocated or freed; writable). Units 1–2 = kmem scratch
 disks allocated at first open in KM_NOSLEEP pieces ≤ 256 KiB, freed at last close; `size1`/`size2` (default 512/2048 KiB,
 max 16384). Pinned, no _halt, no root_defer; _load calls only ramdisk_image and printf. .text 1544/.data 372/.moddata
@@ -81,7 +81,7 @@ in the DDI (modfix: undefined) and modcheck accepting a block-only driver (drvma
 
 ## 2026-10-26 — monsw 1.0.0-2 (b0f75a4)
 
-A packaging release so S3-45 can test `apkg upgrade` of a kernel module: module/VERSION 1.0.0-2; README gains "Size and
+A packaging release to test `apkg upgrade` of a kernel module: module/VERSION 1.0.0-2; README gains "Size and
 memory" (C3-1 §6 / C3-6 §1): file 5197 B, image 2200 B (.text 1584, .data 432, .moddata 161, .bss 16), load working set
 about 15 KiB, no kmem requests. Objects byte-identical to 1.0.0-1 (k30 01a40342, k46 2c2760e9); modcheck ok both lines.
 

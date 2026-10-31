@@ -1,6 +1,6 @@
 /*
  * monsw.c -- the monitor switch, card-independent: /dev/monsw and the kernel API card drivers
- * call (P-8, 2026-09-28).  sys/monsw.h has the value's meanings and where it comes from.
+ * call.  sys/monsw.h has the value's meanings and where it comes from.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *
@@ -36,7 +36,7 @@
 /*
  * IPL 4 around the read-modify-write.  Written out as __asm__ __volatile__ rather than taken
  * from sys/inline.h: the kernel is compiled -traditional, where a plain `volatile` asm can be
- * dropped as dead (T-9).
+ * dropped as dead.
  */
 #define MONSW_SPLTTY(s) __asm__ __volatile__("mov.w %%sr,%0;mov.w &0x2400,%%sr" : "=d"(s))
 #define MONSW_SPLX(s)   __asm__ __volatile__("mov.w %0,%%sr" : : "d"(s))

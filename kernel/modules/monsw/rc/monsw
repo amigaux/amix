@@ -1,6 +1,6 @@
 #!/bin/sh
 # monsw -- put the monitor-switch value into the kernel's monsw at boot:
-# /etc/init.d/monsw, run as /etc/rc2.d/S20monsw (P-8, P-36 W9).
+# /etc/init.d/monsw, run as /etc/rc2.d/S20monsw.
 #
 # The value, the first that is set:
 #   1. /etc/display's monsw line (display(4)): comments stripped, the last

@@ -1,5 +1,5 @@
 /*
- * monswctl.c -- the /dev/monsw box tool (P-8): read and set the monitor-switch
+ * monswctl.c -- the /dev/monsw box tool: read and set the monitor-switch
  * configuration, switch the screen, hold the switch on RTG for a command.
  *
  *   monswctl [-d dev] get           the struct monsw_info fields, one per line
@@ -10,7 +10,7 @@
  *   monswctl [-d dev] native        switch to native video
  *
  * The value is the Z3660 firmware's monitor_switch bit sum (sys/monsw.h):
- * 1 CTS, 2 SEL, 16 CTS level flag, 32 SEL level flag; the owner's boxes use 34.
+ * 1 CTS, 2 SEL, 16 CTS level flag, 32 SEL level flag; 34 is SEL, the card's picture when low.
  * Decimal or 0x-hex; any other bit is refused here before the kernel sees it.
  *
  * RTG is held only while the device is open: the kernel returns the switch to

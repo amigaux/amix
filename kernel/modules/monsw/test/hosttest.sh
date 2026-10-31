@@ -143,7 +143,7 @@ main(void)
 	p("", -1, 0);
 	p("config=-1", -1, 0);			/* the default kbootset writes */
 	p("config=0", 0, 0);
-	p("config=34", 34, 0);			/* the owner's boxes */
+	p("config=34", 34, 0);			/* SEL, low = RTG */
 	p("config=51", 51, 0);
 	p("config=-7", -1, 0);			/* any negative = unset */
 	p("config=4", 4, 0);			/* not a bit sum: monswinit reports it */
