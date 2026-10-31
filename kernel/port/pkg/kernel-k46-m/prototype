@@ -1,0 +1,25 @@
+#
+# prototype -- kernel-k46-m: the module kernel of the 040/060 line and its
+# build sidecar (ET_REL: no unix.sym, C2-3 v6 sec 1).
+#
+# AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.
+# PURE FILES (amix-dlm spec 40 sec 6; apkg 0.3 refuses anything else): f/d of
+# class none, i pkginfo/copyright only.  Since the S5-12 cuts it also
+# carries the cut's filesystem modules (ufs) and their comment-only
+# modreg.d files (C2-3 v8 sec 1; the paths and modes of C3-5 sec 1.2); no
+# other package names them.  /etc is the stock core's directory, declared
+# with core's attributes.  The same paths as the static
+# kernel-k46-* families: a box carries one of them (C2-3 sec 1.1).
+#
+i pkginfo
+i copyright
+d none /stand 0755 root root
+d none /stand/k46 0755 root sys
+f none /stand/k46/unix 0644 root sys
+f none /stand/k46/kabi 0444 root sys
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/ufs 0644 root sys
+f none /etc/conf/modreg.d/ufs 0644 root sys
