@@ -168,22 +168,31 @@ $R/dev/zen0 c 51 0
 $R/dev/zen1 c 51 1" "$(cat "$T/mknod.log")"
 expect "several: counted" "3 node(s) made, 0 failed" "$(cat "$T/rc.log")"
 
-# a record with "?" for a number (the 1991 pkgmk's for minor 0): matches any
-# node that is there; a missing one is not made, and said
+# stock pkgadd records a number 0 as "?" (zen0's minor): "?" is 0, both to
+# compare with the node there and to make a missing one; a "?" mode is 0600
 db <<'EOF'
-/dev/devtst0 c devtst 99 ? 0600 root sys devtst
-/dev/q0 c none ? 1 0600 root sys q
+/dev/zen0 c z3660eth 51 ? 0600 root sys zeth30
+/dev/q0 c none ? 1 ? root sys q
 EOF
 there <<EOF
-$R/dev/devtst0 c 99 0
+$R/dev/zen0 c 51 0
+$R/dev/q0 c 0 1
 EOF
 run "$K" > /dev/null
-same "?: nothing made" "" "$(cat "$T/mknod.log")"
-expect "?: the missing one said" "devnodes: /dev/q0: its record gives no number (c ? 1); not made" "$(cat "$T/rc.log")"
+same "?: matches 0, nothing made" "" "$(cat "$T/mknod.log")$(cat "$T/rc.log")"
 there < /dev/null
 run "$K" > /dev/null
-same "?: missing, still nothing made" "" "$(cat "$T/mknod.log")"
-expect "?: counted as failed" "0 node(s) made, 2 failed" "$(cat "$T/rc.log")"
+same "?: missing ones made with 0" "$R/dev/zen0 c 51 0
+$R/dev/q0 c 0 1" "$(cat "$T/mknod.log")"
+same "?: a ? mode is 0600" "600" "$(stat -c %a "$R/dev/q0")"
+there <<EOF
+$R/dev/zen0 c 51 3
+EOF
+db <<'EOF'
+/dev/zen0 c z3660eth 51 ? 0600 root sys zeth30
+EOF
+run "$K" > /dev/null
+same "?: a node at another minor is made again at 0" "$R/dev/zen0 c 51 0" "$(cat "$T/mknod.log")"
 
 # no database, no records: nothing at all
 rm -f "$T/contents"

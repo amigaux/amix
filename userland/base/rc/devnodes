@@ -14,10 +14,9 @@
 #                  logged as a packaging error
 #
 # A node of class none that is there but differs from its record is left
-# and logged; a record without a number ("?") is never made from. Nothing
-# here carries a major number. One pass: the records, one ls of their paths,
-# and work only for those that need it. Log: /var/adm/rc.log ("devnodes:"
-# and "mknod:" lines).
+# and logged. Nothing here carries a major number. One pass: the records,
+# one ls of their paths, and work only for those that need it. Log:
+# /var/adm/rc.log ("devnodes:" and "mknod:" lines).
 #
 # This file is written in place on update, never moved, so the S link stays
 # the same file.
@@ -42,9 +41,16 @@ esac
 . "$RC_SUBR"
 [ -r "$DEVNODES_DB" ] || exit 0
 
-# "<path> <type> <class> <major> <minor> <mode> <owner> <group>" per record
+# "<path> <type> <class> <major> <minor> <mode> <owner> <group>" per record;
+# stock pkgadd writes a number 0 as "?" (zen0's minor), so "?" is 0, and a
+# "?" mode is 0600
 want=`grep '^/dev/[^ ]* [cb] ' "$DEVNODES_DB" |
-	awk '{ print $1, $2, $3, $4, $5, $6, $7, $8 }'`
+	awk '{
+		if ($4 == "?") $4 = 0
+		if ($5 == "?") $5 = 0
+		if ($6 == "?") $6 = "0600"
+		print $1, $2, $3, $4, $5, $6, $7, $8
+	}'`
 [ -n "$want" ] || exit 0
 
 # the records that need work: "<why> <record>", why = missing or differs
@@ -66,11 +72,8 @@ todo=`
 	END {
 		for (i = 1; i <= k; i++) {
 			p = n[i]; split(rec[p], f, " ")
-			# a "?" (the 1991 pkgmk writes one for a minor of 0) matches any
-			if (!(p in have)) { print "missing", rec[p]; continue }
-			split(have[p], h, " ")
-			if (h[1] != f[2] || (f[4] != "?" && h[2] != f[4]) || (f[5] != "?" && h[3] != f[5]))
-				print "differs", rec[p]
+			if (!(p in have)) print "missing", rec[p]
+			else if (have[p] != f[2] " " f[4] " " f[5]) print "differs", rec[p]
 		}
 	}' root="$DEVNODES_ROOT"
 `
@@ -86,14 +89,6 @@ do
 	set -- $l
 	# $1 why, $2 path, $3 type, $4 class, $5 major, $6 minor, $7 mode, $8 owner, $9 group
 	n=$DEVNODES_ROOT$2
-	if [ "$6" = "?" ] || { [ "$5" = "?" ] && [ $4 = none ]; }
-	then
-		rc_log devnodes "$2: its record gives no number ($3 $5 $6); not made"
-		bad=`expr $bad + 1`
-		IFS='
-'
-		continue
-	fi
 	d=`dirname "$n"`
 	[ -d "$d" ] || mkdir -p "$d"
 	if [ $4 = none ]
