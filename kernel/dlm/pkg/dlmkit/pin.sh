@@ -91,31 +91,32 @@
 # k30 f04242ed..., k46 a6ce6e30...; -9 bbd20b6: k30 0e4c7208..., k46
 # c0b64ee4...; -10 33ea0c7: k30 c883c4fd..., k46 749b19b8...; -11 c2dc7fb:
 # k30 1e317abd..., k46 08463c97...; -12 96720ad (host build): k30
-# db72da99..., k46 cee36ea8...
-# -13 (not minted; the revision for the release): -12's commit, kit
-# built in the build container (amix-toolchain:dist), the reference build
-# for the release.  Its kit differs from -12's host build in three things:
-# the stock and sysroot headers are amix-system's pinned 2.1c p2a usr/
-# (patchlevel.h, and sys/types.h and sys/socket.h with their comments
-# closed), where the host gcc-cross-amix's sysroot is an older copy; and
-# tools/modfix, the kit's host program, as the container's compiler builds
-# it.  Pinned by the manifest digest, which covers kit.conf and NOTICE
-# (the provenance the package carries), not by norev: the norev digest
-# differs between the two builds as well.
-DK_DLM_COMMIT=96720ad
+# db72da99..., k46 cee36ea8...; -13 first pinned at 96720ad (container):
+# k30 6fd5269d..., k46 650b0e50...
+# -13 (not minted; the revision for the release): amix 4ccb3f0, its kit
+# built in the build container (amix-toolchain:dist), the reference build:
+# kabi k30.1.3 / k46.1.3 as -12, with the major registry's c 48 random,
+# sys/monsw.h's corrected SETCFG comment, the contract copies' text without
+# internal ids, and the k46 headers from the port at its pin 727cbe7.  The
+# container builds the kit with amix-system's pinned 2.1c p2a headers and
+# its own tools/modfix, so a host build of the same commit differs.  Pinned
+# by the manifest digest, which covers kit.conf and NOTICE (the provenance
+# the package carries), not by norev.  The digests equal the kit `make -C
+# build kit` makes at 4ccb3f0.
+DK_DLM_COMMIT=4ccb3f0
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=96720ad
+DK_MONSW_COMMIT=4ccb3f0
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
-DK_K46_PORT_COMMIT=d0e8857
+DK_K46_PORT_COMMIT=727cbe7
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
-DK_K46_PORT_HASH=d0e88574f7ee8559452cc7363ff7bcf3dd9133e6
-DK_K30_MANIFEST=6fd5269dc806de36fb790ddac560f2c9fa3c6d5d9d006300c87ef9c8ecfc0e4d
-DK_K46_MANIFEST=650b0e50595c60cf8a30706955e38e3a6b2352ee8d5d472cacb9f40ac0dbd681
+DK_K46_PORT_HASH=727cbe728a1e7bf040425c3e6a61b190647a28b7
+DK_K30_MANIFEST=85d85d6a5bca2a2c1f0f58cad0eb71e34e630f44e4f428efdf289e6cfef271f6
+DK_K46_MANIFEST=dd8b350ba70cf7771a88f7079f61807ebbeda2e1e48bee731e293beeaf11dee2
 
 DK_DATE=261031
 DK_REV=13
