@@ -6,7 +6,10 @@
 #   make dist [OUT=<dir>]   build the host engine, cross-build apkg,
 #                           contents-fsck and the engine for Amix, and roll
 #                           APKG-<ver>.pkg and APKGENG-<ver>.pkg into OUT
-#                           (default <amix>/out/userland/pkgs)
+#                           (default <amix>/out/userland/pkgs), with
+#                           tools/repo's deps/descs/names/cats.conf: the
+#                           staging root's confs gen-catalog.py reads there
+#                           (cats.conf declares the category vocabulary)
 #   make repro-check        dist twice, from this checkout and from a
 #                           `git archive` of HEAD at another path under
 #                           another umask, and compare the bytes
@@ -30,6 +33,8 @@ dist: engine-host cross
 	bash tools/repo/build-packages.sh --apkg --eng $(STAGE)
 	mkdir -p $(OUT)
 	cp $(STAGE)/base/APKG-*.pkg $(STAGE)/base/APKGENG-*.pkg $(OUT)/
+	cp tools/repo/deps.conf tools/repo/descs.conf tools/repo/names.conf \
+		tools/repo/cats.conf $(OUT)/
 	@cd $(OUT) && md5sum APKG-*.pkg APKGENG-*.pkg
 
 engine-host:
