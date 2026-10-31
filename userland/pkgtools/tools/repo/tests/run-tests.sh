@@ -2080,6 +2080,25 @@ t26good "a module package with a c node in /dev/rdsk/ and a b node in /dev/dsk/ 
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "DIR /dev" \
     "PKGMAP 1 b none /dev/dsk/zb0 52 0 0600 root root" \
     "PKGMAP 1 c none /dev/rdsk/zb0 52 0 0600 root root"
+# C3-5 v18 section 1.2: a node's class may be its module's name (zbad) when
+# pkginfo's CLASSES lists it; unlisted, another class, or a file in it is not
+t26good "a module's c node in its module's class, listed in CLASSES, is accepted (C3-5 v18)" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGINFO CLASSES=none zbad" "DIR /dev" \
+    "CDEV /dev/zb0 52 0 zbad"
+t26good "a module's b node in its module's class, listed in CLASSES, is accepted" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGINFO CLASSES=none zbad" "DIR /dev" \
+    "DIR /dev/dsk" "BDEV /dev/dsk/zb0 52 0 zbad"
+t26bad "a node in its module's class that CLASSES does not list is refused" \
+    "not pure files.*an object in class zbad, which pkginfo.s CLASSES does not list" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "DIR /dev" "CDEV /dev/zb0 52 0 zbad"
+t26bad "a node in a listed class other than its module's is refused" \
+    "not pure files.*an object in class kcls" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGINFO CLASSES=none kcls" "DIR /dev" \
+    "CDEV /dev/zb0 52 0 kcls"
+t26bad "a file in the module's class is refused (files stay class none)" \
+    "not pure files.*an object in class zbad" \
+    "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGINFO CLASSES=none zbad" \
+    "PKGMAP 1 f zbad /etc/zbad.conf 0644 root sys 1 1 1"
 t26bad "a module's block node outside /dev/dsk/ is refused" "not pure files.*a block device node outside /dev/dsk/: /dev/zbd0" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 b none /dev/zbd0 52 0 0644 root root"
 t26bad "a module's block node in /dev/rdsk/ is refused" "not pure files.*a block device node outside /dev/dsk/: /dev/rdsk/ram0" \

@@ -1974,14 +1974,14 @@ sed -n 's/^FILE //p' \$F | while read p c; do
 # a module's device node (C3-5 v4 §1.2): pkgadd makes it (mknod, or a
 # stand-in file when the tests do not run as root) and records it as a
 # c line in the contents DB, as heirloom's pkginstall does
-sed -n 's/^CDEV //p' \$F | while read p mj mn; do
+sed -n 's/^CDEV //p' \$F | while read p mj mn cl; do
     mkdir -p \$(dirname \$R\$p)
     mknod \$R\$p c \$mj \$mn 2>/dev/null || : > \$R\$p
-    echo "\$p c none \$mj \$mn 0644 root root \$I" >> \$C; done
-sed -n 's/^BDEV //p' \$F | while read p mj mn; do
+    echo "\$p c \${cl:-none} \$mj \$mn 0644 root root \$I" >> \$C; done
+sed -n 's/^BDEV //p' \$F | while read p mj mn cl; do
     mkdir -p \$(dirname \$R\$p)
     mknod \$R\$p b \$mj \$mn 2>/dev/null || : > \$R\$p
-    echo "\$p b none \$mj \$mn 0600 root root \$I" >> \$C; done
+    echo "\$p b \${cl:-none} \$mj \$mn 0600 root root \$I" >> \$C; done
 sed -n 's/^SHARED //p' \$F | while read p c; do
     mkdir -p \$(dirname \$R\$p); echo "\$c" > \$R\$p
     printf '%s f none 0644 root sys %s 1 1 OTHERPKG +%s\\\\:kcls\n' \
@@ -2549,6 +2549,16 @@ modds "$KR/pkgs/kernel/zdevp-1.0.pkg" ZDEVP zdevp "DIR /dev" "PKGMAP 1 p none /d
 modds "$KR/pkgs/kernel/zdevx-1.0.pkg" ZDEVX zdevx "PKGMAP 1 c none /etc/zen0 51 0 0644 root root"
 modds "$KR/pkgs/kernel/zdevm-1.0.pkg" ZDEVM zdevm "DIR /dev" "PKGMAP 1 c none /dev/zen0 51 0644 root root"
 modds "$KR/pkgs/kernel/zdevk-1.0.pkg" ZDEVK zdevk "DIR /dev" "PKGMAP 1 c kcls /dev/zen0 51 0 0644 root root"
+# C3-5 v18 §1.2: a node's class is its module's name, listed in CLASSES
+modds "$KR/pkgs/kernel/zdevc-1.0.pkg" ZDEVC zdevc "DIR /dev" "PKGINFO CLASSES=none zdevc" \
+    "CDEV /dev/zc0 53 0 zdevc"
+modds "$KR/pkgs/kernel/zdevbc-1.0.pkg" ZDEVBC zdevbc "DIR /dev" "DIR /dev/dsk" \
+    "PKGINFO CLASSES=none zdevbc" "BDEV /dev/dsk/zbc0 54 0 zdevbc"
+modds "$KR/pkgs/kernel/zdevu-1.0.pkg" ZDEVU zdevu "DIR /dev" "CDEV /dev/zu0 53 0 zdevu"
+modds "$KR/pkgs/kernel/zdevo-1.0.pkg" ZDEVO zdevo "DIR /dev" "PKGINFO CLASSES=none kcls" \
+    "CDEV /dev/zo0 53 0 kcls"
+modds "$KR/pkgs/kernel/zdevf-1.0.pkg" ZDEVF zdevf "PKGINFO CLASSES=none zdevf" \
+    "PKGMAP 1 f zdevf /etc/zdevf.conf 0644 root sys 1 1 1"
 printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/kdev kdev\nDIR /dev\nCDEV /dev/zen0 51 0\n' \
     | python3 "$TESTS/mkds.py" "$KR/pkgs/kernel/kerndev-1.0.pkg" KERNDEV 1.0
 printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/kbdev kbdev\nDIR /dev\nDIR /dev/dsk\nBDEV /dev/dsk/ram0 20 0\n' \
@@ -2558,7 +2568,7 @@ $(kline z3660eth-k46 1.0.0-1 module k46 k46.1.0 $PIN kernel/zeth46-1.0.0-1.pkg p
 $(kline ramdisk-k46 1.0.0-1 module k46 k46.1.0 $PIN kernel/ram46-1.0.0-1.pkg pkginst=ram46)
 $(kline kerndev 1.0 kernel k46 k46.1.0 $PIN kernel/kerndev-1.0.pkg)
 $(kline kernbdev 1.0 kernel k46 k46.1.0 $PIN kernel/kernbdev-1.0.pkg)
-$(for i in b bm bk p s l x m k; do kline zdev$i 1.0 module k46 k46.1.0 $PIN kernel/zdev$i-1.0.pkg; done)"
+$(for i in b bm bk p s l x m k c bc u o f; do kline zdev$i 1.0 module k46 k46.1.0 $PIN kernel/zdev$i-1.0.pkg; done)"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 KD=$WORK/ktgt-dev
 "$APKG" -c "$KCONF" -R "$KD" install kernel-k46 >/dev/null 2>&1
@@ -2618,7 +2628,22 @@ run 0 "remove -R of the ramdisk module package" "$APKG" -c "$KCONF" -R "$KD" rem
     && ok "pkgrm ram46 takes the b nodes out of the contents DB; the record is gone" \
     || bad "ramdisk remove" "$(cat "$SHIMLOG" "$KDC")"
 kreset
-for i in kerndev kernbdev zdevb zdevbm zdevbk zdevp zdevs zdevl zdevx zdevm zdevk; do
+# C3-5 v18 §1.2: nodes in their module's class, which CLASSES lists
+for i in zdevc zdevbc; do
+    case $i in
+    zdevc) nrec="/dev/zc0 c zdevc 53 0 0644 root root ZDEVC" ;;
+    zdevbc) nrec="/dev/dsk/zbc0 b zdevbc 54 0 0600 root root ZDEVBC" ;;
+    esac
+    run 0 "install -R of $i, its node in the module's class $i" \
+        "$APKG" -c "$KCONF" -R "$KD" install $i
+    grep -qx "$nrec" "$KDC" \
+        && ok "the contents DB records the node in class $i" \
+        || bad "$i node record" "$(cat "$SHIMLOG" "$KDC")"
+    kreset
+    run 0 "remove -R of $i" "$APKG" -c "$KCONF" -R "$KD" remove $i
+    kreset
+done
+for i in kerndev kernbdev zdevb zdevbm zdevbk zdevp zdevs zdevl zdevx zdevm zdevk zdevu zdevo zdevf; do
     case $i in
     kerndev) why="an object of type c at /dev/zen0" ;;
     kernbdev) why="an object of type b at /dev/dsk/ram0" ;;
@@ -2631,6 +2656,9 @@ for i in kerndev kernbdev zdevb zdevbm zdevbk zdevp zdevs zdevl zdevx zdevm zdev
     zdevx) why="a device node outside /dev/: /etc/zen0" ;;
     zdevm) why="a device entry not of the form <major> <minor> <mode> <owner> <group>: /dev/zen0" ;;
     zdevk) why="an object in class kcls" ;;
+    zdevu) why="an object in class zdevu, which pkginfo's CLASSES does not list" ;;
+    zdevo) why="an object in class kcls" ;;
+    zdevf) why="an object in class zdevf" ;;
     esac
     run 3 "$i: $why is refused (exit 3)" "$APKG" -c "$KCONF" install $i
     echo "$OUT" | grep -qF "$i: not a pure-file kernel-space package: $why" \
