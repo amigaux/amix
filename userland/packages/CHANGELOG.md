@@ -3,6 +3,10 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — INDEX lists amix-base 1.0-5 (725ebc2)
+
+INDEX.md regenerated; it lists amix-base 1.0-5.
+
 ## 2026-10-31 — INDEX and conf list dhcp-client and amix-base 1.0-3 (2bee88d)
 
 INDEX.md and conf/{names,cats,deps,sets}.conf regenerated: they list dhcp-client 1.0-1 (dhcpc, network, set base,
