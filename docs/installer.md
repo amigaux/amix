@@ -5058,6 +5058,7 @@ disc).
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
 - `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk (RETIRED 2026-10-31, P-36).
+- `l11-k46-reinstall-ia`: a fresh install over a seeded r7 disk, nothing of it kept (P-36, `docs/l11-disk.md`).
 
 Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`):
 - the store and its pristine generation;

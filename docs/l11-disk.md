@@ -162,6 +162,13 @@ A 1.1 install never keeps anything of the disk it is laid on:
   the dialog and the first-boot configuration in full. `tools/l11-target-check.py`
   checks this on every 1.1 target.
 
+Matrix cell `l11-k46-reinstall-ia` proves it: `l11-rd-k46` over a copy of an installed
+r7 060 disk with a seeded user (`TARGET_SRC`, default
+`work/p36/r7-060-cd1pub-seeded.hdf`). The interview is answered `y 105 30 1 n n`, the
+beacon carries the sizes, and `bootstore` checks that nothing of the old disk is left
+(`EXPECT_ABSENT`: no `/home/alice`, no `alice` in `passwd` or `shadow`, not its node
+name or hosts line, no `/var/adm/upgrade`, no `S17upgrade`). Then the first boot runs.
+
 What `apkg upgrade` and kbootset's generations do on an installed 1.1 disk (a new
 kernel or module package, a rollback) is unchanged: that is the running system's
 package path, not the installer's.
