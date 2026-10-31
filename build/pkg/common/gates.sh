@@ -481,11 +481,51 @@ D4EOF
 # executable in the payload when AMIX_TOOLCHAIN=gcc14.  gcc14-env.sh says why
 # each exists.
 
+# amix_g14_sysroot_soname <path> -- the SONAME of the library the sysroot
+# holds at the absolute <path>, every symbolic link on the way read inside
+# $AMIX_SYSROOT (an absolute target is the sysroot's, not the host's); empty
+# when it has none; exit 1 when the sysroot holds no file there.
+amix_g14_sysroot_soname() {
+	_gs_f=$(python3 -I - "${AMIX_SYSROOT:?}" "$1" <<'PY'
+import os, sys
+root, path = sys.argv[1], sys.argv[2]
+if not path.startswith("/"):
+    sys.exit(1)
+parts, cur, hops = [q for q in path.split("/") if q], "", 0
+while parts:
+    q = parts.pop(0)
+    if q == ".":
+        continue
+    if q == "..":
+        cur = cur.rsplit("/", 1)[0]
+        continue
+    if os.path.islink(root + cur + "/" + q):
+        hops += 1
+        if hops > 40:
+            sys.exit(1)
+        t = os.readlink(root + cur + "/" + q)
+        if t.startswith("/"):
+            cur = ""
+        parts = [x for x in t.split("/") if x] + parts
+        continue
+    cur += "/" + q
+if not os.path.isfile(root + cur):
+    sys.exit(1)
+print(root + cur)
+PY
+) || { unset _gs_f; return 1; }
+	"$READELF" -d "$_gs_f" 2>/dev/null | sed -n 's/.*(SONAME).*\[\([^]]*\)\].*/\1/p'
+	unset _gs_f
+}
+
 # amix_gate_g14_needed <elf> -- the dynamic section a box can load: interpreter
-# /usr/lib/libc.so.1; every DT_NEEDED either /usr/lib/libc.so.1 (libc's own
-# SONAME, which every stock binary records) or a BARE name the guest resolves
-# from its own /usr/lib (libsocket.so, libnsl.so) -- never a host path; no
-# RPATH/RUNPATH; no TEXTREL.
+# /usr/lib/libc.so.1; every DT_NEEDED either a BARE name the guest resolves
+# from its own /usr/lib (libsocket.so, libnsl.so) or a path that is the SONAME
+# of the sysroot library at that path (amix_g14_sysroot_soname): the platform
+# ABI for libraries that name themselves by path -- /usr/lib/libc.so.1, which
+# every stock binary records, and /usr/amiga/lib/libscreen.so, as the stock X
+# servers and /usr/amiga/bin tools record it -- never a host path or a path
+# the sysroot does not name itself so; no RPATH/RUNPATH; no TEXTREL.
 amix_gate_g14_needed() {
 	_gn_f="$1"; _gn_bad=0
 	_gn_dyn=$("$READELF" -d "$_gn_f" 2>/dev/null)
@@ -495,15 +535,21 @@ amix_gate_g14_needed() {
 	_gn_list=$(echo "$_gn_dyn" | sed -n 's/.*(NEEDED).*\[\([^]]*\)\].*/\1/p')
 	for _gn_n in $_gn_list; do
 		case "$_gn_n" in
-		/usr/lib/libc.so.1) ;;
-		*/*) echo "  NEEDED FAIL $_gn_f -- '$_gn_n' is a path, not a bare name" >&2; _gn_bad=1 ;;
+		*/*)
+			if ! _gn_s=$(amix_g14_sysroot_soname "$_gn_n" 2>/dev/null); then
+				echo "  NEEDED FAIL $_gn_f -- '$_gn_n' is a path, not a bare name, and the sysroot holds no library there" >&2
+				_gn_bad=1
+			elif [ "$_gn_s" != "$_gn_n" ]; then
+				echo "  NEEDED FAIL $_gn_f -- '$_gn_n' is a path, not a bare name, and the sysroot library there is not named so (SONAME '${_gn_s}')" >&2
+				_gn_bad=1
+			fi ;;
 		esac
 	done
 	if echo "$_gn_dyn" | grep -E '\((RPATH|RUNPATH|TEXTREL)\)' >/dev/null; then
 		echo "  NEEDED FAIL $_gn_f -- RPATH/RUNPATH/TEXTREL present" >&2; _gn_bad=1
 	fi
 	[ $_gn_bad -ne 0 ] || echo "  NEEDED ok  $(basename "$_gn_f"): interp /usr/lib/libc.so.1, NEEDED $(echo $_gn_list)"
-	unset _gn_f _gn_dyn _gn_interp _gn_list _gn_n
+	unset _gn_f _gn_dyn _gn_interp _gn_list _gn_n _gn_s
 	return $_gn_bad
 }
 
