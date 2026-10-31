@@ -67,7 +67,7 @@ CATEGORIES = ("system", "network", "utility", "archive", "library", "shell",
 # base (P-36: in every install, whichever set is picked), the installer's
 # sets, and extra (the add-on userland).
 SETS = ("base", "minimal", "standard", "full", "developer", "x11", "extra")
-TOOLCHAINS = ("gcc14", "period")
+TOOLCHAINS = ("gcc14", "period", "none")
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
 VENDOR = "amix-packages"

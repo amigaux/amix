@@ -209,6 +209,15 @@ if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
 	amix_gate_g14_strict "$BUILD/make.log"
 	amix_gate_g14_compat "$BUILD/make.log"
 fi
+# TOOLCHAIN=none: nothing compiled.  common/nocc refuses $CC and the rest;
+# a compiler called by its own name (the build container has them on PATH)
+# leaves its command line, first word the compiler, in make.log
+if [ "$AMIX_TOOLCHAIN" = none ] &&
+   grep -E '^[[:space:]]*([^[:space:]]*/)?([A-Za-z0-9_.+]+-)*(gcc|g\+\+|cc|c\+\+|clang|as|ld|ar)([[:space:]]|$)' "$BUILD/make.log" > "$BUILD/none.compile"; then
+	echo "[FAIL] TOOLCHAIN=none, but the build compiled or linked:" >&2
+	cat "$BUILD/none.compile" >&2
+	exit 1
+fi
 post_build
 echo
 
@@ -268,6 +277,10 @@ dso_syms() {
 	{ "$NM" -D "$1" || :; "$NM" "$1"; } 2>/dev/null | awk '$1 != "U" && NF >= 2 {print $NF}'
 }
 BINS=$(amix_gate_elfs "$DEST")
+if [ "$AMIX_TOOLCHAIN" = none ] && [ -n "$BINS" ]; then
+	echo "[FAIL] TOOLCHAIN=none, but the payload holds objects:" $BINS >&2
+	exit 1
+fi
 for b in $BINS; do
 	# executables and shared objects only (ELF e_type 2/3): an archive keeps
 	# its symbols and its members' undefined references

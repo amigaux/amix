@@ -11,10 +11,12 @@
 # found on PATH (its cut takes their directory from `command -v
 # m68k-linux-gnu-nm`). <dir> gets one symbolic link per tool, to gcc14's
 # m68k-elf-* of the same name, so one set of binutils serves both (P-38
-# S1.4). Put <dir> first on PATH. Measured 2026-10-31: the FPSP 040, FPSP
-# 060 and ISP 060 objects the port builds from NetBSD 10.1's syssrc.tgz are
-# byte-identical with these and with Ubuntu's m68k-linux-gnu gcc 15.2 and
-# binutils 2.46.
+# S1.4, Q8). Put <dir> first on PATH. The objects are NOT those of Ubuntu's
+# m68k-linux-gnu binutils 2.46, which the 68060-261031-52 cut was made with
+# (k30 station, 2026-10-31): binutils 2.43.1 relaxes the FPSP 040's
+# stan.s:231 `lea PITBL+0x200,%a1' to PC-relative, two bytes shorter, where
+# 2.46 keeps it absolute. So -52 is not reproduced through this shim; the
+# k46 line is re-cut (-53) with it.
 set -e
 
 dir=${1:?usage: m68k-gnu-bin <dir>}

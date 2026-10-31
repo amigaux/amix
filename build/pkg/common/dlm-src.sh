@@ -43,14 +43,16 @@ AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh}"
 AMIX_PORT_REPO="${AMIX_PORT_REPO:-$AMIX_SIBLINGS/amix-040-060-port}"
 
 # amix_src_treeish <checkout> <commit> <subdir> <probe> -- the tree-ish to
-# archive for a project at <commit>: <commit> itself when <probe> is at its
-# root (a commit from before the move-in), <commit>:<subdir> when it is under
-# <subdir> (an amix commit).  Prints it; returns 1 when neither holds.
+# archive for a project at <commit>: <commit>:<subdir> when <probe> is under
+# <subdir> (an amix commit), else <commit> itself when <probe> is at its root
+# (a commit from before the move-in).  The subdirectory first: since bfcfe76
+# amix has a Makefile of its own at the top (make dist's), so an amix commit
+# has the probe at both.  Prints it; returns 1 when neither holds.
 amix_src_treeish() {
-	if git -C "$1" cat-file -e "$2:$4" 2>/dev/null; then
-		echo "$2"
-	elif git -C "$1" cat-file -e "$2:$3/$4" 2>/dev/null; then
+	if git -C "$1" cat-file -e "$2:$3/$4" 2>/dev/null; then
 		echo "$2:$3"
+	elif git -C "$1" cat-file -e "$2:$4" 2>/dev/null; then
+		echo "$2"
 	else
 		return 1
 	fi

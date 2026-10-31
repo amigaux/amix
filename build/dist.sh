@@ -316,6 +316,22 @@ roll_recipe() {	# roll_recipe <package dir>
 	grep '^pkg ' "$out/build/userland/$(basename "$1")/BUILD.txt" | sed "s|$out/||"
 }
 
+# host_pkgtools: the host pkgmk and pkgtrans every roll uses, built by
+# pkgtools' own heirloom/build-host.sh when the checkout has none (a clean
+# clone), as run-selftests does
+host_pkgtools() {
+	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] && return 0
+	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh"
+	mkdir -p "$out/build"
+	( cd "$top/userland/pkgtools/heirloom" && ./build-host.sh ) > "$out/build/pkgtools-host.log" 2>&1 || {
+		tail -20 "$out/build/pkgtools-host.log" >&2
+		echo "[FAIL] host pkgtools did not build; log out/build/pkgtools-host.log" >&2
+		exit 1
+	}
+	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] || {
+		echo "[FAIL] build-host.sh left no $AMIX_PKGMK" >&2; exit 1; }
+}
+
 # step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
 # (P-38 S3.3). Each rolls all its recipes, writes its .pkg files to
 # $AMIX_BUILD_ROOT/kspace/pkg/ and prints a `pkg <file> <sha256>` line for
@@ -347,6 +363,7 @@ kspace_owner() {
 }
 
 step_kspace() {
+	host_pkgtools
 	rm -rf "$out/kspace" "$out/build/kspace"
 	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
 	# the port's headers at each recipe's own pinned commit (dlm-src.sh):
@@ -394,6 +411,7 @@ step_kspace() {
 }
 
 step_userland() {
+	host_pkgtools
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
 	rm -rf "$out/userland" "$out/build/userland"
 	mkdir -p "$out/build/userland" "$out/userland/pkgs"
@@ -415,6 +433,7 @@ run() {
 	userland) step_userland ;;
 	recipes/*)
 		d=$(recipe_dir "${1#recipes/}") || exit 1
+		host_pkgtools
 		mkdir -p "$out/build/userland"
 		roll_recipe "$d"
 		;;

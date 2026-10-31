@@ -1,0 +1,7 @@
+#!/bin/sh
+# nocc: the compiler, assembler, linker and archiver of TOOLCHAIN=none, a
+# script-only recipe (amix-env.sh). Any call is the recipe compiling
+# something it declared it would not: refused, with what was asked.
+echo "[FAIL] TOOLCHAIN=none: the build ran ${AMIX_NOCC_AS:-a compiler}: $*" >&2
+echo "       a recipe that compiles anything declares TOOLCHAIN=period or gcc14" >&2
+exit 1

@@ -44,7 +44,7 @@ so each fact about a package is written in one place.
 | `URL`, `SHA256` | the source tarball and its sha256; neither, when the source is in the tree |
 | `SRCPKG=""` | build from another package's `src/` (`amix-benchmark-gcc14` from `amix-benchmark`) |
 | `STYLE=configure` | `styles/<STYLE>.sh` |
-| `TOOLCHAIN=gcc14` | `gcc14`, or `period` (gcc-cross-amix) for a tool that must link only the stock libraries |
+| `TOOLCHAIN=gcc14` | `gcc14`, or `period` (gcc-cross-amix) for a tool that must link only the stock libraries, or `none` for a script-only package that compiles nothing: no compiler gates, every compiler is `common/nocc`, which refuses to run, and the build is refused if its make.log shows a compile or link line or its payload holds an object |
 | `PREFIX=/opt/amix` | the install prefix |
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
