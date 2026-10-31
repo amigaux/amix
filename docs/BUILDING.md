@@ -41,7 +41,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 |---|---|---|---|---|
 | `kit` | kernel/dlm's ABI kits, k30 and k46, with the port at `kernel/port/port.pin` | `out/kit/{k30,k46,kit.digests}` | S2.1, dlm | builds |
 | `kernel-k30` | the 68030 kernel: the cut of record (`kernel/k30/cuts/CURRENT`) rebuilt by k30's hook `kernel/k30/cuts/build.sh`, which refuses sums other than the record's | `kernel/k30/build/cuts/<id>/` (kern30m reads it there), its sums in `out/kernels/k30.list` | S2.2, k30 | builds |
-| `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
+| `kernel-k46` | the 68040/68060 kernel: the cut of record (`kernel/port/cuts/CURRENT`) rebuilt by the port's hook `kernel/port/cuts/build.sh`, which fetches the port at `kernel/port/port.pin` and refuses sums other than the record's | `kernel/port/build/cuts/<id>/` (kern46m reads it there), its sums in `out/kernels/k46.list` | S2.3, port | builds |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
 | `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
