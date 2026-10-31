@@ -1,3 +1,10 @@
+## 2026-10-31 — shared conffiles (474ec4b)
+
+r.conffile leaves a file another package still owns and drops only its own baseline (D-N24: amix-base takes over core's
+files). stock-pkg-system.md records the stock 2.1c pkgrm refusing unattended removal of script packages, the missing
+removef, the installf -f crash, the pkg\ edit flag, and a dsnorm-normalised stream installing with the stock pkgadd.
+conffile 105/0, conffile-e2e 64/0, apkg 521/0.
+
 ## 2026-10-31 — the stock pkgadd and the admin file (d728052)
 
 stock-pkg-system.md and apkg.1 record that the stock pkgadd asks the conflict and script questions under -n whatever
