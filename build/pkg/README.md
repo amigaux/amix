@@ -49,6 +49,7 @@ so each fact about a package is written in one place.
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
 | `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
+| `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
 | `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
@@ -163,9 +164,11 @@ finds its repository and siblings itself, and the driver leaves it to do so.
 The roll is reproducible (`common/dsroll.sh`): two rolls of one recipe from
 the same inputs are the same bytes, wherever the checkout is, whoever rolls
 it and whenever. Every time stamp of the datastream (pkgmap's modtime
-column, each newc header) is `SOURCE_DATE_EPOCH`, as make dist or the build
-container sets it; unset, the driver takes the time of the last commit that
-changed the package directory. The members are archived in sorted order
+column, each newc header) is the package version's epoch: `SOURCE_EPOCH` in
+package.sh, else the time of the last commit that changed the package
+directory. The driver hands it to the roll as `SOURCE_DATE_EPOCH`, replacing
+any value from the environment (the build container's is for its own
+files). The members are archived in sorted order
 (pkgtrans's `find` sorts, `common/sortedfind/find`); their headers say
 uid, gid and device 0, inode numbers in archive order, modes from the
 prototype (`common/dsnorm.py`). A control file that names the build tree or

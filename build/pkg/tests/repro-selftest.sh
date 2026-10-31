@@ -10,10 +10,11 @@
 # copies of build/ at different paths, seconds apart, under umasks 022 and
 # 077, with the second build tree on another filesystem (/dev/shm when it is
 # one) so the spool's directory order, inodes and device differ. The two
-# .pkg must be byte-identical; their headers must carry the epoch and uid 0
-# only; the heirloom reader must unpack the payload unchanged; and another
-# SOURCE_DATE_EPOCH must give other bytes, so the epoch is the only time in
-# them. Needs the toolchains (run it in the build container, or with GCA and
+# .pkg must be byte-identical; their headers must carry the package's epoch
+# (package.sh SOURCE_EPOCH, whatever SOURCE_DATE_EPOCH the environment has)
+# and uid 0 only; the heirloom reader must unpack the payload unchanged; and
+# another SOURCE_EPOCH must give other bytes, so the epoch is the only time
+# in them. Needs the toolchains (run it in the build container, or with GCA and
 # G14 found as layout.sh finds them). Exit 0 and "repro-selftest: PASS" last.
 
 set -e
@@ -21,7 +22,8 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 AMIX_TOP=$(cd "$HERE/../../.." && pwd)
 . "$AMIX_TOP/build/pkg/layout.sh"
-export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1793303717}
+EP=1793303717			# the recipe's SOURCE_EPOCH
+export SOURCE_DATE_EPOCH=1111111111	# the environment's, which the roll must not use
 export GCA G14 AMIX_PKGMGR AMIX_PKGMK AMIX_PKGTRANS AMIX_PM_SCAN060 AMIX_SYSTEM
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/repro.XXXXXX")
@@ -57,6 +59,7 @@ SET=extra
 LICENSE=MIT
 STYLE=hooks
 CONFFILES=/etc/rtest.conf
+SOURCE_EPOCH=1793303717
 EOF
 	cat > "$r/build.sh" <<'EOF'
 build() {
@@ -115,7 +118,7 @@ ok "rolled again 2 s later from $B, umask 077, on $(stat -f -c %T "$S")"
 cmp "$pa" "$pb" || fail "the two rolls differ"
 ok "the two .pkg are byte-identical: $(stat -c%s "$pa") bytes, md5 $(md5sum "$pa" | cut -c1-32)"
 
-python3 -I - "$pa" "$SOURCE_DATE_EPOCH" <<'EOF' || fail "a header carries more than the epoch and uid 0"
+python3 -I - "$pa" "$EP" <<'EOF' || fail "a header carries more than the epoch and uid 0"
 import sys
 buf = open(sys.argv[1], "rb").read()
 epoch = int(sys.argv[2])
@@ -141,7 +144,7 @@ if root != sorted(root):
     print("payload members not in sorted order:", root)
     sys.exit(1)
 EOF
-ok "every newc header: uid, gid, dev 0, mtime $SOURCE_DATE_EPOCH; members sorted"
+ok "every newc header: uid, gid, dev 0, mtime $EP (the recipe's, not the environment's); members sorted"
 
 x="$T/unpack"; mkdir -p "$x"
 "$AMIX_PKGTRANS" "$pa" "$x" rtest > "$T/unpack.log" 2>&1 || { cat "$T/unpack.log" >&2; fail "pkgtrans cannot unpack it"; }
@@ -149,14 +152,14 @@ for f in opt/amix/bin/rtest opt/amix/share/rtest/a etc/rtest.conf; do
 	cmp -s "$x/rtest/root/$f" "$A/out/pkg/rtest/dest/$f" || fail "unpacked $f differs from the staged file"
 done
 [ -f "$x/rtest/install/i.conffile" ] || fail "no install/i.conffile in the datastream"
-awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[fei]$/ { if ($NF != e) bad = 1 } END { exit bad }' e="$SOURCE_DATE_EPOCH" \
+awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[fei]$/ { if ($NF != e) bad = 1 } END { exit bad }' e="$EP" \
 	"$x/rtest/pkgmap" || fail "pkgmap's modtime column is not the epoch"
 ok "the heirloom reader unpacks it: payload as staged, install/ scripts, pkgmap at the epoch"
 
 rm -f "$pb"
-( SOURCE_DATE_EPOCH=$((SOURCE_DATE_EPOCH + 86400)); export SOURCE_DATE_EPOCH
-  roll "$B" 022 "$B/out/pkg" "$T/three.log" )
-cmp -s "$pa" "$pb" && fail "another SOURCE_DATE_EPOCH gave the same bytes"
-ok "another SOURCE_DATE_EPOCH gives other bytes: the epoch is the only time in them"
+sed -i "s/^SOURCE_EPOCH=$EP\$/SOURCE_EPOCH=$((EP + 86400))/" "$B/userland/packages/rtest/package.sh"
+roll "$B" 022 "$B/out/pkg" "$T/three.log"
+cmp -s "$pa" "$pb" && fail "another SOURCE_EPOCH gave the same bytes"
+ok "another SOURCE_EPOCH gives other bytes: the epoch is the only time in them"
 
 echo "repro-selftest: PASS ($n checks)"

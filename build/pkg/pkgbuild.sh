@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC=
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
@@ -296,17 +296,22 @@ WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
 cp "$HERE/prototype" "$WORK/prototype"
-# Every time stamp of the datastream is SOURCE_DATE_EPOCH (the release's,
-# from make dist or the build container); unset, the time of the last
-# commit that changed the package directory.
-if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+# Every time stamp of the datastream is the package version's own epoch, so
+# one version is one set of bytes in every release: package.sh SOURCE_EPOCH,
+# else the time of the last commit that changed the package directory.
+# Never the environment's SOURCE_DATE_EPOCH (the build container sets one
+# for its own files); the roll is given the package's.
+if [ -n "$SOURCE_EPOCH" ]; then
+	SOURCE_DATE_EPOCH=$SOURCE_EPOCH _pb_from="package.sh SOURCE_EPOCH"
+else
 	SOURCE_DATE_EPOCH=$(git -C "$HERE" log -1 --format=%ct -- . 2>/dev/null) && [ -n "$SOURCE_DATE_EPOCH" ] || {
-		echo "[FAIL] SOURCE_DATE_EPOCH is unset and $HERE has no commit to take it from" >&2
+		echo "[FAIL] no epoch: package.sh sets no SOURCE_EPOCH and $HERE has no commit to take it from" >&2
 		exit 1
 	}
+	_pb_from="the package directory's last commit"
 fi
 export SOURCE_DATE_EPOCH
-echo "  epoch   SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 
 {
