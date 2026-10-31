@@ -1,0 +1,130 @@
+#!/bin/sh
+# swap -- add the swap areas at boot: /etc/init.d/swap, run as
+# /etc/rc2.d/S90swap (the stock script's place; it replaces the stock one).
+#
+# start: each swap line of /etc/vfstab (FS type "swap"):
+#   a file      added whole, 0 to its size
+#   a slice     its length read off the disk's RDB (/usr/amiga/bin/rdb, as
+#               the stock script read it); the kernel's own boot area decides:
+#                 no area listed on the slice    the whole slice
+#                 one area, from block 0         the rest of the slice, from
+#                                                the next 16-block boundary
+#                                                past it, when 2048 blocks
+#                                                (1 MB) or more are left
+#                 anything else                  left alone
+# and, as the stock script did, /SWAPFILE and /usr/src/SWAPFILE when they
+# exist. This folds the 030 installer's S89rootswap: its kernel swaps only
+# the first 20476 blocks of slice 2. "swap -s" reads 0 whatever is set up;
+# "swap -l" is the evidence.
+# stop: as the stock script: the files go, then every area after the first.
+#
+# Each area added is said on the console and in /var/adm/rc.log. This file
+# is written in place on update, never moved, so the S link stays the same
+# file.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+SWAP=${SWAP:-/usr/sbin/swap}
+RDB=${RDB:-/usr/amiga/bin/rdb}
+SWAP_VFSTAB=${SWAP_VFSTAB:-/etc/vfstab}
+SWAP_FILES=${SWAP_FILES:-"/SWAPFILE /usr/src/SWAPFILE"}
+
+# add <path> <swaplo> <blocks> <what>
+add() {
+	if "$SWAP" -a $1 $2 $3
+	then
+		echo "Added swap $4 $1, $3 blocks at $2."
+		rc_log swap "added $1 $2 $3 ($4)"
+	else
+		rc_log swap "swap -a $1 $2 $3 failed"
+	fi
+}
+
+# file <path>: the whole file
+file() {
+	set -- $1 `ls -l $1`
+	add $1 0 `expr $6 / 512` file
+}
+
+# slice <path>: the whole slice, or its tail past the kernel's boot area
+slice() {
+	_d=`echo $1 | sed -n 's:^/dev/dsk/\(c[0-9a-f]*d[0-9]*\)s\([0-9]*\)$:\1 \2:p'`
+	if [ -z "$_d" ]
+	then
+		rc_log swap "$1: not a /dev/dsk/c<n>d<n>s<n> slice; left"
+		return
+	fi
+	set -- $1 $_d
+	# $1 path, $2 disk, $3 slice: its length, the RDB's line $3
+	_len=`"$RDB" /dev/rdsk/${2}s0 2>/dev/null | sed -n "${3}p" | awk '{ print $3 }'`
+	case "$_len" in
+	[0-9]*) ;;
+	*)
+		rc_log swap "$1: no length in the RDB of $2; left"
+		return
+		;;
+	esac
+	# the areas listed on it: "<swaplo> <blocks>" a line
+	_a=`"$SWAP" -l 2>/dev/null | awk '$1 == p { print $3, $4 }' p=$1`
+	if [ -z "$_a" ]
+	then
+		add $1 0 $_len slice
+		return
+	fi
+	set -- $1 $_len $_a
+	# $1 path, $2 length, then one area: $3 swaplo, $4 blocks
+	if [ $# -ne 4 ] || [ $3 -ne 0 ]
+	then
+		return
+	fi
+	_lo=`expr \( $4 + 15 \) / 16 \* 16`
+	_n=`expr $2 - $_lo`
+	[ $_n -ge 2048 ] && add $1 $_lo $_n "slice tail"
+}
+
+case "$1" in
+start)
+	. "$RC_SUBR"
+	for f in $SWAP_FILES
+	do
+		[ -f $f ] && file $f
+	done
+	for p in `awk '$4 == "swap" && $1 !~ /^#/ { print $1 }' "$SWAP_VFSTAB" 2>/dev/null`
+	do
+		case $p in
+		/dev/dsk/*)
+			slice $p
+			;;
+		*)
+			if [ -f $p ]
+			then
+				case " $SWAP_FILES " in
+				*" $p "*) ;;
+				*) file $p ;;
+				esac
+			else
+				rc_log swap "$p: no such file or slice; left"
+			fi
+			;;
+		esac
+	done
+	;;
+stop)
+	"$SWAP" -l | awk '$1 !~ /^\/dev\// && NR > 1 { print $1, $3 }' |
+	while read path swaplo
+	do
+		"$SWAP" -d $path $swaplo
+	done
+	"$SWAP" -l | awk 'NR > 2 { print $1, $3 }' |
+	while read path swaplo
+	do
+		"$SWAP" -d $path $swaplo
+	done
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0

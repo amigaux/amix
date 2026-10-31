@@ -36,6 +36,13 @@ stage() {
 	put 0444 rc/devnodes /etc/init.d/devnodes
 	mkdir -p "$DEST/etc/rc2.d"
 	ln "$DEST/etc/init.d/devnodes" "$DEST/etc/rc2.d/S20devnodes"
+	# the swap step in the stock swap script's place and shape (S90swap the
+	# file, init.d/swap and K05swap linked to it)
+	put 0444 rc/swap /etc/rc2.d/S90swap
+	for l in init.d/swap rc0.d/K05swap; do
+		mkdir -p "$DEST/etc/`dirname $l`"
+		ln "$DEST/etc/rc2.d/S90swap" "$DEST/etc/$l"
+	done
 	put 0444 net/network-config /etc/inet/network-config
 	put 0444 net/rc.inet /etc/inet/rc.inet
 	put 0444 net/link.d/aen /etc/inet/link.d/aen
