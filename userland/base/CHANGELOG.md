@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — amxbase 1.0-4/1.0-5: inetinit as core records it, /etc/inittab with the dlm line; S2 base half (fe3e116, 1866d0f, 66ad365)
+
+amxbase 1.0-4: the network start script is recorded as stock core records it (S69inet the file, inetinit and K69inet
+links to it); stock pkgadd ignored the other shape and kept the stock script. docs/package-split.md: the installer's
+(W7) seven steps, measured on E1. amxbase 1.0-5: /etc/inittab is stock plus C3-5 §5's dlm line as the first sysinit
+entry (etc/mkinittab.sh, test-inittab.sh 8/0); still a conffile, no longer STOCK_ETC. S2, base half: ifup's dhcp mode
+end to end on the emulator with amxbase and dhcp-client installed by stock pkgadd (boot-time DHCP, ifdown release,
+INIT-REBOOT).
+
 ## 2026-10-31 — dhcpc 1.0 and the dhcp-client package; profile(4), profile.d(4), nodename(4) (6199cc3, 22e309d, 8a0bddf)
 
 dhcpc 1.0 (/usr/sbin/dhcpc, dhcpc(1M)): DLPI for INIT, INIT-REBOOT and after a lease ends; from BOUND a UDP socket on
