@@ -13,7 +13,7 @@ page proposes something P-36 left open, it says so.
 | Catalog name | `amix-base` (owner, 2026-10-30; P-36 §2.2's working name was `amix-rc`, before D-N24 added the config files) | `dhcp-client` (D-N18) |
 | pkginst (≤ 9 characters) | `amxbase` | `dhcpc` (D-N18) |
 | Licence | MIT | MIT |
-| Toolchain | period (gcc-cross-amix) for `dlpi-mac`; the rest is Bourne sh | period, for `dhcpc` |
+| Toolchain | GCC 14 (gcc14-cross-amix, T-56 D6) for `dlpi-mac`; the rest is Bourne sh | GCC 14, for `dhcpc` |
 | Depends on | nothing but the stock system | `amix-base` (it calls the base package's hook) |
 | Installed by | every install | every install; a static-only machine may remove it |
 
@@ -119,7 +119,7 @@ From the S0 measurements (`dhcp-probe.md`):
 ## What the base package asks of the other work items
 
 - **Packaging harness (W3).** A package whose files are under `/etc`, `/usr`
-  and `/var` with no `/opt/amix` prefix; `TOOLCHAIN=period`; the `CONFFILES`
+  and `/var` with no `/opt/amix` prefix; `TOOLCHAIN=gcc14` (T-56 D6; until then `period`); the `CONFFILES`
   gate's "not under `PREFIX`" rule restated as "under `/etc` or `/var`". The
   set: P-36 says set `base`, but the harness knows `minimal`, `standard`,
   `full`, `developer`, `x11` and `extra`; both packages belong in every

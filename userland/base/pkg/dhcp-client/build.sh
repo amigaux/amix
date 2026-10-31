@@ -1,12 +1,16 @@
 # dhcp-client build hooks. The source tree is a copy of userland/base.
 
-# dhcpc, with the period compiler; libsocket from its archive and the stub
-# libc archive after it, as dhcpc/build.sh links it (select is static there)
+# dhcpc, with the recipe's compiler (GCC 14, T-56 D6) against the stock
+# libraries only: libsocket from its archive and the stub libc archive after
+# it, as dhcpc/build.sh links it (select is static there)
+# (compile and link apart: the harness's gates read the compile line)
 build() {
-	set -- -O -m68020 -o dhcpc.out dhcpc/dhcpc.c -lnsl \
+	echo "$CC $AMIX_CFLAGS -c -o dhcpc.o dhcpc/dhcpc.c" >> "$BUILD/make.log"
+	$CC $AMIX_CFLAGS -c -o dhcpc.o dhcpc/dhcpc.c >> "$BUILD/make.log" 2>&1 || return 1
+	set -- $AMIX_CFLAGS -o dhcpc.out dhcpc.o -lnsl \
 	    "$AMIX_SYSROOT/usr/lib/libsocket.a" "$AMIX_SYSROOT/usr/ccs/lib/libc.so"
 	echo "$CC $*" >> "$BUILD/make.log"
-	"$CC" "$@" 2>&1 | grep -v -e 'within comment' -e 'defined but not used' >> "$BUILD/make.log" || :
+	$CC "$@" >> "$BUILD/make.log" 2>&1
 	[ -f dhcpc.out ] && [ -s dhcpc.out ]
 }
 

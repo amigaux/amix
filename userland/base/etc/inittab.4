@@ -1,0 +1,137 @@
+.TH INITTAB 4 "31 October 2026" "amix-base"
+.SH NAME
+inittab \- what init starts, at boot and at each run level
+.SH SYNOPSIS
+.B /etc/inittab
+.SH DESCRIPTION
+.BR init (1M)
+reads
+.B /etc/inittab
+at boot and whenever the run level changes, and starts, waits for or
+restarts the commands it lists.
+The file shipped with the base package is the system's own, from release
+2.1p2a, with one line added.
+.SS Format
+Each entry is one line of four fields separated by colons:
+.PP
+.RS
+.IB id : rstate : action : process
+.RE
+.TP
+.I id
+one to four characters naming the entry, unique in the file.
+.TP
+.I rstate
+the run levels
+.RB ( 0 \- 6 ,
+.BR s )
+at which the entry applies, written together (as in
+.BR 23 );
+empty for every level.
+.TP
+.I action
+how
+.B init
+treats the process:
+.RS
+.TP 12
+.B sysinit
+run, and waited for, at boot before
+.B init
+asks for or enters a run level; these entries run in the order they are
+written.
+.TP
+.B bootwait
+run once, when the system first enters a listed run level, and waited for.
+.TP
+.B wait
+run, and waited for, on entering a listed run level.
+.TP
+.B respawn
+kept running: started again whenever it ends.
+.TP
+.B powerfail
+run when
+.B init
+is told of a power failure.
+.TP
+.B initdefault
+not a process: its
+.I rstate
+is the run level to enter at boot.
+.RE
+.TP
+.I process
+the command, given to
+.BR sh (1)
+to run; the rest of the line after a
+.B #
+is a comment.
+.PP
+A line that starts with
+.B #
+is a comment.
+.SS The shipped entries
+.PP
+The first line sets run level 2 as the one the system boots to.
+The
+.B sysinit
+entries then run, in this order:
+.IP \(bu 3
+.BR "dlm" ,
+the line the base package adds:
+.B /sbin/modadmin -B
+loads the kernel modules marked for boot.
+It is the first
+.B sysinit
+entry because the drivers it loads (the network, the console and the
+monitor switch among them) must be there before the entries after it use
+them.
+.IP \(bu 3
+.BR autopush (1M)
+with
+.BR /etc/amiga.ap ,
+the STREAMS modules pushed on the console devices;
+.IP \(bu 3
+the console set-up
+.RB ( sioc ,
+and
+.B /dev/syscon
+linked to the console);
+.IP \(bu 3
+.BR /etc/sysinit ,
+the system's own early checks.
+.PP
+After them come
+.B /etc/brc
+(at boot), one
+.B /etc/rc
+script for each run level
+.RB ( rc0 ,
+.BR rc1 ,
+.BR rc2 ,
+.BR rc3 ,
+and
+.B rc6
+for a reboot), the power-failure shutdown, the service access
+controller
+.BR sac (1M),
+and the console login.
+Logins on the serial ports and the other screens are set up with
+.BR pmadm (1M),
+not here.
+.PP
+An update of the base package keeps an edited
+.B /etc/inittab
+and puts the new default beside it as
+.BR /etc/inittab.new .
+.PP
+The system's own page for this file, where it is installed, is shown by
+.BR "man -a inittab" .
+.SH FILES
+.TP
+.B /etc/inittab
+this file.
+.SH SEE ALSO
+.BR init (1M),
+.BR sh (1)
