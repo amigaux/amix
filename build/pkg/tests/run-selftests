@@ -7,7 +7,7 @@
 #
 # Builds the host pkgmk/pkgtrans (userland/pkgtools/heirloom/build-host.sh)
 # unless AMIX_PKGMK is already executable, then runs gate060-selftest.sh,
-# gate-gcc14-selftest.sh and onever-selftest.sh. A selftest that exits 77
+# gate-gcc14-selftest.sh, onever-selftest.sh and repro-selftest.sh. A selftest that exits 77
 # is a SKIP: it says so (a warning annotation under GitHub Actions) and does
 # not fail the run. Exit 0 when every selftest passed or skipped.
 set -u
@@ -27,7 +27,7 @@ if [ ! -x "$pm" ]; then
 fi
 
 failed= skipped=
-for t in gate060 gate-gcc14 onever; do
+for t in gate060 gate-gcc14 onever repro; do
 	echo "== $t-selftest.sh"
 	rc=0
 	sh "$here/$t-selftest.sh" || rc=$?

@@ -158,7 +158,9 @@ PY
 	echo "--- package ---"
 	cp "$_km_dir/pkginfo.$_km_line" "$_km_work/pkginfo"
 	cp "$_km_dir/prototype" "$_km_work/prototype"
-	amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out"
+	# the recipe's epoch is the time of every stamp of the datastream too
+	( SOURCE_DATE_EPOCH=$KM_SOURCE_EPOCH; export SOURCE_DATE_EPOCH
+	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out" ) || exit 1
 	unset _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
 		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _km_n _p _n _h _s _m
 }

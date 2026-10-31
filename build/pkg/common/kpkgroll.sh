@@ -3,6 +3,7 @@
 #
 #     . "$AMIX_PKG_COMMON/kpkgroll.sh"
 #     amix_kpkgroll <workdir> <destroot> <PKG> <version> <outfile>
+#     (with SOURCE_DATE_EPOCH, the time of every stamp: dsroll.sh)
 #
 # Same pkgmk/pkgtrans path and the same name/arch/s5/newc gates as
 # amix_pkgroll (pkgroll.sh), with three differences, each from a contract:
@@ -102,13 +103,9 @@ amix_kpkgroll() {
 	fi
 	rm -f "$_kr_work/.s5scan"
 
-	_kr_spool="$_kr_work/.spool"
-	rm -rf "$_kr_spool"; mkdir -p "$_kr_spool" "$(dirname "$_kr_out")"
-	( cd "$_kr_work" && "$AMIX_PKGMK" -o -d "$_kr_spool" -f prototype -r "$_kr_root" ) || {
-		echo "[FAIL] pkgmk failed for $_kr_pkg" >&2; exit 1; }
-	rm -f "$_kr_out"
-	"$AMIX_PKGTRANS" -s "$_kr_spool" "$_kr_out" "$_kr_pkg" >/dev/null || {
-		echo "[FAIL] pkgtrans failed for $_kr_pkg" >&2; exit 1; }
+	# pkgmk and pkgtrans, every time stamp SOURCE_DATE_EPOCH (dsroll.sh)
+	command -v amix_dsroll >/dev/null 2>&1 || . "$AMIX_PKG_COMMON/dsroll.sh"
+	amix_dsroll "$_kr_work" "$_kr_root" "$_kr_pkg" "$_kr_out"
 
 	# GATE 5 -- newc members.
 	_kr_magic=$(dd if="$_kr_out" bs=1 skip=512 count=6 2>/dev/null)
@@ -129,11 +126,11 @@ amix_kpkgroll() {
 	done
 	echo "  round trip: $_kr_n payload file(s) identical; pkgmap classes:" \
 		"$(awk '$1 ~ /^[0-9]+$/ {print $2 "/" $3}' "$_kr_rt/$_kr_pkg/pkgmap" | sort -u | tr '\n' ' ')"
-	rm -rf "$_kr_rt" "$_kr_spool"
+	rm -rf "$_kr_rt" "$_kr_work/.spool"
 
 	amix_one_version "$_kr_out" "$_kr_pkg" "$_kr_ver" "$_kr_final"
 	echo "  built   $_kr_final ($(stat -c%s "$_kr_final") bytes, sha256 $(sha256sum "$_kr_final" | cut -c1-64))"
-	unset _kr_work _kr_root _kr_pkg _kr_ver _kr_out _kr_final _kr_spool _kr_magic _kr_rt _kr_n _kr_p
+	unset _kr_work _kr_root _kr_pkg _kr_ver _kr_out _kr_final _kr_magic _kr_rt _kr_n _kr_p
 }
 
 # amix_kstage_sidecar <build-sidecar> <shipped-unix> <out> <bss> -- the

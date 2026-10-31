@@ -26,6 +26,7 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 AMIX_TOP=$(cd "$HERE/../../.." && pwd)
 . "$AMIX_TOP/build/pkg/layout.sh"
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1793303717}	# the roll stamps every time with it
 export AMIX_PREFIX=/opt/amix
 
 T=$(mktemp -d "${TMPDIR:-/tmp}/gate060.XXXXXX")

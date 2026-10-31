@@ -3,7 +3,8 @@
 #
 #     . "$AMIX_PKG_COMMON/pkgroll.sh"
 #     amix_pkgroll <workdir> <destroot> <PKG> <version> <outfile>
-#     (with $CONFFILES, the package.sh list, in the environment or the shell)
+#     (with $CONFFILES, the package.sh list, in the environment or the shell,
+#     and SOURCE_DATE_EPOCH, the time of every stamp: dsroll.sh)
 #
 # <workdir>   holds the recipe's AUTHORED pkginfo and prototype
 # <destroot>  the staged tree: <destroot>/usr/local/bin/patch etc.
@@ -216,17 +217,9 @@ amix_pkgroll() {
 	# Config files: CONFFILES from package.sh, when the driver set it.
 	amix_conffiles "$_pr_work" "${CONFFILES:-}"
 
-	_pr_spool="$_pr_work/.spool"
-	rm -rf "$_pr_spool"
-	mkdir -p "$_pr_spool" "$(dirname "$_pr_out")"
-
-	( cd "$_pr_work" && "$AMIX_PKGMK" -o -d "$_pr_spool" -f prototype -r "$_pr_root" ) || {
-		echo "[FAIL] pkgmk failed for $_pr_pkg" >&2; exit 1; }
-
-	rm -f "$_pr_out"
-	"$AMIX_PKGTRANS" -s "$_pr_spool" "$_pr_out" "$_pr_pkg" >/dev/null || {
-		echo "[FAIL] pkgtrans failed for $_pr_pkg" >&2; exit 1; }
-	[ -f "$_pr_out" ] || { echo "[FAIL] pkgtrans produced no $_pr_out" >&2; exit 1; }
+	# pkgmk and pkgtrans, every time stamp SOURCE_DATE_EPOCH (dsroll.sh)
+	command -v amix_dsroll >/dev/null 2>&1 || . "$AMIX_PKG_COMMON/dsroll.sh"
+	amix_dsroll "$_pr_work" "$_pr_root" "$_pr_pkg" "$_pr_out"
 
 	# GATE 4 -- the datastream's members must be cpio newc.  A datastream whose
 	# member archive is not 070701 is one stock Amix pkgadd rejects; the magic
@@ -265,5 +258,5 @@ amix_pkgroll() {
 
 	amix_one_version "$_pr_out" "$_pr_pkg" "$_pr_ver" "$_pr_final"
 	echo "  built   $_pr_final ($(stat -c%s "$_pr_final") bytes, newc verified, md5 $(md5sum "$_pr_final" | cut -d' ' -f1))"
-	unset _pr_work _pr_root _pr_pkg _pr_ver _pr_out _pr_final _pr_spool _pr_magic _pr_rt
+	unset _pr_work _pr_root _pr_pkg _pr_ver _pr_out _pr_final _pr_magic _pr_rt
 }

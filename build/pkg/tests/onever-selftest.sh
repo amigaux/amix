@@ -18,8 +18,9 @@
 #      refused; the datastream already at
 #      the output path is left as it was, nothing is left in the work dir
 #   2. the same with the record's OWN pkginfo and control-file mtimes is
-#      refused too: a roll is not bit-reproducible (the newc headers carry
-#      the spool's inode numbers), so any rebuild of a listed version is
+#      refused too: the record was rolled before dsroll.sh (its newc headers
+#      carry the spool's inode numbers), so no rebuild gives its bytes, and
+#      any rebuild of that version is
 #   3. a byte-identical datastream (the record's) is allowed and says so
 #   4. an unlisted version is allowed as new
 #   5. an ordinary (md5) row: the record's kbootset identical allowed, one byte off
@@ -34,6 +35,7 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 AMIX_TOP=$(cd "$HERE/../../.." && pwd)
 . "$AMIX_TOP/build/pkg/layout.sh"
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1793303717}	# the roll stamps every time with it
 if [ -z "${AMIX_KSPACE_REPO:-}" ]; then
 	_g=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
 		_g=$(cd "$(dirname "$_g")/.." && pwd)/amix-packages && [ -d "$_g" ] && AMIX_KSPACE_REPO=$_g
@@ -101,7 +103,7 @@ cp -p "$T/x/kern46m/pkginfo" "$T/own-pkginfo"; touch -d "@$M" "$T/own-pkginfo"
 if reroll own "$T/own-pkginfo"; then fail "a re-roll with the record's own pkginfo was written"; fi
 grep -q "already listed with other bytes" "$T/roll-own.log" || { cat "$T/roll-own.log" >&2; fail "own re-roll message"; }
 cmp -s "$T/out-own/kern46m-$K46.pkg" "$KF" || fail "the output path changed (own re-roll)"
-ok "a re-roll with the record's own pkginfo is refused as well: the roll is not bit-reproducible"
+ok "a re-roll with the record's own pkginfo is refused as well: the record predates the reproducible roll"
 
 # --- 3. a byte-identical datastream ------------------------------------------
 cp "$KF" "$T/same.pkg"; mkdir -p "$T/out-same"

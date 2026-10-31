@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+# test-dsnorm: host test for build/pkg/common/dsnorm.py.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Datastreams are made here, newc members with the fields a build host
+# leaves (inode, device, uid, wall-clock time); dsnorm must leave only the
+# epoch and the content. Prints "N/N passed"; exits non-zero on any failure.
+
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+DSNORM = os.path.join(os.path.dirname(HERE), "common", "dsnorm.py")
+FIELDS = ("ino", "mode", "uid", "gid", "nlink", "mtime", "filesize",
+          "devmajor", "devminor", "rdevmajor", "rdevminor", "namesize", "check")
+EPOCH = 1793303717
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def run(*args):
+    p = subprocess.run([sys.executable, "-I", DSNORM] + list(args),
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return p.returncode, p.stdout.decode(), p.stderr.decode()
+
+
+def member(name, data=b"", magic=b"070701", **f):
+    v = dict(ino=0, mode=0o100644, uid=0, gid=0, nlink=1, mtime=0,
+             filesize=len(data), devmajor=0, devminor=0, rdevmajor=0,
+             rdevminor=0, namesize=len(name) + 1, check=0)
+    v.update(f)
+    hdr = magic + b"".join(b"%08X" % v[k] for k in FIELDS)
+    nm = name.encode() + b"\0"
+    pad = lambda n: b"\0" * (-n % 4)
+    return hdr + nm + pad(len(hdr) + len(nm)) + data + pad(len(data))
+
+
+def archive(*ms):
+    a = b"".join(ms) + member("TRAILER!!!")
+    return a + b"\0" * (-len(a) % 512)
+
+
+def host(ino, **f):
+    """The fields a build host gives a member."""
+    d = dict(ino=ino, uid=1000, gid=1000, mtime=1793438582 + ino % 7,
+             devmajor=259, devminor=2)
+    d.update(f)
+    return d
+
+
+def stream(pkgmap=b"1 f none /opt/amix/bin/a 0755 root bin 3 1 1\n",
+           payload=b"a\n", magic=b"070701", ino0=100):
+    head = b"# PaCkAgE DaTaStReAm\nrtest 1 8\n# end of header\n"
+    head += b"\0" * (-len(head) % 512)
+    info = b"PKG=rtest\nVERSION=1\n"
+    ctl = archive(member("rtest/pkginfo", info, **host(ino0 + 1)),
+                  member("rtest/pkgmap", pkgmap, **host(ino0 + 2)))
+    root = archive(member("pkginfo", info, **host(ino0 + 1)),
+                   member("pkgmap", pkgmap, **host(ino0 + 2)),
+                   member("root", mode=0o40755, nlink=3, **host(ino0 + 3)),
+                   member("root/opt", mode=0o40755, nlink=1, **host(ino0 + 4)),
+                   member("root/opt/amix", mode=0o40755, nlink=7, **host(ino0 + 5)),
+                   member("root/opt/amix/a", payload, magic=magic,
+                          **host(ino0 + 9, nlink=2)),
+                   member("root/opt/amix/b", payload, **host(ino0 + 9, nlink=2)))
+    return head + ctl + root
+
+
+def fields(buf):
+    """(name, fields) of every member, as dsnorm's reader would see them."""
+    end = buf.find(b"# end of header\n")
+    off = (end + 16 + 511) // 512 * 512
+    out = []
+    while off < len(buf) and buf[off:off + 6] in (b"070701", b"070702"):
+        while True:
+            v = dict(zip(FIELDS, (int(buf[off + 6 + 8 * i: off + 14 + 8 * i], 16)
+                                  for i in range(13))))
+            name = buf[off + 110: off + 110 + v["namesize"] - 1].decode()
+            data = (off + 110 + v["namesize"] + 3) // 4 * 4
+            off = (data + v["filesize"] + 3) // 4 * 4
+            out.append((name, v))
+            if name == "TRAILER!!!":
+                break
+        off = (off + 511) // 512 * 512
+    return out
+
+
+def write(path, data, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fp:
+        fp.write(data)
+    os.chmod(path, mode)
+
+
+tmp = tempfile.mkdtemp(prefix="test-dsnorm.")
+try:
+    # --- stream ---------------------------------------------------------------------
+    one, two = os.path.join(tmp, "one.pkg"), os.path.join(tmp, "two.pkg")
+    write(one, stream())
+    write(two, stream(ino0=5000))
+    before = open(one, "rb").read()
+    rc, out, err = run("stream", one, str(EPOCH))
+    after = open(one, "rb").read()
+    check("stream: normalised", rc == 0 and "2 archive(s)" in out, err or out)
+    check("stream: the length is kept", len(after) == len(before))
+    ms = fields(after)
+    real = [(n, v) for n, v in ms if n != "TRAILER!!!"]
+    check("stream: uid, gid, dev 0 and mtime the epoch on every member",
+          all(v["uid"] == v["gid"] == v["devmajor"] == v["devminor"] == 0
+              and v["mtime"] == EPOCH for _, v in real), repr(real))
+    root = [(n, v) for n, v in ms[3:] if n != "TRAILER!!!"]
+    check("stream: ino renumbered from 1 per archive, hard links share one",
+          [v["ino"] for _, v in ms[:2]] == [1, 2]
+          and [v["ino"] for _, v in root] == [1, 2, 3, 4, 5, 6, 6], repr(root))
+    check("stream: a directory's nlink is 2 plus its subdirectories",
+          [v["nlink"] for n, v in root if n.startswith("root")] == [3, 3, 2, 2, 2],
+          repr(root))
+    check("stream: names, sizes and data unchanged",
+          [(n, v["filesize"], v["mode"]) for n, v in ms]
+          == [(n, v["filesize"], v["mode"]) for n, v in fields(before)])
+    run("stream", two, str(EPOCH))
+    check("stream: two hosts' datastreams of the same content are one",
+          open(two, "rb").read() == after)
+    rc, out, err = run("stream", one, str(EPOCH))
+    check("stream: idempotent", rc == 0 and open(one, "rb").read() == after, err)
+    run("stream", two, str(EPOCH + 1))
+    check("stream: another epoch, other bytes", open(two, "rb").read() != after)
+
+    bad = os.path.join(tmp, "crc.pkg")
+    write(bad, stream(magic=b"070702"))
+    rc, out, err = run("stream", bad, str(EPOCH))
+    check("stream: a 070702 member is refused, the file left alone",
+          rc == 1 and "not newc 070701" in err
+          and open(bad, "rb").read() == stream(magic=b"070702"), err)
+    write(bad, b"not a package")
+    rc, out, err = run("stream", bad, str(EPOCH))
+    check("stream: not a datastream is refused", rc == 1 and "not a package datastream" in err, err)
+    rc, out, err = run("stream", one, "yesterday")
+    check("stream: an epoch that is not a number is refused", rc == 1, err)
+
+    leak = os.path.join(tmp, "leak.pkg")
+    write(leak, stream(pkgmap=b"1 f none /home/b/w/x 0644 root bin 3 1 1\n"))
+    rc, out, err = run("stream", leak, str(EPOCH), "--host", "/home/b/w")
+    check("stream: a build-host path in pkgmap is refused",
+          rc == 1 and "rtest/pkgmap holds /home/b/w" in err, err)
+    write(leak, stream(payload=b"built in /home/b/w/src/a.c\n"))
+    rc, out, err = run("stream", leak, str(EPOCH), "--host", "/home/b/w")
+    check("stream: a build-host path in the payload is reported, not refused",
+          rc == 0 and "payload root/opt/amix/a holds the build-host path /home/b/w" in out,
+          err or out)
+    write(leak, stream(pkgmap=b"1 f none /usr/src/x 0644 root bin 3 1 1\n",
+                       payload=b"/srcx/y\n"))
+    rc, out, err = run("stream", leak, str(EPOCH), "--host", "/src")
+    check("stream: /src is not found in /usr/src or /srcx",
+          rc == 0 and "WARN" not in out, err or out)
+
+    # --- spool ----------------------------------------------------------------------
+    sp = os.path.join(tmp, "spool")
+    top = os.path.join(sp, "rtest")
+    write(os.path.join(top, "pkgmap"),
+          b": 1 8\n1 d none /opt 0755 root sys\n"
+          b"1 f none /opt/a 4711 root bin 3 1 1\n"
+          b"1 e conffile /etc/x.conf 0640 root sys 3 1 1\n"
+          b"1 l none /opt/b=/opt/a\n"
+          b"1 i pkginfo 3 1 1793439106\n", 0o600)
+    write(os.path.join(top, "pkginfo"), b"PKG=rtest\n", 0o600)
+    write(os.path.join(top, "install", "i.conffile"), b"#!/bin/sh\n", 0o700)
+    write(os.path.join(top, "root", "opt", "a"), b"a\n", 0o664)
+    write(os.path.join(top, "root", "etc", "x.conf"), b"x\n", 0o600)
+    os.chmod(os.path.join(top, "root", "opt"), 0o700)
+    os.chmod(os.path.join(top, "root", "etc"), 0o700)
+    rc, out, err = run("spool", sp, "rtest", str(EPOCH))
+    mode = lambda *p: stat.S_IMODE(os.lstat(os.path.join(top, *p)).st_mode)
+    check("spool: modes from pkgmap",
+          rc == 0 and mode("root", "opt") == 0o755 and mode("root", "opt", "a") == 0o4711
+          and mode("root", "etc", "x.conf") == 0o640, err or out)
+    check("spool: 0644 and 0755 for what pkgmap does not list",
+          mode("pkginfo") == mode("pkgmap") == mode("install", "i.conffile") == 0o644
+          and mode("install") == mode("root") == mode("root", "etc") == 0o755)
+    check("spool: pkgmap's modtime column is the epoch, other lines as they were",
+          open(os.path.join(top, "pkgmap"), "rb").read() ==
+          (b": 1 8\n1 d none /opt 0755 root sys\n"
+           b"1 f none /opt/a 4711 root bin 3 1 %d\n"
+           b"1 e conffile /etc/x.conf 0640 root sys 3 1 %d\n"
+           b"1 l none /opt/b=/opt/a\n"
+           b"1 i pkginfo 3 1 %d\n" % (EPOCH, EPOCH, EPOCH)))
+    times = set(int(os.lstat(os.path.join(r, n)).st_mtime)
+                for r, ds, fs in os.walk(sp) for n in ds + fs)
+    check("spool: every time the epoch", times == {EPOCH}, repr(times))
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)
