@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — the proof of make dist, run by hand in CI (b43f795)
+
+build/dist-proof WORKDIR [COMMIT] runs make dist twice, from two clean clones at two paths, and compares the locks
+(with LOCK=, each is also checked against the lock of record; exit 3 is a known gap). .github/workflows/dist.yml runs
+it on workflow_dispatch only (timeouts: job 345 min, image 210, proof 120; image cached under ci.yml's key, which now
+covers toolchain/sysroot-links; no registry, no secrets; artifact dist-proof). dist.sh mounts the image's passwd and
+group with the caller's uid/gid added, for CI runners. release/README: the lock of record comes with S7.1. Local
+proof: two identical locks, 93 lines.
+
 ## 2026-10-31 — make dist builds kernel-k46; the NEEDED gate takes a path that is its library's SONAME (586d9f1, 118a966)
 
 make dist's kernel-k46 step runs the port's hook kernel/port/cuts/build.sh with GCA, G14 and AMIX_SYSTEM, as
