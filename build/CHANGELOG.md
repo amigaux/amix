@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — make dist builds its own host pkgtools in out/build (781d869)
+
+make dist builds its host pkgmk and pkgtrans in a copy of userland/pkgtools under out/build/pkgtools-host/, never
+the checkout's build-host/: build-host.sh bakes its absolute directory into the tools as BINDIR, so tools built in a
+checkout on the host named a cpio path the container lacks. A stamp of the copied files' digest skips a rebuild of
+the same sources. test-dist 43/43.
+
 ## 2026-10-31 — make dist's userland step builds in BUILD_DEPENDS order (e90b0b8)
 
 The new `pkgmeta build-order` lists each recipe after the packages its BUILD_DEPENDS names (a cycle or an unknown
