@@ -67,7 +67,8 @@ do
 	fi
 	b=$base$rel
 	bdir=`expr "x$b" : 'x\(.*\)/[^/]*$'`
-	mkdir -p "$bdir" || { rc=2; continue; }
+	# the stock mkdir -p fails on a directory that exists
+	[ -d "$bdir" ] || mkdir -p "$bdir" || { rc=2; continue; }
 
 	state=new
 	if [ -f "$dst" ]

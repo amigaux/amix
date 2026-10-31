@@ -105,6 +105,20 @@ check "  ... and nothing is written there" test ! -e "$WORK/out/etc/x"
 echo "$WORK/out/src $WORK/out/etc/x" | PKG_INSTALL_ROOT="$WORK/out" sh "$ICF" \
     >/dev/null 2>"$WORK/nopkg.err"
 check "no PKGINST: refused (rc 2)" test $? -eq 2
+# the stock 2.1 mkdir -p fails when the last directory already exists
+# (rig E1, 2026-10-31): two files in one directory, under such a mkdir
+mkdir -p "$WORK/m40/etc"; echo a > "$WORK/m40/a.src"; echo b > "$WORK/m40/b.src"
+printf '%s\n' "$WORK/m40/a.src $WORK/m40/etc/a" "$WORK/m40/b.src $WORK/m40/etc/b" |
+    PKGINST=X PKG_INSTALL_ROOT="$WORK/m40" bash -c '
+        mkdir() {
+            [ "$1" = -p ] || { command mkdir "$@"; return; }
+            shift; for d; do [ -d "$d" ] && { echo "mkdir: \"$d\": File exists" >&2; return 1; }; done
+            command mkdir -p "$@"
+        }
+        export -f mkdir; bash "$1"' sh "$ICF" >/dev/null 2>"$WORK/m40.err"
+check "under a 4.0 mkdir -p, two files in one directory: rc 0" test $? -eq 0
+check "  ... both baselines are stored" \
+    test -f "$WORK/m40/var/sadm/conffiles/X/etc/a" -a -f "$WORK/m40/var/sadm/conffiles/X/etc/b"
 
 # -------------------------------------------------------- i.conffile table ---
 echo "i.conffile: the table under heirloom pkgadd -R"
