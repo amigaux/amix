@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — monsw: monswctl, the boot step and the pages move into kernel/modules (36a3004)
+
+monsw/tool/monswctl.c is copied from kerntools tools/monsw (7996e07) with only comments changed; the cross build
+b1915b96 equals kerntools' pin. rc/monsw (/etc/init.d/monsw, S20monsw) sets /etc/display's monsw, else /etc/monsw with
+a log line naming the older file, else nothing so the card's seed applies, and never fails the boot (P-36 W9). Pages
+monsw(7) and monswctl(1M). tooltest.sh 35 checks. Module objects unchanged: monsw 1f53a31b / 962709ca.
+
 ## 2026-10-29 — The prose names the monorepo (cc5fe5d)
 
 READMEs and source headers say kernel/modules, kernel/dlm and github.com/amigaux/amix instead of the old standalone
