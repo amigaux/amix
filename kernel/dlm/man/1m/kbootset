@@ -1,10 +1,10 @@
 .\" kbootset(1M) -- the generation composer (kernel/dlm).
-.\" Written from docs/contracts/C2-4-kbootset-cli.md version 16 and
+.\" Written from docs/contracts/C2-4-kbootset-cli.md version 17 and
 .\" docs/spec/40-generations-and-composer.md; installed as
 .\" /opt/amix/man/1m/kbootset (userland/packages/docs/man-pages.md).
 .\" Plain -man requests only: the stock nroff of 1991 formats it.
 .\" MIT licence, see LICENSE in kernel/dlm.
-.TH KBOOTSET 1M "2026-10-30" "kbootset" "Amix kernel modules"
+.TH KBOOTSET 1M "2026-10-31" "kbootset" "Amix kernel modules"
 .nh
 .SH NAME
 kbootset \- compose, commit and roll back boot generations
@@ -446,6 +446,30 @@ an installed module object.
 a module's parameters from its package;
 .B /etc/conf/modreg.local.d/\fIname\fP
 holds the owner's, which win.
+.TP
+.B /etc/init.d/kbnamelist
+run as
+.BR /etc/rc2.d/S01kbnamelist :
+.B kbootset namelist
+early in run level 2.
+.TP
+.B /etc/init.d/kbmarkgood
+run as
+.BR /etc/rc2.d/S99zkbootset ,
+the last script of run level 2:
+.BR "kbootset mark-good" .
+.TP
+.B /etc/rc.conf
+.B kbnamelist=no
+or
+.B kbmarkgood=no
+turns the boot script off; both are on by default.
+With
+.B kbmarkgood=no
+no trial generation is ever kept: the loader takes it back on the next
+boot, and the console says so at every boot.
+The status of each call is logged in
+.BR /var/adm/rc.log .
 .SH EXAMPLES
 After installing a kernel-space package by hand with
 .BR bootset=manual :
@@ -475,7 +499,9 @@ mknod /dev/zen0 $1 $2 0
 .fi
 .RE
 .SH SEE ALSO
-.BR apkg (1)
+.BR apkg (1),
+.BR rc.subr (1M),
+.BR rc.conf (4)
 .SH NOTES
 A real 68060 is power-cycled to boot a new generation, not rebooted in
 software.

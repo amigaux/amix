@@ -1,0 +1,45 @@
+#!/bin/sh
+# kbmarkgood -- the boot got this far, so the generation it booted is good
+# (C2-4 section 9, spec 40 section 3.3).
+#
+# Installed by the kbootset package as /etc/init.d/kbmarkgood, linked as
+# /etc/rc2.d/S99zkbootset, the last run-level-2 script (band S99z*, P-36).
+# A box that panics or hangs in rc never gets here, and the loader's
+# try-once rule boots the previous good generation instead.
+#
+# With amix-base's rc.subr, "kbmarkgood=no" in /etc/rc.conf turns it off
+# (on by default); then a trial generation is never kept, so the console
+# says so at every boot. The status goes to /var/adm/rc.log. Without
+# rc.subr it runs as before. It never stops run level 2.
+#
+# RC_SUBR and RC_CONSOLE are for the host test only.
+#
+# MIT licence, see LICENSE in kernel/dlm.
+
+case "$1" in
+start)	;;
+*)	exit 0 ;;
+esac
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+RC_CONSOLE=${RC_CONSOLE:-/dev/console}
+rc_log() {
+	:
+}
+if [ -r "$RC_SUBR" ]
+then
+	. "$RC_SUBR"
+	if rc_enabled kbmarkgood yes
+	then
+		:
+	else
+		echo "kbmarkgood: off (kbmarkgood=no in /etc/rc.conf): a trial generation is not kept" > "$RC_CONSOLE" 2>&1
+		rc_log kbmarkgood "off in rc.conf; nothing marked"
+		exit 0
+	fi
+fi
+KB=${RC_KBOOTSET:-/sbin/kbootset}
+[ -x "$KB" ] || exit 0
+# the call of record (C2-4 section 9): no options
+"$KB" mark-good > "$RC_CONSOLE" 2>&1
+rc_log kbmarkgood "kbootset mark-good, status $?"
+exit 0
