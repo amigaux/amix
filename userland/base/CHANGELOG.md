@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — devnodes, D-N21's boot step; link.d's major column optional (41f4274, 35aab99)
+
+devnodes (/etc/init.d/devnodes = rc2.d/S20devnodes, devnodes(1M)) re-creates a missing /dev node from its c/b record in
+the installed-objects DB: at the registry's major (`kbootset major <class>`) when the record's class names its module,
+else at the record's; a stock node that differs from its record is logged and left. amxbase 1.0-6. link.d's major
+column is optional, needed only for drivers the registry doesn't name (aen keeps 18); rc_mknod takes - for no major.
+Host tests devnodes 27/0, rc 51/0, ifup 70/0; E1 two-boot run PASS (three removed stock nodes re-created).
+
 ## 2026-10-31 — amxbase 1.0-4/1.0-5: inetinit as core records it, /etc/inittab with the dlm line; S2 base half (fe3e116, 1866d0f, 66ad365)
 
 amxbase 1.0-4: the network start script is recorded as stock core records it (S69inet the file, inetinit and K69inet
