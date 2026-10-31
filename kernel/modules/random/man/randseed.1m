@@ -1,0 +1,51 @@
+.TH RANDSEED 1M "31 October 2026" "random"
+.SH NAME
+randseed \- keep the random generator's seed across reboots
+.SH SYNOPSIS
+.B /etc/init.d/randseed
+.B start
+|
+.B stop
+.SH DESCRIPTION
+.B randseed
+runs at every boot as
+.B /etc/rc2.d/S21randseed
+and at every shutdown as
+.BR /etc/rc0.d/K02randseed .
+.TP
+.B start
+writes the seed saved at the last shutdown, then the output of
+.B date
+and
+.BR "ps \-ef" ,
+into
+.BR /dev/urandom ,
+which loads the
+.B random
+module, and saves a fresh seed at once, so that a crash never makes the
+next boot reuse one.
+.TP
+.B stop
+saves a fresh seed.
+.PP
+The seed is 512 bytes read from
+.BR /dev/urandom ,
+in
+.BR /etc/random-seed ,
+readable by root only; it replaces the old one only when it was read whole.
+.PP
+When the device cannot be written (a kernel without the module, or no
+node), the step says so in one line on the console and in the boot log,
+keeps the old seed and lets the boot go on.
+.SH FILES
+.TP
+.B /etc/random-seed
+the seed.
+.TP
+.B /var/adm/rc.log
+the boot log:
+.B randseed:
+lines.
+.SH SEE ALSO
+.BR random (7),
+.BR rc.subr (1M)

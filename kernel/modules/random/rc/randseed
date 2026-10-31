@@ -1,0 +1,80 @@
+#!/bin/sh
+# randseed -- carry the random module's seed across reboots: /etc/init.d/randseed, run as
+# /etc/rc2.d/S21randseed and /etc/rc0.d/K02randseed (random(7)).
+#
+# The generator seeds itself from the clock and the chipset's counters, which are guessable
+# after a boot.  At boot this writes the seed saved at the last shutdown, then the date and
+# the process table, into /dev/urandom (the first write loads the module), and saves a
+# fresh seed at once, so a crash never reuses one.  At shutdown it saves the seed again.
+# The seed is /etc/random-seed, 512 bytes, readable by root only.  S21 sorts after
+# S20devnodes, which makes the package's nodes again if they are missing.
+#
+# A box without the module (or without its node) gets one line on the console and in the
+# log, keeps its old seed, and boots on.  Log: /var/adm/rc.log ("randseed:" lines),
+# through /usr/lib/amix/rc.subr; without it, the console.  The idea, the file and the
+# links are those of isoriano's random-amix; this script is new.
+#
+# RANDSEED_FILE / RANDSEED_DEV / RC_SUBR exist for the host test.
+#
+# MIT licence, see kernel/modules/LICENSE in the amix repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+SEED=${RANDSEED_FILE:-/etc/random-seed}
+DEV=${RANDSEED_DEV:-/dev/urandom}
+
+case "$1" in
+start|stop)
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+
+if [ -r "$RC_SUBR" ]
+then
+	. "$RC_SUBR"
+	log() { rc_log randseed "$*"; }
+else
+	log() { echo "randseed: $*"; }
+fi
+say() {
+	echo "randseed: $*"
+	[ -r "$RC_SUBR" ] && rc_log randseed "$*"
+}
+
+# a fresh seed from the device, put in place only when whole
+save() {
+	umask 077
+	dd if=$DEV of=$SEED.new bs=512 count=1 > /dev/null 2>&1
+	if [ $? -eq 0 ] && [ -s $SEED.new ]
+	then
+		mv $SEED.new $SEED
+		log "seed saved in $SEED"
+	else
+		rm -f $SEED.new
+		say "cannot read $DEV; $SEED kept as it was"
+	fi
+}
+
+if [ "$1" = start ]
+then
+	if [ -f $SEED ]
+	then
+		(cat $SEED >> $DEV) 2> /dev/null
+		if [ $? -ne 0 ]
+		then
+			say "cannot write $DEV (no random module?); $SEED kept as it was"
+			exit 0
+		fi
+		log "seed from $SEED written to $DEV"
+	fi
+	( (date; ps -ef) >> $DEV ) 2> /dev/null
+	if [ $? -ne 0 ]
+	then
+		say "cannot write $DEV (no random module?); no seed saved"
+		exit 0
+	fi
+fi
+save
+exit 0
