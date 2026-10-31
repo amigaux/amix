@@ -144,7 +144,7 @@ EOF
 # pkgadd-prompt: models the stock 1991 pkgadd that PROMPTS (conflict /
 # "Do you want to continue") even under -n on some error paths -- it reads a
 # line from stdin.  A batch/installer run feeds no stdin, so on EOF (apkg
-# redirects the child to /dev/null -- METAL-FIX.3) it ABORTS non-zero, like
+# redirects the child to /dev/null -- the fail-fast fix) it ABORTS non-zero, like
 # the real engine.  On a NEVER-EOF stdin (the pre-fix inherited-console
 # case) the read would BLOCK FOREVER -- which is exactly the metal wedge.
 cat > "$WORK/bin/pkgadd-prompt" <<EOF
@@ -481,10 +481,10 @@ run 4 "pkgadd failure stops install with exit 4" \
     "$APKG" -c "$WORK/conf-fail" install foo
 
 # ------------------------------------------------ no-hang: a PROMPTING pkgadd
-# METAL-FIX.3.  A pkgadd that prompts (conflict/continue) with no stdin used
+# the fail-fast fix.  A pkgadd that prompts (conflict/continue) with no stdin used
 # to HANG apkg forever: the child inherited apkg's stdin, blocked on the
 # prompt, and waitpid() never returned -> apkg never propagated a failure and
-# the console wedged (M-RUN1, "No changes were made to the system." for 60s+).
+# the console wedged (on metal, "No changes were made to the system." for 60s+).
 # Fixed by redirecting the child's stdin to /dev/null, so the prompt reads EOF
 # and pkgadd aborts non-zero.  This test would HANG (time out) against the old
 # code and fast-fails with exit 4 against the fix.  We give apkg a never-EOF
@@ -881,7 +881,7 @@ grep -q "pkgadd -R $TGT -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$
 run 0 "install without -R stays byte-identical (no -R in argv)" \
     "$APKG" -c "$CONF" -f install foo
 grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
-    && ok "no -R: argv is exactly the pre-Wave-3 form" \
+    && ok "no -R: argv is exactly the form before -R existed" \
     || bad "non-R argv drifted" "$(cat $SHIMLOG)"
 
 # ------------------------------------------------ verbose install smoke
@@ -1804,7 +1804,7 @@ fi
 # kernel/dlm contracts, version 2 (2026-10-26): C2-2 (the #ext kpkg block and
 # the install record /var/apkg/kpkg/<name>) and C2-4 (kbootset as a called
 # program).  Integrity in 1.1 is SHA-256 + size per kernel-space package,
-# no signature (D-3 §13); the hook records "unverified".  kbootset does not
+# no signature; the hook records "unverified".  kbootset does not
 # exist on a box yet, so a mock stands in for it here: it logs its argv and
 # answers with the status the test asks for (C2-4 §1: 0 done, 1 I/O,
 # 2 usage, 3 rule, 4 gate).  tests/kbootset-consumer.sh runs the record
@@ -1859,7 +1859,7 @@ cp -r "$WORK/repo/pkgs/." "$KR/pkgs/"
 # (pkginfo + pkgmap, tests/mkds.py) followed by the shim's directives: it
 # installs the FILE lines, records DIR lines as directories, SHARED lines as
 # a file two packages own (status- and class-decorated token in the contents
-# DB).  apkg reads the header and the pkgmap (40 §6 pure files).
+# DB).  apkg reads the header and the pkgmap (pure files).
 mkds() {    # mkds <out> <pkginst> <version> <payload-word> [extra pkgmap line]
     {
         printf 'DIR /stand\nDIR /stand/k46\n'
@@ -1878,7 +1878,7 @@ mkds "$KR/pkgs/kernel/liar-1.0.pkg"    LIARPKG 1.0 liar
 mkds "$KR/pkgs/kernel/badsha-1.0.pkg"  BADSHA  1.0 badsha
 mkds "$KR/pkgs/kernel/kernel-k46-1.1.1.pkg" KERNK46 1.1.1 unix
 mkds "$KR/pkgs/kernel/kernel-k46-2.0.pkg"   KERNK46 2.0   unix
-# not pure files (40 §6): each must be refused before anything installs
+# not pure files: each must be refused before anything installs
 mkds "$KR/pkgs/kernel/impure-e-1.0.pkg"   IMPUREE 1.0 impe "1 e none /etc/kmod.conf 0644 root sys 1 1 1"
 mkds "$KR/pkgs/kernel/impure-c-1.0.pkg"   IMPUREC 1.0 impc "1 f kcls /stand/k46/impc.x 0644 root sys 1 1 1"
 mkds "$KR/pkgs/kernel/impure-s-1.0.pkg"   IMPURES 1.0 imps "1 i postinstall 20 1 1"
@@ -2051,7 +2051,7 @@ OUT=$(cat "$WORK/kupd.out")
     && ok "update counts 15 ordinary + 18 kernel-space entries" \
     || bad "kernel-space catalog not accepted as expected (rc=$rc)" "$OUT"
 echo "$OUT" | grep -q "unverified: no signature check" \
-    && ok "update says the kernel-space block is unverified (60 §4 hook)" \
+    && ok "update says the kernel-space block is unverified (verification hook)" \
     || bad "the verification hook's verdict is not reported" "$OUT"
 OUT=$("$APKG" -c "$KCONF" list 2>&1)
 echo "$OUT" | grep -q "^kernel-k46 .*kernel .*kernel-space kernel, line k46, kabi k46\." \
@@ -2675,7 +2675,7 @@ mkkcat "$KR/catalog" "$KCAT_K110"
 "$APKG" -c "$KCONF" update >/dev/null 2>&1
 
 # --- upgrade with several names: ONE transaction, ONE trigger ---------
-# The stage-2 exit row (kernel/dlm S2-46) upgrades a kernel, the loader and
+# kernel/dlm's stage-2 exit test upgrades a kernel, the loader and
 # kbootset together; with one name per call that was one generation per
 # package.  Here: kernel-k46 1.1.0 -> 1.1.1, loader 3 -> 4, and the userland
 # oldpkg 1.0 -> 2.0, in one call.
@@ -2918,7 +2918,7 @@ rm -rf "$REC" "$ROOT$KT" "$ROOT/stand" "$ROOT/var/sadm/install/contents" \
 
 # ======================================= UFS-only packages (APKG_FSTYPE)
 #
-# P-35 Option C (2026-10-30): a package with file names over 14 bytes says
+# Since 2026-10-30 a package with file names over 14 bytes says
 # APKG_FSTYPE=ufs in its pkginfo; apkg refuses it on any other filesystem,
 # after staging and before the first pkgadd of the transaction (fsreq.c,
 # docs/design.md section 2b).  The box reads statvfs f_basetype; the host

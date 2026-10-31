@@ -5,7 +5,7 @@
 #
 # apkg drives heirloom pkgadd/pkgrm/installf (-R, under fakeroot) from a
 # FILE repository holding a toy package whose two conffiles carry
-# ../conffile/i.conffile and r.conffile.  Walks P-36 W2: the report after
+# ../conffile/i.conffile and r.conffile.  Walks the conffile report after
 # a transaction, the questions at a terminal (on a pty, ptyrun.py), -y /
 # --conf-keep / --conf-new, `apkg conffiles` and `conffiles resolve`,
 # remove keeping edits, purge, and the config-files state.

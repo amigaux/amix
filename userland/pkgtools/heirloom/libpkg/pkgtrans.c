@@ -150,7 +150,7 @@ static char *reloc_names[] = {
 static int	signal_received = 0;
 
 /*
- * AMIX PORT: the reproducible roll (T-56 D1).  With SOURCE_DATE_EPOCH set,
+ * AMIX PORT: the reproducible roll.  With SOURCE_DATE_EPOCH set,
  * each archive's members are listed in C sort order (a parent before its
  * children) and, once the datastream file is written, every newc header
  * is normalised in place by ds_epoch_fd() (libpkg/dsepoch.c) through

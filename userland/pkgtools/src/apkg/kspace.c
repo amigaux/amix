@@ -19,7 +19,7 @@
  *        --journal.  apkg never writes a boot slice itself.
  *
  * Integrity in 1.1 is the per-package SHA-256 of the catalog; there is
- * no signature (D-3 §13).  The hook of 60 §4 stays: kspace_verify_hook()
+ * no signature.  The verification hook stays: kspace_verify_hook()
  * runs before the block is used and the record carries `verified no`.
  *
  * C89, no snprintf/strdup, block-top declarations (the period toolchain
@@ -75,11 +75,11 @@ int sha256_file(const char *path, char hexout[65])
     return 0;
 }
 
-/* ---------------- the verification hook (60 §4) ---------------- */
+/* ---------------- the verification hook ---------------- */
 
 void kspace_verify_hook(struct catalog *cat)
 {
-    /* 1.1: no signature exists (D-3 §13).  A #ksig line is recorded by
+    /* 1.1: no signature exists.  A #ksig line is recorded by
      * catalog_load and not acted on; the verdict is "unverified" and the
      * block passes.  The release that adds signing checks the catalog
      * bytes against the #ksig file HERE and, by policy, refuses. */
@@ -305,7 +305,7 @@ int ds_pkginst(const char *path, char *out, unsigned outlen)
     return npkg == 1 ? 0 : -1;
 }
 
-/* ---------------- pure files (40 §6) ----------------
+/* ---------------- pure files ----------------
  *
  * "Kernel-space packages carry files only (class none, no scripts) and
  * never write a boot slice."  apkg checks it on the staged datastream,
@@ -854,7 +854,7 @@ static int collect_files(void *vctx, const char *path, int type,
     struct files_ctx *c;
 
     c = (struct files_ctx *)vctx;
-    /* plain files only: a kernel-space package is pure files (40 §6),
+    /* plain files only: a kernel-space package is pure files,
      * which ds_pure_files() checked before the pkgadd.  A module's device
      * node (C3-5 v4 §1.2) has no bytes to hash, so it gets no `file` line
      * (C2-2 §2: a file's size and SHA-256; kbootset gate 1 compares
@@ -1018,7 +1018,7 @@ int kpkg_write_record(const struct conf *cf, const struct pkgent *e,
                                     e->sha256, pkginst, source);
 }
 
-/* ---------------- pre-flight (40 §6, 20 §3) ---------------- */
+/* ---------------- pre-flight ---------------- */
 
 /* "<fam>.<major>.<minor>" -> 0, or -1 when the tag is not of that form
  * (a stage-2 static kernel says "static", a loader may say anything) */
@@ -1395,7 +1395,7 @@ int kspace_replaces(const struct conf *cf, struct pkgent **todo, int nt,
 
 /* ---------------- the kbootset trigger (C2-4) ---------------- */
 
-/* bootset= from <target>/etc/default/bootset (40 §2.2): 1 = auto (also
+/* bootset= from <target>/etc/default/bootset: 1 = auto (also
  * when the file or the key is absent: the default), 0 = manual.  An
  * unknown value is taken as manual -- never write a boot store on a
  * setting we cannot read. */

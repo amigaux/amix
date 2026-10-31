@@ -20,7 +20,7 @@
 # the redistributable set).  They stage into a SEPARATE private dir
 # ($KERNEL_STAGING, default build/kernel-private) so private packages are
 # physically apart from the redistributable staging; the publish path also
-# refuses any package carrying /stand/unix or /stand/boot2.boot (W6-K sec 3).
+# refuses any package carrying /stand/unix or /stand/boot2.boot.
 #
 # MIT License, amix-packagemanager project.
 set -euo pipefail
@@ -42,7 +42,7 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # trigger, the journal and `apkg recover`, `upgrade` of several names.
 # STAGED FOR THE 1.1 MEDIA, NOT PUBLISHED: minted into its own staging dir
 # (build/repo-staging-apkg030); the public catalog and the publish line of
-# record still say 0.2.3 until the owner decides the publish.  NOTES
+# record still say 0.2.3 until the publish is decided.  NOTES
 # 2026-10-26.
 # 0.3.1 (2026-10-26): one kernel package per line (C2-2 v5 sec 2.1) -- a
 # kernel install pkgrm's the other package of its line first.  Same rule:
@@ -58,7 +58,7 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # stays what it is.  NOTES 2026-10-26.
 # 0.3.4 (2026-10-30, not minted yet): /etc/apkg.conf and /var/apkg/admin
 # move onto the shared conffile class (src/conffile/i.conffile and
-# r.conffile, P-36 W1), so an upgrade keeps an edited admin file too.
+# r.conffile), so an upgrade keeps an edited admin file too.
 # 0.3.3 is staged with the old payload: one version, one byte set.
 VER_APKG="0.3.4"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
@@ -86,7 +86,7 @@ VER_APKG="0.3.4"
 # compver(5), copyright(5) and space(5) from src/formats.  1.12.4 is staged with the old payload: one version, one
 # byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
 VER_ENG="1.12.5"
-# EPOCH_APKG, EPOCH_ENG: each version's own epoch (P-38 D-b, T-56 D1): every
+# EPOCH_APKG, EPOCH_ENG: each version's own epoch: every
 # time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
@@ -107,20 +107,20 @@ VER_CDFS="0.1-g8de83cf"
 # Kernel-package versions: house convention "<REV>-<date>" (like cdfs's
 # "0.1-g8de83cf"), where REV = the shipped /stand/unix `sum -r` (so the
 # package identity carries the binary's checksum) and the date = mint day.
-# Bump the date on a re-mint.  P5.4 (2026-08-06) superseded the W6-P
+# Bump the date on a re-mint.  The 2026-08-06 builds superseded the first
 # identities (KERNBENCH 45473-2026.07.23, KERNZ3660 00961-2026.07.23) with
-# the Wave-1 rebuilds (z3660eth major-51 renumber + aen security patch in
+# the rebuilds (z3660eth major-51 renumber + aen security patch in
 # the link; KERNBENCH's mix gains z3660eth).  Both payloads are the gated
-# relocunix (ET_REL) bytes: the P5.4 bench build proved /stand/unix == the
-# gated relocunix BYTE-EXACT, so the W6-U slice-vs-relocunix representation
+# relocunix (ET_REL) bytes: the 2026-08-06 bench build proved /stand/unix == the
+# gated relocunix BYTE-EXACT, so the earlier slice-vs-relocunix representation
 # split is gone and REV = the relocunix sum -r.  See
 # build/kernel-packages/{bench,onbox}/unix.provenance.
 #
-# POISONED (2026-08-06, same day): the FIRST P5.4 successors (KERNBENCH
+# POISONED (2026-08-06, same day): the FIRST successors (KERNBENCH
 # 45343-2026.08.06, KERNZ3660 05929-2026.08.06) linked the UNVALIDATED
 # upstream-sync-2026-07 libcdfskern.o (95826 B, md5 a01c7396...) -- on metal
 # the remount canary panicked (Bus Error 482F87AC, cdfs corruption class;
-# Packet D FAILED, sync line frozen).  NEVER mint/deploy those identities;
+# the metal test FAILED, sync line frozen).  NEVER mint/deploy those identities;
 # their .pkg files are quarantined under build/kernel-private/POISONED/
 # with a .POISONED suffix.  Record: amix-kerntools docs/kernel-packages.md
 # sec 4a-bis + each payload's .provenance sibling.  (The causal attribution
@@ -142,7 +142,7 @@ VER_CDFS="0.1-g8de83cf"
 # r4 (2026-08-16) -- ADDITIVE, NOT a retraction.  r3 (64049/45833) was NOT
 # defective: it is metal-green (2026-08-07 calibration, 15/15 cycles + 25/25
 # rapids on both) and its .pkg pair stays valid-in-place in kernel/ as the
-# previous line.  What r4 adds is the whole P5.4 regeneration batch that
+# previous line.  What r4 adds is the whole regeneration batch that
 # accumulated after r3 was cut, built as ONE line (the bench build reused the
 # combined build's own patched image, so both kernels carry byte-identical
 # batch inputs):
@@ -522,16 +522,16 @@ EOF
   #
   # Version 0.3.4 (2026-10-30, not minted).  /etc/apkg.conf and
   # /var/apkg/admin are `e conffile`, installed and removed by the shared
-  # class action scripts src/conffile/i.conffile and r.conffile (P-36 W1;
-  # src/conffile/README.md), which replace i.apkgconf.  An unedited file
+  # class action scripts src/conffile/i.conffile and r.conffile
+  # (src/conffile/README.md), which replace i.apkgconf.  An unedited file
   # takes the new default; an edited one is kept, the new default goes
   # to <file>.new and the file is listed in /var/sadm/conffiles/PENDING.
-  # The admin file is no longer reset by `apkg upgrade apkg` (P-36 F1).
+  # The admin file is no longer reset by `apkg upgrade apkg`.
   # New pages: apkg.conf(5), admin(5), conffile(5) and contents(5) in
   # /usr/apkg/man/man5; contents-fsck(1M) and amix-sadm-migrate(1M) in man1m.
   # The apkg binary (0.3.4) reports and decides the pending config files
   # after each transaction and adds -y/--conf-keep/--conf-new, `conffiles`,
-  # `purge` and the [config-files] state (P-36 W2).
+  # `purge` and the [config-files] state.
   # The template bytes are unchanged (md5 8dada8d9..., T23).
   cat > "$A/prototype" <<EOF
 i pkginfo
@@ -632,7 +632,7 @@ fi
 
 if [ $do_cdfs -eq 1 ]; then
   # ---- cdfs: the CD/optical-filesystem USERLAND, so an INSTALLED Amix box
-  # can mount CDs.  OURS (not stock).  Wave-5 finding: a fresh install of the
+  # can mount CDs.  OURS (not stock).  Found on the installer: a fresh install of the
   # base five ships NO cdfs userland (`/usr/lib/fs/cdfs` absent) even though
   # the cdfs KERNEL side is already in the target kernel (core).  This package
   # closes exactly that gap and nothing more:
@@ -731,15 +731,15 @@ EOF
 fi
 
 # ======================================================================
-# KERNEL PACKAGES (PRIVATE-only; W6-K W6-P).  Payloads are proprietary-
+# KERNEL PACKAGES (PRIVATE-only).  Payloads are proprietary-
 # derived (/stand/unix links Commodore SVR4 objects; /stand/boot2.boot is a
 # Commodore blob), so these NEVER go to $STAGING/the public repo -- they build into
 # $KSTAGING and the publish path refuses anything carrying those paths.
 #
 # Payloads live under the gitignored build/kernel-packages/ (never committed):
-#   bench/unix    the P5.4r4 bench kernel, a4091+z3660eth+cdfs
+#   bench/unix    the r4 bench kernel, a4091+z3660eth+cdfs
 #                                             (sum -r 49667, 1586312 B, ET_REL)
-#   onbox/unix    the P5.4r4 combined metal kernel, z3660scsi+z3660eth+cdfs
+#   onbox/unix    the r4 combined metal kernel, z3660scsi+z3660eth+cdfs
 #                                             (sum -r 60364, 1587524 B, ET_REL)
 #   boot2.boot    the flags-based loader, sha256 f287ff3a... (acquired + gated)
 # Override sources with KERNBENCH_SRC / KERNZ3660_SRC / BOOT2_SRC; the gates
@@ -842,7 +842,7 @@ if [ $do_kernbench -eq 1 ]; then
   mkdir -p "$KPKG/bench"
   [ -f "$KB_SRC" ] || {
     echo "FATAL: KERNBENCH payload missing: $KB_SRC" >&2
-    echo "       the P5.4r4 bench kernel (sum -r 49667, 1586312 B) is expected" >&2
+    echo "       the r4 bench kernel (sum -r 49667, 1586312 B) is expected" >&2
     echo "       at \$KERNTOOLS/work/p54r4-bench-smoke/relocunix," >&2
     echo "       or set KERNBENCH_SRC (or KERNTOOLS)." >&2
     exit 1; }
@@ -877,7 +877,7 @@ support.c    : PROBED, not stock.  amix-a4091 support.c.patch (adf3875 line),
                0xDD0041 + SCMD 0xDD0043, behind the VPOSR AGA gate); the
                0x7000000 RAM-size guess occurs ZERO times in the kernel.
                THIS RETIRES THE `support-stock` KMIX TAG on this line.
-source       : the P5.4 r4 bench rebuild + bench-smoke run (amix-kerntools
+source       : the r4 bench rebuild + bench-smoke run (amix-kerntools
                work/p54r4-bench-smoke/relocunix; run manifest provenance.txt
                + gates.tsv beside it).  Bench-smoke 8/8 PASS: four-arm
                buildgate STABLE after 2 builds (sum=49667), d245 relinkguard
@@ -891,11 +891,11 @@ source       : the P5.4 r4 bench rebuild + bench-smoke run (amix-kerntools
 supersedes   : KERNBENCH 64049-2026.08.07 (r3) -- ADDITIVE supersession, not
                a retraction: r3 is metal-green (2026-08-07 calibration) and
                its .pkg stays valid-in-place in kernel/ as the previous line.
-               r4 simply carries the whole P5.4 regeneration batch that
+               r4 simply carries the whole regeneration batch that
                accumulated after r3 was cut.
                Lineage: r2 53963-2026.08.06 superseded-in-place (latent
                stack-sdcom defect, amix-cdfs 9360542), r1 45343-2026.08.06
-               quarantined (POISONED/), W6-P 45473-2026.07.23 kept intact.
+               quarantined (POISONED/), the first 45473-2026.07.23 kept intact.
 status       : bench-smoke GREEN (cold boot to run-level 2 + LAN, digest 3/3).
                NOT metal-flown -- this is the a4091 BENCH family; the r4
                metal proof belongs to the combined KERNZ3660 kernel (60364,
@@ -935,7 +935,7 @@ if [ $do_kernz3660 -eq 1 ]; then
   mkdir -p "$KPKG/onbox"
   [ -f "$KZ_SRC" ] || {
     echo "FATAL: KERNZ3660 payload missing: $KZ_SRC" >&2
-    echo "       the P5.4r4 combined metal kernel (sum -r 60364, 1587524 B) is" >&2
+    echo "       the r4 combined metal kernel (sum -r 60364, 1587524 B) is" >&2
     echo "       expected at \$KERNTOOLS/work/kernel-packages/p54r4-combined/unix," >&2
     echo "       or set KERNZ3660_SRC (or KERNTOOLS)." >&2
     exit 1; }
@@ -966,7 +966,7 @@ direct maps  : FIRST kernel to fly BOTH.  z3660_direct_map (amix-z3660scsi
                (33 + 65) to the map.  Both disassembly-proven: span gate,
                direct arm sets the flag and does plain window arithmetic with
                NO sptalloc call; the sptalloc arm is retained.
-source       : the P5.4 r4 combined rebuild (amix-kerntools
+source       : the r4 combined rebuild (amix-kerntools
                work/kernel-packages/p54r4-combined/unix; provenance sibling
                there).  Metal-family kernel, z3660eth at cdevsw 51 proven
                BINARY-side ((0xada4-44-0xa31c)/52 = 51 exactly, stride
@@ -983,8 +983,8 @@ supersedes   : KERNZ3660 45833-2026.08.07 (r3) -- ADDITIVE supersession, not
                its .pkg stays valid-in-place in kernel/ as the previous line.
                Lineage: r2 14821-2026.08.06 superseded-in-place (latent
                stack-sdcom defect, amix-cdfs 9360542), r1 05929-2026.08.06
-               quarantined (POISONED/), W6-P 00961-2026.07.23 kept intact.
-status       : METAL-PROVEN 2026-08-15 (P5.4 R3) -- the
+               quarantined (POISONED/), the first 00961-2026.07.23 kept intact.
+status       : METAL-PROVEN 2026-08-15 (r3) -- the
                updbootpart reframe was byte-clean, TWO cold power-to-network
                boots (~270 s each), and adb read z3660_direct_map = 1 AND
                z3660eth_direct_map = 1 live on the hardware, so the 98
@@ -1047,7 +1047,7 @@ fi
 # a staging that carries it re-categorises every stock line that is not base
 # OS (net/uucp -> network, the seven source trees -> source, the X stack ->
 # x11, ...) plus our own apkg/apkgeng (application -> system).  That is the
-# point of the file and the change that was asked for.  It moves no .pkg
+# point of the file.  It moves no .pkg
 # byte and no .pkg md5 -- only catalog lines -- and a later edit here is one
 # regenerate away.  The expected diff against the live catalog is recorded
 # in NOTES.md (the 2026-09-26 PREPARED publish), so the next publish is

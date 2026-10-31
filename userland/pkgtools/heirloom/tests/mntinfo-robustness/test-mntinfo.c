@@ -13,7 +13,7 @@
  *   - a "normal" table (contains "/"): returns 0, behaviour unchanged (the
  *     synthesize branch is never entered).
  *   - a MISSING file (open -> ENOENT): the fresh-install-media case (the Amix
- *     miniroot ships no /etc/mnttab).  METAL-FIX.1 treats it as an empty
+ *     miniroot ships no /etc/mnttab).  the missing-mnttab fix treats it as an empty
  *     table and synthesizes "/" -> returns 0.
  *   - an UNREADABLE file (open -> EACCES): a genuine fault -> get_mntinfo
  *     still fails CLOSED -> returns 1.  Only ENOENT is widened; every other

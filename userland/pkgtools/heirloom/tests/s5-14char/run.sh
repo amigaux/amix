@@ -151,9 +151,9 @@ want_grep "A4 template basename is 14 bytes: typescriXXXXXX" \
 	'template=<'"$S5"'/typescriXXXXXX> (basename 14 chars)' "$LOG"
 
 # --------------------------------------------------------------------- B ----
-# The exact W6 bench failure: two DIFFERENT names that alias to one dirent.
+# The exact bench failure: two DIFFERENT names that alias to one dirent.
 echo
-echo "B. the W6 bench case: typescript.stage1 then typescript.stage2"
+echo "B. the bench case: typescript.stage1 then typescript.stage2"
 
 fresh_s5
 s5run cppath-broken "$SRC/a" "$S5/typescript.stage1"

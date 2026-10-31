@@ -67,7 +67,7 @@ if ! (cd "$STAGING" && md5sum -c catalog.md5 >/dev/null 2>&1); then
     exit 1
 fi
 
-# ---- licensing gate (W6-K section 3): refuse OUR private kernel packages ----
+# ---- licensing gate: refuse OUR private kernel packages ----
 # A package whose pkginfo carries the kernel-package markers (KSUM_R/BOOT2_SHA)
 # is one of the minted KERNBENCH/KERNZ3660 packages -- PRIVATE-only (their
 # /stand/unix + /stand/boot2.boot payload is proprietary-derived).  This DEST
@@ -86,7 +86,7 @@ SCAN_RC=0
 python3 "$GEN" --scan-private "$STAGING" || SCAN_RC=$?
 if [[ $SCAN_RC -eq 3 ]]; then
     echo "publish: REFUSING to publish $STAGING -- it carries proprietary" >&2
-    echo "         kernel/boot2 payload (PRIVATE-only; W6-K section 3). Such" >&2
+    echo "         kernel/boot2 payload (PRIVATE-only). Such" >&2
     echo "         packages may NEVER reach a redistributable/off-LAN repo." >&2
     echo "         There is no --force: build them into a private staging" >&2
     echo "         area (build-packages.sh --kernbench/--kernz3660), not here." >&2
@@ -109,8 +109,7 @@ fi
 # Amix permission -- and is fatal here, for the same reason the kernel gate
 # is: this DEST is public and the mistake is not retractable once fetched.
 # Embedded stock Amix object code (libm) is NOT refused since 2026-10-30
-# (owner: ports link the stock libm.a; the permission covers all of Amix,
-# ruling 2026-10-29): the gate prints an "embeds" line per binary so the
+# (ports link the stock libm.a; the permission covers all of Amix): the gate prints an "embeds" line per binary so the
 # publish log shows it.  UNKNOWN (a stripped binary, whose symbol table the
 # test cannot read) is NOT fatal -- most of the add-on set is stripped -- but
 # it prints, because "not inspected" must never read as "clean".

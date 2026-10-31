@@ -32,9 +32,9 @@
 # quietly absorb and weaken the other.
 #
 # ★ THE RULE CHANGED ON 2026-10-30.  The permission (Amiga Corporation,
-# 2026-09-23) covers all of Amix including its AT&T parts (owner's ruling
-# 2026-10-29; amigaux/amix-system publishes them), and on 2026-10-30 the
-# owner decided that ports link the stock /usr/ccs/lib/libm.a statically.
+# 2026-09-23) covers all of Amix including its AT&T parts (amigaux/amix-system
+# publishes them), and since 2026-10-30 ports link the stock
+# /usr/ccs/lib/libm.a statically.
 # Embedded stock libm is therefore no longer refused: it is RECORDED, one
 # "embeds" line per binary, so a publish still shows what is inside.  What
 # the permission does not cover -- a Kickstart ROM image -- refuses.

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# Wave 1 box phase: does pkgadd -R misbehave, and does <root>/etc/group decide it?
+# Box phase: does pkgadd -R misbehave, and does <root>/etc/group decide it?
 # A = EMPTY altroot  -> clgrnam() fopen fails, returns NULL, dup_gr_ent never runs
 # B = SEEDED altroot -> clgrnam() path fully executes (the -R-exclusive code)
 LOG=/tmp/rtest.log

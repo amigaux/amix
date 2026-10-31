@@ -22,7 +22,7 @@ target name service): one record per object
 
 sorted bytewise and md5'd.  It is identical whether computed on the host
 from a repackage manifest or on the box's own contents DB, so it is the
-reference fingerprint recorded for later waves.
+reference fingerprint recorded for later runs.
 
 euid gate: only root can chown/mknod, so only at euid 0 does an installed
 uid/gid (or a device node) mean anything.  Verifying ownership against a

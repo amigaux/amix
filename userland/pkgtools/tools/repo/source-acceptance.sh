@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# source-acceptance.sh - Wave 3: install the base set THROUGH the apkg
+# source-acceptance.sh - install the base set THROUGH the apkg
 # SOURCE layer (-c <conf> selects http:// / a mounted /cdrom / raw:<dev>)
-# into a FRESH, seeded alternate root, run the Wave-2 gate battery, and
+# into a FRESH, seeded alternate root, run the altroot gate battery, and
 # emit the installed DB for the host canonical-tree digest.  "Three
 # sources, one digest": run this once per source with three fresh roots;
 # altroot_attest.py on each emit must print the same digest.
@@ -13,7 +13,7 @@
 # Box-side Bourne sh (Amix 2.1, pre-POSIX /bin/sh: backticks not $(...),
 # `VAR=val; export VAR`).  euid 0 (ownership attest is only meaningful as
 # root).  The engine (pkgadd/pkgrm/pkgchk/contents-fsck) is the box's
-# Wave-2 engine and is NOT moved by -R - it runs from the box and installs
+# -R-capable engine and is NOT moved by -R - it runs from the box and installs
 # INTO $ROOT.
 #
 # Env:
@@ -53,7 +53,7 @@ echo "=== source-acceptance: conf=$CONF root=$ROOT pkgs=[$PKGS] ==="
 echo "euid check:"; id
 fail() { echo "ACCEPTANCE-FAIL: $1"; exit 1; }
 
-# --- seed a FRESH target root (Wave-2 seed discipline) ---------------
+# --- seed a FRESH target root (altroot seed discipline) -------------
 echo "--- seed fresh root $ROOT ---"
 rm -rf "$ROOT"
 mkdir -p "$ROOT/etc" "$ROOT/var/sadm/pkg" "$ROOT/var/sadm/install" "$ROOT/tmp"

@@ -50,7 +50,7 @@
  *                    server is asked in turn regardless.
  *   kbootset         the generation composer apkg calls after a
  *                    transaction that changed kernel space (C2-4);
- *                    default /sbin/kbootset (40 §2.2).  Like pkgadd it
+ *                    default /sbin/kbootset.  Like pkgadd it
  *                    runs FROM this system and is told -R <target>.
  *   kbootset_journal the --journal handed to kbootset; empty (the
  *                    default) = <target>/var/kbootset/journal, the

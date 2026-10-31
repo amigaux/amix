@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# userland/pkgtools/Makefile -- APKG and APKGENG through make dist (P-38 S4.2).
+# userland/pkgtools/Makefile -- APKG and APKGENG through make dist.
 #
 #   make dist [OUT=<dir>]   build the host engine, cross-build apkg,
 #                           contents-fsck and the engine for Amix, and roll
@@ -15,7 +15,7 @@
 #                           another umask, and compare the bytes
 #
 # Each package rolls under its version's own epoch, pinned beside the
-# version in tools/repo/build-packages.sh (EPOCH_APKG, EPOCH_ENG; P-38 D-b);
+# version in tools/repo/build-packages.sh (EPOCH_APKG, EPOCH_ENG);
 # the environment's SOURCE_DATE_EPOCH is never used.  The cross compiler is
 # m68k-cbm-sysv4-gcc on PATH, as in the build container, or GCA naming
 # gcc-cross-amix's build/ directory (its env.sh is sourced).

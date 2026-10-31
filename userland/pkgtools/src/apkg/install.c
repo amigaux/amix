@@ -43,12 +43,12 @@
  * status comes back unmangled.  When cf->target is set the argv grows an
  * explicit "-R <target>" (byte-identical to the plain form otherwise).
  *
- * The child's stdin is redirected to /dev/null (METAL-FIX.3): a batch /
+ * The child's stdin is redirected to /dev/null (the fail-fast fix): a batch /
  * installer run feeds the engine no stdin, yet the stock 1991 pkgadd will
  * PROMPT (conflict / "Do you want to continue") even under -n on some
  * error paths.  With an inherited, never-fed stdin such a prompt blocks
  * forever, wedging the waitpid() below so apkg never returns and the
- * failure is never propagated - observed on metal (M-RUN1, 2026-07-23): a
+ * failure is never propagated - observed on metal (2026-07-23): a
  * pkgadd "unable to open mount table" error left the console hung at "No
  * changes were made to the system." and the driver's fail-closed `die`
  * (which keys on apkg's rc) never fired.  /dev/null gives any such prompt
@@ -169,7 +169,7 @@ static void print_argv(const char *pfx, char **argv)
 /* fork/execv; returns child exit status (0..255), or -1 on
  * fork/exec/wait failure.  The child's stdin is redirected to /dev/null
  * so a pkgadd that would prompt gets EOF and aborts rather than blocking
- * this waitpid() forever (see the file header / METAL-FIX.3). */
+ * this waitpid() forever (see the file header / the fail-fast fix). */
 static int run_cmd(char **argv)
 {
     int pid;
@@ -343,7 +343,7 @@ static int is_named(char **names, int nnames, const struct pkgent *ent)
 
 /* ---------------- kernel space and the journal ----------------
  *
- * apkg 0.3 (kernel/dlm contracts C2-2 and C2-4, spec 40 §6).  A
+ * apkg 0.3 (kernel/dlm contracts C2-2 and C2-4).  A
  * kernel-space package (an entry of the catalog's #ext kpkg block) is
  * installed by the same pkgadd as any other, with four differences:
  *
@@ -409,7 +409,7 @@ static void announce_kspace(int nk)
 }
 
 /* the pkginst a staged kernel-space datastream installs as, after the
- * pure-files check (40 §6); -1 when it cannot be read, contradicts the
+ * pure-files check; -1 when it cannot be read, contradicts the
  * catalog's pkginst= or carries anything but plain files (message
  * printed).  Runs on every staged package before the first pkgadd. */
 static int kspace_inst(const struct pkgent *e, const char *staged,
@@ -917,7 +917,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     int rc;
 
     /* Several names, ONE transaction (one journal, one kbootset build +
-     * commit): the stage-2 exit row (kernel/dlm S2-46) upgrades a kernel,
+     * commit): kernel/dlm's stage-2 exit test upgrades a kernel,
      * the loader and kbootset together, and one name per call meant one
      * generation per package.  Every name is checked before anything is
      * fetched: one that is not in the catalog (exit 5) or not installed
