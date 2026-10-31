@@ -3,7 +3,8 @@
 
     tapdhcpd.py --tap TAP --client-mac MAC --client-ip ADDR/BITS --router ADDR
                 --server-ip ADDR [--server-mac MAC] [--lease SECS] --log FILE
-                [--noise-flag FILE] [--seconds N]
+                [--noise-flag FILE] [--control FILE] [--dns ADDR,...]
+                [--hostname NAME] [--seconds N]
 
 It attaches to an existing tap that the calling user owns (TUNSETIFF needs no
 capability then), so it needs no root and no listener on the host. On the
@@ -22,6 +23,12 @@ Everything else is ignored. Every frame it sends, and every frame from the
 client that is DHCP, ARP for the server or ICMP, is logged with a timestamp.
 ICMP from the client is decoded (type, code, the quoted UDP port), which is
 how "IP answered our unicast ACK with port-unreachable" shows up.
+
+The file named by --control, read at every DHCP message, changes the
+answers while the client runs (the dhcpc S1 tests): a word on its first line
+of "silent" (answer nothing), "norenew" (ignore a unicast REQUEST from a
+bound client, so it has to rebind) or "nak" (refuse every REQUEST); no file
+or any other word, normal. --dns and --hostname add options 6 and 12.
 
 While the file named by --noise-flag exists, it also sends the client 20
 unsolicited ICMP echo replies a second (IP drops them without answering), so
@@ -146,11 +153,18 @@ class Responder:
                      ip_s(opts[54]) if 54 in opts else "-",
                      ip_s(ip[12:16]), ip_s(ip[16:20]), mac_s(f[0:6]), len(f),
                      struct.unpack("!H", ip[2:4])[0]))
+        mode = self.mode()
+        if mode == "silent":
+            self.say("CONTROL silent: no answer")
+            return
         if t == 1:
             reply = 2
         elif t == 3:
+            if mode == "norenew" and ciaddr != b"\0\0\0\0" and ip[16:20] == self.sip:
+                self.say("CONTROL norenew: unicast REQUEST ignored")
+                return
             want = req or ciaddr
-            reply = 5 if want == self.cip else 6
+            reply = 6 if mode == "nak" else (5 if want == self.cip else 6)
         else:
             return
         lease = self.a.lease
@@ -169,7 +183,10 @@ class Responder:
             o += bytes([58, 4]) + struct.pack("!I", lease // 2)
             o += bytes([59, 4]) + struct.pack("!I", lease * 7 // 8)
             o += bytes([1, 4]) + self.mask + bytes([3, 4]) + self.router
-            o += bytes([6, 4]) + self.router
+            dns = self.a.dns.split(",") if self.a.dns else [ip_s(self.router)]
+            o += bytes([6, 4 * len(dns)]) + b"".join(ip_b(d) for d in dns)
+            if self.a.hostname:
+                o += bytes([12, len(self.a.hostname)]) + self.a.hostname.encode()
         o += b"\xff"
         r[240:240 + len(o)] = o
         r = bytes(r)
@@ -184,6 +201,13 @@ class Responder:
                   "DHCP %s xid=%s yiaddr=%s to=%s/%s (%s)" % (
                       NAMES[reply], xid.hex(), ip_s(self.cip) if reply != 6 else "-",
                       mac_s(dmac), ip_s(dip), how))
+
+    def mode(self):
+        try:
+            with open(self.a.control) as c:
+                return (c.readline().split() or [""])[0]
+        except (OSError, TypeError):
+            return ""
 
     def on_icmp(self, ip, ihl):
         icmp = ip[ihl:]
@@ -252,6 +276,9 @@ def main():
     p.add_argument("--lease", type=int, default=120)
     p.add_argument("--log", required=True)
     p.add_argument("--noise-flag")
+    p.add_argument("--control")
+    p.add_argument("--dns", help="comma-separated; default the router")
+    p.add_argument("--hostname")
     p.add_argument("--seconds", type=int, default=900)
     Responder(p.parse_args()).run()
 

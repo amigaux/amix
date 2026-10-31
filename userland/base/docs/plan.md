@@ -38,8 +38,8 @@ the network chain stay untouched.
 | Piece | Installed as | Kind | Stage |
 |---|---|---|---|
 | `probe/dhcprobe`, `probe/tapdhcpd.py` | not installed | test tools | S0, done: `dhcp-probe.md` |
-| `dhcpc` | `/usr/sbin/dhcpc` | C, period compiler, own package `dhcp-client` | S1 |
-| lease state | `/var/inet/dhcpc/<if>.lease`, `<if>.pid` | runtime | S1 |
+| `dhcpc` | `/usr/sbin/dhcpc` | C, period compiler, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback |
+| lease state | `/var/inet/dhcpc/<if>.lease`, `<if>.pid`; log `/var/adm/dhcpc.log` | runtime | S1 |
 | `ifup` dhcp mode | in `ifup` | code | S2 |
 | RELEASE at `ifdown`, ARP check and DECLINE, several interfaces at once | in `dhcpc`, `ifdown` | code | S3, later |
 
@@ -99,9 +99,10 @@ itself changed.
    live `aen0`; not yet packaged).
 4. **The base config files** (D-N24), once the conffile scripts handle a file
    the system edits every boot without writing a `.new` each update.
-5. **`dhcpc` 1.0** (S1), against the hook contract frozen after S0. Tested on
-   the emulator: lease, reuse after reboot, renew, rebind, NAK, no server and
-   the static fallback, a one-hour soak.
+5. **`dhcpc` 1.0** (S1), against the hook contract frozen after S0 (T-55).
+   Tested on the emulator: lease, reuse of the last address (INIT-REBOOT),
+   renew, rebind, NAK, lease end, release, no server and the static
+   fallback; then a one-hour soak.
 6. **`ifup` dhcp mode** (S2) and, in the installer, DHCP as the default of the
    public install. Then metal: leases on the Z3660 Ethernet, two renewals seen.
 

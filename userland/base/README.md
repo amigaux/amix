@@ -36,12 +36,14 @@ outside the package database.
 | [`docs/plan.md`](docs/plan.md) | the pieces, their files and the order they are built in | plan |
 | [`docs/package-split.md`](docs/package-split.md) | the packages: base (boot and network) and `dhcp-client`, and the contract between them | design |
 | [`docs/dhcp-probe.md`](docs/dhcp-probe.md) | what the 1991 DLPI path was measured to do, the facts the DHCP client is built on | measured |
-| [`dhcpc/probe/`](dhcpc/probe/) | `dhcprobe`, the stage-0 probe, and `tapdhcpd.py`, the test DHCP responder it runs against | tool |
+| [`dhcpc/`](dhcpc/) | `dhcpc`, the DHCP client, and its page `dhcpc(1M)` | written, packaged (`pkg/dhcp-client`) |
+| [`dhcpc/probe/`](dhcpc/probe/) | `dhcprobe`, the stage-0 probe, and `tapdhcpd.py`, the test DHCP responder the probe and the client's tests run against | tool |
+| [`pkg/`](pkg/) | the two packages, `amix-base` (amxbase) and `dhcp-client` (dhcpc) | packaging |
 | [`man/`](man/) | `man`, one manual command for the add-on pages and the stock ones ([`docs/man.md`](docs/man.md)), its page and its host test | written, not yet packaged |
 | [`rc/`](rc/) | `rc.subr`, the boot scripts' helper library; the pages `rc.subr(1M)` and `rc.conf(4)`; its host test | written, not yet packaged |
 | [`net/`](net/) | `ifup`/`ifdown`, `ifup.subr` (the `interfaces` parser and the shared apply step), `dhcpc-hook`, the new `inetinit`, `link.d/aen`, the two legacy hooks; the pages `ifup(1M)` and `interfaces(4)`; [`dlpi-mac`](net/dlpi-mac/), the generic MAC reader, and its page | written, not yet packaged |
 
-The rest (the client in `dhcpc/`, the packages) follows; see `docs/plan.md`.
+What follows (`ifup`'s DHCP default in the installer, metal) is in `docs/plan.md`.
 
 ## Building
 
@@ -53,6 +55,8 @@ against the stock headers and libraries only, so they need nothing from
 ```sh
 userland/base/dhcpc/probe/build.sh          # writes out/base/dhcprobe
 userland/base/net/dlpi-mac/build.sh         # writes out/base/dlpi-mac
+userland/base/dhcpc/build.sh                # writes out/base/dhcpc
+sh build/pkg/pkgbuild.sh userland/base/pkg/amix-base     # and pkg/dhcp-client
 sh userland/base/man/test-man.sh            # host tests of the man front-end
 sh userland/base/rc/test-rc.sh              # host tests of rc.subr
 sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
