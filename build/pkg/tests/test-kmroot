@@ -9,12 +9,17 @@
 # are the siblings (amix-packages' amix/kernel/...). A stand-in checkout and
 # kit are made here, and the roll is followed through the input checks to
 # the kit's modcheck, which must be handed the depend= module under KM_ROOT;
-# a refused licence or depend= input must stop it before modcheck. Prints
+# a refused licence or depend= input must stop it before modcheck.
+# The kit it asks for carries the port commit (KM_PORT_COMMIT, by default
+# the checkout's kernel/port/port.pin), and the module's kabi is the one
+# modcheck says ok for, the lowest its imports need: a k30.1.2 object on a
+# k30.1.3 kit rolls, its .moddata and copyright saying k30.1.2. Prints
 # "N/N passed"; exits non-zero on any failure.
 
 import hashlib
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -46,12 +51,30 @@ def sha(path):
     return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
+def elf(moddata):
+    """A big-endian ELF32 with only a .moddata section (8 header bytes, then
+    the NUL-separated keys), as far as kmodpkg's .moddata read goes."""
+    strtab = b"\0.moddata\0.shstrtab\0"
+    body = b"\0" * 8 + b"\0".join(k.encode() for k in moddata) + b"\0"
+    off = 52
+    shoff = off + len(body) + len(strtab)
+    sh = struct.pack(">10I", *[0] * 10)
+    sh += struct.pack(">10I", 1, 1, 0, 0, off, len(body), 0, 0, 1, 0)
+    sh += struct.pack(">10I", 10, 3, 0, 0, off + len(body), len(strtab), 0, 0, 1, 0)
+    hdr = b"\x7fELF\x01\x02\x01" + b"\0" * 9 + struct.pack(">HHIIIIIHHHHHH", 1, 4, 1, 0, 0, shoff, 0,
+                                                            52, 0, 0, 40, 3, 2)
+    return hdr + body + strtab + sh
+
+
+PORT_PIN = "0d37eb1" + "5" * 33
 tmp = tempfile.mkdtemp(prefix="test-kmroot.")
 try:
-    def tree(base, prefix):
+    def tree(base, prefix, kabi="k30.1.2"):
         """The driver's inputs under BASE/PREFIX; returns the recipe's paths."""
         d = prefix + "kernel/drivers/zz"
-        write(os.path.join(base, d, "build/k30/mod.d/zz"), "the zz module, " + base)
+        obj = os.path.join(base, d, "build/k30/mod.d/zz")
+        os.makedirs(os.path.dirname(obj), exist_ok=True)
+        open(obj, "wb").write(elf(["name=zz", "kabi=" + kabi, "cc=gcc-2.7.2.3-x", "desc=" + base]))
         write(os.path.join(base, d, "module/VERSION"), "1.0.0-1\n")
         write(os.path.join(base, d, "LICENSE"), "MIT\n")
         write(os.path.join(base, prefix + "kernel/modules/monsw/build/k30/mod.d/monsw"), "monsw\n")
@@ -61,16 +84,28 @@ try:
     sib = os.path.join(tmp, "siblings")
     dc = tree(checkout, "")
     ds = tree(sib, "amix/")
+    write(os.path.join(checkout, "kernel/port/port.pin"), "https://example.invalid/port.git %s\n" % PORT_PIN)
+    other = os.path.join(tmp, "other")
+    do = tree(other, "", kabi="k30.1.3")
     kit = os.path.join(tmp, "dlm", "build", "kit", "k30")
     write(os.path.join(kit, "kit.conf"), "LINE=k30\nKABI=k30.1.3\nPIN=gcc-2.7.2.3-x\n")
+    write(os.path.join(kit, "LICENSE"), "the kit's licence\n")
     log = os.path.join(tmp, "modcheck.args")
+    # the real modcheck: `modcheck: <name>: ok (<kabi>, <cc>, <size> bytes)'
     write(os.path.join(kit, "tools", "modcheck.py"),
-          'import sys\nopen(%r, "w").write(" ".join(sys.argv[1:]))\nprint("modcheck: zz: ok (k30.1.3, x)")\n' % log)
+          'import os, sys\nopen(%r, "w").write(" ".join(sys.argv[1:]))\n'
+          'k = os.environ.get("FAKE_KABI", "k30.1.2")\n'
+          'print("modcheck: zz: ok (%%s, gcc-2.7.2.3-x, 123 bytes)" %% k if k else "modcheck: zz: refused")\n' % log)
+    recipe = os.path.join(tmp, "recipe")
+    write(os.path.join(recipe, "modreg"), "zz defaults\n")
+    write(os.path.join(recipe, "prototype"), "i pkginfo\n")
+    write(os.path.join(recipe, "pkginfo.k30"), "PKG=zz30\n")
+    kitargs = os.path.join(tmp, "kit.args")
     gca = os.path.join(tmp, "gca")
     write(os.path.join(gca, "bin", "m68k-cbm-sysv4-scan060"), "#!/bin/sh\nexit 0\n", 0o755)
     write(os.path.join(gca, "env.sh"), 'PATH="%s/bin:$PATH"; export PATH\n' % gca)
 
-    def run(base, d, root, licence_sha=None):
+    def run(base, d, root, licence_sha=None, **extra):
         dep = d.split("kernel/")[0] + "kernel/modules/monsw/build/k30/mod.d/monsw"
         e = {k: v for k, v in os.environ.items() if not k.startswith(("AMIX_", "KM_"))}
         e.update(AMIX_PKG_COMMON=COMMON, AMIX_SIBLINGS=sib, AMIX_CROSS_ENV=os.path.join(gca, "env.sh"),
@@ -82,12 +117,16 @@ try:
                  KM_K30_DEPS="%s %s" % (dep, sha(os.path.join(base, dep))))
         if root is not None:
             e["KM_ROOT"] = root
-        if os.path.exists(log):
-            os.remove(log)
+            e["AMIX_REPO_ROOT"] = root
+        e.update(extra)
+        for f in (log, kitargs):
+            if os.path.exists(f):
+                os.remove(f)
         script = ('. "$AMIX_PKG_COMMON/fetch.sh"; . "$AMIX_PKG_COMMON/kmodpkg.sh"; '
-                  'amix_dlm_kit() { AMIX_DLM_TREE=%s; }; amix_kmodpkg "$1" k30'
-                  % os.path.join(tmp, "dlm"))
-        p = subprocess.run(["/bin/sh", "-c", script, "sh", os.path.join(tmp, "recipe")], env=e,
+                  'amix_dlm_kit() { echo "$*" > %s; AMIX_DLM_TREE=%s; }; '
+                  'amix_kpkgroll() { echo "ROLLED $3 $4"; sed -n 2p "$1/copyright"; }; amix_kmodpkg "$1" k30'
+                  % (kitargs, os.path.join(tmp, "dlm")))
+        p = subprocess.run(["/bin/sh", "-c", script, "sh", recipe], env=e,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         return p.returncode, p.stdout.decode("utf-8", "replace"), (open(log).read() if os.path.exists(log) else "")
 
@@ -97,6 +136,22 @@ try:
           and out.count("(pinned, verified)") == 3, out)
     check("KM_ROOT=the checkout: modcheck gets the depend= module under the checkout",
           "-d %s/kernel/modules/monsw/build/k30/mod.d/monsw" % checkout in args, args or out)
+    check("a k30.1.2 object on a k30.1.3 kit rolls, its copyright saying kabi k30.1.2",
+          rc == 0 and "ROLLED zz30 1.0.0-1" in out and "(kabi k30.1.2), built in" in out, out)
+    check("the kit is asked for with the checkout's port.pin commit",
+          os.path.exists(kitargs) and open(kitargs).read().split() == ["abc1234", PORT_PIN], out)
+    rc, out, args = run(checkout, dc, checkout, KM_PORT_COMMIT="b" * 40)
+    check("KM_PORT_COMMIT names the kit's port commit over port.pin",
+          rc == 0 and os.path.exists(kitargs) and open(kitargs).read().split() == ["abc1234", "b" * 40], out)
+    rc, out, args = run(checkout, dc, checkout, FAKE_KABI="k30.1.3")
+    check("a .moddata kabi other than the one modcheck says ok for is refused",
+          rc != 0 and "[FAIL] .moddata kabi= is not k30.1.3" in out and "ROLLED" not in out, out)
+    rc, out, args = run(checkout, dc, checkout, FAKE_KABI="")
+    check("no ok line from modcheck is refused", rc != 0 and "modcheck did not say ok for zz" in out, out)
+    rc, out, args = run(other, do, other, FAKE_KABI="k30.1.3")
+    check("a k30.1.3 object on the k30.1.3 kit rolls; no port.pin, no port commit",
+          rc == 0 and "(kabi k30.1.3), built in" in out
+          and open(kitargs).read().split() == ["abc1234"], out)
 
     rc, out, args = run(sib, ds, None)
     check("no KM_ROOT: the siblings, as amix-packages' recipes give them",
