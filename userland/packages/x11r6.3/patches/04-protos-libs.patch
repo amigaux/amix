@@ -1,0 +1,1867 @@
+Ours.  Declarations gcc 14 needs in the X libraries and their headers (X11, Xi, Xp, Xmu, Xaw, ICE, SM, xtrans, include/):
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  lib/X11/imCallbk.c: _XimError(CARD16 error_code -> int); _XimError(INT16 detail_length -> int); _XimError(CARD16 type -> int)
+  lib/X11/imDefLkup.c: _XimError(CARD16 error_code -> int); _XimError(INT16 detail_length -> int); _XimError(CARD16 type -> int)
+  lib/X11/imTransR.c: _XimError(CARD16 error_code -> int); _XimError(INT16 detail_length -> int); _XimError(CARD16 type -> int)
+  lib/font/Type1/scanfont.c: objFormatReal(float value -> double); objFormatBoolean(boolean value -> int)
+  lib/font/bitmap/bdfread.c: bdfSpecialProperty(char isString -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): +extern int 
+(*XESetCloseDisplay())();	/* Xlibint.h's, unprototyped */ _IceTransClose 
+_X11TransFreeConnInfo _XDisconnectDisplay XkbApplyVirtualModChanges 
+_XrmInternalStringToQuark 
+Headers whose macros call a function get a declaration beside the macro: 
+include/extensions/extutil.h lib/Xaw/XawI18n.h lib/xtrans/Xtrans.h 
+Also: NULL as a character in lcGeneric.c and omGeneric.c becomes '\0' (and 0 for 
+memset): <stdlib.h> makes NULL (void *)0.
+
+--- a/include/extensions/extutil.h
++++ b/include/extensions/extutil.h
+@@ -170,6 +170,8 @@
+ );
+ 
+ #define XextHasExtension(i) ((i) && ((i)->codes))
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern int XMissingExtension();
+ #define XextCheckExtension(dpy,i,name,val) \
+   if (!XextHasExtension(i)) { XMissingExtension (dpy, name); return val; }
+ #define XextSimpleCheckExtension(dpy,i,name) \
+--- a/include/extensions/XKBsrv.h
++++ b/include/extensions/XKBsrv.h
+@@ -1280,6 +1280,14 @@
+ 
+ #define	XkbAtomGetString(d,s)	NameForAtom(s)
+ 
++/* AMIX: prototypes for gcc 14: the server's renamed XKB calls (XKBMisc.c's definitions) */
++extern int SrvXkbInitCanonicalKeyTypes(XkbDescPtr, unsigned int, int);
++extern int SrvXkbKeyTypesForCoreSymbols(XkbDescPtr, int, KeySym *, unsigned int, int *, KeySym *);
++extern Bool SrvXkbApplyCompatMapToKey(XkbDescPtr, KeyCode, XkbChangesPtr);
++extern Bool SrvXkbUpdateActionVirtualMods(XkbDescPtr, XkbAction *, unsigned int);
++extern int SrvXkbChangeTypesOfKey(XkbDescPtr, int, int, unsigned int, int *, XkbMapChangesPtr);
++extern Bool SrvXkbApplyVirtualModChanges(XkbDescPtr, unsigned int, XkbChangesPtr);
++
+ #endif /* _XKBSRV_H_ */
+ 
+ 
+--- a/lib/ICE/shutdown.c
++++ b/lib/ICE/shutdown.c
+@@ -31,6 +31,10 @@
+ #include <X11/ICE/ICElib.h>
+ #include "ICElibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _IceTransClose ();	/* unprototyped: its types are not defined here */
++
++
+ 
+ Status
+ IceProtocolShutdown (iceConn, majorOpcode)
+--- a/lib/X11/CCC.c
++++ b/lib/X11/CCC.c
+@@ -68,6 +68,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsInitDefaultCCCs (Display *dpy);
++int _XcmsInitScrnInfo (register Display *dpy, int screenNumber);
++
++
+ extern XcmsIntensityMap *_XcmsGetIntensityMap();
+ 
+ 
+--- a/lib/X11/ChGC.c
++++ b/lib/X11/ChGC.c
+@@ -28,6 +28,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XUpdateGCCache (register GC gc, register long unsigned int mask, register XGCValues *attr);
++
++
+ XChangeGC (dpy, gc, valuemask, values)
+     register Display *dpy;
+     GC gc;
+--- a/lib/X11/ClDisplay.c
++++ b/lib/X11/ClDisplay.c
+@@ -32,6 +32,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XDisconnectDisplay ();	/* unprototyped: its types are not defined here */
++
++
+ extern void _XFreeDisplayStructure();
+ 
+ /* 
+--- a/lib/X11/cmsAllCol.c
++++ b/lib/X11/cmsAllCol.c
+@@ -36,6 +36,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsSetGetColors (int (*xColorProc) (/* ??? */), Display *dpy, Colormap cmap, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat result_format, int *pCompressed);
++
++
+ 
+ /*
+  *	NAME
+--- a/lib/X11/cmsAllNCol.c
++++ b/lib/X11/cmsAllNCol.c
+@@ -38,6 +38,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ /*
+  *      EXTERNS
+  */
+--- a/lib/X11/cmsColNm.c
++++ b/lib/X11/cmsColNm.c
+@@ -41,6 +41,12 @@
+ #define XK_LATIN1
+ #include <X11/keysymdef.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDDConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++int _XcmsEqualWhitePts (XcmsCCC ccc, XcmsColor *pWhitePt1, XcmsColor *pWhitePt2);
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ 
+ /*
+  *      EXTERNS
+--- a/lib/X11/cmsInt.c
++++ b/lib/X11/cmsInt.c
+@@ -40,6 +40,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsLRGB_InitScrnDefault (Display *dpy, int screenNumber, XcmsPerScrnInfo *pPerScrnInfo);
++
++
+ #ifndef XCMSCOMPPROC
+ #  define XCMSCOMPPROC	XcmsTekHVCClipC
+ #endif
+--- a/lib/X11/cmsLkCol.c
++++ b/lib/X11/cmsLkCol.c
+@@ -38,6 +38,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ /*
+  *      EXTERNS
+  */
+--- a/lib/X11/ConnDis.c
++++ b/lib/X11/ConnDis.c
+@@ -38,6 +38,10 @@
+ #include <stdio.h>
+ #include <ctype.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _X11TransFreeConnInfo ();	/* unprototyped: its types are not defined here */
++
++
+ #ifndef WIN32
+ #include <sys/socket.h>
+ #endif
+--- a/lib/X11/CopyCmap.c
++++ b/lib/X11/CopyCmap.c
+@@ -28,6 +28,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++struct _XcmsCmapRec *_XcmsCopyCmapRecAndFree (Display *dpy, Colormap src_cmap, Colormap copy_cmap);
++
++
+ Colormap XCopyColormapAndFree(dpy, src_cmap)
+ register Display *dpy;
+ Colormap src_cmap;
+--- a/lib/X11/CrCmap.c
++++ b/lib/X11/CrCmap.c
+@@ -28,6 +28,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++struct _XcmsCmapRec *_XcmsAddCmapRec (Display *dpy, Colormap cmap, Window windowID, Visual *visual);
++
++
+ Colormap XCreateColormap(dpy, w, visual, alloc)
+ register Display *dpy;
+ Window w;
+--- a/lib/X11/CrGC.c
++++ b/lib/X11/CrGC.c
+@@ -28,6 +28,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XUpdateGCCache (register GC gc, register long unsigned int mask, register XGCValues *attr);
++
++
+ #ifdef __STDC__
+ #define Const const
+ #else
+--- a/lib/X11/CvCols.c
++++ b/lib/X11/CvCols.c
+@@ -37,6 +37,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsEqualWhitePts (XcmsCCC ccc, XcmsColor *pWhitePt1, XcmsColor *pWhitePt2);
++
++
+ /*
+  *      EXTERNS
+  *              External declarations required locally to this package
+--- a/lib/X11/CvColW.c
++++ b/lib/X11/CvColW.c
+@@ -37,6 +37,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsDDConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/EvToWire.c
++++ b/lib/X11/EvToWire.c
+@@ -39,6 +39,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XUnknownNativeEvent (register Display *dpy, register XEvent *re, register xEvent *event);
++
++
+ /*
+  * reformat a wire event into an XEvent structure of the right type.
+  */
+--- a/lib/X11/Font.c
++++ b/lib/X11/Font.c
+@@ -29,6 +29,10 @@
+ #define NEED_REPLIES
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XFreeExtData (XExtData *extension);
++
++
+ static XFontStruct *_XQueryFont();
+ 
+ #if NeedFunctionPrototypes
+--- a/lib/X11/FreeGC.c
++++ b/lib/X11/FreeGC.c
+@@ -28,6 +28,10 @@
+ 
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XFreeExtData (XExtData *extension);
++
++
+ XFreeGC (dpy, gc)
+     register Display *dpy;
+     GC gc;
+--- a/lib/X11/GetAtomNm.c
++++ b/lib/X11/GetAtomNm.c
+@@ -29,6 +29,11 @@
+ #define NEED_REPLIES
+ #include "Xlibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _XUpdateAtomCache (Display *dpy, char *name, Atom atom, long unsigned int sig, int idx, int n);
++void _XGetAsyncData (Display *dpy, char *data, char *buf, int len, int skip, int datalen, int discardtotal);
++
++
+ extern void _XFreeAtomTable();
+ 
+ /* XXX this table def is duplicated in IntAtom.c, keep them consistent! */
+--- a/lib/X11/GetColor.c
++++ b/lib/X11/GetColor.c
+@@ -31,6 +31,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ extern void _XcmsRGB_to_XColor();
+ 
+ #if NeedFunctionPrototypes
+--- a/lib/X11/GetImage.c
++++ b/lib/X11/GetImage.c
+@@ -30,6 +30,11 @@
+ #include "Xlibint.h"
+ #include <X11/Xutil.h>		/* for XDestroyImage */
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XGetScanlinePad (Display *dpy, int depth);
++int _XSetImage (XImage *srcimg, register XImage *dstimg, register int x, register int y);
++
++
+ #define ROUNDUP(nbytes, pad) (((((nbytes) - 1) + (pad)) / (pad)) * (pad))
+ 
+ static unsigned int Ones(mask)                /* HACKMEM 169 */
+--- a/lib/X11/HVC.c
++++ b/lib/X11/HVC.c
+@@ -53,6 +53,11 @@
+ #include <X11/Xos.h>
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsCIEuvY_ValidSpec (XcmsColor *pColor);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/HVCGcC.c
++++ b/lib/X11/HVCGcC.c
+@@ -47,6 +47,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/HVCGcV.c
++++ b/lib/X11/HVCGcV.c
+@@ -47,6 +47,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsTekHVCQueryMaxVCRGB (XcmsCCC ccc, XcmsFloat hue, XcmsColor *pColor_return, XcmsRGBi *pRGB_return);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/HVCGcVC.c
++++ b/lib/X11/HVCGcVC.c
+@@ -48,6 +48,11 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	INTERNALS
+  *		Internal defines that need NOT be exported to any package or
+--- a/lib/X11/HVCMxC.c
++++ b/lib/X11/HVCMxC.c
+@@ -49,6 +49,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/HVCMxV.c
++++ b/lib/X11/HVCMxV.c
+@@ -49,6 +49,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/HVCMxVs.c
++++ b/lib/X11/HVCMxVs.c
+@@ -47,6 +47,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/imCallbk.c
++++ b/lib/X11/imCallbk.c
+@@ -38,6 +38,10 @@
+ #include "Ximint.h"
+ #include "XlcPubI.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimError (Xim im, Xic ic, int error_code, int detail_length, int type, char *detail);
++
++
+ #define sz_CARD8                 1
+ #define sz_INT8                  1
+ #define sz_CARD16                2
+--- a/lib/X11/imDefIc.c
++++ b/lib/X11/imDefIc.c
+@@ -33,6 +33,10 @@
+ #include "Xlcint.h"
+ #include "Ximint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimCheckCreateICValues (XIMResourceList res_list, unsigned int list_num);
++
++
+ Private Bool
+ #if NeedFunctionPrototypes
+ _XimCreateICCheck(
+--- a/lib/X11/imDefIm.c
++++ b/lib/X11/imDefIm.c
+@@ -40,6 +40,10 @@
+ #include "XimTrInt.h"
+ #include "Ximint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimRegisterDispatcher (Xim im, int (*callback) (Xim, INT16, XPointer, XPointer), XPointer call_data);
++
++
+ Public int
+ _XimCheckDataSize(buf, len)
+     XPointer	 buf;
+--- a/lib/X11/imDefLkup.c
++++ b/lib/X11/imDefLkup.c
+@@ -33,6 +33,10 @@
+ #include "Xlcint.h"
+ #include "Ximint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimError (Xim im, Xic ic, int error_code, int detail_length, int type, char *detail);
++
++
+ Public Xic
+ #if NeedFunctionPrototypes
+ _XimICOfXICID(
+--- a/lib/X11/imDispch.c
++++ b/lib/X11/imDispch.c
+@@ -33,6 +33,10 @@
+ #include "Xlcint.h"
+ #include "Ximint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimRegisterDispatcher (Xim im, int (*callback) (Xim, INT16, XPointer, XPointer), XPointer call_data);
++
++
+ Public Bool
+ #if NeedFunctionPrototypes
+ _XimRegProtoIntrCallback(
+--- a/lib/X11/imThaiFlt.c
++++ b/lib/X11/imThaiFlt.c
+@@ -74,6 +74,11 @@
+ #include "Ximint.h"
+ #include "XimThai.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XKeyInitialize (Display *dpy);
++int _Xlcmbstowcs (XLCd lcd, wchar_t *wstr, char *str, int len);
++
++
+ #define SPACE   32
+ 
+ /* character classification table */
+--- a/lib/X11/imTransR.c
++++ b/lib/X11/imTransR.c
+@@ -34,6 +34,10 @@
+ #include "XimTrInt.h"
+ #include "Ximint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XimError (Xim im, Xic ic, int error_code, int detail_length, int type, char *detail);
++
++
+ Public TransportSW _XimTransportRec[] = {
+     "X",          _XimXConf,  /* 1st entry must be X. 
+ 					This will be a fallback */
+--- a/lib/X11/ImUtil.c
++++ b/lib/X11/ImUtil.c
+@@ -30,6 +30,10 @@
+ #include <X11/Xutil.h>
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XReverse_Bytes (register unsigned char *bpt, register int nb);
++
++
+ #ifdef __STDC__
+ #define Const const
+ #else
+--- a/lib/X11/KeyBind.c
++++ b/lib/X11/KeyBind.c
+@@ -42,6 +42,11 @@
+ #include <X11/keysymdef.h>
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XKeyInitialize (Display *dpy);
++unsigned int XkbKeysymToModifiers (Display *dpy, KeySym ks);
++
++
+ #ifdef USE_OWN_COMPOSE
+ #include "imComp.h"
+ #endif
+--- a/lib/X11/Lab.c
++++ b/lib/X11/Lab.c
+@@ -42,6 +42,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsCIEXYZ_ValidSpec (XcmsColor *pColor);
++
++
+ /*
+  *	DEFINES
+  *		Internal definitions that need NOT be exported to any package
+--- a/lib/X11/LabGcC.c
++++ b/lib/X11/LabGcC.c
+@@ -34,6 +34,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/LabGcL.c
++++ b/lib/X11/LabGcL.c
+@@ -34,6 +34,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/LabGcLC.c
++++ b/lib/X11/LabGcLC.c
+@@ -35,6 +35,11 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	INTERNALS
+  *		Internal defines that need NOT be exported to any package or
+--- a/lib/X11/LabMnL.c
++++ b/lib/X11/LabMnL.c
+@@ -36,6 +36,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/LabMxC.c
++++ b/lib/X11/LabMxC.c
+@@ -38,6 +38,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/LabMxL.c
++++ b/lib/X11/LabMxL.c
+@@ -36,6 +36,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/lcCharSet.c
++++ b/lib/X11/lcCharSet.c
+@@ -28,6 +28,10 @@
+ #include "Xlibint.h"
+ #include "XlcPublic.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XlcParseCharSet (XlcCharSet charset);
++
++
+ #if NeedVarargsPrototypes
+ char *
+ _XlcGetCSValues(XlcCharSet charset, ...)
+--- a/lib/X11/lcGeneric.c
++++ b/lib/X11/lcGeneric.c
+@@ -672,7 +672,7 @@
+         }
+         strcpy(ret->name,value[0]);
+         ptr = strchr(ret->name,':');
+-        *ptr = NULL;
++        *ptr = '\0';	/* AMIX: NULL is (void *)0 */
+         ptr++;
+         if( !_XlcNCompareISOLatin1(ptr, "none", 4) ){
+             ret->side =  XlcNONE ;
+--- a/lib/X11/LookupCol.c
++++ b/lib/X11/LookupCol.c
+@@ -31,6 +31,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ extern void _XcmsRGB_to_XColor();
+ extern void _XUnresolveColor();
+ 
+--- a/lib/X11/LRGB.c
++++ b/lib/X11/LRGB.c
+@@ -42,6 +42,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsGetProperty (Display *pDpy, Window w, Atom property, int *pFormat, long unsigned int *pNItems, long unsigned int *pNBytes, char **pValue);
++
++
+ #ifdef __STDC__
+ #define Const const
+ #else
+--- a/lib/X11/Luv.c
++++ b/lib/X11/Luv.c
+@@ -43,6 +43,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsCIEuvY_ValidSpec (XcmsColor *pColor);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/LuvGcC.c
++++ b/lib/X11/LuvGcC.c
+@@ -34,6 +34,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/LuvGcL.c
++++ b/lib/X11/LuvGcL.c
+@@ -34,6 +34,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++
++
+ /*
+  *	EXTERNS
+  */
+--- a/lib/X11/LuvGcLC.c
++++ b/lib/X11/LuvGcLC.c
+@@ -35,6 +35,11 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	INTERNALS
+  *		Internal defines that need NOT be exported to any package or
+--- a/lib/X11/LuvMnL.c
++++ b/lib/X11/LuvMnL.c
+@@ -36,6 +36,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/LuvMxC.c
++++ b/lib/X11/LuvMxC.c
+@@ -38,6 +38,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/LuvMxL.c
++++ b/lib/X11/LuvMxL.c
+@@ -36,6 +36,10 @@
+ #include "Xcmsint.h"
+ #include <math.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsConvertColorsWithWhitePt (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat, int *pCompressed);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/X11/omGeneric.c
++++ b/lib/X11/omGeneric.c
+@@ -505,7 +505,7 @@
+ 	return NULL;
+     strcpy(pattern, font_name);
+ 
+-    memset(fields, NULL, sizeof(char *) * 14);
++    memset(fields, 0, sizeof(char *) * 14);	/* AMIX: NULL is (void *)0 */
+     ptr = pattern;
+     while(isspace(*ptr)) {
+ 	ptr++;
+@@ -545,7 +545,7 @@
+     strcpy(str_point, "*");
+     fields[POINT_SIZE_FIELD - 1] = str_point;
+ 
+-    rotate_font[0] = NULL;
++    rotate_font[0] = '\0';	/* AMIX: NULL is (void *)0 */
+     for(field_num = 0 ; field_num < CHARSET_ENCODING_FIELD &&
+ 			fields[field_num] ; field_num++) {
+ 	sprintf(rotate_font, "%s-%s", rotate_font, fields[field_num]);
+--- a/lib/X11/OpenDis.c
++++ b/lib/X11/OpenDis.c
+@@ -34,6 +34,13 @@
+ #include "bigreqstr.h"
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XPollfdCacheInit (Display *dpy);
++int _XDisconnectDisplay ();	/* unprototyped: its types are not defined here */
++int XkbUseExtension (Display *dpy, int *major_rtrn, int *minor_rtrn);
++int _XFreeExtData (XExtData *extension);
++
++
+ #ifdef X_NOT_STDC_ENV
+ extern char *getenv();
+ #endif
+--- a/lib/X11/ParseCol.c
++++ b/lib/X11/ParseCol.c
+@@ -31,6 +31,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ extern void _XcmsRGB_to_XColor();
+ 
+ #if NeedFunctionPrototypes
+--- a/lib/X11/QuCol.c
++++ b/lib/X11/QuCol.c
+@@ -36,6 +36,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsSetGetColors (int (*xColorProc) (/* ??? */), Display *dpy, Colormap cmap, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat result_format, int *pCompressed);
++
++
+ 
+ 
+ /************************************************************************
+--- a/lib/X11/QuCols.c
++++ b/lib/X11/QuCols.c
+@@ -36,6 +36,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsSetGetColors (int (*xColorProc) (/* ??? */), Display *dpy, Colormap cmap, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat result_format, int *pCompressed);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/StCol.c
++++ b/lib/X11/StCol.c
+@@ -36,6 +36,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsSetGetColors (int (*xColorProc) (/* ??? */), Display *dpy, Colormap cmap, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat result_format, int *pCompressed);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/StCols.c
++++ b/lib/X11/StCols.c
+@@ -36,6 +36,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsSetGetColors (int (*xColorProc) (/* ??? */), Display *dpy, Colormap cmap, XcmsColor *pColors_in_out, unsigned int nColors, XcmsColorFormat result_format, int *pCompressed);
++
++
+ 
+ /************************************************************************
+  *									*
+--- a/lib/X11/StNColor.c
++++ b/lib/X11/StNColor.c
+@@ -30,6 +30,10 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsResolveColorString (XcmsCCC ccc, const char **color_string, XcmsColor *pColor_exact_return, XcmsColorFormat result_format);
++
++
+ extern void _XcmsRGB_to_XColor();
+ 
+ #if NeedFunctionPrototypes
+--- a/lib/X11/uvY.c
++++ b/lib/X11/uvY.c
+@@ -40,6 +40,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsCIEXYZ_ValidSpec (XcmsColor *pColor);
++
++
+ 
+ /*
+  *	EXTERNS
+--- a/lib/X11/XKBMisc.c
++++ b/lib/X11/XKBMisc.c
+@@ -1,3 +1,7 @@
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XkbApplyVirtualModChanges ();	/* unprototyped: its types are not defined here */
++
+ /* $XConsortium: XKBMisc.c /main/3 1996/03/01 14:29:50 kaleb $ */
+ /************************************************************
+ Copyright (c) 1993 by Silicon Graphics Computer Systems, Inc.
+--- a/lib/X11/Xrm.c
++++ b/lib/X11/Xrm.c
+@@ -63,6 +63,10 @@
+ #include 	"XrmI.h"
+ #include	<X11/Xos.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XrmQuark _XrmInternalStringToQuark ();	/* unprototyped: its types are not defined here */
++
++
+ #ifdef __STDC__
+ #define Const const
+ #else
+--- a/lib/X11/xyY.c
++++ b/lib/X11/xyY.c
+@@ -40,6 +40,11 @@
+ #include "Xlibint.h"
+ #include "Xcmsint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XcmsDIConvertColors (XcmsCCC ccc, XcmsColor *pColors_in_out, XcmsColor *pWhitePt, unsigned int nColors, XcmsColorFormat newFormat);
++int _XcmsCIEXYZ_ValidSpec (XcmsColor *pColor);
++
++
+ /*
+  *	DEFINES
+  */
+--- a/lib/Xaw/XawI18n.h
++++ b/lib/Xaw/XawI18n.h
+@@ -56,6 +56,9 @@
+ #endif
+ 
+ #ifdef USE_XWCHAR_STRING
++/* AMIX: declared for gcc 14 (the macros here call them) */
++extern int _Xwcslen(), _Xwcsncpy(), _Xmbtowc();
++extern wchar_t *_Xwcscpy();
+ #define wcslen(c) _Xwcslen(c)
+ #define wcscpy(d,s) _Xwcscpy(d,s)
+ #define wcsncpy(d,s,l) _Xwcsncpy(d,s,l)
+--- a/lib/Xaw/XawIm.c
++++ b/lib/Xaw/XawIm.c
+@@ -67,6 +67,10 @@
+ #include "XawI18n.h"
+ #include <ctype.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _XtCopyFromArg (XtArgVal src, char *dst, register unsigned int size);
++
++
+ #if NeedVarargsPrototypes
+ # include <stdarg.h>
+ # define Va_start(a,b) va_start(a,b)
+--- a/lib/Xext/XShm.c
++++ b/lib/Xext/XShm.c
+@@ -37,6 +37,12 @@
+ #include "Xext.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XGetScanlinePad (Display *dpy, int depth);
++int _XGetBitsPerPixel (Display *dpy, int depth);
++void _XInitImageFuncPtrs (register XImage *image);
++
++
+ static XExtensionInfo _shm_info_data;
+ static XExtensionInfo *shm_info = &_shm_info_data;
+ static /* const */ char *shm_extension_name = SHMNAME;
+--- a/lib/XIE/elements.c
++++ b/lib/XIE/elements.c
+@@ -35,6 +35,11 @@
+ 
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XieTechniqueLength (int group, int technique, XiePointer param);
++void _XieEncodeTechnique (char **bufDest, int group, int technique, XiePointer param);
++
++
+ 
+ int
+ _XiePhotofloSize (elem_list, elem_count)
+--- a/lib/XIE/init.c
++++ b/lib/XIE/init.c
+@@ -37,6 +37,10 @@
+ #include "init.h"
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XieInitTechFuncTable (void);
++
++
+ 
+ 
+ Status
+--- a/lib/XIE/photoflo.c
++++ b/lib/XIE/photoflo.c
+@@ -32,6 +32,10 @@
+ 
+ #include "XIElibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XiePhotofloSize (XiePhotoElement *elem_list, int elem_count);
++
++
+ 
+ XiePhotoElement *
+ XieAllocatePhotofloGraph (count)
+--- a/lib/XIE/photospace.c
++++ b/lib/XIE/photospace.c
+@@ -32,6 +32,10 @@
+ 
+ #include "XIElibint.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XiePhotofloSize (XiePhotoElement *elem_list, int elem_count);
++
++
+ 
+ 
+ XiePhotospace
+--- a/lib/XIE/technique.c
++++ b/lib/XIE/technique.c
+@@ -33,6 +33,10 @@
+ #include "XIElibint.h"
+ #include "technique.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XieRegisterTechFunc (int group, int technique, XieTechFuncPtr techfunc);
++
++
+ extern XieTechFuncPtr _XieLookupTechFunc();
+ 
+ 
+--- a/lib/Xi/XAllowDv.c
++++ b/lib/Xi/XAllowDv.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XAllowDeviceEvents (dpy, dev, event_mode, time)
+     register Display 	*dpy;
+--- a/lib/Xi/XChgDCtl.c
++++ b/lib/Xi/XChgDCtl.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangeDeviceControl (dpy, dev, control, d)
+     register	Display 	*dpy;
+--- a/lib/Xi/XChgFCtl.c
++++ b/lib/Xi/XChgFCtl.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangeFeedbackControl (dpy, dev, mask, f)
+     register	Display 	*dpy;
+--- a/lib/Xi/XChgKbd.c
++++ b/lib/Xi/XChgKbd.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangeKeyboardDevice (dpy, dev)
+     register Display 	*dpy;
+--- a/lib/Xi/XChgKMap.c
++++ b/lib/Xi/XChgKMap.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangeDeviceKeyMapping (dpy, dev, first, syms_per_code, keysyms, count)
+     register	Display 	*dpy;
+--- a/lib/Xi/XChgPnt.c
++++ b/lib/Xi/XChgPnt.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangePointerDevice (dpy, dev, xaxis, yaxis)
+     register Display 	*dpy;
+--- a/lib/Xi/XChgProp.c
++++ b/lib/Xi/XChgProp.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XChangeDeviceDontPropagateList (dpy, window, count, events, mode)
+     register Display 	*dpy;
+--- a/lib/Xi/XCloseDev.c
++++ b/lib/Xi/XCloseDev.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XCloseDevice(dpy, dev)
+     register Display 	*dpy;
+--- a/lib/Xi/XDevBell.c
++++ b/lib/Xi/XDevBell.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XDeviceBell (dpy, dev, feedbackclass, feedbackid, percent)
+     register Display 	*dpy;
+--- a/lib/Xi/XExtToWire.c
++++ b/lib/Xi/XExtToWire.c
+@@ -60,6 +60,11 @@
+ #include "XIproto.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XUnknownNativeEvent (register Display *dpy, register XEvent *re, register xEvent *event);
++
++
+ Status
+ _XiEventToWire(dpy, re, event, count)
+     register Display *dpy;	/* pointer to display structure */
+--- a/lib/Xi/XGetBMap.c
++++ b/lib/Xi/XGetBMap.c
+@@ -58,6 +58,11 @@
+ #include "Xlibint.h"
+ #include "XInput.h"
+ #include "extutil.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
+ #ifdef MIN			/* some systems define this in <sys/param.h> */
+ #undef MIN
+ #endif
+--- a/lib/Xi/XGetDCtl.c
++++ b/lib/Xi/XGetDCtl.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XDeviceControl
+ *XGetDeviceControl (dpy, dev, control)
+     register	Display 	*dpy;
+--- a/lib/Xi/XGetFCtl.c
++++ b/lib/Xi/XGetFCtl.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XFeedbackState
+ *XGetFeedbackControl (dpy, dev, num_feedbacks)
+     register	Display 	*dpy;
+--- a/lib/Xi/XGetKMap.c
++++ b/lib/Xi/XGetKMap.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ KeySym 
+ #if NeedFunctionPrototypes
+ *XGetDeviceKeyMapping (
+--- a/lib/Xi/XGetMMap.c
++++ b/lib/Xi/XGetMMap.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XModifierKeymap 
+ *XGetDeviceModifierMapping (dpy, dev)
+     register	Display 	*dpy;
+--- a/lib/Xi/XGetProp.c
++++ b/lib/Xi/XGetProp.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XEventClass
+ *XGetDeviceDontPropagateList (dpy, window, count)
+     register Display 	*dpy;
+--- a/lib/Xi/XGetVers.c
++++ b/lib/Xi/XGetVers.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XExtensionVersion
+ #if NeedFunctionPrototypes
+ *XGetExtensionVersion (
+--- a/lib/Xi/XGMotion.c
++++ b/lib/Xi/XGMotion.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XDeviceTimeCoord
+ *XGetDeviceMotionEvents (dpy, dev, start, stop, nEvents, mode, axis_count)
+     register 	Display	*dpy;
+--- a/lib/Xi/XGrabDev.c
++++ b/lib/Xi/XGrabDev.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int 
+ XGrabDevice (dpy, dev, grab_window, ownerEvents, event_count, event_list,
+ 	this_device_mode, other_devices_mode, time)
+--- a/lib/Xi/XGrDvBut.c
++++ b/lib/Xi/XGrDvBut.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XGrabDeviceButton (dpy, dev, button, modifiers, modifier_device, 
+ 	grab_window, owner_events, event_count, event_list, this_device_mode, 
+--- a/lib/Xi/XGrDvKey.c
++++ b/lib/Xi/XGrDvKey.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XGrabDeviceKey (dpy, dev, key, modifiers, modifier_device, 
+ 	grab_window, owner_events, event_count, event_list, this_device_mode, 
+--- a/lib/Xi/XGtFocus.c
++++ b/lib/Xi/XGtFocus.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XGetDeviceFocus (dpy, dev, focus, revert_to, time)
+     register Display *dpy;
+--- a/lib/Xi/XGtSelect.c
++++ b/lib/Xi/XGtSelect.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XGetSelectedExtensionEvents (dpy, w, this_client_count, this_client_list, 
+ 	all_clients_count, all_clients_list)
+--- a/lib/Xi/XListDev.c
++++ b/lib/Xi/XListDev.c
+@@ -62,6 +62,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XDeviceInfo 
+ *XListInputDevices(dpy, ndevices)
+     register Display *dpy;
+--- a/lib/Xi/XOpenDev.c
++++ b/lib/Xi/XOpenDev.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XDevice
+ *XOpenDevice(dpy, id)
+     register Display 	*dpy;
+--- a/lib/Xi/XQueryDv.c
++++ b/lib/Xi/XQueryDv.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ XDeviceState
+ *XQueryDeviceState (dpy, dev)
+     register Display *dpy;
+--- a/lib/Xi/XSelect.c
++++ b/lib/Xi/XSelect.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XSelectExtensionEvent (dpy, w, event_list, count)
+     register 	Display *dpy;
+--- a/lib/Xi/XSetBMap.c
++++ b/lib/Xi/XSetBMap.c
+@@ -58,6 +58,11 @@
+ #include "Xlibint.h"
+ #include "XInput.h"
+ #include "extutil.h"
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
+ #define NEED_REPLIES
+ 
+ /* returns either  DeviceMappingSuccess or DeviceMappingBusy  */
+--- a/lib/Xi/XSetDVal.c
++++ b/lib/Xi/XSetDVal.c
+@@ -60,6 +60,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XSetDeviceValuators (dpy, dev, valuators, first_valuator, num_valuators)
+     register Display 	*dpy;
+--- a/lib/Xi/XSetMMap.c
++++ b/lib/Xi/XSetMMap.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int 
+ XSetDeviceModifierMapping (dpy, dev, modmap)
+     register		Display 	*dpy;
+--- a/lib/Xi/XSetMode.c
++++ b/lib/Xi/XSetMode.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XSetDeviceMode (dpy, dev, mode)
+     register Display 	*dpy;
+--- a/lib/Xi/XSndExEv.c
++++ b/lib/Xi/XSndExEv.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ extern Status _XiEventToWire();
+ 
+ Status
+--- a/lib/Xi/XStFocus.c
++++ b/lib/Xi/XStFocus.c
+@@ -59,6 +59,10 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++
++
+ int
+ XSetDeviceFocus(dpy, dev, focus, revert_to, time)
+     register 	Display *dpy;
+--- a/lib/Xi/XUngrDev.c
++++ b/lib/Xi/XUngrDev.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XUngrabDevice (dpy, dev, time)
+     register Display *dpy;
+--- a/lib/Xi/XUngrDvB.c
++++ b/lib/Xi/XUngrDvB.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XUngrabDeviceButton(dpy, dev, button, modifiers, modifier_dev, grab_window)
+     register 	Display 	*dpy;
+--- a/lib/Xi/XUngrDvK.c
++++ b/lib/Xi/XUngrDvK.c
+@@ -59,6 +59,11 @@
+ #include "XInput.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *XInput_find_display (register Display *dpy);
++int _XiCheckExtInit (register Display *dpy, register int version_index);
++
++
+ int
+ XUngrabDeviceKey (dpy, dev, key, modifiers, modifier_dev, grab_window)
+     register 	Display 	*dpy;
+--- a/lib/xkbfile/srvmisc.c
++++ b/lib/xkbfile/srvmisc.c
+@@ -37,6 +37,10 @@
+ #include "XKMformat.h"
+ #include "XKBfileInt.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XkbSetGeometry (Display *dpy, unsigned int deviceSpec, XkbGeometryPtr geom);
++
++
+ Bool
+ #if NeedFunctionPrototypes
+ XkbWriteToServer(XkbFileInfo *result)
+--- a/lib/Xmu/CloseHook.c
++++ b/lib/Xmu/CloseHook.c
+@@ -59,6 +59,10 @@
+ #include <X11/Xlib.h>
+ #include <X11/Xmu/CloseHook.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++extern int (*XESetCloseDisplay())();	/* Xlibint.h's, unprototyped */
++
++
+ /* AMIX: extern char *malloc(); (should be void *) -- <stdlib.h> declares it */
+ 
+ /*
+--- a/lib/Xmu/EditresCom.c
++++ b/lib/Xmu/EditresCom.c
+@@ -45,6 +45,10 @@
+ 
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XmuCopyISOLatin1Lowered (char *dst, const char *src);
++
++
+ #define _XEditResPutBool _XEditResPut8	
+ #define _XEditResPutResourceType _XEditResPut8
+ 
+--- a/lib/Xmu/StrToCurs.c
++++ b/lib/Xmu/StrToCurs.c
+@@ -56,6 +56,10 @@
+ #include	<X11/Xmu/Converters.h>
+ #include	<X11/Xmu/Drawing.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XmuCursorNameToIndex (const char *name);
++
++
+ #ifndef X_NOT_POSIX
+ #ifdef _POSIX_SOURCE
+ #include <limits.h>
+--- a/lib/Xmu/StrToGrav.c
++++ b/lib/Xmu/StrToGrav.c
+@@ -30,6 +30,10 @@
+ #include <X11/Intrinsic.h>
+ #include <X11/Xmu/Converters.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void XmuCopyISOLatin1Lowered (char *dst, const char *src);
++
++
+ #define done(address, type) \
+         { (*toVal).size = sizeof(type); (*toVal).addr = (XPointer) address; }
+ 
+--- a/lib/Xp/XpAttr.c
++++ b/lib/Xp/XpAttr.c
+@@ -47,6 +47,11 @@
+ #include <stdio.h>
+ #include <sys/stat.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ char *
+ XpGetAttributes (
+     Display       *dpy,
+--- a/lib/Xp/XpContext.c
++++ b/lib/Xp/XpContext.c
+@@ -41,6 +41,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ #define _XpPadOut(len) (((len) + 3) & ~3)
+ 
+ XPContext
+--- a/lib/Xp/XpDoc.c
++++ b/lib/Xp/XpDoc.c
+@@ -39,6 +39,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ typedef struct {
+     int event_base_return;
+     XPContext context;
+--- a/lib/Xp/XpExtUtil.c
++++ b/lib/Xp/XpExtUtil.c
+@@ -43,6 +43,10 @@
+ #include "extutil.h"
+ #include <X11/Xos.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int _XUnknownNativeEvent (register Display *dpy, register XEvent *re, register xEvent *event);
++
++
+ #define ENQUEUE_EVENT   True
+ #define DONT_ENQUEUE    False
+ 
+--- a/lib/Xp/XpExtVer.c
++++ b/lib/Xp/XpExtVer.c
+@@ -41,6 +41,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ Bool
+ XpQueryExtension (
+--- a/lib/Xp/XpGetData.c
++++ b/lib/Xp/XpGetData.c
+@@ -41,6 +41,12 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _XGetAsyncData (Display *dpy, char *data, char *buf, int len, int skip, int datalen, int discardtotal);
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ #define MAX_XP_BUFFER_SIZE 32768
+ 
+ /*
+--- a/lib/Xp/XpImageRes.c
++++ b/lib/Xp/XpImageRes.c
+@@ -42,6 +42,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ Bool
+ XpSetImageResolution (
+--- a/lib/Xp/XpInput.c
++++ b/lib/Xp/XpInput.c
+@@ -41,6 +41,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ void
+ XpSelectInput (
+--- a/lib/Xp/XpJob.c
++++ b/lib/Xp/XpJob.c
+@@ -47,6 +47,11 @@
+ #endif
+ #include <limits.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ typedef struct {
+     int event_base_return;
+--- a/lib/Xp/XpPage.c
++++ b/lib/Xp/XpPage.c
+@@ -39,6 +39,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ typedef struct {
+     int event_base_return;
+--- a/lib/Xp/XpPageDim.c
++++ b/lib/Xp/XpPageDim.c
+@@ -42,6 +42,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ Status
+ XpGetPageDimensions (
+--- a/lib/Xp/XpPrinter.c
++++ b/lib/Xp/XpPrinter.c
+@@ -41,6 +41,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ #define _XpPadOut(len) (((len) + 3) & ~3)
+ 
+ XPPrinterList
+--- a/lib/Xp/XpPutData.c
++++ b/lib/Xp/XpPutData.c
+@@ -40,6 +40,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ #define _XpPadOut(len) (((len) + 3) & ~3)
+ 
+ void
+--- a/lib/Xp/XpScreens.c
++++ b/lib/Xp/XpScreens.c
+@@ -41,6 +41,11 @@
+ #include "Xlibint.h"
+ #include "extutil.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++XExtDisplayInfo *xp_find_display (register Display *dpy);
++int XpCheckExtInit (register Display *dpy, register int version_index);
++
++
+ 
+ Screen **
+ XpQueryScreens (
+--- a/lib/Xt/PassivGrab.c
++++ b/lib/Xt/PassivGrab.c
+@@ -65,6 +65,10 @@
+ #include "StringDefs.h"
+ #include "PassivGraI.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _XtClearAncestorCache (Widget widget);
++
++
+ /* typedef unsigned long Mask; */
+ #define BITMASK(i) (((Mask)1) << ((i) & 31))
+ #define MASKIDX(i) ((i) >> 5)
+--- a/lib/xtrans/Xtrans.h
++++ b/lib/xtrans/Xtrans.h
+@@ -376,6 +376,14 @@
+ #endif
+ );
+ 
++/* AMIX: declared for gcc 14 (Xtrans.c defines it; its callers had no declaration) */
++int TRANS(GetHostname)(
++#if NeedFunctionPrototypes
++    char *		/* buf */,
++    int			/* maxlen */
++#endif
++);
++
+ int TRANS(Close)(
+ #if NeedFunctionPrototypes
+     XtransConnInfo	/* ciptr */
+--- a/lib/Xtst/XRecord.c
++++ b/lib/Xtst/XRecord.c
+@@ -63,6 +63,10 @@
+ #include "extutil.h"
+ #include "recordstr.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void _XGetAsyncData (Display *dpy, char *data, char *buf, int len, int skip, int datalen, int discardtotal);
++
++
+ extern unsigned long _XSetLastRequestRead();
+ 
+ static XExtensionInfo _xrecord_info_data;
+--- a/lib/Xt/TMkey.c
++++ b/lib/Xt/TMkey.c
+@@ -70,6 +70,10 @@
+ #include "IntrinsicI.h"
+ #include <X11/keysymdef.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XkbLookupKeySym (register Display *dpy, KeyCode key, register unsigned int mods, unsigned int *mods_rtrn, KeySym *keysym_rtrn);
++
++
+ #ifdef __STDC__
+ #define Const const
+ #else
