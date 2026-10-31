@@ -10,12 +10,18 @@
 #   PAULA        amix-paula at 548d258 (--audio-paula)
 # OUT gets tree/ (the archive, dlm tools + kit built in it), cut-68030-261031-63/ (WORK: usr/sys, carve/, dlm-core/)
 # and SHA256SUMS-68030-261031-63; the sums must equal ./SHA256SUMS-68030-261031-63.
+# Since 2192470 two files of the archive come from TOOLS (no byte of the cut changes): build-cross-kernel.sh, whose
+# cmp counts stopped the build where cmp exits 1 into a pipe (diffutils 3.10, the build container), and
+# tools/kabi-sidecar030.py, which takes the toolchain pin from AMIX_GCA_PIN when gcc-cross-amix has no git.
 set -eu
-REV=c1b7842 KB=68030-261031-63
+REV=c1b7842 KB=68030-261031-63 TOOLS=2192470
 OUT=${1:?usage: cut.sh OUT}; : "${AMIX:?}" "${AMIX_SYSTEM:?}" "${GCA:?}" "${G14:?}" "${PORT:?}" "${PAULA:?}"
 OUT=$(mkdir -p "$OUT" && cd "$OUT" && pwd); T=$OUT/tree
 rm -rf "$T" "$OUT/cut-$KB"; mkdir -p "$T"
 git -C "$AMIX" archive "$REV" kernel | tar -x -C "$T"
+for f in build-cross-kernel.sh tools/kabi-sidecar030.py; do
+	git -C "$AMIX" show "$TOOLS:kernel/k30/$f" > "$T/kernel/k30/$f"
+done
 . "$GCA/env.sh"; export PATH=$G14/prefix/bin:$PATH GCA G14 PORT AMIX_SYSTEM KIT_REV=$REV; unset AMIX_DRIVERS
 make -C "$T/kernel/dlm" tools kit > "$OUT/dlm.log" 2>&1
 cd "$T/kernel/k30"

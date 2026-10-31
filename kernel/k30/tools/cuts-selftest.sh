@@ -16,7 +16,7 @@ R=$K/cuts/$KB
 S=$R/SHA256SUMS-$KB
 [ -f "$S" ] || fail "cuts/$KB has no SHA256SUMS-$KB"
 [ "$(grep -c . "$S")" = 7 ] || fail "SHA256SUMS-$KB does not hold seven sums"
-grep -q "KB=$KB\$" "$R/cut.sh" || fail "cuts/$KB/cut.sh does not cut $KB"
+grep -Eq "(^|[ ;])KB=$KB( |$)" "$R/cut.sh" || fail "cuts/$KB/cut.sh does not cut $KB"
 
 P=$K/pkg/kernel-k30-m/pin.sh
 bid=$(sed -n 's/^K30M_BUILDID=//p' "$P")
