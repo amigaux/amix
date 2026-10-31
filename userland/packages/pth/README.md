@@ -39,9 +39,7 @@ is), unchanged. They are guarded by `__amix__`, which `build.sh` defines.
   per switch, but that lives in his patcher script as assembly, not in a patch. It can follow as
   a patch of its own.
 - **`-std=gnu89`**: Pth is 1990s C.
-- **`-include amix-decls.h`** declares the socket calls and `select`. **`amix-uio.h`** declares
-  `readv`/`writev`, which `libc.so.1` has and no Amix header declares; it goes once
-  `amix-decls.h` carries them.
+- **`-include amix-decls.h`** declares the socket calls, `select` and `readv`/`writev`.
 - `pth-config`, `pthread-config`, the libtool `.la` files and `pth.m4` are build-host material and
   are not shipped.
 

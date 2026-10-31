@@ -32,6 +32,5 @@ stage() {
 	amix_man_whatis
 }
 
-# select, the socket calls (amix-decls.h); readv/writev (amix-uio.h, until
-# amix-decls.h has them)
-MAKE_CFLAGS="-include $AMIX_GCC14_DECLS -include $HERE/amix-uio.h"
+# select, the socket calls, readv/writev (amix-decls.h)
+MAKE_CFLAGS="-include $AMIX_GCC14_DECLS"
