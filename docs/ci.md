@@ -13,6 +13,8 @@ finding to fix, not a gate.
 | tests | kernel/dlm host tests | `make -C kernel/dlm test` |
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |
+| tests | kernel/drivers a4091 host tests | `make -C kernel/drivers/a4091/test/host check` |
+| tests | kernel/drivers z3660scsi host tests | `make -C kernel/drivers/z3660scsi/test/host check` |
 | tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
 | tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim) | `sh toolchain/test-tools` |
 | tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
