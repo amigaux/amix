@@ -167,7 +167,13 @@ ok "amix_pkgroll refuses a payload with 040/060-only FPU forms, no datastream wr
 #        the table was not recognised at all and read as a movep;
 #   mem  bound-checked against a MEMORY operand, `moveq #3,%d1; cmpl sw_sel,%d1;
 #        bcs' (tar 1.14 main/start_header): the table was left unsized.
-sw_probe() {	# sw_probe <name> fp|mem <extra asm string or empty>
+#   bias the bound check on the index before a bias is added (vim 9.1):
+#        `movel %d1,%d0; addql #4,%d0; moveq #-4,%d2; cmpl %d1,%d2; bhi',
+#        so d1 in [-4,-1] indexes 4 entries;
+#   const a constant index, `moveq #2,%d0' (vim 9.1, a switch GCC knew the
+#        value of): sized from its own entries, a NOTE;
+#   badbias the bias added into another register than the index: unsized.
+sw_probe() {	# sw_probe <name> fp|mem|bias|const|badbias <extra asm string or empty>
 	{
 		printf '%s\n' 'int sw_sel;'
 		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
@@ -177,10 +183,25 @@ sw_probe() {	# sw_probe <name> fp|mem <extra asm string or empty>
 			printf '%s\n' '	"\tclr.l %d0\n\tmove.b %d1,%d0\n\tadd.l %d0,%d0\n\tmove.l %d0,%a6\n"'
 			printf '%s\n' '	"\t.word 0x3c7b,0xe806\n"'	# moveaw %pc@(T,%a6:l),%a6
 			printf '%s\n' '	"\t.word 0x4efb,0xe002\n"'	# jmp %pc@(T,%a6:w)
-		else
+		elif [ "$2" = mem ]; then
 			printf '%s\n' '	"\tmove.l %a6,-(%sp)\n"'
 			printf '%s\n' '	"\tmoveq #3,%d1\n\tcmp.l sw_sel,%d1\n\tbcs.w 9f\n"'
 			printf '%s\n' '	"\tmove.l sw_sel,%d0\n\tadd.l %d0,%d0\n"'
+			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
+			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		elif [ "$2" = const ]; then
+			printf '%s\n' '	"\tmove.l %a6,-(%sp)\n"'
+			printf '%s\n' '	"\tmoveq #2,%d0\n\tadd.l %d0,%d0\n"'
+			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
+			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		else	# bias, badbias
+			printf '%s\n' '	"\tmove.l 4(%sp),%d1\n\tmove.l %a6,-(%sp)\n\tmove.l %d1,%d0\n"'
+			if [ "$2" = bias ]; then
+				printf '%s\n' '	"\taddq.l #4,%d0\n"'
+			else
+				printf '%s\n' '	"\taddq.l #4,%d1\n"'
+			fi
+			printf '%s\n' '	"\tmoveq #-4,%d2\n\tcmp.l %d1,%d2\n\tbhi.w 9f\n\tadd.l %d0,%d0\n"'
 			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
 			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
 		fi
@@ -194,17 +215,29 @@ sw_probe() {	# sw_probe <name> fp|mem <extra asm string or empty>
 	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the switch probe $1 did not build"
 }
 G14S="$AMIX_PKG_COMMON/gcc14/scan060-g14.py"
-for shape in fp mem; do
+for shape in fp mem bias const; do
 	sw_probe "sw-$shape" "$shape" ''
-	sw_probe "sw-$shape-movep" "$shape" '"\t.word 0x074c,0x0056\n"'
+	# a constant-index table is sized from its words: the movep follows a
+	# word that is no entry (a nop, odd), as gcc's case code does
+	if [ "$shape" = const ]; then mv='"\t.word 0x4e71,0x074c,0x0056\n"'; else mv='"\t.word 0x074c,0x0056\n"'; fi
+	sw_probe "sw-$shape-movep" "$shape" "$mv"
 	out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape") || fail "scan060-g14.py on the $shape switch: $out"
 	echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the $shape table: $out"
+	if [ "$shape" = const ]; then
+		echo "$out" | grep 'NOTE dispatch at .*constant index #2; .*sized from its own entries (4), a known limit' >/dev/null ||
+			fail "scan060-g14.py gave no known-limit NOTE for the constant index: $out"
+	fi
 	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-$shape-movep"); then
 		fail "scan060-g14.py passed a real movep after the $shape table: $out"
 	fi
 	echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the $shape movep probe: $out"
 done
-ok "scan060-g14.py sizes %fp-indexed and memory-bounded switch tables, still catches a real movep after each"
+sw_probe sw-badbias badbias ''
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-badbias"); then
+	fail "scan060-g14.py sized a table whose bias is added to another register: $out"
+fi
+echo "$out" | grep 'UNTRUSTWORTHY.*' >/dev/null || fail "scan060-g14.py on the badbias probe: $out"
+ok "scan060-g14.py sizes %fp-indexed, memory-bounded, biased and constant-index switch tables (a NOTE), still catches a real movep after each; a bias on another register stays unsized"
 
 # Two dispatches back to back (diffutils 2.8.1 groups_letter_value,
 # 2026-10-29), bytes and table words copied from the real binary: the linear

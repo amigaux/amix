@@ -25,6 +25,9 @@ bound check instead (N+1 entries, exactly what the hardware can index),
 verifies every entry lands on an even address inside the same function and
 outside the table, and refuses to give a verdict on any table it cannot size
 (exit 3) -- an unsized table is the case where a real instruction could hide.
+One shape has no bound to read: a constant index (`moveq #K', a switch whose
+value GCC knew), which can only take entry K.  That table is sized from its
+own entries, up to the nearest case, and named in a NOTE as a known limit.
 
 Then, like scan060.py, it re-disassembles only the code BETWEEN tables, so the
 stream re-synchronises after each one, and scans that listing by ENCODING:
@@ -153,6 +156,11 @@ def bound_for(insns, idx):
     The compare may be cmpa against an address register: the stock AT&T
     compiler's `moveq #8,%d1 ; cmpal %d1,%a0 ; bhiw' in libc.so's static
     getutx.o (_getutxid), linked by coreutils who/users/pinky, 2026-10-29.
+    And a biased one, on the index before the bias is added (vim 9.1,
+    2026-10-31):
+        movel %dS,%dI ; addql #K,%dI ; moveq #-K,%dY ; cmpl %dS,%dY ; bhi default
+    lets through only dS in [-K, -1], so dI = dS + K indexes K entries;
+    accepted only when the dispatch's index register is that dI.
     """
     lo = max(0, idx - LOOKBACK)
     block = None
@@ -180,8 +188,13 @@ def bound_for(insns, idx):
         m = re.match(r"^%(d[0-7]),(\S+)$", ops)
         if m and br.startswith("bhi"):
             n = moveq_value(insns, j, "%" + m.group(1))
-            if n is not None:
+            if n is not None and n >= 0:
                 return n + 1
+        m = re.match(r"^%(d[0-7]),%(d[0-7])$", ops)
+        if m and br.startswith("bhi"):
+            n = moveq_value(insns, j, "%" + m.group(2))
+            if n is not None and n < 0 and biased_index(insns, j, idx, m.group(1), -n):
+                return -n
     # no compare bounds it: a mask in the block, else the ways into the block
     for j in range(idx - 1, (block if block is not None else lo) - 1, -1):
         n = mask_bound(insns, j)
@@ -190,6 +203,72 @@ def bound_for(insns, idx):
     if block is not None:
         return entry_bound(insns, block, idx)
     return None
+
+
+def index_register(insns, idx):
+    """The data register the dispatch at insns[idx] indexes its table with:
+    the `movew %pc@(T,%dI:l),...' just before it."""
+    if idx < 1 or insns[idx - 1][2] != "movew":
+        return None
+    m = re.match(r"^%pc@\([0-9a-f]+\b[^,)]*,%(d[0-7]):l\)", insns[idx - 1][3])
+    return m.group(1) if m else None
+
+
+def biased_index(insns, j, idx, src, k):
+    """Whether the dispatch at insns[idx] indexes with %src + K: an
+    `addql #K,%dI' (or `addl #K') into its index register %dI before the
+    compare at insns[j], %dI copied from %src just before that unless it is
+    %src, and nothing else writing %dI up to the dispatch but its doubling."""
+    reg = index_register(insns, idx)
+    if reg is None:
+        return False
+    add = "#%d,%%%s" % (k, reg)
+    for p in range(idx - 2, max(0, j - LOOKBACK) - 1, -1):
+        mn, ops = insns[p][2], insns[p][3]
+        if p < j and mn in ("addql", "addl") and ops == add:
+            if reg == src:
+                return True
+            for q in range(p - 1, max(0, p - 6) - 1, -1):
+                if insns[q][2] == "movel" and insns[q][3] == "%%%s,%%%s" % (src, reg):
+                    return True
+                if insns[q][3].endswith(",%" + reg):
+                    return False
+            return False
+        if ops.endswith(",%" + reg) and not mn.startswith(("cmp", "tst")) \
+                and not (p == idx - 2 and mn == "addl" and ops == "%%%s,%%%s" % (reg, reg)):
+            return False
+    return False
+
+
+def constant_index(insns, idx):
+    """K when the dispatch at insns[idx] can only take entry K: `moveq #K,%dI ;
+    addl %dI,%dI ; movew %pc@(T,%dI:l),... ; jmp' (a switch whose value GCC
+    knew, vim 9.1, 2026-10-31), else None."""
+    reg = index_register(insns, idx)
+    if reg is None or idx < 2 or insns[idx - 2][2] != "addl" \
+            or insns[idx - 2][3] != "%%%s,%%%s" % (reg, reg):
+        return None
+    return moveq_value(insns, idx - 2, "%" + reg)
+
+
+def entries_bound(data, secs, t, fstart, fend):
+    """Entry count of a table at t sized from its own words: the longest run
+    of entries landing on an even address of the function past the table,
+    ending where the nearest case begins.  A known limit: a code word just
+    after the table that also reads as such an entry is taken for one."""
+    n, lowest = 0, None
+    while n < 4096:
+        if lowest is not None and t + 2 * n >= lowest:
+            break
+        w = word_at(data, secs, t + 2 * n)
+        if w is None:
+            break
+        tgt = t + w
+        if tgt & 1 or not (fstart <= tgt < fend) or tgt <= t + 2 * n:
+            break
+        lowest = tgt if lowest is None else min(lowest, tgt)
+        n += 1
+    return n
 
 
 def mask_bound(insns, j):
@@ -256,8 +335,8 @@ def entry_bound(insns, start, idx):
 
 
 def find_tables(insns, labels, data, secs, pts):
-    """-> ({(start, end)}, [problems])"""
-    tables, problems = set(), []
+    """-> ({(start, end)}, [problems], [notes])"""
+    tables, problems, notes = set(), [], []
     for idx, (a, words, mn, ops) in enumerate(insns):
         if mn != "jmp" or not words or words[0] != "4efb":
             continue
@@ -271,6 +350,16 @@ def find_tables(insns, labels, data, secs, pts):
             problems.append("dispatch at 0x%08x: table 0x%08x not just after it" % (a, t))
             continue
         n = bound_for(insns, idx)
+        k = constant_index(insns, idx) if n is None else None
+        if k is not None and k >= 0:
+            fstart, fend = enclosing(pts, a)
+            n = entries_bound(data, secs, t, fstart, fend)
+            if n <= k:
+                problems.append("dispatch at 0x%08x: constant index #%d, but its table at 0x%08x "
+                                "has only %d entr%s landing on code" % (a, k, t, n, "y" if n == 1 else "ies"))
+                continue
+            notes.append("dispatch at 0x%08x: constant index #%d; table at 0x%08x sized from its own "
+                         "entries (%d), a known limit" % (a, k, t, n))
         if n is None or n <= 0 or n > 4096:
             problems.append("dispatch at 0x%08x: no bound check found, table at 0x%08x unsized" % (a, t))
             continue
@@ -288,7 +377,7 @@ def find_tables(insns, labels, data, secs, pts):
                                                                "y" if len(bad) == 1 else "ies", bad[0]))
             continue
         tables.add((a + 4, end))                      # dispatch tail + table
-    return tables, problems
+    return tables, problems, notes
 
 
 def dispatch_of(problem):
@@ -318,14 +407,15 @@ def scan(tool, path):
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
     pts = function_bounds(labels, secs)
-    skip, problems = find_tables(insns, labels, data, secs, pts)
+    skip, problems, notes = find_tables(insns, labels, data, secs, pts)
     for _round in range(6):
         if not skip:
             break
         listing = resync_listing(tool, path, secs, skip)
         insns, _l = parse(listing)
-        new, more = find_tables(insns, labels, data, secs, pts)
+        new, more, more_notes = find_tables(insns, labels, data, secs, pts)
         problems = sorted(set(problems) | set(more))
+        notes = sorted(set(notes) | set(more_notes))
         if not (new - skip):
             break
         skip |= new
@@ -354,8 +444,10 @@ def scan(tool, path):
                 hits.append("0x%08x %s %s -- 64-bit %s" % (a, mn, ops, "divide" if op & 0x40 else "product"))
         elif MNEM_OTHER.match(mn):
             hits.append("0x%08x %s %s -- not implemented on the 68060" % (a, mn, ops))
+    sized = {s for s, _e in skip}
+    notes = [n for n in notes if int(re.match(r"^dispatch at 0x([0-9a-f]+)", n).group(1), 16) + 4 in sized]
     return dict(insns=len(insns), tables=sorted(skip), problems=problems,
-                desync=desync, hits=hits, total_long=total_long)
+                desync=desync, hits=hits, total_long=total_long, notes=notes)
 
 
 def explain(tables, hitfile):
@@ -420,6 +512,8 @@ def main(argv):
             continue
         print("  CLEAN %s (%d insns, %d switch tables sized, %d long mul/div, none 64-bit; no movep/cmp2/chk2/cas2)"
               % (name, r["insns"], len(r["tables"]), r["total_long"]))
+        for n in r["notes"]:
+            print("    NOTE " + n)
     return rc
 
 
