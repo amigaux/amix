@@ -1,31 +1,31 @@
 # C4-5 — DDI v1.2, the DMA interface, version 11
 
-- **Status:** agreed 2026-10-26 (orchestrator), with §5 settled as
+- **Status:** agreed 2026-10-26, with §5 settled as
   shape (b) and the loader's clause (§5.2); version 2 (2026-10-26):
   the calls are minor 2 (k30.1.2, k46.1.2), since kabi 1.1 closed with
-  the minted kernels (§2); version 3 (2026-10-27, S4-62's first piece):
+  the minted kernels (§2); version 3 (2026-10-27):
   `dma_addr(r, pa)` takes the segment's address (§2.3), and the k30
   names are a placeholder until the 030 provider (§5.4); version 4
   (2026-10-27, from the port's heap reading): on k46 `dma_alloc` gives
   heap memory through its DTT0 alias (§3); version 5 (2026-10-27,
-  S4-62's second piece, the 030 provider): on k30 a miss for a segment
+  the 030 provider): on k30 a miss for a segment
   the board cannot reach gives `dma_addr` 0, and the driver does not arm
-  (§2.2); the provider as built (§5.4); version 6 (2026-10-27, the
-  Bench's N109b): the entry-0 decode, the identity map cacheable, so
+  (§2.2); the provider as built (§5.4); version 6 (2026-10-27, read
+  on metal): the entry-0 decode, the identity map cacheable, so
   §5.4's read-after-complete rule stays (§5.3); version 7 (2026-10-27):
   the test hook `dma_forcefail`, beside `dma_forcebounce` (§5.3); version
-  8 (2026-10-27, from N109's sense lines): `dma_forcebounce` never
-  bounces `dma_alloc` memory (§5.3); version 9 (2026-10-27, from N110):
+  8 (2026-10-27, from a bench run's sense lines): `dma_forcebounce` never
+  bounces `dma_alloc` memory (§5.3); version 9 (2026-10-27, from a bench run):
   `dma_forcefail` is a count that clears itself (§5.3); version 10
   (2026-10-27): a driver whose engine is not a Zorro bus master is
-  outside this contract (§6); version 11 (2026-10-27, S5-18, from
-  M-S474b): with no memory a bus master reaches, the board is refused,
+  outside this contract (§6); version 11 (2026-10-27, from
+  the A4000T in the Z3660's 68030 mode): with no memory a bus master reaches, the board is refused,
   not given chip memory (§5.4). Other
   repositories build
   against this text; a change from here is a contract change with a
   version bump.
-- **Implements:** the owner's decision on 80 OQ-80.5 (`docs/plan/stage-4.md`
-  Q4-6, "DDI v1.1 DMA", now minor 2): DDI DMA in the shape of the
+- **Implements:** the resolution of 80 OQ-80.5
+  ("DDI v1.1 DMA", now minor 2): DDI DMA in the shape of the
   040/060 port's `dma_prepare` / `dma_complete`, on both lines, whose
   030 provider bounces through
   memory a Zorro bus master reaches; `20-module-format-and-abi.md` §4
@@ -36,7 +36,7 @@
   `amix-a4091/docs/D42-CALL-SHAPE.md`. This contract adopts them; it adds
   one call (§2.3) and the memory calls (§3).
 - **Providers:** k46, the port's `dma_cache040.s`; k30, the core's
-  `core/plat/k30` (S4-62)
+  `core/plat/k30`
 - **Read by:** amix-a4091 (A4091/A4092 and the A4000T 53C710 target),
   and any later bus-master driver
 
@@ -78,7 +78,7 @@ void dma_complete(struct dma_rec *r, ulong pa, ulong len, int dir);
 
 ### 2.2 What each line's provider does
 
-| | k46 (the port's) | k30 (the core's, S4-62) |
+| | k46 (the port's) | k30 (the core's) |
 |---|---|---|
 | `prepare` | pushes the CPU's dirty lines over `[pa, pa+len)` and takes ownership | if `[pa, pa+len)` is reachable: as k46's, with the 030's cache operations. If not, takes a bounce buffer of `len` from the pool (§3), copies the bytes into it for `TO_DEVICE`, and owns that |
 | `complete` | invalidates the owned lines for `FROM_DEVICE` | for a bounced `FROM_DEVICE`, copies the bounce buffer back to `pa`; then gives the buffer back |
@@ -113,7 +113,7 @@ still owned the record's `pa` is the earlier segment's. A `dma_addr(r)`
 reading the record would arm the device with a wrong address in exactly
 the case §2.2 tells the driver to arm past.
 
-**Where the address is taken** (the a4091 station and the port,
+**Where the address is taken** (amix-a4091 and the 040/060 port,
 2026-10-26, from `amix-a4091/src/a4091-wr.c` at 27d2079):
 - The A4091 driver has **one** site. The data address reaches the
   53C710 only through the DSA table (`ds.data1buf`), which a
@@ -204,7 +204,7 @@ From the K030-U relink kit and the stock base (amix-kerntools, read
 
 ### 5.2 The pool
 
-**Shape (b):** the k30 provider (`core/plat/k30`, S4-62) makes the pool
+**Shape (b):** the k30 provider (`core/plat/k30`) makes the pool
 at `dmainit`, with no kernel change and no new loader record:
 - it takes a `memory[]` entry that is not chip RAM, lies below
   0x08000000 and is outside the main store, and carves the top 64–256 KiB
@@ -218,13 +218,14 @@ at `dmainit`, with no kernel change and no new loader record:
 bind region from below ends **one 2 KiB page short** of the bind base in
 the `memory[]` boot2 hands over, instead of being emptied. `config()`'s
 join test then fails, the region stays out of the main store, and its
-range stays intact for the pool. boot2 pays for it in S4-11.
+range stays intact for the pool. boot2 pays 4 bytes for it
+(`docs/measurements/2026-10-26-boot2-headroom.md` §6).
 
 The pool is reachable by a 32-bit Zorro III bus master (the A4091). A
 24-bit master (the A2091) reaches only chip and Zorro II RAM, which this
 pool does not promise.
 
-### 5.3 The k30 provider's acceptance (S4-62)
+### 5.3 The k30 provider's acceptance
 
 - **Two test hooks, kernel globals set from the box through `/dev/kmem`
   (amix-kerntools `tools/kmemrw`), never in production:**
@@ -232,20 +233,20 @@ pool does not promise.
     **except `dma_alloc` memory** (version 8): the pool's extents, and in
     heap mode each block `dma_alloc` gave. §2.2 promises such memory is
     never bounced, and a bounce of a line the chip wrote would copy stale
-    bytes back over it at complete. Found on N109: the a4091's
+    bytes back over it at complete. Found on metal: the a4091's
     `FROM_DEVICE` sync over its status line was bounced under the hook, the
     copy-back overwrote the chip's status byte, and dd retried a phantom
     error (`status, NO SENSE, retried`). Production was never affected.
     Amiberry's bank at 0x08000000 is reachable by emulated Zorro DMA, so a
-    missed bounce passes in emulation and only metal shows it. Measured:
-    N109 (a4091-k30 1.0.0-3 on kern30m -14), a raw 2 MiB read and `cp` and
+    missed bounce passes in emulation and only metal shows it. Measured on
+    metal (a4091-k30 1.0.0-3 on kern30m -14): a raw 2 MiB read and `cp` and
     `sync` identical with it 0 and 1;
   - `dma_forcefail` (version 7; a count since version 9): N > 0 makes
     the next N prepares that would bounce miss, one off the count each,
     so it clears itself at 0 and can never be left on. `dma_addr` gives 0
     and the driver's path that does not arm (§2.2) runs. As a plain
     switch it missed every bounce while set, and on a Z3660-bound box
-    every buffer above 0x08000000 bounces: N110 saw 321 misses for one
+    every buffer above 0x08000000 bounces: a run on metal saw 321 misses for one
     intended (filesystem fragments, then syslogd writing the miss lines).
     Set it to 1 for one miss. The stock kernel never hands a driver more than the
     pool can bounce (raw I/O a page a command, block I/O a filesystem
@@ -255,7 +256,7 @@ pool does not promise.
   root-table entry 0, which differ from those of entries 2 and 3, before
   the first `FROM_DEVICE` test, to know whether the 030 data cache is on
   for the memory the pool and the bounce buffers live in. **Decoded**
-  (amix-kerntools, N109b on kern30m -14, read live through `/dev/kmem`
+  (amix-kerntools, on kern30m -14, read live through `/dev/kmem`
   from `pstart`'s root table at `cpuroot`):
   - entry 0 `0x7fff0319 0x00000000`: an early-termination page
     descriptor, VA 0–1 GiB to PA 0, **CI clear: cacheable**;
@@ -269,9 +270,9 @@ pool does not promise.
 - **The force-bounce hook and the pool, measured:** `dma_pool`
   0x07fdf800, `dma_poolsz` 0x20000, ending one 2 KiB page below the
   0x08000000 bind (10 §3.2); the console's `dma: pool 128 KiB at
-  0x7FDF800` (N108).
+  0x7FDF800`.
 
-### 5.4 The 030 provider (`core/plat/k30`, S4-62)
+### 5.4 The 030 provider (`core/plat/k30`)
 
 - **At `dmainit`** (`plat_line_init`): the pool is the top 128 KiB of the
   largest fast `memory[]` region between 0x00200000 and 0x08000000 that
@@ -298,8 +299,8 @@ pool does not promise.
 ### 5.4 No memory a bus master reaches (version 11)
 
 A k30 box whose only fast memory lies above 0x08000000 has neither a
-pool nor heap mode. The A4000T in the Z3660's 68030 mode is one
-(M-S474b): all of its fast memory is the Z3660's bind. There the
+pool nor heap mode. The A4000T in the Z3660's 68030 mode is one:
+all of its fast memory is the Z3660's bind. There the
 provider says `dma: no memory a bus master reaches: bus-master DMA is
 off` once at `dmainit`. **Chip memory is not used instead.** It lies
 outside the reach §5.2 promises a 32-bit master, and the custom chips
@@ -312,8 +313,7 @@ own its bandwidth. So:
   so the driver never arms (§5.3's miss);
 - a segment within the reach is still not bounced.
 z3660scsi is not a bus master (§6), so it roots such a box regardless.
-The metal half, an A4091 on that box, waits for the A4000T's Zorro bus
-(S5-21).
+The metal half, an A4091 on that box, waits for the A4000T's Zorro bus.
 
 ## 6. Not in this contract
 
@@ -324,7 +324,6 @@ The metal half, an A4091 on that box, waits for the A4000T's Zorro bus
   would bounce every DDR segment into the pool below 0x08000000, memory
   the piscsi firmware cannot reach, and `dma_complete`'s data-cache clear
   does nothing under the Z3660's 030 interpreter, which has no data
-  cache. The z3660scsi module arms its own maintenance (C4-2 §1.1,
-  ZS-06).
+  cache. The z3660scsi module arms its own maintenance (C4-2 §1.1).
 - The 53C710 drivers' own SCRIPTS and register use (amix-a4091).
 - The port's record layout (its document; version 2 adopted here as is).

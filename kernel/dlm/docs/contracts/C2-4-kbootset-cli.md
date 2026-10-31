@@ -1,6 +1,6 @@
 # C2-4 — `kbootset` as a called program, version 19
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30, P-36 D-N21): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31, P-36 W8): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31, P-36 D-N21): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31, from W7): the kbootset package owns `/dev/kinfo` (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -22,16 +22,16 @@ starts with `kbootset: `.
 
 | Form | Use |
 |---|---|
-| (none) | on the running box (S2-06): kinfo read from `/dev/kinfo` (C2-1). When the node is missing, kbootset makes it (character 53, 0, mode 0444) and says so; when it cannot, the facts come from bootset and the options only; the boot store found as in 40 §5 (bootset's `store=`, else the loader record through kinfo's card table, else a scan of every disk), refusing at gate 8 or 9; the facts from the options, then kinfo, then bootset (§6); `mark-good`'s `--booted` and `--secondary` default to kinfo's loader record |
+| (none) | on the running box: kinfo read from `/dev/kinfo` (C2-1). When the node is missing, kbootset makes it (character 53, 0, mode 0444) and says so; when it cannot, the facts come from bootset and the options only; the boot store found as in 40 §5 (bootset's `store=`, else the loader record through kinfo's card table, else a scan of every disk), refusing at gate 8 or 9; the facts from the options, then kinfo, then bootset (§6); `mark-good`'s `--booted` and `--secondary` default to kinfo's loader record |
 | `-R <root>` | on a mounted target (the installer, repair mode): packages, records and `/stand` under `<root>`; the boot store from `<root>/etc/default/bootset` or `--bootdev` |
 | `--image <file> [--offset N]` | a store in a disk image at byte offset N (host media builds) |
 | `--dev <path> [--offset N]` | a store on a raw device at offset N |
 | `--journal <path>` | the journal; default `<root>/var/kbootset/journal` in the box form, none with `--image`/`--dev` unless named (apkg names it); kbootset makes the missing directories above it (mode 0755) when it writes the journal |
-| `media …` | the pristine generation of a new medium (host build only, S2-04): `--disk`, `--floppy`, `--cd` |
+| `media …` | the pristine generation of a new medium (host build only): `--disk`, `--floppy`, `--cd` |
 
 **`/dev/kinfo` is the kbootset package's** (version 19): `c kinfo /dev/kinfo
 53 0 0444 root sys`, in the class of its registry owner, `kinfo` (C3-5 v18
-§1.2), from kbootset -29, the release-prep revision (P-38 D-g). Until that
+§1.2), from kbootset -29, the release-prep revision. Until that
 is minted the installer makes the node, as it did before. kbootset still makes it
 when it is missing, and amix-base's boot step re-creates it from the
 package's record.
@@ -55,7 +55,7 @@ or kbootset-only transaction, say),
 `kbootset: step N <what>` (1 journal, 2 members, 4 manifest, 5 control
 block = the commit point, 7 journal cleared). With `KBOOTSET_HOLD=N` in
 the environment it syncs and waits before step N, for the rig to cut the
-power (S2-08, S2-40).
+power.
 
 ## 5. Settled at agreement
 
@@ -208,7 +208,7 @@ The generation id and the `created` time are not compared.
 - **`commit --spec`** is never compared. It writes the generation the
   spec gives.
 
-## 11. Module members (S3-16, C3-5)
+## 11. Module members (C3-5)
 
 From kbootset -10 (amix-dlm a64aee1) on, a generation takes
 the module packages installed under the root, as C3-5 §2 says.
@@ -267,8 +267,7 @@ the module packages installed under the root, as C3-5 §2 says.
 ## 12. `kbootset namelist` (40 §4.2)
 
 Writes the booted kernel's namelist to `/stand/unix`, the one path the
-stock `nlist` consumers read (`netstat`, `ifconfig`, `crash`; S3-B5's
-survey). It writes `/stand/unix.new` and renames it over `/stand/unix`,
+stock `nlist` consumers read (`netstat`, `ifconfig`, `crash`). It writes `/stand/unix.new` and renames it over `/stand/unix`,
 so a `/stand/unix` that is a hard link to `/stand/2.1_unix` (as 1.0 left
 it) loses only its name; `/stand/2.1_unix` is untouched.
 
@@ -312,7 +311,7 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
   - `namelist: none (<reason>)` when none can be made, with the reasons
     above.
   `status` itself writes nothing.
-- **The installer** (S3-31) removes the name `/stand/unix` from the
+- **The installer** removes the name `/stand/unix` from the
   target (`/stand/2.1_unix` stays). `S01kbnamelist` comes with the
   kbootset package (§16).
 
@@ -414,7 +413,7 @@ and `<root>/stand/k46/kabi`; when neither says 4, it does nothing.
 
 `kbootset major <name>` prints the majors the major registry gives the
 module `<name>`, for a boot script that re-creates a missing `/dev` node
-(P-36 D-N21) without carrying a number of its own.
+without carrying a number of its own.
 
 - **The source** is the registry compiled into kbootset (`kbootset/kreg.c`,
   generated from `abi/registry/majors`). The kernel gives a module no other
@@ -431,7 +430,7 @@ module `<name>`, for a boot script that re-creates a missing `/dev` node
 - **`kbootset major -l`** (version 18) prints every row of the registry,
   in its order, as `<module> c|b <n>`: `z3660eth c 51`, `ramdisk b 20`.
   It lets a boot step tell a node whose major the registry gives no
-  module (P-36 D-N21). There is no reverse form; `-l` covers it.
+  module. There is no reverse form; `-l` covers it.
 - **Exit status:** 0; 1 for a name the registry does not know, with
   `kbootset: no major is registered to <name>` on standard error and
   nothing on standard output; 2 for usage (no name, more than one, or
@@ -441,11 +440,11 @@ module `<name>`, for a boot script that re-creates a missing `/dev` node
   driver) exits 1. A caller keeps its own number for those.
 - **The host test** is `tests/host/kmajor.sh`.
 
-## 16. The boot scripts (version 17, P-36 W8)
+## 16. The boot scripts (version 17)
 
 The kbootset package owns the two scripts that make the calls of §9 and
 §12. They are package objects, so an update of kbootset reaches them; the
-installer stops writing them (P-36 W7). The source is `kbootset/rc/`.
+installer stops writing them. The source is `kbootset/rc/`.
 
 | Object | Type | Calls |
 |---|---|---|
@@ -456,10 +455,10 @@ installer stops writing them (P-36 W7). The source is `kbootset/rc/`.
 
 - **The link names stay those the installer wrote**, so a 1.1 box's rc
   order does not change. `S01` sorts after `S01MOUNTFSYS`; `S99z*` is the
-  band P-36 §2.2 keeps for the mark-good step.
+  band kept for the mark-good step.
 - **Only `start` runs anything.** `/sbin/rc2` runs an `S` script as
   `/sbin/sh <script> start`; any other argument exits 0.
-- **With amix-base's `/usr/lib/amix/rc.subr`** (P-36 §2.2, `rc.subr(1M)`):
+- **With amix-base's `/usr/lib/amix/rc.subr`** (`rc.subr(1M)`):
   - `kbnamelist=no` or `kbmarkgood=no` in `/etc/rc.conf` turns the script
     off; each is on when rc.conf has no line for it;
   - `kbmarkgood=no` prints `kbmarkgood: off (kbmarkgood=no in

@@ -1,28 +1,28 @@
 # C4-2 — what a root-class driver changes, version 6
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1: its own
+- **Status:** agreed 2026-10-26, version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
-  version 2 (2026-10-26, from the a4091 station): the A4770's key in the
+  version 2 (2026-10-26, from amix-a4091): the A4770's key in the
   A4091 row, and the A4091 polled in its first module form (§8);
   version 3 (2026-10-26, the kabi 1.2 cut): `root_defer` is minor 2 on
   k30, whose minted kernel (kern30m -10) does not export it (§3);
-  version 4 (2026-10-27, S4-74's first metal row): a module carries
+  version 4 (2026-10-27, from the first metal test): a module carries
   every arm the kernel build applied to the static driver it replaces
   (§1.1); version 5 (2026-10-27): §1.1's example names the mechanism, a
   dirty copyback line written back over the board's data; version 6
-  (2026-10-27, S5-06): the A4000T onboard 53C710's gate is the running
+  (2026-10-27): the A4000T onboard 53C710's gate is the running
   Kickstart's `NCR scsi.device` resident (§8.1).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
   context), §4 (interrupt attachment), §5 (the sd contract), §7 (the RAM
-  disk), §8 (memory classes); `70-static-floor.md` §4 (safe mode); D-3 §4
+  disk), §8 (memory classes); `70-static-floor.md` §4 (safe mode)
 - **Extends:** C3-6 version 4, which every module still meets (the
   wrapper, `_load`/`_unload`/`_halt`, DDI only, the console hook, board
   windows). This contract adds what a module of class `root` needs. It is
   its own document, not a C3-6 version, so C3-6 can take the board
-  register rule (S4-63) on its own schedule.
-- **Read by:** the root-class driver owners: amix-z3660scsi (z3660scsi),
+  register rule on its own schedule.
+- **Read by:** the root-class drivers' repositories: amix-z3660scsi (z3660scsi),
   amix-a4091 (A4091/A4092 and the A4000T onboard 53C710 as its second
   target), amix-gayle-ide (Gayle IDE), kernel/modules (`ramdisk`)
 - **Depends on:** C4-1 (`sd_register`), C4-3 (the RAM-disk hand-off),
@@ -55,7 +55,7 @@ with the line's default. The kernel build no longer stamps them: a
 module kernel has no static driver for its passes to find. **The
 module's README lists them.**
 
-Found on metal (S4-74, the A4000T with a real 68060, kern46m -81): the
+Found on metal (the A4000T with a real 68060, kern46m -81): the
 port's `f4arms --cache 60` pass stamps `z3660_cache` = 60 (the 68060
 data-cache arm) into every static k46 z3660scsi. The module kept its
 .data word's 0 (no cache maintenance), so a dirty copyback line was
@@ -63,10 +63,10 @@ written back over the data the Z3660's ARM had just put in DDR, and the
 first directory read through piscsi failed: `swapconf` panicked
 (`lookupname /dev/dsk/c6d0s2 failed - error 20`). The mechanism is the
 write-back, not a stale read: a whole-cache push between two lookup
-passes gave the same ENOTDIRs (August's ATT4 A/B), and only the arm's
+passes gave the same ENOTDIRs, and only the arm's
 push before the transfer closes it. So a module must push before the
 transfer; invalidating after a read is not enough. Emulators need 0, so
-every emulator row passed. The fix is the module's own (ZS-06: the arm
+every emulator row passed. The fix is the module's own (the arm
 from `cputype` at `_load`, a `cache=` parameter, 0 on k30 always).
 
 ## 2. `_load` in the root pass
@@ -91,9 +91,9 @@ is *any* in `docs/abi/ddi.md`; `kmem_alloc`/`kmem_zalloc` with
 `KM_NOSLEEP`; `sd_register` (C4-1); `root_defer` (§3). Also `autocon`,
 `bprobe`, `sptalloc`/`sptfree` and on k46 `dev_kvmap`, which `ddi.md`
 marks *proc*: today's static root drivers call them in `init_tbl`, which
-U1 found to be the same context. **S4-71 confirms each one on both lines
-with a root-class probe module**, which shows that it returns at level 7
-with the clock stopped. Until that row passes, a driver port may build on
+U1 found to be the same context. **A root-class probe module confirms
+each one on both lines**, showing that it returns at level 7
+with the clock stopped. Until that test passes, a driver port may build on
 them but not ship. A name of context *proc* not listed here waits for the
 deferred call (§3).
 
@@ -108,7 +108,7 @@ at level 7 (C3-6 v4 §1.3). So a root-class driver:
    it stays polled and says so.
 
 `root_defer(fn, arg)` is a DDI name of k46.1.1 and k30.1.2, root
-context only, implemented by S4-05:
+context only, implemented in the core:
 - the core keeps up to 8 calls, in order;
 - it runs each once at the first `sysinit` entry (`MOD_C_POST`,
   `modadmin -B`): process context, level 0. The calls run before any
@@ -163,9 +163,9 @@ nothing for it, and `_load` cannot tell the difference.
 
 ## 8. Per driver
 
-| Driver | Owner | `match` | `rank` | Interrupt | `_halt` | Notes |
+| Driver | Repository | `match` | `rank` | Interrupt | `_halt` | Notes |
 |---|---|---|---|---|---|---|
-| z3660scsi | amix-z3660scsi | `zorro:144b:01,mobo:z3660-window` | `z3660` | none: the piscsi mailbox is synchronous, polled | mailbox idle | ZS-05's armed register access (C3-6 §1, S4-63) |
+| z3660scsi | amix-z3660scsi | `zorro:144b:01,mobo:z3660-window` | `z3660` | none: the piscsi mailbox is synchronous, polled | mailbox idle | armed register access (C3-6 §1) |
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
@@ -184,8 +184,8 @@ so `_load` decides before its first access under `$DD0000`:
    §2), then looks for a valid ROM tag: the word `0x4AFC` at an even
    offset whose `rt_MatchTag` is its own address and whose `rt_Name`
    points inside the image at exactly `NCR scsi.device`, with
-   `RTF_COLDSTART` set. Every A4000T Kickstart in the workspace's ROM
-   store carries it (3.1 40.70; 3.2.1 47.102, 47.115: idString
+   `RTF_COLDSTART` set. Every A4000T Kickstart checked carries
+   it (3.1 40.70; 3.2.1 47.102, 47.115: idString
    `A4000T_scsidisk`), and none of the A3000 or A4000 ones does. exec
    runs every cold-start tag at every boot before the strap starts
    boot1, so a box that reaches Amix with the tag in its Kickstart has
@@ -196,7 +196,7 @@ so `_load` decides before its first access under `$DD0000`:
 3. **The chip (G1, G2)**: read-only `bprobe` of ISTAT, then amix-a4091's
    fingerprint (`docs/A4000T-ONBOARD-710.md` §10.2).
 4. **The parameter `declared`** (int, default -1): -1, item 1 decides; 0,
-   never touch the window; 1, touch it without item 1. 1 is the owner's
+   never touch the window; 1, touch it without item 1. 1 is the administrator's
    override for a box item 1 cannot read, such as a software MMU remap of
    a Kickstart other than the one at `0xF80000`. On the Z3660 the ARM
    serves the mapped Kickstart at that physical address, so a mapped ROM
@@ -214,4 +214,4 @@ such a box.
 - How the loader selects and places the module (C4-4).
 - The RAM-disk image's hand-off (C4-3).
 - The DMA interface itself (C4-5).
-- The Z3660 board register rule (C3-6 §1 at its next version, S4-63).
+- The Z3660 board register rule (C3-6 §1 at its next version).

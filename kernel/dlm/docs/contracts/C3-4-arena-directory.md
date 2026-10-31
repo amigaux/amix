@@ -1,11 +1,11 @@
 # C3-4 — the arena directory `AXA1` and the manifest copy, version 1
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.3, §6;
   `30-module-core.md` §2 patches 2, 16 and 17, §3
-- **Written by:** boot2, loader version 2 (S3-15)
+- **Written by:** boot2, loader version 2
 - **Read by:**
-  - the module core (S3-07, S3-08; the root modules from stage 4);
+  - the module core (the root modules from stage 4);
   - `kinfo`, nothing (the manifest's generation is already in `AXL1`).
 - **Reserved by:** the module kernels, which give the arena's zero block
   its offset and capacity (C3-3)

@@ -1,42 +1,42 @@
 # C3-5 — the module package and the per-module manifest record, version 19
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+- **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
   (§2); version 3 (2026-10-26): `marc_post` runs from the first sysinit
-  entry, `modadmin -B` (§5, U15); version 4 (2026-10-26, from S3-31's
-  dry run): the package's names and version (§1.1), and its scripts run
+  entry, `modadmin -B` (§5, U15); version 4 (2026-10-26, from the
+  installer's dry run): the package's names and version (§1.1), and its scripts run
   on the installer's miniroot, so pure `sh` (§1.3); the package's contents (§1.2); version 5
-  (2026-10-26, from S3-31's media of record): init's process ids are not
+  (2026-10-26, from the installer's media of record): init's process ids are not
   stable, so no rc script trusts a pid from an earlier boot (§1.3); version 6
   (2026-10-26, C4-4 version 2): a root record carries `bss=`, the size of
   the module's NOBITS and COMMON, which boot2 reserves behind its file (§3); version 7
   (2026-10-26, C4-4 version 3): `safe=1` marks the root records of the safe-mode
   set (§3); version 8 (2026-10-26, amix-modules' ramdisk): its short name
   (§1.1), and a block driver's nodes in `/dev/dsk` (§1.2); version 9
-  (2026-10-27, amix-gayle-ide's module plan): gayle's short name (§1.1);
+  (2026-10-27, for the amix-gayle-ide module): gayle's short name (§1.1);
   version 10 (2026-10-27): z3660scsi's (as amix-packages minted it) and
   a4091's (§1.1); version 11 (2026-10-27, C4-4 version 5): a root record
   for the root filesystem's boot-class module (§3); version 12
   (2026-10-27, amix-cdfs): cdfs's short name (§1.1); version 13
-  (2026-10-27, C4-4 version 6, S5-02): `safe=1` on every controller module
-  ranked at or before the root's (§3); version 14 (2026-10-27, S5-06):
-  a4kt710's short name (§1.1); version 15 (2026-10-27, C4-4 version 7,
-  S5-09): `safe=1` on a boot record the owner marked (§1, §3); version 16
+  (2026-10-27, C4-4 version 6): `safe=1` on every controller module
+  ranked at or before the root's (§3); version 14 (2026-10-27):
+  a4kt710's short name (§1.1); version 15 (2026-10-27, C4-4 version 7):
+  `safe=1` on a boot record the administrator marked (§1, §3); version 16
   (2026-10-28, amix-paula): paula's short name (§1.1), and a driver's own
-  interface header in its module package (§1.2); version 17 (2026-10-31,
-  P-36 W8, D-N24): amix-base's `/etc/inittab` carries the `dlm` line, and
-  modtools has no package scripts (§1.3, §5); version 18 (2026-10-31,
-  P-36 D-N21): a device node's pkgmap class is its module's name (§1.2);
+  interface header in its module package (§1.2); version 17 (2026-10-31):
+  amix-base's `/etc/inittab` carries the `dlm` line, and
+  modtools has no package scripts (§1.3, §5); version 18 (2026-10-31):
+  a device node's pkgmap class is its module's name (§1.2);
   version 19 (2026-10-31): random's short name (§1.1).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1;
   `10-boot-loader.md` §5.1; `30-module-core.md` §2 patches 16 and 17, §3
-- **Produced by:** the module packages (amix-packages, S3-22) from the
-  driver repositories' modules (C3-1); `kbootset build` (S3-16)
+- **Produced by:** the module packages (amix-packages) from the
+  driver repositories' modules (C3-1); `kbootset build`
 - **Read by:**
-  - apkg (S3-30): the catalog entry, C2-2 as it stands;
+  - apkg: the catalog entry, C2-2 as it stands;
   - `kbootset`: the package files, and the manifest for `check` and `status`;
   - the module core: the records (manifest-only loading, core patch 0009;
     `marc_post`, core patch 0010);
@@ -92,7 +92,7 @@ per line**:
 | paula | `paula` | `paula30` / `paula46` |
 | random | `random` | `random30` / `random46` |
 
-  A new module's owner adds its row in a version bump of this contract.
+  A new module gets its row in a version bump of this contract.
 
 ### 1.2 The package's contents (the stage-3 mint's conventions)
 
@@ -122,7 +122,7 @@ per line**:
   building a module against another module, on the host.
 - **Device nodes:** the package ships the nodes of the majors its driver
   owns as pkgmap device entries, no script: z3660eth `/dev/zen0` c 51 0.
-- **A node's class is its module's name** (version 18, P-36 D-N21): the
+- **A node's class is its module's name** (version 18): the
   module's file name in `/etc/conf/mod.d`, which is the registry's owner
   of the major (`abi/registry/majors`), for example
   `c z3660eth /dev/zen0 51 0 0600 root root` in the prototype.
@@ -146,8 +146,8 @@ per line**:
   (raw) nodes in `/dev/rdsk` only when the driver has a character row:
   the ramdisk, block only, ships `/dev/dsk/ram0`–`ram2`, b 20 0–2, 0600
   root root, and no `/dev/rdsk` node. Network plumbing (`slink`, `ifconfig`) is not the package's
-  beyond its `link.d` line: `ifup` does it (C3-6 §1.8; until P-36 W6, the
-  installer's `S99zen`, S3-31).
+  beyond its `link.d` line: `ifup` does it (C3-6 §1.8; earlier, the
+  installer's `S99zen`).
 - The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
   `.moddata`. **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not
@@ -247,7 +247,7 @@ boot-class module whose `fs=` is the generation's `rootfs`, which
 | `path=` | the generation directory | the core: where the bytes come from (patch 0009) |
 | `sha256=` | the object | the core: what they must hash to (patch 0009); `kbootset check` |
 | `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); `marc_root` the same for a root-class record (C4-4 version 3 §4). boot2 does not read it |
-| `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), the root-class modules those two depend on, and (version 13) every controller module ranked at or before the root's class (C4-4 version 6 §2); on a boot record (version 15), the owner's `safe` mark from `modreg.local.d` and the boot modules it depends on (C4-4 version 7 §2); absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
+| `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), the root-class modules those two depend on, and (version 13) every controller module ranked at or before the root's class (C4-4 version 6 §2); on a boot record (version 15), the administrator's `safe` mark from `modreg.local.d` and the boot modules it depends on (C4-4 version 7 §2); absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
 | `majors=` | **copied verbatim**; required on demand class | `marc_post`: registers each character major for the module (block majors: stage 4) |
 | `depend=` | **copied verbatim** | `kbootset` gate 3, and the record order |
 | `tier=`, `build=` | **copied verbatim** when `tier=core` | `kbootset status`; the core decides from the object's own `.moddata` (patch 0003) |
@@ -283,7 +283,7 @@ a new record, with `loader-min` raised. This contract adds none.
   `vfs_mountroot` loads nothing: it runs with interrupts masked, where
   reading a module file faults (U15, core patch 0017), and prints
   `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`.
-- **Who puts the line there** (version 17, P-36 W8, D-N24): amix-base.
+- **Who puts the line there** (version 17): amix-base.
   Its `/etc/inittab` is a conffile built from the stock file (amix-system
   `etc/inittab`, sha256-checked) with this one line inserted after line 1,
   `is:2:initdefault:`, so it is the first sysinit entry; amix-base's test

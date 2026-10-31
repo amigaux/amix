@@ -1,7 +1,7 @@
 # C2-2 — kernel-space catalog entries and apkg's install record, version 5
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
-- **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed by D-3 §13: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed for 1.1: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
 

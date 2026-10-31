@@ -1,22 +1,22 @@
 # C3-1 — the module object and `.moddata` version 2, version 5
 
-- **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
+- **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): the text form of parameter values (§3); version 3
   (2026-10-26): the §4 table is the load call's, a refused first open is
   `ENXIO` (§4); version 4 (2026-10-26): the image and the file under
-  256 KiB (§1, §4, §6); version 5 (2026-10-27, from amix-cdfs's module
-  plan): `fs` is required of every module that calls `vfs_register`,
+  256 KiB (§1, §4, §6); version 5 (2026-10-27, for the amix-cdfs
+  module): `fs` is required of every module that calls `vfs_register`,
   boot class too (§3). Other repositories build against this text; a
   change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
-- **Produced by:** the ABI kit's `mkmod` and `modfix` (S3-10), used by the
+- **Produced by:** the ABI kit's `mkmod` and `modfix`, used by the
   driver repositories (amix-z3660net, amix-z3660rtg; amix-gayle-ide from
   stage 4)
 - **Read by:**
-  - the module core (S3-03), at every load;
-  - `kbootset build` (S3-16), when it composes a generation;
-  - apkg's pre-flight (S3-30);
+  - the module core, at every load;
+  - `kbootset build`, when it composes a generation;
+  - apkg's pre-flight;
   - the kit's checker.
 
 The base is the object format of kdedon's MIT DLM core (upstream
