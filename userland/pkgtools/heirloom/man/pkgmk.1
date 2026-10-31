@@ -162,6 +162,17 @@ or a specific instance (for example, \fBinst.1\fR or \fBinst.2\fR).
 All instances of a package can be requested by \fBinst.*\fR.
 The asterisk character (\fB*\fR) is a special character to some shells and may need to be escaped.
 In the C-Shell, "*" must be surrounded by single quotes (\fB'\fR) or preceded by a backslash (\e).
+.SH ENVIRONMENT VARIABLES
+.\" AMIX PORT: the reproducible roll (T-56 D1)
+When \fBSOURCE_DATE_EPOCH\fR is set to a number of seconds, every time
+\fBpkgmk\fR writes is that time: the modification time of each object in
+\fIpkgmap\fR, the date of a \fBVERSION\fR or \fBPSTAMP\fR it supplies
+(in UTC; a supplied \fBPSTAMP\fR then carries no host name) and the times
+of the spool's files, which also get the mode \fIpkgmap\fR gives them
+(0755 for a directory and 0644 for a file it does not list).
+With \fBpkgtrans \-s\fR under the same variable, two rolls of the same
+prototype and files are the same bytes.
+A value that is not a number of seconds is an error.
 .SH SEE ALSO
 .IR pkgparam (1),
 .IR pkgproto (1),

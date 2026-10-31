@@ -450,6 +450,8 @@ extern int	pkgexecl(char *filein, char *fileout, char *uname, char *gname,
 extern int	pkgexecv(char *filein, char *fileout, char *uname, char *gname,
 			char *arg[]);
 extern int	pkghead(char *device);
+extern int	pkg_epoch(long *ep);
+extern int	ds_epoch_fd(int fd, long epoch, char *why, unsigned cap);
 extern int	pkgmount(struct pkgdev *devp, char *pkg, int part, int nparts,
 			int getvolflg);
 extern int	pkgtrans(char *device1, char *device2, char **pkg,
@@ -595,6 +597,8 @@ extern int	isfile();
 extern int	pkgexecl();
 extern int	pkgexecv();
 extern int	pkghead();
+extern int	pkg_epoch();
+extern int	ds_epoch_fd();
 extern int	pkgmount();
 extern int	pkgtrans();
 extern int	pkgumount();

@@ -216,6 +216,15 @@ pkgtrans /tmp/pkg1.pkg ~/tmp pkg1
 The \fBMAXINST\fR variable is set in the
 .IR pkginfo (5)
 file and declares the maximum number of package instances.
+.PP
+.\" AMIX PORT: the reproducible roll (T-56 D1)
+When \fBSOURCE_DATE_EPOCH\fR is set to a number of seconds, \fBpkgtrans \-s\fR
+archives each package's members in C sort order and, once the datastream
+file is written, rewrites the header of every member: inode numbers from 1
+in archive order (hard links keep one number), owner, group and device 0,
+the modification time that epoch, and a directory's link count 2 plus its
+subdirectories.  Names, modes, sizes and contents are unchanged.  A value
+that is not a number of seconds is an error.
 .SH SEE ALSO
 .IR pkginfo (1),
 .IR pkgmk (1),
