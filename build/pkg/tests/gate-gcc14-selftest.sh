@@ -12,7 +12,8 @@
 #     source built with the recipe flags;
 #   - amix_pkgroll refuses an unsafe payload, and the datastream gate alone
 #     (tree gate stubbed out) refuses and removes the .pkg;
-#   - the NEEDED gate rejects a host path in DT_NEEDED;
+#   - the NEEDED gate rejects a host path in DT_NEEDED, passes a path that
+#     is the SONAME of the sysroot library there (libscreen.so);
 #   - the ll-printf gate rejects printf("%lld") and accepts it once reviewed;
 #   - the FPU gate rejects the 040/060-only FPU forms -mcpu=68060 emits (an
 #     executable, an archive, and amix_pkgroll's payload) and passes the same
@@ -125,7 +126,40 @@ $CC $AMIX_CFLAGS -o "$T/nsl-path" "$T/nsl.c" "$AMIX_SYSROOT/usr/lib/libnsl.so" 2
 $CC $AMIX_CFLAGS -o "$T/nsl-bare" "$T/nsl.c" -lnsl 2>/dev/null
 if amix_gate_g14_needed "$T/nsl-path" >/dev/null 2>&1; then fail "NEEDED gate passed a host-path DT_NEEDED"; fi
 amix_gate_g14_needed "$T/nsl-bare" >/dev/null 2>&1 || fail "NEEDED gate rejected bare libnsl.so"
+amix_gate_g14_needed "$T/nsl-path" 2>&1 | grep "is a path, not a bare name, and the sysroot holds no library there" >/dev/null ||
+	fail "NEEDED gate refused the host path for another reason"
 ok "NEEDED gate rejects a host path, passes the bare name"
+
+# NEEDED: a path is the platform's when it is the SONAME of the sysroot
+# library at that path -- libscreen.so names itself /usr/amiga/lib/libscreen.so
+# (the stock X servers record that) -- read through the sysroot's links.
+# Three stand-in sysroots for one program: the library reached through a
+# relative link (passes), another library at that path (SONAME differs), none.
+printf 'int main(void) { return 0; }\n' > "$T/scr.c"
+$CC $AMIX_CFLAGS -o "$T/scr" "$T/scr.c" -Wl,--no-as-needed -lscreen 2>"$T/scr.log" || {
+	cat "$T/scr.log" >&2; fail "the libscreen probe did not link"; }
+"$READELF" -d "$T/scr" | grep '(NEEDED).*\[/usr/amiga/lib/libscreen.so\]' >/dev/null ||
+	fail "the libscreen probe does not record /usr/amiga/lib/libscreen.so"
+for v in ok other none; do
+	mkdir -p "$T/sr-$v/usr/lib"
+	cp "$AMIX_SYSROOT/usr/lib/libc.so.1" "$T/sr-$v/usr/lib/"
+done
+mkdir -p "$T/sr-ok/usr/amiga.d/lib" "$T/sr-other/usr/amiga/lib"
+cp "$AMIX_SYSROOT/usr/amiga/lib/libscreen.so" "$T/sr-ok/usr/amiga.d/lib/"
+ln -s amiga.d "$T/sr-ok/usr/amiga"
+cp "$AMIX_SYSROOT/usr/lib/libnsl.so" "$T/sr-other/usr/amiga/lib/libscreen.so"
+( AMIX_SYSROOT=$T/sr-ok; amix_gate_g14_needed "$T/scr" ) >"$T/scr-ok.log" 2>&1 || {
+	cat "$T/scr-ok.log" >&2; fail "NEEDED gate refused /usr/amiga/lib/libscreen.so, the sysroot library's SONAME"; }
+for v in other none; do
+	if ( AMIX_SYSROOT=$T/sr-$v; amix_gate_g14_needed "$T/scr" ) >"$T/scr-$v.log" 2>&1; then
+		fail "NEEDED gate passed /usr/amiga/lib/libscreen.so with sysroot $v"
+	fi
+done
+grep "the sysroot library there is not named so" "$T/scr-other.log" >/dev/null ||
+	{ cat "$T/scr-other.log" >&2; fail "NEEDED gate on a library of another SONAME at the path"; }
+grep "the sysroot holds no library there" "$T/scr-none.log" >/dev/null ||
+	{ cat "$T/scr-none.log" >&2; fail "NEEDED gate on a path the sysroot has no library at"; }
+ok "NEEDED gate passes a path that is the sysroot library's SONAME (through a relative link), refuses one whose library is named otherwise or absent"
 
 # ll printf: libc printf prints ll as l.
 printf '#include <stdio.h>\nint main(int c, char **v) { printf("%%lld\\n", (long long)c); return 0; }\n' > "$T/ll.c"
