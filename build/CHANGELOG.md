@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — a pinned commit is fetched by its full hash only (4952ec6)
+
+git cannot fetch a short hash: make dist refuses a port.pin or fork pin whose commit is not 40 hex digits; the kspace
+step pre-fetches port.pin's full commit into out/cache/port-repo; dlm-src.sh's fallback fetches only a full hash and
+refuses a short one missing from AMIX_PORT_REPO, keeping the kit's PORT_REV label as given (fixes 38feabe, found by
+dlm). CI runs z3660eth's host test. test-dlmsrc 8/8, test-dist 26/26.
+
 ## 2026-10-31 — make dist's drivers step builds every module on the kit; CI driver host tests (ca08c0e)
 
 The drivers step (P-38 S3.2, D-e) builds every driver module on both lines against this checkout's kabi 1.3 kit:
