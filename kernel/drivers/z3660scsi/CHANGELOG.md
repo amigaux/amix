@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — docs and comments state facts without internal ids (658dcc7, a579352)
+
+Docs, NOTES and code comments reworded; .gitignore lists build output only. Objects unchanged: static k30 0e15a363,
+k46 5e222ae2; module k30 2c9e3803, k46 21754e70.
+
 ## 2026-10-30 — works in its amix home (2117886, 93eda8e, 5bd7cbe, 45fac1b)
 
 README points at amix's kernel/k30, kernel/dlm and kernel/drivers/a4091; module/Makefile defaults DLM to amix's
