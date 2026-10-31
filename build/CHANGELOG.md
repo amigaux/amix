@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — make dist's userland step builds in BUILD_DEPENDS order (e90b0b8)
+
+The new `pkgmeta build-order` lists each recipe after the packages its BUILD_DEPENDS names (a cycle or an unknown
+name is refused); `--for` gives one package and what it needs. make dist's userland step and recipes/<name> roll in
+that order, so python3 comes after pth and zlib (dist.yml run 41217293592 failed on that). test-pkgmeta 153/153.
+
 ## 2026-10-31 — the proof of make dist, run by hand in CI (b43f795)
 
 build/dist-proof WORKDIR [COMMIT] runs make dist twice, from two clean clones at two paths, and compares the locks
