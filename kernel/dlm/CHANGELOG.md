@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — the stage-5 exit ledger brought up to date (a036761)
+
+The candidate cuts 68060-261031-52 and 68030-261031-63, and kern46m -52 / kern30m -63, recorded as candidates, pending
+until S5-40; new rows for Paula, S5-45 (PASS, host), S5-47 (the kabi-1.3 ABI kit) and S5-48 (the quirk 90/91/92 fixes,
+with quirk 74 on k30, and their metal; reopens S5-41/42); stage-5.md's kabi note corrected (1.3 for Paula, no 1.3 kit
+yet); P-35/P-36 marks on S5-32, S5-42 and S5-44; a4kt710-k30 left as an open question.
+
 ## 2026-10-30 — kbootset(1M) (4f854d9)
 
 The manual page, for /opt/amix/man/1m/kbootset with whatis.d/kbootset: every subcommand of C2-4 v16, the gates, the
