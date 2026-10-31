@@ -38,7 +38,7 @@ the network chain stay untouched.
 | Piece | Installed as | Kind | Stage |
 |---|---|---|---|
 | `probe/dhcprobe`, `probe/tapdhcpd.py` | not installed | test tools | S0, done: `dhcp-probe.md` |
-| `dhcpc` | `/usr/sbin/dhcpc` | C, period compiler, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback |
+| `dhcpc` | `/usr/sbin/dhcpc` | C, period compiler, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback; a one-hour soak |
 | lease state | `/var/inet/dhcpc/<if>.lease`, `<if>.pid`; log `/var/adm/dhcpc.log` | runtime | S1 |
 | `ifup` dhcp mode | in `ifup` | code | S2 |
 | RELEASE at `ifdown`, ARP check and DECLINE, several interfaces at once | in `dhcpc`, `ifdown` | code | S3, later |
@@ -102,7 +102,8 @@ itself changed.
 5. **`dhcpc` 1.0** (S1), against the hook contract frozen after S0 (T-55).
    Tested on the emulator: lease, reuse of the last address (INIT-REBOOT),
    renew, rebind, NAK, lease end, release, no server and the static
-   fallback; then a one-hour soak.
+   fallback. Soak passed: one hour with a 60 s lease, 112 renewals, 4
+   rebinds, no ICMP, and the daemon was still the same process at the end.
 6. **`ifup` dhcp mode** (S2) and, in the installer, DHCP as the default of the
    public install. Then metal: leases on the Z3660 Ethernet, two renewals seen.
 
