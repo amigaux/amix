@@ -1,0 +1,99 @@
+# The proof of make dist (P-38 S7.2): two make dist runs of one commit, from
+# two clean clones at two different paths, in the pinned build container, and
+# their locks compared; with a lock of record, each run is also checked
+# against it. Run by hand for now. See docs/ci.md.
+name: dist
+
+on:
+  workflow_dispatch:
+    inputs:
+      lock:
+        description: 'lock of record to check both runs against (release/amix-<version>.lock), or empty'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dist-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    name: make dist twice
+    runs-on: ubuntu-24.04
+    timeout-minutes: 345
+    defaults:
+      run:
+        shell: bash   # -eo pipefail
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0   # a package's epoch is its directory's last commit
+          persist-credentials: false
+      - name: amix-system at its pin, checked
+        run: system/fetch-amix-system "$RUNNER_TEMP/amix-system"
+      # The same image and cache key as ci.yml's kit job: one image for both.
+      - name: restore the toolchain image
+        id: image
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: amix-toolchain-${{ hashFiles('toolchain/Containerfile', 'toolchain/*.pin', 'toolchain/container-build.sh', 'toolchain/sysroot-links', 'system/amix-system.pin', 'system/MANIFEST.sha256', 'system/SYMLINKS', 'system/check-amix-system') }}
+      - name: restore the toolchain image, second try
+        id: image2
+        if: steps.image.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: ${{ steps.image.outputs.cache-primary-key }}
+      - name: build the toolchain image
+        if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
+        timeout-minutes: 210
+        run: |
+          start=$(date +%s)
+          toolchain/container-build.sh "$RUNNER_TEMP/amix-system" amix-toolchain:ci
+          echo "cold image build: $(( $(date +%s) - start )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$RUNNER_TEMP/toolchain-image"
+          docker save amix-toolchain:ci | zstd -q -T0 -o "$RUNNER_TEMP/toolchain-image/image.tar.zst"
+          ls -l "$RUNNER_TEMP/toolchain-image"
+      - name: save the toolchain image
+        if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/toolchain-image
+          key: ${{ steps.image.outputs.cache-primary-key }}
+      - name: load the toolchain image
+        if: steps.image.outputs.cache-hit == 'true' || steps.image2.outputs.cache-hit == 'true'
+        run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
+      - name: the image's gcc14 is the pinned build
+        run: toolchain/extract-g14.sh --check amix-toolchain:ci
+      - name: make dist twice, the locks compared
+        timeout-minutes: 120
+        env:
+          AMIX_IMAGE: amix-toolchain:ci
+          SYSTEM: ${{ runner.temp }}/amix-system
+          LOCK_OF_RECORD: ${{ inputs.lock }}
+        run: |
+          if [ -n "$LOCK_OF_RECORD" ]; then
+            [ -f "$LOCK_OF_RECORD" ] || { echo "no lock of record $LOCK_OF_RECORD" >&2; exit 1; }
+            export LOCK=$PWD/$LOCK_OF_RECORD
+          fi
+          rc=0
+          sh build/dist-proof "$RUNNER_TEMP/proof" || rc=$?
+          { echo '### make dist twice'; echo '```'; cat "$RUNNER_TEMP/proof/summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - name: the locks, the step logs and the catalogs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist-proof
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/proof/summary
+            ${{ runner.temp }}/proof/**/step-*.log
+            ${{ runner.temp }}/proof/**/amix/out/lock
+            ${{ runner.temp }}/proof/**/amix/out/build/*.log
+            ${{ runner.temp }}/proof/**/amix/out/*/catalog
+            ${{ runner.temp }}/proof/**/amix/out/*/catalog.md5

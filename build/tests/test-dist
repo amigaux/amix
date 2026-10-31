@@ -92,6 +92,20 @@ try:
               rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)
     rc, out = run("recipes/nosuch")
     check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
+    # two recipes that build against each other: refused before anything builds
+    shutil.copytree(os.path.join(TOP, "build", "pkg", "styles"), os.path.join(top, "build", "pkg", "styles"))
+    for name, dep in (("cx", "cy"), ("cy", "cx")):
+        d = os.path.join(top, "userland", "packages", name)
+        shutil.copytree(os.path.join(TOP, "userland", "packages", "diffutils"), d)
+        ps = [l for l in open(os.path.join(d, "package.sh")).read().splitlines()
+              if not l.startswith(("NAME=", "PKG=", "BUILD_DEPENDS="))]
+        write(os.path.join(d, "package.sh"), "\n".join(
+            ps + ["NAME=%s" % name, "PKG=%s" % name, 'BUILD_DEPENDS="%s"' % dep]) + "\n")
+    rc, out = run("recipes/cx")
+    check("recipes/<name>: a BUILD_DEPENDS cycle is refused, named, before any build",
+          rc == 1 and "[FAIL] userland: BUILD_DEPENDS cycle: cx -> cy -> cx" in out
+          and "host pkgtools" not in out, out)
+    shutil.rmtree(os.path.join(top, "userland", "packages"))
 
     rc, out = run("kspace", SYSTEM=os.path.join(tmp, "nothere"))
     check("no system input: refused before any step",
@@ -149,10 +163,28 @@ PY
     write(os.path.join(top, "kernel", "port", "port.pin"), "file://%s %s\n" % (portsrc, portc))
     recipe("kernel/dlm", "kbootset", "1.1.0-28")
     recipe("kernel/drivers/a4091", "a4091k30", "1.0.0-6")
+    # tools built in the checkout on the host, as build-host.sh leaves them:
+    # make dist must not take them (their BINDIR is another path)
+    for t in ("pkgmk", "pkgtrans"):
+        write(os.path.join(hb, "build-host", "bin", t), "#!/bin/sh\nexit 99\n", 0o755)
+    write(os.path.join(top, ".gitignore"), "/out/\n/userland/pkgtools/heirloom/build-host/\n")
     rc, out = run("kspace")
-    check("kspace: a clean clone's host pkgtools are built first (pkgtools' build-host.sh)",
+    own = os.path.join(top, "out", "build", "pkgtools-host", "pkgtools", "heirloom", "build-host", "bin", "pkgmk")
+    check("kspace: make dist builds its own host pkgtools in out/build/pkgtools-host, not taking the checkout's",
           "--- host pkgtools" in out and open(os.path.join(tmp, "built")).read() == "built\n"
-          and os.access(os.path.join(hb, "build-host", "bin", "pkgmk"), os.X_OK), out)
+          and os.access(own, os.X_OK)
+          and open(os.path.join(hb, "build-host", "bin", "pkgmk")).read() == "#!/bin/sh\nexit 99\n", out)
+    rc2, out2 = run("kspace")
+    check("kspace: the same heirloom sources: make dist's pkgtools are not built again",
+          "--- host pkgtools" not in out2 and open(os.path.join(tmp, "built")).read() == "built\n", out2)
+    write(os.path.join(hb, "NOTES"), "a change\n")
+    rc2, out2 = run("kspace")
+    check("kspace: a change in heirloom builds them again",
+          "--- host pkgtools" in out2 and open(os.path.join(tmp, "built")).read() == "built\nbuilt\n", out2)
+    # the checks below read one run's provider order and one build
+    write(order, "")
+    write(os.path.join(tmp, "built"), "built\n")
+    rc, out = run("kspace")
     kp = os.path.join(top, "out", "kspace", "pkgs")
     check("kspace: the directories with recipes run, the rest are named with their owner, exit 3",
           rc == 3 and "[MISSING] kspace: kernel/k30 has no pkg/build.sh yet (P-38 S3.3, the k30 station" in out
@@ -342,7 +374,10 @@ clean:
           and "=== make dist: kernel-k30" not in out, out)
 
     fake = os.path.join(tmp, "bin", "docker")
-    write(fake, '#!/bin/sh\nprintf "%s\\n" "$@" > "$DOCKER_ARGS"\n', 0o755)
+    # the image's passwd and group, which name no one but root
+    write(fake, '#!/bin/sh\nif [ "$4" = cat ]; then\n'
+          '\tcase $5 in /etc/passwd) echo "root:x:0:0:root:/root:/bin/sh" ;; /etc/group) echo "root:x:0:" ;; esac\n'
+          '\texit 0\nfi\nprintf "%s\\n" "$@" > "$DOCKER_ARGS"\n', 0o755)
     argf = os.path.join(tmp, "docker.args")
     rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
                   DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test")
@@ -355,6 +390,14 @@ clean:
           "%s:/src" % os.path.realpath(top) in args and "%s:%s:ro" % (gitdir, gitdir) in args
           and "%s:/system:ro" % os.path.realpath(sysdir) in args
           and "AMIX_SYSTEM=/system" in args and "AMIX_IN_CONTAINER=1" in args, " ".join(args))
+    ids = os.path.join(os.path.realpath(top), "out", ".ids")
+    passwd = open(os.path.join(ids, "passwd")).read() if os.path.exists(os.path.join(ids, "passwd")) else ""
+    group = open(os.path.join(ids, "group")).read() if os.path.exists(os.path.join(ids, "group")) else ""
+    check("the calling uid and gid get names: the image's passwd and group, the caller added, mounted read-only",
+          passwd == "root:x:0:0:root:/root:/bin/sh\nbuilder:x:%d:%d::/tmp:/bin/sh\n" % (os.getuid(), os.getgid())
+          and group == "root:x:0:\nbuilder:x:%d:\n" % os.getgid()
+          and "%s/passwd:/etc/passwd:ro" % ids in args and "%s/group:/etc/group:ro" % ids in args,
+          passwd + group + " ".join(args))
     check("and runs the step there, from /src, in AMIX_IMAGE",
           args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))

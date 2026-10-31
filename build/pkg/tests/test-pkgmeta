@@ -576,6 +576,30 @@ try:
     refused("guard refuses an instance that is another package's name",
             ("check", clash), "instance Grep")
 
+    # --- build-order: BUILD_DEPENDS first ----------------------------------------------
+    bo = os.path.join(tmp, "bo")
+    for name, deps in (("a", "c"), ("b", ""), ("c", ""), ("d", "a b")):
+        recipe(bo, name, PKG=name, BUILD_DEPENDS='"%s"' % deps)
+    rc, out, err = run("build-order", bo)
+    check("build-order: each recipe after what it builds against, the root's order otherwise",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["c", "a", "b", "d"], out + err)
+    rc, out, err = run("build-order", bo, "--for", "d")
+    check("build-order --for: the package and everything it needs, in order",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["c", "a", "b", "d"], out + err)
+    rc, out, err = run("build-order", bo, "--for", "b")
+    check("build-order --for a package with no BUILD_DEPENDS: that one alone",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["b"], out + err)
+    refused("build-order --for a name that is no package", ("build-order", bo, "--for", "zz"),
+            "no userland package zz")
+    bo2 = os.path.join(tmp, "bo2")
+    recipe(bo2, "e", PKG="e", BUILD_DEPENDS='"zz"')
+    refused("build-order refuses a BUILD_DEPENDS that names no package",
+            ("build-order", bo, bo2), "BUILD_DEPENDS: e names zz, which is no package of these roots")
+    cyc = os.path.join(tmp, "cyc")
+    recipe(cyc, "x", PKG="x", BUILD_DEPENDS='"y"')
+    recipe(cyc, "y", PKG="y", BUILD_DEPENDS='"x"')
+    refused("build-order refuses a cycle, naming it", ("build-order", cyc), "BUILD_DEPENDS cycle: x -> y -> x")
+
     # --- the one-version guard over built output ---------------------------------------
     cat = os.path.join(tmp, "catalog")
     write(cat, read(os.path.join(EXPECT, "catalog")))

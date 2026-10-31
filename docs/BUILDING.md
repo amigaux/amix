@@ -45,7 +45,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
 | `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
-| `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
+| `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name, each after the packages its `BUILD_DEPENDS` names (`recipes/<name>` builds those first); a cycle or a name that is no package is refused | `out/userland/pkgs/` | S4.1 | builds |
 | `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and the space's own: `userland/packages/conf`, and `kernel/conf` for kernel space (its `names.conf` names each kernel package; kernel packages without it are refused); no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
 | `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
@@ -66,6 +66,13 @@ A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<v
 rebuilds everything and refuses the result if any line of its lock differs
 (`release/README.md`).
 
+`build/dist-proof WORKDIR [COMMIT]` is the proof itself (P-38 S7.2): it clones
+the commit twice, at two different paths under WORKDIR, runs every step in
+each, and compares the two locks; with `LOCK=` each run is also checked
+against the lock of record. A step that exits 3 is a known gap and the run
+goes on; any other failure stops it. `WORKDIR/summary` says what each step
+did. CI runs it by hand as the dist workflow (`docs/ci.md`).
+
 ## out/
 
 ```
@@ -78,6 +85,8 @@ out/media/{cd,netinstall,floppies}/
 out/lock
 out/cache/                    distfiles and the port at its pin
 out/build/                    work trees and logs
+out/build/pkgtools-host/      make dist's own host pkgmk and pkgtrans, built from a
+                              copy of userland/pkgtools (never the checkout's build-host/)
 ```
 
 `out/` is ignored by git.

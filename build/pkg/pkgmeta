@@ -27,6 +27,12 @@ Commands:
                             PATH is a catalog file or a directory of *.pkg
                             datastreams; refused if one package name or
                             instance appears with two versions
+  build-order ROOT... [--for NAME]...
+                            the recipes of the ROOTs, one directory a line,
+                            each after every package its BUILD_DEPENDS names
+                            (otherwise in the ROOTs' order); with --for, only
+                            those packages and what they need; refused on a
+                            name that is no package, or on a cycle
 
 A RECIPE is a directory holding package.sh; a ROOT is a directory whose
 subdirectories are recipes (userland/packages, userland/base/pkg). The ROOTs
@@ -525,6 +531,35 @@ def load_roots(roots):
     return loaded
 
 
+def build_order(loaded, names=None):
+    """The recipes of LOADED, each after every package its BUILD_DEPENDS
+    names, in LOADED's order otherwise; with NAMES, only those packages and
+    what they need.  Refused on a name that is no package and on a cycle."""
+    by = dict((m["NAME"], (r, m)) for r, m in loaded)
+    order, state = [], {}
+
+    def visit(name, path):
+        if name not in by:
+            if path:
+                raise Refused("BUILD_DEPENDS: %s names %s, which is no package of these roots"
+                              % (path[-1], name))
+            raise Refused("no userland package %s" % name)
+        if state.get(name) == "done":
+            return
+        if state.get(name) == "open":
+            raise Refused("BUILD_DEPENDS cycle: %s"
+                          % " -> ".join(path[path.index(name):] + [name]))
+        state[name] = "open"
+        for d in words(by[name][1]["BUILD_DEPENDS"]):
+            visit(d, path + [name])
+        state[name] = "done"
+        order.append(by[name][0])
+
+    for name in names or [m["NAME"] for _, m in loaded]:
+        visit(name, [])
+    return order
+
+
 # ------------------------------------------------------------- generators ---
 
 def pkgversion(m):
@@ -755,6 +790,9 @@ def main(argv):
     p.add_argument("whatis")
     p = sub.add_parser("guard")
     p.add_argument("paths", nargs="+")
+    p = sub.add_parser("build-order")
+    p.add_argument("roots", nargs="+")
+    p.add_argument("--for", dest="names", action="append")
     a = ap.parse_args(argv)
 
     if a.cmd == "check":
@@ -852,6 +890,9 @@ def main(argv):
             raise Refused("\n".join(errors))
         print("pkgmeta: one version per name: %d package(s) in %s"
               % (len(entries), " ".join(a.paths)))
+    elif a.cmd == "build-order":
+        for r in build_order(load_roots(a.roots), a.names):
+            print(r)
     return 0
 
 

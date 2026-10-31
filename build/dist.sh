@@ -26,7 +26,8 @@
 #                provider before consumer (dlm, k30, port, the modules, the
 #                drivers), into out/kspace/pkgs, one version per name; a
 #                directory without one yet is named, and the step exits 3
-#   userland     every package.sh of userland/packages and userland/base/pkg:
+#   userland     every package.sh of userland/packages and userland/base/pkg,
+#                each after the packages its BUILD_DEPENDS names:
 #                out/userland/pkgs/*.pkg, one version per name
 #   catalogs     both catalogs, by pkgtools' gen-catalog.py over
 #                out/{kspace,userland}/pkgs with their conf layers:
@@ -37,7 +38,8 @@
 #
 # and `dist` (all of them, stopping at the first that fails or is not in
 # make dist yet), `tools` (the build container, toolchain/container-build.sh),
-# `recipes/<name>` (one userland package) and `drivers/<name>`.
+# `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
+# `drivers/<name>`.
 #
 # Every step but `tools` runs in the build container: outside it, dist.sh
 # runs itself there (AMIX_IMAGE, default amix-toolchain:dist; CONTAINER,
@@ -100,8 +102,20 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	fi
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
+	image=${AMIX_IMAGE:-amix-toolchain:dist}
+	# the calling user's uid and gid need names in the image (the host
+	# pkgtools' smoke tests ask id(1); a CI runner's uid is not the image's
+	# 1000): the image's passwd and group, plus the caller where absent
+	ids=$out/.ids
+	mkdir -p "$ids"
+	"$tool" run --rm "$image" cat /etc/passwd > "$ids/passwd"
+	"$tool" run --rm "$image" cat /etc/group > "$ids/group"
+	awk -F: -v u="$(id -u)" '$3 == u { f = 1 } END { exit !f }' "$ids/passwd" ||
+		echo "builder:x:$(id -u):$(id -g)::/tmp:/bin/sh" >> "$ids/passwd"
+	awk -F: -v g="$(id -g)" '$3 == g { f = 1 } END { exit !f }' "$ids/group" ||
+		echo "builder:x:$(id -g):" >> "$ids/group"
 	# AMIX_DISTFILES, a local directory of distfiles, read-only at /distfiles
-	set -- -w /src "${AMIX_IMAGE:-amix-toolchain:dist}" sh build/dist.sh "$@"
+	set -- -w /src -v "$ids/passwd:/etc/passwd:ro" -v "$ids/group:/etc/group:ro" "$image" sh build/dist.sh "$@"
 	if [ -n "${AMIX_DISTFILES:-}" ]; then
 		set -- -e AMIX_DISTFILES=/distfiles -v "$(cd "$AMIX_DISTFILES" && pwd):/distfiles:ro" "$@"
 	fi
@@ -298,12 +312,23 @@ step_kernel() {
 	cat "$out/kernels/$1.list"
 }
 
-recipe_dir() {	# the package directory of a userland package name
-	for r in "$top/userland/packages/$1" "$top/userland/base/pkg/$1"; do
-		[ -f "$r/package.sh" ] && { echo "$r"; return 0; }
+# build_order [<name>...]: the userland recipe directories in BUILD_DEPENDS
+# order (pkgmeta build-order): each after the packages it builds against, or
+# with names only those and what they need; a name that is no package, or a
+# cycle, is refused
+build_order() {
+	_bo_r=
+	for _bo_d in "$top/userland/packages" "$top/userland/base/pkg"; do
+		[ -d "$_bo_d" ] && _bo_r="$_bo_r $_bo_d"
 	done
-	echo "[FAIL] no userland package $1 (userland/packages, userland/base/pkg)" >&2
-	exit 1
+	if [ -z "$_bo_r" ]; then
+		[ $# -eq 0 ] || { echo "[FAIL] userland: no userland package $1" >&2; exit 1; }
+		return 0
+	fi
+	_bo=$(python3 -I "$here/pkg/pkgmeta" build-order $_bo_r \
+		$(for n; do printf ' --for %s' "$n"; done) 2>&1) || {
+		echo "$_bo" | sed 's/^pkgmeta: /[FAIL] userland: /' >&2; exit 1; }
+	echo "$_bo"
 }
 
 roll_recipe() {	# roll_recipe <package dir>
@@ -320,20 +345,37 @@ roll_recipe() {	# roll_recipe <package dir>
 	grep '^pkg ' "$out/build/userland/$(basename "$1")/BUILD.txt" | sed "s|$out/||"
 }
 
-# host_pkgtools: the host pkgmk and pkgtrans every roll uses, built by
-# pkgtools' own heirloom/build-host.sh when the checkout has none (a clean
-# clone), as run-selftests does
+# host_pkgtools: the host pkgmk and pkgtrans every roll uses, make dist's
+# own: pkgtools' heirloom/build-host.sh run in a copy of userland/pkgtools
+# (build-host.sh reads ../research) under out/build/pkgtools-host/, never the
+# checkout's build-host/. build-host.sh
+# compiles its absolute directory into the tools (BINDIR, where pkgtrans finds
+# its cpio), so tools built in the checkout on the host name a path the
+# container lacks. A stamp of the copied files' digest skips a rebuild of the
+# same sources.
 host_pkgtools() {
-	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] && return 0
-	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh"
-	mkdir -p "$out/build"
-	( cd "$top/userland/pkgtools/heirloom" && ./build-host.sh ) > "$out/build/pkgtools-host.log" 2>&1 || {
+	_hp=$out/build/pkgtools-host
+	_hp_files=$(cd "$top/userland/pkgtools" && git ls-files -co --exclude-standard | LC_ALL=C sort)
+	_hp_sum=$(cd "$top/userland/pkgtools" && echo "$_hp_files" | while read -r f; do
+		sha256sum "$f"; done | sha256sum | cut -c1-64)
+	AMIX_PKGMK=$_hp/pkgtools/heirloom/build-host/bin/pkgmk AMIX_PKGTRANS=$_hp/pkgtools/heirloom/build-host/bin/pkgtrans
+	export AMIX_PKGMK AMIX_PKGTRANS
+	if [ "$(cat "$_hp/stamp" 2>/dev/null)" = "$_hp_sum" ] && [ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ]; then
+		return 0
+	fi
+	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh, in out/build/pkgtools-host"
+	rm -rf "$_hp"
+	mkdir -p "$_hp/pkgtools"
+	( cd "$top/userland/pkgtools" && echo "$_hp_files" | tr '\n' '\0' |
+		tar --null -T - -cf - ) | tar -x -C "$_hp/pkgtools"
+	( cd "$_hp/pkgtools/heirloom" && ./build-host.sh ) > "$out/build/pkgtools-host.log" 2>&1 || {
 		tail -20 "$out/build/pkgtools-host.log" >&2
 		echo "[FAIL] host pkgtools did not build; log out/build/pkgtools-host.log" >&2
 		exit 1
 	}
 	[ -x "$AMIX_PKGMK" ] && [ -x "$AMIX_PKGTRANS" ] || {
 		echo "[FAIL] build-host.sh left no $AMIX_PKGMK" >&2; exit 1; }
+	echo "$_hp_sum" > "$_hp/stamp"
 }
 
 # step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
@@ -419,8 +461,9 @@ step_userland() {
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
 	rm -rf "$out/userland" "$out/build/userland"
 	mkdir -p "$out/build/userland" "$out/userland/pkgs"
-	for r in "$top"/userland/packages/*/package.sh "$top"/userland/base/pkg/*/package.sh; do
-		[ -f "$r" ] && roll_recipe "$(dirname "$r")"
+	order=$(build_order) || exit 1
+	for d in $order; do
+		roll_recipe "$d"
 	done
 	python3 -I "$here/pkg/pkgmeta" guard "$out/userland/pkgs"
 }
@@ -436,10 +479,12 @@ run() {
 	kspace) step_kspace ;;
 	userland) step_userland ;;
 	recipes/*)
-		d=$(recipe_dir "${1#recipes/}") || exit 1
+		order=$(build_order "${1#recipes/}") || exit 1
 		host_pkgtools
 		mkdir -p "$out/build/userland"
-		roll_recipe "$d"
+		for d in $order; do
+			roll_recipe "$d"
+		done
 		;;
 	catalogs) step_catalogs ;;
 	media) missing media "P-38 S6.1, installng after its move-in" ;;
