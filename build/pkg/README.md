@@ -168,11 +168,11 @@ column, each newc header) is the package version's epoch: `SOURCE_EPOCH` in
 package.sh, else the time of the last commit that changed the package
 directory. The driver hands it to the roll as `SOURCE_DATE_EPOCH`, replacing
 any value from the environment (the build container's is for its own
-files). The members are archived in sorted order
-(pkgtrans's `find` sorts, `common/sortedfind/find`); their headers say
-uid, gid and device 0, inode numbers in archive order, modes from the
-prototype (`common/dsnorm.py`). A control file that names the build tree or
-the checkout is refused.
+files). Under it pkgmk and pkgtrans (userland/pkgtools) archive the members
+in sorted order, and their headers say uid, gid and device 0, inode numbers
+in archive order, modes from the prototype. `common/dsnorm.py` checks the
+datastream for all of that and refuses anything else; it never rewrites it.
+A control file that names the build tree or the checkout is refused.
 
 The gcc14 compiler remaps the paths it writes (`__FILE__`, debug
 information): `common/gcc14-env.sh` puts `-ffile-prefix-map` on `CC` and

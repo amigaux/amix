@@ -1,33 +1,27 @@
 #!/usr/bin/env python3
-# dsnorm.py: make a rolled .pkg depend only on its inputs and the epoch.
+# dsnorm.py: check that a rolled .pkg depends only on its inputs and the epoch.
 #
 # MIT licence, see LICENSE at the top of the repository.
 # Python 3 standard library only.
-"""Normalise a pkgmk spool and the datastream pkgtrans writes from it.
+"""Check a datastream for everything but its inputs and the epoch.
 
-  dsnorm.py spool SPOOL PKG EPOCH
-      every file and directory of SPOOL/PKG: its mode from pkgmap (the
-      prototype's), 0644 for a file pkgmap does not list (pkginfo, pkgmap,
-      install/*) and 0755 for such a directory; its time EPOCH. pkgmap's
-      modtime column says EPOCH too: pkgmk gives its own copy of pkginfo
-      the time it wrote it.
   dsnorm.py stream PKGFILE EPOCH [--host PATH]... [--refuse-payload]
-      the newc headers of every archive of the datastream, rewritten in
-      place: ino renumbered from 1 in archive order (members that share an
-      ino share the new one, so hard links stay pairs), uid and gid 0, dev
-      0, mtime EPOCH, a directory's nlink 2 plus its subdirectories in the
-      archive. Names, sizes, data and padding are not touched. A PATH
-      found in the control files (pkginfo, pkgmap, install/) is refused;
-      in the payload it is reported, or refused with --refuse-payload (a
-      gcc14 build, whose paths the compiler remaps). A PATH is found where
-      it starts a path (/src, not /usr/src) and ends at a component's end.
 
-The member order is pkgtrans's own: it lists the spool with find, and the
-roll puts a sorting find first on its PATH (sortedfind/find beside this file).
-Exit status: 0 done, 1 refused, 2 usage.
+pkgmk and pkgtrans write a normalised datastream under SOURCE_DATE_EPOCH
+(userland/pkgtools, ad02a5a). This checks that they did, and never writes:
+in every archive, every member is newc 070701; the members are in C sort
+order; ino runs from 1 in archive order, members that share one (hard
+links) sharing the new one; uid, gid and dev are 0 and mtime is EPOCH; a
+directory's nlink is 2 plus its subdirectories in the archive; a payload
+member's mode is the one pkgmap gives it; and pkgmap's modtime column says
+EPOCH. A PATH found in the control files (pkginfo, pkgmap, install/) is
+refused; in the payload it is reported, or refused with --refuse-payload (a
+gcc14 build, whose paths the compiler remaps). A PATH is found where it
+starts a path (/src, not /usr/src) and ends at a component's end.
+
+Exit status: 0 good, 1 refused (each reason on stderr), 2 usage.
 """
 
-import os
 import re
 import stat
 import sys
@@ -37,99 +31,53 @@ FIELDS = ("ino", "mode", "uid", "gid", "nlink", "mtime", "filesize",
           "devmajor", "devminor", "rdevmajor", "rdevminor", "namesize",
           "check")
 
+# The pkgmap lines that end in a modtime: f, e and v objects (part ftype
+# class path mode owner group size cksum modtime) and i files (part i name
+# size cksum modtime).
+MODTIME_RE = re.compile(r"^\d+\s+(?:[fev]\s+\S+\s+\S+(?:\s+\S+){3}|i\s+\S+)"
+                        r"\s+\d+\s+\d+\s+(\d+)\s*$")
+
 
 class Refused(Exception):
     pass
 
 
-def pkgmap_modes(path):
-    """{path in the spool, relative to PKG: mode} from pkgmap."""
+def pkgmap_modes(text):
+    """{member name of a payload object: mode} from pkgmap's text."""
     modes = {}
-    with open(path, encoding="latin-1") as fp:
-        for line in fp:
-            f = line.split()
-            if len(f) < 4 or not f[0].isdigit():
-                continue
-            ftype, p = f[1], f[3].split("=", 1)[0]
-            if ftype in "fevdx" and len(f) >= 5:
-                mode = f[4]
-            elif ftype in "cb" and len(f) >= 7:
-                mode = f[6]
-            else:
-                continue
-            if not re.match(r"^[0-7]{3,4}$", mode):
-                continue
-            rel = ("root" + p) if p.startswith("/") else ("reloc/" + p)
-            modes[rel] = int(mode, 8)
+    for line in text.splitlines():
+        f = line.split()
+        if len(f) < 4 or not f[0].isdigit():
+            continue
+        ftype, p = f[1], f[3].split("=", 1)[0]
+        if ftype in "fevdx" and len(f) >= 5:
+            mode = f[4]
+        elif ftype in "cb" and len(f) >= 7:
+            mode = f[6]
+        else:
+            continue
+        if re.match(r"^[0-7]{3,4}$", mode):
+            modes[("root" + p) if p.startswith("/") else ("reloc/" + p)] = int(mode, 8)
     return modes
 
 
-# The pkgmap lines that end in a modtime: f, e and v objects (part ftype
-# class path mode owner group size cksum modtime) and i files (part i name
-# size cksum modtime).
-MODTIME_RE = re.compile(r"^(\d+\s+(?:[fev]\s+\S+\s+\S+(?:\s+\S+){3}|i\s+\S+)"
-                        r"\s+\d+\s+\d+\s+)\d+(\s*)$")
-
-
-def pkgmap_epoch(path, epoch):
-    with open(path, encoding="latin-1") as fp:
-        lines = fp.readlines()
-    out = [MODTIME_RE.sub(lambda m: "%s%d%s" % (m.group(1), epoch, m.group(2)), l)
-           for l in lines]
-    with open(path, "w", encoding="latin-1") as fp:
-        fp.writelines(out)
-    return sum(1 for a, b in zip(lines, out) if a != b)
-
-
-def spool(spooldir, pkg, epoch):
-    top = os.path.join(spooldir, pkg)
-    pkgmap_epoch(os.path.join(top, "pkgmap"), epoch)
-    modes = pkgmap_modes(os.path.join(top, "pkgmap"))
-    n = 0
-    for root, dirs, files in os.walk(top):
-        for name in dirs + files:
-            p = os.path.join(root, name)
-            rel = os.path.relpath(p, top)
-            st = os.lstat(p)
-            if stat.S_ISLNK(st.st_mode):
-                os.utime(p, (epoch, epoch), follow_symlinks=False)
-                continue
-            default = 0o755 if stat.S_ISDIR(st.st_mode) else 0o644
-            os.chmod(p, modes.get(rel, default))
-            n += 1
-    # times last, children before parents: a chmod does not move mtime, but
-    # creating nothing more keeps the directories' times as set
-    for root, dirs, files in os.walk(top, topdown=False):
-        for name in dirs + files:
-            os.utime(os.path.join(root, name), (epoch, epoch),
-                     follow_symlinks=False)
-    os.utime(top, (epoch, epoch))
-    print("  dsnorm spool: %d object(s) of %s, modes from pkgmap, time %d"
-          % (n, pkg, epoch))
-
-
 def members(buf, off):
-    """(header offset, fields, name, data offset, next offset) of each
-    member of the archive at OFF, through its TRAILER!!!."""
+    """(fields, name, data) of each member of the archive at OFF, through
+    its TRAILER!!!, and the offset after it."""
     out = []
     while True:
         if buf[off:off + 6] != MAGIC:
             raise Refused("member at %d is not newc 070701 (%r)"
-                          % (off, buf[off:off + 6]))
+                          % (off, bytes(buf[off:off + 6])))
         v = dict(zip(FIELDS, (int(buf[off + 6 + 8 * i: off + 14 + 8 * i], 16)
                               for i in range(13))))
         name = buf[off + 110: off + 110 + v["namesize"] - 1].decode("latin-1")
         data = (off + 110 + v["namesize"] + 3) // 4 * 4
         nxt = (data + v["filesize"] + 3) // 4 * 4
-        out.append((off, v, name, data, nxt))
+        out.append((v, name, bytes(buf[data:data + v["filesize"]])))
         if name == "TRAILER!!!":
             return out, nxt
         off = nxt
-
-
-def put(buf, off, field, value):
-    i = 6 + 8 * FIELDS.index(field)
-    buf[off + i: off + i + 8] = b"%08X" % value
 
 
 def control(name):
@@ -137,94 +85,100 @@ def control(name):
     archive names its members <pkginst>/pkginfo; the package's own do not."""
     top = name.split("/", 1)[0]
     if "/" in name and top not in ("root", "reloc", "install"):
-        name, top = name.split("/", 1)[1], name.split("/", 1)[1].split("/", 1)[0]
+        top = name.split("/", 1)[1].split("/", 1)[0]
     return top not in ("root", "reloc")
+
+
+def check_archive(ms, epoch, bad):
+    real = [(v, n, d) for v, n, d in ms if n != "TRAILER!!!"]
+    names = [n for _, n, _ in real]
+    if names != sorted(names, key=lambda n: n.encode("latin-1")):
+        bad.append("members not in sorted order: %s" % " ".join(names))
+    subdirs, seen, modes = {}, {}, {}
+    for v, n, d in real:
+        if stat.S_ISDIR(v["mode"]) and "/" in n:
+            parent = n.rsplit("/", 1)[0]
+            subdirs[parent] = subdirs.get(parent, 0) + 1
+        if n == "pkgmap" or n.endswith("/pkgmap"):
+            text = d.decode("latin-1")
+            modes.update(pkgmap_modes(text))
+            for line in text.splitlines():
+                m = MODTIME_RE.match(line)
+                if m and int(m.group(1)) != epoch:
+                    bad.append("%s: modtime %s, not %d: %s" % (n, m.group(1), epoch, line))
+    for v, n, _ in real:
+        if v["check"] != 0:
+            bad.append("%s: a checksum field; not 070701" % n)
+        key = (v["devmajor"], v["devminor"], v["ino"])
+        want = seen.setdefault(key, len(seen) + 1)
+        if v["ino"] != want:
+            bad.append("%s: ino %d, not %d (archive order)" % (n, v["ino"], want))
+        for f in ("uid", "gid", "devmajor", "devminor"):
+            if v[f]:
+                bad.append("%s: %s %d, not 0" % (n, f, v[f]))
+        if v["mtime"] != epoch:
+            bad.append("%s: mtime %d, not %d" % (n, v["mtime"], epoch))
+        if stat.S_ISDIR(v["mode"]) and v["nlink"] != 2 + subdirs.get(n, 0):
+            bad.append("%s: nlink %d, not %d" % (n, v["nlink"], 2 + subdirs.get(n, 0)))
+        if n in modes and stat.S_IMODE(v["mode"]) != modes[n]:
+            bad.append("%s: mode %04o, pkgmap says %04o" % (n, stat.S_IMODE(v["mode"]), modes[n]))
 
 
 def stream(path, epoch, hosts, refuse_payload=False):
     with open(path, "rb") as fp:
-        buf = bytearray(fp.read())
+        buf = fp.read()
     if not buf.startswith(b"# PaCkAgE DaTaStReAm\n"):
         raise Refused("%s: not a package datastream" % path)
     end = buf.find(b"# end of header\n")
     if end < 0:
         raise Refused("%s: the datastream header has no end" % path)
     off = (end + 16 + 511) // 512 * 512
-    archives = 0
-    hits = []
+    pats = [(h, re.compile(rb"(?<![A-Za-z0-9_.+/-])" + re.escape(h.encode())
+                           + rb"(?![A-Za-z0-9_.+-])")) for h in hosts]
+    archives, bad, hits = 0, [], []
     while off < len(buf) and buf[off:off + 6] == MAGIC:
         ms, nxt = members(buf, off)
         archives += 1
-        new_ino, subdirs = {}, {}
-        pats = [(h, re.compile(rb"(?<![A-Za-z0-9_.+/-])" + re.escape(h.encode())
-                               + rb"(?![A-Za-z0-9_.+-])")) for h in hosts]
-        for _, v, name, _, _ in ms:
-            if stat.S_ISDIR(v["mode"]) and "/" in name:
-                parent = name.rsplit("/", 1)[0]
-                subdirs[parent] = subdirs.get(parent, 0) + 1
-        for hoff, v, name, data, _ in ms:
-            if name == "TRAILER!!!":
-                continue
-            if v["check"] != 0:
-                raise Refused("%s: %s has a checksum field; not 070701" % (path, name))
-            key = (v["devmajor"], v["devminor"], v["ino"])
-            new_ino.setdefault(key, len(new_ino) + 1)
-            put(buf, hoff, "ino", new_ino[key])
-            for f in ("uid", "gid", "devmajor", "devminor"):
-                put(buf, hoff, f, 0)
-            put(buf, hoff, "mtime", epoch)
-            if stat.S_ISDIR(v["mode"]):
-                put(buf, hoff, "nlink", 2 + subdirs.get(name, 0))
-            body = bytes(buf[data:data + v["filesize"]])
+        check_archive(ms, epoch, bad)
+        for _, n, d in ms:
             for h, pat in pats:
-                if pat.search(body):
-                    hits.append((control(name), name, h))
+                if pat.search(d):
+                    hits.append((control(n), n, h))
         off = (nxt + 511) // 512 * 512
     if not archives:
         raise Refused("%s: no newc archive after the header" % path)
-    bad = [h for h in hits if h[0] or refuse_payload]
     if bad:
+        raise Refused("%s: not normalised to the epoch %d:\n  %s"
+                      % (path, epoch, "\n  ".join(bad)))
+    leaks = [h for h in hits if h[0] or refuse_payload]
+    if leaks:
         raise Refused("%s: build-host paths in the %s: %s" % (
-            path, "payload" if refuse_payload and not any(c for c, _, _ in bad)
-            else "control files", "; ".join("%s holds %s" % (n, h) for _, n, h in bad)))
-    with open(path + ".norm", "wb") as fp:
-        fp.write(buf)
-    os.replace(path + ".norm", path)
-    print("  dsnorm stream: %d archive(s), headers normalised to time %d"
-          % (archives, epoch))
+            path, "control files" if any(c for c, _, _ in leaks) else "payload",
+            "; ".join("%s holds %s" % (n, h) for _, n, h in leaks)))
+    print("  dsnorm: %d archive(s) normalised to the epoch %d" % (archives, epoch))
     for _, n, h in hits:
         print("  [WARN] payload %s holds the build-host path %s" % (n, h))
 
 
 def main(argv):
-    if len(argv) >= 4 and argv[0] == "spool" and len(argv) == 4:
-        spool(argv[1], argv[2], epoch_arg(argv[3]))
-    elif len(argv) >= 3 and argv[0] == "stream":
-        hosts, rest, refuse = [], argv[3:], False
-        while rest:
-            if rest[0] == "--refuse-payload":
-                refuse, rest = True, rest[1:]
-                continue
-            if rest[0] != "--host" or len(rest) < 2:
-                return usage()
+    if len(argv) < 3 or argv[0] != "stream":
+        sys.stderr.write(__doc__)
+        return 2
+    hosts, rest, refuse = [], argv[3:], False
+    while rest:
+        if rest[0] == "--refuse-payload":
+            refuse, rest = True, rest[1:]
+        elif rest[0] == "--host" and len(rest) >= 2:
             if rest[1]:
                 hosts.append(rest[1])
             rest = rest[2:]
-        stream(argv[1], epoch_arg(argv[2]), hosts, refuse)
-    else:
-        return usage()
+        else:
+            sys.stderr.write(__doc__)
+            return 2
+    if not re.match(r"^[0-9]+$", argv[2]):
+        raise Refused("epoch %r is not a number of seconds" % argv[2])
+    stream(argv[1], int(argv[2]), hosts, refuse)
     return 0
-
-
-def epoch_arg(s):
-    if not re.match(r"^[0-9]+$", s):
-        raise Refused("epoch %r is not a number of seconds" % s)
-    return int(s)
-
-
-def usage():
-    sys.stderr.write(__doc__)
-    return 2
 
 
 if __name__ == "__main__":

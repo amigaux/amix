@@ -1,8 +1,0 @@
-#!/bin/sh
-# find, its output in C sort order (build/pkg/common/sortedfind/find).
-# The roll puts this directory first on pkgtrans's PATH: pkgtrans lists the
-# spool with `find <names> -print' and archives the members in that order,
-# which is otherwise the filesystem's directory order. A parent sorts
-# before its children, as cpio needs. AMIX_REAL_FIND is the find to run.
-_sf_out=$("${AMIX_REAL_FIND:?find: AMIX_REAL_FIND is not set}" "$@") || exit
-[ -z "$_sf_out" ] || printf '%s\n' "$_sf_out" | LC_ALL=C sort
