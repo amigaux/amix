@@ -105,13 +105,23 @@ while a value is forced by the parameter.
 .SH FILES
 .TP
 .B /dev/monsw
-character major 52, minor 0.
+character major 52, minor 0, mode 0644, owner root: any user can open it
+for reading, which is all
+.B monswctl get
+and
+.B status
+need; its
+.BR set ,
+.B rtg
+and
+.B native
+open it for writing, which is root's.
 .TP
 .B /etc/conf/mod.d/monsw
 the module.
 .TP
 .B /etc/init.d/monsw
-the boot step, linked as
+the boot step, installed also as
 .BR /etc/rc2.d/S20monsw .
 .TP
 .BR /etc/display ", " /etc/monsw

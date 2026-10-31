@@ -1,11 +1,11 @@
 PKG=monsw30
-NAME=monsw-k30 1.0.0-5 - monitor switch module, k30 line
+NAME=monsw-k30 1.0.0-6 - monitor switch module, k30 line
 ARCH=Amiga
-VERSION=1.0.0-5
+VERSION=1.0.0-6
 CATEGORY=system
 CLASSES=none monsw
 VENDOR=amix
-PSTAMP=amix-monsw30-1.0.0-5
+PSTAMP=amix-monsw30-1.0.0-6
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
 # #ext kpkg block (line=k30), never an ordinary entry.  Catalog name
 # monsw-k30, pkginst monsw30; VERSION is kernel/modules/monsw/module/VERSION,

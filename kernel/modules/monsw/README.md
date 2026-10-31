@@ -67,7 +67,9 @@ The value is a sum of four bits. They have the same meanings as the Z3660 firmwa
 - If the value changes while the state is RTG, the old lines go back to native before the
   new ones take the state.
 
-**The device.** Open `/dev/monsw` and use these ioctls:
+**The device.** Open `/dev/monsw` and use these ioctls. The node is 0644 root, so any user can
+open it read-only for `MONSWIOC_GETCFG` (`monswctl get` and `status` do), and only root opens
+it for writing:
 - `MONSWIOC_RTG` and `MONSWIOC_NATIVE` switch.
 - `MONSWIOC_GETCFG` fills a `struct monsw_info`: the value, its source, the state, the
   holder flag and the number of cards.

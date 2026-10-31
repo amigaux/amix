@@ -21,7 +21,7 @@ Layout, per module (`monsw/README.md` is the worked example):
 | `<module>/module/Master` | the kit's form of `keys`, generated from it |
 | `<module>/module/Makefile` | builds both lines on the kit's `mk/module.mk` |
 | `<module>/module/VERSION` | the package version, one line `x.y.z-rev`, the same on both lines |
-| `<module>/tool/`, `<module>/rc/`, `<module>/man/` | where a module has them: its user tool, its boot step, its pages (monsw, random) |
+| `<module>/tool/`, `<module>/rc/`, `<module>/man/` | where a module has them: its user tool, its boot step, its pages (monsw, random; ramdisk has a page) |
 | `<module>/test/` | host tests and on-box instruments |
 | `<module>/pkg/` | the package recipe, `<module>-k30` and `<module>-k46`: `build.sh` (make dist's kspace step runs it), `pin.sh`, `pkginfo.<line>`, the prototype, `modreg` |
 | `<module>/build/<line>/mod.d/<name>` | the built module objects (not tracked) |

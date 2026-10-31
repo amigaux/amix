@@ -12,7 +12,8 @@
 #   make -C monsw/tool clean
 #
 # The pinned cross tools (m68k-cbm-sysv4-*, gcc-cross-amix) must be on PATH; CROSS names
-# another prefix, HOSTCC another host compiler.  Two builds are byte-identical.
+# another prefix, HOSTCC another host compiler, OUT another output directory (an absolute
+# path; a build outside the checkout writes nothing into it).  Two builds are byte-identical.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../..)
 CROSS ?= m68k-cbm-sysv4-
@@ -26,7 +27,7 @@ HOSTCFLAGS = -O -std=c89 -Wall -pedantic -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SO
 	-DMONSW_TESTDOUBLE -I$(TOP)/include
 
 all: $(OUT)/monswctl
-	@cd $(TOP)/monsw/build && sha256sum tool/monswctl
+	@sha256sum $(OUT)/monswctl
 
 $(OUT)/monswctl: $(SRC)/monswctl.c $(HDR)
 	@mkdir -p $(OUT)

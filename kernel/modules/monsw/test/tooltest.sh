@@ -72,11 +72,14 @@ source=2 (set)
 state=0 (native)
 holder=0
 ncards=1" ] || fail "get output: $OUT"
-[ "$CALLS" = "open /dev/monsw
+[ "$CALLS" = "open /dev/monsw read-only
 ioctl GETCFG
 close" ] || fail "get calls: $CALLS"
-ok "get prints the five monsw_info fields (34 = SEL low=RTG, source set, native)"
+ok "get prints the five monsw_info fields (34 = SEL low=RTG, source set, native), read-only"
 MONSW_TD_INFO="19,1,1,1,2" run 0 status
+[ "$CALLS" = "open /dev/monsw read-only
+ioctl GETCFG
+close" ] || fail "status calls: $CALLS"
 [ "$OUT" = "monsw: value 19 (CTS low=RTG, SEL high=RTG) from seed; state rtg; holder yes; 2 cards" ] || fail "status output: $OUT"
 ok "status: one line, both lines decoded, seed, rtg, holder, plural"
 MONSW_TD_INFO="0,0,-1,0,0" run 0 status
@@ -92,11 +95,17 @@ MONSW_TD_IOCTL_ERRNO=22 run 1 set 34; grep -q "does not take 34" <<<"$ERR" || fa
 MONSW_TD_IOCTL_ERRNO=5  run 1 set 34; grep -q "SETCFG: " <<<"$ERR" || fail "EIO text: $ERR"
 ok "SETCFG refusals EBUSY/EPERM/EINVAL/other -> their own line, exit 1"
 MONSW_TD_OPEN_ERRNO=2 run 1 get; grep -q "mknod /dev/monsw c 52 0" <<<"$ERR" || fail "ENOENT text: $ERR"
-[ "$CALLS" = "open /dev/monsw" ] || fail "ENOENT: calls after a failed open: $CALLS"
+[ "$CALLS" = "open /dev/monsw read-only" ] || fail "ENOENT: calls after a failed open: $CALLS"
 MONSW_TD_OPEN_ERRNO=6 run 1 get; grep -q "kernel without monsw" <<<"$ERR" || fail "ENXIO text: $ERR"
 MONSW_TD_OPEN_ERRNO=19 run 1 get; grep -q "kernel without monsw" <<<"$ERR" || fail "ENODEV text: $ERR"
 MONSW_TD_OPEN_ERRNO=13 run 1 get; grep -q "Permission denied" <<<"$ERR" || fail "EACCES text: $ERR"
-ok "open refusals ENOENT (mknod hint) / ENXIO+ENODEV (no driver) / other -> exit 1, nothing after the open"
+for c in "set 34" "native" "rtg true"; do
+  # shellcheck disable=SC2086
+  MONSW_TD_OPEN_ERRNO=13 run 1 $c
+  grep -q "need write access to the node (root)" <<<"$ERR" || fail "EACCES on $c: $ERR"
+  [ "$CALLS" = "open /dev/monsw" ] || fail "$c did not open for writing: $CALLS"
+done
+ok "open refusals ENOENT (mknod hint) / ENXIO+ENODEV (no driver) / EACCES on a write open (root) / other -> exit 1, nothing after the open"
 MONSW_TD_IOCTL_ERRNO=6 run 1 get; grep -q "GETCFG: " <<<"$ERR" || fail "GETCFG error text: $ERR"
 MONSW_TD_IOCTL_ERRNO=6 run 1 native; grep -q "NATIVE: " <<<"$ERR" || fail "NATIVE error text: $ERR"
 ok "GETCFG / NATIVE failures reported, exit 1"

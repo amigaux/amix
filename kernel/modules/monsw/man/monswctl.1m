@@ -32,6 +32,16 @@ through its device,
 Opening the device loads the
 .B monsw
 module when it is not loaded yet.
+.B get
+and
+.B status
+open it for reading, so any user can ask;
+.BR set ,
+.B rtg
+and
+.B native
+open it for writing, which the node's mode (0644, owner root) leaves to
+root.
 .TP
 .B get
 prints the five fields the driver reports, one per line:
@@ -92,7 +102,7 @@ switches the monitor back to the chipset's picture.
 .SH FILES
 .TP
 .B /dev/monsw
-the device, character major 52, minor 0.
+the device, character major 52, minor 0, mode 0644, owner root.
 .TP
 .B /etc/display
 the

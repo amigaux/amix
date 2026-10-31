@@ -48,11 +48,11 @@
 extern int td_open(const char *, int);
 extern int td_ioctl(int, int, long);
 extern int td_close(int);
-#define MONSW_OPEN(p)       td_open(p, O_RDWR)
+#define MONSW_OPEN(p, f)    td_open(p, f)
 #define MONSW_IOCTL(f, r, a) td_ioctl(f, r, (long)(a))
 #define MONSW_CLOSE(f)      td_close(f)
 #else
-#define MONSW_OPEN(p)       open(p, O_RDWR)
+#define MONSW_OPEN(p, f)    open(p, f)
 #define MONSW_IOCTL(f, r, a) ioctl(f, r, a)
 #define MONSW_CLOSE(f)      close(f)
 #endif
@@ -140,12 +140,16 @@ parse_value(const char *s, int unset_ok, int *out)
 	return 0;
 }
 
+/*
+ * get and status open the device read-only, so any user can ask; set, rtg and native
+ * open it for writing, which the node's mode (0644 root) leaves to root.
+ */
 static int
-open_dev(const char *dev)
+open_dev(const char *dev, int flags)
 {
 	int fd, e;
 
-	fd = MONSW_OPEN(dev);
+	fd = MONSW_OPEN(dev, flags);
 	if (fd >= 0)
 		return fd;
 	e = errno;
@@ -153,6 +157,9 @@ open_dev(const char *dev)
 		fprintf(stderr, "%s: %s: no such node (mknod %s c 52 0)\n", prog, dev, dev);
 	else if (e == ENXIO || e == ENODEV)
 		fprintf(stderr, "%s: %s: no driver behind the node (a kernel without monsw?)\n",
+		    prog, dev);
+	else if (e == EACCES && flags != O_RDONLY)
+		fprintf(stderr, "%s: %s: set, rtg and native need write access to the node (root)\n",
 		    prog, dev);
 	else
 		fprintf(stderr, "%s: %s: %s\n", prog, dev, strerror(e));
@@ -323,7 +330,8 @@ main(int argc, char **argv)
 		return 2;
 	}
 
-	fd = open_dev(dev);
+	fd = open_dev(dev, (strcmp(cmd, "get") == 0 || strcmp(cmd, "status") == 0) ?
+	    O_RDONLY : O_RDWR);
 	if (fd < 0)
 		return 1;
 	if (strcmp(cmd, "get") == 0)

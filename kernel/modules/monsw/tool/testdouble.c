@@ -1,8 +1,8 @@
 /*
  * testdouble.c -- open/ioctl/close stand-ins for the monswctl host selftest.
  *
- * Every call is appended as one line to $MONSW_TD_LOG (open <path>, ioctl <req> <arg>,
- * close).  MONSW_TD_OPEN_ERRNO / MONSW_TD_IOCTL_ERRNO make the call fail with that errno;
+ * Every call is appended as one line to $MONSW_TD_LOG (open <path>, with " read-only"
+ * when it is; ioctl <req> <arg>; close).  MONSW_TD_OPEN_ERRNO / MONSW_TD_IOCTL_ERRNO make the call fail with that errno;
  * MONSW_TD_INFO="config,source,state,holder,ncards" is what GETCFG copies out.
  * Compiled only with -DMONSW_TESTDOUBLE (monsw/test/tooltest.sh); never part of the box binary.
  *
@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/monsw.h>
 
 static void
@@ -43,8 +44,7 @@ td_open(const char *path, int flags)
 	char line[512];
 	int e = td_errno("MONSW_TD_OPEN_ERRNO");
 
-	(void)flags;
-	sprintf(line, "open %s", path);
+	sprintf(line, "open %s%s", path, (flags & O_ACCMODE) == O_RDONLY ? " read-only" : "");
 	td_log(line);
 	if (e) {
 		errno = e;
