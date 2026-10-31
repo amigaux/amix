@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# test-dist: host test of build/dist.sh, make dist's driver (P-38 S1.5).
+#
+# MIT licence, see LICENSE at the top of the repository.
+# A throwaway checkout holds dist.sh with what it reads before any step:
+# layout.sh, system/check-amix-system with an empty manifest, and the
+# toolchain pins. Nothing is built: the preconditions, the steps that are
+# not in make dist yet, the order `dist` stops in, and the container's
+# command line (through a stand-in docker) are checked. Prints "N/N passed";
+# exits non-zero on any failure.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+TOP = os.path.dirname(os.path.dirname(HERE))
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def git(*args, cwd):
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "-c", "commit.gpgsign=false"] + list(args), cwd=cwd, check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+tmp = tempfile.mkdtemp(prefix="test-dist.")
+try:
+    top = os.path.join(tmp, "amix")
+    for f in ("build/dist.sh", "build/pkg/layout.sh", "system/check-amix-system",
+              "toolchain/gcc-cross-amix.pin", "toolchain/gcc14-cross-amix.pin"):
+        os.makedirs(os.path.dirname(os.path.join(top, f)), exist_ok=True)
+        shutil.copy2(os.path.join(TOP, f), os.path.join(top, f))
+    write(os.path.join(top, "system", "MANIFEST.sha256"), "")
+    write(os.path.join(top, "system", "SYMLINKS"), "")
+    git("init", "-q", cwd=top)
+    git("add", ".", cwd=top)
+    git("commit", "-q", "-m", "one", cwd=top)
+    write(os.path.join(top, "README"), "two\n")
+    git("add", ".", cwd=top)
+    git("commit", "-q", "-m", "two", cwd=top)
+    sysdir = os.path.join(tmp, "system")
+    write(os.path.join(sysdir, "usr", "include", "x.h"), "x\n")
+    os.makedirs(os.path.join(sysdir, "etc"))
+    MANIFEST = "%s  usr/include/x.h\n" % subprocess.run(
+        ["sha256sum", os.path.join(sysdir, "usr", "include", "x.h")],
+        stdout=subprocess.PIPE).stdout.decode()[:64]
+    write(os.path.join(top, "system", "MANIFEST.sha256"), MANIFEST)
+    dist = os.path.join(top, "build", "dist.sh")
+    base = {k: v for k, v in os.environ.items()
+            if not k.startswith(("AMIX_", "GIT_")) and k not in ("SYSTEM", "GCA", "G14", "DIST_HOST")}
+
+    def run(*steps, where=dist, **env):
+        e = dict(base, SYSTEM=sysdir, DIST_HOST="1", GCA="/nonexistent/gca")
+        e.update(env)
+        for k in [k for k, v in e.items() if v is None]:
+            del e[k]
+        p = subprocess.run(["sh", where] + list(steps), env=e,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    rc, out = run()
+    check("no step: usage, exit 2", rc == 2 and "kernel-k30" in out, out)
+    rc, out = run("frobnicate")
+    check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
+    for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("drivers", "S3.2"),
+                        ("drivers/a4091", "S3.2"), ("kspace", "S3.3"), ("catalogs", "S5.1"),
+                        ("media", "S6.1"), ("lock", "S1.6")):
+        rc, out = run(step)
+        check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
+              rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)
+    rc, out = run("recipes/nosuch")
+    check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
+
+    rc, out = run("kspace", SYSTEM=os.path.join(tmp, "nothere"))
+    check("no system input: refused before any step",
+          rc == 1 and "no system input" in out and "MISSING" not in out, out)
+    write(os.path.join(top, "system", "MANIFEST.sha256"), "0" * 64 + "  usr/include/x.h\n")
+    rc, out = run("kspace")
+    check("a system input that does not match the manifest: refused",
+          rc == 1 and "does not match system/MANIFEST.sha256" in out and "MISSING" not in out, out)
+    write(os.path.join(top, "system", "MANIFEST.sha256"), MANIFEST)
+
+    shallow = os.path.join(tmp, "shallow")
+    subprocess.run(["git", "clone", "-q", "--depth", "1", "file://" + top, shallow], check=True)
+    write(os.path.join(shallow, "system", "MANIFEST.sha256"), MANIFEST)
+    rc, out = run("kspace", where=os.path.join(shallow, "build", "dist.sh"))
+    check("a shallow clone: refused, a package's epoch needs the history",
+          rc == 1 and "is a shallow clone" in out, out)
+
+    rc, out = run("dist")
+    check("dist: kit first, and stops at the first step that fails",
+          rc != 0 and "=== make dist: kit" in out and "make dist: stopped at kit" in out
+          and "=== make dist: kernel-k30" not in out, out)
+
+    fake = os.path.join(tmp, "bin", "docker")
+    write(fake, '#!/bin/sh\nprintf "%s\\n" "$@" > "$DOCKER_ARGS"\n', 0o755)
+    argf = os.path.join(tmp, "docker.args")
+    rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    gitdir = os.path.join(os.path.realpath(top), ".git")
+    check("outside the container: dist.sh runs itself in it, as the calling user",
+          rc == 0 and args[:2] == ["run", "--rm"] and "--user" in args
+          and args[args.index("--user") + 1] == "%d:%d" % (os.getuid(), os.getgid()), " ".join(args))
+    check("the container gets the checkout at /src, its git directory, the system read-only",
+          "%s:/src" % os.path.realpath(top) in args and "%s:%s:ro" % (gitdir, gitdir) in args
+          and "%s:/system:ro" % os.path.realpath(sysdir) in args
+          and "AMIX_SYSTEM=/system" in args and "AMIX_IN_CONTAINER=1" in args, " ".join(args))
+    check("and runs the step there, from /src, in AMIX_IMAGE",
+          args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
+          and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

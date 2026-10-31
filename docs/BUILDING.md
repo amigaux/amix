@@ -1,0 +1,95 @@
+# Building Amix: make dist
+
+`make dist` builds the release from this checkout and one closed input, the
+Commodore system files: the ABI kits, the kernels, the modules and drivers,
+both package catalogs and the media, all under `out/`. The plan is P-38
+(*make dist for 1.1*); this page is how it works today. Steps that are not in
+make dist yet say so and stop it (exit 3), naming the P-38 step and its owner.
+
+## What you need
+
+- **A full clone** of amix, not a shallow one. A package's epoch, the time of
+  every time stamp in it, is the last commit that changed its directory, so
+  make dist reads the history and refuses a shallow clone.
+- **The system input**: a checkout of
+  [amigaux/amix-system](https://github.com/amigaux/amix-system) at the pin
+  (`system/fetch-amix-system DIR` makes one). It is checked against
+  `system/MANIFEST.sha256` and `system/SYMLINKS` before any step.
+- **docker** or **podman**, for the build container (`toolchain/`).
+
+```sh
+system/fetch-amix-system ../amix-system
+make tools SYSTEM=../amix-system      # the build container, amix-toolchain:dist
+make dist  SYSTEM=../amix-system
+```
+
+Every step runs in the build container, as you, with this checkout at `/src`
+and the system input read-only at `/system`. The fixed path is what makes the
+period compiler (gcc 2.7.2.3, which cannot remap paths) build the same bytes
+on every machine. `AMIX_IMAGE` names another image, and `CONTAINER=podman`
+uses podman. `DIST_HOST=1` runs the steps on your host instead, with the
+toolchains `build/pkg/layout.sh` finds; that is for development, and a release
+is built in the container.
+
+## The steps
+
+In make dist's order, provider before consumer. Each is also a target of its
+own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
+`build/`.
+
+| Target | What it builds | Output | P-38 | Status |
+|---|---|---|---|---|
+| `kit` | kernel/dlm's ABI kits, k30 and k46, with the port at `kernel/port/port.pin` | `out/kit/{k30,k46,kit.digests}` | S2.1, dlm | builds |
+| `kernel-k30` | the 68030 kernel, from its cut record | | S2.2, k30 | not yet |
+| `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
+| `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
+| `drivers`, `drivers/<name>` | the drivers' modules, ours and the pinned forks' | | S3.2, each driver | not yet |
+| `kspace` | the kernel-space packages | `out/kspace/` | S3.3, packages-fa | not yet |
+| `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
+| `catalogs` | the kernel-space and userland catalogs | `out/{kspace,userland}/catalog` | S5.1, pkgtools | not yet |
+| `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
+| `lock` | `out/lock`, every input and output of the build | `out/lock` | S1.6, infra | not yet |
+
+`make tools` builds the container (`toolchain/container-build.sh`).
+
+## out/
+
+```
+out/kit/{k30,k46}/            the ABI kits
+out/kit/kit.digests           one line per kit (kernel/dlm/tools/kitdigest.sh)
+out/modules/<line>/<name>     the generic module objects
+out/kspace/{catalog,catalog.md5,pkgs/}
+out/userland/{catalog,catalog.md5,pkgs/}
+out/media/{cd,netinstall,floppies}/
+out/lock
+out/cache/                    distfiles and the port at its pin
+out/build/                    work trees and logs
+```
+
+`out/` is ignored by git.
+
+## The rules that make it reproducible
+
+- **One version, one set of bytes.** A rebuilt package is byte-identical or it
+  takes a new revision (`build/pkg`, the one-version guard). The roll stamps
+  every time with the package version's own epoch: `SOURCE_EPOCH` in
+  package.sh, or the last commit that changed the package directory, never the
+  environment's `SOURCE_DATE_EPOCH`. The release's own epoch stamps only what
+  is per release: the catalogs, the media and the lock.
+- **The datastream is normalised** by pkgtools' pkgmk and pkgtrans and checked
+  by `build/pkg/common/dsnorm.py`. A payload's static libraries get the member
+  headers `ar D` writes (`build/pkg/common/arnorm.py`).
+- **Paths.** gcc14 writes `/build` for the build tree, `/src` for the
+  checkout and `/gcc14` for the toolchain (`-ffile-prefix-map`), and the roll
+  refuses a build-host path in a gcc14 payload.
+- **Cut ids** come from the cut record (`kernel/k30/cuts/<id>/`, the port's
+  `cuts/<id>/`): a rebuild repeats them.
+- **Inputs from outside** are pinned: the toolchains, amix-system and the port
+  by commit (`.pin`), and the forks in `kernel/drivers/<name>/<name>.pin`.
+  Distfiles are pinned by sha256 (`toolchain/*.distfile`) and fetched from
+  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles) into
+  `out/cache`. `AMIX_DISTFILES=<dir>` takes them from a local directory.
+- **Known exceptions**, which the proof lists by name: the kits' revision lines
+  (`kit.conf` and `NOTICE` name the commits, so the `norev` digest is the one
+  compared across commits), amixbench 1.3 (kept outside amix), and the installed
+  disk and SD images, which are bench-built and proven by their contents.

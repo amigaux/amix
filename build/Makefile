@@ -1,10 +1,22 @@
-# build/Makefile: host tests of the build framework, the selftests of the
-# packaging harness (they need the cross toolchains: run them in the build
-# container), and the check of the packages directories.
+# build/Makefile: make dist and its partial targets (dist.sh, P-38 S1.5), the
+# host tests of the build framework, the selftests of the packaging harness
+# (they need the cross toolchains: run them in the build container), and the
+# check of the packages directories.
 #
 # MIT licence, see LICENSE at the top of the repository.
 
-.PHONY: test selftests check-packages
+STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock
+
+.PHONY: $(STEPS) test selftests check-packages
+
+# SYSTEM=<amix-system checkout> is passed on to dist.sh in the environment.
+export SYSTEM
+
+$(STEPS):
+	sh dist.sh $@
+
+recipes/% drivers/%:
+	sh dist.sh $@
 
 test:
 	python3 -I pkg/tests/test-pkgmeta
@@ -14,6 +26,7 @@ test:
 	python3 -I pkg/tests/test-dsnorm
 	python3 -I pkg/tests/test-classes
 	python3 -I pkg/tests/test-arnorm
+	python3 -I tests/test-dist
 
 selftests:
 	sh pkg/tests/run-selftests

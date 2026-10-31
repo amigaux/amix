@@ -13,8 +13,9 @@
 #
 # Runs, from the top of this checkout mounted at /src: `make kit` in
 # kernel/dlm with the port at its pin, then `make kit-test` and both lines of
-# every module in kernel/modules. Prints a digest of each kit (over its file
-# list, taken before the tests) and the sha256 of each module object. The
+# every module in kernel/modules. Prints each kit's line of
+# kernel/dlm/build/kit.digests (written by make kit, before the tests) and the
+# sha256 of each module object. The
 # build runs as the calling user, so the tree is left as a host build would
 # leave it.
 set -eu
@@ -40,17 +41,13 @@ incontainer() {
 
 incontainer 'make -C kernel/dlm kit GCA="$GCA" PORT=/port'
 
-# A kit's digest, taken before the kit tests build their samples inside it:
-# the sha256 of its sorted "sha256  path" list. The second leaves out
-# kit.conf and NOTICE, whose revision lines name the amix commit.
-digest() {
-	_d=$1; shift
-	(cd "$_d" && find . -type f "$@" | LC_ALL=C sort | xargs sha256sum) | sha256sum | cut -c1-64
-}
-digests=$(for kit in "$top"/kernel/dlm/build/kit/*; do
-	echo "kit ${kit##*/} $(digest "$kit") $(digest "$kit" ! -path ./kit.conf ! -path ./NOTICE)" \
-		"$(grep '^KIT_REV=' "$kit/kit.conf" 2>/dev/null || echo KIT_REV=?)"
-done)
+# The kits' digests, as kernel/dlm's `make kit` wrote them before the kit
+# tests build their samples inside the kits: one line per kit, `kit <line>
+# <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-`. <manifest> is the
+# digest the dlmkit package recipe pins; <norev> leaves out kit.conf and
+# NOTICE, whose revision lines name the commits (kernel/dlm/tools/kitdigest.sh).
+digests=$(cat "$top/kernel/dlm/build/kit.digests") || {
+	echo "container-kit.sh: make kit wrote no kernel/dlm/build/kit.digests" >&2; exit 1; }
 
 incontainer 'make -C kernel/dlm kit-test GCA="$GCA" G14="$G14" PORT=/port
 	for m in kernel/modules/*/module; do make -C "$m"; done'
