@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the display set-up: /etc/display, display.d, xstart, S95display (9bbbfbb)
+
+P-36 W9, base's half: /etc/display (display(4)) and /etc/display.d/<card> (display.d(4)), the xstart launcher
+(xstart(1)) with the shared display.subr and a default xsession, and S95display for the graphical login.
+display.d/native for the chipset display and the stock X11R4 server (best effort). xstart -n is a dry run naming every
+mistake; -xdm runs X11R6's xdm with its -server line. amix-base 1.0-10. Host test-display 38/0; E1 PASS (the stock
+server comes up through xstart).
+
 ## 2026-10-31 — the swap step; devnodes reads ? as 0 (96c0923, d1cf84c)
 
 The swap step: /etc/init.d/swap = rc2.d/S90swap (K05swap), replacing the stock script in its shape and folding the
