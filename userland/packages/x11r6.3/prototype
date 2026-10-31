@@ -8,7 +8,7 @@
 # a relative symlink target.  /usr/X11R6 is an absolute symlink (SYSTEM_PATHS),
 # as stock core's own links are; /usr itself belongs to core and is not
 # declared.  Directories 0755 root sys, files 0644 root bin, programs 0755 root
-# bin.  Every basename <= 14 bytes, or the roll marks the package UFS-only.
+# bin.  rstart's ListGenericCommands (19 bytes) makes the package UFS-only.
 #
 i pkginfo
 #
@@ -26,9 +26,13 @@ d none /opt/amix/X11R6/bin 0755 root sys
 f none /opt/amix/X11R6/bin/Xzz9000 0755 root bin
 l none /opt/amix/X11R6/bin/X=/opt/amix/X11R6/bin/Xzz9000
 f none /opt/amix/X11R6/bin/bdftopcf 0755 root bin
+f none /opt/amix/X11R6/bin/iceauth 0755 root bin
 f none /opt/amix/X11R6/bin/mkfontdir 0755 root bin
 f none /opt/amix/X11R6/bin/resize 0755 root bin
+f none /opt/amix/X11R6/bin/rstart 0755 root bin
+f none /opt/amix/X11R6/bin/rstartd 0755 root bin
 f none /opt/amix/X11R6/bin/sessreg 0755 root bin
+f none /opt/amix/X11R6/bin/smproxy 0755 root bin
 f none /opt/amix/X11R6/bin/startx 0755 root bin
 f none /opt/amix/X11R6/bin/twm 0755 root bin
 f none /opt/amix/X11R6/bin/xauth 0755 root bin
@@ -887,6 +891,25 @@ d none /opt/amix/X11R6/lib/X11/locale/zh 0755 root sys
 f none /opt/amix/X11R6/lib/X11/locale/zh/XLC_LOCALE 0644 root bin
 d none /opt/amix/X11R6/lib/X11/locale/zh_TW 0755 root sys
 f none /opt/amix/X11R6/lib/X11/locale/zh_TW/XLC_LOCALE 0644 root bin
+d none /opt/amix/X11R6/lib/X11/rstart 0755 root sys
+f none /opt/amix/X11R6/lib/X11/rstart/config 0644 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/rstartd.real 0755 root bin
+d none /opt/amix/X11R6/lib/X11/rstart/commands 0755 root sys
+f none /opt/amix/X11R6/lib/X11/rstart/commands/@List 0644 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/commands/ListContexts 0755 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/commands/ListGenericCommands 0755 root bin
+s none /opt/amix/X11R6/lib/X11/rstart/commands/x=/opt/amix/X11R6/lib/X11/rstart/commands/x11r6
+s none /opt/amix/X11R6/lib/X11/rstart/commands/x11=/opt/amix/X11R6/lib/X11/rstart/commands/x11r6
+d none /opt/amix/X11R6/lib/X11/rstart/commands/x11r6 0755 root sys
+f none /opt/amix/X11R6/lib/X11/rstart/commands/x11r6/@List 0644 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/commands/x11r6/LoadMonitor 0755 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/commands/x11r6/Terminal 0755 root bin
+d none /opt/amix/X11R6/lib/X11/rstart/contexts 0755 root sys
+f none /opt/amix/X11R6/lib/X11/rstart/contexts/@List 0644 root bin
+f none /opt/amix/X11R6/lib/X11/rstart/contexts/default 0644 root bin
+s none /opt/amix/X11R6/lib/X11/rstart/contexts/x=/opt/amix/X11R6/lib/X11/rstart/contexts/x11r6
+s none /opt/amix/X11R6/lib/X11/rstart/contexts/x11=/opt/amix/X11R6/lib/X11/rstart/contexts/x11r6
+f none /opt/amix/X11R6/lib/X11/rstart/contexts/x11r6 0644 root bin
 d none /opt/amix/X11R6/lib/X11/twm 0755 root sys
 f none /opt/amix/X11R6/lib/X11/twm/system.twmrc 0644 root bin
 d none /opt/amix/X11R6/lib/X11/xdm 0755 root sys
@@ -1068,9 +1091,13 @@ f none /opt/amix/man/1/Xamix 0644 root bin
 f none /opt/amix/man/1/Xserver 0644 root bin
 f none /opt/amix/man/1/Xzz9000 0644 root bin
 f none /opt/amix/man/1/bdftopcf 0644 root bin
+f none /opt/amix/man/1/iceauth 0644 root bin
 f none /opt/amix/man/1/mkfontdir 0644 root bin
 f none /opt/amix/man/1/resize 0644 root bin
+f none /opt/amix/man/1/rstart 0644 root bin
+f none /opt/amix/man/1/rstartd 0644 root bin
 f none /opt/amix/man/1/sessreg 0644 root bin
+f none /opt/amix/man/1/smproxy 0644 root bin
 f none /opt/amix/man/1/startx 0644 root bin
 f none /opt/amix/man/1/twm 0644 root bin
 f none /opt/amix/man/1/xauth 0644 root bin

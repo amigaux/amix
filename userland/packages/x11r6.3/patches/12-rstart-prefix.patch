@@ -1,0 +1,27 @@
+Ours.  rstart's remote helper rstartd installs into DefaultUsrBin (/usr/bin), outside
+ProjectRoot, so that rsh's default PATH finds it on the remote host.  This package
+keeps everything under its prefix: rstartd goes to $(BINDIR) with the other programs,
+and the rstart client names it by that path on the rsh command line.
+
+--- a/programs/rstart/Imakefile
++++ b/programs/rstart/Imakefile
+@@ -30,7 +30,8 @@
+ ENVPREFIX=RSTART
+ PACKAGEname=rstart
+ 
+-USRBIN=DefaultUsrBin
++XCOMM AMIX: rstartd goes under the package's prefix, not /usr/bin
++USRBIN=$(BINDIR)
+ 
+ #ifndef RshCmd
+ # if	SystemV
+@@ -65,7 +66,8 @@
+ InstallNamedProg($(SERVERNAME),$(SERVERNAME),$(USRBIN))
+ 
+ AllTarget($(CLIENTNAME))
+-CppScriptTarget($(CLIENTNAME),client.cpp,-DRSHCMD=$(RSHCMD) -DSERVERNAME=$(SERVERNAME),NullParameter)
++XCOMM AMIX: so the client runs it by its path; rsh's PATH does not reach it
++CppScriptTarget($(CLIENTNAME),client.cpp,-DRSHCMD=$(RSHCMD) -DSERVERNAME=$(USRBIN)/$(SERVERNAME),NullParameter)
+ InstallNamedProg($(CLIENTNAME),$(CLIENTNAME),$(BINDIR))
+ 
+ AllTarget(config)

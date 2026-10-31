@@ -8,6 +8,7 @@ Declared without a prototype (types not defined at that point, or called with va
 arguments; none has an ANSI definition with a narrow parameter): Error Fatal 
 FindNamedKey outl ShuffleEntries usage 
 Also: xhost's own K&R declaration of inet_makeaddr goes; <arpa/inet.h> declares it.
+Also: smproxy includes <X11/Xmu/WinUtil.h>, which declares XmuClientWindow.
 
 --- a/programs/bdftopcf/bdftopcf.c
 +++ b/programs/bdftopcf/bdftopcf.c
@@ -43,6 +44,48 @@ Also: xhost's own K&R declaration of inet_makeaddr goes; <arpa/inet.h> declares 
  char *progName;
  
  static Bool
+--- a/programs/rstart/auth.c
++++ b/programs/rstart/auth.c
+@@ -37,6 +37,9 @@
+ extern char *expand();
+ extern char myname[];
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int nomem (void);
++
+ struct list_of_argv {
+ 	struct list_of_argv *next;
+ 	int	argc;
+--- a/programs/rstart/server.c
++++ b/programs/rstart/server.c
+@@ -71,6 +71,14 @@
+ extern void key_internal_auth_program();
+ extern void key_internal_auth_input();
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int nomem (void);
++int do_it (void);
++int process (FILE *f, int is_the_real_thing);
++int detach (void);
++int putenv_with_prefix (char *prefix, char *name, char *value);
++int do_auth (void);
++
+ struct key keys[] = {
+ 	"cmd",				key_cmd,
+ 	"exec",				key_exec,
+--- a/programs/smproxy/smproxy.c
++++ b/programs/smproxy/smproxy.c
+@@ -28,6 +28,10 @@
+ ******************************************************************************/
+ 
+ #include "smproxy.h"
++#include <X11/Xmu/WinUtil.h>	/* AMIX: XmuClientWindow, for gcc 14 */
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int LookupWindow (Window window, WinInfo **ptr_ret, WinInfo **prev_ptr_ret);
+ 
+ XtAppContext appContext;
+ Display *disp;
 --- a/programs/xauth/process.c
 +++ b/programs/xauth/process.c
 @@ -46,6 +46,10 @@

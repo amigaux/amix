@@ -9,7 +9,8 @@ AMIX_USR_AMIGA=${AMIX_USR_AMIGA:-$AMIX_SYSROOT/usr}
 
 # the clients built and shipped, beside the libraries and the server
 XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrdb
-	xlsfonts xhost xauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf"
+	xlsfonts xhost xauth iceauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf
+	smproxy rstart"
 
 xmake() {	# xmake <log> <make args...>: make -k, every compile line into make.log by xcc
 	_xm_log=$1; shift
@@ -92,7 +93,15 @@ stage() {
 	rm -f "$DEST$PREFIX/lib/libXIE.a" "$DEST$PREFIX/lib/libPEX5.a"
 	for c in $XCLIENTS; do
 		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR: the build host's
-		xinst i-$c.log programs/$c install install.man XKBCOMPCMD=xkbcomp
+		# and rstart's contexts give remote commands the man pages' home after the relayout
+		xinst i-$c.log programs/$c install install.man XKBCOMPCMD=xkbcomp \
+			DEFAULT_X_MANPATH=/opt/amix/man:/usr/share/man
+	done
+	# rstart's aliases (x, x11 for x11r6) are relative symlinks: the stock pkgadd
+	# mangles those, so they point at their absolute targets
+	for l in $(cd "$DEST" && find ".$PREFIX" -type l); do
+		_t=$(readlink "$DEST/$l"); case $_t in /*) continue;; esac
+		rm "$DEST/$l" && ln -s "$(dirname "${l#.}")/$_t" "$DEST/$l"
 	done
 	# fonts: compiled and indexed by the build host's bdftopcf and mkfontdir
 	for f in misc 75dpi 100dpi; do

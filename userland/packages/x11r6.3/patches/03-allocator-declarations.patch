@@ -113,6 +113,17 @@ name is the socket call amix-decls.h declares.
  
  #define HT	0x09
  #define NL	0x0a
+--- a/programs/iceauth/iceauth.h
++++ b/programs/iceauth/iceauth.h
+@@ -42,7 +42,7 @@
+ 
+ extern char *ProgramName;
+ 
+-extern char *malloc(), *realloc();
++/* AMIX: extern char *malloc(), *realloc(); -- <stdlib.h> declares it */
+ int process_command(), auth_initialize(), auth_finalize();
+ extern int print_help();
+ extern int verbose;
 --- a/programs/xauth/parsedpy.c
 +++ b/programs/xauth/parsedpy.c
 @@ -45,7 +45,7 @@

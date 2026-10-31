@@ -3,7 +3,7 @@
 The X Window System, release 6.3, under `/opt/amix/X11R6`:
 - the `Xzz9000` server for the ZZ9000 and the Z3660 RTG (isoriano's Amiga DDX);
 - the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (static) with their headers;
-- xinit, xdm, twm, xterm and the standard clients.
+- xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart.
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
@@ -11,7 +11,7 @@ It coexists with the stock X11R4/R5 in `/usr/X`.
 
 **Status: work in progress.** The whole tree (libraries, server, clients) compiles under the gcc14
 strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on every
-compile line. It stages, and the prototype matches the payload (1080 paths). The roll stops at the
+compile line. It stages, and the prototype matches the payload (1107 paths). The roll stops at the
 NEEDED gate. `Xzz9000` needs `/usr/amiga/lib/libscreen.so`, the stock screen manager, which every
 Amix box has but the gcc14 sysroot does not carry yet.
 
@@ -39,11 +39,12 @@ at a directory that holds both.
 | `03-allocator-declarations.patch` | Ours: K&R `char *malloc();`-style declarations that collide with `<stdlib.h>` become comments; xinit's own `shutdown()` becomes `xinit_shutdown()`. |
 | `04`–`10-protos-*.patch` | Ours: the prototypes gcc 14 needs, by area (the libraries, the fonts, the server, xterm, twm, xdm, the small clients). Each comes from the definition the call links with (`gcc -aux-info`). A K&R definition's narrow parameters (char, short, their typedefs, float) are default-promoted in the prototype, so caller and callee agree. Each patch's header lists every promotion and every function left unprototyped, with the reason. |
 | `11-mfb-fakepixmap-privates.patch` | Ours: the stack pixmaps of `00`'s `mfbimage.c` get `devPrivates` NULL rather than stack garbage (the server is built with `PIXPRIV`). |
+| `12-rstart-prefix.patch` | Ours: `rstartd` goes to the package's `bin` rather than `/usr/bin`, and the `rstart` client calls it by that path on the `rsh` command line. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
 - the Xt/Xaw shared-library guards;
-- `programs/Imakefile` without twm, rstart and smproxy;
+- `programs/Imakefile` without twm, rstart and smproxy (all three ship here);
 - twm's `lex.l` guard for Amix's own lex;
 - imake's on-box cpp path;
 - his on-box build and session scripts in `config/util`;
@@ -76,5 +77,10 @@ Not taken from isoriano's overlay, done our own way or not needed here:
 - **Man pages** go to sections 1/3/4/5 (not svr4.cf's `1x`/`3x`), then into
   `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`.
 - The XIE and PEX client libraries are not shipped: their extensions are off.
+- **rstart** runs `rsh host /opt/amix/X11R6/bin/rstartd`: Amix's `/usr/bin/rsh` is the remote
+  shell, and the remote `rsh` PATH does not reach the package's `bin`. The contexts' `x` and
+  `x11` aliases are absolute symlinks.
+- **UFS only.** rstart's `commands/ListGenericCommands` has a 19-byte name, so the roll marks the
+  package UFS-only; new installs are UFS.
 - **MIT-SHM** is built in. The 68040/68060 kernel's shared-memory fixes make it safe; on a kernel
   without them, clients must not use it.
