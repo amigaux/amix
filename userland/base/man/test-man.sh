@@ -85,7 +85,7 @@ if [ ! -w "$T/cat/3" ]; then
 fi
 chmod 755 "$T/cat/3"
 
-# which page for a command: the binary PATH runs decides (owner, 2026-10-30)
+# which page for a command: the binary PATH runs decides
 mkdir -p "$T/usr/bin" "$T/usr/sbin" "$T/opt/amix/bin" "$T/usr/amix/bin" "$T/man/1m"
 for b in usr/bin/tar opt/amix/bin/tar usr/bin/printf opt/amix/bin/bzip2 usr/sbin/dlpi-mac usr/amix/bin/man; do
 	printf '#!/bin/sh\n' > "$T/$b"; chmod +x "$T/$b"

@@ -25,7 +25,7 @@ ICMP from the client is decoded (type, code, the quoted UDP port), which is
 how "IP answered our unicast ACK with port-unreachable" shows up.
 
 The file named by --control, read at every DHCP message, changes the
-answers while the client runs (the dhcpc S1 tests): a word on its first line
+answers while the client runs (the dhcpc protocol tests): a word on its first line
 of "silent" (answer nothing), "norenew" (ignore a unicast REQUEST from a
 bound client, so it has to rebind), "nak" (refuse every REQUEST) or
 "conflict" (answer the client's ARP probe for its address as another

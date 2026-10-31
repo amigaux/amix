@@ -5,10 +5,9 @@ Amix's stock `man` reads one tree: `MANPATH` is a single directory with a
 `/usr/catman`. With `MANPATH` aimed at the add-on tree and `CATPATH` unset, it
 caches the add-on pages into `/usr/catman`, where a page with a stock name
 (a GNU `grep`) then hides the stock one. (The measurements are in the
-grimoire's man-page section.) The owner's direction, 2026-10-30: one `man` that
-finds both, never writing into `/usr/catman`, with the stock `/usr/bin/man`
-untouched; and, decided the same day, a command's page is the page of the
-binary `PATH` runs.
+grimoire's man-page section.) The design: one `man` that finds both, never
+writing into `/usr/catman`, with the stock `/usr/bin/man` untouched; and a
+command's page is the page of the binary `PATH` runs.
 
 ## What it is
 
@@ -47,7 +46,7 @@ shell front-end. Its own page is `man/man.1`, installed as
   `/opt/amix`, the front-end drops `MANPATH` and `CATPATH` before it calls the
   stock `man`, so the stock command never caches our pages in `/usr/catman`.
 
-## The layout every package follows (agreed with the packages station)
+## The layout every package follows
 
 1. A page is `/opt/amix/man/<sect>/<name>`: the section directory named as the
    stock ones are (`1`, `3`, `5`, no `man` prefix), the page name without a
@@ -68,12 +67,12 @@ shell front-end. Its own page is `man/man.1`, installed as
 ## Where it sits on PATH
 
 The stock login `PATH` begins `/usr/local/bin:/usr/bin:...`, and the add-on
-userland's `/opt/amix/bin` is appended **last**, by owner rule, so that stock
-commands keep precedence. Neither place works for this command: `/usr/bin/man`
+userland's `/opt/amix/bin` is appended **last**, so that stock commands keep
+precedence. Neither place works for this command: `/usr/bin/man`
 is the stock one, and in `/opt/amix/bin` the front-end would never be reached.
 
 So the base package adds one directory, `/usr/amix/bin`, between
-`/usr/local/bin` and `/usr/bin`, through its `/etc/profile.d` drop-in (D-N23).
+`/usr/local/bin` and `/usr/bin`, through its `/etc/profile.d` drop-in.
 It holds only commands like this one, which answer for our files and pass
 everything else to the stock command of the same name. Commands that replace
 a stock one outright do not go there. A user's own `/usr/local/bin` still

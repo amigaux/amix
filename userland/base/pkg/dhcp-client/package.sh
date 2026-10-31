@@ -1,4 +1,4 @@
-# dhcp-client: dhcpc, the DHCP client (P-36 D-N14 to D-N18).
+# dhcp-client: dhcpc, the DHCP client.
 NAME=dhcp-client
 PKG=dhcpc
 VERSION=1.0

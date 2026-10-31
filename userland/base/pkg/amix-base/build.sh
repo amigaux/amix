@@ -1,6 +1,6 @@
 # amix-base build hooks. The source tree is a copy of userland/base.
 
-# dlpi-mac, with the recipe's compiler (GCC 14, T-56 D6): the boot path
+# dlpi-mac, with the recipe's compiler (GCC 14): the boot path
 # links only the stock libc.so.1, nothing from /opt/amix
 # (compile and link apart: the harness's gates read the compile line)
 build() {
@@ -43,7 +43,7 @@ stage() {
 		mkdir -p "$DEST/etc/`dirname $l`"
 		ln "$DEST/etc/rc2.d/S90swap" "$DEST/etc/$l"
 	done
-	# the display set-up (P-36 W9): /etc/display is the admin's, not here
+	# the display set-up: /etc/display is the admin's, not here
 	put 0444 display/display /etc/init.d/display
 	ln "$DEST/etc/init.d/display" "$DEST/etc/rc2.d/S95display"
 	put 0444 display/display.d/native /etc/display.d/native
