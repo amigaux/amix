@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kern30m re-roots its carve objects (2bfd72d)
+
+pkg/kernel-k30-m: the ufs and s5 carve rebuilds link their objects where the cut (K30M_SRC) and amix-system
+(AMIX_SYSTEM) are now, after checking each Makefile's EXTRA= names the same object. A cut built in the container rolls
+on the host and the other way round; kern30m stays 2a155ebd either way.
+
 ## 2026-10-31 — the kernel-k30 hook runs in make dist's container (2192470, 59e24b8, 6fe391a)
 
 build-cross-kernel.sh's `cmp -l | wc -l` byte counts no longer take cmp's exit status under pipefail (diffutils 3.10 in
