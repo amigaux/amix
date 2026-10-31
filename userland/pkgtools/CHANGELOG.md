@@ -1,3 +1,11 @@
+## 2026-10-31 — make dist for APKG and APKGENG; on-box rolls equal host rolls (2c2a129, 9b6a7a2, 70fc518)
+
+userland/pkgtools/Makefile `dist` builds and rolls APKG 0.3.4 and APKGENG 1.12.5 into out/userland/pkgs with the
+staging confs, each under its version's pinned epoch, PSTAMP without the host's name; `repro-check` proves two builds
+identical (P-38 S4.2). Under SOURCE_DATE_EPOCH pkgmk counts pkgmap part sizes in 4096-byte blocks and keeps pkgmap's
+spool modes as root, and pkgtrans writes every newc field in upper-case hex: measured on rig E1, the box's roll is the
+host's bytes. The 0.3.3 → 0.3.4 upgrade keeps edited conffiles and the essential refusal holds. Not minted.
+
 ## 2026-10-31 — reproducible roll in the engine (21072b2); repo tools' extra pin adds prngd (2e71f93)
 
 With SOURCE_DATE_EPOCH, pkgmk writes the epoch as every pkgmap modtime and default date and sets the spool to pkgmap's
