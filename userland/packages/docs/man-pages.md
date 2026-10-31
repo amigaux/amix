@@ -58,6 +58,7 @@ Upstream ships none for these, so the packages carry their own (in each package'
 | `acompat` | `acompat(3)` (the library, libamixcompat, and every function it provides, each also an alias: `snprintf(3)` … `gettimeofday(3)`), `acompat-test(1)` |
 | `zlib` | `zlib-test(1)` (`zlib(3)` is upstream's) |
 | `amix-benchmark-gcc14` | `amix-bench-g14(1)` |
+| `prngd` | `prngd-ctl(1)`: upstream documents it only in its source (`prngd(1)` is upstream's) |
 
 `bzip2` adds the aliases upstream's `bzip2(1)` covers but does not install: `bunzip2`, `bzcat`,
 `bzip2recover`.

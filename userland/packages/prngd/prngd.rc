@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# prngd -- start or stop the PRNGD entropy daemon on /var/run/egd-pool.
+#
+# The package does not enable it.  To start it at boot, as root:
+#     ln /opt/amix/etc/init.d/prngd /etc/rc2.d/S74prngd
+#     ln /opt/amix/etc/init.d/prngd /etc/rc0.d/K74prngd
+# prngd must always be given a socket (it cores without one); this script
+# always does.
+
+SOCK=/var/run/egd-pool
+case "$1" in
+start)
+	[ -d /var/run ] || mkdir /var/run
+	/opt/amix/sbin/prngd $SOCK
+	;;
+stop)
+	/opt/amix/sbin/prngd --kill $SOCK
+	;;
+*)
+	echo "usage: $0 start|stop" >&2
+	exit 1
+	;;
+esac

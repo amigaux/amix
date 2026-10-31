@@ -1,0 +1,23 @@
+config.h has carried DONT_CHMOD_SOCKET since the UnixWare 1 port, but by
+0.9.29 nothing reads it: prngd chmods every unix socket to SOCKETMODE.  On
+Amix that chmod makes the socket unreachable (ENOTSOCK on every connect;
+patch 01), so honour the define again.  -m/--mode then has no effect.
+
+--- a/prngd.c
++++ b/prngd.c
+@@ -506,6 +506,7 @@
+     }
+ 
+     service_socket[service_count++] = unix_listen(randsock_file[i], 1, 1);
++#ifndef DONT_CHMOD_SOCKET
+     if (chmod(randsock_file[i], socketmode) < 0) {
+       (void)snprintf(msg_buf, sizeof(msg_buf), "Could not chmod socket to %04o",
+ 		     socketmode);
+@@ -513,6 +514,7 @@
+       error_fatal(msg_buf, errno);
+       exit(EXIT_FAILURE);
+     }
++#endif
+     count_openfd++;
+   }
+ 

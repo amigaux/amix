@@ -1,0 +1,38 @@
+#
+# prototype -- prngd 0.9.29 under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  No install scripts (D9): the daemon is NOT
+# started; etc/init.d/prngd is for the admin to link into /etc/rc2.d.  The
+# seed file prngd writes (etc/prngd/prngd-seed) is runtime state, not
+# payload.  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/sbin 0755 root sys
+f none /opt/amix/sbin/prngd 0755 root bin
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/prngd-ctl 0755 root bin
+d none /opt/amix/etc 0755 root sys
+d none /opt/amix/etc/prngd 0700 root sys
+f none /opt/amix/etc/prngd/prngd.conf 0644 root bin
+d none /opt/amix/etc/init.d 0755 root sys
+f none /opt/amix/etc/init.d/prngd 0755 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/prngd 0644 root bin
+f none /opt/amix/man/1/prngd-ctl 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/prngd 0644 root bin
+#
+# Licences: prngd's own in 00README; LICENSE gathers the notices of the
+# BSD/UCB and free files the binaries contain.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/prngd 0755 root sys
+f none /opt/amix/doc/prngd/00README 0644 root bin
+f none /opt/amix/doc/prngd/00DESIGN 0644 root bin
+f none /opt/amix/doc/prngd/README.gather 0644 root bin
+f none /opt/amix/doc/prngd/ChangeLog 0644 root bin
+f none /opt/amix/doc/prngd/LICENSE 0644 root bin
