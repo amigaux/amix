@@ -39,7 +39,7 @@ so each fact about a package is written in one place.
 | `DESC` | one line; pkginfo `DESC` |
 | `APKG_DESC=""` | one line; when set, pkginfo `APKG_DESC` (after `PSTAMP`), which the catalog description takes in place of `SUMMARY` |
 | `CATEGORY` | one of the catalog groups: system, network, utility, archive, library, shell, language, text, editor, documentation, development, multimedia, x11, games, source |
-| `SET` | the sets the package belongs to, space-separated: base, minimal, standard, full, developer, x11, extra. `base` (P-36) is in every install, beside whichever set is chosen |
+| `SET` | the sets the package belongs to, space-separated: base, minimal, standard, full, developer, x11, extra. `base` is in every install, beside whichever set is chosen |
 | `LICENSE` | an SPDX identifier |
 | `URL`, `SHA256` | the source tarball and its sha256; neither, when the source is in the tree |
 | `SRCPKG=""` | build from another package's `src/` (`amix-benchmark-gcc14` from `amix-benchmark`) |
@@ -51,7 +51,7 @@ so each fact about a package is written in one place.
 | `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
 | `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
-| `CONFFILES=""` | config files the administrator edits in place (P-36 section 1.2), absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
+| `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
@@ -85,7 +85,7 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   an `f` or `e` object; a path not under `/etc` or `/var`;
   an `e` object that `CONFFILES` does not list; one conffile listed by two
   packages; an object under `/etc/rc.d`; and a run-level link outside the
-  boot bands (P-36 section 2.2): `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
+  boot bands: `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
   and `S99z*`, with `S10`-`S19` the installer's. It warns, without refusing,
   about every command (in a `bin/` or `sbin/` directory) and every config file
   (`CONFFILES`, and files in `/etc` other than run-level scripts) that has no

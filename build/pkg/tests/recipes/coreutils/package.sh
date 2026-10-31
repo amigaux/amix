@@ -1,4 +1,4 @@
-# package.sh -- GNU coreutils 5.2.1 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU coreutils 5.2.1; assignments only.
 NAME=coreutils
 PKG=coreutil
 VERSION=5.2.1

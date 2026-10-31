@@ -52,7 +52,7 @@ amix_pkginfo_retag() {
 }
 
 # amix_s5_mark <prototype> <pkginfo> -- GATE 3, s5's 14-byte directory
-# entries (P-35 Option C; userland/pkgtools/docs/design.md sec 2b).  s5 cuts
+# entries (userland/pkgtools/docs/design.md sec 2b).  s5 cuts
 # a name at 14 bytes, so on s5 an object with a longer basename installs under
 # a truncated name, and two objects in one directory sharing their first 14
 # bytes collide.  UFS has neither limit, and is the filesystem for new
@@ -112,7 +112,7 @@ amix_s5_mark() {
 }
 
 # amix_conffiles <workdir> <paths> -- the config files the administrator edits
-# in place (package.sh CONFFILES, P-36 section 1.2).  Their lines of the WORK
+# in place (package.sh CONFFILES).  Their lines of the WORK
 # prototype become `e conffile', and the shared class action scripts of
 # userland/pkgtools (src/conffile, i.conffile and r.conffile: keep an edited
 # file, write the new default beside it) are copied next to the prototype

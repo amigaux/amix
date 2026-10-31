@@ -70,7 +70,7 @@ KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 CATEGORIES = ("system", "network", "utility", "archive", "library", "shell",
               "language", "text", "editor", "documentation", "development",
               "multimedia", "x11", "games", "source")
-# base (P-36: in every install, whichever set is picked), the installer's
+# base (in every install, whichever set is picked), the installer's
 # sets, and extra (the add-on userland).
 SETS = ("base", "minimal", "standard", "full", "developer", "x11", "extra")
 TOOLCHAINS = ("gcc14", "period", "none")
@@ -138,7 +138,7 @@ def source_tree(recipe, m):
 # the path; l and s paths are "link=target".
 OBJECT_TYPES = "fevdxlspcb"
 
-# The run-level link bands (P-36 section 2.2): S01-S09 stock mounts and
+# The run-level link bands: S01-S09 stock mounts and
 # kbootset's namelist, S10-S19 first boot and upgrade (the installer's, never
 # a package's), S20-S29 devices and modules, S69 network, S70-S89 daemons,
 # S90-S98 late, S99z* the mark-good step.

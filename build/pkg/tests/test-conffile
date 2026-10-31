@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# test-conffile: host test of pkgroll.sh's amix_conffiles (P-36 section 1.2).
+# test-conffile: host test of pkgroll.sh's amix_conffiles.
 #
 # MIT licence, see LICENSE at the top of the repository.
 # Sources the real build/pkg/common/pkgroll.sh in /bin/sh and runs

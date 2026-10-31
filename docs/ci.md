@@ -31,7 +31,7 @@ tip (the first push of a branch) it checks the whole history (`--all`).
 
 ## Public rules only
 
-The privacy check has public classes (private addresses, station files,
+The privacy check has public classes (private addresses, local tool files,
 secrets, images and oversized blobs, the system files in
 `system/MANIFEST.sha256`, AI attribution in our messages) and a maintainer's
 local extras, read from the `PRIVACY_PATTERNS` and `PRIVACY_BLOCKED`
@@ -92,7 +92,7 @@ with `CONTAINER=podman`) and network access to GitHub and the GNU mirrors.
 
 ## The dist workflow
 
-`.github/workflows/dist.yml` is the proof of make dist (P-38 S7.2), run by
+`.github/workflows/dist.yml` is the proof of make dist, run by
 hand (workflow_dispatch). It fetches amix-system at its pin, takes the build
 container from the same cache as the kit job (the same key, so either job's
 image serves both), and runs `build/dist-proof`: make dist twice, from two

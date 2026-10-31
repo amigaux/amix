@@ -144,9 +144,9 @@ def build(repo):
                             "Add v6 notes")
     c["contrib_ip"] = repo.commit(OTHER, {"contrib/hosts.txt": j(
         "server ", dotted(172, 16, 5, 4), "\n")}, "Add contributor hosts")
-    c["station"] = repo.commit(OURS, {"CLAUDE.md": "notes\n",
+    c["toolfile"] = repo.commit(OURS, {"CLAUDE.md": "notes\n",
                                       "sub/.claude/settings.json": "{}\n"},
-                               "Add station files")
+                               "Add tool files")
     c["keys"] = repo.commit(OURS, {
         "keys/deploy.pem": j("-----BEGIN ", "RSA PRIVATE", " KEY-----\nMIIB\n"),
         "keys/id_ed25519": "key\n",
@@ -306,8 +306,8 @@ def main():
             ("ipv6", 1, "cfg/v6.txt"),
             ("contrib_ip", 1, "contrib/hosts.txt"),
             ("msg_ip", 1, "message"),
-            ("station", 2, "CLAUDE.md"),
-            ("station", 2, "sub/.claude/settings.json"),
+            ("toolfile", 2, "CLAUDE.md"),
+            ("toolfile", 2, "sub/.claude/settings.json"),
             ("keys", 3, "keys/deploy.pem"),
             ("keys", 3, "keys/id_ed25519"),
             ("keys", 3, ".netrc"),
@@ -335,7 +335,7 @@ def main():
             t.ok(has(hits, c[key], cls, path),
                  "plant class %d caught: %s (%s)" % (cls, path, key), out)
         for sha, cls, path in tip_plants:
-            t.ok(has(hits, sha, cls, path), "station file at tip: %s" % path, out)
+            t.ok(has(hits, sha, cls, path), "local tool file at tip: %s" % path, out)
         for path in controls:
             t.ok(not any(h[2] == path for h in hits), "control passes: %s" % path, out)
         for key in ("readme", "binary", "public", "contrib", "example", "shadow",
@@ -400,7 +400,7 @@ def main():
         t.ok(rc == 1 and has(hits, tip, 2, "CLAUDE.md") and has(hits, tip, 1, "cfg/hosts.txt")
              and has(hits, tip, 4, "images/disk.adf") and has(hits, tip, 4, "vendor/early.dat")
              and not any(h[1] == 5 or h[2] == "AGENTS.md" for h in hits),
-             "--tree on master: files and station files, no messages", out)
+             "--tree on master: files and local tool files, no messages", out)
 
         # --pre-push: a new branch checks only what no remote-tracking ref has.
         repo.git("update-ref", "refs/remotes/origin/master", tip)

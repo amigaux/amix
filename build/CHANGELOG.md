@@ -19,7 +19,7 @@ build/dist-proof WORKDIR [COMMIT] runs make dist twice, from two clean clones at
 (with LOCK=, each is also checked against the lock of record; exit 3 is a known gap). .github/workflows/dist.yml runs
 it on workflow_dispatch only (timeouts: job 345 min, image 210, proof 120; image cached under ci.yml's key, which now
 covers toolchain/sysroot-links; no registry, no secrets; artifact dist-proof). dist.sh mounts the image's passwd and
-group with the caller's uid/gid added, for CI runners. release/README: the lock of record comes with S7.1. Local
+group with the caller's uid/gid added, for CI runners. release/README: the lock of record comes when 1.1 is frozen. Local
 proof: two identical locks, 93 lines.
 
 ## 2026-10-31 — make dist builds kernel-k46; the NEEDED gate takes a path that is its library's SONAME (586d9f1, 118a966)
@@ -54,8 +54,8 @@ lowest its imports need, as mkmod tags it), not the kit's KABI: a k30.1.2 module
 
 ## 2026-10-31 — the first make dist rehearsal: two identical locks (2234f49, 6f3f516, f86507a, 1781a2c)
 
-Two clean full clones, in the container, at different paths and times, give line-for-line identical locks (P-38 S7.2's
-first rehearsal: kit, kernel-k30, modules, drivers, 12 userland packages, both catalogs). Fixes it needed: the
+Two clean full clones, in the container, at different paths and times, give line-for-line identical locks (the
+first such run: kit, kernel-k30, modules, drivers, 12 userland packages, both catalogs). Fixes it needed: the
 kspace, userland and recipes steps build the host pkgmk/pkgtrans when a clean clone has none (2234f49); the
 build-host-path check passes one-component paths such as /src (f86507a). Also: TOOLCHAIN=none for script-only
 packages, where any compile is refused (6f3f516); dlm-src.sh's amix_src_treeish probes kernel/dlm before the root,
@@ -80,7 +80,7 @@ test-dist 35/35, test-lock 13/13.
 
 amix_fetch tries, in order: the cache, AMIX_DISTFILES, the recipe's URL (the original site), then each fallback; the
 sha256 decides every time, and a failed fetch names each source tried. pkgbuild.sh passes our copy as the fallback:
-amigaux/amix-distfiles releases/download/<NAME>-<VERSION>/<the URL's file> (owner, 2026-10-31). A kernel/<dir>/pkg/
+amigaux/amix-distfiles releases/download/<NAME>-<VERSION>/<the URL's file> (2026-10-31). A kernel/<dir>/pkg/
 build.sh that exits 3 (an input outside its recipe absent) is recorded as waiting; the kspace step runs the rest and
 ends with 3; any other non-zero still fails. test-fetch 12/12, test-dist 31/31.
 
@@ -88,7 +88,7 @@ ends with 3; any other non-zero still fails. test-fetch 12/12, test-dist 31/31.
 
 amix_kmodpkg reads a recipe's object, VERSION, licences, depend= modules and KM_FILES at $KM_ROOT/<path>: the siblings
 by default (amix-packages), the checkout for an in-amix recipe. A refused licence or depend= input now stops the roll
-(it ran in a subshell and carried on). make dist's catalogs step (P-38 S5.1) calls pkgtools' gen-catalog.py as it is
+(it ran in a subshell and carried on). make dist's catalogs step calls pkgtools' gen-catalog.py as it is
 over out/kspace/pkgs and out/userland/pkgs, with the staging root's confs and each space's own, into
 out/{kspace,userland}/{catalog,catalog.md5}; the catalogs carry no time stamp, two runs are identical, and the lock's
 catalog line is `catalog <space> md5 <md5> sha256 <sha256>`. test-kmroot 6/6, test-dist 30/30, test-lock 13/13.
@@ -106,12 +106,11 @@ test-kfsmod 3/3, including a static check that no common script sources through 
 
 git cannot fetch a short hash: make dist refuses a port.pin or fork pin whose commit is not 40 hex digits; the kspace
 step pre-fetches port.pin's full commit into out/cache/port-repo; dlm-src.sh's fallback fetches only a full hash and
-refuses a short one missing from AMIX_PORT_REPO, keeping the kit's PORT_REV label as given (fixes 38feabe, found by
-dlm). CI runs z3660eth's host test. test-dlmsrc 8/8, test-dist 26/26.
+refuses a short one missing from AMIX_PORT_REPO, keeping the kit's PORT_REV label as given (fixes 38feabe). CI runs z3660eth's host test. test-dlmsrc 8/8, test-dist 26/26.
 
 ## 2026-10-31 — make dist's drivers step builds every module on the kit; CI driver host tests (ca08c0e)
 
-The drivers step (P-38 S3.2, D-e) builds every driver module on both lines against this checkout's kabi 1.3 kit:
+The drivers step builds every driver module on both lines against this checkout's kabi 1.3 kit:
 kernel/drivers/{a4091,z3660scsi,z3660eth}/module (a4091's also a4kt710) and the forks cdfs, gayle-ide, paula and
 z3660rtg, each fetched at its pin by commit into out/cache/forks and built with its own Makefile. Every build starts
 clean; z3660rtg links against our own monsw objects, not the retired stand-in. Objects go to out/modules/<line>/<name>
@@ -128,12 +127,12 @@ repository and port.pin's URL). test-dlmsrc 6/6.
 
 The kspace step runs every kernel/<dir>/pkg/build.sh in provider order (kernel/dlm, kernel/k30, kernel/port, each
 kernel/modules/<m>, each kernel/drivers/<d>) with AMIX_BUILD_ROOT=out/build/kspace, copies their .pkg files into
-out/kspace/pkgs and runs the one-version guard. A directory without a build.sh is named with its owner and the step
+out/kspace/pkgs and runs the one-version guard. A directory without a build.sh is named and the step
 exits 3 after running the ones present; a failing build.sh stops it. test-dist 21/21.
 
 ## 2026-10-31 — the lock format and make lock (3be5063)
 
-release/README.md specifies `#amix-lock 1` (P-38 S1.6): the head (the amix commit, the epoch rule, a `dirty` line when
+release/README.md specifies `#amix-lock 1`: the head (the amix commit, the epoch rule, a `dirty` line when
 tracked files differ, the image); the inputs (every pin, distfile and the system manifest); the outputs (kit.digests,
 modules, packages and catalogs per space, media, each by sha256); and the named exceptions. Sections in a fixed order,
 lines sorted, one build one lock. build/mklock writes out/lock as dist's last step; `make lock LOCK=<file>` writes
@@ -141,9 +140,9 @@ nothing and refuses a build whose lock differs, naming each line. test-lock 12/1
 
 ## 2026-10-31 — make dist exists: the driver, partial targets, docs/BUILDING.md (bfcfe76); static libraries as ar D writes them (56ffa22)
 
-build/dist.sh is the driver (P-38 S1.5), build/Makefile has its targets and the top Makefile only delegates. Steps in
+build/dist.sh is the driver, build/Makefile has its targets and the top Makefile only delegates. Steps in
 order: kit, kernel-k30, kernel-k46, modules, drivers, kspace, userland, catalogs, media, lock; dist runs them all and
-stops at the first that fails or is not there yet (exit 3, naming its P-38 step). kit, modules and userland build. Each
+stops at the first that fails or is not there yet (exit 3, naming it). kit, modules and userland build. Each
 step runs in the build container as the calling user, the checkout at /src and the system input read-only at /system;
 it refuses a missing or mismatched system input and a shallow clone. docs/BUILDING.md describes the steps, out/ and the
 reproducibility rules. A payload's static libraries get the member headers `ar D` writes (arnorm.py; dsnorm refuses
@@ -159,7 +158,7 @@ nlink or a payload mode that differs from pkgmap's. The host-path and CLASSES/PS
 
 ## 2026-10-31 — gcc14 remaps build paths; a host path in its payload refused (655529c)
 
-gcc14-env.sh puts -ffile-prefix-map on CC and CXX (P-38 S1.3): the build tree becomes /build, the checkout /src and the
+gcc14-env.sh puts -ffile-prefix-map on CC and CXX: the build tree becomes /build, the checkout /src and the
 toolchain /gcc14, the build tree's map last. The roll refuses a build-host path in a gcc14 payload; for the period
 compiler, which has no such flag and gets fixed paths from make dist's container, it still only reports one.
 repro-selftest 7/7.
@@ -173,7 +172,7 @@ mod.d name, amix-dlm C3-5 v18 §1.2), or in none for a package minted before v18
 
 ## 2026-10-31 — the roll's epoch is the package version's own (a73c4c7)
 
-P-38 D-b: pkgbuild.sh gives the roll package.sh's new optional SOURCE_EPOCH key (seconds; pkgmeta refuses anything
+pkgbuild.sh gives the roll package.sh's new optional SOURCE_EPOCH key (seconds; pkgmeta refuses anything
 else); without it, the time of the last commit that changed the package directory; never the environment's
 SOURCE_DATE_EPOCH (such as the build container's). Without a key and without a commit, the build is refused.
 test-pkgbuild 65/65 with a hostile SOURCE_DATE_EPOCH set; repro-selftest 6/6.
@@ -207,7 +206,7 @@ test-pkgmeta 128/128, test-pkgbuild 61/61; the base package's seven conffiles ro
 ## 2026-10-30 — SYSTEM_PATHS, the base set, period builds, ESSENTIAL (ccb02f3, 9dbd943)
 
 pkgmeta check refuses a prototype object outside PREFIX, /opt/amix/man, /etc, /var and the paths a new SYSTEM_PATHS
-key names (a base package's /usr paths). SET gains `base` (P-36: every install), written first in sets.conf.
+key names (a base package's /usr paths). SET gains `base` (every install), written first in sets.conf.
 CONFFILES must be under /etc or /var. TOOLCHAIN=period builds through the driver: binutils 2.8.1's nm has no -D for
 the stock libc.so.1, which had emptied the undefined-symbol gate and refused every period executable. ESSENTIAL=yes
 writes APKG_ESSENTIAL=yes into pkginfo (apkg then refuses removal); any value but yes or no is refused.
@@ -221,14 +220,14 @@ man<sect>/<name>.<sect> form still works. check-packages: 0 warnings over 13 rec
 
 ## 2026-10-30 — the roll makes CONFFILES lines e conffile with their scripts (936af77)
 
-pkgroll's amix_conffiles (P-36 W3, part 2) makes each CONFFILES line of the work prototype `e conffile` and adds
+pkgroll's amix_conffiles makes each CONFFILES line of the work prototype `e conffile` and adds
 userland/pkgtools' i.conffile and r.conffile beside it as `i` lines, with no host path in the prototype; a path not
 rewritten exactly once refuses the roll. Without CONFFILES the bytes are unchanged. New host test test-conffile
 14/14; a toy package rolled at -1 and -2 keeps an edited file across pkgadd -R and writes .new.
 
 ## 2026-10-30 — CONFFILES, run-level link bands and man-page warnings (318c390)
 
-package.sh may list CONFFILES (P-36 W3, part 1). pkgmeta check refuses a CONFFILES path that is not an f or e line of
+package.sh may list CONFFILES. pkgmeta check refuses a CONFFILES path that is not an f or e line of
 the prototype or is on two of its lines, one under PREFIX or outside /etc and /var or relative, an e object CONFFILES
 does not list, one conffile listed by two packages, an object under /etc/rc.d, and a run-level link outside the boot
 bands; pkginfo says CLASSES=none conffile for such a package and is unchanged otherwise. pkgmeta check warns about
@@ -237,7 +236,7 @@ commands and config files without a man page (5 current packages flagged). test-
 ## 2026-10-30 — the s5 gate marks long-named packages UFS-only (a77c318); interim driver removed (ca7a835)
 
 pkgroll.sh's s5 gate (GATE 3, amix_s5_mark) marks a package with an object basename over 14 bytes UFS-only:
-APKG_FSTYPE=ufs goes into its pkginfo and the s5 rule is waived (P-35); a malformed APKG_FSTYPE, or one naming s5 when
+APKG_FSTYPE=ufs goes into its pkginfo and the s5 rule is waived; a malformed APKG_FSTYPE, or one naming s5 when
 the package has long names, is refused; packages without long names roll byte-identical. New host test test-s5mark
 26/26. The interim driver build/pkg/common/pkgbuild.sh is removed; build/pkg/pkgbuild.sh drives every package.
 

@@ -111,6 +111,11 @@ RUN set -e; cc=build/prefix/bin/m68k-elf-gcc; \
     sed -n '/^p:/,/rts/p' abi.s | grep -q '%d0'; \
     sed -n '/^r:/,/rts/p' abi.s | grep -q '(%a0)'; \
     rm abi.s
+# the fork's own tests: shared libraries built with -shared and checked by
+# readelf (their on-box run is the fork's), and the compat layer's host
+# batteries; their output is not part of the toolchain
+RUN tools/test-shared.sh && tools/test-compat-host.sh \
+ && rm -rf build/test-shared build/hosttest
 # amix-system's absolute links into usr/amiga and usr/ucblib (libscreen.so,
 # include/amiga, libdbm.a, libucb.a) made relative, so they resolve in the
 # sysroot; the script is bind-mounted, not left in the image

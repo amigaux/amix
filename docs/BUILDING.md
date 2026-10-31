@@ -2,9 +2,8 @@
 
 `make dist` builds the release from this checkout and one closed input, the
 Commodore system files: the ABI kits, the kernels, the modules and drivers,
-both package catalogs and the media, all under `out/`. The plan is P-38
-(*make dist for 1.1*); this page is how it works today. Steps that are not in
-make dist yet say so and stop it (exit 3), naming the P-38 step and its owner.
+both package catalogs and the media, all under `out/`. This page is how it
+works today. Steps that are not in make dist yet say so and stop it (exit 3).
 
 ## What you need
 
@@ -37,18 +36,18 @@ In make dist's order, provider before consumer. Each is also a target of its
 own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 `build/`.
 
-| Target | What it builds | Output | P-38 | Status |
-|---|---|---|---|---|
-| `kit` | kernel/dlm's ABI kits, k30 and k46, with the port at `kernel/port/port.pin` | `out/kit/{k30,k46,kit.digests}` | S2.1, dlm | builds |
-| `kernel-k30` | the 68030 kernel: the cut of record (`kernel/k30/cuts/CURRENT`) rebuilt by k30's hook `kernel/k30/cuts/build.sh`, which refuses sums other than the record's | `kernel/k30/build/cuts/<id>/` (kern30m reads it there), its sums in `out/kernels/k30.list` | S2.2, k30 | builds |
-| `kernel-k46` | the 68040/68060 kernel: the cut of record (`kernel/port/cuts/CURRENT`) rebuilt by the port's hook `kernel/port/cuts/build.sh`, which fetches the port at `kernel/port/port.pin` and refuses sums other than the record's | `kernel/port/build/cuts/<id>/` (kern46m reads it there), its sums in `out/kernels/k46.list` | S2.3, port | builds |
-| `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
-| `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
-| `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
-| `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name, each after the packages its `BUILD_DEPENDS` names (`recipes/<name>` builds those first); a cycle or a name that is no package is refused | `out/userland/pkgs/` | S4.1 | builds |
-| `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and the space's own: `userland/packages/conf`, and `kernel/conf` for kernel space (its `names.conf` names each kernel package; kernel packages without it are refused); no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
-| `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
-| `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
+| Target | What it builds | Output | Status |
+|---|---|---|---|
+| `kit` | kernel/dlm's ABI kits, k30 and k46, with the port at `kernel/port/port.pin` | `out/kit/{k30,k46,kit.digests}` | builds |
+| `kernel-k30` | the 68030 kernel: the cut of record (`kernel/k30/cuts/CURRENT`) rebuilt by k30's hook `kernel/k30/cuts/build.sh`, which refuses sums other than the record's | `kernel/k30/build/cuts/<id>/` (kern30m reads it there), its sums in `out/kernels/k30.list` | builds |
+| `kernel-k46` | the 68040/68060 kernel: the cut of record (`kernel/port/cuts/CURRENT`) rebuilt by the port's hook `kernel/port/cuts/build.sh`, which fetches the port at `kernel/port/port.pin` and refuses sums other than the record's | `kernel/port/build/cuts/<id>/` (kern46m reads it there), its sums in `out/kernels/k46.list` | builds |
+| `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | builds |
+| `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | builds |
+| `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named | `out/kspace/pkgs/` | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
+| `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name, each after the packages its `BUILD_DEPENDS` names (`recipes/<name>` builds those first); a cycle or a name that is no package is refused | `out/userland/pkgs/` | builds |
+| `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and the space's own: `userland/packages/conf`, and `kernel/conf` for kernel space (its `names.conf` names each kernel package; kernel packages without it are refused); no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | builds |
+| `media` | the CD, netinstall and floppy media | `out/media/` | not yet |
+| `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | builds |
 
 `make tools` builds the container (`toolchain/container-build.sh`).
 
@@ -57,7 +56,7 @@ with no arguments it rolls all its recipes, with names those; it reads
 `AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
 `$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
 and exits non-zero on a failure. It exits 3 when an input outside the recipe
-is absent, with a `[MISSING]` line naming the P-38 step and owner (a kernel
+is absent, with a `[MISSING]` line naming the input (a kernel
 cut's output, for one); the step then runs the other directories and ends
 with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from
 their own pinned epoch, never the environment's.
@@ -66,7 +65,7 @@ A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<v
 rebuilds everything and refuses the result if any line of its lock differs
 (`release/README.md`).
 
-`build/dist-proof WORKDIR [COMMIT]` is the proof itself (P-38 S7.2): it clones
+`build/dist-proof WORKDIR [COMMIT]` is the proof itself: it clones
 the commit twice, at two different paths under WORKDIR, runs every step in
 each, and compares the two locks; with `LOCK=` each run is also checked
 against the lock of record. A step that exits 3 is a known gap and the run

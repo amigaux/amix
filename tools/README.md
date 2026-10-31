@@ -8,14 +8,14 @@ Tools that run on the box itself are ordinary packages under `userland/`.
 
 ## privacy-check
 
-`privacy-check` is the gate between a landing and the public repository: it
+`privacy-check` is the gate before anything reaches the public repository: it
 checks commits (`--range A..B`, `--all REF`, or `--pre-push` fed by git's
 pre-push hook) or a single tree (`--tree REF`) and refuses five classes of
-material: private network addresses, station files of the maintainers'
-tooling, secrets such as private keys and access tokens, disk and ROM images,
+material: private network addresses, the maintainers' local tool files,
+secrets such as private keys and access tokens, disk and ROM images,
 oversized blobs and the system files listed in `system/MANIFEST.sha256`, and
 AI attribution in our own commit messages. Contributors' commits are kept as
-written, so the station-file and attribution classes apply only to our
+written, so the tool-file and attribution classes apply only to our
 commits. It prints one line per hit and exits 0 when clean, 1 on hits and 2 on
 any error. A commit is judged on what it adds: the address and secret classes
 read only the lines it adds relative to its first parent (all of them for a

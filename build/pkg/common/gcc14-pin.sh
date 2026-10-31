@@ -27,21 +27,23 @@ gcc14-pin.sh)
 esac
 
 # path-in-prefix<SPACE>sha256, at gcc14-cross-amix AMIX_GCC14_COMMIT.
-# Re-pinned 2026-10-30 (owner, option b) to the build container's gcc14:
-# toolchain/Containerfile builds b51ff39 (the public amigaux/gcc14-cross-amix,
-# branch upstream-58130fe-plus: Antti's 58130fe plus the m68020-60 runtime
-# fix) reproducibly, with the sysroot inside the prefix, and
-# toolchain/gcc14-cross-amix.tree pins the whole tree.
+# Re-pinned 2026-10-30 to the build container's gcc14:
+# toolchain/Containerfile builds the pin reproducibly, with the sysroot inside
+# the prefix, and toolchain/gcc14-cross-amix.tree pins the whole tree.
+# f40055b (2026-10-31; the public amigaux/gcc14-cross-amix, branch
+# upstream-58130fe-plus) adds `gcc -shared`, libamixc99's __cxa_finalize for
+# shared libraries, and library constructors run after the program's
+# start-up: libamixc99.a and the specs change, cc1 and libgcc.a do not.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=b51ff39c500adadca629d7caf2a1d20a00fced03
+AMIX_GCC14_COMMIT=f40055bc894b4e1a547c25cb7f396cc2f4a02d4f
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
-m68k-elf/lib/libamixc99.a 78436c8b23eb9bb28bd4de4eb0fb1f2195caa3df9729a5938cae9fffa7035ca5
-lib/gcc/m68k-elf/14.2.0/specs 0e0d3ff1ca55cd4ece6428b39e10bccfa732cc0d5ce0c1c4abce7ce6ca5498e3"
+m68k-elf/lib/libamixc99.a 1ac4df85649b8b6baf99a012567a460f636c32cff9619c8e88b9ddc3c1077b51
+lib/gcc/m68k-elf/14.2.0/specs 3dd30d468963fba3565ad9febc3327aaee5f10ded4c54c6a1c44360388ba89b4"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
@@ -81,7 +83,7 @@ amix_g14_abi_selfcheck() {
 }
 
 # amix_g14_align_check <cc> <arch flags> <cflags> -- the userland alignment
-# flag (owner decision 2026-10-27): every GCC 14 USERLAND compile drops strict
+# flag: every GCC 14 USERLAND compile drops strict
 # alignment.  GCC 14's m68k-elf default is strict: it reads an unaligned int
 # (and even a stacked pointer argument) a byte or word at a time; on a real
 # 68LC060 Dhrystone ran 1.60x faster with -mno-strict-align.  The 68020
@@ -101,7 +103,7 @@ amix_g14_align_check() {
 		done | tail -1)
 		[ "$_gal_last" = -mno-strict-align ] || {
 			echo "[FAIL] TOOLCHAIN=gcc14: '$_gal_set' does not end with -mno-strict-align" >&2
-			echo "       (gcc14-env.sh AMIX_ARCH_FLAGS; owner decision 2026-10-27)" >&2
+			echo "       (gcc14-env.sh AMIX_ARCH_FLAGS)" >&2
 			_gal_rc=1
 		}
 	done

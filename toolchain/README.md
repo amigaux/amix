@@ -16,10 +16,12 @@ Each pin is one line, `<repository URL> <full commit hash>`, the same format
 as `kernel/port/port.pin`.
 
 gcc14-cross-amix is pinned in the organisation's fork, on the branch
-`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus two
-commits on their way to it, one that builds the runtime for the whole
-68020–68060 range so it also runs on a 68881/68882 (and checks that it does),
-and one that refuses a sysroot without `stdint.h`. Once upstream has them, the
+`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus the
+commits on their way to it: the runtime built for the whole 68020–68060 range
+so it also runs on a 68881/68882 (and a check that it does), a refusal of a
+sysroot without `stdint.h`, and shared libraries: `gcc -shared`,
+libamixc99's `__cxa_finalize` for them, and their constructors run after the
+program's start-up. Once upstream has them, the
 pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
@@ -109,7 +111,7 @@ members, in `__FILE__` strings, both of which name the build directory
 headers. None of that reaches a linked, stripped program: the container's
 gcc14 builds kernel/dlm's box binaries byte-identical to the workstation
 build's, kbootset `1511ef9b` (kbootset -28's) and modadmin `74aa6272`
-(modtools -9's), measured by the dlm station 2026-10-31.
+(modtools -9's), measured 2026-10-31.
 
 ## How kernel/dlm uses them
 
@@ -149,7 +151,7 @@ container kit with a container kit.
 ## What the kernel cuts take from here
 
 The 68040/68060 port's cut and relink scripts need two things the image does
-not carry as such (P-38 S1.4):
+not carry as such:
 
 - **NetBSD 10.1's `syssrc.tgz`** (the FPSP, the 060 package, the FPE),
   pinned in `netbsd-syssrc.distfile`: one line, `<URL> <sha256> [<URL>...]`.
@@ -179,9 +181,9 @@ not carry as such (P-38 S1.4):
   `PATH`. The objects are not those of Ubuntu's m68k-linux-gnu binutils
   2.46, which the k46 cut 68060-261031-52 was made with: binutils 2.43.1
   relaxes the FPSP 040's `stan.s:231` `lea PITBL+0x200,%a1` to PC-relative,
-  two bytes shorter, where 2.46 keeps it absolute (measured by the k30
-  station, 2026-10-31). So -52 cannot be reproduced through the shim, and
-  the k46 line is re-cut as -53 with it (Q8: one binutils). An earlier
+  two bytes shorter, where 2.46 keeps it absolute (measured 2026-10-31). So
+  -52 cannot be reproduced through the shim, and the k46 line is re-cut as
+  -53 with it, so that one set of binutils serves both. An earlier
   comparison here reported the FPSP and ISP objects identical; it did not
   hold.
 

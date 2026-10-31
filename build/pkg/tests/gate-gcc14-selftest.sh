@@ -30,7 +30,7 @@
 #     passes the pinned compiler and rejects the pre-fix one;
 #   - dlm-src.sh's check before amix-dlm's box builds (kbootset, modadmin)
 #     uses the same pins: it refuses that prefix and passes the real one;
-#   - -mno-strict-align (owner decision 2026-10-27) is enforced: amix-env.sh
+#   - -mno-strict-align is enforced: amix-env.sh
 #     refuses flags without it or ending in -mstrict-align, the -S probe
 #     rejects a compiler that still splits an unaligned load, and
 #     amix_gate_g14_strict rejects make-log compile lines without it.
@@ -172,7 +172,7 @@ amix_gate_g14_llprintf "$T/llsn" >/dev/null 2>&1 || fail "ll-printf gate rejecte
 ok "ll-printf gate rejects printf(\"%lld\"), honours a review, passes snprintf-only"
 
 # FPU: -mcpu=68060 emits fdmul/fdadd for double arithmetic, which a
-# 68881/68882 lacks (SIGSYS on the 030 golden row); the recipe flags do not.
+# 68881/68882 lacks (SIGSYS on a 68030 with a 68882); the recipe flags do not.
 printf 'double fma2(double a, double b) { return a * b + a; }\nint main(int c, char **v) { return (int)fma2(c, 1.5); }\n' > "$T/fp.c"
 mkdir -p "$T/fp060" "$T/fpok"
 $CC -mcpu=68060 -O2 -o "$T/fp060/prog" "$T/fp.c"
@@ -494,7 +494,7 @@ grep 'not the pinned toolchain' "$T/dlmpin.log" >/dev/null && grep 'specs:' "$T/
 	{ cat "$T/dlmpin-ok.log" >&2; fail "dlm-src.sh's box check refused the pinned toolchain"; }
 ok "dlm-src.sh's box-build check (kbootset, modadmin) refuses the one-byte specs change, passes the pinned prefix"
 
-# -mno-strict-align (owner decision 2026-10-27): the flag sets that lack it, or
+# -mno-strict-align: the flag sets that lack it, or
 # override it later, are refused by amix-env.sh; a compiler that still splits
 # an unaligned load (a wrapper appending -mstrict-align) fails the -S probe;
 # the make-log half of amix_gate_g14_strict rejects a compile line without it

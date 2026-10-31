@@ -1,4 +1,4 @@
-# package.sh -- GNU diffutils 2.8.1 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU diffutils 2.8.1; assignments only.
 NAME=diffutils
 PKG=diffutil
 VERSION=2.8.1

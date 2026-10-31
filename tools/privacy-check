@@ -23,7 +23,7 @@ judge every added or modified file whole; --tree judges whole files.
 
 Classes:
   1  private network addresses (RFC 1918 IPv4, IPv6 ULA) and local patterns
-  2  station files (CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/) in our
+  2  local tool files (CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/) in our
      commits, and at the tip when the last change to them was ours
   3  secrets: private keys, token shapes, passwords in config files,
      password hashes in shadow files, .netrc and SSH key files
@@ -60,8 +60,8 @@ TEXT_LIMIT = 16 * 1024 * 1024
 MANIFEST_PATH = "system/MANIFEST.sha256"
 WITHHELD = "<withheld>"
 
-STATION_NAMES = {"claude.md", "claude.local.md", "agents.md"}
-STATION_DIR = ".claude"
+TOOL_FILE_NAMES = {"claude.md", "claude.local.md", "agents.md"}
+TOOL_FILE_DIR = ".claude"
 
 IMAGE_EXTS = {".rom", ".adf", ".adz", ".hdf", ".hdz", ".img", ".iso", ".dms"}
 NETRC_NAMES = {".netrc", "_netrc"}
@@ -153,10 +153,10 @@ def extension(path):
     return base[dot:].lower() if dot > 0 else ""
 
 
-def is_station_path(path):
+def is_tool_file_path(path):
     for part in path.split("/"):
         low = part.lower()
-        if low in STATION_NAMES or low == STATION_DIR:
+        if low in TOOL_FILE_NAMES or low == TOOL_FILE_DIR:
             return True
     return False
 
@@ -577,8 +577,8 @@ class Checker(object):
         ours = self.is_ours(author)
         manifest = self.manifest_for(sha)
         for path, oid, base in self.changed_blobs(sha, len(parents)):
-            if ours and is_station_path(path):
-                self.hit(sha, 2, path, "station file in our commit")
+            if ours and is_tool_file_path(path):
+                self.hit(sha, 2, path, "local tool file in our commit")
             self.scan_blob(sha, path, oid, manifest, base)
         self.scan_text(sha, "message", message, " in message")
         if ours:
@@ -594,7 +594,7 @@ class Checker(object):
             if not raw:
                 continue
             path = os.fsdecode(raw)
-            if not is_station_path(path):
+            if not is_tool_file_path(path):
                 continue
             last = git("log", "-1", "--format=%H%x00%an <%ae>", tip, "--", path)
             last = last.decode("utf-8", "replace").strip()
@@ -602,9 +602,9 @@ class Checker(object):
                 lsha, _, ident = last.partition("\0")
                 if not self.is_ours(ident):
                     continue
-                detail = "station file at tip, last changed by our commit %s" % lsha[:10]
+                detail = "local tool file at tip, last changed by our commit %s" % lsha[:10]
             else:
-                detail = "station file at tip, origin unknown"
+                detail = "local tool file at tip, origin unknown"
             self.hit(tip, 2, path, detail)
 
     def check_tree(self, ref):
@@ -627,8 +627,8 @@ class Checker(object):
             if typ != "blob":
                 continue
             count += 1
-            if commit is None and is_station_path(path):
-                self.hit(label, 2, path, "station file in tree")
+            if commit is None and is_tool_file_path(path):
+                self.hit(label, 2, path, "local tool file in tree")
             self.scan_blob(label, path, oid, manifest)
         if commit is not None:
             self.check_tip(commit)
@@ -723,7 +723,7 @@ def build_parser():
     p = argparse.ArgumentParser(
         prog="privacy-check",
         description="Check commits or a tree for material that must not be "
-                    "published: private addresses (1), station files (2), "
+                    "published: private addresses (1), local tool files (2), "
                     "secrets (3), images and system files (4), AI attribution "
                     "in our messages (5).",
         epilog="Exit 0 clean, 1 hits, 2 usage or git error. Environment: "
