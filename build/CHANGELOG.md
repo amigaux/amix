@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the kspace catalog names its packages from kernel/conf (0acf9a5); kernel-k30 runs k30's hook (e39cd58)
+
+The catalogs step passes kernel/conf as the kernel-space catalog's --packages-conf, so a kernel package is catalogued
+under its name (zeth46 as z3660eth-k46); a kspace staging dir with packages and no names.conf is refused. make dist's
+kernel-k30 step runs `sh kernel/k30/cuts/build.sh` (the cut of record, sums refused if they differ); its `kernel k30
+<path> <sha256>` lines go to out/kernels/k30.list and the lock. On the host all seven -63 sums reproduce in 16 s.
+test-dist 35/35, test-lock 13/13.
+
 ## 2026-10-31 — the original site first, our copy as the fallback (80d9050); a kspace hook's exit 3 (7ce5a35)
 
 amix_fetch tries, in order: the cache, AMIX_DISTFILES, the recipe's URL (the original site), then each fallback; the
