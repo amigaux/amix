@@ -648,7 +648,12 @@ carries
 .B BASEDIR
 (\(lqrequires a base directory\(rq, interaction required), whatever the
 admin file says, so such a package installs only through APKGENG\(aqs
-pkgadd.
+pkgadd.  It also stops to ask about files another package owns and about
+install scripts, even with
+.B conflict=nocheck
+and
+.BR action=nocheck ,
+so under it such a package does not install non-interactively.
 .TP
 .B pkgrm
 pkgrm binary (default

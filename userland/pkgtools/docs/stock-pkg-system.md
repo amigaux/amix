@@ -110,9 +110,16 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
 - **admin(4) policy** `/var/sadm/install/admin/default`: `mail=root`, `instance=unique`,
   `basedir=default`, and every check = `ask` (`partial`/`runlevel`/`idepend`/`rdepend`/`space`/
   `setuid`/`conflict`/`action`). A permissive admin (`*=nocheck`, `instance=overwrite`) + `pkgadd -n`
-  runs non-interactive for packages with no install scripts and no file another package owns ✅;
-  with either, it is open 🟡: an install of amxbase with `-n -a /tmp/admin` (`conflict=` and
-  `action=nocheck`) still listed the conflicting files and suspended, rc 5 (rig E1, 2026-10-31).
+  runs non-interactive for packages with no install scripts and no file another package owns ✅.
+- **The stock `pkgadd` asks the conflict and the script questions whatever the admin file says** ✅
+  (emulated stock 2.1c, row E1, 2026-10-31, amxbase: files core owns, install scripts). Under `-n`,
+  with `conflict=nocheck` and `action=nocheck`, it prints "The following files are already installed
+  on the system and are being used by another package:" with an empty list, then "suspended
+  (interaction required)", rc 5, nothing installed; the admin file named by full path (`-a
+  /tmp/admin`) and by name under `/var/sadm/install/admin` fail alike. Without `-n` it asks "Do you
+  want to install these conflicting files" and the super-user scripts question, and a `y` to each
+  goes on. Whether it ignores the whole file or only those two keys is open 🟡. So such a package
+  installs non-interactively only through APKGENG's pkgadd, or with the answers on stdin.
 - **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, row E1, 2026-10-31;
   toy packages varied one parameter at a time, evidence `tmp/2026-10-30-pkgtools-basedir/rig/E1`).
   `/usr/sbin/pkgadd -n -a <admin> -d <pkg>` of any package whose pkginfo carries `BASEDIR` (`/`,
