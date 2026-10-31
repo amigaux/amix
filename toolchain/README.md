@@ -152,24 +152,26 @@ The 68040/68060 port's cut and relink scripts need two things the image does
 not carry as such (P-38 S1.4):
 
 - **NetBSD 10.1's `syssrc.tgz`** (the FPSP, the 060 package, the FPE),
-  pinned in `netbsd-syssrc.distfile`: one line, `<URL> <sha256>`. A distfile
-  pin is not a `.pin` (a repository and a commit), and the image's cache key
-  does not read it. The URL is our copy, a release asset of
-  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles), never
-  NetBSD's own site (10.1 has already moved from cdn.netbsd.org to
-  archive.netbsd.org). It is the file NetBSD publishes as
+  pinned in `netbsd-syssrc.distfile`: one line, `<URL> <sha256> [<URL>...]`.
+  A distfile pin is not a `.pin` (a repository and a commit), and the image's
+  cache key does not read it. The first URL is the original site,
+  archive.netbsd.org (10.1 has already moved there from cdn.netbsd.org); the
+  next is our copy, a release asset of
+  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles) under
+  the upstream's own name (`netbsd-10.1/syssrc.tgz`), for when it moves
+  again. It is the file NetBSD publishes as
   `NetBSD-10.1/source/sets/syssrc.tgz`, 79497697 bytes, sha512
   `766ac21f…8c06926` as in NetBSD's `SHA512`, the same sha256 the port's
   `tools/netbsd-pin.sh` checks.
 
   ```sh
-  toolchain/fetch-distfile toolchain/netbsd-syssrc.distfile    # -> out/cache/syssrc-10.1.tgz
+  toolchain/fetch-distfile toolchain/netbsd-syssrc.distfile    # -> out/cache/syssrc.tgz
   ```
 
   It is fetched at cut time into `out/cache` (ignored), not baked into the
-  image, and only kept once its sha256 matches. `AMIX_DISTFILES=<dir>` takes
-  the file from a local directory instead (a mirror, or before the asset is
-  uploaded).
+  image, in build/pkg/common/fetch.sh's order: the cache, then
+  `AMIX_DISTFILES=<dir>` (a local directory of distfiles, when it holds the
+  pinned bytes), then each URL; the sha256 decides every time.
 - **The `m68k-linux-gnu` tools** the scripts call by name (gcc as an
   assembler with cpp, as, ld, ar, nm, objcopy, objdump, readelf, size).
   `toolchain/m68k-gnu-bin <dir>` links each to gcc14's `m68k-elf-*` of the

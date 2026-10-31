@@ -45,11 +45,17 @@ check "fetch: a refused file is not left in the cache" test ! -e "$T/cache/thing
 refused "fetch: a file missing from AMIX_DISTFILES: the URL is tried" "download failed: https://example.invalid/" \
 	env AMIX_DISTFILES="$T/cache" sh "$here/fetch-distfile" "$T/thing.pin" "$T/cache"
 echo "http://example.invalid/thing-1.0.tgz $sha" > "$T/bad.pin"
-refused "fetch: a pin without an https URL is refused" "no https URL" fetch "$T/bad.pin" "$T/cache"
+refused "fetch: a pin without an https URL is refused" "is not an https URL" fetch "$T/bad.pin" "$T/cache"
+echo "https://example.invalid/thing-1.0.tgz $sha http://example.invalid/ours/thing-1.0.tgz" > "$T/bad.pin"
+refused "fetch: a fallback that is not https is refused" "is not an https URL" fetch "$T/bad.pin" "$T/cache"
 echo "https://example.invalid/thing-1.0.tgz abc" > "$T/bad.pin"
 refused "fetch: a pin without a sha256 is refused" "no sha256" fetch "$T/bad.pin" "$T/cache"
-check "fetch: netbsd-syssrc.distfile names our distfiles copy and a sha256" \
-	grep -Eqx 'https://github\.com/amigaux/amix-distfiles/releases/download/[^ ]+ [0-9a-f]{64}' "$here/netbsd-syssrc.distfile"
+rm -rf "$T/cache"
+echo "https://example.invalid/up/thing-1.0.tgz $sha https://example.invalid/ours/thing-1.0.tgz" > "$T/two.pin"
+refused "fetch: the original, then our copy; neither reachable, both named" "       https://example.invalid/ours/thing-1.0.tgz" \
+	env AMIX_DISTFILES="$T/empty" sh "$here/fetch-distfile" "$T/two.pin" "$T/cache"
+check "fetch: netbsd-syssrc.distfile names archive.netbsd.org first, our copy second, under the upstream's name" \
+	grep -Eqx 'https://archive\.netbsd\.org/[^ ]+/syssrc\.tgz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/netbsd-10\.1/syssrc\.tgz' "$here/netbsd-syssrc.distfile"
 
 # --- m68k-gnu-bin -------------------------------------------------------------------
 mkdir -p "$T/g14/prefix/bin"

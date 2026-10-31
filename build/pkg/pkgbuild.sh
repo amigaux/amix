@@ -154,7 +154,10 @@ if [ -n "$SRCTREE" ]; then
 	echo "  in-tree source ${SRCTREE#$TOP/}: $(cd "$TREE" && find . -type f | wc -l) files, digest $SRCDIGEST"
 else
 	TARBALL="$SRC/${URL##*/}"
-	amix_fetch "$URL" "$SHA256" "$TARBALL"
+	# the original site first, then our copy (amigaux/amix-distfiles, the
+	# release <name>-<version>, the upstream's file name); the pin decides
+	amix_fetch "$URL" "$SHA256" "$TARBALL" \
+		"https://github.com/amigaux/amix-distfiles/releases/download/$NAME-$VERSION/${URL##*/}"
 	case "$TARBALL" in
 	*.tar.gz|*.tgz) tar xzf "$TARBALL" -C "$WORKDIR" ;;
 	*.tar.bz2)      tar xjf "$TARBALL" -C "$WORKDIR" ;;

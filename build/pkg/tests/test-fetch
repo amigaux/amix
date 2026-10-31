@@ -37,11 +37,12 @@ def write(path, data):
         fp.write(data)
 
 
-def fetch(url, sha, dst, distfiles=None):
+def fetch(url, sha, dst, distfiles=None, *fallbacks):
     env = {k: v for k, v in os.environ.items() if k != "AMIX_DISTFILES"}
     if distfiles is not None:
         env["AMIX_DISTFILES"] = distfiles
-    p = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_fetch "$2" "$3" "$4"', "sh", FETCH, url, sha, dst],
+    p = subprocess.run(["/bin/sh", "-c", '. "$1"; shift; amix_fetch "$@"', "sh", FETCH, url, sha, dst]
+                       + list(fallbacks),
                        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return p.returncode, p.stdout.decode("utf-8", "replace")
 
@@ -73,7 +74,8 @@ try:
     os.remove(dst)
     rc, out = fetch(nowhere, sha, dst, dist)
     check("other bytes locally and the URL unreachable: refused, nothing left",
-          rc == 1 and "download failed" in out and not os.path.exists(dst)
+          rc == 1 and "download failed" in out and "no source gave the pinned bytes" in out
+          and not os.path.exists(dst)
           and not os.path.exists(dst + ".part"), out)
 
     rc, out = fetch("file://" + src, sha, dst, os.path.join(tmp, "empty"))
@@ -85,8 +87,33 @@ try:
     write(src, b"tampered upstream\n")
     rc, out = fetch("file://" + src, sha, dst)
     check("the URL's bytes are not the pin: refused, the download not left behind",
-          rc == 1 and "is not the pinned source tarball" in out and not os.path.exists(dst)
+          rc == 1 and "not the pinned bytes (sha256 " in out and not os.path.exists(dst)
           and not os.path.exists(dst + ".part"), out)
+
+    # --- the original site first, our copy as the fallback ---------------------------
+    ours = os.path.join(tmp, "ours", "zlib-1.3.tar.gz")
+    write(ours, good)
+    rc, out = fetch(nowhere, sha, dst, None, "file://" + ours)
+    check("the original unreachable: our copy, checked",
+          rc == 0 and "download failed: %s" % nowhere in out and "fetch   file://%s" % ours in out
+          and open(dst, "rb").read() == good, out)
+    os.remove(dst)
+    rc, out = fetch("file://" + src, sha, dst, None, "file://" + ours)
+    check("the original with other bytes: passed over, our copy taken",
+          rc == 0 and "not the pinned bytes" in out and open(dst, "rb").read() == good, out)
+    os.remove(dst)
+    write(src, good)
+    rc, out = fetch("file://" + src, sha, dst, None, "file://" + os.path.join(tmp, "never"))
+    check("the original good: our copy never asked for",
+          rc == 0 and out.count("fetch   ") == 1 and open(dst, "rb").read() == good, out)
+    os.remove(dst)
+    rc, out = fetch(nowhere, sha, dst, None, "https://example.invalid/ours/zlib-1.3.tar.gz")
+    check("neither gives the bytes: refused, both named",
+          rc == 1 and "       %s" % nowhere in out and "       https://example.invalid/ours/" in out
+          and not os.path.exists(dst), out)
+    write(os.path.join(dist, "zlib-1.3.tar.gz"), good)
+    rc, out = fetch(nowhere, sha, dst, dist, "https://example.invalid/ours/zlib-1.3.tar.gz")
+    check("AMIX_DISTFILES first, before both URLs", rc == 0 and "fetch   " not in out, out)
 finally:
     shutil.rmtree(tmp)
 
