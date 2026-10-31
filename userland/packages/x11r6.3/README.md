@@ -74,6 +74,8 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   the unsigned bound), `lib/font/Speedo/do_trns.c` (sp_proc_outl_data: the index is a byte's high
   nibble) and `lib/font/Type1/type1.c` (Decode: the bound is set on the only path into the block).
   Those switches compile to compare chains; nothing else changes.
+- **xrdb** runs the box's `/usr/ccs/lib/cpp` (the stock SVR4 cpp; the stock xrdb names
+  `/usr/public/lib/gcc-cpp`); `xrdb -cpp <path>` picks another, `-nocpp` none.
 - **Installs** go through the tree's BSD-style `config/util/install.sh`, because `bsdinst.sh` calls
   an SVR4 `install`.
 - **Fonts** misc, 75dpi and 100dpi are compiled and indexed by the build host's `bdftopcf` and

@@ -81,7 +81,12 @@ XCC
 	for c in $XCLIENTS; do
 		[ -f programs/$c/Makefile ] || ( cd programs/$c && ../../config/imake/imake -I../../config/cf \
 			-DTOPDIR=../.. -DCURDIR=programs/$c ) > "$BUILD/x-$c-imake.log" 2>&1
-		xmake x-$c.log -C programs/$c
+		if [ $c = xrdb ]; then
+			# xrdb runs a cpp on the box: the stock /usr/ccs/lib/cpp, not the build's
+			xmake x-$c.log -C programs/$c 'CPP=/usr/ccs/lib/cpp $(STD_CPP_DEFINES)'
+		else
+			xmake x-$c.log -C programs/$c
+		fi
 	done
 	echo "  X: strict counts: $(grep -c 'implicit declaration' "$BUILD/make.log") implicit," \
 		"$(grep -c 'pointer from integer\|integer from pointer' "$BUILD/make.log") pointer/integer," \
