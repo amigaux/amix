@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — comments, READMEs and changelog text state the technical facts only (7bdcc55)
+
+.gitignore lists build output alone. monsw 1.0.0-8 re-pins rc/monsw for its header comment; every object and
+monswctl are unchanged.
+
 ## 2026-10-31 — monsw 1.0.0-7: switching needs a writable descriptor; the module is the only form (60a3ec2, d026a2e)
 
 MONSWIOC_RTG, NATIVE and SETCFG return EBADF unless the device is open for writing, so /dev/monsw's 0644 keeps
