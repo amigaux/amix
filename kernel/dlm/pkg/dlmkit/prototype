@@ -1,0 +1,17 @@
+#
+# prototype -- dlmkit30 / dlmkit46: the ABI kit of one kernel line under
+# /usr/dlm/kit/<line>/ (amix-dlm S3-22; the prefix is this repository's
+# proposal, the plan and the kit docs leave it open).
+#
+# AUTHORED HEAD, GENERATED BODY: this file is the head; build.sh appends one
+# line per directory and file of the staged kit, in C sort order
+# (directories 0755 root sys, files 0644 root bin, the kit's executables
+# 0755 root bin), because the kit is ~1100 files that amix-dlm generates.
+# What it holds is pinned by the kit manifest digest in pin.sh, and the
+# pkgroll gates (s5 14-byte names, 68060 scan) run over every line.
+# /usr/dlm and /usr/dlm/kit are shared by both kit packages.
+#
+i pkginfo
+i copyright
+d none /usr/dlm 0755 root sys
+d none /usr/dlm/kit 0755 root sys

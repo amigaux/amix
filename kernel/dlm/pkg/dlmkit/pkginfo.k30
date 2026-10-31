@@ -1,0 +1,13 @@
+PKG=dlmkit30
+NAME=dlmkit30 k30.1.3.261031-12.96720ad - the ABI kit for k30 kernel modules
+ARCH=Amiga
+VERSION=k30.1.3.261031-12.96720ad
+CATEGORY=development
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-dlmkit30-k30.1.3.261031-12.96720ad
+# USERLAND (amix-dlm S3-22): an ordinary catalog entry, no kpkg entry, no
+# apkg kernel-space record, no catalog dependency.  VERSION is the kit's
+# kabi tag, the kit date, the package revision, then KIT_REV.
+APKG_DESC=The ABI kit for k30 (68030) kernel modules, kabi k30.1.3: headers, DDI lists, registries, module tools, make fragment, sample, docs (/usr/dlm/kit/k30)
+DESC=The amix-dlm ABI kit for the k30 line (kabi k30.1.3, KIT_REV 96720ad): the module headers (mod.h, moddefs.h, ksym.h, amixddi.h, monsw.h), the stock Amix 2.1 kernel headers, the DDI v1 allowlists, the major and probe registries, mkmod, modfix, modcheck.py, mkabi.py, the make fragment, the sample module and the module guide.  A module is built on a host with the pinned gcc-cross-amix and Python 3 (tools/modfix is a Linux x86-64 program).  MIT, with Commodore's headers under the 2026-09-23 distribution permission (NOTICE).

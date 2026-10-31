@@ -1,0 +1,13 @@
+PKG=ldramix
+NAME=loader-amix 1.0.261025-11 - the amix boot loader (boot1 + boot2), loader version 3
+ARCH=Amiga
+VERSION=1.0.261025-11
+CATEGORY=system
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-ldramix-1.0.261025-11
+# Kernel space, role=loader (amix-dlm C2-2 v3, C2-3 v2): pure files under
+# /stand/loader.  Installing it writes no boot store; `kbootset
+# loader-install` puts the loader on the store, and only when asked.
+APKG_DESC=The amix boot loader (boot1 bootblock + boot2, loader version 3) under /stand/loader; kbootset loader-install writes it to the boot store.
+DESC=boot1 (the framed 1 KB bootblock) and boot2 (the generation-aware second stage) of the amix-dlm boot loader, for both the 68030 and the 68040/68060 lines, with /stand/loader/ldrinfo naming the loader version and the SHA-256 of both.  Since -10 boot1 and boot2 read the boot partition into the memory its DosEnvec asks for (BufMemType, the Mask), as FFS does: into fast memory where the partition allows, chip memory only when the Mask does not reach fast memory or no boot node matches; boot2 reads whole blocks straight into that buffer.  Upgrade together with kbootset -24, then kbootset loader-install.  Built from amix-dlm 565de49; MIT.

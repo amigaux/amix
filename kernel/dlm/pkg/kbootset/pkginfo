@@ -1,0 +1,13 @@
+PKG=kbootset
+NAME=kbootset 1.1.0.261031-28 - compose, commit and roll back boot generations
+ARCH=Amiga
+VERSION=1.1.0.261031-28
+CATEGORY=system
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-kbootset-1.1.0.261031-28
+# USERLAND (amix-dlm C2-3 v2 sec 4): an ordinary catalog entry, no kpkg
+# entry, no apkg kernel-space record.  Part of the base set.
+APKG_DESC=kbootset: compose, commit, mark good and roll back boot generations from the installed kernel packages (/sbin/kbootset, static).
+APKG_ESSENTIAL=yes
+DESC=The boot-generation composer of the amix-dlm loader: builds a generation from the installed kernel and loader packages, runs its gates, commits it to the boot store with a journal, and marks good, rolls back or picks the next boot.  apkg 0.3 calls it after a transaction that changed kernel space.  Upgrade kern30m -20 and kern46m -50 together with kbootset -22 or later (an old mobo root record on a 030-mode Z3660 is rewritten only from -22 on).  Since kern46m -50, s5 filesystems no longer mount on the 68040/68060 line: s5 is not safe with its 4 KiB pages (S5-37); kernel -82 had s5 built in.  Since -23, after a boot the loader fell back from the default generation on its own, mark-good checks the default and marks it bad when its files are damaged (C2-4 v15).  Since -24 kbootset knows character major 54, /dev/paula: the paula-k30/-k46 module packages need the kabi 1.3 kernels kern30m -22 / kern46m -61 or later, which carry /dev/paula support and a /dev/audio open that fails at once (EIO) when Paula never interrupts instead of hanging the box.  Upgrade it with loader-amix -10: its loaders read the boot partition into fast memory where the partition (its DosEnvec Mask and BufMemType) allows, instead of always into chip memory.  Since -25 `kbootset major NAME` prints a module's majors from the registry, and the manual page kbootset(1M) is installed in /opt/amix/man.  Since -27 `kbootset major -l` lists the whole registry.  Statically linked, GCC 14; built from amix 0c537a4; MIT.
