@@ -31,6 +31,10 @@ stage() {
 	put 0444 net/rc.inet /etc/inet/rc.inet
 	put 0444 net/link.d/aen /etc/inet/link.d/aen
 	put 0444 etc/profile.d/amix-base.sh /etc/profile.d/amix-base.sh
+	# the stock /etc/profile (amix-system, sha256-checked) plus our lines
+	mkdir -p "$DEST/etc"
+	sh etc/mkprofile.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/profile"
+	chmod 0644 "$DEST/etc/profile"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac

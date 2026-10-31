@@ -71,7 +71,7 @@ then `removef -f core`), as it does for the network chain. The list (owner,
 | `/etc/nodename` | written by `ifup` when an `interfaces` line says `name`, or by the install dialog |
 | `/etc/inet/hosts` | `ifup` rewrites this host's own line |
 | `/etc/default/login` | `CONSOLE=` |
-| `/etc/profile` | gains the one guarded line that sources `/etc/profile.d/*.sh` (D-N23) |
+| `/etc/profile` | gains the one guarded line that sources `/etc/profile.d/*.sh` (D-N23). Ours, built at package time: amix-system's stock bytes (sha256-checked) followed by `etc/profile.add`, the only lines this repository holds (`etc/mkprofile.sh`, test `etc/test-profile.sh`) |
 | `/etc/inet/strcf` | read by `slink`; ours as the network chain's |
 
 `/etc/inet/inetd.conf` moves only in the revision that first changes it. The
