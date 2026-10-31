@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — registry: c 48 for the random module (a8719fb)
+
+c 48 goes to `random` (kernel/modules' random module: /dev/random 0, /dev/urandom 1). It is free in the stock tables
+and in 68030-261031-63 and 68060-261031-52 (M-REG1 re-run). kbootset's table is regenerated, and C3-5 v19 gives the
+short name `random` (random30/random46). The kernels compile the registry in, so the module loads only on cuts made
+from a kit with this change.
+
 ## 2026-10-31 — kbootset -29 recipe: the package owns /dev/kinfo (0f60a0e)
 
 kbootset's recipe moves to -29, its release-prep revision (P-38 D-g, not minted): -28's payload plus /dev/kinfo as
