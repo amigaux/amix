@@ -1,0 +1,123 @@
+.TH MONSW 7 "31 October 2026" "monsw"
+.SH NAME
+monsw \- the monitor switch between the chipset display and a display card
+.SH SYNOPSIS
+.B /dev/monsw
+.br
+.B #include <sys/monsw.h>
+.SH DESCRIPTION
+Some display cards share the monitor with the Amiga's own picture: one or
+two lines of the CIA-B port (CTS and SEL of the serial and parallel ports)
+switch a monitor or a KVM between the two.
+.B monsw
+owns those lines.
+It is a loadable kernel module of the demand class: it loads at the first
+open of
+.BR /dev/monsw ,
+or before a card driver that depends on it.
+A card driver switches through its kernel interface; programs use the
+device, as
+.BR monswctl (1M)
+does.
+.SS The value
+The value says which lines switch the monitor and at which level.
+It is a sum of these bits, the meanings of the Z3660's own
+.B monitor_switch
+setting:
+.TP 6
+.B 1
+drive CTS (CIA-B port A, bit 4);
+.TP
+.B 2
+drive SEL (bit 2);
+.TP
+.B 16
+CTS low is the card's picture (without it, CTS high is);
+.TP
+.B 32
+SEL low is the card's picture.
+.PP
+0 touches no line.
+The valid values are 0 to 3, 16 to 19, 32 to 35 and 48 to 51; another value
+is reported once on the console and taken as 0.
+For example, 34 switches with SEL, the card's picture when SEL is low.
+.SS Where the value comes from
+The first of these that is set is the value in effect:
+.TP 4
+1.
+the module parameter
+.BR config ,
+0 or more, in
+.BR /etc/conf/modreg.local.d/monsw :
+the value is then forced, and the next source is refused;
+.TP
+2.
+the value set with
+.BR MONSWIOC_SETCFG ,
+root only.
+At every boot,
+.B /etc/rc2.d/S20monsw
+sets the
+.B monsw
+line of
+.BR /etc/display ;
+when that file has no such line, the first line of the older file
+.BR /etc/monsw ,
+and the boot log says so; when neither has a value it sets nothing;
+.TP
+3.
+the value the first card driver offered when it registered, its seed
+(the Z3660 offers its firmware setting);
+.TP
+4.
+otherwise 0.
+.PP
+A value that cannot be set at boot is one line on the console and in the
+boot log, and the boot goes on.
+.SS Switching
+Only the lines the value names are touched, and nothing is driven until
+the first switch.
+The switch returns to the chipset's picture at the last close of the device
+when the program that asked for the card's picture holds it, so a program
+that dies cannot leave the monitor on the card.
+.SH IOCTLS
+.TP
+.B MONSWIOC_RTG
+switch to the card's picture.
+.TP
+.B MONSWIOC_NATIVE
+switch to the chipset's picture.
+.TP
+.B MONSWIOC_GETCFG
+fill a
+.BR "struct monsw_info" :
+the value in effect, its source, the state, the holder flag and the number
+of cards registered.
+.TP
+.B MONSWIOC_SETCFG
+the argument is the value itself, or \-1 to unset it.
+Root only
+.RB ( EPERM ).
+.B EINVAL
+for a value that is not a valid sum,
+.B EBUSY
+while a value is forced by the parameter.
+.SH FILES
+.TP
+.B /dev/monsw
+character major 52, minor 0.
+.TP
+.B /etc/conf/mod.d/monsw
+the module.
+.TP
+.B /etc/init.d/monsw
+the boot step, linked as
+.BR /etc/rc2.d/S20monsw .
+.TP
+.BR /etc/display ", " /etc/monsw
+the value set at boot.
+.SH SEE ALSO
+.BR monswctl (1M),
+.BR display (4),
+.BR display.d (4),
+.BR xstart (1)
