@@ -31,8 +31,8 @@ with the epoch where the older one left the build time. So these
 datastreams are not shipped under these versions (one version, one set of
 bytes); the 1.1 set is minted by this roll at new revisions when the release
 is prepared, when the pins move. Three recipes are already at theirs, not
-minted: kbootset -30 (it owns `/dev/kinfo` and knows c 48), modtools -10
-and dlmkit -13.
+minted: kbootset -31 (it owns `/dev/kinfo`, knows c 48 and composes
+demand-class filesystem modules), modtools -10 and dlmkit -14 (kabi 1.4).
 
 **dlmkit's pins are the build container's kit** (`amix-toolchain:dist`,
 make dist's reference build). A host build of the same commit gives another

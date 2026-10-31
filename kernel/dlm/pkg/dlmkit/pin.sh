@@ -92,7 +92,15 @@
 # c0b64ee4...; -10 33ea0c7: k30 c883c4fd..., k46 749b19b8...; -11 c2dc7fb:
 # k30 1e317abd..., k46 08463c97...; -12 96720ad (host build): k30
 # db72da99..., k46 cee36ea8...; -13 first pinned at 96720ad (container):
-# k30 6fd5269d..., k46 650b0e50...
+# k30 6fd5269d..., k46 650b0e50...; -13 at 4ccb3f0: k30 85d85d6a..., k46
+# dd8b350b...
+# -14 (not minted; the revision for the release): amix 6bb7dd6, kabi
+# k30.1.4 / k46.1.4: minor 4 adds no name (abi.txt as 1.3's) and says the
+# kernel's core loads a demand-class filesystem module at its first mount;
+# modcheck tags such a module 1.4 and refuses it below.  The kit built in
+# the container as -13's, its digests equal to `make -C build kit` at
+# 6bb7dd6.
+#
 # -13 (not minted; the revision for the release): amix 4ccb3f0, its kit
 # built in the build container (amix-toolchain:dist), the reference build:
 # kabi k30.1.3 / k46.1.3 as -12, with the major registry's c 48 random,
@@ -103,11 +111,11 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=4ccb3f0
+DK_DLM_COMMIT=6bb7dd6
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=4ccb3f0
+DK_MONSW_COMMIT=6bb7dd6
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
@@ -115,9 +123,9 @@ DK_K46_PORT_COMMIT=727cbe7
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
 DK_K46_PORT_HASH=727cbe728a1e7bf040425c3e6a61b190647a28b7
-DK_K30_MANIFEST=85d85d6a5bca2a2c1f0f58cad0eb71e34e630f44e4f428efdf289e6cfef271f6
-DK_K46_MANIFEST=dd8b350ba70cf7771a88f7079f61807ebbeda2e1e48bee731e293beeaf11dee2
+DK_K30_MANIFEST=6d02476630957665f3bab9b7156c729051ac9cc8e5ad95f32d8bacab75b9cbab
+DK_K46_MANIFEST=716f66820634bd047ccf2734fd73686037e906f2ce5fe200c11ded7597fa353e
 
 DK_DATE=261031
-DK_REV=13
+DK_REV=14
 DK_SOURCE_EPOCH=1793404800
