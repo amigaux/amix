@@ -12,6 +12,11 @@
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
+# -10 (not minted; the release-prep revision, P-38 D-g): amix afea7f5 --
+# core patch 0047, -q/-Q/-S print a locked module's (unload=never) unload
+# delay as `never (locked)` (N235c); modadmin fea0e559 (39092 bytes, gcc14
+# b51ff39 in amix-toolchain:dist).  No scripts, ESSENTIAL, as -9.
+#
 # -9 (2026-10-31, P-36 W8): no postinstall or preremove (the inittab line is
 # amix-base's now), APKG_ESSENTIAL=yes; modadmin as 4442c76 builds on the
 # current gcc14 pin b51ff39 (74aa6272, 39028 bytes): the latest that passes
@@ -58,8 +63,8 @@
 # -1 (2026-10-26): amix-dlm 42df482 (reviewed; modadmin as 55722ef, core
 # patch 0015: -k, -a, -p/-w).  Equal to amix-dlm's own build/box/modadmin
 # (text 28756, data 1648, bss 2508).
-MT_DLM_COMMIT=4442c76
-MT_SHA=74aa6272224840e937e7f89451f2c75f8f16d2e5d928404f6d7cd0418e0fc37d
+MT_DLM_COMMIT=afea7f5
+MT_SHA=fea0e559b5d31ffd480c2143ead00c21ea882af1e12e340add8c665e11905d82
 
-MT_VERSION=1.0.261027-9
+MT_VERSION=1.0.261031-10
 MT_SOURCE_EPOCH=1793404800
