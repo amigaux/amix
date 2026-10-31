@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — pkg/: the kern30m recipe moves in (82f8350)
+
+The kern30m recipe (kernel-k30-m) moves in from amix-packages 450ba6a (P-38 S3.3) as make dist's kspace hook
+pkg/build.sh, on build/pkg's harness with no sibling paths. Re-rolled, kern30m k30.1.3.261031-63 has the minted
+payload, pkgmap payload rows, pkginfo and copyright; only the control stamps differ (D-g). Two runs byte-identical.
+
 ## 2026-10-31 — The 040/060 family tools, from amix-kerntools 989e30b (b52b4b8)
 
 tools/: emit-family-chains, k0-gates, the rootdev and cputype stamps, check-chain-stamp, rootdev-assert, the

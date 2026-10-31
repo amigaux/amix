@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — pkg/: the kern46m recipe moves in (b7f0715)
+
+The kern46m recipe (kernel-k46-m) moves in from amix-packages 450ba6a (P-38 S3.3), the twin of kernel/k30/pkg.
+K46M_SRC names the port's cut output. Re-rolled, kern46m k46.1.3.261031-52 matches the minted one but for the control
+stamps (D-g). Two runs byte-identical.
+
 ## 2026-10-31 — the pin moves to our fork's k46-module 0d37eb1 (5910d09)
 
 port.pin moves from d0e8857 to amigaux/amix-040-060-port k46-module 0d37eb1 (P-38 S2.3), the sources of cut
