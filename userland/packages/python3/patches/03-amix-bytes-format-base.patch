@@ -1,0 +1,38 @@
+Ours (amigaux): if/else for a switch whose jump table gcc gave no bound check the 060 gate can read.
+
+--- a/Objects/bytesobject.c
++++ b/Objects/bytesobject.c
+@@ -851,23 +851,16 @@
+                     int alternate = flags & F_ALT;
+                     int base;
+ 
+-                    switch(c)
+-                    {
+-                        default:
+-                            Py_UNREACHABLE();
+-                        case 'd':
+-                        case 'i':
+-                        case 'u':
+-                            base = 10;
+-                            break;
+-                        case 'o':
+-                            base = 8;
+-                            break;
+-                        case 'x':
+-                        case 'X':
+-                            base = 16;
+-                            break;
+-                    }
++                    /* AMIX: if/else, not a switch: gcc knew c's range from the code
++                       before it and gave the switch's jump table no bound check */
++                    if (c == 'd' || c == 'i' || c == 'u')
++                        base = 10;
++                    else if (c == 'o')
++                        base = 8;
++                    else if (c == 'x' || c == 'X')
++                        base = 16;
++                    else
++                        Py_UNREACHABLE();
+ 
+                     /* Fast path */
+                     writer.min_size -= 2; /* size preallocated for "%d" */

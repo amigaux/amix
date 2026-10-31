@@ -1,0 +1,107 @@
+Ours (amigaux): PyUnicode/PyBytes_FromFormat format each integer through snprintf, libamixc99's, which reads ll and z right; Amix libc's sprintf reads ll as l and knows no z.
+
+--- a/Objects/unicodeobject.c
++++ b/Objects/unicodeobject.c
+@@ -2895,33 +2895,33 @@
+ 
+         if (*f == 'u') {
+             if (longflag) {
+-                len = sprintf(buffer, "%lu", va_arg(*vargs, unsigned long));
++                len = snprintf(buffer, sizeof(buffer), "%lu", va_arg(*vargs, unsigned long));
+             }
+             else if (longlongflag) {
+-                len = sprintf(buffer, "%llu", va_arg(*vargs, unsigned long long));
++                len = snprintf(buffer, sizeof(buffer), "%llu", va_arg(*vargs, unsigned long long));
+             }
+             else if (size_tflag) {
+-                len = sprintf(buffer, "%zu", va_arg(*vargs, size_t));
++                len = snprintf(buffer, sizeof(buffer), "%zu", va_arg(*vargs, size_t));
+             }
+             else {
+-                len = sprintf(buffer, "%u", va_arg(*vargs, unsigned int));
++                len = snprintf(buffer, sizeof(buffer), "%u", va_arg(*vargs, unsigned int));
+             }
+         }
+         else if (*f == 'x') {
+-            len = sprintf(buffer, "%x", va_arg(*vargs, int));
++            len = snprintf(buffer, sizeof(buffer), "%x", va_arg(*vargs, int));
+         }
+         else {
+             if (longflag) {
+-                len = sprintf(buffer, "%li", va_arg(*vargs, long));
++                len = snprintf(buffer, sizeof(buffer), "%li", va_arg(*vargs, long));
+             }
+             else if (longlongflag) {
+-                len = sprintf(buffer, "%lli", va_arg(*vargs, long long));
++                len = snprintf(buffer, sizeof(buffer), "%lli", va_arg(*vargs, long long));
+             }
+             else if (size_tflag) {
+-                len = sprintf(buffer, "%zi", va_arg(*vargs, Py_ssize_t));
++                len = snprintf(buffer, sizeof(buffer), "%zi", va_arg(*vargs, Py_ssize_t));
+             }
+             else {
+-                len = sprintf(buffer, "%i", va_arg(*vargs, int));
++                len = snprintf(buffer, sizeof(buffer), "%i", va_arg(*vargs, int));
+             }
+         }
+         assert(len >= 0);
+--- a/Objects/bytesobject.c
++++ b/Objects/bytesobject.c
+@@ -273,13 +273,13 @@
+ 
+         case 'd':
+             if (longflag) {
+-                sprintf(buffer, "%ld", va_arg(vargs, long));
++                snprintf(buffer, sizeof(buffer), "%ld", va_arg(vargs, long));
+             }
+             else if (size_tflag) {
+-                sprintf(buffer, "%zd", va_arg(vargs, Py_ssize_t));
++                snprintf(buffer, sizeof(buffer), "%zd", va_arg(vargs, Py_ssize_t));
+             }
+             else {
+-                sprintf(buffer, "%d", va_arg(vargs, int));
++                snprintf(buffer, sizeof(buffer), "%d", va_arg(vargs, int));
+             }
+             assert(strlen(buffer) < sizeof(buffer));
+             WRITE_BYTES(buffer);
+@@ -287,26 +287,26 @@
+ 
+         case 'u':
+             if (longflag) {
+-                sprintf(buffer, "%lu", va_arg(vargs, unsigned long));
++                snprintf(buffer, sizeof(buffer), "%lu", va_arg(vargs, unsigned long));
+             }
+             else if (size_tflag) {
+-                sprintf(buffer, "%zu", va_arg(vargs, size_t));
++                snprintf(buffer, sizeof(buffer), "%zu", va_arg(vargs, size_t));
+             }
+             else {
+-                sprintf(buffer, "%u", va_arg(vargs, unsigned int));
++                snprintf(buffer, sizeof(buffer), "%u", va_arg(vargs, unsigned int));
+             }
+             assert(strlen(buffer) < sizeof(buffer));
+             WRITE_BYTES(buffer);
+             break;
+ 
+         case 'i':
+-            sprintf(buffer, "%i", va_arg(vargs, int));
++            snprintf(buffer, sizeof(buffer), "%i", va_arg(vargs, int));
+             assert(strlen(buffer) < sizeof(buffer));
+             WRITE_BYTES(buffer);
+             break;
+ 
+         case 'x':
+-            sprintf(buffer, "%x", va_arg(vargs, int));
++            snprintf(buffer, sizeof(buffer), "%x", va_arg(vargs, int));
+             assert(strlen(buffer) < sizeof(buffer));
+             WRITE_BYTES(buffer);
+             break;
+@@ -332,7 +332,7 @@
+         }
+ 
+         case 'p':
+-            sprintf(buffer, "%p", va_arg(vargs, void*));
++            snprintf(buffer, sizeof(buffer), "%p", va_arg(vargs, void*));
+             assert(strlen(buffer) < sizeof(buffer));
+             /* %p is ill-defined:  ensure leading 0x. */
+             if (buffer[1] == 'X')

@@ -1,0 +1,19 @@
+Ours (amigaux).  In a release build gcc's __builtin_unreachable() lets gcc drop
+the range check in front of a switch whose default is Py_UNREACHABLE(), and
+the 060 gate's scanner then cannot size the jump table (11 such dispatch sites
+in python3.11).  On Amix, Py_UNREACHABLE() is Py_FatalError(), as in a debug
+build: one compare per switch, and the table is bounded in the code.
+
+--- a/Include/pymacro.h
++++ b/Include/pymacro.h
+@@ -140,6 +140,10 @@
+         "We've reached an unreachable state. Anything is possible.\n" \
+         "The limits were in our heads all along. Follow your dreams.\n" \
+         "https://xkcd.com/2200")
++#elif defined(__AMIX__)
++/* Amix: keep each switch's range check, so the 060 gate can size its table */
++#  define Py_UNREACHABLE() \
++    Py_FatalError("Unreachable C code path reached")
+ #elif defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5))
+ #  define Py_UNREACHABLE() __builtin_unreachable()
+ #elif defined(__clang__) || defined(__INTEL_COMPILER)
