@@ -2,7 +2,7 @@
 NAME=dhcp-client
 PKG=dhcpc
 VERSION=1.0
-PKGREV=2
+PKGREV=3
 SUMMARY="DHCP client for the Amix base system"
 DESC="dhcpc: gets and keeps an address over DLPI and UDP, applied through amix-base's dhcpc-hook"
 CATEGORY=network

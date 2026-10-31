@@ -44,7 +44,7 @@ the network chain stay untouched.
 | Piece | Installed as | Kind | Stage |
 |---|---|---|---|
 | `probe/dhcprobe`, `probe/tapdhcpd.py` | not installed | test tools | S0, done: `dhcp-probe.md` |
-| `dhcpc` | `/usr/sbin/dhcpc` | C, GCC 14 (T-56 D6), stock libraries only, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback; a one-hour soak |
+| `dhcpc` | `/usr/sbin/dhcpc` | C, GCC 14 (T-56 D6), stock libraries only, own package `dhcp-client` (`pkg/dhcp-client`); page `dhcpc(1M)` | S1: written; on the emulator: lease, INIT-REBOOT, renew, rebind, NAK, lease end, release, no-server exit 2 and `ifup`'s fallback; a one-hour soak. S3: before binding (INIT and INIT-REBOOT), two ARP probes from 0.0.0.0 on a stream bound to 0x0806; another station answering, or probing for the same address, is a conflict: DHCPDECLINE, INIT again after 10 s. The A2065 driver's stream takes no data part under 60 bytes (ERANGE), so the probe is padded |
 | lease state | `/var/inet/dhcpc/<if>.lease`, `<if>.pid`; log `/var/adm/dhcpc.log` | runtime | S1 |
 | `ifup` dhcp mode | in `ifup` | code | S2: on the emulator with both packages installed by stock `pkgadd`: DHCP from `inetinit` at boot, `ifdown` releasing, `ifup` taking a new lease, INIT-REBOOT at the next boot |
 | RELEASE at `ifdown`, ARP check and DECLINE, several interfaces at once | in `dhcpc`, `ifdown` | code | S3, later |
