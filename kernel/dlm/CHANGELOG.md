@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — modadmin shows a pinned module's unload delay as never; modtools -10 recipe (0034b16, afea7f5, 066e7c7)
+
+Core patch 0047: `modadmin -q/-Q/-S` print `Unload Delay: never (locked)` for a module modstat reports locked
+(unload=never, patch 0016), instead of the default 60 seconds the core never uses (N235c). Host test
+tests/host/modadmin.sh; the core harness 136/136 against KD060-Z and the K030-U kinfo cut. modtools' recipe moves to
+-10 (unminted, release-prep): modadmin fea0e559 built at afea7f5.
+
 ## 2026-10-31 — kbootset -30 recipe: built at 97c4003, knows c 48 random (ea2176e)
 
 kbootset's recipe moves to -30 (unminted, the release-prep revision): the box binary 6da558d0, built at amix 97c4003,
