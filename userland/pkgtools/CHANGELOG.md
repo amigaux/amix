@@ -5,6 +5,12 @@ directory", rc 5), whatever the admin file says; without the line the same packa
 installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
 BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
 
+## 2026-10-31 — scan060 honours AMIX_PKGTRANS (14464ca)
+
+scan060.py unpacks a datastream with the pkgtrans named by AMIX_PKGTRANS when it is set (as build/pkg does), falling
+back to heirloom/build-host/bin/pkgtrans; a set value that is not executable exits 1 naming it. Found by base-e2 while
+rolling amix-base. Repo tools 470/0.
+
 ## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
 
 heirloom/compat/tests/amix-passwd.txt was a box's /etc/passwd (the stock file with box-side edits). It is replaced
