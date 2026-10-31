@@ -1,6 +1,6 @@
 # A4000T onboard 53C710: design note
 
-Status: **design only, no code** (2026-10-02). **§10 (2026-10-27) supersedes §3 and §7 for the module form (the a4kt710 module; its metal half is still open):**
+Status: **design only, no code** (2026-10-02). **§10 (2026-10-27) supersedes §3 and §7 for the module form (the a4kt710 module; on metal on the 060 line since 2026-10-28, §10.8):**
 the sd rows, the glue and the sort key are replaced by `sd_register` with rank `mobo`, and the static relink
 (KD060-ZT) is not pursued. It covers the fixed-address mode of the a4091 driver for the A4000T's
 onboard 53C710: the presence probe, registration and card order, interrupts, DMA reach, the ROM-driver handover, the
@@ -386,7 +386,7 @@ T1-T3.
 2. Row order against an A4092 in the same box.
 3. Whether a KD040-T sibling is wanted.
 
-## 10. The module form (2026-10-27; the metal half is still open)
+## 10. The module form (2026-10-27; metal 2026-10-28)
 
 This section is the design for the module world: contracts C4-1 v3 (sd_register, the rank classes), C4-2 v3 (§8's
 A4000T row), C4-5 v8 (DMA), C2-1 (motherboard id 3, `a4000t-710`), 20 §6 (the `mobo:` registry). §1, §2 (T0), §4,
@@ -506,7 +506,10 @@ So:
   the static objects are byte-identical.
 - Host: `make -C test/host check`, arms `a4kt-k30` and `a4kt-k46`, 12/12 each (the gate negatives with zero
   window accesses, `declared` both ways, the attach, the host ID, `_halt`), mutation-checked.
-- Next: N-A4T1/N-A4T2 in amiberry, then M-A4T1 on the tower with the byte compare (§10.6) mandatory.
+- Metal, 2026-10-28 (k46): the A4000T with a Z3660 (060) booted the k46 module kernel -61 with root on a ZuluSCSI
+  at id 6 on the onboard bus, through `a4kt710`: 3/3 cold boots via the Kickstart's NCR scsi.device, the DMA
+  buffer in Z3660 DDR (`0x0801fd88`), the root filesystem check clean.
+- Open: the §10.6 byte compare on the tower; N-A4T1/N-A4T2 in amiberry; `a4kt710-k30` is untested on metal.
 
 ### 10.9 Effort, and the interface questions
 

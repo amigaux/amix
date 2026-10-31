@@ -165,7 +165,8 @@ Status as of 2026-10-27:
 - **Emulation:** E1 and E2 passed on kern46m -78 with 1.0.0-1. Kernel -77's
   symbol block lacks the five `dma_*` names, so the core refuses the link
   there.
-- **Metal:** later.
+- **Metal (2026-10-27, A4000D + Z3660 060, k46):** M1 and M2 passed; M3 to M5
+  are open.
 
 ### Host (`test/host`, `make -C test/host check`)
 
@@ -198,12 +199,12 @@ So the A4092 and A4770 identities are host and metal rows only.
 | E6 | k30: E1's setup on the 030 module kernel (-14 or later) | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise. **Passed 2026-10-27** (two runs; 1.0.0-3 on kern30m -14): root on the A4091 alone, pool 128 KiB, 2 MiB raw read and `cp` + `sync` + `cmp` identical with the hook off and on, `noreach` 0. The force-bounce status bug (above) is fixed in 1.0.0-4 |
 | E6b | k30: E6's box, `dma_forcebounce` on, one read too large for the 128 KiB pool (`dd` with a 256 KiB block on the raw A4091 disk) | `noreach` +1, the console line `A4091 c…: no reachable DMA buffer for … bytes`, the `dd` fails with EIO, the chip is not armed, and the next command runs |
 
-### Metal (later)
+### Metal
 
 | Row | Setup | Pass when |
 |---|---|---|
-| M1 | A4000D + Z3660 (060) + the A4092 (`c0de:01`) with the Zulu; k46 module kernel; root on the A4092 | As E1, with `A4092 SCSI` registered. The A4092 matches only because kern46m carries the unsigned `autocon()` shift |
-| M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as on the 2026-10-03 metal boots |
+| M1 | A4000D + Z3660 (060) + the A4092 (`c0de:01`) with the Zulu; k46 module kernel; root on the A4092 | As E1, with `A4092 SCSI` registered. The A4092 matches only because kern46m carries the unsigned `autocon()` shift. **Passed 2026-10-27**: the A4092 alone as card 0, root `c2d0s1`, `cp` + `sync` clean, filesystem check 0; also booted in safe mode |
+| M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as on the 2026-10-03 metal boots. **Passed 2026-10-27**: installed with apkg, card 1 `zorro:c0de:01` at `0x40000000`, two 16 MiB raw reads through the A4092 equal to the host's sum, halt pass of 3 modules |
 | M3 | M1's box: a CD install from the Zulu CD unit through the module | As C1/C2 with the static driver: `rearm_n` 0 on a clean run |
 | M4 | M1's box on the k30 line (Z3660 in 030 mode), once k30 has its DMA pool | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
 | M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (`a4kt710`, `mobo:a4000t-710`), not this one |
@@ -224,8 +225,11 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Version | `module/a4kt710/VERSION` (`1.0.0-1`) |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
-**Risk carried to the metal test:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is
-unmeasured. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
+**Metal (2026-10-28, k46):** the A4000T with a Z3660 (060) roots on the onboard bus through `a4kt710`, 3/3 cold boots, with
+the DMA buffer in the Z3660's DDR and a clean filesystem check. `a4kt710-k30` is untested on metal.
+
+**Still open:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is not yet
+byte-compared. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
 a byte compare on the tower (docs/A4000T-ONBOARD-710.md §10.6).
 
 ## Package (C3-5)
