@@ -31,13 +31,6 @@
 #define DefaultCDebugFlags /**/
 #undef OptimizedCDebugFlags
 #define OptimizedCDebugFlags /**/
-/* static libraries: the shared-data .so/.sa model is a later step */
-#undef HasSharedLibraries
-#define HasSharedLibraries NO
-#undef AmixSALibXt
-#define AmixSALibXt /**/
-#undef AmixSALibXmu
-#define AmixSALibXmu /**/
 #undef FixupLibReferences
 #define FixupLibReferences() @@\
 XMULIBONLY = -lXmu @@\
@@ -60,42 +53,7 @@ XMULIB = -lXmu
 #define MathLibrary -L@SYSROOT@/usr/ccs/lib -lm
 #undef ServerExtraSysLibs
 #define ServerExtraSysLibs -lsocket -lnsl -L@USRAMIGA@/ucblib -ldbm -L@USRAMIGA@/amiga/lib -lscreen
-/* libc has the BSD calls (and libamixc99) */
-#undef NeedBerklib
-#define NeedBerklib NO
-/* MIT-SHM: the 68040/68060 kernel's shared-memory fixes make it safe (README) */
-#undef HasShm
-#define HasShm YES
-/* not shipped: XIE, LBX, the print server, Xnest (PEX is off in amix.cf) */
-#undef BuildXIE
-#define BuildXIE NO
-#undef BuildLBX
-#define BuildLBX NO
-#undef XprtServer
-#define XprtServer NO
-#undef XnestServer
-#define XnestServer NO
-/* the driver strips after its gates */
-#undef StripInstalledPrograms
-#define StripInstalledPrograms NO
-/* colours from rgb.txt: the server's rgb reader is AMIX's classic dbm, whose
- * .dir/.pag format no build-host tool writes (README) */
-#undef UseRgbTxt
-#define UseRgbTxt YES
-/* man pages in the stock section names (svr4.cf would use 1x/3x): the stage
- * hook moves them to /opt/amix/man/<sect>/<name> */
-#undef ManSuffix
-#define ManSuffix	1
-#undef LibManSuffix
-#define LibManSuffix	3
-#undef FileManSuffix
-#define FileManSuffix	4
-#undef MiscManSuffix
-#define MiscManSuffix	5
 /* the tree's BSD-style install script (bsdinst.sh calls an SVR4 install): the
  * stage hook installs as the build user, -c and -m only */
 #undef InstallCmd
 #define InstallCmd $(SHELL) $(CONFIGSRC)/util/install.sh
-/* xdm's greeter linked in, not a shared library it dlopens (static libraries) */
-#undef SharedLibXdmGreet
-#define SharedLibXdmGreet NO

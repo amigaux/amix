@@ -1,0 +1,239 @@
+Ours.  The Amix platform for imake and the server: Imake.cf selects our amix.cf, imake's cpp
+gets -DAMIX -DSVR4 -Dm68k, servermd.h knows Amix's byte and bit order, the server Imakefile has
+an Xzz9000 target, mfb uses the portable bit-field code, Xos.h takes the two-argument
+gettimeofday gcc14-cross-amix declares, and site.def includes the cross build's host.def.
+It follows isoriano's analysis (amix-userland, x11r6.3 overlay) of: mfb's 68020 bfextu/bfins
+asm dropping bits (maskbits.h), Xaw without wchar.h/wctype.h (XawI18nDefines), and how imake
+must be told about AMIX (Imake.cf, imakemdep.h).
+
+--- a/config/cf/amix.cf
++++ b/config/cf/amix.cf
+@@ -0,0 +1,72 @@
++XCOMM platform:  amix.cf
++
++/*
++ * The amigaux X11R6.3 package: what the platform is, and what the package
++ * builds.  The cross build's compiler, tools and paths are in host.def.
++ */
++
++#define OSName			Amiga UNIX System V Release 4.0
++#define OSVendor		Commodore-Amiga
++#define OSMajorVersion		4
++#define OSMinorVersion		0
++#define OSTeenyVersion		0
++#define OSDefines		-DAMIX -Dm68k
++#define OSRelease		-DSVR4
++
++XCOMM operating system:  OSName (OSMajorVersion./**/OSMinorVersion./**/OSTeenyVersion)
++
++#define SystemV4		YES
++#define BootstrapCFlags		OSDefines OSRelease
++#define StandardDefines		OSDefines OSRelease
++#define StandardCppDefines	OSDefines OSRelease
++#define ProjectRulesFile	<X11.rules>
++#define ProjectTmplFile		<X11.tmpl>
++
++#define HasGcc			YES
++#define HasGcc2			YES
++#define HasGcc2ForCplusplus	NO
++#define UnixCpp			YES
++
++/* static libraries: the package ships no shared ones */
++#define HasSharedLibraries	NO
++/* xdm's greeter linked in: nothing to dlopen */
++#define SharedLibXdmGreet	NO
++
++/* sockets in libsocket/libnsl; the BSD calls and strcasecmp in libc and
++ * libamixc99; no secure RPC */
++#define ConnectionFlags		-DTCPCONN -DUNIXCONN
++#define HasSockets		YES
++#define SocketLibraries		-lsocket -lnsl
++#define ExtraLibraries		SocketLibraries
++#define NeedBerklib		NO
++#define HasStrcasecmp		YES
++#define HasPutenv		YES
++#define HasSecureRPC		NO
++
++/* no wchar.h/wctype.h: Xaw uses Xlib's own wide-character helpers */
++#define XawI18nDefines		-DUSE_XWCHAR_STRING -DUSE_XMBTOWC
++
++/* the server: Xzz9000, the Amiga DDX on a ZZ9000 or Z3660 RTG */
++#define XAmixServer		YES
++#define BuildXKB		YES
++#define BuildXKBlib		YES
++/* not shipped: PEX, XIE, LBX, the print server, Xnest */
++#define BuildPexExt		NO
++#define BuildXIE		NO
++#define BuildLBX		NO
++#define XprtServer		NO
++#define XnestServer		NO
++/* MIT-SHM: safe with the 68040/68060 kernel's shared-memory fixes (README) */
++#define HasShm			YES
++/* colours from rgb.txt: the server's rgb reader is Amix's classic dbm, whose
++ * .dir/.pag format no build-host tool writes */
++#define UseRgbTxt		YES
++
++/* man pages in the stock section names */
++#define ManSuffix		1
++#define LibManSuffix		3
++#define FileManSuffix		4
++#define MiscManSuffix		5
++
++/* the package strips after its gates */
++#define StripInstalledPrograms	NO
+--- a/config/cf/Imake.cf
++++ b/config/cf/Imake.cf
+@@ -18,6 +18,17 @@
+  *     4.  Create a .cf file with the name given by MacroFile.
+  */
+ 
++/* Commodore Amiga UNIX (amigaux X11R6.3): imake built with -DAMIX -DSVR4 -Dm68k */
++#ifdef AMIX
++# define MacroIncludeFile <amix.cf>
++# define MacroFile amix.cf
++# undef AMIX
++# define AMIXArchitecture
++# undef SVR4
++# undef m68k
++# define M68kArchitecture
++#endif /* AMIX */
++
+ #ifdef ultrix
+ # define MacroIncludeFile <ultrix.cf>
+ # define MacroFile ultrix.cf
+@@ -149,7 +160,6 @@
+ # undef USL
+ # undef SVR4
+ # undef i386
+-# define SVR4Architecture
+ # define i386Architecture
+ # define USLArchitecture
+ #endif /* USL */
+@@ -160,7 +170,6 @@
+ # undef NCR
+ # undef SVR4
+ # undef i386
+-# define SVR4Architecture
+ # define i386Architecture
+ # define NCRArchitecture
+ #endif /* NCR */
+@@ -322,7 +331,6 @@
+ #  define i386Architecture
+ #  undef i386
+ # endif
+-# define SVR4Architecture
+ # define MacroIncludeFile <svr4.cf>
+ # define MacroFile svr4.cf
+ # undef SVR4
+@@ -389,7 +397,6 @@
+ # define MacroFile Oki.cf
+ # undef Oki
+ # define i860SVR4Architecture
+-# define SVR4Architecture
+ # undef SVR4
+ #endif /* Oki */
+ 
+@@ -420,7 +427,6 @@
+ # define FujitsuArchitecture
+ # undef __uxp__
+ # define UXPArchitecture
+-# define SVR4Architecture
+ # ifdef sparc
+ #  undef sparc
+ #  define SparcArchitecture
+--- a/config/imake/imakemdep.h
++++ b/config/imake/imakemdep.h
+@@ -283,6 +283,12 @@
+ #ifdef unix
+ 	"-Uunix",	/* remove unix symbol so that filename unix.c okay */
+ #endif
++#ifdef AMIX		/* Commodore Amiga UNIX: what Imake.cf selects amix.cf by */
++	"-traditional",
++	"-DAMIX",
++	"-DSVR4",
++	"-Dm68k",
++#endif
+ #if defined(__386BSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__FreeBSD__) || defined(MACH)
+ # ifdef __i386__
+ 	"-D__i386__",
+--- a/programs/Xserver/include/servermd.h
++++ b/programs/Xserver/include/servermd.h
+@@ -307,6 +307,14 @@
+ 
+ #endif /* luna */
+ 
++#ifdef AMIX	/* Commodore Amiga UNIX, m68k: big-endian, 32-bit glyph padding */
++#define IMAGE_BYTE_ORDER	MSBFirst
++#define BITMAP_BIT_ORDER	MSBFirst
++#define GLYPHPADBYTES		4
++#define GETLEFTBITS_ALIGNMENT	1
++#define FAST_UNALIGNED_READS	/* 68020 and later */
++#endif /* AMIX */
++
+ #if ((defined(SVR4) && defined(i386)) || \
+      (defined(SYSV) && defined(i386)) || \
+      (defined(sun) && defined (i386) && defined(SVR4)) || \
+--- a/programs/Xserver/Imakefile
++++ b/programs/Xserver/Imakefile
+@@ -1042,6 +1042,26 @@
+ #endif /* XF68FBDevServer */
+ 
+ 
++#if XAmixServer
++XCOMM
++XCOMM Xzz9000: the Amiga DDX (hw/amix) on the ZZ9000/Z3660 RTG framebuffer, with
++XCOMM mfb, cfb and cfb16 (the dirs SUBDIRS builds).  The print server's DIX stubs come
++XCOMM with CFB16Libs.
++XCOMM
++MFBDIR = mfb
++CFB8DIR = cfb
++CFB16DIR = cfb16
++DDXDIR1 = hw/amix
++AMIXDIRS = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) $(CFB16DIR) $(DDXDIR1) $(DEPDIRS)
++AMIXOBJS = hw/amix/amixInit.o
++AMIXLIBS = hw/amix/LibraryTargetName(amix) hw/amix/rtg/LibraryTargetName(rtg) \
++	   hw/amix/rtg/zz9000/LibraryTargetName(zz9000) CFB16Libs
++ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
++#ifndef ServerToInstall
++#define ServerToInstall Xzz9000
++#endif
++#endif /* XAmixServer */
++
+ #if XprtServer
+ XCOMM
+ XCOMM Print Server
+--- a/programs/Xserver/mfb/maskbits.h
++++ b/programs/Xserver/mfb/maskbits.h
+@@ -364,6 +364,10 @@
+ 	 : "g" (x), "g" (w), "g" (src))
+ #define putbits(src, x, w, pdst) FASTPUTBITS(src, x, w, pdst)
+ #endif /* vax */
++/* AMIX: no hand-written bfextu/bfins below; the portable getbits/putbits */
++#ifdef AMIX
++#undef mc68020
++#endif
+ #ifdef mc68020
+ #define FASTGETBITS(psrc, x, w, dst) \
+     __asm ("bfextu %3{%1:%2},%0" \
+--- a/include/Xos.h
++++ b/include/Xos.h
+@@ -207,7 +207,8 @@
+ #if defined(_XOPEN_XPG4) || defined(_XOPEN_UNIX) /* _XOPEN_UNIX is XPG4.2 */
+ #define X_GETTIMEOFDAY(t) gettimeofday(t, (struct timezone*)0)
+ #else
+-#if defined(SVR4) || defined(VMS) || defined(WIN32)
++/* AMIX: gcc14-cross-amix declares the two-argument gettimeofday */
++#if (defined(SVR4) && !defined(AMIX)) || defined(VMS) || defined(WIN32)
+ #define X_GETTIMEOFDAY(t) gettimeofday(t)
+ #else
+ #define X_GETTIMEOFDAY(t) gettimeofday(t, (struct timezone*)0)
+--- a/config/cf/site.def
++++ b/config/cf/site.def
+@@ -122,6 +122,6 @@
+ #define XnestServer YES
+ #endif
+ 
+-/* #include <host.def> */
++#include <host.def>
+ 
+ #endif /* AfterVendorCF */

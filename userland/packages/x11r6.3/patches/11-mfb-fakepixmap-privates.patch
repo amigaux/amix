@@ -1,0 +1,24 @@
+Ours: isoriano's mfbimage.c builds depth-1 images in a stack PixmapRec; its devPrivates (PIXPRIV) are now NULL, not stack garbage.
+
+--- a/programs/Xserver/mfb/mfbimage.c
++++ b/programs/Xserver/mfb/mfbimage.c
+@@ -119,6 +119,9 @@
+     FakePixmap.devKind = PixmapBytePad(FakePixmap.drawable.width, 1);
+     FakePixmap.refcnt = 1;
+     FakePixmap.devPrivate.ptr = (pointer)pImage;
++    #ifdef PIXPRIV
++    FakePixmap.devPrivates = (DevUnion *)NULL;	/* AMIX: no stack garbage in the privates */
++    #endif
+     ((mfbPrivGC *)(pGC->devPrivates[mfbGCPrivateIndex].ptr))->fExpose = FALSE;
+     if (format != XYBitmap)
+ 	(*pGC->ops->CopyArea)((DrawablePtr)&FakePixmap, dst, pGC, leftPad, 0,
+@@ -171,6 +174,9 @@
+ 	FakePixmap.devKind = PixmapBytePad(w, 1);
+ 	FakePixmap.refcnt = 1;
+ 	FakePixmap.devPrivate.ptr = (pointer)pdstLine;
++	#ifdef PIXPRIV
++	FakePixmap.devPrivates = (DevUnion *)NULL;	/* AMIX: no stack garbage in the privates */
++	#endif
+ 
+         ptSrc.x = sx + pDrawable->x;
+         ptSrc.y = sy + pDrawable->y;

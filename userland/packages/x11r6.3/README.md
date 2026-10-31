@@ -11,12 +11,12 @@ It coexists with the stock X11R4/R5 in `/usr/X`.
 
 **Status: work in progress.** The whole tree (libraries, server, clients) compiles under the gcc14
 strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on every
-compile line. It stages, and the prototype matches the payload (1077 paths). The roll stops at the
+compile line. It stages, and the prototype matches the payload (1080 paths). The roll stops at the
 NEEDED gate. `Xzz9000` needs `/usr/amiga/lib/libscreen.so`, the stock screen manager, which every
 Amix box has but the gcc14 sysroot does not carry yet.
 
 Package: `x11r63`, category `x11`, set `extra`. Licence: the X Consortium's (`X11`) for X11R6.3,
-MIT for isoriano's port. Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
+MIT for isoriano's Amiga DDX (patch 00). Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
 
 ## Source
 
@@ -33,20 +33,32 @@ at a directory that holds both.
 
 | Patch | What |
 |---|---|
-| `00-isoriano-amix-overlay.patch` | isoriano's AMIX port (Ignacio Soriano, MIT; amix-userland `components/x11/x11r6.3/overlay`), unchanged: `amix.cf`/`amix.rules`, the `hw/amix` DDX with the `rtg/zz9000` driver, imake and font fixes, his development scripts. |
-| `01-amix-build-config.patch` | Ours: the two-argument `gettimeofday` in `Xos.h`; `site.def` includes the cross build's `host.def`. |
-| `02-implicit-int-externs.patch` | Ours: 197 extern declarations in 4 headers had no return type (`extern XClipBox(...)`); they get their `int`, so no client hits gcc 14's implicit-int error. |
+| `00-isoriano-amix-ddx.patch` | **isoriano's code, used as is** (Ignacio Soriano, MIT; amix-userland `components/x11/x11r6.3/overlay`): the `hw/amix` DDX with the `rtg/zz9000` framebuffer driver (`Xzz9000`) and `Xamix(1)`, and his `mfbimage.c`, which builds depth-1 images in a stack pixmap for that DDX. It already carries the Z3660 RTG work (the Z3660 modes, the card blitter, the monitor switch, the keyboard hand-back) and his soft3D and CDE fixes. |
+| `01-amix-platform.patch` | Ours: the Amix platform. `Imake.cf` selects our own `amix.cf` (the platform's facts and what the package builds); imake's cpp gets `-DAMIX -DSVR4 -Dm68k`; `servermd.h` has Amix's byte and bit order; the server Imakefile has an `Xzz9000` target; mfb uses the portable bit-field code; `Xos.h` takes the two-argument `gettimeofday`; `site.def` includes `host.def`. It follows isoriano's analysis of mfb's 68020 bit-field asm, of Xaw without `wctype.h`, and of how imake must be told about AMIX. |
+| `02-implicit-int-externs.patch` | Ours: 197 extern declarations in 4 headers had no return type (`extern XClipBox(...)`). Each gets its `int`, so no client hits gcc 14's implicit-int error. |
 | `03-allocator-declarations.patch` | Ours: K&R `char *malloc();`-style declarations that collide with `<stdlib.h>` become comments; xinit's own `shutdown()` becomes `xinit_shutdown()`. |
 | `04`–`10-protos-*.patch` | Ours: the prototypes gcc 14 needs, by area (the libraries, the fonts, the server, xterm, twm, xdm, the small clients). Each comes from the definition the call links with (`gcc -aux-info`). A K&R definition's narrow parameters (char, short, their typedefs, float) are default-promoted in the prototype, so caller and callee agree. Each patch's header lists every promotion and every function left unprototyped, with the reason. |
+| `11-mfb-fakepixmap-privates.patch` | Ours: the stack pixmaps of `00`'s `mfbimage.c` get `devPrivates` NULL rather than stack garbage (the server is built with `PIXPRIV`). |
+
+Not taken from isoriano's overlay, done our own way or not needed here:
+- his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
+- the Xt/Xaw shared-library guards;
+- `programs/Imakefile` without twm, rstart and smproxy;
+- twm's `lex.l` guard for Amix's own lex;
+- imake's on-box cpp path;
+- his on-box build and session scripts in `config/util`;
+- whitespace and comment edits.
 
 ## Build notes
 
 - **xcc.** Every compile goes through `build.sh`'s `xcc`, which force-includes `amix-xlibc.h`
   (the C library headers the 1990s sources often omit) and `amix-decls.h`. It logs each line for
   the strict gates.
-- **host.def** (`host.def.in`) sets the cross compiler and tools, `ProjectRoot` `/opt/amix/X11R6`,
-  static libraries, MIT-SHM on, colours from `rgb.txt`. It turns off what is not shipped: XIE,
-  LBX, the print server and Xnest. PEX is already off in `amix.cf`.
+- **amix.cf** (patch 01) says what Amix is and what the package builds: static libraries, MIT-SHM
+  on, colours from `rgb.txt`, man sections 1/3/4/5, xdm's greeter linked in. It turns off what is
+  not shipped: PEX, XIE, LBX, the print server and Xnest. **host.def** (`host.def.in`) holds only
+  the cross build: the compiler and tools, `ProjectRoot` `/opt/amix/X11R6`, the library paths and
+  the install script.
 - **Host tools.** imake, makestrs and makekeys (`ks_tables.h`) are built for the build host.
   imake runs through `imakecpp.sh`, and config files go through a plain host `cpp -traditional`.
 - **rgb.** The server's colour database reader is Amix's classic `dbm`, whose `.dir`/`.pag` format

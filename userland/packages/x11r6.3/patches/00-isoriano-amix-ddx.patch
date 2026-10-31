@@ -1,1267 +1,9 @@
-isoriano's AMIX port of X11R6.3 (Ignacio Soriano, amix-userland components/x11/x11r6.3,
-overlay/xc, MIT for his files; the X Consortium's notices stay on theirs), unchanged:
-amix.cf/amix.rules, the hw/amix DDX with the rtg/zz9000 framebuffer driver (Xzz9000),
-imake and font fixes, and his development scripts in config/util.  Only the paths are
-rewritten (a/ = pristine xc-1, b/ = with the overlay).
+isoriano's Amiga X server (Ignacio Soriano, MIT; amix-userland components/x11/x11r6.3/overlay),
+unchanged: the hw/amix DDX with the rtg/zz9000 framebuffer driver (Xzz9000) and Xamix(1),
+and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 
-diff -ruN a/config/cf/amix.cf b/config/cf/amix.cf
---- a/config/cf/amix.cf	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/cf/amix.cf	2026-10-31 14:21:09.987090290 +0200
-@@ -0,0 +1,98 @@
-+XCOMM AMIX / Amiga UNIX System V Release 4 configuration for X11R6.3
-+XCOMM Keep this conservative: first make stock X11R6 build, then add ZZ9000 RTG.
-+
-+#define OSMajorVersion 4
-+#define OSMinorVersion 0
-+#define OSTeenyVersion 0
-+#define OSName Amiga UNIX System V Release 4.0
-+#define OSVendor "Commodore-Amiga"
-+#define OSDefines -DAMIX -Dm68k
-+#define OSRelease -DSVR4
-+
-+XCOMM operating system: OSName OSVendor
-+
-+#define SystemV4 YES
-+
-+#define BootstrapCFlags OSDefines OSRelease
-+#define StandardDefines OSDefines OSRelease
-+#define StandardCppDefines OSDefines OSRelease
-+
-+#define ProjectRulesFile <X11.rules>
-+#define ProjectTmplFile <X11.tmpl>
-+
-+#define ProjectRoot /usr/x11r6
-+#define UsrLibDir /usr/x11r6/lib
-+#define LibDir /usr/x11r6/lib/X11
-+#define IncRoot /usr/x11r6/include
-+#define BinDir /usr/x11r6/bin
-+#define ManDirectoryRoot /usr/x11r6/man
-+
-+#define HasGcc YES
-+#define HasGcc2 YES
-+#define HasGcc2ForCplusplus NO
-+#define HasSharedLibraries YES
-+#define ForceNormalLib NO
-+#define SeparateSharedCompile YES
-+#define PositionIndependentCFlags -fpic
-+/* Match the working X11R5 AMIX shared-library ABI. */
-+#define SharedLibraryLoadFlags -G
-+#define SharedDataSeparation YES
-+#define SharedCodeDef -DSHAREDCODE
-+#define SharedLibraryDef -DSUNSHLIB
-+/*
-+ * MIT-SHM: unsafe on the stock AMIX kernel; safe on the 68040/68060 port
-+ * kernel with its shared-memory fixes (ISSUE-62/66).  Off unless site.def
-+ * says  #define AmixHasShm YES
-+ */
-+#ifndef AmixHasShm
-+#define AmixHasShm NO
-+#endif
-+#define HasShm AmixHasShm
-+#define CcCmd gcc
-+#define ServerCcCmd gcc
-+#define DefaultCCOptions -ansi -finline-functions
-+#define DefaultCDebugFlags -O
-+#define OptimizedCDebugFlags -O
-+#define CppCmd /usr/public/lib/gcc-cpp
-+#define PreProcessCmd gcc -E
-+#define UnixCpp YES
-+
-+/*
-+ * X11.tmpl assumes SystemV4 has wctype.h/widec.h and defaults Xaw to
-+ * -DHAS_WCTYPE_H.  AMIX does not provide those headers; use Xlib's internal
-+ * wide-char helpers, as several contemporary non-widechar ports do.
-+ */
-+#define XawI18nDefines -DUSE_XWCHAR_STRING -DUSE_XMBTOWC
-+
-+#define ArCmdBase ar
-+#define AsCmd as
-+#define LdCmd ld
-+#define LexCmd lex
-+#define MakeCmd make
-+#define YaccCmd yacc
-+
-+#define ConnectionFlags -DTCPCONN -DUNIXCONN
-+#define HasSockets YES
-+#define NeedBerklib YES
-+#define SocketLibraries -lsocket -lnsl
-+#define ExtraLibraries SocketLibraries
-+#define ServerExtraSysLibs SocketLibraries -ldbm -lscreen
-+#define LdPreLib -L$(BUILDLIBDIR)
-+#define LdPostLib /**/
-+#define HasSecureRPC NO
-+#define HasPutenv YES
-+#define HasStrcasecmp NO
-+#ifdef StrcasecmpDefines
-+#undef StrcasecmpDefines
-+#endif
-+#define StrcasecmpDefines -DNEED_STRCASECMP
-+#define StripInstalledPrograms YES
-+
-+/* Keep the stock X11R6 dependency graph; only PEX remains deferred. */
-+#define BuildPexExt NO
-+#define BuildXKB YES
-+#define BuildXKBlib YES
-+#define XAmixServer YES
-+
-+#include <amix.rules>
-+#include <sv4Lib.rules>
-diff -ruN a/config/cf/amix.rules b/config/cf/amix.rules
---- a/config/cf/amix.rules	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/cf/amix.rules	2026-10-31 14:21:09.987110186 +0200
-@@ -0,0 +1,172 @@
-+/* AMIX-specific imake rules. */
-+
-+/*
-+ * AMIX keeps the runtime image in libfoo.so and executable-resident stubs in
-+ * a companion libfoo.sa archive.  The native link editor consumes both when
-+ * resolving -lfoo.
-+ */
-+#ifndef SharedLibraryDataTarget
-+#define SharedLibraryDataTarget(libname,rev,objlist)                    @@\
-+AllTarget(Concat(lib,libname.sa))                                       @@\
-+                                                                        @@\
-+Concat(lib,libname.sa): objlist AMIXSHLIBFORCE                          @@\
-+	$(RM) $@                                                              @@\
-+	$(AR) $@ objlist                                                      @@\
-+	LinkBuildLibrary($@)                                                  @@\
-+                                                                        @@\
-+AMIXSHLIBFORCE:                                                         @@\
-+                                                                        @@\
-+clean::                                                                 @@\
-+	$(RM) Concat(lib,libname.sa)
-+#endif /* SharedLibraryDataTarget */
-+
-+#ifndef InstallSharedLibraryData
-+#define InstallSharedLibraryData(libname,rev,dest)                      @@\
-+install:: Concat(lib,libname.sa)                                        @@\
-+	MakeDir($(DESTDIR)dest)                                               @@\
-+	$(RM) Concat($(DESTDIR)dest/lib,libname.sa)                           @@\
-+	$(INSTALL) $(INSTALLFLAGS) $(INSTLIBFLAGS) Concat(lib,libname.sa) $(DESTDIR)dest
-+#endif /* InstallSharedLibraryData */
-+
-+/*
-+ * GCC's link driver does not add AMIX companion .sa archives implicitly.
-+ * Put each required archive immediately after its ELF shared library.
-+ */
-+#if defined(UseInstalled) || UseInstalledX11
-+#define AmixSALibXt $(USRLIBDIR)/libXt.sa
-+#define AmixSALibXmu $(USRLIBDIR)/libXmu.sa
-+#else
-+#define AmixSALibXt $(BUILDLIBDIR)/libXt.sa
-+#define AmixSALibXmu $(BUILDLIBDIR)/libXmu.sa
-+#endif
-+#define AmixSALibXaw /**/
-+#define AmixSALib(libname) Concat(AmixSALib,libname)
-+
-+/*
-+ * Stock SVR4 XawClientLibs can expand to bare -lXmu and -lXt.  On AMIX that
-+ * drops the companion .sa archives required by the shared-data ABI, causing
-+ * Athena clients such as xlogo and xmag to fail with unresolved Xt entry
-+ * points.  Override the client rule so every Athena client gets the same
-+ * known-good library order.
-+ */
-+#ifdef XawClientLibs
-+#undef XawClientLibs
-+#endif
-+#define XawClientLibs $(XAWLIB) $(XMULIBONLY) $(XTOOLONLYLIB) AmixSALibXt $(SMLIB) $(ICELIB) $(XLIB)
-+
-+#ifdef XawClientDepLibs
-+#undef XawClientDepLibs
-+#endif
-+#define XawClientDepLibs $(DEPXAWLIB) $(DEPXMULIB) $(DEPXTOOLLIB) $(DEPXLIB)
-+
-+/* sv4Lib.tmpl otherwise replaces XMU with a bare -lXmu. */
-+#ifndef FixupLibReferences
-+#define FixupLibReferences()                                            @@\
-+XMULIBONLY = -lXmu AmixSALibXmu                                        @@\
-+XMULIB = $(XMULIBONLY) -z nodefs
-+#endif
-+
-+#ifndef SharedDSLibReferences
-+#define SharedDSLibReferences(varname,libname,libsource,revname,rev)     @@\
-+revname = rev                                                           @@\
-+Concat3(DEP,varname,LIB) = AmixSALib(libname)                           @@\
-+Concat(varname,LIB) = LoaderLibPrefix Concat(-l,libname) AmixSALib(libname) @@\
-+LintLibReferences(varname,libname,libsource)
-+#endif
-+
-+/*
-+ * gcc-cpp loses the build-directory argument when the stock
-+ * ProjectUnsharedLibReferences macro pastes it to "/lib".  All X11 project
-+ * libraries are exported through BUILDLIBDIR, so construct the dependency
-+ * from that stable make variable and only paste the library filename.
-+ */
-+#if defined(UseInstalled) || UseInstalledX11
-+#define AmixProjectDepLib(name) $(USRLIBDIR)/LibraryTargetName(name)
-+#else
-+#define AmixProjectDepLib(name) $(BUILDLIBDIR)/LibraryTargetName(name)
-+#endif
-+
-+#ifndef ProjectUnsharedLibReferences
-+#define ProjectUnsharedLibReferences(varname,libname,libsource,buildlibdir) @@\
-+Concat3(DEP,varname,LIB) = AmixProjectDepLib(libname)                     @@\
-+Concat(varname,LIB) = LoaderLibPrefix Concat(-l,libname)                  @@\
-+LintLibReferences(varname,libname,libsource)
-+#endif /* ProjectUnsharedLibReferences */
-+
-+/*
-+ * AMIX SVR4 ar maintains the symbol table with ar cq.  On this tree the
-+ * default library macro can expand an empty/undefined RANLIB command into a
-+ * shell error, so keep normal library creation to rm + ar.
-+ */
-+#ifndef NormalLibraryTarget
-+#define NormalLibraryTarget(libname,objlist)                             @@\
-+AllTarget(LibraryTargetName(libname))                                    @@\
-+                                                                        @@\
-+LibraryTargetName(libname): objlist $(EXTRALIBRARYDEPS)                 @@\
-+	$(RM) $@                                                              @@\
-+	$(AR) $@ objlist                                                     @@\
-+	_LinkBuildLibrary($@)
-+#endif /* NormalLibraryTarget */
-+
-+#ifndef NormalLibraryTarget2
-+#define NormalLibraryTarget2(libname,objlist1,objlist2)                  @@\
-+AllTarget(LibraryTargetName(libname))                                    @@\
-+                                                                        @@\
-+LibraryTargetName(libname): objlist1 objlist2 $(EXTRALIBRARYDEPS)       @@\
-+	$(RM) $@                                                              @@\
-+	$(AR) $@ objlist1 objlist2                                           @@\
-+	_LinkBuildLibrary($@)
-+#endif /* NormalLibraryTarget2 */
-+
-+/*
-+ * The same cpp whitespace issue affects include export paths such as
-+ * IncSubdir/IncSubSubdir, producing "X11 /ICE".  Normalize the generated path
-+ * in the shell before creating the export directory and header links.
-+ */
-+#ifdef BuildIncludesTop
-+#undef BuildIncludesTop
-+#endif
-+#define BuildIncludesTop(list)                                         @@\
-+includes:: list                                                        @@\
-+	@dst=`echo $(BUILDINCDIR) | sed 's/[ 	]*\/[ 	]*/\//g'`; \       @@\
-+	$(MKDIRHIER) $$dst; \                                              @@\
-+	set -x; cd $$dst; for i in list; do \                              @@\
-+		RemoveFile($$i); \                                            @@\
-+		src=`echo $(BUILDINCTOP)/$(CURRENT_DIR)/$$i | sed 's/[ 	]*\/[ 	]*/\//g'`; \ @@\
-+		$(LN) $$src .; \                                              @@\
-+	done
-+
-+#ifdef BuildIncludes
-+#undef BuildIncludes
-+#endif
-+#define BuildIncludes(list,sub,up)                                     @@\
-+includes:: list                                                        @@\
-+	@dst=`echo $(BUILDINCDIR)/sub | sed 's/[ 	]*\/[ 	]*/\//g'`; \   @@\
-+	$(MKDIRHIER) $$dst; \                                              @@\
-+	set -x; cd $$dst; for i in list; do \                              @@\
-+		RemoveFile($$i); \                                            @@\
-+		src=`echo $(BUILDINCTOP)/up/$(CURRENT_DIR)/$$i | sed 's/[ 	]*\/[ 	]*/\//g'`; \ @@\
-+		$(LN) $$src .; \                                              @@\
-+	done
-+
-+/*
-+ * AMIX/gcc-cpp can expand a macro fragment like "dir/src" as
-+ * "dir /src".  That makes generated link-source dependencies refer to
-+ * absolute paths such as /cfb.h.  Avoid path concatenation in the make
-+ * dependency and do the source-directory join in the shell instead.
-+ */
-+#ifndef LinkSourceFile
-+#define LinkSourceFile(src,dir)                                         @@\
-+src:                                                                   @@\
-+	RemoveFile($@)                                                     @@\
-+	@srcdir=`cd dir; pwd`; (set -x; $(LN) $$srcdir/src $@)             @@\
-+                                                                        @@\
-+NoConfigRec(src)                                                       @@\
-+                                                                        @@\
-+includes:: src                                                         @@\
-+                                                                        @@\
-+depend:: src                                                           @@\
-+                                                                        @@\
-+clean::                                                                @@\
-+	RemoveFile(src)
-+#endif /* LinkSourceFile */
-diff -ruN a/config/cf/Imake.cf b/config/cf/Imake.cf
---- a/config/cf/Imake.cf	1997-07-16 01:05:52.000000000 +0300
-+++ b/config/cf/Imake.cf	2026-10-31 14:21:09.987017570 +0200
-@@ -18,6 +18,19 @@
-  *     4.  Create a .cf file with the name given by MacroFile.
-  */
- 
-+#ifdef AMIX
-+# define MacroIncludeFile <amix.cf>
-+# define MacroFile amix.cf
-+# undef AMIX
-+# define AMIXArchitecture
-+# ifdef SVR4
-+#  undef SVR4
-+# endif
-+# ifdef m68k
-+#  undef m68k
-+#  define M68kArchitecture
-+# endif
-+#endif /* AMIX */
- #ifdef ultrix
- # define MacroIncludeFile <ultrix.cf>
- # define MacroFile ultrix.cf
-diff -ruN a/config/cf/site.def b/config/cf/site.def
---- a/config/cf/site.def	1997-07-16 01:05:21.000000000 +0300
-+++ b/config/cf/site.def	2026-10-31 14:21:09.987127786 +0200
-@@ -60,7 +60,9 @@
- 
- #ifdef AfterVendorCF
- 
-+#ifndef ProjectRoot
- #define ProjectRoot /usr/X11R6.3
-+#endif
- 
- /* Only set HasXdmAuth to YES if you have a Wraphelp.c file. */
- /* #define HasXdmAuth YES */
-diff -ruN a/config/imake/imakemdep.h b/config/imake/imakemdep.h
---- a/config/imake/imakemdep.h	1997-07-16 01:05:57.000000000 +0300
-+++ b/config/imake/imakemdep.h	2026-10-31 14:21:09.987177948 +0200
-@@ -214,6 +214,9 @@
-  *     If use cc -E but want a different compiler, define DEFAULT_CC.
-  *     If the cpp you need is not in /lib/cpp, define DEFAULT_CPP.
-  */
-+#ifdef AMIX
-+#define DEFAULT_CPP "/usr/public/lib/gcc-cpp"
-+#endif
- #ifdef hpux
- #define USE_CC_E
- #endif
-@@ -283,6 +286,12 @@
- #ifdef unix
- 	"-Uunix",	/* remove unix symbol so that filename unix.c okay */
- #endif
-+#ifdef AMIX
-+	"-traditional",
-+	"-DAMIX",
-+	"-DSVR4",
-+	"-Dm68k",
-+#endif
- #if defined(__386BSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__FreeBSD__) || defined(MACH)
- # ifdef __i386__
- 	"-D__i386__",
-diff -ruN a/config/imake/Makefile.ini b/config/imake/Makefile.ini
---- a/config/imake/Makefile.ini	1997-07-16 01:05:56.000000000 +0300
-+++ b/config/imake/Makefile.ini	2026-10-31 14:21:09.987157082 +0200
-@@ -8,8 +8,8 @@
- # any machine-specific preprocessor symbols.
- #
- 
--BOOTSTRAPCFLAGS = 
--CC = cc
-+BOOTSTRAPCFLAGS = -DAMIX -DSVR4 -Dm68k
-+CC = gcc
- CDEBUGFLAGS = -O
- INCLUDES = -I../../include -I../../imports/x11/include/X11
- CFLAGS = $(BOOTSTRAPCFLAGS) $(CDEBUGFLAGS) $(INCLUDES)
-diff -ruN a/config/util/amix-build-programs.sh b/config/util/amix-build-programs.sh
---- a/config/util/amix-build-programs.sh	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/amix-build-programs.sh	2026-10-31 14:21:09.987230528 +0200
-@@ -0,0 +1,96 @@
-+#!/bin/sh
-+
-+TOP=${1-/usr/x11r6/xc}
-+MODE=${2-useful}
-+
-+USEFUL_PROGRAMS="xinit xsetroot xclock xterm twm xdpyinfo xhost xset xwd xwininfo xlsfonts xlsclients xauth xkill xrefresh xmodmap xprop xrdb xlogo xmag xstdcmap oclock mkfontdir bdftopcf rgb"
-+
-+COMMON_PROGRAMS="appres bdftopcf bitmap editres fsinfo fslsfonts fstobdf iceauth mkfontdir oclock proxymngr rgb x11perf xauth xclipboard xclock xcmsdb xdpyinfo xfd xhost xkill xlogo xlsatoms xlsclients xlsfonts xmag xmodmap xprop xrdb xrefresh xset xsetroot xstdcmap xterm xwd xwininfo xwud twm xinit"
-+
-+OPTIONAL_PROGRAMS="lbxproxy xconsole xdm xfs xfindproxy xfwp xieperf xkbcomp xkbevd xkbprint xkbutils xmh xrx xsm"
-+
-+cd "$TOP" || exit 1
-+
-+if test -d programs
-+then
-+    :
-+else
-+    echo "amix-build-programs: $TOP is not an X11R6 source tree" >&2
-+    exit 1
-+fi
-+
-+if test "x$LD_LIBRARY_PATH" = x
-+then
-+    LD_LIBRARY_PATH=$TOP/exports/lib
-+else
-+    LD_LIBRARY_PATH=$TOP/exports/lib:$LD_LIBRARY_PATH
-+fi
-+export LD_LIBRARY_PATH
-+
-+case "$MODE" in
-+useful)
-+    PROGRAMS=$USEFUL_PROGRAMS
-+    ;;
-+common)
-+    PROGRAMS=$COMMON_PROGRAMS
-+    ;;
-+all)
-+    PROGRAMS="$COMMON_PROGRAMS $OPTIONAL_PROGRAMS"
-+    ;;
-+*)
-+    echo "usage: $0 [source-tree [useful|common|all]]" >&2
-+    exit 1
-+    ;;
-+esac
-+
-+failures=
-+
-+for program in $PROGRAMS
-+do
-+    dir=$TOP/programs/$program
-+
-+    if test -d "$dir"
-+    then
-+        :
-+    else
-+        echo "=== $program: skipped, no source directory ==="
-+        continue
-+    fi
-+
-+    if test -f "$dir/Makefile"
-+    then
-+        :
-+    else
-+        echo "=== $program: skipped, no Makefile ==="
-+        failures="$failures $program"
-+        continue
-+    fi
-+
-+    echo "=== $program ==="
-+    cd "$dir" || exit 1
-+
-+    if test "$program" = twm
-+    then
-+        rm -f lex.c lex.yy.c lex.o
-+    fi
-+
-+    if make
-+    then
-+        :
-+    else
-+        failures="$failures $program"
-+        if test "x$AMIX_PROGRAMS_KEEP_GOING" = xno
-+        then
-+            break
-+        fi
-+    fi
-+done
-+
-+if test "x$failures" = x
-+then
-+    echo "AMIX X11R6 program build completed."
-+    exit 0
-+fi
-+
-+echo "AMIX X11R6 program build had failures:$failures" >&2
-+exit 1
-diff -ruN a/config/util/amix-shared-rebuild.sh b/config/util/amix-shared-rebuild.sh
---- a/config/util/amix-shared-rebuild.sh	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/amix-shared-rebuild.sh	2026-10-31 14:21:09.987244214 +0200
-@@ -0,0 +1,264 @@
-+#!/bin/sh
-+
-+set -e
-+
-+TOP=${1-/usr/x11r6/xc}
-+MODE=${2-all}
-+LIBRARIES="X11 Xext ICE SM Xt Xmu Xaw"
-+PROGRAMS="xinit xsetroot xclock xterm twm"
-+
-+cd "$TOP"
-+
-+if test -f config/cf/amix.cf
-+then
-+    :
-+else
-+    echo "amix-shared-rebuild: $TOP is not an X11R6 source tree" >&2
-+    exit 1
-+fi
-+
-+for setting in \
-+    'HasSharedLibraries YES' \
-+    'SeparateSharedCompile YES' \
-+    'PositionIndependentCFlags -fpic' \
-+    'SharedLibraryLoadFlags -G' \
-+    'SharedDataSeparation YES' \
-+    'SharedCodeDef -DSHAREDCODE' \
-+    'SharedLibraryDef -DSUNSHLIB' \
-+    'HasShm NO'
-+do
-+    if grep "^#define $setting" config/cf/amix.cf >/dev/null
-+    then
-+        :
-+    else
-+        echo "amix-shared-rebuild: missing setting: $setting" >&2
-+        exit 1
-+    fi
-+done
-+
-+if test "x$LD_LIBRARY_PATH" = x
-+then
-+    LD_LIBRARY_PATH=$TOP/exports/lib
-+else
-+    LD_LIBRARY_PATH=$TOP/exports/lib:$LD_LIBRARY_PATH
-+fi
-+export LD_LIBRARY_PATH
-+
-+BUILD_LIBRARIES=no
-+BUILD_SET=
-+REPAIR_SHDATA=no
-+
-+if test "$MODE" = all
-+then
-+    echo "=== regenerate X11R6 Makefiles ==="
-+    rm -f xmakefile
-+    make Makefile
-+    test -s xmakefile
-+    make -f xmakefile Makefiles
-+    BUILD_LIBRARIES=yes
-+    BUILD_SET=$LIBRARIES
-+else
-+    if test "$MODE" = shdata
-+    then
-+        echo "=== regenerate Makefiles for shared-data ABI ==="
-+        rm -f xmakefile
-+        make Makefile
-+        test -s xmakefile
-+        make -f xmakefile Makefiles
-+        BUILD_LIBRARIES=yes
-+        BUILD_SET="Xt Xmu Xaw"
-+    else
-+        if test "$MODE" = shdata-fix
-+        then
-+            echo "=== regenerate affected library Makefiles ==="
-+            for library in Xt Xmu Xaw
-+            do
-+                cd "$TOP/lib/$library"
-+                rm -f Makefile.new
-+                ../../config/imake/imake -I../../config/cf \
-+                    -s Makefile.new -f Imakefile \
-+                    -DTOPDIR=../.. -DCURDIR=lib/$library
-+                test -s Makefile.new
-+                mv Makefile.new Makefile
-+            done
-+
-+            echo "=== regenerate affected client Makefiles ==="
-+            for program in $PROGRAMS
-+            do
-+                cd "$TOP/programs/$program"
-+                rm -f Makefile.new
-+                ../../config/imake/imake -I../../config/cf \
-+                    -s Makefile.new -f Imakefile \
-+                    -DTOPDIR=../.. -DCURDIR=programs/$program
-+                test -s Makefile.new
-+                mv Makefile.new Makefile
-+            done
-+            BUILD_LIBRARIES=yes
-+            BUILD_SET="Xt Xmu Xaw"
-+            REPAIR_SHDATA=yes
-+        else
-+        if test "$MODE" = libs
-+        then
-+            BUILD_LIBRARIES=yes
-+            BUILD_SET=$LIBRARIES
-+        else
-+            if test "$MODE" = clients
-+            then
-+                :
-+            else
-+                echo "usage: $0 [source-tree [all|shdata|shdata-fix|libs|clients]]" >&2
-+                exit 1
-+            fi
-+        fi
-+        fi
-+    fi
-+fi
-+
-+if test "$BUILD_LIBRARIES" = yes
-+then
-+    if echo " $BUILD_SET " | grep ' Xt ' >/dev/null
-+    then
-+        grep 'UNSHAREDOBJS *= *sharedlib.o' \
-+            "$TOP/lib/Xt/Makefile" >/dev/null || {
-+            echo "amix-shared-rebuild: Xt Makefile does not use the native stub-only layout" >&2
-+            exit 1
-+        }
-+        grep 'AMIXSHLIB' "$TOP/lib/Xt/Makefile" >/dev/null || {
-+            echo "amix-shared-rebuild: Xt AMIX wrapper rule is missing" >&2
-+            exit 1
-+        }
-+    fi
-+
-+    if echo " $BUILD_SET " | grep ' Xmu ' >/dev/null
-+    then
-+        grep 'UNSHAREDOBJS *= *sharedlib.o' \
-+            "$TOP/lib/Xmu/Makefile" >/dev/null || {
-+            echo "amix-shared-rebuild: Xmu Makefile does not use the native stub-only layout" >&2
-+            exit 1
-+        }
-+    fi
-+
-+    if grep '^libXaw.sa:' "$TOP/lib/Xaw/Makefile" >/dev/null
-+    then
-+        echo "amix-shared-rebuild: Xaw must not generate a shared-data archive on AMIX" >&2
-+        exit 1
-+    fi
-+
-+    grep 'libXt.sa' "$TOP/programs/xclock/Makefile" >/dev/null || {
-+        echo "amix-shared-rebuild: xclock link does not include libXt.sa" >&2
-+        exit 1
-+    }
-+    grep 'XMULIBONLY.*libXmu.sa' "$TOP/programs/xsetroot/Makefile" >/dev/null || {
-+        echo "amix-shared-rebuild: xsetroot link does not include libXmu.sa" >&2
-+        exit 1
-+    }
-+
-+    if test "$REPAIR_SHDATA" = yes
-+    then
-+        echo "=== restore native ELF .so links ==="
-+        for library in Xt Xmu Xaw
-+        do
-+            cd "$TOP/lib/$library"
-+            image=
-+            for candidate in lib$library.so.*
-+            do
-+                if test -f "$candidate" && test -s "$candidate"
-+                then
-+                    image=$candidate
-+                    break
-+                fi
-+            done
-+            if test "x$image" = x
-+            then
-+                echo "amix-shared-rebuild: missing versioned lib$library ELF image" >&2
-+                exit 1
-+            fi
-+            rm -f lib$library.so
-+            ln -s "$image" lib$library.so
-+            rm -f "$TOP/exports/lib/lib$library.so"
-+            cd "$TOP/exports/lib"
-+            ln -s ../../lib/$library/lib$library.so .
-+        done
-+
-+        echo "=== repair native Xt shared-data archive ==="
-+        cd "$TOP/lib/Xt"
-+        rm -f libXt.sa sharedlib.o
-+        make libXt.sa
-+
-+        echo "=== repair native Xmu shared-data archive ==="
-+        cd "$TOP/lib/Xmu"
-+        rm -f libXmu.sa sharedlib.o
-+        make libXmu.sa
-+
-+        rm -f "$TOP/lib/Xaw/libXaw.sa" "$TOP/exports/lib/libXaw.sa"
-+    else
-+        for library in $BUILD_SET
-+        do
-+            dir="$TOP/lib/$library"
-+            echo "=== clean PIC rebuild of shared lib$library ==="
-+            cd "$dir"
-+            rm -f lib$library.so lib$library.so.* lib$library.sa \
-+                *.o shared/*.o unshared/*.o
-+            make
-+        done
-+    fi
-+fi
-+
-+echo "=== validate shared libraries ==="
-+for library in $LIBRARIES
-+do
-+    cd "$TOP/lib/$library"
-+    found=no
-+    for image in lib$library.so.*
-+    do
-+        if test -f "$image" && test -s "$image"
-+        then
-+            file "$image"
-+            dump -Lv "$image" >/dev/null
-+            found=yes
-+        fi
-+    done
-+    if test "$found" = no
-+    then
-+        echo "amix-shared-rebuild: no valid lib$library shared image" >&2
-+        exit 1
-+    fi
-+    file "lib$library.so"
-+    dump -Lv "lib$library.so" >/dev/null
-+done
-+
-+echo "=== validate AMIX shared-data archives ==="
-+for library in Xt Xmu
-+do
-+    cd "$TOP/lib/$library"
-+    members=`ar t "lib$library.sa"`
-+    if test "x$members" = xsharedlib.o
-+    then
-+        echo "lib$library.sa: native AMIX stub archive"
-+    else
-+        echo "amix-shared-rebuild: unexpected lib$library.sa members: $members" >&2
-+        exit 1
-+    fi
-+done
-+
-+if test -f "$TOP/lib/Xaw/libXaw.sa"
-+then
-+    echo "amix-shared-rebuild: Xaw unexpectedly has a .sa archive" >&2
-+    exit 1
-+fi
-+
-+echo "=== rebuild dynamic clients ==="
-+for program in $PROGRAMS
-+do
-+    cd "$TOP/programs/$program"
-+    if test "$program" = twm
-+    then
-+        rm -f lex.c lex.yy.c lex.o
-+    fi
-+    rm -f "$program"
-+    make "$program"
-+    test -s "$program"
-+    ldd "$program"
-+done
-+
-+echo "AMIX X11R6 shared libraries and clients are ready."
-diff -ruN a/config/util/gears.zz9000 b/config/util/gears.zz9000
---- a/config/util/gears.zz9000	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/gears.zz9000	2026-10-31 14:21:09.987259452 +0200
-@@ -0,0 +1,17 @@
-+#!/bin/sh
-+
-+DISPLAY=${DISPLAY-:0}
-+export DISPLAY
-+
-+for gear in \
-+    /usr/mesa3/Mesa-3.1/demos/gears \
-+    /usr/mesa/Mesa3.1/demos/gears
-+do
-+    if test -x "$gear"
-+    then
-+        exec "$gear"
-+    fi
-+done
-+
-+echo "gears.zz9000: Mesa gears demo not found" >&2
-+exit 1
-diff -ruN a/config/util/startXzz9000 b/config/util/startXzz9000
---- a/config/util/startXzz9000	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/startXzz9000	2026-10-31 14:21:09.987272312 +0200
-@@ -0,0 +1,126 @@
-+#!/bin/sh
-+
-+TOP=${X11R6_TOP-/usr/x11r6/xc}
-+DISPLAY_NUMBER=${1-:0}
-+MODE=${ZZ9K_MODE-1920x800}
-+FONT_PATH=${ZZ9K_FONT_PATH-$TOP/fonts/bdf/misc}
-+
-+SERVER=$TOP/programs/Xserver/Xzz9000
-+CLIENT=$TOP/config/util/xinitrc.zz9000
-+ZZ9K_DEV=${ZZ9K_DEV-/dev/zz9000}
-+ZZ9K_TEST=${ZZ9K_TEST-/usr/amiga/bin/zz9k_test}
-+ZZ9K_CONSOLE=${ZZ9K_CONSOLE-/usr/amiga/bin/zz9k_console}
-+ZZ9K_PRE_X_CMD=${ZZ9K_PRE_X_CMD-noconsole}
-+ZZ9K_EXIT_CMD=${ZZ9K_EXIT_CMD-redirect}
-+ZZ9K_SERVER_LOG=${ZZ9K_SERVER_LOG-/tmp/Xzz9000.log}
-+ZZ9K_CLIENT_LOG=${ZZ9K_CLIENT_LOG-/tmp/Xzz9000-clients.log}
-+
-+case "$DISPLAY_NUMBER" in
-+:[0-9]*) ;;
-+*)
-+    echo "usage: $0 [:display]" >&2
-+    exit 1
-+    ;;
-+esac
-+
-+for file in "$SERVER" "$CLIENT"
-+do
-+    if test -f "$file"
-+    then
-+        :
-+    else
-+        echo "startXzz9000: missing $file" >&2
-+        exit 1
-+    fi
-+done
-+
-+if test "x$LD_LIBRARY_PATH" = x
-+then
-+    LD_LIBRARY_PATH=$TOP/exports/lib
-+else
-+    LD_LIBRARY_PATH=$TOP/exports/lib:$LD_LIBRARY_PATH
-+fi
-+export LD_LIBRARY_PATH TOP
-+
-+RGB_PATH=
-+if test -s /usr/x11r6/lib/X11/rgb.dir
-+then
-+    RGB_PATH=/usr/x11r6/lib/X11/rgb
-+else
-+    if test -s "$TOP/programs/rgb/rgb.dir"
-+    then
-+        RGB_PATH=$TOP/programs/rgb/rgb
-+    fi
-+fi
-+
-+echo "Starting Xzz9000 on $DISPLAY_NUMBER at $MODE"
-+echo "Exit twm to stop the X server."
-+echo "Server log: $ZZ9K_SERVER_LOG"
-+echo "Client log: $ZZ9K_CLIENT_LOG"
-+
-+DISPLAY=$DISPLAY_NUMBER
-+export DISPLAY
-+
-+run_zz9k_command()
-+{
-+    ZZ9K_CMD=$1
-+
-+    case "$ZZ9K_CMD" in
-+    ''|none)
-+        return
-+        ;;
-+    redirect|start)
-+        if test -x "$ZZ9K_CONSOLE"
-+        then
-+            "$ZZ9K_CONSOLE" start >/dev/null 2>&1
-+            return
-+        fi
-+        ;;
-+    stop|noconsole)
-+        if test -x "$ZZ9K_CONSOLE"
-+        then
-+            "$ZZ9K_CONSOLE" stop >/dev/null 2>&1
-+            return
-+        fi
-+        ;;
-+    esac
-+
-+    if test -x "$ZZ9K_TEST"
-+    then
-+        "$ZZ9K_TEST" "$ZZ9K_DEV" "$ZZ9K_CMD" >/dev/null 2>&1
-+    fi
-+}
-+
-+run_zz9k_command "$ZZ9K_PRE_X_CMD"
-+
-+if test "x$RGB_PATH" = x
-+then
-+    "$SERVER" "$DISPLAY_NUMBER" -mode "$MODE" -fp "$FONT_PATH" \
-+        -ac -kb >"$ZZ9K_SERVER_LOG" 2>&1 &
-+else
-+    "$SERVER" "$DISPLAY_NUMBER" -mode "$MODE" -fp "$FONT_PATH" \
-+        -co "$RGB_PATH" -ac -kb >"$ZZ9K_SERVER_LOG" 2>&1 &
-+fi
-+
-+SERVER_PID=$!
-+
-+cleanup()
-+{
-+    if test "x$SERVER_PID" != x
-+    then
-+        kill "$SERVER_PID" >/dev/null 2>&1
-+        wait "$SERVER_PID" >/dev/null 2>&1
-+        SERVER_PID=
-+    fi
-+    run_zz9k_command "$ZZ9K_EXIT_CMD"
-+}
-+
-+trap 'cleanup; exit 1' 1 2 3 15
-+
-+sleep ${ZZ9K_START_DELAY-5}
-+
-+sh "$CLIENT" >"$ZZ9K_CLIENT_LOG" 2>&1
-+STATUS=$?
-+
-+cleanup
-+exit $STATUS
-diff -ruN a/config/util/twmrc.zz9000 b/config/util/twmrc.zz9000
---- a/config/util/twmrc.zz9000	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/twmrc.zz9000	2026-10-31 14:21:09.987284431 +0200
-@@ -0,0 +1,78 @@
-+NoGrabServer
-+RestartPreviousState
-+DecorateTransients
-+RandomPlacement
-+ShowIconManager
-+UsePPosition "on"
-+NoDefaults
-+IconDirectory "/usr/x11r6/xc/include/bitmaps"
-+TitleFont "fixed"
-+ResizeFont "fixed"
-+MenuFont "fixed"
-+IconFont "fixed"
-+IconManagerFont "fixed"
-+BorderWidth 2
-+ButtonIndent 0
-+FramePadding 2
-+TitlePadding 4
-+
-+LeftTitleButton "menu12" = f.menu "window"
-+RightTitleButton "icon" = f.iconify
-+RightTitleButton "xlogo11" = f.delete
-+
-+Color
-+{
-+    BorderColor "gray40"
-+    DefaultBackground "#1b365d"
-+    DefaultForeground "gray90"
-+    TitleBackground "#1b365d"
-+    TitleForeground "white"
-+    MenuBackground "gray15"
-+    MenuForeground "gray90"
-+    MenuTitleBackground "#1b365d"
-+    MenuTitleForeground "white"
-+    IconBackground "gray15"
-+    IconForeground "gray90"
-+    IconManagerBackground "gray15"
-+    IconManagerForeground "gray90"
-+}
-+
-+Button1 = : root : f.menu "main"
-+Button2 = : root : f.menu "windows"
-+Button3 = : root : f.menu "main"
-+
-+Button1 = : title : f.move
-+Button2 = : title : f.raise
-+Button3 = : title : f.menu "window"
-+
-+menu "main"
-+{
-+    "AMIX ZZ9000"       f.title
-+    "xterm"            f.exec "/usr/x11r6/xc/programs/xterm/xterm -geometry 100x30+60+60 -title 'AMIX X11R6.3 on ZZ9000' -e ${ZZ9K_SHELL-/bin/sh} &"
-+    "xclock"           f.exec "/usr/x11r6/xc/programs/xclock/xclock -geometry 220x220-20+20 &"
-+    "Mesa gears"       f.exec "sh /usr/x11r6/xc/config/util/gears.zz9000 &"
-+    "blue background"  f.exec "/usr/x11r6/xc/programs/xsetroot/xsetroot -solid '#1b365d' &"
-+    ""                 f.nop
-+    "refresh"          f.refresh
-+    "restart twm"      f.restart
-+    "exit X session"   f.quit
-+}
-+
-+menu "window"
-+{
-+    "Window"           f.title
-+    "raise"            f.raise
-+    "lower"            f.lower
-+    "move"             f.move
-+    "resize"           f.resize
-+    "iconify"          f.iconify
-+    "delete"           f.delete
-+    "destroy"          f.destroy
-+}
-+
-+menu "windows"
-+{
-+    "Windows"          f.title
-+    "icon manager"     f.showiconmgr
-+    "refresh"          f.refresh
-+}
-diff -ruN a/config/util/xinitrc.zz9000 b/config/util/xinitrc.zz9000
---- a/config/util/xinitrc.zz9000	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/xinitrc.zz9000	2026-10-31 14:21:09.987299736 +0200
-@@ -0,0 +1,39 @@
-+#!/bin/sh
-+
-+XSETROOT=$TOP/programs/xsetroot/xsetroot
-+XCLOCK=$TOP/programs/xclock/xclock
-+XTERM=$TOP/programs/xterm/xterm
-+XMODMAP=$TOP/programs/xmodmap/xmodmap
-+TWM=$TOP/programs/twm/twm
-+TWMRC=$TOP/config/util/twmrc.zz9000
-+DE_KEYMAP=${ZZ9K_XMODMAP-$TOP/config/util/Xmodmap.de}
-+ZZ9K_SHELL=${ZZ9K_SHELL-${SHELL-/bin/sh}}
-+ROOT_COLOR=${ZZ9K_ROOT_COLOR-'#1b365d'}
-+export ZZ9K_SHELL
-+
-+for file in "$XSETROOT" "$XCLOCK" "$XTERM" "$TWM" "$TWMRC"
-+do
-+    if test -f "$file"
-+    then
-+        :
-+    else
-+        echo "xinitrc.zz9000: missing $file" >&2
-+        exit 1
-+    fi
-+done
-+
-+if test -f "$DE_KEYMAP" && test -x "$XMODMAP"
-+then
-+    "$XMODMAP" "$DE_KEYMAP"
-+fi
-+
-+"$TWM" -f "$TWMRC" &
-+TWM_PID=$!
-+
-+sleep ${ZZ9K_TWM_DELAY-2}
-+
-+"$XSETROOT" -solid "$ROOT_COLOR"
-+"$XCLOCK" -geometry 220x220-20+20 &
-+"$XTERM" -geometry 100x30+40+40 -title 'AMIX X11R6.3 on ZZ9000' -e "$ZZ9K_SHELL" &
-+
-+wait "$TWM_PID"
-diff -ruN a/config/util/Xmodmap.de b/config/util/Xmodmap.de
---- a/config/util/Xmodmap.de	1970-01-01 02:00:00.000000000 +0200
-+++ b/config/util/Xmodmap.de	2026-10-31 14:21:09.987216528 +0200
-@@ -0,0 +1,62 @@
-+! German keymap overlay for the AMIX X11R6 server.
-+! AMIX reports raw Amiga keycodes as X keycode = raw scancode + 1.
-+!
-+! This file intentionally avoids XKB; Xzz9000 is started with -kb.
-+! Load with:
-+!   /usr/x11r6/xc/programs/xmodmap/xmodmap /usr/x11r6/xc/config/util/Xmodmap.de
-+
-+clear Mod5
-+
-+keycode   1 = asciicircum degree
-+keycode   2 = 1 exclam
-+keycode   3 = 2 quotedbl twosuperior
-+keycode   4 = 3 section threesuperior
-+keycode   5 = 4 dollar
-+keycode   6 = 5 percent
-+keycode   7 = 6 ampersand
-+keycode   8 = 7 slash braceleft
-+keycode   9 = 8 parenleft bracketleft
-+keycode  10 = 9 parenright bracketright
-+keycode  11 = 0 equal braceright
-+keycode  12 = ssharp question backslash
-+keycode  13 = acute grave
-+keycode  14 = numbersign apostrophe
-+
-+keycode  17 = q Q at
-+keycode  18 = w W
-+keycode  19 = e E
-+keycode  20 = r R
-+keycode  21 = t T
-+keycode  22 = z Z
-+keycode  23 = u U
-+keycode  24 = i I
-+keycode  25 = o O
-+keycode  26 = p P
-+keycode  27 = udiaeresis Udiaeresis
-+keycode  28 = plus asterisk asciitilde
-+
-+keycode  33 = a A
-+keycode  34 = s S
-+keycode  35 = d D
-+keycode  36 = f F
-+keycode  37 = g G
-+keycode  38 = h H
-+keycode  39 = j J
-+keycode  40 = k K
-+keycode  41 = l L
-+keycode  42 = odiaeresis Odiaeresis
-+keycode  43 = adiaeresis Adiaeresis
-+
-+keycode  50 = y Y
-+keycode  51 = x X
-+keycode  52 = c C
-+keycode  53 = v V
-+keycode  54 = b B
-+keycode  55 = n N
-+keycode  56 = m M
-+keycode  57 = comma semicolon
-+keycode  58 = period colon
-+keycode  59 = minus underscore
-+
-+keycode 102 = Mode_switch
-+add Mod5 = Mode_switch
-diff -ruN a/lib/Xaw/Imakefile b/lib/Xaw/Imakefile
---- a/lib/Xaw/Imakefile	1996-09-28 23:51:54.000000000 +0300
-+++ b/lib/Xaw/Imakefile	2026-10-31 14:21:09.987329912 +0200
-@@ -1,9 +1,13 @@
- XCOMM $XConsortium: Imakefile /main/87 1996/09/28 16:43:34 rws $
- #define DoNormalLib NormalLibXaw
- #define DoSharedLib SharedLibXaw
--#define DoDebugLib DebugLibXaw 
--#define DoProfileLib ProfileLibXaw 
-+#define DoDebugLib DebugLibXaw
-+#define DoProfileLib ProfileLibXaw
-+#if defined(AMIXArchitecture)
-+#define HasSharedData NO
-+#else
- #define HasSharedData YES
-+#endif
- #define LibName Xaw
- #define SoRev SOXAWREV
- #define IncSubdir X11
-@@ -175,7 +179,7 @@
- 
- #include <Library.tmpl>
- 
--#if DoSharedLib && SharedDataSeparation
-+#if DoSharedLib && SharedDataSeparation && !defined(AMIXArchitecture)
- SpecialCObjectRule(sharedlib,NullParameter,$(SHLIBDEF))
- #endif
- 
-diff -ruN a/lib/Xt/Imakefile b/lib/Xt/Imakefile
---- a/lib/Xt/Imakefile	1997-07-16 01:06:10.000000000 +0300
-+++ b/lib/Xt/Imakefile	2026-10-31 14:21:09.987357585 +0200
-@@ -13,7 +13,7 @@
- #ifndef MotifBC
- #define MotifBC NO
- #endif
--				   
-+
- /* "YES" allows illegal XtGetValues requests with NULL ArgVal to
-    usually succeed, as R5 did.  Some applications erroneously rely on
-    this behavior.  Support for this will be removed in a future release. */
-@@ -196,7 +196,11 @@
- 	Vendor.o
- 
- #if SharedDataSeparation
-+#if defined(AMIXArchitecture)
-+UNSHAREDOBJS = sharedlib.o
-+#else
- UNSHAREDOBJS = StringDefs.o sharedlib.o
-+#endif
- #else
- UNSHAREDOBJS = sharedlib.o
- #endif
-@@ -213,8 +217,12 @@
- SpecialCLibObjectRule(TMkey,$(_NOOP_),-DXKB)
- #endif
- #if DoSharedLib
-+#if defined(AMIXArchitecture)
-+SpecialCObjectRule(sharedlib,$(_NOOP_),$(SHLIBDEF) -DAMIXSHLIB)
-+#else
- SpecialCObjectRule(sharedlib,$(_NOOP_),$(SHLIBDEF))
- #endif
-+#endif
- 
- STRINGS_FILES = StringDefs.c StringDefs.h Shell.h
- STRINGS_TMPLS = util/StrDefs.ct util/StrDefs.ht util/Shell.ht
-diff -ruN a/lib/Xt/sharedlib.c b/lib/Xt/sharedlib.c
---- a/lib/Xt/sharedlib.c	1995-03-31 03:00:57.000000000 +0300
-+++ b/lib/Xt/sharedlib.c	2026-10-31 14:21:09.987381004 +0200
-@@ -81,7 +81,7 @@
- }
- 
- #if NeedFunctionPrototypes
--Widget 
-+Widget
- XtInitialize(
- _Xconst char* name,
- _Xconst char* classname,
-@@ -91,7 +91,7 @@
- String *argv
- )
- #else
--Widget 
-+Widget
- XtInitialize(name, classname, options, num_options, argc, argv)
- String name, classname;
- XrmOptionDescRec *options;
-@@ -121,21 +121,21 @@
- #else
- Widget
- XtAppInitialize(app_context_return, application_class, options, num_options,
--		argc_in_out, argv_in_out, fallback_resources, 
-+		argc_in_out, argv_in_out, fallback_resources,
- 		args_in, num_args_in)
- XtAppContext * app_context_return;
- String application_class;
- XrmOptionDescRec *options;
- Cardinal num_options, num_args_in;
- int *argc_in_out;
--String *argv_in_out, * fallback_resources;     
-+String *argv_in_out, * fallback_resources;
- ArgList args_in;
- #endif
- {
-     extern Widget _XtAppInitialize();
-     VENDORINIT
-     return _XtAppInitialize (app_context_return, application_class, options,
--			     num_options, argc_in_out, argv_in_out, 
-+			     num_options, argc_in_out, argv_in_out,
- 			     fallback_resources, args_in, num_args_in);
- }
- 
-@@ -191,7 +191,7 @@
- #else
- Widget
- XtOpenApplication(app_context_return, application_class, options, num_options,
--		  argc_in_out, argv_in_out, fallback_resources, 
-+		  argc_in_out, argv_in_out, fallback_resources,
- 		  widget_class, args_in, num_args_in)
- XtAppContext * app_context_return;
- String application_class;
-@@ -206,7 +206,7 @@
-     extern Widget _XtOpenApplication();
-     VENDORINIT
-     return _XtOpenApplication (app_context_return, application_class, options,
--			       num_options, argc_in_out, argv_in_out, 
-+			       num_options, argc_in_out, argv_in_out,
- 			       fallback_resources, widget_class,
- 			       args_in, num_args_in);
- }
-@@ -256,7 +256,7 @@
- 
- #endif /* SUNSHLIB or AIXSHLIB */
- 
--#if defined(SUNSHLIB) && !defined(SHAREDCODE)
-+#if defined(SUNSHLIB) && !defined(SHAREDCODE) && !defined(AMIXSHLIB)
- 
- int _XtInheritTranslations = 0;
- 
-@@ -300,4 +300,4 @@
- extern HookObjClassRec hookObjClassRec;
- WidgetClass hookObjectClass = (WidgetClass) &hookObjClassRec;
- 
--#endif /* SUNSHLIB */
-+#endif /* SUNSHLIB && !AMIXSHLIB */
-diff -ruN a/programs/Imakefile b/programs/Imakefile
---- a/programs/Imakefile	1996-12-18 23:31:52.000000000 +0200
-+++ b/programs/Imakefile	2026-10-31 14:21:09.987487758 +0200
-@@ -23,9 +23,9 @@
-   LBXPROXYSRCDIR = lbxproxy
- #endif
-   PROXYMGRSRCDIR = proxymngr
--    RSTARTSRCDIR = rstart
--   SMPROXYSRCDIR = smproxy
--       TWMSRCDIR = twm
-+    RSTARTSRCDIR =
-+   SMPROXYSRCDIR =
-+       TWMSRCDIR =
-   XCONSOLESRCDIR = xconsole
-        XDMSRCDIR = xdm
- XFINDPROXYSRCDIR = xfindproxy
-diff -ruN a/programs/rstart/Imakefile b/programs/rstart/Imakefile
---- a/programs/rstart/Imakefile	1994-12-02 03:16:44.000000000 +0200
-+++ b/programs/rstart/Imakefile	2026-10-31 14:21:09.988243626 +0200
-@@ -145,6 +145,6 @@
- InstallManPage(rstartd,$(MANDIR))
- 
- XCOMM # Turning this on makes the server look up host names in $DISPLAY and
--XCOMM # substitute IP addresses.  (ODT v1 X clients can't look names up in
-+XCOMM # substitute IP addresses.  (ODT v1 X clients cannot look names up in
- XCOMM # DNS.)
- XCOMM #CFLAGS=-DODT1_DISPLAY_HACK
-diff -ruN a/programs/twm/lex.l b/programs/twm/lex.l
---- a/programs/twm/lex.l	1995-03-01 23:37:51.000000000 +0200
-+++ b/programs/twm/lex.l	2026-10-31 14:21:09.988272523 +0200
-@@ -51,6 +51,8 @@
- /**    OR PERFORMANCE OF THIS SOFTWARE.                                     **/
- /*****************************************************************************/
- 
-+#ifndef AMIX
-+/* The AMIX lex output corrupts this embedded revision comment. */
- /***********************************************************************
-  *
-  * $XConsortium: lex.l,v 1.70 95/03/01 16:37:51 kaleb Exp $
-@@ -60,6 +62,7 @@
-  * 12-Nov-87 Thomas E. LaStrange		File created
-  *
-  ***********************************************************************/
-+#endif
- 
- /* #include <stdio.h> */		/* lex already includes stdio.h */
- #include "gram.h"
-diff -ruN a/programs/Xserver/hw/amix/amixCursor.c b/programs/Xserver/hw/amix/amixCursor.c
---- a/programs/Xserver/hw/amix/amixCursor.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixCursor.c	2026-10-31 14:21:09.987702688 +0200
+--- a/programs/Xserver/hw/amix/amixCursor.c
++++ b/programs/Xserver/hw/amix/amixCursor.c
 @@ -0,0 +1,44 @@
 +/*-
 + * amixCursor.c --
@@ -1307,9 +49,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixCursor.c b/programs/Xserver/hw/amix/ami
 +amixInitCursor ()
 +{
 +}
-diff -ruN a/programs/Xserver/hw/amix/amix.h b/programs/Xserver/hw/amix/amix.h
---- a/programs/Xserver/hw/amix/amix.h	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amix.h	2026-10-31 14:21:09.987685295 +0200
+--- a/programs/Xserver/hw/amix/amix.h
++++ b/programs/Xserver/hw/amix/amix.h
 @@ -0,0 +1,207 @@
 +/*-
 + * amix.h --
@@ -1518,9 +259,8 @@ diff -ruN a/programs/Xserver/hw/amix/amix.h b/programs/Xserver/hw/amix/amix.h
 +#endif /* TIGA */
 +
 +#endif /* _AMIX_H_ */
-diff -ruN a/programs/Xserver/hw/amix/amixInit.c b/programs/Xserver/hw/amix/amixInit.c
---- a/programs/Xserver/hw/amix/amixInit.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixInit.c	2026-10-31 14:21:09.987715060 +0200
+--- a/programs/Xserver/hw/amix/amixInit.c
++++ b/programs/Xserver/hw/amix/amixInit.c
 @@ -0,0 +1,354 @@
 +/*-
 + * amixInit.c --
@@ -1876,9 +616,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixInit.c b/programs/Xserver/hw/amix/amixI
 +
 +    return TRUE;
 +}
-diff -ruN a/programs/Xserver/hw/amix/amixIo.c b/programs/Xserver/hw/amix/amixIo.c
---- a/programs/Xserver/hw/amix/amixIo.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixIo.c	2026-10-31 14:21:09.987734095 +0200
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
 @@ -0,0 +1,564 @@
 +/*-
 + * amixIo.c --
@@ -2444,9 +1183,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixIo.c b/programs/Xserver/hw/amix/amixIo.
 +#endif
 +#endif /* TIGA */
 +}
-diff -ruN a/programs/Xserver/hw/amix/amixKbd.c b/programs/Xserver/hw/amix/amixKbd.c
---- a/programs/Xserver/hw/amix/amixKbd.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixKbd.c	2026-10-31 14:21:09.987753416 +0200
+--- a/programs/Xserver/hw/amix/amixKbd.c
++++ b/programs/Xserver/hw/amix/amixKbd.c
 @@ -0,0 +1,538 @@
 +/*-
 + * amixKbd.c --
@@ -2986,9 +1724,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixKbd.c b/programs/Xserver/hw/amix/amixKb
 +#endif
 +    }
 +}
-diff -ruN a/programs/Xserver/hw/amix/amixKeyMap.c b/programs/Xserver/hw/amix/amixKeyMap.c
---- a/programs/Xserver/hw/amix/amixKeyMap.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixKeyMap.c	2026-10-31 14:21:09.987769214 +0200
+--- a/programs/Xserver/hw/amix/amixKeyMap.c
++++ b/programs/Xserver/hw/amix/amixKeyMap.c
 @@ -0,0 +1,191 @@
 +#include	"amix.h"
 +#include	"keysym.h"
@@ -3181,9 +1918,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixKeyMap.c b/programs/Xserver/hw/amix/ami
 +{
 +    AmixMap, MIN_AMIX_KEY, MAX_AMIX_KEY, AMIX_GLYPHS_PER_KEY,
 +};
-diff -ruN a/programs/Xserver/hw/amix/amixMono.c b/programs/Xserver/hw/amix/amixMono.c
---- a/programs/Xserver/hw/amix/amixMono.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixMono.c	2026-10-31 14:21:09.987782878 +0200
+--- a/programs/Xserver/hw/amix/amixMono.c
++++ b/programs/Xserver/hw/amix/amixMono.c
 @@ -0,0 +1,260 @@
 +#include    "amix.h"
 +#include    "resource.h"
@@ -3445,9 +2181,8 @@ diff -ruN a/programs/Xserver/hw/amix/amixMono.c b/programs/Xserver/hw/amix/amixM
 +{
 +    return (AddScreen(amixMonoInit, argc, argv) >= 0);
 +}
-diff -ruN a/programs/Xserver/hw/amix/amixMouse.c b/programs/Xserver/hw/amix/amixMouse.c
---- a/programs/Xserver/hw/amix/amixMouse.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixMouse.c	2026-10-31 14:21:09.987799899 +0200
+--- a/programs/Xserver/hw/amix/amixMouse.c
++++ b/programs/Xserver/hw/amix/amixMouse.c
 @@ -0,0 +1,359 @@
 +/*-
 + * amixMouse.c --
@@ -3808,17 +2543,15 @@ diff -ruN a/programs/Xserver/hw/amix/amixMouse.c b/programs/Xserver/hw/amix/amix
 +    if (amixFbs[pScreen->myNum].EnterLeave)
 +	(*amixFbs[pScreen->myNum].EnterLeave) (pScreen, entering);
 +}
-diff -ruN a/programs/Xserver/hw/amix/amixTstub.c b/programs/Xserver/hw/amix/amixTstub.c
---- a/programs/Xserver/hw/amix/amixTstub.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/amixTstub.c	2026-10-31 14:21:09.987813267 +0200
+--- a/programs/Xserver/hw/amix/amixTstub.c
++++ b/programs/Xserver/hw/amix/amixTstub.c
 @@ -0,0 +1,4 @@
 +int tigamode;
 +amixTCreate(){}
 +char *TigaBoard;
 +char *tigagm;
-diff -ruN a/programs/Xserver/hw/amix/Imakefile b/programs/Xserver/hw/amix/Imakefile
---- a/programs/Xserver/hw/amix/Imakefile	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/Imakefile	2026-10-31 14:21:09.987656916 +0200
+--- a/programs/Xserver/hw/amix/Imakefile
++++ b/programs/Xserver/hw/amix/Imakefile
 @@ -0,0 +1,28 @@
 +XCOMM $XConsortium: Imakefile,v 5.13 91/07/29 18:26:59 rws Exp $
 +#include <Server.tmpl>
@@ -3848,9 +2581,8 @@ diff -ruN a/programs/Xserver/hw/amix/Imakefile b/programs/Xserver/hw/amix/Imakef
 +#define IHaveSubdirs
 +MakeSubdirs($(SUBDIRS))
 +DependSubdirs($(SUBDIRS))
-diff -ruN a/programs/Xserver/hw/amix/lscreen.h b/programs/Xserver/hw/amix/lscreen.h
---- a/programs/Xserver/hw/amix/lscreen.h	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/lscreen.h	2026-10-31 14:21:09.987826332 +0200
+--- a/programs/Xserver/hw/amix/lscreen.h
++++ b/programs/Xserver/hw/amix/lscreen.h
 @@ -0,0 +1,54 @@
 +#define QUALIFIERS_LEFT_SHIFT		(0x0001)
 +#define QUALIFIERS_RIGHT_SHIFT		(0x0002)
@@ -3906,9 +2638,8 @@ diff -ruN a/programs/Xserver/hw/amix/lscreen.h b/programs/Xserver/hw/amix/lscree
 +#define LEFT_MOUSE_BUTTON	(0x7C)
 +#define MIDDLE_MOUSE_BUTTON	(0x7D)
 +#define RIGHT_MOUSE_BUTTON	(0x7E)
-diff -ruN a/programs/Xserver/hw/amix/rtg/Imakefile b/programs/Xserver/hw/amix/rtg/Imakefile
---- a/programs/Xserver/hw/amix/rtg/Imakefile	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/Imakefile	2026-10-31 14:21:09.987853332 +0200
+--- a/programs/Xserver/hw/amix/rtg/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/Imakefile
 @@ -0,0 +1,20 @@
 +#include <Server.tmpl>
 +
@@ -3930,9 +2661,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/Imakefile b/programs/Xserver/hw/amix/rt
 +#define IHaveSubdirs
 +MakeSubdirs($(SUBDIRS))
 +DependSubdirs($(SUBDIRS))
-diff -ruN a/programs/Xserver/hw/amix/rtg/rtg.h b/programs/Xserver/hw/amix/rtg/rtg.h
---- a/programs/Xserver/hw/amix/rtg/rtg.h	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/rtg.h	2026-10-31 14:21:09.987868736 +0200
+--- a/programs/Xserver/hw/amix/rtg/rtg.h
++++ b/programs/Xserver/hw/amix/rtg/rtg.h
 @@ -0,0 +1,88 @@
 +#ifndef AMIX_RTG_H
 +#define AMIX_RTG_H
@@ -4022,9 +2752,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/rtg.h b/programs/Xserver/hw/amix/rtg/rt
 +#endif
 +
 +#endif /* AMIX_RTG_H */
-diff -ruN a/programs/Xserver/hw/amix/rtg/rtgInit.c b/programs/Xserver/hw/amix/rtg/rtgInit.c
---- a/programs/Xserver/hw/amix/rtg/rtgInit.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/rtgInit.c	2026-10-31 14:21:09.987880073 +0200
+--- a/programs/Xserver/hw/amix/rtg/rtgInit.c
++++ b/programs/Xserver/hw/amix/rtg/rtgInit.c
 @@ -0,0 +1,544 @@
 +/*
 +** rtgInit.c - RTG DDX entry points for xamix-rtg.
@@ -4570,9 +3299,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/rtgInit.c b/programs/Xserver/hw/amix/rt
 +    ErrorF("rtgCreate: calling AddScreen\n");
 +    return (AddScreen(rtgScreenInit, argc, argv) >= 0);
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile b/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
---- a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/Imakefile	2026-10-31 14:21:09.987912771 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
 @@ -0,0 +1,14 @@
 +#include <Server.tmpl>
 +
@@ -4588,9 +3316,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile b/programs/Xserver/hw/
 +NormalLibraryTarget(zz9000, $(OBJS))
 +
 +DependTarget()
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c	2026-10-31 14:21:09.987940199 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c
 @@ -0,0 +1,214 @@
 +/*
 +** ZZ9000cmap.c - Colormap management for ZZ9000 RTG (TrueColor, no CLUT).
@@ -4806,9 +3533,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c b/programs/Xserver/
 +    (*pScreen->InstallColormap)(cmap);
 +    return TRUE;
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c	2026-10-31 14:21:09.987953326 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c
 @@ -0,0 +1,114 @@
 +/*
 +** ZZ9000cursor.c - Software cursor for ZZ9000 RTG via mi layer.
@@ -4924,9 +3650,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c b/programs/Xserve
 +
 +    miDCInitialize(pScreen, &amixPointerScreenFuncs);
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c	2026-10-31 14:21:09.987967653 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
 @@ -0,0 +1,1618 @@
 +/*
 +** ZZ9000draw.c - ZZ9000 drawing primitives for xamix-rtg.
@@ -6546,9 +5271,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c b/programs/Xserver/
 +                      ZZ9KSoft3DReset, StandardMinorOpcode))
 +        ErrorF("zz9000: AddExtension ZZ9K-SOFT3D failed\n");
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h	2026-10-31 14:21:09.987927306 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
 @@ -0,0 +1,218 @@
 +#ifndef ZZ9000_H
 +#define ZZ9000_H
@@ -6768,9 +5492,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h b/programs/Xserver/hw/a
 +void    ZZ9000CursorLimits();
 +
 +#endif /* ZZ9000_H */
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c	2026-10-31 14:21:09.988001911 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
 @@ -0,0 +1,190 @@
 +/*
 +** zz9000hw.c - MNT ZZ9000 hardware init/close for xamix-rtg.
@@ -6962,9 +5685,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c b/programs/Xserver/hw
 +    pRTG->frameBase = (pointer)NULL;
 +    pRTG->fbBase = (unsigned short *)NULL;
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c	2026-10-31 14:21:09.988017528 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
 @@ -0,0 +1,125 @@
 +/*
 +** ZZ9000pix.c - Pixmap and font operations for ZZ9000 RTG.
@@ -7091,9 +5813,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c b/programs/Xserver/h
 +{
 +    return TRUE;
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c	2026-10-31 14:21:09.988034707 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
 @@ -0,0 +1,737 @@
 +/*
 +** ZZ9000screen.c - ZZ9000 ScreenRec initialisation and GC management.
@@ -7832,9 +6553,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c b/programs/Xserve
 +    ZZ9000Soft3DInit(pRTG);         /* zz9000draw.c: 3D clients' swaps */
 +    return TRUE;
 +}
-diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c b/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c
---- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c	2026-10-31 14:21:09.988053997 +0200
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c
 @@ -0,0 +1,59 @@
 +/*
 +** ZZ9000win.c - Window lifecycle hooks for ZZ9000 RTG driver.
@@ -7895,9 +6615,8 @@ diff -ruN a/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c b/programs/Xserver/h
 +{
 +    return TRUE;
 +}
-diff -ruN a/programs/Xserver/hw/amix/Xamix.man b/programs/Xserver/hw/amix/Xamix.man
---- a/programs/Xserver/hw/amix/Xamix.man	1970-01-01 02:00:00.000000000 +0200
-+++ b/programs/Xserver/hw/amix/Xamix.man	2026-10-31 14:21:09.987672147 +0200
+--- a/programs/Xserver/hw/amix/Xamix.man
++++ b/programs/Xserver/hw/amix/Xamix.man
 @@ -0,0 +1,171 @@
 +.\" $XConsortium: Xamix.man,v 1.15 91/08/01 02:30:19 keith Exp $
 +.TH XSUN 1 "Release 5" "X Version 11"
@@ -8070,90 +6789,8 @@ diff -ruN a/programs/Xserver/hw/amix/Xamix.man b/programs/Xserver/hw/amix/Xamix.
 +MIT Laboratory for Computer Science
 +.br
 +Bob Scheifler, Keith Packard
-diff -ruN a/programs/Xserver/Imakefile b/programs/Xserver/Imakefile
---- a/programs/Xserver/Imakefile	1997-07-16 01:06:25.000000000 +0300
-+++ b/programs/Xserver/Imakefile	2026-10-31 14:21:09.987523698 +0200
-@@ -177,6 +177,27 @@
-  *  even if multiple servers that share subdirectories are being built.
-  */
- 
-+#if XAmixServer
-+XCOMM
-+XCOMM AMIX server core; the ZZ9000 DDX and final target are added here.
-+XCOMM
-+MFBDIR   = mfb
-+CFB8DIR  = cfb
-+CFB16DIR = cfb16
-+DDXDIR1  = hw/amix
-+/* Xprint is not part of Xzz9000; its DIX stubs are linked through CFB16Libs. */
-+AMIXDIRS = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) $(CFB16DIR) \
-+           $(DDXDIR1) $(DEPDIRS)
-+AMIXOBJS = hw/amix/amixInit.o
-+AMIXLIBS = hw/amix/LibraryTargetName(amix) \
-+           hw/amix/rtg/LibraryTargetName(rtg) \
-+           hw/amix/rtg/zz9000/LibraryTargetName(zz9000) CFB16Libs
-+ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
-+#ifndef ServerToInstall
-+#define ServerToInstall Xzz9000
-+#endif
-+#endif /* XAmixServer */
-+
- #if XdecServer
- XCOMM
- XCOMM Digital MIPS based WS server (ultrix 4.2 and beyond)
-diff -ruN a/programs/Xserver/include/servermd.h b/programs/Xserver/include/servermd.h
---- a/programs/Xserver/include/servermd.h	1996-12-02 17:25:11.000000000 +0200
-+++ b/programs/Xserver/include/servermd.h	2026-10-31 14:21:09.988082724 +0200
-@@ -307,6 +307,16 @@
- 
- #endif /* luna */
- 
-+#ifdef AMIX
-+
-+#define IMAGE_BYTE_ORDER        MSBFirst
-+#define BITMAP_BIT_ORDER        MSBFirst
-+#define FAST_UNALIGNED_READS
-+#define GLYPHPADBYTES           4
-+#define GETLEFTBITS_ALIGNMENT   1
-+
-+#endif /* AMIX */
-+
- #if ((defined(SVR4) && defined(i386)) || \
-      (defined(SYSV) && defined(i386)) || \
-      (defined(sun) && defined (i386) && defined(SVR4)) || \
-diff -ruN a/programs/Xserver/mfb/maskbits.h b/programs/Xserver/mfb/maskbits.h
---- a/programs/Xserver/mfb/maskbits.h	1994-04-18 03:28:13.000000000 +0300
-+++ b/programs/Xserver/mfb/maskbits.h	2026-10-31 14:21:09.988120450 +0200
-@@ -350,6 +350,26 @@
-     startmask = starttab[(x) & PIM]; \
-     endmask = endtab[((x)+(w)) & PIM];
- 
-+/*
-+** Disable the mc68020 BFEXTU/BFINS inline-asm fast path below.
-+**
-+** getandputbits0() (used by mfbGetSpans for width<=32 reads - i.e. every
-+** glyph/cursor row in a driver like this one, since 6 pixels < PPW=32)
-+** routes through u_FASTPUT(), which on any non-Sun 68020 target expands
-+** directly to FASTPUTBITS() with no re-justification step (NO_3_60_CG4
-+** is unconditionally defined here whenever !defined(sun), regardless of
-+** mc68020 - see below).  That direct FASTGETBITS->FASTPUTBITS pass-through
-+** depends on the bfextu/bfins inline asm being bit-exact, and it isn't:
-+** observed behaviour is that multi-bit runs collapse to single bits
-+** (confirmed by dumping actual FillSpans() calls - every span comes out
-+** width=1, which is exactly what "asm only transfers 1 of the requested
-+** N bits" looks like downstream).  The comment already on this code
-+** admits it "fails on a 3/60+CG4 and cannot be used unmodified" for a
-+** different platform; disabling it here forces the portable getbits()/
-+** putbits() C fallback further down this file instead.
-+*/
-+#undef mc68020
-+
- #ifdef __GNUC__ /* XXX don't want for Alpha? */
- #ifdef vax
- #define FASTGETBITS(psrc,x,w,dst) \
-diff -ruN a/programs/Xserver/mfb/mfbimage.c b/programs/Xserver/mfb/mfbimage.c
---- a/programs/Xserver/mfb/mfbimage.c	1994-04-18 03:28:25.000000000 +0300
-+++ b/programs/Xserver/mfb/mfbimage.c	2026-10-31 14:21:09.988151591 +0200
+--- a/programs/Xserver/mfb/mfbimage.c
++++ b/programs/Xserver/mfb/mfbimage.c
 @@ -94,7 +94,7 @@
      int format;
      char 	*pImage;
@@ -8248,15 +6885,3 @@ diff -ruN a/programs/Xserver/mfb/mfbimage.c b/programs/Xserver/mfb/mfbimage.c
      }
      else
      {
-diff -ruN a/programs/Xserver/mi/miglblt.c b/programs/Xserver/mi/miglblt.c
---- a/programs/Xserver/mi/miglblt.c	1994-04-18 03:27:37.000000000 +0300
-+++ b/programs/Xserver/mi/miglblt.c	2026-10-31 14:21:09.988212823 +0200
-@@ -173,7 +173,7 @@
- 		ValidateGC((DrawablePtr)pPixmap, pGCtmp);
- 	    (*pGCtmp->ops->PutImage)((DrawablePtr)pPixmap, pGCtmp,
- 				pPixmap->drawable.depth,
--				0, 0, gWidth, gHeight, 
-+				0, 0, gWidth, gHeight,
- 				0, XYBitmap, (char *)pb);
- 
- 	    if ((pGC->serialNumber) != (pDrawable->serialNumber))

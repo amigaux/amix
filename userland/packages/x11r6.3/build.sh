@@ -48,7 +48,7 @@ XCC
 		-e "s|@LD@|$LD|g" -e "s|@PREFIX@|$PREFIX|g" -e "s|@SYSROOT@|$AMIX_SYSROOT|g" -e "s|@USRAMIGA@|$AMIX_USR_AMIGA|g" \
 		"$HERE/host.def.in" > config/cf/host.def
 	# build-time tools the tree runs on the build host
-	( cd config/imake && make -f Makefile.ini CC="gcc -std=gnu89 -fcommon -w" imake ) > "$BUILD/x-imake.log" 2>&1 || {
+	( cd config/imake && make -f Makefile.ini BOOTSTRAPCFLAGS="-DAMIX -DSVR4 -Dm68k" CC="gcc -std=gnu89 -fcommon -w" imake ) > "$BUILD/x-imake.log" 2>&1 || {
 		echo "[FAIL] host imake; see $BUILD/x-imake.log" >&2; exit 1; }
 	export IMAKECPP="$HERE/imakecpp.sh"
 	make Makefile BOOTSTRAPCFLAGS="-DAMIX -DSVR4 -Dm68k" > "$BUILD/x-makefile.log" 2>&1 &&
