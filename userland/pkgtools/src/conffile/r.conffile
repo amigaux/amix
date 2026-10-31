@@ -10,7 +10,14 @@
 #   equal to the baseline (unedited)   remove it and its baseline
 #   differs, or no baseline (edited)   keep it and its baseline, say so
 #   already gone                       remove its baseline
+#   still listed under another package leave it to that package, remove
+#   (a file amix-base took over from     its baseline, say so
+#   core, D-N24)
 #   in every case                      remove <path>.new and its PENDING line
+#
+# The engine hands such a shared editable file to this script too (heirloom
+# pkgremove, the '^' case of delmap.c), so the owners come from the contents
+# DB: its line for <path>, the package fields after the eight attributes.
 #
 # Only a kept file keeps its baseline (the "config-files" state): a later
 # install finds both and the i.conffile table applies, and apkg's purge
@@ -18,7 +25,7 @@
 # empty, so a reinstall is a first install.  pkgrm drops the contents entry,
 # so a kept file belongs to no package until then.
 #
-# Bourne sh and rm, rmdir, cmp, mv, expr, echo only, as i.conffile.
+# Bourne sh and rm, rmdir, cmp, mv, expr, echo, fgrep only, as i.conffile.
 
 PATH=/sbin:/usr/sbin:/usr/bin:/bin:$PATH
 export PATH
@@ -32,6 +39,31 @@ then
 fi
 base=$root/var/sadm/conffiles/$pkg
 pending=$root/var/sadm/conffiles/PENDING
+contents=$root/var/sadm/install/contents
+nl='
+'
+ifs=$IFS
+
+# owner <contents line fields>: set other to a package other than this one
+# that the line for <path> lists, after its eight attributes; a line of
+# another type counts as one, so the file stays
+owner() {
+	[ "$1" = "$rel" ] || return 0
+	case $2 in
+	e|f|v)
+		shift 9
+		for o
+		do
+			n=`expr "x$o" : 'x[^A-Za-z0-9]*\([A-Za-z0-9][A-Za-z0-9+._-]*\)'`
+			[ -n "$n" -a "$n" != "$pkg" ] && other=$n
+		done
+		;;
+	*)
+		other="a package (type $2)"
+		;;
+	esac
+	return 0
+}
 
 rc=0
 while read path
@@ -45,8 +77,28 @@ do
 		continue
 	fi
 	b=$base$rel
+	# another package that still lists <path>: its contents line, split
+	# by lines then by blanks (read would join a line that ends in '\',
+	# as stock 2.1 shared lines do)
+	other=
+	if [ -f "$contents" ]
+	then
+		lines=`fgrep "$rel " "$contents" 2>/dev/null`
+		set -f
+		IFS=$nl
+		for l in $lines
+		do
+			IFS=$ifs
+			owner $l
+		done
+		IFS=$ifs
+		set +f
+	fi
 	keep=no
-	if [ -f "$path" ]
+	if [ -n "$other" ]
+	then
+		echo "$rel: left in place; it also belongs to $other"
+	elif [ -f "$path" ]
 	then
 		if [ -f "$b" ] && cmp -s "$b" "$path"
 		then

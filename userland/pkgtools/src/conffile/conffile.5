@@ -106,7 +106,9 @@ skips editable files and is always the clean post-install check.
 .B r.conffile
 removes a conffile you never edited, together with its baseline.  A file
 you edited is kept, with its baseline, and pkgrm says so; it then belongs
-to no package.  Any
+to no package.  A conffile that another package also owns (amix-base
+takes over some of core's files) is left to that package whatever its
+contents; only the baseline goes, and pkgrm says so.  Any
 .B .new
 file and its
 .B PENDING

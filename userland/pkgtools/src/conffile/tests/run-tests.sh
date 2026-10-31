@@ -63,12 +63,29 @@ EOF
 }
 mkpkg 1 'v=1' 'admin=1' && mkpkg 2 'v=2' 'admin=2' && mkpkg 3 'v=3' 'admin=2' &&
 mkpkg 4 'v=4' 'admin=4' || { echo "FAIL: building the toy packages"; cat "$WORK/mk.log"; exit 1; }
+# mkcore <name> <toy.conf>: CORE, a stock-style package that ships
+# /etc/toy.conf as a plain file (as core does /etc/inittab)
+mkcore() {
+    local d="$WORK/src-$1"
+    mkdir -p "$d" "$WORK/spool-$1"
+    printf '%s\n' "$2" > "$d/toy.conf"
+    printf 'PKG=CORE\nNAME=core stand-in\nARCH=m68k\nVERSION=1\nCATEGORY=system\n' > "$d/pkginfo"
+    printf 'i pkginfo=%s\nf none /etc/toy.conf=%s 0644 root sys\n' "$d/pkginfo" "$d/toy.conf" > "$d/prototype"
+    ( cd "$d" && "$HB/pkgmk" -o -d "$WORK/spool-$1" -f prototype &&
+      "$HB/pkgtrans" -s "$WORK/spool-$1" "$WORK/pkgs/$1.pkg" CORE ) >>"$WORK/mk.log" 2>&1
+}
+mkcore core-1 'v=1' && mkcore core-st 'v=stock' ||
+    { echo "FAIL: building the CORE packages"; cat "$WORK/mk.log"; exit 1; }
 
 # one fakeroot state per root (see tools/repo/tests T23); every helper
 # takes it from the root it is given
 fr() { local fs="$WORK/fakeroot.$CUR"; touch "$fs"; fakeroot -i "$fs" -s "$fs" "$@"; }
+# the host engine keeps its DB under its build tree (compiled-in VSADMDIR);
+# r.conffile reads the box path, so each root links that to the DB
+HBV="$(cd "$HB/.." && pwd)/var/sadm"
 newroot() { CUR="$(basename "$1")"; rm -rf "$1"
-    mkdir -p "$1/usr/bin" "$1/etc" "$1/var/sadm/install"
+    mkdir -p "$1/usr/bin" "$1/etc" "$1/var/sadm/install" "$1$HBV/install"
+    ln -s "$1$HBV/install/contents" "$1/var/sadm/install/contents"
     printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$1/etc/passwd"
     printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$1/etc/group"; }
 add() { CUR="$(basename "$1")"; fr "$HB/pkgadd" -R "$1" -n -a "$WORK/admin" -d "$WORK/pkgs/CONFT-$2.pkg" CONFT \
@@ -271,6 +288,54 @@ rmp "$R"; check "pkgrm, file already gone: rc 0" test $? -eq 0
 check "already gone: .new removed" test ! -e "$R/etc/toy.conf.new"
 check "  ... baseline removed" test ! -e "$(base "$R")/etc/toy.conf"
 check "  ... PENDING emptied" test -z "$(pend "$R")"
+
+# ------------------------------------------ shared with another package ---
+# D-N24: amix-base ships core's files as conffiles.  The engine hands a
+# shared editable file to r.conffile, which leaves it to the other owner.
+echo "r.conffile: a conffile another package also owns"
+addc() { CUR="$(basename "$1")"; fr "$HB/pkgadd" -R "$1" -n -a "$WORK/admin" -d "$WORK/pkgs/$2.pkg" CORE \
+        >"$WORK/addc.out" 2>&1; }
+R7="$WORK/r7"; newroot "$R7"
+addc "$R7" core-1; add "$R7" 1
+check "CORE then CONFT, same bytes: both own /etc/toy.conf" \
+    grep -q '^/etc/toy.conf e conffile .*CORE.* CONFT' "$(cdb "$R7")"
+rmp "$R7"; check "pkgrm CONFT: rc 0" test $? -eq 0
+check "  ... /etc/toy.conf stays" is "$R7/etc/toy.conf" 'v=1'
+check "  ... still listed under CORE" grep -q '^/etc/toy.conf .*CORE' "$(cdb "$R7")"
+check "  ... and no longer under CONFT" bash -c "! grep -q '^/etc/toy.conf .*CONFT' '$(cdb "$R7")'"
+check "  ... no stale baseline" test ! -e "$(base "$R7")/etc/toy.conf"
+check "  ... pkgrm says so" grep -qF '/etc/toy.conf: left in place; it also belongs to CORE' "$WORK/rm.out"
+check "  ... the unshared conffile went as usual" test ! -e "$R7/var/toy/admin"
+R8="$WORK/r8"; newroot "$R8"
+addc "$R8" core-st; add "$R8" 1
+check "over a stock file: kept, the default is .new" \
+    bash -c "test \"\$(cat '$R8/etc/toy.conf')\" = v=stock && test -f '$R8/etc/toy.conf.new'"
+rmp "$R8"; check "pkgrm CONFT: rc 0" test $? -eq 0
+check "  ... the stock file stays" is "$R8/etc/toy.conf" 'v=stock'
+check "  ... its .new, PENDING line and baseline go" \
+    bash -c "test ! -e '$R8/etc/toy.conf.new' && test -z \"\$(cat '$R8/var/sadm/conffiles/PENDING' 2>/dev/null)\" && test ! -e '$(base "$R8")/etc/toy.conf'"
+
+# the contents lines r.conffile parses, run directly: a stock 2.1 shared
+# line (core:none, a trailing '\'), a line of another type, decoys that
+# only contain the path, and a file only X owns
+S="$WORK/rsh"; mkdir -p "$S/etc" "$S/var/sadm/install" "$S/var/sadm/conffiles/X/etc"
+for f in a b d; do echo "$f" > "$S/etc/$f"; echo "$f" > "$S/var/sadm/conffiles/X/etc/$f"; done
+cat > "$S/var/sadm/install/contents" <<'CONTENTS'
+/etc/a f conffile 0664 root sys 2 97 1793431436 core:none X\
+/etc/b e conffile 0644 root sys 2 98 1793431436 X
+/etc/b.old f none 0644 root sys 2 98 1793431436 core
+/x/etc/b e none 0644 root sys 2 98 1793431436 core
+/etc/l=/etc/b s none core
+/etc/d d none 0755 root sys core X
+CONTENTS
+printf '%s\n' "$S/etc/a" "$S/etc/b" "$S/etc/d" |
+    PKGINST=X PKG_INSTALL_ROOT="$S" sh "$RCF" >"$WORK/rsh.out" 2>&1
+check "direct: rc 0" test $? -eq 0
+check "  ... the stock shared line: kept for core" \
+    bash -c "test -f '$S/etc/a' && grep -qF '/etc/a: left in place; it also belongs to core' '$WORK/rsh.out'"
+check "  ... X's own file: removed, decoys ignored" test ! -e "$S/etc/b"
+check "  ... another type: kept" grep -qF '/etc/d: left in place; it also belongs to a package (type d)' "$WORK/rsh.out"
+check "  ... every baseline goes" bash -c "test -z \"\$(ls '$S/var/sadm/conffiles/X/etc' 2>/dev/null)\""
 
 # -------------------------------------------- installf -f re-register ----
 # P-36 1.2 marks UNVERIFIED that `installf <pkg> <path> e` + `installf -f`
