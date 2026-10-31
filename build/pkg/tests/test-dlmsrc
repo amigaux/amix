@@ -127,6 +127,33 @@ try:
           rc != 0 and "git cannot fetch a short hash" in out
           and "give the recipe's full port hash" in out, out)
 
+    # an amix commit with a Makefile at the top too (make dist's, since
+    # bfcfe76): the export is kernel/dlm, not the whole tree; and a
+    # pre-move-in commit, the project at the root, still exports the root
+    write(os.path.join(amix, "Makefile"), "dist:\n\t@false\n")
+    write(os.path.join(amix, "kernel", "modules", "include", "sys", "monsw.h"), "/* monsw */\n")
+    git(amix, "add", ".")
+    git(amix, "commit", "-q", "-m", "top-level Makefile")
+    c2 = git(amix, "rev-parse", "--short", "HEAD")
+    rc, out = run('amix_src_treeish "$AMIX_DLM" %s kernel/dlm Makefile; '
+                  'amix_src_treeish "$AMIX_DLM" %s kernel/modules include/sys/monsw.h' % (c2, c2))
+    check("amix_src_treeish: an amix commit with a root Makefile is archived as kernel/dlm (and kernel/modules)",
+          rc == 0 and out.split() == ["%s:kernel/dlm" % c2, "%s:kernel/modules" % c2], out)
+    rc, out = run("amix_dlm_build %s boot1.img" % c2)
+    check("amix_dlm_build: that commit's export is kernel/dlm's tree, so its Makefile builds",
+          rc == 0 and open(log).read() == "CROSS=yes\n"
+          and os.path.isfile(os.path.join(tmp, "out", "kspace", "src", "amix-dlm-%s" % c2, "Makefile"))
+          and not os.path.isdir(os.path.join(tmp, "out", "kspace", "src", "amix-dlm-%s" % c2, "kernel")), out)
+    old = os.path.join(tmp, "amix-dlm-old")
+    write(os.path.join(old, "Makefile"), MAKEFILE)
+    subprocess.run(["git", "init", "-q", old], check=True)
+    git(old, "add", ".")
+    git(old, "commit", "-q", "-m", "the old repository")
+    c3 = git(old, "rev-parse", "--short", "HEAD")
+    rc, out = run('amix_src_treeish %s %s kernel/dlm Makefile' % (old, c3))
+    check("amix_src_treeish: a pre-move-in commit, the project at its root, is archived whole",
+          rc == 0 and out.strip() == c3, out)
+
     empty = os.path.join(tmp, "empty-port")
     subprocess.run(["git", "init", "-q", empty], check=True)
     shutil.rmtree(tree)
