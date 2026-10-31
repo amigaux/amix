@@ -12,10 +12,10 @@
  * never autoconfigured at all.  On the stock 030 boot2 the bootinfo autocon table
  * is also unreliable on real metal (see grimoire-amix: hydra detection).  That is
  * the stock 030 boot2 only: boot2-040 hands the Z3660's ConfigDev over on metal
- * (amix-z3660rtg, A4000D, 2026-09-18), and the 2026-09-27 MD-3a run on a real
+ * (amix-z3660rtg, A4000D, 2026-09-18), and the 2026-09-27 run on a real
  * 68060 attached autocon-first -- the 040/060 line registers this card only via
- * sd.c's autocon() loop, so rooting on it proves the hand-over (internal
- * bench report).  So detection
+ * sd.c's autocon() loop, so rooting on it proves the hand-over (bench
+ * run).  So detection
  * is multi-method, like the Hydra driver: try autocon() first, then -- only on
  * an AGA machine (VPOSR >= 0x22; the ECS build box must never touch it) -- probe
  * the fixed base directly.  Either way the mailbox must answer a signature the
@@ -850,7 +850,7 @@ int	s;
 /*
  * ZS-02 -- the mailbox signature.  Detection may only claim a board whose
  * mailbox answers something the OPEN BUS cannot produce.  The old test,
- * DRVTYPE in {0,1}, is passed by a bus that reads all-zero (the P6.2 hole).
+ * DRVTYPE in {0,1}, is passed by a bus that reads all-zero (the all-zero hole).
  *
  * The piscsi protocol has no version or magic register (z3660_scsi_enums.h,
  * fork and stock alike), so the signature is built from what every firmware
@@ -999,7 +999,7 @@ int	leave;
  *   for a USER (hat_devload) gets Lcm_dev, unconditionally NCS on the r13 /
  *   candidate-2 / candidate-3 kernels, which have no hat_cm_fb table, and NCS on
  *   the driver-line base unless a registered framebuffer range makes it NC
- *   (bench evidence, not published).  But this arm is a
+ *   (measured on the bench).  But this arm is a
  *   KERNEL mapping that never reaches Lcm_sel: sptalloc() ignores its mode and
  *   segkmem_mapin copies a CM=00 template, i.e. WRITETHROUGH CACHEABLE (port
  *   src/devkvmap040.s header).  A cacheable mailbox is still a broken one, so
@@ -1582,7 +1582,7 @@ struct sdcom	*cp;
  * switched out), and a per-process kernel-stack VA (~0x40001xxx, the u-area
  * window) then resolves into a DIFFERENT process's stack -- so z3660done reads a
  * garbage cp->intr (run-to-run "variable garbage", varying pid) and jumps
- * through it.  That is the T2.P3 mount panic: the corrupting completion is always
+ * through it.  That is the CD mount panic: the corrupting completion is always
  * a CD READ(10) (lastcmd=0x28) with cp on the stack, while every disk completion
  * (persistent cp=0x80FDxxx) stays healthy.  depth==0/hits==0 -- not reentrancy,
  * not a DMA scribble: a pointer-lifetime bug in the deferred completion.
@@ -1989,7 +1989,7 @@ ulong	z3660_halt_busy;	/* halt pass found a transaction in flight (never) */
  * has no static driver for that pass to find, and the module's own .data word
  * (-fno-common) stayed 0: on the real 68060 no line op ran, a dirty copyback
  * line was written back over the data the ARM had just put in DDR, and the
- * first directory lookup failed (S4-74, swapconf panic; August's ATT4 A/B).
+ * first directory lookup failed (swapconf panic; the mechanism of August's metal A/B).
  *
  * So _load decides it, before z3660map() (whose cache-inhibit check reads it):
  *   - cputype 30: 0, always -- cpushl/cinvl are line F on the 030, and the

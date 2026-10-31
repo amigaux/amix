@@ -4,7 +4,7 @@
 through amix's `kernel/k30` harness + golden image — `(cd ../../k30 && ./amix-build z3660scsi)`. Started as
 scouting notes and is now the **dated engineering journal** — read it
 newest-section-first, and note that a dated section corrects the ones above it rather than
-editing them. The **living state is [`CHANGELOG.md`](CHANGELOG.md)**: every landed change has a
+editing them. The **living state is [`CHANGELOG.md`](CHANGELOG.md)**: every change has a
 dated entry there. §"Implementation status" below is a frozen 2026-06-07 snapshot, superseded.)
 
 Goal: a native Amix (SVR4/68030) driver for the **Z3660** accelerator's onboard SCSI, so Amix on a real
@@ -142,15 +142,14 @@ Amiberry emulation below or the real A4000+Z3660.
 ## Testing path: the Amiberry Z3660 native SCSI emulation (the A4091-style fast loop)
 
 **Status as of 2026-09-26: built, not a plan.** The emulation this section once proposed exists in
-the workspace's amiberry fork as its Z3660 native SCSI device (`amiberry/src/z3660_scsi.cpp`,
+the project's amiberry fork as its Z3660 native SCSI device (`amiberry/src/z3660_scsi.cpp`,
 documented in `amiberry/docs/z3660-scsi.md`): a Zorro III AutoConfig 0x144B/0x01 board, a register
 file plus a block read/write engine over raw hardfile or ISO backing. The mailbox itself has been
 validated on real A4000+Z3660 since the 2026-06-13 metal boot.
 
 **Known bench gap (2026-09-26):** the piscsi bench rig currently panics at `mountroot`, because its
 `boot.hdf` carries a pre-fix `+cdfs` kernel. It is a stale-image problem, not a driver or emulation
-bug: the rebuild recipe is recorded in the workspace notes and the rebuild is pending an
-amix-kerntools dispatch. Until then, bench results from that rig are not evidence about this driver.
+bug, and the image needs a rebuild. Until then, bench results from that rig are not evidence about this driver.
 
 ## Open questions (for HW/emulation validation)
 1. Unit-number mapping: Amix target (`cp->unit`, 0–7) → PISCSI drive index. Currently 1:1; confirm against
@@ -170,7 +169,7 @@ into 68k RAM on every shipping configuration. The driver's WRITE-side staging br
 unreachable, which is exactly why `z3660_bounce_wr_n` exists — so "unreachable" is *measured* rather
 than believed (the host harness gates it at 0). Every "the bounce keeps us coherent" argument built on
 those two items is void, and this driver needs real CPU cache maintenance on real 040/060 silicon. The
-same correction landed in `src/z3660.c`'s comments in 900f095; full derivation in
+same correction went into `src/z3660.c`'s comments in 900f095; full derivation in
 [`docs/BLIZZARD-F3.md`](docs/BLIZZARD-F3.md) §1.
 
 ## Sources
@@ -265,8 +264,8 @@ SD's FAT32 partition, so Z3660.bin experiments are recoverable.
 **Deployed state (morning of 2026-06-13):** SD carries the full-trace kernel (sum 55077:
 multi-method detect, BOUNCE_PAGES=32, nb==0 fail, deferred completions, dd.c reorder, crumb
 trace + 2 s heartbeat + proc dump + pflusha experiment). The crumb trace costs ~50 ms/IO — fine
-for diagnosis, strip the TRACE blocks for production. Old image is gone (overwritten per
-decision); golden VHD + pre-real-HW snapshot intact in amix-kerntools/hdf/.
+for diagnosis, strip the TRACE blocks for production. Old image is gone (overwritten); the golden
+VHD + pre-real-HW snapshot are kept with the build harness.
 
 ## 2026-06-13 morning: firmware fix DEPLOYED + on-hardware result (SIGILL fixed, SIGSEGV next)
 
@@ -358,12 +357,12 @@ amix-installng and grimoire-amix found no dated closure. The nearest artifact is
 `amix-kerntools/system-fixes/bcheckrc.fixed` (bdd9cf2, 2026-06-22), which its own header marks
 PROPOSED, cosmetic only, and needing HW validation; no validated run of it is recorded.
 
-## 2026-07-11: two load-bearing contracts (T2.P3) — the spl6 bracket + the addr-is-physical rule
+## 2026-07-11: two load-bearing contracts — the spl6 bracket + the addr-is-physical rule
 
-Two facts that must not be relitigated. Both came out of the T2.P3 CD-read-completion
-corruption investigation (`docs/t2p3-artifacts/` in the Amix workspace: the WILD
-exception-frame capture `p0.1-serial-log-findings.md`, the disassembly verdict
-`p0.2-callout-ipl-verdict.md`).
+Two facts that must not be relitigated. Both came out of the CD-read-completion
+corruption investigation behind the cdfs mount panic (the WILD exception-frame
+capture on the serial log, and the disassembly verdict on the callout IPL; those
+artifacts are kept outside this repository).
 
 ### (a) `sdcom.addr` is a PHYSICAL address by contract — do NOT add vtop() in z3660.c
 
@@ -377,7 +376,7 @@ tests that physical value) — correct as written.
 
 Adding a `vtop()` **inside** z3660.c would translate an already-translated address —
 double translation — pointing the firmware DMA at garbage. This "fix" was proposed and
-**evaluated on 2026-07-11 as a NON-FIX; do not resurrect it.** (The genuine T2.P3
+**evaluated on 2026-07-11 as a NON-FIX; do not resurrect it.** (The genuine mount-panic
 corruption was the callout re-entrancy in (b), not addressing.)
 
 Host-harness note: under `HOST_TEST` `vtop()` is effectively identity — the test stores
@@ -433,7 +432,7 @@ artificially removed (`mock_spl_disabled`) the nested transaction interleaves an
 `z3660_nest_hits` counts it. All prior gating assertions plus the CD-oracle parity table
 stay green (45/45 gating, 6/6 parity).
 
-## 2026-07-12: T2.P3 mount panic — completion pointer-lifetime bug (the CD-read `cp`)
+## 2026-07-12: the cdfs mount panic — completion pointer-lifetime bug (the CD-read `cp`)
 
 The spl6 bracket (908f40a) killed the register-scramble but the `mount -F cdfs` still
 panicked, one CD read past where progress used to stop. On-box `cmn_err` capture (diag
@@ -860,7 +859,7 @@ holds the physical address and is forbidden to `vtop()` it, so it needs no addre
 DC, 60 = 68060 DC. It is poked through `/dev/kmem` like the 040/060 port lane's own knobs. There is no
 compile-time discriminator — this file is compiled once, with `-m68020`, into kernels for an emulated
 030, an emulated 040 and a real 060 — and `cputype` may not be referenced because the stock kernel has
-no such symbol and an `extern` would break the `nm -u` clean gate on the 030 line. As landed the
+no such symbol and an `extern` would break the `nm -u` clean gate on the 030 line. As committed the
 definition is *tentative*, so the knob is COMMON in `.bss` and is **not** file-pokeable from this repo
 (f517811 corrects the design doc, which had shown `= 0`).
 
@@ -883,10 +882,10 @@ a zero counter counts as failed — is still **owed**, and the bench structurall
 emulator models no 040/060 copyback data cache.
 *Correction 2026-09-27:* that last clause is wrong. amiberry **does** model a 040/060 copyback data
 cache (per-longword dirty bits, eviction push), live only with `cpu_compatible=true`, `cachesize=0`
-and `cpu_data_cache=true`; device DMA bypasses it (bench evidence,
-not published). So an emulator cell with the cache kept live *can*
+and `cpu_data_cache=true`; device DMA bypasses it (measured on
+the bench). So an emulator cell with the cache kept live *can*
 show a missing CPUSH or a missing CINV. The current bench configs keep it off, and the coherence
-**verdict** stays metal-only (a project decision).
+**verdict** stays metal-only.
 
 ## 2026-08-26: first boot of AMIX off this driver on real 68LC060 silicon
 
@@ -897,8 +896,7 @@ ran the guest CPU on the firmware's interpreter.
 **It is a first, not a result.** The run rode the `DTT0` cache-inhibit free ride alone: `z3660_cache`
 was never poked, so no F3 maintenance executed, and no F3 counter was read afterwards. It says the
 driver survives on silicon in the configuration where the free ride holds; it says nothing about the
-F3 round, which still owes its A/B. (Campaign evidence lives in the workspace's dated scratch
-directory, not published.)
+F3 round, which still owes its A/B.
 
 ## 2026-09-01: `piscsi_scsi()` read — the mailbox has no raw-CDB path
 
@@ -985,13 +983,13 @@ remap to bite. Metal on stock firmware is the open verification.
 
 ## 2026-09-27: the sptalloc-arm console lines are emulator-only
 
-**What the bench prints.** On the kerntools R-060 rig (emulated LC060, the emulated Z3660 board
+**What the bench prints.** On the emulated-LC060 rig (emulated LC060, the emulated Z3660 board
 autoconfigured at `0x40000000`, i.e. the `sptalloc` arm), every boot of candidate-3 and KD060-Z0
 prints `z3660: sptalloc mapping arm is unsupported with a live data cache`, then `z3660:
 cache-inhibit assertion FAILED (cache=60 cacr 0x80008000)`, then `z3660: unit N: no drive mapped,
 skipped` for **all eight** units. Unit 6 still roots the box and moves data equal to host truth
-(internal bench report). **On metal none of this appears**: the board sits at `0x10000000`, the
-direct arm is used, and only the unmapped units are named (MD-3a on the A4000T, internal bench report).
+(bench run). **On metal none of this appears**: the board sits at `0x10000000`, the
+direct arm is used, and only the unmapped units are named (the 2026-09-27 run on the A4000T).
 
 **Reading, line by line.**
 
@@ -1006,7 +1004,7 @@ direct arm is used, and only the unmapped units are named (MD-3a on the A4000T, 
   (`valid` stays 0, the unit is re-read on its next command), which is why unit 6 recovers once
   reads start answering. Why the first reads return 0 on that arm is not established (candidates:
   a translation not yet live for the fresh `sptalloc` VA, or a stale ATC entry). The same attach
-  also accepts DRVTYPE = 0, which is the P6.2 hole below.
+  also accepts DRVTYPE = 0, which is the all-zero hole below.
 
 **Fix, and where it lands.** The skip path is the one that lies, so the fix is to the skip, not to
 the cache message: geometry (and with it every skip line) is only trusted after the mailbox has
@@ -1018,7 +1016,7 @@ byte-identical by requirement.
 
 ## 2026-09-27: ZS-02 — detection a non-Z3660 AGA machine cannot fool
 
-**The hole** ("the P6.2 hole" in the code comments, after the review item that raised it). Before this, the fixed-base probe accepted any window where
+**The all-zero hole.** Before this, the fixed-base probe accepted any window where
 `P_DRVTYPE` read 0 or 1. An AGA machine with no Z3660 and an open bus at `0x10000000` reads 0
 there, so a z3660scsi-carrying kernel would claim a board, sweep eight phantom units and hand
 `sd` a card. The project made closing it a precondition for one auto-detecting kernel per CPU line.
@@ -1026,7 +1024,7 @@ there, so a z3660scsi-carrying kernel would claim a board, sweep eight phantom u
 **Decision order** (`z3660map()`):
 
 1. **ConfigDev first.** `autocon(0x144B0001)`: the board's own AutoConfig entry. This is the
-   metal-proven path on the 040/060 line (boot2-040 hands the entry over, internal bench report), where the
+   metal-proven path on the 040/060 line (boot2-040 hands the entry over on the bench), where the
    glue registers the card only through `sd.c`'s autocon loop. AutoConfig has already proved a
    Z3660 is present, so a mailbox that does not answer the signature *yet* does not un-find it:
    the board attaches, the unit sweep is deferred with one console line, and every later command
@@ -1089,7 +1087,7 @@ from source only.
 
 ## 2026-09-27: Rebuild — spl masks and MMIO `volatile` restored in the objects
 
-**Cause (internal bench report).** `AMIX_KERNEL_CFLAGS` carries `-traditional`, which turns off
+**Cause (measured on the bench).** `AMIX_KERNEL_CFLAGS` carries `-traditional`, which turns off
 `__STDC__`, so the stock `sys/types.h` did `#define volatile` (empty). The GNU spl primitives in
 `sys/inline.h` then became plain output asms, and gcc deleted every one whose result was unused.
 In `z3660_040.o`/`z3660_030.o` only the `spl6()` in `z3660_enter()` survived (its value escapes):
@@ -1137,8 +1135,8 @@ header's meaning: `spl6` = `_spl4` (`mov.w &0x2400,%sr`, returns the prior SR as
 `splx` restores that token. The mock models the IPL, not the SR word, which is all the re-entry
 cells observe. `make -C test/host check`: 155 passed, 0 failed; 6/6 parity.
 
-**Pin.** kerntools re-pins the z3660 object from `55e37689…` to the new sha256; DL-00/DL-08/DL-13,
-MD-3a and MG1–MG3 have to be re-run on it. Not run here.
+**Pin.** The kernel build re-pins the z3660 object from `55e37689…` to the new sha256; the
+emulator and metal detection rows have to be re-run on it. Not run here.
 
 ## 2026-09-27: A1 — console lines that stay true on the sptalloc arm
 
@@ -1158,7 +1156,7 @@ could still say something false or say nothing:
   output, and every command retried it. Now the first failure prints `z3660: cannot map the board
   at 0x...`; `z3660_map_fails` counts all of them.
 
-**DL-08 ECS row (`/dev/rdsk/ced0s2` answers "I/O error").** Not a missing attach gate. In that rig
+**The ECS emulator row (`/dev/rdsk/ced0s2` answers "I/O error").** Not a missing attach gate. In that rig
 config the emulated Z3660 is autoconfigured at `0x40000000` (card 1, `root6.hdf` on unit 6), so
 `sd.c`'s autocon loop builds a card-1 row and the VPOSR gate never applies (it guards only the
 fixed-base fallback). The row is correct and ENXIO would be wrong there. The driver cannot pick
@@ -1167,7 +1165,7 @@ no row, and the stock layer turns a failed command into EIO. The EIO means the d
 command. The kernel (KD060-Z0-W) carried the pre-ZS-02 object, whose silent refusals were a
 DRVTYPE > 1 read (ENXIO, no output) or an ENOMEM map failure. The attach reads on this arm fail
 in the same unexplained way as on AGA. With ZS-02 and this change, the same row prints either the
-deferred-sweep line or the map-failure line, so a re-run of DL-08 row b shows which one it is.
+deferred-sweep line or the map-failure line, so a re-run of that row shows which one it is.
 
 **Evidence.** `make -C test/host check`: **161 passed, 0 failed**, 6/6 parity (was 155/0). New
 `test_console_truthful()` (6 gates): a unit reading block size 0 at attach is named with the 6
@@ -1278,12 +1276,12 @@ Reads, other start LBAs, CD writes and all earlier refusals are untouched. There
 filter. The symbols, offsets, the arming recipe (amiberry `WRITE_MEM`, in-guest `adb -w` +
 kmemdump) and the picture each setting gives are in `docs/FAULT-KNOB.md`.
 
-**One addition to the brief: `z3660_fault_shift`.** The brief's SHIFT is a fixed +4. Armed on
+**One addition: `z3660_fault_shift`.** A fixed SHIFT would be +4. Armed on
 the 2nd piece, +4 sends piece 2's payload to L+8, and piece 3 then overwrites it. The disk ends
 up with L+4 holding its old bytes, a lost piece. DI-1's picture is the opposite direction:
 piece 3's bytes at L+4 and L+8 old, the stale `WRITE_ADDR1` row of DI-1 §4.1. That needs −4
 armed on the 3rd piece. So the offset is a patchable signed long, initialized to 4. The
-default is exactly the brief, and −4 needs no rebuild.
+default is the fixed +4, and −4 needs no rebuild.
 
 **Evidence.**
 - `make -C test/host check`: **217 passed, 0 failed**, 6/6 parity (was 199). The new
@@ -1364,7 +1362,7 @@ Pairs with no rising bit (`$248 → $000`, `$09C → $090`) were safe. The table
 arithmetic; how close two cycles must be for the race to fire is not known. The descriptor
 stores and the doorbell are consecutive instructions (the tightest pairs); `DRVNUMX → ADDR1`
 has the geometry lookup and the `z3660_rw()` entry between them. So every command carried pairs
-the race can hit, not only the `$220 → $240` pair the brief named: that
+the race can hit, not only the `$220 → $240` pair first suspected: that
 pair is the **pre-cache** driver's (before 29b2482 every WRITE read `BLOCKS0+4u` right before
 `WRITE_ADDR1`) and the AmigaOS `z3660_scsi.device`'s (`get_blocksize()` reads `BLOCKSIZE0+4u`
 right before `WRITE_ADDR1`). With the cached driver the same race lands on `$000`, a handled
@@ -1438,7 +1436,7 @@ to the tripwire firmware's proving boot: with ZS-05 the driver's own phantoms sh
 HDL fix (capture after the address settles) and the AmigaOS `z3660_scsi.device`, which has the
 same pairs, are the Z3660 repo's.
 
-## 2026-10-26: S4-30 — z3660scsi as a root-class module (C4-2)
+## 2026-10-26: z3660scsi as a root-class module (C4-2)
 
 **Form.** `-DZ3660SCSI_MODULE` builds `src/z3660.c` as the module `z3660scsi`
 (`module/`: Makefile on the ABI kit's fragment, Master, VERSION 1.0.0-1; `module/README.md`).
@@ -1456,7 +1454,7 @@ handed to sd is `board_phys`, the value the static sd probe hook reported, so `s
 unchanged. `_halt` touches no register (no transaction is ever in flight between calls, and
 every access is a mailbox event); it counts `z3660_halted`. No interrupt, no `root_defer`.
 
-**One thing for S4-71/S4-72 to watch.** sd's first open runs in the root pass too, and each
+**One thing for the first module boots to watch.** sd's first open runs in the root pass too, and each
 `z3660queue()` transaction there runs at IPL 4 under its `spl6` bracket and returns to 7. The
 static driver does exactly this at the same point today, so it is not new, but it is a level
 below C4-2's "level 7" for the length of each transaction.
@@ -1465,7 +1463,7 @@ below C4-2's "level 7" for the length of each transaction.
 `-fno-common` in the module's CFLAGS turns the driver's diagnostics globals into `.bss`
 definitions (no COMMON warnings). The kit as shipped does not yet build a root-class module:
 its `mkmod` writes no `rank=` key and its `modcheck.py` refuses `class=root` ("root-class modules
-come with stage 4"). That is amix-dlm's to change. With a two-line scratch overlay of both tools
+come with stage 4"). That needs a kit change. With a two-line scratch overlay of both tools
 (mkmod writes `$rank`; modcheck accepts root with a rank) both objects pass every other check:
 image 6764 bytes, file 12988 bytes on each line, scan060 and the 4 KiB page geometry clean on
 k46, undefined `autocon bcopy mod_miscops printf sd_register sptalloc` (+ weak
@@ -1478,5 +1476,5 @@ arguments and no spl; the registered queue function runs; `_halt` makes no acces
 AutoConfig board registers with the sweep deferred; ENOMEM and an `sd_register` refusal pass
 back.
 
-**Not done here.** No metal or emulator boot (S4-72's). The package mint (S4-25).
+**Not done here.** No metal or emulator boot. No package.
 

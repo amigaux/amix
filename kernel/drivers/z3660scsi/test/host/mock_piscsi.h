@@ -89,7 +89,7 @@ void mock_set_geom(int unit, unsigned long pdt,
  * and VPOSR report.  MOCK_BUS_BOARD (0, the default) is the real mailbox; the
  * others model a window with NO piscsi board behind it -- writes reach no
  * firmware (no doorbell, no unit select) and reads return:
- *   ZERO   0x00000000 (the P6.2 hole)      ONES   0xFFFFFFFF
+ *   ZERO   0x00000000 (the all-zero hole) ONES   0xFFFFFFFF
  *   ECHO   the bus address of the access (board base + 0x2000 + offset)
  *   LATCH  the last value driven on the bus (read or write)
  *   RAM    plain memory: what was last written to that same offset
