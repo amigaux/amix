@@ -182,7 +182,7 @@ make -C monsw/module               # both lines
 make -C monsw/module k46           # one line
 make -C monsw/module test          # the host test (any host cc)
 make -C monsw/module static        # the static object per line, with its sha256
-make -C monsw/tool                 # monswctl, one binary for both lines, with its sha256
+make -C monsw/tool                 # monswctl, one stripped binary for both lines, with its sha256
 make -C monsw/tool test            # the tool's and the boot step's host test (bash, any host cc)
 ```
 
