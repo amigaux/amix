@@ -1,11 +1,11 @@
 PKG=dlmkit30
-NAME=dlmkit30 k30.1.3.261031-12.96720ad - the ABI kit for k30 kernel modules
+NAME=dlmkit30 k30.1.3.261031-13.96720ad - the ABI kit for k30 kernel modules
 ARCH=Amiga
-VERSION=k30.1.3.261031-12.96720ad
+VERSION=k30.1.3.261031-13.96720ad
 CATEGORY=development
 CLASSES=none
 VENDOR=amix-packages
-PSTAMP=amix-packages-dlmkit30-k30.1.3.261031-12.96720ad
+PSTAMP=amix-packages-dlmkit30-k30.1.3.261031-13.96720ad
 # USERLAND (amix-dlm S3-22): an ordinary catalog entry, no kpkg entry, no
 # apkg kernel-space record, no catalog dependency.  VERSION is the kit's
 # kabi tag, the kit date, the package revision, then KIT_REV.

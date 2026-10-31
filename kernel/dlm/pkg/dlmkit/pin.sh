@@ -90,7 +90,18 @@
 # f753c84c...; -7 05f700a: k30 1c357390..., k46 f5bb0193...; -8 49239b1:
 # k30 f04242ed..., k46 a6ce6e30...; -9 bbd20b6: k30 0e4c7208..., k46
 # c0b64ee4...; -10 33ea0c7: k30 c883c4fd..., k46 749b19b8...; -11 c2dc7fb:
-# k30 1e317abd..., k46 08463c97...
+# k30 1e317abd..., k46 08463c97...; -12 96720ad (host build): k30
+# db72da99..., k46 cee36ea8...
+# -13 (not minted; the release-prep revision, P-38 D-g): -12's commit, kit
+# built in the build container (amix-toolchain:dist), the reference build
+# for the release.  Its kit differs from -12's host build in three things:
+# the stock and sysroot headers are amix-system's pinned 2.1c p2a usr/
+# (patchlevel.h, and sys/types.h and sys/socket.h with their comments
+# closed), where the host gcc-cross-amix's sysroot is an older copy; and
+# tools/modfix, the kit's host program, as the container's compiler builds
+# it.  Pinned by the manifest digest, which covers kit.conf and NOTICE
+# (the provenance the package carries), not by norev: the norev digest
+# differs between the two builds as well.
 DK_DLM_COMMIT=96720ad
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
@@ -103,9 +114,9 @@ DK_K46_PORT_COMMIT=d0e8857
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
 DK_K46_PORT_HASH=d0e88574f7ee8559452cc7363ff7bcf3dd9133e6
-DK_K30_MANIFEST=db72da995d8f7caa4f4c8db1747dec81bd620fac65d3972cebe75cfaa9c02ae9
-DK_K46_MANIFEST=cee36ea8969c46a98c6aff10c1e2a48144929948cada05098d29fa5295a047b7
+DK_K30_MANIFEST=6fd5269dc806de36fb790ddac560f2c9fa3c6d5d9d006300c87ef9c8ecfc0e4d
+DK_K46_MANIFEST=650b0e50595c60cf8a30706955e38e3a6b2352ee8d5d472cacb9f40ac0dbd681
 
 DK_DATE=261031
-DK_REV=12
+DK_REV=13
 DK_SOURCE_EPOCH=1793404800

@@ -30,4 +30,12 @@ not the same datastream: the deterministic roll stamps the control files
 with the epoch where the older one left the build time. So these
 datastreams are not shipped under these versions (one version, one set of
 bytes); the 1.1 set is minted by this roll at new revisions at release prep
-(P-38 D-g), when the pins move.
+(P-38 D-g), when the pins move. Two recipes are already at theirs, not
+minted: kbootset -29 (it owns `/dev/kinfo`) and dlmkit -13.
+
+**dlmkit's pins are the build container's kit** (`amix-toolchain:dist`,
+make dist's reference build). A host build of the same commit gives another
+kit: the host gcc-cross-amix's sysroot is not amix-system's pinned `usr/`
+(the container's), and the kit's host program `tools/modfix` is the host
+compiler's. So dlmkit rolls in the container (`make -C build kspace`) and
+refuses on such a host; the other recipes roll the same bytes on both.
