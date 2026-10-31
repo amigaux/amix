@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 6
+# C3-6 — what a driver changes to become a module, version 7
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -16,7 +16,10 @@
   5 (2026-10-27, from the Gayle IDE module plan): a self-test by a real
   command where a software raise cannot set the board's pending state
   (§1.3); version 6 (2026-10-28, from the Paula module): a chained
-  level-2 handler cannot see CIA-A's interrupt bits (§1.3). The
+  level-2 handler cannot see CIA-A's interrupt bits (§1.3); version 7
+  (2026-10-31, P-36 W8): a network driver's DLPI checklist, the rules
+  the one DHCP client and `ifup` rely on instead of per-driver code
+  (§1.8). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
   Other repositories build against this text; a change from here is a
@@ -267,6 +270,58 @@ packages.
   (S3-10, amix-dlm, next after this contract), the source changes of §2–§4
   can be made and compiled; the module objects are made with the kit.
 
+### 1.8 A network driver: the DLPI checklist (version 7)
+
+The system brings every interface up with one `ifup` and one DHCP client,
+`dhcpc`, neither with code for a particular driver (P-36 §3.2, §4.4;
+D-N10, D-N14). That holds only while each Ethernet driver gives what is
+listed here. A driver that cannot is asked about before it ships, not
+worked around in the client. The checklist is P-36 §4.3–§4.4's. The aen
+column is proven in emulation (T-55, the A2065 under amiberry); the
+z3660eth column is read from its source (P-36 §4.3), and its proof on
+metal is dhcpc's stage S2.
+
+**DLPI, against the stock `<sys/dlpi.h>`** (AT&T `head.sys:sys/dlpi.h
+1.2`: no `DL_VERSION`, no `DL_PHYS_ADDR_REQ`, no multicast or promiscuous
+primitives, and a `dl_info_ack_t` with no SAP-length or broadcast-address
+fields):
+
+| # | Must | Why | aen | z3660eth |
+|---|---|---|---|---|
+| 1 | answer `DL_INFO_REQ` with `DL_INFO_ACK`, and state the provider style truthfully | the client sends `DL_ATTACH_REQ` only to a Style 2 provider | Style 1 | Style 1 |
+| 2 | Style 1, or a Style 2 that answers `DL_ATTACH_REQ` (`DL_OK_ACK` or `DL_ERROR_ACK`) | a dropped attach leaves only the client's alarm | Style 1; drops ATTACH unanswered | Style 1; OK_ACK |
+| 3 | answer `DL_BIND_REQ` for SAP 0x0800 with `DL_BIND_ACK`, the station's own 6-byte MAC as its address | the only place the client learns the MAC: there is no `DL_PHYS_ADDR_REQ`, and `DL_INFO_ACK` carries it only once bound | yes | yes |
+| 4 | let a further stream bind 0x0800 while IP is linked on another, with at least one stream slot free after IP and ARP | the client binds beside the running IP; `slink` already takes two streams | yes; 5 slots | yes; 5 slots |
+| 5 | send `DL_UNITDATA_REQ` with a 6-byte destination, the ethertype taken from the bound SAP, a short frame padded to 60 bytes | the client builds IP and UDP itself and sends to `ff:ff:ff:ff:ff:ff` | yes; padding not zeroed | yes |
+| 6 | deliver a received broadcast or unicast frame of the bound SAP to **every** stream bound to it, as `DL_UNITDATA_IND` | the client's stream and IP's both see the server's reply | yes | yes |
+| 7 | let any open stream be closed while IP stays linked | the client closes its stream once it holds a lease and renews over UDP (D-N15) | yes | yes |
+
+Allowed, because the client copes, but not to be copied:
+
+- an unknown primitive freed without a reply (aen); answer it with
+  `DL_ERROR_ACK`/`DL_BADPRIM`, as z3660eth does;
+- `DL_UNITDATA_IND` arriving on a reused stream slot before its bind is
+  acknowledged (aen keeps the slot's previous SAP and state);
+- a frame length that counts the padding (aen): the client trusts only the
+  IP and UDP lengths.
+
+**What else the driver's package carries** (P-36 W6):
+
+- **One `link.d` line** (D-N10), `/etc/inet/link.d/<module>`, named for
+  the module so that `rc_mknod` can ask the registry for its major:
+  `<ifname prefix> <node prefix> <first unit> <major>`, for example
+  `zen /dev/zen 0 51`. `ifup` finds units by opening `<node><n>` from the
+  first unit until the open fails, so **an open of a unit with no board
+  fails at once** (`ENXIO` or `ENODEV`), never hangs. When it cannot
+  promise that yet, an optional fifth column names a presence command, as
+  `aen -S` does.
+- **Its nodes as package objects** (D-N21), at the registry's major
+  (§1.2); the boot step re-creates a missing one with `kbootset major`
+  (C2-4 §15).
+- **No rc script of its own** to bring the interface up, set its address
+  or start a client. Settings live in `/etc/inet/interfaces`, which no
+  package owns (D-N9).
+
 ## 2. z3660eth (amix-z3660net, S3-25)
 
 What it does today (amix-z3660net `src/z3660eth.c`; the k46 relink in
@@ -299,7 +354,7 @@ The module:
 | Symbols | `ifstats` → `if_attach`, `if_detach` in `_unload` (§1.1); add `intr_attach`/`intr_detach` |
 | `_halt` | `ZZ_CONFIG_DISABLE`, and stop the poll if it can without sleeping |
 | `_unload` | present, though `unload=never` refuses `moduload`: the core calls it after a failed load (§1.1). `untimeout`, interrupt off, `intr_detach`, `if_detach`, `z3660eth_unmap` (last close does not unmap today), reset `map_verdict` |
-| Kept | `/dev/zen0` (c 51 0) and `S99zen`'s `slink` (S3-31) |
+| Kept | `/dev/zen0` (c 51 0). `S99zen`'s `slink` (S3-31) until P-36 W6, when the package ships `link.d/z3660eth` and `ifup` brings zen0 up (§1.8) |
 
 ## 3. z3660rtg (amix-z3660rtg, S3-26)
 
