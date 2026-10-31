@@ -1,0 +1,10 @@
+i pkginfo
+f none /usr/sbin/dhcpc 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root bin
+d none /opt/amix/man/1m 0755 root bin
+d none /opt/amix/man/whatis.d 0755 root bin
+f none /opt/amix/man/1m/dhcpc 0644 root bin
+f none /opt/amix/man/whatis.d/dhcpc 0644 root bin
+d none /var/inet 0755 root sys
+d none /var/inet/dhcpc 0755 root sys

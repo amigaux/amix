@@ -1,0 +1,118 @@
+.TH DHCPC 1M "31 October 2026" "dhcp-client"
+.SH NAME
+dhcpc \- get and keep a network address from a DHCP server
+.SH SYNOPSIS
+.B dhcpc
+[
+.B \-b
+.I seconds
+]
+.I interface
+.br
+.B dhcpc \-x
+.I interface
+.br
+.B dhcpc \-q
+.I interface
+.SH DESCRIPTION
+.B dhcpc
+asks a DHCP server for an address for
+.I interface
+and keeps it: one
+.B dhcpc
+runs in the background for each interface that gets its address this way.
+It is normally started by
+.BR ifup (1M)
+for an interface whose line in
+.B /etc/inet/interfaces
+says
+.BR dhcp ,
+and stopped by
+.BR ifdown .
+.PP
+At start it first asks again for the address it held last, if that lease
+has not ended; otherwise it looks for a server.
+Once the lease is bound,
+.B dhcpc
+renews it with the same server halfway through, and with any server near
+its end; when it ends anyway, or a server refuses it, the address is taken
+off and
+.B dhcpc
+starts looking again, and goes on trying for as long as it runs.
+.PP
+.B dhcpc
+changes nothing itself: every address, route, host name and name-server
+change is made by
+.BR /usr/lib/inet/dhcpc-hook ,
+the same steps
+.B ifup
+uses for a static line, so a DHCP interface and a static one are set up
+alike.
+The machine's name is taken from the server only when
+.B /etc/inet/interfaces
+says
+.BR "hostname dhcp" .
+.SH OPTIONS
+.TP
+.BI \-b " seconds"
+wait at most this long for the first lease before returning; without it,
+wait until there is one.
+.TP
+.B \-x
+give the lease back to the server, take the address off, and stop the
+.B dhcpc
+of
+.IR interface .
+.TP
+.B \-q
+print the lease held for
+.I interface
+as
+.IB name = value
+lines.
+.SH EXIT STATUS
+.TP
+0
+a lease is bound and applied (with
+.BR \-q :
+a lease is held now).
+.TP
+1
+the interface cannot do DHCP (no driver for it, or it does not answer as
+DLPI requires), or another
+.B dhcpc
+already holds it.
+.TP
+2
+no lease within
+.I seconds
+yet; the background
+.B dhcpc
+goes on trying.
+.SH FILES
+.TP
+.BI /var/inet/dhcpc/ interface .lease
+the lease held, in the hook's
+.B DHCP_
+names.
+.TP
+.BI /var/inet/dhcpc/ interface .pid
+the background
+.BR dhcpc .
+.TP
+.B /var/adm/dhcpc.log
+what each
+.B dhcpc
+did.
+.TP
+.B /etc/inet/link.d/*
+where the interface's device is found.
+.SH SEE ALSO
+.BR ifup (1M),
+.BR interfaces (4)
+.SH NOTES
+.B dhcpc
+sends no client identifier; servers know it by its station address.
+A renewal near the end of a lease is sent as a broadcast on the local
+network only, so a server reached through a relay agent cannot extend a
+lease that its first server stopped answering for.

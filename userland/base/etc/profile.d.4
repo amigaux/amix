@@ -1,0 +1,51 @@
+.TH PROFILE.D 4 "31 October 2026" "amix-base"
+.SH NAME
+profile.d \- the packages' additions to the login environment
+.SH SYNOPSIS
+.BI /etc/profile.d/ package .sh
+.SH DESCRIPTION
+At the end of
+.BR /etc/profile ,
+a login shell reads every readable file in
+.B /etc/profile.d
+whose name ends in
+.BR .sh ,
+in name order.
+A package that needs something in every user's environment, such as a
+directory on
+.BR PATH ,
+ships one such file instead of editing
+.BR /etc/profile .
+Each file is read by the user's login shell
+.RB ( sh
+or
+.BR ksh ),
+so it must be plain Bourne shell, and it should change nothing when it is
+read twice.
+A file with another name, such as
+.BR name.sh.off ,
+is not read.
+.PP
+The base package ships
+.BR amix-base.sh ,
+which puts
+.B /usr/amix/bin
+on
+.B PATH
+just before
+.BR /usr/bin .
+That directory holds only commands that answer for the add-on packages'
+files and pass everything else to the stock command of the same name, such
+as
+.BR man (1).
+.B /usr/local/bin
+stays first, and the add-on packages' own
+.B /opt/amix/bin
+stays last, so stock commands keep their place.
+.SH FILES
+.TP
+.B /etc/profile.d/amix-base.sh
+the base package's addition.
+.SH SEE ALSO
+.BR profile (4),
+.BR man (1)

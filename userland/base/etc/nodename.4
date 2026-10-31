@@ -1,0 +1,41 @@
+.TH NODENAME 4 "31 October 2026" "amix-base"
+.SH NAME
+nodename \- the machine's name
+.SH SYNOPSIS
+.B /etc/nodename
+.SH DESCRIPTION
+.B /etc/nodename
+holds the machine's name on its one line: letters, digits and
+.BR \- .
+At boot,
+.B /etc/sysinit
+gives it to the system, and
+.B "uname \-n"
+then prints it.
+.PP
+The file is written when the system is installed, by
+.BR ifup (1M)
+when a line of
+.B /etc/inet/interfaces
+says
+.BI name " host"\fR,
+and by the DHCP client's hook when that file says
+.B "hostname dhcp"
+and the server gives a name.
+Each of these also changes the running name at once
+.RB ( "uname \-S" ).
+To rename the machine by hand, write the new name here (and in this
+host's line of
+.BR /etc/inet/hosts );
+it applies at the next boot, or at once with
+.BI "uname \-S " name\fR.
+.PP
+An update of the base package keeps the file as it is.
+.SH FILES
+.TP
+.B /etc/nodename
+this file.
+.SH SEE ALSO
+.BR ifup (1M),
+.BR interfaces (4),
+.BR uname (1)

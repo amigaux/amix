@@ -1,0 +1,61 @@
+.TH PROFILE 4 "31 October 2026" "amix-base"
+.SH NAME
+profile \- the login shell's start-up commands for every user
+.SH SYNOPSIS
+.B /etc/profile
+.SH DESCRIPTION
+.B /etc/profile
+is read by
+.BR sh (1)
+and
+.BR ksh (1)
+when they start as a login shell, before the user's own
+.BR $HOME/.profile .
+The file shipped with the base package is the system's own, from release
+2.1p2a, with one addition at its end.
+.PP
+The system's part:
+.IP \(bu 3
+sets
+.B PATH
+(the stock directories, with
+.B /usr/local/bin
+first and, for users other than root,
+.B $HOME/bin
+before it and the current directory at its end) and
+.BR TERM
+(on the console, the console's terminal type), and exports
+.B LOGNAME
+too;
+.IP \(bu 3
+sets the terminal's control characters
+.RB ( stty ),
+shows
+.BR /etc/motd ,
+says when there is mail, and lists new news items (not for root);
+.IP \(bu 3
+sets the file creation mask to 022.
+.PP
+The addition reads every readable file whose name ends in
+.B .sh
+in
+.BR /etc/profile.d ,
+so that a package can set up its part of the environment without editing
+this file (see
+.BR profile.d (4)).
+.PP
+An update of the base package keeps an edited
+.B /etc/profile
+and puts the new default beside it as
+.BR /etc/profile.new .
+.SH FILES
+.TP
+.B /etc/profile
+this file.
+.TP
+.B /etc/profile.d/*.sh
+the packages' additions.
+.SH SEE ALSO
+.BR profile.d (4),
+.BR sh (1),
+.BR ksh (1)
