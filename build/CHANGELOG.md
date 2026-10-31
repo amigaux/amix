@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — make dist's drivers step builds every module on the kit; CI driver host tests (ca08c0e)
+
+The drivers step (P-38 S3.2, D-e) builds every driver module on both lines against this checkout's kabi 1.3 kit:
+kernel/drivers/{a4091,z3660scsi,z3660eth}/module (a4091's also a4kt710) and the forks cdfs, gayle-ide, paula and
+z3660rtg, each fetched at its pin by commit into out/cache/forks and built with its own Makefile. Every build starts
+clean; z3660rtg links against our own monsw objects, not the retired stand-in. Objects go to out/modules/<line>/<name>
+and the lock. Two clean runs give 20 byte-identical objects. CI runs a4091's and z3660scsi's host tests. test-dist 24/24.
+
 ## 2026-10-31 — dlm-src.sh takes the toolchain and the port from layout.sh (38feabe)
 
 amix_dlm_build and amix_dlm_kit source layout.sh's AMIX_CROSS_ENV and pass its directory as GCA, instead of reaching
