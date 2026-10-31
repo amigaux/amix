@@ -1,0 +1,5 @@
+# /etc/conf/modreg.d/ramdisk -- the ramdisk module package's defaults
+# (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
+# the module's own, `disable` to ship it off.  None: the package keeps the
+# module's own sizes (size1=512, size2=2048 KiB).  Local settings belong in
+# /etc/conf/modreg.local.d/ramdisk, which no package owns.
