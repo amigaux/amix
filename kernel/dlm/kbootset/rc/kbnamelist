@@ -1,0 +1,33 @@
+#!/bin/sh
+# kbnamelist -- the booted generation's namelist at /stand/unix before
+# anything in run level 2 reads it (C2-4 section 12).
+#
+# Installed by the kbootset package as /etc/init.d/kbnamelist, linked as
+# /etc/rc2.d/S01kbnamelist: after S01MOUNTFSYS, before every other rc2
+# script. With amix-base's rc.subr, "kbnamelist=no" in /etc/rc.conf turns
+# it off (on by default) and the status goes to /var/adm/rc.log; without
+# rc.subr it runs as before. It never stops run level 2.
+#
+# RC_SUBR and RC_CONSOLE are for the host test only.
+#
+# MIT licence, see LICENSE in kernel/dlm.
+
+case "$1" in
+start)	;;
+*)	exit 0 ;;
+esac
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+RC_CONSOLE=${RC_CONSOLE:-/dev/console}
+rc_log() {
+	:
+}
+if [ -r "$RC_SUBR" ]
+then
+	. "$RC_SUBR"
+	rc_enabled kbnamelist yes || exit 0
+fi
+KB=${RC_KBOOTSET:-/sbin/kbootset}
+[ -x "$KB" ] || exit 0
+"$KB" namelist > "$RC_CONSOLE" 2>&1
+rc_log kbnamelist "kbootset namelist, status $?"
+exit 0

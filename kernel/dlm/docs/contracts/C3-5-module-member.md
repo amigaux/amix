@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 16
+# C3-5 — the module package and the per-module manifest record, version 17
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -23,7 +23,9 @@
   a4kt710's short name (§1.1); version 15 (2026-10-27, C4-4 version 7,
   S5-09): `safe=1` on a boot record the owner marked (§1, §3); version 16
   (2026-10-28, amix-paula): paula's short name (§1.1), and a driver's own
-  interface header in its module package (§1.2).
+  interface header in its module package (§1.2); version 17 (2026-10-31,
+  P-36 W8, D-N24): amix-base's `/etc/inittab` carries the `dlm` line, and
+  modtools has no package scripts (§1.3, §5).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -155,8 +157,8 @@ enforces:
   `exec 4>f` behave; `for …; do exec <f; read l; done` continues at line 2
   on the second pass; `IFS` and `set -f` make no difference to that.
 
-- **Process ids are not stable across boots** (version 5). What a
-  package or the installer adds to init (an `inittab` sysinit line such as
+- **Process ids are not stable across boots** (version 5). What the
+  base system adds to init (an `inittab` sysinit line such as
   `modadmin -B`, an early `rc2.d` script such as `S01kbnamelist`) shifts
   every later process's id. So an rc script never trusts a pid an earlier
   boot saved without checking the process's name (`ps -p <pid>`, and that
@@ -167,8 +169,9 @@ enforces:
   messages after boot then reach no log (`conslogging 0`).
 
 Scripts are proven on the 2.1 sh (the installer miniroot), not only on a
-host shell. modtools' postinstall, which puts the `modadmin -B` line first
-among the sysinit entries (§5), follows the rule from modtools -4.
+host shell. modtools' postinstall, which put the `modadmin -B` line first
+among the sysinit entries, followed the rule from modtools -4 to -7; since
+version 17 modtools has no scripts (§5).
 
 ## 2. What `kbootset build` composes, and what it refuses
 
@@ -252,11 +255,25 @@ a new record, with `loader-min` raised. This contract adds none.
   `/etc/inittab`, before every other one:
   `dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1`
   (`modadmin -B`, the modadm command `MOD_C_POST`, root only, once a boot:
-  a second is `EBUSY`). The module packages' installer (S3-31) and the
-  `modtools` package put that line there. The kernel's own hook after
+  a second is `EBUSY`). The kernel's own hook after
   `vfs_mountroot` loads nothing: it runs with interrupts masked, where
   reading a module file faults (U15, core patch 0017), and prints
   `dlm: boot-class modules load from the first sysinit entry (modadmin -B)`.
+- **Who puts the line there** (version 17, P-36 W8, D-N24): amix-base.
+  Its `/etc/inittab` is a conffile built from the stock file (amix-system
+  `etc/inittab`, sha256-checked) with this one line inserted after line 1,
+  `is:2:initdefault:`, so it is the first sysinit entry; amix-base's test
+  checks the line against this section, which stays the text of record.
+  modtools has no package scripts, so stock `pkgadd -n` installs it without
+  a question, and it is `ESSENTIAL`: every 1.1 kernel is a module kernel.
+  The installer does not edit `inittab`; it checks the file against
+  amix-base's default.
+  - Until version 17, modtools' postinstall inserted the line and its
+    preremove took it out (modtools through -7). `apkg upgrade` is one
+    `pkgadd` over the installed instance, so -7's preremove never runs on
+    the way to a modtools without scripts, and the line stays.
+  - A box without `/sbin/modadmin` would print one error for this entry
+    at every boot; no supported install lacks it.
 - **Order:** `marc_post` first registers the demand-class majors, then
   loads the boot-class records in manifest order. A module's
   dependencies load before it in any case.

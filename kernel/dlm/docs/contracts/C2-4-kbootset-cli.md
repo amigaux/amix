@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 16
+# C2-4 — `kbootset` as a called program, version 17
 
-- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30, P-36 D-N21): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25 (orchestrator); version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27, S5-44): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27, S5-45): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from Bench N160): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from Bench S5-13 F30-6): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30, P-36 D-N21): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31, P-36 W8): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -118,7 +118,8 @@ case, the `*` case, and after the repair shell. One line before each:
 
 ## 9. `kbootset mark-good` at the end of run level 2
 
-The base system (amix-installng) calls it once per boot, as the last
+The kbootset package's boot script `kbmarkgood` calls it once per boot
+(version 17, §16; amix-installng wrote the script before), as the last
 step of run level 2 (40 §3, D54), after every other `rc2.d` script,
 so that a generation counts as good only when the whole of run level 2
 has run:
@@ -282,12 +283,13 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     bind address`, `the kernel has no symbols (no unix.sym)`, `the layout
     does not match kinfo`, `kinfo flags a loader fault (0x8)`.
 - **Exit status:** 0 when written or current, 3 when it cannot, 1 on an
-  I/O error. The base system calls it early in run level 2 and ignores
-  the status, from **`/etc/rc2.d/S01kbnamelist`**. `/sbin/rc2` runs the
+  I/O error. The kbootset package's boot script `kbnamelist` calls it
+  early in run level 2 and ignores the status, from
+  **`/etc/rc2.d/S01kbnamelist`** (version 17, §16). `/sbin/rc2` runs the
   `S*` scripts in byte order, so it runs after `S01MOUNTFSYS` (`M` < `k`)
   and before every other `rc2.d` script (`S02PRESERVE` included), so before the
   network scripts (`netstat` and `ifconfig` users) and long before
-  `S99zkbootset`, the `mark-good` hook (§9). Its body is the one line:
+  `S99zkbootset`, the `mark-good` hook (§9). Its call is the one line:
 
 ```
 [ -x /sbin/kbootset ] && /sbin/kbootset namelist >/dev/console 2>&1
@@ -304,7 +306,8 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
     above.
   `status` itself writes nothing.
 - **The installer** (S3-31) removes the name `/stand/unix` from the
-  target (`/stand/2.1_unix` stays) and installs `S01kbnamelist`.
+  target (`/stand/2.1_unix` stays). `S01kbnamelist` comes with the
+  kbootset package (§16).
 
 ## 13. A boot from a read-only medium (CD, floppy pair)
 
@@ -422,3 +425,40 @@ module `<name>`, for a boot script that re-creates a missing `/dev` node
   `kbootset: no major is registered to <name>` on standard error and
   nothing on standard output; 2 for usage (no name, or more than one).
 - **The host test** is `tests/host/kmajor.sh`.
+
+## 16. The boot scripts (version 17, P-36 W8)
+
+The kbootset package owns the two scripts that make the calls of §9 and
+§12. They are package objects, so an update of kbootset reaches them; the
+installer stops writing them (P-36 W7). The source is `kbootset/rc/`.
+
+| Object | Type | Calls |
+|---|---|---|
+| `/etc/init.d/kbnamelist` | `f`, 0744 root sys | `kbootset namelist` (§12) |
+| `/etc/rc2.d/S01kbnamelist` | `l` to it | |
+| `/etc/init.d/kbmarkgood` | `f`, 0744 root sys | `kbootset mark-good` (§9) |
+| `/etc/rc2.d/S99zkbootset` | `l` to it | |
+
+- **The link names stay those the installer wrote**, so a 1.1 box's rc
+  order does not change. `S01` sorts after `S01MOUNTFSYS`; `S99z*` is the
+  band P-36 §2.2 keeps for the mark-good step.
+- **Only `start` runs anything.** `/sbin/rc2` runs an `S` script as
+  `/sbin/sh <script> start`; any other argument exits 0.
+- **With amix-base's `/usr/lib/amix/rc.subr`** (P-36 §2.2, `rc.subr(1M)`):
+  - `kbnamelist=no` or `kbmarkgood=no` in `/etc/rc.conf` turns the script
+    off; each is on when rc.conf has no line for it;
+  - `kbmarkgood=no` prints `kbmarkgood: off (kbmarkgood=no in
+    /etc/rc.conf): a trial generation is not kept` on the console at every
+    boot: with it off, the loader takes every trial back (L8);
+  - kbootset's exit status goes to `/var/adm/rc.log` (`rc_log`).
+- **Without rc.subr** each script runs its call as before, with no log.
+- **The call is the line of record** (§9, §12): `/sbin/kbootset <command>`,
+  no options, its output on `/dev/console`; a missing `/sbin/kbootset` is
+  skipped. Each script exits 0 whatever kbootset returns: neither ever
+  stops run level 2.
+- **Bourne sh of 1991** (C3-5 §1.3): no `$(…)`, no pattern expansions, no
+  `printf`, no `local`.
+- **The host test** is `tests/host/rcscripts.sh`: both scripts with and
+  without rc.subr (amix-base's own, from `userland/base/rc/rc.subr`), the
+  rc.conf keys, the log line, a missing kbootset, and the arguments other
+  than `start`.
