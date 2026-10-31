@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — vim 9.1.0000-1; INDEX lists amix-base 1.0-10 (ed7e9ea, eb67143, 4687423, 11780fe)
+
+vim 9.1.0000-1: terminal only, normal features, ncurses 6.6 static; vim with ex/view/vimdiff/rvim/rview as hard links,
+xxd, the runtime in /opt/amix/share/vim/vim91, man pages, on-box smoke. UFS-only (112 runtime names over 14 bytes,
+APKG_FSTYPE=ufs). Patch 01 (ours): vim_snprintf formats long long through libamixc99's snprintf, because Amix libc
+printf reads ll as l. :version records no build host, user or path. vimtutor not shipped. Configured after isoriano's
+port (credited). INDEX.md lists amix-base 1.0-10.
+
 ## 2026-10-31 — pth 2.0.7-1; ncurses fetches from upstream (a4b15b6, 463b9fd)
 
 pth 2.0.7-1: static libpth.a and libpthread.a (pthread emulation) with headers and pth(3)/pthread(3), the mcsc machine
