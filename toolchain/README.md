@@ -176,10 +176,14 @@ not carry as such (P-38 S1.4):
   assembler with cpp, as, ld, ar, nm, objcopy, objdump, readelf, size).
   `toolchain/m68k-gnu-bin <dir>` links each to gcc14's `m68k-elf-*` of the
   same name, so one set of binutils serves both; the directory goes first on
-  `PATH`. The FPSP 040, FPSP 060 and ISP 060 objects the port builds are
-  byte-identical with these and with Ubuntu's m68k-linux-gnu gcc 15.2 and
-  binutils 2.46 (measured 2026-10-31); the whole cut's proof is that its
-  sums reproduce.
+  `PATH`. The objects are not those of Ubuntu's m68k-linux-gnu binutils
+  2.46, which the k46 cut 68060-261031-52 was made with: binutils 2.43.1
+  relaxes the FPSP 040's `stan.s:231` `lea PITBL+0x200,%a1` to PC-relative,
+  two bytes shorter, where 2.46 keeps it absolute (measured by the k30
+  station, 2026-10-31). So -52 cannot be reproduced through the shim, and
+  the k46 line is re-cut as -53 with it (Q8: one binutils). An earlier
+  comparison here reported the FPSP and ISP objects identical; it did not
+  hold.
 
 `sh toolchain/test-tools` is the host test of both.
 
