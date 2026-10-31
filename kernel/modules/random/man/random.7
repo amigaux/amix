@@ -1,0 +1,72 @@
+.TH RANDOM 7 "31 October 2026" "random"
+.SH NAME
+random, urandom \- random numbers from the kernel
+.SH SYNOPSIS
+.B /dev/random
+.br
+.B /dev/urandom
+.SH DESCRIPTION
+Reading either device gives random bytes, as many as asked for.
+Programs that need random numbers for keys, salts, temporary names or
+seeds read them here; Python's
+.B os.urandom
+and
+.B secrets
+do.
+.PP
+The two devices are the same generator and behave the same: neither ever
+blocks, and there is no count of entropy.
+.B /dev/random
+is there for programs that open it by that name.
+.PP
+The generator is ChaCha20 (RFC 8439) with a 256-bit key.
+Every read ends by replacing the key with output no one sees, so a later
+state of the kernel tells nothing about bytes read before; the key also
+changes every 64 KiB within one long read.
+.PP
+What is written to either device is mixed into the key, by anyone; it
+can only add to what the generator knows, never take away.
+The kernel also mixes in, at load, at every open and at every read, the
+clock ticks since boot, the beam position of the chipset and the timers
+of both CIAs.
+After a boot those are guessable, so the boot step
+.BR randseed (1M)
+writes in the seed saved at the last shutdown, the date and the process
+table before anything else uses the devices.
+.PP
+The driver is the loadable module
+.BR random ,
+of the demand class: it loads at the first open of either device, and is
+never unloaded, since that would lose what was written in.
+.SH FILES
+.TP
+.B /dev/random
+character major 48, minor 0.
+.TP
+.B /dev/urandom
+character major 48, minor 1.
+.TP
+.B /etc/conf/mod.d/random
+the module.
+.TP
+.B /etc/random-seed
+the seed kept across reboots, 512 bytes, readable by root only.
+.SH DIAGNOSTICS
+Another minor number gives
+.BR ENXIO .
+The devices have no
+.B ioctl
+and cannot be mapped.
+.SH EXAMPLES
+.nf
+.ft CW
+dd if=/dev/urandom bs=16 count=1 | od -x
+echo something only I know > /dev/urandom
+.ft R
+.fi
+.SH SEE ALSO
+.BR randseed (1M)
+.SH NOTES
+The interface (two minors that do not block, writes that mix in, a seed
+file across reboots) is that of isoriano's random-amix, the driver that
+first gave Amix these devices.

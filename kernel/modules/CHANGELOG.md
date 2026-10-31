@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — random 1.0.0-1: /dev/random and /dev/urandom as a module (3d4a48d)
+
+A demand-class module for k30 and k46: ChaCha20 (RFC 8439) with fast key erasure, rekeyed after every read and every
+64 KiB; it mixes in writes and a sample of lbolt, VHPOSR and the CIA timer bytes at load, open and read. c 48 (dlm
+a8719fb), unload never. randseed (S21/K02) keeps a 512-byte seed across reboots. Pages random(7) and randseed(1M). The
+interface follows isoriano's random-amix; the code is new. Objects k30 680d9752 / k46 f223164c, built on the kit at
+7a68948; hosttest 442 checks, rctest 8. Loads only on cuts made from a kit carrying c 48 (k30 -64, k46 -53).
+
 ## 2026-10-31 — monsw.h: SETCFG comes from /etc/display's monsw at boot (a56cf4b)
 
 include/sys/monsw.h's comment names /etc/display's monsw (else the older /etc/monsw), written in at boot by
