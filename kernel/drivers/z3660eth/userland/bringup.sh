@@ -1,18 +1,16 @@
 #!/bin/sh
 # bringup.sh -- manual one-shot bring-up of the Z3660 native ethernet on real HW.
 # Run ON the box (single-user is fine).  AMIX is SVR4.0: use slink, NOT `ifconfig plumb`.
-# An EXAMPLE: the address is the box's own, from /etc/default/zen (the file S99zen
-# reads; its header shows the form) or the command line:
-#   sh bringup.sh [address [gateway [netmask]]]
+# A bench and debugging aid: a configured box brings zen0 up at boot from its
+# /etc/inet/interfaces line (ifup), and `ifup zen0` does the same by hand.
+#   sh bringup.sh address [gateway [netmask]]
 
-ZEN_ADDR= ZEN_NETMASK=255.255.255.0 ZEN_GATEWAY=
-[ -r /etc/default/zen ] && . /etc/default/zen
-IP=${1:-$ZEN_ADDR}
-GW=${2:-$ZEN_GATEWAY}
-MASK=${3:-$ZEN_NETMASK}
+IP=$1
+GW=$2
+MASK=${3:-255.255.255.0}
 MAJOR=51
 if [ -z "$IP" ]; then
-	echo "usage: sh bringup.sh address [gateway [netmask]]  (or set ZEN_ADDR in /etc/default/zen)" >&2
+	echo "usage: sh bringup.sh address [gateway [netmask]]" >&2
 	exit 2
 fi
 

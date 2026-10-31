@@ -3,8 +3,8 @@
  *
  *   zen -S    Silent presence check: exit 0 if the Z3660 ethernet is present,
  *             1 if absent (open() returns ENXIO because no Z3660 GEM was found).
- *             Used to gate slink/ifconfig in /etc/inet/network-config so a
- *             board-less boot (or the WinUAE build box) does not stall.
+ *             A manual check; ifup needs none (an absent board's open
+ *             fails with ENXIO, which ends its unit probe).
  *   zen       Print the driver status counters (Z3660ETH_GET_STATUS).
  *
  * Mirrors the stock `aen -S` / Hydra `hya -S` presence convention.  Install as

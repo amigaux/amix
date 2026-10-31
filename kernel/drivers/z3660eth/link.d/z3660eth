@@ -1,0 +1,4 @@
+# /etc/inet/link.d/z3660eth -- the Z3660 native ethernet, for ifup (link.d(4)).
+# Vendor data shipped by the z3660eth package; edit /etc/inet/interfaces, not this.
+# if prefix, node prefix, first unit, cdevsw major (fallback: kbootset names it).
+zen	/dev/zen	0	51
