@@ -17,14 +17,16 @@
 #                commit's kernel/)
 #   AMIX_SYSTEM, GCA, G14  as build/pkg/layout.sh resolves them (make dist
 #                sets them in the container)
-#   PORT         amix-040-060-port at kernel/port/port.pin: unset, the git
-#                archive of that commit from AMIX_PORT_REPO, fetched by hash
-#                from AMIX_PORT_URL (default port.pin's URL) when it lacks it
-#   PAULA        amix-paula at kernel/drivers/paula/paula.pin: the same with
+#   PORT         amix-040-060-port at the cut's own port.pin (cuts/<id>/
+#                port.pin; a cut without one takes kernel/port/port.pin):
+#                unset, the git archive of that commit from AMIX_PORT_REPO,
+#                fetched by hash from AMIX_PORT_URL (default the pin's URL)
+#                when it lacks it
+#   PAULA        amix-paula at the cut's own paula.pin (else
+#                kernel/drivers/paula/paula.pin): the same with
 #                AMIX_PAULA_REPO and AMIX_PAULA_URL
-# A cut's README names the port and paula commits it was cut with; the
-# current pins reproduce its sums when the files the cut reads are the same
-# bytes, and the sums are what this checks.
+# A cut names the port and paula commits it was cut with, so moving the
+# checkout's pins does not move a recorded cut's inputs.
 #
 # MIT licence, see LICENSE in kernel/k30.
 set -eu
@@ -72,8 +74,11 @@ fork_at() {
 	echo "$_fa_d"
 }
 mkdir -p "$SRC"
-PORT=${PORT:-$(fork_at port "$AMIX_TOP/kernel/port/port.pin" "${AMIX_PORT_REPO:-}" "${AMIX_PORT_URL:-}")}
-PAULA=${PAULA:-$(fork_at paula "$AMIX_TOP/kernel/drivers/paula/paula.pin" "${AMIX_PAULA_REPO:-}" "${AMIX_PAULA_URL:-}")}
+pin_of() {	# pin_of <name> <the checkout's pin>: the cut's own, else the checkout's
+	if [ -f "$REC/$1.pin" ]; then echo "$REC/$1.pin"; else echo "$2"; fi
+}
+PORT=${PORT:-$(fork_at port "$(pin_of port "$AMIX_TOP/kernel/port/port.pin")" "${AMIX_PORT_REPO:-}" "${AMIX_PORT_URL:-}")}
+PAULA=${PAULA:-$(fork_at paula "$(pin_of paula "$AMIX_TOP/kernel/drivers/paula/paula.pin")" "${AMIX_PAULA_REPO:-}" "${AMIX_PAULA_URL:-}")}
 
 echo "--- cut $KB (cuts/$KB/cut.sh), port $(basename "$PORT"), paula $(basename "$PAULA")" >&2
 AMIX=$AMIX_TOP AMIX_SYSTEM=$AMIX_SYSTEM GCA=$GCA G14=$G14 PORT=$PORT PAULA=$PAULA \

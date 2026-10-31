@@ -6,17 +6,20 @@
 #   AMIX         an amix clone that has b391504 (kernel/ is taken from it by git archive, nothing else)
 #   AMIX_SYSTEM  amigaux/amix-system (the relink kit; build-cross-kernel.sh)
 #   GCA, G14     gcc-cross-amix and gcc14-cross-amix build/ directories (toolchain/*.pin)
-#   PORT         amix-040-060-port at kernel/port/port.pin (0d37eb1 at b391504: rth1.c, the ttcompat and tcp-hiwat
-#                fixes, the k46 kit headers)
-#   PAULA        amix-paula at kernel/drivers/paula/paula.pin (1b2736d: --audio-paula)
+#   PORT         amix-040-060-port at ./port.pin (0d37eb1: rth1.c, the ttcompat and tcp-hiwat fixes, the k46 kit
+#                headers)
+#   PAULA        amix-paula at ./paula.pin (1b2736d: --audio-paula)
 # OUT gets tree/ (the archive, dlm tools + kit built in it), cut-68030-261031-64/ (WORK: usr/sys, carve/, dlm-core/)
 # and SHA256SUMS-68030-261031-64; the sums must equal ./SHA256SUMS-68030-261031-64.
+# build-cross-kernel.sh comes from TOOLS (no byte of the cut changes): its carve build-id check, `strings | grep -q`
+# under pipefail, failed now and then on a SIGPIPE (89ebcf7, a1b9b6c).
 set -eu
-REV=b391504 KB=68030-261031-64
+REV=b391504 KB=68030-261031-64 TOOLS=a1b9b6c
 OUT=${1:?usage: cut.sh OUT}; : "${AMIX:?}" "${AMIX_SYSTEM:?}" "${GCA:?}" "${G14:?}" "${PORT:?}" "${PAULA:?}"
 OUT=$(mkdir -p "$OUT" && cd "$OUT" && pwd); T=$OUT/tree
 rm -rf "$T" "$OUT/cut-$KB"; mkdir -p "$T"
 git -C "$AMIX" archive "$REV" kernel | tar -x -C "$T"
+git -C "$AMIX" show "$TOOLS:kernel/k30/build-cross-kernel.sh" > "$T/kernel/k30/build-cross-kernel.sh"
 . "$GCA/env.sh"; export PATH=$G14/prefix/bin:$PATH GCA G14 PORT AMIX_SYSTEM KIT_REV=$REV; unset AMIX_DRIVERS
 make -C "$T/kernel/dlm" tools kit > "$OUT/dlm.log" 2>&1
 cd "$T/kernel/k30"
