@@ -53,7 +53,8 @@ the display number.
 .TP
 .BI env " name" = "value ..."
 the server's environment, with the same
-.BR % -names.
+.BR % -names;
+it reaches the server alone, never the session's programs.
 .TP
 .BI limits " name" = "KB ..."
 the limits raised before the server starts:
@@ -77,6 +78,11 @@ that tool, given the switch value and
 .B rtg
 or
 .BR off .
+.TP
+.BI restore " command"
+run, by its full path, after a session whose server ended on its own
+(it crashed or was killed) rather than being stopped at the session's end;
+for a card whose server must give the keyboard back to the console itself.
 .TP
 .BI console " command"
 reserved for the card's console takeover; no tool reads it yet.
@@ -107,16 +113,53 @@ able to try them; their arguments are in the comments of the stock
 file of
 .BR xdm .
 .SH EXAMPLE
+The Z3660's file,
+.BR /etc/display.d/z3660 ,
+as its driver package ships it:
+.PP
 .nf
 .ft CW
-node     /dev/zz9000
-module   z3660rtg
-server   /opt/amix/X11R6/bin/Xzz9000
-modes    1024x768 800x600 1280x720 1920x1080
-depths   16
-args     -mode %m
-limits   vmem=131072 data=65536
-monsw    yes
+# /etc/display.d/z3660 -- the Z3660 RTG card (display.d(4))
+name      Z3660 RTG
+node      /dev/zz9000
+module    z3660rtg
+server    /opt/amix/X11R6/bin/Xzz9000
+modes     1024x768 640x480 800x600 1280x720 1280x800 1280x1024 1920x800 1920x1080
+depths    16
+args      -mode %m -fp /opt/amix/X11R6/lib/X11/fonts/misc/,/opt/amix/X11R6/lib/X11/fonts/75dpi/,/opt/amix/X11R6/lib/X11/fonts/100dpi/ -ac -kb
+limits    vmem=131072 data=65536
+monsw     yes
+monswtool /opt/amix/bin/zz9k_monsw
+restore   /opt/amix/bin/rtg-kbdback
+.ft R
+.fi
+.PP
+The first mode, 1024x768, is the default.
+The font path names the three font directories the X11R6.3 package ships;
+the server's own default also names two it does not ship, and the server
+then opens no font at all.
+The server finds its colour database itself, and links its X libraries in,
+so the file gives no
+.B \-co
+and no
+.BR env .
+The limits cover the card's memory, which the server maps whole, and the
+server's own memory.
+The monitor switch's value is in
+.BR /etc/display ,
+not here.
+.PP
+The chipset's file,
+.BR /etc/display.d/native :
+.PP
+.nf
+.ft CW
+node     /dev/console
+server   /usr/X/bin/X
+modes    auto
+depths   1
+env      SCREEN_GROUP=%n
+monsw    no
 .ft R
 .fi
 .SH SEE ALSO

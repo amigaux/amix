@@ -60,7 +60,17 @@ of
 .BR /etc/display ,
 else
 .BR /usr/lib/amix/xsession .
-When the session ends, the monitor is switched back.
+The card's environment
+.RB ( env )
+reaches the server alone, through a small script
+.B xstart
+writes in
+.B /tmp
+and removes afterwards.
+When the session ends, the monitor is switched back; when the server ended
+on its own instead (it crashed or was killed), the card's
+.B restore
+command runs too.
 .PP
 The system's
 .B startx
