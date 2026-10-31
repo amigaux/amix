@@ -68,6 +68,7 @@ sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
 sh userland/base/net/test-ifup.sh sh nawk       # ifup, ifdown and the hook
 sh userland/base/etc/test-profile.sh           # /etc/profile = stock + profile.add
 sh userland/base/etc/test-inittab.sh           # /etc/inittab = stock + the dlm line
+sh userland/base/etc/test-login.sh             # /etc/default/login = stock, ULIMIT set
 ```
 
 ## Licence
