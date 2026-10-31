@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — random: the package recipe random-k30 / random-k46; no credit lines (948305e, 69afdfa)
+
+kernel/modules/random/pkg (P-38 S3.3), kmodpkg with KM_ROOT the checkout: it ships the object, modreg, /dev/random and
+/dev/urandom (c 48 0/1, class random), randseed with S21/K02 copies, the pages random(7) and randseed(1M) under
+/opt/amix/man, and whatis.d/<PKG>. Trial roll random30 b2b39b83, random46 934be87a, reproducible; rolling in make dist
+waits for three build/pkg fixes. The random module is new code: its credit lines are removed (owner).
+
 ## 2026-10-31 — random 1.0.0-1: /dev/random and /dev/urandom as a module (3d4a48d)
 
 A demand-class module for k30 and k46: ChaCha20 (RFC 8439) with fast key erasure, rekeyed after every read and every
