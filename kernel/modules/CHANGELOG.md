@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — monsw 1.0.0-7: switching needs a writable descriptor; the module is the only form (60a3ec2, d026a2e)
+
+MONSWIOC_RTG, NATIVE and SETCFG return EBADF unless the device is open for writing, so /dev/monsw's 0644 keeps
+switching and setting root's in the kernel; GETCFG works read-only. Objects bb900ef8 / 287ee3ad; hosttest 103.
+monsw has no static form any more: static-port.sh, the static make target and the MONSW_MODULE guard are gone.
+
 ## 2026-10-31 — monsw 1.0.0-6: monswctl reads the device read-only for get and status; ramdisk 1.0.0-5: ramdisk(7) (9e49446, 9cc1d94)
 
 monswctl opens /dev/monsw read-only for get and status, so any user's `monswctl status` works at the node's 0644;
