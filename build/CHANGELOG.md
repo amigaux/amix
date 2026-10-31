@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the original site first, our copy as the fallback (80d9050); a kspace hook's exit 3 (7ce5a35)
+
+amix_fetch tries, in order: the cache, AMIX_DISTFILES, the recipe's URL (the original site), then each fallback; the
+sha256 decides every time, and a failed fetch names each source tried. pkgbuild.sh passes our copy as the fallback:
+amigaux/amix-distfiles releases/download/<NAME>-<VERSION>/<the URL's file> (owner, 2026-10-31). A kernel/<dir>/pkg/
+build.sh that exits 3 (an input outside its recipe absent) is recorded as waiting; the kspace step runs the rest and
+ends with 3; any other non-zero still fails. test-fetch 12/12, test-dist 31/31.
+
 ## 2026-10-31 — KM_ROOT (a7e3dd8); the catalogs step (c8f419a)
 
 amix_kmodpkg reads a recipe's object, VERSION, licences, depend= modules and KM_FILES at $KM_ROOT/<path>: the siblings

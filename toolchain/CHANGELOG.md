@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — a .distfile names the original first, our copy second (80d9050)
+
+A .distfile is `<URL> <sha256> [<URL>...]`, every URL https; netbsd-syssrc.distfile names archive.netbsd.org first and
+our amix-distfiles copy second. test-tools 14/14.
+
 ## 2026-10-31 — fetch-distfile uses the URL when AMIX_DISTFILES lacks the file (b880adb)
 
 toolchain/fetch-distfile follows amix_fetch's rule: a pinned local copy first, else the URL (it used to refuse when
