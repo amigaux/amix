@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — monsw 1.0.0-6: monswctl reads the device read-only for get and status; ramdisk 1.0.0-5: ramdisk(7) (9e49446, 9cc1d94)
+
+monswctl opens /dev/monsw read-only for get and status, so any user's `monswctl status` works at the node's 0644;
+set, rtg and native need write access. monswctl dd05a6ba, 7188 B; the tool Makefile takes OUT=. ramdisk ships the
+page ramdisk(7) with its whatis fragment. The module objects are unchanged.
+
 ## 2026-10-31 — monsw and ramdisk packages roll from kernel/modules; monswctl stripped (9957b28, 1162892, e5011e7, 7b40bc9)
 
 monswctl ships stripped: 8732 → 7028 B, sha256 23739ba2. The module package recipes share kernel/modules/pkg/kmod.sh.
