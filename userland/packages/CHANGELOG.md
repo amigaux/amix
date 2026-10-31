@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — x11r6.3: no host X tools; a reproducible datastream (d138422, 4e57efa)
+
+The xkb .dir listings and the fonts are made by this tree's own xkbcomp, bdftopcf and mkfontdir built for the build
+host, never the host's X install; the PCF fonts carry Amix's MSB-first layout. A BDF without DEFAULT_CHAR gets no
+default character (patch 13, ours: bdfReadFont left stack bytes there, a real bug in the shipped font code too).
+Two container rolls are byte-identical (md5 bf1ae510).
+
 ## 2026-10-31 — x11r6.3 6.3-1 and python3 3.11.18-1 (c89f201..b7adfc5)
 
 - x11r6.3 6.3-1 (new, PKG x11r63, set extra): X11R6.3 under /opt/amix/X11R6 (/usr/X11R6 links to it), with the
