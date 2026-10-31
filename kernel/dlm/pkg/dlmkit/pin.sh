@@ -100,6 +100,13 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -15 (2026-10-31): amix 3c3e353 (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -14 (abi texts unchanged): modcheck reports a demand-class load's peak and
+# what it keeps, and says such a load fails with ENOMEM on short memory
+# (core 0049); C3-6 v9 in docs/.  k46 headers from the port at b0f1d86
+# (kernel/port/port.pin).  Built in the build container; the digests equal
+# `make -C build kit` at 3c3e353.  -14 at 6bb7dd6: k30 6d024766..., k46
+# 716f6682...
 #
 # -13 (not minted; the revision for the release): amix 4ccb3f0, its kit
 # built in the build container (amix-toolchain:dist), the reference build:
@@ -111,21 +118,21 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=6bb7dd6
+DK_DLM_COMMIT=3c3e353
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=6bb7dd6
+DK_MONSW_COMMIT=3c3e353
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
-DK_K46_PORT_COMMIT=727cbe7
+DK_K46_PORT_COMMIT=b0f1d86
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
-DK_K46_PORT_HASH=727cbe728a1e7bf040425c3e6a61b190647a28b7
-DK_K30_MANIFEST=6d02476630957665f3bab9b7156c729051ac9cc8e5ad95f32d8bacab75b9cbab
-DK_K46_MANIFEST=716f66820634bd047ccf2734fd73686037e906f2ce5fe200c11ded7597fa353e
+DK_K46_PORT_HASH=b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+DK_K30_MANIFEST=673872a4ee1c590a2802fe15ba99d7e31d3a6355865c361c3d83a9d0888659f3
+DK_K46_MANIFEST=34ac8a198ec22e59e14d98bd845e82b402bd89d59fd79ff03f50a54ad579edf5
 
 DK_DATE=261031
-DK_REV=14
+DK_REV=15
 DK_SOURCE_EPOCH=1793404800
