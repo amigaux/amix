@@ -12,7 +12,7 @@
 #
 i pkginfo
 #
-# the PATH drop-in (P-36's profile.d; base declares the directory too)
+# the PATH drop-in (/etc/profile.d; base declares the directory too)
 d none /etc/profile.d 0755 root sys
 f none /etc/profile.d/x11r63.sh 0444 root sys
 #
