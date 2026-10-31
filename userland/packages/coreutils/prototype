@@ -7,7 +7,7 @@
 # interactive users, and scripts naming /usr/bin/... keep stock behaviour.
 # `install' is GNU ginstall under its usual name.  Not shipped: uptime (the
 # nlist/kmem load average, PORTING.md 3.3), su (setuid root), hostid, the
-# info manual (no info reader).  No install scripts (D9).  Every basename
+# info manual (no info reader).  No install scripts.  Every basename
 # <= 14 bytes (pkgroll's s5 gate checks the directory listing).
 #
 i pkginfo

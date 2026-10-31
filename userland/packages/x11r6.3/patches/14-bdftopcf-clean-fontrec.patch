@@ -1,0 +1,17 @@
+Ours.  bdftopcf's font record is on its stack and the BDF reader does not set
+every field: info.inkMetrics was whatever the stack held, so a PCF gained or lost
+its ink bounds (24 bytes) from one build host to another.  The record starts
+zeroed.
+
+--- a/programs/bdftopcf/bdftopcf.c
++++ b/programs/bdftopcf/bdftopcf.c
+@@ -164,6 +164,9 @@
+     }
+     else
+ 	input = FontFileOpenFd (0);
++    /* AMIX: a clean font record: the BDF reader leaves fields such as
++     * info.inkMetrics as it finds them, and this one is on the stack */
++    memset ((char *) &font, 0, sizeof (font));
+     if (bdfReadFont (&font, input, bit, byte, glyph, scan) != Successful)
+     {
+ 	fprintf (stderr, "%s: bdf input, %s, corrupt\n",

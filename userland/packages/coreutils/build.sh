@@ -24,7 +24,7 @@ configure_args() {
 }
 
 pre_configure() {
-	# D3: every program defines getpwnam/getpwuid/getgrnam/getgrgid itself
+	# pwgr: every program defines getpwnam/getpwuid/getgrnam/getgrgid itself
 	$CC $AMIX_CFLAGS -c "$COMMON/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
 	# quirk 90: dd's seek= truncation through an ftruncate that cuts aligned
 	$CC $AMIX_CFLAGS -c "$COMMON/amix-ftruncate.c" -o "$BUILD/amix-ftruncate.o"
@@ -63,16 +63,16 @@ stage() {
 	mkdir -p "$DEST$PREFIX/doc/coreutils"
 	cp COPYING NEWS README THANKS "$DEST$PREFIX/doc/coreutils/"
 	chmod 0644 "$DEST$PREFIX/doc/coreutils"/* "$DEST$PREFIX/man/man1"/*
-	# D3: every executable defines the four lookups (T), none is undefined
+	# pwgr: every executable defines the four lookups (T), none is undefined
 	n=0
 	for b in $(amix_gate_elfs "$DEST$PREFIX/bin"); do
 		for f in getpwnam getpwuid getgrnam getgrgid; do
 			"$NM" "$b" | awk -v f=$f '$NF==f && $(NF-1)=="T" {t=1} END {exit !t}' || {
-				echo "[FAIL] D3: $f not defined in $(basename "$b")" >&2; exit 1; }
+				echo "[FAIL] pwgr: $f not defined in $(basename "$b")" >&2; exit 1; }
 		done
 		n=$((n + 1))
 	done
-	echo "  D3 ok   $n executables define getpwnam/getpwuid/getgrnam/getgrgid (T)"
+	echo "  pwgr ok   $n executables define getpwnam/getpwuid/getgrnam/getgrgid (T)"
 	# quirk 90: any ftruncate in a binary is amix-ftruncate.c's (T), never
 	# libc truncate.o's weak one alone
 	n=0

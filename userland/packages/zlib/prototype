@@ -6,7 +6,7 @@
 # pkgproto could not have produced this anyway -- it silently omits symlinks and
 # cannot know the modes a package wants.
 #
-# PREFIX: /opt/amix (COEXISTENCE.md, ROADMAP D11).  One shared
+# PREFIX: /opt/amix (docs/coexistence.md).  One shared
 # /opt/amix/{bin,lib,man,doc} for the whole add-on userland, never a per-package
 # /opt/<pkg> subtree.  Nothing here lands outside /opt/amix, so the pkgadd
 # conflict machinery never fires -- there is no stock file under /opt/amix to
@@ -17,7 +17,7 @@
 #
 # NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object: a pure file
 # payload, because SVR4 install scripts have never been run on Amix's 1992
-# pre-POSIX /bin/sh (D9).
+# pre-POSIX /bin/sh.
 #
 # NO STOCK-OWNED PATH, NO SYMLINK INTO /usr/bin.  Unlike the /usr/local-era
 # patch recipe, nothing here reaches back into a stock tree: /opt/amix/bin is

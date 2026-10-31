@@ -42,7 +42,7 @@ kernel's vector-61 handler emulates), and `amix_gate_d4_selftest` must see it re
 before a build may trust a pass. Re-scanned under the real gate: the published `grep` 2.5.1a
 **fails** (two register/memory-source multiplies in gnulib's `strtoull`/`xstrtoumax`); the other
 published packages and the `amix-benchmark` binaries pass. The fix for a failing site is to route
-the product through libgcc's `__muldi3` (built from 32-bit multiplies only) — ROADMAP D4's
+the product through libgcc's `__muldi3` (built from 32-bit multiplies only) — the 68060 rule's
 "build the TU `-m68000`" does not work here, because this `libgcc.a` has no
 `__mulsi3`/`__divsi3`/`__udivsi3`/`__umodsi3`.
 
@@ -85,7 +85,7 @@ what is committed is exactly the package's installed layout and nothing about an
 
 ## Why the two oldest packages sit at `/usr/local`
 
-**Superseded as policy.** The shared prefix is `/opt/amix` ([`coexistence.md`](coexistence.md) §1, ROADMAP D11).
+**Superseded as policy.** The shared prefix is `/opt/amix` ([`coexistence.md`](coexistence.md) §1).
 What follows is the reasoning that put `libamixcompat` and `patch` there before that policy was
 settled, kept because those two packages are still minted at `/usr/local`.
 
@@ -127,4 +127,4 @@ directory's shape encodes.
 2. **Verify the encoding, never the exit status.** The family law. A build that exits 0 proves
    nothing on this toolchain: `fcmp` operand order, SGS `#`-as-comment, and constant-folded FP all
    produce clean exits and wrong binaries. Every recipe ends in an `objdump -d` gate, including the
-   060 lane's `mulu.l`/`muls.l` `Dh:Dl` check (ROADMAP D4).
+   060 lane's `mulu.l`/`muls.l` `Dh:Dl` check (the D4 gate).

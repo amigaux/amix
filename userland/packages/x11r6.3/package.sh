@@ -2,9 +2,9 @@
 NAME=x11r6.3
 PKG=x11r63
 VERSION=6.3
-PKGREV=1
+PKGREV=2
 SUMMARY="X11R6.3 - the X Window System, with the Xzz9000 server"
-DESC="X11R6.3 under /opt/amix/X11R6 (/usr/X11R6 links to it): the Xzz9000 server for the ZZ9000 and the Z3660 RTG (isoriano's Amiga DDX), the Xlib/Xt/Xaw/Xmu/Xext/SM/ICE libraries (static) and headers, xinit, xdm, twm, xterm and the standard clients, fonts, rgb, XKB data. MIT-SHM is built in: use it only on a kernel with the shared-memory fixes. Needs an FPU: a 68030 with a 68881/68882, or a full 68040 or 68060; LC040/LC060 cannot run it until FP emulation on LC parts exists. Coexists with the stock X11R4/R5 in /usr/X."
+DESC="X11R6.3 under /opt/amix/X11R6 (/usr/X11R6 links to it): the Xzz9000 server for the ZZ9000 and the Z3660 RTG (isoriano's Amiga DDX), the Xlib/Xt/Xaw/Xmu/Xext/SM/ICE libraries (static) and headers, xinit, xdm, twm, xterm and the standard clients, fonts, rgb, XKB data. MIT-SHM is built in: use it only on a kernel with the shared-memory fixes. X needs an FPU or the kernel's FP emulation (68LC040/68LC060: emulated, slow, untested on 1.1): a 68030 with a 68881/68882, or a full 68040 or 68060, runs it at full speed. Coexists with the stock X11R4/R5 in /usr/X."
 CATEGORY=x11
 SET=extra
 LICENSE="X11 AND MIT"

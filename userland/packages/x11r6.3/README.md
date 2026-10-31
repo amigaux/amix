@@ -7,8 +7,8 @@ The X Window System, release 6.3, under `/opt/amix/X11R6`:
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
-**X needs an FPU**: a 68030 with a 68881/68882, or a full 68040 or 68060. LC040/LC060 cannot run it
-until FP emulation on LC parts exists.
+**X needs an FPU or the kernel's FP emulation** (68LC040/68LC060: emulated, slow, untested on 1.1). A
+68030 with a 68881/68882, or a full 68040 or 68060, runs it at full speed.
 
     sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
@@ -44,6 +44,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `11-mfb-fakepixmap-privates.patch` | Ours: the stack pixmaps of `00`'s `mfbimage.c` get `devPrivates` NULL rather than stack garbage (the server is built with `PIXPRIV`). |
 | `12-rstart-prefix.patch` | Ours: `rstartd` goes to the package's `bin` rather than `/usr/bin`, and the `rstart` client calls it by that path on the `rsh` command line. |
 | `13-bdf-defaultch.patch` | Ours: a BDF without a `DEFAULT_CHAR` property gets no default character (`NO_SUCH_CHAR`) rather than whatever the caller's font record held; `bdftopcf`'s is on its stack, so such fonts differed from build to build. |
+| `14-bdftopcf-clean-fontrec.patch` | Ours: `bdftopcf` starts from a zeroed font record. The BDF reader does not set every field (`info.inkMetrics` among them), and the record is on `bdftopcf`'s stack, so a PCF gained or lost its ink bounds from one build host to another. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
@@ -84,7 +85,8 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   built for the build host (`build.sh`'s `hostx`), never the host's X install. They are built
   from a copy of the configured tree with the host cc and `-DLONG64` (R6.3's font code otherwise
   assumes 32-bit longs). The font side keeps `-DAMIX -Dm68k`, so `servermd.h` gives the PCF
-  files Amix's MSB-first layout, the server's own. `patches/host/` applies to that copy only:
+  files Amix's MSB-first layout, the server's own. The server's default font path is these three directories
+  (`amix.cf`'s `DefaultFontPath`), so it starts without `-fp`. `patches/host/` applies to that copy only:
   glibc's `stdin`/`stderr` cannot initialise xkbcomp's statics.
 - **xdm** links its greeter in (`SharedLibXdmGreet NO`): there are no shared libraries to
   `dlopen`.

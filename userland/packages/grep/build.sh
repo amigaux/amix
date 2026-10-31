@@ -13,7 +13,7 @@ pre_configure() {
 }
 
 post_configure() {
-	# the bundled regex MUST be in the link: the box has no regcomp (D8)
+	# the bundled regex MUST be in the link: the box has no regcomp
 	grep 'regex\.o' config.status >/dev/null || {
 		echo "[FAIL] regex.o is NOT in LIBOBJS: --with-included-regex slipped" >&2; exit 1; }
 	echo "  regex.o is in LIBOBJS (bundled GNU regex compiled in)"

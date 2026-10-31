@@ -3,7 +3,7 @@
 #
 # AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
 # generated from package.sh.  The stock system has no rsync.  No install
-# scripts (D9); no rsyncd.conf is installed (the daemon is the admin's to
+# scripts; no rsyncd.conf is installed (the daemon is the admin's to
 # configure, /etc/rsyncd.conf by default).  Every basename <= 14 bytes.
 #
 i pkginfo

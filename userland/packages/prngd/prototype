@@ -2,7 +2,7 @@
 # prototype -- prngd 0.9.29 under /opt/amix.
 #
 # AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
-# generated from package.sh.  No install scripts (D9): the daemon is NOT
+# generated from package.sh.  No install scripts: the daemon is NOT
 # started; etc/init.d/prngd is for the admin to link into /etc/rc2.d.  The
 # seed file prngd writes (etc/prngd/prngd-seed) is runtime state, not
 # payload.  Every basename <= 14 bytes.

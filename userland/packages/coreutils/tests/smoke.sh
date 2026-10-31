@@ -39,7 +39,7 @@ echo x >> big; $B/md5sum -c big.md5 > c2.out 2>&1; rc=$?
 [ $rc -eq 1 ] && has c2.out 'FAILED' && ok "md5sum -c catches a changed file" || bad "md5sum -c changed rc=$rc"
 eq "sum -r agrees with the stock sum -r" "`$B/sum -r big | awk '{print $1+0}'`" "`/usr/bin/sum -r big | awk '{print $1+0}'`"
 
-# --- 2. D3: names for uids/gids (getpwnam/getgrnam in the executable) ---------
+# --- 2. pwgr: names for uids/gids (getpwnam/getgrnam in the executable) ---------
 eq "id -un" "`$B/id -un`" root
 eq "whoami" "`$B/whoami`" root
 $B/id > id.out; has id.out '^uid=0(root) gid=[0-9]*([a-z]*)' && ok "id: `cat id.out`" || bad "id: `cat id.out`"

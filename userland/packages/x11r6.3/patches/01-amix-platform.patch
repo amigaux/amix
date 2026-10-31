@@ -8,7 +8,7 @@ must be told about AMIX (Imake.cf, imakemdep.h).
 
 --- a/config/cf/amix.cf
 +++ b/config/cf/amix.cf
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,74 @@
 +XCOMM platform:  amix.cf
 +
 +/*
@@ -72,6 +72,8 @@ must be told about AMIX (Imake.cf, imakemdep.h).
 +/* colours from rgb.txt: the server's rgb reader is Amix's classic dbm, whose
 + * .dir/.pag format no build-host tool writes */
 +#define UseRgbTxt		YES
++/* the font path the server starts with: the directories this package ships */
++#define DefaultFontPath	$(FONTDIR)/misc/,$(FONTDIR)/75dpi/,$(FONTDIR)/100dpi/
 +
 +/* man pages in the stock section names */
 +#define ManSuffix		1

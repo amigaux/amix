@@ -128,8 +128,7 @@ says otherwise, and the registry has been corrected.**
 - The counterfactual build with no libacompat anywhere also compiles clean, with no implicit
   declarations.
 
-This is standing decision **D8** — self-containedness is the strongest portability predictor —
-confirmed rather than assumed. The shipped package is the standalone build, because declaring a
+Self-containedness is the strongest portability predictor here, confirmed rather than assumed. The shipped package is the standalone build, because declaring a
 dependency that does not exist is worse than declaring none.
 
 ## Package shape
@@ -150,7 +149,7 @@ The target is **absolute** rather than relative, and that is a bench finding: st
 prepends the install root to a relative symlink target and reports success anyway. See the
 prototype's own comment for the two-engine measurement.
 
-Pure file payload: `CLASSES=none`, class `none` on every object, no install scripts (**D9**).
+Pure file payload: `CLASSES=none`, class `none` on every object, no install scripts.
 
 ## On-box evidence
 

@@ -16,7 +16,7 @@ configure_args() {
 }
 
 pre_configure() {
-	# D3: the binary defines getpwnam/getpwuid/getgrnam/getgrgid itself
+	# pwgr: the binary defines getpwnam/getpwuid/getgrnam/getgrgid itself
 	$CC $AMIX_CFLAGS -c "$COMMON/amix-pwgr.c" -o "$BUILD/amix-pwgr.o"
 	export LIBS="$BUILD/amix-pwgr.o"
 	export ac_cv_func_vfork=no
@@ -40,12 +40,12 @@ stage() {
 	cp COPYING NEWS README "$DEST$PREFIX/doc/rsync/"
 	chmod 0755 "$DEST$PREFIX/bin/rsync"
 	chmod 0644 "$DEST$PREFIX/man"/man?/* "$DEST$PREFIX/doc/rsync"/*
-	# D3: the binary defines the four lookups (T)
+	# pwgr: the binary defines the four lookups (T)
 	for f in getpwnam getpwuid getgrnam getgrgid; do
 		"$NM" "$DEST$PREFIX/bin/rsync" | awk -v f=$f '$NF==f && $(NF-1)=="T" {t=1} END {exit !t}' || {
-			echo "[FAIL] D3: $f not defined in rsync" >&2; exit 1; }
+			echo "[FAIL] pwgr: $f not defined in rsync" >&2; exit 1; }
 	done
-	echo "  D3 ok   rsync defines getpwnam/getpwuid/getgrnam/getgrgid (T)"
+	echo "  pwgr ok   rsync defines getpwnam/getpwuid/getgrnam/getgrgid (T)"
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
 	. "$HERE/../tools/manpages.sh"
 	amix_man_relayout

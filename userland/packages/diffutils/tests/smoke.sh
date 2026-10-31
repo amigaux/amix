@@ -155,10 +155,10 @@ $B/cmp -l a a1 > cl.out
 n=`wc -l < cl.out | tr -d ' '`
 [ "$n" -eq 1 ] && has cl.out '^ *390  *60 130$' && ok "cmp -l: 1 differing byte (390: 060 130)" || bad "cmp -l: `cat cl.out`"
 
-# 12. the stock tools, for the record (X6: does stock diff have -u?)
+# 12. the stock tools, for the record (does stock diff have -u?)
 if /usr/bin/diff -u a b > x6.out 2>&1; then :; fi
-if has x6.out '^@@'; then echo "RES X6 stock /usr/bin/diff -u: unified output"
-else echo "RES X6 stock /usr/bin/diff -u: no unified output (`sed -n 1p x6.out`)"; fi
+if has x6.out '^@@'; then echo "RES stock /usr/bin/diff -u: unified output"
+else echo "RES stock /usr/bin/diff -u: no unified output (`sed -n 1p x6.out`)"; fi
 
 cd ..
 if [ $fails -eq 0 ]; then echo "RES smoke PASS"; else echo "RES smoke FAIL $fails"; fi

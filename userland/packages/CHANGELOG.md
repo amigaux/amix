@@ -165,7 +165,7 @@ The stock-kernel ftruncate panic (grimoire quirk 90) reached dd seek=, sparse cp
 recipes/common/amix-ftruncate.c: a strong ftruncate that cuts block-aligned and rewrites the tail. coreutil 5.2.1-3
 links it in all 86 programs; copy.c writes the trailing NUL instead of write+ftruncate (patch 08); stat sizes without a
 run-time %llu (patch 09). gtar 1.14-7: gnulib's F_FREESP path cuts aligned. On the emulated 68030: coreutils smoke 102/102 (d418b45e),
-gcc14-smoke PASS with X4 (gtar 44e79c67). The published period gtar 1.14-2 keeps the hazard. Not published.
+gcc14-smoke PASS with the delete case (gtar 44e79c67). The published period gtar 1.14-2 keeps the hazard. Not published.
 
 ## 2026-10-30 — rsync 3.1.3; seteuid/setegid declared; pkg-smoke host side (0814dda, 3676e4a, e7ac916)
 
@@ -788,7 +788,7 @@ amix-benchmark registry dates relabelled 2026-09-20 → 2026-09-16 (ledger clock
 copyright 2026 Jussi Alanärä, for this repo's own content only (libamixcompat BSD-2, recipe patches follow
 their upstream, packaged programs keep their own). The D4 gate grepped for a mnemonic binutils 2.8.1
 never prints; it now classifies MUL.L/DIV.L by opword and extension word, allows only the
-vector-61-emulated #imm form, and self-tests first. tar 1.14: D3 via recipes/common/amix-pwgr.c with
+vector-61-emulated #imm form, and self-tests first. tar 1.14: pwgr via recipes/common/amix-pwgr.c with
 a dynamic link kept, an lstat static-header-wrapper trap caught, 7 patches. make 3.81: -D_POSIX_SOURCE
 + a config.h.in patch, jobserver on, -l stubbed. Both bench-proven (stock pkgadd, smoke, apkg client
 round trip against a local staging catalog). BATCH-1 client E2E: acompat, patch, zlib, gzip, grep and
@@ -819,9 +819,9 @@ lifted on 2026-09-23; a 1.4 with whet follows the kerntools fieldkit re-mint.
 ## 2026-09-15 — the four review follow-ups closed (6586963)
 
 PORTING.md:40's RAM citation repointed to the packagemanager's current RAM notes and the
-drifted `llms-full.txt` citation dropped; `registry/rsync.yaml` no longer claims two binding floors
-(INTEROP is the hard floor, MEMORY a non-binding consideration); ROADMAP §7 and `registry/x11r63lib.yaml`
-close the x11 sizing question (no per-package byte cap exists; the ~6 MB split is a low-RAM courtesy).
+drifted `llms-full.txt` citation dropped; rsync's version record no longer claims two binding floors
+(INTEROP is the hard floor, MEMORY a non-binding consideration); the x11 sizing question is
+closed (no per-package byte cap exists; the ~6 MB split is a low-RAM courtesy).
 
 ## 2026-09-16 — the 16 MB RAM ceiling retracted from the porting docs and the registry (ce22af0)
 
@@ -858,12 +858,12 @@ the HTTP/1.0 `apkg` client. The repo's publish-target notes, `PORTING.md`'s tran
 ## 2026-09-14 — the graphics lane decided: X11R6.3 and Mesa 3.1 (5284e08, aed07fd)
 
 - `isoriano1968/x11r6.3-amix` (the `Xzz9000` server) and `isoriano1968/mesa-amix` (Mesa 3.1) will
-  be packaged for the catalog. `ROADMAP.md` gains D12 — the lane builds NATIVELY on the box: the
+  be packaged for the catalog. `ROADMAP.md` gains a decision: the lane builds NATIVELY on the box: the
   cross wrapper has no `-shared`/`-G` path and bakes host paths into `DT_NEEDED` (only `libc.so.1`
   carries a SONAME on this target), and X11R6.3 needs imake/makedepend/bdftopcf/mkfontdir/rgb to
   *run* on the target — plus a §7 sizing the seven-package split (x11r63lib/srv/cli/f75/f1c/dev +
-  mesa31, ≈26 MB estimated, ≈1.3× stock X11R4's measured 19.8 MB). X7 (native GCC 2.7.2.3 — stock
-  `cdev` ships 1.4.2) and X8 (ZZ9000 kernel driver on the bench) recorded as open prerequisites.
+  mesa31, ≈26 MB estimated, ≈1.3× stock X11R4's measured 19.8 MB). A native GCC 2.7.2.3 (stock
+  `cdev` ships 1.4.2) and a ZZ9000 kernel driver on the bench recorded as open prerequisites.
   `registry/` gains the seven `candidate` entries (tier 5, difficulty H); `INDEX.md` regenerated
   (23 → 30). Not before 2026-09-19.
 - `PORTING.md` and `recipes/README.md` corrected: the `$CC -E` preprocessing trap was fixed in
@@ -876,7 +876,7 @@ the HTTP/1.0 `apkg` client. The repo's publish-target notes, `PORTING.md`'s tran
   registry) rather than as it was on day one; the plan documents brought up to what was actually built.
 - `PORTING.md` folds in the four traps BATCH-1 paid for and brings section 8 to six ports.
 - Harness resolves the sibling repos relative to the checkout, not to `$HOME`.
-- X3 closed: the registry's categories are agreed, not proposed; `registry/INDEX.md` regenerated.
+- The category taxonomy closed: the registry's categories are agreed, not proposed; `registry/INDEX.md` regenerated.
 - Reviewed and landed 2026-09-14.
 
 
@@ -905,7 +905,7 @@ reconciliation.
 
 ## 2026-08-30 — Wave-0/1 kickoff: coexistence policy, stock audit, first-batch pick (2467986)
 
-- **`COEXISTENCE.md` (+ ROADMAP D11): install under a shared `/opt/amix` prefix**
+- **`COEXISTENCE.md`: install under a shared `/opt/amix` prefix**
   (`--prefix=/opt/amix`, one `{bin,lib,man,share}`). `/usr/local` is reserved for the user's own
   hand-built binaries — packaged and non-packaged software stay in separate trees; never overwrite
   a stock-owned file; supersede stock by PATH `/usr/local/bin:/opt/amix/bin:/usr/bin:/bin`; port a
@@ -919,14 +919,14 @@ reconciliation.
   `core`; `public/bin` = bash/elm/gcc/gdb; `patch` is Larry Wall 12u4. A `coexistence:` block is
   now on all 12 Wave-0/1 registry entries.
 - **`BATCH-1.md`: first batch = zlib 1.2.13, then gzip 1.3.12 / grep 2.5.1a / less 704.**
-- ROADMAP X3 (category taxonomy) resolved on the packagemanager side (`utility`/`editor` groups
+- The category taxonomy resolved on the packagemanager side (`utility`/`editor` groups
   declared, `extra` set carries this repo's userland).
 
 ## 2026-08-28 — the line runs end to end: libamixcompat 0.1 and GNU patch 2.5.9 (df5b665..3ea58f1)
 
 The first two packages built, rolled to SVR4 `.pkg` datastreams, installed with the **stock**
 `pkgadd` on the emulated golden 030, exercised and removed. Publishing remains a separate
-manual step, untouched here; X3 (category taxonomy) stays open — a local pkgadd from a
+manual step, untouched here; the category taxonomy stays open — a local pkgadd from a
 datastream needs no catalog. Both packages sit at `CATEGORY=development` (an existing group).
 
 - **`acompat` 0.1** — first-party C89 shim, the blocker 17 of 23 registry entries carry.
@@ -962,11 +962,11 @@ datastream needs no catalog. Both packages sit at `CATEGORY=development` (an exi
   an FPU — printing a float dies SIGSYS on FPU-less parts (the family's FPE kernel is what
   makes LC060 boxes viable targets). 16 claims carry explicit UNVERIFIED tags.
 - **ROADMAP.md** (ce80a86): the three-jobs framing (re-mint proven Amix builds / modernise
-  ssh+TLS / port what's missing), Waves 0–4, ten standing decisions D1–D10 (LAN-proxy
+  ssh+TLS / port what's missing), Waves 0–4, ten standing decisions (LAN-proxy
   everything; link -lcurses; static + in-executable getpwnam; the 060 objdump mulu.l gate;
-  never autoreconf — the gnulib wall is the boundary), six cross-repo dependencies X1–X6.
+  never autoreconf — the gnulib wall is the boundary), six cross-repo dependencies.
 - **registry/** (f175c48): 23 candidate packages, schema projecting into the
   packagemanager's live catalog format, mandatory cpu_lanes with the 060 gate, shared
   blocker ids (SHIM-SNPRINTF appears in 17 of 23 — libamixcompat is objectively first),
-  generated INDEX.md. **recipes/** convention (4c867e7). No .pkg minting until the X3
+  generated INDEX.md. **recipes/** convention (4c867e7). No .pkg minting until the
   category-taxonomy decision lands with the packagemanager side.

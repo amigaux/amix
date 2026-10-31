@@ -2,7 +2,7 @@
 # prototype -- GNU tar 1.14's installed layout under /opt/amix.
 #
 # AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
-# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it.
+# PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it.
 #
 # COEXISTENCE.  Stock ships /usr/sbin/tar (and /etc/tar), owned by `core`.
 # This package does NOT claim, overwrite or symlink either path -- ours is
@@ -10,7 +10,7 @@
 # stock scripts that name /usr/sbin/tar keep stock behaviour.  The PKG is
 # `gtar`, so the catalog never lists two packages called tar.
 #
-# NO INSTALL SCRIPTS (D9).  No rmt: remote-tape support is not built or
+# NO INSTALL SCRIPTS.  No rmt: remote-tape support is not built or
 # shipped.  No man page: tar 1.14 documents itself in texinfo only, which the
 # box cannot read; `tar --help` is the reference.  Every basename <= 14 bytes.
 #
