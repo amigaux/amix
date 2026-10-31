@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — pkgbuild exports the package epoch for the whole build; two identical rehearsal locks (12c0b43)
+
+pkgbuild.sh works out the package epoch (package.sh SOURCE_EPOCH, else the package directory's last commit) before
+configure and exports SOURCE_DATE_EPOCH for the whole build, not only the roll, so GCC's __DATE__/__TIME__ are the
+package's own; vim 9.1's version string had made two make dist runs differ. test-pkgbuild 72/72. The rehearsal pair
+at 12c0b43 (two clones, different paths) gives byte-identical locks: 81 lines, 20 userland and 8 kspace packages.
+
 ## 2026-10-31 — scan060-g14 sizes bfextu and byte-indexed tables (ccbe90a)
 
 A table indexed by `bfextu <ea>,<off>,<w>,%dI` is sized at exactly 2^w entries. A table whose index is provably a
