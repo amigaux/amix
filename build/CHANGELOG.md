@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-31 — make dist exists: the driver, partial targets, docs/BUILDING.md (bfcfe76); static libraries as ar D writes them (56ffa22)
+
+build/dist.sh is the driver (P-38 S1.5), build/Makefile has its targets and the top Makefile only delegates. Steps in
+order: kit, kernel-k30, kernel-k46, modules, drivers, kspace, userland, catalogs, media, lock; dist runs them all and
+stops at the first that fails or is not there yet (exit 3, naming its P-38 step). kit, modules and userland build. Each
+step runs in the build container as the calling user, the checkout at /src and the system input read-only at /system;
+it refuses a missing or mismatched system input and a shallow clone. docs/BUILDING.md describes the steps, out/ and the
+reproducibility rules. A payload's static libraries get the member headers `ar D` writes (arnorm.py; dsnorm refuses
+otherwise). test-dist 18/18, test-arnorm 6/6.
+
 ## 2026-10-31 — the engine normalises the roll; dsnorm.py only checks it (d5c4eb5)
 
 The roll leaves the normalising to pkgtools' pkgmk and pkgtrans (ad02a5a), which write the datastream normalised under

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — container-kit.sh prints kernel/dlm's kit.digests (bfcfe76)
+
+container-kit.sh prints kernel/dlm's kit.digests lines instead of computing its own digests; CI's `^kit ` grep is
+unchanged.
+
 ## 2026-10-31 — the 68040/68060 cut's container inputs (52171b5)
 
 netbsd-syssrc.distfile pins NetBSD 10.1's syssrc.tgz (79497697 B, sha256 76a600e7…) at our copy on
