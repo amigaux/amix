@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — metal records: the A4092 rows and a4kt710's onboard root (bf6555e, 346f3cf)
+
+The a4091 module ran the A4092 on an A4000D with a Z3660 068060 (2026-10-27: root on the A4092, and the A4092 as a
+second card with raw reads equal to the host). a4kt710 booted the A4000T from its onboard 53C710 (2026-10-28, 3/3
+cold boots). The byte compare on the A4000T and the 68030 forms on metal stay open.
+
 ## 2026-10-31 — docs, comments, test names and .gitignore state facts without internal ids (dcd3d3b)
 
 The archived research notes no longer address a reader; README Credits carries the project's standard LLM-tools
