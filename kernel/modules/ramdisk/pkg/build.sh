@@ -7,7 +7,8 @@
 # make dist's kspace step calls it, after the modules step has built
 # kernel/modules/ramdisk/build/<line>/mod.d/ramdisk.  kernel/modules/pkg/kmod.sh
 # does the work (its header has the outputs and exit statuses); pin.sh has the
-# inputs.  One prototype serves both lines.
+# inputs.  Each line has its own prototype, since the whatis fragment's name
+# (/opt/amix/man/whatis.d/<PKG>) is the line's instance.
 #
 # MIT licence, see kernel/modules/LICENSE in the amix repository.
 set -e

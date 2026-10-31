@@ -1,16 +1,16 @@
 PKG=ramdisk46
-NAME=ramdisk-k46 1.0.0-4 - RAM disk module (root class), k46 line
+NAME=ramdisk-k46 1.0.0-5 - RAM disk module (root class), k46 line
 ARCH=Amiga
-VERSION=1.0.0-4
+VERSION=1.0.0-5
 CATEGORY=system
 CLASSES=none ramdisk
 VENDOR=amix
-PSTAMP=amix-ramdisk46-1.0.0-4
+PSTAMP=amix-ramdisk46-1.0.0-5
 # Kernel space (amix-dlm C2-2, C3-5 v8 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k46), class root, never an ordinary entry.
 # Catalog name ramdisk-k46, pkginst ramdisk46; VERSION is
-# kernel/modules/ramdisk/module/VERSION, the same on both lines.  1.0.0-4 is
-# 1.0.0-3's object and payload, rolled from kernel/modules.  The device nodes
-# are in class ramdisk (C3-5 v18 sec 1.2).
-APKG_DESC=The RAM disk (block major 20: /dev/dsk/ram0 the boot loader's miniroot image, ram1/ram2 scratch disks) as a root-class kernel module for the 68040/68060 module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/ramdisk and /dev/dsk/ram0-ram2.
+# kernel/modules/ramdisk/module/VERSION, the same on both lines.  1.0.0-5 is
+# 1.0.0-3's object and payload, rolled from kernel/modules; 1.0.0-5 adds the
+# page ramdisk(7).  The device nodes are in class ramdisk (C3-5 v18 sec 1.2).
+APKG_DESC=The RAM disk (block major 20: /dev/dsk/ram0 the boot loader's miniroot image, ram1/ram2 scratch disks) as a root-class kernel module for the 68040/68060 module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/ramdisk, /dev/dsk/ram0-ram2 and the page ramdisk(7).
 DESC=The kernel/modules ramdisk driver built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted (match always); block major 20, no character row; never unloaded.  Unit 0 is the miniroot image the boot loader placed in memory (ramdisk_image, C4-3), when there is one; units 1 and 2 are scratch disks of size1/size2 KiB (512 and 2048 by default), allocated at the first open.  Its nodes /dev/dsk/ram0, ram1, ram2 (b 20 0-2, 0600 root root) are shipped by the package.  /etc/conf/modreg.d/ramdisk holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

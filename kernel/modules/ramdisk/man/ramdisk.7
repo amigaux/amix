@@ -1,0 +1,94 @@
+.TH RAMDISK 7 "31 October 2026" "ramdisk"
+.SH NAME
+ramdisk \- the RAM disk: the boot loader's miniroot and two scratch disks
+.SH SYNOPSIS
+.B /dev/dsk/ram0
+.br
+.B /dev/dsk/ram1
+.br
+.B /dev/dsk/ram2
+.SH DESCRIPTION
+.B ramdisk
+is a block driver with three units, each a disk held in memory.
+.TP
+.B ram0
+the miniroot image the boot loader placed in memory, when there is one.
+A medium that boots from a RAM disk (a CD, a floppy, a network install)
+carries the image, and the kernel mounts its root from this unit.
+The memory is the loader's: the kernel never uses it for anything else,
+and the driver never frees it.
+The unit can be written to; its contents are lost at power-off.
+Without an image the unit does not exist.
+.TP
+.B ram1
+a scratch disk of
+.B size1
+KiB, 512 by default.
+.TP
+.B ram2
+a scratch disk of
+.B size2
+KiB, 2048 by default.
+.PP
+A scratch disk's memory is taken when the unit is first opened (or
+mounted) and given back when the last user closes it; a fresh scratch
+disk reads as zeros.
+It is taken in pieces of at most 256 KiB.
+When the kernel cannot give it, the open fails with
+.B ENOMEM
+and can simply be tried again later.
+A unit whose size is 0 does not exist.
+.PP
+Every transfer is a copy by the CPU.
+There is no raw (character) device.
+.PP
+The driver is the loadable module
+.BR ramdisk ,
+of the root class: the boot loader places it with the kernel, and it is
+linked before the root file system is mounted.
+It replaces the stock
+.B ram
+driver on the same block major, with the stock sizes for units 1 and 2.
+It is never unloaded.
+.SH PARAMETERS
+.TP
+.BI size1= KiB
+.PD 0
+.TP
+.BI size2= KiB
+.PD
+the sizes of the scratch disks, 0 to 16384.
+A line
+.B "param size2=4096"
+in
+.B /etc/conf/modreg.local.d/ramdisk
+sets one;
+.B kbootset build
+takes it into the next boot generation.
+.SH DIAGNOSTICS
+An open of a unit that does not exist gives
+.BR ENXIO ,
+an open of a scratch disk the kernel has no memory for
+.BR ENOMEM .
+A transfer past the end of a unit gives
+.BR ENXIO ;
+a read that starts exactly at the end reads nothing.
+At load the console says where unit 0's image is
+.RB ( "ramdisk: unit 0 is the image at" ...).
+.SH EXAMPLES
+.nf
+.ft CW
+mkfs /dev/dsk/ram2 4096
+mount /dev/dsk/ram2 /mnt
+.ft R
+.fi
+.SH FILES
+.TP
+.BR /dev/dsk/ram0 ", " ram1 ", " ram2
+block major 20, minors 0 to 2, mode 0600, owner root.
+.TP
+.B /etc/conf/mod.d/ramdisk
+the module.
+.TP
+.B /etc/conf/modreg.local.d/ramdisk
+the box's own parameters, which no package owns.
