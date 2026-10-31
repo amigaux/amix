@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — make dist builds kernel-k46; the NEEDED gate takes a path that is its library's SONAME (586d9f1, 118a966)
+
+make dist's kernel-k46 step runs the port's hook kernel/port/cuts/build.sh with GCA, G14 and AMIX_SYSTEM, as
+kernel-k30 runs k30's; its `kernel k46` lines go to out/kernels/k46.list and the lock, and a hook that prints none
+fails the step. The rehearsal pair reproduces -53's seven sums and rolls kern46m -53 (6384988e), locks identical.
+The gcc14 NEEDED gate accepts a DT_NEEDED path when the sysroot library at that path has it as its SONAME
+(/usr/lib/libc.so.1; /usr/amiga/lib/libscreen.so as the stock X servers record it); other paths are still refused.
+
 ## 2026-10-31 — pkgbuild exports the package epoch for the whole build; two identical rehearsal locks (12c0b43)
 
 pkgbuild.sh works out the package epoch (package.sh SOURCE_EPOCH, else the package directory's last commit) before
