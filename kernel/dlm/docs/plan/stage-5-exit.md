@@ -17,21 +17,28 @@ part says which half is done and keeps the rest pending.
 
 ## 1. The bytes of record (the final packages, S5-40)
 
+Every cell here stays pending until S5-40 freezes the 1.1 set. Where a
+cell names a candidate, it is a candidate only: the catalog of record is
+still fff860dc (amix-packages `build/kspace/repo/catalog.md5`), which
+carries kern46m -61 and kern30m -22, and no catalog yet carries the
+candidates (2026-10-31).
+
 | What | k46 | k30 |
 |---|---|---|
-| kernel (no ufs and no s5; S5-10, S5-11) | pending | pending |
+| kernel (no ufs and no s5; S5-10, S5-11) | pending; candidate 68060-261031-52 (the port 53ec472: unix c902f310, kabi 7f8c9ee0) | pending; candidate 68030-261031-63 (amix a0e2ab4: brel eda4dcdf, kabi fc3d99a7) |
 | its core (`core/series`, `dlm_maximage`) | pending | pending |
-| kernel package, with the ufs and s5 modules (S5-12) | pending | pending |
+| kernel package, with the ufs and s5 modules (S5-12) | pending; candidate kern46m k46.1.3.261031-52 (amix-packages b9edefc), in no catalog | pending; candidate kern30m k30.1.3.261031-63 (amix-packages 7854057), in no catalog |
 | loader (boot2, its size under 28 672) | pending | pending |
 | kbootset (S5-03, S5-15, S5-44) | pending | pending |
 | modadmin (S5-03) | pending | pending |
-| ABI kit (kabi 1.2, or 1.3 if a stage-5 row needs it) | pending | pending |
+| ABI kit (kabi 1.3, for Paula; S5-47) | pending: fff860dc carries dlmkit46 k46.1.2.261027-11, kabi 1.2; no 1.3 kit is minted | pending: dlmkit30 k30.1.2.261027-11, as k46 |
+| Paula (paula46, paula30; the reason for kabi 1.3, C3-2 v2) | pending; fff860dc carries paula-k46 1.0.0-1 (kabi k46.1.3) | pending; fff860dc carries paula-k30 1.0.0-1 (kabi k30.1.3) |
 | z3660scsi | pending | pending |
 | A4091/A4092 | pending | pending |
-| the A4000T 53C710 (S5-06) | pending | — (no A4000T on this line) |
+| the A4000T 53C710 (S5-06) | pending | open question, not decided: fff860dc ships a4kt710-k30 1.0.0-1, but a4kt710 is unsupported in 030 mode, the A4000T's only k30 use (S5-16; 139b5b0, b7ce32b). Whether k30 ships it is open |
 | Gayle IDE | pending | pending |
 | ramdisk | pending | pending |
-| ufs, s5 (S5-12) | pending | pending |
+| ufs, s5 (S5-12) | pending; candidate ufs f4b9ab71 (-52); s5 — (S5-37) | pending; candidate ufs 3e2507e5, s5 1c9711b9 (-63) |
 | cdfs | pending | pending |
 | z3660eth, z3660rtg, monsw | pending | pending |
 | apkg | pending | pending |
@@ -56,7 +63,7 @@ part says which half is done and keeps the rest pending.
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-10, S5-11 the cuts without ufs and s5 | **PASS** 2026-10-27: -66 (the port abc6080); the packaging cuts since: -91, -50 (the core's build-id fix), -51 (the ufs mount guard), -61 (kabi 1.3) | **PASS** 2026-10-27: -18 (amix-kerntools afde1fd); the packaging cut -20 (224b285, N170c), then -22 (kabi 1.3) |
+| S5-10, S5-11 the cuts without ufs and s5 | **PASS** 2026-10-27: -66 (the port abc6080); the packaging cuts since: -91, -50 (the core's build-id fix), -51 (the ufs mount guard), -61 (kabi 1.3); the candidates since: 68060-261030-51 (quirks 90 and 91; the port 57ade8b), 68060-261031-52 (quirk 92; 53ec472), S5-48 | **PASS** 2026-10-27: -18 (amix-kerntools afde1fd); the packaging cut -20 (224b285, N170c), then -22 (kabi 1.3); the cuts since: 68030-261030-56 (quirks 90, 91 and 74; amix fe544a2), 68030-261031-63 (quirk 92; a0e2ab4), S5-48 |
 | S5-12 the kernel packages carry ufs and s5; `core.list` | **PASS** 2026-10-27: amix-packages mints -91 with ufs, round trip 197/197 (T-51 19:3x); re-minted on -50 (catalog 6f0c1701, 2026-10-28); `core.list` bf10683 | **PASS** 2026-10-27: -20 with ufs and s5, as k46; `core.list` d6b4381 |
 | root on ufs as a module | **PASS** N191u on -50, candidate 6f0c1701; N191x from -91 (2026-10-28, amix-kerntools 8951642). -91 itself refused its ufs, N181u (the build id, 7b07bce) | **PASS** N180u on -20 (2026-10-28, 8951642) |
 | root on s5 as a module | — (no k46 s5 module, S5-37) | **PASS** N185r (2026-10-28, 8951642) |
@@ -87,20 +94,31 @@ part says which half is done and keeps the rest pending.
 |---|---|---|
 | S5-30 rescue from the CD and from the floppy pair | pending | pending |
 | S5-31 disk and SD images with rescue; tape as a package source | pending | pending |
-| S5-32 the generic 060 target, from its pre-installed images | pending | — (a 68060 target) |
+| S5-32 the generic 060 target, from its pre-installed images | pending, and no route: under P-35 (decided 2026-10-30, ufs the only install target) amix-installng 37fbe0e retired all eleven `PREBUILT=1` cells, which mounted an s5 root minted host-side. Whether the row becomes fresh installs on the 060 targets or keeps pre-installed images built on ufs is open | — (a 68060 target) |
 | S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | zen0 in the miniroot and the raw RDB image pass in emulation (amix-installng ni7, 2026-10-27; re-cut ni9 on b1f564f4, install cells 10/10, 2026-10-28); a netinstall from a public host and metal: pending | as k46 |
 | S5-34 the static kernel families out of the catalog | **PASS** 2026-10-27: catalog of record b2a0e874 (amix-packages; T-51 13:5x) | the same |
-| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | kbootset's half 2026-10-27 (6c82415, 4046392); amix-installng's first boot calls `kbootset nodes`, CD rd1p and ni8 leave all four cards' nodes on every installed target (T-51 22:0x). J4's root and the three-controller install: pending (Z3660 + A4092 + Gayle, J4's set) | as k46; the three-controller install: pending (a k30 set with a card 2) |
+| S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | kbootset's half 2026-10-27 (6c82415, 4046392); amix-installng's first boot calls `kbootset nodes`, CD rd1p and ni8 leave all four cards' nodes on every installed target (T-51 22:0x). J4's root and the three-controller install: pending (Z3660 + A4092 + Gayle, J4's set). P-36 (1.1 supports clean installs only) retired the upgrade install (amix-installng dad1b57, e046859); J4's half is a 1.1 root updated by apkg, not an upgrade from 1.0, so P-36 does not retire it by itself. Whether it still runs, or the fresh three-controller install stands in for it, is open | as k46; the three-controller install: pending (a k30 set with a card 2) |
+| S5-45 `kbootset media --disk --ramdisk`: the netinstall raw image's store | **PASS** 2026-10-27, host: amix eb31c79 (C2-4 v13 and C4-3 v4, d4d8f1c); host only, the box kbootset unchanged | the same |
 
-## 6. Release acceptance
+## 6. Rows added after the plan opened
+
+| Row | k46 | k30 |
+|---|---|---|
+| S5-47 the kabi-1.3 ABI kit: dlmkit46 and dlmkit30 at kabi 1.3 (abi 18c0a1c9), minted for S5-40 | pending: the kernels and Paula are kabi 1.3, the catalog of record and the media carry the 1.2 kit (c2dc7fb) | pending, as k46 |
+| S5-48 the stock-defect fixes in the cuts: kzero's fault catch (quirk 90), ufs tail zeroing (quirk 91), the STREAMS freeq guard (quirk 92); on k30 also the sendsig FPU gate (quirk 74) | in the candidate 68060-261031-52 (53ec472). Metal: quirk 90 **PASS** on the A4000T's 68060, test kernel 68060-261030-50 (M51, amix-kerntools d5430cb; the port 574cea1); quirk 91 emulation only (the port ISSUE-108); quirk 92 guarded in emulation, its save not yet seen on k46 (ISSUE-109). The candidate on metal: pending | in the candidate 68030-261031-63 (a0e2ab4). Metal: quirks 90 and 91 on the A4000T in k30 mode, test kernel 68030-261030-54, qzeval 68/68 (M52, amix-kerntools d38cae5), ftx not proven; quirks 74 and 92 emulation only. The candidate on metal: pending |
+
+S5-48 changes shipped kernel and ufs bytes, so by 80 §3 it reopens S5-41
+and S5-42 for every medium that carries those kernels.
+
+## 7. Release acceptance
 
 | Row | k46 | k30 |
 |---|---|---|
 | S5-40 the final packages, one catalog | pending | the same |
-| S5-41 every medium of 50 rebuilt from them | pending | pending |
-| S5-42 stage 4's media rows again on the rebuilt media | pending | pending |
+| S5-41 every medium of 50 rebuilt from them | pending; reopened by S5-48's kernel and ufs bytes (80 §3) | pending, as k46 |
+| S5-42 stage 4's media rows again on the rebuilt media | pending. P-35 and P-36 retired the prebuilt cells (amix-installng 37fbe0e) and the upgrade cells (dad1b57); P-36's fresh install over a 1.0 disk is l11-k46-reinstall-ia (9fb44ac). Which of stage 4's media rows remain is open | pending, as k46 |
 
-## 7. Not cells of this ledger
+## 8. Not cells of this ledger
 
 S5-35 (the panic path after a failed root mount, the port) and S5-36 (the
 Z3660 window probes, the driver repositories) are written where they are

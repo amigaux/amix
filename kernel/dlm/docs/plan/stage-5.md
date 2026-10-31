@@ -18,10 +18,13 @@
   card-number gate of 30 §5.3 expects for its board set, in safe mode too
   once S5-02 lands (spec 70 §4); safe mode reaches a shell on every root
   controller and root filesystem.
-- **kabi:** 1.2 is frozen (stage 4's exit, 2db99e1). A DDI name or
-  fingerprint line added in stage 5 is 1.3. None is planned: the carve's
-  imports are core-tier names (`abi/<line>/core.list`), which bind to the
-  kernel build, not to the kabi.
+- **kabi:** 1.2 froze at stage 4's exit (2db99e1, abi 2ab48658). Stage 5
+  added 1.3 (abi 18c0a1c9) for the Paula module (C3-2 v2, 2026-10-28):
+  the kernels of the catalog of record fff860dc and the candidates are
+  k30.1.3 and k46.1.3. No 1.3 ABI kit exists yet: that catalog and the
+  media carry the 1.2 kits (dlmkit -11, c2dc7fb). The open row is S5-47.
+  The carve's imports are core-tier names (`abi/<line>/core.list`), which
+  bind to the kernel build, not to the kabi.
 
 ## 1. Conventions
 
@@ -75,7 +78,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 |---|---|---|---|---|---|---|
 | S5-30 | **Rescue** from the CD and from the floppy pair | amix-installng | bench | — | S5-41 | 0.5 |
 | S5-31 | **Disk and SD images with rescue; tape as a package source** (was S4-56) | amix-installng | bench | — | S5-41 | 1 |
-| S5-32 | **The generic 060 target** (was S4-57): the A3000 and A4000 with a 68060, the A4091/A4092 or Gayle root, a ZZ9000 in Zorro II; pre-installed images through the first-boot dialog | amix-installng | bench | S5-12 | S5-41 | 1 |
+| S5-32 | **The generic 060 target** (was S4-57): the A3000 and A4000 with a 68060, the A4091/A4092 or Gayle root, a ZZ9000 in Zorro II; pre-installed images through the first-boot dialog. P-35 (2026-10-30) left this route with no cell (amix-installng 37fbe0e retired the s5 `PREBUILT=1` cells); fresh installs or ufs-built images: open | amix-installng | bench | S5-12 | S5-41 | 1 |
 | S5-33 | **The netinstall extras**: the raw RDB image, zen0 in the miniroot, a netinstall from a public host | amix-installng; amix-z3660net (zen0) | bench | — | S5-41 | 1 |
 | S5-34 | **The static kernel families leave the catalog** (S4-24): kernel-k30-u, kernel-k46-z, kernel-k46-zacd, their 1.0 rows under `superseded/` | amix-packages | host | — | S5-40 | 0.1 |
 | S5-35 | **The panic path after a failed root mount** (N149/N150: `ufs_update` +0x58 after `vfs_mountroot` errno 6) | the port | host | — | — | 0.25 |
@@ -84,6 +87,8 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 | S5-44 | **The disk nodes of cards 2 and 3 on an installed root** (Bench J4, M-G3, the A4000D with Z3660 + A4092 + Gayle, a 1.1 set: Gayle is card 2, and the root held only c0-cf, so IDE-D `c16` and the CD `c15` had no names; hand-made nodes read both): C4-1 v5 §2.4, every four-card root holds c0-c1f d0 s0-s7 and no d1 nodes, whatever the board set; `kbootset nodes` (C2-4 v12 §14) makes them, `commit` runs it on the running box, `check` reports it; firstboot calls it in place of its step 4d (recipe `docs/plan/s5-44-disk-nodes.md`) | amix-dlm (`kbootset` -22); amix-installng | host + bench | kbootset -22 | S5-41 | 0.5 |
 | S5-45 | **`kbootset media --disk --ramdisk`** (from amix-installng's S5-33, ni7): the netinstall raw image's store gated by kbootset directly, composed as `media --cd` composes and written by mkstore's engine read-only, members raw (C2-4 v13 §13, C4-3 v4 §1); host only, so the box kbootset and the -22 bytes are unchanged; `build-netinstall.sh` may call it in place of `mkstore` on the `--cd` spec (the same bytes) | amix-dlm; amix-installng (optional switch) | host | — | — | 0.1 |
 | S5-46 | **A motherboard controller's record names it** (C4-1 v6 §5.2, C2-3 v9; from the port's S5-15 work): RTH1 matched a `mobo` record to any card with no AutoConfig board, so an A4000 in 030 mode (Gayle + the Z3660 window) and an A4000T (53C710 + Gayle) fell back to the built-in root. The record becomes `sd id=0000000N base=00000000` (N the kinfo motherboard id, no `mobo` flag: boot2 takes it as it is, no loader byte changes); RTH1 matches it by kinfo's rule and no longer matches a `mobo` record to the window; the kernel says so with `rth1=2`; `kbootset` rewrites an old `mobo` root record only for such a kernel | the port (`rth1.c`, `kabi-sidecar.py`); amix-kerntools (`kabi-sidecar030.py`, the k30 cut); amix-dlm (`kbootset` -22) | host | S5-15 | S5-12, S5-16 | 0.5 |
+| S5-47 | **The kabi-1.3 ABI kit** (added 2026-10-31): dlmkit30 and dlmkit46 at kabi 1.3 (abi 18c0a1c9), from amix `kernel/dlm`, in place of the 1.2 kits (-11) the catalog of record and the media carry | amix `kernel/dlm`; amix-packages | host | — | S5-40 | 0.25 |
+| S5-48 | **The stock-defect fixes in the cuts** (added 2026-10-31): kzero's fault catch (grimoire quirk 90), ufs tail zeroing (91), the STREAMS freeq guard (92), and on k30 the sendsig FPU gate (74), on by default in the candidates 68030-261031-63 and 68060-261031-52; their acceptance on metal, one A4000T session per line on the final cuts. They change shipped kernel and ufs bytes, so they reopen S5-41 and S5-42 (80 §3) | amix `kernel/k30`; the port; the Bench | host + bench + metal | — | S5-40 | 1 |
 
 ### 2.5 Release acceptance (last)
 
