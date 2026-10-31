@@ -1,4 +1,4 @@
-# syslog: the system log's boot step and configuration (P-36 section 7).
+# syslog: the system log's boot step and configuration.
 NAME=syslog
 PKG=syslog
 VERSION=1.0

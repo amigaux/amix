@@ -11,7 +11,7 @@
  *
  * An SVR4.0 Ethernet driver gives its address out in one place a program can
  * reach: the DL_BIND_ACK, or the DL_INFO_ACK of a stream already bound. So,
- * by the rules every driver is held to (P-36 section 4.4):
+ * by the rules every driver is held to (userland/base/docs/dhcp-probe.md):
  *
  *   1. open; DL_INFO_REQ under an alarm;
  *   2. DL_ATTACH_REQ (PPA -p, default 0) only if the provider is Style 2;

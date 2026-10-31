@@ -1,4 +1,4 @@
-# DHCP stage S0: what the 1991 DLPI path does
+# The DLPI probe: what the 1991 DLPI path does
 
 Measured 2026-10-30 with `dhcpc/probe/dhcprobe` on the Amiberry emulator: an
 A3000 running stock Amix 2.1c with the A2065 Ethernet board (`/dev/aen0`,
@@ -11,13 +11,16 @@ its driver exists yet).
 The probe was built with gcc-cross-amix, the period compiler: it stands in for
 a `/usr/sbin` boot-path tool, so it links only the stock `libc.so.1`,
 `libnsl.so` and the `libsocket.a` archive, and needs nothing from `/opt/amix`.
-The shipped `dhcpc` and `dlpi-mac` are built with GCC 14 (T-56 D6) against the
+The shipped `dhcpc` and `dlpi-mac` are built with GCC 14 against the
 same stock libraries. No return-convention shims are needed for that: the
 pinned gcc14-cross-amix (b51ff39) already returns pointers in `%a0` and `%d0`
 and small structures in memory, as the stock libraries expect
 (`amix-abi.h`), and its own runtime, `libamixc99`, is a static archive.
 
-## The rules of P-36 §4.4, one by one
+## The client's DLPI rules, one by one
+
+The rules a DHCP client follows on any DLPI Ethernet driver, with no
+per-driver code, numbered as the client's design numbers them:
 
 | Rule | What was measured | Verdict |
 |---|---|---|
@@ -33,8 +36,9 @@ and small structures in memory, as the stock libraries expect
 | 6. ICMP while nothing listens on 68 | the server's unicast ACK, arriving while only the DLPI stream had it, was answered by IP with **ICMP port unreachable** (type 3 code 3, quoting 67 → 68) when the server's ARP entry was already cached. With the socket bound, never | the socket is needed, as planned |
 | 8. REBIND by broadcast from the socket | with `SO_BROADCAST`, `sendto 255.255.255.255:67` works, but the frame leaves with IP destination **the subnet's directed broadcast** (`x.y.z.255`) and Ethernet broadcast. The ACK came back on the socket | holds on one segment; a relay agent would not see it |
 
-Rules 5, 7, 9, 10 and 11 apply the lease and keep state; the probe applies
-nothing, so they are not measured here.
+Rules 5, 7, 9, 10 and 11 apply the lease and keep state (rule 9: a lease and
+a static line are applied by the same code); the probe applies nothing, so
+they are not measured here.
 
 ## What it means for the client
 
@@ -48,9 +52,9 @@ nothing, so they are not measured here.
 - **The A2065 needs no per-driver code.** Every difference from a textbook
   DLPI provider (no ATTACH reply, silent drop of unknown primitives, the 14
   extra bytes, the pre-bound reused slot) is covered by a general rule.
-- **The ICMP finding confirms the D-N15 design.** Holding a bound address with
-  no listener on port 68 makes IP refuse the server's unicast replies; the UDP
-  socket on 68 must exist from BOUND on.
+- **The ICMP finding confirms the design** of a UDP socket held on port 68.
+  Holding a bound address with no listener on port 68 makes IP refuse the
+  server's unicast replies; the UDP socket on 68 must exist from BOUND on.
 - **REBIND reaches only the local segment** on this IP. Acceptable for 1.0.
 
 ## The emulator translates the MAC
@@ -73,12 +77,12 @@ checksum after), but not inside DHCP options. So on the emulator:
 
 On real hardware there is no translation.
 
-## Still open after S0
+## Still open after the probe
 
-| Item (P-36) | Why not settled | Where it gets settled |
+| Item | Why not settled | Where it gets settled |
 |---|---|---|
-| A UDP socket sending before the interface has an address | the interface was addressed throughout (the test machine is driven over the network) | S1: the client does not rely on it (INIT goes over DLPI) |
-| Re-addressing a live interface | the probe applies nothing | S1 |
+| A UDP socket sending before the interface has an address | the interface was addressed throughout (the test machine is driven over the network) | `dhcpc` 1.0 does not rely on it (INIT goes over DLPI) |
+| Re-addressing a live interface | the probe applies nothing | `dhcpc` 1.0 and `ifup`'s dhcp mode, on the emulator |
 | `zen0` (z3660eth) against the same rules | no emulated Z3660 Ethernet board with the driver loaded exists yet | an emulator configuration with the Z3660 network backend and a kernel carrying the z3660eth module, or metal |
 | How fast `aenopen` fails with no A2065 fitted | the board was present | a boot without the board |
 | Hydra (`hya0`) | no driver source | when the source is here |

@@ -1,6 +1,6 @@
 #!/bin/sh
 # devnodes -- re-create the device nodes the packages installed that are
-# missing: /etc/init.d/devnodes, run as /etc/rc2.d/S20devnodes (P-36 D-N21).
+# missing: /etc/init.d/devnodes, run as /etc/rc2.d/S20devnodes.
 #
 # The nodes that should exist are the c and b objects under /dev in the
 # installed-objects database, /var/sadm/install/contents: every driver

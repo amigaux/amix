@@ -1,6 +1,6 @@
 #!/bin/sh
 # build.sh -- cross-build dlpi-mac with GCC 14 (gcc14-cross-amix, the pin
-# in toolchain/), T-56 D6.
+# in toolchain/).
 #
 #   userland/base/net/dlpi-mac/build.sh [--out FILE]   (default out/base/dlpi-mac)
 #

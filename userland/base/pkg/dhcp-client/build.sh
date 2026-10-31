@@ -1,6 +1,6 @@
 # dhcp-client build hooks. The source tree is a copy of userland/base.
 
-# dhcpc, with the recipe's compiler (GCC 14, T-56 D6) against the stock
+# dhcpc, with the recipe's compiler (GCC 14) against the stock
 # libraries only: libsocket from its archive and the stub libc archive after
 # it, as dhcpc/build.sh links it (select is static there)
 # (compile and link apart: the harness's gates read the compile line)

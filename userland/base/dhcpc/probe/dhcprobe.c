@@ -1,6 +1,6 @@
 /*
  * dhcprobe -- prove the DHCP client's DLPI rules on a 1991 SVR4.0 Ethernet
- * driver before any real client code is written (P-36 W5 stage S0).
+ * driver before any real client code is written.
  *
  *   dhcprobe [-a] [-x] [-d secs] [-w secs] [-i ifaddr] <device>  e.g. /dev/aen0
  *

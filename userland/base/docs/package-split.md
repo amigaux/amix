@@ -1,19 +1,19 @@
 # userland/base: the packages
 
-Two packages come out of this directory: the **base** package (boot helpers,
-the network set-up, the base config files) and **`dhcp-client`**. This page
-says what goes in which, why the line is drawn there, and the contract between
-them. Names and decisions are those of P-36 (decided 2026-10-30); where this
-page proposes something P-36 left open, it says so.
+Three packages come out of this directory: the **base** package (boot
+helpers, the network set-up, the display set-up, the base config files),
+**`dhcp-client`** and **`syslog`**. This page says what goes in the first two,
+why the line between them is drawn there, the contract between them, and
+what the installer does with them.
 
 ## The two packages
 
 | | base | dhcp-client |
 |---|---|---|
-| Catalog name | `amix-base` (owner, 2026-10-30; P-36 §2.2's working name was `amix-rc`, before D-N24 added the config files) | `dhcp-client` (D-N18) |
-| pkginst (≤ 9 characters) | `amxbase` | `dhcpc` (D-N18) |
+| Catalog name | `amix-base` (named `amix-rc` while it held only the boot scripts) | `dhcp-client` |
+| pkginst (≤ 9 characters) | `amxbase` | `dhcpc` |
 | Licence | MIT | MIT |
-| Toolchain | GCC 14 (gcc14-cross-amix, T-56 D6) for `dlpi-mac`; the rest is Bourne sh | GCC 14, for `dhcpc` |
+| Toolchain | GCC 14 (gcc14-cross-amix) for `dlpi-mac`; the rest is Bourne sh | GCC 14, for `dhcpc` |
 | Depends on | nothing but the stock system | `amix-base` (it calls the base package's hook) |
 | Installed by | every install | every install; a static-only machine may remove it |
 
@@ -34,7 +34,7 @@ page proposes something P-36 left open, it says so.
   Every other network driver ships its own `link.d` entry in its own package.
 - **Conffiles** (`e`, the shared keep-your-edits scripts): the two legacy
   hooks `/etc/inet/network-config` and `/etc/inet/rc.inet`, and the base config
-  files that move here from `core` (D-N24; the list is in `plan.md`).
+  files that move here from `core` (the list is in `plan.md`).
 - **Not in any package**, written by the installer and edited by the
   administrator: `/etc/rc.conf`, `/etc/inet/interfaces`. Generated at run time:
   `/etc/resolv.conf`.
@@ -48,22 +48,23 @@ page proposes something P-36 left open, it says so.
 ## Why the line is drawn here
 
 - **The hook belongs to the base package.** A DHCP lease and a static line
-  must be applied by the same lines of code (P-36 §4.4 rule 9), and that code
-  is `ifup`'s. So `dhcpc` only talks DHCP and calls the hook; it never edits a
-  system file. Putting the hook in `dhcp-client` would give the two paths two
-  copies of the apply logic.
+  must be applied by the same lines of code, and that code is `ifup`'s. So
+  `dhcpc` only talks DHCP and calls the hook; it never edits a system file.
+  Putting the hook in `dhcp-client` would give the two paths two copies of
+  the apply logic.
 - **The dependency runs one way.** `dhcp-client` needs `amix-base`;
   `amix-base` does not need `dhcp-client`. When a line says `dhcp` and
   `/usr/sbin/dhcpc` is missing, `ifup` logs it and treats the line as if no
   server answered: the line's static address if it has one, else the
-  interface stays down (D-N16).
+  interface stays down.
 - **Different change rates.** The client is the one piece with a protocol
-  state machine and a daemon; it will be revised on its own schedule (S1, then
-  S3's RELEASE and ARP check) without re-rolling the package that owns
+  state machine and a daemon; it is revised on its own schedule (the ARP
+  check before binding came later) without re-rolling the package that owns
   `/etc/inittab`.
-- **D-N18 already fixed the client's names and its place in `/usr/sbin`.**
+- **The client's names and its place in `/usr/sbin`** were fixed before it
+  was written.
 
-## The contract between them (frozen in T-55, 2026-10-30)
+## The contract between them
 
 ### `dhcpc` command line
 
@@ -95,14 +96,14 @@ page proposes something P-36 left open, it says so.
 
 Environment: `DHCP_IF`, `DHCP_ADDR`, `DHCP_MASK`, `DHCP_ROUTER` (the first
 router), `DHCP_DNS` (space-separated), `DHCP_HOSTNAME` (option 12; applied only
-under `hostname dhcp`, D-N11), `DHCP_SERVER`, `DHCP_LEASE`, `DHCP_T1`,
+under `hostname dhcp`), `DHCP_SERVER`, `DHCP_LEASE`, `DHCP_T1`,
 `DHCP_T2`, `DHCP_OLD_ADDR` (the address before this event, when it changed).
 `resolv.conf` gets nameservers only, merged with the static `dns` line unless
-it says `dns static` (D-N12).
+it says `dns static`.
 
 ### What the probe added to the contract
 
-From the S0 measurements (`dhcp-probe.md`):
+From the DLPI probe's measurements (`dhcp-probe.md`):
 
 - INIT, SELECTING and REQUESTING go over DLPI; RENEW and REBIND over a UDP
   socket bound to port 68, as planned. Both worked on the A2065.
@@ -113,44 +114,40 @@ From the S0 measurements (`dhcp-probe.md`):
   itself by `chaddr` only. The emulator translates `chaddr` between the
   guest-side and the host-side MAC but not option 61, and the guest-side MAC
   is probably the same on every emulated A2065, so a client identifier could
-  make every emulated machine one client to a server. (Open for S1 if a real
+  make every emulated machine one client to a server. (To revisit if a real
   network needs it.)
 
-## What the base package asks of the other work items
+## What the base package needs from the packaging tools
 
-- **Packaging harness (W3).** A package whose files are under `/etc`, `/usr`
-  and `/var` with no `/opt/amix` prefix; `TOOLCHAIN=gcc14` (T-56 D6; until then `period`); the `CONFFILES`
-  gate's "not under `PREFIX`" rule restated as "under `/etc` or `/var`". The
-  set: P-36 says set `base`, but the harness knows `minimal`, `standard`,
-  `full`, `developer`, `x11` and `extra`; both packages belong in every
-  install, so `minimal` unless a `base` set is added.
-- **The shared conffile script (W1).** `/etc/nodename`, `/etc/inet/hosts` and
+- **The packaging harness.** A package whose files are under `/etc`, `/usr`
+  and `/var` with no `/opt/amix` prefix; `TOOLCHAIN=gcc14` (a recipe that
+  compiles nothing uses `period`, since the gcc14 gates want a compile
+  line); the `CONFFILES` gate's "not under `PREFIX`" rule restated as "under
+  `/etc` or `/var`". The set: both packages belong in every install.
+- **The shared conffile script.** `/etc/nodename`, `/etc/inet/hosts` and
   `/etc/TIMEZONE` differ from the shipped default on every installed system.
-  The §1.2 table writes `<file>.new` and a PENDING line whenever the file
-  differs from both the baseline and the new default, so every update of the
-  base package would flag them even when the default did not change. dpkg
-  keeps the file silently in that case. The table needs that row: *file
-  edited, new default identical to the baseline → keep the file, refresh
-  nothing, say nothing*.
-- **Removal (W2).** Removing the base package runs `r.conffile`, which
-  deletes every conffile still equal to its baseline: an unedited
-  `/etc/inittab` or `/etc/default/login` would go, and the machine would not
-  boot. `apkg` should refuse to remove or purge it (an "essential" mark), and
-  the installer never offers it.
-- **The stock defaults' bytes.** The D-N24 files are Commodore's. They are not
-  in `amigaux/amix-system`, which holds `usr/`, the kernels and the floppies
-  but no `etc/`; today they come only from the installer's extract of the
-  stock `core` package. The package build needs them from a public, pinned
-  source (amix-system gaining `etc/`, or the build reading them from the
-  pinned stock media).
-- **Installer (W7).** Lays both packages down, writes `/etc/rc.conf` and
+  A file that differs from both the baseline and the new default gets
+  `<file>.new` and a PENDING line, so every update of the base package would
+  flag them even when the default did not change. dpkg keeps the file
+  silently in that case, and so does the class now: *file edited, new
+  default identical to the baseline → keep the file, refresh nothing, say
+  nothing*.
+- **Removal.** Removing the base package runs `r.conffile`, which deletes
+  every conffile still equal to its baseline: an unedited `/etc/inittab` or
+  `/etc/default/login` would go, and the machine would not boot. The package
+  is marked essential, so `apkg` refuses to remove or purge it, and the
+  installer never offers it.
+- **The stock defaults' bytes.** The files that move here from `core` are
+  Commodore's. The build takes them from a public, pinned source:
+  amix-system's `etc/`, each file checked against `system/MANIFEST.sha256`.
+- **The installer.** Lays both packages down, writes `/etc/rc.conf` and
   `/etc/inet/interfaces`, and transfers ownership from `core` with `removef`;
   the steps are in the next section.
 
-## What the installer (W7) needs from this directory
+## What the installer needs from this directory
 
-Measured on the emulator with stock `pkgadd` (S2, 2026-10-31). The steps, in
-order, on the target root:
+Measured on the emulator with stock `pkgadd`. The steps, in order, on the
+target root:
 
 1. **Install `core` first**, as today: amix-base takes files over from it.
 2. **Seed the conffile baselines.** For each of amix-base's `CONFFILES`
@@ -177,9 +174,9 @@ order, on the target root:
    `dns <addr> ...` line. `/usr/sbin/ifup -n` reports every mistake in the
    file.
 5. **Leave `/etc/inittab` alone.** amix-base ships it with the `dlm` line
-   (C3-5 §5), so the installer no longer adds it; `l11_inittab` compares the
-   file with amix-base's default instead. A box whose `modtools` already
-   added the line holds exactly that default, and the class takes it
+   (contract C3-5 §5), so the installer no longer adds it; its inittab check
+   compares the file with amix-base's default instead. A box whose `modtools`
+   already added the line holds exactly that default, and the class takes it
    silently.
 6. **`removef core`** the paths amix-base took over, with APKGENG's
    `/usr/apkg/bin/removef`: stock 2.1 has none. Until then the conffiles are
@@ -187,7 +184,8 @@ order, on the target root:
    amxbase\` (the `\` is the per-package edit flag, so `pkgchk` skips
    amxbase's entry), and `pkgchk` reports an edited one through `core`'s.
    After the `removef` that goes quiet. No re-typing step: the stock
-   `installf -f` crashes after `installf -c conffile … e` (pkgtools, E1).
+   `installf -f` crashes after `installf -c conffile … e` (measured on the
+   emulated 2.1c system).
 
 The installer no longer lays its syslog unit down: the `syslog` package
 ships `init.d/syslogd` and its `S70`/`K50` links, `/etc/syslog.conf` (a

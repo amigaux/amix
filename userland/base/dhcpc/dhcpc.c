@@ -1,5 +1,5 @@
 /*
- * dhcpc -- the DHCP client of Amix's base system (P-36 section 4).
+ * dhcpc -- the DHCP client of Amix's base system.
  *
  *   dhcpc [-b secs] <if>     get a lease, apply it through the hook, keep it
  *   dhcpc -x <if>            release the lease and end the daemon
@@ -11,7 +11,7 @@
  * background), 1 when the interface cannot do DHCP or a daemon already
  * holds it.
  *
- * The rules (P-36 section 4.4), with no per-driver code:
+ * The rules (userland/base/docs/dhcp-probe.md), with no per-driver code:
  *   - INIT, INIT-REBOOT, SELECTING and REQUESTING, and REBINDING after the
  *     lease ended, go over the interface's DLPI node: DL_INFO_REQ, then
  *     DL_ATTACH_REQ only for a Style 2 provider, then DL_BIND_REQ on 0x0800

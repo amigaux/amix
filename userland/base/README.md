@@ -49,7 +49,7 @@ What follows (`ifup`'s DHCP default in the installer, metal) is in `docs/plan.md
 
 Programs that run on the boot path are built against the stock headers and
 libraries only, so they need nothing from `/opt/amix`: `dhcpc` and `dlpi-mac`
-with GCC 14, gcc14-cross-amix (`toolchain/gcc14-cross-amix.pin`, T-56 D6),
+with GCC 14, gcc14-cross-amix (`toolchain/gcc14-cross-amix.pin`),
 with the harness's flags (`-m68020-60 -mno-strict-align`); the probe with the
 period cross compiler, gcc-cross-amix (`toolchain/gcc-cross-amix.pin`):
 

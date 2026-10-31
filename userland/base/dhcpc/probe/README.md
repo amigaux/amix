@@ -1,6 +1,6 @@
 # dhcpc/probe
 
-Stage S0 of the DHCP client: before any client code, measure what the 1991
+The DHCP client's first step: before any client code, measure what the 1991
 SVR4.0 DLPI path really does. Results: [`../../docs/dhcp-probe.md`](../../docs/dhcp-probe.md).
 
 | File | What |
@@ -36,5 +36,5 @@ IP is linked on the same interface; that is one of the things it tests.
 One line per step, a keyword first: `STEP`, `OPEN`, `INFO` (the fields of a
 `DL_INFO_ACK`), `BIND`, `SIDE`, `QUEUED`, `SEND`, `RECV` (frame data length
 beside the IP and UDP lengths, the addresses), `DHCP` (the decoded reply),
-`UDP`, then `RULE<n> ok` or `FAIL <what>` per rule of P-36 §4.4, and `DONE`.
+`UDP`, then `RULE<n> ok` or `FAIL <what>` per rule (`docs/dhcp-probe.md`), and `DONE`.
 Exit 0 when every step that ran passed.

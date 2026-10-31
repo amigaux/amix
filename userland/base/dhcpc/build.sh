@@ -1,6 +1,6 @@
 #!/bin/sh
 # build.sh -- cross-build dhcpc with GCC 14 (gcc14-cross-amix, the pin in
-# toolchain/), T-56 D6.
+# toolchain/).
 #
 #   userland/base/dhcpc/build.sh [--out FILE]   (default out/base/dhcpc)
 #
