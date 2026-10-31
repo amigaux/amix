@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-31 — The 040/060 family tools, from amix-kerntools 989e30b (b52b4b8)
+
+tools/: emit-family-chains, k0-gates, the rootdev and cputype stamps, check-chain-stamp, rootdev-assert, the
+sddevsize and support-probe injectors, comaddr; contracts/: the shipped families (K060, KD060-Z), the svr4-sum
+vectors, the scan060 set, the spl fixtures. k0-gates finds the port as $PORT and the toolchain as $GCA. The port's -51
+cut reproduces with the tools taken from amix (KT unset), and k0-gates is ALL GREEN; make test runs the new selftests.
+
+## 2026-10-31 — Cut 68030-261031-63, the freeq guard on (a0e2ab4)
+
+cuts/68030-261031-63: from amix c1b7842 with the -56 recipe; the four defaults on (kzero, ufs tail zeroing, FPU
+gate, freeq guard). unix 660e4d12, brel eda4dcdf, sym 9eae436f, kabi fc3d99a7 (k30.1.3, abi 18c0a1c9), ufs 3e2507e5,
+s5 1c9711b9. cut.sh reproduces all seven. C1 (68882), C0 (no FPU) and the prngd trigger pass in emulation.
+
+## 2026-10-31 — STREAMS freeq guard (grimoire quirk 92), on by default (f4aef26, 6e8a7fe)
+
+src/freeqguard030.c joins the final link; tools/freeqguard-retarget.py retargets every freeq relocation (qdetach,
+strclose x2, stropen x2) to freeq_guarded, which takes the pair off the run and scan lists at spl7 and calls the
+stock freeq. It closes stock qattach's undo of a failed open (qdetach clmode 0), which freed a queue still on qhead
+(prngd + prngd-ctl: KERNEL FAULT from queuerun). --no-freeq-guard reproduces all six -56 sums. Test kernel
+68030-261030-62 (not a cut) passes the quirk 90/91, FPU/FPU-less, ftx and smoke sets in emulation. 6e8a7fe: the
+kzero check wants ufs_vptrunz on non-carved builds.
+
 ## 2026-10-30 — cut -56 reproduces at the port pin (613d7fc)
 
 Cut 68030-261030-56 also reproduces, all seven sums, with the port at d0e8857 (kernel/port/port.pin): the port files the

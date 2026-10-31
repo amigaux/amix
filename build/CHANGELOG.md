@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — STOCK_ETC takes stock /etc defaults from amix-system (1608a4a)
+
+A package.sh key STOCK_ETC names stock /etc files by path; after the stage hook the driver copies each from the
+amix-system checkout and refuses one whose sha256 is not system/MANIFEST.sha256's or that the stage hook also
+staged. pkgmeta check refuses a path not under /etc, not a regular file in the manifest, or not exactly one f or e
+prototype line. The bytes never enter amix. The period 68060 datastream gate passes a data-only package.
+test-pkgmeta 128/128, test-pkgbuild 61/61; the base package's seven conffiles roll and install equal to amix-system.
+
 ## 2026-10-30 — SYSTEM_PATHS, the base set, period builds, ESSENTIAL (ccb02f3, 9dbd943)
 
 pkgmeta check refuses a prototype object outside PREFIX, /opt/amix/man, /etc, /var and the paths a new SYSTEM_PATHS

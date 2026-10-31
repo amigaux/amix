@@ -190,10 +190,10 @@ make test
 ```
 
 runs every host self-test here (`tools/kpatch-selftest.sh`, `tools/fstype-selftest.sh`,
-`tools/elf2brel-selftest.py`, and `--selftest` of `relsim.py`, `mksym030.py`, `kinfo-cdevsw.py` and
-`kabi-sidecar030.py`). Each prints `SELFTEST PASS`. None needs an Amiga or the cross compiler; a
-case that needs an input from outside this repository (`AMIX_SYSTEM`, `CDFS`, a driver checkout)
-skips itself and says so.
+`tools/elf2brel-selftest.py`, and `--selftest` of `relsim.py`, `mksym030.py`, `kinfo-cdevsw.py`,
+`kabi-sidecar030.py` and the 040/060 family tools below). Each prints `SELFTEST PASS`. None needs an
+Amiga or the cross compiler; a case that needs an input from outside this repository (`AMIX_SYSTEM`,
+`CDFS`, a driver checkout, the port checkout, the m68k binutils) skips itself and says so.
 
 ## The `driver.conf` contract (brief)
 
@@ -229,6 +229,16 @@ The full, authoritative contract for driver authors is in [`docs/driver-contract
 | `tools/dlm-core-link.sh` | splices kernel/dlm's module core into a linked kernel (the module kernel) |
 | `tools/kinfo-cdevsw.py`, `tools/kabi-sidecar030.py`, `tools/mksym030.py` | `/dev/kinfo`'s cdevsw row, the kabi sidecar, `unix.sym` |
 | `tools/bootchain-verify.py` | checks a boot partition or floppy image against `contracts/bootchain-v1.json` |
+| `tools/emit-family-chains.py` | cuts a 040/060 kernel family's per-(card, unit) chains from its base, with `MANIFEST.json` |
+| `tools/kernel-rootdev-stamp.py`, `tools/kernel-cputype-stamp.py` | the by-symbol rootdev/swap and cputype stamps of a 040/060 chain |
+| `tools/check-chain-stamp.py`, `tools/rootdev-assert.py` | a chain is its base plus exactly the stamp; a kernel's baked rootdev |
+| `tools/kernel-sddevsize-inject.py`, `tools/kernel-support-probe-inject.py` | the 040/060 post-link fixes: sddevsize's default, the W-D7 probe |
+| `tools/k0-gates.py` | the K0 family gates over `contracts/kernel-families.json` (scan060, W-D7, root, spl, media, ...) |
+| `tools/comaddr.py` | runtime addresses of COMMON kernel symbols, replaying elf2brel's placement |
+
+The 040/060 family tools came from amix-kerntools `989e30b`. `k0-gates.py` finds the port checkout as `$PORT`
+(else `amix-040-060-port` beside this tree or beside the amix checkout), the toolchain as `$GCA`, and real-kernel
+selftest fixtures under `$K0_FIXTURES` (absent: those cases skip).
 
 ## No Commodore files here
 

@@ -1,26 +1,25 @@
-root:x:0:0:The Super User:/:
-daemon:x:1:1:Things That Go Bump:/:
-bin:x:2:2:Binary File Administrator:/bin:
-sys:x:3:3:System File Administrator:/usr/src:
-adm:x:4:4:System Administrator:/usr/adm:
-uucp:x:5:5:UUCP Administrator:/usr/lib/uucp:
-nuucp:x:5:5:UUCP Login:/usr/spool/uucppublic:/usr/lib/uucp/uucico
-sync:x:20:1:Update Filesystems:/:/bin/sync
-games:x:30:30:Owner of games:/usr/games:
-news:x:31:31:Usenet administrator:/usr/public/lib/news:
-amiga:x:32:32:Amiga stuff:/usr/amiga:
-lp:x:71:2:Lp Administrator:/usr/spool/lp:
-listen:x:72:2:TLI Listener:/usr/net/nls:
-setup:x:0:0:General System Administration:/usr/admin:/usr/admin/start_setup
-powerdown:x:0:0:general system administration:/usr/admin:/usr/admin/start_powerdown
-sysadm:x:0:0:general system administration:/usr/admin:/usr/admin/start_sysadm
-checkfsys:x:0:0:check diskette file system:/usr/admin:/usr/admin/start_checkfsys
-makefsys:x:0:0:make diskette file system:/usr/admin:/usr/admin/start_makefsys
-mountfsys:x:0:0:mount diskette file system:/usr/admin:/usr/admin/start_mountfsys
-umountfsys:x:0:0:unmount diskette file system:/usr/admin:/usr/admin/start_umountfsys
-guest:x:100:1:system guest:/home/guest:/usr/bin/ksh
-x:x:91:3:X11 software development:/usr/X:
-nobody:x:60001:60001:Unprivileged User:/nowhere:/noshell
-noaccess:x:60002:60002:Unprivileged User:/nowhere:/noshell
-vmsys:x:101:1:The Vmsys User:/home/vmsys:/usr/bin/sh
-oasys:x:102:1:The Oasys User:/home/oasys:/usr/bin/sh
+root:x:0:0:pwgrtest superuser:/:
+daemon:x:1:1:pwgrtest daemon:/:
+bin:x:2:2:pwgrtest bin owner:/bin:
+sys:x:3:3:pwgrtest sys owner:/usr/src:
+adm:x:4:4:pwgrtest adm owner:/usr/adm:
+uucp:x:5:5:pwgrtest uucp, first of uid 5:/usr/lib/uucp:
+nuucp:x:5:5:pwgrtest uucp, second of uid 5:/var/spool/uucppublic:/usr/lib/uucp/uucico
+sync:x:20:1:pwgrtest sync:/:/bin/sync
+games:x:30:30:pwgrtest games:/usr/games:
+news:x:31:31:pwgrtest news:/var/news:
+amiga:x:32:32:pwgrtest amiga:/usr/amiga:
+lp:x:71:2:pwgrtest lp:/var/spool/lp:
+listen:x:72:2:pwgrtest listener:/usr/net/nls:
+setup:x:0:0:pwgrtest uid 0, second:/usr/admin:/usr/admin/start_setup
+powerdown:x:0:0:pwgrtest uid 0, third:/usr/admin:/usr/admin/start_powerdown
+sysadm:x:0:0:pwgrtest uid 0, fourth:/usr/admin:/usr/admin/start_sysadm
+checkfsys:x:0:0:pwgrtest uid 0, fifth:/usr/admin:/usr/admin/start_checkfsys
+makefsys:x:0:0:pwgrtest uid 0, sixth:/usr/admin:/usr/admin/start_makefsys
+mountfsys:x:0:0:pwgrtest uid 0, seventh:/usr/admin:/usr/admin/start_mountfsys
+umountfsys:x:0:0:pwgrtest uid 0, eighth:/usr/admin:/usr/admin/start_umountfsys
+x:x:91:3:pwgrtest one-letter name:/usr/X:
+nobody:x:60001:60001:pwgrtest nobody:/nowhere:/noshell
+noaccess:x:60002:60002:pwgrtest noaccess:/nowhere:/noshell
+vmsys:x:101:1:pwgrtest vmsys:/var/vmsys:/usr/bin/sh
+oasys:x:102:1:pwgrtest oasys:/var/oasys:/usr/bin/sh

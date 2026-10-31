@@ -999,6 +999,31 @@ def fstype_mark(params):
     return value
 
 
+def basedir_warning(params, pkgmap_text):
+    """The warning for a package whose pkginfo carries BASEDIR, or None.
+
+    The stock Amix /usr/sbin/pkgadd refuses every such package under -n
+    ("Installation of this package requires a base directory.", rc 5),
+    whatever the admin file's basedir= says; APKGENG's pkgadd installs it.
+    Measured on the emulated stock 2.1c, 2026-10-31 (docs/stock-pkg-system.md).
+    """
+    if "BASEDIR" not in params:
+        return None
+    relative = False
+    for line in pkgmap_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[0] != ":" and not parts[0].startswith("#") \
+                and parts[1] != "i" and not parts[3].startswith("/"):
+            relative = True
+            break
+    return ("pkginfo BASEDIR=%r: the stock /usr/sbin/pkgadd refuses any "
+            "package with BASEDIR (rc 5, 'requires a base directory'), so it "
+            "installs only through APKGENG; %s"
+            % (params["BASEDIR"],
+               "it has relative paths, which need it" if relative else
+               "every object path is absolute: drop BASEDIR"))
+
+
 def essential_check(params):
     """Refuse a package whose APKG_ESSENTIAL is neither yes nor no."""
     value = params.get(ESSENTIAL_PARAM)
@@ -1051,6 +1076,10 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     for req in ("NAME", "VERSION"):
         if req not in params or not params[req].strip():
             raise Malformed("pkginfo lacks required %s parameter" % req)
+
+    why = basedir_warning(params, pkgmap_text)
+    if why is not None:
+        print("gen-catalog: warning: %s: %s" % (fname, why), file=sys.stderr)
 
     fstype = fstype_mark(params)
     essential_check(params)

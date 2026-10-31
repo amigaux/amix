@@ -1,3 +1,30 @@
+## 2026-10-31 — the stock pkgadd refuses BASEDIR; gen-catalog warns (494d477)
+
+On the emulated stock 2.1c, /usr/sbin/pkgadd refuses any package whose pkginfo carries BASEDIR ("requires a base
+directory", rc 5), whatever the admin file says; without the line the same package installs, and the heirloom engine
+installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
+BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
+
+## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
+
+heirloom/compat/tests/amix-passwd.txt was a box's /etc/passwd (the stock file with box-side edits). It is replaced
+by a stock-format fixture of our own with the stock account names and ids and the quirks the parser test reads (user
+x at uid 91, eight uid-0 entries, uucp and nuucp sharing uid 5) and no real account; the parser test gains two
+checks (21/0). privacy-check --tree HEAD clean. History unchanged.
+
+## 2026-10-31 — the compat group fixture is ours (a87d8cc)
+
+heirloom/compat/tests/amix-group.txt was byte for byte the stock /etc/group, which system/MANIFEST.sha256 now lists,
+so privacy-check --tree flagged it. It is replaced by a stock-format fixture of our own with the same group names,
+gids and multi-member groups, plus a test group; the pw/gr parser test gains two checks (19/0). History unchanged.
+
+## 2026-10-30 — heirloom: scriptvfy.c is never regenerated (754571c)
+
+CI on 0c537a4 failed linking pkgchk: make's built-in %.c: %.l rule re-ran flex whenever a checkout left scriptvfy.l
+a clock tick newer than the committed scanner, dropping its yywrap(). An empty scriptvfy.c rule stops the
+regeneration (host and Amix builds) and scriptvfy.l carries yywrap() too. 10/10 builds clean in the CI base image
+with the .l forced newer.
+
 ## 2026-10-30 — APKG and APKGENG are essential (cd8aa5e)
 
 build-packages.sh marks both packages APKG_ESSENTIAL=yes, as dpkg marks itself: without them the box cannot manage

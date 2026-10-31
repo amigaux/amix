@@ -13,6 +13,17 @@ R=$T/root
 KB="$B/kbootset -R $R --image $T/disk.img --offset 65536"
 sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
+# flip FILE OFFSET: complement one byte, so it changes whatever it held (a
+# constant written over the random kernel is the same byte one time in
+# 256), and check that exactly that byte changed
+flip() {
+	cp "$1" "$1.orig"
+	v=$(od -An -tu1 -j "$2" -N1 "$1" | tr -d ' ')
+	printf "\\$(printf %03o $((255 - v)))" | dd of="$1" bs=1 seek="$2" conv=notrunc 2>/dev/null
+	[ "$(cmp -l "$1.orig" "$1" | wc -l)" -eq 1 ] ||
+		{ echo "kbuild: $1 not changed at $2" >&2; exit 1; }
+	rm -f "$1.orig"
+}
 
 head -c 700000 /dev/urandom > $R/stand/k46/unix
 sidecar() {
@@ -139,7 +150,7 @@ sidecar 4; record			# one above the store's loader (version 3)
 refused 7 $KB build $FACTS
 sidecar; record
 # a kernel changed by hand after apkg installed it
-printf 'X' | dd of=$R/stand/k46/unix bs=1 seek=1000 conv=notrunc 2>/dev/null
+flip $R/stand/k46/unix 1000
 refused 1 $KB build $FACTS
 sidecar; record
 # no record at all: placed by hand or by a bare pkgadd
@@ -162,7 +173,7 @@ refused 2 $KB build $FACTS
 record
 # the kernel changes between build and commit: commit runs the gates again
 $KB build $FACTS | grep -q "generation 3 built"
-printf 'Y' | dd of=$R/stand/k46/unix bs=1 seek=2000 conv=notrunc 2>/dev/null
+flip $R/stand/k46/unix 2000
 refused 1 $KB commit
 sidecar; record
 $KB commit 2>/dev/null | grep -q "generation 3 committed"
@@ -325,7 +336,7 @@ $KB check > $T/out
 grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
 # check: a module copy changed, then gone
 cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
-printf 'Z' | dd of=$R/stand/gen/$id/mod/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+flip $R/stand/gen/$id/mod/monsw 4
 ! $KB check > $T/out
 grep -q "module monsw: /stand/gen/$id/mod/monsw SHA-256 BAD" $T/out
 rm $R/stand/gen/$id/mod/monsw
@@ -408,12 +419,12 @@ grep -q "module z3660eth: its depend= closure has a cycle or a demand-class depe
 three; modpkg monsw class=root match=always
 $KB build $FACTS | grep -q "built"		# root class on a module kernel (stage 4)
 rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
-three; printf 'X' | dd of=$MD/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+three; flip $MD/monsw 4
 refused 1 $KB build $FACTS			# changed after apkg installed it
 # a copy changed between build and commit
 three; $KB build $FACTS | grep -q "built"
 id=$(ls $R/stand/gen | sort -n | tail -1)
-printf 'Y' | dd of=$R/stand/gen/$id/mod/monsw bs=1 seek=4 conv=notrunc 2>/dev/null
+flip $R/stand/gen/$id/mod/monsw 4
 refused 1 $KB commit
 grep -q "changed since kbootset build" $T/out
 rm -rf "${R:?}/stand/gen/${id:?}"
@@ -630,7 +641,7 @@ grep -q "generation 1 kernel unix: .* CRC-32 and SHA-256 ok" $T/out
 grep -q "check: 0 problem(s)" $T/out
 grep -q "differs from the default generation 1" $T/out
 cp $T/disk.img $T/before.img
-printf 'Z' | dd of=$T/disk.img bs=1 seek=$((65536 + 65536 + 5000)) conv=notrunc 2>/dev/null
+flip $T/disk.img $((65536 + 65536 + 5000))
 set +e
 $KB check > $T/out; rc=$?
 set -e

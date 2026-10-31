@@ -239,6 +239,25 @@ stage() {
 	done
 }
 """)
+        # STOCK_ETC: a stock file from the amix-system checkout beside the main
+        # working tree, checked against system/MANIFEST.sha256
+        stock_text = "stock default\n"
+        write(os.path.join(tmp, "amix-system", "etc", "inet", "stock.conf"), stock_text)
+        write(os.path.join(amix, "system", "MANIFEST.sha256"), "%s  etc/inet/stock.conf\n"
+              % hashlib.sha256(stock_text.encode()).hexdigest())
+        for name, extra in (("stock", ""), ("stock2", "\tmkdir -p \"$DEST/etc/inet\"; "
+                                                      "echo x > \"$DEST/etc/inet/stock.conf\"\n")):
+            d = package(pkgs, name, "hooks", "STOCK_ETC=/etc/inet/stock.conf\n",
+                        build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+            write(os.path.join(d, "prototype"),
+                  PROTOTYPE + "f none /etc/inet/stock.conf 0444 root sys\n")
+            write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	cp out.txt "$DEST/opt/amix/share/out.txt"
+%s}
+""" % extra)
+
         # an executable whose libc the nm cannot read with -D, as the period
         # nm (binutils 2.8.1) cannot read the stock libc.so.1
         elfy = package(pkgs, "elfy", "hooks", build=HOOKS_BUILD, src={"greet.txt": "x\n"})
@@ -439,6 +458,32 @@ esac
         rc, out = build("elfy", STUB_UNDEF="nosuch", **elf_env)
         check("UNDEF: refused: a symbol libc does not define",
               rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+
+        # --- STOCK_ETC ---------------------------------------------------------------
+        rc, out = build("stock")
+        env = seen() if rc == 0 else {}
+        staged = os.path.join(out_pkg, "stock", "dest", "etc", "inet", "stock.conf")
+        check("STOCK_ETC: AMIX_SYSTEM is amix-system beside the main working tree",
+              env.get("AMIX_SYSTEM") == os.path.join(sib, "amix-system"), str(env.get("AMIX_SYSTEM")))
+        check("STOCK_ETC: the stock file is staged, byte for byte",
+              rc == 0 and read(staged) == stock_text
+              and "STOCK ok  /etc/inet/stock.conf (amix-system, sha256 " in out, out)
+        rc, out = build("stock2")
+        check("refused: STOCK_ETC staged by the stage hook too",
+              rc == 1 and "the stage hook staged it too" in out, out)
+        write(os.path.join(tmp, "other", "etc", "inet", "stock.conf"), "edited\n")
+        rc, out = build("stock", AMIX_SYSTEM=os.path.join(tmp, "other"))
+        check("refused: a stock file that differs from the manifest",
+              rc == 1 and "system/MANIFEST.sha256 " + hashlib.sha256(
+                  stock_text.encode()).hexdigest() in out, out)
+        rc, out = build("stock", AMIX_SYSTEM=os.path.join(tmp, "nowhere"))
+        check("refused: no amix-system checkout",
+              rc == 1 and "no file %s/etc/inet/stock.conf" % os.path.join(tmp, "nowhere") in out, out)
+        os.rename(os.path.join(amix, "system"), os.path.join(amix, "system.x"))
+        rc, out = build("stock")
+        os.rename(os.path.join(amix, "system.x"), os.path.join(amix, "system"))
+        check("refused: STOCK_ETC with no system/MANIFEST.sha256",
+              rc == 1 and "no " in out and "MANIFEST.sha256 to check it against" in out, out)
 
         # --- the harness named by AMIX_PKG_COMMON (amix-packages) ----------------------
         rc, out = build("conf", AMIX_PKG_COMMON=old)

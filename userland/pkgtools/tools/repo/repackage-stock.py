@@ -612,11 +612,11 @@ def install_test(spec, res, testbase, uidmap, gidmap):
     to exercise.  Without the seed this test could never have covered
     the code that SIGSEGVs on the box (AMIX-PORT.md item 0).
 
-    The fixtures are the real box files.  amix-group.txt is byte-
-    identical to the copy `core` ships (211 bytes); amix-passwd.txt is
-    the live box file and is larger than core's (1445 vs 1339), but
-    both are class `none`, so pkgadd overwrites them to exactly the
-    manifest state and the comparison below is unaffected - verified.
+    The fixtures are ours, in the stock format, with the stock account
+    and group names and their ids (amix may not carry the stock files:
+    system/MANIFEST.sha256 lists etc/passwd and etc/group).  Both are
+    class `none` in core, so pkgadd overwrites them to exactly the
+    manifest state and the comparison below is unaffected.
     """
     report = {"pkg": spec.name, "ok": False, "mismatches": [],
               "device_skips": [], "notes": [], "unresolved": [],

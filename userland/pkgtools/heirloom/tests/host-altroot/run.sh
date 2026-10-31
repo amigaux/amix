@@ -18,8 +18,9 @@
 #
 #   2. The host's own `bin` group is memberless, so dup_gr_ent()'s
 #      gr_mem duplication loop is skipped.  The box's group file has
-#      `bin::2:bin,daemon`.  => both configs use the REAL box fixtures
-#      ../../compat/tests/amix-{passwd,group}.txt.
+#      `bin::2:bin,daemon`.  => both configs use passwd and group
+#      fixtures of ours with the box's names, ids and multi-member
+#      groups, ../../compat/tests/amix-{passwd,group}.txt.
 #
 #   3. The box resolves groups through the compat text parsers
 #      (compat/amixcompat.c fgetgrent/getgrnam - the Amix libc-passwd
@@ -118,7 +119,7 @@ export UBSAN_OPTIONS=print_stacktrace=1
 
 # ------------------------------------------------------------------
 # 2. Build a throwaway package whose every object is owned by a
-#    MULTI-MEMBER group from the real box fixtures:
+#    MULTI-MEMBER group, as on the box (compat/tests/amix-group.txt):
 #       bin::2:bin,daemon      sys::3:bin,sys,adm     adm::4:adm,daemon
 #    (the host's own bin/sys/adm are memberless, which is precisely
 #    the asymmetry that made previous host runs vacuous).

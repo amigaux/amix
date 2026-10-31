@@ -276,6 +276,17 @@ amix_gate_pkg060() {
 		fi
 		rm -rf "$_gp_d"; unset _gp_d; return 1
 	fi
+	# scan060.py calls a datastream with no ELF "NOTHING INSPECTED"; the tree
+	# gate passes a data-only package, so the datastream gate does too
+	_gp_d=$(mktemp -d "${TMPDIR:-/tmp}/amix-pkg060.XXXXXX")
+	"$AMIX_PKGTRANS" "$1" "$_gp_d" all >/dev/null 2>&1 || {
+		echo "  060 FAIL datastream $1 -- pkgtrans could not unpack it" >&2
+		rm -rf "$_gp_d"; unset _gp_d; return 1; }
+	if [ -z "$(amix_gate_elfs "$_gp_d")" ]; then
+		echo "  060 gate: datastream $(basename "$1") -- no m68k ELF or archive (data-only package)"
+		rm -rf "$_gp_d"; unset _gp_d; return 0
+	fi
+	rm -rf "$_gp_d"; unset _gp_d
 	if _gp_out=$(amix_pm_scan060 "$1" 2>&1); then
 		echo "  060 gate: datastream $(basename "$1") -- $(echo "$_gp_out" | tail -1)"
 		unset _gp_out; return 0

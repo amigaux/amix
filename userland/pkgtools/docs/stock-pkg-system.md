@@ -111,6 +111,16 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
   `basedir=default`, and every check = `ask` (`partial`/`runlevel`/`idepend`/`rdepend`/`space`/
   `setuid`/`conflict`/`action`). A permissive admin (`*=nocheck`, `instance=overwrite`) + `pkgadd -n`
   runs fully non-interactive. ✅
+- **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, row E1, 2026-10-31;
+  toy packages varied one parameter at a time, evidence `tmp/2026-10-30-pkgtools-basedir/rig/E1`).
+  `/usr/sbin/pkgadd -n -a <admin> -d <pkg>` of any package whose pkginfo carries `BASEDIR` (`/`,
+  `/usr`) ends with "Installation of this package requires a base directory. … suspended
+  (interaction required)", rc 5, nothing installed, even when every object path is absolute and
+  whatever the admin file says (`basedir=default`, `basedir=/`, no `basedir=` line,
+  `instance=unique` all fail the same). Without the line the same package installs. An `i
+  copyright` file and a long `DESC` make no difference. The heirloom engine (APKGENG) installs both
+  forms the same. So a package meant for a box without APKGENG carries no `BASEDIR`;
+  `gen-catalog.py` warns about one.
 - **`pkgadd` DB mutation** (captured by `diff`-ing `contents` before/after installing `AMIXtst`,
   which drops `/opt/amixtst` + `/opt/amixtst/hello`): pkgadd **inserts each object line in sorted
   pathname position** (not appended — the `/opt/...` lines landed mid-file), tags the trailing field

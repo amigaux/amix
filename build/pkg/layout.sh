@@ -22,6 +22,10 @@
 #                         are its heirloom/build-host.sh output, and
 #                         AMIX_PM_SCAN060 its tools/repo/scan060.py
 #   AMIX_DLM, AMIX_MODULES  this checkout (kernel/dlm and kernel/modules)
+#   AMIX_SYSTEM           the amix-system checkout STOCK_ETC files come from
+#
+# AMIX_SYSTEM unset is the amix-system checkout beside the main working
+# tree; each file taken from it is checked against system/MANIFEST.sha256.
 #
 # GCA and G14 name the toolchains' build/ directories as in the build
 # container (toolchain/README.md). Unset, GCA is the gcc-cross-amix checkout
@@ -46,13 +50,12 @@ export AMIX_PKG_COMMON="${AMIX_PKG_COMMON:-$AMIX_TOP/build/pkg/common}"
 export AMIX_BUILD_ROOT="${AMIX_BUILD_ROOT:-$AMIX_TOP/out/pkg}"
 export AMIX_GCC14_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_BUILD_ROOT}"
 
-if [ -z "${GCA:-}" ] || [ -z "${G14:-}" ]; then
-	_l_git=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
-		_l_sib=$(dirname "$(dirname "$_l_git")") || _l_sib=
-	if [ -n "$_l_sib" ]; then
-		GCA="${GCA:-$_l_sib/gcc-cross-amix/build}"
-		G14="${G14:-$(dirname "$_l_git")/out/toolchain/gcc14-cross-amix/build}"
-	fi
+_l_git=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) &&
+	_l_sib=$(dirname "$(dirname "$_l_git")") || _l_sib=
+if [ -n "$_l_sib" ]; then
+	GCA="${GCA:-$_l_sib/gcc-cross-amix/build}"
+	G14="${G14:-$(dirname "$_l_git")/out/toolchain/gcc14-cross-amix/build}"
+	export AMIX_SYSTEM="${AMIX_SYSTEM:-$_l_sib/amix-system}"
 fi
 if [ -n "${GCA:-}" ]; then
 	export AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$GCA/env.sh}"

@@ -1,0 +1,481 @@
+.\" kbootset(1M) -- the generation composer (kernel/dlm).
+.\" Written from docs/contracts/C2-4-kbootset-cli.md version 16 and
+.\" docs/spec/40-generations-and-composer.md; installed as
+.\" /opt/amix/man/1m/kbootset (userland/packages/docs/man-pages.md).
+.\" Plain -man requests only: the stock nroff of 1991 formats it.
+.\" MIT licence, see LICENSE in kernel/dlm.
+.TH KBOOTSET 1M "2026-10-30" "kbootset" "Amix kernel modules"
+.nh
+.SH NAME
+kbootset \- compose, commit and roll back boot generations
+.SH SYNOPSIS
+.B kbootset
+[\fB\-R\fP \fIroot\fP]
+[\fB\-\-image\fP \fIfile\fP | \fB\-\-dev\fP \fIpath\fP]
+[\fB\-\-offset\fP \fIn\fP]
+[\fB\-\-journal\fP \fIpath\fP]
+.I command
+[\fIargument\fP ...]
+.SH DESCRIPTION
+.B kbootset
+keeps the boot store: the
+.B UNI\e0
+boot slice that the Amix boot loader reads.
+The store holds
+.IR generations .
+A generation is one kernel with its root-class modules, the manifest that
+names them, and the boot- and demand-class modules the manifest names under
+.BI /stand/gen/ id /mod.
+The loader boots one generation; its menu, safe mode and the try-once rule
+choose another when asked or when one fails.
+.PP
+A generation is in one of four states:
+.TP 10
+.B pristine
+the generation the install laid down; never deleted and never marked bad.
+.TP
+.B good
+it completed a full multi-user boot.
+.TP
+.B trial
+committed and not yet good.
+The loader boots a trial once; if that boot does not reach the end of run
+level 2, the next boot takes the previous good generation.
+.TP
+.B bad
+a trial that failed, or a generation marked bad by hand.
+.PP
+The
+.I kept set
+is the pristine generation, the two newest good generations and at most one
+trial.
+.B commit
+and
+.B collect
+remove every other generation.
+.PP
+After a transaction that changes a kernel-space package,
+.B apkg
+runs
+.B "kbootset build"
+and
+.B "kbootset commit"
+itself when
+.B bootset=auto
+in
+.BR /etc/default/bootset ,
+and prints the two commands otherwise.
+The base system runs
+.BR namelist ,
+.B retry
+and
+.B mark-good
+on every boot.
+.SH OPTIONS
+Without
+.B \-\-image
+or
+.BR \-\-dev ,
+.B kbootset
+works on the running box.
+It reads the box's identity from
+.B /dev/kinfo
+(and makes the node, character 53 0, mode 0444, when it is missing),
+and finds the boot store from the
+.B store=
+line of
+.BR /etc/default/bootset ,
+else from the loader record, else by scanning every disk.
+.TP 10
+.BI \-R " root"
+Work on a mounted target: the packages, the records and
+.B /stand
+under
+.IR root ,
+and the store named by
+.IB root /etc/default/bootset
+or by
+.BR \-\-bootdev .
+The installer and repair mode use it.
+.TP
+.BI \-\-image " file"
+The store is in the disk image
+.IR file .
+.TP
+.BI \-\-dev " path"
+The store is on the raw device
+.IR path .
+.TP
+.BI \-\-offset " n"
+The store starts
+.I n
+bytes into the image or device (default 0).
+.TP
+.BI \-\-journal " path"
+The commit journal.
+The default is
+.IB root /var/kbootset/journal
+on the box; with
+.B \-\-image
+or
+.B \-\-dev
+there is none unless one is named.
+.SH COMMANDS
+.TP 10
+.B status
+Prints the store header and its set id
+.RB ( store-id: ),
+the control block, every generation with its state and members, the
+booted generation, the loader that booted it and the kernel
+(from kinfo), each module of the booted generation as loaded or not
+(and why, in a safe boot), whether
+.B /stand/unix
+is the booted kernel's namelist, and the box's facts.
+It writes nothing.
+.TP
+.B build \fR[\fP\fIoptions\fP\fR]\fP
+Composes the next generation from the packages installed under the root
+into
+.BI /stand/gen/ id
+and runs every gate (see GATES).
+It writes nothing to the store.
+The box's facts come from the options, then kinfo, then
+.BR /etc/default/bootset :
+.RS
+.TP 16
+.B "\-\-line 30\fR|\fP46"
+the kernel line.
+.TP
+.BI \-\-bootdev " key"
+the boot disk's controller, as a match key
+.RB ( zorro:0202:54 ).
+.TP
+.BI \-\-rootdev " key"
+the root disk's controller.
+.TP
+.BI \-\-rootfs " type"
+the root file system type
+.RB ( ufs ,
+.BR s5 ).
+.TP
+.BI \-\-mem " bytes"
+the box's fast memory.
+.TP
+.BI \-\-root " record"
+.PD 0
+.TP
+.BI \-\-swap " record"
+.PD
+the root and swap records of the manifest, given once on the pristine
+build; later builds carry them from the default generation.
+.RE
+.IP
+When the built generation equals the default one,
+.B build
+says that
+.B commit
+will write nothing.
+.TP
+.B commit
+Writes the built generation into the store as the trial: the journal, the
+members, a read-back of every extent, the manifest, then the control
+block, which is the commit point.
+It prints
+.B "generation N committed; power-cycle to boot it."
+When the generation equals the default one (the same line, kabi, root,
+swap, members by name, size and SHA-256, and parameters), it writes
+nothing and prints
+.BR "the default generation M already has these members; nothing to commit" .
+On the running box it then makes the disk nodes, as
+.B nodes
+does.
+.TP
+.B "commit \-\-again"
+Commits the built generation even when it equals the default: a fresh
+copy as a new generation, the repair for store bytes that
+.B check
+found damaged.
+.TP
+.BI "commit \-\-spec" " spec"
+Commits the generation a spec file gives, in the format of the host tool
+.BR mkstore ;
+for tests and media built without packages.
+.TP
+.B check
+Recomputes the SHA-256 and CRC-32 of every member in the store and of
+every file the manifests name under the root, and compares the installed
+packages with the default generation.
+It never writes.
+Exit status 1 when it finds a problem.
+.TP
+.B mark-good \fR[\fP\fB\-\-booted\fP \fIid\fP\fR] [\fP\fB\-\-secondary\fP\fR]\fP
+Run once per boot, as the last script of run level 2.
+When the booted generation (from kinfo's loader record) is the trial, it
+becomes good and the default; on any other boot nothing is marked.
+After a new boot loader's trial boot it accepts the new loader, or reports
+that the secondary loader booted.
+When the loader passed over the default by itself, it verifies the default:
+damaged members mark it bad, and the booted generation becomes the
+default.
+It also writes the namelist, as
+.B namelist
+does.
+.B \-\-booted
+and
+.B \-\-secondary
+replace the loader record's answers.
+After a boot from a CD or a floppy pair it marks nothing.
+.TP
+.B retry \fR[\fP\fB\-\-booted\fP \fIid\fP\fR]\fP
+Run by the base system just before the reboot that follows a root file
+system repair.
+When the booted generation is the trial, its attempt does not count, at
+most twice per trial.
+It writes the boot store's control block and nothing on the root;
+otherwise it does nothing.
+.TP
+.B rollback
+Makes the newest good generation older than the default the new default,
+or the pristine one when there is none.
+A pending trial is cancelled.
+.TP
+.BI mark-bad " id"
+Marks generation
+.I id
+bad.
+The pristine generation cannot be marked bad.
+.TP
+.B next previous\fR|\fPsafe\fR|\fPdevload\fR|\fPnone\fR|\fP\fIid\fP
+A request for the next boot only:
+the previous good generation, safe mode, development loading (modules
+outside the manifest may load, and the loader and kernel say so), no
+request, or generation
+.IR id .
+.TP
+.B collect
+Removes the generations outside the kept set.
+.TP
+.BI loader-install " boot2" " \fR[\fP\fB\-\-version\fP \fIn\fP\fR] [\fP\fB\-\-boot1\fP \fIfile\fP\fR]\fP"
+Installs a new boot loader as the primary one; the old primary becomes the
+secondary, which boot1 runs when the new one does not complete a boot.
+boot1 is replaced only with
+.BR \-\-boot1 .
+.B \-\-version
+is the version of the given boot2 (default: this kbootset's own).
+.TP
+.BI create " size boot2" " \fR[\fP\fB\-\-boot1\fP \fIfile\fP\fR] [\fP\fB\-\-version\fP \fIn\fP\fR] [\fP\fB\-\-force\fP\fR]\fP"
+Lays an empty store of
+.I size
+bytes with the loader
+.IR boot2 ;
+it needs
+.B \-\-dev
+or
+.BR \-\-image .
+A slice that already holds a store or a bootblock is refused unless
+.B \-\-force
+is given; the first 64 KiB are zeroed first.
+.TP
+.B namelist
+Writes the booted kernel's namelist to
+.BR /stand/unix ,
+the file
+.BR netstat ,
+.B ifconfig
+and
+.B crash
+read symbols from: an ELF file of the booted kernel's symbols at their
+addresses in this boot.
+It writes only when the content differs, as a new file renamed into place.
+Exit status 3 when it cannot make one; the line says why.
+.TP
+.B nodes
+Makes the disk nodes a four-card kernel needs
+.RB ( /dev/dsk
+and
+.B /dev/rdsk
+c0 to c1f, d0, s0 to s7), removes the d1 nodes, and registers the change to
+the
+.B core
+package on the running box.
+It does nothing unless
+.B sdcards=4
+is in
+.B /stand/k30/kabi
+or
+.BR /stand/k46/kabi .
+It needs neither kinfo nor a store.
+.TP
+.BI major " name"
+Prints the majors that the major registry gives module
+.IR name ,
+one line each,
+.BI c " n"
+for a character major and
+.BI b " n"
+for a block major, with nothing else on the line:
+.B "kbootset major z3660eth"
+prints
+.BR "c 51" .
+It reads neither the store nor kinfo nor the root, so it answers the same
+on a static kernel, in safe mode and after a boot from a CD or a floppy pair.
+Exit status 1, with a message on the standard error and nothing on the
+standard output, for a name the registry does not know.
+.TP
+.B "media \fR...\fP"
+Builds the pristine generation of a new medium (a disk image, a floppy
+pair, a CD tree).
+Only the host build of
+.B kbootset
+has it.
+.SH GATES
+.B build
+and
+.B commit
+refuse, with exit status 4 and a line naming the gate, when:
+.TP 6
+1
+a kernel-space member's SHA-256 is not the one
+.B apkg
+recorded at install (hash);
+.TP
+2
+the members disagree on the kernel ABI, or a module needs a symbol that
+neither the kernel nor a module it depends on gives (kabi);
+.TP
+3
+no driver in the kernel or the root-class modules covers the boot disk's
+controller, the root disk's controller or the root file system, or a
+module is missing its board, its majors or a dependency (closure);
+.TP
+4
+the root-class modules do not fit the kernel's arena (arena);
+.TP
+5
+the generation does not fit the free store space beside the kept set
+(store space);
+.TP
+6
+the box's fast memory is too small for the kernel, the arena and the
+RAM disk (memory);
+.TP
+7
+the installed loader is older than the generation needs (loader);
+.TP
+8
+the boot store cannot be identified unambiguously (boot disk);
+.TP
+9
+the boot disk carries more than one
+.B UNI\e0
+slice (one boot slice);
+.TP
+10
+the kernel's line does not match the box's processor (line).
+.SH EXIT STATUS
+.TP 4
+0
+done: the store changed as asked, or there was nothing to do.
+.TP
+1
+an I/O error, a read-back mismatch, or a damaged store.
+A commit interrupted before its commit point leaves the store unchanged,
+and the next run reports the journal.
+.TP
+2
+usage.
+.TP
+3
+refused by a rule: a read-only store, a pristine generation marked bad, no
+older good generation, an unknown booted generation.
+.TP
+4
+refused by a gate (see GATES).
+.PP
+Nothing is written when the status is 2, 3 or 4.
+Every line
+.B kbootset
+prints for a person starts with
+.BR "kbootset: " ;
+the lines of
+.B major
+are for scripts and do not.
+.SH ENVIRONMENT
+.TP 16
+.BI KBOOTSET_HOLD= n
+.B commit
+announces each step on the standard error
+.RB ( "kbootset: step N" ),
+and with this set it syncs and waits before step
+.IR n ,
+for power-cut tests.
+.SH FILES
+.TP 28
+.B /etc/default/bootset
+.B bootset=auto
+or
+.BR manual ,
+the store
+.RB ( store= ,
+.BR store-id= )
+and the box's facts
+.RB ( line= ,
+.BR bootdev= ,
+.BR rootdev= ,
+.BR rootfs= ,
+.BR mem= ).
+.TP
+.BI /stand/gen/ id /
+a built generation: its manifest and
+.BR mod/ ,
+the modules the kernel loads from the root.
+.TP
+.B /stand/unix
+the booted kernel's namelist.
+.TP
+.B /var/kbootset/journal
+the commit journal.
+.TP
+.B /dev/kinfo
+the booted kernel's identity, loader record and loaded modules.
+.TP
+.B /etc/conf/mod.d/\fIname\fP
+an installed module object.
+.TP
+.B /etc/conf/modreg.d/\fIname\fP
+a module's parameters from its package;
+.B /etc/conf/modreg.local.d/\fIname\fP
+holds the owner's, which win.
+.SH EXAMPLES
+After installing a kernel-space package by hand with
+.BR bootset=manual :
+.PP
+.RS
+.nf
+kbootset build
+kbootset commit
+.fi
+.RE
+.PP
+then power-cycle the box.
+To make the previous good generation the default again:
+.PP
+.RS
+.nf
+kbootset rollback
+.fi
+.RE
+.PP
+A boot script that re-creates a missing node:
+.PP
+.RS
+.nf
+set \-\- `kbootset major z3660eth`
+mknod /dev/zen0 $1 $2 0
+.fi
+.RE
+.SH SEE ALSO
+.BR apkg (1)
+.SH NOTES
+A real 68060 is power-cycled to boot a new generation, not rebooted in
+software.

@@ -640,7 +640,15 @@ pkgadd binary (default
 .BR /usr/apkg/bin/pkgadd ;
 falls back to
 .B /usr/sbin/pkgadd
-when the default is missing).
+when the default is missing).  The stock
+.B /usr/sbin/pkgadd
+refuses any package whose
+.B pkginfo
+carries
+.B BASEDIR
+(\(lqrequires a base directory\(rq, interaction required), whatever the
+admin file says, so such a package installs only through APKGENG\(aqs
+pkgadd.
 .TP
 .B pkgrm
 pkgrm binary (default
