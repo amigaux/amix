@@ -1,9 +1,11 @@
 # kernel/port
 
-The 68040/68060 kernel. It is built from a fork of Antti Sokero's
-amix-040-060-port, which carries the module kernel chain on top of his tree.
-The fork is kept as its own repository so that his upstream and pull requests
-back to it stay ordinary git work.
+The 68040/68060 kernel. It is built from our fork of Antti Sokero's
+amix-040-060-port, amigaux/amix-040-060-port, which carries the module kernel
+chain on top of his tree. We fix the port in our fork, the build takes it by
+pin, and changes go to Antti's repository as pull requests when we choose to.
+The fork stays a repository of its own, so merging his upstream into it stays
+ordinary git work.
 
 This directory holds only this README and `port.pin`, which names the fork and
 the exact commit the build uses.
