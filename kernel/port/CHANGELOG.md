@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cut 68060-261031-53 is the k46 cut of record; kern46m -53 (0560124)
+
+port.pin moves to 727cbe7 and cuts/CURRENT to 68060-261031-53: the port's cut with gcc14's binutils 2.43.1 and amix
+b391504's module core and kit, whose registry carries c 48 random. kabi k46.1.3 and abi 18c0a1c9 unchanged; unix
+affe663a. cuts/build.sh reproduces its seven sums from the public port, on the host and in the build container.
+kern46m k46.1.3.261031-53 (unminted) packages it and asks for kbootset -30 or later; -52 stays the metal record.
+
 ## 2026-10-31 — cuts/build.sh, make dist's kernel-k46 hook (598c4ed)
 
 Rebuilds the port fork's cut of record named in cuts/CURRENT, as the fork has it at port.pin: the fork and paula in
