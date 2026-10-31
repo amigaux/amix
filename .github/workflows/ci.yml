@@ -71,6 +71,8 @@ jobs:
         run: make -C kernel/drivers/a4091/test/host check
       - name: kernel/drivers z3660scsi host tests
         run: make -C kernel/drivers/z3660scsi/test/host check
+      - name: kernel/drivers z3660eth host test (its parameter parser)
+        run: make -C kernel/drivers/z3660eth/module test
       - name: build/pkg host tests
         run: make -C build test
       - name: toolchain host tests (distfile fetch, m68k-gnu-bin)

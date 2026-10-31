@@ -152,8 +152,16 @@ amix_dlm_kit() {
 	_dk_pc="${3:-}"
 	if [ -n "$_dk_pc" ]; then
 		if ! git -C "$_dk_port" cat-file -e "$_dk_pc^{commit}" 2>/dev/null && [ -n "${AMIX_PORT_URL:-}" ]; then
-			# the recipe's pinned commit, by hash: an older pin than port.pin's works too
-			git -C "$_dk_port" fetch -q --depth 1 "$AMIX_PORT_URL" "$_dk_pc" 2>/dev/null || :
+			# the recipe's pinned commit, fetched by hash -- by its full
+			# hash only: git cannot fetch a short one.  The label (the
+			# kit's PORT_REV) stays as the recipe gives it.
+			if echo "$_dk_pc" | grep -Eqx '[0-9a-f]{40}'; then
+				git -C "$_dk_port" fetch -q --depth 1 "$AMIX_PORT_URL" "$_dk_pc" 2>/dev/null || :
+			else
+				echo "[FAIL] amix-040-060-port: $_dk_port has no commit $_dk_pc, and git cannot fetch a short hash;" >&2
+				echo "       give the recipe's full port hash, or an AMIX_PORT_REPO that has $_dk_pc" >&2
+				exit 1
+			fi
 		fi
 		git -C "$_dk_port" cat-file -e "$_dk_pc^{commit}" 2>/dev/null || {
 			echo "[FAIL] amix-040-060-port has no commit $_dk_pc in $_dk_port${AMIX_PORT_URL:+ or at $AMIX_PORT_URL}" >&2; exit 1; }

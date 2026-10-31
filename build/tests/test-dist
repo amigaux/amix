@@ -132,8 +132,14 @@ PY
     for d in ("kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw/module",
               "kernel/drivers/a4091"):
         os.makedirs(os.path.join(top, d), exist_ok=True)
-    write(os.path.join(top, "kernel", "port", "port.pin"),
-          "https://github.com/amigaux/amix-040-060-port.git " + "a" * 40 + "\n")
+    portsrc = os.path.join(tmp, "amix-040-060-port")
+    write(os.path.join(portsrc, "include-modelb", "sys", "immu.h"), "x\n")
+    subprocess.run(["git", "init", "-q", portsrc], check=True)
+    git("add", ".", cwd=portsrc)
+    git("commit", "-q", "-m", "port", cwd=portsrc)
+    portc = subprocess.run(["git", "-C", portsrc, "rev-parse", "HEAD"],
+                           stdout=subprocess.PIPE).stdout.decode().strip()
+    write(os.path.join(top, "kernel", "port", "port.pin"), "file://%s %s\n" % (portsrc, portc))
     recipe("kernel/dlm", "kbootset", "1.1.0-28")
     recipe("kernel/drivers/a4091", "a4091k30", "1.0.0-6")
     rc, out = run("kspace")
@@ -149,9 +155,10 @@ PY
     rt = os.path.join(os.path.realpath(top), "out")
     check("kspace: provider order, each with AMIX_BUILD_ROOT=out/build/kspace and the port by hash",
           [l for l in log if l.startswith("kernel/")] == ["kernel/dlm", "kernel/drivers/a4091"]
-          and "AMIX_BUILD_ROOT=%s AMIX_PORT_URL=https://github.com/amigaux/amix-040-060-port.git "
-              "AMIX_PORT_REPO=%s" % (os.path.join(rt, "build", "kspace"), os.path.join(rt, "cache", "port-repo"))
-          in log and os.path.isdir(os.path.join(rt, "cache", "port-repo", ".git")),
+          and "AMIX_BUILD_ROOT=%s AMIX_PORT_URL=file://%s AMIX_PORT_REPO=%s"
+              % (os.path.join(rt, "build", "kspace"), portsrc, os.path.join(rt, "cache", "port-repo")) in log
+          and subprocess.run(["git", "-C", os.path.join(rt, "cache", "port-repo"), "cat-file", "-t", portc],
+                             stdout=subprocess.PIPE).stdout.decode().strip() == "commit",
           "\n".join(log))
     for d, p in (("kernel/k30", "kern30m"), ("kernel/port", "kern46m"), ("kernel/modules/monsw", "monsw30")):
         recipe(d, p, "1.0-1")
@@ -164,6 +171,10 @@ PY
     rc, out = run("kspace")
     check("kspace: a failing build.sh stops the step, exit 1",
           rc == 1 and "kernel/port/pkg/build.sh failed" in out, out)
+    write(os.path.join(top, "kernel", "port", "port.pin"), "file://%s %s\n" % (portsrc, portc[:7]))
+    rc, out = run("kspace")
+    check("kspace: a port.pin with a short hash is refused before any recipe",
+          rc == 1 and "is not a full 40-digit commit hash" in out and "--- kernel/dlm" not in out, out)
     shutil.rmtree(os.path.join(top, "kernel"))
 
     # --- drivers: ours in kernel/drivers, the forks at their pins ---------------------
@@ -204,6 +215,10 @@ clean:
           and open(os.path.join(mods, "k30", "paula")).read() == "paula k30 yes\n", out)
     check("drivers: the generic modules are kept beside the drivers'",
           sorted(os.listdir(os.path.join(mods, "k30"))) == ["monsw", "paula", "z3660scsi"])
+    write(os.path.join(top, "kernel", "drivers", "paula", "paula.pin"), "file://%s %s\n" % (fork, pc[:7]))
+    rc, out = run("drivers/paula", GCA=gca)
+    check("drivers/<fork>: a pin with a short hash is refused",
+          rc == 1 and "paula.pin: '%s' is not a full 40-digit commit hash" % pc[:7] in out, out)
     rc, out = run("drivers/nosuch", GCA=gca)
     check("drivers/<unknown>: refused", rc == 1 and "no driver nosuch" in out, out)
     write(os.path.join(top, "kernel", "drivers", "z3660scsi", "module", "Makefile"),

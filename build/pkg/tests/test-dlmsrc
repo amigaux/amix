@@ -111,6 +111,22 @@ try:
           "PORT_REV=%s\n" % pc in k46 and "KIT_REV=%s\n" % c in k46
           and ("PORT=%s " % os.path.join(tmp, "out", "kspace", "src", "port-" + pc)) in got, k46 + got)
 
+    short = pc[:7]
+    shutil.rmtree(tree)
+    rc, out = run('amix_dlm_kit %s "" %s' % (c, short), AMIX_PORT_REPO=cache,
+                  AMIX_PORT_URL="file://" + port)
+    k46 = open(os.path.join(tree, "build", "kit", "k46", "kit.conf")).read() if rc == 0 else ""
+    check("amix_dlm_kit: a short pinned port hash the repository has works, and stays the label",
+          rc == 0 and "PORT_REV=%s\n" % short in k46, out + k46)
+    nofull = os.path.join(tmp, "no-full")
+    subprocess.run(["git", "init", "-q", nofull], check=True)
+    shutil.rmtree(tree)
+    rc, out = run('amix_dlm_kit %s "" %s' % (c, short), AMIX_PORT_REPO=nofull,
+                  AMIX_PORT_URL="file://" + port)
+    check("amix_dlm_kit: a short pinned port hash the repository lacks: refused, not fetched",
+          rc != 0 and "git cannot fetch a short hash" in out
+          and "give the recipe's full port hash" in out, out)
+
     empty = os.path.join(tmp, "empty-port")
     subprocess.run(["git", "init", "-q", empty], check=True)
     shutil.rmtree(tree)

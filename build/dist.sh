@@ -106,8 +106,16 @@ AMIX_TOP=$top
 . "$here/pkg/layout.sh"
 : "${GCA:?dist.sh: GCA is not set (the build container sets it)}"
 
+full_hash() {	# full_hash <pin> <commit>: git fetches a commit by its full hash only
+	echo "$2" | grep -Eqx '[0-9a-f]{40}' || {
+		echo "[FAIL] $1: '$2' is not a full 40-digit commit hash; git cannot fetch a short one" >&2
+		exit 1
+	}
+}
+
 port_at_pin() {	# the port at kernel/port/port.pin, in out/cache/port
 	read -r url commit < "$top/kernel/port/port.pin"
+	full_hash kernel/port/port.pin "$commit"
 	p=$out/cache/port
 	if [ "$(git -C "$p" rev-parse HEAD 2>/dev/null)" != "$commit" ]; then
 		rm -rf "$p"
@@ -146,6 +154,7 @@ DRIVERS="a4091 z3660scsi z3660eth cdfs gayle-ide paula z3660rtg"
 
 fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.pin, in out/cache/forks
 	read -r url commit < "$top/kernel/drivers/$1/$1.pin"
+	full_hash "kernel/drivers/$1/$1.pin" "$commit"
 	f=$out/cache/forks/$1
 	if [ "$(git -C "$f" rev-parse HEAD 2>/dev/null)" != "$commit" ]; then
 		rm -rf "$f"
@@ -275,10 +284,15 @@ step_kspace() {
 	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
 	# the port's headers at each recipe's own pinned commit (dlm-src.sh):
 	# a cache repository that fetches a commit it lacks by hash
-	read -r AMIX_PORT_URL _ < "$top/kernel/port/port.pin"
+	read -r AMIX_PORT_URL _pc < "$top/kernel/port/port.pin"
+	full_hash kernel/port/port.pin "$_pc"
 	AMIX_PORT_REPO=$out/cache/port-repo
 	[ -d "$AMIX_PORT_REPO/.git" ] || git init -q "$AMIX_PORT_REPO"
 	AMIX_PORT_URL=${PORT_REPO:-$AMIX_PORT_URL}
+	# port.pin's commit, by its full hash, so a recipe pinned to it finds it
+	# under either spelling; a recipe with an older pin fetches its own
+	git -C "$AMIX_PORT_REPO" cat-file -e "$_pc^{commit}" 2>/dev/null ||
+		git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$_pc"
 	export AMIX_PORT_URL AMIX_PORT_REPO
 	missing=
 	for d in $(kspace_dirs); do
