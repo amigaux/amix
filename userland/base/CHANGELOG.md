@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — syslog builds with TOOLCHAIN=none (6b43224)
+
+syslog compiles nothing, so it sets up no cross toolchain and no longer depends on a compiler checkout. Payload
+unchanged; syslog 1.0-1 re-rolls with a new PSTAMP and timestamp.
+
 ## 2026-10-31 — docs, comments and recipe headers state facts without internal ids; amix-base 1.0-13 (b64aa88)
 
 C objects unchanged (comments only). amix-base 1.0-13 because /etc/profile's comment line and devnodes' header
