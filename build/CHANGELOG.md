@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — the roll's epoch is the package version's own (a73c4c7)
+
+P-38 D-b: pkgbuild.sh gives the roll package.sh's new optional SOURCE_EPOCH key (seconds; pkgmeta refuses anything
+else); without it, the time of the last commit that changed the package directory; never the environment's
+SOURCE_DATE_EPOCH (such as the build container's). Without a key and without a commit, the build is refused.
+test-pkgbuild 65/65 with a hostile SOURCE_DATE_EPOCH set; repro-selftest 6/6.
+
 ## 2026-10-31 — the package roll is byte-reproducible (01aad1b)
 
 dsroll.sh is the pkgmk/pkgtrans step of both amix_pkgroll and amix_kpkgroll: the staged payload and control files are
