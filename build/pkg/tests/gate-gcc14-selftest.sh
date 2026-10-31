@@ -382,4 +382,25 @@ grep '2 of 3 gcc14 compile lines lack' "$T/al4.log" >/dev/null || { cat "$T/al4.
 if amix_gate_g14_strict "$T/none.log" >/dev/null 2>&1; then fail "the strict gate passed a log with no compile line"; fi
 ok "-mno-strict-align: env refuses flags without it or overriding it, -S probe rejects a strict compiler, make-log gate counts 2/3 bad and refuses an empty log"
 
+# amix-decls.h: what the AMIX headers never declare, so an implicit
+# declaration (an error under gcc14) never reaches a link: readv/writev
+# (libc.so.1), cbrt (libm.a), copysign and isinf as gcc's builtins
+cat > "$T/decls.c" <<'EOF'
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <math.h>
+int f(double x, float y, long double z, int fd, struct iovec *v) {
+	return readv(fd, v, 1) + writev(fd, v, 1) + isinf(x) + isinf(y) + isinf(z)
+	    + isnan(x) + (int)copysign(cbrt(x), -1.0);
+}
+EOF
+if $CC $AMIX_CFLAGS -Werror=implicit-function-declaration -c "$T/decls.c" -o "$T/nodecls.o" > "$T/nodecls.log" 2>&1; then
+	fail "the decls probe compiled without amix-decls.h: it tests nothing"
+fi
+$CC $AMIX_CFLAGS -Werror=implicit-function-declaration -include "$AMIX_GCC14_DECLS" -c "$T/decls.c" -o "$T/decls.o" > "$T/decls.log" 2>&1 ||
+	{ cat "$T/decls.log" >&2; fail "amix-decls.h does not declare readv, writev, cbrt, copysign and isinf"; }
+_und=$("$NM" -u "$T/decls.o" | awk '{print $NF}' | LC_ALL=C sort | tr '\n' ' ')
+[ "$_und" = "cbrt readv writev " ] || fail "the decls probe leaves '$_und' undefined, not cbrt readv writev (isinf, isnan and copysign inline)"
+ok "amix-decls.h declares readv, writev, cbrt, copysign and isinf; isinf and copysign expand inline, the rest are the sysroot's"
+
 echo "gate-gcc14-selftest: PASS ($n checks)"
