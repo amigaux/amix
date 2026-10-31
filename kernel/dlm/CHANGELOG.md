@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — P-38 S3.3: dlm's kernel-space recipes move into kernel/dlm/pkg (3d867f9)
+
+loader-amix, kbootset, modtools and dlmkit (dlmkit30/46) move in from amix-packages' recipes (bea8828). They are rolled
+by build/pkg's harness through pkg/build.sh, make dist's kspace hook (`pkg <file> <sha256>` per datastream). Each
+builds from a git archive of its pinned amix commit and verifies its outputs. Re-rolled here, the minted -11/-28/-9/-12
+have the same payload and pkgmap payload rows; only the control files' stamps differ under the deterministic roll, so
+these versions keep amix-packages' bytes and the 1.1 set takes new revisions at release prep (D-g).
+
 ## 2026-10-31 — P-38 S2.1: `make kit` writes build/kit.digests for the release lock (1632ee4)
 
 tools/kitdigest.sh gives each kit two digests: `manifest`, the dlmkit package's pin, equal across rebuilds of one
