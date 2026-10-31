@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — xstart keeps a card's env to its server and runs restore after a crash; amix-base 1.0-14 (5a70fe4)
+
+On the xinit path too, a card's `env` reaches the server alone (a wrapper that exists only while the session runs).
+The optional card key `restore` runs after a session whose server ended on its own (e.g. a keyboard hand-back).
+display.d(4) gives the exact card-file contract, with the Z3660 RTG card file as its worked example.
+
 ## 2026-10-31 — syslog builds with TOOLCHAIN=none (6b43224)
 
 syslog compiles nothing, so it sets up no cross toolchain and no longer depends on a compiler checkout. Payload
