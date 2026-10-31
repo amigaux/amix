@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — port.pin moves to 392a44e (e97ac8e)
+
+392a44e carries the records of cuts 68060-261031-54 and -55; -55's record reproduces its seven sums (unix a31055d9)
+on the host and in the build container. cuts/CURRENT still names -53, whose record is unchanged.
+
 ## 2026-10-31 — port.pin moves to b0f1d86 (f028e9e)
 
 The -53 record at b0f1d86 differs from 727cbe7's in comments and notes only; its seven sums and kern46m -53 are
