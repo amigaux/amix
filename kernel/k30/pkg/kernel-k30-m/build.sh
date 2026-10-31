@@ -37,9 +37,11 @@ SRC="$K30M_SRC/$K30M_SYSDIR"
 
 echo "=== $K30M_CATALOG_NAME $K30M_VERSION (PKG=$K30M_PKG, build $K30M_BUILDID) ==="
 
+# the cut's output is an input from outside the recipe: absent, the roll is
+# not failed but missing (exit 3, build.sh)
 [ -f "$K30M_SRC/$K30M_SUMS" ] || {
-	echo "[FAIL] no cut $K30M_BUILDID at $K30M_SRC: kernel/k30/cuts/$K30M_BUILDID/cut.sh makes it (K30M_SRC names another)" >&2
-	exit 1; }
+	echo "[MISSING] kspace: kernel/k30: $K30M_PKG: no cut $K30M_BUILDID at $K30M_SRC (P-38 S2.2, the k30 station: make kernel-k30)" >&2
+	exit 3; }
 case "$K30M_PORT_COMMIT" in "$K30M_KIT_PORT"*) ;; *)
 	echo "[FAIL] pin.sh: K30M_PORT_COMMIT is not K30M_KIT_PORT in full" >&2; exit 1 ;; esac
 
