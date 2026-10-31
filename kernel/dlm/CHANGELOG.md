@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — first-use loads never wait for memory; core patch 0049 (bc0a7fb, 8370e1d, 93531fe, ac8336b)
+
+A load at first use (a filesystem's first mount, a demand major's first open, a STREAMS first open, a first exec,
+modload) allocates KM_NOSLEEP: short memory fails it with ENOMEM, the kernel as it was and the stub kept, and a later
+use retries. Boot-class loads keep KM_SLEEP. The file's copy is the file's size plus one, in one request, and is freed
+before `_load`: cdfs peaks at about 201 KB instead of about 233 and keeps about 84. modcheck reports peak and resident.
+C3-6 v9 extends the memory rule to every entry point a user's call reaches; C4-6 v6; spec 30 §8; spec 50's CD rows
+(one cdfs object, demand class, loaded at the installer's disc mount).
+
 ## 2026-10-31 — a filesystem module can load at its first mount; kabi 1.4 (44ccad1, 5d03abe, 5d80c50, 6bb7dd6, 931fff2)
 
 Core patch 0048: a demand-class record with fs=<type> gets a stub vfssw row at the first sysinit entry. The first
