@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cut 68030-261031-66 with core patch 0049; kern30m -66 (b7d78d9)
+
+-65's recipe from amix 3c3e353, whose core patch 0049 makes a first-use load never wait for memory and frees the
+load's file copy before the load proper. kabi k30.1.4 and abi 18c0a1c9 unchanged; ufs and s5 stay kabi k30.1.2, boot
+class. unix.brel 8eaa44c9 (1 539 048 B, +740 against -65), bss 346 560 (+32). kern30m k30.1.4.261031-66 = 4e48dd06,
+1 888 256 B; host and container rolls are byte-identical.
+
 ## 2026-10-31 — cut 68030-261031-65, kabi k30.1.4 with core patch 0048; kern30m -65 (4eeb376, 29aeeb8)
 
 -64's recipe from amix 74405ce, whose core patch 0048 loads a demand-class filesystem module at its first mount. The
