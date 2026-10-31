@@ -162,6 +162,10 @@ try:
     check("stream: a build-host path in the payload is reported, not refused",
           rc == 0 and "payload root/opt/amix/a holds the build-host path /home/b/w" in out,
           err or out)
+    rc, out, err = run("stream", leak, str(EPOCH), "--host", "/home/b/w", "--refuse-payload")
+    check("stream: with --refuse-payload (gcc14) it is refused",
+          rc == 1 and "build-host paths in the payload" in err
+          and "root/opt/amix/a holds /home/b/w" in err, err)
     write(leak, stream(pkgmap=b"1 f none /usr/src/x 0644 root bin 3 1 1\n",
                        payload=b"/srcx/y\n"))
     rc, out, err = run("stream", leak, str(EPOCH), "--host", "/src")

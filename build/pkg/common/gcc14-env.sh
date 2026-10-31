@@ -224,4 +224,16 @@ export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-err
 export AMIX_GCC14_DECLS="$AMIX_PKG_COMMON/gcc14/amix-decls.h"
 
 export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
+
+# Path remapping (P-38 S1.3): what the compiler writes of a path (__FILE__,
+# debug info) names /build for the build tree, /src for the checkout and
+# /gcc14 for the toolchain, wherever they are on this host, so a build at
+# another path gives the same bytes. On CC itself, since a recipe's own
+# compile lines need not use AMIX_CFLAGS. The last matching map wins, and
+# the build tree is inside the checkout by default: it comes last.
+AMIX_PREFIX_MAP="-ffile-prefix-map=$AMIX_GCC14_PREFIX=/gcc14 -ffile-prefix-map=$AMIX_REPO_ROOT=/src -ffile-prefix-map=$AMIX_BUILD_ROOT=/build"
+CC="$CC $AMIX_PREFIX_MAP"
+CXX="$CXX $AMIX_PREFIX_MAP"
+AMIX_CPP="$CC -E"
+export CC CXX AMIX_CPP AMIX_PREFIX_MAP
 unset _g14_bin _g14_o

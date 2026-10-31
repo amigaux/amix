@@ -11,15 +11,16 @@
       install/*) and 0755 for such a directory; its time EPOCH. pkgmap's
       modtime column says EPOCH too: pkgmk gives its own copy of pkginfo
       the time it wrote it.
-  dsnorm.py stream PKGFILE EPOCH [--host PATH]...
+  dsnorm.py stream PKGFILE EPOCH [--host PATH]... [--refuse-payload]
       the newc headers of every archive of the datastream, rewritten in
       place: ino renumbered from 1 in archive order (members that share an
       ino share the new one, so hard links stay pairs), uid and gid 0, dev
       0, mtime EPOCH, a directory's nlink 2 plus its subdirectories in the
       archive. Names, sizes, data and padding are not touched. A PATH
       found in the control files (pkginfo, pkgmap, install/) is refused;
-      in the payload it is reported. A PATH is found where it starts a
-      path (/src, not /usr/src) and ends at a component's end.
+      in the payload it is reported, or refused with --refuse-payload (a
+      gcc14 build, whose paths the compiler remaps). A PATH is found where
+      it starts a path (/src, not /usr/src) and ends at a component's end.
 
 The member order is pkgtrans's own: it lists the spool with find, and the
 roll puts a sorting find first on its PATH (sortedfind/find beside this file).
@@ -140,7 +141,7 @@ def control(name):
     return top not in ("root", "reloc")
 
 
-def stream(path, epoch, hosts):
+def stream(path, epoch, hosts, refuse_payload=False):
     with open(path, "rb") as fp:
         buf = bytearray(fp.read())
     if not buf.startswith(b"# PaCkAgE DaTaStReAm\n"):
@@ -181,10 +182,11 @@ def stream(path, epoch, hosts):
         off = (nxt + 511) // 512 * 512
     if not archives:
         raise Refused("%s: no newc archive after the header" % path)
-    bad = [h for h in hits if h[0]]
+    bad = [h for h in hits if h[0] or refuse_payload]
     if bad:
-        raise Refused("%s: build-host paths in the control files: %s" % (
-            path, "; ".join("%s holds %s" % (n, h) for _, n, h in bad)))
+        raise Refused("%s: build-host paths in the %s: %s" % (
+            path, "payload" if refuse_payload and not any(c for c, _, _ in bad)
+            else "control files", "; ".join("%s holds %s" % (n, h) for _, n, h in bad)))
     with open(path + ".norm", "wb") as fp:
         fp.write(buf)
     os.replace(path + ".norm", path)
@@ -198,14 +200,17 @@ def main(argv):
     if len(argv) >= 4 and argv[0] == "spool" and len(argv) == 4:
         spool(argv[1], argv[2], epoch_arg(argv[3]))
     elif len(argv) >= 3 and argv[0] == "stream":
-        hosts, rest = [], argv[3:]
+        hosts, rest, refuse = [], argv[3:], False
         while rest:
+            if rest[0] == "--refuse-payload":
+                refuse, rest = True, rest[1:]
+                continue
             if rest[0] != "--host" or len(rest) < 2:
                 return usage()
             if rest[1]:
                 hosts.append(rest[1])
             rest = rest[2:]
-        stream(argv[1], epoch_arg(argv[2]), hosts)
+        stream(argv[1], epoch_arg(argv[2]), hosts, refuse)
     else:
         return usage()
     return 0
