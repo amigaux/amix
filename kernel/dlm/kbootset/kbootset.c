@@ -39,6 +39,8 @@
  *                          `c N` or `b N` line each (C2-4 §15); needs no
  *                          store and no kinfo; status 1 for a name the
  *                          registry does not know
+ *   major -l               every row of the registry, `NAME c|b N` in its
+ *                          order (C2-4 §15, version 18)
  *   nodes                  the sd disk nodes of a four-card kernel under ROOT
  *                          (C4-1 §2.4, C2-4 §14); needs no store; commit
  *                          runs it on the running box, check reports it
@@ -420,7 +422,7 @@ usage(void)
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
-		"  major NAME\n"
+		"  major NAME | major -l\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -655,6 +657,11 @@ main(int argc, char **argv)
 
 		if (i + 2 != argc)
 			usage();
+		if (!strcmp(argv[i + 1], "-l")) {	/* the whole registry (version 18) */
+			for (j = 0; (own = km_entry(j, &t, &n)) != 0; j++)
+				printf("%s %c %d\n", own, t, n);
+			return 0;
+		}
 		for (j = 0; (own = km_entry(j, &t, &n)) != 0; j++)
 			if (!strcmp(own, argv[i + 1]))
 				printf("%c %d\n", t, n), found = 1;
