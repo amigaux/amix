@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the swap step; devnodes reads ? as 0 (96c0923, d1cf84c)
+
+The swap step: /etc/init.d/swap = rc2.d/S90swap (K05swap), replacing the stock script in its shape and folding the
+installer's S89rootswap. Each vfstab swap slice gets its length from the disk's RDB: the whole slice when the kernel
+lists no area, the tail past a block-0 boot area when 2048+ blocks are left; swap files as before. amix-base 1.0-9.
+devnodes: a `?` major or minor (stock pkgadd's record of 0) is 0, and a `?` mode is 0600. Host tests swap 20/0,
+devnodes 27/0; a two-boot run on a fresh k30 1.1 install PASS.
+
 ## 2026-10-31 — dhcpc and dlpi-mac built with GCC 14; inittab(4) (5520414, 63812ca)
 
 dhcpc and dlpi-mac are built with GCC 14 (gcc14-cross-amix b51ff39, -m68020-60 -mno-strict-align) against the stock
