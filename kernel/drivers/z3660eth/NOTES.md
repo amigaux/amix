@@ -110,12 +110,12 @@ the mechanical check instead: it proves the shape on the shipped objects, and th
 is the address arithmetic. Metal proof belongs to the tripwire firmware (Z3660 `dd9d179`): with
 ZS-05 this driver's own MODE/ACC_OP phantoms should be 0.
 
-## Module form (2026-10-26, kernel/dlm S3-25, contract C3-6 version 1)
+## Module form (2026-10-26, kernel/dlm contract C3-6 version 1)
 
 **One source, a switch.** `-DZ3660ETH_MODULE` turns `src/z3660eth.c` into the
 loadable module; without it the file is the static driver, byte for byte (the
 `.o` of both lines is identical before and after, and the preprocessed token
-stream too). The module is built with kernel/dlm's ABI kit (S3-10), one kit per
+stream too). The module is built with kernel/dlm's ABI kit, one kit per
 line: `make -C module` builds `build/<line>/mod.d/z3660eth` through the kit's
 `mk/module.mk` (its headers, `mkmod`, `modfix`, `modcheck.py`) from the one
 `module/Master` (no `$cpu`: the kit's DEFCPU gives 68030 on k30, 68040 on k46).
@@ -174,7 +174,7 @@ spun on both and printed "interrupt self-test failed; polled" every time.
 - `intrl2=0` leaves the drain to the next poll tick (the other half M-INT1
   measures). Counters: `z3660eth_int6_n`, `z3660eth_int2_n`,
   `z3660eth_intr_mode` (6 = running on interrupts).
-- **Ring resync (1.0.0-4, after S3-46 on the A4000D).** The first metal
+- **Ring resync (1.0.0-4, after the A4000D metal run).** The first metal
   intr=6 run died under a 5 ms ping flood with the firmware at "backlog 32
   fetched 0": the cursor at slot 0 carried the serial the driver had consumed
   last, so every drain broke on its empty-ring sentinel while the firmware
@@ -217,7 +217,7 @@ at a kernel address the static kernel's `nm` gives. In the module they live
 wherever the core placed the module at load; their addresses are in the
 module's symbol table the core builds at load (`getksym`, the kit's
 `sys/ksym.h`), not in the kernel's. How a tool on the box reads them is
-kernel/dlm's side (S3-11, `modadmin`); until then the documented `/dev/kmem`
+kernel/dlm's side (`modadmin`); until then the documented `/dev/kmem`
 pokes (BUILD.md section 8) apply to the static driver only.
 
 ## RX backpressure (2026-10-19, decided in the RX throughput investigation)
@@ -278,7 +278,7 @@ timing the investigation also flagged (ACKs leave from inside the drain, so the 
 waits for a poll) is unchanged; resuming from the service procedure only adds
 drains between ticks.
 
-## Probe failure leaked kernel VA (2026-09-27, AB-04)
+## Probe failure leaked kernel VA (2026-09-27)
 
 **Rule: map, probe, free on failure.** Anything `z3660eth_map()` maps before
 the probe is released on every failure path (`z3660eth_unmap()`, `sptfree(va, n, 0)`;
@@ -290,10 +290,10 @@ and `ZZ_FRAME_PAGES` (32 at NBPP 4096; 64 on the 030 line). The failure returns 
 them (sptalloc half-failure, the F3-M0 cache check, the MAC-sanity probe) only zeroed
 `info->regs`; there was no `sptfree` in the file. So every failed open kept
 **33 pages** (65 on the 030 line). `S99zen` opens `/dev/zen` **16 times** at boot.
-On the AB-04 rig (amiberry, MAC registers read 0) that left **18 free sptmap pages**
+On the emulator (amiberry, MAC registers read 0) that left **18 free sptmap pages**
 (549 with S99zen disabled; the kvwalk shows 16 leaked 1+32 pairs), so raw I/O and
-big kmem pools slept forever on `Km_BigWanted`: the DL-13 "stall". Evidence kept
-locally, not published (amiberry AB-04 test runs: process, kvwalk and kstat captures).
+big kmem pools slept forever on `Km_BigWanted`: the kernel-memory "stall". Evidence kept
+locally, not published (amiberry test runs: process, kvwalk and kstat captures).
 Metal never failed the probe, so it never showed there; a metal firmware whose MAC
 reads 0 would.
 

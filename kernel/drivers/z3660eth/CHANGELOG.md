@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-31 — P-36 W6: link.d entry; zen0 configured through /etc/inet/interfaces (f0385cb, c69b2bf)
+## 2026-10-31 — link.d entry; zen0 configured through /etc/inet/interfaces (f0385cb, c69b2bf)
 
 The driver ships its /etc/inet/link.d entry, link.d/z3660eth: `zen	/dev/zen	0	51` (tab-separated, three # header
 lines); ifup probes the units; on a module kernel `kbootset major z3660eth` gives the major, 51 is the static-kernel
@@ -21,7 +21,7 @@ no stock code is quoted. NOTICE sha256 7bf25198 → f7c22823; objects unchanged.
 README points at amix's kernel/k30, kernel/dlm and ../z3660scsi, with a builds-inside-amix paragraph (`amix-build
 z3660eth`, the dlm kit). module/Makefile defaults DLM to $(TOP)/../../dlm, as a4091 and z3660scsi do. Sibling paths in
 BUILD.md, driver.conf, docs, NOTES, src comments and tools/ use amix's dirs; the z3660scsi cite 9ceada6 is now 90d03ae.
-Old review ids are worded for outside readers. The userland samples carry no address: ZEN_ADDR, ZEN_NETMASK and
+The userland samples carry no address: ZEN_ADDR, ZEN_NETMASK and
 ZEN_GATEWAY come from the box's /etc/default/zen. Objects unchanged (KIT_REV 084dc21): module k30 af24613d, k46
 86fe050b; static k30 c9370806, k46 37185507.
 
@@ -29,7 +29,7 @@ ZEN_GATEWAY come from the box's /etc/default/zen. Objects unchanged (KIT_REV 084
 
 jusii/amix-z3660net rx-backpressure 93fd0d3 (79 commits) moved into amix kernel/drivers/z3660eth by subtree merge after
 a filter-repo rewrite: lab addresses → 192.0.2.x, the project domain → example.com, local paths → repository names,
-the station files removed and the one commit that touched only them pruned (78 commits); the tip differs only in 8
+two local configuration files removed and the one commit that touched only them pruned (78 commits); the tip differs only in 8
 documentation/sample files, the driver, module and tools are byte-identical; old→new map in docs/history-map.txt
 (tip 93fd0d3 → a2d7e88). privacy-check --all: 0 hits (was 42).
 
@@ -52,7 +52,7 @@ trips: RX frame 2→4, poll tick 1→2, TX 2→3, INT6 2→4. Future firmware mu
 
 ## 2026-10-26 — z3660eth module 1.0.0-4: the RX ring resyncs past a wedged sentinel (2a15a4c)
 
-On metal (S3-46, A4000D, intr=6) zen0 died under a 5 ms ping flood: the firmware showed "backlog 32 fetched 0" — the
+On metal (A4000D, intr=6) zen0 died under a 5 ms ping flood: the firmware showed "backlog 32 fetched 0" — the
 cursor sat at slot 0 carrying the serial the driver had already consumed, so every drain took the ring as empty while the
 firmware filled the other 31 slots and dropped the rest; permanent, and intr=0 can die the same way. Two ways in: a lost
 ETH_RX strobe, or the firmware's catch-up race (10c7501 ethernet.c:734-744, unlocked against the RX ISR). With intr=6 the
@@ -65,7 +65,7 @@ stray -1 stores are not this driver (its stores are offsets 0x104/0x190/0x194, v
 
 The stock qattach() calls a driver's open with SR 0x2400 (k46 0x4ee1c, k30 0x5190c), so the PORTS that the level-6 test
 handler raises stayed pending for the whole spin and 1.0.0-2 always printed "zen: interrupt self-test failed; polled",
-emulator and metal alike (S3-44-3, N86/N87). The open now spins on the level-6 flag only and waits for the level-2 flag
+emulator and metal alike. The open now spins on the level-6 flag only and waits for the level-2 flag
 with up to 4 one-tick timeout/sleep rounds (the stock delay() idiom). Module objects k30 abf530d7, k46 9dfe0294 (12945 B,
 modcheck ok); static objects unchanged (k30 c2d6225e, k46 142e2486). NOTES.md: the IPL-4 fact.
 
@@ -96,7 +96,7 @@ objects unchanged.
 ifnet/rawintrq from <net/if.h> plus the driver's own globals); modules 18365 B, k30 8c5cad3c, k46 2bd8654c; static objects
 unchanged (k30 c2d6225e, k46 142e2486). tools/build-module.sh and src/z3660eth.modkeys removed.
 
-## 2026-10-26 — z3660eth as a loadable module, source half (859dfc1, bee712c; amix-dlm S3-25, C3-6)
+## 2026-10-26 — z3660eth as a loadable module, source half (859dfc1, bee712c; contract C3-6)
 
 Building with -DZ3660ETH_MODULE turns the same source into the module form: z3660eth_load(params) / _unload (EBUSY,
 unload=never) / _halt and MOD_DRV_WRAPPER; major 51 is data in z3660eth_drvdata (d_str only); if_attach replaces the ifstats
@@ -105,7 +105,7 @@ stays at IPL 4, from a level-2 handler raised through PORTS (intrl2=1) or the po
 after a software EXTER self-test, polled on any failure. Static objects byte-identical (k30 c2d6225e, k46 142e2486).
 tools/build-module.sh builds one object per line and checks it against amix-dlm's DDI v1 lists (32 imports, all listed).
 
-## 2026-10-21 — RX back-pressure: hold frames in the card's backlog when IP's queue is full (b896afc, 120cab3, 9787f88; review T-47)
+## 2026-10-21 — RX back-pressure: hold frames in the card's backlog when IP's queue is full (b896afc, 120cab3, 9787f88)
 
 The receive service no longer frees a frame that canput() refuses: it leaves the slot in the card's backlog and
 resumes on the next poll once the queue drains. Before, every full IP queue cost an uncounted drop below IP (about
@@ -115,18 +115,18 @@ boxes: push 25–30 → ~350 KB/s together with the port's 16 KB TCP queue-limit
 
 ## 2026-10-13 — Publication scrub before the first push since August (fb2059e)
 
-README licence section and a new NOTICE carry the Amiga Corporation trademark wording; NOTES marks the AB-04 evidence
+README licence section and a new NOTICE carry the Amiga Corporation trademark wording; NOTES marks the probe-leak evidence
 as local-only and relink-040-z3660.sh as private port tooling; ZEN0-BRINGUP links amix-installng by its GitHub URL.
 
-## 2026-09-27 — AB-04: free the mapping windows on a failed probe; cache the verdict (a3571ed, 586ba6f, 8449d53)
+## 2026-09-27 — Free the mapping windows on a failed probe; cache the verdict (a3571ed, 586ba6f, 8449d53)
 
 z3660eth_map() now sptfree()s both kernel-VA windows on every failure path; before, each failed probe on
 the sptalloc arm leaked 33 pages (65 on the 030 line) and S99zen's 16 boot opens exhausted sptmap:
-the rig's "DL-13 stall". A failed probe is cached per board (later opens return the errno without
+the kernel-memory "stall" seen on the emulator. A failed probe is cached per board (later opens return the errno without
 mapping or probing again), one console line, real errno (ENXIO absent / ENOMEM no VA), z3660eth_reprobe
-forgets one verdict. Object z3660eth_040.o a1f49c54 (sum -r 20612). Metal-proven inside KD060-Z (T-10).
+forgets one verdict. Object z3660eth_040.o a1f49c54 (sum -r 20612). Metal-proven inside KD060-Z.
 
-## 2026-09-27 — Interrupt masking made real (4e75876, a33bb6c, 47092ee; review T-9)
+## 2026-09-27 — Interrupt masking made real (4e75876, a33bb6c, 47092ee)
 
 The header no longer no-ops `spl6`/`splx` on the wrong "AMIX has none" premise: it includes the stock
 `<sys/inline.h>` (spl5..7 map to `_spl4`, SR 0x2400). Three masked sections: M1 the `tx_busy` claim in
@@ -135,10 +135,10 @@ occupant's sap/RAW flag); M3 the GET_STATUS snapshot. The hydra-idiom whole-wput
 `tx_busy` release were deliberately not added. Design in NOTES.md "Interrupt masking". Rebuilt with
 gcc-cross-amix 7a1d727: z3660eth_040.o b93ce42d… (sum -r 57252).
 
-## 2026-09-09 — docs: the field-proven zen0 bring-up procedure; GRIMOIRE-HANDOFF cross-reference corrected (74d8564, ae808a7)
+## 2026-09-09 — docs: the field-proven zen0 bring-up procedure; major-number cross-reference corrected (74d8564, ae808a7)
 
 `docs/ZEN0-BRINGUP.md` records the bring-up as it was actually done on metal (major 51 verified on the
-box 2026-09-09), so the next person does not rediscover it; the handoff's stale 48→51 renumber
+box 2026-09-09), so it is not rediscovered; the earlier notes' stale 48→51 renumber
 cross-reference is corrected.
 
 ## 2026-09-01 — docs-currency sweep: README, BUILD, ETHERNET-SCOPING, BLIZZARD-F3
@@ -146,8 +146,8 @@ cross-reference is corrected.
 No code change; the public docs are brought level with HEAD.
 
 - `BUILD.md` (`8a714a1`): §4 claimed the committed clean-gate script "predates" the `nm -u` bar
-  and cited `GRIMOIRE-HANDOFF.md` §8 — contradicting the same file's own tail note, and citing a
-  gitignored file no reader can open. `../amix-kerntools/tools/build-clean-net-kernel.sh` opens
+  and cited an unpublished notes file (§8) — contradicting that file's own tail note, and citing a
+  file no reader can open. `../amix-kerntools/tools/build-clean-net-kernel.sh` opens
   "THE BAR IS nm -u, NOT sum-recurrence", so the tail note was the true one. Both references to
   that script also spelled it as this repo's `tools/`, where it does not exist. "the locked
   two-tier routine in the project notes" now points at §7, which spells it out. The build box was
@@ -167,15 +167,14 @@ No code change; the public docs are brought level with HEAD.
   are annotated in place (the as-written review record is preserved). §8 gains a head note naming
   Q5 and Q6 as the only two items still open and a per-item marker on the nine that closed. §4.3
   said "seven" over a list of six and never acquired the DL_ERROR_ACK/DL_BADPRIM arm (`364333c`);
-  both fixed. Four sites still carried 2026-07-27 for work that landed 2026-07-30 (`c949380`,
-  `f12b2d5`) — `b9991e3` had fixed only driver.conf. The private `wip-ethernet` memory pointer is
-  dropped and the `wip-ethernet`/`amix-base` branch plan marked superseded.
+  both fixed. Four sites still carried 2026-07-27 for work done 2026-07-30 (`c949380`,
+  `f12b2d5`) — `b9991e3` had fixed only driver.conf. The `wip-ethernet`/`amix-base` branch plan
+  is marked superseded.
 - `docs/{BLIZZARD-F3,ETHERNET-SCOPING-evidence}.md` (`98e269c`): `3b97dca` missed five
   `amix-z3660` → `amix-z3660scsi` sites in the evidence dossier and the SCOPING sources footer.
   BLIZZARD-F3's four **measured** citations — including both of the pass line's own anchors —
-  pointed at the gitignored `GRIMOIRE-HANDOFF.md`; the values are inlined and re-cited to
-  README §"Status" and `src/z3660eth.c:46-47`, with the handoff line numbers kept as internal
-  provenance.
+  pointed at an unpublished notes file; the values are inlined and re-cited to
+  README §"Status" and `src/z3660eth.c:46-47`.
 
 ## 2026-08-24 — z3660eth: 040/060 cache maintenance behind a run-time gate (BLIZZARD F3 round 2)
 

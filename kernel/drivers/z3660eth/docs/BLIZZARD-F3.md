@@ -11,7 +11,7 @@ off a run, with its file), **derived** (arithmetic or logic over measured facts,
 **assumed** (neither — each one below names the gate that settles it).
 
 > **ROUND-2 RESULT (2026-08-24, appended — nothing above was edited to match it).**
-> M0 and M2 implemented and landed. Cross-compiled with the real AMIX toolchain (gcc 2.7.2.3 /
+> M0 and M2 implemented and committed. Cross-compiled with the real AMIX toolchain (gcc 2.7.2.3 /
 > GNU as 2.8.1, the shipped `AMIX_KERNEL_CFLAGS`): **`nm -u` is byte-for-byte identical to the
 > pre-change baseline** — the diagnostics use `cmn_err`, which this driver already referenced, so
 > nothing new is undefined and the repo's oldest gate does not move. All **six** 040/060
@@ -36,8 +36,7 @@ The driver does contain a cache block, and it has never been built. `src/Makefil
 `CFLAGS = -O -D_KERNEL -DSVR40 -DSVR4 …` with no `-DZ3660ETH_CACHE_FLUSH` (**measured**), and
 none is injected by the relink scripts. The repo says so in its own words: metal bring-up needed
 *"no cache maintenance … either"* (`README.md` §"Status", **measured**), and the flush helper
-was *"Untested, because it was never needed"* (the project's 2026-06 handoff notes, line 264 —
-unpublished).
+was untested, because it was never needed.
 
 So the block is not a working feature that is switched off. It is **four defects in a dead
 branch**, and BLIZZARD §G/D8 rules that it is repaired rather than deleted, because the device it
@@ -79,11 +78,10 @@ CPU↔CPU aliasing class here at all — no S5/S6, no S8, no page-cross law, bec
 | **030 (shipping today)** | supervisor root table section-0 **early-termination** descriptor, page address 0, CI **clear** — TT is *off*, `copyit.s:87-88` pmoves zero into `%tt0/%tt1` (**measured**, `docs/ETHERNET-SCOPING.md:433`) | **CACHEABLE** |
 | **040/060 (F4's target)** | `DTT0 = 0x003fc060`, `CM = 11` (**measured**, `amix-040-060-port/src/pstart040.s:326-327`) | **CACHE-INHIBITED** |
 
-The driver's own file header has this backwards, and so does the handoff: both argue from *"the
+The driver's own file header has this backwards: it argues from *"the
 window is cacheable"* to *"we got away with it because the 030 data cache is effectively off"*
 (**measured** — the header's *"the 030 data cache is effectively off in every validated config"*,
-`src/z3660eth.c:46-47`; the handoff notes argue the same at lines 256-260, which are
-unpublished). That reasoning is correct **for the 030** and is the
+`src/z3660eth.c:46-47`). That reasoning is correct **for the 030** and is the
 weaker of the two positions. On the 040/060 line the same window is cache-inhibited by a kernel
 constant no code in this repo names.
 
@@ -529,8 +527,7 @@ Same kernel, same driver object, both arms, arm A first:
 > **15/15 cycles clean on arm B**, where one clean cycle is all four of:
 > - every transferred file byte-identical, both directions;
 > - **40/40 flood ping, 0% loss** — the bar the 2026-06-21 metal soak was accepted at
->   (**measured**: *"laptop→box flood ping 40/40, 0% loss"*, `README.md` §"Status";
->   internal provenance: the handoff notes, line 56);
+>   (**measured**: *"laptop→box flood ping 40/40, 0% loss"*, `README.md` §"Status");
 > - `netstat -in` showing **0 input errors, 0 output errors, 0 collisions** — same source;
 > - **8/8 canary binaries byte-identical.**
 >
@@ -541,7 +538,7 @@ Same kernel, same driver object, both arms, arm A first:
 >
 > **Recorded, not gated:** sustained FTP throughput both arms. The 030 metal reference is
 > **~185 KiB/s** (**measured**: *"sustained FTP throughput ~185 KiB/s (stable across runs)"*,
-> `README.md` §"Status"; internal provenance: the handoff notes, line 61); the
+> `README.md` §"Status"); the
 > arm-A-vs-arm-B delta is the price of
 > the belt and belongs in the record, but a throughput regression is not a correctness failure and
 > must not be allowed to masquerade as one.

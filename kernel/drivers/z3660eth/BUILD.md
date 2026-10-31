@@ -180,7 +180,7 @@ and the arm is declared unsupported with a live data cache. The shipped Z3660 co
 ## 9. The loadable-module form (host-side, cross-compiled)
 The same `src/z3660eth.c` built with `-DZ3660ETH_MODULE` is the module of kernel/dlm's
 contract C3-6; the static build above does not change. The module is built with
-kernel/dlm's **ABI kit** (S3-10), one kit per kernel line, and nothing else: the kit's
+kernel/dlm's **ABI kit**, one kit per kernel line, and nothing else: the kit's
 headers (its own `sys/moddefs.h` and `sys/amixddi.h`, the stock headers, on k46 the
 port's 4 KiB `immu.h`/`param.h`), its `mk/module.mk`, `mkmod`, `modfix` and
 `modcheck.py`. Build the kits once in amix's `kernel/dlm`, then the module here (paths

@@ -2,8 +2,8 @@
 #
 # The history of jusii/amix-z3660net (branch rx-backpressure, tip 93fd0d3) was rewritten at move-in with git
 # filter-repo: lab network addresses became documentation addresses (192.0.2.x), the project domain became
-# example.com, local paths became repository names, and the two station files (CLAUDE.md, .claude/) were removed;
-# eae5a66 touched only station files and was pruned. The tip tree differs from 93fd0d3 only by those
+# example.com, local paths became repository names, and two local configuration files were removed;
+# eae5a66 touched only those files and was pruned. The tip tree differs from 93fd0d3 only by those
 # substitutions in 8 documentation/sample files; src/, module/, tools/ and driver.conf are byte-identical.
 # Short hashes in commit messages were rewritten; hashes cited inside files resolve through this map.
 # old (jusii/amix-z3660net) -> new (this directory's history); 'pruned' = no new commit

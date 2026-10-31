@@ -165,7 +165,7 @@ unsigned char z3660eth_present;
 unsigned char z3660eth_direct_map;	/* 1 = section-0 identity, 0 = sptalloc'd */
 
 /*
- * AB-04 (2026-09-27): a failed probe is remembered per board (info->map_verdict)
+ * Since 2026-09-27 a failed probe is remembered per board (info->map_verdict)
  * so later opens neither map nor probe again, and it prints ONE console line.
  * z3660eth_reprobe is the re-probe knob: poke it nonzero through /dev/kmem and
  * the next open forgets one cached verdict and probes afresh (the knob clears
@@ -679,7 +679,7 @@ int board_index;
 
     if (info->regs)
 	return 0;
-    if (info->map_verdict) {		/* AB-04: probed before and failed */
+    if (info->map_verdict) {		/* probed before and failed */
 	if (!z3660eth_reprobe)
 	    return info->map_verdict;
 	z3660eth_reprobe = 0;
@@ -767,8 +767,8 @@ int board_index;
 /*
  * Undo z3660eth_map()'s mapping.  THE RULE: map, probe, free on failure.  The
  * sptalloc arm draws from sptmap, a fixed kernel-VA resource map that nothing
- * else returns pages to; before AB-04 every failed probe kept 1 + ZZ_FRAME_PAGES
- * pages (33 at NBPP 4096, 65 at 2048); on the AB-04 rig S99zen's 16 boot-time
+ * else returns pages to; before 2026-09-27 every failed probe kept 1 + ZZ_FRAME_PAGES
+ * pages (33 at NBPP 4096, 65 at 2048); on the emulator S99zen's 16 boot-time
  * opens left 18 free sptmap pages (549 without S99zen), so raw I/O and big kmem
  * pools slept forever on Km_BigWanted.
  * flag 0 = unmap only: these are board pages, never page[] frames to release.
@@ -1260,7 +1260,7 @@ unsigned short serial;
  * The cursor's slot carries the serial of the frame the driver consumed last
  * (`serial'): the ring is empty -- or the firmware and the driver disagree, and
  * then the drain would read "empty" for ever while the firmware fills the
- * other 31 slots and tail-drops (S3-46 on metal: "backlog 32 fetched 0").
+ * other 31 slots and tail-drops (A4000D metal: "backlog 32 fetched 0").
  * Two ways in, both a frame the firmware still counts as unfetched:
  *   - the ETH_RX strobe for that frame never reached ethernet_receive_frame;
  *   - the catch-up in ethernet_receive_frame (10c7501 ethernet.c:734-744)
