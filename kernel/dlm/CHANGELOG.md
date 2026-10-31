@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — the kit test leaves the kit tree unchanged (864e01b)
+
+The kit test builds the sample in a copy against KIT and checks that each kit tree (entries, modes, SHA-256) is as
+mkkit left it, so a tested kit stays mintable. 98/98 with the -52/-63 kernels; the old in-kit build fails the new
+check. The main checkout's kit is rebuilt at 96720ad.
+
 ## 2026-10-31 — S5-47: the kabi-1.3 kits; modcheck --kernel (4976dac, 93d87ab)
 
 modcheck.py --kernel KABI says whether a kit fits a kernel's sidecar (line, pin, kabi family/major/minor, abi= at the
