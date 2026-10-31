@@ -239,8 +239,10 @@ step_drivers() {	# step_drivers [<name>...]
 # called as it is, over each space's packages. Its two conf layers: the
 # staging root's, tools/repo's deps/names/cats/descs.conf copied into each
 # pkgs/ (the stock, kernel-space and pkgtools packages, and the category
-# vocabulary), and the space's own: userland/packages/conf, or the
-# kernel-space confs once P-38 S3.3 brings them (none until then).
+# vocabulary), and the space's own: userland/packages/conf, or kernel/conf
+# for kernel space, whose names.conf gives each kernel package its catalog
+# name (zeth46: z3660eth-k46). A kernel-space catalog with packages and no
+# such names is refused: boxes, kbootset and installng ask for the names.
 step_catalogs() {
 	gencat=$top/userland/pkgtools/tools/repo/gen-catalog.py
 	for space in kspace userland; do
@@ -248,7 +250,17 @@ step_catalogs() {
 			echo "[FAIL] catalogs: no out/$space/pkgs; make $space first" >&2; exit 1; }
 		case $space in
 		userland) conf=$top/userland/packages/conf ;;
-		kspace) conf=none ;;
+		kspace)
+			conf=$top/kernel/conf
+			if [ ! -f "$conf/names.conf" ]; then
+				ls "$out/kspace/pkgs/"*.pkg >/dev/null 2>&1 && {
+					echo "[FAIL] catalogs: kernel-space packages but no kernel/conf/names.conf; their" >&2
+					echo "       catalog names (zeth46: z3660eth-k46) would be bare instances" >&2
+					exit 1
+				}
+				conf=none
+			fi
+			;;
 		esac
 		for c in deps names cats descs; do
 			cp "$top/userland/pkgtools/tools/repo/$c.conf" "$out/$space/pkgs/$c.conf"

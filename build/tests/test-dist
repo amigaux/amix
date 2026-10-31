@@ -263,6 +263,29 @@ clean:
     check("catalogs: the staging layer, tools/repo's four confs, is in each pkgs/",
           all(os.path.isfile(os.path.join(top, "out", s, "pkgs", c + ".conf"))
               for s in ("kspace", "userland") for c in ("deps", "names", "cats", "descs")))
+    def datastream(pkg, version):
+        def newc(name, data):
+            name = name.encode() + b"\0"
+            hdr = b"070701" + b"".join(b"%08X" % v for v in (
+                1, 0o100644, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name), 0))
+            pad = lambda n: b"\0" * (-n % 4)
+            return hdr + name + pad(len(hdr) + len(name)) + data + pad(len(data))
+        head = b"# PaCkAgE DaTaStReAm\n%s 1 8\n# end of header\n" % pkg.encode()
+        head += b"\0" * (-len(head) % 512)
+        info = ("PKG=%s\nNAME=the %s module\nARCH=Amiga\nVERSION=%s\nCATEGORY=system\n"
+                % (pkg, pkg, version)).encode()
+        return head + newc(pkg + "/pkginfo", info) + newc("TRAILER!!!", b"")
+    with open(os.path.join(top, "out", "kspace", "pkgs", "zeth46-1.0.0-6.pkg"), "wb") as fp:
+        fp.write(datastream("zeth46", "1.0.0-6"))
+    rc, out = run("catalogs")
+    check("catalogs: kernel-space packages and no kernel/conf/names.conf: refused",
+          rc == 1 and "kernel-space packages but no kernel/conf/names.conf" in out, out)
+    write(os.path.join(top, "kernel", "conf", "names.conf"), "zeth46: z3660eth-k46\n")
+    rc, out = run("catalogs")
+    kcat = open(os.path.join(top, "out", "kspace", "catalog")).read() if rc == 0 else ""
+    check("catalogs: kernel/conf is the kspace layer: zeth46 is catalogued as z3660eth-k46",
+          rc == 0 and "\nz3660eth-k46|1.0.0-6|zeth46|" in kcat, out + kcat)
+    shutil.rmtree(os.path.join(top, "kernel"))
     check("catalogs: gen-catalog leaves no __pycache__",
           not os.path.exists(os.path.join(top, "userland", "pkgtools", "tools", "repo", "__pycache__")))
     shutil.rmtree(os.path.join(top, "out"))
