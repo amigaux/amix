@@ -78,7 +78,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 |---|---|---|---|---|---|---|
 | S5-30 | **Rescue** from the CD and from the floppy pair | amix-installng | bench | — | S5-41 | 0.5 |
 | S5-31 | **Disk and SD images with rescue; tape as a package source** (was S4-56) | amix-installng | bench | — | S5-41 | 1 |
-| S5-32 | **The generic 060 target** (was S4-57): the A3000 and A4000 with a 68060, the A4091/A4092 or Gayle root, a ZZ9000 in Zorro II; pre-installed images through the first-boot dialog. P-35 (2026-10-30) left this route with no cell (amix-installng 37fbe0e retired the s5 `PREBUILT=1` cells); fresh installs or ufs-built images: open | amix-installng | bench | S5-12 | S5-41 | 1 |
+| S5-32 | **The generic 060 target** (was S4-57): the A3000 and A4000 with a 68060, the A4091/A4092 or Gayle root, a ZZ9000 in Zorro II; pre-installed images through the first-boot dialog. The route (owner 2026-10-31, P-38 D-f): pre-installed 68060 SD and disk images made by a fresh install of the 1.1 set in emulation, proven by their contents, running firstboot on their first boot. P-35 (2026-10-30) retired the old route (amix-installng 37fbe0e retired the s5 `PREBUILT=1` cells) | amix-installng | bench | S5-12 | S5-41 | 1 |
 | S5-33 | **The netinstall extras**: the raw RDB image, zen0 in the miniroot, a netinstall from a public host | amix-installng; amix-z3660net (zen0) | bench | — | S5-41 | 1 |
 | S5-34 | **The static kernel families leave the catalog** (S4-24): kernel-k30-u, kernel-k46-z, kernel-k46-zacd, their 1.0 rows under `superseded/` | amix-packages | host | — | S5-40 | 0.1 |
 | S5-35 | **The panic path after a failed root mount** (N149/N150: `ufs_update` +0x58 after `vfs_mountroot` errno 6) | the port | host | — | — | 0.25 |
@@ -96,7 +96,7 @@ beside each row (`was S4-nn`), so earlier evidence stays findable.
 |---|---|---|---|---|---|---|
 | S5-40 | **The final packages**: every package of the 1.1 set at its release version, one catalog | amix-packages | host | every row above that changes a shipped byte | S5-41 | 0.5 |
 | S5-41 | **Every medium of 50 rebuilt from the final packages**: disk and SD images, the floppy pair, the CD, the netinstall medium | amix-installng | host + bench | S5-40 | S5-42 | 1 |
-| S5-42 | **Stage 4's media rows again** on the rebuilt media (80 §2), both lines | amix-installng; the Bench | bench | S5-41 | S5-43 | 1 |
+| S5-42 | **Stage 4's media rows again** on the rebuilt media (80 §2), both lines: amix-installng's 9 current l11 cells plus a pre-installed-image cell (owner 2026-10-31); the prebuilt (P-35) and upgrade (P-36) cells are retired | amix-installng; the Bench | bench | S5-41 | S5-43 | 1 |
 | S5-43 | **The exit row**: `stage-5-exit.md` closed in one commit | amix-dlm | host | S5-42 | stage exit | 0.25 |
 
 ## 3. Order

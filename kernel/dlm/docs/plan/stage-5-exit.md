@@ -35,7 +35,7 @@ candidates (2026-10-31).
 | Paula (paula46, paula30; the reason for kabi 1.3, C3-2 v2) | pending; fff860dc carries paula-k46 1.0.0-1 (kabi k46.1.3) | pending; fff860dc carries paula-k30 1.0.0-1 (kabi k30.1.3) |
 | z3660scsi | pending | pending |
 | A4091/A4092 | pending | pending |
-| the A4000T 53C710 (S5-06) | pending | open question, not decided: fff860dc ships a4kt710-k30 1.0.0-1, but a4kt710 is unsupported in 030 mode, the A4000T's only k30 use (S5-16; 139b5b0, b7ce32b). Whether k30 ships it is open |
+| the A4000T 53C710 (S5-06) | pending | decided (owner 2026-10-31): a4kt710-k30 stays in the 1.1 set, accepted in emulation (amiberry's A4000T 53C710 in 030 mode), not on metal. fff860dc ships it as 1.0.0-1; on metal a4kt710 is unsupported in 030 mode, the A4000T's only k30 use (S5-16; 139b5b0, b7ce32b): pending, the emulation row |
 | Gayle IDE | pending | pending |
 | ramdisk | pending | pending |
 | ufs, s5 (S5-12) | pending; candidate ufs f4b9ab71 (-52); s5 — (S5-37) | pending; candidate ufs 3e2507e5, s5 1c9711b9 (-63) |
@@ -94,7 +94,7 @@ candidates (2026-10-31).
 |---|---|---|
 | S5-30 rescue from the CD and from the floppy pair | pending | pending |
 | S5-31 disk and SD images with rescue; tape as a package source | pending | pending |
-| S5-32 the generic 060 target, from its pre-installed images | pending, and no route: under P-35 (decided 2026-10-30, ufs the only install target) amix-installng 37fbe0e retired all eleven `PREBUILT=1` cells, which mounted an s5 root minted host-side. Whether the row becomes fresh installs on the 060 targets or keeps pre-installed images built on ufs is open | — (a 68060 target) |
+| S5-32 the generic 060 target, from its pre-installed images | pending. The route (owner 2026-10-31, P-38 D-f): 1.1 ships pre-installed 68060 SD and disk images, made by a fresh install of the 1.1 set in emulation and proven by their contents; they run firstboot on their first boot. The old route is gone: under P-35 (decided 2026-10-30, ufs the only install target) amix-installng 37fbe0e retired all eleven `PREBUILT=1` cells, which mounted an s5 root minted host-side | — (a 68060 target) |
 | S5-33 the raw RDB image, zen0 in the miniroot, a netinstall from a public host | zen0 in the miniroot and the raw RDB image pass in emulation (amix-installng ni7, 2026-10-27; re-cut ni9 on b1f564f4, install cells 10/10, 2026-10-28); a netinstall from a public host and metal: pending | as k46 |
 | S5-34 the static kernel families out of the catalog | **PASS** 2026-10-27: catalog of record b2a0e874 (amix-packages; T-51 13:5x) | the same |
 | S5-44 the disk nodes of cards 2 and 3: J4's root brought to the set by `kbootset` -22's commit, `check` clean, `pkgchk core` quiet on `/dev` (the rest of core's editable files are not this row's); a fresh install on a three-controller set names the card-2 disks with no hand-made node | kbootset's half 2026-10-27 (6c82415, 4046392); amix-installng's first boot calls `kbootset nodes`, CD rd1p and ni8 leave all four cards' nodes on every installed target (T-51 22:0x). J4's root and the three-controller install: pending (Z3660 + A4092 + Gayle, J4's set). P-36 (1.1 supports clean installs only) retired the upgrade install (amix-installng dad1b57, e046859); J4's half is a 1.1 root updated by apkg, not an upgrade from 1.0, so P-36 does not retire it by itself. Whether it still runs, or the fresh three-controller install stands in for it, is open | as k46; the three-controller install: pending (a k30 set with a card 2) |
@@ -104,7 +104,7 @@ candidates (2026-10-31).
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-47 the kabi-1.3 ABI kit: dlmkit46 and dlmkit30 at kabi 1.3 (abi 18c0a1c9), minted for S5-40 | the kit half done 2026-10-31: the kit at amix 4976dac (port d0e8857) fits 68060-261031-52 (`modcheck.py --kernel`); the kit test 96/96 with -52 as its module kernel; Paula built with it passes modcheck as k46.1.3 and binds to -52's symbol block. The mint (amix-packages): pending; until then the catalog of record and the media carry the 1.2 kit (c2dc7fb) | the kit half done, as k46, against 68030-261031-63; the mint: pending |
+| S5-47 the kabi-1.3 ABI kit: dlmkit46 and dlmkit30 at kabi 1.3 (abi 18c0a1c9), minted for S5-40 | the kit half done 2026-10-31: the kit at amix 4976dac (port d0e8857) fits 68060-261031-52 (`modcheck.py --kernel`); the kit test 96/96 with -52 as its module kernel; Paula built with it passes modcheck as k46.1.3 and binds to -52's symbol block. The mint (amix-packages): pending; until then the catalog of record and the media carry the 1.2 kit (c2dc7fb). Since amix 5910d09 (P-38 S2.3; changelog 7abd64c) `kernel/port/port.pin` is amigaux/amix-040-060-port k46-module 0d37eb1: kits minted from then carry PORT_REV=0d37eb1, and only the k46 kit.conf and NOTICE lines differ; the 4976dac kit with port d0e8857 stands as the record of this half | the kit half done, as k46, against 68030-261031-63; the mint: pending |
 | S5-48 the stock-defect fixes in the cuts: kzero's fault catch (quirk 90), ufs tail zeroing (quirk 91), the STREAMS freeq guard (quirk 92); on k30 also the sendsig FPU gate (quirk 74) | in the candidate 68060-261031-52 (53ec472). Metal: quirk 90 **PASS** on the A4000T's 68060, test kernel 68060-261030-50 (M51, amix-kerntools d5430cb; the port 574cea1); quirk 91 emulation only (the port ISSUE-108); quirk 92 guarded in emulation, its save not yet seen on k46 (ISSUE-109). The candidate on metal: pending | in the candidate 68030-261031-63 (a0e2ab4). Metal: quirks 90 and 91 on the A4000T in k30 mode, test kernel 68030-261030-54, qzeval 68/68 (M52, amix-kerntools d38cae5), ftx not proven; quirks 74 and 92 emulation only. The candidate on metal: pending |
 
 S5-48 changes shipped kernel and ufs bytes, so by 80 §3 it reopens S5-41
@@ -116,7 +116,7 @@ and S5-42 for every medium that carries those kernels.
 |---|---|---|
 | S5-40 the final packages, one catalog | pending | the same |
 | S5-41 every medium of 50 rebuilt from them | pending; reopened by S5-48's kernel and ufs bytes (80 §3) | pending, as k46 |
-| S5-42 stage 4's media rows again on the rebuilt media | pending. P-35 and P-36 retired the prebuilt cells (amix-installng 37fbe0e) and the upgrade cells (dad1b57); P-36's fresh install over a 1.0 disk is l11-k46-reinstall-ia (9fb44ac). Which of stage 4's media rows remain is open | pending, as k46 |
+| S5-42 stage 4's media rows again on the rebuilt media | pending. The acceptance (owner 2026-10-31): amix-installng's 9 current l11 cells (P-36's fresh install over a 1.0 disk among them, l11-k46-reinstall-ia, 9fb44ac) plus a new pre-installed-image cell (S5-32's images), run on the final media. Retired, with the reason: the prebuilt cells (P-35, amix-installng 37fbe0e: they mounted an s5 root minted host-side, and ufs is the only install target) and the upgrade cells (P-36, dad1b57: 1.1 supports clean installs only) | pending, as k46 |
 
 ## 8. Not cells of this ledger
 
