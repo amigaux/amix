@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — docs, comments and recipe headers state facts without internal ids; amix-base 1.0-13 (b64aa88)
+
+C objects unchanged (comments only). amix-base 1.0-13 because /etc/profile's comment line and devnodes' header
+changed; dhcp-client re-rolls with a new timestamp at the same version.
+
 ## 2026-10-31 — /etc/display can start CDE's dtlogin; amix-base 1.0-12 (cabcec9)
 
 /etc/display takes `start dtlogin`: S95display runs `xstart -dtlogin`, which starts dtlogin with `-server` and the
