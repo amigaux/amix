@@ -224,8 +224,11 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Version | `module/a4kt710/VERSION` (`1.0.0-1`) |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
-**Risk carried to the metal test:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is
-unmeasured. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
+**Metal (2026-10-28, k46):** the A4000T with a Z3660 (060) roots on the onboard bus through `a4kt710`, 3/3 cold boots, with
+the DMA buffer in the Z3660's DDR and a clean filesystem check. `a4kt710-k30` is untested on metal.
+
+**Still open:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is not yet
+byte-compared. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
 a byte compare on the tower (docs/A4000T-ONBOARD-710.md §10.6).
 
 ## Package (C3-5)
