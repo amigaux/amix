@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — build-cross-kernel.sh: no SIGPIPE races; each cut pins its own port and paula (89ebcf7, a1b9b6c, e27aae0)
+
+The carve's build-id check no longer fails at random: `strings | grep -q` under pipefail died of SIGPIPE when grep
+exited early (8 in 500 on -64's ufs); grep now reads strings through a process substitution (0 in 1000), and three
+other early-exit pipes are made safe the same way. Each cut record names its own port and paula commits
+(cuts/<id>/port.pin, paula.pin): -63 d0e8857/548d258, -64 0d37eb1/1b2736d, so moving kernel/port/port.pin leaves a
+recorded cut's inputs alone. -63 and -64 reproduce their seven sums, on the host and in amix-toolchain:dist.
+
 ## 2026-10-31 — cut 68030-261031-64, the cut of record; kern30m -64 (1ac1a49)
 
 -63's recipe from amix b391504; the module core's major registry carries c 48 random (a8719fb). kabi k30.1.3, abi
