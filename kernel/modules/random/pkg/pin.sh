@@ -38,7 +38,7 @@ KM_FILES_COMMON="\
 /etc/init.d/randseed kernel/modules/random/rc/randseed 40ec4d84a5b66ce8b070e161805b251514b0f1f2b4b5a72ed7af8a4d378149fe 0744
 /etc/rc2.d/S21randseed kernel/modules/random/rc/randseed 40ec4d84a5b66ce8b070e161805b251514b0f1f2b4b5a72ed7af8a4d378149fe 0744
 /etc/rc0.d/K02randseed kernel/modules/random/rc/randseed 40ec4d84a5b66ce8b070e161805b251514b0f1f2b4b5a72ed7af8a4d378149fe 0744
-/opt/amix/man/7/random kernel/modules/random/man/random.7 69ee2d9e52a59421ad23cf188cb27a3fbce69a3a03049f80f42fae9ed05a5f24 0644
+/opt/amix/man/7/random kernel/modules/random/man/random.7 7c448dcacee71b502e604081703d23e49703a8307a31caea6ed47dc07918f7a3 0644
 /opt/amix/man/1m/randseed kernel/modules/random/man/randseed.1m 696a48cc135c9a39cee162ff6e283ba1e84b1ce9b15ae8f2c8b15b1a10bc8c5f 0644"
 KM_WHATIS=kernel/modules/random/pkg/random.whatis
 KM_WHATIS_SHA=5b6711c0c00aa87f41e519dca5a49e488554bac480d95b9d1bfeb7d3415c2a50

@@ -161,6 +161,11 @@ amix commit (`KM_KIT_COMMIT`). A change to the boot step or a page is a new pack
 The catalog names come from `kernel/conf/names.conf` (`random30: random-k30`,
 `random46: random-k46`).
 
+The packages need a kernel cut with c 48 (k30 -64 or later, k46 -53 or later) and kbootset
+1.1.0.261031-30 or later, the first whose registry has random: both compile the registry in,
+and an older one refuses the module (`ECONFIG`, or kbootset's gate 3). The packages carry no
+dependency for it, because every 1.1 medium ships both.
+
 ## Testing
 
 **`test/hosttest.sh`** runs on the host, with no box. It first checks the source: only the
