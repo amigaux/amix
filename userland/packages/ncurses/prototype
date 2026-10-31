@@ -1,0 +1,37 @@
+#
+# prototype -- ncurses 6.6 under /opt/amix: static libraries and headers.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  No install scripts, no programs, no terminfo
+# database: the library reads the stock /usr/share/lib/terminfo.  The headers
+# are in include/ncurses/, so the stock <curses.h> stays the default.  Every
+# basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libform.a 0644 root bin
+f none /opt/amix/lib/libmenu.a 0644 root bin
+f none /opt/amix/lib/libncurses.a 0644 root bin
+f none /opt/amix/lib/libpanel.a 0644 root bin
+d none /opt/amix/include 0755 root sys
+d none /opt/amix/include/ncurses 0755 root sys
+f none /opt/amix/include/ncurses/curses.h 0644 root bin
+f none /opt/amix/include/ncurses/eti.h 0644 root bin
+f none /opt/amix/include/ncurses/form.h 0644 root bin
+f none /opt/amix/include/ncurses/menu.h 0644 root bin
+f none /opt/amix/include/ncurses/ncurses_dll.h 0644 root bin
+f none /opt/amix/include/ncurses/ncurses.h 0644 root bin
+f none /opt/amix/include/ncurses/panel.h 0644 root bin
+f none /opt/amix/include/ncurses/termcap.h 0644 root bin
+f none /opt/amix/include/ncurses/term.h 0644 root bin
+f none /opt/amix/include/ncurses/unctrl.h 0644 root bin
+#
+# Licence: ncurses' X11-style notice, in every header and in doc/ncurses.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/ncurses 0755 root sys
+f none /opt/amix/doc/ncurses/COPYING 0644 root bin
+f none /opt/amix/doc/ncurses/NEWS 0644 root bin
+f none /opt/amix/doc/ncurses/README 0644 root bin
