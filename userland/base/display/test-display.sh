@@ -24,7 +24,7 @@ expect() { # expect <name> <want-substring> <got>
 refuse() { case "$3" in *"$2"*) bad "$1: unwanted [$2] in [$3]" ;; *) ok ;; esac; }
 
 B=$T/bin
-mkdir -p "$B" "$T/d" "$T/home" "$T/dev" "$T/log"
+mkdir -p "$B" "$T/d" "$T/home" "$T/dev" "$T/log" "$T/tmp"
 for p in Xzz Xnat xinit xdm dtlogin tool; do
 	printf '#!/bin/sh\necho "%s $*" >> %s/calls\n' $p "$T" > "$B/$p"
 done
@@ -57,7 +57,8 @@ conf() { cat > "$T/display"; }
 run() { # run <args...>: xstart, its output and status
 	: > "$T/calls"
 	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="$T/d" HOME="$T/home" \
-	    XINITS="$B/xinit" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="$T/xsession" MONSWCTL="${MCTL:-$B/monswctl-no}" \
+	    XINITS="${XI:-$B/xinit}" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="${XS:-$T/xsession}" \
+	    MONSWCTL="${MCTL:-$B/monswctl-no}" XSTART_TMP="$T/tmp" \
 	    $SH "$here/xstart" "$@" 2>&1
 	echo "rc=$?"
 }
@@ -127,14 +128,65 @@ EOF
 o=$(run)
 same "run: xinit" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
 
-# --- a card's environment: exported for xinit, in the line for xdm
-printf '#!/bin/sh\necho "xinit SG=$SCREEN_GROUP $*" >> %s/calls\n' "$T" > "$B/xinit"
+# --- a card's environment reaches the server alone; restore after a crash.
+# A live xinit: the server in the background, then the session, then the
+# server stopped -- as the real one does
+cat > "$B/xlive" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+"\$@" &
+sp=\$!
+sleep 1
+"\$c"
+kill \$sp 2>/dev/null
+exit 0
+EOF
+cat > "$B/Xlive" <<EOF
+#!/bin/sh
+echo "server SG=\${SCREEN_GROUP-unset} \$*" >> $T/calls
+[ -f $T/die ] && exit 1
+exec sleep 20
+EOF
+printf '#!/bin/sh\necho "client SG=${SCREEN_GROUP-unset}" >> %s/calls\n' "$T" > "$T/livesession"
+printf '#!/bin/sh\necho restore >> %s/calls\n' "$T" > "$B/kbdback"
+chmod +x "$B/xlive" "$B/Xlive" "$B/kbdback" "$T/livesession"
+cat > "$T/d/live" <<EOF
+node     $T/dev/console
+server   $B/Xlive
+modes    auto
+env      SCREEN_GROUP=%n
+restore  $B/kbdback
+EOF
+printf 'card live\n' | conf
+rm -f "$T/die"
+o=$(XI=$B/xlive XS=$T/livesession run :10)
+expect "env: the server has it" "server SG=10 :10" "$(cat "$T/calls")"
+expect "env: the session does not" "client SG=unset" "$(cat "$T/calls")"
+refuse "normal end: no restore" "restore" "$(cat "$T/calls")"
+: > "$T/die"
+o=$(XI=$B/xlive XS=$T/livesession run :10)
+expect "server died: restore ran" "restore" "$(cat "$T/calls")"
+expect "server died: said" "the server ended on its own; running $B/kbdback" "$o"
+rm -f "$T/die"
+same "wrappers removed" "" "$(ls "$T/tmp")"
+o=$(run -n card=live)
+expect "-n: env for the server only" "(env for the server only)" "$o"
+expect "-n: the restore command" "restore  $B/kbdback, when the server ends on its own" "$o"
+# no env, no restore: no wrapper, the server's own path
+printf 'card z3660\nmode 640x480\n' | conf
+o=$(run)
+same "no env or restore: no wrapper" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+# xdm keeps the env in its line
 printf 'card native\n' | conf
-o=$(run :10)
-same "env: exported for xinit" "xinit SG=10 $T/xsession -- $B/Xnat :10" "$(cat "$T/calls")"
 o=$(run -xdm :10)
 same "env: in xdm's line" "xdm -server :10 local /usr/bin/env SCREEN_GROUP=10 $B/Xnat :10" "$(cat "$T/calls")"
-printf '#!/bin/sh\necho "xinit $*" >> %s/calls\n' "$T" > "$B/xinit"
+rm -f "$T/d/live"
+# a restore that is not a full path is a mistake
+printf 'server %s\nrestore kbdback\n' "$B/Xnat" > "$T/d/zbad"
+o=$(run -n card=native)
+expect "restore not a full path: said" "$T/d/zbad:2: restore is a command by its full path" "$o"
+rm -f "$T/d/zbad"
 
 # --- the monitor switch: the tool around the session when no monsw module
 printf 'card z3660\nmonsw 34\n' | conf

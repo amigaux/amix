@@ -11,7 +11,9 @@
 # when the card shares the monitor and the kernel's monsw does not own the
 # switch, the card's switch tool flips it, and back at the end. The server
 # runs through xinit (X11R6's, else the stock one) with ~/.xsession, then
-# ~/.xinitrc, then /etc/display's session, then /usr/lib/amix/xsession.
+# ~/.xinitrc, then /etc/display's session, then /usr/lib/amix/xsession; the
+# card's environment reaches the server alone, and the card's restore command
+# runs when the server ended on its own.
 # -n says what would run, and every mistake in the files; -xdm runs X11R6's
 # xdm with that server instead of a session, -dtlogin CDE's dtlogin the same
 # way (it takes xdm's -server, which outranks its Xconfig). The stock startx
@@ -211,7 +213,9 @@ then
 	then
 		echo "dtlogin  `first "$DTLOGINS"` -server \"$disp local $xline\""
 	else
-		echo "xinit    ${xinit:-none} $s -- $line"
+		echo "xinit    ${xinit:-none} $s -- $line${env:+ (env for the server only)}"
+		r=`disp_val $C restore`
+		[ -n "$r" ] && echo "restore  $r, when the server ends on its own"
 	fi
 	[ -z "$errs" ]
 	exit
@@ -246,14 +250,53 @@ fi
 
 [ -n "$xinit" ] || { say "no xinit installed ($XINITS)"; exit 1; }
 [ -n "$s" ] || { say "no session: no ~/.xsession, ~/.xinitrc or $XSESSION"; exit 1; }
-if [ -n "$tool" ]
+
+# The server runs through a wrapper when the card needs one: it exports the
+# card's environment to the server alone (the stock xinit takes no env
+# prefix) and records the server's process id. With a restore command, the
+# session runs through a second wrapper that marks a normal end: the session
+# ended while the server still ran, so xinit stops the server and its own
+# hand-back runs. No mark when xinit returns means the server died on its
+# own, and the card's restore command runs.
+restore=`disp_val $C restore`
+W=${XSTART_TMP:-/tmp}/xstart.$$
+cleanup() {
+	rm -f $W.server $W.client $W.pid $W.clean
+}
+finish() {
+	if [ -n "$restore" ] && [ ! -f $W.clean ]
+	then
+		say "the server ended on its own; running $restore"
+		$restore
+	fi
+	[ -n "$tool" ] && "$tool" $monsw off > /dev/null
+	cleanup
+}
+trap 'finish' 0
+trap 'exit 1' 1 2 3 15
+srv=$line
+if [ -n "$env" ] || [ -n "$restore" ]
 then
-	trap '"$tool" $monsw off > /dev/null' 0
-	trap 'exit 1' 1 2 3 15
-	"$tool" $monsw rtg > /dev/null
+	{
+		echo '#!/bin/sh'
+		for e in $env
+		do
+			echo "$e" | sed 's/^\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)$/\1="\2"; export \1/'
+		done
+		echo "echo \$\$ > $W.pid"
+		echo "exec $server \"\$@\""
+	} > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; exit 1; }
+	srv=`echo $W.server $disp $args`
 fi
-for e in $env
-do
-	eval `echo "$e" | sed 's/^\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)$/\1="\2"; export \1/'`
-done
-$xinit $s -- $line
+cli=$s
+if [ -n "$restore" ]
+then
+	{
+		echo '#!/bin/sh'
+		echo "/bin/sh $s"
+		echo "kill -0 \`cat $W.pid 2>/dev/null\` 2>/dev/null && : > $W.clean"
+	} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; exit 1; }
+	cli=$W.client
+fi
+[ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
+$xinit $cli -- $srv
