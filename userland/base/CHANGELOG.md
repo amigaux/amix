@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — the syslog package; display.d(4) native best effort (54167d9, bcfeda3)
+
+The syslog package (syslog 1.0-1, set base): init.d/syslogd (S70/K50) on rc.subr, on unless rc.conf says syslogd=no;
+it makes each log file syslog.conf names before the daemon starts and says when m4 is missing. The stock syslog.conf as
+a conffile, /var/log, /dev/conslog. The daemon itself stays the installer's 2.1c copy for now. display.d(4) says the
+native card is a best effort. test-syslogd 15/0; E1 two boots PASS.
+
 ## 2026-10-31 — the display set-up: /etc/display, display.d, xstart, S95display (9bbbfbb)
 
 P-36 W9, base's half: /etc/display (display(4)) and /etc/display.d/<card> (display.d(4)), the xstart launcher
