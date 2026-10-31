@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — pth and vim use amix-decls.h; INDEX lists dhcp-client 1.0-3; python3 held (d867983..c7b9d90)
+
+pth and vim take readv/writev and isinf from amix-decls.h (their local headers dropped); vim's jump tables are back
+(scan060-g14 8bfb296 sizes them). INDEX lists dhcp-client 1.0-3. python3 is held back (its recipe is added and
+reverted in this range) until the 060 gate can size its tables.
+
 ## 2026-10-31 — prngd 0.9.29-2; INDEX lists syslog (c0230bd, 4bfe915)
 
 prngd 0.9.29-2: LICENSE names the tarball's own terms (the author's permissive notice for the whole; BSD-4-Clause-UC
