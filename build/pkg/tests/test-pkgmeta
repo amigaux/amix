@@ -401,6 +401,9 @@ try:
 
     # --- APKG_DESC --------------------------------------------------------------------
     plain = recipe(os.path.join(tmp, "desc0"), "desc")
+    rc, out, err = run("pkginfo", recipe(os.path.join(tmp, "tcnone"), "desc", TOOLCHAIN="none"))
+    check("TOOLCHAIN=none is accepted, and PSTAMP says none",
+          rc == 0 and "\nPSTAMP=amix-packages-diffutil-2.8.1-2-none\n" in out, err or out)
     rc, base, err = run("pkginfo", plain)
     withd = recipe(os.path.join(tmp, "desc1"), "desc",
                    APKG_DESC='"the catalog\'s own description"')

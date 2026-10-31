@@ -51,11 +51,14 @@ AMIX_SIBLINGS=$(cd "$AMIX_REPO_ROOT/.." && pwd)
 # Everything gcc14 changes is in gcc14-env.sh.  A recipe opts in by setting
 # AMIX_RECIPE_TOOLCHAINS="period gcc14" before sourcing this file; one that
 # has not been ported refuses gcc14 rather than half-building.
+# TOOLCHAIN=none: a script-only recipe (shell scripts, data); no compiler,
+# and every compiler, assembler, linker and archiver is common/nocc, which
+# refuses to run.
 AMIX_TOOLCHAIN="${TOOLCHAIN:-${AMIX_TOOLCHAIN:-period}}"
 case "$AMIX_TOOLCHAIN" in
-period|gcc14) ;;
+period|gcc14|none) ;;
 *)
-	echo "[FAIL] TOOLCHAIN=$AMIX_TOOLCHAIN -- known: period (default), gcc14" >&2
+	echo "[FAIL] TOOLCHAIN=$AMIX_TOOLCHAIN -- known: period (default), gcc14, none" >&2
 	exit 1
 	;;
 esac
@@ -74,6 +77,15 @@ export AMIX_HOST_TRIPLET=m68k-cbm-sysv4
 
 if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
 	. "$AMIX_PKG_COMMON/gcc14-env.sh"
+elif [ "$AMIX_TOOLCHAIN" = none ]; then
+	TARGET=none
+	for _ae_t in CC CXX CPP AMIX_CPP AR RANLIB LD NM OBJDUMP STRIP; do
+		eval "$_ae_t=\$AMIX_PKG_COMMON/nocc"
+		export "$_ae_t"
+	done
+	unset _ae_t
+	export AMIX_TARGET=none AMIX_ARCH_FLAGS= AMIX_CFLAGS= AMIX_CONFIGURE_LENIENT=
+	export AMIX_BUILD_ROOT="${AMIX_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
 else
 # The period toolchain -- from here to the matching `fi', unindented.
 

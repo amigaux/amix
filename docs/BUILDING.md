@@ -93,6 +93,10 @@ out/build/                    work trees and logs
 - **The datastream is normalised** by pkgtools' pkgmk and pkgtrans and checked
   by `build/pkg/common/dsnorm.py`. A payload's static libraries get the member
   headers `ar D` writes (`build/pkg/common/arnorm.py`).
+- **Toolchains.** A package builds with `gcc14` (userland), `period`
+  (gcc-cross-amix, for a tool that must link only the stock libraries), or
+  `none`: a script-only package, with no compiler at all. A `none` package
+  that compiles anything is refused.
 - **Paths.** gcc14 writes `/build` for the build tree, `/src` for the
   checkout and `/gcc14` for the toolchain (`-ffile-prefix-map`), and the roll
   refuses a build-host path in a gcc14 payload.
