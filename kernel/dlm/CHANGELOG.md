@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — stage-5 ledger: the owner's rulings on a4kt710-k30, S5-42, S5-32 and S5-44; the port pin (c9884ac, efcaafb)
+
+a4kt710-k30 stays in the 1.1 set, accepted in emulation (the A4000T 53C710 in 030 mode). S5-42's acceptance is
+installng's 9 current l11 cells plus a pre-installed-image cell on the final media; the prebuilt (P-35) and upgrade
+(P-36) cells are retired. S5-32 ships pre-installed 68060 images made by a fresh install in emulation and proven by
+contents (P-38 D-f). S5-44's J4 half is a fresh three-controller install on the A4000D in the batched metal session.
+S5-47 notes the port pin's move to 0d37eb1 (amix 5910d09).
+
 ## 2026-10-31 — P-36 D-N21: `kbootset major -l`; a node's class is its module (3db6056, 9abb0f5)
 
 `kbootset major -l` prints the whole major registry as `<module> c|b <n>` (C2-4 v18). Module packages put their device
