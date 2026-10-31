@@ -120,9 +120,12 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
   want to install these conflicting files" and the super-user scripts question, and a `y` to each
   goes on. Whether it ignores the whole file or only those two keys is open 🟡. So such a package
   installs non-interactively only through APKGENG's pkgadd, or with the answers on stdin.
-  `instance=quit` is not ignored: a second VERSION of an installed package under `-n` with it
-  stops, rc 5, "Unable to determine whether to overwrite an existing package instance, or add a
-  new instance", where the default admin's `instance=unique` would add an instance (run1) 🟡.
+  Nor does `instance=`: a second VERSION of an installed package under `-n` stops, rc 5, "Unable to
+  determine whether to overwrite an existing package instance, or add a new instance", with
+  `instance=quit` and with `instance=overwrite` alike (APKGENG 1.12.0 → 1.12.4, rig E1,
+  2026-10-31, `tmp/2026-10-31-pkgtools-mint`). So the stock pkgadd under `-n` decides nothing an
+  admin file could decide, and no admin file of ours has been seen to change its course 🟡. An
+  upgrade on a box goes through APKGENG's pkgadd (apkg's path).
 - **The stock `pkgrm` does not remove a package that has removal scripts without a person** ✅
   (emulated stock 2.1c, row E1, 2026-10-31, toy packages, evidence
   `tmp/2026-10-31-pkgtools-shared/run{3,4}/rig/E1`). A `postremove` or an `r.<class>` script is

@@ -170,6 +170,8 @@ When \fBSOURCE_DATE_EPOCH\fR is set to a number of seconds, every time
 (in UTC; a supplied \fBPSTAMP\fR then carries no host name) and the times
 of the spool's files, which also get the mode \fIpkgmap\fR gives them
 (0755 for a directory and 0644 for a file it does not list).
+The part sizes in \fIpkgmap\fR are then counted in 4096-byte blocks,
+whatever the spool's file system uses.
 With \fBpkgtrans \-s\fR under the same variable, two rolls of the same
 prototype and files are the same bytes.
 A value that is not a number of seconds is an error.

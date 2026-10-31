@@ -8,8 +8,10 @@
  * (members that share a (dev, ino) share the new number, so hard links stay
  * pairs), uid, gid and dev 0, mtime the epoch, and a directory's nlink 2
  * plus the directories directly under it in the archive.  Names, sizes,
- * modes, data and padding are not touched; the TRAILER!!! member is left
- * as written.  The rewritten fields are written as "%08lX", so the result
+ * modes, data and padding keep their values, but every field of every
+ * header, the TRAILER!!!'s too, is written again as "%08lX": the host's
+ * cpio writes upper-case hex and the Amix one lower-case (rig E1,
+ * 2026-10-31), so a roll on the box is the host's bytes.  On the host that
  * is byte for byte what build/pkg's dsnorm.py makes of the same stream.
  *
  * The file is read and written a header at a time (lseek, read, write),
@@ -212,8 +214,13 @@ archive(int fd, long off, long epoch, long *endp, char *why, unsigned cap)
 			rc = -2;
 			goto out;
 		}
-		if (strcmp(m.name, "TRAILER!!!") == 0)
+		for (i = 0; i < NC_FIELDS; i++)
+			put(m.hdr, (int)i, field(m.hdr, (int)i));
+		if (strcmp(m.name, "TRAILER!!!") == 0) {
+			if (wr(fd, m.off, m.hdr, NC_HDR) != 0)
+				rc = -2;
 			break;
+		}
 		maj = field(m.hdr, F_DEVMAJOR);
 		min = field(m.hdr, F_DEVMINOR);
 		ino = field(m.hdr, F_INO);
