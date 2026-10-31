@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — /etc/display can start CDE's dtlogin; amix-base 1.0-12 (cabcec9)
+
+/etc/display takes `start dtlogin`: S95display runs `xstart -dtlogin`, which starts dtlogin with `-server` and the
+card's server line, as for xdm; no Xservers file is written. When dtlogin isn't installed it is logged and the box
+stays at text logins. CDE ships no boot script of its own. display(4), xstart(1). amix-base 1.0-12.
+
 ## 2026-10-31 — /etc/default/login sets ULIMIT=4194303; amix-base 1.0-11 (e89b9cf)
 
 /etc/default/login sets ULIMIT=4194303, the ufs per-file ceiling, so a login can write files over the kernel's default
