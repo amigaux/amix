@@ -9987,6 +9987,9 @@ def audit_l11():
     fp = _p36_problems(fixture, l11)
     (ok if fixture != src and len(fp) == 2 else fail)(
         "the P-36 audit catches the negative fixture (refusal dropped, capture back): %s" % ("; ".join(fp) or "nothing"))
+    fbl = [w for w in _P36_GONE if w in strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())]
+    (ok if not fbl else fail)("firstboot.sh: no upgrade branch (FB_UPGRADED)%s"
+                              % ((" -- still: " + " ".join(fbl)) if fbl else ""))
     m = re.search(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n.*?\nesac\n', src, re.S)
     if m:
         for val, want in (("", "PASSED"), ("no", "PASSED"), ("yes", "DIE"), ("y", "DIE")):
