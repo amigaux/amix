@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — dlmkit -15 recipe (0915982)
+
+dlmkit30/46 -15 at 3c3e353 with the port at b0f1d86: modcheck's peak and resident report and C3-6 v9 in the kit;
+kabi 1.4 unchanged. Kits k30 673872a4, k46 34ac8a19, built in the build container. Unminted.
+
 ## 2026-10-31 — first-use loads never wait for memory; core patch 0049 (bc0a7fb, 8370e1d, 93531fe, ac8336b)
 
 A load at first use (a filesystem's first mount, a demand major's first open, a STREAMS first open, a first exec,
