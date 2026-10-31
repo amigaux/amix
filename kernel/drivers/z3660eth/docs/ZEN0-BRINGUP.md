@@ -200,12 +200,16 @@ only knows how to bring up `aen0`, and §1 says that can never succeed here. The
   1. makes `/dev/zen0` (char, minor 0) if it is missing;
   2. probes it with `dlpi-mac /dev/zen0`. Without the board the open fails with `ENXIO` and there
      are no `zen` interfaces; the driver handles one board, so `/dev/zen1` fails with `ENODEV` and
-     the probe stops after unit 0. No `zen -S` presence command is needed;
+     the probe stops after unit 0. No `zen -S` presence command is needed. The probe makes each
+     node before it opens it, so the first boot leaves an unused `/dev/zen1` behind; that is
+     expected and harmless;
   3. runs `slink addaen /dev/zen0 zen0` once, with one retry after the base `slink`;
   4. applies the line: `ifconfig zen0 <literal> netmask <mask> up -trailers` and
      `route add default <gw> 1`, or the DHCP client for `dhcp`.
 
-  Its output goes to `/var/adm/rclog/ifup`. `ifup zen0` and `ifdown zen0` do the same by hand.
+  Its output goes to `/var/adm/rclog/ifup`, and the same steps go to `/var/adm/rc.log` with
+  timestamps, between `ifup: started` and `ifup: finished, status N`; DHCP events go to
+  `/var/adm/dhcpc.log`. `ifup zen0` and `ifdown zen0` do the same by hand.
 
 ### 3.1 What the field findings became
 
