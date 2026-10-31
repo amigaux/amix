@@ -4,7 +4,7 @@
 #
 # AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.
 # PURE FILES (amix-dlm spec 40 sec 6; apkg 0.3 refuses anything else): f/d of
-# class none, i pkginfo/copyright only.  Since the S5-12 cuts it also
+# class none, i pkginfo/copyright only.  Since the cuts without built-in filesystems it also
 # carries the cut's filesystem modules (ufs) and their comment-only
 # modreg.d files (C2-3 v8 sec 1; the paths and modes of C3-5 sec 1.2); no
 # other package names them.  /etc is the stock core's directory, declared

@@ -4,7 +4,8 @@
 
 kern30m k30.1.3.261031-64 asks for kbootset -30 or later: kbootset's own registry must know c 48 random for a
 generation to carry the random module. -64 is not minted, so its pkginfo changed in place (roll 777f259b). Emulation
-acceptance of -64: C1-64, C0-64, T64 and the random cell N235c (urandom 1 MiB 0.55 s; seed kept across reboot) pass.
+acceptance of -64 passes: with a 68882, without an FPU, under the freeq trigger, and the random module (urandom
+1 MiB in 0.55 s; the seed kept across a reboot).
 
 ## 2026-10-31 — build-cross-kernel.sh: no SIGPIPE races; each cut pins its own port and paula (89ebcf7, a1b9b6c, e27aae0)
 
@@ -39,19 +40,19 @@ mounted as dist.sh does, the cut reproduces all seven -63 sums in 14 s.
 
 Rebuilds the cut of record named in cuts/CURRENT (68030-261031-63) with its own cut.sh, on this checkout, with the
 port and paula at kernel/port/port.pin and kernel/drivers/paula/paula.pin (fetched by hash), and refuses sums that
-differ from the record's (P-38 S2.2). The output goes to build/cuts/<build id>/, where kern30m reads it by default.
+differ from the record's. The output goes to build/cuts/<build id>/, where kern30m reads it by default.
 tools/cuts-selftest.sh checks that cuts/CURRENT and kern30m's pins agree. On the host, all seven -63 sums reproduce.
 
 ## 2026-10-31 — pkg/build.sh passes a recipe's exit 3 through (e777fdc)
 
-kern30m exits 3 with a [MISSING] line naming P-38 S2.2 (make kernel-k30) when no cut output is present; with the cut,
+kern30m exits 3 with a [MISSING] line naming make kernel-k30 when no cut output is present; with the cut,
 the bytes are unchanged.
 
 ## 2026-10-31 — pkg/: the kern30m recipe moves in (82f8350)
 
-The kern30m recipe (kernel-k30-m) moves in from amix-packages 450ba6a (P-38 S3.3) as make dist's kspace hook
+The kern30m recipe (kernel-k30-m) moves in from amix-packages 450ba6a as make dist's kspace hook
 pkg/build.sh, on build/pkg's harness with no sibling paths. Re-rolled, kern30m k30.1.3.261031-63 has the minted
-payload, pkgmap payload rows, pkginfo and copyright; only the control stamps differ (D-g). Two runs byte-identical.
+payload, pkgmap payload rows, pkginfo and copyright; only the control stamps differ. Two runs byte-identical.
 
 ## 2026-10-31 — The 040/060 family tools, from amix-kerntools 989e30b (b52b4b8)
 
@@ -64,7 +65,7 @@ cut reproduces with the tools taken from amix (KT unset), and k0-gates is ALL GR
 
 cuts/68030-261031-63: from amix c1b7842 with the -56 recipe; the four defaults on (kzero, ufs tail zeroing, FPU
 gate, freeq guard). unix 660e4d12, brel eda4dcdf, sym 9eae436f, kabi fc3d99a7 (k30.1.3, abi 18c0a1c9), ufs 3e2507e5,
-s5 1c9711b9. cut.sh reproduces all seven. C1 (68882), C0 (no FPU) and the prngd trigger pass in emulation.
+s5 1c9711b9. cut.sh reproduces all seven. With a 68882, without an FPU and under the prngd trigger it passes in emulation.
 
 ## 2026-10-31 — STREAMS freeq guard (grimoire quirk 92), on by default (f4aef26, 6e8a7fe)
 
@@ -123,7 +124,7 @@ unix 3a02c257, unix.brel 4b4aefc1, kabi 19c04ef0, ufs 64c99884, s5 f7a74b73. mak
 
 ## 2026-10-30 — moved in from amix-kerntools (public part)
 
-jusii/amix-kerntools release-master 578ff79 (5 commits) moved in by subtree merge after a filter-repo rewrite: CLAUDE.md
-dropped, AGENTS.md renamed docs/driver-contract.md, 578ff79 pruned as empty; 4 commits, old→new map in
+jusii/amix-kerntools release-master 578ff79 (5 commits) moved in by subtree merge after a filter-repo rewrite: a local tool
+note dropped, AGENTS.md renamed docs/driver-contract.md, 578ff79 pruned as empty; 4 commits, old→new map in
 docs/history-map.txt. privacy-check --all: 0 hits (was 3, class 2). The on-box build hub: amix-build, onbox-build, the
 clean-kernel gate, relsim, checkunix; the k30 cross cut follows.

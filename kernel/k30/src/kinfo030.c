@@ -83,7 +83,7 @@
 /* motherboard controllers: a zero manufacturer, so never a Zorro id */
 #define MOBO_A3000WD	1
 #define MOBO_GAYLE	2
-#define MOBO_A4000T710	3		/* the A4000T's onboard 53C710 (a4kt710, S5-06) */
+#define MOBO_A4000T710	3		/* the A4000T's onboard 53C710 (a4kt710) */
 #define MOBO_Z3660WIN	4		/* the Z3660 in its 68030 mode: no AutoConfig board, sd took it at the window */
 #define Z3660_WINDOW	0x10000000UL	/* the Z3660's fixed register window (kernel/dlm C4-1 v4 section 5.1) */
 
@@ -103,7 +103,7 @@ char kinfo_buildid[32] = KINFO_BUILD;
 
 #ifdef KINFO_DLM
 /*
- * The module kernel (stage 3, S3-21; build-cross-kernel.sh --dlm): the record ends in the loaded modules,
+ * The module kernel (stage 3; build-cross-kernel.sh --dlm): the record ends in the loaded modules,
  * 32 bytes each from the core's dlm_kinfo_list() (C2-1 v3: count at 576, list at 580), refreshed on every open and on every
  * read from offset 0, so its length and check follow what is loaded.
  */

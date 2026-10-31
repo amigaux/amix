@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh -- kernel/port's kernel-space package (P-38 S3.3): kernel-k46-m
+# build.sh -- kernel/port's kernel-space package: kernel-k46-m
 # (kern46m), the module kernel of the 68040/68060 line.
 #
 # usage: sh kernel/port/pkg/build.sh [name...]      (default: all)

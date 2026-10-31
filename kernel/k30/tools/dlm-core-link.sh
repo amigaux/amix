@@ -1,6 +1,6 @@
 #!/bin/bash
 # dlm-core-link.sh -- the module core spliced into a finished 030 ET_REL kernel (kernel/dlm
-# docs/plan/stage-3-kernel-brief.md §3, S3-21): the kernel-build steps that need nothing kernel/dlm still owes.
+# docs/plan/stage-3-kernel-brief.md §3): the kernel-build steps that need nothing kernel/dlm still owes.
 #
 #   tools/dlm-core-link.sh ETREL OUT --dlm DIR [--line k30] [--kabi k30.1.0] [--pin PIN]
 #                          [--stub-providers]
@@ -24,9 +24,9 @@
 #      (+ ident)
 #      --stub-providers: every listed name still undefined after the splice gets an `rts`/`.long 0` stub, as
 #      kernel/dlm's `make core` does -- a dry run only, never a kernel to boot (a stub crashes the first caller)
-#   7h the halt hook (S4-21, core patch 0030): when dlm.o defines dlm_halt, tools/dlm-halt030.s joins the ld -r and
+#   7h the halt hook (core patch 0030): when dlm.o defines dlm_halt, tools/dlm-halt030.s joins the ld -r and
 #      tools/patch-dlm-halt030.py retargets mdboot's jsr haltsys / jsr rtnfirm to its shims (dlm_halt first);
-#      a core without dlm_halt links as before; and when dlm.o defines dlm_marc_root (S4-23, core patch 0034),
+#      a core without dlm_halt links as before; and when dlm.o defines dlm_marc_root (core patch 0034),
 #      rth1_mountroot's call of the empty rth1_nomarc (tools/rth1-nomarc030.s) is retargeted to it by the port's
 #      patch_dlm_call.py beside rth1.c (--rth1-dir); a core with the hook and a base without the call FAILs
 #   9  mkksym -f (the sizes; fails on a listed name undefined or of the other kind); mkident --fill (OWED)

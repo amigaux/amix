@@ -14,12 +14,12 @@
 # buildid equal to the sidecar's build=, the version from the build id, abi= equal to the reference of the pinned kabi (abi/k46/abi-<kabi>.txt),
 # sdcards= passed through (C2-3 v7), the loader's relocator binding the kernel,
 # and ksymgate on the kernel symbol block.
-# Since -91 (C2-3 v8 sec 1, S5-12): the cut carries no built-in ufs or s5 and
+# Since -91 (C2-3 v8 sec 1): the cut carries no built-in ufs or s5 and
 # its sidecar no rootfs=; the package ships the cut's ufs core-tier module
 # verbatim at /etc/conf/mod.d/ufs (build/pkg/common/kfsmod.sh: pins, modcheck,
 # .moddata build= the sidecar's, and a rebuild from the carve sources
-# byte-equal to it), with a comment-only modreg.d file.  No s5 on k46 (S5-37).
-# Since -50 (S5-13): the cut's module core is the pinned commit and contains
+# byte-equal to it), with a comment-only modreg.d file.  No s5 on k46 (unsafe under its 4 KiB pages).
+# Since -50: the cut's module core is the pinned commit and contains
 # K46M_CORE_STRIP (the core that skips the stamp's leading blank), and the
 # core's own rule holds over the shipped bytes (build/pkg/common/kbuildid.py):
 # the image's buildid without its leading blanks == the sidecar's build= ==
@@ -45,7 +45,7 @@ echo "=== $K46M_CATALOG_NAME $K46M_VERSION (PKG=$K46M_PKG, build $K46M_BUILDID) 
 # the cut's output is an input from outside the recipe: absent, the roll is
 # not failed but missing (exit 3, build.sh)
 [ -f "$K46M_SRC/$K46M_SUMS" ] || {
-	echo "[MISSING] kspace: kernel/port: $K46M_PKG: no cut $K46M_BUILDID at $K46M_SRC (P-38 S2.3: make kernel-k46)" >&2
+	echo "[MISSING] kspace: kernel/port: $K46M_PKG: no cut $K46M_BUILDID at $K46M_SRC (make kernel-k46)" >&2
 	exit 3; }
 case "$K46M_PORT_COMMIT" in "$K46M_KIT_PORT"*) ;; *)
 	echo "[FAIL] pin.sh: K46M_PORT_COMMIT is not K46M_KIT_PORT in full" >&2; exit 1 ;; esac
@@ -118,7 +118,7 @@ for j in range(st[5] // 16):
 [ "$_bid" = "[ $K46M_BUILDID]" ] || {
 	echo "[FAIL] the image's buildid $_bid is not '[ $K46M_BUILDID]' (STAMP_BUILDID_CPU=60)" >&2; exit 1; }
 echo "  the image's buildid $_bid = a blank + build=$K46M_BUILDID"
-# the core this cut links skips that blank (S5-13: the core of 76f83d8 took
+# the core this cut links skips that blank (the core of 76f83d8 took
 # it verbatim and refused the cut's own ufs, EBADVER), and the core's rule
 # holds over the shipped bytes (build/pkg/common/kfsmod.sh)
 amix_kcore_strips "$K46M_SRC/port/build/dlm-rev/.rev" "$K46M_DLM_COMMIT" "$K46M_CORE_STRIP" || exit 1

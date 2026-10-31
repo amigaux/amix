@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh -- kernel/k30's kernel-space package (P-38 S3.3): kernel-k30-m
+# build.sh -- kernel/k30's kernel-space package: kernel-k30-m
 # (kern30m), the module kernel of the 68030 line.
 #
 # usage: sh kernel/k30/pkg/build.sh [name...]      (default: all)

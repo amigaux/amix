@@ -6,6 +6,5 @@ build/
 core
 *~
 .DS_Store
-.claude/
 configs/
 __pycache__/

@@ -2,12 +2,12 @@
 # Sourced by build.sh.
 #
 # Moved into amix kernel/port/pkg from amix-packages' recipes/kernel-k46-m
-# at 450ba6a (P-38 S3.3): the same pins and the same package text; the
+# at 450ba6a: the same pins and the same package text; the
 # licences that came from beside the checkout now come from amix at a
 # commit (K46M_AMIX_COMMIT) and from amix-paula by hash.  The cut's output
-# is make dist's kernel-k46 step's (kernel/port/cuts/build.sh, P-38 S2.3).
+# is make dist's kernel-k46 step's (kernel/port/cuts/build.sh).
 #
-# Not built in the recipe.  Cut by the port station (kabi k46.1.3, the audio
+# Not built in the recipe.  Cut in amix-040-060-port (kabi k46.1.3, the audio
 # driver with the bounded init wait, 2026-10-28;
 # amix-040-060-port/build/cuts/2026-10-28-k46-paula-iw, README.md there): port branch
 # k46-module at d76a7f0 (relink-040-audio.sh: amix-paula 62fdcab's three
@@ -15,7 +15,7 @@
 # Paula's first interrupt is bounded, a silent Paula fails the open with EIO
 # instead of spinning -- and paula, the /dev/paula exclusion; 1c58661 adds
 # only the KINFO.md row for this cut), on 87b8a88's ufs mount guard and
-# 88dcfc0's S5-46, built as -59 with the c chain (build-c.sh, post-c.sh,
+# 88dcfc0's motherboard root record, built as -59 with the c chain (build-c.sh, post-c.sh,
 # families-c.json):
 #   b-new 284154a3 -> carve 300cf756 -> dd -> sd4 -> f4arms -> f6 -> audio
 #   817d0edc -> rth1 -> kinfo -> dlm (amix-dlm e45b061, core b736c59 + 46
@@ -29,12 +29,12 @@
 # no rootfs=).  Both are shipped VERBATIM; build.sh only checks them.
 #
 # The filesystem module (C2-3 v8 sec 1, C4-6 sec 4): ufs only on k46 (no k46
-# s5 module, S5-37).  out/c/ufs.mod is the port's patched ufs object
+# s5 module).  out/c/ufs.mod is the port's patched ufs object
 # (ufsmod/ufs-exp.k46 6636b27e, fsobj-patch.py: the mount guard) wrapped by
 # amix-dlm e45b061's carve.py --build 68060-261028-61 and built with the k46
 # kit of e45b061; shipped VERBATIM at /etc/conf/mod.d/ufs with a
 # comment-only modreg.d file.  build.sh rebuilds it from ufsmod/c with this
-# repository's kit export and requires the same bytes (S5-12 R2).  The kit
+# repository's kit export and requires the same bytes.  The kit
 # is kabi k46.1.3; the module says kabi=k46.1.2 (the highest minor it
 # imports, never below 1.2, amix-dlm C3-2 v2; K46M_FSKABI).  No module
 # catalog row.
@@ -44,7 +44,7 @@
 # kern46m, version <kabi>.<yymmdd>-<nn> from the sidecar's build id, above
 # the -51 of record (C2-3 v8 sec 1.1).
 #
-# The S5-13 checks stay (the stamp's leading blank, -91): the cut's core is
+# The build-id checks stay (the stamp's leading blank, -91): the cut's core is
 # the pin and contains 7b07bce (K46M_CORE_STRIP), and the core's rule over
 # the shipped bytes (recipes/common/kbuildid.py: the image's buildid
 # stripped == the sidecar's build= == the module's .moddata build=).
@@ -58,7 +58,7 @@
 
 # -53 against -52 (2026-10-31): the port's cut 68060-261031-53 (amix-040-060-port
 # cuts/68060-261031-53 at 727cbe7; REV 2e7f715), the first made with gcc14's
-# binutils 2.43.1 (toolchain/m68k-gnu-bin, P-38 Q8: one binutils) and amix
+# binutils 2.43.1 (toolchain/m68k-gnu-bin, one binutils for both lines) and amix
 # b391504's module core and kit, whose major registry carries c 48 random
 # (a8719fb).  2.43.1 makes the FPSP 040's stan.s lea and the ISP glue's jmp
 # PC-relative where 2.46 kept them absolute, so the kernel's bytes move; -52
@@ -91,7 +91,7 @@ K46M_SUMS=SHA256SUMS-68060-261031-53   # under K46M_SRC, the cut's seven sums
 K46M_OUT=out/c                     # the cut's outputs under K46M_SRC
 K46M_CARVE=ufsmod/mod              # the ufs carve sources (R2)
 K46M_DLM_COMMIT=b391504     # amix-dlm, the cut's core (port/build/dlm-rev/.rev): axrel, ksymgate.py, abi/k46 (lists, reference)
-K46M_CORE_STRIP=7b07bce     # amix-dlm, the first core that skips the stamp's leading blank (S5-13)
+K46M_CORE_STRIP=7b07bce     # amix-dlm, the first core that skips the stamp's leading blank
 K46M_KIT_COMMIT=b391504     # amix-dlm, the kit the module is checked and rebuilt with (445c12e or later)
 K46M_KIT_PORT=2e7f715       # amix-040-060-port, the k46 kit's 4 KiB headers (the cut's PORT_REV)
 K46M_PORT_COMMIT=2e7f7152370820e59e9d6f3cdcf35668749f3718    # K46M_KIT_PORT in full, fetched by hash

@@ -41,4 +41,4 @@ See [`docs/driver-contract.md`](docs/driver-contract.md) for the full driver-aut
 
 ## Commit convention
 
-No AI attribution in commit messages.
+Commit messages say what changed; no trailers.
