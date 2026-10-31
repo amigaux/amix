@@ -9,6 +9,7 @@
 # clean control. Prints "N/N passed"; exits non-zero on any failure.
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -280,6 +281,39 @@ try:
                                      STOCK_ETC='"/etc/inittab /etc/inet/hosts"',
                                      CONFFILES="/etc/inet/hosts"))
     check("STOCK_ETC: an f and an e line of manifest files pass", rc == 0, err)
+    SMAN = PROTO + ("f none /etc/inittab 0664 root sys\n"
+                    "f none /etc/TIMEZONE 0444 root sys\n"
+                    "f none /etc/nodename 0644 bin bin\n")
+    rc, out, err = run("check", conf("stock", "smanok", SMAN,
+                                     STOCK_ETC='"/etc/inittab /etc/TIMEZONE"'))
+    check("man: a STOCK_ETC file is documented by its stock page, case blind",
+          rc == 0 and "inittab" not in err and "TIMEZONE" not in err
+          and "no man page for /etc/nodename\n" in err, err)
+    rc, out, err = run("check", conf("stock", "smanno", SMAN,
+                                     STOCK_ETC='"/etc/inittab /etc/nodename"'))
+    check("man: a STOCK_ETC file with no stock page is still warned about",
+          rc == 0 and "no man page for /etc/TIMEZONE /etc/nodename\n" in err, err)
+    rc, out, err = run("check", conf("stock", "smannot", SMAN))
+    check("man: a stock page counts only for STOCK_ETC files",
+          rc == 0 and "no man page for /etc/inittab /etc/TIMEZONE /etc/nodename\n" in err,
+          err)
+    sp = [l for l in read(os.path.join(os.path.dirname(HERE), "stock-pages")).splitlines()
+          if not l.startswith("#")]
+    check("stock-pages: name(sect) lines, sorted, with inittab(4) and timezone(4)",
+          sp == sorted(set(sp)) and all(re.match(r"^[^\s()]+\(\w+\)$", l) for l in sp)
+          and "inittab(4)" in sp and "timezone(4)" in sp, "%d lines" % len(sp))
+    wf = os.path.join(tmp, "whatis")
+    write(wf, "at(1)            at, batch - execute commands at a later time\n"
+              "acosh(3m)        acosh\\^, asinh\\^ - inverse hyperbolic functions\n"
+              "curs_x(3x)       curs_instr: instr - get a string\n"
+              "mosaic(1X)       mosaic\n"
+              "\n")
+    rc, out, err = run("stock-pages", wf)
+    got = [l for l in out.splitlines() if not l.startswith("#")]
+    check("stock-pages: every name of a line, its section, escapes dropped",
+          rc == 0 and got == ["acosh(3m)", "asinh(3m)", "at(1)", "batch(1)",
+                              "curs_instr(3x)", "curs_x(3x)", "instr(3x)", "mosaic(1X)"]
+          and "(%d bytes, sha256 " % os.path.getsize(wf) in out, err or out)
     for name, proto, over, needle in (
             ("snoman", STK + "f none /etc/nosuch 0644 root sys\n",
              {"STOCK_ETC": "/etc/nosuch"},
@@ -345,6 +379,24 @@ try:
           rc == 0 and "no man page for /opt/amix/bin/unfoo" in err, err)
     rc, out, err = run("check", conf("man", "mgz", PROTO.replace("foo.1 ", "foo.1.gz ")))
     check("man: a compressed page counts", rc == 0 and "warning" not in err, err)
+    LINKD = PROTO + ("d none /etc/inet/link.d 0755 root sys\n"
+                     "f none /etc/inet/link.d/aen 0444 root sys\n"
+                     "f none /etc/inet/link.d/zz9 0444 root sys\n"
+                     "f none /etc/profile.d/foo.sh 0444 root sys\n")
+    rc, out, err = run("check", conf("man", "mdir", LINKD
+                                     + "f none /opt/amix/man/4/link.d 0644 root bin\n"
+                                     + "f none /opt/amix/man/4/profile.d 0644 root bin\n"))
+    check("man: a directory's page covers the files in it",
+          rc == 0 and "warning" not in err, err)
+    rc, out, err = run("check", conf("man", "mdirgap", LINKD
+                                     + "f none /opt/amix/man/4/link.d 0644 root bin\n"))
+    check("man: a directory's page covers only that directory",
+          rc == 0 and "no man page for /etc/profile.d/foo.sh\n" in err
+          and "link.d" not in err, err)
+    rc, out, err = run("check", conf("man", "mdirnone", LINKD))
+    check("man: no directory page, every file in it warned about",
+          rc == 0 and "/etc/inet/link.d/aen /etc/inet/link.d/zz9 /etc/profile.d/foo.sh"
+          in err, err)
 
     # --- APKG_DESC --------------------------------------------------------------------
     plain = recipe(os.path.join(tmp, "desc0"), "desc")
@@ -461,6 +513,51 @@ try:
     write(pkgsh, read(pkgsh).replace("CATEGORY=utility", "CATEGORY=text"))
     rc, out = check_packages(cp)
     check("check-packages refuses after a package.sh change", rc == 1, out)
+
+    # --- several roots, one catalog (userland/packages and userland/base/pkg) ----------
+    pk, bp = os.path.join(tmp, "multi", "packages"), os.path.join(tmp, "multi", "base", "pkg")
+    shutil.copytree(RECIPES, pk)
+    recipe(bp, "sbase", PKG="sbase", SET="base")
+    rc, out, err = run("check", pk, bp)
+    check("check: two roots, one guard over both",
+          rc == 0 and "4 recipe(s), one version each" in out, err or out)
+    rc, out, err = run("index", pk, bp, "-o", "-")
+    check("index: a recipe of the second root is linked from the first",
+          rc == 0 and "| [sbase](../base/pkg/sbase/) |" in out
+          and "| [bzip2](bzip2/) |" in out and "\n4 package(s).\n" in out, err or out)
+    rc, out, err = run("fragments", pk, bp)
+    check("fragments: both roots in one set of files",
+          rc == 0 and "base: sbase\nextra: bzip2,coreutils,diffutils\n" in out
+          and "sbase: system" not in out and "sbase: utility" in out, err or out)
+    rc, out = check_packages(pk)
+    check("check-packages: one root given, the other is not read",
+          rc == 1 and "1 recipe" not in out and "3 recipe(s)" in out, out)
+    p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp, os.path.join(tmp, "nothere")],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = p.stdout.decode()
+    check("check-packages: generated files missing in the first root are refused",
+          p.returncode == 1 and "packages/INDEX.md is out of date" in out
+          and "4 recipe(s)" in out, out)
+    run("index", pk, bp)
+    run("fragments", pk, bp, "-o", os.path.join(pk, "conf"))
+    p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp, os.path.join(tmp, "nothere")],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = p.stdout.decode()
+    check("check-packages: two roots current, a missing one skipped",
+          p.returncode == 0 and "are current" in out, out)
+    check("check-packages: nothing written into the second root",
+          sorted(os.listdir(bp)) == ["sbase"])
+    os.makedirs(os.path.join(tmp, "dupe"))
+    recipe(os.path.join(tmp, "dupe"), "bzip2", PKG="bzip2")
+    refused("check: one name in two roots is refused",
+            ("check", pk, os.path.join(tmp, "dupe")),
+            "package name bzip2 has 2 recipes")
+    for where, name in (("cboth", "cpk"), ("cboth2", "cbp")):
+        r = recipe(os.path.join(tmp, where), name, PKG=name, CONFFILES='"/etc/foo.conf"')
+        write(os.path.join(r, "prototype"), PROTO)
+    refused("check: one conffile owned across two roots is refused",
+            ("check", os.path.join(tmp, "cboth"), os.path.join(tmp, "cboth2")),
+            "is listed by cpk and cbp")
 
     # --- the one-version guard over recipes ------------------------------------------
     two = os.path.join(tmp, "two")

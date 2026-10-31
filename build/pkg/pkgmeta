@@ -6,26 +6,31 @@
 """Generate and check package metadata from package.sh.
 
 Commands:
-  check RECIPE|ROOT...      validate recipes; a ROOT (a directory of recipe
-                            directories) also gets the one-version guard
+  check RECIPE|ROOT...      validate recipes; the ROOTs (directories of recipe
+                            directories) also get the one-version guard,
+                            over all of them together
   pkginfo RECIPE            the pkginfo(4) the roll packs
   catalog RECIPE (--pkg FILE | --md5 HEX --size N) [--filename PATH]
                             the package's catalog v1 line
-  fragments ROOT [-o DIR [--check]]
+  fragments ROOT... [-o DIR [--check]]
                             our lines of names.conf, cats.conf, deps.conf
                             and sets.conf (to stdout, or one file each in
                             DIR; --check compares with DIR instead)
-  index ROOT [-o FILE] [--check]
-                            the table of ROOT's packages (markdown) into
-                            ROOT/INDEX.md, or FILE ("-": stdout); never into
-                            a README.md; --check compares instead of writing
+  index ROOT... [-o FILE] [--check]
+                            the table of the ROOTs' packages (markdown) into
+                            the first ROOT's INDEX.md, or FILE ("-": stdout);
+                            never into a README.md; --check compares instead
+                            of writing
+  stock-pages WHATIS        the stock-pages list from the stock man index
+                            /usr/share/man/whatis (to stdout)
   guard PATH...             the one-version guard over built output: every
                             PATH is a catalog file or a directory of *.pkg
                             datastreams; refused if one package name or
                             instance appears with two versions
 
 A RECIPE is a directory holding package.sh; a ROOT is a directory whose
-subdirectories are recipes (userland/packages). The catalog line is the one
+subdirectories are recipes (userland/packages, userland/base/pkg). The ROOTs
+given together are one catalog. The catalog line is the one
 amix-packagemanager's gen-catalog.py writes for the rolled package with our
 names.conf, cats.conf and deps.conf lines in place.
 
@@ -310,13 +315,62 @@ def prototype_problems(recipe, m):
 # Commands documented under another name: [ is test(1).
 MAN_ALIASES = {"[": "test"}
 
+# The page names of the stock man index, /usr/share/man/whatis, one
+# name(sect) per line: a STOCK_ETC file is documented by its stock page.
+STOCK_PAGES = os.path.join(HERE, "stock-pages")
+
+
+def stock_pages():
+    """The names in STOCK_PAGES, lower case: stock man looks a name up with
+    egrep -i, so /etc/TIMEZONE is timezone(4). None without the file."""
+    try:
+        with open(STOCK_PAGES) as fp:
+            return {line.split("(", 1)[0].lower() for line in fp
+                    if line.strip() and not line.startswith("#")}
+    except FileNotFoundError:
+        return set()
+
+
+STOCK_PAGES_HEAD = """\
+# stock-pages: the page names of the stock man index, /usr/share/man/whatis
+# (%d bytes, sha256 %s):
+# for each line, its name(sect) and every name before " - ", with that
+# section. Names only; the index itself is not here. pkgmeta's man gate
+# counts a STOCK_ETC file as documented when its name is one of these,
+# case blind, as stock man's egrep -i lookup is. Made by
+# build/pkg/pkgmeta stock-pages <whatis>.
+"""
+
+
+def stock_pages_list(raw):
+    """STOCK_PAGES's text from the bytes of a stock whatis file."""
+    out = set()
+    for line in raw.decode("latin-1").splitlines():
+        m = re.match(r"^(\S+)\((\w+)\)\s+(.*)$", line)
+        if not m:
+            continue
+        first, sect, rest = m.groups()
+        names = [first]
+        if " - " in rest:
+            names += re.split(r"[,\s]+", rest.split(" - ", 1)[0])
+        for n in names:
+            # troff escapes (acosh\^) and a trailing colon are not the name
+            n = re.sub(r"\\[\^&|]", "", n).rstrip(":\\")
+            if re.match(r"^[A-Za-z0-9_.+\[-]+$", n):
+                out.add("%s(%s)" % (n, sect))
+    return (STOCK_PAGES_HEAD % (len(raw), hashlib.sha256(raw).hexdigest())
+            + "".join(x + "\n" for x in sorted(out)))
+
 
 def man_warnings(recipe, m):
-    """What RECIPE installs without a man page in its payload: commands (in a
-    bin/ or sbin/ directory) and config files (CONFFILES, and files under
-    /etc other than the run-level scripts and links). A page is a file in
+    """What RECIPE installs without a man page: commands (in a bin/ or sbin/
+    directory) and config files (CONFFILES, and files under /etc other than
+    the run-level scripts and links). A page is a file of the payload in
     .../man/<sect>/<name> (the packages' layout, docs/man-pages.md there) or
-    .../man<sect>/<name>.<sect>[.gz]; a page's name is its command's."""
+    .../man<sect>/<name>.<sect>[.gz]; a page's name is its command's. A
+    config file is also documented by the page of a directory it is in
+    (link.d(4) for /etc/inet/link.d/aen), and a STOCK_ETC file by the stock
+    page of its name (inittab(4))."""
     objs = prototype_objects(recipe) or []
     pages = set()
     for ftype, _, path, _ in objs:
@@ -340,11 +394,17 @@ def man_warnings(recipe, m):
                     and target.rsplit("/", 1)[-1] not in pages):
                 missing.append(path)
     conf = set(words(m["CONFFILES"]))
+    stock = set(words(m["STOCK_ETC"]))
+    stock_names = stock_pages() if stock else set()
     for ftype, _, path, _ in objs:
         etc = (ftype in "fev" and path.startswith("/etc/")
                and not path.startswith(("/etc/init.d/", "/etc/rc"))) or path in conf
-        if etc and path.rsplit("/", 1)[-1] not in pages and path not in missing:
-            missing.append(path)
+        d = path.split("/")
+        if (not etc or path in missing or d[-1] in pages
+                or any(p in pages for p in d[2:-1])
+                or (path in stock and d[-1].lower() in stock_names)):
+            continue
+        missing.append(path)
     return missing
 
 
@@ -434,18 +494,25 @@ def recipes(root):
             if os.path.isfile(os.path.join(root, d, "package.sh"))]
 
 
-def load_root(root):
-    """Every recipe of ROOT, checked, plus the one-version guard over them."""
-    errors, ms = [], []
-    for r in recipes(root):
-        try:
-            ms.append(load(r))
-        except Refused as e:
-            errors.append(str(e))
-    errors += one_version([(m["NAME"], m["PKG"], pkgversion(m),
-                            os.path.join(root, m["NAME"])) for m in ms])
+def load_roots(roots):
+    """(recipe, package.sh values) for every recipe of the ROOTs, checked,
+    plus the one-version guard over all of them: the ROOTs are one catalog."""
+    errors, loaded, where = [], [], {}
+    for root in roots:
+        for r in recipes(root):
+            try:
+                loaded.append((r, load(r)))
+            except Refused as e:
+                errors.append(str(e))
+    for r, m in loaded:
+        where.setdefault(m["NAME"], []).append(r)
+    for name in sorted(n for n in where if len(where[n]) > 1):
+        errors.append("package name %s has %d recipes: %s; a name has one"
+                      % (name, len(where[name]), ", ".join(where[name])))
+    errors += one_version([(m["NAME"], m["PKG"], pkgversion(m), r)
+                           for r, m in loaded])
     owner = {}
-    for m in ms:
+    for _, m in loaded:
         for c in words(m["CONFFILES"]):
             if c in owner and owner[c] != m["NAME"]:
                 errors.append("CONFFILES: %s is listed by %s and %s; a "
@@ -453,7 +520,7 @@ def load_root(root):
             owner.setdefault(c, m["NAME"])
     if errors:
         raise Refused("\n".join(errors))
-    return ms
+    return loaded
 
 
 # ------------------------------------------------------------- generators ---
@@ -538,19 +605,21 @@ def fragments(ms):
              ("deps.conf", deps), ("sets.conf", sets))}
 
 
-def index(ms):
-    ms = sorted(ms, key=lambda m: m["NAME"])
+def index(loaded, where):
+    """The table of packages, each linked by its recipe's path relative to
+    the directory WHERE that the index is written into."""
+    loaded = sorted(loaded, key=lambda rm: rm[1]["NAME"])
     out = ["# Packages\n", "\n",
            "Generated by `build/pkg/pkgmeta index` from each package's\n",
            "`package.sh`; do not edit.\n", "\n",
            "| Package | Version | PKG | Category | Set | Toolchain | Licence | Summary |\n",
            "|---|---|---|---|---|---|---|---|\n"]
-    for m in ms:
+    for r, m in loaded:
         out.append("| [%s](%s/) | %s | `%s` | %s | %s | %s | %s | %s |\n" % (
-            m["NAME"], m["NAME"], pkgversion(m), m["PKG"], m["CATEGORY"],
+            m["NAME"], os.path.relpath(r, where), pkgversion(m), m["PKG"], m["CATEGORY"],
             " ".join(m["SET"].split()), m["TOOLCHAIN"], m["LICENSE"],
             m["SUMMARY"]))
-    out.append("\n%d package(s).\n" % len(ms))
+    out.append("\n%d package(s).\n" % len(loaded))
     return "".join(out)
 
 
@@ -673,33 +742,37 @@ def main(argv):
     p.add_argument("--size", type=int)
     p.add_argument("--filename")
     p = sub.add_parser("fragments")
-    p.add_argument("root")
+    p.add_argument("roots", nargs="+")
     p.add_argument("-o", "--output-dir")
     p.add_argument("--check", action="store_true")
     p = sub.add_parser("index")
-    p.add_argument("root")
+    p.add_argument("roots", nargs="+")
     p.add_argument("-o", "--output")
     p.add_argument("--check", action="store_true")
+    p = sub.add_parser("stock-pages")
+    p.add_argument("whatis")
     p = sub.add_parser("guard")
     p.add_argument("paths", nargs="+")
     a = ap.parse_args(argv)
 
     if a.cmd == "check":
+        loaded = []
+        roots = [p for p in a.paths
+                 if not os.path.isfile(os.path.join(p, "package.sh"))]
         for path in a.paths:
-            if os.path.isfile(os.path.join(path, "package.sh")):
-                ms = [load(path)]
+            if path not in roots:
+                loaded.append((path, load(path)))
                 print("pkgmeta: %s ok" % path)
-            else:
-                ms = load_root(path)
-                print("pkgmeta: %s ok, %d recipe(s), one version each"
-                      % (path, len(ms)))
-            for m in ms:
-                r = path if len(ms) == 1 and os.path.isfile(
-                    os.path.join(path, "package.sh")) else os.path.join(path, m["NAME"])
-                miss = man_warnings(r, m)
-                if miss:
-                    sys.stderr.write("pkgmeta: warning: %s: no man page for %s\n"
-                                     % (m["NAME"], " ".join(miss)))
+        if roots:
+            ms = load_roots(roots)
+            loaded += ms
+            print("pkgmeta: %s ok, %d recipe(s), one version each"
+                  % (" ".join(roots), len(ms)))
+        for r, m in loaded:
+            miss = man_warnings(r, m)
+            if miss:
+                sys.stderr.write("pkgmeta: warning: %s: no man page for %s\n"
+                                 % (m["NAME"], " ".join(miss)))
     elif a.cmd == "pkginfo":
         sys.stdout.write(pkginfo(load(a.recipe)))
     elif a.cmd == "catalog":
@@ -722,7 +795,7 @@ def main(argv):
             ap.error("--filename holds '|' or a newline")
         sys.stdout.write(catalog_line(m, filename, md5, size))
     elif a.cmd == "fragments":
-        frags = fragments(load_root(a.root))
+        frags = fragments([m for _, m in load_roots(a.roots)])
         if a.check:
             if not a.output_dir:
                 ap.error("fragments --check needs -o DIR")
@@ -731,7 +804,7 @@ def main(argv):
             if stale:
                 raise Refused("%s out of date in %s; run pkgmeta fragments %s "
                               "-o %s" % (", ".join(stale), a.output_dir,
-                                         a.root, a.output_dir))
+                                         " ".join(a.roots), a.output_dir))
             print("pkgmeta: fragments in %s are current" % a.output_dir)
         elif a.output_dir:
             os.makedirs(a.output_dir, exist_ok=True)
@@ -742,23 +815,27 @@ def main(argv):
             for f, text in frags.items():
                 sys.stdout.write("==> %s <==\n%s" % (f, text))
     elif a.cmd == "index":
-        out = a.output or os.path.join(a.root, INDEX)
+        out = a.output or os.path.join(a.roots[0], INDEX)
         if os.path.basename(out) == "README.md":
             ap.error("the index never goes into a README.md (the README is "
                      "written by hand); the default is %s" % INDEX)
-        text = index(load_root(a.root))
+        text = index(load_roots(a.roots), a.roots[0] if out == "-"
+                     else os.path.dirname(os.path.abspath(out)))
         if a.check:
             if out == "-":
                 ap.error("index --check needs a file")
             if not same(out, text):
                 raise Refused("%s is out of date; run pkgmeta index %s"
-                              % (out, a.root))
+                              % (out, " ".join(a.roots)))
             print("pkgmeta: %s is current" % out)
         elif out == "-":
             sys.stdout.write(text)
         else:
             with open(out, "w") as fp:
                 fp.write(text)
+    elif a.cmd == "stock-pages":
+        with open(a.whatis, "rb") as fp:
+            sys.stdout.write(stock_pages_list(fp.read()))
     elif a.cmd == "guard":
         entries = []
         for path in a.paths:
