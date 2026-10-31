@@ -14,7 +14,7 @@ finding to fix, not a gate.
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |
 | tests | build/pkg host tests (pkgmeta, the driver) | `make -C build test` |
-| tests | userland/packages: every package.sh, `INDEX.md` and `conf/` current | `make -C build check-packages` |
+| tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
 | kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
 | kit | the image's gcc14 is the pinned build (`toolchain/gcc14-cross-amix.tree`) | `toolchain/extract-g14.sh --check amix-toolchain:ci` |

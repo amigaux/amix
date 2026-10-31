@@ -69,7 +69,7 @@ jobs:
         run: make -C kernel/modules/ramdisk/module test
       - name: build/pkg host tests
         run: make -C build test
-      - name: userland/packages check
+      - name: userland packages check (packages, base/pkg)
         run: make -C build check-packages
 
   kit:

@@ -11,7 +11,8 @@ so each fact about a package is written in one place.
 | `layout.sh` | where the harness finds the toolchains, pkgtools and the build output in this checkout |
 | `common/` | the harness: environment, fetcher, gates and roll |
 | `pkgmeta` | checks `package.sh` and writes pkginfo, the catalog line, our catalog configuration lines and the index; also the one-version guard |
-| `check-packages` | CI's check of `userland/packages` |
+| `stock-pages` | the page names of the stock man index (names only), for the man-page warning; `pkgmeta stock-pages <whatis>` writes it |
+| `check-packages` | CI's check of `userland/packages` and `userland/base/pkg` |
 | `tests/` | the host tests, `make -C build test` |
 
 ## The package directory
@@ -63,11 +64,12 @@ builds never touch the checkout. `BUILD.txt` records a digest of the copy.
 ## pkgmeta
 
 ```sh
-build/pkg/pkgmeta check <package dir>|<packages dir>
+build/pkg/pkgmeta check <package dir>|<packages dir>...
 build/pkg/pkgmeta pkginfo <package dir>
 build/pkg/pkgmeta catalog <package dir> --pkg <rolled .pkg>
-build/pkg/pkgmeta fragments <packages dir> [-o DIR [--check]]
-build/pkg/pkgmeta index <packages dir> [-o FILE] [--check]
+build/pkg/pkgmeta fragments <packages dir>... [-o DIR [--check]]
+build/pkg/pkgmeta index <packages dir>... [-o FILE] [--check]
+build/pkg/pkgmeta stock-pages <stock /usr/share/man/whatis>
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
 ```
 
@@ -88,7 +90,10 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   (`CONFFILES`, and files in `/etc` other than run-level scripts) that has no
   man page in the payload: a file `…/man/<sect>/<name>`, the packages' layout
   (`userland/packages/docs/man-pages.md`; an alias is a page file too), or
-  `…/man<sect>/<name>.<sect>`.
+  `…/man<sect>/<name>.<sect>`. A config file is also documented by the page
+  of a directory it is in (`link.d(4)` covers `/etc/inet/link.d/aen`), and a
+  `STOCK_ETC` file by the stock page of its name (`inittab(4)`), listed in
+  `stock-pages`.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one
   amix-packagemanager's `gen-catalog.py` writes for the rolled package:
@@ -97,12 +102,18 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   catalog name is not the lowercased instance), `cats.conf`, `deps.conf` and
   `sets.conf`. They are merged with the hand-written lines for the stock
   packages when the catalog is generated.
-- `index` writes the table of packages to `INDEX.md` in the packages
-  directory, never to its README, which is written by hand.
+- `index` writes the table of packages to `INDEX.md` in the first packages
+  directory, never to its README, which is written by hand. A package of
+  another directory is linked by its relative path.
+- Several packages directories given together are one catalog: one guard
+  over all of them, one owner per conffile, one set of fragments and one
+  index.
 - With `--check`, `fragments` and `index` compare instead of writing.
-  `check-packages` uses them on `userland/packages`: every `package.sh`
-  passes `check`, and `INDEX.md` and `conf/` (the fragments) are current.
-  It has nothing to check until the first `package.sh` lands.
+  `check-packages` uses them on `userland/packages` and `userland/base/pkg`
+  together: every `package.sh` passes `check`, and `userland/packages`'
+  `INDEX.md` and `conf/` (the fragments) are current. A directory that does
+  not exist is skipped; nothing is checked while neither holds a
+  `package.sh`.
 
 ## One version per name
 

@@ -1,6 +1,6 @@
 # build/Makefile: host tests of the build framework, the selftests of the
 # packaging harness (they need the cross toolchains: run them in the build
-# container), and the check of the packages directory.
+# container), and the check of the packages directories.
 #
 # MIT licence, see LICENSE at the top of the repository.
 
