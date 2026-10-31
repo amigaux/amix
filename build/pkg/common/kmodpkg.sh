@@ -26,6 +26,9 @@
 #                      object names in depend=, for modcheck -d only (never
 #                      packaged)
 #     KM_KIT_COMMIT    amix-dlm commit whose `make kit` gives modcheck
+#     KM_PORT_COMMIT   optional: the 68040/68060 port commit the k46 kit's
+#                      headers (include-modelb) come from; by default the
+#                      checkout's kernel/port/port.pin, when it has one
 #     KM_LICENCES      "<path> <sha256>" per line, relative to KM_ROOT
 #     KM_SOURCE_EPOCH
 #     KM_EXTRA_NOTE    optional: a paragraph for the copyright file
@@ -90,9 +93,14 @@ amix_kmodpkg() {
 	for _p in $(echo "$_km_deps" | awk 'NF {print $1}'); do _km_d="$_km_d -d $_km_root/$_p"; done
 
 	echo "--- modcheck (the kit of amix-dlm $KM_KIT_COMMIT) ---"
-	amix_dlm_kit "$KM_KIT_COMMIT" >/dev/null
+	# the port's headers at a pinned commit, so a bare AMIX_PORT_REPO fetch
+	# gives the k46 kit its include-modelb (dlm-src.sh)
+	_km_pc=${KM_PORT_COMMIT:-}
+	if [ -z "$_km_pc" ] && [ -f "${AMIX_REPO_ROOT:-}/kernel/port/port.pin" ]; then
+		read -r _ _km_pc < "$AMIX_REPO_ROOT/kernel/port/port.pin"
+	fi
+	amix_dlm_kit "$KM_KIT_COMMIT" "" "$_km_pc" >/dev/null
 	_km_kit="$AMIX_DLM_TREE/build/kit/$_km_line"
-	_km_kabi=$(sed -n 's/^KABI=//p' "$_km_kit/kit.conf")
 	_km_pin=$(sed -n 's/^PIN=//p' "$_km_kit/kit.conf")
 	mkdir -p "$_km_build"
 	rm -rf "$_km_build/chk"; mkdir -p "$_km_build/chk"; cp "$_km_obj" "$_km_build/chk/$KM_NAME"
@@ -102,8 +110,13 @@ amix_kmodpkg() {
 		${KM_PAGESHIFT_OK:+-w "$KM_PAGESHIFT_OK"} "$_km_build/chk/$KM_NAME" ) \
 		> "$_km_build/modcheck.out" 2>&1 || {
 		cat "$_km_build/modcheck.out" >&2; echo "[FAIL] modcheck refuses $KM_NAME ($_km_line)" >&2; exit 1; }
-	grep -q "^modcheck: $KM_NAME: ok ($_km_kabi, " "$_km_build/modcheck.out" || {
-		cat "$_km_build/modcheck.out" >&2; echo "[FAIL] modcheck did not say ok for $_km_kabi" >&2; exit 1; }
+	# the module's kabi: the lowest its imports need (mkmod tags the object
+	# with it), which modcheck has checked against the kit's KABI (the same
+	# family and major, the minor not above); a module built on a kabi 1.3
+	# kit may need only 1.2
+	_km_kabi=$(sed -n "s/^modcheck: $KM_NAME: ok (\([^,)]*\)[,)].*/\1/p" "$_km_build/modcheck.out" | head -1)
+	[ -n "$_km_kabi" ] || {
+		cat "$_km_build/modcheck.out" >&2; echo "[FAIL] modcheck did not say ok for $KM_NAME" >&2; exit 1; }
 	sed 's/^/  /' "$_km_build/modcheck.out"
 	# the .moddata keys the catalog row and kbootset read
 	_km_md=$(python3 -I - "$_km_obj" <<'PY'
@@ -176,5 +189,5 @@ PY
 	( SOURCE_DATE_EPOCH=$KM_SOURCE_EPOCH; export SOURCE_DATE_EPOCH
 	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out" ) || exit 1
 	unset _km_root _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
-		_km_v _km_vf _km_d _km_kit _km_kabi _km_pin _km_md _km_n _p _n _h _s _m
+		_km_v _km_vf _km_d _km_kit _km_kabi _km_pc _km_pin _km_md _km_n _p _n _h _s _m
 }

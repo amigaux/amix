@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — random: the docs name what the module needs (7a841fd)
+
+random/README and random(7) name what the module needs: a kernel cut with c 48 (k30 -64, k46 -53 or later) and
+kbootset 1.1.0.261031-30 or later. The packages carry no dependency for it, since every 1.1 medium ships both.
+
 ## 2026-10-31 — random: the package recipe random-k30 / random-k46; no credit lines (948305e, 69afdfa)
 
 kernel/modules/random/pkg (P-38 S3.3), kmodpkg with KM_ROOT the checkout: it ships the object, modreg, /dev/random and

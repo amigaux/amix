@@ -28,6 +28,14 @@ outside the table, and refuses to give a verdict on any table it cannot size
 One shape has no bound to read: a constant index (`moveq #K', a switch whose
 value GCC knew), which can only take entry K.  That table is sized from its
 own entries, up to the nearest case, and named in a NOTE as a known limit.
+An index from `bfextu <ea>,<off>,<width>,%dI' takes 2^width entries, exactly.
+And a table whose index is only provably a byte or a word (an and-mask, or a
+zero-extended byte or word load: 2^k entries at most) but whose 2^k words do
+not all land on code -- GCC knew a narrower range from an outer test -- is
+sized from its own entries too, and only when that run of entries ends on a
+word that cannot be one (odd, outside the function, back into the table, or
+at the first case), never at the cap: a NOTE names it as trusted by shape.
+Any other table it cannot size stays untrustworthy.
 
 Then, like scan060.py, it re-disassembles only the code BETWEEN tables, so the
 stream re-synchronises after each one, and scans that listing by ENCODING:
@@ -195,7 +203,11 @@ def bound_for(insns, idx):
             n = moveq_value(insns, j, "%" + m.group(2))
             if n is not None and n < 0 and biased_index(insns, j, idx, m.group(1), -n):
                 return -n
-    # no compare bounds it: a mask in the block, else the ways into the block
+    # no compare bounds it: a bit field extracted into the index, else a
+    # mask in the block, else the ways into the block
+    n = bitfield_bound(insns, idx, block if block is not None else lo)
+    if n is not None:
+        return n
     for j in range(idx - 1, (block if block is not None else lo) - 1, -1):
         n = mask_bound(insns, j)
         if n is not None:
@@ -212,6 +224,75 @@ def index_register(insns, idx):
         return None
     m = re.match(r"^%pc@\([0-9a-f]+\b[^,)]*,%(d[0-7]):l\)", insns[idx - 1][3])
     return m.group(1) if m else None
+
+
+def index_def(insns, idx, stop):
+    """The instruction that gives the dispatch at insns[idx] its index: walk
+    back from the table load over the doubling (`addl %dI,%dI'), and-masks
+    into %dI and register copies into it, to the first other write of the
+    register.  -> (position, register, [mask entry counts]) or None."""
+    reg = index_register(insns, idx)
+    if reg is None:
+        return None
+    masks = []
+    for p in range(idx - 2, stop - 1, -1):
+        mn, ops = insns[p][2], insns[p][3]
+        if mn.startswith(("rts", "jmp", "bra")):
+            return None
+        if mn.startswith(("cmp", "tst", "btst")) or not ops.endswith(",%" + reg):
+            continue
+        if mn == "addl" and ops == "%%%s,%%%s" % (reg, reg):
+            continue
+        n = mask_bound(insns, p)
+        if n is not None:
+            masks.append(n)
+            continue
+        m = re.match(r"^%([da][0-7]|fp),%" + reg + "$", ops)
+        if mn == "movel" and m:
+            reg = m.group(1)
+            continue
+        return p, reg, masks
+    return None
+
+
+def bitfield_bound(insns, idx, stop):
+    """2^width when the index is `bfextu <ea>,<off>,<width>,%dI' (zero-extended,
+    0 .. 2^width - 1; python 3.11's incrementalnewlinedecoder_newlines_get:
+    `bfextu %a1@(16),2,3,%d0 ; andil #255,%d0'), a mask after it narrowing it
+    further; else None.  objdump prints a literal width as a bare number."""
+    d = index_def(insns, idx, stop)
+    if d is None:
+        return None
+    p, reg, masks = d
+    if insns[p][2] != "bfextu":
+        return None
+    m = re.match(r"^.+,(?:\d+|%d[0-7]),(\d+),%" + reg + "$", insns[p][3])
+    if not m or not 1 <= int(m.group(1)) <= 16:
+        return None
+    return min([1 << int(m.group(1))] + masks)
+
+
+def width_bound(insns, idx, stop):
+    """The most entries the index can take when it is provably a byte or a
+    word: an and-mask into it (2^k), or a zero-extended byte or word load
+    (`moveq #0,%dI' or `clrl %dI', then `moveb/movew <ea>,%dI'); else None."""
+    d = index_def(insns, idx, stop)
+    if d is None:
+        return None
+    p, reg, masks = d
+    if masks:
+        return min(masks)
+    mn = insns[p][2]
+    if mn not in ("moveb", "movew") or not reg.startswith("d"):
+        return None
+    for q in range(p - 1, max(stop, p - 6) - 1, -1):
+        qm, qo = insns[q][2], insns[q][3]
+        if qm.startswith(("cmp", "tst", "btst")) or not (qo.endswith(",%" + reg) or qo == "%" + reg):
+            continue
+        if (qm == "moveq" and qo == "#0,%" + reg) or (qm == "clrl" and qo == "%" + reg):
+            return 256 if mn == "moveb" else 65536
+        return None
+    return None
 
 
 def biased_index(insns, j, idx, src, k):
@@ -251,24 +332,33 @@ def constant_index(insns, idx):
     return moveq_value(insns, idx - 2, "%" + reg)
 
 
-def entries_bound(data, secs, t, fstart, fend):
+def entries_run(data, secs, t, fstart, fend, cap=4096):
     """Entry count of a table at t sized from its own words: the longest run
     of entries landing on an even address of the function past the table,
     ending where the nearest case begins.  A known limit: a code word just
-    after the table that also reads as such an entry is taken for one."""
+    after the table that also reads as such an entry is taken for one.
+    -> (count, why the run ended: case, odd, outside, into or cap)."""
     n, lowest = 0, None
-    while n < 4096:
+    while n < cap:
         if lowest is not None and t + 2 * n >= lowest:
-            break
+            return n, "case"
         w = word_at(data, secs, t + 2 * n)
         if w is None:
-            break
+            return n, "outside"
         tgt = t + w
-        if tgt & 1 or not (fstart <= tgt < fend) or tgt <= t + 2 * n:
-            break
+        if tgt & 1:
+            return n, "odd"
+        if not (fstart <= tgt < fend):
+            return n, "outside"
+        if tgt <= t + 2 * n:
+            return n, "into"
         lowest = tgt if lowest is None else min(lowest, tgt)
         n += 1
-    return n
+    return n, "cap"
+
+
+def entries_bound(data, secs, t, fstart, fend):
+    return entries_run(data, secs, t, fstart, fend)[0]
 
 
 def mask_bound(insns, j):
@@ -349,6 +439,15 @@ def find_tables(insns, labels, data, secs, pts):
         if not (a < t <= a + 64):
             problems.append("dispatch at 0x%08x: table 0x%08x not just after it" % (a, t))
             continue
+        # the offsets loaded from a table elsewhere (python 3.11, 2026-10-31:
+        # `movew @(800cb792,%d5:l:2),%d0 ; jmp %pc@(800cb842,%d0:w)'): the
+        # words after the jmp are no offsets, so no bound may size them
+        if idx > 0 and insns[idx - 1][2] in ("movew", "moveaw"):
+            m = re.match(r"^@\(([0-9a-f]+),", insns[idx - 1][3])
+            if m:
+                problems.append("dispatch at 0x%08x: offsets loaded from 0x%08x, not the table at 0x%08x "
+                                "after the jmp (a two-level dispatch)" % (a, int(m.group(1), 16) & 0xffffffff, t))
+                continue
         n = bound_for(insns, idx)
         k = constant_index(insns, idx) if n is None else None
         if k is not None and k >= 0:
@@ -360,17 +459,31 @@ def find_tables(insns, labels, data, secs, pts):
                 continue
             notes.append("dispatch at 0x%08x: constant index #%d; table at 0x%08x sized from its own "
                          "entries (%d), a known limit" % (a, k, t, n))
-        if n is None or n <= 0 or n > 4096:
+        fstart, fend = enclosing(pts, a)
+        bad = landing(data, secs, t, n, fstart, fend) if n is not None and 0 < n <= 4096 else None
+        if bad is None or bad:
+            # the index only provably a byte or a word: sized from its own
+            # entries, when the run ends on a word that cannot be an entry
+            # (never over a compare's bound: there every index can be taken)
+            hm = width_bound(insns, idx, max(0, idx - LOOKBACK))
+            if hm is not None and n in (None, hm):
+                ne, why = entries_run(data, secs, t, fstart, fend, cap=hm)
+                if why == "cap" and not landing(data, secs, t, ne, fstart, fend):
+                    n, bad = ne, []                  # every index the width allows lands
+                elif why != "cap" and ne > 0 and not landing(data, secs, t, ne, fstart, fend):
+                    notes.append("dispatch at 0x%08x: no bound check, the index at most %d; table at "
+                                 "0x%08x sized from its own entries (%d, the run ending %s), trusted by shape"
+                                 % (a, hm, t, ne, RUN_END[why]))
+                    n, bad = ne, []
+                else:
+                    problems.append("dispatch at 0x%08x: the index at most %d, but table 0x%08x is no run "
+                                    "of entries ending on a word that cannot be one (%d, %s)"
+                                    % (a, hm, t, ne, why))
+                    continue
+        if bad is None:
             problems.append("dispatch at 0x%08x: no bound check found, table at 0x%08x unsized" % (a, t))
             continue
         end = t + 2 * n
-        fstart, fend = enclosing(pts, a)
-        bad = []
-        for k in range(n):
-            w = word_at(data, secs, t + 2 * k)
-            tgt = t + (w if w is not None else 0)
-            if w is None or tgt & 1 or not (fstart <= tgt < fend) or t <= tgt < end:
-                bad.append(k)
         if bad:
             problems.append("dispatch at 0x%08x: table 0x%08x x%d has %d entr%s not landing on code "
                             "in the function (first: #%d)" % (a, t, n, len(bad),
@@ -378,6 +491,22 @@ def find_tables(insns, labels, data, secs, pts):
             continue
         tables.add((a + 4, end))                      # dispatch tail + table
     return tables, problems, notes
+
+
+RUN_END = dict(case="at the first case", odd="on an odd word", outside="on a word leading outside the function",
+               into="on a word leading back into the table")
+
+
+def landing(data, secs, t, n, fstart, fend):
+    """The entries of an n-entry table at t that do not land on an even
+    address of the function outside the table."""
+    end, bad = t + 2 * n, []
+    for k in range(n):
+        w = word_at(data, secs, t + 2 * k)
+        tgt = t + (w if w is not None else 0)
+        if w is None or tgt & 1 or not (fstart <= tgt < fend) or t <= tgt < end:
+            bad.append(k)
+    return bad
 
 
 def dispatch_of(problem):

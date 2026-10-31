@@ -8,6 +8,7 @@ FPU gate (quirk 74) and the STREAMS freeq guard (quirk 92).
 |---|---|
 | `SHA256SUMS-68030-261031-63` | the seven files of record, paths relative to the cut's `usr/sys` |
 | `cut.sh` | the recipe: `cut.sh OUT` with the inputs below; its sums must equal the file above |
+| `port.pin`, `paula.pin` | the port (`d0e8857`) and paula (`548d258`) commits the cut takes, which `../build.sh` fetches |
 
 Inputs (`cut.sh` names each by an environment variable):
 
@@ -24,8 +25,9 @@ kabi k30.1.2); their carve sources are in the cut's `carve/`. Against -56: the k
 relocations, in qdetach, strclose and stropen, retargeted to freeq_guarded) and keeps kabi k30.1.3.  With
 `--no-freeq-guard`, -56's build id and KIT_REV, the recipe on the guard's sources reproduced all six -56 kernel sums.
 
-Since `2192470` the recipe takes `build-cross-kernel.sh` and `tools/kabi-sidecar030.py` from that commit instead of
-`c1b7842`, so the cut builds in make dist's container as on the host. The old script counted bytes with
-`cmp -l | wc -l` under `pipefail`: on larger inputs diffutils 3.12 exits 0 into a pipe, and 3.10 (the container's)
-exits 1, which ended the build. The old sidecar tool also read the compiler pin only from a gcc-cross-amix git
-checkout. No byte of the cut changes: the same seven sums on the host and in the container.
+The recipe takes `build-cross-kernel.sh` and `tools/kabi-sidecar030.py` from `a1b9b6c` instead of `c1b7842`, so
+the cut builds in make dist's container as on the host. The old script counted bytes with `cmp -l | wc -l` under
+`pipefail`: on larger inputs diffutils 3.12 exits 0 into a pipe, and 3.10 (the container's) exits 1, which ended the
+build. The old sidecar tool also read the compiler pin only from a gcc-cross-amix git checkout (both fixed in
+`2192470`). The old script's carve check, `strings | grep -q` under `pipefail`, also failed now and then on a SIGPIPE
+(fixed in `89ebcf7` and `a1b9b6c`). No byte of the cut changes: the same seven sums on the host and in the container.
