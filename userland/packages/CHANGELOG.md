@@ -3,6 +3,14 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — x11r6.3 6.3-2: the default font path is the shipped fonts; reproducible PCF fonts (3ec3b3b, e613fc8, e841994, 7188471)
+
+The server's default font path is the three shipped font directories (misc, 75dpi, 100dpi), so Xzz9000 starts
+without -fp; the old path named Speedo and Type1, which are not shipped. bdftopcf starts from a zeroed font record,
+so the PCF fonts are the same on every build host. The FPU line now reads: needs an FPU or the kernel's FP
+emulation (68LC040/68LC060: emulated, slow, untested on 1.1). Recipe text names the rules directly instead of the
+former repository's plan ids; the build checks' D3 label is now pwgr.
+
 ## 2026-10-31 — recipes, READMEs, docs and changelog text state facts without internal ids (c2f4c6d, 13c539e, 5d48620, 547e3ea)
 
 package.sh headers, READMEs, docs, tool comments and x11r6.3's patch 00 comments reworded; .gitignore lists build
