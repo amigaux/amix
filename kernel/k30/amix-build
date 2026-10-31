@@ -5,7 +5,7 @@ Discovers the driver checkouts (those with a driver.conf), lets you pick which
 to include, generates the amiga/alien sd.c + Makefile (SCSI) and stages the net
 driver, then assembles a SELF-CONTAINED bundle: a tar + an on-box build.sh that
 integrates the drivers into /usr/sys, runs the D245 clean-gate, and (optionally)
-installs.  No LLM in the loop; the heavy, finicky parts (codegen templates, the
+installs.  Fully deterministic; the heavy, finicky parts (codegen templates, the
 idempotent net patch scripts, the clean-gate, checkunix) are reused untouched.
 
 Compilation happens ON the box (native cc/ld/make).  So the default output is a

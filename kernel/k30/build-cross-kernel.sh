@@ -120,7 +120,7 @@
 #
 # Env overrides (sensible defaults):
 #   CONFIG       config object source stem (default fd0unix; --config wins over env)
-#   --rth1 <rth1.c>  (D-2) link the RTH1 kernel half: the port's src/rth1.c compiled with the
+#   --rth1 <rth1.c>  link the RTH1 kernel half: the port's src/rth1.c compiled with the
 #                kit's own .c.o rule, gated (imports/exports exact, no COMMON, scan060 CLEAN, and
 #                byte-identical with and without the cross wrapper's 64-bit-multiply rewrite), linked
 #                into the final ET_REL, and main's jsr vfs_mountroot retargeted to rth1_mountroot by
@@ -1302,7 +1302,7 @@ if [ -n "$DLM_CORE" ]; then
 fi
 RTH1_OBJ=""
 if [ -n "$RTH1_C" ]; then
-  # === 8c. the RTH1 kernel half (D-2): compile + gate rth1.o ============================
+  # === 8c. the RTH1 kernel half: compile + gate rth1.o ============================
   RTH1_C="$(cd "$(dirname "$RTH1_C")" && pwd)/$(basename "$RTH1_C")"
   RTH1_DIR="$(dirname "$RTH1_C")"; RTH1_HOOK="$RTH1_DIR/patch_rth1_hook.py"
   # scan060 is the port's test-tools/scan060.py: $PORT's when set, else the port checkout rth1.c sits in
