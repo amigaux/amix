@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — dlmkit -13 recipe: pinned to the build container's kit (1427c27)
+
+make dist's container builds the kit with amix-system's pinned 2.1c p2a headers and its own tools/modfix, where -12's
+host build had an older sysroot; so dlmkit's manifest pins (k30 6fd5269d, k46 650b0e50) are now the container's, as
+-13, the unminted release-prep revision at -12's commit. It rolls reproducibly in make dist's kspace step (two runs
+identical).
+
 ## 2026-10-31 — registry: c 48 for the random module (a8719fb)
 
 c 48 goes to `random` (kernel/modules' random module: /dev/random 0, /dev/urandom 1). It is free in the stock tables
