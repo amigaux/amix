@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-31 — ifup/ifdown, dhcpc-hook, the new inetinit; the amix-base package (5d31cb3, 17a7587, 382c5e0)
+
+ifup and ifdown (/usr/sbin, ifup(1M)): one apply step in ifup.subr serves a static line and a DHCP lease (address,
+default route — the first interface to set one keeps it — host name, this host's hosts line, the five DNS parts), each
+only when it changes; drivers from /etc/inet/link.d, units probed by dlpi-mac; DHCP bounded by ifup_dhcpwait with a
+static fallback; `ifup -n` dry run. /usr/lib/inet/dhcpc-hook (BOUND/RENEW/REBIND/EXPIRE/RELEASE) to the T-55 contract.
+The new /etc/init.d/inetinit (S69inet/K69inet) runs `ifup -a` through rc_bg. amix-base (amxbase 1.0-1): SET=base,
+ESSENTIAL=yes, the seven D-N24 files from stock, nine conffiles; md5 9b90dc1686357983962186b611003b5e, 87040 B. Host
+tests 64/0 (dash, bash × three awks); E1 run7 PASS under the 1991 sh on the live aen0.
+
 ## 2026-10-30 — rc.subr, the interfaces parser, dlpi-mac; man follows PATH (e86d073, 5365158, eb8622d, 17fb7d5)
 
 rc.subr (/usr/lib/amix/rc.subr): rc_log, rc_enabled and rc_conf (read /etc/rc.conf, never source it), rc_bg (a
