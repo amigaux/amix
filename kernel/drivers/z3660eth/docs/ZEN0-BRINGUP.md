@@ -140,8 +140,7 @@ only when it is missing (§3).
 
 **The bare `slink`, on its own line, before `slink addaen`, is load-bearing.** ✅ This is a real-HW
 finding from 2026-06-21, recorded in this directory's former boot script (`userland/S99zen:11-15`
-as of `21ba1dc`) and
-the project's 2026-06 handoff notes (§7.4, unpublished): on a fast clean boot `slink addaen` can race ahead of the base inet
+as of `21ba1dc`): on a fast clean boot `slink addaen` can race ahead of the base inet
 STREAMS plumbing. The proven manual bring-up always ran a bare `slink` **first** to (re)link the
 base streams, then `slink addaen`. Do not fold the two into one command and do not drop the first.
 
@@ -216,8 +215,8 @@ only knows how to bring up `aen0`, and §1 says that can never succeed here. The
 - **The bare `slink` first** (§2.1): `inetinit` runs it before `ifup`.
 - **Never hang the boot:** the whole `ifup -a` runs in the background under a time bound.
 - **No retry loop.** The old boot script tried `slink addaen` up to 20 times. On metal that opened the
-  device 16 times at boot, and before the AB-04 fix each failed open leaked kernel virtual space
-  (`CHANGELOG.md`, AB-04). `ifup` plumbs once, with one retry, and the driver caches a failed probe.
+  device 16 times at boot, and before the 2026-09-27 fix each failed open leaked kernel virtual
+  space (`CHANGELOG.md`, 2026-09-27). `ifup` plumbs once, with one retry, and the driver caches a failed probe.
 - **A literal address** (§3.3): `ifup` always passes the number from the line, never a name.
 
 ### 3.2 History: the rc2 script `S99zen`
@@ -416,8 +415,6 @@ gate: `ifup` probes with `dlpi-mac` and logs what it found.
   comes up, where the static IP/hostname/netmask/gateway live, and what `slink addaen` actually does
   (it links the driver stream under **two** multiplexors, IP *and* ARP).
 
-> ⚠ **The project's 2026-06 handoff notes (unpublished) until 2026-09-09 still
-> said `mknod /dev/zen0 c 48 0`** (§6, §9.2) — 48 was stale, superseded by the 2026-07-30
-> renumber to **51**. They have since been corrected in place (their own top-of-document correction
-> note explains why); the authoritative value remains `driver.conf`, `README.md` and this file.
-> Their `slink`/race material (§7.4, §9.2) was and still is current and is cited above.
+> ⚠ **Earlier bring-up notes (2026-06) said `mknod /dev/zen0 c 48 0` until 2026-09-09** — 48 was
+> stale, superseded by the 2026-07-30 renumber to **51**. The authoritative value is `driver.conf`,
+> `README.md` and this file.
