@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # measure-corruption.sh  (runs ON the Amix box)
 #
-# Measures the RATE of the intermittent ld kernel-image corruption (NOTES s18).
+# Measures the RATE of the intermittent ld kernel-image corruption (the D245 boot-breaker).
 # Same per-build procedure as build-clean-kernel.sh, but runs a FIXED number of
 # full builds and records EVERY `sum -r relocunix` instead of stopping at the
 # first recurrence.  The clean ld output is byte-deterministic (its sum recurs);

@@ -1,5 +1,5 @@
 # module/a4kt710/Makefile -- the a4kt710 root-class module: the A4000T onboard
-# NCR 53C710 (S5-06), src/a4kt710.c = a4091-wr.c built as its second target.
+# NCR 53C710, src/a4kt710.c = a4091-wr.c built as its second target.
 # Run by module/Makefile once per line with KIT set; objects and the module go
 # to the repo's build/<line>, beside the a4091 module.
 

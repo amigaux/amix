@@ -123,7 +123,9 @@ the host network bridge lives in **[grimoire-amix](https://github.com/jusii/grim
 needs the 68040/68060 port at [`kernel/port/port.pin`](../../port/port.pin) and the gcc-cross-amix
 toolchain at [`toolchain/gcc-cross-amix.pin`](../../../toolchain/gcc-cross-amix.pin), as checkouts beside
 the amix checkout (see [`toolchain/README.md`](../../../toolchain/README.md)). Kernel family names in the
-docs (`KD060-ZA`, `KD060-ZT`, …), the `KT-nn` gates and `W-D7` are labels of the k30 build hub.
+docs (`KD060-ZA`, `KD060-ZT`, …) and `W-D7`, the A3000 WD33C93 support probe that kernel/k30's
+`kernel-support-probe-inject.py` writes in, are names used by kernel/k30's family tools
+(`kernel-families.json`, `k0-gates`).
 
 The loadable module ([`module/`](module/README.md)) builds inside amix against
 [`kernel/dlm`](../../dlm)'s ABI kit: build the kit there (`make kit`, see
@@ -204,7 +206,7 @@ each file); a newer Amiberry loads them and renumbers the version when it saves.
 | SCSI tape read, incl. the short read at a filemark | ✅ | 🟡 pending |
 | A3000 internal SCSI: concurrent multi-target I/O | ✅ | 🟡 pending |
 | A4092 / A4770 boards | 🟡 code path only | ✅ A4092 on the 68060 line (A4000D + Z3660): root filesystem, raw I/O equal to the disk image; A4770 untested |
-| 68040/68060 arm (`-DA4091_KVA`) | ✅ | ✅ MD-1: root on the A4092 (card 1), two boots, D42 record balanced |
+| 68040/68060 arm (`-DA4091_KVA`) | ✅ | ✅ root on the A4092 (card 1), two boots, D42 record balanced |
 
 Root on the A4091 is an A4000 (AGA) shape. On an A3000 the internal SCSI is detected as card 0 and the A4091 is card 1 (`c14d0`..), so a `c6d0s1` root kernel cannot mount root there; boot the A3000 from its own SCSI.
 
@@ -250,6 +252,6 @@ Open Group. The full trademark notes are in [`NOTICE`](NOTICE).
 
 ## Credits
 
-By Jussi Alanärä. AI tooling — **Claude Code** — was used throughout to investigate, build and verify
-this work. Built on the reverse-engineering and documentation efforts of the Amiga Unix community and
+By Jussi Alanärä. Built on the reverse-engineering and documentation efforts of the Amiga Unix community and
 the a4091-software project.
+LLM tools were used in this project.

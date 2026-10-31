@@ -1,6 +1,6 @@
 # A4091 + 53C710 driver reference (for Amix)
 
-> Synthesised from 6 independent research agents (NCR 53C710 Jun-1992 Data Manual, NetBSD `osiop`/amiga `siop`, Linux `53c700`, QEMU `lsi53c710`, WinUAE/Amiberry `ncr_scsi.cpp`, the A4091/a4091-software driver), then **verified against primary sources** (OpenBSD/NetBSD `osiopreg.h`/`osiop.c`, the A4091 firmware `siop.c`, the QEMU 53C710 core, WinUAE `ncr_scsi.cpp`, MVME167 Table 3-10). Target: **Amiga UNIX (Amix) 2.1 = AT&T SVR4.0 on a 68030, big-endian, ILP32**, under **Amiberry 8.1.6**.
+> Synthesised from six independent source studies (NCR 53C710 Jun-1992 Data Manual, NetBSD `osiop`/amiga `siop`, Linux `53c700`, QEMU `lsi53c710`, WinUAE/Amiberry `ncr_scsi.cpp`, the A4091/a4091-software driver), then **verified against primary sources** (OpenBSD/NetBSD `osiopreg.h`/`osiop.c`, the A4091 firmware `siop.c`, the QEMU 53C710 core, WinUAE `ncr_scsi.cpp`, MVME167 Table 3-10). Target: **Amiga UNIX (Amix) 2.1 = AT&T SVR4.0 on a 68030, big-endian, ILP32**, under **Amiberry 8.1.6**.
 >
 > **Confidence tags** `HIGH / MED / LOW` and the **source** are appended to every hex offset/number. Where sources disagree the conflict is kept **visible**, not silently resolved. Items the verifiers could not independently nail are flagged **LOW + "verify empirically against the live chip."**
 
@@ -39,7 +39,7 @@ The 16 MB Zorro III window is **sparse**: only four sub-regions are decoded. Two
 | QUICKINT (IRQ-ack byte) | `0x00880003` | `0x40880003` | **HIGH** | a4091.h; **the shipped driver writes the hi-bank alias `0x008A0003`** (`A4091_OFFSET_QUICKINT \| (1<<17)`, ack byte `0x26`) — both decode to the same QUICKINT register |
 | SWITCHES / DIP (byte) | `0x008C0003` | `0x408C0003` | **HIGH** | a4091.h; emulator `A4091_DIP_OFFSET` |
 
-> **Cross-ref to empirical fact:** the user's `0x40000000` base + `0x00800000` register offset gives **`0x40800000`** — the single most important derived address for bring-up. HIGH (triple-sourced: a4091.h `A4091_OFFSET_REGISTERS`, `attach.c` `dev_base + HW_OFFSET_REGISTERS` / `a4091_release(... - 0x00800000)`, WinUAE `io_start`, plus NetBSD `afsc.c`).
+> **Cross-ref to empirical fact:** the measured `0x40000000` board base + `0x00800000` register offset gives **`0x40800000`** — the single most important derived address for bring-up. HIGH (triple-sourced: a4091.h `A4091_OFFSET_REGISTERS`, `attach.c` `dev_base + HW_OFFSET_REGISTERS` / `a4091_release(... - 0x00800000)`, WinUAE `io_start`, plus NetBSD `afsc.c`).
 
 ### 1.2 ROM offset and size
 
@@ -76,9 +76,9 @@ This is algebraically identical to `osiopreg.h`'s byte-lane scheme `base + BL(3-
 
 **32-bit (longword) registers** (DSA, TEMP, DNAD, DSP, DSPS, SCRATCH, ADDER, DBC/DCMD longword) have the **same offset in both modes**, and **all SCRIPTS words/DMA addresses are longwords**, so they are byte-order transparent.
 
-> **CRITICAL agreement that looks like a conflict — resolved:** Agents 1 & 4 call the A4091 map "**big-endian**" and tabulate `SCNTL0=0x03, SIEN=0x00, ISTAT=0x22, DSTAT=0x0F`. Agents 3 & 6 (NetBSD `osiopreg.h`/amiga `siopreg.h`, the **actual A4091 driver source**) call the same numbers the "**little-endian/right-justified**" map: `SCNTL0=0x03, SIEN=0x00, ISTAT=0x22, DSTAT=0x0F`. **The numeric offsets are IDENTICAL** — only the label differs (a naming clash between NCR datasheet columns and the NetBSD header). **Use Table 2.2; it is agreed by all four sources plus the emulator's `beswap`.** HIGH (all 40 offsets independently reconstructed from `osiopreg.h` and cross-checked against the NCR Jun-92 Data Manual and the VxWorks `ncr710Lib` dump — zero corrections).
+> **CRITICAL agreement that looks like a conflict — resolved:** The datasheet-derived readings call the A4091 map "**big-endian**" and tabulate `SCNTL0=0x03, SIEN=0x00, ISTAT=0x22, DSTAT=0x0F`. NetBSD `osiopreg.h`/amiga `siopreg.h` and the **actual A4091 driver source** call the same numbers the "**little-endian/right-justified**" map: `SCNTL0=0x03, SIEN=0x00, ISTAT=0x22, DSTAT=0x0F`. **The numeric offsets are IDENTICAL** — only the label differs (a naming clash between NCR datasheet columns and the NetBSD header). **Use Table 2.2; it is agreed by all four sources plus the emulator's `beswap`.** HIGH (all 40 offsets independently reconstructed from `osiopreg.h` and cross-checked against the NCR Jun-92 Data Manual and the VxWorks `ncr710Lib` dump — zero corrections).
 >
-> Agent 6 raised a MED caveat that *which* datasheet column applies is board-strap-dependent and "should be verified empirically (ISTAT at `0x22` vs `0x21`)." This is **resolved** by three concrete A4091/Amiga sources (NetBSD `siopreg.h`/`afsc.c`, A4091 firmware, WinUAE `beswap`) all using the same map. Verify on first contact, expect Table 2.2.
+> One reading raised a MED caveat that *which* datasheet column applies is board-strap-dependent and "should be verified empirically (ISTAT at `0x22` vs `0x21`)." This is **resolved** by three concrete A4091/Amiga sources (NetBSD `siopreg.h`/`afsc.c`, A4091 firmware, WinUAE `beswap`) all using the same map. Verify on first contact, expect Table 2.2.
 
 > **MVME167 is a CONFIRMING source, not an outlier (corrected):** an earlier draft flagged the MVME167 (68040 board) big-endian view (`SCNTL0=0x00, SIEN=0x10, DSTAT=0x0C…`) as "a different board's wiring" that "disagrees" with the A4091 map. That framing was **wrong**. MVME167 Table 3-10 lists registers by their *aligned-longword row* (row `0x00`→SCNTL0, row `0x04`→SCID, row `0x08`→SFBR, row `0x0C`→DSTAT, row `0x14`→CTEST4, row `0x1C`→DFIFO, row `0x38`→DMODE); resolving each to its byte lane (BL0=3) gives SCNTL0→`0x03`, DSTAT→`0x0F`, etc. — **identical to the A4091/`osiopreg.h` map**. There is no board-strap difference between MVME167 and A4091 for these offsets; both are big-endian 53C710 with the same byte-lane reversal. The `SCNTL0=0x00 / SIEN=0x10 / SDID=0x20` style numbers were a misread of a *word-index* table. **MVME167 corroborates §2.2.** HIGH.
 
@@ -200,7 +200,7 @@ writeb(R + 0x3A, 0x35);            /* (19) DIEN = BF|ABRT|SIR|IID */
 ```
 Values are NetBSD `osiop` (53C710) constants (HIGH). Notes:
 - **Order is load-bearing:** DCNTL/DMODE early, interrupts off (SIEN=0/DIEN=0) before SCID/DWT, **CTEST7 written last**. The CTEST8 CLF pulse and the CTEST0 write are present in both NetBSD and the firmware; do not drop them.
-- **CTEST0 mask** (`BTD|EAN` in NetBSD's amiga path) — **LOW: verify the exact mask empirically against the live chip / your `osiopreg.h`** before trusting the literal; the *presence* of the write is HIGH, the literal value here is a placeholder.
+- **CTEST0 mask** (`BTD|EAN` in NetBSD's amiga path) — **LOW: verify the exact mask empirically against the live chip / `osiopreg.h`** before trusting the literal; the *presence* of the write is HIGH, the literal value here is a placeholder.
 - If bidirectional STERM/TA is wanted, **`DCNTL.EA` must be the first I/O written** after reset (HIGH). Step (6) is before any SCSI op — acceptable; hoist it earlier if TA timing issues appear.
 - `CF` must match the SCSI clock before SCSI ops; A4091 @ 50 MHz -> `CF=0x00`. HIGH.
 
@@ -272,7 +272,7 @@ On-chip **SCRIPTS processor** DMA-fetches 2- or 3-longword instructions from **h
 ### 5.2 Phase encoding (DCMD bits 26-24)
 `000=DATA_OUT 001=DATA_IN 010=COMMAND 011=STATUS 110=MSG_OUT 111=MSG_IN`. Direct Block-Move DCMD top byte: DATA_OUT=`0x00`, DATA_IN=`0x01`, COMMAND=`0x02`, STATUS=`0x03`, MSG_OUT=`0x06`, MSG_IN=`0x07`. HIGH.
 
-> **Conflict — Block-Move opcode top byte — RESOLVED (HIGH):** Agent 2 uses the bare phase byte (`0x06/0x02/0x01/0x03/0x07`); agent 6 ORed in MOVE-opcode bit27 (`0x0E/0x0A/0x09/0x0B/0x0F`). The QEMU **53C710** model matches a block-move phase on `(insn>>24)&7` with **no bit-27 dependency**, so for the 53C710 in **initiator** mode **bit27 = 0 and agent 2's values are correct.** (The earlier MED tag is upgraded to HIGH now that the QEMU 710 decode confirms it. Still worth a glance at your assembled `.scr` — expect bit27=0.)
+> **Conflict — Block-Move opcode top byte — RESOLVED (HIGH):** one reading uses the bare phase byte (`0x06/0x02/0x01/0x03/0x07`); another ORs in MOVE-opcode bit27 (`0x0E/0x0A/0x09/0x0B/0x0F`). The QEMU **53C710** model matches a block-move phase on `(insn>>24)&7` with **no bit-27 dependency**, so for the 53C710 in **initiator** mode **bit27 = 0 and the bare phase bytes are correct.** (The earlier MED tag is upgraded to HIGH now that the QEMU 710 decode confirms it. Still worth a glance at the assembled `.scr` — expect bit27=0.)
 
 ### 5.3 Key SCRIPTS opcodes (word1), HIGH unless noted
 ```
@@ -289,7 +289,7 @@ Opcode subfield = `(insn>>27)&7`; class = `insn>>30`. Verified decodes: SELECT `
 
 > **SELECT destination-ID is ONE-HOT (HIGH — the key anti-conflation finding):** word1 bits 23-16 are **one-hot** (bit N => target N), not binary. The A4091 firmware builds it as `acb->ds.scsi_addr = (0x10000 << target)` = `1 << (16+target)`; the QEMU **710** model reads `(insn>>16)&0xff` then converts one-hot→binary via `idbitstonum() = 7 - clz8(id)`. **DANGER:** QEMU's `lsi53c895a.c` (8xx family) treats this same field as a plain 4-bit *binary* value — cross-referencing the 8xx model or an 8xx datasheet gives the **wrong** encoding. This is exactly the 53C710-vs-53C8xx conflation to avoid; use the one-hot form above.
 
-> **LOW — INT/RETURN low flag bits (verify empirically against the live chip):** the class/opcode of INT (`0x98…`) and RETURN (`0x90…`) are confirmed, but whether the `0x080000` (bit-19) flag in `0x98080000`/`0x90080000` is mandatory vs. the plain `0x98000000`/`0x90000000` halting forms is **not** independently nailed. QEMU keys interrupt-on-the-fly vs. halt on bit-20 (`insn & (1<<20)`). **Verify against your assembled `.out`** before committing the literal; for a plain halting INT, `0x98000000` may suffice.
+> **LOW — INT/RETURN low flag bits (verify empirically against the live chip):** the class/opcode of INT (`0x98…`) and RETURN (`0x90…`) are confirmed, but whether the `0x080000` (bit-19) flag in `0x98080000`/`0x90080000` is mandatory vs. the plain `0x98000000`/`0x90000000` halting forms is **not** independently nailed. QEMU keys interrupt-on-the-fly vs. halt on bit-20 (`insn & (1<<20)`). **Verify against the assembled `.out`** before committing the literal; for a plain halting INT, `0x98000000` may suffice.
 
 ### 5.4 Host byte buffers (byte-linear, NO swap on the 68030)
 ```
@@ -351,7 +351,7 @@ Files: **`ncr_scsi.cpp`** (board decode) wrapping **`qemuvga/lsi53c710.cpp`** (c
 
 | Board offset | Region | Safe? | Why |
 |---|---|---|---|
-| `0x000000`–`0x0003FF` (~1 KB) | AutoConfig nibble regs | **YES** | real allocated data (what the user already reads) |
+| `0x000000`–`0x0003FF` (~1 KB) | AutoConfig nibble regs | **YES** | real allocated data (what the detection driver reads) |
 | `0x000400`–`0x03FFFF` | rest of real 256 KB ROM buffer | YES | within `xcalloc` 0x40000 |
 | `0x040000`–`0x7FFFFF` | declared-ROM, **UNBACKED** | **NO** | `rom[]` indexed past 256 KB heap -> leak then SIGSEGV |
 | **`0x800000`–`0x87FFFF`** | **53C710 register window** (`io_start=0x800000`, `io_end=A4091_IO_END=0x880000`) | **YES** | `reg = addr & 0x3f`, `beswap` lane; 64-byte file mirrored |
@@ -364,7 +364,7 @@ Files: **`ncr_scsi.cpp`** (board decode) wrapping **`qemuvga/lsi53c710.cpp`** (c
 ### 7.2 Why the full-window read SIGSEGVs (HIGH — exact root cause, verified verbatim)
 The window is a **sparse function-decoded I/O bank** (`ncr_bank_generic`), **not** a flat buffer. ROM region declared `0`–`0x800000` (8 MB) but `ncr->rom = xcalloc(uae_u8, A4091_ROM_SIZE*4)` with `A4091_ROM_SIZE=65536` = `0x40000` (256 KB). `read_rombyte()` is literally `{ uae_u8 v = ncr->rom[addr]; return v; }` with **no bounds check**. A 16 MB sweep walks `addr` toward `0x800000`, ~8 MB past a 256 KB allocation, until an unmapped host page -> **host-process SIGSEGV** (not a guest bus fault). Therefore:
 - **Map/read only the four decoded sub-regions**, never the full window.
-- For the user's purpose: map a **small window at `0x40800000`** (register file; `addr & 0x3f`) and the **first ~4 KB at `0x40000000`** for AutoConfig — both backed and safe.
+- For the driver: map a **small window at `0x40800000`** (register file; `addr & 0x3f`) and the **first ~4 KB at `0x40000000`** for AutoConfig — both backed and safe.
 
 ### 7.3 Emulator behaviour to know
 - Register addressing `reg = (offset) & 0x3f`, lane `3 - (addr & 3)` (`beswap`) — matches Table 2.2. HIGH.
@@ -382,7 +382,7 @@ Each step gates the next.
 
 **Step 2 — Soft reset.** §3.1 (1)–(3): `ISTAT(0x22)=0x80,=0x40,delay,=0x00,delay` (RMW form in production). Via **ISTAT**, not DCNTL. HIGH. Remember the **A4091 write-shadow at reg-base+`0x40`** if writes seem ignored.
 
-**Step 3 — Read chip ID/revision (cheapest liveness check).** Read **`CTEST8` (BE `0x21`)**: top nibble `V[3:0]` (`0xF0`) = revision (manual documents rev 1). A sane non-`0xFF`/non-`0x00` nibble confirms the register block responds at `0x40800000` with correct byte lanes. Also read `ISTAT` at **`0x22`** to confirm the A4091-BE map empirically (agent-6 MED caveat). HIGH.
+**Step 3 — Read chip ID/revision (cheapest liveness check).** Read **`CTEST8` (BE `0x21`)**: top nibble `V[3:0]` (`0xF0`) = revision (manual documents rev 1). A sane non-`0xFF`/non-`0x00` nibble confirms the register block responds at `0x40800000` with correct byte lanes. Also read `ISTAT` at **`0x22`** to confirm the A4091-BE map empirically (the MED caveat in §2.1). HIGH.
 
 **Step 4 — Full init.** §3.1 (4)–(19) with **conservative NetBSD values** (`SCNTL0=0xCC, SCNTL1=0x20, DCNTL=0x20, DMODE=0x80, CTEST7=0x80, SCID=1<<id, DWT=0, SIEN=0xAF, DIEN=0x35`; 50 MHz -> `CF=0x00`) and the corrected write order (DCNTL/DMODE early, ints off before SCID/DWT, CTEST0 + CTEST8-CLF pulse + CTEST7 last). HIGH (CTEST0 mask literal LOW — verify empirically).
 

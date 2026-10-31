@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 /*
- * a4kt_modtest.c -- host tests of the a4kt710 module (S5-06): src/a4091-wr.c
+ * a4kt_modtest.c -- host tests of the a4kt710 module: src/a4091-wr.c
  * built as its second target (-DA4091_MODULE -DA4091_A4KT; -DA4091_KVA as the
  * k46 arm) against mock.c, with a synthetic Kickstart image at 0xF80000.
  *
@@ -9,7 +9,7 @@
  *   - the gate: without the Kickstart's "NCR scsi.device" cold-start tag, with
  *     a near-miss tag, with declared=0, on a non-AGA chipset: ENXIO and ZERO
  *     accesses under $DD0000 (no map, no probe, no DMA area);
- *   - declared=1 passes without the tag (the owner's override);
+ *   - declared=1 passes without the tag (a manual override);
  *   - a passing gate: one registration (c 0, $DD0000, rank mobo), the attach
  *     quiesce, the host ID from the DIP bank, the D42 record's ctlid 3;
  *   - no chip, or a chip that fails the fingerprint: ENXIO, the area given back;

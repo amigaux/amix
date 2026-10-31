@@ -351,7 +351,7 @@ static unsigned char *status_va(struct mock_board *b);
 
 /* the cache-clearing sync (C4-5 v5 section 5.4): prepare + complete FROM_DEVICE
  * over a 16-byte clear line in the area -- never over the status and message
- * bytes the chip wrote, which a bounced complete would overwrite (N109) */
+ * bytes the chip wrote, which a bounced complete would overwrite */
 static void
 check_sline(int i, struct mock_board *b)
 {
@@ -430,7 +430,7 @@ t_queue_noreach(void)
 }
 
 /*
- * Bench N109 (k30, dma_forcebounce on): the status after a WRITE or a TUR must
+ * k30 with dma_forcebounce on: the status after a WRITE or a TUR must
  * be the byte the chip wrote, even when the provider bounces the cache-clearing
  * sync and copies a stale bounce back.  The chip's status lands before any
  * complete; the copy-back follows.  cp->status must read the chip's 0x00.
@@ -517,7 +517,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "queue: zero length", t_queue_zero },
 	{ "queue: WRITE", t_queue_write },
 	{ "queue: out of reach (dma_addr 0)", t_queue_noreach },
-	{ "status under force-bounce (N109)", t_forcebounce_status },
+	{ "status under force-bounce", t_forcebounce_status },
 	{ "selection timeout is silent", t_seltimeout_silent },
 };
 

@@ -51,9 +51,9 @@ unchanged:
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
 | Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
-| Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (Bench N109) |
+| Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (the force-bounce status bug, below) |
 | Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, the poll bound (rc -2), a phase error (rc -3) or a short-read recovery. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
-| Version | `VERSION` (`1.0.0-5`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console, RD-1 E955) |
+| Version | `VERSION` (`1.0.0-5`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console) |
 
 ### The `dma_alloc` area
 
@@ -71,7 +71,7 @@ Zorro master's reach.
 | 0x124 | the IDENTIFY and CDB buffers, 16 bytes |
 | 0x134 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
 
-**N109 (2026-10-27).** 1.0.0-3 ran the sync over the status line itself. With
+**The force-bounce status bug (2026-10-27).** 1.0.0-3 ran the sync over the status line itself. With
 the k30 provider's `dma_forcebounce` hook on, that segment was bounced too.
 The FROM complete then copied the bounce's leftover bytes over the status byte
 the chip had written. Under write load dd saw a nonzero status, REQUEST SENSE
@@ -81,7 +81,7 @@ data intact.
   bounced.
 - Fixed twice: the provider's hook now exempts `dma_alloc` memory (C4-5 v8
   §5.3, kern30m -15), and 1.0.0-4 syncs the clear line instead.
-- The host test "status under force-bounce (N109)" models it: 1.0.0-3 fails it
+- The host test "status under force-bounce" models it: 1.0.0-3 fails it
   and 1.0.0-4 passes.
 
 - The SCRIPTS are position-independent (relative jumps, table-indirect
@@ -131,7 +131,7 @@ It never sleeps, calls `timeout()` or `delay()`, waits for an interrupt or
 self-test.
 
 The queue path's polls are bounded by a read count. The once-per-card SCSI
-bus reset before a board's first command (A4-22) is timed by the beam
+bus reset before a board's first command is timed by the beam
 counter (VHPOSR), not by the clock. So sd's first open (`rth1_apply`, still
 in the root pass) can drive the board at level 7.
 
@@ -148,13 +148,13 @@ in the root pass) can drive the board at level 7.
   - The 030 data cache is write-through; a FROM_DEVICE `dma_complete`
     clears it, hence the status line.
   - The first k30 kernel the module links on is the -14 cut; package
-    1.0.0-2 mints in the -79/-14 wave.
+    1.0.0-2 mints with the -79/-14 kernel cuts.
   - Before that pool existed, `dma_alloc` returned 0 and `_load` returned
     `ENOMEM`.
 - **A4092** (manufacturer 0xc0de): it needs the kernel's unsigned
   `autocon()` shift. Both module kernels have it:
   - kern46m -77 carries the port's ISSUE-76 `lsrl`;
-  - kern30m -12's cut tree has `support.c.patch` (A4-23).
+  - kern30m -12's cut tree has `support.c.patch` with the unsigned shift.
 - **A4770:** in the match keys as `driver.conf` has it; untested on hardware.
 - **Emulation first** (amiberry's A4091 rows), metal later.
 
@@ -178,10 +178,10 @@ The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
 queue path's DMA order and addresses (`test/host/README.md`).
 
-### Emulation (amiberry, the Bench)
+### Emulation (amiberry)
 
 The emulated A4091 takes its AutoConfig ID from the ROM image:
-- A Commodore A4091 ROM (the ROM store's R003) answers `0202:54`.
+- A Commodore A4091 ROM answers `0202:54`.
 - An A4092 ROM built from upstream encodes the manufacturer byte-swapped
   (`0xD0CE`, a4091-software issue #64), so the module's `c0de:01` key never
   matches in emulation.
@@ -190,12 +190,12 @@ So the A4092 and A4770 identities are host and metal rows only.
 
 | Row | Setup | Pass when |
 |---|---|---|
-| E1 | k46: kern46m -78 + this module; one A4091 (R003); root on the A4091 (id 6) | `dlm: … root module(s) linked`, `RTH1: root … from the root record`, multi-user, `kinfo` lists a4091, a 2 MB `cp` + `sync` compare identical, `dlm: halt pass: … stopped`. kmem: `a4091_nboards` 1, `drv_prep == drv_cmpl`, `edge_shared` 0. **Passed 2026-10-27** (Bench N105, N105b; 1.0.0-1): board at 0x48000000, root `c6d0s1` from the root record, 2.4 MB `cp` + `sync` byte-identical twice, halt pass |
-| E2 | k46: the Z3660 root (z3660scsi) + the A4091 as a second controller | sd order z3660 card 0, A4091 card 1: its id-6 disk is `ced0`. **Passed 2026-10-27** (Bench N106; 1.0.0-1 with z3660scsi-k46): 2 root modules linked, root `ced0s1` on card 1, `kinfo` 2 sd cards, check and `cp` + `sync` clean, halt pass of 3 modules |
+| E1 | k46: kern46m -78 + this module; one A4091 (Commodore ROM); root on the A4091 (id 6) | `dlm: … root module(s) linked`, `RTH1: root … from the root record`, multi-user, `kinfo` lists a4091, a 2 MB `cp` + `sync` compare identical, `dlm: halt pass: … stopped`. kmem: `a4091_nboards` 1, `drv_prep == drv_cmpl`, `edge_shared` 0. **Passed 2026-10-27** (two runs; 1.0.0-1): board at 0x48000000, root `c6d0s1` from the root record, 2.4 MB `cp` + `sync` byte-identical twice, halt pass |
+| E2 | k46: the Z3660 root (z3660scsi) + the A4091 as a second controller | sd order z3660 card 0, A4091 card 1: its id-6 disk is `ced0`. **Passed 2026-10-27** (1.0.0-1 with z3660scsi-k46): 2 root modules linked, root `ced0s1` on card 1, `kinfo` 2 sd cards, check and `cp` + `sync` clean, halt pass of 3 modules |
 | E3 | k46: E1's box; `dd` reads with sense, a tape short read if a tape unit is set | `a4091_kstat.bounce_n` grows; the sense and the short read return as with the static driver |
 | E4 | k46: E1's box, five `reboot` cycles | Each boot clean; the halt pass runs each time |
 | E5 | k46: two A4091 boards, if amiberry offers a second instance | Two registrations; the lower base is the lower card |
-| E6 | k30: E1's setup on the 030 module kernel (-14 or later) | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise. **Passed 2026-10-27** (Bench N109, N109b; 1.0.0-3 on kern30m -14): root on the A4091 alone, pool 128 KiB, 2 MiB raw read and `cp` + `sync` + `cmp` identical with the hook off and on, `noreach` 0. Finding N109 (above) is fixed in 1.0.0-4 |
+| E6 | k30: E1's setup on the 030 module kernel (-14 or later) | As E1. Run once with the provider's force-bounce hook (`dma_forcebounce` nonzero, C4-5 §5.3), since amiberry's 0x08000000 bank is reachable by emulated DMA and a missed bounce would pass otherwise. **Passed 2026-10-27** (two runs; 1.0.0-3 on kern30m -14): root on the A4091 alone, pool 128 KiB, 2 MiB raw read and `cp` + `sync` + `cmp` identical with the hook off and on, `noreach` 0. The force-bounce status bug (above) is fixed in 1.0.0-4 |
 | E6b | k30: E6's box, `dma_forcebounce` on, one read too large for the 128 KiB pool (`dd` with a 256 KiB block on the raw A4091 disk) | `noreach` +1, the console line `A4091 c…: no reachable DMA buffer for … bytes`, the `dd` fails with EIO, the chip is not armed, and the next command runs |
 
 ### Metal (later)
@@ -203,12 +203,12 @@ So the A4092 and A4770 identities are host and metal rows only.
 | Row | Setup | Pass when |
 |---|---|---|
 | M1 | A4000D + Z3660 (060) + the A4092 (`c0de:01`) with the Zulu; k46 module kernel; root on the A4092 | As E1, with `A4092 SCSI` registered. The A4092 matches only because kern46m carries the unsigned `autocon()` shift |
-| M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as MD-1 |
+| M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as on the 2026-10-03 metal boots |
 | M3 | M1's box: a CD install from the Zulu CD unit through the module | As C1/C2 with the static driver: `rearm_n` 0 on a clean run |
-| M4 | M1's box on the k30 line (Z3660 in 030 mode), after S4-62 | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
+| M4 | M1's box on the k30 line (Z3660 in 030 mode), once k30 has its DMA pool | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
 | M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (A1, `mobo:a4000t-710`), not this one |
 
-## The second module: a4kt710 (S5-06)
+## The second module: a4kt710
 
 `module/a4kt710/` builds `a4kt710`, the A4000T's onboard NCR 53C710, from the same driver source
 (`src/a4kt710.c` includes `a4091-wr.c` with `-DA4091_A4KT`). `make -C module` builds both modules on both lines.
@@ -224,9 +224,9 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Version | `module/a4kt710/VERSION` (`1.0.0-1`) |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
-**Risk carried to S5-07:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is
+**Risk carried to the metal test:** the onboard 710 is a motherboard bus master, and its DMA reach into the Z3660's DDR is
 unmeasured. k30's provider bounces DDR segments anyway. k46's provider is the identity, so M-A4T1 must include
-M-DMA1's byte compare on the tower.
+a byte compare on the tower (docs/A4000T-ONBOARD-710.md §10.6).
 
 ## Package (C3-5)
 

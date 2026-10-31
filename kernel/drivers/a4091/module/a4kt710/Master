@@ -5,7 +5,7 @@
 # key always matches at load; a4kt710_load is the gate (docs/A4000T-ONBOARD-710.md
 # section 10.2) and touches nothing under $DD0000 undeclared.
 # $param declared (C4-2 v6 section 8.1): -1 the Kickstart's NCR ROM tag decides,
-# 0 never touch the window, 1 the owner's override (touch without the tag).
+# 0 never touch the window, 1 a manual override (touch without the tag).
 # $rank mobo: sd's class 3 (C4-1 section 4).  No $majors: sd owns them.
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
 $modtype misc
