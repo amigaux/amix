@@ -25,13 +25,18 @@ esac
 AMIX_TOP=$(cd "$HERE/../../../.." && pwd)
 . "$AMIX_TOP/build/pkg/layout.sh"
 . "$AMIX_PKG_COMMON/amix-env.sh"
-# dlm-src.sh finds gcc-cross-amix and amix-040-060-port as siblings of the
-# checkout; from a worktree those are the workspace's, the directory holding
-# the main working tree, as layout.sh finds it (until dlm-src.sh takes the
-# toolchain and the port from layout.sh)
-_c_git=$(git -C "$AMIX_TOP" rev-parse --path-format=absolute --git-common-dir)
-AMIX_SIBLINGS=$(dirname "$(dirname "$_c_git")")
-unset _c_git
+# The port the dlmkit recipe takes the k46 kit's headers from: without
+# AMIX_PORT_REPO, a repository of our own under kspace/src, which dlm-src.sh
+# fills with the recipe's pinned port commit, fetched by hash from
+# kernel/port/port.pin's URL (AMIX_PORT_URL), as make dist's kspace step does
+if [ -z "${AMIX_PORT_REPO:-}" ]; then
+	AMIX_PORT_REPO=$AMIX_BUILD_ROOT/kspace/src/port-repo
+	[ -d "$AMIX_PORT_REPO/.git" ] || git init -q "$AMIX_PORT_REPO"
+	read -r _c_url _c_rest < "$AMIX_TOP/kernel/port/port.pin"
+	AMIX_PORT_URL=${AMIX_PORT_URL:-$_c_url}
+	unset _c_url _c_rest
+fi
+export AMIX_PORT_REPO AMIX_PORT_URL
 . "$AMIX_PKG_COMMON/fetch.sh"
 . "$AMIX_PKG_COMMON/pkgroll.sh"
 . "$AMIX_PKG_COMMON/kpkgroll.sh"

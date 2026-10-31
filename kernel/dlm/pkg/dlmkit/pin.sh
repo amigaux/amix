@@ -100,6 +100,9 @@ DK_MONSW_COMMIT=96720ad
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
 DK_K46_PORT_COMMIT=d0e8857
+# its full hash: git fetches a commit by its full hash only (build.sh fetches
+# it into AMIX_PORT_REPO when that lacks it); the label stays the short one
+DK_K46_PORT_HASH=d0e88574f7ee8559452cc7363ff7bcf3dd9133e6
 DK_K30_MANIFEST=db72da995d8f7caa4f4c8db1747dec81bd620fac65d3972cebe75cfaa9c02ae9
 DK_K46_MANIFEST=cee36ea8969c46a98c6aff10c1e2a48144929948cada05098d29fa5295a047b7
 

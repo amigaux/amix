@@ -52,6 +52,16 @@ amix_kit_manifest() {
 LINES=${*:-k30 k46}
 echo "=== dlmkit ($LINES) from amix-dlm $DK_DLM_COMMIT ==="
 echo "--- make kit, amix-dlm $DK_DLM_COMMIT ---"
+case "$DK_K46_PORT_HASH" in
+"$DK_K46_PORT_COMMIT"*) ;;
+*) echo "[FAIL] pin.sh: DK_K46_PORT_HASH $DK_K46_PORT_HASH is not $DK_K46_PORT_COMMIT" >&2; exit 1 ;;
+esac
+if ! git -C "$AMIX_PORT_REPO" cat-file -e "$DK_K46_PORT_HASH^{commit}" 2>/dev/null &&
+   [ -n "${AMIX_PORT_URL:-}" ]; then
+	echo "  port     fetching $DK_K46_PORT_HASH from $AMIX_PORT_URL"
+	git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$DK_K46_PORT_HASH" || {
+		echo "[FAIL] cannot fetch the port's $DK_K46_PORT_HASH from $AMIX_PORT_URL" >&2; exit 1; }
+fi
 amix_dlm_kit "$DK_DLM_COMMIT" "$DK_MONSW_COMMIT" "$DK_K46_PORT_COMMIT"
 
 for LINE in $LINES; do
