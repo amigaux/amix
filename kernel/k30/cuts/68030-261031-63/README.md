@@ -23,3 +23,9 @@ ET_REL it was made from. `mod.d/ufs` and `mod.d/s5` are the carved core-tier mod
 kabi k30.1.2); their carve sources are in the cut's `carve/`. Against -56: the kernel adds the freeq guard (5 freeq
 relocations, in qdetach, strclose and stropen, retargeted to freeq_guarded) and keeps kabi k30.1.3.  With
 `--no-freeq-guard`, -56's build id and KIT_REV, the recipe on the guard's sources reproduced all six -56 kernel sums.
+
+Since `2192470` the recipe takes `build-cross-kernel.sh` and `tools/kabi-sidecar030.py` from that commit instead of
+`c1b7842`, so the cut builds in make dist's container as on the host. The old script counted bytes with
+`cmp -l | wc -l` under `pipefail`: on larger inputs diffutils 3.12 exits 0 into a pipe, and 3.10 (the container's)
+exits 1, which ended the build. The old sidecar tool also read the compiler pin only from a gcc-cross-amix git
+checkout. No byte of the cut changes: the same seven sums on the host and in the container.
