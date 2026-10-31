@@ -110,7 +110,9 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
 - **admin(4) policy** `/var/sadm/install/admin/default`: `mail=root`, `instance=unique`,
   `basedir=default`, and every check = `ask` (`partial`/`runlevel`/`idepend`/`rdepend`/`space`/
   `setuid`/`conflict`/`action`). A permissive admin (`*=nocheck`, `instance=overwrite`) + `pkgadd -n`
-  runs fully non-interactive. ✅
+  runs non-interactive for packages with no install scripts and no file another package owns ✅;
+  with either, it is open 🟡: an install of amxbase with `-n -a /tmp/admin` (`conflict=` and
+  `action=nocheck`) still listed the conflicting files and suspended, rc 5 (rig E1, 2026-10-31).
 - **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, row E1, 2026-10-31;
   toy packages varied one parameter at a time, evidence `tmp/2026-10-30-pkgtools-basedir/rig/E1`).
   `/usr/sbin/pkgadd -n -a <admin> -d <pkg>` of any package whose pkginfo carries `BASEDIR` (`/`,

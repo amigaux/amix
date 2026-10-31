@@ -67,7 +67,10 @@ Departures from P-36's table, and why:
   of a replaced file. Without `-c`, the entry falls back to class `none`. This settles P-36's
   UNVERIFIED item for apkg's `--conf-new`.
 
-**UNVERIFIED on a box:** the stock pkginstall running the scripts, and the stock `/bin/sh`, `mkdir -p`,
+The stock 2.1 `mkdir -p` fails, "File exists", when the last directory already exists (rig E1,
+2026-10-31), so `i.conffile` tests `-d` before each `mkdir -p`; the tests run it under such a mkdir.
+
+**UNVERIFIED on a box:** the stock pkginstall running the scripts to the end, and the stock `/bin/sh`,
 `expr` and `test -o` they use (SVR4.0 features; installng's first 1.1-media install is the proof).
 
 ## Tests
