@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — the first make dist rehearsal: two identical locks (2234f49, 6f3f516, f86507a, 1781a2c)
+
+Two clean full clones, in the container, at different paths and times, give line-for-line identical locks (P-38 S7.2's
+first rehearsal: kit, kernel-k30, modules, drivers, 12 userland packages, both catalogs). Fixes it needed: the
+kspace, userland and recipes steps build the host pkgmk/pkgtrans when a clean clone has none (2234f49); the
+build-host-path check passes one-component paths such as /src (f86507a). Also: TOOLCHAIN=none for script-only
+packages, where any compile is refused (6f3f516); dlm-src.sh's amix_src_treeish probes kernel/dlm before the root,
+since amix has its own top-level Makefile (1781a2c).
+
 ## 2026-10-31 — amix-decls.h declares readv, writev, cbrt, copysign, isinf (a651b24); scan060-g14 sizes vim's switch tables (8bfb296)
 
 amix-decls.h declares readv/writev (libc.so.1), cbrt and copysign (libm.a) and makes isinf gcc's builtin, as C99 has it

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — the m68k-gnu-bin shim does not reproduce -52's FPSP 040 (369daff)
+
+binutils 2.43.1 relaxes the FPSP 040's stan.s:231 `lea PITBL+0x200,%a1` to PC-relative, two bytes shorter than the
+Ubuntu 2.46 that cut 68060-261031-52; the k46 line is re-cut as -53 with the shim. The earlier "byte-identical" note
+is withdrawn.
+
 ## 2026-10-31 — a .distfile names the original first, our copy second (80d9050)
 
 A .distfile is `<URL> <sha256> [<URL>...]`, every URL https; netbsd-syssrc.distfile names archive.netbsd.org first and
