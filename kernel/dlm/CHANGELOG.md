@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — stage-5 ledger and plan: T-56 D3, the A4000T without Zorro cards (3116cbc, f772fee)
+
+S5-21 is narrowed to the tower's cardless rows (CD boot on metal through the onboard 53C710, if a drive is fitted;
+S5-18's metal half in 030 mode). Its A4092 rows are out of 1.1 on the tower and covered by the A4000D's M15-M18 and
+M20 (amix-kerntools daff4dc). S5-07's A4092 beside the 710 is not for 1.1. The plan rows too.
+
 ## 2026-10-31 — P-36 W8: the kbootset package owns its boot scripts; C3-6 v7, C3-5 v17 (b165fd7, ce80a05, fa5efe0, 151803d)
 
 kbootset/rc/kbnamelist and kbmarkgood become /etc/init.d scripts with the links S01kbnamelist and S99zkbootset, which
