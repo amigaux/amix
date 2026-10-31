@@ -9,19 +9,20 @@ moved in from amix-packages' `recipes/` at 450ba6a, beside its twin in
 | `kernel-k46-m/` | `kern46m` | the module kernel of the 68040/68060 line: `/stand/k46/{unix,kabi}` and the cut's ufs module under `/etc/conf/mod.d` (C2-3); rolled by `amix_kpkgroll` |
 
 ```sh
-K46M_SRC=<the cut's output> sh kernel/port/pkg/build.sh [kernel-k46-m]
+sh kernel/port/pkg/build.sh [kernel-k46-m]
 ```
 
 rolls it with the harness in `build/pkg` (`common.sh` sources it) into
 `$AMIX_BUILD_ROOT/kspace/pkg/` (`out/pkg/kspace/pkg/` by default), logs in
 `kspace/log/`, and prints `pkg <file> <sha256>` per datastream: the contract
 of make dist's `kspace` step (docs/BUILDING.md). With no cut output it exits
-3 and names the step that is to make it (`[MISSING]`, P-38 S2.3).
+3 and names the step that makes it (`[MISSING]`, P-38 S2.3).
 
 The kernel is not built here. The recipe packages the output of the port's
 cut record `cuts/<build id>/cut.sh` (amix-040-060-port at the commit
-`kernel/port/port.pin` names or later), which `K46M_SRC` names: the cut has
-no home in amix until make dist's `kernel-k46` step (P-38 S2.3) makes it.
+`kernel/port/port.pin` names), which make dist's `kernel-k46` step
+(`kernel/port/cuts/build.sh`) writes to `kernel/port/build/cuts/<build id>/`,
+`K46M_SRC`'s default.
 Every byte is checked against `pin.sh`: the ET_REL and its sidecar, the
 image's build id against the sidecar's and the module's, and the ufs module,
 rebuilt from the cut's carve sources with the kit of the pinned commit. The

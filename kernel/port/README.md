@@ -7,8 +7,12 @@ pin, and changes go to Antti's repository as pull requests when we choose to.
 The fork stays a repository of its own, so merging his upstream into it stays
 ordinary git work.
 
-This directory holds only this README and `port.pin`, which names the fork and
-the exact commit the build uses.
+This directory holds this README, `port.pin`, which names the fork and the
+exact commit the build uses, and make dist's two hooks for the 68040/68060
+line: `cuts/build.sh` (the `kernel-k46` step) rebuilds the fork's cut of record
+that `cuts/CURRENT` names, as the fork has it at the pin, and refuses sums
+other than the record's; `pkg/` rolls that cut into the `kern46m` package
+(the `kspace` step, `pkg/README.md`).
 
 A pin file is one line, `<git URL> <full commit hash>`; the build fetches that
 exact commit.

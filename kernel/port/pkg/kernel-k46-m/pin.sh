@@ -5,8 +5,7 @@
 # at 450ba6a (P-38 S3.3): the same pins and the same package text; the
 # licences that came from beside the checkout now come from amix at a
 # commit (K46M_AMIX_COMMIT) and from amix-paula by hash.  The cut's output
-# has no home in amix yet: K46M_SRC names it (make dist's kernel-k46 step,
-# P-38 S2.3, is to make it).
+# is make dist's kernel-k46 step's (kernel/port/cuts/build.sh, P-38 S2.3).
 #
 # Not built in the recipe.  Cut by the port station (kabi k46.1.3, the audio
 # driver with the bounded init wait, 2026-10-28;
@@ -73,7 +72,9 @@
 # the cut was reproduced with its cut.sh into K46M_SRC: all seven sums
 # equal the record's.
 
-# K46M_SRC: the output of the port's cuts/68060-261031-52/cut.sh (no default)
+# the cut's output: kernel/port/cuts/build.sh (make kernel-k46) writes it
+# there, from the port's cuts/68060-261031-52/cut.sh (gitignored)
+K46M_SRC="${K46M_SRC:-$AMIX_TOP/kernel/port/build/cuts/68060-261031-52}"
 K46M_SUMS=SHA256SUMS-68060-261031-52   # under K46M_SRC, the cut's seven sums
 K46M_OUT=out/c                     # the cut's outputs under K46M_SRC
 K46M_CARVE=ufsmod/mod              # the ufs carve sources (R2)
