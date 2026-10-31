@@ -1,0 +1,78 @@
+# display.subr -- what xstart and the display boot step share: reading
+# /etc/display (display(4)) and the card files of /etc/display.d
+# (display.d(4)). Sourced; Bourne sh, the 1991 /bin/sh included.
+#
+#   disp_val <file> <key>        the value of <key> (the rest of its last
+#                                line, comment stripped), or nothing
+#   disp_errors                  every mistake in /etc/display and the card
+#                                files, one "<file>:<line>: <what>" a line
+#   disp_cards                   the card names, in the order "auto" tries
+#                                them: by name, "native" last
+#   disp_has <list> <word>       status 0 when <word> is one of <list>
+#
+# Installed as /usr/lib/amix/display.subr.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+DISP_CONF=${DISP_CONF:-/etc/display}
+DISP_D=${DISP_D:-/etc/display.d}
+
+disp_val() {
+	[ -r "$1" ] || return 0
+	sed -e 's/#.*//' "$1" | awk '$1 == k { $1 = ""; v = substr($0, 2) } END { print v }' k="$2"
+}
+
+disp_has() {
+	for _dh in $1
+	do
+		[ "$_dh" = "$2" ] && return 0
+	done
+	return 1
+}
+
+disp_cards() {
+	_dc_n=
+	for _dc in `ls "$DISP_D" 2>/dev/null`
+	do
+		[ -f "$DISP_D/$_dc" ] || continue
+		case $_dc in
+		native) _dc_n=native ;;
+		*.new|*.old|*~) ;;
+		*) echo $_dc ;;
+		esac
+	done
+	[ -n "$_dc_n" ] && echo native
+}
+
+# the keys each file takes, and what their values must look like
+disp_errors() {
+	[ -r "$DISP_CONF" ] && sed -e 's/#.*//' "$DISP_CONF" | awk '
+	NF == 0 { next }
+	{ k = $1; v = $2; at = f ":" NR ": " }
+	k == "card" { if (NF != 2) print at "card takes one name"; next }
+	k == "mode" { if (NF != 2 || v !~ /^[0-9]+x[0-9]+$/) print at "mode is W x H, as 1024x768"; next }
+	k == "depth" { if (NF != 2 || v !~ /^[0-9]+$/) print at "depth is a number of bits"; next }
+	k == "start" { if (NF != 2 || (v != "manual" && v != "xdm")) print at "start is manual or xdm"; next }
+	k == "session" { if (NF != 2 || v !~ /^\//) print at "session is a full path"; next }
+	k == "monsw" { if (NF != 2 || v !~ /^[0-9]+$/) print at "monsw is a bit sum, as 34"; next }
+	{ print at "unknown key \"" k "\"" }
+	' f="$DISP_CONF"
+	for _de in `disp_cards`
+	do
+		sed -e 's/#.*//' "$DISP_D/$_de" | awk '
+		NF == 0 { next }
+		{ k = $1; at = f ":" NR ": " }
+		k == "node" || k == "server" { if (NF != 2 || $2 !~ /^\//) print at k " is a full path"; next }
+		k == "module" { if (NF != 2) print at "module takes one name"; next }
+		k == "modes" { for (i = 2; i <= NF; i++) if ($i !~ /^[0-9]+x[0-9]+$/ && !(NF == 2 && $i == "auto")) print at "mode \"" $i "\" is not W x H"; next }
+		k == "depths" { for (i = 2; i <= NF; i++) if ($i !~ /^[0-9]+$/) print at "depth \"" $i "\" is not a number"; next }
+		k == "limits" { for (i = 2; i <= NF; i++) if ($i !~ /^(vmem|data)=[0-9]+$/) print at "limit \"" $i "\" is not vmem=N or data=N"; next }
+		k == "monsw" { if (NF != 2 || ($2 != "yes" && $2 != "no")) print at "monsw is yes or no"; next }
+		k == "monswtool" { if (NF != 2 || $2 !~ /^\//) print at "monswtool is a full path"; next }
+		k == "args" || k == "env" || k == "console" || k == "name" { next }
+		{ print at "unknown key \"" k "\"" }
+		END { if (!seen) {} }
+		' f="$DISP_D/$_de"
+		[ -n "`disp_val "$DISP_D/$_de" server`" ] || echo "$DISP_D/$_de: no server line"
+	done
+}

@@ -43,6 +43,13 @@ stage() {
 		mkdir -p "$DEST/etc/`dirname $l`"
 		ln "$DEST/etc/rc2.d/S90swap" "$DEST/etc/$l"
 	done
+	# the display set-up (P-36 W9): /etc/display is the admin's, not here
+	put 0444 display/display /etc/init.d/display
+	ln "$DEST/etc/init.d/display" "$DEST/etc/rc2.d/S95display"
+	put 0444 display/display.d/native /etc/display.d/native
+	put 0555 display/xstart /usr/amix/bin/xstart
+	put 0444 display/display.subr /usr/lib/amix/display.subr
+	put 0555 display/xsession /usr/lib/amix/xsession
 	put 0444 net/network-config /etc/inet/network-config
 	put 0444 net/rc.inet /etc/inet/rc.inet
 	put 0444 net/link.d/aen /etc/inet/link.d/aen
@@ -69,6 +76,9 @@ stage() {
 	put 0644 etc/profile.d.4 /opt/amix/man/4/profile.d
 	put 0644 etc/nodename.4 /opt/amix/man/4/nodename
 	put 0644 etc/inittab.4 /opt/amix/man/4/inittab
+	put 0644 display/display.4 /opt/amix/man/4/display
+	put 0644 display/display.d.4 /opt/amix/man/4/display.d
+	put 0644 display/xstart.1 /opt/amix/man/1/xstart
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"

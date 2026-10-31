@@ -1,0 +1,120 @@
+.TH DISPLAY.D 4 "31 October 2026" "amix-base"
+.SH NAME
+display.d \- the display cards X can use, one file each
+.SH SYNOPSIS
+.BI /etc/display.d/ card
+.SH DESCRIPTION
+Each display card's package puts one file in
+.BR /etc/display.d ,
+named for the card, that tells
+.BR xstart (1)
+how to find the card and run its X server.
+The file is the card's own data, replaced with its package; it is not
+edited.
+Which card is used, and in which mode, is in
+.BR /etc/display ,
+not here (see
+.BR display (4)).
+.PP
+Each line is a key and its value, separated by blanks or tabs; a
+.B #
+starts a comment.
+.TP
+.BI node " path"
+the card's device node, opened to see whether the card is there.
+.TP
+.BI module " name"
+the kernel module that drives it, when there is one.
+.TP
+.BI server " path"
+the X server.
+.TP
+.BI modes " W" x "H ..."
+the screen sizes the card and its server take, the default first; or
+.B auto
+when the server picks the mode itself.
+The card's mode list is kept here and nowhere else.
+.TP
+.BI depths " bits ..."
+the pixel depths, the default first.
+.TP
+.BI args " arguments"
+the server's arguments after the display number:
+.B %m
+is the mode,
+.B %w
+and
+.B %h
+its width and height,
+.B %d
+the depth and
+.B %n
+the display number.
+.TP
+.BI env " name" = "value ..."
+the server's environment, with the same
+.BR % -names.
+.TP
+.BI limits " name" = "KB ..."
+the limits raised before the server starts:
+.B vmem
+(the address space, for a card whose memory the server maps whole) and
+.B data
+(the server's own memory).
+.TP
+.B monsw yes \fR|\fP no
+whether the card shares the monitor with the chipset display, so that the
+monitor switch of
+.BR display (4)
+applies.
+When the kernel's
+.B monsw
+module answers, it switches the monitor itself; otherwise the tool below
+does, before the server starts and back when the session ends.
+.TP
+.BI monswtool " path"
+that tool, given the switch value and
+.B rtg
+or
+.BR off .
+.TP
+.BI console " command"
+reserved for the card's console takeover; no tool reads it yet.
+.TP
+.BI name " text"
+the card's name in words.
+.SH CARDS
+.TP
+.B native
+the chipset display with the system's own X11R4 server, shipped by the base
+package.
+The server is monochrome and picks its own mode: 1024x768 on an A2024 or a
+Moniterm, 640x480 on any other monitor.
+.B SCREEN_GROUP
+is the Alt-function-key screen group the server takes; it is the display
+number, so
+.B "xstart :10"
+puts X on Alt-F10, as the system's own files do.
+.PP
+The other cards' files come with their drivers' packages.
+The system's A2410 and DMI Resolver servers have no file: no one has been
+able to try them; their arguments are in the comments of the stock
+.B Xservers
+file of
+.BR xdm .
+.SH EXAMPLE
+.nf
+.ft CW
+node     /dev/zz9000
+module   z3660rtg
+server   /opt/amix/X11R6/bin/Xzz9000
+modes    1024x768 800x600 1280x720 1920x1080
+depths   16
+args     -mode %m
+limits   vmem=131072 data=65536
+monsw    yes
+.ft R
+.fi
+.SH SEE ALSO
+.BR display (4),
+.BR xstart (1)
