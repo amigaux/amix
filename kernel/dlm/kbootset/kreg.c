@@ -9,6 +9,7 @@
 #include "kmod.h"
 
 static const struct { int type, n; const char *name; } reg[] = {
+	{ 'c', 48, "random" },
 	{ 'c', 49, "z3660rtg" },
 	{ 'c', 51, "z3660eth" },
 	{ 'c', 52, "monsw" },

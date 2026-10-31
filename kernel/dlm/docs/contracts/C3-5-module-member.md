@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 18
+# C3-5 — the module package and the per-module manifest record, version 19
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -26,7 +26,8 @@
   interface header in its module package (§1.2); version 17 (2026-10-31,
   P-36 W8, D-N24): amix-base's `/etc/inittab` carries the `dlm` line, and
   modtools has no package scripts (§1.3, §5); version 18 (2026-10-31,
-  P-36 D-N21): a device node's pkgmap class is its module's name (§1.2).
+  P-36 D-N21): a device node's pkgmap class is its module's name (§1.2);
+  version 19 (2026-10-31): random's short name (§1.1).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -89,6 +90,7 @@ per line**:
 | cdfs | `cdfs` | `cdfs30` / `cdfs46` |
 | a4kt710 | `a4kt710` | `a4kt71030` / `a4kt71046` |
 | paula | `paula` | `paula30` / `paula46` |
+| random | `random` | `random30` / `random46` |
 
   A new module's owner adds its row in a version bump of this contract.
 
