@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-31 — display.d(4): the Z3660 example drops -fp; amix-base 1.0-16 (8d05ace)
+
+X11R6.3 from 6.3-2 on finds its fonts by its own default path, so the example's args are `-mode %m -ac -kb`.
+
 ## 2026-10-31 — display.d(4): the Z3660 example lists only the modes the card takes; amix-base 1.0-15 (a865427)
 
 The modes line is 1024x768 (default) 640x480 800x600 1280x720 1280x800 1280x1024 1920x1080; 1920x800 is gone.
