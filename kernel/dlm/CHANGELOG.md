@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — P-36 D-N21: `kbootset major -l`; a node's class is its module (3db6056, 9abb0f5)
+
+`kbootset major -l` prints the whole major registry as `<module> c|b <n>` (C2-4 v18). Module packages put their device
+nodes in a class named for the module, with no class script and listed in CLASSES, so amix-base's boot step can find
+each node's module in the contents DB and re-create it at the registry's major (C3-5 v18 §1.2). The link.d major column
+is optional for a registry module and required otherwise; aen keeps 18 (C3-6 v8). make test 719/0.
+
 ## 2026-10-31 — stage-5 ledger and plan: T-56 D3, the A4000T without Zorro cards (3116cbc, f772fee)
 
 S5-21 is narrowed to the tower's cardless rows (CD boot on metal through the onboard 53C710, if a drive is fitted;
