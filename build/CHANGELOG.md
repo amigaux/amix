@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — scan060-g14 sizes bfextu and byte-indexed tables (ccbe90a)
+
+A table indexed by `bfextu <ea>,<off>,<w>,%dI` is sized at exactly 2^w entries. A table whose index is provably a
+byte or word (an and-mask, or a zero-extended load) and has no compare is sized from its own run of entries, only
+when the run ends on a word that cannot be an entry; a NOTE names it as trusted by shape and the D4 gate lists the
+NOTEs. A compare's bound is never overridden; two-level dispatches are refused. python3.11: textio.c's table now
+sized; _PyBytes_FormatEx's stays UNTRUSTWORTHY. Verdicts on all 120 GCC 14 ELFs unchanged; selftest 21/21.
+
 ## 2026-10-31 — kmodpkg: the port commit for the k46 kit; the module's kabi from modcheck (5d283f4)
 
 kmodpkg.sh asks for the kit with the port commit (KM_PORT_COMMIT, else kernel/port/port.pin's hash), so a bare
