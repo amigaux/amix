@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — pth 2.0.7-1; ncurses fetches from upstream (a4b15b6, 463b9fd)
+
+pth 2.0.7-1: static libpth.a and libpthread.a (pthread emulation) with headers and pth(3)/pthread(3), the mcsc machine
+context, isoriano's three patches (errno across switches, public timespec, yielding pthread_once; credited, unchanged).
+ncurses fetches from ftp.gnu.org with the amix-distfiles copy as fallback (same pin).
+
 ## 2026-10-31 — ncurses 6.6-1 (783d34b, a8b7b71)
 
 Static libncurses/form/menu/panel with headers in /opt/amix/include/ncurses; narrow characters; reads the stock
