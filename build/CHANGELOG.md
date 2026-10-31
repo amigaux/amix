@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — a source from AMIX_DISTFILES (b880adb); kfsmod.sh and kmodpkg.sh take the toolchain from layout.sh (281127d)
+
+amix_fetch reads $AMIX_DISTFILES/<the URL's last component> first and copies it in when it holds the pinned bytes;
+other bytes give a warning and the URL is fetched as before; the sha256 stays the pin. Our copies are
+amigaux/amix-distfiles release assets (releases/download/<name>-<version>/<file>); make dist passes AMIX_DISTFILES
+read-only at /distfiles. test-fetch 7/7, offline. kfsmod.sh's modcheck and rebuild and kmodpkg.sh's modcheck source
+layout.sh's AMIX_CROSS_ENV instead of the siblings' gcc-cross-amix (the k30 recipes failed at "modcheck refuses ufs");
+test-kfsmod 3/3, including a static check that no common script sources through $AMIX_SIBLINGS.
+
 ## 2026-10-31 — a pinned commit is fetched by its full hash only (4952ec6)
 
 git cannot fetch a short hash: make dist refuses a port.pin or fork pin whose commit is not 40 hex digits; the kspace

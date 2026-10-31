@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — fetch-distfile uses the URL when AMIX_DISTFILES lacks the file (b880adb)
+
+toolchain/fetch-distfile follows amix_fetch's rule: a pinned local copy first, else the URL (it used to refuse when
+AMIX_DISTFILES lacked the file). test-tools 12/12, now offline.
+
 ## 2026-10-31 — gcc14 in the container builds dlm's box binaries byte-identical (38feabe)
 
 toolchain/README.md records that the container's gcc14 builds kernel/dlm's box binaries byte-identical to the
