@@ -40,13 +40,13 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | Target | What it builds | Output | P-38 | Status |
 |---|---|---|---|---|
 | `kit` | kernel/dlm's ABI kits, k30 and k46, with the port at `kernel/port/port.pin` | `out/kit/{k30,k46,kit.digests}` | S2.1, dlm | builds |
-| `kernel-k30` | the 68030 kernel, from its cut record | | S2.2, k30 | not yet |
+| `kernel-k30` | the 68030 kernel: the cut of record (`kernel/k30/cuts/CURRENT`) rebuilt by k30's hook `kernel/k30/cuts/build.sh`, which refuses sums other than the record's | `kernel/k30/build/cuts/<id>/` (kern30m reads it there), its sums in `out/kernels/k30.list` | S2.2, k30 | builds |
 | `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
 | `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
-| `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and `userland/packages/conf` (the kernel-space confs with S3.3) as the space's own; no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
+| `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and the space's own: `userland/packages/conf`, and `kernel/conf` for kernel space (its `names.conf` names each kernel package; kernel packages without it are refused); no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
 | `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
 

@@ -96,6 +96,14 @@ def lock(top, out):
     if os.path.isfile(digests):
         with open(digests) as fp:
             sections.append(sorted(l.rstrip("\n") for l in fp if l.strip()))
+    kernels = os.path.join(out, "kernels")
+    if os.path.isdir(kernels):
+        lines = []
+        for rel in files(kernels):
+            if rel.endswith(".list"):
+                with open(os.path.join(kernels, rel)) as fp:
+                    lines += [l.rstrip("\n") for l in fp if l.startswith("kernel ")]
+        sections.append(sorted(lines))
     mods = os.path.join(out, "modules")
     if os.path.isdir(mods):
         sections.append(["module %s %s" % (rel, sha256(os.path.join(mods, rel)))

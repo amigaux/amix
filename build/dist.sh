@@ -10,7 +10,9 @@
 #
 #   kit          kernel/dlm's ABI kits, k30 and k46, with the port at
 #                kernel/port/port.pin: out/kit/{k30,k46,kit.digests}
-#   kernel-k30   the 68030 cut (P-38 S2.2, k30)            not in make dist yet
+#   kernel-k30   the 68030 cut of record (kernel/k30/cuts/CURRENT), by k30's
+#                hook kernel/k30/cuts/build.sh, into kernel/k30/build/cuts/<id>/
+#                (where kern30m reads it); its sums in out/kernels/k30.list
 #   kernel-k46   the 68040/68060 cut (P-38 S2.3, port)     not in make dist yet
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
 #   drivers      every driver module on both lines, on the kit (P-38 S3.2,
@@ -239,8 +241,10 @@ step_drivers() {	# step_drivers [<name>...]
 # called as it is, over each space's packages. Its two conf layers: the
 # staging root's, tools/repo's deps/names/cats/descs.conf copied into each
 # pkgs/ (the stock, kernel-space and pkgtools packages, and the category
-# vocabulary), and the space's own: userland/packages/conf, or the
-# kernel-space confs once P-38 S3.3 brings them (none until then).
+# vocabulary), and the space's own: userland/packages/conf, or kernel/conf
+# for kernel space, whose names.conf gives each kernel package its catalog
+# name (zeth46: z3660eth-k46). A kernel-space catalog with packages and no
+# such names is refused: boxes, kbootset and installng ask for the names.
 step_catalogs() {
 	gencat=$top/userland/pkgtools/tools/repo/gen-catalog.py
 	for space in kspace userland; do
@@ -248,7 +252,17 @@ step_catalogs() {
 			echo "[FAIL] catalogs: no out/$space/pkgs; make $space first" >&2; exit 1; }
 		case $space in
 		userland) conf=$top/userland/packages/conf ;;
-		kspace) conf=none ;;
+		kspace)
+			conf=$top/kernel/conf
+			if [ ! -f "$conf/names.conf" ]; then
+				ls "$out/kspace/pkgs/"*.pkg >/dev/null 2>&1 && {
+					echo "[FAIL] catalogs: kernel-space packages but no kernel/conf/names.conf; their" >&2
+					echo "       catalog names (zeth46: z3660eth-k46) would be bare instances" >&2
+					exit 1
+				}
+				conf=none
+			fi
+			;;
 		esac
 		for c in deps names cats descs; do
 			cp "$top/userland/pkgtools/tools/repo/$c.conf" "$out/$space/pkgs/$c.conf"
@@ -256,6 +270,28 @@ step_catalogs() {
 		python3 -I -B "$gencat" --packages-conf "$conf" -o "$out/$space" "$out/$space/pkgs"
 		echo "catalog $space $(cut -c1-32 "$out/$space/catalog.md5") $(grep -c '^[^#]' "$out/$space/catalog" || :) row(s)"
 	done
+}
+
+# step_kernel_k30: k30's hook rebuilds the cut of record and refuses sums
+# other than the record's; it prints `kernel k30 <path> <sha256>` per file,
+# which the lock takes verbatim. Its exit status is passed through (3: an
+# input is absent).
+step_kernel_k30() {
+	mkdir -p "$out/kernels"
+	export GCA G14 AMIX_SYSTEM
+	rc=0
+	sh "$top/kernel/k30/cuts/build.sh" > "$out/build/kernel-k30.log" 2>&1 || rc=$?
+	grep '^kernel k30 ' "$out/build/kernel-k30.log" > "$out/kernels/k30.list.new" || :
+	if [ "$rc" -ne 0 ]; then
+		tail -20 "$out/build/kernel-k30.log" >&2
+		rm -f "$out/kernels/k30.list.new"
+		echo "[FAIL] kernel-k30: kernel/k30/cuts/build.sh exited $rc; log out/build/kernel-k30.log" >&2
+		exit "$rc"
+	fi
+	[ -s "$out/kernels/k30.list.new" ] || {
+		echo "[FAIL] kernel-k30: the hook printed no kernel k30 lines" >&2; exit 1; }
+	mv "$out/kernels/k30.list.new" "$out/kernels/k30.list"
+	cat "$out/kernels/k30.list"
 }
 
 recipe_dir() {	# the package directory of a userland package name
@@ -370,7 +406,7 @@ step_userland() {
 run() {
 	case $1 in
 	kit) step_kit ;;
-	kernel-k30) missing kernel-k30 "P-38 S2.2, the k30 station: make kernel-k30 wraps the cut" ;;
+	kernel-k30) mkdir -p "$out/build"; step_kernel_k30 ;;
 	kernel-k46) missing kernel-k46 "P-38 S2.3, the port station: the cut in the container" ;;
 	modules) step_modules ;;
 	drivers) mkdir -p "$out/build"; step_drivers ;;
