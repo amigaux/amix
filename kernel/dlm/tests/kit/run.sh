@@ -84,6 +84,12 @@ open(sys.argv[2], 'wb').write(d)" "$1" "$2" || { fail "cannot make $2"; return 1
 DRV='#include "sys/types.h"\n#include "sys/conf.h"\n#include "sys/moddefs.h"\nstatic int o() { return 0; }\nstatic int l() { return 0; }\nstatic int u() { return 0; }\n'
 WRAP='#include "sys/types.h"\n#include "sys/moddefs.h"\nstatic int l() { return 0; }\nstatic int u() { return 0; }\n'
 
+# kittree KIT: every entry with its type and mode, every file with its SHA-256
+kittree() {
+	(cd "$1" && find . -printf '%y %m %p\n' | LC_ALL=C sort &&
+		find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
+}
+
 for l in k30 k46; do
 	echo "== $l"
 	if sh "$R/tools/mkkit.sh" $l "$B/kit/$l" > "$W/mkkit-$l.log" 2>&1; then
@@ -92,13 +98,17 @@ for l in k30 k46; do
 		fail "$l: mkkit"; cat "$W/mkkit-$l.log"; continue
 	fi
 	K=$B/kit/$l
-	# the sample, through the make fragment alone
-	if (cd "$K/sample/hello" && make > "$W/hello-$l.log" 2>&1); then
+	# what mkkit left: the kit leaves this run as it came, so it can be minted
+	kittree "$K" > "$W/tree-$l.before"
+	# the sample, through the make fragment alone, in a copy of the kit's
+	# sample: a build inside the kit would leave sample/hello/build in it
+	mkdir -p "$W/$l-sample" && cp -R "$K/sample/hello" "$W/$l-sample/"
+	if (cd "$W/$l-sample/hello" && make KIT="$K" > "$W/hello-$l.log" 2>&1); then
 		pass "$l: sample: $(grep '^modcheck' "$W/hello-$l.log")"
 	else
 		fail "$l: sample build"; cat "$W/hello-$l.log"
 	fi
-	H=$K/sample/hello/build/$l/mod.d/hello
+	H=$W/$l-sample/hello/build/$l/mod.d/hello
 	# the probe, measured through the kit's own headers, gives the offsets
 	# of the line's fingerprint (C3-3 section 4)
 	. "$K/kit.conf"
@@ -350,6 +360,17 @@ if (cd "$d" && make KIT="$B/kit/k46" MODOUT=. clean > clean.log 2>&1); then
 else
 	pass "clean refuses MODOUT=."
 fi
+
+# no case wrote into a kit: each tree is as mkkit left it
+for l in k30 k46; do
+	[ -f "$W/tree-$l.before" ] || continue
+	kittree "$B/kit/$l" > "$W/tree-$l.after"
+	if cmp -s "$W/tree-$l.before" "$W/tree-$l.after"; then
+		pass "$l: the kit tree is as mkkit left it ($(grep -vc '^[0-9a-f]\{64\} ' "$W/tree-$l.after") entries)"
+	else
+		fail "$l: the run changed the kit tree"; diff "$W/tree-$l.before" "$W/tree-$l.after" | head
+	fi
+done
 
 echo "kit: $fails failed"
 [ $fails -eq 0 ]
