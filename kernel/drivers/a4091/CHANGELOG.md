@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — docs, comments, test names and .gitignore state facts without internal ids (dcd3d3b)
+
+The archived research notes no longer address a reader; README Credits carries the project's standard LLM-tools
+note. Objects unchanged.
+
 ## 2026-10-30 — README links k30's patch manifest; stock files from amix-system (38e17df)
 
 ## 2026-10-30 — works in its amix home (2756fa2, a819ab7, 79b70ee, d5a6e38)
