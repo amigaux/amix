@@ -1,3 +1,8 @@
+## 2026-10-31 — the stock pkgadd and the admin file (d728052)
+
+stock-pkg-system.md and apkg.1 record that the stock pkgadd asks the conflict and script questions under -n whatever
+the admin file says (measured on rig E1; whether the whole admin file is ignored stays 🟡).
+
 ## 2026-10-31 — i.conffile and the stock mkdir -p (37a2ea7)
 
 The class tests -d before mkdir -p, since the stock 2.1 mkdir -p fails on an existing directory and a second conffile
