@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — P-36 W6: link.d entry; zen0 configured through /etc/inet/interfaces (f0385cb, c69b2bf)
+
+The driver ships its /etc/inet/link.d entry, link.d/z3660eth: `zen	/dev/zen	0	51` (tab-separated, three # header
+lines); ifup probes the units; on a module kernel `kbootset major z3660eth` gives the major, 51 is the static-kernel
+fallback. userland/S99zen, network-config.zen and the /etc/default/zen text are gone: amix userland/base's ifup chain
+replaces them. bringup.sh stays as a bench aid, address from its command line only. README and ZEN0-BRINGUP §3
+configure zen0 by an /etc/inet/interfaces line; the S99zen era stays as history (§3.2). src/ and module/ unchanged.
+
 ## 2026-10-30 — build notes, evidence voice, NOTICE credit (aa9de1b, 2f350c2, 49a8bba)
 
 BUILD.md drops the old build box's notes and keeps three points as plain advice (FTP push/pull with NFSv2 for large
