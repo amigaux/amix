@@ -1,4 +1,4 @@
-# package.sh -- less 704 (P-31 sec 10.9); assignments only.
+# package.sh -- less 704; assignments only.
 NAME=less
 PKG=less
 VERSION=704

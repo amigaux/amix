@@ -1,4 +1,4 @@
-# package.sh -- rsync 3.1.3 (P-31 sec 10.9); assignments only.
+# package.sh -- rsync 3.1.3; assignments only.
 NAME=rsync
 PKG=rsync
 VERSION=3.1.3

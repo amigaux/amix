@@ -1,4 +1,4 @@
-# package.sh -- zlib 1.2.13 (P-31 sec 10.9); assignments only.
+# package.sh -- zlib 1.2.13; assignments only.
 NAME=zlib
 PKG=zlib
 VERSION=1.2.13

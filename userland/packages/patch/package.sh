@@ -1,4 +1,4 @@
-# package.sh -- GNU patch 2.5.9 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU patch 2.5.9; assignments only.
 NAME=patch
 PKG=patch
 VERSION=2.5.9

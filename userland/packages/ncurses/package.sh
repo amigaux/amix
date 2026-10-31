@@ -1,4 +1,4 @@
-# package.sh -- ncurses 6.6 (P-31 sec 10.9); assignments only.
+# package.sh -- ncurses 6.6; assignments only.
 NAME=ncurses
 PKG=ncurses
 VERSION=6.6

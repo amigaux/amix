@@ -1,4 +1,4 @@
-# package.sh -- GNU gzip 1.3.12 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU gzip 1.3.12; assignments only.
 NAME=gzip
 PKG=gzip
 VERSION=1.3.12

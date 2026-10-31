@@ -1,4 +1,4 @@
-# package.sh -- CPython 3.11.18 (P-31 sec 10.9); assignments only.
+# package.sh -- CPython 3.11.18; assignments only.
 NAME=python3
 PKG=python3
 VERSION=3.11.18

@@ -1,4 +1,4 @@
-# package.sh -- GNU make 3.81 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU make 3.81; assignments only.
 NAME=make
 PKG=make
 VERSION=3.81

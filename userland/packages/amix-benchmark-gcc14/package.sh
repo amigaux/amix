@@ -1,4 +1,4 @@
-# package.sh -- amix-benchmark-gcc14 1.3 (P-31 sec 10.9); assignments only.
+# package.sh -- amix-benchmark-gcc14 1.3; assignments only.
 # The amix-bench suite built with GCC 14 from amix-benchmark's src/.
 NAME=amix-benchmark-gcc14
 PKG=amixbch14
