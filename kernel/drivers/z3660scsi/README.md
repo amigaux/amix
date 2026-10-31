@@ -28,8 +28,8 @@ The full map is in [`kernel/k30/REPOS.md`](../../k30/REPOS.md).
 
 ## Status (2026-09-27)
 
-Latest: the stock-firmware unit-probe guard (70f54b6) is landed and pushed, and
-K0 is metal-proven with this driver on a real 68060 at 128 MB (A4000T, MD-3a,
+Latest: the stock-firmware unit-probe guard (70f54b6) is in, and
+K0 is metal-proven with this driver on a real 68060 at 128 MB (A4000T,
 2026-09-27: root on the Z3660, reads and a 2.2 MB write equal to host truth).
 
 **Driver written, integrated, clean-gated, and proven on real hardware** ✅ —
@@ -104,7 +104,7 @@ assets/                  local reference material (gitignored): WinUAE 4.4.0 sou
                          rollback firmware baselines, deploy scripts -- see assets/README.md
 NOTES.md                 the dated engineering journal: protocol scouting, real-HW
                          findings, and the corrections to both
-CHANGELOG.md             dated record of everything that landed -- the living state
+CHANGELOG.md             dated record of every change -- the living state
 ```
 
 The upstream firmware source (formerly cloned into a gitignored `repo/`) is not kept in

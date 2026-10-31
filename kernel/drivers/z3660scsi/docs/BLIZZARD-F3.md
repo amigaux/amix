@@ -10,7 +10,7 @@ number off a run, with its file), **derived** (arithmetic over measured facts, s
 **assumed** (neither — each one below names the gate that settles it).
 
 > **ROUND-1 RESULT (2026-08-24, appended — nothing above was edited to match it).**
-> M0 and M1 implemented and landed. Cross-compiled with the real AMIX toolchain
+> M0 and M1 implemented and committed. Cross-compiled with the real AMIX toolchain
 > (gcc 2.7.2.3 / GNU as 2.8.1, the shipped `AMIX_KERNEL_CFLAGS`): `nm -u` unchanged but for
 > `printf`; the four 040/060-only instruction sites (`movec` ×3, `cpushl`+`cinvl`, `cinvl`,
 > `nop`) each proven dominated by a `tstl z3660_cache` / `beq` in the disassembly. The
@@ -23,10 +23,10 @@ number off a run, with its file), **derived** (arithmetic over measured facts, s
 > **CORRECTION (2026-09-27, appended — nothing above or below was edited to match it).**
 > §7's premise "Amiberry models no 68040/060 copyback data cache" is wrong. amiberry models one
 > (per-longword dirty bits, eviction push), live only with `cpu_compatible=true`, `cachesize=0`
-> and `cpu_data_cache=true`; device DMA bypasses it (bench evidence,
-> not published). An emulator cell with the cache live can show a
+> and `cpu_data_cache=true`; device DMA bypasses it (measured on
+> the bench). An emulator cell with the cache live can show a
 > missing CPUSH or CINV; the bench configs to date keep it off. The coherence **verdict** stays
-> metal-only (a project decision), so §7 is unchanged as the scoring protocol.
+> metal-only, so §7 is unchanged as the scoring protocol.
 
 ---
 
@@ -120,7 +120,7 @@ accesses above `0x80000000` to the page tables so they *do* translate and *do* c
 
 ### 1.4 What the 060-D cache knobs do and do not change
 
-The dispatch framed this round as designing "for the world AFTER the knobs land (copyback low
+An obvious framing designs this round "for the world AFTER the knobs land (copyback low
 memory)". **That world does not exist and is not what the knobs do.** Read
 `amix-040-060-port/docs/060-D-CACHE-KNOBS-PLAN.md:26-33` (**measured**):
 
@@ -140,18 +140,18 @@ booked as *"a separate later low-identity-map/physmap milestone"*
 
 ## 2. THE ORDERING DECISION
 
-**Decided: the maintenance lands NOW, default-off, poke-armed — not "when the knobs land".**
+**The maintenance goes in NOW, default-off, poke-armed — not "when the knobs land".**
 
 The premise that would have justified deferring is false in both directions: copyback is not
 coming, it is here (§1.4); and DTT0 does not make the data buffers CI, it makes the driver's
 *view* of them CI (§1.2). The maintenance is therefore a **precondition of F4's first boot**,
-which is exactly why BLIZZARD §9 gates F4 on F3 — a first real-silicon boot with unfixed
+which is exactly why F4 is gated on F3 — a first real-silicon boot with unfixed
 drivers would produce corruption indistinguishable from a kernel bug and burn the one clean
 first boot on an ambiguity.
 
 One item genuinely *is* knob-ordered, and only one: **S4**. Its hazard is armed by the store
-buffer, so its barrier is written now and its necessity is sequenced after F3-M3, per
-BLIZZARD §7 F4-M5 (*"Sequence the knob that arms it after F3-M3, never before"*).
+buffer, so its barrier is written now and its necessity is sequenced after F3-M3: the
+knob that arms it comes after F3-M3, never before.
 
 "Default-off" is what makes "now" safe: see §4.
 
@@ -159,8 +159,8 @@ BLIZZARD §7 F4-M5 (*"Sequence the knob that arms it after F3-M3, never before"*
 
 ## 3. SUSPECT DISPOSITION
 
-Every S-item from the 2026-08-24 LC060 recon (S2, S3, S4, S5/S6, S8, S10, S11 — an untracked
-workspace scratch note, not in this repo; every item is reproduced below), re-verified in-tree today against
+Every S-item from the 2026-08-24 LC060 recon (S2, S3, S4, S5/S6, S8, S10, S11; every item is
+reproduced below), re-verified in-tree today against
 `src/z3660.c` as it stands at `ab04824`.
 
 | # | claim | re-verified? | disposition |
@@ -219,7 +219,7 @@ DEFERRED TODO in `hat040.s`"* (`CACHES-ON-PLAYBOOK.md:215`, **measured**) — so
 board window would take `hat_cm_ram`, i.e. **copyback**, making the mailbox cacheable and the
 driver non-functional.
 
-**Decision (D8 order): the `sptalloc` arm is UNSUPPORTED on real silicon until a later
+**The `sptalloc` arm is UNSUPPORTED on real silicon until a later
 milestone.** It is reached only by `autoconfig_rtg YES` (board at `0x40000000`), which is not
 the shipped Z3660 configuration. M0 detects it and says so.
 
@@ -289,7 +289,7 @@ idiom this campaign already uses for `hg_on`, `i40_on` and `hat_cm_ram`:
 long z3660_cache;   /* 0 = off (shipping default); 40 = 68040 DC; 60 = 68060 DC */
 ```
 
-(As landed, `src/z3660.c` uses the tentative definition above, not `= 0`. Either spelling
+(As committed, `src/z3660.c` uses the tentative definition above, not `= 0`. Either spelling
 zero-initialises, but neither gets `.data` file storage — a tentative definition is COMMON
 and even an explicit `= 0` lands in `.bss` — so the knob is not file-pokeable from this
 repo. A build that wants a non-zero default at link time absorbs the COMMON with an
@@ -333,7 +333,7 @@ rather than inferred.
 
 ## 5. THE BOUNDARIES — a correction to the plan
 
-BLIZZARD §6.3 F3-M1 names `z3660_enter` / `z3660_leave` / `z3660_complete` as the boundaries,
+The original F3-M1 plan names `z3660_enter` / `z3660_leave` / `z3660_complete` as the boundaries,
 inheriting the recon's "ready-made boundaries" line. **Those are the wrong boundaries for data
 maintenance, and using them would introduce the §3.2 bug.**
 
@@ -431,7 +431,7 @@ is a backstop, not the argument — the argument is the gate.
 
 ## 7. F3-M3 — THE PRE-REGISTERED METAL PROTOCOL
 
-**Written before the session, per BLIZZARD §6.3. The bench structurally cannot run this**:
+**Written before the run. The bench structurally cannot run this**:
 Amiberry models no 68040/060 copyback data cache, which is on `ACCEPTANCE.md`'s own list of
 things it is not evidence for. Only the real 68060 can score it.
 
@@ -494,7 +494,7 @@ the bug reproduced first.
   re-scope.
 - **Arm B fails three times with no named mechanism** ⇒ stop. Fall back to the documented,
   asserted free ride (F3-M0) with `z3660_cache = 0`, declare the maintenance arm parked, and
-  write the failure up. A documented dependence, never silence (BLIZZARD §6.3).
+  write the failure up. A documented dependence, never silence.
 - **Arm A passes** ⇒ do not ship the maintenance on the strength of a theory the hardware
   declined to confirm. Re-derive §1 against the measurement and report the contradiction.
 

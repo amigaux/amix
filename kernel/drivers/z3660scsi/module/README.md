@@ -74,11 +74,11 @@ linked image by the 040/060 port's `f4arms --cache 60` pass. A module
 kernel runs no such pass, so the module sets the arm itself at `_load`, as
 kernel/dlm C4-2 §1.1 requires of every module that replaces a static driver.
 
-**Why:** the first module kernel on the A4000T's real 68060 (S4-74, kern46m
+**Why:** the first module kernel on the A4000T's real 68060 (kern46m
 -81) ran with the module's own `.data` word, 0. No line op ran, a dirty
 copyback line was written back over the data the Z3660's ARM had just put
 in DDR, and the first directory lookup failed (`swapconf` panicked:
-`lookupname /dev/dsk/c6d0s2 failed - error 20`) — August's ATT4 mechanism.
+`lookupname /dev/dsk/c6d0s2 failed - error 20`) — the copyback mechanism of August's metal A/B.
 Emulators need 0, so every emulator row had passed.
 
 | `cputype` | `cache=` absent or `-1` | `cache=0` | `cache=40` / `60` | anything else |
@@ -96,7 +96,7 @@ and `z3660_cache_bad` (parameters refused or not understood).
 Z3660's UAE_030 core emulates no 030 data cache; and no real 68030 hosts
 the piscsi mailbox (the Z3660 is the CPU card).
 
-**The Bench's check** after a boot on the 060 (kern46m -81): read with
+**The on-box check** after a boot on the 060 (kern46m -81): read with
 `/dev/kmem` that `z3660_cache` = `0x3c` (60), `z3660_push_n` > 0 and
 `z3660_ci_ok` = 1. The host harness gates the same three on its 060 cell
 (`test/host/z3660_modtest.c`, `test_zs06_arm()`).

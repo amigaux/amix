@@ -795,7 +795,7 @@ static void stretch_cd_parity()
 
 /* ====================================================================== */
 /* GATING: spl6 re-entry bracket -- a callout-nested mailbox transaction    */
-/* cannot interleave an in-flight one (the T2.P3 corruption family).        */
+/* cannot interleave an in-flight one (the CD-mount corruption family).     */
 /* ====================================================================== */
 
 static int reentry_hook_calls;	/* times the in-flight hook fired          */
@@ -882,7 +882,7 @@ static void test_reentry()
 }
 
 /* ====================================================================== */
-/* GATING: synchronous ITERATIVE completion (the T2.P3 lifetime fix).       */
+/* GATING: synchronous ITERATIVE completion (the CD-mount lifetime fix).    */
 /* A completion that re-issues the next I/O -- exactly dd.c's ihandle ->     */
 /* startio -> sdqueue -> z3660queue chain -- must (1) be delivered while the */
 /* caller's context is current (no timeout() deferral window that strands a  */
@@ -1415,8 +1415,9 @@ static void test_fault_knob()
 /* mock, sets what autocon(), VPOSR and the probe address answer, and asks */
 /* z3660present() -- the 030 line's sd.c probe hook -- for a verdict.      */
 /* The absent-board cells take the fixed-base path (autocon misses, AGA),  */
-/* which is the P6.2 hole: before ZS-02 every one of the all-zero, latch   */
-/* and RAM cells was accepted, because DRVTYPE read 0 or a stored value <=1.*/
+/* which is the all-zero hole: before ZS-02 every one of the all-zero,     */
+/* latch and RAM cells was accepted, because DRVTYPE read 0 or a stored    */
+/* value <=1.                                                              */
 /* ====================================================================== */
 
 static int zs_cell( autocon_base, vposr, bus)
@@ -1470,7 +1471,7 @@ static void test_zs02_detection()
 
 	printf("\n=== GATE: ZS-02 detection -- two-value mailbox signature ===\n");
 
-	/* 1. absent board, all-zero bus: the P6.2 hole itself */
+	/* 1. absent board, all-zero bus: the all-zero hole itself */
 	zs_absent( "all-zero", MOCK_BUS_ZERO);
 	CHECK( z3660_sig_rd[4] <= 1,
 	       "ZS-02 all-zero: DRVTYPE alone reads 0 -- the pre-ZS-02 test would have accepted it");
@@ -1562,7 +1563,7 @@ static void test_zs02_detection()
 /* A skip is not a mask, so a unit named "skipped" at attach that later    */
 /* answers with a drive must be re-named ("drive answering now") and drop  */
 /* out of z3660_skipmask.  A board whose mapping fails must not fail       */
-/* silently (the DL-08 ECS row saw EIO with no z3660 line at all).         */
+/* silently (an ECS emulator run saw EIO with no z3660 line at all).       */
 /* ====================================================================== */
 
 #define U_LATE	3		/* reads bs 0 at attach, a drive afterwards */

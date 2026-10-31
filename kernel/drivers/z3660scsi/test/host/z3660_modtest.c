@@ -20,7 +20,7 @@
  * z3660map(), and records where it came from in z3660_cache_src.  The matrix
  * is cputype 30/40/60 x cache absent, -1, 0, 40, 60, 99, not a number; on the
  * 060 with no parameter the attach check runs (z3660_ci_ok 1) and a READ
- * pushes (z3660_push_n > 0), the Bench's check after boot.
+ * pushes (z3660_push_n > 0), the on-box check after boot.
  */
 #include <stdio.h>
 #include <string.h>
@@ -209,7 +209,7 @@ static void test_zs06_arm()
 	arm_cell( 20L, 0, 0L, 0L, 0);
 	arm_cell( 20L, "cache=60", 0L, 0L, 1);
 
-	/* the Bench's check after boot on the 060: armed, checked, pushing --
+	/* the on-box check after boot on the 060: armed, checked, pushing --
 	 * from the module's .data 0, so an arm set after z3660map() fails here */
 	g_preset = 0;
 	arm_cell( 60L, 0, 60L, 0L, 0);

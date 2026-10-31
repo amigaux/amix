@@ -15,7 +15,7 @@ settles it is named).
 > A4000D. The single event sits in the 2026-10-01 A4092 fault-hunt sessions. No driver change
 > is owed (§9.8).
 
-> **2026-10-03 evening: §8 supersedes items 3 and 5.** The rig (§7, run as kerntools E34) and
+> **2026-10-03 evening: §8 supersedes items 3 and 5.** The rig (§7, run 2026-10-03) and
 > metal have since cleared the kernel + driver request stream. The register race of item 3
 > measured 0 stale reads in 4,165,877 register writes under load and drops to #2. The #1
 > candidate is now the SD card's flash translation layer after an unclean power-down (§8.8).
@@ -354,7 +354,7 @@ in the event). As defence in depth the driver can make every request self-checki
 - **This must not be read as papering over the firmware.** The counter makes the firmware defect
   visible, and the firmware fix remains owed.
 
-### 6.2 Page splitting (asked for; not the DI-1 fix)
+### 6.2 Page splitting (not the DI-1 fix)
 
 The driver **cannot** split at page boundaries. `sdcom.addr` is a physical address by contract
 (NOTES 2026-07-11 (a)), and with no virtual address there is nothing to `vtop()` the next page
@@ -371,7 +371,7 @@ issuer, and on this kernel it does for every buf above 4096 B (§3). The remaini
 
 ## 7. Recommended first experiment — the rig, shipping kernel, D245 capture
 
-**Run 2026-10-03 as kerntools row E34 (792cdd8): clean. Results in §8.2.**
+**Run 2026-10-03 on the rig (kerntools 792cdd8): clean. Results in §8.2.**
 
 **Goal.** Prove or convict the kernel + driver request stream (§4.2/4.4/4.6/4.7) byte for byte,
 with the instrument that will later read metal. The amiberry mailbox applies register writes by
@@ -429,10 +429,10 @@ the kernel (port) or this driver accordingly.
 ## 8. State of the hunt, 2026-10-03 evening
 
 Commit hashes cited here and in §9 from other repos (the kerntools rig, Z3660 diagnostic branches,
-the 040/060 port, installng) point to unpublished diagnostic work.
+the 040/060 port, installng) name diagnostic work kept outside this repository.
 
-**Added 2026-10-03 evening. Docs only; no driver code changed.** The sources are internal bench
-reports (not published) from the firmware side, the 040/060 port, kerntools and the A4000D bench.
+**Added 2026-10-03 evening. Docs only; no driver code changed.** The sources are bench
+runs on the firmware side, the 040/060 port, the kerntools rig and the A4000D (logs kept outside the repository).
 Each point names the source and, where one exists, the commit. In this section **measured** means
 measured by the named source and reported there; this repo did not re-run it. **This section supersedes §1 items 3 and 5 and the ranking in §4.**
 
@@ -464,14 +464,14 @@ with a page-aligned `ngeteblk(4096)`.
 
 ### 8.2 The rig: the request stream is consistent (§7 run)
 
-kerntools 792cdd8, rows E32/E32b/E33/E33b/E34, on the shipping KD060-Z b9cee294 and on
+kerntools 792cdd8, five rig runs, on the shipping KD060-Z b9cee294 and on
 KD060-Z-CD 94fbb4fd *(measured)*:
 
 | row | run | result |
 |---|---|---|
-| E32 / E32b | metadata torture, 12,000 files, 26 min per kernel | 0 DI-1 signatures, 0 DUP fragments |
-| E33 / E33b | raw path, tagged patterns, bs 8k and 2k | 4096/4096 pieces correct |
-| E34 | §7 as written: D245 capture, 48 MiB tagged scratch, 512-file churn | the write-log replay reproduces the post images byte for byte; all 57,344 scratch writes were 2 KiB requests; every sector carries its own LBA's tag |
+| 1, 2 | metadata torture, 12,000 files, 26 min per kernel | 0 DI-1 signatures, 0 DUP fragments |
+| 3, 4 | raw path, tagged patterns, bs 8k and 2k | 4096/4096 pieces correct |
+| 5 | §7 as written: D245 capture, 48 MiB tagged scratch, 512-file churn | the write-log replay reproduces the post images byte for byte; all 57,344 scratch writes were 2 KiB requests; every sector carries its own LBA's tag |
 | all | §5 counters, in-run | 0 (`z3660_pagecross_n` 0→0 on the shipping kernel; 11→11 boot-time on -CD, §8.3) |
 
 **Reading.** The kernel + driver request stream is consistent on both kernels, for the block and
@@ -484,7 +484,7 @@ DI-1 **below the driver** on the rig. It says nothing about the firmware race or
 
 - **The 11 boot-time crossings on KD060-Z-CD** are exactly the 11 × 512 B RDB reads (4 + 3 + 4
   per window) into `getrdb()`'s static `block` *(measured: port verdict by arithmetic on
-  kerntools' windows; bench evidence, not published)*. cdfs's growth moved that buffer to page
+  kerntools' windows)*. cdfs's growth moved that buffer to page
   offset 0xE24 (VA 0x08136E24). On the shipping kernel it sits at 0x63C and does not cross.
   Below 0x40000000 is the DTT0 identity region (`vtop040` returns phys == va), so the two
   "pages" are consecutive physical memory and the transfer is correct. The counter is pure `pa`
@@ -528,7 +528,7 @@ the consequence directly: a misplaced piece would carry the previous request's t
 
 ### 8.5 Metal, A4000T (firmware side)
 
-*(measured; internal bench report)*
+*(measured on the bench)*
 - Shipped firmware 719AF9B7, bench OS + RAMLOAD, **RTG off**: one full arm-A pass (102,396
   back-to-back 2 KiB writes) was **CLEAN**: 409,584/409,584 sectors, misplaced 0, stale 0,
   corrupt 0, no tag missing (image A07223DA).
@@ -591,7 +591,7 @@ not the card's FTL.
   writes;
 - c. the card's CID, manufacturer and date from a host reader when the card is out;
 - d. **decisive**, on a **scratch SD card only**: write load, then a power cut a few seconds
-  after the halt, ×10, host-checked each time. Pending a scratch card (an open release decision).
+  after the halt, ×10, host-checked each time. Pending a scratch card.
 
 **Bench rule now:** ≥ 10 s between the halt banner and any power cut, on both benches.
 
@@ -628,7 +628,7 @@ the A4000D's as-shipped arm (§8.4) tell them apart.
   `diag-regrace` branch (f1e8f40, 61bb936), which never lands. So nothing masked the race on
   D-DEV.
 - §6.1: the firmware side holds that a driver read-back goes through the FPGA read path, not the
-  ARM's DDR view, so it cannot prove what the ARM latched (internal bench report: "no driver
+  ARM's DDR view, so it cannot prove what the ARM latched (firmware-side finding: "no driver
   mitigation exists"). This contradicts §6.1's reading of `scsi.c` @2092–2096 and is unresolved. It is not
   pursued while the race measures zero.
 - §6.2: the ring was added (bd8d900). The issuer-side `gen_strategy` test is not a 1.0 item
@@ -640,9 +640,9 @@ the A4000D's as-shipped arm (§8.4) tell them apart.
 
 ## 9. Closing evidence, 2026-10-04
 
-**Added 2026-10-04. Docs only; no driver code changed.** The sources are internal bench reports
-(not published): the DI-1 verdict, compiled 2026-10-04 00:20 and updated as the A4000D cell
-finished, and the release work plan. As in §8, **measured** means measured by the named source
+**Added 2026-10-04. Docs only; no driver code changed.** The source is the DI-1
+verdict, compiled 2026-10-04 00:20 and updated as the A4000D cell finished (logs kept outside
+the repository). As in §8, **measured** means measured by the named source
 and reported there; this
 repo did not re-run it unless a commit or file of this repo is named. **This section supersedes
 §8.8's ranking and closes the hunt from the driver's side.**
@@ -659,8 +659,8 @@ driver change is owed.
 
 ### 9.1 The kernel cannot misplace a piece (040/060 port)
 
-*(measured, by reading the shipping binary and the usl-svr42 source; internal bench report,
-row "Kernel retry / completion-order shims")*
+*(measured, by reading the shipping binary and the usl-svr42 source;
+the "Kernel retry / completion-order shims" row)*
 - **No kernel path pairs piece k's LBA with piece k+1's data.**
 - **`buf_breakup`'s per-piece advance window has the opposite orientation.** The loop stores
   `b_blkno` (@0x3d284) and then `b_addr` (@0x3d288). A request built between the two stores
@@ -677,10 +677,10 @@ row "Kernel retry / completion-order shims")*
 - **The dd completion-order shims** (`dd_issue_first`, `dd_startio_tail`; §3 step 4) only
   reorder delivery. They neither build nor change an (LBA, address) pair.
 
-### 9.2 The rig fault-knob cells (kerntools E36/E36b/E36c)
+### 9.2 The rig fault-knob cells
 
-*(measured; kerntools d27e142, `rig/matrix.tsv` rows E36/E36b/E36c; recipe and host tools are
-bench evidence, not published)*
+*(measured; kerntools d27e142, three rig cells A–C; the recipe and host tools are kept outside
+the repository)*
 
 The kernel is the diagnostic chain KD060-Z-FK-c0-u6 (c9c6cb64): the shipping KD060-Z recipe
 plus this repo's d78ac7f. That object carries bd8d900's page-cross ring and the one-shot WRITE
@@ -690,19 +690,19 @@ It then rewrites the block (touch + sync) and checks the capture.
 
 | cell | knob | result |
 |---|---|---|
-| E36 | REFUSE on piece 2 (LBA L+4) | the faulted flush wrote piece 1 only. The refused piece reached no LBA, and pieces 3/4 of that pass were not issued. The next flush wrote all four pieces at their own LBAs. The D245 replay is exact (2763 writes) and the post image is clean. **The kernel error path never misplaces**, which confirms §9.1 by experiment. |
-| E36b | SHIFT −4 on piece 3 (LBA L+8) | piece 3's payload was written at L+4 (seq 5108): **DI-1's picture, in the write record**. A second flush of the same block 75 ms later rewrote all four pieces correctly, so the post image is healed. Replay exact (2766 writes). |
-| E36c | as E36b, single-inode touch; the damaged state reconstructed | the kernel still flushed the block twice, ~70 ms apart (seq 5111–5114 faulted, 5160–5163 healing). Replaying the capture through seq 5113 (verified exact) gives the disk right after the faulted write. Piece 2 equals piece 3 except later-stamped dinode times: **hdf0's picture exactly** (§2.2). |
+| A | REFUSE on piece 2 (LBA L+4) | the faulted flush wrote piece 1 only. The refused piece reached no LBA, and pieces 3/4 of that pass were not issued. The next flush wrote all four pieces at their own LBAs. The D245 replay is exact (2763 writes) and the post image is clean. **The kernel error path never misplaces**, which confirms §9.1 by experiment. |
+| B | SHIFT −4 on piece 3 (LBA L+8) | piece 3's payload was written at L+4 (seq 5108): **DI-1's picture, in the write record**. A second flush of the same block 75 ms later rewrote all four pieces correctly, so the post image is healed. Replay exact (2766 writes). |
+| C | as B, single-inode touch; the damaged state reconstructed | the kernel still flushed the block twice, ~70 ms apart (seq 5111–5114 faulted, 5160–5163 healing). Replaying the capture through seq 5113 (verified exact) gives the disk right after the faulted write. Piece 2 equals piece 3 except later-stamped dinode times: **hdf0's picture exactly** (§2.2). |
 
 **New fact: the kernel flushes an inode block twice per sync**, about 70–75 ms apart and with
-identical content, even for a single `touch; sync` *(measured, E36b/E36c)*. Consequence
+identical content, even for a single `touch; sync` *(measured, cells B and C)*. Consequence
 *(derived)*: a stale-ADDR1 hit on the first flush heals itself at the second. Only a hit on a
 block's **last** write persists, so a persisting DI-1 is rarer than the raw race rate.
 
 **Detectors must compare time-masked** *(measured)*. The reconstructed piece 2 matches piece 3
 only with the dinode time fields masked, as in hdf0 (§2.2: the `ic_atime` bytes of three dinodes
 differ). An exact-copy detector misses it. kerntools' `di1sig.py`
-(bench tooling, not published) now compares exact and time-masked windows over allocated
+(rig tooling) now compares exact and time-masked windows over allocated
 dinodes. It reports 1 finding on the reconstruction, 0 on the master, and 0 on every DI-1 rig
 image re-checked. installng's `tools/fsdupcheck.py` compares the block-pointer arrays (dinode
 bytes 40–99), so it is time-insensitive. Its self-test for a re-stamped copy is installng
@@ -710,7 +710,7 @@ bytes 40–99), so it is time-insensitive. Its self-test for a re-stamped copy i
 
 ### 9.3 Metal, A4000D: every torture arm clean
 
-*(measured; internal bench report; diagnostic firmware F583F05B = Z3660
+*(measured on the bench; diagnostic firmware F583F05B = Z3660
 `diag-regrace` 61bb936)*
 
 The setup is §8.4's: bench OS preset 6, RTG on with rtgload drawing 1024×768×16, RAMLOAD,
@@ -812,7 +812,7 @@ Probes c (the card's CID) and d (the scratch-card power-cut series) stay as list
 - **The shipping z3660scsi object stays e072408 (ZS-04).** The DI-1 kernel b9cee294 carries the
   older 53f43bd (§3); DI-1 gives no reason to change either. This repo's bd8d900 (page-cross
   ring) and d78ac7f (fault knob) are diagnostic cuts only and never ship.
-- Whether this clears DI-1 as a freeze blocker is an open release decision.
+- Whether DI-1 still blocks the release freeze is open.
 
 **Final status of every candidate** (replaces the table in §4 and the ranking in §8.8):
 
@@ -820,7 +820,7 @@ Probes c (the card's CID) and d (the scratch-card power-cut series) stay as list
 |---|---|---|
 | register-value race on the mailbox (firmware/FPGA) | **the only sufficient mechanism**; not reproduced on a healthy bus | §4.1, §8.4, §9.3, §9.4 |
 | kernel request stream, retry path, completion-order shims | excluded (source and rig) | §8.1, §8.2, §9.1, §9.2 |
-| page crossing in `z3660_rw` | refuted, measured 0; census E35 `dcn_kv_scat` 0 over 132,231 requests (kerntools 5de893b) | §4.4, §8.3, §8.4 |
+| page crossing in `z3660_rw` | refuted, measured 0; census run `dcn_kv_scat` 0 over 132,231 requests (kerntools 5de893b) | §4.4, §8.3, §8.4 |
 | cache, bounce, completion FIFO, ZS-04 | refuted | §4.5–4.8 |
 | stale file pointer, FatFs | excluded | §8.7 |
 | host upload path | excluded | §8.6 |

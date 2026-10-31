@@ -3,7 +3,7 @@
 ## 2026-10-30 — works in its amix home (2117886, 93eda8e, 5bd7cbe, 45fac1b)
 
 README points at amix's kernel/k30, kernel/dlm and kernel/drivers/a4091; module/Makefile defaults DLM to amix's
-kernel/dlm; sibling-repo paths in notes, docs and comments use amix's dirs; old review ids and station names reworded
+kernel/dlm; sibling-repo paths in notes, docs and comments use amix's dirs; notes and docs reworded
 for outside readers. Module and static objects equal the standalone build: module k30 2c9e3803, k46 21754e70.
 
 ## 2026-10-30 — moved in from amix-z3660scsi
@@ -16,13 +16,13 @@ docs/history-map.txt (tip 209bdd2 → 8aa9848). privacy-check --all: 0 hits (was
 ## 2026-10-27 — ZS-06: the module form sets its own data-cache arm at _load (66e4e14, 472c528, dd32157)
 
 The static k46 kernels get z3660_cache = 60 from the port's f4arms pass; a module kernel runs no such pass, so on the real 68060
-the module ran with 0 and hit S4-74 (a dirty copyback line written back over the ARM's data → swapconf ENOTDIR). The arm now comes
+the module ran with 0 and failed (a dirty copyback line written back over the ARM's data → swapconf ENOTDIR). The arm now comes
 from cputype (DDI_CPUTYPE) and `$param cache:int:-1:-1:60`, set before z3660map(); k30 always 0; 40/60 refused on another CPU with
 one line; witnesses z3660_cache_src / z3660_cache_bad. Host matrix 42 checks (red on the old module, mutation-checked). modcheck
-ok both lines (7468 B; k30 2c9e3803, k46 21754e70); static objects unchanged. Module 1.0.0-2. Bench check on -82: z3660_cache 0x3c,
+ok both lines (7468 B; k30 2c9e3803, k46 21754e70); static objects unchanged. Module 1.0.0-2. On-box check on -82: z3660_cache 0x3c,
 z3660_push_n > 0, z3660_ci_ok 1, swapconf passes.
 
-## 2026-10-26 — S4-30: z3660scsi as a root-class module (beff392)
+## 2026-10-26 — z3660scsi as a root-class module (beff392)
 
 `-DZ3660SCSI_MODULE` builds src/z3660.c as the module z3660scsi (module/: Makefile on the ABI kit's fragment, Master, VERSION
 1.0.0-1). .moddata: class=root, match=zorro:144b:01,mobo:z3660-window, rank=z3660, unload=never, no majors (sd owns the disk
@@ -46,8 +46,8 @@ DI-1 §9.8 "no driver change owed" is superseded.
 
 ## 2026-10-13 — Publication scrub before the first push since August (40da0e8)
 
-README and a new root NOTICE carry the Amiga Corporation trademark wording. Internal report ids, scratch paths and
-process wording in DI-1, NOTES, BLIZZARD-F3 and two z3660.c comments made generic; driver code unchanged.
+README and a new root NOTICE carry the Amiga Corporation trademark wording. References to material outside the
+repository removed from DI-1, NOTES, BLIZZARD-F3 and two z3660.c comments; driver code unchanged.
 
 ## 2026-10-03 — DI-1 instruments: page-cross ring, fault knob, the record (db0d135..3809907)
 
@@ -85,7 +85,7 @@ VPOSR shows AGA; a mailbox signature the open bus cannot fake (READ_ADDR2/WRITE_
 order, DRVNUM following DRVNUMX through two values, DRVTYPE <= 1); an AutoConfig board with a silent
 mailbox attaches with its unit sweep deferred (no phantom "no drive mapped" lines). Host harness 155/0,
 6/6 parity; driver-line object 55e37689 scan060 CLEAN. Docs: completions are synchronous through the
-driver FIFO (not timeout()); amiberry does model a 040/060 copyback cache (AB-03), the coherence verdict
+driver FIFO (not timeout()); amiberry does model a 040/060 copyback cache, the coherence verdict
 stays metal-only; the sptalloc arm's mapping is CM=00 writethrough-cacheable; the autocon table is
 unreliable only on the stock 030 boot2; README status.
 
@@ -100,7 +100,7 @@ Harness 131/131 (was 95), parity 6/6; object 8004 B, same undefined-symbol set. 
 
 z3660.c STATUS header reflects the 2026-06-13 metal boot (comment only; object byte-identical on
 three builds). NOTES: the Amiberry Z3660 SCSI emulation exists; the bench rig's stale +cdfs kernel gap
-is recorded; boot-fsck marked open as of 2026-09-26. BLIZZARD-F3 cites no tmp/ path.
+is recorded; boot-fsck marked open as of 2026-09-26. BLIZZARD-F3 cites only files in the tree.
 
 ## 2026-09-01 — docs: NOTES retracts the two cache claims BLIZZARD F3 falsified; journal to HEAD; README status 2026-08; test/host described as it is (daf6c6b, 9a9f280, a374476, cacc989)
 
@@ -174,7 +174,7 @@ through `/dev/kmem` exactly like the port lane's `hg_on` / `i40_on` / `hat_cm_ra
 compile-time discriminator available — this file is compiled once with `-m68020` into kernels for
 an emulated 030, an emulated 040 and a real 060 — and `cputype` may not be referenced, because the
 stock kernel has no such symbol and an extern would break the `nm -u` clean gate on the 030 line.
-As landed the definition is tentative, so the knob is COMMON in `.bss` and is NOT file-pokeable
+As committed the definition is tentative, so the knob is COMMON in `.bss` and is NOT file-pokeable
 from this repo; a build wanting a non-zero default absorbs the COMMON out of tree (f517811
 corrects the design doc, which had shown `= 0`). Shipping-path proof, in increasing strength:
 `nm -u` unchanged but for `printf`; every `f468`/`f448`/`4e71`/`4e7a` site proven dominated by a
@@ -192,7 +192,7 @@ expected to FAIL, 15/15 clean cycles and 8/8 byte-identical canaries on arm B, w
 and the bench structurally cannot run it (Amiberry models no 040/060 copyback data cache). One
 adjacent fact does now exist: on **2026-08-26** this driver served the AMIX root disk on a real
 **68LC060** for the first time, three boots for three to multiuser at cpufreq 80 with live piscsi
-I/O (campaign evidence is in the workspace's dated scratch directory, not published; see NOTES.md §2026-08-26) — but on the free ride alone. `z3660_cache`
+I/O (see NOTES.md §2026-08-26) — but on the free ride alone. `z3660_cache`
 was never poked and no F3 counter was read, so that run is a first, not a result.
 
 ## 2026-08-18 — z3660: page-size-agnostic board-window geometry (0bd3f10)
@@ -257,7 +257,7 @@ relink/golden regeneration.
 
 ## 2026-07-12
 
-- **z3660: complete commands synchronously in-context (fixes the T2.P3 cdfs mount panic).**
+- **z3660: complete commands synchronously in-context (fixes the cdfs mount panic).**
   The driver used to defer completion to a clock callout — `timeout(z3660done, cp)` — which
   runs in a *different* context from the caller that issued the request. Callers such as the
   cdfs mount path pass a **stack-allocated** `struct sdcom`; by the time the callout fired,
