@@ -1,0 +1,51 @@
+.\" x11r63.sh.4 -- userland/packages/x11r6.3.  MIT, see LICENSE in userland/packages.
+.TH X11R63.SH 4 "2026-10-31" "x11r63" "Amix add-on files"
+.SH NAME
+x11r63.sh \- X11R6.3's addition to the login environment
+.SH SYNOPSIS
+.B /etc/profile.d/x11r63.sh
+.SH DESCRIPTION
+The
+.B x11r63
+package installs this file, which a login shell reads at the end of
+.B /etc/profile
+(see
+.BR profile.d (4)).
+It appends
+.B /opt/amix/X11R6/bin
+to
+.B PATH
+unless
+.B PATH
+already holds it or
+.BR /usr/X11R6/bin ,
+so X11R6.3's commands come after everything else on the path, and the
+stock X11R4/R5 commands in
+.B /usr/X/bin
+keep their names wherever a profile puts them first.
+Reading it twice changes nothing.
+.PP
+To leave X11R6.3 off a user's path, set
+.B PATH
+to include
+.B /usr/X11R6/bin
+in that user's own profile, or rename the file to
+.BR x11r63.sh.off .
+.SH FILES
+.TP
+.B /opt/amix/X11R6/bin
+X11R6.3's commands, among them
+.BR Xzz9000 ,
+.BR xinit ,
+.BR xdm ,
+.B twm
+and
+.BR xterm .
+.TP
+.B /usr/X11R6
+A link to
+.BR /opt/amix/X11R6 .
+.SH SEE ALSO
+.BR profile.d (4),
+.BR Xamix (1),
+.BR xinit (1)

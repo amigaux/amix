@@ -1066,6 +1066,7 @@ d none /opt/amix/man 0755 root sys
 d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/Xamix 0644 root bin
 f none /opt/amix/man/1/Xserver 0644 root bin
+f none /opt/amix/man/1/Xzz9000 0644 root bin
 f none /opt/amix/man/1/bdftopcf 0644 root bin
 f none /opt/amix/man/1/mkfontdir 0644 root bin
 f none /opt/amix/man/1/resize 0644 root bin
@@ -1091,5 +1092,7 @@ f none /opt/amix/man/1/xterm 0644 root bin
 f none /opt/amix/man/1/xwd 0644 root bin
 f none /opt/amix/man/1/xwininfo 0644 root bin
 f none /opt/amix/man/1/xwud 0644 root bin
+d none /opt/amix/man/4 0755 root sys
+f none /opt/amix/man/4/x11r63.sh 0644 root bin
 d none /opt/amix/man/whatis.d 0755 root sys
 f none /opt/amix/man/whatis.d/x11r63 0644 root bin
