@@ -3,6 +3,11 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — amix-benchmark-gcc14 1.3-6, built with gcc14-cross-amix f40055b (2642778)
+
+The binaries are unchanged; BUILD-INFO and PROVENANCE name the new toolchain. amixbch14-1.3-6.pkg sha256 542ae027,
+130 560 B.
+
 ## 2026-10-31 — x11r6.3 6.3-2: the default font path is the shipped fonts; reproducible PCF fonts (3ec3b3b, e613fc8, e841994, 7188471)
 
 The server's default font path is the three shipped font directories (misc, 75dpi, 100dpi), so Xzz9000 starts
