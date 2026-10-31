@@ -1,15 +1,21 @@
-## 2026-10-31 — the stock pkgadd refuses BASEDIR; gen-catalog warns (494d477)
+## 2026-10-31 — i.conffile and the stock mkdir -p (37a2ea7)
 
-On the emulated stock 2.1c, /usr/sbin/pkgadd refuses any package whose pkginfo carries BASEDIR ("requires a base
-directory", rc 5), whatever the admin file says; without the line the same package installs, and the heirloom engine
-installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
-BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
+The class tests -d before mkdir -p, since the stock 2.1 mkdir -p fails on an existing directory and a second conffile
+in one directory failed the install (found by base-e2's amxbase install on E1); stock-pkg-system.md narrows the
+non-interactive admin claim to packages with no scripts or conflicting files. conffile 88/0, conffile-e2e 64/0.
 
 ## 2026-10-31 — scan060 honours AMIX_PKGTRANS (14464ca)
 
 scan060.py unpacks a datastream with the pkgtrans named by AMIX_PKGTRANS when it is set (as build/pkg does), falling
 back to heirloom/build-host/bin/pkgtrans; a set value that is not executable exits 1 naming it. Found by base-e2 while
 rolling amix-base. Repo tools 470/0.
+
+## 2026-10-31 — the stock pkgadd refuses BASEDIR; gen-catalog warns (494d477)
+
+On the emulated stock 2.1c, /usr/sbin/pkgadd refuses any package whose pkginfo carries BASEDIR ("requires a base
+directory", rc 5), whatever the admin file says; without the line the same package installs, and the heirloom engine
+installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
+BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
 
 ## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
 
