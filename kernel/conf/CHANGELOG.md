@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-31 — names.conf: random30 → random-k30, random46 → random-k46 (2dd65c3)
+
+The catalog names of the random module's packages (kernel/modules/random/pkg).
+
 ## 2026-10-31 — the kernel-space catalog's names.conf (854f971)
 
 The 23 pkginst → catalog-name mappings of the kernel-space catalog (loader, kernels, module packages) move in from
