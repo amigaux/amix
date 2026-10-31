@@ -217,8 +217,8 @@ def sidecar(etrel, brel, family, pin, fill=None, abi=None, mkabi=None, sym=None,
         die("%s: kinfo is not registered in cdevsw[53]" % etrel)
     kabi = cstr(data_sym(k, "kinfo_kabi", 24)[1])
     build = cstr(data_sym(k, "kinfo_buildid", 32)[1])
-    if fill and kabi not in ("k30.1.0", "k30.1.1", "k30.1.2", "k30.1.3"):
-        die("a module kernel's kinfo tag is %r, not k30.1.0, k30.1.1, k30.1.2 or k30.1.3 (kernel/dlm)" % kabi)
+    if fill and kabi not in ("k30.1.0", "k30.1.1", "k30.1.2", "k30.1.3", "k30.1.4"):
+        die("a module kernel's kinfo tag is %r, not k30.1.0, k30.1.1, k30.1.2, k30.1.3 or k30.1.4 (kernel/dlm)" % kabi)
     if not BUILD_RE.match(build):
         die("kinfo_buildid %r is not a stamped 68030-yymmdd-nn" % build)
     raw = open(brel, "rb").read()
