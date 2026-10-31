@@ -1,0 +1,71 @@
+#!/bin/sh
+# test-tools: host test of toolchain/fetch-distfile and toolchain/m68k-gnu-bin.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh toolchain/test-tools
+#
+# Needs no network: the distfile comes from a local AMIX_DISTFILES, and the
+# gcc14 tools are stand-ins. Prints "N/N passed"; exits non-zero on a failure.
+
+here=$(cd "$(dirname "$0")" && pwd)
+T=$(mktemp -d "${TMPDIR:-/tmp}/test-tools.XXXXXX")
+trap 'rm -rf "$T"' EXIT
+pass=0 fail=0
+check() {	# check <what> <command...>
+	what=$1; shift
+	if "$@" >"$T/out" 2>&1; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL $what"; sed 's/^/    /' "$T/out"; fi
+}
+refused() {	# refused <what> <needle> <command...>: exits non-zero and says <needle>
+	what=$1 needle=$2; shift 2
+	if "$@" >"$T/out" 2>&1; then
+		fail=$((fail + 1)); echo "FAIL $what (it passed)"; sed 's/^/    /' "$T/out"
+	elif grep -qF "$needle" "$T/out"; then pass=$((pass + 1))
+	else fail=$((fail + 1)); echo "FAIL $what (not: $needle)"; sed 's/^/    /' "$T/out"; fi
+}
+
+# --- fetch-distfile ------------------------------------------------------------
+mkdir -p "$T/dist" "$T/cache"
+printf 'the distfile\n' > "$T/dist/thing-1.0.tgz"
+sha=$(sha256sum "$T/dist/thing-1.0.tgz" | cut -c1-64)
+echo "https://github.com/amigaux/amix-distfiles/releases/download/thing-1.0/thing-1.0.tgz $sha" > "$T/thing.pin"
+fetch() { AMIX_DISTFILES=$T/dist sh "$here/fetch-distfile" "$@"; }
+
+check "fetch: from AMIX_DISTFILES into the cache, checked, path printed last" \
+	env AMIX_DISTFILES="$T/dist" sh -c 'p=$(sh "$0" "$1" "$2" 2>/dev/null | tail -1) && [ "$p" = "$2/thing-1.0.tgz" ] && cmp -s "$p" "$3"' \
+	"$here/fetch-distfile" "$T/thing.pin" "$T/cache" "$T/dist/thing-1.0.tgz"
+check "fetch: a cached file that matches is not fetched again" \
+	sh -c 'AMIX_DISTFILES=/nonexistent sh "$0" "$1" "$2" 2>&1 | grep -q "^  cached"' \
+	"$here/fetch-distfile" "$T/thing.pin" "$T/cache"
+printf 'other bytes\n' > "$T/dist/thing-1.0.tgz"
+rm -f "$T/cache/thing-1.0.tgz"
+refused "fetch: bytes other than the pin's are refused" "is not the pinned" fetch "$T/thing.pin" "$T/cache"
+check "fetch: a refused file is not left in the cache" test ! -e "$T/cache/thing-1.0.tgz" -a ! -e "$T/cache/thing-1.0.tgz.part"
+refused "fetch: a file missing from AMIX_DISTFILES is refused" "has no thing-1.0.tgz" \
+	env AMIX_DISTFILES="$T/cache" sh "$here/fetch-distfile" "$T/thing.pin" "$T/cache"
+echo "http://example.invalid/thing-1.0.tgz $sha" > "$T/bad.pin"
+refused "fetch: a pin without an https URL is refused" "no https URL" fetch "$T/bad.pin" "$T/cache"
+echo "https://example.invalid/thing-1.0.tgz abc" > "$T/bad.pin"
+refused "fetch: a pin without a sha256 is refused" "no sha256" fetch "$T/bad.pin" "$T/cache"
+check "fetch: netbsd-syssrc.distfile names our distfiles copy and a sha256" \
+	grep -Eqx 'https://github\.com/amigaux/amix-distfiles/releases/download/[^ ]+ [0-9a-f]{64}' "$here/netbsd-syssrc.distfile"
+
+# --- m68k-gnu-bin -------------------------------------------------------------------
+mkdir -p "$T/g14/prefix/bin"
+for t in gcc as ld ar nm objcopy objdump readelf size; do
+	printf '#!/bin/sh\necho m68k-elf-%s "$@"\n' "$t" > "$T/g14/prefix/bin/m68k-elf-$t"
+	chmod 755 "$T/g14/prefix/bin/m68k-elf-$t"
+done
+check "m68k-gnu-bin: every m68k-linux-gnu tool the port calls, linked to gcc14's" \
+	sh -c 'G14=$1 sh "$0" "$2" && for t in gcc as ld ar nm objcopy objdump readelf size; do
+		[ "$("$2/m68k-linux-gnu-$t" x)" = "m68k-elf-$t x" ] || exit 1; done' \
+	"$here/m68k-gnu-bin" "$T/g14" "$T/gnu"
+check "m68k-gnu-bin: the port's lookup finds the directory" \
+	sh -c '[ "$(PATH=$0:$PATH; dirname "$(command -v m68k-linux-gnu-nm)")" = "$0" ]' "$T/gnu"
+rm "$T/g14/prefix/bin/m68k-elf-objcopy"
+refused "m68k-gnu-bin: a missing gcc14 tool is refused" "no $T/g14/prefix/bin/m68k-elf-objcopy" \
+	env G14="$T/g14" sh "$here/m68k-gnu-bin" "$T/gnu2"
+refused "m68k-gnu-bin: G14 unset is refused" "G14 is not set" env -u G14 sh "$here/m68k-gnu-bin" "$T/gnu3"
+
+echo "$pass/$((pass + fail)) passed"
+[ "$fail" -eq 0 ]

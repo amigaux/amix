@@ -98,7 +98,9 @@ amix_fetch() {
 		exit 1
 	fi
 
-	amix_verify "$_af_dst.part" "$_af_want"
+	# a download that is not the pinned bytes does not stay behind
+	( amix_verify "$_af_dst.part" "$_af_want" ) || { rm -f "$_af_dst.part"; exit 1; }
+	amix_verify "$_af_dst.part" "$_af_want" >/dev/null
 	mv "$_af_dst.part" "$_af_dst"
 	unset _af_url _af_want _af_dst
 }

@@ -1,0 +1,27 @@
+#!/bin/sh
+# m68k-gnu-bin: the m68k-linux-gnu tools the 68040/68060 port's scripts call,
+# made from the container's gcc14 toolchain.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     toolchain/m68k-gnu-bin <dir>     (G14 names gcc14-cross-amix's build/)
+#
+# The port's cut and relink scripts run m68k-linux-gnu-gcc (as an assembler
+# with cpp), -ld, -nm, -readelf, -objcopy, -objdump, -size, -as and -ar,
+# found on PATH (its cut takes their directory from `command -v
+# m68k-linux-gnu-nm`). <dir> gets one symbolic link per tool, to gcc14's
+# m68k-elf-* of the same name, so one set of binutils serves both (P-38
+# S1.4). Put <dir> first on PATH. Measured 2026-10-31: the FPSP 040, FPSP
+# 060 and ISP 060 objects the port builds from NetBSD 10.1's syssrc.tgz are
+# byte-identical with these and with Ubuntu's m68k-linux-gnu gcc 15.2 and
+# binutils 2.46.
+set -e
+
+dir=${1:?usage: m68k-gnu-bin <dir>}
+bin=${G14:?m68k-gnu-bin: G14 is not set}/prefix/bin
+mkdir -p "$dir"
+for t in gcc as ld ar nm objcopy objdump readelf size; do
+	[ -x "$bin/m68k-elf-$t" ] || { echo "[FAIL] no $bin/m68k-elf-$t" >&2; exit 1; }
+	ln -sf "$bin/m68k-elf-$t" "$dir/m68k-linux-gnu-$t"
+done
+echo "m68k-gnu-bin: $dir -> $bin/m68k-elf-*"

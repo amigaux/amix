@@ -69,6 +69,8 @@ jobs:
         run: make -C kernel/modules/ramdisk/module test
       - name: build/pkg host tests
         run: make -C build test
+      - name: toolchain host tests (distfile fetch, m68k-gnu-bin)
+        run: sh toolchain/test-tools
       - name: userland packages check (packages, base/pkg)
         run: make -C build check-packages
 
