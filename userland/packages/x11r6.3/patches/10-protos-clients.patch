@@ -1,0 +1,405 @@
+Ours.  Declarations gcc 14 needs in the small clients (xauth, xmodmap, xset, mkfontdir, xinit, ...):
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  programs/xmodmap/handle.c: AddModifier(KeyCode keycode -> int); RemoveModifier(KeyCode keycode -> int)
+Declared without a prototype (types not defined at that point, or called with varying
+arguments; none has an ANSI definition with a narrow parameter): Error Fatal 
+FindNamedKey outl ShuffleEntries usage 
+Also: xhost's own K&R declaration of inet_makeaddr goes; <arpa/inet.h> declares it.
+
+--- a/programs/bdftopcf/bdftopcf.c
++++ b/programs/bdftopcf/bdftopcf.c
+@@ -37,6 +37,12 @@
+ #include <stdio.h>
+ #include <X11/Xos.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FontDefaultFormat (int *bit, int *byte, int *glyph, int *scan);
++int bdfReadFont (FontPtr pFont, FontFilePtr file, int bit, int byte, int glyph, int scan);
++int pcfWriteFont (FontPtr pFont, FontFilePtr file);
++
++
+ main (argc, argv)
+     char    **argv;
+ {
+--- a/programs/mkfontdir/mkfontdir.c
++++ b/programs/mkfontdir/mkfontdir.c
+@@ -117,6 +117,16 @@
+ #define  XK_LATIN1
+ #include <X11/keysymdef.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int CopyISOLatin1Lowered (char *dst, char *src, int len);
++int BitmapGetInfoBitmap (FontPathElementPtr fpe, FontInfoPtr pFontInfo, FontEntryPtr entry, char *fileName);
++int FontFileCountDashes (char *name, int namelen);
++FontEntryPtr FontFileAddEntry (FontTablePtr table, FontEntryPtr prototype);
++Bool FontFileInitTable (FontTablePtr table, int size);
++int FontFileFreeTable (FontTablePtr table);
++int BitmapRegisterFontFileFunctions (void);
++
++
+ char *progName;
+ 
+ static Bool
+--- a/programs/xauth/process.c
++++ b/programs/xauth/process.c
+@@ -46,6 +46,10 @@
+ #include <X11/Xlib.h>
+ #include <X11/extensions/security.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int parse_displayname (char *displayname, int *familyp, char **hostp, int *dpynump, int *scrnump, char **restp);
++
++
+ extern char *get_hostname();
+ extern Bool nameserver_timedout;
+ 
+--- a/programs/xdpyinfo/xdpyinfo.c
++++ b/programs/xdpyinfo/xdpyinfo.c
+@@ -44,6 +44,11 @@
+ #include <X11/Xos.h>
+ #include <stdio.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int print_event_mask (char *buf, int lastcol, int indent, long int mask);
++int XShapeQueryVersion (Display *dpy, int *major_versionp, int *minor_versionp);
++
++
+ char *ProgramName;
+ Bool queryExtensions = False;
+ 
+--- a/programs/xhost/xhost.c
++++ b/programs/xhost/xhost.c
+@@ -50,6 +50,10 @@
+ #include <X11/Xauth.h>
+ #include <X11/Xmu/Error.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int change_host (Display *dpy, char *name, int add);
++
++
+ #ifdef NEEDSOCKETS
+ #ifdef att
+ typedef unsigned short unsign16;
+@@ -71,7 +75,7 @@
+ 	bogus definition of inet_makeaddr() in BSD 4.2 and Ultrix
+ #else
+ #if !defined(hpux) && !defined(NCR)
+-extern unsigned long inet_makeaddr();
++/* AMIX: extern unsigned long inet_makeaddr(); -- <arpa/inet.h> declares it */
+ #endif
+ #endif
+ #ifdef DNETCONN
+--- a/programs/xinit/xinit.c
++++ b/programs/xinit/xinit.c
+@@ -39,6 +39,14 @@
+ #include <errno.h>
+ #include <setjmp.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Error ();	/* unprototyped: called with varying arguments */
++int startServer (char **server);
++int startClient (char **client);
++int Fatal ();	/* unprototyped: called with varying arguments */
++int processTimeout (int timeout, char *string);
++
++
+ #ifndef X_NOT_STDC_ENV
+ #include <stdlib.h>
+ #else
+--- a/programs/xkbcomp/action.c
++++ b/programs/xkbcomp/action.c
+@@ -33,6 +33,10 @@
+ #include "vmod.h"
+ #include "action.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FindNamedKey ();	/* unprototyped: its types are not defined here */
++
++
+ static Bool	actionsInitialized;
+ static ExprDef	constTrue;
+ static ExprDef	constFalse;
+--- a/programs/xkbcomp/xkbcomp.c
++++ b/programs/xkbcomp/xkbcomp.c
+@@ -45,6 +45,11 @@
+ #include "tokens.h"
+ #include <X11/extensions/XKBgeom.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int AddMatchingFiles (char *head_in);
++int AddMapOnly (char *map);
++
++
+ #define	lowbit(x)	((x) & (-(x)))
+ 
+ /***====================================================================***/
+--- a/programs/xkill/xkill.c
++++ b/programs/xkill/xkill.c
+@@ -48,6 +48,12 @@
+ 
+ #include <X11/Xmu/WinUtil.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int kill_all_windows (Display *dpy, int screenno, int top);
++int wm_state_set (Display *dpy, Window win);
++int wm_running (Display *dpy, int screenno);
++
++
+ Display *dpy = NULL;
+ char *ProgramName;
+ 
+--- a/programs/xlsclients/xlsclients.c
++++ b/programs/xlsclients/xlsclients.c
+@@ -35,6 +35,15 @@
+ #include <X11/Xatom.h>
+ #include <X11/Xutil.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int lookat (Display *dpy, Window root, int verbose, int maxcmdlen);
++int print_client_properties (Display *dpy, Window w, int verbose, int maxcmdlen);
++Window XmuClientWindow (Display *dpy, Window win);
++int print_text_field (Display *dpy, char *s, XTextProperty *tp);
++int print_quoted_word (char *s, int maxlen);
++int unknown (Display *dpy, Atom actual_type, int actual_format);
++
++
+ char *ProgramName;
+ 
+ static void usage ()
+--- a/programs/xlsfonts/dsimple.c
++++ b/programs/xlsfonts/dsimple.c
+@@ -34,6 +34,11 @@
+ #include <X11/Xutil.h>
+ #include <X11/cursorfont.h>
+ #include <stdio.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage (void);
++int outl ();	/* unprototyped: called with varying arguments */
++
+ /*
+  * Other_stuff.h: Definitions of routines in other_stuff.
+  *
+--- a/programs/xlsfonts/xlsfonts.c
++++ b/programs/xlsfonts/xlsfonts.c
+@@ -32,6 +32,13 @@
+ #include <stdio.h>
+ #include "dsimple.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int get_list (char *pattern);
++int show_fonts (void);
++int do_query_font (Display *dpy, char *name);
++int copy_number (char **pp1, char **pp2, int n1, int n2);
++
++
+ #define N_START 1000  /* Maximum # of fonts to start with */
+ 
+ int max_output_line_width = 79;
+--- a/programs/xmodmap/handle.c
++++ b/programs/xmodmap/handle.c
+@@ -36,6 +36,17 @@
+ #include "xmodmap.h"
+ #include "wq.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int UpdateModifierMapping (XModifierKeymap *map);
++int AddModifier (XModifierKeymap **mapp, int keycode, int modifier);
++int RemoveModifier (XModifierKeymap **mapp, int keycode, int modifier);
++int ClearModifier (XModifierKeymap **mapp, int modifier);
++int SetPointerMap (unsigned char *map, int n);
++int PrintModifierMapping (XModifierKeymap *map, FILE *fp);
++int PrintKeyTable (int exprs, FILE *fp);
++int PrintPointerMap (FILE *fp);
++
++
+ static XModifierKeymap *map = NULL;
+ 
+ 
+--- a/programs/xprop/dsimple.c
++++ b/programs/xprop/dsimple.c
+@@ -34,6 +34,11 @@
+ #include <X11/Xutil.h>
+ #include <X11/cursorfont.h>
+ #include <stdio.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage (void);
++int outl ();	/* unprototyped: called with varying arguments */
++
+ /*
+  * Other_stuff.h: Definitions of routines in other_stuff.
+  *
+--- a/programs/xprop/xprop.c
++++ b/programs/xprop/xprop.c
+@@ -42,6 +42,13 @@
+ 
+ #include "dsimple.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int remove_property (Display *dpy, Window w, char *propname);
++int Show_Prop (char *format, char *dformat, char *prop);
++int Show_All_Props (void);
++int outl ();	/* unprototyped: called with varying arguments */
++
++
+ #ifndef X_NOT_STDC_ENV
+ #include <stdlib.h>
+ #else
+--- a/programs/xrdb/xrdb.c
++++ b/programs/xrdb/xrdb.c
+@@ -48,6 +48,13 @@
+ #include <ctype.h>
+ #include <errno.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int XmuGetHostname (char *buf, int maxlen);
++int Process (int scrno, int doScreen, int execute);
++int ShuffleEntries ();	/* unprototyped: its types are not defined here */
++int ReProcess (int scrno, int doScreen);
++
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #endif
+--- a/programs/xsetroot/xsetroot.c
++++ b/programs/xsetroot/xsetroot.c
+@@ -40,6 +40,13 @@
+ #include <stdio.h>
+ #include "X11/bitmaps/gray"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int CreateCursorFromFiles (char *cursor_file, char *mask_file);
++int SetBackgroundToBitmap (Pixmap bitmap, unsigned int width, unsigned int height);
++int FixupState (void);
++int XmuCursorNameToIndex (const char *name);
++
++
+ 
+ #define Dynamic 1
+ 
+--- a/programs/xset/xset.c
++++ b/programs/xset/xset.c
+@@ -40,6 +40,24 @@
+ #include <X11/Xproto.h>
+ #include <X11/Xutil.h>
+ #include <X11/Xmu/Error.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage ();	/* unprototyped: called with a char * or an int second argument */
++int set_click (Display *dpy, int percent);
++int is_number (char *arg, int maximum);
++int set_bell_vol (Display *dpy, int percent);
++int set_bell_pitch (Display *dpy, int pitch);
++int set_bell_dur (Display *dpy, int duration);
++int set_font_path (Display *dpy, char *path, int special, int before, int after);
++int set_led (Display *dpy, int led, int led_mode);
++int set_mouse (Display *dpy, int acc_num, int acc_denom, int threshold);
++int set_saver (Display *dpy, int mask, int value);
++int set_repeat (Display *dpy, int key, int auto_repeat_mode);
++int set_lock (Display *dpy, int onoff);
++int query (Display *dpy);
++int set_pixels (Display *dpy, long unsigned int *pixels, caddr_t *colors, int numpixels);
++int error (char *message);
++
+ #ifdef MITMISC
+ #include <X11/extensions/MITMisc.h>
+ #endif
+--- a/programs/xwd/dsimple.c
++++ b/programs/xwd/dsimple.c
+@@ -34,6 +34,11 @@
+ #include <X11/Xutil.h>
+ #include <X11/cursorfont.h>
+ #include <stdio.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage (void);
++int outl ();	/* unprototyped: called with varying arguments */
++
+ /*
+  * Other_stuff.h: Definitions of routines in other_stuff.
+  *
+--- a/programs/xwd/xwd.c
++++ b/programs/xwd/xwd.c
+@@ -89,6 +89,17 @@
+ #include "wsutils.h"
+ #include "multiVis.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage (void);
++int Error ();	/* unprototyped: called with varying arguments */
++int Window_Dump (Window window, FILE *out);
++int outl ();	/* unprototyped: called with varying arguments */
++int Image_Size (XImage *image);
++int Get_XColors (XWindowAttributes *win_info, XColor **colors);
++int _swaplong (register char *bp, register unsigned int n);
++int _swapshort (register char *bp, register unsigned int n);
++
++
+ #ifdef XKB
+ #include <X11/extensions/XKBbells.h>
+ #endif
+--- a/programs/xwininfo/dsimple.c
++++ b/programs/xwininfo/dsimple.c
+@@ -35,6 +35,11 @@
+ #include <X11/Xutil.h>
+ #include <X11/cursorfont.h>
+ #include <stdio.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int usage (void);
++int outl ();	/* unprototyped: called with varying arguments */
++
+ /*
+  * Other_stuff.h: Definitions of routines in other_stuff.
+  *
+--- a/programs/xwininfo/xwininfo.c
++++ b/programs/xwininfo/xwininfo.c
+@@ -53,6 +53,18 @@
+ /* Include routines to handle parsing defaults */
+ #include "dsimple.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Display_Window_Id (Window window, int newline_wanted);
++int Display_Tree_Info (Window window, int recurse);
++int Display_Stats_Info (Window window);
++int Display_Bits_Info (Window window);
++int Display_Events_Info (Window window);
++int Display_WM_Info (Window window);
++int Display_Size_Hints (Window window);
++int Display_Window_Shape (Window window);
++int display_tree_info_1 (Window window, int recurse, int level);
++
++
+ static char *window_id_format = "0x%lx";
+ 
+ /*
+--- a/programs/xwud/xwud.c
++++ b/programs/xwud/xwud.c
+@@ -42,6 +42,23 @@
+ #include <X11/keysymdef.h>
+ #include <errno.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int Error ();	/* unprototyped: called with varying arguments */
++int _swaplong (register char *bp, register unsigned int n);
++int _swapshort (register char *bp, register unsigned int n);
++int Latin1Upper (char *s);
++int EffectiveSize (XVisualInfo *vinfo);
++int VisualRank (int class);
++int Extract_Plane (register XImage *in_image, register XImage *out_image, int plane);
++int IsGray (Display *dpy, XStandardColormap *stdmap);
++int Do_StdGray (Display *dpy, XStandardColormap *stdmap, int ncolors, XColor *colors, register XImage *in_image, register XImage *out_image);
++int Do_StdCol (Display *dpy, XStandardColormap *stdmap, int ncolors, XColor *colors, register XImage *in_image, register XImage *out_image);
++int Do_Direct (Display *dpy, XWDFileHeader *header, Colormap *colormap, int ncolors, XColor *colors, XImage *in_image, XImage *out_image);
++int Do_Pseudo (Display *dpy, Colormap *colormap, int ncolors, XColor *colors, register XImage *in_image, register XImage *out_image);
++int putScaledImage (Display *display, Drawable d, GC gc, XImage *src_image, int exp_x, int exp_y, unsigned int exp_width, unsigned int exp_height, unsigned int dest_width, unsigned int dest_height);
++int putImage (Display *dpy, Window image_win, GC gc, XImage *out_image, int x, int y, int w, int h);
++
++
+ #ifdef X_NOT_STDC_ENV
+ extern int errno;
+ #endif
