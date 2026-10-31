@@ -10,7 +10,9 @@
 # /opt/amix/man layout (amix userland/packages/docs/man-pages.md).  Since -26
 # (P-36 W8) kbootset's two rc scripts, 0744 root sys as stock's, with their
 # run-level names as hard links (as stock and amix-base); /etc, /etc/init.d
-# and /etc/rc2.d with core's attributes.
+# and /etc/rc2.d with core's attributes.  Since -29 /dev/kinfo (C2-4 v19
+# sec 2), character 53, 0, 0444 root sys, in the class of its registry owner,
+# kinfo (C3-5 v18 sec 1.2); /dev with core's attributes.
 #
 i pkginfo
 i copyright
@@ -32,3 +34,5 @@ f none /etc/init.d/kbmarkgood 0744 root sys
 d none /etc/rc2.d 0755 bin bin
 l none /etc/rc2.d/S01kbnamelist=/etc/init.d/kbnamelist
 l none /etc/rc2.d/S99zkbootset=/etc/init.d/kbmarkgood
+d none /dev 0755 bin bin
+c kinfo /dev/kinfo 53 0 0444 root sys
