@@ -24,7 +24,12 @@
  * (SYS_fchmod 93; bzip2 1.0.8 and coreutils 5.2.1 sort, 2026-10-29);
  * seteuid/setegid are the static member seteguid.o of usr/ccs/lib/libc.so
  * (trap #0, SYS 141/136; rsync 3.1.3's daemon, 2026-10-30); socketpair and
- * set/end*ent are libsocket's, munmap and isnan libc.so.1's (perl 5.8.9).
+ * set/end*ent are libsocket's, munmap and isnan libc.so.1's (perl 5.8.9);
+ * readv/writev are libc.so.1's (weak, over _readv/_writev; GNU Pth 2.0.7);
+ * cbrt and copysign are libm.a's (cbrt, and copysign weak over _copysign;
+ * FFmpeg 4.4.8), and gcc14 expands copysign inline anyway.  isinf is in no
+ * AMIX library: it is gcc's builtin, as a macro, which C99 makes it, so a
+ * float or long double argument is classified as itself (FFmpeg, vim).
  * MIT, this repository.
  */
 #ifndef AMIX_PACKAGES_GCC14_DECLS_H
@@ -40,6 +45,7 @@ extern "C" {
 struct sockaddr;
 struct timeval;
 struct rlimit;
+struct iovec;
 
 int socket(int, int, int);
 int connect(int, const struct sockaddr *, int);
@@ -85,6 +91,15 @@ void endservent(void);
 
 int munmap(void *, size_t);
 int isnan(double);
+
+int readv(int, const struct iovec *, int);
+int writev(int, const struct iovec *, int);
+
+double cbrt(double);
+double copysign(double, double);
+#ifndef isinf
+#define isinf(x) __builtin_isinf(x)
+#endif
 long _sysconf(int);	/* <limits.h>'s CLK_TCK is _sysconf(3) */
 
 #ifdef __cplusplus
