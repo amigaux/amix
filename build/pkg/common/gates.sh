@@ -179,6 +179,7 @@ amix_gate_d4() {
 	fi
 	for _g4_f in "$@"; do
 		[ -e "$_g4_f" ] || { echo "[FAIL] D4 gate: no such file $_g4_f" >&2; return 1; }
+		_g4_notes=	# scan060-g14.py's NOTEs (amix_g14_scan3), listed under the verdict
 		# scanner 1, per ELF/archive (a directory is walked for them)
 		for _g4_e in $(amix_gate_elfs "$_g4_f"); do
 			_g4_out=$(amix_d4_scan "$_g4_e")
@@ -209,8 +210,12 @@ amix_gate_d4() {
 			echo "$_g4_out" | sed 's/^/          /' >&2
 			_g4_bad=1
 		fi
+		if [ -n "$_g4_notes" ]; then
+			echo "  D4 note $_g4_f -- $(echo "$_g4_notes" | wc -l | tr -d ' ') switch table(s) sized from their own entries, not from a bound check:"
+			echo "$_g4_notes" | sed 's/^/          /'
+		fi
 	done
-	unset _g4_f _g4_e _g4_out _g4_sum
+	unset _g4_f _g4_e _g4_out _g4_sum _g4_notes
 	return $_g4_bad
 }
 
@@ -370,6 +375,9 @@ amix_g14_scan3() {
 		unset _g3_s _g3_out; return 1
 	fi
 	echo "$_g3_out"
+	_g3_n=$(echo "$_g3_out" | sed -n 's/^ *NOTE //p' | while read -r _g3_l; do echo "${1##*/}: $_g3_l"; done)
+	[ -z "$_g3_n" ] || _g4_notes="${_g4_notes:+$_g4_notes
+}$_g3_n"
 	_g3_tmp=$(mktemp "${TMPDIR:-/tmp}/amix-s6.XXXXXX")
 	if amix_pm_scan060 "$1" > "$_g3_tmp" 2>&1; then
 		echo "  scan060.py: clean"
@@ -382,7 +390,7 @@ amix_g14_scan3() {
 		rm -f "$_g3_tmp"; unset _g3_s _g3_out _g3_tmp; return 1
 	fi
 	rm -f "$_g3_tmp"
-	unset _g3_s _g3_out _g3_tmp
+	unset _g3_s _g3_out _g3_tmp _g3_n _g3_l
 	return 0
 }
 

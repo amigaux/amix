@@ -173,7 +173,19 @@ ok "amix_pkgroll refuses a payload with 040/060-only FPU forms, no datastream wr
 #   const a constant index, `moveq #2,%d0' (vim 9.1, a switch GCC knew the
 #        value of): sized from its own entries, a NOTE;
 #   badbias the bias added into another register than the index: unsized.
-sw_probe() {	# sw_probe <name> fp|mem|bias|const|badbias <extra asm string or empty>
+# And the index without a bound check (python 3.11, 2026-10-31):
+#   bf    `bfextu 8(%sp){#2:#3},%d0 ; andil #255,%d0': exactly 8 entries;
+#   bfreg the width in a register: unsized;
+#   mask  `andil #255,%d0' only, 4 entries then an odd word: sized from
+#         its own entries, trusted by shape (a NOTE);
+#   load  `moveq #0,%d0 ; moveb 11(%sp),%d0', the same;
+#   sload `moveb 11(%sp),%d0', no zero-extension: unsized;
+#   zero  the mask, but the first table word is odd: no run, unsized;
+#   cmpmask `cmpb #7,%d0 ; bhi' and the mask: the compare's 8 entries
+#         stand, the four that do not land are reported;
+#   twolevel the offsets loaded from another table, `movew @(swt,%d0:l:2)':
+#         refused even with a bound check.
+sw_probe() {	# sw_probe <name> <shape: fp mem bias const badbias bf bfreg mask load sload zero cmpmask twolevel> <extra asm string or empty>
 	{
 		printf '%s\n' 'int sw_sel;'
 		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
@@ -194,6 +206,23 @@ sw_probe() {	# sw_probe <name> fp|mem|bias|const|badbias <extra asm string or em
 			printf '%s\n' '	"\tmoveq #2,%d0\n\tadd.l %d0,%d0\n"'
 			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
 			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		elif [ "$2" = twolevel ]; then
+			printf '%s\n' '	"\tmove.l 4(%sp),%d0\n\tmove.l %a6,-(%sp)\n\tcmp.l #3,%d0\n\tbhi.w 9f\n"'
+			printf '%s\n' '	"\t.word 0x3030,0x0bb0\n\t.long swt\n"'	# movew @(swt,%d0:l:2),%d0
+			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		elif [ "$2" != bias ] && [ "$2" != badbias ]; then	# no bound check
+			printf '%s\n' '	"\tmove.l %a6,-(%sp)\n"'
+			case "$2" in
+			bf) printf '%s\n' '	"\tbfextu 8(%sp){#2:#3},%d0\n\tandi.l #255,%d0\n"' ;;
+			bfreg) printf '%s\n' '	"\tmoveq #3,%d1\n\tbfextu 8(%sp){#2:%d1},%d0\n"' ;;
+			mask|zero) printf '%s\n' '	"\tmove.l 8(%sp),%d0\n\tandi.l #255,%d0\n"' ;;
+			cmpmask) printf '%s\n' '	"\tmove.l 8(%sp),%d0\n\tcmp.b #7,%d0\n\tbhi.w 9f\n\tandi.l #255,%d0\n"' ;;
+			load) printf '%s\n' '	"\tmoveq #0,%d0\n\tmove.b 11(%sp),%d0\n"' ;;
+			sload) printf '%s\n' '	"\tmove.b 11(%sp),%d0\n"' ;;
+			esac
+			printf '%s\n' '	"\tadd.l %d0,%d0\n"'
+			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
+			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
 		else	# bias, badbias
 			printf '%s\n' '	"\tmove.l 4(%sp),%d1\n\tmove.l %a6,-(%sp)\n\tmove.l %d1,%d0\n"'
 			if [ "$2" = bias ]; then
@@ -205,10 +234,15 @@ sw_probe() {	# sw_probe <name> fp|mem|bias|const|badbias <extra asm string or em
 			printf '%s\n' '	"\t.word 0x303b,0x0806\n"'	# movew %pc@(T,%d0:l),%d0
 			printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
 		fi
-		printf '%s\n' '	"\t.word 0x074c,0x0056,0x0056,0x0056\n"'
+		case "$2" in
+		bf) printf '%s\n' '	"\t.word 0x074c,0x0056,0x0056,0x0056,0x0056,0x0056,0x0056,0x0056\n"' ;;
+		zero) printf '%s\n' '	"\t.word 0x4e71,0x074c,0x0056,0x0056,0x0056\n"' ;;
+		*) printf '%s\n' '	"\t.word 0x074c,0x0056,0x0056,0x0056\n"' ;;
+		esac
 		[ -z "$3" ] || printf '\t%s\n' "$3"
 		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n"'
-		printf '%s\n' '	"9:\tmove.l (%sp)+,%a6\n\trts\n.size swp,.-swp\n");'
+		printf '%s\n' '	"9:\tmove.l (%sp)+,%a6\n\trts\n.size swp,.-swp\n"'
+		printf '%s\n' '	".data\nswt:\t.word 4,4,4,4\n.text\n");'
 		printf '%s\n' 'int swp(int);'
 		printf '%s\n' 'int main(int c, char **v) { sw_sel = c; return swp(c); }'
 	} > "$T/$1.c"
@@ -238,6 +272,48 @@ if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-badbias"); then
 fi
 echo "$out" | grep 'UNTRUSTWORTHY.*' >/dev/null || fail "scan060-g14.py on the badbias probe: $out"
 ok "scan060-g14.py sizes %fp-indexed, memory-bounded, biased and constant-index switch tables (a NOTE), still catches a real movep after each; a bias on another register stays unsized"
+
+# tables without a bound check: a bit field's width sizes one exactly; an
+# index provably a byte (mask, zero-extended load) sizes one from its own
+# entries when the run ends on a word that cannot be one (a NOTE); and the
+# negatives stay untrustworthy
+for shape in bf mask load; do
+	sw_probe "sw-w-$shape" "$shape" ''
+	if [ "$shape" = bf ]; then mv='"\t.word 0x074c,0x0056\n"'; else mv='"\t.word 0x4e71,0x074c,0x0056\n"'; fi
+	sw_probe "sw-w-$shape-movep" "$shape" "$mv"
+	out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-w-$shape") || fail "scan060-g14.py on the $shape switch: $out"
+	echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the $shape table: $out"
+	if [ "$shape" = bf ]; then
+		if echo "$out" | grep NOTE >/dev/null; then fail "scan060-g14.py gave a NOTE for the exact bit field table: $out"; fi
+	else
+		echo "$out" | grep 'NOTE dispatch at .*the index at most 256; .*sized from its own entries (4, the run ending on an odd word), trusted by shape' >/dev/null ||
+			fail "scan060-g14.py gave no trusted-by-shape NOTE for the $shape table: $out"
+	fi
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-w-$shape-movep"); then
+		fail "scan060-g14.py passed a real movep after the $shape table: $out"
+	fi
+	echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the $shape movep probe: $out"
+done
+for shape in bfreg sload zero cmpmask twolevel; do
+	sw_probe "sw-w-$shape" "$shape" ''
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-w-$shape"); then
+		fail "scan060-g14.py sized the $shape table: $out"
+	fi
+	case "$shape" in
+	bfreg|sload) want='no bound check found' ;;
+	zero) want='the index at most 256, but table .* is no run of entries' ;;
+	cmpmask) want='x8 has 4 entries not landing' ;;
+	twolevel) want='offsets loaded from .*a two-level dispatch' ;;
+	esac
+	echo "$out" | grep UNTRUSTWORTHY >/dev/null && echo "$out" | grep "$want" >/dev/null ||
+		fail "scan060-g14.py on the $shape probe, not '$want': $out"
+done
+# the D4 gate lists the trusted-by-shape table under its verdict
+d4=$(amix_gate_d4 "$T/sw-w-load" 2>&1)
+echo "$d4" | grep "D4 note $T/sw-w-load -- 1 switch table(s) sized from their own entries" >/dev/null &&
+	echo "$d4" | grep "  sw-w-load: dispatch at .*trusted by shape" >/dev/null ||
+	fail "amix_gate_d4 did not list the trusted-by-shape table: $d4"
+ok "scan060-g14.py sizes a bfextu-indexed table exactly, a byte-indexed one from its own entries (a NOTE), catches a movep after each; a register width, an unextended byte, a run of no entries, a compare's bound and a two-level dispatch stay untrustworthy; the D4 gate lists the NOTE"
 
 # Two dispatches back to back (diffutils 2.8.1 groups_letter_value,
 # 2026-10-29), bytes and table words copied from the real binary: the linear
