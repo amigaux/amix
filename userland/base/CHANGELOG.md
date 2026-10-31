@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — our own /etc/profile; amxbase 1.0-2 (720849d)
+
+amix-base ships its own /etc/profile: the stock 2.1p2a file plus the guarded line that sources /etc/profile.d/*.sh
+(D-N23), built at package time from amix-system's etc/profile (sha256-checked against system/MANIFEST.sha256) and
+etc/profile.add; no Commodore bytes in amix. The other six D-N24 files stay STOCK_ETC. amxbase 1.0-2, 87552 B.
+test-profile.sh 8/0 (dash, bash); E1 run8 PASS under the 1991 sh and ksh.
+
 ## 2026-10-31 — ifup/ifdown, dhcpc-hook, the new inetinit; the amix-base package (5d31cb3, 17a7587, 382c5e0)
 
 ifup and ifdown (/usr/sbin, ifup(1M)): one apply step in ifup.subr serves a static line and a DHCP lease (address,
