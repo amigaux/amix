@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the 68040/68060 cut's container inputs (52171b5)
+
+netbsd-syssrc.distfile pins NetBSD 10.1's syssrc.tgz (79497697 B, sha256 76a600e7…) at our copy on
+amigaux/amix-distfiles; a distfile pin is `<URL> <sha256>`, named .distfile so the image's cache key does not read it.
+fetch-distfile puts the file in out/cache only when its sha256 matches; AMIX_DISTFILES=<dir> is a local override.
+m68k-gnu-bin links the m68k-linux-gnu-* tools the port's scripts call to gcc14's m68k-elf-* (P-38 S1.4); the port's
+FPSP/ISP objects build byte-identical through it. New host test toolchain/test-tools 12/12 (a CI step).
+
 ## 2026-10-30 — apt and cache-restore retries; old images pruned (b352285, de7b1e0)
 
 The image build retries apt against snapshot.ubuntu.com (each file 5 times; an update that skipped an index now
