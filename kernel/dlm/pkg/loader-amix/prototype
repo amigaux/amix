@@ -1,0 +1,14 @@
+#
+# prototype -- loader-amix: /stand/loader/{boot1,boot2,ldrinfo} (C2-3 v2 sec 3).
+#
+# AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.  PURE FILES
+# (40 sec 6).  /stand is the stock core's directory, declared with core's
+# attributes.
+#
+i pkginfo
+i copyright
+d none /stand 0755 root root
+d none /stand/loader 0755 root sys
+f none /stand/loader/boot1 0444 root sys
+f none /stand/loader/boot2 0444 root sys
+f none /stand/loader/ldrinfo 0444 root sys

@@ -72,6 +72,7 @@ modtools/      the library behind modadmin
 man/           kbootset(1M) and its whatis line, as /opt/amix/man installs them
 abi/           the ABI kit's sources: headers, lists, registries, make fragment
 tools/         host tools (mkstore, carve.py, mkkit.sh, ...) and tools/measure/
+pkg/           the kernel-space package recipes (loader-amix, kbootset, modtools, dlmkit)
 tests/         host, cross, core-harness, kit and Bench tests
 docs/spec/     the specification, one file per area (00-overview.md first)
 docs/contracts/  the interface contracts with the other projects

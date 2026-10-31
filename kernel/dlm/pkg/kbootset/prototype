@@ -1,0 +1,34 @@
+#
+# prototype -- kbootset: /sbin/kbootset (C2-3 v2 sec 4).
+#
+# AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.  /sbin and
+# /var are the stock core's directories, declared with core's attributes
+# (0755 bin bin).  /var/kbootset is ours (-4): kbootset's journal lives there
+# (C2-4: <root>/var/kbootset/journal) and apkg's trigger passes that path, so
+# a box that never ran kbootset must still have the directory.  Since -25
+# the manual page kbootset(1M) and its whatis fragment, in the shared
+# /opt/amix/man layout (amix userland/packages/docs/man-pages.md).  Since -26
+# (P-36 W8) kbootset's two rc scripts, 0744 root sys as stock's, with their
+# run-level names as hard links (as stock and amix-base); /etc, /etc/init.d
+# and /etc/rc2.d with core's attributes.
+#
+i pkginfo
+i copyright
+d none /sbin 0755 bin bin
+f none /sbin/kbootset 0755 root bin
+d none /var 0755 bin bin
+d none /var/kbootset 0755 root sys
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/kbootset 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/kbootset 0644 root bin
+d none /etc 0755 root root
+d none /etc/init.d 0755 bin bin
+f none /etc/init.d/kbnamelist 0744 root sys
+f none /etc/init.d/kbmarkgood 0744 root sys
+d none /etc/rc2.d 0755 bin bin
+l none /etc/rc2.d/S01kbnamelist=/etc/init.d/kbnamelist
+l none /etc/rc2.d/S99zkbootset=/etc/init.d/kbmarkgood

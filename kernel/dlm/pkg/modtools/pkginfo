@@ -1,0 +1,15 @@
+PKG=modtools
+NAME=modtools 1.0.261027-9 - load, unload and inspect kernel modules
+ARCH=Amiga
+VERSION=1.0.261027-9
+CATEGORY=system
+CLASSES=none
+VENDOR=amix-packages
+PSTAMP=amix-packages-modtools-1.0.261027-9
+# USERLAND (amix-dlm S3-11, C2-4 v8 sec 11): an ordinary catalog entry, no
+# kpkg entry, no apkg kernel-space record, no catalog dependency -- modadmin
+# reaches the module core through system calls; on a static kernel it fails
+# at run time, which is correct.
+APKG_DESC=modadmin: load, unload, list and inspect kernel modules; read or write a loaded module's tunables by name; print or keep the kernel's message buffer (/sbin/modadmin, static)
+APKG_ESSENTIAL=yes
+DESC=The module administrator of the amix-dlm module core: loads and unloads kernel modules, lists them and shows their status, registers driver majors for load on first open, loads the boot-class modules from the first sysinit entry of /etc/inittab (modadmin -B; the line is amix-base's inittab, the package has no scripts), and reads or writes a loaded module's tunables and counters by symbol name through /dev/kmem, prints the kernel's message buffer (modadmin -L) and keeps kernel messages in it on a box with no console logger (modadmin -K, root).  Needs a module kernel.  Statically linked, GCC 14; built from amix-dlm 4442c76; MIT.
