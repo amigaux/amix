@@ -63,3 +63,8 @@ stage() {
 
 # select (amix-decls.h); isinf, C99 math Amix lacks, as gcc's builtin
 MAKE_CFLAGS="-include $AMIX_GCC14_DECLS -include $HERE/amix-isinf.h"
+
+# the ll conversions in vim's strings are vim_snprintf formats (messages, :echo);
+# vim_snprintf formats each through snprintf, libamixc99's (patches/01); vim
+# hands libc printf/fprintf/sprintf no ll format of its own (grep of src/*.c)
+AMIX_LL_PRINTF_REVIEWED="vim_snprintf formats ll via libamixc99 snprintf (patches/01); no ll format reaches libc printf"

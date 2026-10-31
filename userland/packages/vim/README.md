@@ -28,7 +28,13 @@ the pin of record. `AMIX_DISTFILES` names a local copy.
 
 The configuration follows isoriano's amix-userland port (MIT, Ignacio Soriano): the feature set and
 the `vim_cv_*` answers a cross build cannot measure (terminfo, `tgetent` returning zero, the tty
-group and mode, `uname`). No source patches are needed.
+group and mode, `uname`).
+
+## Patches
+
+| Patch | Why |
+|---|---|
+| `01-vim-snprintf-ll.patch` | **Numbers printed as garbage.** `vim_snprintf()` formats each integer conversion by handing a one-conversion format to libc `sprintf`, and Amix's libc printf family reads `ll` as `l`: a `long long` takes 8 bytes on the stack, so the value and every later argument came out wrong. That covers every Vim Number (`:echo 5`, `"%lld bytes"`, `g CTRL-G`'s counts). The two `long long` cases now go through `snprintf`, which is libamixc99's on Amix and handles `ll`. |
 
 ## Build notes
 
@@ -54,6 +60,11 @@ group and mode, `uname`). No source patches are needed.
 - libacompat not linked;
 - prototype == staged tree;
 - the 060 gate.
+
+The printf gate is reviewed (`AMIX_LL_PRINTF_REVIEWED`): Vim's binary carries `%lld` strings and
+imports libc `printf`, but those strings are `vim_snprintf` formats, and after patch 01 they reach
+libamixc99's `snprintf`. No `ll` format of Vim's own goes to libc `printf`, `fprintf` or `sprintf`
+(checked by a grep of `src/*.c`).
 
 ## Tests
 
