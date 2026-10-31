@@ -120,6 +120,34 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
   want to install these conflicting files" and the super-user scripts question, and a `y` to each
   goes on. Whether it ignores the whole file or only those two keys is open 🟡. So such a package
   installs non-interactively only through APKGENG's pkgadd, or with the answers on stdin.
+  `instance=quit` is not ignored: a second VERSION of an installed package under `-n` with it
+  stops, rc 5, "Unable to determine whether to overwrite an existing package instance, or add a
+  new instance", where the default admin's `instance=unique` would add an instance (run1) 🟡.
+- **The stock `pkgrm` does not remove a package that has removal scripts without a person** ✅
+  (emulated stock 2.1c, row E1, 2026-10-31, toy packages, evidence
+  `tmp/2026-10-31-pkgtools-shared/run{3,4}/rig/E1`). A `postremove` or an `r.<class>` script is
+  enough: under `-n` it asks the super-user scripts question and suspends, rc 5, with
+  `action=nocheck` and with the default admin alike; with `y` answers on a pipe it asks both
+  questions, then "Removal of <pkg> failed. No changes were made to the system.", rc 1, and no
+  script ran (scripts mode 0644 or 0755). The same package without scripts removes. So a conffile
+  package (its `r.conffile`) comes off a box without APKGENG only by hand at the console (not yet
+  tried).
+- **Stock 2.1c has no `removef`** ✅ (`/usr/sbin` holds `installf` only; `/usr/sadm/install/bin`
+  holds `pkginstall` and `pkgremove`). The bench image's `removef` is APKGENG's,
+  `/usr/apkg/bin/removef`.
+- **The stock `installf -f` crashes after a re-type** ✅: `installf -c conffile <pkg> <path> e`
+  (rc 0) then `installf -f <pkg>` dies, rc 139, and leaves the line as
+  `… ? ? ? core:none +<pkg>\`. apkg's `--conf-new` runs the `installf` beside its pkgadd, APKGENG's
+  by default.
+- **An editable object is recorded as `f` with the package marked `<pkg>\`** ✅: the stock pkgadd
+  writes an `e` object of the pkgmap as `/etc/x f conffile 0644 root sys <size> <sum> <mtime>
+  amxbase\`, owned or shared (`core:none amxbase\`, the first owner's ftype kept). The `\` is the
+  per-package edit flag (heirloom `srchcfile.c` reads `pkg\[:class]` the same way), and `pkgchk`
+  skips the contents of a file so flagged.
+- **A datastream with normalised headers installs** ✅: build/pkg's `amix_dsroll` stream (newc ino
+  renumbered with a hard link kept, uid/gid/dev 0, every mtime and pkgmap's modtime the epoch) of a
+  toy with a directory tree and a hard link installs with `/usr/sbin/pkgadd -n`, rc 0, `pkgchk`
+  clean, the link intact (2026-10-31, `tmp/2026-10-31-pkgtools-shared/run3`).
 - **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, row E1, 2026-10-31;
   toy packages varied one parameter at a time, evidence `tmp/2026-10-30-pkgtools-basedir/rig/E1`).
   `/usr/sbin/pkgadd -n -a <admin> -d <pkg>` of any package whose pkginfo carries `BASEDIR` (`/`,
