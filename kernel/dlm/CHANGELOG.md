@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — kbootset -30 and dlmkit -13 recipes re-pinned to 4ccb3f0 (0ad4faa)
+
+Their payloads take the restated text: kbootset(1M) and kbmarkgood (the binary is unchanged, 6da558d0) and the
+contract copies in the kits. dlmkit -13 also takes the c 48 registry, monsw.h's SETCFG comment and the port pin
+727cbe7; its manifests (k30 85d85d6a, k46 dd8b350b) equal make dist's kit at 4ccb3f0. Both are unminted.
+
 ## 2026-10-31 — docs, comments and the changelog state facts without internal ids (b91a56f, 396c9d4, 305fc01, 6d9fa07, 48c90fd, 87197bf)
 
 The stage plans and a review draft leave the repository. Specs, measurements, contracts (neutral version histories),
