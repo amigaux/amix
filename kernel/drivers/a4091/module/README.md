@@ -206,7 +206,7 @@ So the A4092 and A4770 identities are host and metal rows only.
 | M2 | M1's box, Z3660 root + the A4092 second | The card order is the 1.0 names' (z3660 card 0, A4092 card 1), as on the 2026-10-03 metal boots |
 | M3 | M1's box: a CD install from the Zulu CD unit through the module | As C1/C2 with the static driver: `rearm_n` 0 on a clean run |
 | M4 | M1's box on the k30 line (Z3660 in 030 mode), once k30 has its DMA pool | As M1. The pool and bounce are load-bearing here: Zorro DMA cannot reach the Z3660's DDR |
-| M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (A1, `mobo:a4000t-710`), not this one |
+| M5 | The A4000T (when repaired) with the A4092 | As M1. The tower's onboard 53C710 is a separate module (`a4kt710`, `mobo:a4000t-710`), not this one |
 
 ## The second module: a4kt710
 

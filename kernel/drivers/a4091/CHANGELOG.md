@@ -111,7 +111,7 @@ bus reset per card before its first command, closing the ROM-driver SYNC hazard 
 manufacturer shift in support.c.patch (stock autocon never matched ids >= 0x8000). Docs: the A4000T onboard-710 design
 note (T0 series: an uninitialised 53C710 window hangs the CPU under the Z3660; presence = declaration + ROM initialisation;
 T0b decoding with the lane rule, the SXFER byte and the pass criteria); D42-CALL-SHAPE metal section: the DMA_WIP CPLD
-asserts SNOOP, so DMA into Z3660 RAM is read-coherent in hardware and only the write half can show the seam; A1 GREEN on
+asserts SNOOP, so DMA into Z3660 RAM is read-coherent in hardware and only the write half can show the seam; reads verified on
 metal with a byte-exact 32 MiB compare against host truth and the control arm.
 
 ## 2026-09-29 — the 040/060 bounce; alignment docs
