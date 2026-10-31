@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — prngd 0.9.29-1 moves in (d09d080)
+
+prngd 0.9.29-1 moved in from amix-packages (3208937): GCC 14, STYLE=make, the two Amix patches, prngd.conf and init
+script, the on-box smoke. Man pages in the amix layout: upstream prngd(1) plus a new prngd-ctl(1), whatis.d/prngd. The
+binaries are byte-identical to the build tested on 2026-10-31. It needs a kernel with the freeq guard (quirk 92), which
+every 1.1 kernel has; it ships in 1.1 (owner, T-56 D7). 16 packages.
+
 ## 2026-10-31 — INDEX lists amix-base 1.0-5 (725ebc2)
 
 INDEX.md regenerated; it lists amix-base 1.0-5.
