@@ -869,16 +869,36 @@ clear_lastchg()
 	fi
 }
 
+home_on_data()
+{
+	# 1.1 with a data slice: /home is that slice from the first boot's steps on (section
+	# 4), but the dialog runs before them. Mount it here, so the home amixmkuser makes
+	# (/home/<login>) lands on it and not under its mount point on the root.
+	HOME_MNT=
+	[ -n "$FB_DATA_SLICE" ] || return 0
+	set -- `/etc/devnm / 2>/dev/null`
+	_hd=`expr "$1" : '\(/dev/dsk/c[0-9a-f]*d[01]\)s[0-7]$'`
+	[ -d /home ] || mkdir /home
+	if [ -n "$_hd" ] && mount -F "$FB_ROOT_FSTYPE" "${_hd}s$FB_DATA_SLICE" /home 2>/dev/null; then
+		HOME_MNT=y
+	else
+		echo "\nThe /home slice could not be mounted; the new home is made on the root"
+		echo "and is hidden once /home is mounted. Move it there after the first boot."
+	fi
+}
+
 ask_users()
 {
-	# Stock's loop, verbatim (one account, then on).
+	# Stock's loop, verbatim (one account, then on), with /home on the data slice (1.1).
 	USER_ADDED=
 	while [ "$USER_ADDED" = "" ]
 	do
 		readask "\nWould you like to create a user account? [n] "
 		case $ask in
 			[yY]* )
+				home_on_data
 				/usr/amiga/lib/amixmkuser && USER_ADDED="done"
+				[ -z "$HOME_MNT" ] || umount /home 2>/dev/null
 				;;
 			[nN]* | "" )
 				USER_ADDED="done"

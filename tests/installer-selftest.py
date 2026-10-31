@@ -10094,6 +10094,24 @@ def audit_l11():
     (ok if "CONF= " in out and "I=2" in out and "left as the installation set it" in out else fail)(
         "firstboot dialog (1.0), no interface: as before (asked, then left as the installation set it): %r"
         % out.strip()[-120:])
+    # a user made in the dialog (sysinit, before section 4 mounts /home) lands on the data slice
+    users = "\n".join(_extract_func(fbt, f) for f in ("home_on_data", "ask_users")) \
+        .replace("/usr/amiga/lib/amixmkuser", "amixmkuser").replace("/etc/devnm", "devnm")
+    stubs = ('devnm() { echo "/dev/dsk/c6d0s1 /"; }\n'
+             'mount() { echo "MOUNT $*"; [ -z "$MOUNT_FAILS" ]; }\numount() { echo "UMOUNT $*"; }\n'
+             'mkdir() { :; }\namixmkuser() { echo "MKUSER mounted=$HOME_MNT"; }\n')
+    for what, kv, want, bad in (
+            ("a data slice", dict(FB_DATA_SLICE="4", FB_ROOT_FSTYPE="ufs"),
+             ["MOUNT -F ufs /dev/dsk/c6d0s4 /home", "MKUSER mounted=y", "UMOUNT /home"], ["could not be mounted"]),
+            ("no data slice", dict(FB_DATA_SLICE="", FB_ROOT_FSTYPE="ufs"),
+             ["MKUSER mounted="], ["MOUNT", "UMOUNT"]),
+            ("a failing mount", dict(FB_DATA_SLICE="4", FB_ROOT_FSTYPE="ufs", MOUNT_FAILS="y"),
+             ["could not be mounted", "MKUSER mounted="], ["UMOUNT"])):
+        out, rd = fbrun(stubs + users + "\nask_users\n", answers=("y",), **kv)
+        good = all(w in out for w in want) and not any(b in out for b in bad) \
+            and out.find("MOUNT -F") <= out.find("MKUSER")
+        (ok if good else fail)("firstboot dialog, a user account with %s: /home mounted around amixmkuser "
+                               "as needed: %r" % (what, " | ".join(out.strip().splitlines()[-4:])))
     m8 = re.search(r'\nfb_bits\(\)\n\{.*?\n\}\nif \[ "\$FB_L11" = y \] && \[ "\$FB_NET_CONFIGURED" = y \]; then\n(.*?)\nelif ', fbt, re.S)
     m1 = re.search(r'\nif \[ "\$FB_L11" = y \] && \[ -z "\$FB_NODENAME" \]; then\n.*?\nuname -S "\$FB_NAME_EFF" 2>/dev/null \|\| true\n', fbt, re.S)
     m7 = re.search(r'\nif \[ "\$FB_L11" = y \]; then\n\tsv=yes;.*?\nelif ', fbt, re.S)
