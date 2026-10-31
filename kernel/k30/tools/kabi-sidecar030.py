@@ -130,8 +130,15 @@ def default_pin():
         die("set GCA to gcc-cross-amix's build/ directory (toolchain/README.md), or give --pin")
     gca = os.path.dirname(os.path.abspath(os.environ["GCA"]))
     try:
-        head = subprocess.run(["git", "-C", gca, "rev-parse", "--short=7", "HEAD"],
-                              capture_output=True, text=True, check=True).stdout.strip()
+        # a checkout's HEAD; an export (the build container's) has no git, and its commit is the
+        # toolchain pin build/pkg/layout.sh exports
+        try:
+            head = subprocess.run(["git", "-C", gca, "rev-parse", "--short=7", "HEAD"],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            head = os.environ.get("AMIX_GCA_PIN", "")[:7]
+            if not head:
+                raise
         wrapper = open(os.path.join(gca, "amix-gcc-wrapper.sh")).read().replace("@TARGET@", "m68k-cbm-sysv4")
     except (OSError, subprocess.CalledProcessError):
         die("cannot read gcc-cross-amix at %s; give --pin" % gca)
