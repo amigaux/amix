@@ -35,7 +35,8 @@ system <path> <sha256>                system/MANIFEST.sha256 and system/SYMLINKS
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
-cut <id> <sha256>                     each kernel cut's SHA256SUMS (to come, P-38 S2)
+kernel <line> <path> <sha256>         each file of a kernel cut, as its hook prints it
+                                      (out/kernels/<line>.list; the cut of record's sums)
 module <line>/<name> <sha256>         out/modules
 pkg kspace|userland <file> <size> <sha256>
 catalog kspace|userland md5 <md5> sha256 <sha256>

@@ -86,7 +86,7 @@ try:
     check("no step: usage, exit 2", rc == 2 and "kernel-k30" in out, out)
     rc, out = run("frobnicate")
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
-    for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("media", "S6.1")):
+    for step, owner in (("kernel-k46", "S2.3"), ("media", "S6.1")):
         rc, out = run(step)
         check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
               rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)
@@ -240,6 +240,24 @@ clean:
     rc, out = run("drivers/z3660scsi", GCA=gca)
     check("drivers: a driver that builds no module object is refused",
           rc == 1 and "z3660scsi built no module object" in out, out)
+    shutil.rmtree(os.path.join(top, "kernel"))
+    shutil.rmtree(os.path.join(top, "out"))
+
+    # --- kernel-k30: k30's hook, kernel/k30/cuts/build.sh -----------------------------
+    hook = os.path.join(top, "kernel", "k30", "cuts", "build.sh")
+    write(hook, 'echo "GCA=$GCA"\necho "kernel k30 unix.brel %s"\necho "kernel k30 kabi %s"\n' % ("e" * 64, "f" * 64))
+    rc, out = run("kernel-k30")
+    lst = os.path.join(top, "out", "kernels", "k30.list")
+    check("kernel-k30: k30's hook runs with the toolchain, its sums kept for the lock",
+          rc == 0 and open(lst).read() == "kernel k30 unix.brel %s\nkernel k30 kabi %s\n" % ("e" * 64, "f" * 64)
+          and "GCA=/nonexistent/gca" in open(os.path.join(top, "out", "build", "kernel-k30.log")).read(), out)
+    write(hook, 'echo "[MISSING] kern30m: no port (P-38 S2.3)" >&2\nexit 3\n')
+    rc, out = run("kernel-k30")
+    check("kernel-k30: the hook's exit 3 (an absent input) passes through, the old sums kept",
+          rc == 3 and "[MISSING] kern30m: no port" in out and os.path.getsize(lst) > 0, out)
+    write(hook, 'echo "kernel k30 unix 0"\necho "sums differ from the record" >&2\nexit 1\n')
+    rc, out = run("kernel-k30")
+    check("kernel-k30: a failing hook fails the step", rc == 1 and "cuts/build.sh exited 1" in out, out)
     shutil.rmtree(os.path.join(top, "kernel"))
     shutil.rmtree(os.path.join(top, "out"))
 
