@@ -56,7 +56,10 @@ A kernel directory's recipes plug into `kspace` as `kernel/<dir>/pkg/build.sh`:
 with no arguments it rolls all its recipes, with names those; it reads
 `AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
 `$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
-and exits non-zero on a failure. Its recipes set `SOURCE_DATE_EPOCH` from
+and exits non-zero on a failure. It exits 3 when an input outside the recipe
+is absent, with a `[MISSING]` line naming the P-38 step and owner (a kernel
+cut's output, for one); the step then runs the other directories and ends
+with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from
 their own pinned epoch, never the environment's.
 
 A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`

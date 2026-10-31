@@ -169,10 +169,21 @@ PY
     check("kspace: every directory has its recipes: exit 0, dlm first, k30 and port before the modules",
           rc == 0 and "MISSING" not in out and [l for l in open(order).read().split("\n") if l.startswith("kernel/")]
           == ["kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw", "kernel/drivers/a4091"], out)
+    write(os.path.join(top, "kernel", "k30", "pkg", "build.sh"),
+          'echo kernel/k30 >> "%s"\necho "[MISSING] kern30m: no cut 68030-261031-63 output (P-38 S2.2, k30)" >&2\nexit 3\n' % order)
+    os.remove(order)
+    rc, out = run("kspace")
+    check("kspace: a hook's exit 3 is an absent input: its [MISSING] line, the rest still run, exit 3",
+          rc == 3 and "[MISSING] kern30m: no cut 68030-261031-63 output" in out
+          and "kernel/k30/pkg/build.sh is waiting for an input" in out
+          and [l for l in open(order).read().split("\n") if l.startswith("kernel/")]
+          == ["kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw", "kernel/drivers/a4091"]
+          and "kern46m-1.0-1.pkg" in os.listdir(os.path.join(top, "out", "kspace", "pkgs")), out)
+    recipe("kernel/k30", "kern30m", "1.0-1")
     recipe("kernel/port", "kern46m", "1.0-1", fail=True)
     rc, out = run("kspace")
     check("kspace: a failing build.sh stops the step, exit 1",
-          rc == 1 and "kernel/port/pkg/build.sh failed" in out, out)
+          rc == 1 and "kernel/port/pkg/build.sh failed (exit 1)" in out, out)
     write(os.path.join(top, "kernel", "port", "port.pin"), "file://%s %s\n" % (portsrc, portc[:7]))
     rc, out = run("kspace")
     check("kspace: a port.pin with a short hash is refused before any recipe",
