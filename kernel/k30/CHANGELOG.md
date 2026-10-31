@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — comments, docs and package descriptions state facts without internal ids (24cf96d, e900c1c)
+
+No binary change: cut -64 reproduces its seven sums with the edited build script. kern30m -64's description text
+changed (unminted; payload identical).
+
 ## 2026-10-31 — kern30m -64 asks for kbootset -30 or later; -64 emulation acceptance complete (ce80e2c)
 
 kern30m k30.1.3.261031-64 asks for kbootset -30 or later: kbootset's own registry must know c 48 random for a

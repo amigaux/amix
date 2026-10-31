@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-31 — the kern46m recipe, its README and the cut hook state facts without internal ids (87bf2c5, e900c1c)
+
+kern46m -53's description text changed (unminted; payload identical).
+
 ## 2026-10-31 — cut 68060-261031-53 is the k46 cut of record; kern46m -53 (0560124)
 
 port.pin moves to 727cbe7 and cuts/CURRENT to 68060-261031-53: the port's cut with gcc14's binutils 2.43.1 and amix
