@@ -1,0 +1,67 @@
+.\" prngd-ctl.1 -- userland/packages/prngd.  MIT, see LICENSE in userland/packages.
+.TH PRNGD-CTL 1 "2026-10-31" "prngd 0.9.29" "Amix add-on commands"
+.SH NAME
+prngd\-ctl \- query a prngd or EGD entropy socket
+.SH SYNOPSIS
+.B /opt/amix/bin/prngd\-ctl
+.I socket
+.B get
+.br
+.B /opt/amix/bin/prngd\-ctl
+.I socket
+.B read
+.I n
+.br
+.B /opt/amix/bin/prngd\-ctl
+.I socket
+.B readb
+.I n
+.br
+.B /opt/amix/bin/prngd\-ctl
+.I socket
+.B pid
+.SH DESCRIPTION
+.B prngd\-ctl
+connects to the unix socket
+.I socket
+of a running
+.BR prngd (1)
+(or any daemon that speaks the EGD protocol), sends one command and
+prints the answer.
+The socket the shipped start script uses is
+.BR /var/run/egd\-pool .
+.TP 8
+.B get
+prints the number of bits of entropy the daemon holds.
+.TP
+.BI read " n"
+reads up to
+.I n
+random bytes, 0 to 255, without waiting, and writes them to standard
+output as they are, not encoded.
+A daemon that is still gathering may return fewer, or none.
+.TP
+.BI readb " n"
+reads exactly
+.I n
+random bytes, 0 to 255, waiting until the daemon has them, and writes them
+to standard output as they are.
+.TP
+.B pid
+prints the process id of the daemon.
+.PP
+The command names may be given in either case.
+Writing entropy into the pool is not implemented.
+.SH EXIT STATUS
+0 when the daemon answered; 1 on a usage error, a number out of range, or
+a socket that cannot be reached or does not answer.
+.SH EXAMPLES
+.nf
+/opt/amix/bin/prngd\-ctl /var/run/egd\-pool get
+/opt/amix/bin/prngd\-ctl /var/run/egd\-pool readb 16 | od \-b
+.fi
+.SH SEE ALSO
+.BR prngd (1)
+.SH NOTES
+This page is written for the Amix package: upstream's prngd\-ctl is
+documented only in the comment at the top of its source.

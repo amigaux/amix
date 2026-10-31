@@ -1,0 +1,40 @@
+An AMIX block for config.h: what the box has (measured on the emulated
+golden 030): snprintf/vsnprintf from GCC 14's libamixc99, no O_RSYNC, int
+socket lengths, the files seed.c hashes at startup where AMIX keeps them --
+/var/adm/{wtmpx,utmpx}, syslog's /var/log/notice (/etc/syslog.conf),
+/var/cron/log -- and DONT_CHMOD_SOCKET: on Amix a bound AF_UNIX socket is a
+FIFO of mode 0, and chmod on it makes every later connect() fail with
+ENOTSOCK (errno 95), so prngd's chmod to 0777 left a socket nobody could
+reach (prngd-ctl and prngd --kill both refused).
+
+--- a/config.h
++++ b/config.h
+@@ -455,6 +455,28 @@
+ #endif
+ #endif
+ 
++#ifdef AMIX
++/* Commodore Amiga Unix (SVR4.0) -- the GCC 14 cross build defines AMIX.
++ * snprintf/vsnprintf are libamixc99's (C99); no getrusage, no daemon(),
++ * no O_RSYNC; socket lengths are int (SVR4 ABI).  The seed files are the
++ * box's real logs: /var/adm and syslog's /var/log, cron's log. */
++#define HAVE_SNPRINTF
++#define HAVE_VSNPRINTF
++/* chmod on a bound AF_UNIX path (a FIFO here, mode 0) makes every later
++ * connect fail with ENOTSOCK (measured on the box): leave its mode alone;
++ * Amix does not check those bits, any user connects */
++#define DONT_CHMOD_SOCKET
++#define O_RSYNC		0
++#define SOCKLEN_T	int
++#define PATH_TMP	"/tmp"
++#define PATH_VAR_TMP	"/var/tmp"
++#define PATH_PASSWD	"/etc/passwd"
++#define PATH_WTMP	"/var/adm/wtmpx"
++#define PATH_UTMP	"/var/adm/utmpx"
++#define PATH_SYSLOG	"/var/log/notice"
++#define PATH_MAILLOG	"/var/cron/log"
++#endif
++
+ #ifndef RANDSAVENAME
+ #define RANDSAVENAME	"/etc/prngd-seed"
+ #endif
