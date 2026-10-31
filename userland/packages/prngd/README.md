@@ -16,13 +16,16 @@ Package: `prngd`, catalog name `prngd`, category `system`, set `extra`. Built wi
 Every 1.1 kernel has it; a stock 2.1c kernel without it can panic (below). The package cannot
 declare this as a package dependency, since the kernel is not a package on a stock box.
 
-**Licences:**
-- prngd's own code is "free, you can do with it whatever you want" (`00README`);
-- `bsd-daemon.c` is under the 4-clause UCB licence;
-- `tools/prngd-ctl.c` is BSD;
-- `sha1.c` (from mhash) is freely distributable.
+**Licence** (`LICENSE` in `package.sh`, an SPDX expression):
+- `LicenseRef-prngd`: prngd's own terms, the author's permissive notice in `00README`: "This
+  software is free. You can do with it whatever you want", with a request to acknowledge its use.
+  This covers the package as a whole.
+- `BSD-4-Clause-UC`: `bsd-daemon.c` only, the 4-clause UCB licence, advertising clause included.
+- `BSD-3-Clause`: `tools/prngd-ctl.c`, that is `prngd-ctl`.
+- `LicenseRef-sha1-freely`: `sha1.c`, "Distribute and use freely; there are no restrictions".
 
-`doc/prngd/LICENSE` carries those three notices; the binaries contain that code.
+`doc/prngd/00README` carries prngd's own terms. `doc/prngd/LICENSE` gathers the notices of
+`bsd-daemon.c`, `prngd-ctl.c` and `sha1.c`, whose code the binaries contain.
 
 ## Version: 0.9.29
 
