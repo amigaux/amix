@@ -3,6 +3,10 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — INDEX lists amix-base 1.0-6 (ab460d6)
+
+INDEX.md regenerated; it lists amix-base 1.0-6.
+
 ## 2026-10-31 — prngd 0.9.29-1 moves in (d09d080)
 
 prngd 0.9.29-1 moved in from amix-packages (3208937): GCC 14, STYLE=make, the two Amix patches, prngd.conf and init
