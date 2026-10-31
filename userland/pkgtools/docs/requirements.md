@@ -46,7 +46,7 @@ with our patch set; build a small **C89 remote catalog client** on top. Evaluati
   NOTES.md Session 3): the server tested offers NFSv2 **over TCP only** (`rpcinfo` shows no UDP
   `nfs` service) and Amix's 1992 client is UDP-only.
 
-## Deliverables (the plan, and where each one landed)
+## Deliverables (the plan, and where each one is)
 
 All six shipped. "Delivered as" names what exists at HEAD; the plan text is unchanged.
 

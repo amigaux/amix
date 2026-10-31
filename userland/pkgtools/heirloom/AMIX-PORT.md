@@ -29,7 +29,7 @@ table is the executive summary.
 | 11 | **The flip-decider**: first `getpwnam()` SIGSEGVs inside the Amix libc passwd machinery (`_libc_malloc` fn-ptr internals; group path survives) | compat defines `getpwnam/getpwuid/getgrnam/getgrgid` as direct text parsers (preempt libc for all our objects); regression-tested against the REAL box `/etc/passwd`+`/etc/group` (compat/tests/, runs in every build-host.sh) |
 | 12 | (2026-10-05, emulated LC060) gcc 2.7.2.3 emits the 64-bit-product `muls.l/mulu.l <ea>,%dH:%dL` for every divide/modulo by a constant and for `(u64)a*b`; the 68060 does not implement it (vector 61, Amix SIGKILLs). The published 1.12.0 engine (2026-07-05, pre-`984192a`) also carried 64-bit-dividend `divs.l` from the SGS `tdivs` mis-assembly — `installf -f` died in `HASH()` | The toolchain wrapper's `fix_asm` (gcc-cross-amix `2ab2b22`, rule 11; `amix-cc` runs it via the extracted `fix_asm`) turns each 64-bit multiply into an equivalent 16x16 `mulu.w` sequence: same `%dH:%dL`, every other register and X preserved, N/Z/V/C as the hardware leaves them. `amix-cc` keeps only the gate: a leftover 64-bit mul/div/`tdiv` fails the compile. `tools/repo/scan060.py` gates the APKG/APKGENG mints and the static build. APKGENG 1.12.2. (1.12.1 used an `amix-cc`-local copy of the rewrite that did **not** preserve X, contrary to what this row said: same results, X clobbered. Removed; 1.12.1 minted, never published, superseded.) NOTES.md 2026-10-05 |
 | 13 | (2026-10-26, found on the box by the installer) `removef PKG -` (stdin path-list form) kept fgets' trailing newline on every line, so no path matched contents and nothing was removed, rc 0, silently. Upstream defect (OpenSolaris/heirloom); the argument form and installf's stdin form (strtok) were fine. Stock Amix ships no `removef` at all | `pkgcmds/installf/removef.c`: take the first `" \t\n"` token per line as installf does, skip blank lines. Host regression `tests/removef-stdin/run.sh` (2 of 3 paths via stdin, exactly those removed; fails on the unfixed source), run by build-host.sh step 6. APKGENG 1.12.4. NOTES.md 2026-10-26 |
-| 14 | (2026-10-31, T-56 D1) A roll is not reproducible: pkgmap's modtime column is each file's mtime, the spool's modes follow the umask, each newc header carries the spool's inode and device, the builder's uid/gid and the wall clock, and members come in the filesystem's directory order; a default PSTAMP names the host | With `SOURCE_DATE_EPOCH` set (unset: as before; not a number: refused): `pkgmk` writes the epoch as every pkgmap modtime and default date (UTC; a default PSTAMP without the host's name) and sets every spool object to pkgmap's mode (0755/0644 when unlisted) and the epoch (`pkgcmds/pkgmk/main.c`); `pkgtrans -s` lists each archive's members through `LC_ALL=C sort` and rewrites every newc header in place: ino renumbered with hard links kept, uid/gid/dev 0, mtime the epoch, a directory's nlink 2 + its subdirectories (`libpkg/pkgtrans.c`, new `libpkg/dsepoch.c`). The bytes are build/pkg's dsroll path's (`dsnorm.py` finds nothing to change). Host test `tests/repro-roll/run.sh`, build-host.sh step 7. On the box (rig E1, 2026-10-31) three more: pkgmap's part sizes are counted in 4096-byte blocks, not the spool filesystem's (1K there: `: 1 28` for the host's `: 1 92`); the spool takes pkgmap's modes saved before outvol() as root ORs 0644 into them; and every header field is rewritten `%08lX`, as the Amix cpio writes lower-case hex. The box's roll of a test package is then the host's bytes |
+| 14 | (2026-10-31) A roll is not reproducible: pkgmap's modtime column is each file's mtime, the spool's modes follow the umask, each newc header carries the spool's inode and device, the builder's uid/gid and the wall clock, and members come in the filesystem's directory order; a default PSTAMP names the host | With `SOURCE_DATE_EPOCH` set (unset: as before; not a number: refused): `pkgmk` writes the epoch as every pkgmap modtime and default date (UTC; a default PSTAMP without the host's name) and sets every spool object to pkgmap's mode (0755/0644 when unlisted) and the epoch (`pkgcmds/pkgmk/main.c`); `pkgtrans -s` lists each archive's members through `LC_ALL=C sort` and rewrites every newc header in place: ino renumbered with hard links kept, uid/gid/dev 0, mtime the epoch, a directory's nlink 2 + its subdirectories (`libpkg/pkgtrans.c`, new `libpkg/dsepoch.c`). The bytes are build/pkg's dsroll path's (`dsnorm.py` finds nothing to change). Host test `tests/repro-roll/run.sh`, build-host.sh step 7. On an emulated Amix 2.1c (2026-10-31) three more: pkgmap's part sizes are counted in 4096-byte blocks, not the spool filesystem's (1K there: `: 1 28` for the host's `: 1 92`); the spool takes pkgmap's modes saved before outvol() as root ORs 0644 into them; and every header field is rewritten `%08lX`, as the Amix cpio writes lower-case hex. The box's roll of a test package is then the host's bytes |
 
 Plus hygiene fixed along the way: fpkgparam stack-underflow (empty
 admin values), canonize/canonize_name overlapping strcpy (7 sites),
@@ -331,7 +331,7 @@ dirs (two passes: the pkgcmds `clean` targets also delete
 builds share the tree and cannot run interleaved; their outputs
 (`build-amix/`, `build-host/`) coexist.
 
-## Static-link variant — `build-amix-static.sh` (Installer-NG W5.0)
+## Static-link variant — `build-amix-static.sh` (for the installer)
 
 `./build-amix-static.sh` emits the **CD-resident installer engine
 subset** as **fully static** m68k SVR4 ELF executables:
@@ -343,8 +343,8 @@ build-amix-static/sadm-helpers/ pkginstall
 ```
 
 (`apkg` is the **FILE+RAW-only** static variant — `-DAPKG_NO_HTTP`, `http.c`
-excluded; see the apkg paragraph below.  `contents-fsck` was added as of
-**W6.4a** so the installer driver can run a contents-DB integrity **check**
+excluded; see the apkg paragraph below.  `contents-fsck` was added so the
+installer driver can run a contents-DB integrity **check**
 as an install step on the freshly-installed target — see the
 contents-fsck paragraph below.)
 
@@ -451,7 +451,7 @@ The two options NOT taken, recorded for the future:
    shared-only; not on the tape, sysroot, or images, and no libnsl
    source is available.
 
-**`contents-fsck` in the static set (W6.4a, 2026-07-23).**  Our own C89
+**`contents-fsck` in the static set (2026-07-23).**  Our own C89
 contents(4) DB checker (`src/contents-fsck/contents-fsck.c`) is added to
 the CD-resident set so the installer driver can run a **contents-DB
 integrity check as an install step** on the freshly-installed target —
@@ -491,7 +491,7 @@ repair modes (`-r`, and the strip form `-r -s`) stay a **post-migration
 tool for the corrupt factory DB**, NOT an install step — the installer only
 ever runs the check form above.
 
-**W5.3 consumption note.** The Installer-NG **W5.3 ISO re-master** pulls
+**Consumption note.** The installer's **ISO re-master** pulls
 its CD-resident engine set from this tree —
 `heirloom/build-amix-static/bin/{apkg,pkgadd,pkgtrans,pkginfo,pkgchk,contents-fsck}`
 plus `heirloom/build-amix-static/sadm-helpers/pkginstall` — and places
@@ -499,7 +499,7 @@ plus `heirloom/build-amix-static/sadm-helpers/pkginstall` — and places
 → `/cdrom/install/bin/pkginstall`, the shim convention the miniroot's
 `build-miniroot.sh` compiles in).  `apkg` joins that set as of
 2026-07-22; the CD-side `apkg.conf` must point `repo=` at a `file://` or
-`raw:` source (an `http://` repo would fail closed).  As of **METAL-FIX.3**
+`raw:` source (an `http://` repo would fail closed).  As of **the fail-fast fix**
 (2026-07-24) the static `apkg` is **46880 B**, `sum -r` **37448**, md5
 `fbe2acc888980b2eef77feabb72915e9` (was 46464 B / `sum -r` 40275 before the
 fix) — the re-master pulls it by name, so it consumes the rebuilt binary
@@ -509,7 +509,7 @@ prompts on an error path gets EOF and **aborts non-zero** instead of
 hanging the install forever (`src/apkg/install.c` `run_cmd`); this is the
 binary the RAW/metal install path (`install.sh` → `apkg install`) runs, so
 rebuilding it is what carries the fail-fast onto the disc.  `contents-fsck`
-joins as of **W6.4a** (2026-07-23): the re-master pulls
+joins as of 2026-07-23: the re-master pulls
 `build-amix-static/bin/contents-fsck` (static, 29468 B, `sum -r` 23366,
 md5 `43684b68e8143af94a78f8bf194bd4b2`) onto the disc, and the installer
 driver runs it **check-only** on the freshly-installed target
@@ -517,7 +517,7 @@ driver runs it **check-only** on the freshly-installed target
 install; see the contents-fsck paragraph above).  On-box smoke of the
 static `apkg` (the `http://` refusal, and a `file://`/`raw:` install
 under the miniroot), and of the `contents-fsck` install-step check, is
-owed to the follow-up installng wave — the host build + host tests are
+still owed by the installer — the host build + host tests are
 green, but nothing here ran on the guest.  (The consumer-side convention
 lives in `amix-installng`: `docs/miniroot.md`, `miniroot/miniroot.proto`,
 `tools/build-miniroot.sh` — those must be updated to add `apkg` and
@@ -695,7 +695,7 @@ All Amix-behavior changes are marked `AMIX PORT` in the code.
   stdin form; upstream kept fgets' newline and matched nothing
   (2026-10-26, root cause 13).
 
-**Install-miniroot mnttab robustness (Installer-NG W5.5a, bench 2026-07-23):**
+**Install-miniroot mnttab robustness (bench 2026-07-23):**
 - `libinst/mntinfo.c` `get_mntinfo()` — synthesize a "/" root entry when
   the mount table lacks one, instead of the fatal `ERR_MNT_NOROOT`
   ("get_mntinfo() identified <X> as root file system instead of </>").
@@ -741,10 +741,10 @@ All Amix-behavior changes are marked `AMIX PORT` in the code.
     that spurious failure at the source, so no caller emits it.
 
 **Install-miniroot mnttab robustness, part 2 — a MISSING mount table
-(Installer-NG METAL-FIX.1, bench 2026-07-23):**
-- `libinst/mntinfo.c` `get_mntinfo()` — extend the W5.5a fix (above) to the
-  case where `/etc/mnttab` is **absent entirely**, not merely sparse. W5.5a
-  synthesizes "/" when the table is present but lacks a root line; that
+(bench 2026-07-23):**
+- `libinst/mntinfo.c` `get_mntinfo()` — extend the sparse-table fix (above) to
+  the case where `/etc/mnttab` is **absent entirely**, not merely sparse. That
+  fix synthesizes "/" when the table is present but lacks a root line; that
   synthesize sits *after* the `setmntent()` open, so it is unreachable when
   the open itself fails. On the first **RAW** (`raw:<slice>`) metal install
   (A4000+Z3660, A4091, 2026-07-23) everything ran green through seed +
@@ -753,14 +753,14 @@ All Amix-behavior changes are marked `AMIX PORT` in the code.
   made "No changes ... ". The miniroot ships **no** `/etc/mnttab`
   (`miniroot.proto` has no entry) and the RAW path's `/etc/mount` is a bare
   `mount(2)` wrapper that writes none, so on fresh media `open()` returns
-  ENOENT before W5.5a can act.
+  ENOENT before the sparse-table fix can act.
   - Why the bench RAW acceptance passed anyway (state contamination, not a
     real pass): the reused root **floppy** carried an `/etc/mnttab` left over
-    from cdfs-helper mounts in earlier CD-arm waves, so the file was *present*
-    (sparse) and the W5.5a branch handled it. Fresh media has no such file.
+    from cdfs-helper mounts in earlier CD test runs, so the file was *present*
+    (sparse) and the sparse-table branch handled it. Fresh media has no such file.
   - Fix: when `setmntent()` fails with **ENOENT specifically**, treat the
     table as empty and synthesize the root via the same
-    `/dev/root / s5 rw 0` construct W5.5a uses (now factored into the shared
+    `/dev/root / s5 rw 0` construct the sparse-table fix uses (now factored into the shared
     `synthesize_root()` helper so the two paths cannot drift). **Every other
     open error (EACCES, EIO, ...) still fails CLOSED exactly as before** — the
     widening is ENOENT-only, so a normally-booted SVR4 system (which always
@@ -789,7 +789,7 @@ is ≥ 14 characters (2026-08-14):**
   `O_CREAT|O_EXCL` create returns EEXIST, mkstemp gives up, and pkgadd dies
   with `ERR_MKTEMP`. The empty `<>` in the failure message is mktemp having
   blanked the template — the fingerprint of exactly this path, and what the
-  amix-installng W6 `cd-full` bench log showed.
+  installer's `cd-full` bench log showed.
   - **Scope: an upgrade/re-install defect, not a fresh-install one.** The
     branch is entered only when the target already exists (`access(F_OK)`).
     Fresh installs are provably safe — of the 109 paths declared by more than
@@ -884,7 +884,7 @@ is ≥ 14 characters (2026-08-14):**
 - `pkgcmds/pkgremove/main.c` (rmclass) — a package directory that still
   holds entries is "not empty" for `ENOTEMPTY` as well as `EEXIST`.
   SVR4 rmdir(2) returns EEXIST, Linux ENOTEMPTY, so on the host a
-  directory kept non-empty (a conffile r.conffile kept, P-36) failed the
+  directory kept non-empty (a conffile r.conffile kept) failed the
   pkgrm "partially" and left the package "partially installed".  No
   change on Amix, where rmdir gives EEXIST (2026-10-30).
 - `libadm/Makefile.mk` — hardcoded RedHat `-I/usr/lib/x86_64-redhat-
@@ -912,7 +912,7 @@ is ≥ 14 characters (2026-08-14):**
 ## Known risks for on-box testing (bench items)
 
 1. **RESOLVED — switch dispatch (.swbeg)**: the toolchain wrapper fix
-   landed and the tree was fully rebuilt through it; the dispatch
+   is in and the tree was fully rebuilt through it; the dispatch
    invariant is machine-checked on every build (see quirk 4).  Note
    for the toolchain repo: the installed wrapper's own swbeg rule
    still eats the newline (use `[ \t]*$` or the slurp-mode `/mg`

@@ -116,7 +116,7 @@ core dump independently converge on the same function.
 instance=overwrite, everything nocheck, basedir=default) → `/tmp/adm`.
 Box `/tmp` is wiped on reboot; re-push both before re-running.
 
-## The fix (next wave, out of scope here)
+## The fix (later, out of scope here)
 
 Belongs in the toolchain, not this tree: teach `amix-cc` / the
 `m68k-cbm-sysv4-gcc` wrapper to rewrite the SGS `tdivs.l ea,Dr:Dq` /

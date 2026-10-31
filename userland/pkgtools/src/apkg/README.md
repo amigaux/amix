@@ -59,7 +59,7 @@ See [apkg.1](apkg.1) for the full manual.
 ## UFS-only packages (`APKG_FSTYPE`)
 
 A package whose pkginfo says `APKG_FSTYPE=ufs` (file names over 14 bytes,
-which s5 cuts; P-35 Option C) is refused, exit 5, before any `pkgadd` of the
+which s5 cuts) is refused, exit 5, before any `pkgadd` of the
 transaction, when the directory of one of its long names, under the `-R`
 target, is on another filesystem type (`statvfs` `f_basetype`; the install
 base when it has no long name).  Unmarked packages are not checked.
@@ -76,7 +76,7 @@ is `docs/design.md` section 2c.
 ## Kernel space (0.3)
 
 Kernel, loader and module packages are the kernel-modules campaign's
-(kernel/dlm, decision D-3).  apkg implements its side of two agreed contracts,
+(kernel/dlm).  apkg implements its side of two agreed contracts,
 C2-2 version 5 and C2-4 version 2 (2026-10-26): `kernel/dlm/docs/contracts/C2-2-kpkg.md` (the catalog block and the
 install record) and `C2-4-kbootset-cli.md` (kbootset as a called program).
 NOTES.md 2026-10-25 is the record of what was built and how it was tested.
@@ -90,7 +90,7 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
   carry `kabi=`/`pin=`; a missing or excluded key refuses the entry.  The optional keys of C2-2 v2: `pkginst=` (otherwise
   the datastream header names it) and `offset=` (RAW media).
 - **Integrity.** SHA-256 + size for kernel space, md5 + size for userland as
-  before.  No signature in 1.1 (D-3 §13): the hook in `kspace_verify_hook()`
+  before.  No signature in 1.1: the hook in `kspace_verify_hook()`
   records "unverified"; records say `verified no`.
 - **Pre-flight** before anything is fetched: module kabi family/major/minor
   and compiler pin against the kernel of its line; a static kernel takes no
@@ -105,7 +105,7 @@ NOTES.md 2026-10-25 is the record of what was built and how it was tested.
   then the new `pkgadd` + record, one trigger.  A cut between the two is
   finished by `apkg recover`.  Two kernel records of one line, or two
   kernels of one line in one transaction, refuse with exit 5.
-- **Pure files** (40 §6): after staging, before the first pkgadd, the
+- **Pure files**: after staging, before the first pkgadd, the
   datastream's pkgmap may hold only `f`/`d` objects of class `none` and no
   install scripts (`i`: pkginfo, depend, copyright), and at least one `f`;
   a module package may also carry its driver's device nodes as `c none`
@@ -240,7 +240,7 @@ against test vectors in the suite.
   documented `.Z` step: `zcat < f.pkg.Z > f.pkg` in the cache.  The child's
   **stdin is `/dev/null`**: the 1991 pkgadd prompts on some error paths even
   under `-n`, and with apkg's stdin inherited a batch/installer run blocked
-  there forever (seen on metal, METAL-FIX.3).  Reading EOF makes pkgadd abort
+  there forever (seen on metal, the fail-fast fix).  Reading EOF makes pkgadd abort
   non-zero instead, so a prompt now surfaces as the ordinary exit **4** with
   the failing package named, never as a hang.
 * **the admin file is materialised, never assumed** (`conf_adminfile()` in

@@ -1,11 +1,11 @@
-# Kernel packages — the W6-P mint (PRIVATE-only)
+# Kernel packages KERNBENCH and KERNZ3660 (private packages)
 
 The `amix-packagemanager` side of **"kernel + drivers as packages."** This is the
-consumer of the build-hub contract `amix-kerntools/docs/kernel-packages.md` (W6-K):
+consumer of the build-hub contract `amix-kerntools/docs/kernel-packages.md`:
 it mints the two **installable-system kernel packages** an Amix install pkgadd's onto a
 target's system disk. Those packages are **PRIVATE-only** — they ship proprietary-derived
 bytes and may **never** reach the redistributable repo. This doc records the mint, the
-private-flag mechanics, and the discrepancies with the W6-K draft that this mint corrects.
+private-flag mechanics, and the discrepancies with the build hub's first draft that this mint corrects.
 
 ## 1. The two packages
 
@@ -14,9 +14,9 @@ private-flag mechanics, and the discrepancies with the W6-K draft that this mint
 | `KERNBENCH` | `a4091` + `z3660eth` + `cdfs` + `a3091`/`a2091` fix + `scsi.c` GSIO; **PROBED** `support.c` | `0x00480016` / `c6s1unix` | **49667** | 1 586 312 B |
 | `KERNZ3660` | `z3660scsi` (piscsi) + `z3660eth` (net) + `cdfs` (A4000+Z3660 metal) | `0x00480016` / `c6s1unix` | **60364** | 1 587 524 B |
 
-> The table shows the **current** (P5.4 **r4**, 2026-08-16) identities — see §8. Every
+> The table shows the **current** (**r4**, 2026-08-16) identities — see §8. Every
 > earlier identity is **superseded, not destroyed**: the r3 pair (`64049`/`45833`, §7),
-> the r2 pair, and the original W6-P pair (`45473`/`00961`, 2026-07-23) all keep their
+> the r2 pair, and the original first pair (`45473`/`00961`, 2026-07-23) all keep their
 > `.pkg` files in the private staging, and §§5–7 record their mints as history. Only the
 > r1 pair is quarantined (`build/kernel-private/POISONED/`).
 
@@ -50,8 +50,8 @@ Earlier identities, in lineage order, **none of which is current**: the r3 pair
 `64049-2026.08.07` / `45833-2026.08.07` (metal-green at the 2026-08-07 calibration;
 superseded **additively** by r4, kept valid-in-place — §§7–8), the r2 pair
 `53963-2026.08.06` / `14821-2026.08.06` (**never deploy** — latent cdfs stack-sdcom
-defect), the first P5.4 mint `45343-2026.08.06` / `05929-2026.08.06` (**never deploy**,
-**quarantined**), and the W6-P pair `45473-2026.07.23` / `00961-2026.07.23` (`00961` was
+defect), the first re-mint `45343-2026.08.06` / `05929-2026.08.06` (**never deploy**,
+**quarantined**), and the first pair `45473-2026.07.23` / `00961-2026.07.23` (`00961` was
 the last metal-validated identity until the r3 calibration) — §7.
 
 ## 2. The shared boot2 (proprietary; acquired, never committed)
@@ -76,7 +76,7 @@ factory packages. Three independent mechanisms enforce PRIVATE-only:
    or the bare default (which build only the redistributable set).
 
 2. **Catalog refusal (`gen-catalog.py`).** A package whose **pkginfo carries the
-   kernel-package markers** (`KSUM_R` and/or `BOOT2_SHA` — the params W6-P mints onto
+   kernel-package markers** (`KSUM_R` and/or `BOOT2_SHA` — the params the mint stamps onto
    `KERNBENCH`/`KERNZ3660`) is refused **fatally** from a catalog build — the catalog is not
    written at all (no partial catalog that blesses the rest). Defense in depth: a private
    package can never even appear in the redistributable catalog.
@@ -92,7 +92,7 @@ Gate-17 licensing posture, applied to the package/remote-repo publish path. The 
 a private kernel package lives in exactly one place — `gen-catalog.py` `KERNEL_MARKER_PARAMS`
 — which both the catalog build and the publish scan consult.
 
-> **Re-key (METAL-FIX.2b, 2026-07-23).** The gate originally keyed on the pkgmap
+> **Re-key (2026-07-23).** The gate originally keyed on the pkgmap
 > **pathnames** `/stand/unix` + `/stand/boot2.boot`. That was wrong: **stock `core` ships
 > those same members as original Amix content** and has always been in the (LAN-private)
 > catalog, so the pathname gate condemned every regen of the real 32-row catalog — and the
@@ -124,20 +124,20 @@ does not touch the RDB, and it does not write the raw boot slice — a package i
 never brick the boot chain.
 
 Making the installed kernel **bootable** is a separate, gated step owned by **`amix-installng`
-(`updbootpart`, W6-I)**: framing `boot1 + boot2 + unix` into the RDB `UNI\0` boot slice — a
+(`updbootpart`)**: framing `boot1 + boot2 + unix` into the RDB `UNI\0` boot slice — a
 raw-device write pkgadd never performs. That step re-runs `boot2-sha-gate` (refuse
 `5ab360b1…`) and `rootdev-assert` before the write and `bootchain-verify` after it. Any
 rotation/backup of the prior kernel, and the raw reframe itself, are updbootpart's to own —
 **not** the package's.
 
-## 5. Discrepancies with the W6-K draft (kerntools doc amendment owed)
+## 5. Discrepancies with the build hub's first draft (kerntools doc amendment owed)
 
 Two deliberate corrections vs. `amix-kerntools/docs/kernel-packages.md` as drafted; both
-should be reconciled into that doc at wave close:
+should be reconciled into that doc later:
 
-- **KERNBENCH payload is the slice-proven booting bytes, not the relocunix.** The W6-K draft
+- **KERNBENCH payload is the slice-proven booting bytes, not the relocunix.** The build hub's first draft
   staged KERNBENCH as the ET_REL `relocunix` representation (`sum -r 42265`, 1 577 468 B).
-  Per the W6-U bench probe, the bytes that actually **boot** (pushed to `/stand`,
+  Per the bench probe, the bytes that actually **boot** (pushed to `/stand`,
   stock-`makeiblk`-framed, cold-booted ×2) are `sum -r 45473`, 1 252 347 B. These are two
   representations of the **same** kernel; the package ships the proven-booting slice bytes,
   so `KSUM_R` and the `VERSION` REV are **45473**, not 42265. Recorded in
@@ -160,15 +160,15 @@ should be reconciled into that doc at wave close:
   carrying either package; clean redistributable staging passes. Regression-locked as
   `tools/repo/tests/run-tests.sh` T13.
 
-## 7. P5.4 re-mints r1–r3 (2026-08-06/07) — HISTORY, superseded by r4 (§8)
+## 7. Re-mints r1–r3 (2026-08-06/07) — HISTORY, superseded by r4 (§8)
 
 > **Not current.** This section records the r1–r3 mints as they stood on 2026-08-07.
 > The current identities are the **r4** pair in **§8** (`49667`/`60364`, 2026-08-16).
 > r3 is superseded **additively** — it was never defective and its `.pkg` pair stays
 > valid-in-place — so "current" below should be read as "current at r3".
 
-The **P5.4 kernel rebuilds** (the `z3660eth` major **48→51** renumber and the `aen`
-security patch actually in the link) supersede the W6-P identities. Same package names, same
+The **2026-08-06 kernel rebuilds** (the `z3660eth` major **48→51** renumber and the `aen`
+security patch actually in the link) supersede the first identities. Same package names, same
 three-object payload, same rootdev/`CONFIG`, same private-flag mechanics (§3, unchanged);
 what moves is the `/stand/unix` bytes, `KSUM_R`, `VERSION`, and — for `KERNBENCH` — the
 `KMIX`, which **gains `z3660eth`**. Three mints happened (r1 2026-08-06, quarantined;
@@ -176,8 +176,8 @@ r2 2026-08-06, superseded; **r3 2026-08-07, current at the time**):
 
 | PKG | supersedes (never deploy) | **`VERSION` (r3)** | `sum -r` | size | md5 |
 |-----|-----------|--------------------|----------|------|-----|
-| `KERNBENCH` | r2 `53963-2026.08.06`; r1 `45343-2026.08.06` (quarantined); W6-P `45473-2026.07.23` (kept) | **`64049-2026.08.07`** | 64049 | 1 585 656 B | `3df0a0d5045edc106857a8ea83ede7ad` |
-| `KERNZ3660` | r2 `14821-2026.08.06`; r1 `05929-2026.08.06` (quarantined); W6-P `00961-2026.07.23` (kept — last metal-validated before the r3 calibration) | **`45833-2026.08.07`** | 45833 | 1 586 680 B | `150d7c5a8262e6c466ab1f1c54d18edd` |
+| `KERNBENCH` | r2 `53963-2026.08.06`; r1 `45343-2026.08.06` (quarantined); first `45473-2026.07.23` (kept) | **`64049-2026.08.07`** | 64049 | 1 585 656 B | `3df0a0d5045edc106857a8ea83ede7ad` |
+| `KERNZ3660` | r2 `14821-2026.08.06`; r1 `05929-2026.08.06` (quarantined); first `00961-2026.07.23` (kept — last metal-validated before the r3 calibration) | **`45833-2026.08.07`** | 45833 | 1 586 680 B | `150d7c5a8262e6c466ab1f1c54d18edd` |
 
 Payload sources (provenance siblings beside each artifact, mirrored into the staged
 `build/kernel-packages/{bench,onbox}/unix.provenance`):
@@ -185,22 +185,22 @@ Payload sources (provenance siblings beside each artifact, mirrored into the sta
 dir, manifest `provenance.txt` + `gates.tsv`) and
 `amix-kerntools/work/kernel-packages/p54r3-combined/unix` (KERNZ3660).
 
-> **POISONED first mint (same day, 2026-08-06).** The first P5.4 successors —
+> **POISONED first mint (same day, 2026-08-06).** The first successors —
 > `KERNBENCH 45343-2026.08.06` (1 585 284 B) and `KERNZ3660 05929-2026.08.06` (1 586 308 B) —
-> were minted from the Wave-1 build batch that had **silently linked `amix-cdfs`'s
+> were minted from the 2026-08-06 build batch that had **silently linked `amix-cdfs`'s
 > unvalidated `upstream-sync-2026-07` `libcdfskern.o`** (95 826 B, md5 `a01c7396…`; the
-> amix-cdfs tree sat on the sync branch). On metal (M-RUN4) that batch's installed kernel
+> amix-cdfs tree sat on the sync branch). On metal that batch's installed kernel
 > **panicked the remount canary** in one cycle (Bus Error, fault addr `482F87AC` — the cdfs
-> corruption class); Packet D formally FAILED and the sync line is frozen. Those identities
+> corruption class); the metal test formally FAILED and the sync line is frozen. Those identities
 > must **never be deployed**: their `.pkg` files are quarantined out of every `*.pkg` glob at
 > `build/kernel-private/POISONED/*.pkg.POISONED` (README beside them), kept for forensics
 > only. The r2 rebuilds carry the **metal-proven `8de83cf`-line cdfs** (`libcdfskern.o`
 > 96 126 B, md5 `80635a1b…`, `sum -r` 52157), now **pin-enforced at staging** by kerntools'
 > `fstypes.conf` md5 provenance pin (kerntools `2ec2b19`; build logs record "(pin OK)").
 > Record: `amix-kerntools/docs/kernel-packages.md` §4a-bis;
-> `amix-cdfs/docs/upstream-rebase-plan.md` (Packet D / §5.1).
-> **Correction (2026-08-07, P5.4 attribution revision).** The causal story above is
-> superseded. The M-RUN4 panic mechanism was the cdfs **stack-sdcom defect** (see the r2
+> `amix-cdfs/docs/upstream-rebase-plan.md` (§5.1).
+> **Correction (2026-08-07, attribution revision).** The causal story above is
+> superseded. The metal-run panic mechanism was the cdfs **stack-sdcom defect** (see the r2
 > record below; fixed in `amix-cdfs` `main` @ `9360542`), which was present in **both**
 > cdfs lines at the time — **not** the `upstream-sync-2026-07` content per se (the sync
 > line is exonerated for the panics), and **not** the cross toolchain. The r1 quarantine
@@ -230,14 +230,14 @@ dir, manifest `provenance.txt` + `gates.tsv`) and
 > **both** r3 kernels — so both r3 kernels are now metal-validated (`00961` was the last
 > metal-validated kernel until then).
 
-- **The §5 slice-vs-relocunix representation split is dissolved.** W6-P shipped KERNBENCH as
+- **The §5 slice-vs-relocunix representation split is dissolved.** The first mint shipped KERNBENCH as
   the slice-proven booting bytes because they *differed* from the relocunix representation.
-  The P5.4 bench builds proved `/stand/unix` on the golden build box **== the gated relocunix
+  The 2026-08-06 bench builds proved `/stand/unix` on the golden build box **== the gated relocunix
   BYTE-EXACT** (pulled length-gated, box `sum -r` == host on the r2 and r3 builds alike), so both packages now ship the
   gated **ET_REL relocunix bytes verbatim** — the representation KERNZ3660 has always
   shipped — and `KSUM_R`/`REV` = the relocunix `sum -r`. §5's first bullet is historical.
 - **Predecessors kept, not destroyed:** `KERNBENCH-45473-2026.07.23.pkg`,
-  `KERNZ3660-00961-2026.07.23.pkg` (July, W6-P) and the superseded r2 pair
+  `KERNZ3660-00961-2026.07.23.pkg` (July, the first mint) and the superseded r2 pair
   `KERNBENCH-53963-2026.08.06.pkg` / `KERNZ3660-14821-2026.08.06.pkg` remain in
   `build/kernel-private/kernel/` beside the r3 successors (the r1 pair is quarantined in
   `../POISONED/`). `00961` was the last **metal-validated** kernel until the 2026-08-07
@@ -256,11 +256,11 @@ dir, manifest `provenance.txt` + `gates.tsv`) and
   the normal catalog build refuses rc 3 with **no catalog written**. Suite: repo tools
   94/94 (T13 included).
 
-## 8. P5.4 r4 (2026-08-16) — the full-regeneration-batch mint
+## 8. r4 (2026-08-16) — the full-regeneration-batch mint
 
 **r4 is additive, not a retraction.** r3 (`64049`/`45833`, §7) was **not** defective — it is
 metal-green from the 2026-08-07 calibration and its `.pkg` pair stays **valid-in-place** in
-`build/kernel-private/kernel/` as the previous line. What r4 adds is the whole P5.4
+`build/kernel-private/kernel/` as the previous line. What r4 adds is the whole
 regeneration batch that accumulated after r3 was cut, built as **one line**: the bench kernel
 was linked from the *same* patched image the combined build produced, so both r4 kernels
 carry byte-identical batch inputs.
@@ -291,7 +291,7 @@ manifest `provenance.txt` + `gates.tsv`) and
 | **`z3660scsi` direct map** | `amix-z3660scsi` `8293cdc` — **never flown before r4** | symbol `z3660_direct_map`; direct arm sets the flag and does plain window arithmetic with **no `sptalloc` call**; `sptalloc` arm retained. Combined kernel only |
 | **`z3660net` direct map** | `amix-z3660net` `b89c5d2` | symbol `z3660eth_direct_map`; same shape. With the row above, **98 sptmap pages** (33 + 65) return to the map |
 | **cdfs errno de-laundering** | `amix-cdfs` `e0ef11a`; pin @ kerntools `811dd0c` | `exp` md5 `673cd9f43a928d0e57e3a9c32cecb9a4`, 96 366 B, `sum -r` 56869; both build logs record "(pin OK)" |
-| **`z3660eth` major 51** | source-side since P5.2 | baked **binary-side**: `(0xada4 − 44 − 0xa31c)/52 = 51` exactly, stride corroborated by `(cdevcnt − cdevsw)/52 = 70 = CDEVSIZE` |
+| **`z3660eth` major 51** | source-side since the earlier rebuild | baked **binary-side**: `(0xada4 − 44 − 0xa31c)/52 = 51` exactly, stride corroborated by `(cdevcnt − cdevsw)/52 = 70 = CDEVSIZE` |
 | a3091/a2091 start-queue lifecycle fix | `amix-a4091` `be2f5e3` | rode in for free — kpatch read the golden's stale `.kprev` and re-established both from pristine stock (`4 target(s) checked, 3 applied (1 already present)`) |
 
 > **★ `KMIX` change — `support-stock` is RETIRED from the `KERNBENCH` line.** The r4 bench
@@ -306,7 +306,7 @@ manifest `provenance.txt` + `gates.tsv`) and
 
 ### Validation status at the r4 mint
 
-- **`KERNZ3660` 60364 is METAL-PROVEN** (2026-08-15, P5.4 R3): the
+- **`KERNZ3660` 60364 is METAL-PROVEN** (2026-08-15, r3): the
   `updbootpart` reframe was byte-clean, **two** cold power-to-network boots (~270 s each),
   and `adb` read `z3660_direct_map = 1` **and** `z3660eth_direct_map = 1` live on the
   hardware — so the 98 reclaimed sptmap pages are hardware fact, not a gate result.
