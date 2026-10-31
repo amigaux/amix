@@ -7,8 +7,8 @@ The X Window System, release 6.3, under `/opt/amix/X11R6`:
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
-**X needs an FPU**: a 68030 with a 68881/68882, or a full 68040 or 68060. LC040/LC060 cannot run it
-until FP emulation on LC parts exists.
+**X needs an FPU or the kernel's FP emulation** (68LC040/68LC060: emulated, slow, untested on 1.1). A
+68030 with a 68881/68882, or a full 68040 or 68060, runs it at full speed.
 
     sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
