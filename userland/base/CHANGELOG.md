@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — dhcpc and dlpi-mac built with GCC 14; inittab(4) (5520414, 63812ca)
+
+dhcpc and dlpi-mac are built with GCC 14 (gcc14-cross-amix b51ff39, -m68020-60 -mno-strict-align) against the stock
+libraries only: NEEDED libnsl.so and /usr/lib/libc.so.1, no RPATH, nothing from /opt/amix (T-56 D6). dhcp-client 1.0-2,
+amix-base 1.0-7. inittab(4): our page for the inittab amix-base ships (the format, the shipped entries, why the dlm line
+comes first); amix-base 1.0-8. E1 two boots PASS: the S1 checks and the S2 boot path with the GCC 14 binaries.
+
 ## 2026-10-31 — devnodes, D-N21's boot step; link.d's major column optional (41f4274, 35aab99)
 
 devnodes (/etc/init.d/devnodes = rc2.d/S20devnodes, devnodes(1M)) re-creates a missing /dev node from its c/b record in
