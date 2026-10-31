@@ -196,7 +196,7 @@ a4091init()
  * length is derived from the opcode group code; data DMAs straight into cp->addr
  * (identity VA==PA).  READ path (DATA_IN) only; writes (DATA_OUT) need a SCRIPTS
  * branch (deferred).  Still 'nopoll' (single ISTAT read): the emulated target
- * answers instantly, and a poll loop currently breaks the kernel boot (NOTES S12).
+ * answers instantly, and a poll loop currently breaks the kernel boot.
  */
 bool
 a4091queue( c, cp)

@@ -4,7 +4,7 @@
 #
 #   make -C module            both lines, both modules: build/<line>/mod.d/a4091
 #                             and build/<line>/mod.d/a4kt710 (module/a4kt710/,
-#                             the A4000T onboard 53C710, S5-06), each checked
+#                             the A4000T onboard 53C710), each checked
 #                             by the kit's modfix and modcheck.py
 #   make -C module k30        one line (or k46)
 #   make -C module clean

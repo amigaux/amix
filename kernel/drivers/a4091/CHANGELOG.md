@@ -23,7 +23,7 @@ old→new map in docs/history-map.txt (tip 9a2753a → 0ede9f0). privacy-check -
 A stale object without the C4-2 v6 §8.1 gate had been checked and reported; the mint was built fresh and is correct (k46 95bebecb,
 k30 e65b4f7d). The host tests compile the source directly and were valid; re-run from clean, all pass.
 
-## 2026-10-27 — S5-06: a4kt710, the A4000T onboard NCR 53C710 as a second module target of the A4091 driver (6cc01e4, d9fe9f7, e9a0257, a74708e)
+## 2026-10-27 — a4kt710, the A4000T onboard NCR 53C710 as a second module target of the A4091 driver (6cc01e4, d9fe9f7, e9a0257, a74708e)
 
 mobo:a4000t-710, rank mobo. Its gate is C4-2 v6 §8.1: the running Kickstart's "NCR scsi.device" cold-start tag (or declared=1),
 then AGA, then a read-only fingerprint; otherwise ENXIO with nothing under $DD0000 touched. modcheck ok on k46/k30; host 12/12
@@ -32,29 +32,29 @@ per line, mutation-checked; the a4091 module and the static objects unchanged.
 ## 2026-10-27 — a4091 module 1.0.0-5: a selection timeout is silent (9dfdf5b)
 
 An absent id answering a bus scan (rc -1) is counted in a4091_kstat.seltimeout and no longer traced; the installer's source probe
-and disk scan had filled the k30 console with "A4091 slow" lines (rd1h E955; the gate traced any failed command, identical on both
+and disk scan had filled the k30 console with "A4091 slow" lines (the gate traced any failed command, identical on both
 lines). Slow polls, the poll bound, phase errors and short-read recoveries still trace; no debug param added. Host 18/18 per arm,
 mutation-checked; modcheck ok k46 (5524 B, 8655e87a) / k30 (4532 B, 6a6b6b3c); static objects unchanged.
 
 ## 2026-10-27 — a4091 module 1.0.0-4: the WRITE/TUR sync runs over a clear line, not the status line (3ec2ecd, 21d3bac)
 
-Bench N109's NO-SENSE retries under dma_forcebounce: the cache-clearing sync ran over the chip-written status line, so a bounced
+NO-SENSE retries on k30 under dma_forcebounce: the cache-clearing sync ran over the chip-written status line, so a bounced
 FROM complete copied stale bytes over the status. The area gains a 16-byte clear line nobody writes (1348 B) and the sync runs
 there. The host mock models the hook (GOOD lands, then 0x5a copied back): red on 1.0.0-3, green now, 17/17 per arm,
 mutation-checked. modcheck ok k46 (5476 B, 3d8cc066) / k30 (4492 B, 69929d09); static objects unchanged. E6 marked passed.
 
 ## 2026-10-27 — a4091 module 1.0.0-3: the attach lines name the board, not a card (aa4c278)
 
-sd assigns the card only after registration (Bench N106: the Z3660 ranked first made the A4091 card 1 after the module had
+sd assigns the card only after registration (the Z3660 ranked first made the A4091 card 1 after the module had
 printed "card 0"), so the k46 attach lines say `a4091: board N at …`; RTH1/kinfo name the card. The static strings are unchanged
-(one macro per message). k46 object 54405c68; k30 byte-identical to 1.0.0-2. Host 16/16 per arm. E1 (N105/N105b) and E2 (N106)
+(one macro per message). k46 object 54405c68; k30 byte-identical to 1.0.0-2. Host 16/16 per arm. E1 and E2
 marked passed in the README.
 
 ## 2026-10-27 — a4091 module: the refused arm also calls dma_complete (drv_prep == drv_cmpl)
 
 dma_complete with nothing prepared only counts cmpl_noprep on both providers (dlm), so the refused arm completes too.
 Host 16/16 per arm; modcheck ok k46.1.2 (5492 B, ef8cd0dc) / k30.1.2 (4484 B, adbc4e47); static objects unchanged. Still 1.0.0-2
-(1.0.0-2 is unminted; it mints in the -79/-14 wave).
+(1.0.0-2 is unminted; it mints with the -79/-14 kernel cuts).
 
 ## 2026-10-27 — a4091 module 1.0.0-2, C4-5 v5 (0c00bc9, 7ad5299, 53bebc5)
 
@@ -64,7 +64,7 @@ prepare/complete before the status read (the k30 write-through cache), counted i
 ident+CDB, bounce). modcheck ok k46.1.2 (5476 B, 2ba85168) / k30.1.2 (4468 B, fe163b4e); host tests 16/16 per arm,
 mutation-checked; static objects unchanged. README: E6 with dma_forcebounce, E6b the pool-miss EIO row.
 
-## 2026-10-27 — S4-31 tests: test/host and the module README's test matrix (caa35b5, 23e34ba)
+## 2026-10-27 — tests: test/host and the module README's test matrix (caa35b5, 23e34ba)
 
 test/host (new): the real a4091-wr.c with -DA4091_MODULE on host gcc, mocks for autocon, the two map arms, sd_register and the
 five DMA names; 15/15 cases per line: registrations, A4092/A4770 identities, two-board sd order (an A4092 below an A4091 is
@@ -72,12 +72,12 @@ card 0), 4-board cap, ENXIO/ENOMEM/dead-board/refused-registration paths, _halt 
 mutation-checked. README matrix: H1/H2, emulation E1–E6 (k46 -78+; A4092/A4770 cannot be emulated — amiberry takes the board
 id from a byte-swapped ROM), metal M1–M5. Static pins untouched.
 
-## 2026-10-27 — S4-31: the A4091/A4092/A4770 root-class module (d9ee8d7, a7f7fea)
+## 2026-10-27 — the A4091/A4092/A4770 root-class module (d9ee8d7, a7f7fea)
 
 -DA4091_MODULE turns a4091-wr.c into module `a4091` (C4-2 v3 §8, C4-5 v3): the chip-visible statics move to one 1328 B
 dma_alloc area (SCRIPTS, DSA table, ident/CDB/status/msg, the 1040 B bounce), the data address armed with dma_addr(r, pa);
 autocon over zorro:0202:54, c0de:01, c0de:02, up to four boards; polled, rank zorro, _halt = a4091init per board. modcheck
-ok on k46.1.2 (5324 B, 00469cdf) and k30.1.2 (4316 B, 856823d6); k30 _load returns ENOMEM until S4-62 piece 2. Static objects
+ok on k46.1.2 (5324 B, 00469cdf) and k30.1.2 (4316 B, 856823d6); k30 _load returns ENOMEM until the k30 DMA provider's pool lands. Static objects
 unchanged (030 b5042e96, 040 c9f0e467, --d42 7d75ab42). Not yet run on any kernel (needs kern46m -78's symbol block).
 
 ## 2026-10-13 — Publication scrub before the first push since August (05dffa2)
@@ -87,9 +87,9 @@ internal file (the 2026-09-26 "before any push" to-do below is done). Docs and t
 letter numbers and process wording made generic; README names the sibling repos the 040/060 build expects.
 Objects unchanged (030 b5042e96, 040 c9f0e467, 040 --d42 7d75ab42).
 
-## 2026-10-05 — A4-24: re-arm the bus reset after a stuck command (a0c99a6)
+## 2026-10-05 — re-arm the bus reset after a stuck command (a0c99a6)
 
-A4-24: after a stuck command (poll-bound timeout, or err_phase with the target still holding BSY, e.g. a 512-byte dd
+After a stuck command (poll-bound timeout, or err_phase with the target still holding BSY, e.g. a 512-byte dd
 against a 2048-byte CD unit) the driver re-arms its once-per-card SCSI bus reset, so the next command clears the bus
 instead of the card staying wedged; counter a4091_rearm_n. Objects 030 b5042e96, 040 c9f0e467, 040 --d42 7d75ab42.
 
@@ -99,24 +99,24 @@ D42 on metal: the verdict is "defensive on the Z3660 today" (SNOOP, write-throug
 conditions that make it load-bearing; tool src/d42wcell.c; the 68040/68060 arm carried a root filesystem on an
 A4092.
 
-## 2026-10-03 — A4-21/A4-22/A4-23, the A4000T onboard-710 note, D42 on metal (062e514..eaaa66f)
+## 2026-10-03 — slow-poll gate, per-card bus reset, support.c manufacturer shift, the A4000T onboard-710 note, D42 on metal (062e514..eaaa66f)
 
-A4-21: the "A4091 slow" print is gated on a poll threshold (a4091_slow_poll; a4091_maxpoll high-water). A4-22: one SCSI
-bus reset per card before its first command, closing the ROM-driver SYNC hazard (a4091_busreset_n/_to). A4-23: unsigned
+The "A4091 slow" print is gated on a poll threshold (a4091_slow_poll; a4091_maxpoll high-water). One SCSI
+bus reset per card before its first command, closing the ROM-driver SYNC hazard (a4091_busreset_n/_to). Unsigned
 manufacturer shift in support.c.patch (stock autocon never matched ids >= 0x8000). Docs: the A4000T onboard-710 design
 note (T0 series: an uninitialised 53C710 window hangs the CPU under the Z3660; presence = declaration + ROM initialisation;
 T0b decoding with the lane rule, the SXFER byte and the pass criteria); D42-CALL-SHAPE metal section: the DMA_WIP CPLD
 asserts SNOOP, so DMA into Z3660 RAM is read-coherent in hardware and only the write half can show the seam; A1 GREEN on
 metal with a byte-exact 32 MiB compare against host truth and the control arm.
 
-## 2026-09-29 — A4-18/A4-19: the 040/060 bounce; A4-20 docs
+## 2026-09-29 — the 040/060 bounce; alignment docs
 
 The 040/060 arm bounces any misaligned FROM_DEVICE read ≤ 1 KB (GSIO iobuf, dd sense) through a static
 16-aligned buffer and copies out after dma_complete; a longer one is refused (bounce_toolong). Counters
-bounce_n/bounce_toolong in the kstat block, magic "A4K2" (A4-18). The service is handed the bounced range with a
+bounce_n/bounce_toolong in the kstat block, magic "A4K2". The service is handed the bounced range with a
 length rounded up to 16 bytes and the bounce is zeroed before prepare, so edge_shared == 0 holds by construction and a
-no-data command copies out zeros (A4-19; objects stub 4641f912, --d42 e07c7619; 030 byte-identical). Docs: the 64 KB
-GSIO patch is 030-only; stock iobuf has no alignment guarantee (A4-20).
+no-data command copies out zeros (objects stub 4641f912, --d42 e07c7619; 030 byte-identical). Docs: the 64 KB
+GSIO patch is 030-only; stock iobuf has no alignment guarantee.
 
 ## 2026-09-29 — the D42 contract, the chipset gate, the card-order fact
 
@@ -124,9 +124,9 @@ support.c.patch detects AGA by the Agnus id low nibble (NTSC ECS is not AGA; fou
 
 ## 2026-09-29 — support.c.patch: AGA by the Agnus id low nibble (NTSC ECS is not AGA)
 
-The chipset gate tested `id >= 0x22`, which misread an NTSC ECS Agnus (0x30) as AGA and would skip an NTSC A3000's internal SCSI probe (losing its root). It now tests `(id & 0x0F) >= 2`. Found by Emre Bastuz's amix-gayle-ide review; the same fix landed in kerntools' W-D7 probe (KT-09b) and amix-z3660scsi (ZS-03).
+The chipset gate tested `id >= 0x22`, which misread an NTSC ECS Agnus (0x30) as AGA and would skip an NTSC A3000's internal SCSI probe (losing its root). It now tests `(id & 0x0F) >= 2`. Found by Emre Bastuz's amix-gayle-ide review; the same fix landed in kerntools' W-D7 probe and amix-z3660scsi.
 
-## 2026-09-28 — A4-11: the 040/060 arm
+## 2026-09-28 — the 040/060 arm
 
 a4091-wr.c gains the 040/060 arm behind -DA4091_KVA (dev_kvmap NCS register pages, autocon via sdcardbase(), D42 record + local stubs, U77 byte-write probe off by default); the 030 build is byte-identical. tools/build-a4091-040.sh builds and gates the object (a4091_040.o c869795f, scan060 CLEAN, G2 2/2). docs/D42-CALL-SHAPE.md is the DMA call-shape proposal sent to the upstream port author. Built, not yet booted.
 
@@ -134,12 +134,12 @@ a4091-wr.c gains the 040/060 arm behind -DA4091_KVA (dev_kvmap NCS register page
 
 - **Legal + NOTICE: the Amix release restriction is lifted** (`2008597`). README no longer describes
   Amix as unlicensed abandonware; it records Amiga Corporation's approval (Mike Battilana, 2026-09-19,
-  confirmed 2026-09-23) and the owner's ruling. The four patches carry 160 verbatim stock lines (135
+  confirmed 2026-09-23). The four patches carry 160 verbatim stock lines (135
   context + 25 replaced), Commodore/AT&T-USL-derived and not under this repo's MIT licence. New
   `NOTICE` lists the four provenances: the MIT original work, the stock patch context, the NetBSD
   ncr53cxxx notice behind `reference/scripts/*.out`, and the per-file licences of the git-ignored
-  a4091-software checkout. Before any push: the README's citation of the workspace CLAUDE.md is
-  replaced by the amigaux.org disclaimer page.
+  a4091-software checkout. Before publication the README's disclaimer citation points at the
+  amigaux.org disclaimer page.
 
 ## 2026-09-01
 

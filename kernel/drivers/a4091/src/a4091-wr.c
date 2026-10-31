@@ -101,7 +101,7 @@
 #define	A4091_PROD	0x02020054	/* AutoConfig: Commodore(0x0202) product 0x54 */
 #ifdef	A4091_A4KT
 /*
- * The A4000T onboard 53C710 (S5-06, docs/A4000T-ONBOARD-710.md section 10): the
+ * The A4000T onboard 53C710 (docs/A4000T-ONBOARD-710.md section 10): the
  * fixed base $DD0000, registers at +0x40 written directly (no write shadow),
  * DCNTL EA (connect _SLACK/_STERM), the host ID from the DIP bank at +0x3000,
  * and the D42 record's ctlid = C2-1's motherboard id 3 (a4000t-710).
@@ -282,7 +282,7 @@ ulong	a4091_resid;		/* DATA_IN short-read FIFO/odd-byte residue (real HW; 0 in e
 uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 
 /*
- * "A4091 slow" console threshold, in ISTAT polls (A4-21).  Under emulation the
+ * "A4091 slow" console threshold, in ISTAT polls.  Under emulation the
  * DMA is instant (poll == 0), but on metal every command spins while the chip
  * works, so the old poll > 0 gate printed one line per I/O.  The default is 1/8
  * of the 8,000,000 poll bound: one Zorro III ISTAT read costs roughly 0.3-1 us,
@@ -304,7 +304,7 @@ ulong	a4091_maxpoll;
  * Provided by the port's relink, not by stock AMIX:
  *   dev_kvmap(phys, nbytes, cm, flags) / dev_kvunmap(kva, nbytes)
  *                    -- src/devkvmap040.s; cm 0x40 = NCS, flags bit 0 = NOSLEEP.
- *   sdcardbase(card) -- the sd.c shim PO-04 adds: the base autocon() recorded.
+ *   sdcardbase(card) -- the sd.c shim the port's relink adds: the base autocon() recorded.
  * Stock:
  *   bprobe(addr, v)  -- one byte through u_nofault: v < 0 reads, else writes
  *                       the low byte of v; 0 = no fault, 1 = bus error caught.
@@ -354,7 +354,7 @@ extern int	bprobe();
  *                          OFF by default: a refused write that the line's
  *                          u_nofault pad does not catch is a panic.
  *   a4091_dma_off       nonzero: the D42 service sees off != 0 in the record,
- *                          counts, and does no cache op (DL-02's control arm).
+ *                          counts, and does no cache op (the coherence test's control arm).
  */
 long	a4091_bytewrite_probe = 0;
 long	a4091_dma_off = 0;
@@ -440,7 +440,7 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
  * the driver prepares and completes FROM_DEVICE over the CLEAR LINE beside it,
  * a line nobody writes, before it reads the status (C4-5 v5 section 5.4): the
  * k30 complete clears the whole data cache, and should the provider bounce that
- * segment (its dma_forcebounce hook does, Bench N109), the bounce it copies back
+ * segment (its dma_forcebounce hook does), the bounce it copies back
  * lands on the clear line, never on the status byte the chip wrote.
  */
 struct a4091_dmaarea {
@@ -748,7 +748,7 @@ int	card;
 /*
  * 53C710 soft reset + minimal polled-mode init (subset of siopreset, siop.c:800-826).
  * No SCSI/DMA interrupts (we poll).  The SCSI bus reset is a4091_busreset(), once
- * per card (A4-22).
+ * per card.
  */
 static void
 a4091init()
@@ -774,7 +774,7 @@ a4091init()
 }
 
 /*
- * SCSI bus reset, once per card, before its first command (A4-22).  The board's
+ * SCSI bus reset, once per card, before its first command.  The board's
  * AmigaOS ROM may have negotiated synchronous transfer with a target (A4091/A4092
  * DIP SW6 Off); a target keeps that agreement until a bus reset, while this
  * driver always runs asynchronous (SXFER never written, no SDTR).  The soft reset
@@ -789,7 +789,7 @@ a4091init()
  * The first command to each target afterwards gets CHECK CONDITION / UNIT
  * ATTENTION (6/29): dd senses and retries once (one "blk" console line), ct's
  * open starts with REQUEST SENSE, GSIO returns status 2 once to its caller.
- *   a4091_busreset     patchable; 0 skips the reset (the pre-A4-22 behaviour)
+ *   a4091_busreset     patchable; 0 skips the reset (the earlier behaviour)
  *   a4091_busreset_n   resets done;  a4091_busreset_to  line waits that timed out
  *   a4091_rearm_n      resets re-armed by a stuck command (see a4091queue)
  */
@@ -858,7 +858,7 @@ int	card;
  * branch (deferred).  Completion is now a BOUNDED ISTAT poll (a finite spin that
  * still exits for a silent/absent target -- this path is shared with the boot-time
  * SCSI bus scan, so it must not hang on an empty id).  The old "a poll loop breaks
- * the kernel boot" claim is retired: NOTES.md S18 traced the boot-breaker to an
+ * the kernel boot" claim is retired: the boot-breaker was traced to an
  * intermittent (~70%) ld file-write corruption, independent of the poll loop and
  * mitigated by a build-until-stable clean gate.
  */
@@ -1212,7 +1212,7 @@ struct sdcom	*cp;
 	/* The status (C4-5 v5 section 5.4): a FROM_DEVICE complete clears the 030
 	 * data cache; after a WRITE or a TUR none ran, so run one over the clear
 	 * line -- not the status line: a bounced complete copies back over its
-	 * segment (N109) -- before the status and message bytes are read. */
+	 * segment -- before the status and message bytes are read. */
 	if (!(dmadir == DMA_FROM_DEVICE && dlen != 0)) {
 		ulong	spa;
 
@@ -1349,7 +1349,7 @@ char	*params;
 
 #ifdef	A4091_A4KT
 /* ----------------------------------------------------------------------------
- * The A4000T onboard 53C710 target (S5-06; docs/A4000T-ONBOARD-710.md section
+ * The A4000T onboard 53C710 target (docs/A4000T-ONBOARD-710.md section
  * 10): the module a4kt710, .moddata match=mobo:a4000t-710, rank=mobo.  A mobo:
  * key always matches at load, so _load is the gate, and the gate's first rule
  * is absolute: on a Z3660 box any access to $DD00xx hangs the bus for good

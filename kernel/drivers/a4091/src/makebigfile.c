@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /*
  * makebigfile.c -- probe whether the intermittent kernel-image corruption
- * (NOTES s18) is triggered by ld's I/O *pattern* (small buffered writes +
+ * (the D245 boot-breaker) is triggered by ld's I/O *pattern* (small buffered writes +
  * seek-back patching) or is internal to ld.  Builds a ~1.5 MB file with
  * deterministic content using a write-then-seek-and-patch pattern similar to
  * how ld lays down sections then fixes up symtab/relocations.  The content is

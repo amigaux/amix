@@ -36,7 +36,7 @@ $(BUILD)/drv-k46.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(DRVF) -DA4091_KVA -c $(DRV) -o $@
 
-# the a4kt710 target (S5-06): the same source, -DA4091_A4KT, VPOSR from the mock
+# the a4kt710 target: the same source, -DA4091_A4KT, VPOSR from the mock
 $(BUILD)/drv-a4kt-k30.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(DRVF) $(A4KTF) -c $(DRV) -o $@

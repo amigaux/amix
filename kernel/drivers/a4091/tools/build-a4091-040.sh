@@ -2,7 +2,7 @@
 # build-a4091-040.sh -- cross-build the 040/060 arm of src/a4091-wr.c (-DA4091_KVA) and gate it.
 #
 # This is the driver-side proof only.  The kernel relink that consumes the object (sd.c rows,
-# sdcardbase() shim, loop bound, switch rows, init hook, devkvmap040.o) is the port's PO-04
+# sdcardbase() shim, loop bound, switch rows, init hook, devkvmap040.o) is the port's own step
 # (relink-040-a4091.sh in amix-040-060-port); nothing here touches that repository.
 #
 #   sh tools/build-a4091-040.sh [--d42]        # --d42: import dma_prepare/dma_complete

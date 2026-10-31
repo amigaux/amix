@@ -76,7 +76,7 @@ In the "who" column, D means the driver writes the field and the service only re
 
 **Who owns the record.** The controller object owns it. The A4091 keeps one record per sd card in `a4091_dmarec[SDCARDS]`, a global the service or a kmem reader can find by name. The driver fills the identity fields (magic, version, ctlid, unit, off) at attach, before the first transfer. That is the `hat_cm_fb` registration contract: register before first use, never removed. The service never allocates or frees a record.
 
-**The off switch.** The driver copies its patchable knob `a4091_dma_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is DL-02's control arm: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate.
+**The off switch.** The driver copies its patchable knob `a4091_dma_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is the control arm of the emulator coherence test: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate.
 
 **Acceptance invariants** (read by kmem; none of them panics):
 
@@ -91,7 +91,7 @@ In the "who" column, D means the driver writes the field and the service only re
 
 The A4091 driver is **synchronous and polled**. `a4091queue()` builds the DSA table, arms SCRIPTS, then polls `ISTAT` for `SIP|DIP` (at most 8,000,000 reads). `a4091intr()` is empty. So "after its interrupt" means after the polled `ISTAT` shows the chip halted.
 
-1. Build the DSA table (command, status and message buffers live in kernel `.data` under DTT0's cache-inhibited identity; A4-12 audits that).
+1. Build the DSA table (command, status and message buffers live in kernel `.data` under DTT0's cache-inhibited identity).
 2. `prepare(r, cp->addr, cp->nbyte, cp->reading ? FROM : TO)`. Skipped (counted in `drv_zero`) when `nbyte == 0`.
 3. `WR32(DSP)` arms SCRIPTS. Poll `ISTAT`.
 4. On a short read (phase mismatch in DATA_IN), the FIFO is drained and SCRIPTS is re-launched at the phase dispatch. That moves only STATUS/MSG into `.data`, not a new segment, so it needs no second prepare.
@@ -122,26 +122,26 @@ B2's rule still holds: the CPU must not touch the owned rounded range until comp
 
 ## GSIO alignment
 
-The port author asked whether GSIO can actually hand the A4091 a misaligned buffer. **Yes, and it is not the only path that does.** Sources are the Model-B sysroot the 040 arm builds against (`amix-040-060-port/build/sysroot-modelb/usr/sys/amiga/alien/`).
+Can GSIO actually hand the A4091 a misaligned buffer? **Yes, and it is not the only path that does.** Sources are the Model-B sysroot the 040 arm builds against (`amix-040-060-port/build/sysroot-modelb/usr/sys/amiga/alien/`).
 
 1. **GSIO never passes a user buffer.** `scsi.c:gsioctl` copies the caller's data into a static kernel buffer and hands the driver that: `static uchar iobuf[1024]` (`scsi.c:22`), `sdcom.addr = iobuf` (`scsi.c:40`), copyin before / copyout after (`scsi.c:37`, `:51`). So user-buffer alignment is irrelevant, but:
    - **length** is checked only as `nbyte % DMA_GRANULARITY` with `DMA_GRANULARITY 4` (`scsi.c:10`, `:32`) and `nbyte <= 1024` (`scsi.c:33`; `scsi.o` compares `#1024`). An INQUIRY of 36 bytes ends at `iobuf + 0x24`, not on a line boundary.
-   - **start**: `iobuf` sits at `.bss + 0x28` of `scsi.o` (after the static `sdcom`, 0x28 bytes; `.bss` aligned 2**2). The kernel's `.bss` is aligned 2**3 (`unix-040-fpe` relocatable), so `iobuf` is 8-aligned at best, 16-aligned only by luck of the final load address. Measured (DL-02e): stock `iobuf` is a char array at `.bss+0x4820` with no padding, landing 4 mod 16 in the shipped KD060-Z, 8 in the p15 D42 link and 0 in p16/p17, so the misaligned case occurs in shipping kernels.
+   - **start**: `iobuf` sits at `.bss + 0x28` of `scsi.o` (after the static `sdcom`, 0x28 bytes; `.bss` aligned 2**2). The kernel's `.bss` is aligned 2**3 (`unix-040-fpe` relocatable), so `iobuf` is 8-aligned at best, 16-aligned only by luck of the final load address. Measured: stock `iobuf` is a char array at `.bss+0x4820` with no padding, landing 4 mod 16 in the shipped KD060-Z, 8 in the p15 D42 link and 0 in p16/p17, so the misaligned case occurs in shipping kernels.
    - Neighbours: the tail edge line holds `iobuf`'s own unused bytes; the head edge line (when misaligned) holds the tail of the static `sdcom` (`addr`, `nbyte`, `card`, `unit`, `intr` at +0x14..+0x27). Nothing writes those during the transfer: `gsioctl` sleeps, and the A4091 writes `cp->status`/`cp->okay` (+0x06/+0x05, a different line) only **after** `dma_complete` (`a4091-wr.c`, the `A4091_KVA` block before `(*cp->intr)(cp)`). So the edge is benign in fact, but `edge_shared` counts it.
 2. **dd's REQUEST SENSE is misaligned by layout.** `dd.c:getsense` reads 16 bytes FROM_DEVICE into `dp->sense` (`dd.c:272-280`). `sense[16]` sits at +0x34 in `struct dd` (`dd.o`: `pea %a2@(52)`), and `ddtab[SDCARDS][SDUNITS]` has a 0x44 stride (`dd.o` `.bss` 0x440 = 2 x 8 x 0x44). 0x44 is 4 mod 16, so the sense buffer's alignment cycles through four residues across units: at most one unit in four is line-aligned. The tail edge line holds the **next** unit's `state`/`bhead`/`btail`, which `ddstrategy` and `ihandle` write; for `ddtab[0][7]` that is card 1's unit 0, which another controller's completion can reach from interrupt context. This is the one real exposure found.
 3. **Block and raw I/O are aligned.** `dd.c:startio` sends `bp->b_bcount` (whole 512-byte blocks, `dd.c:255-258`). Raw character I/O does not reach the driver with user pages: `uiophysio -> breakup -> amiga_dma_pageio` (`dd.c:83`, `:137`) stages each chunk through a kernel buffer from `ngeteblk( NBPP)` (`physdsk.c:43`, copyout/copyin at `:75`, `:84`), so no user alignment reaches the driver. The start alignment of that buffer, and of buffer-cache buffers, comes from the kernel allocator and is not audited here; lengths are whole blocks.
 
-**Consequence.** Unbounced, `edge_shared == 0` could not hold on this line: every sense on most units and every GSIO transfer whose length is not a multiple of 16 (INQUIRY, 36 bytes) would count. The driver bounces instead (A4-18, 2026-09-29), below.
+**Consequence.** Unbounced, `edge_shared == 0` could not hold on this line: every sense on most units and every GSIO transfer whose length is not a multiple of 16 (INQUIRY, 36 bytes) would count. The driver bounces instead (2026-09-29), below.
 
-## Bounce (A4-18, implemented)
+## Bounce (implemented)
 
 The 040/060 arm (`-DA4091_KVA` only; the 030 build is byte-identical) bounces misaligned reads itself. The sd layer and the service contract are unchanged.
 
 - **When.** A `FROM_DEVICE` transfer with `nbyte > 0` whose `pa` or `pa + len` is not on a 16-byte boundary. `TO_DEVICE` never bounces: complete does no cache op for it, so no edge arises. Block and raw I/O are whole aligned blocks and never bounce.
 - **Where.** `a4091_bounce[1024 + 16]`, static `.bss` in the driver object (never a stack buffer), used from its first 16-byte boundary. Its address is its bus address by the same kernel-`.data` identity the DSA table (`&ds`) relies on.
-- **How.** The DSA data pointer, `prepare` and `complete` all get the bounce's address. The SCSI transfer length (`ds.data1len`) is the caller's; the length passed to `prepare`/`complete` is the caller's **rounded up to a multiple of 16** (A4-19), so both edges of the serviced range sit inside the driver's own aligned buffer and `edge_shared` stays 0 by construction (the buffer has the headroom: start offset <= 15 plus <= 1024). After `complete` (so after the final `cinvl`) and before `sdcom.intr`, the driver copies `len` bytes to `sdcom.addr`.
-- **Copy-out rule (A4-19).** The driver clears the rounded bounce range before `prepare` (whose `cpushl` writes the zeros back to memory). A command that transfers fewer bytes than requested, or none (TEST UNIT READY issued through GSIO with a non-zero `nbyte`), therefore copies out zeros for the untransferred tail, never a previous command's bytes. The exact transferred count is not used: the SCRIPTS does not record whether `DATA_IN` ran, and `DBC` after a normal completion belongs to the last STATUS/MSG move, so it is only meaningful on the phase-mismatch path. No `bounce_short` counter was added. The copy writes through `sdcom.addr` as a kernel pointer: every range that can bounce is a kernel static (GSIO `iobuf`, `dd` sense), which are identity-mapped.
-- **Too long.** A misaligned `FROM_DEVICE` range longer than 1 KB is **refused**, never passed through unaligned: `bounce_toolong` counts it, one console line names it, and the command completes with `status 0xff`, `okay FALSE` (the same hardware-error result as an unmapped card; `sdcom` has no sense to fill). No path on this line produces one today (GSIO caps at 1024). The 64 KB GSIO buffer of `scsi.c.patch` exists only in the 030 cross-links that include this repo (e.g. K030-A4091-IDE); the 040/060 port relinks the stock `scsi.o`, so this 1 KB limit and that buffer never meet in one kernel, by build recipe rather than design (DL-02e).
+- **How.** The DSA data pointer, `prepare` and `complete` all get the bounce's address. The SCSI transfer length (`ds.data1len`) is the caller's; the length passed to `prepare`/`complete` is the caller's **rounded up to a multiple of 16**, so both edges of the serviced range sit inside the driver's own aligned buffer and `edge_shared` stays 0 by construction (the buffer has the headroom: start offset <= 15 plus <= 1024). After `complete` (so after the final `cinvl`) and before `sdcom.intr`, the driver copies `len` bytes to `sdcom.addr`.
+- **Copy-out rule.** The driver clears the rounded bounce range before `prepare` (whose `cpushl` writes the zeros back to memory). A command that transfers fewer bytes than requested, or none (TEST UNIT READY issued through GSIO with a non-zero `nbyte`), therefore copies out zeros for the untransferred tail, never a previous command's bytes. The exact transferred count is not used: the SCRIPTS does not record whether `DATA_IN` ran, and `DBC` after a normal completion belongs to the last STATUS/MSG move, so it is only meaningful on the phase-mismatch path. No `bounce_short` counter was added. The copy writes through `sdcom.addr` as a kernel pointer: every range that can bounce is a kernel static (GSIO `iobuf`, `dd` sense), which are identity-mapped.
+- **Too long.** A misaligned `FROM_DEVICE` range longer than 1 KB is **refused**, never passed through unaligned: `bounce_toolong` counts it, one console line names it, and the command completes with `status 0xff`, `okay FALSE` (the same hardware-error result as an unmapped card; `sdcom` has no sense to fill). No path on this line produces one today (GSIO caps at 1024). The 64 KB GSIO buffer of `scsi.c.patch` exists only in the 030 cross-links that include this repo (e.g. K030-A4091-IDE); the 040/060 port relinks the stock `scsi.o`, so this 1 KB limit and that buffer never meet in one kernel, by build recipe rather than design.
 - **Counters.** `a4091_kstat` gained `bounce_n` (transfers bounced) and `bounce_toolong` after `bw_mask[]`; its magic moved to `0x41344b32` "A4K2". The DMAR record is unchanged (version 2).
 - **Concurrency.** One buffer serves every card. `a4091queue` runs one command to completion before returning (polled `ISTAT`, no sleep, `a4091intr` empty) and already shares `ds`, `cdb_buf` and `status_buf` across cards; the copy-out finishes before the sd callback can re-enter the driver. Commands cannot overlap on one controller or across controllers, so no per-command flag is needed.
 
@@ -152,7 +152,7 @@ The 040/060 arm (`-DA4091_KVA` only; the 030 build is byte-identical) bounces mi
 - Without `-DA4091_D42`, `a4091-wr.c` defines both entry points as **local stubs**. They do no cache maintenance and leave the service fields untouched. They count `a4091_kstat.stub_prep` / `stub_cmpl`.
 - Attach prints `D42 seam STUB (no cache maintenance)`. A stub kernel is coherent only with the data cache off, which is every emulated cell today. **It must not be taken to metal with a live data cache as a coherence candidate.**
 - With `-DA4091_D42` the object imports `dma_prepare` and `dma_complete`. `tools/build-a4091-040.sh --d42` gates that import set.
-- A coherence verdict comes only from metal (MD-1/MD-4). The emulator shows at most a missing CPUSH/CINV, with the cache kept live (AB-03).
+- A coherence verdict comes only from metal (below). The emulator shows at most a missing CPUSH/CINV, with the cache kept live.
 
 ## Metal, 2026-10-02 (A4000D, Z3660 060, A4092 card 1, KD060-ZA dl4)
 
@@ -160,9 +160,9 @@ What the first metal runs show, and what they do not:
 
 | Run | Seam | Result |
 |---|---|---|
-| A1-dl4, raw reads of LBA 0, 4 MiB and 32 MiB, two boots, copyback (`hat_cm_ram 0x20`) | on | host-true (`sum -r` identical, LBA 0 byte-identical); 38,913 + 4,097 segments, every invariant holds, `edge_shared 0` |
+| dl4, raw reads of LBA 0, 4 MiB and 32 MiB, two boots, copyback (`hat_cm_ram 0x20`) | on | host-true (`sum -r` identical, LBA 0 byte-identical); 38,913 + 4,097 segments, every invariant holds, `edge_shared 0` |
 | control arm, the same reads | **off** (`a4091_dma_off 1`) | **also host-true**; `off_n` = 2 × `drv_prep`, the S fields did not move |
-| MD-1 (2026-10-03): KD060-ZA-c1-u6, root `/dev/dsk/ced0s1` on a ZuluSCSI at id 6 behind the A4092, a full first boot and a clean second boot | on | booted to multi-user both times; prep = cmpl per arm (`0x6EB`/`0xA05`, then `0x382`/`0x7A4`), `drv_prep == drv_cmpl`, `edge_shared` and every must-be-zero counter 0, bus reset 1/0 |
+| Root boot (2026-10-03): KD060-ZA-c1-u6, root `/dev/dsk/ced0s1` on a ZuluSCSI at id 6 behind the A4092, a full first boot and a clean second boot | on | booted to multi-user both times; prep = cmpl per arm (`0x6EB`/`0xA05`, then `0x382`/`0x7A4`), `drv_prep == drv_cmpl`, `edge_shared` and every must-be-zero counter 0, bus reset 1/0 |
 | WRITE cell 1 (2026-10-03): raw writes of a 1 MiB self-locating pattern, region 1 seam on, three regions seam off | on / **off** | all four regions byte-identical on read-back. `dd` never makes the staging buffer's lines resident before `copyin` writes them, so nothing was dirty to push. Cell 2 (a read then a write of different data per chunk, `src/d42wcell.c`) was to be the discriminating run |
 | WRITE cell 2, Part A (2026-10-03): read-only PTE walk of the staging buffers (`kroot040` → VA `0x402BD000` and two neighbours) | n/a | **PTE `0x0FF18019`: CM = 00, write-through** (phys `0x0FF18000`, the pool cell 1's DMA addresses landed in). Neighbours `0x0FF1B019`, `0x0FF91019`, also write-through. Part B was not run, because write-through cannot hold a dirty line |
 
@@ -200,7 +200,7 @@ What the first metal runs show, and what they do not:
   | Page-cache I/O (B_PAGEIO) | `bp_map040.s` ends every mapin with `cpusha bc`, a whole-cache push |
   | GSIO `iobuf` and dd sense | uncached identity memory (DTT0) |
 
-  The seam ran balanced through every run, including MD-1's root filesystem, so it costs nothing and breaks nothing.
+  The seam ran balanced through every run, including the root-filesystem boots, so it costs nothing and breaks nothing.
 - **Why it stays.** It becomes load-bearing as soon as any of those conditions change:
   - the port's planned B2 conversion of `segkmem_alloc` to copyback, which would make the raw staging buffer
     copyback-dirty at DMA time;
