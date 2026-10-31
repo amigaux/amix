@@ -43,6 +43,9 @@ f none /opt/amix/man/4/interfaces 0644 root bin
 f none /opt/amix/man/4/link.d 0644 root bin
 f none /opt/amix/man/4/network-config 0644 root bin
 f none /opt/amix/man/4/rc.inet 0644 root bin
+f none /opt/amix/man/4/profile 0644 root bin
+f none /opt/amix/man/4/profile.d 0644 root bin
+f none /opt/amix/man/4/nodename 0644 root bin
 f none /opt/amix/man/whatis.d/amxbase 0644 root bin
 d none /var/opt 0755 root sys
 d none /var/opt/amix 0755 root sys
