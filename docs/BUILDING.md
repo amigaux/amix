@@ -66,6 +66,13 @@ A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<v
 rebuilds everything and refuses the result if any line of its lock differs
 (`release/README.md`).
 
+`build/dist-proof WORKDIR [COMMIT]` is the proof itself (P-38 S7.2): it clones
+the commit twice, at two different paths under WORKDIR, runs every step in
+each, and compares the two locks; with `LOCK=` each run is also checked
+against the lock of record. A step that exits 3 is a known gap and the run
+goes on; any other failure stops it. `WORKDIR/summary` says what each step
+did. CI runs it by hand as the dist workflow (`docs/ci.md`).
+
 ## out/
 
 ```

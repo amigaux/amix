@@ -1,6 +1,7 @@
 # release
 
-Lock files: the exact inputs and outputs of each release.
+Lock files: the exact inputs and outputs of each release. None is here yet:
+the lock of record for 1.1 is written when the 1.1 set is frozen (P-38 S7.1).
 `release/amix-<version>.lock` is the lock of the promoted candidate, written
 by `make lock` (`build/mklock`) at the end of the make dist that built it
 (P-38 S1.6). A rebuild is proven against it:

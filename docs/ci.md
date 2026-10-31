@@ -89,3 +89,22 @@ Each step is an ordinary command; run it from the top of the repository. The
 host tests need a C compiler, `make`, `python3` and zlib's headers
 (`zlib1g-dev` on Debian and Ubuntu). The kit job needs docker (or podman,
 with `CONTAINER=podman`) and network access to GitHub and the GNU mirrors.
+
+## The dist workflow
+
+`.github/workflows/dist.yml` is the proof of make dist (P-38 S7.2), run by
+hand (workflow_dispatch). It fetches amix-system at its pin, takes the build
+container from the same cache as the kit job (the same key, so either job's
+image serves both), and runs `build/dist-proof`: make dist twice, from two
+clean clones of the commit at two different paths, and the two locks
+compared. Given a lock of record (`release/amix-<version>.lock`, the
+dispatch's `lock` input), each run is also checked against it. A step that is
+not in make dist yet, or a recipe still `[MISSING]`, is a known gap; any other
+failure fails the run. The summary lists each step and the lock's sha256; the
+locks, the step logs and the catalogs are kept as the run's `dist-proof`
+artifact. A cold image build reports its time in the summary. The job's
+limit is 345 minutes (the image build 210, the two make dist runs 120).
+
+The container runs as the runner's uid, which has no name in the image:
+`build/dist.sh` mounts the image's passwd and group with the caller added,
+since the host pkgtools' smoke tests ask `id`.

@@ -342,7 +342,10 @@ clean:
           and "=== make dist: kernel-k30" not in out, out)
 
     fake = os.path.join(tmp, "bin", "docker")
-    write(fake, '#!/bin/sh\nprintf "%s\\n" "$@" > "$DOCKER_ARGS"\n', 0o755)
+    # the image's passwd and group, which name no one but root
+    write(fake, '#!/bin/sh\nif [ "$4" = cat ]; then\n'
+          '\tcase $5 in /etc/passwd) echo "root:x:0:0:root:/root:/bin/sh" ;; /etc/group) echo "root:x:0:" ;; esac\n'
+          '\texit 0\nfi\nprintf "%s\\n" "$@" > "$DOCKER_ARGS"\n', 0o755)
     argf = os.path.join(tmp, "docker.args")
     rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
                   DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test")
@@ -355,6 +358,14 @@ clean:
           "%s:/src" % os.path.realpath(top) in args and "%s:%s:ro" % (gitdir, gitdir) in args
           and "%s:/system:ro" % os.path.realpath(sysdir) in args
           and "AMIX_SYSTEM=/system" in args and "AMIX_IN_CONTAINER=1" in args, " ".join(args))
+    ids = os.path.join(os.path.realpath(top), "out", ".ids")
+    passwd = open(os.path.join(ids, "passwd")).read() if os.path.exists(os.path.join(ids, "passwd")) else ""
+    group = open(os.path.join(ids, "group")).read() if os.path.exists(os.path.join(ids, "group")) else ""
+    check("the calling uid and gid get names: the image's passwd and group, the caller added, mounted read-only",
+          passwd == "root:x:0:0:root:/root:/bin/sh\nbuilder:x:%d:%d::/tmp:/bin/sh\n" % (os.getuid(), os.getgid())
+          and group == "root:x:0:\nbuilder:x:%d:\n" % os.getgid()
+          and "%s/passwd:/etc/passwd:ro" % ids in args and "%s/group:/etc/group:ro" % ids in args,
+          passwd + group + " ".join(args))
     check("and runs the step there, from /src, in AMIX_IMAGE",
           args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))

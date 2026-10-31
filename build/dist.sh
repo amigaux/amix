@@ -100,8 +100,20 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	fi
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
+	image=${AMIX_IMAGE:-amix-toolchain:dist}
+	# the calling user's uid and gid need names in the image (the host
+	# pkgtools' smoke tests ask id(1); a CI runner's uid is not the image's
+	# 1000): the image's passwd and group, plus the caller where absent
+	ids=$out/.ids
+	mkdir -p "$ids"
+	"$tool" run --rm "$image" cat /etc/passwd > "$ids/passwd"
+	"$tool" run --rm "$image" cat /etc/group > "$ids/group"
+	awk -F: -v u="$(id -u)" '$3 == u { f = 1 } END { exit !f }' "$ids/passwd" ||
+		echo "builder:x:$(id -u):$(id -g)::/tmp:/bin/sh" >> "$ids/passwd"
+	awk -F: -v g="$(id -g)" '$3 == g { f = 1 } END { exit !f }' "$ids/group" ||
+		echo "builder:x:$(id -g):" >> "$ids/group"
 	# AMIX_DISTFILES, a local directory of distfiles, read-only at /distfiles
-	set -- -w /src "${AMIX_IMAGE:-amix-toolchain:dist}" sh build/dist.sh "$@"
+	set -- -w /src -v "$ids/passwd:/etc/passwd:ro" -v "$ids/group:/etc/group:ro" "$image" sh build/dist.sh "$@"
 	if [ -n "${AMIX_DISTFILES:-}" ]; then
 		set -- -e AMIX_DISTFILES=/distfiles -v "$(cd "$AMIX_DISTFILES" && pwd):/distfiles:ro" "$@"
 	fi
