@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — S5-47: the kabi-1.3 kits; modcheck --kernel (4976dac, 93d87ab)
+
+modcheck.py --kernel KABI says whether a kit fits a kernel's sidecar (line, pin, kabi family/major/minor, abi= at the
+same minor), with tests/host/kitkern.sh. The kabi-1.3 kits at 4976dac (port d0e8857) fit 68030-261031-63 (fc3d99a7)
+and 68060-261031-52 (7f8c9ee0); Paula built with them passes modcheck as k30.1.3/k46.1.3 and binds to both
+candidates' symbol blocks. Kit test 96/96 on the candidates; make test 719/0. The kit package mint is amix-packages'.
+
 ## 2026-10-31 — the stage-5 exit ledger brought up to date (a036761)
 
 The candidate cuts 68060-261031-52 and 68030-261031-63, and kern46m -52 / kern30m -63, recorded as candidates, pending
