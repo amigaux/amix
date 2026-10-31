@@ -3,6 +3,12 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — recipes, READMEs, docs and changelog text state facts without internal ids (c2f4c6d, 13c539e, 5d48620, 547e3ea)
+
+package.sh headers, READMEs, docs, tool comments and x11r6.3's patch 00 comments reworded; .gitignore lists build
+output only. No code changes: x11r6.3's 31 ELF files are byte-identical. The packages whose recipe directory changed
+re-roll with new timestamps.
+
 ## 2026-10-31 — x11r6.3: no host X tools; a reproducible datastream (d138422, 4e57efa)
 
 The xkb .dir listings and the fonts are made by this tree's own xkbcomp, bdftopcf and mkfontdir built for the build
