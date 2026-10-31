@@ -62,11 +62,11 @@ eq "rsync -aH local (rc $rc)" "`sums dst`" "`sums src`"
 eq "-a keeps the mode" "`mode dst/sub/a.txt`" "-rw-r-----"
 eq "-a keeps the mtime" "`ls -l dst/sub/a.txt | awk '{print $6, $7, $8}'`" "`ls -l src/sub/a.txt | awk '{print $6, $7, $8}'`"
 eq "-a keeps the symlink" "`ls -l dst/link | sed 's/.* -> //'`" "sub/a.txt"
-eq "-a keeps owner and group by name (D3)" "`ls -l dst/sub/deep/b.txt | awk '{print $3, $4}'`" "bin sys"
+eq "-a keeps owner and group by name (pwgr)" "`ls -l dst/sub/deep/b.txt | awk '{print $3, $4}'`" "bin sys"
 eq "-H keeps the hard link" "`ls -i dst/hard | awk '{print $1}'`" "`ls -i dst/text.txt | awk '{print $1}'`"
 eq "the empty file" "`ls -l dst/empty | awk '{print $5}'`" 0
 $R -a --chown=bin:sys src/sub/ chown/ > c.out 2>&1
-eq "--chown=bin:sys resolves the names (D3)" "`ls -l chown/a.txt | awk '{print $3, $4}'`" "bin sys"
+eq "--chown=bin:sys resolves the names (pwgr)" "`ls -l chown/a.txt | awk '{print $3, $4}'`" "bin sys"
 $R -a --numeric-ids src/sub/ num/ > /dev/null 2>&1
 eq "--numeric-ids" "`ls -ln num/deep/b.txt | awk '{print $3}'`" "`grep '^bin:' /etc/passwd | cut -d: -f3`"
 

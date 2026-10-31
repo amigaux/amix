@@ -20,7 +20,7 @@ trip byte-exact, a **host-produced** `.gz` decompressed byte-exact, `pkgchk` 0, 
 
 ## Version — 1.3.12, and why the asm stays off
 
-The gnulib wall for gzip is **1.4**, not the naive 1.3.6 (D5), so 1.3.12 is free headroom over the
+The gnulib wall for gzip is **1.4**, not the naive 1.3.6, so 1.3.12 is free headroom over the
 archived 1.3.5. Its longest-match inner loop can be built from an assembler source; this recipe
 seeds **`gzip_cv_assembler=no`** to force the C path (`config.h` has no `ASMV`, asserted by the
 build). The SGS `#`-is-a-comment trap makes a mis-assembled `.s` a valid instruction with a clean
@@ -51,7 +51,7 @@ under `/opt/amix/doc/gzip/`. `gunzip` and `zcat` are gzip's own `/bin/sh` wrappe
 (`exec gzip -d` / `exec gzip -cd`) — gzip's `argv[0]` mode-detection is compiled out under the
 default `GNU_STANDARD=1`, so they are wrappers, not symlinks. Their shebang is rewritten from the
 build host's `/bin/bash` to `/bin/sh`; the body is pure Bourne, safe under Amix's 1992 shell. Pure
-file payload, nothing outside `/opt/amix` (D9).
+file payload, nothing outside `/opt/amix`.
 
 ## GCC 14 build
 

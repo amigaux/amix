@@ -21,17 +21,17 @@ form, and no register/memory-source ones). **Bench-proven** on the emulated gold
 (2026-09-26): stock `pkgadd`, `pkgchk` 0, `tests/smoke.sh` PASS, and a box-made archive extracted
 byte-for-byte by the host's GNU tar (`sum -r` identical both sides).
 
-## ★ D3 — the first package that needed it
+## ★ pwgr — the first package that needed it
 
 `tar -c` maps uid→name (`getpwuid`), and `tar -x` as root maps name→uid (`getpwnam`) — and the
-**first `getpwnam()` of a process crashes in the stock shared libc** (docs/porting.md §3.1, ROADMAP D3).
+**first `getpwnam()` of a process crashes in the stock shared libc** (docs/porting.md §3.1).
 The executable therefore **defines** all four lookups itself —
 [`build/pkg/common/amix-pwgr.c`](../../../build/pkg/common/amix-pwgr.c), linked as a plain object — and `build.sh`
 asserts via `nm` that they are `T` in the binary and never `U`. On the box: an archive entry owned
 by `bin` with a wrong numeric id (4242) extracts owned by the box's own `bin` (uid 2), an unknown
 name keeps its number, and a box-made archive records owner names.
 
-The binary stays **dynamic**. D3 says "link static"; what it needs is that the executable's own
+The binary stays **dynamic**. The first plan said "link static"; what it needs is that the executable's own
 definitions win, and for the program's own calls they win in a dynamic link just as surely (ld
 binds them at link time). A static link would pull stock SVR4 `libc.a` objects into a published
 binary — the exposure that kept `whet` out of `amix-benchmark` 1.3.
@@ -79,7 +79,7 @@ GCC 14 only (`patches-gcc14/`; the period build is frozen):
 
 `/opt/amix/bin/tar` and `COPYING`/`NEWS`/`README` under `/opt/amix/doc/tar/`. No `rmt` (remote tape
 is not built), the man page `/opt/amix/man/1/tar`, written here since tar 1.14 documents itself in texinfo only (`tar --help` is the
-reference). Pure file payload (D9). `-z` runs `gzip` from `PATH` — install the `gzip` package and
+reference). Pure file payload. `-z` runs `gzip` from `PATH` — install the `gzip` package and
 put `/opt/amix/bin` on `PATH`.
 
 ## Known limits
@@ -99,7 +99,7 @@ put `/opt/amix/bin` on `PATH`.
 - **The fix:** `patches-gcc14/03`.
 - **Bench:** the emulated A3000, `tools/gcc14-smoke`.
   - All 42 period-versus-GCC 14 comparisons EQUAL.
-  - X4 (GCC 14 tar only; the period tar would panic): `-b 1 --delete` 215040 → 214016, two
+  - The delete case (GCC 14 tar only; the period tar would panic): `-b 1 --delete` 215040 → 214016, two
     members left, `t/b` extracts byte-exact.
 - **Package:** `gtar-1.14-7.pkg`, md5 `44e79c678a475cd6c96f7a7ade8afe9a`, 221696 bytes.
 

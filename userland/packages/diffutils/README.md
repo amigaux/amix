@@ -14,9 +14,9 @@ Package: `diffutil` (PKG ≤ 9 characters), catalog name `diffutils`, category `
 
 ## Version: 2.8.1
 
-The last release before the gnulib wall (ROADMAP D5). 3.x needs a rebuilt gnulib and
+The last release before the gnulib wall. 3.x needs a rebuilt gnulib and
 `autoreconf`, which we never run. 2.8.1 carries its own regex, fnmatch, getopt and mkstemp,
-so it needs nothing from libamixcompat (D8). With GCC 14 the compat symbols come from the
+so it needs nothing from libamixcompat. With GCC 14 the compat symbols come from the
 toolchain's libamixc99. The gate confirms libacompat is never linked.
 
 Source: `https://ftp.gnu.org/gnu/diffutils/diffutils-2.8.1.tar.gz`, sha256
@@ -99,7 +99,7 @@ See `tests/smoke.sh`. The checks:
 - `diff3 -m` merge and conflict;
 - `sdiff` side by side and an `-o` merge;
 - `cmp`, including an offset past 64 KB, and `cmp -l`;
-- for the record: whether stock `/usr/bin/diff` has `-u` (ROADMAP X6).
+- for the record: whether stock `/usr/bin/diff` has `-u`.
 
 **Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (A3000, 64 MB,
 bench-golden kernel 46759dcc).
@@ -113,7 +113,7 @@ bench-golden kernel 46759dcc).
 - **Earlier runs:** run1 found the sdiff exit status (patch 03) and a wrong expectation in the
   test (binary rc). Run2 passed but shipped two empty man pages (fixed above).
 
-ROADMAP X6 is answered on the box: stock `/usr/bin/diff -u` says `diff: invalid option -u`.
+Answered on the box: stock `/usr/bin/diff -u` says `diff: invalid option -u`.
 Stock diff has no unified format, so this package is the box's only unified diff.
 
 Not run: real 68030/68060 hardware. The 68060 lane rests on the build gates: all three

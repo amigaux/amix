@@ -51,7 +51,7 @@ The only tolerated implicit declarations are `snprintf`/`vsnprintf` in the two g
 `/opt/amix/lib/libz.a`, headers `/opt/amix/include/{zlib.h,zconf.h}`, the man pages
 `/opt/amix/man/3/zlib` and `/opt/amix/man/1/zlib-test`, `LICENSE`/`README`/`ChangeLog` under `/opt/amix/doc/zlib/`, and the
 on-box acceptance binary `/opt/amix/bin/zlib-test`. Nothing lands outside `/opt/amix`; there is no
-stock file to conflict with. Pure file payload (`CLASSES=none`, D9).
+stock file to conflict with. Pure file payload (`CLASSES=none`).
 
 ## On-box evidence
 

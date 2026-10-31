@@ -2,7 +2,7 @@
 # prototype -- GNU make 3.81's installed layout under /opt/amix.
 #
 # AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
-# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it.
+# PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it.
 #
 # COEXISTENCE.  Stock ships /usr/ccs/bin/make, owned by `core`.  This package
 # does NOT claim, overwrite or symlink it -- ours is /opt/amix/bin/make and wins
@@ -10,7 +10,7 @@
 # /usr/ccs/bin/make keep stock behaviour.  No stock package is named `make`, so
 # the PKG name does not collide.
 #
-# NO INSTALL SCRIPTS (D9).  No info manual (the box has no info reader); the
+# NO INSTALL SCRIPTS.  No info manual (the box has no info reader); the
 # man page is make.1.  Every basename <= 14 bytes.
 #
 i pkginfo

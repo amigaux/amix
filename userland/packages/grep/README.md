@@ -24,7 +24,7 @@ alternation matched; `pkgchk` 0, `pkgrm` clean.
 ## Why 2.5.1a — the bundled regex, forced
 
 The last GPLv2 grep, and the deciding factor is that it carries its **own** `regex.c` (the GNU
-`re_compile_pattern`/`re_search` API). **The box has no POSIX `regcomp` at all** (D8), so a grep that
+`re_compile_pattern`/`re_search` API). **The box has no POSIX `regcomp` at all**, so a grep that
 expects the system to provide it is unbuildable. The trap the REGEX-NONE blocker names is that a
 compile-test for a system regex *succeeds* under gcc 2.7's implicit declarations even when the
 symbol is absent — so this recipe passes **`--with-included-regex`** to force `regex.o` into
@@ -70,7 +70,7 @@ path D4 moved — and passed on the emulated golden 030. Staged for publication 
 `/opt/amix/bin/{grep,egrep,fgrep}`, man pages under `/opt/amix/man/1/` with `whatis.d/grep`,
 `COPYING`/`NEWS`/`README` under `/opt/amix/doc/grep/`. `egrep`/`fgrep` are grep's own `/bin/sh`
 wrappers, rewritten to `exec /opt/amix/bin/grep -E|-F …` by **absolute** path so they work regardless
-of PATH. Pure file payload (D9), nothing outside `/opt/amix`, no symlink into a stock tree.
+of PATH. Pure file payload, nothing outside `/opt/amix`, no symlink into a stock tree.
 
 ## GCC 14 revisions
 

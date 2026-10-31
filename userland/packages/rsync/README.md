@@ -16,7 +16,7 @@ Package: `rsync`, catalog name `rsync`, category `network`, set `extra`, GPL-3.0
 
 ## Version: 3.1.3
 
-The version is set by interop (registry/rsync.yaml, ROADMAP.md §3):
+The version is set by interop:
 - rsync ≤ 2.5.7 caps at protocol 30 and has no `--protocol`, so a modern peer cannot talk to
   it at all.
 - 2.6.3, the archived Amix build, speaks protocol 29 and builds the whole file list in RAM.
@@ -47,7 +47,7 @@ The call path, symbolized against the kernel: `fcntl` → `ufs_space` → `ufs_f
 
 ## Configure (`build.sh`)
 
-- **Bundled zlib and popt** (`--with-included-zlib --with-included-popt`, D8). rsync's zlib is
+- **Bundled zlib and popt** (`--with-included-zlib --with-included-popt`). rsync's zlib is
   its own modified copy, and the compressed stream a peer expects is the one it makes.
   rsync's bundled `getaddrinfo`, `inet_ntop`/`inet_pton` and `snprintf` are used too, because
   the box has none of the first three and configure cannot run the C99 `vsnprintf` test. rsync
@@ -59,7 +59,7 @@ The call path, symbolized against the kernel: `fcntl` → `ufs_space` → `ufs_f
   "cross". rsync then uses `pipe()` for its local child pairs. SVR4 pipes are full-duplex
   STREAMS, and that path is what the bench proved.
 - **`ac_cv_func_vfork=no`**: `vfork` is only a static member of `usr/ccs/lib/libc.so` (grimoire).
-- **D3**: `amix-pwgr.o` is compiled in `pre_configure` and put in `LIBS`. The binary defines
+- **pwgr**: `amix-pwgr.o` is compiled in `pre_configure` and put in `LIBS`. The binary defines
   `getpwnam/getpwuid/getgrnam/getgrgid` itself (asserted in `stage`). They are used for
   `-o/-g` by name, `--chown`, and the daemon's `uid =`/`gid =`.
 - **`MAKE_CFLAGS=-include amix-decls.h -I./zlib -I./popt -DHAVE_CONFIG_H`**:
@@ -103,7 +103,7 @@ All of these passed on the 2026-10-30 build:
 - prototype == staged tree (14 paths);
 - no empty file;
 - every undefined symbol defined by its `NEEDED` libraries;
-- D3;
+- pwgr;
 - the 060 gate with all three scanners, on the tree and on the datastream: 247 long mul/div,
   none 64-bit, which covers the MD4/MD5 and rolling-checksum code (registry LC060-MUL64);
 - no 040/060-only FPU form;

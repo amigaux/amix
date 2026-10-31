@@ -51,7 +51,7 @@ grep 'link -> target.txt' t.list > /dev/null 2>&1 && echo "ok   symlink listed" 
 	|| bad "symlink not listed"
 
 # 2. EXTRACT AS ROOT -- same-owner maps NAMES back through getpwnam()/getgrnam()
-#    (D3: the executable's own parsers, not the stock libc's first-call crash).
+#    (pwgr: the executable's own parsers, not the stock libc's first-call crash).
 echo "-- tar -xf fixture.tar -C x  (as root: name -> uid via getpwnam)"
 rm -rf x; mkdir x
 "$TAR" -xf fixture.tar -C x 2> x.err
@@ -84,7 +84,7 @@ fi
 	&& echo "ok   long-name file extracted with its content" || bad "long-name file content wrong"
 
 # 3. CREATE ON THE BOX -- lstat (the ac_cv_func_lstat seed) and uid -> name
-#    (getpwuid, D3).  Also exercises -b (strtoull) and --totals (human.c): the
+#    (getpwuid, pwgr).  Also exercises -b (strtoull) and --totals (human.c): the
 #    two code paths the D4 patches rewrote.
 echo "-- tar -b 20 --totals -cf out.tar x"
 "$TAR" -b 20 --totals -cf out.tar x 2> c.err

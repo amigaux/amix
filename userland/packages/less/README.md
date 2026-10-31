@@ -6,8 +6,8 @@ GPL-3.0-or-later OR BSD-2-Clause. Metadata and source pin: [`package.sh`](packag
     sh build/pkg/pkgbuild.sh userland/packages/less
 
 Fills a genuine gap: stock Amix has only `more`/`pg`/`page`. less adds backward scroll, incremental
-search and no-write paging. The best demonstration of D5 in the whole roadmap — a **2026** release
-that still supports SVR4 `regcmp`/libgen, still needs no `config.sub`, and has no gnulib dependency.
+search and no-write paging. A **2026** release that is still on the near side of the gnulib wall: it
+still supports SVR4 `regcmp`/libgen, still needs no `config.sub`, and has no gnulib dependency.
 
 ## Result
 
@@ -31,7 +31,7 @@ over a real tty.
    struct has a `struct termio` field that stays **incomplete**: less includes `<termios.h>` (for
    `tcgetattr`), which defines `VINTR`, which makes `<curses.h>` skip its own `<termio.h>` include.
    The termcap path avoids `<term.h>` entirely, and on SVR4 the termcap `tgetent` reads the terminfo
-   database (D2) — so `-lcurses` alone is enough.
+   database — so `-lcurses` alone is enough.
 3. **`ac_cv_func_stat=yes`.** SVR4 `stat` is a static-inline wrapper over `_xstat`, so autoconf's
    link-test for a bare `stat` symbol **fails** and `HAVE_STAT` comes out unset — after which
    `edit.c`/`cmdbuf.c`/`filename.c` skip `<sys/stat.h>` and every `struct stat` is incomplete. `stat`
@@ -50,7 +50,7 @@ over a real tty.
 ## Package shape
 
 `/opt/amix/bin/{less,lesskey,lessecho}`, man pages under `/opt/amix/man/1/` with `whatis.d/less` (the troff sources, `patches/05`),
-`LICENSE`/`COPYING`/`NEWS` under `/opt/amix/doc/less/`. Pure file payload (D9), nothing outside
+`LICENSE`/`COPYING`/`NEWS` under `/opt/amix/doc/less/`. Pure file payload, nothing outside
 `/opt/amix`, no scripts, no symlinks.
 
 ## GCC 14 build

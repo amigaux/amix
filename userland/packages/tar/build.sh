@@ -30,13 +30,13 @@ post_configure() {
 			echo "[FAIL] config.h defines HAVE_$h -- a probe reached the host's headers" >&2; exit 1; }
 	done
 	echo "  HAVE_STRINGS_H/STDINT_H/INTTYPES_H absent (target headers were read)"
-	# D3: the executable defines getpwnam/getpwuid/getgrnam/getgrgid itself
+	# pwgr: the executable defines getpwnam/getpwuid/getgrnam/getgrgid itself
 	$CC $AMIX_CFLAGS -c "$COMMON/amix-pwgr.c" -o "$BUILD/amix-pwgr.o" > "$BUILD/pwgr.log" 2>&1 || {
 		echo "[FAIL] amix-pwgr.c did not compile" >&2; cat "$BUILD/pwgr.log" >&2; exit 1; }
 	! grep 'warning' "$BUILD/pwgr.log" | grep -v "^$AMIX_SYSROOT/" | grep -v '/include-fixed/' >/dev/null || {
 		echo "[FAIL] amix-pwgr.c compiled with warnings:" >&2; cat "$BUILD/pwgr.log" >&2; exit 1; }
-	echo "  amix-pwgr.o built (D3)"
-	# every Makefile's LIBS: the D3 object, and a link trace proving where
+	echo "  amix-pwgr.o built (pwgr)"
+	# every Makefile's LIBS: the pwgr object, and a link trace proving where
 	# gettimeofday comes from (usr/ccs/lib/libc.so's static member)
 	for m in $(find . -name Makefile); do
 		sed -i "s|^LIBS = .*|LIBS = $BUILD/amix-pwgr.o -Wl,-y,gettimeofday|" "$m"
@@ -54,11 +54,11 @@ post_build() {
 	[ -f src/tar ] || { echo "[FAIL] tar binary not built" >&2; exit 1; }
 	for s in getpwnam getpwuid getgrnam getgrgid; do
 		"$NM" src/tar | awk -v s="$s" '$NF==s && $(NF-1)=="T" {f=1} END {exit !f}' || {
-			echo "[FAIL] D3: $s is not defined (T) in the executable" >&2; exit 1; }
+			echo "[FAIL] pwgr: $s is not defined (T) in the executable" >&2; exit 1; }
 		! "$NM" -u src/tar | awk '{print $NF}' | grep -x "$s" >/dev/null || {
-			echo "[FAIL] D3: $s is still UNDEFINED -- libc's copy would be called" >&2; exit 1; }
+			echo "[FAIL] pwgr: $s is still UNDEFINED -- libc's copy would be called" >&2; exit 1; }
 	done
-	echo "  D3 ok  getpwnam/getpwuid/getgrnam/getgrgid defined in the executable"
+	echo "  pwgr ok  getpwnam/getpwuid/getgrnam/getgrgid defined in the executable"
 	needed=$("$OBJDUMP" -p src/tar | awk '$1=="NEEDED" {print $2}' | tr '\n' ' ')
 	[ "$needed" = "/usr/lib/libc.so.1 " ] || {
 		echo "[FAIL] DT_NEEDED is '$needed', expected only /usr/lib/libc.so.1" >&2; exit 1; }

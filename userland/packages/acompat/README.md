@@ -8,9 +8,8 @@ package's catalog name, `acompat`, so the catalog name users install by never ch
 
 ## Why this exists
 
-`grep -c 'id: *SHIM-' registry/*.yaml` is the argument: 17 of the 23 candidate packages carry a
-blocker that this library closes. One shim written once kills the class — that is standing decision
-**D10**, and it is why this is the first thing built.
+17 of the 23 candidate packages carried a blocker that this library closes. One shim written once
+removes the whole class, which is why this is the first thing built.
 
 ## Scope — measured, not assumed
 
@@ -98,7 +97,7 @@ for NULL, the SVR4/BSD spelling, not glibc's `(nil)`.
 - **`<strings.h>` declares only what this library provides.** `bcopy`/`bzero`/`index`/`rindex`/`ffs`
   live in `/usr/ucblib` and are *not* declared here — turning a clean "undefined symbol" into a
   puzzle would defeat the point of making the libc surface honest.
-- **The `getpwnam` family (D3) is not here yet.** It is a different shape of fix — the executable
+- **The `getpwnam` family (pwgr) is not here yet.** It is a different shape of fix — the executable
   must *define* those symbols so its own globals win at static link time — and it belongs with the
   first package that maps uid→name. Recorded in the registry, not silently dropped.
 - `inttypes.h`, `stdbool.h`, `wchar.h`, `fnmatch`, `glob`, `random`, `daemon`, `getrusage` and

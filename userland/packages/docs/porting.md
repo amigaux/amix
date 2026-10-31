@@ -13,9 +13,7 @@ relative to `userland/packages`; `userland/pkgtools/…` (the package manager, f
 amix-packagemanager) and `build/pkg/…` (the build framework and the shared harness, formerly
 `recipes/common/`) are relative to the top of amix. `../<repo>/…` names a **sibling Amix
 repository** checked out beside amix — `../gcc-cross-amix`, `../grimoire-amix`, `../amix-kerntools`,
-`../amix-040-060-port` (not all of them are public). `ROADMAP` Dn/Xn and
-`registry/` citations name the planning records of the former amix-packages repository, which stay
-with the maintainer. Line numbers are as of the citation's date. A citation here is a **provenance
+`../amix-040-060-port` (not all of them are public). Line numbers are as of the citation's date. A citation here is a **provenance
 record, not a followable link**: it says where a claim was measured, precisely enough
 for a maintainer to re-derive it, not that a reader can click through to it. Stripping them would
 make a measured claim indistinguishable from a repeated one, which is the one discipline this guide
@@ -409,7 +407,7 @@ globals win at static link time (`../grimoire-amix/docs/drivers/toolchain.md:262
 `llms-full.txt:7583`). **Any tool that maps uid→name — `ls -l`, `ps`, a top-class monitor — hits
 this.**
 
-**D3 is proven** (`tar/`, 2026-09-26): `build/pkg/common/amix-pwgr.c` defines the four
+**pwgr is proven** (`tar/`, 2026-09-26): `build/pkg/common/amix-pwgr.c` defines the four
 lookups, linked as a plain object into a still-**dynamic** executable; the build asserts via `nm`
 that they are `T`, never `U`.
 
@@ -510,7 +508,7 @@ given tool needs is **UNVERIFIED** until someone tries.
 
 **★ Route 1 is now proven for a termcap-style client — `less` 704, 2026-08-30.** less builds
 `-DUSE_TERMCAP` and links **`-lcurses` alone**; on SVR4 the termcap `tgetent` reads the *terminfo*
-database, so nothing else is needed (D2). Two measured details a screen-oriented recipe will meet:
+database, so nothing else is needed. Two measured details a screen-oriented recipe will meet:
 
 - The reason to leave the default *terminfo* path is a **header collision**, not a missing library.
   `<term.h>`'s `TERMINAL` struct has a `struct termio` field that stays **incomplete**, because less
@@ -600,8 +598,8 @@ file payloads.**
 
 ### ★ 3.8 Pattern matching: no POSIX `regcomp` — `regcmp`/libgen is the substitute
 
-**[MEASURED]** there is **no POSIX `regcomp`/`regexec` on this box at all** (`ROADMAP.md` D8;
-blocker id `REGEX-NONE`, on four registry entries). What exists is two older interfaces:
+**[MEASURED]** there is **no POSIX `regcomp`/`regexec` on this box at all** (four candidate packages
+were blocked by it). What exists is two older interfaces:
 
 | Interface | Where | Shape |
 |---|---|---|
@@ -973,7 +971,7 @@ Still open:
 - **ncurses on Amix is untried** (§3.4), and so is any program that actually draws with curses
   rather than with termcap escapes.
 - **SVR4 install scripts under the 1992 sh are untried** (§3.6) — all six packages are deliberately
-  pure file payloads (D9), so the question is still open.
+  pure file payloads, so the question is still open.
 - **Nothing is `published`.** Six `.pkg` datastreams exist and install from a local file; none has
   been put in the catalog, so the remote-fetch half of the pipeline is unexercised from this side.
 - **The `atof` drift's attribution is unresolved** — stock libc or FPE, nobody knows (§3.5).

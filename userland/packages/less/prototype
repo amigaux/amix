@@ -2,11 +2,11 @@
 # prototype -- less 704's installed layout under /opt/amix.
 #
 # AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
-# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it, so
+# PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it, so
 # the pkgadd conflict machinery never fires and no stock-owned path is touched.
 # /opt is the one declared shared parent the stock contents DB already co-owns.
 #
-# NO INSTALL SCRIPTS (D9): CLASSES=none, class `none` on every object -- a pure
+# NO INSTALL SCRIPTS: CLASSES=none, class `none` on every object -- a pure
 # file payload.  Three binaries, no scripts, no symlinks.  lesskey compiles a
 # key-binding file; lessecho is less's own filename-metacharacter helper.
 # Every basename <= 14 bytes.

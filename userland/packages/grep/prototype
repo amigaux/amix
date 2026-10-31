@@ -2,7 +2,7 @@
 # prototype -- GNU grep 2.5.1a's installed layout under /opt/amix.
 #
 # AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
-# PREFIX /opt/amix (COEXISTENCE.md, ROADMAP D11); nothing lands outside it.
+# PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it.
 #
 # ★ COEXISTENCE, THE WORKED CASE.  Stock ships /usr/bin/grep (-> /sbin/grep),
 # owned by `core`.  This package deliberately does NOT claim, overwrite, or
@@ -12,7 +12,7 @@
 # /opt/amix, the pkgadd conflict machinery never fires, and a stock pkgrm can
 # never take our binary with it.
 #
-# NO INSTALL SCRIPTS (D9).  egrep/fgrep are grep's own /bin/sh wrappers
+# NO INSTALL SCRIPTS.  egrep/fgrep are grep's own /bin/sh wrappers
 # (`exec /opt/amix/bin/grep -E|-F ...`), shipped as ordinary files -- their exec
 # target was rewritten to the absolute path so they work regardless of PATH
 # (build.sh step 5).  Every basename <= 14 bytes.

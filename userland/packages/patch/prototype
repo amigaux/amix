@@ -8,7 +8,7 @@
 #
 # NO INSTALL SCRIPTS.  CLASSES=none, class `none` on every object.  SVR4
 # install scripts have never been run on Amix under its 1992 pre-POSIX
-# /bin/sh, so this is a pure file payload (D9).
+# /bin/sh, so this is a pure file payload.
 #
 i pkginfo
 #

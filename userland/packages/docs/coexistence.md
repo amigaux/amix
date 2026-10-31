@@ -4,15 +4,14 @@ Amix 2.1 ships a general SVR4 userland. Some of the tools this directory ports a
 box at 1980s/1990s versions; most do not. This file is the **standing policy** for how a ported
 package coexists with stock — the prefix it installs under, the files it must never touch, how the
 newer tool wins for interactive users, and what `pkgadd` actually does when two packages claim one
-path. Every recipe inherits it (cited from `ROADMAP.md` **D11**); a recipe that wants to diverge
+path. Every recipe inherits it; a recipe that wants to diverge
 argues here first, in the commit that changes this file.
 
-`ROADMAP` Dn/Xn and `registry/<name>.yaml` citations name the planning records of the former
-amix-packages repository, which stay with the maintainer and are not in amix. Package paths
+Package paths
 (`patch/prototype`) are relative to `userland/packages`; `userland/pkgtools/…` and `build/…` paths
 are relative to the top of amix.
 
-Confidence tags follow the `ROADMAP.md` legend: **[MEASURED]** by this family on the bench,
+Confidence tags: **[MEASURED]** by this family on the bench,
 **[PROVEN-AMIX]** an artifact ran on Amix, **[UNVERIFIED]** believed with a reason but unchecked,
 **[OPEN]** a decision not yet made. Stock-side facts here are read out of
 `userland/pkgtools` — the authority on what stock ships (its `docs/stock-pkg-system.md`, the
@@ -137,7 +136,7 @@ not a silent package side effect:
   future **bootstrap package** that ships a sourceable snippet at `/opt/amix/etc/profile.amix` for
   the user to add to `/etc/profile` or `~/.profile` (`. /opt/amix/etc/profile.amix`).
 - **Do not:** have a package edit `/etc/profile`. That file is `core`-owned (never overwrite, §2),
-  and SVR4 package install scripts are an **[UNVERIFIED]** path on Amix's 1992 `/bin/sh` (**D9**).
+  and SVR4 package install scripts are an **[UNVERIFIED]** path on Amix's 1992 `/bin/sh`.
 - **Do not:** symlink `/opt/amix/bin/<tool>` from `/usr/bin/<tool>` to force precedence — it
   re-enters `/usr/bin` (§2), and stock `pkgadd` **corrupts a relative symlink target**
   ([MEASURED], `patch/prototype`), so it would also demand absolute-target care for no gain.
@@ -223,7 +222,7 @@ complete 28,866-member repackaging), the `hdf/tape21/` tape extraction, and the 
 | **grep** | **present** | SVR4 `grep` at `/usr/bin/grep`→`/sbin/grep`; `egrep`/`fgrep` separate; no `-r/-o/--color/-P` | `core` | GNU grep 2.5.1a: `-r`, `-o`, `--color`, reliable `-E`, own regex |
 | **less** | **absent** | pagers `more`/`pg`/`page` only | `core` (more/pg) | `less` itself: backward scroll, incremental search |
 | **tar** | **present** | SVR4 `tar` at `/usr/sbin/tar` (+`/etc/tar`); ustar, no `-z`, no base-256 read | `core` | GNU tar 1.14: base-256 (modern archives), `-z`, long names |
-| **diffutils** | **present** | SVR4 `diff`/`diff3`/`sdiff`/`cmp`/`bdiff` at `/usr/bin`; context `-c`; unified `-u` [UNVERIFIED, likely absent — X6] | `core` | GNU diffutils 2.8.1: unified `-u` (every patch here is unified), better diff3 |
+| **diffutils** | **present** | SVR4 `diff`/`diff3`/`sdiff`/`cmp`/`bdiff` at `/usr/bin`; context `-c`; unified `-u` absent [MEASURED: `diff: invalid option -u`] | `core` | GNU diffutils 2.8.1: unified `-u` (every patch here is unified), better diff3 |
 | **bzip2** | **absent** | none | — | `.bz2`; needed to open the `.cpio.bz2` Amix software corpus itself |
 | **coreutils** | **partial** | SVR4 `ls`/`cp`/`mv`/`cat`/`sort`/… present; **no `md5sum`/`sha1sum`, no `cksum`** (only `sum`) | `core` | GNU coreutils 5.2.1: `md5sum`/`sha1sum` (box has no content checksum at all), GNU flags |
 | **rsync** | **absent** | none (post-dates 1992) | — | `rsync` itself; also a candidate FTP replacement for the bench |
@@ -235,18 +234,18 @@ case, exactly like `patch`.
 
 **Reconciliation note.** The `hdf/tape21/` extraction's `public/bin` shows only ~18 files
 (the elm mail suite + bash/gcc/gdb) and does **not** contain `patch`, `gzip`, or `less`; yet
-`patch` 12u4 *is* bench-verified present in stock `public` on the golden box
-(`registry/patch.yaml`). The tape extraction is therefore **partial** for `public`, so it proves
+`patch` 12u4 *is* bench-verified present in stock `public` on the golden box.
+The tape extraction is therefore **partial** for `public`, so it proves
 *presence*, not *absence*, for that package. The audit above leans on the authoritative `core`
 manifest (complete) for the base tools and on the bench finding for `patch`; a definitive
-`pkginfo -l public` on the golden box is the clean way to close any residual doubt (an X6-class
+`pkginfo -l public` on the golden box is the clean way to close any residual doubt (a
 box one-liner).
 
 ---
 
 ## 7. Open items for the packagemanager side (X-items)
 
-- **[OPEN — X3-prefix, OVERRIDDEN BY THE BATCH-1 PUBLISH (2026-09-15)]** Confirm **`/opt/amix`** is
+- **[OPEN — the prefix, OVERRIDDEN BY THE BATCH-1 PUBLISH (2026-09-15)]** Confirm **`/opt/amix`** is
   acceptable to `amix-packagemanager` as the amix-packages payload prefix. The `extra` set exists
   for our packages but names no prefix; the engine uses `/usr/apkg`, the user keeps `/usr/local`,
   and `/opt/amix` is the disjoint third tree. Low risk — a natural split — but it is the
@@ -260,9 +259,9 @@ box one-liner).
   bootstrap-package `/opt/amix/etc/profile.amix` snippet, or left to the user? Needs a decision
   before the first batch ships so every recipe's description says the same thing. **Also overtaken
   by the 2026-09-15 publish** without being decided.
-- **[OPEN — X6]** Box one-liner: **does stock `diff` support `-u`?** Decides how much value
-  `diffutils` adds. Batch it into the next bench login.
-- **X3 taxonomy — RESOLVED (2026-09-01), both sides.** The packagemanager side declared the
+- **[MEASURED]** Box one-liner: **does stock `diff` support `-u`?** No: stock `/usr/bin/diff -u`
+  says `diff: invalid option -u`, so `diffutils` adds unified diffs.
+- **Category taxonomy — RESOLVED (2026-09-01), both sides.** The packagemanager side declared the
   category vocabulary and the exact 23-package mapping in `tools/repo/cats.conf` (adding `utility`
   and `editor` groups for this repo) and created the `extra` set in `sets.conf`. This repo has now
   reconciled against it: all 23 `registry/*.yaml` carry `category_status: agreed`, and the five
@@ -283,5 +282,5 @@ box one-liner).
   `catalog` — the stock package roster, the agreed taxonomy, the `extra` set.
 - the Amix 2.1 install-tape extraction, kept outside the public tree (partial for
   `public`; complete `core` via the repackaging manifest).
-- `registry/patch.yaml`, `patch/prototype` — the bench-verified stock `patch` 12u4 finding
+- `patch/prototype` — the bench-verified stock `patch` 12u4 finding
   and the stock-`pkgadd` relative-symlink-corruption measurement.

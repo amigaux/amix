@@ -52,7 +52,7 @@ carries on. That is the right outcome: the alternative is `nlist()` + `/dev/kmem
 ## Package shape
 
 `/opt/amix/bin/make`, `/opt/amix/man/1/make` (and `whatis.d/make`), and `COPYING`, `COPYING.LIB`, `NEWS`, `README`
-under `/opt/amix/doc/make/`. No info manual (no reader on the box). Pure file payload (D9).
+under `/opt/amix/doc/make/`. No info manual (no reader on the box). Pure file payload.
 
 ## GCC 14 build
 

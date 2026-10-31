@@ -22,7 +22,7 @@ Package: `coreutil` (PKG ≤ 9 characters), catalog name `coreutils`, category `
 
 ## Version: 5.2.1
 
-The last 5.x before gnulib became the substrate (D5). One package covers the era trio
+The last 5.x before gnulib became the substrate. One package covers the era trio
 (fileutils, textutils, sh-utils).
 
 Source: `https://ftp.gnu.org/gnu/coreutils/coreutils-5.2.1.tar.gz`, sha256 `9f7662c4…c85bf9`.
@@ -54,7 +54,7 @@ kernel.org mirror serves identical bytes.
   - `ac_cv_func_getgroups_works=yes`;
   - `ac_cv_func_strtod=yes`, which also drops the `pow()` → `-lm` the replacement needs;
   - `jm_cv_func_svid_putenv=yes` (asserted: no `rpl_putenv`).
-- **D3**: `amix-pwgr.o` is compiled in `pre_configure` and put in `LIBS`. Every executable
+- **pwgr**: `amix-pwgr.o` is compiled in `pre_configure` and put in `LIBS`. Every executable
   defines `getpwnam/getpwuid/getgrnam/getgrgid` itself (asserted: 86 of 86 `T`).
 - **`MAKE_CFLAGS=-include amix-decls.h`** (select, getrlimit, fchmod): make only. In configure
   the prototypes collide with autoconf's `char f();` probes and turn present functions absent
@@ -102,7 +102,7 @@ All of these passed on the 2026-10-29 build:
 - prototype == staged tree (184 paths);
 - no empty file;
 - every undefined symbol defined by the binary's own `NEEDED` libraries;
-- D3 86/86;
+- pwgr 86/86;
 - the 060 gate with all three scanners, on the tree and on the datastream;
 - no 040/060-only FPU form;
 - no ll printf conversion.
@@ -118,7 +118,7 @@ See `tests/smoke.sh`: 95 checks, run as root on the box.
 **Content checksums** against host-computed digests of the same awk-generated 511456 bytes:
 md5sum, sha1sum, cksum, `md5sum -c` both ways, and `sum -r` equal to the stock `sum -r`.
 
-**D3:**
+**pwgr:**
 - `id`, `whoami`, `groups`;
 - `chown bin:bin` / `chgrp sys` shown by name in `ls -l` and `stat`;
 - `ls -ln`.
