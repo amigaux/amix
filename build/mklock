@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+# mklock: the lock of a make dist build (P-38 S1.6).
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Python 3 standard library only.
+"""Write, or check, the lock of a make dist build.
+
+  mklock TOP OUT [--check LOCK]
+
+The lock (release/README.md) names every input and output of the build in
+OUT, one line each, in fixed sections whose lines are sorted, so one build
+has one lock. It is written to OUT/lock. With --check, the lock of OUT is
+compared with LOCK instead, and every differing line is printed: a rebuild
+that differs from the lock of record is refused.
+
+Exit status: 0 written or equal, 1 refused, 2 usage.
+"""
+
+import hashlib
+import os
+import subprocess
+import sys
+
+FORMAT = "#amix-lock 1"
+
+# What the proof does not compare byte for byte, and why (P-38 S7.2).
+EXCEPTIONS = (
+    "exception kit-revision-lines kit.conf and NOTICE name the amix and port commits;"
+    " the kit's norev digest is compared across commits",
+    "exception amixbench-1.3 kept outside amix (0be17e7)",
+    "exception installed-images the disk and SD images are bench-built and proven by"
+    " their contents (D-f)",
+)
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fp:
+        for block in iter(lambda: fp.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def git(top, *args):
+    return subprocess.run(["git", "-C", top] + list(args), stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL, check=True).stdout.decode().strip()
+
+
+def files(root):
+    """Every regular file under ROOT, relative, sorted."""
+    out = []
+    for r, dirs, fs in os.walk(root):
+        dirs.sort()
+        for f in fs:
+            p = os.path.join(r, f)
+            if os.path.isfile(p) and not os.path.islink(p):
+                out.append(os.path.relpath(p, root))
+    return sorted(out)
+
+
+def lock(top, out):
+    """The lock's lines, in order."""
+    head = [FORMAT, "amix %s" % git(top, "rev-parse", "HEAD"),
+            "epoch package-version (SOURCE_EPOCH, else the package directory's last commit)"]
+    tree = git(top, "status", "--porcelain", "--untracked-files=no")
+    if tree:
+        head.append("dirty %s" % hashlib.sha256(tree.encode()).hexdigest())
+    image = "/opt/amix/TOOLCHAIN.sha256"
+    head.append("image %s" % (sha256(image) if os.path.isfile(image) else "host"))
+    sections = []
+    # inputs: every pin and distfile pin, and the system input's manifest
+    pins = []
+    for rel in git(top, "ls-files", "*.pin", "*.distfile").splitlines():
+        if rel.endswith(".pin") or rel.endswith(".distfile"):
+            with open(os.path.join(top, rel)) as fp:
+                text = fp.read()
+            kind = "pin" if rel.endswith(".pin") else "distfile"
+            f = text.split()
+            if len(text.splitlines()) == 1 and len(f) == 2 and f[0].startswith("https://"):
+                pins.append("%s %s %s %s" % (kind, rel, f[0], f[1]))
+            else:   # a pin of another format (kernel/dlm's): the file's digest
+                pins.append("%s %s sha256 %s" % (kind, rel, sha256(os.path.join(top, rel))))
+    sections.append(sorted(pins))
+    sections.append(["system %s %s" % (rel, sha256(os.path.join(top, rel)))
+                     for rel in ("system/MANIFEST.sha256", "system/SYMLINKS")
+                     if os.path.isfile(os.path.join(top, rel))])
+    # outputs
+    digests = os.path.join(out, "kit", "kit.digests")
+    if os.path.isfile(digests):
+        with open(digests) as fp:
+            sections.append(sorted(l.rstrip("\n") for l in fp if l.strip()))
+    mods = os.path.join(out, "modules")
+    if os.path.isdir(mods):
+        sections.append(["module %s %s" % (rel, sha256(os.path.join(mods, rel)))
+                         for rel in files(mods)])
+    for space in ("kspace", "userland"):
+        d = os.path.join(out, space)
+        pkgs = os.path.join(d, "pkgs")
+        lines = []
+        if os.path.isdir(pkgs):
+            lines += ["pkg %s %s %d %s" % (space, rel, os.path.getsize(os.path.join(pkgs, rel)),
+                                           sha256(os.path.join(pkgs, rel)))
+                      for rel in files(pkgs) if rel.endswith(".pkg")]
+        for c in ("catalog", "catalog.md5"):
+            if os.path.isfile(os.path.join(d, c)):
+                lines.append("catalog %s %s %s" % (space, c, sha256(os.path.join(d, c))))
+        sections.append(sorted(lines))
+    media = os.path.join(out, "media")
+    if os.path.isdir(media):
+        sections.append(["media %s %d %s" % (rel, os.path.getsize(os.path.join(media, rel)),
+                                             sha256(os.path.join(media, rel)))
+                         for rel in files(media)])
+    sections.append(list(EXCEPTIONS))
+    return head + [l for s in sections for l in s]
+
+
+def main(argv):
+    if len(argv) not in (2, 4) or (len(argv) == 4 and argv[2] != "--check"):
+        sys.stderr.write(__doc__)
+        return 2
+    top, out = os.path.abspath(argv[0]), os.path.abspath(argv[1])
+    lines = lock(top, out)
+    if len(argv) == 4:
+        with open(argv[3]) as fp:
+            want = fp.read().splitlines()
+        if want[:1] != [FORMAT]:
+            sys.stderr.write("[FAIL] mklock: %s is not an %s file\n" % (argv[3], FORMAT))
+            return 1
+        gone = [l for l in want if l not in lines]
+        new = [l for l in lines if l not in want]
+        if gone or new:
+            sys.stderr.write("[FAIL] mklock: this build is not the lock %s:\n" % argv[3])
+            for l in gone:
+                sys.stderr.write("  - %s\n" % l)
+            for l in new:
+                sys.stderr.write("  + %s\n" % l)
+            return 1
+        print("mklock: this build is the lock %s (%d lines)" % (argv[3], len(lines)))
+        return 0
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "lock.new"), "w") as fp:
+        fp.write("\n".join(lines) + "\n")
+    os.replace(os.path.join(out, "lock.new"), os.path.join(out, "lock"))
+    print("mklock: %s, %d lines" % (os.path.join(out, "lock"), len(lines)))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except (OSError, subprocess.CalledProcessError) as e:
+        sys.stderr.write("[FAIL] mklock: %s\n" % e)
+        sys.exit(1)
