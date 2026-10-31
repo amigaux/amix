@@ -462,38 +462,8 @@ ask_timezone()
 	echo "(if its reading is plausible); set the battery clock from AmigaOS."
 }
 
-ask_network()
+find_ifs()
 {
-	# Cleared FIRST so a second pass through the summary loop that declines
-	# networking really does decline it (the answer is the whole gate S16 reads).
-	FB_NET_CONFIGURED=
-	readask "\nDo you want to configure networking? [y] "
-	case $ask in
-		[nN]* )
-			echo "\nNetworking is left as the installation set it."
-			return 0
-			;;
-	esac
-
-	# 1.1: every interface a driver finds asks a DHCP server (`* dhcp`),
-	# or one interface gets a static address. Default: static when the installation set
-	# an address, else DHCP.
-	FB_NET_MODE=static
-	if [ "$FB_L11" = y ]; then
-		DHDEF=y
-		[ -n "$FB_IP" ] && DHDEF=n
-		readask "\nUse DHCP to configure the network? [$DHDEF] "
-		[ "$ask" != "" ] || ask=$DHDEF
-		case $ask in
-			[yY]* )
-				FB_NET_MODE=dhcp FB_IP= FB_NETMASK= FB_GATEWAY= FB_DNS1= FB_DNS2=
-				ask_repo
-				FB_NET_CONFIGURED=y
-				return 0
-				;;
-		esac
-	fi
-
 	# Interface detection with what an installed box carries TODAY.
 	#   aen0 -- the stock A2065 probe, `aen -S`. This IS the stock convention:
 	#           /etc/inet/network-config gates its own bring-up on it.
@@ -536,6 +506,58 @@ ask_network()
 		set -- $NET_IFS
 		NIF=$#
 	fi
+}
+
+ask_network()
+{
+	# Cleared FIRST so a second pass through the summary loop that declines
+	# networking really does decline it (the answer is the whole gate S16 reads).
+	FB_NET_CONFIGURED= FB_NET_NOIF=
+	# 1.1: look for an interface first. With none there is nothing to ask: the network is
+	# recorded as DHCP on any interface (`* dhcp`), so a card fitted later comes up at its
+	# first boot through ifup, and no repository address is asked (DNS from the lease).
+	if [ "$FB_L11" = y ]; then
+		find_ifs
+		if [ "$NIF" = 0 ]; then
+			echo "\nNo supported Ethernet interface was found on this machine, so the"
+			echo "network questions are skipped.  Amiga UNIX supports the A2065 (aen0) and,"
+			echo "on a Z3660, the native Ethernet (zen0).  A card fitted later asks a"
+			echo "DHCP server for its address at the next boot."
+			FB_NET_MODE=dhcp FB_IP= FB_NETMASK= FB_GATEWAY= FB_DNS1= FB_DNS2= FB_NET_NOIF=y
+			FB_NET_CONFIGURED=y
+			return 0
+		fi
+	fi
+	readask "\nDo you want to configure networking? [y] "
+	case $ask in
+		[nN]* )
+			echo "\nNetworking is left as the installation set it."
+			return 0
+			;;
+	esac
+
+	# 1.1: every interface a driver finds asks a DHCP server (`* dhcp`),
+	# or one interface gets a static address. Default: static when the installation set
+	# an address, else DHCP.
+	FB_NET_MODE=static
+	if [ "$FB_L11" = y ]; then
+		DHDEF=y
+		[ -n "$FB_IP" ] && DHDEF=n
+		readask "\nUse DHCP to configure the network? [$DHDEF] "
+		[ "$ask" != "" ] || ask=$DHDEF
+		case $ask in
+			[yY]* )
+				FB_NET_MODE=dhcp FB_IP= FB_NETMASK= FB_GATEWAY= FB_DNS1= FB_DNS2=
+				ask_repo
+				FB_NET_CONFIGURED=y
+				return 0
+				;;
+		esac
+	fi
+
+	[ "$FB_L11" = y ] || find_ifs
+	# a function's `set --` stays its own: the list is set here for the choice below
+	[ -z "$NET_IFS" ] || set -- $NET_IFS
 	if [ "$NIF" = 0 ]; then
 		echo "\nNo supported Ethernet interface was found on this machine."
 		echo "Amiga UNIX supports the A2065 (aen0) and, on a Z3660, the native"
@@ -956,7 +978,11 @@ summary()
 		echo "Timezone:		`sed -n 's/^TZ=//p' /etc/TIMEZONE 2>/dev/null`"
 	fi
 	if [ "$FB_NET_CONFIGURED" = y ] && [ "$FB_NET_MODE" = dhcp ]; then
-		echo "Network:		DHCP on every interface"
+		if [ "$FB_NET_NOIF" = y ]; then
+			echo "Network:		no interface found; DHCP on a card fitted later"
+		else
+			echo "Network:		DHCP on every interface"
+		fi
 	elif [ "$FB_NET_CONFIGURED" = y ]; then
 		echo "Network:		$FB_ETHER_IF $FB_IP netmask $FB_NETMASK"
 		if [ -n "$FB_GATEWAY" ]; then

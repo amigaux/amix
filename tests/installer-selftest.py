@@ -10076,11 +10076,24 @@ def audit_l11():
         r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
         rd = lambda *p: open(os.path.join(fr, *p)).read() if os.path.exists(os.path.join(fr, *p)) else ""
         return r.stdout + r.stderr, rd
-    net = _extract_func(fbt, "ask_network") + "\n" + _extract_func(fbt, "ask_repo")
-    out, rd = fbrun(net + '\nask_network\necho "MODE=$FB_NET_MODE CONF=$FB_NET_CONFIGURED IP=$FB_IP REPO=$FB_REPO_HOST"\n',
+    net = "\n".join(_extract_func(fbt, f) for f in ("find_ifs", "ask_network", "ask_repo"))
+    # the hardware is the test's: an A2065 or none (aen -S), never a Z3660 NIC, and no mknod
+    zen_none = lambda c: c.replace("mknod /dev/zen0 c 51 0", "false").replace("( : < /dev/zen0 )", "false")
+    net_aen, net_none = zen_none(net).replace("/usr/amiga/bin/aen -S", "true"), \
+        zen_none(net).replace("/usr/amiga/bin/aen -S", "false")
+    show = '\nask_network\necho "MODE=$FB_NET_MODE CONF=$FB_NET_CONFIGURED IP=$FB_IP REPO=$FB_REPO_HOST NOIF=$FB_NET_NOIF I=$i"\n'
+    out, rd = fbrun(net_aen + show,
                     answers=("y", "y", "pkg.example", ""), FB_L11="y", FB_IP="", FB_REPO_HOST="", FB_REPO_IP="")
-    (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example" in out else fail)(
+    (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=" in out else fail)(
         "firstboot dialog (1.1): `Use DHCP? y` takes no address, keeps the repository questions: %r" % out.strip()[-120:])
+    out, rd = fbrun(net_none + show, answers=(), FB_L11="y", FB_IP="198.51.100.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+    (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=y I=1" in out and "network questions are skipped" in out else fail)(
+        "firstboot dialog (1.1), no interface: no network question asked, DHCP recorded for a card fitted later: %r"
+        % out.strip()[-120:])
+    out, rd = fbrun(net_none + show, answers=("y",), FB_L11="", FB_IP="198.51.100.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+    (ok if "CONF= " in out and "I=2" in out and "left as the installation set it" in out else fail)(
+        "firstboot dialog (1.0), no interface: as before (asked, then left as the installation set it): %r"
+        % out.strip()[-120:])
     m8 = re.search(r'\nfb_bits\(\)\n\{.*?\n\}\nif \[ "\$FB_L11" = y \] && \[ "\$FB_NET_CONFIGURED" = y \]; then\n(.*?)\nelif ', fbt, re.S)
     m1 = re.search(r'\nif \[ "\$FB_L11" = y \] && \[ -z "\$FB_NODENAME" \]; then\n.*?\nuname -S "\$FB_NAME_EFF" 2>/dev/null \|\| true\n', fbt, re.S)
     m7 = re.search(r'\nif \[ "\$FB_L11" = y \]; then\n\tsv=yes;.*?\nelif ', fbt, re.S)
