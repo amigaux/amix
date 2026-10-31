@@ -1,0 +1,73 @@
+.TH DEFAULT 4 "31 October 2026" "amix-base"
+.SH NAME
+default \- the settings system commands start from
+.SH SYNOPSIS
+.BI /etc/default/ command
+.SH DESCRIPTION
+Each file in
+.B /etc/default
+holds the settings one system command starts with, one
+.IB NAME = value
+a line; a line that starts with
+.B #
+is not in effect.
+The base package ships
+.BR /etc/default/login ;
+the other files
+.RB ( cron ,
+.BR passwd ,
+.BR su ,
+.BR tar )
+are the system's own and are described with their commands.
+.SS /etc/default/login
+read by
+.BR login (1)
+for every login:
+.TP
+.BI ULIMIT= blocks
+the largest file a login's processes may write, in 512-byte blocks.
+The base package sets
+.BR 4194303 ,
+the largest file the ufs file system holds (2 GiB less 512 bytes); the
+system's own file leaves the line commented out, and a login is then held
+to the kernel's 524288 blocks (256 MiB), so writing a bigger file fails
+(EFBIG).
+.TP
+.BI CONSOLE= device
+when set,
+.B root
+may log in only there; commented out (as shipped),
+.B root
+may log in anywhere.
+.TP
+.BI PASSREQ= YES\fR|\fPNO
+whether every account must have a password.
+.TP
+.BI ALTSHELL= YES\fR|\fPNO
+whether
+.B SHELL
+is set to the account's own shell.
+.TP
+.BI HZ= n
+the clock rate passed on in the environment.
+.TP
+.BI TIMEZONE= zone
+a time zone for logins; commented out, the system's
+.B /etc/TIMEZONE
+applies.
+.TP
+.B NOEXPIRE
+uncommented, no password expires.
+.PP
+An update of the base package keeps an edited
+.B /etc/default/login
+and puts the new default beside it as
+.BR /etc/default/login.new .
+.SH FILES
+.TP
+.B /etc/default/login
+the settings of
+.BR login .
+.SH SEE ALSO
+.BR login (1),
+.BR ulimit (1)

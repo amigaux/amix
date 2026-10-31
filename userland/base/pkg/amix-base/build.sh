@@ -61,6 +61,10 @@ stage() {
 	# the stock /etc/inittab with the dlm line first among sysinit (C3-5 5)
 	sh etc/mkinittab.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/inittab"
 	chmod 0664 "$DEST/etc/inittab"
+	# the stock /etc/default/login with a login's file limit at ufs's ceiling
+	mkdir -p "$DEST/etc/default"
+	sh etc/mklogin.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/default/login"
+	chmod 0444 "$DEST/etc/default/login"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 rc/devnodes.1m /opt/amix/man/1m/devnodes
@@ -76,6 +80,7 @@ stage() {
 	put 0644 etc/profile.d.4 /opt/amix/man/4/profile.d
 	put 0644 etc/nodename.4 /opt/amix/man/4/nodename
 	put 0644 etc/inittab.4 /opt/amix/man/4/inittab
+	put 0644 etc/default.4 /opt/amix/man/4/default
 	put 0644 display/display.4 /opt/amix/man/4/display
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart

@@ -76,7 +76,7 @@ then `removef -f core`), as it does for the network chain. The list (owner,
 | `/etc/TIMEZONE` | the colon form is mandatory; validated wherever it is written |
 | `/etc/nodename` | written by `ifup` when an `interfaces` line says `name`, or by the install dialog |
 | `/etc/inet/hosts` | `ifup` rewrites this host's own line |
-| `/etc/default/login` | `CONSOLE=` |
+| `/etc/default/login` | `CONSOLE=`; ours, built at package time: the stock bytes with `ULIMIT=4194303` for the commented `#ULIMIT=4096` (`etc/mklogin.sh`, test `etc/test-login.sh`), so a login can write a file up to the ufs ceiling (2 GiB less 512 bytes) and not only the kernel's 256 MiB. Page `default(4)` |
 | `/etc/profile` | gains the one guarded line that sources `/etc/profile.d/*.sh` (D-N23). Ours, built at package time: amix-system's stock bytes (sha256-checked) followed by `etc/profile.add`, the only lines this repository holds (`etc/mkprofile.sh`, test `etc/test-profile.sh`) |
 | `/etc/inet/strcf` | read by `slink`; ours as the network chain's |
 

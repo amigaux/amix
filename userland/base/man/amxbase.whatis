@@ -1,4 +1,5 @@
 devnodes(1m)     devnodes - re-create missing device nodes at boot
+default(4)       default - the settings system commands start from
 display(4)       display - which screen X uses on this machine, and how it starts
 display.d(4)     display.d - the display cards X can use, one file each
 dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
