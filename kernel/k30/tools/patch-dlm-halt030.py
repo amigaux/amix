@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# patch-dlm-halt030.py -- the k30 module kernel's halt-pass hook (S4-21; kernel/dlm core patch 0030, spec 30 sec 2
+# patch-dlm-halt030.py -- the k30 module kernel's halt-pass hook (kernel/dlm core patch 0030, spec 30 sec 2
 # patch 11): mdboot calls dlm_halt() immediately before its haltsys and before its rtnfirm.
 #
 #   patch-dlm-halt030.py ETREL            retarget; idempotent ([skip] when already done)

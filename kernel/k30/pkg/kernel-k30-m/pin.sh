@@ -2,13 +2,13 @@
 # Sourced by build.sh.
 #
 # Moved into amix kernel/k30/pkg from amix-packages' recipes/kernel-k30-m at
-# 450ba6a (P-38 S3.3): the same pins and the same package text; the inputs
+# 450ba6a: the same pins and the same package text; the inputs
 # that came from beside the checkout now come from amix at a commit
 # (K30M_AMIX_COMMIT: elf2brel and the licences of the drivers' patches) and
 # from the pinned forks by hash (the port's and paula's licences).
 #
 # Not built here.  amix-kerntools cut it (kerntools 22d3261, the k30 cut at
-# DDI minor 3: amix-kerntools/build/cuts/2026-10-28-k30-paula/cut-paula.sh -- the S5-10
+# DDI minor 3: amix-kerntools/build/cuts/2026-10-28-k30-paula/cut-paula.sh -- the
 # cut-carve.sh recipe, --no-scsi-drivers --object-absent --no-fstypes
 # --carve-fs ufs,s5, plus --kabi k30.1.3 and --audio-paula: amix-paula
 # 548d258's three patchers on the stock amiga/driver/audio.c, safeclose,
@@ -32,8 +32,8 @@
 # boot modules bound to the cut's build=, built with the k30 kit (amix-dlm
 # e45b061); shipped VERBATIM at /etc/conf/mod.d/{ufs,s5} with comment-only
 # modreg.d files.  build.sh rebuilds both from the cut's carve/ directory
-# with this repository's own kit export and requires the same bytes (S5-12
-# R2).  The kit is kabi k30.1.3; a module carries the highest minor it
+# with this repository's own kit export and requires the same bytes.
+# The kit is kabi k30.1.3; a module carries the highest minor it
 # imports, never below 1.2 (amix-dlm C3-2 v2), so ufs and s5 say
 # kabi=k30.1.2 in .moddata (K30M_FSKABI).  No module catalog rows: they
 # travel in the kernel package only.
@@ -42,7 +42,7 @@
 # kern30m, version <kabi>.<yymmdd>-<nn> from the sidecar's build id, above
 # the -20 of record (C2-3 v8 sec 1.1).  -04 to -13 stay in build/kspace/pkg;
 # -14 to -16 are in build/kspace/pkg/superseded; -17 is 64d37aaa's; -20
-# (kerntools 224b285, dlm dc9f6ab, kabi k30.1.2, the S5-12 cut) is the
+# (kerntools 224b285, dlm dc9f6ab, kabi k30.1.2, the first carved cut) is the
 # kernel of the catalogs of record 915e09f3 to b1f564f4.
 #
 # -22 against -20: kabi k30.1.3 (DDI minor 3: AllocMem, FreeMem,
@@ -52,7 +52,7 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
-# -64 against -63 (2026-10-31): the k30 station's cut 68030-261031-64 (amix
+# -64 against -63 (2026-10-31): the cut 68030-261031-64 (amix
 # kernel/k30/cuts/68030-261031-64), -63's recipe from amix b391504: the module
 # core's major registry carries c 48 random (a8719fb), so the random module's
 # char major is the kernel's own; the same fixes as -63.  The first cut made
@@ -62,7 +62,7 @@
 # 1b2736d at their pins (the files the cut reads are -63's bytes), audio.c
 # 1f43c5ff; ufs carved from the same qz/ufs.exp (c480330a).
 #
-# -63 against -56 (2026-10-31): the k30 station's cut 68030-261031-63
+# -63 against -56 (2026-10-31): the cut 68030-261031-63
 # (amix kernel/k30/cuts/68030-261031-63, a0e2ab4), from amix c1b7842's
 # kernel/ with -56's recipe and fixes plus the STREAMS freeq guard (grimoire
 # quirk 92: the 5 freeq calls in qdetach, strclose and stropen go through
@@ -72,7 +72,7 @@
 # c1b7842, port d0e8857 (kernel/port/port.pin), audio.c 1f43c5ff; ufs
 # carved from the same qz/ufs.exp as -56.
 #
-# -56 against -22 (2026-10-30): the k30 station's cut 68030-261030-56 (amix
+# -56 against -22 (2026-10-30): the cut 68030-261030-56 (amix
 # kernel/k30/cuts/68030-261030-56: cut.sh and its SHA256SUMS; the files in
 # kernel/k30's own build/cuts), from amix 4fc583f's kernel/ with the -22
 # recipe and its three build-cross-kernel.sh defaults: kzero (grimoire quirk

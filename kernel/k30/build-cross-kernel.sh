@@ -77,14 +77,14 @@
 #                         EXACTLY these (the dropped drivers' amiga/alien objects)
 #     --no-fstypes        no in-kernel filesystem from fstypes.conf (no static cdfs: no fs/cdfs/exp, no vfssw row,
 #                         stock filesys.o, no libgcc pull) -- a module kernel whose cdfs is a boot module (kern30m -17)
-#     --carve-fs ufs,s5   (S5-10, kernel/dlm C4-6 / docs/plan/s4-40-ufs-s5-carve.md) ufs and/or s5 out of the base: their
+#     --carve-fs ufs,s5   (kernel/dlm C4-6 / docs/plan/s4-40-ufs-s5-carve.md) ufs and/or s5 out of the base: their
 #                         fs/<fs>/exp leave fs/Makefile OPT_SUBEXP, their vfssw rows leave master.d/filesys.c, s5's
 #                         inoinit leaves master.d/kernel.c's init_tbl (both objects recompiled: the object gate must
 #                         allow master.d/filesys.o master.d/kernel.o); the stock exps are hashed against the sysroot.
 #                         After the link, each carved fs becomes a core-tier module bound to the cut's build id
 #                         (kernel/dlm tools/carve.py wrap + the k30 kit's make, which runs modcheck), written to
 #                         usr/sys/mod.d/<fs> beside unix.brel. Needs --dlm-core with a built kit/k30 and --kinfo-build.
-#     --sd-cards 2|4      (S4-21, kernel/dlm C4-1) 4 = the four-card sd layer: the staged sd.h gets SDCARDS 4
+#     --sd-cards 2|4      (kernel/dlm C4-1) 4 = the four-card sd layer: the staged sd.h gets SDCARDS 4
 #                         and C4-1's sdcard() (card low bit 3, high bit 7), ct.c's table-index decode
 #                         becomes (idx >> 3) & 3, sd.c.in's rank column and ranked insert (rank class,
 #                         then base: 1 z3660, 2 zorro, 3 mobo, 4 ide), and every alien object that
@@ -96,7 +96,7 @@
 #                         audio exclusion pair, so it needs --audio-paula). The block generator, the libgcc
 #                         export loop and the core.list gate take only the list lines whose minor is at most the
 #                         claim's (C3-2 v2 section 2). Default k30.1.0.
-#     --bempty-ram        (S4-21, kernel/dlm core 0031) bdevsw row 20, the stock ramdisk, becomes an empty row (every
+#     --bempty-ram        (kernel/dlm core 0031) bdevsw row 20, the stock ramdisk, becomes an empty row (every
 #                         routine nodev, nullflag) so a module's registered b: major can fill it.  An exact-line
 #                         edit of master.d/kernel.c, which then recompiles.  Off by default.
 #   A driver dir is kernel/drivers/<name> (e.g. ../drivers/a4091); a checkout kept elsewhere
@@ -135,7 +135,7 @@
 #                and, after elf2brel, the kabi sidecar written next to unix.brel ($BUILD/kabi) by
 #                tools/kabi-sidecar030.py for family NAME (default K030-U); --check after.
 #                scan060 is $PORT/test-tools/scan060.py: --kinfo needs PORT (a checkout of the port).
-#   --dlm | --dlm-core <kernel/dlm dir> [--dlm-stub-providers]  (stage 3, S3-21; needs --kinfo) the module kernel:
+#   --dlm | --dlm-core <kernel/dlm dir> [--dlm-stub-providers]  (stage 3; needs --kinfo) the module kernel:
 #                tools/dlm-core-link.sh runs steps 1-10 of kernel/dlm's docs/plan/stage-3-kernel-brief.md on the
 #                linked ET_REL after the kinfo row, before elf2brel, in $WORK/dlm-core: the core staged with its
 #                series, mkoffs, mkreg, the core objects and core/plat at kabi k30.1.0, mkident's AXK1 + arena,
@@ -685,7 +685,7 @@ if [ -n "$AUDIO_PAULA" ]; then
   echo "  -> amiga/driver/audio.o recompiled (section 4b) before section 5 relinks amiga/driver"
 fi
 
-# === 2c. --sd-cards 4: the four-card sd layer (S4-21, kernel/dlm C4-1 section 2) ==============
+# === 2c. --sd-cards 4: the four-card sd layer (kernel/dlm C4-1 section 2) ==============
 # sd.h is a header, which the patch harness above does not take, so the two stock edits are made
 # here, each anchored on the exact stock line and refused when the line is not there exactly once:
 #   sd.h  SDCARDS 2 -> 4; sdcard( dev) = card low bit 3 | card high bit 7 (C4-1 section 2.1)
@@ -1017,7 +1017,7 @@ if [ -n "$NET_DIR" ]; then
   compile_patched_obj master.d kernel.c kernel.o "-D__STDC__=0"
 fi
 
-# --- 7b-carve. (S5-10, --carve-fs) ufs and/or s5 out of the base: their exps leave fs/Makefile's OPT_SUBEXP, their
+# --- 7b-carve. (--carve-fs) ufs and/or s5 out of the base: their exps leave fs/Makefile's OPT_SUBEXP, their
 # vfssw rows leave master.d/filesys.c (the table's later indices shift: kernel/dlm's call, C4-6), and s5's inoinit leaves
 # master.d/kernel.c's init_tbl (the s5 module calls it before vfs_register). Both objects are recompiled here, for
 # the same silent-vanish reason as 7b. The stock exps the modules wrap are the sysroot's, hashed against the tree's.
@@ -1314,12 +1314,12 @@ if [ -n "$RTH1_C" ]; then
   # --dlm: step 8's root hook is rth1.c's own (#ifdef RTH1_DLM: dlm_marc_post once vfs_mountroot returns 0;
   # amix-040-060-port k46-module, ea42b65): an rth1.c without it would build a module kernel that never posts
   [ -z "$DLM_CORE" ] || grep -q 'RTH1_DLM' "$RTH1_C" || { echo "--dlm: $RTH1_C has no RTH1_DLM hook (amix-040-060-port k46-module)" >&2; exit 2; }
-  # --sd-cards 4: the port's rth1.c (S4-21, its 42b84a8 on) walks four cards and builds C4-1's root minor and
+  # --sd-cards 4: the port's rth1.c (from its 42b84a8 on) walks four cards and builds C4-1's root minor and
   # bo_name with -DSDCARDS=4. An older rth1.c has no such form: it is built as it is, and roots on cards 0-1 only
   RTH1_SD4=""
   if [ "$SD_CARDS" = 4 ]; then
     if grep -q '#if SDCARDS > 2' "$RTH1_C"; then RTH1_SD4="-DSDCARDS=4"
-    else echo "  WARNING: --sd-cards 4 with a two-card rth1.c ($RTH1_C): a root on card 2 or 3 is not found (the port's S4-21 rth1.c, 42b84a8 on, has the four-card form)"; fi
+    else echo "  WARNING: --sd-cards 4 with a two-card rth1.c ($RTH1_C): a root on card 2 or 3 is not found (the port's rth1.c from 42b84a8 on has the four-card form)"; fi
   fi
   echo "--- rth1: compiling $RTH1_C with the kit's .c.o rule (amiga/alien: -c -O $CFLAGS_K -I../.. -I../inc${RTH1_SD4:+ $RTH1_SD4}) ---"
   ( cd "$BUILD/amiga/alien"
@@ -1330,7 +1330,7 @@ if [ -n "$RTH1_C" ]; then
   echo "  rth1.o $(sha256sum "$BUILD/rth1.o" | cut -c1-16) == the AMIX_MUL64=keep build (no 64-bit multiply site)"
   "$OBJDUMP" -h "$BUILD/rth1.o" | awk '$2 ~ /^\.rodata/ {print "  note: rth1.o carries " $2 " (folded by elf2brel)"}'
   GOT="$("$NM" "$BUILD/rth1.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  # the port's rth1.c from f0a6011 on also calls rth1_nomarc() before rth1_apply on a module kernel (S4-23):
+  # the port's rth1.c from f0a6011 on also calls rth1_nomarc() before rth1_apply on a module kernel:
   # tools/rth1-nomarc030.s provides it, empty, and step 7h of dlm-core-link.sh retargets it to dlm_marc_root
   NOMARC=""; [ -z "$DLM_CORE" ] || ! echo " $GOT " | grep -q " rth1_nomarc " || NOMARC=1
   # from bb6eaf6 on it also copies the AXL1 record's rootfs name into rootfstype (kernel/dlm C4-3 section 3), bounded
@@ -1343,7 +1343,7 @@ if [ -n "$RTH1_C" ]; then
       || { echo "--rth1: rth1.c bounds rootfstype at '${RL:-?}' bytes, the base's rootfstype is '${KL:-?}' (hex)" >&2; exit 1; }
     ROOTFS=1; echo "  rth1.o writes rootfstype (the AXL1 rootfs name), bounded at $RL bytes = the base's rootfstype"
   fi
-  # from 88dcfc0 on (S5-46, kernel/dlm C4-1 v6 section 5.2) it matches a motherboard record by its id, from sd's name for the
+  # from 88dcfc0 on (kernel/dlm C4-1 v6 section 5.2) it matches a motherboard record by its id, from sd's name for the
   # card (sd.c.in's sdhardwarename, kinfo's rule): one more import
   SDHW=""; ! echo " $GOT " | grep -q " sdhardwarename " || SDHW=1
   [ "$GOT" = "bootinfo ${DLM_CORE:+dlm_marc_post }printf rootdev ${ROOTFS:+rootfstype }${NOMARC:+rth1_nomarc }sdcardbase ${SDHW:+sdhardwarename }sdopen swapfile vfs_mountroot" ] \
@@ -1567,8 +1567,8 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
   if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   if [ "$FREEQ_GUARD" = 1 ]; then python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"; fi
-  # the sd seam, checked on the objects (a lost seam leaves a root module registered and never taken: S4-73's
-  # "RTH1: root c6d0s1 built in (controller not present)"): a four-card base must call a core's dlm_sd_close
+  # the sd seam, checked on the objects (a lost seam leaves a root module registered and never taken, the boot
+  # line "RTH1: root c6d0s1 built in (controller not present)"): a four-card base must call a core's dlm_sd_close
   if [ "$SD_CARDS" = 4 ] && "$NM" "$WORK/dlm-core/obj/dlm.o" | awk '$2=="T" && $3=="dlm_sd_close" {f=1} END{exit !f}'; then
     "$NM" "$BUILD/unix.static" | awk '$1=="U" && $2=="dlm_sd_close" {f=1} END{exit !f}' \
       || { echo "--sd-cards 4: the core defines dlm_sd_close but sd.c never calls it (the sd seam is missing)" >&2; exit 1; }

@@ -92,7 +92,7 @@ def read(path):
             continue
         name = b[st + nm:b.index(b'\0', st + nm)].decode('latin-1')
         # a name can be a file's static (t) and the kernel's global (T) at once -- three static delay()s beside the
-        # global the core tier exports (S5-10): the global is the one the symbol block names, so it wins over a local
+        # global the core tier exports: the global is the one the symbol block names, so it wins over a local
         if name not in out or (out[name][2] >> 4 == 0 and info >> 4 != 0):
             out[name] = (val, sz, info)
     return out
@@ -150,7 +150,7 @@ def selftest():
     ok('round trip: every name, value, size and kind', all(r[nm] == (v, s, i) for nm, v, s, i in syms))
     p2 = os.path.join(d, 'dup.sym')
     write([('delay', 0x508c, 4, 0x02), ('delay', 0x10b0e, 4, 0x02), ('delay', 0x3e34e, 8, 0x12), ('end', 0x9000, 0, 0x10)], p2)
-    ok('a global wins over same-named locals (the static delay()s, S5-10)', read(p2)['delay'] == (0x3e34e, 8, 0x12))
+    ok('a global wins over same-named locals (the static delay()s)', read(p2)['delay'] == (0x3e34e, 8, 0x12))
     b = open(p, 'rb').read()
     ok('ELF32 big-endian m68k, SHN_ABS symbols', b[:6] == b'\x7fELF\x01\x02' and struct.unpack('>H', b[18:20])[0] == 4
        and all(struct.unpack('>H', b[52 + 16 * k + 14:52 + 16 * k + 16])[0] == SHN_ABS for k in range(1, 5)))

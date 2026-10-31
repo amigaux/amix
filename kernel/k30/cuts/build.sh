@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh -- make dist's kernel-k30 hook (P-38 S2.2): the current cut of
+# build.sh -- make dist's kernel-k30 hook: the current cut of
 # record, cuts/CURRENT's build id, rebuilt by its own cut.sh, its sums
 # checked against the record's.
 #

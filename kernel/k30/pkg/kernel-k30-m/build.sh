@@ -16,7 +16,7 @@
 # reproducing the brel from the ET_REL; bss= measured twice; abi= equal to
 # the reference of the pinned kabi (abi/k30/abi-<kabi>.txt); arena= a
 # multiple of 16 (C3-3 v5); sdcards= passed through (C2-3 v7); ksymgate on the ET_REL's symbol block.
-# Since -20 (C2-3 v8 sec 1, S5-12): the cut carries no built-in ufs or s5 and
+# Since -20 (C2-3 v8 sec 1): the cut carries no built-in ufs or s5 and
 # its sidecar no rootfs=; the package ships the cut's ufs and s5 core-tier
 # modules verbatim at /etc/conf/mod.d (build/pkg/common/kfsmod.sh: pins,
 # modcheck, .moddata build= the sidecar's, and a rebuild from the carve
@@ -40,7 +40,7 @@ echo "=== $K30M_CATALOG_NAME $K30M_VERSION (PKG=$K30M_PKG, build $K30M_BUILDID) 
 # the cut's output is an input from outside the recipe: absent, the roll is
 # not failed but missing (exit 3, build.sh)
 [ -f "$K30M_SRC/$K30M_SUMS" ] || {
-	echo "[MISSING] kspace: kernel/k30: $K30M_PKG: no cut $K30M_BUILDID at $K30M_SRC (P-38 S2.2, the k30 station: make kernel-k30)" >&2
+	echo "[MISSING] kspace: kernel/k30: $K30M_PKG: no cut $K30M_BUILDID at $K30M_SRC (make kernel-k30)" >&2
 	exit 3; }
 case "$K30M_PORT_COMMIT" in "$K30M_KIT_PORT"*) ;; *)
 	echo "[FAIL] pin.sh: K30M_PORT_COMMIT is not K30M_KIT_PORT in full" >&2; exit 1 ;; esac

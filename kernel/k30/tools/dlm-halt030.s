@@ -1,4 +1,4 @@
-| dlm-halt030.s -- the k30 module kernel's halt-pass shims (S4-21, kernel/dlm core patch 0030).
+| dlm-halt030.s -- the k30 module kernel's halt-pass shims (kernel/dlm core patch 0030).
 | tools/patch-dlm-halt030.py retargets mdboot's `jsr haltsys` and `jsr rtnfirm` here: the module halt pass runs,
 | then the stock routine is entered with mdboot's own return address and argument (jmp, not jsr).
 | dlm_halt clobbers only the scratch registers a call site already gives up.

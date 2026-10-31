@@ -1,4 +1,4 @@
-# common.sh -- sourced by each recipe of kernel/k30/pkg (P-38 S3.3) once it
+# common.sh -- sourced by each recipe of kernel/k30/pkg once it
 # has set HERE to its own directory: the amix packaging harness
 # (build/pkg/layout.sh, then build/pkg/common) and where the recipes write.
 #
@@ -7,7 +7,7 @@
 #                   pkg/ its datastreams, src/ the exports it reads
 #   kspace_epoch E  exports SOURCE_DATE_EPOCH=E, the recipe's pin.sh epoch:
 #                   every stamp of the roll is the package version's own,
-#                   never the environment's (P-38 D-b)
+#                   never the environment's
 #   kspace_done F   names the datastream F the recipe rolled, for build.sh
 #   kspace_amix_file C P OUT     amix's file P at commit C, into OUT
 #   kspace_fork_have N C         the pinned fork N's commit C (in full) is in
