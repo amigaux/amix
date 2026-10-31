@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — make dist's kspace step calls each kernel/<dir>/pkg/build.sh (880ede1)
+
+The kspace step runs every kernel/<dir>/pkg/build.sh in provider order (kernel/dlm, kernel/k30, kernel/port, each
+kernel/modules/<m>, each kernel/drivers/<d>) with AMIX_BUILD_ROOT=out/build/kspace, copies their .pkg files into
+out/kspace/pkgs and runs the one-version guard. A directory without a build.sh is named with its owner and the step
+exits 3 after running the ones present; a failing build.sh stops it. test-dist 21/21.
+
 ## 2026-10-31 — the lock format and make lock (3be5063)
 
 release/README.md specifies `#amix-lock 1` (P-38 S1.6): the head (the amix commit, the epoch rule, a `dirty` line when
