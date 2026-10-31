@@ -1,0 +1,99 @@
+#!/bin/sh
+# monsw -- put the monitor-switch value into the kernel's monsw at boot:
+# /etc/init.d/monsw, run as /etc/rc2.d/S20monsw (P-8, P-36 W9).
+#
+# The value, the first that is set:
+#   1. /etc/display's monsw line (display(4)): comments stripped, the last
+#      line wins, as xstart reads it; a value that is not digits is ignored
+#   2. /etc/monsw, the older file: its first line; the log says it was used
+#   3. nothing: no MONSWIOC_SETCFG, so the value the card driver offers (its
+#      seed) applies
+# The value goes in with monswctl set. A value the tool or the kernel
+# refuses -- a bad bit sum, no node, a kernel without monsw, a value patched
+# into the kernel (EBUSY) -- is one line on the console and in the log, and
+# the boot goes on: the switch is never a boot dependency. S20monsw sorts
+# after S20devnodes, which makes the package's /dev/monsw node again if it
+# is missing, and before any X session. Log: /var/adm/rc.log ("monsw:"
+# lines), through /usr/lib/amix/rc.subr; without it, the console.
+#
+# MONSW_DISPLAY / MONSW_CONF / MONSW_CTL / MONSW_DEV / RC_SUBR exist for the
+# host test.
+#
+# MIT licence, see kernel/modules/LICENSE in the amix repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+DISPLAY_CONF=${MONSW_DISPLAY:-/etc/display}
+CONF=${MONSW_CONF:-/etc/monsw}
+CTL=${MONSW_CTL:-/usr/sbin/monswctl}
+DEV=${MONSW_DEV:-/dev/monsw}
+
+case "$1" in
+start)
+	;;
+stop)
+	exit 0
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+
+if [ -r "$RC_SUBR" ]
+then
+	. "$RC_SUBR"
+	log() { rc_log monsw "$*"; }
+else
+	log() { echo "monsw: $*"; }
+fi
+# say: the console and the log
+say() {
+	echo "monsw: $*"
+	[ -r "$RC_SUBR" ] && rc_log monsw "$*"
+}
+
+v=
+if [ -r "$DISPLAY_CONF" ]
+then
+	v=`sed -e 's/#.*//' "$DISPLAY_CONF" |
+		awk '$1 == "monsw" { $1 = ""; v = substr($0, 2) } END { print v }'`
+	case "$v" in
+	'')
+		;;
+	*[!0-9]*)
+		say "$DISPLAY_CONF monsw '$v' is not a bit sum; ignored"
+		v=
+		;;
+	*)
+		from=$DISPLAY_CONF
+		;;
+	esac
+fi
+if [ -z "$v" ] && [ -f "$CONF" ]
+then
+	read v < "$CONF"
+	from=$CONF
+	[ -n "$v" ] && log "value $v from $CONF, the older file; set monsw in $DISPLAY_CONF instead"
+fi
+if [ -z "$v" ]
+then
+	log "no value in $DISPLAY_CONF or $CONF; the card's own value applies"
+	exit 0
+fi
+
+if [ ! -x "$CTL" ]
+then
+	say "$from value $v not applied: $CTL is missing"
+	exit 0
+fi
+tmp=${TMPDIR:-/tmp}/monsw.rc.$$
+$CTL -d $DEV set "$v" > $tmp 2>&1
+if [ $? -ne 0 ]
+then
+	say "$from value '$v' not applied: `cat $tmp`"
+	rm -f $tmp
+	exit 0
+fi
+rm -f $tmp
+log "value $v from $from set"
+exit 0

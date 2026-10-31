@@ -1,0 +1,128 @@
+.TH MONSWCTL 1M "31 October 2026" "monsw"
+.SH NAME
+monswctl \- read and set the monitor switch, and switch the screen
+.SH SYNOPSIS
+.B monswctl
+[
+.B \-d
+.I dev
+]
+.B get
+|
+.B status
+|
+.BI set " value"
+|
+.B rtg
+[
+.I command
+[
+.I argument ...
+] ]
+|
+.B native
+.SH DESCRIPTION
+.B monswctl
+talks to the monitor switch,
+.BR monsw (7),
+through its device,
+.B /dev/monsw
+(or
+.IR dev ).
+Opening the device loads the
+.B monsw
+module when it is not loaded yet.
+.TP
+.B get
+prints the five fields the driver reports, one per line:
+.BR config ,
+the value in effect and its meaning;
+.BR source ,
+where it came from
+.RB ( none ,
+.BR seed ,
+.BR set ,
+.BR patched );
+.BR state ,
+.BR native ,
+.B rtg
+or
+.B none
+(not switched yet);
+.BR holder ,
+1 when a program holds the switch on the card's picture;
+.BR ncards ,
+the card drivers registered.
+.TP
+.B status
+prints the same in one line.
+.TP
+.BI set " value"
+makes
+.I value
+the value in effect, unless one is patched into the kernel; root only.
+.I value
+is a sum of the bits of
+.BR monsw (7),
+in decimal or as
+.BR 0x \&
+hex;
+.B \-1
+unsets it, so that the card's own value applies again.
+A value with any other bit is refused here, before the kernel sees it.
+The boot step
+.B /etc/rc2.d/S20monsw
+uses this to put the value from
+.BR /etc/display
+into the kernel at every boot.
+.TP
+.B rtg
+switches the monitor to the card's picture, runs
+.I command
+and switches back when it ends, however it ends.
+Without a command it holds the card's picture until the end of its input
+or until it is killed.
+Its exit status is the command's.
+.TP
+.B native
+switches the monitor back to the chipset's picture.
+.SH EXIT STATUS
+0 done; 1 the device or the kernel refused, with one line that says why;
+2 a usage mistake, before the device is opened.
+.SH FILES
+.TP
+.B /dev/monsw
+the device, character major 52, minor 0.
+.TP
+.B /etc/display
+the
+.B monsw
+line, the value set at boot; see
+.BR display (4).
+.TP
+.B /etc/monsw
+the older file: one line, the value.
+The boot step reads it only when
+.B /etc/display
+has no
+.B monsw
+line, and the boot log says so.
+.TP
+.B /var/adm/rc.log
+the boot log: one
+.B monsw:
+line for each boot.
+.SH EXAMPLES
+.nf
+.ft CW
+monswctl status
+monsw: value 34 (SEL low=RTG) from set; state native; holder no; 1 card
+monswctl rtg sleep 10
+.ft R
+.fi
+.SH SEE ALSO
+.BR monsw (7),
+.BR display (4),
+.BR display.d (4),
+.BR xstart (1),
+.BR rc.subr (1M)

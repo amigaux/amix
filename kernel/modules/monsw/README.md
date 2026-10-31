@@ -19,7 +19,13 @@ that the 68040/68060 port links into its static kernels (see "The static form").
 | `module/Makefile` | builds both lines on the kit's `mk/module.mk` |
 | `module/VERSION` | the package version, `x.y.z-rev`, the same on both lines |
 | `module/static-port.sh` | compares the static object with the port's copy |
+| `tool/monswctl.c` | `monswctl`, the tool for `/dev/monsw` (`/usr/sbin/monswctl`) |
+| `tool/testdouble.c` | open/ioctl/close stand-ins for the tool's host test |
+| `tool/Makefile` | builds `monswctl` with the cross tools, and the host build for the test |
+| `rc/monsw` | the boot step, `/etc/init.d/monsw` linked as `/etc/rc2.d/S20monsw` |
+| `man/monsw.7`, `man/monswctl.1m` | the pages `monsw(7)` and `monswctl(1M)` |
 | `test/hosttest.sh` | host test of the parameter parser and the switch semantics |
+| `test/tooltest.sh` | host test of `monswctl` and of the boot step |
 | `test/monswtest.c` | the on-box instrument for `/dev/monsw` |
 
 ## The configuration value
@@ -45,8 +51,8 @@ The value is a sum of four bits. They have the same meanings as the Z3660 firmwa
    above. A forced value that is not a valid sum is still forced, and is taken as 0. While a
    value is forced, `MONSWIOC_SETCFG` answers `EBUSY`. At load the console says
    `monsw: switch value N (patched)`.
-2. **SETCFG**: root's last `MONSWIOC_SETCFG`, typically from `/etc/monsw`, applied by an rc
-   step at boot. -1 clears it.
+2. **SETCFG**: root's last `MONSWIOC_SETCFG`, typically the boot step's (see "The boot
+   step"). -1 clears it.
 3. **seed**: the value the first card driver offered when it registered (the Z3660 reports
    its firmware setting, register 0x318). Later cards' seeds are ignored.
 4. otherwise 0.
@@ -121,7 +127,24 @@ for the wrapper; `monsw_conf_data` is a weak reference. Its globals are the API 
 **To set a box's value**, use one of these:
 - a line `param config=34` in `/etc/conf/modreg.local.d/monsw`, owned by the administrator;
 - the same line in an installer's `modreg.d` default;
-- leave `config` unset and let `/etc/monsw` reach the driver through `MONSWIOC_SETCFG` at boot.
+- leave `config` unset and put a line `monsw 34` in `/etc/display` (`display(4)`); the boot step
+  sets it through `MONSWIOC_SETCFG`.
+
+## The boot step
+
+`rc/monsw` is `/etc/init.d/monsw`, run as `/etc/rc2.d/S20monsw`: after `S20devnodes`, which
+makes the package's `/dev/monsw` again when it is missing, and before any X session. It sets
+the first value it finds with `monswctl set`:
+1. the `monsw` line of `/etc/display`, read as `xstart` reads it: comments stripped, the last
+   line wins. A value that is not digits is reported and ignored;
+2. else the first line of `/etc/monsw`, the older file; the boot log says that it was used;
+3. else nothing, so the card's seed applies.
+
+A value that cannot be set (a bad sum, no node, a kernel without monsw, a forced value) is one
+line on the console and in the boot log, and the boot goes on. The log is `/var/adm/rc.log`
+through amix-base's `/usr/lib/amix/rc.subr` (`rc.subr(1M)`); without it, the console. The
+step carries no major number and makes no node (P-36 D-N21). A card's `display.d` entry says
+only whether the card uses the switch (`monsw yes`), not a value.
 
 ## Size and memory
 
@@ -159,6 +182,8 @@ make -C monsw/module               # both lines
 make -C monsw/module k46           # one line
 make -C monsw/module test          # the host test (any host cc)
 make -C monsw/module static        # the static object per line, with its sha256
+make -C monsw/tool                 # monswctl, one binary for both lines, with its sha256
+make -C monsw/tool test            # the tool's and the boot step's host test (bash, any host cc)
 ```
 
 `DLM` names the dlm directory (default `../dlm`, that is `kernel/dlm`), or `KIT_k30` and
@@ -193,7 +218,10 @@ One package per line, minted by amix-packages:
 Each package has `CATEGORY` `system` and no scripts. It ships:
 - `/etc/conf/mod.d/monsw`, the object;
 - `/etc/conf/modreg.d/monsw`, comments only, because the package sets no parameter;
-- `/dev/monsw` as a pkgmap device entry, `c 52 0`.
+- `/dev/monsw` as a pkgmap device entry, `c 52 0`;
+- `/usr/sbin/monswctl` (`monsw/build/tool/monswctl`, the same on both lines);
+- `/etc/init.d/monsw` (`rc/monsw`) and its link `/etc/rc2.d/S20monsw`;
+- the pages `monsw(7)` and `monswctl(1M)`.
 
 ## Testing
 
@@ -212,6 +240,13 @@ It then checks:
 - the last-close rules;
 - `_unload`;
 - the `cdevsw` row.
+
+**`test/tooltest.sh`** runs on the host, with no box (bash). It compiles `tool/monswctl.c`
+against `tool/testdouble.c` and checks the usage refusals, the values that reach `SETCFG`,
+`get` and `status`, each refusal's own line and exit status, and `rtg` around a command. It
+then runs `rc/monsw` under `sh` with a stand-in `monswctl` and `rc.subr`: the `/etc/display`,
+`/etc/monsw`, seed precedence, the log lines, one console line for each refusal, exit 0
+always.
 
 **`test/monswtest.c`** is the on-box instrument, one step per run: `get`, `rtg [secs]`,
 `native`, `set <value>`, `bad`. Build it with the guest's `cc -I<amix>/kernel/modules/include`, or
