@@ -3,6 +3,11 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — INDEX and conf list amix-base (92efd91)
+
+INDEX.md and conf/{names,cats,sets}.conf regenerated with the multi-root pkgmeta; they list amix-base (amxbase, system,
+set base) from userland/base/pkg. 14 packages.
+
 ## 2026-10-30 — patch names /usr/bin/patch in SYSTEM_PATHS (3799b4a)
 
 Ready for build/pkg's SYSTEM_PATHS check; pkginfo, INDEX.md and the package are unchanged, so no revision bump.
