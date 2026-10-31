@@ -61,14 +61,19 @@ amix_verify() {
 	unset _av_f _av_want _av_got
 }
 
-# amix_fetch <url> <expected-sha256> <destfile>
+# amix_fetch <url> <expected-sha256> <destfile> [<fallback url>...]
 #
-# AMIX_DISTFILES names a local directory of distfiles (a mirror of
-# amigaux/amix-distfiles, whose release assets are
-# https://github.com/amigaux/amix-distfiles/releases/download/<name>-<version>/<file>,
-# the upstream's own file name): when it holds the URL's last component and
-# that file is the pinned bytes, it is copied in instead of downloaded;
-# otherwise the URL is fetched as always.  The sha256 is the pin either way.
+# Where the bytes come from, in order; the sha256 is the pin in every case:
+#   1. <destfile> itself, when it is already the pinned bytes;
+#   2. AMIX_DISTFILES, a local directory of distfiles: the file named as
+#      <url>'s last component, when it is the pinned bytes (a file there
+#      with other bytes is warned about and passed over);
+#   3. <url>, the original site;
+#   4. each <fallback url>: our copy, a release asset of amigaux/amix-distfiles,
+#      https://github.com/amigaux/amix-distfiles/releases/download/<name>-<version>/<file>
+#      (the upstream's own file name), for the sources whose sites move.
+# A URL that fails, or gives other bytes, is reported and the next is tried;
+# when none gives the pinned bytes the fetch fails, naming each.
 #
 # Downloads to a sibling .part file and only renames after the digest matches,
 # so an interrupted transfer can never be mistaken for a complete one -- the
@@ -78,6 +83,7 @@ amix_fetch() {
 	_af_url="$1"
 	_af_want="$2"
 	_af_dst="$3"
+	shift 3
 
 	if [ -f "$_af_dst" ] && [ "$(amix_sha256 "$_af_dst")" = "$_af_want" ]; then
 		echo "  cached  $_af_dst"
@@ -100,27 +106,34 @@ amix_fetch() {
 		echo "  [WARN] $_af_local is not the pinned bytes; fetching the URL"
 	fi
 	unset _af_local
-	echo "  fetch   $_af_url"
+	for _af_u in "$_af_url" "$@"; do
+		if amix_fetch_one "$_af_u" "$_af_dst.part" &&
+		   [ "$(amix_sha256 "$_af_dst.part")" = "$_af_want" ]; then
+			amix_verify "$_af_dst.part" "$_af_want"
+			mv "$_af_dst.part" "$_af_dst"
+			unset _af_url _af_want _af_dst _af_u
+			return 0
+		fi
+		[ ! -f "$_af_dst.part" ] || echo "  [WARN] $_af_u: not the pinned bytes (sha256 $(amix_sha256 "$_af_dst.part"))"
+		rm -f "$_af_dst.part"
+	done
+	echo "[FAIL] no source gave the pinned bytes, sha256 $_af_want:" >&2
+	for _af_u in "$_af_url" "$@"; do echo "       $_af_u" >&2; done
+	exit 1
+}
+
+# amix_fetch_one <url> <file> -- one download, curl or wget; a failure says so
+amix_fetch_one() {
+	echo "  fetch   $1"
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL --retry 3 -o "$_af_dst.part" "$_af_url" || {
-			echo "[FAIL] download failed: $_af_url" >&2
-			rm -f "$_af_dst.part"
-			exit 1
-		}
+		curl -fsSL --retry 3 -o "$2" "$1" && return 0
 	elif command -v wget >/dev/null 2>&1; then
-		wget -q -O "$_af_dst.part" "$_af_url" || {
-			echo "[FAIL] download failed: $_af_url" >&2
-			rm -f "$_af_dst.part"
-			exit 1
-		}
+		wget -q -O "$2" "$1" && return 0
 	else
 		echo "[FAIL] neither curl nor wget on PATH" >&2
 		exit 1
 	fi
-
-	# a download that is not the pinned bytes does not stay behind
-	( amix_verify "$_af_dst.part" "$_af_want" ) || { rm -f "$_af_dst.part"; exit 1; }
-	amix_verify "$_af_dst.part" "$_af_want" >/dev/null
-	mv "$_af_dst.part" "$_af_dst"
-	unset _af_url _af_want _af_dst
+	echo "  [WARN] download failed: $1"
+	rm -f "$2"
+	return 1
 }

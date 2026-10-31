@@ -1,0 +1,38 @@
+#!/bin/sh
+# display -- the graphical login at boot: /etc/init.d/display, run as
+# /etc/rc2.d/S95display.
+#
+# Off unless /etc/display says "start xdm" (display(4); the default is
+# manual). rc.conf's display=no turns the step off whatever /etc/display
+# says. With xdm, "xstart -xdm" starts xdm with the server line it builds
+# from /etc/display and the card file, so no xdm file is edited. Its output
+# goes to /var/adm/rclog/display.
+# stop: nothing; xdm and its server end with the system.
+#
+# This file is written in place on update, never moved, so the S link stays
+# the same file.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+DISP_SUBR=${DISP_SUBR:-/usr/lib/amix/display.subr}
+XSTART=${XSTART:-/usr/amix/bin/xstart}
+
+case "$1" in
+start)
+	. "$RC_SUBR"
+	rc_enabled display yes || exit 0
+	. "$DISP_SUBR"
+	[ "`disp_val "$DISP_CONF" start`" = xdm ] || exit 0
+	rc_log display "start xdm: `$XSTART -n -xdm 2>&1 | sed -n 's/^xdm *//p'`"
+	# not rc_bg: its bound would stop xdm; xdm is a daemon of its own
+	$XSTART -xdm < /dev/null >> "$RC_BGLOG/display" 2>&1 &
+	;;
+stop)
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0

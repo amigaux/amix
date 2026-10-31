@@ -68,6 +68,7 @@ amix_env_banner() { echo "  stub harness"; }
 """,
     "fetch.sh": """\
 amix_fetch() {
+	echo "$4" > "$STUB_LOG/fallback"
 	cp "${1#file://}" "$3"
 	echo "$2  $3" | sha256sum -c --quiet
 }
@@ -327,6 +328,10 @@ esac
         # --- the harness at build/pkg/common: layout.sh ------------------------------
         rc, out = build("conf")
         check("amix layout: configure style builds", rc == 0, out)
+        check("the source: the recipe's URL first, our amix-distfiles copy as the fallback",
+              rc == 0 and read(os.path.join(log, "fallback")) ==
+              "https://github.com/amigaux/amix-distfiles/releases/download/conf-1.0/conf-1.0.tar.gz\n",
+              read(os.path.join(log, "fallback")) if rc == 0 else out)
         env = seen() if rc == 0 else {}
         sib = os.path.realpath(tmp)
         g14x = os.path.join(os.path.realpath(amix), "out", "toolchain",

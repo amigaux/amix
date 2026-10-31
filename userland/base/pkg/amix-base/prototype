@@ -19,6 +19,13 @@ l none /etc/rc2.d/S20devnodes=/etc/init.d/devnodes
 f none /etc/rc2.d/S90swap 0444 root sys
 l none /etc/init.d/swap=/etc/rc2.d/S90swap
 l none /etc/rc0.d/K05swap=/etc/rc2.d/S90swap
+f none /etc/init.d/display 0444 root sys
+l none /etc/rc2.d/S95display=/etc/init.d/display
+d none /etc/display.d 0755 root sys
+f none /etc/display.d/native 0444 root sys
+f none /usr/amix/bin/xstart 0555 bin bin
+f none /usr/lib/amix/display.subr 0444 root sys
+f none /usr/lib/amix/xsession 0555 root sys
 f none /etc/inet/network-config 0444 root sys
 f none /etc/inet/rc.inet 0444 root sys
 d none /etc/inet/link.d 0755 root sys
@@ -53,6 +60,9 @@ f none /opt/amix/man/4/profile 0644 root bin
 f none /opt/amix/man/4/profile.d 0644 root bin
 f none /opt/amix/man/4/nodename 0644 root bin
 f none /opt/amix/man/4/inittab 0644 root bin
+f none /opt/amix/man/4/display 0644 root bin
+f none /opt/amix/man/4/display.d 0644 root bin
+f none /opt/amix/man/1/xstart 0644 root bin
 f none /opt/amix/man/whatis.d/amxbase 0644 root bin
 d none /var/opt 0755 root sys
 d none /var/opt/amix 0755 root sys

@@ -1,0 +1,244 @@
+#!/bin/sh
+# xstart -- start X on this machine's display, as /etc/display says.
+#
+#   xstart [-n] [:N] [WxH] [key=value ...]   a session, here, now
+#   xstart -xdm                              the graphical login (S95display)
+#
+# Reads /etc/display (display(4)); an argument overrides one field for this
+# run (WxH is mode=WxH). The card is /etc/display.d/<card> (display.d(4)),
+# or with "card auto" the first whose node opens, the native one last. The
+# mode and depth must be among the card's; the card's limits are raised;
+# when the card shares the monitor and the kernel's monsw does not own the
+# switch, the card's switch tool flips it, and back at the end. The server
+# runs through xinit (X11R6's, else the stock one) with ~/.xsession, then
+# ~/.xinitrc, then /etc/display's session, then /usr/lib/amix/xsession.
+# -n says what would run, and every mistake in the files; -xdm runs X11R6's
+# xdm with that server instead of a session. The stock startx is not touched.
+#
+# Installed as /usr/amix/bin/xstart. Exit 0 when the session (or xdm) ran,
+# 1 when the display cannot be set up, 2 on a usage mistake.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+DISP_SUBR=${DISP_SUBR:-/usr/lib/amix/display.subr}
+. "$DISP_SUBR"
+XINITS=${XINITS:-"/opt/amix/X11R6/bin/xinit /usr/X/bin/xinit"}
+XDMS=${XDMS:-/opt/amix/X11R6/bin/xdm}
+XSESSION=${XSESSION:-/usr/lib/amix/xsession}
+MONSWCTL=${MONSWCTL:-/usr/sbin/monswctl}
+
+say() {
+	echo "xstart: $*" >&2
+}
+
+# first <list>: the first executable of the list
+first() {
+	for _f in $1
+	do
+		[ -x "$_f" ] && { echo $_f; return 0; }
+	done
+	return 1
+}
+
+dry=
+xdm=
+disp=:0
+over=
+for a
+do
+	case $a in
+	-n) dry=1 ;;
+	-xdm) xdm=1 ;;
+	:[0-9]*) disp=$a ;;
+	[0-9]*x[0-9]*) over="$over mode=$a" ;;
+	card=*|mode=*|depth=*|session=*|monsw=*) over="$over $a" ;;
+	*)
+		echo "usage: xstart [-n] [:N] [WxH] [key=value ...] | xstart -xdm" >&2
+		exit 2
+		;;
+	esac
+done
+
+# the fields: /etc/display's, then the arguments'
+card=`disp_val "$DISP_CONF" card`
+mode=`disp_val "$DISP_CONF" mode`
+depth=`disp_val "$DISP_CONF" depth`
+session=`disp_val "$DISP_CONF" session`
+monsw=`disp_val "$DISP_CONF" monsw`
+for o in $over
+do
+	eval `echo "$o" | sed 's/^\([a-z]*\)=\(.*\)$/\1="\2"/'`
+done
+[ -n "$card" ] || card=auto
+
+errs=`disp_errors`
+if [ -n "$dry" ] && [ -n "$errs" ]
+then
+	echo "$errs" | sed 's/^/xstart: /' >&2
+fi
+
+# the card: by name, or the first whose node opens
+probe() {
+	_n=`disp_val "$DISP_D/$1" node`
+	[ -n "$_n" ] && sh -c ": < $_n" 2>/dev/null
+}
+if [ $card = auto ]
+then
+	card=
+	for c in `disp_cards`
+	do
+		if probe $c
+		then
+			card=$c
+			break
+		fi
+	done
+	if [ -z "$card" ]
+	then
+		say "no display card answers (cards in $DISP_D: `disp_cards | tr '\012' ' '`)"
+		exit 1
+	fi
+elif [ ! -f "$DISP_D/$card" ]
+then
+	say "no card file $DISP_D/$card"
+	exit 1
+elif probe $card
+then
+	:
+else
+	say "$card: its node `disp_val "$DISP_D/$card" node` does not open"
+	exit 1
+fi
+C=$DISP_D/$card
+server=`disp_val $C server`
+modes=`disp_val $C modes`
+depths=`disp_val $C depths`
+if [ ! -x "$server" ]
+then
+	say "$card: no server $server"
+	exit 1
+fi
+
+# the mode and depth: the card's first when not set; "modes auto": the server's
+if [ "$modes" = auto ]
+then
+	[ -n "$mode" ] && say "$card picks its own mode; mode $mode ignored"
+	mode=
+elif [ -z "$mode" ]
+then
+	set -- $modes
+	mode=$1
+elif disp_has "$modes" $mode
+then
+	:
+else
+	say "$card has no mode $mode (it has: $modes)"
+	exit 1
+fi
+if [ -z "$depth" ]
+then
+	set -- $depths
+	depth=$1
+elif [ -n "$depths" ]
+then
+	disp_has "$depths" $depth || {
+		say "$card has no depth $depth (it has: $depths)"
+		exit 1
+	}
+fi
+
+# the server's line: the card's args with %m %w %h %d %n filled in
+w=`echo "$mode" | sed 's/x.*//'`
+h=`echo "$mode" | sed 's/.*x//'`
+n=`echo $disp | sed 's/^://'`
+args=`disp_val $C args | sed -e "s/%m/$mode/g" -e "s/%w/$w/g" -e "s/%h/$h/g" \
+	-e "s/%d/$depth/g" -e "s/%n/$n/g"`
+env=`disp_val $C env | sed -e "s/%n/$n/g"`
+line=`echo $server $disp $args`
+# xdm takes the card's environment in the server's line, as the stock
+# Xservers writes it; the stock xinit takes no such line ("No such file or
+# directory: :0"), so a session gets it in xstart's own environment
+xline=$line
+[ -n "$env" ] && xline="/usr/bin/env $env $line"
+
+# the monitor switch: the kernel's monsw owns it when it answers
+tool=
+if [ "`disp_val $C monsw`" = yes ] && [ -n "$monsw" ] && [ "$monsw" != 0 ]
+then
+	if [ -x "$MONSWCTL" ] && "$MONSWCTL" status > /dev/null 2>&1
+	then
+		tool=
+	else
+		tool=`disp_val $C monswtool`
+		if [ -z "$tool" ] || [ ! -x "$tool" ]
+		then
+			say "monitor switch $monsw, but no monsw module and no switch tool; the monitor will not switch"
+			tool=
+		fi
+	fi
+fi
+
+# the session
+s=
+for f in "$HOME/.xsession" "$HOME/.xinitrc" "$session" "$XSESSION"
+do
+	if [ -n "$f" ] && [ -r "$f" ]
+	then
+		s=$f
+		break
+	fi
+done
+xinit=`first "$XINITS"`
+
+if [ -n "$dry" ]
+then
+	echo "card     $card ($C)"
+	echo "mode     ${mode:-chosen by the server}, depth ${depth:-as the server sets it}"
+	echo "server   $line"
+	[ -n "$env" ] && echo "env      $env"
+	echo "limits   `disp_val $C limits`"
+	echo "monsw    ${tool:+$tool $monsw}${tool:-not switched here}"
+	echo "session  ${s:-none}"
+	if [ -n "$xdm" ]
+	then
+		echo "xdm      `first "$XDMS"` -server \"$disp local $xline\""
+	else
+		echo "xinit    ${xinit:-none} $s -- $line"
+	fi
+	[ -z "$errs" ]
+	exit
+fi
+
+for l in `disp_val $C limits`
+do
+	v=`echo $l | sed 's/^[a-z]*=//'`
+	case $l in
+	vmem=*) ulimit -v $v 2>/dev/null || ulimit -m $v 2>/dev/null ||
+		say "cannot raise the memory limit to $v KB; the server may fail to map the card" ;;
+	data=*) ulimit -d $v 2>/dev/null ||
+		say "cannot raise the data limit to $v KB; the server may run out of memory" ;;
+	esac
+done
+
+if [ -n "$xdm" ]
+then
+	# X11R6's xdm only: the system's own xdm runs only as a SAF port monitor
+	# (its _sactab entry, amixadm) and exits when started any other way
+	x=`first "$XDMS"` || { say "start xdm needs X11R6's xdm ($XDMS); the system's xdm runs only under SAF"; exit 1; }
+	[ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
+	exec $x -server "$disp local $xline"
+fi
+
+[ -n "$xinit" ] || { say "no xinit installed ($XINITS)"; exit 1; }
+[ -n "$s" ] || { say "no session: no ~/.xsession, ~/.xinitrc or $XSESSION"; exit 1; }
+if [ -n "$tool" ]
+then
+	trap '"$tool" $monsw off > /dev/null' 0
+	trap 'exit 1' 1 2 3 15
+	"$tool" $monsw rtg > /dev/null
+fi
+for e in $env
+do
+	eval `echo "$e" | sed 's/^\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)$/\1="\2"; export \1/'`
+done
+$xinit $s -- $line

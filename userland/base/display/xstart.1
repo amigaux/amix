@@ -1,0 +1,95 @@
+.TH XSTART 1 "31 October 2026" "amix-base"
+.SH NAME
+xstart \- start X on this machine's display
+.SH SYNOPSIS
+.B xstart
+[
+.B \-n
+] [
+.BI : N
+] [
+.IR W x H
+] [
+.IB key = value
+\&... ]
+.SH DESCRIPTION
+.B xstart
+starts an X session on the display card, mode and depth that
+.B /etc/display
+names (see
+.BR display (4)),
+with the X server and arguments the card's file in
+.B /etc/display.d
+gives (see
+.BR display.d (4)).
+An argument changes one field of
+.B /etc/display
+for this session only:
+.IR W x H
+is the mode, and
+.BR card= ,
+.BR mode= ,
+.BR depth= ,
+.B session=
+and
+.B monsw=
+the others.
+.BI : N
+is the display number (default
+.BR :0 ).
+.PP
+In order,
+.B xstart
+finds the card (with
+.BR "card auto" ,
+the first whose device answers, the chipset display last), checks the mode
+and depth against the card's, raises the limits the card asks for, switches
+the monitor to the card when the card shares it, and runs the server through
+.B xinit
+(X11R6's, else the system's) with the session:
+.BR ~/.xsession ,
+else
+.BR ~/.xinitrc ,
+else the
+.B session
+of
+.BR /etc/display ,
+else
+.BR /usr/lib/amix/xsession .
+When the session ends, the monitor is switched back.
+.PP
+The system's
+.B startx
+is still there and unchanged.
+.SH OPTIONS
+.TP
+.B \-n
+say what would be run, and every mistake in
+.B /etc/display
+and the card files, and run nothing.
+.SH EXIT STATUS
+0 when the session ran (with
+.BR \-n :
+when the files hold no mistake); 1 when the display cannot be set up (no
+card answers, a mode or depth the card does not have, no server, no
+.BR xinit );
+2 on a usage mistake.
+.SH FILES
+.TP
+.B /etc/display
+the machine's choice.
+.TP
+.B /etc/display.d/*
+the cards.
+.TP
+.B /usr/lib/amix/xsession
+the default session.
+.SH SEE ALSO
+.BR display (4),
+.BR display.d (4)
+.SH NOTES
+The keyboard map under X is not yet derived from the console's
+.BR /etc/default.kmap ;
+a
+.B ~/.Xmodmap
+run from the session sets it.

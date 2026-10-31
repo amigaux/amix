@@ -64,6 +64,8 @@ try:
     write(os.path.join(top, "kernel/dlm/toolchain.pin"), keyed)
     write(os.path.join(top, "toolchain/x.distfile"),
           "https://github.com/amigaux/amix-distfiles/releases/download/x/x.tgz " + "d" * 64 + "\n")
+    write(os.path.join(top, "toolchain/y.distfile"),
+          "https://example.invalid/up/y.tgz " + "f" * 64 + " https://github.com/amigaux/amix-distfiles/releases/download/y-1/y.tgz\n")
     write(os.path.join(top, "system/MANIFEST.sha256"), "m\n")
     write(os.path.join(top, "system/SYMLINKS"), "s\n")
     write(os.path.join(top, ".gitignore"), "/out/\n")
@@ -74,11 +76,13 @@ try:
     write(os.path.join(out, "kit/kit.digests"),
           "kit k30 k30.1.3 %s %s KIT_REV=1 PORT_REV=-\nkit k46 k46.1.3 %s %s KIT_REV=1 PORT_REV=2\n"
           % ("1" * 64, "2" * 64, "3" * 64, "4" * 64))
+    write(os.path.join(out, "kernels/k30.list"), "kernel k30 unix.brel %s\nkernel k30 kabi %s\n" % ("5" * 64, "6" * 64))
     write(os.path.join(out, "modules/k46/ramdisk"), "r46")
     write(os.path.join(out, "modules/k30/ramdisk"), "r30")
     write(os.path.join(out, "userland/pkgs/zlib-1.2.13-8.pkg"), "zlib")
     write(os.path.join(out, "userland/pkgs/amxbase-1.0-8.pkg"), "base")
     write(os.path.join(out, "userland/catalog"), "cat")
+    write(os.path.join(out, "userland/catalog.md5"), hashlib.md5(b"cat").hexdigest() + "  catalog\n")
     write(os.path.join(out, "media/cd/amix.iso"), "iso")
     write(os.path.join(out, "build/userland/zlib.log"), "not in the lock")
 
@@ -91,6 +95,8 @@ try:
                        "image host"], "\n".join(lock[:5]))
     want = [
         "distfile toolchain/x.distfile https://github.com/amigaux/amix-distfiles/releases/download/x/x.tgz " + "d" * 64,
+        "distfile toolchain/y.distfile https://example.invalid/up/y.tgz " + "f" * 64
+        + " https://github.com/amigaux/amix-distfiles/releases/download/y-1/y.tgz",
         "pin kernel/dlm/toolchain.pin sha256 " + sha(keyed),
         "pin kernel/port/port.pin https://github.com/amigaux/amix-040-060-port.git " + "a" * 40,
         "pin toolchain/gcc14-cross-amix.pin https://github.com/amigaux/gcc14-cross-amix.git " + "b" * 40,
@@ -98,9 +104,11 @@ try:
         "system system/SYMLINKS " + sha("s\n"),
         "kit k30 k30.1.3 %s %s KIT_REV=1 PORT_REV=-" % ("1" * 64, "2" * 64),
         "kit k46 k46.1.3 %s %s KIT_REV=1 PORT_REV=2" % ("3" * 64, "4" * 64),
+        "kernel k30 kabi " + "6" * 64,
+        "kernel k30 unix.brel " + "5" * 64,
         "module k30/ramdisk " + sha("r30"),
         "module k46/ramdisk " + sha("r46"),
-        "catalog userland catalog " + sha("cat"),
+        "catalog userland md5 %s sha256 %s" % (hashlib.md5(b"cat").hexdigest(), sha("cat")),
         "pkg userland amxbase-1.0-8.pkg 4 " + sha("base"),
         "pkg userland zlib-1.2.13-8.pkg 4 " + sha("zlib"),
         "media cd/amix.iso 3 " + sha("iso"),
@@ -135,6 +143,11 @@ try:
           "\n".join(lock[:8]))
     rc, o, e = run(top, out, "--check", rec)
     check("--check: so a build from a changed tree is refused", rc == 1 and "+ dirty " in e, e)
+    write(os.path.join(out, "userland/catalog.md5"), "0" * 32 + "  catalog\n")
+    rc, o, e = run(top, out)
+    check("a catalog.md5 that is not its catalog's md5 is refused",
+          rc == 1 and "userland/catalog.md5 does not say the catalog's md5" in e, e)
+    write(os.path.join(out, "userland/catalog.md5"), hashlib.md5(b"cat").hexdigest() + "  catalog\n")
     write(rec, "not a lock\n")
     rc, o, e = run(top, out, "--check", rec)
     check("--check: a file that is not a lock is refused", rc == 1 and "is not an #amix-lock 1 file" in e, e)

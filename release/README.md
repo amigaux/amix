@@ -28,15 +28,19 @@ image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.
 
 pin <path> <URL> <commit>             every one-line .pin in the checkout
 pin <path> sha256 <sha256>            a .pin of another format, by its digest
-distfile <path> <URL> <sha256>        every .distfile
+distfile <path> <URL> <sha256> [<URL>...]
+                                      every .distfile, as written: the original
+                                      site, the sha256, then our copy
 system <path> <sha256>                system/MANIFEST.sha256 and system/SYMLINKS
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
-cut <id> <sha256>                     each kernel cut's SHA256SUMS (to come, P-38 S2)
+kernel <line> <path> <sha256>         each file of a kernel cut, as its hook prints it
+                                      (out/kernels/<line>.list; the cut of record's sums)
 module <line>/<name> <sha256>         out/modules
 pkg kspace|userland <file> <size> <sha256>
-catalog kspace|userland <file> <sha256>
+catalog kspace|userland md5 <md5> sha256 <sha256>
+                                      the catalog (its md5 names it); catalog.md5 must agree
 media <path> <size> <sha256>          out/media
 
 exception <name> <why>                what the proof does not compare byte for byte

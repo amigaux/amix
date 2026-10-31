@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-10-31 — the kspace catalog names its packages from kernel/conf (0acf9a5); kernel-k30 runs k30's hook (e39cd58)
+
+The catalogs step passes kernel/conf as the kernel-space catalog's --packages-conf, so a kernel package is catalogued
+under its name (zeth46 as z3660eth-k46); a kspace staging dir with packages and no names.conf is refused. make dist's
+kernel-k30 step runs `sh kernel/k30/cuts/build.sh` (the cut of record, sums refused if they differ); its `kernel k30
+<path> <sha256>` lines go to out/kernels/k30.list and the lock. On the host all seven -63 sums reproduce in 16 s.
+test-dist 35/35, test-lock 13/13.
+
+## 2026-10-31 — the original site first, our copy as the fallback (80d9050); a kspace hook's exit 3 (7ce5a35)
+
+amix_fetch tries, in order: the cache, AMIX_DISTFILES, the recipe's URL (the original site), then each fallback; the
+sha256 decides every time, and a failed fetch names each source tried. pkgbuild.sh passes our copy as the fallback:
+amigaux/amix-distfiles releases/download/<NAME>-<VERSION>/<the URL's file> (owner, 2026-10-31). A kernel/<dir>/pkg/
+build.sh that exits 3 (an input outside its recipe absent) is recorded as waiting; the kspace step runs the rest and
+ends with 3; any other non-zero still fails. test-fetch 12/12, test-dist 31/31.
+
+## 2026-10-31 — KM_ROOT (a7e3dd8); the catalogs step (c8f419a)
+
+amix_kmodpkg reads a recipe's object, VERSION, licences, depend= modules and KM_FILES at $KM_ROOT/<path>: the siblings
+by default (amix-packages), the checkout for an in-amix recipe. A refused licence or depend= input now stops the roll
+(it ran in a subshell and carried on). make dist's catalogs step (P-38 S5.1) calls pkgtools' gen-catalog.py as it is
+over out/kspace/pkgs and out/userland/pkgs, with the staging root's confs and each space's own, into
+out/{kspace,userland}/{catalog,catalog.md5}; the catalogs carry no time stamp, two runs are identical, and the lock's
+catalog line is `catalog <space> md5 <md5> sha256 <sha256>`. test-kmroot 6/6, test-dist 30/30, test-lock 13/13.
+
 ## 2026-10-31 — a source from AMIX_DISTFILES (b880adb); kfsmod.sh and kmodpkg.sh take the toolchain from layout.sh (281127d)
 
 amix_fetch reads $AMIX_DISTFILES/<the URL's last component> first and copies it in when it holds the pinned bytes;

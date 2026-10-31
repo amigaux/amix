@@ -48,6 +48,9 @@ tmp = tempfile.mkdtemp(prefix="test-dist.")
 try:
     top = os.path.join(tmp, "amix")
     for f in ("build/dist.sh", "build/pkg/layout.sh", "build/pkg/pkgmeta", "system/check-amix-system",
+              "userland/pkgtools/tools/repo/gen-catalog.py",
+              "userland/pkgtools/tools/repo/deps.conf", "userland/pkgtools/tools/repo/names.conf",
+              "userland/pkgtools/tools/repo/cats.conf", "userland/pkgtools/tools/repo/descs.conf",
               "toolchain/gcc-cross-amix.pin", "toolchain/gcc14-cross-amix.pin"):
         os.makedirs(os.path.dirname(os.path.join(top, f)), exist_ok=True)
         shutil.copy2(os.path.join(TOP, f), os.path.join(top, f))
@@ -83,8 +86,7 @@ try:
     check("no step: usage, exit 2", rc == 2 and "kernel-k30" in out, out)
     rc, out = run("frobnicate")
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
-    for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("catalogs", "S5.1"),
-                        ("media", "S6.1")):
+    for step, owner in (("kernel-k46", "S2.3"), ("media", "S6.1")):
         rc, out = run(step)
         check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
               rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)
@@ -167,10 +169,21 @@ PY
     check("kspace: every directory has its recipes: exit 0, dlm first, k30 and port before the modules",
           rc == 0 and "MISSING" not in out and [l for l in open(order).read().split("\n") if l.startswith("kernel/")]
           == ["kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw", "kernel/drivers/a4091"], out)
+    write(os.path.join(top, "kernel", "k30", "pkg", "build.sh"),
+          'echo kernel/k30 >> "%s"\necho "[MISSING] kern30m: no cut 68030-261031-63 output (P-38 S2.2, k30)" >&2\nexit 3\n' % order)
+    os.remove(order)
+    rc, out = run("kspace")
+    check("kspace: a hook's exit 3 is an absent input: its [MISSING] line, the rest still run, exit 3",
+          rc == 3 and "[MISSING] kern30m: no cut 68030-261031-63 output" in out
+          and "kernel/k30/pkg/build.sh is waiting for an input" in out
+          and [l for l in open(order).read().split("\n") if l.startswith("kernel/")]
+          == ["kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw", "kernel/drivers/a4091"]
+          and "kern46m-1.0-1.pkg" in os.listdir(os.path.join(top, "out", "kspace", "pkgs")), out)
+    recipe("kernel/k30", "kern30m", "1.0-1")
     recipe("kernel/port", "kern46m", "1.0-1", fail=True)
     rc, out = run("kspace")
     check("kspace: a failing build.sh stops the step, exit 1",
-          rc == 1 and "kernel/port/pkg/build.sh failed" in out, out)
+          rc == 1 and "kernel/port/pkg/build.sh failed (exit 1)" in out, out)
     write(os.path.join(top, "kernel", "port", "port.pin"), "file://%s %s\n" % (portsrc, portc[:7]))
     rc, out = run("kspace")
     check("kspace: a port.pin with a short hash is refused before any recipe",
@@ -228,6 +241,71 @@ clean:
     check("drivers: a driver that builds no module object is refused",
           rc == 1 and "z3660scsi built no module object" in out, out)
     shutil.rmtree(os.path.join(top, "kernel"))
+    shutil.rmtree(os.path.join(top, "out"))
+
+    # --- kernel-k30: k30's hook, kernel/k30/cuts/build.sh -----------------------------
+    hook = os.path.join(top, "kernel", "k30", "cuts", "build.sh")
+    write(hook, 'echo "GCA=$GCA"\necho "kernel k30 unix.brel %s"\necho "kernel k30 kabi %s"\n' % ("e" * 64, "f" * 64))
+    rc, out = run("kernel-k30")
+    lst = os.path.join(top, "out", "kernels", "k30.list")
+    check("kernel-k30: k30's hook runs with the toolchain, its sums kept for the lock",
+          rc == 0 and open(lst).read() == "kernel k30 unix.brel %s\nkernel k30 kabi %s\n" % ("e" * 64, "f" * 64)
+          and "GCA=/nonexistent/gca" in open(os.path.join(top, "out", "build", "kernel-k30.log")).read(), out)
+    write(hook, 'echo "[MISSING] kern30m: no port (P-38 S2.3)" >&2\nexit 3\n')
+    rc, out = run("kernel-k30")
+    check("kernel-k30: the hook's exit 3 (an absent input) passes through, the old sums kept",
+          rc == 3 and "[MISSING] kern30m: no port" in out and os.path.getsize(lst) > 0, out)
+    write(hook, 'echo "kernel k30 unix 0"\necho "sums differ from the record" >&2\nexit 1\n')
+    rc, out = run("kernel-k30")
+    check("kernel-k30: a failing hook fails the step", rc == 1 and "cuts/build.sh exited 1" in out, out)
+    shutil.rmtree(os.path.join(top, "kernel"))
+    shutil.rmtree(os.path.join(top, "out"))
+
+    # --- catalogs: pkgtools' gen-catalog over each space's packages --------------------
+    rc, out = run("catalogs")
+    check("catalogs: refused without the packages of each space",
+          rc == 1 and "no out/kspace/pkgs; make kspace first" in out, out)
+    for space in ("kspace", "userland"):
+        os.makedirs(os.path.join(top, "out", space, "pkgs"))
+    write(os.path.join(top, "userland", "packages", "conf", "cats.conf"), "# none\n")
+    rc, out = run("catalogs")
+    cats = {s: open(os.path.join(top, "out", s, "catalog")).read() for s in ("kspace", "userland")
+            if os.path.exists(os.path.join(top, "out", s, "catalog"))}
+    check("catalogs: gen-catalog writes each space's catalog and catalog.md5",
+          rc == 0 and cats.get("kspace", "").startswith("#apkg-catalog 1")
+          and os.path.isfile(os.path.join(top, "out", "userland", "catalog.md5"))
+          and "catalog kspace " in out and "catalog userland " in out, out)
+    rc2, out2 = run("catalogs")
+    check("catalogs: two runs, the same catalogs",
+          rc2 == 0 and all(open(os.path.join(top, "out", s, "catalog")).read() == cats[s] for s in cats), out2)
+    check("catalogs: the staging layer, tools/repo's four confs, is in each pkgs/",
+          all(os.path.isfile(os.path.join(top, "out", s, "pkgs", c + ".conf"))
+              for s in ("kspace", "userland") for c in ("deps", "names", "cats", "descs")))
+    def datastream(pkg, version):
+        def newc(name, data):
+            name = name.encode() + b"\0"
+            hdr = b"070701" + b"".join(b"%08X" % v for v in (
+                1, 0o100644, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name), 0))
+            pad = lambda n: b"\0" * (-n % 4)
+            return hdr + name + pad(len(hdr) + len(name)) + data + pad(len(data))
+        head = b"# PaCkAgE DaTaStReAm\n%s 1 8\n# end of header\n" % pkg.encode()
+        head += b"\0" * (-len(head) % 512)
+        info = ("PKG=%s\nNAME=the %s module\nARCH=Amiga\nVERSION=%s\nCATEGORY=system\n"
+                % (pkg, pkg, version)).encode()
+        return head + newc(pkg + "/pkginfo", info) + newc("TRAILER!!!", b"")
+    with open(os.path.join(top, "out", "kspace", "pkgs", "zeth46-1.0.0-6.pkg"), "wb") as fp:
+        fp.write(datastream("zeth46", "1.0.0-6"))
+    rc, out = run("catalogs")
+    check("catalogs: kernel-space packages and no kernel/conf/names.conf: refused",
+          rc == 1 and "kernel-space packages but no kernel/conf/names.conf" in out, out)
+    write(os.path.join(top, "kernel", "conf", "names.conf"), "zeth46: z3660eth-k46\n")
+    rc, out = run("catalogs")
+    kcat = open(os.path.join(top, "out", "kspace", "catalog")).read() if rc == 0 else ""
+    check("catalogs: kernel/conf is the kspace layer: zeth46 is catalogued as z3660eth-k46",
+          rc == 0 and "\nz3660eth-k46|1.0.0-6|zeth46|" in kcat, out + kcat)
+    shutil.rmtree(os.path.join(top, "kernel"))
+    check("catalogs: gen-catalog leaves no __pycache__",
+          not os.path.exists(os.path.join(top, "userland", "pkgtools", "tools", "repo", "__pycache__")))
     shutil.rmtree(os.path.join(top, "out"))
 
     rc, out = run("dist")

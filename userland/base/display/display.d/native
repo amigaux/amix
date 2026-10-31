@@ -1,0 +1,11 @@
+# /etc/display.d/native -- the chipset display and the stock X11R4 server.
+# Shipped by amix-base; not to be edited (see display.d(4)). The stock
+# server is monochrome and picks its own mode: 1024x768 on an A2024 or a
+# Moniterm, 640x480 on any other monitor. SCREEN_GROUP is the Alt-function
+# key group it takes, the display number (as the stock xdm Xservers says).
+node     /dev/console
+server   /usr/X/bin/X
+modes    auto
+depths   1
+env      SCREEN_GROUP=%n
+monsw    no

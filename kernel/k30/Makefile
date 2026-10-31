@@ -16,3 +16,4 @@ test:
 	python3 tools/kernel-sddevsize-inject.py --selftest
 	python3 tools/kernel-support-probe-inject.py --selftest
 	python3 tools/k0-gates.py --selftest
+	sh tools/cuts-selftest.sh

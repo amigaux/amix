@@ -10,7 +10,9 @@
 #
 #   kit          kernel/dlm's ABI kits, k30 and k46, with the port at
 #                kernel/port/port.pin: out/kit/{k30,k46,kit.digests}
-#   kernel-k30   the 68030 cut (P-38 S2.2, k30)            not in make dist yet
+#   kernel-k30   the 68030 cut of record (kernel/k30/cuts/CURRENT), by k30's
+#                hook kernel/k30/cuts/build.sh, into kernel/k30/build/cuts/<id>/
+#                (where kern30m reads it); its sums in out/kernels/k30.list
 #   kernel-k46   the 68040/68060 cut (P-38 S2.3, port)     not in make dist yet
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
 #   drivers      every driver module on both lines, on the kit (P-38 S3.2,
@@ -23,7 +25,9 @@
 #                directory without one yet is named, and the step exits 3
 #   userland     every package.sh of userland/packages and userland/base/pkg:
 #                out/userland/pkgs/*.pkg, one version per name
-#   catalogs     both catalogs (P-38 S5.1, pkgtools)       not in make dist yet
+#   catalogs     both catalogs, by pkgtools' gen-catalog.py over
+#                out/{kspace,userland}/pkgs with their conf layers:
+#                out/{kspace,userland}/{catalog,catalog.md5}
 #   media        CD, netinstall, floppies (P-38 S6.1)      not in make dist yet
 #   lock         out/lock, every input and output (release/README.md); with
 #                LOCK=<file>, refuses a build that is not that lock
@@ -233,6 +237,63 @@ step_drivers() {	# step_drivers [<name>...]
 	done
 }
 
+# step_catalogs: pkgtools' gen-catalog.py (userland/pkgtools/tools/repo),
+# called as it is, over each space's packages. Its two conf layers: the
+# staging root's, tools/repo's deps/names/cats/descs.conf copied into each
+# pkgs/ (the stock, kernel-space and pkgtools packages, and the category
+# vocabulary), and the space's own: userland/packages/conf, or kernel/conf
+# for kernel space, whose names.conf gives each kernel package its catalog
+# name (zeth46: z3660eth-k46). A kernel-space catalog with packages and no
+# such names is refused: boxes, kbootset and installng ask for the names.
+step_catalogs() {
+	gencat=$top/userland/pkgtools/tools/repo/gen-catalog.py
+	for space in kspace userland; do
+		[ -d "$out/$space/pkgs" ] || {
+			echo "[FAIL] catalogs: no out/$space/pkgs; make $space first" >&2; exit 1; }
+		case $space in
+		userland) conf=$top/userland/packages/conf ;;
+		kspace)
+			conf=$top/kernel/conf
+			if [ ! -f "$conf/names.conf" ]; then
+				ls "$out/kspace/pkgs/"*.pkg >/dev/null 2>&1 && {
+					echo "[FAIL] catalogs: kernel-space packages but no kernel/conf/names.conf; their" >&2
+					echo "       catalog names (zeth46: z3660eth-k46) would be bare instances" >&2
+					exit 1
+				}
+				conf=none
+			fi
+			;;
+		esac
+		for c in deps names cats descs; do
+			cp "$top/userland/pkgtools/tools/repo/$c.conf" "$out/$space/pkgs/$c.conf"
+		done
+		python3 -I -B "$gencat" --packages-conf "$conf" -o "$out/$space" "$out/$space/pkgs"
+		echo "catalog $space $(cut -c1-32 "$out/$space/catalog.md5") $(grep -c '^[^#]' "$out/$space/catalog" || :) row(s)"
+	done
+}
+
+# step_kernel_k30: k30's hook rebuilds the cut of record and refuses sums
+# other than the record's; it prints `kernel k30 <path> <sha256>` per file,
+# which the lock takes verbatim. Its exit status is passed through (3: an
+# input is absent).
+step_kernel_k30() {
+	mkdir -p "$out/kernels"
+	export GCA G14 AMIX_SYSTEM
+	rc=0
+	sh "$top/kernel/k30/cuts/build.sh" > "$out/build/kernel-k30.log" 2>&1 || rc=$?
+	grep '^kernel k30 ' "$out/build/kernel-k30.log" > "$out/kernels/k30.list.new" || :
+	if [ "$rc" -ne 0 ]; then
+		tail -20 "$out/build/kernel-k30.log" >&2
+		rm -f "$out/kernels/k30.list.new"
+		echo "[FAIL] kernel-k30: kernel/k30/cuts/build.sh exited $rc; log out/build/kernel-k30.log" >&2
+		exit "$rc"
+	fi
+	[ -s "$out/kernels/k30.list.new" ] || {
+		echo "[FAIL] kernel-k30: the hook printed no kernel k30 lines" >&2; exit 1; }
+	mv "$out/kernels/k30.list.new" "$out/kernels/k30.list"
+	cat "$out/kernels/k30.list"
+}
+
 recipe_dir() {	# the package directory of a userland package name
 	for r in "$top/userland/packages/$1" "$top/userland/base/pkg/$1"; do
 		[ -f "$r/package.sh" ] && { echo "$r"; return 0; }
@@ -258,8 +319,10 @@ roll_recipe() {	# roll_recipe <package dir>
 # step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
 # (P-38 S3.3). Each rolls all its recipes, writes its .pkg files to
 # $AMIX_BUILD_ROOT/kspace/pkg/ and prints a `pkg <file> <sha256>` line for
-# each; exit 0 or a failure. Run in provider order; the directories that have
-# none yet are named, with their owner, and the step then exits 3.
+# each; exit 0, 3 when an input outside the recipe is absent (with a
+# [MISSING] line naming the P-38 step and owner), or another code for a
+# failure. Run in provider order; the directories that have none yet, or
+# exit 3, are named, the others still run, and the step then exits 3.
 kspace_dirs() {
 	for d in kernel/dlm kernel/k30 kernel/port; do
 		[ -d "$top/$d" ] && echo "$d"
@@ -298,15 +361,22 @@ step_kspace() {
 	git -C "$AMIX_PORT_REPO" cat-file -e "$_pc^{commit}" 2>/dev/null ||
 		git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$_pc"
 	export AMIX_PORT_URL AMIX_PORT_REPO
-	missing=
+	missing= waiting=
 	for d in $(kspace_dirs); do
 		if [ ! -f "$top/$d/pkg/build.sh" ]; then
 			missing="$missing $d"
 			continue
 		fi
 		echo "--- $d"
-		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || {
-			echo "[FAIL] kspace: $d/pkg/build.sh failed" >&2; exit 1; }
+		# exit 3: an input outside the recipe is absent (a cut's output); the
+		# hook has printed its [MISSING] line, and the rest still run
+		rc=0
+		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || rc=$?
+		case $rc in
+		0) ;;
+		3) waiting="$waiting $d" ;;
+		*) echo "[FAIL] kspace: $d/pkg/build.sh failed (exit $rc)" >&2; exit 1 ;;
+		esac
 	done
 	for p in "$out/build/kspace/kspace/pkg/"*.pkg; do
 		[ -f "$p" ] && cp "$p" "$out/kspace/pkgs/"
@@ -314,12 +384,13 @@ step_kspace() {
 	if [ -n "$(ls "$out/kspace/pkgs")" ]; then
 		python3 -I "$here/pkg/pkgmeta" guard "$out/kspace/pkgs"
 	fi
-	if [ -n "$missing" ]; then
-		for d in $missing; do
-			echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
-		done
-		exit 3
-	fi
+	for d in $missing; do
+		echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
+	done
+	for d in $waiting; do
+		echo "[MISSING] kspace: $d/pkg/build.sh is waiting for an input (its [MISSING] line above)" >&2
+	done
+	[ -z "$missing$waiting" ] || exit 3
 }
 
 step_userland() {
@@ -335,7 +406,7 @@ step_userland() {
 run() {
 	case $1 in
 	kit) step_kit ;;
-	kernel-k30) missing kernel-k30 "P-38 S2.2, the k30 station: make kernel-k30 wraps the cut" ;;
+	kernel-k30) mkdir -p "$out/build"; step_kernel_k30 ;;
 	kernel-k46) missing kernel-k46 "P-38 S2.3, the port station: the cut in the container" ;;
 	modules) step_modules ;;
 	drivers) mkdir -p "$out/build"; step_drivers ;;
@@ -347,7 +418,7 @@ run() {
 		mkdir -p "$out/build/userland"
 		roll_recipe "$d"
 		;;
-	catalogs) missing catalogs "P-38 S5.1, pkgtools: gen-catalog over out/" ;;
+	catalogs) step_catalogs ;;
 	media) missing media "P-38 S6.1, installng after its move-in" ;;
 	lock)
 		# LOCK=<lock of record>: refuse a build that differs from it
