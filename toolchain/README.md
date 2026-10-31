@@ -16,10 +16,12 @@ Each pin is one line, `<repository URL> <full commit hash>`, the same format
 as `kernel/port/port.pin`.
 
 gcc14-cross-amix is pinned in the organisation's fork, on the branch
-`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus two
-commits on their way to it, one that builds the runtime for the whole
-68020–68060 range so it also runs on a 68881/68882 (and checks that it does),
-and one that refuses a sysroot without `stdint.h`. Once upstream has them, the
+`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus the
+commits on their way to it: the runtime built for the whole 68020–68060 range
+so it also runs on a 68881/68882 (and a check that it does), a refusal of a
+sysroot without `stdint.h`, and shared libraries: `gcc -shared`,
+libamixc99's `__cxa_finalize` for them, and their constructors run after the
+program's start-up. Once upstream has them, the
 pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
