@@ -23,6 +23,10 @@ import sys
 
 FORMAT = "#amix-lock 1"
 
+
+class LockError(Exception):
+    pass
+
 # What the proof does not compare byte for byte, and why (P-38 S7.2).
 EXCEPTIONS = (
     "exception kit-revision-lines kit.conf and NOTICE name the amix and port commits;"
@@ -101,9 +105,18 @@ def lock(top, out):
             lines += ["pkg %s %s %d %s" % (space, rel, os.path.getsize(os.path.join(pkgs, rel)),
                                            sha256(os.path.join(pkgs, rel)))
                       for rel in files(pkgs) if rel.endswith(".pkg")]
-        for c in ("catalog", "catalog.md5"):
-            if os.path.isfile(os.path.join(d, c)):
-                lines.append("catalog %s %s %s" % (space, c, sha256(os.path.join(d, c))))
+        cat = os.path.join(d, "catalog")
+        if os.path.isfile(cat):
+            with open(cat, "rb") as fp:
+                md5 = hashlib.md5(fp.read()).hexdigest()
+            try:
+                with open(os.path.join(d, "catalog.md5")) as fp:
+                    said = fp.read().split()[:1]
+            except FileNotFoundError:
+                said = []
+            if said != [md5]:
+                raise LockError("%s/catalog.md5 does not say the catalog's md5 %s" % (space, md5))
+            lines.append("catalog %s md5 %s sha256 %s" % (space, md5, sha256(cat)))
         sections.append(sorted(lines))
     media = os.path.join(out, "media")
     if os.path.isdir(media):
@@ -148,6 +161,6 @@ def main(argv):
 if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
-    except (OSError, subprocess.CalledProcessError) as e:
+    except (OSError, subprocess.CalledProcessError, LockError) as e:
         sys.stderr.write("[FAIL] mklock: %s\n" % e)
         sys.exit(1)

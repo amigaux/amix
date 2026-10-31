@@ -23,7 +23,9 @@
 #                directory without one yet is named, and the step exits 3
 #   userland     every package.sh of userland/packages and userland/base/pkg:
 #                out/userland/pkgs/*.pkg, one version per name
-#   catalogs     both catalogs (P-38 S5.1, pkgtools)       not in make dist yet
+#   catalogs     both catalogs, by pkgtools' gen-catalog.py over
+#                out/{kspace,userland}/pkgs with their conf layers:
+#                out/{kspace,userland}/{catalog,catalog.md5}
 #   media        CD, netinstall, floppies (P-38 S6.1)      not in make dist yet
 #   lock         out/lock, every input and output (release/README.md); with
 #                LOCK=<file>, refuses a build that is not that lock
@@ -233,6 +235,29 @@ step_drivers() {	# step_drivers [<name>...]
 	done
 }
 
+# step_catalogs: pkgtools' gen-catalog.py (userland/pkgtools/tools/repo),
+# called as it is, over each space's packages. Its two conf layers: the
+# staging root's, tools/repo's deps/names/cats/descs.conf copied into each
+# pkgs/ (the stock, kernel-space and pkgtools packages, and the category
+# vocabulary), and the space's own: userland/packages/conf, or the
+# kernel-space confs once P-38 S3.3 brings them (none until then).
+step_catalogs() {
+	gencat=$top/userland/pkgtools/tools/repo/gen-catalog.py
+	for space in kspace userland; do
+		[ -d "$out/$space/pkgs" ] || {
+			echo "[FAIL] catalogs: no out/$space/pkgs; make $space first" >&2; exit 1; }
+		case $space in
+		userland) conf=$top/userland/packages/conf ;;
+		kspace) conf=none ;;
+		esac
+		for c in deps names cats descs; do
+			cp "$top/userland/pkgtools/tools/repo/$c.conf" "$out/$space/pkgs/$c.conf"
+		done
+		python3 -I -B "$gencat" --packages-conf "$conf" -o "$out/$space" "$out/$space/pkgs"
+		echo "catalog $space $(cut -c1-32 "$out/$space/catalog.md5") $(grep -c '^[^#]' "$out/$space/catalog" || :) row(s)"
+	done
+}
+
 recipe_dir() {	# the package directory of a userland package name
 	for r in "$top/userland/packages/$1" "$top/userland/base/pkg/$1"; do
 		[ -f "$r/package.sh" ] && { echo "$r"; return 0; }
@@ -347,7 +372,7 @@ run() {
 		mkdir -p "$out/build/userland"
 		roll_recipe "$d"
 		;;
-	catalogs) missing catalogs "P-38 S5.1, pkgtools: gen-catalog over out/" ;;
+	catalogs) step_catalogs ;;
 	media) missing media "P-38 S6.1, installng after its move-in" ;;
 	lock)
 		# LOCK=<lock of record>: refuse a build that differs from it

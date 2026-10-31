@@ -36,7 +36,8 @@ kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
 cut <id> <sha256>                     each kernel cut's SHA256SUMS (to come, P-38 S2)
 module <line>/<name> <sha256>         out/modules
 pkg kspace|userland <file> <size> <sha256>
-catalog kspace|userland <file> <sha256>
+catalog kspace|userland md5 <md5> sha256 <sha256>
+                                      the catalog (its md5 names it); catalog.md5 must agree
 media <path> <size> <sha256>          out/media
 
 exception <name> <why>                what the proof does not compare byte for byte
