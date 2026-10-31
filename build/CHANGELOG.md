@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — the roll refuses a class CLASSES does not list; module node classes (e9f43c6)
+
+The roll refuses, before pkgmk, an object whose class pkginfo's CLASSES does not list (stock pkgadd installs only the
+listed classes and skips the rest silently, while pkgmk only warns), and a pkginfo without PSTAMP (pkgmk would write the
+build host's name and the date). kpkgroll's pure-files gate takes a module's device node in its module's class (the
+mod.d name, amix-dlm C3-5 v18 §1.2), or in none for a package minted before v18. New host test test-classes 13/13.
+
 ## 2026-10-31 — the roll's epoch is the package version's own (a73c4c7)
 
 P-38 D-b: pkgbuild.sh gives the roll package.sh's new optional SOURCE_EPOCH key (seconds; pkgmeta refuses anything
