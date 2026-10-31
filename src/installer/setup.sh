@@ -863,11 +863,8 @@ choose_disk()
 
 	# stock state 5: an existing RDB is destroyed, and the operator says so
 	# out loud. NO DEFAULT -- an empty answer re-asks (stock has no "" arm).
-	# S4-58: on a 1.1 medium a disk that holds Amix is offered the upgrade first.
-	ANS_UPGRADE= ANS_DROP_HOME=
-	if rdb_present "$SCSI" && upgrade_offer; then
-		return 0
-	fi
+	# P-36: 1.1 supports clean installs only -- a disk that holds Amix gets this
+	# question too, never an upgrade.
 	if rdb_present "$SCSI"; then
 		echo "\nWARNING:  The following existing data on disk will be destroyed.\n"
 		/etc/rdb -V "/dev/dsk/c${SCSI}d0s0" 2>/dev/null
@@ -880,95 +877,6 @@ choose_disk()
 			esac
 		done
 	fi
-}
-
-# upgrade_offer -- S4-58 (amix-dlm spec 40 §7): the chosen disk holds an Amix system
-# and this medium lays the 1.1 disk. Says what an upgrade keeps and what it does not,
-# with the size of /home read off the installed root (mounted read-only, measured by
-# its own du), and asks: upgrade, erase and install afresh, or stop. Returns 0 for the
-# upgrade (ANS_UPGRADE=yes; ANS_DROP_HOME=yes when /home cannot be carried over),
-# 1 for an ordinary install (the erase question follows).
-upgrade_offer()
-{
-	[ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] || return 1
-	udev="/dev/dsk/c${SCSI}d0s0"
-	/etc/rdb -p 1 "$udev" > /tmp/.upo 2>/dev/null
-	set x `cat /tmp/.upo`; shift
-	[ "$1" = UNIX_Root ] || { rm -f /tmp/.upo; return 1; }
-	/etc/rdb -p 2 "$udev" > /tmp/.upo 2>/dev/null
-	set x `cat /tmp/.upo`; shift
-	[ "$1" = UNIX_Swap ] || { rm -f /tmp/.upo; return 1; }
-	uswlen="$3"
-	ukind=1.0 udata=
-	um=`dd if="/dev/rdsk/c${SCSI}d0s3" bs=512 iseek=2 count=1 2>/dev/null | dd bs=4 count=1 2>/dev/null`
-	if [ "$um" = AXS1 ]; then
-		ukind=1.1
-		/etc/rdb -p 4 "$udev" > /tmp/.upo 2>/dev/null
-		set x `cat /tmp/.upo`; shift
-		[ "$1" = UNIX_Data ] && udata=y
-	fi
-	rm -f /tmp/.upo
-	uhome=
-	if [ -z "$udata" ]; then
-		# ufs only: no installed system has an s5 root (P-35)
-		if /etc/mount "/dev/dsk/c${SCSI}d0s1" /mnt 1 ufs > /dev/null 2>&1; then
-			if [ -d /mnt/home ] && [ -x /mnt/usr/sbin/chroot ]; then
-				set x `/mnt/usr/sbin/chroot /mnt /usr/bin/du -s /home 2>/dev/null`; shift
-				uhome="$1"
-			fi
-			/etc/umount /mnt
-		fi
-	fi
-	echo "\nThis disk holds an Amiga UNIX $ukind installation."
-	echo "An upgrade installs this disc's system again and keeps the configuration:"
-	echo "the node name, users and passwords, the network, the time zone and the"
-	echo "first-boot answers."
-	echo "Not kept: every package beyond this disc's set, and every other file on the root."
-	if [ -n "$udata" ]; then
-		echo "/home is on its own partition and stays as it is."
-	elif is_num "$uhome"; then
-		umb=`expr "$uhome" / 2048`
-		ucap=`expr "$uswlen" - 2048`
-		if [ "$uhome" -gt "$ucap" ]; then
-			echo "/home holds $umb megabytes, more than an upgrade can carry over: it is LOST."
-			ANS_DROP_HOME=yes
-		elif [ "$umb" = 0 ]; then
-			echo "/home holds less than a megabyte and is carried over."
-		else
-			echo "/home holds $umb megabytes and is carried over."
-		fi
-	fi
-	while :
-	do
-		echo ""
-		echo "  1)   Upgrade this installation"
-		echo "  2)   Erase the disk and install afresh"
-		echo "  3)   Stop"
-		readask "\nWhich? [1] "
-		case $ask in
-			""|1)	ANS_UPGRADE=yes; return 0 ;;
-			2)	ANS_DROP_HOME=; return 1 ;;
-			3)	restart ;;
-		esac
-	done
-}
-
-# upgrade_sizes -- an upgrade asks no sizes: a 1.1 disk keeps its layout and a 1.0 disk
-# is re-laid to the driver's defaults (the old swap slice, which holds the saved
-# configuration, is checked against them there). The values here are for the space
-# check and the summary only; the answers carry no sizes.
-upgrade_sizes()
-{
-	if plan_root_default "$DISK_MB"; then
-		:
-	else
-		echo "\nA ${DISK_MB} megabyte disk is too small to install UNIX on."
-		restart
-	fi
-	ANS_ROOT="$DEF_ROOT"
-	plan_swap_default "$ANS_ROOT"
-	ANS_SWAP="$DEF_SWAP"
-	ANS_FSYS=ufs
 }
 
 # ---------------------------------------------------------------------------
@@ -2123,13 +2031,6 @@ ask_verbose()
 confirm()
 {
 	echo ""
-	if [ "$ANS_UPGRADE" = yes ]; then
-		if [ "$ANS_DROP_HOME" = yes ]; then
-			echo "Upgrade install:	the configuration is kept; /home is NOT"
-		else
-			echo "Upgrade install:	the configuration and /home are kept"
-		fi
-	fi
 	echo "Install to:		`scsi_label $SCSI`  (/dev/dsk/c${SCSI}d0s${TARGET_ROOT_SLICE})"
 	echo "Disk size:		$DISK_MB megabytes"
 	echo "Root file system:	$ANS_ROOT megabytes"
@@ -2165,11 +2066,7 @@ confirm()
 	# dialog, and saying so here is the only warning the operator gets that the
 	# machine will ask for a nodename, a network and a root password when it
 	# boots off its own disk for the first time.
-	if [ "$ANS_UPGRADE" = yes ]; then
-		echo "Configure at first boot:	no (the old configuration is kept)"
-	else
-		echo "Configure at first boot:	yes (nodename, network, passwords, users)"
-	fi
+	echo "Configure at first boot:	yes (nodename, network, passwords, users)"
 
 	CHANGE=
 	while [ "$CHANGE" = "" ]
@@ -2195,12 +2092,8 @@ do
 	# Right where stock ran it: after the disk is chosen (the controller
 	# probe needs a raw node) and before a single size is asked for.
 	check_old_boot
-	if [ "$ANS_UPGRADE" = yes ]; then
-		upgrade_sizes
-	else
-		ask_sizes
-		ANS_FSYS=ufs	# the only target filesystem (P-35); not asked
-	fi
+	ask_sizes
+	ANS_FSYS=ufs	# the only target filesystem (P-35); not asked
 	ask_set
 	ask_verbose
 	if confirm; then
@@ -2272,16 +2165,8 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "# install set: $SET_LABEL"
 	echo "TARGET_SCSI_ID=$SCSI"
 	echo "TARGET_DISK_MB=$DISK_MB"
-	if [ "$ANS_UPGRADE" = yes ]; then
-		# S4-58: the upgrade keeps or re-lays the layout itself; no sizes
-		echo "INSTALL_UPGRADE=yes"
-		echo "UPGRADE_DROP_HOME=${ANS_DROP_HOME:-no}"
-		echo "TARGET_ROOT_MB="
-		echo "TARGET_SWAP_MB="
-	else
-		echo "TARGET_ROOT_MB=$ANS_ROOT"
-		echo "TARGET_SWAP_MB=$ANS_SWAP"
-	fi
+	echo "TARGET_ROOT_MB=$ANS_ROOT"
+	echo "TARGET_SWAP_MB=$ANS_SWAP"
 	# The root filesystem type. Written UNCONDITIONALLY, exactly like FB_KMAP
 	# above and for the same reason: the value must OVERRIDE whatever the base
 	# profile declares, so it can never be omitted just because the question was
