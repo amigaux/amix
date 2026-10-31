@@ -29,7 +29,7 @@ and for your own module, a `Makefile` with `KIT`, `MODULE`, `OBJS` and
 | `sysroot/`, `stock/` | the stock Amix 2.1 kernel headers (see `NOTICE`) |
 | `ddi.list`, `core.list` | the names a module may import, per tier (C3-2) |
 | `registry/` | the character and block majors, the motherboard probes |
-| `tools/` | `mkmod`, `modfix`, `modcheck.py` (the checker) |
+| `tools/` | `mkmod`, `modfix`, `modcheck.py` (the checker; `modcheck.py --kernel /stand/<line>/kabi` says whether the kit fits a kernel: line, pin, kabi, and `abi=` at the same minor) |
 | `mk/module.mk` | the make fragment |
 | `sample/hello/` | the sample module |
 | `docs/` | `ddi.md` (the DDI contracts), `guide.md` (writing a module), `contracts/C3-1.md`, `C3-2.md`, `C3-6.md` |

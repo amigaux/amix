@@ -12,6 +12,11 @@
 #       below the kit's KABI_MIN (kit.conf; the kit's own minor in a kit
 #       without one).  So a module that imports no newer name loads on
 #       the kernels it loaded on before (C3-2 section 2)
+#   modcheck.py [-k KIT] --kernel KABI
+#       the kit against a kernel's sidecar KABI (/stand/<line>/kabi, C3-3):
+#       the same line and pin, the kabi's family and major, the kit's minor
+#       not above the kernel's, and at the same minor abi= the SHA-256 of
+#       the kit's abi.txt; one line per mismatch, exit status 1 if any
 #
 #   KIT        the kit directory (kit.conf, ddi.list, core.list,
 #              registry/); default: the directory above this script
@@ -57,7 +62,7 @@
 # One line per problem; exit status 1 if there is any.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
-import os, re, struct, subprocess, sys, tempfile
+import hashlib, os, re, struct, subprocess, sys, tempfile
 
 ALLOC, SHT_RELA, SHT_REL, SHT_SYMTAB = 2, 4, 9, 2
 OK_TYPES = (1, 8, 13)                    # PROGBITS, NOBITS, the .moddata type
@@ -479,9 +484,58 @@ def scan(e, path):
 waived = {}
 
 
+def kernel(kit, path):
+    """--kernel: the kit against a kernel's sidecar"""
+    c, k = conf(kit), {}
+    try:
+        for line in open(path):
+            if '=' in line:
+                key, v = line.strip().split('=', 1)
+                k[key] = v
+    except OSError as x:
+        sys.exit('modcheck: %s: %s' % (path, x))
+    abi = hashlib.sha256(open(os.path.join(kit, 'abi.txt'), 'rb').read()).hexdigest()
+    who = 'kernel %s' % k.get('build', path)
+    probs = []
+    for key in ('line', 'kabi', 'pin', 'abi'):
+        if key not in k:
+            probs.append('%s: no %s= line' % (who, key))
+    if probs:
+        for p in probs:
+            print('modcheck: %s' % p)
+        return 1
+    if k['line'] != c['LINE']:
+        probs.append('%s is line %s, the kit %s' % (who, k['line'], c['LINE']))
+    kf, km, kn = (k['kabi'].split('.') + ['', '', ''])[:3]
+    cf, cm, cn = c['KABI'].split('.')
+    if (kf, km) != (cf, cm) or not kn.isdigit():
+        probs.append('%s is kabi %s, the kit %s: another family or major'
+                     % (who, k['kabi'], c['KABI']))
+    elif int(cn) > int(kn):
+        probs.append('%s is kabi %s, below the kit\'s %s: a module importing a '
+                     'minor-%s name would not load there' % (who, k['kabi'], c['KABI'], cn))
+    elif int(cn) == int(kn) and k['abi'] != abi:
+        probs.append('%s has abi=%s, the kit\'s abi.txt %s: the same kabi, another ABI'
+                     % (who, k['abi'][:8], abi[:8]))
+    if k['pin'] != c['PIN']:
+        probs.append('%s is pinned to %s, the kit to %s' % (who, k['pin'], c['PIN']))
+    for p in probs:
+        print('modcheck: %s' % p)
+    if probs:
+        return 1
+    print('modcheck: kit %s fits %s (kabi %s, abi %s, %s)'
+          % (c['KABI'], who, k['kabi'],
+             abi[:8] if int(cn) == int(kn) else 'not compared below its minor', k['pin']))
+    return 0
+
+
 def main(argv):
     kit = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     deps = []
+    if len(argv) in (2, 4) and argv[-2] == '--kernel':
+        if len(argv) == 4 and argv[0] != '-k':
+            sys.exit('usage: modcheck.py [-k KIT] --kernel KABI')
+        return kernel(argv[1] if len(argv) == 4 else kit, argv[-1])
     if len(argv) in (2, 4) and argv[-2] == '--kabi':
         if len(argv) == 4 and argv[0] != '-k':
             sys.exit('usage: modcheck.py [-k KIT] --kabi OBJECT')
@@ -508,7 +562,8 @@ def main(argv):
         argv = argv[2:]
     if len(argv) != 1:
         sys.exit('usage: modcheck.py [-k KIT] [-d DEPMODULE]... [-w FUNC,...] MODULE\n'
-                 '       modcheck.py [-k KIT] --kabi OBJECT')
+                 '       modcheck.py [-k KIT] --kabi OBJECT\n'
+                 '       modcheck.py [-k KIT] --kernel KABI')
     path = argv[0]
     c = conf(kit)
     try:

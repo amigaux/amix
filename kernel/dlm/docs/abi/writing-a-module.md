@@ -76,6 +76,9 @@ builds for both kits without mixing them. It is compiled against the kit's
 headers, linked, its `.moddata` written by `mkmod`, and checked by
 `modfix` and `modcheck.py`. The checker names each rule a module breaks.
 The module core makes the same refusals at load time.
+Before building for a given kernel, the kit's `tools/modcheck.py --kernel
+kabi`, given a copy of that kernel's `/stand/<line>/kabi`, says whether
+the kit fits it.
 
 ## 3. The Master file
 

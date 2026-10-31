@@ -82,6 +82,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 	B=$(B) sh tests/host/kbox.sh
 	B=$(B) sh tests/host/knode.sh
 	B=$(B) sh tests/host/kmajor.sh
+	B=$(B) sh tests/host/kitkern.sh
 	B=$(B) sh tests/host/namelist.sh
 	B=$(B) sh tests/host/knamelist.sh
 	B=$(B) sh tests/host/prfcheck.sh
