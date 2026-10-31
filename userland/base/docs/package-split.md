@@ -60,7 +60,7 @@ page proposes something P-36 left open, it says so.
   `/etc/inittab`.
 - **D-N18 already fixed the client's names and its place in `/usr/sbin`.**
 
-## The contract between them (draft, to be frozen after S0)
+## The contract between them (frozen in T-55, 2026-10-30)
 
 ### `dhcpc` command line
 

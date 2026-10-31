@@ -25,13 +25,13 @@ the network chain stay untouched.
 
 | Piece | Installed as | Kind | What it does |
 |---|---|---|---|
-| `inetinit` | `/etc/init.d/inetinit` = `rc2.d/S69inet` (and the `K69inet` links) | code, written in place so the hard links survive | `slink`; `ifconfig lo0 127.0.0.1 up`; `ifup -a` in the background with a time bound and its log in `/var/adm/ifup.log`; then the two legacy hooks below |
-| `ifup`, `ifdown` | `/usr/sbin/ifup`, `/usr/sbin/ifdown` | code | per interface: read its MAC (`dlpi-mac`), pick its line in `interfaces` (MAC line, then name line, then `*`; none = off), `slink addaen <node> <if>` once, then `static` or `dhcp`, then the shared apply step |
-| `ifup.subr` | `/usr/lib/inet/ifup.subr` | code | the `interfaces` parser (one awk program, no shell read loops; written, page `interfaces(4)`) and the apply step: `ifconfig` with literal addresses, the default route, this host's line in `/etc/inet/hosts`, `/etc/nodename` when a line says `name`, `/etc/resolv.conf` (nameservers only) and the other DNS parts, done idempotently |
-| `dhcpc-hook` | `/usr/lib/inet/dhcpc-hook` | code | the entry point the DHCP client calls; it runs the same apply step as a static line (contract: `package-split.md`) |
+| `inetinit` | `/etc/init.d/inetinit` = `rc2.d/S69inet` (and the `K69inet` links) | code, written in place so the hard links survive | `slink`; `ifconfig lo0 127.0.0.1 up`; `ifup -a` through `rc_bg` (bound: `rc.conf`'s `ifup_bound`, default 120 s; output in `/var/adm/rclog/ifup`); then the two legacy hooks below. Written |
+| `ifup`, `ifdown` | `/usr/sbin/ifup`, `/usr/sbin/ifdown` | code | per interface: read its MAC (`dlpi-mac`), pick its line in `interfaces` (MAC line, then name line, then `*`; none = off), `slink addaen <node> <if>` once (one retry after the base `slink`), then `static` or `dhcp`, then the shared apply step; `ifup -n` says what it would do. Written; page `ifup(1M)` |
+| `ifup.subr` | `/usr/lib/inet/ifup.subr` | code | the `interfaces` parser (one awk program, no shell read loops; written, page `interfaces(4)`) and the apply step: `ifconfig` with literal addresses, the default route (the first interface to set one keeps it), this host's line in `/etc/inet/hosts` (for that interface, else the first one up), `/etc/nodename` when a line says `name`, `/etc/resolv.conf` (nameservers only) and the other DNS parts, each only when it changes. Written |
+| `dhcpc-hook` | `/usr/lib/inet/dhcpc-hook` | code | the entry point the DHCP client calls; it runs the same apply step as a static line (contract: `package-split.md`, frozen in T-55). Written |
 | `dlpi-mac` | `/usr/sbin/dlpi-mac` | C, period compiler | prints the station address of any DLPI Ethernet node, by the §4.4 rules: from the `DL_INFO_ACK` of a slot already bound, else from a `DL_BIND_ACK`; unbinds before it closes. The installer's `zenmac`, generalized (device, PPA and SAP as arguments). Page: `dlpi-mac(1M)` |
-| `link.d/aen` | `/etc/inet/link.d/aen` | vendor data | the stock A2065's entry: `aen /dev/aen 0 18` plus `aen -S` as a presence command until a boot without the card is timed. Other drivers ship their own entry in their own package |
-| `network-config`, `rc.inet` | `/etc/inet/network-config`, `/etc/inet/rc.inet` | conffiles | empty, commented hooks kept so that third-party instructions ("append to network-config") still work |
+| `link.d/aen` | `/etc/inet/link.d/aen` | vendor data | the stock A2065's entry: `aen /dev/aen 0 18` plus `aen -S` as a presence command until a boot without the card is timed. Other drivers ship their own entry in their own package; the file is named for the driver's module, which `rc_mknod` asks the registry about. Written |
+| `network-config`, `rc.inet` | `/etc/inet/network-config`, `/etc/inet/rc.inet` | conffiles | empty, commented hooks kept so that third-party instructions ("append to network-config") still work; the stock `rc.inet` runs nothing either (inetd comes from the SAF). Written |
 
 ### DHCP: `dhcpc/`
 
@@ -95,8 +95,8 @@ itself changed.
    (written, host-tested and run on the emulator; not yet packaged). No
    packaging dependency beyond a plain package.
 3. **`ifup`/`ifdown`, `ifup.subr`, `link.d/aen`, `dhcpc-hook`, the new
-   `inetinit`.** Needs the packaging harness to take `CONFFILES` (W3) and the
-   shared conffile scripts (W1) for `network-config` and `rc.inet`.
+   `inetinit`** (written, host-tested, `ifup` run on the emulator against the
+   live `aen0`; not yet packaged).
 4. **The base config files** (D-N24), once the conffile scripts handle a file
    the system edits every boot without writing a `.new` each update.
 5. **`dhcpc` 1.0** (S1), against the hook contract frozen after S0. Tested on
