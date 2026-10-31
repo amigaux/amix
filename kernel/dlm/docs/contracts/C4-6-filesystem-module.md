@@ -1,4 +1,4 @@
-# C4-6 — the filesystem module form, version 4
+# C4-6 — the filesystem module form, version 5
 
 - **Status:** agreed 2026-10-26, with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
@@ -8,6 +8,9 @@
   filesystem module, boot class with the generation's `rootfs` promoted
   to a root record (§1, §5); the miniroot is s5. Version 4 (2026-10-27,
   from an amix-installng RAM-disk image): the miniroot is s5 on k30 and ufs on k46 (§1).
+  Version 5 (2026-10-31): a filesystem module may be demand class, loaded
+  at the first mount of its type (§1, §5); cdfs is (core patch 0048,
+  kabi minor 4).
   Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
@@ -25,18 +28,20 @@
 
 ## 1. A filesystem module
 
-**One rule for ufs, s5 and cdfs: a filesystem module is boot class; the
-generation's `rootfs` is promoted to a root record.** `kbootset` composes
-the module whose `fs=` is the generation's `rootfs` as a root record
-(boot2 places it, `marc_root` links it before the root is mounted, and it
-is in the safe set), and every other filesystem module as a boot record,
-loaded at the first `sysinit` entry before anything else is mounted
-(C4-4 §1.3, core patch 0043). So one object per line serves every box,
-and the arena holds one filesystem at most.
+**One rule for ufs, s5 and cdfs: a filesystem module is boot or demand
+class; the generation's `rootfs` is promoted to a root record.** `kbootset`
+composes the module whose `fs=` is the generation's `rootfs` as a root
+record (boot2 places it, `marc_root` links it before the root is mounted,
+and it is in the safe set; `match=always` when the module gives none),
+every other boot-class filesystem module as a boot record, loaded at the
+first `sysinit` entry before anything else is mounted (C4-4 §1.3, core
+patch 0043), and a demand-class one as a demand record with `fs=`, loaded
+at the first mount of its type (§5). So one object per line serves every
+box, and the arena holds one filesystem at most.
 
 | Key | ufs, s5 | cdfs |
 |---|---|---|
-| `class` | `boot`; promoted where it is the `rootfs` | `boot`; promoted only on a medium that roots on the CD itself, which none of 1.1 does (§5) |
+| `class` | `boot`; promoted where it is the `rootfs` | `demand` (version 5): loaded at the first `cdfs` mount, so it is resident only on a box that mounts a disc; promoted only on a medium that roots on the CD itself, which none of 1.1 does (§5) |
 | `match` | `always` | `always` |
 | `fs` | `ufs` / `s5`: the name it registers (C3-1 §3) | `cdfs` |
 | `tier` | `core`, with the kernel's `build` (C3-1): a stock object imports more than the DDI (§4) | `ddi` |
@@ -53,8 +58,8 @@ type) **and ufs on k46**: s5 is broken under the 4 KiB-page line (on the
 k46 s5 RAM-disk root `ls -l` and `/etc/sioc` die with a bus error),
 which is why every k46 miniroot has been ufs. So the k46 media's
 generation has `--rootfs ufs` and promotes ufs; on k30, s5 is promoted
-and ufs is boot class to make the target disk. cdfs is boot class on
-both, to mount the disc.
+and ufs is boot class to make the target disk. cdfs is demand class on
+both, loaded when the disc is mounted (§5).
 
 ## 2. The table
 
@@ -128,16 +133,49 @@ it registers through `vfs_register` and reaches the disk through
 
 ## 5. Choosing the class
 
-Nothing in the stock mount path loads a module for an unknown type:
-`mount` fails in `vfs_getvfssw`. So no filesystem module is demand class
-(30 §6 had cdfs so). Boot class loads it at the first `sysinit` entry,
-before `mountall`, in process context; cdfs's 69 KB image and the
-boot-class one of ufs and s5 are well inside U2's process-context total.
-The root filesystem cannot wait for `sysinit`, so it is promoted (§1). A
-load-by-type hook in the mount path would be a change to stock code that
-this avoids. The 1.1 CD medium roots on its RAM disk,
-so cdfs is boot class there too; a medium that roots on the CD itself
-would promote it by the same rule.
+**Boot class** loads a filesystem module at the first `sysinit` entry,
+before `mountall`, in process context; ufs and s5 are boot class where
+they are not the root. The root filesystem cannot wait for `sysinit`, so
+it is promoted (§1).
+
+**Demand class** (version 5, core patch 0048) loads a filesystem module
+at the first mount of its type, so a filesystem that most boxes never
+mount costs nothing until then. cdfs is demand class: resident only on
+a box that mounts a disc. No stock code changes, because
+the stock mount path reaches a filesystem only through its `vfssw` row:
+`smount` takes the row's `vsw_vfsops` (by index, or by name through
+`vfs_getvfssw`) and calls its `vfs_mount`, and `sysfs` and `statfs` read
+only the row's name and index.
+- **The stub row.** `marc_post`'s demand pass (never in safe mode) gives
+  each demand record with `fs=<type>` a row in a spare `vfssw` row (§2):
+  `vsw_name` is the type, `vsw_vfsops` one of the core's stub tables, one
+  per spare row, so the stub knows its type from the vfs's ops pointer. A
+  type the kernel or a boot-class module already has gets no stub (the
+  module would never load; the console says so).
+- **The first mount.** The stub's `vfs_mount`, in the mount system call's
+  process context, loads the module as a demand major's first open does
+  (manifest-only, its SHA-256 checked, C3-4). The module's `_load` calls
+  `vfs_register`, which fills the stub's row in place, keeping its index;
+  the stub then puts the row's ops into the vfs and mounts through them.
+  A mount that took the stub while another loaded the module finds the
+  row filled and goes on. A load that fails, or a module that registers
+  no row, fails the mount with that error (`ENXIO` for the latter) and
+  leaves the stub, so a later mount tries again.
+- **The other stub entries** answer without loading: `vfs_sync` 0, since
+  the stock `sync()` calls every row's; `vfs_mountroot` and the rest
+  `EINVAL`, since `vfs_mountroot` tries only `rootfstype` (§6) and no vfs
+  is mounted through a stub.
+- **Safe mode** gives no stub rows, so a mount of the type fails with
+  `EINVAL` and nothing loads, as on a box without the module.
+- **Unload.** A filesystem module stays pinned (§3): once loaded, it stays
+  until the next boot.
+- **The kernel** must be at kabi minor 4, whose core has the stub path
+  (C3-2 §3). A demand-class filesystem module is tagged minor 4, so
+  `kbootset` gate 2 and apkg's pre-flight refuse it on an older kernel.
+
+The 1.1 CD medium roots on its RAM disk (C4-3), so cdfs is demand class
+there too and loads when the medium's installer mounts the disc; a medium
+that rooted on the CD itself would promote it by the same rule as ufs.
 
 ## 6. The root filesystem type
 

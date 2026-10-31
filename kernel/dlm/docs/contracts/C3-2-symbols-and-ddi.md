@@ -1,6 +1,6 @@
 # C3-2 — the exported-symbol block, the allowlist and DDI v1, version 2
 
-- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -165,6 +165,14 @@ character major 54, 20 §6). The contracts are in `docs/abi/ddi.md`.
 
 A kernel exports minor 3 only when its cut applies that patch. Without
 it, the cut claims 1.2, and the gate holds it there (§2).
+
+**Minor 4, load on mount** (version 3). No new DDI name: minor 4 says
+that the kernel's module core (patch 0048) gives a demand-class record
+with `fs=<type>` a stub filesystem row, and loads the module at the first
+mount of that type (C4-6 §5). A demand-class filesystem module is tagged
+minor 4 whatever it imports, so `kbootset` gate 2 and apkg's pre-flight
+refuse it on an older kernel, whose core would never load it. Every
+module of minor 3 or below still fits a minor-4 kernel.
 
 The two exclusion flags stay data names, and are not replaced by a
 `paula_claim()`/`paula_release()` pair (2026-10-28). No rule here

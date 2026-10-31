@@ -1,4 +1,4 @@
-# C3-1 — the module object and `.moddata` version 2, version 5
+# C3-1 — the module object and `.moddata` version 2, version 6
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): the text form of parameter values (§3); version 3
@@ -6,7 +6,9 @@
   `ENXIO` (§4); version 4 (2026-10-26): the image and the file under
   256 KiB (§1, §4, §6); version 5 (2026-10-27, for the amix-cdfs
   module): `fs` is required of every module that calls `vfs_register`,
-  boot class too (§3). Other repositories build against this text; a
+  boot class too (§3); version 6 (2026-10-31): a demand-class module
+  may load by its `fs` instead of `majors`, at the first mount of its
+  filesystem type (§3). Other repositories build against this text; a
   change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
@@ -86,8 +88,8 @@ offset 8   ...       NUL-terminated "key=value" strings, ending with an empty st
 | `class` | `boot` or `demand`; `root` from stage 4 | always | core, `kbootset` |
 | `match` | comma-separated keys: `zorro:MMMM:PP` (4 and 2 lowercase hex digits, neither all zero), `mobo:<probe>` from the registry, `always` | root class; optional for boot and demand | core |
 | `rank` | the sd rank key (30 §5) | root-class disk controllers | core |
-| `majors` | comma-separated `c:<n>` / `b:<n>`, each in the registry (20 §6) | when the module registers a device | core, `kbootset` |
-| `fs` | the filesystem name for `vfs_register` | every module that calls `vfs_register`, root or boot class (C4-6 §3) | core |
+| `majors` | comma-separated `c:<n>` / `b:<n>`, each in the registry (20 §6) | when the module registers a device; a demand-class module has `majors` or `fs`, not both | core, `kbootset` |
+| `fs` | the filesystem name for `vfs_register` | every module that calls `vfs_register`, of any class (C4-6 §3); a demand-class one loads at the first mount of this type, on a kernel at kabi minor 4 or later (C4-6 §5) | core, `kbootset` |
 | `depend` | comma-separated module names | when it uses another module's symbols | core, `kbootset` |
 | `unload` | `never` (the default) or `allowed` | no | core |
 | `param` | `<name>:<type>:<default>[:<min>:<max>]`, type `int`, `bool`, `str` or `hex` | per parameter | `kbootset`, core |
@@ -117,7 +119,8 @@ follows as a spec change after freeze once this is agreed.
 - A boot-class module with `match` is loaded by `marc_post` only when one
   of its keys matches the booted board set (the boards in `bootinfo`). One
   without `match` is always loaded. A demand-class module loads at the
-  first open of one of its `majors`.
+  first open of one of its `majors`, or, with `fs` (version 6), at the
+  first mount of that filesystem type.
 - A module that finds no hardware returns `ENXIO` from `_load` and is not
   kept.
 

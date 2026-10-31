@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 19
+# C3-5 — the module package and the per-module manifest record, version 20
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -27,7 +27,9 @@
   amix-base's `/etc/inittab` carries the `dlm` line, and
   modtools has no package scripts (§1.3, §5); version 18 (2026-10-31):
   a device node's pkgmap class is its module's name (§1.2);
-  version 19 (2026-10-31): random's short name (§1.1).
+  version 19 (2026-10-31): random's short name (§1.1); version 20
+  (2026-10-31): a demand-class record may carry `fs=` instead of
+  `majors=`, and `marc_post` gives that type a stub row (§2, §3, §5).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -209,7 +211,7 @@ the gate, when:
 | 1 | an object's SHA-256 differs from its install record |
 | 2 | a kabi family or major other than the kernel's, a minor above it, a `cc=` other than the kernel's pin, a `tier=core` module whose `build=` is not the kernel's (C3-1 §3) |
 | 2 | a parameter value outside its declared type or range, or a parameter the module does not declare |
-| 3 | a `depend=` naming a module not in the generation; a **boot-class module without `match=`** (one that needs no board says `match=always`); a **demand-class module without `majors=`, or whose majors are not registered to it** (the registry, `abi/registry/majors`, as core patch 0006 checks at load) |
+| 3 | a `depend=` naming a module not in the generation; a **boot-class module without `match=`** (one that needs no board says `match=always`); a **demand-class module without `majors=` or `fs=`, with both, or whose majors are not registered to it** (the registry, `abi/registry/majors`, as core patch 0006 checks at load); a **demand-class module with `fs=` on a kernel below kabi minor 4** (version 20); **two modules with one `fs=`** |
 | 3 | stage 4: a root-class set that does not cover the boot and root controllers and the root filesystem |
 | 4 | stage 4: the root-class set over the arena's capacity |
 | — | over the loader parser's limits: more than 32 module records, more than 32 `param` records, or a record longer than 255 bytes (`loader/common/manifest.h`) |
@@ -231,7 +233,7 @@ records.
 
 ```
 module <name> boot <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> match=<keys> [depend=<names>] [tier=core build=<id>]
-module <name> demand <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> majors=<c:N,...> [depend=<names>] [tier=core build=<id>]
+module <name> demand <size> path=/stand/gen/<id>/mod/<name> sha256=<64 hex> majors=<c:N,...> | fs=<type> [depend=<names>] [tier=core build=<id>]
 module <name> root <size> at=<off> [stored=<n> z=deflate] bss=<n> crc32=<8 hex> sha256=<64 hex> match=<keys> [safe=1] ...   (stage 4)
 param <name>.<pname>=<value>
 ```
@@ -248,7 +250,8 @@ boot-class module whose `fs=` is the generation's `rootfs`, which
 | `sha256=` | the object | the core: what they must hash to (patch 0009); `kbootset check` |
 | `match=` | **copied verbatim** from `.moddata`; required on boot and root class | `marc_post`: a boot-class record loads only if a key names a board in this box (the platform's matcher; `always` always matches); `marc_root` the same for a root-class record (C4-4 version 3 §4). boot2 does not read it |
 | `safe=1` | root class (version 7): on the records of the safe-mode set, written by `kbootset`: the root controller's module (from `kinfo`'s card table, C2-1), the root filesystem's module (the manifest's `rootfs`), the root-class modules those two depend on, and (version 13) every controller module ranked at or before the root's class (C4-4 version 6 §2); on a boot record (version 15), the administrator's `safe` mark from `modreg.local.d` and the boot modules it depends on (C4-4 version 7 §2); absent on every other record | boot2: in safe mode it places only these, and it sets flag 0x4 on their directory entries in every boot (C4-4 version 3 §2) |
-| `majors=` | **copied verbatim**; required on demand class | `marc_post`: registers each character major for the module (block majors: stage 4) |
+| `majors=` | **copied verbatim**; on demand class, `majors=` or `fs=` | `marc_post`: registers each character major for the module (block majors: stage 4) |
+| `fs=` | **copied verbatim** from `.moddata`, on a demand-class record of a filesystem module (version 20) | `marc_post`: a stub row for the type in a spare `vfssw` row, so the first mount of the type loads the module (C4-6 §5, core patch 0048) |
 | `depend=` | **copied verbatim** | `kbootset` gate 3, and the record order |
 | `tier=`, `build=` | **copied verbatim** when `tier=core` | `kbootset status`; the core decides from the object's own `.moddata` (patch 0003) |
 | `param` | §2 | the core: passed to the module's `_load` as its first argument, one string `"<pname>=<value> ..."`, valid during the call |
@@ -298,7 +301,8 @@ a new record, with `loader-min` raised. This contract adds none.
     the way to a modtools without scripts, and the line stays.
   - A box without `/sbin/modadmin` would print one error for this entry
     at every boot; no supported install lacks it.
-- **Order:** `marc_post` first registers the demand-class majors, then
+- **Order:** `marc_post` first registers the demand-class majors and
+  filesystem types, then
   loads the boot-class records in manifest order. A module's
   dependencies load before it in any case.
 - **Console:** one line per record:
