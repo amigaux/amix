@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — P-38 S2.1: `make kit` writes build/kit.digests for the release lock (1632ee4)
+
+tools/kitdigest.sh gives each kit two digests: `manifest`, the dlmkit package's pin, equal across rebuilds of one
+commit, and `norev`, without kit.conf and NOTICE, equal across commits when the kit's bytes are. `make kit` writes them
+to build/kit.digests (`kit <line> <kabi> <manifest> <norev> KIT_REV= PORT_REV=`), the format agreed with infra for
+make dist and the lock. Two builds at 1632ee4 gave identical digests; make test 719/0.
+
 ## 2026-10-31 — stage-5 ledger: the owner's rulings on a4kt710-k30, S5-42, S5-32 and S5-44; the port pin (c9884ac, efcaafb)
 
 a4kt710-k30 stays in the 1.1 set, accepted in emulation (the A4000T 53C710 in 030 mode). S5-42's acceptance is
