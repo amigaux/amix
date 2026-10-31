@@ -9,7 +9,8 @@
 # unless AMIX_BUILD_ROOT is set), its log to $AMIX_BUILD_ROOT/kspace/log/;
 # on standard output one line per datastream, `pkg <file> <sha256>`.
 # Exit status 1 on any failure (the recipe's log's tail on standard error),
-# 2 for usage.
+# 2 for usage, 3 when a recipe's input from outside it is absent (its
+# [MISSING] line on standard error; the other recipes still roll).
 #
 # MIT licence, see LICENSE at the top of the repository.
 set -e
@@ -32,14 +33,25 @@ export KSPACE_LIST
 trap 'rm -f "$KSPACE_LIST"' EXIT INT TERM
 : > "$KSPACE_LIST"
 
+missing=
 for n in $names; do
 	log="$root/kspace/log/$n.log"
-	if ! sh "$HERE/$n/build.sh" > "$log" 2>&1; then
+	rc=0
+	sh "$HERE/$n/build.sh" > "$log" 2>&1 || rc=$?
+	case $rc in
+	0) ;;
+	3)
+		grep '^\[MISSING\]' "$log" >&2
+		missing=1
+		;;
+	*)
 		tail -20 "$log" >&2
 		echo "[FAIL] kernel/port/pkg: $n did not roll; log $log" >&2
 		exit 1
-	fi
+		;;
+	esac
 done
 while read -r f; do
 	echo "pkg ${f##*/} $(sha256sum < "$f" | cut -c1-64)"
 done < "$KSPACE_LIST"
+[ -z "$missing" ] || exit 3
