@@ -9,7 +9,7 @@ def check(what, cond):
         fails += 1
 
 check("version %s" % sys.version.split()[0], sys.version_info[:3] == (3, 11, 18))
-check("big integers: 2**200 %% 1000003", 2 ** 200 % 1000003 == pow(2, 200, 1000003))
+check("big integers: 2**200 mod 1000003", 2 ** 200 % 1000003 == pow(2, 200, 1000003))
 check("float: 0.1 + 0.2 repr", repr(0.1 + 0.2) == "0.30000000000000004")
 import json
 check("json round trip", json.loads(json.dumps({"a": [1, 2.5, "x"]})) == {"a": [1, 2.5, "x"]})
@@ -38,6 +38,10 @@ with open(os.path.join(d, "f"), "w") as f:
     f.write("hello\n")
 check("file I/O and listdir", os.listdir(d) == ["f"] and open(os.path.join(d, "f")).read() == "hello\n")
 import sysconfig
-check("sysconfig platform %s" % sysconfig.get_platform(), "amigaunix" in sysconfig.get_platform())
+# sys.platform names the sysconfig data; get_platform() is built from uname at run time
+# ("unix_system_v-4.0-Amiga_(Unlimited)") and is only printed
+prefix = sysconfig.get_config_var("prefix")
+check("sys.platform %s, sysconfig data loads (prefix %s; get_platform %s)" % (sys.platform, prefix, sysconfig.get_platform()),
+      sys.platform == "amigaunix" and prefix == "/opt/amix")
 print("RES python %s" % ("PASS" if fails == 0 else "FAIL %d" % fails))
 sys.exit(1 if fails else 0)
