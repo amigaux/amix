@@ -1,0 +1,526 @@
+Subject: first-use loads never wait for memory; the file's copy is freed early
+
+--- a/dlm.h
++++ b/dlm.h
+@@ -237,6 +237,7 @@
+ #define	DL_SYS		0x01	/* system credentials and root */
+ #define	DL_DEMAND	0x02	/* set the demand mark */
+ #define	DL_ARENA	0x04	/* a root module from the arena (patch 2) */
++#define	DL_NOWAIT	0x08	/* a first-use load: KM_NOSLEEP (patch 0049) */
+ 
+ /* dlm_unload() callers */
+ #define	DU_DEMAND	0
+@@ -358,7 +359,7 @@
+ extern int dlm_xreg();
+ extern int dlm_creg(), dlm_sreg();
+ extern int dlm_autoload();
+-extern int dlm_loadname();
++extern int dlm_loadname(), dlm_loaduse();
+ extern int dlm_fsreg();
+ 
+ /* dlm_str.c */
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -70,13 +70,60 @@
+  */
+ int	dlm_nosleep;
+ 
+-#define	NOMEM(e)	((e) == ENOMEM && dlm_nosleep)
++/*
++ * A first-use load (the first mount of a demand filesystem type, a demand
++ * major's first open, a first exec, modadmin -l) runs in a user's process
++ * after multi-user, where a KM_SLEEP request the kernel map cannot meet
++ * waits for good (U2, U4).  So its process is in dlm_nwproc while it
++ * loads, and every allocation the core makes for it is KM_NOSLEEP, under
++ * the root pass's cap: short memory fails the load with ENOMEM and the
++ * kernel as it was, and a later use tries again.  Boot-class loads keep
++ * KM_SLEEP.  Per process, so another process's load is not affected.
++ */
++#define	DLM_NWMAX	8
++static char	*dlm_nwproc[DLM_NWMAX];
++
++static int
++nowait()
++{
++	int i;
++
++	for (i = 0; i < DLM_NWMAX; i++)
++		if (dlm_nwproc[i] && dlm_nwproc[i] == CURPROC())
++			return 1;
++	return 0;
++}
++
++static int
++nowait_enter()
++{
++	int i;
++
++	for (i = 0; i < DLM_NWMAX; i++)
++		if (dlm_nwproc[i] == 0) {
++			dlm_nwproc[i] = CURPROC();
++			return 1;
++		}
++	return 0;
++}
++
++static void
++nowait_leave()
++{
++	int i;
++
++	for (i = 0; i < DLM_NWMAX; i++)
++		if (dlm_nwproc[i] == CURPROC())
++			dlm_nwproc[i] = 0;
++}
++
++#define	NOMEM(e)	((e) == ENOMEM && (dlm_nosleep || nowait()))
+ 
+ char *
+ dlm_zalloc(n)
+ 	long n;
+ {
+-	if (dlm_nosleep)
++	if (dlm_nosleep || nowait())
+ 		return n > DLM_NOSLEEPMAX ? (char *)0 :
+ 		    (char *)kmem_zalloc((size_t)(n ? n : 1), KM_NOSLEEP);
+ 	return (char *)kmem_zalloc((size_t)(n ? n : 1), KM_SLEEP);
+@@ -461,35 +508,34 @@
+ 	return EPERM;
+ }
+ 
+-/* Read the whole file once, check its SHA-256, and load from the copy. */
++/*
++ * Read the whole file once, check its SHA-256, and load from the copy: the
++ * buffer is the file's size (one allocation, one byte over, so a file
++ * that grew while it was read shows), and dlm_load frees it as soon as
++ * the image, the relocations and the symbol table are built.
++ */
+ static int
+ lf_hashload(lf)
+ 	struct dlm_lf *lf;
+ {
+ 	unsigned char sha[32];
+-	long cap = 8192, n = 0, i;
+-	char *b, *nb;
++	struct vattr va;
++	long cap, n = 0, i;
++	char *b;
+ 	int resid, e;
+ 	static char hex[] = "0123456789abcdef";
+ 
++	va.va_mask = AT_SIZE;
++	if ((e = VOP_GETATTR(lf->lf_vp, &va, 0, u.u_cred)) != 0)
++		return e;
++	if (va.va_size >= (unsigned long)dlm_maximage) {
++		printf("dlm: %s: its file is over the limit\n", lf->lf_mod->m_name);
++		return ENOLOAD;
++	}
++	cap = (long)va.va_size + 1;
+ 	if ((b = dlm_zalloc(cap)) == 0)
+ 		return ENOMEM;
+-	for (;;) {
+-		if (n == cap) {
+-			if (cap >= dlm_maximage) {
+-				dlm_free(b, cap);
+-				printf("dlm: %s: its file is over the limit\n", lf->lf_mod->m_name);
+-				return ENOLOAD;
+-			}
+-			if ((nb = dlm_zalloc(cap * 2)) == 0) {
+-				dlm_free(b, cap);
+-				return ENOMEM;
+-			}
+-			bcopy(b, nb, n);
+-			dlm_free(b, cap);
+-			b = nb;
+-			cap *= 2;
+-		}
++	while (n < cap) {
+ 		resid = 0;
+ 		e = vn_rdwr(UIO_READ, lf->lf_vp, (caddr_t)(b + n), (int)(cap - n), (off_t)n,
+ 		    UIO_SYSSPACE, 0, 0x7fffffffL, u.u_cred, &resid);
+@@ -497,9 +543,14 @@
+ 			dlm_free(b, cap);
+ 			return e;
+ 		}
+-		n += (cap - n) - resid;
+-		if (resid)
++		if (resid == cap - n)		/* the end of the file */
+ 			break;
++		n += (cap - n) - resid;
++	}
++	if (n != (long)va.va_size) {
++		dlm_free(b, cap);
++		printf("dlm: %s: its file changed while it was read\n", lf->lf_mod->m_name);
++		return EIO;
+ 	}
+ 	lf->lf_mbuf = b;
+ 	lf->lf_mcap = cap;
+@@ -808,6 +859,9 @@
+ 	return 0;
+ }
+ 
++static int dlm_load1();
++
++/* DL_NOWAIT: a first-use load, KM_NOSLEEP for its process (above) */
+ int
+ dlm_load(path, flags, depth, g, mp)
+ 	char *path;
+@@ -815,6 +869,26 @@
+ 	struct dlm_guard *g;
+ 	struct dlm_mod **mp;
+ {
++	int e, nw = 0;
++
++	if ((flags & DL_NOWAIT) && !nowait()) {
++		if (!nowait_enter())
++			return EBUSY;
++		nw = 1;
++	}
++	e = dlm_load1(path, flags & ~DL_NOWAIT, depth, g, mp);
++	if (nw)
++		nowait_leave();
++	return e;
++}
++
++static int
++dlm_load1(path, flags, depth, g, mp)
++	char *path;
++	int flags, depth;
++	struct dlm_guard *g;
++	struct dlm_mod **mp;
++{
+ 	char *name = lastcomp(path);
+ 	struct dlm_mod *m, *dm;
+ 	struct dlm_lf *lf;
+@@ -1009,6 +1083,7 @@
+ 	w = G32(m->m_base + ld->ld_secoff[ld->ld_modsec]);
+ 	lf_close(lf);
+ 	dlm_ld_free(ld);
++	lf_mfree(lf);			/* the file's copy: nothing reads it from here */
+ 
+ 	/* wrapper */
+ 	if (!inimg(m, w, (unsigned long)MWSZ) || (w & 1)) {
+@@ -1074,8 +1149,10 @@
+ 	*mp = m;
+ 	return 0;
+ fail:
+-	if (NOMEM(e))
++	if (NOMEM(e) && dlm_nosleep)
+ 		printf("dlm: %s: no memory for it in the root pass\n", name);
++	else if (NOMEM(e))
++		printf("dlm: %s: not loaded: kernel memory short (error %d)\n", name, e);
+ 	lf_fail(g, lf);
+ 	return e;
+ }
+@@ -1168,6 +1245,7 @@
+ 
+ 	while (g->g_lf)
+ 		lf_fail(g, g->g_lf);
++	nowait_leave();			/* a signal took a first-use load out */
+ 	if ((m = g->g_unl) != 0) {
+ 		g->g_unl = 0;
+ 		relink(m, g->g_unlnl);
+@@ -1237,8 +1315,12 @@
+ 		return ENOSYS;
+ 	if (!suser(u.u_cred))
+ 		return EPERM;
+-	if ((buf = dlm_zalloc((long)MAXPATHLEN)) == 0)
++	if (!nowait_enter())		/* a first-use load: the whole call */
++		return EBUSY;
++	if ((buf = dlm_zalloc((long)MAXPATHLEN)) == 0) {
++		nowait_leave();
+ 		return ENOMEM;
++	}
+ 	if ((e = copyinstr(uap->path, buf, MAXPATHLEN, &len)) == 0 &&
+ 	    strlen(lastcomp(buf)) > MODMAXNAMELEN - 1)
+ 		e = ENAMETOOLONG;
+@@ -1250,12 +1332,13 @@
+ 			dlm_free(buf, (long)MAXPATHLEN);
+ 			return EINTR;
+ 		}
+-		e = dlm_load(buf, DL_DEMAND, 1, &g, &m);
++		e = dlm_load(buf, DL_DEMAND | DL_NOWAIT, 1, &g, &m);
+ 		UNGUARD(save);
+ 		if (e == 0)
+ 			rvp->r_val1 = m->m_id;
+ 	}
+ 	dlm_free(buf, (long)MAXPATHLEN);
++	nowait_leave();
+ 	return e;
+ }
+ 
+--- a/dlm_slot.c
++++ b/dlm_slot.c
+@@ -154,7 +154,7 @@
+ 	}
+ 	e = 0;
+ 	if (xs->xs_mod == 0 &&
+-	    ((e = dlm_load(xs->xs_name, DL_SYS, 1, &g, &m)) != 0 || xs->xs_mod == 0))
++	    ((e = dlm_load(xs->xs_name, DL_SYS | DL_NOWAIT, 1, &g, &m)) != 0 || xs->xs_mod == 0))
+ 		e = ENOEXEC;
+ 	if (e == 0) {
+ 		h.m = m = xs->xs_mod;
+@@ -617,7 +617,7 @@
+ 	}
+ 	e = 0;
+ 	if (cs->cs_mod == 0 &&
+-	    ((e = dlm_load(cs->cs_name, DL_SYS, 1, &g, &m)) != 0 || cs->cs_mod == 0))
++	    ((e = dlm_load(cs->cs_name, DL_SYS | DL_NOWAIT, 1, &g, &m)) != 0 || cs->cs_mod == 0))
+ 		e = ENXIO;
+ 	if (e == 0) {
+ 		h.m = m = cs->cs_mod;
+@@ -641,11 +641,31 @@
+ 	return e;
+ }
+ 
+-/* Loads module name for a static driver that calls through a pointer it sets. */
++static int loadname();
++
++/* Loads module name for a static driver that calls through a pointer it
++ * sets, and for marc_post's boot-class records. */
+ int
+ dlm_loadname(name)
+ 	char *name;
+ {
++	return loadname(name, DL_SYS);
++}
++
++/* Loads module name at its first use (the first mount of its filesystem
++ * type): KM_NOSLEEP, so short memory fails the use with ENOMEM. */
++int
++dlm_loaduse(name)
++	char *name;
++{
++	return loadname(name, DL_SYS | DL_NOWAIT);
++}
++
++static int
++loadname(name, flags)
++	char *name;
++	int flags;
++{
+ 	struct dlm_guard g;
+ 	label_t save;
+ 	struct dlm_mod *m;
+@@ -658,7 +678,7 @@
+ 		dlm_abort(&g);
+ 		DLM_LONGJMP(&u.u_qsav);
+ 	}
+-	e = dlm_load(name, DL_SYS, 1, &g, &m);
++	e = dlm_load(name, flags, 1, &g, &m);
+ 	bcopy((caddr_t)&save, (caddr_t)&u.u_qsav, sizeof (label_t));
+ 	return e;
+ }
+--- a/dlm_str.c
++++ b/dlm_str.c
+@@ -425,7 +425,7 @@
+ 	}
+ 	e = 0;
+ 	if (sd->sd_mod == 0 &&
+-	    ((e = dlm_load(sd->sd_name, DL_SYS, 1, &g, &m)) != 0 || sd->sd_mod == 0))
++	    ((e = dlm_load(sd->sd_name, DL_SYS | DL_NOWAIT, 1, &g, &m)) != 0 || sd->sd_mod == 0))
+ 		e = ENXIO;
+ 	if (e == 0) {
+ 		h.m = m = sd->sd_mod;
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -457,7 +457,7 @@
+ 	if (k < 0 || k >= dlm_nfsdem)
+ 		return EINVAL;
+ 	f = &dlm_fsdem[k];
+-	e = dlm_loadname(f->fd_mod);
++	e = dlm_loaduse(f->fd_mod);
+ 	for (i = vstatic; i < nfstype; i++)
+ 		if (vfssw[i].vsw_name && strcmp(vfssw[i].vsw_name, f->fd_type) == 0 &&
+ 		    !ISSTUB(vfssw[i].vsw_vfsops))
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -67,13 +67,16 @@
+ #define	CE_PANIC	3
+ 
+ #define	VOP_CLOSE(vp, f, c, o, cr)	host_close(vp)
++struct vattr { long va_mask; unsigned long va_size; };
++#define	AT_SIZE		0x0080
++#define	VOP_GETATTR(vp, vap, f, cr)	host_getattr(vp, vap)
+ #define	VN_RELE(vp)
+ 
+ extern long lbolt;
+ extern char *kmem_zalloc();
+ extern void kmem_free();
+ extern int copyin(), copyout(), copyinstr(), suser();
+-extern int vn_open(), vn_rdwr(), host_close();
++extern int vn_open(), vn_rdwr(), host_close(), host_getattr();
+ extern int sleep();
+ extern void wakeup(), cmn_err();
+ extern struct cred *crget();
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -32,7 +32,7 @@
+ int		host_intr_after, host_intr_open;
+ int		host_sleeps;
+ int		host_nomem_after;
+-long		host_km_sleep, host_km_nosleep;
++long		host_km_sleep, host_km_nosleep, host_kmaxreq;
+ unsigned long	host_nextrun = 0x01000000;
+ int		host_fault;	/* copyin/copyout of (char *)1 fault */
+ 
+@@ -68,6 +68,8 @@
+ 	}
+ 	host_kbytes += n;
+ 	host_kblocks++;
++	if ((long)n > host_kmaxreq)
++		host_kmaxreq = (long)n;
+ 	return p;
+ }
+ 
+@@ -183,6 +185,21 @@
+ 	return 0;
+ }
+ 
++/* VOP_GETATTR's size: the file's length */
++int
++host_getattr(vp, vap)
++	struct vnode *vp;
++	struct vattr *vap;
++{
++	long here = ftell(vp->v_fp);
++
++	if (fseek(vp->v_fp, 0L, 2) != 0)
++		return EIO;
++	vap->va_size = (unsigned long)ftell(vp->v_fp);
++	fseek(vp->v_fp, here, 0);
++	return 0;
++}
++
+ int
+ host_close(vp)
+ 	struct vnode *vp;
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -140,8 +140,13 @@
+ # demand filesystems (C4-6 section 5): fd1 registers its type when the
+ # first mount loads it, and mounts; fd2 fails its _load after registering;
+ # fd3 loads without registering
+-for p in ('fd1', 'fd2', 'fd3'):
++for p in ('fd1', 'fd2', 'fd3', 'fd4'):
+     fsmod(p, p, mount=True)
++# first-use loads (patch 0049): nw1 by modload, with 6000 bytes of data
++# so its file is clearly bigger than what the core holds during _load;
++# nw2 by a boot-class load
++mod('nw1', data='\t.space\t6000\n')
++mod('nw2')
+ 
+ 
+ # a 3-chain for moduload(0): ha -> hb -> hc
+--- a/test/state.c
++++ b/test/state.c
+@@ -1230,6 +1230,101 @@
+ 	dlm_devload = odev;
+ }
+ 
++/* ---- first-use loads: no waiting for memory, the file's copy freed
++ * before _load (patch 0049) ---- */
++static long nw_kbin;
++
++int
++h_kbin(m, a, b)
++	char *m, *a;
++	long b;
++{
++	nw_kbin = host_kbytes;
++	return 0;
++}
++
++void
++nowait_tests()
++{
++	static char a[4096], man[2048], s1[65], s2[65], s4[65];
++	extern long host_kmaxreq;
++	extern struct vfsops dlm_fsstub[];
++	extern int dlm_nfsdem;
++	char *om = dlm_man;
++	long ol = dlm_manlen, gen, bytes, blocks, sl, fsize;
++	struct dlm_mod *m;
++	struct vfs v1;
++	FILE *f;
++	char p[1024];
++	int id, k, e = -1, clean = 1, odev = dlm_devload, base = nfstype;
++
++	hexsha("nw1", s1);
++	hexsha("nw2", s2);
++	hexsha("fd4", s4);
++	sprintf(man, "GMF1\ngeneration 9\n"
++	    "module nw1 demand 300 path=/stand/gen/7/mod/nw1 sha256=%s\n"
++	    "module nw2 boot 300 path=/stand/gen/7/mod/nw2 sha256=%s match=always\n"
++	    "module fd4 demand 300 path=/stand/gen/7/mod/fd4 sha256=%s fs=fd4\n", s1, s2, s4);
++	mkarena(a, man, 1, 1);
++	dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &gen);
++	dlm_devload = 0;
++	/* the file's copy: its size exactly, and gone before _load */
++	host_handler("nw1_load", h_kbin);
++	sprintf(p, "%s/stand/gen/7/mod/nw1", host_root);
++	fsize = (f = fopen(p, "rb")) != 0 && fseek(f, 0L, 2) == 0 ? ftell(f) : -1;
++	if (f)
++		fclose(f);
++	host_kmaxreq = 0;
++	nw_kbin = -1;
++	check(fsize > 0 && fsize < 8192 && modload("nw1", &id) == 0 && (m = byname("nw1")) != 0,
++	    "nowait: a manifest member loads by modadmin -l");
++	check(host_kmaxreq < 8192 && host_kmaxreq >= fsize + 1,
++	    "nowait: the file's copy is its size plus one, one request (no doubling)");
++	check(nw_kbin >= 0 && nw_kbin - host_kbytes < fsize,
++	    "nowait: during _load the core no longer holds the file's copy");
++	moduload(id);
++	/* modadmin -l: KM_NOSLEEP; each failing request -> ENOMEM, the kernel as it was */
++	bytes = host_kbytes;
++	blocks = host_kblocks;
++	sl = host_km_sleep;
++	for (k = 1; k < 200; k++) {
++		host_nomem_after = k;
++		if ((e = modload("nw1", &id)) == 0)
++			break;
++		if (e != ENOMEM || byname("nw1") || host_kbytes != bytes || host_kblocks != blocks)
++			clean = 0;
++	}
++	host_nomem_after = 0;
++	check(k > 1 && k < 200 && clean && host_km_sleep == sl,
++	    "nowait: a first-use load asks KM_NOSLEEP only; short memory -> ENOMEM, the kernel as it was");
++	if ((m = byname("nw1")) != 0)
++		moduload(m->m_id);
++	/* a boot-class load (marc_post) keeps KM_SLEEP */
++	sl = host_km_sleep;
++	check(dlm_loadname("nw2") == 0 && byname("nw2") && host_km_sleep > sl,
++	    "nowait: a boot-class load still asks KM_SLEEP");
++	if ((m = byname("nw2")) != 0)
++		moduload(m->m_id);
++	/* the first mount of a demand filesystem type under short memory */
++	host_handler("fd4_load", h_vfown);
++	host_handler("fd4_mount", h_fdmount);
++	dlm_marc_run();
++	host_nomem_after = 2;
++	check(rowof("fd4") == base && fdmount("fd4", &v1) == ENOMEM && !byname("fd4") &&
++	    vfssw[base].vsw_vfsops == &dlm_fsstub[0],
++	    "nowait: a first mount under short memory -> ENOMEM; the stub stays");
++	host_nomem_after = 0;
++	fd_mounts = 0;
++	check(fdmount("fd4", &v1) == 0 && byname("fd4") && fd_mounts == 1,
++	    "nowait: the next mount, with memory, loads the module and mounts");
++	nfstype = base;			/* fd4 stays, pinned */
++	bzero((caddr_t)&vfssw[base], 4 * sizeof vfssw[0]);
++	dlm_nfsdem = 0;
++	dlm_man = om;
++	dlm_manlen = ol;
++	dlm_devload = odev;
++}
++
+ /* ---- block rows (30 section 2 patch 7) ---- */
+ void
+ blk_tests()
+@@ -2256,6 +2351,7 @@
+ 	rdblk_tests();
+ 	vfs_tests();
+ 	fsdem_tests();
++	nowait_tests();
+ 
+ 	printf("%d passed, %d failed\n", passes, fails);
+ 	return fails != 0;
