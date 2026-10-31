@@ -11,8 +11,11 @@ its driver exists yet).
 The probe was built with gcc-cross-amix, the period compiler: it stands in for
 a `/usr/sbin` boot-path tool, so it links only the stock `libc.so.1`,
 `libnsl.so` and the `libsocket.a` archive, and needs nothing from `/opt/amix`.
-GCC 14 would add its runtime (the m68k-elf return-convention shims) for no
-gain; the real `dhcpc` follows the probe.
+The shipped `dhcpc` and `dlpi-mac` are built with GCC 14 (T-56 D6) against the
+same stock libraries. No return-convention shims are needed for that: the
+pinned gcc14-cross-amix (b51ff39) already returns pointers in `%a0` and `%d0`
+and small structures in memory, as the stock libraries expect
+(`amix-abi.h`), and its own runtime, `libamixc99`, is a static archive.
 
 ## The rules of P-36 §4.4, one by one
 

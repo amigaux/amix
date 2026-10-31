@@ -2,14 +2,14 @@
 NAME=amix-base
 PKG=amxbase
 VERSION=1.0
-PKGREV=6
+PKGREV=7
 SUMMARY="Amix base system: boot helpers, the network set-up, the base config files"
 DESC="rc.subr and /etc/rc.conf, ifup/ifdown over /etc/inet/interfaces, dlpi-mac, the DHCP hook, the new inetinit, the device-node boot step, man, and the stock /etc base files as conffiles"
 CATEGORY=system
 SET=base
 LICENSE=MIT
 STYLE=hooks
-TOOLCHAIN=period
+TOOLCHAIN=gcc14
 ESSENTIAL=yes
 SYSTEM_PATHS="/usr/amix/bin /usr/lib/amix /usr/lib/inet /usr/sbin/ifup /usr/sbin/ifdown /usr/sbin/dlpi-mac"
 # /etc/profile and /etc/inittab are built in stage from the stock files:

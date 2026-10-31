@@ -103,7 +103,7 @@ struct lease {
 };
 
 static char *ifname;
-static char node[64];
+static char node[80];		/* a 63-byte node prefix and a unit */
 static long ppa;
 static unsigned char mac[6];
 static unsigned char bcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
@@ -1093,6 +1093,7 @@ usage()
 	exit(1);
 }
 
+int
 main(argc, argv)
 int argc;
 char **argv;

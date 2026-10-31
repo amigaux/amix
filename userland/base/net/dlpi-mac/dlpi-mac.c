@@ -39,6 +39,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* the stock headers declare none of these */
 extern int errno;
@@ -148,6 +149,7 @@ unsigned long off, len;
 	return (unsigned char *)u->c + off;
 }
 
+int
 main(argc, argv)
 int argc;
 char **argv;

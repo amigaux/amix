@@ -1,9 +1,13 @@
 # amix-base build hooks. The source tree is a copy of userland/base.
 
-# dlpi-mac, with the period compiler: the boot path links only libc.so.1
+# dlpi-mac, with the recipe's compiler (GCC 14, T-56 D6): the boot path
+# links only the stock libc.so.1, nothing from /opt/amix
+# (compile and link apart: the harness's gates read the compile line)
 build() {
-	echo "$CC -O -m68020 -o dlpi-mac net/dlpi-mac/dlpi-mac.c" >> "$BUILD/make.log"
-	"$CC" -O -m68020 -o dlpi-mac net/dlpi-mac/dlpi-mac.c >> "$BUILD/make.log" 2>&1
+	echo "$CC $AMIX_CFLAGS -c -o dlpi-mac.o net/dlpi-mac/dlpi-mac.c" >> "$BUILD/make.log"
+	$CC $AMIX_CFLAGS -c -o dlpi-mac.o net/dlpi-mac/dlpi-mac.c >> "$BUILD/make.log" 2>&1 || return 1
+	echo "$CC $AMIX_CFLAGS -o dlpi-mac dlpi-mac.o" >> "$BUILD/make.log"
+	$CC $AMIX_CFLAGS -o dlpi-mac dlpi-mac.o >> "$BUILD/make.log" 2>&1
 }
 
 # put <mode> <source> <payload path>
