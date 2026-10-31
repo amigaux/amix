@@ -216,5 +216,12 @@ echo "== pw/gr parser regression (Amix-format fixtures) =="
 echo "== removef stdin-form regression =="
 "$TOP/tests/removef-stdin/run.sh" || { echo "SMOKE FAIL: removef stdin"; exit 1; }
 
+# ------------------------------------------------------------------
+# 7. the reproducible roll: with SOURCE_DATE_EPOCH, pkgmk + pkgtrans -s
+#    give the bytes build/pkg's dsroll path gives (T-56 D1)
+# ------------------------------------------------------------------
+echo "== reproducible roll =="
+"$TOP/tests/repro-roll/run.sh" || { echo "SMOKE FAIL: reproducible roll"; exit 1; }
+
 echo "== host build + smoke test PASSED =="
 ls -l "$BIN"

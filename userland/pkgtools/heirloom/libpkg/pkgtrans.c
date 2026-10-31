@@ -149,6 +149,18 @@ static char *reloc_names[] = {
 
 static int	signal_received = 0;
 
+/*
+ * AMIX PORT: the reproducible roll (T-56 D1).  With SOURCE_DATE_EPOCH set,
+ * each archive's members are listed in C sort order (a parent before its
+ * children) and, once the datastream file is written, every newc header
+ * is normalised in place by ds_epoch_fd() (libpkg/dsepoch.c) through
+ * ds_normfd, opened when the file is created.  Unset, nothing changes.
+ */
+static int	ds_epoch_set = 0;
+static long	ds_epoch;
+static int	ds_normfd = -1;
+#define	FIND_SORT	(ds_epoch_set ? " -print | LC_ALL=C sort |" : " -print |")
+
 char	**xpkg; 	/* array of transferred packages */
 int	nxpkg;
 
@@ -664,6 +676,16 @@ pkgtrans(char *device1, char *device2, char **pkg, int options,
 	struct sigaction	nact;
 	struct sigaction	oact;
 
+	/* AMIX PORT: SOURCE_DATE_EPOCH (see ds_epoch_set above) */
+	ds_normfd = -1;
+	ds_epoch_set = pkg_epoch(&ds_epoch);
+	if (ds_epoch_set < 0) {
+		progerr(pkg_gt(ERR_TRANSFER));
+		logerr(pkg_gt("SOURCE_DATE_EPOCH <%s> is not a number of seconds"),
+		    getenv("SOURCE_DATE_EPOCH"));
+		return (1);
+	}
+
 	/*
 	 * setup signal handlers for SIGINT and SIGHUP and release hold
 	 */
@@ -711,6 +733,20 @@ pkgtrans(char *device1, char *device2, char **pkg, int options,
 	 */
 
 	r = _pkgtrans(device1, device2, pkg, options, keystore, keystore_alias);
+
+	if (ds_normfd >= 0) {
+		char	why[256];
+
+		if (r == 0 && ds_epoch_fd(ds_normfd, ds_epoch, why,
+		    sizeof (why)) != 0) {
+			progerr(pkg_gt(ERR_TRANSFER));
+			logerr(pkg_gt("cannot normalise <%s> to SOURCE_DATE_EPOCH: %s"),
+			    device2, why);
+			r = 1;
+		}
+		(void) close(ds_normfd);
+		ds_normfd = -1;
+	}
 
 	/*
 	 * reset signal handlers
@@ -973,9 +1009,11 @@ wdsheader(struct dm_buf *hdr, char *src, char *device, char **pkg, PKCS7 *sig)
 	making_sig = (sig != NULL) ? B_TRUE : B_FALSE;
 
 	(void) ds_close(0);
-	if (dstdev.pathname)
+	if (dstdev.pathname) {
 		ds_fd = creat(device, 0644);
-	else
+		if (ds_epoch_set && ds_fd >= 0 && ds_normfd < 0)
+			ds_normfd = open(device, O_RDWR);
+	} else
 		ds_fd = open(device, 1);
 
 	if (ds_fd < 0) {
@@ -1592,10 +1630,10 @@ pkgxfer(char *srcinst, int options)
 		if (options & PT_ODTSTREAM) {
 #ifndef SUNOS41
 			(void) sprintf(cmd+strlen(cmd),
-			    " -print | %s -oc -C %d",
+			    "%s %s -oc -C %d", FIND_SORT,
 #else
 			(void) sprintf(cmd+strlen(cmd),
-			    " -print | %s -oc -C %d",
+			    "%s %s -oc -C %d", FIND_SORT,
 #endif
 				CPIOPROC, (int)BLK_SIZE);
 		} else {
@@ -1824,10 +1862,10 @@ pkgdump(char *srcinst, BIO *bio)
 
 #ifndef SUNOS41
 		(void) sprintf(cmd+strlen(cmd),
-		    " -print | %s -oc -C %d",
+		    "%s %s -oc -C %d", FIND_SORT,
 #else
 		    (void) sprintf(cmd+strlen(cmd),
-			" -print | %s -oc -C %d",
+			"%s %s -oc -C %d", FIND_SORT,
 #endif
 			CPIOPROC, (int)BLK_SIZE);
 		/*

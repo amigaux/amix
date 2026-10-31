@@ -5,7 +5,7 @@ INC = -I. -I../hdrs -I../libgendb
 
 
 OBJ = ainfo.o canonize.o ckparam.o ckvolseq.o cvtpath.o dbsql.o devtype.o \
-	dstream.o fmkdir.o gpkglist.o gpkgmap.o isdir.o nokeystore.o \
+	dsepoch.o dstream.o fmkdir.o gpkglist.o gpkgmap.o isdir.o nokeystore.o \
 	logerr.o mappath.o ncgrpw.o nhash.o pkgerr.o \
 	pkgexecl.o pkgexecv.o pkgmount.o pkgstr.o pkgtrans.o \
 	pkgxpand.o ppkgmap.o progerr.o putcfile.o rrmdir.o runcmd.o \

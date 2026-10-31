@@ -63,6 +63,8 @@
 #include <pkglib.h>
 #include <libadm.h>
 #include <libinst.h>
+#include <dirent.h>
+#include <utime.h>
 
 #undef	P_tmpdir
 #define	P_tmpdir	"/var/tmp/"
@@ -162,6 +164,111 @@ static void	usage(void);
 
 static int	slinkf(char *from, char *to);
 
+/*
+ * AMIX PORT: the reproducible roll (T-56 D1).  With SOURCE_DATE_EPOCH set,
+ * every time pkgmk writes is that epoch: pkgmap's modtime column (so the
+ * copies in the spool get it too), the date of a default VERSION or PSTAMP
+ * (in UTC, and a default PSTAMP without the host's name), and, once the
+ * spool is written, every object of it; each spool object then also has
+ * the mode pkgmap gives it (0755 for a directory pkgmap does not list,
+ * 0644 for any other file: pkginfo, pkgmap, install/).  pkgtrans does the
+ * rest (libpkg/pkgtrans.c, dsepoch.c).  Unset, nothing changes.
+ */
+static int	epoch_set;
+static long	epoch;
+
+/* the date in fmt: UTC from the epoch when set, else local from *clock */
+static void
+stamp(char *buf, size_t len, char *fmt, time_t *clock)
+{
+	time_t	t;
+
+	if (epoch_set) {
+		t = (time_t)epoch;
+		(void) strftime(buf, len, fmt, gmtime(&t));
+	} else {
+		/* LINTED do not use cftime(); use strftime instead */
+		(void) cftime(buf, fmt, clock);
+	}
+}
+
+/* the mode pkgmap gives the spool object rel (root[.N]/<path> or
+ * reloc[.N]/<path>), else 0755 for a directory and 0644 for a file */
+static mode_t
+spool_mode(struct cfent **eptlist, char *rel, int dir)
+{
+	char	*slash;
+	char	*obj;
+	size_t	n;
+	int	i;
+
+	obj = NULL;
+	if ((slash = strchr(rel, '/')) != NULL) {
+		n = (size_t)(slash - rel);
+		if ((n >= 4 && strncmp(rel, "root", 4) == 0 &&
+		    (n == 4 || rel[4] == '.')))
+			obj = slash;
+		else if (n >= 5 && strncmp(rel, "reloc", 5) == 0 &&
+		    (n == 5 || rel[5] == '.'))
+			obj = slash + 1;
+	}
+	for (i = 0; obj != NULL && eptlist[i]; i++) {
+		if (strchr("fevdx", eptlist[i]->ftype) == NULL ||
+		    eptlist[i]->ainfo.mode == BADMODE ||
+		    strcmp(eptlist[i]->path, obj) != 0)
+			continue;
+		return (eptlist[i]->ainfo.mode & 07777);
+	}
+	return (dir ? 0755 : 0644);
+}
+
+static int
+epoch_utime(char *path)
+{
+	struct utimbuf	ut;
+
+	ut.actime = ut.modtime = (time_t)epoch;
+	return (utime(path, &ut));
+}
+
+/* every object under dir (rel its spool-relative name): mode, then time,
+ * children before their directory; symbolic links are left alone */
+static int
+spool_epoch(char *dir, char *rel, struct cfent **eptlist)
+{
+	DIR		*dp;
+	struct dirent	*de;
+	struct stat	st;
+	char		path[PATH_MAX];
+	char		r[PATH_MAX];
+	int		rc;
+
+	if ((dp = opendir(dir)) == NULL)
+		return (-1);
+	rc = 0;
+	while ((de = readdir(dp)) != NULL) {
+		if (strcmp(de->d_name, ".") == 0 ||
+		    strcmp(de->d_name, "..") == 0)
+			continue;
+		(void) snprintf(path, sizeof (path), "%s/%s", dir, de->d_name);
+		(void) snprintf(r, sizeof (r), *rel ? "%s/%s" : "%s%s", rel,
+		    de->d_name);
+		if (lstat(path, &st) != 0) {
+			rc = -1;
+			continue;
+		}
+		if ((st.st_mode & S_IFMT) == S_IFLNK)
+			continue;
+		if (S_ISDIR(st.st_mode) && spool_epoch(path, r, eptlist) != 0)
+			rc = -1;
+		if (chmod(path, spool_mode(eptlist, r, S_ISDIR(st.st_mode))) != 0 ||
+		    epoch_utime(path) != 0)
+			rc = -1;
+	}
+	(void) closedir(dp);
+	return (rc);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -211,6 +318,12 @@ main(int argc, char *argv[])
 	if (func != SIG_DFL)
 		func = sigset(SIGHUP, func);
 
+	/* AMIX PORT: read before the environment is cleared (see epoch_set) */
+	if ((epoch_set = pkg_epoch(&epoch)) < 0) {
+		progerr(gettext("SOURCE_DATE_EPOCH <%s> is not a number of "
+		    "seconds"), getenv("SOURCE_DATE_EPOCH"));
+		quit(1);
+	}
 	environ = NULL;
 	while ((c = getopt(argc, argv, "osnp:l:r:b:d:f:a:v:?")) != EOF) {
 		switch (c) {
@@ -451,8 +564,7 @@ main(int argc, char *argv[])
 		quit(1);
 	if ((pkgvers = getenv("VERSION")) == NULL) {
 		/* XXX - I18n */
-		/* LINTED do not use cftime(); use strftime instead */
-		(void) cftime(buf, "\045m/\045d/\045Y", &clock);
+		stamp(buf, sizeof (buf), "\045m/\045d/\045Y", &clock);
 		(void) snprintf(temp, sizeof (temp),
 			gettext("Dev Release %s"), buf);
 		putparam("VERSION", temp);
@@ -472,11 +584,11 @@ main(int argc, char *argv[])
 	if (getenv("PSTAMP") == NULL) {
 		/* use octal value of '%' to fight sccs expansion */
 		/* XXX - I18n */
-		/* LINTED do not use cftime(); use strftime instead */
-		(void) cftime(buf, "\045Y\045m\045d\045H\045M\045S", &clock);
+		stamp(buf, sizeof (buf), "\045Y\045m\045d\045H\045M\045S",
+		    &clock);
 		(void) uname(&utsbuf);
 		(void) snprintf(temp, sizeof (temp), "%s%s",
-			utsbuf.nodename, buf);
+			epoch_set ? "" : utsbuf.nodename, buf);
 		putparam("PSTAMP", temp);
 		logerr(gettext(WRN_SETPARAM), "PSTAMP", temp);
 	}
@@ -637,6 +749,10 @@ main(int argc, char *argv[])
 			break;
 		}
 	}
+	if (epoch_set)
+		for (i = 0; eptlist[i]; i++)
+			if (strchr("fevi", eptlist[i]->ftype) != NULL)
+				eptlist[i]->cinfo.modtime = (time_t)epoch;
 
 	if (nparts > 1)
 		(void) fprintf(stderr, gettext(MSG_PACKAGEM), nparts);
@@ -668,6 +784,12 @@ main(int argc, char *argv[])
 					"%s/install", pkgloc);
 			checkscripts(inst_path, 0);
 		}
+	}
+	if (epoch_set && (spool_epoch(pkgloc, "", eptlist) != 0 ||
+	    epoch_utime(pkgloc) != 0)) {
+		progerr(gettext("cannot set the spool <%s> to SOURCE_DATE_EPOCH"),
+		    pkgloc);
+		quit(1);
 	}
 
 	quit(0);
