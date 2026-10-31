@@ -80,6 +80,8 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   S01kbnamelist or S99zkbootset (their packages carry them). `docs/l11-disk.md`.
 - **The first boot** (`FB_L11=y`): DHCP or one static interface, the answers into
   `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed.
+- **The repository.** A 1.1 install's `/etc/apkg.conf` names `http://pkg.amigaux.org/1.1`,
+  the release's own tree (the profiles' `FB_REPO_URL`, and the driver's default on 1.1).
 - **Checks.** `tools/l11-target-check.py` reads all of it host-side; the first-boot rig's
   answers include the DHCP and DNS questions.
 - **The monitor switch.** The kernel-space set's monsw package ships monswctl, its boot

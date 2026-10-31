@@ -2738,13 +2738,16 @@ def audit_w64b_completeness():
     else:
         fail("driver does not write /etc/apkg.conf with the parametrized repo line "
              "(echo \"repo=$FB_REPO_URL\")")
-    if re.search(r'\[\s+-n\s+"\$FB_REPO_URL"\s+\]\s+\|\|\s+FB_REPO_URL=http://pkg\.amigaux\.org\b',
-                 code):
-        ok("driver defaults FB_REPO_URL to the public canonical repo "
-           "http://pkg.amigaux.org (omit-the-key => the live public repo)")
+    # each release's tree has its own fixed path: 1.1 defaults to /1.1 (apkg fetches
+    # <repo>/catalog, so no trailing slash); the frozen 1.0 media keep the root
+    if re.search(r'if \[ -z "\$FB_REPO_URL" \]; then\n\tcase "\$INSTALL_LAYOUT" in\n'
+                 r'\t\t1\.1\)\tFB_REPO_URL=http://pkg\.amigaux\.org/1\.1 ;;\n'
+                 r'\t\t\*\)\tFB_REPO_URL=http://pkg\.amigaux\.org ;;\n\tesac\nfi', code):
+        ok("driver defaults FB_REPO_URL by layout: 1.1 -> http://pkg.amigaux.org/1.1, "
+           "1.0 -> the root")
     else:
-        fail("driver does not default FB_REPO_URL to http://pkg.amigaux.org -- a profile "
-             "without the key would write an empty or stale repo= line")
+        fail("driver does not default FB_REPO_URL by layout (1.1: http://pkg.amigaux.org/1.1) -- "
+             "a profile without the key would write an empty or stale repo= line")
     if re.search(r'repo=http://(files\.example\.net/html/amix|pkg\.amigaux\.org)"', code):
         fail("driver still writes a LITERAL repo= URL somewhere -- it must come from "
              "FB_REPO_URL")
@@ -8025,12 +8028,14 @@ def _public_flavor_problems(name, d):
     if host and url and ("//" + host + "/") not in url and not url.endswith("//" + host):
         probs.append("%s: FB_REPO_URL %r does not name FB_REPO_HOST %r -- the "
                      "baked hosts line would resolve nothing" % (name, url, host))
-    # The published repository keeps its catalog at the ROOT (pkg.amigaux.org/catalog,
-    # live since 2026-09-14); the old files.example.net layout's /amix path answers 404
-    # there, and the dialog swaps only the host, so a path baked here ships broken.
-    if host == "pkg.amigaux.org" and url and url.rstrip("/") != "http://pkg.amigaux.org":
-        probs.append("%s: FB_REPO_URL %r is not the published repository root "
-                     "http://pkg.amigaux.org (its catalog is at /catalog)" % (name, url))
+    # Each release's tree has its own fixed path on the published repository: 1.0 at the
+    # root (the frozen 1.0 media), 1.1 at /1.1 (no trailing slash: apkg fetches
+    # <repo>/catalog). The dialog swaps only the host and keeps the path.
+    if host == "pkg.amigaux.org" and url:
+        want = "http://pkg.amigaux.org/1.1" if d.get("INSTALL_LAYOUT") == "1.1" else "http://pkg.amigaux.org"
+        if url != want:
+            probs.append("%s: FB_REPO_URL %r is not its release's repository tree %s"
+                         % (name, url, want))
     return probs
 
 

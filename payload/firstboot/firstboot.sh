@@ -711,6 +711,11 @@ ask_repo()
 			if [ "$ask" = "" ] && [ -z "$FB_REPO_IP" ]; then
 				if [ -n "$FB_DNS1" ]; then
 					echo "\nNo address: $FB_REPO_HOST will be resolved by DNS."
+				elif [ "$FB_NET_MODE" = dhcp ]; then
+					# ifup gives the resolver the name servers of the lease (DHCP_DNS)
+					echo "\nNo address: $FB_REPO_HOST will be resolved by the name"
+					echo "servers the DHCP server gives. If it gives none, add the"
+					echo "name to /etc/inet/hosts by hand."
 				else
 					echo "\nNo address recorded for $FB_REPO_HOST."
 					echo "Package downloads will not resolve it until it is"

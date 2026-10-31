@@ -847,7 +847,14 @@ esac
 case "$FB_TZ" in
 	:*)	FB_TZ=`expr "$FB_TZ" : ':\(.*\)'` ;;
 esac
-[ -n "$FB_REPO_URL" ] || FB_REPO_URL=http://pkg.amigaux.org
+# each release's packages live under their own fixed path; apkg fetches <repo>/catalog, so no
+# trailing slash (the 1.0 media of record keep the root)
+if [ -z "$FB_REPO_URL" ]; then
+	case "$INSTALL_LAYOUT" in
+		1.1)	FB_REPO_URL=http://pkg.amigaux.org/1.1 ;;
+		*)	FB_REPO_URL=http://pkg.amigaux.org ;;
+	esac
+fi
 [ -n "$RTC" ] || RTC=setclk
 case "$RTC" in
 	setclk|none)	;;
