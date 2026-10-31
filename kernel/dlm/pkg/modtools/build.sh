@@ -1,12 +1,12 @@
 #!/bin/sh
 #
-# build.sh -- the modtools package (amix-dlm S3-11): a USERLAND package,
+# build.sh -- the modtools package : a USERLAND package,
 # rolled by the ordinary amix_pkgroll with every userland gate.
 #
 #     sh kernel/dlm/pkg/modtools/build.sh     (or kernel/dlm/pkg/build.sh)
 #
 # Pure files since -9: the boot-class module line in /etc/inittab is amix-base's
-# (inittab is its conffile, P-36 W8); -8 and earlier carried a postinstall and
+# (inittab is its conffile); -8 and earlier carried a postinstall and
 # preremove for it, which stock pkgadd/pkgrm -n cannot run unattended.
 #
 # Outputs ($KSPACE, common.sh):

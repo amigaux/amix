@@ -7,17 +7,17 @@
 # modtools/libmod.c (the six module system calls through the stock
 # syscall()), GCC 14 (gcc14-cross-amix), static, -Ttext-segment=0x80000000,
 # checked by gcc14-cross-amix's check-68060-safe.py --68881 in that Makefile
-# (S3-11, C2-4 v8 sec 11).  USERLAND, like kbootset: no kernel-space record.
+# (C2-4 v8 sec 11).  USERLAND, like kbootset: no kernel-space record.
 #
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
-# -10 (not minted; the release-prep revision, P-38 D-g): amix afea7f5 --
+# -10 (not minted; the revision for the release): amix afea7f5 --
 # core patch 0047, -q/-Q/-S print a locked module's (unload=never) unload
-# delay as `never (locked)` (N235c); modadmin fea0e559 (39092 bytes, gcc14
+# delay as `never (locked)`; modadmin fea0e559 (39092 bytes, gcc14
 # b51ff39 in amix-toolchain:dist).  No scripts, ESSENTIAL, as -9.
 #
-# -9 (2026-10-31, P-36 W8): no postinstall or preremove (the inittab line is
+# -9 (2026-10-31): no postinstall or preremove (the inittab line is
 # amix-base's now), APKG_ESSENTIAL=yes; modadmin as 4442c76 builds on the
 # current gcc14 pin b51ff39 (74aa6272, 39028 bytes): the latest that passes
 # the gates, rebuildable from today's pin (D1), where -8 shipped -7's
@@ -29,18 +29,18 @@
 # b51ff39 since a6b124c, whose -mno-strict-align default changes the code, so
 # 4442c76 no longer rebuilds f51c98d6; the pin below still decides.
 #
-# -7 (2026-10-27): amix-dlm 4442c76 (reviewed as 9a7279c; modadmin source
-# unchanged since 2233745) -- rebuilt on gcc14-cross-amix cf461e3 (S5-01:
+# -7 (2026-10-27): amix-dlm 4442c76 (9a7279c; modadmin source
+# unchanged since 2233745) -- rebuilt on gcc14-cross-amix cf461e3 (
 # pointers in %a0 and %d0, structs through %a0), checked by dlm-src.sh
 # against gcc14-pin.sh (the pins and the ABI self-check of TOOLCHAIN=gcc14).
 # modadmin f51c98d6, equal to amix-dlm's own build/box/modadmin at 4442c76.
 # -6's scripts (= -4's).
-# -6 (2026-10-26): amix-dlm 2233745 (reviewed; core patches 0025 as
+# -6 (2026-10-26): amix-dlm 2233745 (core patches 0025 as
 # d834597: -L prints the message buffer's words first, oldest byte first,
 # text only; 0026 as 662de06: -K, root, sets prt_where's PRW_BUF so kernel
 # messages stay in putbuf), modadmin 0518fb28, equal to amix-dlm's own
 # build/box/modadmin.  -5's scripts (= -4's).
-# -5 (2026-10-26): amix-dlm c6ad5bd (reviewed; core patch 0024 as
+# -5 (2026-10-26): amix-dlm c6ad5bd (core patch 0024 as
 # 7e731f9: `modadmin -L` prints the kernel's message buffer), modadmin
 # 7329e183, equal to amix-dlm's own build/box/modadmin.  -4's scripts.
 # -4 (2026-10-26): the same binary as -3 (f5ce731, a206874d).  -3's
@@ -55,12 +55,12 @@
 # them with a fixed PATH, has no awk, grep or cmp (-2 stopped the install
 # there with `awk: not found').  A rewrite is now a rename: 0664, group sys
 # when chgrp is there.
-# -2 (2026-10-26): amix-dlm f5ce731 (reviewed as b61ab31, a changelog on
+# -2 (2026-10-26): amix-dlm f5ce731 (b61ab31 with a changelog on
 # top; modadmin as core patch 0017: -B, the modadm command MOD_C_POST --
 # the boot-class modules load from /etc/inittab's first sysinit entry, C3-5
 # v3 sec 5).  The package gains the postinstall/preremove pair that puts
 # that inittab line in and takes it out again.
-# -1 (2026-10-26): amix-dlm 42df482 (reviewed; modadmin as 55722ef, core
+# -1 (2026-10-26): amix-dlm 42df482 (modadmin as 55722ef, core
 # patch 0015: -k, -a, -p/-w).  Equal to amix-dlm's own build/box/modadmin
 # (text 28756, data 1648, bss 2508).
 MT_DLM_COMMIT=afea7f5

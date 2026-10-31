@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh -- kernel/dlm's kernel-space packages (P-38 S3.3): loader-amix,
+# build.sh -- kernel/dlm's kernel-space packages: loader-amix,
 # kbootset, modtools, dlmkit (dlmkit30 and dlmkit46).
 #
 # usage: sh kernel/dlm/pkg/build.sh [name...]      (default: all four)

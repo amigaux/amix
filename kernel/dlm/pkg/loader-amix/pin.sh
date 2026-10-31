@@ -4,14 +4,14 @@
 # Built from amix-dlm at a pinned commit (build/pkg/common/dlm-src.sh: git
 # archive into build/, the sibling checkout is only read) with amix-dlm's own
 # Makefile and the period cross toolchain its toolchain.pin names.  The
-# outputs must equal the pins below: 124b86c reproduces the station's
+# outputs must equal the pins below: 124b86c reproduces amix-dlm's own
 # build/boot1.img and build/boot2.bin byte for byte (2026-10-26).
 #
 # -11 (2026-10-31): a package-only revision for the 1.1 kernel-space set:
 # -10 re-rolled without the pkginfo BASEDIR line (7cef686; stock pkgadd
 # refuses one); the same commit, the same payload bytes.
 #
-# -10 (2026-10-28): amix-dlm 565de49 (reviewed; loaders as a6a1511 on
+# -10 (2026-10-28): amix-dlm 565de49 (loaders as a6a1511 on
 # 39240c1): boot1's block and boot2's bounce buffer come from the boot
 # partition's DosEnvec (de_BufMemType, MEMF_PUBLIC when 0; chip when de_Mask
 # does not reach them or no boot node matches), as FFS does; boot2 reads
@@ -22,31 +22,31 @@
 # (39240c1).  boot1 1024 B 765915a7, boot2 28349 B da260a96, equal to
 # amix-dlm's own build/boot1.img and build/boot2.bin.  Loader version
 # still 3.  -9 was ea75578 (boot1 c6c380ee, boot2 28658 B 76346d9a).
-# -9 (2026-10-27): amix-dlm ea75578 (reviewed 78fcd50; boot2 L11): the
+# -9 (2026-10-27): amix-dlm ea75578 (78fcd50; boot2 L11): the
 # volume-2 prompt re-reads every 4 s when the disk-change counter does not
 # move.  boot2 file 28658 B.  Loader version still 3, boot1 unchanged.
 # Equal to amix-dlm's own build/boot2.bin.  -8 was 33ea0c7 (boot2 28646 B
 # 61b3feb0).
-# -8 (2026-10-27): amix-dlm 33ea0c7 (reviewed; boot2 as S4-11 4003c9f):
+# -8 (2026-10-27): amix-dlm 33ea0c7 (boot2 as 4003c9f):
 # boot2 places the RAM-disk image (top of the kernel's region, 64 KiB
 # aligned; AXL1 116/120 and the ramdisk root selector); ax_memcap ends the
 # region one 2 KiB page short of the bind base; L texts within 20 chars.
 # boot2 file 28646 B (image+bss 28420 of 28672).  Loader version still 3,
 # manifest untouched, boot1 unchanged.  Equal to amix-dlm's own
 # build/boot2.bin.  -7 was 05f700a (boot2 28526 B a151a252).
-# -7 (2026-10-26): amix-dlm 05f700a (reviewed; ec99e40): loader version 3,
-# which root-class generations need (S4-10, gate 7; banner `amix-boot 3:`).
+# -7 (2026-10-26): amix-dlm 05f700a (ec99e40): loader version 3,
+# which root-class generations need (gate 7; banner `amix-boot 3:`).
 # Manifest untouched, boot1 unchanged.  -6 was 2233745 (boot2 28356 B
 # 344b8e07).
-# -6 (2026-10-26): amix-dlm 2233745 (reviewed; boot2 aad576f): ax_ctl_pick
+# -6 (2026-10-26): amix-dlm 2233745 (boot2 aad576f): ax_ctl_pick
 # with one scratch, 488 bytes off boot2's bss.  Loader version still 2,
 # manifest untouched, boot1 unchanged.  -5 was 26492cf (boot2 28392 B
 # 6147ab3b).
-# -5 (2026-10-26): amix-dlm 26492cf (reviewed; boot2 001b04a): a k30 kernel
+# -5 (2026-10-26): amix-dlm 26492cf (boot2 001b04a): a k30 kernel
 # gets at most 64 MiB of fast memory; Zorro III RAM is never kernel memory.
 # Loader version still 2, manifest untouched, boot1 unchanged.  -4 was
 # 28aaf58 (boot2 28136 B e36c1c55).
-# -4 (2026-10-26): amix-dlm 28aaf58 (reviewed; boot2 9f6f0bb): boot2 binds
+# -4 (2026-10-26): amix-dlm 28aaf58 (boot2 9f6f0bb): boot2 binds
 # the kernel only below 0x40000000, never in Zorro III RAM.  Loader version
 # still 2, manifest untouched, boot1 unchanged.  -3 was 124b86c (boot2
 # 28100 B c7bff405).

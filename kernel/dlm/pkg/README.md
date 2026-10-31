@@ -1,14 +1,14 @@
 # kernel/dlm/pkg: dlm's kernel-space packages
 
-The recipes of the packages built from kernel/dlm (P-38 S3.3), moved in from
+The recipes of the packages built from kernel/dlm, moved in from
 amix-packages' `recipes/` at bea8828:
 
 | Recipe | Packages | What |
 |---|---|---|
 | `loader-amix/` | `ldramix` | boot1 and boot2 under `/stand/loader` (C2-3 §3); rolled by `amix_kpkgroll` |
 | `kbootset/` | `kbootset` | `/sbin/kbootset`, its page and its two boot scripts (C2-3 §4, C2-4 §16) |
-| `modtools/` | `modtools` | `/sbin/modadmin` (S3-11) |
-| `dlmkit/` | `dlmkit30`, `dlmkit46` | the ABI kit of each line under `/usr/dlm/kit/<line>` (S3-22) |
+| `modtools/` | `modtools` | `/sbin/modadmin` |
+| `dlmkit/` | `dlmkit30`, `dlmkit46` | the ABI kit of each line under `/usr/dlm/kit/<line>` |
 
 ```sh
 sh kernel/dlm/pkg/build.sh [loader-amix|kbootset|modtools|dlmkit]...
@@ -22,16 +22,17 @@ of make dist's `kspace` step.
 Each recipe's `pin.sh` names the amix commit it builds from (a `git archive`
 of that commit, `build/pkg/common/dlm-src.sh`), the sha256 of every built
 file it ships, its version and its `SOURCE_EPOCH`, every time stamp of the
-roll (P-38 D-b). A build whose bytes are not the pinned ones fails.
+roll. A build whose bytes are not the pinned ones fails.
 
 **The versions here were minted by amix-packages' older roll.** Rolled here,
 each has the same payload, pkginfo, copyright and pkgmap payload rows, but
 not the same datastream: the deterministic roll stamps the control files
 with the epoch where the older one left the build time. So these
 datastreams are not shipped under these versions (one version, one set of
-bytes); the 1.1 set is minted by this roll at new revisions at release prep
-(P-38 D-g), when the pins move. Two recipes are already at theirs, not
-minted: kbootset -29 (it owns `/dev/kinfo`) and dlmkit -13.
+bytes); the 1.1 set is minted by this roll at new revisions when the release
+is prepared, when the pins move. Three recipes are already at theirs, not
+minted: kbootset -30 (it owns `/dev/kinfo` and knows c 48), modtools -10
+and dlmkit -13.
 
 **dlmkit's pins are the build container's kit** (`amix-toolchain:dist`,
 make dist's reference build). A host build of the same commit gives another
