@@ -16,10 +16,11 @@
 # Why: a version names one set of bytes -- the catalog row, an apkg record
 # and the Bench's proof all key on it.  kern30m -20 / kern46m -50 re-rolled
 # for pkginfo text alone (cfcfe78) made the same versions two byte-sets.
-# A datastream is not bit-reproducible here (the newc headers carry the
-# spool's inode numbers, pkgmap the control files' mtimes), so in practice
-# any rebuild of a listed version is refused: a changed package takes a new
-# version, and an unchanged one is not rolled again.
+# Since dsroll.sh a datastream is bit-reproducible: rolled again from the
+# same inputs with the same SOURCE_DATE_EPOCH, it is the same bytes and
+# passes here. Versions rolled before it are not (their newc headers carry
+# the spool's inodes, pkgmap the control files' mtimes), so a rebuild of one
+# of those is refused: a changed package takes a new version.
 
 case "${0##*/}" in
 onever.sh)

@@ -13,13 +13,13 @@ finding to fix, not a gate.
 | tests | kernel/dlm host tests | `make -C kernel/dlm test` |
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |
-| tests | build/pkg host tests (pkgmeta, the driver) | `make -C build test` |
+| tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
 | tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
 | kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
 | kit | the image's gcc14 is the pinned build (`toolchain/gcc14-cross-amix.tree`) | `toolchain/extract-g14.sh --check amix-toolchain:ci` |
 | kit | the dlm kit, its tests and every module, in the container | `toolchain/container-kit.sh amix-toolchain:ci` |
-| kit | the packaging harness selftests (68060 and gcc14 gates, one-version guard), in the container | `make -C build selftests` |
+| kit | the packaging harness selftests (68060 and gcc14 gates, one-version guard, the reproducible roll), in the container | `make -C build selftests` |
 
 The range of the privacy check is the pull request's base to its head, or for
 a push the previous tip of `master` to the new one. When there is no previous
@@ -65,7 +65,10 @@ The harness selftests build the host packaging tools
 selftest needs the kernel-space catalog of record, which stays in the
 amix-packages clone until the kernel-space packages move; CI has none, so it
 skips (exit 77) with a warning on the run. Locally it finds amix-packages
-beside the main working tree, or `AMIX_KSPACE_REPO`.
+beside the main working tree, or `AMIX_KSPACE_REPO`. The reproducible-roll
+selftest is the gate that a rolled `.pkg` is byte-identical when rolled again
+from another path, at another time, under another umask and on another
+filesystem (the container's `/tmp` and `/dev/shm`).
 
 The container's gcc14 is the one gcc14 packages are built with, in CI and
 on the host (`toolchain/extract-g14.sh` copies it out). The kit job checks

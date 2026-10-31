@@ -296,6 +296,17 @@ WORK="$BUILD/pkgwork"
 rm -rf "$WORK"; mkdir -p "$WORK"
 python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
 cp "$HERE/prototype" "$WORK/prototype"
+# Every time stamp of the datastream is SOURCE_DATE_EPOCH (the release's,
+# from make dist or the build container); unset, the time of the last
+# commit that changed the package directory.
+if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+	SOURCE_DATE_EPOCH=$(git -C "$HERE" log -1 --format=%ct -- . 2>/dev/null) && [ -n "$SOURCE_DATE_EPOCH" ] || {
+		echo "[FAIL] SOURCE_DATE_EPOCH is unset and $HERE has no commit to take it from" >&2
+		exit 1
+	}
+fi
+export SOURCE_DATE_EPOCH
+echo "  epoch   SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 
 {

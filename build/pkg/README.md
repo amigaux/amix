@@ -160,6 +160,18 @@ are in this checkout:
 `AMIX_PKG_COMMON` names another harness. An amix-packages `recipes/common`
 finds its repository and siblings itself, and the driver leaves it to do so.
 
+The roll is reproducible (`common/dsroll.sh`): two rolls of one recipe from
+the same inputs are the same bytes, wherever the checkout is, whoever rolls
+it and whenever. Every time stamp of the datastream (pkgmap's modtime
+column, each newc header) is `SOURCE_DATE_EPOCH`, as make dist or the build
+container sets it; unset, the driver takes the time of the last commit that
+changed the package directory. The members are archived in sorted order
+(pkgtrans's `find` sorts, `common/sortedfind/find`); their headers say
+uid, gid and device 0, inode numbers in archive order, modes from the
+prototype (`common/dsnorm.py`). A control file that names the build tree or
+the checkout is refused; the same path in the payload, a compiler's
+`__FILE__`, is reported. `tests/repro-selftest.sh` proves it in CI.
+
 The roll's s5 gate (`common/pkgroll.sh`, `amix_s5_mark`): a package whose
 object names all fit s5's 14 bytes must have no two in one directory that
 share their first 14; a package with a longer name is marked UFS-only,

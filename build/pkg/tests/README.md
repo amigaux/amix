@@ -5,7 +5,9 @@
 `test-s5mark` is the host test of `pkgroll.sh`'s GATE 3, the s5 rule and
 the UFS mark (`APKG_FSTYPE=ufs`, P-35); `test-conffile` the host test of its
 `CONFFILES` step (P-36), with stand-ins for userland/pkgtools' class action
-scripts. Run them with
+scripts; `test-dsnorm` the host test of `common/dsnorm.py`, the spool and
+datastream normalising of the reproducible roll, on datastreams it makes
+itself. Run them with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 
@@ -33,7 +35,11 @@ gates of `build/pkg/common` can fail: `gate060-selftest.sh` (the 68060
 gate), `gate-gcc14-selftest.sh` (the gcc14 gates and the toolchain pin) and
 `onever-selftest.sh` (the one-version guard, against the kernel-space
 catalog of record in an amix-packages checkout, `AMIX_KSPACE_REPO`; without
-one it exits 77, a SKIP). They need both cross toolchains and the host
+one it exits 77, a SKIP), and `repro-selftest.sh` (the reproducible roll:
+one gcc14 recipe built and rolled from two copies of `build/` at different
+paths, seconds apart, under other umasks and on another filesystem, must
+give byte-identical `.pkg` files, which the heirloom reader unpacks; another
+`SOURCE_DATE_EPOCH` must give other bytes). They need both cross toolchains and the host
 pkgtools, which `run-selftests` builds when missing; CI runs them in the
 build container.
 

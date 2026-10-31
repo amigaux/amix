@@ -82,6 +82,7 @@ amix_gate_g14_compat() { :; }
     "pkgroll.sh": """\
 amix_pkgroll() {
 	cp "$1/pkginfo" "$STUB_LOG/pkginfo"
+	echo "$SOURCE_DATE_EPOCH" > "$STUB_LOG/epoch"
 	tar cf "$5" -C "$2" .
 }
 """,
@@ -295,7 +296,8 @@ esac
         base = {k: v for k, v in os.environ.items()
                 if not k.startswith(("AMIX_", "GIT_")) and k not in
                 ("GCA", "G14", "TOOLCHAIN", "REPO")}
-        base.update(STUB_LOG=log, STUB_G14_COMMIT=g14_pin, LC_ALL="C")
+        base.update(STUB_LOG=log, STUB_G14_COMMIT=g14_pin, LC_ALL="C",
+                    SOURCE_DATE_EPOCH="1793303717")
 
         def build(name, **env):
             e = dict(base)
@@ -345,6 +347,20 @@ esac
               read(os.path.join(log, "repo.txt")) == "REPO=%s\n" % amix)
         built = os.path.join(out_pkg, "pkg", "conf-1.0-1.pkg")
         check("amix layout: the package lands in out/pkg", os.path.isfile(built), out)
+        check("the roll gets SOURCE_DATE_EPOCH as given",
+              read(os.path.join(log, "epoch")) == "1793303717\n")
+        rc, out = build("conf", SOURCE_DATE_EPOCH=None)
+        check("unset SOURCE_DATE_EPOCH and no commit of the package: refused",
+              rc != 0 and "SOURCE_DATE_EPOCH is unset" in out, out)
+        git = ["git", "-C", amix, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+               "-c", "commit.gpgsign=false"]
+        subprocess.run(git + ["add", os.path.join(pkgs, "conf")], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "conf"], check=True,
+                       env=dict(base, GIT_COMMITTER_DATE="@1790000000 +0000",
+                                GIT_AUTHOR_DATE="@1790000000 +0000"))
+        rc, out = build("conf", SOURCE_DATE_EPOCH=None)
+        check("unset SOURCE_DATE_EPOCH: the last commit of the package directory",
+              rc == 0 and read(os.path.join(log, "epoch")) == "1790000000\n", out)
         work = os.path.join(out_pkg, "conf", "work", "conf-1.0")
         check("configure style: configure_args reach ./configure",
               "--with-test" in read(os.path.join(work, "configure.args")))
