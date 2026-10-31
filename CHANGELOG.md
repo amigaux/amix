@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — 1.1 is clean installs only; media rd1x / ni17 / fp-rd1x (dad1b57..dca90ae)
+
+P-36: the upgrade install is removed (setup.sh's offer, install.sh/l11.sh's capture/restore/put-in-place, S17upgrade,
+/var/adm/upgrade, firstboot's FB_UPGRADED branches); INSTALL_UPGRADE other than no is refused; the four upgrade cells
+are retired; docs/upgrade-install.md becomes docs/l11-disk.md. New cell l11-k46-reinstall-ia: a fresh install over a
+seeded 1.0 disk keeps nothing of it. Media rd1x (ISO 09506d18…), ni17 (c3e61f18…) and fp-rd1x on kern30m -63, kern46m
+-52 (freeq guard, quirk 92) and gayle 1.1.0-3 (interrupt I/O), catalog 547d2916; 9/9 cells PASS 10/10. emu_launch
+records only its own run's emulator pid.
+
 ## 2026-10-30 — the media on kern30m -56; this workspace's amiberry (50797a7..3ac92fb)
 
 The media carry kern30m k30.1.3.261030-56 (kzero, ufs tail zeroing, the sendsig FPU gate; catalog fe2154da): CD rd1u
