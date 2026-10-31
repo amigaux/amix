@@ -20,8 +20,11 @@ page proposes something P-36 left open, it says so.
 ### What `amix-base` holds
 
 - **Code, replaced freely on update** (`f` objects): `/usr/lib/amix/rc.subr`;
-  `/etc/init.d/inetinit` and its `S69inet`/`K69inet` links (`l` objects,
-  written in place so the hard links survive); `/usr/sbin/ifup`, `ifdown`,
+  the network start script, one file under four names, recorded as stock
+  `core` records it: the `f` object is `/etc/rc2.d/S69inet`, and
+  `/etc/init.d/inetinit` and the two `K69inet` are `l` objects linked to it
+  (any other shape is an "object type change" that stock `pkgadd` ignores,
+  keeping the old script); `/usr/sbin/ifup`, `ifdown`,
   `dlpi-mac`; `/usr/lib/inet/ifup.subr` and `dhcpc-hook`; the swap step; the `man` front-end
   `/usr/amix/bin/man` (`man.md`); the pages `man(1)`, `rc.subr(1M)`,
   `dlpi-mac(1M)`, `rc.conf(4)` and `interfaces(4)` under `/opt/amix/man`, with
@@ -141,4 +144,53 @@ From the S0 measurements (`dhcp-probe.md`):
   source (amix-system gaining `etc/`, or the build reading them from the
   pinned stock media).
 - **Installer (W7).** Lays both packages down, writes `/etc/rc.conf` and
-  `/etc/inet/interfaces`, and transfers ownership from `core` with `removef`.
+  `/etc/inet/interfaces`, and transfers ownership from `core` with `removef`;
+  the steps are in the next section.
+
+## What the installer (W7) needs from this directory
+
+Measured on the emulator with stock `pkgadd` (S2, 2026-10-31). The steps, in
+order, on the target root:
+
+1. **Install `core` first**, as today: amix-base takes files over from it.
+2. **Seed the conffile baselines.** For each of amix-base's `CONFFILES`
+   (`package.sh`) whose size and `sum` still match its `f` record in
+   `/var/sadm/install/contents`, copy the file to
+   `/var/sadm/conffiles/amxbase<path>` (make the directory only when it is
+   missing: the 4.0 `mkdir -p` fails on one that exists). The class then
+   takes the new default silently; a file that does not match is kept, with
+   `<path>.new` and a line in `/var/sadm/conffiles/PENDING`. Without this
+   step every stock file counts as edited, and the stock
+   `/etc/inet/network-config`, which brings `aen0` up by itself, stays and
+   fights `ifup` at every boot.
+3. **`pkgadd` amxbase, then dhcpc** (`dhcp-client` carries no `depend` file;
+   the order is the installer's). Stock 2.1c `pkgadd` asks two questions for
+   amxbase whatever the admin file says: whether to install files another
+   package owns, and whether to run scripts as root. Under `-n` it stops
+   there (exit 5, nothing installed), so the installer answers `y` to both on
+   standard input, or uses the engine's `pkgadd`. dhcpc asks nothing.
+4. **Write `/etc/inet/interfaces`** (`interfaces(4)`). The public default is
+   one line, `* dhcp`: every interface a driver finds asks a DHCP server.
+   A machine name given at install goes on that line (`* dhcp name <host>`);
+   with none, add the global line `hostname dhcp` to take the server's.
+   A static choice is `* static <addr>/<bits> gw <router>` plus a
+   `dns <addr> ...` line. `/usr/sbin/ifup -n` reports every mistake in the
+   file.
+5. **Edit `/etc/inittab` (the `dlm` line) after step 3**, not before: an
+   edit made first makes the file differ from its record, so step 2 leaves
+   it, and the class keeps it with a `.new`.
+6. **`removef core`** the paths amix-base took over (the engine's: stock 2.1
+   has no `removef`). Until then the conffiles are listed by both packages,
+   and a `pkgrm` of amxbase can delete an unedited one that `core` still
+   lists.
+7. **Re-type the conffiles `e`.** Stock `pkgadd` keeps `core`'s `f` in their
+   records (`/etc/inittab f conffile …`), so `pkgchk` reports every edit as
+   an error. `installf -c conffile amxbase <path> e` per file, then
+   `installf -f amxbase` (the engine's; tried there, not yet on stock).
+
+The installer does not write `/etc/nodename`, the host's line in
+`/etc/inet/hosts`, `/etc/resolv.conf` or any `ifconfig` line: `ifup` writes
+them from `/etc/inet/interfaces` at the first boot. `/etc/rc.conf` is
+optional (`ifup_dhcpwait`, default 20 s; `ifup_bound`, default 120 s). An
+interface is seen only through its driver's `/etc/inet/link.d` entry: amix-base
+ships `aen`, and every other network driver's package ships its own.

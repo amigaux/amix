@@ -10,10 +10,10 @@ f none /usr/lib/inet/dhcpc-hook 0555 root sys
 f none /usr/sbin/ifup 0755 root sys
 f none /usr/sbin/ifdown 0755 root sys
 f none /usr/sbin/dlpi-mac 0755 root sys
-f none /etc/init.d/inetinit 0444 root sys
-l none /etc/rc2.d/S69inet=/etc/init.d/inetinit
-l none /etc/rc0.d/K69inet=/etc/init.d/inetinit
-l none /etc/rc1.d/K69inet=/etc/init.d/inetinit
+f none /etc/rc2.d/S69inet 0444 root sys
+l none /etc/init.d/inetinit=/etc/rc2.d/S69inet
+l none /etc/rc0.d/K69inet=/etc/rc2.d/S69inet
+l none /etc/rc1.d/K69inet=/etc/rc2.d/S69inet
 f none /etc/inet/network-config 0444 root sys
 f none /etc/inet/rc.inet 0444 root sys
 d none /etc/inet/link.d 0755 root sys
