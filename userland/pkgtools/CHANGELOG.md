@@ -1,3 +1,10 @@
+## 2026-10-31 — reproducible roll in the engine (21072b2); repo tools' extra pin adds prngd (2e71f93)
+
+With SOURCE_DATE_EPOCH, pkgmk writes the epoch as every pkgmap modtime and default date and sets the spool to pkgmap's
+modes and the epoch; pkgtrans -s archives in C sort order and normalises every newc header in place (ino, uid/gid/dev
+0, mtime, directory nlink), the bytes build/pkg's dsroll path makes (T-56 D1); without it, as before. repro-roll 18
+checks; apkg 533/0, repo tools 475/0. The repo tools' pinned extra set adds prngd (moved in at d09d080).
+
 ## 2026-10-31 — device nodes in their module's class (ccba8d1)
 
 gen-catalog and apkg's kernel-space pre-flight accept a module package's c/b node in its module's class (amix-dlm C3-5
