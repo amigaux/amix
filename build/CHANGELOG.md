@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-31 — the package roll is byte-reproducible (01aad1b)
+
+dsroll.sh is the pkgmk/pkgtrans step of both amix_pkgroll and amix_kpkgroll: the staged payload and control files are
+set to SOURCE_DATE_EPOCH before pkgmk; dsnorm.py gives every spool object its pkgmap mode and the epoch and sets
+pkgmap's modtime column to it; pkgtrans archives in sorted order; each newc header is rewritten in place (ino renumbered
+in archive order with hard links kept together, uid/gid/dev 0, mtime the epoch). A control file naming the build tree
+is refused. pkgbuild.sh takes SOURCE_DATE_EPOCH as given, else the package directory's last commit time; kmodpkg uses
+KM_SOURCE_EPOCH. Two rolls from different paths, times and umasks give identical bytes (repro-selftest.sh, test-dsnorm).
+
 ## 2026-10-31 — check-packages covers userland/base/pkg; stock and directory man pages (f5b513b)
 
 pkgmeta check, index and fragments take several packages directories as one catalog: one version guard and one owner
