@@ -7,7 +7,8 @@
 #   make boot1            assemble boot1 and apply the 1 KB size gate
 #   make box              kbootset and modadmin for the box: GCC 14, static (D-3 §9)
 #   make all              all of the above
-#   make kit              the ABI kit for both lines into build/kit/ (S3-10)
+#   make kit              the ABI kit for both lines into build/kit/ (S3-10),
+#                         its digests into build/kit.digests (P-38 S2.1)
 #   make kit-test         the kit: build, the sample, the checker's refusals
 #
 # The cross toolchain is gcc-cross-amix; source its build/env.sh first, or
@@ -83,6 +84,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 	B=$(B) sh tests/host/knode.sh
 	B=$(B) sh tests/host/kmajor.sh
 	B=$(B) sh tests/host/kitkern.sh
+	B=$(B) sh tests/host/kitdigest.sh
 	B=$(B) sh tests/host/rcscripts.sh
 	B=$(B) sh tests/host/namelist.sh
 	B=$(B) sh tests/host/knamelist.sh
@@ -344,8 +346,12 @@ core: need-gca need-g14 toolchain-check
 # the ABI kit (abi/, docs/spec/20-module-format-and-abi.md section 5): one
 # per line, with the stock headers of the pinned sysroot (never tracked)
 kit: need-gca need-port toolchain-check
+	rm -f $(B)/kit.digests
 	GCA="$(GCA)" sh tools/mkkit.sh k30 $(B)/kit/k30
 	GCA="$(GCA)" PORT="$(PORT)" sh tools/mkkit.sh k46 $(B)/kit/k46
+	sh tools/kitdigest.sh $(B)/kit/k30 $(B)/kit/k46 > $(B)/kit.digests.new
+	mv $(B)/kit.digests.new $(B)/kit.digests
+	cat $(B)/kit.digests
 
 kit-test: need-gca need-g14 need-port toolchain-check
 	B=$(B) GCA="$(GCA)" G14="$(G14)" PORT="$(PORT)" sh tests/kit/run.sh $(KIT_KERNELS)

@@ -81,7 +81,19 @@ docs/          other documentation (see docs/README.md)
 ```
 
 `make test` runs the host tests; `make kit` builds the ABI kit (see the
-`Makefile` for the toolchains each target needs).
+`Makefile` for the toolchains each target needs) and writes
+`build/kit.digests`, one line per kit for the release lock (P-38 S2.1):
+
+```
+kit <line> <kabi> <manifest> <norev> KIT_REV=<amix commit> PORT_REV=<port commit>|-
+```
+
+`manifest` is the sha256 of the kit's file list (`tools/kitdigest.sh -l`,
+one `<x|-> <sha256> <path>` per file): the digest the dlmkit package pins,
+equal across rebuilds of one commit. `norev` leaves out `kit.conf` and
+`NOTICE`, whose revision lines name the commits, so it is equal across
+commits when the kit's bytes are. make dist copies the file to `out/kit/`
+and the lock takes the lines as they are; keep the format stable.
 
 ## Licence
 
