@@ -6,6 +6,11 @@ identical. Under SOURCE_DATE_EPOCH pkgmk counts pkgmap part sizes in 4096-byte b
 spool modes as root, and pkgtrans writes every newc field in upper-case hex: measured on an emulated Amix 2.1c, the box's roll is the
 host's bytes. The 0.3.3 → 0.3.4 upgrade keeps edited conffiles and the essential refusal holds. Not minted.
 
+## 2026-10-31 — public text without internal ids (484b1a6, 03c55e6)
+
+Comments, messages, tests and docs restate facts without plan or run ids, evidence paths or attributions. No binary
+changes (37 binaries identical); APKG and APKGENG re-roll for script comments and man page text.
+
 ## 2026-10-31 — reproducible roll in the engine (21072b2); repo tools' extra pin adds prngd (2e71f93)
 
 With SOURCE_DATE_EPOCH, pkgmk writes the epoch as every pkgmap modtime and default date and sets the spool to pkgmap's
