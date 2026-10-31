@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — port.pin moves to b0f1d86 (f028e9e)
+
+The -53 record at b0f1d86 differs from 727cbe7's in comments and notes only; its seven sums and kern46m -53 are
+unchanged.
+
 ## 2026-10-31 — the kern46m recipe, its README and the cut hook state facts without internal ids (87bf2c5, e900c1c)
 
 kern46m -53's description text changed (unminted; payload identical).

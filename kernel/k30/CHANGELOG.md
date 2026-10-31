@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cut 68030-261031-65, kabi k30.1.4 with core patch 0048; kern30m -65 (4eeb376, 29aeeb8)
+
+-64's recipe from amix 74405ce, whose core patch 0048 loads a demand-class filesystem module at its first mount. The
+kernel claims kabi k30.1.4; abi 18c0a1c9 is unchanged, and ufs and s5 stay kabi k30.1.2, boot class. unix.brel
+41406ac1 (1 538 308 B, +1936 B against -64), bss 346 528 (+132). build-cross-kernel.sh and kabi-sidecar030.py take
+k30.1.4. kern30m k30.1.4.261031-65 = 1c280a6f, 1 886 720 B; host and container rolls are byte-identical.
+
 ## 2026-10-31 — kabi-sidecar030.py labels pin= from amix's compiler pin (04c0b65, 9eb8d03)
 
 tools/kabi-sidecar030.py takes the sidecar's pin= from AMIX_GCA_PIN when it is set and checks the installed wrapper
