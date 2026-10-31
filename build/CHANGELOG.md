@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — kmodpkg: the port commit for the k46 kit; the module's kabi from modcheck (5d283f4)
+
+kmodpkg.sh asks for the kit with the port commit (KM_PORT_COMMIT, else kernel/port/port.pin's hash), so a bare
+AMIX_PORT_REPO still gives the k46 kit its include-modelb. The module's kabi is the one modcheck says ok for (the
+lowest its imports need, as mkmod tags it), not the kit's KABI: a k30.1.2 module rolls on a k30.1.3 kit and its
+.moddata and copyright say k30.1.2. test-kmroot 12/12 (8/12 against the old script).
+
 ## 2026-10-31 — the first make dist rehearsal: two identical locks (2234f49, 6f3f516, f86507a, 1781a2c)
 
 Two clean full clones, in the container, at different paths and times, give line-for-line identical locks (P-38 S7.2's
