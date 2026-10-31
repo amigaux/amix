@@ -3,6 +3,13 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — ncurses 6.6-1 (783d34b, a8b7b71)
+
+Static libncurses/form/menu/panel with headers in /opt/amix/include/ncurses; narrow characters; reads the stock
+/usr/share/lib/terminfo; no programs and no terminfo db installed. Configured after isoriano's amix-userland port
+(credited); ac_cv_func_tsearch=no for AMIX's non-const twalk. Source pinned by sha256 at the amigaux/amix-distfiles
+release URL, with the upstream origin in package.sh and README. The first of the X11/CDE set (owner, T-56 D7).
+
 ## 2026-10-31 — INDEX lists amix-base 1.0-9 (31e0ec8)
 
 INDEX.md regenerated; it lists amix-base 1.0-9.
