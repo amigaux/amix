@@ -3,6 +3,17 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-10-31 — x11r6.3 6.3-1 and python3 3.11.18-1 (c89f201..b7adfc5)
+
+- x11r6.3 6.3-1 (new, PKG x11r63, set extra): X11R6.3 under /opt/amix/X11R6 (/usr/X11R6 links to it), with the
+  Xzz9000 server for the ZZ9000/Z3660 RTG (isoriano's Amiga DDX), static Xlib/Xt/Xaw/Xmu/Xext/SM/ICE, xinit, xdm,
+  twm, xterm, the standard clients with smproxy, iceauth and rstart, fonts, rgb.txt and XKB data;
+  /etc/profile.d/x11r63.sh. Our own amix.cf platform; gcc 14 prototype patches (strict-clean); five files built
+  with -fno-jump-tables so the 060 gate proves every table. Needs an FPU and a UFS root.
+- python3 3.11.18-1 (new): Python 3.11 under /opt/amix with pth threads and zlib; isoriano's cpython port patch plus
+  our 02-04 (Py_UNREACHABLE, a FormatEx switch, ll/z formatting via snprintf); PYTHONHASHSEED=0 fallback when
+  /dev/urandom is unreadable. Needs an FPU and a UFS root. On box (E1, 030+68882): python3 11/11, vim PASS.
+
 ## 2026-10-31 — pth and vim use amix-decls.h; INDEX lists dhcp-client 1.0-3; python3 held (d867983..c7b9d90)
 
 pth and vim take readv/writev and isinf from amix-decls.h (their local headers dropped); vim's jump tables are back
