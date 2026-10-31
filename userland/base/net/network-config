@@ -1,0 +1,8 @@
+# /etc/inet/network-config -- sourced by /etc/init.d/inetinit after the
+# interfaces are started.
+#
+# The interfaces themselves are set up from /etc/inet/interfaces by ifup; see
+# interfaces(4). This file is kept, empty, for instructions written for the
+# stock system that say "add this line to network-config". Lines added here
+# run at every boot, as root, after "ifup -a" has been started in the
+# background, so an interface may not be up yet when they run.

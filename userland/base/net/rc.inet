@@ -1,0 +1,7 @@
+# /etc/inet/rc.inet -- run by /etc/init.d/inetinit last, at every boot.
+#
+# Kept, empty, for instructions written for the stock system that add
+# routes or daemons here. The default route comes from /etc/inet/interfaces
+# (interfaces(4)); network daemons are started by the service access
+# facility (inetd) as before.
+exit 0

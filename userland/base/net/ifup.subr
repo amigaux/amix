@@ -1,7 +1,11 @@
-# ifup.subr -- the /etc/inet/interfaces parser that ifup, ifdown and the
-# DHCP hook share.
+# ifup.subr -- what ifup, ifdown and the DHCP hook share: the
+# /etc/inet/interfaces parser, the driver table, and the one apply step a
+# static line and a DHCP lease both go through.
 #
-# Sourced, never run; installed as /usr/lib/inet/ifup.subr.
+# Sourced, never run, after /usr/lib/amix/rc.subr; installed as
+# /usr/lib/inet/ifup.subr.
+#
+# The parser:
 #
 #   if_select <ifname> <mac|->   the row for this interface, printed as
 #                                "<mode> <addr> <mask> <gw> <name> <key>"
@@ -13,6 +17,17 @@
 #   if_dns_static                status 0 when a dns line says "static"
 #   if_domain                    the domain line's name, or nothing
 #   if_hostname_dhcp             status 0 when "hostname dhcp" is set
+#
+# The drivers and the system:
+#   if_links                     every interface present, one line each:
+#                                "<if> <node> <mac|->", from /etc/inet/link.d
+#   if_link <ifname>             the same line for one interface, or nothing
+#   if_plumb <if> <node>         link the interface under IP (slink), once
+#   if_apply <if> <addr> <mask> <gw|-> <name|-> [<dns ...>]
+#                                address, default route, host name, hosts
+#                                line and DNS, each only when it changes
+#   if_unapply <if> [<gw>]       take the interface down (and its route)
+#   if_dns_apply [<dns ...>]     DNS on with these and the static servers
 #
 # The file's format is in interfaces(4). A row with a mistake in it is not
 # skipped: its interface is treated as off, so a typo never hands the
@@ -298,4 +313,271 @@ if_domain() {
 
 if_hostname_dhcp() {
 	if_parse | grep '^hostname dhcp$' > /dev/null
+}
+
+# --- the drivers and the system -------------------------------------------
+
+IF_LINKD=${IF_LINKD:-/etc/inet/link.d}
+IF_HOSTS=${IF_HOSTS:-/etc/inet/hosts}
+IF_NODENAME=${IF_NODENAME:-/etc/nodename}
+IF_RESOLV=${IF_RESOLV:-/etc/resolv.conf}
+IF_NETCONFIG=${IF_NETCONFIG:-/etc/netconfig}
+IF_DOMAINF=${IF_DOMAINF:-/etc/domain}
+IF_LIB=${IF_LIB:-/usr/lib}
+IF_STATE=${IF_STATE:-/var/inet}
+IF_LEASES=${IF_LEASES:-/var/inet/dhcpc}
+IFCONFIG=${IFCONFIG:-/usr/sbin/ifconfig}
+ROUTE=${ROUTE:-/usr/sbin/route}
+SLINK=${SLINK:-/usr/sbin/slink}
+DLPIMAC=${DLPIMAC:-/usr/sbin/dlpi-mac}
+IF_UNITS=${IF_UNITS:-8}
+
+_if_say() {
+	echo "ifup: $*"
+	rc_log ifup "$*"
+}
+
+# A link.d entry is one line: <if prefix> <node prefix> <first unit> <major>
+# [<presence command ...>]; its file is named for the driver's module.
+_if_entry() {
+	sed -e 's/#.*//' -e '/^[ 	]*$/d' "$1" | sed -n 1p
+}
+
+# _if_units <entry file> [<unit>]: the "<if> <node> <mac|->" lines of a
+# driver, every unit from the first until one does not open (or only <unit>)
+_if_units() {
+	_if_one=$2
+	_if_e=`_if_entry "$1"`
+	[ -n "$_if_e" ] || return
+	set -- `basename "$1"` $_if_e
+	_if_mod=$1
+	_if_pre=$2
+	_if_node=$3
+	_if_n=$4
+	_if_maj=$5
+	shift
+	shift
+	shift
+	shift
+	shift
+	# the presence command, if the entry has one (no "!": not in this sh)
+	if [ $# -gt 0 ]
+	then
+		"$@" > /dev/null 2>&1 || return
+	fi
+	_if_last=`expr $_if_n + $IF_UNITS`
+	while [ $_if_n -lt $_if_last ]
+	do
+		if [ -z "$_if_one" ] || [ "$_if_one" = $_if_n ]
+		then
+			rc_mknod "$_if_node$_if_n" c "$_if_maj" $_if_n "$_if_mod" 0600 > /dev/null 2>&1
+			_if_m=`"$DLPIMAC" "$_if_node$_if_n" 2>/dev/null`
+			case $? in
+			0) echo "$_if_pre$_if_n $_if_node$_if_n $_if_m" ;;
+			2) echo "$_if_pre$_if_n $_if_node$_if_n -" ;;
+			*) return ;;
+			esac
+			[ -n "$_if_one" ] && return
+		fi
+		_if_n=`expr $_if_n + 1`
+	done
+}
+
+if_links() {
+	for _if_f in "$IF_LINKD"/*
+	do
+		[ -f "$_if_f" ] && _if_units "$_if_f"
+	done
+}
+
+if_link() {
+	_if_p=`echo "$1" | sed 's/[0-9]*$//'`
+	_if_u=`echo "$1" | sed 's/^[a-z]*//'`
+	[ -n "$_if_u" ] || return
+	for _if_f in "$IF_LINKD"/*
+	do
+		[ -f "$_if_f" ] || continue
+		set -- `_if_entry "$_if_f"`
+		[ "$1" = "$_if_p" ] && _if_units "$_if_f" "$_if_u" && return
+	done
+}
+
+# An interface IP already knows answers ifconfig; slink is run only for one
+# it does not, and once more after the base plumbing if the first try fails.
+if_plumb() {
+	"$IFCONFIG" "$1" > /dev/null 2>&1 && return 0
+	"$SLINK" addaen "$2" "$1" > /dev/null 2>&1 && return 0
+	"$SLINK" > /dev/null 2>&1
+	"$SLINK" addaen "$2" "$1" > /dev/null 2>&1 && return 0
+	_if_say "$1: slink addaen $2 $1 failed"
+	return 1
+}
+
+# _if_cur <if>: the address and mask ifconfig shows, "<addr> <hexmask>"
+_if_cur() {
+	"$IFCONFIG" "$1" 2>/dev/null | sed -n 's/.*inet \([0-9.]*\) netmask \([0-9a-fx]*\).*/\1 \2/p' | sed -n 1p
+}
+
+# _if_hex <a.b.c.d>: the mask as ifconfig prints it, e.g. ffffff00
+_if_hex() {
+	echo "$1" | awk -F. '{ printf "%02x%02x%02x%02x\n", $1, $2, $3, $4 }'
+}
+
+# _if_hostsrow <file> <addr> <name> <old name> <domain>: the file without any
+# row for <addr> and without the aliases <name>/<old name> (bare or with a
+# domain), then "<addr> <name> <name>.<domain>"
+_if_hostsrow() {
+	awk '
+	/^[ 	]*#/ || NF == 0 { print; next }
+	$1 == ip { next }
+	{
+		keep = ""
+		drop = 0
+		for (i = 2; i <= NF; i++) {
+			f = $i
+			if (substr(f, 1, 1) == "#") {
+				for (; i <= NF; i++)
+					keep = keep " " $i
+				break
+			}
+			if (f == nm || f == old || index(f, nm ".") == 1 || (old != "" && index(f, old ".") == 1)) {
+				drop++
+				continue
+			}
+			keep = keep " " f
+		}
+		if (drop == 0)
+			print
+		else if (keep != "" && substr(keep, 2, 1) != "#")
+			print $1 "	" substr(keep, 2)
+	}
+	END {
+		row = ip "	" nm
+		if (dom != "")
+			row = row " " nm "." dom
+		print row
+	}' ip="$2" nm="$3" old="$4" dom="$5" "$1"
+}
+
+# _if_replace <file> <new file>: put <new> in place of <file> when they
+# differ, keeping <file>'s mode; status 0 when it changed
+_if_replace() {
+	if [ -f "$1" ] && cmp -s "$1" "$2"
+	then
+		rm -f "$2"
+		return 1
+	fi
+	cat "$2" > "$1" && rm -f "$2"
+}
+
+# The machine's name and this host's line in the hosts file. The line
+# follows the primary interface: the one that set the default route, else
+# the first that came up.
+_if_name() {
+	_if_old=`uname -n`
+	_if_new=$_if_old
+	if [ "$2" != - ] && [ "$2" != "$_if_old" ]
+	then
+		if uname -S "$2" && echo "$2" > "$IF_NODENAME"
+		then
+			_if_new=$2
+			_if_say "$1: host name $_if_old -> $2"
+		fi
+	fi
+	[ "`cat "$IF_STATE/ifup.primary" 2>/dev/null`" = "$1" ] || return 0
+	[ -f "$IF_HOSTS" ] || return 0
+	_if_hostsrow "$IF_HOSTS" "$3" "$_if_new" "$_if_old" "`if_domain`" > "$IF_HOSTS.if$$" &&
+		_if_replace "$IF_HOSTS" "$IF_HOSTS.if$$" &&
+		_if_say "$1: hosts line $3 $_if_new"
+	return 0
+}
+
+if_apply() {
+	_if_i=$1
+	_if_a=$2
+	_if_k=$3
+	_if_g=$4
+	_if_h=$5
+	shift
+	shift
+	shift
+	shift
+	shift
+	if [ "`_if_cur $_if_i`" = "$_if_a `_if_hex $_if_k`" ] &&
+	    "$IFCONFIG" "$_if_i" 2>/dev/null | grep '<UP' > /dev/null
+	then
+		_if_say "$_if_i: $_if_a netmask $_if_k already up"
+	elif "$IFCONFIG" "$_if_i" "$_if_a" netmask "$_if_k" up -trailers
+	then
+		_if_say "$_if_i: $_if_a netmask $_if_k up"
+	else
+		_if_say "$_if_i: ifconfig $_if_a netmask $_if_k failed"
+		return 1
+	fi
+	[ -d "$IF_STATE" ] || mkdir -p "$IF_STATE"
+	if [ "$_if_g" != - ] && "$ROUTE" add default "$_if_g" 1 > /dev/null 2>&1
+	then
+		echo "$_if_i" > "$IF_STATE/ifup.primary"
+		_if_say "$_if_i: default route $_if_g"
+	elif [ ! -s "$IF_STATE/ifup.primary" ]
+	then
+		echo "$_if_i" > "$IF_STATE/ifup.primary"
+	fi
+	_if_name "$_if_i" "$_if_h" "$_if_a"
+	if_dns_apply "$@"
+}
+
+if_unapply() {
+	"$IFCONFIG" "$1" down > /dev/null 2>&1 && _if_say "$1: down"
+	[ -n "$2" ] && [ "$2" != - ] && "$ROUTE" delete default "$2" > /dev/null 2>&1 &&
+		_if_say "$1: default route $2 removed"
+	[ "`cat "$IF_STATE/ifup.primary" 2>/dev/null`" = "$1" ] && rm -f "$IF_STATE/ifup.primary"
+	return 0
+}
+
+# _if_leasedns: the DHCP_DNS of every lease held now
+_if_leasedns() {
+	cat "$IF_LEASES"/*.lease 2>/dev/null | sed -n 's/^DHCP_DNS=//p'
+}
+
+# DNS is on whenever a nameserver is known, with all five parts, each made
+# only when it is not already so: resolv.conf (nameservers only; a domain or
+# search line would be appended to every lookup), libsocket.so linked to
+# libsockdns.so, netconfig from netconfig.DNS, an empty /etc/domain, and
+# literal addresses in every boot-time ifconfig (true by construction here).
+# With no nameserver nothing is changed.
+if_dns_apply() {
+	_if_ns=`if_dns`
+	if if_dns_static
+	then
+		:
+	else
+		_if_ns="$_if_ns $* `_if_leasedns`"
+	fi
+	_if_ns=`echo $_if_ns | awk '{ for (i = 1; i <= NF; i++) if (!($i in s)) { s[$i] = 1; printf "%s%s", (n++ ? " " : ""), $i } print "" }'`
+	[ -n "$_if_ns" ] || return 0
+	if [ ! -f "$IF_LIB/libsockdns.so" ] || [ ! -f "$IF_NETCONFIG.DNS" ]
+	then
+		_if_say "dns: $IF_LIB/libsockdns.so or $IF_NETCONFIG.DNS missing; DNS left off"
+		return 1
+	fi
+	for _if_s in $_if_ns
+	do
+		echo "nameserver $_if_s"
+	done > "$IF_RESOLV.if$$"
+	_if_replace "$IF_RESOLV" "$IF_RESOLV.if$$" && chmod 644 "$IF_RESOLV" &&
+		_if_say "dns: nameservers $_if_ns"
+	if [ "`ls -i "$IF_LIB/libsocket.so" 2>/dev/null | awk '{ print $1 }'`" != \
+	    "`ls -i "$IF_LIB/libsockdns.so" | awk '{ print $1 }'`" ]
+	then
+		ln -f "$IF_LIB/libsockdns.so" "$IF_LIB/libsocket.so" && _if_say "dns: libsocket.so is libsockdns.so"
+	fi
+	cp "$IF_NETCONFIG.DNS" "$IF_NETCONFIG.if$$" &&
+		_if_replace "$IF_NETCONFIG" "$IF_NETCONFIG.if$$" && _if_say "dns: netconfig from netconfig.DNS"
+	if [ -s "$IF_DOMAINF" ]
+	then
+		cp /dev/null "$IF_DOMAINF" && _if_say "dns: $IF_DOMAINF emptied"
+		domainname "" > /dev/null 2>&1
+	fi
+	return 0
 }

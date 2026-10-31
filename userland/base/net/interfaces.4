@@ -93,8 +93,9 @@ letting the
 .B *
 line take it.
 A mistake in a global line causes the line to be ignored.
-Every mistake is reported in the boot log, with its line number, when the
-network is set up.
+Every mistake is reported with its line number in the boot log, when the
+network is set up, and by
+.BR "ifup \-n" .
 .SH EXAMPLE
 .nf
 .ft CW
@@ -115,5 +116,6 @@ this file.
 .B /etc/inet/link.d/*
 the network drivers present, one file each, shipped by the driver packages.
 .SH SEE ALSO
+.BR ifup (1M),
 .BR dlpi-mac (1M),
 .BR rc.conf (4)

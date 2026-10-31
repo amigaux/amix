@@ -1,0 +1,37 @@
+#!/bin/sh
+# inetinit -- start and stop TCP/IP: /etc/init.d/inetinit, run as
+# /etc/rc2.d/S69inet (and the K69inet links).
+#
+# start: the base plumbing (slink) and the loopback, by literal address; then
+# "ifup -a" in the background, bounded by rc.conf's ifup_bound seconds
+# (default 120), its output in /var/adm/rclog/ifup; then the two hooks kept
+# for instructions written for the stock system, /etc/inet/network-config
+# (sourced) and /etc/inet/rc.inet (run). Nothing else is written here.
+# stop: slink -u.
+#
+# This file is written in place on update, never moved, so the S/K hard links
+# stay the same file.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+[ -d /usr/bin ] || exit 1		# /usr must be mounted
+
+case "$1" in
+start)
+	# already started
+	/usr/sbin/ifconfig lo0 > /dev/null 2>&1 && exit 0
+	. /usr/lib/amix/rc.subr
+	rm -f /var/inet/ifup.primary
+	/usr/sbin/slink && /usr/sbin/ifconfig lo0 127.0.0.1 up
+	rc_bg `rc_conf ifup bound 120` ifup /usr/sbin/ifup -a
+	[ -f /etc/inet/network-config ] && . /etc/inet/network-config
+	exec /bin/sh /etc/inet/rc.inet
+	;;
+stop)
+	/usr/sbin/slink -u
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac

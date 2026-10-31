@@ -1,0 +1,122 @@
+#!/bin/sh
+# ifup -- bring network interfaces up as /etc/inet/interfaces says.
+#
+#   ifup -a          every interface the drivers in /etc/inet/link.d find
+#   ifup <if> ...    those interfaces
+#   ifup -n [<if>]   only say what would be done, and every mistake in the file
+#
+# For each interface: its station address (dlpi-mac), its row (the MAC row,
+# then the name row, then "*"; none = off), slink once, then the row's mode:
+# static applies the address; dhcp runs dhcpc, and if no lease comes within
+# rc.conf's ifup_dhcpwait seconds (default 20) or there is no dhcpc, the
+# row's own address if it has one, else the interface stays down while dhcpc
+# keeps trying. Static and DHCP addresses go through the same apply step
+# (ifup.subr), which also sets the default route, the host name, this host's
+# hosts line and DNS. The boot runs "ifup -a" from /etc/init.d/inetinit.
+#
+# Installed as /usr/sbin/ifup. Exit 0 when every interface asked for is up or
+# off as configured, 1 otherwise.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+IF_SUBR=${IF_SUBR:-/usr/lib/inet/ifup.subr}
+DHCPC=${DHCPC:-/usr/sbin/dhcpc}
+. "$RC_SUBR"
+. "$IF_SUBR"
+
+dry=
+case "$1" in
+-n)
+	dry=1
+	shift
+	;;
+esac
+if [ $# -eq 0 ] && [ -z "$dry" ]
+then
+	echo "usage: ifup [-n] -a | interface ..." >&2
+	exit 1
+fi
+
+if_errors | sed 's/^/ifup: /'
+[ -n "$dry" ] && [ $# -eq 0 ] && set -- -a
+
+# up <if> <node> <mac>: one interface as its row says
+up() {
+	set -- $1 $2 $3 `if_select "$1" "$3"`
+	# $1 if, $2 node, $3 mac, $4 mode, $5 addr, $6 mask, $7 gw, $8 name, $9 key
+	if [ -n "$dry" ]
+	then
+		echo "ifup: $1 ($3): $4 $5 $6 gw $7 name $8 (row $9)"
+		return 0
+	fi
+	case $4 in
+	off)
+		echo "ifup: $1 ($3): off"
+		return 0
+		;;
+	esac
+	if_plumb "$1" "$2" || return 1
+	if [ $4 = dhcp ]
+	then
+		if [ -x "$DHCPC" ]
+		then
+			"$DHCPC" -b `rc_conf ifup dhcpwait 20` "$1"
+			case $? in
+			0)
+				_if_say "$1: DHCP lease applied"
+				return 0
+				;;
+			2)
+				_if_say "$1: no DHCP lease yet; dhcpc keeps trying"
+				;;
+			*)
+				_if_say "$1: dhcpc cannot run on $1"
+				;;
+			esac
+		else
+			_if_say "$1: dhcp, but $DHCPC is not installed"
+		fi
+		if [ $5 = - ]
+		then
+			_if_say "$1: no static fallback; left down"
+			return 1
+		fi
+		_if_say "$1: static fallback $5"
+	fi
+	if_apply "$1" "$5" "$6" "$7" "$8"
+}
+
+rc=0
+if [ "$1" = -a ]
+then
+	links=`if_links`
+	[ -n "$links" ] || _if_say "no network interface found (link.d: $IF_LINKD)"
+else
+	links=
+	for i in "$@"
+	do
+		l=`if_link "$i"`
+		if [ -n "$l" ]
+		then
+			links="$links
+$l"
+		else
+			_if_say "$i: no such interface here"
+			rc=1
+		fi
+	done
+fi
+# one "<if> <node> <mac>" per line; the words go three at a time (a for
+# list is fixed when the loop starts, whatever set -- does inside up)
+n=0
+for w in $links
+do
+	case $n in
+	0) i=$w ;;
+	1) d=$w ;;
+	2) up "$i" "$d" "$w" || rc=1 ;;
+	esac
+	n=`expr \( $n + 1 \) % 3`
+done
+exit $rc

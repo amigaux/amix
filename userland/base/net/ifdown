@@ -1,0 +1,45 @@
+#!/bin/sh
+# ifdown -- take network interfaces down.
+#
+#   ifdown -a          every interface the drivers in /etc/inet/link.d find
+#   ifdown <if> ...    those interfaces
+#
+# An interface holding a DHCP lease is released through dhcpc (which calls
+# the DHCP hook with RELEASE); any other is taken down here, with the default
+# route its row set. The interface stays linked under IP: this release's
+# slink can only unlink everything at once.
+#
+# Installed as /usr/sbin/ifdown. Exit 0 when every interface asked for is
+# down, 1 otherwise.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+IF_SUBR=${IF_SUBR:-/usr/lib/inet/ifup.subr}
+DHCPC=${DHCPC:-/usr/sbin/dhcpc}
+. "$RC_SUBR"
+. "$IF_SUBR"
+
+if [ $# -eq 0 ]
+then
+	echo "usage: ifdown -a | interface ..." >&2
+	exit 1
+fi
+
+if [ "$1" = -a ]
+then
+	set -- `if_links | awk '{ print $1 }'`
+fi
+
+rc=0
+for i in "$@"
+do
+	if [ -f "$IF_LEASES/$i.pid" ] && [ -x "$DHCPC" ]
+	then
+		"$DHCPC" -x "$i" || rc=1
+		continue
+	fi
+	set -- `if_select "$i" -`
+	if_unapply "$i" "$4"
+done
+exit $rc

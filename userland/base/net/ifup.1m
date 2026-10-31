@@ -1,0 +1,138 @@
+.TH IFUP 1M "31 October 2026" "amix-base"
+.SH NAME
+ifup, ifdown \- bring network interfaces up or down
+.SH SYNOPSIS
+.B ifup
+.B \-a
+|
+.I interface ...
+.br
+.B ifup \-n
+[
+.I interface ...
+]
+.br
+.B ifdown
+.B \-a
+|
+.I interface ...
+.SH DESCRIPTION
+.B ifup
+sets up each
+.I interface
+the way its line in
+.B /etc/inet/interfaces
+says (see
+.BR interfaces (4));
+with
+.BR \-a ,
+every interface the installed network drivers find.
+The boot runs
+.B "ifup \-a"
+from
+.BR /etc/init.d/inetinit .
+.PP
+For each interface,
+.B ifup
+reads its station address with
+.BR dlpi-mac (1M),
+chooses its line (the line with that address, then the line with its name,
+then the
+.B *
+line; with none, the interface is left down), links it under IP with
+.B slink
+if IP does not know it yet, and then follows the line's mode:
+.TP
+.B static
+the address and mask are set with
+.BR ifconfig .
+.TP
+.B dhcp
+.B /usr/sbin/dhcpc
+is asked for a lease and given
+.B ifup_dhcpwait
+seconds (from
+.BR /etc/rc.conf ;
+default 20).
+If no lease comes in that time, or no DHCP client is installed, the
+address on the line is used if it has one; otherwise the interface stays
+down, and the DHCP client keeps trying.
+.TP
+.B off
+nothing is done.
+.PP
+A static address and a DHCP lease are applied by the same steps, each only
+when it is not already in place, so running
+.B ifup
+again changes nothing:
+the address; the default route, from the line's
+.B gw
+or the lease's router (the first interface to set one keeps it); the
+machine's name when the line says
+.B name
+(or the lease gives one under
+.BR "hostname dhcp" );
+this host's line in
+.BR /etc/inet/hosts ,
+for the interface that holds the default route (else the first one up);
+and DNS.
+DNS is turned on whenever a name server is known: the
+.B dns
+lines' servers and the lease's are written to
+.B /etc/resolv.conf
+(name servers only),
+.B /usr/lib/libsocket.so
+becomes
+.BR libsockdns.so ,
+.B /etc/netconfig
+is taken from
+.BR /etc/netconfig.DNS ,
+and
+.B /etc/domain
+is emptied.
+.PP
+With
+.BR \-n ,
+.B ifup
+only says, for each interface, which line applies and what it would do,
+and lists every mistake in
+.BR /etc/inet/interfaces .
+.PP
+.B ifdown
+takes each
+.I interface
+down and removes the default route its line set.
+An interface that holds a DHCP lease is released through the DHCP client.
+.SH EXIT STATUS
+0 when every interface named is up, or off as configured; 1 otherwise.
+.SH FILES
+.TP
+.B /etc/inet/interfaces
+how each interface is set up.
+.TP
+.B /etc/inet/link.d/*
+the network drivers present, one line each.
+.TP
+.B /usr/lib/inet/ifup.subr
+the steps
+.BR ifup ,
+.B ifdown
+and the DHCP client's hook share.
+.TP
+.B /usr/lib/inet/dhcpc-hook
+what the DHCP client runs to apply a lease.
+.TP
+.B /var/adm/rclog/ifup
+the output of the boot's
+.BR "ifup \-a" ;
+each step is also in
+.BR /var/adm/rc.log .
+.SH SEE ALSO
+.BR dlpi-mac (1M),
+.BR interfaces (4),
+.BR rc.conf (4)
+.SH NOTES
+.B ifdown
+leaves the interface linked under IP:
+.B slink
+on this release can only unlink every interface at once.

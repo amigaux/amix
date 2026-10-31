@@ -1,0 +1,78 @@
+#!/bin/sh
+# dhcpc-hook -- apply a DHCP lease through the same step as a static line.
+#
+#   dhcpc-hook <if> BOUND|RENEW|REBIND|EXPIRE|RELEASE
+#
+# Called by dhcpc only, with the lease in DHCP_ADDR, DHCP_MASK, DHCP_ROUTER,
+# DHCP_DNS, DHCP_HOSTNAME, DHCP_SERVER, DHCP_LEASE, DHCP_T1, DHCP_T2 and
+# DHCP_OLD_ADDR (the contract: userland/base/docs/package-split.md). dhcpc
+# itself never edits a system file.
+#
+#   BOUND           address, mask, route, host name, hosts line, DNS
+#   RENEW, REBIND   the same when the address changed; else DNS and route
+#   EXPIRE          down, then the row's static fallback if it has one
+#   RELEASE         down
+#
+# The host name comes from the lease only under "hostname dhcp", and never
+# over a row's own "name".
+#
+# Installed as /usr/lib/inet/dhcpc-hook. Exit 0 when applied, 1 otherwise.
+#
+# MIT licence, see LICENSE at the top of the repository.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+IF_SUBR=${IF_SUBR:-/usr/lib/inet/ifup.subr}
+. "$RC_SUBR"
+. "$IF_SUBR"
+
+if [ $# -ne 2 ]
+then
+	echo "usage: dhcpc-hook interface reason" >&2
+	exit 1
+fi
+i=$1
+why=$2
+
+# the interface's row: $1 mode, $2 addr, $3 mask, $4 gw, $5 name, $6 key
+set -- `if_select "$i" -`
+row_addr=$2
+row_mask=$3
+row_gw=$4
+name=$5
+if [ "$name" = - ] && [ -n "$DHCP_HOSTNAME" ] && if_hostname_dhcp
+then
+	name=$DHCP_HOSTNAME
+fi
+gw=${DHCP_ROUTER:--}
+
+rc_log dhcpc-hook "$i $why ${DHCP_ADDR:-} ${DHCP_MASK:-} router ${DHCP_ROUTER:-none}"
+case $why in
+BOUND)
+	if_apply "$i" "$DHCP_ADDR" "$DHCP_MASK" "$gw" "$name" $DHCP_DNS
+	;;
+RENEW|REBIND)
+	if [ -n "$DHCP_OLD_ADDR" ] && [ "$DHCP_OLD_ADDR" != "$DHCP_ADDR" ]
+	then
+		if_apply "$i" "$DHCP_ADDR" "$DHCP_MASK" "$gw" "$name" $DHCP_DNS
+	else
+		[ "$gw" != - ] && "$ROUTE" add default "$gw" 1 > /dev/null 2>&1 &&
+			_if_say "$i: default route $gw"
+		if_dns_apply $DHCP_DNS
+	fi
+	;;
+EXPIRE)
+	if_unapply "$i" "$gw"
+	if [ "$row_addr" != - ]
+	then
+		_if_say "$i: lease ended; static fallback $row_addr"
+		if_apply "$i" "$row_addr" "$row_mask" "$row_gw" "$name"
+	fi
+	;;
+RELEASE)
+	if_unapply "$i" "$gw"
+	;;
+*)
+	echo "dhcpc-hook: unknown reason $why" >&2
+	exit 1
+	;;
+esac

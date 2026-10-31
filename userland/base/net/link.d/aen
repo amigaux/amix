@@ -1,0 +1,4 @@
+# /etc/inet/link.d/aen -- the stock A2065 (Commodore/Ameristar) Ethernet driver.
+# <if prefix> <node prefix> <first unit> <major> [<presence command ...>]
+# Vendor data shipped by amix-base; not to be edited (see interfaces(4)).
+aen	/dev/aen	0	18	/usr/amiga/bin/aen -S
