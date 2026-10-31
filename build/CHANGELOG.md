@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the engine normalises the roll; dsnorm.py only checks it (d5c4eb5)
+
+The roll leaves the normalising to pkgtools' pkgmk and pkgtrans (ad02a5a), which write the datastream normalised under
+SOURCE_DATE_EPOCH; dsroll.sh no longer touches the payload, control files or spool modes, and common/sortedfind/ is
+gone. dsnorm.py is now a check that never writes: it refuses, naming the fault, a datastream that is unsorted, not
+newc, with ino out of archive order, uid/gid/dev not 0, an mtime or pkgmap modtime off the epoch, a wrong directory
+nlink or a payload mode that differs from pkgmap's. The host-path and CLASSES/PSTAMP gates stay. repro-selftest 7/7.
+
 ## 2026-10-31 — gcc14 remaps build paths; a host path in its payload refused (655529c)
 
 gcc14-env.sh puts -ffile-prefix-map on CC and CXX (P-38 S1.3): the build tree becomes /build, the checkout /src and the
