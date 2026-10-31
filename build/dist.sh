@@ -191,6 +191,13 @@ kspace_owner() {
 step_kspace() {
 	rm -rf "$out/kspace" "$out/build/kspace"
 	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
+	# the port's headers at each recipe's own pinned commit (dlm-src.sh):
+	# a cache repository that fetches a commit it lacks by hash
+	read -r AMIX_PORT_URL _ < "$top/kernel/port/port.pin"
+	AMIX_PORT_REPO=$out/cache/port-repo
+	[ -d "$AMIX_PORT_REPO/.git" ] || git init -q "$AMIX_PORT_REPO"
+	AMIX_PORT_URL=${PORT_REPO:-$AMIX_PORT_URL}
+	export AMIX_PORT_URL AMIX_PORT_REPO
 	missing=
 	for d in $(kspace_dirs); do
 		if [ ! -f "$top/$d/pkg/build.sh" ]; then

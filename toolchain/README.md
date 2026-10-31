@@ -106,7 +106,10 @@ host compiler, and carry other build paths; `libgcc.a` and `libstdc++.a`
 differ in their members' debug information and, in two `libstdc++.a`
 members, in `__FILE__` strings, both of which name the build directory
 (`/opt/amix/g14-work` here); `libamixc99.a` differs only in its archive
-headers.
+headers. None of that reaches a linked, stripped program: the container's
+gcc14 builds kernel/dlm's box binaries byte-identical to the workstation
+build's, kbootset `1511ef9b` (kbootset -28's) and modadmin `74aa6272`
+(modtools -9's), measured by the dlm station 2026-10-31.
 
 ## How kernel/dlm uses them
 

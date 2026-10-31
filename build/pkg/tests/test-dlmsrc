@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+# test-dlmsrc: host test of build/pkg/common/dlm-src.sh's inputs.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# amix_dlm_build and amix_dlm_kit must take the period toolchain from
+# AMIX_CROSS_ENV and the port from AMIX_PORT_REPO, never from the checkout's
+# siblings (a worktree, the build container), and fetch a pinned port commit
+# the repository lacks by hash from AMIX_PORT_URL. A stand-in amix checkout
+# (its Makefile records what it was given), a stand-in env.sh and a port
+# repository are made here; AMIX_SIBLINGS points at nothing. Prints "N/N
+# passed"; exits non-zero on any failure.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+COMMON = os.path.join(os.path.dirname(HERE), "common")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def git(repo, *args):
+    return subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                           "-c", "commit.gpgsign=false"] + list(args), check=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip()
+
+
+MAKEFILE = """\
+kit:
+\tmkdir -p build/kit/k30 build/kit/k46
+\techo "KIT_REV=$(KIT_REV)" > build/kit/k30/kit.conf
+\t{ echo "KIT_REV=$(KIT_REV)"; echo "PORT_REV=$$(git -C $(PORT) rev-parse --short HEAD)"; } > build/kit/k46/kit.conf
+\techo "GCA=$(GCA) PORT=$(PORT) CROSS=$$FAKE_CROSS" > $(LOG)
+\ttest -f $(PORT)/include-modelb/sys/immu.h
+build/boot1.img:
+\tmkdir -p build
+\techo "CROSS=$$FAKE_CROSS" > $(LOG)
+\techo boot1 > $@
+"""
+
+tmp = tempfile.mkdtemp(prefix="test-dlmsrc.")
+try:
+    amix = os.path.join(tmp, "amix")
+    write(os.path.join(amix, "kernel", "dlm", "Makefile"), MAKEFILE)
+    subprocess.run(["git", "init", "-q", amix], check=True)
+    git(amix, "add", ".")
+    git(amix, "commit", "-q", "-m", "dlm")
+    c = git(amix, "rev-parse", "--short", "HEAD")
+    port = os.path.join(tmp, "port-upstream")
+    write(os.path.join(port, "include-modelb", "sys", "immu.h"), "/* 4 KiB */\n")
+    subprocess.run(["git", "init", "-q", port], check=True)
+    git(port, "add", ".")
+    git(port, "commit", "-q", "-m", "port")
+    git(port, "config", "uploadpack.allowAnySHA1InWant", "true")
+    pc = git(port, "rev-parse", "HEAD")
+    write(os.path.join(port, "README"), "later\n")
+    git(port, "add", ".")
+    git(port, "commit", "-q", "-m", "a later commit, the branch head")
+    gca = os.path.join(tmp, "gca", "build")
+    write(os.path.join(gca, "env.sh"), "FAKE_CROSS=yes; export FAKE_CROSS\n")
+    log = os.path.join(tmp, "make.log")
+
+    def run(script, **env):
+        e = {k: v for k, v in os.environ.items() if not k.startswith("AMIX_")}
+        e.update(AMIX_PKG_COMMON=COMMON, AMIX_BUILD_ROOT=os.path.join(tmp, "out"),
+                 AMIX_SIBLINGS=os.path.join(tmp, "nothing-here"), AMIX_DLM=amix,
+                 AMIX_MODULES=amix, AMIX_CROSS_ENV=os.path.join(gca, "env.sh"), LOG=log)
+        e.update(env)
+        for k in [k for k, v in e.items() if v is None]:
+            del e[k]
+        p = subprocess.run(["/bin/sh", "-c", '. "$AMIX_PKG_COMMON/dlm-src.sh"; ' + script],
+                           env=e, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    rc, out = run("amix_dlm_build %s boot1.img" % c)
+    check("amix_dlm_build: the period toolchain from AMIX_CROSS_ENV, not the siblings",
+          rc == 0 and open(log).read() == "CROSS=yes\n", out)
+
+    cache = os.path.join(tmp, "out", "cache", "port-repo")
+    subprocess.run(["git", "init", "-q", cache], check=True)
+    rc, out = run('amix_dlm_kit %s "" %s' % (c, pc), AMIX_PORT_REPO=cache,
+                  AMIX_PORT_URL="file://" + port)
+    got = open(log).read() if os.path.exists(log) else ""
+    check("amix_dlm_kit: GCA is AMIX_CROSS_ENV's directory, its env.sh sourced",
+          rc == 0 and ("GCA=%s " % gca) in got and "CROSS=yes" in got, out + got)
+    check("amix_dlm_kit: the pinned port commit, which AMIX_PORT_REPO lacked, fetched by hash",
+          rc == 0 and git(cache, "cat-file", "-t", pc) == "commit", out)
+    tree = os.path.join(tmp, "out", "kspace", "src", "amix-dlm-%s" % c)
+    k46 = open(os.path.join(tree, "build", "kit", "k46", "kit.conf")).read() if rc == 0 else ""
+    check("amix_dlm_kit: the k46 kit is labelled with that commit, not the port's head",
+          "PORT_REV=%s\n" % pc in k46 and "KIT_REV=%s\n" % c in k46
+          and ("PORT=%s " % os.path.join(tmp, "out", "kspace", "src", "port-" + pc)) in got, k46 + got)
+
+    empty = os.path.join(tmp, "empty-port")
+    subprocess.run(["git", "init", "-q", empty], check=True)
+    shutil.rmtree(tree)
+    rc, out = run('amix_dlm_kit %s "" %s' % (c, pc), AMIX_PORT_REPO=empty, AMIX_PORT_URL=None)
+    check("amix_dlm_kit: a port commit not in AMIX_PORT_REPO and no AMIX_PORT_URL: refused",
+          rc != 0 and "amix-040-060-port has no commit %s in %s" % (pc, empty) in out, out)
+    rc, out = run('amix_dlm_kit %s "" %s' % (c, "f" * 40), AMIX_PORT_REPO=cache,
+                  AMIX_PORT_URL="file://" + port)
+    check("amix_dlm_kit: a commit the URL does not have either: refused, naming both",
+          rc != 0 and "or at file://%s" % port in out, out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

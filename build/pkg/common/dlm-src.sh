@@ -16,9 +16,11 @@
 # own Makefile builds the targets there.  A commit from before the move-in
 # has the project at its root and is archived whole (the same tree as in the
 # old repository); a later amix commit is archived as <commit>:kernel/dlm
-# (amix_src_treeish).  AMIX_DLM / AMIX_MODULES name another checkout.  The period cross toolchain comes
-# from gcc-cross-amix's env.sh (boot1/boot2 need it), GCC 14 from the sibling
-# gcc14-cross-amix (kbootset, modadmin); a box/ target first proves that
+# (amix_src_treeish).  AMIX_DLM / AMIX_MODULES name another checkout.  The
+# period cross toolchain is layout.sh's AMIX_CROSS_ENV, gcc-cross-amix's
+# env.sh (boot1/boot2 need it), GCC 14 its AMIX_G14_BUILD (kbootset,
+# modadmin), so a worktree and the build container work as the main checkout
+# does; without layout.sh they are the siblings.  A box/ target first proves that
 # prefix is the pinned toolchain (gcc14-pin.sh, the same pins and ABI
 # self-check as TOOLCHAIN=gcc14 recipes).  Each recipe then verifies the
 # outputs against its own sha256 pins, so a commit that builds different
@@ -34,6 +36,11 @@ esac
 AMIX_DLM="${AMIX_DLM:-$AMIX_SIBLINGS/amix}"
 AMIX_MODULES="${AMIX_MODULES:-$AMIX_SIBLINGS/amix}"
 AMIX_G14_BUILD="${AMIX_G14_BUILD:-$AMIX_SIBLINGS/gcc14-cross-amix/build}"
+AMIX_CROSS_ENV="${AMIX_CROSS_ENV:-$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh}"
+# the port's checkout the kit's headers come from (AMIX_PORT_REPO); a
+# pinned commit it lacks is fetched by hash from AMIX_PORT_URL (make dist
+# gives a cache repository and kernel/port/port.pin's URL)
+AMIX_PORT_REPO="${AMIX_PORT_REPO:-$AMIX_SIBLINGS/amix-040-060-port}"
 
 # amix_src_treeish <checkout> <commit> <subdir> <probe> -- the tree-ish to
 # archive for a project at <commit>: <commit> itself when <probe> is at its
@@ -102,7 +109,7 @@ amix_dlm_build() {
 	*) _db_st= ;;
 	esac
 	(
-		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+		. "$AMIX_CROSS_ENV" >/dev/null 2>&1
 		make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" $_db_t
 	) > "$AMIX_DLM_TREE.log" 2>&1 || {
 		echo "[FAIL] amix-dlm $_db_c: make$_db_t failed:" >&2
@@ -120,7 +127,9 @@ amix_dlm_build() {
 # export is the pinned commit by construction, so a shim answers for it
 # (KIT_REV=<commit>, never dirty).  The k46 kit also records PORT_REV, the
 # commit of ../amix-040-060-port its 4 KiB headers come from (include-modelb/,
-# with a -dirty check on immu.h/param.h).  With <port commit>, mkkit's PORT
+# with a -dirty check on immu.h/param.h; the port is AMIX_PORT_REPO, and a
+# <port commit> it lacks is fetched by hash from AMIX_PORT_URL).  With
+# <port commit>, mkkit's PORT
 # is the git archive of that commit's include-modelb/ (and src/sys/monsw.h
 # when it has one) in build/kspace/src/port-<commit>/, and the shim answers
 # its two calls (PORT_REV=<port commit>, never dirty), so the kit does not
@@ -137,13 +146,17 @@ amix_dlm_build() {
 amix_dlm_kit() {
 	amix_dlm_export "$1"
 	_dk_shim="$AMIX_BUILD_ROOT/kspace/src/gitshim-$1"
-	_dk_port="$AMIX_SIBLINGS/amix-040-060-port"
+	_dk_port="$AMIX_PORT_REPO"
 	_dk_git=$(command -v git)
 	_dk_mh=
 	_dk_pc="${3:-}"
 	if [ -n "$_dk_pc" ]; then
+		if ! git -C "$_dk_port" cat-file -e "$_dk_pc^{commit}" 2>/dev/null && [ -n "${AMIX_PORT_URL:-}" ]; then
+			# the recipe's pinned commit, by hash: an older pin than port.pin's works too
+			git -C "$_dk_port" fetch -q --depth 1 "$AMIX_PORT_URL" "$_dk_pc" 2>/dev/null || :
+		fi
 		git -C "$_dk_port" cat-file -e "$_dk_pc^{commit}" 2>/dev/null || {
-			echo "[FAIL] amix-040-060-port has no commit $_dk_pc" >&2; exit 1; }
+			echo "[FAIL] amix-040-060-port has no commit $_dk_pc in $_dk_port${AMIX_PORT_URL:+ or at $AMIX_PORT_URL}" >&2; exit 1; }
 		_dk_pt="$AMIX_BUILD_ROOT/kspace/src/port-$_dk_pc"
 		if [ ! -f "$_dk_pt/include-modelb/sys/immu.h" ]; then
 			rm -rf "$_dk_pt"; mkdir -p "$_dk_pt"
@@ -195,11 +208,11 @@ amix_dlm_kit() {
 	} > "$_dk_shim/git"
 	chmod +x "$_dk_shim/git"
 	(
-		. "$AMIX_SIBLINGS/gcc-cross-amix/build/env.sh" >/dev/null 2>&1
+		. "$AMIX_CROSS_ENV" >/dev/null 2>&1
 		if [ -n "$_dk_mh" ]; then export MONSW_H="$_dk_mh"; fi
 		# KIT_REV: an archive of an amix commit is no git checkout, so
 		# its mkkit takes the commit from the environment
-		PATH="$_dk_shim:$PATH" GCA="$AMIX_SIBLINGS/gcc-cross-amix/build" \
+		PATH="$_dk_shim:$PATH" GCA="$(dirname "$AMIX_CROSS_ENV")" \
 			PORT="$_dk_port" KIT_REV="$1" \
 			make -C "$AMIX_DLM_TREE" G14="$AMIX_G14_BUILD" kit
 	) > "$AMIX_DLM_TREE.kit.log" 2>&1 || {
