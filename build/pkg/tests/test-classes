@@ -118,6 +118,14 @@ try:
                     + node, INFO % "none z3660eth")
     check("a file still must be class none",
           rc != 0 and "BAD class z3660eth /etc/conf/mod.d/z3660eth" in out, out)
+    # --- amix_host_paths: the build-host paths the roll checks for ------------------
+    r = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_host_paths /home/b/amix/out/pkg/zz/pkgwork /src "" '
+                        '/src/out/build/userland /home/b/amix', "sh", os.path.join(COMMON, "dsroll.sh")],
+                       capture_output=True, text=True)
+    check("host paths: every path of two or more components; not /src (the container's checkout) or an empty one",
+          r.returncode == 0 and r.stdout.split("\n")[:-1] == [
+              "--host /home/b/amix/out/pkg/zz/pkgwork", "--host /src/out/build/userland", "--host /home/b/amix"],
+          r.stdout + r.stderr)
 finally:
     shutil.rmtree(tmp)
 

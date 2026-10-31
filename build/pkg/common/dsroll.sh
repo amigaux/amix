@@ -61,6 +61,17 @@ amix_classes() {
 	unset _cl_list
 }
 
+# amix_host_paths <path>... -- `--host <path>' for each build-host path a
+# datastream must not name.  A one-component path is left out: /src is the
+# build container's fixed checkout (gcc14 writes it for the checkout too),
+# no host's own, and ordinary text in a package's documentation.
+amix_host_paths() {
+	for _hp in "$@"; do
+		case "$_hp" in /*/*) printf -- '--host %s\n' "$_hp" ;; esac
+	done
+	unset _hp
+}
+
 amix_dsroll() {
 	_ds_work="$1"
 	_ds_root="$2"
@@ -88,9 +99,10 @@ amix_dsroll() {
 	"$AMIX_PKGTRANS" -s "$_ds_spool" "$_ds_out" "$_ds_pkg" >/dev/null || {
 		echo "[FAIL] pkgtrans failed for $_ds_pkg" >&2; exit 1; }
 	[ -f "$_ds_out" ] || { echo "[FAIL] pkgtrans produced no $_ds_out" >&2; exit 1; }
+	# shellcheck disable=SC2046 (one --host and one path per word)
 	python3 -I "$AMIX_PKG_COMMON/dsnorm.py" stream "$_ds_out" "$SOURCE_DATE_EPOCH" \
-		--host "$(cd "$_ds_work" && pwd -P)" --host "$(cd "$_ds_root" && pwd -P)" \
-		--host "${AMIX_REPO_ROOT:-}" --host "${AMIX_BUILD_ROOT:-}" \
+		$(amix_host_paths "$(cd "$_ds_work" && pwd -P)" "$(cd "$_ds_root" && pwd -P)" \
+			"${AMIX_REPO_ROOT:-}" "${AMIX_BUILD_ROOT:-}") \
 		${AMIX_PREFIX_MAP:+--refuse-payload} || { rm -f "$_ds_out"; exit 1; }
 	unset _ds_work _ds_root _ds_pkg _ds_out _ds_spool
 }
