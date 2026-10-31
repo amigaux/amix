@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-31 — the lock format and make lock (3be5063)
+
+release/README.md specifies `#amix-lock 1` (P-38 S1.6): the head (the amix commit, the epoch rule, a `dirty` line when
+tracked files differ, the image); the inputs (every pin, distfile and the system manifest); the outputs (kit.digests,
+modules, packages and catalogs per space, media, each by sha256); and the named exceptions. Sections in a fixed order,
+lines sorted, one build one lock. build/mklock writes out/lock as dist's last step; `make lock LOCK=<file>` writes
+nothing and refuses a build whose lock differs, naming each line. test-lock 12/12.
+
 ## 2026-10-31 — make dist exists: the driver, partial targets, docs/BUILDING.md (bfcfe76); static libraries as ar D writes them (56ffa22)
 
 build/dist.sh is the driver (P-38 S1.5), build/Makefile has its targets and the top Makefile only delegates. Steps in
