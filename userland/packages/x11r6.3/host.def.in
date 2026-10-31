@@ -1,0 +1,84 @@
+/*
+ * host.def -- the cross build's overrides, included by site.def after amix.cf
+ * (patch 01).  build.sh writes config/cf/host.def from this file, filling in
+ * the @...@ paths.  Every override is an #undef/#define pair.
+ */
+/* gcc14-cross-amix through build.sh's xcc (the C library and amix-decls.h
+ * force-included, every compile line logged for the strict gates) */
+#undef CcCmd
+#define CcCmd @XCC@
+#undef ServerCcCmd
+#define ServerCcCmd @XCC@
+#undef CppCmd
+#define CppCmd @XCPP@
+#undef PreProcessCmd
+#define PreProcessCmd @XCC@ -E
+#undef ArCmdBase
+#define ArCmdBase @AR@
+#undef RanlibCmd
+#define RanlibCmd @RANLIB@
+#undef AsCmd
+#define AsCmd @AS@
+#undef LdCmd
+#define LdCmd @LD@
+/* makedepend is never run */
+#undef DependCmd
+#define DependCmd true
+/* the flags come from xcc */
+#undef DefaultCCOptions
+#define DefaultCCOptions /**/
+#undef DefaultCDebugFlags
+#define DefaultCDebugFlags /**/
+#undef OptimizedCDebugFlags
+#define OptimizedCDebugFlags /**/
+/* static libraries: the shared-data .so/.sa model is a later step */
+#undef HasSharedLibraries
+#define HasSharedLibraries NO
+#undef AmixSALibXt
+#define AmixSALibXt /**/
+#undef AmixSALibXmu
+#define AmixSALibXmu /**/
+#undef FixupLibReferences
+#define FixupLibReferences() @@\
+XMULIBONLY = -lXmu @@\
+XMULIB = -lXmu
+/* the tree under /opt/amix/X11R6 (/usr/X11R6 links to it) */
+#undef ProjectRoot
+#define ProjectRoot @PREFIX@
+#undef UsrLibDir
+#define UsrLibDir @PREFIX@/lib
+#undef LibDir
+#define LibDir @PREFIX@/lib/X11
+#undef IncRoot
+#define IncRoot @PREFIX@/include
+#undef BinDir
+#define BinDir @PREFIX@/bin
+#undef ManDirectoryRoot
+#define ManDirectoryRoot @PREFIX@/man
+/* libraries from the sysroot and the stock /usr/amiga, /usr/ucblib */
+#undef MathLibrary
+#define MathLibrary -L@SYSROOT@/usr/ccs/lib -lm
+#undef ServerExtraSysLibs
+#define ServerExtraSysLibs -lsocket -lnsl -L@USRAMIGA@/ucblib -ldbm -L@USRAMIGA@/amiga/lib -lscreen
+/* libc has the BSD calls (and libamixc99) */
+#undef NeedBerklib
+#define NeedBerklib NO
+/* MIT-SHM: the 68040/68060 kernel's shared-memory fixes make it safe (README) */
+#undef HasShm
+#define HasShm YES
+/* not shipped: XIE, LBX, the print server, Xnest (PEX is off in amix.cf) */
+#undef BuildXIE
+#define BuildXIE NO
+#undef BuildLBX
+#define BuildLBX NO
+#undef XprtServer
+#define XprtServer NO
+#undef XnestServer
+#define XnestServer NO
+/* the driver strips after its gates */
+#undef StripInstalledPrograms
+#define StripInstalledPrograms NO
+/* colours from rgb.txt: the server's rgb reader is AMIX's classic dbm, whose
+ * .dir/.pag format no build-host tool writes (README) */
+#undef UseRgbTxt
+#define UseRgbTxt YES

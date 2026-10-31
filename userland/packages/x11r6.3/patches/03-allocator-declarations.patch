@@ -1,0 +1,352 @@
+Ours.  1990s K&R declarations of the allocators ("char *malloc();", "Char *realloc(),
+*calloc();") collide with <stdlib.h>, which every X compile now includes (amix-xlibc.h):
+they become comments.  xinit's own static shutdown() is renamed xinit_shutdown(): the
+name is the socket call amix-decls.h declares.
+
+--- a/lib/Xau/AuFileName.c
++++ b/lib/Xau/AuFileName.c
+@@ -34,7 +34,7 @@
+ XauFileName ()
+ {
+     char *slashDotXauthority = "/.Xauthority";
+-    char    *name, *malloc (), *getenv ();
++    char    *name, *getenv ();
+     static char	*buf;
+     static int	bsize;
+ #ifdef WIN32
+--- a/lib/Xau/AuRead.c
++++ b/lib/Xau/AuRead.c
+@@ -49,7 +49,7 @@
+ FILE	*file;
+ {
+     unsigned short  len;
+-    char	    *data, *malloc ();
++    char	    *data;
+ 
+     if (read_short (&len, file) == 0)
+ 	return 0;
+@@ -76,7 +76,7 @@
+ {
+     Xauth   local;
+     Xauth   *ret;
+-    char    *malloc ();
++/* AMIX: char    *malloc (); -- <stdlib.h> declares it */
+ 
+     if (read_short (&local.family, auth_file) == 0)
+ 	return 0;
+--- a/lib/Xau/AuWrite.c
++++ b/lib/Xau/AuWrite.c
+@@ -61,7 +61,7 @@
+ FILE	*auth_file;
+ Xauth	*auth;
+ {
+-    char    *malloc ();
++/* AMIX: char    *malloc (); -- <stdlib.h> declares it */
+ 
+     if (write_short (auth->family, auth_file) == 0)
+ 	return 0;
+--- a/lib/Xdmcp/Alloc.c
++++ b/lib/Xdmcp/Alloc.c
+@@ -30,7 +30,7 @@
+ 
+ /* stubs for use when Xalloc, Xrealloc and Xfree are not defined */
+ 
+-extern char	*malloc (), *realloc ();
++/* AMIX: extern char	*malloc (), *realloc (); -- <stdlib.h> declares it */
+ 
+ long *
+ Xalloc (amount)
+--- a/lib/Xmu/CloseHook.c
++++ b/lib/Xmu/CloseHook.c
+@@ -59,7 +59,7 @@
+ #include <X11/Xlib.h>
+ #include <X11/Xmu/CloseHook.h>
+ 
+-extern char *malloc();					/* should be void * */
++/* AMIX: extern char *malloc(); (should be void *) -- <stdlib.h> declares it */
+ 
+ /*
+  *				 Private data
+--- a/lib/Xmu/CrCmap.c
++++ b/lib/Xmu/CrCmap.c
+@@ -39,7 +39,7 @@
+ #include <X11/Xlib.h>
+ #include <X11/Xutil.h>
+ 
+-extern char	*calloc();
++/* AMIX: extern char	*calloc(); -- <stdlib.h> declares it */
+ 
+ static int	ROmap();		/* allocate entire map Read Only */
+ static Status	ROorRWcell();		/* allocate a cell, prefer Read Only */
+--- a/lib/Xmu/CvtCache.c
++++ b/lib/Xmu/CvtCache.c
+@@ -36,7 +36,7 @@
+ #include <X11/Xos.h>
+ #include <X11/Xmu/CvtCache.h>
+ 
+-extern char *malloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ 
+ static XmuDisplayQueue *dq = NULL;
+ static int _CloseDisplay(), _FreeCCDQ();
+--- a/lib/Xmu/LookupCmap.c
++++ b/lib/Xmu/LookupCmap.c
+@@ -37,7 +37,7 @@
+ #include <X11/Xutil.h>
+ #include <X11/Xmu/StdCmap.h>
+ 
+-extern char *malloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ static Status lookup();
+ 
+ /*
+--- a/lib/Xmu/Xct.c
++++ b/lib/Xmu/Xct.c
+@@ -49,8 +49,8 @@
+ #define IsMore(priv) ((priv)->ptr != (priv)->ptrend)
+ #define AmountLeft(priv) ((priv)->ptrend - (priv)->ptr)
+ 
+-extern char *malloc();
+-extern char *realloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
++/* AMIX: extern char *realloc(); -- <stdlib.h> declares it */
+ 
+ #define HT	0x09
+ #define NL	0x0a
+--- a/programs/xauth/parsedpy.c
++++ b/programs/xauth/parsedpy.c
+@@ -45,7 +45,7 @@
+ #define UNIX_CONNECTION_LENGTH 4
+ #endif
+ 
+-extern char *malloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ 
+ 
+ /*
+--- a/programs/xinit/xinit.c
++++ b/programs/xinit/xinit.c
+@@ -140,7 +140,7 @@
+ #endif
+ 
+ 
+-static void shutdown();
++static void xinit_shutdown();	/* AMIX: shutdown is the socket call */
+ static void set_environment();
+ 
+ #ifdef SIGNALRETURNSINT
+@@ -157,7 +157,7 @@
+ 	signal(SIGHUP, SIG_IGN);
+ 	signal(SIGPIPE, SIG_IGN);
+ 	Error("unexpected signal %d\r\n", sig);
+-	shutdown();
++	xinit_shutdown();
+ 	exit(1);
+ }
+ 
+@@ -339,7 +339,7 @@
+ 	signal(SIGHUP, SIG_IGN);
+ 	signal(SIGPIPE, SIG_IGN);
+ 
+-	shutdown();
++	xinit_shutdown();
+ 
+ 	if (serverpid < 0 )
+ 		Fatal("Server error.\n");
+@@ -493,7 +493,7 @@
+ 
+ 		if (waitforserver() == 0) {
+ 			Error("unable to connect to X server\r\n");
+-			shutdown();
++			xinit_shutdown();
+ 			serverpid = -1;
+ 		}
+ 		break;
+@@ -536,7 +536,7 @@
+ }
+ 
+ static
+-void shutdown()
++void xinit_shutdown()
+ {
+ 	/* have kept display opened, so close it now */
+ 	if (clientpid > 0) {
+--- a/programs/xlsfonts/dsimple.c
++++ b/programs/xlsfonts/dsimple.c
+@@ -71,7 +71,7 @@
+ char *Malloc(size)
+      unsigned size;
+ {
+-	char *data, *malloc();
++	char *data;
+ 
+ 	if (!(data = malloc(size)))
+ 	  Fatal_Error("Out of memory!");
+@@ -87,7 +87,7 @@
+         char *ptr;
+         int size;
+ {
+-	char *new_ptr, *realloc();
++	char *new_ptr;
+ 
+ 	if (!ptr)
+ 	  return(Malloc(size));
+--- a/programs/xprop/dsimple.c
++++ b/programs/xprop/dsimple.c
+@@ -71,7 +71,7 @@
+ char *Malloc(size)
+      unsigned size;
+ {
+-	char *data, *malloc();
++	char *data;
+ 
+ 	if (!(data = malloc(size)))
+ 	  Fatal_Error("Out of memory!");
+@@ -87,7 +87,7 @@
+         char *ptr;
+         int size;
+ {
+-	char *new_ptr, *realloc();
++	char *new_ptr;
+ 
+ 	if (!ptr)
+ 	  return(Malloc(size));
+--- a/programs/Xserver/os/utils.c
++++ b/programs/Xserver/os/utils.c
+@@ -805,7 +805,7 @@
+ Xalloc (amount)
+     unsigned long amount;
+ {
+-    char		*malloc();
++/* AMIX: char		*malloc(); -- <stdlib.h> declares it */
+     register pointer  ptr;
+ 	
+     if ((long)amount <= 0)
+@@ -833,7 +833,7 @@
+ XNFalloc (amount)
+     unsigned long amount;
+ {
+-    char             *malloc();
++/* AMIX: char *malloc(); -- <stdlib.h> declares it */
+     register pointer ptr;
+ 
+     if ((long)amount <= 0)
+@@ -875,8 +875,8 @@
+     register pointer ptr;
+     unsigned long amount;
+ {
+-    char *malloc();
+-    char *realloc();
++/* AMIX: char *malloc(); -- <stdlib.h> declares it */
++/* AMIX: char *realloc(); -- <stdlib.h> declares it */
+ 
+ #ifdef MEMBUG
+     if (!Must_have_memory && Memory_fail &&
+--- a/programs/xterm/button.c
++++ b/programs/xterm/button.c
+@@ -40,7 +40,7 @@
+ #include "error.h"
+ #include "menu.h"
+ 
+-extern char *malloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ 
+ extern void DoSecureKeyboard();
+ 
+--- a/programs/xterm/charproc.c
++++ b/programs/xterm/charproc.c
+@@ -97,8 +97,8 @@
+ extern XtAppContext app_con;
+ extern Widget toplevel;
+ extern void exit();
+-extern char *malloc();
+-extern char *realloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
++/* AMIX: extern char *realloc(); -- <stdlib.h> declares it */
+ extern fd_set Select_mask;
+ extern fd_set X_mask;
+ extern fd_set pty_mask;
+--- a/programs/xterm/screen.c
++++ b/programs/xterm/screen.c
+@@ -45,7 +45,7 @@
+ #include <sys/ptem.h>
+ #endif
+ 
+-extern Char *calloc(), *malloc(), *realloc();
++/* AMIX: extern Char *calloc(), *malloc(), *realloc(); -- <stdlib.h> declares it */
+ extern void free();
+ 
+ ScrnBuf Allocate (nrow, ncol, addr)
+--- a/programs/xterm/scrollbar.c
++++ b/programs/xterm/scrollbar.c
+@@ -318,7 +318,7 @@
+ 	register TScreen *screen = &xw->screen;
+ 	register int border = 2 * screen->border;
+ 	register int i;
+-	Char *realloc(), *calloc();
++/* AMIX: Char *realloc(), *calloc(); -- <stdlib.h> declares it */
+ 
+ 	if(screen->fullVwin.scrollbar)
+ 		return;
+--- a/programs/xwd/dsimple.c
++++ b/programs/xwd/dsimple.c
+@@ -72,7 +72,7 @@
+ char *Malloc(size)
+      unsigned size;
+ {
+-	char *data, *malloc();
++	char *data;
+ 
+ 	if (!(data = malloc(size)))
+ 	  Fatal_Error("Out of memory!");
+@@ -88,7 +88,7 @@
+         char *ptr;
+         int size;
+ {
+-	char *new_ptr, *realloc();
++	char *new_ptr;
+ 
+ 	if (!ptr)
+ 	  return(Malloc(size));
+--- a/programs/xwd/xwd.c
++++ b/programs/xwd/xwd.c
+@@ -244,7 +244,7 @@
+  *              writting.
+  */
+ 
+-char *calloc();
++/* AMIX: char *calloc(); -- <stdlib.h> declares it */
+ 
+ Window_Dump(window, out)
+      Window window;
+--- a/programs/xwininfo/dsimple.c
++++ b/programs/xwininfo/dsimple.c
+@@ -72,7 +72,7 @@
+ char *Malloc(size)
+      unsigned size;
+ {
+-	char *data, *malloc();
++	char *data;
+ 
+ 	if (!(data = malloc(size)))
+ 	  Fatal_Error("Out of memory!");
+@@ -88,7 +88,7 @@
+         char *ptr;
+         int size;
+ {
+-	char *new_ptr, *realloc();
++	char *new_ptr;
+ 
+ 	if (!ptr)
+ 	  return(Malloc(size));
+--- a/programs/xwud/xwud.c
++++ b/programs/xwud/xwud.c
+@@ -46,7 +46,7 @@
+ extern int errno;
+ #endif
+ 
+-extern char *malloc();
++/* AMIX: extern char *malloc(); -- <stdlib.h> declares it */
+ unsigned Image_Size();
+ Atom wm_protocols;
+ Atom wm_delete_window;

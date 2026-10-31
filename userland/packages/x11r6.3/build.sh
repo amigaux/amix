@@ -1,0 +1,79 @@
+# build.sh -- X11R6.3 hooks for build/pkg/pkgbuild.sh (STYLE=hooks).
+# Hooks only; the reasons are in README.md.
+
+ASM_REVIEWED="other platforms' .s files (xfree86, cfb/stip*); none is in an AMIX build"
+
+# the Amiga screen manager (amiga/screen.h, libscreen.so) and libdbm, from the
+# stock /usr/amiga and /usr/ucblib: the sysroot links to them but lacks them
+AMIX_USR_AMIGA=${AMIX_USR_AMIGA:-$AMIX_SYSROOT/usr}
+
+# the clients built and shipped, beside the libraries and the server
+XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrdb
+	xlsfonts xhost xauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf"
+
+xmake() {	# xmake <log> <make args...>: make -k, every compile line into make.log by xcc
+	_xm_log=$1; shift
+	_xm_rc=0; make -k "$@" > "$BUILD/$_xm_log" 2>&1 < /dev/null || _xm_rc=$?
+	echo "  X: $* rc=$_xm_rc"
+}
+
+build() {
+	# xc-2: the fonts (and docs); xc-3 is hardcopy docs only and is not fetched
+	. "$COMMON/fetch.sh"
+	amix_fetch https://www.x.org/archive/X11R6.3/tars/xc-2.tar.gz \
+		cb9e6725a6f10b345c3dea417821d79a0738c09da0a16fe6b14b2ade878dcb8d "$SRC/xc-2.tar.gz" \
+		"https://github.com/amigaux/amix-distfiles/releases/download/$NAME-$VERSION/xc-2.tar.gz" || exit 1
+	tar xzf "$SRC/xc-2.tar.gz" -C .. || exit 1
+	chmod -R u+w .	# the tarball's modes are read-only
+	[ -f "$AMIX_USR_AMIGA/amiga/include/amiga/screen.h" ] && [ -f "$AMIX_USR_AMIGA/amiga/lib/libscreen.so" ] &&
+		[ -f "$AMIX_USR_AMIGA/ucblib/libdbm.a" ] || {
+		echo "[FAIL] no amiga/include/amiga/screen.h, amiga/lib/libscreen.so and ucblib/libdbm.a" >&2
+		echo "       under AMIX_USR_AMIGA=$AMIX_USR_AMIGA (the stock /usr/amiga and /usr/ucblib)" >&2
+		exit 1
+	}
+	# only <amiga/...> from /usr/amiga/include: it also holds an assert.h of its own
+	mkdir -p "$BUILD/ainc" && ln -sfn "$AMIX_USR_AMIGA/amiga/include/amiga" "$BUILD/ainc/amiga"
+	# the compiler: gcc14, the C library and amix-decls.h force-included, every line logged
+	cat > "$BUILD/xcc" <<XCC
+#!/bin/sh
+echo "$CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS \$* $AMIX_CFLAGS $AMIX_ARCH_FLAGS" >> "$BUILD/make.log"
+exec $CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS "\$@" $AMIX_CFLAGS $AMIX_ARCH_FLAGS 2>> "$BUILD/make.log"
+XCC
+	chmod +x "$BUILD/xcc"
+	# config files (xinitrc, Xsession, ...) go through a plain host cpp, without xcc's headers
+	printf '#!/bin/sh\nexec /usr/bin/cpp -traditional -undef -DAMIX -DSVR4 -Dm68k -Dunix "$@"\n' > "$BUILD/xcpp"
+	chmod +x "$BUILD/xcpp"
+	_b=$(dirname "$AR")
+	sed -e "s|@XCC@|$BUILD/xcc|g" -e "s|@XCPP@|$BUILD/xcpp|g" -e "s|@AR@|$AR|g" -e "s|@RANLIB@|$RANLIB|g" -e "s|@AS@|$_b/$AMIX_TARGET-as|g" \
+		-e "s|@LD@|$LD|g" -e "s|@PREFIX@|$PREFIX|g" -e "s|@SYSROOT@|$AMIX_SYSROOT|g" -e "s|@USRAMIGA@|$AMIX_USR_AMIGA|g" \
+		"$HERE/host.def.in" > config/cf/host.def
+	# build-time tools the tree runs on the build host
+	( cd config/imake && make -f Makefile.ini CC="gcc -std=gnu89 -fcommon -w" imake ) > "$BUILD/x-imake.log" 2>&1 || {
+		echo "[FAIL] host imake; see $BUILD/x-imake.log" >&2; exit 1; }
+	export IMAKECPP="$HERE/imakecpp.sh"
+	make Makefile BOOTSTRAPCFLAGS="-DAMIX -DSVR4 -Dm68k" > "$BUILD/x-makefile.log" 2>&1 &&
+	make -f xmakefile Makefiles > "$BUILD/x-makefiles.log" 2>&1 || {
+		echo "[FAIL] imake Makefiles; see $BUILD/x-makefile*.log" >&2; exit 1; }
+	mkdir -p "$BUILD/hinc" && ln -sfn "$PWD/include" "$BUILD/hinc/X11"
+	_hcc="gcc -std=gnu89 -fcommon -w -I$BUILD/hinc"
+	( cd config/util && $_hcc -c makestrs.c && $_hcc -o makestrs makestrs.o ) &&
+	$_hcc -o "$BUILD/makekeys" lib/X11/util/makekeys.c && "$BUILD/makekeys" < include/keysymdef.h > lib/X11/ks_tables.h || {
+		echo "[FAIL] host makestrs/makekeys" >&2; exit 1; }
+	echo "  X: host imake, makestrs, makekeys (ks_tables.h)"
+	make -f xmakefile includes > "$BUILD/x-includes.log" 2>&1 || {
+		echo "[FAIL] make includes; see $BUILD/x-includes.log" >&2; exit 1; }
+	xmake x-lib.log -C lib
+	xmake x-server.log -C programs/Xserver
+	for c in $XCLIENTS; do
+		[ -f programs/$c/Makefile ] || ( cd programs/$c && ../../config/imake/imake -I../../config/cf \
+			-DTOPDIR=../.. -DCURDIR=programs/$c ) > "$BUILD/x-$c-imake.log" 2>&1
+		xmake x-$c.log -C programs/$c
+	done
+	echo "  X: strict counts: $(grep -c 'implicit declaration' "$BUILD/make.log") implicit," \
+		"$(grep -c 'pointer from integer\|integer from pointer' "$BUILD/make.log") pointer/integer," \
+		"$(grep -c ' error: ' "$BUILD/make.log") errors"
+}
+
+stage() {
+	:
+}

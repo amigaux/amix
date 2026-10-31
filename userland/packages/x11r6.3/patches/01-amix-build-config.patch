@@ -1,0 +1,26 @@
+Ours.  gcc14-cross-amix declares the two-argument gettimeofday, so Xos.h takes that
+form on AMIX; site.def includes host.def after the vendor .cf (the cross build's
+compiler, paths and switches, written by build.sh).
+
+--- a/include/Xos.h
++++ b/include/Xos.h
+@@ -207,7 +207,8 @@
+ #if defined(_XOPEN_XPG4) || defined(_XOPEN_UNIX) /* _XOPEN_UNIX is XPG4.2 */
+ #define X_GETTIMEOFDAY(t) gettimeofday(t, (struct timezone*)0)
+ #else
+-#if defined(SVR4) || defined(VMS) || defined(WIN32)
++/* AMIX: gcc14-cross-amix declares the two-argument gettimeofday */
++#if (defined(SVR4) && !defined(AMIX)) || defined(VMS) || defined(WIN32)
+ #define X_GETTIMEOFDAY(t) gettimeofday(t)
+ #else
+ #define X_GETTIMEOFDAY(t) gettimeofday(t, (struct timezone*)0)
+--- a/config/cf/site.def
++++ b/config/cf/site.def
+@@ -124,6 +124,6 @@
+ #define XnestServer YES
+ #endif
+ 
+-/* #include <host.def> */
++#include <host.def>
+ 
+ #endif /* AfterVendorCF */
