@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — docs, comments and the changelog state facts without internal ids (b91a56f, 396c9d4, 305fc01, 6d9fa07, 48c90fd, 87197bf)
+
+The stage plans and a review draft leave the repository. Specs, measurements, contracts (neutral version histories),
+code comments, tests, the man page and recipe comments restate facts without review or plan ids or private paths. A
+measurement note is renamed 2026-10-26-stage2-exit.md. All shipped binaries and both kits' headers and tools are
+byte-identical; kbootset -30's package description is the only package change.
+
 ## 2026-10-31 — modadmin shows a pinned module's unload delay as never; modtools -10 recipe (0034b16, afea7f5, 066e7c7)
 
 Core patch 0047: `modadmin -q/-Q/-S` print `Unload Delay: never (locked)` for a module modstat reports locked
