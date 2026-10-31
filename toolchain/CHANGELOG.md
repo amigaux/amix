@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — the gcc14 sysroot's links into /usr/amiga and /usr/ucblib resolve (857c7cb)
+
+The new toolchain/sysroot-links, run by the Containerfile, makes the sysroot's absolute links whose target is inside
+the sysroot relative: usr/lib/libscreen.so, usr/include/amiga, usr/ccs/lib/libdbm.a, usr/ccs/lib/libucb.a,
+usr/lib/font. Other absolute links stay. gcc14-cross-amix.tree moves to 4c9e9428 (the sysroot +565 files; the rest
+of the tree unchanged). test-tools 18/18.
+
 ## 2026-10-31 — the m68k-gnu-bin shim does not reproduce -52's FPSP 040 (369daff)
 
 binutils 2.43.1 relaxes the FPSP 040's stan.s:231 `lea PITBL+0x200,%a1` to PC-relative, two bytes shorter than the

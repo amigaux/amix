@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — amix-system pinned at 761a82e: usr/amiga, usr/ucblib, the 2.1p2a syslogd (857c7cb)
+
+amix-system.pin moves to 761a82e, which adds usr/amiga, usr/ucblib and the 2.1p2a usr/sbin/syslogd (565 files and
+one link, all byte-equal to the stock 2.1 packages plus the 2.1p2a patch). MANIFEST.sha256 4105 lines (+565),
+SYMLINKS 152 (+1); the README table gains the three rows.
+
 ## 2026-10-31 — amix-system repinned to 7cba961, the stock /etc at 2.1p2a (284b8a8)
 
 amix-system 7cba961 adds the stock /etc at 2.1p2a (P-36 D-N24). MANIFEST.sha256 gains its 206 etc/ files (3540 in

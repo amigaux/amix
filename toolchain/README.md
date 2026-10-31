@@ -69,7 +69,7 @@ The image holds the AMIX sysroot, so it is built locally from a checkout of
 | `/opt/amix-cross/m68k-cbm-sysv4/sysroot` | its sysroot |
 | `/opt/amix/gcc-cross-amix/build/env.sh` | its environment (`PATH`, `AMIX_SYSROOT`, `AMIX_ROOT`) |
 | `/opt/amix/gcc14-cross-amix/build/prefix/bin/m68k-elf-*` | GCC 14 |
-| `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`; `build/sysroot` links to it |
+| `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`, and amix-system's absolute links into `usr/amiga` and `usr/ucblib` (`usr/lib/libscreen.so`, `usr/include/amiga`, `usr/ccs/lib/libdbm.a`, ...) made relative by `sysroot-links`, so they resolve there; `build/sysroot` links to it |
 | `/opt/amix/amix-system/usr` | the AMIX root both were built from |
 | `/opt/amix/TOOLCHAIN.sha256` | the hash list |
 

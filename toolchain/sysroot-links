@@ -1,0 +1,30 @@
+#!/bin/sh
+# sysroot-links: make a sysroot's links into usr/amiga and usr/ucblib relative.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh toolchain/sysroot-links SYSROOT
+#
+# amix-system keeps its symbolic links as the installation made them, and
+# several are absolute: usr/lib/libscreen.so -> /usr/amiga/lib/libscreen.so,
+# usr/include/amiga -> /usr/amiga/include/amiga, usr/ccs/lib/libdbm.a and
+# libucb.a -> /usr/ucblib/... In a sysroot an absolute link resolves against
+# the host's root and finds nothing. Each link under SYSROOT/usr whose target
+# is under /usr/amiga or /usr/ucblib, and is in the sysroot, becomes the
+# equivalent relative link; the other absolute links are left as they are
+# (gcc14-cross-amix's sync-sysroot.sh makes usr/include/X11 relative). Prints
+# each link it changes; refuses a sysroot without usr/amiga or usr/ucblib.
+set -eu
+root=${1:?usage: sysroot-links SYSROOT}
+for d in usr/amiga usr/ucblib; do
+	[ -d "$root/$d" ] || { echo "sysroot-links: $root has no $d (amix-system before 761a82e?)" >&2; exit 1; }
+done
+cd "$root"
+find usr -type l | LC_ALL=C sort | while read -r l; do
+	t=$(readlink "$l")
+	case "$t" in /usr/amiga/*|/usr/ucblib/*) ;; *) continue ;; esac
+	[ -e ".$t" ] || continue
+	r=$(realpath -ms --relative-to="$(dirname "$l")" ".$t")
+	ln -sfn "$r" "$l"
+	echo "  $l -> $r (was $t)"
+done
