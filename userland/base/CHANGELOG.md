@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — /etc/default/login sets ULIMIT=4194303; amix-base 1.0-11 (e89b9cf)
+
+/etc/default/login sets ULIMIT=4194303, the ufs per-file ceiling, so a login can write files over the kernel's default
+256 MiB. Built from the stock bytes (etc/mklogin.sh: exactly `#ULIMIT=4096` replaced), still a conffile; new page
+default(4). amix-base 1.0-11. On E1: a fresh login's ulimit is 4194303.
+
 ## 2026-10-31 — dhcpc checks an address with ARP before binding (88954e7)
 
 dhcpc S3: two RFC 5227 probes after the DHCPACK, from INIT or INIT-REBOOT; when another station claims or probes the
