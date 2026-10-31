@@ -4,7 +4,7 @@
 #
 # MIT licence, see LICENSE in userland/packages.
 #
-# The layout (docs/man-pages.md, agreed with the base station):
+# The layout (docs/man-pages.md; userland/base/docs/man.md states the same):
 #   /opt/amix/man/<sect>/<name>      the troff source, -man macros, no suffix,
 #                                    plain, 0644; <name> within 14 bytes
 #   /opt/amix/man/whatis.d/<PKG>     one stock whatis line per page file:

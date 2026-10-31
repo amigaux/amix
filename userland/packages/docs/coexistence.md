@@ -14,7 +14,7 @@ are relative to the top of amix.
 
 Confidence tags follow the `ROADMAP.md` legend: **[MEASURED]** by this family on the bench,
 **[PROVEN-AMIX]** an artifact ran on Amix, **[UNVERIFIED]** believed with a reason but unchecked,
-**[OPEN]** a decision with a named owner. Stock-side facts here are read out of
+**[OPEN]** a decision not yet made. Stock-side facts here are read out of
 `userland/pkgtools` — the authority on what stock ships (its `docs/stock-pkg-system.md`, the
 repackaged factory catalog, and the install-tape extraction), never re-invented.
 
@@ -142,7 +142,7 @@ not a silent package side effect:
   re-enters `/usr/bin` (§2), and stock `pkgadd` **corrupts a relative symlink target**
   ([MEASURED], `patch/prototype`), so it would also demand absolute-target care for no gain.
 
-**[OPEN — owner: this repo, a maintainer decision]** how `/opt/amix/bin` reaches PATH out of the box (manual
+**[OPEN — for this repository to decide]** how `/opt/amix/bin` reaches PATH out of the box (manual
 line vs. a bootstrap-package profile snippet vs. left entirely to the user). See §7.
 
 ---

@@ -147,38 +147,35 @@ md5sum, sha1sum, cksum, `md5sum -c` both ways, and `sum -r` equal to the stock `
 - `pathchk`, `pwd`, `dd`, `uname`, `hostname`, `nice -n 5`, `nohup`, `kill -l`;
 - `tty` and `stty` on a non-tty, `sync`, `who`, `users`, `pinky`.
 
-**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (rig row E1: A3000, 64 MB,
-bench-golden kernel 46759dcc), slot 1, rig-run 20261029-230323.
+**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (A3000, 64 MB,
+bench-golden kernel 46759dcc).
 - **Install and removal:** the pushed files matched MANIFEST.sum. Stock `pkgadd` rc 0 installed
   177 files, `pkgchk` rc 0, smoke 95/95, stock `pkgrm` rc 0, and no contents-database line was
   left.
 - **Package:** `coreutil-5.2.1-1.pkg`, md5 `81300da8b7c9dc5500f9abb0a6b90112`, 3567104 bytes.
 - **Binaries** (`sum -r` / bytes): ls 07714/102348, md5sum 08949/36092, sha1sum 35204/36092,
   date 43132/54072, sort 00515/52856, df 09125/52888.
-- **Evidence:** `Amigaux/tmp/2026-10-29-pkgsmoke-coreutils/run3/E1/`.
 - **Earlier runs:** run1 and run2 failed `date -u` (93/95). The probes (`…/probe`, `…/probe2`,
   with the core file) isolated it to patch 07's cause; the run2 `putenv` seed was not the cause.
 
 Not run: real hardware, and an FPU-less part.
 
-**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin, owner Y3).
+**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin).
 - **Objects:** every object is byte-identical to the cf461e3 build.
 - **Relink proof:** relinking them against the cf461e3 runtime reproduces the -1 executables
   byte for byte. All the new bytes are runtime: libgcc and libamixc99 were rebuilt under
   -mno-strict-align.
 - **Package:** `coreutil-5.2.1-2.pkg`, md5 `e5552f7e2b7f753932718eb7d7530f2d`, 3557376 bytes.
-- **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 95/95.
-- **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+- **Bench:** the emulated A3000, stock pkgadd/pkgchk/pkgrm rc 0, smoke 95/95.
 
 **Revision -3, 2026-10-30: the stock-kernel ftruncate panic (grimoire quirk 90), and stat.**
-- **Probed at -2** on E1, one boot per case:
+- **Probed at -2** on the emulated A3000, one boot per case:
   - `dd if=/dev/null of=<480017 bytes> bs=1000 seek=477` panicked;
   - so did `cp --sparse=always` of 110017 bytes ending in zeros;
   - aligned `dd seek=` (409600) and a 53000-byte sparse copy did not.
-  - Evidence: `Amigaux/tmp/2026-10-30-ftx/`.
 - **The fix:** patch 08, `amix-ftruncate.o`, and patch 09 for the `stat -c %s` = 0 the new checks
   exposed.
-- **Bench:** E1 slot 1, rig-run 20261030-112151. Stock pkgadd/pkgchk/pkgrm rc 0, smoke 102/102.
+- **Bench:** the emulated A3000. Stock pkgadd/pkgchk/pkgrm rc 0, smoke 102/102.
   - The new checks: `dd seek=` shrink 480020→477000 with the bytes kept, the sparse
     `cp` of 110017 bytes identical, `stat -c %s` equal to `wc -c`, and `stat -f -c %b` > 0.
 - **Package:** `coreutil-5.2.1-3.pkg`, md5 `d418b45ec9c809a474343d67d1826a0a`, 3694592 bytes.

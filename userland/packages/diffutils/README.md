@@ -8,7 +8,7 @@
 
 Package: `diffutil` (PKG ≤ 9 characters), catalog name `diffutils`, category `utility`, set
 `extra`, GPL-2.0-or-later (COPYING ships in `/opt/amix/doc/diffutils`). Built with GCC 14
-(`TOOLCHAIN=gcc14`, `-m68020-60 -mno-strict-align -O2`). Layout per P-31 §10.9:
+(`TOOLCHAIN=gcc14`, `-m68020-60 -mno-strict-align -O2`). Layout:
 `package.sh` holds the metadata, `build.sh` has the hooks only, and `prototype` is the payload.
 `pkginfo` is generated.
 
@@ -101,8 +101,8 @@ See `tests/smoke.sh`. The checks:
 - `cmp`, including an offset past 64 KB, and `cmp -l`;
 - for the record: whether stock `/usr/bin/diff` has `-u` (ROADMAP X6).
 
-**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (rig row E1: A3000, 64 MB,
-bench-golden kernel 46759dcc), slot 1, rig-run 20261029-214655.
+**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (A3000, 64 MB,
+bench-golden kernel 46759dcc).
 - **Install and removal:** the pushed files matched MANIFEST.sum. Stock `pkgadd` rc 0 installed
   11 files, `pkgchk` rc 0, `tests/smoke.sh` 24/24 ok, stock `pkgrm` rc 0, and afterwards no
   contents-database line names the package.
@@ -110,7 +110,6 @@ bench-golden kernel 46759dcc), slot 1, rig-run 20261029-214655.
   A rebuild differs only in pkgmap/cpio mtimes; the payload is identical.
 - **Binaries** (`sum -r` / bytes): diff 13253/94360, diff3 63594/22424, sdiff 04547/28084,
   cmp 03876/21904.
-- **Evidence:** `Amigaux/tmp/2026-10-29-pkgsmoke-diffutils/run3/E1/`.
 - **Earlier runs:** run1 found the sdiff exit status (patch 03) and a wrong expectation in the
   test (binary rc). Run2 passed but shipped two empty man pages (fixed above).
 
@@ -120,14 +119,13 @@ Stock diff has no unified format, so this package is the box's only unified diff
 Not run: real 68030/68060 hardware. The 68060 lane rests on the build gates: all three
 scanners are clean, and the binaries contain no FPU instructions.
 
-**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin, owner Y3).
+**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin).
 - **Objects:** every object is byte-identical to the cf461e3 build.
 - **Relink proof:** relinking them against the cf461e3 runtime reproduces the -1 executables
   byte for byte. All the new bytes are runtime: libgcc and libamixc99 were rebuilt under
   -mno-strict-align.
 - **Package:** `diffutil-2.8.1-2.pkg`, md5 `baffdea7f68d4017b46e2a4fcb8606d5`, 212992 bytes.
-- **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 24/24.
-- **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+- **Bench:** the emulated A3000, stock pkgadd/pkgchk/pkgrm rc 0, smoke 24/24.
 
 ## Revision -3: man pages where `man` finds them
 

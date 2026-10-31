@@ -7,9 +7,8 @@ their `bzegrep`/`bzfgrep`/`bzless`/`bzcmp` names), and `libbz2.a` + `bzlib.h`, u
     sh build/pkg/pkgbuild.sh userland/packages/bzip2      # build + roll
     sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/bzip2      # stage the on-box acceptance
 
-Package: `bzip2`, catalog name `bzip2`, category `archive` (P-31 §10.9 decision 3, which names
-bzip2 under archive; the live `cats.conf` declares the group at the next owner-approved
-publish), set `extra`. Licence: the bzip2-1.0.6 licence, BSD-style; LICENSE ships in
+Package: `bzip2`, catalog name `bzip2`, category `archive` (the live `cats.conf` declares the
+group at the next publish), set `extra`. Licence: the bzip2-1.0.6 licence, BSD-style; LICENSE ships in
 `/opt/amix/doc/bzip2`. Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`) from the plain
 Makefile (`STYLE=make`: the driver passes CC/AR/RANLIB/CFLAGS; there is no configure).
 
@@ -92,8 +91,8 @@ checks:
 - bzcmp;
 - bzmore.
 
-**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (rig row E1: A3000, 64 MB,
-bench-golden kernel 46759dcc), slot 1, rig-run 20261029-220828.
+**Bench, 2026-10-29: PASS.** Run on the emulated golden 030 (A3000, 64 MB,
+bench-golden kernel 46759dcc).
 - **Install and removal:** the pushed files matched MANIFEST.sum. Stock `pkgadd` rc 0 installed
   18 files, `pkgchk` rc 0, smoke 23/23, stock `pkgrm` rc 0, and no contents-database line was
   left.
@@ -101,20 +100,17 @@ bench-golden kernel 46759dcc), slot 1, rig-run 20261029-220828.
 - **Binaries** (`sum -r` / bytes): bzip2 59958/80092 (bunzip2 and bzcat are the same file),
   bzip2recover 45819/11144. `libbz2.a` is 64010 bytes; its sum differs per build (ar
   timestamps).
-- **Evidence:** `Amigaux/tmp/2026-10-29-pkgsmoke-bzip2/run2/E1/`.
-- **Run1** failed the two-file bzgrep and led to the sed finding above. The probe of the pieces
-  is in `…/probe/run/E1/probe.log`.
+- **Run1** failed the two-file bzgrep and led to the sed finding above.
 
 Not run: real 68030/68060 hardware, and an FPU-less part.
 
-**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin, owner Y3).
+**Re-mint -2, 2026-10-29: gcc14-cross-amix b51ff39** (the public pin).
 - **Objects:** every object is byte-identical to the cf461e3 build.
 - **Relink proof:** relinking them against the cf461e3 runtime reproduces the -1 executables
   byte for byte. All the new bytes are runtime: libgcc and libamixc99 were rebuilt under
   -mno-strict-align.
 - **Package:** `bzip2-1.0.8-2.pkg`, md5 `2b10de77a92e2da2338972da68a8f6eb`, 218624 bytes.
-- **Bench:** E1 slot 2, stock pkgadd/pkgchk/pkgrm rc 0, smoke 23/23.
-- **Evidence:** `Amigaux/tmp/2026-10-29-g14-repin/`.
+- **Bench:** the emulated A3000, stock pkgadd/pkgchk/pkgrm rc 0, smoke 23/23.
 
 ## Revision -3: man pages where `man` finds them
 

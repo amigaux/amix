@@ -44,7 +44,7 @@ built with the period toolchain (GCC 2.7.2.3) in 2026-09. Each was bench-proven 
 `tests/smoke.sh`, checked with `pkgchk` and removed with `pkgrm`.
 
 **Current, not published.** The recipes here build the GCC 14 revisions of the userland set
-(`TOOLCHAIN=gcc14`), and these replace the period builds when the owner publishes them. They are
+(`TOOLCHAIN=gcc14`), and these replace the period builds when they are published. They are
 built, gated and smoke-tested in emulation. Publishing to pkg.amigaux.org is a manual maintainer
 step.
 
@@ -117,8 +117,7 @@ No package here edits `/etc/profile` or symlinks into a stock directory. The rea
 | [`INDEX.md`](INDEX.md), [`conf/`](conf/) | The package table and our catalog configuration lines, generated from each `package.sh` by `build/pkg/pkgmeta` (`index`, `fragments`); never edited by hand |
 | [`tools/`](tools/) | The on-box acceptance: `pkg-smoke/` stages one package's smoke test, `client-e2e-onbox.sh` runs `apkg` install → smoke → `pkgchk` → remove |
 
-**On citations.** `../<repo>/…` citations name sibling Amix repositories, and `../tmp/<date>-<topic>/`
-citations name the maintainer's dated research notes, which are not in version control; `ROADMAP`
+**On citations.** `../<repo>/…` citations name sibling Amix repositories; `ROADMAP`
 and `registry/` citations name the planning records of the former repository, which stay with the
 maintainer. They record where a claim was measured, not a link you can follow. Commit hashes cited
 before 2026-10-13 refer to the pre-public development history.
