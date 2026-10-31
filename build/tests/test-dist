@@ -83,8 +83,7 @@ try:
     check("no step: usage, exit 2", rc == 2 and "kernel-k30" in out, out)
     rc, out = run("frobnicate")
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
-    for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("drivers", "S3.2"),
-                        ("drivers/a4091", "S3.2"), ("catalogs", "S5.1"),
+    for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("catalogs", "S5.1"),
                         ("media", "S6.1")):
         rc, out = run(step)
         check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
@@ -166,6 +165,55 @@ PY
     check("kspace: a failing build.sh stops the step, exit 1",
           rc == 1 and "kernel/port/pkg/build.sh failed" in out, out)
     shutil.rmtree(os.path.join(top, "kernel"))
+
+    # --- drivers: ours in kernel/drivers, the forks at their pins ---------------------
+    gca = os.path.join(tmp, "gca")
+    write(os.path.join(gca, "env.sh"), "STUB_CROSS=yes; export STUB_CROSS\n")
+    write(os.path.join(top, "kernel", "dlm", "build", "kit.digests"), "kit k30 x\n")
+    for line in ("k30", "k46"):
+        write(os.path.join(top, "out", "modules", line, "monsw"), "monsw " + line)
+    stub = """\
+all:
+\tfor l in k30 k46; do mkdir -p $(OUTDIR)/build/$$l/mod.d; echo "$(NAME) $$l $$STUB_CROSS" > $(OUTDIR)/build/$$l/mod.d/$(NAME); done
+\techo "DLM=$(DLM)" > $(OUTDIR)/build/dlm.seen
+clean:
+\trm -rf $(OUTDIR)/build
+"""
+    write(os.path.join(top, "kernel", "drivers", "z3660scsi", "module", "Makefile"),
+          "NAME = z3660scsi\nOUTDIR = ..\n" + stub)
+    fork = os.path.join(tmp, "amix-paula")
+    write(os.path.join(fork, "module", "Makefile"), "NAME = paula\nOUTDIR = ..\n" + stub)
+    subprocess.run(["git", "init", "-q", fork], check=True)
+    git("add", ".", cwd=fork)
+    git("commit", "-q", "-m", "paula", cwd=fork)
+    pc = subprocess.run(["git", "-C", fork, "rev-parse", "HEAD"], stdout=subprocess.PIPE).stdout.decode().strip()
+    write(os.path.join(top, "kernel", "drivers", "paula", "paula.pin"), "file://%s %s\n" % (fork, pc))
+
+    rc, out = run("drivers/z3660scsi", GCA=gca)
+    mods = os.path.join(top, "out", "modules")
+    check("drivers/<ours>: built in kernel/drivers/<d>/module against this checkout's kit, both lines",
+          rc == 0 and "module k30 z3660scsi " in out and "module k46 z3660scsi " in out
+          and open(os.path.join(mods, "k46", "z3660scsi")).read() == "z3660scsi k46 yes\n"
+          and open(os.path.join(top, "kernel", "drivers", "z3660scsi", "build", "dlm.seen")).read()
+          == "DLM=%s\n" % os.path.join(os.path.realpath(top), "kernel", "dlm"), out)
+    rc, out = run("drivers/paula", GCA=gca)
+    cache = os.path.join(top, "out", "cache", "forks", "paula")
+    check("drivers/<fork>: the fork at its pinned commit, in out/cache/forks, built against this kit",
+          rc == 0 and "module k30 paula " in out
+          and subprocess.run(["git", "-C", cache, "rev-parse", "HEAD"], stdout=subprocess.PIPE).stdout.decode().strip() == pc
+          and open(os.path.join(mods, "k30", "paula")).read() == "paula k30 yes\n", out)
+    check("drivers: the generic modules are kept beside the drivers'",
+          sorted(os.listdir(os.path.join(mods, "k30"))) == ["monsw", "paula", "z3660scsi"])
+    rc, out = run("drivers/nosuch", GCA=gca)
+    check("drivers/<unknown>: refused", rc == 1 and "no driver nosuch" in out, out)
+    write(os.path.join(top, "kernel", "drivers", "z3660scsi", "module", "Makefile"),
+          "all:\n\t@true\nclean:\n\t@true\n")
+    shutil.rmtree(os.path.join(top, "kernel", "drivers", "z3660scsi", "build"))
+    rc, out = run("drivers/z3660scsi", GCA=gca)
+    check("drivers: a driver that builds no module object is refused",
+          rc == 1 and "z3660scsi built no module object" in out, out)
+    shutil.rmtree(os.path.join(top, "kernel"))
+    shutil.rmtree(os.path.join(top, "out"))
 
     rc, out = run("dist")
     check("dist: kit first, and stops at the first step that fails",

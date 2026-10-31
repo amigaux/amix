@@ -13,7 +13,10 @@
 #   kernel-k30   the 68030 cut (P-38 S2.2, k30)            not in make dist yet
 #   kernel-k46   the 68040/68060 cut (P-38 S2.3, port)     not in make dist yet
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
-#   drivers      kernel/drivers' modules (P-38 S3.2)       not in make dist yet
+#   drivers      every driver module on both lines, on the kit (P-38 S3.2,
+#                D-e): kernel/drivers/{a4091,z3660scsi,z3660eth}/module and
+#                the forks at their pins (cdfs, gayle-ide, paula, z3660rtg):
+#                out/modules/<line>/<name>
 #   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
 #                provider before consumer (dlm, k30, port, the modules, the
 #                drivers), into out/kspace/pkgs, one version per name; a
@@ -128,13 +131,92 @@ step_kit() {
 
 step_modules() {
 	[ -f "$top/kernel/dlm/build/kit.digests" ] || step_kit
-	( . "$GCA/env.sh"; for m in "$top"/kernel/modules/*/module; do make -C "$m"; done )
+	( . "$GCA/env.sh"; for m in "$top"/kernel/modules/*/module; do make -C "$m" clean; make -C "$m"; done )
 	rm -rf "$out/modules"
 	for obj in "$top"/kernel/modules/*/build/*/mod.d/*; do
 		line=$(basename "$(dirname "$(dirname "$obj")")")
 		mkdir -p "$out/modules/$line"
 		cp "$obj" "$out/modules/$line/"
 		echo "module $line $(basename "$obj") $(sha256sum < "$obj" | cut -c1-64)"
+	done
+}
+
+# the drivers: ours in kernel/drivers, and the forks at their pins
+DRIVERS="a4091 z3660scsi z3660eth cdfs gayle-ide paula z3660rtg"
+
+fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.pin, in out/cache/forks
+	read -r url commit < "$top/kernel/drivers/$1/$1.pin"
+	f=$out/cache/forks/$1
+	if [ "$(git -C "$f" rev-parse HEAD 2>/dev/null)" != "$commit" ]; then
+		rm -rf "$f"
+		git init -q "$f"
+		git -C "$f" fetch -q --depth 1 "$url" "$commit"
+		git -C "$f" -c advice.detachedHead=false checkout -q "$commit"
+	fi
+	rm -rf "$f/build"
+	echo "$f"
+}
+
+build_driver() {	# build_driver <name>: its module on both lines, built against this checkout's kit
+	dlm=$top/kernel/dlm
+	case $1 in
+	a4091|z3660scsi|z3660eth)
+		# a4091's module/ builds a4kt710 (the A4000T's onboard 53C710) too;
+		# clean first, so no object of an earlier kit survives
+		make -C "$top/kernel/drivers/$1/module" DLM="$dlm" clean
+		make -C "$top/kernel/drivers/$1/module" DLM="$dlm"
+		;;
+	cdfs)
+		f=$(fork_at_pin cdfs)
+		make -C "$f/platform/amix-kernel/module" DLM="$dlm"
+		;;
+	gayle-ide|paula)
+		f=$(fork_at_pin "$1")
+		make -C "$f/module" DLM="$dlm"
+		;;
+	z3660rtg)
+		# depend= names monsw: the real monsw module of each line (out/modules)
+		f=$(fork_at_pin z3660rtg)
+		for line in k30 k46; do
+			make -C "$f/module" KIT="$dlm/build/kit/$line" \
+				MONSWMOD="$out/modules/$line/monsw" \
+				LOCALIZE_OBJCOPY="$G14/prefix/bin/m68k-elf-objcopy"
+		done
+		;;
+	*) echo "[FAIL] drivers: no driver $1 (known: $DRIVERS)" >&2; exit 1 ;;
+	esac
+}
+
+driver_objects() {	# the module objects a driver's build leaves
+	case $1 in
+	a4091) set -- "$top/kernel/drivers/a4091" ;;
+	z3660scsi|z3660eth) set -- "$top/kernel/drivers/$1" ;;
+	*) set -- "$out/cache/forks/$1" ;;
+	esac
+	find "$1" -path '*/build/*' -path '*/mod.d/*' -type f | LC_ALL=C sort
+}
+
+step_drivers() {	# step_drivers [<name>...]
+	[ -f "$top/kernel/dlm/build/kit.digests" ] || sh "$0" kit
+	[ -f "$out/modules/k30/monsw" ] && [ -f "$out/modules/k46/monsw" ] || sh "$0" modules
+	[ $# -gt 0 ] || set -- $DRIVERS
+	for d; do
+		echo "--- driver $d"
+		( . "$GCA/env.sh"; build_driver "$d" ) > "$out/build/driver-$d.log" 2>&1 || {
+			tail -20 "$out/build/driver-$d.log" >&2
+			echo "[FAIL] drivers: $d did not build; log out/build/driver-$d.log" >&2
+			exit 1
+		}
+		n=0
+		for obj in $(driver_objects "$d"); do
+			line=$(basename "$(dirname "$(dirname "$obj")")")
+			case $line in k30|k46) ;; *) continue ;; esac
+			mkdir -p "$out/modules/$line"
+			cp "$obj" "$out/modules/$line/"
+			echo "module $line $(basename "$obj") $(sha256sum < "$obj" | cut -c1-64)"
+			n=$((n + 1))
+		done
+		[ "$n" -gt 0 ] || { echo "[FAIL] drivers: $d built no module object" >&2; exit 1; }
 	done
 }
 
@@ -238,7 +320,8 @@ run() {
 	kernel-k30) missing kernel-k30 "P-38 S2.2, the k30 station: make kernel-k30 wraps the cut" ;;
 	kernel-k46) missing kernel-k46 "P-38 S2.3, the port station: the cut in the container" ;;
 	modules) step_modules ;;
-	drivers|drivers/*) missing "$1" "P-38 S3.2, each driver's station: its module on both lines" ;;
+	drivers) mkdir -p "$out/build"; step_drivers ;;
+	drivers/*) mkdir -p "$out/build"; step_drivers "${1#drivers/}" ;;
 	kspace) step_kspace ;;
 	userland) step_userland ;;
 	recipes/*)

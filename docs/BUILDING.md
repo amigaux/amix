@@ -43,7 +43,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `kernel-k30` | the 68030 kernel, from its cut record | | S2.2, k30 | not yet |
 | `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
-| `drivers`, `drivers/<name>` | the drivers' modules, ours and the pinned forks' | | S3.2, each driver | not yet |
+| `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | the hook builds; no directory has recipes yet |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
 | `catalogs` | the kernel-space and userland catalogs | `out/{kspace,userland}/catalog` | S5.1, pkgtools | not yet |

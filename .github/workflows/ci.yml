@@ -67,6 +67,10 @@ jobs:
         run: make -C kernel/modules/monsw/module test
       - name: kernel/modules ramdisk host test
         run: make -C kernel/modules/ramdisk/module test
+      - name: kernel/drivers a4091 host tests
+        run: make -C kernel/drivers/a4091/test/host check
+      - name: kernel/drivers z3660scsi host tests
+        run: make -C kernel/drivers/z3660scsi/test/host check
       - name: build/pkg host tests
         run: make -C build test
       - name: toolchain host tests (distfile fetch, m68k-gnu-bin)
