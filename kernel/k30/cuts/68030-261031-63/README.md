@@ -25,9 +25,9 @@ kabi k30.1.2); their carve sources are in the cut's `carve/`. Against -56: the k
 relocations, in qdetach, strclose and stropen, retargeted to freeq_guarded) and keeps kabi k30.1.3.  With
 `--no-freeq-guard`, -56's build id and KIT_REV, the recipe on the guard's sources reproduced all six -56 kernel sums.
 
-The recipe takes `build-cross-kernel.sh` and `tools/kabi-sidecar030.py` from `a1b9b6c` instead of `c1b7842`, so
+The recipe takes `build-cross-kernel.sh` and `tools/kabi-sidecar030.py` from `04c0b65` instead of `c1b7842`, so
 the cut builds in make dist's container as on the host. The old script counted bytes with `cmp -l | wc -l` under
 `pipefail`: on larger inputs diffutils 3.12 exits 0 into a pipe, and 3.10 (the container's) exits 1, which ended the
 build. The old sidecar tool also read the compiler pin only from a gcc-cross-amix git checkout (both fixed in
-`2192470`). The old script's carve check, `strings | grep -q` under `pipefail`, also failed now and then on a SIGPIPE
+`2192470`; the pin is the amix pin since `04c0b65`). The old script's carve check, `strings | grep -q` under `pipefail`, also failed now and then on a SIGPIPE
 (fixed in `89ebcf7` and `a1b9b6c`). No byte of the cut changes: the same seven sums on the host and in the container.

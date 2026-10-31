@@ -11,15 +11,18 @@
 #   PAULA        amix-paula at ./paula.pin (1b2736d: --audio-paula)
 # OUT gets tree/ (the archive, dlm tools + kit built in it), cut-68030-261031-64/ (WORK: usr/sys, carve/, dlm-core/)
 # and SHA256SUMS-68030-261031-64; the sums must equal ./SHA256SUMS-68030-261031-64.
-# build-cross-kernel.sh comes from TOOLS (no byte of the cut changes): its carve build-id check, `strings | grep -q`
-# under pipefail, failed now and then on a SIGPIPE (89ebcf7, a1b9b6c).
+# Two files come from TOOLS (no byte of the cut changes): build-cross-kernel.sh, whose carve build-id check,
+# `strings | grep -q` under pipefail, failed now and then on a SIGPIPE (89ebcf7, a1b9b6c), and tools/kabi-sidecar030.py,
+# which labels pin= from AMIX_GCA_PIN, the amix pin, not a local checkout's HEAD (04c0b65).
 set -eu
-REV=b391504 KB=68030-261031-64 TOOLS=a1b9b6c
+REV=b391504 KB=68030-261031-64 TOOLS=04c0b65
 OUT=${1:?usage: cut.sh OUT}; : "${AMIX:?}" "${AMIX_SYSTEM:?}" "${GCA:?}" "${G14:?}" "${PORT:?}" "${PAULA:?}"
 OUT=$(mkdir -p "$OUT" && cd "$OUT" && pwd); T=$OUT/tree
 rm -rf "$T" "$OUT/cut-$KB"; mkdir -p "$T"
 git -C "$AMIX" archive "$REV" kernel | tar -x -C "$T"
-git -C "$AMIX" show "$TOOLS:kernel/k30/build-cross-kernel.sh" > "$T/kernel/k30/build-cross-kernel.sh"
+for f in build-cross-kernel.sh tools/kabi-sidecar030.py; do
+	git -C "$AMIX" show "$TOOLS:kernel/k30/$f" > "$T/kernel/k30/$f"
+done
 . "$GCA/env.sh"; export PATH=$G14/prefix/bin:$PATH GCA G14 PORT AMIX_SYSTEM KIT_REV=$REV; unset AMIX_DRIVERS
 make -C "$T/kernel/dlm" tools kit > "$OUT/dlm.log" 2>&1
 cd "$T/kernel/k30"
