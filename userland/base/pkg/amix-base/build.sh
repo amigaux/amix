@@ -37,6 +37,9 @@ stage() {
 	mkdir -p "$DEST/etc"
 	sh etc/mkprofile.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/profile"
 	chmod 0644 "$DEST/etc/profile"
+	# the stock /etc/inittab with the dlm line first among sysinit (C3-5 5)
+	sh etc/mkinittab.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/inittab"
+	chmod 0664 "$DEST/etc/inittab"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac

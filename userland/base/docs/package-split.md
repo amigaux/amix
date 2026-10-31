@@ -176,9 +176,11 @@ order, on the target root:
    A static choice is `* static <addr>/<bits> gw <router>` plus a
    `dns <addr> ...` line. `/usr/sbin/ifup -n` reports every mistake in the
    file.
-5. **Edit `/etc/inittab` (the `dlm` line) after step 3**, not before: an
-   edit made first makes the file differ from its record, so step 2 leaves
-   it, and the class keeps it with a `.new`.
+5. **Leave `/etc/inittab` alone.** amix-base ships it with the `dlm` line
+   (C3-5 §5), so the installer no longer adds it; `l11_inittab` compares the
+   file with amix-base's default instead. A box whose `modtools` already
+   added the line holds exactly that default, and the class takes it
+   silently.
 6. **`removef core`** the paths amix-base took over (the engine's: stock 2.1
    has no `removef`). Until then the conffiles are listed by both packages,
    and a `pkgrm` of amxbase can delete an unedited one that `core` still

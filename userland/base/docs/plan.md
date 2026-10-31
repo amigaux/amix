@@ -66,7 +66,7 @@ then `removef -f core`), as it does for the network chain. The list (owner,
 
 | File | Why it moves |
 |---|---|
-| `/etc/inittab` | with the `dlm` line our installer adds today |
+| `/etc/inittab` | carries the `dlm` line, `modadmin -B` as the first `sysinit` entry (C3-5 §5). Ours, built at package time: amix-system's stock bytes (sha256-checked) with that one line after the `initdefault` entry (`etc/mkinittab.sh`, test `etc/test-inittab.sh`); `modtools` no longer edits the file |
 | `/etc/TIMEZONE` | the colon form is mandatory; validated wherever it is written |
 | `/etc/nodename` | written by `ifup` when an `interfaces` line says `name`, or by the install dialog |
 | `/etc/inet/hosts` | `ifup` rewrites this host's own line |
