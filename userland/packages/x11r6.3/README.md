@@ -78,9 +78,13 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   `/usr/public/lib/gcc-cpp`); `xrdb -cpp <path>` picks another, `-nocpp` none.
 - **Installs** go through the tree's BSD-style `config/util/install.sh`, because `bsdinst.sh` calls
   an SVR4 `install`.
-- **Fonts** misc, 75dpi and 100dpi are compiled and indexed by the build host's `bdftopcf` and
-  `mkfontdir`. PCF records its own byte order, and `fonts.dir` is text. The XKB data's `.dir`
-  listings come from the build host's `xkbcomp -lfhlpR`.
+- **Fonts** misc, 75dpi and 100dpi are compiled and indexed by this tree's own `bdftopcf` and
+  `mkfontdir`, and the XKB data's `.dir` listings come from its own `xkbcomp -lfhlpR`, all three
+  built for the build host (`build.sh`'s `hostx`), never the host's X install. They are built
+  from a copy of the configured tree with the host cc and `-DLONG64` (R6.3's font code otherwise
+  assumes 32-bit longs). The font side keeps `-DAMIX -Dm68k`, so `servermd.h` gives the PCF
+  files Amix's MSB-first layout, the server's own. `patches/host/` applies to that copy only:
+  glibc's `stdin`/`stderr` cannot initialise xkbcomp's statics.
 - **xdm** links its greeter in (`SharedLibXdmGreet NO`): there are no shared libraries to
   `dlopen`.
 - **X** is a hard link to `Xzz9000`. `/usr/X11R6` is an absolute symlink to `/opt/amix/X11R6`.

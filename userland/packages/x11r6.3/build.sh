@@ -76,6 +76,7 @@ XCC
 	echo "  X: host imake, makestrs, makekeys (ks_tables.h)"
 	make -f xmakefile includes > "$BUILD/x-includes.log" 2>&1 || {
 		echo "[FAIL] make includes; see $BUILD/x-includes.log" >&2; exit 1; }
+	hostx
 	xmake x-lib.log -C lib
 	xmake x-server.log -C programs/Xserver
 	for c in $XCLIENTS; do
@@ -91,6 +92,38 @@ XCC
 	echo "  X: strict counts: $(grep -c 'implicit declaration' "$BUILD/make.log") implicit," \
 		"$(grep -c 'pointer from integer\|integer from pointer' "$BUILD/make.log") pointer/integer," \
 		"$(grep -c ' error: ' "$BUILD/make.log") errors"
+}
+
+# hostx: this tree's xkbcomp, bdftopcf and mkfontdir for the build host, the install
+# steps' own tools (the xkb .dir listings, the fonts), never the host's X install.
+# A copy of the configured tree before the cross compile, built with the host cc
+# (patches/host/: glibc's stdio is not constant); LONG64, since R6.3's font code
+# assumes 32-bit longs otherwise; the font side keeps -DAMIX -Dm68k (servermd.h:
+# the target's MSB-first glyphs) and drops the host's own `linux' (its LSB block).
+hostx() {
+	HX="$BUILD/hostxc"
+	rm -rf "$HX"; mkdir -p "$HX/programs/Xserver"
+	tar cf - --exclude=./fonts --exclude=./doc --exclude=./programs/Xserver . | (cd "$HX" && tar xf -)
+	cp -R programs/Xserver/include "$HX/programs/Xserver/"
+	for _hp in "$HERE"/patches/host/*.patch; do
+		( cd "$HX" && patch -p1 --batch --fuzz=0 < "$_hp" ) > /dev/null || {
+			echo "[FAIL] host patch $(basename "$_hp")" >&2; exit 1; }
+	done
+	_hxcc="gcc -std=gnu89 -fcommon -fpermissive -w -D_GNU_SOURCE -DLONG64"
+	( set -e
+		for _d in lib/xkbfile lib/Xext lib/X11; do
+			make -C "$HX/$_d" "CC=$_hxcc" 'AR=ar cq' RANLIB=ranlib STD_DEFINES= EXTRA_LIBRARIES=
+		done
+		make -C "$HX/lib/font" "CC=$_hxcc -Ulinux" 'AR=ar cq' RANLIB=ranlib \
+			'STD_DEFINES=-DAMIX -Dm68k' EXTRA_LIBRARIES=
+		make -C "$HX/programs/xkbcomp" "CC=$_hxcc" STD_DEFINES= EXTRA_LIBRARIES= LDPOSTLIB= xkbcomp
+		for _p in bdftopcf mkfontdir; do
+			make -C "$HX/programs/$_p" "CC=$_hxcc -Ulinux" 'STD_DEFINES=-DAMIX -Dm68k' \
+				EXTRA_LIBRARIES= LDPOSTLIB= $_p
+		done
+	) > "$BUILD/x-hostx.log" 2>&1 < /dev/null || {
+		echo "[FAIL] the build-host xkbcomp/bdftopcf/mkfontdir; see $BUILD/x-hostx.log" >&2; exit 1; }
+	echo "  X: build-host xkbcomp, bdftopcf, mkfontdir from this tree"
 }
 
 xinst() {	# xinst <log> <dir> <targets...>: an imake install into the payload
@@ -110,9 +143,9 @@ stage() {
 	# the XIE and PEX client libraries: their extensions are not built
 	rm -f "$DEST$PREFIX/lib/libXIE.a" "$DEST$PREFIX/lib/libPEX5.a"
 	for c in $XCLIENTS; do
-		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR: the build host's
-		# and rstart's contexts give remote commands the man pages' home after the relayout
-		xinst i-$c.log programs/$c install install.man XKBCOMPCMD=xkbcomp \
+		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR (hostx's), and
+		# rstart's contexts give remote commands the man pages' home after the relayout
+		xinst i-$c.log programs/$c install install.man XKBCOMPCMD="$BUILD/hostxc/programs/xkbcomp/xkbcomp" \
 			DEFAULT_X_MANPATH=/opt/amix/man:/usr/share/man
 	done
 	# rstart's aliases (x, x11 for x11r6) are relative symlinks: the stock pkgadd
@@ -121,9 +154,10 @@ stage() {
 		_t=$(readlink "$DEST/$l"); case $_t in /*) continue;; esac
 		rm "$DEST/$l" && ln -s "$(dirname "${l#.}")/$_t" "$DEST/$l"
 	done
-	# fonts: compiled and indexed by the build host's bdftopcf and mkfontdir
+	# fonts: compiled and indexed by hostx's bdftopcf and mkfontdir
 	for f in misc 75dpi 100dpi; do
-		xinst i-font-$f.log fonts/bdf/$f install FONTC=bdftopcf MKFONTDIR=mkfontdir
+		xinst i-font-$f.log fonts/bdf/$f install FONTC="$BUILD/hostxc/programs/bdftopcf/bdftopcf" \
+			MKFONTDIR="$BUILD/hostxc/programs/mkfontdir/mkfontdir"
 	done
 	mkdir -p "$DEST$PREFIX/lib/X11"
 	cp programs/rgb/rgb.txt "$DEST$PREFIX/lib/X11/rgb.txt"

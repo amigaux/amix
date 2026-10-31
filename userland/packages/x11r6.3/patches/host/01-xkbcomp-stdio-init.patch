@@ -1,0 +1,47 @@
+HOST ONLY: applied to the build-host copy of the tree that builds xkbcomp for
+the .dir listings, never to the payload.  glibc's stdin/stderr are not constants,
+so the four FILE * initialised to them start NULL and a constructor sets them.
+
+--- a/programs/xkbcomp/utils.c
++++ b/programs/xkbcomp/utils.c
+@@ -122,7 +122,7 @@
+ /***                  FUNCTION ENTRY TRACKING                           ***/
+ /***====================================================================***/
+ 
+-static	FILE	*entryFile=	stderr;
++static	FILE	*entryFile;	/* HOST: stderr, set at startup */
+ 	int	 uEntryLevel;
+ 
+ Boolean
+@@ -191,7 +191,7 @@
+ /***			PRINT FUNCTIONS					***/
+ /***====================================================================***/
+ 
+-	FILE	*uDebugFile=		stderr;
++	FILE	*uDebugFile;		/* HOST: stderr, set at startup */
+ 	int	 uDebugIndentLevel=	0;
+ 	int	 uDebugIndentSize=	4;
+ 
+@@ -251,7 +251,9 @@
+ 
+ /***====================================================================***/
+ 
+-static	FILE	*errorFile=	stderr;
++static	FILE	*errorFile;	/* HOST: stderr, set at startup (glibc's stderr is not a constant) */
++static void __attribute__((constructor)) host_stdio(void)
++{ if (!entryFile) entryFile = stderr; if (!uDebugFile) uDebugFile = stderr; if (!errorFile) errorFile = stderr; }
+ static	int	 outCount=	0;
+ static	char	*preMsg=	NULL;
+ static	char	*postMsg=	NULL;
+--- a/programs/xkbcomp/xkbscan.c
++++ b/programs/xkbcomp/xkbscan.c
+@@ -35,7 +35,8 @@
+ #define	DEBUG_VAR	scanDebug
+ #include "utils.h"
+ 
+-FILE	*yyin = stdin;
++FILE	*yyin;	/* HOST: stdin, set at startup (glibc's stdin is not a constant) */
++static void __attribute__((constructor)) host_yyin(void) { if (!yyin) yyin = stdin; }
+ 
+ static char scanFileBuf[1024];
+ char *	 scanFile= scanFileBuf;
