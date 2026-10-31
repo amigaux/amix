@@ -1,0 +1,10 @@
+dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
+ifdown(1m)       ifup, ifdown - bring network interfaces up or down
+ifup(1m)         ifup, ifdown - bring network interfaces up or down
+interfaces(4)    interfaces - how each network interface is set up at boot
+link.d(4)        link.d - the network drivers present, one file each
+man(1)           man - display a manual page, from the add-on packages or from the stock system
+network-config(4) network-config, rc.inet - network commands run at every boot
+rc.conf(4)       rc.conf - which boot services run, and their settings
+rc.inet(4)       network-config, rc.inet - network commands run at every boot
+rc.subr(1m)      rc.subr - shell functions for the boot scripts of the add-on packages

@@ -1,0 +1,33 @@
+.TH NETWORK-CONFIG 4 "31 October 2026" "amix-base"
+.SH NAME
+network-config, rc.inet \- network commands run at every boot
+.SH SYNOPSIS
+.B /etc/inet/network-config
+.br
+.B /etc/inet/rc.inet
+.SH DESCRIPTION
+Both files are run by
+.B /etc/init.d/inetinit
+at every boot, as root:
+.B network-config
+is read by the shell after
+.B "ifup \-a"
+has been started in the background, and
+.B rc.inet
+is run last.
+.PP
+They are kept, empty, for instructions written for the stock system, such
+as \(lqadd this line to network-config\(rq.
+The interfaces themselves, their addresses, the default route and DNS come
+from
+.BR /etc/inet/interfaces ;
+nothing needs to be written here for them.
+Because the interfaces come up in the background, a line here may run
+before an interface is up.
+.PP
+An update of the base package keeps either file when it has been edited,
+and puts the new default beside it as
+.IB file .new\fR.
+.SH SEE ALSO
+.BR ifup (1M),
+.BR interfaces (4)

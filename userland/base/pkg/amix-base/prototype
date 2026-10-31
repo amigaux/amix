@@ -1,0 +1,57 @@
+i pkginfo
+d none /usr/amix 0755 root sys
+d none /usr/amix/bin 0755 root sys
+f none /usr/amix/bin/man 0555 bin bin
+d none /usr/lib/amix 0755 root sys
+f none /usr/lib/amix/rc.subr 0444 root sys
+d none /usr/lib/inet 0755 root sys
+f none /usr/lib/inet/ifup.subr 0444 root sys
+f none /usr/lib/inet/dhcpc-hook 0555 root sys
+f none /usr/sbin/ifup 0755 root sys
+f none /usr/sbin/ifdown 0755 root sys
+f none /usr/sbin/dlpi-mac 0755 root sys
+f none /etc/init.d/inetinit 0444 root sys
+l none /etc/rc2.d/S69inet=/etc/init.d/inetinit
+l none /etc/rc0.d/K69inet=/etc/init.d/inetinit
+l none /etc/rc1.d/K69inet=/etc/init.d/inetinit
+f none /etc/inet/network-config 0444 root sys
+f none /etc/inet/rc.inet 0444 root sys
+d none /etc/inet/link.d 0755 root sys
+f none /etc/inet/link.d/aen 0444 root sys
+d none /etc/profile.d 0755 root sys
+f none /etc/profile.d/amix-base.sh 0444 root sys
+f none /etc/inittab 0664 root sys
+f none /etc/TIMEZONE 0444 root sys
+f none /etc/nodename 0644 bin bin
+f none /etc/inet/hosts 0444 root sys
+f none /etc/default/login 0444 root sys
+f none /etc/profile 0644 root sys
+f none /etc/inet/strcf 0444 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root bin
+d none /opt/amix/man/1 0755 root bin
+d none /opt/amix/man/1m 0755 root bin
+d none /opt/amix/man/4 0755 root bin
+d none /opt/amix/man/whatis.d 0755 root bin
+f none /opt/amix/man/1/man 0644 root bin
+f none /opt/amix/man/1m/rc.subr 0644 root bin
+f none /opt/amix/man/1m/dlpi-mac 0644 root bin
+f none /opt/amix/man/1m/ifup 0644 root bin
+f none /opt/amix/man/1m/ifdown 0644 root bin
+f none /opt/amix/man/4/rc.conf 0644 root bin
+f none /opt/amix/man/4/interfaces 0644 root bin
+f none /opt/amix/man/4/link.d 0644 root bin
+f none /opt/amix/man/4/network-config 0644 root bin
+f none /opt/amix/man/4/rc.inet 0644 root bin
+f none /opt/amix/man/whatis.d/amxbase 0644 root bin
+d none /var/opt 0755 root sys
+d none /var/opt/amix 0755 root sys
+d none /var/opt/amix/catman 0755 root sys
+d none /var/opt/amix/catman/1 0755 root sys
+d none /var/opt/amix/catman/1m 0755 root sys
+d none /var/opt/amix/catman/3 0755 root sys
+d none /var/opt/amix/catman/4 0755 root sys
+d none /var/opt/amix/catman/5 0755 root sys
+d none /var/opt/amix/catman/8 0755 root sys
+d none /var/adm/rclog 0755 root sys
+d none /var/inet 0755 root sys

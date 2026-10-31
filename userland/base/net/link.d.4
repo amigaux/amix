@@ -1,0 +1,61 @@
+.TH LINK.D 4 "31 October 2026" "amix-base"
+.SH NAME
+link.d \- the network drivers present, one file each
+.SH SYNOPSIS
+.BI /etc/inet/link.d/ driver
+.SH DESCRIPTION
+Each network driver package puts one file in
+.BR /etc/inet/link.d ,
+named for the driver's kernel module, that tells
+.BR ifup (1M)
+how to find the driver's interfaces.
+The file is the driver's own data, replaced with the package; it is not
+edited.
+How each interface is set up is in
+.BR /etc/inet/interfaces ,
+not here.
+.PP
+The file holds one line (a
+.B #
+starts a comment):
+.PP
+.nf
+.IB "prefix  node  first  major" " [" "presence command ..." ]
+.fi
+.TP
+.I prefix
+the interface name before the unit number, as IP knows it
+.RB ( aen
+for
+.BR aen0 ).
+.TP
+.I node
+the device node before the unit number
+.RB ( /dev/aen
+for
+.BR /dev/aen0 ).
+.TP
+.I first
+the first unit number, usually 0.
+.TP
+.I major
+the node's major number, used to make a missing node when the running
+kernel's registry does not name the module.
+.TP
+.I presence command
+optional: a command that fails when no such card is fitted; the driver's
+units are not probed then.
+.PP
+.B ifup
+opens the units one after another, from
+.IR first ,
+and stops at the first that does not open.
+.SH EXAMPLE
+.nf
+.ft CW
+aen     /dev/aen    0   18   /usr/amiga/bin/aen -S
+.ft R
+.fi
+.SH SEE ALSO
+.BR ifup (1M),
+.BR interfaces (4)
