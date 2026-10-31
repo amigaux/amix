@@ -21,7 +21,7 @@ rd_init() {
 	         "$APKG" "$L11/kpkg/catalog"; do
 		[ -e "$f" ] || die "$f missing (tools/build-l11-inputs.sh --set tools/l11-set.conf)"
 	done
-	PKGTRANS="$ws/amix-packagemanager/heirloom/build-host/bin/pkgtrans"
+	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46}"
 	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30}"

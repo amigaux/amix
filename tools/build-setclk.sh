@@ -12,7 +12,7 @@
 # Usage: tools/build-setclk.sh [--pkg amigasrc-2.1.pkg] [--out FILE] [--keep-src DIR]
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
-PKG="$repo/../amix-packagemanager/build/repo-staging/stock/amigasrc-2.1.pkg"
+PKG="$repo/build/pins/staging/stock/amigasrc-2.1.pkg"
 PKG_SHA=01de21f232828acb8e4bf4e266e6c069ab3db81ac3240fb03868c1b132626ed0
 SRC_SHA=03a00a434cff9137eaca276dab073cacd1003c0a0e2eff9493c058086b104901
 PATCH="$repo/src/setclk/setclk-y2k.patch"

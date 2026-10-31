@@ -10,7 +10,7 @@
 #   --out   default build/core (gitignored): DIR/root is the tree, DIR/pkgmap and
 #           DIR/pkginfo the package's own
 #
-# The host heirloom pkgtrans (../amix-packagemanager/heirloom/build-host, read-only) writes
+# The host heirloom pkgtrans (amix userland/pkgtools, built into work/l11 by build-l11-inputs.sh) writes
 # the package's files and directories; its l (hard link) and s (symlink) entries are made
 # here from the pkgmap, as an installed core has them. Until 2026-10-30 this tree was the
 # sibling's build/repo-staging/stock/.t/core, which stayed in the frozen workspace.
@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
 done
 die() { echo "build-core-tree: $*" >&2; exit 1; }
 
-PKGTRANS="$ws/amix-packagemanager/heirloom/build-host/bin/pkgtrans"
+PKGTRANS="$repo/work/l11/pkgtools/heirloom/build-host/bin/pkgtrans"
 [ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 [ -f "$PKG" ] || die "no $PKG"
 got="$(sha256sum < "$PKG" | cut -d' ' -f1)"

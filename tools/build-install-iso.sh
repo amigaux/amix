@@ -52,10 +52,12 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench's real addresses
 
-PKGMGR="${PKGMGR:-$repo/../amix-packagemanager}"
+# amix userland/pkgtools at the set's revision, built by tools/build-l11-inputs.sh
+# (nothing in 1.1 reads the frozen amix-packagemanager)
+PKGMGR="${PKGMGR:-$repo/work/l11/pkgtools}"
 STATIC="${STATIC:-$PKGMGR/heirloom/build-amix-static}"
 CORE_T="${CORE_T:-$repo/build/core/root}"   # tools/build-core-tree.sh
-STAGING="${STAGING:-$PKGMGR/build/repo-staging}"
+STAGING="${STAGING:-$repo/work/l11/staging}"
 # Authored metadata comes from the sibling's REPO TREE, never its build staging:
 # the staging copy of deps.conf has been observed lagging (it predates the kernel-
 # package edges), and sets.conf/cats.conf are not staged there at all. Same rule as
@@ -827,16 +829,41 @@ if [ -n "$_want_l11" ]; then
     && [ "$(wc -l < "$STAGE/l11/bcheckrc")" = "$(( $(wc -l < "$_bc") + 3 ))" ] \
     || { echo "STOP: the bcheckrc retry patch did not insert exactly three lines" >&2; exit 1; }
   sum -r "$_bc" | awk '{print $1}' > "$STAGE/l11/bcheckrc.stock"
-  # /etc/inittab as modtools' postinstall must leave it (amix-dlm C3-5 v4 §5): core's,
-  # with the dlm line before its first sysinit entry; install.sh compares the target's
-  _it="$CORE_T/etc/inittab"
-  [ "$(md5sum < "$_it" | cut -c1-32)" = 06b13538fb68ef8ba305ba04f844c3b8 ] \
-    || { echo "STOP: $_it is not the 2.1 inittab (md5 06b13538...)" >&2; exit 1; }
-  awk -F: 'BEGIN { L = "dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1"; d = 0 }
-    d == 0 && $3 == "sysinit" { print L; d = 1 } { print } END { if (d == 0) exit 1 }' "$_it" > "$STAGE/l11/inittab" \
-    && [ "$(grep -c '^dlm:' "$STAGE/l11/inittab")" = 1 ] \
-    && [ "$(grep -v '^dlm:' "$STAGE/l11/inittab" | md5sum | cut -c1-32)" = 06b13538fb68ef8ba305ba04f844c3b8 ] \
-    || { echo "STOP: the expected inittab is not core's plus the one dlm line" >&2; exit 1; }
+  # the base packages: l11_base adds them under the target's chroot after
+  # core and the base set. base/order is their pkginsts in the set's order; <pkginst>.pkg the
+  # datastream, <pkginst>.cf the paths of its pkgmap's `e conffile` lines (what the class acts
+  # on, so the seed reads what the bytes install); seed.sh the baseline rule. The names fit
+  # s5's 14 characters: the netinstall miniroot is s5 (amxbase-1.0-10.pkg was
+  # cut short there).
+  [ -f "$L11_IN/base/catalog.lines" ] \
+    || { echo "STOP: no $L11_IN/base/catalog.lines -- the set's base-pkg lines (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
+  [ -x "$_pt" ] || { echo "STOP: no host pkgtrans at $_pt (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-base.XXXXXX")"
+  rm -rf "$STAGE/l11/base"; mkdir -p "$STAGE/l11/base"
+  cut -d'|' -f3 "$L11_IN/base/catalog.lines" > "$STAGE/l11/base/order"
+  while IFS='|' read -r _bn _bv _bi _bf _bm _bz _; do
+    [ "$(md5sum < "$L11_IN/base/$_bf" | cut -c1-32)" = "$_bm" ] \
+      || { echo "STOP: $L11_IN/base/$_bf is not its catalog line's md5 $_bm" >&2; exit 1; }
+    [ "${#_bi}" -le 9 ] || { echo "STOP: base package $_bi: a pkginst over 9 characters" >&2; exit 1; }
+    cp "$L11_IN/base/$_bf" "$STAGE/l11/base/$_bi.pkg"
+    "$_pt" "$L11_IN/base/$_bf" "$_bw" "$_bi" >/dev/null 2>&1 \
+      || { echo "STOP: pkgtrans could not unpack $_bf" >&2; exit 1; }
+    awk '$2 == "e" && $3 == "conffile" { print $4 }' "$_bw/$_bi/pkgmap" > "$STAGE/l11/base/$_bi.cf"
+  done < "$L11_IN/base/catalog.lines"
+  grep -qx amxbase "$STAGE/l11/base/order" && [ -s "$STAGE/l11/base/amxbase.cf" ] \
+    || { echo "STOP: the set's base packages lack amix-base (amxbase) or its conffiles" >&2; exit 1; }
+  cp "$repo/payload/l11-seed.sh" "$STAGE/l11/base/seed.sh"
+  # /etc/inittab as the target holds it once amix-base is in: amix-base's default, with
+  # C3-5 §5's dlm line once, as the first sysinit entry (l11_inittab compares the target's)
+  _it="$_bw/amxbase/root/etc/inittab"
+  [ -f "$_it" ] || { echo "STOP: amix-base's datastream has no /etc/inittab" >&2; exit 1; }
+  [ "$(grep -c '^dlm:' "$_it")" = 1 ] \
+    && [ "$(awk -F: '$3 == "sysinit" { print $1; exit }' "$_it")" = dlm ] \
+    && grep -qx 'dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1' "$_it" \
+    || { echo "STOP: amix-base's inittab does not carry the one dlm line as its first sysinit entry" >&2; exit 1; }
+  cp "$_it" "$STAGE/l11/inittab"
+  rm -rf "$_bw"
   # core's 1992 kernel, which stays when install.sh removes the name /stand/unix
   sum -r "$CORE_T/stand/2.1_unix" | awk '{print $1}' > "$STAGE/l11/2.1_unix.sum"
   # apkg's conf for finishing a target's pending transaction from the repair path
@@ -848,7 +875,8 @@ if [ -n "$_want_l11" ]; then
   chmod 0755 "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
   chmod 0744 "$STAGE/l11/bcheckrc"
   chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock" \
-    "$STAGE/l11/inittab" "$STAGE/l11/2.1_unix.sum"
+    "$STAGE/l11/inittab" "$STAGE/l11/2.1_unix.sum" "$STAGE/l11"/base/*
+  chmod 0755 "$STAGE/l11/base/seed.sh"
   { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
     && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \

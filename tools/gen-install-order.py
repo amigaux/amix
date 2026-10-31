@@ -8,7 +8,7 @@
 # line, and runs `pkgadd -R` down the list. All the ordering intelligence lives
 # HERE, host-side, at ISO-assembly time -- exactly like the catalog. This keeps
 # the on-box driver tiny and keeps a single authored dependency graph
-# (../amix-packagemanager/build/repo-staging/deps.conf) as the one source of
+# (amix userland/pkgtools tools/repo/deps.conf, built into work/l11) as the one source of
 # truth for install order.
 #
 # RULES (fail-closed):
