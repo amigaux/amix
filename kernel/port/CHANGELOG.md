@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — pkg/build.sh passes a recipe's exit 3 through (f9f59db)
+
+kern46m exits 3 with a [MISSING] line naming P-38 S2.3 (the port station) when K46M_SRC is unset or holds no cut; with
+the cut, the bytes are unchanged.
+
 ## 2026-10-31 — pkg/: the kern46m recipe moves in (b7f0715)
 
 The kern46m recipe (kernel-k46-m) moves in from amix-packages 450ba6a (P-38 S3.3), the twin of kernel/k30/pkg.

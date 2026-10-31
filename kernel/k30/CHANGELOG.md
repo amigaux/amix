@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — pkg/build.sh passes a recipe's exit 3 through (e777fdc)
+
+kern30m exits 3 with a [MISSING] line naming P-38 S2.2 (make kernel-k30) when no cut output is present; with the cut,
+the bytes are unchanged.
+
 ## 2026-10-31 — pkg/: the kern30m recipe moves in (82f8350)
 
 The kern30m recipe (kernel-k30-m) moves in from amix-packages 450ba6a (P-38 S3.3) as make dist's kspace hook
