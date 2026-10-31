@@ -278,15 +278,21 @@ but not one that can root on a loaded image.
   context after multi-user a module gets about 320 KiB in total on k46
   at 128 MB and 640 KiB on k30 at 64 MB (64 KiB `KM_NOSLEEP` pieces;
   `docs/measurements/2026-10-26-u2.md`).
-  - A load from a file (`modload`, a demand-class first open) holds the
-    core's working set at once, all `KM_SLEEP`: the file rounded up to a
-    power of two, the symbol tables, the image and the module's table.
-    That is about 57 KB for z3660eth, 67 KB for z3660rtg and 232 KB for
-    a cdfs-sized module.
-  - A module loaded in process context keeps that working set well
-    under k46's total. A load past the total waits instead of failing,
-    as U4's `KM_SLEEP` request did. C3-1 §6's 256 KiB is a ceiling, not
-    a budget: a module at it cannot load this way on k46.
+  - A load from a file holds, at its peak, the file's copy (its size
+    plus one byte, so the SHA-256 is checked over the bytes that load),
+    the symbol tables, the image and the module's table. The copy and
+    the tables are freed before the module's `_load` (core patch 0049);
+    the image and the module's table stay. For cdfs that is a peak of
+    about 201 KB and about 84 KB resident (the kit's checker computes
+    both).
+  - **A first-use load never waits for memory** (core patch 0049): the
+    first mount of a demand filesystem type, a demand major's first
+    open, a first exec and `modload` (`modadmin -l`) make every core
+    allocation `KM_NOSLEEP`, so short memory fails the load with
+    `ENOMEM`, the kernel as it was, and a later use tries again. A
+    boot-class load at the first `sysinit` entry keeps `KM_SLEEP`.
+    C3-1 §6's 256 KiB is a ceiling, not a budget: a module at it cannot
+    load this way on k46.
   - A larger module is boot class (the first `sysinit` entry, before
     multi-user) or root class (stage 4, from the arena: no kmem for its
     file or image). The totals there are not measured; U1's single
@@ -302,7 +308,8 @@ but not one that can root on a loaded image.
   - Root-class `_load` at boot keeps its own rule (§3, U1: `KM_NOSLEEP`,
     at most 1 MiB).
   - The core's own allocations for a module grow with its size and are
-    `KM_SLEEP`. So the module's image is at most 256 KiB and its file is
+    `KM_SLEEP` for a boot-class load (`KM_NOSLEEP` at first use, above).
+    So the module's image is at most 256 KiB and its file is
     under 256 KiB (C3-1 §6, version 4; it was 2 MiB). The kit's checker
     refuses a larger module at build time. Core patch 0027 sets
     `dlm_maximage` to 256 KiB from the next kernel cut. C3-1 §6 records

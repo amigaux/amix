@@ -1,4 +1,4 @@
-# C4-6 — the filesystem module form, version 5
+# C4-6 — the filesystem module form, version 6
 
 - **Status:** agreed 2026-10-26, with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
@@ -10,7 +10,9 @@
   from an amix-installng RAM-disk image): the miniroot is s5 on k30 and ufs on k46 (§1).
   Version 5 (2026-10-31): a filesystem module may be demand class, loaded
   at the first mount of its type (§1, §5); cdfs is (core patch 0048,
-  kabi minor 4).
+  kabi minor 4). Version 6 (2026-10-31): that load never waits for
+  memory; short memory fails the mount with `ENOMEM` (§5, core patch
+  0049).
   Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
@@ -160,7 +162,10 @@ only the row's name and index.
   A mount that took the stub while another loaded the module finds the
   row filled and goes on. A load that fails, or a module that registers
   no row, fails the mount with that error (`ENXIO` for the latter) and
-  leaves the stub, so a later mount tries again.
+  leaves the stub, so a later mount tries again. The load never waits
+  for memory (core patch 0049): when kernel memory is short the mount
+  fails with `ENOMEM` and the console says
+  `dlm: <module>: not loaded: kernel memory short (error 12)`.
 - **The other stub entries** answer without loading: `vfs_sync` 0, since
   the stock `sync()` calls every row's; `vfs_mountroot` and the rest
   `EINVAL`, since `vfs_mountroot` tries only `rootfstype` (§6) and no vfs
