@@ -46,7 +46,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | the hook builds; no directory has recipes yet |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
-| `catalogs` | the kernel-space and userland catalogs | `out/{kspace,userland}/catalog` | S5.1, pkgtools | not yet |
+| `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and `userland/packages/conf` (the kernel-space confs with S3.3) as the space's own; no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
 | `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
 

@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+# test-kmroot: host test of kmodpkg.sh's KM_ROOT, the base of a module
+# recipe's input paths.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# amix_kmodpkg reads the object, its VERSION, the licences and the depend=
+# modules at paths the recipe gives relative to KM_ROOT: an in-amix recipe
+# sets KM_ROOT=$AMIX_REPO_ROOT (kernel/drivers/...), and without it they
+# are the siblings (amix-packages' amix/kernel/...). A stand-in checkout and
+# kit are made here, and the roll is followed through the input checks to
+# the kit's modcheck, which must be handed the depend= module under KM_ROOT;
+# a refused licence or depend= input must stop it before modcheck. Prints
+# "N/N passed"; exits non-zero on any failure.
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+COMMON = os.path.join(os.path.dirname(HERE), "common")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def sha(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+tmp = tempfile.mkdtemp(prefix="test-kmroot.")
+try:
+    def tree(base, prefix):
+        """The driver's inputs under BASE/PREFIX; returns the recipe's paths."""
+        d = prefix + "kernel/drivers/zz"
+        write(os.path.join(base, d, "build/k30/mod.d/zz"), "the zz module, " + base)
+        write(os.path.join(base, d, "module/VERSION"), "1.0.0-1\n")
+        write(os.path.join(base, d, "LICENSE"), "MIT\n")
+        write(os.path.join(base, prefix + "kernel/modules/monsw/build/k30/mod.d/monsw"), "monsw\n")
+        return d
+
+    checkout = os.path.join(tmp, "amix")
+    sib = os.path.join(tmp, "siblings")
+    dc = tree(checkout, "")
+    ds = tree(sib, "amix/")
+    kit = os.path.join(tmp, "dlm", "build", "kit", "k30")
+    write(os.path.join(kit, "kit.conf"), "LINE=k30\nKABI=k30.1.3\nPIN=gcc-2.7.2.3-x\n")
+    log = os.path.join(tmp, "modcheck.args")
+    write(os.path.join(kit, "tools", "modcheck.py"),
+          'import sys\nopen(%r, "w").write(" ".join(sys.argv[1:]))\nprint("modcheck: zz: ok (k30.1.3, x)")\n' % log)
+    gca = os.path.join(tmp, "gca")
+    write(os.path.join(gca, "bin", "m68k-cbm-sysv4-scan060"), "#!/bin/sh\nexit 0\n", 0o755)
+    write(os.path.join(gca, "env.sh"), 'PATH="%s/bin:$PATH"; export PATH\n' % gca)
+
+    def run(base, d, root, licence_sha=None):
+        dep = d.split("kernel/")[0] + "kernel/modules/monsw/build/k30/mod.d/monsw"
+        e = {k: v for k, v in os.environ.items() if not k.startswith(("AMIX_", "KM_"))}
+        e.update(AMIX_PKG_COMMON=COMMON, AMIX_SIBLINGS=sib, AMIX_CROSS_ENV=os.path.join(gca, "env.sh"),
+                 REPO=os.path.join(tmp, "out"), KM_NAME="zz", KM_SHORT="zz", KM_REPO=d,
+                 KM_VERSION="1.0.0-1", KM_KIT_COMMIT="abc1234", KM_SOURCE_EPOCH="1793303717",
+                 KM_K30_OBJ=d + "/build/k30/mod.d/zz",
+                 KM_K30_SHA=sha(os.path.join(base, d, "build/k30/mod.d/zz")),
+                 KM_LICENCES="%s/LICENSE %s" % (d, licence_sha or sha(os.path.join(base, d, "LICENSE"))),
+                 KM_K30_DEPS="%s %s" % (dep, sha(os.path.join(base, dep))))
+        if root is not None:
+            e["KM_ROOT"] = root
+        if os.path.exists(log):
+            os.remove(log)
+        script = ('. "$AMIX_PKG_COMMON/fetch.sh"; . "$AMIX_PKG_COMMON/kmodpkg.sh"; '
+                  'amix_dlm_kit() { AMIX_DLM_TREE=%s; }; amix_kmodpkg "$1" k30'
+                  % os.path.join(tmp, "dlm"))
+        p = subprocess.run(["/bin/sh", "-c", script, "sh", os.path.join(tmp, "recipe")], env=e,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace"), (open(log).read() if os.path.exists(log) else "")
+
+    rc, out, args = run(checkout, dc, checkout)
+    check("KM_ROOT=the checkout: the object, VERSION and licence verified at checkout-relative paths",
+          "kernel/drivers/zz/module/VERSION = 1.0.0-1" in out and "--- modcheck" in out
+          and out.count("(pinned, verified)") == 3, out)
+    check("KM_ROOT=the checkout: modcheck gets the depend= module under the checkout",
+          "-d %s/kernel/modules/monsw/build/k30/mod.d/monsw" % checkout in args, args or out)
+
+    rc, out, args = run(sib, ds, None)
+    check("no KM_ROOT: the siblings, as amix-packages' recipes give them",
+          "amix/kernel/drivers/zz/module/VERSION = 1.0.0-1" in out
+          and "-d %s/amix/kernel/modules/monsw/build/k30/mod.d/monsw" % sib in args, args or out)
+    rc, out, args = run(checkout, dc, None)
+    check("an in-amix recipe without KM_ROOT does not find its inputs among the siblings",
+          rc != 0 and "not found" in out and "--- modcheck" not in out, out)
+
+    rc, out, args = run(checkout, dc, checkout, licence_sha="0" * 64)
+    check("a licence that is not the pinned bytes stops the roll before modcheck",
+          rc != 0 and "--- modcheck" not in out and not args, out)
+    rc, out, args = run(checkout, dc, os.path.join(tmp, "nowhere"))
+    check("a KM_ROOT that is not a directory is refused", rc != 0 and "is not a directory" in out, out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)
