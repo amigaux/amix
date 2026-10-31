@@ -7,13 +7,16 @@ The X Window System, release 6.3, under `/opt/amix/X11R6`:
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
-    AMIX_USR_AMIGA=<dir with amiga/ and ucblib/> sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
+**X needs an FPU**: a 68030 with a 68881/68882, or a full 68040 or 68060. LC040/LC060 cannot run it
+until FP emulation on LC parts exists.
+
+    sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
 **Status: work in progress.** The whole tree (libraries, server, clients) compiles under the gcc14
 strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on every
 compile line. It stages, and the prototype matches the payload (1107 paths). The roll stops at the
-NEEDED gate. `Xzz9000` needs `/usr/amiga/lib/libscreen.so`, the stock screen manager, which every
-Amix box has but the gcc14 sysroot does not carry yet.
+68060 gate: scan060-g14 cannot yet size seven of GCC 14's switch tables, and the NEEDED gate does not
+yet accept `/usr/amiga/lib/libscreen.so`, the library's own SONAME, which every stock user records.
 
 Package: `x11r63`, category `x11`, set `extra`. Licence: the X Consortium's (`X11`) for X11R6.3,
 MIT for isoriano's Amiga DDX (patch 00). Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
@@ -26,8 +29,8 @@ falls back to our byte-identical copies in the amigaux/amix-distfiles archive (`
 `AMIX_DISTFILES` names a local copy. `xc-3` holds only hardcopy documentation and is not used.
 
 The server needs the stock `/usr/amiga` (the screen manager: `amiga/screen.h`, `libscreen.so`) and
-`/usr/ucblib` (`libdbm.a`), which the sysroot names but does not yet carry. `AMIX_USR_AMIGA` points
-at a directory that holds both.
+`/usr/ucblib` (`libdbm.a`), from the toolchain sysroot (amix-system). `AMIX_USR_AMIGA` names another
+directory that holds both; the default is the sysroot's `usr`.
 
 ## Patches
 
