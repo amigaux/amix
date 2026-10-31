@@ -121,7 +121,10 @@
 # 0.3.2's ds_pure_files() accepts them, and a block driver's nodes
 # "b none /dev/dsk/<node> ..." alike, as apkg's next revision does; a c or
 # b entry in a kernel or loader package, a p/s/l/other entry, a c node
-# outside /dev/ or a b node outside /dev/dsk/ is still refused).
+# outside /dev/ or a b node outside /dev/dsk/ is still refused).  Since C3-5
+# v18 section 1.2 a node's class may be its module's name (the object's file
+# name in /etc/conf/mod.d/) when pkginfo's CLASSES lists it; files and
+# directories stay class none, and any other class is refused.
 # The private-kernel gate (KSUM_R/BOOT2_SHA) still runs first, unchanged.
 #
 # Datastream layout parsed here (docs/stock-pkg-system.md section 4, plus
@@ -514,15 +517,31 @@ DIGITS_RE = re.compile(r"^[0-9]+$")
 OCTAL_RE = re.compile(r"^[0-7]+$")
 
 
-def cdev_problem(parts):
+def module_name(pkgmap_text, basedir):
+    """The module's name: the file name of the package's one object
+    directly in /etc/conf/mod.d/, or None when there is not exactly one."""
+    names = [path[len(MODDIR_PREFIX):]
+             for ftype, _cls, path in pkgmap_objects(pkgmap_text, basedir)
+             if ftype == "f" and path.startswith(MODDIR_PREFIX)
+             and "/" not in path[len(MODDIR_PREFIX):]]
+    return names[0] if len(names) == 1 else None
+
+
+def cdev_problem(parts, module=None, classes=()):
     """C3-5 v8 section 1.2: None when a module's pkgmap device entry is
-    "<part> c none /dev/<node> <major> <minor> <mode> <owner> <group>" or
-    "<part> b none /dev/dsk/<node> <major> <minor> <mode> <owner> <group>"
-    (decimal major/minor, octal mode); else why not, in apkg's words."""
+    "<part> c <class> /dev/<node> <major> <minor> <mode> <owner> <group>" or
+    "<part> b <class> /dev/dsk/<node> <major> <minor> <mode> <owner> <group>"
+    (decimal major/minor, octal mode), <class> none or (C3-5 v18) the
+    module's name with pkginfo's CLASSES listing it; else why not, in
+    apkg's words."""
     if len(parts) < 4:
         return "unreadable pkgmap line %r" % " ".join(parts)
     if parts[2] != "none":
-        return "an object in class %s" % parts[2]
+        if parts[2] != module:
+            return "an object in class %s" % parts[2]
+        if parts[2] not in classes:
+            return ("an object in class %s, which pkginfo's CLASSES does "
+                    "not list" % parts[2])
     if parts[1] == "b":
         if (not parts[3].startswith("/dev/dsk/")
                 or parts[3] == "/dev/dsk/"):
@@ -536,11 +555,15 @@ def cdev_problem(parts):
     return None
 
 
-def pure_files_problem(pkgmap_text, role=None):
+def pure_files_problem(pkgmap_text, role=None, params=None):
     """40 section 6: None when the pkgmap holds only f/d objects of class
     none, i entries pkginfo/depend/copyright only, and at least one f --
     the rule apkg's ds_pure_files() applies on the box; else why not.
-    role "module" also allows its device nodes, c and b (cdev_problem())."""
+    role "module" also allows its device nodes, c and b (cdev_problem()),
+    in class none or in the module's class that pkginfo's CLASSES lists."""
+    params = params or {}
+    module = module_name(pkgmap_text, params.get("BASEDIR", "/") or "/")
+    classes = params.get("CLASSES", "").strip().strip('"').split()
     nf = 0
     for line in pkgmap_text.splitlines():
         parts = line.split()
@@ -557,7 +580,7 @@ def pure_files_problem(pkgmap_text, role=None):
                 return "an object in class %s" % parts[2]
             nf += ftype == "f"
         elif ftype in ("c", "b") and role == "module":
-            why = cdev_problem(parts)
+            why = cdev_problem(parts, module, classes)
             if why is not None:
                 return why
         else:
@@ -1099,7 +1122,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     basedir = params.get("BASEDIR", "/") or "/"
     role = kspace_role(pkgmap_text, basedir)
     if role is not None:
-        why = pure_files_problem(pkgmap_text, role)
+        why = pure_files_problem(pkgmap_text, role, params)
         if why is not None:
             raise Malformed("kernel-space package is not pure files "
                             "(40 section 6): %s" % why)

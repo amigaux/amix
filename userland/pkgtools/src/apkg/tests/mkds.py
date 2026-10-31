@@ -10,13 +10,17 @@
 #   FILE <path> <word>         pkgmap "1 f none <path> ..." (shim writes <word>)
 #   SHARED <path> <word>       as FILE; the shim also names OTHERPKG first
 #   COPY <path> <hostfile>     as FILE; the shim copies <hostfile>
-#   CDEV <path> <maj> <min>    pkgmap "1 c none <path> <maj> <min> 0644 root
-#                              root" (the shim makes the node, or a stand-in)
-#   BDEV <path> <maj> <min>    pkgmap "1 b none <path> <maj> <min> 0600 root
-#                              root" (a block node, C3-5 v8 section 1.2)
+#   CDEV <path> <maj> <min> [class]
+#                              pkgmap "1 c <class> <path> <maj> <min> 0644
+#                              root root", class none by default (the shim
+#                              makes the node, or a stand-in)
+#   BDEV <path> <maj> <min> [class]
+#                              the same as "1 b <class> ... 0600 root root"
+#                              (a block node, C3-5 v8 section 1.2)
 #   PKGMAP <pkgmap line>       an extra pkgmap line, verbatim (no directive)
 #   PKGINFO <KEY=VALUE>        an extra pkginfo line, verbatim (APKG_FSTYPE=,
-#                              BASEDIR=, ...)
+#                              BASEDIR=, ...); a CLASSES= line replaces the
+#                              default CLASSES=none
 # A second archive carries the payload as pkgtrans lays it out (pkginfo,
 # pkgmap, then root/<path> for every DIR/FILE/SHARED/COPY), so
 # gen-catalog.py can read a kernel package's sidecar out of it.  The
@@ -36,10 +40,13 @@ def newc(name, data):
 
 out, pkg, ver = sys.argv[1:4]
 directives = sys.stdin.read().splitlines()
+extra = [d.split(None, 1)[1] for d in directives
+         if d.split(None, 1)[:1] == ["PKGINFO"]]
 pkginfo = ("PKG=%s\nNAME=test %s\nVERSION=%s\nARCH=m68k\nCATEGORY=system\n"
-           "CLASSES=none\n" % (pkg, pkg, ver))
-pkginfo += "".join(d.split(None, 1)[1] + "\n" for d in directives
-                   if d.split(None, 1)[:1] == ["PKGINFO"])
+           % (pkg, pkg, ver))
+if not any(e.startswith("CLASSES=") for e in extra):
+    pkginfo += "CLASSES=none\n"
+pkginfo += "".join(e + "\n" for e in extra)
 pkginfo = pkginfo.encode()
 pm = [": 1 20"]
 for d in directives:
@@ -50,10 +57,12 @@ for d in directives:
         pm.append("1 d none %s 0755 root sys" % t[1])
     elif t[0] in ("FILE", "SHARED", "COPY"):
         pm.append("1 f none %s 0644 root sys 1 1 1" % t[1])
-    elif t[0] == "CDEV":
-        pm.append("1 c none %s %s 0644 root root" % (t[1], t[2]))
-    elif t[0] == "BDEV":
-        pm.append("1 b none %s %s 0600 root root" % (t[1], t[2]))
+    elif t[0] in ("CDEV", "BDEV"):
+        dv = d.split()
+        cls = dv[4] if len(dv) > 4 else "none"
+        pm.append("1 %s %s %s %s %s %s root root" % (
+            "c" if t[0] == "CDEV" else "b", cls, dv[1], dv[2], dv[3],
+            "0644" if t[0] == "CDEV" else "0600"))
     elif t[0] == "PKGMAP":
         pm.append(d.split(None, 1)[1])
 pm.append("1 i pkginfo %d 1 1" % len(pkginfo))

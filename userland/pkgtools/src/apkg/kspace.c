@@ -324,6 +324,9 @@ int ds_pkginst(const char *path, char *out, unsigned outlen)
  *      averify() mknod) and records it in the contents database;
  *   b  the same, a block driver's nodes (C3-5 v8 section 1.2), under
  *      /dev/dsk/ only (the ramdisk: /dev/dsk/ram0 b 20 0);
+ *      a c or b node's class may also be its module's name, the file name
+ *      of the package's one object in /etc/conf/mod.d/, when pkginfo's
+ *      CLASSES lists it (C3-5 v18 section 1.2: "c z3660eth /dev/zen0 ...");
  *   anything else (e, v, l, s, p, x; c or b in a kernel or loader
  *      package) refuses the package.
  * At least one f is required.
@@ -387,17 +390,46 @@ static int all_in(const char *s, const char *set)
     return 1;
 }
 
-/* one module's c or b entry (tok[0..nt-1]); 0 = acceptable, -1 = not
- * (why).  c: under /dev/; b: under /dev/dsk/ (C3-5 v8 section 1.2) */
-static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
+/* 1 when word is one of the blank-separated words of list */
+static int word_in(const char *list, const char *word)
 {
+    unsigned n;
+
+    n = (unsigned)strlen(word);
+    while (n > 0 && *list != '\0') {
+        while (*list == ' ' || *list == '\t')
+            list++;
+        if (strncmp(list, word, n) == 0 &&
+            (list[n] == '\0' || list[n] == ' ' || list[n] == '\t'))
+            return 1;
+        while (*list != '\0' && *list != ' ' && *list != '\t')
+            list++;
+    }
+    return 0;
+}
+
+/* one module's c or b entry (tok[0..nt-1]); 0 = acceptable, -1 = not
+ * (why).  c: under /dev/; b: under /dev/dsk/ (C3-5 v8 section 1.2); class
+ * none, or the module's (modname) when classes lists it (v18) */
+static int cdev_ok(char **tok, int nt, const char *modname,
+                   const char *classes, char *why, unsigned cap)
+{
+    unsigned n;
+
     if (nt < 4) {
         setwhy(why, cap, "unreadable pkgmap line ", tok[0]);
         return -1;
     }
     if (strcmp(tok[2], "none") != 0) {
         setwhy(why, cap, "an object in class ", tok[2]);
-        return -1;
+        if (modname[0] == '\0' || strcmp(tok[2], modname) != 0)
+            return -1;
+        if (!word_in(classes, tok[2])) {
+            n = (unsigned)strlen(why);
+            setwhy(why + n, cap - n, ", which pkginfo's CLASSES does not "
+                   "list", NULL);
+            return -1;
+        }
     }
     if (tok[1][0] == 'b') {
         if (strncmp(tok[3], "/dev/dsk/", 9) != 0 || tok[3][9] == '\0') {
@@ -418,10 +450,69 @@ static int cdev_ok(char **tok, int nt, char *why, unsigned cap)
     return 0;
 }
 
-/* the pkgmap rule above; module: c and b entries allowed.  0 = pure, -1 = not
- * (why set) */
-static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
+/* the module's name: the file name of the pkgmap's one f directly in
+ * /etc/conf/mod.d/, or "" when there is not exactly one */
+static void pkgmap_modname(const char *text, char *out, unsigned cap)
 {
+    char line[512];
+    char type[16];
+    char cls[64];
+    char path[256];
+    const char *next;
+    unsigned n;
+    int found;
+
+    out[0] = '\0';
+    found = 0;
+    for (; text != NULL && *text != '\0'; text = next) {
+        next = strchr(text, '\n');
+        n = next != NULL ? (unsigned)(next - text) : (unsigned)strlen(text);
+        if (next != NULL)
+            next++;
+        if (n >= sizeof(line))
+            continue;
+        memcpy(line, text, n);
+        line[n] = '\0';
+        if (sscanf(line, "%*s %15s %63s %255s", type, cls, path) != 3 ||
+            strcmp(type, "f") != 0 || strncmp(path, "/etc/conf/mod.d/", 16) != 0 ||
+            path[16] == '\0' || strchr(path + 16, '/') != NULL)
+            continue;
+        if (found++ == 0 && strlen(path + 16) < cap)
+            strcpy(out, path + 16);
+    }
+    if (found != 1)
+        out[0] = '\0';
+}
+
+/* pkginfo's CLASSES (quotes dropped) into out, "" without one */
+static void pkginfo_classes(const char *text, char *out, unsigned cap)
+{
+    const char *p;
+    unsigned n;
+
+    out[0] = '\0';
+    for (p = text; p != NULL && *p != '\0'; p = strchr(p, '\n')) {
+        if (*p == '\n')
+            p++;
+        if (strncmp(p, "CLASSES=", 8) != 0)
+            continue;
+        p += 8;
+        if (*p == '"')
+            p++;
+        for (n = 0; p[n] != '\0' && p[n] != '\n' && p[n] != '"' &&
+             n + 1 < cap; n++)
+            out[n] = p[n];
+        out[n] = '\0';
+        return;
+    }
+}
+
+/* the pkgmap rule above; module: c and b entries allowed, in class none or
+ * in the module's class that classes lists.  0 = pure, -1 = not (why set) */
+static int pkgmap_pure(char *text, int module, const char *classes,
+                       char *why, unsigned cap)
+{
+    char modname[64];
     char *line;
     char *next;
     char *tok[10];
@@ -429,6 +520,7 @@ static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
     int nt;
     int nf;
 
+    pkgmap_modname(text, modname, sizeof(modname));
     nf = 0;
     for (line = text; line != NULL && *line != '\0'; line = next) {
         next = strchr(line, '\n');
@@ -478,7 +570,7 @@ static int pkgmap_pure(char *text, int module, char *why, unsigned cap)
         case 'c':
         case 'b':
             if (module) {
-                if (cdev_ok(tok, nt, why, cap) != 0)
+                if (cdev_ok(tok, nt, modname, classes, why, cap) != 0)
                     return -1;
                 break;
             }
@@ -620,11 +712,19 @@ int ds_member(const char *path, const char *member, char **text,
 int ds_pure_files(const char *path, int module, char *why, unsigned cap)
 {
     char *text;
+    char classes[256];
     int rc;
 
+    classes[0] = '\0';
+    if (module) {
+        if (ds_member(path, "pkginfo", &text, why, cap) != 0)
+            return -1;
+        pkginfo_classes(text, classes, sizeof(classes));
+        free(text);
+    }
     if (ds_member(path, "pkgmap", &text, why, cap) != 0)
         return -1;
-    rc = pkgmap_pure(text, module, why, cap);
+    rc = pkgmap_pure(text, module, classes, why, cap);
     free(text);
     return rc;
 }

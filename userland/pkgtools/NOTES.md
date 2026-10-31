@@ -468,6 +468,17 @@ package a `c` entry is allowed when it is all of `c none /dev/<node> <major> <mi
 node outside `/dev/` (`a device node outside /dev/: …`), a short or malformed line (`a device entry
 not of the form <major> <minor> <mode> <owner> <group>: …`), another class (`an object in class …`).
 
+**C3-5 v18 §1.2 (2026-10-31, P-36 D-N21): a node's class is its module's.** A `c` or `b` entry of a
+`role=module` package may be in class `none` or in its module's class: the file name of the
+package's one `f` directly in `/etc/conf/mod.d/` (`c z3660eth /dev/zen0 51 0 0600 root root`), and
+only when pkginfo's `CLASSES` lists it (the stock pkgadd installs the listed classes and skips the
+rest without a word). Files and directories stay class `none`; any other class is refused as before
+(`an object in class kcls`), and the module's class unlisted is refused as `an object in class
+<module>, which pkginfo's CLASSES does not list`. The class has no class action script (an `i`
+other than pkginfo/depend/copyright is still refused). apkg (`pkgmap_modname()`,
+`pkginfo_classes()`, `cdev_ok()`) and gen-catalog (`module_name()`, `cdev_problem(parts, module,
+classes)`) apply it alike; amix-packages minted paula -3, ramdisk -3, monsw -4 and z3660eth -8 so.
+
 - **apkg** (`kspace.c` `pkgmap_pure()`/`cdev_ok()`, `ds_pure_files(path, module, …)`, called from
   `install.c` `kspace_inst()` with `role == module`). Version **0.3.2**; man page and README say so.
 - **gen-catalog** (`pure_files_problem(pkgmap, role)`, `cdev_problem()`): a module package with

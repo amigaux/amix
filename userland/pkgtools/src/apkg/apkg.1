@@ -414,21 +414,36 @@ entries only pkginfo, depend and copyright), and at least one file.
 A module package may also carry the device nodes of its driver's majors
 (C3-5 version 4) as
 .B c
-entries of class
-.B none
-under
+entries under
 .BR /dev/ ,
 in full
-.RB ( "c none /dev/zen0 51 0 0644 root root" );
-pkgadd makes the node and records it in the contents database.
+.RB ( "c none /dev/zen0 51 0 0644 root root" ),
+and a block driver's as
+.B b
+entries under
+.B /dev/dsk/
+(version 8); pkgadd makes the node and records it in the contents
+database.  A node's class is
+.B none
+or, since C3-5 version 18, its module's name \- the file name of the
+package's one object in
+.B /etc/conf/mod.d/
+.RB ( "c z3660eth /dev/zen0 51 0 0600 root root" )
+\- when the package's
+.B CLASSES
+lists it, as the stock pkgadd installs only the listed classes.
 Anything else
 .RB ( e ,
 .BR v ,
-links, block devices, a character device in a kernel or loader package
-or outside
-.BR /dev/ ,
-another class, a script) refuses the transaction with
-exit 3.
+links, a device node in a kernel or loader package, a character node
+outside
+.B /dev/
+or a block node outside
+.BR /dev/dsk/ ,
+a file or directory in a class other than
+.BR none ,
+a node in another class or in its module's class unlisted, a script)
+refuses the transaction with exit 3.
 .PP
 After each kernel-space
 .BR pkgadd ,
