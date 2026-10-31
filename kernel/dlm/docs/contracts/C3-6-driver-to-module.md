@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 7
+# C3-6 — what a driver changes to become a module, version 8
 
 - **Status:** agreed 2026-10-26 (orchestrator), version 1; version 2
   (2026-10-26, from the z3660rtg station's module build): the console
@@ -19,6 +19,8 @@
   level-2 handler cannot see CIA-A's interrupt bits (§1.3); version 7
   (2026-10-31, P-36 W8): a network driver's DLPI checklist, the rules
   the one DHCP client and `ifup` rely on instead of per-driver code
+  (§1.8); version 8 (2026-10-31, P-36 D-N21): the `link.d` major is
+  optional for a registry module, and a node's class is its module's
   (§1.8). The
   driver-change
   brief of the z3660net and z3660rtg stations (and of the monsw owner).
@@ -309,15 +311,18 @@ Allowed, because the client copes, but not to be copied:
 
 - **One `link.d` line** (D-N10), `/etc/inet/link.d/<module>`, named for
   the module so that `rc_mknod` can ask the registry for its major:
-  `<ifname prefix> <node prefix> <first unit> <major>`, for example
-  `zen /dev/zen 0 51`. `ifup` finds units by opening `<node><n>` from the
+  `<ifname prefix> <node prefix> <first unit> [<major>]`, for example
+  `zen /dev/zen 0 51`. The major is optional when the file's name is a
+  module of the registry, because `kbootset major <name>` gives it
+  (C2-4 §15), and required otherwise: the stock A2065's `aen /dev/aen 0
+  18` keeps it (version 8). `ifup` finds units by opening `<node><n>` from the
   first unit until the open fails, so **an open of a unit with no board
   fails at once** (`ENXIO` or `ENODEV`), never hangs. When it cannot
   promise that yet, an optional fifth column names a presence command, as
   `aen -S` does.
 - **Its nodes as package objects** (D-N21), at the registry's major
-  (§1.2); the boot step re-creates a missing one with `kbootset major`
-  (C2-4 §15).
+  (§1.2), in the class named for the module (C3-5 §1.2, version 18); the
+  boot step re-creates a missing one with `kbootset major` (C2-4 §15).
 - **No rc script of its own** to bring the interface up, set its address
   or start a client. Settings live in `/etc/inet/interfaces`, which no
   package owns (D-N9).
