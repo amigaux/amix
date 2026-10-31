@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cuts/build.sh, make dist's kernel-k30 hook (85f9c06)
+
+Rebuilds the cut of record named in cuts/CURRENT (68030-261031-63) with its own cut.sh, on this checkout, with the
+port and paula at kernel/port/port.pin and kernel/drivers/paula/paula.pin (fetched by hash), and refuses sums that
+differ from the record's (P-38 S2.2). The output goes to build/cuts/<build id>/, where kern30m reads it by default.
+tools/cuts-selftest.sh checks that cuts/CURRENT and kern30m's pins agree. On the host, all seven -63 sums reproduce.
+
 ## 2026-10-31 — pkg/build.sh passes a recipe's exit 3 through (e777fdc)
 
 kern30m exits 3 with a [MISSING] line naming P-38 S2.2 (make kernel-k30) when no cut output is present; with the cut,
