@@ -40,8 +40,7 @@ All passed:
 - strict, with `-mno-strict-align` on 223 of 223 compile lines;
 - libacompat not linked;
 - prototype == staged tree (24 paths);
-- the 060 gate;
-- no ll printf conversion.
+- the 060 gate, on the staged tree and on the rolled datastream.
 
 `libncurses.a` and `libform.a` hold FPU instructions, none of them 040/060-only: a program linking
 them needs an FPU, or the kernel's FPE on an FPU-less part.
