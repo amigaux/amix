@@ -1,0 +1,16 @@
+PKG=ramdisk30
+NAME=ramdisk-k30 1.0.0-4 - RAM disk module (root class), k30 line
+ARCH=Amiga
+VERSION=1.0.0-4
+CATEGORY=system
+CLASSES=none ramdisk
+VENDOR=amix
+PSTAMP=amix-ramdisk30-1.0.0-4
+# Kernel space (amix-dlm C2-2, C3-5 v8 sec 1, C4-2): a role=module entry of
+# the #ext kpkg block (line=k30), class root, never an ordinary entry.
+# Catalog name ramdisk-k30, pkginst ramdisk30; VERSION is
+# kernel/modules/ramdisk/module/VERSION, the same on both lines.  1.0.0-4 is
+# 1.0.0-3's object and payload, rolled from kernel/modules.  The device nodes
+# are in class ramdisk (C3-5 v18 sec 1.2).
+APKG_DESC=The RAM disk (block major 20: /dev/dsk/ram0 the boot loader's miniroot image, ram1/ram2 scratch disks) as a root-class kernel module for the 68030 module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/ramdisk and /dev/dsk/ram0-ram2.
+DESC=The kernel/modules ramdisk driver built as an amix-dlm kernel module for the 68030 line (kabi k30.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted (match always); block major 20, no character row; never unloaded.  Unit 0 is the miniroot image the boot loader placed in memory (ramdisk_image, C4-3), when there is one; units 1 and 2 are scratch disks of size1/size2 KiB (512 and 2048 by default), allocated at the first open.  Its nodes /dev/dsk/ram0, ram1, ram2 (b 20 0-2, 0600 root root) are shipped by the package.  /etc/conf/modreg.d/ramdisk holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

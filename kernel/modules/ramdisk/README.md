@@ -175,7 +175,7 @@ An older kit stops the build: one without `iodone` or `ramdisk_image` in its `dd
 
 ## Packages (amix-dlm C3-5)
 
-One package per line, minted by amix-packages:
+One package per line, rolled by `pkg/build.sh` (make dist's kspace step):
 
 | | k30 | k46 |
 |---|---|---|

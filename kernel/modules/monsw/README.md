@@ -182,7 +182,7 @@ make -C monsw/module               # both lines
 make -C monsw/module k46           # one line
 make -C monsw/module test          # the host test (any host cc)
 make -C monsw/module static        # the static object per line, with its sha256
-make -C monsw/tool                 # monswctl, one binary for both lines, with its sha256
+make -C monsw/tool                 # monswctl, one stripped binary for both lines, with its sha256
 make -C monsw/tool test            # the tool's and the boot step's host test (bash, any host cc)
 ```
 
@@ -207,7 +207,7 @@ port's Model-B sysroot.
 
 ## Packages (amix-dlm C3-5)
 
-One package per line, minted by amix-packages:
+One package per line, rolled by `pkg/build.sh` (make dist's kspace step):
 
 | | k30 | k46 |
 |---|---|---|
@@ -218,10 +218,17 @@ One package per line, minted by amix-packages:
 Each package has `CATEGORY` `system` and no scripts. It ships:
 - `/etc/conf/mod.d/monsw`, the object;
 - `/etc/conf/modreg.d/monsw`, comments only, because the package sets no parameter;
-- `/dev/monsw` as a pkgmap device entry, `c 52 0`;
-- `/usr/sbin/monswctl` (`monsw/build/tool/monswctl`, the same on both lines);
-- `/etc/init.d/monsw` (`rc/monsw`) and its link `/etc/rc2.d/S20monsw`;
-- the pages `monsw(7)` and `monswctl(1M)`.
+- `/dev/monsw` (`c 52 0`, 0644) as a device entry of class `monsw`;
+- `/usr/sbin/monswctl` (`monsw/build/tool/monswctl`, stripped, the same on both lines), which
+  `pkg/build.sh` builds before the roll;
+- `/etc/init.d/monsw` (`rc/monsw`, 0744 root sys), and the same bytes as
+  `/etc/rc2.d/S20monsw`: a copy, not a link, because a kernel-space package is pure files;
+- the pages `/opt/amix/man/7/monsw` and `/opt/amix/man/1m/monswctl`, and the whatis
+  fragment `/opt/amix/man/whatis.d/monsw30` or `monsw46`, which is why each line has its own
+  prototype.
+
+It does not depend on amix-base: without its `rc.subr` the boot step logs to the console.
+`pin.sh` pins the objects, the licence and every shipped file by sha256.
 
 ## Testing
 

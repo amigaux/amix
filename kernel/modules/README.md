@@ -23,7 +23,11 @@ Layout, per module (`monsw/README.md` is the worked example):
 | `<module>/module/VERSION` | the package version, one line `x.y.z-rev`, the same on both lines |
 | `<module>/tool/`, `<module>/rc/`, `<module>/man/` | where a module has them: its user tool, its boot step, its pages (monsw, random) |
 | `<module>/test/` | host tests and on-box instruments |
+| `<module>/pkg/` | the package recipe, `<module>-k30` and `<module>-k46`: `build.sh` (make dist's kspace step runs it), `pin.sh`, `pkginfo.<line>`, the prototype, `modreg` |
 | `<module>/build/<line>/mod.d/<name>` | the built module objects (not tracked) |
+
+`pkg/kmod.sh` is the body every `<module>/pkg/build.sh` sources: it rolls each line through
+build/pkg's `kmodpkg`, with the checkout as `KM_ROOT`.
 
 `include/sys/` holds the published interface headers (`sys/monsw.h`). The ABI kit of
 `kernel/dlm` copies them, so a module that calls another module builds against the kit alone.

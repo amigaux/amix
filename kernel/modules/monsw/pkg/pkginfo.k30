@@ -1,0 +1,14 @@
+PKG=monsw30
+NAME=monsw-k30 1.0.0-5 - monitor switch module, k30 line
+ARCH=Amiga
+VERSION=1.0.0-5
+CATEGORY=system
+CLASSES=none monsw
+VENDOR=amix
+PSTAMP=amix-monsw30-1.0.0-5
+# Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
+# #ext kpkg block (line=k30), never an ordinary entry.  Catalog name
+# monsw-k30, pkginst monsw30; VERSION is kernel/modules/monsw/module/VERSION,
+# the same on both lines.  The node is in class monsw (C3-5 v18 sec 1.2).
+APKG_DESC=The monitor switch (/dev/monsw: the CIA-B lines that flip a monitor between the chipset display and a display card) as a demand-class kernel module for the 68030 line module kernel kernel-k30-m, with its tool monswctl and the boot step that sets the value from /etc/display: /etc/conf/mod.d/monsw, /dev/monsw, /usr/sbin/monswctl, /etc/init.d/monsw.
+DESC=The kernel/modules monsw driver built as an amix-dlm kernel module for the 68030 line: demand class, loaded at the first open of /dev/monsw or before a module that depends on it (z3660rtg); character major 52, its node /dev/monsw (c 52 0) shipped by the package; never unloaded.  It drives the CIA-B CTS/SEL lines as the Z3660 firmware's monitor_switch bit sum says.  The boot step /etc/init.d/monsw (S20monsw) sets the value from /etc/display's monsw line, else from the older /etc/monsw, else leaves the card's own value; /usr/sbin/monswctl reads and sets it and switches the screen.  Pages monsw(7) and monswctl(1M).  /etc/conf/modreg.d/monsw holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

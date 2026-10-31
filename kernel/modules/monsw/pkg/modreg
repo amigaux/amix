@@ -1,0 +1,7 @@
+# /etc/conf/modreg.d/monsw -- the monsw module package's defaults (amix-dlm
+# C3-5 sec 1): one `param <name>=<value>` per default other than the
+# module's own, `disable` to ship it off.  None: monsw loads with config
+# unset (-1), so the value comes from the boot step's MONSWIOC_SETCFG
+# (/etc/display's monsw) or the first card's seed.  To force a box's value,
+# put a line `param config=34` in /etc/conf/modreg.local.d/monsw, which no
+# package owns.

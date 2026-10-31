@@ -4,8 +4,9 @@
 #   make -C monsw/tool            monsw/build/tool/monswctl, cross-compiled with -O, and
 #                                 its sha256; the gates: the <sys/monsw.h> the compiler took
 #                                 is kernel/modules/include/sys/monsw.h, the result is an
-#                                 m68k object that imports ioctl, open and close
-#   make -C monsw/tool host       monsw/build/tool-host/monswctl: the host build against
+#                                 m68k object that imports ioctl, open and close; then
+#                                 stripped, as it ships
+#   make -C monsw/tool host      monsw/build/tool-host/monswctl: the host build against
 #                                 testdouble.c, with -Wall -pedantic, for the host test
 #   make -C monsw/tool test       the host test (monsw/test/tooltest.sh)
 #   make -C monsw/tool clean
@@ -40,6 +41,7 @@ $(OUT)/monswctl: $(SRC)/monswctl.c $(HDR)
 		$(CROSS)nm $@.tmp | grep -qE " U _?$$s\$$" || \
 			{ echo "monswctl: $@ does not import $$s" >&2; rm -f $@.tmp; exit 1; }; \
 	done
+	$(CROSS)strip $@.tmp
 	@mv $@.tmp $@
 
 host: $(HOUT)/monswctl
