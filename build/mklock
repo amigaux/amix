@@ -82,6 +82,9 @@ def lock(top, out):
             f = text.split()
             if len(text.splitlines()) == 1 and len(f) == 2 and f[0].startswith("https://"):
                 pins.append("%s %s %s %s" % (kind, rel, f[0], f[1]))
+            elif kind == "distfile" and len(text.splitlines()) == 1 and len(f) >= 2:
+                # the original site, the sha256, then the fallbacks: as written
+                pins.append("%s %s %s" % (kind, rel, " ".join(f)))
             else:   # a pin of another format (kernel/dlm's): the file's digest
                 pins.append("%s %s sha256 %s" % (kind, rel, sha256(os.path.join(top, rel))))
     sections.append(sorted(pins))

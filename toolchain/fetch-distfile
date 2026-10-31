@@ -6,23 +6,26 @@
 #     toolchain/fetch-distfile <name>.distfile [<cache dir>]   (default out/cache)
 #
 # A distfile pin (a .distfile, not a .pin: that is a repository and a commit,
-# and the build image's cache key) is one line, `<URL> <sha256>`: the URL of our copy on
-# amigaux/amix-distfiles (a release asset), never the original site, which
-# moves (NetBSD 10.1 has left cdn.netbsd.org). The file lands in the cache
-# under the URL's last component, and only after its sha256 matches; a file
-# already there and matching is not fetched again. AMIX_DISTFILES names a
-# local directory to take the file from when it holds the pinned bytes, for
-# a mirror or before the asset is uploaded (build/pkg/common/fetch.sh, the
-# same rule as a package's source). Prints the cached file's path last.
+# and the build image's cache key) is one line, `<URL> <sha256> [<URL>...]`:
+# the original site first, then our copy, a release asset of
+# amigaux/amix-distfiles under the upstream's own file name, for when the
+# original moves (NetBSD 10.1 has already left cdn.netbsd.org). The order is
+# build/pkg/common/fetch.sh's, a package's source's: the cache, AMIX_DISTFILES
+# (a local directory of distfiles), then each URL; the sha256 decides every
+# time. The file lands in the cache under the first URL's last component.
+# Prints the cached file's path last.
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
 top=$(dirname "$here")
 pin=${1:?usage: fetch-distfile <pin> [<cache dir>]}
 cache=${2:-$top/out/cache}
-read -r url sha < "$pin" || :
-case "$url" in https://*) ;; *) echo "[FAIL] $pin: no https URL on its line" >&2; exit 1 ;; esac
-echo "$sha" | grep -Eq '^[0-9a-f]{64}$' || { echo "[FAIL] $pin: no sha256 on its line" >&2; exit 1; }
+read -r url sha more < "$pin" || :
+for u in $url $more; do
+	case "$u" in https://*) ;; *) echo "[FAIL] $pin: '$u' is not an https URL" >&2; exit 1 ;; esac
+done
+[ -n "$url" ] || { echo "[FAIL] $pin: no URL on its line" >&2; exit 1; }
+echo "$sha" | grep -Eq '^[0-9a-f]{64}$' || { echo "[FAIL] $pin: no sha256 after the first URL" >&2; exit 1; }
 name=${url##*/}
 . "$top/build/pkg/common/fetch.sh"
 if [ -f "$cache/$name" ] && [ "$(amix_sha256 "$cache/$name")" = "$sha" ]; then
@@ -30,5 +33,6 @@ if [ -f "$cache/$name" ] && [ "$(amix_sha256 "$cache/$name")" = "$sha" ]; then
 	echo "$cache/$name"
 	exit 0
 fi
-amix_fetch "$url" "$sha" "$cache/$name" >&2
+# shellcheck disable=SC2086 (the fallback URLs, one word each)
+amix_fetch "$url" "$sha" "$cache/$name" $more >&2
 echo "$cache/$name"

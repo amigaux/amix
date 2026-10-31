@@ -44,7 +44,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
 | `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` (a4091 with a4kt710) and the forks at their pins, fetched by commit (cdfs, gayle-ide, paula, z3660rtg; z3660rtg's `depend=monsw` on our monsw) | `out/modules/<line>/<name>` | S3.2 | builds |
-| `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | the hook builds; no directory has recipes yet |
+| `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | builds: kernel/dlm, kernel/k30 and kernel/port have recipes; the modules and drivers to come |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
 | `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and `userland/packages/conf` (the kernel-space confs with S3.3) as the space's own; no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | S5.1, pkgtools | builds |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
@@ -56,7 +56,10 @@ A kernel directory's recipes plug into `kspace` as `kernel/<dir>/pkg/build.sh`:
 with no arguments it rolls all its recipes, with names those; it reads
 `AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
 `$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
-and exits non-zero on a failure. Its recipes set `SOURCE_DATE_EPOCH` from
+and exits non-zero on a failure. It exits 3 when an input outside the recipe
+is absent, with a `[MISSING]` line naming the P-38 step and owner (a kernel
+cut's output, for one); the step then runs the other directories and ends
+with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from
 their own pinned epoch, never the environment's.
 
 A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`
@@ -98,12 +101,14 @@ out/build/                    work trees and logs
 - **Inputs from outside** are pinned: the toolchains, amix-system and the port
   by commit (`.pin`), and the forks in `kernel/drivers/<name>/<name>.pin`.
   Distfiles are pinned by sha256 (`toolchain/*.distfile`, a package's
-  `URL`/`SHA256`) and fetched from
-  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles), whose
-  release assets are `releases/download/<name>-<version>/<the upstream's file
-  name>`. `AMIX_DISTFILES=<dir>`, a local directory of them, is read first: a
-  file there that is the pinned bytes is copied in instead of downloaded.
-  make dist passes it into the container, read-only at `/distfiles`.
+  `URL`/`SHA256`) and fetched in one order: `AMIX_DISTFILES=<dir>`, a local
+  directory of them (make dist passes it into the container, read-only at
+  `/distfiles`), then the original site, then our copy, a release asset of
+  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles) at
+  `releases/download/<name>-<version>/<the upstream's file name>`. The
+  sha256 decides every time. Our copy is kept for the sources whose sites
+  move (NetBSD, GitHub archive tarballs, SourceForge, the X11 set); a stable
+  source with no copy simply has no fallback.
 - **Known exceptions**, which the proof lists by name: the kits' revision lines
   (`kit.conf` and `NOTICE` name the commits, so the `norev` digest is the one
   compared across commits), amixbench 1.3 (kept outside amix), and the installed

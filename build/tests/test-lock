@@ -64,6 +64,8 @@ try:
     write(os.path.join(top, "kernel/dlm/toolchain.pin"), keyed)
     write(os.path.join(top, "toolchain/x.distfile"),
           "https://github.com/amigaux/amix-distfiles/releases/download/x/x.tgz " + "d" * 64 + "\n")
+    write(os.path.join(top, "toolchain/y.distfile"),
+          "https://example.invalid/up/y.tgz " + "f" * 64 + " https://github.com/amigaux/amix-distfiles/releases/download/y-1/y.tgz\n")
     write(os.path.join(top, "system/MANIFEST.sha256"), "m\n")
     write(os.path.join(top, "system/SYMLINKS"), "s\n")
     write(os.path.join(top, ".gitignore"), "/out/\n")
@@ -92,6 +94,8 @@ try:
                        "image host"], "\n".join(lock[:5]))
     want = [
         "distfile toolchain/x.distfile https://github.com/amigaux/amix-distfiles/releases/download/x/x.tgz " + "d" * 64,
+        "distfile toolchain/y.distfile https://example.invalid/up/y.tgz " + "f" * 64
+        + " https://github.com/amigaux/amix-distfiles/releases/download/y-1/y.tgz",
         "pin kernel/dlm/toolchain.pin sha256 " + sha(keyed),
         "pin kernel/port/port.pin https://github.com/amigaux/amix-040-060-port.git " + "a" * 40,
         "pin toolchain/gcc14-cross-amix.pin https://github.com/amigaux/gcc14-cross-amix.git " + "b" * 40,

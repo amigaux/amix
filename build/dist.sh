@@ -283,8 +283,10 @@ roll_recipe() {	# roll_recipe <package dir>
 # step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
 # (P-38 S3.3). Each rolls all its recipes, writes its .pkg files to
 # $AMIX_BUILD_ROOT/kspace/pkg/ and prints a `pkg <file> <sha256>` line for
-# each; exit 0 or a failure. Run in provider order; the directories that have
-# none yet are named, with their owner, and the step then exits 3.
+# each; exit 0, 3 when an input outside the recipe is absent (with a
+# [MISSING] line naming the P-38 step and owner), or another code for a
+# failure. Run in provider order; the directories that have none yet, or
+# exit 3, are named, the others still run, and the step then exits 3.
 kspace_dirs() {
 	for d in kernel/dlm kernel/k30 kernel/port; do
 		[ -d "$top/$d" ] && echo "$d"
@@ -323,15 +325,22 @@ step_kspace() {
 	git -C "$AMIX_PORT_REPO" cat-file -e "$_pc^{commit}" 2>/dev/null ||
 		git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$_pc"
 	export AMIX_PORT_URL AMIX_PORT_REPO
-	missing=
+	missing= waiting=
 	for d in $(kspace_dirs); do
 		if [ ! -f "$top/$d/pkg/build.sh" ]; then
 			missing="$missing $d"
 			continue
 		fi
 		echo "--- $d"
-		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || {
-			echo "[FAIL] kspace: $d/pkg/build.sh failed" >&2; exit 1; }
+		# exit 3: an input outside the recipe is absent (a cut's output); the
+		# hook has printed its [MISSING] line, and the rest still run
+		rc=0
+		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || rc=$?
+		case $rc in
+		0) ;;
+		3) waiting="$waiting $d" ;;
+		*) echo "[FAIL] kspace: $d/pkg/build.sh failed (exit $rc)" >&2; exit 1 ;;
+		esac
 	done
 	for p in "$out/build/kspace/kspace/pkg/"*.pkg; do
 		[ -f "$p" ] && cp "$p" "$out/kspace/pkgs/"
@@ -339,12 +348,13 @@ step_kspace() {
 	if [ -n "$(ls "$out/kspace/pkgs")" ]; then
 		python3 -I "$here/pkg/pkgmeta" guard "$out/kspace/pkgs"
 	fi
-	if [ -n "$missing" ]; then
-		for d in $missing; do
-			echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
-		done
-		exit 3
-	fi
+	for d in $missing; do
+		echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
+	done
+	for d in $waiting; do
+		echo "[MISSING] kspace: $d/pkg/build.sh is waiting for an input (its [MISSING] line above)" >&2
+	done
+	[ -z "$missing$waiting" ] || exit 3
 }
 
 step_userland() {

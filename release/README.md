@@ -28,7 +28,9 @@ image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.
 
 pin <path> <URL> <commit>             every one-line .pin in the checkout
 pin <path> sha256 <sha256>            a .pin of another format, by its digest
-distfile <path> <URL> <sha256>        every .distfile
+distfile <path> <URL> <sha256> [<URL>...]
+                                      every .distfile, as written: the original
+                                      site, the sha256, then our copy
 system <path> <sha256>                system/MANIFEST.sha256 and system/SYMLINKS
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
