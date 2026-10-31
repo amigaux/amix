@@ -335,7 +335,7 @@ esac
 mkvar() { # mkvar <makefile> <VAR>
   sed -e ':a' -e '/\\$/{N;s/\\\n//;ba}' "$1" \
     | sed 's/#.*//' \
-    | awk -v V="$2" '$0 ~ "^[ \t]*"V"[ \t]*=" { sub("^[ \t]*"V"[ \t]*=[ \t]*",""); print; exit }'
+    | awk -v V="$2" '!f && $0 ~ "^[ \t]*"V"[ \t]*=" { sub("^[ \t]*"V"[ \t]*=[ \t]*",""); print; f = 1 }'
 }
 
 # --- helper: recompile ONE kernel-patched .o in its own subdir, honoring THAT subdir's
@@ -1200,7 +1200,7 @@ assert_rootdev() { # assert_rootdev <config-name>
   [ -n "$lbm" ] && [ -n "$lmm" ] || { echo "FATAL: could not read L_BITSMINOR/L_MAXMIN from $SYSMACROS" >&2; exit 1; }
 
   # read the stored dev_t back out of the config object
-  line="$("$OBJDUMP" -t "$cobj" | awk '$NF=="rootdev"{print; exit}')"
+  line="$("$OBJDUMP" -t "$cobj" | awk '!f && $NF=="rootdev" {print; f = 1}')"
   [ -n "$line" ] || { echo "FATAL: no 'rootdev' symbol in $cobj" >&2; exit 1; }
   off="$(printf '%s\n' "$line" | awk '{print $1}')"
   sz="$(printf '%s\n' "$line" | awk '{print $(NF-1)}')"
@@ -1225,7 +1225,7 @@ print("".join(b[off+k] for k in range(n)))
       "$actual" "$amaj" "$amin" "$cfg" "${sec#.}" "$off" "$((16#$sz))"
 
   # resolve the EXPECTED value from the config source
-  tok="$(sed -n 's/.*rootdev[ \t]*=[ \t]*\([A-Za-z0-9_]*\).*/\1/p' "$csrc" | head -1)"
+  tok="$(sed -n 's/.*rootdev[ \t]*=[ \t]*\([A-Za-z0-9_]*\).*/\1/{p;q}' "$csrc")"
   [ -n "$tok" ] || { echo "FATAL: no 'rootdev =' initializer in $csrc" >&2; exit 1; }
   # Does the SOURCE locally #define this token?  If NOT, the token is an external compile
   # macro (the `unix` placeholder's -DROOTDEV) -- the ONLY case allowed to skip the metal
@@ -1337,7 +1337,7 @@ if [ -n "$RTH1_C" ]; then
   # by its ROOTFSTYPE_LEN, which must equal rootfstype's size in this base (master.d/kernel.o, char[15] in the stock)
   ROOTFS=""
   if [ -n "$DLM_CORE" ] && echo " $GOT " | grep -q " rootfstype "; then
-    RL="$(sed -n 's/^#define[[:space:]]*ROOTFSTYPE_LEN[[:space:]]*\([0-9]*\).*/\1/p' "$RTH1_C" | head -1)"
+    RL="$(sed -n 's/^#define[[:space:]]*ROOTFSTYPE_LEN[[:space:]]*\([0-9]*\).*/\1/{p;q}' "$RTH1_C")"
     KL="$("$OBJDUMP" -t "$BUILD/master.d/kernel.o" | awk '$NF=="rootfstype" && $(NF-2)==".data" {print $(NF-1)}')"
     [ -n "$RL" ] && [ -n "$KL" ] && [ "$RL" = "$((16#$KL))" ] \
       || { echo "--rth1: rth1.c bounds rootfstype at '${RL:-?}' bytes, the base's rootfstype is '${KL:-?}' (hex)" >&2; exit 1; }
@@ -1652,7 +1652,9 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
       || { tail -15 "$WORK/carve/$f.make.log" >&2; echo "FATAL: the $f module did not build (or modcheck refused it)" >&2; exit 1; }
     m="$WORK/carve/$f/build/k30/mod.d/$f"
     [ -f "$m" ] || { echo "FATAL: no $m after make" >&2; exit 1; }
-    strings -a "$m" | grep -q "$KINFO_BUILD" || { echo "FATAL: the $f module does not carry the build id $KINFO_BUILD" >&2; exit 1; }
+    # grep -q stops at the first match; strings writes on, and under pipefail its SIGPIPE (141) made this fail now and
+    # then (about 1 in 60 on an 8 KiB strings output); read it through a process substitution instead
+    grep -q -- "$KINFO_BUILD" <(strings -a "$m") || { echo "FATAL: the $f module does not carry the build id $KINFO_BUILD" >&2; exit 1; }
     if [ "$f" = ufs ] && [ "$UFS_TAILZERO" = 1 ]; then qz_check "$m" m68k-elf-nm m68k-elf-objdump; fi
     cp "$m" "$BUILD/mod.d/$f"
     echo "  mod.d/$f: $(wc -c < "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-16), bound to $KINFO_BUILD; $(grep -a -i 'modcheck' "$WORK/carve/$f.make.log" | tail -1)"
