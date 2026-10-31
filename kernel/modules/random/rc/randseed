@@ -11,8 +11,7 @@
 #
 # A box without the module (or without its node) gets one line on the console and in the
 # log, keeps its old seed, and boots on.  Log: /var/adm/rc.log ("randseed:" lines),
-# through /usr/lib/amix/rc.subr; without it, the console.  The idea, the file and the
-# links are those of isoriano's random-amix; this script is new.
+# through /usr/lib/amix/rc.subr; without it, the console.
 #
 # RANDSEED_FILE / RANDSEED_DEV / RC_SUBR exist for the host test.
 #

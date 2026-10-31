@@ -10,7 +10,7 @@ packages (`<name>-k30` / `<name>-k46`, C3-5). A hardware driver keeps its module
 |---|---|---|---|
 | `monsw` | demand | c 52 | the console monitor switch; moved from amix-040-060-port `src/monsw.c` (2026-10-26, D-3 / S3-27) |
 | `ramdisk` | root | b 20 | the RAM disk: unit 0 the loader-placed miniroot image, units 1–2 scratch disks; replaces the stock `ram` driver (2026-10-26, D-3 / S4-34) |
-| `random` | demand | c 48 | `/dev/random` and `/dev/urandom`: ChaCha20 with fast key erasure, and the seed kept across reboots; the interface of isoriano's random-amix, new code (2026-10-31, 1.1) |
+| `random` | demand | c 48 | `/dev/random` and `/dev/urandom`: ChaCha20 with fast key erasure, and the seed kept across reboots (2026-10-31, 1.1) |
 
 Layout, per module (`monsw/README.md` is the worked example):
 

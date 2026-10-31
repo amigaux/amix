@@ -4,8 +4,6 @@
  * this is the short form.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
- * The interface (two minors, neither blocks, writes mix in, a seed file across reboots) is
- * isoriano's random-amix, the driver that first gave Amix these devices; this code is new.
  *
  *   minor 0  /dev/random     the same generator; neither minor blocks and there is no
  *   minor 1  /dev/urandom    entropy count, as /dev/urandom on Linux after its first seeding
