@@ -28,7 +28,8 @@ refused() {	# refused <what> <needle> <command...>: exits non-zero and says <nee
 mkdir -p "$T/dist" "$T/cache"
 printf 'the distfile\n' > "$T/dist/thing-1.0.tgz"
 sha=$(sha256sum "$T/dist/thing-1.0.tgz" | cut -c1-64)
-echo "https://github.com/amigaux/amix-distfiles/releases/download/thing-1.0/thing-1.0.tgz $sha" > "$T/thing.pin"
+# example.invalid never resolves: a fetch of the URL fails at once, offline
+echo "https://example.invalid/amix-distfiles/releases/download/thing-1.0/thing-1.0.tgz $sha" > "$T/thing.pin"
 fetch() { AMIX_DISTFILES=$T/dist sh "$here/fetch-distfile" "$@"; }
 
 check "fetch: from AMIX_DISTFILES into the cache, checked, path printed last" \
@@ -39,9 +40,9 @@ check "fetch: a cached file that matches is not fetched again" \
 	"$here/fetch-distfile" "$T/thing.pin" "$T/cache"
 printf 'other bytes\n' > "$T/dist/thing-1.0.tgz"
 rm -f "$T/cache/thing-1.0.tgz"
-refused "fetch: bytes other than the pin's are refused" "is not the pinned" fetch "$T/thing.pin" "$T/cache"
+refused "fetch: other bytes in AMIX_DISTFILES are not taken; the URL is tried" "is not the pinned bytes; fetching the URL" fetch "$T/thing.pin" "$T/cache"
 check "fetch: a refused file is not left in the cache" test ! -e "$T/cache/thing-1.0.tgz" -a ! -e "$T/cache/thing-1.0.tgz.part"
-refused "fetch: a file missing from AMIX_DISTFILES is refused" "has no thing-1.0.tgz" \
+refused "fetch: a file missing from AMIX_DISTFILES: the URL is tried" "download failed: https://example.invalid/" \
 	env AMIX_DISTFILES="$T/cache" sh "$here/fetch-distfile" "$T/thing.pin" "$T/cache"
 echo "http://example.invalid/thing-1.0.tgz $sha" > "$T/bad.pin"
 refused "fetch: a pin without an https URL is refused" "no https URL" fetch "$T/bad.pin" "$T/cache"

@@ -63,6 +63,13 @@ amix_verify() {
 
 # amix_fetch <url> <expected-sha256> <destfile>
 #
+# AMIX_DISTFILES names a local directory of distfiles (a mirror of
+# amigaux/amix-distfiles, whose release assets are
+# https://github.com/amigaux/amix-distfiles/releases/download/<name>-<version>/<file>,
+# the upstream's own file name): when it holds the URL's last component and
+# that file is the pinned bytes, it is copied in instead of downloaded;
+# otherwise the URL is fetched as always.  The sha256 is the pin either way.
+#
 # Downloads to a sibling .part file and only renames after the digest matches,
 # so an interrupted transfer can never be mistaken for a complete one -- the
 # same failure shape amixsync.py hit when the 1991 ftpd's missing SIZE command
@@ -80,6 +87,19 @@ amix_fetch() {
 	fi
 
 	mkdir -p "$(dirname "$_af_dst")"
+	_af_local="${AMIX_DISTFILES:+$AMIX_DISTFILES/${_af_url##*/}}"
+	if [ -n "$_af_local" ] && [ -f "$_af_local" ]; then
+		if [ "$(amix_sha256 "$_af_local")" = "$_af_want" ]; then
+			echo "  local   $_af_local (AMIX_DISTFILES)"
+			cp "$_af_local" "$_af_dst.part"
+			amix_verify "$_af_dst.part" "$_af_want"
+			mv "$_af_dst.part" "$_af_dst"
+			unset _af_url _af_want _af_dst _af_local
+			return 0
+		fi
+		echo "  [WARN] $_af_local is not the pinned bytes; fetching the URL"
+	fi
+	unset _af_local
 	echo "  fetch   $_af_url"
 	if command -v curl >/dev/null 2>&1; then
 		curl -fsSL --retry 3 -o "$_af_dst.part" "$_af_url" || {

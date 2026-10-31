@@ -14,7 +14,9 @@ gives a payload's static libraries the member headers `ar D` writes;
 `test-dlmsrc` the host test of `common/dlm-src.sh`'s inputs (the period
 toolchain from `AMIX_CROSS_ENV`, the port from `AMIX_PORT_REPO`, a pinned
 port commit fetched by hash), with stand-ins for the checkout and the
-toolchain. Run them with
+toolchain; `test-fetch` the host test of `common/fetch.sh` (a source from
+`AMIX_DISTFILES` when it is the pinned bytes, else from the URL). Run them
+with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 

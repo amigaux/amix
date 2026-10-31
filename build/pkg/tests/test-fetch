@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+# test-fetch: host test of build/pkg/common/fetch.sh, amix_fetch.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# A package's source comes from AMIX_DISTFILES (a local directory of
+# distfiles) when it holds the URL's file as the pinned bytes, and from the
+# URL otherwise; the sha256 is the pin either way. The URLs here are file://
+# ones, or example.invalid, which never resolves, so nothing is downloaded.
+# Prints "N/N passed"; exits non-zero on any failure.
+
+import hashlib
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+FETCH = os.path.join(os.path.dirname(HERE), "common", "fetch.sh")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fp:
+        fp.write(data)
+
+
+def fetch(url, sha, dst, distfiles=None):
+    env = {k: v for k, v in os.environ.items() if k != "AMIX_DISTFILES"}
+    if distfiles is not None:
+        env["AMIX_DISTFILES"] = distfiles
+    p = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_fetch "$2" "$3" "$4"', "sh", FETCH, url, sha, dst],
+                       env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return p.returncode, p.stdout.decode("utf-8", "replace")
+
+
+tmp = tempfile.mkdtemp(prefix="test-fetch.")
+try:
+    good = b"the source tarball\n"
+    sha = hashlib.sha256(good).hexdigest()
+    dist = os.path.join(tmp, "distfiles")
+    write(os.path.join(dist, "zlib-1.3.tar.gz"), good)
+    nowhere = "https://example.invalid/amix-distfiles/releases/download/zlib-1.3/zlib-1.3.tar.gz"
+    dst = os.path.join(tmp, "build", "zlib-1.3.tar.gz")
+
+    rc, out = fetch(nowhere, sha, dst, dist)
+    check("AMIX_DISTFILES holds the pinned bytes: copied in, the URL not fetched",
+          rc == 0 and "local   %s/zlib-1.3.tar.gz (AMIX_DISTFILES)" % dist in out
+          and "fetch   " not in out and open(dst, "rb").read() == good, out)
+    rc, out = fetch(nowhere, sha, dst, dist)
+    check("already in place and matching: cached, nothing else read", rc == 0 and "cached" in out, out)
+
+    os.remove(dst)
+    write(os.path.join(dist, "zlib-1.3.tar.gz"), b"other bytes\n")
+    src = os.path.join(tmp, "upstream", "zlib-1.3.tar.gz")
+    write(src, good)
+    rc, out = fetch("file://" + src, sha, dst, dist)
+    check("AMIX_DISTFILES holds other bytes: a warning, then the URL, checked",
+          rc == 0 and "is not the pinned bytes; fetching the URL" in out
+          and "fetch   file://" in out and open(dst, "rb").read() == good, out)
+    os.remove(dst)
+    rc, out = fetch(nowhere, sha, dst, dist)
+    check("other bytes locally and the URL unreachable: refused, nothing left",
+          rc == 1 and "download failed" in out and not os.path.exists(dst)
+          and not os.path.exists(dst + ".part"), out)
+
+    rc, out = fetch("file://" + src, sha, dst, os.path.join(tmp, "empty"))
+    check("AMIX_DISTFILES without the file: the URL, as always", rc == 0 and "fetch   file://" in out, out)
+    os.remove(dst)
+    rc, out = fetch("file://" + src, sha, dst)
+    check("no AMIX_DISTFILES: the URL, as always", rc == 0 and open(dst, "rb").read() == good, out)
+    os.remove(dst)
+    write(src, b"tampered upstream\n")
+    rc, out = fetch("file://" + src, sha, dst)
+    check("the URL's bytes are not the pin: refused, the download not left behind",
+          rc == 1 and "is not the pinned source tarball" in out and not os.path.exists(dst)
+          and not os.path.exists(dst + ".part"), out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

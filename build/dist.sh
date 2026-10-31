@@ -93,9 +93,13 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	fi
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
+	# AMIX_DISTFILES, a local directory of distfiles, read-only at /distfiles
+	set -- -w /src "${AMIX_IMAGE:-amix-toolchain:dist}" sh build/dist.sh "$@"
+	if [ -n "${AMIX_DISTFILES:-}" ]; then
+		set -- -e AMIX_DISTFILES=/distfiles -v "$(cd "$AMIX_DISTFILES" && pwd):/distfiles:ro" "$@"
+	fi
 	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 -e LOCK \
-		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" \
-		-w /src "${AMIX_IMAGE:-amix-toolchain:dist}" sh build/dist.sh "$@"
+		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi
 if [ "$AMIX_IN_CONTAINER" = 1 ]; then
 	git config --global --add safe.directory /src

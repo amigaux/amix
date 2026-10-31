@@ -97,9 +97,13 @@ out/build/                    work trees and logs
   `cuts/<id>/`): a rebuild repeats them.
 - **Inputs from outside** are pinned: the toolchains, amix-system and the port
   by commit (`.pin`), and the forks in `kernel/drivers/<name>/<name>.pin`.
-  Distfiles are pinned by sha256 (`toolchain/*.distfile`) and fetched from
-  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles) into
-  `out/cache`. `AMIX_DISTFILES=<dir>` takes them from a local directory.
+  Distfiles are pinned by sha256 (`toolchain/*.distfile`, a package's
+  `URL`/`SHA256`) and fetched from
+  [amigaux/amix-distfiles](https://github.com/amigaux/amix-distfiles), whose
+  release assets are `releases/download/<name>-<version>/<the upstream's file
+  name>`. `AMIX_DISTFILES=<dir>`, a local directory of them, is read first: a
+  file there that is the pinned bytes is copied in instead of downloaded.
+  make dist passes it into the container, read-only at `/distfiles`.
 - **Known exceptions**, which the proof lists by name: the kits' revision lines
   (`kit.conf` and `NOTICE` name the commits, so the `norev` digest is the one
   compared across commits), amixbench 1.3 (kept outside amix), and the installed
