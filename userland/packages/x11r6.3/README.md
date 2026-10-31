@@ -15,8 +15,8 @@ until FP emulation on LC parts exists.
 **Status: work in progress.** The whole tree (libraries, server, clients) compiles under the gcc14
 strict gate: no implicit declarations, no pointer/integer conversions, `-mno-strict-align` on every
 compile line. It stages, and the prototype matches the payload (1107 paths). The roll stops at the
-68060 gate: scan060-g14 cannot yet size seven of GCC 14's switch tables, and the NEEDED gate does not
-yet accept `/usr/amiga/lib/libscreen.so`, the library's own SONAME, which every stock user records.
+NEEDED gate until it accepts `/usr/amiga/lib/libscreen.so`, the library's own SONAME, which every
+stock user records (infra 118a966).
 
 Package: `x11r63`, category `x11`, set `extra`. Licence: the X Consortium's (`X11`) for X11R6.3,
 MIT for isoriano's Amiga DDX (patch 00). Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
@@ -67,6 +67,13 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   imake runs through `imakecpp.sh`, and config files go through a plain host `cpp -traditional`.
 - **rgb.** The server's colour database reader is Amix's classic `dbm`, whose `.dir`/`.pag` format
   no build-host tool writes. So the server reads `rgb.txt` itself (`UseRgbTxt`).
+- **-fno-jump-tables** for five files only (`build.sh`'s `XNOJT`): each holds a GCC 14 switch table
+  that the 68060 gate's scan060-g14 cannot size, though the code bounds it:
+  `lib/font/bitmap/bdfutils.c` (bdfSpecialProperty: the bound is on the index before a shift),
+  `lib/Xtst/XTest.c` (send_axes) and `programs/xdm/dm.c` (WaitForChild) (a signed compare before
+  the unsigned bound), `lib/font/Speedo/do_trns.c` (sp_proc_outl_data: the index is a byte's high
+  nibble) and `lib/font/Type1/type1.c` (Decode: the bound is set on the only path into the block).
+  Those switches compile to compare chains; nothing else changes.
 - **Installs** go through the tree's BSD-style `config/util/install.sh`, because `bsdinst.sh` calls
   an SVR4 `install`.
 - **Fonts** misc, 75dpi and 100dpi are compiled and indexed by the build host's `bdftopcf` and

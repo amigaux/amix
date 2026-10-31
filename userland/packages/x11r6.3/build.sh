@@ -12,6 +12,14 @@ XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrd
 	xlsfonts xhost xauth iceauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf
 	smproxy rstart"
 
+# compiled with -fno-jump-tables, these files only: a GCC 14 switch table in each that
+# scan060-g14 (the D4 gate) cannot size, though the code bounds it
+XNOJT="lib/font/bitmap/bdfutils.c	bdfSpecialProperty: the bound is on the index before a shift
+	lib/Xtst/XTest.c		send_axes: a signed compare before the unsigned bound, table via %an
+	programs/xdm/dm.c		WaitForChild: the same shape
+	lib/font/Speedo/do_trns.c	sp_proc_outl_data: the index is a byte's high nibble, sign case away
+	lib/font/Type1/type1.c		Decode: the bound is set on the only path into the dispatch block"
+
 xmake() {	# xmake <log> <make args...>: make -k, every compile line into make.log by xcc
 	_xm_log=$1; shift
 	_xm_rc=0; make -k "$@" > "$BUILD/$_xm_log" 2>&1 < /dev/null || _xm_rc=$?
@@ -35,10 +43,15 @@ build() {
 	# only <amiga/...> from /usr/amiga/include: it also holds an assert.h of its own
 	mkdir -p "$BUILD/ainc" && ln -sfn "$AMIX_USR_AMIGA/amiga/include/amiga" "$BUILD/ainc/amiga"
 	# the compiler: gcc14, the C library and amix-decls.h force-included, every line logged
+	_nojt=$(echo "$XNOJT" | awk -v t="$(pwd -P)" '{printf " %s/%s", t, $1}')
 	cat > "$BUILD/xcc" <<XCC
 #!/bin/sh
-echo "$CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS \$* $AMIX_CFLAGS $AMIX_ARCH_FLAGS" >> "$BUILD/make.log"
-exec $CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS "\$@" $AMIX_CFLAGS $AMIX_ARCH_FLAGS 2>> "$BUILD/make.log"
+_xf=
+for _a in "\$@"; do
+	case "\$_a" in *.c) case "$_nojt " in *" \$(realpath -m -- "\$_a") "*) _xf=-fno-jump-tables ;; esac ;; esac
+done
+echo "$CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS \$* \$_xf $AMIX_CFLAGS $AMIX_ARCH_FLAGS" >> "$BUILD/make.log"
+exec $CC -std=gnu89 -fcommon -I$BUILD/ainc -include $HERE/amix-xlibc.h -include $AMIX_GCC14_DECLS "\$@" \$_xf $AMIX_CFLAGS $AMIX_ARCH_FLAGS 2>> "$BUILD/make.log"
 XCC
 	chmod +x "$BUILD/xcc"
 	# config files (xinitrc, Xsession, ...) go through a plain host cpp, without xcc's headers
