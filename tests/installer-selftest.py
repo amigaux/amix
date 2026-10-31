@@ -1543,10 +1543,7 @@ def audit_tool_allowlist():
     # driver's own strict allowlist (and its functions) apply.
     lwords = list(command_words(read_sh(L11)))
     need_l = {"dd", "expr", "die", "msg", "rm"}
-    # the upgrade install saves the old system with that system's OWN tools, run on
-    # its own root mounted read-only at /mnt (chroot + its find/cpio/du/sum)
-    lbad = [w for w in lwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)
-            and not w.startswith("/mnt/usr/")]
+    lbad = [w for w in lwords if _classify(w, dfuncs, proto_tools, DRIVER_EXTRA)]
     if need_l - set(lwords):
         fail("allowlist parser is not exercising l11.sh (vacuity guard): missing %s"
              % sorted(need_l - set(lwords)))
@@ -9244,7 +9241,7 @@ def audit_dmamask_stamp():
     img = dm.synth_rdb(0x07FFFFFE)
     r, got = run(img, "a4092")
     if r.returncode == 0 and got == bytes(img):
-        ok("a disk already at its Mask is left byte-identical (an upgrade's kept layout)")
+        ok("a disk already at its Mask is left byte-identical (a re-stamp is idempotent)")
     else:
         fail("re-stamping an already-stamped disk changed it (rc=%d)" % r.returncode)
     r, got = run(dm.synth_rdb(0xFFFFFFFC), "")
@@ -9841,6 +9838,25 @@ def audit_unattended():
                      % (pn, key, v, card, v))
 
 
+# P-36: the upgrade install's names; none may come back into the driver or l11.sh
+_P36_GONE = ("l11_upgrade_capture", "l11_upgrade_restore", "l11_upgrade_apply", "l11_keep_layout",
+             "S17upgrade", "SWAP_HOLD", "UPGRADE_KIND", "L11_KEEP", "DATA_KEEP", "FB_UPGRADED",
+             "/var/adm/upgrade", "UPGRADE_DROP_HOME")
+
+
+def _p36_problems(install_src, l11_src):
+    """What keeps install.sh + l11.sh from being clean-install only (P-36)."""
+    probs = []
+    if not re.search(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n\tno\)\t: ;;\n\t\*\)\tdie "[^"\n]*'
+                     r'1\.1 requires a fresh install, P-36', install_src):
+        probs.append("install.sh does not refuse INSTALL_UPGRADE")
+    code = strip_full_comments(install_src) + strip_full_comments(l11_src)
+    left = sorted(w for w in _P36_GONE if w in code)
+    if left:
+        probs.append("upgrade code left: " + " ".join(left))
+    return probs
+
+
 def audit_l11():
     """L11. The 1.1 disk layout (amix-dlm spec 40, stage 2 S2-30/S2-31), EXECUTED
     under dash from the scripts' own text: (1) plan_partitions with INSTALL_LAYOUT=1.1
@@ -9959,36 +9975,26 @@ def audit_l11():
         else:
             fail("apkg: %s -- got %r" % (what, out.strip()))
 
-    # (5) the upgrade's first-boot hook S17upgrade, generated from l11.sh's own echo
-    # lines and run against a scratch tree: good sums -> applied once; a changed file ->
-    # nothing applied (the redirect-fed loop must not lose its verdict)
-    m = re.search(r"\n\t\{\n((?:\t\techo .*\n)+)\t\} > \"\$TARGET/etc/rc2\.d/S17upgrade\"", l11)
-    if not m:
-        fail("could not extract the S17upgrade generator from l11.sh")
-    else:
-        gen = os.path.join(d, "gen-s17")
-        r = subprocess.run(["/usr/bin/dash", "-c", m.group(1).replace("\t\t", "")],
-                           capture_output=True, text=True, timeout=30)
-        # S4-54: the installer puts the files in place; S17upgrade is a guard that only reports
-        # a cfg/ the install did not finish (no RESTORED), and never applies anything
-        for restored in (True, False):
-            root = os.path.join(d, "s17-%s" % ("restored" if restored else "unrestored"))
-            u = os.path.join(root, "var", "adm", "upgrade")
-            os.makedirs(os.path.join(u, "cfg", "etc"), exist_ok=True)
-            open(os.path.join(u, "cfg", "etc", "nodename"), "w").write("upgbox\n")
-            open(os.path.join(u, "SUMS"), "w").write("1 1 etc/nodename\n")
-            if restored:
-                open(os.path.join(u, "RESTORED"), "w").write("")
-            open(gen, "w").write(r.stdout.replace("U=/var/adm/upgrade", "U=" + u))
-            o = subprocess.run(["/usr/bin/dash", gen, "start"], capture_output=True, text=True, timeout=30)
-            applied = os.path.exists(os.path.join(root, "etc", "nodename"))
-            if restored and not applied and not o.stdout.strip():
-                ok("S17upgrade guard: the install put the configuration in place (RESTORED) -> silent, nothing applied")
-            elif not restored and not applied and "did not put in place" in o.stdout:
-                ok("S17upgrade guard: a cfg/ without RESTORED is reported, nothing applied")
-            else:
-                fail("S17upgrade guard (%s): applied=%s out=%r"
-                     % ("restored" if restored else "unrestored", applied, o.stdout.strip()))
+    # (5) P-36: 1.1 supports clean installs only -- install.sh refuses INSTALL_UPGRADE,
+    # and neither script carries the upgrade path; the audit is shown to catch a fixture
+    # with the refusal dropped and the capture brought back
+    probs = _p36_problems(src, l11)
+    (ok if not probs else fail)("install.sh + l11.sh: no upgrade path, INSTALL_UPGRADE refused%s"
+                                % ((" -- " + "; ".join(probs)) if probs else ""))
+    fixture = re.sub(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n.*?\nesac\n', "\n", src, flags=re.S)
+    fixture = fixture.replace('\t\tRDB_CLEAR="$OFFSET_BLOCKS"\n',
+                              '\t\tRDB_CLEAR="$OFFSET_BLOCKS"\n\t\t[ "${INSTALL_UPGRADE:-no}" = yes ] && l11_upgrade_capture\n')
+    fp = _p36_problems(fixture, l11)
+    (ok if fixture != src and len(fp) == 2 else fail)(
+        "the P-36 audit catches the negative fixture (refusal dropped, capture back): %s" % ("; ".join(fp) or "nothing"))
+    m = re.search(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n.*?\nesac\n', src, re.S)
+    if m:
+        for val, want in (("", "PASSED"), ("no", "PASSED"), ("yes", "DIE"), ("y", "DIE")):
+            body = 'die() { echo "DIE $*"; exit 3; }\n' + ("INSTALL_UPGRADE=%s\n" % val if val else "") \
+                   + m.group(0) + "echo PASSED\n"
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            good = want in out and (want == "PASSED" or "fresh install, P-36" in out)
+            (ok if good else fail)("install.sh, INSTALL_UPGRADE=%s: %s" % (val or "(unset)", out.strip()[:90]))
 
     # (6) l11_bcheckrc: the stock 2.1 bcheckrc becomes the medium's retry-patched one in
     # place (its hard link follows); a patched one is kept; any other is left alone
@@ -10295,19 +10301,6 @@ def audit_l11():
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
             (ok if want in out and not os.listdir(os.path.join(ct, "tmp")) else fail)(
                 "install.sh's 1.1 m4 check, %s: %s" % (what, "accepted" if "PASSED" in out else "refused"))
-
-    # (15b) S4-54: every file of the upgrade's keep list is matched by the restore's cpio
-    # patterns (a kept file the restore does not extract stops every upgrade at its check)
-    mk = re.search(r'\nL11_KEEP="([^"]*)"', l11, re.S)
-    mp = re.search(r"\| /bin/cpio -icdmu ('etc/\*'(?: '[^']*')*) \) > /tmp/upg\.err", l11)
-    if not mk or not mp:
-        fail("l11.sh: no L11_KEEP list or no restore cpio patterns")
-    else:
-        import fnmatch
-        pats = re.findall(r"'([^']*)'", mp.group(1))
-        miss = [f for f in mk.group(1).split() if not any(fnmatch.fnmatch(f, p) for p in pats)]
-        (ok if not miss else fail)("l11.sh: the restore's cpio patterns %s match every kept file%s"
-                                   % (" ".join(pats), (" -- not: " + " ".join(miss)) if miss else ""))
 
     # (16) C4-1: l11.sh reads the kernel's sd cards from its sidecar (sdcards=4, absent = 2)
     # and install.sh hands FB_SDCARDS=4 to the first boot
