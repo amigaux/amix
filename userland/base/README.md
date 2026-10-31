@@ -61,6 +61,7 @@ sh build/pkg/pkgbuild.sh userland/base/pkg/amix-base     # and pkg/dhcp-client
 sh userland/base/man/test-man.sh            # host tests of the man front-end
 sh userland/base/rc/test-rc.sh              # host tests of rc.subr
 sh userland/base/rc/test-devnodes.sh        # the device-node boot step
+sh userland/base/rc/test-swap.sh            # the swap boot step
 sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
 sh userland/base/net/test-ifup.sh sh nawk       # ifup, ifdown and the hook
 sh userland/base/etc/test-profile.sh           # /etc/profile = stock + profile.add
