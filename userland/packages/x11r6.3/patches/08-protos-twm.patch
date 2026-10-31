@@ -1,0 +1,215 @@
+Ours.  Declarations gcc 14 needs in twm:
+each file that called a function with no declaration gets a prototype after its
+includes, taken from the definition the call links with (gcc -aux-info).  A K&R
+definition's narrow parameters are default-promoted in the prototype, as a K&R caller
+passes them (char/short/their typedefs -> int, float -> double):
+  none in this area
+
+--- a/programs/twm/add_window.c
++++ b/programs/twm/add_window.c
+@@ -75,6 +75,19 @@
+ #include "screen.h"
+ #include "iconmgr.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int FetchWmProtocols (TwmWindow *tmp);
++int FetchWmColormapWindows (TwmWindow *tmp);
++int GetWindowConfig (TwmWindow *theWindow, short int *x, short int *y, short unsigned int *width, short unsigned int *height, int *iconified, int *icon_info_present, short int *icon_x, short int *icon_y, int *width_ever_changed_by_user, int *height_ever_changed_by_user);
++int Transient (Window w, Window *propw);
++int InstallRootColormap (void);
++int ConstrainSize (TwmWindow *tmp_win, int *widthp, int *heightp);
++int UninstallRootColormap (void);
++int SetBorder (TwmWindow *tmp, int onoroff);
++int ReGrab (void);
++int InstallWindowColormaps (int type, TwmWindow *tmp);
++
++
+ #define gray_width 2
+ #define gray_height 2
+ static char gray_bits[] = {
+--- a/programs/twm/events.c
++++ b/programs/twm/events.c
+@@ -75,6 +75,31 @@
+ #include "iconmgr.h"
+ #include "version.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int InstallWindowColormaps (int type, TwmWindow *tmp);
++int InsertRGBColormap (Atom a, XStandardColormap *maps, int nmaps, int replace);
++int RemoveRGBColormap (Atom a);
++int RedoIconName (void);
++int CreateIconWindow (TwmWindow *tmp_win, int def_x, int def_y);
++int FetchWmColormapWindows (TwmWindow *tmp);
++int FetchWmProtocols (TwmWindow *tmp);
++int PaintMenu (MenuRoot *mr, XEvent *e);
++int IconDown (TwmWindow *tmp_win);
++int SetMapStateProp (TwmWindow *tmp_win, int state);
++int Iconify (TwmWindow *tmp_win, int def_x, int def_y);
++int DeIconify (TwmWindow *tmp_win);
++int RestoreWithdrawnLocation (TwmWindow *tmp);
++int UninstallRootColormap (void);
++int PopDownMenu (void);
++int UpdateMenu (void);
++int SetBorder (TwmWindow *tmp, int onoroff);
++int SetFocus (TwmWindow *tmp_win, Time time);
++int SendTakeFocusMessage (TwmWindow *tmp, Time timestamp);
++int PaintEntry (MenuRoot *mr, MenuItem *mi, int exposure);
++int GetGravityOffsets (TwmWindow *tmp, int *xp, int *yp);
++int SetFrameShape (TwmWindow *tmp);
++
++
+ extern int iconifybox_width, iconifybox_height;
+ extern unsigned int mods_used;
+ extern int menuFromFrameOrWindowOrTitlebar;
+--- a/programs/twm/gram.y
++++ b/programs/twm/gram.y
+@@ -95,6 +95,18 @@
+ extern name_list **do_colorlist_keyword();
+ extern int do_color_keyword(), do_string_savecolor();
+ extern int yylineno;
++/* AMIX: declarations for gcc 14 (the scanner's, and functions the actions call before
++ * their definitions) */
++int yylex (void);
++int yyerror (char *s);
++int twmrc_error_prefix (void);
++int RemoveDQuote (char *str);
++int do_var_savecolor (int key);
++int SetHighlightPixmap (char *filename);
++int do_squeeze_entry ();
++int AddIconRegion (char *geom, int grav1, int grav2, int stepx, int stepy);
++int NewBitmapCursor ();
++int CreateTitleButton ();
+ %}
+ 
+ %union
+--- a/programs/twm/iconmgr.c
++++ b/programs/twm/iconmgr.c
+@@ -44,6 +44,10 @@
+ #include "siconify.bm"
+ #include <X11/Xos.h>
+ #include <X11/Xmu/CharSet.h>
++
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int SetMapStateProp (TwmWindow *tmp_win, int state);
++
+ #ifdef macII
+ int strcmp(); /* missing from string.h in AUX 2.0 */
+ #endif
+--- a/programs/twm/lex.l
++++ b/programs/twm/lex.l
+@@ -91,6 +91,9 @@
+ }
+ #endif
+ 
++/* AMIX: declarations for gcc 14 */
++int twmrc_error_prefix (void);
++int parse_keyword (char *s, int *nump);
+ %}
+ 
+ string				\"([^"]|\\.)*\"
+--- a/programs/twm/list.c
++++ b/programs/twm/list.c
+@@ -67,6 +67,11 @@
+ #include "screen.h"
+ #include "gram.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int twmrc_error_prefix (void);
++int GetColor (int kind, Pixel *what, char *name);
++
++
+ struct name_list_struct
+ {
+     name_list *next;		/* pointer to the next name */
+--- a/programs/twm/menus.c
++++ b/programs/twm/menus.c
+@@ -78,6 +78,34 @@
+ #include <X11/extensions/sync.h>
+ #include <X11/SM/SMlib.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int AddDefaultBindings (void);
++int CreateFonts (void);
++int MakeMenu (MenuRoot *mr);
++int InstallRootColormap (void);
++int DestroyMenu (MenuRoot *menu);
++int UninstallRootColormap (void);
++void MenuStartResize (TwmWindow *tmp_win, int x, int y, int w, int h);
++void MenuEndResize (TwmWindow *tmp_win);
++void MenuDoResize (int x_root, int y_root, TwmWindow *tmp_win);
++int DeIconify (TwmWindow *tmp_win);
++int HideIconManager (void);
++int NeedToDefer (MenuRoot *root);
++int Iconify (TwmWindow *tmp_win, int def_x, int def_y);
++int SetBorder (TwmWindow *tmp, int onoroff);
++int InstallWindowColormaps (int type, TwmWindow *tmp);
++int SetFocus (TwmWindow *tmp_win, Time time);
++int SendDeleteWindowMessage (TwmWindow *tmp, Time timestamp);
++int SendSaveYourselfMessage (TwmWindow *tmp, Time timestamp);
++int WarpToScreen (int n, int inc);
++int BumpWindowColormap (TwmWindow *tmp, int inc);
++int SetMapStateProp (TwmWindow *tmp_win, int state);
++int IconDown (TwmWindow *tmp_win);
++int CreateIconWindow (TwmWindow *tmp_win, int def_x, int def_y);
++int IconUp (TwmWindow *tmp_win);
++int FetchWmColormapWindows (TwmWindow *tmp);
++
++
+ extern XEvent Event;
+ 
+ int RootFunction = 0;
+--- a/programs/twm/parse.c
++++ b/programs/twm/parse.c
+@@ -73,6 +73,11 @@
+ #include <X11/Xatom.h> 
+ #include <X11/extensions/sync.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int twmrc_error_prefix (void);
++int GetColorValue (int kind, XColor *what, char *name);
++
++
+ #ifndef SYSTEM_INIT_FILE
+ #define SYSTEM_INIT_FILE "/usr/lib/X11/twm/system.twmrc"
+ #endif
+--- a/programs/twm/resize.c
++++ b/programs/twm/resize.c
+@@ -69,6 +69,13 @@
+ #include "add_window.h"
+ #include "screen.h"
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++int InstallRootColormap (void);
++int ConstrainSize (TwmWindow *tmp_win, int *widthp, int *heightp);
++int UninstallRootColormap (void);
++int SetFrameShape (TwmWindow *tmp);
++
++
+ #define MINHEIGHT 0     /* had been 32 */
+ #define MINWIDTH 0      /* had been 60 */
+ 
+--- a/programs/twm/twm.c
++++ b/programs/twm/twm.c
+@@ -79,6 +79,22 @@
+ #include <X11/Xatom.h>
+ #include <X11/SM/SMlib.h>
+ 
++/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
++void ReadWinConfigFile (char *filename);
++int XSyncQueryExtension (Display *dpy, int *event_base_return, int *error_base_return);
++int InstallWindowColormaps (int type, TwmWindow *tmp);
++int LocateStandardColormaps (void);
++int SetFocus (TwmWindow *tmp_win, Time time);
++int InitVariables (void);
++int CreateFonts (void);
++int MakeMenus (void);
++int SetMapStateProp (TwmWindow *tmp_win, int state);
++void ConnectToSessionManager (char *previous_id);
++int GetFont (MyFont *font);
++int GetGravityOffsets (TwmWindow *tmp, int *xp, int *yp);
++int XmuPrintDefaultErrorMessage (Display *dpy, XErrorEvent *event, FILE *fp);
++
++
+ XtAppContext appContext;	/* Xt application context */
+ 
+ Display *dpy;			/* which display are we talking to */
