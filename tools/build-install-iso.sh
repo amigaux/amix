@@ -577,60 +577,21 @@ if [ -f "$repo/payload/zenmac" ]; then
   echo "build-install-iso: staged /install/zenmac ($(wc -c <"$STAGE/zenmac") B, sha256 $(sha256sum "$STAGE/zenmac" | cut -c1-16)...)"
 fi
 
-# --- /install/monsw (P-8 monitor switch) ------------------------------------
-# The three files install.sh lays down when a profile sets MONSW (see its "LAY
-# DOWN the monitor-switch bits" block): amix-kerntools' rc step S20monsw and its
-# cross-built monswctl, and the port line's sys/monsw.h -- the same sources
-# kerntools' build-image.sh section b3b uses. Staged ONLY when a requested
-# profile sets MONSW to a value (not empty, not "none"), so every other medium is
-# byte-for-byte what it was. Both pins are checked HERE, host-side, before any
-# box is involved, and a mismatch STOPS the build: monswctl must hash to
-# kerntools' tools/monsw/MANIFEST monswctl_sha256; the header to MONSW_H_SHA
-# (the same pin build-image.sh and build-monswctl.sh carry).
-MONSW_KT="$repo/../amix-kerntools/tools/monsw"
-MONSW_H="$repo/../amix-040-060-port/src/sys/monsw.h"
-MONSW_H_SHA=66e63e7e7a48131398809c16fa103b11d5b951b898e067a01089707f9523229e
-MONSW_MAJOR=52   # cdevsw row of /dev/monsw (port b9992ed); install.sh mknods c 52 0
-_want_monsw=
+# --- MONSW (the monitor switch) ------------------------------------------------
+# On 1.1 the kernel-space set's monsw package carries monswctl, its boot step and
+# /dev/monsw; the profile's MONSW only becomes /etc/display's monsw line (l11_admin).
+# Nothing is staged for it. A 1.0 profile can no longer set it: its files came from
+# amix-kerntools' 1.0 pipeline, which is retired.
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^MONSW=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _l="$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     ''|none) ;;
-    0|1|2|3|16|17|18|19|32|33|34|35|48|49|50|51) _want_monsw="$_want_monsw $_p=$_v" ;;
+    0|1|2|3|16|17|18|19|32|33|34|35|48|49|50|51)
+      [ "$_l" = 1.1 ] || { echo "STOP: profile $_p: MONSW=$_v on a 1.0 install -- 1.0 media no longer carry the monitor-switch files (the monsw package does, on 1.1)" >&2; exit 1; } ;;
     *) echo "STOP: profile $_p: MONSW='$_v' is not a bit sum of 1 2 16 32 (or 'none')" >&2; exit 1 ;;
   esac
 done
-if [ -n "$_want_monsw" ]; then
-  for _f in "$MONSW_KT/S20monsw" "$MONSW_KT/MANIFEST" "$MONSW_H"; do
-    [ -f "$_f" ] || { echo "STOP: MONSW requested by${_want_monsw} but $_f is missing" >&2; exit 1; }
-  done
-  [ -f "$MONSW_KT/bin/monswctl" ] || {
-    echo "STOP: MONSW requested by${_want_monsw} but $MONSW_KT/bin/monswctl is not built (run ../amix-kerntools/tools/monsw/build-monswctl.sh)" >&2; exit 1; }
-  _ctl_want="$(sed -n 's/^monswctl_sha256=//p' "$MONSW_KT/MANIFEST")"
-  _ctl_got="$(sha256sum "$MONSW_KT/bin/monswctl" | cut -c1-64)"
-  [ -n "$_ctl_want" ] && [ "$_ctl_got" = "$_ctl_want" ] || {
-    echo "STOP: monswctl sha256 $_ctl_got != kerntools MANIFEST ${_ctl_want:-<none>} ($MONSW_KT/bin/monswctl; rebuild with build-monswctl.sh)" >&2; exit 1; }
-  _h_got="$(sha256sum "$MONSW_H" | cut -c1-64)"
-  [ "$_h_got" = "$MONSW_H_SHA" ] || {
-    echo "STOP: sys/monsw.h sha256 $_h_got != pinned $MONSW_H_SHA ($MONSW_H; re-pin here AND in kerntools together)" >&2; exit 1; }
-  # S20monsw self-heals the node at every boot: its mknod must name the SAME major
-  # install.sh lays down, or a box that loses /dev/monsw re-creates the wrong row.
-  _s20_major="$(sed -n 's|.*mknod [^ ]* c \([0-9][0-9]*\) 0.*|\1|p' "$MONSW_KT/S20monsw" | head -1)"
-  [ "$_s20_major" = "$MONSW_MAJOR" ] || {
-    echo "STOP: $MONSW_KT/S20monsw self-heals /dev/monsw as c ${_s20_major:-?} 0, but the installed node is c $MONSW_MAJOR 0 (update kerntools' S20monsw first)" >&2; exit 1; }
-  mkdir -p "$STAGE/monsw"
-  cp "$MONSW_KT/S20monsw" "$STAGE/monsw/S20monsw"
-  cp "$MONSW_KT/bin/monswctl" "$STAGE/monsw/monswctl"
-  cp "$MONSW_H" "$STAGE/monsw/monsw.h"
-  chmod 0755 "$STAGE/monsw/S20monsw" "$STAGE/monsw/monswctl"
-  chmod 0644 "$STAGE/monsw/monsw.h"
-  cmp -s "$MONSW_KT/S20monsw" "$STAGE/monsw/S20monsw" && cmp -s "$MONSW_KT/bin/monswctl" "$STAGE/monsw/monswctl" \
-    && cmp -s "$MONSW_H" "$STAGE/monsw/monsw.h" || {
-    echo "STOP: staged /install/monsw is not byte-identical to its sources" >&2; exit 1; }
-  echo "build-install-iso: staged /install/monsw for${_want_monsw}: monswctl ${_ctl_got:0:16}... (== MANIFEST), monsw.h ${_h_got:0:16}... (== pin), S20monsw $(sha256sum "$STAGE/monsw/S20monsw" | cut -c1-16)..."
-else
-  echo "build-install-iso: no requested profile sets MONSW -- /install/monsw not staged"
-fi
 
 # --- /install/x11kit (K1 RTG desktop kit, X11KIT=rtg) -------------------------
 # The kit install.sh lays down for X11KIT=rtg (its "LAY DOWN the RTG X11 kit" block).

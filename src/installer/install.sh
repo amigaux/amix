@@ -763,12 +763,10 @@ esac
 #                                 040/060 target kernel goes in UNCOMPRESSED, so
 #                                 2 MB is 92.7% full before anything grows.
 #   TARGET_SWAP_MB   <empty>      stock-default swap sizing (plan_partitions)
-#   MONSW            <empty>      P-8 monitor switch: the value written to
-#                                 /etc/monsw (a bit sum of 1 2 16 32; the owner's
-#                                 Z3660 boxes use 34). Set = lay down the five
-#                                 /dev/monsw bits (S20monsw, monswctl, sys/monsw.h,
-#                                 the c 52 0 node, /etc/monsw); empty or "none" =
-#                                 none of them, exactly as before (gated below)
+#   MONSW            <empty>      the monitor switch's bits (a bit sum of 1 2 16 32;
+#                                 the Z3660 boxes use 34): 1.1 only, the monsw line
+#                                 of /etc/display (the monsw package ships the rest);
+#                                 empty or "none" = no line
 #   RUN_UNIT         6            the target chain: 6 = the profile's single chain;
 #                                 install = one pre-framed chain per unit (Q-4.15);
 #                                 hint = the family chain to any id (D-2, RTH1);
@@ -3118,48 +3116,14 @@ else
 	esac
 fi
 
-# --- LAY DOWN the monitor-switch bits (P-8, /dev/monsw) -----------------------
-# The Z3660 flavors carry what amix-kerntools' build-image.sh section b3b lays on
-# a desktop golden (kerntools docs/monsw.md, "What amix-installng profiles must
-# carry"): the rc step /etc/rc2.d/S20monsw (755), the tool /usr/sbin/monswctl
-# (755), the interface header /usr/include/sys/monsw.h (644), the node
-# /dev/monsw c 52 0, and /etc/monsw = the profile's MONSW value (644). The three
-# files ride the medium under $INST/monsw, staged by build-install-iso.sh ONLY
-# after it checked monswctl against kerntools' MANIFEST sha and the header
-# against its pin -- so the bytes here are the pinned ones. DRIVER-WRITTEN and
-# additive like S99zen (not package members, invisible to the attestation). A
-# The major is 52 (port driver line b9992ed; 50 is the stock SAD STREAMS row).
-# kernel without the monsw driver boots this unchanged: S20monsw prints one
-# console line and the boot goes on. MONSW empty or "none" lays down nothing.
+# --- the monitor switch (/dev/monsw) -------------------------------------------
+# On 1.1 the monsw package ships monswctl, its boot step and /dev/monsw; MONSW is
+# /etc/display's monsw line (l11_admin). A 1.0 medium carries no monitor-switch files
+# (build-install-iso.sh refuses MONSW on a 1.0 profile).
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
-	# the monsw package ships its boot step and /dev/monsw (a node of its class), and
-	# the bits are /etc/display's monsw line (l11_admin)
 	msg "monitor switch: the monsw package's boot step; the bits in /etc/display (MONSW='$MONSW')"
 elif [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
-	for mf in S20monsw monswctl monsw.h; do
-		[ -f "$INST/monsw/$mf" ] || die "profile $PROFILE_NAME sets MONSW=$MONSW but this medium has no $INST/monsw/$mf (re-master with tools/build-install-iso.sh)"
-	done
-	[ -d "$TARGET/etc/rc2.d" ] || run mkdir -p "$TARGET/etc/rc2.d"
-	run cp "$INST/monsw/S20monsw" "$TARGET/etc/rc2.d/S20monsw"
-	run chmod 0755 "$TARGET/etc/rc2.d/S20monsw"
-	[ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
-	run cp "$INST/monsw/monswctl" "$TARGET/usr/sbin/monswctl"
-	run chmod 0755 "$TARGET/usr/sbin/monswctl"
-	[ -d "$TARGET/usr/include/sys" ] || run mkdir -p "$TARGET/usr/include/sys"
-	run chmod 0755 "$TARGET/usr/include/sys"
-	run cp "$INST/monsw/monsw.h" "$TARGET/usr/include/sys/monsw.h"
-	run chmod 0644 "$TARGET/usr/include/sys/monsw.h"
-	[ -c "$TARGET/dev/monsw" ] || run mknod "$TARGET/dev/monsw" c 52 0
-	# 0644 root, as the Z3660 station's MG5 kit: monswctl and the X server run as
-	# root, and a world-writable switch node would let any user flip the monitor
-	# (mknod alone takes the miniroot's umask and leaves it crw-rw-rw-).
-	run chmod 0644 "$TARGET/dev/monsw"
-	echo "$MONSW" > "$TARGET/etc/monsw" || die "cannot write $TARGET/etc/monsw"
-	[ -f "$TARGET/etc/monsw" ] || die "wrote $TARGET/etc/monsw but it is not there"
-	run chmod 0644 "$TARGET/etc/monsw"
-	msg "laid down the monitor switch (P-8): /etc/monsw=$MONSW, S20monsw, /usr/sbin/monswctl, sys/monsw.h, /dev/monsw c 52 0 (additive)"
-else
-	msg "monitor switch: none (MONSW='$MONSW') -- no /dev/monsw bits laid down"
+	die "profile $PROFILE_NAME sets MONSW=$MONSW on a 1.0 install: 1.0 media carry no monitor-switch files"
 fi
 
 # --- LAY DOWN the RTG X11 kit (K1, X11KIT=rtg) ---------------------------------

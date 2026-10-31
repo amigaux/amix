@@ -82,6 +82,10 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed.
 - **Checks.** `tools/l11-target-check.py` reads all of it host-side; the first-boot rig's
   answers include the DHCP and DNS questions.
+- **The monitor switch.** The kernel-space set's monsw package ships monswctl, its boot
+  step and `/dev/monsw`; a profile's `MONSW` is only `/etc/display`'s monsw line. The
+  medium stages nothing for it, and a 1.0 profile with `MONSW` is refused (its files came
+  from a retired 1.0 pipeline).
 - **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
   the old cap was 1024); `docs/l11-disk.md`.
 - **The pre-installed images**: `tools/build-preinstalled.sh` masters the image

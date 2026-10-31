@@ -8509,11 +8509,12 @@ def _unatt_checks(code):
 
 
 def audit_monsw():
-    head("AM. P-8 monitor switch: MONSW -> the five /dev/monsw bits (S20monsw, monswctl, "
-         "sys/monsw.h, c 52 0, /etc/monsw), Z3660 profiles only")
+    head("AM. the monitor switch: MONSW is /etc/display's monsw line on 1.1; the monsw package "
+         "ships monswctl, its boot step and /dev/monsw; nothing is staged or laid by the installer")
     driver_src = open(DRIVER, encoding="utf-8", errors="replace").read()
     code = strip_full_comments(driver_src)
     iso_src = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
+    iso_code = strip_full_comments(iso_src)
 
     # The legal values are exactly the subset sums of {1, 2, 16, 32} (monswctl's own rule).
     legal = sorted({a + b + c + d for a in (0, 1) for b in (0, 2) for c in (0, 16) for d in (0, 32)})
@@ -8538,87 +8539,44 @@ def audit_monsw():
             ok("install.sh MONSW validation EXECUTED: all 64 bit patterns + none/empty/junk "
                "classified exactly as monswctl would (%d legal values)" % len(legal))
 
-    # AM2: the laydown -- each of the five, with its mode, gated on MONSW set and != none.
-    want = [
-        (r'if\s+\[\s+-n\s+"\$MONSW"\s+\]\s+&&\s+\[\s+"\$MONSW"\s+!=\s+none\s+\];\s*then', "gate on MONSW set and != none"),
-        (r'run\s+cp\s+"\$INST/monsw/S20monsw"\s+"\$TARGET/etc/rc2\.d/S20monsw"', "S20monsw copied"),
-        (r'run\s+chmod\s+0755\s+"\$TARGET/etc/rc2\.d/S20monsw"', "S20monsw 755"),
-        (r'run\s+cp\s+"\$INST/monsw/monswctl"\s+"\$TARGET/usr/sbin/monswctl"', "monswctl copied"),
-        (r'run\s+chmod\s+0755\s+"\$TARGET/usr/sbin/monswctl"', "monswctl 755"),
-        (r'run\s+cp\s+"\$INST/monsw/monsw\.h"\s+"\$TARGET/usr/include/sys/monsw\.h"', "monsw.h copied"),
-        (r'run\s+chmod\s+0644\s+"\$TARGET/usr/include/sys/monsw\.h"', "monsw.h 644"),
-        (r'run\s+mknod\s+"\$TARGET/dev/monsw"\s+c\s+52\s+0', "/dev/monsw c 52 0"),
-        (r'run\s+chmod\s+0644\s+"\$TARGET/dev/monsw"', "/dev/monsw 0644 (not world-writable)"),
-        (r'echo\s+"\$MONSW"\s+>\s+"\$TARGET/etc/monsw"', "/etc/monsw written"),
-        (r'run\s+chmod\s+0644\s+"\$TARGET/etc/monsw"', "/etc/monsw 644"),
-        (r'die\s+"profile \$PROFILE_NAME sets MONSW=\$MONSW but this medium has no', "missing medium file is fatal"),
-    ]
-    miss = [d for rx, d in want if not re.search(rx, code)]
-    if miss:
-        fail("install.sh monsw laydown incomplete: missing %s" % miss)
+    # AM2: install.sh lays down no monitor-switch file, and refuses MONSW on a 1.0 install.
+    laid = [d for rx, d in (
+        (r'\$INST/monsw/', "a file from $INST/monsw"),
+        (r'usr/include/sys/monsw\.h', "sys/monsw.h"),
+        (r'mknod\s+"\$TARGET/dev/monsw"', "a /dev/monsw node"),
+        (r'>\s+"\$TARGET/etc/monsw"', "/etc/monsw")) if re.search(rx, code)]
+    refuse = re.search(r'elif \[ -n "\$MONSW" \] && \[ "\$MONSW" != none \]; then\n\tdie "profile '
+                       r'\$PROFILE_NAME sets MONSW=\$MONSW on a 1\.0 install', code)
+    if laid or not refuse:
+        fail("install.sh: monitor-switch laydown left (%s) or no refusal of MONSW on 1.0" % (laid or "-"))
     else:
-        ok("install.sh lays down all five monsw bits with their modes (755/755/644/c 52 0/644), "
-           "gated on MONSW, fatal when the medium lacks a file")
-    # NEGATIVE FIXTURE: dropping any one of the five from the driver must be caught.
-    caught = 0
-    for rx, d in want[1:11]:
-        mutated = re.sub(rx, "true", code, count=1)
-        if not re.search(rx, mutated):
-            caught += 1
-    if caught == 10:
-        ok("negative fixture: removing any single monsw laydown line (10 variants) is detected")
-    else:
-        fail("negative fixture: only %d/10 single-line removals were detectable" % caught)
+        ok("install.sh lays down no monitor-switch file (the monsw package's) and refuses MONSW on a 1.0 install")
 
-    # AM3: the medium gates both pins host-side and stages only on demand.
-    kt_img = os.path.join(REPO, os.pardir, "amix-kerntools", "tools", "build-image.sh")
-    pin = re.search(r'^MONSW_H_SHA=([0-9a-f]{64})$', iso_src, re.M)
-    checks = [
-        (pin is not None, "MONSW_H_SHA pinned"),
-        (re.search(r"sed -n 's/\^monswctl_sha256=//p' \"\$MONSW_KT/MANIFEST\"", iso_src) is not None,
-         "monswctl compared to kerntools MANIFEST"),
-        (re.search(r'\[ "\$_h_got" = "\$MONSW_H_SHA" \]', iso_src) is not None, "header compared to pin"),
-        (re.search(r'^MONSW_MAJOR=52\b', iso_src, re.M) is not None
-         and re.search(r'\[ "\$_s20_major" = "\$MONSW_MAJOR" \]', iso_src) is not None,
-         "S20monsw's self-heal major checked against 52"),
-        (re.search(r"^\s*''\|none\) ;;$", iso_src, re.M) is not None, "empty/none stages nothing"),
-    ]
-    bad = [d for c, d in checks if not c]
-    if bad:
-        fail("build-install-iso.sh /install/monsw staging: %s" % bad)
+    # AM3: the medium stages nothing for it, reads neither kerntools nor the port's header,
+    # and refuses MONSW on a 1.0 profile.
+    reads = [d for rx, d in (
+        (r'amix-kerntools/tools/monsw', "amix-kerntools/tools/monsw"),
+        (r'monsw\.h', "sys/monsw.h"),
+        (r'\$STAGE/monsw', "$STAGE/monsw"),
+        (r'MONSW_H_SHA', "MONSW_H_SHA")) if re.search(rx, iso_code)]
+    stop10 = re.search(r'\[ "\$_l" = 1\.1 \] \|\| \{ echo "STOP: profile \$_p: MONSW=\$_v on a 1\.0 install',
+                       iso_code)
+    if reads or not stop10:
+        fail("build-install-iso.sh: monitor-switch staging left (%s) or no STOP for MONSW on 1.0" % (reads or "-"))
     else:
-        ok("build-install-iso.sh stages /install/monsw only for a MONSW profile, after checking "
-           "monswctl == kerntools MANIFEST and sys/monsw.h == pin (STOP on mismatch)")
-    if pin and os.path.isfile(kt_img):
-        ktpin = re.search(r'^MONSW_H_SHA="([0-9a-f]{64})"', open(kt_img, encoding="utf-8").read(), re.M)
-        if ktpin and ktpin.group(1) == pin.group(1):
-            ok("sys/monsw.h pin agrees with kerntools build-image.sh (%s...)" % pin.group(1)[:16])
-        else:
-            fail("sys/monsw.h pin %s disagrees with kerntools build-image.sh %s"
-                 % (pin.group(1)[:16], ktpin.group(1)[:16] if ktpin else "<none>"))
+        ok("build-install-iso.sh stages no /install/monsw, reads no kerntools or port file, "
+           "and STOPs on MONSW in a 1.0 profile")
 
-    # AM4: which profiles carry it -- exactly the Z3660 metal (metal-a4000-z3660 and
-    # metal-a4000-z3660-*) and showcase-* flavors; every other profile none/unset
-    # (handover-a4000-z3660 is deliberately off: not our box).
-    z = 0
+    # AM4: the 1.0 profiles that still name a switch value are frozen: mastering refuses them.
+    old10 = []
     for pf in sorted(os.listdir(PROFILES_DIR)):
         if not pf.endswith(".profile"):
             continue
-        v = _parse_profile(os.path.join(PROFILES_DIR, pf)).get("MONSW", "")
-        z3660 = (pf == "metal-a4000-z3660.profile" or pf.startswith("metal-a4000-z3660-")
-                 or pf.startswith("public-a4000-z3660-") or pf.startswith("showcase-"))
-        if z3660:
-            if v in legal_s and v != "0":
-                z += 1
-            else:
-                fail("%s: a Z3660 flavor must set MONSW to a switch value (got %r)" % (pf, v))
-        elif v not in ("", "none"):
-            fail("%s: MONSW=%r on a non-Z3660 profile (it would lay /dev/monsw bits on a box "
-                 "without the card)" % (pf, v))
-    if z:
-        ok("MONSW set on all %d Z3660 metal/showcase profiles and on no other profile" % z)
-    else:
-        fail("no Z3660 profile sets MONSW")
+        d = _parse_profile(os.path.join(PROFILES_DIR, pf))
+        v = d.get("MONSW", "")
+        if v not in ("", "none") and d.get("INSTALL_LAYOUT") != "1.1":
+            old10.append(pf)
+    ok("%d 1.0 profile(s) set MONSW: 1.0 media are frozen, build-install-iso.sh refuses them" % len(old10))
 
 
 def audit_x11kit_k1():
