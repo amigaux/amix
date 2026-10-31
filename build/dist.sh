@@ -26,7 +26,8 @@
 #                provider before consumer (dlm, k30, port, the modules, the
 #                drivers), into out/kspace/pkgs, one version per name; a
 #                directory without one yet is named, and the step exits 3
-#   userland     every package.sh of userland/packages and userland/base/pkg:
+#   userland     every package.sh of userland/packages and userland/base/pkg,
+#                each after the packages its BUILD_DEPENDS names:
 #                out/userland/pkgs/*.pkg, one version per name
 #   catalogs     both catalogs, by pkgtools' gen-catalog.py over
 #                out/{kspace,userland}/pkgs with their conf layers:
@@ -37,7 +38,8 @@
 #
 # and `dist` (all of them, stopping at the first that fails or is not in
 # make dist yet), `tools` (the build container, toolchain/container-build.sh),
-# `recipes/<name>` (one userland package) and `drivers/<name>`.
+# `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
+# `drivers/<name>`.
 #
 # Every step but `tools` runs in the build container: outside it, dist.sh
 # runs itself there (AMIX_IMAGE, default amix-toolchain:dist; CONTAINER,
@@ -310,12 +312,23 @@ step_kernel() {
 	cat "$out/kernels/$1.list"
 }
 
-recipe_dir() {	# the package directory of a userland package name
-	for r in "$top/userland/packages/$1" "$top/userland/base/pkg/$1"; do
-		[ -f "$r/package.sh" ] && { echo "$r"; return 0; }
+# build_order [<name>...]: the userland recipe directories in BUILD_DEPENDS
+# order (pkgmeta build-order): each after the packages it builds against, or
+# with names only those and what they need; a name that is no package, or a
+# cycle, is refused
+build_order() {
+	_bo_r=
+	for _bo_d in "$top/userland/packages" "$top/userland/base/pkg"; do
+		[ -d "$_bo_d" ] && _bo_r="$_bo_r $_bo_d"
 	done
-	echo "[FAIL] no userland package $1 (userland/packages, userland/base/pkg)" >&2
-	exit 1
+	if [ -z "$_bo_r" ]; then
+		[ $# -eq 0 ] || { echo "[FAIL] userland: no userland package $1" >&2; exit 1; }
+		return 0
+	fi
+	_bo=$(python3 -I "$here/pkg/pkgmeta" build-order $_bo_r \
+		$(for n; do printf ' --for %s' "$n"; done) 2>&1) || {
+		echo "$_bo" | sed 's/^pkgmeta: /[FAIL] userland: /' >&2; exit 1; }
+	echo "$_bo"
 }
 
 roll_recipe() {	# roll_recipe <package dir>
@@ -431,8 +444,9 @@ step_userland() {
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
 	rm -rf "$out/userland" "$out/build/userland"
 	mkdir -p "$out/build/userland" "$out/userland/pkgs"
-	for r in "$top"/userland/packages/*/package.sh "$top"/userland/base/pkg/*/package.sh; do
-		[ -f "$r" ] && roll_recipe "$(dirname "$r")"
+	order=$(build_order) || exit 1
+	for d in $order; do
+		roll_recipe "$d"
 	done
 	python3 -I "$here/pkg/pkgmeta" guard "$out/userland/pkgs"
 }
@@ -448,10 +462,12 @@ run() {
 	kspace) step_kspace ;;
 	userland) step_userland ;;
 	recipes/*)
-		d=$(recipe_dir "${1#recipes/}") || exit 1
+		order=$(build_order "${1#recipes/}") || exit 1
 		host_pkgtools
 		mkdir -p "$out/build/userland"
-		roll_recipe "$d"
+		for d in $order; do
+			roll_recipe "$d"
+		done
 		;;
 	catalogs) step_catalogs ;;
 	media) missing media "P-38 S6.1, installng after its move-in" ;;

@@ -92,6 +92,20 @@ try:
               rc == 3 and "[MISSING] %s: not in make dist yet (P-38 %s" % (step, owner) in out, out)
     rc, out = run("recipes/nosuch")
     check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
+    # two recipes that build against each other: refused before anything builds
+    shutil.copytree(os.path.join(TOP, "build", "pkg", "styles"), os.path.join(top, "build", "pkg", "styles"))
+    for name, dep in (("cx", "cy"), ("cy", "cx")):
+        d = os.path.join(top, "userland", "packages", name)
+        shutil.copytree(os.path.join(TOP, "userland", "packages", "diffutils"), d)
+        ps = [l for l in open(os.path.join(d, "package.sh")).read().splitlines()
+              if not l.startswith(("NAME=", "PKG=", "BUILD_DEPENDS="))]
+        write(os.path.join(d, "package.sh"), "\n".join(
+            ps + ["NAME=%s" % name, "PKG=%s" % name, 'BUILD_DEPENDS="%s"' % dep]) + "\n")
+    rc, out = run("recipes/cx")
+    check("recipes/<name>: a BUILD_DEPENDS cycle is refused, named, before any build",
+          rc == 1 and "[FAIL] userland: BUILD_DEPENDS cycle: cx -> cy -> cx" in out
+          and "host pkgtools" not in out, out)
+    shutil.rmtree(os.path.join(top, "userland", "packages"))
 
     rc, out = run("kspace", SYSTEM=os.path.join(tmp, "nothere"))
     check("no system input: refused before any step",
