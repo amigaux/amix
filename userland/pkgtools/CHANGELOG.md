@@ -1,3 +1,9 @@
+## 2026-10-31 — device nodes in their module's class (ccba8d1)
+
+gen-catalog and apkg's kernel-space pre-flight accept a module package's c/b node in its module's class (amix-dlm C3-5
+v18 §1.2) when pkginfo's CLASSES lists it; files stay class none, other classes and an unlisted module class are
+refused. apkg 533/0, repo tools 475/0. Boxes need the next apkg (0.3.4) to install such packages.
+
 ## 2026-10-31 — shared conffiles (474ec4b)
 
 r.conffile leaves a file another package still owns and drops only its own baseline (D-N24: amix-base takes over core's
