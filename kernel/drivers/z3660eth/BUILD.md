@@ -139,8 +139,8 @@ panic. That proves the whole integration + build path independent of the datapat
 
 ## 7. Real HW (Phases 2–4) — shuttle, don't re-image
 Shuttle the clean `relocunix` to the real box via `transfer.hdf` (`c5d0`), stage it,
-`cd /stand; make`, reboot. Then bring the interface up at the box's own address per
-`userland/bringup.sh` and test TX → RX → ARP+ping. Never re-image the root.
+`cd /stand; make`, reboot. Then bring the interface up at the box's own address with
+`sh userland/bringup.sh <address> [<gateway>]` and test TX → RX → ARP+ping. Never re-image the root.
 
 ## 8. Cache maintenance and the two mapping arms (030 vs 040/060)
 Relevant if you are building `z3660eth` into anything other than a stock 68030 AMIX kernel — the

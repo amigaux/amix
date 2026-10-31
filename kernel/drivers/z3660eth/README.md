@@ -84,13 +84,24 @@ firmware boundary.
 
 [`docs/ZEN0-BRINGUP.md`](docs/ZEN0-BRINGUP.md) is the field-proven runbook — the
 evidence for the above, the five-command manual bring-up (verified first try on real
-68LC060 metal, 2026-09-09), the `/etc/rc2.d/S99zen` persistence script with its exact
-shipped body, the three identity files (and why `setuname -n` is *not* one of them),
-and a triage section for telling which path a box is on. Auto-bring-up at boot =
-`userland/S99zen` (→ `/etc/rc2.d/S99zen`); it runs a bare `slink` first and retries
-`slink addaen`, because the bring-up can otherwise race the inet base streams on a
-fast clean boot. The userland files are examples: the address is the box's own, set in
-its `/etc/default/zen` (`userland/S99zen`'s header shows the form).
+68LC060 metal, 2026-09-09), the three identity files (and why `setuname -n` is *not*
+one of them), and a triage section for telling which path a box is on.
+
+**Configuring `zen0`.** A box brings `zen0` up at boot through the one network set-up
+every interface shares (amix `userland/base`): one line in `/etc/inet/interfaces`, for
+example
+
+```
+zen0    static  192.0.2.39/24  gw 192.0.2.1
+```
+
+or `zen0 dhcp`. `ifup` (run by `inetinit` at boot, or by hand as `ifup zen0`) finds the
+driver through its vendor entry `/etc/inet/link.d/z3660eth` ([`link.d/z3660eth`](link.d/z3660eth)
+here: interface prefix `zen`, node prefix `/dev/zen`, first unit 0, static-kernel major 51),
+makes `/dev/zen0` if it is missing, links it under IP and ARP once, and applies the line.
+The z3660eth package ships that entry and the node; the major on a module kernel comes
+from the module registry (`kbootset major z3660eth`). The file formats are in
+`interfaces(4)` and `link.d(4)`.
 
 ## Layout
 - `src/z3660eth.c` — the driver (STREAMS/DLPI skeleton adapted from the stock
@@ -106,16 +117,18 @@ its `/etc/default/zen` (`userland/S99zen`'s header shows the form).
   NOTES.md
   "Module form".
 - `driver.conf` — the `net` stanza consumed by `amix-build`.
-- `userland/` — `zen.c` (the `zen -S` presence tool), the `/etc/inet` config
-  snippet, and the manual interface bring‑up runbook.
+- `link.d/z3660eth` — the driver's `/etc/inet/link.d` entry (link.d(4)), shipped
+  by the package for `ifup`.
+- `userland/` — `zen.c` (the `zen` presence and status tool) and `bringup.sh`, the
+  manual interface bring‑up for the bench.
 - `tools/` — the two fail‑closed on‑box patch scripts (`patch-kernel.sh` claims
   the cdevsw row, `patch-makefile.sh` the driver `OBJ` list) plus
   `patch-selftest.sh`, their benchless host‑side fixture battery.
 - `BUILD.md` — the exact on‑box build + kernel‑integration steps (the manual
   procedure that `kernel/k30` automates).
 - `docs/ZEN0-BRINGUP.md` — the field-proven bring-up runbook: why `aen` can never
-  work under this firmware, the five-command sequence, `S99zen` persistence, the
-  identity files, and how to tell which path a box is on.
+  work under this firmware, the five-command sequence, persistence through
+  `/etc/inet/interfaces`, the identity files, and how to tell which path a box is on.
 - `docs/BLIZZARD-F3.md` — the cache-coherence pre-registration and its round-2
   result: why the 030 needs no maintenance and how the 040/060 gate works.
 - `CHANGELOG.md` — what changed, when, and against which commit.

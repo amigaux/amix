@@ -123,8 +123,9 @@ mknod /dev/zen0 c 51 0
 With RFC 5737 documentation addresses that is `ifconfig zen0 192.0.2.39 netmask 255.255.255.0 up
 -trailers` and `route add default 192.0.2.1 1`.
 
-`userland/bringup.sh` in this directory is the same sequence with a `zen -S` presence gate in front and
-the values taken from the box's `/etc/default/zen` (or its command line).
+`userland/bringup.sh` in this directory is the same sequence with a `zen -S` presence gate in front,
+taking the address, gateway and netmask from its command line. It is a bench aid; a configured box
+brings `zen0` up from `/etc/inet/interfaces` (§3).
 
 ### 2.1 The notes that matter
 
@@ -134,10 +135,12 @@ and `BUILD.md` §2(b) carry the reasoning: 51 is the lowest slot of the ecosyste
 51–67/69, renumbered from 48 on 2026-07-30 because 48 turned out to be contested. Amix ships
 `/dev/aen0` and `/dev/aen1` but nothing for `zen0`, so the node is yours to make. `mknod` printing
 **`File exists`** on a re-run is harmless — that is the node already being there, and the
-`[ -c /dev/zen0 ] ||` guard in the boot script exists to suppress it.
+`[ -c /dev/zen0 ] ||` guard in `bringup.sh` exists to suppress it. At boot, `ifup` makes the node
+only when it is missing (§3).
 
 **The bare `slink`, on its own line, before `slink addaen`, is load-bearing.** ✅ This is a real-HW
-finding from 2026-06-21, recorded in this directory at `userland/S99zen:11-15` and
+finding from 2026-06-21, recorded in this directory's former boot script (`userland/S99zen:11-15`
+as of `21ba1dc`) and
 the project's 2026-06 handoff notes (§7.4, unpublished): on a fast clean boot `slink addaen` can race ahead of the base inet
 STREAMS plumbing. The proven manual bring-up always ran a bare `slink` **first** to (re)link the
 base streams, then `slink addaen`. Do not fold the two into one command and do not drop the first.
@@ -150,6 +153,7 @@ Function "tp", command 3: link: Device busy
 ```
 
 (The wording is from the 2026-09-09 field session; this directory's prior note at `userland/S99zen:15`
+as of `21ba1dc`
 records the same condition more loosely as *"'Device busy' from the bare slink is expected and
 harmless"*.) **It means the base inet STREAMS are already up — which is the good case. Do not
 "fix" it.** Suppressing it, or making the script bail on it, removes the very race protection the
@@ -166,27 +170,60 @@ not an option flag (✅ `docs/ETHERNET-SCOPING-evidence.md:1673` table, from the
 
 ---
 
-## 3. Making it persist — `/etc/rc2.d/S99zen`
+## 3. Making it persist — `/etc/inet/interfaces`
 
 Amix's stock boot chain (`/etc/rc2.d/S69inet` → `/etc/init.d/inetinit` → `/etc/inet/network-config`)
-only knows how to bring up `aen0`, and §1 says that can never succeed here. So `zen0` needs its own
-rc2 script.
+only knows how to bring up `aen0`, and §1 says that can never succeed here. The amix base system
+(amix `userland/base`) replaces that chain with one set-up shared by every Ethernet interface, and
+`zen0` uses it like any other:
 
-The shipped file is **`/etc/rc2.d/S99zen`**, mode **744**, owner **root**:
+- **You write one line** in `/etc/inet/interfaces`, the administrator's file that no package owns:
 
-- ✅ **371 bytes**, and ✅ **`sum -r` = `56264     1`** — both verified when this runbook was written
-  against the shipped copy, `S99zen.min`, kept with the campaign's unpublished evidence.
-- 🟡 The **744 / root** mode-and-owner is the on-box installed state as reported; the host-side
-  copy carries the host's own mode, so it is not checkable from the file.
+  ```
+  zen0    static  192.0.2.39/24  gw 192.0.2.1
+  ```
 
-### 3.1 The exact shipped body
+  or `zen0 dhcp`. A row keyed by the card's MAC instead of `zen0` works too, so one image can serve
+  several machines; `name <host>` on a row sets the node name. The format is `interfaces(4)`.
+- **The driver's package ships** `/etc/inet/link.d/z3660eth` (this directory's `link.d/z3660eth`,
+  format `link.d(4)`) and the `/dev/zen0` node:
 
-Reproduced verbatim so it survives the scratch directory being cleared. Note it has **no shebang
-and no comments** — that is what makes it 371 bytes and what the checksum above is of. (The
-annotated variant with the full comment header is `userland/S99zen` in this directory; it is the same
-logic, except that it reads the address, netmask and gateway from the box's `/etc/default/zen`.
-The addresses below are RFC 5737 documentation addresses; the shipped file carried the box's own,
-and the size and checksum above are of that file.)
+  ```
+  zen	/dev/zen	0	51
+  ```
+
+  — interface prefix, node prefix, first unit, and the cdevsw major. On a module kernel the major
+  comes from the module registry (`kbootset major z3660eth`, the file's name being the module's);
+  the column is the static-kernel fallback.
+- **At boot, `inetinit`** (still `S69inet`) runs the bare `slink`, brings up `lo0`, then runs
+  `ifup -a` in the background with a time bound. For `zen0`, `ifup`:
+  1. makes `/dev/zen0` (char, minor 0) if it is missing;
+  2. probes it with `dlpi-mac /dev/zen0`. Without the board the open fails with `ENXIO` and there
+     are no `zen` interfaces; the driver handles one board, so `/dev/zen1` fails with `ENODEV` and
+     the probe stops after unit 0. No `zen -S` presence command is needed;
+  3. runs `slink addaen /dev/zen0 zen0` once, with one retry after the base `slink`;
+  4. applies the line: `ifconfig zen0 <literal> netmask <mask> up -trailers` and
+     `route add default <gw> 1`, or the DHCP client for `dhcp`.
+
+  Its output goes to `/var/adm/rclog/ifup`. `ifup zen0` and `ifdown zen0` do the same by hand.
+
+### 3.1 What the field findings became
+
+- **The bare `slink` first** (§2.1): `inetinit` runs it before `ifup`.
+- **Never hang the boot:** the whole `ifup -a` runs in the background under a time bound.
+- **No retry loop.** The old boot script tried `slink addaen` up to 20 times. On metal that opened the
+  device 16 times at boot, and before the AB-04 fix each failed open leaked kernel virtual space
+  (`CHANGELOG.md`, AB-04). `ifup` plumbs once, with one retry, and the driver caches a failed probe.
+- **A literal address** (§3.3): `ifup` always passes the number from the line, never a name.
+
+### 3.2 History: the rc2 script `S99zen`
+
+Before the shared set-up, `zen0` came up from its own **`/etc/rc2.d/S99zen`**, mode 744, owner
+root. The annotated copy was `userland/S99zen` in this directory, removed after `21ba1dc`. The shipped
+copy, `S99zen.min`, was ✅ **371 bytes** with ✅ **`sum -r` = `56264     1`**, both checked when this
+runbook was written against the copy kept with the campaign's unpublished evidence. It had no shebang
+and no comments, and this was its body (RFC 5737 addresses here; the shipped file carried the box's
+own):
 
 ```sh
 [ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0
@@ -205,25 +242,10 @@ and the size and checksum above are of that file.)
 ) > /tmp/zen-bringup.log 2>&1 &
 ```
 
-Substitute your own address, netmask and gateway on the `ifconfig` and `route` lines, or use
-`userland/S99zen` and put them in `/etc/default/zen`.
-
-### 3.2 Why it is shaped like that — three deliberate choices
-
-1. **It retries `slink addaen` up to 20 times, 3 s apart.** The STREAMS stack is not ready the
-   instant `rc2` runs. ✅ Same 2026-06-21 race as §2.1; the loop plus the leading bare `slink` is
-   the mitigation (`userland/S99zen:11-15`, loop at `:33-38`; internal provenance
-   the project's 2026-06 handoff notes §7.4, §9.2 — unpublished). The initial `sleep 5`
-   gives the base streams a head start before the first attempt. Worst case the loop spends ~60 s and gives up — in the
-   background, where it costs nothing.
-
-2. **The whole bring-up is backgrounded (`( … ) &`).** ✅ `userland/S99zen:7-9`: a datapath problem
-   must never be able to hang the boot. The box still reaches login even if `zen0` never comes up.
-   On a board-less box the driver simply `ENXIO`s and the script is harmless.
-
-3. **It logs to `/tmp/zen-bringup.log`.** Because it is backgrounded, nothing it prints would reach
-   the console anyway — so it all goes to a file you can read afterwards. **This is the first thing
-   to read when `zen0` did not come up.**
+It retried `slink addaen` to ride out the 2026-06-21 race (`userland/S99zen:11-15`, loop at `:33-38`,
+as of `21ba1dc`), ran in the background so a datapath problem could not hang the boot (`:7-9`), and
+logged to `/tmp/zen-bringup.log`. A box still running it should drop it when it moves to
+`/etc/inet/interfaces`, so that only one of the two plumbs `zen0`.
 
 ### 3.3 ⚠ Use a literal address — never `` `uname -n` ``
 
@@ -235,8 +257,8 @@ so every lookup burns the full resolver retransmit — **~90 s per lookup**, mea
 boot going from 210 s to 29 s once the literal IP replaced the name. A literal IP skips name
 resolution entirely.
 
-This applies to `S99zen` exactly as it applies to `network-config`, and it is why the userland
-samples in this directory take a literal number from `/etc/default/zen`, never a name.
+This applies to any boot-time `ifconfig`, and it is why `/etc/inet/interfaces` takes a literal
+number, never a name, and `ifup` passes it as it is.
 
 ### 3.4 Measured bring-up times
 
@@ -249,7 +271,8 @@ treat them as order-of-magnitude expectations rather than a spec:
 | emulated 040 | **t+156 s** from power-on |
 
 The practical consequence is the one this directory has warned about since 2026-06: ✅ *"it can take the
-full boot for `zen0` to appear — don't conclude 'broken' from an early check"* (`userland/S99zen:16-17`).
+full boot for `zen0` to appear — don't conclude 'broken' from an early check"* (`userland/S99zen:16-17`
+as of `21ba1dc`).
 If the SD image is dirty and `fsck` forces a reboot, it takes longer still.
 
 ---
@@ -330,9 +353,12 @@ changing anything.
 |---|---|---|---|
 | `ifconfig -a` | `lo0` **and `zen0`** | `lo0` and `aen0` | **`lo0` only** |
 | `ls -l /dev/zen0` | present, char **51**, 0 | absent | absent |
-| `ls -l /etc/rc2.d/S99zen` | present, 744 root | absent | absent |
-| `cat /etc/inet/network-config` | the `aen` chain, unused/removed | the `aen -S && …` chain | stock `aen` chain |
-| `cat /tmp/zen-bringup.log` | the successful `ifconfig zen0` dump | — | — |
+| `cat /etc/inet/interfaces` | a `zen0` (or MAC) row | stock chain, no such file | no row for `zen0` |
+| `ls /etc/inet/link.d` | `z3660eth` present | absent | absent if the package is missing |
+| `cat /var/adm/rclog/ifup` | `zen0` plumbed and addressed | — | — |
+
+On a box set up before the shared set-up, the third row is `ls -l /etc/rc2.d/S99zen` and the log is
+`/tmp/zen-bringup.log` (§3.2).
 
 `lo0` **only**, on a box running the Amix-interop firmware, means the stock `aen` chain ran and
 short-circuited — go to §5.1. Add `/usr/amiga/bin/zen` (built from `userland/zen.c`) to the toolkit
@@ -370,21 +396,16 @@ missing or unexecutable `network-config`, a broken `S69inet` hardlink, or a boot
 none of which is wrong. The script ran perfectly and did exactly what it was written to do. **The
 absence of output is the diagnosis, not the absence of a diagnosis.** Confirm it directly by
 running `/usr/amiga/bin/aen -S; echo $?` by hand: a bare `1` with no message is the signature of
-§1, and the fix is §2 + §3, not anything in `network-config`.
+§1, and the fix is §2 + §3, not anything in `network-config`. The shared set-up of §3 has no such
+gate: `ifup` probes with `dlpi-mac` and logs what it found.
 
 ---
 
 ## 6. Related files in this directory
 
-- `userland/bringup.sh` — the §2 sequence as a runnable script, with a `zen -S` gate; the address
-  from `/etc/default/zen` or the command line.
-- `userland/S99zen` — the §3 boot script, annotated (same logic, more comments than the 371-byte
-  shipped `S99zen.min`), reading the box's address from `/etc/default/zen`; its header shows the form.
-- `userland/network-config.zen` — the `/etc/inet/network-config` snippet, for a box that prefers to
-  hang `zen0` off the stock chain rather than use a separate rc2 script. Note its in-file warning
-  about editing `network-config` in place: it is hardlinked with `S69inet`/`inetinit`, so never
-  unlink and recreate it, and never leave an `S*`-named backup in `rc2.d/` (the `for f in
-  /etc/rc2.d/S*` glob would execute it).
+- `link.d/z3660eth` — the driver's `/etc/inet/link.d` entry for `ifup` (§3), shipped by the package.
+- `userland/bringup.sh` — the §2 sequence as a runnable script, with a `zen -S` gate; the address,
+  gateway and netmask from its command line. For the bench.
 - `userland/zen.c` — the `zen` presence/status tool (`/usr/amiga/bin/zen`).
 - `BUILD.md` — building the driver into a kernel; §2(b) has the major-51 reasoning.
 - `docs/ETHERNET-SCOPING-evidence.md` §§1–3 — the source-grounded dossier on how the stock `aen0`
