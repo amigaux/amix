@@ -61,6 +61,7 @@ stage() {
 	put 0644 etc/profile.4 /opt/amix/man/4/profile
 	put 0644 etc/profile.d.4 /opt/amix/man/4/profile.d
 	put 0644 etc/nodename.4 /opt/amix/man/4/nodename
+	put 0644 etc/inittab.4 /opt/amix/man/4/inittab
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"

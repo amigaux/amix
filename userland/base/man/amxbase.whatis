@@ -2,6 +2,7 @@ devnodes(1m)     devnodes - re-create missing device nodes at boot
 dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
 ifdown(1m)       ifup, ifdown - bring network interfaces up or down
 ifup(1m)         ifup, ifdown - bring network interfaces up or down
+inittab(4)       inittab - what init starts, at boot and at each run level
 interfaces(4)    interfaces - how each network interface is set up at boot
 link.d(4)        link.d - the network drivers present, one file each
 man(1)           man - display a manual page, from the add-on packages or from the stock system
