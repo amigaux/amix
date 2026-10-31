@@ -104,7 +104,7 @@ candidates (2026-10-31).
 
 | Row | k46 | k30 |
 |---|---|---|
-| S5-47 the kabi-1.3 ABI kit: dlmkit46 and dlmkit30 at kabi 1.3 (abi 18c0a1c9), minted for S5-40 | pending: the kernels and Paula are kabi 1.3, the catalog of record and the media carry the 1.2 kit (c2dc7fb) | pending, as k46 |
+| S5-47 the kabi-1.3 ABI kit: dlmkit46 and dlmkit30 at kabi 1.3 (abi 18c0a1c9), minted for S5-40 | the kit half done 2026-10-31: the kit at amix 4976dac (port d0e8857) fits 68060-261031-52 (`modcheck.py --kernel`); the kit test 96/96 with -52 as its module kernel; Paula built with it passes modcheck as k46.1.3 and binds to -52's symbol block. The mint (amix-packages): pending; until then the catalog of record and the media carry the 1.2 kit (c2dc7fb) | the kit half done, as k46, against 68030-261031-63; the mint: pending |
 | S5-48 the stock-defect fixes in the cuts: kzero's fault catch (quirk 90), ufs tail zeroing (quirk 91), the STREAMS freeq guard (quirk 92); on k30 also the sendsig FPU gate (quirk 74) | in the candidate 68060-261031-52 (53ec472). Metal: quirk 90 **PASS** on the A4000T's 68060, test kernel 68060-261030-50 (M51, amix-kerntools d5430cb; the port 574cea1); quirk 91 emulation only (the port ISSUE-108); quirk 92 guarded in emulation, its save not yet seen on k46 (ISSUE-109). The candidate on metal: pending | in the candidate 68030-261031-63 (a0e2ab4). Metal: quirks 90 and 91 on the A4000T in k30 mode, test kernel 68030-261030-54, qzeval 68/68 (M52, amix-kerntools d38cae5), ftx not proven; quirks 74 and 92 emulation only. The candidate on metal: pending |
 
 S5-48 changes shipped kernel and ufs bytes, so by 80 §3 it reopens S5-41
