@@ -1,8 +1,15 @@
-# The 1.1 disk and the upgrade install
+# The 1.1 disk
 
-amix-dlm `docs/spec/40-generations-and-composer.md` §2, §7 and D-3 §5 define them;
-this repository implements them as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`,
-sourced by `install.sh`) and `INSTALL_UPGRADE=yes`. Stage-2 work items S2-30 and S2-31.
+amix-dlm `docs/spec/40-generations-and-composer.md` §2 defines it; this repository
+implements it as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`, sourced by `install.sh`).
+Stage-2 work item S2-30.
+
+> **1.1 requires a fresh install (P-36, owner 2026-10-31).** There is no upgrade
+> install and no update path from 1.0, and no migration code: a disk that holds Amix
+> is erased and installed afresh. The upgrade install this file used to describe
+> (`INSTALL_UPGRADE=yes`; S2-31, S4-54, S4-58) is removed. Its text is
+> `docs/upgrade-install.md` and its code is in `l11.sh`, `install.sh`, `setup.sh` and
+> `firstboot.sh`, all in git up to 3ac92fb.
 
 ## The 1.1 disk
 
@@ -140,135 +147,21 @@ the root. On a 1.1 disk it then offers `status`, `rollback` and `mark-bad`
 through the disk's own `/sbin/kbootset`, using the store named in its
 `/etc/default/bootset`.
 
-## The upgrade install
+## Over a disk that holds Amix
 
-`INSTALL_UPGRADE=yes` (with `INSTALL_LAYOUT=1.1`) installs over a disk that
-already holds Amix.
+A 1.1 install never keeps anything of the disk it is laid on:
+- the interview asks stock's erase question (*"Are you sure you want to erase this
+  disk?"*, no default) for any disk that carries an RDB, a 1.0 or 1.1 Amix disk
+  included. It offers no upgrade;
+- an unattended profile is refused over a disk with an RDB unless it sets
+  `TARGET_ERASE_OK=yes`;
+- `INSTALL_UPGRADE` set to anything but `no` stops the install: *"1.1 requires a
+  fresh install, P-36"*;
+- the RDB area is cleared and the layout above is authored. The new root carries
+  no `/var/adm/upgrade` and no `/etc/rc2.d/S17upgrade`, and the first boot runs
+  the dialog and the first-boot configuration in full. `tools/l11-target-check.py`
+  checks this on every 1.1 target.
 
-### What survives
-
-| What | 1.0 disk (no data slice) | 1.1 disk |
-|---|---|---|
-| the configuration set (below) | saved, put in place by the installer and checked there | the same |
-| the first-boot dialog's choices kept in package files (below) | saved as states, set again on the new root and checked | the same |
-| `/home` | saved with the configuration and restored into the new `/home` (into s4 when the new disk has one) | on s4: the slice is not touched; on a 1.1 disk without s4: saved like 1.0 |
-| installed packages | no: the medium's set is installed again | no |
-| anything else on the root | no | no |
-| the boot store | re-laid: one new pristine generation | re-written: one new pristine generation |
-
-The configuration set is every file of this list that exists on the old root (proposed for OQ-40.1):
-
-```
-etc/nodename etc/domain etc/TIMEZONE etc/TZ etc/tz.index etc/clkzone
-etc/passwd etc/shadow etc/group etc/default/login
-etc/inet/hosts etc/inet/rc.inet etc/inet/zen.conf etc/resolv.conf etc/netconfig
-etc/rc2.d/S99zen etc/rc2.d/S99zkbootset etc/apkg.conf sbin/bcheckrc
-var/adm/firstboot/firstboot.conf
-etc/conf/modreg.local.d/*
-```
-
-The old `firstboot.conf` is the record of the old box's answers. It is kept as
-`/var/adm/upgrade/firstboot.conf.prev`, while the new one drives this install's first boot.
-
-The first-boot dialog's other choices live in files that packages own. Each is kept as a
-state, `L11_STATE_SH` in `l11.sh`, detected on the old root at capture and recorded in the
-HEADER. At the end of the install it is set again from the new system's own files, then
-detected on the new root and compared:
-
-| State | Where it lives | Set again by |
-|---|---|---|
-| `syslog=y\|n` | the vendor `exit` line in `/etc/init.d/syslogd` | `FB_SYSLOG=n` in the new `firstboot.conf`; the first boot edits the file, as for a fresh install |
-| `a2024=true\|false` | `/usr/amiga/bin/A2024`, a link to `/usr/bin/true` or `false` | the link |
-| `kmap=<map>` | `/usr/amiga/lib/kmap/default.kmap`, a link to one map | the link |
-| `xcolor=X2410\|Xdmi` | `/usr/X/bin/X` (stock `amixcolorx`) | the link |
-| `news=cnews\|nntp` | the `inews` flavour (stock `amixnews`) | the new system's `amixnews`, answered |
-
-A choice whose package the medium does not install (no X, no `public`) cannot come back.
-The install says so. `/etc/hosts.equiv` and root's dotfiles are not kept: users' own files
-come back with `/home`, and root's are the new system's.
-
-`etc/conf/modreg.local.d` holds the administrator's module parameters (C3-5 §1).
-The restore also puts it on the new root before the store is composed, so the
-pristine generation takes them.
-
-`/sbin/bcheckrc` survives upgrades as a configuration file (P-29 class).
-- A stock copy (every 1.0 disk) is saved and comes back with `kbootset retry` in it.
-- An already patched copy comes back as it was.
-- A copy the administrator changed comes back as it was, without the lines; the
-  install says so.
-
-Password entries keep their aging fields only if the clock can be trusted (spec 40 §7). The
-install runs the new system's plausibility-gated `setclk` (1992..2037) under chroot, and
-requires that no entry's last change is later than today. Otherwise every entry's aging
-fields are cleared: the install says so and leaves `/var/adm/upgrade/AGING-CLEARED`. A
-clock that was put back after it ran ahead would otherwise lock those accounts out.
-
-### How
-
-1. **Capture**, before the first write. The old root is mounted read-only
-   (ufs, else s5) and saved by that system's own tools: `chroot /mnt`, `find`,
-   `cpio -oc` and `du`.
-   - The archive (relative names) goes to the start of the old swap slice.
-   - A header `AMIXUPG1 <blocks> <sum -r> <home y|n>` goes in that slice's last block.
-   - Each configuration file's `sum -r` is noted.
-   - `/home` that does not fit in the swap slice (less 1 MiB) stops the install,
-     unless `UPGRADE_DROP_HOME=yes`.
-   - The console says what is not kept.
-2. **Re-lay** a 1.0 disk to the 1.1 layout. The old swap slice must lie clear
-   of the new root, swap and data slices, which is checked before the first
-   write; only the new store may cover it.
-
-   A 1.1 disk keeps its RDB: s1 is re-made and s4 kept. Its s2 is both the stash
-   and the swap, so no swap is added until the restore.
-3. **Install** the base set and the three packages as on a fresh disk, so an
-   upgraded disk carries the same records (kbootset, loader-amix, the kernel) as a
-   fresh one. `/var/apkg` and the package database are not part of the saved set:
-   they describe the new install.
-4. **Restore**, before the store is written:
-   - the archive is read through the whole-disk node at the old slice's block,
-     and must give back its `sum -r`;
-   - `/home` is extracted into place;
-   - the configuration goes to `/var/adm/upgrade/cfg`, and every file must
-     match its noted sum.
-
-   A mismatch stops the install unarmed. The archive stays where it was, and
-   the console names its block.
-5. **Put in place**, at the end of the install, after everything else is laid (S4-54):
-   - every saved file comes back from the archive into its own place, with the archive's
-     owners, modes and times;
-   - `bcheckrc` is written with `cat`, so its `/usr/sbin` link keeps the same content;
-   - each file must match its noted sum on the new root;
-   - the dialog's states are set again and checked, and the aging rule is applied;
-   - `FB_UPGRADED=y` goes into the new `firstboot.conf`, and `RESTORED` into
-     `/var/adm/upgrade`.
-
-   The first-boot dialog is not armed on an upgrade. One owner per file: the first boot
-   skips the node name, time zone, passwords, hosts and network files (sections 1–3 and
-   5–5d), and only sets the running node name from the restored `/etc/nodename`.
-   `/etc/rc2.d/S17upgrade` is a guard: it reports a `cfg/` the install did not finish (no
-   `RESTORED`) and applies nothing.
-
-The unattended erase guard does not stop an upgrade; the upgrade is itself the
-deliberate reinstall.
-
-### The interview's offer (S4-58)
-
-On a 1.1 medium, when the chosen disk holds Amix (slice 1 `UNIX_Root`, slice 2
-`UNIX_Swap`; a 1.1 disk is recognised by its store), the interview offers before the
-erase question:
-
-```
-This disk holds an Amiga UNIX 1.0 installation.
-An upgrade installs this disc's system again and keeps the configuration:
-...
-  1)   Upgrade this installation
-  2)   Erase the disk and install afresh
-  3)   Stop
-```
-
-It says what is not kept. It also reports the size of `/home`, read off the installed
-root mounted read-only and measured by that system's own `du`: kept in place on a data
-slice, carried over when it fits in the swap slice, LOST (`UPGRADE_DROP_HOME=yes`) when
-it does not. An upgrade asks no sizes and no filesystem type. The answers carry
-`INSTALL_UPGRADE=yes`, and the summary says that the old configuration is kept and the
-first-boot dialog not armed. Matrix cell `l11-k46-upg-ia` drives it through the interview.
+What `apkg upgrade` and kbootset's generations do on an installed 1.1 disk (a new
+kernel or module package, a rollback) is unchanged: that is the running system's
+package path, not the installer's.

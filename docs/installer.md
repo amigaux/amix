@@ -8,7 +8,7 @@ that populates `/install/`; **W5.4** was the first end-to-end on-box run. Every
 wave since is a further section below.
 
 > **This document is wave-chronological.** Every `W…` section records what was true
-> **when that wave landed** and is deliberately left standing. The three sections
+> **when that wave landed** and is deliberately left standing. The four sections
 > immediately below are *current state* and **win over any figure or s5 statement
 > quoted inside a wave section**.
 
@@ -26,8 +26,8 @@ there is no install base on s5).
   is **author** mode.
 - `setup.sh` no longer asks *"What file system type is the root partition?"*; the
   composed answer is always `TARGET_ROOT_FSTYPE=ufs`.
-- The upgrade install (and the interview's upgrade offer) mounts the old root as
-  **ufs only**.
+- The upgrade install, which mounted the old root as ufs only, is gone too (P-36,
+  next section).
 - `install-matrix.sh`: the eleven prebuilt cells (`cd`, `cd-interactive`,
   `cd-interrupt`, `cd-suomi`, `cd-standard`, `cd-public`, `cd-public-r6`, `raw`,
   `fd-a4091-aga`, `fd-a4091-pub-r6`, `fd-ide-raw`) are **RETIRED** with their reason;
@@ -38,6 +38,30 @@ there is no install base on s5).
 
 The installed-tree digest has no filesystem field, so every attested set's reference
 stands (proven for `minimal` by `cd-ufs`, `full`/`developer`/`x11` on the ufs rig).
+
+## Clean installs only — current (P-36, 2026-10-31)
+
+**1.1 supports clean installs only** (owner: "no update path from 1.0, no migration
+code"). A disk that holds Amix is erased and installed afresh.
+
+- `setup.sh` offers no upgrade. A disk that carries an RDB, an installed 1.0 or 1.1
+  disk included, is asked stock's erase question and nothing else; the answers block
+  has no `INSTALL_UPGRADE` or `UPGRADE_DROP_HOME` line.
+- `install.sh` refuses `INSTALL_UPGRADE` set to anything but `no`: *"1.1 requires a
+  fresh install, P-36"*. The capture, restore and put-in-place (`l11_upgrade_*`), the
+  kept 1.1 layout, the held swap, `S17upgrade` and `/var/adm/upgrade` are removed, and
+  so is the unattended erase guard's exemption for an upgrade.
+- `firstboot.sh` has no `FB_UPGRADED` branch: the first boot always writes the node
+  name, zone, root password, hosts, repository and `zen.conf`.
+- `install-matrix.sh`: `l11-k30-upg`, `l11-k46-upg`, `l11-k46-upg-ia` and
+  `l11-k46-upg11` are **RETIRED**, their profiles deleted. The interactive l11
+  vectors lose the leading `2` that answered the offer (`y 105 30 1 n n`).
+  `tools/l11-target-check.py` asserts on every 1.1 target that there is no
+  `/var/adm/upgrade`, no `S17upgrade` and no `FB_UPGRADED`.
+- **Not touched:** `apkg upgrade` and kbootset's generations on a running 1.1 system.
+
+The disk itself: `docs/l11-disk.md`. The removed upgrade install
+(`docs/upgrade-install.md` and its code) is in git up to 3ac92fb.
 
 ## Canonical digests — current
 
@@ -5008,8 +5032,8 @@ c1-u1 chain; the A4092 ROM boot R2 is not run).
 - `kbootset` writes and checks the pristine generation.
 
 The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/install/l11` with a static
-apkg 0.3 and the kernel-space FILE source. The disk, the upgrade install of a 1.0 disk, and what survives it are
-described in `docs/upgrade-install.md`.
+apkg 0.3 and the kernel-space FILE source. The disk is described in `docs/l11-disk.md`. (The upgrade install of a
+1.0 disk described there until 2026-10-31 is removed, P-36: 1.1 requires a fresh install.)
 
 What a 1.1 medium carries is one tracked file, `tools/l11-set.conf` (S3-31):
 - the amix-dlm and amix-packagemanager revisions;
@@ -5033,7 +5057,7 @@ disc).
 
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
-- `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk.
+- `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk (RETIRED 2026-10-31, P-36).
 
 Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`):
 - the store and its pristine generation;
