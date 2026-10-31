@@ -1,5 +1,5 @@
 /*
- * txn.c - apkg's transaction journal, /var/apkg/txn (40 §6, P-28 D63).
+ * txn.c - apkg's transaction journal, /var/apkg/txn.
  *
  * Copyright (c) 2026 Jussi Alanärä.
  * MIT license - see LICENSE in this directory.

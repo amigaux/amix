@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# r.conffile -- removal script for class "conffile" (P-36 section 1.2).
+# r.conffile -- removal script for class "conffile".
 #
 # pkgrm runs this with the class's paths on stdin, one per line, and removes
 # none of them itself.  For each path, against the baseline i.conffile kept
@@ -12,7 +12,7 @@
 #   already gone                       remove its baseline
 #   still listed under another package leave it to that package, remove
 #   (a file amix-base took over from     its baseline, say so
-#   core, D-N24)
+#   core)
 #   in every case                      remove <path>.new and its PENDING line
 #
 # The engine hands such a shared editable file to this script too (heirloom

@@ -320,7 +320,7 @@ check "raw.img layout verified (catalog@0, md5@32768, pkgs at offsets)" \
     grep -q RAWIMG-OK "$WORK/t12.img.out"
 
 # --------------------------------------------------------------- T13 ----
-# Licensing gate (W6-K section 3), RE-KEYED to OUR kernel packages: a package
+# Licensing gate, RE-KEYED to OUR kernel packages: a package
 # is PRIVATE-only when its pkginfo carries the kernel-package markers
 # (KSUM_R / BOOT2_SHA) that build-packages.sh mints onto KERNBENCH/KERNZ3660 --
 # NOT when its pkgmap merely installs /stand/unix or /stand/boot2.boot.  That
@@ -717,7 +717,7 @@ check "every @group token is a single token" \
                           '$WORK/cats.groups')\""
 # The vocabulary is LOCKED, the way the set memberships are: it is the
 # contract the recipes' CATEGORY is checked against (build/pkg/pkgmeta's
-# closed list).  Fifteen groups since 2026-10-30 (owner): archive, library,
+# closed list).  Fifteen groups since 2026-10-30: archive, library,
 # shell, language and multimedia added, emacs folded into editor and
 # openlook into x11.  Groups with no package yet must not be pruned.
 check "cats.conf declares exactly the fifteen agreed groups" \
@@ -945,7 +945,7 @@ fi
 
 # --------------------------------------------------------------- T19 ----
 # payload-licence-gate.py -- a Kickstart ROM never leaves; embedded stock
-# Amix object code (libm) is recorded, not refused (owner, 2026-10-30).
+# Amix object code (libm) is recorded, not refused (since 2026-10-30).
 # A gate that inspects nothing prints the same thing as a gate that inspects
 # everything and finds nothing, so every check here is paired: it must FIRE on
 # the known positive as well as pass the negatives.
@@ -955,7 +955,7 @@ check "tools/repo/payload-licence-gate.py exists" test -f "$PLG"
 check "its own self-test passes" python3 "$PLG" --self-test
 
 # the libm detector, exercised directly on signatures (no package needed).
-# Since 2026-10-30 (owner: ports link the stock libm.a statically; the
+# Since 2026-10-30 (ports link the stock libm.a statically; the
 # permission covers all of Amix) embedded libm is RECORDED, never refused.
 plg_verdict() {
     python3 - "$PLG" "$@" <<'PY'
@@ -1247,7 +1247,7 @@ check "the packages layer may not use '+' includes" test $? -ne 0
 # to contain, in one small set, every shape that decides the answer:
 #
 #   * the same aliasing pair in TWO directories (WORK/ and ZAPHOD/) -- the
-#     shape W6's basename-only key MERGED into one row;
+#     shape the installer scan's basename-only key MERGED into one row;
 #   * two DIFFERENT over-long basenames sharing a 14-character prefix but
 #     living in different directories -- the shape that same key INVENTS a
 #     collision for;
@@ -1261,7 +1261,7 @@ check "the packages layer may not use '+' includes" test $? -ne 0
 #
 # Expected, by hand: 16 objects, 14 in the truncation universe, 9 basenames
 # over 14 characters and 10 at 14 or over, 3 real collision groups -- and 2
-# by the W6 key, which is wrong in three separate ways at once.
+# by the basename-only key, which is wrong in three separate ways at once.
 echo "T17: s5-collision-scan.py (14-character name collisions)"
 SCAN="$HERE/../s5-collision-scan.py"
 S17="$WORK/t17"; mkdir -p "$S17"
@@ -1331,10 +1331,10 @@ is "basenames over 14 characters (9)" "basenames > 14" 9
 is "basenames at 14 or over (10)" "basenames >= 14" 10
 is "3 real collision groups, keyed per directory" \
     "collision groups (dir," 3
-is "the W6 basename-only key would say 2" \
+is "the basename-only key would say 2" \
     "collision groups, basename-only" 2
 
-# WORK/ and ZAPHOD/ must be reported SEPARATELY -- this is the W6 defect.
+# WORK/ and ZAPHOD/ must be reported SEPARATELY -- this is the basename-only defect.
 check "WORK and ZAPHOD are two distinct groups, not one" \
     test "$(grep -c 'amixInitExtDMI$' "$WORK/t17.out")" = 2
 check "the ZAPHOD group is reported" \
@@ -1364,8 +1364,8 @@ check "a set with no aliasing pair passes --fail-on-collision" \
 # tree when one is present.  These are the numbers docs/s5-14char-collisions.md
 # is written from; --check re-derives all seven from the .pkg files themselves.
 # The published tree lives at http://pkg.amigaux.org/ since 2026-09-15, so this
-# needs a local copy: set PUBLISHED to a mirror of it (e.g. the frozen mirror
-# the first publish was made from).  Unset, the check is skipped.
+# needs a local copy: set PUBLISHED to a mirror of it (e.g. the mirror the
+# first publish was made from).  Unset, the check is skipped.
 PUBLISHED="${PUBLISHED:-}"
 if [ -n "$PUBLISHED" ] && [ -f "$PUBLISHED/catalog" ]; then
     check "pinned constants for the published 'full' set all match" \
@@ -1678,7 +1678,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     pend() { cat "$1/var/sadm/conffiles/PENDING" 2>/dev/null; }
     check "the minted pkgmap delivers /etc/apkg.conf as e conffile" \
         grep -aq '^1 e conffile /etc/apkg.conf 0644 root sys' "$P23"
-    check "  ... and /var/apkg/admin as e conffile (P-36 F1)" \
+    check "  ... and /var/apkg/admin as e conffile" \
         grep -aq '^1 e conffile /var/apkg/admin 0644 root sys' "$P23"
     check "  ... with i.conffile and r.conffile in install/" \
         bash -c "grep -aq '^1 i i.conffile ' '$P23' && grep -aq '^1 i r.conffile ' '$P23'"
@@ -1714,7 +1714,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "re-add over an edited conf: conf is mode 0644" mode644 "$R1/etc/apkg.conf"
     check "  ... the contents DB records the kept file's size and cksum" ondisk "$R1"
 
-    # 2b. P-36 F1: an edited admin file survives the re-add (it was `e none`
+    # 2b. an edited admin file survives the re-add (it was `e none`
     #     and reset by every `apkg upgrade apkg`)
     printf 'mail=\ninstance=overwrite\n' > "$R1/var/apkg/admin"
     add "$R1" "$P23"
@@ -1930,7 +1930,7 @@ t25bad "a sidecar whose sha256= is not the packaged unix's is refused" "sidecar 
 sidecar25 "$S25/sc-nopin" k46 "" ""
 t25bad "a sidecar without pin= is refused" "no usable pin=" \
     "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/sc-nopin"
-t25bad "a kernel package that is not pure files is refused (40 section 6)" "not pure files.*type e" \
+t25bad "a kernel package that is not pure files is refused" "not pure files.*type e" \
     "COPY /stand/k46/unix $S25/src/stand/k46/unix" "COPY /stand/k46/kabi $S25/src/stand/k46/kabi" \
     "PKGMAP 1 e none /etc/kmod.conf 0644 root sys 1 1 1"
 ldrinfo25 "$S25/li-line" k46
@@ -2058,7 +2058,7 @@ t26bad "a name= other than the file name is refused" "name=other, the object is 
 mo good.o name=zbad kabi=k46.1.0 cc=$MPIN
 t26bad "two module objects in one package are refused" "2 objects under /etc/conf/mod.d/" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "COPY /etc/conf/mod.d/zbad2 $S26/src/good.o"
-t26bad "a module package that is not pure files is refused (40 section 6)" "not pure files.*postinstall" \
+t26bad "a module package that is not pure files is refused" "not pure files.*postinstall" \
     "COPY /etc/conf/mod.d/zbad $S26/src/good.o" "PKGMAP 1 i postinstall 20 1 1"
 # device entries (C3-5 v4 section 1.2): a module's c none /dev/<node> passes
 # (above), and (C3-5 v8 section 1.2) a block driver's b none /dev/dsk/<node>
@@ -2266,7 +2266,7 @@ else
 fi
 
 # --------------------------------------------------------------- T28 ----
-# The UFS-only mark (P-35 Option C, 2026-10-30; docs/design.md section 2b):
+# The UFS-only mark (2026-10-30; docs/design.md section 2b):
 # pkginfo APKG_FSTYPE=ufs on a package with a name over 14 bytes.  The
 # real host engine mints a perl-shaped package (BASEDIR=/, /opt/amix,
 # long names and a 14-byte collision); gen-catalog lists it in the

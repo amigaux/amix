@@ -218,7 +218,7 @@ echo "== removef stdin-form regression =="
 
 # ------------------------------------------------------------------
 # 7. the reproducible roll: with SOURCE_DATE_EPOCH, pkgmk + pkgtrans -s
-#    give the bytes build/pkg's dsroll path gives (T-56 D1)
+#    give the bytes build/pkg's dsroll path gives
 # ------------------------------------------------------------------
 echo "== reproducible roll =="
 "$TOP/tests/repro-roll/run.sh" || { echo "SMOKE FAIL: reproducible roll"; exit 1; }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-tests.sh -- host tests for i.conffile / r.conffile (P-36 W1).
+# run-tests.sh -- host tests for i.conffile / r.conffile.
 #
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
@@ -123,7 +123,7 @@ echo "$WORK/out/src $WORK/out/etc/x" | PKG_INSTALL_ROOT="$WORK/out" sh "$ICF" \
     >/dev/null 2>"$WORK/nopkg.err"
 check "no PKGINST: refused (rc 2)" test $? -eq 2
 # the stock 2.1 mkdir -p fails when the last directory already exists
-# (rig E1, 2026-10-31): two files in one directory, under such a mkdir
+# (an emulated Amix 2.1c, 2026-10-31): two files in one directory, under such a mkdir
 mkdir -p "$WORK/m40/etc"; echo a > "$WORK/m40/a.src"; echo b > "$WORK/m40/b.src"
 printf '%s\n' "$WORK/m40/a.src $WORK/m40/etc/a" "$WORK/m40/b.src $WORK/m40/etc/b" |
     PKGINST=X PKG_INSTALL_ROOT="$WORK/m40" bash -c '
@@ -290,7 +290,7 @@ check "  ... baseline removed" test ! -e "$(base "$R")/etc/toy.conf"
 check "  ... PENDING emptied" test -z "$(pend "$R")"
 
 # ------------------------------------------ shared with another package ---
-# D-N24: amix-base ships core's files as conffiles.  The engine hands a
+# amix-base ships core's files as conffiles.  The engine hands a
 # shared editable file to r.conffile, which leaves it to the other owner.
 echo "r.conffile: a conffile another package also owns"
 addc() { CUR="$(basename "$1")"; fr "$HB/pkgadd" -R "$1" -n -a "$WORK/admin" -d "$WORK/pkgs/$2.pkg" CORE \
@@ -338,7 +338,7 @@ check "  ... another type: kept" grep -qF '/etc/d: left in place; it also belong
 check "  ... every baseline goes" bash -c "test -z \"\$(ls '$S/var/sadm/conffiles/X/etc' 2>/dev/null)\""
 
 # -------------------------------------------- installf -f re-register ----
-# P-36 1.2 marks UNVERIFIED that `installf <pkg> <path> e` + `installf -f`
+# Whether `installf <pkg> <path> e` + `installf -f`
 # re-reads size and checksum of an existing e entry -- apkg --conf-new
 # relies on it after it moves <file>.new over the user's file.
 echo "installf -f re-registers a replaced conffile"

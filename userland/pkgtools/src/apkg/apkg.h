@@ -436,7 +436,7 @@ extern int fs_check(const struct conf *cf, const char *name,
 /* SHA-256 of a file as 64 lowercase hex chars; 0 ok / -1 unreadable */
 extern int sha256_file(const char *path, char hexout[65]);
 
-/* The verification hook of 60 §4: runs once the catalog is read and
+/* The verification hook: runs once the catalog is read and
  * before any kernel-space entry is used.  In 1.1 it records
  * "unverified" (cat->kverified = 0) and passes; a later release puts
  * the signature check here and may refuse the block. */
@@ -460,7 +460,7 @@ extern int ds_pkginst(const char *path, char *out, unsigned outlen);
  * NUL-terminated, into *text (free it); 0 ok / -1 (why[] says) */
 extern int ds_member(const char *path, const char *member, char **text,
                      char *why, unsigned cap);
-/* 40 §6 "pure files": the datastream's pkgmap holds only f and d objects
+/* "Pure files": the datastream's pkgmap holds only f and d objects
  * of class none and no install scripts (i: pkginfo, depend, copyright),
  * and at least one f; with module set, also c entries of class none
  * under /dev/ and b entries under /dev/dsk/ (C3-5 v8 §1.2: the driver's
@@ -484,7 +484,7 @@ extern int kpkg_write_record_fields(const struct conf *cf,
 extern int kpkg_owner(const struct conf *cf, const char *key,
                       char *pkginst, unsigned len);
 extern int kpkg_remove_record(const struct conf *cf, const char *key);
-/* pre-flight of 40 §6 over the kernel-space members of a transaction:
+/* the pure-files pre-flight over the kernel-space members of a transaction:
  * refused entries, kabi family/major/minor, compiler pin, line.  0 ok,
  * EX_* on refusal (message printed). */
 extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,

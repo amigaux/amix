@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
 # i.conffile -- class action script for class "conffile": a config file the
-# administrator edits in place survives an upgrade (P-36 section 1.2).
+# administrator edits in place survives an upgrade.
 #
 # pkgadd runs this with "<src> <dst>" pairs on stdin, one per line; on the
 # last volume the same call also has $1 = ENDOFCLASS, so stdin is read

@@ -248,7 +248,7 @@ cmp -s "$NH_RAW" "$CACHE/foo-1.0.pkg" \
     || bad "RAW parity: staged bytes differ"
 
 # ---------------------------------------------- (4) kernel-space parity
-# 40 section 6 / C3-5 v8 section 1.2 through kspace.c: a module's device
+# The pure-files rule / C3-5 v8 section 1.2 through kspace.c: a module's device
 # nodes, c under /dev/ and b under /dev/dsk/ (the ramdisk's ram0-2 b 20),
 # pass; a b node elsewhere, a short or classed b line, a p, s or l entry and
 # a b node in a kernel package are refused.  Dry-run installs (-n) of each

@@ -1,8 +1,7 @@
 # conffile: config files that keep the administrator's edits
 
 `i.conffile` and `r.conffile` are the class action scripts of class `conffile`, the one shared
-pair every Amix package with an edit-in-place config file carries (P-36 §1.2, decisions D-N1 to
-D-N6). The administrator's view is [`conffile.5`](conffile.5); this file is the contract for
+pair every Amix package with an edit-in-place config file carries. The administrator's view is [`conffile.5`](conffile.5); this file is the contract for
 packagers and for `build/pkg`.
 
 ## Using them in a package
@@ -11,8 +10,8 @@ packagers and for `build/pkg`.
   absolute path under `/etc` or `/var`. A relocatable (BASEDIR-relative) path is not supported.
 - The prototype carries `i i.conffile=<this dir>/i.conffile` and `i r.conffile=<this dir>/r.conffile`,
   and pkginfo says `CLASSES=none conffile`.
-- A conffile may be a path another package also owns, as amix-base ships core's `/etc/inittab`
-  (D-N24). The install rules are the same; on removal `r.conffile` leaves such a file to the other
+- A conffile may be a path another package also owns, as amix-base ships core's `/etc/inittab`.
+  The install rules are the same; on removal `r.conffile` leaves such a file to the other
   owner (below).
 - Nothing else: the scripts take `$PKGINST` and `$PKG_INSTALL_ROOT` from the engine.
 
@@ -46,12 +45,12 @@ package stays whatever its bytes, only this package's baseline goes, and pkgrm s
 never edited; a package the system cannot boot without (the base package, with `/etc/inittab`)
 carries `APKG_ESSENTIAL=yes` and apkg refuses to remove it (`docs/design.md` section 2c).
 
-Departures from P-36's table, and why:
+Departures from the original design, and why:
 
-- **No migration row** (owner D-N13: 1.1 is clean installs only). A file present without a baseline
+- **No migration row** (1.1 is clean installs only). A file present without a baseline
   is treated as edited, the conservative outcome; on a clean install that is a file the installer
-  wrote before the package (D-N24's `removef core` transfer, for instance).
-- **No s5 `new/` directory** (D-N3 as amended by D-N13): clean 1.1 installs are UFS.
+  wrote before the package (the installer's `removef core` transfer, for instance).
+- **No s5 `new/` directory**: clean 1.1 installs are UFS.
 - **A removed file comes back.** After the class action script the engine verifies every object of
   the class and fails the install, "partially failed", on one that does not exist (heirloom
   `instvol.c`, cverify after the script; the stock pkginstall shares the code). So "do not recreate
@@ -75,13 +74,14 @@ Departures from P-36's table, and why:
 - A directory a kept file leaves non-empty is "not empty", not a failure: heirloom pkgrm now takes
   Linux's `ENOTEMPTY` like SVR4's `EEXIST` (AMIX PORT, 2026-10-30).
 - `installf -c conffile <pkginst> <path> e` then `installf -f <pkginst>` re-reads size and checksum
-  of a replaced file. Without `-c`, the entry falls back to class `none`. This settles P-36's
-  UNVERIFIED item for apkg's `--conf-new`.
+  of a replaced file. Without `-c`, the entry falls back to class `none`. apkg's `--conf-new`
+  relies on it.
 
-The stock 2.1 `mkdir -p` fails, "File exists", when the last directory already exists (rig E1,
-2026-10-31), so `i.conffile` tests `-d` before each `mkdir -p`; the tests run it under such a mkdir.
+The stock 2.1 `mkdir -p` fails, "File exists", when the last directory already exists (an emulated
+Amix 2.1c, 2026-10-31), so `i.conffile` tests `-d` before each `mkdir -p`; the tests run it under such a mkdir.
 
-The stock 2.1c pkgadd runs `i.conffile` to the end (amxbase 1.0-4 on rig E1, 2026-10-31).
+The stock 2.1c pkgadd runs `i.conffile` to the end (amxbase 1.0-4 on an emulated Amix 2.1c,
+2026-10-31).
 
 **UNVERIFIED on a box:** `r.conffile` under the stock pkgrm (which runs it only with a person at the
 console) and under APKGENG's.

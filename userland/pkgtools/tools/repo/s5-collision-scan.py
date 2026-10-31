@@ -12,10 +12,10 @@
 # dirent on the box: the second install overwrites the first, pkgadd's
 # size/cksum verification fails against the first one's pkgmap line, and the
 # package reports "partially failed".  That is what happened to `gnusrc2` on
-# the amix-installng W6 cd-full run.
+# the installer's cd-full run.
 #
 # The measurement and the decision it feeds are in
-# ../../docs/s5-14char-collisions.md.  W6's own scan was prose only and had a
+# ../../docs/s5-14char-collisions.md.  The installer's own scan was prose only and had a
 # DEFECT this tool exists to not repeat: it keyed collision groups on the
 # truncated BASENAME ALONE, so two directories that each hold the same
 # aliasing pair collapsed into one row -- it reported 3 groups where there are
@@ -40,7 +40,7 @@
 #                        is the contents-DB object count.
 #   truncation universe  the same, minus b/c/p (device nodes and pipes).  s5
 #                        does store those as dirents, so they CAN collide;
-#                        they are excluded here only because W6's counts
+#                        they are excluded here only because the installer scan's counts
 #                        excluded them and the pinned constants below are
 #                        stated over that universe.  The scan reports the
 #                        collision count over both and says so when they
@@ -50,7 +50,7 @@
 # UFS-ONLY PACKAGES.  A package whose pkginfo carries APKG_FSTYPE (e.g.
 # APKG_FSTYPE=ufs; gen-catalog.py's UFS-ONLY BLOCK, docs/design.md section
 # 2b) never installs on s5: apkg refuses it there.  The s5 rule does not
-# apply to it (P-35 Option C, 2026-10-30).  Its objects still count in
+# apply to it (since 2026-10-30).  Its objects still count in
 # every universe above -- the count identity is about objects, not
 # filesystems -- but the scan names the marked packages, and a collision
 # group made only of their objects is reported as exempt and does not
@@ -75,7 +75,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 S5_NAME_MAX = 14
 
-# ftypes that are not ordinary tree objects for the W6 counting convention
+# ftypes that are not ordinary tree objects for the installer scan's counting convention
 DEVICE_FTYPES = frozenset("bcp")
 
 # pkgmap(4) ftypes whose path field is "<path>=<source>" (pkgmap(4): the
@@ -89,13 +89,13 @@ LINK_FTYPES = frozenset("sl")
 # cannot move the collision picture silently.
 #
 # NOTE on `basename_key_groups`: that is NOT a measurement of anything real.
-# It is the W6 defect reproduced on purpose -- group the TRUNCATED (>14)
+# It is the basename-only defect reproduced on purpose -- group the TRUNCATED (>14)
 # basenames on basename[:14] with the directory thrown away, and count a group
-# only when it holds more than one distinct basename.  It reproduces W6's
+# only when it holds more than one distinct basename.  It reproduces the installer scan's
 # three rows exactly, which is what makes "3 vs 5" a regression-checkable
 # statement instead of an anecdote.
 #
-# NOTE on `over_14` = 147: W6 reported 152 over the identical 27,876-path
+# NOTE on `over_14` = 147: the installer's scan reported 152 over the identical 27,876-path
 # universe and no counting variant reproduces 152 (docs section 7).  147 is
 # what the published packages contain; over-long names that do not collide are
 # harmless anyway, by the same lookup-truncation round trip that makes the
@@ -219,7 +219,7 @@ def group_by_directory(paths):
     """Group paths by (dirname, basename[:14]) -- the s5 dirent identity.
 
     THE keying rule.  A truncated name only collides with names in its OWN
-    directory; keying on the basename alone is the W6 defect (it both merges
+    directory; keying on the basename alone is the basename-only defect (it both merges
     genuinely separate collisions and invents cross-directory ones).
     """
     groups = {}
@@ -230,11 +230,11 @@ def group_by_directory(paths):
 
 
 def group_by_basename(paths):
-    """The W6 defect, reproduced for regression: directory discarded.
+    """The basename-only defect, reproduced for regression: directory discarded.
 
     Restricted to names that are actually truncated (> 14), and counting a
     group only when it holds more than one distinct basename -- that is the
-    variant that reproduces W6's three rows.  Reference only; never a fix
+    variant that reproduces the installer scan's three rows.  Reference only; never a fix
     input.
     """
     groups = {}
@@ -291,7 +291,7 @@ def report(res, quiet):
         % (S5_NAME_MAX, res["collision_groups"]))
     out("collision groups, basename-only key %8d\n"
         % res["basename_key_groups"])
-    out("  (that last line is the W6 defect reproduced for reference:\n"
+    out("  (that last line is the basename-only defect reproduced for reference:\n"
         "   the directory discarded.  It is never the number to fix by.)\n")
 
     if res["marked"]:

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# run.sh - the reproducible roll (T-56 D1) in the engine itself.  With
+# run.sh - the reproducible roll in the engine itself.  With
 # SOURCE_DATE_EPOCH set, pkgmk and pkgtrans -s write a datastream that
 # depends only on the prototype, the files and the epoch:
 #   - two rolls of one package from different copies of its files (other

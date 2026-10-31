@@ -3,7 +3,7 @@
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
 # dist-repro.sh -- `make repro-check`: APKG and APKGENG are the same bytes
-# however they are built (P-38 S4.2, "in out/ and reproducible").  Runs
+# however they are built.  Runs
 # `make dist` twice: in this checkout, and in a `git archive` of HEAD's
 # userland/pkgtools unpacked at another path, built under umask 077 with
 # another SOURCE_DATE_EPOCH in the environment (which the roll must

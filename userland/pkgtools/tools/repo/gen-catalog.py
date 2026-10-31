@@ -66,7 +66,7 @@
 #
 # ------------------------------------------------- KERNEL-SPACE BLOCK ---
 # A kernel, loader or module package (kernel/dlm contracts C2-2 v3, C2-3 v2,
-# C3-1, C3-5, D-3) is
+# C3-1, C3-5) is
 # NEVER an ordinary entry: a deployed 0.2.x apkg must not see kernel space.
 # It goes into a block after the ordinary entries (and after --isize), every
 # line a '#' comment under 2048 bytes:
@@ -115,7 +115,7 @@
 # has not exactly one type-13 section, whose .moddata lacks "MD2\0", has a
 # key twice (param aside), a name= other than the file name, a kabi= not
 # k30|k46.<major>.<minor> or no single-token cc=; a package that is not pure
-# files (40 section 6: only f/d of class none, no install scripts; a module
+# files (only f/d of class none, no install scripts; a module
 # package may also carry its driver's device nodes, C3-5 v8 section 1.2:
 # "c none /dev/<node> <major> <minor> <mode> <owner> <group>", as apkg
 # 0.3.2's ds_pure_files() accepts them, and a block driver's nodes
@@ -143,8 +143,8 @@
 # A package whose pkginfo carries APKG_FSTYPE=<type>[,<type>...] installs
 # only onto those filesystem types (statvfs f_basetype names: ufs, s5,
 # nfs, ...).  The packages set APKG_FSTYPE=ufs on a package with a file
-# name over 14 bytes, which s5 cuts (P-35 Option C, 2026-10-30;
-# docs/design.md section 2b).  The value is validated here exactly as
+# name over 14 bytes, which s5 cuts (2026-10-30; docs/design.md
+# section 2b).  The value is validated here exactly as
 # apkg validates it (1..15 of [a-z0-9] per type, comma-separated); a
 # malformed one SKIPs the package.  Every marked package is listed after
 # the entries (after --isize, before the kernel-space block):
@@ -210,7 +210,7 @@ DS_END = b"# end of header\n"
 PKG_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
 
 # Kernel-package markers -- the pkginfo params that identify OUR minted kernel
-# packages (KERNBENCH/KERNZ3660) specifically.  W6-P mints those packages with
+# packages (KERNBENCH/KERNZ3660) specifically.  Their mint stamps them with
 # KSUM_R (the shipped /stand/unix `sum -r`) and BOOT2_SHA (the flags-based
 # boot2 loader hash) in pkginfo precisely so a gate can recognise a
 # proprietary-derived kernel package WITHOUT unpacking it or keying on
@@ -221,7 +221,7 @@ PKG_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
 # the explicitly-private installng raw-source build, which clones the golden
 # kernel but is no *package* -- untouched.  The kernel/boot2 bytes are
 # proprietary-derived (/stand/unix links Commodore SVR4 objects; boot2 is a
-# Commodore blob, W6-K section 3), so a marker-matched package is refused from
+# Commodore blob), so a marker-matched package is refused from
 # the redistributable catalog AND the publish path (the amix-installng Gate-17
 # posture, applied to packages): fail closed, no --force.
 KERNEL_MARKER_PARAMS = ("KSUM_R", "BOOT2_SHA")
@@ -272,7 +272,7 @@ class PrivateContent(Exception):
     its proprietary-derived /stand payload is PRIVATE-only.
 
     Fatal in a redistributable catalog build and a refuse on the publish
-    path (W6-K section 3): it may never enter the NAS / an off-LAN repo.
+    path: it may never enter the NAS / an off-LAN repo.
     """
 
 
@@ -556,7 +556,7 @@ def cdev_problem(parts, module=None, classes=()):
 
 
 def pure_files_problem(pkgmap_text, role=None, params=None):
-    """40 section 6: None when the pkgmap holds only f/d objects of class
+    """The pure-files rule: None when the pkgmap holds only f/d objects of class
     none, i entries pkginfo/depend/copyright only, and at least one f --
     the rule apkg's ds_pure_files() applies on the box; else why not.
     role "module" also allows its device nodes, c and b (cdev_problem()),
@@ -1068,7 +1068,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
 
     pkginst, params, pkgmap_text = parse_datastream(buf)
 
-    # Licensing gate (W6-K section 3), re-keyed to OUR kernel packages: a
+    # Licensing gate, re-keyed to OUR kernel packages: a
     # package whose pkginfo carries the kernel-package markers (KSUM_R /
     # BOOT2_SHA) is one of the minted KERNBENCH/KERNZ3660 kernel packages --
     # proprietary-derived /stand/unix + /stand/boot2.boot, PRIVATE-only.
@@ -1082,7 +1082,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
             "package is a PRIVATE kernel package -- pkginfo carries kernel "
             "marker(s) %s (KSUM_R/BOOT2_SHA identify OUR minted KERNBENCH/"
             "KERNZ3660, whose /stand/unix + /stand/boot2.boot payload is "
-            "proprietary-derived, W6-K section 3); it may NEVER enter a "
+            "proprietary-derived); it may NEVER enter a "
             "redistributable catalog or repo"
             % ", ".join(sorted(kmarkers)))
 
@@ -1124,8 +1124,8 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
     if role is not None:
         why = pure_files_problem(pkgmap_text, role, params)
         if why is not None:
-            raise Malformed("kernel-space package is not pure files "
-                            "(40 section 6): %s" % why)
+            raise Malformed("kernel-space package is not pure files: %s"
+                            % why)
         kabi = pin = loader = None
         if role == "loader":
             kline, loader = loader_info(buf, params)
@@ -1324,8 +1324,8 @@ def main(argv):
                     help="do NOT build a catalog: scan <staging> for OUR "
                          "minted kernel packages (pkginfo carrying the "
                          "KSUM_R/BOOT2_SHA markers) and exit nonzero (rc=3) if "
-                         "any are found. The publish-path licensing gate "
-                         "(W6-K section 3); fail closed, no override.")
+                         "any are found. The publish-path licensing gate; "
+                         "fail closed, no override.")
     ap.add_argument("--packages-conf", metavar="DIR", default=PACKAGES_CONF,
                     help="the userland packages' conf directory, read "
                          "alongside the staging root's confs (default: "
@@ -1423,7 +1423,7 @@ def main(argv):
             for fn in sorted(offenders):
                 print("gen-catalog: PRIVATE CONTENT %s is a kernel package "
                       "(pkginfo marker(s) %s) -- refusing (proprietary "
-                      "kernel/boot2, W6-K section 3; never redistributable)"
+                      "kernel/boot2; never redistributable)"
                       % (fn, ", ".join(sorted(offenders[fn]))),
                       file=sys.stderr)
             print("gen-catalog: scan-private: REFUSE (%d private package(s); "
@@ -1459,7 +1459,7 @@ def main(argv):
                   "9 chars)", file=sys.stderr)
             return 2
         except PrivateContent as exc:
-            # Licensing gate (W6-K section 3): fail closed - a kernel-marker
+            # Licensing gate: fail closed - a kernel-marker
             # (KSUM_R/BOOT2_SHA) package must never be blessed into a
             # redistributable catalog.  No --force.
             print("gen-catalog: FATAL %s: %s" % (fname, exc),

@@ -2,15 +2,15 @@
 
 userland/pkgtools/Makefile `dist` builds and rolls APKG 0.3.4 and APKGENG 1.12.5 into out/userland/pkgs with the
 staging confs, each under its version's pinned epoch, PSTAMP without the host's name; `repro-check` proves two builds
-identical (P-38 S4.2). Under SOURCE_DATE_EPOCH pkgmk counts pkgmap part sizes in 4096-byte blocks and keeps pkgmap's
-spool modes as root, and pkgtrans writes every newc field in upper-case hex: measured on rig E1, the box's roll is the
+identical. Under SOURCE_DATE_EPOCH pkgmk counts pkgmap part sizes in 4096-byte blocks and keeps pkgmap's
+spool modes as root, and pkgtrans writes every newc field in upper-case hex: measured on an emulated Amix 2.1c, the box's roll is the
 host's bytes. The 0.3.3 → 0.3.4 upgrade keeps edited conffiles and the essential refusal holds. Not minted.
 
 ## 2026-10-31 — reproducible roll in the engine (21072b2); repo tools' extra pin adds prngd (2e71f93)
 
 With SOURCE_DATE_EPOCH, pkgmk writes the epoch as every pkgmap modtime and default date and sets the spool to pkgmap's
 modes and the epoch; pkgtrans -s archives in C sort order and normalises every newc header in place (ino, uid/gid/dev
-0, mtime, directory nlink), the bytes build/pkg's dsroll path makes (T-56 D1); without it, as before. repro-roll 18
+0, mtime, directory nlink), the bytes build/pkg's dsroll path makes; without it, as before. repro-roll 18
 checks; apkg 533/0, repo tools 475/0. The repo tools' pinned extra set adds prngd (moved in at d09d080).
 
 ## 2026-10-31 — device nodes in their module's class (ccba8d1)
@@ -21,7 +21,7 @@ refused. apkg 533/0, repo tools 475/0. Boxes need the next apkg (0.3.4) to insta
 
 ## 2026-10-31 — shared conffiles (474ec4b)
 
-r.conffile leaves a file another package still owns and drops only its own baseline (D-N24: amix-base takes over core's
+r.conffile leaves a file another package still owns and drops only its own baseline (amix-base takes over core's
 files). stock-pkg-system.md records the stock 2.1c pkgrm refusing unattended removal of script packages, the missing
 removef, the installf -f crash, the pkg\ edit flag, and a dsnorm-normalised stream installing with the stock pkgadd.
 conffile 105/0, conffile-e2e 64/0, apkg 521/0.
@@ -29,7 +29,7 @@ conffile 105/0, conffile-e2e 64/0, apkg 521/0.
 ## 2026-10-31 — the stock pkgadd and the admin file (d728052)
 
 stock-pkg-system.md and apkg.1 record that the stock pkgadd asks the conflict and script questions under -n whatever
-the admin file says (measured on rig E1; whether the whole admin file is ignored stays 🟡).
+the admin file says (measured on an emulated Amix 2.1c; whether the whole admin file is ignored stays 🟡).
 
 ## 2026-10-31 — i.conffile and the stock mkdir -p (37a2ea7)
 
@@ -47,7 +47,7 @@ rolling amix-base. Repo tools 470/0.
 
 On the emulated stock 2.1c, /usr/sbin/pkgadd refuses any package whose pkginfo carries BASEDIR ("requires a base
 directory", rc 5), whatever the admin file says; without the line the same package installs, and the heirloom engine
-installs both alike (toy packages on row E1). gen-catalog now warns about such a package and says whether it needs
+installs both alike (toy packages on an emulated Amix 2.1c). gen-catalog now warns about such a package and says whether it needs
 BASEDIR; apkg(1) and docs/stock-pkg-system.md record the fact. Repo tools 466/0.
 
 ## 2026-10-31 — the compat passwd fixture is ours (f0817bf)
@@ -79,7 +79,7 @@ tools 461/0. Not minted.
 
 ## 2026-10-30 — the essential-package mark, APKG_ESSENTIAL (75c33d4, 12832c6)
 
-P-36 W2 follow-up. A package whose installed pkginfo says APKG_ESSENTIAL=yes (the base package: its r.conffile
+A package whose installed pkginfo says APKG_ESSENTIAL=yes (the base package: its r.conffile
 would delete an unedited /etc/inittab) is refused by apkg remove, purge and remove --purge, exit 5, before the
 journal or pkgrm; --force-remove-essential overrides, -f does not. list and info show the mark. gen-catalog skips a
 package whose value is neither yes nor no. Stock pkgrm ignores the mark. Interface: docs/design.md §2c. apkg 521/0,
@@ -90,7 +90,7 @@ conffile e2e 64/0, repo tools 448/0. Not minted.
 Written from the engine source (src/formats, MIT) and shipped by APKGENG 1.12.5 (not minted) beside the other
 section-5 package formats.
 
-## 2026-10-30 — apkg decides config files (P-36 W2); man pages (9da25f4, 85d4e09, 2a2a09f, 6dbbdcc)
+## 2026-10-30 — apkg decides config files; man pages (9da25f4, 85d4e09, 2a2a09f, 6dbbdcc)
 
 apkg 0.3.4 (not minted): after each install or upgrade it lists the config files kept beside a new default and decides
 them — at a terminal keep/new/diff/later; -y/--conf-keep keep; --conf-new installs the default, saves yours as .old and
@@ -99,7 +99,7 @@ records it with `installf -c conffile`; with no terminal and no flag they stay p
 an edited file silently when the package's default did not change. New pages contents-fsck(1M), amix-sadm-migrate(1M)
 and contents(5); APKGENG 1.12.5 ships only its own commands' pages. Tests: conffile e2e 52/0, conffile 86/0, apkg 497/0.
 
-## 2026-10-30 — conffiles (P-36 W1) (035ca80, 632f11b, 7490ff0, ba7ed9a)
+## 2026-10-30 — conffiles (035ca80, 632f11b, 7490ff0, ba7ed9a)
 
 src/conffile: i.conffile and r.conffile, the shared class `conffile`. An upgrade keeps an edited config file and
 writes the new default to <file>.new, listed in /var/sadm/conffiles/PENDING; baselines are in
@@ -147,7 +147,7 @@ nameservers (59cf5af). The pre-publication history stays outside amix.
 
 ## 2026-10-30 — the UFS-only package mark, APKG_FSTYPE (f9b20e8, 544b830, eeb9f2f)
 
-P-35 Option C, step 1. A package whose pkginfo says APKG_FSTYPE=ufs may carry file names over 14 bytes; apkg refuses it
+UFS is the only filesystem for new installs. A package whose pkginfo says APKG_FSTYPE=ufs may carry file names over 14 bytes; apkg refuses it
 on any other filesystem before the first pkgadd (exit 5, one line naming the package, directory and filesystem; a
 malformed value exits 3); unmarked packages behave as before. gen-catalog validates the mark and lists marked packages
 in a `#ext fstype 1` trailer that every catalog v1 reader skips (apkg 0.1, 0.2.3, 0.3.3 checked). s5-collision-scan
@@ -155,8 +155,7 @@ exempts marked packages. Interface: docs/design.md §2b. apkg 497/0, repo tools 
 
 ## 2026-10-30 — payload-licence gate: stock libm is recorded, a Kickstart ROM refuses (dccd3b1, e656915)
 
-Per the owner's 2026-10-29 ruling (the permission covers all of Amix incl. its AT&T parts) and 2026-10-30 decision
-("Yes, stock libm"), the gate no longer refuses a payload ELF that embeds SVR4 libm; it prints one `embeds` line per
+The permission covers all of Amix incl. its AT&T parts and ports link the stock libm.a, so the gate no longer refuses a payload ELF that embeds SVR4 libm; it prints one `embeds` line per
 binary so a publish still shows what is inside. A new content test refuses a Kickstart ROM image anywhere in a payload
 ($1111/$1114 + JMP header, byte-swapped, AMIROMTYPE1; split halves not seen). Repo tools 387/0, apkg 457/0.
 
@@ -203,7 +202,7 @@ without it). `build-packages.sh --m4` via the new `repackage-stock.py --member`;
 for field, so the two packages share the file: an identical row is never a conflict (pkgdbmerg's shared/contchg/attrchg,
 ckconflct), pkgrm of one owner leaves the file to the other — proven on the host engine in both orders, strict and APKG
 admin, with mode/mtime controls. Staged build/repo-staging/stock/m4-2.1.pkg (md5 cf0784f9, 26112 B), not published.
-deps.conf `m4: core`; test T27; repo tools 401/0. Open: m4 into sets.conf minimal (base-8 → base-9) is the owner's.
+deps.conf `m4: core`; test T27; repo tools 401/0. Open: m4 into sets.conf minimal (base-8 → base-9).
 
 ## 2026-10-26 — APKG 0.3.2 minted for the 1.1 media, staged in build/repo-staging-apkg032 (d6ff38f) — NOT published
 
@@ -223,7 +222,7 @@ apkg 442/0, repo tools 367/0; apkg.amix c18d6ee2 (113230 B).
 
 APKG-0.3.1.pkg sha256 45b809cd, md5 2378f66d, 197120 B; the apkg.amix inside is 87b0c427 (112647 B). Against 0.3.0 only
 apkg and apkg.1 changed. All publish-path gates pass; heirloom pkgadd -R overwrite install keeps an edited apkg.conf. The
-public catalog stays at 0.2.3 until the owner's go.
+public catalog stays at 0.2.3 until the publish is decided.
 
 ## 2026-10-26 — apkg 0.3.1: one kernel package per line; gen-catalog module rows (06b77c4, 07ebd85) — NOT minted
 
@@ -239,10 +238,10 @@ rows from the object's .moddata (kabi=/cc=), no depend= — byte-identical to am
 ## 2026-10-26 — apkg upgrade with several names; APKG 0.3.0 staged for the 1.1 media (6215017, bb0072d) — NOT published
 
 `apkg upgrade <name>...` takes several names as one transaction: one journal, one kbootset build + commit, so a kernel, the
-loader and kbootset upgrade into one generation (stage-2 exit row S2-46); an unknown or not-installed name refuses the whole
+loader and kbootset upgrade into one generation (kernel/dlm's stage-2 exit test); an unknown or not-installed name refuses the whole
 call; up-to-date names are left out. APKG 0.3.0 minted by build-packages.sh --apkg for the 1.1 media
 (build/repo-staging-apkg030/base/APKG-0.3.0.pkg, 192 000 B, sha256 e6e7b7d5…): STAGED, the public catalog and the publish
-line of record still say 0.2.3 — publishing is the owner's decision. APKGENG stays 1.12.3. run-tests 376/0.
+line of record still say 0.2.3 — publishing is decided separately. APKGENG stays 1.12.3. run-tests 376/0.
 
 ## 2026-10-25 (night, 2) — the install record is named by pkginst (C2-2 v4) (3ab2c3f)
 
@@ -261,9 +260,9 @@ packages skipped until stage 3. Journal format apkg-txn 2. run-tests 349/0, repo
 
 ## 2026-10-25 (late) — apkg 0.3 follow-up after the kbootset author's review (0e6090f..d7e91f0)
 
-apkg cites contracts C2-2/C2-4 v2 (behaviour unchanged). A kernel-space datastream must be pure files (spec 40 §6): the
+apkg cites contracts C2-2/C2-4 v2 (behaviour unchanged). A kernel-space datastream must be pure files: the
 pkgmap may hold only f and d objects of class none and the i entries pkginfo, depend, copyright; anything else exits 3
-before any pkgadd; install records list plain files only. gen-catalog.py writes the `#ext kpkg 1` block (S2-23): a kernel
+before any pkgadd; install records list plain files only. gen-catalog.py writes the `#ext kpkg 1` block: a kernel
 package goes into it with line=, kabi=, pin= copied verbatim from its own sidecar; a catalog without kernel space is
 byte-identical to before; loader and module packages are skipped for now (ldrinfo lacks line/kabi/pin — contract question).
 The kbootset consumer test builds kbootset through amix-dlm's Makefile. run-tests 338/0, repo tools 333/0, consumer 12/0.
@@ -276,12 +275,12 @@ datastreams are checked by SHA-256 + size (amix-dlm's loader/common SHA-256, cop
 and line. After a transaction that changed kernel space apkg calls `kbootset build` then `kbootset commit` (C2-4 v1); exits
 6 = kbootset error (journal kept), 7 = kbootset refused (generation unchanged). New journal /var/apkg/txn and `apkg recover`;
 config keys kbootset= and kbootset_journal=. Version 0.3.0 in source only (build-packages.sh still mints 0.2.3 — the mint is
-the owner's call). Host tests 330/0; consumer test against the real kbootset 10/0; emulator smoke on rig row E1 PASS.
+decided separately). Host tests 330/0; consumer test against the real kbootset 10/0; emulator smoke on an emulated 2.1c PASS.
 
 ## 2026-10-14 — batch 0 published to pkg.amigaux.org (6724e96, 871d605)
 
 Catalog db94282c5eaae7d8fb0b07230331eacd, 41 entries: the seven add-ons moved -1 → -2 (strict-060 re-mints) and the -1
-files were removed from the server (D-2); APKGENG 1.12.0 → 1.12.3, APKG 0.2.2 → 0.2.3 (the 1.0 media versions). Older
+files were removed from the server; APKGENG 1.12.0 → 1.12.3, APKG 0.2.2 → 0.2.3 (the 1.0 media versions). Older
 APKG/APKGENG files stay served, decatalogued. Proven on a true LC060 cell first (7/7 and the upgrade path).
 
 ## 2026-10-13 — initial public release (github.com/jusii/amix-packagemanager)
@@ -532,9 +531,9 @@ explicit `Host:` header). The on-box `apkg` E2E for the six runs on the real A40
 - History condensed for the public release on 2026-10-13.
 
 
-## 2026-08-16 — the P5.4 r4 KERN mint (a46b24f)
+## 2026-08-16 — the r4 KERN mint (a46b24f)
 
-- Both private kernel packages re-minted onto the full P5.4 regeneration batch:
+- Both private kernel packages re-minted onto the full regeneration batch:
   **KERNBENCH 49667-2026.08.16** (sum -r 49667, 1 586 312 B, payload md5 8072e610…;
   bench-smoke 8/8 — a4091 family) and **KERNZ3660 60364-2026.08.16** (60364,
   1 587 524 B, payload md5 23b4b898…; **metal-proven 2026-08-15**: byte-clean
@@ -549,15 +548,15 @@ explicit `Host:` header). The on-box `apkg` E2E for the six runs on the real A40
   publish/catalog gates refuse both r4 packages (rc 3/4, zero files) while the same
   staging without them publishes rc 0. Suites 178/178, 87/87, 19/19.
 
-## 2026-08-14 — the s5-14char arc (brief, cppath fix, scanner)
+## 2026-08-14 — the s5-14char arc (report, cppath fix, scanner)
 
-- docs/s5-14char-collisions.md (d677e85): 5 groups/10 objects (corrects W6's 3); all ten are 1992
+- docs/s5-14char-collisions.md (d677e85): 5 groups/10 objects (corrects the installer's 3); all ten are 1992
   build droppings; pkgadd mkstemp root cause; Option A recommended — then SUPERSEDED by the UFS
-  default (full installs whole on ufs; Option A retired, not landed).
+  default (full installs whole on ufs; Option A retired, not done).
 - cppath fix (76b7145): pkgadd can now overwrite ≥14-char basenames on s5 (14-byte-capped template,
   same-dir atomic; red/green LD_PRELOAD s5 simulator, 24 checks). Deployment debt: rides the next
   APKGENG mint. License-file rename deliberately deferred (digest blast radius).
-- tools/repo/s5-collision-scan.py (a149c2e): the W6 scan mechanized, 7 pinned constants, T17,
+- tools/repo/s5-collision-scan.py (a149c2e): the installer's scan mechanized, 7 pinned constants, T17,
   suite 178/178. ab82525 records the arc.
 # Changelog
 
@@ -567,7 +566,7 @@ Maintainer notes/README/design.md/src/apkg/README: apkg 0.2.2 named; the DNS stu
 payload-licence gate appear where a reader looks for how a publish is gated (pointing at NOTES.md);
 repo-tools file count 18; test counts 223 / 20 / 268; example uses APKG-0.2.2.pkg.
 
-## 2026-08-11 — W3 package metadata — installed sizes, cats.conf taxonomy, install sets (dd62c40, 0e974a9, daae217)
+## 2026-08-11 — package metadata — installed sizes, cats.conf taxonomy, install sets (dd62c40, 0e974a9, daae217)
 
 Host-side only; no package re-minted, every .pkg md5 untouched, and a plain
 regeneration of the live repo still reproduces the published catalog
@@ -599,9 +598,9 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   to skip `#` before the ISO path may pass `--isize`).
 - Tests: tools/repo 94 → 161, src/apkg 81 → 87, both 0 failed.
 
-## 2026-08-07 — P5.4 r3: KERN packages re-minted on the stack-sdcom-fixed cdfs; r2 superseded; attribution corrected (2a08cfa, 7960a87, b72bc02)
+## 2026-08-07 — r3: KERN packages re-minted on the stack-sdcom-fixed cdfs; r2 superseded; attribution corrected (2a08cfa, 7960a87, b72bc02)
 
-- **Root-cause correction for the whole P5.4 mint lineage**: the M-RUN4 panics were amix-cdfs's
+- **Root-cause correction for the whole 2026-08 mint lineage**: the metal-run panics were amix-cdfs's
   stack-allocated sdcom (u-area-window lifetime bug, fixed `9360542`) — present in BOTH cdfs
   lines then; NOT the upstream-sync line (exonerated) and NOT the cross toolchain. §7 and the
   r1 quarantine README carry the corrected story (`b72bc02`).
@@ -614,33 +613,33 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   successor, now the golden's running kernel). Publish gate REFUSES both (quoted, rc 3);
   pkgtrans round-trips md5-identical; suite 94/94. July predecessors intact.
 
-## 2026-08-06 — P5.4: re-mint the PRIVATE kernel packages as the Wave-1 successors (6500d7f)
+## 2026-08-06 — re-mint the PRIVATE kernel packages as the rebuilt successors (6500d7f)
 
-- The P5.4 Wave-1 kernel rebuilds (z3660eth major 48→51 renumber + the aen security patch in
-  the link) supersede the W6-P kernel-package identities. KERNBENCH → `45343-2026.08.06`
+- The kernel rebuilds (z3660eth major 48→51 renumber + the aen security patch in
+  the link) supersede the first kernel-package identities. KERNBENCH → `45343-2026.08.06`
   (sum -r 45343, 1 585 284 B, md5 e739b9cb…; KMIX GAINS z3660eth:
   a4091,z3660eth,cdfs,a3091-fixed,a2091-fixed,scsi-gsio,support-stock); KERNZ3660 →
   `05929-2026.08.06` (sum -r 05929, 1 586 308 B, md5 e4420789…; KMIX unchanged
   z3660scsi,z3660eth,cdfs). Sources = amix-kerntools work/kernel-packages/p54-bench-cdfs/unix
   and p54-combined/unix (provenance siblings); rootdev/CONFIG/payload shape/private-flag
   mechanics unchanged.
-- The W6-P slice-vs-relocunix representation split is DISSOLVED: the P5.4 bench build proved
+- The first mint's slice-vs-relocunix representation split is DISSOLVED: the bench build proved
   /stand/unix == the gated relocunix BYTE-EXACT (sum -r 45343 both, pulled length-gated), so
   both packages now ship the gated ET_REL relocunix bytes verbatim and REV/KSUM_R = the
   relocunix sum -r. docs/kernel-packages.md §7 records the re-mint; §5's KERNBENCH bullet is
   now historical.
 - Predecessors superseded, not destroyed: KERNBENCH-45473-2026.07.23.pkg and
   KERNZ3660-00961-2026.07.23.pkg stay in build/kernel-private/kernel/; 00961 remains the last
-  METAL-validated kernel until M-RUN4. Neither successor is yet cold-boot- or metal-validated
-  (bench-smoke / M-RUN4 follow the wave).
+  METAL-validated kernel until the metal run. Neither successor is yet cold-boot- or metal-validated
+  (bench-smoke and the metal run follow).
 - Proofs: gate_kernel passed both; pkgtrans round-trip md5-identical payloads; boot2 sha256
   f287ff3a… re-verified; pkgmap modes == stock core, class none only; publish gate REFUSES
   both successors (scan-private rc 3, markers BOOT2_SHA/KSUM_R; catalog build rc 3, no
   catalog written). Suite: repo tools 94/94 (T13 included).
 
-## 2026-07-24 — METAL-FIX.3: apkg install fails fast on a hung/prompting pkgadd (79f56f3)
+## 2026-07-24 — apkg install fails fast on a hung/prompting pkgadd (79f56f3)
 
-- M-RUN1 froze: a pkgadd error left the console wedged at "No changes were made to the system."
+- A metal run froze: a pkgadd error left the console wedged at "No changes were made to the system."
   60s+ and `apkg install`'s rc never propagated, so the driver's `|| die` never fired. Root
   cause (`src/apkg/install.c` run_cmd): pkgadd was forked with apkg's stdin INHERITED; the stock
   1991 pkgadd prompts (conflict/continue) even under -n on error paths, and with a never-fed
@@ -658,12 +657,12 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   apkg by name (no pinned sum) → picks it up automatically. install.sh's "stops on first
   failure" comment is now TRUE for prompting/hanging pkgadd, not just clean-nonzero.
 
-## 2026-07-23 — METAL-FIX.2b: re-key the W6-P licensing gate to kernel-package markers (4de56d0)
+## 2026-07-23 — re-key the kernel-package licensing gate to kernel-package markers (4de56d0)
 
-- The W6-P gate (577c65a) keyed on pkgmap PATHNAMES (`/stand/unix`, `/stand/boot2.boot`) —
+- The first gate (577c65a) keyed on pkgmap PATHNAMES (`/stand/unix`, `/stand/boot2.boot`) —
   but stock `core` ships those members as ORIGINAL Amix content, so the gate condemned every
   regen of the real 32-row catalog, the base-8 `gen-catalog --raw`, and the explicitly-private
-  raw-source build (froze the metal retry). Re-keyed the refusal to the robust markers W6-P
+  raw-source build (froze the metal retry). Re-keyed the refusal to the robust markers the mint
   itself mints — pkginfo `KSUM_R`/`BOOT2_SHA`, carried ONLY by KERNBENCH/KERNZ3660 — so kernel
   packages remain fully refused (catalog rc 3, publish rc 4, still no `--force`) while stock
   `/stand` content passes as it always had. No CLI/exit-code changes; only the trigger moved.
@@ -671,18 +670,18 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   `--raw` incl. core → rc 0 with raw.img; both real kernel packages still refused with the
   marker named; T13 reworked with both directions regression-locked. Suites: repo 94/94,
   apkg 77/77, nohttp 17/17, contents-fsck 19/19, mntinfo 5/5.
-- Hygiene rider (landed with this entry): untracked the stale committed
+- Hygiene rider (in this entry): untracked the stale committed
   `tools/repo/__pycache__/gen-catalog.cpython-314.pyc` (gitignore already covers it) — it
   churned as "benign noise" on every tools run.
 
-## 2026-07-23 — Installer-NG METAL-FIX.1: get_mntinfo() survives a MISSING /etc/mnttab (3b9b7a1)
+## 2026-07-23 — Installer: get_mntinfo() survives a MISSING /etc/mnttab (3b9b7a1)
 
-- **Extends the W5.5a sparse-mnttab fix to an ABSENT mount table.** The first metal RAW install
+- **Extends the sparse-mnttab fix to an ABSENT mount table.** The first metal RAW install
   (A4000+Z3660, 2026-07-23) ran green through seed + `apkg update` + all 8 SRC_RAW package reads,
   then died: `pkgadd: ERROR: unable to open mount table (/etc/mnttab): No such file or directory`
-  — the miniroot ships no mnttab, the RAW path's `/etc/mount` writes none, and W5.5a's synthesize
+  — the miniroot ships no mnttab, the RAW path's `/etc/mount` writes none, and the sparse-mnttab synthesize
   only ran after a SUCCESSFUL open. (Bench RAW passed only by state contamination: its reused
-  root floppy carried an mnttab left by cdfs-helper mounts in earlier CD-arm waves.)
+  root floppy carried an mnttab left by cdfs-helper mounts in earlier CD test runs.)
 - Fix (`libinst/mntinfo.c`): ENOENT on the mount-table open ⇒ treat as empty ⇒ synthesize the
   `/dev/root / s5 rw 0` root via a shared `synthesize_root()` helper (the two paths cannot
   drift). Every OTHER open error stays FAIL-CLOSED (EACCES fixture proves it). Robustness suite
@@ -691,12 +690,12 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
 - Static set: only **pkgchk** (52096, 264524 B) and **pkginstall** (46006, 399900 B) change —
   pkgadd is byte-identical (get_mntinfo lives in the pkginstall CHILD it execs, which is also
   why the field error carries the "pkgadd:" prefix). Re-master consumers pick up exactly those
-  two. Outstanding: on-metal re-verification against genuinely fresh media (installng wave);
-  the apkg fail-fast hang seen at the metal freeze is a separate open item (METAL-FIX.3).
+  two. Outstanding: on-metal re-verification against genuinely fresh media (installer);
+  the apkg fail-fast hang seen at the metal freeze is a separate open item (the fail-fast fix).
 
-## 2026-07-23 — Installer-NG W6-P: PRIVATE kernel packages minted + publish licensing gate (577c65a)
+## 2026-07-23 — PRIVATE kernel packages minted + publish licensing gate (577c65a)
 
-- Minted **KERNBENCH** (`/stand/unix` = the W6-U slice-proven bench kernel, sum -r 45473,
+- Minted **KERNBENCH** (`/stand/unix` = the slice-proven bench kernel, sum -r 45473,
   1,252,347 B; a4091+cdfs+a3091-fixed) and **KERNZ3660** (`/stand/unix` = the metal-validated
   00961, 1,585,400 B; z3660scsi+z3660eth+cdfs), both rootdev 0x00480016/c6s1unix, both shipping
   the flags-based `/stand/boot2.boot` (sha256 f287ff3a…, acquired via kerntools boot2-sha-gate;
@@ -710,12 +709,12 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   (rc 4, destination untouched; NO --force). Consumption is local `pkgadd -d <file>` only —
   no catalog row, no apkg path, cannot leak off-LAN. Regression-locked as run-tests T13
   (repo suite 73→87).
-- Corrections vs the W6-K contract draft (kerntools doc amendment owed): KERNBENCH ships the
+- Corrections vs the build hub's contract draft (kerntools doc amendment owed): KERNBENCH ships the
   proven-booting slice bytes (45473 — not the 42265 relocunix representation of the same
   kernel), and the mint uses ARCH=Amiga. Suites green: repo 87/87, apkg 77/77, nohttp 17/17,
   contents-fsck 19/19, mntinfo all-pass.
 
-## 2026-07-23 — Installer-NG W6.4a + W6.4c-a: static contents-fsck; apkg on PATH; hygiene (69e0003, b862c75, 1d6bfb8, d5ab424)
+## 2026-07-23 — Installer: static contents-fsck; apkg on PATH; hygiene (69e0003, b862c75, 1d6bfb8, d5ab424)
 
 - **Static contents-fsck joins the CD engine set** (`69e0003`): build-amix-static.sh emits
   src/contents-fsck as fully static m68k SVR4 (29468 B, sum -r 23366) — ET_EXEC, zero
@@ -737,9 +736,9 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   symlink-carrying APKG — the held publish must ship the freshly-regenerated catalog
   (32 rows, same-mint).
 
-## 2026-07-23 — Installer-NG W6.1: mint the cdfs base package (CD-mount userland) (6200312)
+## 2026-07-23 — Installer: mint the cdfs base package (CD-mount userland) (6200312)
 
-- Wave-5 found a fresh base-five install ships NO cdfs userland (`/usr/lib/fs/cdfs` absent), so
+- The installer found a fresh base-five install ships NO cdfs userland (`/usr/lib/fs/cdfs` absent), so
   an installed box cannot `mount -F cdfs` a CD even though the cdfs KERNEL side is already in
   the target kernel. Minted the missing userland as OUR package `cdfs` (base/, alongside
   APKG/APKGENG) via a new `build-packages.sh --cdfs` arm (also in `--all`).
@@ -752,10 +751,10 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   explicit for alt-root installs; a no-op on a booted box).
 - Host proof: pkgtrans round-trip byte-identical; pkgname gate green (32 pkgs); catalog +
   catalog.md5 regenerated & consistent. Side-catch: the staging catalog had gone STALE vs four
-  stock packages rebuilt during W5.x (core/games/lp/text, md5-only deltas) — the regen corrects
+  stock packages rebuilt during the installer work (core/games/lp/text, md5-only deltas) — the regen corrects
   it; any future publish must ship this fresh catalog. apkg 77/77, repo 73/73.
 
-## 2026-07-23 — Installer-NG W5.5a: get_mntinfo() tolerates a sparse mnttab (0d3a21c)
+## 2026-07-23 — Installer: get_mntinfo() tolerates a sparse mnttab (0d3a21c)
 
 - Root-caused the miniroot base-OS install failure (`pkgadd -R /mnt` "identified `</cdrom>` as
   root file system instead of `</>`", installed nothing) to the miniroot's incomplete
@@ -774,11 +773,11 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
 - Exit-status finding: the engine already fails CLOSED (pkginstall/pkgremove quit(99), installf
   exit(1), pkgadd via ckreturn→failflag→exit non-zero; on-box missing-datastream = 99). The one
   fail-open, pkgchk's intentional get_mntinfo swallow, is mooted by this fix.
-- Bench-proven downstream (installng W5.4d/e/f): with this engine, all 5 base packages install
+- Bench-proven downstream (installer): with this engine, all 5 base packages install
   rc=0 from the miniroot and the full zero-touch install reproduces the canonical digest
   `86e1ceb144f1328bf441c5df38fc2798` on a twice-cold-booted target.
 
-## 2026-07-22 — Installer-NG W5.0b follow-up: static apkg (FILE+RAW-only) joins the CD engine set (6553368)
+## 2026-07-22 — Installer, follow-up: static apkg (FILE+RAW-only) joins the CD engine set (6553368)
 
 - `heirloom/build-amix-static.sh` now also emits `build-amix-static/bin/apkg` as a fully static
   m68k SVR4 ELF — ET_EXEC, zero PT_INTERP, zero DT_NEEDED, **46464 B**. Resolves the deferred
@@ -797,10 +796,10 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
 - New standalone test `src/apkg/tests/nohttp-variant.sh` (17/17): http refusal on every verb +
   FILE/RAW parity vs the shared build. Shared `apkg`/`apkg.amix` md5-identical pre/post.
   Suites: apkg 77/77, repo 73/73; divsll-only clean.
-- W5.3's ISO re-master pulls `build-amix-static/bin/{apkg,pkgadd,pkgtrans,pkginfo,pkgchk}` +
-  `sadm-helpers/pkginstall`. On-box smoke of the static set owed to W5.4.
+- The installer's ISO re-master pulls `build-amix-static/bin/{apkg,pkgadd,pkgtrans,pkginfo,pkgchk}` +
+  `sadm-helpers/pkginstall`. On-box smoke of the static set still owed.
 
-## 2026-07-22 — Installer-NG W5.0b: static-link variant for the CD engine set (8be79a0)
+## 2026-07-22 — Installer: static-link variant for the CD engine set (8be79a0)
 
 - `heirloom/build-amix-static.sh` emits the CD-resident installer subset (pkgadd, pkgtrans,
   pkginfo, pkgchk + the pkginstall sadm helper) as fully static m68k SVR4 ELF — ET_EXEC, zero
@@ -832,7 +831,7 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
 - The bench guidance in the maintainer notes corrected accordingly (`3efa704`): the 64 MB (`mbresmem_size=64`)
   recipe is **retired** — 16 MB at the ceiling is the config; >16 MB mis-maps the SCSI disk.
 
-## 2026-07-21 — Installer-NG Wave 3: package SOURCE abstraction, proven 3 sources → 1 digest (c61bdb7, 5fc80e4)
+## 2026-07-21 — Installer: package SOURCE abstraction, proven 3 sources → 1 digest (c61bdb7, 5fc80e4)
 
 - apkg gains an explicit SOURCE layer (`src/apkg/source.{c,h}`): `repo=` is classified with NO
   heuristics — `http://` → HTTP, `file://` or a bare `/path` (e.g. `/cdrom`) → FILE,
@@ -848,7 +847,7 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   Removed the stale apkg lock-clear workaround (engine `unlockinst` is fixed).
 - `tools/repo`: `gen-catalog.py --raw` (512-aligned offsets + a self-describing `raw.img`);
   `source-acceptance.sh` drives the base-set install through each source into a fresh seeded
-  `-R` root + the Wave-2 gate battery.
+  `-R` root + the earlier gate battery.
 - **ACCEPTANCE — three sources, one digest.** On the bench (kernel 42265, **64 MB**), the base
   set (core/bsd/net/text/sysadm) installs through the source layer from a mounted **cdfs**, a
   **raw slice** (`raw:/dev/rdsk/c5d0s1`), and **`http://`**, each reproducing the canonical tree
@@ -867,12 +866,12 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   multi-chunk `raw_extract` regression test added then stays (apkg suite 74→**77**; repo 73/73).
   Host cross-build unchanged from c61bdb7 (objdump: `divsll`-only). (`5fc80e4`)
 
-## 2026-07-21 — Installer-NG Wave 2: -R ownership correctness, proven on the box (7331368, cef7fff, 7fc7ba5)
+## 2026-07-21 — Installer: -R ownership correctness, proven on the box (7331368, cef7fff, 7fc7ba5)
 
 - Base set (core, bsd, net, text, sysadm) installed via `pkgadd -R` into a fresh seeded root
   on the bench box — all five rc=0 (~3.5 min), ownership attested GREEN at euid 0,
   contents-fsck clean (0 findings / 4793 records), `pkginfo -R` lists all five.
-  **Canonical tree digest (the Waves 3/5 reference): `86e1ceb144f1328bf441c5df38fc2798`
+  **Canonical tree digest (the installer's reference): `86e1ceb144f1328bf441c5df38fc2798`
   (4793 objects, owner/group resolved through the target root's passwd/group).**
 - Engine (heirloom):
   - `averify()` under -R now ABORTS the package when an owner/group NAME is unresolvable in
@@ -944,7 +943,7 @@ byte-for-byte (md5 edeba578b73fc892f3c8c5ede603aca7).
   root at `<root>/var/sadm/install/core`). Per-region DS_DEBUG bisection independently
   names CGR (cgrnam) as the sole suppressor — bisect and core dump converge. Added
   `heirloom/tests/altroot-repro/` (harnesses + proof + per-region patch). Fix belongs in
-  the gcc-cross-amix wrapper (next wave). (`c05cba0`)
+  the gcc-cross-amix wrapper (later). (`c05cba0`)
 
 ## 2026-07-20 (-R averify SIGSEGV: host reproduction ruled out, m68k padding inference retracted)
 

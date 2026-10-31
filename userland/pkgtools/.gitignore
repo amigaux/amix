@@ -47,9 +47,6 @@ heirloom/version/version
 __pycache__/
 *.pyc
 
-# local-only: agent/session rules and settings never enter the public tree
-CLAUDE.md
-.claude/
 # emulator configs carry host paths and ROM locations; ship *.example.uae only
 configs/*.uae
 !configs/*.example.uae

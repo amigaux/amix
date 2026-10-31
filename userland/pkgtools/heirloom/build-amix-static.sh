@@ -16,7 +16,7 @@
 #
 # contents-fsck is our own C89 contents(4) DB checker (src/contents-fsck),
 # added here so the installer driver can run a contents-DB integrity CHECK
-# as an install step on the freshly-installed target (Installer-NG W6.4a).
+# as an install step on the freshly-installed target.
 # It is libc-only (single source, static buffers, no malloc, no sockets),
 # so it links fully static exactly like apkg's FILE+RAW path - crt +
 # values-Xt + one object + libc.a, no heirloom libs, no libnsl/libsocket.
@@ -24,7 +24,7 @@
 # clean, non-zero = findings/error -> the driver must fail closed.  See the
 # contents-fsck section below and AMIX-PORT.md "Static-link variant".
 #
-# WHY STATIC (Installer-NG W5.0 / E4 probe, 2026-07-22).  The stock
+# WHY STATIC (probed on the install miniroot, 2026-07-22).  The stock
 # install miniroot (amix-installng amix_21_root.adf) is a hostile host
 # for our dynamically-linked engine:
 #   * it carries NO libnsl.so anywhere;

@@ -165,7 +165,7 @@ static void	usage(void);
 static int	slinkf(char *from, char *to);
 
 /*
- * AMIX PORT: the reproducible roll (T-56 D1).  With SOURCE_DATE_EPOCH set,
+ * AMIX PORT: the reproducible roll.  With SOURCE_DATE_EPOCH set,
  * every time pkgmk writes is that epoch: pkgmap's modtime column (so the
  * copies in the spool get it too), the date of a default VERSION or PSTAMP
  * (in UTC, and a default PSTAMP without the host's name), and, once the

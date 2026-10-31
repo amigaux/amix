@@ -861,8 +861,8 @@ construct_vfs(struct vfstab *vfsent, char *client_path, char *link_name,
  * AMIX PORT: synthesize the always-present root ("/") mount-table entry.
  *
  * Shared by the two install-media-only robustness paths in get_mntinfo():
- * a MISSING /etc/mnttab (open() ENOENT, METAL-FIX.1) and a SPARSE /etc/mnttab
- * whose shortest entry is not "/" (W5.5a).  In both cases the host mount table
+ * a MISSING /etc/mnttab (open() ENOENT, the missing-mnttab fix) and a SPARSE /etc/mnttab
+ * whose shortest entry is not "/".  In both cases the host mount table
  * fails to record the root filesystem, yet this process is by definition
  * executing out of it.  The synthesized entry is exactly the canonical seed
  * line
@@ -937,10 +937,10 @@ get_mntinfo(int map_client, char *vfstab_file)
 		int	open_errno = errno;
 
 		/*
-		 * AMIX PORT (METAL-FIX.1): a *missing* mount table is the
+		 * AMIX PORT (the missing-mnttab fix): a *missing* mount table is the
 		 * fresh-install-media case and is NOT fatal.
 		 *
-		 * The W5.5a synthesize below handles a SPARSE /etc/mnttab
+		 * The synthesize below handles a SPARSE /etc/mnttab
 		 * (present, but lacking the "/" line); this handles the file
 		 * being ABSENT entirely.  The Amix install miniroot ships no
 		 * /etc/mnttab, and nothing on the RAW (bare mount(2)) source

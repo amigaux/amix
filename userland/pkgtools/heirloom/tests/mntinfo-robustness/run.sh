@@ -51,7 +51,7 @@ $CC -O -std=gnu89 -fcommon -D_GNU_SOURCE -I"$TOP/sslstub" \
 printf '/dev/cdrom /cdrom cdfs ro 0 0\n' > "$OUT/sparse"        # NO "/"  (miniroot shape)
 printf '/dev/root / s5 rw 0 0\n/dev/cdrom /cdrom cdfs ro 0 0\n' > "$OUT/normal"  # has "/"
 
-# The two open-failure fixtures are DELIBERATELY DISTINCT (METAL-FIX.1) -- the
+# The two open-failure fixtures are DELIBERATELY DISTINCT (the missing-mnttab fix) -- the
 # split IS the point:
 #   * MISSING file (open -> ENOENT) is the fresh-install-media case: the Amix
 #     miniroot ships no /etc/mnttab.  get_mntinfo() must treat it as an empty
@@ -59,7 +59,7 @@ printf '/dev/root / s5 rw 0 0\n/dev/cdrom /cdrom cdfs ro 0 0\n' > "$OUT/normal" 
 #     was just wiped and we never create it).
 #   * UNREADABLE file (open -> EACCES) is a genuine fault: get_mntinfo() must
 #     still fail CLOSED -> rc 1.  chmod 000 yields EACCES for the (non-root)
-#     tester.  The pre-METAL-FIX.1 suite used a *missing* file for this case,
+#     tester.  The pre-the missing-mnttab fix suite used a *missing* file for this case,
 #     but a missing file now legitimately synthesizes, so the fail-closed
 #     assertion must use a PERMISSION failure to keep exercising fail-closed.
 MISSING="$OUT/missing"                                   # never created -> ENOENT

@@ -122,7 +122,7 @@ each under its version's own epoch (`EPOCH_APKG`, `EPOCH_ENG` beside the version
 environment's. `make dist [OUT=<dir>]` here builds everything they need (the host engine, then
 apkg, contents-fsck and the engine for Amix) and rolls both into `<amix>/out/userland/pkgs`;
 `make repro-check` does it twice, here and from a `git archive` of HEAD at another path, and
-compares the bytes (P-38 S4.2). `repackage-stock.py` is the same idea for
+compares the bytes. `repackage-stock.py` is the same idea for
 the 27 Amix 2.1 factory packages, rebuilt from the original install tape with modes, owners,
 device nodes and symlinks read out of the cpio headers. `publish.sh` rsyncs the staging tree to
 the repository root named by `PUBLISH_DEST` (required; there is no default host) and verifies the

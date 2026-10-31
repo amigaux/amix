@@ -91,7 +91,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
   they need no format-version bump and cost no field. A second one, `fstype` (section 2b), lists the
   UFS-only packages; it is not opt-in but appears only when a package is marked. (Historical note: opt-in was load-bearing
   while a non-conforming consumer existed — `amix-installng`'s `isocheck.parse_catalog` originally
-  did not skip `#` lines. That parser conforms since installng W3b, 2026-08-11, and the ISO path
+  did not skip `#` lines. That parser conforms since 2026-08-11, and the ISO path
   now passes `--isize`; no known non-conforming consumer remains.) A package whose pkgmap cannot be summed gets
   **no** `#isize` line at all (plus a stderr warning): **absence means unknown, never zero** — a
   consumer must treat a missing line as "unknown", not as "free". The figure is a payload byte
@@ -127,7 +127,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
 - Host-testable: builds with `gcc -std=gnu89` on Linux (sockets are portable); tests run against
   `python3 -m http.server` + a fake pkgadd shim.
 
-### 2a. Package sources (Wave 3, `src/apkg/source.{c,h}`)
+### 2a. Package sources (`src/apkg/source.{c,h}`)
 
 The `repo=` string is classified **explicitly** (no heuristics) into one of three sources; the
 rest of apkg is source-agnostic. Classification lives in `src_open`; `http.c` stays an
@@ -159,7 +159,7 @@ The engine argv is byte-identical to before when `-R` is unset, and grows `-R <t
 
 ### 2b. The filesystem a package needs: `APKG_FSTYPE` (UFS-only packages)
 
-The owner's decision P-35 Option C (2026-10-30): UFS is the only filesystem for new installs, and
+Since 2026-10-30 UFS is the only filesystem for new installs, and
 s5 stays readable. s5 cuts every directory entry at 14 bytes, so a package may now carry longer
 file names if it says so; apkg then refuses it on s5. This section is the interface between the
 packages' build (amix-packages `pkgroll`, which sets the mark) and this repository (apkg, which
@@ -244,7 +244,7 @@ source.
 
 ### 2c. Packages the system cannot do without: `APKG_ESSENTIAL`
 
-P-36 W2 follow-up (2026-10-30). Removing the base package would run its `r.conffile`, which deletes
+Added 2026-10-30. Removing the base package would run its `r.conffile`, which deletes
 every config file still equal to its default: an unedited `/etc/inittab` or `/etc/default/login`
 would go and the box would not boot. dpkg's `Essential: yes` answers the same problem. This
 section is the interface between the packages' build (`build/pkg`, which sets the mark) and apkg
@@ -368,8 +368,8 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   see, since it keys on pkginfo markers. It refuses (exit 5, no `--force`) a Kickstart ROM image,
   which the Amix permission does not cover. Stock Amix object code statically linked into a
   payload binary (SVR4 `libm`, detected via embedded `STT_FILE` source names) was refused until
-  2026-10-30; since the owner's decision that day (ports link the stock `libm.a`; the permission
-  covers all of Amix, ruling 2026-10-29) it is recorded as an `embeds` line, not refused. A
+  2026-10-30; since that day (ports link the stock `libm.a`; the permission covers all of
+  Amix) it is recorded as an `embeds` line, not refused. A
   stripped payload binary reports UNKNOWN, never a clean pass. Detail: NOTES.md 2026-10-30; the
   history and the four ways the gate was wrong before it was right: NOTES.md 2026-09-16.
 

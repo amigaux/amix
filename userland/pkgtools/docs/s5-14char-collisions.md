@@ -1,12 +1,11 @@
-# The `full` set vs s5's 14-character names — decision brief
+# The `full` set vs s5's 14-character names — decision report
 
 **Status: DECISION PENDING.** This document measures the problem and recommends
 one option. Nothing in `sets.conf`, the catalogs or the packages has been
-changed. Raised by `amix-installng` W6 (2026-08-12), when `cd-full` became the
+changed. Raised by the installer (2026-08-12), when `cd-full` became the
 first run ever to lay down all thirty packages and `gnusrc2` failed with `rc=2`.
 
-> **UFS-only packages are exempt (2026-10-30).** Under the owner's decision P-35
-> Option C, UFS is the only filesystem for new installs and s5 stays readable. A
+> **UFS-only packages are exempt (2026-10-30).** UFS is the only filesystem for new installs and s5 stays readable. A
 > package whose pkginfo carries **`APKG_FSTYPE=ufs`** (the UFS-only mark,
 > [design.md §2b](design.md)) may hold basenames over 14 bytes and names that
 > share their first 14 bytes in one directory: apkg refuses it on s5 instead of
@@ -23,12 +22,12 @@ first run ever to lay down all thirty packages and `gnusrc2` failed with `rc=2`.
 
 | | |
 |---|--:|
-| collision groups in `full` — **installng W6 reported** | 3 |
+| collision groups in `full` — **the installer reported** | 3 |
 | collision groups in `full` — **actually** | **5** |
 | colliding objects | **10** |
 | minimum objects to drop for a clean `full` | **5** |
 
-The W6 scan was **directory-blind**: it keyed groups on the truncated *basename*
+The installer's scan was **directory-blind**: it keyed groups on the truncated *basename*
 alone, so the two `amixInitExt*` pairs that exist in **two** directories
 (`WORK/` and `ZAPHOD/`) each collapsed into one row. Its three rows name the
 right six *filenames*, but the fix is per-path, and there are ten paths.
@@ -129,7 +128,7 @@ bytes ship anyway as `mi/miinitext.c`, and `make` regenerates it on demand.
 | 4 | `.../ddx/amix/ZAPHOD` | `amixInitExtDMI` | `amixInitExtDMI.c` (**s**), `amixInitExtDMI.o` (f) | `X11r5src` |
 | 5 | `.../ddx/amix/ZAPHOD` | `amixInitExtMon` | `amixInitExtMono.c` (**s**), `amixInitExtMono.o` (f) | `X11r5src` |
 
-Groups 4 and 5 are the ones W6 missed. They are *symlink vs regular file* — the
+Groups 4 and 5 are the ones the installer's scan missed. They are *symlink vs regular file* — the
 nastier shape, since the two objects are not even the same type.
 
 ---
@@ -206,7 +205,7 @@ and is filed as a follow-up rather than folded into it.
 
 ## 3. Reproducing the scan
 
-W6's scan was ad-hoc and left no tool — only prose. The algorithm below
+The installer's scan was ad-hoc and left no tool — only prose. The algorithm below
 reproduces every number in this document from the published `.pkg` files, and
 **is now implemented as `tools/repo/s5-collision-scan.py`** (2026-08-14):
 
@@ -227,24 +226,24 @@ and an invented one).
    those are control files and never enter the target tree.
 3. **Object universe** = distinct paths, all ftypes.
    **Truncation universe** = the same, minus `b`/`c`/`p` (device nodes and
-   pipes, which s5 stores as dirents but which W6's count excluded).
+   pipes, which s5 stores as dirents but which the installer scan's count excluded).
 4. Group by **`(dirname, basename[:14])`**. A group with more than one distinct
-   path is a collision. *Keying on `basename[:14]` alone is the W6 bug.*
+   path is a collision. *Keying on `basename[:14]` alone is the basename-only bug.*
 
 Regression constants for the thirty published packages:
 
 | quantity | value |
 |---|--:|
-| truncation universe (matches W6's "distinct paths") | **27,876** |
-| basenames > 14 characters | **147** (W6 said 152 — unreconciled, see §7) |
+| truncation universe (matches the installer scan's "distinct paths") | **27,876** |
+| basenames > 14 characters | **147** (the installer's scan said 152 — unreconciled, see §7) |
 | basenames ≥ 14 characters | 572 |
 | **collision groups, keyed per directory** | **5** |
-| collision groups, keyed on basename alone (the W6 bug) | 3 |
+| collision groups, keyed on basename alone (the basename-only bug) | 3 |
 | object universe (= the contents-DB object count) | **28,709** |
 
 ### 3.1 The object count is computable host-side
 
-W6 believed the installed object count could only come off the guest, and put
+The installer's run assumed the installed object count could only come off the guest, and put
 the pkgmap-sum over-count at 1.6–1.7 %. In fact the relationship is exact:
 
 > **contents-DB object count = number of distinct paths across the set's
@@ -259,7 +258,7 @@ Verified against all four attested references, with no residual:
 | `developer` | 11,497 | 11,497 | 0 |
 | `x11` | 11,546 | 11,546 | 0 |
 
-W6's "Σ pkgmap objects" figures are the *entry* counts plus one `i` line per
+The installer scan's "Σ pkgmap objects" figures are the *entry* counts plus one `i` line per
 package (4,929 + 8 = 4,937; 11,187 + 17 = 11,204) — so both numbers reconcile,
 and the gap between them is pure de-duplication of shared directories.
 
@@ -398,7 +397,7 @@ patched Imakefile, and it should be documented rather than silently shipped.
 tunefs,ufsdump,ufsrestore,…}`) and `conf` ships the kernel side —
 `/usr/sys/fs/ufs` (relink objects + `exp`) and `/usr/sys/master.d/ufs`. UFS has
 255-character names and no 65,535-inode ceiling, so it would retire this
-collision, W6's `firstboot.conf.new` case, the RAW payload rename gate, the
+collision, the installer scan's `firstboot.conf.new` case, the RAW payload rename gate, the
 inode ceiling, *and* §2.1's upgrade defect at once.
 
 **This is a flag, not a recommendation.** Whether the shipped install kernels
@@ -411,7 +410,7 @@ s5-only installer was a locked user decision. It is recorded because the cost of
 
 ## 7. Open discrepancy
 
-W6 counted **152** over-long basenames; this scan counts **147** over the
+The installer's scan counted **152** over-long basenames; this scan counts **147** over the
 identical 27,876-path universe (which reproduces exactly, so the input sets
 agree). Neither counting variant tried here — entries vs distinct paths, with or
 without link sources, with or without `i` lines — yields 152. The gap does not

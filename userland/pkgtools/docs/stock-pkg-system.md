@@ -112,7 +112,7 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
   `setuid`/`conflict`/`action`). A permissive admin (`*=nocheck`, `instance=overwrite`) + `pkgadd -n`
   runs non-interactive for packages with no install scripts and no file another package owns ✅.
 - **The stock `pkgadd` asks the conflict and the script questions whatever the admin file says** ✅
-  (emulated stock 2.1c, row E1, 2026-10-31, amxbase: files core owns, install scripts). Under `-n`,
+  (emulated stock 2.1c, 2026-10-31, amxbase: files core owns, install scripts). Under `-n`,
   with `conflict=nocheck` and `action=nocheck`, it prints "The following files are already installed
   on the system and are being used by another package:" with an empty list, then "suspended
   (interaction required)", rc 5, nothing installed; the admin file named by full path (`-a
@@ -122,13 +122,12 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
   installs non-interactively only through APKGENG's pkgadd, or with the answers on stdin.
   Nor does `instance=`: a second VERSION of an installed package under `-n` stops, rc 5, "Unable to
   determine whether to overwrite an existing package instance, or add a new instance", with
-  `instance=quit` and with `instance=overwrite` alike (APKGENG 1.12.0 → 1.12.4, rig E1,
-  2026-10-31, `tmp/2026-10-31-pkgtools-mint`). So the stock pkgadd under `-n` decides nothing an
+  `instance=quit` and with `instance=overwrite` alike (APKGENG 1.12.0 → 1.12.4,
+  emulated stock 2.1c, 2026-10-31). So the stock pkgadd under `-n` decides nothing an
   admin file could decide, and no admin file of ours has been seen to change its course 🟡. An
   upgrade on a box goes through APKGENG's pkgadd (apkg's path).
 - **The stock `pkgrm` does not remove a package that has removal scripts without a person** ✅
-  (emulated stock 2.1c, row E1, 2026-10-31, toy packages, evidence
-  `tmp/2026-10-31-pkgtools-shared/run{3,4}/rig/E1`). A `postremove` or an `r.<class>` script is
+  (emulated stock 2.1c, 2026-10-31, toy packages). A `postremove` or an `r.<class>` script is
   enough: under `-n` it asks the super-user scripts question and suspends, rc 5, with
   `action=nocheck` and with the default admin alike; with `y` answers on a pipe it asks both
   questions, then "Removal of <pkg> failed. No changes were made to the system.", rc 1, and no
@@ -150,9 +149,9 @@ followed by **cpio archive(s) in SVR4 `070701` (portable ASCII / "newc")** carry
 - **A datastream with normalised headers installs** ✅: build/pkg's `amix_dsroll` stream (newc ino
   renumbered with a hard link kept, uid/gid/dev 0, every mtime and pkgmap's modtime the epoch) of a
   toy with a directory tree and a hard link installs with `/usr/sbin/pkgadd -n`, rc 0, `pkgchk`
-  clean, the link intact (2026-10-31, `tmp/2026-10-31-pkgtools-shared/run3`).
-- **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, row E1, 2026-10-31;
-  toy packages varied one parameter at a time, evidence `tmp/2026-10-30-pkgtools-basedir/rig/E1`).
+  clean, the link intact (emulated stock 2.1c, 2026-10-31).
+- **A `BASEDIR` in pkginfo stops the stock `pkgadd`** ✅ (emulated stock 2.1c, 2026-10-31;
+  toy packages varied one parameter at a time).
   `/usr/sbin/pkgadd -n -a <admin> -d <pkg>` of any package whose pkginfo carries `BASEDIR` (`/`,
   `/usr`) ends with "Installation of this package requires a base directory. … suspended
   (interaction required)", rc 5, nothing installed, even when every object path is absolute and
@@ -240,7 +239,7 @@ observable role: an SVR4 installer wrapper that lays down packages and writes `/
 ---
 
 ## Sources / evidence
-- Firsthand, this session, on `Amix_UAE_clean.hdf` (Amix 2.1c) under WinUAE; command transcripts
+- Firsthand, on `Amix_UAE_clean.hdf` (Amix 2.1c) under WinUAE; command transcripts
   (phases A–E) kept outside this tree. ✅
 - amigaunix.com `more_software` (pkg build/install flow, `.pkg`/cpio/`tar.zoo` formats) and AmixBP
   (`amixbp.sourceforge.net`, group_id 263433 — backports, stalled 2009). 🟡

@@ -1,6 +1,6 @@
 /*
  * conffile.c - the apkg side of config files that keep the
- * administrator's edits (P-36 section 1.2; conffile(5)).
+ * administrator's edits (conffile(5)).
  *
  * Copyright (c) 2026 Jussi Alanärä.
  * MIT license - see LICENSE in this directory.
@@ -9,7 +9,7 @@
  * safe thing inside every pkgadd and pkgrm, under any installer: an
  * edited file is kept, the new default goes to <path>.new, and the file
  * is named in /var/sadm/conffiles/PENDING as "<pkginst> <path>".  The
- * engine's stdin is /dev/null (install.c, METAL-FIX.3), so nothing can
+ * engine's stdin is /dev/null (install.c, the fail-fast fix), so nothing can
  * be asked there.  apkg asks AFTER the transaction:
  *
  *   keep   your file stays; <path>.new is deleted (the same bytes stay
@@ -17,7 +17,7 @@
  *   new    your file becomes <path>.old, <path>.new becomes <path>, and
  *          the contents DB is told: installf -c conffile <pkginst>
  *          <path> e, then installf -f <pkginst> (without -c the entry
- *          falls back to class none; host-tested in P-36 W1)
+ *          falls back to class none; host-tested in src/conffile/tests)
  *   diff   diff(1) of your file against <path>.new, then ask again
  *   later  nothing; the file stays pending for `apkg conffiles resolve`
  *

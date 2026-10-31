@@ -1,6 +1,6 @@
 /*
  * dsepoch.c - a datastream that depends only on its inputs and
- * SOURCE_DATE_EPOCH (T-56 D1: the reproducible roll).
+ * SOURCE_DATE_EPOCH: the reproducible roll.
  *
  * pkg_epoch() reads SOURCE_DATE_EPOCH.  ds_epoch_fd() rewrites, in place,
  * the newc (070701) header of every member of every cpio archive of a
@@ -10,8 +10,8 @@
  * plus the directories directly under it in the archive.  Names, sizes,
  * modes, data and padding keep their values, but every field of every
  * header, the TRAILER!!!'s too, is written again as "%08lX": the host's
- * cpio writes upper-case hex and the Amix one lower-case (rig E1,
- * 2026-10-31), so a roll on the box is the host's bytes.  On the host that
+ * cpio writes upper-case hex and the Amix one lower-case (measured on an
+ * emulated Amix 2.1c, 2026-10-31), so a roll on the box is the host's bytes.  On the host that
  * is byte for byte what build/pkg's dsnorm.py makes of the same stream.
  *
  * The file is read and written a header at a time (lseek, read, write),

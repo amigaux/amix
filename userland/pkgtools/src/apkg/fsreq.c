@@ -11,7 +11,7 @@
  *
  * installs only onto those filesystem types, named as statvfs(2)
  * f_basetype names them.  The packages set it when a file name is longer
- * than 14 bytes, which s5 cuts (P-35, Option C).  apkg checks, on the
+ * than 14 bytes, which s5 cuts.  apkg checks, on the
  * staged and verified datastream and before any pkgadd of the
  * transaction:
  *
