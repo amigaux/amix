@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-31 — display.d(4): the Z3660 example lists only the modes the card takes; amix-base 1.0-15 (a865427)
+
+The modes line is 1024x768 (default) 640x480 800x600 1280x720 1280x800 1280x1024 1920x1080; 1920x800 is gone.
+
 ## 2026-10-31 — xstart keeps a card's env to its server and runs restore after a crash; amix-base 1.0-14 (5a70fe4)
 
 On the xinit path too, a card's `env` reaches the server alone (a wrapper that exists only while the session runs).
