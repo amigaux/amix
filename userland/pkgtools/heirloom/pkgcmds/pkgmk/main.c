@@ -176,6 +176,15 @@ static int	slinkf(char *from, char *to);
  */
 static int	epoch_set;
 static long	epoch;
+static mode_t	*epoch_modes;	/* each entry's mode as pkgmap says it */
+
+/*
+ * Under SOURCE_DATE_EPOCH the block and fragment size pkgmap's part sizes
+ * are counted in: not the spool filesystem's (on the box 1K, so pkgmap's
+ * ": 1 <blocks>" line differed from the host's for the same input,
+ * 2026-10-31), but the 4096 every host roll so far had, so their bytes stay.
+ */
+#define	EPOCH_BSIZE	4096
 
 /* the date in fmt: UTC from the epoch when set, else local from *clock */
 static void
@@ -214,10 +223,10 @@ spool_mode(struct cfent **eptlist, char *rel, int dir)
 	}
 	for (i = 0; obj != NULL && eptlist[i]; i++) {
 		if (strchr("fevdx", eptlist[i]->ftype) == NULL ||
-		    eptlist[i]->ainfo.mode == BADMODE ||
+		    epoch_modes[i] == BADMODE ||
 		    strcmp(eptlist[i]->path, obj) != 0)
 			continue;
-		return (eptlist[i]->ainfo.mode & 07777);
+		return (epoch_modes[i] & 07777);
 	}
 	return (dir ? 0755 : 0644);
 }
@@ -653,6 +662,8 @@ main(int argc, char *argv[])
 		quit(99);
 	}
 
+	if (epoch_set)
+		bsize = frsize = EPOCH_BSIZE;
 	if (bsize == 0) {
 		bsize = svfsb.f_bsize;
 	}
@@ -749,10 +760,22 @@ main(int argc, char *argv[])
 			break;
 		}
 	}
-	if (epoch_set)
+	if (epoch_set) {
+		/* outvol() as root ORs 0644 into the modes it sets on the spool
+		 * ("safe attributes"); the spool keeps pkgmap's, saved here */
 		for (i = 0; eptlist[i]; i++)
+			;
+		epoch_modes = (mode_t *)calloc((size_t)i + 1, sizeof (mode_t));
+		if (epoch_modes == NULL) {
+			progerr(gettext(ERR_MEMORY), errno);
+			quit(99);
+		}
+		for (i = 0; eptlist[i]; i++) {
+			epoch_modes[i] = eptlist[i]->ainfo.mode;
 			if (strchr("fevi", eptlist[i]->ftype) != NULL)
 				eptlist[i]->cinfo.modtime = (time_t)epoch;
+		}
+	}
 
 	if (nparts > 1)
 		(void) fprintf(stderr, gettext(MSG_PACKAGEM), nparts);

@@ -79,6 +79,13 @@ check "roll A (SOURCE_DATE_EPOCH)" roll "$W/work" "$W/rootA" "$W/spA" "$W/A.pkg"
 check "roll B: other inodes, order, umask, times and spool path" \
 	roll "$W/workB" "$W/rootB" "$W/sp/B" "$W/B.pkg" SOURCE_DATE_EPOCH=$E
 check "A and B are the same bytes" cmp -s "$W/A.pkg" "$W/B.pkg"
+# (As root pkgmk ORs 0644 into the modes it gives the spool's files, and the
+# spool must still carry pkgmap's: that is checked on the box, as root.  A
+# fakeroot roll cannot show it: pkgmk clears its environment, so fakeroot
+# loses its key and the faked modes go unrecorded.)
+# pkgmap's part size is counted in 4096-byte blocks, not the spool
+# filesystem's (on a 1K-block box it was 28 for what the host made 92)
+check "pkgmap counts its blocks of 4096" grep -qx ': 1 92' "$W/spA/$PKG/pkgmap"
 check "every pkgmap modtime is the epoch" \
 	bash -c "! grep -E '^1 ([fev] \S+ \S+ \S+ \S+ \S+|i \S+) [0-9]+ [0-9]+ ' '$W/spA/$PKG/pkgmap' | grep -v ' $E\$'"
 check "the spool's files carry pkgmap's modes" \

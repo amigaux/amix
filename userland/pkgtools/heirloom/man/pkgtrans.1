@@ -223,8 +223,10 @@ archives each package's members in C sort order and, once the datastream
 file is written, rewrites the header of every member: inode numbers from 1
 in archive order (hard links keep one number), owner, group and device 0,
 the modification time that epoch, and a directory's link count 2 plus its
-subdirectories.  Names, modes, sizes and contents are unchanged.  A value
-that is not a number of seconds is an error.
+subdirectories.  Names, modes, sizes and contents are unchanged, and every
+field is written in upper-case hex, whichever case \fBcpio\fR wrote, so a
+roll on Amix is the same bytes as one on another host.  A value that is
+not a number of seconds is an error.
 .SH SEE ALSO
 .IR pkginfo (1),
 .IR pkgmk (1),
