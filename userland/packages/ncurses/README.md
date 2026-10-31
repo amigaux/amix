@@ -15,8 +15,8 @@ Package: `ncurses`, category `library`, set `extra`. Licence: ncurses' X11-style
 ## Source
 
 ncurses 6.6, `https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz`, sha256 `355b4cbb…49ff11`.
-`package.sh` fetches the byte-identical copy in the amigaux/amix-distfiles archive
-(`AMIX_DISTFILES` names a local copy).
+The fetch falls back to our byte-identical copy in the amigaux/amix-distfiles archive
+(`ncurses-6.6/ncurses-6.6.tar.gz`); `AMIX_DISTFILES` names a local copy.
 
 The configuration follows isoriano's amix-userland port (MIT, Ignacio Soriano): static,
 narrow characters, no C++ binding, the stock terminfo directory. No source patches are needed.

@@ -8,8 +8,8 @@ DESC="ncurses 6.6 as static libraries (libncurses.a, libform.a, libmenu.a, libpa
 CATEGORY=library
 SET=extra
 LICENSE=X11
-# upstream origin: https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz (the archive copy is byte-identical)
-URL=https://github.com/amigaux/amix-distfiles/releases/download/ncurses-6.6/ncurses-6.6.tar.gz
+# fallback: our archive copy, https://github.com/amigaux/amix-distfiles/releases/download/ncurses-6.6/ncurses-6.6.tar.gz
+URL=https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz
 SHA256=355b4cbbed880b0381a04c46617b7656e362585d52e9cf84a67e2009b749ff11
 STYLE=configure
 TOOLCHAIN=gcc14
