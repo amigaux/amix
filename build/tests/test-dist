@@ -47,7 +47,7 @@ def git(*args, cwd):
 tmp = tempfile.mkdtemp(prefix="test-dist.")
 try:
     top = os.path.join(tmp, "amix")
-    for f in ("build/dist.sh", "build/pkg/layout.sh", "system/check-amix-system",
+    for f in ("build/dist.sh", "build/pkg/layout.sh", "build/pkg/pkgmeta", "system/check-amix-system",
               "toolchain/gcc-cross-amix.pin", "toolchain/gcc14-cross-amix.pin"):
         os.makedirs(os.path.dirname(os.path.join(top, f)), exist_ok=True)
         shutil.copy2(os.path.join(TOP, f), os.path.join(top, f))
@@ -84,7 +84,7 @@ try:
     rc, out = run("frobnicate")
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
     for step, owner in (("kernel-k30", "S2.2"), ("kernel-k46", "S2.3"), ("drivers", "S3.2"),
-                        ("drivers/a4091", "S3.2"), ("kspace", "S3.3"), ("catalogs", "S5.1"),
+                        ("drivers/a4091", "S3.2"), ("catalogs", "S5.1"),
                         ("media", "S6.1")):
         rc, out = run(step)
         check("%s: not in make dist yet, exit 3, names %s" % (step, owner),
@@ -107,6 +107,60 @@ try:
     rc, out = run("kspace", where=os.path.join(shallow, "build", "dist.sh"))
     check("a shallow clone: refused, a package's epoch needs the history",
           rc == 1 and "is a shallow clone" in out, out)
+
+    # --- kspace: kernel/<dir>/pkg/build.sh, provider before consumer --------------
+    order = os.path.join(tmp, "kspace.order")
+
+    def recipe(d, pkg, version, fail=False):
+        write(os.path.join(top, d, "pkg", "build.sh"), """\
+echo %s >> "%s"
+echo "AMIX_BUILD_ROOT=$AMIX_BUILD_ROOT" >> "%s"
+%s
+python3 -I - "$AMIX_BUILD_ROOT/kspace/pkg/%s-%s.pkg" <<'PY'
+import sys
+def newc(name, data):
+    name = name.encode() + b"\\0"
+    hdr = b"070701" + b"".join(b"%%08X" %% v for v in (
+        1, 0o100644, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name), 0))
+    pad = lambda n: b"\\0" * (-n %% 4)
+    return hdr + name + pad(len(hdr) + len(name)) + data + pad(len(data))
+head = b"# PaCkAgE DaTaStReAm\\n%s 1 8\\n# end of header\\n"
+head += b"\\0" * (-len(head) %% 512)
+open(sys.argv[1], "wb").write(head + newc("%s/pkginfo", b"PKG=%s\\nVERSION=%s\\n") + newc("TRAILER!!!", b""))
+PY
+""" % (d, order, order, "exit 1" if fail else "", pkg, version, pkg, pkg, pkg, version))
+
+    for d in ("kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw/module",
+              "kernel/drivers/a4091"):
+        os.makedirs(os.path.join(top, d), exist_ok=True)
+    recipe("kernel/dlm", "kbootset", "1.1.0-28")
+    recipe("kernel/drivers/a4091", "a4091k30", "1.0.0-6")
+    rc, out = run("kspace")
+    kp = os.path.join(top, "out", "kspace", "pkgs")
+    check("kspace: the directories with recipes run, the rest are named with their owner, exit 3",
+          rc == 3 and "[MISSING] kspace: kernel/k30 has no pkg/build.sh yet (P-38 S3.3, the k30 station" in out
+          and "kernel/port has no pkg/build.sh" in out and "kernel/modules/monsw has no pkg/build.sh" in out
+          and "kernel/dlm has no" not in out and "kernel/drivers/a4091 has no" not in out, out)
+    check("kspace: their packages land in out/kspace/pkgs, through the one-version guard",
+          sorted(os.listdir(kp)) == ["a4091k30-1.0.0-6.pkg", "kbootset-1.1.0-28.pkg"]
+          and "one version per name: 2 package(s)" in out, out)
+    log = open(order).read().split("\n")
+    check("kspace: provider order, each with AMIX_BUILD_ROOT=out/build/kspace",
+          [l for l in log if l.startswith("kernel/")] == ["kernel/dlm", "kernel/drivers/a4091"]
+          and "AMIX_BUILD_ROOT=%s" % os.path.join(os.path.realpath(top), "out", "build", "kspace") in log,
+          "\n".join(log))
+    for d, p in (("kernel/k30", "kern30m"), ("kernel/port", "kern46m"), ("kernel/modules/monsw", "monsw30")):
+        recipe(d, p, "1.0-1")
+    os.remove(order)
+    rc, out = run("kspace")
+    check("kspace: every directory has its recipes: exit 0, dlm first, k30 and port before the modules",
+          rc == 0 and "MISSING" not in out and [l for l in open(order).read().split("\n") if l.startswith("kernel/")]
+          == ["kernel/dlm", "kernel/k30", "kernel/port", "kernel/modules/monsw", "kernel/drivers/a4091"], out)
+    recipe("kernel/port", "kern46m", "1.0-1", fail=True)
+    rc, out = run("kspace")
+    check("kspace: a failing build.sh stops the step, exit 1",
+          rc == 1 and "kernel/port/pkg/build.sh failed" in out, out)
+    shutil.rmtree(os.path.join(top, "kernel"))
 
     rc, out = run("dist")
     check("dist: kit first, and stops at the first step that fails",

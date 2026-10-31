@@ -14,7 +14,10 @@
 #   kernel-k46   the 68040/68060 cut (P-38 S2.3, port)     not in make dist yet
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
 #   drivers      kernel/drivers' modules (P-38 S3.2)       not in make dist yet
-#   kspace       the kernel-space packages (P-38 S3.3)     not in make dist yet
+#   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
+#                provider before consumer (dlm, k30, port, the modules, the
+#                drivers), into out/kspace/pkgs, one version per name; a
+#                directory without one yet is named, and the step exits 3
 #   userland     every package.sh of userland/packages and userland/base/pkg:
 #                out/userland/pkgs/*.pkg, one version per name
 #   catalogs     both catalogs (P-38 S5.1, pkgtools)       not in make dist yet
@@ -157,6 +160,61 @@ roll_recipe() {	# roll_recipe <package dir>
 	grep '^pkg ' "$out/build/userland/$(basename "$1")/BUILD.txt" | sed "s|$out/||"
 }
 
+# step_kspace: every kernel directory's recipes, kernel/<dir>/pkg/build.sh
+# (P-38 S3.3). Each rolls all its recipes, writes its .pkg files to
+# $AMIX_BUILD_ROOT/kspace/pkg/ and prints a `pkg <file> <sha256>` line for
+# each; exit 0 or a failure. Run in provider order; the directories that have
+# none yet are named, with their owner, and the step then exits 3.
+kspace_dirs() {
+	for d in kernel/dlm kernel/k30 kernel/port; do
+		[ -d "$top/$d" ] && echo "$d"
+	done
+	for d in "$top"/kernel/modules/*/module; do
+		[ -d "$d" ] && echo "kernel/modules/$(basename "$(dirname "$d")")"
+	done
+	for d in "$top"/kernel/drivers/*/; do
+		[ -d "$d" ] && echo "kernel/drivers/$(basename "$d")"
+	done
+	return 0
+}
+
+kspace_owner() {
+	case $1 in
+	kernel/dlm) echo "the dlm station" ;;
+	kernel/k30) echo "the k30 station" ;;
+	kernel/port) echo "the port station" ;;
+	kernel/modules/*) echo "the modules station" ;;
+	*) echo "${1#kernel/drivers/}'s station" ;;
+	esac
+}
+
+step_kspace() {
+	rm -rf "$out/kspace" "$out/build/kspace"
+	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
+	missing=
+	for d in $(kspace_dirs); do
+		if [ ! -f "$top/$d/pkg/build.sh" ]; then
+			missing="$missing $d"
+			continue
+		fi
+		echo "--- $d"
+		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || {
+			echo "[FAIL] kspace: $d/pkg/build.sh failed" >&2; exit 1; }
+	done
+	for p in "$out/build/kspace/kspace/pkg/"*.pkg; do
+		[ -f "$p" ] && cp "$p" "$out/kspace/pkgs/"
+	done
+	if [ -n "$(ls "$out/kspace/pkgs")" ]; then
+		python3 -I "$here/pkg/pkgmeta" guard "$out/kspace/pkgs"
+	fi
+	if [ -n "$missing" ]; then
+		for d in $missing; do
+			echo "[MISSING] kspace: $d has no pkg/build.sh yet (P-38 S3.3, $(kspace_owner "$d") with packages-fa)" >&2
+		done
+		exit 3
+	fi
+}
+
 step_userland() {
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
 	rm -rf "$out/userland" "$out/build/userland"
@@ -174,7 +232,7 @@ run() {
 	kernel-k46) missing kernel-k46 "P-38 S2.3, the port station: the cut in the container" ;;
 	modules) step_modules ;;
 	drivers|drivers/*) missing "$1" "P-38 S3.2, each driver's station: its module on both lines" ;;
-	kspace) missing kspace "P-38 S3.3, packages-fa with each directory: the kernel-space recipes" ;;
+	kspace) step_kspace ;;
 	userland) step_userland ;;
 	recipes/*)
 		d=$(recipe_dir "${1#recipes/}") || exit 1

@@ -44,13 +44,20 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `kernel-k46` | the 68040/68060 kernel, from the port's cut | | S2.3, port | not yet |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` | | builds |
 | `drivers`, `drivers/<name>` | the drivers' modules, ours and the pinned forks' | | S3.2, each driver | not yet |
-| `kspace` | the kernel-space packages | `out/kspace/` | S3.3, packages-fa | not yet |
+| `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` in provider order (dlm, k30, port, the modules, the drivers), one version per name; a directory without one is named with its owner | `out/kspace/pkgs/` | S3.3, each directory with packages-fa | the hook builds; no directory has recipes yet |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name | `out/userland/pkgs/` | S4.1 | builds |
 | `catalogs` | the kernel-space and userland catalogs | `out/{kspace,userland}/catalog` | S5.1, pkgtools | not yet |
 | `media` | the CD, netinstall and floppy media | `out/media/` | S6.1, installng | not yet |
 | `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | S1.6, infra | builds |
 
 `make tools` builds the container (`toolchain/container-build.sh`).
+
+A kernel directory's recipes plug into `kspace` as `kernel/<dir>/pkg/build.sh`:
+with no arguments it rolls all its recipes, with names those; it reads
+`AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
+`$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
+and exits non-zero on a failure. Its recipes set `SOURCE_DATE_EPOCH` from
+their own pinned epoch, never the environment's.
 
 A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`
 rebuilds everything and refuses the result if any line of its lock differs
