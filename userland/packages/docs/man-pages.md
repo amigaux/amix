@@ -1,9 +1,8 @@
 # Man pages
 
 Every package ships the manual pages of what it installs: upstream's pages for every command and
-configuration file, and a page of our own where upstream has none (owner rule, 2026-10-30). This
-file is the layout the packages install and the base package's `man` front-end reads; the base
-station keeps the same contract in `userland/base/docs/man.md`.
+configuration file, and a page of our own where upstream has none. This file is the layout the packages install and
+the base package's `man` front-end reads; `userland/base/docs/man.md` states the same contract.
 
 ## Layout
 

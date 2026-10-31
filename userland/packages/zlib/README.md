@@ -77,7 +77,7 @@ catalog line.
 
 ## Revision -7: the catalog group
 
-`-7` takes the P-31 §10.9 catalog group `library` (it was `development`), as a new revision because the category
+`-7` takes the catalog group `library` (it was `development`), as a new revision because the category
 is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
 previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
 `PSTAMP` only, and the pkgmap only in its `i pkginfo` line.

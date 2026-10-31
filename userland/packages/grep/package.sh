@@ -1,4 +1,4 @@
-# package.sh -- GNU grep 2.5.1a (P-31 sec 10.9); assignments only.
+# package.sh -- GNU grep 2.5.1a; assignments only.
 NAME=grep
 PKG=grep
 VERSION=2.5.1a

@@ -947,7 +947,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +    {
 +	extern void rtgAbort();
 +
-+	rtgAbort ();	/* the monitor back to the Amiga video (RT-04) */
++	rtgAbort ();	/* the monitor back to the Amiga video */
 +    }
 +#endif
 +}
@@ -2699,11 +2699,11 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +
 +    unsigned char      *cardPrivate;    /* card-specific private data         */
 +    int                 devFd;          /* the card's device fd, -1 = none;   */
-+                                        /* set by the card's InitHW (RT-04)   */
++                                        /* set by the card's InitHW           */
 +};
 +
 +/*
-+** The RTG monitor switch (P-8 / RT-04): the device-independent layer asks
++** The RTG monitor switch: the device-independent layer asks
 +** the card's own device to put the monitor on the RTG output at screen init
 +** and back on the Amiga video when the server ends, with the ioctl of the
 +** Xsvga-class RTG contract (Klaus Burckert; the numbering of Antti's
@@ -2862,7 +2862,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +}
 +
 +/*
-+** RTG monitor switch (RT-04, P-8).
++** RTG monitor switch.
 +**
 +** rtgSwitchFd is a dup() of the card's device fd, taken at the first screen
 +** init and kept for the whole process.  Two reasons: the card code closes its
@@ -2898,7 +2898,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +}
 +
 +/*
-+** Give the keyboard back to the console (RT-10).  rtgOpenInput made our
++** Give the keyboard back to the console.  rtgOpenInput made our
 +** screen the screen manager's active one (SIOCACTIVATE) without displaying
 +** it; closing it leaves the kernel with no active screen at all -- its
 +** CloseScreen looks for a successor only in our (empty) screen group and
@@ -3114,7 +3114,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +        return FALSE;
 +    }
 +
-+    /* The mode is set: the monitor to the RTG output (RT-04). */
++    /* The mode is set: the monitor to the RTG output. */
 +    rtgMonitorOn(pRTG);
 +
 +    ErrorF("rtgScreenInit: hw init done, calling ZZ9000ScreenInit\n");
@@ -3704,7 +3704,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +#define ZZ9000_STRIDE(pRTG)  ((pRTG)->pitch / 2)  /* pixels per scanline */
 +
 +/* ---------------------------------------------------------------------- */
-+/* Run helpers (P-5 fix 2): 32-bit stores where both ends allow it.         */
++/* Run helpers: 32-bit stores where both ends allow it.                     */
 +
 +/*
 +** A 32-bit store moves two pixels in one bus cycle where a 16-bit store moves
@@ -3897,7 +3897,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +}
 +
 +/* ---------------------------------------------------------------------- */
-+/* The card's blitter (P-5 fix 3)                                          */
++/* The card's blitter                                                      */
 +
 +/*
 +** -blitmin N: window fills (SolidRect GXcopy, PaintWindow) and window-to-
@@ -5008,7 +5008,7 @@ and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 +        return (RegionPtr) NULL;
 +
 +    /*
-+    ** Fast path (P-5 fix 2a): the common scroll/copy of an unobscured window.
++    ** Fast path: the common scroll/copy of an unobscured window.
 +    ** When the source is clipped by its clipList (not IncludeInferiors), that
 +    ** clipList and the destination's composite clip are one box each, and
 +    ** the source rectangle lies wholly inside the source box, no part of the

@@ -1,4 +1,4 @@
-# package.sh -- acompat 0.1, the libamixcompat library (P-31 sec 10.9); assignments only.
+# package.sh -- acompat 0.1, the libamixcompat library; assignments only.
 # Our own source (src/, include/), BSD-2-Clause; no upstream tarball.
 NAME=acompat
 PKG=acompat

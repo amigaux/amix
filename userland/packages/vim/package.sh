@@ -1,4 +1,4 @@
-# package.sh -- Vim 9.1.0000 (P-31 sec 10.9); assignments only.
+# package.sh -- Vim 9.1.0000; assignments only.
 NAME=vim
 PKG=vim
 VERSION=9.1.0000

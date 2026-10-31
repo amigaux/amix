@@ -43,7 +43,7 @@ the maintainer).
   - block-aligned cuts, including 480017→475136 and 110017→106496, the start of the old last block;
   - extensions.
 
-The call path was symbolized by the kerntools station: `fcntl` → `ufs_space` → `ufs_freesp` → `ufs_itrunc` → `pvn_vptrunc` → `bzero`. Evidence: `Amigaux/tmp/2026-10-30-rsync/ftprobe/`.
+The call path, symbolized against the kernel: `fcntl` → `ufs_space` → `ufs_freesp` → `ufs_itrunc` → `pvn_vptrunc` → `bzero`.
 
 ## Configure (`build.sh`)
 
@@ -139,8 +139,8 @@ The checks:
 - **Box's daemon, default uid/gid:** a module with no `uid =`/`gid =` serves a file over
   loopback, as the built-in nobody/nobody.
 
-**Bench, 2026-10-30: PASS.** Run on the emulated golden 030 (rig row E1: A3000, 64 MB,
-bench-golden kernel 46759dcc), slot 1, rig-run 20261030-102808. The peer was the host's rsync
+**Bench, 2026-10-30: PASS.** Run on the emulated golden 030 (A3000, 64 MB,
+bench-golden kernel 46759dcc). The peer was the host's rsync
 3.4.1 (protocol 32).
 - **Install and removal:** the pushed files matched MANIFEST.sum. Stock `pkgadd` rc 0 installed
   6 files, `pkgchk` rc 0, smoke 44/44, stock `pkgrm` rc 0, and no contents-database line was
@@ -149,7 +149,6 @@ bench-golden kernel 46759dcc), slot 1, rig-run 20261030-102808. The peer was the
 - **Binary** (`sum -r` / bytes): rsync 31659/394936.
 - **Memory:** during the 1500-file pull, `ps -el` showed SZ 928 and 1070 pages for the two
   receiver processes, about 1.9 and 2.1 MB at 2 KiB pages (registry: observe, not assume).
-- **Evidence:** `Amigaux/tmp/2026-10-30-rsync/run4/E1/`.
 - **Earlier runs:**
   - run1 panicked the kernel at the `--inplace` step (patch 01; `probe1/` pins the step,
     `ftprobe/` the geometry);

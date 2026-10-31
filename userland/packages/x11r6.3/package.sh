@@ -1,4 +1,4 @@
-# package.sh -- X11R6.3 (P-31 sec 10.9); assignments only.
+# package.sh -- X11R6.3; assignments only.
 NAME=x11r6.3
 PKG=x11r63
 VERSION=6.3

@@ -92,13 +92,12 @@ put `/opt/amix/bin` on `PATH`.
   can panic the stock kernel. Use the GCC 14 build (1.14-7 or later).
 
 **Revision 1.14-7, 2026-10-30 (GCC 14): the stock-kernel ftruncate panic (grimoire quirk 90).**
-- **Probed at -6** on E1, one boot per case:
+- **Probed at -6** on the emulated A3000, one boot per case:
   - `tar -b 1 --delete` of a small member from a 215040-byte archive panicked;
   - the same from a 214016-byte archive survived, because its new EOF (212992) is 8 KiB-aligned;
   - default-blocking `--delete` survived.
-  - Evidence: `Amigaux/tmp/2026-10-30-ftx/`.
 - **The fix:** `patches-gcc14/03`.
-- **Bench:** E1 slot 1, rig-run 20261030-113242, `tools/gcc14-smoke`.
+- **Bench:** the emulated A3000, `tools/gcc14-smoke`.
   - All 42 period-versus-GCC 14 comparisons EQUAL.
   - X4 (GCC 14 tar only; the period tar would panic): `-b 1 --delete` 215040 → 214016, two
     members left, `t/b` extracts byte-exact.
@@ -122,7 +121,7 @@ catalog line.
 
 ## Revision -8: the catalog group
 
-`-8` takes the P-31 §10.9 catalog group `archive` (it was `utility`), as a new revision because the category
+`-8` takes the catalog group `archive` (it was `utility`), as a new revision because the category
 is in the packed pkginfo. Built on the gcc14 container pin (amix 4af93f5): the payload is the
 previous revision's, file for file (sha256 and mode); pkginfo differs in `VERSION`, `CATEGORY` and
 `PSTAMP` only, and the pkgmap only in its `i pkginfo` line.

@@ -1,4 +1,4 @@
-# package.sh -- GNU tar 1.14 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU tar 1.14; assignments only.
 NAME=tar
 PKG=gtar
 VERSION=1.14

@@ -1,4 +1,4 @@
-# package.sh -- prngd 0.9.29 (P-31 sec 10.9); assignments only.
+# package.sh -- prngd 0.9.29; assignments only.
 NAME=prngd
 PKG=prngd
 VERSION=0.9.29

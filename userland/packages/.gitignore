@@ -1,6 +1,3 @@
-# local-only maintainer files (never tracked)
-/CLAUDE.md
-/.claude/
 # build outputs: work trees, fetched source tarballs, .pkg datastreams, staging/publish roots, logs
 /build/
 /tmp/

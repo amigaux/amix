@@ -1,4 +1,4 @@
-# package.sh -- GNU Pth 2.0.7 (P-31 sec 10.9); assignments only.
+# package.sh -- GNU Pth 2.0.7; assignments only.
 NAME=pth
 PKG=pth
 VERSION=2.0.7

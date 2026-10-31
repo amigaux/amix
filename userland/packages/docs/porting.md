@@ -13,8 +13,7 @@ relative to `userland/packages`; `userland/pkgtools/…` (the package manager, f
 amix-packagemanager) and `build/pkg/…` (the build framework and the shared harness, formerly
 `recipes/common/`) are relative to the top of amix. `../<repo>/…` names a **sibling Amix
 repository** checked out beside amix — `../gcc-cross-amix`, `../grimoire-amix`, `../amix-kerntools`,
-`../amix-040-060-port` (not all of them are public) — and `../tmp/<date>-<topic>/…` names one of the
-**maintainer's dated research notes, which are not in version control**. `ROADMAP` Dn/Xn and
+`../amix-040-060-port` (not all of them are public). `ROADMAP` Dn/Xn and
 `registry/` citations name the planning records of the former amix-packages repository, which stay
 with the maintainer. Line numbers are as of the citation's date. A citation here is a **provenance
 record, not a followable link**: it says where a claim was measured, precisely enough
@@ -38,11 +37,11 @@ Two citation hazards worth knowing:
 
 | Fact | Value | Source |
 |---|---|---|
-| OS | Amiga Unix (Amix) 2.1 / 2.1c — AT&T **SVR4.0**, 1992 | `userland/pkgtools/docs/design.md:4-5`; stock kernel dated `Mar 20 1992` (`../tmp/2026-08-27-metal-opportunistic/RESULTS.md:28`) |
+| OS | Amiga Unix (Amix) 2.1 / 2.1c — AT&T **SVR4.0**, 1992 | `userland/pkgtools/docs/design.md:4-5`; stock kernel dated `Mar 20 1992` |
 | CPU (stock) | **68020 or 68030 with a real MMU**. Stock Amix has **no 68040/68060 support** | `../grimoire-amix/llms-full.txt:162` |
 | FPU (stock) | **68881 or 68882 mandatory — there is no soft-float build** | `../grimoire-amix/llms-full.txt:207`, `:1019`, `:4463` |
-| RAM (stock) | **Retracted 2026-09-15: the old "4–16 MB Fast RAM, >16 MB mis-maps the SCSI drive" claim had no first-party observation anywhere in the family.** The real limit is **describable RAM**, which fails silently rather than corrupting disk — **≈64 MB on the stock 030 kernel** (the bench golden runs 64 MB daily; the owner runs the stock 030 line at ≥80 MB), **≈128 MB on the 040/060 kernels** on real silicon | `llms-full.txt:162` (retracted); `../amix-kerntools/docs/ram-limits-reconciliation.md` |
-| RAM (family rigs) | Both configs are measured working points, not the ceiling: 16 MB proven for early packaging work; the bench golden runs 64 MB daily; 128 MB proven on the Z3660 metal rig under the 040/060 kernel | `userland/pkgtools/NOTES.md`; `../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:361-362`; `../amix-kerntools/docs/ram-limits-reconciliation.md` |
+| RAM (stock) | **Retracted 2026-09-15: the old "4–16 MB Fast RAM, >16 MB mis-maps the SCSI drive" claim had no first-party observation anywhere in the family.** The real limit is **describable RAM**, which fails silently rather than corrupting disk — **≈64 MB on the stock 030 kernel** (the bench golden runs 64 MB daily; a stock 030 machine runs at ≥80 MB), **≈128 MB on the 040/060 kernels** on real silicon | `llms-full.txt:162` (retracted); `../amix-kerntools/docs/ram-limits-reconciliation.md` |
+| RAM (family rigs) | Both configs are measured working points, not the ceiling: 16 MB proven for early packaging work; the bench golden runs 64 MB daily; 128 MB proven on the Z3660 metal rig under the 040/060 kernel | `userland/pkgtools/NOTES.md`; `../amix-kerntools/docs/ram-limits-reconciliation.md` |
 | Disk | **~44 MB free** on the metal box's root (`31420 used / 44419 avail` KB) | `B-amix-feasibility.md:358-359` |
 | Binaries | **ELF 32-bit MSB, Motorola m68k, version 1 (SYSV), dynamically linked** | `../gcc-cross-amix/README.md:104-108` |
 | Clock tick | `HZ` = **60** | `../amix-kerntools/tools/amix-bench/build-fieldkit.sh:41-44` |
@@ -50,8 +49,8 @@ Two citation hazards worth knowing:
 | Root filesystem | **s5** — directory entries truncate to **14 bytes** | `userland/pkgtools/NOTES.md:92-95` |
 | System date | **Capped at 1999** by a kernel Y2K limitation | `llms-full.txt:4735` |
 
-The metal box this family now runs (A4000 + Z3660, socketed **MC68LC060 rev 4, no FPU** —
-`../tmp/2026-08-28-fpe-r13-metal/RESULTS.md:4`) is *outside* the stock envelope on both CPU and
+The metal box this family now runs (A4000 + Z3660, socketed **MC68LC060 rev 4, no FPU**) is
+*outside* the stock envelope on both CPU and
 FPU. It works because of the 040/060 port lane's own kernel work. **A port must not assume that
 kernel**: target stock Amix unless a recipe says otherwise.
 
@@ -87,8 +86,8 @@ ask "does it print a float?" first (`quirks.md:201-202`).
 **Porting consequences.** (a) Anything grepping for illegal-instruction traps misses every one of
 these. (b) A tool that merely *formats* a number inherits an FPU dependency it never asked for.
 (c) On the 040/060 lane's FPE kernel, FP is emulated and correct — the family proved IEEE-754
-behaviour and exact `%e/%f/%g` conversion at every magnitude including subnormals
-(`../tmp/2026-08-27-fpe-workload/RESULTS.md:198-212`) — but it is *slow*, and that kernel is not
+behaviour and exact `%e/%f/%g` conversion at every magnitude including subnormals —
+but it is *slow*, and that kernel is not
 what a stock box runs.
 
 ---
@@ -291,8 +290,7 @@ and `signal.h:25` guards the function declarations the same way. **[measured]**:
 `SA_SIGINFO` sits behind the stricter `(__STDC__ - 0 == 0) && !defined(_POSIX_SOURCE)`
 (`sys/signal.h:87`, `:94`) — *"the flag is visible to the K&R / non-`__STDC__` compilation mode and
 hidden under strict-ANSI or POSIX. That is the `__STDC__` header gate: the on-box 1991 `cc` gets it
-for free; a cross build must not define `_POSIX_SOURCE` and must not compile as strict ANSI"*
-(`../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:286-290`).
+for free; a cross build must not define `_POSIX_SOURCE` and must not compile as strict ANSI"*.
 
 **Recipe rule:** if a port needs POSIX-era signal handling, `mmap`, or anything a configure script
 reports "missing", try `-U__STDC__` **before** concluding the facility is absent. Conversely never
@@ -370,7 +368,7 @@ declared** function.
 > A real probe in this family passed a `double` through an undeclared `atof` and silently got the
 > wrong value: *"`fptrans` did not honour `argv[2]` — `atof` was not declared, so the input was 3.0
 > rather than the 0.5 passed … an undeclared-`atof` bug is exactly the kind of thing that silently
-> invalidates a probe"* (`../tmp/2026-08-27-fpe-workload/RESULTS.md:454-458`).
+> invalidates a probe"*.
 > Build with `-Wall` and treat every implicit-declaration warning as an error.
 
 Some symbols exist only in a **static** archive — a trap when a build probes the shared library.
@@ -471,7 +469,7 @@ single-digit number, it is an alignment — nothing lives at 4."*
 This is why the box's `uptime` is broken. *"A flat `0.00` is not an idle machine; it is the same
 defect wearing a more convincing disguise"* (`load-averages.md:9-12`). Measured against the true
 `avenrun`, the kernel's load rose **0.07 → 0.11 and decayed to 0.02** while `uptime` printed one
-frozen `0.00, 0.00, 0.00` (`../tmp/2026-08-27-metal-opportunistic/RESULTS.md:203-210`).
+frozen `0.00, 0.00, 0.00`.
 
 **Trap 2 — `/stand/unix` LIES when the running kernel came off a raw slice.** The documented
 `adb -k /stand/unix /dev/mem` workaround (`load-averages.md:47`) carries two conditions: the
@@ -534,7 +532,7 @@ input at ~256 characters**, silently (`llms-full.txt:2785`).
 ### 3.5 Float parsing drifts at large exponents
 
 `printf` is correct; **`atof`/`strtod` is not.** Measured on the box against correctly-rounded host
-values (`../tmp/2026-08-27-fpe-workload/RESULTS.md:216-238`):
+values:
 
 ```
 1e0 … 1e50    ALL EXACT
@@ -872,8 +870,7 @@ The operational rules:
   still tripped) (`llms-full.txt:2523-2524`, `:1545`).
 - **inetd counts LOGINS, not commands** (`../amix-kerntools/tools/amixrun.py:213`). Hold one
   session open for a batch (`llms-full.txt:2528-2529`).
-- **Push a directory in one run** — a per-file push loop self-destructs at 40 files
-  (`../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:355-357`).
+- **Push a directory in one run** — a per-file push loop self-destructs at 40 files.
 - **A retry is a fresh login** — a harness that quietly retries burns the budget three times as
   fast, which is exactly how a past bench run exhausted it.
 - **Design against 40**: *"40 is the floor and the only safe number to design against — never
@@ -985,8 +982,7 @@ Still open:
   only in the vendored upstream man pages. No `.pkg` size limit, path-length limit (beyond the
   ~110-char `-R` prefix) or per-package object limit is recorded.
 - **`mmap(MAP_FIXED)` exists** in the headers (`$SYSROOT/usr/include/sys/mman.h:62`, `:104`) but
-  whether a fixed mapping at a chosen address succeeds is untested
-  (`../tmp/2026-08-27-cputest-amix-research/B-amix-feasibility.md:332-336`).
+  whether a fixed mapping at a chosen address succeeds is untested.
 - **Four topics in this guide have no grimoire coverage at all** — the `__STDC__` header gate, the
   SVR4 `/proc` ioctl model, the curses/terminfo situation, and any inventory of Amix libc exports.
   Their evidence is this repo's own measurement. Publishing them via `/amix-brief` would be a net

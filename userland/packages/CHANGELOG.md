@@ -19,7 +19,7 @@ Two container rolls are byte-identical (md5 bf1ae510).
   with -fno-jump-tables so the 060 gate proves every table. Needs an FPU and a UFS root.
 - python3 3.11.18-1 (new): Python 3.11 under /opt/amix with pth threads and zlib; isoriano's cpython port patch plus
   our 02-04 (Py_UNREACHABLE, a FormatEx switch, ll/z formatting via snprintf); PYTHONHASHSEED=0 fallback when
-  /dev/urandom is unreadable. Needs an FPU and a UFS root. On box (E1, 030+68882): python3 11/11, vim PASS.
+  /dev/urandom is unreadable. Needs an FPU and a UFS root. On the emulated 68030 + 68882: python3 11/11, vim PASS.
 
 ## 2026-10-31 — pth and vim use amix-decls.h; INDEX lists dhcp-client 1.0-3; python3 held (d867983..c7b9d90)
 
@@ -52,7 +52,7 @@ ncurses fetches from ftp.gnu.org with the amix-distfiles copy as fallback (same 
 Static libncurses/form/menu/panel with headers in /opt/amix/include/ncurses; narrow characters; reads the stock
 /usr/share/lib/terminfo; no programs and no terminfo db installed. Configured after isoriano's amix-userland port
 (credited); ac_cv_func_tsearch=no for AMIX's non-const twalk. Source pinned by sha256 at the amigaux/amix-distfiles
-release URL, with the upstream origin in package.sh and README. The first of the X11/CDE set (owner, T-56 D7).
+release URL, with the upstream origin in package.sh and README. The first of the X11/CDE set.
 
 ## 2026-10-31 — INDEX lists amix-base 1.0-9 (31e0ec8)
 
@@ -71,7 +71,7 @@ INDEX.md regenerated; it lists amix-base 1.0-6.
 prngd 0.9.29-1 moved in from amix-packages (3208937): GCC 14, STYLE=make, the two Amix patches, prngd.conf and init
 script, the on-box smoke. Man pages in the amix layout: upstream prngd(1) plus a new prngd-ctl(1), whatis.d/prngd. The
 binaries are byte-identical to the build tested on 2026-10-31. It needs a kernel with the freeq guard (quirk 92), which
-every 1.1 kernel has; it ships in 1.1 (owner, T-56 D7). 16 packages.
+every 1.1 kernel has; it ships in 1.1. 16 packages.
 
 ## 2026-10-31 — INDEX lists amix-base 1.0-5 (725ebc2)
 
@@ -95,7 +95,7 @@ Ready for build/pkg's SYSTEM_PATHS check; pkginfo, INDEX.md and the package are 
 
 pkg-smoke runs each smoke.sh where it expects to run (beside its fixtures for gzip, grep, less, make, patch and tar),
 builds host fixtures with tests/mkfixture.py and brings out.tar home; tar's new host half reads the box's archive
-with the host tar. All 13 current revisions install, check, smoke and remove cleanly in one E1 run.
+with the host tar. All 13 current revisions install, check, smoke and remove cleanly in one run on the emulated 68030.
 
 ## 2026-10-30 — man pages in /opt/amix/man with whatis.d; 13 revisions (7feb82c..102cd9e)
 
@@ -103,7 +103,7 @@ Every package's pages move to /opt/amix/man/<sect>/<name> with whatis.d/<PKG> (t
 the contract shared with userland/base): grep -8, gzip -8, less -8, make -8, patch -7, gtar -9, zlib -8, acompat -8,
 amixbch14 1.3-5, bzip2 -3, diffutil -3, rsync -2, coreutil -4. New pages tar(1), acompat(3) with nine aliases,
 acompat-test(1), zlib-test(1), amix-bench-g14(1); bunzip2/bzcat/bzip2recover aliases. less -8 ships the troff
-sources (-7 shipped pre-formatted pages). All 129 pages render through E1's stock nroff; other payload files are
+sources (-7 shipped pre-formatted pages). All 129 pages render through the stock nroff on the emulated 68030; other payload files are
 unchanged. amix-benchmark-gcc14 refuses a home path or build host in its payload (abebb49); pkg-smoke installs and
 checks a package without a smoke test (d41d0bb).
 
@@ -137,7 +137,7 @@ deferred STREAMS put through a garbage qi_putp); the kernel fix is routed. Not p
 
 ## 2026-10-30 — kernel-k30-m k30.1.3.261030-56 (611ddc5, 547e801)
 
-The k30 station's cut 68030-261030-56 from amix 4fc583f with kzero (quirk 90), ufs tail zeroing (quirk 91; the ufs
+The k30 cut 68030-261030-56 from amix 4fc583f with kzero (quirk 90), ufs tail zeroing (quirk 91; the ufs
 module from the cut's qz/ufs.exp) and the sendsig FPU gate (quirk 74). kabi k30.1.3 unchanged. Both fs modules rebuild
 byte-equal. 1883136 bytes, md5 aa9714d9. dlm-src.sh builds kits from an amix commit. Not published.
 
@@ -148,17 +148,17 @@ literal default. privacy-check --tree HEAD: 0 hits. perl smoke 53/53 and rsync p
 
 ## 2026-10-30 — perl 5.8.9 recipe, roll held on the s5/UFS decision (5f1ac42, d07b517, eeac483, 931b691)
 
-Configure measured on the box, GCC 14 cross build with a host perl, stock libm.a (owner) with matherr as shipped.
-E1: perl core suite 227/231 scripts (68673 tests), smoke 53/53. amix-decls.h prototypes (socketpair, netdb
+Configure measured on the box, GCC 14 cross build with a host perl, stock libm.a with matherr as shipped.
+On the emulated 68030: perl core suite 227/231 scripts (68673 tests), smoke 53/53. amix-decls.h prototypes (socketpair, netdb
 set/end*ent, munmap, isnan, _sysconf); scan060-g14 sizes mask- and entry-bounded switch tables (self-test 19/19);
 pkgbuild.sh STYLE=hooks. No .pkg rolled; not published.
 
 ## 2026-10-30 — quirk 90 worked around in the landed packages (cad15e4, 97bbcf1, cbd8c25)
 
-The stock-kernel ftruncate panic (grimoire quirk 90) reached dd seek=, sparse cp/mv/install and tar -b 1 --delete on E1.
+The stock-kernel ftruncate panic (grimoire quirk 90) reached dd seek=, sparse cp/mv/install and tar -b 1 --delete on the emulated 68030.
 recipes/common/amix-ftruncate.c: a strong ftruncate that cuts block-aligned and rewrites the tail. coreutil 5.2.1-3
 links it in all 86 programs; copy.c writes the trailing NUL instead of write+ftruncate (patch 08); stat sizes without a
-run-time %llu (patch 09). gtar 1.14-7: gnulib's F_FREESP path cuts aligned. E1: coreutils smoke 102/102 (d418b45e),
+run-time %llu (patch 09). gtar 1.14-7: gnulib's F_FREESP path cuts aligned. On the emulated 68030: coreutils smoke 102/102 (d418b45e),
 gcc14-smoke PASS with X4 (gtar 44e79c67). The published period gtar 1.14-2 keeps the hazard. Not published.
 
 ## 2026-10-30 — rsync 3.1.3; seteuid/setegid declared; pkg-smoke host side (0814dda, 3676e4a, e7ac916)
@@ -166,7 +166,7 @@ gcc14-smoke PASS with X4 (gtar 44e79c67). The published period gtar 1.14-2 keeps
 rsync 3.1.3-1 (gcc14, /opt/amix, protocol 31, bundled zlib/popt/getaddrinfo). Patch 01 works around a stock-kernel
 panic (ftruncate shrinking a file past its direct blocks inside its last block, grimoire quirk 90): --inplace cuts at
 the block boundary and rewrites the tail. Patch 02 parses dotted quads before gethostbyname, which AMIX's fails on.
-Daemon defaults to nobody/nobody. E1 golden 030 against the host's rsync 3.4.1: smoke 44/44; pkg 192e5bbe / 685568 B.
+Daemon defaults to nobody/nobody. The emulated 68030 against the host's rsync 3.4.1: smoke 44/44; pkg 192e5bbe / 685568 B.
 amix-decls.h declares seteuid/setegid; pkg-smoke runs an optional per-package tests/host.sh. Not published.
 
 ## 2026-10-30 — gcc14 re-pinned to amigaux/gcc14-cross-amix b51ff39; the gcc14 set re-minted (a6b124c, d53600f)
@@ -175,27 +175,27 @@ Public pin b51ff39: cc1 unchanged (9635f67e); libgcc and libamixc99 rebuilt unde
 adds the default). Every package object is byte-identical to the cf461e3 build; a relink with the old runtime reproduces
 the old executables, so every new byte is runtime. One name = one byte set, so all twelve take a new revision: acompat
 0.1-6, zlib 1.2.13-6, gzip 1.3.12-6, patch 2.5.9-6, gtar 1.14-6, grep 2.5.1a-7, less 704-7, make 3.81-7,
-amix-benchmark-gcc14 1.3-4, diffutils 2.8.1-2, bzip2 1.0.8-2, coreutils 5.2.1-2. E1 gcc14-smoke PASS (all checks EQUAL,
+amix-benchmark-gcc14 1.3-4, diffutils 2.8.1-2, bzip2 1.0.8-2, coreutils 5.2.1-2. gcc14-smoke PASS on the emulated 68030 (all checks EQUAL,
 dhry 151514/s, paranoia 24/24); pkg-smoke diffutils 24/24, bzip2 23/23, coreutils 95/95. Not published.
 
 ## 2026-10-29 — coreutils 5.2.1; MAKE_CFLAGS and a NEEDED-aware undef gate (c728391, 53707ec, d512466, c62ec2f)
 
 coreutil 5.2.1-1 (gcc14, /opt/amix): 86 programs + groups incl. md5sum/sha1sum, no libm; date -u fixed for AMIX libc
-writing into the TZ string; E1 smoke 95/95, stock pkgadd/pkgchk/pkgrm clean; pkg 81300da8 / 3567104 B. pkgbuild.sh gains
+writing into the TZ string; smoke 95/95 on the emulated 68030, stock pkgadd/pkgchk/pkgrm clean; pkg 81300da8 / 3567104 B. pkgbuild.sh gains
 MAKE_CFLAGS and an undef gate over every NEEDED object; amix-decls.h declares getrlimit/setrlimit; scan060-g14.py sizes
 cmpa-bounded switch tables (self-test 18/18). Not published.
 
 ## 2026-10-29 — bzip2 1.0.8; the interim driver is recipes/common/pkgbuild.sh with STYLE=make (3810e35, 343a4b5, 702b57c)
 
 bzip2 1.0.8-1 (gcc14, /opt/amix, category archive): bzip2recover's 64-bit offsets formatted by hand, Bourne-shell bzgrep
-and bzdiff, the -v report out of line so compression runs no FPU instruction (FPU-less LC040/LC060). E1 smoke 23/23 with
+and bzdiff, the -v report out of line so compression runs no FPU instruction (FPU-less LC040/LC060). Smoke 23/23 on the emulated 68030 with
 upstream's test vectors; stock pkgadd/pkgchk/pkgrm clean; pkg 65e99c40 / 221696 B. amix-decls.h declares fchmod. 343a4b5
 builds only with 702b57c's STYLE=make. Not published; cats.conf needs archive and utility before a publish.
 
 ## 2026-10-29 — diffutils 2.8.1, the first package in the §10.9 shape (ac02f0f, 209d712, 61a4761)
 
 diffutil 2.8.1-1 (gcc14, /opt/amix), built by the interim driver recipes/common/style-configure.sh with the on-box
-smoke runner tools/pkg-smoke; E1 smoke 24/24, stock pkgadd/pkgchk/pkgrm clean; pkg 2fed5ef9 / 213504 B. scan060-g14.py
+smoke runner tools/pkg-smoke; smoke 24/24 on the emulated 68030, stock pkgadd/pkgchk/pkgrm clean; pkg 2fed5ef9 / 213504 B. scan060-g14.py
 keeps no stale unsized-table verdict after a re-sync, self-test 17/17. Not published.
 
 ## 2026-10-29 — gcc14 re-pinned to the compiler rebuilt from cf461e3 (e42cb91)
@@ -211,29 +211,29 @@ k46 cuts are read from amix-040-060-port/build/cuts, k30 cuts from amix-kerntool
 retired stand-in's new name (pins aa7aace6, bf902e40 unchanged). dlm-src.sh reads dlm and modules from the amix
 monorepo; pre-move commits archive to identical trees. 34/34 pins verified, round trip 253/0; no pinned bytes changed.
 
-## 2026-10-28 — the kspace catalog of record is fff860dc (b1f564f4 + kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10, paula-k30/-k46 1.0.0-1), proven by the Bench in emulation (kerntools 82f7da2); b1f564f4 kept at superseded/repo-20261028-1602; round trip 253/253 with upgrades from all four superseded roots (7292a37) — not published
+## 2026-10-28 — the kspace catalog of record is fff860dc (b1f564f4 + kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61, kbootset -24, loader-amix -10, paula-k30/-k46 1.0.0-1), proven in emulation (kerntools 82f7da2); b1f564f4 kept at superseded/repo-20261028-1602; round trip 253/253 with upgrades from all four superseded roots (7292a37) — not published
 
 ## 2026-10-28 — candidate kernel-space root fff860dc (b1f564f4 + the kabi 1.3 set), not promoted, not published: kern30m k30.1.3.261028-22, kern46m k46.1.3.261028-61 (/dev/paula support, bounded /dev/audio open), kbootset 1.1.0.261028-24 (box 0b9b8ec4, c 54 paula in kreg), loader-amix 1.0.261025-10 (boot1 765915a7, boot2 da260a96: DMA buffers by the partition's DosEnvec), paula-k30/-k46 1.0.0-1 added; modtools -7 kept; round trip 253/253 including upgrades from 64d37aaa, 915e09f3, 6f0c1701 and b1f564f4 (5972993)
 
-## 2026-10-28 — paula-k30 / paula-k46 1.0.0-1 (pkginst paula30 / paula46): isoriano's /dev/paula (MIT) as a demand-class module of each line (kabi 1.3, c 54), objects amix-paula 548d258 (k30 147844b4, k46 d2c7d8f4); ships /dev/paula c 54 0 0666 and /usr/include/paula.h; kmodpkg.sh gains optional KM_FILES. paula30 fc0b4516, paula46 dd332b02; not in any catalog. The Bench's ramdisk refusal is apkg 0.3.2 on the box: ramdisk-k30/-k46 need APKG 0.3.3 (d14d36d, c048863)
+## 2026-10-28 — paula-k30 / paula-k46 1.0.0-1 (pkginst paula30 / paula46): isoriano's /dev/paula (MIT) as a demand-class module of each line (kabi 1.3, c 54), objects amix-paula 548d258 (k30 147844b4, k46 d2c7d8f4); ships /dev/paula c 54 0 0666 and /usr/include/paula.h; kmodpkg.sh gains optional KM_FILES. paula30 fc0b4516, paula46 dd332b02; not in any catalog. The ramdisk refusal seen in emulation is apkg 0.3.2 on the box: ramdisk-k30/-k46 need APKG 0.3.3 (d14d36d, c048863)
 
-## 2026-10-28 — the kspace catalog of record is b1f564f4 (6f0c1701 + kbootset -23 + kern46m -51), proven by the Bench in emulation; 6f0c1701 kept at superseded/repo-20261028-0434, candidate 059c7c53 withdrawn; R5 runs from all three superseded roots, R6 from 6f0c1701; round trip 212/212 (3060b1f) — not published
+## 2026-10-28 — the kspace catalog of record is b1f564f4 (6f0c1701 + kbootset -23 + kern46m -51), proven in emulation; 6f0c1701 kept at superseded/repo-20261028-0434, candidate 059c7c53 withdrawn; R5 runs from all three superseded roots, R6 from 6f0c1701; round trip 212/212 (3060b1f) — not published
 
 ## 2026-10-28 — kern46m k46.1.2.261028-51 from the k46 cut 68060-261028-51 (port 87b8a88: the ufs module refuses a ufs with blocks under 4 KiB at mount, EINVAL, where -50 mounted it and panicked in ufs_getapage); core 7b07bce and abi 2ab48658 unchanged; pins unix 0fda887c, kabi 03208ab3, ufs.mod 62cc5250, ufs-exp.k46 6636b27e; first k46 cut with the release notes; candidate root b1f564f4 = 059c7c53 with kern46m -50 → -51, not promoted; round trip 212/212 (dd5359e) — not published
 
-## 2026-10-28 — the kspace catalog of record is 6f0c1701 (the candidate proven by the Bench's S5-13), 915e09f3 kept at superseded/repo-20261028-0319; R5 runs from both superseded roots (4ef0aec)
+## 2026-10-28 — the kspace catalog of record is 6f0c1701 (the candidate proven on the bench), 915e09f3 kept at superseded/repo-20261028-0319; runs from both superseded roots (4ef0aec)
 
 ## 2026-10-28 — kbootset -23 (1.1.0.261028-23) from amix-dlm e089c2a: C2-4 v15, mark-good marks a refused default bad when its bytes are damaged; box 3c18c3b5, modtools -7 kept; its DESC carries the kernel release notes (upgrade with kbootset -22 or later; s5 no longer mounts on the 68040/68060 line, S5-37); candidate root 059c7c53 = 6f0c1701 + kbootset -23 only, not promoted; round trip R6 (kbootset alone) (cfcfe78, 53fed43)
 
 ## 2026-10-28 — the kern30m/kern46m recipes carry the release notes for each line's next cut; the shipped -20 and -50 are never re-rolled (cfcfe78's text re-rolls withdrawn, never promoted); one-version guard recipes/common/onever.sh: a roll never rewrites a version a kspace root lists with other bytes (selftest 6/6) (cfcfe78, 53fed43, 371807c)
 
-## 2026-10-28 — kern46m k46.1.2.261028-50 from the re-cut 68060-261028-50 (module core amix-dlm 7b07bce; -91's core refused its own ufs, S5-13); new gates: the cut's core contains 7b07bce, and image buildid (blanks stripped) == sidecar build= == ufs build= (kbuildid-selftest 10/10); candidate kernel-space root 6f0c1701 (915e09f3 with -91 → -50), not promoted; round trip 202/202 (363e1b9) — not published
+## 2026-10-28 — kern46m k46.1.2.261028-50 from the re-cut 68060-261028-50 (module core amix-dlm 7b07bce; -91's core refused its own ufs); new gates: the cut's core contains 7b07bce, and image buildid (blanks stripped) == sidecar build= == ufs build= (kbuildid-selftest 10/10); candidate kernel-space root 6f0c1701 (915e09f3 with -91 → -50), not promoted; round trip 202/202 (363e1b9) — not published
 
-## 2026-10-27 — kbootset 1.1.0.261027-22 from amix-dlm 1308c0b (box 37e78d88; modtools -7 kept, modadmin byte-identical), and the S5-12 next root promoted as the kernel-space catalog of record 915e09f3, 64d37aaa kept at superseded/repo-20261027-1948 (f9b0f08); round trip 198/198 — not published
+## 2026-10-27 — kbootset 1.1.0.261027-22 from amix-dlm 1308c0b (box 37e78d88; modtools -7 kept, modadmin byte-identical), and the next root promoted as the kernel-space catalog of record 915e09f3, 64d37aaa kept at superseded/repo-20261027-1948 (f9b0f08); round trip 198/198 — not published
 
-## 2026-10-27 — kern30m k30.1.2.261027-20 and kern46m k46.1.2.261027-91: the kernel packages carry their cut's ufs (and on k30 s5) core-tier modules (S5-12, amix-dlm recipe 59f1a28) (9302dc9); next root catalog 2e7ee51a, round trip 197/197 — not published
+## 2026-10-27 — kern30m k30.1.2.261027-20 and kern46m k46.1.2.261027-91: the kernel packages carry their cut's ufs (and on k30 s5) core-tier modules (amix-dlm recipe 59f1a28) (9302dc9); next root catalog 2e7ee51a, round trip 197/197 — not published
 
-## 2026-10-27 — GCC 14 userland built -mno-strict-align (owner decision 2026-10-27): acompat 0.1-5, zlib 1.2.13-5, gzip 1.3.12-5, patch 2.5.9-5, gtar 1.14-5, grep 2.5.1a-6, less 704-6, make 3.81-6, amix-benchmark-gcc14 1.3-3 (5a4ba57, 67a5674); one flag location, the pin check refuses a build without it; 42/42 EQUAL on the 030 and the 060; next root catalog 8c6a3b4c — not published
+## 2026-10-27 — GCC 14 userland built -mno-strict-align: acompat 0.1-5, zlib 1.2.13-5, gzip 1.3.12-5, patch 2.5.9-5, gtar 1.14-5, grep 2.5.1a-6, less 704-6, make 3.81-6, amix-benchmark-gcc14 1.3-3 (5a4ba57, 67a5674); one flag location, the pin check refuses a build without it; 42/42 EQUAL on the 030 and the 060; next root catalog 8c6a3b4c — not published
 
 ## 2026-10-27 — a4kt710-k30 / a4kt710-k46 1.0.0-1 (pkginst a4kt71030 / a4kt71046), the A4000T onboard NCR 53C710 root-class module (a3a287e); catalog 64d37aaa, round trip 172/172 — not published
 
@@ -242,9 +242,9 @@ mobo:a4000t-710, rank mobo, kabi 1.2; it does nothing unless the running Kicksta
 k46 95bebecb, k30 e65b4f7d (the sibling's working-tree objects were stale and lacked the gate). a4kt71030 ab19897d / 27648 B,
 a4kt71046 77c997e3 / 30208 B. b2a0e874 kept at superseded/repo-20261027-1353. kmodpkg.sh gains an optional KM_VERSION_FILE.
 
-## 2026-10-27 — kbootset 1.1.0.261027-21 and modtools 1.0.261027-7 from amix-dlm 4442c76; the static 1.0 kernels leave the kernel-space catalog (S5-03, S5-34) (2b6ba70, d52fdee); catalog b2a0e874, round trip 162/162 — not published
+## 2026-10-27 — kbootset 1.1.0.261027-21 and modtools 1.0.261027-7 from amix-dlm 4442c76; the static 1.0 kernels leave the kernel-space catalog (2b6ba70, d52fdee); catalog b2a0e874, round trip 162/162 — not published
 
-kbootset -21 brings S5-02 (the safe set keeps the card numbers; C4-4 v6, C3-5 v13). Both built on gcc14-cross-amix cf461e3 and
+kbootset -21: the safe set keeps the card numbers (C4-4 v6, C3-5 v13). Both built on gcc14-cross-amix cf461e3 and
 checked against the pins and the return-value ABI (new recipes/common/gcc14-pin.sh, run by dlm-src.sh before any box build).
 /sbin/kbootset 143cc1d8 (e8250e37 / 202240 B), /sbin/modadmin f51c98d6 (0867b623 / 59904 B). kernel-k30-u, -k46-z, -k46-zacd
 leave the catalog (datastreams kept in superseded/static-1.0/); b198e9e2 kept byte-identical at superseded/repo-20261027-1344.
@@ -255,20 +255,20 @@ leave the catalog (datastreams kept in superseded/static-1.0/); b198e9e2 kept by
 
 cf461e3 fixes the return-value ABI: pointers in %a0 and %d0, every struct in memory through %a0 (AMIX cc, gcc 2.7, libc div()).
 gcc14-env.sh pins the toolchain and checks the ABI from the compiler's own -S output on every build (gate-gcc14-selftest 14/14).
-Smoke on E1 (030+68882) and N6 (060): 42/42 EQUAL; period-compiled callers of the GCC 14 zlib/acompat archives now get correct
+Smoke on the emulated 68030 + 68882 and 68060: 42/42 EQUAL; period-compiled callers of the GCC 14 zlib/acompat archives now get correct
 pointers; a GCC 14 div()/ldiv() test passes 6/6. tar drops its sys/mkdev.h patch. The zlib/acompat hold is lifted. The -3 builds
 and amixbch14 1.3 are superseded and never published.
 
 ## 2026-10-27 — gayle-k30/-k46 1.1.0-3 (124c578): interrupt I/O by default; round trip 159/159 — not published
 
-From amix-gayle-ide b2935fc (owner decision T-54 item 21: `param intr=0` in modreg.local.d selects polled), kit c2dc7fb; objects
+From amix-gayle-ide b2935fc (`param intr=0` in modreg.local.d selects polled), kit c2dc7fb; objects
 k30 e465bb12 / k46 5c8d7d64, rebuilt byte-identical. gayle30 5870d595 / 29696 B, gayle46 d3c55cf8 / 31232 B. The exit catalog
 6e60a128 is unchanged; the next-catalog root build/kspace/next/repo (b198e9e2) differs from it only in the two gayle rows.
 
 ## 2026-10-27 — GCC 14 userland: acompat 0.1-3, zlib 1.2.13-3, gzip 1.3.12-3, patch 2.5.9-3, gtar 1.14-3, amix-benchmark-gcc14 1.3 (5c871e1..8ffb88b) — not published
 
 TOOLCHAIN=gcc14 (-m68020-60) builds the remaining userland recipes as revision -3; the period recipes are unchanged (byte-identical
-rebuilds). Smoke: 42 period-vs-gcc14 tests EQUAL on E1 (030+68882) and N6 (060). New amix-benchmark-gcc14 (PKG amixbch14, command
+rebuilds). Smoke: 42 period-vs-gcc14 tests EQUAL on the emulated 68030 + 68882 and 68060. New amix-benchmark-gcc14 (PKG amixbch14, command
 amix-bench-g14) installs beside amix-benchmark with no shared file and names its compiler. scan060-g14 sizes %fp-indexed and
 memory-bounded switch tables. HOLD zlib -3 and acompat -3: GCC 14 returns pointers in %d0 only (SVR4 uses %a0 too), so their
 archives hand garbage pointers to period-compiled callers — re-mint after the toolchain fix.
@@ -288,11 +288,11 @@ round-trip root with the same catalog). Round trip 159/159 with two negative bui
 
 ## 2026-10-27 — z3660scsi-k30/-k46 1.0.0-2 (7401d53), kern46m k46.1.2.261027-82 (d8ee54b); round trip 157/157 — not published
 
-z3660scsi 1.0.0-2 (amix-z3660scsi 209bdd2, ZS-06: the module arms its data cache from cputype at _load, `param=cache:int:-1:-1:60`,
-always 0 on k30 — the S4-74 metal fix): objects k30 2c9e3803 / k46 21754e70 (7468 B image), now kabi 1.2; md5 51ff85c2 / 6808c875.
+z3660scsi 1.0.0-2 (amix-z3660scsi 209bdd2: the module arms its data cache from cputype at _load, `param=cache:int:-1:-1:60`,
+always 0 on k30 — the metal fix): objects k30 2c9e3803 / k46 21754e70 (7468 B image), now kabi 1.2; md5 51ff85c2 / 6808c875.
 kbootset writes no param token, so the cputype default runs. kern46m -82 (port fcaffcd STAMP_BUILDID_CPU=60, dlm 178a47b): the
 image's .data buildid " 68060-261027-82" = the sidecar's build= (build.sh checks it); unix 435f255f, arena 0x0012c500, abi 2ab48658,
-103 names; md5 97bc0e8a / 2480128 B; the stamper lands as src/stamp_buildid.real.py beside the KT-41 shim. Catalog 6a4b8caa.
+103 names; md5 97bc0e8a / 2480128 B; the stamper lands as src/stamp_buildid.real.py beside the shim. Catalog 6a4b8caa.
 
 ## 2026-10-27 — kern30m k30.1.2.261027-17 (65b98db), gayle-k30/-k46 1.1.0-2 (6bc9f94); round trip 157/157 — not published
 
@@ -368,7 +368,7 @@ with --rootfs cdfs. Known: kbootset does not check a module's imports against th
 dlmkit30 k30.1.2.261027-10 (md5 d654b658 / 4082688 B, manifest c883c4fd) and dlmkit46 (280595b9 / 4099584 B, 749b19b8; PORT_REV
 12d416c): sd.h SDCARDS 4 + the four-card decode, the 13 filesystem names at minor 2, abi.txt 2ab48658 both lines, the k30 DMA
 NOTICE updated; ramdisk, gayle and a4091 modules check ok (a4091 db230fa's objects differ from the 1.0.0-1 pins by its own v5
-source, not the kit). loader-amix -8: boot2 28646 B 61b3feb0 (S4-11), boot1 unchanged, version 3; md5 8dc2c216. kbootset -17:
+source, not the kit). loader-amix -8: boot2 28646 B 61b3feb0, boot1 unchanged, version 3; md5 8dc2c216. kbootset -17:
 fs= promotion, --ramdisk defaults, gate 4; /sbin/kbootset 527b8d59; md5 63573f93 / 195072 B. modadmin unchanged (no modtools
 mint). Catalog a9018242 (roots at superseded/repo-20261027-0048/-0049/-0050). Round trip 142/142 with host kbootset 33ea0c7.
 
@@ -379,7 +379,7 @@ base 284154a3, no z3660 pass); equals the port's -53 but the id digits. unix abc
 k46.1.2, arena 0x0012c210, 90 symbols, abi fea18182. Both sidecar checks pass. Pkg md5 abf76e6f / 2478080 B. a4091 (78cf019)
 and gayle (6e3d811) objects as pinned under kits bbd20b6 and 4acd4a6; md5 a409130 50b2de4f, a409146 055a905b, gayle30
 f4768c8e, gayle46 ca71699c; no device nodes. Catalog 94f5d0a1 (20 kernel-space rows). On k30 gate 3 refuses both modules while
-kern30m's root= names their boards. gayle ships only after S4-71's bprobe row (publication gate).
+kern30m's root= names their boards. gayle ships only after its bprobe row passes on the box (publication gate).
 
 ## 2026-10-27 — kern30m k30.1.2.261026-13, the five DMA names in the k30 kernel (6b689e0); the k46 kit's port headers pinned by archive (db9f1e5) — not published
 
@@ -393,7 +393,7 @@ reproduces both manifests (0e4c7208, c0b64ee4). kmodpkg.sh still stamps the live
 ## 2026-10-27 — dlmkit -9 from amix-dlm bbd20b6: the DMA names in DDI 1.2 (a7f30fb) — not published
 
 dlmkit30 k30.1.2.261027-9 (md5 ecea42d0 / 4071936 B, manifest 0e4c7208) and dlmkit46 k46.1.2.261027-9 (a55964ac / 4088832 B,
-c0b64ee4; PORT_REV 12d416c): dma_prepare/complete/addr/alloc/free at minor 2 on both lines (S4-62 piece 1, C4-5 v3); the k30
+c0b64ee4; PORT_REV 12d416c): dma_prepare/complete/addr/alloc/free at minor 2 on both lines (C4-5 v3); the k30
 provider a placeholder (NOTICE). The ramdisk builds byte-identical against them. Staged catalog b82f7901 (-8 root at
 superseded/repo-20261027-0013). Round trip 126/126; gates PASS. modtools and loader-amix need no re-mint at bbd20b6.
 
@@ -423,7 +423,7 @@ superseded/repo-20261026-2305). Round trip 114/114; gates PASS.
 
 ## 2026-10-26 — kern46m k46.1.2.261026-77, the kabi 1.2 k46 kernel with the 16-aligned arena (fddf560); ramdisk-k30/-k46 1.0.0-1 minted, not staged (7379df6) — not published
 
-kern46m: cut in amix-packages (build/kspace/cut-k46m, the port's S4-22c recipe) from port 12d416c + dlm 49239b1 + base
+kern46m: cut in amix-packages (build/kspace/cut-k46m, the port's recipe) from port 12d416c + dlm 49239b1 + base
 284154a3, no z3660 pass; identical to the port's -75 dry build but the build-id byte (-72…-76 were taken, so -77).
 unix e85d4371 (2440473 B), sidecar 0ca10470: kabi k46.1.2, arena 0x0012c050, abi fea18182, sdcards 4, root= dlm_static_root.
 kabi-sidecar.py and mkident --check pass; build.sh refuses a non-16-aligned arena. Pkg md5 4c37a341 / 2477056 B; staged
@@ -443,7 +443,7 @@ PORT_REV stamps the live port HEAD, so a rebuild fails its pin whenever the port
 ## 2026-10-26 — kbootset 1.1.0.261026-16 from amix-dlm f340556; round trip 114/114 on kern46m -71 (c1e18c0, 78fac35) — not published
 
 kbootset -16 (kbootset code as 05f700a): composes root-class modules as root records (`module <name> root … bss= match=
-safe=1`, S4-12); a generation carrying one gets loader-min 3 (AX_LOADER_ROOT, gate 7); gate 3 refuses a root module for a
+safe=1`); a generation carrying one gets loader-min 3 (AX_LOADER_ROOT, gate 7); gate 3 refuses a root module for a
 controller the kernel's root= already names. /sbin/kbootset 98c04c09, datastream md5 101453b3 / 194048 B, sha256 1351983f;
 replaces -15. Staged catalog 51bf05f4 (-15 root at superseded/repo-20261026-2213). Round-trip fixture: k46-m stages 1–3
 boot from mobo:a3000-wd as k30-m does (kern46m -71 no longer links z3660scsi); stage 4 keeps the Z3660 facts and composes
@@ -476,21 +476,21 @@ list gains root_defer; abi texts unchanged (fea18182); kit-test 74/74 (a root mo
 generations need; boot2 28526 B a151a252, boot1 unchanged; ldrinfo version=3, catalog loader=3; md5 fb71911c / 35840 B;
 replaces -6. Staged catalog b4865981; round trip 106/106 (loader 3 laid, the m kernels' loader-min 2 satisfied); gates PASS.
 
-## 2026-10-26 — kern30m k30.1.1.261026-10, the S4-23 k30 root-class kernel (6e5bb14) — not published
+## 2026-10-26 — kern30m k30.1.1.261026-10, the k30 root-class kernel (6e5bb14) — not published
 
 K030-U build 68030-261026-10 (kerntools 3405b11) on amix-dlm 4c1acd0 (core 0001–0035, marc_root live): -08's content plus
 the root pass. brel 1c837598 (1722768 B), unix.sym 3c9c6e74, sidecar c4476f3c, abi= fea18182, sdcards=4; ksymgate 12/12.
 md5 d733de8c / 1942528 B. The staged root carries -10 beside kern46m -69 (catalog 10d591cb); the -08 root at
-superseded/repo-20261026-2144. Round trip 106/106; gates PASS. The S4-23 cut has no top-level sidecar copy (the recipe cmp
+superseded/repo-20261026-2144. Round trip 106/106; gates PASS. The cut has no top-level sidecar copy (the recipe cmp
 is a no-op; the sidecar stays sha-pinned) — kerntools' cut script may restore it.
 
-## 2026-10-26 — kern46m k46.1.1.261026-69, the S4-22 k46 root-class kernel (27240b0) — not published
+## 2026-10-26 — kern46m k46.1.1.261026-69, the k46 root-class kernel (27240b0) — not published
 
 KD060-Z module kernel build 68060-261026-69 (port k46-module ab91c80) on amix-dlm 4c1acd0 (core 0001–0035): -65's content
 plus the root pass (the arena load path, dlm_marc_root, match= at marc_root); z3660scsi 86e6cd7. unix e3a049fc (2447964 B),
 sidecar 415c52ba, abi= fea18182, sdcards=4; ksymgate 12/12. md5 41a469f0 / 2485248 B. -65 stays in build/kspace/pkg; the
 staged root carries -69 (catalog da231aed); the -65 root at superseded/repo-20261026-2141. Round trip 106/106 (nothing in
-it exercises the root pass — that is S4-72's); gates PASS.
+it exercises the root pass — that comes later); gates PASS.
 
 ## 2026-10-26 — dlmkit -6 from amix-dlm 96205b6, the first kabi 1.1 kits (b4c6eb6) — not published
 
@@ -501,24 +501,24 @@ carries kabi=k30.1.1 / k46.1.1 and passes modcheck; kit-test 64/64 with the samp
 2d52a62b; round trip 106/106 (the staged modules are still kabi 1.0 and compose on the 1.1 kernels); gates PASS. No
 round-trip case yet for "a 1.1-kit module refused by a 1.0 kernel".
 
-## 2026-10-26 — kern30m k30.1.1.261026-08, the S4-21 k30 module kernel of record (6db5e5c) — not published
+## 2026-10-26 — kern30m k30.1.1.261026-08, the k30 module kernel of record (6db5e5c) — not published
 
 The first k30 kernel at kabi k30.1.1: K030-U build 68030-261026-08 (kerntools 1079741) on amix-dlm a15104e (core
 0001–0032), the four-card sd layer with the dlm_sd_close seam, the dlm_halt hook, bdevsw row 20 freed. brel 9e823641
 (1720256 B), unix.sym 027060cc, sidecar d009be9b, abi= fea18182 (= abi-k30.1.1.txt), sdcards=4 passed through; ksymgate
-12/12. md5 6c606993 / 1939968 B. -04 stays in build/kspace/pkg (the S4-55 media); the staged root carries -08 (catalog
+12/12. md5 6c606993 / 1939968 B. -04 stays in build/kspace/pkg (the media); the staged root carries -08 (catalog
 008d58f0); the -04 root at superseded/repo-20261026-2108. Round trip 106/106 with the 1.0 modules composing; gates PASS.
 
-## 2026-10-26 — kern46m k46.1.1.261026-65, the S4-21 k46 module kernel of record (11fe968) — not published
+## 2026-10-26 — kern46m k46.1.1.261026-65, the k46 module kernel of record (11fe968) — not published
 
 The first kernel at kabi k46.1.1: KD060-Z module kernel build 68060-261026-65 (port k46-module aebb759) on amix-dlm a15104e
 (core 0001–0032): the four-card sd layer, the halt hook, the sd seam, bdevsw row 20 freed; z3660scsi 86e6cd7. unix 5a7028c0
 (2444800 B), sidecar 3a47087a, abi= fea18182 (= abi-k46.1.1.txt), sdcards=4 passed through; ksymgate 12/12. build.sh checks
 abi= against the pinned kabi's reference text and the sdcards= key. md5 d3f33e75 / 2481664 B. -61 stays in build/kspace/pkg
-(the S4-55 media); the staged root carries -65 (catalog 1db2567a); the -61 root at superseded/repo-20261026-2052. Round trip
+(the media); the staged root carries -65 (catalog 1db2567a); the -61 root at superseded/repo-20261026-2052. Round trip
 106/106 with the kabi-1.0 modules composing on the 1.1 kernel; gates PASS.
 
-## 2026-10-26 — kern30m k30.1.0.261026-04, the S4-20 module kernel (ddb6f14) — not published
+## 2026-10-26 — kern30m k30.1.0.261026-04, the module kernel (ddb6f14) — not published
 
 The first stage-4 k30 cut: K030-U build 68030-261026-04 (kerntools 39fd8dd) with amix-dlm 4b7eb3d (core 0001–0028,
 dlm_maximage 256 KiB), no driver change. brel c0f69e0a (1716016 B, bss 349324), unix.sym d9991e90, sidecar 21c63f07, abi=
@@ -526,24 +526,24 @@ unchanged 7a90c7d9; ksymgate 12/12. md5 8f70f34a / 1935360 B. The recipe reads t
 checks its SHA256SUMS. -01 stays in build/kspace/pkg for the stage-3 media; the staged root carries -04 (catalog 9e143d53);
 the previous root kept at superseded/repo-20261026-1906 (6b003630). Round trip 106/106; gates PASS.
 
-## 2026-10-26 — kern46m k46.1.0.261026-61, the S4-20 module kernel (2834c79) — not published
+## 2026-10-26 — kern46m k46.1.0.261026-61, the module kernel (2834c79) — not published
 
 The first stage-4 k46 cut: KD060-Z module kernel build 68060-261026-61 (port k46-module 13dc9f3) with amix-dlm 4b7eb3d
-(core 0001–0028, dlm_maximage 256 KiB) and amix-z3660scsi 86e6cd7 (ZS-05). unix cb2499f1 (2433820 B), sidecar 9a85b329,
+(core 0001–0028, dlm_maximage 256 KiB) and amix-z3660scsi 86e6cd7. unix cb2499f1 (2433820 B), sidecar 9a85b329,
 abi= unchanged 7a90c7d9; ksymgate 12/12. md5 0fdca621 / 2470912 B. -58 stays in build/kspace/pkg (the stage-3 media of
 record use it); the staged root carries -61 (catalog 6b003630); the -58 root kept at superseded/repo-20261026-1848
 (47584f25). Round trip 106/106; gates PASS.
 
 ## 2026-10-26 — z3660eth-k30/-k46 1.0.0-5 (0a37c09) — not published
 
-From amix-z3660net c5f7a46: every board register access in the module armed against the Z3660 address-capture race (ZS-05).
+From amix-z3660net c5f7a46: every board register access in the module armed against the Z3660 address-capture race.
 Objects k30 022c012b, k46 ca3a2b05 (19751 B file, 13537 B image). zeth30 md5 6c88d4f7, zeth46 4a641610, 29184 B each. The
 -4 datastreams stay in build/kspace/pkg; the staged root carries -5 (catalog 47584f25); the -4 root is kept at
 build/kspace/superseded/repo-20261026-1744 (086eac4d). Round trip 106/106; gates PASS.
 
 ## 2026-10-26 — z3660eth-k30/-k46 1.0.0-4 (09cdd8d) — not published
 
-From amix-z3660net 2a15a4c: in intr=6 mode the module's RX ring resyncs past a wedged sentinel (the metal S3-46 stall).
+From amix-z3660net 2a15a4c: in intr=6 mode the module's RX ring resyncs past a wedged sentinel (a stall seen on the metal).
 Objects k30 8d0e75f0, k46 a928fd2b (19379 B file, 13177 B image); /dev/zen0 as before. zeth30 md5 5404d3e3, zeth46
 a9e30900, 28672 B each. The -3 datastreams stay in build/kspace/pkg; the staged root carries -4 (catalog 086eac4d); the -3
 root is kept at build/kspace/superseded/repo-20261026-1652 (ad04c5bc). Round trip 106/106; gates PASS.
@@ -557,7 +557,7 @@ ad04c5bc); the -2 root is kept at build/kspace/superseded/repo-20261026-1507 (fd
 
 ## 2026-10-26 — monsw-k30/-k46 1.0.0-2 (d059277) — not published
 
-A package revision for S3-45's `apkg upgrade` row, from amix-modules b0f75a4: module/VERSION 1.0.0-2, README facts; objects
+A package revision for the `apkg upgrade` test, from amix-modules b0f75a4: module/VERSION 1.0.0-2, README facts; objects
 unchanged (k30 01a40342, k46 2c2760e9; kit c6ad5bd). monsw30 md5 d345e3d1, monsw46 b7367ae7, 14336 B each. The 1.0.0-1
 datastreams stay in build/kspace/pkg; catalog v1 cannot carry two versions of one name, so the staged root carries -2
 (fde1018e) and the -1 root is kept at build/kspace/superseded/repo-20261026-1426 (6bdb0969) as the upgrade row's "from"
@@ -569,7 +569,7 @@ kbootset 1.1.0.261025-15: in `media --cd`/`--floppy` gate 3 checks only the root
 writes /stand/unix 0644 whatever the umask; /sbin/kbootset d44f6a32 = dlm's box build; md5 4531c633 / 188416 B (supersedes
 -14). dlmkit30/46 -5 (KIT_REV 594731b): modcheck warns when a demand-class module's load working set passes 160 KiB, guide
 updated; MONSW_REV amix-modules@c0386d9, kit.conf sources in sh; md5 bf551763 / 4057600 B, e868d694 / 4074496 B; kit-test
-64/64. Staged catalog regenerated in the wave (6bdb0969, three rows); round trip 106/106; both gate selftests PASS.
+64/64. Staged catalog regenerated with it (6bdb0969, three rows); round trip 106/106; both gate selftests PASS.
 
 ## 2026-10-26 — dlmkit -4, modtools -6, loader-amix -6 from amix-dlm 2233745 (bf15f58..8ac06af) — not published
 
@@ -579,7 +579,7 @@ questions for it); modcheck enforces C3-1 v4 (image ≤ 256 KiB, file < 256 KiB)
 4072960 B. modtools -6: modadmin 0518fb28 with core patches 0025 (-L prints the buffer's words first) and 0026 (-K keeps
 kernel messages in putbuf); -5's inittab scripts unchanged; md5 d191106f / 59904 B. loader-amix -6: boot2 28356 B 344b8e07,
 boot1 unchanged, loader version 2; md5 446410f6 / 35328 B. Superseded -3/-5/-5 moved aside; staged catalog regenerated in
-the same wave (ba0e1c8c, four rows changed); round trip 106/106; both gate selftests PASS.
+the same change (ba0e1c8c, four rows changed); round trip 106/106; both gate selftests PASS.
 
 ## 2026-10-26 — loader-amix -5 (4a9d646) — not published
 
@@ -659,13 +659,13 @@ S5NAMES; the kit sample builds with each kit as installed. Round trip 54/54. Dat
 
 kbootset -10: `kbootset media` composes the installed module packages into the medium's pristine generation; /sbin/kbootset
 305345a3 (159988 B) byte-equal to dlm's box build; datastream md5 893fb434 / 165888 B; pkgmap unchanged (/var/kbootset).
-modtools -1 (new userland recipe, S3-11): /sbin/modadmin d94e5228 (GCC 14 static, byte-equal to dlm's box build; 68060-safe),
+modtools -1 (new userland recipe): /sbin/modadmin d94e5228 (GCC 14 static, byte-equal to dlm's box build; 68060-safe),
 no catalog dependency, no kernel-space record; datastream md5 34cd0e5a / 50176 B; copyright carries kdedon's MIT and
 amix-dlm's MIT. Round trip at 42df482 with a modtools row and install: 41/41.
 
 ## 2026-10-26 — kbootset -9 from amix-dlm a71a875 (449c1ef) — not published
 
-S3-16: kbootset composes module members through gates 1–3, writes module and param records, `status` shows which members are
+kbootset composes module members through gates 1–3, writes module and param records, `status` shows which members are
 loaded. /sbin/kbootset 8cb4c157 (158828 B), byte-equal to dlm's box build; datastream md5 7bb5cea7 / 164352 B; pkgmap as
 before with /var/kbootset. Round trip at a71a875: 39/39. Note: the pkgmap's copyright/pkginfo mtimes are build-time, so a
 rebuild changes the datastream md5 but not the binary (true since -8).
@@ -715,37 +715,37 @@ root for K030-U. Kernel-space set: kern30u -1, kern46z -2, kern46zcd -2, ldramix
 /sbin/kbootset 9cf75c1c creates the journal's directories itself; the package also ships /var/kbootset (d none 0755 root sys),
 the directory apkg's trigger points the journal at (the stage-2 exit row found it missing on a fresh box). Supersedes -3.
 The round trip pins d64bad7, no longer creates /var/kbootset itself and checks the pkgmap entry and the installed
-directory: 25/25. Current sets for the owner's publish decision: kern46z -2, kern46zcd -2, ldramix -2, kbootset -4;
+directory: 25/25. Current sets for publishing: kern46z -2, kern46zcd -2, ldramix -2, kbootset -4;
 grep/less/make -4.
 
 ## 2026-10-25 (night) — kbootset -3 from amix-dlm db0ef3a (c9eb388) — not published
 
 kbootset 1.1.0.261025-3 carries /sbin/kbootset f4a6632b (the `retry` verb, C2-4 v5), reproducible from a git archive of
-db0ef3a; supersedes -2. The round trip pins kbootset to db0ef3a, 23/23. Proposed set for the owner's publish decision:
+db0ef3a; supersedes -2. The round trip pins kbootset to db0ef3a, 23/23. Proposed set for publishing:
 kern46z -2, kern46zcd -2, ldramix -2, kbootset -3, grep/less/make -4.
 
 ## 2026-10-25 (night) — gcc14 revision -4 on -m68020-60; kernel-space packages -2 with bss= (87d6dc8..4c35db0) — not published
 
 TOOLCHAIN=gcc14 defaults to -m68020-60; the FPU gate fails any fs*/fd* form (040/060-only, absent on a 68881/68882) in every
 ELF and archive of a payload and names the symbol — it caught the toolchain's own runtime (libamixc99 amix_vsnprintf, libgcc
-__floatundidf) before the gcc14 station rebuilt it for 68020-60. grep, less, make re-minted as -4 on the rebuilt runtime:
-20/20 EQUAL with the period builds on E1 (030) and N6 (060). Kernel-space -2 (C2-3 v4): the conversion step writes the
+__floatundidf) before gcc14-cross-amix was rebuilt for 68020-60. grep, less, make re-minted as -4 on the rebuilt runtime:
+20/20 EQUAL with the period builds on the emulated 68030 and 68060. Kernel-space -2 (C2-3 v4): the conversion step writes the
 shipped-form sidecar with bss= (KD060-Z 283 469, ZA-CD 284 945, K030-U 344 918, measured twice); loader-amix and kbootset -2
 from amix-dlm 1230e8b (boot2 27 434 B); round trip on apkg 72f6a72 + kbootset 1230e8b 23/23 incl. the bss= negative.
 
-## 2026-10-25 (night) — S2-12 kernel-space packages; gcc14 phase-2 smoke (9e54df8..a8f45d2) — minted, not published
+## 2026-10-25 (night) — kernel-space packages; gcc14 phase-2 smoke (9e54df8..a8f45d2) — minted, not published
 
 kernel-k46-z 1.1.0.261025.51 and kernel-k46-zacd 1.1.0.261025.52: the port's KD060 kernels as brel (27 % smaller; axrel proves
 both forms bind to the same image), sidecar verbatim except size=/sha256= restated for the shipped form; kernel-k30-u is a
 stand-in, never catalogued. loader-amix 1.0.261025 (/stand/loader/{boot1,boot2,ldrinfo}, loader version 1) and kbootset
 1.1.0.261025 (/sbin/kbootset, userland), built from amix-dlm fb9c1ce. recipes/common/kpkgroll.sh (pure-files roll),
 dlm-src.sh; tools/kspace-roundtrip.sh: gen-catalog → apkg 0.3 -R → kbootset build/commit/check, 20/20, with gate-1 and
-gate-2 refusals. gcc14 phase 2 (tools/gcc14-smoke/): grep and less byte-equal to the period builds on E1 and N6; make dies on
-the 030+68882 with -mcpu=68060 FPU forms and matches with -m68020-60 — see tmp/2026-10-25-gcc14-eval/PHASE2.md.
+gate-2 refusals. gcc14 phase 2 (tools/gcc14-smoke/): grep and less byte-equal to the period builds on the emulated 68030 and 68060; make dies on
+the 030+68882 with -mcpu=68060 FPU forms and matches with -m68020-60.
 
 ## 2026-10-25 — TOOLCHAIN=gcc14 selector and gates; grep, less, make recipes ported (414de4a, b8985c1)
 
-A selectable GCC 14 toolchain (Antti's gcc14-cross-amix, userland only per D-3 §9) beside the period default:
+A selectable GCC 14 toolchain (Antti's gcc14-cross-amix, userland only) beside the period default:
 recipes/common/gcc14-env.sh with the switch items (SVR4/unix predefines, prototypes, hard-float), gates for DT_NEEDED bare
 names, 68060 safety and the libc %lld printf defect (tools/gate-gcc14-selftest.sh, 10 checks). grep, less and make build with
 TOOLCHAIN=gcc14 (one source patch for less). Emulator proof of the three packages and PHASE2.md still to come (the run was

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# prepare.sh -- stage the on-box acceptance of P-31 sec 10.9 packages.
+# prepare.sh -- stage the on-box acceptance of the userland packages.
 #
 #     sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/<name>...
 #
