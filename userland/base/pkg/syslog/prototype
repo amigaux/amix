@@ -1,0 +1,7 @@
+i pkginfo
+f none /etc/init.d/syslogd 0444 root sys
+l none /etc/rc2.d/S70syslogd=/etc/init.d/syslogd
+l none /etc/rc0.d/K50syslogd=/etc/init.d/syslogd
+f none /etc/syslog.conf 0444 root sys
+d none /var/log 0755 root sys
+c none /dev/conslog 25 0 0222 root root

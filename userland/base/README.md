@@ -57,12 +57,13 @@ period cross compiler, gcc-cross-amix (`toolchain/gcc-cross-amix.pin`):
 userland/base/dhcpc/probe/build.sh          # writes out/base/dhcprobe
 userland/base/net/dlpi-mac/build.sh         # writes out/base/dlpi-mac
 userland/base/dhcpc/build.sh                # writes out/base/dhcpc
-sh build/pkg/pkgbuild.sh userland/base/pkg/amix-base     # and pkg/dhcp-client
+sh build/pkg/pkgbuild.sh userland/base/pkg/amix-base     # and pkg/dhcp-client, pkg/syslog
 sh userland/base/man/test-man.sh            # host tests of the man front-end
 sh userland/base/rc/test-rc.sh              # host tests of rc.subr
 sh userland/base/rc/test-devnodes.sh        # the device-node boot step
 sh userland/base/rc/test-swap.sh            # the swap boot step
 sh userland/base/display/test-display.sh    # xstart, display(4), the xdm step
+sh userland/base/syslog/test-syslogd.sh     # the syslogd boot step
 sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
 sh userland/base/net/test-ifup.sh sh nawk       # ifup, ifdown and the hook
 sh userland/base/etc/test-profile.sh           # /etc/profile = stock + profile.add
