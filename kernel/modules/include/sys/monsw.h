@@ -18,7 +18,8 @@
  * touch a line.  Where the value comes from, later wins:
  *   seed     a registered card driver's value at attach (the Z3660's register 0x318),
  *            taken only from the first card that offers one
- *   SETCFG   MONSWIOC_SETCFG, root only: /etc/monsw written in at boot by an rc step
+ *   SETCFG   MONSWIOC_SETCFG, root only: /etc/display's monsw (else the older /etc/monsw)
+ *            written in at boot by /etc/rc2.d/S20monsw
  *   patched  monsw_config in the kernel image, -1 = unset; set, it forces the value and
  *            SETCFG answers EBUSY
  *
