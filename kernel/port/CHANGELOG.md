@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cut 68060-261031-55 is the k46 cut of record; kern46m -55 (dcc3b68)
+
+cuts/CURRENT moves to 68060-261031-55: the port's cut at eae06ae with amix 3c3e353's module core and kit. Core 0048
+loads a demand-class filesystem module at its first mount; 0049 makes a first-use load never wait for memory. kabi
+k46.1.4; abi 18c0a1c9 unchanged. kern46m k46.1.4.261031-55 = 5a29a4de, 2 550 784 B, still asking for kbootset -30;
+host and container rolls are byte-identical.
+
 ## 2026-10-31 — port.pin moves to 392a44e (e97ac8e)
 
 392a44e carries the records of cuts 68060-261031-54 and -55; -55's record reproduces its seven sums (unix a31055d9)
