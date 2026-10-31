@@ -5,8 +5,8 @@
  * kernel's manifest names its identity record and its module arena
  * (C3-3, C3-4), and the loader checks the one and fills the other with
  * the arena directory, a copy of the manifest and the root-class modules
- * (C4-4 version 3).  A RAM disk is S4-11's: a manifest with one is
- * refused with a message (loader-min guards this as well).
+ * (C4-4 version 3).  A RAM disk image is placed by ramdisk_place and
+ * handed on in the loader record (C4-3 section 4).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -423,7 +423,7 @@ struct ax_ci {
 
 /* copper words: FMODE, BPLCON3, BPLCON4 to their power-on values, no
  * bitplanes, black background, end -- the state the stock loader leaves
- * and the 1992 console assumes (N21, 2026-10-25) */
+ * and the 1992 console assumes (measured 2026-10-25) */
 static const ax_u16 nullcop[] = {
 	0x01fc, 0x0000, 0x0106, 0x0c00, 0x010c, 0x0011,
 	0x0100, 0x0200, 0x0180, 0x0000, 0xffff, 0xfffe };

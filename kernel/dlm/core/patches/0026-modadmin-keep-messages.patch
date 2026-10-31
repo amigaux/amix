@@ -2,9 +2,10 @@ Subject: modadmin -K: keep the kernel's messages in putbuf too
 
 After boot the stock kernel's prt_where is 0x2, the console only: a
 message reaches putbuf only through a registered console logger, so on a
-box without one modadmin -L finds nothing (S3-43, k46).  -K sets bit 0,
-PRW_BUF, found through the namelist /stand/unix and written through
-/dev/kmem.  Root only; the console keeps what it had.  User side only.
+box without one modadmin -L finds nothing (the stage-3 emulator rows,
+k46).  -K sets bit 0, PRW_BUF, found through the namelist /stand/unix
+and written through /dev/kmem.  Root only; the console keeps what it
+had.  User side only.
 
 --- a/modadmin.c
 +++ b/modadmin.c

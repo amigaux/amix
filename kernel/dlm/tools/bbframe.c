@@ -1,6 +1,6 @@
 /*
  * bbframe.c -- frame boot1's code as an AmigaDOS bootblock, and the 1 KB
- * size gate (docs/plan/stage-1.md S1-05).
+ * size gate (docs/spec/10-boot-loader.md §3.1).
  *
  *   bbframe <code.bin> <bootblock.img>   frame; fails if the code exceeds
  *                                        1008 bytes

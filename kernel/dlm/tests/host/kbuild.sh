@@ -78,7 +78,7 @@ grep -q "generation 2 built" $T/out
 grep -q "equals the default generation 1: kbootset commit will write nothing (commit --again writes it)" $T/out
 grep -q "^root sd id=02025400" $R/stand/gen/2/build
 grep -q "^rootfs ufs$" $R/stand/gen/2/build
-# the Z3660 is one controller (C4-1 §5.1, S5-15): a root or swap record on
+# the Z3660 is one controller (C4-1 §5.1): a root or swap record on
 # a Z3660 card, the window's forms included, is written id=144b0100
 # base=00000000; another board's record is kept as given; the window's key
 # is the board's
@@ -94,7 +94,7 @@ grep -qx "root sd id=02025400 base=40000000 unit=6 slice=2" $R/stand/gen/2/build
 $KB build --line 46 --bootdev mobo:z3660-window --rootdev mobo:z3660-window --rootfs ufs --mem 16777216 > /dev/null
 grep -qx "bootdev=zorro:144b:01" $R/stand/gen/2/facts && grep -qx "rootdev=zorro:144b:01" $R/stand/gen/2/facts ||
 	{ echo "kbuild: the window's key was not taken as zorro:144b:01" >&2; cat $R/stand/gen/2/facts >&2; exit 1; }
-# a motherboard controller's record names it (C4-1 §5.2, S5-46): an old
+# a motherboard controller's record names it (C4-1 §5.2): an old
 # mobo record takes its controller's id only on a kernel whose sidecar
 # says rth1=2; a stray mobo beside an id is dropped (boot2 refuses it);
 # swap records are kept
@@ -371,7 +371,7 @@ grep -q "intr=-1 is not a valid int value for module z3660eth" $T/out
 three; echo "intr=6" > $R/etc/conf/modreg.d/z3660eth
 refused 2 $KB build $FACTS			# a malformed line
 grep -q "neither param <name>=<value>, disable nor safe" $T/out
-# the owner's safe mark (S5-09): a boot module's record gets safe=1, from
+# the local safe mark (C4-4 §2): a boot module's record gets safe=1, from
 # modreg.local.d only and for boot class only
 three; echo "safe" > $R/etc/conf/modreg.local.d/z3660eth
 $KB build $FACTS | grep -q "built"
@@ -432,7 +432,7 @@ rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R
 cp $T/kabi.static $R/stand/k46/kabi; record
 echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, commit, check) ok"
 
-# root-class modules (S4-12; C3-5 version 7, C4-4 version 3) on a module
+# root-class modules (C3-5 version 7, C4-4 version 3) on a module
 # kernel whose sidecar names no built-in root controller or filesystem:
 # the closure through the modules, the records with bss= and safe=1, the
 # members in the store, gate 4 over the whole set
@@ -485,7 +485,7 @@ grep -q "a block major needs a root-class module" $T/out
 rootset; modpkg ramdisk class=root match=always majors=b:20
 $KB build $RFACTS | grep -q "built"
 rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
-# safe mode keeps the card numbers (spec 70 section 4, S5-02): every
+# safe mode keeps the card numbers (spec 70 section 4): every
 # controller module ranked at or before the root's class joins the safe
 # set; on an A4091 root the Z3660's, on a built-in WD root the Z3660's
 # and the A4091's; Gayle's never (ide sorts last)
@@ -551,9 +551,9 @@ head -c 4096 /dev/zero > $T/mini.img
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin --ramdisk $T/mini.img $RFACTS --root ramdisk --swap none > /dev/null 2>&1
 grep -q "^module ramdisk root .*/stand/gen/1/mod/ramdisk z=deflate bss=0 match=always safe=1$" $T/r1.adf.spec
-# one swap per boot (S5-05): the image comes after the root modules, in
+# one swap per boot: the image comes after the root modules, in
 # boot2's read order, so an image that spans the two volumes is the only
-# member to ask for volume 2 (E958/E959's pairs asked 2, 1, 2)
+# member to ask for volume 2 (the other order asked 2, 1, 2)
 head -c 300000 /dev/urandom > $T/bigmini.img
 $B/kbootset -R $R media --floppy $T/r1.adf $T/r2.adf --boot1 $B/rt/boot1.img \
 	--boot2 $B/rt/boot2.bin --ramdisk $T/bigmini.img $RFACTS > /dev/null 2>&1
@@ -649,7 +649,7 @@ set -e
 cp $T/before.img $T/disk.img
 echo "kbuild: check ok"
 
-# media builds (S2-04): the pristine generation of a new medium from the
+# media builds: the pristine generation of a new medium from the
 # same root, every gate run; a disk store by kbootset's core, the floppy
 # pair and the CD tree by mkstore's engine
 MB="$B/kbootset -R $R"
@@ -711,7 +711,8 @@ echo "kbuild: media (disk, floppy pair, CD; a medium with modules) ok"
 
 # commit --spec with z=deflate on the kbootset the box runs (no zlib: its
 # own deflate): the member is stored deflated, the store checks, and a
-# generation that fits only deflated is accepted (S3-43-4 on a 4 MiB store)
+# generation that fits only deflated is accepted (the stage-3 emulator
+# rows on a 4 MiB store)
 KZ="$B/kbootset-nz --image $T/z.img --offset 0"
 head -c 1048576 /dev/zero > $T/z.img
 $KZ create 1048576 $B/rt/boot2.bin > /dev/null

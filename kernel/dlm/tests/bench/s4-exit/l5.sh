@@ -4,12 +4,14 @@
 # set does not fit the kernel's arena, so boot2 refuses it with L5 and
 # boots the good generation.  kbootset cannot write it (gate 4 refuses
 # such a generation, from `build` and from `commit --spec` alike), so the
-# row writes this image over a slot copy's boot slice, as S3-43's l5.img.
+# row writes this image over a slot copy's boot slice, as the stage-3
+# emulator rows' l5.img does.
 #   generation <id> (good)     the box's generation as kbootset composed
 #                              it, under its own id: its boot- and
 #                              demand-class records name /stand/gen/<id>/
 #                              mod/, and the core loads them only from the
-#                              booted generation's directory (N142)
+#                              booted generation's directory (a
+#                              renumbered image had z3660eth refused)
 #   generation <id>+1 (trial)  the same, its last root module's bss=
 #                              raised to the arena's capacity: the module
 #                              cannot fit, and boot2 refuses it before the
@@ -36,7 +38,8 @@ LAST=$(awk '$1 == "module" && $3 == "root" { n = $2 } END { print n }' "$BUILD")
 [ -n "$CAP" ] && [ -n "$LAST" ] ||
 	{ echo "l5.sh: $BUILD is not a module generation with root modules" >&2; exit 1; }
 # a brel kernel's bss is only in its sidecar; kbootset writes it into the
-# kernel record, and so must this spec (N142: "no bss= for this brel")
+# kernel record, and so must this spec (without it: "no bss= for this
+# brel")
 LINE=$(awk '$1 == "line" { print $2 }' "$BUILD")
 ID=$(echo "$BUILD" | sed -n 's#.*/stand/gen/\([0-9][0-9]*\)/build$#\1#p')
 [ -n "$ID" ] || { echo "l5.sh: BUILD must be a /stand/gen/<id>/build" >&2; exit 2; }

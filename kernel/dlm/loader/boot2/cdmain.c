@@ -1,6 +1,6 @@
 /*
  * cdmain.c -- amix-cdboot, boot2 as an AmigaDOS program started from a CD's
- * startup-sequence (docs/spec/10-boot-loader.md §4.4, D-3 §10): the CD as
+ * startup-sequence (docs/spec/10-boot-loader.md §4.4): the CD as
  * the medium -- the control file, manifests and members read as plain
  * files through dos.library from <base>/K30 or <base>/K46 -- and core.c for
  * everything else.  Read-only: no trial, no one-shot, no writes.

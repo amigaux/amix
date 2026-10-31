@@ -1,6 +1,6 @@
 #!/bin/sh
-# mkprobes.sh -- S3-44's probe modules, built with one line's ABI kit
-# (tests/bench/README.md, S3-44): t44intr and t44fill, for /tmp/s44
+# mkprobes.sh -- M-INT1's probe modules, built with one line's ABI kit
+# (tests/bench/README.md, M-INT1): t44intr and t44fill, for /tmp/s44
 # on the box, loaded under development load.
 #
 # usage: mkprobes.sh KIT OUTDIR      (KIT: build/kit/<line>, `make kit`)

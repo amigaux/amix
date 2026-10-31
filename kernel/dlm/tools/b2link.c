@@ -7,7 +7,7 @@
  * first from 0), or 0 and the field's 16-bit offset when the distance is
  * odd or over 510 (every field lies below the 28 KiB limit, so below
  * 32768).
- * (docs/plan/stage-1.md S1-11.)
+ * (docs/spec/10-boot-loader.md §3.2.)
  *
  * usage: b2link IN.o OUT.bin       boot2 behind boot1 (self-relocating)
  *        b2link -h [-c] IN.o OUT   amix-cdboot: an AmigaDOS load file (one

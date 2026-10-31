@@ -1,5 +1,5 @@
 /*
- * t44intr.c -- S3-44 (M-INT1, bench half): the core's interrupt chains on
+ * t44intr.c -- M-INT1, bench half: the core's interrupt chains on
  * a kernel of record.  Its _load attaches a counting handler to level 2
  * and two to level 6 (one that claims every call, then one that counts),
  * and raises PORTS and EXTER once from software, as z3660eth's self-test
@@ -106,4 +106,4 @@ t44intr_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t44intr, t44intr_load, t44intr_unload, "S3-44 interrupt chains");
+MOD_MISC_WRAPPER(t44intr, t44intr_load, t44intr_unload, "t44 interrupt chains");

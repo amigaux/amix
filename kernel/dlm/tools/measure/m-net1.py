@@ -13,7 +13,7 @@
 #                usr/sbin/ping, usr/bin/ftp) and a stripped apkg 0.2.3 as
 #                <netdir>/apkg
 #   <outdir>     optional: also write each miniroot archive there as
-#                miniroot-<line>-<full|trim>.tar (the M-FP1 input, S1-24)
+#                miniroot-<line>-<full|trim>.tar (the M-FP1 input)
 import io, json, os, struct, subprocess, sys, tarfile, zlib
 
 WS, NET = sys.argv[1], sys.argv[2]
@@ -21,7 +21,7 @@ OUT = sys.argv[3] if len(sys.argv) > 3 else None
 sys.path.insert(0, os.path.join(WS, 'amix-installng/tools/lib'))
 import s5, ufs  # noqa: E402  (amix-installng's own readers)
 
-BUDGET = 2 * 890880   # two DD volumes at the budget of record (P-28 D37)
+BUDGET = 2 * 890880   # two DD volumes at the budget of record
 
 
 def s5_files(img):

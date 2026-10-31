@@ -1,5 +1,5 @@
 /*
- * t43ext.c -- S3-43: a module that is in no generation.  Outside
+ * t43ext.c -- a module that is in no generation.  Outside
  * development load the core refuses it (M-SIG3); under development load
  * it loads, and the console says so.
  *
@@ -25,4 +25,4 @@ t43ext_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t43ext, t43ext_load, t43ext_unload, "S3-43 outside the generation");
+MOD_MISC_WRAPPER(t43ext, t43ext_load, t43ext_unload, "t43 outside the generation");

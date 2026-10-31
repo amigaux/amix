@@ -3,8 +3,8 @@
  * (commit, mark-good, rollback, next, mark-bad, collect, loader-install),
  * the store-space gate, and a power cut after every single write of each
  * operation -- whole or torn in half -- after which the store must still
- * boot, judged by the loader's own rules (docs/plan/stage-2.md S2-02, the
- * host half of M-GEN3).
+ * boot, judged by the loader's own rules (the host half of
+ * M-GEN3).
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */

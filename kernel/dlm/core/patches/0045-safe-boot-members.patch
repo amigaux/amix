@@ -1,9 +1,9 @@
-Subject: safe mode: the boot members the owner marked safe=1 load too
+Subject: safe mode: the boot members marked safe=1 load too
 
 Safe mode loaded no boot-class module, so a box whose only NIC is a
 module (every Z3660 box) had no network in a safe boot.  A boot record
 with safe=1 (kbootset writes it from a `safe` line in modreg.local.d,
-S5-09, C4-4 section 2) now loads in safe mode as well: marc_post's boot
+C4-4 section 2) now loads in safe mode as well: marc_post's boot
 pass takes only those, the demand pass is skipped, and lf_gate lets
 only those through.  Without such a record the old line and behaviour
 stand.  The state harness has the marked and unmarked members.
@@ -16,7 +16,7 @@ stand.  The state harness has the marked and unmarked members.
  	lf->lf_sha[0] = 0;
 -	if (dlm_safe) {			/* the floor and the root controller only */
 +	if (dlm_safe && !dlm_man_safeboot(name)) {	/* the floor, the root set, and
-+						 * what the owner marked safe */
++						 * what modreg.local.d marked safe */
  		printf("dlm: safe mode: %s is refused\n", name);
  		return EPERM;
  	}
@@ -39,7 +39,7 @@ stand.  The state harness has the marked and unmarked members.
  	if (dlm_safe) {
 -		printf("dlm: safe mode: no boot- or demand-class module loads this boot\n");
 -		return;
-+		/* only the boot members the owner marked safe=1 (S5-09) */
++		/* only the boot members marked safe=1 */
 +		for (n = 0, p = dlm_man, lim = dlm_man + dlm_manlen; p < lim && !n; p = l + 1) {
 +			for (l = p; l < lim && *l != '\n'; l++)
 +				;
@@ -78,7 +78,7 @@ stand.  The state harness has the marked and unmarked members.
  }
  
  /*
-+ * Is name a boot-class member the owner marked safe=1 (S5-09, C4-4 section
++ * Is name a boot-class member marked safe=1 (C4-4 section
 + * 2): one that loads in safe mode too?  kbootset writes the mark from a
 + * `safe` line in modreg.local.d, and on the boot members it depends on.
 + */
@@ -116,7 +116,7 @@ stand.  The state harness has the marked and unmarked members.
  		if ((m = byname("pb1")) != 0)
  			moduload(m->m_id);
  	}
-+	/* the owner's safe=1 on a boot member (S5-09): it loads in safe mode
++	/* safe=1 on a boot member: it loads in safe mode
 +	 * too, the unmarked one does not, and demand loading stays refused */
 +	sprintf(man, "GMF1\ngeneration 9\n"
 +	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=always safe=1\n"

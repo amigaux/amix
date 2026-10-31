@@ -4,7 +4,7 @@ modstat reports a module that does not declare unload=allowed as locked
 (patch 0016), and the core never unloads a locked one, so the delay it
 carries (the default 60 s) is never used.  -q, -Q and -S printed it all
 the same: "Unload Delay: 60 seconds" beside "Flags: locked".  A locked
-module's line now reads "never (locked)" (amix-dlm N235c).
+module's line now reads "never (locked)".
 
 --- a/modadmin.c
 +++ b/modadmin.c

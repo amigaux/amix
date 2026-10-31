@@ -2,7 +2,7 @@ Subject: dlm_str_open: say that a STREAMS open runs at level 4
 
 The stock qattach() raises SR to 0x2400 around a STREAMS open, and the
 core's trampoline leaves it.  A self-test that spins for a level-2
-interrupt raised from the open never sees it (S3-44-3, z3660eth
+interrupt raised from the open never sees it (M-INT1's bench rows, z3660eth
 1.0.0-2).  Comment only: dlm.o is unchanged.
 
 --- a/dlm_str.c

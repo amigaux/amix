@@ -107,13 +107,13 @@ struct ax_memr {
  * the first 1 GiB one to one and keep their own segment maps at 0x40040000
  * (syssegs): a kernel bound in Zorro III expansion memory, from
  * 0x40000000, is not mapped once translation is on and never starts
- * (S3-43-7, 2026-10-26; docs/spec/10-boot-loader.md §5) */
+ * (2026-10-26; docs/spec/10-boot-loader.md §5) */
 #define AX_IDMAP_TOP	0x40000000UL
 
 /* the most fast memory a k30 kernel can describe: the stock 2 KiB-page
  * kernel takes as its main store the whole region its end lies in, and
- * one over 64 MiB stops it before the banner (S3-43, N70 and N75,
- * 2026-10-26); 10 section 3 */
+ * one over 64 MiB stops it before the banner (the stage-3 emulator
+ * rows, 2026-10-26); 10 section 3 */
 #define AX_K30_MEMCAP	0x04000000UL
 
 /* in the MemHeader copies mems[0..n) (bootinfo.memory[] to be): the fast

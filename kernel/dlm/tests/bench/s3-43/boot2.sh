@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot2.sh -- S3-43's loader rows (docs/spec/10-boot-loader.md §9):
+# boot2.sh -- the loader rows of the stage-3 emulator rows (10 §9):
 #   l14.spec    for `kbootset commit --spec` on the box: the module kernel
 #               with the manifest's arena capacity other than the identity
 #               record's; boot2 refuses it with L14

@@ -1,16 +1,15 @@
 Subject: development load as C3-4 says; manifest paths under /stand/gen
 
-From the stage-3 audit (amix-dlm docs/plan/stage-3-audit-2026-10-26.md
-section 1.1, 1.6).  lf_gate honoured development load before it looked
-for a manifest, so development load replaced a missing arena directory
-(C3-4 section 5 forbids it), and it took a member's path= and sha256= even
-under development load, so the SHA-256 rule was not lifted (C3-4 section
-3 lifts it).  Now no manifest refuses first; a member under development
-load loads from its path= unchecked, and says so.  A member whose path=
-is not /stand/gen/<the booted generation>/mod/<name> is refused (C3-5
-section 3).  The harness's manifests use those paths, and it boots an empty
-generation first, since development load needs a manifest; four new
-checks.
+From the audit of the stage-3 core (2026-10-26).  lf_gate honoured
+development load before it looked for a manifest, so development load
+replaced a missing arena directory (C3-4 section 5 forbids it), and it
+took a member's path= and sha256= even under development load, so the
+SHA-256 rule was not lifted (C3-4 section 3 lifts it).  Now no manifest
+refuses first; a member under development load loads from its path=
+unchecked, and says so.  A member whose path= is not /stand/gen/<the
+booted generation>/mod/<name> is refused (C3-5 section 3).  The
+harness's manifests use those paths, and it boots an empty generation
+first, since development load needs a manifest; four new checks.
 
 --- a/dlm_arena.c
 +++ b/dlm_arena.c

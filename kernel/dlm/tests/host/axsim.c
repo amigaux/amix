@@ -8,7 +8,7 @@
  * The rules are loader/common's own (store.c, select.c); the menu is not
  * simulated (no input), and the kernel is assumed to start but never to
  * mark anything good, as a static 1.0 kernel does.  Used to state the
- * expected outcome of the M-LD4 lifecycle rows (docs/plan/stage-1.md S1-22).
+ * expected outcome of the M-LD4 lifecycle rows (tests/bench/README.md).
  *
  * usage: axsim IMAGE OFFSET BOOTS     the image is written in place
  *

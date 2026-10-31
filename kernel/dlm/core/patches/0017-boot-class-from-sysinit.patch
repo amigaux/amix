@@ -1,6 +1,6 @@
 Subject: boot-class modules from the first sysinit entry (U15)
 
-S3-B5 (2026-10-26): the first boot-class load panicked in process 0.
+On 2026-10-26 the first boot-class load panicked in process 0.
 rth1_mountroot calls dlm_marc_post with interrupts masked (psw 0x2700),
 and lf_hashload's vn_rdwr faulted (bus error) on a page the file system
 maps for the read, which cannot be brought in there.  That answers U15
@@ -40,7 +40,7 @@ where the modules load.  The harness checks MOD_C_POST and its once.
 - * The kernel calls dlm_marc_post() once, in process 0 after vfs_mountroot
 - * returns (or from the first sysinit entry, if loading files in process 0
 - * proves unsafe, U15).  It reads the manifest the loader booted:
-+ * U15 answered it (S3-B5, 2026-10-26): reading a module file in process 0
++ * U15 answered it (2026-10-26): reading a module file in process 0
 + * after vfs_mountroot, where the kernel's hook dlm_marc_post() is called,
 + * faults: the hook runs with interrupts masked (psw 0x2700), and a page
 + * the file system maps for the read cannot be brought in there.  So the

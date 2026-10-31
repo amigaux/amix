@@ -1,12 +1,13 @@
 /*
- * rprobe.c -- S4-71's root-context probe (contract C4-2 section 2): a
+ * rprobe.c -- the root-context probe (contract C4-2 section 2): a
  * root-class module whose _load, in marc_root, calls each DDI name C4-2
  * lets a root-class _load call although ddi.md marks it proc, and after
  * each one reads the status register's level and lbolt.  The row passes
  * when every call returns, the level stays 7 and lbolt does not move.
  * It returns ENXIO, so nothing stays linked.
  *
- * Built with the ABI kit (Makefile beside it); tests/bench/README.md, S4-71.
+ * Built with the ABI kit (Makefile beside it); tests/bench/README.md,
+ * the root context.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -108,4 +109,4 @@ rprobe_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(rprobe, rprobe_load, rprobe_unload, "S4-71 root-context probe");
+MOD_MISC_WRAPPER(rprobe, rprobe_load, rprobe_unload, "root-context probe");

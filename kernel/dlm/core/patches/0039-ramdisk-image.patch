@@ -40,7 +40,7 @@ name of minor 1.  The state harness checks both answers.
 +extern int ramdisk_image();		/* (&paddr, &size): C4-3 section 4 */
  extern void dlm_defer_run();		/* the deferred calls, at MOD_C_POST */
  extern int dlm_halt();
- extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_load_mem();		/* a root module from the arena */		/* the halt pass, from mdboot */
 --- a/test/state.c
 +++ b/test/state.c
 @@ -718,6 +718,21 @@
@@ -62,7 +62,7 @@ name of minor 1.  The state harness checks both answers.
 +	dlm_rd_addr = dlm_rd_size = 0;
 +}
 +
- /* ---- root_defer (C4-2 section 3, S4-05) ---- */
+ /* ---- root_defer (C4-2 section 3) ---- */
  static int rd_calls, rd_lastarg, rd_e[12], rd_n;
  
 @@ -1895,6 +1910,7 @@

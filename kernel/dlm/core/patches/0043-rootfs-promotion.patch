@@ -1,7 +1,7 @@
 Subject: promotion: the rootfs's boot-class module links from the arena
 
-Contract C4-4 section 1.3 (the orchestrator's decision on amix-cdfs's
-plan): cdfs is boot class on a disk-rooted box and root on the CD
+Contract C4-4 section 1.3 (from amix-cdfs's
+module plan): cdfs is boot class on a disk-rooted box and root on the CD
 medium, one object.  kbootset composes it as a root record on a
 generation whose rootfs it is; the core links an arena module of boot
 class only when its fs= is the manifest's rootfs, and refuses any other
@@ -68,7 +68,7 @@ as before.  The state harness checks both.
 +# the manifest's rootfs
 +mod('pfs', md=['name=pfs', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=boot',
 +               'match=always', 'fs=pfs'])
- # marc_root (S4-04): rp1 links; rp2's bytes are damaged; rp3 is not in
+ # marc_root: rp1 links; rp2's bytes are damaged; rp3 is not in
  # the manifest; rp5's _load finds no board (ENXIO); rp6 is a safe-mode
  # member and rp7 is not
 --- a/test/state.c

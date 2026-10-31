@@ -1,6 +1,6 @@
 Subject: mkmod for the ABI kit: MKMOD_CC, driver and STREAMS types
 
-The ABI kit (amix-dlm abi/, S3-10) runs mkmod from its own directory,
+The ABI kit (amix-dlm abi/) runs mkmod from its own directory,
 with the compiler and flags its make fragment sets in MKMOD_CC, so no
 toolchain env.sh is needed beside it; without MKMOD_CC, mkmod sources it
 as before.  $modtype accepts drv and str as well as misc (the wrapper

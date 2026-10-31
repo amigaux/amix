@@ -3,7 +3,7 @@
 # time) on the Amiga: copies axtime, the two floppy-class static kernels and
 # their raw-deflate streams (as mkstore stores them) into <outdir>, and
 # writes EXPECTED with the commands to run and the CRC-32 and SHA-256 that
-# axtime must print.  See docs/plan/stage-1.md S1-23.
+# axtime must print.  See docs/spec/90-measurements.md, M-LD7.
 #
 # usage: m-ld7.sh <workspace> <outdir>
 #   <workspace>  the Amix project workspace (holds amix-kerntools/)

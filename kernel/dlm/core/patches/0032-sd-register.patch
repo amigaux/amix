@@ -1,6 +1,6 @@
 Subject: sd_register: disk controller modules register before sd's first open
 
-30 section 2 patch 8 (S4-03), contract C4-1 section 3.  A root-class
+30 section 2 patch 8, contract C4-1 section 3.  A root-class
 disk controller registers each board from its _load:
 sd_register(queuefn, c, base, name, rank).  The entry waits in the
 core's table of four until sd's first open takes it (dlm_sd_close) and
@@ -165,7 +165,7 @@ removes it.  The state harness covers each case.
 +extern int dlm_nsdreg, dlm_sdclosed;
 +extern int sd_register(), dlm_sd_close();
 +extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
- extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
+ extern int dlm_halt();		/* the halt pass, from mdboot */
  extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
  #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
 --- a/dlm_ld.c
@@ -191,7 +191,7 @@ removes it.  The state harness covers each case.
  mod('hl4')
  
  
-+# sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
++# sd_register (C4-1): sr1 z3660, sr2 zorro (registers another
 +# class), sr3 ide (its _load fails after registering), sr4 zorro (fills
 +# the table), srbad an unknown class
 +mod('sr1', extra=['rank=z3660'])
@@ -210,7 +210,7 @@ removes it.  The state harness covers each case.
  	    "no-sleep: the unload returns every byte");
  }
  
-+/* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
++/* ---- sd_register (C4-1, 30 section 2 patch 8) ---- */
 +static int sr_e[8], sr_n;
 +
 +/* register board k of the calling module, its own _load as the queue entry */
@@ -300,7 +300,7 @@ removes it.  The state harness covers each case.
 +	moduload(i1);
 +}
 +
- /* ---- block rows (30 section 2 patch 7, S4-06) ---- */
+ /* ---- block rows (30 section 2 patch 7) ---- */
  void
  blk_tests()
 @@ -1525,6 +1615,7 @@

@@ -3,7 +3,7 @@
 # (C2-4 section 9, spec 40 section 3.3).
 #
 # Installed by the kbootset package as /etc/init.d/kbmarkgood, linked as
-# /etc/rc2.d/S99zkbootset, the last run-level-2 script (band S99z*, P-36).
+# /etc/rc2.d/S99zkbootset, the last run-level-2 script (band S99z*).
 # A box that panics or hangs in rc never gets here, and the loader's
 # try-once rule boots the previous good generation instead.
 #

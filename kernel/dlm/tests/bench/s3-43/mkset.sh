@@ -1,6 +1,6 @@
 #!/bin/sh
-# mkset.sh -- S3-43's module set, built with the ABI kit of one line
-# (docs/plan/stage-3.md S3-43; tests/bench/README.md, S3-43):
+# mkset.sh -- the stage-3 emulator rows' module set, built with the ABI
+# kit of one line (tests/bench/README.md):
 #   members, through the kit's make fragment and composed into the test
 #   generation by kbootset (stand-in packages, s3-modpkg.sh):
 #     monsw, z3660rtg  stand-ins on majors 52 and 49 (depend=monsw; monsw
@@ -100,7 +100,7 @@ open(sys.argv[1], 'wb').write(d)" "$OUT/s43/$1"
 }
 WRAP='#include "sys/types.h"\n#include "sys/moddefs.h"\nextern int printf();\nstatic int l() { printf("%%s loaded\\n", "NAME"); return 0; }\nstatic int u() { return 0; }\n'
 M0='$modtype misc\n$class demand\n$cpu '"$DEFCPU"'\n$unload allowed\n'
-w() { printf '%s' "$WRAP" | sed "s/NAME/$1/"; printf 'MOD_MISC_WRAPPER(%s, l, u, "S3-43 %s");\n' "$1" "$2"; }
+w() { printf '%s' "$WRAP" | sed "s/NAME/$1/"; printf 'MOD_MISC_WRAPPER(%s, l, u, "t43 %s");\n' "$1" "$2"; }
 
 other=$([ $LINE = k30 ] && echo k46 || echo k30)
 KABI_OVERRIDE=$other.1.0 bad kfam "$(w kfam 'another family')" "$M0"'kfam\tkfam\n'
@@ -124,12 +124,12 @@ bad bv1 "$(w bv1 '.moddata version 1')" "$M0"'bv1\tbv1\n'
 edit bv1 <<'PY'
 i = d.index(b'MD2\0'); d[i + 2] = ord('1')
 PY
-bad bsym "$(printf '#include "sys/types.h"\n#include "sys/moddefs.h"\nextern int cdevsw[];\nstatic int l() { return cdevsw[0]; }\nstatic int u() { return 0; }\nMOD_MISC_WRAPPER(bsym, l, u, "S3-43 an off-list kernel name");\n')" \
+bad bsym "$(printf '#include "sys/types.h"\n#include "sys/moddefs.h"\nextern int cdevsw[];\nstatic int l() { return cdevsw[0]; }\nstatic int u() { return 0; }\nMOD_MISC_WRAPPER(bsym, l, u, "t43 an off-list kernel name");\n')" \
 	"$M0"'bsym\tbsym\n' cdevsw
 # a .moddata name over 14 (modfix stops one at 14): built as the 14-character
 # blongname12345, saved as blong, its name= lengthened by one character and
 # its desc= shortened by one, so the section keeps its size
-bad blongname12345 "$(w blongname12345 'a name over 14')" "$M0"'$desc S3-43 a name over 14\nblongname12345\tblongname12345\n' '' blong
+bad blongname12345 "$(w blongname12345 'a name over 14')" "$M0"'$desc t43 a name over 14\nblongname12345\tblongname12345\n' '' blong
 edit blong <<'PY'
 for k in range(shnum):
     if sh(k, 4) == 13:

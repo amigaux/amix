@@ -94,9 +94,9 @@ changenum(void)
  * is read again when its change counter moved, a key asks, or every 4 s,
  * always after CMD_CLEAR; the motor stays off while waiting.  The 4 s read
  * is for a counter that never moves: Kickstart 3.2.1's trackdisk under
- * amiberry did not count the rig's swap, and the loop waited for ever
- * (E958/E959, 2026-10-27).  A device without a change counter is re-read
- * every half second.  Each verdict is said once (N25b/N26b, 2026-10-25).
+ * amiberry did not count the emulator's disk swap, and the loop waited for
+ * ever (2026-10-27).  A device without a change counter is re-read
+ * every half second.  Each verdict is said once (2026-10-25).
  */
 static int
 want_volume(ax_u32 vol)

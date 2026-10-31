@@ -1,7 +1,7 @@
 Subject: harness cases for branches the stage-3 audit found untested
 
-Test only: no kernel source changes (amix-dlm docs/plan/stage-3-audit-
-2026-10-26.md section 2.5).  The interrupt chains' error returns (ENXIO
+Test only: no kernel source changes (the audit of the stage-3 core,
+2026-10-26).  The interrupt chains' error returns (ENXIO
 before the walk is armed, ECONFIG on a full chain, EINVAL at a bad level)
 and the order of stock and module handlers on both levels; marc_post
 loading a boot member's dependency first; modstat reporting a pinned

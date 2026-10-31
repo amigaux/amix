@@ -2,5 +2,5 @@ $modtype misc
 $class boot
 $match always
 $unload allowed
-$desc S3-43 relocation oracle
+$desc t43 relocation oracle
 t43rel	t43rel

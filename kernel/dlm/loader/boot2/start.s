@@ -1,7 +1,7 @@
 # start.s -- boot2's first bytes: a header, then the start-up stub that
 # moves boot2 into fast memory when the machine has any, relocates it for
 # where it then lies, clears its bss and calls C.
-# (docs/spec/10-boot-loader.md §3.2; docs/plan/stage-1.md S1-11.)
+# (docs/spec/10-boot-loader.md §3.2.)
 #
 # boot1 loads boot2 into chip memory unless the partition's DosEnvec allows
 # other memory (10 §3.1).  Run from chip, its code competes with the display

@@ -1,7 +1,7 @@
 # the core tier for the k46 line (C3-2 section 4): what the carved ufs and
 # s5 objects (the stock ones as the port's fsobj-patch.py patches them for
 # 4 KiB pages) import outside DDI, and the COMMONs they share with the rest
-# of the stock tree (tools/carve.py corelist, S5-04).  Only a module with
+# of the stock tree (tools/carve.py corelist).  Only a module with
 # tier=core and the kernel's build may resolve these.  Sorted by name.
 as_iolock func 2
 as_map_reliably func 2

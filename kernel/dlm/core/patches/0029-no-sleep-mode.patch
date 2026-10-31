@@ -1,6 +1,6 @@
 Subject: no-sleep mode for the root pass; every load-path allocation checked
 
-30 section 2 patch 3 (S4-02).  The root pass runs at level 7 with the
+30 section 2 patch 3.  The root pass runs at level 7 with the
 clock stopped (U1), where nothing may sleep.  dlm_nosleep, which the root
 pass sets, makes dlm_zalloc ask KM_NOSLEEP and refuse a request over
 1 MiB.  Every allocation on a load path checks for 0, and the load fails
@@ -359,7 +359,7 @@ is left behind.
  	dlm_devload = 1;
  }
  
-+/* ---- no-sleep mode (30 section 2 patch 3, S4-02) ---- */
++/* ---- no-sleep mode (30 section 2 patch 3) ---- */
 +extern long host_kblocks, host_km_sleep, host_km_nosleep;
 +extern int host_nomem_after;
 +

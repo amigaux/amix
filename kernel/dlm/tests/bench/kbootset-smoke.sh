@@ -1,6 +1,6 @@
 #!/bin/sh
 # kbootset-smoke.sh -- the box build of kbootset on an Amix box, against a
-# store in an image file (docs/plan/stage-2.md S2-07).  Bourne shell, for
+# store in an image file.  Bourne shell, for
 # the box's /bin/sh.  Run in a directory holding kbootset (build/box/),
 # boot1.img, boot2.bin and unix (any kernel-sized file).
 #

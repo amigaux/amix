@@ -1,5 +1,5 @@
 /*
- * t44fill.c -- S3-44: fills the level-6 chain.  Its _load attaches one
+ * t44fill.c -- M-INT1: fills the level-6 chain.  Its _load attaches one
  * declining handler per slot until intr_attach refuses (ECONFIG, 168, on
  * a full chain), and keeps them: a driver that attaches next falls back
  * to polled.  Its _unload detaches them all.
@@ -49,4 +49,4 @@ t44fill_unload()
 	return 0;
 }
 
-MOD_MISC_WRAPPER(t44fill, t44fill_load, t44fill_unload, "S3-44 full level-6 chain");
+MOD_MISC_WRAPPER(t44fill, t44fill_load, t44fill_unload, "t44 full level-6 chain");

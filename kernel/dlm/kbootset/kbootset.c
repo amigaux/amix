@@ -3,11 +3,11 @@
  * (docs/spec/40-generations-and-composer.md §3): the commands over the
  * core in ks.c, on a disk image (host media builds) or a raw boot slice
  * (the box).  The same source builds on the host and, statically, for the
- * box (docs/plan/stage-2.md S2-07).
+ * box.
  *
  * usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND
  *
- * Without --image or --dev, kbootset works on the running box (S2-06): it
+ * Without --image or --dev, kbootset works on the running box (kbox.c): it
  * reads /dev/kinfo (C2-1), finds the boot store (40 §5, gates 8 and 9)
  * and records it in ROOT/etc/default/bootset (C2-4 §6); the box facts come
  * from the options, then kinfo, then bootset; the journal is
@@ -23,7 +23,7 @@
  *                          installed under ROOT (default /) into
  *                          ROOT/stand/gen/<id>/; every gate; the options
  *                          name the box's facts on a host build (kinfo on
- *                          the box, S2-06)
+ *                          the box)
  *   commit                 commit the built generation (the gates again);
  *                          nothing when it equals the default generation
  *   commit --again         commit it even then (a repair; the bench rows)
@@ -53,7 +53,7 @@
  *   collect
  *   loader-install BOOT2 [--version N] [--boot1 FILE]
  *
- * Media (host build only, S2-04): the pristine generation of a new medium
+ * Media (host build only): the pristine generation of a new medium
  * from the packages installed under ROOT, every gate run against the
  * medium's facts and the loader it carries:
  *   media --disk IMG --offset N --size S --boot1 F --boot2 F [--version N] [--force] FACTS
@@ -68,7 +68,7 @@
  * records it for gate 7; it defaults to this kbootset's own loader's
  * (AX_LOADER_VERSION).
  *
- * Power-cut rows (docs/plan/stage-2.md S2-08): commit prints
+ * Power-cut rows (M-GEN3): commit prints
  * "kbootset: step N <what>" to stderr before each step of 40 §3.2, and with
  * KBOOTSET_HOLD=N set it flushes, syncs and waits for ever before step N,
  * so the row can cut the power exactly there.

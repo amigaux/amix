@@ -1,6 +1,6 @@
 Subject: the arena load path: a root module links where boot2 placed it
 
-30 section 2 patch 2 (S4-01), contract C4-4 version 2 section 4.
+30 section 2 patch 2, contract C4-4 version 2 section 4.
 dlm_load_mem(name, p, len, bss) loads a root-class module from its file
 bytes in the arena: no path, no file read, no hash (the root pass checks
 the CRC-32 against the directory).  Its allocated PROGBITS sections are
@@ -200,9 +200,9 @@ relocated against both, and each refusal.
  extern int dlm_nsdreg, dlm_sdclosed;
  extern int sd_register(), dlm_sd_close();
  extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
--extern int dlm_halt();		/* the halt pass, from mdboot (S4-07) */
+-extern int dlm_halt();		/* the halt pass, from mdboot */
 +extern int dlm_halt();
-+extern int dlm_load_mem();		/* a root module from the arena (S4-01) */		/* the halt pass, from mdboot (S4-07) */
++extern int dlm_load_mem();		/* a root module from the arena */		/* the halt pass, from mdboot */
  extern int dlm_nosleep;		/* no-sleep mode: the root pass (30 section 3) */
  #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
  extern void dlm_free();
@@ -262,7 +262,7 @@ relocated against both, and each refusal.
  mod('hl4')
  
  
-+# the arena load path (S4-01): ar1 and ar1b are root class with .bss, a
++# the arena load path: ar1 and ar1b are root class with .bss, a
 +# common, and data relocated against both; ar2 needs ar9, never linked
 +def armod(p, deps=()):
 +    md = ['name=' + p, 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root',
@@ -280,7 +280,7 @@ relocated against both, and each refusal.
 +mod('ardm')                         # demand class, offered from the arena
 +
 +
- # sd_register (C4-1, S4-03): sr1 z3660, sr2 zorro (registers another
+ # sd_register (C4-1): sr1 z3660, sr2 zorro (registers another
  # class), sr3 ide (its _load fails after registering), sr4 zorro (fills
  # the table), srbad an unknown class
 --- a/test/state.c
@@ -289,7 +289,7 @@ relocated against both, and each refusal.
  	    "no-sleep: the unload returns every byte");
  }
  
-+/* ---- the arena load path (30 section 2 patch 2, S4-01) ---- */
++/* ---- the arena load path (30 section 2 patch 2) ---- */
 +
 +/* a module's file as boot2 places it: 16-aligned, then a zeroed tail */
 +static char *
@@ -349,7 +349,7 @@ relocated against both, and each refusal.
 +	    "arena: a module that is not root class -> ECONFIG");
 +}
 +
- /* ---- sd_register (C4-1, 30 section 2 patch 8, S4-03) ---- */
+ /* ---- sd_register (C4-1, 30 section 2 patch 8) ---- */
  static int sr_e[8], sr_n;
  
 @@ -1620,6 +1680,7 @@

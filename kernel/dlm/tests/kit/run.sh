@@ -1,12 +1,12 @@
 #!/bin/sh
-# run.sh -- the ABI kit (S3-10): build the kit for both lines, build the
+# run.sh -- the ABI kit: build the kit for both lines, build the
 # sample module with each through the make fragment alone, and show that
 # the checker refuses what C3-1 refuses.  With the module core's host
 # loader (`make core` builds it) and the stage-3 module kernels at hand,
 # the sample also loads against each kernel's own symbol block.
 #
 # usage: run.sh [KD060-Z-module-kernel K030-U-module-kernel.etrel]
-#   (the S3-20/S3-21 cuts; not part of amix: without them that load is
+#   (the stage-3 cuts; not part of amix: without them that load is
 #   skipped)
 # Environment: B (build directory); GCA, G14 (gcc14-cross-amix's build
 # directory) and PORT, required, as tools/mkkit.sh.
@@ -341,8 +341,8 @@ if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" 
 else
 	fail "the minor-3 module"; cat "$d"/make*.log
 fi
-# S4-71's root-context probe builds and checks on both lines; on k46 it
-# also calls dev_kvmap (tests/bench/README.md, S4-71)
+# the root-context probe builds and checks on both lines; on k46 it
+# also calls dev_kvmap (tests/bench/README.md, the root context)
 d=$W/rprobe
 mkdir -p "$d"
 cp "$R/tests/bench/s4-71/rprobe.c" "$R/tests/bench/s4-71/Master" "$R/tests/bench/s4-71/Makefile" "$d/"
@@ -351,9 +351,9 @@ if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" 
    grep -q "modcheck: rprobe: ok (k46.1.2, root," "$d/make46.log" &&
    m68k-cbm-sysv4-nm "$d/build/k46/src/Driver.o" | grep -q " U dev_kvmap$" &&
    ! m68k-cbm-sysv4-nm "$d/build/k30/src/Driver.o" | grep -q dev_kvmap; then
-	pass "the S4-71 probe builds and checks on both lines (dev_kvmap on k46 only)"
+	pass "the root-context probe builds and checks on both lines (dev_kvmap on k46 only)"
 else
-	fail "the S4-71 probe"; cat "$d"/make*.log
+	fail "the root-context probe"; cat "$d"/make*.log
 fi
 if (cd "$d" && make KIT="$B/kit/k46" MODOUT=. clean > clean.log 2>&1); then
 	fail "clean with MODOUT=. was not refused"

@@ -5,7 +5,7 @@ kernel's /dev/kmem habit (adb, a patched address) cannot reach them.
 modadmin -k looks a name up with getksym, which searches the kernel's
 exported names and then each loaded module's own globals; -a gives the
 symbol at an address; -p reads longs at a symbol through /dev/kmem and -w
-writes one (S3-11, amix-dlm docs/plan/stage-3.md).
+writes one.
 
 --- a/modadmin.c
 +++ b/modadmin.c

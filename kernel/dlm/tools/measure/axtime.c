@@ -1,8 +1,8 @@
 /*
  * axtime.c -- M-LD7 and M-LD8 on the Amiga itself: how long the loader's
  * CRC-32, a SHA-256 and the raw-deflate decoder take over a kernel-sized
- * file on this CPU (docs/spec/90-measurements.md; docs/plan/stage-1.md
- * S1-23).  An AmigaDOS program (cross-built with gcc-cross-amix, written as
+ * file on this CPU (docs/spec/90-measurements.md, M-LD7 and
+ * M-LD8).  An AmigaDOS program (cross-built with gcc-cross-amix, written as
  * a load file by b2link -h), run from a shell under AmigaOS: the same C the
  * loader runs, timed with the E-clock under Forbid, interrupts on as during
  * a boot.

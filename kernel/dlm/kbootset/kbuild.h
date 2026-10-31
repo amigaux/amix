@@ -26,12 +26,12 @@ struct kb_facts {
 	char swap[128];		/* the swap record, or "": the default generation's */
 };
 
-/* the Z3660 as one controller (C4-1 §5.1, S5-15): a match key of its
+/* the Z3660 as one controller (C4-1 §5.1): a match key of its
  * window, mobo:z3660-window, becomes zorro:144b:01, in place; an sd root
  * or swap record on a Z3660 card (id 144b0100 at any base, id 4, or id 0
  * at the window 0x10000000) becomes id=144b0100 base=00000000, the rest
  * kept, into out (128 bytes).  A motherboard controller's record (C4-1
- * §5.2, S5-46): with an id 1-3 it drops a mobo flag, which boot2 refuses;
+ * §5.2): with an id 1-3 it drops a mobo flag, which boot2 refuses;
  * an old mobo record (id 0) on the controller whose key is key
  * (mobo:a3000-wd, mobo:gayle, mobo:a4000t-710, or the Z3660's
  * zorro:144b:01) takes that controller's id, when key is not "" (the
@@ -70,7 +70,7 @@ int kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 cr
  * (C2-4 §3: a repair, or a row that needs the generation) */
 int kb_commit(struct ks *k, const char *root, ax_u32 *id, int again);
 
-/* a new medium's pristine generation (host media builds, S2-04): every
+/* a new medium's pristine generation (host media builds): every
  * gate, against the loader version the medium carries, then the
  * generation as a mkstore spec in out (paths under root; members deflated
  * when deflate is set; ramdisk, if given, as its RAM disk; the installed

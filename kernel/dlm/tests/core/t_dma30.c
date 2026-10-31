@@ -177,7 +177,7 @@ main(void)
 	}
 
 	/* no memory a bus master reaches (C4-5 section 5.4; the A4000T in 030
-	 * mode, M-S474b): the kernel's region lies above the reach and no
+	 * mode): the kernel's region lies above the reach and no
 	 * other region below it, so neither pool nor heap: DMA is off */
 	memset(bootinfo, 0, sizeof bootinfo);
 	mem(0, 0x0003, RAM, RAM + 0x10000);

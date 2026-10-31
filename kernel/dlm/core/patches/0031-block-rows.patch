@@ -1,6 +1,6 @@
 Subject: block rows: a pinned driver's bdevsw rows from its mod_drv_data
 
-30 section 2 patch 7 (S4-06).  The core refused any driver with
+30 section 2 patch 7.  The core refused any driver with
 drv_bcount; the ramdisk (block major 20) needs a block row.  A driver
 may now have consecutive block majors, each registered to it (b: in the
 registry), with or without character rows.  The block switch has no
@@ -42,7 +42,7 @@ ABI name: the stage-4 kabi minor, k46.1.1 / k30.1.1.
  #define	cfn(cp)	((int (**)())&(cp)->d_open)
  
 +/*
-+ * Block rows (30 section 2 patch 7, S4-06).  The block switch has no
++ * Block rows (30 section 2 patch 7).  The block switch has no
 + * first-open trampoline, so a block driver's row is filled when the
 + * module links, and only a pinned module may have one: the row then
 + * stays until the kernel halts.  A failed load puts the row back.
@@ -304,7 +304,7 @@ ABI name: the stage-4 kabi minor, k46.1.1 / k30.1.1.
  drvmod('swd', 66)                   # the backstop after a failed linkage
  
  
-+# block drivers (S4-06): bd1 a pinned block-only driver on b:24; bdun is
++# block drivers: bd1 a pinned block-only driver on b:24; bdun is
 +# unpinned; bdreg's b:22 is registered to no one; bdused's b:23 is in use;
 +# bdcf has a character row (c:59) that links, then the used block row
 +def blkmod(p, bmajor, cmajor=0, ccount=0, pinned=True):
@@ -336,7 +336,7 @@ ABI name: the stage-4 kabi minor, k46.1.1 / k30.1.1.
  	    "no-sleep: the unload returns every byte");
  }
  
-+/* ---- block rows (30 section 2 patch 7, S4-06) ---- */
++/* ---- block rows (30 section 2 patch 7) ---- */
 +void
 +blk_tests()
 +{
@@ -363,7 +363,7 @@ ABI name: the stage-4 kabi minor, k46.1.1 / k30.1.1.
 +	    "bdev: a character row that links, then a block row that cannot: both as before");
 +}
 +
- /* ---- the halt pass (30 section 2 patch 11, S4-07) ---- */
+ /* ---- the halt pass (30 section 2 patch 11) ---- */
  extern int dlm_halted;
  static char halt_order[16];
 @@ -1060,7 +1087,7 @@
