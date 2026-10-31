@@ -32,6 +32,11 @@ and stopped by
 .PP
 At start it first asks again for the address it held last, if that lease
 has not ended; otherwise it looks for a server.
+Before it uses an address a server gives it,
+.B dhcpc
+asks on the network whether another station has it (two ARP probes, a
+second apart); if one answers, it declines the address to the server and
+asks again ten seconds later.
 Once the lease is bound,
 .B dhcpc
 renews it with the same server halfway through, and with any server near

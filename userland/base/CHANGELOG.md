@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-31 — dhcpc checks an address with ARP before binding (88954e7)
+
+dhcpc S3: two RFC 5227 probes after the DHCPACK, from INIT or INIT-REBOOT; when another station claims or probes the
+address it sends DHCPDECLINE (option 50 and the server id) and starts again after 10 s. The check is skipped and logged
+if the ARP stream can't open. tapdhcpd gains a conflict mode. dhcp-client 1.0-3. E1 PASS, conflict and normal rounds.
+
 ## 2026-10-31 — the syslog package; display.d(4) native best effort (54167d9, bcfeda3)
 
 The syslog package (syslog 1.0-1, set base): init.d/syslogd (S70/K50) on rc.subr, on unless rc.conf says syslogd=no;

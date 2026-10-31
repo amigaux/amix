@@ -72,6 +72,7 @@ extern int optind;
 #define HOOKPATH	"PATH=/sbin:/usr/sbin:/usr/bin:/etc"
 
 #define SAP_IP		0x0800
+#define SAP_ARP		0x0806
 #define ACK_SECS	5
 #define BOOTPS		67
 #define BOOTPC		68
@@ -81,6 +82,7 @@ extern int optind;
 #define DHCPDISCOVER	1
 #define DHCPOFFER	2
 #define DHCPREQUEST	3
+#define DHCPDECLINE	4
 #define DHCPACK		5
 #define DHCPNAK		6
 #define DHCPRELEASE	7
@@ -347,9 +349,10 @@ int *n;
 	}
 }
 
-/* open, info, attach (Style 2 only), bind 0x0800; the MAC into mac[] */
+/* open, info, attach (Style 2 only), bind sap; the MAC into mac[] */
 static int
-dlopen_if()
+dlopen_if(sap)
+unsigned long sap;
 {
 	int fd, n;
 	union buf u;
@@ -383,7 +386,7 @@ dlopen_if()
 	}
 	memset((char *)&breq, 0, sizeof(breq));
 	breq.dl_primitive = DL_BIND_REQ;
-	breq.dl_sap = SAP_IP;
+	breq.dl_sap = sap;
 	breq.dl_service_mode = DL_CLDLS;
 	if (sendctl(fd, (char *)&breq, sizeof(breq)) < 0 ||
 	    getack(fd, &u, &n) != DL_BIND_ACK) {
@@ -429,7 +432,7 @@ unsigned long ciaddr, requested, sid;
 	put32(p + 236, COOKIE);
 	o = p + 240;
 	*o++ = 53; *o++ = 1; *o++ = type;
-	if (type != DHCPRELEASE) {
+	if (type != DHCPRELEASE && type != DHCPDECLINE) {
 		*o++ = 57; *o++ = 2; put16(o, 576); o += 2;
 	}
 	if (requested) {
@@ -438,7 +441,7 @@ unsigned long ciaddr, requested, sid;
 	if (sid) {
 		*o++ = 54; *o++ = 4; put32(o, sid); o += 4;
 	}
-	if (type != DHCPRELEASE) {
+	if (type != DHCPRELEASE && type != DHCPDECLINE) {
 		*o++ = 55; *o++ = sizeof(prl);
 		memcpy((char *)o, (char *)prl, sizeof(prl)); o += sizeof(prl);
 	}
@@ -618,6 +621,123 @@ struct lease *l;
 	}
 	alarm(0);
 	return 0;
+}
+
+/* --- the ARP check of an acknowledged address (RFC 5227) --------------- */
+
+static char *
+macstr(m)
+unsigned char *m;
+{
+	static char s[20];
+
+	sprintf(s, "%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+	return s;
+}
+
+/*
+ * Is addr in use? Two ARP probes (sender address 0.0.0.0) a second apart,
+ * on a stream of its own bound to 0x0806; an ARP from another station whose
+ * sender address is addr, or that probes for addr too, is a conflict.
+ * 1 in use (the other station's MAC in by), 0 free, -1 not checked.
+ */
+static int
+arpcheck(addr, by)
+unsigned long addr;
+unsigned char *by;
+{
+	int fd, i, flags;
+	union buf c, d;
+	struct strbuf ctl, dat;
+	dl_unitdata_req_t *ud = (dl_unitdata_req_t *)c.c;
+	unsigned char *a;
+	unsigned long spa;
+
+	if ((fd = dlopen_if((unsigned long)SAP_ARP)) < 0)
+		return -1;
+	for (i = 0; i < 2 && !stop; i++) {
+		memset(c.c, 0, sizeof(dl_unitdata_req_t));
+		ud->dl_primitive = DL_UNITDATA_REQ;
+		ud->dl_dest_addr_length = 6;
+		ud->dl_dest_addr_offset = sizeof(dl_unitdata_req_t);
+		memcpy(c.c + sizeof(dl_unitdata_req_t), (char *)bcast, 6);
+		a = (unsigned char *)d.c;
+		/* padded to 60: the A2065 driver's stream refuses a shorter data
+		 * part (its module_info minimum, 64 less the CRC) with ERANGE */
+		memset((char *)a, 0, 60);
+		put16(a, 1);
+		put16(a + 2, SAP_IP);
+		a[4] = 6;
+		a[5] = 4;
+		put16(a + 6, 1);
+		memcpy((char *)a + 8, (char *)mac, 6);
+		put32(a + 24, addr);
+		ctl.maxlen = 0;
+		ctl.len = sizeof(dl_unitdata_req_t) + 6;
+		ctl.buf = c.c;
+		dat.maxlen = 0;
+		dat.len = 60;
+		dat.buf = d.c;
+		if (putmsg(fd, &ctl, &dat, 0) < 0) {
+			say("%s: ARP probe not sent (errno %d)", node, (char *)errno, 0, 0);
+			close(fd);
+			return -1;
+		}
+		arm(1);
+		while (!stop && !timedout) {
+			ctl.maxlen = sizeof(c.c);
+			ctl.len = 0;
+			ctl.buf = c.c;
+			dat.maxlen = sizeof(d.c);
+			dat.len = 0;
+			dat.buf = d.c;
+			flags = 0;
+			if (getmsg(fd, &ctl, &dat, &flags) < 0)
+				break;
+			if (ctl.len < (int)sizeof(long) || *(long *)c.c != DL_UNITDATA_IND ||
+			    dat.len < 28)
+				continue;
+			a = (unsigned char *)d.c;
+			if (get16(a + 2) != SAP_IP || memcmp((char *)a + 8, (char *)mac, 6) == 0)
+				continue;
+			spa = get32(a + 14);
+			if (spa == addr || (get16(a + 6) == 1 && spa == 0 && get32(a + 24) == addr)) {
+				alarm(0);
+				memcpy((char *)by, (char *)a + 8, 6);
+				close(fd);
+				return 1;
+			}
+		}
+		alarm(0);
+	}
+	close(fd);
+	return 0;
+}
+
+/*
+ * The check of a lease just acknowledged on fd: 1 when its address is in
+ * use, so it was declined (DHCPDECLINE) and the caller starts again after
+ * the 10 seconds RFC 2131 asks for.
+ */
+static int
+declined(fd, l)
+int fd;
+struct lease *l;
+{
+	unsigned char by[6];
+
+	switch (arpcheck(l->addr, by)) {
+	case -1:
+		say("%s: not checked with ARP (no ARP stream)", ipstr(l->addr), 0, 0, 0);
+		return 0;
+	case 0:
+		return 0;
+	}
+	say("%s is in use by %s; declined", ipstr(l->addr), macstr(by), 0, 0);
+	xid = rand() ^ ((unsigned long)rand() << 16);
+	dlsend(fd, DHCPDECLINE, l->addr, l->server);
+	sleepuntil(time((long *)0) + 10);
+	return 1;
 }
 
 /* --- the UDP socket of a bound lease ----------------------------------- */
@@ -866,7 +986,7 @@ unsigned long last;
 	int fd, try, type;
 	struct lease offer;
 
-	if ((fd = dlopen_if()) < 0)
+	if ((fd = dlopen_if((unsigned long)SAP_IP)) < 0)
 		return -1;
 	if (last) {
 		for (try = 0; try < 2 && !stop; try++) {
@@ -875,6 +995,8 @@ unsigned long last;
 			type = dlrecv(fd, DHCPACK, backoff(try), l);
 			if (type == DHCPACK) {
 				say("INIT-REBOOT: %s acknowledged by %s", ipstr(l->addr), ipstr(l->server), 0, 0);
+				if (declined(fd, l))
+					break;
 				close(fd);
 				return 0;
 			}
@@ -897,6 +1019,8 @@ unsigned long last;
 		if (type == DHCPACK) {
 			if (!l->server)
 				l->server = offer.server;
+			if (declined(fd, l))
+				continue;
 			say("bound %s from %s", ipstr(l->addr), ipstr(l->server), 0, 0);
 			close(fd);
 			return 0;
@@ -1070,7 +1194,7 @@ release()
 		return pid ? 0 : 1;
 	}
 	if (findnode() == 0 && (s = udpopen()) >= 0) {
-		int fd = dlopen_if();	/* only for the MAC */
+		int fd = dlopen_if((unsigned long)SAP_IP);	/* only for the MAC */
 
 		if (fd >= 0)
 			close(fd);

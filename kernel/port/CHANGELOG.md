@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-31 — cuts/build.sh, make dist's kernel-k46 hook (598c4ed)
+
+Rebuilds the port fork's cut of record named in cuts/CURRENT, as the fork has it at port.pin: the fork and paula in
+cache repos, NetBSD syssrc through toolchain/fetch-distfile, toolchain/m68k-gnu-bin first on PATH; in the container
+gcc-cross-amix is fetched as a git repo at its pin for the port's wrapper check. kern46m reads its output by default.
+CURRENT names -52, which needs binutils 2.46; the port's -53 (gcc14 binutils, c 48 random) replaces it (P-38 S2.3).
+
 ## 2026-10-31 — pkg/build.sh passes a recipe's exit 3 through (f9f59db)
 
 kern46m exits 3 with a [MISSING] line naming P-38 S2.3 (the port station) when K46M_SRC is unset or holds no cut; with

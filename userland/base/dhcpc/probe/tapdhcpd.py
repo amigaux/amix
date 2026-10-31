@@ -27,8 +27,10 @@ how "IP answered our unicast ACK with port-unreachable" shows up.
 The file named by --control, read at every DHCP message, changes the
 answers while the client runs (the dhcpc S1 tests): a word on its first line
 of "silent" (answer nothing), "norenew" (ignore a unicast REQUEST from a
-bound client, so it has to rebind) or "nak" (refuse every REQUEST); no file
-or any other word, normal. --dns and --hostname add options 6 and 12.
+bound client, so it has to rebind), "nak" (refuse every REQUEST) or
+"conflict" (answer the client's ARP probe for its address as another
+station, 02:00:de:ad:be:ef, so it has to decline it); no file or any other
+word, normal. The client's ARP probes and its DECLINE are logged. --dns and --hostname add options 6 and 12.
 
 While the file named by --noise-flag exists, it also sends the client 20
 unsolicited ICMP echo replies a second (IP drops them without answering), so
@@ -50,6 +52,7 @@ IFF_TAP = 0x0002
 IFF_NO_PI = 0x1000
 BCAST = b"\xff" * 6
 COOKIE = 0x63825363
+OTHER = bytes.fromhex("0200deadbeef")	# the station that "holds" the address
 NAMES = {1: "DISCOVER", 2: "OFFER", 3: "REQUEST", 4: "DECLINE", 5: "ACK",
          6: "NAK", 7: "RELEASE", 8: "INFORM"}
 
@@ -122,6 +125,15 @@ class Responder:
     def on_arp(self, f):
         op = struct.unpack("!H", f[20:22])[0]
         sha, spa, tpa = f[22:28], f[28:32], f[38:42]
+        if op == 1 and tpa == self.cip and sha == self.cmac:
+            # the client's probe for the address it was given (RFC 5227)
+            self.say("RX ARP probe who-has %s tell %s (%s)" % (ip_s(tpa), ip_s(spa), mac_s(sha)))
+            if self.mode() == "conflict":
+                arp = struct.pack("!HHBBH6s4s6s4s", 1, 0x0800, 6, 4, 2,
+                                  OTHER, self.cip, sha, spa)
+                self.send(sha + OTHER + b"\x08\x06" + arp,
+                          "CONTROL conflict: ARP %s is-at %s" % (ip_s(self.cip), mac_s(OTHER)))
+            return
         if op != 1 or tpa != self.sip:
             return
         self.say("RX ARP who-has %s tell %s (%s)" % (ip_s(tpa), ip_s(spa), mac_s(sha)))
