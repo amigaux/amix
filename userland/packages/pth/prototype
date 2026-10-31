@@ -1,0 +1,34 @@
+#
+# prototype -- GNU Pth 2.0.7 under /opt/amix: static libraries, headers, pages.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  No install scripts.  pth-config, pthread-config,
+# the libtool .la files and pth.m4 are build-host material and are not shipped.
+# Every basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libpth.a 0644 root bin
+f none /opt/amix/lib/libpthread.a 0644 root bin
+d none /opt/amix/include 0755 root sys
+f none /opt/amix/include/pth.h 0644 root bin
+f none /opt/amix/include/pthread.h 0644 root bin
+#
+# man pages (docs/man-pages.md)
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/3 0755 root sys
+f none /opt/amix/man/3/pth 0644 root bin
+f none /opt/amix/man/3/pthread 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/pth 0644 root bin
+#
+# Licence: LGPL 2.1 or later, COPYING.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/pth 0755 root sys
+f none /opt/amix/doc/pth/COPYING 0644 root bin
+f none /opt/amix/doc/pth/NEWS 0644 root bin
+f none /opt/amix/doc/pth/README 0644 root bin
+f none /opt/amix/doc/pth/THANKS 0644 root bin
