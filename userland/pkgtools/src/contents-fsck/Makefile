@@ -37,8 +37,11 @@ CROSS_AS      = m68k-cbm-sysv4-as
 CROSS_LD      = m68k-cbm-sysv4-ld
 CROSS_CFLAGS  = -O
 CROSS_ENV    ?= $(if $(GCA),$(GCA)/env.sh)
-CROSS_SYSROOT = $(HOME)/opt/amix-cross/m68k-cbm-sysv4/sysroot
-CROSS_CRTDIR  = $(CROSS_SYSROOT)/usr/ccs/lib
+# The AMIX sysroot: CROSS_SYSROOT when set, else AMIX_SYSROOT (exported by
+# env.sh, which the build container and the recipe below source), else
+# ~/opt/amix-cross's.  Resolved in the recipe, after env.sh.
+CROSS_SYSROOT ?=
+CROSS_SYSROOT_HOME = $(HOME)/opt/amix-cross/m68k-cbm-sysv4/sysroot
 
 SRC = contents-fsck.c
 
@@ -59,16 +62,18 @@ contents-fsck.amix: $(SRC) tools/asmfix.pl
 	        "to its env.sh" >&2; exit 1; }; \
 	      echo "sourcing $(CROSS_ENV)"; . $(CROSS_ENV); }; \
 	  set -e; \
+	  sr="$(CROSS_SYSROOT)"; sr="$${sr:-$${AMIX_SYSROOT:-$(CROSS_SYSROOT_HOME)}}"; \
+	  crt="$$sr/usr/ccs/lib"; \
 	  $(CROSS_GCCREAL) -S $(CROSS_CFLAGS) \
-		-I$(CROSS_SYSROOT)/usr/include \
+		-I"$$sr/usr/include" \
 		-o contents-fsck.amix.s $(SRC); \
 	  perl tools/asmfix.pl contents-fsck.amix.s; \
 	  $(CROSS_AS) -m68020 -o contents-fsck.amix.o contents-fsck.amix.s; \
 	  $(CROSS_LD) -o $@ \
-		$(CROSS_CRTDIR)/crt1.o $(CROSS_CRTDIR)/crti.o \
+		"$$crt/crt1.o" "$$crt/crti.o" \
 		contents-fsck.amix.o \
-		$(CROSS_CRTDIR)/libc.a \
-		$(CROSS_CRTDIR)/crtn.o )
+		"$$crt/libc.a" \
+		"$$crt/crtn.o" )
 	@rm -f contents-fsck.amix.o contents-fsck.amix.s
 	file $@
 

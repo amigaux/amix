@@ -20,7 +20,7 @@ W="${DIST_REPRO_WORK:-$TOP/tmp/dist-repro}"
 if [ -n "$(git -C "$HERE" status --porcelain -- . 2>/dev/null)" ]; then
 	echo "dist-repro: warning: userland/pkgtools has uncommitted changes; the copy is HEAD's" >&2
 fi
-rm -rf "$W"; mkdir -p "$W/copy"
+rm -rf "${W:?}"; mkdir -p "$W/copy"
 git -C "$TOP" archive HEAD userland/pkgtools | tar -x -C "$W/copy"
 
 echo "== dist A: this checkout"
