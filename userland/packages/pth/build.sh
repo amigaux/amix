@@ -1,8 +1,8 @@
 # build.sh -- GNU Pth hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
-# isoriano's patches are guarded by __amix__; Pth is 1990s C (gnu89)
-EXTRA_CFLAGS="-D__amix__ -std=gnu89 -fno-strict-aliasing"
+# Pth is 1990s C (gnu89)
+EXTRA_CFLAGS="-std=gnu89 -fno-strict-aliasing"
 
 configure_args() {
 	echo --enable-pthread --disable-shared --enable-static \
