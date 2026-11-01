@@ -1,5 +1,6 @@
 /*
  * zlib-test.c -- prove the packaged libz.a actually works, ON THE BOX.
+ * MIT licence: holder and text in /opt/amix/doc/zlib/LICENSE.amix.
  *
  * Shipped in the package (/opt/amix/bin/zlib-test) for the same reason
  * libacompat ships acompat-test: a package that installs files proves the

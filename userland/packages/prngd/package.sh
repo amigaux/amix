@@ -2,8 +2,7 @@
 NAME=prngd
 PKG=prngd
 VERSION=0.9.29
-PKGREV=2   # -2: LICENSE names the tarball's own terms (not BSD-4-Clause alone)
-SOURCE_EPOCH=1793470956   # this version's epoch, kept when only the build scripts change
+PKGREV=3   # -3: gcc14-cross-amix 3446533, every program gains the library-constructor runner
 SUMMARY="prngd 0.9.29 entropy daemon"
 DESC="PRNGD 0.9.29, the pseudo-random number gathering daemon: an EGD-protocol socket (/var/run/egd-pool) for ssh/TLS on a box with no /dev/random, fed by sampling system commands. Always give it a socket argument. Not started by the package: see /opt/amix/etc/init.d/prngd. Installs /opt/amix/sbin/prngd and /opt/amix/bin/prngd-ctl."
 CATEGORY=system
