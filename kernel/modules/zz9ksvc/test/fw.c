@@ -270,7 +270,10 @@ answer(const ZZ9KMailboxWireEntry *rq)
 			complete(rq, fw.alloc_status, 0, 0);
 			return;
 		}
-		if ((arm = place(len, align)) == 0) {
+		if (fw.alloc_at) {
+			arm = fw.alloc_at;
+			fw.alloc_at = 0;
+		} else if ((arm = place(len, align)) == 0) {
 			complete(rq, ZZ9K_STATUS_NO_MEMORY, 0, 0);
 			return;
 		}

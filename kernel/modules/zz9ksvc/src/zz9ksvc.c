@@ -30,7 +30,11 @@
  * mmap(2) maps a buffer by its cookie only: the offset encodes the handle and a generation
  * (so a freed and reused handle does not map the new buffer through an old cookie), and
  * d_mmap returns the page of the buffer's physical range that the board driver vouched for
- * (zb_heapphys) or -1.  ZZSIOC_STATS and ZZSIOC_RESET are root's.
+ * (zb_heapphys) or -1.  A mapping outlives the cookie: the driver is not told of munmap.  So
+ * a buffer d_mmap has given a frame of is never handed back to the runtime while the open
+ * lives: its FREE holds it (ZB_HELD), and d_close, which specfs calls only after the clone's
+ * last mapping is gone, frees it.  After a RESET the runtime may place a new buffer over such
+ * a range; ZZSIOC_ALLOC refuses that one (EAGAIN).  ZZSIOC_STATS and ZZSIOC_RESET are root's.
  *
  * The callout runs at the clock's level; process-context code takes the tables at spl4.
  */
@@ -68,12 +72,15 @@
 #define ZB_LIVE	1	/* allocated and usable */
 #define ZB_QUAR	2	/* a timed-out request refers to it: kept until that completes */
 #define ZB_DEAD	3	/* the runtime was reset: gone on the card; the slot waits for FREE */
+#define ZB_HELD	4	/* freed after it was mapped: kept, unusable, until the open's close */
 
 struct zzs_buf {
 	int		b_state;
 	int		b_gen;		/* 0-7, in the cookie */
 	int		b_busy;		/* requests in flight that refer to it */
 	int		b_tofree;	/* free it when it is released */
+	int		b_mapped;	/* d_mmap has given a frame of it: it may be mapped */
+	int		b_gone;		/* the runtime was reset under it: nothing to free there */
 	unsigned long	b_fwh;		/* the firmware's handle */
 	unsigned long	b_len;		/* bytes, a page multiple */
 	unsigned long	b_phys;		/* where it lies; 0 for a card-only buffer */
@@ -220,7 +227,7 @@ struct zzs_buf *b;
 {
 	struct zzs_req *rq;
 
-	if (b->b_state != ZB_DEAD) {
+	if (b->b_state != ZB_DEAD && !b->b_gone) {
 		if (!up->u_ready || (rq = zzs_req_new(up)) == 0) {
 			b->b_tofree = 1;
 			return;
@@ -237,7 +244,52 @@ struct zzs_buf *b;
 	b->b_state = ZB_FREE;
 	b->b_tofree = 0;
 	b->b_busy = 0;
+	b->b_mapped = 0;
+	b->b_gone = 0;
+	b->b_phys = 0;
 	b->b_gen = (b->b_gen + 1) & 7;
+}
+
+/*
+ * The client gives b up.  While the open lives, a buffer that may be mapped is held: its
+ * pages stay the client's until d_close; anything else is freed on the card now.
+ */
+static void
+zzs_drop(up, op, b)
+struct zzs_unit *up;
+struct zzs_open *op;
+struct zzs_buf *b;
+{
+	if (b->b_mapped && !op->o_closed) {
+		b->b_state = ZB_HELD;
+		b->b_tofree = 0;
+		b->b_gen = (b->b_gen + 1) & 7;
+		return;
+	}
+	zzs_kfree(up, op, b);
+}
+
+/* does phys..phys+len meet a buffer of a live open on unit up that may still be mapped */
+static int
+zzs_mapped_overlap(up, phys, len)
+struct zzs_unit *up;
+unsigned long phys, len;
+{
+	struct zzs_open *op;
+	struct zzs_buf *b;
+	int s, h;
+
+	for (s = 0; s < ZZS_NOPEN; s++) {
+		if ((op = up->u_open[s]) == 0 || op->o_closed)
+			continue;
+		for (h = 0; h < ZZS_NHANDLE; h++) {
+			b = &op->o_buf[h];
+			if (b->b_state != ZB_FREE && b->b_mapped && b->b_phys != 0 &&
+			    b->b_phys < phys + len && phys < b->b_phys + b->b_len)
+				return 1;
+		}
+	}
+	return 0;
 }
 
 /* a request that referred to buffers of op no longer can make the firmware write them */
@@ -260,7 +312,7 @@ struct zzs_req *rq;
 				b->b_tofree = 1;
 		}
 		if (b->b_busy == 0 && b->b_tofree && b->b_state == ZB_LIVE)
-			zzs_kfree(up, rq->q_op, b);
+			zzs_drop(up, rq->q_op, b);
 	}
 	rq->q_nref = 0;
 }
@@ -373,7 +425,7 @@ struct zzs_unit *up;
 				if (up->u_open[s]->o_buf[h].b_tofree &&
 				    up->u_open[s]->o_buf[h].b_busy == 0 &&
 				    up->u_open[s]->o_buf[h].b_state == ZB_LIVE)
-					zzs_kfree(up, up->u_open[s], &up->u_open[s]->o_buf[h]);
+					zzs_drop(up, up->u_open[s], &up->u_open[s]->o_buf[h]);
 	zzs_reap(up);
 }
 
@@ -459,7 +511,11 @@ struct cred *cr;
 	return 0;
 }
 
-/* the last close of a clone: free its buffers, or quarantine those still in use */
+/*
+ * The last close of a clone: free its buffers, or quarantine those still in use.  specfs
+ * calls it only once the clone has no open file and no mapping left (spec_close and
+ * spec_delmap test the common snode's counts), so held buffers are freed here too.
+ */
 /*ARGSUSED*/
 static int
 zzsclose(dev, flag, otyp, cr)
@@ -488,6 +544,10 @@ struct cred *cr;
 	}
 	op->o_nout = 0;
 	for (h = 0; h < ZZS_NHANDLE; h++) {
+		/* a held buffer is a live (or dead) one again: if its FREE cannot be queued now,
+		   the callout retries it as for any other */
+		if (op->o_buf[h].b_state == ZB_HELD)
+			op->o_buf[h].b_state = op->o_buf[h].b_gone ? ZB_DEAD : ZB_LIVE;
 		if (op->o_buf[h].b_state == ZB_LIVE && op->o_buf[h].b_busy == 0)
 			zzs_kfree(up, op, &op->o_buf[h]);
 		else if (op->o_buf[h].b_state == ZB_DEAD)
@@ -562,6 +622,8 @@ caddr_t arg;
 	b->b_phys = 0;
 	b->b_busy = 0;
 	b->b_tofree = 0;
+	b->b_mapped = 0;
+	b->b_gone = 0;
 	b->b_state = ZB_LIVE;
 	op->o_bytes += len;
 	/* a mappable buffer must lie, whole and page-aligned, in the host-visible heap */
@@ -572,6 +634,13 @@ caddr_t arg;
 		zzs_arm();
 		splx(x);
 		return EIO;
+	}
+	/* nor over pages a live open may still have mapped (the runtime was reset under them) */
+	if (!(za.za_flags & ZZS_ALLOC_CARDONLY) && zzs_mapped_overlap(up, phys, len)) {
+		zzs_kfree(up, op, b);
+		zzs_arm();
+		splx(x);
+		return EAGAIN;
 	}
 	if (!(za.za_flags & ZZS_ALLOC_CARDONLY))
 		b->b_phys = phys;
@@ -740,8 +809,17 @@ struct zzs_unit *up;
 			if (op->o_buf[h].b_state == ZB_QUAR)
 				zzs_quar--;
 			if (op->o_buf[h].b_state != ZB_FREE) {
-				op->o_buf[h].b_state = op->o_closed ? ZB_FREE : ZB_DEAD;
-				op->o_bytes -= op->o_closed ? op->o_buf[h].b_len : 0;
+				if (op->o_closed) {
+					op->o_buf[h].b_state = ZB_FREE;
+					op->o_bytes -= op->o_buf[h].b_len;
+					op->o_buf[h].b_mapped = 0;
+					op->o_buf[h].b_phys = 0;
+				} else {
+					/* a held one stays held: it may still be mapped */
+					if (op->o_buf[h].b_state != ZB_HELD)
+						op->o_buf[h].b_state = ZB_DEAD;
+					op->o_buf[h].b_gone = 1;
+				}
 				op->o_buf[h].b_busy = 0;
 				op->o_buf[h].b_tofree = 0;
 				op->o_buf[h].b_gen = (op->o_buf[h].b_gen + 1) & 7;
@@ -792,7 +870,7 @@ int *rvp;
 	case ZZSIOC_FREE:
 		h = (int)arg;
 		if (h < 0 || h >= ZZS_NHANDLE || op->o_buf[h].b_state == ZB_FREE ||
-		    op->o_buf[h].b_tofree)
+		    op->o_buf[h].b_state == ZB_HELD || op->o_buf[h].b_tofree)
 			return EINVAL;
 		x = spl4();
 		if (op->o_buf[h].b_busy > 0 && op->o_buf[h].b_state == ZB_LIVE) {
@@ -802,7 +880,7 @@ int *rvp;
 		if (op->o_buf[h].b_state == ZB_QUAR)
 			op->o_buf[h].b_tofree = 1;
 		else
-			zzs_kfree(up, op, &op->o_buf[h]);
+			zzs_drop(up, op, &op->o_buf[h]);
 		zzs_arm();
 		splx(x);
 		return 0;
@@ -857,6 +935,7 @@ int prot;
 	if (b->b_state != ZB_LIVE || b->b_tofree || b->b_phys == 0 || b->b_gen != ZZS_CK_G(off) ||
 	    ZZS_CK_OFF(off) >= b->b_len)
 		return -1;
+	b->b_mapped = 1;
 	return (int)phystopfn(b->b_phys + ZZS_CK_OFF(off));
 }
 

@@ -19,6 +19,7 @@ struct fw_state {
 	unsigned	status;		/* nonzero: answer service requests with it */
 	unsigned	alloc_status;	/* nonzero: fail ALLOC_SHARED with it */
 	int		alloc_outside;	/* place the next buffers outside the window */
+	unsigned long	alloc_at;	/* nonzero: place the next buffer here (a restarted runtime) */
 	unsigned	alloc_extra;	/* report this many bytes more than asked */
 	unsigned long	next_handle;
 	unsigned long	live[FW_NBUF];	/* handles allocated and not freed */

@@ -160,14 +160,69 @@ main(void)
 		    "a handle out of range or free");
 		CHECK(op_mmap(b, base) == -1, "another open's cookie maps nothing there");
 		CHECK(op_mmap(makedevice(ZZS_MAJOR, 0), base) == -1, "the node itself maps nothing");
-		/* free and allocate again: the same handle, a new generation; the old cookie is dead */
-		e = ioc(a, ZZSIOC_FREE, (void *)0L);
-		CHECK(e == 0, "FREE handle 0: %d", e);
-		e = op_alloc(a, 100, 0, &za);
-		CHECK(e == 0 && za.za_handle == 0 && za.za_cookie == ZZS_COOKIE(0, 1),
-		    "re-ALLOC handle 0: e %d handle %ld cookie %lx", e, za.za_handle, za.za_cookie);
-		CHECK(op_mmap(a, base) == -1 && op_mmap(a, za.za_cookie) != -1, "the old cookie is dead");
+		/* an unmapped buffer freed and allocated again: the same handle, a new generation, the
+		   old cookie dead */
+		{
+			dev_t x = op_open(0, &e);
+			struct zzs_alloc zx;
+
+			CHECK(e == 0 && op_alloc(x, 100, 0, &zx) == 0 && zx.za_handle == 0, "an unmapped buffer");
+			nlive = fw.nlive;
+			CHECK(ioc(x, ZZSIOC_FREE, (void *)0L) == 0, "FREE it");
+			drain();
+			CHECK(fw.nlive == nlive - 1, "an unmapped buffer goes back at once: %d live", fw.nlive);
+			e = op_alloc(x, 100, 0, &zx);
+			CHECK(e == 0 && zx.za_handle == 0 && zx.za_cookie == ZZS_COOKIE(0, 1),
+			    "re-ALLOC handle 0: e %d handle %ld cookie %lx", e, zx.za_handle, zx.za_cookie);
+			CHECK(op_mmap(x, ZZS_COOKIE(0, 0)) == -1 && op_mmap(x, zx.za_cookie) != -1,
+			    "the old cookie is dead");
+			CHECK(op_close(x) == 0, "close");
+			drain();
+		}
+	}
+
+	/* 6b. a mapped buffer, freed, is held until the close: the client may still have it
+	   mapped, so its pages must not go to anyone else while the open lives */
+	{
+		dev_t x = op_open(0, &e), y = op_open(0, &e), w;
+		struct zzs_alloc zx, zy;
+		int px, py, nf, k;
+
+		CHECK(op_alloc(x, 100, 0, &zx) == 0 && (px = op_mmap(x, zx.za_cookie)) != -1, "map a buffer");
+		nf = fw.nfree;
+		CHECK(ioc(x, ZZSIOC_FREE, (void *)zx.za_handle) == 0, "FREE it, the mapping kept");
 		drain();
+		CHECK(fw.nfree == nf && zzs_open_of(x)->o_buf[zx.za_handle].b_state == ZB_HELD,
+		    "nothing went to the runtime; held");
+		CHECK(op_mmap(x, zx.za_cookie) == -1 && op_mmap(x, ZZS_COOKIE(zx.za_handle, 1)) == -1,
+		    "a held buffer maps nothing new");
+		CHECK(ioc(x, ZZSIOC_FREE, (void *)zx.za_handle) == EINVAL, "a held buffer is freed once");
+		CHECK(op_decompress(x, zx.za_handle, 0, 1, zx.za_handle, 0, 1, &id) == EBADF,
+		    "a held buffer cannot be used");
+		CHECK(ioc(x, ZZSIOC_INFO, &zi) == 0 && zi.zi_used == (long)pg, "its bytes still count");
+		/* another client allocates: never the pages x may still have mapped */
+		CHECK(op_alloc(y, 100, 0, &zy) == 0 && (py = op_mmap(y, zy.za_cookie)) != -1, "another client");
+		CHECK(py != px, "the old mapping never sees the new buffer: frames %d, %d", px, py);
+		CHECK(ioc(y, ZZSIOC_FREE, (void *)zy.za_handle) == 0, "free it (held: y mapped it)");
+		/* x closes, which specfs does only after its last munmap: the held buffer goes back */
+		CHECK(op_close(x) == 0, "close x");
+		drain();
+		CHECK(fw.nfree == nf + 1, "the held buffer went back at close: %d frees", fw.nfree - nf);
+		w = op_open(0, &e);
+		CHECK(op_alloc(w, 100, 0, &zx) == 0 && op_mmap(w, zx.za_cookie) == px,
+		    "after the close its pages are handed out again");
+		CHECK(op_close(w) == 0 && op_close(y) == 0, "close");
+		drain();
+		/* sixteen buffers mapped and freed: the handles stay taken until the close */
+		w = op_open(0, &e);
+		nlive = fw.nlive;
+		for (k = 0; k < 16; k++)
+			CHECK(op_alloc(w, 100, 0, &zx) == 0 && op_mmap(w, zx.za_cookie) != -1 &&
+			    ioc(w, ZZSIOC_FREE, (void *)zx.za_handle) == 0, "map and free %d", k);
+		CHECK(op_alloc(w, 100, 0, &zx) == ENOSPC, "no handle left while they are held");
+		CHECK(op_close(w) == 0, "close");
+		drain();
+		CHECK(fw.nlive == nlive, "all sixteen went back at close: %d left", fw.nlive - nlive);
 	}
 
 	/* 7. SUBMIT: the policy, references, translation */
@@ -310,8 +365,8 @@ main(void)
 	drain();
 	zt = stats(a);
 	CHECK(zt.zt_quar == 0, "the late completion releases the quarantine");
-	CHECK(fw.nlive == nlive && zzs_unit[0].u_open[0]->o_buf[0].b_state == ZB_FREE,
-	    "the freed one went back to the firmware (handle 3 came): %d live", fw.nlive);
+	CHECK(fw.nlive == nlive + 1 && zzs_unit[0].u_open[0]->o_buf[0].b_state == ZB_HELD,
+	    "the freed one, mapped before, is held, not given back (handle 3 came): %d live", fw.nlive);
 	CHECK(zzs_unit[0].u_open[0]->o_buf[2].b_state == ZB_LIVE && op_mmap(a, ck) != -1,
 	    "the other is usable again");
 	CHECK(ioc(a, ZZSIOC_FREE, (void *)3L) == 0, "free the extra");
@@ -382,6 +437,39 @@ main(void)
 	fw.hold = 0;
 	drain();
 	CHECK(op_plain(a, fw_op_ping(), &id) == 0 && op_wait(a, id, 0, &zw) == 0, "requests work after RESET");
+
+	/* 11b. after a RESET the restarted runtime may place a new buffer over pages a live open
+	   still has mapped: ALLOC refuses it, and gives it back, until that open closes */
+	{
+		dev_t x = op_open(0, &e), y = op_open(0, &e);
+		struct zzs_alloc zx, zy;
+		unsigned long arm;
+		int px, nf;
+
+		CHECK(op_alloc(x, 100, 0, &zx) == 0 && (px = op_mmap(x, zx.za_cookie)) != -1, "x maps a buffer");
+		arm = FW_HEAP_ARM + ((unsigned long)px << TD_PSHIFT) - PHYS_BASE;
+		fw_restart();
+		CHECK(ioc(x, ZZSIOC_RESET, 0) == 0, "the runtime restarted: RESET");
+		CHECK(zzs_open_of(x)->o_buf[zx.za_handle].b_state == ZB_DEAD, "x's buffer is dead");
+		nf = fw.nfree;
+		fw.alloc_at = arm;
+		CHECK(op_alloc(y, 100, 0, &zy) == EAGAIN, "a new buffer over x's mapped pages is refused");
+		drain();
+		CHECK(fw.nfree == nf + 1 && fw.nlive == 0, "and given back to the runtime");
+		CHECK(ioc(x, ZZSIOC_FREE, (void *)zx.za_handle) == 0 &&
+		    zzs_open_of(x)->o_buf[zx.za_handle].b_state == ZB_HELD, "x frees it: held");
+		fw.alloc_at = arm;
+		CHECK(op_alloc(y, 100, 0, &zy) == EAGAIN, "still refused while x lives");
+		drain();
+		CHECK(op_close(x) == 0, "x closes");
+		drain();
+		CHECK(fw.nfree == nf + 2, "x's buffer, gone with the reset, sends no FREE: %d", fw.nfree - nf);
+		fw.alloc_at = arm;
+		CHECK(op_alloc(y, 100, 0, &zy) == 0 && op_mmap(y, zy.za_cookie) == px,
+		    "after x's close the pages may go to y");
+		CHECK(op_close(y) == 0, "close y");
+		drain();
+	}
 
 	/* 12. unload: refused while opens remain; then the board is given back */
 	CHECK(td_unload() == EBUSY, "unload with opens");
