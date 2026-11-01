@@ -609,10 +609,10 @@ X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d 
 X11KIT_MONSW="$X11KIT_RTG/build/tools/zz9k_monsw"
 X11KIT_MONSW_SHA=8149544a8e563cda0e2ec8b177e5999170c8013ed820c4f84f8adc15898c96bf   # P-7 fallback
 # 1.1 media: the server is x11r63's and the RTG tools and nodes are the z3660rtg package's, so
-# the installer lays only the launcher (x11/1.1/startx-rtg: no -ac, its log in /var/adm, pinned
+# the installer lays only the launcher (x11/1.1/startx-rtg: the x11r63 server, no -ac, its log in /var/adm, pinned
 # here) and root's session file; staged as x11kit/1.1/ when a requested 1.1 profile sets X11KIT=rtg
 X11KIT_L11_STARTX="$X11KIT_RTG/x11/1.1/startx-rtg"
-X11KIT_L11_STARTX_SHA=823aa9f7f7b83df57064281b2acceb7fcb3f797c4830acf4a1f8d6afab695f1d
+X11KIT_L11_STARTX_SHA=4c0173a3c001f68a9bbdaa122171e672da725a3fd4b99e3323918ee4aadf61a4
 _want_x11kit=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^X11KIT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
