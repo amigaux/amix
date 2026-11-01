@@ -15,7 +15,7 @@ main=$(cd "$(git -C "$top" rev-parse --git-common-dir)/.." && pwd)
 SYS=${AMIX_SYSTEM:-$(dirname "$main")/amix-system}
 C35="$top/kernel/dlm/docs/contracts/C3-5-module-member.md"
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-inittab.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 ok() { pass=$((pass + 1)); }
 bad() { fail=$((fail + 1)); echo "FAIL: $*"; }

@@ -99,7 +99,7 @@ rc_bg() {
 	[ -d "$RC_BGLOG" ] || mkdir -p "$RC_BGLOG" 2>/dev/null
 	rc_log "$_rc_s" "started, bound $_rc_t s: $*"
 	(
-		rm -f "$_rc_f"
+		rm -f "${_rc_f:?}"
 		(
 			sleep $_rc_t
 			if [ -s "$_rc_f" ]
@@ -113,7 +113,7 @@ rc_bg() {
 		_rc_w=$!
 		_RC_PF=$_rc_f sh -c '[ "$1" = _rc ] && shift; echo $$ > "$_RC_PF"; exec "$@"' _rc "$@"
 		_rc_r=$?
-		rm -f "$_rc_f"
+		rm -f "${_rc_f:?}"
 		kill $_rc_w 2>/dev/null
 		rc_log "$_rc_s" "finished, status $_rc_r"
 	) < /dev/null >> "$RC_BGLOG/$_rc_s" 2>&1 &
@@ -168,7 +168,7 @@ rc_mknod() {
 		return 1
 	fi
 	[ "`_rc_node "$_rc_n"`" = "$_rc_ty $_rc_ma $_rc_mi" ] && return 0
-	rm -f "$_rc_n"
+	rm -f "${_rc_n:?}"
 	if mknod "$_rc_n" "$_rc_ty" "$_rc_ma" "$_rc_mi" && chmod "$_rc_md" "$_rc_n"
 	then
 		rc_log mknod "made $_rc_n $_rc_ty $_rc_ma $_rc_mi"

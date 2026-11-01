@@ -117,7 +117,7 @@ show() {
 			cat "$c"
 			return
 		fi
-		rm -f "$tmp"
+		rm -f "${tmp:?}"
 	fi
 	format "$2"
 }

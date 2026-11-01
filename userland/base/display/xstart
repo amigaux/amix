@@ -262,7 +262,7 @@ fi
 restore=`disp_val $C restore`
 W=${XSTART_TMP:-/tmp}/xstart.$$
 cleanup() {
-	rm -f $W.server $W.client $W.pid $W.clean
+	rm -f ${W:?}.server ${W:?}.client ${W:?}.pid ${W:?}.clean
 }
 finish() {
 	if [ -n "$restore" ] && [ ! -f $W.clean ]

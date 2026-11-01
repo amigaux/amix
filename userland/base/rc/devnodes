@@ -101,7 +101,7 @@ do
 '
 			continue
 		fi
-		rm -f "$n"
+		rm -f "${n:?}"
 		if mknod "$n" $3 $5 $6 && chmod $7 "$n"
 		then
 			rc_log mknod "made $n $3 $5 $6"

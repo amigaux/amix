@@ -10,7 +10,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 AWK=${2:-awk}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-ifup.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -57,7 +57,7 @@ cat > "$B/slink" <<EOF
 #!/bin/sh
 echo "slink \$*" >> $T/st/calls
 if [ "\${1:-}" = addaen ]; then
-	if [ -f $T/st/slinkfail ]; then rm -f $T/st/slinkfail; exit 1; fi
+	if [ -f $T/st/slinkfail ]; then rm -f ${T:?}/st/slinkfail; exit 1; fi
 	: > $T/st/linked.\$3
 fi
 exit 0
@@ -67,7 +67,7 @@ cat > "$B/route" <<EOF
 echo "route \$*" >> $T/st/calls
 case "\$1" in
 add) [ -f $T/st/route ] && exit 1; echo "\$3" > $T/st/route ;;
-delete) [ "\`cat $T/st/route 2>/dev/null\`" = "\$3" ] || exit 1; rm -f $T/st/route ;;
+delete) [ "\`cat $T/st/route 2>/dev/null\`" = "\$3" ] || exit 1; rm -f ${T:?}/st/route ;;
 esac
 exit 0
 EOF
@@ -84,7 +84,7 @@ cat > "$B/dhcpc" <<EOF
 echo "dhcpc \$*" >> $T/st/calls
 r=\`cat $T/st/dhcpc.rc 2>/dev/null || echo 2\`
 if [ "\$1" = -x ]; then
-	rm -f $T/var/dhcpc/\$2.pid
+	rm -f ${T:?}/var/dhcpc/\${2:?}.pid
 	DHCP_ROUTER=192.0.2.1 $SH $here/dhcpc-hook \$2 RELEASE
 	exit 0
 fi
@@ -115,11 +115,11 @@ printf 'tcp DNS\n' > "$T/netconfig.DNS"; printf 'tcp plain\n' > "$T/netconfig"
 echo "example.com" > "$T/domain"
 
 reset() {
-	rm -f "$T/st/"if.* "$T/st/"linked.* "$T/st/route" "$T/st/calls" "$T/st/dhcpc.rc" "$T/st/slinkfail" \
-	    "$T/primary" "$T/var/ifup.primary" "$T/var/dhcpc/"*
+	rm -f "${T:?}/st/"if.* "${T:?}/st/"linked.* "${T:?}/st/route" "${T:?}/st/calls" "${T:?}/st/dhcpc.rc" "${T:?}/st/slinkfail" \
+	    "${T:?}/primary" "${T:?}/var/ifup.primary" "${T:?}/var/dhcpc/"*
 	echo "oldname" > "$T/st/nodename"
 	printf '# hosts\n127.0.0.1\tlocalhost\n192.0.2.99\toldname oldname.example.com\n192.0.2.5\tother\n' > "$T/hosts"
-	rm -f "$T/resolv.conf" "$T/rc.log"
+	rm -f "${T:?}/resolv.conf" "${T:?}/rc.log"
 }
 run() { # run <cmd> <args...>: one of the three, with the test tree
 	c=$1

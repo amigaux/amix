@@ -23,7 +23,7 @@ export AMIX_TOP="$top" AMIX_TOOLCHAIN=gcc14 AMIX_RECIPE_TOOLCHAINS=gcc14
 . "$top/build/pkg/common/amix-env.sh" > /dev/null
 
 mkdir -p "$(dirname "$out")"
-rm -f "$out"
+rm -f "${out:?}"
 $CC $AMIX_CFLAGS -o "$out" "$here/dhcpc.c" \
 	-lnsl "$AMIX_SYSROOT/usr/lib/libsocket.a" "$AMIX_SYSROOT/usr/ccs/lib/libc.so" >&2
 [ -s "$out" ] || { echo "build.sh: link failed" >&2; exit 1; }

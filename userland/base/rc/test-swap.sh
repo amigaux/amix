@@ -9,7 +9,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-swap.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -136,7 +136,7 @@ same "files: each once" "-a $T/SWAPFILE 0 64
 expect "files: said" "Added swap file $T/more, 32 blocks at 0." "$o"
 # a vfstab line naming nothing
 printf '/nowhere/swapfile\t-\t-\tswap\t-\tno\t-\n' | vfstab
-rm -f "$T/SWAPFILE"
+rm -f "${T:?}/SWAPFILE"
 run start > /dev/null
 expect "missing: logged" "swap: /nowhere/swapfile: no such file or slice; left" "$(cat "$T/rc.log")"
 

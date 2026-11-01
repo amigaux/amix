@@ -15,7 +15,7 @@ SH=${1:-sh}
 main=$(cd "$(git -C "$top" rev-parse --git-common-dir)/.." && pwd)
 SYS=${AMIX_SYSTEM:-$(dirname "$main")/amix-system}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-profile.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 ok() { pass=$((pass + 1)); }
 bad() { fail=$((fail + 1)); echo "FAIL: $*"; }
@@ -36,10 +36,10 @@ mkdir -p "$T/pd"
 echo 'A=one' > "$T/pd/a.sh"; echo 'B=two' > "$T/pd/b.sh"; echo 'C=never' > "$T/pd/c.txt"
 o=$($SH -c ". '$T/add'; echo \"\$A \$B \${C:-unset} \${_amx_f:-unset}\"")
 [ "$o" = "one two unset unset" ] && ok || bad "drop-ins: got [$o]"
-rm -f "$T/pd/"*
+rm -f "${T:?}/pd/"*
 o=$($SH -c ". '$T/add'; echo ok")
 [ "$o" = ok ] && ok || bad "an empty profile.d: got [$o]"
-rmdir "$T/pd"
+rmdir "${T:?}/pd"
 o=$($SH -c ". '$T/add'; echo ok")
 [ "$o" = ok ] && ok || bad "no profile.d: got [$o]"
 

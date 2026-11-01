@@ -474,10 +474,10 @@ _if_hostsrow() {
 _if_replace() {
 	if [ -f "$1" ] && cmp -s "$1" "$2"
 	then
-		rm -f "$2"
+		rm -f "${2:?}"
 		return 1
 	fi
-	cat "$2" > "$1" && rm -f "$2"
+	cat "$2" > "$1" && rm -f "${2:?}"
 }
 
 # The machine's name and this host's line in the hosts file. The line
@@ -541,7 +541,7 @@ if_unapply() {
 	"$IFCONFIG" "$1" down > /dev/null 2>&1 && _if_say "$1: down"
 	[ -n "$2" ] && [ "$2" != - ] && "$ROUTE" delete default "$2" > /dev/null 2>&1 &&
 		_if_say "$1: default route $2 removed"
-	[ "`cat "$IF_STATE/ifup.primary" 2>/dev/null`" = "$1" ] && rm -f "$IF_STATE/ifup.primary"
+	[ "`cat "$IF_STATE/ifup.primary" 2>/dev/null`" = "$1" ] && rm -f "${IF_STATE:?}/ifup.primary"
 	return 0
 }
 
