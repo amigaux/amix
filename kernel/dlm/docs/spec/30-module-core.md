@@ -47,7 +47,7 @@ What the adopted core lacks for our use, patch by patch:
 | 3 | No-sleep mode before process 1: allocation failure returns an error instead of sleeping; no record sleeps | every core allocation is `KM_SLEEP`; a root-class load runs before processes exist (U1) |
 | 4 | `.moddata` v2 parser, wrapper revision 2, kabi and compiler-pin checks | `20-module-format-and-abi.md` §2–§3 |
 | 5 | Allowlisted symbol block (two tiers) replacing the full 160 KiB table | `20-…` §4 |
-| 6 | Registries: majors, syscalls, filesystem names from the kit; refusal of a major already owned | `20-…` §6; the core and its zz9000 module both use major 49 |
+| 6 | Registries: majors, syscalls, filesystem names from the kit; refusal of a major already owned. Since core patch 0051 the majors' owners are the booted manifest's `major` records, which `kbootset` writes from the registry (C3-5 §3, version 22), so a new major needs no new kernel; the table built into the kernel answers only without a booted manifest | `20-…` §6; the core and its zz9000 module both use major 49 |
 | 7 | Block-device linkage (`bdevsw` rows) | the core refuses block drivers (`drv_bcount` must be 0); the RAM disk needs one |
 | 8 | `sd_register`: disk controllers register into the sd layer (§5) | no HBA registration exists |
 | 9 | `vfs_register` and a grown `vfssw` (§6) | no filesystem linkage exists |
