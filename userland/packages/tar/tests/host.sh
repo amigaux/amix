@@ -18,7 +18,7 @@ pre)
 	;;
 post)
 	W=$HOSTWORK
-	rm -rf "$W"; mkdir -p "$W/x"
+	rm -rf -- "${W:?}"; mkdir -p "$W/x"
 	if ! tar -xf "${RIG_CELL:?}/out.tar" -C "$W" tar/tests/out.tar 2>/dev/null; then
 		echo "RES host tar FAIL no tar/tests/out.tar came back from the box"
 		exit 1

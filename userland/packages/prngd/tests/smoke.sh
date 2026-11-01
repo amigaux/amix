@@ -70,7 +70,7 @@ sleep 2
 if [ -n "$p2" ] && [ $rc -eq 0 ] && kill -0 $p2 2>/dev/null; then bad "init.d stop (rc $rc): $p2 still runs"
 elif [ -n "$p2" ] && [ $rc -eq 0 ]; then ok "init.d/prngd stop (rc $rc)"; else bad "init.d stop rc=$rc pid='$p2': `cat rc2.out`"; fi
 # runtime state, not payload: pkgrm must find the package's directory empty
-rm -f $X/etc/prngd/prngd-seed
+rm -f -- "${X:?}/etc/prngd/prngd-seed"
 
 cd ..
 if [ $fails -eq 0 ]; then echo "RES smoke PASS"; else echo "RES smoke FAIL $fails"; fi

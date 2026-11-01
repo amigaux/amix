@@ -39,13 +39,13 @@ build() {
 			echo "[FAIL] port/amix-$n.c" >&2; exit 1; }
 	done
 	# a Python for the build host: the cross build runs it (--with-build-python)
-	rm -rf "$BUILD/hostpy"; mkdir -p "$BUILD/hostpy"
+	rm -rf -- "${BUILD:?}/hostpy"; mkdir -p "$BUILD/hostpy"
 	( cd "$BUILD/hostpy" && env -u CC -u CXX -u AR -u RANLIB -u LD -u NM -u STRIP -u OBJDUMP -u READELF \
 		CC=gcc CFLAGS= "$T/configure" --without-ensurepip --disable-shared > configure.log 2>&1 &&
 		env -u AR -u RANLIB make -j8 all > make.log 2>&1 ) || { echo "[FAIL] host python; see $BUILD/hostpy" >&2; exit 1; }
 	echo "  host python: $("$BUILD/hostpy/python" -E -S --version)"
 	LIBS1="$K/amix-math.o $K/amix-wide.o $K/amix-clock.o $K/amix-time.o $K/amix-environ.o -lz -lm -lpthread -lpth -ldl -lsocket -lnsl"
-	rm -rf "$BUILD/x"; mkdir -p "$BUILD/x"; cd "$BUILD/x"
+	rm -rf -- "${BUILD:?}/x"; mkdir -p "$BUILD/x"; cd "$BUILD/x"
 	READELF=$(dirname "$AR")/$AMIX_TARGET-readelf \
 	CFLAGS="$AMIX_CFLAGS -fno-strict-aliasing" CPPFLAGS="-I$HERE/port/include -I$PTH/include -I$ZL/include" \
 	LDFLAGS="-L$PTH/lib -L$ZL/lib" LIBS="$LIBS1" ac_cv_file__dev_ptmx=yes ac_cv_file__dev_ptc=no \
@@ -75,7 +75,7 @@ stage() {
 	cp "$HERE/python3.sh" "$b/bin/python3"
 	# the standard library, less what this build cannot run or does not ship
 	( cd Lib && tar cf - . ) | ( cd "$L" && tar xf - )
-	( cd "$L" && rm -rf test idlelib tkinter turtledemo turtle.py ensurepip lib2to3/tests \
+	( cd "${L:?}" && rm -rf -- test idlelib tkinter turtledemo turtle.py ensurepip lib2to3/tests \
 		distutils/tests unittest/test ctypes sqlite3 venv site-packages/README.txt \
 		$(find . -name __pycache__ -o -name 'Makefile*' -o -name '*.exe') )
 	mkdir -p "$L/site-packages"

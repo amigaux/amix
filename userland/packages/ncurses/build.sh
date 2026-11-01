@@ -24,7 +24,7 @@ post_configure() {
 stage() {
 	make DESTDIR="$DEST" install.libs install.includes > /dev/null
 	# ncurses6-config is a build-host helper (it names the build's flags), not payload
-	rm -f "$DEST$PREFIX/bin/ncurses6-config"; rmdir "$DEST$PREFIX/bin"
+	rm -f -- "${DEST:?}${PREFIX:?}/bin/ncurses6-config"; rmdir -- "${DEST:?}${PREFIX:?}/bin"
 	mkdir -p "$DEST$PREFIX/doc/ncurses"
 	cp COPYING NEWS README "$DEST$PREFIX/doc/ncurses/"
 	chmod 0644 "$DEST$PREFIX"/lib/*.a "$DEST$PREFIX"/include/ncurses/*.h "$DEST$PREFIX"/doc/ncurses/*

@@ -25,7 +25,7 @@ sums() { ( cd "$1" && find . -type f ! -name done | LC_ALL=C sort | while read -
 
 case "$1" in
 pre)
-	rm -rf "$W"; mkdir -p "$W/mod/src" "$W/mod/up" "$W/tobox"
+	rm -rf -- "${W:?}"; mkdir -p "$W/mod/src" "$W/mod/up" "$W/tobox"
 	python3 -I - "$W/mod/src" <<'EOF'
 import os, sys, random
 r = random.Random(31)
