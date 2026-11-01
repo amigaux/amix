@@ -6,8 +6,10 @@ Python 3.11.18 under `/opt/amix`:
 - the standard library in `/opt/amix/lib/python3.11`, compiled to bytecode;
 - the pages `python3.11(1)` and `python3(1)`.
 
-Threads come from GNU Pth's pthread emulation (cooperative: one Python thread runs at a time, and
-another runs when it blocks or yields).
+Threads come from GNU Pth's pthread emulation, which is cooperative: one Python thread runs at a
+time, and another runs when it blocks or yields. A thread that only computes hands over every
+switch interval through a CPU-time timer (patch 05); without it, such a thread kept every other
+thread from running, sleepers included.
 
     sh build/pkg/pkgbuild.sh userland/packages/pth
     sh build/pkg/pkgbuild.sh userland/packages/zlib
@@ -45,6 +47,7 @@ names a local copy.
 | `02-amix-py-unreachable.patch` | In a release build `Py_UNREACHABLE()` is `__builtin_unreachable()`, so gcc drops the range check in front of every switch whose default it is. The 060 gate then cannot size those jump tables (11 sites in python3.11). On Amix it is `Py_FatalError()`, as in a debug build: one compare per switch. |
 | `03-amix-bytes-format-base.patch` | Bytes %-formatting's fast path picks the base with a switch whose range gcc knows from the code before it, so it emits no bound check at all: an if/else instead, with the same choices. |
 | `04-amix-format-via-snprintf.patch` | **A real bug.** `PyUnicode_FromFormat` (behind every `PyErr_Format`) and `PyBytes_FromFormat` format each integer through libc `sprintf`, whose Amix version reads `ll` as `l` and knows no `z`. Every `%lld`, `%zd` and `%zu` in an error message came out wrong, and so did the arguments after it. They now go through `snprintf`, libamixc99's, which reads both right. |
+| `05-amix-gil-switch-timer.patch` | **A real bug.** A thread computing in Python held the GIL and never blocked, so under Pth no other thread ran again, not even one whose `sleep` was over (`tests/starve.py` hung on both rows, 3 of 3). A timer on user CPU time (`setitimer(ITIMER_VIRTUAL)`, SIGVTALRM, every `sys.getswitchinterval()`, from the first new thread on) marks a switch due; at its next eval-breaker check the running thread drops the GIL, yields to Pth and takes it back, when another Python thread exists. Amix rounds the timer to its clock (about 30 ms); it does not run while the process is idle. A program's own ITIMER_VIRTUAL replaces it. |
 
 ## The port (isoriano's)
 
@@ -101,4 +104,6 @@ His set of built-in modules (`Modules/Setup.local`) is kept, with zlib: `math`, 
 `tests/smoke.sh` runs on the box:
 - `python3` starts with no `PYTHONHASHSEED`, whatever `/dev/urandom` does;
 - `tests/smoke.py` checks big integers, float repr, json, a zlib round trip, sha256, datetime,
-  four threads through Pth, file I/O and the sysconfig platform.
+  four threads through Pth, file I/O and the sysconfig platform;
+- `tests/starve.py`: a thread spinning in Python must let the main thread run again after its
+  0.2 s sleep (its SIGALRM ends the process after 10 s if not).

@@ -1,0 +1,144 @@
+Ours.  A CPU-bound thread no longer starves the others.  Python's threads
+are Pth's, cooperative: they switch only when the running one blocks or
+yields.  A thread computing in Python holds the GIL and never blocks, so
+no other thread ran again -- not one whose sleep was over, nor one waiting
+for the GIL (its timed wait never got to time out and ask for the GIL).
+A timer on user CPU time (setitimer ITIMER_VIRTUAL, SIGVTALRM, every
+switch interval, started with the first new thread) marks a switch due;
+at its next eval-breaker check the running thread drops the GIL, yields
+to Pth and takes it back, when another Python thread exists.  The flag is
+part of COMPUTE_EVAL_BREAKER, so a recomputed eval_breaker keeps it.
+Amix rounds the timer to its clock (about 30 ms for a 10 ms request);
+virtual time does not run while the process is idle.  A program's own
+ITIMER_VIRTUAL replaces the switch timer.
+
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -217,6 +217,26 @@
+     " value in enclosing scope"
+ 
+ 
++#ifdef __amix__
++/*
++ * Amix: Python's threads are Pth's, cooperative threads that switch only
++ * when the running one blocks or yields.  A thread computing in Python
++ * holds the GIL and never blocks, so no other thread ran again -- not one
++ * whose sleep was over, nor one waiting for the GIL, whose timed wait
++ * never got to time out and ask for the GIL.  A timer on user CPU time
++ * (SIGVTALRM, every switch interval, from the second thread on) marks a
++ * switch due; at its next eval-breaker check the running thread drops the
++ * GIL, yields to Pth and takes the GIL back (eval_frame_handle_pending).
++ */
++#include <signal.h>
++#include <sys/time.h>
++extern int pthread_yield_np(void);
++static volatile sig_atomic_t amix_switch_due = 0;
++#define AMIX_SWITCH_DUE() amix_switch_due
++#else
++#define AMIX_SWITCH_DUE() 0
++#endif
++
+ /* This can set eval_breaker to 0 even though gil_drop_request became
+    1.  We believe this is all right because the eval loop will release
+    the GIL eventually anyway. */
+@@ -226,7 +246,8 @@
+                      struct _ceval_state *ceval2)
+ {
+     _Py_atomic_store_relaxed(&ceval2->eval_breaker,
+-        _Py_atomic_load_relaxed_int32(&ceval2->gil_drop_request)
++        AMIX_SWITCH_DUE()
++        | _Py_atomic_load_relaxed_int32(&ceval2->gil_drop_request)
+         | (_Py_atomic_load_relaxed_int32(&ceval->signals_pending)
+            && _Py_ThreadCanHandleSignals(interp))
+         | (_Py_atomic_load_relaxed_int32(&ceval2->pending.calls_to_do)
+@@ -1169,6 +1190,42 @@
+ }
+ 
+ 
++#ifdef __amix__
++static void
++amix_switch_tick(int sig)
++{
++    amix_switch_due = 1;
++    _Py_atomic_store_relaxed(&_PyRuntime.interpreters.main->ceval.eval_breaker, 1);
++}
++
++/* From the threading module, before it starts a thread: once per process */
++void
++_PyEval_AmixStartSwitchTimer(void)
++{
++    static int started = 0;
++    struct sigaction sa;
++    struct itimerval it;
++    unsigned long us;
++
++    if (started)
++        return;
++    started = 1;
++    memset(&sa, 0, sizeof sa);
++    sa.sa_handler = amix_switch_tick;
++    sa.sa_flags = SA_RESTART;
++    sigemptyset(&sa.sa_mask);
++    if (sigaction(SIGVTALRM, &sa, NULL) < 0)
++        return;
++    us = _PyRuntime.ceval.gil.interval;        /* sys.setswitchinterval */
++    if (us < 1000)
++        us = 1000;
++    it.it_interval.tv_sec = us / 1000000;
++    it.it_interval.tv_usec = us % 1000000;
++    it.it_value = it.it_interval;
++    (void) setitimer(ITIMER_VIRTUAL, &it, NULL);
++}
++#endif
++
+ /* Handle signals, pending calls, GIL drop request
+    and asynchronous exception */
+ static int
+@@ -1209,6 +1266,25 @@
+         }
+     }
+ 
++#ifdef __amix__
++    /* The switch timer: let the other threads run, if there are any */
++    if (amix_switch_due) {
++        amix_switch_due = 0;
++        if (tstate->interp->threads.head != tstate || tstate->next != NULL) {
++            if (_PyThreadState_Swap(&runtime->gilstate, NULL) != tstate) {
++                Py_FatalError("tstate mix-up");
++            }
++            drop_gil(ceval, ceval2, tstate);
++            pthread_yield_np();
++            take_gil(tstate);
++            if (_PyThreadState_Swap(&runtime->gilstate, tstate) != NULL) {
++                Py_FatalError("orphan tstate");
++            }
++        }
++        COMPUTE_EVAL_BREAKER(tstate->interp, ceval, ceval2);
++    }
++#endif
++
+     /* Check for asynchronous exception. */
+     if (tstate->async_exc != NULL) {
+         PyObject *exc = tstate->async_exc;
+--- a/Modules/_threadmodule.c
++++ b/Modules/_threadmodule.c
+@@ -3,6 +3,9 @@
+ /* Interface to Sjoerd's portable C thread library */
+ 
+ #include "Python.h"
++#ifdef __amix__
++extern void _PyEval_AmixStartSwitchTimer(void);
++#endif
+ #include "pycore_interp.h"        // _PyInterpreterState.threads.count
+ #include "pycore_moduleobject.h"  // _PyModule_GetState()
+ #include "pycore_pylifecycle.h"
+@@ -1194,6 +1197,9 @@
+     boot->args = Py_NewRef(args);
+     boot->kwargs = Py_XNewRef(kwargs);
+ 
++#ifdef __amix__
++    _PyEval_AmixStartSwitchTimer();     /* Python/ceval.c */
++#endif
+     unsigned long ident = PyThread_start_new_thread(thread_run, (void*) boot);
+     if (ident == PYTHREAD_INVALID_THREAD_ID) {
+         PyErr_SetString(ThreadError, "can't start new thread");
