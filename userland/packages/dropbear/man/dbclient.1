@@ -1,0 +1,249 @@
+.\" dbclient(1) for Amix: Dropbear 2026.94 as this package builds it.
+.\" From upstream's page by Gerrit Pape and Matt Johnston (MIT, see
+.\" /opt/amix/doc/dropbear/LICENSE), rewritten in -man for the system's nroff.
+.TH DBCLIENT 1 "1 November 2026" "dropbear 2026.94"
+.SH NAME
+dbclient, ssh \- small SSH client
+.SH SYNOPSIS
+.B dbclient
+[
+.B \-tTNfgyz
+] [
+.B \-p
+.I port
+] [
+.B \-i
+.I keyfile
+] ... [
+.B \-L
+.I forward
+] [
+.B \-R
+.I forward
+] [
+.B \-l
+.I user
+]
+[\fIuser\fP@]\fIhost\fP[^\fIport\fP]
+[
+.I command
+]
+.br
+.B dbclient
+[
+.I options
+]
+[\fIuser\fP@]\fIhost1\fP,[\fIuser\fP@]\fIhost2\fP,...
+.SH DESCRIPTION
+.B dbclient
+logs in to
+.I host
+over SSH, version 2, and runs
+.I command
+there, or a login shell when no command is given.
+It is also installed as
+.BR ssh ,
+the name other programs call (rsync's
+.BR \-e ,
+for one); its options are its own, not OpenSSH's.
+It is the client of the Dropbear SSH programs; see
+.BR dropbear (8).
+It offers the same algorithms as the server (see
+.B ALGORITHMS
+in
+.BR dropbear (8)),
+so it talks to any SSH server of the last ten years.
+.PP
+It authenticates with a key first, then with a password.
+The keys it tries are
+.B ~/.ssh/id_dropbear
+and those given with
+.BR \-i ;
+make one with
+.BR dropbearkey (1).
+.PP
+At the first connection to a host it shows the host key's fingerprint and
+asks whether to trust it; the key is then kept in
+.BR ~/.ssh/known_hosts ,
+and a later connection whose host key differs is refused.
+.SH OPTIONS
+.TP
+.I command
+Run
+.I command
+on the remote host with the user's shell.
+The command starts at the first argument after
+.I host
+that is not an option.
+.TP
+.BI \-p " port"
+Connect to
+.I port
+(default 22); also written
+.IR host ^ port .
+.TP
+.BI \-i " keyfile"
+Use the key in
+.IR keyfile ,
+a key in Dropbear's format as
+.BR dropbearkey (1)
+makes it.
+May be given more than once.
+.TP
+\fB\-L\fP [\fIaddress\fP:]\fIlport\fP:\fIhost\fP:\fIport\fP
+Forward the local port
+.I lport
+through the connection to
+.IR host : port .
+.TP
+\fB\-R\fP [\fIaddress\fP:]\fIrport\fP:\fIhost\fP:\fIport\fP
+Forward the remote port
+.I rport
+through the connection to
+.IR host : port
+here.
+.TP
+.BI \-l " user"
+Log in as
+.IR user ;
+also written
+.IR user @ host .
+.TP
+.B \-t
+Allocate a terminal (the default without a command).
+.TP
+.B \-T
+No terminal (the default with a command).
+.TP
+.B \-N
+Run no command; for port forwarding.
+.TP
+.B \-f
+Go into the background after logging in (needs a command or
+.BR \-N ).
+.TP
+.B \-g
+Let other hosts connect to forwarded ports.
+.TP
+.B \-y
+Accept an unknown host key without asking (a changed one is still
+refused); given twice, check no host key at all, which is unsafe.
+.TP
+.BI \-W " window"
+The receive window of each channel, in bytes (default 24576).
+.TP
+.BI \-K " seconds"
+Send a keepalive after
+.I seconds
+without traffic (0, the default, sends none).
+.TP
+.BI \-I " seconds"
+Close the connection after
+.I seconds
+without traffic (0, the default, never).
+.TP
+.B \-z
+Do not mark the traffic with the AF21 class of service.
+.TP
+.BI \-J " command"
+Talk to the server through the standard input and output of
+.IR command ,
+run by the shell, instead of a TCP connection;
+.I host
+still names the host key.
+.TP
+.BI \-B " host" : port
+Connect to
+.IR host : port
+through the server and join it to the standard input and output, as
+.B netcat
+does.
+.TP
+.BI \-c " ciphers"
+.PD 0
+.TP
+.BI \-m " macs"
+.PD
+Offer only these ciphers or MACs, separated by commas;
+.B help
+lists them.
+.TP
+.BI \-o " option" = value
+An option in OpenSSH's form:
+.BR BatchMode ,
+.BR BindAddress ,
+.BR ExitOnForwardFailure ,
+.BR GatewayPorts ,
+.BR IdentityFile ,
+.BR PasswordAuthentication ,
+.BR Port ,
+.BR ProxyCommand ,
+.BR ServerAliveInterval ,
+.B StrictHostKeyChecking
+.RB ( yes ,
+.B no
+or
+.BR accept-new )
+and
+.BR UseSyslog .
+.TP
+.B \-s
+Request
+.I command
+as a subsystem.
+.TP
+\fB\-b\fP [\fIaddress\fP][:\fIport\fP]
+Connect from this local address or port.
+.TP
+.BI \-Q " what"
+List the algorithms of one kind:
+.BR kex ,
+.BR sig ,
+.BR cipher ,
+.B mac
+or
+.BR compress .
+.TP
+.B \-V
+Print the version.
+.SH MORE THAN ONE HOP
+Hosts separated by commas are reached one through the other: the client
+logs in to the first, then through a forwarded connection to the next,
+and so on.
+Each hop is authenticated end to end; a host on the way sees only
+encrypted traffic.
+.SH ESCAPES
+With a terminal, a newline followed by
+.B ~.
+ends the connection,
+.B ~^Z
+puts it in the background and
+.B ~R
+makes new session keys.
+.SH ENVIRONMENT
+.TP
+.B DROPBEAR_PASSWORD
+The password to log in with.
+Other users can read a process's environment with
+.BR ps (1),
+so use a key instead where you can.
+.SH FILES
+.TP
+.B ~/.ssh/id_dropbear
+The default key.
+.TP
+.B ~/.ssh/known_hosts
+The host keys trusted so far, in OpenSSH's form.
+.SH SEE ALSO
+.BR dropbear (8),
+.BR dropbearkey (1),
+.BR scp (1)
+.SH NOTES
+A key made by OpenSSH's
+.B ssh-keygen
+cannot be read here; make a key with
+.BR dropbearkey (1)
+and add its public half, which
+.B "dropbearkey \-y"
+prints, to the server's
+.BR authorized_keys .

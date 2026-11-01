@@ -1,0 +1,91 @@
+.\" scp(1) for Amix: the scp of Dropbear 2026.94 (from OpenSSH's, BSD
+.\" licence, see /opt/amix/doc/dropbear/LICENSE).  Written for this package.
+.TH SCP 1 "1 November 2026" "dropbear 2026.94"
+.SH NAME
+scp \- copy files over SSH
+.SH SYNOPSIS
+.B scp
+[
+.B \-prqv
+] [
+.B \-P
+.I port
+] [
+.B \-i
+.I keyfile
+] [
+.B \-l
+.I limit
+] [
+.B \-S
+.I program
+]
+\fIsource\fP ... \fItarget\fP
+.SH DESCRIPTION
+.B scp
+copies files between hosts.
+A remote file is written
+[\fIuser\fP@]\fIhost\fP:\fIpath\fP;
+a path without a host is a local file.
+The connection is made by
+.BR dbclient (1),
+which asks for a password or uses a key as it always does, and the
+remote host runs
+.B scp
+too.
+.TP
+.B \-p
+Keep the files' times and modes.
+.TP
+.B \-r
+Copy directories and what they hold.
+.TP
+.B \-q
+Show no progress.
+.TP
+.B \-v
+Have
+.B dbclient
+say what it does.
+.TP
+.BI \-P " port"
+The remote port.
+.TP
+.BI \-i " keyfile"
+The key to log in with (see
+.BR dbclient (1)).
+.TP
+.BI \-l " limit"
+Use at most
+.I limit
+Kbit/s, a whole number.
+.TP
+.BI \-S " program"
+Connect with
+.I program
+instead of
+.BR /opt/amix/bin/dbclient .
+.TP
+.BI \-o " option"
+An option for
+.BR dbclient ,
+as its
+.B \-o
+takes.
+.SH EXAMPLES
+.nf
+.ft CW
+$ scp notes.txt user@server:/tmp
+$ scp -r user@server:src .
+.ft R
+.fi
+.SH SEE ALSO
+.BR dbclient (1),
+.BR dropbear (8)
+.SH NOTES
+This is the original scp protocol.
+From another system with OpenSSH 9.0 or later, whose
+.B scp
+uses SFTP unless told otherwise, copy to and from this system with
+.BR "scp \-O" .
+File times are kept to the second.

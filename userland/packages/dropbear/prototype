@@ -1,0 +1,49 @@
+#
+# prototype -- Dropbear SSH 2026.94.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  The stock system has no SSH.  One binary,
+# /opt/amix/sbin/dropbear, and the client programs (dbclient, also as ssh,
+# dropbearkey, scp) as hard links to it.  No
+# install scripts: the host keys are made by the boot script at the first
+# start and are no object of this package, so neither an update nor pkgrm
+# touches them; its settings are lines in /etc/rc.conf, which no package
+# owns.  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/sbin 0755 root sys
+f none /opt/amix/sbin/dropbear 0755 root bin
+d none /opt/amix/bin 0755 root sys
+l none /opt/amix/bin/dbclient=/opt/amix/sbin/dropbear
+l none /opt/amix/bin/ssh=/opt/amix/sbin/dropbear
+l none /opt/amix/bin/dropbearkey=/opt/amix/sbin/dropbear
+l none /opt/amix/bin/scp=/opt/amix/sbin/dropbear
+#
+# the host keys and the pid file
+d none /etc/dropbear 0700 root sys
+#
+# the boot script, one file under three names (rc.subr(1M))
+f none /etc/init.d/dropbear 0444 root sys
+l none /etc/rc2.d/S76dropbear=/etc/init.d/dropbear
+l none /etc/rc0.d/K40dropbear=/etc/init.d/dropbear
+l none /etc/rc1.d/K40dropbear=/etc/init.d/dropbear
+#
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/dbclient 0644 root bin
+f none /opt/amix/man/1/dropbearkey 0644 root bin
+f none /opt/amix/man/1/scp 0644 root bin
+f none /opt/amix/man/1/ssh 0644 root bin
+d none /opt/amix/man/8 0755 root sys
+f none /opt/amix/man/8/dropbear 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/dropbear 0644 root bin
+#
+# MIT and the other licences of the parts: LICENSE travels with the binary
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/dropbear 0755 root sys
+f none /opt/amix/doc/dropbear/LICENSE 0644 root bin
+f none /opt/amix/doc/dropbear/CHANGES 0644 root bin

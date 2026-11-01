@@ -1,0 +1,76 @@
+.\" dropbearkey(1) for Amix: Dropbear 2026.94 as this package builds it.
+.\" From upstream's page by Gerrit Pape and Matt Johnston (MIT, see
+.\" /opt/amix/doc/dropbear/LICENSE), rewritten in -man for the system's nroff.
+.TH DROPBEARKEY 1 "1 November 2026" "dropbear 2026.94"
+.SH NAME
+dropbearkey \- make a key for dropbear and dbclient
+.SH SYNOPSIS
+.B dropbearkey
+.B \-t
+.B ed25519
+|
+.B rsa
+.B \-f
+.I file
+[
+.B \-s
+.I bits
+]
+.br
+.B dropbearkey
+.B \-y
+.B \-f
+.I file
+.SH DESCRIPTION
+.B dropbearkey
+makes a private key, from
+.BR /dev/urandom ,
+writes it to
+.I file
+(which must not exist yet), readable by its owner only, and prints the
+public key and its fingerprint.
+The key is a host key for
+.BR dropbear (8)
+or a user's key for
+.BR dbclient (1).
+Keys are not encrypted, so the file's mode is all that protects one.
+.TP
+.BI \-t " type"
+.B ed25519
+(the one to use: small and fast) or
+.BR rsa ,
+for a peer that knows no ed25519.
+.TP
+.BI \-f " file"
+The private key's file.
+.TP
+.BI \-s " bits"
+The size of an RSA key, a multiple of 8 (default 3072).
+Making one takes minutes on a 68030.
+.TP
+.B \-y
+Print the public key and fingerprint of the key in
+.IR file ;
+the public line is what goes into a server's
+.BR ~/.ssh/authorized_keys .
+.SH EXAMPLES
+A key to log in with, and its public half for the server:
+.PP
+.nf
+.ft CW
+$ mkdir -m 700 ~/.ssh
+$ dropbearkey -t ed25519 -f ~/.ssh/id_dropbear
+$ dropbearkey -y -f ~/.ssh/id_dropbear | grep '^ssh-'
+.ft R
+.fi
+.PP
+An RSA host key, made by hand instead of by the boot script:
+.PP
+.nf
+.ft CW
+# dropbearkey -t rsa -f /etc/dropbear/host_rsa
+.ft R
+.fi
+.SH SEE ALSO
+.BR dbclient (1),
+.BR dropbear (8)

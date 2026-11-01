@@ -1,0 +1,80 @@
+#!/sbin/sh
+#
+# /etc/init.d/dropbear -- start and stop the Dropbear SSH server.
+# Linked as /etc/rc2.d/S76dropbear and /etc/rc0.d, /etc/rc1.d K40dropbear.
+#
+# On unless /etc/rc.conf says dropbear=no.  Settings, each a line in
+# /etc/rc.conf (rc.conf(4)), all optional:
+#   dropbear_port=22          the TCP port
+#   dropbear_rsa=no           yes: also an RSA host key, made at the first
+#                             start that finds none (slow on a 68030)
+#   dropbear_flags=           more options for dropbear(8), e.g. -s -g
+# The host keys are made here at the first start, from /dev/urandom, and
+# never come from the package.  See dropbear(8).
+#
+# The system's /bin/sh of 1992: backticks, no $(...), no `local', no `!'.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+DROPBEAR=${DROPBEAR:-/opt/amix/sbin/dropbear}
+DROPBEARKEY=${DROPBEARKEY:-/opt/amix/bin/dropbearkey}
+KEYDIR=${KEYDIR:-/etc/dropbear}
+URANDOM=${URANDOM:-/dev/urandom}
+PIDFILE=$KEYDIR/dropbear.pid
+
+pid=`cat "$PIDFILE" 2>/dev/null`
+
+# hostkey <type>: make $KEYDIR/host_<type> if it is missing
+hostkey() {
+	if [ -f "$KEYDIR/host_$1" ]; then
+		return 0
+	fi
+	if "$DROPBEARKEY" -t $1 -f "$KEYDIR/host_$1" > /dev/null 2>&1; then
+		rc_log dropbear "made the $1 host key $KEYDIR/host_$1"
+		return 0
+	fi
+	rc_log dropbear "could not make the $1 host key $KEYDIR/host_$1"
+	rm -f "${KEYDIR:?}/host_$1"
+	return 1
+}
+
+case "$1" in
+start)
+	. "$RC_SUBR"
+	rc_enabled dropbear yes || exit 0
+	if [ ! -x "$DROPBEAR" ] || [ ! -x "$DROPBEARKEY" ]; then
+		rc_log dropbear "no $DROPBEAR or $DROPBEARKEY; not started"
+		exit 0
+	fi
+	if [ ! -c "$URANDOM" ]; then
+		rc_log dropbear "no $URANDOM (the random module); not started"
+		exit 0
+	fi
+	if [ -n "$pid" ] && kill -0 $pid 2> /dev/null; then
+		exit 0
+	fi
+	[ -d "$KEYDIR" ] || mkdir "$KEYDIR"
+	chmod 700 "$KEYDIR"
+	hostkey ed25519 || exit 0
+	keys="-r $KEYDIR/host_ed25519"
+	if [ "`rc_conf dropbear rsa no`" = yes ]; then
+		hostkey rsa && keys="$keys -r $KEYDIR/host_rsa"
+	fi
+	port=`rc_conf dropbear port 22`
+	flags=`rc_conf dropbear flags`
+	if "$DROPBEAR" -p $port -P "$PIDFILE" $keys $flags; then
+		rc_log dropbear "started on port $port"
+	else
+		rc_log dropbear "did not start (exit $?)"
+	fi
+	;;
+stop)
+	if [ -n "$pid" ] && kill $pid 2> /dev/null; then
+		rm -f "${PIDFILE:?}"
+	fi
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0
