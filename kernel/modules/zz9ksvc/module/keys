@@ -1,0 +1,11 @@
+# The .moddata keys of the zz9ksvc module (amix-dlm C3-1 section 3, C3-6 section 4), one
+# key=value string per line as the section carries them.  kabi, cc and cpu come from the
+# ABI kit of the line; module/Makefile turns this file into the kit's Master.  Demand
+# class: it loads at the first open of /dev/zz9ksvcN and is kept only when a board with a
+# runtime is there (zz9kbus, named in depend, is loaded first).
+name=zz9ksvc
+class=demand
+majors=c:55
+unload=allowed
+depend=zz9kbus
+desc=ZZ9000-family service channel /dev/zz9ksvcN
