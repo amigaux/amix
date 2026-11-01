@@ -205,7 +205,7 @@ l11_mkfs_data()
 		msg "data slice   : none laid (TARGET_DATA_MB=${TARGET_DATA_MB:-default} on a ${DISK_MB}MB disk)"
 		return 0
 	fi
-	run /bin/mkfs_ufs -o free=2,opt=s "/dev/dsk/c${ID}d0s4" "$DATALEN"
+	run /bin/mkfs_ufs -o `ufs_mkfs_opts "$DATALEN"` "/dev/dsk/c${ID}d0s4" "$DATALEN"
 	msg "data slice   : s4 ${DATA_MB}MB $TARGET_ROOT_FSTYPE, /home"
 }
 

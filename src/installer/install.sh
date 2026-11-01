@@ -1681,9 +1681,18 @@ build_target_author() {
 	#      fs_size x fs_fsize equals its slice size to the byte.
 	# NO labelit: there is no /usr/lib/fs/ufs/labelit on the medium, and
 	# STOCK RAN labelit ON NEITHER FILESYSTEM.
-	run /bin/mkfs_ufs -o free=2,opt=s "$ROOT_BLK" "$ROOTLEN"
+	run /bin/mkfs_ufs -o `ufs_mkfs_opts "$ROOTLEN"` "$ROOT_BLK" "$ROOTLEN"
 	[ "$INSTALL_LAYOUT" = 1.1 ] && l11_mkfs_data
 	return 0
+}
+
+# ufs_mkfs_opts BLOCKS -- mkfs_ufs's -o for a slice of BLOCKS 512-byte blocks: stock's free=2,opt=s
+# and, on a slice over 512 MiB, nbpi=8192 (one inode per 8 KiB instead of stock's density: a
+# 2047 MiB slice holds about 260000 inodes, not 830000, and gives back about 75 MiB of inode
+# table; the full set is about 29000 objects)
+ufs_mkfs_opts()
+{
+	if [ "$1" -gt 1048576 ]; then echo "free=2,opt=s,nbpi=8192"; else echo "free=2,opt=s"; fi
 }
 
 # INSTALL_TARGET_PREBUILT=1 mounted an s5 root tools/mkroot.sh had minted

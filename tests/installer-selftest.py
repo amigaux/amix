@@ -8154,7 +8154,7 @@ def _audit_public_flavor(profiles):
 #        column 4, defaulted to s5 and validated there too.
 #   AA9  every tracked profile declares the key with a legal value.
 
-_UFS_OPT = "-o free=2,opt=s"
+_UFS_OPT = '-o `ufs_mkfs_opts "$ROOTLEN"`'   # stock's free=2,opt=s; nbpi=8192 over 512 MiB
 
 
 def _ufs_checks(code):
@@ -9828,6 +9828,26 @@ def _p36_problems(install_src, l11_src):
     return probs
 
 
+def audit_ufs_density():
+    head("UD. mkfs_ufs density: stock's free=2,opt=s, plus nbpi=8192 on a slice over 512 MiB (root and /home)")
+    src = open(DRIVER, encoding="utf-8").read()
+    m = re.search(r'\n(ufs_mkfs_opts\(\)\n\{\n.*?\n\})\n', src, re.S)
+    l11 = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    if not m or 'run /bin/mkfs_ufs -o `ufs_mkfs_opts "$DATALEN"` "/dev/dsk/c${ID}d0s4" "$DATALEN"' not in l11:
+        fail("no ufs_mkfs_opts in install.sh, or l11_mkfs_data does not use it")
+        return
+    want = ((204800, "free=2,opt=s"), (1048576, "free=2,opt=s"), (1048577, "free=2,opt=s,nbpi=8192"),
+            (4192256, "free=2,opt=s,nbpi=8192"), (2916352, "free=2,opt=s,nbpi=8192"))
+    got = []
+    for blocks, w in want:
+        r = subprocess.run(["/usr/bin/dash", "-c", m.group(1) + '\nufs_mkfs_opts %d\n' % blocks],
+                           capture_output=True, text=True, timeout=10).stdout.strip()
+        got.append((blocks, r, w))
+    bad = [g for g in got if g[1] != g[2]]
+    (fail if bad else ok)("ufs_mkfs_opts EXECUTED: 100 and 512 MiB stock density, 512 MiB+1 block, 2047 and 1424 MiB "
+                          "nbpi=8192%s" % ((": %r" % bad) if bad else ""))
+
+
 def audit_modreg_local():
     head("ML. MODREG_LOCAL: administrator module lines laid before the kbootset build (emulation rigs: "
          "z3660rtg fixed=1); never on a profile for real hardware")
@@ -10751,6 +10771,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_ufs_density()
     audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()

@@ -26,6 +26,11 @@ at the driver's raw-I/O clamp, at 3072 MiB with EINVAL at a 32-bit seek; spec 40
 was the old guess), and under the stock kernel's cap when `KERNEL_SDDEVSIZE` is not `fixed`.
 A file over 256 MiB needs the login `ulimit` raised (amix-base 1.0-11: 4194303).
 
+Each ufs is made with stock's `mkfs_ufs -o free=2,opt=s`; a slice over 512 MiB also gets
+`nbpi=8192`, one inode per 8 KiB instead of stock's density (a 2047 MiB root then holds about
+260000 inodes, not 830000, and keeps about 75 MiB more for files; the full set is about 29000
+objects).
+
 The installer:
 1. authors that RDB. Before writing, it refuses a disk that already carries two
    `UNI\0` partitions, and it clears the whole RDB area (blocks 0–127).
