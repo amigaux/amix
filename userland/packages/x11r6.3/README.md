@@ -54,6 +54,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `21-zz9000-blits-partial.patch` | Ours: blitFlush follows the driver's BLITS count: the rest is sent until every record has run, EINVAL draws that one record on the CPU, any other error draws the records not yet run and turns the blitter off. Before, an error redrew the whole batch, applying a copy that had run twice. One record per operation: the driver bands; `-blitmax` is accepted and ignored. |
 | `22-zz9000-map-framebuffer.patch` | Ours: the server maps the visible framebuffer only (not the whole board with its register window), and checks GETFBINFO against the mode it set (size, depth 16, RGB565, stride, inside the board) before drawing. |
 | `23-zz9000-no-soft3d.patch` | Ours: the ZZ9K-SOFT3D extension goes, and with it the probe of ioctl 18 at every start, a call our card driver leaves unassigned. |
+| `24-amix-no-mitshm.patch` | Ours: MIT-SHM is not built. ShmAttach attached any segment a client named with the server's root rights, and R6.3 cannot check a client's uid against the segment. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
@@ -70,7 +71,7 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   (the C library headers the 1990s sources often omit) and `amix-decls.h`. It logs each line for
   the strict gates.
 - **amix.cf** (patch 01) says what Amix is and what the package builds: static libraries, MIT-SHM
-  on, colours from `rgb.txt`, man sections 1/3/4/5, xdm's greeter linked in. It turns off what is
+  off, colours from `rgb.txt`, man sections 1/3/4/5, xdm's greeter linked in. It turns off what is
   not shipped: PEX, XIE, LBX, the print server and Xnest. **host.def** (`host.def.in`) holds only
   the cross build: the compiler and tools, `ProjectRoot` `/opt/amix/X11R6`, the library paths and
   the install script.
@@ -110,5 +111,7 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   `x11` aliases are absolute symlinks.
 - **UFS only.** rstart's `commands/ListGenericCommands` has a 19-byte name, so the roll marks the
   package UFS-only; new installs are UFS.
-- **MIT-SHM** is built in. The 68040/68060 kernel's shared-memory fixes make it safe; on a kernel
-  without them, clients must not use it.
+- **MIT-SHM** is not built. Its ShmAttach attaches whatever segment id a client names, with the
+  server's rights (root), and R6.3 has no way to learn a client's uid to check the segment's
+  permissions: any client, remote ones included, could read or write any shared-memory segment on
+  the box through the server. Clients fall back to ordinary image requests.
