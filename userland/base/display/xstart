@@ -22,7 +22,8 @@
 # Installed as /usr/amix/bin/xstart. Exit 0 when the session (or xdm) ran,
 # 1 when the display cannot be set up, 2 on a usage mistake.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 DISP_SUBR=${DISP_SUBR:-/usr/lib/amix/display.subr}
 . "$DISP_SUBR"

@@ -1,0 +1,113 @@
+.TH BOOTSWAP 1M "1 November 2026" "amix-base"
+.SH NAME
+bootswap \- add the swap areas at boot
+.SH SYNOPSIS
+.B /etc/init.d/swap start
+.br
+.B /etc/init.d/swap stop
+.SH DESCRIPTION
+The base package's swap step runs at every boot as
+.B /etc/rc2.d/S90swap
+and at shutdown as
+.BR /etc/rc0.d/K05swap ,
+in the place of the system's own swap script.
+.PP
+At boot it adds the swap lines of
+.B /etc/vfstab
+(file system type
+.BR swap ),
+and, as the system's script did,
+.B /SWAPFILE
+and
+.B /usr/src/SWAPFILE
+when they exist:
+.TP
+.I a file
+is added whole.
+.TP
+.I a slice
+.RB ( /dev/dsk/c\fIn\fPd\fIn\fPs\fIn\fP )
+has its length read from the disk's partition table (with
+.BR /usr/amiga/bin/rdb ).
+The kernel may already swap on the start of the slice: when
+.B "swap \-l"
+lists no area on it, the step adds from block 0; when it lists one area
+from block 0, the step adds from the next 16-block boundary past it; any
+other layout is left alone.
+How far the added area reaches is set by
+.BR swap_add ,
+below.
+.PP
+At shutdown the files are removed first, then every area after the first.
+.PP
+Each area added, and each one the kernel refused, is said on the console
+and written to
+.BR /var/adm/rc.log ,
+with the
+.B swap_add
+size that was used.
+.B "swap \-s"
+reads 0 whatever is set up;
+.B "swap \-l"
+shows the areas.
+.SH SETTINGS
+In
+.BR /etc/rc.conf (4):
+.TP
+.BI swap_add= "size ..."
+the sizes to try for a slice, in order; default
+.BR 30 .
+A size is
+.B all
+(to the end of the slice) or a number of MiB counted from the start of the
+slice, the kernel's own area included, so that
+.B 30
+means at most 61440 blocks of swap on the slice in all.
+A size past the end of the slice is the end.
+.IP
+The first size that adds at least 2048 blocks (1 MB) is tried.
+When the kernel refuses it for want of memory
+.RB ( ENOMEM ),
+the next size is tried; each size at most once, and a size that ends where
+a tried one did is not tried again.
+Any other failure ends the step for that slice.
+.SH THE KERNEL'S LIMIT
+For every area
+.B "swap \-a"
+adds, the kernel needs a page table (16 bytes for each 2 KiB page on the
+68030) in one piece of a fixed 4 MiB kernel area.
+On a 64 MB 68030 machine only about 48 MiB of swap fits there.
+A kernel with the guard refuses a larger request with
+.BR ENOMEM ,
+which is what the list steps down on; a kernel without it waits forever on
+such a request, and the boot with it.
+So the list must suit the kernel:
+.TP
+.B 30
+any kernel: 30 MiB in all is known to fit.
+.TP
+.B "all 48 30"
+a kernel with the guard.
+.PP
+The installer writes the line for the kernel it installs.
+.SH EXAMPLE
+On a 68030 kernel with the guard, whose own area is the first 20476 blocks
+of a 64 MiB slice,
+.B "swap_add=all 48 30"
+first asks for blocks 20480 to the end (110592 blocks); if the kernel
+refuses, blocks 20480 to 98304 (77824 blocks); if it refuses again, blocks
+20480 to 61440 (40960 blocks).
+.SH FILES
+.TP
+.B /etc/vfstab
+the swap lines.
+.TP
+.B /etc/rc.conf
+.BR swap_add .
+.TP
+.B /var/adm/rc.log
+what was added and refused.
+.SH SEE ALSO
+.BR rc.conf (4),
+.BR rc.subr (1M),
+.BR swap (1M)

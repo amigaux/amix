@@ -12,7 +12,8 @@
 # This file is written in place on update, never moved, so the S and K
 # links stay the same file.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/syslog/LICENSE (LICENSE at the top of the
+# repository).
 
 RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
 SYSLOGD=${SYSLOGD:-/usr/sbin/syslogd}

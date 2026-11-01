@@ -35,6 +35,9 @@ case "\$1" in
 	;;
 -a)
 	echo "-a \$2 \$3 \$4" >> $T/calls
+	# a kernel with the guard: an area over \$T/max blocks is refused (ENOMEM)
+	if [ -f $T/max ] && [ "\$4" -gt "\`cat $T/max\`" ]; then
+		echo "/usr/sbin/swap: Not enough space" >&2; exit 1; fi
 	awk -v p="\$2" -v lo="\$3" -v n="\$4" '\$1 == p && lo < \$2 + \$3 && \$2 < lo + n { bad = 1 } END { exit bad }' \$A || {
 		echo "/usr/sbin/swap: File exists" >&2; exit 2; }
 	echo "\$2 \$3 \$4" >> \$A
@@ -60,7 +63,8 @@ areas() { cat > "$T/areas"; }
 run() { # run start|stop: the step, its output; the calls in calls
 	: > "$T/calls"
 	: > "$T/rc.log"
-	env RC_SUBR="$here/rc.subr" RC_LOG="$T/rc.log" SWAP="$T/bin/swap" RDB="$T/bin/rdb" \
+	env RC_SUBR="$here/rc.subr" RC_LOG="$T/rc.log" RC_CONF="$T/rc.conf" RC_RUN="$T" \
+	    SWAP="$T/bin/swap" RDB="$T/bin/rdb" \
 	    SWAP_VFSTAB="$T/vfstab" SWAP_FILES="$T/SWAPFILE $T/SRCSWAP" PATH="$T/bin:$PATH" \
 	    $SH "$here/swap" "$@" 2>&1
 }
@@ -69,6 +73,9 @@ STOCK='#device         device          mount   FS      fsck    mount   mount
 #to mount       to fsck         point   type    pass    at boot options
 /dev/dsk/c6d0s1	/dev/rdsk/c6d0s1	/	ufs	1	yes	-
 /dev/dsk/c6d0s2	-	-	swap	-	no	-'
+
+# the slice's end: the cases below, before the size list
+echo "swap_add=all" > "$T/rc.conf"
 
 # the bench kernel: the whole slice already its area -- nothing to add
 echo "$STOCK" | vfstab
@@ -81,8 +88,8 @@ same "whole slice in use: nothing said" "" "$o"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 o=$(run start)
 same "boot area: the tail added" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
-expect "boot area: said" "Added swap slice tail /dev/dsk/c6d0s2, 81920 blocks at 20480." "$o"
-expect "boot area: logged" "swap: added /dev/dsk/c6d0s2 20480 81920 (slice tail)" "$(cat "$T/rc.log")"
+expect "boot area: said" "Added swap slice tail /dev/dsk/c6d0s2, 81920 blocks at 20480 (swap_add all)." "$o"
+expect "boot area: logged" "swap: added /dev/dsk/c6d0s2 20480 81920 (slice tail, swap_add all)" "$(cat "$T/rc.log")"
 # run again: two areas now -- left alone
 o=$(run start)
 same "again: nothing more" "" "$(cat "$T/calls")"
@@ -137,6 +144,87 @@ expect "missing: logged" "swap: /nowhere/swapfile: no such file or slice; left" 
 printf '#/dev/dsk/c6d0s2\t-\t-\tswap\t-\tno\t-\n/dev/dsk/c6d0s1\t/dev/rdsk/c6d0s1\t/\tufs\t1\tyes\t-\n' | vfstab
 run start > /dev/null
 same "comments and ufs: nothing" "" "$(cat "$T/calls")"
+
+# the size list (rc.conf swap_add): the 50 MiB slice c6d0s2, the 030
+# kernel's 20476-block area from 0
+printf '%s\n' "$STOCK" | vfstab
+: > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "no swap_add: 30 MiB in all" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+expect "no swap_add: the size logged" "swap: added /dev/dsk/c6d0s2 20480 40960 (slice tail, swap_add 30)" "$(cat "$T/rc.log")"
+echo "swap_add=30" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "30: 61440 blocks in all" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+# no area listed: 30 MiB from block 0
+: | areas
+run start > /dev/null
+same "30, no area: from 0" "-a /dev/dsk/c6d0s2 0 61440" "$(cat "$T/calls")"
+# a size past the slice's end is the end
+echo "swap_add=200" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "200 MiB: the slice's end" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
+# a size inside the kernel's area adds nothing, and the next is tried
+echo "swap_add=10 30" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "10 inside the area: 30 next" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+# the guard: all refused, 48 refused, 30 taken; each said in rc.log
+echo "swap_add=all 48 30" > "$T/rc.conf"
+echo 50000 > "$T/max"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+o=$(run start)
+same "all 48 30: stepped down" "-a /dev/dsk/c6d0s2 20480 81920
+-a /dev/dsk/c6d0s2 20480 77824
+-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+expect "all 48 30: the refusal logged" "swap: swap -a /dev/dsk/c6d0s2 20480 81920 failed: /usr/sbin/swap: Not enough space" "$(cat "$T/rc.log")"
+expect "all 48 30: the size used logged" "swap: added /dev/dsk/c6d0s2 20480 40960 (slice tail, swap_add 30)" "$(cat "$T/rc.log")"
+expect "all 48 30: the refusal said" "failed: /usr/sbin/swap: Not enough space" "$o"
+# all fits: one try
+rm -f "$T/max"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "all fits: one try" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
+# every size refused: each tried once, then nothing more
+echo 1000 > "$T/max"
+echo "swap_add=all 48 30 30 all" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "all refused: each size once" "-a /dev/dsk/c6d0s2 20480 81920
+-a /dev/dsk/c6d0s2 20480 77824
+-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+same "all refused: nothing added" "/dev/dsk/c6d0s2 0 20476" "$(cat "$T/areas")"
+rm -f "$T/max"
+# a 48 that ends where all does (a 40 MiB slice) is not tried again
+printf '/dev/dsk/c6d0s3\t-\t-\tswap\t-\tno\t-\n' | vfstab
+echo 1000 > "$T/max"
+echo "swap_add=all 48 10" > "$T/rc.conf"
+: | areas
+run start > /dev/null
+same "48 = all: not again" "-a /dev/dsk/c6d0s3 0 40000
+-a /dev/dsk/c6d0s3 0 20480" "$(cat "$T/calls")"
+rm -f "$T/max"
+# another failure ends it: no step down
+printf '%s\n' "$STOCK" | vfstab
+echo "swap_add=all 30" > "$T/rc.conf"
+printf '/dev/dsk/c6d0s2 0 20476\n/dev/dsk/c6d0s2 30000 100\n' | areas
+run start > /dev/null
+same "two areas: left" "" "$(cat "$T/calls")"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+cp "$T/bin/swap" "$T/swap.real"
+printf '#!/bin/sh\ncase "$1" in -a) echo "-a $2 $3 $4" >> %s/calls; echo "/usr/sbin/swap: Invalid argument" >&2; exit 1 ;; esac\nexec %s/swap.real "$@"\n' "$T" "$T" > "$T/bin/swap"
+run start > /dev/null
+same "EINVAL: no step down" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
+cp "$T/swap.real" "$T/bin/swap"
+# a bad entry is said and skipped
+echo "swap_add=lots 30" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "bad entry: skipped" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+expect "bad entry: logged" "swap: swap_add: lots is neither all nor a size in MiB; skipped" "$(cat "$T/rc.log")"
+ls "$T"/swap.[0-9]* > /dev/null 2>&1 && bad "an error file was left" || ok
 
 # stop: the files go, then every area after the first
 printf '/dev/dsk/c6d0s2 0 20476\n/dev/dsk/c6d0s2 20480 81920\n%s/more 0 32\n' "$T" | areas

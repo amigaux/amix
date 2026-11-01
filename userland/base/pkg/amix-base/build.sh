@@ -71,6 +71,7 @@ stage() {
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 rc/devnodes.1m /opt/amix/man/1m/devnodes
+	put 0644 rc/bootswap.1m /opt/amix/man/1m/bootswap
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac
 	put 0644 net/ifup.1m /opt/amix/man/1m/ifup
 	put 0644 net/ifdown.1m /opt/amix/man/1m/ifdown
@@ -89,6 +90,7 @@ stage() {
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
+	put 0644 LICENSE /opt/amix/doc/amix-base/LICENSE
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"
 	done
