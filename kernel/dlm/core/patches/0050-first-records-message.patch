@@ -1,0 +1,21 @@
+Subject: a first-use load short of memory for its first records says so
+
+The two records a load allocates first (the module and its file) went
+short with the root-pass line whatever the load was; outside the root
+pass they now print the first-use line of patch 0049.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -928,7 +928,11 @@
+ 			dlm_free((char *)m, (long)sizeof (struct dlm_mod));
+ 		if (lf)
+ 			dlm_free((char *)lf, (long)sizeof (struct dlm_lf));
+-		printf("dlm: %s: no memory for it in the root pass\n", name);
++		if (dlm_nosleep)
++			printf("dlm: %s: no memory for it in the root pass\n", name);
++		else
++			printf("dlm: %s: not loaded: kernel memory short (error %d)\n",
++			    name, ENOMEM);
+ 		return ENOMEM;
+ 	}
+ 	strcpy(m->m_name, name);
