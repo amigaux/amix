@@ -16,8 +16,8 @@
 # ldrinfo): the loader of record, never a separate build. The pair is
 # `kbootset -R ROOT media --floppy V1 V2 --boot1 --boot2 ... --ramdisk IMAGE`, written by
 # mkstore's floppy engine and read back whole by lsstore; the image is gated against the pair's
-# generation (tools/ramdisk-image-check.py: each boot-class module in it, byte for byte -- on k30
-# since catalog b1f564f4 also the kernel package's ufs). The used and free bytes of volume 2 are
+# generation (tools/ramdisk-image-check.py: each boot- and demand-class module in it, byte for
+# byte -- on k30 since catalog b1f564f4 also the kernel package's ufs). The used and free bytes of volume 2 are
 # printed: the image may grow into them (S4-53).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"

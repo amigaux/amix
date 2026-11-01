@@ -7,9 +7,10 @@
 #   tools/build-ramdisk-cd.sh --boot-mods DIR [--work DIR]
 #   tools/build-ramdisk-cd.sh --k46 IMAGE --k30 IMAGE --out TREE [--work DIR]
 #
-#   --boot-mods   each line's boot-class module objects at DIR/<line>/<name>, the exact bytes
-#                 its generation records, for the images (build-ramdisk-miniroot.sh --mod
-#                 NAME=DIR/<line>/NAME, one per file): cdfs on both lines and, since catalog
+#   --boot-mods   each line's boot- and demand-class module objects at DIR/<line>/<name>, the
+#                 exact bytes its generation records, for the images (build-ramdisk-miniroot.sh
+#                 --mod NAME=DIR/<line>/NAME, one per file): cdfs on both lines (demand class,
+#                 loaded at the disc's first mount) and, since catalog
 #                 b1f564f4 (kernels with no built-in ufs or s5), the kernel package's ufs on k30,
 #                 where s5 is the promoted root and the miniroot mounts the ufs target with it
 #   --k46, --k30  the line's RAM-disk image (tools/build-ramdisk-miniroot.sh): ufs on k46,
@@ -19,8 +20,8 @@
 #
 # The staging roots and the per-line modules: tools/lib/ramdisk-media.sh. Each generation is
 # `kbootset -R ROOT media --cd ... --ramdisk IMAGE`, members raw; each image is then gated
-# against its generation (tools/ramdisk-image-check.py: every boot-class record's object in the
-# image byte for byte, a ufs image's block size at least 4096).
+# against its generation (tools/ramdisk-image-check.py: every boot- and demand-class record's
+# object in the image byte for byte, a ufs image's block size at least 4096).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
 die() { echo "build-ramdisk-cd: STOP: $*" >&2; exit 1; }

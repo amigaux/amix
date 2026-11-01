@@ -5,9 +5,10 @@
 
 SPEC is the generation spec kbootset media wrote (gen-k46.spec / gen-k30.spec, a floppy
 pair's V1.spec), IMAGE the line's RAM-disk image (tools/build-ramdisk-miniroot.sh): ufs on
-k46, s5 on k30. Every boot-class record (`module NAME boot SIZE path=P sha256=S ...`) must
-find P in the image holding exactly the bytes S names: the core loads it from the RAM-disk
-root after `modadmin -B` (C3-5 section 5). Since catalog b1f564f4 the kernels carry no
+k46, s5 on k30. Every boot- or demand-class record (`module NAME boot|demand SIZE path=P
+sha256=S ...`) must find P in the image holding exactly the bytes S names: the core loads a
+boot-class one from the RAM-disk root after `modadmin -B` (C3-5 section 5), a demand-class one
+at its first use (cdfs, fs=cdfs, at the first mount of the disc). Since catalog b1f564f4 the kernels carry no
 built-in ufs or s5: on k30 the kernel package's ufs is such a record (s5 is the promoted
 root), and without it the miniroot cannot mount the ufs target. A ufs image's block size
 must be at least 4096 (the k46 ufs module refuses a smaller one at mount, S5-13).
@@ -103,9 +104,9 @@ def main(args):
                 print("ramdisk-image-check: %s: ufs block size %d" % (os.path.basename(image), bs))
         get, dev = reader(img, fs)
         recs = [l.split() for l in open(spec) if l.startswith("module ") and len(l.split()) > 2
-                and l.split()[2] == "boot"]
+                and l.split()[2] in ("boot", "demand")]
         if not recs:
-            print("ramdisk-image-check: %s records no boot-class module" % spec)
+            print("ramdisk-image-check: %s records no boot- or demand-class module" % spec)
             bad = 1
         for r in recs:
             kv = dict(x.split("=", 1) for x in r[4:] if "=" in x)
@@ -115,8 +116,8 @@ def main(args):
                       % (image, kv.get("path"), r[1], kv.get("sha256", "?")[:16]))
                 bad = 1
             else:
-                print("ramdisk-image-check: %s: boot module %s at %s, sha256 %s"
-                      % (os.path.basename(image), r[1], kv["path"], kv["sha256"][:16]))
+                print("ramdisk-image-check: %s: %s module %s at %s, sha256 %s"
+                      % (os.path.basename(image), r[2], r[1], kv["path"], kv["sha256"][:16]))
         if not zen0:
             continue
         z = dev("/dev/zen0")

@@ -12,7 +12,7 @@
 # The chain this disc ends (each step's own header has the details):
 #   1. tools/build-install-iso.sh --profile <the two l11 profiles> --set full --four-card
 #        --stage STAGE --keep-stage --out MASTER.iso   (the installer tree and the full set)
-#   2. this tool, --boot-mods DIR: each line's boot-class module objects at DIR/<line>/<name>
+#   2. this tool, --boot-mods DIR: each line's boot- and demand-class module objects at DIR/<line>/<name>
 #        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
 #        (S5-33) and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
 #   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5120 [--fp-patch] --net
@@ -68,7 +68,7 @@ L11="${L11_IN:-$repo/work/l11}"
 export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 z3660eth-k46"
 export K30_MODS="ramdisk-k30 a4091-k30 z3660eth-k30"
 if [ -n "$BMODS" ]; then
-  # step 2: stage each line as its generation will be, and hand out the boot-class objects
+  # step 2: stage each line as its generation will be, and hand out the boot- and demand-class objects
   ws="$(dirname "$repo")"
   . "$here/lib/ramdisk-media.sh"
   mkdir -p "$W"; rd_init "$W/cd"   # rd_init makes W the staging dir

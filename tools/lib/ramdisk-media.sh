@@ -7,9 +7,10 @@
 # compose). The caller then runs `kbootset -R stage-LINE media --cd|--floppy ... --ramdisk`.
 #   k46: ramdisk, z3660scsi, a4091, gayle and a4kt710 (root class: the disc sits on an A4091 or
 #        the Gayle slave; the target on the Z3660, the IDE master or the A4000T's 710),
-#        cdfs (boot class, from the image's /stand/gen/1/mod); rootfs ufs, 32 MiB assumed
+#        cdfs (demand class, loaded from the image's /stand/gen/1/mod at the disc's first
+#        mount); rootfs ufs, 32 MiB assumed
 #   k30: ramdisk, a4091, z3660scsi and gayle (root class: an A4000 in 030 mode installs onto its
-#        Z3660 or its IDE master), cdfs (boot class; kern30m links no static cdfs since -17);
+#        Z3660 or its IDE master), cdfs (demand class; kern30m links no static cdfs since -17);
 #        rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
 #   gayle with `param slave=2`: the ATAPI CD on the IDE slave attaches (the install source), an ATA
 #   disk there never does (a CF as slave is unstable: the target is the master only)
@@ -61,7 +62,9 @@ rd_facts() {
 	esac
 }
 
-# rd_stage LINE -- $W/stage-LINE: the loader, the line's kernel and modules
+# rd_stage LINE -- $W/stage-LINE: the loader, the line's kernel and modules, and kbootset (a
+# kernel row's kbootset= names the lowest kbootset it composes with; apkg holds the kernel back
+# without it). The staging root is the composition root only, never on a medium.
 rd_stage() {
 	local l=$1 t="$W/stage-$1"
 	rd_facts "$l"
@@ -78,7 +81,7 @@ kbootset=$B/kbootset
 C
 	"$APKG" -c "$W/apkg-$l.conf" update > "$W/apkg-$l.log" 2>&1
 	# shellcheck disable=SC2086
-	"$APKG" -c "$W/apkg-$l.conf" -R "$t" install loader-amix "kernel-$l-m" $MODS >> "$W/apkg-$l.log" 2>&1 \
+	"$APKG" -c "$W/apkg-$l.conf" -R "$t" install kbootset loader-amix "kernel-$l-m" $MODS >> "$W/apkg-$l.log" 2>&1 \
 		|| { tail -5 "$W/apkg-$l.log" >&2; die "$l: apkg could not stage $MODS"; }
 	case " $MODS " in *" gayle-$l "*)
 		mkdir -p "$t/etc/conf/modreg.local.d"
@@ -86,8 +89,9 @@ C
 	esac
 }
 
-# rd_bootmods LINE DIR -- DIR/LINE/<name>: every boot-class module the line's generation records
-# (`module NAME boot ... path=P sha256=S`), the exact bytes, for the RAM-disk image's
+# rd_bootmods LINE DIR -- DIR/LINE/<name>: every module the line's generation loads from the root
+# (`module NAME boot|demand ... path=P sha256=S`: boot class after the root is mounted, demand
+# class at first use, cdfs at the disc's first mount), the exact bytes, for the RAM-disk image's
 # /stand/gen/1/mod (tools/build-ramdisk-miniroot.sh --mod). kbootset decides the list, so it
 # follows the staged packages: since catalog b1f564f4 the kernel package's own ufs is boot class
 # on k30 (s5 is the promoted root there) and the miniroot mounts the ufs target with it. Composed
@@ -106,7 +110,7 @@ rd_bootmods() {
 		[ "$(sha256sum < "$W/stage-$l$p" | cut -c1-64)" = "$s" ] || die "$l: stage-$l$p is not the $n its generation records"
 		cp "$W/stage-$l$p" "$d/$n"
 		echo "$n"
-	done < <(awk '$1 == "module" && $3 == "boot" { p = s = ""
+	done < <(awk '$1 == "module" && ($3 == "boot" || $3 == "demand") { p = s = ""
 		for (i = 5; i <= NF; i++) { if ($i ~ /^path=/) p = substr($i, 6); if ($i ~ /^sha256=/) s = substr($i, 8) }
 		print $2, p, s }' "$W/bm-$l.spec")
 	rm -rf "${W:?}/bm-$l" "${W:?}/bm-$l.img"
