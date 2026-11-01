@@ -17,20 +17,23 @@
 # 1.0.0-3 (2026-11-01): the same module 1.0.0-1, its objects byte-identical
 # to 1.0.0-2's, rolled from amix: the copyright file names kernel/drivers/a4091
 # and the A4000T metal boots, and the vendor is amix.
+# 1.0.0-4 (2026-11-01): the same module 1.0.0-1 and source, built with
+# gcc-cross-amix 33ebadc: .moddata says cc=gcc-2.7.2.3-33ebadc, every other
+# section equals 1.0.0-3's; for kernel-k30-m -68 and kernel-k46-m -56 or later.
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
 KM_VERSION=1.0.0-1
-KM_PKG_VERSION=1.0.0-3
+KM_PKG_VERSION=1.0.0-4
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=e65b4f7d31881dc0299a88af60ebe7ca4d28cf4d86a3fa772e6fa5d27d86ff85
-KM_K46_SHA=95bebecb6a8854423bb5180e2b9992d32cc586b9dceaf76f338fa1c6ff96ce2f
+KM_K30_SHA=17a3a63473838cd9292ea8bd94b83d30fda863286f1960b612ef189bf0a092ae
+KM_K46_SHA=2607fe5f7450fa531a257daca692cae9e3f2da96737b21723f416485eb180e12
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=6cc5dbafd168138530da0d8601a42322abbc4da9
+KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
 KM_LICENCES="\
 kernel/drivers/a4091/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
@@ -43,13 +46,15 @@ a read-only probe of the chip answers; otherwise it returns ENXIO, silent.
 The parameter declared (default -1, the tag decides; 0 never; 1 without the
 tag) overrides it: param declared=0 in /etc/conf/modreg.local.d/a4kt710
 disables the controller.  On the 68030 line (a4kt710-k30) the DMA goes
-through the module core's 030 provider, a bounce pool below 0x08000000:
-kernel-k30-m -14 or later, boot2 at amix-dlm 4003c9f or later; it is not
-supported with a Z3660 in 030 mode and is untested on metal.  On the
+through the module core's 030 provider, a bounce pool below 0x08000000
+(boot2 at amix-dlm 4003c9f or later); it is not supported with a Z3660 in
+030 mode and is untested on metal.  On the
 68040/68060 line (a4kt710-k46) the provider is the identity: an A4000T with
 a Z3660 has booted with its root on the onboard bus through this module,
 the DMA buffer in the Z3660's memory; a byte compare of that DMA is still
 open (kernel/drivers/a4091/docs/A4000T-ONBOARD-710.md sec 10.6).  The
+objects carry cc=gcc-2.7.2.3-33ebadc, so they load on kernel-k30-m -68 or
+later (a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The
 module is built from src/a4kt710.c and src/a4091-wr.c, part 1 of the NOTICE
 below (MIT); none of the NOTICE's other parts is in the object."
 
