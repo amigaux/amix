@@ -1,0 +1,9 @@
+i pkginfo
+f none /usr/lib/libamixrt.so.1 0755 root bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/amixrt 0755 root sys
+f none /opt/amix/doc/amixrt/LICENSE.libamixc99 0644 root bin
+f none /opt/amix/doc/amixrt/COPYING.RUNTIME 0644 root bin
+f none /opt/amix/doc/amixrt/COPYING3 0644 root bin
