@@ -301,7 +301,7 @@ stage() {
 #!/bin/sh
 case $1 in
 -D) echo "nm: $2: Invalid operation" >&2; exit 1 ;;
--u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}" ;;
+-u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}"; echo "         w ${STUB_WEAK:-weak_hook}" ;;
 *) echo "00018cac T printf"; echo "00001000 T exit" ;;
 esac
 """, 0o755)
@@ -593,6 +593,8 @@ stage() {
         rc, out = build("elfy", STUB_UNDEF="nosuch", **elf_env)
         check("UNDEF: refused: a symbol libc does not define",
               rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+        check("UNDEF: a weak reference no library defines is not a missing symbol",
+              "weak_hook" not in out, out)
         libc = "  NEEDED      /usr/lib/libc.so.1\n"
         rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libfoo.so.1\n  RPATH       /opt/amix/share", **elf_env)
         check("UNDEF: a bare NEEDED is found through the binary's RPATH in its own payload",

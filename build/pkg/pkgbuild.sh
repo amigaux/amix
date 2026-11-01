@@ -391,7 +391,9 @@ for b in $BINS; do
 		esac
 	fi
 	for l in $files; do dso_syms "$l"; done | LC_ALL=C sort -u > "$BUILD/needed.syms"
-	missing=$("$NM" -u "$b" | awk '{print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
+	# strong references only: a weak one (w) may stay unresolved, as libamixrt's
+	# __amix_dso_batch does in a program that does not define it
+	missing=$("$NM" -u "$b" | awk '$1 == "U" {print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
 	echo "            found:$found"
