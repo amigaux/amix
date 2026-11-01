@@ -6,7 +6,7 @@
  *
  * Verbs (docs/design.md section 2):
  *   update, list [installed|all], search <substr>, info <name>,
- *   download <name>, install <name>..., upgrade <name>...,
+ *   download <name>, install <name>..., upgrade [<name>...],
  *   remove [--purge] <name>, purge <name>, conffiles [list|resolve]
  *   [<name>], recover, version
  * Options (before the verb): -n dry-run, -f force (applies to the
@@ -44,9 +44,11 @@ static void usage(void)
         "  info <name>         show one catalog entry + installed state\n"
         "  download <name>     fetch a package into the cache and verify\n"
         "  install <name>...   resolve deps, download, pkgadd\n"
-        "  upgrade <name>...   pkgadd over the installed instances when the\n"
+        "  upgrade [<name>...] pkgadd over the installed instances when the\n"
         "                      catalog is newer, one transaction (no pkgrm;\n"
-        "                      never uninstalls)\n"
+        "                      never uninstalls); no names: every newer\n"
+        "                      package; a kernel brings its modules, the\n"
+        "                      loader and kbootset\n"
         "  remove [--purge] <name>  pkgrm; edited config files stay; an\n"
         "                      essential package is refused\n"
         "  purge <name>        remove, and delete its config files too\n"
@@ -585,10 +587,6 @@ int main(int argc, char **argv)
     }
 
     if (strcmp(verb, "upgrade") == 0) {
-        if (argc - i < 1) {
-            usage();
-            return EX_USAGE;
-        }
         if (load_catalog_or_die(&cf, &cat, &ec) != 0)
             return ec;
         rc = cmd_upgrade(&cf, &cat, argv + i, argc - i);

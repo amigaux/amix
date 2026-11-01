@@ -3112,6 +3112,186 @@ grep -q "^pkgadd .*admin.overwrite -d $FR/pkgs/ufsonly-1.0.pkg UFSONLY$" "$SHIML
 rm -rf "${ROOT:?}/var/sadm/pkg/UFSONLY" "${ROOT:?}${FT:?}"
 "$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
 
+# --- a kernel brings its set (apkg 0.3.5) -------------------------------
+# kbootset's gate 2 refuses a generation while an installed module was built
+# with another compiler pin than the kernel, so a new cut moves the kernel,
+# kbootset and every installed module of its line in ONE call, kbootset
+# first and the kernel last, the generation built once.  A fresh root on the
+# old era (kernel kset-k 1.0, modules ma..md, loader 3, kbootset -33), then
+# the new era's catalogs.
+XS=$WORK/kset; XR=$XS/root; XP=$XS/pkgs
+mkdir -p "$XP/kernel" "$XR/var/apkg" "$XR/var/sadm/install" "$XR/etc"
+cp "$ROOT/var/apkg/admin" "$XR/var/apkg/admin"
+NEWPIN=gcc-2.7.2.3-fffffff
+KB33=1.1.0.261031-33; KB34=1.1.0.261101-34; KB35=1.1.0.261102-35
+xds() {     # xds <out> <pkginst> <version> <payload-word>
+    printf 'DIR /stand\nDIR /stand/k46\nFILE /stand/k46/%s %s-%s\n' "$4" "$4" "$3" \
+        | python3 "$TESTS/mkds.py" "$XP/$1" "$2" "$3"
+}
+xds kernel/ksetk-1.0.pkg KSETK 1.0 ksetunix
+xds kernel/ksetk-2.0.pkg KSETK 2.0 ksetunix
+for m in a b c d; do
+    xds kernel/m$m-1.0.pkg MOD$(echo $m | tr a-d A-D) 1.0 mod$m
+    xds kernel/m$m-2.0.pkg MOD$(echo $m | tr a-d A-D) 2.0 mod$m
+done
+for v in 3 4; do
+    printf 'DIR /stand\nDIR /stand/loader\nFILE /stand/loader/ldrinfo version=%s\n' $v \
+        | python3 "$TESTS/mkds.py" "$XP/kernel/xloader-$v.pkg" LOADER $v
+done
+for v in $KB33 $KB34 $KB35; do
+    printf 'DIR /sbin\nFILE /sbin/kbootset kb-%s\n' $v \
+        | python3 "$TESTS/mkds.py" "$XP/kbootset-$v.pkg" kbootset $v
+done
+xk() {      # xk <name> <version> <role> <kabi> <pin> <file> [extra]: a #kpkg line
+    printf '#kpkg %s %s role=%s line=k46 kabi=%s pin=%s size=%s sha256=%s file=%s%s\n' \
+        "$1" "$2" "$3" "$4" "$5" "$(sizeof "$XP/$6")" "$(sha "$XP/$6")" "$6" "${7:+ $7}"
+}
+xcat() {    # xcat <repo dir> <kbootset version> <kernel line> <module lines> <loader version>
+    mkdir -p "$1"; ln -sfn "$XP" "$1/pkgs"
+    {
+        echo "#apkg-catalog 1"
+        echo "kbootset|$2|kbootset|kbootset-$2.pkg|$(md5of "$XP/kbootset-$2.pkg")|$(sizeof "$XP/kbootset-$2.pkg")|none|system|the generation composer"
+        echo "#ext kpkg 1"
+        echo "$3"
+        printf '%s\n' "$4"
+        printf '#kpkg loader %s role=loader line=any loader=%s size=%s sha256=%s file=kernel/xloader-%s.pkg pkginst=LOADER\n' \
+            "$5" "$5" "$(sizeof "$XP/kernel/xloader-$5.pkg")" "$(sha "$XP/kernel/xloader-$5.pkg")" "$5"
+        echo "#end kpkg"
+    } > "$1/catalog"
+}
+xmods() {   # xmods <version> <kabi> <pin> <letters>
+    for m in $4; do xk m$m "$1" module "$2" "$3" kernel/m$m-$1.pkg; done
+}
+xcat "$XS/repoA" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xmods 1.0 k46.1.0 $PIN 'a b c d')" 3
+KNEW=$(xk kset-k 2.0 kernel k46.2.0 $NEWPIN kernel/ksetk-2.0.pkg kbootset=$KB34)
+xcat "$XS/repoB" $KB35 "$KNEW" "$(xmods 2.0 k46.2.0 $NEWPIN 'a b c d')" 4
+xcat "$XS/repoL" $KB35 "$KNEW" "$(xmods 2.0 k46.2.0 $NEWPIN 'a b'; xmods 1.0 k46.1.0 $PIN 'c d')" 4
+xcat "$XS/repoK" $KB33 "$KNEW" "$(xmods 2.0 k46.2.0 $NEWPIN 'a b c d')" 4
+for r in A B L K; do
+    mkkconf "$XS/conf$r" "file://$XS/repo$r"
+    sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/conf$r"
+done
+xa() { APKG_ROOT=$XR "$APKG" "$@"; }
+xreset() { kreset; rm -rf "${XR:?}"/var/apkg/kpkg "${XR:?}"/var/sadm/pkg "${XR:?}"/stand "${XR:?}"/sbin
+    : > "$XR/var/sadm/install/contents"
+    xa -c "$XS/confA" update >/dev/null 2>&1
+    xa -c "$XS/confA" install kset-k ma mb mc md loader kbootset >/dev/null 2>&1
+    kreset; }
+xreset
+grep -qx "version 1.0" "$XR/var/apkg/kpkg/md" && grep -q "^VERSION=$KB33" "$XR/var/sadm/pkg/kbootset/pkginfo" \
+    && ok "the old era is installed: kset-k 1.0, ma..md 1.0, loader 3, kbootset -33" \
+    || bad "old-era install" "$(ls -R "$XR/var/apkg/kpkg" 2>&1)"
+
+# every misfit module is named before anything is fetched
+xa -c "$XS/confL" update >/dev/null 2>&1
+run 5 "upgrade kset-k with mc, md left at the old pin: refused (exit 5)" \
+    xa -c "$XS/confL" upgrade kset-k
+echo "$OUT" | grep -q "the installed module mc must be upgraded or removed with the kernel kset-k" && \
+echo "$OUT" | grep -q "the installed module md must be upgraded or removed with the kernel kset-k" && \
+echo "$OUT" | grep "2 installed modules would be left behind:" | grep -q " mc" && \
+echo "$OUT" | grep "2 installed modules would be left behind:" | grep -q " md" && \
+echo "$OUT" | grep -q "'apkg upgrade' with no names takes every newer package), or 'apkg remove' them; nothing was changed" \
+    && ok "the refusal names mc and md, then one summary with the two ways out" \
+    || bad "misfit listing" "$OUT"
+echo "$OUT" | grep -qx "apkg: mc: kabi k46.1.0 does not match the kernel kset-k (kabi k46.2.0)" \
+    && ok "... each with why (the kabi major)" || bad "misfit why" "$OUT"
+[ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && grep -qx "version 1.0" "$XR/var/apkg/kpkg/kset-k" \
+    && ok "... and nothing ran: no pkgadd, no kbootset, kset-k still 1.0" \
+    || bad "a refused set ran something" "$(cat "$SHIMLOG" "$KLOG")"
+
+# the kernel's kbootset floor (C2-2 v6): the catalog's kbootset is not new enough
+kreset
+xa -c "$XS/confK" update >/dev/null 2>&1
+run 5 "a kernel with kbootset=-34 and only -33 anywhere: refused (exit 5)" \
+    xa -c "$XS/confK" upgrade kset-k
+echo "$OUT" | grep -q "kset-k needs kbootset $KB34 or newer; $KB33 is installed and the catalog has none newer" \
+    && [ ! -s "$SHIMLOG" ] && ok "it names the floor and the installed -33 (so -33 < -34), nothing ran" \
+    || bad "kbootset floor refusal" "$OUT"
+
+# -n: the set, and nothing runs
+kreset
+xa -c "$XS/confB" update >/dev/null 2>&1
+run 0 "-n upgrade kset-k shows the whole set" xa -n -c "$XS/confB" upgrade kset-k
+for m in ma mb mc md; do
+    echo "$OUT" | grep -qx "with the kernel kset-k: upgrading $m 1.0 -> 2.0" || bad "-n set lacks $m" "$OUT"
+done
+echo "$OUT" | grep -qx "with the new kernel: upgrading loader 3 -> 4" && \
+echo "$OUT" | grep -qx "with the new kernel: upgrading kbootset $KB33 -> $KB35" && [ ! -s "$SHIMLOG" ] \
+    && ok "... the four modules, the loader and kbootset; no pkgadd" || bad "-n set" "$OUT $(cat "$SHIMLOG")"
+
+# the set in one call: kbootset first, the loader, the modules, the kernel last
+kreset
+run 0 "upgrade kset-k brings its set and takes it (rc 0)" xa -c "$XS/confB" upgrade kset-k
+ORDER=$(sed -n 's/^pkgadd .* \([A-Za-z]*\)$/\1/p' "$SHIMLOG" | tr '\n' ' ')
+case "$ORDER" in
+"kbootset LOADER MOD"?" MOD"?" MOD"?" MOD"?" KSETK ") ok "pkgadd order: kbootset, LOADER, the four modules, KSETK last" ;;
+*) bad "set order" "$ORDER" ;;
+esac
+[ "$(cat "$KLOG")" = "kbootset --journal /var/kbootset/journal build
+kbootset --journal /var/kbootset/journal commit" ] \
+    && ok "ONE kbootset build + commit, after the last pkgadd" || bad "set trigger" "$(cat "$KLOG")"
+grep -qx "version 2.0" "$XR/var/apkg/kpkg/kset-k" && grep -qx "version 2.0" "$XR/var/apkg/kpkg/md" && \
+grep -qx "loader 4" "$XR/var/apkg/kpkg/LOADER" && grep -q "^VERSION=$KB35" "$XR/var/sadm/pkg/kbootset/pkginfo" \
+    && ok "the records and kbootset say the new era ($KB35 meets the -34 floor)" \
+    || bad "records after the set" "$(cat "$XR/var/apkg/kpkg/kset-k")"
+
+# no names: every newer package, one transaction; then nothing to do
+xreset
+xa -c "$XS/confB" update >/dev/null 2>&1
+kreset
+run 0 "'apkg upgrade' with no names (rc 0)" xa -c "$XS/confB" upgrade
+[ "$(grep -c '^pkgadd' "$SHIMLOG")" = 7 ] && [ "$(grep -c build "$KLOG")" = 1 ] && \
+sed -n 's/^pkgadd .* \([A-Za-z]*\)$/\1/p' "$SHIMLOG" | head -1 | grep -qx kbootset && \
+sed -n 's/^pkgadd .* \([A-Za-z]*\)$/\1/p' "$SHIMLOG" | tail -1 | grep -qx KSETK \
+    && ok "seven pkgadds (kbootset first, KSETK last), one generation build" \
+    || bad "no-name upgrade" "$OUT $(cat "$SHIMLOG")"
+kreset
+run 0 "'apkg upgrade' again: nothing newer" xa -c "$XS/confB" upgrade
+echo "$OUT" | grep -qx "every installed package is up to date" && [ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] \
+    && ok "it says so and runs nothing" || bad "no-name up to date" "$OUT"
+
+# a misfit already installed (not in the call) refuses a kernel-space call
+xreset
+sed -i "s/^pin .*/pin gcc-other/" "$XR/var/apkg/kpkg/md"
+xcat "$XS/repoM" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xmods 2.0 k46.1.0 $PIN 'a'; xmods 1.0 k46.1.0 $PIN 'b c d')" 3
+mkkconf "$XS/confM" "file://$XS/repoM"
+sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/confM"
+xa -c "$XS/confM" update >/dev/null 2>&1
+kreset
+run 5 "upgrade ma while md's record has another pin: refused (exit 5)" xa -c "$XS/confM" upgrade ma
+echo "$OUT" | grep -q "the installed module md does not fit the installed kernel kset-k" && \
+echo "$OUT" | grep -q "1 installed module would be left behind: md" && [ ! -s "$SHIMLOG" ] \
+    && ok "the installed misfit is named, nothing ran" || bad "installed misfit" "$OUT"
+
+# a gate refusal: the old generation still boots, and apkg says what to fix
+kreset
+echo "build=4" > "$WORK/kb.mode"
+run 7 "kbootset refuses at a gate on remove (exit 7)" xa -c "$XS/confM" remove ma
+echo "$OUT" | grep -q "the installed module md does not fit the kernel kset-k: compiler pin gcc-other differs" && \
+echo "$OUT" | grep -q "the generation committed before still boots" \
+    && ok "the diagnosis names md and says the old generation still boots" || bad "gate diagnosis" "$OUT"
+sed -i "s/^pin .*/pin $PIN/" "$XR/var/apkg/kpkg/md"
+kreset
+echo "build=4" > "$WORK/kb.mode"
+run 7 "a gate refusal with every module fitting (exit 7)" xa -c "$XS/confM" install ma
+echo "$OUT" | grep -q "every installed module fits its kernel by kabi and pin; kbootset's line above names the gate" \
+    && ok "... says no module misfits and points at kbootset's line" || bad "gate diagnosis, no misfit" "$OUT"
+kreset
+
+# the catalog: kbootset= only on a kernel row
+xcat "$XS/repoX" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg kbootset=$KB34)" 3
+mkkconf "$XS/confX" "file://$XS/repoX"
+xa -c "$XS/confX" update >/dev/null 2>&1
+run 0 "info on a module row carrying kbootset=" xa -c "$XS/confX" info ma
+echo "$OUT" | grep -q "Refused:     only a kernel entry may carry kbootset= (C2-2 v6 §1.1)" \
+    && ok "a module row with kbootset= is refused" || bad "kbootset= on a module" "$OUT"
+run 0 "info on the kernel row with kbootset=" xa -c "$XS/confB" info kset-k
+echo "$OUT" | grep -q "Refused" && bad "a kernel row with kbootset= refused" "$OUT" \
+    || ok "a kernel row with kbootset= is accepted"
+
 # ------------------------------------------------ exit-code sanity extras
 run 1 "unknown verb fails with exit 1" "$APKG" frobnicate
 run 1 "missing -c file fails with exit 1" "$APKG" -c /nonexistent-conf list

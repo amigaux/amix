@@ -63,7 +63,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # default repository is the 1.1 tree.  Staged, NOT published.  NOTES
 # 2026-11-01.
 # 0.3.3 is staged with the old payload: one version, one byte set.
-VER_APKG="0.3.4"
+# 0.3.5 (2026-11-01, not minted yet): a new kernel cut upgrades as one set
+# -- `apkg upgrade` with no names, a kernel brings its modules, the loader
+# and kbootset, kbootset first and the kernel last, the pre-flight over
+# every installed module, a kernel row's kbootset= floor (C2-2 v6), and
+# what to fix after a gate refusal.  0.3.4 (c19cb40f...) stays what it is.
+VER_APKG="0.3.5"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -94,10 +99,11 @@ VER_ENG="1.12.5"
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
-# file's last commit (which every arm here shares).  Both: 2026-10-30
-# 00:00:00 UTC, the day 0.3.4 and 1.12.5 were set.  The other arms roll
-# without one, as before.
-EPOCH_APKG=1793318400
+# file's last commit (which every arm here shares).  EPOCH_ENG:
+# 2026-10-30 00:00:00 UTC, the day 1.12.5 was set; EPOCH_APKG: 2026-11-01
+# 00:00:00 UTC, the day 0.3.5 was set (0.3.4's was 1793318400).  The other
+# arms roll without one, as before.
+EPOCH_APKG=1793491200
 EPOCH_ENG=1793318400
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
@@ -540,6 +546,10 @@ EOF
   # so its bytes are no longer 0.2.2's: an upgraded box keeps its own conf
   # (the root URL, which the host sends on to the 1.0 tree) and gets the new
   # default as /etc/apkg.conf.new; a fresh install gets the 1.1 repo.
+  #
+  # Version 0.3.5 (2026-11-01, not minted).  The apkg binary and apkg.1
+  # change (a kernel cut upgrades as one set); every other payload byte is
+  # 0.3.4's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

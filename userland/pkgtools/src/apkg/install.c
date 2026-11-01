@@ -895,6 +895,73 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
  * question the way SVR4 always could: the old inode stays alive for the
  * running process while the directory entry is replaced.
  */
+/* the place of a package in an upgrade (0.3.5): kbootset first, the
+ * other ordinary packages, the loader, the modules, the kernel last.  The
+ * generation is built once, after all of them; the order decides what a
+ * failure midway leaves (the journal, 'apkg recover'). */
+static int set_rank(const struct pkgent *e)
+{
+    if (!e->kspace)
+        return strcmp(e->name, KBOOTSET_PKG) == 0 ? 0 : 1;
+    if (strcmp(e->role, "loader") == 0)
+        return 2;
+    if (strcmp(e->role, "module") == 0)
+        return 3;
+    return 4;
+}
+
+/* stable: insertion sort by rank, todo[] and ow[] together */
+static void order_set(struct pkgent **todo, int *ow, int nt)
+{
+    struct pkgent *e;
+    int o;
+    int i, j;
+
+    for (i = 1; i < nt; i++) {
+        e = todo[i];
+        o = ow[i];
+        for (j = i; j > 0 && set_rank(todo[j - 1]) > set_rank(e); j--) {
+            todo[j] = todo[j - 1];
+            ow[j] = ow[j - 1];
+        }
+        todo[j] = e;
+        ow[j] = o;
+    }
+}
+
+int cmd_upgrade(const struct conf *cf, struct catalog *cat,
+                char **names, int nnames);
+
+/* `apkg upgrade` with no names: every installed package the catalog has a
+ * newer version of, one transaction (a refused entry is left out) */
+static int upgrade_all(const struct conf *cf, struct catalog *cat)
+{
+    char **names;
+    char iver[128];
+    struct pkgent *e;
+    int n;
+    int i;
+    int rc;
+
+    names = (char **)xmalloc((unsigned)((cat->n + 1) * sizeof(char *)));
+    n = 0;
+    for (i = 0; i < cat->n; i++) {
+        e = &cat->ents[i];
+        if (e->refused != NULL || !ent_installed(cf, e, iver, sizeof(iver)) ||
+            apkg_vercmp(e->version, iver) <= 0)
+            continue;
+        names[n++] = e->name;
+    }
+    if (n == 0) {
+        printf("every installed package is up to date\n");
+        free((char *)names);
+        return EX_OK;
+    }
+    rc = cmd_upgrade(cf, cat, names, n);
+    free((char *)names);
+    return rc;
+}
+
 int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                 char **names, int nnames)
 {
@@ -922,8 +989,12 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
      * generation per package.  Every name is checked before anything is
      * fetched: one that is not in the catalog (exit 5) or not installed
      * (exit 1) refuses the whole call; one already up to date is
-     * reported and left out.  Only the NAMED packages move -- no
-     * dependency is pulled in, exactly as for one name. */
+     * reported and left out.  No dependency is pulled in, exactly as for
+     * one name; but a kernel brings its set (kspace_expand: the modules
+     * of its line, the loader, kbootset).  No names: every installed
+     * package the catalog has a newer version of (0.3.5). */
+    if (nnames == 0)
+        return upgrade_all(cf, cat);
     todo = (struct pkgent **)xmalloc(
         (unsigned)(nnames * sizeof(struct pkgent *)));
     ow = (int *)xmalloc((unsigned)(nnames * sizeof(int)));
@@ -965,6 +1036,8 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         free((char *)ow);
         return rc;
     }
+    kspace_expand(cf, cat, &todo, &ow, &nt);
+    order_set(todo, ow, nt);
     /* an upgrade keeps its pkginst, so it replaces no other kernel
      * package; kspace_replaces() still refuses a line with two kernel
      * records (C2-2 v5 §2.1) */

@@ -130,6 +130,8 @@ static void ent_free(struct pkgent *e)
         free(e->loaderv);
         if (e->kpkginst != NULL)
             free(e->kpkginst);
+        if (e->kbootmin != NULL)
+            free(e->kbootmin);
         if (e->refused != NULL)
             free(e->refused);
     }
@@ -225,7 +227,7 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     int nt;
     int i;
     int seen_role, seen_line, seen_kabi, seen_pin, seen_size, seen_sha,
-        seen_file, seen_pkginst, seen_offset, seen_loader;
+        seen_file, seen_pkginst, seen_offset, seen_loader, seen_kbootset;
     int loader;
 
     nt = 0;
@@ -257,7 +259,8 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
     e->name = xstrdup(tok[1]);
     e->version = xstrdup(tok[2]);
     seen_role = seen_line = seen_kabi = seen_pin = seen_size = seen_sha =
-        seen_file = seen_pkginst = seen_offset = seen_loader = 0;
+        seen_file = seen_pkginst = seen_offset = seen_loader =
+        seen_kbootset = 0;
     for (i = 3; i < nt; i++) {
         eq = strchr(tok[i], '=');
         if (eq == NULL || eq == tok[i]) {
@@ -330,6 +333,14 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
                 krefuse(e, "bad offset", val);
             else
                 e->offset = atol(val);
+        } else if (strcmp(key, "kbootset") == 0) {
+            /* C2-2 v6 §1.1: the lowest kbootset package version that
+             * composes a generation with this kernel */
+            if (kdup(&seen_kbootset, e, key))
+                continue;
+            if (!safe_word(val))
+                krefuse(e, "bad kbootset", val);
+            e->kbootmin = xstrdup(val);
         } else if (key[0] == '!') {
             krefuse(e, "unknown mandatory key", key);
         }
@@ -361,6 +372,8 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         if (!seen_pin)
             krefuse(e, "missing key", "pin= (C2-2 v3 §1.1)");
     }
+    if (seen_kbootset && (e->role == NULL || strcmp(e->role, "kernel") != 0))
+        krefuse(e, "only a kernel entry may carry", "kbootset= (C2-2 v6 §1.1)");
     if (!seen_size)
         krefuse(e, "missing key", "size=");
     if (!seen_sha)

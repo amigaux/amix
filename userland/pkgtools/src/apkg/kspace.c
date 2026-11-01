@@ -1054,41 +1054,76 @@ static int kabi_parse(const char *tag, char *fam, unsigned famcap,
     return 0;
 }
 
+/* why[] = the concatenation of the NULL-terminated parts, cut at cap */
+static void whycat(char *why, unsigned cap, const char *p1, const char *p2,
+                   const char *p3, const char *p4, const char *p5,
+                   const char *p6, const char *p7)
+{
+    const char *part[7];
+    const char *q;
+    unsigned n;
+    int i;
+
+    part[0] = p1; part[1] = p2; part[2] = p3; part[3] = p4;
+    part[4] = p5; part[5] = p6; part[6] = p7;
+    n = 0;
+    for (i = 0; i < 7 && part[i] != NULL; i++)
+        for (q = part[i]; *q != '\0' && n + 1 < cap; q++)
+            why[n++] = *q;
+    why[n] = '\0';
+}
+
+/* one module against one kernel: 0 fits, -1 does not (why[] says, in
+ * the words module_fits prints after the module's name) */
+static int module_why(const char *mline, const char *mkabi,
+                      const char *mpin, const char *kname,
+                      const char *kkabi, const char *kpin,
+                      char *why, unsigned cap)
+{
+    char mf[32], kf[32];
+    long mmaj, mmin, kmaj, kmin;
+
+    if (kabi_parse(kkabi, kf, sizeof(kf), &kmaj, &kmin) != 0 || kmaj == 0) {
+        whycat(why, cap, "the kernel ", kname, " (kabi ", kkabi,
+               ") is static and takes no modules", NULL, NULL);
+        return -1;
+    }
+    if (kabi_parse(mkabi, mf, sizeof(mf), &mmaj, &mmin) != 0) {
+        whycat(why, cap, "kabi '", mkabi,
+               "' is not <family>.<major>.<minor>", NULL, NULL, NULL, NULL);
+        return -1;
+    }
+    if (strcmp(mf, mline) != 0 || strcmp(mf, kf) != 0 || mmaj != kmaj) {
+        whycat(why, cap, "kabi ", mkabi, " does not match the kernel ",
+               kname, " (kabi ", kkabi, ")");
+        return -1;
+    }
+    if (mmin > kmin) {
+        whycat(why, cap, "kabi ", mkabi, " needs a newer kernel than ",
+               kname, " (kabi ", kkabi, ")");
+        return -1;
+    }
+    if (strcmp(mpin, kpin) != 0) {
+        whycat(why, cap, "compiler pin ", mpin, " differs from the kernel ",
+               kname, "'s (", kpin, ")");
+        return -1;
+    }
+    return 0;
+}
+
 /* one module against one kernel; 0 fits, -1 refused (message printed) */
 static int module_fits(const char *mname, const char *mline,
                        const char *mkabi, const char *mpin,
                        const char *kname, const char *kkabi,
                        const char *kpin)
 {
-    char mf[32], kf[32];
-    long mmaj, mmin, kmaj, kmin;
+    char why[768];
 
-    if (kabi_parse(kkabi, kf, sizeof(kf), &kmaj, &kmin) != 0 || kmaj == 0) {
-        warnx2("%s: the kernel %s (kabi %s) is static and takes no "
-               "modules", mname, kname, kkabi);
-        return -1;
-    }
-    if (kabi_parse(mkabi, mf, sizeof(mf), &mmaj, &mmin) != 0) {
-        warnx2("%s: kabi '%s' is not <family>.<major>.<minor>", mname,
-               mkabi);
-        return -1;
-    }
-    if (strcmp(mf, mline) != 0 || strcmp(mf, kf) != 0 || mmaj != kmaj) {
-        warnx2("%s: kabi %s does not match the kernel %s (kabi %s)",
-               mname, mkabi, kname, kkabi);
-        return -1;
-    }
-    if (mmin > kmin) {
-        warnx2("%s: kabi %s needs a newer kernel than %s (kabi %s)",
-               mname, mkabi, kname, kkabi);
-        return -1;
-    }
-    if (strcmp(mpin, kpin) != 0) {
-        warnx2("%s: compiler pin %s differs from the kernel %s's (%s)",
-               mname, mpin, kname, kpin);
-        return -1;
-    }
-    return 0;
+    if (module_why(mline, mkabi, mpin, kname, kkabi, kpin, why,
+                   sizeof(why)) == 0)
+        return 0;
+    warnx2("%s: %s", mname, why);
+    return -1;
 }
 
 static int in_todo(struct pkgent **todo, int nt, const char *name)
@@ -1144,10 +1179,19 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
     DIR *d;
     struct dirent *de;
     const char *mname;
+    char why[768];
+    char left[1024];
+    char kbver[128];
+    struct pkgent *kb;
     int i, j;
     int bad;
+    int nk;
+    int nleft;
 
     bad = 0;
+    nk = 0;
+    for (i = 0; i < nt; i++)
+        nk += todo[i]->kspace;
     for (i = 0; i < nt; i++) {
         if (!todo[i]->kspace)
             continue;
@@ -1196,46 +1240,242 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         }
     }
 
-    /* a new kernel against the installed modules of its line that this
-     * transaction does not replace: they must follow it (-f does not
-     * override; a kernel without its modules may not boot) */
+    /* a kernel's kbootset= (C2-2 v6 §1.1): the kbootset that builds the
+     * generation -- the transaction's, else the installed one -- must be
+     * at least that version, or the new kernel's generation is composed
+     * by a kbootset that does not know it */
     for (i = 0; i < nt; i++) {
-        if (!todo[i]->kspace || strcmp(todo[i]->role, "kernel") != 0)
+        if (!todo[i]->kspace || strcmp(todo[i]->role, "kernel") != 0 ||
+            todo[i]->kbootmin == NULL)
             continue;
-        d = opendir(cf->kpkgdir);
-        if (d == NULL)
+        kb = NULL;
+        for (j = 0; j < nt; j++)
+            if (!todo[j]->kspace && strcmp(todo[j]->name, KBOOTSET_PKG) == 0)
+                kb = todo[j];
+        if (kb != NULL) {
+            if (apkg_vercmp(kb->version, todo[i]->kbootmin) >= 0)
+                continue;
+            warnx2("%s needs kbootset %s or newer; this call brings %s",
+                   todo[i]->name, todo[i]->kbootmin, kb->version);
+        } else if (installed_version(cf, KBOOTSET_PKG, kbver,
+                                     sizeof(kbver))) {
+            if (apkg_vercmp(kbver, todo[i]->kbootmin) >= 0)
+                continue;
+            warnx2("%s needs kbootset %s or newer; %s is installed and "
+                   "the catalog has none newer", todo[i]->name,
+                   todo[i]->kbootmin, kbver);
+        } else {
+            warnx2("%s needs kbootset %s or newer; none is installed",
+                   todo[i]->name, todo[i]->kbootmin);
+        }
+        warnx2("the committed generation is unchanged; the kernel waits "
+               "for that kbootset");
+        bad = 1;
+    }
+
+    /* every installed module the transaction does not move, against the
+     * kernel its line will have: the transaction's, else the installed
+     * one (kbootset gate 2 refuses a generation with one misfit, so the
+     * whole set is checked here, before anything is fetched).  -f does
+     * not override: a kernel without its modules may not boot.  Every
+     * misfit is named, then one summary says what to do. */
+    nleft = 0;
+    left[0] = '\0';
+    d = (nk > 0) ? opendir(cf->kpkgdir) : NULL;
+    while (d != NULL && (de = readdir(d)) != NULL) {
+        if (rec_skip(de->d_name) || rec_read(cf, de->d_name, &mr) != 0 ||
+            strcmp(mr.role, "module") != 0)
             continue;
-        while ((de = readdir(d)) != NULL) {
-            if (rec_skip(de->d_name) ||
-                rec_read(cf, de->d_name, &mr) != 0 ||
-                strcmp(mr.role, "module") != 0 ||
-                strcmp(mr.line, todo[i]->kline) != 0)
-                continue;
-            mname = mr.name[0] != '\0' ? mr.name : de->d_name;
-            if (in_todo(todo, nt, mname))
-                continue;
+        mname = mr.name[0] != '\0' ? mr.name : de->d_name;
+        if (in_todo(todo, nt, mname))
+            continue;
+        k = NULL;
+        for (j = 0; j < nt; j++)
+            if (todo[j]->kspace && strcmp(todo[j]->role, "kernel") == 0 &&
+                strcmp(todo[j]->kline, mr.line) == 0)
+                k = todo[j];
+        if (k != NULL) {
             /* C2-2 v5 §2.1: going back to a static kernel needs the
              * module packages removed first */
-            if (kabi_parse(todo[i]->kabi, fam, sizeof(fam), &maj, &min) != 0
-                || maj == 0) {
+            if (kabi_parse(k->kabi, fam, sizeof(fam), &maj, &min) != 0 ||
+                maj == 0) {
                 warnx2("%s: built for kabi %s, the new kernel %s is static: "
                        "remove the module packages first", mname, mr.kabi,
-                       todo[i]->name);
+                       k->name);
                 bad = 1;
                 continue;
             }
-            if (module_fits(mname, mr.line, mr.kabi, mr.pin,
-                            todo[i]->name, todo[i]->kabi,
-                            todo[i]->pin) != 0) {
-                warnx2("the installed module %s must be upgraded or "
-                       "removed with the kernel %s", mname,
-                       todo[i]->name);
-                bad = 1;
-            }
+            if (module_why(mr.line, mr.kabi, mr.pin, k->name, k->kabi,
+                           k->pin, why, sizeof(why)) == 0)
+                continue;
+            warnx2("%s: %s", mname, why);
+            warnx2("the installed module %s must be upgraded or "
+                   "removed with the kernel %s", mname, k->name);
+        } else if (installed_kernel(cf, mr.line, kname, sizeof(kname),
+                                    &kr) == 0) {
+            if (module_why(mr.line, mr.kabi, mr.pin, kname, kr.kabi,
+                           kr.pin, why, sizeof(why)) == 0)
+                continue;
+            warnx2("%s: %s", mname, why);
+            warnx2("the installed module %s does not fit the installed "
+                   "kernel %s", mname, kname);
+        } else {
+            warnx2("the installed module %s has no kernel of line %s "
+                   "installed or in this transaction", mname, mr.line);
         }
+        bad = 1;
+        nleft++;
+        if (strlen(left) + strlen(mname) + 2 < sizeof(left)) {
+            if (left[0] != '\0')
+                strcat(left, " ");
+            strcat(left, mname);
+        }
+    }
+    if (d != NULL)
         closedir(d);
+    if (nleft > 0) {
+        warnx2("%d installed module%s would be left behind: %s", nleft,
+               nleft == 1 ? "" : "s", left);
+        warnx2("upgrade %s in the same call when the catalog has a "
+               "version that fits ('apkg upgrade' with no names takes "
+               "every newer package), or 'apkg remove' %s; nothing was "
+               "changed", nleft == 1 ? "it" : "them",
+               nleft == 1 ? "it" : "them");
     }
     return bad ? EX_DEPS : EX_OK;
+}
+
+/* ---------------- a kernel brings its set (apkg 0.3.5) ----------------
+ *
+ * A new cut moves the kernel package, kbootset and every installed module
+ * package of its line together: kbootset's gate 2 refuses a generation
+ * while a module was built with another compiler pin than the kernel, so
+ * the generation is built once, after all of them.  kspace_expand() adds
+ * what the catalog has for that; kspace_preflight() refuses what is still
+ * left behind; install.c orders the set (kbootset first, the kernel last).
+ */
+
+static void add_todo(struct pkgent ***todo, int **ow, int *nt,
+                     struct pkgent *e, const char *why, const char *from)
+{
+    *todo = (struct pkgent **)xrealloc((char *)*todo,
+        (unsigned)((*nt + 1) * sizeof(struct pkgent *)));
+    *ow = (int *)xrealloc((char *)*ow, (unsigned)((*nt + 1) * sizeof(int)));
+    (*todo)[*nt] = e;
+    (*ow)[*nt] = 1;
+    (*nt)++;
+    printf("with %s: upgrading %s %s -> %s\n", why, e->name, from,
+           e->version);
+}
+
+void kspace_expand(const struct conf *cf, struct catalog *cat,
+                   struct pkgent ***todo, int **ow, int *nt)
+{
+    struct krec mr;
+    struct pkgent *k;
+    struct pkgent *e;
+    DIR *d;
+    struct dirent *de;
+    const char *mname;
+    char why[768];
+    char kwhy[300];
+    char ver[128];
+    int nt0;
+    int nkern;
+    int i, j;
+
+    nt0 = *nt;
+    nkern = 0;
+    for (i = 0; i < nt0; i++) {
+        k = (*todo)[i];
+        if (!k->kspace || strcmp(k->role, "kernel") != 0)
+            continue;
+        nkern++;
+        whycat(kwhy, sizeof(kwhy), "the kernel ", k->name, NULL, NULL, NULL,
+               NULL, NULL);
+        d = opendir(cf->kpkgdir);
+        while (d != NULL && (de = readdir(d)) != NULL) {
+            if (rec_skip(de->d_name) || rec_read(cf, de->d_name, &mr) != 0 ||
+                strcmp(mr.role, "module") != 0 ||
+                strcmp(mr.line, k->kline) != 0)
+                continue;
+            mname = mr.name[0] != '\0' ? mr.name : de->d_name;
+            if (in_todo(*todo, *nt, mname))
+                continue;
+            e = catalog_find(cat, mname);
+            if (e == NULL || !e->kspace || e->refused != NULL ||
+                strcmp(e->role, "module") != 0 ||
+                apkg_vercmp(e->version, mr.version) <= 0)
+                continue;
+            if (module_why(e->kline, e->kabi, e->pin, k->name, k->kabi,
+                           k->pin, why, sizeof(why)) != 0)
+                continue;       /* the pre-flight names it */
+            add_todo(todo, ow, nt, e, kwhy, mr.version);
+        }
+        if (d != NULL)
+            closedir(d);
+    }
+    if (nkern == 0)
+        return;
+    /* the loader and kbootset, when the catalog has newer ones */
+    for (j = 0; j < cat->n; j++) {
+        e = &cat->ents[j];
+        if (!e->kspace || e->refused != NULL ||
+            strcmp(e->role, "loader") != 0 || in_todo(*todo, *nt, e->name))
+            continue;
+        if (kpkg_installed(cf, e->pkginst, ver, sizeof(ver)) &&
+            apkg_vercmp(e->version, ver) > 0)
+            add_todo(todo, ow, nt, e, "the new kernel", ver);
+    }
+    e = catalog_find(cat, KBOOTSET_PKG);
+    if (e != NULL && !e->kspace && !in_todo(*todo, *nt, e->name) &&
+        installed_version(cf, e->pkginst, ver, sizeof(ver)) &&
+        apkg_vercmp(e->version, ver) > 0)
+        add_todo(todo, ow, nt, e, "the new kernel", ver);
+}
+
+void kspace_diagnose(const struct conf *cf)
+{
+    struct krec mr;
+    struct krec kr;
+    DIR *d;
+    struct dirent *de;
+    const char *mname;
+    char kname[256];
+    char why[768];
+    int n;
+
+    n = 0;
+    d = opendir(cf->kpkgdir);
+    while (d != NULL && (de = readdir(d)) != NULL) {
+        if (rec_skip(de->d_name) || rec_read(cf, de->d_name, &mr) != 0 ||
+            strcmp(mr.role, "module") != 0)
+            continue;
+        mname = mr.name[0] != '\0' ? mr.name : de->d_name;
+        if (installed_kernel(cf, mr.line, kname, sizeof(kname), &kr) != 0) {
+            warnx2("the installed module %s has no kernel of line %s",
+                   mname, mr.line);
+            n++;
+            continue;
+        }
+        if (module_why(mr.line, mr.kabi, mr.pin, kname, kr.kabi, kr.pin,
+                       why, sizeof(why)) == 0)
+            continue;
+        warnx2("the installed module %s does not fit the kernel %s: %s",
+               mname, kname, why);
+        n++;
+    }
+    if (d != NULL)
+        closedir(d);
+    if (n > 0)
+        warnx2("upgrade %s ('apkg upgrade' with no names takes every newer "
+               "package) or 'apkg remove' %s, and the generation is built "
+               "then", n == 1 ? "it" : "them", n == 1 ? "it" : "them");
+    else
+        warnx2("every installed module fits its kernel by kabi and pin; "
+               "kbootset's line above names the gate ('kbootset status' "
+               "shows the store)");
+    warnx2("the generation committed before still boots");
 }
 
 /* ---------------- one kernel package per line (C2-2 v5 §2.1) ----------
@@ -1653,6 +1893,8 @@ int kspace_trigger(const struct conf *cf, struct txn *t)
         return EX_BOOTSET;
     }
     rc = kb_call(cf, "build", last, sizeof(last));
+    if (rc == EX_BOOTGATE)
+        kspace_diagnose(cf);
     if (rc != EX_OK)
         return rc;
     /* between the two calls the built generation can be inspected

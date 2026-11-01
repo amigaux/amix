@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.4"
+#define APKG_VERSION "0.3.5"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -296,6 +296,8 @@ struct pkgent {
     char *sha256;     /* 64 lowercase hex of the datastream as served  */
     char *loaderv;    /* loader=<n> of a loader entry; "-" otherwise   */
     char *kpkginst;   /* optional pkginst= key; NULL = from the datastream */
+    char *kbootmin;   /* a kernel's kbootset= (C2-2 v6): the lowest kbootset
+                       * version; NULL = no requirement                   */
     char *refused;    /* NULL, or why the entry may not be installed   */
 };
 
@@ -489,6 +491,20 @@ extern int kpkg_remove_record(const struct conf *cf, const char *key);
  * EX_* on refusal (message printed). */
 extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
                             int nt);
+/* the catalog name and pkginst of the kbootset package (an ordinary entry,
+ * C2-2 §1.1) */
+#define KBOOTSET_PKG "kbootset"
+/* A kernel in the transaction brings its set (apkg 0.3.5): every installed
+ * module of its line the transaction does not move whose catalog version
+ * is newer and fits the new kernel, then the loader and kbootset when the
+ * catalog has newer ones; each addition is printed.  *todo and *ow grow
+ * (xrealloc), *nt counts them.  A module left behind that does not fit is
+ * the pre-flight's to refuse. */
+extern void kspace_expand(const struct conf *cf, struct catalog *cat,
+                          struct pkgent ***todo, int **ow, int *nt);
+/* after kbootset refused at a gate: name every installed module that does
+ * not fit the installed kernel of its line, and what to do */
+extern void kspace_diagnose(const struct conf *cf);
 /* One kernel package per line (C2-2 v5 §2.1).  Every kernel package of a
  * line installs /stand/<line>/unix, so a transaction that installs a
  * role=kernel package replaces the kernel package of the same line that

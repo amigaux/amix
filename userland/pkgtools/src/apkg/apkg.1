@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "October 2026" "apkg 0.3.4" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.5" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -118,9 +118,9 @@ A package that names the filesystems it needs (see
 below) and would land on another is refused before anything is
 installed.
 .TP
-.BI upgrade " name" ...
-For each named package whose catalog version is newer than the installed
-one, download and verify the new package and then run a single
+.BR upgrade " [" \fIname\fP ...]
+For each named package (with no names: each installed package) whose
+catalog version is newer than the installed one, download and verify the new package and then run a single
 .B pkgadd
 over the installed instance, with an
 .B instance=overwrite
@@ -144,7 +144,20 @@ one journal covers them, and a transaction that changes kernel space ends
 with one kbootset build and commit (so a kernel, the loader and kbootset
 upgrade into one generation).  A name not in the catalog (exit 5) or not
 installed (exit 1) refuses the whole call before anything is fetched.  No
-dependency is pulled in: only the named packages move.
+dependency is pulled in, with one exception: a kernel brings its set (see
+.BR "KERNEL SPACE" ).
+.IP
+With no names, every installed package whose catalog version is newer
+moves, as one transaction ("every installed package is up to date" when
+there is none).  This is the way to take a new kernel cut: the kernel,
+kbootset, the loader and every module package move together.
+.IP
+The packages of a transaction are installed in this order: kbootset,
+the other ordinary packages, the loader, the modules, the kernel last.
+The generation is built once, after the last
+.BR pkgadd ;
+a failure midway leaves the journal for
+.BR "apkg recover" .
 .TP
 .BR remove " [" \-\-purge ]
 .I name
@@ -358,9 +371,50 @@ Before anything is fetched, a transaction is pre-flighted: a module
 must match the kernel of its line (in the transaction, or installed)
 in kabi family and major, its minor must not exceed the kernel's, and
 the compiler pins must be equal; a static kernel takes no modules; a
-new kernel may not strand an installed module of its line.  A refusal
-exits 5 and changes nothing.  The box's CPU line is checked by
-kbootset (its gate 10), not here.
+new kernel may not strand an installed module of its line.  Every
+installed module the transaction does not move is checked against the
+kernel its line will have, in every line, as kbootset's gate 2 checks
+the generation; each misfit is named with the reason, then one summary:
+.PP
+.RS
+.nf
+apkg: mc: kabi k46.1.0 does not match the kernel kset-k (kabi k46.2.0)
+apkg: the installed module mc must be upgraded or removed with the kernel kset-k
+apkg: 1 installed module would be left behind: mc
+.fi
+.RE
+.PP
+A refusal exits 5 and changes nothing.  The box's CPU line is checked
+by kbootset (its gate 10), not here.
+.PP
+.B A kernel brings its set
+(apkg 0.3.5).  kbootset refuses a generation while an installed module
+was built with another compiler pin than the kernel, so a new cut moves
+the kernel, kbootset and every installed module of its line together.
+When a transaction upgrades a kernel, apkg adds every installed module
+of its line whose catalog version is newer and fits the new kernel, and
+the loader and kbootset when the catalog has newer ones; each addition
+is printed before anything is fetched
+("with the kernel kernel-k46-m: upgrading z3660eth-k46 1.1.0-8 -> 1.1.0-9";
+.B \-n
+shows the set and changes nothing).  A module the catalog has no fitting
+version of is left for the pre-flight, which refuses the transaction: remove
+it, or wait for its package.
+.PP
+A kernel row may carry
+.BI kbootset= version
+(C2-2 version 6): the lowest kbootset that composes a generation with
+it.  When neither the transaction's kbootset nor the installed one is
+that new, the transaction is refused before anything is fetched
+("kernel-k46-m needs kbootset 1.1.0.261101-34 or newer; 1.1.0.261031-33
+is installed and the catalog has none newer").  Older clients ignore the
+key.
+.PP
+When kbootset refuses the build at a gate anyway (exit 7), apkg names
+every installed module that does not fit the installed kernel of its
+line and what to do (upgrade, or remove it), or says that every module
+fits and kbootset's own line names the gate.  The generation committed
+before stays in the boot store and still boots.
 .PP
 .B One kernel package per line
 (C2-2 version 5 \(sc2.1).  Every kernel package of a line, a static
