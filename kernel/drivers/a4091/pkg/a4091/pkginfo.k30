@@ -1,16 +1,16 @@
 PKG=a409130
-NAME=a4091-k30 1.0.0-7 - A4091/A4092/A4770 SCSI driver module (root class), k30 line
+NAME=a4091-k30 1.0.0-8 - A4091/A4092/A4770 SCSI driver module (root class), k30 line
 ARCH=Amiga
-VERSION=1.0.0-7
+VERSION=1.0.0-8
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-a409130-1.0.0-7
+PSTAMP=amix-a409130-1.0.0-8
 # Kernel space (amix-dlm C2-2, C3-5 v10 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k30, kabi=k30.1.2), class root, never an ordinary
 # entry.  Catalog name a4091-k30, pkginst a409130; VERSION is the module's
 # own release (kernel/drivers/a4091/module/VERSION), the same on both lines.
-# 1.0.0-7 is a package-only revision of the module's 1.0.0-5: the same objects,
-# rolled from amix.
-APKG_DESC=A4091/A4092/A4770 SCSI (NCR 53C710) as a root-class kernel module for the 68030 root-class module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/a4091. DMA through the core's 030 provider: kernel-k30-m -14 or later.
-DESC=The kernel/drivers/a4091 driver built as an amix-dlm kernel module for the 68030 line (kabi k30.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when an A4091, A4092 or A4770 is present (match zorro:0202:54, zorro:c0de:01, zorro:c0de:02), up to four boards registered with sd at rank zorro; polled, never unloaded; DMA through the core's DDI 1.2 (C4-5 v5), on k30 the core's 030 provider (a bounce pool below 0x08000000): needs kernel-k30-m -14 or later and boot2 at amix-dlm 4003c9f or later; a transfer the provider cannot reach is refused, not armed.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4091 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
+# 1.0.0-8 is a package-only revision of the module's 1.0.0-5: the same source
+# built with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc).
+APKG_DESC=A4091/A4092/A4770 SCSI (NCR 53C710) as a root-class kernel module for the 68030 root-class module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/a4091. DMA through the core's 030 provider. Needs kernel-k30-m -68 or later (cc=gcc-2.7.2.3-33ebadc).
+DESC=The kernel/drivers/a4091 driver built as an amix-dlm kernel module for the 68030 line (kabi k30.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when an A4091, A4092 or A4770 is present (match zorro:0202:54, zorro:c0de:01, zorro:c0de:02), up to four boards registered with sd at rank zorro; polled, never unloaded; DMA through the core's DDI 1.2 (C4-5 v5), on k30 the core's 030 provider (a bounce pool below 0x08000000): needs kernel-k30-m -68 or later, whose pin is the module's cc=gcc-2.7.2.3-33ebadc, and boot2 at amix-dlm 4003c9f or later; a transfer the provider cannot reach is refused, not armed.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4091 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

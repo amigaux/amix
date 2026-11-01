@@ -1,16 +1,16 @@
 PKG=a409146
-NAME=a4091-k46 1.0.0-7 - A4091/A4092/A4770 SCSI driver module (root class), k46 line
+NAME=a4091-k46 1.0.0-8 - A4091/A4092/A4770 SCSI driver module (root class), k46 line
 ARCH=Amiga
-VERSION=1.0.0-7
+VERSION=1.0.0-8
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-a409146-1.0.0-7
+PSTAMP=amix-a409146-1.0.0-8
 # Kernel space (amix-dlm C2-2, C3-5 v10 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k46, kabi=k46.1.2), class root, never an ordinary
 # entry.  Catalog name a4091-k46, pkginst a409146; VERSION is the module's
 # own release (kernel/drivers/a4091/module/VERSION), the same on both lines.
-# 1.0.0-7 is a package-only revision of the module's 1.0.0-5: the same objects,
-# rolled from amix.
-APKG_DESC=A4091/A4092/A4770 SCSI (NCR 53C710) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (k46.1.2.261027-78 or later) (kabi k46.1.2): /etc/conf/mod.d/a4091.
-DESC=The kernel/drivers/a4091 driver built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when an A4091, A4092 or A4770 is present (match zorro:0202:54, zorro:c0de:01, zorro:c0de:02), up to four boards registered with sd at rank zorro; polled, never unloaded; DMA through the core's DDI 1.2 (C4-5).  Needs kernel-k46-m k46.1.2.261027-78 or later, whose symbol block carries the five dma_* names.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4091 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
+# 1.0.0-8 is a package-only revision of the module's 1.0.0-5: the same source
+# built with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc).
+APKG_DESC=A4091/A4092/A4770 SCSI (NCR 53C710) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (-56 or later) (kabi k46.1.2): /etc/conf/mod.d/a4091.
+DESC=The kernel/drivers/a4091 driver built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when an A4091, A4092 or A4770 is present (match zorro:0202:54, zorro:c0de:01, zorro:c0de:02), up to four boards registered with sd at rank zorro; polled, never unloaded; DMA through the core's DDI 1.2 (C4-5).  Needs kernel-k46-m -56 or later, whose pin is the module's cc=gcc-2.7.2.3-33ebadc.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4091 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
