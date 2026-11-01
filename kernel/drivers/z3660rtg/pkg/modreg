@@ -1,0 +1,13 @@
+# /etc/conf/modreg.d/z3660rtg -- the z3660rtg module package's defaults
+# (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
+# the module's own, `disable` to ship it off.  None: z3660rtg loads with its
+# own defaults,
+#   blit=1       use the board's blitter (0: draw on the CPU)
+#   fixed=0      1: let the probe try the fixed-base rows of a board with no
+#                AutoConfig entry (it reads a fixed address on any machine
+#                with the right chipset; a real Z3660 has an entry)
+#   kvfb=0       MiB of the framebuffer mapped for the kernel when the board
+#                lies above the identity map (0: 8 on k46, 2 on k30; at most 46)
+#   maxarea=0    the blit band, in pixels (0: 8192; at most 3686400)
+# Local settings belong in /etc/conf/modreg.local.d/z3660rtg, which no
+# package owns, as `param <name>=<value>` lines.
