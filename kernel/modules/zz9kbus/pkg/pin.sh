@@ -6,20 +6,22 @@
 # with match= the boards it serves, unload=never, no majors, no depend=.  Board driver
 # packages and zz9ksvc need it.
 # 1.0.0-1 (2026-11-01): the first.
+# 1.0.0-2 (2026-11-01): rebuilt on kit 3b53a8a (gcc-cross-amix 33ebadc); the
+# code is unchanged, only .moddata cc= differs (gcc-2.7.2.3-33ebadc).
 
 KM_NAME=zz9kbus
 KM_SHORT=zz9kbus
 KM_REPO=kernel/modules/zz9kbus
-KM_VERSION=1.0.0-1
+KM_VERSION=1.0.0-2
 
 KM_K30_OBJ=kernel/modules/zz9kbus/build/k30/mod.d/zz9kbus
-KM_K30_SHA=20db776b49a85a2f89a9ef5392a29b8d24161494be9692d93805986f3eec2393
+KM_K30_SHA=24c00be48a7fc76860d34680b57aab417889569979e63bd05479f96414d73703
 KM_K46_OBJ=kernel/modules/zz9kbus/build/k46/mod.d/zz9kbus
-KM_K46_SHA=1e571b9a479fe4e033fc869a7b2c1409f4652f974aaf0d87c1a3911114c00638
+KM_K46_SHA=6ea8ca203303128f2e8cde46929dc79b36040e3dfcf8a95a257669428ecab776
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=d68305af64c80ad6fb6b1019dd91a3ff2b7a75ee	# the registry with c 55 zz9ksvc and the zz9k short names
+KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f	# PIN gcc-2.7.2.3-33ebadc
 
 KM_LICENCES="\
 kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4"
