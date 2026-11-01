@@ -50,13 +50,26 @@ The C is K&R. The kernel compiler runs with `-traditional`.
 | `dev_kvmap` | `char *dev_kvmap(phys, nbytes, cm, flags)` | proc | port (k46) | a device window at a cache class: `cm` 0x40 (non-cacheable serialised, for registers) or 0x60 (non-cacheable); `flags` bit 0 = no sleep. The kernel address of `phys`, the in-page offset kept, or 0 |
 | `dev_kvunmap` | `dev_kvunmap(kva, nbytes)` | proc | port (k46) | undoes one `dev_kvmap`, with the same `nbytes` |
 
-The kernel maps physical addresses below `VSECT1` (0x40000000) one to one.
-That is the page tables' early termination, not transparent translation.
-A board window there is reachable at `phystokv(phys)`, which is the
+The kernel maps physical addresses below `VSECT1` (0x40000000) one to one,
+so a board window there is reachable at `phystokv(phys)`, which is the
 identity (`<sys/immu.h>` on k30; `<sys/amixddi.h>` gives both names on k46,
-whose kit has the port's 4 KiB-page `sys/immu.h` without them). On k46 the
-kit's `sys/immu.h` and `sys/param.h` are the 4 KiB-page forms, so
-`phystopfn()` and `btop()` are right.
+whose kit has the port's 4 KiB-page `sys/immu.h` without them). How the
+lines map it differs:
+
+- **k30:** the page tables' early termination; no transparent translation.
+- **k46:** transparent translation, the only mapping of that range (the
+  kernel root's entries for it are empty): ITT0 for supervisor instruction
+  fetches, DTT0 for supervisor data, no table walk and no ATC entry; user
+  accesses walk the process's own tables (supervisor-only since the port's
+  `4c6ea89`). The same on the 68040 and the 68060. DTT0's cache mode is
+  cache-inhibited, imprecise (CM 11), not serialised: a window reached
+  there is never cached, but on the 68060 a store can wait in the store
+  buffer, unordered against other accesses. A register window that needs
+  serialised access is mapped with `dev_kvmap(phys, nbytes, 0x40, flags)`
+  even below `VSECT1`, never used through `phystokv` there.
+
+On k46 the kit's `sys/immu.h` and `sys/param.h` are the 4 KiB-page forms,
+so `phystopfn()` and `btop()` are right.
 
 ## Copy and strings
 
