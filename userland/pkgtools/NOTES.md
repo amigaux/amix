@@ -1,5 +1,61 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-01 — a new kernel cut upgrades as one set (apkg 0.3.5, NOT MINTED)
+
+**Why.** kbootset's gate 2 refuses a generation while an installed module was built with another
+compiler pin than the kernel, so a cut within 1.1 (the 33ebadc kit: k30 -68, k46 -56) moves the
+kernel package, kbootset and every installed module package of its line together. 0.3.4 upgraded
+several names in one transaction already, but only the named ones, in command-line order, with no
+way to say which kbootset a kernel needs.
+
+**What 0.3.5 does.**
+- `apkg upgrade` with no names upgrades every installed package with a newer catalog version, one
+  transaction ("every installed package is up to date" when none).
+- A kernel in an upgrade brings its set (`kspace_expand`): every installed module of its line
+  whose catalog version is newer and fits the new kernel (kabi, pin), then the loader and kbootset
+  when the catalog has newer ones; each is printed ("with the kernel kernel-k46-m: upgrading
+  z3660eth-k46 1.0.0-8 -> 1.0.0-11"), and `-n` shows the set.
+- Order: kbootset, the other ordinary packages, the loader, the modules, the kernel last; one
+  generation build at the end.
+- The pre-flight checks every installed module the transaction does not move against the kernel
+  its line will have, in every line; each misfit is named with why, then one summary ("1 installed
+  module would be left behind: z3660rtg-k46") and the two ways out.
+- A kernel row's `kbootset=<version>` (C2-2 v6 §1.2) refuses the transaction when neither the
+  transaction's kbootset nor the installed one is that new; `kbootset=` on another role refuses
+  the row. Package versions compare with `apkg_vercmp` (1.1.0.261031-33 < 1.1.0.261101-34 <
+  1.1.0.261102-35, tested).
+- After a gate refusal (exit 7) apkg names the installed modules that do not fit their kernel, or
+  says every module fits and kbootset's line names the gate, and that the generation committed
+  before still boots.
+- gen-catalog writes `kbootset=` from the sidecar's `kbootset-min=` (C2-3 v10), else from a
+  `kbootset.conf` line `<catalog name> <version>: <kbootset version>` in either conf layer; the
+  two differing refuse the package. amix's `kernel/conf/kbootset.conf` gives kernel-k30-m -68 and
+  kernel-k46-m -56 and -57 the floor 1.1.0.261101-34 (their sidecars predate the key).
+
+**Tests.** apkg `run-tests.sh` 566/0 (the set: expansion, order, every misfit named, the floor,
+no-name upgrade, `-n`, an installed misfit, the gate diagnosis both ways, `kbootset=` per role),
+nohttp 38/0, kbootset-consumer 12/0, conffile e2e 64/0; repo tools 530/0 (T33: the sidecar key,
+either conf layer, the conflict, neither). `make amix` links; scan060 clean.
+
+**On emulated boxes** (the fresh 1.1 k46 image, A3000/AGA, LC060 with the Z3660; kernel -52,
+kbootset -28, modules at 8949028, z3660rtg-k46 1.1.0-2), packages over HTTP: a roll of 0.3.5
+(md5 `3d2f8737…`, a test roll, not the mint) and the joint landing's -56 kernel-space set with
+`kbootset=1.1.0.261101-34` on the kernel row:
+
+- `apkg upgrade kernel-k46-m`: the set printed (z3660scsi, z3660eth, monsw, kbootset -34), then
+  refused, exit 5: "z3660rtg-k46: compiler pin gcc-2.7.2.3-8949028 differs from the kernel
+  kernel-k46-m's (gcc-2.7.2.3-33ebadc)", one module left behind; nothing changed (the set has no
+  z3660rtg on the new kit yet).
+- After `apkg remove z3660rtg-k46`, the same call: rc 0, pkgadds in the order kbootset, zscsi46,
+  zeth46, monsw46, kern46m; ONE `kbootset build` + `commit` (generation 3). The next boot:
+  generation 3, kernel 68060-261101-56, ufs/z3660scsi/z3660eth loaded, the network up.
+- A second box: a file with no apkg record placed in `/etc/conf/mod.d`, then `apkg upgrade` with
+  no names: kbootset, modtools, the three modules, the kernel installed, then kbootset -34's
+  build refused at gate 1 ("/etc/conf/mod.d/zztamper has no apkg record"), exit 7, apkg's
+  diagnosis and "the generation committed before still boots". The next boot: generation 2,
+  kernel 68060-261031-52. The file removed, `kbootset build` and `commit` made generation 3, and
+  the boot after that ran 68060-261101-56.
+
 ## 2026-11-01 — APKG 0.3.4 minted (STAGED, NOT PUBLISHED)
 
 **Why.** apkg 0.3.3 refuses a module package whose device nodes are in the module's class
