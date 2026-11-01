@@ -58,6 +58,7 @@ d none /opt/amix/man/1 0755 root bin
 d none /opt/amix/man/1m 0755 root bin
 d none /opt/amix/man/4 0755 root bin
 d none /opt/amix/man/whatis.d 0755 root bin
+d none /opt/amix/man/replaces.d 0755 root bin
 f none /opt/amix/man/1/man 0644 root bin
 f none /opt/amix/man/1m/rc.subr 0644 root bin
 f none /opt/amix/man/1m/devnodes 0644 root bin

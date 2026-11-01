@@ -131,5 +131,25 @@ o=$(prun "$stockfirst" -a bzip2);  expect "-a, only ours" "bzip2 page" "$o"; ref
 o=$(prun "$stockfirst" -a 3 zlib); expect "-a explicit 3: ours" "zlib page" "$o"; expect "-a explicit 3: stock" "STOCK[3 zlib]" "$o"
 o=$(prun "$stockfirst" -a ls);     expect "-a, only stock" "STOCK[ls]" "$o"
 
+# a stock binary a package replaced (replaces.d): the package's page for it
+mkdir -p "$T/man/replaces.d"
+printf '.TH TAR 1\nHeirloom tar page\n' > "$T/man/1/heirloom-tar"
+printf '# the stock tar, replaced\n%s/usr/bin/tar 1 heirloom-tar\n%s/usr/bin/nosuchbin 1 nosuchpage\n' "$T" "$T" > "$T/man/replaces.d/hltar"
+rm -rf "${T:?}/cat/1"/*
+o=$(prun "$stockfirst" tar);       expect "replaced: its page" "Heirloom tar page" "$o"; refuse "replaced: not stock" "STOCK" "$o"; refuse "replaced: not GNU" "GNU tar page" "$o"
+o=$(prun "$oursfirst" tar);        expect "PATH runs ours first: our page" "GNU tar page" "$o"; refuse "PATH runs ours: not the replacement" "Heirloom" "$o"
+o=$(prun "$stockfirst" 1 tar);     expect "replaced, explicit 1" "Heirloom tar page" "$o"
+o=$(prun "$stockfirst" 3 tar);     expect "replaced, other section: stock" "STOCK[3 tar]" "$o"; refuse "other section: not the replacement" "Heirloom" "$o"
+o=$(prun "$stockfirst" -a tar);    case "$o" in *"Heirloom tar page"*"STOCK[1 tar]"*) ok ;; *) bad "-a replaced: its page, then stock: $o" ;; esac
+o=$(prun "$stockfirst" heirloom-tar); expect "the page by its own name" "Heirloom tar page" "$o"
+[ -f "$T/cat/1/heirloom-tar" ] && ok || bad "replaced: cached under the page's name"
+o=$(prun "$oursfirst" tar)
+grep -q 'GNU tar page' "$T/cat/1/tar" 2>/dev/null && ! grep -q Heirloom "$T/cat/1/tar" && ok || bad "the other page cached apart: $(cat "$T/cat/1/tar" 2>&1)"
+grep -q Heirloom "$T/cat/1/heirloom-tar" && ok || bad "the replacement's cache kept apart"
+o=$(prun "$stockfirst" hltar);     expect "replaces.d is not a section" "STOCK[hltar]" "$o"
+o=$(prun "$stockfirst" replaces.d hltar); refuse "replaces.d is not a section argument" "Heirloom" "$o"; expect "replaces.d as a name" "STOCK[replaces.d]" "$o"
+rm -f "${T:?}/man/1/heirloom-tar"
+o=$(prun "$stockfirst" tar);       expect "replacement page missing: as before" "STOCK[1 tar]" "$o"
+
 echo "test-man: $pass passed, $fail failed ($SH)"
 [ "$fail" -eq 0 ]

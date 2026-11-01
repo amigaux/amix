@@ -7,10 +7,12 @@
 #   man -f name ...              the same, by name
 #
 # Which page: a command's page (sections 1, 1m, 8) is the page of the binary
-# PATH runs. When that binary is a stock one (outside /opt/amix and
-# /usr/amix) and the stock index has the name, the stock page is shown;
-# otherwise ours. A page in any other section is ours when we have one. A
-# name only one tree has is shown from that tree.
+# PATH runs. When a package has replaced that binary (a line for its path in
+# replaces.d, below), the package's page for it is shown. Else, when that
+# binary is a stock one (outside /opt/amix and /usr/amix) and the stock index
+# has the name, the stock page is shown; otherwise ours. A page in any other
+# section is ours when we have one. A name only one tree has is shown from
+# that tree.
 #
 # Installed as /usr/amix/bin/man, ahead of /usr/bin on PATH. The stock
 # /usr/bin/man is never changed; every name we have no page for, and every
@@ -19,6 +21,9 @@
 # Our pages: /opt/amix/man/<sect>/<name>, plain troff with the -man macros; an
 # alias is a one-line ".so <path>" file. The index: /opt/amix/man/whatis.d/<pkg>,
 # lines in the stock whatis format, read directly (nothing assembles them).
+# A package that replaces a stock binary lists it in
+# /opt/amix/man/replaces.d/<pkg>: "<binary path> <sect> <page name>" a line,
+# "#" lines comments; its page is /opt/amix/man/<sect>/<page name>.
 # Formatted pages are cached in /var/opt/amix/catman/<sect>/<name>, and only
 # where the invoking user may write (root, as shipped); never in /usr/catman.
 #
@@ -60,7 +65,7 @@ sections() {
 	for d in "$TREE"/*
 	do
 		s=`basename "$d"`
-		case " $SECTS whatis.d " in
+		case " $SECTS whatis.d replaces.d " in
 		*" $s "*) ;;
 		*) [ -d "$d" ] && echo "$s" ;;
 		esac
@@ -137,6 +142,14 @@ which_bin() {
 			return
 		fi
 	done
+}
+
+# replaced <binary>: "<sect> <page name>" of the page a package gives for a
+# stock binary it replaced, or nothing
+replaced() {
+	[ -n "$1" ] || return
+	cat "$TREE"/replaces.d/* 2>/dev/null |
+		awk '$1 !~ /^#/ && $1 == b && NF >= 3 { print $2, $3; exit }' b="$1"
 }
 
 # stock_sect <name> <sections>: the section of the stock index's first line
@@ -219,7 +232,7 @@ case "$1" in
 	shift
 	;;
 *)
-	if [ $# -gt 1 ] && [ -d "$TREE/$1" ] && [ "$1" != whatis.d ]
+	if [ $# -gt 1 ] && [ -d "$TREE/$1" ] && [ "$1" != whatis.d ] && [ "$1" != replaces.d ]
 	then
 		sect=$1
 		shift
@@ -231,6 +244,37 @@ esac
 rc=0
 for n in "$@"
 do
+	# a stock binary a package replaced: that package's page (cached under
+	# the page's own name, apart from another package's page for <name>)
+	case "${sect:-1}" in
+	1|1m|1M|8)
+		rb=`which_bin "$n"`
+		rp=`replaced "$rb"`
+		;;
+	*)
+		rp=
+		;;
+	esac
+	if [ -n "$rp" ]
+	then
+		set -- $rp
+		if [ -z "$sect" ] || [ "$sect" = "$1" ]
+		then
+			hit=`find_page "$1" "$2"`
+			if [ -n "$hit" ]
+			then
+				set -- $hit
+				show "$1" "$2" "`basename "$2"`" | page
+				ssect=
+				[ -n "$all" ] && ssect=`stock_sect "$n" "${sect:-$CMDSECTS}"`
+				if [ -n "$ssect" ]
+				then
+					"$STOCK" "$ssect" "$n" || rc=1
+				fi
+				continue
+			fi
+		fi
+	fi
 	hit=`find_page "$sect" "$n"`
 	if [ -z "$hit" ]
 	then

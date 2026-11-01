@@ -106,6 +106,8 @@ stage() {
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
+	# where a package that replaces a stock binary names it (man.sh)
+	mkdir -p "$DEST/opt/amix/man/replaces.d"
 	put 0644 LICENSE /opt/amix/doc/amix-base/LICENSE
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"
