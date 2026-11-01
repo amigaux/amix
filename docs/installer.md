@@ -90,9 +90,11 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   from a retired 1.0 pipeline).
 - **Swap.** The swap slice is added in steps (`SWAP_ADD_MB`, sizes in MiB tried in order, `all` the
   whole slice; the first the kernel takes is used and logged). `swap -a` needs one contiguous
-  block of kernel space for its page table, and until the kernels refuse an oversized request it
-  waits for ever, so the list holds only sizes known to fit: 30 MiB on the 68030 line, the whole
-  slice on the 68040/68060 line; with the kernel guard, `all 48 30`. `swap -l` shows what is in use.
+  block of kernel space for its page table; the guarded kernels (k30 -67, k46 -56) refuse an
+  oversized request ("Not enough space") where older ones wait for ever. The images use `all 48 30`
+  (the whole 64 MiB slice first); without the key, 30 MiB on the 68030 line and the whole slice on
+  the 68040/68060 line. The same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
+  `swap -l` shows what is in use.
 - **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
   the old cap was 1024); `docs/l11-disk.md`.
 - **The pre-installed images**: `tools/build-preinstalled.sh` masters the image
