@@ -1,3 +1,7 @@
+## 2026-11-01 — APKG 0.3.4 minted (c2cc7c3, 58584ef)
+
+make dist in the build container, md5 c19cb40f5da28e740831bee6e2d72750, 246272 B, the same bytes from a git archive copy; staged, not published. On an emulated 1.1 k46 box apkg 0.3.3 refuses z3660rtg-k46 1.1.1-1 (device nodes in the module's class, exit 3), upgrades itself to 0.3.4, and 0.3.4 installs it. make dist now compiles apkg and contents-fsck afresh, and contents-fsck's cross link takes the sysroot from env.sh, so the container builds it from scratch.
+
 ## 2026-11-01 — one repository tree per release (ba83216, 251f1cc, fefe799, 74168ea, dd62028)
 
 publish.sh takes the release as a required argument and publishes only <docroot>/<release>/; tools/repo/move-1.0-tree.sh
