@@ -20,8 +20,10 @@ gcc14-cross-amix is pinned in the organisation's fork, on the branch
 commits on their way to it: the runtime built for the whole 68020–68060 range
 so it also runs on a 68881/68882 (and a check that it does), a refusal of a
 sysroot without `stdint.h`, and shared libraries: `gcc -shared`,
-libamixc99's `__cxa_finalize` for them, and their constructors run after the
-program's start-up. Once upstream has them, the
+libamixc99's `__cxa_finalize` for them, their constructors run after the
+program's start-up, and a binutils patch so gas keeps a PIC relocation
+against an exported symbol (a library's pointer to its own exported data can
+then be bound to the program's copy). Once upstream has them, the
 pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
