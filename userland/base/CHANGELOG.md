@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — amix-base 1.0-24 (7c25608)
+
+man shows a package's own page for a stock program the package has replaced. The package lists the program in /opt/amix/man/replaces.d/<pkginst>, one line per program: "<binary path> <section> <page name>". When the program PATH runs is listed there and the page exists, that page is shown and cached under the page's own name; -a then adds the stock page. The table is keyed by the binary's path, so another package's page for the same name still serves its own binary. amxbase-1.0-24 md5 69bb46c9.
+
 ## 2026-11-01 — amix-base 1.0-22 and 1.0-23 (017ed49, 370d66b)
 
 - 1.0-22: rc_bg no longer leaves its timer behind. When the command ended it killed only the watcher subshell, so the sleep ran out the whole bound: S69inet left a `sleep 120` for two minutes after every boot. The timer's sleep now records its own pid and is killed as soon as the command ends. The swap step logs the kernel's refusal text again (stock sed dropped the unterminated line tr left; it now joins with awk).
