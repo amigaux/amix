@@ -53,6 +53,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `20-amix-bell-gated.patch` | Ours: the Paula bell is off unless the server runs with `-audiobell` (the stock audio driver's open waits for Paula at level 4 with no timeout, so a missing interrupt froze the box); the bell's process closes every descriptor before opening `/dev/audio`; one bell at a time. |
 | `21-zz9000-blits-partial.patch` | Ours: blitFlush follows the driver's BLITS count: the rest is sent until every record has run, EINVAL draws that one record on the CPU, any other error draws the records not yet run and turns the blitter off. Before, an error redrew the whole batch, applying a copy that had run twice. One record per operation: the driver bands; `-blitmax` is accepted and ignored. |
 | `22-zz9000-map-framebuffer.patch` | Ours: the server maps the visible framebuffer only (not the whole board with its register window), and checks GETFBINFO against the mode it set (size, depth 16, RGB565, stride, inside the board) before drawing. |
+| `23-zz9000-no-soft3d.patch` | Ours: the ZZ9K-SOFT3D extension goes, and with it the probe of ioctl 18 at every start, a call our card driver leaves unassigned. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
