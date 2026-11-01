@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-01 — kbootset cards; C3-6 v10; kbootset -32, dlmkit -16 (2e841f7, a7efb20, f594053, d539cf9, 50cdad7)
+
+`kbootset cards` lists the running kernel's sd cards from kinfo's card table with each controller's match key, and
+`kbootset cards <disk>` prints one disk's key, so an installer takes --bootdev and --rootdev from the disk the user
+picks (C2-4 v21 §17; kbootset(1M); tests/host/kcards.sh). C3-6 v10: z3660rtg's parameters (maxarea 8192, fixed,
+kvfb) and its mapping of a board window above VSECT1 (dev_kvmap on k46, sptalloc on k30). kbootset -32 (box
+bc934ce1, 159 008 B) and dlmkit -16 (k30 672edbba, k46 cc4c3200, port 392a44e), unminted.
+
 ## 2026-11-01 — core patch 0050; low-memory test tools (56178c5, d48c128)
 
 Core 0050: a first-use load whose first two records find memory short prints the first-use line, "dlm: <m>: not
