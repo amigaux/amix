@@ -1,0 +1,98 @@
+Ours.  pthread_once waits on a condition while another thread runs the
+initialiser, and runs it only once.  Upstream's ran init_routine again in
+every thread that called pthread_once before the first finished (a thread
+switch inside the initialiser was enough), a generic Pth 2.0.7 bug.  It
+replaces isoriano's yielding version, whose states and cancellation reset are
+its model: that one looped on pth_yield, a spin at full CPU while the
+initialiser blocked, and looped forever when the initialiser called
+pthread_once on its own control, which now gives EDEADLK.
+
+--- a/pthread.c
++++ b/pthread.c
+@@ -358,15 +358,83 @@
+     return OK;
+ }
+ 
++/*
++ * pthread_once: the first caller runs init_routine; every other caller
++ * waits on a condition until it has run, and does not run it again.
++ * Threads switch only inside Pth calls, so testing and setting the state
++ * needs no atomic operation.  The states of *once_control:
++ * PTHREAD_ONCE_INIT, ONCE_DONE (1, the value earlier builds set) and
++ * ONCE_RUNNING.  A cancelled initialiser leaves PTHREAD_ONCE_INIT, so the
++ * next caller runs it; the waiters are woken either way.  A thread that
++ * calls pthread_once for a control whose initialiser it is itself running
++ * gets EDEADLK instead of waiting for itself.
++ */
++#define ONCE_DONE    1
++#define ONCE_RUNNING 2
++
++struct once_run {
++    pthread_once_t  *control;
++    pth_t            owner;
++    struct once_run *next;
++};
++static struct once_run *once_runs = NULL;   /* initialisers running now */
++static pth_mutex_t      once_mutex = PTH_MUTEX_INIT;
++static pth_cond_t       once_cond  = PTH_COND_INIT;
++
++/* after the initialiser, or as its cancellation cleanup */
++static void once_finish(void *arg)
++{
++    struct once_run *run = (struct once_run *)arg;
++    struct once_run **p;
++
++    for (p = &once_runs; *p != NULL; p = &(*p)->next) {
++        if (*p == run) {
++            *p = run->next;
++            break;
++        }
++    }
++    if (*run->control == ONCE_RUNNING)
++        *run->control = PTHREAD_ONCE_INIT;  /* cancelled: not done */
++    pth_cond_notify(&once_cond, TRUE);
++}
++
+ int pthread_once(
+     pthread_once_t *once_control, void (*init_routine)(void))
+ {
++    struct once_run run;
++    struct once_run *r;
++    int cancel;
++
+     pthread_initialize();
+     if (once_control == NULL || init_routine == NULL)
+         return pth_error(EINVAL, EINVAL);
+-    if (*once_control != 1)
+-        init_routine();
+-    *once_control = 1;
++    while (*once_control == ONCE_RUNNING) {
++        for (r = once_runs; r != NULL; r = r->next)
++            if (r->control == once_control && r->owner == pth_self())
++                return pth_error(EDEADLK, EDEADLK);
++        /* pthread_once is no cancellation point: the wait is not either */
++        pth_cancel_state(PTH_CANCEL_DISABLE, &cancel);
++        if (!pth_mutex_acquire(&once_mutex, FALSE, NULL)) {
++            pth_cancel_state(cancel, NULL);
++            return errno;
++        }
++        if (*once_control == ONCE_RUNNING)
++            pth_cond_await(&once_cond, &once_mutex, NULL);
++        pth_mutex_release(&once_mutex);
++        pth_cancel_state(cancel, NULL);
++    }
++    if (*once_control == ONCE_DONE)
++        return OK;
++    run.control = once_control;
++    run.owner   = pth_self();
++    if (!pth_cleanup_push(once_finish, &run))
++        return errno;
++    run.next  = once_runs;
++    once_runs = &run;
++    *once_control = ONCE_RUNNING;
++    init_routine();
++    *once_control = ONCE_DONE;
++    pth_cleanup_pop(TRUE);
+     return OK;
+ }
+ 
