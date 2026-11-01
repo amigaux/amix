@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 /* Elapsed kernel ticks, not adjustable calendar time. Physical AMIX measured
  * _SC_CLK_TCK=60. Extend the unsigned 32-bit tick counter across wraps. */
 #include <sys/types.h>

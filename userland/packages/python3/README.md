@@ -51,11 +51,13 @@ names a local copy.
 
 ## The port (isoriano's)
 
-From isoriano's amix-userland (Ignacio Soriano), unchanged:
+From isoriano's amix-userland (Ignacio Soriano); the code unchanged, the headers ours where noted:
 - `patches/01-cpython-3.11-amix.patch` (PSF licence, as CPython): `configure` learns AmigaUNIX as
   a cross-build host, plus SVR4.0 changes to `pytime.c`, `posixmodule.c` and `zlibmodule.c`;
-- `port/`, his adapters for the older AMIX C interface (MIT; `amix-math.c` derives from CPython,
-  PSF, `port/LICENSE.PSF`):
+- `port/`, his adapters for the older AMIX C interface: MIT, `port/LICENSE` ("Copyright (c) 2026
+  isoriano1968"), shipped as `doc/python3/LICENSE.adapters`; `amix-math.c` derives from CPython,
+  PSF, `port/LICENSE.PSF`, shipped as `LICENSE.port`. Our change: an SPDX line naming each file's
+  licence:
   - `amix-math.c`, C99 math fallbacks;
   - `amix-wide.c`, wide-character functions;
   - `amix-clock.c` and `amix-time.c`, clocks and time;

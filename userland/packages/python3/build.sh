@@ -89,6 +89,7 @@ stage() {
 		echo "[FAIL] compileall; see $BUILD/compileall.log" >&2; exit 1; }
 	cp LICENSE README.rst "$b/doc/python3/"
 	cp "$HERE/port/LICENSE.PSF" "$b/doc/python3/LICENSE.port"
+	cp "$HERE/port/LICENSE" "$b/doc/python3/LICENSE.adapters"	# isoriano's adapters: MIT
 	find "$L" -type d -exec chmod 0755 {} +; find "$L" -type f -exec chmod 0644 {} +
 	chmod 0755 "$b/bin/python3" "$b/bin/python3.11"; chmod 0644 "$b"/doc/python3/*
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)

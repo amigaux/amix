@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 /* Private environment adapters. No cooperative scheduling point occurs while
  * modifying environ. Only strings allocated here are reclaimed here. */
 #include <stdlib.h>

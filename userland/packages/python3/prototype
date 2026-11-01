@@ -24,11 +24,13 @@ f none /opt/amix/man/1/python3 0644 root bin
 d none /opt/amix/man/whatis.d 0755 root sys
 f none /opt/amix/man/whatis.d/python3 0644 root bin
 #
-# Licence: the PSF licence; LICENSE.port is the port's (isoriano's) PSF notice.
+# Licence: the PSF licence; LICENSE.port is the PSF notice of the port's amix-math.c,
+# LICENSE.adapters the MIT notice of isoriano's other adapters.
 d none /opt/amix/doc 0755 root sys
 d none /opt/amix/doc/python3 0755 root sys
 f none /opt/amix/doc/python3/LICENSE 0644 root bin
 f none /opt/amix/doc/python3/LICENSE.port 0644 root bin
+f none /opt/amix/doc/python3/LICENSE.adapters 0644 root bin
 f none /opt/amix/doc/python3/README.rst 0644 root bin
 #
 # the standard library
