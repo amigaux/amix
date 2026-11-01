@@ -43,6 +43,9 @@ describes the stock
 the one that
 .B tar
 runs.
+When a package has replaced the stock program itself, and lists it in
+.BR /opt/amix/man/replaces.d ,
+the package's page for it is shown instead.
 A page in any other section is the package's.
 .B \-a
 shows both pages.
@@ -74,7 +77,8 @@ Show every page for
 .IR name :
 the one
 .B man
-would choose first, then the other.
+would choose first, then the other (for a replaced stock program, the
+package's page, then the stock one).
 .TP
 .BI \-k " keyword"
 List the pages whose index line contains
@@ -106,6 +110,22 @@ the index lines of one package, in the stock
 format:
 .br
 .BI "    " name ( section ) "     names \- description"
+.TP
+.BI /opt/amix/man/replaces.d/ package
+the stock programs a package replaced, one a line:
+.br
+.BI "    " "path section page"
+.br
+for example
+.BR "/usr/sbin/tar 1 heirloom-tar" .
+When the program
+.B PATH
+runs is one of them,
+.BI /opt/amix/man/ section / page
+is its page.
+Lines that start with
+.B #
+are comments.
 .TP
 .BI /var/opt/amix/catman/ section / name
 formatted pages kept to show them faster. Only a user who can write there

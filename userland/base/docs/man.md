@@ -32,6 +32,19 @@ shell front-end. Its own page is `man/man.1`, installed as
   `/usr/sbin` tools (no stock page) show ours. The index check is the stock
   `man`'s own lookup pattern, so "the stock index lists it" means "the stock
   `man` would find it".
+- **A stock binary a package replaced.** When a package installs its own
+  program at a stock path (Heirloom tar at `/usr/sbin/tar`), the rule above
+  would show the stock page. Such a package lists the path in
+  `/opt/amix/man/replaces.d/<pkginst>`, one line per binary:
+  `<binary path> <sect> <page name>`, `#` lines comments. When the binary
+  `PATH` runs for a command (sections 1, 1m, 8, or the line's section when
+  one is given) is listed there and the page exists, that page is shown,
+  cached under its own name. The table is keyed by the path, not the name,
+  so another package's page for the same name (GNU tar's `tar`, for
+  `/opt/amix/bin/tar`) is still shown when `PATH` runs that one. A binary
+  reached by more than one path (a link such as `/etc/tar`) needs a line for
+  each path `PATH` may name. `-a` shows the replacement's page, then the
+  stock one.
 - **Formatting** is the stock pipeline, run from the top of the tree:
   `/usr/ucb/tbl | /usr/ucb/eqn | /usr/ucb/nroff -man -T37 | col`, shown
   through `$PAGER` (default `/usr/bin/more`) when the output is a terminal. A page that is only a
@@ -57,10 +70,13 @@ shell front-end. Its own page is `man/man.1`, installed as
    name, at most 9 characters, so the file name fits 14 bytes): one line per page
    file, aliases included, in the stock `whatis` format, `name(sect)` padded to
    column 18 and then `names - description`; sorted, no blank or comment lines.
-4. The packages share `/opt/amix/man`, its section directories and `whatis.d`
-   as `d` objects. No package ships `/opt/amix/man/whatis` (nothing assembles
+4. The packages share `/opt/amix/man`, its section directories, `whatis.d`
+   and `replaces.d` as `d` objects. No package ships `/opt/amix/man/whatis` (nothing assembles
    one; the front-end reads the fragments) or anything under the cache.
-5. A package with pages does not depend on the base package: its pages are
+5. A package that replaces a stock binary ships its page under a name of its
+   own (`/opt/amix/man/1/heirloom-tar`), its index line naming both
+   (`tar, heirloom-tar`), and `/opt/amix/man/replaces.d/<pkginst>`.
+6. A package with pages does not depend on the base package: its pages are
    plain files, and without the front-end the stock `man` still shows them
    with `MANPATH=/opt/amix/man`.
 
