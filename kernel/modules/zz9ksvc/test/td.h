@@ -149,7 +149,8 @@ callouts(void)
 
 /* ---- the stub board ---- */
 
-#define PHYS_BASE	0x20000000UL	/* where the window lies in physical memory */
+#define PHYS_BASE	0x20000000UL	/* where runtime 0's window lies in physical memory */
+#define PHYS_STEP	0x02000000UL	/* and runtime n's, n steps above it */
 static struct zz9kbus_board board;
 static int bread_magic = 1;
 
@@ -158,26 +159,36 @@ static void bell(char *c) { td_doorbells++; }
 static int
 heapphys(char *c, unsigned long arm, unsigned long len, unsigned long *phys)
 {
-	*phys = PHYS_BASE;	/* a plausible answer even when refusing: only the return counts */
+	unsigned long base = PHYS_BASE + (unsigned long)c * PHYS_STEP;	/* zb_ctx: the runtime */
+
+	*phys = base;	/* a plausible answer even when refusing: only the return counts */
 	if (arm < FW_HEAP_ARM || len > FW_HEAP_LEN || arm - FW_HEAP_ARM > FW_HEAP_LEN - len)
 		return -1;
-	*phys = PHYS_BASE + (arm - FW_HEAP_ARM);
+	*phys = base + (arm - FW_HEAP_ARM);
 	return 0;
+}
+
+/* bp as a board whose runtime is fw_mboxes[inst] */
+static void
+board_setup(struct zz9kbus_board *bp, int inst)
+{
+	memset(bp, 0, sizeof *bp);
+	bp->zb_version = ZZ9KBUS_VERSION;
+	bp->zb_id = ZZ9KBUS_ID_Z3660;
+	bp->zb_boff = 0x400;
+	bp->zb_bsize = 0x20;
+	bp->zb_ctx = (char *)(long)inst;
+	bp->zb_bread = (unsigned (*)())bread;
+	bp->zb_doorbell = (void (*)())bell;
+	bp->zb_mbox = (char *)fw_mboxes[inst];
+	bp->zb_mboxlen = FW_MBOXLEN;
+	bp->zb_heapphys = (int (*)())heapphys;
 }
 
 static void
 board_init(void)
 {
-	memset(&board, 0, sizeof board);
-	board.zb_version = ZZ9KBUS_VERSION;
-	board.zb_id = ZZ9KBUS_ID_Z3660;
-	board.zb_boff = 0x400;
-	board.zb_bsize = 0x20;
-	board.zb_bread = (unsigned (*)())bread;
-	board.zb_doorbell = (void (*)())bell;
-	board.zb_mbox = (char *)fw_mbox;
-	board.zb_mboxlen = FW_MBOXLEN;
-	board.zb_heapphys = (int (*)())heapphys;
+	board_setup(&board, 0);
 }
 
 /* ---- the client's side ---- */
@@ -317,7 +328,12 @@ td_map(dev_t d, long cookie, unsigned long len)
 	}
 	if (first == -1)
 		return 0;
-	return fw_heap_at(FW_HEAP_ARM + ((unsigned long)first << TD_PSHIFT) - PHYS_BASE);
+	{
+		unsigned long phys = (unsigned long)first << TD_PSHIFT;
+		int inst = (int)((phys - PHYS_BASE) / PHYS_STEP);
+
+		return fw_heap_of(inst, FW_HEAP_ARM + phys - PHYS_BASE - (unsigned long)inst * PHYS_STEP);
+	}
 }
 
 static struct zzs_stats

@@ -6,6 +6,8 @@
  * real heap would; DECOMPRESS of DEFLATE_RAW, ZLIB and GZIP inflates with the host's zlib
  * exactly as the firmware's one-shot decompress does (inflate with Z_FINISH, the CRC-32 of
  * the output), and algorithm 0, no real algorithm, gets the fixed reply the policy rows use.
+ * QUERY_CAPS and QUERY_SERVICE answer as the firmware does.  There are FW_NINST runtimes,
+ * one per unit; fw and fw_mbox name fw_cur's, and fw_step steps every one that was set up.
  *
  * Copyright (c) 2026 Jussi Alanärä.  GPL-3.0-or-later, see zz9ksvc/LICENSE.
  */
@@ -14,9 +16,11 @@
 #include "zz9k/abi.h"
 #include "fw.h"
 
-unsigned char fw_mbox[FW_MBOXLEN];
-static unsigned char fw_heap[FW_HEAP_LEN];
-struct fw_state fw;
+unsigned char fw_mboxes[FW_NINST][FW_MBOXLEN];
+static unsigned char fw_heaps[FW_NINST][FW_HEAP_LEN];
+struct fw_state fw_st[FW_NINST];
+int fw_cur;
+#define fw_heap	(fw_heaps[fw_cur])
 
 static void
 put32(volatile uint8_t *p, uint32_t v) { zz9k_put_be32(p, v); }
@@ -41,6 +45,17 @@ fw_init(int reqn, int cmpn, unsigned long caps)
 	fw.reqn = reqn;
 	fw.cmpn = cmpn;
 	fw.next_handle = 0x100;
+	fw.codec_flags = ZZ9K_SERVICE_FLAG_CODEC_DEFLATE_RAW | ZZ9K_SERVICE_FLAG_CODEC_ZLIB |
+	    ZZ9K_SERVICE_FLAG_CODEC_GZIP | ZZ9K_SERVICE_FLAG_CODEC_CHECKSUM;
+}
+
+/* runtime inst's heap memory at a firmware address, or 0 */
+unsigned char *
+fw_heap_of(int inst, unsigned long arm)
+{
+	if (inst < 0 || inst >= FW_NINST || arm < FW_HEAP_ARM || arm >= FW_HEAP_ARM + FW_HEAP_LEN)
+		return 0;
+	return fw_heaps[inst] + (arm - FW_HEAP_ARM);
 }
 
 /* the runtime restarted: every buffer it held is forgotten, the heap is empty again */
@@ -330,6 +345,42 @@ answer(const ZZ9KMailboxWireEntry *rq)
 		complete(rq, fw.status ? fw.status : ZZ9K_STATUS_OK, reply, 8);
 		return;
 	}
+	if (op == ZZ9K_OP_QUERY_CAPS) {
+		ZZ9KMailboxDescriptor *d = (ZZ9KMailboxDescriptor *)fw_mbox;
+
+		if (fw.no_caps) {
+			complete(rq, ZZ9K_STATUS_INTERNAL_ERROR, 0, 0);
+			return;
+		}
+		put32(reply + 0, ZZ9K_ABI_MAGIC);
+		zz9k_put_be16(reply + 4, ZZ9K_ABI_VERSION_MAJOR);
+		zz9k_put_be16(reply + 6, ZZ9K_ABI_VERSION_MINOR);
+		put32(reply + 8, zz9k_get_be32(d->capability_bits) | ZZ9K_CAP_SERVICE_DISCOVERY);
+		put32(reply + 12, 48);
+		put32(reply + 16, FW_NBUF);
+		put32(reply + 24, 0x00020901);
+		put32(reply + 28, fw.reqn);
+		put32(reply + 32, fw.cmpn);
+		complete(rq, ZZ9K_STATUS_OK, reply, 40);
+		return;
+	}
+	if (op == ZZ9K_OP_QUERY_SERVICE) {
+		uint32_t id = zz9k_get_be32(rq->payload);
+
+		if (id != ZZ9K_SERVICE_CODEC || fw.codec_flags == 0) {
+			complete(rq, ZZ9K_STATUS_NOT_FOUND, 0, 0);
+			return;
+		}
+		put32(reply + 0, id);
+		put32(reply + 4, 1);
+		put32(reply + 12, fw.codec_flags);
+		put32(reply + 16, ZZ9K_OP_DECOMPRESS);
+		put32(reply + 20, 1);
+		put32(reply + 24, 48);
+		memcpy(reply + 28, "codec", 5);
+		complete(rq, ZZ9K_STATUS_OK, reply, 48);
+		return;
+	}
 	put32(reply, 0x5a5a394b);
 	complete(rq, fw.status ? fw.status : ZZ9K_STATUS_OK, reply, 16);
 }
@@ -339,8 +390,23 @@ answer(const ZZ9KMailboxWireEntry *rq)
  * fw.hold is set (it times out), or for fw.delay steps; held ones are answered once the
  * hold is lifted.
  */
+static void step1(void);
+
 void
 fw_step(void)
+{
+	int save = fw_cur, i;
+
+	for (i = 0; i < FW_NINST; i++)
+		if (fw_st[i].reqn != 0) {
+			fw_cur = i;
+			step1();
+		}
+	fw_cur = save;
+}
+
+static void
+step1(void)
 {
 	ZZ9KMailboxDescriptor *d = (ZZ9KMailboxDescriptor *)fw_mbox;
 	ZZ9KMailboxWireEntry *ring;

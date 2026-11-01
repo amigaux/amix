@@ -20,6 +20,8 @@ struct fw_state {
 	unsigned	alloc_status;	/* nonzero: fail ALLOC_SHARED with it */
 	int		alloc_outside;	/* place the next buffers outside the window */
 	unsigned long	alloc_at;	/* nonzero: place the next buffer here (a restarted runtime) */
+	unsigned long	codec_flags;	/* QUERY_SERVICE of CODEC: its flags; 0: no such service */
+	int		no_caps;	/* QUERY_CAPS fails */
 	unsigned	alloc_extra;	/* report this many bytes more than asked */
 	unsigned long	next_handle;
 	unsigned long	live[FW_NBUF];	/* handles allocated and not freed */
@@ -30,11 +32,16 @@ struct fw_state {
 	unsigned long	last_align, last_alloc_flags;
 };
 
-extern unsigned char fw_mbox[FW_MBOXLEN];
-extern struct fw_state fw;
+#define FW_NINST	2	/* runtimes: one per unit */
+extern unsigned char fw_mboxes[FW_NINST][FW_MBOXLEN];
+extern struct fw_state fw_st[FW_NINST];
+extern int fw_cur;			/* the runtime fw and fw_mbox name */
+#define fw_mbox		(fw_mboxes[fw_cur])
+#define fw		(fw_st[fw_cur])
 void fw_init(int reqn, int cmpn, unsigned long caps);
 void fw_restart(void);
 unsigned char *fw_heap_at(unsigned long arm);
+unsigned char *fw_heap_of(int inst, unsigned long arm);
 unsigned long fw_alg_raw(void), fw_alg_zlib(void), fw_alg_gzip(void);
 unsigned long fw_deflate(unsigned long alg, const unsigned char *src, unsigned long n,
     unsigned char *dst, unsigned long cap);
