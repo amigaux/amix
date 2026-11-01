@@ -206,8 +206,8 @@ otherwise.
     (`tests/smoke.sh` checks this on the box).
 - **pwgr:** `build/pkg/common/amix-pwgr.c` is linked in, so the binary
   defines `getpwnam/getpwuid/getgrnam/getgrgid` itself. This avoids the
-  stock shared libc's first-call `getpwnam` crash. `getspnam` and `crypt`
-  are libc's static members (`/etc/shadow`, the system's DES crypt).
+  stock shared libc's first-call `getpwnam` crash. `getspnam` is libc's static member (`/etc/shadow`), and `crypt` is the
+  system's DES crypt from `/usr/lib/libcrypt.a` (Dropbear links `-lcrypt`).
 - **`-fno-jump-tables` for `cli-runopts.c` and `svr-chansession.c`.** Two of
   their switches compile into dispatch shapes the 68060 gate's table scanner
   cannot size yet. Both are cold paths (option parsing, pty modes).
