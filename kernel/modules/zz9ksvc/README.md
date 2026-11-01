@@ -25,7 +25,8 @@ and carry no GPL text, so an MIT board driver never links GPL code.
 | `include/sys/zz9ksvc.h` | the ioctl interface |
 | `module/keys`, `module/Master`, `module/Makefile`, `module/VERSION` | as for every module here |
 | `man/zz9ksvc.7` | the page `zz9ksvc(7)` |
-| `test/hosttest.sh`, `test/fw.c`, `test/fw.h` | the host test and its stand-in runtime |
+| `test/hosttest.sh`, `test/td.h`, `test/stub/`, `test/stub-bus/` | the host test, its DDI stand-ins and client calls, the stub kernel headers |
+| `test/fw.c`, `test/fw.h` | the stand-in runtime (libzz9k's host test uses it too) |
 | `pkg/` | the package recipe, rolled by make dist's kspace step |
 
 ## How it works
@@ -62,6 +63,18 @@ maps a buffer by its cookie only: the offset carries the handle and a generation
 reused handle does not map through an old cookie) and `d_mmap` returns the page of that
 buffer's range, or -1. The offset is range-checked in full, negative values included, and on
 k46 both 2 KiB halves of a page give the same frame.
+
+**A mapping outlives its cookie.** The driver is not told of `munmap`, so a buffer `d_mmap` has
+given a frame of may still be mapped after its FREE. Such a buffer is held: its handle stays
+taken, its bytes count against the quota, it maps nothing new and no request can use it, and it
+is not handed back to the runtime while the open lives. The open's `d_close` frees it: specfs
+calls `d_close` on a clone only after its last open file and its last mapping are gone (the map
+count on the clone's common snode, tested by `spec_close` and `spec_delmap`), including the
+unmap at exit, which comes after the files are closed. So no other client's buffer, and no
+buffer of the kernel's, ever lies under pages a client can still reach. A buffer never mapped
+(card-only, or not mapped yet) goes back at once. After a RESET the restarted runtime may place
+a new buffer over pages a live open still has mapped; such an allocation is refused with
+`EAGAIN` (and the buffer given back) until that open closes.
 
 **Completions and waits.** Replies are polled from a `timeout()` callout every clock tick,
 and only while something is in flight, quarantined or owed a free; an idle box costs nothing.
@@ -101,11 +114,11 @@ The module imports only DDI v1 minor-0 names (`copyin`, `copyout`, `drv_priv`, `
 
 | | k30 | k46 |
 |---|---|---|
-| file (`mod.d/zz9ksvc`) | 13,474 bytes | 13,370 bytes |
-| allocated image (`modcheck`) | 12,208 bytes | 12,104 bytes |
+| file (`mod.d/zz9ksvc`) | 13,894 bytes | 13,790 bytes |
+| allocated image (`modcheck`) | 12,568 bytes | 12,456 bytes |
 
 `.bss` is 3,584 bytes: the two units' request tables. Each open takes one `kmem_zalloc` of
-about 470 bytes (`KM_NOSLEEP`, `ENOMEM` when there is none). `wire.o` is 2,440 bytes of text.
+596 bytes (`KM_NOSLEEP`, `ENOMEM` when there is none). `wire.o` is 2,440 bytes of text.
 
 ## Building
 
@@ -144,7 +157,9 @@ checks the source (c 55 in `zz9ksvc.c` and `keys`; `zz9kbus.h` MIT with no GPL t
 headers included only by `wire.c` and the stand-in), then compiles the shipped `zz9ksvc.c`,
 `wire.c` and `zz9kbus.c` with stand-ins for the DDI (a simulated clock drives `timeout` and
 `sleep`) against `test/fw.c`, a stand-in runtime with a real ABI v2 mailbox that can hold,
-park, delay or fail requests, and a stub board whose host-visible window the test sets. It
+park, delay or fail requests, a heap with host memory behind it placed first fit (a freed
+range is handed out again), and DECOMPRESS of raw deflate, zlib and gzip done with the host's
+zlib as the firmware does it; and a stub board whose host-visible window the test sets. It
 covers:
 - the descriptor checks (each way a descriptor can be wrong);
 - `_load` with no board, no magic, no runtime, a bad descriptor, and a good one (the board held);
@@ -154,6 +169,12 @@ covers:
   allocation that times out or is interrupted giving its late buffer back;
 - mmap by handle: the right frame, both halves of a k46 page, past the end, negative offsets,
   a wrong generation, another client's cookie, a freed and reused handle;
+- a mapped buffer freed: held (nothing to the runtime, no new mapping, no use, bytes still
+  counted), another client's new buffer never on its frames, given back at the close and its
+  frames handed out again after it; sixteen held buffers take every handle until the close;
+  after a RESET, a new buffer over a live open's mapped pages refused until that open closes;
+- a real DECOMPRESS of each format through the kernel: the bytes, the CRC-32, no room, a
+  corrupt stream;
 - the request policy, root-only opcodes, payload length, every reference check (range,
   overflow, ownership, free handles), the runtime seeing only its own handles, 4 in flight, a
   full ring, a stray reply;

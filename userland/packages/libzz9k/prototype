@@ -1,0 +1,48 @@
+#
+# prototype -- libzz9k's installed layout.
+#
+# AUTHORED, NOT GENERATED: build.sh's stage hook puts exactly these paths under
+# the destination root and the driver runs pkgmk -r over it.  PREFIX /opt/amix
+# (docs/coexistence.md).  A pure file payload: class none, no install scripts.
+# Every basename is at most 14 bytes (s5): the SDK headers whose names are
+# longer (image_geometry.h, service_registry.h) and those that need them
+# (request.h, reply.h, image.h) are not shipped; the library uses them inside.
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the static library and its headers ------------------------------------
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libzz9k.a 0644 root bin
+d none /opt/amix/include 0755 root sys
+d none /opt/amix/include/zz9k 0755 root sys
+f none /opt/amix/include/zz9k/abi.h 0644 root bin
+f none /opt/amix/include/zz9k/amix.h 0644 root bin
+f none /opt/amix/include/zz9k/compression.h 0644 root bin
+f none /opt/amix/include/zz9k/crypto.h 0644 root bin
+f none /opt/amix/include/zz9k/host.h 0644 root bin
+f none /opt/amix/include/zz9k/text.h 0644 root bin
+#
+# --- the on-box check, linked against exactly this archive -----------------
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/zz9k-test 0755 root bin
+#
+# --- manual pages ----------------------------------------------------------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/zz9k-test 0644 root bin
+d none /opt/amix/man/3 0755 root sys
+f none /opt/amix/man/3/libzz9k 0644 root bin
+f none /opt/amix/man/3/zz9k_inflate 0644 root bin
+f none /opt/amix/man/3/zz9k_pool 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/libzz9k 0644 root bin
+#
+# --- licence and provenance ------------------------------------------------
+#
+# GPL-3.0-or-later, the SDK's licence; a program linking libzz9k is GPL as a whole.
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/libzz9k 0755 root sys
+f none /opt/amix/doc/libzz9k/LICENSE 0644 root bin
+f none /opt/amix/doc/libzz9k/PROVENANCE 0644 root bin

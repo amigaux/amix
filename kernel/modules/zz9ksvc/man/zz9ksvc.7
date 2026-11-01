@@ -70,6 +70,9 @@ when the client has no handle or quota left.
 frees the buffer whose handle is the argument.
 .B EBUSY
 while a request in flight uses it.
+A buffer that was ever mapped is held until the channel is closed (see
+.BR "Mapping a buffer" ):
+its handle and its bytes stay taken until then.
 .TP
 .B ZZSIOC_SUBMIT
 passes on a request: the opcode and up to 48 bytes of payload in the runtime's
@@ -115,6 +118,22 @@ the buffer's cookie as the offset (plus a page-aligned offset into the buffer)
 and a length within it maps that buffer of the board's memory.
 Nothing else on the board can be mapped.
 A cookie stops working when its buffer is freed.
+.PP
+A mapping outlives the cookie, so the board's memory under a mapped buffer is
+not given to anyone else while the client may still reach it: a freed buffer
+that was mapped is given back only when the channel is closed and its last
+mapping is gone.
+A program that maps buffers should
+.BR munmap (2)
+them, reuse them, and free them when it is done; when every handle is held,
+.B ZZSIOC_ALLOC
+gives
+.B ENOSPC
+until the channel is closed and opened again.
+After
+.BR ZZSIOC_RESET ,
+an allocation the restarted runtime places under another client's mapping gives
+.BR EAGAIN .
 .SS Timeouts
 The runtime cannot cancel work it has taken.
 When a wait times out, the buffers the request uses are quarantined: the runtime
@@ -144,4 +163,5 @@ The module is GPL-3.0-or-later; the interface between board drivers and it,
 .BR zz9kbus ,
 is MIT.
 .SH SEE ALSO
-.BR mmap (2)
+.BR mmap (2),
+.BR munmap (2)

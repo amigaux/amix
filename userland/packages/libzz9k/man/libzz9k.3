@@ -1,0 +1,160 @@
+.TH LIBZZ9K 3 "1 November 2026" "libzz9k"
+.SH NAME
+libzz9k, zz9k_inflate, zz9k_pool \- ZZ9000-family board services, with a software fallback
+.SH SYNOPSIS
+.nf
+.B #include <zz9k/amix.h>
+.PP
+.BI "int zz9k_inflate(uint32_t " algorithm ", uint32_t " flags ,
+.BI "    const void *" src ", uint32_t " src_length ,
+.BI "    void *" dst ", uint32_t " dst_capacity ", int " how ,
+.BI "    ZZ9KDecompressResult *" result ", int *" ran );
+.PP
+.BI "int zz9k_pool(const ZZ9KAmixBoard **" boards );
+.BI "int zz9k_pool_codec(uint32_t " flags );
+.BI "void zz9k_pool_timeout(uint32_t " ms );
+.B "void zz9k_pool_close(void);"
+.PP
+.BI "int zz9k_open_unit(ZZ9KContext **" ctx ", int " unit );
+.fi
+.PP
+.B cc ... -I/opt/amix/include ... -Wl,--gc-sections -L/opt/amix/lib -lzz9k -lz
+.SH DESCRIPTION
+A Z3660, and a ZZ9000 whose firmware has the services runtime, can do work for a
+program on the board's second ARM core.
+The kernel reaches each such board through
+.BR zz9ksvc (7),
+.B /dev/zz9ksvc0
+and
+.BR /dev/zz9ksvc1 .
+.B libzz9k
+is the program's side: the ZZ9000 SDK version 2 host interface
+.RB ( <zz9k/host.h> )
+over those channels, and calls that run on a board when one offers the service
+and in software when none does, with the same result either way.
+.PP
+.B zz9k_inflate
+decompresses
+.I src_length
+bytes at
+.I src
+into at most
+.I dst_capacity
+bytes at
+.IR dst .
+.I algorithm
+is
+.BR ZZ9K_COMPRESSION_DEFLATE_RAW ,
+.B ZZ9K_COMPRESSION_ZLIB
+or
+.BR ZZ9K_COMPRESSION_GZIP ;
+the other algorithms of the SDK run on a board only.
+.I flags
+is 0 or
+.B ZZ9K_DECOMPRESS_FLAG_EXPECT_END
+(a stream that does not end is an error).
+.I how
+is
+.B ZZ9K_INFLATE_AUTO
+(a board that offers it, else software),
+.B ZZ9K_INFLATE_BOARD
+or
+.BR ZZ9K_INFLATE_SOFT .
+The status is a
+.B ZZ9K_STATUS_*
+code;
+.B ZZ9K_STATUS_OK
+fills
+.I result
+(bytes consumed and written, the CRC-32 of the output, the algorithm, the result
+flags), and the status, the result and the bytes at
+.I dst
+are the same on a board and in software.
+.B ZZ9K_STATUS_NO_MEMORY
+means
+.I dst
+is too small,
+.B ZZ9K_STATUS_BAD_REQUEST
+a stream that cannot be decoded or a bad argument.
+.I *ran
+(when
+.I ran
+is not null) says where it ran.
+With
+.B ZZ9K_INFLATE_BOARD
+and no board offering it, the status is
+.B ZZ9K_STATUS_NOT_FOUND
+when there is no board and
+.B ZZ9K_STATUS_UNSUPPORTED
+when none has the service.
+.PP
+The pool opens every
+.B /dev/zz9ksvcN
+once per process, at the first call, and reads each board's capability
+catalogue (QUERY_CAPS, and the CODEC service's flags by QUERY_SERVICE).
+A node that gives
+.B ENXIO
+(no board, or no runtime on it) is left out.
+.B zz9k_pool
+gives the boards and their number;
+.B zz9k_pool_codec
+the unit of the first board whose CODEC service has every flag in
+.IR flags ,
+or \-1.
+.B zz9k_pool_timeout
+bounds each board request
+.RI ( ms ,
+0 for the kernel's 10 seconds);
+a call that times out runs in software, and that board is left out of
+.B ZZ9K_INFLATE_AUTO
+calls for 30 seconds.
+.B zz9k_pool_close
+closes every channel.
+.PP
+.B zz9k_open
+takes the first unit that answers,
+.B zz9k_open_unit
+a given one, for the SDK's own calls.
+On Amix a buffer of
+.B zz9k_alloc_shared
+is mapped with
+.BR mmap (2);
+the kernel passes on only the requests it knows (see
+.BR zz9ksvc (7));
+.BR zz9k_submit ,
+.B zz9k_poll
+and the interrupt calls give
+.BR ZZ9K_STATUS_UNSUPPORTED .
+.SH NOTES
+The library has a section per function:
+.B -Wl,--gc-sections
+keeps only the calls a program makes (the whole SDK host interface is about 50 KB
+of text).
+.PP
+The kernel gives a freed buffer that was mapped back to the board only when the
+channel closes, so the pool keeps two buffers per board and reuses them, and
+opens its channel again when growing them runs out of handles.
+.PP
+The library is not safe for threads.
+.SH LICENCE
+.B libzz9k
+is GPL-3.0-or-later: it is the ZZ9000 SDK's host code, which is GPL-3.0-or-later
+with no linking exception.
+A program that links it is a combined work under the GPL, version 3 or later, as
+a whole.
+The licence is
+.BR /opt/amix/doc/libzz9k/LICENSE .
+.SH FILES
+.TP
+.B /opt/amix/lib/libzz9k.a
+the library
+.TP
+.B /opt/amix/include/zz9k
+its headers
+.TP
+.BR /dev/zz9ksvc0 ", " /dev/zz9ksvc1
+the channels
+.SH SEE ALSO
+.BR zz9k-test (1),
+.BR zz9ksvc (7),
+.BR mmap (2)

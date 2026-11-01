@@ -1,0 +1,365 @@
+Amix: the SDK host API over the kernel's zz9ksvc channel (ZZ9K_HOST_AMIX).
+
+On Amix the kernel module zz9ksvc owns the board's mailbox, so the host code cannot write
+the rings itself.  With ZZ9K_HOST_AMIX (the build sets it) a context is an open of
+/dev/zz9ksvcN: zz9k_call submits by ZZSIOC_SUBMIT and waits by ZZSIOC_WAIT (the kernel
+gives the request its id and swaps the open's handles for the runtime's), zz9k_alloc_shared
+is ZZSIOC_ALLOC and an mmap(2) of the cookie, zz9k_free_shared unmaps exactly what was
+mapped and frees, zz9k_close unmaps everything before it closes.  zz9k_open takes the first
+unit that answers and zz9k_open_unit (zz9k/amix.h) a given one.  The raw ring calls
+(zz9k_submit, zz9k_poll) and the interrupt calls answer ZZ9K_STATUS_UNSUPPORTED, as on any
+host without a mailbox; the kernel polls.  Upstream lines are only added to, except the
+platform test's #if, which becomes an #elif after the new branch.
+
+--- a/zz9k_host.c
++++ b/zz9k_host.c
+@@ -11,12 +11,21 @@
+ #include <errno.h>
+ #include <string.h>
+ 
+-#if defined(__amigaos__) || defined(__amiga__) || defined(__AMIGA__) || \
++#if defined(ZZ9K_HOST_AMIX) && ZZ9K_HOST_AMIX
++/* Amix (SVR4, kernel module zz9ksvc): the kernel owns the board's mailbox.
++ * A context is an open of /dev/zz9ksvcN; a request goes in by ZZSIOC_SUBMIT
++ * and its reply comes back by ZZSIOC_WAIT; a shared buffer is a handle of
++ * that open, mapped with mmap(2) by the cookie ZZSIOC_ALLOC gives. */
++#define ZZ9K_HOST_AMIGA 0
++#elif defined(__amigaos__) || defined(__amiga__) || defined(__AMIGA__) || \
+     defined(__VBCC__)
+ #define ZZ9K_HOST_AMIGA 1
+ #else
+ #define ZZ9K_HOST_AMIGA 0
+ #endif
++#ifndef ZZ9K_HOST_AMIX
++#define ZZ9K_HOST_AMIX 0
++#endif
+ 
+ #if ZZ9K_HOST_AMIGA
+ /* CACRF_ClearD lives in execbase.h, not types.h; the amissl
+@@ -41,6 +50,19 @@
+ #include <stdlib.h>
+ #endif
+ 
++#if ZZ9K_HOST_AMIX
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <sys/mman.h>
++#include <sys/zz9ksvc.h>
++#include "zz9k/amix.h"
++#if defined(__AMIX__)
++/* the Amix headers declare no munmap */
++extern int munmap(void *, size_t);
++#endif
++#endif
++
+ #if ZZ9K_HOST_AMIGA
+ /* FindConfigDev() dispatches through this global library base. Standalone
+  * tools normally receive a definition from libnix's auto-open stubs, but a
+@@ -118,6 +140,14 @@
+   unsigned char irq_armed;
+   unsigned char late_irq_expected; /* cancelled op still in flight */
+   unsigned char aperture_layout_valid;
++#if ZZ9K_HOST_AMIX
++  int amix_fd;                     /* the open of /dev/zz9ksvcN */
++  int amix_unit;
++  struct {
++    void *addr;                    /* the mapping of each handle's buffer */
++    uint32_t length;
++  } amix_map[ZZS_NHANDLE];
++#endif
+ #if ZZ9K_HOST_AMIGA
+   struct Interrupt irq;
+   struct Task *irq_task;
+@@ -969,6 +999,18 @@
+       ((uint32_t)zz9k_read_reg16(board->board_addr, ZZ9K_REG_SDK_VERSION)
+        << 16);
+   return ZZ9K_STATUS_OK;
++#elif ZZ9K_HOST_AMIX
++  {
++    ZZ9KContext *ctx;
++    int status = zz9k_open(&ctx);
++
++    if (status != ZZ9K_STATUS_OK) {
++      return status;
++    }
++    *board = ctx->board;
++    zz9k_close(ctx);
++    return ZZ9K_STATUS_OK;
++  }
+ #else
+   return ZZ9K_STATUS_UNSUPPORTED;
+ #endif
+@@ -1020,11 +1062,220 @@
+                                          ZZ9K_REG_SDK_IRQ_ACK);
+   }
+   return status;
++#elif ZZ9K_HOST_AMIX
++  {
++    int unit;
++    int status = ZZ9K_STATUS_NOT_FOUND;
++
++    /* the first unit whose channel opens: a board with a runtime */
++    for (unit = 0; unit < ZZ9K_AMIX_NUNIT; unit++) {
++      status = zz9k_open_unit(ctx, unit);
++      if (status == ZZ9K_STATUS_OK) {
++        break;
++      }
++    }
++    return status;
++  }
+ #else
+   return ZZ9K_STATUS_UNSUPPORTED;
+ #endif
+ }
+ 
++#if ZZ9K_HOST_AMIX
++/* The status for an errno of the channel. */
++static int zz9k_amix_status(int e)
++{
++  switch (e) {
++  case ENXIO:
++  case ENODEV:
++  case ENOENT:
++    return ZZ9K_STATUS_NOT_FOUND;   /* no board, runtime or node */
++  case EINVAL:
++  case EPERM:
++  case EACCES:
++    return ZZ9K_STATUS_UNSUPPORTED; /* the kernel does not pass it on */
++  case EBADF:
++    return ZZ9K_STATUS_BAD_HANDLE;
++  case EAGAIN:
++  case EBUSY:
++    return ZZ9K_STATUS_BUSY;
++  case ENOSPC:
++  case ENOMEM:
++    return ZZ9K_STATUS_NO_MEMORY;
++  case ETIMEDOUT:
++    return ZZ9K_STATUS_TIMEOUT;
++  default:
++    return ZZ9K_STATUS_IO_ERROR;
++  }
++}
++
++int zz9k_open_unit(ZZ9KContext **ctx, int unit)
++{
++  char path[16];
++  struct zzs_info zi;
++  ZZ9KContext *new_ctx;
++  int fd;
++  int e;
++
++  if (!ctx) {
++    return ZZ9K_STATUS_BAD_REQUEST;
++  }
++  *ctx = 0;
++  if (unit < 0 || unit >= ZZ9K_AMIX_NUNIT) {
++    return ZZ9K_STATUS_BAD_REQUEST;
++  }
++  memcpy(path, "/dev/zz9ksvc", 12);
++  path[12] = (char)('0' + unit);
++  path[13] = '\0';
++  fd = open(path, O_RDWR);
++  if (fd < 0) {
++    return zz9k_amix_status(errno);
++  }
++  memset(&zi, 0, sizeof(zi));
++  if (ioctl(fd, ZZSIOC_INFO, &zi) != 0) {
++    e = errno;
++    close(fd);
++    return zz9k_amix_status(e);
++  }
++  if (zi.zi_abimajor != ZZ9K_ABI_VERSION_MAJOR) {
++    close(fd);
++    return ZZ9K_STATUS_UNSUPPORTED;
++  }
++  new_ctx = (ZZ9KContext *)zz9k_alloc_host(sizeof(*new_ctx));
++  if (!new_ctx) {
++    close(fd);
++    return ZZ9K_STATUS_NO_MEMORY;
++  }
++  memset(new_ctx, 0, sizeof(*new_ctx));
++  (void)fcntl(fd, F_SETFD, FD_CLOEXEC);
++  new_ctx->amix_fd = fd;
++  new_ctx->amix_unit = unit;
++  new_ctx->board.product = (uint16_t)(zi.zi_id & 0xffff);
++  new_ctx->board.zorro_version =
++      (uint32_t)zi.zi_id ==
++              ((ZZ9K_MNT_MANUFACTURER << 16) | ZZ9K_PRODUCT_Z2) ? 2U : 3U;
++  new_ctx->board.firmware_version =
++      ((uint32_t)zi.zi_abimajor << 16) | (uint32_t)zi.zi_abiminor;
++  /* the kernel rings the doorbell and polls: no interrupt here */
++  new_ctx->capability_bits = (uint32_t)zi.zi_caps &
++      ~(uint32_t)(ZZ9K_CAP_IRQ_COMPLETION | ZZ9K_CAP_DOORBELL);
++  new_ctx->request_ring_entries = (uint32_t)zi.zi_reqn;
++  new_ctx->completion_ring_entries = (uint32_t)zi.zi_cmpn;
++  new_ctx->next_request_id = 1;
++  new_ctx->sync_cookie_mask = ZZ9K_SYNC_COOKIE_MASK;
++  *ctx = new_ctx;
++  return ZZ9K_STATUS_OK;
++}
++
++int zz9k_unit(const ZZ9KContext *ctx)
++{
++  return ctx ? ctx->amix_unit : -1;
++}
++
++/* zz9k_call's Amix body: SUBMIT, then WAIT for that request, which the
++ * kernel bounds (ctx->offload_timeout_ms, else its own 10 s).  A signal
++ * does not end the call: the request stays the kernel's until waited for. */
++static int zz9k_amix_call(ZZ9KContext *ctx, ZZ9KRequest *request,
++                          ZZ9KMailboxEntry *reply)
++{
++  struct zzs_submit zs;
++  struct zzs_wait zw;
++  uint32_t len = request->entry.payload_len;
++
++  if (len > ZZS_PAYLOAD) {
++    return ZZ9K_STATUS_BAD_REQUEST;
++  }
++  memset(&zs, 0, sizeof(zs));
++  zs.zs_opcode = request->entry.opcode;
++  zs.zs_len = (long)len;
++  memcpy(zs.zs_payload, request->entry.payload.inline_data, len);
++  if (ioctl(ctx->amix_fd, ZZSIOC_SUBMIT, &zs) != 0) {
++    return zz9k_amix_status(errno);
++  }
++  memset(&zw, 0, sizeof(zw));
++  zw.zw_id = zs.zs_id;
++  zw.zw_ms = ctx->offload_timeout_ms > 600000U ? 600000L :
++                                                  (long)ctx->offload_timeout_ms;
++  while (ioctl(ctx->amix_fd, ZZSIOC_WAIT, &zw) != 0) {
++    if (errno != EINTR) {
++      return zz9k_amix_status(errno);
++    }
++  }
++  memset(reply, 0, sizeof(*reply));
++  reply->request_id = (uint32_t)zs.zs_id;
++  reply->opcode = request->entry.opcode;
++  reply->status = (uint16_t)zw.zw_status;
++  reply->user_cookie = request->entry.user_cookie;
++  len = zw.zw_len < 0 ? 0U : (uint32_t)zw.zw_len;
++  if (len > ZZS_PAYLOAD || len > sizeof(reply->payload.inline_data)) {
++    return ZZ9K_STATUS_INTERNAL_ERROR;
++  }
++  reply->payload_len = (uint16_t)len;
++  memcpy(reply->payload.inline_data, zw.zw_payload, len);
++  return reply->status;
++}
++
++/* zz9k_alloc_shared's Amix body: ZZSIOC_ALLOC, then mmap(2) of the cookie
++ * unless the buffer is card-only.  Buffers are page-aligned. */
++static int zz9k_amix_alloc_shared(ZZ9KContext *ctx, uint32_t length,
++                                  uint32_t alignment, uint32_t flags,
++                                  ZZ9KSharedBuffer *buffer)
++{
++  struct zzs_alloc za;
++  void *p;
++  long page = sysconf(_SC_PAGESIZE);
++
++  memset(buffer, 0, sizeof(*buffer));
++  if (page <= 0 || alignment > (uint32_t)page ||
++      (alignment & (alignment - 1U)) != 0U || length > (uint32_t)ZZS_QUOTA) {
++    return ZZ9K_STATUS_UNSUPPORTED;
++  }
++  memset(&za, 0, sizeof(za));
++  za.za_length = (long)length;
++  za.za_flags = (flags & ZZ9K_ALLOC_CARD_ONLY) ? ZZS_ALLOC_CARDONLY : 0;
++  if (ioctl(ctx->amix_fd, ZZSIOC_ALLOC, &za) != 0) {
++    return zz9k_amix_status(errno);
++  }
++  if (za.za_handle < 0 || za.za_handle >= ZZS_NHANDLE) {
++    return ZZ9K_STATUS_INTERNAL_ERROR;
++  }
++  buffer->handle = (uint32_t)za.za_handle;
++  buffer->length = (uint32_t)za.za_length;
++  if (!(flags & ZZ9K_ALLOC_CARD_ONLY)) {
++    p = (void *)mmap(0, (size_t)za.za_length, PROT_READ | PROT_WRITE,
++                     MAP_SHARED, ctx->amix_fd, (off_t)za.za_cookie);
++    if (p == (void *)-1) {
++      (void)ioctl(ctx->amix_fd, ZZSIOC_FREE, (int)za.za_handle);
++      memset(buffer, 0, sizeof(*buffer));
++      return ZZ9K_STATUS_IO_ERROR;
++    }
++    buffer->data = p;
++    ctx->amix_map[za.za_handle].addr = p;
++    ctx->amix_map[za.za_handle].length = (uint32_t)za.za_length;
++  }
++  return ZZ9K_STATUS_OK;
++}
++
++/* zz9k_free_shared's Amix body: unmap exactly what was mapped, then FREE.
++ * The kernel holds a buffer that was mapped until this open is closed. */
++static int zz9k_amix_free_shared(ZZ9KContext *ctx, uint32_t handle)
++{
++  if (handle >= ZZS_NHANDLE) {
++    return ZZ9K_STATUS_BAD_HANDLE;
++  }
++  if (ctx->amix_map[handle].addr) {
++    (void)munmap(ctx->amix_map[handle].addr,
++                 (size_t)ctx->amix_map[handle].length);
++    ctx->amix_map[handle].addr = 0;
++    ctx->amix_map[handle].length = 0;
++  }
++  if (ioctl(ctx->amix_fd, ZZSIOC_FREE, (int)handle) != 0) {
++    return zz9k_amix_status(errno);
++  }
++  return ZZ9K_STATUS_OK;
++}
++#endif
++
+ int zz9k_attach_mailbox(ZZ9KContext **ctx, const ZZ9KBoard *board,
+                         volatile ZZ9KMailboxDescriptor *mailbox,
+                         volatile uint16_t *doorbell,
+@@ -1138,6 +1389,20 @@
+ #if ZZ9K_HOST_AMIGA
+   zz9k_timer_close(ctx);
+ #endif
++#if ZZ9K_HOST_AMIX
++  {
++    int h;
++
++    /* every mapping first: the kernel frees the buffers at the close of
++     * the open's last file and last mapping */
++    for (h = 0; h < ZZS_NHANDLE; h++) {
++      if (ctx->amix_map[h].addr) {
++        (void)munmap(ctx->amix_map[h].addr, (size_t)ctx->amix_map[h].length);
++      }
++    }
++    close(ctx->amix_fd);
++  }
++#endif
+   zz9k_free_host(ctx);
+ }
+ 
+@@ -1634,6 +1899,9 @@
+   if (!ctx || !buffer || length == 0) {
+     return ZZ9K_STATUS_BAD_REQUEST;
+   }
++#if ZZ9K_HOST_AMIX
++  return zz9k_amix_alloc_shared(ctx, length, alignment, flags, buffer);
++#endif
+ 
+   card_only = (flags & ZZ9K_ALLOC_CARD_ONLY) != 0U;
+   /* HOST_WINDOW exists so a Zorro 2 host can map the buffer through its
+@@ -1746,6 +2014,9 @@
+   if (!ctx || handle == ZZ9K_INVALID_HANDLE) {
+     return ZZ9K_STATUS_BAD_REQUEST;
+   }
++#if ZZ9K_HOST_AMIX
++  return zz9k_amix_free_shared(ctx, handle);
++#endif
+ 
+   memset(&reply, 0, sizeof(reply));
+   status = zz9k_request_free_shared(&request, handle);
+@@ -3998,6 +4269,10 @@
+   if (!ctx || !request || !reply) {
+     return ZZ9K_STATUS_BAD_REQUEST;
+   }
++#if ZZ9K_HOST_AMIX
++  (void)timeout_ticks;
++  return zz9k_amix_call(ctx, request, reply);
++#endif
+ 
+   lock_status = zz9k_mailbox_lock(ctx);
+   if (lock_status != ZZ9K_STATUS_OK) {
