@@ -331,7 +331,7 @@ main(void)
 			memcpy(s, comp, n);
 			memset(t, 0, zc.za_length);
 			CHECK(op_inflate(b, zb.za_handle, n, zc.za_handle, zc.za_length, algs[k], &id) == 0 &&
-			    op_wait(b, id, 0, &zw) == 0 && zw.zw_status == fw_status_ok() && zw.zw_len == 20,
+			    op_wait(b, id, 0, &zw) == 0 && zw.zw_status == fw_status_ok() && zw.zw_len == 48,
 			    "inflate %lu: status %ld", algs[k], zw.zw_status);
 			CHECK(zzw_get32(zw.zw_payload) == n && zzw_get32(zw.zw_payload + 4) == sizeof orig &&
 			    zzw_get32(zw.zw_payload + 8) == fw_crc32(orig, sizeof orig) &&

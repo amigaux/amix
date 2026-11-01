@@ -328,7 +328,9 @@ answer(const ZZ9KMailboxWireEntry *rq)
 	if (op == ZZ9K_OP_DECOMPRESS && zz9k_get_be32(rq->payload + 24) != 0) {
 		unsigned st = inflate_req(rq->payload, reply);
 
-		complete(rq, st, st == ZZ9K_STATUS_OK ? reply : 0, st == ZZ9K_STATUS_OK ? 20 : 0);
+		/* as the firmware: the whole result payload on OK, none otherwise */
+		complete(rq, st, st == ZZ9K_STATUS_OK ? reply : 0,
+		    st == ZZ9K_STATUS_OK ? (unsigned)sizeof(ZZ9KDecompressResultPayload) : 0);
 		return;
 	}
 	if (op == ZZ9K_OP_DECOMPRESS || op == ZZ9K_OP_DECOMPRESS_TEST) {
