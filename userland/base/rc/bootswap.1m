@@ -74,13 +74,19 @@ Any other failure ends the step for that slice.
 .SH THE KERNEL'S LIMIT
 For every area
 .B "swap \-a"
-adds, the kernel needs a page table (16 bytes for each 2 KiB page on the
-68030) in one piece of a fixed 4 MiB kernel area.
-On a 64 MB 68030 machine only about 48 MiB of swap fits there.
+adds, the kernel needs an array for the area in one piece of its kvseg,
+which its other tables share.
+Measured on the 68030 kernel, for an area added after boot on top of its
+own 10 MiB area: about 50 MiB fits on a 64 MB machine, about 248 MiB on a
+16 MB one.
 A kernel with the guard refuses a larger request with
-.BR ENOMEM ,
-which is what the list steps down on; a kernel without it waits forever on
-such a request, and the boot with it.
+.B ENOMEM
+(swap prints
+.BR "SC_ADD failed" ,
+then
+.BR "swap: Not enough space" ,
+and exits 2), which is what the list steps down on; a kernel without it
+waits forever on such a request, and the boot with it.
 So the list must suit the kernel:
 .TP
 .B 30

@@ -17,9 +17,10 @@
 #               first size that adds 2048 blocks (1 MB) or more is tried;
 #               when the kernel refuses it for want of memory (ENOMEM), the
 #               next, each size at most once; any other failure ends it.
-#               swap -a needs a page table in one piece of a fixed kernel
-#               area, and a kernel without the ENOMEM guard waits forever on
-#               one that does not fit, so the list must suit the kernel.
+#               swap -a needs an array for the area in one piece of the
+#               kernel's kvseg, and a kernel without the ENOMEM guard waits
+#               forever on one that does not fit, so the list must suit the
+#               kernel.
 # and, as the stock script did, /SWAPFILE and /usr/src/SWAPFILE when they
 # exist. This folds the 030 installer's S89rootswap: its kernel swaps only
 # the first 20476 blocks of slice 2. "swap -s" reads 0 whatever is set up;
@@ -38,7 +39,9 @@ SWAP=${SWAP:-/usr/sbin/swap}
 RDB=${RDB:-/usr/amiga/bin/rdb}
 SWAP_VFSTAB=${SWAP_VFSTAB:-/etc/vfstab}
 SWAP_FILES=${SWAP_FILES:-"/SWAPFILE /usr/src/SWAPFILE"}
-# what swap prints when the kernel refuses an area for want of memory
+# what swap prints when the kernel refuses an area for want of memory (its
+# output: "SC_ADD failed", then "swap: Not enough space"; exit status 2,
+# which other failures share)
 SWAP_NOMEM=${SWAP_NOMEM:-"Not enough space"}
 
 # add <path> <swaplo> <blocks> <what> [<size>]: 0 when added; on a failure, nomem
@@ -46,7 +49,7 @@ SWAP_NOMEM=${SWAP_NOMEM:-"Not enough space"}
 add() {
 	_e=$RC_RUN/swap.$$
 	nomem=no
-	if "$SWAP" -a $1 $2 $3 2> $_e
+	if "$SWAP" -a $1 $2 $3 > $_e 2>&1
 	then
 		rm -f "${_e:?}"
 		echo "Added swap $4 $1, $3 blocks at $2${5:+ (swap_add $5)}."

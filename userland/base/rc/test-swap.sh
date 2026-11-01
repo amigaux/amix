@@ -37,7 +37,7 @@ case "\$1" in
 	echo "-a \$2 \$3 \$4" >> $T/calls
 	# a kernel with the guard: an area over \$T/max blocks is refused (ENOMEM)
 	if [ -f $T/max ] && [ "\$4" -gt "\`cat $T/max\`" ]; then
-		echo "/usr/sbin/swap: Not enough space" >&2; exit 1; fi
+		echo "SC_ADD failed"; echo "swap: Not enough space" >&2; exit 2; fi
 	awk -v p="\$2" -v lo="\$3" -v n="\$4" '\$1 == p && lo < \$2 + \$3 && \$2 < lo + n { bad = 1 } END { exit bad }' \$A || {
 		echo "/usr/sbin/swap: File exists" >&2; exit 2; }
 	echo "\$2 \$3 \$4" >> \$A
@@ -179,9 +179,20 @@ o=$(run start)
 same "all 48 30: stepped down" "-a /dev/dsk/c6d0s2 20480 81920
 -a /dev/dsk/c6d0s2 20480 77824
 -a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
-expect "all 48 30: the refusal logged" "swap: swap -a /dev/dsk/c6d0s2 20480 81920 failed: /usr/sbin/swap: Not enough space" "$(cat "$T/rc.log")"
+expect "all 48 30: the refusal logged" "swap: swap -a /dev/dsk/c6d0s2 20480 81920 failed: SC_ADD failed swap: Not enough space" "$(cat "$T/rc.log")"
 expect "all 48 30: the size used logged" "swap: added /dev/dsk/c6d0s2 20480 40960 (slice tail, swap_add 30)" "$(cat "$T/rc.log")"
-expect "all 48 30: the refusal said" "failed: /usr/sbin/swap: Not enough space" "$o"
+expect "all 48 30: the refusal said" "failed: SC_ADD failed swap: Not enough space" "$o"
+# the refusal's text on standard output alone still steps down
+cp "$T/bin/swap" "$T/swap.real"
+printf '#!/bin/sh\ncase "$1" in -a) if [ "$4" -gt 50000 ]; then echo "-a $2 $3 $4" >> %s/calls; echo "swap: Not enough space"; exit 2; fi ;; esac\nexec %s/swap.real "$@"\n' "$T" "$T" > "$T/bin/swap"
+rm -f "${T:?}/max"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "stdout text: stepped down" "-a /dev/dsk/c6d0s2 20480 81920
+-a /dev/dsk/c6d0s2 20480 77824
+-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+cp "$T/swap.real" "$T/bin/swap"
+
 # all fits: one try
 rm -f "${T:?}/max"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
