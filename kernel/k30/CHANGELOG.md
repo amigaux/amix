@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — the sidecar carries the kbootset floor (77971fb)
+
+The sidecar copies the module core's core/kbootset-min as kbootset-min= (C2-3 version 10), refusing anything but one line in the kbootset version form; recorded cuts keep their sidecars.
+
 ## 2026-11-01 — cut 68030-261101-68 and kern30m -68 (1ca4de2, 3e6037a, 88ad417)
 
 - The toolchain pin comes from kernel/dlm/toolchain.pin; a module kernel stops if the kabi pin= is not the core's pin.
