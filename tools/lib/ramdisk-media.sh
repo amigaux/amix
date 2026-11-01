@@ -7,7 +7,8 @@
 # compose). The caller then runs `kbootset -R stage-LINE media --cd|--floppy ... --ramdisk`.
 #   k46: ramdisk, z3660scsi and a4091 (root class: the disc sits on an A4091 in the rigs),
 #        cdfs (boot class, from the image's /stand/gen/1/mod); rootfs ufs, 32 MiB assumed
-#   k30: ramdisk and a4091, cdfs (boot class; kern30m links no static cdfs since -17);
+#   k30: ramdisk, a4091 and z3660scsi (root class: an A4000 in 030 mode installs onto its
+#        Z3660), cdfs (boot class; kern30m links no static cdfs since -17);
 #        rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
 # K46_MODS / K30_MODS override the module lists. The caller defines die().
 
@@ -24,7 +25,7 @@ rd_init() {
 	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46}"
-	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30}"
+	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30}"
 	mkdir -p "$W/bin"
 	# the unpacking pkgadd apkg calls: files and directories into -R, the contents file kept
 	cat > "$W/bin/pkgadd" <<P
