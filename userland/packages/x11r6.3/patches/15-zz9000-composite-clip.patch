@@ -1,0 +1,193 @@
+Ours.  The ZZ9000 GC's composite clip is rebuilt from scratch on every
+relevant validate, as miComputeCompositeClip does, by one function for
+windows and pixmaps:
+
+- pixmap: the pixmap bounds intersected with the client clip at clipOrg.
+  The old code translated the client clip by the last window's origin, or
+  kept a window's clip, and never bounded it by the pixmap, so a client
+  clip larger than a small pixmap let fills write past its buffer;
+- window: the client clip at the drawable origin plus clipOrg, intersected
+  with the clip list (or NotClippedByChildren).  The old code dropped the
+  client clip when only the window or the subwindow mode changed;
+- the NotClippedByChildren region is destroyed after use (it leaked on
+  every IncludeInferiors validate);
+- CreateGC fails cleanly when the clip region cannot be allocated.
+
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
+@@ -225,6 +225,14 @@
+ 
+     pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+     pPriv->clip = (*pGC->pScreen->RegionCreate)(NULL, 1);
++    if (!pPriv->clip)
++    {
++        xfree((pointer) pGC->ops);
++        pGC->ops = NULL;
++        xfree((pointer) pGC->funcs);
++        pGC->funcs = NULL;
++        return FALSE;
++    }
+ 
+     return TRUE;
+ }
+@@ -252,45 +260,83 @@
+ /* ValidateGC                                                          */
+ 
+ /*
+-** ZZ9000pixValidateGC - GC for drawing into an off-screen pixmap.
++** ZZ9000ComputeClip - the composite clip of pGC on pDraw, into the GC
++** private's region, rebuilt from scratch (as miComputeCompositeClip).
+ **
+-** All ops fall back to mi.  ZZ9000FillSpans handles the solid-fill
+-** case in software (direct pixel writes into host-allocated pixmap data).
++** Window: (client clip at drawable origin + clipOrg) intersected with the
++** clip list, or with NotClippedByChildren for IncludeInferiors (a region
++** of our own, destroyed here).  Pixmap: the pixmap bounds, intersected
++** with the client clip at clipOrg.  Every drawing op clips to this region,
++** so it must never reach past the drawable.
+ */
+ static void
+-ZZ9000pixValidateGC(pGC, change, pDraw)
+-GCPtr         pGC;
+-unsigned long change;
+-DrawablePtr   pDraw;
++ZZ9000ComputeClip(pGC, pDraw)
++GCPtr       pGC;
++DrawablePtr pDraw;
+ {
+-    RTGGCPRIV *pPriv;
+-    BoxRec     tbox;
+-    int        win_moved;
++    ScreenPtr  pScreen = pGC->pScreen;
++    RTGGCPRIV *pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
++    RegionPtr  clip = (RegionPtr) pPriv->clip;
++    RegionPtr  client = (RegionPtr) pGC->clientClip;
++    RegionPtr  pregWin;
++    BoxRec     bounds;
++    int        dx, dy;
+ 
+-    if ((change & (GCClipXOrigin | GCClipYOrigin | GCClipMask)) ||
+-        (change & GCSubwindowMode) ||
+-        (pDraw->serialNumber != (pGC->serialNumber & DRAWABLE_SERIAL_BITS)))
++    if (pDraw->type == DRAWABLE_WINDOW)
+     {
+-        pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+-        win_moved = (pGC->lastWinOrg.x != pDraw->x ||
+-                     pGC->lastWinOrg.y != pDraw->y);
++        WindowPtr pWin = (WindowPtr) pDraw;
+ 
+-        if (pGC->clientClipType != CT_NONE && win_moved)
++        if (pGC->subWindowMode == IncludeInferiors)
++            pregWin = NotClippedByChildren(pWin);
++        else
++            pregWin = &pWin->clipList;
++
++        if (pGC->clientClipType == CT_NONE)
++            (*pScreen->RegionCopy)(clip, pregWin);
++        else
+         {
+-            (*pGC->pScreen->RegionCopy)((RegionPtr) pPriv->clip,
+-                                         (RegionPtr) pGC->clientClip);
+-            (*pGC->pScreen->TranslateRegion)(pPriv->clip,
+-                pGC->lastWinOrg.x + pGC->clipOrg.x,
+-                pGC->lastWinOrg.y + pGC->clipOrg.y);
++            dx = pDraw->x + pGC->clipOrg.x;
++            dy = pDraw->y + pGC->clipOrg.y;
++            (*pScreen->TranslateRegion)(client, dx, dy);
++            (*pScreen->Intersect)(clip, pregWin, client);
++            (*pScreen->TranslateRegion)(client, -dx, -dy);
+         }
+-        else if (pGC->clientClipType == CT_NONE)
++
++        if (pregWin != &pWin->clipList)
++            (*pScreen->RegionDestroy)(pregWin);
++    }
++    else
++    {
++        bounds.x1 = 0;
++        bounds.y1 = 0;
++        bounds.x2 = pDraw->width;
++        bounds.y2 = pDraw->height;
++        (*pScreen->RegionReset)(clip, &bounds);
++
++        if (pGC->clientClipType != CT_NONE)
+         {
+-            (*pGC->pScreen->RegionDestroy)(pPriv->clip);
+-            tbox.x1 = 0;           tbox.y1 = 0;
+-            tbox.x2 = pDraw->width; tbox.y2 = pDraw->height;
+-            pPriv->clip = (*pGC->pScreen->RegionCreate)(&tbox, 1);
++            (*pScreen->TranslateRegion)(clip, -pGC->clipOrg.x, -pGC->clipOrg.y);
++            (*pScreen->Intersect)(clip, clip, client);
++            (*pScreen->TranslateRegion)(clip, pGC->clipOrg.x, pGC->clipOrg.y);
+         }
+     }
++}
++
++/*
++** ZZ9000pixValidateGC - GC for drawing into an off-screen pixmap.
++**
++** All ops fall back to mi.  ZZ9000FillSpans handles the solid-fill
++** case in software (direct pixel writes into host-allocated pixmap data).
++*/
++static void
++ZZ9000pixValidateGC(pGC, change, pDraw)
++GCPtr         pGC;
++unsigned long change;
++DrawablePtr   pDraw;
++{
++    /* rebuilt on every pixmap validate: a GC last used on a window still
++     * holds that window's clip, which is not bounded by this pixmap */
++    ZZ9000ComputeClip(pGC, pDraw);
+ 
+     /* solid fills direct; tiles and stipples through ZZ9000PatternSpans */
+     pGC->ops->FillSpans     = (pGC->fillStyle == FillSolid) ? ZZ9000FillSpans
+@@ -339,10 +385,7 @@
+ unsigned long change;
+ DrawablePtr   pDraw;
+ {
+-    RTGGCPRIV *pPriv;
+-    WindowPtr  pWin;
+     int        win_moved;
+-    RegionPtr  reg;
+ 
+     if (pDraw->type == DRAWABLE_PIXMAP)
+     {
+@@ -350,7 +393,6 @@
+         return;
+     }
+ 
+-    pWin = (WindowPtr) pDraw;
+     win_moved = (pGC->lastWinOrg.x != pDraw->x ||
+                  pGC->lastWinOrg.y != pDraw->y);
+     if (win_moved)
+@@ -363,29 +405,7 @@
+         change & GCSubwindowMode ||
+         pDraw->serialNumber != (pGC->serialNumber & DRAWABLE_SERIAL_BITS) ||
+         win_moved)
+-    {
+-        pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+-
+-        if (pGC->clientClipType != CT_NONE &&
+-            (change & (GCClipXOrigin | GCClipYOrigin | GCClipMask) || win_moved))
+-        {
+-            (*pGC->pScreen->RegionCopy)((RegionPtr) pPriv->clip,
+-                                         (RegionPtr) pGC->clientClip);
+-            (*pGC->pScreen->TranslateRegion)(pPriv->clip,
+-                pGC->lastWinOrg.x + pGC->clipOrg.x,
+-                pGC->lastWinOrg.y + pGC->clipOrg.y);
+-        }
+-        else
+-        {
+-            (*pGC->pScreen->RegionCopy)((RegionPtr) pPriv->clip,
+-                                         &pWin->winSize);
+-        }
+-
+-        reg = (pGC->subWindowMode == IncludeInferiors)
+-              ? NotClippedByChildren(pWin)
+-              : &pWin->clipList;
+-        (*pGC->pScreen->Intersect)(pPriv->clip, pPriv->clip, reg);
+-    }
++        ZZ9000ComputeClip(pGC, pDraw);
+ 
+     /* Line ops */
+     if (pGC->lineStyle == LineSolid)

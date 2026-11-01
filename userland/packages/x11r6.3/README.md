@@ -45,6 +45,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `12-rstart-prefix.patch` | Ours: `rstartd` goes to the package's `bin` rather than `/usr/bin`, and the `rstart` client calls it by that path on the `rsh` command line. |
 | `13-bdf-defaultch.patch` | Ours: a BDF without a `DEFAULT_CHAR` property gets no default character (`NO_SUCH_CHAR`) rather than whatever the caller's font record held; `bdftopcf`'s is on its stack, so such fonts differed from build to build. |
 | `14-bdftopcf-clean-fontrec.patch` | Ours: `bdftopcf` starts from a zeroed font record. The BDF reader does not set every field (`info.inkMetrics` among them), and the record is on `bdftopcf`'s stack, so a PCF gained or lost its ink bounds from one build host to another. |
+| `15-zz9000-composite-clip.patch` | Ours: the ZZ9000 GC's composite clip is rebuilt from scratch on every relevant validate, by one function for windows and pixmaps (as `miComputeCompositeClip`). A pixmap's clip is bounded by the pixmap, so a large client clip can no longer make fills write past a small pixmap's buffer; a window keeps its client clip when only the window or the subwindow mode changes; the `NotClippedByChildren` region is freed; CreateGC fails cleanly without its clip region. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
