@@ -1660,6 +1660,13 @@ elif [ -n "$DLM_CORE" ]; then
     --mkabi "$DLM_CORE/tools/mkabi.py" "$DLM_CORE/abi/k30/ddi.list" "$WORK/dlm-core/core/dlm_offs.h")
   python3 "$KT/tools/kabi-sidecar030.py" "$BUILD/unix" "$BUILD/unix.brel" --family generic --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}" -o "$BUILD/kabi"
   python3 "$KT/tools/kabi-sidecar030.py" --check "$BUILD/unix" "$BUILD/unix.brel" "$BUILD/kabi" --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}"
+  # the sidecar's pin= (the toolchain that built the kernel, toolchain/gcc-cross-amix.pin) must be the core's
+  # compiled DLM_PIN (dlm-core-link.sh: the core's toolchain.pin), the pin a module's cc= is checked against
+  KPIN="$(sed -n 's/^pin=//p' "$BUILD/kabi")"
+  DPIN="$(awk '$1 == "gcc" {g = $2} $1 == "commit" {c = $2} END {if (g != "" && c != "") print "gcc-" g "-" c}' "$DLM_CORE/toolchain.pin")"
+  [ -n "$KPIN" ] && [ "$KPIN" = "$DPIN" ] \
+    || { echo "--dlm: the sidecar's pin=$KPIN is not the core's toolchain.pin ($DPIN): repin both together" >&2; exit 1; }
+  echo "  pin=$KPIN: the sidecar and the core's toolchain.pin agree"
 elif [ -n "$KINFO_C" ]; then
   echo "--- kinfo: the kabi sidecar of unix.brel (C2-3 §2; tools/kabi-sidecar030.py) ---"
   python3 "$KT/tools/kabi-sidecar030.py" "$BUILD/unix" "$BUILD/unix.brel" --family "$KINFO_FAMILY" --sdcards "$SD_CARDS" -o "$BUILD/kabi"

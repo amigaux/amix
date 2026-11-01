@@ -82,7 +82,10 @@ X="$AMIX_DLM_TREE"
 echo "$K30M_DLM_LICENCES" | while read n h; do [ -n "$n" ] && amix_verify "$X/$n" "$h"; done
 
 echo "--- the sidecar describes the shipped brel and unix.sym (checked, not rewritten) ---"
-for kv in "kabi=$K30M_KABI" "family=generic" "line=k30" "pin=gcc-2.7.2.3-8949028" \
+# pin= is the core's toolchain pin at K30M_DLM_COMMIT (kernel/dlm/toolchain.pin): gcc-<gcc>-<commit>
+K30M_PIN=$(awk '$1 == "gcc" {g = $2} $1 == "commit" {c = $2} END {if (g != "" && c != "") print "gcc-" g "-" c}' "$X/toolchain.pin")
+[ -n "$K30M_PIN" ] || { echo "[FAIL] $X/toolchain.pin: no gcc and commit" >&2; exit 1; }
+for kv in "kabi=$K30M_KABI" "family=generic" "line=k30" "pin=$K30M_PIN" \
 	"build=$K30M_BUILDID" "size=$K30M_BREL_SIZE" "sha256=$K30M_BREL_SHA" "bss=$K30M_BSS" \
 	"loader-min=2" "sym=unix.sym $K30M_SYM_SIZE $K30M_SYM_SHA"; do
 	grep -qx "$kv" "$SRC/kabi" || { echo "[FAIL] $SRC/kabi lacks '$kv'" >&2; exit 1; }
