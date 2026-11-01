@@ -438,12 +438,12 @@ usage(void)
  * `cards [DEV]` (C2-4 §17): the sd cards of the running kernel, from the
  * card table of the kinfo record at path (C2-1 §2), each with the match key
  * of its controller; or, given a disk node, the key of that disk's card,
- * c<8k + unit> on card k.  It reads nothing else and writes nothing.
+ * c<8k + unit> on card k.  It reads nothing else and writes nothing; kp is
+ * main's kinfo buffer.
  */
 static int
-cards(const char *path, int n, char **a)
+cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 {
-	static struct kb_kinfo ki;
 	char key[48];
 	const char *b = 0, *p;
 	long c = -1;
@@ -471,27 +471,27 @@ cards(const char *path, int n, char **a)
 			return 2;
 		}
 	}
-	if (kb_kinfo_read(path, &ki) != 0) {
+	if (kb_kinfo_read(path, kp) != 0) {
 		fprintf(stderr, "kbootset: no kinfo record at %s: the kernel's sd cards are unknown\n", path);
 		return 1;
 	}
-	for (i = 0; i < ki.ncards; i++) {
-		unsigned long k = (unsigned long)ki.card[i].k;
+	for (i = 0; i < kp->ncards; i++) {
+		unsigned long k = (unsigned long)kp->card[i].k;
 
-		kb_matchkey(ki.card[i].id, key);
+		kb_matchkey(kp->card[i].id, key);
 		if (n == 0) {
 			if (key[0])
 				printf("card %lu: c%lu-c%lu %s", k, 8 * k, 8 * k + 7, key);
 			else
 				printf("card %lu: c%lu-c%lu unknown controller id 0x%08lx", k, 8 * k, 8 * k + 7,
-				    (unsigned long)ki.card[i].id);
-			if (ki.card[i].base)
-				printf(" base 0x%08lx", (unsigned long)ki.card[i].base);
+				    (unsigned long)kp->card[i].id);
+			if (kp->card[i].base)
+				printf(" base 0x%08lx", (unsigned long)kp->card[i].base);
 			printf("\n");
 		} else if (k == (unsigned long)c / 8) {
 			if (!key[0]) {
 				fprintf(stderr, "kbootset: %s: card %lu has the unknown controller id 0x%08lx\n",
-				    a[0], k, (unsigned long)ki.card[i].id);
+				    a[0], k, (unsigned long)kp->card[i].id);
 				return 1;
 			}
 			printf("%s\n", key);
@@ -502,7 +502,7 @@ cards(const char *path, int n, char **a)
 		fprintf(stderr, "kbootset: %s: the running kernel has no card %ld\n", a[0], c / 8);
 		return 1;
 	}
-	if (ki.ncards == 0)
+	if (kp->ncards == 0)
 		fprintf(stderr, "kbootset: the running kernel registered no sd cards\n");
 	return 0;
 }
@@ -750,7 +750,7 @@ main(int argc, char **argv)
 		return found ? 0 : 1;
 	}
 	if (!strcmp(argv[i], "cards"))		/* kinfo only, no store (C2-4 §17) */
-		return cards(kpath && *kpath ? kpath : "/dev/kinfo", argc - i - 1, argv + i + 1);
+		return cards(kpath && *kpath ? kpath : "/dev/kinfo", argc - i - 1, argv + i + 1, &ki);
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
