@@ -56,7 +56,7 @@ command -v md5sum  >/dev/null || { echo "md5sum required"; exit 1; }
 echo "== building host apkg =="
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 
-rm -rf "$WORK"
+rm -rf "${WORK:?}"
 mkdir -p "$WORK/repo/pkgs" "$WORK/badrepo" "$WORK/badmd5repo" \
          "$WORK/bin" "$WORK/root/etc" "$WORK/root/var/apkg" \
          "$WORK/root/var/sadm/install" \
@@ -75,7 +75,7 @@ mkpkg() {
     printf 'fake SVR4 datastream for %s\n' "$1" > "$WORK/repo/pkgs/$1"
     dd if=/dev/urandom of="$WORK/repo/pkgs/$1.pad" bs=256 count=1 2>/dev/null
     cat "$WORK/repo/pkgs/$1.pad" >> "$WORK/repo/pkgs/$1"
-    rm -f "$WORK/repo/pkgs/$1.pad"
+    rm -f "${WORK:?}/repo/pkgs/$1.pad"
 }
 for f in foo-1.0.pkg bar-2.0.pkg baz-1.1.pkg oldpkg-2.0.pkg \
          samepkg-1.0.pkg unver-1.5.pkg corrupt-1.0.pkg \
@@ -316,7 +316,7 @@ run 2 "update with server down fails with exit 2" \
     "$APKG" -c "$WORK/conf-down" update
 
 # ------------------------------------------------ 302 redirect
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 0 "update follows one 302 redirect" "$APKG" -c "$WORK/conf-redirect" update
 cmp -s "$CATFILE" "$WORK/repo/catalog" \
     && ok "redirected update stored the right catalog" \
@@ -330,12 +330,12 @@ ln -s repo "$WORK/1.1"
 mkconf "$WORK/conf-rel"       "http://127.0.0.1:$PORT/1.1"       "$WORK/bin/pkgadd-shim"
 mkconf "$WORK/conf-relslash"  "http://127.0.0.1:$PORT/1.1/"      "$WORK/bin/pkgadd-shim"
 for c in conf-rel conf-relslash; do
-    rm -f "$CATFILE"
+    rm -f "${CATFILE:?}"
     run 0 "update from a release tree ($c)" "$APKG" -c "$WORK/$c" update
     cmp -s "$CATFILE" "$WORK/repo/catalog" \
         && ok "the release tree's catalog stored ($c)" \
         || bad "release-tree update stored wrong catalog bytes ($c)"
-    rm -rf "$ROOT/var/apkg/cache"
+    rm -rf "${ROOT:?}/var/apkg/cache"
     run 0 "download from a release tree's pkgs/ ($c)" "$APKG" -c "$WORK/$c" download foo
 done
 
@@ -493,7 +493,7 @@ run 5 "install of name not in catalog fails with exit 5" "$APKG" install nosuch
 
 # ------------------------------------------------ pkgadd failure -> exit 4
 : > "$SHIMLOG"
-rm -f "$CACHE/foo-1.0.pkg"
+rm -f "${CACHE:?}/foo-1.0.pkg"
 run 4 "pkgadd failure stops install with exit 4" \
     "$APKG" -c "$WORK/conf-fail" install foo
 
@@ -509,15 +509,15 @@ run 4 "pkgadd failure stops install with exit 4" \
 # would manifest -- proving the child's stdin, not apkg's, is what got closed.
 if command -v timeout >/dev/null 2>&1 && command -v mkfifo >/dev/null 2>&1; then
     : > "$SHIMLOG"
-    rm -f "$CACHE/foo-1.0.pkg"
+    rm -f "${CACHE:?}/foo-1.0.pkg"
     FIFO=$WORK/hangstdin.fifo
-    rm -f "$FIFO"; mkfifo "$FIFO"
+    rm -f "${FIFO:?}"; mkfifo "${FIFO:?}"
     sleep 30 > "$FIFO" &          # hold the write end open, never write
     HOLDER=$!
     OUT=$(timeout 10 "$APKG" -c "$WORK/conf-prompt" install foo < "$FIFO" 2>&1)
     rc=$?
     kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null
-    rm -f "$FIFO"
+    rm -f "${FIFO:?}"
     if [ "$rc" -eq 124 ]; then
         bad "prompting pkgadd HUNG the install (timed out; child stdin not redirected)" "$OUT"
     elif [ "$rc" -eq 4 ]; then
@@ -546,7 +546,7 @@ fi
 # Fix 1: there is no pkgrm in the upgrade path any more -- one pkgadd over
 #        the installed instance, so no failure path can uninstall anything.
 # Fix 2: the admin file is materialised before every engine call (below).
-rm -f "$ROOT/var/apkg/admin.overwrite"
+rm -f "${ROOT:?}/var/apkg/admin.overwrite"
 : > "$SHIMLOG"
 OUT=$("$APKG" upgrade oldpkg 2>&1); rc=$?
 if [ $rc -eq 0 ] && \
@@ -575,7 +575,7 @@ fi
 # A pkgadd that FAILS must leave the installed package alone -- and, with
 # no pkgrm in the path, it now provably does: nothing ran but the pkgadd.
 : > "$SHIMLOG"
-rm -f "$CACHE/oldpkg-2.0.pkg"
+rm -f "${CACHE:?}/oldpkg-2.0.pkg"
 OUT=$("$APKG" -c "$WORK/conf-fail" upgrade oldpkg 2>&1); rc=$?
 if [ $rc -eq 4 ] && ! grep -q '^pkgrm ' "$SHIMLOG" && \
    echo "$OUT" | grep -q "is untouched"; then
@@ -587,9 +587,9 @@ fi
 # THE ADMIN FILE IS MATERIALISED, NEVER ASSUMED.  This is the exact metal
 # failure generalised: with /var/apkg/admin absent, the old client handed
 # pkgadd a -a path that did not exist and pkgadd refused to run.
-rm -f "$ROOT/var/apkg/admin" "$ROOT/var/apkg/admin.overwrite"
+rm -f "${ROOT:?}/var/apkg/admin" "${ROOT:?}/var/apkg/admin.overwrite"
 : > "$SHIMLOG"
-rm -f "$CACHE/oldpkg-2.0.pkg"
+rm -f "${CACHE:?}/oldpkg-2.0.pkg"
 OUT=$("$APKG" upgrade oldpkg 2>&1); rc=$?
 if [ $rc -eq 0 ] && [ -f "$ROOT/var/apkg/admin.overwrite" ] && \
    grep -q '^instance=overwrite$' "$ROOT/var/apkg/admin.overwrite" && \
@@ -598,9 +598,9 @@ if [ $rc -eq 0 ] && [ -f "$ROOT/var/apkg/admin.overwrite" ] && \
 else
     bad "missing-admin recovery broken (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
-rm -f "$ROOT/var/apkg/admin"
+rm -f "${ROOT:?}/var/apkg/admin"
 : > "$SHIMLOG"
-rm -f "$CACHE/foo-1.0.pkg"
+rm -f "${CACHE:?}/foo-1.0.pkg"
 OUT=$("$APKG" install foo 2>&1); rc=$?
 if [ $rc -eq 0 ] && [ -f "$ROOT/var/apkg/admin" ] && \
    grep -q '^instance=quit$' "$ROOT/var/apkg/admin" && \
@@ -751,7 +751,7 @@ run 0 "catalog restored after rejection fixtures" "$APKG" update
 # a mounted tree (e.g. /cdrom): file:// scheme, or a bare absolute /path.
 mkconf "$WORK/conf-file"    "file://$WORK/repo" "$WORK/bin/pkgadd-shim"
 mkconf "$WORK/conf-fileabs" "$WORK/repo"        "$WORK/bin/pkgadd-shim"
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 0 "update from a file:// source copies the catalog" \
     "$APKG" -c "$WORK/conf-file" update
 cmp -s "$CATFILE" "$WORK/repo/catalog" \
@@ -807,7 +807,7 @@ build(os.path.join(work, "raw-noff.img"), False)
 PY
 mkconf "$WORK/conf-raw"     "raw:$WORK/raw.img"      "$WORK/bin/pkgadd-shim"
 mkconf "$WORK/conf-rawnoff" "raw:$WORK/raw-noff.img" "$WORK/bin/pkgadd-shim"
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 OUT=$("$APKG" -c "$WORK/conf-raw" update 2>&1); rc=$?
 if [ $rc -eq 0 ] && echo "$OUT" | grep -q "catalog updated: 1 package"; then
     ok "update from raw: reads + parses the offset catalog at offset 0"
@@ -827,10 +827,10 @@ cmp -s "$CACHE/foo-1.0.pkg" "$P/foo-1.0.pkg" \
 mkconf "$WORK/conf-raw-fail" "raw:$WORK/raw.img" "$WORK/bin/pkgadd-fail"
 "$APKG" -c "$WORK/conf-raw-fail" update >/dev/null 2>&1
 : > "$SHIMLOG"
-rm -f "$CACHE/foo-1.0.pkg"
+rm -f "${CACHE:?}/foo-1.0.pkg"
 run 4 "raw: pkgadd failure propagates (exit 4)" \
     "$APKG" -c "$WORK/conf-raw-fail" install foo
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 0 "update from a raw: source whose catalog has no offset column" \
     "$APKG" -c "$WORK/conf-rawnoff" update
 run 3 "raw install refuses an entry with no offset (fail closed, exit 3)" \
@@ -866,7 +866,7 @@ img[DATA_OFF + n:end] = b"\xaa" * (end - (DATA_OFF + n))
 open(os.path.join(work, "raw-big.img"), "wb").write(img)
 PY
 mkconf "$WORK/conf-rawbig" "raw:$WORK/raw-big.img" "$WORK/bin/pkgadd-shim"
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 0 "update from raw: big multi-chunk offset catalog" \
     "$APKG" -c "$WORK/conf-rawbig" update
 : > "$SHIMLOG"
@@ -1307,7 +1307,7 @@ grep -q 'a window above 4096 is SLOWER' "$SRC/http.c" \
 #     still fetch byte-exact (many more recv() rounds, same bytes) ---
 mkconf "$WORK/conf-buf" "http://127.0.0.1:$PORT/repo" "$WORK/bin/pkgadd-shim"
 echo "bufsize=512" >> "$WORK/conf-buf"
-rm -f "$CACHE/foo-1.0.pkg"
+rm -f "${CACHE:?}/foo-1.0.pkg"
 run 0 "install with bufsize=512 (tiny reads) still works" \
     "$APKG" -c "$WORK/conf-buf" -f install foo
 cmp -s "$CACHE/foo-1.0.pkg" "$WORK/repo/pkgs/foo-1.0.pkg" \
@@ -1392,7 +1392,7 @@ run 0 "update against the trickling server" "$APKG" -c "$WORK/conf-slow" update
 #     timeout far shorter than the transfer itself.  This is the A4000D
 #     failure; it fails against a whole-transfer cap and passes against
 #     an inactivity timer. ---
-rm -f "$CACHE/slow-1.0.pkg"
+rm -f "${CACHE:?}/slow-1.0.pkg"
 T0=$(date +%s)
 OUT=$("$APKG" -c "$WORK/conf-slow" install slow 2>&1); rc=$?
 T1=$(date +%s)
@@ -1416,7 +1416,7 @@ NPROG=$(echo "$OUT" | grep -c '^apkg: \.\.\. [0-9/]* bytes$')
 [ "$NPROG" -eq 2 ] \
     && ok "progress prints at the 256 KB default step (2 lines for 586 KB)" \
     || bad "expected 2 progress lines for 586 KB, got $NPROG" "$OUT"
-rm -f "$CACHE/slow-1.0.pkg"
+rm -f "${CACHE:?}/slow-1.0.pkg"
 OUT=$("$APKG" -v -c "$WORK/conf-slow" install slow 2>&1)
 NPROGV=$(echo "$OUT" | grep -c '^apkg: \.\.\. [0-9/]* bytes$')
 [ "$NPROGV" -gt "$NPROG" ] \
@@ -1424,14 +1424,14 @@ NPROGV=$(echo "$OUT" | grep -c '^apkg: \.\.\. [0-9/]* bytes$')
     || bad "-v did not tighten the progress interval ($NPROGV vs $NPROG)" "$OUT"
 cp "$WORK/conf-slow" "$WORK/conf-slowquiet"
 echo "progress=0" >> "$WORK/conf-slowquiet"
-rm -f "$CACHE/slow-1.0.pkg"
+rm -f "${CACHE:?}/slow-1.0.pkg"
 OUT=$("$APKG" -c "$WORK/conf-slowquiet" install slow 2>&1)
 echo "$OUT" | grep -q '^apkg: \.\.\. [0-9/]* bytes$' \
     && bad "progress=0 still printed progress" "$OUT" \
     || ok "progress=0 silences the progress lines"
 
 # --- a connection that goes SILENT must still be killed, promptly ---
-rm -f "$CACHE/stall-1.0.pkg" "$CACHE/stall-1.0.pkg.part"
+rm -f "${CACHE:?}/stall-1.0.pkg" "${CACHE:?}/stall-1.0.pkg.part"
 T0=$(date +%s)
 OUT=$("$APKG" -c "$WORK/conf-stall" install stall 2>&1); rc=$?
 T1=$(date +%s)
@@ -1464,7 +1464,7 @@ echo "$OUT" | grep -q "(256 bytes received)" \
 cp "$WORK/conf-stall" "$WORK/conf-stall-retry"
 sed -i 's/^retries=0$/retries=1/' "$WORK/conf-stall-retry"
 sed -i 's/^retry_delay=0$/retry_delay=0/' "$WORK/conf-stall-retry"
-rm -f "$CACHE/stall-1.0.pkg" "$CACHE/stall-1.0.pkg.part"
+rm -f "${CACHE:?}/stall-1.0.pkg" "${CACHE:?}/stall-1.0.pkg.part"
 T0=$(date +%s)
 OUT=$("$APKG" -c "$WORK/conf-stall-retry" install stall 2>&1); rc=$?
 T1=$(date +%s)
@@ -2019,7 +2019,7 @@ awk -v i="\$I" '{ keep = 1
     for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
         sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
     if (keep) print }' \$C > \$C.t && mv \$C.t \$C
-rm -rf \$R/var/sadm/pkg/\$I
+rm -rf \${R:?}/var/sadm/pkg/\${I:?}
 exit 0
 EOF
 # the kbootset mock (C2-4): the mode file says which call answers what
@@ -2058,7 +2058,7 @@ KCONF=$WORK/conf-kspace
 mkkconf "$KCONF" "file://$KR"
 REC=$ROOT/var/apkg/kpkg
 TXN=$ROOT/var/apkg/txn
-kreset() { : > "$SHIMLOG"; : > "$KLOG"; rm -f "$WORK/kb.mode" "$WORK/kshim.die"; }
+kreset() { : > "${SHIMLOG:?}"; : > "${KLOG:?}"; rm -f "${WORK:?}/kb.mode" "${WORK:?}/kshim.die"; }
 kreset
 
 # --- the parser ---
@@ -2145,7 +2145,7 @@ OLDDIR=$WORK/old-apkg
 GITTOP=$(git -C "$SRC" rev-parse --show-toplevel 2>/dev/null)
 if [ -n "$GITTOP" ] && \
    git -C "$GITTOP" cat-file -e "$OLDC:src/apkg/catalog.c" 2>/dev/null; then
-    rm -rf "$OLDDIR"; mkdir -p "$OLDDIR"
+    rm -rf "${OLDDIR:?}"; mkdir -p "${OLDDIR:?}"
     git -C "$GITTOP" archive "$OLDC" src/apkg | tar -x -C "$OLDDIR"
     make -C "$OLDDIR/src/apkg" host >/dev/null 2>&1
     OLDAPKG=$OLDDIR/src/apkg/apkg
@@ -2368,7 +2368,7 @@ run 0 "bootset=manual: install succeeds without running kbootset" \
     "$APKG" -c "$KCONF" -f install z3660scsi-k46
 [ ! -s "$KLOG" ] && echo "$OUT" | grep -q "bootset=manual; compose the next generation with: $WORK/bin/kbootset-mock --journal /var/kbootset/journal build" \
     && ok "bootset=manual prints the commands instead" || bad "manual mode" "$OUT $(cat "$KLOG")"
-rm -f "$ROOT/etc/default/bootset"
+rm -f "${ROOT:?}/etc/default/bootset"
 kreset
 run 0 "-n on a kernel-space install" "$APKG" -c "$KCONF" -n -f install z3660scsi-k46
 [ ! -s "$KLOG" ] && [ ! -s "$SHIMLOG" ] && [ ! -f "$TXN" ] && \
@@ -2787,7 +2787,7 @@ OUT=$("$APKG" -c "$K4" -f install kernel-k46-z 2>&1); rc=$?
 [ $rc -ne 0 ] && grep -q "conflict: /stand/k46/unix" "$WORK/conflict.err" && [ "$(owners /stand/k46/unix)" = "KERN46Z " ] \
     && ok "(fixture) a pkgadd over another package's /stand/k46/unix is a conflict" \
     || bad "the pkgadd shim does not model the conflict (rc=$rc)" "$(cat "$WORK/conflict.err")"
-rm -rf "$ROOT/var/sadm/pkg/KERN46M"
+rm -rf "${ROOT:?}/var/sadm/pkg/KERN46M"
 
 # step 1 under -n: the plan line, then the pkgrm before the pkgadd; nothing runs
 kreset
@@ -2870,7 +2870,7 @@ run 5 "... and a module install of that line" "$APKG" -c "$K4" -f install zeth46
 run 5 "... and a forced reinstall of the installed kernel" "$APKG" -c "$K4" -f install kernel-k46-n
 [ ! -s "$SHIMLOG" ] && [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
     && ok "the two-records refusals run and journal nothing" || bad "two-records refusal ran something" "$(cat "$SHIMLOG")"
-rm -f "$REC/KERN46M"
+rm -f "${REC:?}/KERN46M"
 
 # back to the static family once the module is removed
 "$APKG" -c "$K4" remove zeth46 >/dev/null 2>&1
@@ -2927,10 +2927,10 @@ run 0 "a userland install through the kernel-space catalog" \
     "$APKG" -c "$KCONF" -f install foo
 [ ! -s "$KLOG" ] && [ ! -f "$TXN" ] \
     && ok "userland: no kbootset call, no journal left" || bad "userland touched kspace" "$(cat "$KLOG")"
-rm -rf "$REC" "$ROOT$KT" "$ROOT/stand" "$ROOT/var/sadm/install/contents" \
-       "$ROOT/var/sadm/pkg/KERNK46" "$ROOT/var/sadm/pkg/Z3660SCS" \
-       "$ROOT/var/sadm/pkg/KERN46Z" "$ROOT/var/sadm/pkg/KERN46M" \
-       "$ROOT/var/sadm/pkg/KERN46N" "$ROOT/var/sadm/pkg/ZETH46"
+rm -rf "${REC:?}" "${ROOT:?}${KT:?}" "${ROOT:?}/stand" "${ROOT:?}/var/sadm/install/contents" \
+       "${ROOT:?}/var/sadm/pkg/KERNK46" "${ROOT:?}/var/sadm/pkg/Z3660SCS" \
+       "${ROOT:?}/var/sadm/pkg/KERN46Z" "${ROOT:?}/var/sadm/pkg/KERN46M" \
+       "${ROOT:?}/var/sadm/pkg/KERN46N" "${ROOT:?}/var/sadm/pkg/ZETH46"
 "$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
 
 # ======================================= UFS-only packages (APKG_FSTYPE)
@@ -3103,7 +3103,7 @@ echo "$OUT" | grep -q "the installed ufsonly 0.9 is untouched" && [ ! -s "$SHIML
 fsrun 0 "upgrade on ufs proceeds" "$ROOT=ufs" upgrade ufsonly
 grep -q "^pkgadd .*admin.overwrite -d $FR/pkgs/ufsonly-1.0.pkg UFSONLY$" "$SHIMLOG" \
     && ok "upgrade reached pkgadd with instance=overwrite" || bad "upgrade on ufs" "$(cat "$SHIMLOG")"
-rm -rf "$ROOT/var/sadm/pkg/UFSONLY" "$ROOT$FT"
+rm -rf "${ROOT:?}/var/sadm/pkg/UFSONLY" "${ROOT:?}${FT:?}"
 "$APKG" update >/dev/null 2>&1    # the plain catalog for what follows
 
 # ------------------------------------------------ exit-code sanity extras
