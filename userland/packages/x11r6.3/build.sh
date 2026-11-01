@@ -170,8 +170,10 @@ stage() {
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
 	. "$HERE/../tools/manpages.sh"
 	amix_man_relayout
-	# Xzz9000 (and X, its link) is the Amiga DDX that Xamix(1) describes
-	amix_man_alias Xzz9000 1 Xamix
+	# Xzz9000 (and X, its link): our own page.  The DDX's Xamix page is the R5
+	# Xsun page with the names swapped, and there is no Xamix command
+	rm -f -- "${DEST:?}/opt/amix/man/1/Xamix"
+	amix_man "$HERE/man/Xzz9000.1" 1
 	amix_man "$HERE/man/x11r63.sh.4" 4 x11r63.sh
 	amix_man_whatis
 }

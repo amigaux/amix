@@ -104,7 +104,8 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   `/etc/profile.d/x11r63.sh` puts `/opt/amix/X11R6/bin` last on `PATH`, behind the stock X in
   `/usr/X/bin`.
 - **Man pages** go to sections 1/3/4/5 (not svr4.cf's `1x`/`3x`), then into
-  `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`.
+  `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`. `Xzz9000(1)` is the package's own page
+  (`man/Xzz9000.1`); the DDX's `Xamix` page, the R5 Xsun page with the names swapped, is not shipped.
 - The XIE and PEX client libraries are not shipped: their extensions are off.
 - **rstart** runs `rsh host /opt/amix/X11R6/bin/rstartd`: Amix's `/usr/bin/rsh` is the remote
   shell, and the remote `rsh` PATH does not reach the package's `bin`. The contexts' `x` and

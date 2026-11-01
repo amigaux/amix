@@ -1087,7 +1087,6 @@ d none /opt/amix/X11R6/lib/X11/xserver 0755 root sys
 f none /opt/amix/X11R6/lib/X11/xserver/SecurityPolicy 0644 root bin
 d none /opt/amix/man 0755 root sys
 d none /opt/amix/man/1 0755 root sys
-f none /opt/amix/man/1/Xamix 0644 root bin
 f none /opt/amix/man/1/Xserver 0644 root bin
 f none /opt/amix/man/1/Xzz9000 0644 root bin
 f none /opt/amix/man/1/bdftopcf 0644 root bin
