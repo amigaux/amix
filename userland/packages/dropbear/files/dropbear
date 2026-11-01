@@ -39,6 +39,10 @@ hostkey() {
 
 case "$1" in
 start)
+	if [ ! -f "$RC_SUBR" ]; then
+		echo "dropbear: no $RC_SUBR (amix-base); not started" >&2
+		exit 0
+	fi
 	. "$RC_SUBR"
 	rc_enabled dropbear yes || exit 0
 	if [ ! -x "$DROPBEAR" ] || [ ! -x "$DROPBEARKEY" ]; then
