@@ -418,8 +418,9 @@ l11_bits()
 #     static line for FB_ETHER_IF, a zen0 line beside it from FB_ZEN_IP, a MAC line per
 #     FB_ZEN_CARDS row (the address-by-card table, docs/address-by-card.md), and dns/domain;
 #     FB_IP empty (public) gives `* dhcp`, with the profile's name, else `hostname dhcp`.
-#   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; every other service keeps
-#     its own default.
+#   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; swap_add= from SWAP_ADD_MB, the
+#     sizes amix-base's boot swap step tries (bootswap(1M)); every other service keeps its own
+#     default.
 #   /etc/display (display(4)): card auto (the first card whose device answers, the chipset
 #     display last), monsw from MONSW, start manual (no xdm is packaged yet).
 l11_admin()
@@ -454,6 +455,7 @@ l11_admin()
 	{
 		echo "# /etc/rc.conf -- written by install.sh from profile $PROFILE_NAME; see rc.conf(4)"
 		case "$FB_SYSLOG" in n) echo "syslogd=no" ;; *) echo "syslogd=yes" ;; esac
+		[ -z "$SWAP_ADD_MB" ] || echo "swap_add=$SWAP_ADD_MB"
 	} > "$TARGET/etc/rc.conf" || die "cannot write $TARGET/etc/rc.conf"
 	run chmod 0644 "$TARGET/etc/rc.conf"
 	{

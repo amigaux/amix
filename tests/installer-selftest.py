@@ -10124,12 +10124,13 @@ def audit_l11():
             return r.stdout, body_if, rd("etc", "rc.conf"), rd("etc", "display"), rd("chroot.log")
         out, ifs, rc, disp, crl = admin(x11=True, FB_IP="192.0.2.38", FB_NETMASK="255.255.255.0", FB_GATEWAY="192.0.2.1",
                                         FB_NODENAME="uaeamix", FB_ZEN_IP="192.0.2.39", FB_ZEN_NETMASK="255.255.255.0",
-                                        FB_DOMAIN="example.net", FB_SYSLOG="n", MONSW="34")
+                                        FB_DOMAIN="example.net", FB_SYSLOG="n", MONSW="34", SWAP_ADD_MB="all 48 30")
         (ok if ifs == ["aen0 static 192.0.2.38/24 gw 192.0.2.1 name uaeamix", "zen0 static 192.0.2.39/24",
-                       "domain example.net"] and "syslogd=no" in rc and "monsw 34" in disp
+                       "domain example.net"] and "syslogd=no" in rc and "\nswap_add=all 48 30\n" in rc
+              and "monsw 34" in disp
               and "start manual" in disp and "card auto" in disp
               and "/usr/sbin/ifup -n" in crl and "/usr/amix/bin/xstart -n" in crl else fail)(
-            "l11_admin, the bench profile: aen0 static, zen0 beside it, domain; syslogd=no; monsw; checked: %r %r" % (ifs, out))
+            "l11_admin, the bench profile: aen0 static, zen0 beside it, domain; syslogd=no; swap_add; monsw; checked: %r %r" % (ifs, out))
         out, ifs, rc, disp, crl = admin(FB_ETHER_IF="zen0", FB_IP="192.0.2.38", FB_NETMASK="255.255.255.0",
                                         FB_GATEWAY="192.0.2.1",
                                         FB_ZEN_CARDS="00:80:51:01:02:03=192.0.2.39=a4000d default=192.0.2.38")
