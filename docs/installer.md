@@ -92,8 +92,8 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   the old cap was 1024); `docs/l11-disk.md`.
 - **The pre-installed images**: `tools/build-preinstalled.sh` masters the image
   medium (`profiles/image-k46-4g`, `image-k30-4g`, set x11), installs it in the
-  `l11-img-<line>` cell onto a 3600 MiB target (root 2047, swap 256, store 64, /home
-  1232 MiB), proves it with `bootstore`, first-boots a copy, and keeps the unbooted
+  `l11-img-<line>` cell onto a 3600 MiB target (root 2047, swap 64, store 64, /home
+  1424 MiB), proves it with `bootstore`, first-boots a copy, and keeps the unbooted
   target with its manifest in `work/images`. `l11-img-k30-r2048` asks for a 2048 MiB
   root and is expected to fail at mkfs.
 
