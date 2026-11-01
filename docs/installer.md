@@ -5242,7 +5242,9 @@ layout, `KBOOTSET_BOOTDEV=mobo:a4000t-710`, a4kt710's match key (C4-2 §8). Kick
 such a disk through the A4000T ROM's `NCR scsi.device`; the root record is the motherboard
 form (C4-1 §5.2, motherboard id 3), which kbootset writes from the `mobo` record l11.sh
 derives. The 1.1 media carry `a4kt710-k30`/`-k46` (and `paula-k30`/`-k46`) for a profile's
-`KERNEL_MODPKGS` or `apkg install`; no profile of record installs them yet.
+`KERNEL_MODPKGS` or `apkg install`; the A4000T profile (`bench-a4000t-060-l11`) installs
+`a4kt710-k46`, and only the A4000D 68060 test disk installs `paula-k46`. Every 1.1 profile
+installs `cdfs-k30`/`-k46`, which loads at the first CD mount.
 
 The first boot of each media cell shows the Mask at work: boot2's boot-device line names its
 buffer (`amix-boot 3: 68060, boot device z3660_scsi.device, partition at …, buffer 807c2d0`
