@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-01 — kdrv.sh for driver recipes; KM_PKG_VERSION; guarded deletes; What's new (a9ae32e, 1103523, 5b5c455, aa3b502)
+
+build/pkg/common/kdrv.sh is the body of a driver directory's pkg/build.sh: it rolls each recipe for k30 and k46
+from the objects make dist's drivers step built, exits 3 with a [MISSING] line for an object not built and 2 for an
+unknown name, and runs an optional kdrv_prepare in its own compiler environment. kmodpkg.sh takes KM_PKG_VERSION, a
+package-only revision. Every delete on a variable path in build/ and toolchain/ uses ${var:?}. Locks are identical
+before and after. docs/WHATS-NEW.md lists new packages and features per release, linked from README.md.
+
 ## 2026-11-01 — gates for shared objects and their libraries (bcca619)
 
 scan060-g14.py takes a shared object's function bounds from its STT_FUNC symbols, so a PIC switch's table label no
