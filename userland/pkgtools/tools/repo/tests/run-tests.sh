@@ -1219,22 +1219,27 @@ check "no set names a test fixture (amixdemo/demolib)" \
 # built on that.  Populated 2026-09-16 with BATCH-1 (published 2026-09-15,
 # catalog 32 -> 38), amix-benchmark (published 2026-09-16, catalog 38 -> 39)
 # and batch-2's make + tar (staged 2026-09-26, catalog -> 41), then the GCC 14
-# batch's bzip2, coreutils and diffutils (assigned 2026-10-30, unpublished),
-# then prngd (moved in from amix-packages, d09d080, 2026-10-31), then
-# ncurses, pth, python3, vim and x11r6.3 (2026-10-31, 2026-11-01);
-# pinned to the measured membership so a future batch must touch this test
-# deliberately, not by drift.
+# batch and more recipes from the packages layer.  The members grow with
+# every new recipe, so what is checked is the rule, not the list: the nine
+# add-ons the 1.0 catalog published stay in it, and it shares nothing with
+# the locked sets.
 check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
 # Since 2026-10-30 the recipe-built members come from the packages layer
 # (rsync and amix-benchmark-gcc14 joined there); this file names
 # amix-benchmark alone.
 if [ -f "$PKGCONF/sets.conf" ]; then
-    check "extra is the twenty add-on packages" \
-        test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
-             "acompat amix-benchmark amix-benchmark-gcc14 bzip2 coreutils diffutils grep gzip less make ncurses patch prngd pth python3 rsync tar vim x11r6.3 zlib "
+    python3 "$SETS" extra > "$WORK/t16-extra"
+    for p in acompat amix-benchmark grep gzip less make patch tar zlib; do
+        check "extra keeps $p, published in 1.0" grep -qx "$p" "$WORK/t16-extra"
+    done
 else
-    echo "  skip- extra's full membership (no $PKGCONF/sets.conf)"
+    echo "  skip- extra's 1.0 members (no $PKGCONF/sets.conf)"
 fi
+for s in minimal standard developer x11; do
+    check "extra and $s are disjoint" \
+        bash -c "test -z \"\$(comm -12 <(python3 '$SETS' extra | sort) \
+                                       <(python3 '$SETS' $s | sort))\""
+done
 check "this directory's sets.conf names amix-benchmark alone in extra" \
     test "$(python3 "$SETS" -f "$SETSCONF" extra | tr '\n' ' ')" = \
          "amix-benchmark "
