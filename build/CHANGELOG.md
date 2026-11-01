@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-01 — gates for shared objects and their libraries (bcca619)
+
+scan060-g14.py takes a shared object's function bounds from its STT_FUNC symbols, so a PIC switch's table label no
+longer ends a function; executables keep their label bounds. The NEEDED gate checks shared objects too: no
+interpreter, a SONAME, the same NEEDED rules; an RPATH may name only the box's own absolute directories under
+/opt/amix or /usr; RUNPATH and TEXTREL are refused. pkgbuild's UNDEF gate finds a bare NEEDED through the binary's
+DT_RPATH (in the package, then its BUILD_DEPENDS trees, then the sysroot), then in the sysroot's /usr/lib; a NEEDED
+found nowhere fails, naming where it looked.
+
 ## 2026-10-31 — gcc14-pin.sh at f40055b; make dist's locks re-measured (3162004, 5d2e382, b8e8252)
 
 build/pkg/common/gcc14-pin.sh pins f40055b and its two changed files. dist-proof gives two identical locks; against
