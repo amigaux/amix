@@ -1031,8 +1031,12 @@ plan_root_default()
 	rootblk=`expr "$PRE_REMAIN" - "$swblk"`
 	DEF_ROOT=`expr "$rootblk" / "$BLOCKS_PER_MB"`
 	# E-BIG: the same stock-kernel root ceiling the driver enforces.
-	ROOTCAP=
+	ROOTCAP= ROOTCAP_WHY="This kernel limits an on-box root to"
 	[ "$KERNEL_SDDEVSIZE" = fixed ] || ROOTCAP=`expr "$SDDEV_CAP_BLOCKS" / "$BLOCKS_PER_MB"`
+	# 1.1: a ufs filesystem holds at most 4194303 blocks (2047 MiB; mkfs of 2048 fails in wtfs)
+	if [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && { [ -z "$ROOTCAP" ] || [ "$ROOTCAP" -gt 2047 ]; }; then
+		ROOTCAP=2047 ROOTCAP_WHY="A ufs file system holds at most"
+	fi
 	if [ -n "$ROOTCAP" ] && [ "$ROOTMAX" -gt "$ROOTCAP" ]; then ROOTMAX="$ROOTCAP"; fi
 	if [ -n "$ROOTCAP" ] && [ "$DEF_ROOT" -gt "$ROOTCAP" ]; then DEF_ROOT="$ROOTCAP"; fi
 	# ★ NG, and it is a REAL fix, not a flourish. On a disk under ~23 MB the
@@ -1094,7 +1098,7 @@ ask_sizes()
 				if [ "$ask" -gt "$ROOTMAX" ]
 				then
 	if [ -n "$ROOTCAP" ] && [ "$ask" -gt "$ROOTCAP" ]; then
-		echo "\nThis kernel limits an on-box root to $ROOTCAP megabytes."
+		echo "\n$ROOTCAP_WHY $ROOTCAP megabytes."
 	else
 	echo "\nYou must leave at least $MINSWAP megabytes free for swap space."
 	fi

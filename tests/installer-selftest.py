@@ -9827,6 +9827,31 @@ def _p36_problems(install_src, l11_src):
     return probs
 
 
+def audit_ufs_rootcap():
+    head("UC. the ufs ceiling: a 1.1 root is refused above 2047 MiB (4194303 blocks), in the interview "
+         "and in the driver; the stock kernel's smaller cap still wins")
+    for path, name in ((SETUP, "setup.sh"), (DRIVER, "install.sh")):
+        src = open(path, encoding="utf-8").read()
+        m = re.search(r'\n(\tROOTCAP= ROOTCAP_WHY=.*?\n\tfi\n)', src, re.S)
+        if not m:
+            fail("%s: no ROOTCAP block with the 1.1 ufs ceiling" % name)
+            continue
+        wrong = []
+        for layout, fixed, want in (("1.1", "fixed", "2047"), ("1.0", "fixed", ""),
+                                    ("1.1", "", "602"), ("", "fixed", "")):
+            body = ('BLOCKS_PER_MB=2048\nSDDEV_CAP_BLOCKS=1234567\nINSTALL_LAYOUT="%s"\nKERNEL_SDDEVSIZE="%s"\n%s'
+                    'echo "CAP=$ROOTCAP"\n' % (layout, fixed, m.group(1)))
+            r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10)
+            if r.stdout.strip() != "CAP=" + want:
+                wrong.append((layout, fixed, r.stdout.strip(), want))
+        (fail if wrong else ok)("%s: root cap EXECUTED -- 1.1 = 2047, 1.0 = none, the stock 602 MB cap "
+                                "wins below it%s" % (name, (": %r" % wrong) if wrong else ""))
+    im = open(os.path.join(REPO, "tools", "install-matrix.sh"), encoding="utf-8").read()
+    (ok if ': > "$RUN/serial.log"\n    python3 "$KT/tools/rig-serial.py"' in im else fail)(
+        "install-matrix: the floppy cells' serial capture starts from an empty serial.log (a reused "
+        "outdir's old 'starting the kernel' would end the volume follower)")
+
+
 def audit_l11():
     """L11. The 1.1 disk layout (amix-dlm spec 40, stage 2 S2-30/S2-31), EXECUTED
     under dash from the scripts' own text: (1) plan_partitions with INSTALL_LAYOUT=1.1
@@ -10590,6 +10615,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_ufs_rootcap()
     audit_l11()
 
     print()

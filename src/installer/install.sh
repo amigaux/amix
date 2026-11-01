@@ -1310,11 +1310,16 @@ plan_partitions() {
 	rootblk=`expr "$REMAIN" - "$swblk"`
 	ROOT_MB=`expr "$rootblk" / "$BLOCKS_PER_MB"`
 	# E-BIG: the stock kernel's on-box root ceiling (see SDDEV_CAP_BLOCKS).
-	ROOTCAP=
+	ROOTCAP= ROOTCAP_WHY="this kernel limits an on-box root to"
 	[ "$KERNEL_SDDEVSIZE" = fixed ] || ROOTCAP=`expr "$SDDEV_CAP_BLOCKS" / "$BLOCKS_PER_MB"`
+	# 1.1: a ufs filesystem holds at most 4194303 blocks (2047 MiB): mkfs_ufs of a 2048 MiB
+	# slice fails in wtfs (ENXIO), so the root is refused here, not at mkfs
+	if [ "$INSTALL_LAYOUT" = 1.1 ] && { [ -z "$ROOTCAP" ] || [ "$ROOTCAP" -gt 2047 ]; }; then
+		ROOTCAP=2047 ROOTCAP_WHY="a ufs filesystem holds at most"
+	fi
 	if [ -n "$ROOTCAP" ] && [ "$ROOTMAX" -gt "$ROOTCAP" ]; then ROOTMAX="$ROOTCAP"; fi
 	if [ -n "$ROOTCAP" ] && [ "$ROOT_MB" -gt "$ROOTCAP" ]; then
-		msg "root size    : ${ROOT_MB}MB capped to ${ROOTCAP}MB -- this kernel limits an on-box root to ${ROOTCAP} MB"
+		msg "root size    : ${ROOT_MB}MB capped to ${ROOTCAP}MB -- $ROOTCAP_WHY ${ROOTCAP} MB"
 		ROOT_MB="$ROOTCAP"
 	fi
 	# TARGET_ROOT_MB overrides the stock DEFAULT answer -- it is the profile's
@@ -1325,7 +1330,7 @@ plan_partitions() {
 		is_num "$TARGET_ROOT_MB" || die "TARGET_ROOT_MB='$TARGET_ROOT_MB' is not a number"
 		[ "$TARGET_ROOT_MB" -ge "$MINROOT" ] || die "TARGET_ROOT_MB=$TARGET_ROOT_MB is below the stock minimum root of ${MINROOT}MB"
 		if [ -n "$ROOTCAP" ] && [ "$TARGET_ROOT_MB" -gt "$ROOTCAP" ]; then
-			die "TARGET_ROOT_MB=$TARGET_ROOT_MB exceeds ${ROOTCAP}MB -- this kernel limits an on-box root to ${ROOTCAP} MB"
+			die "TARGET_ROOT_MB=$TARGET_ROOT_MB exceeds ${ROOTCAP}MB -- $ROOTCAP_WHY ${ROOTCAP} MB"
 		fi
 		[ "$TARGET_ROOT_MB" -le "$ROOTMAX" ] || die "TARGET_ROOT_MB=$TARGET_ROOT_MB exceeds ${ROOTMAX}MB -- stock leaves at least ${MINSWAP}MB free for swap"
 		ROOT_MB="$TARGET_ROOT_MB"
