@@ -382,6 +382,14 @@ for b in $BINS; do
 		}
 		files="$files $l" found="$found $n ($w)"
 	done
+	# a shared object takes from libc.so.1 without naming it: the interpreter
+	# is in every process (libamixrt.so.1 NEEDs nothing)
+	if [ "$(od -An -tx1 -j16 -N2 "$b" | tr -d ' ')" = 0003 ] && [ -f "$AMIX_SYSROOT/usr/lib/libc.so.1" ]; then
+		case " $files " in
+		*" $AMIX_SYSROOT/usr/lib/libc.so.1 "*) ;;
+		*) files="$files $AMIX_SYSROOT/usr/lib/libc.so.1" found="$found libc.so.1 (the interpreter)" ;;
+		esac
+	fi
 	for l in $files; do dso_syms "$l"; done | LC_ALL=C sort -u > "$BUILD/needed.syms"
 	missing=$("$NM" -u "$b" | awk '{print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }

@@ -619,6 +619,9 @@ stage() {
         check("PREBUILT: a pinned gcc14 file ships as it is; nothing compiled, so the flags gate is not run",
               rc == 0 and "PREBUILT ok /opt/amix/share/out.elf: a pinned gcc14 file" in out
               and "STRICT n/a nothing compiled" in out and "stub strict gate ran" not in out, out)
+        rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN="  SONAME      libx.so.1", **elf_env)
+        check("UNDEF: a shared object that NEEDs nothing takes its symbols from libc.so.1, the interpreter",
+              rc == 0 and "found: libc.so.1 (the interpreter)" in out, out)
         rc, out = build("prebuilt", STUB_PINS="x " + "0" * 64, STUB_DYN=libc.strip(), **elf_env)
         check("PREBUILT: a file no gcc14 pin names is refused",
               rc == 1 and "is in PREBUILT, but no file gcc14-pin.sh pins has its sha256" in out, out)
