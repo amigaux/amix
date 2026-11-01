@@ -23,15 +23,17 @@ expect() { # expect <name> <want-substring> <got>
 
 mkdir -p "$T/bin"
 # swap -l | -a <path> <lo> <n> | -d <path> <lo>; the areas are $T/areas,
-# "<path> <lo> <n>" a line; an overlap on the same path is refused
+# "<path> <lo> <n>" a line; an overlap on the same path is refused. As the
+# stock swap, -l counts 2 KiB pages: with $T/k46 (4 KiB pages) half of each
 cat > "$T/bin/swap" <<EOF
 #!/bin/sh
 A=$T/areas
 touch \$A
 case "\$1" in
 -l)
+	h=1; [ -f $T/k46 ] && h=2
 	echo "path                 dev  swaplo blocks   free"
-	awk '{ printf "%-20s 18,38 %6d %6d %6d\\n", \$1, \$2, \$3, \$3 }' \$A
+	awk -v h=\$h '{ printf "%-20s 18,38 %6d %6d %6d\\n", \$1, \$2, \$3 / h, \$3 / h }' \$A
 	;;
 -a)
 	echo "-a \$2 \$3 \$4" >> $T/calls
@@ -55,6 +57,12 @@ case "$1" in
 /dev/rdsk/c6d0s0) printf 'root 2 204800\nswap 204802 102400\nhome 307202 40000\n' ;;
 *) exit 1 ;;
 esac
+EOF
+# uname -a: the kernel's build id names its CPU; $T/uname, else a 68030's
+cat > "$T/bin/uname" <<EOF
+#!/bin/sh
+[ -f $T/uname ] && exec cat $T/uname
+echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) 68030-261101-67 m68k"
 EOF
 chmod +x "$T/bin/"*
 
@@ -93,6 +101,31 @@ expect "boot area: logged" "swap: added /dev/dsk/c6d0s2 20480 81920 (slice tail,
 # run again: two areas now -- left alone
 o=$(run start)
 same "again: nothing more" "" "$(cat "$T/calls")"
+
+# a 68060 kernel: swap -l lists half of each area (2 KiB pages counted,
+# 4 KiB used), so its whole-slice area reads 51200 -- nothing to add
+touch "$T/k46"
+echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) 68060-261031-94 m68k" > "$T/uname"
+echo "/dev/dsk/c6d0s2 0 102400" | areas
+o=$(run start)
+same "68060, whole slice in use: nothing added" "" "$(cat "$T/calls")"
+same "68060, whole slice in use: nothing said" "" "$o"
+# its 40960-block area (listed 20480): the tail from 40960
+echo "/dev/dsk/c6d0s2 0 40960" | areas
+run start > /dev/null
+same "68060 boot area: the tail past its real length" "-a /dev/dsk/c6d0s2 40960 61440" "$(cat "$T/calls")"
+# a 68040 kernel the same
+echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) 68040-261031-94 m68k" > "$T/uname"
+echo "/dev/dsk/c6d0s2 0 40960" | areas
+run start > /dev/null
+same "68040 boot area: the tail past its real length" "-a /dev/dsk/c6d0s2 40960 61440" "$(cat "$T/calls")"
+# the stock kernel names no CPU: 2 KiB pages, as listed
+rm -f "${T:?}/k46"
+echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) m68k" > "$T/uname"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "stock kernel: the tail as listed" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
+rm -f "${T:?}/uname"
 
 # no area listed: the whole slice
 : | areas

@@ -34,6 +34,15 @@ The kernel may already swap on the start of the slice: when
 lists no area on it, the step adds from block 0; when it lists one area
 from block 0, the step adds from the next 16-block boundary past it; any
 other layout is left alone.
+.B "swap \-l"
+counts its blocks in 2 KiB pages, so on a 68040 or 68060 kernel, whose
+pages are 4 KiB, it lists half of each area; there the step doubles the
+length it reads.
+It tells such a kernel by the CPU that heads the build id
+.B "uname \-a"
+shows
+.RB ( 68040\- ...,
+.BR 68060\- ...).
 How far the added area reaches is set by
 .BR swap_add ,
 below.
@@ -79,6 +88,11 @@ which its other tables share.
 Measured on the 68030 kernel, for an area added after boot on top of its
 own 10 MiB area: about 50 MiB fits on a 64 MB machine, about 248 MiB on a
 16 MB one.
+On the 68040/68060 kernel the array takes 4 KiB of kvseg per MiB of swap;
+on top of its own 30 MiB area, 256 MiB was added and 512 MiB refused on a
+64 MB machine, 512 MiB added and 768 MiB refused on a 16 MB one (the
+largest free piece of kvseg at boot: about 410 MiB's worth, and about 630).
+The figures move a little from boot to boot with what else holds kvseg.
 A kernel with the guard refuses a larger request with
 .B ENOMEM
 (swap prints
@@ -93,7 +107,10 @@ So the list must suit the kernel:
 any kernel: 30 MiB in all is known to fit.
 .TP
 .B "all 48 30"
-a kernel with the guard.
+a 68030 kernel with the guard.
+.TP
+.B "all 256 30"
+a 68040/68060 kernel with the guard.
 .PP
 The installer writes the line for the kernel it installs.
 .SH EXAMPLE
