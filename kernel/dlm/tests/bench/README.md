@@ -1284,6 +1284,53 @@ KABI=<line>.1.2 sh tests/bench/s3-modpkg.sh tests/bench/s4-exit/build/<line>/mod
 | the probe | `sdlate: sd_register -> 16, PASS: refused after sd's first open` |
 | then | the boot goes on as without it; no new disk; `modadmin -l` does not list sdlate |
 
+### Low memory at first use (30 §8)
+
+The tools are in `tests/bench/lowmem/`: two misc modules built from
+`kmhog.c` and a user program.
+
+- `kmhold` drains the kernel allocator with `KM_NOSLEEP` pieces (1 MiB
+  down to 16 bytes) and gives them back from a timeout 20 s later. Its
+  release line names the bytes, which makes it a gauge as well.
+- `kmsleep` drains the same way, then asks one 4096-byte `KM_SLEEP`
+  request and prints how many ticks it took to return.
+- `lmmount SECS SPEC DIR [FSTYPE]` sleeps, then calls `mount(2)` itself,
+  so the first mount meets the empty allocator without a fork or an exec
+  on the way.
+
+The modules are never installed: they load by path in a development-load
+boot. Build:
+
+```
+make -C tests/bench/lowmem/kmhold KIT=<amix>/kernel/dlm/build/kit/<line>
+make -C tests/bench/lowmem/kmsleep KIT=<amix>/kernel/dlm/build/kit/<line>
+m68k-cbm-sysv4-gcc -O -o lmmount tests/bench/lowmem/lmmount.c
+```
+
+A cell is three boots on one disk: a generation with a demand-class
+filesystem module (cdfs) and a CD; `kbootset next devload`; then, with
+the three files copied to `/tmp` after the boot (it is cleared at boot):
+
+```
+/tmp/lmmount 8 0,5 /cdrom &      # mount(2) at 8 s
+modadmin -l /tmp/kmhold          # drained now, released at about 20 s
+wait
+modadmin -l /tmp/kmsleep         # ENXIO by design; the result is on the console
+```
+
+| Core | `lmmount` | Console |
+|---|---|---|
+| 0048 | rc 0 after about 13 s: the load waited for the release | `kmhold: released …` before the mount completes |
+| 0049, 0050 | rc -1, errno 12, at once; the next mount succeeds | `dlm: cdfs: not loaded: kernel memory short (error 12)` (0049 printed the root pass's line), `dlm: demand module cdfs not loaded for a cdfs mount (error 12)` |
+
+`kmsleep` on either core: `4096 KM_SLEEP returned memory after 1202 ticks
+(HZ 60): it WAITED for the release`. A small `KM_SLEEP` request on an empty
+allocator sleeps like a large one. In one cell of four (k30) the release's
+frees did not wake it at all: it slept 57149 ticks, until a later load and
+unload of `kmhold` freed memory again. So a small `KM_SLEEP` can sleep on
+after memory is back, and the first-use rule of C3-6 §1.1 holds for small
+requests as well.
+
 ### Not bench rows
 
 - **M-MOD1, M-FL1** are host computations:

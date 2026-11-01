@@ -4,4 +4,8 @@ l none /etc/rc2.d/S70syslogd=/etc/init.d/syslogd
 l none /etc/rc0.d/K50syslogd=/etc/init.d/syslogd
 f none /etc/syslog.conf 0444 root sys
 d none /var/log 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/syslog 0755 root sys
+f none /opt/amix/doc/syslog/LICENSE 0644 root bin
 c none /dev/conslog 25 0 0222 root root

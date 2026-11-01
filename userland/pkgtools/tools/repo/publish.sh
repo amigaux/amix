@@ -4,29 +4,41 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
 #
-# Usage: publish.sh [--dry-run|-n] <stagingdir>
+# Usage: publish.sh [--dry-run|-n] <release> <stagingdir>
 #
+#   <release>    the Amix release this tree is for, <major>.<minor> (1.0,
+#                1.1, ...).  Required: every release has its own tree.
 #   <stagingdir> must contain: catalog, catalog.md5 (from gen-catalog.py)
 #                and the *.pkg / *.pkg.Z files the catalog references.
 #
-# Layout pushed (docs/design.md section 5, categorized subdirectories):
-#   $PUBLISH_DEST/catalog, catalog.md5     served as <repo>/catalog
-#   $PUBLISH_DEST/pkgs/**/*.pkg[.Z]        served as <repo>/pkgs/<filename>
-#                                          (<filename> may contain '/':
-#                                          stock/, base/, test/, ...)
+# Layout pushed (docs/design.md section 5): one tree per release, nothing
+# at the docroot itself.
+#   $PUBLISH_DEST/<release>/catalog, catalog.md5
+#                                  served as <repo>/catalog, with
+#                                  <repo> = $PUBLISH_URL/<release>
+#   $PUBLISH_DEST/<release>/pkgs/**/*.pkg[.Z]
+#                                  served as <repo>/pkgs/<filename>
+#                                  (<filename> may contain '/':
+#                                  stock/, base/, test/, ...)
+# A publish writes and prunes only inside its own release's tree; the other
+# releases' trees are never touched.
 #
 # Environment:
-#   PUBLISH_DEST   rsync destination, REQUIRED, e.g. <user>@<host>:<docroot>
-#                  (rsync over ssh as the invoking user; the docroot should be
-#                  owned by that user, so no root is involved)
-#   PUBLISH_URL    HTTP base for verify   (default http://pkg.amigaux.org)
+#   PUBLISH_DEST   rsync destination, the docroot, REQUIRED, e.g.
+#                  <user>@<host>:<docroot> (rsync over ssh as the invoking
+#                  user; the docroot should be owned by that user, so no root
+#                  is involved)
+#   PUBLISH_URL    HTTP base of the docroot for verify (default
+#                  http://pkg.amigaux.org); the catalog is fetched from
+#                  $PUBLISH_URL/<release>/catalog
 #
 # There is deliberately no default destination: publishing mutates a public
 # host, so the caller names it every time.  The repository moved to the
 # canonical public host pkg.amigaux.org on 2026-09-15; see NOTES.md.
 #
 # --dry-run maps to rsync -n: nothing is written, and the post-publish HTTP
-# verification (curl of $PUBLISH_URL/catalog + md5 compare) is skipped.
+# verification (curl of $PUBLISH_URL/<release>/catalog + md5 compare) is
+# skipped.
 
 set -euo pipefail
 
@@ -34,21 +46,35 @@ DEST="${PUBLISH_DEST:?set PUBLISH_DEST=<user>@<host>:<docroot>}"
 URL="${PUBLISH_URL:-http://pkg.amigaux.org}"
 
 usage() {
-    echo "usage: $0 [--dry-run|-n] <stagingdir>" >&2
+    echo "usage: $0 [--dry-run|-n] <release> <stagingdir>" >&2
+    echo "       <release> is <major>.<minor>, e.g. 1.1" >&2
     exit 1
 }
 
 DRY=0
+RELEASE=""
 STAGING=""
 for arg in "$@"; do
     case "$arg" in
         --dry-run|-n) DRY=1 ;;
         -h|--help)    usage ;;
         -*)           echo "publish: unknown option: $arg" >&2; usage ;;
-        *)            [[ -n "$STAGING" ]] && usage; STAGING="$arg" ;;
+        *)            if [[ -z "$RELEASE" ]]; then RELEASE="$arg"
+                      elif [[ -z "$STAGING" ]]; then STAGING="$arg"
+                      else usage; fi ;;
     esac
 done
-[[ -n "$STAGING" ]] || usage
+if [[ -z "$STAGING" ]]; then
+    echo "publish: a release and a staging directory are both required" >&2
+    usage
+fi
+# The release names a directory on the public host: digits, one dot,
+# digits, and nothing else, so it can never climb out of the docroot.
+if [[ ! "$RELEASE" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    echo "publish: release '$RELEASE' is not <major>.<minor> (e.g. 1.1)" >&2
+    exit 1
+fi
+TREE="${DEST:?}/${RELEASE:?}"
 
 [[ -d "$STAGING" ]] || { echo "publish: $STAGING: not a directory" >&2; exit 1; }
 [[ -f "$STAGING/catalog" ]] || {
@@ -137,11 +163,17 @@ if [[ $DRY -eq 1 ]]; then
     echo "publish: DRY RUN -- no files will be written"
 fi
 
-# Local destination dirs must exist before rsync (skip for remote host:path
-# destinations and for dry runs).
-if [[ $DRY -eq 0 && "$DEST" != *:* ]]; then
-    mkdir -p "$DEST/pkgs"
-fi
+# The release tree must exist before the syncs below.  An empty local
+# skeleton <release>/pkgs/ synced into the docroot (no --delete) creates it,
+# locally or on the host, with any rsync version.  The source is the release
+# directory itself, not the skeleton's root, so the docroot's own mode and
+# times are never touched.
+SKEL="$(mktemp -d)"
+trap 'rm -rf "${SKEL:?}"' EXIT
+mkdir -p "${SKEL:?}/${RELEASE:?}/pkgs"
+chmod 755 "${SKEL:?}/${RELEASE:?}" "${SKEL:?}/${RELEASE:?}/pkgs"
+echo "publish: release tree -> ${TREE:?}/"
+rsync "${RSYNC_OPTS[@]}" "${SKEL:?}/${RELEASE:?}" "${DEST:?}/"
 
 # Packages first, catalog second: a client never sees a catalog that
 # references packages which are not uploaded yet.  --delete-excluded prunes
@@ -149,27 +181,27 @@ fi
 # Filters: '*/' lets rsync descend into the categorized subdirectories
 # (stock/, base/, test/, ...) with the directory structure preserved;
 # --prune-empty-dirs keeps package-less directories off the server.
-echo "publish: syncing packages -> $DEST/pkgs/"
+echo "publish: syncing packages -> ${TREE:?}/pkgs/"
 rsync "${RSYNC_OPTS[@]}" --delete --delete-excluded --prune-empty-dirs \
     --include='*/' --include='*.pkg' --include='*.pkg.Z' --exclude='*' \
-    "$STAGING/" "$DEST/pkgs/"
+    "${STAGING:?}/" "${TREE:?}/pkgs/"
 
-echo "publish: syncing catalog -> $DEST/"
-rsync "${RSYNC_OPTS[@]}" "$STAGING/catalog" "$STAGING/catalog.md5" "$DEST/"
+echo "publish: syncing catalog -> ${TREE:?}/"
+rsync "${RSYNC_OPTS[@]}" "$STAGING/catalog" "$STAGING/catalog.md5" "${TREE:?}/"
 
 if [[ $DRY -eq 1 ]]; then
-    echo "publish: dry run complete -- skipping HTTP verify of $URL/catalog"
+    echo "publish: dry run complete -- skipping HTTP verify of $URL/$RELEASE/catalog"
     exit 0
 fi
 
 # ------------------------------------------------------------- verify ---
 # Fetch the published catalog back over plain HTTP (the same path the apkg
 # client uses) and compare checksums against the staged copy.
-echo "publish: verifying $URL/catalog"
+echo "publish: verifying $URL/$RELEASE/catalog"
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
-if ! curl -fsS --max-time 30 "$URL/catalog" -o "$TMP"; then
-    echo "publish: ERROR: could not fetch $URL/catalog" >&2
+trap 'rm -rf "${SKEL:?}"; rm -f "${TMP:?}"' EXIT
+if ! curl -fsS --max-time 30 "$URL/$RELEASE/catalog" -o "$TMP"; then
+    echo "publish: ERROR: could not fetch $URL/$RELEASE/catalog" >&2
     exit 2
 fi
 LOCAL_MD5="$(md5sum < "$STAGING/catalog" | cut -d' ' -f1)"

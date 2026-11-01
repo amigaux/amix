@@ -39,7 +39,7 @@ K=$(cd "$1" && pwd) OUT=$2
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 W=$OUT/work
-rm -rf "$W" "$OUT/tree" "$OUT/s43" "$OUT/verdicts.txt"
+rm -rf "${W:?}" "${OUT:?}/tree" "${OUT:?}/s43" "${OUT:?}/verdicts.txt"
 mkdir -p "$W" "$OUT/tree" "$OUT/s43"
 V=$OUT/verdicts.txt
 

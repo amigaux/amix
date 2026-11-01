@@ -90,7 +90,7 @@ amix_dsroll() {
 	python3 -I "$AMIX_PKG_COMMON/arnorm.py" "$_ds_root" || exit 1
 
 	_ds_spool="$_ds_work/.spool"
-	rm -rf "$_ds_spool"
+	rm -rf "${_ds_spool:?}"
 	mkdir -p "$_ds_spool" "$(dirname "$_ds_out")"
 	( cd "$_ds_work" && "$AMIX_PKGMK" -o -d "$_ds_spool" -f prototype -r "$_ds_root" ) || {
 		echo "[FAIL] pkgmk failed for $_ds_pkg" >&2; exit 1; }

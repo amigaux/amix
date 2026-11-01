@@ -26,7 +26,8 @@
 # Bourne sh of 1991: no $(...), no local, no test -nt. Every variable the
 # helpers set begins with _rc, so a script's own names are left alone.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 RC_CONF=${RC_CONF:-/etc/rc.conf}
 RC_LOG=${RC_LOG:-/var/adm/rc.log}

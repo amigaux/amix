@@ -1,5 +1,30 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-01 — one repository tree per release
+
+**What.** pkg.amigaux.org serves each release from its own tree, `<docroot>/<release>/catalog`,
+`catalog.md5` and `pkgs/`, and nothing from the docroot itself. `publish.sh` takes the release as
+a required argument (`publish.sh [--dry-run] <release> <staging>`), checks it is exactly
+`<major>.<minor>`, creates the tree with an empty skeleton synced into the docroot (any rsync
+version; the docroot's own mode and times untouched), syncs and prunes only inside that tree, and
+verifies `$PUBLISH_URL/<release>/catalog`. Both fail-closed gates are unchanged. The catalog
+format does not change: a staging root is one tree, and filenames stay relative to its `pkgs/`.
+
+**apkg 0.3.4.** The compiled default and the shipped `/etc/apkg.conf` say
+`repo=http://pkg.amigaux.org/1.1`. A base URL with a path already worked over HTTP/1.0 (`parse_url`
+keeps the path; one trailing slash is dropped); the tests now fetch a catalog and a package from
+`http://127.0.0.1:<port>/1.1` and `…/1.1/`. The template's bytes are no longer 0.2.2's, so an
+upgraded box keeps its own conf, whose root URL the host sends on to `/1.0`, and gets the new
+default as `/etc/apkg.conf.new`; a fresh 1.1 install gets the 1.1 repo.
+
+**1.0 moves once.** `tools/repo/move-1.0-tree.sh` runs on the host against the docroot: a plan
+by default (checks, `rsync -n` list), `--apply` copies into `/1.0/` and verifies every catalogued
+package by md5 (the root stays), `--remove-root` verifies again and removes only the root's
+`catalog`, `catalog.md5` and `pkgs/`. Deployed 0.2.x boxes fetch from the root; the web server
+should answer `/catalog`, `/catalog.md5` and `/pkgs/*` with a 301 into `/1.0/` before
+`--remove-root` (apkg follows one hop by default). The script is tested on a temp docroot only;
+running it on the host goes with the site deploy.
+
 ## 2026-10-30 — apkg decides the config files (apkg 0.3.4, NOT MINTED)
 
 **What.** After an `install`/`upgrade`, apkg reads `/var/sadm/conffiles/PENDING` and lists the

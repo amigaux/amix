@@ -57,9 +57,9 @@ stage() {
 	# uptime: the load average takes the nlist/kmem route that reads garbage
 	# on AMIX (docs/porting.md 3.3); su/hostid are not built; no info reader;
 	# charset.alias is an empty table for sysv4
-	rm -f "$DEST$PREFIX/bin/uptime" "$DEST$PREFIX/man/man1/uptime.1" \
-	      "$DEST$PREFIX/man/man1/su.1" "$DEST$PREFIX/man/man1/hostid.1"
-	rm -rf "$DEST$PREFIX/info" "$DEST$PREFIX/lib"
+	rm -f -- "${DEST:?}${PREFIX:?}/bin/uptime" "${DEST:?}${PREFIX:?}/man/man1/uptime.1" \
+	      "${DEST:?}${PREFIX:?}/man/man1/su.1" "${DEST:?}${PREFIX:?}/man/man1/hostid.1"
+	rm -rf -- "${DEST:?}${PREFIX:?}/info" "${DEST:?}${PREFIX:?}/lib"
 	mkdir -p "$DEST$PREFIX/doc/coreutils"
 	cp COPYING NEWS README THANKS "$DEST$PREFIX/doc/coreutils/"
 	chmod 0644 "$DEST$PREFIX/doc/coreutils"/* "$DEST$PREFIX/man/man1"/*

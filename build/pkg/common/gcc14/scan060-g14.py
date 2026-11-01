@@ -113,10 +113,35 @@ def parse(listing):
     return insns, labels
 
 
-def function_bounds(labels, secs):
-    """sorted label addresses + section ends, for 'which function is this in'."""
-    pts = sorted(set(labels) | {sa + sz for sa, _o, sz in secs} | {sa for sa, _o, _s in secs})
-    return pts
+def func_symbols(data):
+    """(start, end) of every STT_FUNC symbol with a size, from .symtab and
+    .dynsym."""
+    shoff = struct.unpack(">I", data[32:36])[0]
+    shentsize, shnum = struct.unpack(">HH", data[46:50])
+    out = set()
+    for i in range(shnum):
+        sh = data[shoff + i * shentsize: shoff + (i + 1) * shentsize]
+        _n, typ, _f, _a, off, size, _l, _i, _al, ent = struct.unpack(">10I", sh[:40])
+        if typ not in (2, 11) or ent < 16:              # SHT_SYMTAB, SHT_DYNSYM
+            continue
+        for k in range(size // ent):
+            _nm, val, sz, info = struct.unpack(">IIIB", data[off + k * ent: off + k * ent + 13])
+            if info & 0xf == 2 and sz:                  # STT_FUNC
+                out.add((val, val + sz))
+    return out
+
+
+def function_bounds(labels, secs, data=None):
+    """sorted function starts and ends + section ends, for 'which function is
+    this in'.  An executable's are its labels; a shared object's (ET_DYN) are
+    its STT_FUNC symbols, start and start + size: PIC code loads a switch
+    table's base from the GOT, so the table's local label lands in the symbol
+    table and, taken as a label, would end the function in the middle
+    (libX11.so, libXt.so, 2026-10-31)."""
+    ends = {sa + sz for sa, _o, sz in secs} | {sa for sa, _o, _s in secs}
+    if data is not None and struct.unpack(">H", data[16:18])[0] == 3:
+        return sorted(ends | {b for f in func_symbols(data) for b in f})
+    return sorted(set(labels) | ends)
 
 
 def enclosing(pts, a):
@@ -535,7 +560,7 @@ def scan(tool, path):
     if "Disassembly of section" not in listing:
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
-    pts = function_bounds(labels, secs)
+    pts = function_bounds(labels, secs, data)
     skip, problems, notes = find_tables(insns, labels, data, secs, pts)
     for _round in range(6):
         if not skip:

@@ -37,7 +37,8 @@
 # The parsing is one awk program (the stock awk is nawk), with no shell read
 # loops: the 1991 sh's read and redirections in loops are unreliable.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 IF_CONF=${IF_CONF:-/etc/inet/interfaces}
 

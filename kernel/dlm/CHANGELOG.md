@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-01 — every rm -r of a variable path guarded (bcb0e11)
+
+Every `rm -r` of a variable path in kernel/dlm's tests, tools/mkkit.sh and the recipe build scripts goes through
+`${VAR:?}`, so an empty variable stops the script instead of removing from the wrong place. Packages unchanged.
+
+## 2026-11-01 — kbootset cards; C3-6 v10; kbootset -32, dlmkit -16 (2e841f7, a7efb20, f594053, d539cf9, 50cdad7)
+
+`kbootset cards` lists the running kernel's sd cards from kinfo's card table with each controller's match key, and
+`kbootset cards <disk>` prints one disk's key, so an installer takes --bootdev and --rootdev from the disk the user
+picks (C2-4 v21 §17; kbootset(1M); tests/host/kcards.sh). C3-6 v10: z3660rtg's parameters (maxarea 8192, fixed,
+kvfb) and its mapping of a board window above VSECT1 (dev_kvmap on k46, sptalloc on k30). kbootset -32 (box
+bc934ce1, 159 008 B) and dlmkit -16 (k30 672edbba, k46 cc4c3200, port 392a44e), unminted.
+
+## 2026-11-01 — core patch 0050; low-memory test tools (56178c5, d48c128)
+
+Core 0050: a first-use load whose first two records find memory short prints the first-use line, "dlm: <m>: not
+loaded: kernel memory short (error 12)", instead of the root pass's; behaviour as 0049. tests/bench/lowmem: kmhold
+(drains the kernel allocator with KM_NOSLEEP pieces and frees them from a timeout; a gauge), kmsleep (one 4 KiB
+KM_SLEEP on the drained allocator) and lmmount (mount(2) from a process started before the drain), loaded by path in
+a development-load boot. Measured: on core 0048 a first-use mount on a drained allocator waits for memory; on 0049
+it fails at once with ENOMEM and the next mount succeeds; a 4 KiB KM_SLEEP sleeps like a large one and can miss its
+wakeup after memory returns.
+
 ## 2026-10-31 — dlmkit -15 recipe (0915982)
 
 dlmkit30/46 -15 at 3c3e353 with the port at b0f1d86: modcheck's peak and resident report and C3-6 v9 in the kit;

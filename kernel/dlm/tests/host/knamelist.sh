@@ -14,7 +14,7 @@ K46=${NL_K46:-}
 K30E=${NL_K30_ETREL:-}
 K30B=${NL_K30_BREL:-}
 T=$B/knamelist
-rm -rf $T && mkdir -p $T
+rm -rf "${T:?}" && mkdir -p $T
 sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
 
@@ -133,7 +133,7 @@ if [ -f "$K46" ]; then
 	echo "build=68060-261026-57" > $R/stand/k46/kabi
 	no 3 "booted from a read-only medium whose kernel (68060-261026-56) is not the one installed here (68060-261026-57)" $KB namelist
 	echo "knamelist: k46 booted from a read-only medium (status, namelist from the installed kernel, no mark-good, no retry) ok"
-	rm -rf $R
+	rm -rf "${R:?}"
 else
 	echo "knamelist: no k46 kernel, skipped"
 fi

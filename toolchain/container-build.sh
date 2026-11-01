@@ -30,7 +30,7 @@ top=$(dirname "$here")
 "$top/system/check-amix-system" "$sys"
 
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT INT TERM
+trap 'rm -rf "${work:?}"' EXIT INT TERM
 
 # export NAME PIN LOCAL: the tree of PIN's commit into $work/NAME.
 export_pin() {

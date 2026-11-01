@@ -11,7 +11,7 @@
 set -e
 B=${B:-build}
 T=$B/rcscripts
-rm -rf $T && mkdir -p $T
+rm -rf "${T:?}" && mkdir -p $T
 T=$(cd $T && pwd)
 SUBR=${RC_SUBR_SRC:-../../userland/base/rc/rc.subr}
 # a stand-in kbootset: records its arguments, says a line, exits $KBRC

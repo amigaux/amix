@@ -1,10 +1,10 @@
 .\" kbootset(1M) -- the generation composer (kernel/dlm).
-.\" Written from docs/contracts/C2-4-kbootset-cli.md version 17 and
+.\" Written from docs/contracts/C2-4-kbootset-cli.md version 21 and
 .\" docs/spec/40-generations-and-composer.md; installed as
 .\" /opt/amix/man/1m/kbootset (userland/packages/docs/man-pages.md).
 .\" Plain -man requests only: the stock nroff of 1991 formats it.
 .\" MIT licence, see LICENSE in kernel/dlm.
-.TH KBOOTSET 1M "2026-10-31" "kbootset" "Amix kernel modules"
+.TH KBOOTSET 1M "2026-11-01" "kbootset" "Amix kernel modules"
 .nh
 .SH NAME
 kbootset \- compose, commit and roll back boot generations
@@ -329,6 +329,42 @@ it prints every row of the registry instead, as
 .I "module type n"
 .RB ( "z3660eth c 51" ).
 .TP
+.BI "cards \fR[\fP" disk \fR]\fP
+Prints the disk controllers the running kernel drives, from the card table
+of
+.BR /dev/kinfo ,
+one line per card:
+.I "card k: cN-cM key"
+with
+.B base
+.I address
+after it for a Zorro board.
+The disks of card
+.I k
+are c(8\fIk\fP) to c(8\fIk\fP+7) in the
+.BI c n d m s k
+names, and
+.I key
+is the controller's match key, the value
+.B build
+takes for
+.B \-\-bootdev
+and
+.BR \-\-rootdev :
+.BR zorro:144b:01 ,
+.BR mobo:gayle ,
+.BR mobo:a4000t-710 .
+Given a disk node
+.RB ( /dev/dsk/c8d0s1 ,
+.BR /dev/rdsk/... ,
+or the name alone), it prints only the key of that disk's card.
+A card is listed only when its driver is linked and registered with sd in
+the running kernel.
+It reads kinfo and nothing else and writes nothing.
+Exit status 1, with a message on the standard error and nothing on the
+standard output, when there is no kinfo record or the disk's card is not in
+the table; 2 for a name that is not a disk node.
+.TP
 .B "media \fR...\fP"
 Builds the pristine generation of a new medium (a disk image, a floppy
 pair, a CD tree).
@@ -406,6 +442,8 @@ prints for a person starts with
 .BR "kbootset: " ;
 the lines of
 .B major
+and
+.B cards
 are for scripts and do not.
 .SH ENVIRONMENT
 .TP 16
@@ -503,6 +541,15 @@ A boot script that re-creates a missing node:
 .nf
 set \-\- `kbootset major z3660eth`
 mknod /dev/zen0 $1 $2 0
+.fi
+.RE
+.PP
+An installer that takes the controller from the disk the user picked:
+.PP
+.RS
+.nf
+key=`kbootset cards /dev/dsk/c8d0s1` || exit 1
+kbootset \-R /mnt build \-\-bootdev $key \-\-rootdev $key ...
 .fi
 .RE
 .SH SEE ALSO

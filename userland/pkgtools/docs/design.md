@@ -70,7 +70,7 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
 ```
 
 - **Config** `/etc/apkg.conf` (plain `key=value`, `#` comments):
-  `repo=http://pkg.amigaux.org` · `cachedir=/var/apkg/cache` · `pkgadd=/usr/apkg/bin/pkgadd`
+  `repo=http://pkg.amigaux.org/1.1` · `cachedir=/var/apkg/cache` · `pkgadd=/usr/apkg/bin/pkgadd`
   (fallback `/usr/sbin/pkgadd`) · `admin=/var/apkg/admin` · the nine fetch keys · the three
   resolver keys (`nameserver`, `dns_timeout`, `dns_retries`)
 - **Catalog format v1** — pipe-delimited text, `#` comments, one package per line:
@@ -319,6 +319,23 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 
 ### 5.1 Catalog and publishing
 
+- **Repository layout: one tree per release.** The host serves each Amix release from its own
+  directory, and nothing from the docroot itself:
+
+  ```
+  <docroot>/1.0/catalog, catalog.md5, pkgs/<filename>   http://pkg.amigaux.org/1.0
+  <docroot>/1.1/catalog, catalog.md5, pkgs/<filename>   http://pkg.amigaux.org/1.1
+  ```
+
+  A tree is what one `gen-catalog.py` staging root becomes: the catalog's filename field stays
+  relative to the tree's `pkgs/` (`stock/core-2.1.pkg`, `base/APKG-0.3.4.pkg`), so the catalog
+  format does not change. apkg's `repo=` names a release's tree (apkg 0.3.4's default and shipped
+  template: `http://pkg.amigaux.org/1.1`), and apkg fetches `<repo>/catalog` and
+  `<repo>/pkgs/<filename>` below it. 1.0 was published at the docroot until 2026-11-01;
+  `tools/repo/move-1.0-tree.sh` moves it to `/1.0/` once (a dry-run plan, `--apply` copies and
+  verifies, `--remove-root` removes the root's copy), and the web server answers the old root
+  paths with a 301 into `/1.0/`, which the deployed 0.2.x clients follow (`redirects=1`).
+
 - **Kernel space** (apkg 0.3, kernel/dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
   one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
   block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
@@ -348,8 +365,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   is validated (malformed: SKIP), listed in the `#ext fstype 1` trailer and named in the summary
   line (`1 UFS-only (perl=ufs)`). `--scan-private` builds nothing — it is the licensing gate,
   below.
-- `publish.sh`: rsync staging → `$PUBLISH_DEST` (`<user>@<host>:<docroot>`; `catalog`,
-  `catalog.md5`, `pkgs/`), verify via `curl http://pkg.amigaux.org/catalog`. `PUBLISH_DEST` is
+- `publish.sh [--dry-run] <release> <staging>`: rsync staging → `$PUBLISH_DEST/<release>/`
+  (`$PUBLISH_DEST` = `<user>@<host>:<docroot>`; `catalog`, `catalog.md5`, `pkgs/`), verify via
+  `curl $PUBLISH_URL/<release>/catalog`. The release (`<major>.<minor>`) is **required** and
+  checked to be exactly that, so it names a directory and nothing else; a publish writes and
+  prunes only inside its own release's tree. `PUBLISH_DEST` is
   **required** — there is no default host, so every publish names its destination — and the
   verify URL is overridable (`PUBLISH_URL`). Since 2026-09-15 the destination is **remote** —
   rsync over ssh as the invoking user (the docroot is owned by that user, so no root and no

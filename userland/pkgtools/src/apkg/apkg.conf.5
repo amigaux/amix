@@ -31,7 +31,7 @@ Each key, its default and its full meaning are in
 section CONFIGURATION.
 .TP 18
 .B repo
-repository base URL (http://pkg.amigaux.org)
+repository base URL: the release's tree on the host (http://pkg.amigaux.org/1.1)
 .TP
 .B cachedir
 package download cache (/var/apkg/cache)
@@ -74,7 +74,7 @@ seconds per DNS query attempt, and further attempts per nameserver
 .SH EXAMPLE
 .nf
 # apkg configuration
-repo=http://pkg.amigaux.org
+repo=http://pkg.amigaux.org/1.1
 cachedir=/var/apkg/cache
 admin=/var/apkg/admin
 nameserver=192.0.2.53

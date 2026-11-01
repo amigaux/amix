@@ -202,7 +202,7 @@ S8="$WORK/t8"; mkdir -p "$S8"
 cp "$FIX/TESTpkg.pkg" "$FIX/toy.pkg" "$S8/"
 python3 "$GEN" "$S8" >/dev/null 2>&1
 DEST8="$WORK/t8-dest"; mkdir -p "$DEST8"
-PUBLISH_DEST="$DEST8" bash "$PUB" --dry-run "$S8" >"$WORK/t8.out" 2>&1
+PUBLISH_DEST="$DEST8" bash "$PUB" --dry-run 1.1 "$S8" >"$WORK/t8.out" 2>&1
 check "dry-run exit 0" test $? -eq 0
 check "dry-run announces itself" grep -q 'DRY RUN' "$WORK/t8.out"
 check "dry-run lists packages" grep -q 'TESTpkg.pkg' "$WORK/t8.out"
@@ -215,15 +215,15 @@ check "destination untouched" \
 # ---------------------------------------------------------------- T9 ----
 echo "T9: publish.sh refuses bad staging"
 S9="$WORK/t9"; mkdir -p "$S9"
-PUBLISH_DEST="$WORK/t9-dest" bash "$PUB" --dry-run "$S9" >/dev/null 2>&1
+PUBLISH_DEST="$WORK/t9-dest" bash "$PUB" --dry-run 1.1 "$S9" >/dev/null 2>&1
 check "missing catalog -> nonzero exit" test $? -ne 0
 cp "$FIX/TESTpkg.pkg" "$S9/"
 python3 "$GEN" "$S9" >/dev/null 2>&1
 echo "tampered" >> "$S9/catalog"
-PUBLISH_DEST="$WORK/t9-dest" bash "$PUB" --dry-run "$S9" >/dev/null 2>&1
+PUBLISH_DEST="$WORK/t9-dest" bash "$PUB" --dry-run 1.1 "$S9" >/dev/null 2>&1
 check "catalog/catalog.md5 mismatch -> nonzero exit" test $? -ne 0
 python3 "$GEN" "$S9" >/dev/null 2>&1
-env -u PUBLISH_DEST bash "$PUB" --dry-run "$S9" >"$WORK/t9-nodest.out" 2>&1
+env -u PUBLISH_DEST bash "$PUB" --dry-run 1.1 "$S9" >"$WORK/t9-nodest.out" 2>&1
 check "no PUBLISH_DEST -> nonzero exit (no default host)" test $? -ne 0
 check "no PUBLISH_DEST -> says to set it" grep -q 'PUBLISH_DEST' "$WORK/t9-nodest.out"
 
@@ -261,7 +261,7 @@ check "cross-subdir duplicate reported" \
 # --------------------------------------------------------------- T11 ----
 echo "T11: publish.sh --dry-run preserves subdirectory structure"
 DEST11="$WORK/t11-dest"; mkdir -p "$DEST11"
-PUBLISH_DEST="$DEST11" bash "$PUB" --dry-run "$S10" >"$WORK/t11.out" 2>&1
+PUBLISH_DEST="$DEST11" bash "$PUB" --dry-run 1.1 "$S10" >"$WORK/t11.out" 2>&1
 check "dry-run exit 0" test $? -eq 0
 check "dry-run lists subdir package with its path" \
     grep -q 'stock/TESTpkg.pkg' "$WORK/t11.out"
@@ -273,6 +273,90 @@ check "dry-run does not sync deps.conf" \
     bash -c "! grep -q 'deps.conf' <(grep -v '^publish:' '$WORK/t11.out')"
 check "destination untouched" \
     test -z "$(find "$DEST11" -mindepth 1 -print -quit)"
+check "dry-run syncs packages into the release tree" \
+    grep -qF "publish: syncing packages -> $DEST11/1.1/pkgs/" "$WORK/t11.out"
+check "dry-run syncs the catalog into the release tree" \
+    grep -qF "publish: syncing catalog -> $DEST11/1.1/" "$WORK/t11.out"
+
+# --------------------------------------------------------------- T11b ---
+# One tree per release: publish.sh takes the release as a required argument,
+# writes only <dest>/<release>/{catalog,catalog.md5,pkgs/}, prunes only
+# there, and never writes at the docroot itself.
+echo "T11b: publish.sh per-release trees"
+D11b="$WORK/t11b-dest"; mkdir -p "$D11b/1.0/pkgs/base"
+echo old > "$D11b/1.0/catalog"; echo old > "$D11b/1.0/pkgs/base/OLD-1.0.pkg"
+chmod 755 "$D11b"
+PUBLISH_DEST="$D11b" bash "$PUB" --dry-run "$S10" >"$WORK/t11b-norel.out" 2>&1
+check "no release -> nonzero exit" test $? -ne 0
+check "no release -> says both are required" \
+    grep -q 'a release and a staging directory are both required' "$WORK/t11b-norel.out"
+for bad in 1 1.1.1 v1.1 ../1.1 1.1/x .. 1.x; do
+    PUBLISH_DEST="$D11b" bash "$PUB" --dry-run "$bad" "$S10" >"$WORK/t11b-bad.out" 2>&1
+    check "release '$bad' refused" bash -c "[ $? -ne 0 ] && grep -q 'is not <major>.<minor>' '$WORK/t11b-bad.out'"
+done
+check "a refused release wrote nothing" \
+    test "$(cd "$D11b" && find . | sort | tr '\n' ' ')" = ". ./1.0 ./1.0/catalog ./1.0/pkgs ./1.0/pkgs/base ./1.0/pkgs/base/OLD-1.0.pkg "
+# a real publish into the temp docroot, verified through file:// (curl)
+mkdir -p "$D11b/1.1/pkgs"; echo stale > "$D11b/1.1/pkgs/STALE-0.pkg"
+PUBLISH_DEST="$D11b" PUBLISH_URL="file://$D11b" bash "$PUB" 1.1 "$S10" >"$WORK/t11b.out" 2>&1
+check "publish 1.1 exit 0" test $? -eq 0
+check "1.1/catalog and catalog.md5 published" \
+    bash -c "cmp -s '$S10/catalog' '$D11b/1.1/catalog' && cmp -s '$S10/catalog.md5' '$D11b/1.1/catalog.md5'"
+check "packages under 1.1/pkgs/ with their subdirectories" \
+    bash -c "test -f '$D11b/1.1/pkgs/stock/TESTpkg.pkg' && test -f '$D11b/1.1/pkgs/base/deep/toy.pkg' && test -f '$D11b/1.1/pkgs/TSTpkg.pkg'"
+check "nothing at the docroot's own catalog or pkgs/" \
+    bash -c "test ! -e '$D11b/catalog' && test ! -e '$D11b/catalog.md5' && test ! -e '$D11b/pkgs'"
+check "a stale 1.1 package is pruned" test ! -e "$D11b/1.1/pkgs/STALE-0.pkg"
+check "the 1.0 tree is untouched" \
+    bash -c "test \"\$(cat '$D11b/1.0/catalog')\" = old && test -f '$D11b/1.0/pkgs/base/OLD-1.0.pkg'"
+check "the docroot keeps its mode" test "$(stat -c %a "$D11b")" = 755
+check "verify fetched <url>/1.1/catalog" \
+    grep -qF "publish: OK -- served catalog matches staging" "$WORK/t11b.out"
+
+# --------------------------------------------------------------- T11c ---
+# move-1.0-tree.sh, the one-time move of the 1.0 tree from the docroot into
+# <docroot>/1.0/, on a temp docroot: plan writes nothing, --apply copies and
+# verifies, --remove-root removes only the root's three entries.
+echo "T11c: move-1.0-tree.sh on a temp docroot"
+MV="$HERE/../move-1.0-tree.sh"
+D11c="$WORK/t11c-docroot"; mkdir -p "$D11c/pkgs" "$D11c/1.1"
+cp -R "$S10/stock" "$S10/base" "$S10/TSTpkg.pkg" "$D11c/pkgs/"
+cp "$S10/catalog" "$S10/catalog.md5" "$D11c/"
+echo index > "$D11c/index.html"; echo keep > "$D11c/1.1/catalog"
+snap() { (cd "$D11c" && find . -type f -exec md5sum {} + | sort -k2); }
+snap > "$WORK/t11c.before"
+bash "$MV" "$D11c" > "$WORK/t11c-plan.out" 2>&1
+check "plan: exit 0" test $? -eq 0
+check "plan: lists the packages it would copy" grep -q 'stock/TESTpkg.pkg' "$WORK/t11c-plan.out"
+snap > "$WORK/t11c.after"
+check "plan: writes nothing" cmp -s "$WORK/t11c.before" "$WORK/t11c.after"
+bash "$MV" --apply "$D11c" > "$WORK/t11c-apply.out" 2>&1
+check "--apply: exit 0" test $? -eq 0
+check "--apply: the 1.0 tree has the catalog and every package" \
+    bash -c "cmp -s '$D11c/catalog' '$D11c/1.0/catalog' && test -f '$D11c/1.0/pkgs/stock/TESTpkg.pkg' && test -f '$D11c/1.0/pkgs/base/deep/toy.pkg'"
+check "--apply: the copy verifies, 0 bad" grep -q '1.0: catalog.md5 OK, 3 package(s) checked, 0 bad' "$WORK/t11c-apply.out"
+check "--apply: the root tree stays" bash -c "test -f '$D11c/catalog' && test -f '$D11c/pkgs/TSTpkg.pkg'"
+bash "$MV" --apply "$D11c" > "$WORK/t11c-apply2.out" 2>&1
+check "--apply again: exit 0, still verifies" test $? -eq 0
+echo corrupt >> "$D11c/1.0/pkgs/TSTpkg.pkg"
+bash "$MV" --remove-root "$D11c" > "$WORK/t11c-rm-bad.out" 2>&1
+check "--remove-root refuses while the copy does not verify" \
+    bash -c "[ $? -ne 0 ] && test -f '$D11c/catalog' && test -d '$D11c/pkgs'"
+cp "$D11c/pkgs/TSTpkg.pkg" "$D11c/1.0/pkgs/TSTpkg.pkg"
+bash "$MV" --remove-root "$D11c" > "$WORK/t11c-rm.out" 2>&1
+check "--remove-root: exit 0" test $? -eq 0
+check "--remove-root: the root's catalog, catalog.md5 and pkgs/ are gone" \
+    bash -c "test ! -e '$D11c/catalog' && test ! -e '$D11c/catalog.md5' && test ! -e '$D11c/pkgs'"
+check "--remove-root: 1.0, 1.1 and the index page stay" \
+    bash -c "test -f '$D11c/1.0/catalog' && test \"\$(cat '$D11c/1.1/catalog')\" = keep && test -f '$D11c/index.html'"
+bash "$MV" "$D11c" > "$WORK/t11c-again.out" 2>&1
+check "plan after the move: nothing to move, nonzero" test $? -ne 0
+D11d="$WORK/t11d-docroot"; mkdir -p "$D11d/pkgs" "$D11d/1.0"
+cp "$S10/catalog" "$S10/catalog.md5" "$D11d/"; cp -R "$S10/stock" "$S10/base" "$S10/TSTpkg.pkg" "$D11d/pkgs/"
+echo other > "$D11d/1.0/catalog"
+bash "$MV" --apply "$D11d" > "$WORK/t11d.out" 2>&1
+check "--apply refuses a different 1.0/catalog already there" \
+    bash -c "[ $? -ne 0 ] && grep -q 'exists and differs' '$WORK/t11d.out' && test \"\$(cat '$D11d/1.0/catalog')\" = other"
 
 # --------------------------------------------------------------- T12 ----
 echo "T12: --raw offset catalog + raw.img (self-describing slice)"
@@ -443,7 +527,7 @@ cp "$FIX/toy.pkg" "$S13f/"
 python3 "$GEN" "$S13f" >/dev/null 2>&1            # valid catalog for the toy
 mk_kernel_pkg "$S13f"                             # add kernel pkg AFTER
 DEST13="$WORK/t13f-dest"; mkdir -p "$DEST13"
-PUBLISH_DEST="$DEST13" bash "$PUB" --dry-run "$S13f" >"$WORK/t13f.out" 2>&1; RC=$?
+PUBLISH_DEST="$DEST13" bash "$PUB" --dry-run 1.1 "$S13f" >"$WORK/t13f.out" 2>&1; RC=$?
 check "publish refuses staging with a kernel-marker package (rc 4)" test "$RC" -eq 4
 check "publish refusal names private/proprietary content" \
     grep -qi 'proprietary\|PRIVATE' "$WORK/t13f.out"
@@ -460,7 +544,7 @@ cp "$FIX/toy.pkg" "$S13g/"
 mk_stock_stand_pkg "$S13g"
 python3 "$GEN" "$S13g" >/dev/null 2>&1            # valid catalog incl. the stock pkg
 DEST13g="$WORK/t13g-dest"; mkdir -p "$DEST13g"
-PUBLISH_DEST="$DEST13g" bash "$PUB" --dry-run "$S13g" >"$WORK/t13g.out" 2>&1; RC=$?
+PUBLISH_DEST="$DEST13g" bash "$PUB" --dry-run 1.1 "$S13g" >"$WORK/t13g.out" 2>&1; RC=$?
 check "publish passes stock /stand staging (dry-run rc 0)" test "$RC" -eq 0
 check "publish scan announces OK on stock /stand staging" \
     grep -q 'scan-private: OK' "$WORK/t13g.out"
@@ -1135,21 +1219,27 @@ check "no set names a test fixture (amixdemo/demolib)" \
 # built on that.  Populated 2026-09-16 with BATCH-1 (published 2026-09-15,
 # catalog 32 -> 38), amix-benchmark (published 2026-09-16, catalog 38 -> 39)
 # and batch-2's make + tar (staged 2026-09-26, catalog -> 41), then the GCC 14
-# batch's bzip2, coreutils and diffutils (assigned 2026-10-30, unpublished),
-# then prngd (moved in from amix-packages, d09d080, 2026-10-31);
-# pinned to the measured membership so a future batch must touch this test
-# deliberately, not by drift.
+# batch and more recipes from the packages layer.  The members grow with
+# every new recipe, so what is checked is the rule, not the list: the nine
+# add-ons the 1.0 catalog published stay in it, and it shares nothing with
+# the locked sets.
 check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
 # Since 2026-10-30 the recipe-built members come from the packages layer
 # (rsync and amix-benchmark-gcc14 joined there); this file names
 # amix-benchmark alone.
 if [ -f "$PKGCONF/sets.conf" ]; then
-    check "extra is the fifteen add-on packages" \
-        test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
-             "acompat amix-benchmark amix-benchmark-gcc14 bzip2 coreutils diffutils grep gzip less make patch prngd rsync tar zlib "
+    python3 "$SETS" extra > "$WORK/t16-extra"
+    for p in acompat amix-benchmark grep gzip less make patch tar zlib; do
+        check "extra keeps $p, published in 1.0" grep -qx "$p" "$WORK/t16-extra"
+    done
 else
-    echo "  skip- extra's full membership (no $PKGCONF/sets.conf)"
+    echo "  skip- extra's 1.0 members (no $PKGCONF/sets.conf)"
 fi
+for s in minimal standard developer x11; do
+    check "extra and $s are disjoint" \
+        bash -c "test -z \"\$(comm -12 <(python3 '$SETS' extra | sort) \
+                                       <(python3 '$SETS' $s | sort))\""
+done
 check "this directory's sets.conf names amix-benchmark alone in extra" \
     test "$(python3 "$SETS" -f "$SETSCONF" extra | tr '\n' ' ')" = \
          "amix-benchmark "
@@ -1692,8 +1782,8 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "fresh install: pkgadd rc 0" test $? -eq 0
     check "fresh install: /etc/apkg.conf is the shipped default" \
         cmp -s "$R1/etc/apkg.conf" "$R1/usr/apkg/lib/apkg.conf"
-    check "fresh install: the default is 0.2.2's bytes (md5 8dada8d9...)" \
-        test "$(md5sum < "$R1/usr/apkg/lib/apkg.conf" | cut -c1-32)" = 8dada8d9fd5da9cced27ac3bf18e85a9
+    check "fresh install: the default names the 1.1 tree" \
+        grep -qx 'repo=http://pkg.amigaux.org/1.1' "$R1/usr/apkg/lib/apkg.conf"
     chk "$R1"; check "fresh install: plain pkgchk APKG clean" test $? -eq 0
     check "fresh install: conf is mode 0644" mode644 "$R1/etc/apkg.conf"
 
@@ -1739,7 +1829,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
 
     # 3. a conf written BEFORE the first install (installer shape) is kept
     R2="$S23/r2"; newroot "$R2"
-    fr sh -c "umask 022; printf '# installer\nrepo=http://pkg.amigaux.org\ncachedir=/var/apkg/cache\nadmin=/var/apkg/admin\n' > '$R2/etc/apkg.conf'"
+    fr sh -c "umask 022; printf '# installer\nrepo=http://pkg.amigaux.org/1.1\ncachedir=/var/apkg/cache\nadmin=/var/apkg/admin\n' > '$R2/etc/apkg.conf'"
     cp "$R2/etc/apkg.conf" "$S23/pre.conf"
     add "$R2" "$P23"
     check "pre-written conf: pkgadd rc 0" test $? -eq 0

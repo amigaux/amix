@@ -55,7 +55,7 @@ else
 fi
 mkdir -p "$(dirname "$dir")"
 new=$dir.new.$$
-trap 'rm -rf "$new"' EXIT INT TERM
+trap 'rm -rf "${new:?}"' EXIT INT TERM
 c=$("$tool" create "$image")
 "$tool" cp "$c:/opt/amix/gcc14-cross-amix" "$new" || { "$tool" rm "$c" >/dev/null; exit 1; }
 "$tool" rm "$c" >/dev/null
@@ -68,7 +68,7 @@ have=$(cd "$new" && find . -type f ! -name TOOLCHAIN.sha256 -print0 | LC_ALL=C s
 	rm -f "$new.want"
 	exit 1
 }
-rm -rf "$dir"
+rm -rf "${dir:?}"
 mv "$new" "$dir"
 trap - EXIT INT TERM
 echo "gcc14: $dir (G14=$dir/build)"

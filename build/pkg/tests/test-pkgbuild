@@ -304,8 +304,32 @@ case $1 in
 *) echo "00018cac T printf"; echo "00001000 T exit" ;;
 esac
 """, 0o755)
+        # the dynamic lines objdump -p prints: STUB_DYN when given
         write(os.path.join(tools, "objdump"),
-              "#!/bin/sh\necho '  NEEDED      /usr/lib/libc.so.1'\n", 0o755)
+              "#!/bin/sh\nif [ -n \"${STUB_DYN:-}\" ]; then printf '%s\\n' \"$STUB_DYN\"; "
+              "else echo '  NEEDED      /usr/lib/libc.so.1'; fi\n", 0o755)
+        # a binary and the shared library it needs, both in the payload
+        elfrp = package(pkgs, "elfrp", "hooks", build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+        write(os.path.join(elfrp, "prototype"), PROTOTYPE.replace("out.txt", "out.elf")
+              + "f none /opt/amix/share/libfoo.so.1 0755 root sys\n")
+        write(os.path.join(elfrp, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
+	echo "stub libfoo" > "$DEST/opt/amix/share/libfoo.so.1"
+}
+""")
+        # a binary that needs a library of a package it is built against
+        elfdep = package(pkgs, "elfdep", "hooks", 'BUILD_DEPENDS="libdep"\n', build=HOOKS_BUILD,
+                         src={"greet.txt": "x\n"})
+        write(os.path.join(elfdep, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
+        write(os.path.join(elfdep, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
+}
+""")
+        write(os.path.join(sysroot, "usr", "X", "lib", "libX.so"), "stub libX\n")
 
         # gcc-cross-amix checkouts: one at another commit than the pin, and a
         # build/ inside some other repository's tree
@@ -537,6 +561,23 @@ esac
         rc, out = build("elfy", STUB_UNDEF="nosuch", **elf_env)
         check("UNDEF: refused: a symbol libc does not define",
               rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+        libc = "  NEEDED      /usr/lib/libc.so.1\n"
+        rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libfoo.so.1\n  RPATH       /opt/amix/share", **elf_env)
+        check("UNDEF: a bare NEEDED is found through the binary's RPATH in its own payload",
+              rc == 0 and "found: /usr/lib/libc.so.1 (sysroot) libfoo.so.1 (package /opt/amix/share)" in out, out)
+        write(os.path.join(out_pkg, "libdep", "dest", "opt", "amix", "lib", "libbar.so.1"), "stub libbar\n")
+        rc, out = build("elfdep", STUB_DYN=libc + "  NEEDED      libbar.so.1\n  RPATH       /opt/amix/lib", **elf_env)
+        check("UNDEF: then in the trees of the packages it is built against (BUILD_DEPENDS)",
+              rc == 0 and "libbar.so.1 (libdep /opt/amix/lib)" in out, out)
+        rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libX.so\n  RPATH       /usr/X/lib", **elf_env)
+        check("UNDEF: then in the sysroot at the RPATH directory",
+              rc == 0 and "libX.so (sysroot /usr/X/lib)" in out, out)
+        rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libnone.so.1\n  RPATH       /opt/amix/share", **elf_env)
+        check("UNDEF: a NEEDED found nowhere is refused, with where it was looked for",
+              rc == 1 and "NEEDED libnone.so.1 is not in its RPATH (/opt/amix/share) in this package" in out, out)
+        rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libfoo.so.1", **elf_env)
+        check("UNDEF: without an RPATH, a library in the payload is not found (the box would not find it)",
+              rc == 1 and "NEEDED libfoo.so.1 is not in its RPATH (none)" in out, out)
 
         # --- STOCK_ETC ---------------------------------------------------------------
         rc, out = build("stock")

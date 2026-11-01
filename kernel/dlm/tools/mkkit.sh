@@ -90,7 +90,7 @@ else
 	fi
 fi
 
-rm -rf "$OUT"
+rm -rf "${OUT:?}"
 mkdir -p "$OUT/include/sys" "$OUT/tools" "$OUT/mk" "$OUT/registry" "$OUT/sample" \
 	"$OUT/docs/contracts" "$OUT/sysroot/usr" "$OUT/stock/usr"
 OUT=$(cd "$OUT" && pwd)
@@ -109,7 +109,7 @@ cp "$S/tools/mkmod" "$S/tools/mkoffs" "$OUT/tools/"
 cp "$S/dlmoffs.c" "$OUT/"		# the probe: tools/mkoffs finds it here
 ${HOSTCC:-cc} -std=gnu89 -O -w -o "$OUT/tools/modfix" "$S/tools/modfix.c"
 cp "$S/LICENSE" "$OUT/tools/LICENSE.core"
-rm -rf "$S"
+rm -rf "${S:?}"
 cp "$R/abi/tools/modcheck.py" "$OUT/tools/"
 cp "$R/abi/mk/module.mk" "$OUT/mk/"
 

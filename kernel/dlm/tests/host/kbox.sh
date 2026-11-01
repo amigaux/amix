@@ -11,7 +11,7 @@
 set -e
 B=${B:-build}
 T=$B/kbox
-rm -rf $T && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/stand/k30 $T/root/var/apkg/kpkg
+rm -rf "${T:?}" && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/stand/k30 $T/root/var/apkg/kpkg
 R=$T/root
 export KBOOTSET_DEVROOT=$T/dev KBOOTSET_KINFO=$T/kinfo
 
@@ -157,7 +157,7 @@ $B/kbootset -R $R mark-good > $T/out
 # next loader run takes the trial again
 $B/kbootset -R $R build | grep -q "generation 3 built"
 # committed as apkg calls it, a named journal whose directory is missing
-rm -rf $R/var/kbootset
+rm -rf "${R:?}/var/kbootset"
 $B/kbootset -R $R --journal $R/var/kbootset/journal commit --again 2>/dev/null | grep -q "generation 3 committed"
 [ -d $R/var/kbootset ] && [ -z "$(cat $R/var/kbootset/journal 2>/dev/null)" ]
 $B/axsim $(sed -n 's/^store=//p' $R/etc/default/bootset) 0 1 | grep -q "generation 3, kernel"

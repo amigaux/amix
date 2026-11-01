@@ -3,6 +3,17 @@
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 
+## 2026-11-01 — amix-benchmark-gcc14 1.3-7 (549e7b3)
+
+BUILD-INFO and PROVENANCE name gcc14-cross-amix feec32e; the binaries are unchanged. amixbch14-1.3-7.pkg md5 421c0a37,
+130 560 B.
+
+## 2026-11-01 — recipe scripts guard deletes; package epochs pinned (585c616, f0cdf7d)
+
+Recipe scripts guard every rm and cp on a variable path with ${var:?}. SOURCE_EPOCH in package.sh keeps each affected
+version's bytes (coreutils, ncurses, prngd, python3, rsync, tar, vim, x11r6.3): container rolls before and after are
+byte-identical.
+
 ## 2026-10-31 — amix-benchmark-gcc14 1.3-6, built with gcc14-cross-amix f40055b (2642778)
 
 The binaries are unchanged; BUILD-INFO and PROVENANCE name the new toolchain. amixbch14-1.3-6.pkg sha256 542ae027,

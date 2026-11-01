@@ -1,0 +1,10 @@
+# /etc/conf/modreg.d/a4kt710 -- the a4kt710 module package's defaults
+# (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
+# the module's own, `disable` to ship it off.  None: the package keeps the
+# module's own declared=-1 (the running Kickstart's NCR scsi.device ROM tag
+# decides, C4-2 v6 sec 8.1).  Local settings belong in
+# /etc/conf/modreg.local.d/a4kt710, which no package owns; there
+#   param declared=0
+# disables the controller (nothing under 0xDD0000 is touched), and
+#   param declared=1
+# drives it without the tag (a manual override).

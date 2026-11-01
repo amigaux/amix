@@ -6,7 +6,7 @@
 set -e
 B=${B:-build}
 S=$B/prfcheck
-rm -rf "$S" && mkdir -p "$S"
+rm -rf "${S:?}" && mkdir -p "$S"
 cp -R core/upstream/. "$S/"
 grep -v '^#' core/series | while read p; do
 	[ -n "$p" ] && patch -p1 -s -d "$S" < "core/patches/$p"

@@ -11,7 +11,7 @@
 
 here=$(cd "$(dirname "$0")" && pwd)
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-tools.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 check() {	# check <what> <command...>
 	what=$1; shift
@@ -51,7 +51,7 @@ echo "https://example.invalid/thing-1.0.tgz $sha http://example.invalid/ours/thi
 refused "fetch: a fallback that is not https is refused" "is not an https URL" fetch "$T/bad.pin" "$T/cache"
 echo "https://example.invalid/thing-1.0.tgz abc" > "$T/bad.pin"
 refused "fetch: a pin without a sha256 is refused" "no sha256" fetch "$T/bad.pin" "$T/cache"
-rm -rf "$T/cache"
+rm -rf "${T:?}/cache"
 echo "https://example.invalid/up/thing-1.0.tgz $sha https://example.invalid/ours/thing-1.0.tgz" > "$T/two.pin"
 refused "fetch: the original, then our copy; neither reachable, both named" "       https://example.invalid/ours/thing-1.0.tgz" \
 	env AMIX_DISTFILES="$T/empty" sh "$here/fetch-distfile" "$T/two.pin" "$T/cache"

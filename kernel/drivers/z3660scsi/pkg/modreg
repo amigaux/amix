@@ -1,0 +1,6 @@
+# /etc/conf/modreg.d/z3660scsi -- the z3660scsi module package's defaults
+# (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
+# the module's own, `disable` to ship it off.  None: the package ships the
+# module's own default cache=-1, the data-cache arm from the CPU type (0 on
+# a 68030, 40 on a 68040, 60 on a 68060).  Local settings belong in
+# /etc/conf/modreg.local.d/z3660scsi, which no package owns.

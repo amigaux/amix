@@ -49,5 +49,6 @@ cannot show (why, measured numbers, hashes).
 
 ## Bugs and questions
 
-Open an issue at
-[github.com/amigaux/amix/issues](https://github.com/amigaux/amix/issues).
+- Questions and ideas: [Discussions](https://github.com/amigaux/amix/discussions).
+- Bugs, feature requests and hardware support: open an issue with one of the
+  forms at [github.com/amigaux/amix/issues/new/choose](https://github.com/amigaux/amix/issues/new/choose).

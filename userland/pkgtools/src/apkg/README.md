@@ -281,7 +281,7 @@ it as `<file>.new` and listed in `/var/sadm/conffiles/PENDING`. The shipped defa
 
 | key      | default                              |
 |----------|--------------------------------------|
-| repo     | `http://pkg.amigaux.org`             |
+| repo     | `http://pkg.amigaux.org/1.1`         |
 | cachedir | `/var/apkg/cache`                    |
 | pkgadd   | `/usr/apkg/bin/pkgadd` (runtime fallback `/usr/sbin/pkgadd`) |
 | pkgrm    | `/usr/apkg/bin/pkgrm` (fallback `/usr/sbin/pkgrm`)           |

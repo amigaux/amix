@@ -102,7 +102,7 @@ amix_man_relayout() {
 				else
 					amix_man "$_r_f" "$_r_sect" "$_r_name"
 				fi
-				rm -f "$_r_f"
+				rm -f -- "${_r_f:?}"
 			done
 			rmdir "$_r_d"
 		done

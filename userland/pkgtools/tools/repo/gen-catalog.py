@@ -10,8 +10,11 @@
 #         repo uses categorized subdirectories (stock/, base/, test/,
 #         devel/, ...) and the catalog filename field carries the path
 #         relative to the staging root (forward slashes, e.g.
-#         stock/net-2.1.pkg).  Optional override files, staging-root
-#         level only:
+#         stock/net-2.1.pkg).  A staging root is one release's tree:
+#         publish.sh <release> puts its catalog at <release>/catalog and
+#         its packages under <release>/pkgs/ on the host, so the filename
+#         stays relative to that tree's pkgs/.  Optional override files,
+#         staging-root level only:
 #           deps.conf   "name: dep1,dep2" lines -- wins over APKG_DEPS in
 #                       pkginfo.  Keys match the catalog name (post
 #                       names.conf mapping); the pkginst (PKG) also matches
