@@ -143,6 +143,10 @@ try:
     rc, out, args = run(checkout, dc, checkout, KM_PORT_COMMIT="b" * 40)
     check("KM_PORT_COMMIT names the kit's port commit over port.pin",
           rc == 0 and os.path.exists(kitargs) and open(kitargs).read().split() == ["abc1234", "b" * 40], out)
+    rc, out, args = run(checkout, dc, checkout, KM_PKG_VERSION="1.0.0-2")
+    check("KM_PKG_VERSION: a package-only revision rolls as 1.0.0-2, module/VERSION still checked as 1.0.0-1",
+          rc == 0 and "ROLLED zz30 1.0.0-2" in out and "module 1.0.0-1" in out
+          and "kernel/drivers/zz/module/VERSION = 1.0.0-1" in out, out)
     rc, out, args = run(checkout, dc, checkout, FAKE_KABI="k30.1.3")
     check("a .moddata kabi other than the one modcheck says ok for is refused",
           rc != 0 and "[FAIL] .moddata kabi= is not k30.1.3" in out and "ROLLED" not in out, out)
