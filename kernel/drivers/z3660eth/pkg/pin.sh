@@ -12,19 +12,24 @@
 # objects are 1.0.0-9's, byte for byte (af24613d / 86fe050b), and so are the
 # link.d entry, the node and modreg; the package files (vendor amix, the
 # descriptions, the licence paths, the epoch) are new, hence the revision.
+# 1.0.0-11 (2026-11-01): the objects rebuilt on the kit of f5678ba, whose
+# PIN is gcc-cross-amix 33ebadc (.moddata cc=gcc-2.7.2.3-33ebadc; module
+# kernels from k30 -68 and k46 -56 refuse an 8949028 module).  Module
+# 1.0.0-5, source unchanged; built in amix-toolchain:gca-33ebadc.  The
+# package files are -10's but for the revision.
 
 KM_NAME=z3660eth
 KM_SHORT=zeth
 KM_REPO=kernel/drivers/z3660eth
 KM_VERSION=1.0.0-5
-KM_PKG_VERSION=1.0.0-10
+KM_PKG_VERSION=1.0.0-11
 
-KM_K30_SHA=af24613d0763df9c37a4b93b6179cd46d2793d3c922b7f441fc39c30e3442b88
-KM_K46_SHA=86fe050bdb4e040fe0ae39ca219e7dc2c0602a8f1e09340897d4a804e6a91ba9
+KM_K30_SHA=e1caab15db0064a77bcce424ca8042466847b42d125bb13260520f2180c7addd
+KM_K46_SHA=d8b292ba153ef3d59b00a11f5ee9d21e832b6568fc8bc743367f0ad9fa937c80
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=6cc5dbafd168138530da0d8601a42322abbc4da9
+KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
 KM_LICENCES="\
 kernel/drivers/z3660eth/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
