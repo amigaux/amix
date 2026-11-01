@@ -1136,7 +1136,8 @@ check "no set names a test fixture (amixdemo/demolib)" \
 # catalog 32 -> 38), amix-benchmark (published 2026-09-16, catalog 38 -> 39)
 # and batch-2's make + tar (staged 2026-09-26, catalog -> 41), then the GCC 14
 # batch's bzip2, coreutils and diffutils (assigned 2026-10-30, unpublished),
-# then prngd (moved in from amix-packages, d09d080, 2026-10-31);
+# then prngd (moved in from amix-packages, d09d080, 2026-10-31), then
+# ncurses, pth, python3, vim and x11r6.3 (2026-10-31, 2026-11-01);
 # pinned to the measured membership so a future batch must touch this test
 # deliberately, not by drift.
 check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
@@ -1144,9 +1145,9 @@ check "the add-on set 'extra' is declared" bash -c "python3 '$SETS' extra"
 # (rsync and amix-benchmark-gcc14 joined there); this file names
 # amix-benchmark alone.
 if [ -f "$PKGCONF/sets.conf" ]; then
-    check "extra is the fifteen add-on packages" \
+    check "extra is the twenty add-on packages" \
         test "$(python3 "$SETS" extra | tr '\n' ' ')" = \
-             "acompat amix-benchmark amix-benchmark-gcc14 bzip2 coreutils diffutils grep gzip less make patch prngd rsync tar zlib "
+             "acompat amix-benchmark amix-benchmark-gcc14 bzip2 coreutils diffutils grep gzip less make ncurses patch prngd pth python3 rsync tar vim x11r6.3 zlib "
 else
     echo "  skip- extra's full membership (no $PKGCONF/sets.conf)"
 fi
