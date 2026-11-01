@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — every rm -r of a variable path guarded (bcb0e11)
+
+Every `rm -r` of a variable path in kernel/dlm's tests, tools/mkkit.sh and the recipe build scripts goes through
+`${VAR:?}`, so an empty variable stops the script instead of removing from the wrong place. Packages unchanged.
+
 ## 2026-11-01 — kbootset cards; C3-6 v10; kbootset -32, dlmkit -16 (2e841f7, a7efb20, f594053, d539cf9, 50cdad7)
 
 `kbootset cards` lists the running kernel's sd cards from kinfo's card table with each controller's match key, and
