@@ -34,11 +34,14 @@ esac
 # upstream-58130fe-plus) adds `gcc -shared`, libamixc99's __cxa_finalize for
 # shared libraries, and library constructors run after the program's
 # start-up: libamixc99.a and the specs change, cc1 and libgcc.a do not.
+# feec32e (2026-11-01) patches gas to keep a PIC relocation against an
+# exported symbol instead of folding it into its section: only the
+# assembler changes, none of the four files pinned here.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=f40055bc894b4e1a547c25cb7f396cc2f4a02d4f
+AMIX_GCC14_COMMIT=feec32eda756964fa6182bae49ac11f9e0681c1a
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
