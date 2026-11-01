@@ -48,14 +48,14 @@ add() {
 	nomem=no
 	if "$SWAP" -a $1 $2 $3 2> $_e
 	then
-		rm -f $_e
+		rm -f "${_e:?}"
 		echo "Added swap $4 $1, $3 blocks at $2${5:+ (swap_add $5)}."
 		rc_log swap "added $1 $2 $3 ($4${5:+, swap_add $5})"
 		return 0
 	fi
 	grep "$SWAP_NOMEM" $_e > /dev/null 2>&1 && nomem=yes
 	_m=`tr '\012' ' ' < $_e | sed 's/ *$//'`
-	rm -f $_e
+	rm -f "${_e:?}"
 	echo "swap -a $1 $2 $3 failed: $_m" >&2
 	rc_log swap "swap -a $1 $2 $3 failed: $_m"
 	return 1

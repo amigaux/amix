@@ -183,7 +183,7 @@ expect "all 48 30: the refusal logged" "swap: swap -a /dev/dsk/c6d0s2 20480 8192
 expect "all 48 30: the size used logged" "swap: added /dev/dsk/c6d0s2 20480 40960 (slice tail, swap_add 30)" "$(cat "$T/rc.log")"
 expect "all 48 30: the refusal said" "failed: /usr/sbin/swap: Not enough space" "$o"
 # all fits: one try
-rm -f "$T/max"
+rm -f "${T:?}/max"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 run start > /dev/null
 same "all fits: one try" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
@@ -196,7 +196,7 @@ same "all refused: each size once" "-a /dev/dsk/c6d0s2 20480 81920
 -a /dev/dsk/c6d0s2 20480 77824
 -a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
 same "all refused: nothing added" "/dev/dsk/c6d0s2 0 20476" "$(cat "$T/areas")"
-rm -f "$T/max"
+rm -f "${T:?}/max"
 # a 48 that ends where all does (a 40 MiB slice) is not tried again
 printf '/dev/dsk/c6d0s3\t-\t-\tswap\t-\tno\t-\n' | vfstab
 echo 1000 > "$T/max"
@@ -205,7 +205,7 @@ echo "swap_add=all 48 10" > "$T/rc.conf"
 run start > /dev/null
 same "48 = all: not again" "-a /dev/dsk/c6d0s3 0 40000
 -a /dev/dsk/c6d0s3 0 20480" "$(cat "$T/calls")"
-rm -f "$T/max"
+rm -f "${T:?}/max"
 # another failure ends it: no step down
 printf '%s\n' "$STOCK" | vfstab
 echo "swap_add=all 30" > "$T/rc.conf"
