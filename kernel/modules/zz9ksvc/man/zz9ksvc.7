@@ -1,0 +1,147 @@
+.TH ZZ9KSVC 7 "1 November 2026" "zz9ksvc"
+.SH NAME
+zz9ksvc \- the service channel of a ZZ9000-family board's second ARM core
+.SH SYNOPSIS
+.B /dev/zz9ksvc0
+.br
+.B /dev/zz9ksvc1
+.br
+.B #include <sys/zz9ksvc.h>
+.SH DESCRIPTION
+A Z3660, and a ZZ9000 with a firmware that has the services runtime, can do work
+on the board's second ARM core for a program on the Amiga: decompression first,
+more services later.
+The program hands it buffers in the board's memory and requests, and waits for
+the replies.
+Each board is a unit, and
+.BI /dev/zz9ksvc N
+is the channel to unit
+.IR N .
+.PP
+When the board, its bootstrap block or its runtime is missing, the open fails
+with
+.BR ENXIO :
+the program then does the work itself.
+.PP
+Every open is a client of its own, and the kernel stands between the clients and
+the board:
+.IP \(bu 3
+a client names its buffers by handles, 0 to 15, never by an address;
+.IP \(bu
+the kernel builds each request it passes on: it gives the request its number,
+lets through only the requests it knows, and puts the board's own handle in
+place of each handle the client names, after checking the buffer is that
+client's and the bytes used lie inside it;
+.IP \(bu
+no address from a client reaches the board, and no board address reaches a
+client.
+.PP
+Each client may hold 16 buffers and 8 MiB of buffers in all, and have 4
+requests in flight.
+.PP
+The driver is the loadable module
+.BR zz9ksvc ,
+of the demand class: it loads at the first open, and stays only while a board
+with a runtime is there.
+The board driver (the Z3660's
+.BR z3660rtg ,
+a ZZ9000's) finds the board and gives it to
+.B zz9ksvc
+through the small module
+.BR zz9kbus .
+.SH IOCTLS
+.TP
+.B ZZSIOC_INFO
+fills a
+.BR "struct zzs_info" :
+the unit, the board's id, the runtime's ABI version and capability bits, the
+ring sizes, this client's limits and the bytes of buffers it holds.
+.TP
+.B ZZSIOC_ALLOC
+allocates a buffer of
+.B za_length
+bytes, rounded up to whole pages, and gives its handle and, unless
+.B ZZS_ALLOC_CARDONLY
+is asked, the cookie that maps it.
+.B ENOSPC
+when the client has no handle or quota left.
+.TP
+.B ZZSIOC_FREE
+frees the buffer whose handle is the argument.
+.B EBUSY
+while a request in flight uses it.
+.TP
+.B ZZSIOC_SUBMIT
+passes on a request: the opcode and up to 48 bytes of payload in the runtime's
+own layout, with each buffer named by its handle.
+It gives the request's number.
+.B EINVAL
+for a request the kernel does not pass on or a range outside its buffer,
+.B EBADF
+for a handle that is not one of this client's buffers,
+.B EPERM
+for a request only root may make,
+.B EAGAIN
+when 4 are in flight or the rings are full.
+.TP
+.B ZZSIOC_WAIT
+waits for the request
+.BR zw_id ,
+at most
+.B zw_ms
+milliseconds (10 seconds when 0), and gives the runtime's status and reply.
+A signal ends the wait with
+.BR EINTR ,
+and the request can be waited for again.
+.B ETIMEDOUT
+when the time runs out (see
+.BR "Timeouts" ).
+.TP
+.B ZZSIOC_STATS
+(root) fills a
+.B "struct zzs_stats"
+with the channel's counts.
+.TP
+.B ZZSIOC_RESET
+(root) forgets everything the runtime held, after it was restarted: requests in
+flight fail with
+.BR EIO ,
+and buffers must be freed and allocated again.
+.SS Mapping a buffer
+.BR mmap (2)
+with
+.BR MAP_SHARED ,
+the buffer's cookie as the offset (plus a page-aligned offset into the buffer)
+and a length within it maps that buffer of the board's memory.
+Nothing else on the board can be mapped.
+A cookie stops working when its buffer is freed.
+.SS Timeouts
+The runtime cannot cancel work it has taken.
+When a wait times out, the buffers the request uses are quarantined: the runtime
+may still write them, so they are not freed or handed out again until its reply
+comes or the runtime is reset.
+The same happens to a client's buffers when it closes, or is killed, with
+requests in flight.
+At most 32 buffers are quarantined at a time; a request that could take the
+count past that gives
+.BR EAGAIN .
+.PP
+The kernel looks for replies at every clock tick while requests are in flight,
+and not at all otherwise.
+.SH FILES
+.TP
+.BR /dev/zz9ksvc0 ", " /dev/zz9ksvc1
+character major 55, minors 0 and 1, mode 0666.
+.TP
+.B /etc/conf/mod.d/zz9ksvc
+the module;
+.B /etc/conf/mod.d/zz9kbus
+the board registry it uses.
+.SH NOTES
+The runtime's requests and replies are those of the ZZ9000 SDK version 2
+(BlitterStudio zz9000-firmware); the module carries its headers.
+The module is GPL-3.0-or-later; the interface between board drivers and it,
+.BR zz9kbus ,
+is MIT.
+.SH SEE ALSO
+.BR mmap (2)
