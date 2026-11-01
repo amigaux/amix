@@ -101,14 +101,21 @@ l11_keys()
 	# the controller from the disk the user picked: the medium's kbootset reads the running
 	# kernel's sd card table (`kbootset cards DISK`, C2-1); a key it names wins over the
 	# profile's TARGET_HBA, which stays the fallback for a medium or kernel that cannot say
+	# L11_CTL says where the key came from; l11_bootstore logs it (the install log is not open yet here)
+	L11_CTL="the profile's KBOOTSET_BOOTDEV"
 	if [ -z "$KBOOTSET_BOOTDEV" ] && [ -x "$L11/bin/kbootset" ]; then
-		_k=`"$L11/bin/kbootset" cards "/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_ROOT_SLICE}" 2>/dev/null`
+		# one line either way: the key on standard output, or why not on standard error
+		_k=`"$L11/bin/kbootset" cards "/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_ROOT_SLICE}" 2>&1`
 		set -- $_k
 		case "$1" in
 			mobo:?*|zorro:?*:?*)
 				KBOOTSET_BOOTDEV="$1"
-				msg "controller   : $1 (kbootset cards: the target disk's own card; profile TARGET_HBA=$TARGET_HBA)" ;;
+				L11_CTL="kbootset cards: the target disk's own card; profile TARGET_HBA=$TARGET_HBA" ;;
+			*)	L11_CTL="the profile's TARGET_HBA=$TARGET_HBA; kbootset cards: ${_k:-no answer}" ;;
 		esac
+		msg "controller   : ${KBOOTSET_BOOTDEV:-from TARGET_HBA} ($L11_CTL)"
+	elif [ -z "$KBOOTSET_BOOTDEV" ]; then
+		L11_CTL="the profile's TARGET_HBA=$TARGET_HBA; the medium has no kbootset for cards"
 	fi
 	if [ -z "$KBOOTSET_BOOTDEV" ]; then
 		case "$TARGET_HBA" in
@@ -284,6 +291,7 @@ l11_bootstore()
 	fi
 	msg "packages     : `echo $L11_BASE_KPKGS $L11_XPKGS $KERNEL_KPKG $KERNEL_MODPKGS` installed by apkg (records under /var/apkg/kpkg)"
 	msg "sd cards     : $L11_SDCARDS (the kernel's sidecar, C4-1)"
+	msg "controller   : $KBOOTSET_BOOTDEV ($L11_CTL)"
 
 	# the store, by the INSTALLED kbootset from the INSTALLED loader files: it lays the
 	# store over whatever the slice held -- a 1.0 chain, an earlier store, a 1.0 root's

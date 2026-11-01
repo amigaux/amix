@@ -9881,11 +9881,12 @@ def audit_kbootset_cards():
     head("KC. the target's controller comes from the disk the user picked (`kbootset cards DISK` on the "
          "medium's kbootset); the profile's TARGET_HBA is the fallback")
     src = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
-    m = re.search(r'\n(\tif \[ -z "\$KBOOTSET_BOOTDEV" \] && \[ -x "\$L11/bin/kbootset" \]; then\n.*?'
+    m = re.search(r'\n(\tL11_CTL="the profile.s KBOOTSET_BOOTDEV"\n.*?'
                   r'\n\t\[ -n "\$KBOOTSET_ROOTDEV" \] \|\| KBOOTSET_ROOTDEV="\$KBOOTSET_BOOTDEV"\n)', src, re.S)
+    logged = 'msg "controller   : $KBOOTSET_BOOTDEV ($L11_CTL)"' in src
     iso = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
-    if not m or 'cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"' not in iso:
-        fail("l11.sh asks no `kbootset cards`, or the medium does not carry the box kbootset")
+    if not m or not logged or 'cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"' not in iso:
+        fail("l11.sh asks no `kbootset cards` or logs no controller source, or the medium does not carry the box kbootset")
         return
     d = tempfile.mkdtemp(prefix="kcards_")
     try:
@@ -9898,18 +9899,30 @@ def audit_kbootset_cards():
                 open(kb, "w").write("#!/bin/sh\n%s\n" % stub); os.chmod(kb, 0o755)
             body = ('L11=%s\nTARGET_SCSI_ID=e\nTARGET_ROOT_SLICE=1\nTARGET_HBA=%s\nKBOOTSET_BOOTDEV=\n'
                     'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n%s\necho "BOOTDEV=$KBOOTSET_BOOTDEV"\n'
-                    % (d, hba, m.group(1)))
+                    'echo "CTL=$L11_CTL"\n' % (d, hba, m.group(1)))
             return subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10).stdout
+        # each case: the key, and the source the install log is given (L11_CTL, logged by l11_bootstore)
         cases = (
             ("the disk's card names gayle; the profile says z3660scsi", '[ "$1 $2" = "cards /dev/dsk/ced0s1" ] && echo mobo:gayle',
-             "z3660scsi", "BOOTDEV=mobo:gayle"),
-            ("a Zorro card with its base", 'echo "zorro:144b:01 base 0x40000000"', "gayle", "BOOTDEV=zorro:144b:01"),
-            ("a kbootset without `cards`: the profile stands", 'echo "usage: kbootset ..." >&2; exit 2', "a4000t", "BOOTDEV=mobo:a4000t-710"),
-            ("no kbootset on the medium: the profile stands", None, "a3000", "BOOTDEV=mobo:a3000-wd"),
+             "z3660scsi", ["BOOTDEV=mobo:gayle", "CTL=kbootset cards: the target disk's own card; profile TARGET_HBA=z3660scsi"]),
+            ("a Zorro card with its base", 'echo "zorro:144b:01 base 0x40000000"', "gayle",
+             ["BOOTDEV=zorro:144b:01", "CTL=kbootset cards:"]),
+            ("a kbootset without `cards`: the profile stands", 'echo "usage: kbootset ..." >&2; exit 2', "a4000t",
+             ["BOOTDEV=mobo:a4000t-710", "CTL=the profile's TARGET_HBA=a4000t; kbootset cards: usage: kbootset ..."]),
+            ("the disk's card is not in the table: the profile stands",
+             'echo "kbootset: /dev/dsk/ced0s1: the running kernel has no card 1" >&2; exit 1', "gayle",
+             ["BOOTDEV=mobo:gayle", "CTL=the profile's TARGET_HBA=gayle; kbootset cards: kbootset: /dev/dsk/ced0s1: the running kernel has no card 1"]),
+            ("no kbootset on the medium: the profile stands", None, "a3000",
+             ["BOOTDEV=mobo:a3000-wd", "CTL=the profile's TARGET_HBA=a3000; the medium has no kbootset for cards"]),
         )
-        bad = [w for w, stub, hba, want in cases if want not in run(stub, hba)]
-        (fail if bad else ok)("kbootset cards EXECUTED (4 cases: the disk's key wins, Zorro key, no `cards`, no "
-                              "kbootset)%s" % ((": " + "; ".join(bad)) if bad else ""))
+        bad = []
+        for w, stub, hba, want in cases:
+            out = run(stub, hba)
+            if not all(x in out for x in want):
+                bad.append("%s: %r" % (w, out.strip().splitlines()[-2:]))
+        (fail if bad else ok)("kbootset cards EXECUTED (5 cases: the disk's key wins, Zorro key, no `cards`, a card "
+                              "not in the table, no kbootset; each names its source for the log)%s"
+                              % ((": " + "; ".join(bad)) if bad else ""))
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
