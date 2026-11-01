@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — FORKPIN sources; @PKG@ and depend in module recipes (67b1827)
+
+pkgbuild builds from a fork a checkout pin names (package.sh FORKPIN: the git archive of its commit, fetched by hash into out/cache/forks/<name>). Module recipes take @PKG@ (the line's instance) in the prototype and KM_FILES, and a depend file as i depend.
+
 ## 2026-11-01 — shared-object gates, PREBUILT, the DES tables; fork driver recipes (24a07a6..89c6146)
 
 - pkgbuild refuses a payload whose ELF NEEDs libamixrt.so.1 unless DEPENDS names amixrt. The new package.sh key PREBUILT ships pinned-prefix ELFs (sha-checked, not stripped). A shared object resolves against libc.so.1, the interpreter. The UNDEF gate counts strong undefined references only.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — xztop 1.1.1-1; manpages.sh skips replaces.d (104385a, 0f89d15)
+
+- xztop 1.1.1-1: the Z3660/ZZ9000 sensors in an X window, from the z3660rtg fork, statically linked with X11R6.3.
+- manpages.sh's amix_man_whatis skips /opt/amix/man/replaces.d, amix-base's table of replaced stock binaries.
+
 ## 2026-11-01 — revisions for gcc14-cross-amix 43825b2; LICENSE.amix (fded5b3)
 
 Every gcc14 package takes a new revision for gcc14-cross-amix 43825b2 (libamixrt; each program gains the library-constructor runner): acompat -9, amixbch14 -8, bzip2 -4, coreutils -5, diffutils -4, grep -9, tar -10, gzip -9, less -9, make -9, patch -8, prngd -3, python3 -2, rsync -3, vim -2, x11r6.3 -3, zlib -9. Packages with files of ours ship doc/<pkg>/LICENSE.amix.
