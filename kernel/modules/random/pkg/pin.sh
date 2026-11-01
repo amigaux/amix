@@ -13,20 +13,22 @@
 # /dev/urandom (c 48 1) are device entries in the module's class, random
 # (C3-5 v18 sec 1.2).
 # -1 (2026-10-31): amix 3d4a48d (landed 516d467), kit 7a68948.
+# 1.0.0-2 (2026-11-01): rebuilt on kit 3b53a8a (gcc-cross-amix 33ebadc); the
+# code is unchanged, only .moddata cc= differs (gcc-2.7.2.3-33ebadc).
 
 KM_NAME=random
 KM_SHORT=random
 KM_REPO=kernel/modules/random
-KM_VERSION=1.0.0-1
+KM_VERSION=1.0.0-2
 
 KM_K30_OBJ=kernel/modules/random/build/k30/mod.d/random
-KM_K30_SHA=680d975290028065825af793433ae5ea960bd3682a28cfc4e63f013e215450cf
+KM_K30_SHA=b4fe657c0ca138f1a919a49bdc1d875a7318103611868bde5377127c9a7a6549
 KM_K46_OBJ=kernel/modules/random/build/k46/mod.d/random
-KM_K46_SHA=f223164c7cecb10217f2905f78c69ab3269987cad5689953c623a8fc0d301bde
+KM_K46_SHA=f7200bc5994e2356c54a235e2cfb9a1e3227d2ad68fa41ed91acdef6ee174475
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=7a68948b9dd41adb4f4d0aee1f4459aca2d0ef8a	# c 48 random in the registry
+KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f	# PIN gcc-2.7.2.3-33ebadc
 
 KM_LICENCES="\
 kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4"
