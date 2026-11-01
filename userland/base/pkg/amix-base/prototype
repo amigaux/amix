@@ -49,6 +49,7 @@ d none /opt/amix/man/whatis.d 0755 root bin
 f none /opt/amix/man/1/man 0644 root bin
 f none /opt/amix/man/1m/rc.subr 0644 root bin
 f none /opt/amix/man/1m/devnodes 0644 root bin
+f none /opt/amix/man/1m/bootswap 0644 root bin
 f none /opt/amix/man/1m/dlpi-mac 0644 root bin
 f none /opt/amix/man/1m/ifup 0644 root bin
 f none /opt/amix/man/1m/ifdown 0644 root bin
@@ -67,6 +68,9 @@ f none /opt/amix/man/4/display 0644 root bin
 f none /opt/amix/man/4/display.d 0644 root bin
 f none /opt/amix/man/1/xstart 0644 root bin
 f none /opt/amix/man/whatis.d/amxbase 0644 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/amix-base 0755 root sys
+f none /opt/amix/doc/amix-base/LICENSE 0644 root bin
 d none /var/opt 0755 root sys
 d none /var/opt/amix 0755 root sys
 d none /var/opt/amix/catman 0755 root sys

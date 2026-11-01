@@ -12,7 +12,8 @@
 #
 # Installed as /usr/lib/amix/display.subr.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 DISP_CONF=${DISP_CONF:-/etc/display}
 DISP_D=${DISP_D:-/etc/display.d}
