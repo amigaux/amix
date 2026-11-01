@@ -100,6 +100,12 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -18 (2026-11-01): amix 227bd7e (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -17: the kit carries kernel/modules' sys/zz9kbus.h beside sys/monsw.h
+# (1ec3e2f), with the registry's c 55; core patch 0051 changes nothing in
+# the kit (the digests equal 1ec3e2f's but for the revision stamps).  Built
+# in the build container; the digests equal `make -C build kit` at 227bd7e.
+# -17 at 9be1705: k30 33852dd4..., k46 48f84e72...
 # -17 (2026-11-01): amix 9be1705 (KIT_REV), kabi k30.1.4 / k46.1.4 as
 # -16 (abi texts, headers, tools unchanged): the major registry gains
 # c 55 zz9ksvc (C3-5 v21); k46 headers from the port at 392a44e.  Built in
@@ -131,11 +137,11 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=9be1705
+DK_DLM_COMMIT=227bd7e
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=9be1705
+DK_MONSW_COMMIT=227bd7e
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
@@ -143,9 +149,9 @@ DK_K46_PORT_COMMIT=392a44e
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
 DK_K46_PORT_HASH=392a44e1dda2bb2e8cd2ab294b00830bf04e07e0
-DK_K30_MANIFEST=33852dd4fb31ed96567f67028a70439ff6f4f3914e06cf812087307c3aad52f6
-DK_K46_MANIFEST=48f84e7231740cdbf4628d6a7baaf7d95c9eb436fdc0310d7eb0cce1e04eae56
+DK_K30_MANIFEST=136c2d094014779ac84d2363c29b5aa821c6d89dd3bb85dc1e3c330d57792cf2
+DK_K46_MANIFEST=f244bc31ef69d1a51289fc87419fb52596a9e2560cfbe8cfdffa665243a056f5
 
 DK_DATE=261101
-DK_REV=17
+DK_REV=18
 DK_SOURCE_EPOCH=1793491200
