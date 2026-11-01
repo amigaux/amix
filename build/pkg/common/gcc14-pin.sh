@@ -43,19 +43,22 @@ esac
 # first out) and amix_initS.o for -shared: the specs, libamixc99.a and both
 # init objects change and libamixrt.so.1 is pinned too; cc1 and libgcc.a do
 # not change.
+# 43825b2 (2026-11-01): libamixc99's snprintf and vsnprintf pass a double
+# as two words, so libamixrt.so.1 runs no FPU instruction: libamixc99.a and
+# libamixrt.so.1 change, nothing else pinned here.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=34465331d3ccdf4a320f684736b5df032971c206
+AMIX_GCC14_COMMIT=43825b2eaa683392c5daf7d715b1ee0a96787e69
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
-m68k-elf/lib/libamixc99.a 591306dca7eafd580e024f347124b5d6eb5d90537662f6f0e31c9ee9f5b768fe
+m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9d67b9496de
 lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 7d7c647e2737c7998711d5e90b314e048ebae3140cc5d4d9b816660680dd5880"
+m68k-elf/lib/amixrt/libamixrt.so.1 8b4f328bd297ed0fbacf60710ab841f990c6280d1b6a6ea043f789b66a5d040d"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
