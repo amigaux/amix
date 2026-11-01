@@ -9,8 +9,8 @@
 # (sourced) and /etc/inet/rc.inet (run). Nothing else is written here.
 # stop: slink -u.
 #
-# This file is written in place on update, never moved, so the S/K hard links
-# stay the same file.
+# The package declares its S/K links with it, so an update that installs the
+# file anew makes them to it again.
 #
 # MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
 # repository).

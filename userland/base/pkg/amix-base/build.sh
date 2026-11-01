@@ -43,6 +43,22 @@ stage() {
 		mkdir -p "$DEST/etc/`dirname $l`"
 		ln "$DEST/etc/rc2.d/S90swap" "$DEST/etc/$l"
 	done
+	# the stock services that are off unless rc.conf turns them on: each
+	# stock script behind the gate (rc/mkgated.sh), in the shape stock core
+	# records it (the file first, its S and K links to it)
+	for g in rpc:rc2.d/S75rpc:0744:init.d/rpc,rc0.d/K50rpc,rc1.d/K50rpc \
+	    smtpd:rc3.d/S88smtpd:0444:init.d/smtpd,rc2.d/S88smtpd \
+	    lp:rc2.d/S80lp:0444:init.d/lp,rc0.d/K20lp \
+	    news:rc2.d/S91news:0444:init.d/news; do
+		set -- `echo "$g" | tr ':' ' '`
+		mkdir -p "$DEST/etc/`dirname $2`"
+		sh rc/mkgated.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" $1 "$DEST/etc/$2" || return 1
+		chmod $3 "$DEST/etc/$2"
+		for l in `echo $4 | tr ',' ' '`; do
+			mkdir -p "$DEST/etc/`dirname $l`"
+			ln "$DEST/etc/$2" "$DEST/etc/$l"
+		done
+	done
 	# the display set-up: /etc/display is the admin's, not here
 	put 0444 display/display /etc/init.d/display
 	ln "$DEST/etc/init.d/display" "$DEST/etc/rc2.d/S95display"

@@ -30,9 +30,9 @@
 # "swap -l" is the evidence.
 # stop: as the stock script: the files go, then every area after the first.
 #
-# Each area added is said on the console and in /var/adm/rc.log. This file
-# is written in place on update, never moved, so the S link stays the same
-# file.
+# Each area added is said on the console and in /var/adm/rc.log. The package
+# declares its S and K links with it, so an update that installs the file
+# anew makes them to it again.
 #
 # MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
 # repository).

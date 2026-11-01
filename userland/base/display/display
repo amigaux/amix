@@ -11,8 +11,8 @@
 # its text logins (as with manual). Output: /var/adm/rclog/display.
 # stop: nothing; the display manager and its server end with the system.
 #
-# This file is written in place on update, never moved, so the S link stays
-# the same file.
+# The package declares its S link with it, so an update that installs the
+# file anew makes it to it again.
 #
 # MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
 # repository).

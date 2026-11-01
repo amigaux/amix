@@ -19,6 +19,18 @@ l none /etc/rc2.d/S20devnodes=/etc/init.d/devnodes
 f none /etc/rc2.d/S90swap 0444 root sys
 l none /etc/init.d/swap=/etc/rc2.d/S90swap
 l none /etc/rc0.d/K05swap=/etc/rc2.d/S90swap
+f none /etc/rc2.d/S75rpc 0744 root sys
+l none /etc/init.d/rpc=/etc/rc2.d/S75rpc
+l none /etc/rc0.d/K50rpc=/etc/rc2.d/S75rpc
+l none /etc/rc1.d/K50rpc=/etc/rc2.d/S75rpc
+f none /etc/rc3.d/S88smtpd 0444 root sys
+l none /etc/init.d/smtpd=/etc/rc3.d/S88smtpd
+l none /etc/rc2.d/S88smtpd=/etc/rc3.d/S88smtpd
+f none /etc/rc2.d/S80lp 0444 root sys
+l none /etc/init.d/lp=/etc/rc2.d/S80lp
+l none /etc/rc0.d/K20lp=/etc/rc2.d/S80lp
+f none /etc/rc2.d/S91news 0444 root sys
+l none /etc/init.d/news=/etc/rc2.d/S91news
 f none /etc/init.d/display 0444 root sys
 l none /etc/rc2.d/S95display=/etc/init.d/display
 d none /etc/display.d 0755 root sys

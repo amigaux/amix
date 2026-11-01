@@ -46,6 +46,56 @@ A value other than
 or
 .B no
 is treated as missing, and the boot log says so.
+.SH STOCK SERVICES
+Six services of the stock system are installed but do not run unless this
+file turns them on; each defaults to
+.BR no :
+.TP
+.B rwalld
+.BR rpc.rwalld ,
+the network
+.BR wall (1M)
+server.
+.TP
+.B rusersd
+.BR rpc.rusersd ,
+which tells other hosts who is logged in.
+.TP
+.B sprayd
+.BR rpc.sprayd ,
+the server for
+.BR spray (1M).
+.TP
+.B mthreads
+.BR mthreads ,
+the news thread daemon of
+.BR /etc/init.d/news .
+The rest of that script still runs.
+.TP
+.B smtpd
+.BR smtpd ,
+which takes mail from other hosts over SMTP.
+Local mail, such as
+.BR cron 's
+mail to root, is delivered by
+.BR /bin/mail
+without it.
+.TP
+.B lpsched
+the print service scheduler
+.BR lpsched ,
+which starts the network printing daemon
+.BR lpNet .
+.PP
+.B rpcbind
+starts as before, whatever is set here.
+Each is still the stock script in
+.BR /etc/init.d ,
+with its stock start and stop links; the base package puts a check of
+this file in front of it, and the stock stop scripts still run at shutdown.
+A change takes effect at the next boot, or when the script is run by hand
+with
+.BR start .
 .SH EXAMPLE
 .nf
 .ft CW
@@ -54,6 +104,7 @@ syslogd=yes
 display=no        # no graphical login, whatever /etc/display says
 ifup_dhcpwait=30  # wait longer for a DHCP lease at boot
 swap_add=30       # swap on the slice: 30 MiB in all
+lpsched=yes       # the print service, which is off by default
 .ft R
 .fi
 .SH FILES
@@ -69,6 +120,7 @@ the boot log, where a bad value is reported.
 .BR display (4),
 .BR ifup (1M)
 .SH NOTES
-The stock services in
-.B /etc/rc2.d
-do not read this file; only those of the add-on packages do.
+Of the stock services in
+.BR /etc/rc2.d ,
+only the six above read this file; the others start as on the stock
+system.
