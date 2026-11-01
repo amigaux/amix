@@ -46,6 +46,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `13-bdf-defaultch.patch` | Ours: a BDF without a `DEFAULT_CHAR` property gets no default character (`NO_SUCH_CHAR`) rather than whatever the caller's font record held; `bdftopcf`'s is on its stack, so such fonts differed from build to build. |
 | `14-bdftopcf-clean-fontrec.patch` | Ours: `bdftopcf` starts from a zeroed font record. The BDF reader does not set every field (`info.inkMetrics` among them), and the record is on `bdftopcf`'s stack, so a PCF gained or lost its ink bounds from one build host to another. |
 | `15-zz9000-composite-clip.patch` | Ours: the ZZ9000 GC's composite clip is rebuilt from scratch on every relevant validate, by one function for windows and pixmaps (as `miComputeCompositeClip`). A pixmap's clip is bounded by the pixmap, so a large client clip can no longer make fills write past a small pixmap's buffer; a window keeps its client clip when only the window or the subwindow mode changes; the `NotClippedByChildren` region is freed; CreateGC fails cleanly without its clip region. |
+| `16-pixmap-size-bounds.patch` | Ours: dix `ProcCreatePixmap` refuses a width or height over 32767 (BadAlloc), and `ZZ9000CreatePixmap` refuses the same and any byte size that would wrap an int. Before, 65535 × 32769 at depth 16 allocated 131072 bytes for a drawable claiming the full size. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);

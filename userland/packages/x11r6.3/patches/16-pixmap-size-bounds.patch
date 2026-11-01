@@ -1,0 +1,43 @@
+Ours.  Pixmap sizes are bounded where they are created.  XCreatePixmap
+with 65535 × 32769 at depth 16 made ZZ9000CreatePixmap compute
+height × bytes-per-line in an int, wrap to 131072 bytes, and hand out a
+drawable that claims the full size.
+
+- dix ProcCreatePixmap refuses a width or height over 32767 with BadAlloc
+  (drawable sizes and region boxes are signed 16-bit; mfb and cfb compute
+  the byte size in an int too);
+- ZZ9000CreatePixmap refuses the same, and any byte size that would not
+  fit an int with the PixmapRec and its privates, for the server's own
+  callers.
+
+--- a/programs/Xserver/dix/dispatch.c
++++ b/programs/Xserver/dix/dispatch.c
+@@ -1347,6 +1347,10 @@
+ 	client->errorValue = 0;
+         return BadValue;
+     }
++    /* AMIX: drawable sizes and region boxes are signed 16-bit, and the
++     * DDXs compute the byte size in an int: refuse what cannot be drawn */
++    if (stuff->width > 32767 || stuff->height > 32767)
++	return BadAlloc;
+     if (stuff->depth != 1)
+     {
+         pDepth = pDraw->pScreen->allowedDepths;
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
+@@ -46,7 +46,14 @@
+     if (depth != ZZ9000_DEPTH && depth != 1)
+         return NullPixmap;
+ 
+-    size     = PixmapBytePad(width, depth);
++    /* signed 16-bit sizes only, and a byte size that fits an int with room
++     * for the PixmapRec and its privates (ProcCreatePixmap bounds clients,
++     * this bounds the server's own callers) */
++    if (width < 0 || height < 0 || width > 32767 || height > 32767)
++        return NullPixmap;
++    size = PixmapBytePad(width, depth);
++    if (height != 0 && size > (0x7fffffff - 65536) / height)
++        return NullPixmap;
+     datasize = height * size;
+ 
+     if (depth == 1)
