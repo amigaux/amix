@@ -383,7 +383,7 @@ SHA-256 and CRC-32 are amix-dlm's loader/common code.
 --- a/test/hconf.c
 +++ b/test/hconf.c
 @@ -14,6 +14,11 @@
- char	*dlm_pin = "gcc-2.7.2.3-8949028";
+ char	*dlm_pin = DLM_PIN;		/* the harness build's -DDLM_PIN: toolchain.pin */
  char	*dlm_build = "68060-261101-01";
  
 +/* manifest-only loading: off for the older tests, man_tests() turns it on */

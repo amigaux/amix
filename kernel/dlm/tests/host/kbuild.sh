@@ -6,6 +6,9 @@
 # repository root after `make tools` and store-roundtrip.sh (its build/rt
 # files are reused).
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 B=${B:-build}
 T=$B/kbuild
 rm -rf "${T:?}" && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg
@@ -31,7 +34,7 @@ sidecar() {
 kabi=static
 family=KD060-A
 line=k46
-pin=gcc-2.7.2.3-8949028
+pin=$KPIN
 build=68060-260928-52
 size=$(size $R/stand/k46/unix)
 sha256=$(sha $R/stand/k46/unix)
@@ -47,7 +50,7 @@ version 1.1.0
 role kernel
 line k46
 kabi static
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source /mnt/cdrom
 installed 1761400000
@@ -291,7 +294,7 @@ version 1.0.0
 role module
 line k46
 kabi k46.1.0
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source /mnt/cdrom
 installed 1761400000

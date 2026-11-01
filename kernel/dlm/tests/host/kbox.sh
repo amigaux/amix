@@ -9,6 +9,9 @@
 # two disks); the facts from kinfo; mark-good's defaults from kinfo.
 # Run from the repository root after `make tools` and store-roundtrip.sh.
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 B=${B:-build}
 T=$B/kbox
 rm -rf "${T:?}" && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/stand/k30 $T/root/var/apkg/kpkg
@@ -116,7 +119,7 @@ head -c 500000 /dev/urandom > $R/stand/k46/unix
 cat > $R/stand/k46/kabi <<EOF2
 kabi=static
 line=k46
-pin=gcc-2.7.2.3-8949028
+pin=$KPIN
 size=$(size $R/stand/k46/unix)
 sha256=$(sha $R/stand/k46/unix)
 loader-min=1
@@ -126,7 +129,7 @@ EOF2
 cat > $R/var/apkg/kpkg/kernel-kd060a <<EOF2
 name kernel-kd060a
 kabi static
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 verified no
 file /stand/k46/unix $(size $R/stand/k46/unix) $(sha $R/stand/k46/unix)
 file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)

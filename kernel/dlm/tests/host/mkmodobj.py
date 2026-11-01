@@ -14,14 +14,17 @@
 # default to k46.1.0 and the pin; cpu= to 68040.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
-import struct, sys
+import os, struct, sys
 
 out, args = sys.argv[1], sys.argv[2:]
 undef = [a[2:] for a in args if a.startswith('U:')]
 defs = [a[2:] for a in args if a.startswith('D:')]
 keys = [a for a in args if not a.startswith(('U:', 'D:'))]
 names = [a.split('=', 1)[0] for a in keys]
-for k, v in (('kabi', 'k46.1.0'), ('cc', 'gcc-2.7.2.3-8949028'), ('cpu', '68040')):
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+tp = dict(l.split()[:2] for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'toolchain.pin'))
+          if l.strip() and not l.startswith('#'))
+for k, v in (('kabi', 'k46.1.0'), ('cc', 'gcc-%s-%s' % (tp['gcc'], tp['commit'])), ('cpu', '68040')):
     if k not in names:
         keys.append('%s=%s' % (k, v))
 md = b'\0\0\0\0MD2\0' + b''.join(k.encode() + b'\0' for k in keys) + b'\0'

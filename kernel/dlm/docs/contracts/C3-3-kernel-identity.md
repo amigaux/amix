@@ -85,7 +85,7 @@ are new:
 kabi=k46.1.0                 the module kernel's tag; "static" stays for stage-2 kernels
 family=generic               the module kernel; static families keep their name
 line=k46
-pin=gcc-2.7.2.3-8949028
+pin=gcc-2.7.2.3-33ebadc
 build=68060-261101-NN
 size=…                       of unix as shipped
 sha256=…                     of unix as shipped

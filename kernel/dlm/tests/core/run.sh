@@ -111,13 +111,18 @@ else
 	fail "kernel-side printf formats: $(cat "$B/prfcheck.log")"
 fi
 
+# the compiler pin the kernel build gives the core (dlmconf.c's DLM_PIN), the
+# harness and mkmod: toolchain.pin's gcc and commit, as the kit's PIN
+PIN=gcc-$(awk '$1 == "gcc" {print $2}' "$R/toolchain.pin")-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
+export DLM_PIN=$PIN
+
 # ---- 1. host tools ----
 HCC="${HOSTCC:-cc} -std=gnu89 -O -g -Wall -Wno-parentheses -Wno-unused-but-set-variable"
 if $HCC -DDLM_TOOL -I"$DLM" -I"$DLM/include" -o "$TB/mkksym" "$DLM/tools/mkksym.c" "$DLM/dlm_sym.c" &&
    $HCC -o "$TB/modfix" "$DLM/tools/modfix.c" &&
    $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -o "$B/test-bin/reloc" \
 	"$T/reloc.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" &&
-   $HCC -DDLM_HOST -I"$DLM" -I"$DLM/include" -I"$T/include" -o "$B/test-bin/state" \
+   $HCC -DDLM_HOST -DDLM_PIN=\"$PIN\" -I"$DLM" -I"$DLM/include" -I"$T/include" -o "$B/test-bin/state" \
 	"$T/state.c" "$T/hostk.c" "$DLM/dlm_core.c" "$DLM/dlm_ld.c" "$DLM/dlm_sym.c" \
 	"$DLM/dlm_slot.c" "$DLM/dlm_arena.c" "$DLM/dlm_post.c" "$DLM/dlm_intr.c" "$DLM/dlm_str.c" \
 	"$DLM/dlm_ddi.c" "$T/hconf.c" \
@@ -128,7 +133,6 @@ else
 fi
 
 # ---- 2. kernel objects ----
-PIN=gcc-2.7.2.3-8949028	# toolchain.pin
 KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.2\" -DDLM_PIN=\"$PIN\""
 rm -f "$B/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
