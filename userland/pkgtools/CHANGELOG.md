@@ -1,3 +1,10 @@
+## 2026-11-01 — one repository tree per release (ba83216, 251f1cc, fefe799, 74168ea, dd62028)
+
+publish.sh takes the release as a required argument and publishes only <docroot>/<release>/; tools/repo/move-1.0-tree.sh
+moves the 1.0 tree to /1.0/ once (plan, --apply, --remove-root); apkg 0.3.4's default repository is
+http://pkg.amigaux.org/1.1; the apkg tests guard every delete with ${var:?}; the extra set is checked by rule (the 1.0
+add-ons kept, disjoint from the locked sets).
+
 ## 2026-10-31 — make dist for APKG and APKGENG; on-box rolls equal host rolls (2c2a129, 9b6a7a2, 70fc518)
 
 userland/pkgtools/Makefile `dist` builds and rolls APKG 0.3.4 and APKGENG 1.12.5 into out/userland/pkgs with the
