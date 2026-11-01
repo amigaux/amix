@@ -779,6 +779,11 @@ if [ -n "$_want_l11" ]; then
     cp "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"
   fi
   cp "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg"
+  # the set's box kbootset: l11.sh asks it which controller drives the disk the user picked
+  # (`kbootset cards DISK`); one without `cards` answers nothing and the profile's TARGET_HBA stands
+  if [ -f "$L11_IN/dlm/build/box/kbootset" ]; then
+    cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"; chmod 0755 "$STAGE/l11/bin/kbootset"
+  fi
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
   # the CD boot tree is the medium's, not work/l11's: say which, or why there is none

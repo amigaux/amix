@@ -9828,6 +9828,43 @@ def _p36_problems(install_src, l11_src):
     return probs
 
 
+def audit_kbootset_cards():
+    head("KC. the target's controller comes from the disk the user picked (`kbootset cards DISK` on the "
+         "medium's kbootset); the profile's TARGET_HBA is the fallback")
+    src = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    m = re.search(r'\n(\tif \[ -z "\$KBOOTSET_BOOTDEV" \] && \[ -x "\$L11/bin/kbootset" \]; then\n.*?'
+                  r'\n\t\[ -n "\$KBOOTSET_ROOTDEV" \] \|\| KBOOTSET_ROOTDEV="\$KBOOTSET_BOOTDEV"\n)', src, re.S)
+    iso = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
+    if not m or 'cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"' not in iso:
+        fail("l11.sh asks no `kbootset cards`, or the medium does not carry the box kbootset")
+        return
+    d = tempfile.mkdtemp(prefix="kcards_")
+    try:
+        os.makedirs(os.path.join(d, "bin"))
+        def run(stub, hba):
+            kb = os.path.join(d, "bin", "kbootset")
+            if stub is None:
+                if os.path.exists(kb): os.remove(kb)
+            else:
+                open(kb, "w").write("#!/bin/sh\n%s\n" % stub); os.chmod(kb, 0o755)
+            body = ('L11=%s\nTARGET_SCSI_ID=e\nTARGET_ROOT_SLICE=1\nTARGET_HBA=%s\nKBOOTSET_BOOTDEV=\n'
+                    'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n%s\necho "BOOTDEV=$KBOOTSET_BOOTDEV"\n'
+                    % (d, hba, m.group(1)))
+            return subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10).stdout
+        cases = (
+            ("the disk's card names gayle; the profile says z3660scsi", '[ "$1 $2" = "cards /dev/dsk/ced0s1" ] && echo mobo:gayle',
+             "z3660scsi", "BOOTDEV=mobo:gayle"),
+            ("a Zorro card with its base", 'echo "zorro:144b:01 base 0x40000000"', "gayle", "BOOTDEV=zorro:144b:01"),
+            ("a kbootset without `cards`: the profile stands", 'echo "usage: kbootset ..." >&2; exit 2', "a4000t", "BOOTDEV=mobo:a4000t-710"),
+            ("no kbootset on the medium: the profile stands", None, "a3000", "BOOTDEV=mobo:a3000-wd"),
+        )
+        bad = [w for w, stub, hba, want in cases if want not in run(stub, hba)]
+        (fail if bad else ok)("kbootset cards EXECUTED (4 cases: the disk's key wins, Zorro key, no `cards`, no "
+                              "kbootset)%s" % ((": " + "; ".join(bad)) if bad else ""))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
          "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
@@ -10685,6 +10722,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_kbootset_cards()
     audit_swap_stepdown()
     audit_guarded_rm_mv()
     audit_ufs_rootcap()

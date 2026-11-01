@@ -98,6 +98,18 @@ l11_keys()
 		[ -n "$_o" ] || die "KERNEL_MODPKGS: $_m is not named <module>-k$L11_LINE (C3-5 section 1.1)"
 		L11_MODS="$L11_MODS $_o"
 	done
+	# the controller from the disk the user picked: the medium's kbootset reads the running
+	# kernel's sd card table (`kbootset cards DISK`, C2-1); a key it names wins over the
+	# profile's TARGET_HBA, which stays the fallback for a medium or kernel that cannot say
+	if [ -z "$KBOOTSET_BOOTDEV" ] && [ -x "$L11/bin/kbootset" ]; then
+		_k=`"$L11/bin/kbootset" cards "/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_ROOT_SLICE}" 2>/dev/null`
+		set -- $_k
+		case "$1" in
+			mobo:?*|zorro:?*:?*)
+				KBOOTSET_BOOTDEV="$1"
+				msg "controller   : $1 (kbootset cards: the target disk's own card; profile TARGET_HBA=$TARGET_HBA)" ;;
+		esac
+	fi
 	if [ -z "$KBOOTSET_BOOTDEV" ]; then
 		case "$TARGET_HBA" in
 			a3000)		KBOOTSET_BOOTDEV=mobo:a3000-wd ;;
