@@ -7,6 +7,12 @@
 # outputs must equal the pins below: 124b86c reproduces amix-dlm's own
 # build/boot1.img and build/boot2.bin byte for byte (2026-10-26).
 #
+# -12 (2026-11-01): a package-only revision: -11 was minted earlier with
+# pkgmap timestamps from that roll's mtime (154238e9), and today's roll at
+# the pinned epoch gives other bytes (92015c81); a new version keeps one
+# version to one set of bytes.  The same commit and payload; pkginfo
+# differs only in the version.
+#
 # -11 (2026-10-31): a package-only revision for the 1.1 kernel-space set:
 # -10 re-rolled without the pkginfo BASEDIR line (7cef686; stock pkgadd
 # refuses one); the same commit, the same payload bytes.
@@ -71,6 +77,6 @@ LDR_BOOT2_SHA=da260a9689f37745c9b3760204355f46dd5f5e8f4207f82f2622a27f81a27f72
 
 LDR_CATALOG_NAME=loader-amix
 LDR_PKG=ldramix
-LDR_PKG_VERSION=1.0.261025-11
+LDR_PKG_VERSION=1.0.261025-12
 
 LDR_SOURCE_EPOCH=1792886400
