@@ -51,10 +51,10 @@ stage() {
 	b="$DEST$PREFIX"
 	cp src/xxd/xxd "$b/bin/xxd"
 	# the stock pkgadd mangles a relative symlink target (docs/porting.md 7): hard links
-	for l in ex view vimdiff rvim rview; do rm -f "$b/bin/$l"; ln "$b/bin/vim" "$b/bin/$l"; done
+	for l in ex view vimdiff rvim rview; do rm -f -- "${b:?}/bin/$l"; ln "$b/bin/vim" "$b/bin/$l"; done
 	# no GUI, no NLS; vimtutor needs a POSIX shell (it uses $(...) and mktemp)
-	rm -f "$b/bin/vimtutor"
-	rm -rf "$b/share/vim/vim91/lang" "$b/share/vim/vim91/tools" "$b/share/man"
+	rm -f -- "${b:?}/bin/vimtutor"
+	rm -rf -- "${b:?}/share/vim/vim91/lang" "${b:?}/share/vim/vim91/tools" "${b:?}/share/man"
 	mkdir -p "$b/doc/vim"; cp LICENSE README.md "$b/doc/vim/"
 	chmod 0755 "$b"/bin/*
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)

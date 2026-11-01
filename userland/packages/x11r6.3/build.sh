@@ -102,9 +102,9 @@ XCC
 # the target's MSB-first glyphs) and drops the host's own `linux' (its LSB block).
 hostx() {
 	HX="$BUILD/hostxc"
-	rm -rf "$HX"; mkdir -p "$HX/programs/Xserver"
+	rm -rf -- "${HX:?}"; mkdir -p "$HX/programs/Xserver"
 	tar cf - --exclude=./fonts --exclude=./doc --exclude=./programs/Xserver . | (cd "$HX" && tar xf -)
-	cp -R programs/Xserver/include "$HX/programs/Xserver/"
+	cp -R programs/Xserver/include "${HX:?}/programs/Xserver/"
 	for _hp in "$HERE"/patches/host/*.patch; do
 		( cd "$HX" && patch -p1 --batch --fuzz=0 < "$_hp" ) > /dev/null || {
 			echo "[FAIL] host patch $(basename "$_hp")" >&2; exit 1; }
@@ -139,9 +139,9 @@ stage() {
 	xinst i-nls.log nls install
 	xinst i-server.log programs/Xserver install install.man
 	# X is Xzz9000 under its usual name: a hard link (stock pkgadd mangles a relative symlink)
-	rm -f "$DEST$PREFIX/bin/X" && ln "$DEST$PREFIX/bin/Xzz9000" "$DEST$PREFIX/bin/X"
+	rm -f -- "${DEST:?}${PREFIX:?}/bin/X" && ln "$DEST$PREFIX/bin/Xzz9000" "$DEST$PREFIX/bin/X"
 	# the XIE and PEX client libraries: their extensions are not built
-	rm -f "$DEST$PREFIX/lib/libXIE.a" "$DEST$PREFIX/lib/libPEX5.a"
+	rm -f -- "${DEST:?}${PREFIX:?}/lib/libXIE.a" "${DEST:?}${PREFIX:?}/lib/libPEX5.a"
 	for c in $XCLIENTS; do
 		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR (hostx's), and
 		# rstart's contexts give remote commands the man pages' home after the relayout
@@ -152,7 +152,7 @@ stage() {
 	# mangles those, so they point at their absolute targets
 	for l in $(cd "$DEST" && find ".$PREFIX" -type l); do
 		_t=$(readlink "$DEST/$l"); case $_t in /*) continue;; esac
-		rm "$DEST/$l" && ln -s "$(dirname "${l#.}")/$_t" "$DEST/$l"
+		rm -- "${DEST:?}/${l:?}" && ln -s "$(dirname "${l#.}")/$_t" "$DEST/$l"
 	done
 	# fonts: compiled and indexed by hostx's bdftopcf and mkfontdir
 	for f in misc 75dpi 100dpi; do

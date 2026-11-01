@@ -25,7 +25,7 @@ OUT="${AMIX_BUILD_ROOT:-$TOP/out/pkg}"
 S="${PKS_STAGE:-$TOP/out/pkg-smoke/stage}"
 [ $# -ge 1 ] || { echo "usage: sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/<name>..." >&2; exit 2; }
 
-rm -rf "$S"; mkdir -p "$S"
+rm -rf -- "${S:?}"; mkdir -p "$S"
 : > "$S/PKGLIST"
 for r in "$@"; do
 	R=$(cd "$r" && pwd)
@@ -36,7 +36,7 @@ for r in "$@"; do
 	  [ -f "$P/$f" ] || { echo "[FAIL] $P/$f not built" >&2; exit 1; }
 	  cp "$P/$f" "$S/"
 	  mkdir -p "$S/$NAME"
-	  [ -d "$R/tests" ] && cp -r "$R/tests" "$S/$NAME/"
+	  [ -d "$R/tests" ] && cp -r "${R:?}/tests" "${S:?}/$NAME/"
 	  # where smoke.sh runs: a script whose usage line is `sh tests/smoke.sh'
 	  # runs from <name>/, an older one (`sh smoke.sh') from <name>/tests/,
 	  # beside its fixtures; a tests/mkfixture.py makes tests/fixture.tar here
