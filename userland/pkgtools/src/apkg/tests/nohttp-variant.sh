@@ -256,7 +256,13 @@ cmp -s "$NH_RAW" "$CACHE/foo-1.0.pkg" \
 KW=$WORK/kspace; KP=$KW/repo/pkgs/kernel
 mkdir -p "$KP" "$KW/root/var/apkg" "$KW/root/var/sadm/pkg"
 cp "$ROOT/var/apkg/admin" "$KW/root/var/apkg/admin"
-KPIN=gcc-2.7.2.3-8949028
+# The kit's compiler pin as kernel-space packages carry it, gcc-<gcc>-<commit>,
+# read from kernel/dlm/toolchain.pin (AMIX_TOOLCHAIN_PIN names another file),
+# so a toolchain repin needs no edit here; outside the monorepo, a neutral one.
+KPIN=$(awk '$1 == "gcc" { g = $2 } $1 == "commit" { c = $2 }
+    END { if (g != "" && c != "") print "gcc-" g "-" c }' \
+    "${AMIX_TOOLCHAIN_PIN:-$SRC/../../../../kernel/dlm/toolchain.pin}" 2>/dev/null)
+KPIN=${KPIN:-gcc-2.7.2.3-0000000}
 kds() {     # kds <file> <pkginst> <directives...>  (a module package)
     f=$1; i=$2; shift 2
     { printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nFILE /etc/conf/mod.d/%s o\nDIR /dev\n' "$i"

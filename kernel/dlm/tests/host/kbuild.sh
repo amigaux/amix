@@ -6,6 +6,9 @@
 # repository root after `make tools` and store-roundtrip.sh (its build/rt
 # files are reused).
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 B=${B:-build}
 T=$B/kbuild
 rm -rf "${T:?}" && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg
@@ -31,7 +34,7 @@ sidecar() {
 kabi=static
 family=KD060-A
 line=k46
-pin=gcc-2.7.2.3-8949028
+pin=$KPIN
 build=68060-260928-52
 size=$(size $R/stand/k46/unix)
 sha256=$(sha $R/stand/k46/unix)
@@ -47,7 +50,7 @@ version 1.1.0
 role kernel
 line k46
 kabi static
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source /mnt/cdrom
 installed 1761400000
@@ -291,7 +294,7 @@ version 1.0.0
 role module
 line k46
 kabi k46.1.0
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source /mnt/cdrom
 installed 1761400000
@@ -334,6 +337,41 @@ grep -a -qx "param z3660rtg.blit=0" $T/disk.img
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
 $KB check > $T/out
 grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
+# the major table (core patch 0051, C3-5 v22): every registry row in the
+# registry's order, after the arena and ident records; check finds it equal
+sed 's/#.*//' abi/registry/majors | awk 'NF == 3 { print "major", $1, $2, $3 }' > $T/wantmaj
+grep '^major ' $B5 > $T/gotmaj
+cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantmaj $T/gotmaj >&2; exit 1; }
+grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
+grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
+grep -q "generation $id: major table ok" $T/out
+echo "param blit=off   # the administrator's" > $R/etc/conf/modreg.local.d/z3660rtg
+$KB build $FACTS > $T/out && id=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
+[ -n "$id" ] || { echo "kbuild: the module generation was not built" >&2; cat $T/out >&2; exit 1; }
+B5=$R/stand/gen/$id/build
+grep -A9 '^kernel unix' $B5 > $T/mods
+# boot class first, then demand class with monsw before the z3660rtg that depends on it
+sed -n 2p $T/mods | grep -q "^module z3660eth boot $(size $MD/z3660eth) path=/stand/gen/$id/mod/z3660eth sha256=$(sha $MD/z3660eth) match=zorro:144b:01,mobo:z3660-window$"
+sed -n 3p $T/mods | grep -q "^module monsw demand $(size $MD/monsw) path=/stand/gen/$id/mod/monsw sha256=[0-9a-f]* majors=c:52$"
+sed -n 4p $T/mods | grep -q "^module z3660rtg demand [0-9]* path=/stand/gen/$id/mod/z3660rtg sha256=[0-9a-f]* majors=c:49 depend=monsw$"
+for p in "z3660eth.intr=6" "z3660eth.intrl2=1" "monsw.config=-1" "z3660rtg.blit=0" "z3660rtg.maxarea=0"; do
+	grep -qx "param $p" $B5 || { echo "kbuild: no param $p" >&2; cat $B5 >&2; exit 1; }
+done
+cmp -s $MD/z3660rtg $R/stand/gen/$id/mod/z3660rtg
+$KB commit 2>/dev/null | grep -q "committed"
+grep -a -q "^module z3660rtg demand .* depend=monsw$" $T/disk.img
+grep -a -qx "param z3660rtg.blit=0" $T/disk.img
+$B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
+$KB check > $T/out
+grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
+# the major table (core patch 0051, C3-5 v22): every registry row in the
+# registry's order, after the arena and ident records; check finds it equal
+sed 's/#.*//' abi/registry/majors | awk 'NF == 3 { print "major", $1, $2, $3 }' > $T/wantmaj
+grep '^major ' $B5 > $T/gotmaj
+cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantmaj $T/gotmaj >&2; exit 1; }
+grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
+grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
+grep -q "generation $id: major table ok" $T/out
 # check: a module copy changed, then gone
 cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
 flip $R/stand/gen/$id/mod/monsw 4
@@ -344,6 +382,23 @@ rm $R/stand/gen/$id/mod/monsw
 grep -q "module monsw: /stand/gen/$id/mod/monsw missing" $T/out
 cp $T/monsw.keep $R/stand/gen/$id/mod/monsw
 $KB check > $T/out
+# a default generation without the table (an older kbootset composed it)
+# is not the same generation: build composes one and commit writes it
+echo "param intr=5" > $R/etc/conf/modreg.d/z3660eth	# so this one differs, and is committed
+$KB build $FACTS > $T/out
+id2=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
+sed '/^major /d' $R/stand/gen/$id2/build > $T/nomaj && cp $T/nomaj $R/stand/gen/$id2/build
+$KB commit 2>/dev/null | grep -q "generation $id2 committed"
+$KB mark-good --booted $id2 > /dev/null		# the default now, as after its boot
+$KB check > $T/out || :
+grep -q "generation $id2 has no major table" $T/out
+$KB build $FACTS > $T/out && id3=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
+! grep -q "equals the default" $T/out || { echo "kbuild: a default without the major table taken as equal" >&2; cat $T/out >&2; exit 1; }
+$KB commit 2>/dev/null | grep -q "committed"
+$KB check > $T/out
+grep -q "generation $id3: major table ok" $T/out
+echo "param intr=6" > $R/etc/conf/modreg.d/z3660eth
+$KB rollback > $T/out 2>&1		# the default back to what the sections below expect
 # what build refuses
 modpkg monsw class=demand majors=c:52 kabi=k46.1.1
 refused 2 $KB build $FACTS			# a minor above the kernel's
@@ -371,6 +426,9 @@ grep -q "intr=-1 is not a valid int value for module z3660eth" $T/out
 three; echo "intr=6" > $R/etc/conf/modreg.d/z3660eth
 refused 2 $KB build $FACTS			# a malformed line
 grep -q "neither param <name>=<value>, disable nor safe" $T/out
+three; modpkg kinfo class=demand majors=c:53
+refused 3 $KB build $FACTS			# a row the kernel's own kinfo driver fills
+grep -q "module kinfo: major c:53 is a row the kernel's own switch fills" $T/out
 # the local safe mark (C4-4 §2): a boot module's record gets safe=1, from
 # modreg.local.d only and for boot class only
 three; echo "safe" > $R/etc/conf/modreg.local.d/z3660eth
@@ -431,7 +489,7 @@ grep -q "changed since kbootset build" $T/out
 rm -rf "${R:?}/stand/gen/${id:?}"
 rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
 cp $T/kabi.static $R/stand/k46/kabi; record
-echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, commit, check) ok"
+echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, the major table, a kernel row, commit, check) ok"
 
 # root-class modules (C3-5 version 7, C4-4 version 3) on a module
 # kernel whose sidecar names no built-in root controller or filesystem:

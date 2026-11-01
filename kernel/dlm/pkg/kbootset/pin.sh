@@ -12,6 +12,16 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -34 (not minted; the revision for the release): amix e072f89 -- kbootset
+# writes the major table into a module kernel's manifest, one `major` record
+# per registry row (C3-5 v22), which a kernel with core patch 0051 reads
+# instead of a table built into it; gate 3 refuses a member on a row the
+# kernel's own drivers fill; check compares each generation's table with
+# the registry, and a default generation without the table is not taken
+# for an equal one.  Built on gcc14 43825b2 in amix-toolchain:g14-43825b2:
+# the box binary 0d5462db (162016 bytes, 2556 more than -33); kbootset(1M)
+# 3a980b98 (check); whatis and rc scripts as -33.
+#
 # -33 (not minted; the revision for the release): amix 9be1705 -- kbootset
 # knows character major 55, zz9ksvc (the ZZ9000/Z3660 service channel,
 # kernel/modules), so gate 3 passes a zz9ksvc module; built on gcc14 43825b2 in amix-toolchain:g14-43825b2,
@@ -206,15 +216,15 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=9be1705
-KB_SHA=048e108a1e095ffeb6404b97169a3dbbece0f4a49d58c164d12b6907f913cc0f
+KB_DLM_COMMIT=e072f89
+KB_SHA=0d5462db9997a5028d8d1e53f070119ad25681f62cb358df3eb37f04a0f9a99b
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
-KB_MAN_SHA=f7fd14f9c6ee95561e587856ef7056ed81ae5ee9803d2331bc9ccee91fc2a395
+KB_MAN_SHA=3a980b9834df6a6d4b5603acf4abbf403bea2d4f46d5609f3355ec6102f0141e
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 
 # the rc scripts, from the same commit (kernel/dlm/kbootset/rc)
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261101-33
+KB_VERSION=1.1.0.261101-34
 KB_SOURCE_EPOCH=1793491200

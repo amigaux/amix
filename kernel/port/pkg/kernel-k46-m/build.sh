@@ -79,7 +79,10 @@ X="$AMIX_DLM_TREE"
 echo "$K46M_DLM_LICENCES" | while read n h; do [ -n "$n" ] && amix_verify "$X/$n" "$h"; done
 
 echo "--- the sidecar describes the shipped ET_REL (checked, not rewritten) ---"
-for kv in "kabi=$K46M_KABI" "family=generic" "line=k46" "pin=gcc-2.7.2.3-8949028" \
+# pin= is the core's toolchain pin at K46M_DLM_COMMIT (kernel/dlm/toolchain.pin): gcc-<gcc>-<commit>
+K46M_PIN=$(awk '$1 == "gcc" {g = $2} $1 == "commit" {c = $2} END {if (g != "" && c != "") print "gcc-" g "-" c}' "$X/toolchain.pin")
+[ -n "$K46M_PIN" ] || { echo "[FAIL] $X/toolchain.pin: no gcc and commit" >&2; exit 1; }
+for kv in "kabi=$K46M_KABI" "family=generic" "line=k46" "pin=$K46M_PIN" \
 	"build=$K46M_BUILDID" "size=$K46M_UNIX_SIZE" "sha256=$K46M_UNIX_SHA" "loader-min=2"; do
 	grep -qx "$kv" "$SRC/kabi" || { echo "[FAIL] $SRC/kabi lacks '$kv'" >&2; exit 1; }
 done

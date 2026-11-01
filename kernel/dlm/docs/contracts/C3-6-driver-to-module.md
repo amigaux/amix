@@ -272,7 +272,7 @@ packages.
 
 ### 1.7 Built with the kit
 
-- The line's pinned gcc-cross-amix (`gcc-2.7.2.3-8949028`) with
+- The line's pinned gcc-cross-amix (`gcc-2.7.2.3-33ebadc`) with
   `AMIX_KERNEL_CFLAGS` and the 060-safe rewrite (C3-1 §1), against the
   kit's headers and the pinned sysroot; on k46 also the 4 KiB page
   geometry the static build uses: the kit's k46 `sys/immu.h` and

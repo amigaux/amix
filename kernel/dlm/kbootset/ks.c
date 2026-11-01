@@ -88,6 +88,25 @@ ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m)
 	return g ? manifest(k, g, m) : 0;
 }
 
+/* generation id's manifest as text, CRC-checked, NUL-terminated and not
+ * parsed (parsing splits its lines): malloc'd, or 0 */
+char *
+ks_manifest_text(struct ks *k, ax_u32 id)
+{
+	const struct ax_gen *g = ks_find(k, id);
+	char *buf;
+
+	if (!g || g->man_len == 0 || g->man_len > MAXMAN || (buf = malloc(g->man_len + 1)) == 0)
+		return 0;
+	if (get(k, g->man_off, (ax_u8 *)buf, g->man_len) != KS_OK ||
+	    ax_crc32(k->crctab, (ax_u8 *)buf, g->man_len) != g->man_crc) {
+		free(buf);
+		return 0;
+	}
+	buf[g->man_len] = 0;
+	return buf;
+}
+
 ax_u32
 ks_next_id(const struct ks *k)
 {

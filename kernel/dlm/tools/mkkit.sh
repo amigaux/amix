@@ -80,7 +80,7 @@ need GCA "gcc-cross-amix's build directory" toolchain/
 [ "$LINE" = k30 ] || need PORT "the 040/060 port's checkout" kernel/port/
 [ -f "$GCA/env.sh" ] || { echo "mkkit: no $GCA/env.sh (GCA: gcc-cross-amix's build directory)" >&2; exit 1; }
 . "$GCA/env.sh"
-PIN=gcc-2.7.2.3-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
+PIN=gcc-$(awk '$1 == "gcc" {print $2}' "$R/toolchain.pin")-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
 # KIT_REV: the amix commit, -dirty when kernel/ has uncommitted changes
 if [ -n "$ARCHIVE" ]; then
 	REV=$ARCHIVE

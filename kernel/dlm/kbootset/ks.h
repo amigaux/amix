@@ -145,6 +145,7 @@ ax_u32 ks_next_id(const struct ks *k);
 /* generation id's manifest, checked, in a malloc'd buffer that *m points
  * into (free it after use); 0 when it cannot be read */
 char *ks_manifest(struct ks *k, ax_u32 id, struct ax_manifest *m);
+char *ks_manifest_text(struct ks *k, ax_u32 id);
 
 /* a member's bytes from the store, inflated and checked against its
  * CRC-32 and SHA-256 (malloc'd, *len bytes); 0 when it cannot be read or

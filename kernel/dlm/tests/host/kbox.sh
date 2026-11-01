@@ -9,6 +9,9 @@
 # two disks); the facts from kinfo; mark-good's defaults from kinfo.
 # Run from the repository root after `make tools` and store-roundtrip.sh.
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 B=${B:-build}
 T=$B/kbox
 rm -rf "${T:?}" && mkdir -p $T/dev $T/root/etc/default $T/root/stand/k46 $T/root/stand/k30 $T/root/var/apkg/kpkg
@@ -116,7 +119,7 @@ head -c 500000 /dev/urandom > $R/stand/k46/unix
 cat > $R/stand/k46/kabi <<EOF2
 kabi=static
 line=k46
-pin=gcc-2.7.2.3-8949028
+pin=$KPIN
 size=$(size $R/stand/k46/unix)
 sha256=$(sha $R/stand/k46/unix)
 loader-min=1
@@ -126,7 +129,7 @@ EOF2
 cat > $R/var/apkg/kpkg/kernel-kd060a <<EOF2
 name kernel-kd060a
 kabi static
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 verified no
 file /stand/k46/unix $(size $R/stand/k46/unix) $(sha $R/stand/k46/unix)
 file /stand/k46/kabi $(size $R/stand/k46/kabi) $(sha $R/stand/k46/kabi)
@@ -243,6 +246,26 @@ $B/kbootset -R $R status > $T/out
 grep -qx "modules: safe mode: the safe set is empty; no module loads this boot" $T/out
 python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0 z3660eth,monsw
 
+# 6b''. check compares a module kernel's major table with the registry
+# (core patch 0051, C3-5 v22): none, as an older kbootset composed it (a
+# note, no problem); one row changed (a problem); the registry's rows
+sed 's/#.*//' abi/registry/majors | awk 'NF == 3 { print "major", $1, $2, $3 }' > $T/maj
+for v in none changed same; do
+	{ sed -n '1,4p' $T/mods.spec; echo "arena 0x0009a000 0x00060000"; echo "ident 0x00099fc0"
+	  case $v in changed) sed 's/^major c 52 monsw$/major c 52 other/' $T/maj ;; same) cat $T/maj ;; esac
+	  sed -n '5,$p' $T/mods.spec; } > $T/maj.spec
+	gm=$($B/kbootset -R $R commit --spec $T/maj.spec 2>/dev/null | sed -n 's/^kbootset: generation \([0-9]*\) committed.*/\1/p')
+	[ -n "$gm" ] || { echo "kbox: the $v major-table generation was not committed"; exit 1; }
+	set +e
+	$B/kbootset -R $R check > $T/out
+	set -e
+	case $v in
+	none) grep -q "generation $gm has no major table (an older kbootset composed it)" $T/out ;;
+	changed) grep -q "generation $gm: its major table differs from this kbootset's registry" $T/out ;;
+	same) grep -q "generation $gm: major table ok" $T/out ;;
+	esac || { echo "kbox: check on the $v major table:" >&2; grep -i "major\|generation $gm" $T/out >&2; exit 1; }
+done
+
 # 6c. check reports the running box's disk nodes when an installed kernel
 # is a four-card one (C2-4 §14), as one problem; a k30 sidecar, so the
 # default generation's files keep their hashes
@@ -293,4 +316,4 @@ set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "gate 8 (boot disk): 2 disks hold a boot store" $T/out
-echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, a fallback boot's verdict, retry, status's modules, check's nodes, the Z3660 window's card, the safe set in status ok"
+echo "kbox: kinfo, finding the store (record, bootset, scan), gates 8 and 9, mark-good, a fallback boot's verdict, retry, status's modules, check's major table and nodes, the Z3660 window's card, the safe set in status ok"
