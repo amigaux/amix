@@ -69,7 +69,7 @@ amix_dlm_export() {
 		echo "[FAIL] amix-dlm $1: no Makefile at the root or under kernel/dlm" >&2; exit 1; }
 	AMIX_DLM_TREE="$AMIX_BUILD_ROOT/kspace/src/amix-dlm-$1"
 	if [ ! -f "$AMIX_DLM_TREE/Makefile" ]; then
-		rm -rf "$AMIX_DLM_TREE"; mkdir -p "$AMIX_DLM_TREE"
+		rm -rf "${AMIX_DLM_TREE:?}"; mkdir -p "${AMIX_DLM_TREE:?}"
 		git -C "$AMIX_DLM" archive "$_de_t" | tar -x -C "$AMIX_DLM_TREE"
 	fi
 	unset _de_t
@@ -106,7 +106,7 @@ amix_dlm_build() {
 		amix_dlm_g14_check || exit 1
 		if [ -d "$AMIX_DLM_TREE/build/box" ] && [ "$(cat "$_db_st" 2>/dev/null)" != "$AMIX_GCC14_PINS" ]; then
 			echo "  amix-dlm $_db_c: build/box was not built by this toolchain: removed"
-			rm -rf "$AMIX_DLM_TREE/build/box"
+			rm -rf "${AMIX_DLM_TREE:?}/build/box"
 		fi ;;
 	*) _db_st= ;;
 	esac
@@ -169,7 +169,7 @@ amix_dlm_kit() {
 			echo "[FAIL] amix-040-060-port has no commit $_dk_pc in $_dk_port${AMIX_PORT_URL:+ or at $AMIX_PORT_URL}" >&2; exit 1; }
 		_dk_pt="$AMIX_BUILD_ROOT/kspace/src/port-$_dk_pc"
 		if [ ! -f "$_dk_pt/include-modelb/sys/immu.h" ]; then
-			rm -rf "$_dk_pt"; mkdir -p "$_dk_pt"
+			rm -rf "${_dk_pt:?}"; mkdir -p "${_dk_pt:?}"
 			_dk_pf=include-modelb
 			git -C "$_dk_port" cat-file -e "$_dk_pc:src/sys/monsw.h" 2>/dev/null &&
 				_dk_pf="$_dk_pf src/sys/monsw.h"
@@ -191,7 +191,7 @@ amix_dlm_kit() {
 		_dk_mt=$(amix_src_treeish "$AMIX_MODULES" "$_dk_mc" kernel/modules include/sys/monsw.h) || {
 			echo "[FAIL] amix-modules $_dk_mc: no include/sys/monsw.h at the root or under kernel/modules" >&2; exit 1; }
 		if [ ! -f "$_dk_mr/include/sys/monsw.h" ]; then
-			rm -rf "$_dk_mr"; mkdir -p "$_dk_mr"
+			rm -rf "${_dk_mr:?}"; mkdir -p "${_dk_mr:?}"
 			git -C "$AMIX_MODULES" archive "$_dk_mt" | tar -x -C "$_dk_mr"
 		fi
 		_dk_mh="$_dk_mr/include/sys/monsw.h"
