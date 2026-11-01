@@ -19,7 +19,9 @@ toolchain; `test-fetch` the host test of `common/fetch.sh` (a source from
 `test-kfsmod` the host test of the kernel-space helpers' period toolchain
 (`AMIX_CROSS_ENV`, never the checkout's siblings); `test-kmroot` the host
 test of `common/kmodpkg.sh`'s `KM_ROOT`, the base of a module recipe's input
-paths. Run them with
+paths, its `@PKG@` (the line's instance in the prototype and `KM_FILES`) and
+a recipe's `depend` file; `test-kdrv` the host test of `common/kdrv.sh`.
+Run them with
 `make -C build test` from the top of the repository. They need Python 3,
 `/bin/sh`, git, make and tar.
 

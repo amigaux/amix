@@ -55,7 +55,8 @@ STYLES_DIR = os.path.join(HERE, "styles")
 
 # package.sh keys, in the order a recipe writes them, and the defaults the
 # driver sets before sourcing it. URL and SHA256 are required unless the
-# source is in the tree: the package's own src/, or SRCPKG's.
+# source is in the tree (the package's own src/, or SRCPKG's) or is a fork
+# pinned in the checkout (FORKPIN: a <dir>/<name>.pin, `<url> <commit>`).
 REQUIRED = ("NAME", "PKG", "VERSION", "PKGREV", "SUMMARY", "DESC", "CATEGORY",
             "SET", "LICENSE")
 SOURCE = ("URL", "SHA256")
@@ -64,7 +65,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
-            ("PREBUILT", ""))
+            ("PREBUILT", ""), ("FORKPIN", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -431,8 +432,25 @@ def problems(recipe, m):
             out.append("SRCPKG=%s: no %s" % (m["SRCPKG"], tree))
         if os.path.isdir(os.path.join(recipe, "src")):
             out.append("SRCPKG is set and the package has a src/ of its own")
+    if m["FORKPIN"]:
+        top = os.path.dirname(os.path.dirname(os.path.dirname(os.path.normpath(recipe))))
+        pin = os.path.join(top, m["FORKPIN"])
+        if (m["FORKPIN"].startswith("/") or ".." in m["FORKPIN"].split("/")
+                or not m["FORKPIN"].endswith(".pin")):
+            out.append("FORKPIN=%s is not a checkout path to a .pin file" % m["FORKPIN"])
+        elif not os.path.isfile(pin):
+            out.append("FORKPIN=%s: no such file in the checkout" % m["FORKPIN"])
+        else:
+            f = open(pin).read().split()
+            if len(f) != 2 or not re.match(r"^[0-9a-f]{40}$", f[1]):
+                out.append("FORKPIN=%s does not hold `<url> <40-hex commit>`" % m["FORKPIN"])
+        if tree:
+            out.append("FORKPIN is set, but the source is in the tree (%s)" % tree)
     for k in SOURCE:
-        if tree and m[k]:
+        if m["FORKPIN"]:
+            if m[k]:
+                out.append("%s is set, but the source is the fork at FORKPIN" % k)
+        elif tree and m[k]:
             out.append("%s is set, but the source is in the tree (%s)"
                        % (k, tree))
         elif not tree and not m[k]:

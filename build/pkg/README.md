@@ -43,6 +43,7 @@ so each fact about a package is written in one place.
 | `LICENSE` | an SPDX identifier |
 | `URL`, `SHA256` | the source tarball and its sha256; neither, when the source is in the tree |
 | `SRCPKG=""` | build from another package's `src/` (`amix-benchmark-gcc14` from `amix-benchmark`) |
+| `FORKPIN=""` | build from a fork that a pin file in the checkout names (`kernel/drivers/z3660rtg/z3660rtg.pin`, `<url> <40-hex commit>`): the `git archive` of that commit, fetched by hash into `out/cache/forks/<name>` (`xztop` from amix-z3660rtg). No `URL`, `SHA256` or `src/` beside it |
 | `STYLE=configure` | `styles/<STYLE>.sh` |
 | `TOOLCHAIN=gcc14` | `gcc14`, or `period` (gcc-cross-amix) for a tool that must link only the stock libraries, or `none` for a script-only package that compiles nothing: no compiler gates, every compiler is `common/nocc`, which refuses to run, and the build is refused if its make.log shows a compile or link line or its payload holds an object |
 | `PREFIX=/opt/amix` | the install prefix |
@@ -58,10 +59,12 @@ so each fact about a package is written in one place.
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
 driver does, so the two never disagree about a value.
 
-A package has one source: the tarball at `URL`, or the source in the tree.
-That is the package's own `src/`, or, with `SRCPKG`, the `src/` of the
-package it names. The driver copies it to the build tree, so patches and
-builds never touch the checkout. `BUILD.txt` records a digest of the copy.
+A package has one source: the tarball at `URL`, a fork at the commit a
+checkout pin names (`FORKPIN`), or the source in the tree. That is the
+package's own `src/`, or, with `SRCPKG`, the `src/` of the package it names.
+The driver copies it to the build tree, so patches and builds never touch the
+checkout. `BUILD.txt` records a digest of the copy, and for a fork its URL
+and commit.
 
 ## pkgmeta
 

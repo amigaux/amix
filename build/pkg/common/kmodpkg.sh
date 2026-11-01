@@ -42,8 +42,12 @@
 #                      per line, the source relative to KM_ROOT: further
 #                      plain files the package ships beside the module (a
 #                      driver's interface header), verified and copied
-#                      verbatim; the prototype lists each as `f none`
-# and, from the recipe directory: pkginfo.<line>, prototype, modreg.
+#                      verbatim; the prototype lists each as `f none`.
+#                      @PKG@ in a path is the line's instance, as in the
+#                      prototype (whatis.d/@PKG@: zrtg30 or zrtg46)
+# and, from the recipe directory: pkginfo.<line>, prototype, modreg, and
+# depend when the package has stock SVR4 prerequisites (`P <pkginst>
+# <name>` lines; the prototype then lists `i depend`).
 #
 # Installs /etc/conf/mod.d/<name> (the object, verbatim) and
 # /etc/conf/modreg.d/<name> (the package's defaults, the recipe's modreg
@@ -144,11 +148,14 @@ PY
 	mkdir -p "$_km_dest/etc/conf/mod.d" "$_km_dest/etc/conf/modreg.d" "$_km_work"
 	cp "$_km_obj" "$_km_dest/etc/conf/mod.d/$KM_NAME"
 	cp "$_km_dir/modreg" "$_km_dest/etc/conf/modreg.d/$KM_NAME"
-	echo "${KM_FILES:-}" | while read _p _s _h _m; do
+	# the line's prototype: @PKG@ is the line's instance (a file named by it,
+	# such as the man pages' whatis.d/<PKG>), in the prototype and KM_FILES
+	sed "s/@PKG@/$_km_pkg/g" "$_km_dir/prototype" > "$_km_work/prototype"
+	echo "${KM_FILES:-}" | sed "s/@PKG@/$_km_pkg/g" | while read _p _s _h _m; do
 		[ -n "$_p" ] || continue
 		case "$_p" in /etc/conf/*|/dev/*|/stand/*|*/../*|*/./*|[!/]*)
 			echo "[FAIL] KM_FILES: $_p is not a plain path outside /etc/conf, /dev and /stand" >&2; exit 1 ;; esac
-		grep -q "^f none $_p $_m " "$_km_dir/prototype" || {
+		grep -q "^f none $_p $_m " "$_km_work/prototype" || {
 			echo "[FAIL] KM_FILES: the prototype has no 'f none $_p $_m'" >&2; exit 1; }
 		amix_verify "$_km_root/$_s" "$_h"
 		mkdir -p "$_km_dest${_p%/*}"
@@ -188,7 +195,16 @@ PY
 
 	echo "--- package ---"
 	cp "$_km_dir/pkginfo.$_km_line" "$_km_work/pkginfo"
-	cp "$_km_dir/prototype" "$_km_work/prototype"
+	# a recipe's depend file (the stock SVR4 prerequisites, `P <pkginst>
+	# <name>`) goes in as `i depend`, which the prototype must list
+	if [ -f "$_km_dir/depend" ]; then
+		grep -qx 'i depend' "$_km_work/prototype" || {
+			echo "[FAIL] $_km_dir/depend exists but the prototype has no 'i depend'" >&2; exit 1; }
+		cp "$_km_dir/depend" "$_km_work/depend"
+		echo "  depend: $(grep '^P ' "$_km_dir/depend" | awk '{print $2}' | tr '\n' ' ')"
+	elif grep -qx 'i depend' "$_km_work/prototype"; then
+		echo "[FAIL] the prototype lists 'i depend' but $_km_dir has no depend file" >&2; exit 1
+	fi
 	# the recipe's epoch is the time of every stamp of the datastream too
 	( SOURCE_DATE_EPOCH=$KM_SOURCE_EPOCH; export SOURCE_DATE_EPOCH
 	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$_km_pv" "$_km_out" ) || exit 1

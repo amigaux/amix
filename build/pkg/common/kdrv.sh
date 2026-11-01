@@ -27,8 +27,9 @@
 #   kdrv_prepare     optional function, run before the rolls: builds what
 #                    KM_FILES names that the drivers step does not (tools),
 #                    in its own compiler environment
-# and from the recipe directory: pkginfo.<line>, modreg, and prototype.<line>
-# when the lines' payloads differ, else prototype.
+# and from the recipe directory: pkginfo.<line>, modreg, prototype.<line>
+# when the lines' payloads differ, else prototype, and depend when the
+# package has stock prerequisites.
 #
 # Rolling compiles nothing: the harness is sourced with TOOLCHAIN=none, and
 # modcheck runs in the period toolchain's environment (AMIX_CROSS_ENV).
@@ -90,6 +91,7 @@ kdrv_one() {
 		_d_r=$_d_work/recipe-$_d_l
 		rm -rf "${_d_r:?}"; mkdir -p "$_d_r"
 		cp "$_d_dir/pkginfo.$_d_l" "$_d_dir/modreg" "$_d_r/"
+		[ ! -f "$_d_dir/depend" ] || cp "$_d_dir/depend" "$_d_r/"
 		if [ -f "$_d_dir/prototype.$_d_l" ]; then
 			cp "$_d_dir/prototype.$_d_l" "$_d_r/prototype"
 		else
