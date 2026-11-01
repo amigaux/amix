@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-01 — the swap step-down; licences shipped; amix-base 1.0-18, dhcp-client 1.0-4, syslog 1.0-2 (5ab5e60, 5cf092b, 0601ab0)
+
+The swap step reads `swap_add` from /etc/rc.conf: the sizes to try for a swap slice, each `all` or MiB counted from
+the slice's start, tried in order, stepping down only when the kernel refuses with ENOMEM, each size at most once;
+the size used goes to rc.log. With no line, 30 MiB, which fits any kernel. New page bootswap(1M). All three packages
+ship /opt/amix/doc/<name>/LICENSE (MIT), and the shipped scripts name it. The plan lists the run-level numbers in use.
+
 ## 2026-11-01 — /etc/group is a base conffile with the audio group; amix-base 1.0-17 (5dd8050)
 
 The stock file with `audio::20:` added after `daemon`, the group of the sound device's node (0660 root audio); a
