@@ -3175,7 +3175,32 @@ fi
 # (the same edit MG5 made; the attestation is contents-DB-derived and does not see
 # it). A fresh install writes it once, so no guard is needed -- and the miniroot
 # has no grep to make one with.
-if [ "$X11KIT" = rtg ]; then
+if [ "$X11KIT" = rtg ] && [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	# 1.1: the server is x11r63's, rtg-kbdback, zz9k_monsw, the card file and the nodes
+	# /dev/zz9000 and /dev/zz9000i are the z3660rtg package's, PATH is firstboot's profile.d;
+	# the installer lays only the launcher and root's session file, each sum -r checked
+	for xf in 1.1/startx-rtg xinitrc-rtg; do
+		[ -f "$INST/x11kit/$xf" ] || die "profile $PROFILE_NAME sets X11KIT=rtg but this medium has no $INST/x11kit/$xf (re-master with tools/build-install-iso.sh)"
+	done
+	XSUM="$INST/bin/sum"
+	[ -x "$XSUM" ] || die "X11KIT=rtg: no SVR4 sum at $XSUM to verify the kit"
+	[ -d "$TARGET/opt/amix/bin" ] || run mkdir -p "$TARGET/opt/amix/bin"
+	run chmod 0755 "$TARGET/opt/amix" "$TARGET/opt/amix/bin"
+	run cp "$INST/x11kit/1.1/startx-rtg" "$TARGET/opt/amix/bin/startx-rtg"
+	run chmod 0755 "$TARGET/opt/amix/bin/startx-rtg"
+	run cp "$INST/x11kit/xinitrc-rtg" "$TARGET/.xinitrc-rtg"
+	run chmod 0644 "$TARGET/.xinitrc-rtg"
+	for xf in 1.1/startx-rtg xinitrc-rtg; do
+		case "$xf" in
+			xinitrc-rtg) xd="$TARGET/.xinitrc-rtg" ;;
+			*)           xd="$TARGET/opt/amix/bin/startx-rtg" ;;
+		esac
+		xs_want=`"$XSUM" -r "$INST/x11kit/$xf"`; xs_want=`expr "$xs_want" : '\([0-9]*\)'`
+		xs_got=`"$XSUM" -r "$xd"`; xs_got=`expr "$xs_got" : '\([0-9]*\)'`
+		[ -n "$xs_want" ] && [ "$xs_got" = "$xs_want" ] || die "X11KIT=rtg: $xd sum -r $xs_got != medium $xs_want"
+	done
+	msg "RTG X11 (1.1): /opt/amix/bin/startx-rtg and /.xinitrc-rtg (sum -r verified); the server is x11r63's, the RTG tools and /dev/zz9000[i] the z3660rtg package's"
+elif [ "$X11KIT" = rtg ]; then
 	for xf in Xzz9000 rtg-kbdback startx-rtg zz9k_monsw xinitrc-rtg; do
 		[ -f "$INST/x11kit/$xf" ] || die "profile $PROFILE_NAME sets X11KIT=rtg but this medium has no $INST/x11kit/$xf (re-master with tools/build-install-iso.sh)"
 	done

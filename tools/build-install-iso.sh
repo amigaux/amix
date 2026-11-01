@@ -608,6 +608,11 @@ X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d 
 # (startx-rtg 5ec6a2fa, xinitrc-rtg 8f867980) differs from those files in comments only.
 X11KIT_MONSW="$X11KIT_RTG/build/tools/zz9k_monsw"
 X11KIT_MONSW_SHA=8149544a8e563cda0e2ec8b177e5999170c8013ed820c4f84f8adc15898c96bf   # P-7 fallback
+# 1.1 media: the server is x11r63's and the RTG tools and nodes are the z3660rtg package's, so
+# the installer lays only the launcher (x11/1.1/startx-rtg: no -ac, its log in /var/adm, pinned
+# here) and root's session file; staged as x11kit/1.1/ when a requested 1.1 profile sets X11KIT=rtg
+X11KIT_L11_STARTX="$X11KIT_RTG/x11/1.1/startx-rtg"
+X11KIT_L11_STARTX_SHA=823aa9f7f7b83df57064281b2acceb7fcb3f797c4830acf4a1f8d6afab695f1d
 _want_x11kit=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^X11KIT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
@@ -646,6 +651,15 @@ if [ -n "$_want_x11kit" ]; then
   chmod 0755 "$STAGE/x11kit/Xzz9000" "$STAGE/x11kit/rtg-kbdback" "$STAGE/x11kit/startx-rtg" "$STAGE/x11kit/zz9k_monsw"
   chmod 0644 "$STAGE/x11kit/xinitrc-rtg"
   echo "build-install-iso: staged /install/x11kit for${_want_x11kit}: KIT.sha256 ${X11KIT_KIT_SHA:0:16}... ==${_kit_list}, zz9k_monsw=${X11KIT_MONSW_SHA:0:8} (all == pins)"
+  for _p in $_want_x11kit; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" | tail -1 | tr -d '"')" = 1.1 ] || continue
+    [ -f "$X11KIT_L11_STARTX" ] && [ "$(sha256sum "$X11KIT_L11_STARTX" | cut -c1-64)" = "$X11KIT_L11_STARTX_SHA" ] \
+      || { echo "STOP: $X11KIT_L11_STARTX is missing or not the pinned ${X11KIT_L11_STARTX_SHA:0:16}..." >&2; exit 1; }
+    mkdir -p "$STAGE/x11kit/1.1"
+    cp "$X11KIT_L11_STARTX" "$STAGE/x11kit/1.1/startx-rtg"; chmod 0755 "$STAGE/x11kit/1.1/startx-rtg"
+    echo "build-install-iso: staged /install/x11kit/1.1/startx-rtg (${X11KIT_L11_STARTX_SHA:0:16}...) for the 1.1 profiles"
+    break
+  done
 else
   echo "build-install-iso: no requested profile sets X11KIT -- /install/x11kit not staged"
 fi
