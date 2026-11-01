@@ -1,0 +1,11 @@
+# The .moddata keys of the zz9kbus module (amix-dlm C3-1 section 3), one key=value
+# string per line as the section carries them.  kabi, cc and cpu come from the ABI kit
+# of the line; module/Makefile turns this file into the kit's Master.  A misc module
+# with no major, boot class: resident on a box with one of the boards it serves (match,
+# read in the boot pass only); board drivers and zz9ksvc name it in depend=, which loads
+# it first wherever the boot pass did not.
+name=zz9kbus
+class=boot
+match=zorro:144b:01,mobo:z3660-window,zorro:6d6e:03,zorro:6d6e:04
+unload=never
+desc=ZZ9000-family board registry
