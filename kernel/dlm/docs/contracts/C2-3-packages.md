@@ -1,6 +1,6 @@
-# C2-3 — kernel and loader package layout, the kabi sidecar, version 9
+# C2-3 — kernel and loader package layout, the kabi sidecar, version 10
 
-- **Status:** agreed 2026-10-25, version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1); version 9 (2026-10-27): `rth1=2`, the kernel matches a motherboard record by its id (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25, version 1; version 2 (2026-10-26): `ldrinfo`'s keys, and the catalog entries of the loader and kbootset packages (§3, §4); version 3 (2026-10-26): where `/dev/kinfo` comes from (§1); version 4 (2026-10-26): `bss=` for a brel kernel, and the sidecar describes the form shipped (§2, §5); version 5: the module kernel's keys `ident=`, `arena=`, `ksym=`, `abi=` (C3-3 §3); version 6 (2026-10-26): `unix.sym` and `sym=`, the symbols of a kernel that ships without them (§1, §2.1); version 7 (2026-10-26, from the installer's C4-1 work): `sdcards=`, the sd cards the kernel was built for (§2); version 8 (2026-10-27): a cut without ufs and s5 carries their core-tier modules, and the version must sort above the line's installed kernel (§1, §1.1); version 9 (2026-10-27): `rth1=2`, the kernel matches a motherboard record by its id (§2); version 10 (2026-11-01): `kbootset-min=`, the oldest kbootset the kernel can be composed with (§2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §2.2, §3.1 (gates 2, 3, 4, 7, 10), `20-module-format-and-abi.md` §3 (kabi)
 - **Produced by:** amix-packages, from kernels built in amix-kerntools (030 families) and amix-040-060-port (040/060 families), and from the loader built in kernel/dlm
 - **Read by:** `kbootset build`, apkg 0.3 pre-flight, the installer
@@ -91,6 +91,7 @@ arena=0x001f2000 0x00080000  offset and capacity; absent on a static kernel
 sym=unix.sym 412345 <64 hex> the symbols file beside unix: name, size, SHA-256 (version 6; every brel)
 sdcards=4                    the sd cards the kernel was built for (version 7); absent means 2
 rth1=2                       its RTH1 half matches a motherboard record by its id (version 9, C4-1 §5.2); absent: the old forms only
+kbootset-min=1.1.0.261101-34 the oldest kbootset package version that can compose it (version 10); absent: no floor
 ```
 
 What the gates read:
@@ -119,6 +120,19 @@ motherboard controller's record by its motherboard id (C4-1 §5.2). The
 kernel build writes it with the other keys. kbootset reads it before it
 writes a root record in that form. A kernel without it gets the record
 as given.
+
+**`kbootset-min=`** (version 10) is the oldest kbootset package version
+(§4) that can compose a generation with this kernel. It follows from the
+module core the kernel carries: amix `kernel/dlm/core/kbootset-min`, one
+line, at the dlm commit the cut builds with.
+- The kernel build copies that line verbatim (amix-kerntools'
+  `kabi-sidecar030.py`, amix-040-060-port's `kabi-sidecar.py`).
+- `gen-catalog.py` copies it onto the catalog row as `kbootset=`
+  (C2-2 §1.2), and apkg acts on it there.
+- kbootset itself does not read it.
+- A sidecar written before this version is **not** re-stamped: the
+  sidecar is one of a cut's recorded sums. Those kernels' floors are
+  conf lines (C2-2 §1.2).
 
 Unknown keys are ignored.
 
@@ -209,3 +223,7 @@ them. A kernel without that emulation cannot run kbootset.
   then kbootset reads that file instead of the kernel. From kerntools' first
   reader: `unix.sym` is `ET_EXEC` and `st_value` is the address itself
   (§2.1). The module kernels' package names (§1.1).
+- Version 10 (2026-11-01): `kbootset-min=` comes from the dlm core's
+  `core/kbootset-min`, never typed per cut. Sidecars already recorded
+  keep their bytes; unlike `sdcards=` (version 7), this key is not
+  re-stamped.

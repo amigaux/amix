@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 5
+# C2-2 — kernel-space catalog entries and apkg's install record, version 6
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1); version 6 (2026-11-01): `kbootset=`, the oldest kbootset a kernel can be composed with (§1.2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed for 1.1: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -38,8 +38,8 @@ whole.
 | Role | Required | Absent |
 |---|---|---|
 | `kernel` | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | — |
-| `module` | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | — |
-| `loader` | `line=any`, `loader=<n>`, `size=`, `sha256=`, `file=` | `kabi=`, `pin=` |
+| `module` | `line=k30\|k46`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=` | `kbootset=` (version 6) |
+| `loader` | `line=any`, `loader=<n>`, `size=`, `sha256=`, `file=` | `kabi=`, `pin=`, `kbootset=` (version 6) |
 
 - An entry that lacks a key its role requires is refused, as is an entry
   that carries a key its role excludes.
@@ -63,6 +63,51 @@ whole.
     install, kbootset's gate 3 does at build (C3-5 §2);
   - `file=` is a path under the repository's `base/`, as for the
     ordinary entries.
+
+### 1.2 The kbootset floor (version 6)
+
+A `kernel` row may carry `kbootset=<version>`: the oldest kbootset
+package version that can compose a generation with this kernel. A
+`module` or `loader` row that carries it is refused (§1.1). Without the
+key the kernel sets no floor.
+
+```
+#kpkg kernel-k46-m k46.1.4.261101-58 role=kernel line=k46 ... kbootset=1.1.0.261101-34 file=...
+```
+
+- **Why:** a kernel's module core can depend on what kbootset writes into
+  the manifest. From core patch 0051 the core takes a module's majors
+  from the manifest's major records, which kbootset writes from
+  1.1.0.261101-34 on. A generation from an older kbootset has none, so
+  every module major is refused (the box still boots).
+- **The value** is a kbootset package version as published (C2-3 §4),
+  compared with apkg's version order.
+- **apkg** (0.3.5 on), before it fetches anything: when neither the
+  installed kbootset nor the one in the transaction is at least the
+  floor, it adds kbootset to the transaction (`apkg upgrade` of a kernel
+  installs kbootset first and the kernel last) or refuses with a message
+  that names the version. An older apkg ignores the key (§1).
+- **kbootset** does not read the floor. The binary does not carry its
+  own package version, and a check in it could only cover floors above
+  the kbootset that reads it.
+- **Where the value comes from** (`gen-catalog.py`), in this order:
+  1. the kernel's sidecar `kbootset-min=` (C2-3 §2), copied like `line=`,
+     `kabi=` and `pin=`;
+  2. for a kernel whose sidecar predates the key: a line of
+     `kbootset.conf` in the packages-conf layer (amix `kernel/conf`, the
+     layer `names.conf` comes from), one published version per line:
+
+     ```
+     kernel-k30-m k30.1.4.261101-68: 1.1.0.261101-34
+     ```
+
+     The sidecar is one of a cut's recorded sums and `pkginfo` is part of
+     the datastream, so neither changes after the fact; the conf line sits
+     outside both. It lists only cuts made before C2-3 version 10;
+  3. otherwise no key.
+
+  When a sidecar key and a conf line for the same version differ,
+  `gen-catalog.py` refuses the row.
 
 ## 2. The install record `/var/apkg/kpkg/<pkginst>`
 
@@ -161,3 +206,10 @@ A package of the same pkginst is an upgrade, as before. apkg 0.3.1
 - For a medium, `source` is the mount path or the raw device as apkg saw
   it.
 - `/var/apkg/kpkg/` is apkg's alone; `kbootset` only reads it.
+- Version 6 (2026-11-01): the floor is the kbootset package version, not
+  a separate interface number, since apkg already orders package
+  versions. It sits on the kernel row only: a module needs its kernel,
+  and the kernel carries the core. Its source is the sidecar for new
+  cuts and `kbootset.conf` for the cuts before the key (§1.2).
+  `gen-catalog.py` reads only staging roots and conf layers, never a
+  package recipe.
