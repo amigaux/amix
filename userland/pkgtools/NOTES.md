@@ -1,5 +1,20 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-01 — APKG 0.3.5 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container (`amix-toolchain:dist`) from master, `VER_APKG="0.3.5"`,
+`EPOCH_APKG=1793491200`; `make repro-check` there: the checkout's roll and a `git archive`
+copy's (another path, umask 077, `SOURCE_DATE_EPOCH=1`) are the same bytes:
+
+- **md5 `3d2f87375a3d2bd49e0668addfb1bf91`**, **sha256
+  `d0005d59c45604503124e63bbceb4e356a0edaa0d18da0b3d34ca777139fdfc8`**, **253440 B**; the same bytes
+  as the roll the emulated rows of the entry below installed.
+- `apkg.amix`: sha256 `9d2e93ba4dad307df195d02bef3b78c09abe1ba043c33a4e6e84058b65b08783`, 132770 B,
+  `sum -r` 56120. scan060 clean, link gate OK.
+- APKGENG 1.12.5 rolls in the same `make dist` at `a49452d8…`, unchanged; not part of this mint.
+- 0.3.4 (`c19cb40f…`) stays what it is; media still pinning a pre-mint 0.3.4 roll move straight
+  to 0.3.5.
+
 ## 2026-11-01 — a new kernel cut upgrades as one set (apkg 0.3.5, NOT MINTED)
 
 **Why.** kbootset's gate 2 refuses a generation while an installed module was built with another

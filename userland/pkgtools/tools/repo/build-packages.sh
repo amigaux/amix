@@ -63,7 +63,8 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # default repository is the 1.1 tree.  Staged, NOT published.  NOTES
 # 2026-11-01.
 # 0.3.3 is staged with the old payload: one version, one byte set.
-# 0.3.5 (2026-11-01, not minted yet): a new kernel cut upgrades as one set
+# 0.3.5 (2026-11-01; minted 2026-11-01, md5 3d2f8737...): a new kernel cut
+# upgrades as one set
 # -- `apkg upgrade` with no names, a kernel brings its modules, the loader
 # and kbootset, kbootset first and the kernel last, the pre-flight over
 # every installed module, a kernel row's kbootset= floor (C2-2 v6), and
@@ -547,7 +548,7 @@ EOF
   # (the root URL, which the host sends on to the 1.0 tree) and gets the new
   # default as /etc/apkg.conf.new; a fresh install gets the 1.1 repo.
   #
-  # Version 0.3.5 (2026-11-01, not minted).  The apkg binary and apkg.1
+  # Version 0.3.5 (2026-11-01; minted 2026-11-01).  The apkg binary and apkg.1
   # change (a kernel cut upgrades as one set); every other payload byte is
   # 0.3.4's.
   cat > "$A/prototype" <<EOF
