@@ -37,7 +37,7 @@ if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
 fi
 command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1 || die "m68k-cbm-sysv4-gcc not found after sourcing $envsh"
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/setclk.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/setclk.XXXXXX")"; trap 'rm -rf "${tmp:?}"' EXIT
 # The datastream's cpio is newc (070701): 110-byte header, name, pad to 4, body.
 python3 - "$PKG" "$tmp/setclk.c" <<'PY'
 import sys

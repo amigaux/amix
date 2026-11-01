@@ -61,7 +61,7 @@ rd_facts() {
 rd_stage() {
 	local l=$1 t="$W/stage-$1"
 	rd_facts "$l"
-	rm -rf "$t" "$W/cache-$l"
+	rm -rf "${t:?}" "${W:?}/cache-$l"
 	mkdir -p "$t/etc/default" "$t/var/apkg" "$t/var/kbootset" "$t/stand"
 	printf 'bootset=manual\n' > "$t/etc/default/bootset"
 	cat > "$W/apkg-$l.conf" <<C
@@ -87,7 +87,7 @@ C
 rd_bootmods() {
 	local l=$1 d="$2/$1" n p s
 	rd_stage "$l"
-	rm -rf "$W/bm-$l" "$W/bm-$l.spec" "$d"
+	rm -rf "${W:?}/bm-$l" "${W:?}/bm-$l.spec" "${d:?}"
 	head -c 65536 /dev/zero > "$W/bm-$l.img"
 	( cd "$W" && "$B/kbootset" -R "stage-$l" media --cd "bm-$l" --version 3 --line "${l#k}" \
 	    --rootdev always --rootfs "$FS" --mem "$MEM" --ramdisk "bm-$l.img" ) > "$W/bm-$l.log" 2>&1 \
@@ -101,7 +101,7 @@ rd_bootmods() {
 	done < <(awk '$1 == "module" && $3 == "boot" { p = s = ""
 		for (i = 5; i <= NF; i++) { if ($i ~ /^path=/) p = substr($i, 6); if ($i ~ /^sha256=/) s = substr($i, 8) }
 		print $2, p, s }' "$W/bm-$l.spec")
-	rm -rf "$W/bm-$l" "$W/bm-$l.img"
+	rm -rf "${W:?}/bm-$l" "${W:?}/bm-$l.img"
 }
 
 # rd_imgcheck SPEC IMAGE [--zen0] -- the image holds every boot-class module SPEC records,

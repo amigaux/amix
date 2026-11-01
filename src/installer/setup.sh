@@ -734,7 +734,7 @@ rdb_extent_mb()
 			fi
 		fi
 	done
-	rm -f "$SCAN_F.p"
+	rm -f "${SCAN_F:?}.p"
 	[ "$emax" -gt 0 ] || return 0
 	expr "$emax" / "$BLOCKS_PER_MB"
 }
@@ -824,7 +824,7 @@ choose_disk()
 	done < "$SCAN_F"
 	if [ -f "$BLK0.mb" ]; then
 		DISK_MB=`cat "$BLK0.mb"`
-		rm -f "$BLK0.mb"
+		rm -f "${BLK0:?}.mb"
 	fi
 	case "$DISK_MB" in
 		"?")	DISK_MB= ;;
@@ -927,7 +927,7 @@ check_old_boot()
 			set -- `cat "$SCAN_F.c"`
 			if [ "$#" -ge 1 ]; then OB_CTL="$1"; fi
 		fi
-		rm -f "$SCAN_F.c"
+		rm -f "${SCAN_F:?}.c"
 	fi
 
 	case "$OB_ROM" in
@@ -1450,7 +1450,7 @@ build_set_table()
 	smax=`cat "$SET_F.m"`
 	snext=`expr "$smax" + 1`
 	echo "$snext custom - n Custom selection" >> "$SET_F"
-	rm -f "$SET_F.m"
+	rm -f "${SET_F:?}.m"
 	# the default row: 1, or on the network the `standard` set (amix-dlm 50 section 5)
 	DEF_SET=1
 	if [ "$SRC_KIND" = net ]; then
@@ -1459,7 +1459,7 @@ build_set_table()
 			[ "$sname" = standard ] && echo "$snum" > "$SET_F.d"
 		done < "$SET_F"
 		[ -s "$SET_F.d" ] && DEF_SET=`cat "$SET_F.d"`
-		rm -f "$SET_F.d"
+		rm -f "${SET_F:?}.d"
 	fi
 
 	# Row 1's ORDER FILE and row 2's SET NAME, back in the PARENT.
@@ -1471,7 +1471,7 @@ build_set_table()
 	# child and the parent saw nothing (`STOP: internal: /cdrom/install/sets has
 	# no usable first row`, run w3b2-cdi). Values come back through the
 	# FILESYSTEM here, which is the only channel this shell cannot lose.
-	rm -f "$SET_F.r1o" "$SET_F.r2s"
+	rm -f "${SET_F:?}.r1o" "${SET_F:?}.r2s"
 	while read snum sname sord satt slbl
 	do
 		case "$snum" in
@@ -1483,7 +1483,7 @@ build_set_table()
 	R2SET=
 	if [ -s "$SET_F.r1o" ]; then R1ORD=`cat "$SET_F.r1o"`; fi
 	if [ -s "$SET_F.r2s" ]; then R2SET=`cat "$SET_F.r2s"`; fi
-	rm -f "$SET_F.r1o" "$SET_F.r2s"
+	rm -f "${SET_F:?}.r1o" "${SET_F:?}.r2s"
 	[ -n "$R1ORD" ] || die "internal: $INST/sets has no usable first row"
 	[ -n "$R2SET" ] || R2SET=set
 	return 0
@@ -1524,7 +1524,7 @@ pick_set()
 		esac
 		# One FILE per field, `cat` back in the parent -- never a redirected
 		# `read`, which this shell may run in a fork (see build_set_table).
-		rm -f "$SET_F.n" "$SET_F.s" "$SET_F.o" "$SET_F.a" "$SET_F.l"
+		rm -f "${SET_F:?}.n" "${SET_F:?}.s" "${SET_F:?}.o" "${SET_F:?}.a" "${SET_F:?}.l"
 		while read snum sname sord satt slbl
 		do
 			case "$snum" in ""|\#*) continue ;; esac
@@ -1543,7 +1543,7 @@ pick_set()
 			SET_ATT=`cat "$SET_F.a"`
 			SET_LABEL=`cat "$SET_F.l"`
 		fi
-		rm -f "$SET_F.n" "$SET_F.s" "$SET_F.o" "$SET_F.a" "$SET_F.l"
+		rm -f "${SET_F:?}.n" "${SET_F:?}.s" "${SET_F:?}.o" "${SET_F:?}.a" "${SET_F:?}.l"
 	done
 }
 
@@ -1698,7 +1698,7 @@ build_pkg_table()
 	[ -s "$CATN_F" ] || return 1
 	set -- `cat "$CATN_F.n"`
 	CWANT=" $* "
-	rm -f "$CATN_F.n"
+	rm -f "${CATN_F:?}.n"
 
 	# (c) the #isize block as one "name bytes name bytes" string. A package
 	#     with no line simply is not in it, and shows "?" -- absence is UNKNOWN.
@@ -1728,7 +1728,7 @@ build_pkg_table()
 	do
 		# One FILE per field, `cat` back here in the parent (never a redirected
 		# `read` -- see build_set_table for what this shell does with those).
-		rm -f "$PKG_F.c" "$PKG_F.t" "$PKG_F.d" "$PKG_F.x"
+		rm -f "${PKG_F:?}.c" "${PKG_F:?}.t" "${PKG_F:?}.d" "${PKG_F:?}.x"
 		while read qcn qtok qdep qdesc
 		do
 			if [ "$qtok" = "$t" ]; then
@@ -1743,7 +1743,7 @@ build_pkg_table()
 		rtok=`cat "$PKG_F.t"`
 		rdep=`cat "$PKG_F.d"`
 		rdesc=`cat "$PKG_F.x"`
-		rm -f "$PKG_F.c" "$PKG_F.t" "$PKG_F.d" "$PKG_F.x"
+		rm -f "${PKG_F:?}.c" "${PKG_F:?}.t" "${PKG_F:?}.d" "${PKG_F:?}.x"
 		rsz=`expr "$ISZS" : ".* $rcn \([0-9][0-9]*\) "`
 		if is_num "$rsz"; then
 			rbg=`budget "$rsz"`
@@ -1783,7 +1783,7 @@ custom_screen()
 	echo "\nDisc contents:  $R2SET"
 	echo "`padr Inst 8` `padr Name 10` `padr Description 40`   Size  "
 	echo "`padr ---- 8` `padr ---- 10` `padr ----------- 40`   ----  "
-	rm -f "$PKG_F.sel"
+	rm -f "${PKG_F:?}.sel"
 	while read pcn ptok psz pmb pdep pdesc
 	do
 		if [ -f "$SELP$pcn" ]; then
@@ -1812,7 +1812,7 @@ custom_screen()
 			esac
 		done
 		[ -n "$cunk" ] || CUSTOM_BYTES="$ctot"
-		rm -f "$PKG_F.sel"
+		rm -f "${PKG_F:?}.sel"
 	fi
 	if [ -n "$CUSTOM_BYTES" ]; then
 		cbud=`budget "$CUSTOM_BYTES"`
@@ -1832,7 +1832,7 @@ custom_all()
 
 custom_none()
 {
-	rm -f "$SELP"*
+	rm -f "${SELP:?}"*
 	echo 1 > "$SELP"core
 }
 
@@ -1841,7 +1841,7 @@ custom_none()
 # screen's starting state: stock opened on `standard`, not on an empty list.
 custom_preset()
 {
-	rm -f "$SELP"*
+	rm -f "${SELP:?}"*
 	if [ -f "$1" ]; then
 		:
 	else
@@ -1859,7 +1859,7 @@ custom_preset()
 		set -- `cat "$TOK_F.pre"`
 		SWANT=" $* "
 	fi
-	rm -f "$TOK_F.pre"
+	rm -f "${TOK_F:?}.pre"
 	while read pcn ptok prest
 	do
 		case "$SWANT" in
@@ -1873,7 +1873,7 @@ custom_preset()
 custom_toggle()
 {
 	tnm="$1"
-	rm -f "$PKG_F.hit"
+	rm -f "${PKG_F:?}.hit"
 	while read pcn ptok prest
 	do
 		if [ "$tnm" = "$pcn" ] || [ "$tnm" = "$ptok" ]; then
@@ -1882,7 +1882,7 @@ custom_toggle()
 	done < "$PKG_F"
 	if [ -s "$PKG_F.hit" ]; then
 		tcn=`cat "$PKG_F.hit"`
-		rm -f "$PKG_F.hit"
+		rm -f "${PKG_F:?}.hit"
 	else
 		echo "\nUnknown package:  $tnm"
 		return 0
@@ -1892,7 +1892,7 @@ custom_toggle()
 		return 0
 	fi
 	if [ -f "$SELP$tcn" ]; then
-		rm -f "$SELP$tcn"
+		rm -f "${SELP:?}$tcn"
 		close_deselect
 	else
 		echo 1 > "$SELP$tcn"
@@ -1955,7 +1955,7 @@ close_deselect()
 				if [ -f "$SELP$cxd1" ]; then
 					:
 				else
-					rm -f "$SELP$pcn"
+					rm -f "${SELP:?}$pcn"
 				fi
 			done
 		done < "$PKG_F"
@@ -1984,7 +1984,7 @@ custom_write_order()
 	[ -s "$PKG_F.n" ] || return 1
 	set -- `cat "$PKG_F.n"`
 	CUSTOM_N="$#"
-	rm -f "$PKG_F.n"
+	rm -f "${PKG_F:?}.n"
 	[ "$1" = core ] || die "internal: the custom order starts with '$1', not core -- Gate 13 in the driver would refuse it"
 	return 0
 }
@@ -2221,7 +2221,7 @@ fi
 # is a dozen blocks of an 880-block floppy. $ANSWERS is kept (the driver sources
 # it), and so is $CUSTOM_ORDER when a Custom selection chose it -- $SET_ORDER may
 # BE that file.
-rm -f "$BLK0" "$SCAN_F" "$SCAN_F.p" "$SET_F" "$TOK_F" "$TOK_F.pre" "$CATN_F" \
+rm -f "${BLK0:?}" "${SCAN_F:?}" "${SCAN_F:?}.p" "${SET_F:?}" "${TOK_F:?}" "${TOK_F:?}.pre" "${CATN_F:?}" \
       "$CATN_F.n" "$ISZ_F" "$PKG_F" "$PKG_F.sel" "$PKG_F.n" "$ISZP_F" \
       "$ANSWERS_BLOCK" "$KMAP_FILE" "$SELP"*
 sync

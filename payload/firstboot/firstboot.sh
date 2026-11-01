@@ -344,7 +344,7 @@ write_conf()
 		echo "# W5-DIALOG-END"
 	} >> "$NEWCONF" || return 1
 	grep '^# W5-DIALOG-END$' "$NEWCONF" > /dev/null || return 1
-	mv "$NEWCONF" "$CONF" || return 1
+	mv "${NEWCONF:?}" "${CONF:?}" || return 1
 	chmod 600 "$CONF" 2>/dev/null
 	chmod 644 "$CONF" 2>/dev/null
 	return 0
@@ -1121,7 +1121,7 @@ run_dialog()
 			echo ""
 			echo "WARNING:  could not write $CONF -- this dialog will run again at"
 			echo "WARNING:  the next boot."
-			rm -f "$NEWCONF"
+			rm -f "${NEWCONF:?}"
 			exit 0
 		fi
 		if [ "$PW_DONE" = "" ]; then
@@ -1968,9 +1968,9 @@ if [ -n "$DIALOG_PENDING" ]; then
 	echo "firstboot: has not completed, so it will run again and be applied next boot."
 	exit 0
 fi
-rm -f "$MARK"
+rm -f "${MARK:?}"
 # The seeded root hash has done its job (applied above, or superseded by the dialog's
 # own password): do not leave a copy of a root credential lying in /var/adm.
-rm -f "$FBDIR/root.shadow"
+rm -f "${FBDIR:?}/root.shadow"
 echo "firstboot: identity baked; NOT rebooting, NOT touching the clock. Done."
 exit 0

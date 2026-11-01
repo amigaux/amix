@@ -90,7 +90,7 @@ bash "$here/build-ramdisk-cd.sh" --k46 "$I46" --k30 "$I30" --out "$W/tree" --wor
 python3 "$here/ramdisk-image-check.py" --zen0 "$W/cd/gen-k46.spec" "$I46" ufs "$W/cd/gen-k30.spec" "$I30" s5 \
   || die "a netinstall image does not hold what its generation records (see above)"
 
-root="$W/root"; rm -rf "$root"; mkdir -p "$root"
+root="$W/root"; rm -rf "${root:?}"; mkdir -p "$root"
 cp -R "$W/tree/BOOT" "$W/tree/S" "$root/"
 find "$root/BOOT" "$root/S" -type d -exec chmod 0755 {} +
 find "$root/BOOT" "$root/S" -type f -exec chmod 0644 {} +
@@ -104,11 +104,11 @@ no packages itself.
 
 Publication: unpublished (publishing this medium is a per-artefact owner decision).
 EOF
-mkdir -p "$(dirname "$ISO")"; rm -f "$ISO"
+mkdir -p "$(dirname "$ISO")"; rm -f "${ISO:?}"
 xorriso -as mkisofs -o "$ISO" -V "$VOLID" -publisher "amix-installng" -A "AMIX 2.1 NETINSTALL" \
   -iso-level 3 -rational-rock -sysid "AMIGA BOOT" "$root" > "$W/xorriso.log" 2>&1 \
   || { tail -5 "$W/xorriso.log" >&2; die "xorriso refused"; }
-back="$W/readback"; [ ! -d "$back" ] || chmod -R u+w "$back"; rm -rf "$back"; mkdir -p "$back"
+back="$W/readback"; [ ! -d "$back" ] || chmod -R u+w "$back"; rm -rf "${back:?}"; mkdir -p "$back"
 xorriso -osirrox on -indev "$ISO" -extract / "$back" > /dev/null 2>&1 && chmod -R u+w "$back" || die "could not read $ISO back"
 "$L11/dlm/build/lsstore" -C "$back" | tail -1 | grep -q '^lsstore: ok' || die "the boot tree on $ISO does not pass lsstore -C"
 [ "$(xorriso -indev "$ISO" -pvd_info 2>/dev/null | sed -n 's/^System Id *: *//p')" = "AMIGA BOOT" ] \
@@ -138,7 +138,7 @@ if [ -n "$RAW" ]; then
     SECS=64 CYLB=32768 OFFC=2
     PC=$(( mb * 1048576 / CYLB )); TOTAL=$(( OFFC + PC ))
     OFF=$(( OFFC * CYLB )) SZ=$(( PC * CYLB ))
-    rm -f "$out" "$out.tmp"
+    rm -f "${out:?}" "${out:?}.tmp"
     rdbtool -f "$out.tmp" create "chs=${TOTAL},1,${SECS}" bs=512 + init > /dev/null || die "rdbtool create refused"
     rdbtool "$out.tmp" add "start=$OFFC" "size=$PC" name=UNIX_Boot dostype=0x554e4900 bootable=1 pri=5 \
       automount=1 boot_blocks=2 "mask=$DE_MASK" max_transfer=0xffffff num_buffer=30 > /dev/null \
@@ -175,13 +175,13 @@ assert s.dostype == rdb.DT_BOOT and s.bootable, "slice 1 is not a bootable UNI\\
 assert (s.byte_offset, s.byte_size) == (int(sys.argv[2]), int(sys.argv[3])), (s.byte_offset, s.byte_size)
 PY
     python3 "$here/dmamask.py" check "$out.tmp" --mask "$DE_MASK" || die "$l: the DosEnvec read-back failed"
-    mv "$out.tmp" "$out"
+    mv "${out:?}.tmp" "${out:?}"
     echo "build-netinstall: $out ($(wc -c < "$out") bytes, sha256 $(sha256sum < "$out" | cut -c1-16)); RDB + UNIX_Boot store at $OFF, $SZ bytes, generation 1 ($l), lsstore ok"
   done
 fi
 if [ -n "$MFROM" ]; then
   [ -f "$MFROM" ] && [ -n "$MDIR" ] || die "--mirror-from needs the master ISO and --mirror DIR"
-  [ ! -d "$MDIR" ] || chmod -R u+w "$MDIR"; rm -rf "$MDIR"; mkdir -p "$MDIR"
+  [ ! -d "$MDIR" ] || chmod -R u+w "$MDIR"; rm -rf "${MDIR:?}"; mkdir -p "$MDIR"
   xorriso -osirrox on -indev "$MFROM" -extract / "$MDIR" > /dev/null 2>&1 && chmod -R u+w "$MDIR" || die "could not extract $MFROM"
   ln -s install/l11/kpkg "$MDIR/kspace"
   [ -f "$MDIR/catalog" ] && [ -f "$MDIR/kspace/catalog" ] && [ -f "$MDIR/kspace/catalog.md5" ] \

@@ -244,7 +244,7 @@ put_bytes()
 		dd if="$_pb" bs="$_end" skip=1 2>/dev/null >> "$_po"
 	fi
 	dd if="$_po" of="$1" bs=512 seek="$2" count=1 2>/dev/null || return 1
-	rm -f "$_pb" "$_po"
+	rm -f "${_pb:?}" "${_po:?}"
 	return 0
 }
 # byte_is FILE OFFSET OOO -- is the byte at OFFSET of FILE the octal OOO?
@@ -252,7 +252,7 @@ byte_is()
 {
 	dd if="$1" of="$TARGET/tmp/.b1.$$" bs=1 skip="$2" count=1 2>/dev/null
 	_got=`"$INST/bin/sum" -r "$TARGET/tmp/.b1.$$" | ( read s rest; echo "$s" )`
-	rm -f "$TARGET/tmp/.b1.$$"
+	rm -f "${TARGET:?}/tmp/.b1.$$"
 	_d1=`expr "$3" : '\(.\)'`
 	_d2=`expr "$3" : '.\(.\)'`
 	_d3=`expr "$3" : '..\(.\)'`
@@ -1815,7 +1815,7 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE}"
 SWAPOUT="$TARGET/tmp/.swapl.$$"
 SWAPTOK="$TARGET/tmp/.swaptk.$$"
 add_target_swap() {
-	rm -f "$SWAPOUT" "$SWAPTOK"
+	rm -f "${SWAPOUT:?}" "${SWAPTOK:?}"
 	# --- is the fake still the swap? (stock's own `$6 = /dev/fakeswap` guard) ---
 	/bin/swap -l > "$SWAPOUT" 2>&1
 	logline "+ /bin/swap -l  (before)"
@@ -1826,7 +1826,7 @@ add_target_swap() {
 		esac
 	done < "$SWAPOUT"
 	if [ ! -f "$SWAPTOK" ]; then
-		rm -f "$SWAPOUT" "$SWAPTOK"
+		rm -f "${SWAPOUT:?}" "${SWAPTOK:?}"
 		# the console-only pre-mount window already did it (early_target_swap): say so here, in the log
 		if [ -n "${EARLY_SWAP_ADDED:-}" ]; then
 			logline "$PROG: swap: added $EARLY_SWAP_ADDED (real disk swap replaces the dummydisk fake; done before mkfs)"
@@ -1836,7 +1836,7 @@ add_target_swap() {
 		msg "swap: /dev/fakeswap is not in the swap table -- swap configuration left alone"
 		return 0
 	fi
-	rm -f "$SWAPTOK"
+	rm -f "${SWAPTOK:?}"
 	# --- the REAL slice length, out of the RDB (stock read it the same way) ----
 	# `/etc/rdb -p N <disk>` prints one line: `<name> <offset> <length>` in
 	# 512-byte blocks (measured: `UNIX_Swap 161920 36864`). The planned $SWAPLEN
@@ -1851,7 +1851,7 @@ add_target_swap() {
 	if [ -s "$SWAPTOK" ]; then
 		SWAPBLKS=`cat "$SWAPTOK"`
 	fi
-	rm -f "$SWAPOUT" "$SWAPTOK"
+	rm -f "${SWAPOUT:?}" "${SWAPTOK:?}"
 	if is_num "$SWAPBLKS"; then
 		:
 	else
@@ -1875,7 +1875,7 @@ add_target_swap() {
 	/bin/swap -l > "$SWAPOUT" 2>&1
 	logline "+ /bin/swap -l  (after)"
 	cat "$SWAPOUT" >> "$LOGFILE"
-	rm -f "$SWAPOUT"
+	rm -f "${SWAPOUT:?}"
 	return 0
 }
 add_target_swap
@@ -2017,14 +2017,14 @@ fi
 # after the first pkgadd has already refused is a worse diagnosis than finding it
 # out here. Subshell-safe: the redirect-fed loop only APPENDS, the parent decides.
 ORDERFIRST="$TARGET/tmp/.order1.$$"
-rm -f "$ORDERFIRST"
+rm -f "${ORDERFIRST:?}"
 while read pkg; do
 	case "$pkg" in ""|\#*) continue;; esac
 	[ -f "$ORDERFIRST" ] || echo "$pkg" > "$ORDERFIRST"
 done < "$ORDER"
 [ -f "$ORDERFIRST" ] || die "install order $ORDER names no packages -- refusing to install a bare disk"
 ofirst=`cat "$ORDERFIRST"`
-rm -f "$ORDERFIRST"
+rm -f "${ORDERFIRST:?}"
 [ "$ofirst" = core ] || die "install order $ORDER starts with '$ofirst', not 'core' -- core is the base OS and establishes the target's name service (Gate 13); refusing"
 
 # THE 1.1 BASE CARRIES m4 (2026-10-26). The 2.1c syslogd reads /etc/syslog.conf only
@@ -2034,12 +2034,12 @@ rm -f "$ORDERFIRST"
 # that dropped it.
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	ORDCDEV="$TARGET/tmp/.ordcdev.$$"
-	rm -f "$ORDCDEV"
+	rm -f "${ORDCDEV:?}"
 	while read pkg; do
 		case "$pkg" in m4|Cdev) [ -f "$ORDCDEV" ] || echo y > "$ORDCDEV" ;; esac
 	done < "$ORDER"
 	[ -f "$ORDCDEV" ] || die "install order $ORDER has neither m4 nor Cdev -- a 1.1 install needs /usr/ccs/bin/m4 (syslogd reads /etc/syslog.conf through m4); refusing"
-	rm -f "$ORDCDEV"
+	rm -f "${ORDCDEV:?}"
 fi
 
 # WHICH SET, for the log. An explicit INSTALL_SET (the interview always writes
@@ -2050,7 +2050,7 @@ fi
 # about sets. Subshell-safe: append-only inside, decide in the parent.
 if [ -z "$INSTALL_SET" ]; then
 	ORDSET="$TARGET/tmp/.ordset.$$"
-	rm -f "$ORDSET"
+	rm -f "${ORDSET:?}"
 	while read otag okey oval orest; do
 		[ "$otag" = "#" ] || continue
 		[ "$okey" = "set:" ] || continue
@@ -2059,7 +2059,7 @@ if [ -z "$INSTALL_SET" ]; then
 	if [ -s "$ORDSET" ]; then
 		INSTALL_SET=`cat "$ORDSET"`
 	fi
-	rm -f "$ORDSET"
+	rm -f "${ORDSET:?}"
 fi
 [ -n "$INSTALL_SET" ] || INSTALL_SET=default
 
@@ -2087,7 +2087,7 @@ fi
 # alone -- absence is UNKNOWN, not `n`.
 if [ "$INSTALL_ATTESTED" = y ] && [ -f "$INST/sets" ]; then
 	SETATT="$TARGET/tmp/.setatt.$$"
-	rm -f "$SETATT"
+	rm -f "${SETATT:?}"
 	while read snum sname sord satt srest; do
 		case "$snum" in ""|\#*) continue;; esac
 		[ "$sname" = "$INSTALL_SET" ] || continue
@@ -2097,7 +2097,7 @@ if [ "$INSTALL_ATTESTED" = y ] && [ -f "$INST/sets" ]; then
 		INSTALL_ATTESTED=n
 		msg "attestation: $INST/sets marks set '$INSTALL_SET' UNATTESTED; the profile said attested=y -- THE MEDIUM WINS"
 	fi
-	rm -f "$SETATT"
+	rm -f "${SETATT:?}"
 fi
 msg "install set: $INSTALL_SET  order: $ORDER  (attested=$INSTALL_ATTESTED)"
 
@@ -2117,7 +2117,7 @@ write_apkg_conf() {
 	run chmod 0644 "$APKG_CONF"
 	msg "wrote $APKG_CONF (repo=$FB_REPO_URL)"
 }
-rm -f "$TARGET/tmp/.apkgord.$$"
+rm -f "${TARGET:?}/tmp/.apkgord.$$"
 while read _p _rest; do
 	if [ "$_p" = APKG ]; then echo y > "$TARGET/tmp/.apkgord.$$"; fi
 done < "$ORDER"
@@ -2125,7 +2125,7 @@ done < "$ORDER"
 # file already there with no baseline counts as edited (.new and a PENDING line), so the
 # package installs its default and the repo line is written after it (below), an edit.
 if [ -f "$TARGET/tmp/.apkgord.$$" ]; then
-	rm -f "$TARGET/tmp/.apkgord.$$"
+	rm -f "${TARGET:?}/tmp/.apkgord.$$"
 	[ "$INSTALL_LAYOUT" = 1.1 ] || write_apkg_conf
 fi
 if [ "$INSTALL_ATTESTED" = n ]; then
@@ -2210,7 +2210,7 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 		die "base-OS install FAILED for package(s): `cat "$pkgfail"` -- refusing to arm a half-installed disk"
 	fi
 	[ "$npkgs" -gt 0 ] || die "installed ZERO packages ($ORDER empty or unparseable) -- refusing to arm a bare disk"
-	rm -f "$pkgok" "$pkgfail"
+	rm -f "${pkgok:?}" "${pkgfail:?}"
 	msg "installed $npkgs package(s) via pkgadd -R"
 elif [ "$SOURCE_KIND" = net ]; then
 	# --- net: the image's HTTP apkg drives the SAME pkgadd (amix-dlm 50 section 5) ---
@@ -2247,7 +2247,7 @@ elif [ "$SOURCE_KIND" = net ]; then
 	[ -s "$netnames" ] || die "network source: none of $ORDER's packages is in the repository catalog"
 	set -- `cat "$netnames"`
 	npkgs=$#
-	rm -f "$netnames"
+	rm -f "${netnames:?}"
 	# ONE PACKAGE AT A TIME, the cache emptied after each: apkg stages every datastream
 	# of a transaction before its first pkgadd, so a whole set at once needs the set's
 	# datastreams AND its installed files on the target root together (seen: the standard
@@ -2256,9 +2256,9 @@ elif [ "$SOURCE_KIND" = net ]; then
 	msg "network: apkg install ($npkgs packages, one at a time) -R $TARGET  [$*]"
 	for pkg in "$@"; do
 		runq "$APKG" -c "$NETCONF" -R "$TARGET" install "$pkg" || die "network source: apkg install $pkg FAILED (apkg rc nonzero) -- refusing to arm a half-installed disk"
-		rm -f "$APKGCACHE"/*.pkg
+		rm -f "${APKGCACHE:?}"/*.pkg
 	done
-	run rm -rf "$APKGCACHE"
+	run rm -rf "${APKGCACHE:?}"
 	msg "installed $npkgs package(s) via apkg over HTTP (-R $TARGET); the download cache removed"
 else
 	# --- raw: the CD-resident static apkg drives the SAME pkgadd (SRC_RAW) ----
@@ -2318,7 +2318,7 @@ else
 	[ -s "$rawnames" ] || die "RAW source: order file $ORDER lists no packages -- refusing to install a bare disk"
 	set -- `cat "$rawnames"`
 	npkgs=$#
-	rm -f "$rawnames"
+	rm -f "${rawnames:?}"
 
 	# apkg install into $TARGET. apkg stages+verifies EVERYTHING before the first
 	# pkgadd and stops on the first pkgadd failure (nonzero rc), so a nonzero rc
@@ -2422,7 +2422,7 @@ if [ "$TARGET_ROOT_FSTYPE" = ufs ] && [ -d "$FPFIX" ]; then
 	done < "$FPFIX/SUMS"
 	[ -s "$fpfail" ] && die "5b: REFUSING to arm -- `cat "$fpfail"`"
 	[ "`count_tokens "$fpok"`" -gt 0 ] || die "5b: $FPFIX/SUMS names no member -- nothing was patched"
-	rm -f "$fpok" "$fpfail"
+	rm -f "${fpok:?}" "${fpfail:?}"
 	msg "5b: installed-tree ufs FP patch applied + verified -- the shipped root can fsck itself on an FPU-less 060"
 elif [ "$TARGET_ROOT_FSTYPE" = ufs ]; then
 	msg "5b: no $FPFIX on the medium -- installed ufs tools left STOCK (fine on a real FPU; FATAL on an LC060)"
@@ -2452,14 +2452,14 @@ if [ -x "$TARGET/usr/apkg/bin/apkg" ]; then
 	# Written before the package loop (above). An APKG older than 0.2.3 delivers the conf as a
 	# plain `f` file and REPLACES it: then the repo line is gone -- write it again (a plain
 	# `pkgchk APKG` will then name it; the r6 media carry 0.2.3, where the file is kept).
-	rm -f "$TARGET/tmp/.apkgrepo.$$"
+	rm -f "${TARGET:?}/tmp/.apkgrepo.$$"
 	if [ -f "$APKG_CONF" ]; then
 		while read _l; do
 			if [ "$_l" = "repo=$FB_REPO_URL" ]; then echo y > "$TARGET/tmp/.apkgrepo.$$"; fi
 		done < "$APKG_CONF"
 	fi
 	if [ -f "$TARGET/tmp/.apkgrepo.$$" ]; then
-		rm -f "$TARGET/tmp/.apkgrepo.$$"
+		rm -f "${TARGET:?}/tmp/.apkgrepo.$$"
 		msg "$APKG_CONF kept by the APKG package (repo=$FB_REPO_URL)"
 	elif [ "$INSTALL_LAYOUT" = 1.1 ]; then
 		write_apkg_conf
@@ -2525,7 +2525,7 @@ BSIMG="$INST/$BOOTSLICE_IMG"
 # no overflow risk -- so BOOTLEN is only checked when it is set.)
 FIT_MAN="$INST/$BOOTSLICE_MANIFEST"
 if [ -n "${BOOTLEN:-}" ] && [ -f "$FIT_MAN" ]; then
-	rm -f "$TARGET/tmp/.chainblk"
+	rm -f "${TARGET:?}/tmp/.chainblk"
 	while read fit_region fit_off fit_nblk fit_sum
 	do
 		case "$fit_region" in
@@ -2534,7 +2534,7 @@ if [ -n "${BOOTLEN:-}" ] && [ -f "$FIT_MAN" ]; then
 	done < "$FIT_MAN"
 	[ -s "$TARGET/tmp/.chainblk" ] || die "boot-chain manifest names no chain region -- cannot check the chain fits the boot slice; refusing to dd"
 	CHAIN_BLK=`cat "$TARGET/tmp/.chainblk"`
-	rm -f "$TARGET/tmp/.chainblk"
+	rm -f "${TARGET:?}/tmp/.chainblk"
 	is_num "$CHAIN_BLK" || die "boot-chain size unreadable from the manifest -- refusing to dd"
 	[ "$CHAIN_BLK" -le "$BOOTLEN" ] || die "boot chain is $CHAIN_BLK blocks but the target boot slice is only $BOOTLEN blocks -- it would overflow into the next partition. Grow TARGET_BOOT_MB (the 060 chain needs >=2 MiB). NOT writing."
 	msg "boot chain fits: $CHAIN_BLK blocks <= boot slice $BOOTLEN blocks"
@@ -2558,10 +2558,10 @@ if [ -n "$STAMP_PATCH" ]; then
 		byte_is "$TARGET/tmp/.sr.$$" "$s_off" "$s_oct" || echo "$s_blk $s_off" >> "$TARGET/tmp/.stampfail.$$"
 		echo "$s_blk" >> "$TARGET/tmp/.stampok.$$"
 	done < "$STAMP_PATCH"
-	rm -f "$TARGET/tmp/.sb.$$" "$TARGET/tmp/.sr.$$"
+	rm -f "${TARGET:?}/tmp/.sb.$$" "${TARGET:?}/tmp/.sr.$$"
 	[ -s "$TARGET/tmp/.stampfail.$$" ] && die "stamp FAILED at `cat $TARGET/tmp/.stampfail.$$` -- the boot slice does not hold the unit's chain"
 	[ -s "$TARGET/tmp/.stampok.$$" ] || die "the stamp table $STAMP_PATCH held no rows -- refusing an unstamped family chain"
-	rm -f "$TARGET/tmp/.stampok.$$"
+	rm -f "${TARGET:?}/tmp/.stampok.$$"
 	run sync
 	msg "stamp written and read back byte for byte"
 fi
@@ -2614,13 +2614,13 @@ while read region blk_off nblk want_sum; do
 		echo "$region" >> "$vfails_f"
 	fi
 done < "$MAN"
-rm -f "$tmpr"
+rm -f "${tmpr:?}"
 # Count in the PARENT (the subshell's increments are gone): tokens per file.
 # pre-POSIX-safe -- count_tokens `[ -s ]`-guards the empty `set --` no-op trap that
 # would otherwise carry the vok count over into an empty vfails (W5.4e-run-1).
 vok=`count_tokens "$vok_f"`
 vfails=`count_tokens "$vfails_f"`
-rm -f "$vok_f" "$vfails_f"
+rm -f "${vok_f:?}" "${vfails_f:?}"
 [ "$vfails" = 0 ] || die "boot-chain verification FAILED ($vfails region(s)) -- the disk will not boot; NOT arming first-boot"
 # A manifest that yielded ZERO verified regions is itself a failure -- never read
 # "nothing checked" as "all good" (the aggregate form of the empty-vs-empty trap).
@@ -2640,7 +2640,7 @@ if [ -n "$STAND_UNIX_FROM_SLICE" ]; then
 	_kb=`expr $_kb / 512`
 	run dd if="$BOOT_RAW" of="$TARGET/tmp/.unix.$$" bs=512 skip=20 count="$_kb"
 	run dd if="$TARGET/tmp/.unix.$$" of="$TARGET/stand/unix" bs="$STAND_UNIX_FROM_SLICE" count=1
-	rm -f "$TARGET/tmp/.unix.$$"
+	rm -f "${TARGET:?}/tmp/.unix.$$"
 	STAND_UNIX=stamped
 fi
 if [ -n "$STAND_UNIX" ]; then
@@ -2700,7 +2700,7 @@ if [ -n "${ROOT_RECORD_DISK:-}" ]; then
 	run dd if="$BSIMG" of="$RD_RAW" bs=512
 	oct_file "$TARGET/tmp/.rto.$$" "$@"
 	put_bytes "$RD_RAW" 19 256 28 "$TARGET/tmp/.rto.$$" || die "could not write the root record to $RD_RAW"
-	rm -f "$TARGET/tmp/.rto.$$"
+	rm -f "${TARGET:?}/tmp/.rto.$$"
 	run sync
 	dd if="$RD_RAW" of="$TARGET/tmp/.rb.$$" bs=512 skip=19 count=1 2>/dev/null
 	r_off=256
@@ -2709,10 +2709,10 @@ if [ -n "${ROOT_RECORD_DISK:-}" ]; then
 		byte_is "$TARGET/tmp/.rb.$$" "$r_off" "$r_oct" || die "root record byte at boot-slice 0x2700+`expr $r_off - 256` did not read back"
 		r_off=`expr $r_off + 1`
 	done
-	rm -f "$TARGET/tmp/.rb.$$"
+	rm -f "${TARGET:?}/tmp/.rb.$$"
 	dd if="$RD_RAW" bs=512 count="$R_NBLK" of="$TARGET/tmp/.rc.$$" 2>/dev/null
 	r_got=`"$INST/bin/sum" -r "$TARGET/tmp/.rc.$$" | ( read s rest; echo "$s" )`
-	rm -f "$TARGET/tmp/.rc.$$"
+	rm -f "${TARGET:?}/tmp/.rc.$$"
 	is_num "$r_got" && [ "$r_got" -eq "$R_SUM" ] || die "boot disk $RD: the chain with its root record sums $r_got, expected $R_SUM"
 	msg "root record verified: 28 bytes one by one, chain sum -r $r_got"
 	# A separate boot-only disk ships NOT bootable (pri -128): it must not win a boot
@@ -3186,7 +3186,7 @@ if [ "$X11KIT" = rtg ]; then
 		xs_got=`"$XSUM" -r "$xd"`; xs_got=`expr "$xs_got" : '\([0-9]*\)'`
 		[ -n "$xs_want" ] && [ "$xs_got" = "$xs_want" ] || die "X11KIT=rtg: $xd sum -r $xs_got != medium $xs_want"
 	done
-	run rm -f "$TARGET/etc/rtg-monswitch"
+	run rm -f "${TARGET:?}/etc/rtg-monswitch"
 	[ -c "$TARGET/dev/zz9000" ] || run mknod "$TARGET/dev/zz9000" c 49 0
 	run chmod 0644 "$TARGET/dev/zz9000"
 	echo 'PATH=$PATH:/usr/X/bin; export PATH' >> "$TARGET/etc/profile" || die "cannot append /usr/X/bin to $TARGET/etc/profile"
@@ -3245,7 +3245,7 @@ if [ "$TZFILES" = tzdata ]; then
 		if [ ! -s "$tz_src" ] || { [ -n "$tz_dir" ] && [ ! -d "$TARGET/usr/lib/locale/TZ/$tz_dir" ]; }; then
 			echo "$tz_name" >> "$tzfail"; continue
 		fi
-		rm -f "$tz_dst"
+		rm -f "${tz_dst:?}"
 		if cp "$tz_src" "$tz_dst" && [ -s "$tz_dst" ]; then
 			set -- `"$TZSUM" -r "$tz_src"`; tz_want=$1
 			set -- `"$TZSUM" -r "$tz_dst"`; tz_got=$1
@@ -3261,7 +3261,7 @@ if [ "$TZFILES" = tzdata ]; then
 	[ -s "$tzfail" ] && die "zone files FAILED to lay down: `cat "$tzfail"`"
 	tzn=`count_tokens "$tzok"`
 	[ "$tzn" -gt 0 ] || die "laid down ZERO zone files ($INST/tz/MANIFEST empty or unparseable)"
-	rm -f "$tzok" "$tzfail"
+	rm -f "${tzok:?}" "${tzfail:?}"
 	msg "laid down $tzn regenerated zone files (current tzdata, 1991 layout) over /usr/lib/locale/TZ"
 else
 	msg "zone files: TZFILES=stock -- the 1991 /usr/lib/locale/TZ left alone"
@@ -3289,12 +3289,12 @@ KMAPDIR="$TARGET/usr/amiga/lib/kmap"
 if [ -n "$FB_KMAP" ] && [ "$FB_KMAP" != usa ]; then
 	[ -d "$KMAPDIR" ] || die "profile $PROFILE_NAME sets FB_KMAP=$FB_KMAP but the target has no $KMAPDIR (is core installed?)"
 	[ -f "$KMAPDIR/$FB_KMAP" ] || die "profile $PROFILE_NAME sets FB_KMAP=$FB_KMAP but $KMAPDIR/$FB_KMAP does not exist -- valid stock maps are cdn ch1 ch2 d dk e f gb i n s usa usa0 usa1 usa2"
-	run rm -f "$KMAPDIR/default.kmap"
+	run rm -f "${KMAPDIR:?}/default.kmap"
 	run ln "$KMAPDIR/$FB_KMAP" "$KMAPDIR/default.kmap"
 	msg "baked keymap $FB_KMAP (hard link $KMAPDIR/default.kmap; /etc/sysinit loads it every boot)"
 else
 	if [ -d "$KMAPDIR" ]; then
-		run rm -f "$KMAPDIR/default.kmap"
+		run rm -f "${KMAPDIR:?}/default.kmap"
 	fi
 	msg "keymap: none baked (FB_KMAP='$FB_KMAP') -- the compiled-in American map, exactly as stock did for 'usa'"
 fi
@@ -3341,7 +3341,7 @@ done
 # anything else that might be in there safe and keeps the echo short).
 for i in 0 1 2 3 4 5 6 7 8 9; do
 	for j in 0 1 2 3 4 5 6 7 8 9; do
-		rm -f "$LOSTFOUND/$i$j" || die "cannot clear the $LOSTFOUND preseed"
+		rm -f "${LOSTFOUND:?}/$i$j" || die "cannot clear the $LOSTFOUND preseed"
 	done
 done
 msg "lost+found preseeded (100 slots created + removed; the directory keeps the space)"
@@ -3405,12 +3405,12 @@ logline "$PROG:   fsck of $ROOT_RAW and the INSTALL COMPLETE summary all run"
 logline "$PROG:   with $TARGET unmounted, so they are console-only."
 logline "--------------------------------------------------------------"
 INSTALL_LOG_PATH="$LOGFILE"
-rm -f "$RUNOUT"
+rm -f "${RUNOUT:?}"
 LOGFILE=
 RUNOUT=
 
 # The RAW arm's apkg cache and raw.conf live in the target's /tmp; they are done.
-rm -rf "$TARGET/tmp/apkgcache" "$TARGET/tmp/raw.conf"
+rm -rf "${TARGET:?}/tmp/apkgcache" "${TARGET:?}/tmp/raw.conf"
 msg "unmounting target and running a final fsck..."
 /etc/umount "$TARGET" 2>/dev/null || umount "$TARGET" 2>/dev/null || warn "umount $TARGET returned nonzero"
 # The ONLY fsck of the run (there is no pre-mount one, see section 2), and the

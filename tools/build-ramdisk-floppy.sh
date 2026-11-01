@@ -44,7 +44,7 @@ LV=$(sed -n 's/^version=//p' "$LD/ldrinfo" 2>/dev/null)
 [ "$(sha256sum < "$LD/boot2" | cut -d' ' -f1)" = "$(sed -n 's/^boot2-sha256=//p' "$LD/ldrinfo")" ] \
   || die "the staged boot2 is not the one its ldrinfo records"
 V1="$OUT/amix-rd-$LINE-1.adf" V2="$OUT/amix-rd-$LINE-2.adf"
-rm -f "$V1" "$V2"
+rm -f "${V1:?}" "${V2:?}"
 ( cd "$W" && "$B/kbootset" -R "stage-$LINE" media --floppy "$V1" "$V2" --boot1 "$LD/boot1" \
     --boot2 "$LD/boot2" --version "$LV" --line "${LINE#k}" --rootdev always --rootfs "$FS" --mem "$MEM" \
     --ramdisk "$IMG" ) > "$W/media-$LINE.log" 2>&1 \

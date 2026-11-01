@@ -40,7 +40,7 @@ got="$(sha256sum < "$PKG" | cut -d' ' -f1)"
 [ "$got" = "$CORE_SHA256" ] || die "$PKG has sha256 $got, not core-2.1's $CORE_SHA256"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/core-tree.XXXXXX")"
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "${tmp:?}"' EXIT
 "$PKGTRANS" "$PKG" "$tmp" core > "$tmp/pkgtrans.log" 2>&1 || { cat "$tmp/pkgtrans.log" >&2; die "pkgtrans failed"; }
 [ -d "$tmp/core/root" ] || die "pkgtrans wrote no core/root"
 
@@ -61,8 +61,8 @@ while read -r _ type _ spec _; do
 	fi
 done < "$tmp/core/pkgmap"
 
-rm -rf "$OUT"; mkdir -p "$(dirname "$OUT")"
-mv "$tmp/core" "$OUT"
+rm -rf "${OUT:?}"; mkdir -p "$(dirname "$OUT")"
+mv "${tmp:?}/core" "${OUT:?}"
 for f in usr/bin/sum var/sadm/install/admin/default stand/boot1.boot sbin/bcheckrc etc/inittab stand/2.1_unix; do
 	[ -e "$OUT/root/$f" ] || die "the tree has no /$f"
 done

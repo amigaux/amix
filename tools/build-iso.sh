@@ -279,9 +279,9 @@ cleanup() {
     echo "(--keep-stage: staged tree left at $root)"
   else
     chmod -R u+w "$work" 2>/dev/null || true
-    rm -rf "$work" 2>/dev/null || true
+    rm -rf "${work:?}" 2>/dev/null || true
   fi
-  rm -f "$TMPISO" 2>/dev/null || true
+  rm -f "${TMPISO:?}" 2>/dev/null || true
   exit "$rc"
 }
 trap cleanup EXIT
@@ -409,7 +409,7 @@ echo
 python3 "$GEN_CATALOG" --isize "$root/pkgs" -o "$root"
 # metadata inputs, not disc content (sets.conf is never staged here -- the disc's
 # set table is authored by build-install-iso.sh into /install/sets)
-rm -f "$root/pkgs/deps.conf" "$root/pkgs/cats.conf" "$root/pkgs/names.conf"
+rm -f "${root:?}/pkgs/deps.conf" "${root:?}/pkgs/cats.conf" "${root:?}/pkgs/names.conf"
 
 [ -s "$root/catalog" ] || { echo "STOP: gen-catalog produced no catalog" >&2; exit 1; }
 (cd "$root" && md5sum -c catalog.md5 >/dev/null) || {
@@ -558,7 +558,7 @@ PY
 # No -M and no -C anywhere: those are what genuinely append a second session.
 echo
 echo "=== xorriso: mastering (single session, RR on, Joliet off) ==="
-rm -f "$TMPISO"
+rm -f "${TMPISO:?}"
 xorriso -as mkisofs \
         -o "$TMPISO" \
         -V "$VOLID" \
@@ -672,7 +672,7 @@ PY
 # 7. publish — only a fully-verified image appears at OUT
 # ===========================================================================
 mkdir -p "$outdir"
-mv "$TMPISO" "$outabs"
+mv "${TMPISO:?}" "${outabs:?}"
 echo
 printf 'built install CD: %s (%s bytes, %s)\n' \
   "$outabs" "$(wc -c <"$outabs")" "$(du -h "$outabs" | cut -f1)"

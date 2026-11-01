@@ -33,7 +33,7 @@ fi
 command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1 || { echo "build-zenmac: STOP: m68k-cbm-sysv4-gcc not found after sourcing $envsh" >&2; exit 1; }
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/zenmac.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT
+trap 'rm -f "${tmp:?}"' EXIT
 # -m68020: the one binary runs on the 030, 040 and 060 lines alike (no FP at all).
 m68k-cbm-sysv4-gcc -O -m68020 -o "$tmp" "$src"
 

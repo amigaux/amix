@@ -2160,7 +2160,7 @@ def audit_firstboot_wiring():
 
     # J5: firstboot.sh removes PENDING -- the once-only half the hook relies on.
     fb = strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())
-    if re.search(r'rm\s+-f\s+"\$MARK"', fb):
+    if re.search(r'rm\s+-f\s+"\$\{MARK:\?\}"', fb):
         ok("firstboot.sh removes the PENDING marker when done (once-only)")
     else:
         fail("firstboot.sh does NOT remove PENDING -- would re-run every boot")
@@ -5046,7 +5046,7 @@ def _audit_w1_keymap(code, profiles):
         (r'KMAPDIR="\$TARGET/usr/amiga/lib/kmap"', "resolves the target kmap dir"),
         (r'if\s+\[\s+-n\s+"\$FB_KMAP"\s+\]\s+&&\s+\[\s+"\$FB_KMAP"\s+!=\s+usa\s+\];\s*then',
          "bakes only for a non-empty, non-`usa` FB_KMAP (stock: usa links nothing)"),
-        (r'run rm -f "\$KMAPDIR/default\.kmap"', "removes any existing default.kmap first (stock)"),
+        (r'run rm -f "\$\{KMAPDIR:\?\}/default\.kmap"', "removes any existing default.kmap first (stock)"),
         (r'run ln "\$KMAPDIR/\$FB_KMAP" "\$KMAPDIR/default\.kmap"',
          "HARD-links the chosen map to default.kmap (stock `ln`, never `ln -s`)"),
         (r'\[\s+-f\s+"\$KMAPDIR/\$FB_KMAP"\s+\]\s+\|\|\s+die',
@@ -5161,7 +5161,7 @@ def _audit_w1_lostfound(code):
          "fires on the first loop iteration), fail-closed"),
         (r'\[\s+-f\s+"\$LOSTFOUND/99"\s+\]\s+\|\|\s+die',
          "ASSERTS a LAST-iteration slot exists (catches a create that lies)"),
-        (r'rm -f "\$LOSTFOUND/\$i\$j"\s+\|\|\s+die', "removes them again (an s5 directory keeps the space)"),
+        (r'rm -f "\$\{LOSTFOUND:\?\}/\$i\$j"\s+\|\|\s+die', "removes them again (an s5 directory keeps the space)"),
         (r'\[\s+-d\s+"\$LOSTFOUND"\s+\]', "only mkdir's the directory when it is absent"),
     ]
     for pat, desc in checks:
@@ -5640,7 +5640,7 @@ def audit_w2_structure():
         (r'cat "\$ANSWERS_BLOCK" > "\$ANSWERS_ECHO_PATH"',
          "the beacon is the ANSWERS BLOCK, not the whole composed profile (the "
          "floppy has ~46 free blocks and pkgadd needs some of them)"),
-        (r'rm -f "\$BLK0" ',
+        (r'rm -f "\$\{BLK0:\?\}" ',
          "the interview hands its scratch back before exec'ing the driver"),
     ]
     for pat, why in checks:
@@ -6680,7 +6680,7 @@ def audit_w3b_metadata():
             (r'cp -p "\$DEPS_CONF" "\$root/pkgs/deps\.conf"',
              "deps.conf is staged from the packagemanager's REPO TREE, not its "
              "build staging (the staging copy has been observed lagging)"),
-            (r'rm -f "\$root/pkgs/deps\.conf" "\$root/pkgs/cats\.conf"',
+            (r'rm -f "\$\{root:\?\}/pkgs/deps\.conf" "\$\{root:\?\}/pkgs/cats\.conf"',
              "both are removed again -- they are generator inputs, not disc content"),
             (r'check_catalog_isize', "the mastered image's isize block is verified"),
         ]
@@ -7731,7 +7731,7 @@ def audit_w5_dialog():
             (r'> "\$NEWCONF"', "writes to a TEMP file"),
             (r"grep '\^# W5-DIALOG-END\$' \"\$NEWCONF\"",
              "verifies the closing marker BEFORE it replaces the conf"),
-            (r'mv "\$NEWCONF" "\$CONF"', "moves it into place (atomic)"),
+            (r'mv "\$\{NEWCONF:\?\}" "\$\{CONF:\?\}"', "moves it into place (atomic)"),
         ]
         bad = [d for p, d in checks if not re.search(p, wc)]
         if bad:
@@ -8625,7 +8625,7 @@ def audit_x11kit_k1():
         (r'run\s+mknod\s+"\$TARGET/dev/zz9000"\s+c\s+49\s+0', "/dev/zz9000 c 49 0"),
         (r'run\s+chmod\s+0644\s+"\$TARGET/dev/zz9000"', "/dev/zz9000 0644"),
         (r"echo\s+'PATH=\$PATH:/usr/X/bin; export PATH'\s+>>\s+\"\$TARGET/etc/profile\"", "/usr/X/bin on PATH"),
-        (r'run\s+rm\s+-f\s+"\$TARGET/etc/rtg-monswitch"', "/etc/rtg-monswitch never left behind"),
+        (r'run\s+rm\s+-f\s+"\$\{TARGET:\?\}/etc/rtg-monswitch"', "/etc/rtg-monswitch never left behind"),
     ]
     miss = [d for rx, d in want if not re.search(rx, code)]
     if re.search(r'>\s*"?\$TARGET/etc/rtg-monswitch', code):
@@ -9302,7 +9302,7 @@ def audit_firstboot_perms():
     want_fb = [(r'chmod 700 "\$FBDIR" 2>/dev/null', "firstboot re-tightens the dir on every run"),
                (r'chmod 600 "\$CONF" "\$MARK" "\$DIALOG_DONE" "\$FBDIR/root.shadow" 2>/dev/null',
                 "... and its state files"),
-               (r'rm -f "\$MARK"\nrm -f "\$FBDIR/root.shadow"', "root.shadow removed when first boot completes")]
+               (r'rm -f "\$\{MARK:\?\}"\nrm -f "\$\{FBDIR:\?\}/root.shadow"', "root.shadow removed when first boot completes")]
     miss = [d for rx, d in want_drv if not re.search(rx, drv)] + \
            [d for rx, d in want_fb if not re.search(rx, fb)]
     if miss:
@@ -9482,7 +9482,7 @@ def audit_tz():
         (r'if\s+\[\s+"\$TZFILES"\s+=\s+tzdata\s+\];\s*then', "gate on TZFILES=tzdata"),
         (r'\[ -f "\$INST/tz/MANIFEST" \] \|\| die', "refuses a medium without the set"),
         (r'while read tz_sha tz_size tz_name; do', "reads the MANIFEST"),
-        (r'rm -f "\$tz_dst"\n\t\tif cp "\$tz_src" "\$tz_dst"', "removes each name before copying (breaks the 1991 hard links)"),
+        (r'rm -f "\$\{tz_dst:\?\}"\n\t\tif cp "\$tz_src" "\$tz_dst"', "removes each name before copying (breaks the 1991 hard links)"),
         (r'"\$TZSUM" -r "\$tz_dst"', "sum -r of every copy"),
         (r'done < "\$INST/tz/MANIFEST"\n\t\[ -s "\$tzfail" \] && die', "decides after the loop, in the parent"),
         (r'tzn=`count_tokens "\$tzok"`', "counts from the ok file (subshell-safe)"),
@@ -9825,6 +9825,31 @@ def _p36_problems(install_src, l11_src):
     if left:
         probs.append("upgrade code left: " + " ".join(left))
     return probs
+
+
+def audit_guarded_rm_mv():
+    head("RG. every rm and mv on a variable path names it \"${var:?}\" (an empty variable stops the "
+         "script instead of widening the path)")
+    import glob
+    rx_cmd = re.compile(r'(?<![\w-])(rm|mv)(?=\s)')
+    rx_var = re.compile(r'"\$(\{[A-Za-z_][A-Za-z_0-9]*\}|[A-Za-z_][A-Za-z_0-9]*)')
+    rx_end = re.compile(r';|&&|\|\||\||\bthen\b|\bdo\b')
+    bad = []
+    files = sorted(glob.glob(os.path.join(REPO, "tools", "*.sh")) + glob.glob(os.path.join(REPO, "tools", "lib", "*.sh"))
+                   + glob.glob(os.path.join(REPO, "src", "installer", "*.sh")) + glob.glob(os.path.join(REPO, "payload", "*.sh"))
+                   + glob.glob(os.path.join(REPO, "payload", "firstboot", "*.sh")))
+    for f in files:
+        for n, l in enumerate(open(f, encoding="utf-8", errors="replace"), 1):
+            if l.lstrip().startswith("#"):
+                continue
+            for m in rx_cmd.finditer(l):
+                if re.search(r'(^|\s)#', l[:m.start()]):
+                    break
+                e = rx_end.search(l, m.end())
+                if rx_var.search(l[m.end():e.start() if e else len(l)]):
+                    bad.append("%s:%d" % (os.path.relpath(f, REPO), n))
+    (fail if bad else ok)("rm/mv variable paths guarded in %d scripts%s"
+                          % (len(files), (": " + " ".join(bad[:8])) if bad else ""))
 
 
 def audit_ufs_rootcap():
@@ -10619,6 +10644,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_guarded_rm_mv()
     audit_ufs_rootcap()
     audit_l11()
 
