@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-01 — gcc14-cross-amix pinned at feec32e: gas keeps PIC relocations (c82064e)
+
+feec32e's binutils patch makes gas keep a PIC relocation against an exported symbol, so a library's pointer to its own
+exported data binds to the program's copy. Only the assembler changes: the tree digest is 1cd216fd (5976 files);
+cc1, libgcc.a, libamixc99.a and the specs are as at f40055b. The image also runs the fork's test-pic-globals.sh.
+
 ## 2026-10-31 — gcc14-cross-amix pinned at f40055b: gcc -shared (3162004)
 
 f40055b adds `gcc -shared`, libamixc99's __cxa_finalize for shared libraries, and library constructors run after the
