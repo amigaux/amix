@@ -64,3 +64,4 @@ d none /opt/amix/doc/zlib 0755 root sys
 f none /opt/amix/doc/zlib/LICENSE 0644 root bin
 f none /opt/amix/doc/zlib/README 0644 root bin
 f none /opt/amix/doc/zlib/ChangeLog 0644 root bin
+f none /opt/amix/doc/zlib/LICENSE.amix 0644 root bin

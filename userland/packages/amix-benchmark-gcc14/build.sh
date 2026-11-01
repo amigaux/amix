@@ -76,6 +76,7 @@ stage() {
 	cp fieldkit/runbench.sh "$kit/runbench.sh"
 	cp "$HERE/files/amix-bench-g14" "$DEST$PREFIX/bin/amix-bench-g14"
 	cp fieldkit/README-FIELD.txt "$DEST$PREFIX/doc/amix-bench-g14/README.txt"
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/amix-bench-g14/LICENSE.amix"; chmod 0644 "$DEST$PREFIX/doc/amix-bench-g14/LICENSE.amix"	# our files in this package: MIT
 	printf 'int amix_bench_version_probe;\n' > "$BUILD/v.c"
 	$CC -S -o "$BUILD/v.s" "$BUILD/v.c"
 	cc_version=$(grep -ao 'GCC: ([^)]*)[^"]*' "$BUILD/v.s" | head -1)

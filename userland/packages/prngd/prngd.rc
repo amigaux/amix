@@ -1,6 +1,7 @@
 #!/bin/sh
 #
 # prngd -- start or stop the PRNGD entropy daemon on /var/run/egd-pool.
+# MIT licence: holder and text in /opt/amix/doc/prngd/LICENSE.amix.
 #
 # The package does not enable it.  To start it at boot, as root:
 #     ln /opt/amix/etc/init.d/prngd /etc/rc2.d/S74prngd

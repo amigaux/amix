@@ -2,8 +2,7 @@
 NAME=coreutils
 PKG=coreutil
 VERSION=5.2.1
-PKGREV=4   # -4: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
-SOURCE_EPOCH=1793470956   # this version's epoch, kept when only the build scripts change
+PKGREV=5   # -5: gcc14-cross-amix 3446533, every program gains the library-constructor runner
 SUMMARY="GNU coreutils 5.2.1"
 DESC="GNU coreutils 5.2.1 beside the stock SVR4 tools, which it does NOT replace: GNU ls, cp, mv, rm, sort, date, df, du, install, stat and the rest, plus md5sum and sha1sum (the box has no content checksum otherwise). Installs /opt/amix/bin; add /opt/amix/bin to PATH."
 CATEGORY=utility

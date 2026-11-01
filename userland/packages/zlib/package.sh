@@ -2,7 +2,7 @@
 NAME=zlib
 PKG=zlib
 VERSION=1.2.13
-PKGREV=8   # -8: man pages in /opt/amix/man/<sect>/<name> + whatis.d (docs/man-pages.md)
+PKGREV=9   # -9: gcc14-cross-amix 3446533, every program gains the library-constructor runner
 SUMMARY="zlib 1.2.13 - the deflate/inflate compression library"
 DESC="zlib 1.2.13 static compression library (libz.a) plus headers, under /opt/amix. The first zlib on Amix; rsync, wget and git link it. Ships /opt/amix/bin/zlib-test, an on-box acceptance check (crc32/adler32 canaries, a multi-MB deflate/inflate round trip, and inflate of a host-produced stream)."
 CATEGORY=library
