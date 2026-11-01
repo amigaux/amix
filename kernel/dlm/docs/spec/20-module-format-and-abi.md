@@ -203,7 +203,8 @@ uncommitted changes under `kernel/`. A kit built from an archive of amix
 (`git archive`, `make dist`) records the `KIT_REV` its environment gives,
 else `unknown`; a git checkout around the archive that is not amix is never
 taken for it. `MONSW_REV` is `<repository>@<commit>`
-of `sys/monsw.h` (`amix@<commit>` from `kernel/modules/include/`). On k46
+of `sys/monsw.h` (`amix@<commit>` from `kernel/modules/include/`), and of
+`sys/zz9kbus.h` beside it, which the kit carries since 2026-11-01. On k46
 `PORT_REV` is the 040/060 port commit of the page headers. A kit built
 before the move into amix (2026-10-29) has an amix-dlm commit as its
 `KIT_REV`; amix keeps that history unchanged, so the hash resolves in amix

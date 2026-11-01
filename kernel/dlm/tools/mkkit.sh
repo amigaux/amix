@@ -14,7 +14,9 @@
 #                        the environment's KIT_REV, else unknown),
 #                        MONSW_REV, on k46 PORT_REV
 #   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
-#                        core/series) and amixddi.h (abi/include)
+#                        core/series), amixddi.h (abi/include), and the
+#                        generic modules' interfaces from kernel/modules
+#                        (MODHDRS: monsw.h, zz9kbus.h)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
 #                        gcc wrapper puts first ($AMIX_SYSROOT)
 #   stock/usr/include/,  the stock headers AMIX_KERNEL_CFLAGS names
@@ -127,12 +129,19 @@ cp "$R/docs/abi/writing-a-module.md" "$OUT/docs/guide.md"
 for c in C3-1-module-object C3-2-symbols-and-ddi C3-6-driver-to-module; do
 	cp "$R/docs/contracts/$c.md" "$OUT/docs/contracts/${c%%-[a-z]*}.md"
 done
-# the interface headers of generic modules, versioned with the module's
-# release: sys/monsw.h from amix's kernel/modules/include/sys/ (where every
-# generic module's header sits)
+# the interface headers of generic modules, versioned with the modules'
+# releases, from amix's kernel/modules/include/sys/ (where every generic
+# module's header sits; MONSW_H names monsw.h there, the others are beside
+# it): monsw.h, the monitor switch's; zz9kbus.h, the ZZ9000-family board
+# registry's.  Named, not globbed: the kit is MIT, and a header under
+# another licence there stays out of it.
+MODHDRS="monsw.h zz9kbus.h"
 MONSW_H=${MONSW_H:-$AMIX/kernel/modules/include/sys/monsw.h}
-[ -f "$MONSW_H" ] || { echo "mkkit: no sys/monsw.h ($MONSW_H)" >&2; exit 1; }
-cp "$MONSW_H" "$OUT/include/sys/monsw.h"
+for h in $MODHDRS; do
+	f=$(dirname "$MONSW_H")/$h
+	[ -f "$f" ] || { echo "mkkit: no sys/$h ($f)" >&2; exit 1; }
+	cp "$f" "$OUT/include/sys/$h"
+done
 # where it came from: the repository's commit, -dirty if the file differs;
 # the repository is amix when the file is in this checkout, or in this archive
 # (which has amix's KIT_REV)
@@ -216,8 +225,9 @@ include/sys/amixddi.h, tools/modcheck.py, mk/, sample/, docs/, the lists and
 the registries.  include/sys/mod.h, moddefs.h, ksym.h, tools/mkmod and
 tools/modfix come from kdedon's MIT module core, with the changes in
 amix's kernel/dlm (tools/LICENSE.core).
-include/sys/monsw.h, the monitor switch's interface, is Jussi Alanärä's, from
-$MONSW_REPO at $MONSW_REV$( [ "$MONSW_REPO" = amix ] && printf ' (MIT)' ).
+include/sys/monsw.h and zz9kbus.h, the interfaces of the monitor switch and
+of the ZZ9000-family board registry, are Jussi Alanärä's, from $MONSW_REPO at
+$MONSW_REV$( [ "$MONSW_REPO" = amix ] && printf ' (MIT)' ).
 
 sysroot/ and stock/ hold Commodore's Amix 2.1 kernel headers, published in
 this kit under the distribution permission given to the project on

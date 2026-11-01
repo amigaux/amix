@@ -12,6 +12,12 @@
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
+# -11 (not minted; the revision for the release): amix 9be1705, the
+# commit of kbootset -33 -- modadmin's source as -10's (afea7f5 builds the
+# same bytes), rebuilt on gcc14 43825b2 in amix-toolchain:g14-43825b2,
+# whose amix_init.o runs library constructors after start-up: modadmin
+# 21bbb4aa (39516 bytes, 424 more).  No scripts, ESSENTIAL, as -10.
+#
 # -10 (not minted; the revision for the release): amix afea7f5 --
 # core patch 0047, -q/-Q/-S print a locked module's (unload=never) unload
 # delay as `never (locked)`; modadmin fea0e559 (39092 bytes, gcc14
@@ -63,8 +69,8 @@
 # -1 (2026-10-26): amix-dlm 42df482 (modadmin as 55722ef, core
 # patch 0015: -k, -a, -p/-w).  Equal to amix-dlm's own build/box/modadmin
 # (text 28756, data 1648, bss 2508).
-MT_DLM_COMMIT=afea7f5
-MT_SHA=fea0e559b5d31ffd480c2143ead00c21ea882af1e12e340add8c665e11905d82
+MT_DLM_COMMIT=9be1705
+MT_SHA=21bbb4aaee7eec868ad277a6abe4d96fdbd2bd8189b06bff61c256bf4ae1cac2
 
-MT_VERSION=1.0.261031-10
-MT_SOURCE_EPOCH=1793404800
+MT_VERSION=1.0.261101-11
+MT_SOURCE_EPOCH=1793491200
