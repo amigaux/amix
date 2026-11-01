@@ -585,7 +585,7 @@ lets the version-1 refusal case through).  30-module-core.md section
  int	dlm_unload_wake = 60;
  char	*dlm_static[] = { "stat1", 0 };
 +char	*dlm_kabi = "k46.1.3";		/* the harness's kernel */
-+char	*dlm_pin = "gcc-2.7.2.3-8949028";
++char	*dlm_pin = DLM_PIN;		/* the harness build's -DDLM_PIN: toolchain.pin */
 +char	*dlm_build = "68060-261101-01";
  
  /* stock exec rows and a hook table, as the static kernel has them */
@@ -610,7 +610,7 @@ lets the version-1 refusal case through).  30-module-core.md section
  
 -def mod(p, deps='', rev=1, text='', data='', ops='mod_miscops', pdata='0'):
 +KABI = 'k46.1.3'                  # the harness's kernel (hconf.c)
-+PIN = 'gcc-2.7.2.3-8949028'
++PIN = os.environ.get('DLM_PIN') or sys.exit('mkmods.py: DLM_PIN, the kernel build\'s compiler pin, is not set')
 +
 +
 +def moddata(p, deps, md, v1):
@@ -729,7 +729,7 @@ lets the version-1 refusal case through).  30-module-core.md section
  IMG=$1
  B=$2
 +# mkmod's -K and -P: the kernel the modules are built for (.moddata v2)
-+export DLM_KABI=${DLM_KABI:-k46.1.0} DLM_PIN=${DLM_PIN:-gcc-2.7.2.3-8949028}
++export DLM_KABI=${DLM_KABI:-k46.1.0} DLM_PIN=${DLM_PIN:?the kernel build's compiler pin (toolchain.pin)}
  . "$AUX/toolchain/src/gcc-cross-amix/build/env.sh"
  PATH="$AUX/toolchain/bin:$PATH"
  export PATH

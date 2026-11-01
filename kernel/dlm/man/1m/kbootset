@@ -203,8 +203,11 @@ for tests and media built without packages.
 .TP
 .B check
 Recomputes the SHA-256 and CRC-32 of every member in the store and of
-every file the manifests name under the root, and compares the installed
-packages with the default generation.
+every file the manifests name under the root, compares each module
+kernel's major table with this
+.BR kbootset 's
+registry (a different table is a problem, none a note), and compares the
+installed packages with the default generation.
 It never writes.
 Exit status 1 when it finds a problem.
 .TP

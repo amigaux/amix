@@ -36,6 +36,13 @@
 
 #define MAXFILE	(64UL << 20)
 
+/* the switches' sizes in every kernel of record (kernrow below) */
+#define KB_CDEVCNT	70
+#define KB_BDEVCNT	32
+static int kernrow(int type, long n);
+static void majtable(char *text);
+static void majrows(const char *text, char *out, size_t cap);
+
 static int
 refuse(struct ks *k, int gate, const char *msg)
 {
@@ -1120,7 +1127,18 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 	}
 	qsort(mods, (size_t)nmods, sizeof(mods[0]), by_name);
 
-	/* gate 3: class, match, majors, depend */
+	/* gate 3: class, match, majors, depend; first the registry's rows,
+	 * which the manifest carries: one past a switch would make the core
+	 * refuse the whole table */
+	{
+		const char *nm;
+		int t, n;
+
+		for (i = 0; rc == KS_OK && (nm = km_entry(i, &t, &n)) != 0; i++)
+			if (n >= (t == 'c' ? KB_CDEVCNT : KB_BDEVCNT))
+				sprintf(m, "the registry's row %c %d (%.15s) is past the kernel's switch",
+					t, n, nm), rc = refuse(k, 3, m);
+	}
 	for (i = 0; i < nmods && rc == KS_OK; i++) {
 		struct km_info *mi = &mods[i].i;
 		const char *p = mi->majors, *key;
@@ -1172,6 +1190,10 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 			} else if ((own = km_owner(p[0], (int)maj)) == 0 || strcmp(own, mi->name)) {
 				sprintf(m, "module %.15s: major %c:%ld is %s", mi->name, p[0], maj,
 					own ? "registered to another module" : "not in the registry");
+				rc = refuse(k, 3, m);
+			} else if (kernrow(p[0], maj)) {
+				sprintf(m, "module %.15s: major %c:%ld is a row the kernel's own switch fills",
+					mi->name, p[0], maj);
 				rc = refuse(k, 3, m);
 			} else
 				p = *q ? q + 1 : q;
@@ -1372,7 +1394,7 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 {
 	static struct ax_manifest m;
 	struct kb_rec r;
-	char line[600], sha[65], kpath[32], *buf;
+	char line[600], sha[65], kpath[32], *buf, *txt;
 	ax_u8 *data;
 	ax_u32 len;
 	DIR *d;
@@ -1411,6 +1433,26 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 				}
 			}
 			say(line);
+		}
+		/* a module kernel's major table against this kbootset's registry */
+		if (m.has_arena && (txt = ks_manifest_text(k, g->id)) != 0) {
+			char want[2048], got[2048];
+
+			want[0] = 0;
+			majtable(want);
+			majrows(txt, got, sizeof got);
+			if (!got[0])
+				sprintf(line, "generation %lu has no major table (an older kbootset composed it): "
+					"a kernel that reads it refuses every major; kbootset build composes one",
+					(unsigned long)g->id);
+			else if (strcmp(got, want)) {
+				sprintf(line, "generation %lu: its major table differs from this kbootset's "
+					"registry", (unsigned long)g->id);
+				bad++;
+			} else
+				sprintf(line, "generation %lu: major table ok", (unsigned long)g->id);
+			say(line);
+			free(txt);
 		}
 		/* the default generation against what is installed now */
 		if (g->id == k->ctl.default_gen && m.line && m.kernel.sha256) {
@@ -1492,6 +1534,53 @@ kb_canonrec(const char *rec, const char *key, char *out)
 			o += sprintf(out + o, " %s", tok[i]);
 }
 
+/* the switches of every kernel of record: 70 character rows, 32 block rows,
+ * and the rows their own drivers fill (M-REG1 on 68030-261101-67 and
+ * 68060-261031-55, the same on both lines).  A module never gets one of
+ * those; the core refuses it at registration too (dlm_creg). */
+static int
+kernrow(int type, long n)
+{
+	if (type == 'b')
+		return n >= 16 && n <= 19;
+	return n <= 6 || (n >= 8 && n <= 37) || n == 40 || n == 41 || n == 46 || n == 50 || n == 53;
+}
+
+/* the major table of a module kernel's manifest (C3-5 section 3, version
+ * 22): every registry row as "major <c|b> <n> <name>", which the core
+ * reads instead of a table built into the kernel (core patch 0051) */
+static void
+majtable(char *text)
+{
+	const char *nm;
+	int i, t, n;
+
+	for (i = 0; (nm = km_entry(i, &t, &n)) != 0; i++)
+		sprintf(text + strlen(text), "major %c %d %s\n", t, n, nm);
+}
+
+/* the major records of a manifest's text, in order, into out (cap bytes;
+ * empty when there are none) */
+static void
+majrows(const char *text, char *out, size_t cap)
+{
+	const char *p = text, *e;
+	size_t n = 0, len;
+
+	out[0] = 0;
+	while (p && *p) {
+		e = strchr(p, '\n');
+		len = e ? (size_t)(e - p) : strlen(p);
+		if (len > 6 && !strncmp(p, "major ", 6) && n + len + 2 <= cap) {
+			memcpy(out + n, p, len);
+			n += len;
+			out[n++] = '\n';
+			out[n] = 0;
+		}
+		p = e ? e + 1 : 0;
+	}
+}
+
 /* the generation's records before its members (10 §5.1); a root or swap
  * record on a Z3660 card in its canonical form (C4-1 §5.1) */
 static void
@@ -1511,10 +1600,12 @@ head(char *text, const struct kb_facts *f, const struct kb_kernel *kk, const cha
 	if (kk->build[0])
 		sprintf(text + strlen(text), "kernel-build %s\n", kk->build);
 	sprintf(text + strlen(text), "rootfs %s\n", rootfs);
-	if (kk->has_arena)
+	if (kk->has_arena) {
 		sprintf(text + strlen(text), "arena 0x%08lx 0x%08lx\nident 0x%08lx\n",
 			(unsigned long)kk->arena_off, (unsigned long)kk->arena_cap,
 			(unsigned long)kk->ident_off);
+		majtable(text);
+	}
 	if (rootrec && rootrec[0]) {
 		kb_canonrec(rootrec, kk->rth1 >= 2 ? f->rootdev : "", rr);
 		sprintf(text + strlen(text), "root %.120s\n", rr);
@@ -1592,7 +1683,7 @@ same(const char *a, const char *b)
  * describe?  Both sides go through the loader's parser, so the comparison
  * is of what the manifests say (line, kabi, CPUs, loader-min, root,
  * swap, filesystem, boards, arena, identity record, every member by size
- * and SHA-256, the parameters), not of their layout; the generation id
+ * and SHA-256, the parameters, the major table), not of their layout; the generation id
  * and created time are not compared.  Sets *dflt to the default's id.
  */
 static int
@@ -1632,6 +1723,15 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 		     d.mod[i].bss == n.mod[i].bss;
 	for (i = 0; eq && i < d.nparam; i++)
 		eq = same(d.param[i], n.param[i]);
+	if (eq) {	/* and the major table: a default without one is not this */
+		static char dr[2048], nr[2048];
+		char *dt = ks_manifest_text(k, k->ctl.default_gen);
+
+		majrows(dt ? dt : "", dr, sizeof dr);
+		majrows(head, nr, sizeof nr);
+		eq = dt && !strcmp(dr, nr);
+		free(dt);
+	}
 	*dflt = d.generation;
 	free(dman);
 	return eq;

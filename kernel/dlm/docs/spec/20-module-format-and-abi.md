@@ -215,6 +215,14 @@ too.
 Fixed in S0; each is a text file in the kit. Values marked *proposed* are
 checked against the built kernels before they are frozen (M-REG1).
 
+The major registry is boot data since core patch 0051: `kbootset` writes
+its rows into each module kernel's manifest as `major` records (C3-5 §3,
+version 22), and the core reads a module's majors' owners there. A new
+major is a registry line, a `kbootset` and a kit, never a new kernel. The
+numbers stay fixed (a package ships its device nodes with them), so the
+text registry remains the one shared list; the kernels' switches have 70
+character and 32 block rows, of which the rows below are free.
+
 | Registry | Entries |
 |---|---|
 | System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined) |

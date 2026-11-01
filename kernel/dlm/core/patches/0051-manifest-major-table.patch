@@ -1,0 +1,348 @@
+Subject: the module majors are the booted manifest's major records
+
+A module's majors were checked against a table compiled into the kernel,
+so a new major needed a new kernel.  kbootset now writes one record per
+registry row into the manifest ("major <c|b> <n> <name>", C3-5 version
+22), and dlm_majowned and md_majors read them there.  A manifest without
+the records refuses every major; a malformed row, one past the switch,
+or one number in two rows refuses the whole table.  Without a booted
+manifest (no module loads then) the built-in table still answers.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -761,18 +761,39 @@
+  * (20-module-format-and-abi.md section 6, C3-1 section 4).  The
+  * syntax was checked by dlm_ld_moddata.
+  */
++/*
++ * The owner of major mj of type 'c' or 'b' into owner (MODMAXNAMELEN
++ * bytes), as dlm_man_major answers: the booted manifest's major table.
++ * Without a booted manifest no module loads (patch 17), and the table
++ * built into the kernel (dlmreg.c) answers instead.
++ */
++static int
++majowner(type, mj, owner)
++	int type, mj;
++	char *owner;
++{
++	struct dlm_majreg *r;
++
++	if (dlm_man != 0)
++		return dlm_man_major(type, mj, owner);
++	for (r = dlm_majreg; r->r_type; r++)
++		if (r->r_type == type && r->r_major == mj && strlen(r->r_name) < MODMAXNAMELEN) {
++			strcpy(owner, r->r_name);
++			return 0;
++		}
++	owner[0] = 0;
++	return ENOENT;
++}
++
+ /* major mj of type 'c' or 'b' is registered to name: 0, else ECONFIG */
+ int
+ dlm_majowned(type, mj, name)
+ 	int type, mj;
+ 	char *name;
+ {
+-	struct dlm_majreg *r;
++	char o[MODMAXNAMELEN];
+ 
+-	for (r = dlm_majreg; r->r_type; r++)
+-		if (r->r_type == type && r->r_major == mj)
+-			return strcmp(r->r_name, name) == 0 ? 0 : ECONFIG;
+-	return ECONFIG;
++	return majowner(type, mj, o) == 0 && strcmp(o, name) == 0 ? 0 : ECONFIG;
+ }
+ 
+ /*
+@@ -794,19 +815,18 @@
+ md_majors(v, name)
+ 	char *v, *name;
+ {
+-	struct dlm_majreg *r;
+-	int type, n;
++	char o[MODMAXNAMELEN];
++	int type, n, e;
+ 
+ 	while (*v) {
+ 		type = *v;
+ 		for (v += 2, n = 0; *v >= '0' && *v <= '9'; v++)
+ 			n = n * 10 + (*v - '0');
+-		for (r = dlm_majreg; r->r_type; r++)
+-			if (r->r_type == type && r->r_major == n)
+-				break;
+-		if (r->r_type == 0 || strcmp(r->r_name, name) != 0) {
++		if ((e = majowner(type, n, o)) != 0 || strcmp(o, name) != 0) {
+ 			printf("dlm: %s: major %s:%d is %s\n", name, type == 'b' ? "b" : "c", n,
+-			    r->r_type ? "registered to another module" : "not in the registry");
++			    e == ENODEV ? "refused: the booted manifest has no major table" :
++			    e == EINVAL ? "refused: the booted manifest's major table is damaged" :
++			    e == ENOENT ? "not in the registry" : "registered to another module");
+ 			return ECONFIG;
+ 		}
+ 		if (*v == ',')
+--- a/dlm.h
++++ b/dlm.h
+@@ -382,6 +382,7 @@
+ extern void dlm_marc_root();		/* the kernel's hook in rth1_mountroot */
+ extern int dlm_devload;			/* development load this boot */
+ extern int dlm_arena_check(), dlm_man_member(), dlm_man_rootfs(), dlm_man_safeboot();
++extern int dlm_man_major();	/* (type, major, owner): the manifest's major table */
+ extern void dlm_arena_init();
+ extern void ax_sha256();		/* amix-dlm loader/common/sha256.c */
+ 
+@@ -399,7 +400,9 @@
+ /* the loaded modules, for kinfo's module list (C2-1 offset 536) */
+ extern int dlm_kinfo_list();
+ 
+-/* the major registry, generated from the ABI kit's file by tools/mkreg */
++/* the major registry built into the kernel, generated from the ABI kit's
++ * file by tools/mkreg: asked only without a booted manifest, whose major
++ * records answer otherwise (dlm_man_major) */
+ struct dlm_majreg {
+ 	int	r_type;			/* 'c' or 'b'; 0 ends the table */
+ 	int	r_major;
+--- a/dlm_post.c
++++ b/dlm_post.c
+@@ -31,6 +31,8 @@
+ 
+ #include "dlm.h"
+ 
++extern int cdevcnt, bdevcnt;		/* the switches' rows (sys/conf.h) */
++
+ /* the value of key= in the record [p, l) into out; 1 if present */
+ static int
+ attr(p, l, key, out, cap)
+@@ -214,6 +216,58 @@
+ }
+ 
+ /*
++ * The booted manifest's major table (C3-5 section 3, version 22): one
++ * "major <c|b> <n> <name>" record per registry row, which kbootset writes
++ * from the major registry, so a module's major is boot data and a new
++ * one needs no new kernel.  The owner of major mj of type 'c' or 'b'
++ * goes into owner (MODMAXNAMELEN bytes) and the answer is 0; ENOENT when
++ * the table has no such row; ENODEV when the manifest has no table (one
++ * an older kbootset composed); EINVAL when any record is malformed, is
++ * past the switch, or names a number another record names: the whole
++ * table is refused then, never half of it.  Read where asked, not kept:
++ * a load or a registration asks, rarely.
++ */
++int
++dlm_man_major(type, mj, owner)
++	int type, mj;
++	char *owner;
++{
++	unsigned char seen[64];		/* c 0-255, then b 0-255 */
++	char *p, *l, *q, *lim = dlm_man + dlm_manlen, nm[MODMAXNAMELEN];
++	int rows = 0, t, n, k;
++
++	owner[0] = 0;
++	bzero((caddr_t)seen, (unsigned)sizeof seen);
++	for (p = dlm_man; p && p < lim; p = l + 1) {
++		for (l = p; l < lim && *l != '\n'; l++)
++			;
++		if (l - p < 6 || bcmp(p, "major ", 6) != 0)
++			continue;
++		q = p + 6;
++		t = *q++;
++		if ((t != 'c' && t != 'b') || q >= l || *q++ != ' ')
++			return EINVAL;
++		for (n = 0, k = 0; q < l && *q >= '0' && *q <= '9' && k < 4; q++, k++)
++			n = n * 10 + (*q - '0');
++		if (k == 0 || q >= l || *q++ != ' ' || n >= (t == 'c' ? cdevcnt : bdevcnt) || n > 255)
++			return EINVAL;
++		for (k = 0; q < l && *q != ' ' && k < MODMAXNAMELEN - 1; )
++			nm[k++] = *q++;
++		nm[k] = 0;
++		if (k == 0 || q != l)
++			return EINVAL;
++		k = (t == 'b') * 256 + n;
++		if (seen[k >> 3] & 1 << (k & 7))
++			return EINVAL;
++		seen[k >> 3] |= 1 << (k & 7);
++		rows++;
++		if (t == type && n == mj)
++			strcpy(owner, nm);
++	}
++	return rows == 0 ? ENODEV : owner[0] ? 0 : ENOENT;
++}
++
++/*
+  * A member's parameters from the manifest ("param <name>.<pname>=<value>"
+  * records), as one string "<pname>=<value> ..." into buf; buf[0] is 0 when
+  * there are none.  C3-5: passed to the module's _load.
+--- a/test/state.c
++++ b/test/state.c
+@@ -397,6 +397,17 @@
+ }
+ 
+ /* ---- manifest-only loading and the arena directory (patch 17, C3-4) ---- */
++/*
++ * The harness's major table as manifest records (patch 51, C3-5 version
++ * 22): hconf.c's rows, b 23 once (bdused's, as hconf.c's first row for it
++ * answers), so every manifest below gives the modules the majors the
++ * built-in table gives them without one.
++ */
++#define HREG "major c 51 z3660eth\nmajor c 58 regok\nmajor c 60 cd\nmajor c 61 cdold\n" \
++	"major c 62 cdblk\nmajor c 63 zz\nmajor c 65 cdkd\nmajor c 67 pdm\nmajor c 64 sddem\n" \
++	"major c 68 pbcd\nmajor c 69 pbsd\nmajor b 20 ramdisk\nmajor b 21 bdun\n" \
++	"major b 23 bdused\nmajor b 24 bd1\nmajor b 25 bdnb\nmajor c 59 bdcf\n"
++
+ extern unsigned long ax_crc32();
+ extern void ax_crc32_init();
+ 
+@@ -460,7 +471,7 @@
+ 	hexsha("pm1", s1);
+ 	hexsha("pmd", sd);
+ 	hexsha("pmf", sf);
+-	sprintf(man, "GMF1\ngeneration 7\nline k46\n"
++	sprintf(man, "GMF1\ngeneration 7\nline k46\n" HREG
+ 	    "module pm1 boot 300 path=/stand/gen/7/mod/pm1 sha256=%s\n"
+ 	    "module pm2 demand 300 path=/stand/gen/7/mod/pm2 sha256=%s\n"
+ 	    "module pmd boot 300 path=/stand/gen/7/mod/pmd sha256=%s\n"
+@@ -510,6 +521,64 @@
+ 	dlm_devload = 1;
+ }
+ 
++/* ---- the manifest's major table (patch 51, C3-5 version 22) ---- */
++/* regok (majors=c:58) loaded under a manifest with these records: its errno */
++static int
++majrun(recs)
++	char *recs;
++{
++	static char a[4096], man[2048];
++	int id, e;
++
++	sprintf(man, "GMF1\ngeneration 7\nline k46\n%s", recs);
++	mkarena(a, man, 1, 1);
++	if (dlm_arena_check(a, 4096L, &dlm_man, &dlm_manlen, &dlm_mangen) != 0)
++		return -1;
++	if ((e = modload("regok", &id)) == 0)
++		moduload(id);
++	return e;
++}
++
++void
++major_tests()
++{
++	char *om = dlm_man, o[MODMAXNAMELEN];
++	long oml = dlm_manlen, omg = dlm_mangen;
++	int id, dv = dlm_devload;
++
++	dlm_devload = 1;		/* regok, regown, regnone are no members */
++	check(majrun(HREG) == 0, "major table: a module whose row is its own loads");
++	check(dlm_man_major('c', 58, o) == 0 && !strcmp(o, "regok") &&
++	    dlm_man_major('b', 20, o) == 0 && !strcmp(o, "ramdisk") &&
++	    dlm_man_major('c', 57, o) == ENOENT && dlm_man_major('b', 58, o) == ENOENT,
++	    "major table: a row answers by its type and number");
++	check(modload("regown", &id) == ECONFIG && !byname("regown"),
++	    "major table: another module's row -> ECONFIG");
++	check(modload("regnone", &id) == ECONFIG && !byname("regnone"),
++	    "major table: a number with no row -> ECONFIG");
++	check(majrun("") == ECONFIG && dlm_man_major('c', 58, o) == ENODEV,
++	    "major table: a manifest without one (an older kbootset's) -> every major refused");
++	check(majrun(HREG "major c 58 other\n") == ECONFIG && dlm_man_major('c', 51, o) == EINVAL,
++	    "major table: one number in two rows -> the whole table refused");
++	check(majrun(HREG "major c 70 far\n") == ECONFIG && majrun(HREG "major b 32 far\n") == ECONFIG,
++	    "major table: a row past the switch -> the whole table refused");
++	check(majrun("major x 58 regok\n") == ECONFIG && majrun("major c 58\n") == ECONFIG &&
++	    majrun("major c 58 regok more\n") == ECONFIG && majrun("major c regok\n") == ECONFIG &&
++	    majrun("major c 058x regok\n") == ECONFIG,
++	    "major table: a malformed row -> the whole table refused");
++	check(majrun("major c 58 regok\n") == 0, "major table: one row is a table");
++	majrun(HREG "major c 3 stk\n");
++	check(dlm_creg("stk", 3) == ECONFIG, "major table: a row on a stock row in use -> dlm_creg refuses it");
++	dlm_man = 0;
++	check(dlm_majowned('c', 58, "regok") == 0 && dlm_majowned('c', 58, "other") == ECONFIG &&
++	    dlm_majowned('c', 57, "regok") == ECONFIG,
++	    "major table: no booted manifest -> the table built into the kernel answers");
++	dlm_man = om;
++	dlm_manlen = oml;
++	dlm_mangen = omg;
++	dlm_devload = dv;
++}
++
+ /* ---- no-sleep mode (30 section 2 patch 3) ---- */
+ extern long host_kblocks, host_km_sleep, host_km_nosleep;
+ extern int host_nomem_after;
+@@ -637,7 +706,7 @@
+ 		rp_arena = (char *)(((unsigned long)calloc(1, 0x30000) + 15) & ~15UL);
+ 	a = rp_arena;
+ 	bzero(a, 0x20000);
+-	strcpy(rp_man, "GMF1\ngeneration 7\nline k46\n");
++	strcpy(rp_man, "GMF1\ngeneration 7\nline k46\n" HREG);
+ 	off = (32 + 48 * count + 15) & ~15L;
+ 	for (i = 0; i < count; i++) {
+ 		if ((f = arfile(names[i], &len, 0L, 0)) == 0)
+@@ -1171,7 +1240,7 @@
+ 	hexsha("fd1", s1);
+ 	hexsha("fd2", s2);
+ 	hexsha("fd3", s3);
+-	sprintf(man, "GMF1\ngeneration 9\n"
++	sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 	    "module fd1 demand 300 path=/stand/gen/7/mod/fd1 sha256=%s fs=fd1\n"
+ 	    "module fd2 demand 300 path=/stand/gen/7/mod/fd2 sha256=%s fs=fd2\n"
+ 	    "module fd3 demand 300 path=/stand/gen/7/mod/fd3 sha256=%s fs=fd3\n"
+@@ -1261,7 +1330,7 @@
+ 	hexsha("nw1", s1);
+ 	hexsha("nw2", s2);
+ 	hexsha("fd4", s4);
+-	sprintf(man, "GMF1\ngeneration 9\n"
++	sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 	    "module nw1 demand 300 path=/stand/gen/7/mod/nw1 sha256=%s\n"
+ 	    "module nw2 boot 300 path=/stand/gen/7/mod/nw2 sha256=%s match=always\n"
+ 	    "module fd4 demand 300 path=/stand/gen/7/mod/fd4 sha256=%s fs=fd4\n", s1, s2, s4);
+@@ -1450,7 +1519,7 @@
+ 	hexsha("pb1", s1);
+ 	hexsha("pb2", s2);
+ 	hexsha("pdm", s3);
+-	sprintf(man, "GMF1\ngeneration 9\n"
++	sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=zorro:144b:01,always\n"
+ 	    "module pb2 boot 300 path=/stand/gen/7/mod/pb2 sha256=%s match=zorro:dead:01\n"
+ 	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:67\n"
+@@ -1487,7 +1556,7 @@
+ 		static char s4[65];
+ 
+ 		hexsha("pb3", s4);
+-		sprintf(man, "GMF1\ngeneration 9\n"
++		sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 		    "module pb3 boot 300 path=/stand/gen/7/mod/pb3 sha256=%s match=always depend=pb1\n"
+ 		    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=always\n", s4, s1);
+ 		mkarena(a, man, 1, 1);
+@@ -1504,7 +1573,7 @@
+ 	}
+ 	/* safe=1 on a boot member: it loads in safe mode
+ 	 * too, the unmarked one does not, and demand loading stays refused */
+-	sprintf(man, "GMF1\ngeneration 9\n"
++	sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 	    "module pb1 boot 300 path=/stand/gen/7/mod/pb1 sha256=%s match=always safe=1\n"
+ 	    "module pb2 boot 300 path=/stand/gen/7/mod/pb2 sha256=%s match=always\n"
+ 	    "module pdm demand 300 path=/stand/gen/7/mod/pdm sha256=%s majors=c:67\n", s1, s2, s3);
+@@ -1534,7 +1603,7 @@
+ 		hexsha("pbcd", s5);
+ 		hexsha("pbsd", s6);
+ 		hexsha("sddem", s7);
+-		sprintf(man, "GMF1\ngeneration 9\n"
++		sprintf(man, "GMF1\ngeneration 9\n" HREG
+ 		    "module pbcd boot 300 path=/stand/gen/7/mod/pbcd sha256=%s match=always\n"
+ 		    "module pbsd boot 300 path=/stand/gen/7/mod/pbsd sha256=%s match=always\n"
+ 		    "module sddem demand 300 path=/stand/gen/7/mod/sddem sha256=%s majors=c:64\n",
+@@ -2050,7 +2119,7 @@
+ 	{
+ 		static char a0[4096];
+ 
+-		mkarena(a0, "GMF1\ngeneration 7\nline k46\n", 1, 1);
++		mkarena(a0, "GMF1\ngeneration 7\nline k46\n" HREG, 1, 1);
+ 		check(dlm_arena_check(a0, 4096L, &dlm_man, &dlm_manlen, &dlm_mangen) == 0,
+ 		    "the harness's booted manifest (no member)");
+ 	}
+@@ -2336,6 +2405,7 @@
+ 	host_handler("cd_close", h_cdclose);
+ 	drv_tests();
+ 	man_tests();
++	major_tests();
+ 	nosleep_tests();
+ 	blk_tests();
+ 	sdreg_tests();

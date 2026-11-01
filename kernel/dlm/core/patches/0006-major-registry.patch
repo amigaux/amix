@@ -102,7 +102,7 @@ EEXIST in dlm_creg as before.  30-module-core.md section 2, patch 6.
 --- a/test/hconf.c
 +++ b/test/hconf.c
 @@ -14,6 +14,14 @@
- char	*dlm_pin = "gcc-2.7.2.3-8949028";
+ char	*dlm_pin = DLM_PIN;		/* the harness build's -DDLM_PIN: toolchain.pin */
  char	*dlm_build = "68060-261101-01";
  
 +/* the harness's major registry */

@@ -17,6 +17,9 @@
 #             them); gate 2 refuses a brel kernel whose sidecar has no bss=
 # Writes OUTDIR/stand/<line>/{unix,kabi} and OUTDIR/var/apkg/kpkg/kernel-standin.
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 KERNEL=$1 LINE=$2 KEYS=$3 FS=$4 BUILD=$5 OUT=$6 BSS=$7
 sha() { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
@@ -26,7 +29,7 @@ cat > "$OUT/stand/$LINE/kabi" <<EOF
 kabi=static
 family=standin
 line=$LINE
-pin=gcc-2.7.2.3-8949028
+pin=$KPIN
 build=$BUILD
 size=$(size "$OUT/stand/$LINE/unix")
 sha256=$(sha "$OUT/stand/$LINE/unix")
@@ -41,7 +44,7 @@ version 0.0.0
 role kernel
 line $LINE
 kabi static
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source stand-in (tests/bench/s2-standin.sh)
 installed ${SOURCE_DATE_EPOCH:-1761400000}

@@ -14,6 +14,9 @@
 # Writes OUTDIR/etc/conf/mod.d/<name>, OUTDIR/var/apkg/kpkg/mod-<name> and,
 # with modreg lines, OUTDIR/etc/conf/modreg.d/<name>.
 set -e
+# the compiler pin of toolchain.pin (gcc and commit), as the kit's PIN
+TP=$(dirname "$0")/../../toolchain.pin
+KPIN=gcc-$(awk '$1 == "gcc" {print $2}' "$TP")-$(awk '$1 == "commit" {print $2}' "$TP")
 M=$1 LINE=$2 OUT=$3
 [ -n "$OUT" ] || { echo "usage: s3-modpkg.sh MODULE LINE OUTDIR [modreg-line ...]" >&2; exit 2; }
 shift 3
@@ -35,7 +38,7 @@ version 0.0.0
 role module
 line $LINE
 kabi ${KABI:-$LINE.1.0}
-pin gcc-2.7.2.3-8949028
+pin $KPIN
 sha256 0000000000000000000000000000000000000000000000000000000000000000
 source stand-in (tests/bench/s3-modpkg.sh)
 installed ${SOURCE_DATE_EPOCH:-1761400000}

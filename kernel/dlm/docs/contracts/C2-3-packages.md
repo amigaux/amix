@@ -79,7 +79,7 @@ meaning (version 7); the block below is an example.
 kabi=static                  k46.1.0 from stage 3; "static" on a stage-2 static kernel
 family=KD060-A               the static family; "generic" for the module kernel
 line=k46
-pin=gcc-2.7.2.3-8949028      the compiler pin (20 §3.2)
+pin=gcc-2.7.2.3-33ebadc      the compiler pin (20 §3.2)
 build=68060-261021-NN        the build id: the kernel's buildid string (uname -m, kinfo C2-1)
 size=1459584                 of unix, in the form shipped
 sha256=<64 hex>              of unix, in the form shipped
