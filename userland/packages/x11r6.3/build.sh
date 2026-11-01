@@ -18,7 +18,8 @@ XNOJT="lib/font/bitmap/bdfutils.c	bdfSpecialProperty: the bound is on the index 
 	lib/Xtst/XTest.c		send_axes: a signed compare before the unsigned bound, table via %an
 	programs/xdm/dm.c		WaitForChild: the same shape
 	lib/font/Speedo/do_trns.c	sp_proc_outl_data: the index is a byte's high nibble, sign case away
-	lib/font/Type1/type1.c		Decode: the bound is set on the only path into the dispatch block"
+	lib/font/Type1/type1.c		Decode: the bound is set on the only path into the dispatch block
+	programs/Xserver/cfb/cfbglblt8.c	cfbPolyGlyphBlt8: the glyph-bit group's switch, bounded by its mask"
 
 xmake() {	# xmake <log> <make args...>: make -k, every compile line into make.log by xcc
 	_xm_log=$1; shift
