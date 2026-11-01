@@ -6,6 +6,11 @@ PROGRAMS="dropbear dbclient dropbearkey scp"
 # them in the Makefile's CFLAGS, which the driver's make CFLAGS replace
 MAKE_CFLAGS="-fno-strict-overflow -Wno-pointer-sign -include $AMIX_GCC14_DECLS -include $HERE/port/amix-compat.h -I$HERE/port/include"
 
+# the one 64-bit conversion, scp's "C%04o %lld %s" file header, is formatted
+# by snprintf, which is libamixc99's (defined in the binary); the libc printf
+# family prints only that already-formatted string
+AMIX_LL_PRINTF_REVIEWED="scp's C%04o %lld %s header goes through libamixc99 snprintf (scp.c, source())"
+
 configure_args() {
 	echo --disable-harden --disable-zlib --disable-pam --disable-lastlog \
 	     --enable-bundled-libtom --disable-largefile
