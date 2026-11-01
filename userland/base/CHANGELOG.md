@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — amix-base 1.0-22 and 1.0-23 (017ed49, 370d66b)
+
+- 1.0-22: rc_bg no longer leaves its timer behind. When the command ended it killed only the watcher subshell, so the sleep ran out the whole bound: S69inet left a `sleep 120` for two minutes after every boot. The timer's sleep now records its own pid and is killed as soon as the command ends. The swap step logs the kernel's refusal text again (stock sed dropped the unterminated line tr left; it now joins with awk).
+- 1.0-23: six stock services are installed but run only when /etc/rc.conf turns them on: rpc.rwalld, rpc.rusersd, rpc.sprayd, mthreads, smtpd, and lpsched (which starts lpNet); keys rwalld, rusersd, sprayd, mthreads, smtpd and lpsched, default no, documented in rc.conf(4). Each stock script is built from amix-system, sha256-checked, behind a gate; the stock text below the gate is intact and the stock stop scripts run unchanged. Local mail through /bin/mail needs no smtpd. About 2.4 MiB more free memory and 9 fewer processes at boot on both lines. amxbase-1.0-23 md5 743cb37e.
+
 ## 2026-11-01 — amix-base 1.0-21 (734b458, fa6a35c)
 
 The swap step reads a 68040/68060 kernel's boot area at its real length. swap -l counts 2 KiB pages, so on those 4 KiB-page kernels it lists half of each area, and the tail the step added past the boot area overlapped it and failed at every boot. The step now doubles the listed length when uname -a's build id starts 68040- or 68060-; a kernel without a CPU in its build id is read as before. bootswap(1M) says so, and gives the 68040/68060 kernel's limits: 256 MiB added on a 64 MB machine, 512 MiB on a 16 MB one. amxbase-1.0-21 md5 19f6f658.
