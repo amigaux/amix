@@ -96,7 +96,7 @@
 
 #include "apkg.h"
 
-#define DEF_REPO      "http://pkg.amigaux.org"
+#define DEF_REPO      "http://pkg.amigaux.org/1.1"
 #define DEF_CACHEDIR  "/var/apkg/cache"
 #define DEF_PKGADD    "/usr/apkg/bin/pkgadd"
 #define DEF_PKGADD_FB "/usr/sbin/pkgadd"

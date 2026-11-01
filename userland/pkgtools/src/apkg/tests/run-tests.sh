@@ -322,6 +322,23 @@ cmp -s "$CATFILE" "$WORK/repo/catalog" \
     && ok "redirected update stored the right catalog" \
     || bad "redirected update stored wrong catalog bytes"
 
+# ------------------------------------------------ a release's tree
+# One tree per release on the host: the base URL carries the release as a
+# path (http://pkg.amigaux.org/1.1); catalog and packages are fetched below
+# it over HTTP/1.0, and one trailing slash is ignored.
+ln -s repo "$WORK/1.1"
+mkconf "$WORK/conf-rel"       "http://127.0.0.1:$PORT/1.1"       "$WORK/bin/pkgadd-shim"
+mkconf "$WORK/conf-relslash"  "http://127.0.0.1:$PORT/1.1/"      "$WORK/bin/pkgadd-shim"
+for c in conf-rel conf-relslash; do
+    rm -f "$CATFILE"
+    run 0 "update from a release tree ($c)" "$APKG" -c "$WORK/$c" update
+    cmp -s "$CATFILE" "$WORK/repo/catalog" \
+        && ok "the release tree's catalog stored ($c)" \
+        || bad "release-tree update stored wrong catalog bytes ($c)"
+    rm -rf "$ROOT/var/apkg/cache"
+    run 0 "download from a release tree's pkgs/ ($c)" "$APKG" -c "$WORK/$c" download foo
+done
+
 # ------------------------------------------------ list
 OUT=$("$APKG" list 2>&1); rc=$?
 if [ $rc -eq 0 ] && echo "$OUT" | grep -q "^foo " && \
@@ -965,7 +982,7 @@ run 0 "an UNKNOWN extension block is ignored too (forward compatible)" \
 # The assertion is behavioural, not a grep of conf.c: it reads the repo the
 # BINARY resolved off the -v config line.  No packet leaves the machine --
 # `list` reads the cached catalog and the repo URL is only ever used by fetch.
-CANON_REPO=http://pkg.amigaux.org
+CANON_REPO=http://pkg.amigaux.org/1.1
 cat > "$WORK/conf-norepo" <<EOF
 cachedir=$ROOT/var/apkg/cache
 pkgadd=$WORK/bin/pkgadd-shim

@@ -295,7 +295,7 @@ APKG_ESSENTIAL=yes
 EOF
   cat > "$A/apkg.conf" <<EOF
 # apkg configuration
-repo=http://pkg.amigaux.org
+repo=http://pkg.amigaux.org/1.1
 cachedir=/var/apkg/cache
 # The admin(4) file handed to pkgadd/pkgrm with -a.  This package ships it,
 # which also means pkgrm APKG deletes it -- so apkg re-creates it whenever it
@@ -532,7 +532,11 @@ EOF
   # The apkg binary (0.3.4) reports and decides the pending config files
   # after each transaction and adds -y/--conf-keep/--conf-new, `conffiles`,
   # `purge` and the [config-files] state.
-  # The template bytes are unchanged (md5 8dada8d9..., T23).
+  # The template's repo= names the 1.1 release's tree,
+  # http://pkg.amigaux.org/1.1 (one tree per release, nothing at the root),
+  # so its bytes are no longer 0.2.2's: an upgraded box keeps its own conf
+  # (the root URL, which the host sends on to the 1.0 tree) and gets the new
+  # default as /etc/apkg.conf.new; a fresh install gets the 1.1 repo.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

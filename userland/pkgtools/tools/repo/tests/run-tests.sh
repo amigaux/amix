@@ -1777,8 +1777,8 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     check "fresh install: pkgadd rc 0" test $? -eq 0
     check "fresh install: /etc/apkg.conf is the shipped default" \
         cmp -s "$R1/etc/apkg.conf" "$R1/usr/apkg/lib/apkg.conf"
-    check "fresh install: the default is 0.2.2's bytes (md5 8dada8d9...)" \
-        test "$(md5sum < "$R1/usr/apkg/lib/apkg.conf" | cut -c1-32)" = 8dada8d9fd5da9cced27ac3bf18e85a9
+    check "fresh install: the default names the 1.1 tree" \
+        grep -qx 'repo=http://pkg.amigaux.org/1.1' "$R1/usr/apkg/lib/apkg.conf"
     chk "$R1"; check "fresh install: plain pkgchk APKG clean" test $? -eq 0
     check "fresh install: conf is mode 0644" mode644 "$R1/etc/apkg.conf"
 
@@ -1824,7 +1824,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
 
     # 3. a conf written BEFORE the first install (installer shape) is kept
     R2="$S23/r2"; newroot "$R2"
-    fr sh -c "umask 022; printf '# installer\nrepo=http://pkg.amigaux.org\ncachedir=/var/apkg/cache\nadmin=/var/apkg/admin\n' > '$R2/etc/apkg.conf'"
+    fr sh -c "umask 022; printf '# installer\nrepo=http://pkg.amigaux.org/1.1\ncachedir=/var/apkg/cache\nadmin=/var/apkg/admin\n' > '$R2/etc/apkg.conf'"
     cp "$R2/etc/apkg.conf" "$S23/pre.conf"
     add "$R2" "$P23"
     check "pre-written conf: pkgadd rc 0" test $? -eq 0

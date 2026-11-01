@@ -631,7 +631,21 @@ A key the file does not name takes its built-in default.  Keys and defaults:
 .TP
 .B repo
 Repository base URL (default
-.BR http://pkg.amigaux.org ).
+.BR http://pkg.amigaux.org/1.1 ).
+Each Amix release has its own tree on the host, its
+.B catalog
+and
+.B pkgs/
+under
+.BI http://pkg.amigaux.org/ release
+.RB ( /1.0
+for 1.0,
+.B /1.1
+for 1.1); the base URL names the release's tree, and apkg fetches
+.IB repo /catalog
+and
+.IB repo /pkgs/ filename
+below it.  One trailing slash is ignored.
 The host is a name-based virtual host, so the repository must be named by
 hostname; a bare IP address is answered 404.  Stock Amix has no resolver, so
 either add the address to
