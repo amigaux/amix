@@ -18,6 +18,17 @@ post_configure() {
 	echo "  mcsc machine context; pthread.h patched (public timespec)"
 }
 
+# the box tests (tests/smoke.sh): built here against this tree's pthread.h
+# and libpthread.a, left in the tree (tests/fixtures), not shipped
+post_build() {
+	for t in t-errno t-once; do
+		echo "$CC $AMIX_CFLAGS -I. -o $t $HERE/tests/$t.c .libs/libpthread.a -lsocket -lnsl" >> "$BUILD/make.log"
+		$CC $AMIX_CFLAGS -I. -o "$t" "$HERE/tests/$t.c" .libs/libpthread.a -lsocket -lnsl >> "$BUILD/make.log" 2>&1 || {
+			echo "[FAIL] tests/$t.c did not link" >&2; tail -20 "$BUILD/make.log" >&2; exit 1; }
+	done
+	echo "  box tests built: t-errno t-once"
+}
+
 stage() {
 	b="$DEST$PREFIX"
 	mkdir -p "$b/lib" "$b/include" "$b/doc/pth"

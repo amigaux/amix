@@ -23,14 +23,11 @@ The fetch falls back to our byte-identical copy in the amigaux/amix-distfiles ar
 
 ## Patches
 
-All three are isoriano's, from his amix-userland port (Ignacio Soriano; LGPL 2.1 or later, as Pth
-is), unchanged. They are guarded by `__amix__`, which `build.sh` defines.
-
-| Patch | Why |
-|---|---|
-| `patches/0001-amix-global-errno.patch` | Amix's `errno` is one process-wide variable: each thread's `errno` is saved and restored across a context switch. |
-| `postconf/0002-amix-public-timespec.patch` | `struct timespec` for programs that include `pthread.h`; Amix's headers have none. It patches `pthread.h`, which configure generates, so `build.sh` applies it in `post_configure`. |
-| `patches/0003-amix-yielding-once.patch` | `pthread_once` yields while another thread runs the initialiser, instead of spinning. |
+| Patch | Whose | Why |
+|---|---|---|
+| `patches/0001-mcsc-keep-errno.patch` | isoriano's (amix-userland; Ignacio Soriano, LGPL 2.1 or later as Pth is), with our comment and no `__amix__` guard | `errno` is one variable per process: the mcsc switch now saves and restores each thread's, as the sjlj switch always did through `pth_mctx_save`/`restore`. A generic Pth 2.0.7 bug, not an Amix quirk. The store before `swapcontext` gives a thread starting at its `makecontext` entry its own `errno` (0). |
+| `postconf/0002-amix-public-timespec.patch` | isoriano's, unchanged | `struct timespec` for programs that include `pthread.h`; Amix's headers have none (guarded by `__amix__`, which GCC 14 predefines). It patches `pthread.h`, which configure generates, so `build.sh` applies it in `post_configure`. |
+| `patches/0003-pthread-once-cond.patch` | ours, replacing isoriano's yielding `pthread_once` (its states and cancellation reset are the model) | `pthread_once` runs the initialiser once and the other callers wait on a condition until it has run. Upstream ran it again in every caller that came before the first finished (a generic Pth bug); the yielding version looped on `pth_yield`, a spin at full CPU while the initialiser blocked, and forever when the initialiser called `pthread_once` on its own control, which now gives `EDEADLK`. A cancelled initialiser resets the control and wakes the waiters, and the next caller runs it. |
 
 ## Build notes
 
@@ -56,5 +53,12 @@ Both libraries hold FPU instructions, none of them
 
 ## Tests
 
-The libraries are exercised on the box through the programs that link them (Python's threading
-tests).
+`tests/smoke.sh` runs two C programs on the box, which `build.sh` builds against the tree's own
+`pthread.h` and `libpthread.a` and leaves in the tree (`tests/fixtures`); they are not shipped:
+- `t-errno`: four threads keep their own `errno` across 1000 switches each, and a new thread starts
+  with `errno` 0;
+- `t-once`: four callers of a yielding initialiser run it once and all return after it; an
+  initialiser calling `pthread_once` on its own control gets `EDEADLK`; a cancelled initialiser
+  leaves its control unset, the waiting caller then runs the initialiser, later callers do not.
+
+Python's threading tests exercise the libraries too.
