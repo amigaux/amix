@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-01 — /etc/group is a base conffile with the audio group; amix-base 1.0-17 (5dd8050)
+
+The stock file with `audio::20:` added after `daemon`, the group of the sound device's node (0660 root audio); a
+package that lays a node owned by a group needs the group present when pkgadd installs it. Built from the stock
+bytes (etc/mkgroup.sh, sha256-checked). New page group(4): the format, adding a login (`usermod -G audio <login>`,
+naming its other groups too), and `groupadd -g 20 audio` for a system whose kept file lacks the group.
+
 ## 2026-10-31 — display.d(4): the Z3660 example drops -fp; amix-base 1.0-16 (8d05ace)
 
 X11R6.3 from 6.3-2 on finds its fonts by its own default path, so the example's args are `-mode %m -ac -kb`.
