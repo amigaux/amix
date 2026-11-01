@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — kbootset -33, modtools -11 on gcc14 43825b2; the kit carries sys/zz9kbus.h (fb3c424, 1ec3e2f)
+
+kbootset -33 knows c 55 zz9ksvc; it and modtools -11 (modadmin's source unchanged) are rebuilt on gcc14 43825b2, whose start-up code runs library constructors: kbootset 048e108a (159460 bytes), modadmin 21bbb4aa (39516 bytes). mkkit copies kernel/modules' sys/zz9kbus.h into the kit beside sys/monsw.h, by name, so a header under another licence stays out of the MIT kit.
+
 ## 2026-11-01 — character major 55 for zz9ksvc; dlmkit -17 (9be1705, d68305a)
 
 The registry gives c 55 to kernel/modules' zz9ksvc (the ZZ9000/Z3660 service channel, /dev/zz9ksvcN). 55 is free in 68030-261101-67 and 68060-261031-55 (M-REG1 re-run); kbootset's table is regenerated. C3-5 v21 gives zz9ksvc and zz9kbus their short names, and says a module that loads only as a dependency is boot class with its boards' match=. dlmkit -17 carries the registry (kits k30 33852dd4, k46 48f84e72). Kernels refuse a zz9ksvc module until they are cut from this registry.

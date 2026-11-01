@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-01 — shared-object gates, PREBUILT, the DES tables; fork driver recipes (24a07a6..89c6146)
+
+- pkgbuild refuses a payload whose ELF NEEDs libamixrt.so.1 unless DEPENDS names amixrt. The new package.sh key PREBUILT ships pinned-prefix ELFs (sha-checked, not stripped). A shared object resolves against libc.so.1, the interpreter. The UNDEF gate counts strong undefined references only.
+- scan060-g14 knows crypt(3)'s DES tables in .text (libcrypt.a's des_crypt.o, libc's crypt.o) as data by the member's sha256.
+- Package recipes for the gayle and cdfs fork drivers under kernel/drivers; cdfs pinned at e63c513.
+
 ## 2026-11-01 — kdrv.sh for driver recipes; KM_PKG_VERSION; guarded deletes; What's new (a9ae32e, 1103523, 5b5c455, aa3b502)
 
 build/pkg/common/kdrv.sh is the body of a driver directory's pkg/build.sh: it rolls each recipe for k30 and k46

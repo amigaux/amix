@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — gcc14-cross-amix pinned at 43825b2 (b368e68, 358d5a2)
+
+- gcc14-cross-amix 43825b2 adds libamixrt.so.1 and runs library constructors after the program's start-up; snprintf/vsnprintf pass a double as two words, so libamixrt.so.1 runs without an FPU. Tree 8efb932a (6011 files). gcc14-pin.sh pins libamixc99.a and the specs anew and adds amix_init.o, amix_initS.o and libamixrt.so.1; the image runs test-amixrt.sh and copies libamixrt.so.1 into the sysroot's usr/lib.
+
 ## 2026-11-01 — gcc14-cross-amix pinned at feec32e: gas keeps PIC relocations (c82064e)
 
 feec32e's binutils patch makes gas keep a PIC relocation against an exported symbol, so a library's pointer to its own

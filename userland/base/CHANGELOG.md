@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — amixrt 1.0-1; amix-base 1.0-20, dhcp-client 1.0-5 (e758ca8, 974f485)
+
+- amixrt 1.0-1: /usr/lib/libamixrt.so.1 (set base, essential) for GCC 14 shared libraries, with libamixc99's MIT licence and GCC's runtime exception under /opt/amix/doc/amixrt.
+- amix-base 1.0-20 and dhcp-client 1.0-5 rebuilt with gcc14-cross-amix 43825b2: every program they link gains the constructor runner; both still link only libc.so.1 (and libnsl for dhcpc). No source change.
+
 ## 2026-11-01 — every delete guarded; the swap step reads both streams; amix-base 1.0-19 (0ba9739, 65d1322, 9759ed0)
 
 Every delete on a variable path, in the shipped scripts and the tests, takes ${var:?}, so an empty variable stops
