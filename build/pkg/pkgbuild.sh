@@ -309,18 +309,46 @@ for b in $BINS; do
 	esac
 	amix_gate_elf "$b"
 	# every undefined symbol must be defined by a shared object the binary
-	# records as NEEDED (libc.so.1, or a bare name from the box's /usr/lib)
+	# records as NEEDED, found where the box's runtime linker finds it: a
+	# path as itself (this package's, or the sysroot's); a bare name in each
+	# DT_RPATH directory -- in this package, then in its BUILD_DEPENDS
+	# packages' trees, then in the sysroot -- and then in the sysroot's
+	# /usr/lib.  A NEEDED found nowhere fails.
 	libs=$("$OBJDUMP" -p "$b" | awk '$1 == "NEEDED" {print $2}' | tr '\n' ' ')
-	files=""
+	rpath=$("$OBJDUMP" -p "$b" | awk '$1 == "RPATH" {print $2}' | tr ':' ' ')
+	files="" found=""
 	for n in $libs; do
-		case $n in /*) l="$AMIX_SYSROOT$n" ;; *) l="$AMIX_SYSROOT/usr/lib/$n" ;; esac
-		[ -f "$l" ] || { echo "[FAIL] $(basename "$b"): NEEDED $n not in the sysroot" >&2; exit 1; }
-		files="$files $l"
+		l="" w=""
+		case $n in
+		/*)
+			if [ -f "$DEST$n" ]; then l=$DEST$n w=package
+			elif [ -f "$AMIX_SYSROOT$n" ]; then l=$AMIX_SYSROOT$n w=sysroot
+			fi ;;
+		*)
+			for d in $rpath; do
+				[ -f "$DEST$d/$n" ] && { l=$DEST$d/$n w="package $d"; break; }
+				for p in $BUILD_DEPENDS; do
+					[ -f "$AMIX_BUILD_ROOT/$p/dest$d/$n" ] && { l=$AMIX_BUILD_ROOT/$p/dest$d/$n w="$p $d"; break; }
+				done
+				[ -n "$l" ] && break
+				[ -f "$AMIX_SYSROOT$d/$n" ] && { l=$AMIX_SYSROOT$d/$n w="sysroot $d"; break; }
+			done
+			if [ -z "$l" ] && [ -f "$AMIX_SYSROOT/usr/lib/$n" ]; then
+				l=$AMIX_SYSROOT/usr/lib/$n w="sysroot /usr/lib"
+			fi ;;
+		esac
+		[ -n "$l" ] || {
+			echo "[FAIL] $(basename "$b"): NEEDED $n is not in its RPATH (${rpath:-none}) in this package," >&2
+			echo "       its BUILD_DEPENDS ($BUILD_DEPENDS) or the sysroot, nor in the sysroot's /usr/lib" >&2
+			exit 1
+		}
+		files="$files $l" found="$found $n ($w)"
 	done
 	for l in $files; do dso_syms "$l"; done | LC_ALL=C sort -u > "$BUILD/needed.syms"
 	missing=$("$NM" -u "$b" | awk '{print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
+	echo "            found:$found"
 	$STRIP "$b"
 done
 echo

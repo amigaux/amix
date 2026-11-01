@@ -254,7 +254,8 @@ _amix_gate_060_tree_impl() {
 	for _gt_e in $(amix_gate_elfs "$1"); do
 		# every ELF and archive: no 040/060-only FPU form (a 68881/2 lacks them)
 		amix_gate_g14_fpu "$_gt_e" || _gt_bad=1
-		case "$(od -An -tx1 -j16 -N2 "$_gt_e" | tr -d ' ')" in 0002) ;; *) continue ;; esac
+		# executables and shared objects: their dynamic section
+		case "$(od -An -tx1 -j16 -N2 "$_gt_e" | tr -d ' ')" in 0002|0003) ;; *) continue ;; esac
 		amix_gate_g14_needed "$_gt_e" || _gt_bad=1
 		amix_gate_g14_llprintf "$_gt_e" || _gt_bad=1
 	done
@@ -525,13 +526,27 @@ PY
 # ABI for libraries that name themselves by path -- /usr/lib/libc.so.1, which
 # every stock binary records, and /usr/amiga/lib/libscreen.so, as the stock X
 # servers and /usr/amiga/bin tools record it -- never a host path or a path
-# the sysroot does not name itself so; no RPATH/RUNPATH; no TEXTREL.
+# the sysroot does not name itself so; no RUNPATH (the runtime linker reads
+# DT_RPATH); a DT_RPATH only of the box's own absolute directories, under
+# /opt/amix or /usr, never a host path, `..' or $ORIGIN; no TEXTREL.  A
+# shared object (ET_DYN) has no interpreter and must name itself (DT_SONAME);
+# its NEEDED and RPATH follow the same rules.
 amix_gate_g14_needed() {
 	_gn_f="$1"; _gn_bad=0
 	_gn_dyn=$("$READELF" -d "$_gn_f" 2>/dev/null)
 	_gn_interp=$("$READELF" -l "$_gn_f" 2>/dev/null | sed -n 's/.*Requesting program interpreter: \(.*\)]/\1/p')
-	[ "$_gn_interp" = /usr/lib/libc.so.1 ] || {
-		echo "  NEEDED FAIL $_gn_f -- interpreter '$_gn_interp'" >&2; _gn_bad=1; }
+	if [ "$(od -An -tx1 -j16 -N2 "$_gn_f" | tr -d ' ')" = 0003 ]; then
+		_gn_so=$(echo "$_gn_dyn" | sed -n 's/.*(SONAME).*\[\([^]]*\)\].*/\1/p')
+		[ -z "$_gn_interp" ] || {
+			echo "  NEEDED FAIL $_gn_f -- a shared object with an interpreter '$_gn_interp'" >&2; _gn_bad=1; }
+		[ -n "$_gn_so" ] || {
+			echo "  NEEDED FAIL $_gn_f -- a shared object with no SONAME" >&2; _gn_bad=1; }
+		_gn_what="shared object, SONAME $_gn_so"
+	else
+		[ "$_gn_interp" = /usr/lib/libc.so.1 ] || {
+			echo "  NEEDED FAIL $_gn_f -- interpreter '$_gn_interp'" >&2; _gn_bad=1; }
+		_gn_what="interp /usr/lib/libc.so.1"
+	fi
 	_gn_list=$(echo "$_gn_dyn" | sed -n 's/.*(NEEDED).*\[\([^]]*\)\].*/\1/p')
 	for _gn_n in $_gn_list; do
 		case "$_gn_n" in
@@ -545,11 +560,22 @@ amix_gate_g14_needed() {
 			fi ;;
 		esac
 	done
-	if echo "$_gn_dyn" | grep -E '\((RPATH|RUNPATH|TEXTREL)\)' >/dev/null; then
-		echo "  NEEDED FAIL $_gn_f -- RPATH/RUNPATH/TEXTREL present" >&2; _gn_bad=1
+	if echo "$_gn_dyn" | grep -E '\((RUNPATH|TEXTREL)\)' >/dev/null; then
+		echo "  NEEDED FAIL $_gn_f -- RUNPATH or TEXTREL present" >&2; _gn_bad=1
 	fi
-	[ $_gn_bad -ne 0 ] || echo "  NEEDED ok  $(basename "$_gn_f"): interp /usr/lib/libc.so.1, NEEDED $(echo $_gn_list)"
-	unset _gn_f _gn_dyn _gn_interp _gn_list _gn_n _gn_s
+	_gn_rp=$(echo "$_gn_dyn" | sed -n 's/.*(RPATH).*\[\([^]]*\)\].*/\1/p' | tr ':' ' ')
+	for _gn_d in $_gn_rp; do
+		case "$_gn_d" in
+		*'$'*|*/../*|*/..|*/./*|*/.) _gn_ok=no ;;
+		/opt/amix/*|/usr/*) _gn_ok=yes ;;
+		*) _gn_ok=no ;;
+		esac
+		[ $_gn_ok = yes ] || {
+			echo "  NEEDED FAIL $_gn_f -- RPATH '$_gn_d' is not a directory of the box (/opt/amix/... or /usr/...)" >&2
+			_gn_bad=1; }
+	done
+	[ $_gn_bad -ne 0 ] || echo "  NEEDED ok  $(basename "$_gn_f"): $_gn_what, NEEDED $(echo $_gn_list)${_gn_rp:+, RPATH $(echo $_gn_rp)}"
+	unset _gn_f _gn_dyn _gn_interp _gn_list _gn_n _gn_s _gn_so _gn_what _gn_rp _gn_d _gn_ok
 	return $_gn_bad
 }
 

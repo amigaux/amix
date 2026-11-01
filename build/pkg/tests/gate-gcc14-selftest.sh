@@ -161,6 +161,49 @@ grep "the sysroot holds no library there" "$T/scr-none.log" >/dev/null ||
 	{ cat "$T/scr-none.log" >&2; fail "NEEDED gate on a path the sysroot has no library at"; }
 ok "NEEDED gate passes a path that is the sysroot library's SONAME (through a relative link), refuses one whose library is named otherwise or absent"
 
+# NEEDED on shared objects and RPATH: a shared object has no interpreter and
+# names itself; an RPATH may name only the box's own directories; RUNPATH is
+# refused (the runtime linker reads DT_RPATH)
+printf 'int libf(int x) { return x + 1; }\n' > "$T/libf.c"
+$CC $AMIX_CFLAGS -fPIC -shared -Wl,-soname,libf.so.1 -o "$T/libf.so.1" "$T/libf.c" 2>"$T/so.log" ||
+	{ cat "$T/so.log" >&2; fail "the shared object probe did not link"; }
+$CC $AMIX_CFLAGS -fPIC -shared -o "$T/libnoname.so" "$T/libf.c" 2>"$T/so.log" ||
+	{ cat "$T/so.log" >&2; fail "the unnamed shared object probe did not link"; }
+amix_gate_g14_needed "$T/libf.so.1" > "$T/so-ok.log" 2>&1 ||
+	{ cat "$T/so-ok.log" >&2; fail "NEEDED gate refused a shared object with a SONAME"; }
+grep 'NEEDED ok  libf.so.1: shared object, SONAME libf.so.1' "$T/so-ok.log" >/dev/null ||
+	fail "NEEDED gate on the shared object: $(cat "$T/so-ok.log")"
+if amix_gate_g14_needed "$T/libnoname.so" > "$T/so-no.log" 2>&1; then
+	fail "NEEDED gate passed a shared object without a SONAME"
+fi
+grep 'a shared object with no SONAME' "$T/so-no.log" >/dev/null ||
+	fail "NEEDED gate on the unnamed shared object: $(cat "$T/so-no.log")"
+printf 'int main(void) { return 0; }\n' > "$T/rp.c"
+for v in box host runpath; do
+	case $v in
+	box) f='-Wl,-rpath,/opt/amix/X11R6/lib' ;;
+	host) f="-Wl,-rpath,$T" ;;
+	runpath) f='-Wl,--enable-new-dtags,-rpath,/opt/amix/lib' ;;
+	esac
+	$CC $AMIX_CFLAGS $f -o "$T/rp-$v" "$T/rp.c" 2>"$T/rp.log" ||
+		{ cat "$T/rp.log" >&2; fail "the RPATH probe $v did not link"; }
+done
+"$READELF" -d "$T/rp-box" | grep '(RPATH).*\[/opt/amix/X11R6/lib\]' >/dev/null ||
+	fail "the RPATH probe records no DT_RPATH"
+amix_gate_g14_needed "$T/rp-box" > "$T/rp-box.log" 2>&1 ||
+	{ cat "$T/rp-box.log" >&2; fail "NEEDED gate refused an RPATH of the box's own directory"; }
+grep 'RPATH /opt/amix/X11R6/lib' "$T/rp-box.log" >/dev/null || fail "NEEDED gate did not name the RPATH: $(cat "$T/rp-box.log")"
+for v in host runpath; do
+	if amix_gate_g14_needed "$T/rp-$v" > "$T/rp-$v.log" 2>&1; then
+		fail "NEEDED gate passed the $v RPATH probe"
+	fi
+done
+grep "RPATH '$T' is not a directory of the box" "$T/rp-host.log" >/dev/null ||
+	fail "NEEDED gate on a host RPATH: $(cat "$T/rp-host.log")"
+grep 'RUNPATH or TEXTREL present' "$T/rp-runpath.log" >/dev/null ||
+	fail "NEEDED gate on a RUNPATH: $(cat "$T/rp-runpath.log")"
+ok "NEEDED gate passes a shared object with a SONAME and a box RPATH, refuses a shared object without a SONAME, a host RPATH and a RUNPATH"
+
 # ll printf: libc printf prints ll as l.
 printf '#include <stdio.h>\nint main(int c, char **v) { printf("%%lld\\n", (long long)c); return 0; }\n' > "$T/ll.c"
 printf '#include <stdio.h>\nint main(int c, char **v) { char b[32]; snprintf(b, sizeof b, "%%lld", (long long)c); puts(b); return 0; }\n' > "$T/llsn.c"
