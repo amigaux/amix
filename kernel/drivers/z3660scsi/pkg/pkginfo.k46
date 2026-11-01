@@ -1,0 +1,16 @@
+PKG=zscsi46
+NAME=z3660scsi-k46 1.0.0-4 - Z3660 SCSI driver module (root class), k46 line
+ARCH=Amiga
+VERSION=1.0.0-4
+CATEGORY=system
+CLASSES=none
+VENDOR=amix
+PSTAMP=amix-zscsi46-1.0.0-4
+# Kernel space (amix-dlm C2-2, C3-5 v4 sec 1, C4-2): a role=module entry of
+# the #ext kpkg block (line=k46, kabi=k46.1.2), class root, never an ordinary
+# entry.  Catalog name z3660scsi-k46, pkginst zscsi46; VERSION is the module's
+# own release (kernel/drivers/z3660scsi/module/VERSION), the same on both
+# lines.  1.0.0-4 is a package-only revision of the module's 1.0.0-2: the
+# same object as 1.0.0-3, rolled in amix.
+APKG_DESC=Z3660 SCSI (PiStorm piscsi mailbox) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/z3660scsi.
+DESC=The kernel/drivers/z3660scsi driver built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when a Z3660 is present (match zorro:144b:01, mobo:z3660-window), registered with sd at rank z3660; never unloaded.  No major and no device nodes of its own: sd owns the disk majors and nodes.  The data-cache arm is set at load from the CPU type (68040 or 68060 maintenance); `param cache=` in /etc/conf/modreg.local.d/z3660scsi overrides it.  /etc/conf/modreg.d/z3660scsi holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
