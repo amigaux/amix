@@ -196,6 +196,11 @@
 #                with KM_NOSLEEP first, so a swap area larger than kvseg's largest free run fails with ENOMEM instead
 #                of sleeping on Km_OsizeWanted for ever.  --check after the link and after the dlm splice.
 #                --no-swap-guard is the kernel without it, byte for byte.
+#   --stock-proc-limits  build with the stock soft data and vmem limits (16 MB; PROC_LIMITS=0 does the same).  By
+#                default master.d/kernel.h's SDATLIM and SVMMLIM are 0x7fffffff (unlimited) like their hard limits,
+#                so a process may grow to what memory and swap allow; SSTKLIM stays 0x1000000 (a 16 MB soft stack
+#                catches runaway recursion; the hard stack limit is unlimited).  The linked rlimits table is checked.
+#                --stock-proc-limits is the kernel without it, byte for byte.
 #   --object-baseline <file> --object-allow "<obj>..."  after the final link, every built
 #                object must have the baseline's sha256 (`sha256  path` lines, paths under usr/sys)
 #                EXCEPT exactly the allowed ones, which must differ; an object the baseline does not
@@ -238,6 +243,7 @@ TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the o
 FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
+PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
@@ -281,6 +287,7 @@ while [ "$#" -gt 0 ]; do
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
+    --stock-proc-limits) PROC_LIMITS=0; shift ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
     -*)         echo "unknown option: $1" >&2; exit 2 ;;
@@ -303,6 +310,7 @@ SD_CARDS="${SD_CARDS:-2}"
 case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SWAP_GUARD" in 0|1) ;; *) echo "SWAP_GUARD='$SWAP_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
@@ -736,6 +744,20 @@ if [ "$BEMPTY_RAM" = 1 ]; then
     *" master.d/kernel.o "*) : ;;
     *) PATCHED_OTHER+=("master.d|kernel.o|kernel.c"); PATCHED_OTHER_SEEN="$PATCHED_OTHER_SEEN master.d/kernel.o"
        echo "  -> master.d/kernel.c : master.d/kernel.o recompiled (section 4b) before master.d/exp relink" ;;
+  esac
+fi
+if [ "$PROC_LIMITS" = 1 ]; then
+  echo "--- process limits: soft data and vmem limits unlimited (master.d/kernel.h; the soft stack stays 16 MB) ---"
+  for l in "#define HDATLIM   0x7fffffff" "#define HVMMLIM   0x7fffffff" "#define HSTKLIM   0x7fffffff" \
+           "#define SSTKLIM   0x1000000"; do   # unchanged, and must be as the stock has them
+    [ "$(grep -cxF -- "$l" "$BUILD/master.d/kernel.h")" = 1 ] || { echo "FATAL: master.d/kernel.h lacks '$l'" >&2; exit 1; }
+  done
+  stock_edit "$BUILD/master.d/kernel.h" "#define SDATLIM   0x1000000" "#define SDATLIM   0x7fffffff"
+  stock_edit "$BUILD/master.d/kernel.h" "#define SVMMLIM   0x1000000" "#define SVMMLIM   0x7fffffff"
+  case " $PATCHED_OTHER_SEEN " in
+    *" master.d/kernel.o "*) : ;;
+    *) PATCHED_OTHER+=("master.d|kernel.o|kernel.c"); PATCHED_OTHER_SEEN="$PATCHED_OTHER_SEEN master.d/kernel.o"
+       echo "  -> master.d/kernel.h : master.d/kernel.o recompiled (section 4b) before master.d/exp relink" ;;
   esac
 fi
 
@@ -1528,6 +1550,25 @@ if [ "$SWAP_GUARD" = 1 ]; then
   python3 "$KT/tools/swapguard-retarget.py" "$BUILD/unix"
   python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"
 fi
+# HARD CHECK (process limits): the linked rlimits table, {soft, hard} for cpu fsize data stack core nofile vmem
+if [ "$PROC_LIMITS" = 1 ]; then WANT_RL="7fffffff 7fffffff 10000000 7fffffff 7fffffff 7fffffff 1000000 7fffffff"
+else WANT_RL="7fffffff 7fffffff 10000000 7fffffff 1000000 7fffffff 1000000 7fffffff"; fi
+WANT_RL="$WANT_RL 100000 7fffffff 40 400 $([ "$PROC_LIMITS" = 1 ] && echo 7fffffff || echo 1000000) 7fffffff"
+python3 - "$BUILD/unix" "$WANT_RL" <<'PYRL' || exit 1
+import struct, sys
+b = open(sys.argv[1], 'rb').read()
+shoff, = struct.unpack_from('>I', b, 32); se, sn = struct.unpack_from('>HH', b, 46)
+sh = [struct.unpack_from('>IIIIIIIIII', b, shoff + i * se) for i in range(sn)]
+st = [s for s in sh if s[1] == 2][0]; so = sh[st[6]][4]
+hit = []
+for i in range(st[5] // 16):
+    n, v, sz, info, o, x = struct.unpack_from('>IIIBBH', b, st[4] + 16 * i)
+    if b[so + n:b.index(0, so + n)] == b'rlimits' and 0 < x < sn and sh[x][1] == 1:
+        hit.append(['%x' % q for q in struct.unpack_from('>14I', b, sh[x][4] + v)])
+if len(hit) != 1 or hit[0] != sys.argv[2].split():
+    sys.exit('process limits: rlimits %s, want %s' % (hit, sys.argv[2]))
+print('--- process limits: rlimits ' + ' '.join(hit[0]) + ' ---')
+PYRL
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
   python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ" <<'PYG' || exit 1
@@ -1660,6 +1701,13 @@ elif [ -n "$DLM_CORE" ]; then
     --mkabi "$DLM_CORE/tools/mkabi.py" "$DLM_CORE/abi/k30/ddi.list" "$WORK/dlm-core/core/dlm_offs.h")
   python3 "$KT/tools/kabi-sidecar030.py" "$BUILD/unix" "$BUILD/unix.brel" --family generic --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}" -o "$BUILD/kabi"
   python3 "$KT/tools/kabi-sidecar030.py" --check "$BUILD/unix" "$BUILD/unix.brel" "$BUILD/kabi" --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}"
+  # the sidecar's pin= (the toolchain that built the kernel, toolchain/gcc-cross-amix.pin) must be the core's
+  # compiled DLM_PIN (dlm-core-link.sh: the core's toolchain.pin), the pin a module's cc= is checked against
+  KPIN="$(sed -n 's/^pin=//p' "$BUILD/kabi")"
+  DPIN="$(awk '$1 == "gcc" {g = $2} $1 == "commit" {c = $2} END {if (g != "" && c != "") print "gcc-" g "-" c}' "$DLM_CORE/toolchain.pin")"
+  [ -n "$KPIN" ] && [ "$KPIN" = "$DPIN" ] \
+    || { echo "--dlm: the sidecar's pin=$KPIN is not the core's toolchain.pin ($DPIN): repin both together" >&2; exit 1; }
+  echo "  pin=$KPIN: the sidecar and the core's toolchain.pin agree"
 elif [ -n "$KINFO_C" ]; then
   echo "--- kinfo: the kabi sidecar of unix.brel (C2-3 §2; tools/kabi-sidecar030.py) ---"
   python3 "$KT/tools/kabi-sidecar030.py" "$BUILD/unix" "$BUILD/unix.brel" --family "$KINFO_FAMILY" --sdcards "$SD_CARDS" -o "$BUILD/kabi"

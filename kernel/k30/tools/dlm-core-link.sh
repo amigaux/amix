@@ -4,6 +4,7 @@
 #
 #   tools/dlm-core-link.sh ETREL OUT --dlm DIR [--line k30] [--kabi k30.1.0] [--pin PIN]
 #                          [--stub-providers]
+#   (PIN defaults to gcc-<gcc>-<commit> from DIR/toolchain.pin, the core's own toolchain pin)
 #
 # ETREL is the linked kernel before elf2brel (build-cross-kernel.sh's $BUILD/unix, with --kinfo's cdevsw row).
 # OUT is a work directory; OUT/unix is the spliced ET_REL, OUT/steps.tsv one line per step (step, PASS|FAIL|OWED,
@@ -38,12 +39,16 @@
 set -uo pipefail
 KT="$(cd "$(dirname "$0")/.." && pwd)"
 ETREL="${1:?ETREL}"; OUT="${2:?OUT}"; shift 2
-DLM="$KT/../dlm"; LINE=k30; KABI=k30.1.0; PIN=gcc-2.7.2.3-8949028; STUB=0
+DLM="$KT/../dlm"; LINE=k30; KABI=k30.1.0; PIN=; STUB=0
 while [ $# -gt 0 ]; do case "$1" in
 	--dlm) DLM="$2"; shift 2;; --line) LINE="$2"; shift 2;; --kabi) KABI="$2"; shift 2;; --pin) PIN="$2"; shift 2;;
 	--stub-providers) STUB=1; shift;; --rth1-dir) RTH1_DIR="$2"; shift 2;;
 	*) echo "dlm-core-link: unknown option $1" >&2; exit 2;; esac; done
 RTH1_DIR="${RTH1_DIR:-}"
+if [ -z "$PIN" ]; then
+	PIN=$(awk '$1 == "gcc" {g = $2} $1 == "commit" {c = $2} END {if (g != "" && c != "") print "gcc-" g "-" c}' "$DLM/toolchain.pin" 2> /dev/null)
+	[ -n "$PIN" ] || { echo "dlm-core-link: no gcc and commit in $DLM/toolchain.pin (or pass --pin)" >&2; exit 2; }
+fi
 GCA="${GCA:?dlm-core-link: set GCA to the build/ directory of gcc-cross-amix (toolchain/README.md)}"; G14="${G14:-}"
 . "$GCA/env.sh"; [ -z "$G14" ] || PATH="$PATH:$G14/prefix/bin"; export PATH
 rm -rf "$OUT"; mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; C="$OUT/core"; O="$OUT/obj"; mkdir -p "$O"
