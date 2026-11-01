@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — character major 55 for zz9ksvc; dlmkit -17 (9be1705, d68305a)
+
+The registry gives c 55 to kernel/modules' zz9ksvc (the ZZ9000/Z3660 service channel, /dev/zz9ksvcN). 55 is free in 68030-261101-67 and 68060-261031-55 (M-REG1 re-run); kbootset's table is regenerated. C3-5 v21 gives zz9ksvc and zz9kbus their short names, and says a module that loads only as a dependency is boot class with its boards' match=. dlmkit -17 carries the registry (kits k30 33852dd4, k46 48f84e72). Kernels refuse a zz9ksvc module until they are cut from this registry.
+
 ## 2026-11-01 — every rm -r of a variable path guarded (bcb0e11)
 
 Every `rm -r` of a variable path in kernel/dlm's tests, tools/mkkit.sh and the recipe build scripts goes through
