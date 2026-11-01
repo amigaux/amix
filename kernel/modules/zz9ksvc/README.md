@@ -25,7 +25,8 @@ and carry no GPL text, so an MIT board driver never links GPL code.
 | `include/sys/zz9ksvc.h` | the ioctl interface |
 | `module/keys`, `module/Master`, `module/Makefile`, `module/VERSION` | as for every module here |
 | `man/zz9ksvc.7` | the page `zz9ksvc(7)` |
-| `test/hosttest.sh`, `test/fw.c`, `test/fw.h` | the host test and its stand-in runtime |
+| `test/hosttest.sh`, `test/td.h`, `test/stub/`, `test/stub-bus/` | the host test, its DDI stand-ins and client calls, the stub kernel headers |
+| `test/fw.c`, `test/fw.h` | the stand-in runtime (libzz9k's host test uses it too) |
 | `pkg/` | the package recipe, rolled by make dist's kspace step |
 
 ## How it works
@@ -144,7 +145,9 @@ checks the source (c 55 in `zz9ksvc.c` and `keys`; `zz9kbus.h` MIT with no GPL t
 headers included only by `wire.c` and the stand-in), then compiles the shipped `zz9ksvc.c`,
 `wire.c` and `zz9kbus.c` with stand-ins for the DDI (a simulated clock drives `timeout` and
 `sleep`) against `test/fw.c`, a stand-in runtime with a real ABI v2 mailbox that can hold,
-park, delay or fail requests, and a stub board whose host-visible window the test sets. It
+park, delay or fail requests, a heap with host memory behind it placed first fit (a freed
+range is handed out again), and DECOMPRESS of raw deflate, zlib and gzip done with the host's
+zlib as the firmware does it; and a stub board whose host-visible window the test sets. It
 covers:
 - the descriptor checks (each way a descriptor can be wrong);
 - `_load` with no board, no magic, no runtime, a bad descriptor, and a good one (the board held);
@@ -154,6 +157,8 @@ covers:
   allocation that times out or is interrupted giving its late buffer back;
 - mmap by handle: the right frame, both halves of a k46 page, past the end, negative offsets,
   a wrong generation, another client's cookie, a freed and reused handle;
+- a real DECOMPRESS of each format through the kernel: the bytes, the CRC-32, no room, a
+  corrupt stream;
 - the request policy, root-only opcodes, payload length, every reference check (range,
   overflow, ownership, free handles), the runtime seeing only its own handles, 4 in flight, a
   full ring, a stray reply;

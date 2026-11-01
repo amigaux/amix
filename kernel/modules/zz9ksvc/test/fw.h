@@ -20,8 +20,9 @@ struct fw_state {
 	unsigned	alloc_status;	/* nonzero: fail ALLOC_SHARED with it */
 	int		alloc_outside;	/* place the next buffers outside the window */
 	unsigned	alloc_extra;	/* report this many bytes more than asked */
-	unsigned long	next_handle, next_arm;
+	unsigned long	next_handle;
 	unsigned long	live[FW_NBUF];	/* handles allocated and not freed */
+	unsigned long	live_arm[FW_NBUF], live_len[FW_NBUF];	/* where each lies */
 	int		nlive, nalloc, nfree, bad_free, not_queued, steps;
 	unsigned	last_op;
 	unsigned char	last_payload[48];
@@ -31,6 +32,12 @@ struct fw_state {
 extern unsigned char fw_mbox[FW_MBOXLEN];
 extern struct fw_state fw;
 void fw_init(int reqn, int cmpn, unsigned long caps);
+void fw_restart(void);
+unsigned char *fw_heap_at(unsigned long arm);
+unsigned long fw_alg_raw(void), fw_alg_zlib(void), fw_alg_gzip(void);
+unsigned long fw_deflate(unsigned long alg, const unsigned char *src, unsigned long n,
+    unsigned char *dst, unsigned long cap);
+unsigned long fw_crc32(const unsigned char *p, unsigned long n);
 void fw_break(int how);
 void fw_step(void);
 void fw_stray(unsigned long id);

@@ -1,0 +1,2 @@
+#define FREAD	0x01
+#define FWRITE	0x02

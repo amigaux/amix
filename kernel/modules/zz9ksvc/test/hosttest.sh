@@ -4,6 +4,8 @@
 # stand-ins for the DDI names it calls (timeout and sleep drive a simulated clock), the
 # shipped src/wire.c and zz9kbus/src/zz9kbus.c beside it, and test/fw.c as the board's
 # runtime: a mailbox in host memory that answers like the firmware, with faults on demand.
+# The stub headers are test/stub (zz9ksvc.c's) and test/stub-bus (zz9kbus.c's), the
+# stand-ins and the client's calls test/td.h.
 # The board is a stub zz9kbus board whose host-visible heap window the test chooses.  It
 # runs once with the k30 page size (2 KiB) and once with the k46 one (4 KiB).
 #
@@ -12,341 +14,9 @@ set -e
 top=$(cd "$(dirname "$0")/../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp:?}"' EXIT
-mkdir -p "$tmp/inc/sys" "$tmp/bus/sys"
-
-# zz9ksvc.c's kernel headers
-cat > "$tmp/inc/sys/param.h" <<'H'
-#define HZ	100
-#define PZERO	25
-#define PCATCH	0400
-H
-cat > "$tmp/inc/sys/file.h" <<'H'
-#define FREAD	0x01
-#define FWRITE	0x02
-H
-cat > "$tmp/inc/sys/cred.h" <<'H'
-struct cred { int cr_uid; };
-H
-cat > "$tmp/inc/sys/kmem.h" <<'H'
-#define KM_SLEEP	0
-#define KM_NOSLEEP	1
-H
-cat > "$tmp/inc/sys/immu.h" <<'H'
-#define NBPP		TD_NBPP
-#define phystopfn(pa)	((unsigned)(pa) >> TD_PSHIFT)
-H
-cat > "$tmp/inc/sys/conf.h" <<'H'
-struct bdevsw { int (*d_open)(); int (*d_close)(); int (*d_strategy)(); int (*d_print)(); };
-struct cdevsw { int (*d_open)(); int (*d_close)(); int (*d_read)(); int (*d_write)();
-	int (*d_ioctl)(); int (*d_mmap)(); };
-H
-cat > "$tmp/inc/sys/ddi.h" <<'H'
-unsigned getminor(dev_t); unsigned getmajor(dev_t); dev_t makedevice(unsigned, unsigned);
-H
-cat > "$tmp/inc/sys/moddefs.h" <<'H'
-struct mod_drv_data {
-	struct bdevsw drv_bdevsw; int drv_bmajor, drv_bcount;
-	struct cdevsw drv_cdevsw; int drv_cmajor, drv_ccount;
-};
-#define MOD_DRV_WRAPPER(p, l, u, h, d) \
-	int (*td_load)(char *) = l; int (*td_unload)(void) = u; char *td_desc = d
-H
-cat > "$tmp/inc/sys/amixddi.h" <<'H'
-int spl4(void); int splx(int);
-H
-# zz9kbus.c's, in its own unit
-: > "$tmp/bus/sys/param.h"
-echo '#define MOD_MISC_WRAPPER(p, l, u, d) int td_bus_wrapper' > "$tmp/bus/sys/moddefs.h"
 
 cat > "$tmp/t.c" <<'C'
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/types.h>
-
-typedef long clock_t_td;
-#define _KERNEL
-/* the DDI stand-ins zz9ksvc.c declares K&R-style */
-clock_t lbolt;
-int td_root = 1, td_signal, td_kmem_fail, td_copy_fail, td_doorbells, td_kmem_live;
-struct td_co { void (*f)(); caddr_t a; long when; int id; } td_co[64];
-int td_coid;
-
-#include "zz9ksvc.c"
-#include "fw.h"
-
-static int checks, td_woken_any;
-static caddr_t td_woken[64];
-#define CHECK(c, ...) do { if (!(c)) { printf("FAIL %s:%d: ", __FILE__, __LINE__); \
-	printf(__VA_ARGS__); printf("\n"); exit(1); } checks++; } while (0)
-
-unsigned getminor(dev_t d) { return (unsigned)d & 0x3ffff; }
-unsigned getmajor(dev_t d) { return ((unsigned)d >> 18) & 0xff; }
-dev_t makedevice(unsigned ma, unsigned mi) { return (dev_t)((ma << 18) | mi); }
-int spl4(void) { return 0; }
-int splx(int s) { return 0; }
-int drv_priv(struct cred *c) { return td_root ? 0 : EPERM; }
-int copyin(caddr_t u, caddr_t k, size_t n) { if (td_copy_fail) return -1; memcpy(k, u, n); return 0; }
-int copyout(caddr_t k, caddr_t u, size_t n) { if (td_copy_fail) return -1; memcpy(u, k, n); return 0; }
-void bcopy(const void *s, void *d, size_t n) { memmove(d, s, n); }
-void bzero(void *p, size_t n) { memset(p, 0, n); }
-caddr_t kmem_zalloc(size_t n, int f) { if (td_kmem_fail) return 0; td_kmem_live++; return calloc(1, n); }
-void kmem_free(caddr_t p, size_t n) { td_kmem_live--; free(p); }
-
-int
-timeout(void (*f)(), caddr_t a, long t)
-{
-	int i;
-
-	for (i = 0; i < 64; i++)
-		if (td_co[i].f == 0) {
-			td_co[i].f = f; td_co[i].a = a; td_co[i].when = lbolt + t; td_co[i].id = ++td_coid;
-			return td_co[i].id;
-		}
-	printf("FAIL: callout table full\n");
-	exit(1);
-}
-
-int
-untimeout(int id)
-{
-	int i;
-
-	for (i = 0; i < 64; i++)
-		if (td_co[i].f && td_co[i].id == id)
-			td_co[i].f = 0;
-	return 0;
-}
-
-void
-wakeup(caddr_t chan)
-{
-	int i;
-
-	for (i = 0; i < 64; i++)
-		if (td_woken[i] == 0) {
-			td_woken[i] = chan;
-			break;
-		}
-	td_woken_any = 1;
-}
-
-static int
-was_woken(caddr_t chan)
-{
-	int i, w = 0;
-
-	for (i = 0; i < 64; i++)
-		if (td_woken[i] == chan) {
-			td_woken[i] = 0;
-			w = 1;
-		}
-	return w;
-}
-
-/* one clock tick of the simulated box: the runtime steps, due callouts run */
-static void
-td_tick(void)
-{
-	int i;
-
-	lbolt++;
-	fw_step();
-	for (i = 0; i < 64; i++)
-		if (td_co[i].f && td_co[i].when <= lbolt) {
-			void (*f)() = td_co[i].f;
-			caddr_t a = td_co[i].a;
-
-			td_co[i].f = 0;
-			f(a);
-		}
-}
-
-static void
-td_run(int ticks)
-{
-	while (ticks-- > 0)
-		td_tick();
-}
-
-int
-sleep(caddr_t chan, int pri)
-{
-	int n;
-
-	for (n = 0; n < 100000; n++) {
-		if (td_signal) {
-			td_signal = 0;
-			return 1;
-		}
-		td_tick();
-		if (was_woken(chan))
-			return 0;
-	}
-	printf("FAIL: sleep never woken\n");
-	exit(1);
-}
-
-static int
-callouts(void)
-{
-	int i, n = 0;
-
-	for (i = 0; i < 64; i++)
-		if (td_co[i].f)
-			n++;
-	return n;
-}
-
-/* ---- the stub board ---- */
-
-#define PHYS_BASE	0x20000000UL	/* where the window lies in physical memory */
-static struct zz9kbus_board board;
-static int bread_magic = 1;
-
-static unsigned bread(char *c, int off) { return off == 0 && bread_magic ? zzw_boot_magic : 0xffff; }
-static void bell(char *c) { td_doorbells++; }
-static int
-heapphys(char *c, unsigned long arm, unsigned long len, unsigned long *phys)
-{
-	*phys = PHYS_BASE;	/* a plausible answer even when refusing: only the return counts */
-	if (arm < FW_HEAP_ARM || len > FW_HEAP_LEN || arm - FW_HEAP_ARM > FW_HEAP_LEN - len)
-		return -1;
-	*phys = PHYS_BASE + (arm - FW_HEAP_ARM);
-	return 0;
-}
-
-static void
-board_init(void)
-{
-	memset(&board, 0, sizeof board);
-	board.zb_version = ZZ9KBUS_VERSION;
-	board.zb_id = ZZ9KBUS_ID_Z3660;
-	board.zb_boff = 0x400;
-	board.zb_bsize = 0x20;
-	board.zb_bread = (unsigned (*)())bread;
-	board.zb_doorbell = (void (*)())bell;
-	board.zb_mbox = (char *)fw_mbox;
-	board.zb_mboxlen = FW_MBOXLEN;
-	board.zb_heapphys = (int (*)())heapphys;
-}
-
-/* ---- the client's side ---- */
-
-static dev_t
-op_open(int unit, int *err)
-{
-	dev_t d = makedevice(ZZS_MAJOR, unit);
-
-	*err = zz9ksvc_drvdata[0].drv_cdevsw.d_open(&d, FREAD | FWRITE, 2, (struct cred *)0);
-	return d;
-}
-
-static int
-op_close(dev_t d)
-{
-	return zz9ksvc_drvdata[0].drv_cdevsw.d_close(d, FREAD | FWRITE, 2, (struct cred *)0);
-}
-
-static int
-ioc(dev_t d, int cmd, void *arg)
-{
-	int rv;
-
-	return zz9ksvc_drvdata[0].drv_cdevsw.d_ioctl(d, cmd, (caddr_t)arg, FREAD | FWRITE,
-	    (struct cred *)0, &rv);
-}
-
-static int
-op_alloc(dev_t d, long len, long flags, struct zzs_alloc *za)
-{
-	memset(za, 0, sizeof *za);
-	za->za_length = len;
-	za->za_flags = flags;
-	return ioc(d, ZZSIOC_ALLOC, za);
-}
-
-static void
-be32(unsigned char *p, unsigned long v)
-{
-	p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v;
-}
-
-/* a DECOMPRESS of src (off, len) into dst (off, cap) */
-static int
-op_decompress(dev_t d, long src, unsigned long soff, unsigned long slen,
-    long dst, unsigned long doff, unsigned long dcap, long *id)
-{
-	struct zzs_submit zs;
-	int e;
-
-	memset(&zs, 0, sizeof zs);
-	zs.zs_opcode = fw_op_decompress();
-	zs.zs_len = 48;
-	be32(zs.zs_payload + 0, src);
-	be32(zs.zs_payload + 4, soff);
-	be32(zs.zs_payload + 8, slen);
-	be32(zs.zs_payload + 12, dst);
-	be32(zs.zs_payload + 16, doff);
-	be32(zs.zs_payload + 20, dcap);
-	e = ioc(d, ZZSIOC_SUBMIT, &zs);
-	if (id)
-		*id = zs.zs_id;
-	return e;
-}
-
-static int
-op_plain(dev_t d, unsigned long opcode, long *id)
-{
-	struct zzs_submit zs;
-	int e;
-
-	memset(&zs, 0, sizeof zs);
-	zs.zs_opcode = opcode;
-	zs.zs_len = 4;
-	e = ioc(d, ZZSIOC_SUBMIT, &zs);
-	if (id)
-		*id = zs.zs_id;
-	return e;
-}
-
-static int
-op_wait(dev_t d, long id, long ms, struct zzs_wait *zw)
-{
-	memset(zw, 0, sizeof *zw);
-	zw->zw_id = id;
-	zw->zw_ms = ms;
-	return ioc(d, ZZSIOC_WAIT, zw);
-}
-
-static int
-op_mmap(dev_t d, long off)
-{
-	return zz9ksvc_drvdata[0].drv_cdevsw.d_mmap(d, (off_t)off, 3);
-}
-
-static struct zzs_stats
-stats(dev_t d)
-{
-	struct zzs_stats zt;
-
-	memset(&zt, 0, sizeof zt);
-	if (ioc(d, ZZSIOC_STATS, &zt) != 0) {
-		printf("FAIL: STATS\n");
-		exit(1);
-	}
-	return zt;
-}
-
-static void
-drain(void)
-{
-	int n;
-
-	for (n = 0; n < 200 && (zzs_pending() || callouts()); n++)
-		td_tick();
-}
+#include "td.h"
 
 int
 main(void)
@@ -587,6 +257,42 @@ main(void)
 	zt = stats(a);
 	CHECK(zt.zt_stray == 1, "stray completions: %ld", zt.zt_stray);
 
+	/* 7b. a real DECOMPRESS through the kernel: the stand-in inflates as the firmware does */
+	{
+		static unsigned char orig[5000], comp[6000];
+		unsigned long algs[3], k, n = 0;
+		unsigned char *s, *t;
+
+		algs[0] = fw_alg_raw(); algs[1] = fw_alg_zlib(); algs[2] = fw_alg_gzip();
+		for (k = 0; k < sizeof orig; k++)
+			orig[k] = (unsigned char)(k * 7 + k / 13);
+		CHECK(op_alloc(b, 3 * 2048, 0, &zb) == 0 && op_alloc(b, 3 * 2048, 0, &zc) == 0, "two buffers");
+		s = td_map(b, zb.za_cookie, zb.za_length);
+		t = td_map(b, zc.za_cookie, zc.za_length);
+		CHECK(s && t && s != t, "both map to the heap");
+		for (k = 0; k < 3; k++) {
+			n = fw_deflate(algs[k], orig, sizeof orig, comp, sizeof comp);
+			CHECK(n > 0 && n <= (unsigned long)zb.za_length, "the test stream %lu: %lu bytes", algs[k], n);
+			memcpy(s, comp, n);
+			memset(t, 0, zc.za_length);
+			CHECK(op_inflate(b, zb.za_handle, n, zc.za_handle, zc.za_length, algs[k], &id) == 0 &&
+			    op_wait(b, id, 0, &zw) == 0 && zw.zw_status == fw_status_ok() && zw.zw_len == 20,
+			    "inflate %lu: status %ld", algs[k], zw.zw_status);
+			CHECK(zzw_get32(zw.zw_payload) == n && zzw_get32(zw.zw_payload + 4) == sizeof orig &&
+			    zzw_get32(zw.zw_payload + 8) == fw_crc32(orig, sizeof orig) &&
+			    memcmp(t, orig, sizeof orig) == 0, "inflate %lu: the bytes and the CRC", algs[k]);
+		}
+		/* too small a destination; a corrupt stream */
+		CHECK(op_inflate(b, zb.za_handle, n, zc.za_handle, 100, algs[2], &id) == 0 &&
+		    op_wait(b, id, 0, &zw) == 0 && zw.zw_status == 6, "no room: NO_MEMORY (%ld)", zw.zw_status);
+		s[3] ^= 0xff;
+		CHECK(op_inflate(b, zb.za_handle, n, zc.za_handle, zc.za_length, algs[2], &id) == 0 &&
+		    op_wait(b, id, 0, &zw) == 0 && zw.zw_status == 4, "corrupt: BAD_REQUEST (%ld)", zw.zw_status);
+		CHECK(ioc(b, ZZSIOC_FREE, (void *)zb.za_handle) == 0 &&
+		    ioc(b, ZZSIOC_FREE, (void *)zc.za_handle) == 0, "free both");
+		drain();
+	}
+
 	/* 8. timeout and quarantine: the runtime takes the DECOMPRESS and never answers it */
 	fw.park_op = fw_op_decompress();
 	CHECK(op_decompress(a, 0, 0, pg, 2, 0, 3 * pg, &id) == 0, "submit, held");
@@ -714,9 +420,9 @@ for p in 2048:11 4096:12; do
 	cc="${HOSTCC:-cc} -std=gnu89 -w -DTD_NBPP=$nbpp -DTD_PSHIFT=$shift"
 	$cc -c -I"$top/zz9ksvc/sdk" -I"$top/zz9ksvc/src" -o "$tmp/wire.o" "$top/zz9ksvc/src/wire.c"
 	$cc -c -I"$top/zz9ksvc/sdk" -I"$top/zz9ksvc/test" -o "$tmp/fw.o" "$top/zz9ksvc/test/fw.c"
-	$cc -c -D_KERNEL -I"$tmp/bus" -I"$top/include" -o "$tmp/bus.o" "$top/zz9kbus/src/zz9kbus.c"
-	$cc -I"$tmp/inc" -I"$top/include" -I"$top/zz9ksvc/include" -I"$top/zz9ksvc/src" \
-	    -I"$top/zz9ksvc/test" -o "$tmp/t" "$tmp/t.c" "$tmp/wire.o" "$tmp/fw.o" "$tmp/bus.o" \
+	$cc -c -D_KERNEL -I"$top/zz9ksvc/test/stub-bus" -I"$top/include" -o "$tmp/bus.o" "$top/zz9kbus/src/zz9kbus.c"
+	$cc -I"$top/zz9ksvc/test/stub" -I"$top/include" -I"$top/zz9ksvc/include" -I"$top/zz9ksvc/src" \
+	    -I"$top/zz9ksvc/test" -o "$tmp/t" "$tmp/t.c" "$tmp/wire.o" "$tmp/fw.o" "$tmp/bus.o" -lz \
 	    2> "$tmp/cc.log" || { cat "$tmp/cc.log" >&2; exit 1; }
 	(cd "$top/zz9ksvc/src" && "$tmp/t")
 done
