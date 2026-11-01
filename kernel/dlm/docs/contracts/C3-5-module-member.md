@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 21
+# C3-5 — the module package and the per-module manifest record, version 22
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -31,7 +31,10 @@
   (2026-10-31): a demand-class record may carry `fs=` instead of
   `majors=`, and `marc_post` gives that type a stub row (§2, §3, §5);
   version 21 (2026-11-01): zz9ksvc's and zz9kbus's short names, and the
-  class of a module that loads only as a dependency (§1.1).
+  class of a module that loads only as a dependency (§1.1); version 22
+  (2026-11-01): a module kernel's manifest carries the major table, one
+  `major` record per registry row, which the core reads (core patch 0051;
+  §3).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -240,6 +243,34 @@ declared one. Anything else is refused at gate 2, naming the module, the
 parameter and the value.
 
 ## 3. The manifest records
+
+**The major table** (version 22). A module kernel's manifest (one with
+`arena` and `ident`) carries, right after `ident`, one record per row of
+the major registry (`abi/registry/majors`), in the registry's order:
+
+```
+major <c|b> <n> <name>
+```
+
+- The core reads the owner of a module's majors there (core patch 0051),
+  not from a table built into the kernel, so a new major needs a new
+  `kbootset` and a new kit, never a new kernel.
+- Every row is written, not only the members': a development-load test
+  module with a registered major loads too.
+- The core refuses every major of a manifest without the table (one an
+  older `kbootset` composed: a kernel with patch 0051 needs `kbootset`
+  -34 or later), and the whole table when a record is malformed, is past
+  the switch (70 character, 32 block rows) or names a number another
+  record names. Without a booted manifest no module loads, and the table
+  built into the kernel answers.
+- `kbootset` gate 3 refuses a registry row past the switch, and a member
+  whose major is a row the kernel's own drivers fill (M-REG1 on the
+  kernels of record: character 0–6, 8–37, 40–41, 46, 50, 53; block
+  16–19). `kbootset check` compares each module-kernel generation's table
+  with its registry: a different table is a problem, no table a note.
+- boot2 ignores the record (an unknown, non-critical one), and a kernel
+  without patch 0051 reads only `module` and `param` records, so the two
+  combine both ways.
 
 After the kernel's record, one record per module: root class first, then
 boot class in `depend` order, then demand class; then the `param`

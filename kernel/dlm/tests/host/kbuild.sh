@@ -334,6 +334,14 @@ grep -a -qx "param z3660rtg.blit=0" $T/disk.img
 $B/lsstore $T/disk.img 65536 | grep -q "lsstore: ok"
 $KB check > $T/out
 grep -q "module z3660rtg: /stand/gen/$id/mod/z3660rtg ok" $T/out
+# the major table (core patch 0051, C3-5 v22): every registry row in the
+# registry's order, after the arena and ident records; check finds it equal
+sed 's/#.*//' abi/registry/majors | awk 'NF == 3 { print "major", $1, $2, $3 }' > $T/wantmaj
+grep '^major ' $B5 > $T/gotmaj
+cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantmaj $T/gotmaj >&2; exit 1; }
+grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
+grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
+grep -q "generation $id: major table ok" $T/out
 # check: a module copy changed, then gone
 cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
 flip $R/stand/gen/$id/mod/monsw 4
@@ -371,6 +379,9 @@ grep -q "intr=-1 is not a valid int value for module z3660eth" $T/out
 three; echo "intr=6" > $R/etc/conf/modreg.d/z3660eth
 refused 2 $KB build $FACTS			# a malformed line
 grep -q "neither param <name>=<value>, disable nor safe" $T/out
+three; modpkg kinfo class=demand majors=c:53
+refused 3 $KB build $FACTS			# a row the kernel's own kinfo driver fills
+grep -q "module kinfo: major c:53 is a row the kernel's own switch fills" $T/out
 # the local safe mark (C4-4 §2): a boot module's record gets safe=1, from
 # modreg.local.d only and for boot class only
 three; echo "safe" > $R/etc/conf/modreg.local.d/z3660eth
@@ -431,7 +442,7 @@ grep -q "changed since kbootset build" $T/out
 rm -rf "${R:?}/stand/gen/${id:?}"
 rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-* "${R:?}"/etc/conf/modreg.d/* "${R:?}"/etc/conf/modreg.local.d/*
 cp $T/kabi.static $R/stand/k46/kabi; record
-echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, commit, check) ok"
+echo "kbuild: module members (gates 1, 2, 3, the order, modreg parameters, the major table, a kernel row, commit, check) ok"
 
 # root-class modules (C3-5 version 7, C4-4 version 3) on a module
 # kernel whose sidecar names no built-in root controller or filesystem:
