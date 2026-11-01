@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — cut 68060-261101-56 is the k46 cut of record; kern46m -56 (65b7f49, b79f9e6, dcbe60b)
+
+port.pin moves to 7af6b2d. Cut 68060-261101-56 on gcc-cross-amix 33ebadc with module core 0051: ITT0/DTT0 supervisor-only (user code can no longer reach physical memory below 1 GiB), no legacy 030 segment tables in user address spaces, swapadd fails with ENOMEM instead of sleeping, soft data and vmem limits unlimited. unix 8ef91062, kabi 712b3d0e, ufs.mod 384ef7c9, abi 18c0a1c9 unchanged. kern46m -56 (0c63b229) needs kbootset -34 or later and the module packages built on the same kit; kernel-k46-m reads pin= from the cut's dlm toolchain.pin.
+
 ## 2026-10-31 — cut 68060-261031-55 is the k46 cut of record; kern46m -55 (dcc3b68)
 
 cuts/CURRENT moves to 68060-261031-55: the port's cut at eae06ae with amix 3c3e353's module core and kit. Core 0048

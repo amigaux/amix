@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-01 — cut 68030-261101-68 and kern30m -68 (1ca4de2, 3e6037a, 88ad417)
+
+- The toolchain pin comes from kernel/dlm/toolchain.pin; a module kernel stops if the kabi pin= is not the core's pin.
+- Soft data and vmem limits are unlimited by default (stack stays 16 MB); --stock-proc-limits builds the old table.
+- Cut 68030-261101-68 on gcc-cross-amix 33ebadc with module core 0051 (module majors from the booted manifest): unix 39dbbe3f, brel 679f8270, kabi 1b15e299 (k30.1.4, pin gcc-2.7.2.3-33ebadc). kern30m -68 (ebc9e866) needs kbootset -34 or later.
+
 ## 2026-11-01 — swapadd guard; cut 68030-261101-67
 
 - swap -a of an area whose anon array finds no free run in kvseg now fails at once with ENOMEM ("swap: Not enough space", exit 2) instead of sleeping for ever; the boot-time add of the swap slice's tail no longer hangs. On by default; --no-swap-guard builds the previous kernel byte for byte (1dff121).

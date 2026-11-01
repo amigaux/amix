@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — every module re-rolled on the gcc-cross-amix 33ebadc kit (b2b683f..1549a26)
+
+monsw 1.0.0-9, ramdisk 1.0.0-6, random 1.0.0-2, zz9kbus 1.0.0-2 and zz9ksvc 1.0.0-2 are rolled on the kit with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc), which the -68/-56 kernels require. The modules' code is unchanged (each object differs in the 7-byte pin). monswctl now links values-Xa.o as the native cc does.
+
 ## 2026-11-01 — zz9kbus and zz9ksvc 1.0.0-1
 
 - zz9kbus 1.0.0-1: the MIT registry between ZZ9000-family board drivers and zz9ksvc (include/sys/zz9kbus.h, carried by the ABI kit for board drivers built outside the tree); boot class, matching the Z3660 and ZZ9000 keys; objects 20db776b / 1e571b9a (7a8a509, 49d6bf8).

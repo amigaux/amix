@@ -18,3 +18,5 @@ internals are in each directory's `CHANGELOG.md`.
 - Shared libraries with GCC 14 (`gcc -shared`).
 - Package repositories per release (`http://pkg.amigaux.org/1.1`).
 - `make dist` builds the release reproducibly from this repository.
+- Programs can use all of the machine's memory: data and mapped-memory limits are unlimited by default.
+- Network and print services that few machines need start only when `/etc/rc.conf` turns them on.

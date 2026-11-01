@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — zscsi30/46 1.0.0-5 on the 33ebadc kit (b632b40)
+
+The module's 1.0.0-2 rebuilt with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc), the compiler the new kernels require: k30 3236e6c7, k46 15f0769a.
+
 ## 2026-11-01 — package recipe in amix, zscsi30/zscsi46 1.0.0-4 (2af0085)
 
 pkg/ rolls z3660scsi-k30/-k46 through build/pkg/common/kdrv.sh from make dist's drivers objects (k30 2c9e3803, k46

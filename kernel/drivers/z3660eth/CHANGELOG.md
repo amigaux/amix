@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — package 1.0.0-11 on the gcc-cross-amix 33ebadc kit (f18df25)
+
+The objects rebuilt on the kit with cc=gcc-2.7.2.3-33ebadc, which the k30 -68 and k46 -56 module kernels require. Module release 1.0.0-5, source unchanged. Modules k30 e1caab15, k46 d8b292ba; packages zeth30 44f74bed, zeth46 8230250e.
+
 ## 2026-11-01 — package recipe: z3660eth-k30/-k46 1.0.0-10 rolled from amix (e77e899)
 
 kernel/drivers/z3660eth/pkg/ holds the recipe kdrv rolls in make dist's kspace step: the module, modreg,

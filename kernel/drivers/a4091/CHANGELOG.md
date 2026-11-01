@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — a4091 1.0.0-8, a4kt710 1.0.0-4 on the 33ebadc kit (9392ffc)
+
+Re-rolled with gcc-cross-amix 33ebadc (.moddata cc=gcc-2.7.2.3-33ebadc, other sections unchanged; modules 1.0.0-5 and 1.0.0-1); for kernel-k30-m -68 and kernel-k46-m -56 or later.
+
 ## 2026-11-01 — package recipes for a4091 and a4kt710, rolled by make dist (f0b6043)
 
 pkg/ holds the a4091 and a4kt710 recipes, rolled by make dist's kspace step from the drivers step's objects, which are
