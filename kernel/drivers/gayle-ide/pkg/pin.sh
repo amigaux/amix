@@ -15,18 +15,20 @@
 # comments only, the module's defaults).
 # 1.1.0-5 (2026-11-01): the module 1.1.0-3 (fork 24ed009), the same objects as
 # the earlier 1.1.0-4, first rolled from amix.
+# 1.1.0-6 (2026-11-01): the same module 1.1.0-3, built with the kit of toolchain
+# pin gcc-2.7.2.3-33ebadc: the objects differ from 1.1.0-5 only in that tag.
 
 KM_NAME=gayle
 KM_SHORT=gayle
 KM_REPO=kernel/drivers/gayle-ide
 KM_VERSION=1.1.0-3
-KM_PKG_VERSION=1.1.0-5
+KM_PKG_VERSION=1.1.0-6
 KM_VERSION_FILE=out/cache/forks/gayle-ide/module/VERSION
 
-KM_K30_SHA=e465bb12ff690460041e3288c5b8d76e61694cf884bb785dcf4461a4f84a649d
-KM_K46_SHA=5c8d7d640712492403641e36934f12f164cd333d03a1322df6a429cbeb7da437
+KM_K30_SHA=5833325d72f1fe4917a8cf3a0af835f5a9d0928bc8e2331d0f7c47dcff13d561
+KM_K46_SHA=f0ad33a8dadef1dd5ff4e463aa448905a4ec7ad2ac8683e937be1360227927ce
 
-KM_KIT_COMMIT=6cc5dbafd168138530da0d8601a42322abbc4da9
+KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
 KM_LICENCES="\
 out/cache/forks/gayle-ide/LICENSE b2a9d95bb7959880868ac8f29fcb7268c02a9401597ba1d153b0055bdc5c9340"
