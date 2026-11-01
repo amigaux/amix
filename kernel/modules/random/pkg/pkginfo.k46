@@ -1,11 +1,11 @@
 PKG=random46
-NAME=random-k46 1.0.0-1 - /dev/random and /dev/urandom module, k46 line
+NAME=random-k46 1.0.0-2 - /dev/random and /dev/urandom module, k46 line
 ARCH=Amiga
-VERSION=1.0.0-1
+VERSION=1.0.0-2
 CATEGORY=system
 CLASSES=none random
 VENDOR=amix
-PSTAMP=amix-random46-1.0.0-1
+PSTAMP=amix-random46-1.0.0-2
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
 # #ext kpkg block (line=k46), never an ordinary entry.  Catalog name
 # random-k46, pkginst random46; VERSION is the module's own release

@@ -1,11 +1,11 @@
 PKG=zz9ksvc46
-NAME=zz9ksvc-k46 1.0.0-1 - ZZ9000-family service channel module, k46 line
+NAME=zz9ksvc-k46 1.0.0-2 - ZZ9000-family service channel module, k46 line
 ARCH=Amiga
-VERSION=1.0.0-1
+VERSION=1.0.0-2
 CATEGORY=system
 CLASSES=none zz9ksvc
 VENDOR=amix
-PSTAMP=amix-zz9ksvc46-1.0.0-1
+PSTAMP=amix-zz9ksvc46-1.0.0-2
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the #ext kpkg block
 # (line=k46), never an ordinary entry.  Catalog name zz9ksvc-k46, pkginst zz9ksvc46; VERSION
 # is kernel/modules/zz9ksvc/module/VERSION, the same on both lines.  The nodes are in class

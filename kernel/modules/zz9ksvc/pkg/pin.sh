@@ -11,20 +11,22 @@
 # zz9ksvc.  The directory is GPL-3.0-or-later (it carries the ZZ9000 SDK headers): the
 # copyright file carries that licence and no other.
 # 1.0.0-1 (2026-11-01): the first.
+# 1.0.0-2 (2026-11-01): rebuilt on kit 3b53a8a (gcc-cross-amix 33ebadc); the
+# code is unchanged, only .moddata cc= differs (gcc-2.7.2.3-33ebadc).
 
 KM_NAME=zz9ksvc
 KM_SHORT=zz9ksvc
 KM_REPO=kernel/modules/zz9ksvc
-KM_VERSION=1.0.0-1
+KM_VERSION=1.0.0-2
 
 KM_K30_OBJ=kernel/modules/zz9ksvc/build/k30/mod.d/zz9ksvc
-KM_K30_SHA=d3a4712bcf48207545f1be5eb71005b7ad0cbd7fa4d1ca7bd338a99eb5857334
+KM_K30_SHA=44e03e1d3842422f0909e46b1955b99161d7edf94dcf85f99e5536655f1de351
 KM_K46_OBJ=kernel/modules/zz9ksvc/build/k46/mod.d/zz9ksvc
-KM_K46_SHA=f57809022a5492e0d0e0d27995630dc733881bb7f4e80e503bd610341a61f108
-KM_K30_DEPS="kernel/modules/zz9kbus/build/k30/mod.d/zz9kbus 20db776b49a85a2f89a9ef5392a29b8d24161494be9692d93805986f3eec2393"
-KM_K46_DEPS="kernel/modules/zz9kbus/build/k46/mod.d/zz9kbus 1e571b9a479fe4e033fc869a7b2c1409f4652f974aaf0d87c1a3911114c00638"
+KM_K46_SHA=6e860b5b63113fa64daea7c69ddcfc2932e59116cf9c2a5ee5832118e601571b
+KM_K30_DEPS="kernel/modules/zz9kbus/build/k30/mod.d/zz9kbus 24c00be48a7fc76860d34680b57aab417889569979e63bd05479f96414d73703"
+KM_K46_DEPS="kernel/modules/zz9kbus/build/k46/mod.d/zz9kbus 6ea8ca203303128f2e8cde46929dc79b36040e3dfcf8a95a257669428ecab776"
 
-KM_KIT_COMMIT=d68305af64c80ad6fb6b1019dd91a3ff2b7a75ee	# the registry with c 55 zz9ksvc
+KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f	# PIN gcc-2.7.2.3-33ebadc
 
 KM_LICENCES="\
 kernel/modules/zz9ksvc/LICENSE 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"

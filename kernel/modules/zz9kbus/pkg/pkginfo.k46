@@ -1,11 +1,11 @@
 PKG=zz9kbus46
-NAME=zz9kbus-k46 1.0.0-1 - ZZ9000-family board registry module, k46 line
+NAME=zz9kbus-k46 1.0.0-2 - ZZ9000-family board registry module, k46 line
 ARCH=Amiga
-VERSION=1.0.0-1
+VERSION=1.0.0-2
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-zz9kbus46-1.0.0-1
+PSTAMP=amix-zz9kbus46-1.0.0-2
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the #ext kpkg block
 # (line=k46), never an ordinary entry.  Catalog name zz9kbus-k46, pkginst zz9kbus46; VERSION
 # is kernel/modules/zz9kbus/module/VERSION, the same on both lines.
