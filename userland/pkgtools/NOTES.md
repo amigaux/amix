@@ -1,5 +1,49 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-01 — APKG 0.3.4 minted (STAGED, NOT PUBLISHED)
+
+**Why.** apkg 0.3.3 refuses a module package whose device nodes are in the module's class
+(`z3660rtg-k46` 1.1.1-1: "not a pure-file kernel-space package: an object in class z3660rtg",
+exit 3); 0.3.4 takes them. 0.3.4 also carries the conffile class for `/etc/apkg.conf` and
+`/var/apkg/admin` and the 1.1 tree as the default repository.
+
+**The mint.** `make dist` in the build container (`amix-toolchain:dist`), `VER_APKG="0.3.4"`,
+`EPOCH_APKG=1793318400`, from the committed tree:
+
+- **md5 `c19cb40f5da28e740831bee6e2d72750`**, **sha256
+  `68d61d9f72b192606d9b6d1e325ec241aef3fcb04f6fe79bd4a90746d0493a49`**, **246272 B**.
+- `make repro-check` in the container: the checkout's roll and a `git archive` copy's (another
+  path, umask 077, `SOURCE_DATE_EPOCH=1` in the environment) are the same bytes. The container's
+  apkg and contents-fsck equal a host build with gcc-cross-amix byte for byte.
+- `apkg.amix`: sha256 `99da33c0772a85639bec1df84c8bd463b770b1bf6cd65e706624f48402322c57`, 128114 B,
+  `sum -r` 10826; version string `0.3.4`, default repo `http://pkg.amigaux.org/1.1`. scan060 clean
+  (2 ELFs), link gate OK.
+- APKGENG 1.12.5 rolls in the same `make dist` at md5 `a49452d874bb026ab41ba26c0299035f` (unchanged
+  since 2026-10-31); it is not part of this mint.
+- Earlier `make dist` rolls named 0.3.4 (`62408562…`, `1a7b5c61…`) predate this mint and are not
+  0.3.4; media built from one must take this datastream.
+
+**make dist fix found by the mint.** contents-fsck's cross link looked for the sysroot only under
+`~/opt/amix-cross`, so a fresh build in the container failed; it now takes `AMIX_SYSROOT` from
+env.sh first. `make dist` also removes apkg's and contents-fsck's cross binaries first, so no
+binary an earlier host build left reaches the roll.
+
+**On an emulated box** (the fresh 1.1 k46 image, A3000/AGA, LC060 with the Z3660 and its RTG,
+first boot answered, then over telnet; packages over HTTP from a `/1.1` tree):
+
+- the image's APKG removed with the engine's pkgrm and 0.3.3 (`2237f523…`) installed from the
+  catalog: `apkg version` = 0.3.3;
+- 0.3.3, `apkg upgrade z3660rtg-k46` (1.1.0-2 → 1.1.1-1): "not a pure-file kernel-space package: an
+  object in class z3660rtg", exit 3, 1.1.0-2 untouched;
+- 0.3.3, `apkg upgrade apkg`: rc 0, "kept your version; the new default is /etc/apkg.conf.new";
+  `apkg version` = 0.3.4, installed binary `sum -r` 10826 (the mint's);
+- 0.3.4, `apkg -y upgrade z3660rtg-k46`: rc 0, `zrtg46` 1.1.1-1 completely installed, kbootset
+  generation 2 built and committed; `/dev/zz9000` and `/dev/zz9000i` in contents as class
+  `z3660rtg`; `pkgchk -n zrtg46` and `pkgchk -n APKG` rc 0; `apkg conffiles` lists
+  `/etc/apkg.conf` pending with its `.new`.
+
+Suites: apkg 539/0, repo tools 521/0, contents-fsck 19/0.
+
 ## 2026-11-01 — one repository tree per release
 
 **What.** pkg.amigaux.org serves each release from its own tree, `<docroot>/<release>/catalog`,
