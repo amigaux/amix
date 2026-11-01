@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — ldramix -12 (238ff2f)
+
+A package-only revision of -11, which was minted earlier with other pkgmap timestamps (154238e9). Same loader, commit 565de49; b49b42b2.
+
 ## 2026-11-01 — a kernel declares its kbootset floor (90a7fa7)
 
 C2-2 v6 / C2-3 v10: a kernel declares the oldest kbootset it can be composed with (kbootset= on its catalog row, from the sidecar's kbootset-min= or kernel/conf/kbootset.conf); recorded sidecars are not re-stamped. core/kbootset-min is 1.1.0.261101-34, the floor core 0051 sets.
