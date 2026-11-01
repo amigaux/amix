@@ -120,12 +120,12 @@ echo "/dev/dsk/c6d0s2 0 40960" | areas
 run start > /dev/null
 same "68040 boot area: the tail past its real length" "-a /dev/dsk/c6d0s2 40960 61440" "$(cat "$T/calls")"
 # the stock kernel names no CPU: 2 KiB pages, as listed
-rm -f "$T/k46"
+rm -f "${T:?}/k46"
 echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) m68k" > "$T/uname"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 run start > /dev/null
 same "stock kernel: the tail as listed" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
-rm -f "$T/uname"
+rm -f "${T:?}/uname"
 
 # no area listed: the whole slice
 : | areas
