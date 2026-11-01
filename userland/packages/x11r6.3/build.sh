@@ -167,6 +167,15 @@ stage() {
 	chmod 0444 "$DEST/etc/profile.d/x11r63.sh"
 	ln -s "$PREFIX" "$DEST/usr/X11R6"
 	echo "  staged: $(cd "$DEST" && find . -type f | wc -l) files"
+	# the notices: COPYRIGHT from this tree's compiled sources and fonts,
+	# LICENSE (ours), LICENSE.ddx (patch 00's)
+	mkdir -p "$DEST$PREFIX/doc/x11r63"
+	python3 -I "$HERE/notices.py" "$PWD" > "$DEST$PREFIX/doc/x11r63/COPYRIGHT" || {
+		echo "[FAIL] notices.py" >&2; exit 1; }
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/x11r63/LICENSE"
+	cp "$HERE/LICENSE.ddx" "$DEST$PREFIX/doc/x11r63/LICENSE.ddx"
+	chmod 0644 "$DEST$PREFIX/doc/x11r63/COPYRIGHT" "$DEST$PREFIX/doc/x11r63/LICENSE" \
+		"$DEST$PREFIX/doc/x11r63/LICENSE.ddx"
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
 	. "$HERE/../tools/manpages.sh"
 	amix_man_relayout

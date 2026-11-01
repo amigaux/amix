@@ -1086,6 +1086,12 @@ f none /opt/amix/X11R6/lib/X11/xkb/types/pc 0644 root bin
 d none /opt/amix/X11R6/lib/X11/xserver 0755 root sys
 f none /opt/amix/X11R6/lib/X11/xserver/SecurityPolicy 0644 root bin
 d none /opt/amix/man 0755 root sys
+# --- notices: COPYRIGHT (notices.py), LICENSE (ours), LICENSE.ddx (patch 00) ---
+d none /opt/amix/X11R6/doc 0755 root sys
+d none /opt/amix/X11R6/doc/x11r63 0755 root sys
+f none /opt/amix/X11R6/doc/x11r63/COPYRIGHT 0644 root bin
+f none /opt/amix/X11R6/doc/x11r63/LICENSE 0644 root bin
+f none /opt/amix/X11R6/doc/x11r63/LICENSE.ddx 0644 root bin
 d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/Xserver 0644 root bin
 f none /opt/amix/man/1/Xzz9000 0644 root bin
