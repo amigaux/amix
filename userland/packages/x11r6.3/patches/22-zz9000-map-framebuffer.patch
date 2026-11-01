@@ -1,0 +1,99 @@
+Ours.  The server maps the visible framebuffer only, and checks what
+GETFBINFO says before writing a pixel through it.
+
+- It mapped GETINFO's board_size, the whole board including the register
+  window below fb_offset (the Z3660's 46 MB window, which made startx-rtg
+  raise ulimit -v).  It now maps from the page holding fb_offset to the
+  end of the last row;
+- GETFBINFO must describe the mode just set: its width and height,
+  depth 16 at two bytes a pixel, RGB565 masks, a stride that holds a row,
+  and a framebuffer inside the board; otherwise the screen fails to start
+  with the values in the log.
+
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
+@@ -6,6 +6,7 @@
+ #include <sys/mman.h>
+ #include <fcntl.h>
+ #include <errno.h>
++#include <unistd.h>
+ #include "../../amix.h"
+ #include "../rtg.h"
+ #include "zz9000.h"
+@@ -65,6 +66,8 @@
+     struct zz9k_fbinfo fbi;
+     struct zz9k_fill fill;
+     caddr_t base;
++    long pg;
++    unsigned long mapOff, mapLen;
+     int fd;
+ 
+     ErrorF("ZZ9000InitHW: starting\n");
+@@ -113,8 +116,44 @@
+         return FALSE;
+     }
+ 
+-    base = (caddr_t)mmap(0, info.board_size,
+-                         PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++    /*
++    ** GETFBINFO describes the mode just set; every pixel the server writes
++    ** goes where it says, so check it first: our mode, RGB565 at two bytes
++    ** a pixel, a stride that holds a row, and a framebuffer inside the board.
++    */
++    if (fbi.width != mode.width || fbi.height != mode.height ||
++        fbi.depth != ZZ9000_DEPTH || fbi.bytes_per_pixel != 2 ||
++        fbi.red_mask != 0xf800 || fbi.green_mask != 0x07e0 ||
++        fbi.blue_mask != 0x001f ||
++        fbi.stride < fbi.width * 2 || (fbi.stride & 1) ||
++        fbi.fb_offset >= info.board_size ||
++        fbi.fb_size > info.board_size - fbi.fb_offset ||
++        (unsigned long)fbi.stride * fbi.height > fbi.fb_size) {
++        ErrorF("ZZ9000InitHW: the driver's framebuffer does not fit the mode "
++               "(%dx%d depth %d, %d bytes/pixel, stride %d, masks %lx/%lx/%lx, "
++               "offset %lx size %lx, board %lx)\n",
++               fbi.width, fbi.height, fbi.depth, fbi.bytes_per_pixel,
++               fbi.stride, fbi.red_mask, fbi.green_mask, fbi.blue_mask,
++               fbi.fb_offset, fbi.fb_size, info.board_size);
++        (void) close(fd);
++        xfree((pointer)pZZ);
++        return FALSE;
++    }
++
++    /*
++    ** Map the visible framebuffer only, not the whole board: the register
++    ** window below fb_offset is the driver's, and on the Z3660 the board is
++    ** a 46 MB window.  From the page holding fb_offset to the end of the
++    ** last row.
++    */
++    pg = sysconf(_SC_PAGESIZE);
++    if (pg <= 0)
++        pg = 4096;
++    mapOff = fbi.fb_offset & ~((unsigned long)pg - 1);
++    mapLen = fbi.fb_offset - mapOff + (unsigned long)fbi.stride * fbi.height;
++    mapLen = (mapLen + pg - 1) & ~((unsigned long)pg - 1);
++    base = (caddr_t)mmap(0, mapLen,
++                         PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)mapOff);
+     if (base == (caddr_t)-1) {
+         ErrorF("ZZ9000InitHW: mmap failed (%s)\n", strerror(errno));
+         (void) close(fd);
+@@ -133,17 +172,17 @@
+     pZZ->fd       = fd;
+     pRTG->devFd   = fd;             /* for the rtg/ layer's monitor switch */
+     pZZ->mapBase  = (pointer)base;
+-    pZZ->mapSize  = info.board_size;
++    pZZ->mapSize  = mapLen;
+     pZZ->fbOffset = fbi.fb_offset;
+     pZZ->fbSize   = fbi.fb_size;
+-    pZZ->fbBase   = (unsigned short *)(base + fbi.fb_offset);
++    pZZ->fbBase   = (unsigned short *)(base + (fbi.fb_offset - mapOff));
+ 
+     pRTG->width        = fbi.width;
+     pRTG->height       = fbi.height;
+     pRTG->pitch        = fbi.stride;
+     pRTG->bitsPerPixel = ZZ9000_BPP;
+     pRTG->depth        = ZZ9000_DEPTH;
+-    pRTG->fbOffset     = fbi.fb_offset;
++    pRTG->fbOffset     = fbi.fb_offset - mapOff;  /* from frameBase */
+     pRTG->frameBase    = (pointer)base;
+     pRTG->fbBase       = pZZ->fbBase;
+     pRTG->cardPrivate  = (pointer)pZZ;
