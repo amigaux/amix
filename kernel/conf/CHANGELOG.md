@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01
+
+- Catalog names zz9kbus-k30/-k46 and zz9ksvc-k30/-k46 (262b717).
+
 ## 2026-10-31 — names.conf: random30 → random-k30, random46 → random-k46 (2dd65c3)
 
 The catalog names of the random module's packages (kernel/modules/random/pkg).
