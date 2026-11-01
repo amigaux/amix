@@ -1,0 +1,17 @@
+PKG=zrtg46
+NAME=z3660rtg-k46 1.1.1-3 - Z3660 RTG framebuffer driver module, k46 line
+ARCH=Amiga
+VERSION=1.1.1-3
+CATEGORY=system
+CLASSES=none z3660rtg
+VENDOR=amix
+PSTAMP=amix-zrtg46-1.1.1-3
+# Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
+# #ext kpkg block (line=k46, kabi=k46.1.2), never an ordinary entry.  Catalog
+# name z3660rtg-k46, pkginst zrtg46; VERSION is the package's: 1.1.1-3 is the
+# module's 1.1.1-1 (the fork's module/VERSION at
+# kernel/drivers/z3660rtg/z3660rtg.pin), its object built with the
+# gcc-2.7.2.3-33ebadc kit, rolled from amix.  depend=monsw: composable only
+# beside monsw46.  1.1.1-3 no longer carries xztop (its own package).
+APKG_DESC=Z3660/ZZ9000 RTG framebuffer as a demand-class kernel module for the 68040/68060 module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/z3660rtg, /dev/zz9000 and /dev/zz9000i, /etc/display.d/z3660, startx-rtg and the tools zz9k_monsw, rtg-kbdback and ztop (xztop is its own package); needs the monsw module (monsw46).
+DESC=The amix-z3660rtg zz9000 framebuffer driver (Z3660 target) built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): demand class, character major 49, loaded at its first open; it depends on the monsw monitor-switch module (depend=monsw), without which kbootset refuses the generation at gate 3.  /etc/conf/modreg.d/z3660rtg holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT; links the stock console font object.  For X on a Z3660 the package also ships /etc/display.d/z3660, the card's display.d(4) file (server /opt/amix/X11R6/bin/Xzz9000, modes 1024x768 to 1920x1080 at depth 16), the nodes /dev/zz9000 (c 49 0, 0660 root sys: the server and the monitor-switch tool run as root) and /dev/zz9000i (c 49 128, 0444: the board's sensors, for any user), and /opt/amix/bin/zz9k_monsw (the monitor-switch tool the file names) and /opt/amix/bin/rtg-kbdback (gives the console its keyboard back after a server that ended on its own), built with GCC 14.  It also ships /opt/amix/bin/ztop, the board's temperatures, voltages and CPU clock on a terminal, with its manual page, and /opt/amix/bin/startx-rtg, the 1.1 launcher (run as root; the server with access control on, its log in /var/adm).  The same readings in an X window are the xztop package.  Parameters: blit, fixed (probe the fixed-base rows of a board without AutoConfig), kvfb (MiB of the framebuffer the kernel maps when the board lies above the identity map) and maxarea, in /etc/conf/modreg.d/z3660rtg.

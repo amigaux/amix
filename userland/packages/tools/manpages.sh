@@ -10,6 +10,10 @@
 #   /opt/amix/man/whatis.d/<PKG>     one stock whatis line per page file:
 #                                    "name(sect)", padded to 16, a space,
 #                                    then "names - description"
+#   /opt/amix/man/replaces.d/<PKG>   the stock binaries the package replaces,
+#                                    "<binary path> <sect> <page name>" a line
+#                                    (userland/base/docs/man.md); a table, not
+#                                    pages: amix_man_whatis skips it
 # An alias is a one-line page, ".so /opt/amix/man/<sect>/<target>".
 #
 #     amix_man <source> <sect> [<name>]     install a page (name: the source's
@@ -63,7 +67,7 @@ _amix_man_desc() {
 amix_man_whatis() {
 	_w_dir="$DEST$AMIX_MANDIR/whatis.d"
 	mkdir -p "$_w_dir"
-	( cd "$DEST$AMIX_MANDIR" && find . -type f ! -path './whatis.d/*' | sed 's|^\./||' | LC_ALL=C sort ) |
+	( cd "$DEST$AMIX_MANDIR" && find . -type f ! -path './whatis.d/*' ! -path './replaces.d/*' | sed 's|^\./||' | LC_ALL=C sort ) |
 	while read -r _w_p; do
 		_w_sect=${_w_p%%/*}; _w_name=${_w_p#*/}
 		_w_desc=$(_amix_man_desc "$DEST$AMIX_MANDIR/$_w_p" "$_w_name")

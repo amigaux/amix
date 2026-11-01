@@ -1,0 +1,25 @@
+#
+# prototype -- xztop 1.1.1's installed layout under /opt/amix.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it.
+# NO INSTALL SCRIPTS: CLASSES=none, class `none` on every object.  One
+# program, its manual page and whatis line, and the licences of what it
+# links: the fork's, and X11R6.3's holders and notice.
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/xztop 0755 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/xztop 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/xztop 0644 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/xztop 0755 root sys
+f none /opt/amix/doc/xztop/LICENSE 0644 root bin
+f none /opt/amix/doc/xztop/NOTICE 0644 root bin
+f none /opt/amix/doc/xztop/X11R6.3-LABEL 0644 root bin
+f none /opt/amix/doc/xztop/X11R6.3-NOTICE 0644 root bin

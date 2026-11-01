@@ -126,7 +126,8 @@ KM_LICENCES="%s/LICENSE %s"
         e.update(env)
         script = ('HERE=%s; . "$HERE/../../../../build/pkg/common/kdrv.sh"; '
                   'amix_dlm_kit() { AMIX_DLM_TREE=%s; }; '
-                  'amix_kpkgroll() { mkdir -p "${5%%/*}"; echo "$3 $4" > "$5"; }; kdrv_roll "$@"'
+                  'amix_kpkgroll() { mkdir -p "${5%%/*}"; echo "$3 $4" > "$5"; '
+                  '[ ! -f "$1/depend" ] || echo "DEPEND $3 $(cat "$1/depend")"; }; kdrv_roll "$@"'
                   % (d, os.path.join(tmp, "dlm")))
         p = subprocess.run(["/bin/sh", "-c", script, "sh"] + list(names), env=e,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -153,6 +154,13 @@ KM_LICENCES="%s/LICENSE %s"
     rc, out = run(two, FAIL_PREPARE="1")
     check("a failing kdrv_prepare stops the roll, exit 1",
           rc == 1 and "bb's kdrv_prepare failed" in out, out)
+    write(os.path.join(zz, "depend"), "P amxbase amix-base\n")
+    write(os.path.join(zz, "prototype"), "i pkginfo\ni depend\n")
+    rc, out = run(zz)
+    logs = "".join(open(os.path.join(build, "kspace", "zz", "zz-%s.log" % l)).read() for l in ("k30", "k46"))
+    check("a recipe's depend file reaches each line's roll",
+          rc == 0 and "DEPEND zz30 P amxbase amix-base" in logs and "DEPEND zz46 P amxbase amix-base" in logs,
+          out + logs)
     os.remove(os.path.join(top, "out", "modules", "k46", "aa"))
     rc, out = run(two)
     check("a missing object: exit 3 and a [MISSING] line, the other recipe still rolls",

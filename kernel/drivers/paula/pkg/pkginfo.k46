@@ -1,0 +1,18 @@
+PKG=paula46
+NAME=paula-k46 1.1.0-2 - Paula audio module (/dev/paula), k46 line
+ARCH=Amiga
+VERSION=1.1.0-2
+CATEGORY=system
+CLASSES=none paula
+VENDOR=amix
+PSTAMP=amix-paula46-1.1.0-2
+# Kernel space (amix-dlm C2-2, C3-5 sec 1): a role=module entry of the #ext
+# kpkg block (line=k46, kabi=k46.1.3), never an ordinary entry.  Catalog
+# name paula-k46, pkginst paula46; VERSION is the package's: 1.1.0-2 is
+# the module's 1.1.0-1 (the fork's module/VERSION at
+# kernel/drivers/paula/paula.pin), its object built with the
+# gcc-2.7.2.3-33ebadc kit, rolled from amix.  kabi minor 3 is the
+# requirement: apkg's pre-flight refuses the package on an older kernel.
+# The device node is in class paula (C3-5 v18 sec 1.2), 0660 root audio.
+APKG_DESC=Native Paula audio (/dev/paula: Paula's four channels for one program, replayed by CIA-A timer B), isoriano1968's driver (MIT) with our changes as a demand-class kernel module for the 68040/68060 module kernel kernel-k46-m, kabi k46.1.3 or later; /dev/audio is refused while /dev/paula is open: /etc/conf/mod.d/paula, /dev/paula and /usr/include/paula.h.
+DESC=Native Paula audio: isoriano1968's paula-amix driver (MIT) with our changes built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.3, so it needs a module kernel of kabi minor 3 or later).  A program drives Paula's four audio channels register by register, as on AmigaOS; CIA-A timer B applies the queued ticks at the song's tempo and Paula plays the samples from chip RAM.  Demand class: loaded at the first open of /dev/paula; character major 54, its node /dev/paula (c 54 0, 0660 root audio: members of the group audio, which amix-base provides, may open it) shipped by the package; may be unloaded.  It excludes /dev/audio: while /dev/paula is open /dev/audio refuses its open, and the other way round (the module kernel's audio driver carries the patch).  /usr/include/paula.h is the driver's interface for programs.  Its parameters clock (PAL or NTSC), maxarea (the largest sample area) and ring (tick slots) are documented in /etc/conf/modreg.d/paula; the package keeps the module's own defaults, and /etc/conf/modreg.local.d/paula sets others.  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

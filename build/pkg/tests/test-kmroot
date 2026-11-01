@@ -13,7 +13,9 @@
 # The kit it asks for carries the port commit (KM_PORT_COMMIT, by default
 # the checkout's kernel/port/port.pin), and the module's kabi is the one
 # modcheck says ok for, the lowest its imports need: a k30.1.2 object on a
-# k30.1.3 kit rolls, its .moddata and copyright saying k30.1.2. Prints
+# k30.1.3 kit rolls, its .moddata and copyright saying k30.1.2. @PKG@ in the
+# prototype and KM_FILES is the line's instance (zz30), and a recipe's
+# depend file goes in as `i depend`, which the prototype must list. Prints
 # "N/N passed"; exits non-zero on any failure.
 
 import hashlib
@@ -105,7 +107,7 @@ try:
     write(os.path.join(gca, "bin", "m68k-cbm-sysv4-scan060"), "#!/bin/sh\nexit 0\n", 0o755)
     write(os.path.join(gca, "env.sh"), 'PATH="%s/bin:$PATH"; export PATH\n' % gca)
 
-    def run(base, d, root, licence_sha=None, **extra):
+    def run(base, d, root, licence_sha=None, rdir=None, **extra):
         dep = d.split("kernel/")[0] + "kernel/modules/monsw/build/k30/mod.d/monsw"
         e = {k: v for k, v in os.environ.items() if not k.startswith(("AMIX_", "KM_"))}
         e.update(AMIX_PKG_COMMON=COMMON, AMIX_SIBLINGS=sib, AMIX_CROSS_ENV=os.path.join(gca, "env.sh"),
@@ -124,9 +126,11 @@ try:
                 os.remove(f)
         script = ('. "$AMIX_PKG_COMMON/fetch.sh"; . "$AMIX_PKG_COMMON/kmodpkg.sh"; '
                   'amix_dlm_kit() { echo "$*" > %s; AMIX_DLM_TREE=%s; }; '
-                  'amix_kpkgroll() { echo "ROLLED $3 $4"; sed -n 2p "$1/copyright"; }; amix_kmodpkg "$1" k30'
+                  'amix_kpkgroll() { echo "ROLLED $3 $4"; sed -n 2p "$1/copyright"; '
+                  'sed "s/^/PROTO /" "$1/prototype"; [ ! -f "$1/depend" ] || sed "s/^/DEP /" "$1/depend"; '
+                  '(cd "$2" && find . -type f | sed "s/^/STAGED /"); }; amix_kmodpkg "$1" k30'
                   % (kitargs, os.path.join(tmp, "dlm")))
-        p = subprocess.run(["/bin/sh", "-c", script, "sh", recipe], env=e,
+        p = subprocess.run(["/bin/sh", "-c", script, "sh", rdir or recipe], env=e,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         return p.returncode, p.stdout.decode("utf-8", "replace"), (open(log).read() if os.path.exists(log) else "")
 
@@ -164,6 +168,40 @@ try:
     rc, out, args = run(checkout, dc, None)
     check("an in-amix recipe without KM_ROOT does not find its inputs among the siblings",
           rc != 0 and "not found" in out and "--- modcheck" not in out, out)
+
+    # @PKG@: a file named by the line's instance, in the prototype and KM_FILES
+    rp = os.path.join(tmp, "recipe-pkg")
+    shutil.copytree(recipe, rp)
+    write(os.path.join(rp, "prototype"), "i pkginfo\nf none /opt/zz/whatis.d/@PKG@ 0644 root bin\n")
+    wsrc = os.path.join(checkout, "tools-out", "whatis")
+    write(wsrc, "zz(1)  zz - a test\n")
+    files = "/opt/zz/whatis.d/@PKG@ tools-out/whatis %s 0644" % sha(wsrc)
+    rc, out, args = run(checkout, dc, checkout, rdir=rp, KM_FILES=files)
+    check("@PKG@ in the prototype and KM_FILES is the line's instance: whatis.d/zz30",
+          rc == 0 and "PROTO f none /opt/zz/whatis.d/zz30 0644 root bin" in out
+          and "STAGED ./opt/zz/whatis.d/zz30" in out and "@PKG@" not in out, out)
+    write(os.path.join(rp, "prototype"), "i pkginfo\nf none /opt/zz/whatis.d/zz46 0644 root bin\n")
+    rc, out, args = run(checkout, dc, checkout, rdir=rp, KM_FILES=files)
+    check("a KM_FILES path whose @PKG@ is not the prototype's line is refused",
+          rc != 0 and "the prototype has no 'f none /opt/zz/whatis.d/zz30 0644'" in out, out)
+
+    # depend: copied as `i depend` when the prototype lists it, refused otherwise
+    rd = os.path.join(tmp, "recipe-dep")
+    shutil.copytree(recipe, rd)
+    write(os.path.join(rd, "depend"), "P amxbase\tamix-base\n")
+    write(os.path.join(rd, "prototype"), "i pkginfo\ni depend\n")
+    rc, out, args = run(checkout, dc, checkout, rdir=rd)
+    check("a recipe's depend file goes in as i depend",
+          rc == 0 and "DEP P amxbase\tamix-base" in out and "depend: amxbase" in out, out)
+    write(os.path.join(rd, "prototype"), "i pkginfo\n")
+    rc, out, args = run(checkout, dc, checkout, rdir=rd)
+    check("a depend file without 'i depend' in the prototype is refused",
+          rc != 0 and "has no 'i depend'" in out and "ROLLED" not in out, out)
+    os.remove(os.path.join(rd, "depend"))
+    write(os.path.join(rd, "prototype"), "i pkginfo\ni depend\n")
+    rc, out, args = run(checkout, dc, checkout, rdir=rd)
+    check("'i depend' without a depend file is refused",
+          rc != 0 and "has no depend file" in out and "ROLLED" not in out, out)
 
     rc, out, args = run(checkout, dc, checkout, licence_sha="0" * 64)
     check("a licence that is not the pinned bytes stops the roll before modcheck",

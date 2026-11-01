@@ -194,6 +194,17 @@ printf 'all:\\n\\techo "$(CFLAGS)" > out.txt\\n' > Makefile
                 src={"greet.txt": "hello from src/\n", "sub dir/a b": "x\n"})
         package(pkgs, "inside2", "hooks", "SRCPKG=inside\n", build=HOOKS_BUILD)
         package(pkgs, "nohook", "hooks", src={"greet.txt": "x\n"})
+        # a fork pinned in the checkout (FORKPIN): a local repository, its tip
+        fork = os.path.join(tmp, "forkrepo")
+        write(os.path.join(fork, "greet.txt"), "hello from the fork\n")
+        g = ["git", "-C", fork, "-c", "user.name=t", "-c", "user.email=t@invalid"]
+        subprocess.run(["git", "init", "-q", fork], check=True)
+        subprocess.run(g + ["add", "greet.txt"], check=True)
+        subprocess.run(g + ["commit", "-q", "-m", "fork"], check=True)
+        fork_c = subprocess.run(["git", "-C", fork, "rev-parse", "HEAD"], check=True,
+                                stdout=subprocess.PIPE).stdout.decode().strip()
+        write(os.path.join(amix, "kernel", "drivers", "zz", "zz.pin"), "file://%s %s\n" % (fork, fork_c))
+        package(pkgs, "forked", "hooks", "FORKPIN=kernel/drivers/zz/zz.pin\n", build=HOOKS_BUILD)
         # vim's version string: __DATE__ __TIME__, which GCC takes from
         # SOURCE_DATE_EPOCH -- so the build sees the package's epoch
         package(pkgs, "datetime", "hooks", src={"greet.txt": "x\n"}, build=HOOKS_BUILD.replace(
@@ -509,6 +520,16 @@ stage() {
               rc == 0 and read(os.path.join(out_pkg, "inside2", "work",
                                             "inside2-1.0", "out.txt"))
               == "hello from src/\n", out)
+        rc, out = build("forked")
+        check("FORKPIN builds from the fork's commit, fetched by hash",
+              rc == 0 and read(os.path.join(out_pkg, "forked", "work", "forked-1.0", "out.txt"))
+              == "hello from the fork\n", out)
+        check("BUILD.txt records the fork, its commit and the digest",
+              rc == 0 and ("source kernel/drivers/zz/zz.pin file://%s %s digest " % (fork, fork_c))
+              in read(os.path.join(out_pkg, "forked", "BUILD.txt")), out)
+        shutil.rmtree(fork)
+        rc, out = build("forked")
+        check("FORKPIN: a commit the cache has is not fetched again", rc == 0, out)
         rc, out = build("nohook")
         check("refused: STYLE=hooks without a build hook",
               rc != 0 and "defines no build hook" in out, out)

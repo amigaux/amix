@@ -1,0 +1,12 @@
+# /etc/conf/modreg.d/paula -- the paula module package's defaults (amix-dlm
+# C3-5 sec 1): one `param <name>=<value>` per default other than the
+# module's own, `disable` to ship it off.  None: the package ships the
+# module's own defaults of its three parameters,
+#   clock=0          0: PAL or NTSC from the Agnus/Alice id; 1: NTSC;
+#                    2: PAL (for a machine whose crystal is not the chip's)
+#   maxarea=1572864  the largest sample area PAULA_SETUP takes, in bytes
+#                    (4096 to 1572864)
+#   ring=64          tick slots, 388 bytes each (4 to 64); PAULA_PUSH
+#                    queues one fewer
+# Local settings belong in /etc/conf/modreg.local.d/paula, which no package
+# owns, as `param <name>=<value>` lines.

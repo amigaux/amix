@@ -457,6 +457,31 @@ try:
     write(os.path.join(twice, "src", "x.c"), "\n")
     refused("check refuses SRCPKG and a src/ of its own", ("check", twice),
             "SRCPKG is set and the package has a src/ of its own")
+    # --- a fork pinned in the checkout (FORKPIN) ------------------------------------------
+    fk = os.path.join(tmp, "fk")
+    fpk = os.path.join(fk, "userland", "packages")
+    write(os.path.join(fk, "kernel", "drivers", "zz", "zz.pin"),
+          "https://example.invalid/zz.git %s\n" % ("a" * 40))
+    write(os.path.join(fk, "kernel", "drivers", "zz", "short.pin"), "https://example.invalid/zz.git abc1234\n")
+    rc, out, err = run("check", recipe(fpk, "fork", PKG="fork", URL='""', SHA256='""',
+                                       FORKPIN="kernel/drivers/zz/zz.pin"))
+    check("check passes FORKPIN naming a checkout pin, without URL and SHA256", rc == 0, err)
+    refused("check refuses FORKPIN with URL",
+            ("check", recipe(fpk, "furl", FORKPIN="kernel/drivers/zz/zz.pin")),
+            "URL is set, but the source is the fork at FORKPIN")
+    refused("check refuses a FORKPIN file the checkout lacks",
+            ("check", recipe(fpk, "fnone", URL='""', SHA256='""', FORKPIN="kernel/drivers/zz/no.pin")),
+            "FORKPIN=kernel/drivers/zz/no.pin: no such file in the checkout")
+    refused("check refuses a FORKPIN without a full commit",
+            ("check", recipe(fpk, "fshort", URL='""', SHA256='""', FORKPIN="kernel/drivers/zz/short.pin")),
+            "does not hold `<url> <40-hex commit>`")
+    refused("check refuses a FORKPIN outside the checkout",
+            ("check", recipe(fpk, "fabs", URL='""', SHA256='""', FORKPIN="/etc/zz.pin")),
+            "is not a checkout path to a .pin file")
+    fsrc = recipe(fpk, "fsrc", URL='""', SHA256='""', FORKPIN="kernel/drivers/zz/zz.pin")
+    write(os.path.join(fsrc, "src", "x.c"), "\n")
+    refused("check refuses FORKPIN and a src/ together", ("check", fsrc),
+            "FORKPIN is set, but the source is in the tree")
     refused("check refuses a SHA256 that is not one",
             ("check", recipe(tmp, "badsha", SHA256="abc")), "SHA256 is not 64")
 

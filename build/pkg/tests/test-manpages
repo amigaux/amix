@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# test-manpages: host test of userland/packages/tools/manpages.sh's
+# amix_man_whatis, the whatis.d/<PKG> fragment a recipe's stage hook writes.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# A staged tree under /opt/amix/man holds a page, an alias of it, a whatis.d
+# fragment of an earlier run and a replaces.d/<PKG> table (amix-base's man
+# front-end shows a replacing package's page for a stock binary). The
+# fragment must list the page and the alias and nothing from whatis.d or
+# replaces.d; a copy of manpages.sh that does not skip replaces.d is refused
+# on the table (no NAME line), which shows the test sees the skip. Prints
+# "N/N passed"; exits non-zero on any failure.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+TOP = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+MANPAGES = os.path.join(TOP, "userland", "packages", "tools", "manpages.sh")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+
+
+PAGE = """.TH TAR 1
+.SH NAME
+tar \\- the heirloom tar archiver
+.SH SYNOPSIS
+.B tar
+"""
+
+tmp = tempfile.mkdtemp(prefix="test-manpages.")
+try:
+    def stage(dest):
+        man = os.path.join(dest, "opt", "amix", "man")
+        write(os.path.join(man, "1", "tar"), PAGE)
+        write(os.path.join(man, "1", "htar"), ".so /opt/amix/man/1/tar\n")
+        write(os.path.join(man, "whatis.d", "hltar"), "stale(1)         stale - an earlier run\n")
+        write(os.path.join(man, "replaces.d", "hltar"), "/usr/bin/tar 1 tar\n")
+        return man
+
+    def run(script, dest):
+        p = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_man_whatis', "sh", script],
+                           env=dict(os.environ, DEST=dest, PKG="hltar"),
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    dest = os.path.join(tmp, "dest")
+    man = stage(dest)
+    rc, out = run(MANPAGES, dest)
+    frag = open(os.path.join(man, "whatis.d", "hltar")).read() if rc == 0 else ""
+    check("amix_man_whatis runs on a tree with replaces.d", rc == 0, out)
+    check("the fragment lists the page and its alias",
+          frag.splitlines() == ["htar(1)          htar - the heirloom tar archiver",
+                                "tar(1)           tar - the heirloom tar archiver"], frag or out)
+    check("nothing from replaces.d or the earlier whatis.d reaches the fragment",
+          rc == 0 and "replaces" not in frag and "/usr/bin/tar" not in frag and "stale" not in frag, frag)
+    check("the replaces.d table is left as staged",
+          open(os.path.join(man, "replaces.d", "hltar")).read() == "/usr/bin/tar 1 tar\n")
+
+    # the control: without the skip, the table is read as a page and refused
+    noskip = os.path.join(tmp, "manpages-noskip.sh")
+    text = open(MANPAGES).read()
+    check("manpages.sh skips replaces.d in amix_man_whatis's find",
+          text.count("! -path './replaces.d/*'") == 1, MANPAGES)
+    open(noskip, "w").write(text.replace(" ! -path './replaces.d/*'", ""))
+    dest2 = os.path.join(tmp, "dest2")
+    stage(dest2)
+    rc, out = run(noskip, dest2)
+    check("control: a manpages.sh without the skip is refused on replaces.d",
+          rc != 0 and "replaces.d/hltar: no \"names - description\" NAME line" in out, out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)
