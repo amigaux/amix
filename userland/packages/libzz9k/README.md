@@ -98,9 +98,9 @@ kernel answers `EAGAIN`), and that one call runs in software.
 
 | Path | Bytes |
 |---|---|
-| `/opt/amix/lib/libzz9k.a` | 84,340 |
+| `/opt/amix/lib/libzz9k.a` | 85,040 |
 | `/opt/amix/include/zz9k/`: `amix.h`, `host.h`, `abi.h`, `crypto.h`, `text.h`, `compression.h` | 158,754 |
-| `/opt/amix/bin/zz9k-test` | 57,668 text |
+| `/opt/amix/bin/zz9k-test` | 57,860 text |
 | `/opt/amix/man/{1,3}`, `whatis.d/libzz9k`; `/opt/amix/doc/libzz9k/{LICENSE,PROVENANCE}` | |
 
 The headers are what `zz9k/amix.h` and `zz9k/host.h` need. The SDK's `request.h`, `reply.h` and
@@ -108,11 +108,11 @@ The headers are what `zz9k/amix.h` and `zz9k/host.h` need. The SDK's `request.h`
 `service_registry.h`'s, is longer than s5's 14 bytes, and shipping them would make the package
 UFS-only. The library uses them inside.
 
-**Size and memory.** `zz9k_host.c` is the whole SDK host API in one file: 50,428 bytes of text
-at `-O2`; `zz9k_amix.c` adds 2,321 (and 148 bytes of bss, the pool). Both are compiled with a
+**Size and memory.** `zz9k_host.c` is the whole SDK host API in one file: 50,638 bytes of text
+at `-O2` (with a section per function); `zz9k_amix.c` adds 2,533 (and 148 bytes of bss, the pool). Both are compiled with a
 section per function, so a program linked with **`-Wl,--gc-sections`** keeps only the calls it
 makes: `zz9k-test`, which uses the pool, `zz9k_inflate` and zlib's deflate and inflate, has
-57,668 bytes of text that way, 103,858 without. At run time the pool costs two shared buffers per
+57,860 bytes of text that way, about 46 KB more without. At run time the pool costs two shared buffers per
 board in use, on the card, and one kernel open per board; the software path costs zlib's inflate
 state (about 7 KiB, plus its 32 KiB window), freed at the end of each call.
 
