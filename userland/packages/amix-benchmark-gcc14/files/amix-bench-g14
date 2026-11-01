@@ -1,6 +1,7 @@
 #!/bin/sh
 # amix-bench-g14 -- the amix-bench matrix, GCC 14 build (package
 # amix-benchmark-gcc14, PKG amixbch14).
+# MIT licence: holder and text in /opt/amix/doc/amix-bench-g14/LICENSE.amix.
 #
 # The same driver and the same benchmark sources as `amix-bench' (package
 # amix-benchmark, built with gcc 2.7.2.3); only the compiler differs.  The kit

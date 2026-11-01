@@ -63,6 +63,7 @@ fi
 export AMIX_TOOLCHAIN AMIX_BUILD_ROOT
 export CC=cc CPP="cc -E" AMIX_CPP="cc -E" NM=${STUB_NM:-nm} OBJDUMP=${STUB_OBJDUMP:-objdump} STRIP=${STUB_STRIP:-strip}
 export AMIX_SYSROOT=${STUB_SYSROOT:-}
+AMIX_GCC14_PINS=${STUB_PINS:-}
 export AMIX_CFLAGS=-O AMIX_HOST_TRIPLET=m68k-cbm-sysv4 AMIX_CONFIGURE_LENIENT=
 amix_env_banner() { echo "  stub harness"; }
 """,
@@ -77,7 +78,7 @@ amix_fetch() {
 amix_gate_noasm() { return 0; }
 amix_gate_elfs() { [ -z "${STUB_NM:-}" ] || find "$1" -name '*.elf'; }
 amix_gate_elf() { :; }
-amix_gate_g14_strict() { :; }
+amix_gate_g14_strict() { echo "  stub strict gate ran"; }
 amix_gate_g14_compat() { :; }
 """,
     "pkgroll.sh": """\
@@ -300,7 +301,7 @@ stage() {
 #!/bin/sh
 case $1 in
 -D) echo "nm: $2: Invalid operation" >&2; exit 1 ;;
--u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}" ;;
+-u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}"; echo "         w ${STUB_WEAK:-weak_hook}" ;;
 *) echo "00018cac T printf"; echo "00001000 T exit" ;;
 esac
 """, 0o755)
@@ -319,6 +320,37 @@ stage() {
 	echo "stub libfoo" > "$DEST/opt/amix/share/libfoo.so.1"
 }
 """)
+        # a binary that needs libamixrt.so.1, with and without DEPENDS on amixrt
+        for nm, dep in (("elfrt", 'DEPENDS="amix-base amixrt"\n'), ("elfnort", 'DEPENDS="amix-base"\n')):
+            d = package(pkgs, nm, "hooks", dep, build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+            write(os.path.join(d, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
+            write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
+}
+""")
+        write(os.path.join(sysroot, "usr", "lib", "libamixrt.so.1"), "stub libamixrt\n")
+        # a package that ships a prebuilt file of the gcc14 prefix
+        pre = package(pkgs, "prebuilt", "hooks", 'TOOLCHAIN=gcc14\nPREBUILT="/opt/amix/share/out.elf"\n',
+                      build="build() { cp greet.txt out.txt; }\n", src={"greet.txt": "x\n"})
+        pre_stage = """build() { cp greet.txt out.txt; }
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\3' > "$DEST/opt/amix/share/out.elf"
+	%s
+}
+"""
+        write(os.path.join(pre, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
+        write(os.path.join(pre, "build.sh"), pre_stage % ":")
+        # and one whose payload holds another ELF besides
+        pre2 = package(pkgs, "prebuilt2", "hooks", 'TOOLCHAIN=gcc14\nPREBUILT="/opt/amix/share/out.elf"\n',
+                       src={"greet.txt": "x\n"})
+        write(os.path.join(pre2, "prototype"), PROTOTYPE.replace("out.txt", "out.elf")
+              + "f none /opt/amix/share/other.elf 0644 root sys\n")
+        write(os.path.join(pre2, "build.sh"),
+              pre_stage % 'cp "$DEST/opt/amix/share/out.elf" "$DEST/opt/amix/share/other.elf"')
+        pre_sha = hashlib.sha256(b"\x7fELF\x01\x02\x01" + b"\0" * 10 + b"\x03").hexdigest()
         # a binary that needs a library of a package it is built against
         elfdep = package(pkgs, "elfdep", "hooks", 'BUILD_DEPENDS="libdep"\n', build=HOOKS_BUILD,
                          src={"greet.txt": "x\n"})
@@ -561,6 +593,8 @@ stage() {
         rc, out = build("elfy", STUB_UNDEF="nosuch", **elf_env)
         check("UNDEF: refused: a symbol libc does not define",
               rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+        check("UNDEF: a weak reference no library defines is not a missing symbol",
+              "weak_hook" not in out, out)
         libc = "  NEEDED      /usr/lib/libc.so.1\n"
         rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libfoo.so.1\n  RPATH       /opt/amix/share", **elf_env)
         check("UNDEF: a bare NEEDED is found through the binary's RPATH in its own payload",
@@ -575,6 +609,27 @@ stage() {
         rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libnone.so.1\n  RPATH       /opt/amix/share", **elf_env)
         check("UNDEF: a NEEDED found nowhere is refused, with where it was looked for",
               rc == 1 and "NEEDED libnone.so.1 is not in its RPATH (/opt/amix/share) in this package" in out, out)
+        rt = libc + "  NEEDED      libamixrt.so.1"
+        rc, out = build("elfrt", STUB_DYN=rt, **elf_env)
+        check("UNDEF: a binary that NEEDs libamixrt.so.1 rolls when DEPENDS names amixrt",
+              rc == 0 and "libamixrt.so.1 (sysroot /usr/lib)" in out, out)
+        rc, out = build("elfnort", STUB_DYN=rt, **elf_env)
+        check("UNDEF: without amixrt in DEPENDS it is refused",
+              rc == 1 and "NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" in out, out)
+        pins = "m68k-elf/lib/amixrt/libamixrt.so.1 " + pre_sha
+        rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN=libc.strip(), **elf_env)
+        check("PREBUILT: a pinned gcc14 file ships as it is; nothing compiled, so the flags gate is not run",
+              rc == 0 and "PREBUILT ok /opt/amix/share/out.elf: a pinned gcc14 file" in out
+              and "STRICT n/a nothing compiled" in out and "stub strict gate ran" not in out, out)
+        rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN="  SONAME      libx.so.1", **elf_env)
+        check("UNDEF: a shared object that NEEDs nothing takes its symbols from libc.so.1, the interpreter",
+              rc == 0 and "found: libc.so.1 (the interpreter)" in out, out)
+        rc, out = build("prebuilt", STUB_PINS="x " + "0" * 64, STUB_DYN=libc.strip(), **elf_env)
+        check("PREBUILT: a file no gcc14 pin names is refused",
+              rc == 1 and "is in PREBUILT, but no file gcc14-pin.sh pins has its sha256" in out, out)
+        rc, out = build("prebuilt2", STUB_PINS=pins, STUB_DYN=libc.strip(), **elf_env)
+        check("PREBUILT: another ELF in a build that compiled nothing is refused",
+              rc == 1 and "/opt/amix/share/other.elf: an ELF in a build that compiled nothing, not in PREBUILT" in out, out)
         rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libfoo.so.1", **elf_env)
         check("UNDEF: without an RPATH, a library in the payload is not found (the box would not find it)",
               rc == 1 and "NEEDED libfoo.so.1 is not in its RPATH (none)" in out, out)

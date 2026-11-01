@@ -63,7 +63,8 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("PREFIX", "/opt/amix"), ("DEPENDS", ""), ("BUILD_DEPENDS", ""),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
-            ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""))
+            ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
+            ("PREBUILT", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -468,6 +469,9 @@ def problems(recipe, m):
             out.append("%s has leading or trailing blanks" % k)
     if m["ESSENTIAL"] not in ("yes", "no"):
         out.append("ESSENTIAL=%s -- yes or no" % m["ESSENTIAL"])
+    for f in words(m["PREBUILT"]):
+        if not f.startswith("/") or "/../" in f + "/" or "/./" in f + "/":
+            out.append("PREBUILT: %s is not an absolute payload path" % f)
     if m["SOURCE_EPOCH"] and not re.match(r"^[1-9][0-9]*$", m["SOURCE_EPOCH"]):
         out.append("SOURCE_EPOCH=%s is not a number of seconds" % m["SOURCE_EPOCH"])
     if m["SUMMARY"][:1] in ("'", '"') and m["SUMMARY"][-1:] == m["SUMMARY"][:1]:

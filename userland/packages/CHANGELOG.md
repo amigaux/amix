@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — revisions for gcc14-cross-amix 43825b2; LICENSE.amix (fded5b3)
+
+Every gcc14 package takes a new revision for gcc14-cross-amix 43825b2 (libamixrt; each program gains the library-constructor runner): acompat -9, amixbch14 -8, bzip2 -4, coreutils -5, diffutils -4, grep -9, tar -10, gzip -9, less -9, make -9, patch -8, prngd -3, python3 -2, rsync -3, vim -2, x11r6.3 -3, zlib -9. Packages with files of ours ship doc/<pkg>/LICENSE.amix.
+
 Commit hashes cited in entries dated before 2026-10-13 refer to the pre-public development
 history, which the maintainer keeps; they are provenance, not links into this repository's history.
 

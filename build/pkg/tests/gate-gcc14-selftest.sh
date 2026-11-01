@@ -204,6 +204,40 @@ grep 'RUNPATH or TEXTREL present' "$T/rp-runpath.log" >/dev/null ||
 	fail "NEEDED gate on a RUNPATH: $(cat "$T/rp-runpath.log")"
 ok "NEEDED gate passes a shared object with a SONAME and a box RPATH, refuses a shared object without a SONAME, a host RPATH and a RUNPATH"
 
+# scan060-g14.py's known stock data: libcrypt.a's des_crypt.o keeps its DES
+# tables in .text; stripped, a program linking crypt(3) has no labels there,
+# and the S table decodes as movep. The member, by its sha256, marks them data.
+printf '#include <stdio.h>\nextern char *crypt(const char *, const char *);\nint main(int c, char **v) { puts(crypt(c > 1 ? v[1] : "pw", "ab")); return 0; }\n' > "$T/des.c"
+$CC $AMIX_CFLAGS -o "$T/des" "$T/des.c" -lcrypt 2>"$T/des.log" || { cat "$T/des.log" >&2; fail "the crypt probe did not link"; }
+"$STRIP" "$T/des"
+if out=$(env -u AMIX_SYSROOT python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/des"); then
+	fail "scan060-g14.py passed the stripped crypt probe without the known data: it tests nothing: $out"
+fi
+echo "$out" | grep 'HITS .*des' >/dev/null || fail "scan060-g14.py on the crypt probe without AMIX_SYSROOT: $out"
+out=$(python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/des") || fail "scan060-g14.py refused the stripped crypt probe: $out"
+echo "$out" | grep 'NOTE known stock data at .*libcrypt.a(des_crypt.o) IP FP .* S P' >/dev/null ||
+	fail "scan060-g14.py gave no known-data NOTE for des_crypt.o: $out"
+# a sysroot whose des_crypt.o is one byte different: refused
+mkdir -p "$T/sr-des/usr/lib"
+python3 - "$AMIX_SYSROOT/usr/lib/libcrypt.a" "$T/sr-des/usr/lib/libcrypt.a" <<'PY'
+import sys
+d = bytearray(open(sys.argv[1], "rb").read())
+o = 8
+while o + 60 <= len(d):
+    size = int(d[o + 48:o + 58].decode().strip())
+    if d[o:o + 16].decode("latin-1").strip().rstrip("/") == "des_crypt.o":
+        d[o + 60 + size - 1] ^= 1
+        break
+    o += 60 + size + (size & 1)
+open(sys.argv[2], "wb").write(bytes(d))
+PY
+if out=$(AMIX_SYSROOT=$T/sr-des python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/des"); then
+	fail "scan060-g14.py passed with a des_crypt.o that is not the listed one: $out"
+fi
+echo "$out" | grep 'UNTRUSTWORTHY' >/dev/null && echo "$out" | grep 'known stock member usr/lib/libcrypt.a(des_crypt.o) has sha256' >/dev/null ||
+	fail "scan060-g14.py on a changed des_crypt.o: $out"
+ok "scan060-g14.py takes des_crypt.o's DES tables in a stripped program as data by the member's sha256 (a NOTE), finds the movep without the sysroot, refuses a member that is not the listed one"
+
 # ll printf: libc printf prints ll as l.
 printf '#include <stdio.h>\nint main(int c, char **v) { printf("%%lld\\n", (long long)c); return 0; }\n' > "$T/ll.c"
 printf '#include <stdio.h>\nint main(int c, char **v) { char b[32]; snprintf(b, sizeof b, "%%lld", (long long)c); puts(b); return 0; }\n' > "$T/llsn.c"
