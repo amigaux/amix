@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-01 — package recipe: z3660eth-k30/-k46 1.0.0-10 rolled from amix (e77e899)
+
+kernel/drivers/z3660eth/pkg/ holds the recipe kdrv rolls in make dist's kspace step: the module, modreg,
+/etc/inet/link.d/z3660eth (0444) and /dev/zen0 (c 51 0, 0600, class z3660eth). The drivers step's objects (k30
+af24613d, k46 86fe050b) are byte-identical to the published 1.0.0-9's; the package moves to 1.0.0-10 for its new
+vendor, copyright paths and epoch. Module release 1.0.0-5. Also recorded: ZEN0-BRINGUP notes the unused /dev/zen1 the
+probe leaves and the rc.log/dhcpc.log lines (c20bc38).
+
 ## 2026-10-31 — public text states facts only (c846ca0)
 
 Internal ids and run labels in docs, comments and this changelog become dates and plain wording; citations of
