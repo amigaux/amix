@@ -1,3 +1,7 @@
+## 2026-11-01 — APKG 0.3.5 minted (bfbf1f7)
+
+make dist in the build container, md5 3d2f87375a3d2bd49e0668addfb1bf91, sha256 d0005d59…, 253440 B, the same bytes from a git archive copy; staged, not published.
+
 ## 2026-11-01 — apkg 0.3.5: a new kernel cut upgrades as one set (690f468, 59335d7, 5ec57b8)
 
 `apkg upgrade` with no names takes every newer package; a kernel brings the newer fitting modules of its line, the loader and kbootset; kbootset first, the kernel last, one generation build; the pre-flight names every installed module left behind; a kernel row's kbootset= (C2-2 v6) from the sidecar's kbootset-min= or kernel/conf/kbootset.conf refuses too old a kbootset; a gate refusal says what to fix and that the old generation still boots. Shown on the 1.1 k46 image: -52 to -56 in one call, and the old generation booting after a forced refusal. Not minted.

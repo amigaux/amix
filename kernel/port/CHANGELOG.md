@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — cut 68060-261101-57; kern46m -57 (d80d396, 1821aee)
+
+kernel-k46-m k46.1.4.261101-57: cut 68060-261101-57 (port 5d6f586), -56 with idle ticks counted as idle (the idle override's own waitloc), so an idle machine's time shows as idle in sysinfo, sar and the process times. unix 7370eec3, kabi d21c9154; kit, kabi k46.1.4 and abi 18c0a1c9 unchanged; no module package changes. kern46m 53aae7e2.
+
 ## 2026-11-01 — cut 68060-261101-56 is the k46 cut of record; kern46m -56 (65b7f49, b79f9e6, dcbe60b)
 
 port.pin moves to 7af6b2d. Cut 68060-261101-56 on gcc-cross-amix 33ebadc with module core 0051: ITT0/DTT0 supervisor-only (user code can no longer reach physical memory below 1 GiB), no legacy 030 segment tables in user address spaces, swapadd fails with ENOMEM instead of sleeping, soft data and vmem limits unlimited. unix 8ef91062, kabi 712b3d0e, ufs.mod 384ef7c9, abi 18c0a1c9 unchanged. kern46m -56 (0c63b229) needs kbootset -34 or later and the module packages built on the same kit; kernel-k46-m reads pin= from the cut's dlm toolchain.pin.
