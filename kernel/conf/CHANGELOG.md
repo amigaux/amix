@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — kbootset.conf (690f468, 609ad20)
+
+The kbootset floor 1.1.0.261101-34 for kernel-k30-m -68 and kernel-k46-m -56 and -57, whose sidecars predate kbootset-min=.
+
 ## 2026-11-01
 
 - Catalog names zz9kbus-k30/-k46 and zz9ksvc-k30/-k46 (262b717).
