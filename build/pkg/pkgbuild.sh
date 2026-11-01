@@ -315,6 +315,18 @@ for b in $BINS; do
 	# packages' trees, then in the sysroot -- and then in the sysroot's
 	# /usr/lib.  A NEEDED found nowhere fails.
 	libs=$("$OBJDUMP" -p "$b" | awk '$1 == "NEEDED" {print $2}' | tr '\n' ' ')
+	# a binary that needs the GCC 14 runtime library, libamixrt.so.1, needs
+	# the package that ships it: package.sh says so in DEPENDS (nothing adds
+	# it behind the recipe), except the amixrt package itself
+	case " $libs " in
+	*" libamixrt.so.1 "*)
+		case " $(echo "$DEPENDS" | tr ',' ' ') " in
+		*" amixrt "*) ;;
+		*) [ "$NAME" = amixrt ] || {
+			echo "[FAIL] $(basename "$b") NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" >&2
+			exit 1; } ;;
+		esac ;;
+	esac
 	rpath=$("$OBJDUMP" -p "$b" | awk '$1 == "RPATH" {print $2}' | tr ':' ' ')
 	files="" found=""
 	for n in $libs; do
