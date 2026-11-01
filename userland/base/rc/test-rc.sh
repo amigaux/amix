@@ -119,6 +119,15 @@ expect "TERM held: KILL" "stubborn: finished, status 137" "$l"
 case "$l" in *"quick: still running"*) bad "quick command's timer fired" ;; *) ok ;; esac
 same "arguments kept" "two  words three" "$(cat "$T/rclog/args")"
 same "no pid file left" "" "$(ls "$T/run")"
+# the timer's sleep goes when the command ends: none left to run out the
+# bound (a bound no other test uses, to find it in ps)
+R "$B; rc_bg 247 brief sh -c 'echo brief'" > /dev/null
+R "$B; rc_bg 247 instant true" > /dev/null
+sleep 3
+same "no timer sleep left" "0" "$(ps -eo args | grep -c '^sleep 247$')"
+expect "brief finished" "brief: finished, status 0" "$(cat "$T/rc.log")"
+expect "instant finished" "instant: finished, status 0" "$(cat "$T/rc.log")"
+same "no pid file left after them" "" "$(ls "$T/run")"
 
 # rc_mknod (the fake mknod makes a plain file, so every call makes one)
 : > "$T/rc.log"; : > "$T/mknod.log"

@@ -96,6 +96,9 @@ If it is still running after
 .I seconds
 it is sent a terminate signal, and five seconds later a kill signal if it
 is still there; the log says so.
+When the command ends first, its timer is stopped with it, so nothing of
+.B rc_bg
+is left running once the command has ended.
 Only the command itself is stopped, not programs it started, so a script
 given to
 .B rc_bg

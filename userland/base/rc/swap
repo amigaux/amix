@@ -61,7 +61,9 @@ add() {
 		return 0
 	fi
 	grep "$SWAP_NOMEM" $_e > /dev/null 2>&1 && nomem=yes
-	_m=`tr '\012' ' ' < $_e | sed 's/ *$//'`
+	# its lines joined by blanks; not tr into sed, which drops the whole
+	# unterminated line tr leaves
+	_m=`awk '{ printf "%s%s", s, $0; s = " " } END { print "" }' $_e`
 	rm -f "${_e:?}"
 	echo "swap -a $1 $2 $3 failed: $_m" >&2
 	rc_log swap "swap -a $1 $2 $3 failed: $_m"

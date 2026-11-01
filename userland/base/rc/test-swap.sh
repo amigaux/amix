@@ -46,7 +46,7 @@ case "\$1" in
 	;;
 -d)
 	echo "-d \$2 \$3" >> $T/calls
-	awk -v p="\$2" -v lo="\$3" '!(\$1 == p && \$2 == lo)' \$A > \$A.n && mv \$A.n \$A
+	awk -v p="\$2" -v lo="\$3" '!(\$1 == p && \$2 == lo)' \$A > \$A.n && mv "\${A:?}.n" "\${A:?}"
 	;;
 esac
 EOF
@@ -57,6 +57,17 @@ case "$1" in
 /dev/rdsk/c6d0s0) printf 'root 2 204800\nswap 204802 102400\nhome 307202 40000\n' ;;
 *) exit 1 ;;
 esac
+EOF
+# sed as the box's: a last line without a newline is dropped, whole (in a
+# pipe; a file operand goes to the real sed as it is)
+REALSED=$(command -v sed)
+cat > "$T/bin/sed" <<EOF
+#!/bin/sh
+for a; do l=\$a; done
+[ -f "\$l" ] && exec $REALSED "\$@"
+cat > $T/sed.in
+[ -n "\`tail -c 1 $T/sed.in\`" ] && { $REALSED '\$d' $T/sed.in > $T/sed.cut; mv "${T:?}/sed.cut" "${T:?}/sed.in"; }
+exec $REALSED "\$@" $T/sed.in
 EOF
 # uname -a: the kernel's build id names its CPU; $T/uname, else a 68030's
 cat > "$T/bin/uname" <<EOF

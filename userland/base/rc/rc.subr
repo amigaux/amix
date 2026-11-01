@@ -85,8 +85,12 @@ rc_conf() {
 # before the wait). A one-line sh records the command's pid and then execs
 # it, so the watcher signals exactly that process. TERM first; the 1991 sh
 # holds a TERM while it waits for a child, so KILL follows after a grace.
-# Once the command ends the pid file is removed before the watcher is
-# killed, so a timer that has not fired never stops anything.
+# Once the command ends its pid file is removed, so a timer that has not
+# fired never stops anything, and then the timer's own sleep is killed: it
+# too records its pid and execs, since a TERM to the watcher would wait for
+# the sleep (held, as above) and leave it to run out the whole bound. The
+# watcher drops that pid file as soon as its sleep returns, so a pid that
+# has ended is never signalled.
 #
 # The command's output goes to a file of its own: this sh opens ">>" without
 # O_APPEND, so two long-lived writers of one file overwrite each other.
@@ -99,9 +103,10 @@ rc_bg() {
 	[ -d "$RC_BGLOG" ] || mkdir -p "$RC_BGLOG" 2>/dev/null
 	rc_log "$_rc_s" "started, bound $_rc_t s: $*"
 	(
-		rm -f "${_rc_f:?}"
+		rm -f "${_rc_f:?}" "${_rc_f:?}.t"
 		(
-			sleep $_rc_t
+			_RC_PF=$_rc_f.t sh -c '[ "$1" = _rc ] && shift; echo $$ > "$_RC_PF"; exec sleep "$1"' _rc $_rc_t
+			rm -f "${_rc_f:?}.t"
 			if [ -s "$_rc_f" ]
 			then
 				rc_log "$_rc_s" "still running after $_rc_t s; stopped"
@@ -109,12 +114,13 @@ rc_bg() {
 				sleep $RC_GRACE
 				[ -s "$_rc_f" ] && kill -9 `cat "$_rc_f"` 2>/dev/null
 			fi
-		) &
-		_rc_w=$!
+		) 2>/dev/null &
 		_RC_PF=$_rc_f sh -c '[ "$1" = _rc ] && shift; echo $$ > "$_RC_PF"; exec "$@"' _rc "$@"
 		_rc_r=$?
 		rm -f "${_rc_f:?}"
-		kill $_rc_w 2>/dev/null
+		# a command quicker than the timer's start: give it a second
+		[ -s "$_rc_f.t" ] || sleep 1
+		[ -s "$_rc_f.t" ] && kill `cat "$_rc_f.t"` 2>/dev/null
 		rc_log "$_rc_s" "finished, status $_rc_r"
 	) < /dev/null >> "$RC_BGLOG/$_rc_s" 2>&1 &
 }
