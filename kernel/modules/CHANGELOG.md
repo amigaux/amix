@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — zz9ksvc 1.0.0-3 (c953397..2b5f582)
+
+- zz9ksvc 1.0.0-3: a buffer freed after it was mapped is held until the channel's close (a mapping outlives its cookie), and after RESET an allocation over a live client's mapped pages gets EAGAIN.
+- The host test's stand-ins are shared files; the stand-in runtime has a first-fit heap with memory behind it, a real inflate, two runtimes and catalogue answers.
+
 ## 2026-11-01 — every module re-rolled on the gcc-cross-amix 33ebadc kit (b2b683f..1549a26)
 
 monsw 1.0.0-9, ramdisk 1.0.0-6, random 1.0.0-2, zz9kbus 1.0.0-2 and zz9ksvc 1.0.0-2 are rolled on the kit with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc), which the -68/-56 kernels require. The modules' code is unchanged (each object differs in the 7-byte pin). monswctl now links values-Xa.o as the native cc does.

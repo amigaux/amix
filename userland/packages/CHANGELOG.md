@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — libzz9k 2.9.1-1 (721b61e)
+
+libzz9k 2.9.1-1, the ZZ9000 SDK v2 host library for Amix (GPL-3.0-or-later): the SDK's host API over /dev/zz9ksvcN, a pool of the boards, and zz9k_inflate (raw deflate, zlib, gzip) on a board or with zlib, with the same result either way.
+
 ## 2026-11-01 — xztop 1.1.1-1; manpages.sh skips replaces.d (104385a, 0f89d15)
 
 - xztop 1.1.1-1: the Z3660/ZZ9000 sensors in an X window, from the z3660rtg fork, statically linked with X11R6.3.
