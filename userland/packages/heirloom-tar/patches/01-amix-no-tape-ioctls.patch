@@ -1,0 +1,34 @@
+Amix has no <sys/mtio.h>, and none of the SVR4.2MP tape headers tar falls
+back to (<sys/scsi.h>, <sys/st01.h>).  Like HP-UX and AIX, Amix gets no
+tape block-size probe: tapeblock stays 0, so tar never backspaces a tape
+by ioctl and seeks with lseek, as it does on any plain file or device.
+
+--- a/tar/tar.c
++++ b/tar/tar.c
+@@ -89,6 +89,8 @@
+ 	defined (__hpux) || defined (_AIX) || defined (__NetBSD__) || \
+ 	defined (__OpenBSD__) || defined (__DragonFly__) || defined (__APPLE__)
+ #include <sys/mtio.h>
++#elif defined (__AMIX__)
++/* Amix: no tape ioctls in the headers; tapeblock stays 0 */
+ #else	/* SVR4.2MP */
+ #include <sys/scsi.h>
+ #include <sys/st01.h>
+@@ -2164,6 +2166,8 @@
+ 		mo.mt_op = n > 0 ? MTFSR : MTBSR;
+ 		mo.mt_count = (n > 0 ? n : -n) / tapeblock;
+ 		fault = ioctl(mt, MTIOCTOP, &mo) < 0;
++#elif defined (__AMIX__)
++		fault = 1;	/* not reached: tapeblock is 0 */
+ #else	/* SVR4.2MP */
+ 		int	t, a;
+ 		t = n > 0 ? T_SBF : T_SBB;
+@@ -2682,7 +2686,7 @@
+ 		if (ioctl(mt, MTIOCGET, &mg) == 0)
+ 			tapeblock = mg.mt_blksiz;
+ 	}
+-#elif defined (__hpux) || defined (_AIX)
++#elif defined (__hpux) || defined (_AIX) || defined (__AMIX__)
+ #else	/* SVR4.2MP */
+ 	if ((mtstat.st_mode&S_IFMT) == S_IFCHR) {
+ 		struct blklen	bl;
