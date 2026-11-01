@@ -199,7 +199,10 @@ mlkem768x25519-sha256, curve25519-sha256,
 curve25519-sha256@libssh.org
 .TP
 host keys
-ssh-ed25519, rsa-sha2-256 (only with an RSA host key)
+ssh-ed25519, and rsa-sha2-256 with an RSA host key; the client,
+.BR dbclient (1),
+asks a server for rsa-sha2-256 first, which is ten times cheaper to verify
+here, and then ssh-ed25519
 .TP
 user keys
 ssh-ed25519, rsa-sha2-256
@@ -210,9 +213,12 @@ chacha20-poly1305@openssh.com, aes128-ctr
 MACs
 hmac-sha2-256 (with aes128-ctr; chacha20-poly1305 has its own)
 .PP
-There is no Diffie-Hellman group exchange, no NIST curve, no DSA, no
-SHA-1, no CBC mode, no 3DES and no compression.
-The reasons and the measurements are in the package's README.
+There is no finite-field Diffie-Hellman, no NIST curve, no DSA, no
+SHA-1, no CBC mode, no 3DES and no compression: on a 68k each is slower
+than what is offered, or weaker, or both.
+The measurements are in the README of the package's source,
+.B userland/packages/dropbear
+in the amix repository.
 .SH BOOT SCRIPT
 .B /etc/init.d/dropbear
 (also

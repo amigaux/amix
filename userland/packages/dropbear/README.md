@@ -42,18 +42,121 @@ offered was chosen by measuring each candidate on the box (below):
 
 | Kind | Offered, in order | Out |
 |---|---|---|
-| key exchange | @KEX_ORDER@ | diffie-hellman-group14/16 (2048/4096-bit modexp), ecdh-sha2-nistp*, sntrup761x25519 |
-| host key | ssh-ed25519; rsa-sha2-256 only with an RSA host key (off unless asked for) | ecdsa, ssh-dss, ssh-rsa (SHA-1) |
+| key exchange | mlkem768x25519-sha256, curve25519-sha256 (and its @libssh.org name) | diffie-hellman-group14/16 (2048/4096-bit modexp), ecdh-sha2-nistp*, sntrup761x25519 |
+| host key, server | ssh-ed25519; rsa-sha2-256 only with an RSA host key (off unless asked for) | ecdsa, ssh-dss, ssh-rsa (SHA-1) |
+| host key, client | rsa-sha2-256, then ssh-ed25519 (`patches/03`) | the same |
 | user key | ssh-ed25519, rsa-sha2-256 | ecdsa, sk-* (FIDO), ssh-dss, ssh-rsa (SHA-1) |
 | cipher | chacha20-poly1305@openssh.com, aes128-ctr | aes256-ctr, aes-gcm, every CBC mode, 3des, none |
 | MAC | hmac-sha2-256 (with aes128-ctr) | hmac-sha2-512, hmac-sha1, hmac-sha1-96 |
 | compression | none | zlib |
 
-@ALGO_TEXT@
+Why this order, from the table below:
+
+- **Key exchange.** Two X25519 operations are the whole cost of
+  curve25519-sha256 for each side. ML-KEM-768 adds about 0.1 s to the server
+  (one encapsulation) and 0.25 s to the client (key generation and
+  decapsulation), 3 to 8 per cent. So the post-quantum hybrid
+  mlkem768x25519-sha256 stays first, as upstream has it. It costs about 43 KB
+  of the binary. With it, a session recorded today cannot be decrypted later
+  by a quantum computer, and OpenSSH 10.1 and later warn about a session
+  without it. Diffie-Hellman group14 costs 23 times curve25519 (two 2048-bit
+  exponentiations, over a minute on the emulated 68030); the NIST P-256 ECDH
+  costs twice curve25519; the client's sntrup761 key generation alone costs
+  more than curve25519. All three are compiled out.
+- **The server's host key.** The server signs once per connection: 3.2 s for
+  ed25519 against 38 s for RSA-2048 and 130 s for RSA-3072 (Dropbear's RSA
+  signature does no CRT). So the boot script makes only an ed25519 key. An
+  RSA key, for a client without ed25519 (OpenSSH before 6.5, 2014), comes
+  only with `dropbear_rsa=yes`.
+- **The client's host key.** The client verifies once per connection, and
+  verifying is the other way round. rsa-sha2-256 (e = 65537) takes
+  0.4–0.9 s; this ed25519 (TweetNaCl's, which does two full scalar
+  multiplications) takes 6–11 s. The client's order picks the algorithm, so
+  `dbclient` asks a server for its RSA key first (`patches/03`) and uses
+  ed25519 when the server has nothing else. Both are secure; RSA-2048 is
+  NIST's 112-bit level, allowed through 2030.
+- **User keys** follow the same arithmetic. On the box as a server, an
+  ed25519 user key costs 8 s to verify and an RSA-3072 one under 1 s. On
+  the box as a client, an ed25519 key costs 3 s to sign with and an RSA key
+  38 s (2048 bits) to 130 s (3072). So: an ed25519 key for logging in *from* the box, and an RSA
+  key is the faster one for logging in *to* it. Both work.
+- **Cipher.** chacha20-poly1305 and aes128-ctr with hmac-sha2-256 move bulk
+  data at the same rate. For the small packets of an interactive session
+  chacha20-poly1305 is twice as fast (one primitive and a cheap MAC, against
+  AES plus two SHA-256 compressions per packet). It comes first, with
+  aes128-ctr as the fallback for peers without it. hmac-sha2-512 halves the
+  rate, AES-GCM (libtomcrypt's table-free GHASH) runs at a tenth of it, and
+  aes256-ctr adds cost for no gain at this level. All are compiled out.
 
 ### The measurements
 
-@TABLE@
+`dbbench` (built from Dropbear's own `curve25519.c`, `mlkem768.c`,
+`sntrup761.c`, `dh_groups.c` and its bundled libtomcrypt and libtommath, with
+a fixed random stream, no `/dev/urandom` needed) times each primitive in CPU
+time (`times(2)`, 60 Hz). It ran on two emulated rows, both Amix 1.1:
+
+- **68030** with a 68882 (kernel 68030-261027-20);
+- **68LC060** with no FPU (kernel 68060-261028-61).
+
+Both are the Amiberry interpreter at `cpu_speed=max`, not cycle-exact, so the
+figures are **relative only**. Compare algorithms on one row, and compare the
+two rows only as ratios. A real machine's numbers will come from the metal
+boxes. The shipped build is `DROPBEAR_SMALL_CODE` (the "small" columns); the
+"fast" columns are the unrolled build.
+
+Time per operation, ms (emulated):
+
+| Operation | 030 small | 030 fast | LC060 small | LC060 fast |
+|---|---:|---:|---:|---:|
+| X25519 (one scalar multiplication) | 1521 | 1750 | 1458 | 1567 |
+| ML-KEM-768 key generation | 111 | 110 | 114 | 94 |
+| ML-KEM-768 encapsulation | 104 | 126 | 115 | 103 |
+| ML-KEM-768 decapsulation | 131 | 192 | 135 | 105 |
+| sntrup761 key generation | 4700 | 4283 | 3950 | 3892 |
+| sntrup761 encapsulation | 155 | 134 | 125 | 128 |
+| sntrup761 decapsulation | 296 | 258 | 312 | 267 |
+| DH group14, one 2048-bit exponentiation | 38467 | 33100 | 31717 | 33567 |
+| ECDH P-256 key generation | 3467 | 3833 | 2883 | 2775 |
+| ECDH P-256 shared secret | 3217 | 3767 | 2650 | 2444 |
+| Ed25519 key generation | 3225 | 3258 | 3317 | 3442 |
+| Ed25519 sign | 3242 | 3925 | 3167 | 2658 |
+| Ed25519 verify | 8133 | 10667 | 7950 | 5717 |
+| RSA-2048 sign (as Dropbear: no CRT) | 38517 | 45383 | 34517 | 70900 |
+| RSA-2048 verify | 525 | 410 | 429 | 471 |
+| RSA-3072 sign | 130067 | 108900 | 119067 | 106650 |
+| RSA-3072 verify | 848 | 869 | 906 | 755 |
+
+One SSH packet's cipher and MAC, KB/s (emulated), for full 16 KB packets and
+for 64-byte (keystroke-sized) ones:
+
+| Cipher + MAC | 030 16 KB | 030 64 B | LC060 16 KB | LC060 64 B |
+|---|---:|---:|---:|---:|
+| chacha20-poly1305@openssh.com | 230 | 142 | 247 | 153 |
+| aes128-ctr + hmac-sha2-256 | 226 | 72 | 250 | 75 |
+| aes256-ctr + hmac-sha2-256 | 230 | 69 | 237 | 70 |
+| aes128-ctr + hmac-sha2-512 | 106 | 15 | 124 | 19 |
+| aes128-gcm | 24 | 16 | 23 | 16 |
+
+What one connection costs each side, from the rows above (030 small, emulated
+s):
+
+| | key exchange | host key | total |
+|---|---:|---:|---:|
+| server, mlkem768x25519 + ed25519 | 3.0 + 0.1 | sign 3.2 | 6.4 |
+| server, curve25519 + ed25519 | 3.0 | sign 3.2 | 6.3 |
+| server, DH group14 + RSA-2048 | 77 | sign 38.5 | 115 |
+| client, mlkem768x25519, RSA host key | 3.0 + 0.24 | verify 0.5–0.85 | 3.8–4.1 |
+| client, mlkem768x25519, ed25519 host key | 3.0 + 0.24 | verify 8.1 | 11.4 |
+
+Then add the user's authentication: a password costs one DES crypt, and a key
+costs what the user-key bullet above says. The end-to-end handshake times
+measured from the host are under Acceptance.
+
+`DROPBEAR_SMALL_CODE`: the unrolled build is 17 KB larger and measures no
+faster here. The interpreter models no instruction cache, and that cache is
+what decides the question on a 68030 (256-byte I-cache) and a 68060 (8 KB).
+So the shipped build keeps upstream's small code until the metal boxes say
+otherwise.
 
 ## Porting
 
@@ -61,7 +164,8 @@ offered was chosen by measuring each candidate on the box (below):
 
 - **One multi-call binary** (`MULTI=1`, `PROGRAMS="dropbear dbclient dropbearkey scp"`).
   The four programs share libtomcrypt, libtommath and the protocol code, so
-  one binary of @SIZE@ is smaller than four; the other names are hard links.
+  one stripped binary of 285 KB (277 KB text, 4 KB data, 9 KB bss) is smaller
+  than four; the other names are hard links.
   `dropbearconvert` (OpenSSH key import) is not built.
 - **libtomcrypt and libtommath are bundled and linked in statically**
   (`--enable-bundled-libtom`). No other program on the box uses them, so a
@@ -74,7 +178,7 @@ offered was chosen by measuring each candidate on the box (below):
   (`/etc/dropbear/host_ed25519`, `host_rsa`, `dropbear.pid`; every name within
   the 14 bytes an s5 file system keeps), and leaves out X11, agent and
   Unix-socket forwarding, PAM and the askpass helper. Upstream's
-  `DROPBEAR_SMALL_CODE` stays on (@SMALLCODE@).
+  `DROPBEAR_SMALL_CODE` stays on (see the measurements).
 - **`DROPBEAR_SVR_DROP_PRIVS 0`.** Since 2026.89 the server drops to the user
   right after authentication. It keeps a saved utmp group so it can still
   write the login records (`setresgid(-1, -1, utmp)`). SVR4.0 can't set a

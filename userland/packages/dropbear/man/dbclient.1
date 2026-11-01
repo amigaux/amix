@@ -53,6 +53,9 @@ It offers the same algorithms as the server (see
 in
 .BR dropbear (8)),
 so it talks to any SSH server of the last ten years.
+Of a server's host keys it asks for the RSA one (rsa-sha2-256) first,
+which is ten times cheaper to verify on this machine than ed25519, and
+then the ed25519 one.
 .PP
 It authenticates with a key first, then with a password.
 The keys it tries are
