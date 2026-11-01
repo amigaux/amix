@@ -90,10 +90,10 @@ Why this order, from the table below:
 
 ### The measurements
 
-`dbbench` (built from Dropbear's own `curve25519.c`, `mlkem768.c`,
-`sntrup761.c`, `dh_groups.c` and its bundled libtomcrypt and libtommath, with
-a fixed random stream, no `/dev/urandom` needed) times each primitive in CPU
-time (`times(2)`, 60 Hz). It ran on two emulated rows, both Amix 1.1:
+`tests/bench/dbbench.c` times each primitive in CPU time (`times(2)`, 60 Hz).
+It is built by `tests/bench/build.sh` from Dropbear's own `curve25519.c`,
+`mlkem768.c`, `sntrup761.c` and `dh_groups.c` and its bundled libtomcrypt and
+libtommath, with a fixed random stream, so it needs no `/dev/urandom`. It ran on two emulated rows, both Amix 1.1:
 
 - **68030** with a 68882 (kernel 68030-261027-20);
 - **68LC060** with no FPU (kernel 68060-261028-61).
