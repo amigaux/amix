@@ -10,6 +10,9 @@
 #     KM_SHORT         C3-5 sec 1.1 short name (pkginst = short + line digits)
 #     KM_REPO          the driver repository (sibling directory name)
 #     KM_VERSION       the module's release, = <repo>/module/VERSION
+#     KM_PKG_VERSION   optional: the package's version when it is not the
+#                      module's release (a package-only revision: the same
+#                      object re-rolled with other package files)
 #     KM_ROOT          the directory every path below is relative to: the
 #                      checkout's siblings by default (amix-packages' recipes,
 #                      `amix/kernel/...`); a recipe inside amix sets
@@ -75,8 +78,9 @@ amix_kmodpkg() {
 	_km_build="$REPO/build/kspace/$_km_cat"
 	_km_dest="$_km_build/dest"
 	_km_work="$_km_build/work"
-	_km_out="$REPO/build/kspace/pkg/$_km_pkg-$KM_VERSION.pkg"
-	echo "=== $_km_cat $KM_VERSION (PKG=$_km_pkg) ==="
+	_km_pv=${KM_PKG_VERSION:-$KM_VERSION}
+	_km_out="$REPO/build/kspace/pkg/$_km_pkg-$_km_pv.pkg"
+	echo "=== $_km_cat $_km_pv (PKG=$_km_pkg, module $KM_VERSION) ==="
 	[ "${#KM_SHORT}" -le 7 ] || { echo "[FAIL] short name $KM_SHORT over 7 bytes (C3-5 sec 1.1)" >&2; exit 1; }
 
 	echo "--- verify the inputs ---"
@@ -103,7 +107,7 @@ amix_kmodpkg() {
 	_km_kit="$AMIX_DLM_TREE/build/kit/$_km_line"
 	_km_pin=$(sed -n 's/^PIN=//p' "$_km_kit/kit.conf")
 	mkdir -p "$_km_build"
-	rm -rf "$_km_build/chk"; mkdir -p "$_km_build/chk"; cp "$_km_obj" "$_km_build/chk/$KM_NAME"
+	rm -rf "${_km_build:?}/chk"; mkdir -p "${_km_build:?}/chk"; cp "${_km_obj:?}" "${_km_build:?}/chk/$KM_NAME"
 	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1
 	  command -v m68k-cbm-sysv4-scan060 >/dev/null || { echo "no scan060 on PATH"; exit 1; }
 	  python3 -I "$_km_kit/tools/modcheck.py" -k "$_km_kit" $_km_d \
@@ -136,7 +140,7 @@ PY
 	case " $_km_md " in *" kabi=$_km_kabi "*) ;; *) echo "[FAIL] .moddata kabi= is not $_km_kabi" >&2; exit 1 ;; esac
 	case " $_km_md " in *" cc=$_km_pin "*) ;; *) echo "[FAIL] .moddata cc= is not $_km_pin" >&2; exit 1 ;; esac
 
-	rm -rf "$_km_dest" "$_km_work"
+	rm -rf "${_km_dest:?}" "${_km_work:?}"
 	mkdir -p "$_km_dest/etc/conf/mod.d" "$_km_dest/etc/conf/modreg.d" "$_km_work"
 	cp "$_km_obj" "$_km_dest/etc/conf/mod.d/$KM_NAME"
 	cp "$_km_dir/modreg" "$_km_dest/etc/conf/modreg.d/$KM_NAME"
@@ -154,7 +158,7 @@ PY
 	done || exit 1
 
 	{
-		echo "$_km_cat $KM_VERSION -- the $KM_NAME kernel module of Amiga UNIX (Amix), line $_km_line"
+		echo "$_km_cat $_km_pv -- the $KM_NAME kernel module of Amiga UNIX (Amix), line $_km_line"
 		echo "(kabi $_km_kabi), built in $KM_REPO with the amix-dlm ABI kit."
 		echo
 		echo "The module is linked against the Amiga UNIX kernel interface; Amiga UNIX is"
@@ -187,7 +191,7 @@ PY
 	cp "$_km_dir/prototype" "$_km_work/prototype"
 	# the recipe's epoch is the time of every stamp of the datastream too
 	( SOURCE_DATE_EPOCH=$KM_SOURCE_EPOCH; export SOURCE_DATE_EPOCH
-	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$KM_VERSION" "$_km_out" ) || exit 1
-	unset _km_root _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
+	  amix_kpkgroll "$_km_work" "$_km_dest" "$_km_pkg" "$_km_pv" "$_km_out" ) || exit 1
+	unset _km_pv _km_root _km_dir _km_line _km_obj _km_sha _km_deps _km_cat _km_pkg _km_build _km_dest _km_work _km_out \
 		_km_v _km_vf _km_d _km_kit _km_kabi _km_pc _km_pin _km_md _km_n _p _n _h _s _m
 }

@@ -31,6 +31,7 @@ test:
 	python3 -I pkg/tests/test-fetch
 	python3 -I pkg/tests/test-kfsmod
 	python3 -I pkg/tests/test-kmroot
+	python3 -I pkg/tests/test-kdrv
 	python3 -I tests/test-dist
 	python3 -I tests/test-lock
 

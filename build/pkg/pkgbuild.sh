@@ -164,7 +164,7 @@ mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
 # --- 1. the source: fetched and verified before extraction, or copied -----------------
 echo "--- source ---"
-rm -rf "$TREE"
+rm -rf "${TREE:?}"
 if [ -n "$SRCTREE" ]; then
 	# in the tree: the commit pins it; the digest is for the record
 	mkdir -p "$TREE"
@@ -242,7 +242,7 @@ echo
 
 # --- 5. stage, then the prototype and the binaries ----------------------------------------
 echo "--- stage ---"
-rm -rf "$DEST"; mkdir -p "$DEST"
+rm -rf "${DEST:?}"; mkdir -p "${DEST:?}"
 stage
 # STOCK_ETC: stock defaults from amix-system's etc/, by path, each checked
 # against system/MANIFEST.sha256 (they never enter this repository)
@@ -356,7 +356,7 @@ echo
 # --- 6. pkginfo from package.sh, roll ----------------------------------------------------
 echo "--- package ---"
 WORK="$BUILD/pkgwork"
-rm -rf "$WORK"; mkdir -p "$WORK"
+rm -rf "${WORK:?}"; mkdir -p "${WORK:?}"
 python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
 cp "$HERE/prototype" "$WORK/prototype"
 echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"

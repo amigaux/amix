@@ -26,7 +26,7 @@ image=${1:?usage: container-kit.sh IMAGE}
 tool=${CONTAINER:-docker}
 
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT INT TERM
+trap 'rm -rf "${work:?}"' EXIT INT TERM
 read -r url commit < "$top/kernel/port/port.pin"
 git init -q "$work/port"
 git -C "$work/port" fetch -q --depth 1 "${PORT_REPO:-$url}" "$commit"

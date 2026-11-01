@@ -235,11 +235,11 @@ amix_pkgroll() {
 	# family law is "verify the artifact, never the exit status"; a package is
 	# an artifact like any other.
 	_pr_rt="$_pr_work/.roundtrip"
-	rm -rf "$_pr_rt"; mkdir -p "$_pr_rt"
+	rm -rf "${_pr_rt:?}"; mkdir -p "${_pr_rt:?}"
 	"$AMIX_PKGTRANS" -i "$_pr_out" "$_pr_rt" "$_pr_pkg" >/dev/null 2>&1 || true
 	if [ ! -f "$_pr_rt/$_pr_pkg/pkgmap" ]; then
 		# -i is header-only on some builds; fall back to a full extract.
-		rm -rf "$_pr_rt"; mkdir -p "$_pr_rt"
+		rm -rf "${_pr_rt:?}"; mkdir -p "${_pr_rt:?}"
 		"$AMIX_PKGTRANS" "$_pr_out" "$_pr_rt" "$_pr_pkg" >/dev/null 2>&1 || true
 	fi
 	if [ -f "$_pr_rt/$_pr_pkg/pkgmap" ]; then

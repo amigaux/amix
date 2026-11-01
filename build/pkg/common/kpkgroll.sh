@@ -122,7 +122,7 @@ amix_kpkgroll() {
 
 	# GATE 6 -- round trip: every payload file back out, byte for byte.
 	_kr_rt="$_kr_work/.roundtrip"
-	rm -rf "$_kr_rt"; mkdir -p "$_kr_rt"
+	rm -rf "${_kr_rt:?}"; mkdir -p "${_kr_rt:?}"
 	"$AMIX_PKGTRANS" "$_kr_out" "$_kr_rt" "$_kr_pkg" >/dev/null 2>&1 || true
 	[ -f "$_kr_rt/$_kr_pkg/pkgmap" ] || {
 		echo "[FAIL] cannot unpack $_kr_out" >&2; exit 1; }
@@ -134,7 +134,7 @@ amix_kpkgroll() {
 	done
 	echo "  round trip: $_kr_n payload file(s) identical; pkgmap classes:" \
 		"$(awk '$1 ~ /^[0-9]+$/ {print $2 "/" $3}' "$_kr_rt/$_kr_pkg/pkgmap" | sort -u | tr '\n' ' ')"
-	rm -rf "$_kr_rt" "$_kr_work/.spool"
+	rm -rf "${_kr_rt:?}" "${_kr_work:?}/.spool"
 
 	amix_one_version "$_kr_out" "$_kr_pkg" "$_kr_ver" "$_kr_final"
 	echo "  built   $_kr_final ($(stat -c%s "$_kr_final") bytes, sha256 $(sha256sum "$_kr_final" | cut -c1-64))"

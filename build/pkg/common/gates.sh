@@ -173,8 +173,8 @@ amix_gate_d4() {
 	# Prove the gate can fail before trusting any pass -- once per build.
 	if [ -z "$AMIX_D4_SELFTESTED" ]; then
 		_g4_td=$(mktemp -d "${TMPDIR:-/tmp}/amix-d4.XXXXXX")
-		amix_gate_d4_selftest "$_g4_td" || { rm -rf "$_g4_td"; return 1; }
-		rm -rf "$_g4_td"
+		amix_gate_d4_selftest "${_g4_td:?}" || { rm -rf "${_g4_td:?}"; return 1; }
+		rm -rf "${_g4_td:?}"
 		unset _g4_td
 	fi
 	for _g4_f in "$@"; do
@@ -275,24 +275,24 @@ amix_gate_pkg060() {
 		_gp_d=$(mktemp -d "${TMPDIR:-/tmp}/amix-pkg060.XXXXXX")
 		"$AMIX_PKGTRANS" "$1" "$_gp_d" all >/dev/null 2>&1 || {
 			echo "  060 FAIL datastream $1 -- pkgtrans could not unpack it" >&2
-			rm -rf "$_gp_d"; unset _gp_d; return 1; }
+			rm -rf "${_gp_d:?}"; unset _gp_d; return 1; }
 		echo "  060 gate: datastream $(basename "$1") unpacked; the payload as served:"
 		if _amix_gate_060_tree_impl "$_gp_d"; then
-			rm -rf "$_gp_d"; unset _gp_d; return 0
+			rm -rf "${_gp_d:?}"; unset _gp_d; return 0
 		fi
-		rm -rf "$_gp_d"; unset _gp_d; return 1
+		rm -rf "${_gp_d:?}"; unset _gp_d; return 1
 	fi
 	# scan060.py calls a datastream with no ELF "NOTHING INSPECTED"; the tree
 	# gate passes a data-only package, so the datastream gate does too
 	_gp_d=$(mktemp -d "${TMPDIR:-/tmp}/amix-pkg060.XXXXXX")
 	"$AMIX_PKGTRANS" "$1" "$_gp_d" all >/dev/null 2>&1 || {
 		echo "  060 FAIL datastream $1 -- pkgtrans could not unpack it" >&2
-		rm -rf "$_gp_d"; unset _gp_d; return 1; }
+		rm -rf "${_gp_d:?}"; unset _gp_d; return 1; }
 	if [ -z "$(amix_gate_elfs "$_gp_d")" ]; then
 		echo "  060 gate: datastream $(basename "$1") -- no m68k ELF or archive (data-only package)"
-		rm -rf "$_gp_d"; unset _gp_d; return 0
+		rm -rf "${_gp_d:?}"; unset _gp_d; return 0
 	fi
-	rm -rf "$_gp_d"; unset _gp_d
+	rm -rf "${_gp_d:?}"; unset _gp_d
 	if _gp_out=$(amix_pm_scan060 "$1" 2>&1); then
 		echo "  060 gate: datastream $(basename "$1") -- $(echo "$_gp_out" | tail -1)"
 		unset _gp_out; return 0
