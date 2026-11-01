@@ -160,7 +160,9 @@ has it in full):
   level 0 (C3-6 §1.3).
 - The console goes through `cons_hook_set`, never `conputc`.
 - Board windows: `phystokv` below `VSECT1`, `sptalloc` or (k46)
-  `dev_kvmap` above. Never give a board the address of the module's own
+  `dev_kvmap` above. On k46 the window below `VSECT1` is cache-inhibited
+  but not serialised (ddi.md, "Memory"): registers that need serialised
+  access go through `dev_kvmap(…, 0x40, …)` there too. Never give a board the address of the module's own
   memory: there is no DMA interface in DDI v1.0.
 - `_unload` undoes everything: hooks, handlers, timeouts, mappings,
   registrations with other modules.
