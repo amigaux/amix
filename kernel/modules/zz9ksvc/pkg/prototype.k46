@@ -1,0 +1,26 @@
+# prototype.k46 -- zz9ksvc-k46 (zz9ksvc46): the module object, the package's defaults, the
+# nodes of its major, the page zz9ksvc(7) and the whatis fragment (amix-dlm C3-5 sec 1).
+# prototype.k30 and prototype.k46 differ only in the whatis fragment's name.
+#
+# AUTHORED, NOT GENERATED: build.sh hands it to kmodpkg, which runs pkgmk.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright only, no
+# scripts; the nodes of the driver's major as device entries in the module's class, zz9ksvc
+# (C3-5 v18 sec 1.2): /dev/zz9ksvc0 and 1, mode 0666 (every request is checked by the kernel).
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/zz9ksvc 0644 root sys
+f none /etc/conf/modreg.d/zz9ksvc 0644 root sys
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/7 0755 root sys
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/7/zz9ksvc 0644 root sys
+f none /opt/amix/man/whatis.d/zz9ksvc46 0644 root sys
+d none /dev 0755 bin bin
+c zz9ksvc /dev/zz9ksvc0 55 0 0666 root root
+c zz9ksvc /dev/zz9ksvc1 55 1 0666 root root

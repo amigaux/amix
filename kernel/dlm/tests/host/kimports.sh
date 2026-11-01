@@ -9,7 +9,7 @@
 set -e
 B=${B:-build}
 T=$B/kimports
-rm -rf $T && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg $T/root/etc/conf/mod.d
+rm -rf "${T:?}" && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg $T/root/etc/conf/mod.d
 R=$T/root
 MD=$R/etc/conf/mod.d
 KB="$B/kbootset -R $R --image $T/disk.img --offset 65536"

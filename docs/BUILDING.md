@@ -59,7 +59,10 @@ and exits non-zero on a failure. It exits 3 when an input outside the recipe
 is absent, with a `[MISSING]` line naming the input (a kernel
 cut's output, for one); the step then runs the other directories and ends
 with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from
-their own pinned epoch, never the environment's.
+their own pinned epoch, never the environment's. A driver directory's
+`pkg/build.sh` is three lines around `build/pkg/common/kdrv.sh`, which rolls
+each recipe (in `pkg/`, or one subdirectory per package) from the objects the
+`drivers` step built in `out/modules/<line>/`.
 
 A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`
 rebuilds everything and refuses the result if any line of its lock differs

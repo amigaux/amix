@@ -8,7 +8,7 @@
 set -e
 B=${B:-build}
 [ -n "$AX_KERNELS" ] && [ -n "$AX_ELF2BREL" ] || { echo "rel-kernels: AX_KERNELS/AX_ELF2BREL unset, skipped"; exit 0; }
-T=$B/rk; rm -rf $T; mkdir -p $T
+T=$B/rk; rm -rf "${T:?}"; mkdir -p $T
 V=0x08000000
 for k in $AX_KERNELS; do
 	n=$(basename "$k")

@@ -33,11 +33,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # the whole .pkg) still reads everything and inspects sunfont.o.
 amix_gate_060_tree() {
 	_g6t="$BUILD/gate060"
-	rm -rf "$_g6t"; mkdir -p "$_g6t"; cp -R "$1/." "$_g6t/"
+	rm -rf "${_g6t:?}"; mkdir -p "$_g6t"; cp -R "$1/." "$_g6t/"
 	rm -f "$_g6t$PFX/tools/modfix"
 	echo "  060 gate: the payload without the host program $PFX/tools/modfix:"
 	if _amix_gate_060_tree_impl "$_g6t"; then _g6r=0; else _g6r=1; fi
-	rm -rf "$_g6t"
+	rm -rf "${_g6t:?}"
 	return $_g6r
 }
 
@@ -104,7 +104,7 @@ for LINE in $LINES; do
 		echo "       ($BUILD/manifest)" >&2; exit 1; }
 	echo "      manifest sha256 pinned, verified"
 
-	rm -rf "$DEST" "$WORK"; mkdir -p "$DEST$PFX" "$WORK"
+	rm -rf "${DEST:?}" "${WORK:?}"; mkdir -p "$DEST$PFX" "$WORK"
 	cp -R "$KIT/." "$DEST$PFX/"
 	find "$DEST" -type d -exec chmod 0755 {} +
 	find "$DEST" -type f -perm -u+x -exec chmod 0755 {} +
@@ -134,7 +134,7 @@ for LINE in $LINES; do
 	# kabi 1.3 the sample says KABI_MIN: it imports no minor-3 name)
 	KABI_MIN=$(sed -n 's/^KABI_MIN=//p' "$KIT/kit.conf")
 	[ -n "$KABI_MIN" ] || KABI_MIN=$KABI
-	rm -rf "$BUILD/sample"; mkdir -p "$BUILD/sample"
+	rm -rf "${BUILD:?}/sample"; mkdir -p "$BUILD/sample"
 	cp "$DEST$PFX/sample/hello/hello.c" "$DEST$PFX/sample/hello/Master" \
 		"$DEST$PFX/sample/hello/Makefile" "$BUILD/sample/"
 	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1

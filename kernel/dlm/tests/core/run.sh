@@ -67,7 +67,7 @@ fail() { echo "FAIL $*"; fails=$((fails + 1)); }
 # upstream's mkmod sources <tree>/toolchain/src/gcc-cross-amix/build/env.sh
 # relative to itself: a staged copy of the core with that path pointing here
 S=$B/stage
-rm -rf "$S"
+rm -rf "${S:?}"
 mkdir -p "$S/kernel" "$S/toolchain/src/gcc-cross-amix/build"
 cp -R "$U" "$S/kernel/dlm"
 # the queue (core/series) on the copy: the tests are of the core as shipped
@@ -206,7 +206,7 @@ for IMG; do
 	case "$K" in K030*|*k30*) KABI=k30.1.2 LINE=k30 ;; *) KABI=k46.1.2 LINE=k46 ;; esac
 	ORIG=$IMG
 	export DLM_KABI=$KABI DLM_PIN=$PIN	# mkmod's -K and -P
-	rm -rf "$W"
+	rm -rf "${W:?}"
 	mkdir -p "$W"
 	echo "== $K"
 	# an ET_REL kernel (as shipped) defines stext but not etext/edata/end,

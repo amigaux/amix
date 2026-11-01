@@ -1,8 +1,10 @@
-devnodes(1m)     devnodes - re-create missing device nodes at boot
+bootswap(1m)     bootswap - add the swap areas at boot
 default(4)       default - the settings system commands start from
+devnodes(1m)     devnodes - re-create missing device nodes at boot
 display(4)       display - which screen X uses on this machine, and how it starts
 display.d(4)     display.d - the display cards X can use, one file each
 dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
+group(4)         group - the group file
 ifdown(1m)       ifup, ifdown - bring network interfaces up or down
 ifup(1m)         ifup, ifdown - bring network interfaces up or down
 inittab(4)       inittab - what init starts, at boot and at each run level

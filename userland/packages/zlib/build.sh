@@ -62,6 +62,7 @@ stage() {
 	cp zlib-test "$DEST$PREFIX/bin/zlib-test"
 	cp zlib.3 "$DEST$PREFIX/man/man3/zlib.3"
 	cp LICENSE README ChangeLog "$DEST$PREFIX/doc/zlib/"
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/zlib/LICENSE.amix"; chmod 0644 "$DEST$PREFIX/doc/zlib/LICENSE.amix"	# our files in this package: MIT
 	chmod 0644 "$DEST$PREFIX/lib/libz.a" "$DEST$PREFIX/include"/*.h \
 		"$DEST$PREFIX/man/man3/zlib.3" "$DEST$PREFIX/doc/zlib"/*
 	chmod 0755 "$DEST$PREFIX/bin/zlib-test"

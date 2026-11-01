@@ -9,7 +9,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-rc.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }

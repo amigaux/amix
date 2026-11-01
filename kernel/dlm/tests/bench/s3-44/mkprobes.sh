@@ -16,7 +16,7 @@ mkdir -p "$OUT/s44" "$OUT/work"
 OUT=$(cd "$OUT" && pwd)
 for n in t44intr t44fill; do
 	d=$OUT/work/$n
-	rm -rf "$d" && mkdir -p "$d"
+	rm -rf "${d:?}" && mkdir -p "$d"
 	cp "$S/$n.c" "$d/"
 	cp "$S/$n.Master" "$d/Master"
 	printf 'KIT = %s\nMODULE = %s\nOBJS = %s.o\ninclude $(KIT)/mk/module.mk\n' "$K" $n $n > "$d/Makefile"
@@ -24,5 +24,5 @@ for n in t44intr t44fill; do
 	cp "$d/build/$LINE/mod.d/$n" "$OUT/s44/"
 	echo "mkprobes: $n: $(grep '^modcheck' "$d/make.log" | tail -1)"
 done
-rm -rf "$OUT/work"
+rm -rf "${OUT:?}/work"
 (cd "$OUT" && sha256sum s44/*)

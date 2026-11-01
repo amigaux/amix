@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — zz9kbus and zz9ksvc 1.0.0-1
+
+- zz9kbus 1.0.0-1: the MIT registry between ZZ9000-family board drivers and zz9ksvc (include/sys/zz9kbus.h, carried by the ABI kit for board drivers built outside the tree); boot class, matching the Z3660 and ZZ9000 keys; objects 20db776b / 1e571b9a (7a8a509, 49d6bf8).
+- zz9ksvc 1.0.0-1: /dev/zz9ksvcN on c 55, the service channel of a ZZ9000-family board's second ARM core: per-open handles and quotas, kernel-built entries, bounded waits with quarantine, polling only while busy, mmap by handle cookie, root-only control. GPL-3.0-or-later with the ZZ9000 SDK v2 headers from zz9000-firmware v2.9.1. Objects d3a4712b / f5780902 (09a0e1a).
+
 ## 2026-10-31 — comments, READMEs and changelog text state the technical facts only (7bdcc55)
 
 .gitignore lists build output alone. monsw 1.0.0-8 re-pins rc/monsw for its header comment; every object and

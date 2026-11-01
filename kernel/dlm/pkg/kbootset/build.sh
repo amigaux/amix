@@ -32,7 +32,7 @@ echo "--- build amix-dlm $KB_DLM_COMMIT ---"
 amix_dlm_build "$KB_DLM_COMMIT" box/kbootset
 amix_verify "$AMIX_DLM_TREE/build/box/kbootset" "$KB_SHA"
 
-rm -rf "$BUILD"; mkdir -p "$DEST/sbin" "$DEST/var/kbootset" "$WORK"
+rm -rf "${BUILD:?}"; mkdir -p "$DEST/sbin" "$DEST/var/kbootset" "$WORK"
 cp "$AMIX_DLM_TREE/build/box/kbootset" "$DEST/sbin/kbootset"
 # kbootset(1M) and its whatis fragment (amix userland/packages/docs/man-pages.md)
 M="$DEST/opt/amix/man"

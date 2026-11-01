@@ -10,7 +10,7 @@
 set -e
 B=${B:-build}
 T=$B/kmajor
-rm -rf $T && mkdir -p $T/dev $T/root
+rm -rf "${T:?}" && mkdir -p $T/dev $T/root
 export KBOOTSET_DEVROOT=$T/dev KBOOTSET_KINFO=$T/no-kinfo
 
 # every owner in the registry: its lines in the registry's order

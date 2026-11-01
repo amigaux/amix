@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+# test-kdrv: host test of kdrv.sh, the body of kernel/drivers/<d>/pkg/build.sh.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# A stand-in checkout gets two driver directories: zz with its one recipe in
+# pkg/, and two with recipes aa and bb in pkg/aa and pkg/bb; the module
+# objects are big-endian ELF32 files with a .moddata section in
+# out/modules/<line>/, where make dist's drivers step puts them. The kit and
+# the final roll are stand-ins, as in test-kmroot. Checked: each recipe rolls
+# both lines from out/modules and prints its `pkg' lines; a package-only
+# revision names the file; names select recipes and an unknown name is a
+# usage error; a missing object is exit 3 with a [MISSING] line while the
+# other recipe still rolls; kdrv_prepare runs first and its failure stops the
+# roll. Prints "N/N passed"; exits non-zero on any failure.
+
+import hashlib
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+TOP = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def sha(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def elf(moddata):
+    """A big-endian ELF32 with only a .moddata section, as far as kmodpkg
+    reads it."""
+    strtab = b"\0.moddata\0.shstrtab\0"
+    body = b"\0" * 8 + b"\0".join(k.encode() for k in moddata) + b"\0"
+    off = 52
+    shoff = off + len(body) + len(strtab)
+    sh = struct.pack(">10I", *[0] * 10)
+    sh += struct.pack(">10I", 1, 1, 0, 0, off, len(body), 0, 0, 1, 0)
+    sh += struct.pack(">10I", 10, 3, 0, 0, off + len(body), len(strtab), 0, 0, 1, 0)
+    hdr = b"\x7fELF\x01\x02\x01" + b"\0" * 9 + struct.pack(">HHIIIIIHHHHHH", 1, 4, 1, 0, 0, shoff, 0,
+                                                            52, 0, 0, 40, 3, 2)
+    return hdr + body + strtab + sh
+
+
+tmp = tempfile.mkdtemp(prefix="test-kdrv.")
+try:
+    top = os.path.join(tmp, "amix")
+    shutil.copytree(os.path.join(TOP, "build", "pkg", "common"), os.path.join(top, "build", "pkg", "common"))
+    shutil.copy2(os.path.join(TOP, "build", "pkg", "layout.sh"), os.path.join(top, "build", "pkg"))
+    for f in ("gcc-cross-amix.pin", "gcc14-cross-amix.pin"):
+        os.makedirs(os.path.join(top, "toolchain"), exist_ok=True)
+        shutil.copy2(os.path.join(TOP, "toolchain", f), os.path.join(top, "toolchain", f))
+
+    def module(name, kabi="k30.1.2"):
+        for line, k in (("k30", kabi), ("k46", kabi.replace("k30", "k46"))):
+            p = os.path.join(top, "out", "modules", line, name)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            open(p, "wb").write(elf(["name=" + name, "kabi=" + k, "cc=gcc-2.7.2.3-x"]))
+
+    def recipe(d, name, short, extra=""):
+        os.makedirs(d, exist_ok=True)
+        repo = "kernel/drivers/" + d.split("kernel/drivers/")[1].split("/")[0]
+        write(os.path.join(top, repo, "module", "VERSION"), "1.0.0-1\n")
+        write(os.path.join(top, repo, "LICENSE"), "MIT\n")
+        objs = "".join('KM_K%s_SHA=%s\n' % (l[1:], sha(os.path.join(top, "out", "modules", l, name)))
+                       for l in ("k30", "k46") if os.path.exists(os.path.join(top, "out", "modules", l, name)))
+        write(os.path.join(d, "pin.sh"), """\
+KM_NAME=%s
+KM_SHORT=%s
+KM_REPO=%s
+KM_VERSION=1.0.0-1
+KM_KIT_COMMIT=abc1234
+KM_SOURCE_EPOCH=1793303717
+KM_LICENCES="%s/LICENSE %s"
+%s%s""" % (name, short, repo, repo, sha(os.path.join(top, repo, "LICENSE")), objs, extra))
+        for line in ("k30", "k46"):
+            write(os.path.join(d, "pkginfo." + line), "PKG=%s%s\n" % (short, line[1:]))
+        write(os.path.join(d, "prototype"), "i pkginfo\n")
+        write(os.path.join(d, "modreg"), "# defaults\n")
+
+    module("zz")
+    module("aa")
+    module("bb")
+    recipe(os.path.join(top, "kernel", "drivers", "zz", "pkg"), "zz", "zz")
+    two = os.path.join(top, "kernel", "drivers", "two", "pkg")
+    recipe(os.path.join(two, "aa"), "aa", "aa", 'KM_PKG_VERSION=1.0.0-2\n')
+    recipe(os.path.join(two, "bb"), "bb", "bb",
+           'kdrv_prepare() { echo prepared > "$AMIX_BUILD_ROOT/bb-prepared"; [ -z "${FAIL_PREPARE:-}" ]; }\n')
+
+    kit = os.path.join(tmp, "dlm", "build", "kit")
+    for line in ("k30", "k46"):
+        write(os.path.join(kit, line, "kit.conf"), "LINE=%s\nKABI=%s.1.3\nPIN=gcc-2.7.2.3-x\n" % (line, line))
+        write(os.path.join(kit, line, "LICENSE"), "the kit's licence\n")
+        write(os.path.join(kit, line, "tools", "modcheck.py"),
+              'import os, sys\nn = os.path.basename(sys.argv[-1])\nl = "k46" if "/k46/" in sys.argv[2] + "/" else "k30"\n'
+              'print("modcheck: %s: ok (%s.1.2, gcc-2.7.2.3-x, 1 bytes)" % (n, l))\n')
+    gca = os.path.join(tmp, "gca")
+    write(os.path.join(gca, "bin", "m68k-cbm-sysv4-scan060"), "#!/bin/sh\nexit 0\n", 0o755)
+    write(os.path.join(gca, "env.sh"), 'PATH="%s/bin:$PATH"; export PATH\n' % gca)
+    build = os.path.join(tmp, "out")
+
+    def run(d, *names, **env):
+        e = {k: v for k, v in os.environ.items() if not k.startswith(("AMIX_", "KM_", "TOOLCHAIN"))}
+        e.update(AMIX_BUILD_ROOT=build, AMIX_CROSS_ENV=os.path.join(gca, "env.sh"), GCA=gca)
+        e.update(env)
+        script = ('HERE=%s; . "$HERE/../../../../build/pkg/common/kdrv.sh"; '
+                  'amix_dlm_kit() { AMIX_DLM_TREE=%s; }; '
+                  'amix_kpkgroll() { mkdir -p "${5%%/*}"; echo "$3 $4" > "$5"; }; kdrv_roll "$@"'
+                  % (d, os.path.join(tmp, "dlm")))
+        p = subprocess.run(["/bin/sh", "-c", script, "sh"] + list(names), env=e,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    pk = os.path.join(build, "kspace", "pkg")
+    zz = os.path.join(top, "kernel", "drivers", "zz", "pkg")
+    rc, out = run(zz)
+    check("one recipe in pkg/: both lines roll from out/modules, `pkg' lines printed",
+          rc == 0 and "pkg zz30-1.0.0-1.pkg " in out and "pkg zz46-1.0.0-1.pkg " in out
+          and sorted(os.listdir(pk)) == ["zz30-1.0.0-1.pkg", "zz46-1.0.0-1.pkg"], out)
+    rc, out = run(two)
+    check("recipes in subdirectories: each rolls; a package-only revision names the file",
+          rc == 0 and "pkg aa30-1.0.0-2.pkg " in out and "pkg bb46-1.0.0-1.pkg " in out, out)
+    check("kdrv_prepare runs before the roll",
+          os.path.isfile(os.path.join(build, "bb-prepared")), out)
+    shutil.rmtree(pk)
+    rc, out = run(two, "bb")
+    check("a name selects its recipe only",
+          rc == 0 and "pkg bb30-1.0.0-1.pkg " in out and "aa30" not in out, out)
+    rc, out = run(two, "cc")
+    check("a name that is no recipe here: usage error, exit 2",
+          rc == 2 and "names here: aa bb" in out, out)
+    rc, out = run(two, FAIL_PREPARE="1")
+    check("a failing kdrv_prepare stops the roll, exit 1",
+          rc == 1 and "bb's kdrv_prepare failed" in out, out)
+    os.remove(os.path.join(top, "out", "modules", "k46", "aa"))
+    rc, out = run(two)
+    check("a missing object: exit 3 and a [MISSING] line, the other recipe still rolls",
+          rc == 3 and "[MISSING] kernel/drivers/two/pkg: aa's out/modules/k46/aa is not built (make drivers)" in out
+          and "pkg bb30-1.0.0-1.pkg " in out and "aa30" not in out.replace("[MISSING]", ""), out)
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

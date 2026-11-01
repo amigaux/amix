@@ -20,7 +20,7 @@ R=$(cd "$(dirname "$0")/../../.." && pwd)
 MODULE=$1 KERNEL=$2 SIDECAR=$3 BIND=$4 QFILE=$5 PFILE=$6
 [ -n "$PFILE" ] || { echo "usage: oracle.sh MODULE KERNEL SIDECAR BIND QFILE PFILE" >&2; exit 2; }
 T=$(mktemp -d)
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pc=$(python3 -I -c "import sys; d = open(sys.argv[1], 'rb').read(18); print('pcrel' if d[16:18] == b'\0\1' else '')" "$KERNEL")
 "$R/build/axrel" "$KERNEL" "$BIND" "$T/img" $pc > /dev/null
 ksym=$(sed -n 's/^ksym=//p' "$SIDECAR")

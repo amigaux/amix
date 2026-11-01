@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-01 — package recipe in amix, zscsi30/zscsi46 1.0.0-4 (2af0085)
+
+pkg/ rolls z3660scsi-k30/-k46 through build/pkg/common/kdrv.sh from make dist's drivers objects (k30 2c9e3803, k46
+21754e70, module 1.0.0-2). 1.0.0-4 is package-only: the same object and payload as the published 1.0.0-3; the
+copyright file names kernel/drivers/z3660scsi and the vendor is amix. Byte-identical across two clean container runs.
+
 ## 2026-10-31 — docs and comments state facts without internal ids (658dcc7, a579352)
 
 Docs, NOTES and code comments reworded; .gitignore lists build output only. Objects unchanged: static k30 0e15a363,

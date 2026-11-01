@@ -1,0 +1,16 @@
+PKG=zeth30
+NAME=z3660eth-k30 1.0.0-10 - Z3660 ethernet driver module, k30 line
+ARCH=Amiga
+VERSION=1.0.0-10
+CATEGORY=system
+CLASSES=none z3660eth
+VENDOR=amix
+PSTAMP=amix-zeth30-1.0.0-10
+# Kernel space (amix-dlm C2-2, C3-5 sec 1): a role=module entry of the
+# #ext kpkg block (line=k30), never an ordinary entry.  Catalog name
+# z3660eth-k30, pkginst zeth30.  The module's release is
+# kernel/drivers/z3660eth/module/VERSION (1.0.0-5), the same on both lines;
+# 1.0.0-10 is a package revision of it.  The node is in class z3660eth
+# (C3-5 sec 1.2).
+APKG_DESC=Z3660 onboard ethernet (zen0, STREAMS/DLPI) as a boot-class kernel module for the 68030 line module kernel kernel-k30-m: /etc/conf/mod.d/z3660eth, /dev/zen0 and the link.d entry ifup reads (/etc/inet/link.d/z3660eth).
+DESC=The kernel/drivers/z3660eth driver built as an amix-dlm kernel module for the 68030 line: boot class, loaded at the first sysinit entry (modadmin -B) when a Z3660 is present (match zorro:144b:01, mobo:z3660-window), character major 51, its node /dev/zen0 (c 51 0, mode 0600) shipped by the package.  /etc/inet/link.d/z3660eth (zen /dev/zen 0 51) tells ifup the interface prefix, the node, the first unit and the major; configure zen0 in /etc/inet/interfaces, not there.  /etc/conf/modreg.d/z3660eth holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

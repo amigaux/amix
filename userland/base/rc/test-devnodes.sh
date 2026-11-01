@@ -10,7 +10,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-devnodes.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -195,7 +195,7 @@ run "$K" > /dev/null
 same "?: a node at another minor is made again at 0" "$R/dev/zen0 c 51 0" "$(cat "$T/mknod.log")"
 
 # no database, no records: nothing at all
-rm -f "$T/contents"
+rm -f "${T:?}/contents"
 o=$(run "$K")
 same "no database" "" "$o$(cat "$T/mknod.log")$(cat "$T/rc.log")"
 db <<'EOF'

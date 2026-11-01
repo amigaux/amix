@@ -9,7 +9,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-man.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -69,7 +69,7 @@ o=$(run env MANPATH=/usr/share/man $M ls)
 expect "other MANPATH kept" "MANPATH=/usr/share/man" "$o"
 
 # the cache: written where writable, reused, refreshed when the source is newer
-rm -f "$T/cat/1/tar"
+rm -f "${T:?}/cat/1/tar"
 a=$(run $M tar); [ -f "$T/cat/1/tar" ] && ok || bad "cache written"
 b=$(run $M tar); [ "$a" = "$b" ] && ok || bad "cache reused: [$a] vs [$b]"
 sleep 1; touch "$T/man/1/tar"
@@ -78,7 +78,7 @@ ls "$T/cat/1" | grep -q '^T' && bad "temporary file left in the cache" || ok
 # no cache directory for section 5: formatted every time, nothing written
 run $M rsyncd.conf >/dev/null; [ ! -e "$T/cat/5" ] && ok || bad "cache made for an absent section"
 # a read-only cache directory: formatted, not written
-rm -f "$T/cat/3/zlib"; chmod 555 "$T/cat/3"
+rm -f "${T:?}/cat/3/zlib"; chmod 555 "$T/cat/3"
 if [ ! -w "$T/cat/3" ]; then
 	o=$(run $M zlib); expect "read-only cache still shows" "zlib page" "$o"
 	[ ! -e "$T/cat/3/zlib" ] && ok || bad "read-only cache written"
@@ -103,7 +103,7 @@ printf(3S)       printf, fprintf, sprintf - print formatted output
 tar(1)           tar - tape file archiver
 zlib(3)          zlib - a stock page of the same name, for the test
 EOF2
-rm -rf "$T/cat/1"/* "$T/cat/3"/*
+rm -rf "${T:?}/cat/1"/* "${T:?}/cat/3"/*
 stockfirst="$T/usr/bin:$T/usr/sbin:$T/usr/amix/bin:$T/opt/amix/bin:/usr/bin:/bin"
 oursfirst="$T/usr/amix/bin:$T/opt/amix/bin:$T/usr/bin:$T/usr/sbin:/usr/bin:/bin"
 prun() { # prun <PATH> man args...

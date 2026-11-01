@@ -49,7 +49,8 @@ Until a directory holds its project, its README says what will live there.
 
 ## More
 
-The project's home is <https://amigaux.org>.
+What each release brings: [docs/WHATS-NEW.md](docs/WHATS-NEW.md). The
+project's home is <https://amigaux.org>.
 
 ## Licence
 
