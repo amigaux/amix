@@ -3,6 +3,7 @@ NAME=ncurses
 PKG=ncurses
 VERSION=6.6
 PKGREV=1
+SOURCE_EPOCH=1793470308   # this version's epoch, kept when only the build scripts change
 SUMMARY="ncurses 6.6 - the terminal library, static"
 DESC="ncurses 6.6 as static libraries (libncurses.a, libform.a, libmenu.a, libpanel.a) with their headers in /opt/amix/include/ncurses, narrow characters, reading the stock terminfo database in /usr/share/lib/terminfo. For building programs (vim links it); the stock curses and tic/tput are untouched and no programs are installed."
 CATEGORY=library
