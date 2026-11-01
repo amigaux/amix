@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 9
+# C3-6 — what a driver changes to become a module, version 10
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -23,7 +23,10 @@
   optional for a registry module, and a node's class is its module's
   (§1.8); version 9 (2026-10-31): the memory rule covers every entry
   point that runs in a user's call, not only `_load`, and at first use
-  a module prefers `KM_NOSLEEP` with a clean `ENOMEM` (§1.1). The
+  a module prefers `KM_NOSLEEP` with a clean `ENOMEM` (§1.1); version 10
+  (2026-11-01, from the z3660rtg review fixes): z3660rtg's parameters
+  (`maxarea` defaults to 8192; `fixed` and `kvfb`) and its mapping of a
+  board window above `VSECT1` (§3). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -405,10 +408,10 @@ The module:
 | Wrapper | `MOD_DRV_WRAPPER(zz9000, …)`, the six entry points in the row, `drv_cmajor` 49 |
 | `_load` | `zz9k_probe(0)`; `ENXIO` if no board. No console at load: as today it is the ioctl's |
 | Console | `ZZ9KIOC_CONSOLE` ENABLE and REDIRECT (the same today): `cons_hook_set(zz9k_cons_hook)`, where the hook takes `(cp, p, n)` and returns nonzero only for writes with `cp->screen == displayedscreen` that it drew (not passed on); the per-character `zz9k_conputc` becomes a loop over `p`. DISABLE: `cons_hook_clear()`. No `conputc`. **By design the hook also takes virtual-terminal writes** to the displayed screen, where the `conputc` swap saw only the kernel's `printf`: the RTG then shows that screen as the native code would |
-| Memory | unchanged; `d_mmap` hands out device pages only (§1.5) |
-| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC` (§5, §6) |
+| Memory | `d_mmap` hands out device pages only (§1.5). A board window below `VSECT1` is reached through `phystokv()`, as the static driver does. A window above it (a Z3660 whose RTG AutoConfig puts it at `0x40000000`, or `0x50000000` behind a 256 MB RAM board) is mapped in two parts only: the register page and the first `kvfb` MiB of the framebuffer, which the console and the driver's own drawing stay inside. On k46 `dev_kvmap` (cache class `0x40`, non-cacheable serialised, for the registers; `0x60`, non-cacheable, for the framebuffer; flags 1, no sleep); on k30 `sptalloc(…, PG_V, phystopfn(…), 0)`, whose pages are not data-cached there, from the 4 MiB pool other drivers share. The framebuffer part halves until it fits; a mapping that fails fails the probe. Both are released in `_unload`. `d_mmap` still returns physical page frames and reaches the whole framebuffer. Only board rows whose device space is the framebuffer alone are attached this way |
+| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`; for a window above `VSECT1` `dev_kvmap`/`dev_kvunmap` (k46) or `sptalloc`/`sptfree` (k30), all DDI v1 minor 0. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC` (§5, §6) |
 | Font | `sunfont.o` linked into the module object (§1.7), and the module built **without** `ZZ9K_NO_BUILTINFONT` (that option stays for the static k46 relinks). The kit provides a `sunfont.o` the cross tools can link (the stock `sunfont.s` is m4 and SVR4 assembler syntax). `builtinfont` is also a stock k30 kernel name: the module makes it local (`objcopy --localize-symbol=builtinfont`, the make fragment's `LOCALIZE`) so it never shadows or exports it |
-| Parameters | the kernel-patchable `zz9k_blit_on` and `zz9k_blit_maxarea` have no patch path in a module: `param=blit:bool:1` and `param=maxarea:int:0:0:<the driver's limit>`, defaults equal to today's patched values |
+| Parameters | the kernel-patchable `zz9k_*` knobs have no patch path in a module, so each is a parameter: `param=blit:bool:1` (use the card's blitter); `param=maxarea:int:8192:0:3686400` (pixels per blitter band; 0 is the default, 8192); `param=fixed:bool:0` (1 also tries the board rows at a fixed base, `0x10000000`, which have no AutoConfig entry, as an emulator's stand-in; off by default, because such a probe reads a fixed address on any machine with the right chipset); `param=kvfb:int:0:0:46` (MiB of the framebuffer mapped for a window above `VSECT1`; 0 is the line's default, 8 on k46 and 2 on k30) |
 | Targets | one module per line serves both targets: the probe tells the ZZ9000 and the Z3660 apart at run time, so the target is no longer a compile-time switch in the module form; one name, one major (§6) |
 | `_unload` | `cons_hook_clear()` if the console is on; the switch back to native (`ZZ9K_MONSW_SET(0)`, as DISABLE does); `monsw_unregister()` for each board it registered (monsw keeps a pointer to the board's name, which is in this module's `.data`). No timeout and no interrupt is armed. The core does not call it while `/dev/zz9000` is open |
 | `_halt` | none, the wrapper's entry 0 (the board neither interrupts nor writes memory) |
