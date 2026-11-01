@@ -13,18 +13,20 @@
 # (vfs_mountroot returns EROFS).
 # 1.1.0-5 (2026-11-01): the module 1.1.0-4 (fork e63c513), the same objects
 # as the earlier 1.1.0-4 package, first rolled from amix.
+# 1.1.0-6 (2026-11-01): the same module 1.1.0-4, built with the kit of toolchain
+# pin gcc-2.7.2.3-33ebadc: the objects differ from 1.1.0-5 only in that tag.
 
 KM_NAME=cdfs
 KM_SHORT=cdfs
 KM_REPO=kernel/drivers/cdfs
 KM_VERSION=1.1.0-4
-KM_PKG_VERSION=1.1.0-5
+KM_PKG_VERSION=1.1.0-6
 KM_VERSION_FILE=out/cache/forks/cdfs/platform/amix-kernel/module/VERSION
 
-KM_K30_SHA=be3ed0a385d7e22c0bb02dec9298b2157a66b4cf3d2179089476d321cedca95d
-KM_K46_SHA=b4e5a7285d434217d5289f430b0fe3e520d6511dd0bc2a91a0a7c50d37d79a86
+KM_K30_SHA=25233427a1530ac0ddfec61cd44100c246b85d0c494ba4175a3e290f3bcae832
+KM_K46_SHA=07b2800e5def614ee76278c481acf06cbf37afc3a49e09abc8189afe6169f95f
 
-KM_KIT_COMMIT=6cc5dbafd168138530da0d8601a42322abbc4da9
+KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
 # the fork's platform/amix-kernel/module/Makefile PAGESHIFT_OK: the k46 shifts
 # by 11 in these functions are CD-sector divisions (offset / 2048), not page

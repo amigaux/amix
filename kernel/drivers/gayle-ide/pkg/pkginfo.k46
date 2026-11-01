@@ -1,15 +1,16 @@
 PKG=gayle46
-NAME=gayle-k46 1.1.0-5 - A4000 Gayle IDE driver module (root class), k46 line
+NAME=gayle-k46 1.1.0-6 - A4000 Gayle IDE driver module (root class), k46 line
 ARCH=Amiga
-VERSION=1.1.0-5
+VERSION=1.1.0-6
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-gayle46-1.1.0-5
+PSTAMP=amix-gayle46-1.1.0-6
 # Kernel space (amix-dlm C2-2, C3-5 v9 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k46, kabi=k46.1.2), class root, never an ordinary
 # entry.  Catalog name gayle-k46, pkginst gayle46; VERSION is the package's:
-# 1.1.0-5 is the module's 1.1.0-3 (the fork's module/VERSION at
-# kernel/drivers/gayle-ide/gayle-ide.pin), the same object, rolled from amix.
+# 1.1.0-6 is the module's 1.1.0-3 (the fork's module/VERSION at
+# kernel/drivers/gayle-ide/gayle-ide.pin), its object built with the
+# gcc-2.7.2.3-33ebadc kit, rolled from amix.
 APKG_DESC=A4000 Gayle IDE as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/gayle, interrupt I/O by default (param intr=0: polled).
 DESC=The amix-gayle-ide driver built as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted on an A4000 (match mobo:gayle), the IDE port registered with sd at rank ide as a pseudo SCSI host adapter; never unloaded.  Interrupt I/O by default (intr=1): at the first sysinit the module attaches INT2 and self-tests with one READ VERIFY, and stays polled if the test fails; the line param intr=0 in /etc/conf/modreg.local.d/gayle selects polled I/O.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/gayle holds the package's defaults (none; comments only).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
