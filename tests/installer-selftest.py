@@ -9828,6 +9828,45 @@ def _p36_problems(install_src, l11_src):
     return probs
 
 
+def audit_swap_stepdown():
+    head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
+         "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
+    src = open(DRIVER, encoding="utf-8").read()
+    m = re.search(r'\n(\t\[ -n "\$SWAP_ADD_MB" \] \|\| case .*?\n\tearly_target_swap\(\) \{\n.*?\n\t\})\n', src, re.S)
+    if not m:
+        fail("install.sh: no SWAP_ADD_MB default and early_target_swap")
+        return
+    block = m.group(1)
+    def run(cpu, add, takes, slice_blocks=131072):
+        # takes: the largest block count this kernel takes (a larger request is refused)
+        body = ('BLOCKS_PER_MB=2048\nTARGET_SWAP_SLICE=2\nID=6\nDISK_RAW=/dev/rdsk/c6d0s0\nSWAPLEN=%d\n'
+                'INSTALL_CPU="%s"\nSWAP_ADD_MB="%s"\n'
+                'is_num() { case "$1" in ""|*[!0-9]*) return 1 ;; esac; return 0; }\n'
+                'msg() { echo "MSG $*"; }\nwarn() { echo "WARN $*"; }\n'
+                'runq() { shift; case "$1" in -a) echo "TRY $4"; [ "$4" -le %d ] ;; *) return 0 ;; esac; }\n'
+                'swapl() { echo "path dev swaplo blocks free"; echo "/dev/fakeswap 0,0 0 100 100"; }\n'
+                % (slice_blocks, cpu, add, takes))
+        code = block.replace("/bin/swap -l", "swapl").replace("/etc/rdb -p", "echo 2 x %d #" % slice_blocks)
+        r = subprocess.run(["/usr/bin/dash", "-c", body + code + "\nearly_target_swap\necho ADDED=$EARLY_SWAP_ADDED\n"],
+                           capture_output=True, text=True, timeout=10)
+        return r.stdout
+    cases = (
+        ("030 default: 30 MiB only", "030", "", 10**9, ["TRY 61440", "ADDED=/dev/dsk/c6d0s2 0 61440"], ["TRY 131072"]),
+        ("060 default: the whole slice", "060", "", 10**9, ["TRY 131072", "ADDED=/dev/dsk/c6d0s2 0 131072"], []),
+        ("guarded list steps down to 48 MiB", "030", "all 48 30", 100000, ["TRY 131072", "TRY 98304", "ADDED=/dev/dsk/c6d0s2 0 98304"], ["TRY 61440"]),
+        ("then to 30 MiB", "030", "all 48 30", 70000, ["TRY 131072", "TRY 98304", "TRY 61440", "ADDED=/dev/dsk/c6d0s2 0 61440"], []),
+        ("no size twice (a 48 MiB slice: all = 48)", "030", "all 48 30", 10, ["TRY 98304", "TRY 61440"], []),
+    )
+    bad = []
+    for what, cpu, add, takes, want, notwant in cases:
+        sl = 98304 if "48 MiB slice" in what else 131072
+        out = run(cpu, add, takes, sl)
+        if not all(w in out for w in want) or any(n in out for n in notwant) or (what.startswith("no size") and out.count("TRY 98304") != 1):
+            bad.append("%s: %r" % (what, out.strip().splitlines()[-4:]))
+    (fail if bad else ok)("swap step-down EXECUTED (5 cases: defaults per line, 48 then 30 MiB, no size twice)%s"
+                          % ((": " + "; ".join(bad)) if bad else ""))
+
+
 def audit_guarded_rm_mv():
     head("RG. every rm and mv on a variable path names it \"${var:?}\" (an empty variable stops the "
          "script instead of widening the path)")
@@ -10645,6 +10684,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_swap_stepdown()
     audit_guarded_rm_mv()
     audit_ufs_rootcap()
     audit_l11()

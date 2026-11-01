@@ -763,6 +763,9 @@ esac
 #                                 040/060 target kernel goes in UNCOMPRESSED, so
 #                                 2 MB is 92.7% full before anything grows.
 #   TARGET_SWAP_MB   <empty>      stock-default swap sizing (plan_partitions)
+#   SWAP_ADD_MB      <line's>     how much of the swap slice is added before mkfs: sizes in MiB
+#                                 (`all` = the whole slice) tried in order, the first the kernel
+#                                 takes; default 30 on the 68030 line, all on the 68040/68060 line
 #   MONSW            <empty>      the monitor switch's bits (a bit sum of 1 2 16 32;
 #                                 the Z3660 boxes use 34): 1.1 only, the monsw line
 #                                 of /etc/display (the monsw package ships the rest);
@@ -1606,20 +1609,40 @@ build_target_author() {
 	# files (nothing is mounted yet): stock's own `set \`swap -l\`` form; the `x` keeps an
 	# empty output from turning `set` into a variable dump. 2c then finds the fake gone and
 	# only logs the table. Fail-open like 2c.
+	# How much of the slice is added: SWAP_ADD_MB, sizes in MiB tried in order, `all` the whole
+	# slice; the first the kernel takes is used and logged, and no size is tried twice. The
+	# kernel's swap -a needs one contiguous block of kernel space for its page table (16 bytes
+	# a page); until a kernel refuses a request that does not fit, it waits for ever on one, so
+	# the list holds only sizes known to fit: 30 MiB on the 68030 line (its ceiling on a 64 MB
+	# box is about 48), the whole slice on the 68040/68060 line.
+	[ -n "$SWAP_ADD_MB" ] || case "${INSTALL_CPU:-030}" in 040|060) SWAP_ADD_MB=all ;; *) SWAP_ADD_MB=30 ;; esac
 	early_target_swap() {
 		set x `/bin/swap -l 2>/dev/null`; shift
 		[ "$6" = /dev/fakeswap ] || return 0
 		set x `/etc/rdb -p "$TARGET_SWAP_SLICE" "$DISK_RAW" 2>/dev/null`; shift
 		eblks="$3"
 		is_num "$eblks" || eblks="$SWAPLEN"
-		if runq /bin/swap -a "/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE}" 0 "$eblks"; then
-			msg "swap: added /dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE} 0 $eblks before mkfs"
-			EARLY_SWAP_ADDED="/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE} 0 $eblks"
-			if runq /bin/swap -d /dev/fakeswap 0; then EARLY_SWAP_REMOVED=y
-			else warn "swap: could not remove /dev/fakeswap before mkfs"; fi
-		else
-			warn "swap: could not add the swap slice before mkfs; mkfs runs on /dev/fakeswap"
-		fi
+		_last=
+		for _mb in $SWAP_ADD_MB
+		do
+			case "$_mb" in
+				all)	_b="$eblks" ;;
+				*)	is_num "$_mb" || { warn "swap: SWAP_ADD_MB size '$_mb' is not a number"; continue; }
+					_b=`expr "$_mb" \* "$BLOCKS_PER_MB"` ;;
+			esac
+			[ "$_b" -le "$eblks" ] || _b="$eblks"
+			[ "$_b" = "$_last" ] && continue
+			_last="$_b"
+			if runq /bin/swap -a "/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE}" 0 "$_b"; then
+				msg "swap: added /dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE} 0 $_b ($_b of the slice's $eblks blocks) before mkfs"
+				EARLY_SWAP_ADDED="/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE} 0 $_b"
+				if runq /bin/swap -d /dev/fakeswap 0; then EARLY_SWAP_REMOVED=y
+				else warn "swap: could not remove /dev/fakeswap before mkfs"; fi
+				return 0
+			fi
+			warn "swap: the kernel refused $_b blocks of the swap slice"
+		done
+		warn "swap: could not add the swap slice before mkfs; mkfs runs on /dev/fakeswap"
 		return 0
 	}
 	early_target_swap
