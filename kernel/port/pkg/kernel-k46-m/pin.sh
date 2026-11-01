@@ -56,6 +56,18 @@
 # The release notes in pkginfo ride this cut (a new version); -51 is never
 # re-rolled -- one version, one set of bytes (recipes/README.md).
 
+# -56 against -55 (2026-11-01): the port's cut 68060-261101-56 (amix-040-060-port
+# cuts/68060-261101-56 at 7af6b2d; REV 2e3b9d5): ITT0/DTT0 supervisor-only,
+# so a user process no longer reaches physical memory below 1 GiB; no 68030
+# segment tables in user address spaces; swap -a of an area too big for the
+# kernel's map fails with ENOMEM; the soft data and vmem limits unlimited.
+# amix 3b53a8a's core adds 0050 (a first-use load short of memory for its
+# first records prints the first-use line) and 0051 (module majors are the
+# booted manifest's major records, so kbootset -34 or later), built with
+# gcc-cross-amix 33ebadc (DLM_PIN and the sidecar's pin=gcc-2.7.2.3-33ebadc).
+# kabi k46.1.4 and abi 18c0a1c9 unchanged; the ufs module differs in its
+# .moddata pin= and build= only.
+#
 # -55 against -53 (2026-10-31): the port's cut 68060-261031-55 (amix-040-060-port
 # cuts/68060-261031-55 at 392a44e; REV eae06ae), with amix 3c3e353's module
 # core, kit and family tools: core patch 0048 loads a demand-class filesystem
@@ -96,32 +108,32 @@
 
 # the cut's output: kernel/port/cuts/build.sh (make kernel-k46) writes it
 # there, from the port's cuts/68060-261031-55/cut.sh (gitignored)
-K46M_SRC="${K46M_SRC:-$AMIX_TOP/kernel/port/build/cuts/68060-261031-55}"
-K46M_SUMS=SHA256SUMS-68060-261031-55   # under K46M_SRC, the cut's seven sums
+K46M_SRC="${K46M_SRC:-$AMIX_TOP/kernel/port/build/cuts/68060-261101-56}"
+K46M_SUMS=SHA256SUMS-68060-261101-56   # under K46M_SRC, the cut's seven sums
 K46M_OUT=out/c                     # the cut's outputs under K46M_SRC
 K46M_CARVE=ufsmod/mod              # the ufs carve sources (R2)
-K46M_DLM_COMMIT=3c3e353     # amix-dlm, the cut's core (port/build/dlm-rev/.rev): axrel, ksymgate.py, abi/k46 (lists, reference)
+K46M_DLM_COMMIT=3b53a8a     # amix-dlm, the cut's core (port/build/dlm-rev/.rev): axrel, ksymgate.py, abi/k46 (lists, reference)
 K46M_CORE_STRIP=7b07bce     # amix-dlm, the first core that skips the stamp's leading blank
-K46M_KIT_COMMIT=3c3e353     # amix-dlm, the kit the module is checked and rebuilt with (445c12e or later)
-K46M_KIT_PORT=eae06ae       # amix-040-060-port, the k46 kit's 4 KiB headers (the cut's PORT_REV)
-K46M_PORT_COMMIT=eae06ae08ea1a740606664a5d78a1e1523f509a1    # K46M_KIT_PORT in full, fetched by hash
-K46M_AMIX_COMMIT=3c3e353    # amix, the cut's kernel/k30 tools: the in-amix licence
+K46M_KIT_COMMIT=3b53a8a     # amix-dlm, the kit the module is checked and rebuilt with (445c12e or later)
+K46M_KIT_PORT=2e3b9d5       # amix-040-060-port, the k46 kit's 4 KiB headers (the cut's PORT_REV)
+K46M_PORT_COMMIT=2e3b9d54439a1166e4fef20cad2fb5e575367160    # K46M_KIT_PORT in full, fetched by hash
+K46M_AMIX_COMMIT=3b53a8a    # amix, the cut's kernel/k30 tools: the in-amix licence
 K46M_PAULA_COMMIT=62fdcabe4b5c94ec8fcbaa610655b9a0795778ec   # amix-paula, the audio patchers
 
 K46M_CATALOG_NAME=kernel-k46-m
 K46M_PKG=kern46m
-K46M_BUILDID=68060-261031-55
+K46M_BUILDID=68060-261101-56
 K46M_KABI=k46.1.4
 K46M_FSKABI=k46.1.2       # the .moddata kabi of ufs (the minor it imports)
-K46M_VERSION=k46.1.4.261031-55
+K46M_VERSION=k46.1.4.261101-56
 
-K46M_UNIX_SHA=a31055d985b4ddbc65f761e6a6a32ce78725dd5471e9056d2485ca17c3e20654
-K46M_UNIX_SIZE=2423300
-K46M_KABI_SHA=ed45fb0f2208e841a5602c7c348083c9e3133199e198eec7c974ab1f64ad4697
+K46M_UNIX_SHA=8ef910629a2c87ae3e860b53fd5271ade0cc876bcf79f478a58ac9d490c35bd5
+K46M_UNIX_SIZE=2424876
+K46M_KABI_SHA=712b3d0e6802fa949a7e01f0d9ea132b959d51a8bb4129769a276292fb688fff
 
 # the filesystem module: <fs> <sha256> <size> <file under $K46M_OUT>
 K46M_FSMODS="\
-ufs 53314504fc09a1272b6908b79a8326cc2ba7370b1705e875aab4087248e96596 79624 ufs.mod"
+ufs 384ef7c998326e18eea5435808d92ba0a8a0289aab3c7ce0f8c1ade72e18c1cf 79624 ufs.mod"
 # the port's patched ufs object the carve links (ufsmod/Makefile's EXTRA=):
 # since -52 the tail-zeroed one, ufs-exp.k46 (6636b27e, as -61) with
 # ufs_vptrunz bound in by the port's tools/ufs-tailzero.sh
@@ -129,8 +141,8 @@ K46M_FSEXP=ufsmod/ufs-exp-qz.k46
 K46M_FSEXP_SHA=f49bf55e3048b2a3ff30cc4dc3b9d02ab31e979fd389d346925c2f60da4c0b8e
 
 # the port's licence and the third-party notices of the code linked into the
-# kernel (as kernel-k46), from the cut's copy of the port tree (eae06ae
-# since -55, 2e7f715 in -53, fff9660 in -52, the same bytes as d76a7f0, 87b8a88 and 88dcfc0;
+# kernel (as kernel-k46), from the cut's copy of the port tree (2e3b9d5
+# since -56, eae06ae in -55, 2e7f715 in -53, fff9660 in -52, the same bytes as d76a7f0, 87b8a88 and 88dcfc0;
 # MOTOROLA-M68060-SP.txt changed since -82's port tree)
 K46M_NOTICES="\
 LICENSE                                    ceec1a0761d69087a733d3b04716c29baa0c0243f2c0def26456516f73ad8ca6
@@ -155,4 +167,4 @@ K46M_DLM_LICENCES="\
 LICENSE               20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 core/upstream/LICENSE 7c74426a1d5885c08435d597fcb07c2395accef0773001fc6fbd22b2bbf8a66d"
 
-K46M_SOURCE_EPOCH=1793404800     # 2026-10-31 00:00 UTC
+K46M_SOURCE_EPOCH=1793491200     # 2026-11-01 00:00 UTC
