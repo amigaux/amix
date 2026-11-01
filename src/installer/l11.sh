@@ -26,7 +26,8 @@
 #                  fsck reboot (C2-4 v5 §7), and the stock file's `sum -r`
 #   inittab        amix-base's /etc/inittab (it carries C3-5 §5's dlm line before its first
 #                  sysinit entry): what the target holds once amix-base is in
-#   base/          the base packages: order (their pkginsts, in order), each
+#   base/          the userland packages added after core: order (the pkginsts every set
+#                  takes, in order), o.<set> (the ones only that set takes), each
 #                  <pkginst>.pkg, <pkginst>.cf (its pkgmap's `e conffile` paths; s5-safe names)
 #                  and seed.sh (payload/l11-seed.sh)
 #   2.1_unix.sum   the `sum -r` of core's /stand/2.1_unix, which stays when the name
@@ -311,7 +312,7 @@ l11_bootstore()
 	# files, so the node is the installer's: c 53 0, 0444. The miniroot has no chown or
 	# chgrp; the node is root's already, and first boot gives it group sys.
 	[ -d "$TARGET/dev" ] || run mkdir -p "$TARGET/dev"
-	rm -f "$TARGET/dev/kinfo"
+	rm -f "${TARGET:?}/dev/kinfo"
 	run /bin/mknod "$TARGET/dev/kinfo" c 53 0
 	run chmod 0444 "$TARGET/dev/kinfo"
 	# updbootpart would frame a 1.0 chain over the store: on this disk it is the shim
@@ -322,7 +323,7 @@ l11_bootstore()
 	l11_bcheckrc "$TARGET/sbin/bcheckrc"
 	l11_markgood
 	l11_bootset auto
-	rm -rf "$TARGET/tmp/kpkgcache" "$KCONF"
+	rm -rf "${TARGET:?}/tmp/kpkgcache" "${KCONF:?}"
 	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
 }
 
@@ -350,7 +351,11 @@ l11_base()
 	run cp "$L11/base/seed.sh" "$_bd/seed.sh"
 	run cp "$INST/admin/pkgadd" "$_bd/admin"
 	_n=0
-	for _p in `cat "$L11/base/order"`
+	# every set's packages, then the chosen set's own (base/o.<set>, staged only for a set the
+	# medium offers)
+	_ord=`cat "$L11/base/order"`
+	[ -f "$L11/base/o.$INSTALL_SET" ] && _ord="$_ord `cat "$L11/base/o.$INSTALL_SET"`"
+	for _p in $_ord
 	do
 		_f="$_p.pkg"
 		[ -f "$L11/base/$_f" ] || die "base packages: no $_p datastream ($_f) in $L11/base"
@@ -365,6 +370,8 @@ l11_base()
 		runq "$_cr" "$TARGET" /usr/apkg/bin/pkgadd -n -a /tmp/l11base/admin -d "/tmp/l11base/$_f" "$_p" \
 			|| die "base packages: pkgadd $_p failed (rc=$?) -- refusing to arm"
 		[ -d "$TARGET/var/sadm/pkg/$_p" ] || die "base packages: pkgadd $_p returned 0 but $_p is not installed"
+		# one datastream at a time on the target (x11r63's is 34 MB)
+		run rm -f "${_bd:?}/$_f"
 		_n=`expr $_n + 1`
 	done
 	[ "$_n" -gt 0 ] || die "base packages: $L11/base/order names none"
@@ -378,8 +385,8 @@ l11_base()
 	run cp /dev/null "$TARGET/etc/mnttab"
 	[ -s "$TARGET/var/sadm/conffiles/PENDING" ] \
 		&& die "base packages: a fresh install left conffiles PENDING: `cat "$TARGET/var/sadm/conffiles/PENDING"`"
-	run rm -rf "$_bd"
-	msg "base pkgs    : $_n added under the target's chroot (`cat "$L11/base/order"`); core gave up amix-base's conffiles"
+	run rm -rf "${_bd:?}"
+	msg "base pkgs    : $_n added under the target's chroot (`echo $_ord`); core gave up amix-base's conffiles"
 }
 
 # l11_bits MASK -- _bits: the prefix length of a dotted netmask (empty: none); dies on
@@ -605,7 +612,7 @@ l11_inittab()
 # package ships it (-26 on: init.d/kbnamelist with its rc2.d link); this checks it.
 l11_namelist()
 {
-	rm -f "$TARGET/stand/unix" "$TARGET/unix"
+	rm -f "${TARGET:?}/stand/unix" "${TARGET:?}/unix"
 	[ -f "$TARGET/stand/unix" ] && die "cannot remove $TARGET/stand/unix"
 	[ -f "$TARGET/stand/2.1_unix" ] || die "core's /stand/2.1_unix is not on the target"
 	_us=`( read _s _r; echo "$_s" ) < "$L11/2.1_unix.sum"`

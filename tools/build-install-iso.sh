@@ -343,7 +343,7 @@ echo "  ${SELECTED[*]}"
 # 1. stage /install/
 # ---------------------------------------------------------------------------
 echo "build-install-iso: staging /install/ at $STAGE"
-rm -rf "$STAGE"
+rm -rf "${STAGE:?}"
 mkdir -p "$STAGE/bin" "$STAGE/admin" "$STAGE/profiles" "$STAGE/firstboot" "$STAGE/boot"
 
 # engine + shim + sum + contents-fsck (the CD-resident static DB integrity checker
@@ -627,7 +627,7 @@ if [ -n "$_want_x11kit" ]; then
     echo "STOP: amix-z3660rtg/build/out does not match x11/KIT.sha256" >&2; exit 1; }
   [ -f "$X11KIT_MONSW" ] || { echo "STOP: X11KIT=rtg requested by${_want_x11kit} but $X11KIT_MONSW is not built" >&2; exit 1; }
   [ "$(sha256sum "$X11KIT_MONSW" | cut -c1-64)" = "$X11KIT_MONSW_SHA" ] || { echo "STOP: zz9k_monsw sha256 != pinned $X11KIT_MONSW_SHA" >&2; exit 1; }
-  rm -rf "$STAGE/x11kit"; mkdir -p "$STAGE/x11kit"
+  rm -rf "${STAGE:?}/x11kit"; mkdir -p "$STAGE/x11kit"
   _kit_list=
   while read -r _sha _name; do
     case "$_name" in
@@ -705,7 +705,7 @@ if [ -n "$_want_tz" ]; then
     echo "STOP: payload/tz/MANIFEST sha256 $_tz_got != pinned $TZSET_SHA (rebuild with tools/build-tzfile.py, or re-pin deliberately)" >&2; exit 1; }
   (cd "$repo/payload/tz" && sha256sum --quiet -c <(awk '{print $1"  "$3}' MANIFEST)) || {
     echo "STOP: payload/tz does not match its MANIFEST (rebuild with tools/build-tzfile.py)" >&2; exit 1; }
-  rm -rf "$STAGE/tz"; cp -r "$repo/payload/tz" "$STAGE/tz"; chmod -R a+rX "$STAGE/tz"
+  rm -rf "${STAGE:?}/tz"; cp -r "$repo/payload/tz" "$STAGE/tz"; chmod -R a+rX "$STAGE/tz"
   diff -r "$repo/payload/tz" "$STAGE/tz" >/dev/null || { echo "STOP: staged /install/tz is not identical to payload/tz" >&2; exit 1; }
   echo "build-install-iso: staged /install/tz ($(awk 'END{print NR}' "$repo/payload/tz/MANIFEST") zones, ${TZSET_SHA:0:16}... == pin) for${_want_tz}"
 else
@@ -757,7 +757,7 @@ if [ -n "$_want_l11" ]; then
         || { echo "STOP: profile $_p: $_m is not a role=module row of line $_kl in $L11_IN/kpkg/catalog" >&2; exit 1; }
     done
   done
-  rm -rf "$STAGE/l11"; mkdir -p "$STAGE/l11/bin" "$STAGE/l11/kpkg"
+  rm -rf "${STAGE:?}/l11"; mkdir -p "$STAGE/l11/bin" "$STAGE/l11/kpkg"
   if [ -n "$STRIP_COMMENTS" ]; then
     python3 "$here/strip-sh-comments.py" "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
       || { echo "STOP: strip-sh-comments refused l11.sh" >&2; exit 1; }
@@ -791,7 +791,9 @@ if [ -n "$_want_l11" ]; then
     || { echo "STOP: the bcheckrc retry patch did not insert exactly three lines" >&2; exit 1; }
   sum -r "$_bc" | awk '{print $1}' > "$STAGE/l11/bcheckrc.stock"
   # the base packages: l11_base adds them under the target's chroot after
-  # core and the base set. base/order is their pkginsts in the set's order; <pkginst>.pkg the
+  # core and the base set. base/order is the pkginsts every set takes, in the set's order;
+  # base/o.<set> those only that set takes (staged below, once the offered sets are known,
+  # and only for a set this medium offers); <pkginst>.pkg the
   # datastream, <pkginst>.cf the paths of its pkgmap's `e conffile` lines (what the class acts
   # on, so the seed reads what the bytes install); seed.sh the baseline rule. The names fit
   # s5's 14 characters: the netinstall miniroot is s5 (amxbase-1.0-10.pkg was
@@ -801,9 +803,15 @@ if [ -n "$_want_l11" ]; then
   _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
   [ -x "$_pt" ] || { echo "STOP: no host pkgtrans at $_pt (tools/build-l11-inputs.sh)" >&2; exit 1; }
   _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-base.XXXXXX")"
-  rm -rf "$STAGE/l11/base"; mkdir -p "$STAGE/l11/base"
-  cut -d'|' -f3 "$L11_IN/base/catalog.lines" > "$STAGE/l11/base/order"
+  rm -rf "${STAGE:?}/l11/base"; mkdir -p "$STAGE/l11/base"
+  # base/sets: each pkginst and the sets that take it (no set: every set); older inputs lack it
+  _bsets="$L11_IN/base/sets"
+  if [ ! -f "$_bsets" ]; then
+    cut -d'|' -f3 "$L11_IN/base/catalog.lines" > "$_bw/sets"; _bsets="$_bw/sets"
+  fi
+  awk 'NF == 1 { print $1 }' "$_bsets" > "$STAGE/l11/base/order"
   while IFS='|' read -r _bn _bv _bi _bf _bm _bz _; do
+    grep -qx "$_bi" "$STAGE/l11/base/order" || continue
     [ "$(md5sum < "$L11_IN/base/$_bf" | cut -c1-32)" = "$_bm" ] \
       || { echo "STOP: $L11_IN/base/$_bf is not its catalog line's md5 $_bm" >&2; exit 1; }
     [ "${#_bi}" -le 9 ] || { echo "STOP: base package $_bi: a pkginst over 9 characters" >&2; exit 1; }
@@ -824,7 +832,7 @@ if [ -n "$_want_l11" ]; then
     && grep -qx 'dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1' "$_it" \
     || { echo "STOP: amix-base's inittab does not carry the one dlm line as its first sysinit entry" >&2; exit 1; }
   cp "$_it" "$STAGE/l11/inittab"
-  rm -rf "$_bw"
+  rm -rf "${_bw:?}"
   # core's 1992 kernel, which stays when install.sh removes the name /stand/unix
   sum -r "$CORE_T/stand/2.1_unix" | awk '{print $1}' > "$STAGE/l11/2.1_unix.sum"
   # apkg's conf for finishing a target's pending transaction from the repair path
@@ -1061,6 +1069,34 @@ done
   echo "STOP: this medium satisfies NO named set -- the interview would have nothing to offer" >&2
   exit 1; }
 
+# --- /install/l11/base/o.<set>: the set-only userland packages, for the sets this medium offers --
+# (rows 1 and 2: the offered sets and the set it is mastered for). A package no offered set takes
+# stays off the medium: x11r63 is 34 MB, the netinstall RAM disk 5 MB.
+if [ -d "$STAGE/l11/base" ] && [ -f "$L11_IN/base/sets" ] && awk 'NF > 1 { f = 1 } END { exit !f }' "$L11_IN/base/sets"; then
+  _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-sets.XXXXXX")"
+  _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
+  for _s in ${OFFERED_SETS[@]+"${OFFERED_SETS[@]}"} "$SET_NAME"; do
+    for _bi in $(awk -v s="$_s" 'NF > 1 { for (i = 2; i <= NF; i++) if ($i == s) print $1 }' "$L11_IN/base/sets"); do
+      _line="$(awk -F'|' -v i="$_bi" '$3 == i' "$L11_IN/base/catalog.lines")"
+      IFS='|' read -r _bn _bv _ _bf _bm _bz _ <<< "$_line"
+      [ -n "$_bf" ] || { echo "STOP: base/sets names $_bi, which base/catalog.lines lacks" >&2; exit 1; }
+      [ "${#_bi}" -le 9 ] || { echo "STOP: set package $_bi: a pkginst over 9 characters" >&2; exit 1; }
+      if [ ! -f "$STAGE/l11/base/$_bi.pkg" ]; then
+        [ "$(md5sum < "$L11_IN/base/$_bf" | cut -c1-32)" = "$_bm" ] \
+          || { echo "STOP: $L11_IN/base/$_bf is not its catalog line's md5 $_bm" >&2; exit 1; }
+        cp "$L11_IN/base/$_bf" "$STAGE/l11/base/$_bi.pkg"
+        "$_pt" "$L11_IN/base/$_bf" "$_bw" "$_bi" >/dev/null 2>&1 \
+          || { echo "STOP: pkgtrans could not unpack $_bf" >&2; exit 1; }
+        awk '$2 == "e" && $3 == "conffile" { print $4 }' "$_bw/$_bi/pkgmap" > "$STAGE/l11/base/$_bi.cf"
+        rm -rf "${_bw:?}/$_bi"
+      fi
+      grep -qx "$_bi" "$STAGE/l11/base/o.$_s" 2>/dev/null || echo "$_bi" >> "$STAGE/l11/base/o.$_s"
+      echo "build-install-iso: l11/base/o.$_s: $_bn $_bv ($_bi)"
+    done
+  done
+  rm -rf "${_bw:?}"
+fi
+
 # ---------------------------------------------------------------------------
 # /install/sets -- the interview's three-tier menu, as data
 # ---------------------------------------------------------------------------
@@ -1186,7 +1222,7 @@ for p in "${PROFILES[@]}"; do
       UNITARGS+=(--unit "$n:$ustage/u$n/bootslice.img")
     done
     python3 "$here/rth1-media.py" stamp --family "$outdir/bootslice.img" "${UNITARGS[@]}" --out "$outdir/stamp"
-    rm -rf "$ustage"
+    rm -rf "${ustage:?}"
     echo "build-install-iso: boot/$name/stamp/units:"; sed 's/^/    /' "$outdir/stamp/units"
   fi
 

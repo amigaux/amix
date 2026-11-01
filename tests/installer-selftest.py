@@ -10003,8 +10003,12 @@ def audit_l11():
     iso = open(os.path.join(HERE, "build-install-iso.sh"), encoding="utf-8").read()
     for what, good in (
             ("l11_base runs seed.sh then APKGENG's pkgadd under the target's chroot, per base/order",
-             re.search(r'for _p in `cat "\$L11/base/order"`.*?"\$_cr" "\$TARGET" /bin/sh /tmp/l11base/seed\.sh'
+             re.search(r'for _p in \$_ord\n.*?"\$_cr" "\$TARGET" /bin/sh /tmp/l11base/seed\.sh'
                        r'.*?runq "\$_cr" "\$TARGET" /usr/apkg/bin/pkgadd -n -a /tmp/l11base/admin', lb, re.S)),
+            ("l11_base takes base/order, then the chosen set's base/o.<set>, and drops each datastream after its pkgadd",
+             '_ord=`cat "$L11/base/order"`' in lb
+             and '[ -f "$L11/base/o.$INSTALL_SET" ] && _ord="$_ord `cat "$L11/base/o.$INSTALL_SET"`"' in lb
+             and 'run rm -f "${_bd:?}/$_f"' in lb),
             ("l11_base transfers amix-base's conffiles from core (removef core, removef -f core)",
              '/usr/apkg/bin/removef core `cat "$L11/base/amxbase.cf"`' in lb
              and '/usr/apkg/bin/removef -f core' in lb),
