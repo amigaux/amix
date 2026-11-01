@@ -1901,7 +1901,13 @@ mkds "$KR/pkgs/kernel/impure-c-1.0.pkg"   IMPUREC 1.0 impc "1 f kcls /stand/k46/
 mkds "$KR/pkgs/kernel/impure-s-1.0.pkg"   IMPURES 1.0 imps "1 i postinstall 20 1 1"
 mkds "$KR/pkgs/kernel/impure-l-1.0.pkg"   IMPUREL 1.0 impl "1 s none /stand/k46/impl.lnk=/stand/k46/impl"
 sha() { sha256sum "$1" | cut -c1-64; }
-PIN=gcc-2.7.2.3-8949028
+# The kit's compiler pin as kernel-space packages carry it, gcc-<gcc>-<commit>,
+# read from kernel/dlm/toolchain.pin (AMIX_TOOLCHAIN_PIN names another file),
+# so a toolchain repin needs no edit here; outside the monorepo, a neutral one.
+PIN=$(awk '$1 == "gcc" { g = $2 } $1 == "commit" { c = $2 }
+    END { if (g != "" && c != "") print "gcc-" g "-" c }' \
+    "${AMIX_TOOLCHAIN_PIN:-$SRC/../../../../kernel/dlm/toolchain.pin}" 2>/dev/null)
+PIN=${PIN:-gcc-2.7.2.3-0000000}
 kline() {   # kline <name> <version> <role> <line> <kabi> <pin> <file> [extra]
     printf '#kpkg %s %s role=%s line=%s kabi=%s pin=%s size=%s sha256=%s file=%s%s\n' \
         "$1" "$2" "$3" "$4" "$5" "$6" "$(sizeof "$KR/pkgs/$7")" \

@@ -67,7 +67,13 @@ head -c 20000 /dev/urandom > "$WORK/boot2.bin"
 # --- a kernel package: /stand/k46/unix + its C2-3 sidecar ---
 sha()  { sha256sum "$1" | cut -c1-64; }
 size() { wc -c < "$1" | tr -d ' '; }
-PIN=gcc-2.7.2.3-8949028
+# The kit's compiler pin as kernel-space packages carry it, gcc-<gcc>-<commit>,
+# read from kernel/dlm/toolchain.pin (AMIX_TOOLCHAIN_PIN names another file),
+# so a toolchain repin needs no edit here; outside the monorepo, a neutral one.
+PIN=$(awk '$1 == "gcc" { g = $2 } $1 == "commit" { c = $2 }
+    END { if (g != "" && c != "") print "gcc-" g "-" c }' \
+    "${AMIX_TOOLCHAIN_PIN:-$SRC/../../../../kernel/dlm/toolchain.pin}" 2>/dev/null)
+PIN=${PIN:-gcc-2.7.2.3-0000000}
 mkkernel() {   # mkkernel <dir> <sidecar kabi>
     mkdir -p "$1"
     head -c 700000 /dev/urandom > "$1/unix"

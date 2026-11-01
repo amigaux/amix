@@ -16,6 +16,13 @@
 
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# The kit's compiler pin as kernel-space packages carry it, gcc-<gcc>-<commit>,
+# read from kernel/dlm/toolchain.pin (AMIX_TOOLCHAIN_PIN names another file),
+# so a toolchain repin needs no edit here; outside the monorepo, a neutral one.
+KITPIN=$(awk '$1 == "gcc" { g = $2 } $1 == "commit" { c = $2 }
+    END { if (g != "" && c != "") print "gcc-" g "-" c }' \
+    "${AMIX_TOOLCHAIN_PIN:-$HERE/../../../../../kernel/dlm/toolchain.pin}" 2>/dev/null)
+KITPIN=${KITPIN:-gcc-2.7.2.3-0000000}
 GEN="$HERE/../gen-catalog.py"
 PUB="$HERE/../publish.sh"
 FIX="$HERE/fixtures"
@@ -1914,7 +1921,7 @@ sidecar25() {   # sidecar25 <out> [line] [sha256] [pin-line]
 kabi=static
 family=KD060-A
 line=${2:-k46}
-${4-pin=gcc-2.7.2.3-8949028}
+${4-pin=$KITPIN}
 build=68060-260928-52
 size=$(wc -c < "$S25/src/stand/k46/unix" | tr -d ' ')
 sha256=${3:-$(sha256sum "$S25/src/stand/k46/unix" | cut -c1-64)}
@@ -1977,7 +1984,7 @@ mkdir -p "$S25/plain"; cp "$FIX/TESTpkg.pkg" "$S25/stg/KBOOTSET-1.0.pkg" "$S25/s
 python3 "$GEN" "$S25/plain" >/dev/null 2>&1
 python3 "$GEN" "$S25/stg" >"$WORK/t25.out" 2>"$WORK/t25.err"
 check "gen-catalog takes a staging root with a kernel package (rc 0)" test $? -eq 0
-KL="#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=gcc-2.7.2.3-8949028 size=$(wc -c < "$K25" | tr -d ' ') sha256=$(sha256sum "$K25" | cut -c1-64) file=kernel/KERNKD60-1.1.0.pkg pkginst=KERNKD60"
+KL="#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=$KITPIN size=$(wc -c < "$K25" | tr -d ' ') sha256=$(sha256sum "$K25" | cut -c1-64) file=kernel/KERNKD60-1.1.0.pkg pkginst=KERNKD60"
 LL="#kpkg loader 3 role=loader line=any loader=3 size=$(wc -c < "$L25" | tr -d ' ') sha256=$(sha256sum "$L25" | cut -c1-64) file=kernel/LOADER-3.pkg pkginst=LOADER"
 check "the block is exactly: #ext kpkg 1, the kernel's and the loader's #kpkg lines, #end kpkg" \
     test "$(sed -n '/^#ext kpkg 1$/,/^#end kpkg$/p' "$S25/stg/catalog")" = "#ext kpkg 1
@@ -2071,7 +2078,7 @@ fi
 echo "T26: module packages, kabi= and pin= from the object's .moddata"
 MKOBJ="$HERE/mkmodobj.py"
 S26="$WORK/t26"; mkdir -p "$S26/src" "$S26/stg/base"
-MPIN=gcc-2.7.2.3-8949028
+MPIN=$KITPIN
 python3 "$MKOBJ" "$S26/src/zeth" name=zeth kabi=k46.1.0 cc=$MPIN cpu=68030 \
     class=boot match=zorro:144b:01 majors=c:51 depend=zbus \
     param=mtu:int:1500 param=promisc:bool:0 "desc=test module"
