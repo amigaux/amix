@@ -18,20 +18,23 @@
 # 1.0.0-7 (2026-10-31): the driver gives EBADF for RTG, NATIVE and SETCFG on a
 # descriptor opened only for reading; objects bb900ef8 / 287ee3ad.
 # 1.0.0-8 (2026-10-31): rc/monsw's header comment; objects and monswctl unchanged.
+# 1.0.0-9 (2026-11-01): rebuilt on kit 3b53a8a (gcc-cross-amix 33ebadc); the
+# code is unchanged, only .moddata cc= differs (gcc-2.7.2.3-33ebadc).  monswctl
+# links values-Xa.o as the native cc does (_lib_version 1), 7228 bytes.
 
 KM_NAME=monsw
 KM_SHORT=monsw
 KM_REPO=kernel/modules/monsw
-KM_VERSION=1.0.0-8
+KM_VERSION=1.0.0-9
 
 KM_K30_OBJ=kernel/modules/monsw/build/k30/mod.d/monsw
-KM_K30_SHA=bb900ef80ee652755efd1677f6cb2bcb285f7b64f32c6194931a7752926587cc
+KM_K30_SHA=4bc8f57089b80baec94fa64e0a65dfd6a3b27a2ab4a66c63db345e9e35233a20
 KM_K46_OBJ=kernel/modules/monsw/build/k46/mod.d/monsw
-KM_K46_SHA=287ee3adb222e13df9b35b2d651e9099246e7992fc11075643e5769baf6132da
+KM_K46_SHA=f9f6ed6b6a31a20d689f5cb8a30d53bf5804eae8b639ccf316b5feb1628f7623
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=7a68948b9dd41adb4f4d0aee1f4459aca2d0ef8a
+KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f	# PIN gcc-2.7.2.3-33ebadc
 
 KM_LICENCES="\
 kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4"
@@ -39,7 +42,7 @@ kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec4
 # the boot step's rc2.d name is a copy, not a link: a kernel-space package is
 # pure files
 KM_FILES_COMMON="\
-/usr/sbin/monswctl kernel/modules/monsw/build/tool/monswctl dd05a6ba5ca62f25f70e7f2679ee73c7c43a7a13fdcc5dca817e28c657f87355 0755
+/usr/sbin/monswctl kernel/modules/monsw/build/tool/monswctl b9e2aa21c0ccda1a975e7dfc871997c127a67ab1c7f08da626cb521a7e295ca6 0755
 /etc/init.d/monsw kernel/modules/monsw/rc/monsw 8744a32609ab00f94dcb00ade98db4f06c8596088293ae560b687a8474102652 0744
 /etc/rc2.d/S20monsw kernel/modules/monsw/rc/monsw 8744a32609ab00f94dcb00ade98db4f06c8596088293ae560b687a8474102652 0744
 /opt/amix/man/7/monsw kernel/modules/monsw/man/monsw.7 1d18b042ef37647135cbb3cdff07caf3c3097c7a2faea63e37aae9a1e6d9a570 0644
