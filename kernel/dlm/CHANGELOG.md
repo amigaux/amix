@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — a kernel declares its kbootset floor (90a7fa7)
+
+C2-2 v6 / C2-3 v10: a kernel declares the oldest kbootset it can be composed with (kbootset= on its catalog row, from the sidecar's kbootset-min= or kernel/conf/kbootset.conf); recorded sidecars are not re-stamped. core/kbootset-min is 1.1.0.261101-34, the floor core 0051 sets.
+
 ## 2026-11-01 — module majors are boot data (core 0051, kbootset -34); the compiler pin from toolchain.pin (521a340..a53e15d)
 
 The core takes a module's majors' owners from the booted manifest's `major <c|b> <n> <name>` records, not from a table built into the kernel, so a new major needs a new kbootset and kit, never a new kernel. A manifest without them refuses every major; a malformed row, one past the switch or one number twice refuses the whole table. kbootset -34 writes every registry row into a module kernel's manifest (C3-5 v22), refuses a member on a row the kernel's own drivers fill, treats a default generation without the table as different, and check compares each generation's table with the registry. toolchain.pin moves to gcc-cross-amix 33ebadc; the core harness, the fixtures and mkkit read the pin from it. ddi.md states how each line maps the low 1 GiB (k30 page tables, k46 ITT0/DTT0, supervisor-only, not serialised). kbootset -34 (0d5462db), dlmkit -18 (7db391c; kits 9f95c45a / 5279c36f).
