@@ -52,7 +52,10 @@ KM_WHATIS_SHA=4d0289ad1e7c4c52c824210a55e6c8fbbaabd3a8f6bf588a6bdd25019f3a9c08
 
 KM_SOURCE_EPOCH=1793404800	# 2026-10-31 00:00 UTC
 
-# monswctl: make dist's modules step builds the objects only
+# monswctl: make dist's modules step builds the objects only.  Cleaned first, so a
+# monswctl of an earlier toolchain pin never survives (make sees the source unchanged).
 kmod_prepare() {
-	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1; make -s -C "$KM_ROOT/kernel/modules/monsw/tool" )
+	( . "$AMIX_CROSS_ENV" >/dev/null 2>&1
+	  make -s -C "$KM_ROOT/kernel/modules/monsw/tool" clean &&
+	  make -s -C "$KM_ROOT/kernel/modules/monsw/tool" )
 }
