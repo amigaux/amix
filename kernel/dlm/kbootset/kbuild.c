@@ -41,6 +41,7 @@
 #define KB_BDEVCNT	32
 static int kernrow(int type, long n);
 static void majtable(char *text);
+static void majrows(const char *text, char *out, size_t cap);
 
 static int
 refuse(struct ks *k, int gate, const char *msg)
@@ -1435,20 +1436,12 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 		}
 		/* a module kernel's major table against this kbootset's registry */
 		if (m.has_arena && (txt = ks_manifest_text(k, g->id)) != 0) {
-			char want[2048], got[2048], *p, *e;
-			size_t gl = 0;
+			char want[2048], got[2048];
 
 			want[0] = 0;
 			majtable(want);
-			for (p = txt; (p = strstr(p, "\nmajor ")) != 0; p = e) {
-				e = strchr(++p, '\n');
-				if (!e || gl + (size_t)(e - p) + 2 > sizeof got)
-					break;
-				memcpy(got + gl, p, (size_t)(e - p) + 1);
-				gl += (size_t)(e - p) + 1;
-			}
-			got[gl] = 0;
-			if (!gl)
+			majrows(txt, got, sizeof got);
+			if (!got[0])
 				sprintf(line, "generation %lu has no major table (an older kbootset composed it): "
 					"a kernel that reads it refuses every major; kbootset build composes one",
 					(unsigned long)g->id);
@@ -1566,6 +1559,28 @@ majtable(char *text)
 		sprintf(text + strlen(text), "major %c %d %s\n", t, n, nm);
 }
 
+/* the major records of a manifest's text, in order, into out (cap bytes;
+ * empty when there are none) */
+static void
+majrows(const char *text, char *out, size_t cap)
+{
+	const char *p = text, *e;
+	size_t n = 0, len;
+
+	out[0] = 0;
+	while (p && *p) {
+		e = strchr(p, '\n');
+		len = e ? (size_t)(e - p) : strlen(p);
+		if (len > 6 && !strncmp(p, "major ", 6) && n + len + 2 <= cap) {
+			memcpy(out + n, p, len);
+			n += len;
+			out[n++] = '\n';
+			out[n] = 0;
+		}
+		p = e ? e + 1 : 0;
+	}
+}
+
 /* the generation's records before its members (10 §5.1); a root or swap
  * record on a Z3660 card in its canonical form (C4-1 §5.1) */
 static void
@@ -1668,7 +1683,7 @@ same(const char *a, const char *b)
  * describe?  Both sides go through the loader's parser, so the comparison
  * is of what the manifests say (line, kabi, CPUs, loader-min, root,
  * swap, filesystem, boards, arena, identity record, every member by size
- * and SHA-256, the parameters), not of their layout; the generation id
+ * and SHA-256, the parameters, the major table), not of their layout; the generation id
  * and created time are not compared.  Sets *dflt to the default's id.
  */
 static int
@@ -1708,6 +1723,15 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 		     d.mod[i].bss == n.mod[i].bss;
 	for (i = 0; eq && i < d.nparam; i++)
 		eq = same(d.param[i], n.param[i]);
+	if (eq) {	/* and the major table: a default without one is not this */
+		static char dr[2048], nr[2048];
+		char *dt = ks_manifest_text(k, k->ctl.default_gen);
+
+		majrows(dt ? dt : "", dr, sizeof dr);
+		majrows(head, nr, sizeof nr);
+		eq = dt && !strcmp(dr, nr);
+		free(dt);
+	}
 	*dflt = d.generation;
 	free(dman);
 	return eq;
