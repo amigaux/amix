@@ -1,0 +1,20 @@
+#
+# prototype -- z3660scsi-<line>: the module object and the package's
+# defaults (amix-dlm C3-5 sec 1).  The same paths on both lines: a box
+# carries the package of its kernel's line.
+#
+# AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright
+# only, no scripts.  No device nodes: a root-class disk controller has no
+# major of its own (sd owns the disk majors and lays the disk nodes).  /etc
+# is the stock core's directory, declared with core's attributes;
+# /etc/conf and below are shared by every module package.
+#
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/z3660scsi 0644 root sys
+f none /etc/conf/modreg.d/z3660scsi 0644 root sys
