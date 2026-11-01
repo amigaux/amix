@@ -1,0 +1,26 @@
+.TH ZZ9K-TEST 1 "1 November 2026" "libzz9k"
+.SH NAME
+zz9k-test \- check libzz9k and the ZZ9000-family boards on this machine
+.SH SYNOPSIS
+.B /opt/amix/bin/zz9k-test
+.SH DESCRIPTION
+.B zz9k-test
+lists the boards
+.BR libzz9k (3)
+finds behind
+.B /dev/zz9ksvc0
+and
+.B /dev/zz9ksvc1
+(the unit, the ABI version, the firmware version, the capability bits and the
+CODEC service's flags), then decompresses a raw deflate, a zlib and a gzip
+stream of test data in software and, where a board offers it, on the board,
+and checks each result against the original and the two against each other.
+A machine without a board passes with software only.
+.SH EXIT STATUS
+0 when every check holds, 1 otherwise.
+.SH FILES
+.B /opt/amix/lib/libzz9k.a
+(linked in)
+.SH SEE ALSO
+.BR libzz9k (3),
+.BR zz9ksvc (7)

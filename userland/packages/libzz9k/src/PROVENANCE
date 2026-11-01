@@ -1,0 +1,36 @@
+src/ -- the ZZ9000 SDK v2 host API, copied verbatim (not one byte changed) from
+BlitterStudio/zz9000-firmware, https://github.com/BlitterStudio/zz9000-firmware.git, at
+release v2.9.1, commit ffaf221b2600d5c0586f225dcb7721529e7b3bba (2026-10-28):
+
+  zz9k_host.c                         sdk/host/src/zz9k_host.c
+  include/zz9k/host.h, request.h, reply.h
+                                      sdk/host/include/zz9k/
+  include/zz9k/, the other 14 files   sdk/include/zz9k/ (the same files kernel/modules/zz9ksvc
+                                      carries in sdk/zz9k)
+
+Each file carries its own notice, SPDX-License-Identifier: GPL-3.0-or-later; the licence
+text is ../LICENSE, copied from the same commit.  The Amix branch is ../patches/0001, which
+the build applies; zz9k_amix.c, zz9k-test.c and include/zz9k/amix.h are this package's own.
+
+To update: copy the files from a newer release, replace this file's release, commit and
+sums, and refresh the patch against the new zz9k_host.c.
+
+sha256 of each file:
+285c980567b5c2a571dec73ace8cc5bb30cbf2289cbf1185b2036eb2957211b5  zz9k_host.c
+36ba715f8612ad79f6ff9ba55831566156a47c5ed6dcd192527e4c447f9d23fa  include/zz9k/abi.h
+dbcf1d537e03fecf2ea99a87958689b66bfeb1c2c8605abf516bdb2dba4b66d0  include/zz9k/audio.h
+7758172bb4058c075846a6ce512500e204f40488c29b79329109ca0548fade11  include/zz9k/batch.h
+8922eb9961151b750470acde4954cb630878c9d50929f010e842a70a536c9aa9  include/zz9k/caps.h
+9e071191054f7c97602c1b73d594e83bd58bf4f1633c3829513181f02d4a505f  include/zz9k/compression.h
+d2dc183a258f37853f70b087d23bb6d262493adc6a7fa46543199206b7a7fc91  include/zz9k/crypto.h
+9e6e8d3d81364a7b8740a9e7515455b2677f5c5c0bb73c90f16c6c48df2a5002  include/zz9k/host.h
+c9c4ce5c0146d7202269856c8243d3562c510e764adf812027ec930e08cf166b  include/zz9k/image.h
+584e67a6d761545813ff429e1f8699ffa1a6819e7ece5b024b564b9cf5fe1d93  include/zz9k/image_geometry.h
+a82090aacde429b3ba928b18cfa9ae7b8b8de07b6895576b46eb442855cd1af8  include/zz9k/module.h
+ae99a77d47b1f605a38828684e200d9db4b64403aced8c8e2f2897feb4d8a18f  include/zz9k/reply.h
+bb5ae6b50649233ea39c6eb8506b66272aede494f1bf32db4a36105887aad5bf  include/zz9k/request.h
+0163e746ebc2fbb5cdfa2e5428603158bb67448d95e364cc21c1360c46062c4d  include/zz9k/sdk.h
+b1e42cc75294f18ed60dd631005f43fc2c973a3ced11533df590f3304d96acda  include/zz9k/service_registry.h
+5dfb6fa12841d7701af429ea1e1e82443674e2b763fa4e2ce88b9d9b8d454f96  include/zz9k/shared.h
+d94eead9fd36bb8b54efc86c176a828b7aab463f7421162310f7ea1ebf159f4e  include/zz9k/surface.h
+6163a135b49622c3218a9c0b1b98992a65a50feeab9a1d7d8640489856d3a756  include/zz9k/text.h
