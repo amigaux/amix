@@ -56,9 +56,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # /dev/dsk (kernel/dlm C3-5 v8 sec 1.2, abfaaac).  Same rule: its own staging
 # dir (build/repo-staging-apkg033), NOT published; 0.3.2 (9d6de726...)
 # stays what it is.  NOTES 2026-10-26.
-# 0.3.4 (2026-10-30, not minted yet): /etc/apkg.conf and /var/apkg/admin
-# move onto the shared conffile class (src/conffile/i.conffile and
-# r.conffile), so an upgrade keeps an edited admin file too.
+# 0.3.4 (2026-10-30; minted 2026-11-01, md5 c19cb40f...): /etc/apkg.conf
+# and /var/apkg/admin move onto the shared conffile class
+# (src/conffile/i.conffile and r.conffile), so an upgrade keeps an edited
+# admin file too; a module's device nodes may be in its module's class; the
+# default repository is the 1.1 tree.  Staged, NOT published.  NOTES
+# 2026-11-01.
 # 0.3.3 is staged with the old payload: one version, one byte set.
 VER_APKG="0.3.4"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
@@ -520,7 +523,7 @@ EOF
   # (block nodes under /dev/dsk); every other payload byte is 0.3.2's.
   # Staged for the 1.1 media, NOT published.
   #
-  # Version 0.3.4 (2026-10-30, not minted).  /etc/apkg.conf and
+  # Version 0.3.4 (2026-10-30; minted 2026-11-01).  /etc/apkg.conf and
   # /var/apkg/admin are `e conffile`, installed and removed by the shared
   # class action scripts src/conffile/i.conffile and r.conffile
   # (src/conffile/README.md), which replace i.apkgconf.  An unedited file

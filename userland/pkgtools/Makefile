@@ -29,7 +29,7 @@ CROSS := $(if $(wildcard $(GCA)/env.sh),. $(GCA)/env.sh &&,)
 .PHONY: dist engine-host cross repro-check
 
 dist: engine-host cross
-	rm -rf $(STAGE)
+	STAGE='$(STAGE)'; rm -rf "$${STAGE:?}"
 	bash tools/repo/build-packages.sh --apkg --eng $(STAGE)
 	mkdir -p $(OUT)
 	cp $(STAGE)/base/APKG-*.pkg $(STAGE)/base/APKGENG-*.pkg $(OUT)/
@@ -41,10 +41,15 @@ engine-host:
 	cd heirloom && ./build-host.sh
 
 # the host engine first: both builds share heirloom's object directories,
-# and each regenerates them
+# and each regenerates them.  apkg and contents-fsck are compiled afresh,
+# so no binary an earlier build left (another compiler, another sysroot)
+# reaches the roll.
 cross: engine-host
 	@$(CROSS) command -v m68k-cbm-sysv4-gcc >/dev/null || { \
 		echo "make dist: no m68k-cbm-sysv4-gcc: run in the build container or set GCA" >&2; exit 1; }
+	rm -rf src/apkg/obj-amix src/apkg/apkg.amix
+	rm -f src/contents-fsck/contents-fsck.amix src/contents-fsck/contents-fsck.amix.o \
+		src/contents-fsck/contents-fsck.amix.s
 	$(CROSS) $(MAKE) -C src/apkg amix
 	$(CROSS) $(MAKE) -C src/contents-fsck amix
 	$(CROSS) cd heirloom && ./build-amix.sh
