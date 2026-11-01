@@ -100,6 +100,13 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -17 (2026-11-01): amix 9be1705 (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -16 (abi texts, headers, tools unchanged): the major registry gains
+# c 55 zz9ksvc (C3-5 v21); k46 headers from the port at 392a44e.  Built in
+# the build container (amix-toolchain:dist; the same digests in the image
+# of the gcc14 3446533 pin: the kit links nothing with gcc14); the digests
+# equal `make -C build kit` at 9be1705.  -16 at d539cf9: k30 672edbba...,
+# k46 cc4c3200...
 # -16 (2026-11-01): amix d539cf9 (KIT_REV), kabi k30.1.4 / k46.1.4 as
 # -15 (abi texts, headers, tools unchanged): C3-6 v10 in docs/ (z3660rtg's
 # parameters and its window above VSECT1); k46 headers from the port at
@@ -124,11 +131,11 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=d539cf9
+DK_DLM_COMMIT=9be1705
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=d539cf9
+DK_MONSW_COMMIT=9be1705
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
@@ -136,9 +143,9 @@ DK_K46_PORT_COMMIT=392a44e
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
 DK_K46_PORT_HASH=392a44e1dda2bb2e8cd2ab294b00830bf04e07e0
-DK_K30_MANIFEST=672edbba293c647a66c0d651d4a0add0dd4f8cf3234c8a5e16457d192e4aa4ff
-DK_K46_MANIFEST=cc4c3200153ac23bf2833f7377a084aabd4d5a8760839d7b89c2e12787a48233
+DK_K30_MANIFEST=33852dd4fb31ed96567f67028a70439ff6f4f3914e06cf812087307c3aad52f6
+DK_K46_MANIFEST=48f84e7231740cdbf4628d6a7baaf7d95c9eb436fdc0310d7eb0cce1e04eae56
 
 DK_DATE=261101
-DK_REV=16
+DK_REV=17
 DK_SOURCE_EPOCH=1793491200
