@@ -8,7 +8,7 @@
 set -e
 B=${B:-build}
 T=$B/modadmin
-rm -rf $T && mkdir -p $T
+rm -rf "${T:?}" && mkdir -p $T
 sh tools/stagecore.sh $T/core
 cat > $T/drv.c <<'C'
 #include <stdio.h>

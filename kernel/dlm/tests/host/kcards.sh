@@ -12,7 +12,7 @@
 set -e
 B=${B:-build}
 T=$B/kcards
-rm -rf $T && mkdir -p $T/root
+rm -rf "${T:?}" && mkdir -p $T/root
 export KBOOTSET_DEVROOT=$T/dev
 
 # a version-3 kinfo record with the given cards (k,id,base,flags/...)

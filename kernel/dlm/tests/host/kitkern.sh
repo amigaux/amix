@@ -9,7 +9,7 @@
 set -e
 B=${B:-build}
 T=$B/kitkern
-rm -rf $T && mkdir -p $T/kit
+rm -rf "${T:?}" && mkdir -p $T/kit
 MC="python3 abi/tools/modcheck.py -k $T/kit"
 cp abi/k46/abi-k46.1.3.txt $T/kit/abi.txt
 printf 'LINE=k46\nKABI=k46.1.3\nKABI_MIN=k46.1.2\nPIN=gcc-2.7.2.3-8949028\n' > $T/kit/kit.conf

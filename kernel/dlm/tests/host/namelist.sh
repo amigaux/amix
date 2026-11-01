@@ -20,7 +20,7 @@ K30E=${NL_K30_ETREL:-}
 K30B=${NL_K30_BREL:-}
 K30S=${NL_K30_KABI:-}
 T=$B/namelist
-rm -rf "$T" && mkdir -p "$T"
+rm -rf "${T:?}" && mkdir -p "$T"
 
 # nlcmp NAMELIST BLOCK: the block's names at the namelist's addresses
 nlcmp() {

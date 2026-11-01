@@ -37,7 +37,7 @@ amix_verify "$AMIX_DLM_TREE/build/boot2.bin" "$LDR_BOOT2_SHA"
 	&& [ "$(stat -c%s "$AMIX_DLM_TREE/build/boot2.bin")" = "$LDR_BOOT2_SIZE" ] || {
 	echo "[FAIL] boot1/boot2 sizes are not the pinned ones" >&2; exit 1; }
 
-rm -rf "$BUILD"; mkdir -p "$DEST/stand/loader" "$WORK"
+rm -rf "${BUILD:?}"; mkdir -p "$DEST/stand/loader" "$WORK"
 cp "$AMIX_DLM_TREE/build/boot1.img" "$DEST/stand/loader/boot1"
 cp "$AMIX_DLM_TREE/build/boot2.bin" "$DEST/stand/loader/boot2"
 # ldrinfo: one key=value per line, the C2-3 v2 sec 3 keys in its order

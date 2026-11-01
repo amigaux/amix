@@ -15,7 +15,7 @@ flip() {
 		{ echo "store-roundtrip: $1 not changed at $2" >&2; exit 1; }
 	rm -f "$1.orig"
 }
-rm -rf $T && mkdir -p $T
+rm -rf "${T:?}" && mkdir -p $T
 head -c 1267397 /dev/urandom > $T/unix
 # a compressible module, stored deflated
 yes "amix z3660scsi module text" 2>/dev/null | head -c 45678 > $T/z3660scsi

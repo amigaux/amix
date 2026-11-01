@@ -32,7 +32,7 @@ fails=0
 pass() { printf "PASS %s\n" "$*"; }
 fail() { printf "FAIL %s\n" "$*"; fails=$((fails + 1)); }
 W=$B/kit-test
-rm -rf "$W" && mkdir -p "$W"
+rm -rf "${W:?}" && mkdir -p "$W"
 
 # refused CASE LINE FILE PATTERN [modcheck args]: the checker says no, naming the rule
 refused() {

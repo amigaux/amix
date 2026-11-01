@@ -10,7 +10,7 @@
 set -e
 B=${B:-build}
 T=$B/kitdigest
-rm -rf $T && mkdir -p $T/k46/include/sys $T/k46/tools $T/k30
+rm -rf "${T:?}" && mkdir -p $T/k46/include/sys $T/k46/tools $T/k30
 KD="sh tools/kitdigest.sh"
 printf 'LINE=k46\nKABI=k46.1.3\nKIT_REV=abc1234\nPORT_REV=0d37eb1\n' > $T/k46/kit.conf
 printf 'LINE=k30\nKABI=k30.1.3\nKIT_REV=abc1234\n' > $T/k30/kit.conf
