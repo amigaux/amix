@@ -10,7 +10,7 @@ build: one compare per switch, and the table is bounded in the code.
          "We've reached an unreachable state. Anything is possible.\n" \
          "The limits were in our heads all along. Follow your dreams.\n" \
          "https://xkcd.com/2200")
-+#elif defined(__AMIX__)
++#elif defined(__amix__)
 +/* Amix: keep each switch's range check, so the 060 gate can size its table */
 +#  define Py_UNREACHABLE() \
 +    Py_FatalError("Unreachable C code path reached")
