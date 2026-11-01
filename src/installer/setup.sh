@@ -747,20 +747,16 @@ choose_disk()
 	else
 		# stock, verbatim
 		echo "\nNo hard disks are attached to this system."
-		# ...and then the line stock never had to write, because in 1991
-		# nobody tried to install UNIX on an IDE machine. Today the most
-		# likely reader of the sentence above is somebody with a stock
-		# A4000 or A1200 whose hard disk is working perfectly well and is
-		# simply invisible to this kernel. Saying "no disks" and stopping
-		# leaves them to conclude their disk is broken. Plan section 6:
-		# surface the coverage hole IN THE PRODUCT.
+		# ...and the lines stock never had to write: an A4000's own IDE port
+		# is a target (the gayle module, the master only), and an IDE disk
+		# that is not seen is most likely set as the slave. Saying "no disks"
+		# and stopping would leave the reader to conclude the disk is broken.
 		echo ""
-		echo "If this machine's hard disk is an IDE drive -- the internal"
-		echo "drive of an A4000, A1200 or A600 -- then it cannot be used."
-		echo "There is no Amiga UNIX IDE driver, and there never was one."
-		echo "UNIX needs a SCSI host adapter (the A3000 or A4000T onboard"
-		echo "controller, an A2091, an A590 or an A4091) with a SCSI disk"
-		echo "attached to it."
+		echo "An IDE disk on the A4000's own port is used as the MASTER only:"
+		echo "set the disk (or the CF adapter) to master; a CD-ROM may be the"
+		echo "slave.  The IDE port of an A1200 or A600 is not supported."
+		echo "Otherwise UNIX needs a SCSI host adapter (the A3000 or A4000T"
+		echo "onboard controller, an A4091, or the Z3660's) with a disk on it."
 		restart
 	fi
 

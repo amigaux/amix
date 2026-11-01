@@ -5,11 +5,14 @@
 # medium's kernel-space catalog (work/l11/kpkg, tools/build-l11-inputs.sh), installed by the
 # host apkg of that build through a pkgadd that only unpacks (device nodes are not needed to
 # compose). The caller then runs `kbootset -R stage-LINE media --cd|--floppy ... --ramdisk`.
-#   k46: ramdisk, z3660scsi and a4091 (root class: the disc sits on an A4091 in the rigs),
+#   k46: ramdisk, z3660scsi, a4091, gayle and a4kt710 (root class: the disc sits on an A4091 or
+#        the Gayle slave; the target on the Z3660, the IDE master or the A4000T's 710),
 #        cdfs (boot class, from the image's /stand/gen/1/mod); rootfs ufs, 32 MiB assumed
-#   k30: ramdisk, a4091 and z3660scsi (root class: an A4000 in 030 mode installs onto its
-#        Z3660), cdfs (boot class; kern30m links no static cdfs since -17);
+#   k30: ramdisk, a4091, z3660scsi and gayle (root class: an A4000 in 030 mode installs onto its
+#        Z3660 or its IDE master), cdfs (boot class; kern30m links no static cdfs since -17);
 #        rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
+#   gayle with `param slave=2`: the ATAPI CD on the IDE slave attaches (the install source), an ATA
+#   disk there never does (a CF as slave is unstable: the target is the master only)
 # K46_MODS / K30_MODS override the module lists. The caller defines die().
 
 # rd_init WORKDIR -- the inputs checked, the unpacking pkgadd and the admin file written
@@ -24,8 +27,8 @@ rd_init() {
 	done
 	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
-	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46}"
-	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30}"
+	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46 gayle-k46 a4kt710-k46}"
+	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30 gayle-k30}"
 	mkdir -p "$W/bin"
 	# the unpacking pkgadd apkg calls: files and directories into -R, the contents file kept
 	cat > "$W/bin/pkgadd" <<P
@@ -77,6 +80,10 @@ C
 	# shellcheck disable=SC2086
 	"$APKG" -c "$W/apkg-$l.conf" -R "$t" install loader-amix "kernel-$l-m" $MODS >> "$W/apkg-$l.log" 2>&1 \
 		|| { tail -5 "$W/apkg-$l.log" >&2; die "$l: apkg could not stage $MODS"; }
+	case " $MODS " in *" gayle-$l "*)
+		mkdir -p "$t/etc/conf/modreg.local.d"
+		echo "param slave=2" > "$t/etc/conf/modreg.local.d/gayle" ;;
+	esac
 }
 
 # rd_bootmods LINE DIR -- DIR/LINE/<name>: every boot-class module the line's generation records

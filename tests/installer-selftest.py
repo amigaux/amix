@@ -6417,12 +6417,13 @@ def audit_w2_interview():
         # the negative: work/install-matrix/w6-oldboot measured 524288 and
         # "A3000 Internal SCSI" on the canonical rig, and those exact strings
         # are what the "modern machine" case below feeds in.
-        ("W6 coverage: a machine with NO disks at all gets stock's own line AND "
-         "the IDE pointer (the A4000/A1200 owner whose disk is fine)",
+        ("a machine with NO disks at all gets stock's own line AND the IDE pointer: the A4000's "
+         "port takes a master only (a disk not seen is most likely the slave), A1200/A600 not",
          {}, ["", ""], {},
          ["No hard disks are attached to this system.",
-          "There is no Amiga UNIX IDE driver, and there never was one.",
-          "UNIX needs a SCSI host adapter"], [], []),
+          "An IDE disk on the A4000's own port is used as the MASTER only:",
+          "The IDE port of an A1200 or A600 is not supported.",
+          "UNIX needs a SCSI host adapter"], ["There is no Amiga UNIX IDE driver"], []),
         ("W6 coverage: a KICKSTART 1.3 machine (romsize 262144) is refused by "
          "name, before any size is asked for",
          bench, ["y", "", ""], {"machine": {"rom": "echo 262144"}},
