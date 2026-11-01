@@ -3284,6 +3284,7 @@ mandatory on this SVR4. It fires only when the dialog collected a gateway
 | key | written by | meaning |
 |---|---|---|
 | `FIRSTBOOT_DIALOG` | profile / `setup.sh` | arm the dialog? Default `n`. |
+| `FIRSTBOOT_DIALOG_INTERACTIVE` | profile | `n`: an interactive install leaves the dialog off too (disks configured before they ship) |
 | `FB_DIALOG` | the driver | the tier, recorded in `firstboot.conf` |
 | `FB_ROOT_TELNET` | profile, then the dialog | `y` = `#CONSOLE=` (default) |
 | `FB_SYSLOG` | profile, then the dialog | `n` restores the vendor `exit`, in place |

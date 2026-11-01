@@ -2191,8 +2191,9 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	# where the full installed userland exists. The miniroot cannot hash a
 	# password or bring up an interface; the stock installer split the same way.
 	# A profile-driven unattended run never reaches this file, so its target is
-	# byte-identical to a pre-W5 one.
-	echo "FIRSTBOOT_DIALOG=y"
+	# byte-identical to one made before the dialog existed. A profile whose disks are configured before they ship
+	# (a test disk with its address and password baked in) says FIRSTBOOT_DIALOG_INTERACTIVE=n.
+	echo "FIRSTBOOT_DIALOG=${FIRSTBOOT_DIALOG_INTERACTIVE:-y}"
 	echo "# W2-ANSWERS-END"
 } > "$ANSWERS_BLOCK" || die "cannot write $ANSWERS_BLOCK"
 cat "$ANSWERS_BLOCK" >> "$ANSWERS" || die "cannot append the answers to $ANSWERS"

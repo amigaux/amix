@@ -7846,9 +7846,10 @@ def audit_w5_dialog():
         ok("negative fixture fires: an unconditionally-armed dialog is flagged")
     else:
         fail("negative fixture did NOT fire: the arm-gate check is broken")
-    if re.search(r'echo "FIRSTBOOT_DIALOG=y"', open(SETUP, encoding="utf-8").read()):
+    if re.search(r'echo "FIRSTBOOT_DIALOG=\$\{FIRSTBOOT_DIALOG_INTERACTIVE:-y\}"', open(SETUP, encoding="utf-8").read()):
         ok("the interview writes FIRSTBOOT_DIALOG=y -- interactive installs, and "
-           "only interactive installs, arm the dialog")
+           "only interactive installs, arm the dialog (unless the profile says "
+           "FIRSTBOOT_DIALOG_INTERACTIVE=n)")
     else:
         fail("setup.sh does not write FIRSTBOOT_DIALOG=y into the answers profile")
 
