@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — amix-base 1.0-21 (734b458, fa6a35c)
+
+The swap step reads a 68040/68060 kernel's boot area at its real length. swap -l counts 2 KiB pages, so on those 4 KiB-page kernels it lists half of each area, and the tail the step added past the boot area overlapped it and failed at every boot. The step now doubles the listed length when uname -a's build id starts 68040- or 68060-; a kernel without a CPU in its build id is read as before. bootswap(1M) says so, and gives the 68040/68060 kernel's limits: 256 MiB added on a 64 MB machine, 512 MiB on a 16 MB one. amxbase-1.0-21 md5 19f6f658.
+
 ## 2026-11-01 — amixrt 1.0-1; amix-base 1.0-20, dhcp-client 1.0-5 (e758ca8, 974f485)
 
 - amixrt 1.0-1: /usr/lib/libamixrt.so.1 (set base, essential) for GCC 14 shared libraries, with libamixc99's MIT licence and GCC's runtime exception under /opt/amix/doc/amixrt.
