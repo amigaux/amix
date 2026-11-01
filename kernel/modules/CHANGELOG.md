@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — monsw recipe cleans its tool (96acf49)
+
+monsw's package recipe cleans monsw/tool before building monswctl, so a monswctl built under an earlier toolchain pin can't survive into a roll; the packages are unchanged.
+
 ## 2026-11-01 — zz9ksvc 1.0.0-3 (c953397..2b5f582)
 
 - zz9ksvc 1.0.0-3: a buffer freed after it was mapped is held until the channel's close (a mapping outlives its cookie), and after RESET an allocation over a live client's mapped pages gets EAGAIN.
