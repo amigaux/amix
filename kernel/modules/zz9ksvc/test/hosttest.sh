@@ -700,10 +700,10 @@ grep -q '^majors=c:55$' "$top/zz9ksvc/module/keys" &&
 grep -q '^name=zz9ksvc$' "$top/zz9ksvc/module/keys" &&
 grep -q '^depend=zz9kbus$' "$top/zz9ksvc/module/keys" ||
 	{ echo "hosttest: the major, name or depend differ between zz9ksvc.c and keys" >&2; exit 1; }
-! grep -qi 'GPL\|General Public' "$top/include/zz9kbus.h" ||
-	{ echo "hosttest: include/zz9kbus.h carries GPL text" >&2; exit 1; }
-grep -q 'MIT licence' "$top/include/zz9kbus.h" ||
-	{ echo "hosttest: include/zz9kbus.h has no MIT notice" >&2; exit 1; }
+! grep -qi 'GPL\|General Public' "$top/include/sys/zz9kbus.h" ||
+	{ echo "hosttest: include/sys/zz9kbus.h carries GPL text" >&2; exit 1; }
+grep -q 'MIT licence' "$top/include/sys/zz9kbus.h" ||
+	{ echo "hosttest: include/sys/zz9kbus.h has no MIT notice" >&2; exit 1; }
 # only src/wire.c and test/fw.c include the SDK headers
 inc=$(grep -l 'zz9k/abi.h' "$top"/zz9ksvc/src/*.c "$top"/zz9ksvc/src/*.h "$top"/zz9ksvc/test/*.c | xargs -n1 basename | sort | tr '\n' ' ')
 [ "$inc" = "fw.c wire.c " ] || { echo "hosttest: SDK headers included by: $inc" >&2; exit 1; }

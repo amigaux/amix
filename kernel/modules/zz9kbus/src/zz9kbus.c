@@ -1,6 +1,6 @@
 /*
  * zz9kbus.c -- the registry between ZZ9000-family board drivers and zz9ksvc
- * (include/zz9kbus.h has the interface).  A misc module of a few hundred bytes:
+ * (include/sys/zz9kbus.h has the interface).  A misc module of a few hundred bytes:
  * board drivers and zz9ksvc name it in depend=, so the core loads it before them.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
@@ -12,7 +12,7 @@
 #include <sys/param.h>
 #include <sys/errno.h>
 #include <sys/moddefs.h>
-#include <zz9kbus.h>
+#include <sys/zz9kbus.h>
 
 static struct zz9kbus_board *zz9kbus_tab[ZZ9KBUS_NUNIT];
 

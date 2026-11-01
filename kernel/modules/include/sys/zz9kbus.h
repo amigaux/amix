@@ -1,7 +1,8 @@
 /*
- * zz9kbus.h -- the interface between a ZZ9000-family board driver (the Z3660's
+ * sys/zz9kbus.h -- the interface between a ZZ9000-family board driver (the Z3660's
  * z3660rtg; a ZZ9000 driver) and the core-1 service channel zz9ksvc, through the
- * zz9kbus registry module.
+ * zz9kbus registry module.  The ABI kit of kernel/dlm carries a copy, so a board driver
+ * built outside the amix repository finds it there.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see kernel/modules/LICENSE in the amix repository.
  *

@@ -5,7 +5,7 @@
  *
  * Copyright (c) 2026 Jussi Alanärä.  GPL-3.0-or-later, see zz9ksvc/LICENSE.
  *
- * The board comes from zz9kbus (include/zz9kbus.h): at _load, the board of each unit whose
+ * The board comes from zz9kbus (include/sys/zz9kbus.h): at _load, the board of each unit whose
  * bootstrap block and mailbox descriptor check out (src/wire.c) is taken and held.  With
  * none, _load fails ENXIO and the module is not kept, so the open fails ENXIO: the client
  * uses its software path.
@@ -45,7 +45,7 @@
 #include <sys/ddi.h>
 #include <sys/moddefs.h>
 #include <sys/amixddi.h>
-#include <zz9kbus.h>
+#include <sys/zz9kbus.h>
 #include <sys/zz9ksvc.h>
 #include "wire.h"
 

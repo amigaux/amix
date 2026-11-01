@@ -11,7 +11,7 @@
 # DLM is the kernel/dlm directory whose kits are built (`make kit` there gives build/kit/k30
 # and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.  The pinned cross tools
 # (m68k-cbm-sysv4-*, gcc-cross-amix) and python3 must be on PATH.  zz9kbus.h is
-# kernel/modules/include/zz9kbus.h.  Master is generated from keys.
+# kernel/modules/include/sys/zz9kbus.h.  Master is generated from keys.
 
 TOP := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../..)
 DLM ?= $(abspath $(TOP)/../dlm)

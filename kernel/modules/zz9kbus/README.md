@@ -5,7 +5,7 @@
 It is a misc module of a few hundred bytes, MIT, with no device of its own.
 
 - A board driver that finds the SDK bootstrap block on its board fills a `struct
-  zz9kbus_board` (`include/zz9kbus.h`) and calls `zz9kbus_register()`, which gives the board a
+  zz9kbus_board` (`include/sys/zz9kbus.h`) and calls `zz9kbus_register()`, which gives the board a
   unit, 0 or 1. At its `_unload` it calls `zz9kbus_unregister()`, which answers `EBUSY` while
   `zz9ksvc` holds the board.
 - `zz9ksvc` takes a unit's board with `zz9kbus_get()` and gives it back with `zz9kbus_put()`.
@@ -15,14 +15,14 @@ It is a misc module of a few hundred bytes, MIT, with no device of its own.
 The board record gives `zz9ksvc` exactly this much of the board: a 16-bit read of the bootstrap
 block, the doorbell write, the mailbox the board driver mapped, and where a range of the
 firmware's host-visible heap lies in physical memory. No register pointer and no mapping of the
-whole board. `include/zz9kbus.h` describes both sides.
+whole board. `include/sys/zz9kbus.h` describes both sides.
 
 ## Layout
 
 | Path | Content |
 |---|---|
 | `src/zz9kbus.c` | the registry |
-| `../include/zz9kbus.h` | the interface, for board drivers and `zz9ksvc` |
+| `../include/sys/zz9kbus.h` | the interface, for board drivers and `zz9ksvc`; the ABI kit carries a copy |
 | `module/keys`, `module/Master`, `module/Makefile`, `module/VERSION` | as for every module here |
 | `test/hosttest.sh` | the host test |
 | `pkg/` | the package recipe |

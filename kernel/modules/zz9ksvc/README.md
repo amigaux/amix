@@ -11,7 +11,7 @@ It is a loadable kernel module of class `demand` for both Amix kernel lines, `k3
 
 **Licence.** This directory is GPL-3.0-or-later (`LICENSE`), because it carries the SDK's
 headers verbatim (`sdk/zz9k`, see `sdk/PROVENANCE`); the rest of kernel/modules is MIT. The
-interface board drivers use, `include/zz9kbus.h`, and the registry module `zz9kbus` are MIT
+interface board drivers use, `include/sys/zz9kbus.h`, and the registry module `zz9kbus` are MIT
 and carry no GPL text, so an MIT board driver never links GPL code.
 
 ## Layout
@@ -31,7 +31,7 @@ and carry no GPL text, so an MIT board driver never links GPL code.
 ## How it works
 
 **The board.** A board driver that finds the SDK bootstrap block on its board registers it
-with zz9kbus (`include/zz9kbus.h`): a 16-bit read of the bootstrap block only, the doorbell
+with zz9kbus (`include/sys/zz9kbus.h`): a 16-bit read of the bootstrap block only, the doorbell
 write, the mailbox it mapped (descriptor and rings) and the answer to "where does this range
 of the host-visible heap lie in physical memory". Nothing else of the board reaches zz9ksvc.
 At `_load` zz9ksvc takes and holds each unit's board whose bootstrap magic and mailbox

@@ -1,5 +1,5 @@
 #!/bin/sh
-# hosttest.sh -- host test of the zz9kbus registry (include/zz9kbus.h), without a box.
+# hosttest.sh -- host test of the zz9kbus registry (include/sys/zz9kbus.h), without a box.
 # The shipped zz9kbus/src/zz9kbus.c is compiled by the host cc with stub headers for the
 # kernel's sys/param.h and sys/moddefs.h; the test includes it, so it sees the table.
 #
