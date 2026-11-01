@@ -40,8 +40,8 @@ RUN printf '%s\n' 'Acquire::Retries "5";' 'Acquire::Retries::Delay::Maximum "120
  && try upd -o Acquire::Check-Valid-Until=false \
  && try apt-get install -y --no-install-recommends \
       autotools-dev bison bzip2 cpio curl file flex g++ gcc git \
-      gzip libc6-dev m4 make patch perl python3 strip-nondeterminism \
-      xz-utils zlib1g-dev \
+      gcc-i686-linux-gnu gzip libc6-dev libc6-dev-i386-cross m4 make patch \
+      perl python3 strip-nondeterminism xz-utils zlib1g-dev \
  && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log
 
 # ---------------------------------------------------------------------------
@@ -62,9 +62,14 @@ RUN mkdir distfiles \
       c7ad94c18f098f0580d0a7cd68638e98aa98571078536934fdc85f5e9047bf5a distfiles/binutils-2.8.1.tar.gz \
       16166e0f0f2064bb3114716650569065ef3855ae2331d7a29b85d4b9aa73773c distfiles/gcc-2.7.2.3.tar.gz \
     | sha256sum -c -
-# test-hello builds everything (make all), then links a C program.
+# test-hello builds everything (make all), then links a C program; check
+# runs the fork's regression gates (tests/) against a staged copy. gcc is
+# built as i686 host code, linked statically by the i686 cross compiler
+# (gcc-i686-linux-gnu, libc6-dev-i386-cross). AMIX_ROOT is the checked
+# amix-system tree.
 RUN make test-hello PREFIX=/opt/amix-cross AMIX_ROOT=/opt/amix/amix-system \
- && rm -rf src distfiles build/binutils-* build/gcc-* build/test
+ && make check PREFIX=/opt/amix-cross AMIX_ROOT=/opt/amix/amix-system \
+ && rm -rf src distfiles build/binutils-* build/gcc-* build/test build/stage
 
 # ---------------------------------------------------------------------------
 # gcc14-cross-amix: GCC 14 for m68k-elf with AMIX's return convention,
