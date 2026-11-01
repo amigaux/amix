@@ -1,0 +1,6 @@
+$modtype misc
+$class demand
+$unload allowed
+$param secs:int:20:1:600
+$desc low-memory row: drain kernel memory and then one 4 KiB KM_SLEEP
+kmsleep	kmsleep
