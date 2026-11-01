@@ -22,6 +22,8 @@ struct fw_state {
 	unsigned long	alloc_at;	/* nonzero: place the next buffer here (a restarted runtime) */
 	unsigned long	codec_flags;	/* QUERY_SERVICE of CODEC: its flags; 0: no such service */
 	int		no_caps;	/* QUERY_CAPS fails */
+	unsigned	dec_status;	/* nonzero: answer a real DECOMPRESS with it, as a firmware
+					   that judges the stream otherwise than zlib */
 	unsigned	alloc_extra;	/* report this many bytes more than asked */
 	unsigned long	next_handle;
 	unsigned long	live[FW_NBUF];	/* handles allocated and not freed */
