@@ -10140,11 +10140,11 @@ def audit_l11():
                     answers=("y", "y", "pkg.example", ""), FB_L11="y", FB_IP="", FB_REPO_HOST="", FB_REPO_IP="")
     (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=" in out else fail)(
         "firstboot dialog (1.1): `Use DHCP? y` takes no address, keeps the repository questions: %r" % out.strip()[-120:])
-    out, rd = fbrun(net_none + show, answers=(), FB_L11="y", FB_IP="198.51.100.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+    out, rd = fbrun(net_none + show, answers=(), FB_L11="y", FB_IP="192.0.2.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
     (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=y I=1" in out and "network questions are skipped" in out else fail)(
         "firstboot dialog (1.1), no interface: no network question asked, DHCP recorded for a card fitted later: %r"
         % out.strip()[-120:])
-    out, rd = fbrun(net_none + show, answers=("y",), FB_L11="", FB_IP="198.51.100.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+    out, rd = fbrun(net_none + show, answers=("y",), FB_L11="", FB_IP="192.0.2.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
     (ok if "CONF= " in out and "I=2" in out and "left as the installation set it" in out else fail)(
         "firstboot dialog (1.0), no interface: as before (asked, then left as the installation set it): %r"
         % out.strip()[-120:])
@@ -10177,9 +10177,9 @@ def audit_l11():
         for what, kv, want in (
                 ("DHCP, no name", dict(FB_NET_MODE="dhcp", FB_NODENAME=""), ["* dhcp", "hostname dhcp"]),
                 ("DHCP with a name", dict(FB_NET_MODE="dhcp", FB_NODENAME="box"), ["* dhcp name box"]),
-                ("static", dict(FB_NET_MODE="static", FB_NODENAME="box", FB_ETHER_IF="aen0", FB_IP="203.0.113.11",
-                                FB_NETMASK="255.255.255.0", FB_GATEWAY="203.0.113.1", FB_DNS1="203.0.113.1"),
-                 ["aen0 static 203.0.113.11/24 gw 203.0.113.1 name box", "dns 203.0.113.1"])):
+                ("static", dict(FB_NET_MODE="static", FB_NODENAME="box", FB_ETHER_IF="aen0", FB_IP="192.0.2.11",
+                                FB_NETMASK="255.255.255.0", FB_GATEWAY="192.0.2.1", FB_DNS1="192.0.2.1"),
+                 ["aen0 static 192.0.2.11/24 gw 192.0.2.1 name box", "dns 192.0.2.1"])):
             base = dict(FB_L11="y", FB_NET_CONFIGURED="y", FB_DNS1="", FB_DNS2="", FB_DOMAIN="")
             base.update(kv)
             out, rd = fbrun(s1 + s8, **base)
