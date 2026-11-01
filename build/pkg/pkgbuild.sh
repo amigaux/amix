@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH=
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
@@ -224,8 +224,22 @@ if grep -E 'implicit declaration|pointer from integer|integer from pointer' "$BU
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+# PREBUILT (package.sh): payload paths of ELFs the package ships ready-made
+# from the pinned gcc14 prefix (libamixrt.so.1); each must be the bytes of a
+# file gcc14-pin.sh pins.  A build that then compiles nothing has no compile
+# line for the flags gate to read, and every ELF in its payload must be one
+# of them.
+compiled=yes
+if [ -n "$PREBUILT" ] && ! grep -F -- "$(basename "${AMIX_GCC14_CC:-m68k-elf-gcc}")" "$BUILD/make.log" |
+	grep -E -- '(^|[[:space:]])-c([[:space:]]|$)' >/dev/null; then
+	compiled=no
+fi
 if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
-	amix_gate_g14_strict "$BUILD/make.log"
+	if [ $compiled = yes ]; then
+		amix_gate_g14_strict "$BUILD/make.log"
+	else
+		echo "  STRICT n/a nothing compiled; the payload's ELFs are the pinned toolchain's: $PREBUILT"
+	fi
 	amix_gate_g14_compat "$BUILD/make.log"
 fi
 # TOOLCHAIN=none: nothing compiled.  common/nocc refuses $CC and the rest;
@@ -307,6 +321,18 @@ for b in $BINS; do
 	0002|0003) ;;
 	*) echo "  ARCHIVE/OBJ $(basename "$b"): no undef gate, not stripped"; continue ;;
 	esac
+	prebuilt=no
+	case " $PREBUILT " in *" ${b#"$DEST"} "*) prebuilt=yes ;; esac
+	if [ $prebuilt = yes ]; then
+		s=$(sha256sum < "$b" | cut -c1-64)
+		echo "${AMIX_GCC14_PINS:-}" | awk '{print $2}' | grep -qx "$s" || {
+			echo "[FAIL] ${b#"$DEST"} is in PREBUILT, but no file gcc14-pin.sh pins has its sha256 $s" >&2
+			exit 1; }
+		echo "  PREBUILT ok ${b#"$DEST"}: a pinned gcc14 file, shipped as it is"
+	elif [ $compiled = no ]; then
+		echo "[FAIL] ${b#"$DEST"}: an ELF in a build that compiled nothing, not in PREBUILT" >&2
+		exit 1
+	fi
 	amix_gate_elf "$b"
 	# every undefined symbol must be defined by a shared object the binary
 	# records as NEEDED, found where the box's runtime linker finds it: a
@@ -361,7 +387,8 @@ for b in $BINS; do
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
 	echo "            found:$found"
-	$STRIP "$b"
+	# a prebuilt file keeps the pinned bytes
+	[ $prebuilt = yes ] || $STRIP "$b"
 done
 echo
 
