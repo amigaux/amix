@@ -41,6 +41,12 @@
  *                          registry does not know
  *   major -l               every row of the registry, `NAME c|b N` in its
  *                          order (C2-4 §15, version 18)
+ *   cards [DEV]            the running kernel's sd cards from kinfo's card
+ *                          table, `card K: cN-cM KEY [base 0xB]` each, KEY the
+ *                          controller's match key; with a disk node (cNdMsK)
+ *                          only that disk's KEY, as --bootdev and --rootdev
+ *                          take it (C2-4 §17); reads kinfo only; status 1
+ *                          without kinfo or when the disk's card is not there
  *   nodes                  the sd disk nodes of a four-card kernel under ROOT
  *                          (C4-1 §2.4, C2-4 §14); needs no store; commit
  *                          runs it on the running box, check reports it
@@ -422,10 +428,83 @@ usage(void)
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
-		"  major NAME | major -l\n"
+		"  major NAME | major -l | cards [DEV]\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
+}
+
+/*
+ * `cards [DEV]` (C2-4 §17): the sd cards of the running kernel, from the
+ * card table of the kinfo record at path (C2-1 §2), each with the match key
+ * of its controller; or, given a disk node, the key of that disk's card,
+ * c<8k + unit> on card k.  It reads nothing else and writes nothing.
+ */
+static int
+cards(const char *path, int n, char **a)
+{
+	static struct kb_kinfo ki;
+	char key[48];
+	const char *b = 0, *p;
+	long c = -1;
+	int i;
+
+	if (n > 1)
+		usage();
+	if (n == 1) {			/* /dev/dsk/cNdMsK, /dev/rdsk/..., or the name alone */
+		b = (p = strrchr(a[0], '/')) != 0 ? p + 1 : a[0];
+		if (b[0] == 'c' && b[1] >= '0' && b[1] <= '9') {
+			c = strtol(b + 1, (char **)&p, 10);
+			if (*p++ != 'd' || *p < '0' || *p > '9')
+				c = -1;
+			while (c >= 0 && *p >= '0' && *p <= '9')
+				p++;
+			if (c >= 0 && (*p++ != 's' || *p < '0' || *p > '9'))
+				c = -1;
+			while (c >= 0 && *p >= '0' && *p <= '9')
+				p++;
+			if (*p)
+				c = -1;
+		}
+		if (c < 0) {
+			fprintf(stderr, "kbootset: %s is not a disk node (cNdMsK)\n", a[0]);
+			return 2;
+		}
+	}
+	if (kb_kinfo_read(path, &ki) != 0) {
+		fprintf(stderr, "kbootset: no kinfo record at %s: the kernel's sd cards are unknown\n", path);
+		return 1;
+	}
+	for (i = 0; i < ki.ncards; i++) {
+		unsigned long k = (unsigned long)ki.card[i].k;
+
+		kb_matchkey(ki.card[i].id, key);
+		if (n == 0) {
+			if (key[0])
+				printf("card %lu: c%lu-c%lu %s", k, 8 * k, 8 * k + 7, key);
+			else
+				printf("card %lu: c%lu-c%lu unknown controller id 0x%08lx", k, 8 * k, 8 * k + 7,
+				    (unsigned long)ki.card[i].id);
+			if (ki.card[i].base)
+				printf(" base 0x%08lx", (unsigned long)ki.card[i].base);
+			printf("\n");
+		} else if (k == (unsigned long)c / 8) {
+			if (!key[0]) {
+				fprintf(stderr, "kbootset: %s: card %lu has the unknown controller id 0x%08lx\n",
+				    a[0], k, (unsigned long)ki.card[i].id);
+				return 1;
+			}
+			printf("%s\n", key);
+			return 0;
+		}
+	}
+	if (n == 1) {
+		fprintf(stderr, "kbootset: %s: the running kernel has no card %ld\n", a[0], c / 8);
+		return 1;
+	}
+	if (ki.ncards == 0)
+		fprintf(stderr, "kbootset: the running kernel registered no sd cards\n");
+	return 0;
 }
 
 static ax_u8 *
@@ -670,6 +749,8 @@ main(int argc, char **argv)
 			fprintf(stderr, "kbootset: no major is registered to %s\n", argv[i + 1]);
 		return found ? 0 : 1;
 	}
+	if (!strcmp(argv[i], "cards"))		/* kinfo only, no store (C2-4 §17) */
+		return cards(kpath && *kpath ? kpath : "/dev/kinfo", argc - i - 1, argv + i + 1);
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
