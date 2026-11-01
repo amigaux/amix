@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-01 — every delete guarded; the swap step reads both streams; amix-base 1.0-19 (0ba9739, 65d1322, 9759ed0)
+
+Every delete on a variable path, in the shipped scripts and the tests, takes ${var:?}, so an empty variable stops
+the command instead. The swap step recognises a refused area by swap's "Not enough space" on either output stream (a
+guarded kernel prints "SC_ADD failed", then "swap: Not enough space", exit 2, a status other failures share).
+bootswap(1M) gives the measured limits: an area of about 50 MiB fits on a 64 MB 68030 machine, about 248 MiB on 16 MB.
+
 ## 2026-11-01 — the swap step-down; licences shipped; amix-base 1.0-18, dhcp-client 1.0-4, syslog 1.0-2 (5ab5e60, 5cf092b, 0601ab0)
 
 The swap step reads `swap_add` from /etc/rc.conf: the sizes to try for a swap slice, each `all` or MiB counted from
