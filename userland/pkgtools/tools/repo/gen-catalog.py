@@ -44,6 +44,10 @@
 #                       bytes, so saying anything new about a shipped
 #                       package meant a new package.  The authored file
 #                       lives in tools/repo/descs.conf.
+#           kbootset.conf  "<catalog name> <version>: <kbootset version>"
+#                       lines -- a kernel row's kbootset= (C2-2 v6) for a
+#                       published kernel whose sidecar predates
+#                       kbootset-min= (C2-3 v10); see the kernel-space block.
 #         The same files are also read from --packages-conf DIR (default:
 #         amix's userland/packages/conf, generated from the recipes by
 #         build/pkg/pkgmeta; 'none' skips it, and a missing one warns).
@@ -108,6 +112,11 @@
 # and kbootset's gate 3 enforces module dependencies.
 # The kbootset package (/sbin/kbootset) is userland (C2-3 v2 section 4):
 # an ordinary entry, nothing special here.
+# A kernel row's optional kbootset= (C2-2 v6 section 1.2, the lowest kbootset
+# package version that composes a generation with it) comes from the
+# sidecar's kbootset-min= (C2-3 v10), else from a kbootset.conf line for
+# that name and version (a kernel cut before the key existed); a sidecar key
+# and a conf line that differ refuse the package; neither, no key.
 # Refused per package (SKIP, like any malformed package): a sidecar
 # missing, unreadable, without kabi/pin/line, or whose line differs from
 # its path, or whose sha256=/size= disagree with the packaged unix; an
@@ -653,8 +662,9 @@ def payload_files(buf, paths, basedir):
 
 
 def kernel_sidecar(buf, params, pkgmap_text):
-    """C2-3 section 2: return (line, kabi, pin) from the package's own
-    /stand/<line>/kabi, verbatim; Malformed when it cannot be trusted."""
+    """C2-3 section 2: return (line, kabi, pin, kbootset-min or None)
+    from the package's own /stand/<line>/kabi, verbatim; Malformed when it
+    cannot be trusted."""
     basedir = params.get("BASEDIR", "/") or "/"
     sidecar = None
     for ftype, _cls, path in pkgmap_objects(pkgmap_text, basedir):
@@ -693,7 +703,12 @@ def kernel_sidecar(buf, params, pkgmap_text):
         if "size" in keys and keys["size"] != str(len(u)):
             raise Malformed("kernel package: sidecar size=%s, packaged %s "
                             "is %d bytes" % (keys["size"], unix, len(u)))
-    return keys["line"], keys["kabi"], keys["pin"]
+    kbmin = keys.get("kbootset-min")
+    if kbmin is not None and (kbmin == "" or len(kbmin.split()) != 1 or
+                              kbmin != kbmin.strip() or "|" in kbmin):
+        raise Malformed("kernel package: sidecar %s has an unusable "
+                        "kbootset-min= (C2-3 v10 section 2)" % path)
+    return keys["line"], keys["kabi"], keys["pin"], kbmin
 
 
 def loader_info(buf, params):
@@ -1058,7 +1073,7 @@ def essential_check(params):
 
 
 def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
-                descs_conf, verbose):
+                descs_conf, verbose, kbootset_conf=None):
     """relname: path relative to the staging root (forward slashes);
     it is emitted verbatim as the catalog filename field."""
     fname = relname
@@ -1129,22 +1144,35 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         if why is not None:
             raise Malformed("kernel-space package is not pure files: %s"
                             % why)
-        kabi = pin = loader = None
+        kabi = pin = loader = kbmin = None
         if role == "loader":
             kline, loader = loader_info(buf, params)
         elif role == "module":
             kline, kabi, pin = module_info(buf, params, pkgmap_text)
         else:
-            kline, kabi, pin = kernel_sidecar(buf, params, pkgmap_text)
+            kline, kabi, pin, kbmin = kernel_sidecar(buf, params,
+                                                     pkgmap_text)
         version = clean_field(params["VERSION"])
         if len(version.split()) != 1:
             raise Malformed("kernel-space VERSION %r is not one token"
                             % version)
+        if role == "kernel":
+            kbconf = as_layers("kbootset.conf", kbootset_conf).get(
+                "%s %s" % (name, version))
+            if kbconf is not None and (len(kbconf.split()) != 1 or
+                                       "|" in kbconf):
+                raise Malformed("kbootset.conf: %s %s: %r is not one "
+                                "version" % (name, version, kbconf))
+            if kbmin is not None and kbconf is not None and kbmin != kbconf:
+                raise Malformed("kernel package: sidecar kbootset-min=%s, "
+                                "kbootset.conf says %s (C2-2 v6 section 1.2)"
+                                % (kbmin, kbconf))
+            kbmin = kbmin if kbmin is not None else kbconf
         entry = {
             "kspace": True, "name": name, "version": version,
             "pkginst": pkginst, "filename": fname, "role": role,
             "line": kline, "kabi": kabi, "pin": pin, "loader": loader,
-            "size": str(len(raw)),
+            "kbootset": kbmin, "size": str(len(raw)),
             "sha256": hashlib.sha256(raw).hexdigest(),
             "md5": hashlib.md5(raw).hexdigest(),
             "fstype": fstype,
@@ -1268,6 +1296,8 @@ def kpkg_line(e):
         keys = "line=%s loader=%s" % (e["line"], e["loader"])
     else:
         keys = "line=%s kabi=%s pin=%s" % (e["line"], e["kabi"], e["pin"])
+        if e.get("kbootset"):
+            keys += " kbootset=%s" % e["kbootset"]
     line = ("#kpkg %s %s role=%s %s size=%s sha256=%s file=%s pkginst=%s"
             % (e["name"], e["version"], e["role"], keys, e["size"],
                e["sha256"], e["filename"], e["pkginst"]))
@@ -1348,6 +1378,7 @@ def main(argv):
     cats_conf = ConfLayers("cats.conf")
     cat_groups = {}
     descs_conf = ConfLayers("descs.conf")
+    kbootset_conf = ConfLayers("kbootset.conf")
     layer_dirs = [("staging", staging)]
     if args.packages_conf != "none":
         if os.path.isdir(args.packages_conf):
@@ -1361,6 +1392,12 @@ def main(argv):
         names_path = os.path.join(confdir, "names.conf")
         cats_path = os.path.join(confdir, "cats.conf")
         descs_path = os.path.join(confdir, "descs.conf")
+        kbootset_path = os.path.join(confdir, "kbootset.conf")
+        if os.path.isfile(kbootset_path):
+            # the key is "<catalog name> <version>", spacing normalised
+            kbootset_conf.add(label, dict(
+                (" ".join(k.split()), v)
+                for k, v in read_conf(kbootset_path).items()))
         if os.path.isfile(deps_path):
             deps_conf.add(label, read_conf(deps_path))
         if os.path.isfile(names_path):
@@ -1446,7 +1483,7 @@ def main(argv):
         try:
             entry = build_entry(path, fname, deps_conf, names_conf,
                                 cats_conf, cat_groups, descs_conf,
-                                args.verbose)
+                                args.verbose, kbootset_conf)
             if entry["name"] in seen:
                 raise Malformed("duplicate catalog name %r (already "
                                 "provided by %s)" %

@@ -7,6 +7,7 @@ S5.1).
 | File | What |
 |---|---|
 | `names.conf` | the catalog name of each kernel-space package whose name is not its pkginst lowercased (`a409130: a4091-k30`): the kernel, loader and module packages, whose pkginst fits the 9 characters stock `pkgadd` keeps |
+| `kbootset.conf` | the lowest kbootset version of a published kernel package whose sidecar predates `kbootset-min=` (`kernel-k30-m k30.1.4.261101-68: 1.1.0.261101-34`); gen-catalog writes it on the kernel's row as `kbootset=` (C2-2 v6 §1.2). A kernel cut since carries the key in its sidecar and needs no line |
 
 The format is gen-catalog's: `<PKGINST>: <catalog-name>`, one per line,
 `#` comments. A package not listed keeps its pkginst lowercased as its

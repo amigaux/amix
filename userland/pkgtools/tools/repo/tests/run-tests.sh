@@ -2587,6 +2587,70 @@ else
     echo "  skip- BASEDIR warning checks (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
 fi
 
+# ---------------------------------------------------------------- T33 ----
+# A kernel row's kbootset= (C2-2 v6 section 1.2): the lowest kbootset version
+# that composes a generation with it, from the sidecar's kbootset-min= (C2-3
+# v10), else from a kbootset.conf line for that name and version (either conf
+# layer); the two differing refuse the package; neither, no key.
+echo "T33: a kernel row's kbootset= from the sidecar or kbootset.conf"
+S33="$WORK/t33"; mkdir -p "$S33"
+kpkg33() {   # kpkg33 <dir> <sidecar extra line or ""> : a staging root with the T25 kernel
+    mkdir -p "$1/src/stand/k46" "$1/stg/kernel"
+    cp "$S25/src/stand/k46/unix" "$1/src/stand/k46/unix"
+    sidecar25 "$1/src/stand/k46/kabi"
+    [ -z "$2" ] || printf '%s\n' "$2" >> "$1/src/stand/k46/kabi"
+    printf 'DIR /stand\nDIR /stand/k46\nCOPY /stand/k46/unix %s\nCOPY /stand/k46/kabi %s\n' \
+        "$1/src/stand/k46/unix" "$1/src/stand/k46/kabi" |
+        python3 "$MKDS" "$1/stg/kernel/KERNKD60-1.1.0.pkg" KERNKD60 1.1.0
+    printf 'KERNKD60: kernel-kd060a\n' > "$1/stg/names.conf"
+}
+krow33() { grep '^#kpkg kernel-kd060a ' "$1/stg/catalog"; }
+KBV=1.1.0.261101-34
+kpkg33 "$S33/a" "kbootset-min=$KBV"
+python3 "$GEN" "$S33/a/stg" >/dev/null 2>&1
+check "sidecar kbootset-min=: the row says kbootset= after pin=" \
+    bash -c "grep -q '^#kpkg kernel-kd060a 1.1.0 role=kernel line=k46 kabi=static pin=$KITPIN kbootset=$KBV size=' '$S33/a/stg/catalog'"
+kpkg33 "$S33/b" ""
+printf '# a comment\nkernel-kd060a   1.1.0: %s\nkernel-kd060a 1.0.9: 9.9\n' "$KBV" > "$S33/b/stg/kbootset.conf"
+python3 "$GEN" "$S33/b/stg" >/dev/null 2>&1
+check "no sidecar key: the staging root's kbootset.conf line for that version (spacing normalised)" \
+    bash -c "krow() { grep '^#kpkg kernel-kd060a ' '$S33/b/stg/catalog'; }; krow | grep -q ' kbootset=$KBV '"
+kpkg33 "$S33/c" ""
+mkdir -p "$S33/c/conf"; printf 'kernel-kd060a 1.1.0: %s\n' "$KBV" > "$S33/c/conf/kbootset.conf"
+python3 "$GEN" --packages-conf "$S33/c/conf" "$S33/c/stg" >/dev/null 2>&1
+check "the packages-conf layer's kbootset.conf counts the same" \
+    bash -c "grep '^#kpkg kernel-kd060a ' '$S33/c/stg/catalog' | grep -q ' kbootset=$KBV '"
+kpkg33 "$S33/d" "kbootset-min=$KBV"
+printf 'kernel-kd060a 1.1.0: 1.1.0.261031-33\n' > "$S33/d/stg/kbootset.conf"
+python3 "$GEN" "$S33/d/stg" >/dev/null 2>"$WORK/t33d.err"
+check "sidecar and kbootset.conf differ: the kernel package is refused" \
+    bash -c "! grep -q '^#kpkg kernel-kd060a ' '$S33/d/stg/catalog'"
+check "... and the refusal names both values" \
+    grep -q "sidecar kbootset-min=$KBV, kbootset.conf says 1.1.0.261031-33" "$WORK/t33d.err"
+kpkg33 "$S33/e" "kbootset-min=$KBV"
+printf 'kernel-kd060a 1.1.0: %s\n' "$KBV" > "$S33/e/stg/kbootset.conf"
+python3 "$GEN" "$S33/e/stg" >/dev/null 2>&1
+check "sidecar and kbootset.conf agree: one kbootset= key" \
+    test "$(grep '^#kpkg kernel-kd060a ' "$S33/e/stg/catalog" | grep -o 'kbootset=' | wc -l)" = 1
+kpkg33 "$S33/f" ""
+printf 'kernel-kd060a 1.0.9: %s\nother 1.1.0: %s\n' "$KBV" "$KBV" > "$S33/f/stg/kbootset.conf"
+python3 "$GEN" "$S33/f/stg" >/dev/null 2>&1
+check "neither (a conf line for another version or name): no kbootset= key" \
+    bash -c "grep -q '^#kpkg kernel-kd060a ' '$S33/f/stg/catalog' && ! grep '^#kpkg kernel-kd060a ' '$S33/f/stg/catalog' | grep -q kbootset="
+kpkg33 "$S33/g" "kbootset-min="
+python3 "$GEN" "$S33/g/stg" >/dev/null 2>"$WORK/t33g.err"
+check "an empty sidecar kbootset-min= refuses the package" \
+    bash -c "! grep -q '^#kpkg kernel-kd060a ' '$S33/g/stg/catalog' && grep -q 'unusable kbootset-min=' '$WORK/t33g.err'"
+check "the shipped kernel/conf/kbootset.conf is gen-catalog's format" \
+    python3 -c "
+import sys, re
+for n, l in enumerate(open(sys.argv[1]), 1):
+    l = l.strip()
+    if not l or l.startswith('#'): continue
+    k, v = l.split(':', 1)
+    assert len(k.split()) == 2 and len(v.split()) == 1, (n, l)
+" "$HERE/../../../../../kernel/conf/kbootset.conf"
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"
