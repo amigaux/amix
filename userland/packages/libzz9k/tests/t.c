@@ -151,19 +151,53 @@ main(void)
 	    b[0].unit, b[0].abi_major, (unsigned long)b[0].codec_flags);
 	CHECK(zz9k_pool_codec(ZZ9K_SERVICE_FLAG_CODEC_ZLIB | ZZ9K_SERVICE_FLAG_CODEC_GZIP) == 0 &&
 	    zz9k_pool_codec(ZZ9K_SERVICE_FLAG_CODEC_LZ4_BLOCK) == -1, "codec lookups");
+	/* the threshold: AUTO keeps a short source in software, without a tick */
+	n = pack(ZZ9K_COMPRESSION_ZLIB, 3000);
+	CHECK(n < ZZ9K_INFLATE_BOARD_MIN, "a short stream: %lu bytes", n);
+	k = fw_st[0].steps;
+	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, NORIG, ZZ9K_INFLATE_AUTO, &r,
+	    &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_SOFT && fw_st[0].steps == k,
+	    "under ZZ9K_INFLATE_BOARD_MIN: software, ran %d", ran);
+	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, NORIG, ZZ9K_INFLATE_BOARD, &r,
+	    &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_BOARD, "BOARD ignores the threshold");
+	n = pack(ZZ9K_COMPRESSION_ZLIB, NORIG);
+	CHECK(n >= ZZ9K_INFLATE_BOARD_MIN, "a long stream: %lu bytes", n);
+	same("over the threshold", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, NORIG, ZZ9K_STATUS_OK,
+	    ZZ9K_INFLATE_BOARD);
+	zz9k_inflate_threshold((uint32_t)n + 1);
+	same("the threshold set over it", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, NORIG, ZZ9K_STATUS_OK,
+	    ZZ9K_INFLATE_SOFT);
+	zz9k_inflate_threshold(0);	/* the rest of the test: every source may go to the board */
 	formats("one board", ZZ9K_INFLATE_BOARD);
 	CHECK(fw_st[0].nlive == 2, "two buffers, reused: %d live", fw_st[0].nlive);
-	/* the outcomes that are not OK, the same either way */
+	/* the outcomes that are not OK, the same either way: the board's answer is decided
+	   again in software */
 	n = pack(ZZ9K_COMPRESSION_ZLIB, 50000);
-	same("no room", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, 1000, ZZ9K_STATUS_NO_MEMORY, ZZ9K_INFLATE_BOARD);
+	same("no room", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, 1000, ZZ9K_STATUS_NO_MEMORY, ZZ9K_INFLATE_SOFT);
 	same("truncated, EXPECT_END", ZZ9K_COMPRESSION_ZLIB, ZZ9K_DECOMPRESS_FLAG_EXPECT_END, comp, n / 2,
-	    NORIG, ZZ9K_STATUS_BAD_REQUEST, ZZ9K_INFLATE_BOARD);
+	    NORIG, ZZ9K_STATUS_BAD_REQUEST, ZZ9K_INFLATE_SOFT);
 	same("truncated", ZZ9K_COMPRESSION_ZLIB, 0, comp, n / 2, NORIG, ZZ9K_STATUS_BAD_REQUEST,
-	    ZZ9K_INFLATE_BOARD);
+	    ZZ9K_INFLATE_SOFT);
 	same("whole, EXPECT_END", ZZ9K_COMPRESSION_ZLIB, ZZ9K_DECOMPRESS_FLAG_EXPECT_END, comp, n, NORIG,
 	    ZZ9K_STATUS_OK, ZZ9K_INFLATE_BOARD);
 	comp[n / 3] ^= 0x5a;
-	same("corrupt", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, NORIG, ZZ9K_STATUS_BAD_REQUEST, ZZ9K_INFLATE_BOARD);
+	same("corrupt", ZZ9K_COMPRESSION_ZLIB, 0, comp, n, NORIG, ZZ9K_STATUS_BAD_REQUEST, ZZ9K_INFLATE_SOFT);
+	{
+		/* a firmware that judges a corrupt stream that would overfill dst BAD_REQUEST where
+		   zlib says NO_MEMORY: AUTO gives zlib's verdict, BOARD the board's */
+		unsigned long m = pack(ZZ9K_COMPRESSION_ZLIB, 50000);
+
+		comp[m - 8] ^= 0x5a;
+		fw_st[0].dec_status = 4;	/* BAD_REQUEST */
+		same("board BAD_REQUEST, zlib NO_MEMORY", ZZ9K_COMPRESSION_ZLIB, 0, comp, m, 1000,
+		    ZZ9K_STATUS_NO_MEMORY, ZZ9K_INFLATE_SOFT);
+		CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, m, outb, 1000, ZZ9K_INFLATE_BOARD,
+		    &r, &ran) == ZZ9K_STATUS_BAD_REQUEST && ran == ZZ9K_INFLATE_BOARD,
+		    "BOARD keeps the board's status");
+		fw_st[0].dec_status = 0;
+		n = pack(ZZ9K_COMPRESSION_ZLIB, 50000);
+		comp[n / 3] ^= 0x5a;
+	}
 	same("unknown flag", ZZ9K_COMPRESSION_ZLIB, 4, comp, n, NORIG, ZZ9K_STATUS_BAD_REQUEST, 0);
 	same("unknown algorithm", 77, 0, comp, n, NORIG, ZZ9K_STATUS_BAD_REQUEST, 0);
 	same("empty source", ZZ9K_COMPRESSION_ZLIB, 0, comp, 0, NORIG, ZZ9K_STATUS_BAD_REQUEST, 0);
@@ -184,20 +218,55 @@ main(void)
 		same("empty output", ZZ9K_COMPRESSION_GZIP, 0, e0, (uint32_t)l, 100,
 		    ZZ9K_STATUS_INTERNAL_ERROR, ZZ9K_INFLATE_SOFT);
 	}
+	/* an algorithm only a board can do goes to it even under the threshold */
+	zz9k_pool_close();
+	fw_st[0].codec_flags |= ZZ9K_SERVICE_FLAG_CODEC_LZ4_BLOCK;
+	zz9k_inflate_threshold(ZZ9K_INFLATE_BOARD_MIN);
+	fw_st[0].last_op = 0;
+	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_LZ4_BLOCK, 0, comp, 100, outb, NORIG, ZZ9K_INFLATE_AUTO,
+	    &r, &ran) == ZZ9K_STATUS_UNSUPPORTED && ran == ZZ9K_INFLATE_BOARD &&
+	    fw_st[0].last_op == fw_op_decompress(), "LZ4 under the threshold: the board's answer");
+	zz9k_pool_close();
+	fw_st[0].codec_flags &= ~(unsigned long)ZZ9K_SERVICE_FLAG_CODEC_LZ4_BLOCK;
+	zz9k_inflate_threshold(0);
 	/* an algorithm the board does not offer and software cannot do */
 	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_LZ4_BLOCK, 0, comp, n, outb, NORIG, ZZ9K_INFLATE_AUTO,
 	    &r, &ran) == ZZ9K_STATUS_UNSUPPORTED, "LZ4 with no LZ4 anywhere: UNSUPPORTED");
 	/* growing: every new size a new buffer; when the held ones use up the handles or the
-	   quota, the channel is opened again and the call still runs on the board */
+	   quota, the channel is opened again.  The old channel's close queues a FREE for each
+	   held buffer, and the reopened channel's first ALLOC may find the request ring still
+	   full of them (EAGAIN, BUSY): that one call runs in software, with the same result. */
 	n = pack(ZZ9K_COMPRESSION_ZLIB, 20000);
 	k = fw_st[0].nfree;
-	for (i = 64UL * 1024; i <= 6UL * 1024 * 1024; i += i / 2) {
-		CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, (uint32_t)i,
+	{
+		int soft_runs = 0;
+
+		for (i = 64UL * 1024; i <= 6UL * 1024 * 1024; i += i / 2) {
+			CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, (uint32_t)i,
+			    ZZ9K_INFLATE_AUTO, &r, &ran) == ZZ9K_STATUS_OK && r.bytes_written == 20000 &&
+			    memcmp(outb, orig, 20000) == 0, "dst %lu", i);
+			if (ran == ZZ9K_INFLATE_SOFT)
+				soft_runs++;
+			CHECK(kt_opens() <= 2, "at most the channel and its predecessor: %d", kt_opens());
+		}
+		CHECK(soft_runs <= 1, "only a reopen's call may run in software: %d", soft_runs);
+		kt_drain();
+		CHECK(fw_st[0].nfree > k, "the held buffers were given back on the way: %d",
+		    fw_st[0].nfree - k);
+		CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, (uint32_t)(i * 2 / 3),
 		    ZZ9K_INFLATE_AUTO, &r, &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_BOARD &&
-		    r.bytes_written == 20000 && memcmp(outb, orig, 20000) == 0, "dst %lu: %d", i, ran);
-		CHECK(kt_opens() == 1, "one channel: %d", kt_opens());
+		    kt_opens() == 1, "the reopened channel takes the big buffer on the board");
 	}
-	CHECK(fw_st[0].nfree > k, "the held buffers were given back on the way: %d", fw_st[0].nfree - k);
+	/* with few held buffers the old channel's FREEs leave the ring room: the call that runs
+	   out of quota opens a fresh channel and still runs on the board */
+	zz9k_pool_close();
+	kt_drain();
+	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, 3UL * 1024 * 1024,
+	    ZZ9K_INFLATE_AUTO, &r, &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_BOARD, "dst 3 MiB");
+	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, 5UL * 1024 * 1024,
+	    ZZ9K_INFLATE_AUTO, &r, &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_BOARD &&
+	    memcmp(outb, orig, 20000) == 0, "dst 5 MiB: over the quota with the 3 MiB held: a fresh "
+	    "channel in the same call, ran %d", ran);
 	CHECK(zz9k_inflate(ZZ9K_COMPRESSION_ZLIB, 0, comp, n, outb, (uint32_t)NOUT,
 	    ZZ9K_INFLATE_AUTO, &r, &ran) == ZZ9K_STATUS_OK && ran == ZZ9K_INFLATE_SOFT,
 	    "a call that cannot fit the board's quota runs in software");

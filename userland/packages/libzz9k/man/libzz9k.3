@@ -1,4 +1,4 @@
-.TH LIBZZ9K 3 "1 November 2026" "libzz9k"
+.TH LIBZZ9K 3 "1 November 2026" "libzz9k 2.9.1-2"
 .SH NAME
 libzz9k, zz9k_inflate, zz9k_pool \- ZZ9000-family board services, with a software fallback
 .SH SYNOPSIS
@@ -9,6 +9,8 @@ libzz9k, zz9k_inflate, zz9k_pool \- ZZ9000-family board services, with a softwar
 .BI "    const void *" src ", uint32_t " src_length ,
 .BI "    void *" dst ", uint32_t " dst_capacity ", int " how ,
 .BI "    ZZ9KDecompressResult *" result ", int *" ran );
+.PP
+.BI "void zz9k_inflate_threshold(uint32_t " bytes );
 .PP
 .BI "int zz9k_pool(const ZZ9KAmixBoard **" boards );
 .BI "int zz9k_pool_codec(uint32_t " flags );
@@ -56,7 +58,7 @@ is 0 or
 .I how
 is
 .B ZZ9K_INFLATE_AUTO
-(a board that offers it, else software),
+(a board that offers it, else software; see below),
 .B ZZ9K_INFLATE_BOARD
 or
 .BR ZZ9K_INFLATE_SOFT .
@@ -69,13 +71,30 @@ fills
 (bytes consumed and written, the CRC-32 of the output, the algorithm, the result
 flags), and the status, the result and the bytes at
 .I dst
-are the same on a board and in software.
+are the same on a board and in software: in
+.B ZZ9K_INFLATE_AUTO
+only a board's
+.B ZZ9K_STATUS_OK
+is taken, and any other answer of the board is decided again in software, so
+every stream has one answer;
+.B ZZ9K_INFLATE_BOARD
+returns the board's own status.
 .B ZZ9K_STATUS_NO_MEMORY
 means
 .I dst
 is too small,
 .B ZZ9K_STATUS_BAD_REQUEST
 a stream that cannot be decoded or a bad argument.
+In
+.BR ZZ9K_INFLATE_AUTO ,
+a source shorter than the threshold runs in software, since the board's round
+trip would cost more:
+.B ZZ9K_INFLATE_BOARD_MIN
+(1024) bytes, or what
+.B zz9k_inflate_threshold
+set for the process.
+An algorithm only a board can do goes to the board whatever its size.
+.PP
 .I *ran
 (when
 .I ran

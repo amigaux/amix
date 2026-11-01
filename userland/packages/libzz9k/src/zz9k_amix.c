@@ -3,6 +3,13 @@
  * process, and zz9k_inflate, which runs on a board that offers the algorithm and in software
  * otherwise, with the same status, result and bytes either way.
  *
+ * In AUTO only a board's OK is taken: any other answer of the board is decided again in
+ * software and zlib's verdict returned, so there is one answer for every stream (a firmware
+ * may judge a corrupt stream that would overfill the destination BAD_REQUEST where zlib says
+ * NO_MEMORY).  A ZZ9K_INFLATE_BOARD call returns the board's own status.  A source shorter
+ * than the threshold (ZZ9K_INFLATE_BOARD_MIN, zz9k_inflate_threshold) runs in software in
+ * AUTO: below it the round trip costs more than the work.
+ *
  * The software path is the firmware's one-shot DECOMPRESS of the zlib family done with this
  * system's zlib: inflate with Z_FINISH, the CRC-32 of the output, and the same status for
  * each outcome; and the checks the SDK's request and reply helpers make on the host side
@@ -41,6 +48,7 @@ static struct pool_board pool[ZZ9K_AMIX_NUNIT];
 static ZZ9KAmixBoard pool_info[ZZ9K_AMIX_NUNIT];
 static int pool_n = -1;		/* -1: not opened yet */
 static uint32_t pool_ms;
+static uint32_t inflate_min = ZZ9K_INFLATE_BOARD_MIN;
 
 /* open pb's channel on unit and read its catalogue; 0 when the unit has no live board */
 static int
@@ -162,6 +170,12 @@ zz9k_pool_timeout(uint32_t ms)
 }
 
 void
+zz9k_inflate_threshold(uint32_t bytes)
+{
+  inflate_min = bytes;
+}
+
+void
 zz9k_pool_close(void)
 {
   int k;
@@ -259,19 +273,17 @@ board_buffers(struct pool_board *pb, uint32_t slen, uint32_t dcap)
 }
 
 /*
- * DECOMPRESS on pb.  *answered says whether the board answered it (its status is then the
- * call's) or the call did not get there (no channel, no buffers, the kernel refused or
- * timed out: the caller may run it in software).
+ * DECOMPRESS on pb: the board's status, or the reason it did not get there (no channel, no
+ * buffers, the kernel refused or timed out).  On OK the output is copied to dst.
  */
 static int
 board_inflate(struct pool_board *pb, uint32_t algorithm, uint32_t flags, const void *src,
               uint32_t src_length, void *dst, uint32_t dst_capacity,
-              ZZ9KDecompressResult *result, int *answered)
+              ZZ9KDecompressResult *result)
 {
   ZZ9KDecompressDesc desc;
   int status;
 
-  *answered = 0;
   status = board_buffers(pb, src_length, dst_capacity);
   if (status != ZZ9K_STATUS_OK) {
     if (status == ZZ9K_STATUS_TIMEOUT || status == ZZ9K_STATUS_IO_ERROR) {
@@ -296,12 +308,10 @@ board_inflate(struct pool_board *pb, uint32_t algorithm, uint32_t flags, const v
       return ZZ9K_STATUS_INTERNAL_ERROR;
     }
     memcpy(dst, (const void *)pb->dst.data, result->bytes_written);
-    *answered = 1;
     pb->down_until = 0;
     return status;
   case ZZ9K_STATUS_NO_MEMORY:	/* no room in dst: the firmware's answer */
   case ZZ9K_STATUS_BAD_REQUEST:	/* a stream it could not decode */
-    *answered = 1;
     pb->down_until = 0;
     return status;
   case ZZ9K_STATUS_TIMEOUT:	/* the kernel quarantined the buffers */
@@ -384,7 +394,6 @@ zz9k_inflate(uint32_t algorithm, uint32_t flags, const void *src, uint32_t src_l
 {
   struct pool_board *pb;
   int status;
-  int answered;
   int soft = window_bits(algorithm) != 0;
 
   if (ran) {
@@ -401,13 +410,16 @@ zz9k_inflate(uint32_t algorithm, uint32_t flags, const void *src, uint32_t src_l
       (how != ZZ9K_INFLATE_AUTO && how != ZZ9K_INFLATE_BOARD && how != ZZ9K_INFLATE_SOFT)) {
     return ZZ9K_STATUS_BAD_REQUEST;
   }
-  if (how != ZZ9K_INFLATE_SOFT) {
+  /* the board: when asked to, or in AUTO for a source over the threshold (or one only a
+     board can do) */
+  if (how == ZZ9K_INFLATE_BOARD ||
+      (how == ZZ9K_INFLATE_AUTO && (!soft || src_length >= inflate_min))) {
     pb = pool_find(codec_flag(algorithm), how == ZZ9K_INFLATE_AUTO);
     if (pb) {
       status = board_inflate(pb, algorithm, flags, src, src_length, dst, dst_capacity,
-                             result, &answered);
-      if (answered || how == ZZ9K_INFLATE_BOARD || !soft) {
-        if (!answered) {
+                             result);
+      if (status == ZZ9K_STATUS_OK || how == ZZ9K_INFLATE_BOARD || !soft) {
+        if (status != ZZ9K_STATUS_OK) {
           memset(result, 0, sizeof(*result));
         }
         if (ran) {
@@ -415,6 +427,7 @@ zz9k_inflate(uint32_t algorithm, uint32_t flags, const void *src, uint32_t src_l
         }
         return status;
       }
+      /* anything but OK: zlib decides */
       memset(result, 0, sizeof(*result));
     } else if (how == ZZ9K_INFLATE_BOARD || !soft) {
       return pool_n == 0 ? ZZ9K_STATUS_NOT_FOUND : ZZ9K_STATUS_UNSUPPORTED;

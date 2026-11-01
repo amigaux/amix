@@ -41,17 +41,24 @@ void zz9k_pool_timeout(uint32_t ms);
 void zz9k_pool_close(void);
 
 /* how zz9k_inflate may run */
-#define ZZ9K_INFLATE_AUTO	0	/* a board that offers it, else software */
+#define ZZ9K_INFLATE_AUTO	0	/* a board that offers it, else software; see below */
 #define ZZ9K_INFLATE_BOARD	1	/* a board only */
 #define ZZ9K_INFLATE_SOFT	2	/* software only */
+
+/* AUTO runs a source shorter than this many bytes in software (the board's round trip
+   costs more); zz9k_inflate_threshold sets it for the process */
+#define ZZ9K_INFLATE_BOARD_MIN	1024
+void zz9k_inflate_threshold(uint32_t bytes);
 
 /*
  * Decompress src_length bytes at src into at most dst_capacity bytes at dst, as the SDK's
  * DECOMPRESS does: ZZ9K_COMPRESSION_DEFLATE_RAW, _ZLIB or _GZIP, flags 0 or
  * ZZ9K_DECOMPRESS_FLAG_EXPECT_END.  The status and, on ZZ9K_STATUS_OK, the result (bytes
  * consumed and written, the CRC-32 of the output, the algorithm, the result flags) and the
- * bytes at dst are the same on a board and in software.  Other algorithms run on a board
- * only.  *ran (may be 0) says where it ran: ZZ9K_INFLATE_BOARD or ZZ9K_INFLATE_SOFT.
+ * bytes at dst are the same on a board and in software: in AUTO only a board's OK is taken,
+ * any other answer is decided again in software.  ZZ9K_INFLATE_BOARD returns the board's own
+ * status.  Other algorithms run on a board only.  *ran (may be 0) says where it ran:
+ * ZZ9K_INFLATE_BOARD or ZZ9K_INFLATE_SOFT.
  * With ZZ9K_INFLATE_BOARD and no board offering it: ZZ9K_STATUS_NOT_FOUND when there is
  * no board, ZZ9K_STATUS_UNSUPPORTED when none has the service.
  */

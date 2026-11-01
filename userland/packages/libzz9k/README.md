@@ -1,6 +1,6 @@
 # libzz9k — the ZZ9000 SDK v2 host library for Amix
 
-**Package `libzz9k` 2.9.1.** A Z3660, and a ZZ9000 whose firmware has the services runtime
+**Package `libzz9k` 2.9.1-2.** A Z3660, and a ZZ9000 whose firmware has the services runtime
 (BlitterStudio zz9000-firmware, SDK version 2), can do work for an Amiga program on the board's
 second ARM core. The kernel reaches each such board through `zz9ksvc` (kernel/modules/zz9ksvc,
 `/dev/zz9ksvc0` and `1`). libzz9k is the program's side: the SDK's own host API over those
@@ -70,10 +70,18 @@ both paths come the host-side checks of the SDK's helpers: before, `zz9k_request
 `OK` the host sees only the status, so the result is zero on both paths. The host test checks,
 call by call, that the status, the result and the bytes agree.
 
-**When software takes over** (`ZZ9K_INFLATE_AUTO`): no board offers the algorithm; the channel
-or its buffers cannot be had; the kernel refuses the request; or the request times out. A firmware
-answer, `NO_MEMORY` or `BAD_REQUEST` included, is the call's answer, since software would give
-the same. A board whose request timed out is left out of AUTO calls for 30 seconds, so a stalled
+**One answer for every stream.** In `ZZ9K_INFLATE_AUTO` only a board's `OK` is taken. Any other
+answer of the board is decided again in software and zlib's verdict returned: a firmware may judge
+a corrupt stream that would overfill the destination `BAD_REQUEST` where zlib says `NO_MEMORY`,
+and errors are rare enough that the second pass costs nothing that matters. A
+`ZZ9K_INFLATE_BOARD` call returns the board's own status.
+
+**When software takes over** (`ZZ9K_INFLATE_AUTO`): the source is shorter than the threshold
+(`ZZ9K_INFLATE_BOARD_MIN`, 1024 bytes until the bench measures the board's round trip;
+`zz9k_inflate_threshold` sets it for the process); no board offers the algorithm; the channel or
+its buffers cannot be had; the kernel refuses the request; the request times out; or the board
+answers anything but `OK`. An algorithm only a board can do (LZ4, LZMA, LZH) goes to the board
+whatever its size. A board whose request timed out is left out of AUTO calls for 30 seconds, so a stalled
 runtime costs one bound and not one per call; a `ZZ9K_INFLATE_BOARD` call still asks it, and an
 answer brings it back. `zz9k_pool_timeout` sets the bound (default: the kernel's 10 s).
 
@@ -82,7 +90,9 @@ channel closes (the mapping outlives its cookie; zz9ksvc(7)). So each board keep
 buffers, source and destination, mapped once and reused; one grows, at least doubling from
 64 KiB, only when a call needs more. When growing runs out of handles or of the 8 MiB quota, the
 channel is closed and opened again, which gives every held buffer back. A call that cannot fit the
-quota at all runs in software.
+quota at all runs in software. The old channel's close queues a FREE for each held buffer; when
+there were many, the fresh channel's first allocation can find the request ring still full (the
+kernel answers `EAGAIN`), and that one call runs in software.
 
 ## What is installed
 
@@ -116,14 +126,17 @@ checks the upstream files against `src/PROVENANCE`, then builds the library as t
 `zz9ksvc.c`, with its host harness (`zz9ksvc/test/td.h`) and two stand-in runtimes
 (`zz9ksvc/test/fw.c`) that inflate with the host's zlib as the firmware does. The library's
 system calls on `/dev/zz9ksvcN` go to the driver (`tests/sysshim.c`), which closes a channel the
-way specfs does, only after its last mapping is gone. 220 checks:
+way specfs does, only after its last mapping is gone. 241 checks:
 
 - no board (the node gives `ENXIO`): an empty pool, `NOT_FOUND`, everything in software;
-- one board: the catalogue; each format on the board and in software, the same; no room, a
+- one board: the catalogue; the threshold (a short source in software without a tick, `BOARD`
+  ignoring it, the setter, an algorithm only a board can do going to it under the threshold);
+  each format on the board and in software, the same; a board that answers `BAD_REQUEST` where
+  zlib says `NO_MEMORY` (AUTO gives zlib's verdict, BOARD the board's); no room, a
   truncated stream with and without `EXPECT_END`, a corrupt stream, an unknown flag or algorithm,
   an empty source, a stream with no output; an algorithm nobody offers; the buffers reused, grown,
-  the channel opened again when the held ones use up the handles, a call too big for the quota in
-  software; the SDK's own calls on the Amix branch (`zz9k_find_board`, `zz9k_open`, `zz9k_ping`,
+  the channel opened again when the held ones use up the handles (in the same call when the ring
+  has room), a call too big for the quota in software; the SDK's own calls on the Amix branch (`zz9k_find_board`, `zz9k_open`, `zz9k_ping`,
   `zz9k_query_caps`, mapped and card-only buffers, `zz9k_decompress` by handle, an opcode the
   kernel refuses, no raw ring access, `zz9k_close` giving its channel back);
 - two boards: each call on the first board that offers its algorithm;
@@ -136,9 +149,10 @@ way specfs does, only after its last mapping is gone. 220 checks:
   the runtimes, every unmap exactly a mapping; at the end the driver unloads with all its memory
   freed.
 
-Of nine mutants of the library, eight are killed (no copy back, no unmap at free or close, a
-firmware `NO_MEMORY` taken for a transport failure, no skip of a stalled board, no fresh channel,
-the reply's length lost, the empty-output check gone); the ninth, the `EXPECT_END` branch of the
+Of thirteen mutants of the library, twelve are killed (no copy back, no unmap at free or close,
+no skip of a stalled board, no fresh channel in the same call, the reply's length lost, the
+empty-output check gone, a board's error taken in AUTO, no threshold, the threshold applied to
+BOARD calls or to an algorithm only a board can do, a threshold of 0 by default); the thirteenth, the `EXPECT_END` branch of the
 software path removed, is an equivalent mutant, since `inflate` with `Z_FINISH` returns `Z_STREAM_END` or `Z_BUF_ERROR`, never
 `Z_OK`, and both give `BAD_REQUEST`.
 
