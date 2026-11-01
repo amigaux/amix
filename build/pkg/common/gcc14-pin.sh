@@ -1,5 +1,6 @@
 # gcc14-pin.sh -- the gcc14-cross-amix identity: the pinned commit, the
-# sha256 of its cc1, libgcc.a, libamixc99.a and specs, and the return-value
+# sha256 of its cc1, libgcc.a, libamixc99.a, specs, amix_init.o, amix_initS.o
+# and libamixrt.so.1, and the return-value
 # ABI self-check.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
 # recipes) and by dlm-src.sh before it builds amix-dlm's box binaries
 # (kbootset, modadmin), which amix-dlm's Makefile links with the toolchain
@@ -37,16 +38,24 @@ esac
 # feec32e (2026-11-01) patches gas to keep a PIC relocation against an
 # exported symbol instead of folding it into its section: only the
 # assembler changes, none of the four files pinned here.
+# 3446533 (2026-11-01) adds libamixrt.so.1, the runtime a shared library
+# NEEDs, run-after-start-up library constructors in amix_init.o (last in,
+# first out) and amix_initS.o for -shared: the specs, libamixc99.a and both
+# init objects change and libamixrt.so.1 is pinned too; cc1 and libgcc.a do
+# not change.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=feec32eda756964fa6182bae49ac11f9e0681c1a
+AMIX_GCC14_COMMIT=34465331d3ccdf4a320f684736b5df032971c206
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
-m68k-elf/lib/libamixc99.a 1ac4df85649b8b6baf99a012567a460f636c32cff9619c8e88b9ddc3c1077b51
-lib/gcc/m68k-elf/14.2.0/specs 3dd30d468963fba3565ad9febc3327aaee5f10ded4c54c6a1c44360388ba89b4"
+m68k-elf/lib/libamixc99.a 591306dca7eafd580e024f347124b5d6eb5d90537662f6f0e31c9ee9f5b768fe
+lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
+m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
+m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
+m68k-elf/lib/amixrt/libamixrt.so.1 7d7c647e2737c7998711d5e90b314e048ebae3140cc5d4d9b816660680dd5880"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {

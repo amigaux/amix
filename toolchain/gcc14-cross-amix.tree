@@ -2,5 +2,5 @@
 # the build container's /opt/amix/TOOLCHAIN.sha256 (its lines under
 # amix/gcc14-cross-amix/, that prefix removed), built by Containerfile from
 # the commit in gcc14-cross-amix.pin. toolchain/extract-g14.sh checks an image
-# against it; build/pkg/common/gcc14-pin.sh pins four of its files.
-1cd216fd2ed7ea6c346c67ddf58a2baacd3d2159d0959418e038c6886991c721
+# against it; build/pkg/common/gcc14-pin.sh pins seven of its files.
+34f356c0d604c5c790743e1cc2eecf8459c6baebfc3a03ef789e1336b1b996c8

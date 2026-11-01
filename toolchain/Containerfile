@@ -113,15 +113,20 @@ RUN set -e; cc=build/prefix/bin/m68k-elf-gcc; \
     rm abi.s
 # the fork's own tests: shared libraries built with -shared and checked by
 # readelf (their on-box run is the fork's), a library's PIC references to its
-# exported data kept against the symbol, and the compat layer's host
-# batteries; their output is not part of the toolchain
-RUN tools/test-shared.sh && tools/test-pic-globals.sh && tools/test-compat-host.sh \
- && rm -rf build/test-shared build/test-pic-globals build/hosttest
+# exported data kept against the symbol, libamixrt.so.1's shape and probes,
+# and the compat layer's host batteries; their output is not part of the
+# toolchain
+RUN tools/test-shared.sh && tools/test-pic-globals.sh && tools/test-amixrt.sh \
+ && tools/test-compat-host.sh \
+ && rm -rf build/test-shared build/test-pic-globals build/test-amixrt build/hosttest
 # amix-system's absolute links into usr/amiga and usr/ucblib (libscreen.so,
 # include/amiga, libdbm.a, libucb.a) made relative, so they resolve in the
 # sysroot; the script is bind-mounted, not left in the image
 RUN --mount=type=bind,source=sysroot-links,target=/tmp/sysroot-links \
     sh /tmp/sysroot-links build/sysroot
+# libamixrt.so.1 where the box has it, /usr/lib, so a program's NEEDED is
+# found in the sysroot as the runtime linker finds it on the box
+RUN cp build/prefix/m68k-elf/lib/amixrt/libamixrt.so.1 build/sysroot/usr/lib/libamixrt.so.1
 
 # ---------------------------------------------------------------------------
 # The members of the archives built here (not the sysroots' AMIX archives,
