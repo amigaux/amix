@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — zz9ksvc test stand-in can force a decompression status (4b9e371)
+
+The zz9ksvc host test's stand-in can be made to answer a decompression with a chosen status.
+
 ## 2026-11-01 — monsw recipe cleans its tool (96acf49)
 
 monsw's package recipe cleans monsw/tool before building monswctl, so a monswctl built under an earlier toolchain pin can't survive into a roll; the packages are unchanged.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-01 — libzz9k 2.9.1-2 (99886d9, 1ded317)
+
+AUTO calls take only a board's success and decide any other board answer with zlib, so every stream has one answer; ZZ9K_INFLATE_BOARD keeps the board's status. AUTO runs a source shorter than ZZ9K_INFLATE_BOARD_MIN (1024 bytes, settable with zz9k_inflate_threshold) in software.
+
 ## 2026-11-01 — libzz9k 2.9.1-1 (721b61e)
 
 libzz9k 2.9.1-1, the ZZ9000 SDK v2 host library for Amix (GPL-3.0-or-later): the SDK's host API over /dev/zz9ksvcN, a pool of the boards, and zz9k_inflate (raw deflate, zlib, gzip) on a board or with zlib, with the same result either way.
