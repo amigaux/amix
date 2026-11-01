@@ -1,11 +1,11 @@
 PKG=ramdisk30
-NAME=ramdisk-k30 1.0.0-5 - RAM disk module (root class), k30 line
+NAME=ramdisk-k30 1.0.0-6 - RAM disk module (root class), k30 line
 ARCH=Amiga
-VERSION=1.0.0-5
+VERSION=1.0.0-6
 CATEGORY=system
 CLASSES=none ramdisk
 VENDOR=amix
-PSTAMP=amix-ramdisk30-1.0.0-5
+PSTAMP=amix-ramdisk30-1.0.0-6
 # Kernel space (amix-dlm C2-2, C3-5 v8 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k30), class root, never an ordinary entry.
 # Catalog name ramdisk-k30, pkginst ramdisk30; VERSION is

@@ -10,20 +10,22 @@
 # 1.0.0-4 (2026-10-31): rolled from kernel/modules; the object and the payload
 # are 1.0.0-3's.
 # 1.0.0-5 (2026-10-31): the page ramdisk(7) and its whatis fragment.
+# 1.0.0-6 (2026-11-01): rebuilt on kit 3b53a8a (gcc-cross-amix 33ebadc); the
+# code is unchanged, only .moddata cc= differs (gcc-2.7.2.3-33ebadc).
 
 KM_NAME=ramdisk
 KM_SHORT=ramdisk
 KM_REPO=kernel/modules/ramdisk
-KM_VERSION=1.0.0-5
+KM_VERSION=1.0.0-6
 
 KM_K30_OBJ=kernel/modules/ramdisk/build/k30/mod.d/ramdisk
-KM_K30_SHA=5523d8533d50840619d0a686bfbb02cf2eae50dee8746fbbd7561acea890c873
+KM_K30_SHA=793ce89b14e99847a7948fa898ba00216371f58ffd19dee8b2786ba02ddbd81f
 KM_K46_OBJ=kernel/modules/ramdisk/build/k46/mod.d/ramdisk
-KM_K46_SHA=054467f6feadfa253b490cce95fa1350195cf6b3a8eefdaa4a14b47865f07bb6
+KM_K46_SHA=b793e3437bddee2dc93bd313d740a98c155b8d9036194c97f57e46effca6732f
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=7a68948b9dd41adb4f4d0aee1f4459aca2d0ef8a
+KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f	# PIN gcc-2.7.2.3-33ebadc
 
 KM_LICENCES="\
 kernel/modules/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4"
