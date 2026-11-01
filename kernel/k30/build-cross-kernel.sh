@@ -1699,6 +1699,8 @@ elif [ -n "$DLM_CORE" ]; then
   # abi= (C3-3 §4) when the core's mkabi.py produced it in step 9b, recomputed by the sidecar tool
   grep -q '^abi=' "$WORK/dlm-core/abi.txt" 2>/dev/null && ABI_ARGS+=(--abi "$WORK/dlm-core/abi.txt" \
     --mkabi "$DLM_CORE/tools/mkabi.py" "$DLM_CORE/abi/k30/ddi.list" "$WORK/dlm-core/core/dlm_offs.h")
+  # kbootset-min= (C2-3 v10): the core's core/kbootset-min, copied verbatim; a core without the file has no floor
+  [ -f "$DLM_CORE/core/kbootset-min" ] && ABI_ARGS+=(--kbootset-min "$DLM_CORE/core/kbootset-min")
   python3 "$KT/tools/kabi-sidecar030.py" "$BUILD/unix" "$BUILD/unix.brel" --family generic --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}" -o "$BUILD/kabi"
   python3 "$KT/tools/kabi-sidecar030.py" --check "$BUILD/unix" "$BUILD/unix.brel" "$BUILD/kabi" --module "$WORK/dlm-core/ident-fill.txt" "${ABI_ARGS[@]}"
   # the sidecar's pin= (the toolchain that built the kernel, toolchain/gcc-cross-amix.pin) must be the core's

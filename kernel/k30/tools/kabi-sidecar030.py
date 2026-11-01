@@ -3,8 +3,10 @@
 
     kabi-sidecar030.py ETREL BREL --family NAME [--pin PIN] [-o OUT | --stand DIR]
     kabi-sidecar030.py --check ETREL BREL SIDECAR
-    kabi-sidecar030.py ETREL BREL --family generic --module FILL [--abi ABI --mkabi MKABI DDILIST OFFS] [-o OUT | --stand DIR]
+    kabi-sidecar030.py ETREL BREL --family generic --module FILL [--abi ABI --mkabi MKABI DDILIST OFFS]
+        [--kbootset-min FILE] [-o OUT | --stand DIR]
     kabi-sidecar030.py --check ETREL BREL SIDECAR --module FILL [--abi ABI --mkabi MKABI DDILIST OFFS]
+        [--kbootset-min FILE]
 
 The 030 kit ships the brel (elf2brel's output); the ET_REL it was made from is the only place the symbols are.
 One key=value per line, in C2-3's order: kabi, family, line, pin, build, size, sha256, bss, loader-min, root,
@@ -27,7 +29,9 @@ layout of dlm_ident, dlm_arena and dlm_ksym -- and, through stage 3, root=/rootf
 §3: kbootset's gate 3 needs them). --abi ABI (the build's step-9 `mkabi.py
 --check` output, abi=<64 hex>) adds abi= (C3-3 §4); with --mkabi this tool re-runs `MKABI --text` on ETREL with DDILIST and
 OFFS (the step-2 dlm_offs.h) and the two must agree. --sym SYM (C2-3 version 6) adds sym=unix.sym <size> <sha256> for
-the brel's symbols file beside unix; its `end` must be the image size plus bss=.
+the brel's symbols file beside unix; its `end` must be the image size plus bss=. --kbootset-min FILE (C2-3 version 10;
+a module kernel only) adds kbootset-min=, FILE's one line copied verbatim: the module core's core/kbootset-min, the
+oldest kbootset package version that can compose the kernel; it must be in that version form (1.1.0.yymmdd-nn).
 No timestamps: the same files give the same bytes. -o OUT writes the sidecar there (default: BREL's directory/
 kabi); --stand DIR lays out the package's files instead: DIR/stand/k30/unix (a copy of BREL) and DIR/stand/k30/kabi.
 """
@@ -209,7 +213,7 @@ def sym_key(sym, conv):
     return [("sym", "%s %d %s" % (os.path.basename(sym), len(b), hashlib.sha256(b).hexdigest()))]
 
 
-def sidecar(etrel, brel, family, pin, fill=None, abi=None, mkabi=None, sym=None, sdcards=2):
+def sidecar(etrel, brel, family, pin, fill=None, abi=None, mkabi=None, sym=None, sdcards=2, kbmin=None):
     k = kc.Kernel(etrel)
     if "kinfoopen" not in k.index or "kinfo_kabi" not in k.index:
         die("%s does not carry kinfo (build-cross-kernel.sh --kinfo)" % etrel)
@@ -235,7 +239,9 @@ def sidecar(etrel, brel, family, pin, fill=None, abi=None, mkabi=None, sym=None,
             ("size", str(len(raw))), ("sha256", hashlib.sha256(raw).hexdigest()), ("bss", str(conv.bsssize)),
             ("loader-min", "2"), ("root", ",".join(root_keys(k)))] + ([("rootfs", ",".join(fs))] if fs else [])
             + sdcards_key(sdcards) + module_keys(k, conv, fill) + (abi_key(etrel, abi, mkabi) if abi else []) + (sym_key(sym, conv) if sym else [])
-            + rth1_key(k))
+            + rth1_key(k) + kbmin_key(kbmin))
+    if kbmin:
+        die("--kbootset-min is for a module kernel (--module): C2-3 version 10")
     lines = [
         ("kabi", kabi),
         ("family", family),
@@ -259,6 +265,22 @@ def rth1_key(k):
         i = k.index.get(n)
         return i is not None and (k.b[k.so + i * k.se + 12] & 0xF) == 2   # STT_FUNC
     return [("rth1", "2")] if func("rth1_moboid") and func("rth1_apply") else []
+
+
+KBMIN_FORM = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]{6}-[0-9]+")
+
+
+def kbmin_key(path):
+    """kbootset-min= (kernel/dlm C2-3 v10): the module core's core/kbootset-min, exactly one line in the kbootset
+    package's version form (1.1.0.261101-34), copied verbatim; none without --kbootset-min"""
+    if not path:
+        return []
+    lines = open(path).read().split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    if len(lines) != 1 or not KBMIN_FORM.fullmatch(lines[0]):
+        die("%s: not one line in the kbootset version form (1.1.0.yymmdd-nn): %r" % (path, lines))
+    return [("kbootset-min", lines[0])]
 
 
 def sdcards_key(n):
@@ -290,6 +312,23 @@ def selftest():
     ok('no rth1= for the old rth1.c (rth1_apply alone)', rth1_key(kern(rth1_apply=0x12)) == [])
     ok('no rth1= when rth1_moboid is not a function', rth1_key(kern(rth1_moboid=0x01, rth1_apply=0x12)) == [])
     ok('no rth1= without rth1_apply', rth1_key(kern(rth1_moboid=0x02)) == [])
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        def kbm(text):
+            pth = os.path.join(td, "kbootset-min")
+            with open(pth, "w") as fh:
+                fh.write(text)
+            try:
+                return kbmin_key(pth)
+            except SystemExit:
+                return "refused"
+        ok('kbootset-min= copied verbatim from core/kbootset-min', kbm("1.1.0.261101-34\n") == [('kbootset-min', '1.1.0.261101-34')])
+        ok('kbootset-min: a file without its newline is the same line', kbm("1.1.0.261101-34") == [('kbootset-min', '1.1.0.261101-34')])
+        ok('kbootset-min: two lines refused', kbm("1.1.0.261101-34\n1.1.0.261101-35\n") == "refused")
+        ok('kbootset-min: not the version form refused', kbm("-34\n") == "refused")
+        ok('kbootset-min: a trailing blank refused (verbatim, never trimmed)', kbm("1.1.0.261101-34 \n") == "refused")
+        ok('kbootset-min: an empty file refused', kbm("") == "refused")
+    ok('no kbootset-min= without --kbootset-min (recorded cuts keep their bytes)', kbmin_key(None) == [])
     print('kabi-sidecar030: %d checks, %d failed' % (n, f))
     print('kabi-sidecar030: SELFTEST PASS' if f == 0 else 'kabi-sidecar030: SELFTEST FAIL')
     return 0 if f == 0 else 1
@@ -312,13 +351,15 @@ def main(argv=None):
     ap.add_argument("--mkabi", nargs=3, metavar=("MKABI", "DDILIST", "OFFS"))
     ap.add_argument("--sym", metavar="SYM")
     ap.add_argument("--sdcards", type=int, default=2, help="4 on a build-cross-kernel.sh --sd-cards 4 kernel")
+    ap.add_argument("--kbootset-min", metavar="FILE", help="the module core's core/kbootset-min (C2-3 v10)")
     a = ap.parse_args(argv)
     if a.check:
         if not a.sidecar:
             ap.error("--check ETREL BREL SIDECAR")
         have = open(a.sidecar).read()
         kv = dict(ln.split("=", 1) for ln in have.splitlines() if "=" in ln)
-        want = sidecar(a.etrel, a.brel, kv.get("family", ""), kv.get("pin", ""), a.module, a.abi, a.mkabi, a.sym, a.sdcards)
+        want = sidecar(a.etrel, a.brel, kv.get("family", ""), kv.get("pin", ""), a.module, a.abi, a.mkabi, a.sym, a.sdcards,
+                       a.kbootset_min)
         if have != want:
             print("kabi-sidecar030: %s differs from what this tool writes:\n%s" % (a.sidecar, want), end="")
             return 1
@@ -326,7 +367,8 @@ def main(argv=None):
         return 0
     if not a.family:
         ap.error("--family NAME")
-    text = sidecar(a.etrel, a.brel, a.family, a.pin or default_pin(), a.module, a.abi, a.mkabi, a.sym, a.sdcards)
+    text = sidecar(a.etrel, a.brel, a.family, a.pin or default_pin(), a.module, a.abi, a.mkabi, a.sym, a.sdcards,
+                   a.kbootset_min)
     if a.stand:
         d = os.path.join(a.stand, "stand", "k30")
         os.makedirs(d, exist_ok=True)
