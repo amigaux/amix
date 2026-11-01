@@ -100,6 +100,12 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -16 (2026-11-01): amix d539cf9 (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -15 (abi texts, headers, tools unchanged): C3-6 v10 in docs/ (z3660rtg's
+# parameters and its window above VSECT1); k46 headers from the port at
+# 392a44e (kernel/port/port.pin; immu.h and param.h as at b0f1d86).
+# Built in the build container; the digests equal `make -C build kit` at
+# d539cf9.  -15 at 3c3e353: k30 673872a4..., k46 34ac8a19...
 # -15 (2026-10-31): amix 3c3e353 (KIT_REV), kabi k30.1.4 / k46.1.4 as
 # -14 (abi texts unchanged): modcheck reports a demand-class load's peak and
 # what it keeps, and says such a load fails with ENOMEM on short memory
@@ -118,21 +124,21 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=3c3e353
+DK_DLM_COMMIT=d539cf9
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=3c3e353
+DK_MONSW_COMMIT=d539cf9
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
-DK_K46_PORT_COMMIT=b0f1d86
+DK_K46_PORT_COMMIT=392a44e
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
-DK_K46_PORT_HASH=b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
-DK_K30_MANIFEST=673872a4ee1c590a2802fe15ba99d7e31d3a6355865c361c3d83a9d0888659f3
-DK_K46_MANIFEST=34ac8a198ec22e59e14d98bd845e82b402bd89d59fd79ff03f50a54ad579edf5
+DK_K46_PORT_HASH=392a44e1dda2bb2e8cd2ab294b00830bf04e07e0
+DK_K30_MANIFEST=672edbba293c647a66c0d651d4a0add0dd4f8cf3234c8a5e16457d192e4aa4ff
+DK_K46_MANIFEST=cc4c3200153ac23bf2833f7377a084aabd4d5a8760839d7b89c2e12787a48233
 
-DK_DATE=261031
-DK_REV=15
-DK_SOURCE_EPOCH=1793404800
+DK_DATE=261101
+DK_REV=16
+DK_SOURCE_EPOCH=1793491200
