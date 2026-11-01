@@ -13,4 +13,7 @@ stage() {
 	# installer laid them
 	ln "$DEST/etc/init.d/syslogd" "$DEST/etc/rc2.d/S70syslogd"
 	ln "$DEST/etc/init.d/syslogd" "$DEST/etc/rc0.d/K50syslogd"
+	mkdir -p "$DEST/opt/amix/doc/syslog"
+	cp LICENSE "$DEST/opt/amix/doc/syslog/LICENSE"
+	chmod 0644 "$DEST/opt/amix/doc/syslog/LICENSE"
 }

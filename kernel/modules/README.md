@@ -6,11 +6,17 @@ each built for both kernel lines (k30, k46) with the ABI kit from kernel/dlm and
 packages (`<name>-k30` / `<name>-k46`, C3-5). A hardware driver keeps its module with the driver
 (z3660eth, z3660rtg, a4091, gayle-ide, z3660scsi).
 
+Everything here is MIT (`LICENSE`) except `zz9ksvc/`, which carries the ZZ9000 SDK headers and is
+GPL-3.0-or-later (`zz9ksvc/LICENSE`); its packages say so, and the interface board drivers use with
+it, `include/sys/zz9kbus.h` and the `zz9kbus` module, is MIT.
+
 | Module | Class | Majors | Origin |
 |---|---|---|---|
 | `monsw` | demand | c 52 | the console monitor switch; moved from amix-040-060-port `src/monsw.c` (2026-10-26) |
 | `ramdisk` | root | b 20 | the RAM disk: unit 0 the loader-placed miniroot image, units 1–2 scratch disks; replaces the stock `ram` driver (2026-10-26) |
 | `random` | demand | c 48 | `/dev/random` and `/dev/urandom`: ChaCha20 with fast key erasure, and the seed kept across reboots (2026-10-31, 1.1) |
+| `zz9kbus` | boot | — | the registry between ZZ9000-family board drivers and `zz9ksvc` (`include/sys/zz9kbus.h`); MIT (2026-11-01) |
+| `zz9ksvc` | demand | c 55 | `/dev/zz9ksvcN`, the service channel of a ZZ9000-family board's second ARM core: per-open buffers by handle, checked requests, bounded waits, mmap by handle; GPL-3.0-or-later (2026-11-01) |
 
 Layout, per module (`monsw/README.md` is the worked example):
 
@@ -29,7 +35,8 @@ Layout, per module (`monsw/README.md` is the worked example):
 `pkg/kmod.sh` is the body every `<module>/pkg/build.sh` sources: it rolls each line through
 build/pkg's `kmodpkg`, with the checkout as `KM_ROOT`.
 
-`include/sys/` holds the published interface headers (`sys/monsw.h`). The ABI kit of
+`include/sys/` holds the published interface headers (`sys/monsw.h`, and `sys/zz9kbus.h`, the
+interface between ZZ9000-family board drivers and `zz9ksvc`). The ABI kit of
 `kernel/dlm` copies them, so a module that calls another module builds against the kit alone.
 
 Build every module of a line with the kit of `kernel/dlm` and the pinned gcc-cross-amix

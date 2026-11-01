@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-01 — swapadd guard; cut 68030-261101-67
+
+- swap -a of an area whose anon array finds no free run in kvseg now fails at once with ENOMEM ("swap: Not enough space", exit 2) instead of sleeping for ever; the boot-time add of the swap slice's tail no longer hangs. On by default; --no-swap-guard builds the previous kernel byte for byte (1dff121).
+- Cut 68030-261101-67 and kern30m -67: -66's recipe with the guard and module core 0050; kabi k30.1.4 and abi unchanged. unix f81868da, brel d427c428, kern30m 53d57a18 (6be370b).
+
 ## 2026-10-31 — cut 68030-261031-66 with core patch 0049; kern30m -66 (b7d78d9)
 
 -65's recipe from amix 3c3e353, whose core patch 0049 makes a first-use load never wait for memory and frees the

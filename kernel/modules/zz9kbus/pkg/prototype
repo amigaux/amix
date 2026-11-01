@@ -1,0 +1,14 @@
+# prototype -- zz9kbus-<line> (zz9kbus30, zz9kbus46): the module object and the package's
+# defaults (amix-dlm C3-5 sec 1).  The same paths on both lines.
+#
+# AUTHORED, NOT GENERATED: build.sh hands it to kmodpkg, which runs pkgmk.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright only.  No
+# device node: the module has no major.
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/zz9kbus 0644 root sys
+f none /etc/conf/modreg.d/zz9kbus 0644 root sys

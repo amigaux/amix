@@ -21,7 +21,8 @@
 # This file is written in place on update, never moved, so the S link stays
 # the same file.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
 DEVNODES_DB=${DEVNODES_DB:-/var/sadm/install/contents}
@@ -100,7 +101,7 @@ do
 '
 			continue
 		fi
-		rm -f "$n"
+		rm -f "${n:?}"
 		if mknod "$n" $3 $5 $6 && chmod $7 "$n"
 		then
 			rc_log mknod "made $n $3 $5 $6"

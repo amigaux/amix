@@ -9,7 +9,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-syslogd.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -48,7 +48,7 @@ run() { # run start|stop [rc.conf line]
 	    SYSLOG_DIR="$T/log" M4="${M4:-$T/bin/m4}" $SH "$here/syslogd" "$1" 2>&1
 }
 
-rm -f "$T/syslog.pid"
+rm -f "${T:?}/syslog.pid"
 o=$(run start)
 same "start: the daemon ran" "started" "$(cat "$T/calls")"
 same "start: the log files made, each once" "kernel
@@ -72,7 +72,7 @@ o=$(run start)
 same "stale pid: started" "started" "$(cat "$T/calls")"
 
 # rc.conf says no
-rm -f "$T/syslog.pid"
+rm -f "${T:?}/syslog.pid"
 o=$(run start "syslogd=no")
 same "syslogd=no: nothing" "" "$(cat "$T/calls")"
 

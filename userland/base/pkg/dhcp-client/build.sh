@@ -24,5 +24,6 @@ stage() {
 	put 0755 dhcpc.out /usr/sbin/dhcpc
 	put 0644 dhcpc/dhcpc.1m /opt/amix/man/1m/dhcpc
 	put 0644 dhcpc/dhcpc.whatis /opt/amix/man/whatis.d/dhcpc
+	put 0644 LICENSE /opt/amix/doc/dhcp-client/LICENSE
 	mkdir -p "$DEST/var/inet/dhcpc"
 }

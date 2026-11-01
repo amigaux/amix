@@ -69,6 +69,7 @@ stage() {
 	mkdir -p "$DEST$PREFIX/bin" "$DEST$PREFIX/doc/tar"
 	cp src/tar "$DEST$PREFIX/bin/tar"
 	cp COPYING NEWS README "$DEST$PREFIX/doc/tar/"
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/tar/LICENSE.amix"; chmod 0644 "$DEST$PREFIX/doc/tar/LICENSE.amix"	# our files in this package: MIT
 	chmod 0755 "$DEST$PREFIX/bin/tar"
 	chmod 0644 "$DEST$PREFIX/doc/tar"/*
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)

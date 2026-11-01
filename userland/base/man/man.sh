@@ -24,7 +24,8 @@
 #
 # Bourne sh of 1991: no $(...), no test -nt, no local.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 TREE=${AMIX_MANTREE:-/opt/amix/man}
 CATS=${AMIX_CATTREE:-/var/opt/amix/catman}
@@ -116,7 +117,7 @@ show() {
 			cat "$c"
 			return
 		fi
-		rm -f "$tmp"
+		rm -f "${tmp:?}"
 	fi
 	format "$2"
 }

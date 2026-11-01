@@ -43,6 +43,15 @@ MUL.L/DIV.L with extension bit 10 (the 64-bit forms), and the movep, cmp2,
 chk2 and cas2 the 68060 also lacks.  Every function label must fall on an
 instruction start in the final listing, or the verdict is "untrustworthy".
 
+Known stock data in .text: a few stock archive members that programs link
+keep tables in .text as local symbols (crypt(3)'s DES tables in libc's
+crypt.o and libcrypt.a's des_crypt.o).  KNOWN_STOCK_DATA names each member by
+its archive in the sysroot ($AMIX_SYSROOT), its sha256 and those symbols.  A
+member whose sha256 differs is a problem.  Otherwise its .text is looked for
+in the program, its relocated bytes masked, and where it is found exactly,
+each listed symbol's range (to the member's next symbol) is data, like a
+sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied.
+
 --explain HITFILE: read scan060.py's output and say, for every hit address it
 lists, whether it lies inside a table sized here (data, not code).  Exit 1 if
 any hit is unexplained.  This is how the gcc14 gate keeps scan060.py as an
@@ -50,6 +59,7 @@ independent decoder instead of dropping it.
 
 MIT, amix-packages.
 """
+import hashlib
 import os
 import re
 import struct
@@ -68,6 +78,17 @@ MOVEQ = re.compile(r"^#(-?\d+),%(d[0-7])$")
 CMPL_REG = re.compile(r"^%(d[0-7]),%(d[0-7])$")            # cmpl %dX,%dY
 MNEM_OTHER = re.compile(r"^(movep|cmp2|chk2|cas2)")
 LOOKBACK = 16
+
+# Stock archive members (relative to the sysroot) whose named local symbols in
+# .text are data, not code.
+KNOWN_STOCK_DATA = (
+    ("usr/ccs/lib/libc.so", "crypt.o",
+     "4af415c472ab5916313b324b61478159f485a73f0c4bd095c868dc03b4219d58",
+     ("IP", "FP", "PC1_C", "PC1_D", "shifts", "PC2_C", "PC2_D", "e2")),
+    ("usr/lib/libcrypt.a", "des_crypt.o",
+     "57ab906ac374ea2c78fb25a5b6814bf0f2da30499b33845a8f08cab45fd4c195",
+     ("IP", "FP", "PC1_C", "PC1_D", "shifts", "PC2_C", "PC2_D", "e2", "S", "P")),
+)
 
 
 def die(msg, code=2):
@@ -129,6 +150,105 @@ def func_symbols(data):
             if info & 0xf == 2 and sz:                  # STT_FUNC
                 out.add((val, val + sz))
     return out
+
+
+def ar_member(path, name):
+    """The bytes of member NAME of the ar archive at PATH, or None."""
+    d = open(path, "rb").read()
+    if d[:8] != b"!<arch>\n":
+        return None
+    o = 8
+    while o + 60 <= len(d):
+        h = d[o:o + 60]
+        size = int(h[48:58].decode().strip() or 0)
+        if h[:16].decode("latin-1").strip().rstrip("/") == name:
+            return d[o + 60:o + 60 + size]
+        o += 60 + size + (size & 1)
+    return None
+
+
+def member_text(obj):
+    """(.text bytes, set of relocated byte offsets, {symbol: (start, end)})
+    of a relocatable ELF32 big-endian object; each symbol in .text runs to
+    the next symbol or the section's end."""
+    shoff = struct.unpack(">I", obj[32:36])[0]
+    shentsize, shnum, shstrndx = struct.unpack(">HHH", obj[46:52])
+    sh = [struct.unpack(">10I", obj[shoff + i * shentsize: shoff + i * shentsize + 40]) for i in range(shnum)]
+    names = sh[shstrndx]
+
+    def nm(off, tab):
+        e = obj.index(b"\0", tab[4] + off)
+        return obj[tab[4] + off:e].decode("latin-1")
+    ti = [i for i, s in enumerate(sh) if nm(s[0], names) == ".text"][0]
+    text = obj[sh[ti][4]:sh[ti][4] + sh[ti][5]]
+    masked = set()
+    syms = []
+    for s in sh:
+        if s[1] == 4 and s[7] == ti:                    # SHT_RELA for .text
+            for k in range(s[5] // 12):
+                r = struct.unpack(">I", obj[s[4] + 12 * k: s[4] + 12 * k + 4])[0]
+                masked.update(range(r, r + 4))
+        if s[1] == 2:                                   # SHT_SYMTAB
+            strtab = sh[s[6]]
+            for k in range(s[5] // 16):
+                n, val, _sz, _info, _oth, shndx = struct.unpack(">IIIBBH", obj[s[4] + 16 * k: s[4] + 16 * k + 16])
+                if shndx == ti and n:
+                    syms.append((val, nm(n, strtab)))
+    starts = sorted(set(v for v, _n in syms)) + [len(text)]
+    ranges = {}
+    for v, n in syms:
+        ranges[n] = (v, min(x for x in starts if x > v) if v < len(text) else v)
+    return text, masked, ranges
+
+
+def find_text(data, secs, text, masked):
+    """Program addresses where TEXT appears in an executable section, the
+    bytes at MASKED offsets (relocated) not compared."""
+    anchor, a_off, run = b"", 0, 0
+    for i in range(len(text) + 1):
+        if i < len(text) and i not in masked:
+            run += 1
+            continue
+        if run > len(anchor):
+            anchor, a_off = text[i - run:i], i - run
+        run = 0
+    if len(anchor) < 16:
+        return []
+    found = []
+    for sa, so, sz in secs:
+        sec = data[so:so + sz]
+        f = sec.find(anchor)
+        while f >= 0:
+            base = f - a_off
+            if base >= 0 and base + len(text) <= sz and all(
+                    sec[base + i] == text[i] for i in range(len(text)) if i not in masked):
+                found.append(sa + base)
+            f = sec.find(anchor, f + 1)
+    return found
+
+
+def known_data(data, secs, sysroot):
+    """-> ([(start, end)], [notes], [problems]) for KNOWN_STOCK_DATA in a
+    program."""
+    ranges, notes, problems = [], [], []
+    for archive, member, want, symbols in KNOWN_STOCK_DATA:
+        path = os.path.join(sysroot, archive)
+        obj = ar_member(path, member) if os.path.isfile(path) else None
+        if obj is None:
+            continue
+        got = hashlib.sha256(obj).hexdigest()
+        if got != want:
+            problems.append("known stock member %s(%s) has sha256 %s, not the listed %s"
+                            % (archive, member, got[:16], want[:16]))
+            continue
+        text, masked, syms = member_text(obj)
+        for base in find_text(data, secs, text, masked):
+            for s in symbols:
+                if s in syms:
+                    ranges.append((base + syms[s][0], base + syms[s][1]))
+            notes.append("known stock data at 0x%08x: %s(%s) %s, sha256 %s"
+                         % (base, os.path.basename(archive), member, " ".join(symbols), want[:16]))
+    return ranges, notes, problems
 
 
 def function_bounds(labels, secs, data=None):
@@ -561,7 +681,11 @@ def scan(tool, path):
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
     pts = function_bounds(labels, secs, data)
+    sysroot = os.environ.get("AMIX_SYSROOT", "")
+    known, knotes, kproblems = known_data(data, secs, sysroot) if sysroot else ([], [], [])
     skip, problems, notes = find_tables(insns, labels, data, secs, pts)
+    skip |= set(known)
+    problems += kproblems
     for _round in range(6):
         if not skip:
             break
@@ -601,7 +725,8 @@ def scan(tool, path):
     sized = {s for s, _e in skip}
     notes = [n for n in notes if int(re.match(r"^dispatch at 0x([0-9a-f]+)", n).group(1), 16) + 4 in sized]
     return dict(insns=len(insns), tables=sorted(skip), problems=problems,
-                desync=desync, hits=hits, total_long=total_long, notes=notes)
+                desync=desync, hits=hits, total_long=total_long, notes=notes + knotes,
+                known=len(set(known)))
 
 
 def explain(tables, hitfile):
@@ -649,8 +774,9 @@ def main(argv):
                       % (name, len(unexplained), len(addrs), " ".join("%08x" % a for a in unexplained)))
                 rc = max(rc, 1)
             else:
-                print("  explained %s: %d scan060.py hit(s) -- %d inside the %d sized switch tables (data), "
-                      "%d at odd addresses (decode out of sync)" % (name, len(addrs), len(intab), len(r["tables"]), len(odd)))
+                print("  explained %s: %d scan060.py hit(s) -- %d inside the %d sized switch tables and known "
+                      "stock data ranges (data), %d at odd addresses (decode out of sync)"
+                      % (name, len(addrs), len(intab), len(r["tables"]), len(odd)))
             continue
         if r["problems"] or r["desync"]:
             print("  UNTRUSTWORTHY %s:" % name)
@@ -659,13 +785,13 @@ def main(argv):
             rc = max(rc, 3)
             continue
         if r["hits"]:
-            print("  HITS %d %s (%d insns, %d switch tables sized):" % (len(r["hits"]), name, r["insns"], len(r["tables"])))
+            print("  HITS %d %s (%d insns, %d switch tables sized):" % (len(r["hits"]), name, r["insns"], len(r["tables"]) - r["known"]))
             for h in r["hits"]:
                 print("    " + h)
             rc = max(rc, 1)
             continue
         print("  CLEAN %s (%d insns, %d switch tables sized, %d long mul/div, none 64-bit; no movep/cmp2/chk2/cas2)"
-              % (name, r["insns"], len(r["tables"]), r["total_long"]))
+              % (name, r["insns"], len(r["tables"]) - r["known"], r["total_long"]))
         for n in r["notes"]:
             print("    NOTE " + n)
     return rc

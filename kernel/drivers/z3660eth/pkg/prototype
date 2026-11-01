@@ -1,0 +1,27 @@
+#
+# prototype -- z3660eth-<line>: the module object, the package's defaults,
+# the driver's link.d entry and the node of its major (amix-dlm C3-5 sec 1).
+# The same paths on both lines: a box carries the package of its kernel's
+# line.
+#
+# AUTHORED, NOT GENERATED: kmodpkg runs pkgmk on it.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright
+# only, no scripts.  /etc and /dev are the stock core's directories, declared
+# with core's attributes; /etc/conf and below are shared by every module
+# package; /etc/inet/link.d is declared as amix-base declares it.  The node
+# /dev/zen0 is a device entry in the module's class, z3660eth, which
+# pkginfo's CLASSES lists (C3-5 sec 1.2); the class has no action script, so
+# stock pkgadd lays it and pkgrm removes it as a none object.  Mode 0600, as
+# ifup makes a missing node.
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/z3660eth 0644 root sys
+f none /etc/conf/modreg.d/z3660eth 0644 root sys
+d none /etc/inet/link.d 0755 root sys
+f none /etc/inet/link.d/z3660eth 0444 root sys
+d none /dev 0755 bin bin
+c z3660eth /dev/zen0 51 0 0600 root root

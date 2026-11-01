@@ -12,7 +12,8 @@
 # Installed as /usr/sbin/ifdown. Exit 0 when every interface asked for is
 # down, 1 otherwise.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
 IF_SUBR=${IF_SUBR:-/usr/lib/inet/ifup.subr}

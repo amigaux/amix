@@ -77,7 +77,7 @@ amix_kfsmod_check() {
 	grep -qx "LINE=$_kf_line" "$_kf_kit/kit.conf" && grep -qx "KABI=$_kf_kabi" "$_kf_kit/kit.conf" || {
 		echo "[FAIL] $_kf_kit is not the $_kf_line kit of kabi $_kf_kabi" >&2; exit 1; }
 	_kf_pin=$(sed -n 's/^PIN=//p' "$_kf_kit/kit.conf")
-	rm -rf "$_kf_out"; mkdir -p "$_kf_out"; cp "$_kf_obj" "$_kf_out/$_kf_fs"
+	rm -rf "${_kf_out:?}"; mkdir -p "${_kf_out:?}"; cp "${_kf_obj:?}" "${_kf_out:?}/$_kf_fs"
 	amix_kfsmod_modcheck "$_kf_kit" "$_kf_out/$_kf_fs" "$_kf_out/modcheck.out" || {
 		cat "$_kf_out/modcheck.out" >&2; echo "[FAIL] modcheck refuses $_kf_fs ($_kf_line)" >&2; exit 1; }
 	grep -q "^modcheck: $_kf_fs: ok ($_kf_mkabi, boot, " "$_kf_out/modcheck.out" || {
@@ -95,7 +95,7 @@ amix_kfsmod_check() {
 
 amix_kfsmod_rebuild() {
 	_kr_line=$1 _kr_fs=$2 _kr_carve=$3 _kr_obj=$4 _kr_kit=$5 _kr_w=$6 _kr_x=${7:-}
-	rm -rf "$_kr_w"; mkdir -p "$_kr_w"
+	rm -rf "${_kr_w:?}"; mkdir -p "${_kr_w:?}"
 	for _kr_f in Makefile Master "${_kr_fs}_wrap.c"; do
 		cp "$_kr_carve/$_kr_f" "$_kr_w/" || { echo "[FAIL] no $_kr_carve/$_kr_f" >&2; exit 1; }
 	done

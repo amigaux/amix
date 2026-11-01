@@ -10,7 +10,7 @@
 set -e
 B=${B:-build}
 T=$B/knode
-rm -rf $T && mkdir -p $T
+rm -rf "${T:?}" && mkdir -p $T
 R=$T/root
 
 # tree ROOT FIRST LAST D1: c<FIRST>..c<LAST> d0 s0-s7 as files, and the d1
@@ -67,7 +67,7 @@ grep -qx "would make /dev/dsk/c1fd0s7 b 18 255" $T/out
 grep -qx "kbootset: nodes: the host build writes nothing: 256 to make, 256 d1 nodes to remove, core's registration left to the booted box" $T/out
 
 # 3. the complete set, registered: nothing to do
-rm -rf $R/dev && tree $R 0 1f n
+rm -rf "${R:?}/dev" && tree $R 0 1f n
 printf '/dev/dsk/c0d0s0 b none 18 0 0600 root root core\n/dev/rdsk/c1fd0s7 c none 40 255 0600 root root core\n' \
 	> $R/var/sadm/install/contents
 $B/kbootset -R $R nodes > $T/out

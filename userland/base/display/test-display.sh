@@ -10,7 +10,7 @@ set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-display.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 
 ok() { pass=$((pass + 1)); }
@@ -98,7 +98,7 @@ o=$(run -n card=native mode=800x600)
 expect "native ignores a mode" "native picks its own mode; mode 800x600 ignored" "$o"
 
 # --- a card by name whose node is not there; a card that does not exist
-rm -f "$T/dev/zz9000"
+rm -f "${T:?}/dev/zz9000"
 o=$(run -n)
 expect "named card absent" "z3660: its node $T/dev/zz9000 does not open" "$o"
 o=$(run -n card=va2000)
@@ -118,7 +118,7 @@ expect "session: ~/.xinitrc" "session  $T/home/.xinitrc" "$o"
 : > "$T/home/.xsession"
 o=$(run -n)
 expect "session: ~/.xsession first" "session  $T/home/.xsession" "$o"
-rm -f "$T/home/.xsession" "$T/home/.xinitrc"
+rm -f "${T:?}/home/.xsession" "${T:?}/home/.xinitrc"
 
 # --- a run: xinit with the session and the server's line
 conf <<'EOF'
@@ -159,7 +159,7 @@ env      SCREEN_GROUP=%n
 restore  $B/kbdback
 EOF
 printf 'card live\n' | conf
-rm -f "$T/die"
+rm -f "${T:?}/die"
 o=$(XI=$B/xlive XS=$T/livesession run :10)
 expect "env: the server has it" "server SG=10 :10" "$(cat "$T/calls")"
 expect "env: the session does not" "client SG=unset" "$(cat "$T/calls")"
@@ -168,7 +168,7 @@ refuse "normal end: no restore" "restore" "$(cat "$T/calls")"
 o=$(XI=$B/xlive XS=$T/livesession run :10)
 expect "server died: restore ran" "restore" "$(cat "$T/calls")"
 expect "server died: said" "the server ended on its own; running $B/kbdback" "$o"
-rm -f "$T/die"
+rm -f "${T:?}/die"
 same "wrappers removed" "" "$(ls "$T/tmp")"
 o=$(run -n card=live)
 expect "-n: env for the server only" "(env for the server only)" "$o"
@@ -181,12 +181,12 @@ same "no env or restore: no wrapper" "xinit $T/xsession -- $B/Xzz :0 -mode 640x4
 printf 'card native\n' | conf
 o=$(run -xdm :10)
 same "env: in xdm's line" "xdm -server :10 local /usr/bin/env SCREEN_GROUP=10 $B/Xnat :10" "$(cat "$T/calls")"
-rm -f "$T/d/live"
+rm -f "${T:?}/d/live"
 # a restore that is not a full path is a mistake
 printf 'server %s\nrestore kbdback\n' "$B/Xnat" > "$T/d/zbad"
 o=$(run -n card=native)
 expect "restore not a full path: said" "$T/d/zbad:2: restore is a command by its full path" "$o"
-rm -f "$T/d/zbad"
+rm -f "${T:?}/d/zbad"
 
 # --- the monitor switch: the tool around the session when no monsw module
 printf 'card z3660\nmonsw 34\n' | conf
@@ -236,7 +236,7 @@ expect "mistakes: -n status 1" "rc=1" "$o"
 sed -i '$d' "$T/d/native"
 
 # --- no card answers at all
-rm -f "$T/dev/console" "$T/dev/zz9000"
+rm -f "${T:?}/dev/console" "${T:?}/dev/zz9000"
 conf < /dev/null
 o=$(run -n)
 expect "nothing answers" "no display card answers" "$o"

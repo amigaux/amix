@@ -16,9 +16,9 @@ set -e
 R=$(cd "$(dirname "$0")/../../.." && pwd)
 LINE=$1 KERNEL=$2 SIDECAR=$3 ETREL=$4 ROOTREC=$5 SLICE=$6 OUT=$7
 [ -n "$OUT" ] || { echo "usage: handover.sh LINE KERNEL SIDECAR ETREL ROOTREC SLICEBYTES OUTDIR" >&2; exit 2; }
-rm -rf "$OUT" && mkdir -p "$OUT"
+rm -rf "${OUT:?}" && mkdir -p "$OUT"
 KERNEL=$ETREL sh "$R/tests/bench/s3-43/mkset.sh" "$R/build/kit/$LINE" "$OUT"
-rm -rf "$OUT/work"
+rm -rf "${OUT:?}/work"
 sh "$R/tests/bench/s3-43/boot2.sh" "$KERNEL" "$SIDECAR" "$OUT/boot2" "$ROOTREC" "$SLICE"
 mv "$OUT/boot2/l14.spec" "$OUT/boot2/l5.img" "$OUT/"
 (cd "$OUT" && find tree s43 verdicts.txt l14.spec l5.img -type f | sort | xargs sha256sum) > "$OUT/SHA256SUMS"

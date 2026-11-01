@@ -75,7 +75,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH=
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
@@ -164,7 +164,7 @@ mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
 # --- 1. the source: fetched and verified before extraction, or copied -----------------
 echo "--- source ---"
-rm -rf "$TREE"
+rm -rf "${TREE:?}"
 if [ -n "$SRCTREE" ]; then
 	# in the tree: the commit pins it; the digest is for the record
 	mkdir -p "$TREE"
@@ -224,8 +224,22 @@ if grep -E 'implicit declaration|pointer from integer|integer from pointer' "$BU
 	exit 1
 fi
 echo "  no implicit declarations, no pointer/integer conversions"
+# PREBUILT (package.sh): payload paths of ELFs the package ships ready-made
+# from the pinned gcc14 prefix (libamixrt.so.1); each must be the bytes of a
+# file gcc14-pin.sh pins.  A build that then compiles nothing has no compile
+# line for the flags gate to read, and every ELF in its payload must be one
+# of them.
+compiled=yes
+if [ -n "$PREBUILT" ] && ! grep -F -- "$(basename "${AMIX_GCC14_CC:-m68k-elf-gcc}")" "$BUILD/make.log" |
+	grep -E -- '(^|[[:space:]])-c([[:space:]]|$)' >/dev/null; then
+	compiled=no
+fi
 if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
-	amix_gate_g14_strict "$BUILD/make.log"
+	if [ $compiled = yes ]; then
+		amix_gate_g14_strict "$BUILD/make.log"
+	else
+		echo "  STRICT n/a nothing compiled; the payload's ELFs are the pinned toolchain's: $PREBUILT"
+	fi
 	amix_gate_g14_compat "$BUILD/make.log"
 fi
 # TOOLCHAIN=none: nothing compiled.  common/nocc refuses $CC and the rest;
@@ -242,7 +256,7 @@ echo
 
 # --- 5. stage, then the prototype and the binaries ----------------------------------------
 echo "--- stage ---"
-rm -rf "$DEST"; mkdir -p "$DEST"
+rm -rf "${DEST:?}"; mkdir -p "${DEST:?}"
 stage
 # STOCK_ETC: stock defaults from amix-system's etc/, by path, each checked
 # against system/MANIFEST.sha256 (they never enter this repository)
@@ -307,6 +321,18 @@ for b in $BINS; do
 	0002|0003) ;;
 	*) echo "  ARCHIVE/OBJ $(basename "$b"): no undef gate, not stripped"; continue ;;
 	esac
+	prebuilt=no
+	case " $PREBUILT " in *" ${b#"$DEST"} "*) prebuilt=yes ;; esac
+	if [ $prebuilt = yes ]; then
+		s=$(sha256sum < "$b" | cut -c1-64)
+		echo "${AMIX_GCC14_PINS:-}" | awk '{print $2}' | grep -qx "$s" || {
+			echo "[FAIL] ${b#"$DEST"} is in PREBUILT, but no file gcc14-pin.sh pins has its sha256 $s" >&2
+			exit 1; }
+		echo "  PREBUILT ok ${b#"$DEST"}: a pinned gcc14 file, shipped as it is"
+	elif [ $compiled = no ]; then
+		echo "[FAIL] ${b#"$DEST"}: an ELF in a build that compiled nothing, not in PREBUILT" >&2
+		exit 1
+	fi
 	amix_gate_elf "$b"
 	# every undefined symbol must be defined by a shared object the binary
 	# records as NEEDED, found where the box's runtime linker finds it: a
@@ -315,6 +341,18 @@ for b in $BINS; do
 	# packages' trees, then in the sysroot -- and then in the sysroot's
 	# /usr/lib.  A NEEDED found nowhere fails.
 	libs=$("$OBJDUMP" -p "$b" | awk '$1 == "NEEDED" {print $2}' | tr '\n' ' ')
+	# a binary that needs the GCC 14 runtime library, libamixrt.so.1, needs
+	# the package that ships it: package.sh says so in DEPENDS (nothing adds
+	# it behind the recipe), except the amixrt package itself
+	case " $libs " in
+	*" libamixrt.so.1 "*)
+		case " $(echo "$DEPENDS" | tr ',' ' ') " in
+		*" amixrt "*) ;;
+		*) [ "$NAME" = amixrt ] || {
+			echo "[FAIL] $(basename "$b") NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" >&2
+			exit 1; } ;;
+		esac ;;
+	esac
 	rpath=$("$OBJDUMP" -p "$b" | awk '$1 == "RPATH" {print $2}' | tr ':' ' ')
 	files="" found=""
 	for n in $libs; do
@@ -344,19 +382,30 @@ for b in $BINS; do
 		}
 		files="$files $l" found="$found $n ($w)"
 	done
+	# a shared object takes from libc.so.1 without naming it: the interpreter
+	# is in every process (libamixrt.so.1 NEEDs nothing)
+	if [ "$(od -An -tx1 -j16 -N2 "$b" | tr -d ' ')" = 0003 ] && [ -f "$AMIX_SYSROOT/usr/lib/libc.so.1" ]; then
+		case " $files " in
+		*" $AMIX_SYSROOT/usr/lib/libc.so.1 "*) ;;
+		*) files="$files $AMIX_SYSROOT/usr/lib/libc.so.1" found="$found libc.so.1 (the interpreter)" ;;
+		esac
+	fi
 	for l in $files; do dso_syms "$l"; done | LC_ALL=C sort -u > "$BUILD/needed.syms"
-	missing=$("$NM" -u "$b" | awk '{print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
+	# strong references only: a weak one (w) may stay unresolved, as libamixrt's
+	# __amix_dso_batch does in a program that does not define it
+	missing=$("$NM" -u "$b" | awk '$1 == "U" {print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
 	echo "            found:$found"
-	$STRIP "$b"
+	# a prebuilt file keeps the pinned bytes
+	[ $prebuilt = yes ] || $STRIP "$b"
 done
 echo
 
 # --- 6. pkginfo from package.sh, roll ----------------------------------------------------
 echo "--- package ---"
 WORK="$BUILD/pkgwork"
-rm -rf "$WORK"; mkdir -p "$WORK"
+rm -rf "${WORK:?}"; mkdir -p "${WORK:?}"
 python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
 cp "$HERE/prototype" "$WORK/prototype"
 echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"

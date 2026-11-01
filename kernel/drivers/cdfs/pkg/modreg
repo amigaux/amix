@@ -1,0 +1,6 @@
+# /etc/conf/modreg.d/cdfs -- the cdfs module package's defaults (amix-dlm
+# C3-5 sec 1): one `param <name>=<value>` per default other than the
+# module's own, `disable` to ship it off.  None: cdfs has no parameters.
+# It is a demand-class module, loaded at its first mount; the line
+#   disable
+# in /etc/conf/modreg.local.d/cdfs, which no package owns, keeps it out.

@@ -7,7 +7,7 @@
 set -e
 B=${B:-build}
 [ -n "$AX_FLOPPIES" ] || { echo "inflate-kernels: AX_FLOPPIES unset, skipped"; exit 0; }
-T=$B/ik; rm -rf $T; mkdir -p $T
+T=$B/ik; rm -rf "${T:?}"; mkdir -p $T
 for adf in $AX_FLOPPIES; do
 	n=$(basename "$adf")
 	python3 -I - "$adf" "$T/$n.raw" "$T/$n.def" <<'PY'

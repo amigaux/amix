@@ -12,7 +12,8 @@
 # This file is written in place on update, never moved, so the S/K hard links
 # stay the same file.
 #
-# MIT licence, see LICENSE at the top of the repository.
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
 
 [ -d /usr/bin ] || exit 1		# /usr must be mounted
 

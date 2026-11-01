@@ -1,0 +1,7 @@
+# generated from keys by module/Makefile
+$modtype misc
+$class boot
+$match zorro:144b:01,mobo:z3660-window,zorro:6d6e:03,zorro:6d6e:04
+$unload never
+$desc ZZ9000-family board registry
+zz9kbus zz9kbus

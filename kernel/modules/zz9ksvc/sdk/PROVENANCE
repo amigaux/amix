@@ -1,0 +1,24 @@
+sdk/zz9k/ -- the ZZ9000 SDK v2 headers, copied verbatim (not one byte changed) from
+BlitterStudio/zz9000-firmware, https://github.com/BlitterStudio/zz9000-firmware.git,
+directory sdk/include/zz9k at tag v2.9.1, commit ffaf221b2600d5c0586f225dcb7721529e7b3bba
+(2026-10-28).  Each file carries its own notice, SPDX-License-Identifier: GPL-3.0-or-later;
+the licence text is ../LICENSE, copied from the same commit.
+
+To update: copy the directory from a newer tag, replace this file's tag, commit and sums,
+and rebuild; src/wire.c is the only file that includes these headers.
+
+sha256 of each file:
+36ba715f8612ad79f6ff9ba55831566156a47c5ed6dcd192527e4c447f9d23fa  abi.h
+dbcf1d537e03fecf2ea99a87958689b66bfeb1c2c8605abf516bdb2dba4b66d0  audio.h
+7758172bb4058c075846a6ce512500e204f40488c29b79329109ca0548fade11  batch.h
+8922eb9961151b750470acde4954cb630878c9d50929f010e842a70a536c9aa9  caps.h
+9e071191054f7c97602c1b73d594e83bd58bf4f1633c3829513181f02d4a505f  compression.h
+d2dc183a258f37853f70b087d23bb6d262493adc6a7fa46543199206b7a7fc91  crypto.h
+584e67a6d761545813ff429e1f8699ffa1a6819e7ece5b024b564b9cf5fe1d93  image_geometry.h
+c9c4ce5c0146d7202269856c8243d3562c510e764adf812027ec930e08cf166b  image.h
+a82090aacde429b3ba928b18cfa9ae7b8b8de07b6895576b46eb442855cd1af8  module.h
+0163e746ebc2fbb5cdfa2e5428603158bb67448d95e364cc21c1360c46062c4d  sdk.h
+b1e42cc75294f18ed60dd631005f43fc2c973a3ced11533df590f3304d96acda  service_registry.h
+5dfb6fa12841d7701af429ea1e1e82443674e2b763fa4e2ce88b9d9b8d454f96  shared.h
+d94eead9fd36bb8b54efc86c176a828b7aab463f7421162310f7ea1ebf159f4e  surface.h
+6163a135b49622c3218a9c0b1b98992a65a50feeab9a1d7d8640489856d3a756  text.h

@@ -32,6 +32,7 @@ f none /opt/amix/doc/python3/LICENSE 0644 root bin
 f none /opt/amix/doc/python3/LICENSE.port 0644 root bin
 f none /opt/amix/doc/python3/LICENSE.adapters 0644 root bin
 f none /opt/amix/doc/python3/README.rst 0644 root bin
+f none /opt/amix/doc/python3/LICENSE.amix 0644 root bin
 #
 # the standard library
 d none /opt/amix/lib 0755 root sys

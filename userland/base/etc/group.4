@@ -1,0 +1,83 @@
+.TH GROUP 4 "1 November 2026" "amix-base"
+.SH NAME
+group \- the group file
+.SH SYNOPSIS
+.B /etc/group
+.SH DESCRIPTION
+Each line of
+.B /etc/group
+is one group, four fields separated by colons:
+.PP
+.RS
+.IB name : password : gid : members
+.RE
+.PP
+.I name
+is the group's name,
+.I password
+is empty,
+.I gid
+its number and
+.I members
+the logins that have the group besides their own (their
+.B /etc/passwd
+group), separated by commas.
+.PP
+The base package ships the system's own file with the groups the add-on
+packages need added; a package that installs a file or device node owned by
+a group can be installed only when the group is in this file.
+.TP
+.B audio
+(gid 20) the sound device: its node is readable and writable by root and by
+the members of
+.BR audio .
+.SH ADDING A LOGIN TO A GROUP
+.B usermod \-G
+sets a login's whole list of extra groups, so name the ones it has as well;
+.B groups
+.I login
+prints them:
+.PP
+.RS
+.nf
+.ft CW
+groups jane
+usermod -G audio jane
+.ft R
+.fi
+.RE
+.PP
+for a login with no other extra groups, or
+.B "usermod \-G audio,games jane"
+when it is in
+.B games
+too.
+A new login gets the group with
+.BR "useradd \-G audio" .
+The change takes effect at the login's next login.
+.SH UPDATES
+The file is a configuration file of the base package: an update never
+overwrites a file that was changed (a group added, a member added), nor,
+on a system installed before the base package carried this file, the file
+it finds.
+It keeps the file and writes the new default as
+.BR /etc/group.new ,
+and the package tools list it as pending.
+When the new default only adds a group, add it to the kept file with
+.BR groupadd ,
+for example
+.B "groupadd \-g 20 audio"
+(any free number will do: packages name the group, not its number), then
+remove
+.BR /etc/group.new .
+.SH FILES
+.TP
+.B /etc/group
+.TP
+.B /etc/group.new
+a new default waiting to be merged.
+.SH SEE ALSO
+.BR groupadd (1M),
+.BR useradd (1M),
+.BR usermod (1M),
+.BR groups (1)

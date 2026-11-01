@@ -143,7 +143,7 @@ port_at_pin() {	# the port at kernel/port/port.pin, in out/cache/port
 	full_hash kernel/port/port.pin "$commit"
 	p=$out/cache/port
 	if [ "$(git -C "$p" rev-parse HEAD 2>/dev/null)" != "$commit" ]; then
-		rm -rf "$p"
+		rm -rf "${p:?}"
 		git init -q "$p"
 		git -C "$p" fetch -q --depth 1 "${PORT_REPO:-$url}" "$commit"
 		git -C "$p" -c advice.detachedHead=false checkout -q "$commit"
@@ -154,7 +154,7 @@ port_at_pin() {	# the port at kernel/port/port.pin, in out/cache/port
 step_kit() {
 	port=$(port_at_pin)
 	( . "$GCA/env.sh"; make -C "$top/kernel/dlm" kit GCA="$GCA" PORT="$port" )
-	rm -rf "$out/kit"
+	rm -rf "${out:?}/kit"
 	mkdir -p "$out/kit"
 	cp -R "$top/kernel/dlm/build/kit/k30" "$top/kernel/dlm/build/kit/k46" "$out/kit/"
 	cp "$top/kernel/dlm/build/kit.digests" "$out/kit/kit.digests"
@@ -165,7 +165,7 @@ step_kit() {
 step_modules() {
 	[ -f "$top/kernel/dlm/build/kit.digests" ] || step_kit
 	( . "$GCA/env.sh"; for m in "$top"/kernel/modules/*/module; do make -C "$m" clean; make -C "$m"; done )
-	rm -rf "$out/modules"
+	rm -rf "${out:?}/modules"
 	for obj in "$top"/kernel/modules/*/build/*/mod.d/*; do
 		line=$(basename "$(dirname "$(dirname "$obj")")")
 		mkdir -p "$out/modules/$line"
@@ -182,12 +182,12 @@ fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.p
 	full_hash "kernel/drivers/$1/$1.pin" "$commit"
 	f=$out/cache/forks/$1
 	if [ "$(git -C "$f" rev-parse HEAD 2>/dev/null)" != "$commit" ]; then
-		rm -rf "$f"
+		rm -rf "${f:?}"
 		git init -q "$f"
 		git -C "$f" fetch -q --depth 1 "$url" "$commit"
 		git -C "$f" -c advice.detachedHead=false checkout -q "$commit"
 	fi
-	rm -rf "$f/build"
+	rm -rf "${f:?}/build"
 	echo "$f"
 }
 
@@ -364,7 +364,7 @@ host_pkgtools() {
 		return 0
 	fi
 	echo "--- host pkgtools: userland/pkgtools/heirloom/build-host.sh, in out/build/pkgtools-host"
-	rm -rf "$_hp"
+	rm -rf "${_hp:?}"
 	mkdir -p "$_hp/pkgtools"
 	( cd "$top/userland/pkgtools" && echo "$_hp_files" | tr '\n' '\0' |
 		tar --null -T - -cf - ) | tar -x -C "$_hp/pkgtools"
@@ -400,7 +400,7 @@ kspace_dirs() {
 
 step_kspace() {
 	host_pkgtools
-	rm -rf "$out/kspace" "$out/build/kspace"
+	rm -rf "${out:?}/kspace" "${out:?}/build/kspace"
 	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
 	# the port's headers at each recipe's own pinned commit (dlm-src.sh):
 	# a cache repository that fetches a commit it lacks by hash
@@ -449,7 +449,7 @@ step_kspace() {
 step_userland() {
 	host_pkgtools
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
-	rm -rf "$out/userland" "$out/build/userland"
+	rm -rf "${out:?}/userland" "${out:?}/build/userland"
 	mkdir -p "$out/build/userland" "$out/userland/pkgs"
 	order=$(build_order) || exit 1
 	for d in $order; do

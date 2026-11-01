@@ -14,7 +14,7 @@ top=$(cd "$here/../../.." && pwd)
 main=$(cd "$(git -C "$top" rev-parse --git-common-dir)/.." && pwd)
 SYS=${AMIX_SYSTEM:-$(dirname "$main")/amix-system}
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-login.XXXXXX")
-trap 'rm -rf "$T"' EXIT
+trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 ok() { pass=$((pass + 1)); }
 bad() { fail=$((fail + 1)); echo "FAIL: $*"; }

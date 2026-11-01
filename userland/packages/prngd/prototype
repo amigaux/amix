@@ -36,3 +36,4 @@ f none /opt/amix/doc/prngd/00DESIGN 0644 root bin
 f none /opt/amix/doc/prngd/README.gather 0644 root bin
 f none /opt/amix/doc/prngd/ChangeLog 0644 root bin
 f none /opt/amix/doc/prngd/LICENSE 0644 root bin
+f none /opt/amix/doc/prngd/LICENSE.amix 0644 root bin

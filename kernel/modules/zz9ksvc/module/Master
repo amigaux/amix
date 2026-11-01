@@ -1,0 +1,8 @@
+# generated from keys by module/Makefile
+$modtype drv
+$class demand
+$majors c:55
+$unload allowed
+$depend zz9kbus
+$desc ZZ9000-family service channel /dev/zz9ksvcN
+zz9ksvc zz9ksvc

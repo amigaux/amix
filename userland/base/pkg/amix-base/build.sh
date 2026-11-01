@@ -65,9 +65,13 @@ stage() {
 	mkdir -p "$DEST/etc/default"
 	sh etc/mklogin.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/default/login"
 	chmod 0444 "$DEST/etc/default/login"
+	# the stock /etc/group with the audio group added
+	sh etc/mkgroup.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/etc/group"
+	chmod 0644 "$DEST/etc/group"
 	put 0644 man/man.1 /opt/amix/man/1/man
 	put 0644 rc/rc.subr.1m /opt/amix/man/1m/rc.subr
 	put 0644 rc/devnodes.1m /opt/amix/man/1m/devnodes
+	put 0644 rc/bootswap.1m /opt/amix/man/1m/bootswap
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac
 	put 0644 net/ifup.1m /opt/amix/man/1m/ifup
 	put 0644 net/ifdown.1m /opt/amix/man/1m/ifdown
@@ -81,10 +85,12 @@ stage() {
 	put 0644 etc/nodename.4 /opt/amix/man/4/nodename
 	put 0644 etc/inittab.4 /opt/amix/man/4/inittab
 	put 0644 etc/default.4 /opt/amix/man/4/default
+	put 0644 etc/group.4 /opt/amix/man/4/group
 	put 0644 display/display.4 /opt/amix/man/4/display
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
+	put 0644 LICENSE /opt/amix/doc/amix-base/LICENSE
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"
 	done

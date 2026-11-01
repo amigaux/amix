@@ -1,0 +1,15 @@
+PKG=cdfs30
+NAME=cdfs-k30 1.1.0-5 - cdfs read-only CD filesystem module (demand class), k30 line
+ARCH=Amiga
+VERSION=1.1.0-5
+CATEGORY=system
+CLASSES=none
+VENDOR=amix
+PSTAMP=amix-cdfs30-1.1.0-5
+# Kernel space (amix-dlm C2-2, C3-5 v12 sec 1, C4-6): a role=module entry of
+# the #ext kpkg block (line=k30, kabi=k30.1.4), class demand, never an ordinary
+# entry.  Catalog name cdfs-k30, pkginst cdfs30; VERSION is the package's:
+# 1.1.0-5 is the module's 1.1.0-4 (the fork's platform/amix-kernel/module/VERSION
+# at kernel/drivers/cdfs/cdfs.pin), the same object, rolled from amix.
+APKG_DESC=cdfs, the read-only CD filesystem (ISO 9660, Joliet, Rock Ridge, UDF, HFS), as a demand-class kernel module for the 68030 module kernel kernel-k30-m of kabi k30.1.4, loaded at its first mount: /etc/conf/mod.d/cdfs.
+DESC=The amix-cdfs filesystem (ODFileSystem's Amix port) built as an amix-dlm kernel module for the 68030 line (kabi k30.1.4): demand class, loaded at its first mount (mount -F cdfs), registered as filesystem type cdfs (vfs_register); reads ISO 9660, Joliet, Rock Ridge, UDF and HFS media through sd; never unloaded.  It needs a module kernel of kabi k30.1.4 and kbootset -31 or later.  cdfs cannot mount a root (vfs_mountroot returns EROFS), so a CD is never the root filesystem: the 1.1 media root on a RAM disk and mount the CD with cdfs.  No major and no device nodes of its own.  /etc/conf/modreg.d/cdfs holds the package's defaults (none; comments only); 'disable' in /etc/conf/modreg.local.d/cdfs keeps it out.  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  BSD 2-clause.

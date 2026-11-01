@@ -10,7 +10,7 @@
 set -e
 BOX=$1
 H=${B:-build}/smoke-host
-rm -rf "$H" && mkdir -p "$H"
+rm -rf "${H:?}" && mkdir -p "$H"
 cp "$BOX/boot1.img" "$BOX/boot2.bin" "$BOX/unix" "$H/"
 cp tests/bench/kbootset-smoke.sh "$H/"
 (cd "$H" && KB="$OLDPWD/${B:-build}/kbootset" sh kbootset-smoke.sh)

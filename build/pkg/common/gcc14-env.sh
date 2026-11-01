@@ -119,7 +119,8 @@
 #              AMIX_GCC14_BUILD_ROOT moves them, for a measurement build
 #              that must not touch the shipped artifacts.
 #   identity   the toolchain is PINNED: gcc14-cross-amix AMIX_GCC14_COMMIT, and the
-#              sha256 of its cc1, libgcc.a, libamixc99.a and specs in the
+#              sha256 of its cc1, libgcc.a, libamixc99.a, specs, init
+#              objects and libamixrt.so.1 in the
 #              prefix (AMIX_GCC14_PINS, in gcc14-pin.sh, which dlm-src.sh's
 #              box builds of kbootset and modadmin check too).  A prefix that
 #              differs fails before anything is built.  cf461e3 fixed two return-value ABI

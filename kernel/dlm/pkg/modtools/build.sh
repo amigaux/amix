@@ -32,7 +32,7 @@ case "$MT_DLM_COMMIT$MT_SHA" in *pending*)
 	exit 1 ;;
 esac
 
-rm -rf "$BUILD"; mkdir -p "$DEST/sbin" "$WORK"
+rm -rf "${BUILD:?}"; mkdir -p "$DEST/sbin" "$WORK"
 echo "--- build amix-dlm $MT_DLM_COMMIT ---"
 amix_dlm_build "$MT_DLM_COMMIT" box/modadmin
 amix_verify "$AMIX_DLM_TREE/build/box/modadmin" "$MT_SHA"

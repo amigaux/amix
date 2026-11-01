@@ -8,7 +8,7 @@
 set -e
 B=${B:-build}
 T=$B/kbuild
-rm -rf $T && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg
+rm -rf "${T:?}" && mkdir -p $T/root/stand/k46 $T/root/var/apkg/kpkg
 R=$T/root
 KB="$B/kbootset -R $R --image $T/disk.img --offset 65536"
 sha() { sha256sum "$1" | cut -c1-64; }
@@ -274,7 +274,7 @@ $B/kbootset -R $R --image $T/v1.img --offset 65536 create 8388608 $B/rt/boot2.bi
 msidecar 0x00060000
 refused 7 $B/kbootset -R $R --image $T/v1.img --offset 65536 build $FACTS
 cp $T/kabi.static $R/stand/k46/kabi; record
-rm -rf $R/stand/gen/[0-9]*
+rm -rf "${R:?}"/stand/gen/[0-9]*
 echo "kbuild: module kernel (gates 2, 4, 6, 7, the arena and ident records) ok"
 
 # module members (C3-5): the installed module packages go into the

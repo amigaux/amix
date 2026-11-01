@@ -1,4 +1,5 @@
 #!/bin/sh
+# MIT licence: holder and text in /opt/amix/doc/python3/LICENSE.amix.
 # python3 -- start Python 3.11.  CPython seeds its hash randomisation from
 # /dev/urandom at startup and stops if it cannot; until the random driver is
 # installed, fall back to a fixed seed.  Drop this wrapper once it ships.

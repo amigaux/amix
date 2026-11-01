@@ -140,6 +140,7 @@ try:
             ("badtc", {"TOOLCHAIN": "gcc2"}, "TOOLCHAIN=gcc2"),
             ("nosum", {"SUMMARY": '""'}, "SUMMARY is not set"),
             ("badepoch", {"SOURCE_EPOCH": "2026-10-31"}, "SOURCE_EPOCH=2026-10-31 is not a number"),
+            ("badprebuilt", {"PREBUILT": '"usr/lib/libamixrt.so.1"'}, "PREBUILT: usr/lib/libamixrt.so.1 is not an absolute payload path"),
             ("pipe", {"SUMMARY": '"a|b"'}, "SUMMARY holds '|'"),
             ("twoline", {"DESC": '"one\ntwo"'}, "DESC must be one line"),
             ("apipe", {"APKG_DESC": '"a|b"'}, "APKG_DESC holds '|'"),

@@ -26,6 +26,7 @@ stage() {
 	cp "$HERE/prngd.conf" "$DEST$PREFIX/etc/prngd/prngd.conf"
 	cp "$HERE/prngd.rc" "$DEST$PREFIX/etc/init.d/prngd"
 	cp 00README 00DESIGN ChangeLog "$DEST$PREFIX/doc/prngd/"
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/prngd/LICENSE.amix"; chmod 0644 "$DEST$PREFIX/doc/prngd/LICENSE.amix"	# our files in this package: MIT
 	cp 00README.gatherers "$DEST$PREFIX/doc/prngd/README.gather"	# s5: <= 14 bytes
 	# the binaries carry bsd-daemon.c (4-clause UCB), tools/prngd-ctl.c (BSD)
 	# and sha1.c (free): their notices travel with them; 00README has prngd's own

@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 20
+# C3-5 — the module package and the per-module manifest record, version 21
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -29,7 +29,9 @@
   a device node's pkgmap class is its module's name (§1.2);
   version 19 (2026-10-31): random's short name (§1.1); version 20
   (2026-10-31): a demand-class record may carry `fs=` instead of
-  `majors=`, and `marc_post` gives that type a stub row (§2, §3, §5).
+  `majors=`, and `marc_post` gives that type a stub row (§2, §3, §5);
+  version 21 (2026-11-01): zz9ksvc's and zz9kbus's short names, and the
+  class of a module that loads only as a dependency (§1.1).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -93,8 +95,20 @@ per line**:
 | a4kt710 | `a4kt710` | `a4kt71030` / `a4kt71046` |
 | paula | `paula` | `paula30` / `paula46` |
 | random | `random` | `random30` / `random46` |
+| zz9ksvc | `zz9ksvc` | `zz9ksvc30` / `zz9ksvc46` |
+| zz9kbus | `zz9kbus` | `zz9kbus30` / `zz9kbus46` |
 
   A new module gets its row in a version bump of this contract.
+
+- **A module that loads only as a dependency** (version 21), named in
+  other modules' `depend=` and owning no major and no filesystem type
+  (zz9kbus), is boot class with `match=` naming the boards of the
+  modules that depend on it, not `always`, so it is resident only on a
+  box with one of them. Demand class does not fit: a demand record
+  needs `majors=` or `fs=` (§2, gate 3). `match=` is read only by
+  `marc_post`'s boot pass; a dependency load does not read it, so a
+  demand module that depends on it (zz9ksvc) still loads it at its
+  first open where the boot pass passed it over.
 
 ### 1.2 The package's contents (the stage-3 mint's conventions)
 

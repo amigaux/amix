@@ -53,6 +53,7 @@ is treated as missing, and the boot log says so.
 syslogd=yes
 display=no        # no graphical login, whatever /etc/display says
 ifup_dhcpwait=30  # wait longer for a DHCP lease at boot
+swap_add=30       # swap on the slice: 30 MiB in all
 .ft R
 .fi
 .SH FILES
@@ -64,6 +65,7 @@ this file.
 the boot log, where a bad value is reported.
 .SH SEE ALSO
 .BR rc.subr (1M),
+.BR bootswap (1M),
 .BR display (4),
 .BR ifup (1M)
 .SH NOTES
