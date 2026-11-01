@@ -9828,6 +9828,35 @@ def _p36_problems(install_src, l11_src):
     return probs
 
 
+def audit_modreg_local():
+    head("ML. MODREG_LOCAL: administrator module lines laid before the kbootset build (emulation rigs: "
+         "z3660rtg fixed=1); never on a profile for real hardware")
+    src = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    m = re.search(r'\n(\tif \[ -n "\$MODREG_LOCAL" \]; then\n.*?\n\tfi)\n\tl11_kb build', src, re.S)
+    if not m:
+        fail("l11.sh: no MODREG_LOCAL block before l11_kb build")
+        return
+    d = tempfile.mkdtemp(prefix="modreg_")
+    try:
+        body = ('TARGET=%s\nMODREG_LOCAL="z3660rtg:param fixed=1|gayle:param slave=2"\nrun() { "$@"; }\n'
+                'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n%s\n' % (d, m.group(1)))
+        out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10).stdout
+        rd = lambda n: open(os.path.join(d, "etc", "conf", "modreg.local.d", n)).read() \
+            if os.path.exists(os.path.join(d, "etc", "conf", "modreg.local.d", n)) else ""
+        (ok if rd("z3660rtg") == "param fixed=1\n" and rd("gayle") == "param slave=2\n" and "DIE" not in out else fail)(
+            "MODREG_LOCAL EXECUTED: two entries laid in modreg.local.d (%r)" % out.strip()[-80:])
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    bad = []
+    for pf in sorted(os.listdir(PROFILES_DIR)):
+        if pf.endswith(".profile") and not pf.startswith("test-a4000-030-x11"):
+            v = _parse_profile(os.path.join(PROFILES_DIR, pf)).get("MODREG_LOCAL", "")
+            if "fixed=1" in v:
+                bad.append(pf)
+    (fail if bad else ok)("no profile for real hardware sets z3660rtg fixed=1 (only the emulated X disk)%s"
+                          % ((": " + " ".join(bad)) if bad else ""))
+
+
 def audit_kbootset_cards():
     head("KC. the target's controller comes from the disk the user picked (`kbootset cards DISK` on the "
          "medium's kbootset); the profile's TARGET_HBA is the fallback")
@@ -10722,6 +10751,7 @@ def main():
     audit_installed_fp_patch()
     audit_unattended()
     audit_pick_at_install()
+    audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()
     audit_guarded_rm_mv()

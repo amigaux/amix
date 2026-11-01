@@ -303,6 +303,23 @@ l11_bootstore()
 	l11_bootset manual
 	msg "boot store   : laid by the installed kbootset with the loader package's boot1/boot2 (version $_lv), store-id $L11_STORE_ID"
 
+	# MODREG_LOCAL (a profile key, emulation rigs only): administrator lines for modules, as
+	# "module:line|module:line", laid in /etc/conf/modreg.local.d/<module> before the build so the
+	# generation carries them (e.g. "z3660rtg:param fixed=1" where an emulator's RTG board has no
+	# AutoConfig entry; never on a real Z3660, whose board has one)
+	if [ -n "$MODREG_LOCAL" ]; then
+		run mkdir -p "$TARGET/etc/conf/modreg.local.d"
+		_ml="$MODREG_LOCAL"
+		while [ -n "$_ml" ]
+		do
+			_e=`expr "$_ml" : '\([^|]*\)'`
+			_ml=`expr "$_ml" : '[^|]*|\(.*\)'`
+			_mm=`expr "$_e" : '\([^:]*\):'` _mv=`expr "$_e" : '[^:]*:\(.*\)'`
+			[ -n "$_mm" ] && [ -n "$_mv" ] || die "MODREG_LOCAL entry '$_e' is not module:line"
+			echo "$_mv" >> "$TARGET/etc/conf/modreg.local.d/$_mm" || die "cannot write modreg.local.d/$_mm"
+			msg "modreg.local: $_mm: $_mv"
+		done
+	fi
 	l11_kb build --line "$L11_LINE" --bootdev "$KBOOTSET_BOOTDEV" --rootdev "$KBOOTSET_ROOTDEV" \
 		--rootfs "$TARGET_ROOT_FSTYPE" --mem "$L11_MEM" --root "$KBOOTSET_ROOTREC"
 	l11_kb commit
