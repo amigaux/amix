@@ -946,8 +946,11 @@ unsigned long old;
 	return (st >> 8) & 255;
 }
 
-/* the foreground parent, told once: 'B' bound, 'F' cannot run; a parent
- * that stopped waiting (-b passed) is not there to read it, which is fine */
+/* the foreground parent, told once: 'B' bound, 'F' cannot run. A parent
+ * that stopped waiting (-b passed) has closed the pipe, and a write to it
+ * raises SIGPIPE, whose default ends the daemon without a word: it is
+ * ignored for this one write (an ignored signal would stay ignored in the
+ * hook it execs, so the default comes back after) */
 static void
 tell(c)
 int c;
@@ -955,7 +958,9 @@ int c;
 	char b = c;
 
 	if (tellfd >= 0) {
+		signal(SIGPIPE, SIG_IGN);
 		write(tellfd, &b, 1);
+		signal(SIGPIPE, SIG_DFL);
 		close(tellfd);
 		tellfd = -1;
 	}
