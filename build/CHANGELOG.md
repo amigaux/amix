@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — repro-selftest fixture: man directories root sys (122fe12)
+
+The repro-selftest fixture recipe declares /opt/amix/man and /opt/amix/man/1 as 0755 root sys. The shared-directory rule refused the old root bin, and the container selftests failed at pkgbuild.sh.
+
 ## 2026-11-02 — MAN_REPLACES (7cf3775)
 
 The package.sh key MAN_REPLACES lists the stock binaries a package replaces as `<binary path> <sect> <page name>` triples. pkgmeta check counts such a binary as documented by its page and refuses malformed entries, a page the prototype lacks, or a missing replaces.d/<PKG>.
