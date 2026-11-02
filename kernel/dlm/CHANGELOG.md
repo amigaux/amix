@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — C4-2 v7 §2.1: what the bprobe confirmation covers (9407b0f)
+
+C4-2 version 7 §2.1 records what the root-context bprobe confirmation covers: a level-7 return on both lines; a caught bus error on k46 on a real 68LC060 (an empty Zorro III read, 283–295 ms, at levels 0, 4 and 7); k30 on a real 68030 not shown, so a k30 fixed-address probe also needs an identity check.
+
 ## 2026-11-02 — kbootset -36: inquiry and cards --probe (14b5853, f8e9027, 662cc98, 26b2432, 61a213c)
 
 `kbootset inquiry <card> <unit>` and `kbootset cards --probe` ask each unit its type with one read-only SCSI INQUIRY through /dev/scsi before anything reads it, so the installer never reads a CD with dd (C2-4 v23 §18; each line flushed so a stall names its card). Gate 1's "differs" line names the reinstall, `apkg -f install <name>`. Package kbootset -36 e2e6f5bd. Emulator proofs on z3660scsi, a4091, a4kt710 and gayle, both lines; the A4091's first command of a boot waits out its bus-reset settle in emulation (a driver matter). Every rm and mv of a variable path in tests and tools takes "${var:?}".
