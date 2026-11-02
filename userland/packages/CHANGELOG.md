@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — x11r63 6.3-7: font path setup with fewer FPU instructions (bbb87b0, 17c95e6)
+
+The X server sets up its font path with about half the floating-point instructions (a rounding cache, the dpi test in integers), with the same font list and font properties; a 68LC060 is ready in about 24 s instead of 44 s. Package md5 56193e62.
+
 ## 2026-11-02 — x11r63 6.3-6: X built with fork, not vfork (c3abeff, 443fe46)
 
 x11r63 6.3-6 builds X with fork instead of vfork (amix.cf HasVFork NO, patch 27). xinit's vfork child rewrote the parent's libc signal table, so xinit died with a Bus Error when the server became ready; X now starts through xinit/xstart on metal (A4000D 060). Xzz9000 is unchanged; xinit dab346c0…; package md5 2ed3a8f3.

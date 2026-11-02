@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-02 — xstart ends the server with the session; amix-base 1.0-27 (45fe98a)
+
+- A session's server now gets the card's display.d `once` option (X11R6's -terminate, the system server's -once, or none), so it exits when the session ends instead of resetting first.
+- On a 68LC060 that reset took up to 30 s, and xinit killed the server after 10 s without its hand-back to the Amiga video.
+- xstart now waits up to XSTART_WAIT (60 s) for an X server still on the display and then refuses, instead of starting a second server that fails with "Cannot establish any listening sockets".
+- amxbase-1.0-27 md5 2580dd91.
+
 ## 2026-11-02 — dhcpc lives on when -b stopped waiting; dhcp-client 1.0-7 (2c058ba)
 
 The daemon told the foreground dhcpc -b of its first lease only after the BOUND hook. When -b had already returned (a hook longer than the wait, or a lease that came late), that write raised SIGPIPE and ended the daemon without a log line, so the lease was never renewed. tell() now ignores SIGPIPE for that write. test-tell.sh tests it on the host. dhcpc-1.0-7 md5 878d3d2a.
