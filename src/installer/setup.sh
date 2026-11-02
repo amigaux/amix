@@ -452,9 +452,23 @@ card_key()
 		[ "$_w" = card ] && [ "$_k" = "$1:" ] && { echo "$_key"; break; }
 	done < "$CARDS_F"
 }
-# card_name KEY -- how the interview names a controller
+# card_base N -- the base address `kbootset cards` gives card N ("base 0x00da0000"), or nothing
+card_base()
+{
+	while read _w _k _r _key _b _v _rest
+	do
+		[ "$_w" = card ] && [ "$_k" = "$1:" ] && { [ "$_b" = base ] && echo "$_v"; break; }
+	done < "$CARDS_F"
+}
+# card_name KEY [BASE] -- how the interview names a controller; the gayle IDE port is the A4000's or,
+# at 0xDA0000, the A1200's (one driver and one key, two machines)
 card_name()
 {
+	case "$1:$2" in
+		mobo:gayle:0x00da0000|mobo:gayle:0x00DA0000|mobo:gayle:0xda0000|mobo:gayle:0xDA0000)
+			echo "A1200 IDE"
+			return 0 ;;
+	esac
 	case "$1" in
 		zorro:144b:01)		echo "Z3660 SCSI" ;;
 		zorro:0202:54)		echo "A4091 SCSI" ;;
@@ -500,6 +514,13 @@ card_units()
 		elif [ "$_a" = unit ] && [ -n "$CARDS_PROBED" ] && [ -n "$_cur" ]; then
 			_u=`expr "$_b" : '\([0-7]\):$'`
 			[ -n "$_u" ] && [ "$_c $_d" = "type 0" ] && hexname `expr $_cur \* 8 + $_u`
+		elif [ "$_a" = not ] && [ -n "$CARDS_PROBED" ] && [ -n "$_cur" ]; then
+			# a card no INQUIRY reaches (the A3000's WD): its units are read as before the probe (the
+			# block path is safe there; only the raw passthrough is not)
+			for _u in 0 1 2 3 4 5 6
+			do
+				hexname `expr $_cur \* 8 + $_u`
+			done
 		fi
 	done < "$CARDS_F"
 }
@@ -963,7 +984,9 @@ choose_disk()
 	echo "\nHard disks attached to this system:\n"
 	_skey=
 	[ -s "$CARDS_F" ] && _skey=`card_key "$SUSPECT_CARD"`
-	_sname=`card_name "$_skey"`
+	_sbase=
+	[ -s "$CARDS_F" ] && _sbase=`card_base "$SUSPECT_CARD"`
+	_sname=`card_name "$_skey" "$_sbase"`
 	case "$SUSPECT_CARD" in
 		[0-3])	echo "card $SUSPECT_CARD${_sname:+ ($_sname)} did not answer in time: its disks are not"
 			echo "scanned this boot (its controller may be wedged).  Restart to try it again.\n" ;;
@@ -985,7 +1008,8 @@ choose_disk()
 		if [ -n "$UNIVERSAL" ] && [ "$sstate" = ok ]; then
 			scard=`id_card $sid`
 			skey=`card_key $scard`
-			sctl=`card_name "$skey"`
+			sbase=`card_base $scard`
+			sctl=`card_name "$skey" "$sbase"`
 			shold=`disk_contents $sid`
 			echo "`scsi_label $sid`${sctl:+  $sctl}		$stext	$shold"
 			echo "$sid" >> "$TOK_F"

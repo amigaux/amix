@@ -22,7 +22,9 @@
 #   4. this tool, with the two images
 # --mirror-from MASTER.iso --mirror DIR: also writes the repository snapshot the matrix's
 # netinstall cells serve (install-matrix.sh l11-ni-* --mirror DIR): the master's tree with
-# kspace -> install/l11/kpkg -- the same packages the full set and the medium carry.
+# kspace -> install/l11/kpkg -- the same packages the full set and the medium carry -- plus
+# make dist's userland rows and datastreams ($L11_IN/base: catalog.lines), which the installed
+# system's second stage installs (a set's own base packages, x11r63)
 #
 # The generations are build-ramdisk-cd.sh's with the netinstall module lists: the RAM disk,
 # the root controllers and z3660eth as a boot-class module (50 section 5; zen0, S5-33), no
@@ -189,5 +191,18 @@ if [ -n "$MFROM" ]; then
   ln -s install/l11/kpkg "$MDIR/kspace"
   [ -f "$MDIR/catalog" ] && [ -f "$MDIR/kspace/catalog" ] && [ -f "$MDIR/kspace/catalog.md5" ] \
     || die "$MFROM is not a 1.1 full-set master (no catalog, kspace/catalog or its md5)"
-  echo "build-netinstall: repository snapshot $MDIR ($(grep -c '|' "$MDIR/catalog") userland rows, kernel space at kspace/)"
+  # the release's userland rows: make dist's own (flat file names, served at pkgs/<file> as the
+  # repository serves them), with the datastreams the CD's base/ carries -- the installed
+  # system's second stage takes a set's own base packages (x11r63) from here
+  UL="$L11/base"
+  [ -f "$UL/catalog.lines" ] || die "no $UL/catalog.lines (tools/build-l11-inputs.sh)"
+  while IFS='|' read -r un uv ui uf um us _; do
+    [ -f "$UL/$uf" ] && [ "$(md5sum < "$UL/$uf" | cut -c1-32)" = "$um" ] && [ "$(wc -c < "$UL/$uf")" = "$us" ] \
+      || die "$UL/$uf is not its catalog row ($un $uv)"
+    ! grep -q "^$un|" "$MDIR/catalog" || die "$MFROM's catalog already has a $un row"
+    cp "$UL/$uf" "$MDIR/pkgs/$uf"
+  done < "$UL/catalog.lines"
+  cat "$UL/catalog.lines" >> "$MDIR/catalog"
+  ( cd "$MDIR" && md5sum catalog > catalog.md5 )
+  echo "build-netinstall: repository snapshot $MDIR ($(grep -c '|' "$MDIR/catalog") userland rows, $(wc -l < "$UL/catalog.lines") of them make dist's, kernel space at kspace/)"
 fi

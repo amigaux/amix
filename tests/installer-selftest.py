@@ -9987,9 +9987,357 @@ def audit_syspass_confirm():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_netset_stage1():
+    head("NR. the netinstall's first stage: the chosen set beyond minimal and its own base packages, as the "
+         "repository catalog's rows, recorded before any install; the second-stage hook")
+    src = open(os.path.join(REPO, "src", "installer", "install.sh"), encoding="utf-8").read()
+    fns = {}
+    for name in ("net_row", "net_record", "emit_netset_hook"):
+        m = re.search(r"\n(%s\(\)\s*\{\n.*?\n\})\n" % name, src, re.S)
+        fns[name] = m.group(1) if m else None
+    swap = ('NET_SET="$INSTALL_SET" NET_SET_ORDER="$ORDER"' in src
+            and 'ORDER="$INST/order.minimal" INSTALL_SET=minimal' in src
+            and '[ -z "$NET_SET" ] || net_record' in src
+            and 'emit_netset_hook "$TARGET/etc/rc2.d/S99znetset"' in src)
+    if not all(fns.values()) or not swap:
+        fail("install.sh: net_row/net_record/emit_netset_hook or their wiring (the set switch, the record before "
+             "the installs, the hook at the arm step) is missing")
+        return
+    d = tempfile.mkdtemp(prefix="netrec_")
+    try:
+        inst = os.path.join(d, "inst")
+        os.makedirs(os.path.join(inst, "l11", "base"))
+        os.makedirs(os.path.join(d, "t", "tmp"))
+        open(os.path.join(inst, "order.minimal"), "w").write("# set: minimal (3 package(s))\ncore\nAPKGENG\nAPKG\n")
+        open(os.path.join(inst, "order.full"), "w").write("# set: full\ncore\nxbasic\nAPKGENG\nAPKG\nxtras\n")
+        open(os.path.join(inst, "l11", "base", "o.full"), "w").write("x11r63\n")
+        cat = os.path.join(d, "catalog")
+        open(cat, "w").write("#apkg-catalog 1\n"
+                             "core|2.1|core|stock/core-2.1.pkg|00|1|none|system|Core\n"
+                             "xbasic|2.1|xbasic|stock/xbasic-2.1.pkg|11|2|none|x11|X basic\n"
+                             "xtras|2.1|xtras|stock/xtras-2.1.pkg|22|3|none|x11|X extras\n"
+                             "x11r6.3|6.3-6|x11r63|x11r63-6.3-6.pkg|33|4|none|x11|X11R6.3\n")
+        def run(extra=""):
+            body = ('INST=%s\nTARGET=%s/t\nNETCAT=%s\nNET_SET=full\nNET_SET_ORDER=%s/order.full\n'
+                    'NET_REPO=http://192.0.2.1:8420/1.1\nmsg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n'
+                    '%s\n%s\n%s\nnet_record\n' % (inst, d, cat, inst, fns["net_row"], fns["net_record"], extra))
+            return subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=20)
+        r = run()
+        rec = os.path.join(d, "t", "tmp", "netset.rec")
+        got = open(rec).read() if os.path.exists(rec) else ""
+        want = ("set full\nrepo http://192.0.2.1:8420/1.1\n"
+                "row xbasic|2.1|xbasic|stock/xbasic-2.1.pkg|11|2|none|x11|X basic\n"
+                "row xtras|2.1|xtras|stock/xtras-2.1.pkg|22|3|none|x11|X extras\n"
+                "row x11r6.3|6.3-6|x11r63|x11r63-6.3-6.pkg|33|4|none|x11|X11R6.3\n")
+        (ok if got == want and r.returncode == 0 else fail)(
+            "first stage EXECUTED: the record holds full beyond minimal in order, then o.full's x11r63 by its "
+            "pkginst as the catalog's x11r6.3 row%s" % ("" if got == want else ": %r %r" % (got, r.stdout[-200:])))
+        open(os.path.join(inst, "l11", "base", "o.full"), "w").write("x11r63\nnosuch\n")
+        r = run()
+        (ok if r.returncode == 3 and "nosuch is not in the repository catalog" in r.stdout else fail)(
+            "first stage EXECUTED: a package of the set missing from the repository stops the install before "
+            "anything is installed")
+        hook = os.path.join(d, "hook")
+        body = '%s\nemit_netset_hook %s\n' % (fns["emit_netset_hook"], hook)
+        subprocess.run(["/usr/bin/dash", "-c", body], timeout=10)
+        h = open(hook).read() if os.path.exists(hook) else ""
+        fb = os.path.join(d, "fb")
+        os.makedirs(fb)
+        open(os.path.join(fb, "netset.sh"), "w").write("echo RAN\n")
+        hb = h.replace("/var/adm/firstboot", fb).replace("/sbin/sh", "/usr/bin/dash")
+        r0 = subprocess.run(["/usr/bin/dash", "-c", hb], capture_output=True, text=True, timeout=10)
+        open(os.path.join(fb, "netset"), "w").write("set full\n")
+        r1 = subprocess.run(["/usr/bin/dash", "-c", hb], capture_output=True, text=True, timeout=10)
+        (ok if h.startswith("#!/bin/sh\n# S99znetset") and r0.stdout == "" and r1.stdout == "RAN\n" else fail)(
+            "S99znetset EXECUTED: runs netset.sh only while the record is there%s"
+            % ("" if r1.stdout == "RAN\n" else ": %r %r" % (h, r1.stdout)))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_netset_stage2():
+    head("SN. the netinstall's second stage (payload/firstboot/netset.sh) on the installed system: the "
+         "recorded rows against the repository, one package at a time, retries, resume, a bootable stop")
+    src = open(os.path.join(REPO, "payload", "firstboot", "netset.sh"), encoding="latin-1").read()
+    code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+    bad_syntax = [t for t in ("$(", "$((", "local ", "[[") if t in code]
+    (fail if bad_syntax else ok)("netset.sh: pre-POSIX sh only (no %s)" % ", ".join(("$(", "$((", "local", "[["))
+                                 + ((": " + " ".join(bad_syntax)) if bad_syntax else ""))
+    rows = ["xbasic|2.1|xbasic|stock/xbasic-2.1.pkg|0123456789abcdef0123456789abcdef|1024|none|x11|X basic",
+            "x11r6.3|6.3-6|x11r63|x11r63-6.3-6.pkg|fedcba9876543210fedcba9876543210|34151424|none|x11|X11R6.3"]
+    def setup(d, repo_rows, fail=(), update_fails=False, armed=True):
+        for sub in ("fb", "sadm", "vt"):
+            os.makedirs(os.path.join(d, sub), exist_ok=True)
+        if armed:
+            with open(os.path.join(d, "fb", "netset"), "w") as f:
+                f.write("set full\nrepo http://192.0.2.1:8420/1.1\n" + "".join("row %s\n" % r for r in rows))
+        with open(os.path.join(d, "hook"), "w") as f:
+            f.write("#!/bin/sh\n")
+        with open(os.path.join(d, "repo-catalog"), "w") as f:
+            f.write("#apkg-catalog 1\n" + "".join(r + "\n" for r in repo_rows))
+        with open(os.path.join(d, "fail"), "w") as f:
+            f.write("".join(n + "\n" for n in fail))
+        uf = os.path.join(d, "update-fails")
+        if update_fails:
+            open(uf, "w").close()
+        elif os.path.exists(uf):
+            os.remove(uf)
+        stub = os.path.join(d, "apkg")
+        with open(stub, "w") as f:
+            f.write('#!/bin/sh\nD=%s\necho "$*" >> $D/calls\nshift 2\n'
+                    'case "$1" in\n'
+                    ' update) [ -f $D/update-fails ] && exit 1; cp $D/repo-catalog $D/w/catalog; exit 0 ;;\n'
+                    ' -y) n=$3; grep -qx "$n" $D/fail && exit 1\n'
+                    '     inst=`grep "^$n|" $D/repo-catalog | cut -d"|" -f3`; mkdir -p $D/sadm/$inst\n'
+                    '     echo "TMPDIR=$TMPDIR" >> $D/calls; exit 0 ;;\n'
+                    'esac\nexit 9\n' % d)
+        os.chmod(stub, 0o755)
+    def run(d, args=()):
+        body = (src.replace("/var/adm/firstboot", d + "/fb").replace("/etc/rc2.d/S99znetset", d + "/hook")
+                .replace("/usr/apkg/bin/apkg", d + "/apkg").replace("/var/apkg/netset", d + "/w")
+                .replace("/var/sadm/pkg/", d + "/sadm/").replace("/var/tmp", d + "/vt").replace("PAUSE=30", "PAUSE=0")
+                .replace("sleep 10", "sleep 1"))
+        r = subprocess.run(["/usr/bin/dash", "-c", body, "netset.sh"] + list(args), capture_output=True, text=True,
+                           timeout=60)
+        calls = open(os.path.join(d, "calls")).read() if os.path.exists(os.path.join(d, "calls")) else ""
+        return r.returncode, r.stdout, calls
+    ex = lambda d, *p: os.path.exists(os.path.join(d, *p))
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        setup(d, rows)
+        rc, out, calls = run(d)
+        good = (rc == 0 and ex(d, "sadm", "xbasic") and ex(d, "sadm", "x11r63") and ex(d, "fb", "netset.done")
+                and not ex(d, "fb", "netset") and not ex(d, "hook") and not ex(d, "w")
+                and "1 of 2: xbasic 2.1" in out and "2 of 2: x11r6.3 6.3-6" in out and "The full set is installed." in out
+                and calls.count("TMPDIR=%s/vt" % d) == 2 and not ex(d, "fb", "netset.lock"))
+        (ok if good else fail)("second stage EXECUTED: both packages in order, with progress lines and TMPDIR on "
+                               "the disk; netset becomes netset.done, the hook and the cache are removed%s"
+                               % ("" if good else ": rc %d %r %r" % (rc, out[-300:], calls[-200:])))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        setup(d, rows, fail=("x11r6.3",))
+        rc, out, calls = run(d)
+        first = (rc == 0 and ex(d, "sadm", "xbasic") and not ex(d, "sadm", "x11r63") and ex(d, "fb", "netset")
+                 and ex(d, "hook") and calls.count("-y install x11r6.3") == 3 and "did not finish" in out
+                 and "continues at the next boot" in out)
+        setup(d, rows)
+        rc2, out2, calls2 = run(d)
+        second = (rc2 == 0 and "1 of 2: xbasic 2.1 (already installed)" in out2 and ex(d, "sadm", "x11r63")
+                  and ex(d, "fb", "netset.done") and not ex(d, "hook")
+                  and calls2.count("-y install xbasic") == 1)
+        (ok if first and second else fail)(
+            "second stage EXECUTED: a package that fails three times stops it with the system bootable and the "
+            "stage armed; the next run skips what is installed and finishes%s"
+            % ("" if first and second else ": %r / %r" % (out[-250:], out2[-250:])))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        setup(d, [rows[0].replace("0123456789abcdef", "ffffffffffffffff", 1), rows[1]])
+        rc, out, calls = run(d)
+        good = (rc == 0 and "changed since the installation" in out and "install" not in calls.replace("update", "")
+                and ex(d, "fb", "netset") and ex(d, "hook"))
+        (ok if good else fail)("second stage EXECUTED: a repository row that differs from the recorded one (md5) "
+                               "stops it before any install%s" % ("" if good else ": %r %r" % (out[-200:], calls)))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        setup(d, rows, update_fails=True)
+        rc, out, calls = run(d)
+        good = (rc == 0 and calls.count("update") == 3 and "could not be read" in out and ex(d, "fb", "netset"))
+        (ok if good else fail)("second stage EXECUTED: an unreachable repository is tried three times, then the "
+                               "stage stays armed%s" % ("" if good else ": %r %r" % (out[-200:], calls)))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        # a lock whose runner is gone (a pid no process has) is broken; a live runner is waited for;
+        # the boot's run (--boot) clears any lock: nothing else can be running at boot
+        setup(d, rows)
+        dead = subprocess.Popen(["true"]); dead.wait()
+        os.makedirs(os.path.join(d, "fb", "netset.lock"))
+        open(os.path.join(d, "fb", "netset.lock", "pid"), "w").write("%d\n" % dead.pid)
+        rc, out, calls = run(d)
+        stale = rc == 0 and ex(d, "fb", "netset.done") and not ex(d, "fb", "netset.lock")
+        setup(d, rows)
+        os.rename(os.path.join(d, "fb", "netset.done"), os.path.join(d, "fb", "netset.old"))
+        # the holder runs orphaned (as a runner does on the box), so it is reaped when it ends --
+        # a child of this process would stay a zombie, which `kill -0` still finds
+        livepid = subprocess.run(["sh", "-c", "sleep 3 > /dev/null 2>&1 & echo $!"], capture_output=True,
+                                 text=True).stdout.strip()
+        os.makedirs(os.path.join(d, "fb", "netset.lock"))
+        open(os.path.join(d, "fb", "netset.lock", "pid"), "w").write("%s\n" % livepid)
+        rc, out, calls = run(d)
+        waited = rc == 0 and "already running" in out and ex(d, "fb", "netset.done")
+        setup(d, rows)
+        os.remove(os.path.join(d, "fb", "netset.done"))
+        held = subprocess.Popen(["sleep", "30"])
+        os.makedirs(os.path.join(d, "fb", "netset.lock"))
+        open(os.path.join(d, "fb", "netset.lock", "pid"), "w").write("%d\n" % held.pid)
+        rc, out, calls = run(d, ["--boot"])
+        held.kill(); held.wait()
+        boot = rc == 0 and "already running" not in out and ex(d, "fb", "netset.done")
+        (ok if stale and waited and boot else fail)(
+            "second stage EXECUTED: one run at a time -- a dead runner's lock is broken, a live one is waited for, "
+            "the boot's run (--boot) clears a lock%s" % ("" if stale and waited and boot else ": stale %s waited %s boot %s %r"
+                                                        % (stale, waited, boot, out[-200:])))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    d = tempfile.mkdtemp(prefix="netset_")
+    try:
+        setup(d, rows, armed=False)
+        rc, out, calls = run(d)
+        (ok if rc == 0 and out == "" and calls == "" else fail)(
+            "second stage EXECUTED: no record, no output, no apkg call (a CD install, or a finished stage)")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_tmp_sweep():
+    head("TS. the install leaves the target's /tmp and /var/tmp empty (an image of record ships unbooted), "
+         "and the kernel-space run's catalog does not stay behind")
+    src = open(os.path.join(REPO, "src", "installer", "install.sh"), encoding="utf-8").read()
+    l11 = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    line = next((l for l in src.splitlines() if l.startswith('rm -rf "${TARGET:?}"/tmp/*')), None)
+    cat = 'rm -rf "${TARGET:?}/tmp/kpkgcache" "${TARGET:?}/tmp/catalog" "${KCONF:?}"' in l11
+    if not line or not cat:
+        fail("install.sh has no /tmp and /var/tmp sweep, or l11.sh leaves the kernel-space catalog in /tmp")
+        return
+    d = tempfile.mkdtemp(prefix="tmpsweep_")
+    try:
+        for rel in ("tmp/catalog", "tmp/.runout.12", "tmp/sub/x", "var/tmp/dstream1/a", "var/tmp/.hidden",
+                    "etc/keep", "var/adm/firstboot/netset"):
+            os.makedirs(os.path.dirname(os.path.join(d, rel)), exist_ok=True)
+            open(os.path.join(d, rel), "w").write("x\n")
+        r = subprocess.run(["/usr/bin/dash", "-c", "TARGET=%s\n%s\n" % (d, line)], capture_output=True, text=True, timeout=10)
+        left = lambda sub: sorted(os.listdir(os.path.join(d, sub)))
+        good = (r.returncode == 0 and left("tmp") == [] and left("var/tmp") == []
+                and os.path.exists(os.path.join(d, "etc", "keep")) and os.path.exists(os.path.join(d, "var", "adm", "firstboot", "netset")))
+        (ok if good else fail)("tmp sweep EXECUTED: /tmp and /var/tmp emptied, dot files and directories included; the "
+                               "directories themselves and everything else stay%s"
+                               % ("" if good else ": tmp %r var/tmp %r rc %d" % (left("tmp"), left("var/tmp"), r.returncode)))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_net_kspace():
+    head("NK. the netinstall finds kernel space where the repository keeps it: the release tree's one catalog "
+         "(its #ext kpkg block), else the tree's kspace/ catalog")
+    prof = open(os.path.join(REPO, "src", "miniroot", "profile"), encoding="latin-1").read()
+    m = re.search(r"\n(\tNKOK=\n.*?\n\tif \[ \"\$NKOK\" = y \]\n\tthen\n\t\t:\n\telse\n.*?\n\tfi)\n", prof, re.S)
+    if not m or 'NET_REPO=http://pkg.amigaux.org/1.1' not in prof:
+        fail("profile: no kernel-space gate (NKOK) in net_source, or the repository default is not the 1.1 tree")
+        return
+    d = tempfile.mkdtemp(prefix="netk_")
+    try:
+        stub = os.path.join(d, "apkg")
+        # the stub's update copies the repository's catalog beside the cache, as apkg does
+        open(stub, "w").write('#!/bin/sh\nconf=$2\nrepo=`sed -n "s/^repo=//p" $conf`\ncache=`sed -n "s/^cachedir=//p" $conf`\n'
+                              'echo "$repo" >> %s/repos\nsrc=%s/srv/`echo $repo | sed "s|^http://[^/]*/||"`/catalog\n'
+                              '[ -f "$src" ] || exit 1\ncp "$src" `dirname $cache`/catalog\n' % (d, d))
+        os.chmod(stub, 0o755)
+        def run(layout):
+            for sub in ("srv", "tmp"):
+                shutil.rmtree(os.path.join(d, sub), ignore_errors=True)
+            rel = os.path.join(d, "srv", "1.1")
+            os.makedirs(os.path.join(d, "tmp", "net", "cache")); os.makedirs(os.path.join(d, "tmp", "netk", "cache"))
+            os.makedirs(rel)
+            if layout == "one":
+                open(os.path.join(rel, "catalog"), "w").write("#apkg-catalog 1\ncore|2.1|core|stock/core-2.1.pkg|0|1|none|s|c\n"
+                                                              "#ext kpkg 1\n#kpkg kernel-k46-m k46 role=kernel\n#end kpkg\n")
+            elif layout == "two":
+                open(os.path.join(rel, "catalog"), "w").write("#apkg-catalog 1\ncore|2.1|core|stock/core-2.1.pkg|0|1|none|s|c\n")
+                os.makedirs(os.path.join(rel, "kspace"))
+                open(os.path.join(rel, "kspace", "catalog"), "w").write("#apkg-catalog 1\n#ext kpkg 1\n#kpkg x\n#end kpkg\n")
+            if os.path.exists(os.path.join(d, "repos")):
+                os.remove(os.path.join(d, "repos"))
+            body = m.group(1).replace("/tmp/", d + "/tmp/").replace("$NETINST/bin/apkg", stub)
+            # net_source writes /tmp/net.conf just before this block
+            sh = ('NET_REPO=http://repo/1.1\nNETINST=/nonexistent\nrestart() { echo RESTART; exit 4; }\n'
+                  'printf "repo=%%s\\ncachedir=%s/tmp/net/cache\\n" "$NET_REPO" > %s/tmp/net.conf\n%s\necho "KREPO=$NET_KREPO"\n'
+                  % (d, d, body))
+            r = subprocess.run(["/usr/bin/dash", "-c", sh], capture_output=True, text=True, timeout=20)
+            return r.returncode, r.stdout
+        rc1, o1 = run("one")
+        rc2, o2 = run("two")
+        rc3, o3 = run("none")
+        good = ("KREPO=http://repo/1.1\n" in o1 and rc1 == 0 and "KREPO=http://repo/1.1/kspace\n" in o2 and rc2 == 0
+                and rc3 == 4 and "RESTART" in o3)
+        (ok if good else fail)("kernel-space gate EXECUTED: a catalog with the #ext kpkg block -> the same repository; "
+                               "without it -> kspace/; an unreadable repository -> the gate restarts%s"
+                               % ("" if good else ": %r %r %r" % (o1[-120:], o2[-120:], o3[-120:])))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_kb_nodes():
+    head("KN. the target carries its own disk nodes before its first boot: `kbootset -R nodes` after the "
+         "boot store's check (a root on card 2 or 3 opens its swap by name in swapconf, before any rc script)")
+    l11 = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    i_chk = l11.find("\tl11_kb check\n")
+    i_nod = l11.find("\trunq $KB nodes || die ")
+    i_swp = l11.find('[ ! -b "$TARGET/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_SWAP_SLICE:-2}" ]')
+    fb = open(os.path.join(REPO, "payload", "firstboot", "firstboot.sh"), encoding="latin-1").read()
+    good = 0 <= i_chk < i_nod < i_swp and "/sbin/kbootset nodes" in fb
+    (ok if good else fail)("l11.sh runs `kbootset -R nodes` after `l11_kb check` and refuses a target without its "
+                           "swap node; the first boot still registers the set (`kbootset nodes`)")
+
+
+def audit_probe_backticks():
+    head("CP. the cards probe cannot hold the boot: run in backticks (as the profile does) with a unit that never "
+         "answers, the CD candidates come back at the bound, the stuck card marked and left out")
+    prof = open(os.path.join(REPO, "src", "miniroot", "profile"), encoding="latin-1").read()
+    fns = []
+    for name in ("inquiry_bounded", "cards_probe_bounded", "cd_candidates_from_cards"):
+        m = re.search(r"\n(%s\(\)\n\{\n.*?\n\})\n" % name, prof, re.S)
+        if not m:
+            fail("profile: no %s()" % name)
+            return
+        fns.append(m.group(1))
+    d = tempfile.mkdtemp(prefix="cprobe_")
+    try:
+        kb = os.path.join(d, "kbootset")
+        # card 1's unit 0 never answers (a controller asleep in gsioctl)
+        open(kb, "w").write('#!/bin/sh\ncase "$1" in\ncards) echo "card 0: c0-c7 zorro:0202:54"; echo "card 1: c8-cf mobo:gayle" ;;\n'
+                            'inquiry) [ "$2 $3" = "1 0" ] && exec sleep 300\n  [ "$2 $3" = "0 3" ] && { echo "type 5 CD"; exit 0; }\n'
+                            '  exit 1 ;;\nesac\n')
+        os.chmod(kb, 0o755)
+
+        def run(fs):
+            body = ('KBOOTSET=%s\nSCSIDEV=/dev/null\nCARDS_PROBE=%s/cards.probe\nUNIT_SECS=2\nNOINQ_KEYS=mobo:a3000-wd\n%s\n'
+                    '_cds=`cd_candidates_from_cards`\necho "CDS=[`echo $_cds`]"\necho "SUS=[`cat %s/cards.probe.suspect`]"\n'
+                    % (kb, d, "\n".join(fs), d))
+            # its own session: the stuck stub and what it left behind are this run's process group
+            pr = subprocess.Popen(["/usr/bin/dash", "-c", body], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                  text=True, start_new_session=True)
+            try:
+                return pr.communicate(timeout=30)[0]
+            except subprocess.TimeoutExpired:
+                return "TIMEOUT"
+            finally:
+                try:
+                    os.killpg(pr.pid, 9)
+                except ProcessLookupError:
+                    pass
+                pr.wait()
+
+        out = run(fns)
+        want = "CDS=[0,3]" in out and "SUS=[1]" in out
+        old = [fns[0].replace(" < /dev/null > /dev/null 2>&1 &", " &")] + fns[1:]
+        out_old = run(old) if old[0] != fns[0] else "unchanged"
+        (ok if want and out_old == "TIMEOUT" else fail)(
+            "probe in backticks EXECUTED: back at the bound with card 0's CD and card 1 marked suspect; without its "
+            "own descriptors the same inquiry holds the substitution (timeout)%s"
+            % ("" if want and out_old == "TIMEOUT" else ": %r / old %r" % (out[-200:], out_old[-80:])))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
 def audit_ni_base():
-    head("NB. the netinstall image carries the base packages every set takes (base/order), never a "
-         "set's own extras (base/o.<set>: x11r63, 34 MB)")
+    head("NB. the netinstall image carries the base packages every set takes (base/order) and the "
+         "per-set lists, never a set's own datastreams (base/o.<set>: x11r63, 34 MB)")
     src = open(os.path.join(REPO, "tools", "build-ramdisk-miniroot.sh"), encoding="utf-8").read()
     m = re.search(r'\n(  if \[ -f "\$ITREE/l11/base/order" \]; then\n.*?\n  fi)\n', src, re.S)
     if not m:
@@ -10008,9 +10356,18 @@ def audit_ni_base():
         body = 'ITREE=%s/stage\nit=%s\ndie() { echo "DIE $*"; exit 3; }\n%s\n' % (d, it, m.group(1))
         r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=10)
         got = sorted(os.listdir(os.path.join(it, "l11", "base"))) if os.path.isdir(os.path.join(it, "l11", "base")) else []
-        want = ["amxbase.cf", "amxbase.pkg", "order", "seed.sh", "syslog.cf", "syslog.pkg"]
+        want = ["amxbase.cf", "amxbase.pkg", "o.full", "o.x11", "order", "seed.sh", "syslog.cf", "syslog.pkg"]
         (ok if got == want and r.returncode == 0 else fail)(
-            "netinstall base EXECUTED: order, seed.sh and the every-set packages; no x11r63, no o.<set> (%s)" % " ".join(got))
+            "netinstall base EXECUTED: order, seed.sh, the every-set packages and the o.<set> lists; no x11r63 "
+            "datastream (%s)" % " ".join(got))
+        open(os.path.join(b, "x11r63.cf"), "w").write("etc/X11/x.conf\n")
+        shutil.rmtree(os.path.join(it, "l11", "base"))
+        r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=10)
+        (ok if "DIE" in r.stdout and "conffiles" in r.stdout and r.returncode == 3 else fail)(
+            "netinstall base EXECUTED: a set's own package with conffiles stops the build (the second stage "
+            "cannot seed them)")
+        open(os.path.join(b, "x11r63.cf"), "w").write("")
+        shutil.rmtree(os.path.join(it, "l11", "base"))
         os.remove(os.path.join(b, "syslog.pkg"))
         r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=10)
         (ok if "DIE" in r.stdout and r.returncode == 3 else fail)(
@@ -10183,85 +10540,119 @@ def audit_boot_pri():
 
 
 def audit_cd_candidates():
-    head("CC. the miniroot's CD addresses come from the running kernel: `kbootset cards --probe` (the "
-         "units that answer as CD drives), else every unit of every card it registered, else the fixed list; "
-         "the address that answered goes to /tmp/cd.spec")
+    head("CC. the miniroot's CD addresses come from the running kernel: each card's units by one bounded "
+         "`kbootset inquiry` at a time (the units that answer as CD drives), never asking a card no INQUIRY may reach "
+         "(the A3000's WD: its units are mounted once each instead), else every unit of every other card, else "
+         "the fixed list; the address that "
+         "answered goes to /tmp/cd.spec")
     prof = os.path.join(REPO, "src", "miniroot", "profile")
     src = open(prof, encoding="latin-1").read()
-    i = src.find("cd_candidates_from_cards()\n{")
-    k = src.find("cards_probe_bounded()\n{")
-    if i < 0 or k < 0:
-        fail("src/miniroot/profile: no cd_candidates_from_cards / cards_probe_bounded")
-        return
-    f = src[i:]
-    f = f[:f.index("\n}\n") + 3]
-    g = src[k:]
-    g = g[:g.index("\n}\n") + 3]
-    f = g + "\n" + f
+    fns = []
+    for name in ("inquiry_bounded", "cards_probe_bounded", "cd_candidates_from_cards"):
+        m = re.search(r"\n(%s\(\)\n\{\n.*?\n\})\n" % name, src, re.S)
+        if not m:
+            fail("src/miniroot/profile: no %s()" % name)
+            return
+        fns.append(m.group(1))
+    f = "\n".join(fns)
+    keys = re.search(r'(?m)^NOINQ_KEYS="([^"]*)"$', src)
+    (ok if keys and keys.group(1) == "mobo:a3000-wd" else fail)("the profile names the A3000's WD as a card no INQUIRY may reach")
     (ok if 'echo "$s" > $CD_SPEC_FILE' in src and "CD_SPEC_FILE=/tmp/cd.spec" in src else fail)(
         "the probe writes the address that answered to /tmp/cd.spec")
     (ok if re.search(r'(?m)^_cds=`cd_candidates_from_cards`\n\[ -n "\$_cds" \] && CD_CANDIDATES=`echo \$_cds`$', src)
      else fail)("CD_CANDIDATES is replaced only when the kernel's cards gave a list (the fixed list is the fallback)")
     d = tempfile.mkdtemp(prefix="cdcand.")
     try:
-        cards = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n"
-                 "card 2: c10-c17 mobo:gayle\\n")
-        full = " ".join("%d,%d" % (c, u) for c in (0, 1, 2) for u in (3, 5, 2, 4, 1, 0, 6))
-        cases = (
-            ("-36 --probe: only the units that answer as CD drives (an A4091 ZuluSCSI CD, the IDE slave)",
-             "card 0: c0-c7 zorro:144b:01 base 0x40000000\\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n"
-             "card 1: c8-cf zorro:0202:54 base 0x40800000\\n  unit 3: type 5 ZuluSCSI CDROM 2.0\\n"
-             "card 2: c10-c17 mobo:gayle\\n  unit 5: type 5 UAE-ATAPI CD-ROM 0.1\\n  unit 6: type 0 UAE IDE -\\n",
-             0, "/dev/null", "1,3 2,5"),
-            ("-36 --probe finds no CD drive: every unit of every card", "card 0: c0-c7 zorro:144b:01 base 0x40000000\\n"
-             "  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n", 0, "/dev/null", full),
-            ("kbootset -35 (no --probe, exit 2): every unit of every card", "", 2, "/dev/null", full),
-            ("no /dev/scsi node: --probe is not asked, every unit of every card", "", 0, "/nonexistent", full),
-        )
-        for what, probe, prc, dev, want in cases:
-            kb = os.path.join(d, "kb")
-            open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") printf "%%b" "%s"; exit %d;;\n'
-                                '"cards ") printf "%%b" "%s";;\nesac\n' % (probe, prc, cards))
-            os.chmod(kb, 0o755)
-            r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=%s CARDS_PROBE=%s/cards.probe PROBE_SECS=20\n%s\ncd_candidates_from_cards" % (kb, dev, d, f)],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
-            got = " ".join(r.stdout.decode().split())
-            (ok if got == want else fail)("CD addresses: %s%s" % (what, "" if got == want else " -- got %r" % got))
-        # a probe that never returns (an empty unit's selection timeout, no timeout in gsioctl): abandoned
-        # at PROBE_SECS, and the full list is used
         kb = os.path.join(d, "kb")
-        open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") exec /bin/sleep 30 ;;\n"cards ") printf "%%b" "%s";;\nesac\n' % cards)
+        # the stub: `cards` prints d/cards; `inquiry C U` logs the call and answers from d/inq/C.U
+        # (its line), d/inq/C.U.hang (it never returns), or nothing (no unit, exit 1)
+        open(kb, "w").write('#!/bin/sh\nD=%s\ncase "$1" in\ncards) [ "$2" = --probe ] && exit 9; cat $D/cards ;;\n'
+                            'inquiry) echo "$2 $3" >> $D/calls\n  [ -f $D/inq/$2.$3.hang ] && exec /bin/sleep 30\n'
+                            '  [ -f $D/inq/$2.$3 ] && { cat $D/inq/$2.$3; exit 0; }\n  exit 1 ;;\n'
+                            'esac\n' % d)
         os.chmod(kb, 0o755)
-        t0 = time.time()
-        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe PROBE_SECS=3\n%s\ncd_candidates_from_cards >%s/out.txt" % (kb, d, f, d)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-        took = time.time() - t0
-        got = " ".join(open(os.path.join(d, "out.txt")).read().split())
-        (ok if got == full and took < 20 else fail)("CD addresses: a probe that hangs is abandoned at its bound (%.0f s), the full list used%s"
-                                                     % (took, "" if got == full else " -- got %r" % got))
-        # past the bound the card the probe hung on (its last flushed `card N:` line) is recorded as
-        # suspect for the interview; no card line at all: "unknown"
-        for part, want_s, what in (
-                ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n"
-                 "card 1: c8-cf zorro:0202:54 base 0x40800000\\n", "1", "the card its last line names (card 1)"),
-                ("", "unknown", "no card line: unknown")):
-            open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") printf "%%b" "%s"; exec /bin/sleep 30 ;;\n'
-                                '"cards ") printf "%%b" "%s";;\nesac\n' % (part, cards))
-            for x in ("cards.probe.suspect",):
+
+        def setup(cards, units, hang=()):
+            shutil.rmtree(os.path.join(d, "inq"), ignore_errors=True)
+            os.makedirs(os.path.join(d, "inq"))
+            for x in ("calls", "cards.probe", "cards.probe.suspect"):
                 if os.path.exists(os.path.join(d, x)):
                     os.remove(os.path.join(d, x))
-            subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe PROBE_SECS=2\n%s\ncd_candidates_from_cards >/dev/null" % (kb, d, f)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-            sp = os.path.join(d, "cards.probe.suspect")
-            got_s = open(sp).read().strip() if os.path.exists(sp) else "(none)"
-            (ok if got_s == want_s else fail)("CD addresses: an abandoned probe records its suspect card: %s%s"
-                                              % (what, "" if got_s == want_s else " -- got %r" % got_s))
-        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s/none SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe\n%s\ncd_candidates_from_cards" % (d, d, f)],
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
-        (ok if not r.stdout.strip() else fail)("CD addresses: no kbootset on the RAM disk gives no list (the fixed one stands)")
+            open(os.path.join(d, "cards"), "w").write(cards)
+            for (c, u), line in units.items():
+                open(os.path.join(d, "inq", "%d.%d" % (c, u)), "w").write(line + "\n")
+            for c, u in hang:
+                open(os.path.join(d, "inq", "%d.%d.hang" % (c, u)), "w").close()
+
+        def run(dev="/dev/null", kbp=kb):
+            body = ('KBOOTSET=%s SCSIDEV=%s CARDS_PROBE=%s/cards.probe UNIT_SECS=2 NOINQ_KEYS="mobo:a3000-wd"\n%s\n'
+                    '_cds=`cd_candidates_from_cards`\necho $_cds' % (kbp, dev, d, f))
+            pr = subprocess.Popen(["/usr/bin/dash", "-c", body], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, start_new_session=True)
+            try:
+                out = " ".join(pr.communicate(timeout=60)[0].split())
+            except subprocess.TimeoutExpired:
+                out = "TIMEOUT"
+            finally:
+                try:
+                    os.killpg(pr.pid, 9)
+                except ProcessLookupError:
+                    pass
+                pr.wait()
+            rd = lambda n: open(os.path.join(d, n)).read() if os.path.exists(os.path.join(d, n)) else ""
+            return out, rd("calls"), rd("cards.probe.suspect").strip(), rd("cards.probe")
+
+        three = "card 0: c0-c7 zorro:144b:01 base 0x40000000\ncard 1: c8-cf zorro:0202:54 base 0x40800000\ncard 2: c10-c17 mobo:gayle\n"
+        full = " ".join("%d,%d" % (c, u) for c in (0, 1, 2) for u in (3, 5, 2, 4, 1, 0, 6))
+        disks = {(0, 6): "type 0 ZuluSCSI HARDDRIVE 2.0", (2, 6): "type 0 UAE IDE -"}
+        cds = {(1, 3): "type 5 ZuluSCSI CDROM 2.0", (2, 5): "type 5 UAE-ATAPI CD-ROM 0.1"}
+        setup(three, {**disks, **cds})
+        out, calls, sus, pf = run()
+        good = (out == "1,3 2,5" and len(calls.split("\n")) - 1 == 24 and "  unit 5: type 5 UAE-ATAPI" in pf)
+        (ok if good else fail)("CD addresses: every unit of every card asked once, one at a time; only the units that "
+                               "answer as CD drives (an A4091 CD, the IDE slave)%s" % ("" if good else " -- got %r" % out))
+        setup(three, disks)
+        out = run()[0]
+        (ok if out == full else fail)("CD addresses: no unit answers as a CD drive: every unit of every card%s"
+                                      % ("" if out == full else " -- got %r" % out))
+        setup(three, {})
+        out = run(kbp=os.path.join(d, "none"))[0]
+        (ok if out == "" else fail)("CD addresses: no kbootset on the RAM disk gives no list (the fixed one stands)")
+        out = run(dev="/nonexistent")[0]
+        (ok if out == full else fail)("CD addresses: no /dev/scsi node: nothing is asked, every unit of every card%s"
+                                      % ("" if out == full else " -- got %r" % out))
+        # a unit that never answers: its card is marked suspect and left, the other cards are still asked
+        setup(three, {**disks, **cds}, hang=((1, 0),))
+        t0 = time.time()
+        out, calls, sus, pf = run()
+        took = time.time() - t0
+        good = out == "2,5" and sus == "1" and "1 1" not in calls.split("\n") and "2 5" in calls and took < 30
+        (ok if good else fail)("CD addresses: a unit that never answers (card 1 unit 0) is abandoned at its bound "
+                               "(%.0f s): card 1 suspect, its other units not asked, card 2's CD still found%s"
+                               % (took, "" if good else " -- got %r sus %r" % (out, sus)))
+        setup(three, disks, hang=((1, 0),))
+        out, calls, sus, pf = run()
+        want = " ".join("%d,%d" % (c, u) for c in (0, 2) for u in (3, 5, 2, 4, 1, 0, 6))
+        (ok if out == want and sus == "1" else fail)("CD addresses: no CD found past a stuck card: every unit of every "
+                                                     "other card, none of the suspect one%s" % ("" if out == want else " -- got %r" % out))
+        # the A3000: no INQUIRY ever reaches the WD (mobo:a3000-wd); its units are mounted once each instead
+        a3 = "card 0: c0-c7 zorro:0202:54 base 0x40800000\ncard 1: c8-cf mobo:a3000-wd\n"
+        wd = " ".join("1,%d" % u for u in (3, 5, 2, 4, 1, 0, 6))
+        setup(a3, {(0, 3): "type 5 ZuluSCSI CDROM 2.0"})
+        out, calls, sus, pf = run()
+        good = (out == "0,3 " + wd and not any(l.startswith("1 ") for l in calls.split("\n"))
+                and "card 1: c8-cf mobo:a3000-wd\n  not probed" in pf)
+        (ok if good else fail)("CD addresses: an A3000 with an A4091: the WD is never asked (not probed in the table); "
+                               "the A4091's CD first, then each WD unit for the mount probe%s"
+                               % ("" if good else " -- got %r calls %r" % (out, calls)))
+        setup("card 0: c0-c7 mobo:a3000-wd\n", {})
+        out, calls, sus, pf = run()
+        want = " ".join("0,%d" % u for u in (3, 5, 2, 4, 1, 0, 6))
+        good = out == want and calls == ""
+        (ok if good else fail)("CD addresses: an A3000 alone: no INQUIRY at all, every WD unit for the mount probe%s"
+                               % ("" if good else " -- got %r calls %r" % (out, calls)))
     finally:
         shutil.rmtree(d, ignore_errors=True)
-
 
 def audit_universal_cards():
     head("UC. a universal medium (TARGET_HBA=auto) scans every card the kernel registered: with "
@@ -10274,8 +10665,8 @@ def audit_universal_cards():
         if not f:
             fail("setup.sh: no %s()" % name)
         return f or ""
-    body = "\n".join(fn(n) for n in ("hexval", "hexname", "read_cards", "card_key", "card_name", "card_hba",
-                                      "card_units", "id_card"))
+    body = "\n".join(fn(n) for n in ("hexval", "hexname", "read_cards", "card_key", "card_base", "card_name",
+                                      "card_hba", "card_units", "id_card"))
     for need, what in (('UNIVERSAL=y', "the universal block sets UNIVERSAL"),
                        ('INSTALLABLE_IDS="${SCAN_IDS:-none}"', "every disk found is installable"),
                        ('[ -n "$UNIVERSAL" ] && [ -s "$TOK_F.held" ] && UNI_ASK=y',
@@ -10317,6 +10708,32 @@ def audit_universal_cards():
                 (2, 'SUSPECT_CARD=1; read_cards; card_units', "0 1 2 3 4 5 6 10 11 12 13 14 15 16",
                  "a card a stuck probe hung on (card 1): none of its units is scanned")):
             got = run(prc, script)
+            (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        # the A1200: the same gayle driver and key at 0xDA0000, named for its machine; the A4000's stays "IDE"
+        pf = os.path.join(d, "cards.probe")
+        for table, want, what in (
+                ("card 0: c0-c7 mobo:gayle base 0x00da0000\n  unit 0: type 0 UAE IDE -\n  unit 5: type 5 UAE-ATAPI CD-ROM 0.1\n",
+                 "A1200 IDE|0", "an A1200 alone: its IDE port is named \"A1200 IDE\" and its master offered"),
+                ("card 0: c0-c7 mobo:gayle\n  unit 0: type 0 UAE IDE -\n", "IDE|0", "the A4000's IDE port stays \"IDE\"")):
+            open(pf, "w").write(table)
+            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=/bin/true CARDS_F=%s/cards SETUP_PROBE=%s CARDS_PROBED= "
+                                "NOINQ_KEYS=mobo:a3000-wd\n%s\nread_cards; k=`card_key 0`; b=`card_base 0`; n=`card_name \"$k\" \"$b\"`; "
+                                "u=`card_units`; echo \"$n|$u\"" % (d, pf, body)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            got = r.stdout.decode().strip()
+            (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        # the A3000: the WD (mobo:a3000-wd) is not probed, so its units are read as before the probe
+        pf = os.path.join(d, "cards.probe")
+        for table, want, what in (
+                ("card 0: c0-c7 zorro:0202:54 base 0x40800000\n  unit 3: type 5 ZuluSCSI CDROM 2.0\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\n"
+                 "card 1: c8-cf mobo:a3000-wd\n  not probed (no INQUIRY on this controller)\n", "6 8 9 a b c d e",
+                 "an A3000 with an A4091: the A4091's disk by its INQUIRY, the WD's units 0-6 by the dd read"),
+                ("card 0: c0-c7 mobo:a3000-wd\n  not probed (no INQUIRY on this controller)\n", "0 1 2 3 4 5 6",
+                 "an A3000 alone: the WD's units 0-6 by the dd read")):
+            open(pf, "w").write(table)
+            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=/bin/true CARDS_F=%s/cards SETUP_PROBE=%s CARDS_PROBED= "
+                                "NOINQ_KEYS=mobo:a3000-wd\n%s\nread_cards; card_units" % (d, pf, body)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            got = " ".join(r.stdout.decode().split())
             (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
         ssi = "\n".join(_extract_func(setup, n) or "" for n in ("cd_unit_id", "spec_id", "scan_safe_ids"))
         r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s\nCD_SPEC= MINIROOT_CD_CANDIDATES= INSTALLABLE_IDS= SUSPECT_CARD=2\n"
@@ -11240,6 +11657,12 @@ def main():
     audit_modreg_local()
     audit_gayle_slave()
     audit_ni_base()
+    audit_probe_backticks()
+    audit_kb_nodes()
+    audit_net_kspace()
+    audit_tmp_sweep()
+    audit_netset_stage2()
+    audit_netset_stage1()
     audit_syspass_confirm()
     audit_kbootset_cards()
     audit_swap_stepdown()

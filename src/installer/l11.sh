@@ -361,6 +361,17 @@ l11_bootstore()
 	# the post-write proof: every member's SHA-256 and CRC-32 against its manifest,
 	# the generation against apkg's record; kbootset never writes in `check`
 	l11_kb check
+	# A four-card kernel names cards 2 and 3 c10-c1f, and core lays only the c0-cf d0 and d1
+	# nodes. The kernel opens its swap by name before any rc script runs, so a root on card 2 or
+	# 3 (an IDE disk beside a Z3660 and a Zorro SCSI card) needs its nodes on the disk now:
+	# without them the first boot panics in swapconf (lookupname /dev/dsk/c16d0s2, error 2).
+	# `kbootset -R nodes` lays the four-card set (c0-c1f d0 s0-s7) and removes the d1 nodes; the
+	# booted box registers the change to core at its first boot (firstboot.sh, `kbootset nodes`).
+	# On a two-card kernel it says core's nodes stand.
+	runq $KB nodes || die "kbootset nodes failed on the target (status $?): a root on card 2 or 3 cannot open its swap at boot"
+	if [ ! -b "$TARGET/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_SWAP_SLICE:-2}" ]; then
+		die "the target has no /dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_SWAP_SLICE:-2} after kbootset nodes: its first boot would panic in swapconf"
+	fi
 	runq $KB status
 	# the generation's module copies, where the module core loads them from (C2-4 §11:
 	# build -R writes them onto this root; check above hashed them)
@@ -386,7 +397,8 @@ l11_bootstore()
 	l11_bcheckrc "$TARGET/sbin/bcheckrc"
 	l11_markgood
 	l11_bootset auto
-	rm -rf "${TARGET:?}/tmp/kpkgcache" "${KCONF:?}"
+	# apkg keeps the catalog beside its cache (dirname(cachedir)/catalog): it goes too
+	rm -rf "${TARGET:?}/tmp/kpkgcache" "${TARGET:?}/tmp/catalog" "${KCONF:?}"
 	msg "boot store   : pristine generation committed on $BOOT_RAW and checked; /etc/default/bootset, /dev/kinfo and the updbootpart shim laid"
 }
 

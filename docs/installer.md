@@ -5286,3 +5286,42 @@ and the target kept `/etc/rdb`'s `0xFFFFFFFC` whatever its controller. It showed
 Z3660 (the netinstall `l11-ni-k30` target on the A3000 WD read back `0xFFFFFFFC`, ni10; on a
 Z3660 the two Masks are equal). The copy takes it now, and `ramdisk-image-check.py --zen0` (the
 netinstall images' gate in `build-netinstall.sh`) demands the medium table byte for byte.
+
+## The network installation in two stages
+
+The netinstall medium boots a 5 MiB RAM disk and reads its packages over HTTP. A set beyond minimal
+is installed in two stages:
+
+1. **From the RAM disk.** The interview offers the repository's sets (minimal, standard, full) as
+   before. The installer then installs the **minimal** set over HTTP (apkg `-R`, one package at a
+   time, the cache and the spool on the target), the base packages every set takes from the image
+   (`l11/base/order`), the kernel set and the boot store, and arms the first boot. Before the first
+   package it writes the record of the rest of the chosen set, `/var/adm/firstboot/netset`: the
+   set's name, the repository, and the repository catalog's row of every package the set has beyond
+   minimal, then the set's own base packages (`l11/base/o.<set>`: x11r6.3 for x11 and full, which is
+   34 MB and stays off the image). A package the repository does not have stops the installation
+   there, before anything is installed. The miniroot's network answers become the first-boot
+   dialog's defaults, and the repository URL is the one the installation used.
+2. **At the first boot.** `/etc/rc2.d/S99znetset` runs `/var/adm/firstboot/netset.sh` at the end of
+   run level 2: the network is up, swap is on and the boot generation is marked good; the console
+   login follows it. The script checks every recorded row against the repository's catalog (a
+   repository that changed since the installation stops it), then installs each package with
+   apkg, one at a time, with one progress line each. apkg refuses a datastream whose size or md5
+   is not its row's. A package is tried three times; one already installed is skipped. If the stage
+   cannot finish, it says what is missing and how to finish (`/sbin/sh /var/adm/firstboot/netset.sh`,
+   or the next boot), and the system stays as it is: bootable, with the packages installed so far.
+   When the set is complete the record becomes `netset.done` and the hook is removed. One run at a
+   time: a second run waits for the first.
+
+Disk space: the second stage holds one package's downloaded copy and its spool at once. For the
+full set the peak is about 350 MiB of data (x11r5src's 60 MiB twice on top of the tree so far),
+about 375 MiB with ufs metadata, so a full network install wants a 512 MB disk; standard peaks near
+70 MiB.
+
+The cells: `uni-ni-k46` (the full set, 512 MiB), `uni-ni-k30` (standard) and `uni-ni-k46-resume`
+(the first boot's repository goes away after three datastreams; a second boot finishes the stage)
+name the repository `amixrepo`, which the miniroot resolves to the tap anchor and the first-boot
+dialog to the rig host's slot-network address, where the cell serves the same snapshot.
+`tools/netset-check.py` judges the disk the first boot left. The snapshot is the full-set master
+plus make dist's userland rows (`build-netinstall.sh --mirror`), and passes amix's `tools/release-check`
+as a directory.

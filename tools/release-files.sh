@@ -7,11 +7,16 @@
 # zip (`zip -fz-`: no zip64 -- an image is under 4 GiB, and old built-in unzippers choke on zip64),
 # under 2 GiB (a release host's file cap); `zipinfo -v` must show no zip64 extra field, and
 # `unzip -t` must pass. Then DIR/SHA256SUMS over the zips and the images, and the content check
-# (tools/release-check.py: no Kickstart or board ROM, no private address, local name or secret)
+# (amix's tools/release-check: no Kickstart or board ROM, no private address, local name or secret,
+# no build trace; the ROM register roms/MANIFEST.sha256 and $PRIVACY_PATTERNS, the bench's names)
 # over every image and every --media file (an ISO, whose .sha256 beside it is checked too).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+# the workspace: the directory holding this repository's git directory (a worktree's too); amix's
+# tools/release-check is the one content check every release file passes
+ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
+RC="$ws/amix/tools/release-check"
 IMG= MEDIA=()
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -21,6 +26,8 @@ while [ $# -gt 0 ]; do
 	esac
 done
 [ -d "$IMG" ] || { echo "release-files: --images DIR is required" >&2; exit 2; }
+[ -x "$RC" ] && [ -n "${PRIVACY_PATTERNS:-}" ] && [ -f "$PRIVACY_PATTERNS" ] \
+	|| { echo "release-files: needs $RC and \$PRIVACY_PATTERNS (the bench's local names)" >&2; exit 2; }
 command -v zip >/dev/null && command -v zipinfo >/dev/null && command -v unzip >/dev/null \
 	|| { echo "release-files: zip, zipinfo and unzip are required" >&2; exit 2; }
 CAP=$((2 * 1024 * 1024 * 1024))
@@ -58,7 +65,8 @@ for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do
 	fi
 	say "medium $(basename "$m"): $(stat -c %s "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-64)"
 done
-python3 "$here/release-check.py" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
+python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
+	"${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 say "release-files: $( [ $bad = 0 ] && echo 'ALL CLEAN' || echo 'FAILED')"
 exit $bad

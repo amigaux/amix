@@ -155,40 +155,66 @@ KBOOTSET=/sbin/kbootset
 SCSIDEV=/dev/scsi
 # the probe's output, for the interview too (setup.sh reads it instead of probing again)
 CARDS_PROBE=/tmp/cards.probe
-PROBE_SECS=60
-# cards_probe_bounded -- `kbootset cards --probe` into $CARDS_PROBE, given at most PROBE_SECS:
-# gsioctl has no timeout of its own, so an empty unit takes as long as its controller's selection
-# timeout. Past the bound the probe is abandoned and its file stays empty (the full list is used).
+# the cards no INQUIRY may reach: the stock a3091's raw passthrough (gsioctl, at spl0) lets the chip's
+# reset interrupt in, and that INQUIRY never returns. Its block path (dd, a mount; queued at spl2) is
+# safe, so the A3000's WD is not probed but its units are mounted once each for the CD and read for
+# disks, as before the probe. `kbootset cards` itself sends no command.
+NOINQ_KEYS="mobo:a3000-wd"
+# one unit's bound: an empty unit answers within its controller's selection timeout
+UNIT_SECS=20
+# inquiry_bounded CARD UNIT -- `kbootset inquiry CARD UNIT` (one INQUIRY) into $CARDS_PROBE.u, given
+# at most UNIT_SECS: 0 a unit answered, 1 none, 2 past the bound. The inquiry runs in the background
+# with its own stdin, stdout and stderr (the caller is in backticks, whose substitution waits for
+# every writer of its pipe); the miniroot has no kill, so one past the bound is abandoned.
+inquiry_bounded()
+{
+	rm -f $CARDS_PROBE.u $CARDS_PROBE.ud
+	( $KBOOTSET inquiry $1 $2 > $CARDS_PROBE.u 2>/dev/null
+	  echo $? > $CARDS_PROBE.ud ) < /dev/null > /dev/null 2>&1 &
+	_is=0
+	while [ ! -s $CARDS_PROBE.ud ]
+	do
+		[ $_is -ge $UNIT_SECS ] && return 2
+		/bin/sleep 1
+		_is=`expr $_is + 1`
+	done
+	[ "`cat $CARDS_PROBE.ud`" = 0 ] && [ -s $CARDS_PROBE.u ] && return 0
+	return 1
+}
+# cards_probe_bounded -- each card's units by INQUIRY, one at a time, into $CARDS_PROBE in the shape
+# of `kbootset cards --probe`: the card's line, then "  unit U: type T ..." per unit that answered.
+# A card of NOINQ_KEYS gets "  not probed (no INQUIRY on this controller)" under its line. A unit past
+# its bound leaves its card's controller asleep for the rest of this boot: the card is written to
+# $CARDS_PROBE.suspect, and its remaining units are not asked.
 cards_probe_bounded()
 {
 	cp /dev/null $CARDS_PROBE
-	rm -f $CARDS_PROBE.new $CARDS_PROBE.done $CARDS_PROBE.suspect
+	rm -f $CARDS_PROBE.new $CARDS_PROBE.suspect
 	[ -x /bin/sleep ] || return 1
-	# the probe runs in the background and marks its end; the miniroot has no kill, so a probe
-	# past the bound is abandoned, not stopped (its INQUIRY ends with the selection timeout)
-	( $KBOOTSET cards --probe > $CARDS_PROBE.new 2>/dev/null
-	  cp /dev/null $CARDS_PROBE.done ) &
-	_ps=0
-	while [ ! -f $CARDS_PROBE.done ]
+	$KBOOTSET cards > $CARDS_PROBE.cards 2>/dev/null || return 1
+	cp /dev/null $CARDS_PROBE.new
+	_cs=`while read _a _b _r; do [ "$_a" = card ] && expr "$_b" : '\([0-3]\):$'; done < $CARDS_PROBE.cards`
+	for _c in $_cs
 	do
-		if [ $_ps -ge $PROBE_SECS ]
-		then
-			# the probe is asleep in the kernel for the rest of this boot, on the card its last
-			# `card N:` line names (kbootset flushes each line): that card's controller may be
-			# wedged, so the interview marks its disks. No line: which card is unknown.
-			_sus=`while read _a _b _r; do [ "$_a" = card ] && expr "$_b" : '\([0-3]\):$'; done < $CARDS_PROBE.new`
-			_last=unknown
-			for _c in $_sus
-			do
-				_last=$_c
-			done
-			echo "$_last" > $CARDS_PROBE.suspect
-			return 1
-		fi
-		/bin/sleep 1
-		_ps=`expr $_ps + 1`
+		_cl=`while read _l; do case "$_l" in "card $_c:"*) echo "$_l"; break ;; esac; done < $CARDS_PROBE.cards`
+		echo "$_cl" >> $CARDS_PROBE.new
+		set -- $_cl
+		case " $NOINQ_KEYS " in
+			*" $4 "*)
+				echo "  not probed (no INQUIRY on this controller)" >> $CARDS_PROBE.new
+				continue ;;
+		esac
+		for _u in 0 1 2 3 4 5 6 7
+		do
+			inquiry_bounded $_c $_u
+			case $? in
+				0)	echo "  unit $_u: `cat $CARDS_PROBE.u`" >> $CARDS_PROBE.new ;;
+				2)	echo "$_c" > $CARDS_PROBE.suspect
+					break ;;
+			esac
+		done
 	done
-	[ -s $CARDS_PROBE.new ] && mv $CARDS_PROBE.new $CARDS_PROBE
+	mv $CARDS_PROBE.new $CARDS_PROBE
 	return 0
 }
 cd_candidates_from_cards()
@@ -206,6 +232,13 @@ cd_candidates_from_cards()
 			then
 				_u=\`expr "$_b" : '\\([0-7]\\):$'\`
 				[ "$_t $_n" = "type 5" ] && [ -n "$_cur" ] && [ -n "$_u" ] && echo "$_cur,$_u"
+			elif [ "$_a" = not ] && [ -n "$_cur" ]
+			then
+				# a card no INQUIRY reaches: each of its units is tried once by the mount probe
+				for _u in 3 5 2 4 1 0 6
+				do
+					echo "$_cur,$_u"
+				done
 			fi
 		done < $CARDS_PROBE`
 		if [ -n "$_p" ]
@@ -214,11 +247,16 @@ cd_candidates_from_cards()
 			return 0
 		fi
 	fi
-	$KBOOTSET cards 2>/dev/null | while read _w _k _r
+	# every unit of every card, but none of a card whose probe never ended: a mount there would
+	# wait on the same wedged controller
+	_sc=
+	[ -s $CARDS_PROBE.suspect ] && _sc=`cat $CARDS_PROBE.suspect`
+	$KBOOTSET cards 2>/dev/null | while read _w _k _x _key _r
 	do
 		[ "$_w" = card ] || continue
 		_c=`expr "$_k" : '\([0-3]\):$'`
 		[ -n "$_c" ] || continue
+		[ "$_c" != "$_sc" ] || continue
 		for _u in 3 5 2 4 1 0 6
 		do
 			echo "$_c,$_u"
@@ -764,16 +802,17 @@ net_source()
 	NGW="$ask"
 	readask "What is the name server's address? (RETURN for none) "
 	NNS="$ask"
-	readask "Which package repository? [http://pkg.amigaux.org] "
-	NET_REPO="$ask"; [ "$NET_REPO" = "" ] && NET_REPO=http://pkg.amigaux.org
-	NET_KREPO="$NET_REPO/kspace"
+	readask "Which package repository? [http://pkg.amigaux.org/1.1] "
+	NET_REPO="$ask"; [ "$NET_REPO" = "" ] && NET_REPO=http://pkg.amigaux.org/1.1
 	# the host part of the URL: http://HOST[:PORT][/...]
 	nhost=`expr "$NET_REPO" : 'http://\([^:/]*\)'`
+	NRIP=
 	if [ "$NNS" = "" ]
 	then
 		case "$nhost" in
 			[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
 			*)	readask "What is the address of $nhost? "
+				NRIP="$ask"
 				echo "$ask	$nhost" >> /etc/inet/hosts ;;
 		esac
 	else
@@ -812,12 +851,21 @@ net_source()
 		echo "repo=$NET_REPO"
 		echo "cachedir=/tmp/net/cache"
 	} > /tmp/net.conf
-	{
-		echo "repo=$NET_KREPO"
-		echo "cachedir=/tmp/netk/cache"
-	} > /tmp/netk.conf
-	if $NETINST/bin/apkg -c /tmp/net.conf update > /tmp/net.log 2>&1 &&
-	   $NETINST/bin/apkg -c /tmp/netk.conf update >> /tmp/net.log 2>&1
+	# kernel space: a release tree carries it in the same catalog (its `#ext kpkg 1` block, the
+	# datastreams beside the others under pkgs/); a tree without the block keeps it in kspace/
+	NKOK=
+	if $NETINST/bin/apkg -c /tmp/net.conf update > /tmp/net.log 2>&1
+	then
+		NKB=`while read nk1 nk2; do [ "$nk1" = "#ext" ] && [ "$nk2" = "kpkg 1" ] && { echo y; break; }; done < /tmp/net/catalog`
+		NET_KREPO="$NET_REPO/kspace"
+		[ "$NKB" = y ] && NET_KREPO="$NET_REPO"
+		{
+			echo "repo=$NET_KREPO"
+			echo "cachedir=/tmp/netk/cache"
+		} > /tmp/netk.conf
+		$NETINST/bin/apkg -c /tmp/netk.conf update >> /tmp/net.log 2>&1 && NKOK=y
+	fi
+	if [ "$NKOK" = y ]
 	then
 		:
 	else
@@ -854,6 +902,9 @@ net_source()
 	INST=$NETINST
 	SETUP=$NETINST/bin/setup.sh
 	export SRC_KIND INST NET_REPO NET_KREPO NET_RATE
+	# the installed system's network defaults (install.sh: the first-boot dialog offers them)
+	NET_IF=$NIF NET_IP=$NIP NET_MASK=$NMASK NET_GW=$NGW NET_NS=$NNS NET_RHOST=$nhost NET_RIP=$NRIP
+	export NET_IF NET_IP NET_MASK NET_GW NET_NS NET_RHOST NET_RIP
 }
 
 find_source()

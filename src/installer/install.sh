@@ -423,6 +423,68 @@ emit_firstboot_hook() {
 	} > "$1"
 }
 
+# emit_netset_hook FILE -- the rc2 hook of the netinstall's second stage: runs
+# /var/adm/firstboot/netset.sh while its record (netset) is there. It sorts after
+# S99zkbootset, so the network is up, swap is on and the boot generation is marked good
+# before the rest of the set installs; the console login follows it. A driver-written,
+# non-package file like S16firstboot; netset.sh removes it when the set is complete.
+emit_netset_hook() {
+	{
+		echo '#!/bin/sh'
+		echo '# S99znetset -- the network installation'"'"'s second stage, while it is armed.'
+		echo '# Written onto the target by src/installer/install.sh (NOT a package member).'
+		echo 'FB=/var/adm/firstboot'
+		echo 'if [ -f "$FB/netset" ]; then'
+		echo '	/sbin/sh "$FB/netset.sh" --boot'
+		echo 'fi'
+		echo 'exit 0'
+	} > "$1"
+}
+
+# net_record -- the netinstall's second-stage record, $TARGET/tmp/netset.rec: the chosen
+# set's name, the repository, and the repository catalog's row ($NETCAT, the catalog this
+# run's `apkg update` fetched) of each package the chosen set has beyond the minimal one,
+# in install order, then the set's own base packages (base/o.<set>, which the image does
+# not carry). netset.sh installs those rows and refuses a repository whose row has changed.
+# Every package must have a row now, before anything is installed.
+# net_row PKG -- the $NETCAT row whose name or pkginst is PKG (the order's tokens are
+# pkginsts, the catalog's names may differ: x11r63 is x11r6.3), or nothing
+net_row()
+{
+	while read _l
+	do
+		case "$_l" in ""|\#*) continue ;; esac
+		_cn=`expr "$_l" : '\([^|]*\)|'`
+		_ci=`expr "$_l" : '[^|]*|[^|]*|\([^|]*\)|'`
+		if [ "$_ci" = "$1" ] || [ "$_cn" = "$1" ]; then
+			echo "$_l"
+			break
+		fi
+	done < "$NETCAT"
+}
+net_record()
+{
+	_min=`while read _p _r; do case "$_p" in ""|\#*) ;; *) echo "$_p" ;; esac; done < "$INST/order.minimal"`
+	_min=" "`echo $_min`" "
+	_todo=`while read _p _r; do case "$_p" in ""|\#*) ;; *) case "$_min" in *" $_p "*) ;; *) echo "$_p" ;; esac ;; esac; done < "$NET_SET_ORDER"`
+	if [ -f "$INST/l11/base/o.$NET_SET" ]; then
+		_todo="$_todo "`cat "$INST/l11/base/o.$NET_SET"`
+	fi
+	_rec="$TARGET/tmp/netset.rec"
+	rm -f "${_rec:?}"
+	echo "set $NET_SET" > "$_rec" || die "cannot write $_rec"
+	echo "repo $NET_REPO" >> "$_rec"
+	_nr=0
+	for _p in $_todo
+	do
+		_row=`net_row "$_p"`
+		[ -n "$_row" ] || die "network source: the $NET_SET set's $_p is not in the repository catalog ($NET_REPO) -- refusing to start"
+		echo "row $_row" >> "$_rec"
+		_nr=`expr $_nr + 1`
+	done
+	msg "network: the second stage will install $_nr package(s) of the $NET_SET set at the first boot ($_rec)"
+}
+
 # emit_zen_hook FILE -- write the target's rc2 Z3660-native-ethernet (zen0) bring-up
 # to FILE (METAL-FIX.4). Like S16firstboot above, this is DRIVER-WRITTEN and additive
 # -- NOT a package member, so it never reaches the pkgadd contents DB (invisible to
@@ -854,6 +916,20 @@ esac
 case "$FB_TZ" in
 	:*)	FB_TZ=`expr "$FB_TZ" : ':\(.*\)'` ;;
 esac
+# the netinstall: the network the miniroot brought up (net_source's answers) is the installed
+# system's, offered again by the first-boot dialog; the second stage installs from the same
+# repository. A profile's own value wins.
+if [ "$SRC_KIND" = net ]; then
+	[ -n "$FB_REPO_URL" ] || FB_REPO_URL="$NET_REPO"
+	[ -n "$FB_ETHER_IF" ] || FB_ETHER_IF="$NET_IF"
+	[ -n "$FB_IP" ] || FB_IP="$NET_IP"
+	[ -n "$FB_NETMASK" ] || FB_NETMASK="$NET_MASK"
+	[ -n "$FB_GATEWAY" ] || FB_GATEWAY="$NET_GW"
+	[ -n "$FB_DNS1" ] || FB_DNS1="$NET_NS"
+	if [ -z "$FB_REPO_IP" ] && [ -n "$NET_RIP" ]; then
+		FB_REPO_HOST="$NET_RHOST" FB_REPO_IP="$NET_RIP"
+	fi
+fi
 # each release's packages live under their own fixed path; apkg fetches <repo>/catalog, so no
 # trailing slash (the 1.0 media of record keep the root)
 if [ -z "$FB_REPO_URL" ]; then
@@ -2102,6 +2178,20 @@ if [ -z "$INSTALL_SET" ]; then
 fi
 [ -n "$INSTALL_SET" ] || INSTALL_SET=default
 
+# THE NETINSTALL INSTALLS IN TWO STAGES. Now: the minimal set over HTTP (with the base
+# packages from the image, the kernel set and the boot store, as for any set). At the first
+# boot: the rest of the chosen set, by payload/firstboot/netset.sh from the record net_record
+# writes below -- on the installed system, which has its own disk for the cache and the
+# spool, retries a failed download and continues after an interruption. The minimal set is
+# what this run installs, attests and logs; NET_SET is the set the user chose.
+NET_SET= NET_SET_ORDER=
+if [ "$SOURCE_KIND" = net ] && [ "$INSTALL_SET" != minimal ]; then
+	[ -f "$INST/order.minimal" ] || die "network source: the medium has no order.minimal"
+	NET_SET="$INSTALL_SET" NET_SET_ORDER="$ORDER"
+	ORDER="$INST/order.minimal" INSTALL_SET=minimal
+	msg "network install in two stages: the minimal set now, the rest of the $NET_SET set at the first boot"
+fi
+
 # ★ THE MEDIUM IS THE AUTHORITY ON ATTESTATION, NOT THE PROFILE. INSTALL_ATTESTED
 # arrives from the answers profile, and on an INTERACTIVE install that is already
 # the medium's own answer -- setup.sh reads $INST/sets and writes
@@ -2271,6 +2361,9 @@ elif [ "$SOURCE_KIND" = net ]; then
 	msg "network: apkg update ($NET_REPO)"
 	runq "$APKG" -c "$NETCONF" update || die "network source: apkg update FAILED ($NET_REPO) -- refusing to install"
 	NETCAT="$TARGET/var/apkg/catalog"
+	# the second stage's record first: every package of the chosen set must be in the
+	# repository before the first one installs
+	[ -z "$NET_SET" ] || net_record
 	netnames="$TARGET/tmp/.netnames.$$"
 	: > "$netnames"
 	while read pkg; do
@@ -2976,6 +3069,18 @@ run chmod 600 "$TARGET/var/adm/firstboot/firstboot.conf" "$TARGET/var/adm/firstb
 echo "+ emit_firstboot_hook $TARGET/etc/rc2.d/S16firstboot"
 emit_firstboot_hook "$TARGET/etc/rc2.d/S16firstboot" || die "cannot write the first-boot rc2 hook"
 run chmod 0744 "$TARGET/etc/rc2.d/S16firstboot"
+# the netinstall's second stage, armed when the first one recorded the rest of the set
+if [ -f "$TARGET/tmp/netset.rec" ]; then
+	[ -f "$INST/firstboot/netset.sh" ] || die "network source: the medium has no firstboot/netset.sh"
+	run cp "$INST/firstboot/netset.sh" "$TARGET/var/adm/firstboot/netset.sh"
+	run chmod 700 "$TARGET/var/adm/firstboot/netset.sh"
+	run mv "${TARGET:?}/tmp/netset.rec" "${TARGET:?}/var/adm/firstboot/netset"
+	run chmod 600 "$TARGET/var/adm/firstboot/netset"
+	echo "+ emit_netset_hook $TARGET/etc/rc2.d/S99znetset"
+	emit_netset_hook "$TARGET/etc/rc2.d/S99znetset" || die "cannot write the second-stage rc2 hook"
+	run chmod 0744 "$TARGET/etc/rc2.d/S99znetset"
+	msg "second stage armed: rc2.d/S99znetset installs the rest of the $NET_SET set at the first boot"
+fi
 
 # 1.1: no reframe tool and no /stand framing tools -- kbootset owns the boot store.
 if [ "$INSTALL_LAYOUT" != 1.1 ]; then
@@ -3479,6 +3584,10 @@ RUNOUT=
 
 # The RAW arm's apkg cache and raw.conf live in the target's /tmp; they are done.
 rm -rf "${TARGET:?}/tmp/apkgcache" "${TARGET:?}/tmp/raw.conf"
+# The target's /tmp and /var/tmp as a fresh system has them: empty. Its first boot would clear
+# them (S05RMTMPFILES), but an image of record is never booted before it ships, so what the
+# install left there would ship with it. No package lays anything in either.
+rm -rf "${TARGET:?}"/tmp/* "${TARGET:?}"/tmp/.[!.]* "${TARGET:?}"/var/tmp/* "${TARGET:?}"/var/tmp/.[!.]*
 msg "unmounting target and running a final fsck..."
 /etc/umount "$TARGET" 2>/dev/null || umount "$TARGET" 2>/dev/null || warn "umount $TARGET returned nonzero"
 # The ONLY fsck of the run (there is no pre-mount one, see section 2), and the

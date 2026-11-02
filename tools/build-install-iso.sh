@@ -424,6 +424,8 @@ else
   cp -p "$repo/src/installer/setup.sh"   "$STAGE/bin/setup.sh";   chmod 0755 "$STAGE/bin/setup.sh"
 fi
 cp -p "$repo"/payload/firstboot/firstboot.sh "$STAGE/firstboot/firstboot.sh"
+# the netinstall's second stage (install.sh arms it on a network install of a set beyond minimal)
+cp -p "$repo"/payload/firstboot/netset.sh "$STAGE/firstboot/netset.sh"
 cp -p "$repo"/payload/firstboot/root.shadow  "$STAGE/firstboot/root.shadow"
 
 # FB_ROOT_SEED_PW (optional profile key): override the SEEDED root password hash.

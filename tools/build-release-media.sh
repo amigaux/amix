@@ -19,11 +19,16 @@
 #                                    (tools/build-ramdisk-hdf.sh, priority 5)
 #   amix-1.1-netinstall.iso          (with --ni-*) the network installer (tools/build-netinstall.sh)
 #   <each>.sha256, SHA256SUMS, MEDIA.txt (names, sizes, sha256, the inputs) and the content check
-#   (tools/release-check.py on every ISO: no ROM, no private address, name or secret).
+#   (amix's tools/release-check on every ISO: no ROM, no private address, name or secret; needs
+#   $PRIVACY_PATTERNS, the bench's local names, and the ROM register roms/MANIFEST.sha256).
 # The master stage is kept at --out/stage (netinstall's --install takes it). Publication of any of
 # these files is a separate, per-artefact decision. Exit 0 all built and clean, 1 not, 2 usage.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+# the workspace: the directory holding this repository's git directory (a worktree's too); amix's
+# tools/release-check is the one content check every release file passes
+ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
+RC="$ws/amix/tools/release-check"
 TREE= R46= R30= OUT= N46= N30= SET=x11
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -41,6 +46,7 @@ die() { echo "build-release-media: STOP: $*" >&2; exit 1; }
 [ -d "$TREE" ] && [ -f "$R46" ] && [ -f "$R30" ] && [ -n "$OUT" ] || { sed -n '2,6p' "$0" >&2; exit 2; }
 { [ -z "$N46$N30" ] || { [ -f "$N46" ] && [ -f "$N30" ]; }; } || die "--ni-k46 and --ni-k30 go together"
 L11_IN="${L11_IN:-$repo/work/l11}"; export L11_IN
+[ -x "$RC" ] && [ -n "${PRIVACY_PATTERNS:-}" ] && [ -f "$PRIVACY_PATTERNS" ] || die "needs $RC and \$PRIVACY_PATTERNS (the bench's local names)"
 [ -f "$L11_IN/INPUTS" ] || die "no $L11_IN/INPUTS (tools/build-l11-inputs.sh)"
 [ ! -s "$L11_IN/UNPINNED" ] || die "$L11_IN rolled userland unpinned: not inputs of record"
 [ -z "$(git -C "$repo" status --porcelain)" ] || die "the tree has uncommitted changes: release media name one commit"
@@ -92,7 +98,8 @@ fi
 	done
 } > "$OUT/MEDIA.txt"
 cat "$OUT/MEDIA.txt"
-python3 "$here/release-check.py" "$ISO" ${NI:+"$NI"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
+python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
+	"$ISO" ${NI:+"$NI"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
 rc=${PIPESTATUS[0]}
 [ "$rc" = 0 ] && echo "build-release-media: built and clean ($OUT)" || echo "build-release-media: the content check FAILED ($OUT/RELEASE-CHECK.txt)"
 exit $([ "$rc" = 0 ] && echo 0 || echo 1)
