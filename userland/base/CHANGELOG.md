@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-02 — ifup: the kernel's domain, a lease still being applied; amix-base 1.0-26 (8e185fd, 064ae88, 960e8fd)
+
+- With DNS on, the kernel's domain was rpcdomain after every boot: the stock sysinit's `domainname` does nothing with an empty /etc/domain, and the resolver appended the kernel's default to lookups. ifup's DNS step now clears the kernel's domain whenever it is set.
+- When the BOUND hook outlasted ifup_dhcpwait (21 s against 20 on a 16 MB 68030), ifup applied the line's static fallback over the lease just applied. ifup now asks `dhcpc -q` first, and a held lease counts.
+- ifup(1M) says DNS is never turned off, that /etc/resolv.conf must then stay, and how to go back (libsocket.so linked to libsockhost.so, resolv.so taken out of /etc/netconfig).
+- amxbase-1.0-26 md5 d39399eb.
+
 ## 2026-11-02 — the man directories are root sys; amix-base 1.0-25, dhcp-client 1.0-6 (6e83c56)
 
 The shared /opt/amix/man directories (man, the section directories, whatis.d, replaces.d) are 0755 root sys, the same as in every other package. Stock pkgadd stops on a d entry whose attributes differ from the registry. man.md rule 4 now states the attribute. On a disk that already has these packages, apkg's install of the new amix-base rewrites the directories' registry entries. amxbase-1.0-25 md5 5c827fc6, dhcpc-1.0-6 md5 2369ad74.
