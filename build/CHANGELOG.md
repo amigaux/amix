@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-02 — release step scans with the GCC 14 sysroot; release-allow; gcc14 dcfd12d (c85a9ee, 3709c53, 07db7ea)
+
+- make dist release scans with GCC 14's sysroot, so stock members' tables in .text are data as in the D4 gate.
+- release-allow: the NNTP example addresses in pubsrc-2.1 and three 1991 X sources in Xsource-2.1 and X11r5src-2.1.
+- gcc14-cross-amix dcfd12d: libamixrt.so.1 installed stripped (22728 bytes); nothing else in the image changes.
+
 ## 2026-11-02 — release-check; scan060-g14 section names; make dist apkg and release steps (30317c8, f5cbac3, c4349cb)
 
 - tools/release-check: the content check for published files, moved from the media build: disk images (ufs slices file by file, other slices raw, swap must be zero, no build-box traces), ISOs, and repository trees with each package datastream read member by member; the ROM register and private patterns are given by path.

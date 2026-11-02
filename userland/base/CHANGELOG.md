@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — amixrt 1.0-2 (721fd88)
+
+libamixrt.so.1 stripped (38456 → 22728 bytes); allocated sections and .dynsym unchanged. Package md5 408850aa.
+
 ## 2026-11-02 — xstart ends the server with the session; amix-base 1.0-27 (45fe98a)
 
 - A session's server now gets the card's display.d `once` option (X11R6's -terminate, the system server's -once, or none), so it exits when the session ends instead of resetting first.
