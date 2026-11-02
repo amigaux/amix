@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-02 — dropbear 2026.94-1 and heirloom-tar 070715-1 (e7eaf40..51ba153)
+
+- dropbear 2026.94-1: the SSH server and client (dbclient/ssh, scp, dropbearkey) as one 285 KB binary, the lightest secure algorithm set measured on the 030 and 060 (mlkem768x25519 and curve25519 key exchange, chacha20-poly1305, ed25519 host key made at first start), boot script on rc.subr. Two SVR4 fixes: TCP connect under O_NDELAY, and ptys from /dev/ptmx with the STREAMS modules pushed in the session's child (controlling tty, window size, terminal modes). md5 d87bc85e.
+- heirloom-tar 070715-1 (heirtar): Heirloom Toolchest tar replaces the 1992 /usr/sbin/tar, essential, never removed. Owner names map to local ids as stock did; absent or empty names keep the numbers instead of crashing; GNU long names and pax are read; sizes written through a correct %llo. man tar shows heirloom-tar(1) through replaces.d. md5 d27bb2c4.
+
 ## 2026-11-01 — libzz9k 2.9.1-2 (99886d9, 1ded317)
 
 AUTO calls take only a board's success and decide any other board answer with zlib, so every stream has one answer; ZZ9K_INFLATE_BOARD keeps the board's status. AUTO runs a source shorter than ZZ9K_INFLATE_BOARD_MIN (1024 bytes, settable with zz9k_inflate_threshold) in software.

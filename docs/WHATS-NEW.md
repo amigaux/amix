@@ -14,6 +14,8 @@ internals are in each directory's `CHANGELOG.md`.
 - X11R6.3 on the Z3660 graphics card (`x11r6.3`, `z3660rtg`).
 - Paula audio: the `paula` driver and `/dev/paula`.
 - `ztop` and `xztop`: the Z3660 board's sensors in a terminal and in an X window.
+- SSH: `dropbear`, the server and client with scp.
+- A `tar` that reads modern archives (GNU, ustar, pax) without crashing, from the Heirloom Toolchest.
 - `/dev/random`: the `random` module.
 - New packages: `python3`, `vim`, `rsync`, `ncurses`, `pth`, `bzip2`, `prngd`, `coreutils`, `diffutils`.
 - Shared libraries with GCC 14 (`gcc -shared`).
