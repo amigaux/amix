@@ -1,0 +1,184 @@
+Subject: an empty interrupt chain costs two instructions, not a walk
+
+Every level-2 interrupt (the clock, the A3000's SCSI, the network) went
+through dlm_int2_walk, which walked all 8 slots of the module chain even
+with none attached: about 390 cycles, 15.6 us on a 25 MHz 68030, so
+1.6-3 % of the CPU at 1000-2000 interrupts a second under disk load.
+The level-6 CIA-B wrapper did the same.  Each chain now keeps its count
+of attached handlers, changed under SPLHI in intr_attach, intr_detach
+and the backstop's dlm_intr_sweep, and the walk and the wrapper run the
+chain only when it is not 0.  dlm_intr_attached(level) answers the
+count, for the harness.
+
+--- a/dlm_intr.c
++++ b/dlm_intr.c
+@@ -23,7 +23,10 @@
+  * A handler is called as fn(arg) at its level and returns nonzero if its
+  * board raised the interrupt; every handler of the chain is called every
+  * time, as the stock ones are, and what they return is counted, not used
+- * to stop the chain.  No spl masks level 6 (C3-2): a level-6 handler's
++ * to stop the chain.  Each chain keeps the number of its handlers, so with
++ * none attached an interrupt costs two instructions here instead of a walk
++ * over every slot (about 390 cycles on a 68030 for the empty level-2
++ * chain).  No spl masks level 6 (C3-2): a level-6 handler's
+  * driver masks at its own board.  A driver with a polled mode keeps it as
+  * the default and attaches only once its board is set up to interrupt;
+  * if intr_attach fails it stays polled.
+@@ -43,6 +46,7 @@
+ };
+ 
+ static struct dlm_intr	int2_chain[INTR_MAX], int6_chain[INTR_MAX];
++static int		int2_n, int6_n;	/* handlers attached, changed under SPLHI */
+ static int		(*int2_last)();	/* the stock handler the walk displaced */
+ static int		dlm_intr_ready;
+ 
+@@ -81,7 +85,8 @@
+ {
+ 	if (int2_last)
+ 		(*int2_last)(a);
+-	runchain(int2_chain);
++	if (int2_n)
++		runchain(int2_chain);
+ 	return 0;
+ }
+ 
+@@ -92,7 +97,8 @@
+ {
+ 	int r = __amix_aciabintr(a);
+ 
+-	runchain(int6_chain);
++	if (int6_n)
++		runchain(int6_chain);
+ 	return r;
+ }
+ 
+@@ -142,6 +148,10 @@
+ 	fr->i_calls = fr->i_claims = 0;
+ 	strncpy(fr->i_name, name ? name : "", MODMAXNAMELEN - 1);
+ 	fr->i_fn = fn;			/* last: the chain sees a whole entry */
++	if (level == 2)
++		int2_n++;
++	else
++		int6_n++;
+ 	SPLX(s);
+ 	return 0;
+ }
+@@ -162,6 +172,10 @@
+ 		if (c[i].i_fn == fn && c[i].i_arg == arg) {
+ 			SPLHI(s);
+ 			c[i].i_fn = 0;
++			if (level == 2)
++				int2_n--;
++			else
++				int6_n--;
+ 			SPLX(s);
+ 			return 0;
+ 		}
+@@ -184,6 +198,10 @@
+ 			    (unsigned long)c[i].i_fn < hi) {
+ 				SPLHI(s);
+ 				c[i].i_fn = 0;
++				if (l)
++					int6_n--;
++				else
++					int2_n--;
+ 				SPLX(s);
+ 				n++;
+ 			}
+@@ -191,6 +209,14 @@
+ 	return n;
+ }
+ 
++/* the number of handlers attached at level 2 or 6, for diagnosis */
++int
++dlm_intr_attached(level)
++	int level;
++{
++	return level == 2 ? int2_n : level == 6 ? int6_n : -1;
++}
++
+ /* a handler's counts, for diagnosis (the harness, modstat later) */
+ int
+ dlm_intr_count(level, fn, callsp, claimsp)
+--- a/dlm.h
++++ b/dlm.h
+@@ -393,7 +393,7 @@
+ extern int dlm_posted;			/* MOD_C_POST has run this boot */
+ 
+ /* interrupt chains (30 section 4) */
+-extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_int2_walk();
++extern int intr_attach(), intr_detach(), dlm_intr_count(), dlm_intr_attached(), dlm_int2_walk();
+ extern void dlm_intr_init();
+ extern int dlm_intr_sweep(), dlm_ddi_sweep();	/* (lo, hi): what was left in [lo, hi) */
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -1722,10 +1722,12 @@
+ 	swp_rv = EIO;
+ 	check(modload("swp", &id) == EIO && !byname("swp") && intr_detach(6, swp_fn, (char *)0) == ENOENT,
+ 	    "backstop: a handler left by a failed _load is removed");
++	check(dlm_intr_attached(6) == 0, "intr: the backstop's removal lowers the chain's count to 0");
+ 	swp_rv = 0;
+ 	check(modload("swp", &id) == 0 && byname("swp") && moduload(id) == 0 && !byname("swp") &&
+ 	    intr_detach(6, swp_fn, (char *)0) == ENOENT,
+ 	    "backstop: a handler an _unload forgot is removed");
++	check(dlm_intr_attached(6) == 0, "intr: after an _unload's leftover is swept the count is 0");
+ 
+ 	/* the ifstats list: the module's link first, in the middle, last */
+ 	host_handler("swi_load", h_swi);
+@@ -1787,34 +1789,51 @@
+ 	int i;
+ 
+ 	check(intr_attach(2, ih1, x, "ih1") == ENXIO, "intr: level 2 before the walk is armed -> ENXIO");
++	check(dlm_intr_attached(2) == 0 && dlm_intr_attached(6) == 0 && dlm_intr_attached(3) == -1,
++	    "intr: a refused attach leaves the count at 0; no count at another level");
+ 	dlm_intr_init();
++	/* empty chains: the walk and the CIA-B wrapper call the stock handlers only */
++	p2int();
++	aciabintr((char *)0);
++	check(hconf_i2a == 1 && hconf_i2b == 1 && hconf_ciab == 1 && h1n == 0 && h2n == 0,
++	    "intr: with no handler attached the stock handlers still run, once each");
+ 	for (i = 0; i < 8; i++)
+ 		intr_attach(6, ih3, xs + i, "ih3");
++	check(dlm_intr_attached(6) == 8, "intr: eight attached, the level-6 count is 8");
+ 	check(intr_attach(6, ih3, xs + 8, "ih3") == ECONFIG, "intr: a ninth handler on a full chain -> ECONFIG");
++	check(dlm_intr_attached(6) == 8 && intr_attach(6, ih3, xs + 3, "ih3") == EEXIST && dlm_intr_attached(6) == 8,
++	    "intr: a full chain's refusal and a second attach leave the count at 8");
+ 	for (i = 0; i < 8; i++)
+ 		intr_detach(6, ih3, xs + i);
++	check(dlm_intr_attached(6) == 0, "intr: every handler detached, the count is 0");
+ 	check(intr_detach(3, ih1, x) == EINVAL, "intr: detach at a level other than 2 or 6 -> EINVAL");
+ 	check(int2_tbl[1] == dlm_int2_walk && int2_tbl[2] == 0,
+ 	    "intr: the walk takes int2_tbl's last handler slot, the terminator stays");
+ 	check(intr_attach(2, ih1, x, "ih1") == 0 && intr_attach(6, ih2, (char *)0, "ih2") == 0,
+ 	    "intr: a handler on each chain");
++	check(dlm_intr_attached(2) == 1 && dlm_intr_attached(6) == 1, "intr: one handler on each chain, each count 1");
+ 	p2int();
+-	check(ih1_saw == hconf_i2a + hconf_i2b && ih1_saw == 2,
++	check(ih1_saw == hconf_i2a + hconf_i2b && ih1_saw == 4,
+ 	    "intr: on level 2 the stock handlers run first, then the module's");
+-	check(hconf_i2a == 1 && hconf_i2b == 1 && h1n == 1 && h1a == x,
++	check(hconf_i2a == 2 && hconf_i2b == 2 && h1n == 1 && h1a == x,
+ 	    "intr: level 2 calls the stock handlers, the displaced one first, then the module's with its arg");
+ 	aciabintr((char *)0);
+-	check(hconf_ciab == 1 && h2n == 1 && ih2_saw == 1,
++	check(hconf_ciab == 2 && h2n == 1 && ih2_saw == 2,
+ 	    "intr: level 6 calls the stock CIA-B handler, then the module's");
+ 	check(dlm_intr_count(2, ih1, &calls, &claims) == 0 && calls == 1 && claims == 1 &&
+ 	    dlm_intr_count(6, ih2, &calls, &claims) == 0 && claims == 0,
+ 	    "intr: calls and claims are counted per handler");
+ 	check(intr_attach(2, ih1, x, "ih1") == EEXIST && intr_attach(3, ih1, x, "") == EINVAL &&
+ 	    intr_attach(2, 0, x, "") == EINVAL, "intr: a second attach, a bad level, no handler -> refused");
++	check(dlm_intr_attached(2) == 1, "intr: the refused attaches leave the level-2 count at 1");
+ 	check(intr_detach(2, ih1, x) == 0 && intr_detach(2, ih1, x) == ENOENT, "intr: detach, then not found");
++	check(dlm_intr_attached(2) == 0, "intr: the second detach (not found) leaves the count at 0");
+ 	p2int();
+-	check(hconf_i2b == 2 && h1n == 1, "intr: a detached handler is not called, the stock ones still are");
++	check(hconf_i2b == 3 && h1n == 1, "intr: a detached handler is not called, the stock ones still are");
+ 	intr_detach(6, ih2, (char *)0);
++	aciabintr((char *)0);
++	check(dlm_intr_attached(6) == 0 && hconf_ciab == 3 && h2n == 1,
++	    "intr: level 6 empty again: the stock CIA-B handler runs, the detached one does not");
+ 	sweep_tests();
+ }
+ 
