@@ -54,6 +54,8 @@ is asked for a lease and given
 seconds (from
 .BR /etc/rc.conf ;
 default 20).
+A lease that came in that time counts even while the DHCP client is still
+applying it, which on a slow machine can take longer than the wait.
 If no lease comes in that time, or no DHCP client is installed, the
 address on the line is used if it has one; otherwise the interface stays
 down, and the DHCP client keeps trying.

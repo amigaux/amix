@@ -241,6 +241,13 @@ expect "fallback applied" "aen0: 192.0.2.40 netmask 255.255.255.0 up" "$o"
 expect "no fallback: down" "aen1: no static fallback; left down" "$o"
 same "status with one down" 1 "$r"
 reset
+echo 2 > "$T/st/dhcpc.rc"; : > "$T/st/held"
+o=$(run ifup aen0); r=$?
+expect "bound, hook still running: said" "aen0: DHCP lease held; dhcpc's hook is applying it" "$o"
+refuse "bound, hook still running: no fallback" "static fallback" "$o"
+refuse "bound, hook still running: no address set" "ifconfig aen0 192.0.2.40" "$(cat "$T/st/calls")"
+same "bound, hook still running: status" 0 "$r"
+reset
 o=$(DHCPC_PATH="$T/nodhcpc" run ifup aen0)
 expect "no dhcpc" "aen0: dhcp, but $T/nodhcpc is not installed" "$o"
 expect "no dhcpc: fallback" "aen0: 192.0.2.40 netmask" "$o"
