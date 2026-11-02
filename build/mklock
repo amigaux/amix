@@ -108,9 +108,16 @@ def lock(top, out):
     if os.path.isdir(mods):
         sections.append(["module %s %s" % (rel, sha256(os.path.join(mods, rel)))
                          for rel in files(mods)])
-    for space in ("kspace", "userland"):
-        d = os.path.join(out, space)
-        pkgs = os.path.join(d, "pkgs")
+    # each space: its datastreams (pkgs/, or the directory itself for apkg)
+    # and its catalog; a release tree's datastreams in their subdirectories
+    spaces = [(s, os.path.join(out, s), os.path.join(out, s, "pkgs")) for s in ("kspace", "userland")]
+    spaces.append(("apkg", os.path.join(out, "apkg"), os.path.join(out, "apkg")))
+    rels = os.path.join(out, "release")
+    if os.path.isdir(rels):
+        spaces += [("release/" + r, os.path.join(rels, r), os.path.join(rels, r, "pkgs"))
+                   for r in sorted(os.listdir(rels))
+                   if os.path.isdir(os.path.join(rels, r)) and not r.endswith(".tmp")]
+    for space, d, pkgs in spaces:
         lines = []
         if os.path.isdir(pkgs):
             lines += ["pkg %s %s %d %s" % (space, rel, os.path.getsize(os.path.join(pkgs, rel)),

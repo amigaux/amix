@@ -41,8 +41,10 @@ kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
 kernel <line> <path> <sha256>         each file of a kernel cut, as its hook prints it
                                       (out/kernels/<line>.list; the cut of record's sums)
 module <line>/<name> <sha256>         out/modules
-pkg kspace|userland <file> <size> <sha256>
-catalog kspace|userland md5 <md5> sha256 <sha256>
+pkg kspace|userland|apkg|release/<rel> <file> <size> <sha256>
+                                      out/{kspace,userland}/pkgs, out/apkg, and
+                                      out/release/<rel>/pkgs (base/, stock/ below it)
+catalog kspace|userland|release/<rel> md5 <md5> sha256 <sha256>
                                       the catalog (its md5 names it); catalog.md5 must agree
 media <path> <size> <sha256>          out/media
 

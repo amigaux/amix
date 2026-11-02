@@ -5,7 +5,7 @@
 #
 # MIT licence, see LICENSE at the top of the repository.
 
-STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock
+STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock
 
 .PHONY: $(STEPS) test selftests check-packages
 
