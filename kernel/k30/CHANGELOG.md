@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — cut 68030-261102-70 (fee9393)
+
+sdqueue runs a controller's queue function at sdspl or above (raise only), so a raw /dev/scsi command that is the first to the A3000 WD no longer kills the stock a3091 driver; kinfo and the port's rth1 (31edbc6) give the A1200's `A1200 IDE` motherboard id 2, as the A4000's Gayle port. kern30m k30.1.4.261102-70 packages it (1dea6b19).
+
 ## 2026-11-02 — cut 68030-261102-69 (d576c94)
 
 -68's recipe from amix 46c269c with the module core's patch 0052, so the INT2/INT6 interrupt chains are not walked while no module has attached a handler. kabi k30.1.4 and abi 18c0a1c9 unchanged; the sidecar carries kbootset-min=1.1.0.261102-35. kern30m k30.1.4.261102-69 packages it (ad8f5af1).
