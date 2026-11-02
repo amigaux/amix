@@ -27,6 +27,10 @@ $X/bin/python3 -c 'import sys; print(sys.flags.hash_randomization)' > hr.out 2>&
 $X/bin/python3 "$H/tests/smoke.py" > py.out 2>&1; rc=$?
 cat py.out
 [ $rc -eq 0 ] && ok "smoke.py rc 0" || bad "smoke.py rc $rc"
+# a CPU-bound thread must let the others run (SIGALRM ends it if it hangs)
+$X/bin/python3 "$H/tests/starve.py" > st.out 2>&1; rc=$?
+cat st.out
+[ $rc -eq 0 ] && grep 'RES ok   starve' st.out > /dev/null || bad "starve.py rc $rc (142: hung, killed by its alarm)"
 
 cd ..
 if [ $fails -eq 0 ]; then echo "RES smoke PASS"; else echo "RES smoke FAIL $fails"; fi

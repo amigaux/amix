@@ -12,13 +12,19 @@ XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrd
 	xlsfonts xhost xauth iceauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf
 	smproxy rstart"
 
+# the LL printf gate scans the whole file with strings(1): in Xzz9000 (and X,
+# its link) it matches "%Lo$E" in .text, an absolute address operand followed
+# by opcode bytes, not a format; X11R6.3 has no long long conversion
+AMIX_LL_PRINTF_REVIEWED="Xzz9000's only match is instruction bytes in .text (an address operand and opcodes), not a format string; X11R6.3 formats no long long"
+
 # compiled with -fno-jump-tables, these files only: a GCC 14 switch table in each that
 # scan060-g14 (the D4 gate) cannot size, though the code bounds it
 XNOJT="lib/font/bitmap/bdfutils.c	bdfSpecialProperty: the bound is on the index before a shift
 	lib/Xtst/XTest.c		send_axes: a signed compare before the unsigned bound, table via %an
 	programs/xdm/dm.c		WaitForChild: the same shape
 	lib/font/Speedo/do_trns.c	sp_proc_outl_data: the index is a byte's high nibble, sign case away
-	lib/font/Type1/type1.c		Decode: the bound is set on the only path into the dispatch block"
+	lib/font/Type1/type1.c		Decode: the bound is set on the only path into the dispatch block
+	programs/Xserver/cfb/cfbglblt8.c	cfbPolyGlyphBlt8: the glyph-bit group's switch, bounded by its mask"
 
 xmake() {	# xmake <log> <make args...>: make -k, every compile line into make.log by xcc
 	_xm_log=$1; shift
@@ -167,11 +173,22 @@ stage() {
 	chmod 0444 "$DEST/etc/profile.d/x11r63.sh"
 	ln -s "$PREFIX" "$DEST/usr/X11R6"
 	echo "  staged: $(cd "$DEST" && find . -type f | wc -l) files"
+	# the notices: COPYRIGHT from this tree's compiled sources and fonts,
+	# LICENSE (ours), LICENSE.ddx (patch 00's)
+	mkdir -p "$DEST$PREFIX/doc/x11r63"
+	python3 -I "$HERE/notices.py" "$PWD" > "$DEST$PREFIX/doc/x11r63/COPYRIGHT" || {
+		echo "[FAIL] notices.py" >&2; exit 1; }
+	cp "$HERE/../LICENSE" "$DEST$PREFIX/doc/x11r63/LICENSE"
+	cp "$HERE/LICENSE.ddx" "$DEST$PREFIX/doc/x11r63/LICENSE.ddx"
+	chmod 0644 "$DEST$PREFIX/doc/x11r63/COPYRIGHT" "$DEST$PREFIX/doc/x11r63/LICENSE" \
+		"$DEST$PREFIX/doc/x11r63/LICENSE.ddx"
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
 	. "$HERE/../tools/manpages.sh"
 	amix_man_relayout
-	# Xzz9000 (and X, its link) is the Amiga DDX that Xamix(1) describes
-	amix_man_alias Xzz9000 1 Xamix
+	# Xzz9000 (and X, its link): our own page.  The DDX's Xamix page is the R5
+	# Xsun page with the names swapped, and there is no Xamix command
+	rm -f -- "${DEST:?}/opt/amix/man/1/Xamix"
+	amix_man "$HERE/man/Xzz9000.1" 1
 	amix_man "$HERE/man/x11r63.sh.4" 4 x11r63.sh
 	amix_man_whatis
 }

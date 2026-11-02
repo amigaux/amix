@@ -1,6 +1,8 @@
 From isoriano1968/amix-userland, components/runtime/python3/ports/python (Ignacio Soriano;
 PSF-2.0, as CPython), unchanged: AmigaUNIX as a cross-build host, pytime and posixmodule
-for SVR4.0, zlibmodule for a zlib without some 1.2.x entry points.
+for SVR4.0, and zlibmodule's output-buffer helpers taking avail_out as uInt *, the type
+of z_stream's field (they took uint32_t *, which is unsigned long here: GCC 14 refuses
+the mismatched pointer).
 
 --- a/configure
 +++ b/configure

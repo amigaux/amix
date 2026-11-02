@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 /* Private, code-point based string operations for CPython on AMIX. */
 #include <wchar.h>
 #include <stdlib.h>

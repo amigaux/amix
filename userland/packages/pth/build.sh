@@ -1,8 +1,8 @@
 # build.sh -- GNU Pth hooks for build/pkg/pkgbuild.sh.
 # Hooks only; the reasons are in README.md.
 
-# isoriano's patches are guarded by __amix__; Pth is 1990s C (gnu89)
-EXTRA_CFLAGS="-D__amix__ -std=gnu89 -fno-strict-aliasing"
+# Pth is 1990s C (gnu89)
+EXTRA_CFLAGS="-std=gnu89 -fno-strict-aliasing"
 
 configure_args() {
 	echo --enable-pthread --disable-shared --enable-static \
@@ -16,6 +16,17 @@ post_configure() {
 		echo "[FAIL] postconf/0002 did not apply to the generated pthread.h" >&2; exit 1; }
 	make pth_p.h > /dev/null
 	echo "  mcsc machine context; pthread.h patched (public timespec)"
+}
+
+# the box tests (tests/smoke.sh): built here against this tree's pthread.h
+# and libpthread.a, left in the tree (tests/fixtures), not shipped
+post_build() {
+	for t in t-errno t-once; do
+		echo "$CC $AMIX_CFLAGS -I. -o $t $HERE/tests/$t.c .libs/libpthread.a -lsocket -lnsl" >> "$BUILD/make.log"
+		$CC $AMIX_CFLAGS -I. -o "$t" "$HERE/tests/$t.c" .libs/libpthread.a -lsocket -lnsl >> "$BUILD/make.log" 2>&1 || {
+			echo "[FAIL] tests/$t.c did not link" >&2; tail -20 "$BUILD/make.log" >&2; exit 1; }
+	done
+	echo "  box tests built: t-errno t-once"
 }
 
 stage() {

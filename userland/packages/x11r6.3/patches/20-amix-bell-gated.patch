@@ -1,0 +1,99 @@
+Ours.  The Paula bell is off unless the server is started with -audiobell.
+
+- The stock audio driver's open() starts Paula and then waits for its
+  interrupt at level 4 with no timeout: where the interrupt never comes
+  (an emulator with sound output off, a faulty chip) the first bell froze
+  the whole box;
+- the bell's grandchild closes every descriptor before opening
+  /dev/audio: it held the client and listening sockets, the framebuffer
+  and the console for as long as the sound played;
+- one bell at a time (rate-limited to the bell duration), so a client
+  ringing in a loop does not make the server fork twice per request.
+
+--- a/programs/Xserver/hw/amix/amixKbd.c
++++ b/programs/Xserver/hw/amix/amixKbd.c
+@@ -57,6 +57,7 @@
+ #include <sys/ioctl.h>
+ #include <fcntl.h>
+ #include <sys/wait.h>
++#include <unistd.h>
+ 
+ /* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
+ void mieqEnqueue (xEvent *e);
+@@ -81,6 +82,14 @@
+ static int bellPitch = 400;             /* Hz; from KeybdCtrl */
+ static int bellDuration = 100;          /* ms */
+ 
++/*
++** -audiobell turns the bell on; it is off by default.  The stock audio
++** driver's open() starts Paula and then waits for its interrupt at level 4
++** with no timeout: where that interrupt never comes (an emulator with its
++** sound output off, a faulty chip) the first open freezes the whole box.
++*/
++Bool amixAudioBell = FALSE;
++
+ extern CARD8 amixModMap[];
+ extern KeySymsRec amixKeySyms;
+ 
+@@ -209,11 +218,19 @@
+     ** child exits at once (reaped here, no zombie); the grandchild belongs
+     ** to init.  A busy /dev/audio (mikmod playing) just means no beep.
+     */
+-    pid_t pid;
+-    int   status;
++    static CARD32 lastBell;
++    pid_t  pid;
++    int    status;
++    CARD32 now;
+ 
+-    if (loudness <= 0 || bellDuration <= 0 || bellPitch <= 0)
++    if (!amixAudioBell || loudness <= 0 || bellDuration <= 0 || bellPitch <= 0)
++	return;
++    /* at most one bell at a time: a client ringing in a loop must not make
++     * the server fork twice per request */
++    now = GetTimeInMillis();
++    if (lastBell != 0 && now - lastBell < (CARD32) bellDuration)
+ 	return;
++    lastBell = now;
+     pid = fork();
+     if (pid < 0)
+ 	return;
+@@ -231,7 +248,15 @@
+ 	int   period = BELL_PERIOD, volume = loudness * 64 / 100;
+ 	int   fd;
+ 	char *buf;
++	long  maxfd;
+ 
++	/* the grandchild holds nothing of the server's: client sockets, the
++	 * listening sockets, the framebuffer and console devices */
++	maxfd = sysconf(_SC_OPEN_MAX);
++	if (maxfd <= 0 || maxfd > 4096)
++	    maxfd = 4096;
++	for (fd = 0; fd < maxfd; fd++)
++	    (void) close(fd);
+ 	setsid();
+ 	fd = open("/dev/audio", O_WRONLY);
+ 	if (fd < 0)
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -403,6 +403,11 @@
+     if (strcmp (argv[i], "-debug") == 0) {	/* -debug */
+ 	return 1;
+     }
++    if (strcmp (argv[i], "-audiobell") == 0) {	/* -audiobell */
++	extern Bool amixAudioBell;
++	amixAudioBell = TRUE;
++	return 1;
++    }
+     if (strcmp (argv[i], "-mono") == 0) {	/* -mono */
+ 	amixFbs[AmixIndex].type = NATIVE_MONO;
+ 	return 1;
+@@ -569,6 +574,8 @@
+     ErrorF("-ar1 int               key repeat delay, ms (XKB off; XKB takes it too)\n");
+     ErrorF("-ar2 int               key repeat interval, ms (XKB off; XKB takes it too)\n");
+     ErrorF("-debug                 disable non-blocking console mode\n");
++    ErrorF("-audiobell             ring the bell on /dev/audio (off: the\n");
++    ErrorF("                       stock driver's open hangs without Paula)\n");
+     ErrorF("-mono                  force monochrome-only screen\n");
+     ErrorF("-zaphod                disable active Zaphod mode\n");
+     ErrorF("-heads int		   number of Zaphod screens to open\n");

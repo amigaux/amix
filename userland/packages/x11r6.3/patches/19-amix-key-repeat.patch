@@ -1,0 +1,231 @@
+Ours.  Key repeat comes from one place: XKB's RepeatKeys when XKB is on,
+the DDX's own repeat only when the server runs with -kb (XKB off), as
+the shipped display configuration does.
+
+- The DDX repeat replaced the server's select timeout from its block
+  handler, so a shorter timeout of the server's was lost; it now only
+  shortens it, to the time left before the next repeat;
+- tvplus left tv_usec at 1000000 unnormalised, and -ar1 1000 or more gave
+  an EINVAL select that spun the server: the timeout is computed in
+  microseconds and normalised, and -ar1/-ar2 are bounded to 1..30000 ms;
+- it ignored `xset r off` for single keys: a key repeats only when its
+  autoRepeats bit is set;
+- with XKB on both repeated, doubling every repeat; -ar1/-ar2 now reach
+  XKB as well (read here, not consumed);
+- the system's own repeat events (qualifier REPEAT) are dropped.
+
+--- a/programs/Xserver/hw/amix/amix.h
++++ b/programs/Xserver/hw/amix/amix.h
+@@ -187,7 +187,7 @@
+ #define tvplus(tv, tv1, tv2)	/* tv = tv1 + tv2 */ \
+ 		(tv).tv_sec = (tv1).tv_sec + (tv2).tv_sec; \
+ 		(tv).tv_usec = (tv1).tv_usec + (tv2).tv_usec; \
+-		if ((tv).tv_usec > 1000000) { \
++		if ((tv).tv_usec >= 1000000) { \
+ 			(tv).tv_usec -= 1000000; \
+ 			(tv).tv_sec += 1; \
+ 		}
+--- a/programs/Xserver/hw/amix/amixKbd.c
++++ b/programs/Xserver/hw/amix/amixKbd.c
+@@ -97,6 +97,7 @@
+ struct timeval    autoRepeatLastKeyDownTv;
+ struct timeval    autoRepeatDeltaTv;
+ static KeybdCtrl  sysKbCtrl;
++extern Bool       noXkbExtension;   /* xkb/xkbInit.c: -kb */
+ void amixFindInputScreen();
+ 
+ KbPrivRec  	sysKbPriv = {
+@@ -375,7 +376,14 @@
+     xE.u.u.type = (keydown ? KeyPress : KeyRelease);
+     xE.u.u.detail = key;
+ 
+-    if ((xE.u.u.type == KeyPress) && (keyModifiers == 0)) {
++    /*
++    ** The DDX repeats keys only when XKB is off (-kb): with XKB on, its
++    ** RepeatKeys does it, and both would double every repeat.  A key
++    ** repeats when repeat is on and that key's bit is set (xset r).
++    */
++    if ((xE.u.u.type == KeyPress) && (keyModifiers == 0) && noXkbExtension &&
++	sysKbPriv.ctrl->autoRepeat == AutoRepeatModeOn &&
++	(sysKbPriv.ctrl->autoRepeats[key >> 3] & (1 << (key & 7)))) {
+ 	/* initialize new AutoRepeater event & mark AutoRepeater on */
+ 	autoRepeatEvent = xE;
+ 	autoRepeatFirst = TRUE;
+@@ -400,6 +408,8 @@
+      * Update time & pointer location of saved KeyPress event.
+      */
+ 
++    autoRepeatDeltaTv.tv_sec  = (autoRepeatFirst ? autoRepeatInitiate : autoRepeatDelay) / 1000000;
++    autoRepeatDeltaTv.tv_usec = (autoRepeatFirst ? autoRepeatInitiate : autoRepeatDelay) % 1000000;
+     delta = TVTOMILLI(autoRepeatDeltaTv);
+     autoRepeatFirst = FALSE;
+ 
+@@ -427,8 +437,39 @@
+     return (TRUE);
+ }
+ 
+-static KeybdCtrl *pKbdCtrl = (KeybdCtrl *) 0;
++/*
++** The time to the next repeat, in microseconds (0 = due now).  The first
++** repeat comes autoRepeatInitiate after the press, then one every
++** autoRepeatDelay.
++*/
++static long
++amixRepeatDue()
++{
++    struct timeval now, d;
++    long           wait, elapsed;
++
++    gettimeofday(&now, (struct timezone *) NULL);
++    tvminus(d, now, autoRepeatLastKeyDownTv);
++    wait = autoRepeatFirst ? autoRepeatInitiate : autoRepeatDelay;
++    if (d.tv_sec < 0)
++	return wait;                    /* the clock went back: start over */
++    if (d.tv_sec >= wait / 1000000 + 1)
++	return 0;
++    elapsed = d.tv_sec * 1000000 + d.tv_usec;
++    return elapsed >= wait ? 0 : wait - elapsed;
++}
+ 
++static Bool
++amixRepeating()
++{
++    return autoRepeatKeyDown && noXkbExtension &&
++	   sysKbPriv.ctrl->autoRepeat == AutoRepeatModeOn;
++}
++
++/*
++** Shortens the server's select timeout to the next repeat; never lengthens
++** it (a shorter timeout of the server's own stands).
++*/
+ /*ARGSUSED*/
+ void
+ amixBlockHandler(nscreen, pbdata, pptv, pReadmask)
+@@ -437,22 +478,18 @@
+     struct timeval **pptv;
+     pointer pReadmask;
+ {
+-    static struct timeval artv = { 0, 0 };	/* autorepeat timeval */
+-
+-    if (!autoRepeatKeyDown)
+-	return;
+-
+-    if (pKbdCtrl == (KeybdCtrl *) 0)
+-	pKbdCtrl = ((KbPrivPtr) LookupKeyboardDevice()->devicePrivate)->ctrl;
++    static struct timeval artv;
++    long due;
+ 
+-    if (pKbdCtrl->autoRepeat != AutoRepeatModeOn)
++    if (!amixRepeating())
+ 	return;
+-
+-    if (autoRepeatFirst == TRUE)
+-	artv.tv_usec = autoRepeatInitiate;
+-    else
+-	artv.tv_usec = autoRepeatDelay;
+-    *pptv = &artv;
++    due = amixRepeatDue();
++    artv.tv_sec  = due / 1000000;
++    artv.tv_usec = due % 1000000;
++    if (*pptv == (struct timeval *) NULL ||
++	(*pptv)->tv_sec > artv.tv_sec ||
++	((*pptv)->tv_sec == artv.tv_sec && (*pptv)->tv_usec > artv.tv_usec))
++	*pptv = &artv;
+ }
+ 
+ /*ARGSUSED*/
+@@ -463,33 +500,11 @@
+     unsigned long err;
+     pointer pReadmask;
+ {
+-    struct timeval tv;
+-
+-    if (pKbdCtrl == (KeybdCtrl *) 0)
+-	pKbdCtrl = ((KbPrivPtr) LookupKeyboardDevice()->devicePrivate)->ctrl;
+-
+-    if (pKbdCtrl->autoRepeat != AutoRepeatModeOn)
+-    {
+-	amixFindInputScreen(nscreen, pbdata, err, (fd_set *)pReadmask);
+-	return;
+-    }
+-
+-    if (autoRepeatKeyDown) {
+-	gettimeofday(&tv, (struct timezone *) NULL);
+-	tvminus(autoRepeatDeltaTv, tv, autoRepeatLastKeyDownTv);
+-	if (autoRepeatDeltaTv.tv_sec > 0 ||
+-			(!autoRepeatFirst && autoRepeatDeltaTv.tv_usec >
+-				autoRepeatDelay) ||
+-			(autoRepeatDeltaTv.tv_usec >
+-				autoRepeatInitiate))
+-		autoRepeatReady++;
+-    }
+-    
+-    if (autoRepeatReady)
+-    {
+-	amixEnqueueAutoRepeat ();
+-	autoRepeatReady = 0;
+-    }
++    if (amixRepeating()) {
++	if (amixRepeatDue() == 0)
++	    amixEnqueueAutoRepeat ();
++    } else
++	autoRepeatKeyDown = 0;
+ 
+     amixFindInputScreen(nscreen, pbdata, err, (fd_set *)pReadmask);
+ }
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -274,6 +274,11 @@
+ 	{
+ 	    static char switchKeyDown[0x80];
+ 
++	    /* the system's own key repeats: X repeats keys itself (XKB, or
++	     * the DDX when XKB is off) */
++	    if (!(ae->code & 0x80) && (ae->qualifiers & QUALIFIERS_REPEAT))
++		continue;
++
+ 	    if (!(ae->code & 0x80))
+ 	    {
+ 		if ((ae->qualifiers & QUALIFIERS_ALT) &&
+@@ -379,15 +384,21 @@
+ #endif
+ #endif /* TIGA */
+ 
+-    if (strcmp (argv[i], "-ar1") == 0) {	/* -ar1 int */
+-	if (++i >= argc) UseMsg ();
+-	autoRepeatInitiate = 1000 * (long)atoi(argv[i]);
+-	return 2;
+-    }
+-    if (strcmp (argv[i], "-ar2") == 0) {	/* -ar2 int */
+-	if (++i >= argc) UseMsg ();
+-	autoRepeatDelay = 1000 * (long)atoi(argv[i]);
+-	return 2;
++    /*
++    ** -ar1/-ar2 (milliseconds) are read here for the DDX's own repeat
++    ** (XKB off) and not consumed, so XKB takes them too; 1..30000 ms
++    */
++    if (strcmp (argv[i], "-ar1") == 0 || strcmp (argv[i], "-ar2") == 0) {
++	long ms;
++	if (i + 1 >= argc) UseMsg ();
++	ms = atol(argv[i + 1]);
++	if (ms >= 1 && ms <= 30000) {
++	    if (argv[i][3] == '1')
++		autoRepeatInitiate = 1000 * ms;
++	    else
++		autoRepeatDelay = 1000 * ms;
++	}
++	return 0;
+     }
+     if (strcmp (argv[i], "-debug") == 0) {	/* -debug */
+ 	return 1;
+@@ -555,8 +566,8 @@
+ void
+ ddxUseMsg()
+ {
+-    ErrorF("-ar1 int               set autorepeat initiate time\n");
+-    ErrorF("-ar2 int               set autorepeat interval time\n");
++    ErrorF("-ar1 int               key repeat delay, ms (XKB off; XKB takes it too)\n");
++    ErrorF("-ar2 int               key repeat interval, ms (XKB off; XKB takes it too)\n");
+     ErrorF("-debug                 disable non-blocking console mode\n");
+     ErrorF("-mono                  force monochrome-only screen\n");
+     ErrorF("-zaphod                disable active Zaphod mode\n");

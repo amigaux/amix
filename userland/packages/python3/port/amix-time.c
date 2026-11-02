@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 /* Copy libc's static result before any cooperative scheduling point. These
  * adapters are for GNU Pth's non-preemptive execution, not kernel threads. */
 #include <time.h>

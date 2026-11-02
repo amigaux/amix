@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 #ifndef AMIX_PYTHON_INTTYPES_H
 #define AMIX_PYTHON_INTTYPES_H
 /* CPython's private format-macro subset for GCC 14's 32-bit AMIX ABI.

@@ -1,0 +1,48 @@
+Ours.  The DDX's filter for the system's screen-switch keys swallows the
+press of Alt-Esc and Alt-F1..F10 and exactly that press's release.
+
+- It decided per event, so a key pressed before Alt and released with
+  Alt down lost its release and stayed down in X (and autorepeated);
+- its range ran to PRINT_SCREEN_KEY, so with Alt the keypad's ( ) / *
+  (0x5A-0x5D) were eaten too.
+
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -263,16 +263,30 @@
+ 	lastEventTime = TVTOMILLI(ae->tv);
+ 
+ 	/*
+-	** <HACK> This little check strips the Alt-Function Key
+-	** <HACK> sequences that are used by the system to switch
+-	** <HACK> from screen to screen.
++	** Alt-Esc and Alt-F1..F10 switch the system's screens and do not
++	** reach X.  Only the press decides; its release is swallowed with
++	** it, whatever the qualifiers are by then, and every other release
++	** passes, so no key is left down in X.  The keypad keys after F10
++	** (0x5A-0x5D) are ordinary keys.
+ 	*/
+-
+-	if (ae->qualifiers & QUALIFIERS_ALT) 
++	if (ae->type != MOUSE_MOVE_EVENT &&
++	    !(key_code >= LEFT_MOUSE_BUTTON && key_code <= RIGHT_MOUSE_BUTTON))
+ 	{
+-	    if (key_code == ESCAPE_KEY ||
+-		(key_code >= FUNCTION_KEY_1 && key_code <= PRINT_SCREEN_KEY))
++	    static char switchKeyDown[0x80];
++
++	    if (!(ae->code & 0x80))
++	    {
++		if ((ae->qualifiers & QUALIFIERS_ALT) &&
++		    (key_code == ESCAPE_KEY ||
++		     (key_code >= FUNCTION_KEY_1 && key_code <= FUNCTION_KEY_10)))
++		{
++		    switchKeyDown[key_code] = 1;
++		    continue;
++		}
++	    }
++	    else if (switchKeyDown[key_code])
+ 	    {
++		switchKeyDown[key_code] = 0;
+ 		continue;
+ 	    }
+ 	}

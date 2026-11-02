@@ -1,0 +1,2931 @@
+Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
+(cfb16ScreenInit) instead of the hand-built screen, GC and drawing layer.
+
+- cfb16 owns visuals, windows, pixmaps (mfb for depth 1), GCs and their
+  validation, all drawing, colormaps and text: planemask, dashed and wide
+  lines, pixmap drawing and depth-1 pixmaps are cfb's;
+- TrueColor only at depth 16, the visual set to the card's RGB565 (cfb's
+  depth-16 default is 6-5-5 with red low);
+- the card's blitter at four points: window-to-window CopyArea through
+  cfb's own BitBlt (clipping, exposures) with a blitter doBitBlt,
+  CopyWindow, solid GXcopy PolyFillRect, solid PaintWindow; each flushes
+  the queue before returning, so cfb's CPU drawing never meets a pending
+  blit.  PutImage of a 16-bit picture into a window keeps the direct path;
+- zz9000win.c, zz9000cmap.c, zz9000pix.c and zz9000cursor.c go, and so does
+  the rtg layer's own GC private and visual.
+
+--- a/programs/Xserver/hw/amix/rtg/rtgInit.c
++++ b/programs/Xserver/hw/amix/rtg/rtgInit.c
+@@ -43,12 +43,9 @@
+ extern void amixWakeupHandler();
+ extern Bool amixCursorInitialize();
+ 
+-/* forward - defined in ZZ9000/ZZ9000screen.c */
++/* zz9000/zz9000screen.c: the screen on cfb16; cfb's default colormap */
+ extern Bool ZZ9000ScreenInit();
+-extern Bool ZZ9000CreateDefColormap();
+-
+-/* mfb - needed to initialise depth-1 GC private storage */
+-extern Bool mfbAllocatePrivates();
++extern Bool cfbCreateDefColormap();
+ 
+ /* input device globals from amixKbd.c / amixMouse.c / amixMono.c */
+ extern KbPrivRec  sysKbPriv;
+@@ -60,14 +57,6 @@
+ /* Globals defined here, declared extern in rtg.h                     */
+ 
+ int rtgScreenIndex    = -1;
+-int rtgGCPrivateIndex = -1;
+-
+-/* ------------------------------------------------------------------ */
+-/* TrueColor 16-bit visual for RGB565                                  */
+-
+-static VisualRec rtgVisual;     /* filled in rtgCreate() each generation */
+-static VisualID  rtgVID;
+-static DepthRec  rtgDepth;
+ 
+ static unsigned long rtgGeneration = 0;
+ 
+@@ -311,15 +300,6 @@
+ 
+     pScreen->devPrivates[rtgScreenIndex].ptr = (pointer) pRTG;
+ 
+-    /*
+-    ** The zero-width line bias, which miScreenInit sets and this screen
+-    ** (not built on miScreenInit) never did: without it miZeroLineScreenIndex
+-    ** stays 0 and miZeroLine takes its Bresenham tie-breaks from whatever
+-    ** devPrivates[0] holds -- a heap pointer -- so diagonal edges changed
+-    ** with every build (MG10: the window-menu triangle, s8rt04 vs s10rt04).
+-    */
+-    miSetZeroLineBias(pScreen, DEFAULTZEROLINEBIAS);
+-
+     /* Screen geometry from selected mode */
+     pRTG->width        = ZZ9000_selected_mode->w;
+     pRTG->height       = ZZ9000_selected_mode->h;
+@@ -328,26 +308,6 @@
+     pRTG->depth        = ZZ9000_DEPTH;
+     pRTG->fbOffset     = ZZ9000_FB_OFFSET;
+ 
+-    ErrorF("rtgScreenInit: geometry set, rtgGCPrivateIndex=%d\n", rtgGCPrivateIndex);
+-
+-    /* mfb GC private storage - required so depth-1 GCs can be delegated to
+-       mfbCreateGC (same pattern as cfb/cfbscrinit.c:mfbAllocatePrivates) */
+-    if (!mfbAllocatePrivates(pScreen, (int *)NULL, (int *)NULL))
+-    {
+-        ErrorF("rtgScreenInit: mfbAllocatePrivates failed\n");
+-        xfree((pointer) pRTG);
+-        return FALSE;
+-    }
+-
+-    /* GC private storage for this screen */
+-    if (!AllocateGCPrivate(pScreen, rtgGCPrivateIndex, sizeof(RTGGCPRIV)))
+-    {
+-        ErrorF("rtgScreenInit: AllocateGCPrivate failed\n");
+-        xfree((pointer) pRTG);
+-        return FALSE;
+-    }
+-
+-    ErrorF("rtgScreenInit: AllocateGCPrivate ok, calling ZZ9000InitHW\n");
+ 
+     /* Open /dev/zz9000, set mode, mmap framebuffer */
+     if (!ZZ9000InitHW(pRTG))
+@@ -362,14 +322,9 @@
+ 
+     ErrorF("rtgScreenInit: hw init done, calling ZZ9000ScreenInit\n");
+ 
+-    /*
+-    ** Install the ScreenRec function vector for ZZ9000.
+-    ** ZZ9000ScreenInit() also sets pScreen->numVisuals, visuals, depths,
+-    ** rootDepth, rootVisual, defColormap, blackPixel, whitePixel.
+-    */
++    /* the screen: cfb16 on the framebuffer, with the card's blitter */
+     if (!ZZ9000ScreenInit(pScreen, pRTG,
+-                          XmonitorResolution, YmonitorResolution,
+-                          &rtgVisual, &rtgDepth))
++                          XmonitorResolution, YmonitorResolution))
+     {
+         ErrorF("rtgScreenInit: ZZ9000ScreenInit failed\n");
+         ZZ9000CloseHW(pRTG);
+@@ -408,13 +363,13 @@
+         miDCInitialize(pScreen, &amixPointerScreenFuncs);
+     }
+ 
+-    ErrorF("rtgScreenInit: cursor done, calling ZZ9000CreateDefColormap\n");
++    ErrorF("rtgScreenInit: cursor done, calling cfbCreateDefColormap\n");
+ 
+     (void) rtgSaveScreen(pScreen, SCREEN_SAVER_FORCER);
+ 
+-    if (!ZZ9000CreateDefColormap(pScreen))
++    if (!cfbCreateDefColormap(pScreen))
+     {
+-        ErrorF("rtgScreenInit: ZZ9000CreateDefColormap failed\n");
++        ErrorF("rtgScreenInit: cfbCreateDefColormap failed\n");
+         return FALSE;
+     }
+ 
+@@ -500,32 +455,6 @@
+             return FALSE;
+         }
+ 
+-        rtgGCPrivateIndex = AllocateGCPrivateIndex();
+-        ErrorF("rtgCreate: rtgGCPrivateIndex=%d\n", rtgGCPrivateIndex);
+-        if (rtgGCPrivateIndex < 0)
+-        {
+-            ErrorF("rtgCreate: AllocateGCPrivateIndex failed\n");
+-            return FALSE;
+-        }
+-
+-        /* TrueColor visual for 16-bit RGB565 */
+-        rtgVisual.vid            = FakeClientID(0);
+-        rtgVisual.class          = TrueColor;
+-        rtgVisual.bitsPerRGBValue = 8;
+-        rtgVisual.ColormapEntries = 64;   /* 2^6 - green channel dominates */
+-        rtgVisual.nplanes        = ZZ9000_DEPTH;
+-        rtgVisual.redMask        = ZZ9000_RED_MASK;
+-        rtgVisual.greenMask      = ZZ9000_GREEN_MASK;
+-        rtgVisual.blueMask       = ZZ9000_BLUE_MASK;
+-        rtgVisual.offsetRed      = ZZ9000_RED_SHIFT;
+-        rtgVisual.offsetGreen    = ZZ9000_GREEN_SHIFT;
+-        rtgVisual.offsetBlue     = ZZ9000_BLUE_SHIFT;
+-
+-        rtgVID             = rtgVisual.vid;
+-        rtgDepth.depth     = ZZ9000_DEPTH;
+-        rtgDepth.numVids   = 1;
+-        rtgDepth.vids      = &rtgVID;
+-
+         rtgGeneration = serverGeneration;
+     }
+ 
+--- a/programs/Xserver/hw/amix/rtg/rtg.h
++++ b/programs/Xserver/hw/amix/rtg/rtg.h
+@@ -59,23 +59,10 @@
+ typedef struct _rtgScreenRec *rtgScreenPtr;
+ 
+ extern int rtgScreenIndex;      /* allocated by AllocateScreenPrivateIndex() */
+-extern int rtgGCPrivateIndex;   /* allocated by AllocateGCPrivateIndex()     */
+ 
+ #define GetRTGScreen(s) \
+     ((struct _rtgScreenRec *)(s)->devPrivates[rtgScreenIndex].ptr)
+ 
+-/*
+-** GC private: clip region derived from GC clip list.
+-** Same pattern as TIGA's GCPRIV.
+-*/
+-struct _rtg_gc_priv {
+-    struct _Region *clip;
+-};
+-
+-typedef struct _rtg_gc_priv RTGGCPRIV;
+-
+-#define rtgGCClip(gc) \
+-    (((struct _rtg_gc_priv *)(gc)->devPrivates[rtgGCPrivateIndex].ptr)->clip)
+ 
+ /*
+ ** Entry points called from amixInit.c via amixFbData[].
+--- a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
+@@ -1,12 +1,12 @@
+ #include <Server.tmpl>
+ 
+-SRCS = zz9000hw.c zz9000screen.c zz9000draw.c zz9000win.c zz9000cmap.c zz9000pix.c zz9000cursor.c
++SRCS = zz9000hw.c zz9000screen.c zz9000draw.c
+ 
+-OBJS = zz9000hw.o zz9000screen.o zz9000draw.o zz9000win.o zz9000cmap.o zz9000pix.o zz9000cursor.o
++OBJS = zz9000hw.o zz9000screen.o zz9000draw.o
+ 
+-STD_DEFINES = ServerDefines -DRTG -DZZ9000
++STD_DEFINES = ServerDefines -DRTG -DZZ9000 -DPSZ=16
+ CDEBUGFLAGS = -g -O
+-   INCLUDES = -I. -I.. -I../.. -I../../../../include -I$(XINCLUDESRC) -I../../../../mi -I../../../../mfb -I$(FONTINCSRC) -I/usr/amiga/include
++   INCLUDES = -I. -I.. -I../.. -I../../../../include -I$(XINCLUDESRC) -I../../../../mi -I../../../../mfb -I../../../../cfb -I$(FONTINCSRC) -I/usr/amiga/include
+ 
+ NormalLibraryObjectRule()
+ NormalLibraryTarget(zz9000, $(OBJS))
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
+@@ -160,57 +160,14 @@
+ void    ZZ9000CloseHW();
+ Bool    ZZ9000SetMode();
+ 
++/* zz9000screen.c: the screen on cfb16 */
+ Bool    ZZ9000ScreenInit();
+-Bool    ZZ9000CloseScreen();
+-void    ZZ9000DrawGuarantee();
+-Bool    ZZ9000CreateGC();
+-void    ZZ9000ValidateGC();
+-void    ZZ9000DestroyGC();
+-void    ZZ9000ChangeClip();
+-void    ZZ9000CopyClip();
+-void    ZZ9000DestroyClip();
+-void    ZZ9000QueryBestSize();
+ 
+-void    ZZ9000GetImage();
+-void    ZZ9000FillSpans();
+-void    ZZ9000SetSpans();
+-void    ZZ9000GetSpans();
+-void    ZZ9000SolidRect();
+-void    ZZ9000CopyWindow();
+-void    ZZ9000PaintWindow();
+-RegionPtr ZZ9000CopyArea();
+-RegionPtr ZZ9000CopyPlane();
+-void    ZZ9000PolyPoint();
+-void    ZZ9000ZeroLine();
+-void    ZZ9000PolySegment();
+-void    ZZ9000PolyRectangle();
+-void    ZZ9000FillPolygon();
+-void    ZZ9000PolyFillRect();
+-void    ZZ9000PolyText8();
+-void    ZZ9000ImageText8();
++/* zz9000draw.c: the blitter and the CPU helpers */
+ void    ZZ9000PutImage();
+-void    ZZ9000PushPixels();
+-
+-Bool    ZZ9000CreateWindow();
+-Bool    ZZ9000DestroyWindow();
+-Bool    ZZ9000PositionWindow();
+-Bool    ZZ9000ChangeWindowAttributes();
+-Bool    ZZ9000RealizeWindow();
+-Bool    ZZ9000UnrealizeWindow();
+-
+-Bool    ZZ9000CreateColormap();
+-void    ZZ9000DestroyColormap();
+-void    ZZ9000InstallColormap();
+-void    ZZ9000UninstallColormap();
+-int     ZZ9000ListInstalledColormaps();
+-void    ZZ9000StoreColors();
+-void    ZZ9000ResolveColor();
+-Bool    ZZ9000CreateDefColormap();
+-
+-Bool    ZZ9000RealizeCursor();
+-Bool    ZZ9000UnrealizeCursor();
+-Bool    ZZ9000DisplayCursor();
+-Bool    ZZ9000SetCursorPosition();
+-void    ZZ9000CursorLimits();
++void    ZZ9000FillBox();
++void    ZZ9000BlitFlush();
++void    ZZ9000CopyBoxes();
++void    ZZ9000DoBitbltBlit();
+ 
+ #endif /* ZZ9000_H */
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
+@@ -1,756 +1,440 @@
+ /*
+-** ZZ9000screen.c - ZZ9000 ScreenRec initialisation and GC management.
++** zz9000screen.c -- the ZZ9000/Z3660 RTG screen: X's own 16-bit framebuffer
++** code (cfb16) on the card's framebuffer, with the card's blitter for large
++** copies and fills.
++**
++** cfbScreenInit (cfb16: PSZ 16) owns the screen: visuals, windows, pixmaps
++** (mfb for depth 1), GCs and their validation, every drawing operation,
++** colormaps and text.  Four places hand work to the blitter instead
++** (zz9000draw.c does the queueing):
++**   - CopyArea, window to window, GXcopy, all planes: cfb's own BitBlt
++**     (clipping, exposures) with a doBitBlt that sends the boxes to the
++**     blitter in a safe order;
++**   - CopyWindow, the same box walk;
++**   - PolyFillRect, window, FillSolid, GXcopy, all planes;
++**   - PaintWindowBackground and PaintWindowBorder with a solid pixel.
++** Each of them flushes the blitter queue before it returns, so the queue is
++** empty whenever cfb's CPU code touches the framebuffer (BLITS returns when
++** the card has finished).  PutImage of a 16-bit picture into a window under
++** GXcopy uses the direct path (ZZ9000PutImage); everything else is cfb's.
+ **
+-** ZZ9000ScreenInit() builds the full ScreenRec function vector.  It is
+-** called from rtgInit.c:rtgScreenInit() after ZZ9000InitHW() has opened
+-** the device and written the mode registers.
+-**
+-** GC lifecycle functions (CreateGC, ValidateGC, DestroyGC, ChangeClip,
+-** DestroyClip, CopyClip) are also here, modelled on dmi/tiggc.c but
+-** with depth=16 and no TIGA-specific tile/stipple hardware.
+-**
+-** Drawing ops installed in ValidateGC:
+-**   FillSolid        -> ZZ9000FillSpans / ZZ9000SolidRect  (ZZ9000draw.c)
+-**   Tile/Stipple     -> ZZ9000PatternSpans, rectangles through mi
+-**   CopyArea         -> ZZ9000CopyArea                     (ZZ9000draw.c)
+-**   Lines/poly/arcs  -> mi layer (miZeroLine, miPolyArc ...)
+-**   Text             -> mi layer (miPolyText8, miImageText8 ...)
++** MIT licence: holder and text in /opt/amix/X11R6/doc/x11r63/LICENSE.
+ */
+ 
+-#include <stdio.h>
+ #include "X.h"
+ #include "Xmd.h"
++#include "Xproto.h"
+ #include "scrnintstr.h"
+-#include "regionstr.h"
+-#include "windowstr.h"
+ #include "pixmapstr.h"
++#include "windowstr.h"
+ #include "gcstruct.h"
+-#include "resource.h"
+-#include "colormap.h"
+-#include "colormapst.h"
++#include "regionstr.h"
+ #include "servermd.h"
++#include "colormapst.h"
++#include "resource.h"
+ #include "mi.h"
+-#include "mfb.h"
++#include "cfb.h"
+ #include "../../amix.h"
+ #include "../rtg.h"
+ #include "zz9000.h"
+ 
+-/* ------------------------------------------------------------------ */
+-/* External mi functions used below */
+-
+-extern RegionPtr miCopyPlane();
+-extern RegionPtr miCopyArea();
+-extern void      miPolyPoint();
+-extern Bool      miModifyPixmapHeader();
+-
+-/* ------------------------------------------------------------------ */
+-/* Forward declarations for functions defined later in this file */
+-
+-void ZZ9000ValidateGC();
+-void ZZ9000DestroyGC();
+-void ZZ9000ChangeClip();
+-void ZZ9000DestroyClip();
+-void ZZ9000CopyClip();
+-static void ZZ9000ChangeGC();
+-static void ZZ9000CopyGC();
+-static void ZZ9000pixValidateGC();
+-
+-/* ------------------------------------------------------------------ */
+-/* Functions implemented in other ZZ9000 source files */
+-
+-/* ZZ9000draw.c */
+-extern void      ZZ9000FillSpans();
+-extern void      ZZ9000PatternSpans();
+-extern void      ZZ9000SetSpans();
+-extern void      ZZ9000PutImage();
+-extern RegionPtr ZZ9000CopyArea();
+-extern void      ZZ9000CopyWindow();
+-extern void      ZZ9000PaintWindow();
+-extern void      ZZ9000SolidRect();
+-
+-/* ZZ9000win.c */
+-extern Bool ZZ9000CreateWindow();
+-extern Bool ZZ9000DestroyWindow();
+-extern Bool ZZ9000PositionWindow();
+-extern Bool ZZ9000ChangeWindowAttributes();
+-extern Bool ZZ9000RealizeWindow();
+-extern Bool ZZ9000UnrealizeWindow();
+-
+-/* ZZ9000cmap.c */
+-extern Bool ZZ9000CreateColormap();
+-extern void ZZ9000DestroyColormap();
+-extern void ZZ9000InstallColormap();
+-extern void ZZ9000UninstallColormap();
+-extern int  ZZ9000ListInstalledColormaps();
+-extern void ZZ9000StoreColors();
+-extern void ZZ9000ResolveColor();
+-extern Bool ZZ9000CreateDefColormap();
+-
+-/* ZZ9000pix.c */
+-extern PixmapPtr ZZ9000CreatePixmap();
+-extern Bool      ZZ9000DestroyPixmap();
+-extern Bool      ZZ9000RealizeFont();
+-extern Bool      ZZ9000UnrealizeFont();
+-
+-/* rtgInit.c */
+-extern int rtgGCPrivateIndex;
+-
+-/* ------------------------------------------------------------------ */
+-/* GCFuncs and GCOps default tables                                   */
+-
+-static GCFuncs ZZ9000gcFuncs =
+-{
+-    ZZ9000ValidateGC,
+-    ZZ9000ChangeGC,
+-    ZZ9000CopyGC,
+-    ZZ9000DestroyGC,
+-    ZZ9000ChangeClip,
+-    ZZ9000DestroyClip,
+-    ZZ9000CopyClip,
+-};
++extern RegionPtr cfbBitBlt();
+ 
+-/*
+-** Default ops installed at CreateGC time.  ValidateGC may replace
+-** individual slots based on fill style, line width, etc.
+-*/
+-static GCOps ZZ9000gcOps =
++/* The GC wrapper: cfb's funcs and ops, and our copy of the ops when the
++** GC's state lets the blitter or the direct PutImage take some of them. */
++typedef struct {
++    GCFuncs *funcs;         /* cfb's GC funcs */
++    GCOps   *cfbOps;        /* cfb's ops, as its last ValidateGC chose them */
++    GCOps    ops;           /* cfb's ops with ours in; pGC->ops when wrapped */
++    int      wrapped;       /* pGC->ops is &ops */
++} ZZGCPrivRec, *ZZGCPrivPtr;
++
++static int           zzGCPrivateIndex = -1;
++static unsigned long zzGeneration = 0;
++
++/* cfb's screen functions we wrap (one RTG screen) */
++static Bool (*zzCfbCreateGC)();
++static void (*zzCfbCopyWindow)();
++static void (*zzCfbPaintWindowBackground)();
++static void (*zzCfbPaintWindowBorder)();
++
++#define ZZGCPriv(pGC) ((ZZGCPrivPtr) (pGC)->devPrivates[zzGCPrivateIndex].ptr)
++#define ALLPLANES(pm) (((pm) & 0xffff) == 0xffff)
++
++/* ---------------------------------------------------------------------- */
++/* Operations                                                              */
++
++/* CopyArea: window to window goes through cfb's BitBlt with the blitter. */
++static RegionPtr
++zzCopyArea(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty)
++DrawablePtr pSrc, pDst;
++GCPtr       pGC;
++int         srcx, srcy, w, h, dstx, dsty;
+ {
+-    ZZ9000FillSpans,    /* FillSpans   */
+-    ZZ9000SetSpans,     /* SetSpans    */
+-    ZZ9000PutImage,     /* PutImage    - 16-bit ZPixmap direct, else mi */
+-    ZZ9000CopyArea,     /* CopyArea    */
+-    miCopyPlane,        /* CopyPlane   */
+-    miPolyPoint,        /* PolyPoint   */
+-    miZeroLine,         /* Polylines   */
+-    miPolySegment,      /* PolySegment */
+-    miPolyRectangle,    /* PolyRectangle */
+-    miPolyArc,          /* PolyArc     */
+-    miFillPolygon,      /* FillPolygon */
+-    ZZ9000SolidRect,    /* PolyFillRect */
+-    miPolyFillArc,      /* PolyFillArc */
+-    miPolyText8,        /* PolyText8   */
+-    miPolyText16,       /* PolyText16  */
+-    miImageText8,       /* ImageText8  */
+-    miImageText16,      /* ImageText16 */
+-    miImageGlyphBlt,    /* ImageGlyphBlt */
+-    miPolyGlyphBlt,     /* PolyGlyphBlt */
+-    miPushPixels        /* PushPixels  */
+-#ifdef NEED_LINEHELPER
+-    , miMiter           /* LineHelper  */
+-#endif
+-};
++    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+ 
+-/* ------------------------------------------------------------------ */
+-/* Internal GCFuncs helpers (no-ops; state changes handled in Validate) */
+-
+-static void
+-ZZ9000ChangeGC(pGC, mask)
+-GCPtr  pGC;
+-BITS32 mask;
+-{
++    if (pSrc->type == DRAWABLE_WINDOW && pDst->type == DRAWABLE_WINDOW &&
++        zz9000BlitMin > 0 && (long) w * h >= zz9000BlitMin)
++        return cfbBitBlt(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty,
++                         ZZ9000DoBitbltBlit, 0L);
++    return (*pPriv->cfbOps->CopyArea)(pSrc, pDst, pGC, srcx, srcy, w, h,
++                                      dstx, dsty);
+ }
+ 
++/* PolyFillRect, solid: the clipped boxes to the blitter (or the CPU). */
+ static void
+-ZZ9000CopyGC(pGCSrc, changes, pGCDst)
+-GCPtr pGCSrc;
+-Mask  changes;
+-GCPtr pGCDst;
+-{
+-}
+-
+-/* ------------------------------------------------------------------ */
+-/* GC lifecycle                                                        */
+-
+-/*
+-** ZZ9000CreateGC - allocate GCFuncs, GCOps and private clip region.
+-*/
+-Bool
+-ZZ9000CreateGC(pGC)
+-GCPtr pGC;
++zzPolyFillRect(pDraw, pGC, nrect, prect)
++DrawablePtr pDraw;
++GCPtr       pGC;
++int         nrect;
++xRectangle *prect;
+ {
+-    RTGGCPRIV *pPriv;
++    ZZGCPrivPtr  pPriv = ZZGCPriv(pGC);
++    rtgScreenPtr pRTG = GetRTGScreen(pDraw->pScreen);
++    RegionPtr    clip = cfbGetCompositeClip(pGC);
++    BoxPtr       pextent, pbox;
++    int          i, n, any, x1, y1, x2, y2, bx1, by1, bx2, by2;
++
++    /* nothing large enough for the blitter: cfb's own fill is the fastest */
++    any = 0;
++    if (zz9000BlitMin > 0)
++        for (i = 0; i < nrect && !any; i++)
++            if ((long) prect[i].width * prect[i].height >= zz9000BlitMin)
++                any = 1;
++    if (!any) {
++        (*pPriv->cfbOps->PolyFillRect)(pDraw, pGC, nrect, prect);
++        return;
++    }
+ 
+-#ifdef ZZ9000_DEBUG
+-    ErrorF("ZZ9000CreateGC: depth=%d\n", pGC->depth);
+-#endif
+-
+-    /* Delegate 1-bit GCs to mfb - same pattern as cfb/cfbgc.c line 241.
+-       mfbAllocatePrivates() in rtgScreenInit ensures the mfb GC private
+-       slot exists before any GC is created. */
+-    if (pGC->depth == 1)
+-        return mfbCreateGC(pGC);
+-
+-    if (pGC->depth != ZZ9000_DEPTH)
+-    {
+-        ErrorF("ZZ9000CreateGC: unsupported depth %d\n", pGC->depth);
+-        return FALSE;
++    pextent = REGION_EXTENTS(pDraw->pScreen, clip);
++    for (; nrect > 0; nrect--, prect++) {
++        x1 = prect->x + pDraw->x;
++        y1 = prect->y + pDraw->y;
++        x2 = x1 + (int) prect->width;
++        y2 = y1 + (int) prect->height;
++        if (x1 < pextent->x1) x1 = pextent->x1;
++        if (y1 < pextent->y1) y1 = pextent->y1;
++        if (x2 > pextent->x2) x2 = pextent->x2;
++        if (y2 > pextent->y2) y2 = pextent->y2;
++        if (x1 >= x2 || y1 >= y2)
++            continue;
++        n = REGION_NUM_RECTS(clip);
++        pbox = REGION_RECTS(clip);
++        for (; n > 0; n--, pbox++) {
++            bx1 = x1 > pbox->x1 ? x1 : pbox->x1;
++            by1 = y1 > pbox->y1 ? y1 : pbox->y1;
++            bx2 = x2 < pbox->x2 ? x2 : pbox->x2;
++            by2 = y2 < pbox->y2 ? y2 : pbox->y2;
++            if (bx1 < bx2 && by1 < by2)
++                ZZ9000FillBox(pRTG, bx1, by1, bx2, by2,
++                              (unsigned short) pGC->fgPixel);
++        }
+     }
++    ZZ9000BlitFlush();
++}
+ 
+-#ifdef ZZ9000_DEBUG
+-    ErrorF("ZZ9000CreateGC: pPriv=%p\n", pGC->devPrivates[rtgGCPrivateIndex].ptr);
+-#endif
++/* CopyWindow: as cfbCopyWindow, with the blitter. */
++static void
++zzCopyWindow(pWin, ptOldOrg, prgnSrc)
++WindowPtr   pWin;
++DDXPointRec ptOldOrg;
++RegionPtr   prgnSrc;
++{
++    ScreenPtr pScreen = pWin->drawable.pScreen;
++    RegionRec rgnDst;
++    int       dx, dy;
+ 
+-    pGC->funcs = (GCFuncs *) xalloc(sizeof(GCFuncs));
+-    if (!pGC->funcs)
+-        return FALSE;
++    if (zz9000BlitMin <= 0) {
++        (*zzCfbCopyWindow)(pWin, ptOldOrg, prgnSrc);
++        return;
++    }
++    REGION_INIT(pScreen, &rgnDst, NullBox, 0);
++    dx = ptOldOrg.x - pWin->drawable.x;
++    dy = ptOldOrg.y - pWin->drawable.y;
++    REGION_TRANSLATE(pScreen, prgnSrc, -dx, -dy);
++    REGION_INTERSECT(pScreen, &rgnDst, &pWin->borderClip, prgnSrc);
++    ZZ9000CopyBoxes(GetRTGScreen(pScreen), REGION_RECTS(&rgnDst),
++                    REGION_NUM_RECTS(&rgnDst), dx, dy);
++    ZZ9000BlitFlush();
++    REGION_UNINIT(pScreen, &rgnDst);
++}
+ 
+-    pGC->ops = (GCOps *) xalloc(sizeof(GCOps));
+-    if (!pGC->ops)
+-    {
+-        xfree((pointer) pGC->funcs);
+-        pGC->funcs = NULL;
+-        return FALSE;
++/* PaintWindow: a solid background or border to the blitter, else cfb's. */
++static void
++zzPaintWindow(pWin, pRegion, what)
++WindowPtr pWin;
++RegionPtr pRegion;
++int       what;
++{
++    rtgScreenPtr  pRTG = GetRTGScreen(pWin->drawable.pScreen);
++    unsigned long pixel;
++    BoxPtr        pbox;
++    int           n;
++
++    if (what == PW_BACKGROUND) {
++        if (pWin->backgroundState != BackgroundPixel) {
++            (*zzCfbPaintWindowBackground)(pWin, pRegion, what);
++            return;
++        }
++        pixel = pWin->background.pixel;
++    } else {
++        if (!pWin->borderIsPixel) {
++            (*zzCfbPaintWindowBorder)(pWin, pRegion, what);
++            return;
++        }
++        pixel = pWin->border.pixel;
+     }
++    n = REGION_NUM_RECTS(pRegion);
++    pbox = REGION_RECTS(pRegion);
++    for (; n > 0; n--, pbox++)
++        ZZ9000FillBox(pRTG, pbox->x1, pbox->y1, pbox->x2, pbox->y2,
++                      (unsigned short) pixel);
++    ZZ9000BlitFlush();
++}
+ 
+-    *pGC->funcs = ZZ9000gcFuncs;
+-    *pGC->ops   = ZZ9000gcOps;
++/* ---------------------------------------------------------------------- */
++/* The GC wrapper                                                          */
+ 
+-    pGC->clientClip     = NULL;
+-    pGC->clientClipType = CT_NONE;
+-    pGC->miTranslate    = TRUE;
+-    pGC->fgPixel        = pGC->pScreen->blackPixel;
+-    pGC->bgPixel        = pGC->pScreen->whitePixel;
+-    pGC->alu            = GXcopy;
+-    pGC->planemask      = ~0;
+-    pGC->lineWidth      = 0;
+-    pGC->lineStyle      = LineSolid;
+-    pGC->capStyle       = CapButt;
+-    pGC->fillStyle      = FillSolid;
+-    pGC->joinStyle      = JoinMiter;
+-    pGC->fillRule       = EvenOddRule;
+-    pGC->arcMode        = ArcPieSlice;
+-    pGC->patOrg.x   = pGC->patOrg.y   = 0;
+-    pGC->clipOrg.x  = pGC->clipOrg.y  = 0;
+-    pGC->lastWinOrg.x = pGC->lastWinOrg.y = 0;
+-
+-    pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+-    pPriv->clip = (*pGC->pScreen->RegionCreate)(NULL, 1);
+-    if (!pPriv->clip)
+-    {
+-        xfree((pointer) pGC->ops);
+-        pGC->ops = NULL;
+-        xfree((pointer) pGC->funcs);
+-        pGC->funcs = NULL;
+-        return FALSE;
+-    }
++static void zzValidateGC(), zzChangeGC(), zzCopyGC(), zzDestroyGC();
++static void zzChangeClip(), zzDestroyClip(), zzCopyClip();
+ 
+-    return TRUE;
+-}
++static GCFuncs zzGCFuncs = {
++    zzValidateGC, zzChangeGC, zzCopyGC, zzDestroyGC,
++    zzChangeClip, zzDestroyClip, zzCopyClip,
++};
+ 
+-/*
+-** ZZ9000DestroyGC - free GCFuncs, GCOps and private clip region.
+-*/
+-void
+-ZZ9000DestroyGC(pGC)
++/* back to cfb's funcs and ops, before calling cfb */
++static void
++zzUnwrap(pGC)
+ GCPtr pGC;
+ {
+-    RTGGCPRIV *pPriv;
++    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+ 
+-    xfree((pointer) pGC->funcs);
+-    pGC->funcs = NULL;
+-    xfree((pointer) pGC->ops);
+-    pGC->ops = NULL;
+-
+-    pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+-    if (pPriv->clip)
+-        (*pGC->pScreen->RegionDestroy)(pPriv->clip);
++    pGC->funcs = pPriv->funcs;
++    if (pPriv->wrapped)
++        pGC->ops = pPriv->cfbOps;
++    pPriv->wrapped = FALSE;
+ }
+ 
+-/* ------------------------------------------------------------------ */
+-/* ValidateGC                                                          */
+-
+ /*
+-** ZZ9000ComputeClip - the composite clip of pGC on pDraw, into the GC
+-** private's region, rebuilt from scratch (as miComputeCompositeClip).
+-**
+-** Window: (client clip at drawable origin + clipOrg) intersected with the
+-** clip list, or with NotClippedByChildren for IncludeInferiors (a region
+-** of our own, destroyed here).  Pixmap: the pixmap bounds, intersected
+-** with the client clip at clipOrg.  Every drawing op clips to this region,
+-** so it must never reach past the drawable.
++** Ours over cfb's: whatever cfb chose, plus our ops where the state allows
++** (window, GXcopy, all planes; a solid fill for PolyFillRect).  Only a
++** ValidateGC knows the drawable; the other funcs leave cfb's ops in place
++** until the next ValidateGC, which DIX runs before any drawing after them.
+ */
+ static void
+-ZZ9000ComputeClip(pGC, pDraw)
+-GCPtr       pGC;
+-DrawablePtr pDraw;
++zzWrap(pGC, onWindow)
++GCPtr pGC;
++int   onWindow;
+ {
+-    ScreenPtr  pScreen = pGC->pScreen;
+-    RTGGCPRIV *pPriv = (RTGGCPRIV *) pGC->devPrivates[rtgGCPrivateIndex].ptr;
+-    RegionPtr  clip = (RegionPtr) pPriv->clip;
+-    RegionPtr  client = (RegionPtr) pGC->clientClip;
+-    RegionPtr  pregWin;
+-    BoxRec     bounds;
+-    int        dx, dy;
+-
+-    if (pDraw->type == DRAWABLE_WINDOW)
+-    {
+-        WindowPtr pWin = (WindowPtr) pDraw;
+-
+-        if (pGC->subWindowMode == IncludeInferiors)
+-            pregWin = NotClippedByChildren(pWin);
+-        else
+-            pregWin = &pWin->clipList;
+-
+-        if (pGC->clientClipType == CT_NONE)
+-            (*pScreen->RegionCopy)(clip, pregWin);
+-        else
+-        {
+-            dx = pDraw->x + pGC->clipOrg.x;
+-            dy = pDraw->y + pGC->clipOrg.y;
+-            (*pScreen->TranslateRegion)(client, dx, dy);
+-            (*pScreen->Intersect)(clip, pregWin, client);
+-            (*pScreen->TranslateRegion)(client, -dx, -dy);
+-        }
++    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+ 
+-        if (pregWin != &pWin->clipList)
+-            (*pScreen->RegionDestroy)(pregWin);
+-    }
+-    else
+-    {
+-        bounds.x1 = 0;
+-        bounds.y1 = 0;
+-        bounds.x2 = pDraw->width;
+-        bounds.y2 = pDraw->height;
+-        (*pScreen->RegionReset)(clip, &bounds);
+-
+-        if (pGC->clientClipType != CT_NONE)
+-        {
+-            (*pScreen->TranslateRegion)(clip, -pGC->clipOrg.x, -pGC->clipOrg.y);
+-            (*pScreen->Intersect)(clip, clip, client);
+-            (*pScreen->TranslateRegion)(clip, pGC->clipOrg.x, pGC->clipOrg.y);
+-        }
+-    }
++    pPriv->funcs = pGC->funcs;
++    pGC->funcs = &zzGCFuncs;
++    pPriv->cfbOps = pGC->ops;
++    if (!onWindow || pGC->alu != GXcopy || !ALLPLANES(pGC->planemask))
++        return;
++    pPriv->ops = *pGC->ops;
++    pPriv->ops.CopyArea = zzCopyArea;
++    pPriv->ops.PutImage = ZZ9000PutImage;
++    if (pGC->fillStyle == FillSolid)
++        pPriv->ops.PolyFillRect = zzPolyFillRect;
++    pGC->ops = &pPriv->ops;
++    pPriv->wrapped = TRUE;
+ }
+ 
+-/*
+-** ZZ9000pixValidateGC - GC for drawing into an off-screen pixmap.
+-**
+-** All ops fall back to mi.  ZZ9000FillSpans handles the solid-fill
+-** case in software (direct pixel writes into host-allocated pixmap data).
+-*/
+ static void
+-ZZ9000pixValidateGC(pGC, change, pDraw)
++zzValidateGC(pGC, changes, pDraw)
+ GCPtr         pGC;
+-unsigned long change;
++unsigned long changes;
+ DrawablePtr   pDraw;
+ {
+-    /* rebuilt on every pixmap validate: a GC last used on a window still
+-     * holds that window's clip, which is not bounded by this pixmap */
+-    ZZ9000ComputeClip(pGC, pDraw);
+-
+-    /* solid fills direct; tiles and stipples through ZZ9000PatternSpans */
+-    pGC->ops->FillSpans     = (pGC->fillStyle == FillSolid) ? ZZ9000FillSpans
+-                                                            : ZZ9000PatternSpans;
+-    pGC->ops->SetSpans      = ZZ9000SetSpans;
+-    pGC->ops->PutImage      = ZZ9000PutImage;
+-    pGC->ops->CopyArea      = ZZ9000CopyArea;
+-    pGC->ops->CopyPlane     = miCopyPlane;
+-    pGC->ops->PolyPoint     = miPolyPoint;
+-    pGC->ops->Polylines     = miZeroLine;
+-    pGC->ops->PolySegment   = miPolySegment;
+-    pGC->ops->PolyRectangle = miPolyRectangle;
+-    pGC->ops->PolyArc       = miPolyArc;
+-    pGC->ops->FillPolygon   = miFillPolygon;
+-    pGC->ops->PolyFillRect  = (pGC->fillStyle == FillSolid) ? ZZ9000SolidRect
+-                                                            : miPolyFillRect;
+-    pGC->ops->PolyFillArc   = miPolyFillArc;
+-    pGC->ops->PolyText8     = miPolyText8;
+-    pGC->ops->PolyText16    = miPolyText16;
+-    pGC->ops->ImageText8    = miImageText8;
+-    pGC->ops->ImageText16   = miImageText16;
+-    pGC->ops->ImageGlyphBlt = miImageGlyphBlt;
+-    pGC->ops->PolyGlyphBlt  = miPolyGlyphBlt;
+-    pGC->ops->PushPixels    = miPushPixels;
+-#ifdef NEED_LINEHELPER
+-    pGC->ops->LineHelper    = miMiter;
+-#endif
++    zzUnwrap(pGC);
++    (*pGC->funcs->ValidateGC)(pGC, changes, pDraw);
++    zzWrap(pGC, pDraw->type == DRAWABLE_WINDOW);
+ }
+ 
+-/*
+-** ZZ9000ValidateGC - update clip region and select drawing ops.
+-**
+-** Called by DIX before any drawing sequence on a new window/GC pair.
+-** Keeps the cached clip region in GC private up to date, then installs
+-** the appropriate ops:
+-**
+-**   FillSolid  -> ZZ9000FillSpans / ZZ9000SolidRect
+-**   FillTiled  -> ZZ9000PatternSpans (rectangles and polygons through mi)
+-**   Stipple    -> ZZ9000PatternSpans
+-**   Lines      -> miZeroLine (zero-width) / miWideLine (wide)
+-**   Everything else -> mi
+-*/
+-void
+-ZZ9000ValidateGC(pGC, change, pDraw)
++static void
++zzChangeGC(pGC, mask)
+ GCPtr         pGC;
+-unsigned long change;
+-DrawablePtr   pDraw;
++unsigned long mask;
+ {
+-    int        win_moved;
+-
+-    if (pDraw->type == DRAWABLE_PIXMAP)
+-    {
+-        ZZ9000pixValidateGC(pGC, ~0UL, pDraw);
+-        return;
+-    }
+-
+-    win_moved = (pGC->lastWinOrg.x != pDraw->x ||
+-                 pGC->lastWinOrg.y != pDraw->y);
+-    if (win_moved)
+-    {
+-        pGC->lastWinOrg.x = pDraw->x;
+-        pGC->lastWinOrg.y = pDraw->y;
+-    }
+-
+-    if (change & (GCClipXOrigin | GCClipYOrigin | GCClipMask) ||
+-        change & GCSubwindowMode ||
+-        pDraw->serialNumber != (pGC->serialNumber & DRAWABLE_SERIAL_BITS) ||
+-        win_moved)
+-        ZZ9000ComputeClip(pGC, pDraw);
+-
+-    /* Line ops */
+-    if (pGC->lineStyle == LineSolid)
+-    {
+-        if (pGC->lineWidth)
+-        {
+-            pGC->ops->Polylines   = miWideLine;
+-            pGC->ops->PolySegment = miPolySegment;
+-        }
+-        else
+-        {
+-            pGC->ops->Polylines   = miZeroLine;
+-            pGC->ops->PolySegment = miPolySegment;
+-        }
+-    }
+-    else
+-    {
+-        pGC->ops->Polylines   = pGC->lineWidth ? miWideDash : miZeroLine;
+-        pGC->ops->PolySegment = miPolySegment;
+-    }
++    zzUnwrap(pGC);
++    (*pGC->funcs->ChangeGC)(pGC, mask);
++    zzWrap(pGC, FALSE);
++}
+ 
+-#ifdef NEED_LINEHELPER
+-    pGC->ops->LineHelper = (pGC->joinStyle == JoinMiter) ? miMiter : miNotMiter;
+-#endif
+-    pGC->ops->SetSpans   = ZZ9000SetSpans;
+-
+-    /* Fill ops: solid direct, tile/stipple spans through ZZ9000PatternSpans */
+-    switch (pGC->fillStyle)
+-    {
+-    case FillSolid:
+-        pGC->ops->FillSpans    = ZZ9000FillSpans;
+-        pGC->ops->FillPolygon  = miFillPolygon;
+-        pGC->ops->PolyFillRect = ZZ9000SolidRect;
+-        pGC->ops->PushPixels   = miPushPixels;
+-        pGC->ops->PolyText8    = miPolyText8;
+-        break;
+-
+-    case FillTiled:
+-        pGC->ops->FillSpans    = ZZ9000PatternSpans;
+-        pGC->ops->FillPolygon  = miFillPolygon;
+-        pGC->ops->PolyFillRect = miPolyFillRect;
+-        pGC->ops->PushPixels   = miPushPixels;
+-        pGC->ops->PolyText8    = miPolyText8;
+-        break;
+-
+-    case FillStippled:
+-    case FillOpaqueStippled:
+-        pGC->ops->FillSpans    = ZZ9000PatternSpans;
+-        pGC->ops->FillPolygon  = miFillPolygon;
+-        pGC->ops->PolyFillRect = miPolyFillRect;
+-        pGC->ops->PushPixels   = miPushPixels;
+-        pGC->ops->PolyText8    = miPolyText8;
+-        break;
+-    }
++static void
++zzCopyGC(pGCSrc, mask, pGCDst)
++GCPtr         pGCSrc, pGCDst;
++unsigned long mask;
++{
++    zzUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyGC)(pGCSrc, mask, pGCDst);
++    zzWrap(pGCDst, FALSE);
+ }
+ 
+-/* ------------------------------------------------------------------ */
+-/* Clip region management                                              */
++static void
++zzDestroyGC(pGC)
++GCPtr pGC;
++{
++    zzUnwrap(pGC);
++    (*pGC->funcs->DestroyGC)(pGC);
++}
+ 
+-/*
+-** ZZ9000ChangeClip - set a new client clip region on a GC.
+-*/
+-void
+-ZZ9000ChangeClip(pGC, type, pval, nrects)
++static void
++zzChangeClip(pGC, type, pvalue, nrects)
+ GCPtr   pGC;
+-int     type;
+-pointer pval;
+-int     nrects;
+-{
+-    ZZ9000DestroyClip(pGC);
+-
+-    if (type == CT_PIXMAP)
+-    {
+-        pGC->clientClip = (pointer) mfbPixmapToRegion(pval);
+-        (*pGC->pScreen->DestroyPixmap)(pval);
+-    }
+-    else if (type == CT_REGION)
+-    {
+-        pGC->clientClip = pval;
+-    }
+-    else if (type != CT_NONE)
+-    {
+-        pGC->clientClip = (pointer)
+-            (*pGC->pScreen->RectsToRegion)(nrects, (xRectangle *) pval, type);
+-        xfree(pval);
+-    }
+-    else
+-    {
+-        pGC->clientClipType = CT_NONE;
+-        pGC->stateChanges  |= GCClipMask;
+-    }
+-
+-    pGC->clientClipType =
+-        (type != CT_NONE && pGC->clientClip) ? CT_REGION : CT_NONE;
+-    pGC->stateChanges |= GCClipMask;
++int     type, nrects;
++pointer pvalue;
++{
++    zzUnwrap(pGC);
++    (*pGC->funcs->ChangeClip)(pGC, type, pvalue, nrects);
++    zzWrap(pGC, FALSE);
+ }
+ 
+-/*
+-** ZZ9000DestroyClip - free the current client clip region.
+-*/
+-void
+-ZZ9000DestroyClip(pGC)
++static void
++zzDestroyClip(pGC)
+ GCPtr pGC;
+ {
+-    if (pGC->clientClipType == CT_PIXMAP)
+-        (*pGC->pScreen->DestroyPixmap)(pGC->clientClip);
+-    else if (pGC->clientClipType != CT_NONE)
+-        (*pGC->pScreen->RegionDestroy)(pGC->clientClip);
++    zzUnwrap(pGC);
++    (*pGC->funcs->DestroyClip)(pGC);
++    zzWrap(pGC, FALSE);
++}
+ 
+-    pGC->clientClipType = CT_NONE;
+-    pGC->clientClip     = NULL;
++static void
++zzCopyClip(pGCDst, pGCSrc)
++GCPtr pGCDst, pGCSrc;
++{
++    zzUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyClip)(pGCDst, pGCSrc);
++    zzWrap(pGCDst, FALSE);
+ }
+ 
+-/*
+-** ZZ9000CopyClip - copy the client clip region from src GC to dst GC.
+-*/
+-void
+-ZZ9000CopyClip(dst, src)
+-GCPtr dst;
+-GCPtr src;
+-{
+-    RegionPtr rgnCopy;
+-
+-    if (src->clientClipType == CT_REGION)
+-    {
+-        rgnCopy = (*src->pScreen->RegionCreate)(NULL, 1);
+-        (*src->pScreen->RegionCopy)(rgnCopy, (RegionPtr) src->clientClip);
+-        ZZ9000ChangeClip(dst, CT_REGION, (pointer) rgnCopy, 0);
+-        return;
+-    }
+-    if (src->clientClipType == CT_PIXMAP)
+-        ((PixmapPtr) src->clientClip)->refcnt++;
+-    ZZ9000ChangeClip(dst, src->clientClipType, src->clientClip, 0);
++static Bool
++zzCreateGC(pGC)
++GCPtr pGC;
++{
++    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
++
++    if (!(*zzCfbCreateGC)(pGC))
++        return FALSE;
++    pPriv->wrapped = FALSE;
++    zzWrap(pGC, FALSE);
++    return TRUE;
+ }
+ 
+-/* ------------------------------------------------------------------ */
+-/* Screen-level functions                                              */
++/* ---------------------------------------------------------------------- */
++/* Colormaps                                                               */
+ 
+ /*
+-** ZZ9000QueryBestSize - return an acceptable size for cursors, tiles, stipples.
+-**
+-** Software cursor can be any size; we cap at 64x64 to match TIGA.
+-** Tile and stipple: no hardware constraint - return requested size.
++** TrueColor has no colour table to load, but one map is always the
++** installed one and clients are told when it changes.  zzInstalledMap is
++** cleared at every screen init, so a reset never leaves it pointing at a
++** freed map.
+ */
+-void
+-ZZ9000QueryBestSize(kind, W, H, pScreen)
+-int     kind;
+-CARD16 *W;
+-CARD16 *H;
++static ColormapPtr zzInstalledMap = (ColormapPtr) NULL;
++
++static int
++zzListInstalledColormaps(pScreen, pmaps)
+ ScreenPtr pScreen;
++Colormap *pmaps;
+ {
+-    switch (kind)
+-    {
+-    case CursorShape:
+-        if (*W > 64) *W = 64;
+-        if (*H > 64) *H = 64;
+-        break;
+-
+-    case TileShape:
+-    case StippleShape:
+-        /* No hardware constraint on tile/stipple size */
+-        break;
+-
+-    default:
+-        break;
+-    }
++    if (!zzInstalledMap)
++        return 0;
++    *pmaps = zzInstalledMap->mid;
++    return 1;
+ }
+ 
+-/*
+-** ZZ9000CloseScreen - minimal hook; hardware cleanup is in rtgCloseScreen.
+-**
+-** rtgInit.c:rtgCloseScreen() chains to this, then calls ZZ9000CloseHW().
+-** This function returns TRUE so the DIX chain continues.
+-*/
+-Bool
+-ZZ9000CloseScreen(i, pScreen)
+-int       i;
+-ScreenPtr pScreen;
++static void
++zzInstallColormap(pmap)
++ColormapPtr pmap;
+ {
+-    return TRUE;
++    ColormapPtr old = zzInstalledMap;
++
++    if (pmap == old)
++        return;
++    if (old)
++        WalkTree(pmap->pScreen, TellLostMap, (pointer) &old->mid);
++    zzInstalledMap = pmap;
++    WalkTree(pmap->pScreen, TellGainedMap, (pointer) &pmap->mid);
+ }
+ 
+-/*
+-** ZZ9000DrawGuarantee - no backing store; nothing to do.
+-**
+-** Called by miDCMakeGC before drawing the software cursor.
+-** With backingStoreSupport = NotUseful, there is no backing store to
+-** guarantee, so this is a no-op.
+-*/
+-void
+-ZZ9000DrawGuarantee(pWin, pGC, guarantee)
+-WindowPtr pWin;
+-GCPtr     pGC;
+-int       guarantee;
++static void
++zzUninstallColormap(pmap)
++ColormapPtr pmap;
+ {
++    ColormapPtr def;
++
++    if (pmap != zzInstalledMap || pmap->mid == pmap->pScreen->defColormap)
++        return;
++    def = (ColormapPtr) LookupIDByType(pmap->pScreen->defColormap, RT_COLORMAP);
++    if (def)
++        (*pmap->pScreen->InstallColormap)(def);
+ }
+ 
+-/* ------------------------------------------------------------------ */
+-/* Screen initialisation                                               */
++/* ---------------------------------------------------------------------- */
++/* Screen                                                                  */
+ 
+ /*
+-** ZZ9000ScreenInit - build the complete ScreenRec function vector.
+-**
+-** Called from rtgInit.c:rtgScreenInit() after ZZ9000InitHW() has set
+-** pRTG->fbBase.  pVisual and pDepth are the static TrueColor records
+-** initialised in rtgInit.c:rtgCreate().
+-**
+-** Owns no persistent state beyond what it installs in pScreen.
++** ZZ9000ScreenInit - cfb16 on the mapped framebuffer, the visual made the
++** card's RGB565, and the blitter's wrappers in.  The caller (rtgInit.c) adds
++** the cursor, input, SaveScreen and CloseScreen, and the default colormap.
+ */
+ Bool
+-ZZ9000ScreenInit(pScreen, pRTG, dpix, dpiy, pVisual, pDepth)
++ZZ9000ScreenInit(pScreen, pRTG, dpix, dpiy)
+ ScreenPtr    pScreen;
+ rtgScreenPtr pRTG;
+ int          dpix, dpiy;
+-VisualRec   *pVisual;
+-DepthRec    *pDepth;
+ {
+-    /* Screen geometry */
+-    pScreen->width    = pRTG->width;
+-    pScreen->height   = pRTG->height;
+-    pScreen->mmWidth  = (pRTG->width  * 254) / (dpix * 10);
+-    pScreen->mmHeight = (pRTG->height * 254) / (dpiy * 10);
+-
+-    /* Visuals and depths */
+-    pScreen->numDepths     = 1;
+-    pScreen->allowedDepths = pDepth;
+-    pScreen->rootDepth     = ZZ9000_DEPTH;
+-    pScreen->rootVisual    = pVisual->vid;
+-    pScreen->defColormap   = (Colormap) FakeClientID(0);
+-    pScreen->minInstalledCmaps = 1;
+-    pScreen->maxInstalledCmaps = 1;
+-    pScreen->numVisuals    = 1;
+-    pScreen->visuals       = pVisual;
+-
+-    pScreen->backingStoreSupport = NotUseful;
+-    pScreen->saveUnderSupport    = NotUseful;
+-    pScreen->DrawGuarantee       = ZZ9000DrawGuarantee;
+-    pScreen->PostValidateTree    = (void (*)()) 0;
+-    pScreen->PointerNonInterestBox = (void (*)()) 0;
+-    pScreen->ClipNotify          = (void (*)()) 0;
+-
+-    pScreen->SaveDoomedAreas       = (void (*)()) 0;
+-    pScreen->RestoreAreas           = (RegionPtr (*)()) 0;
+-    pScreen->ExposeCopy             = (void (*)()) 0;
+-    pScreen->TranslateBackingStore  = (RegionPtr (*)()) 0;
+-    pScreen->ClearBackingStore      = (RegionPtr (*)()) 0;
+-
+-    pScreen->blackPixel = 0x0000;   /* RGB565 black */
+-    pScreen->whitePixel = 0xFFFF;   /* RGB565 white */
+-
+-    /* Window management - thin hooks; real work done by DIX/mi */
+-    pScreen->CreateWindow         = ZZ9000CreateWindow;
+-    pScreen->DestroyWindow        = ZZ9000DestroyWindow;
+-    pScreen->PositionWindow       = ZZ9000PositionWindow;
+-    pScreen->ChangeWindowAttributes = ZZ9000ChangeWindowAttributes;
+-    pScreen->RealizeWindow        = ZZ9000RealizeWindow;
+-    pScreen->UnrealizeWindow      = ZZ9000UnrealizeWindow;
+-
+-    /* Font management - no hardware fonts */
+-    pScreen->RealizeFont   = ZZ9000RealizeFont;
+-    pScreen->UnrealizeFont = ZZ9000UnrealizeFont;
+-
+-    /* Screen lifecycle */
+-    pScreen->CloseScreen      = ZZ9000CloseScreen;
+-    pScreen->QueryBestSize    = ZZ9000QueryBestSize;
+-    pScreen->SaveScreen       = (Bool (*)()) NULL; /* installed by rtgInit */
+-    pScreen->SourceValidate   = (void (*)()) NULL;
+-
+-    /* Pixel transfer - mi handles format conversion */
+-    pScreen->GetImage  = ZZ9000GetImage;
+-    pScreen->GetSpans  = ZZ9000GetSpans;
+-
+-    /* GC */
+-    pScreen->CreateGC      = ZZ9000CreateGC;
+-
+-    /* Pixmaps */
+-    pScreen->CreatePixmap       = ZZ9000CreatePixmap;
+-    pScreen->DestroyPixmap      = ZZ9000DestroyPixmap;
+-    pScreen->ModifyPixmapHeader = miModifyPixmapHeader;
+-
+-    /* Validation */
+-    pScreen->ValidateTree = miValidateTree;
+-
+-    /* Colormap - TrueColor: no CLUT; most entries are no-ops */
+-    pScreen->InstallColormap        = ZZ9000InstallColormap;
+-    pScreen->UninstallColormap      = ZZ9000UninstallColormap;
+-    pScreen->ListInstalledColormaps = ZZ9000ListInstalledColormaps;
+-    pScreen->StoreColors            = ZZ9000StoreColors;
+-    pScreen->ResolveColor           = ZZ9000ResolveColor;
+-    pScreen->CreateColormap         = ZZ9000CreateColormap;
+-    pScreen->DestroyColormap        = ZZ9000DestroyColormap;
+-
+-    /* Region operations - pure mi */
+-    pScreen->RegionCreate    = miRegionCreate;
+-    pScreen->RegionInit      = miRegionInit;
+-    pScreen->RegionCopy      = miRegionCopy;
+-    pScreen->RegionDestroy   = miRegionDestroy;
+-    pScreen->RegionUninit    = miRegionUninit;
+-    pScreen->Intersect       = miIntersect;
+-    pScreen->Inverse         = miInverse;
+-    pScreen->Union           = miUnion;
+-    pScreen->Subtract        = miSubtract;
+-    pScreen->RegionReset     = miRegionReset;
+-    pScreen->TranslateRegion = miTranslateRegion;
+-    pScreen->RectIn          = miRectIn;
+-    pScreen->PointInRegion   = miPointInRegion;
+-    pScreen->RegionNotEmpty  = miRegionNotEmpty;
+-    pScreen->RegionEmpty     = miRegionEmpty;
+-    pScreen->RegionExtents   = miRegionExtents;
+-    pScreen->RegionAppend    = miRegionAppend;
+-    pScreen->RegionValidate  = miRegionValidate;
+-
+-    /* Bitmap/region conversion */
+-    pScreen->BitmapToRegion  = mfbPixmapToRegion; /* 1-bit pixmaps only */
+-    pScreen->RectsToRegion   = miRectsToRegion;
+-
+-    /* Window painting - handled by ZZ9000draw.c */
+-    pScreen->PaintWindowBackground = ZZ9000PaintWindow;
+-    pScreen->PaintWindowBorder     = ZZ9000PaintWindow;
+-    pScreen->CopyWindow            = ZZ9000CopyWindow;
+-
+-    /* Exposure and background clearing */
+-    pScreen->WindowExposures   = miWindowExposures;
+-    pScreen->ClearToBackground = miClearToBackground;
+-
+-    /* Miscellaneous */
+-    pScreen->SendGraphicsExpose = miSendGraphicsExpose;
+-
+-    /* X11R6 window-layer operations supplied by miScreenInit normally. */
+-    pScreen->MarkWindow             = miMarkWindow;
+-    pScreen->MarkOverlappedWindows  = miMarkOverlappedWindows;
+-    pScreen->ChangeSaveUnder        = miChangeSaveUnder;
+-    pScreen->PostChangeSaveUnder    = miPostChangeSaveUnder;
+-    pScreen->MoveWindow             = miMoveWindow;
+-    pScreen->ResizeWindow           = miSlideAndSizeWindow;
+-    pScreen->GetLayerWindow         = miGetLayerWindow;
+-    pScreen->HandleExposures        = miHandleValidateExposures;
+-    pScreen->ReparentWindow         = (void (*)()) 0;
+-#ifdef SHAPE
+-    pScreen->SetShape               = miSetShape;
+-#endif
+-    pScreen->ChangeBorderWidth      = miChangeBorderWidth;
+-    pScreen->MarkUnrealizedWindow   = miMarkUnrealizedWindow;
++    VisualPtr v;
++    int       i;
++
++    if (zzGeneration != serverGeneration) {
++        zzGCPrivateIndex = AllocateGCPrivateIndex();
++        if (zzGCPrivateIndex < 0)
++            return FALSE;
++        zzGeneration = serverGeneration;
++    }
+ 
+-    /* Block/Wakeup and cursor are installed by rtgInit.c after this returns */
++    /* the card has no colour table at 16 bits: TrueColor only */
++    if (!cfbSetVisualTypes(ZZ9000_DEPTH, 1 << TrueColor, 6))
++        return FALSE;
++    if (!cfbScreenInit(pScreen, (pointer) pRTG->fbBase, pRTG->width,
++                       pRTG->height, dpix, dpiy, pRTG->pitch / 2))
++        return FALSE;
+ 
++    /* cfb's depth-16 TrueColor is 6-5-5 red-low; the card is RGB565 */
++    for (i = 0, v = pScreen->visuals; i < pScreen->numVisuals; i++, v++) {
++        if (v->class != TrueColor || v->nplanes != ZZ9000_DEPTH)
++            continue;
++        v->redMask         = ZZ9000_RED_MASK;
++        v->greenMask       = ZZ9000_GREEN_MASK;
++        v->blueMask        = ZZ9000_BLUE_MASK;
++        v->offsetRed       = ZZ9000_RED_SHIFT;
++        v->offsetGreen     = ZZ9000_GREEN_SHIFT;
++        v->offsetBlue      = ZZ9000_BLUE_SHIFT;
++        v->bitsPerRGBValue = 6;
++        v->ColormapEntries = 64;
++    }
++
++    /* cfb sets the colormap hooks only when built STATIC_COLOR, which it
++     * is not here: the DDX sets them.  TrueColor: no StoreColors */
++    zzInstalledMap = (ColormapPtr) NULL;
++    pScreen->InstallColormap        = zzInstallColormap;
++    pScreen->UninstallColormap      = zzUninstallColormap;
++    pScreen->ListInstalledColormaps = zzListInstalledColormaps;
++    pScreen->StoreColors            = (void (*)()) NoopDDA;
++
++    if (!AllocateGCPrivate(pScreen, zzGCPrivateIndex, sizeof(ZZGCPrivRec)))
++        return FALSE;
++    zzCfbCreateGC = pScreen->CreateGC;
++    pScreen->CreateGC = zzCreateGC;
++    zzCfbCopyWindow = pScreen->CopyWindow;
++    pScreen->CopyWindow = zzCopyWindow;
++    zzCfbPaintWindowBackground = pScreen->PaintWindowBackground;
++    pScreen->PaintWindowBackground = zzPaintWindow;
++    zzCfbPaintWindowBorder = pScreen->PaintWindowBorder;
++    pScreen->PaintWindowBorder = zzPaintWindow;
+     return TRUE;
+ }
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
+@@ -1,16 +1,9 @@
+ /*
+-** ZZ9000draw.c - ZZ9000 drawing primitives for xamix-rtg.
+-**
+-** Direct 16-bit pixel writes to the mmap'd framebuffer at
+-** pRTG->fbBase (pixel 0,0), pitch = ZZ9000_PITCH bytes per scanline.
+-**
+-** All span coordinates are absolute screen coordinates (miTranslate=TRUE).
+-** Rectangle coordinates from PolyFillRect are drawable-relative and
+-** are adjusted by pDrawable->x / pDrawable->y before use.
+-** Clipping uses rtgGCClip(pGC) which ValidateGC keeps up to date.
+-**
+-** Functions that operate without a GC (PaintWindow, CopyWindow) clip
+-** against the region passed by the caller.
++** zz9000draw.c - the ZZ9000/Z3660 card's blitter and CPU helpers for the
++** cfb16 screen (zz9000screen.c): the blitter queue, CPU fills and copies
++** for what the blitter does not take, the ordered copy of a box list, and
++** the direct PutImage path.  All coordinates are absolute screen
++** coordinates; pRTG->fbBase is pixel (0,0), pRTG->pitch bytes a line.
+ */
+ 
+ #include <string.h>
+@@ -24,22 +17,11 @@
+ #include "gcstruct.h"
+ #include "servermd.h"
+ #include "mi.h"
++#include "cfb.h"
+ #include "../../amix.h"
+ #include "../rtg.h"
+ #include "zz9000.h"
+ 
+-/* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
+-int miClipSpans (RegionPtr prgnDst, register DDXPointPtr ppt, register int *pwidth, int nspans, register DDXPointPtr pptNew, int *pwidthNew, int fSorted);
+-
+-
+-/* Uncomment to dump the first 40 ZZ9000FillSpans() calls (y/x/width of
+-** each clipped span) to the server log - diagnostic for text/glyph
+-** rendering corruption.  Text and the software cursor both reach the
+-** framebuffer through FillSpans (via miPushPixels); general fills/rects
+-** go through ZZ9000SolidRect instead, so this stays fairly quiet outside
+-** of text and cursor drawing. Remove once done. */
+-/* #define ZZ9000_DEBUG_FILLSPANS */
+-
+ /* ---------------------------------------------------------------------- */
+ /* Private helpers                                                         */
+ 
+@@ -417,364 +399,6 @@
+     cpuCopy(pRTG, srcx, srcy, w, h, dstx, dsty);
+ }
+ 
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000GetImage - tracing wrapper for miGetImage                        */
+-
+-extern void miGetImage();
+-extern void mfbGetSpans();
+-
+-void
+-ZZ9000GetImage(pDraw, sx, sy, w, h, format, planeMask, pdstLine)
+-DrawablePtr    pDraw;
+-int            sx, sy, w, h;
+-unsigned int   format;
+-unsigned long  planeMask;
+-pointer        pdstLine;
+-{
+-    miGetImage(pDraw, sx, sy, w, h, format, planeMask, pdstLine);
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000FillSpans                                                         */
+-
+-/*
+-** ZZ9000FillSpans - solid colour span fill.
+-**
+-** Called by DIX for FillSolid fill style.  Spans in ppts are in absolute
+-** screen coordinates (DIX translates when miTranslate=TRUE).
+-** miClipSpans may split one input span across several clip boxes, so its
+-** output must use separately allocated arrays sized for the widest band.
+-*/
+-void
+-ZZ9000FillSpans(pDraw, pGC, nspans, ppts, pwidths, fSorted)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-int         nspans;
+-DDXPointPtr ppts;
+-int        *pwidths;
+-int         fSorted;
+-{
+-    rtgScreenPtr    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    unsigned short  pixel  = (unsigned short) pGC->fgPixel;
+-    int             alu    = pGC->alu;
+-    unsigned short *base   = drawBase(pDraw, pRTG);
+-    int             stride = drawStride(pDraw);
+-    RegionPtr       clip   = rtgGCClip(pGC);
+-    DDXPointPtr     clippedPts;
+-    int            *clippedWidths;
+-    int             maxSpans;
+-    unsigned short *p;
+-    int             i, w;
+-
+-    if (nspans <= 0)
+-        return;
+-
+-    maxSpans = nspans * miFindMaxBand(clip);
+-    if (maxSpans <= 0)
+-        return;
+-
+-    clippedPts = (DDXPointPtr)
+-        ALLOCATE_LOCAL(maxSpans * sizeof(DDXPointRec));
+-    clippedWidths = (int *) ALLOCATE_LOCAL(maxSpans * sizeof(int));
+-    if (!clippedPts || !clippedWidths)
+-    {
+-        if (clippedPts)
+-            DEALLOCATE_LOCAL(clippedPts);
+-        if (clippedWidths)
+-            DEALLOCATE_LOCAL(clippedWidths);
+-        return;
+-    }
+-
+-    nspans = miClipSpans(clip,
+-                         ppts, pwidths, nspans,
+-                         clippedPts, clippedWidths, fSorted);
+-
+-#ifdef ZZ9000_DEBUG_FILLSPANS
+-    {
+-        static int dbgCalls = 0;
+-        if (dbgCalls < 40)
+-        {
+-            dbgCalls++;
+-            ErrorF("ZZ9000FillSpans[%d]: nspans=%d pixel=0x%04x alu=%d stride=%d\n",
+-                   dbgCalls, nspans, pixel, alu, stride);
+-            for (i = 0; i < nspans && i < 20; i++)
+-                ErrorF("  span[%d]: y=%d x=%d w=%d\n",
+-                       i, clippedPts[i].y, clippedPts[i].x, clippedWidths[i]);
+-        }
+-    }
+-#endif
+-
+-    for (i = 0; i < nspans; i++)
+-    {
+-        w = clippedWidths[i];
+-        if (w <= 0)
+-            continue;
+-        p = base + clippedPts[i].y * stride + clippedPts[i].x;
+-
+-        switch (alu)
+-        {
+-        case GXcopy:         fillRun(p, pixel, w);                    break;
+-        case GXxor:          while (w-->0) { *p ^= pixel;    p++; }    break;
+-        case GXor:           while (w-->0) { *p |= pixel;    p++; }    break;
+-        case GXand:          while (w-->0) { *p &= pixel;    p++; }    break;
+-        case GXinvert:       while (w-->0) { *p ^= 0xFFFF;  p++; }    break;
+-        case GXclear:        while (w-->0)  *p++ = 0;                  break;
+-        case GXset:          while (w-->0)  *p++ = 0xFFFF;             break;
+-        case GXnoop:                                                    break;
+-        case GXcopyInverted: while (w-->0)  *p++ = ~pixel;             break;
+-        case GXandReverse:   while (w-->0) { *p = pixel & ~*p;  p++; } break;
+-        case GXandInverted:  while (w-->0) { *p &= ~pixel;      p++; } break;
+-        case GXorReverse:    while (w-->0) { *p = pixel | ~*p;  p++; } break;
+-        case GXnor:          while (w-->0) { *p = ~(pixel | *p); p++; } break;
+-        case GXequiv:        while (w-->0) { *p = ~(pixel ^ *p); p++; } break;
+-        case GXorInverted:   while (w-->0) { *p |= ~pixel;      p++; } break;
+-        case GXnand:         while (w-->0) { *p = ~(pixel & *p); p++; } break;
+-        default:             fillRun(p, pixel, w);                    break;
+-        }
+-    }
+-
+-    DEALLOCATE_LOCAL(clippedWidths);
+-    DEALLOCATE_LOCAL(clippedPts);
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000SetSpans                                                          */
+-
+-/*
+-** ropRun - combine w source pixels into dst under a raster op (not GXcopy).
+-*/
+-static void
+-ropRun(dst, src, w, alu)
+-unsigned short *dst;
+-unsigned short *src;
+-int             w;
+-int             alu;
+-{
+-    unsigned short s, d;
+-
+-    while (w-- > 0)
+-    {
+-        s = *src++;
+-        d = *dst;
+-        switch (alu)
+-        {
+-        case GXclear:        d = 0;           break;
+-        case GXand:          d = s & d;       break;
+-        case GXandReverse:   d = s & ~d;      break;
+-        case GXcopy:         d = s;           break;
+-        case GXandInverted:  d = ~s & d;      break;
+-        case GXnoop:                          break;
+-        case GXxor:          d = s ^ d;       break;
+-        case GXor:           d = s | d;       break;
+-        case GXnor:          d = ~(s | d);    break;
+-        case GXequiv:        d = ~s ^ d;      break;
+-        case GXinvert:       d = ~d;          break;
+-        case GXorReverse:    d = s | ~d;      break;
+-        case GXcopyInverted: d = ~s;          break;
+-        case GXorInverted:   d = ~s | d;      break;
+-        case GXnand:         d = ~(s & d);    break;
+-        case GXset:          d = 0xFFFF;      break;
+-        }
+-        *dst++ = d;
+-    }
+-}
+-
+-/*
+-** ZZ9000PatternSpans - FillSpans for FillTiled, FillStippled and
+-** FillOpaqueStippled, on windows (VRAM) and pixmaps (host memory) alike.
+-**
+-** The pattern origin is the drawable's origin plus the GC's patOrg.  A tile
+-** is a 16-bit pixmap; a stipple is a depth-1 pixmap, MSBFirst bit order
+-** (servermd.h for AMIX), so bit x of a row is row[x>>3] & (0x80 >> (x&7)).
+-** FillStippled leaves clear bits alone; FillOpaqueStippled paints them with
+-** the background.  These used to fall back to a solid foreground fill, which
+-** made every tiled rectangle (dtstyle's backdrop preview) and every stippled
+-** one (Motif's insensitive text and shading) a plain block.
+-*/
+-void
+-ZZ9000PatternSpans(pDraw, pGC, nspans, ppts, pwidths, fSorted)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-int         nspans;
+-DDXPointPtr ppts;
+-int        *pwidths;
+-int         fSorted;
+-{
+-    rtgScreenPtr    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    unsigned short *base   = drawBase(pDraw, pRTG);
+-    int             stride = drawStride(pDraw);
+-    RegionPtr       clip   = rtgGCClip(pGC);
+-    int             alu    = pGC->alu;
+-    int             tiled  = (pGC->fillStyle == FillTiled);
+-    int             opaque = (pGC->fillStyle == FillOpaqueStippled);
+-    PixmapPtr       pPat   = tiled ? pGC->tile.pixmap : pGC->stipple;
+-    unsigned short  fg     = (unsigned short) pGC->fgPixel;
+-    unsigned short  bg     = (unsigned short) pGC->bgPixel;
+-    int             xorg, yorg, pw, ph, pstride;
+-    DDXPointPtr     clippedPts;
+-    int            *clippedWidths;
+-    int             maxSpans, i, w, n, x, px, py;
+-    unsigned short *p;
+-    unsigned char  *srow;
+-    unsigned short *trow;
+-
+-    if (nspans <= 0 || !pPat || !pPat->devPrivate.ptr ||
+-        pPat->drawable.width <= 0 || pPat->drawable.height <= 0 ||
+-        (tiled && pPat->drawable.depth != ZZ9000_DEPTH) ||
+-        (!tiled && pPat->drawable.depth != 1))
+-    {
+-        ZZ9000FillSpans(pDraw, pGC, nspans, ppts, pwidths, fSorted);
+-        return;
+-    }
+-    pw = pPat->drawable.width;
+-    ph = pPat->drawable.height;
+-    pstride = pPat->devKind;            /* bytes */
+-    xorg = pDraw->x + pGC->patOrg.x;
+-    yorg = pDraw->y + pGC->patOrg.y;
+-
+-    maxSpans = nspans * miFindMaxBand(clip);
+-    if (maxSpans <= 0)
+-        return;
+-    clippedPts = (DDXPointPtr) ALLOCATE_LOCAL(maxSpans * sizeof(DDXPointRec));
+-    clippedWidths = (int *) ALLOCATE_LOCAL(maxSpans * sizeof(int));
+-    if (!clippedPts || !clippedWidths)
+-    {
+-        if (clippedPts)
+-            DEALLOCATE_LOCAL(clippedPts);
+-        if (clippedWidths)
+-            DEALLOCATE_LOCAL(clippedWidths);
+-        return;
+-    }
+-    nspans = miClipSpans(clip, ppts, pwidths, nspans,
+-                         clippedPts, clippedWidths, fSorted);
+-    if (pDraw->type == DRAWABLE_WINDOW)
+-        BLIT_FLUSH();                   /* no queued blit may land on top */
+-
+-    for (i = 0; i < nspans; i++)
+-    {
+-        w = clippedWidths[i];
+-        if (w <= 0)
+-            continue;
+-        x = clippedPts[i].x;
+-        p = base + (long) clippedPts[i].y * stride + x;
+-        py = (clippedPts[i].y - yorg) % ph;
+-        if (py < 0)
+-            py += ph;
+-        px = (x - xorg) % pw;
+-        if (px < 0)
+-            px += pw;
+-
+-        if (tiled)
+-        {
+-            trow = (unsigned short *)((char *) pPat->devPrivate.ptr + (long) py * pstride);
+-            for (; w > 0; w -= n, p += n, px = 0)
+-            {
+-                n = pw - px;
+-                if (n > w)
+-                    n = w;
+-                if (alu == GXcopy)
+-                    copyRun(p, trow + px, n);
+-                else
+-                    ropRun(p, trow + px, n, alu);
+-            }
+-        }
+-        else
+-        {
+-            srow = (unsigned char *) pPat->devPrivate.ptr + (long) py * pstride;
+-            for (; w > 0; w--, p++)
+-            {
+-                if (srow[px >> 3] & (0x80 >> (px & 7)))
+-                {
+-                    if (alu == GXcopy)
+-                        *p = fg;
+-                    else
+-                        ropRun(p, &fg, 1, alu);
+-                }
+-                else if (opaque)
+-                {
+-                    if (alu == GXcopy)
+-                        *p = bg;
+-                    else
+-                        ropRun(p, &bg, 1, alu);
+-                }
+-                if (++px == pw)
+-                    px = 0;
+-            }
+-        }
+-    }
+-
+-    DEALLOCATE_LOCAL(clippedWidths);
+-    DEALLOCATE_LOCAL(clippedPts);
+-}
+-
+-/*
+-** ZZ9000SetSpans - write packed 16-bit pixel data to the framebuffer.
+-**
+-** Each source scanline is padded according to PixmapBytePad(), as required
+-** by the DDX SetSpans contract.  For each input span we clip each clip-box
+-** intersection and copy the appropriate slice of the source.  GXcopy is a
+-** plain copy; every other raster op goes through ropRun (mi's PutImage and
+-** CopyArea paths land here with the GC's alu).
+-*/
+-void
+-ZZ9000SetSpans(pDraw, pGC, pcharsrc, ppt, pwidths, nspans, fSorted)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-char       *pcharsrc;
+-DDXPointPtr ppt;
+-int        *pwidths;
+-int         nspans;
+-int         fSorted;
+-{
+-    rtgScreenPtr    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    unsigned short *base   = drawBase(pDraw, pRTG);
+-    int             stride = drawStride(pDraw);
+-    RegionPtr       clip   = rtgGCClip(pGC);
+-    BoxPtr          pbox;
+-    int             nbox;
+-    char           *psrcLine;
+-    unsigned short *psrc;
+-    int             srcBytes;
+-    int             i, cx1, cx2, sw;
+-
+-    psrcLine = pcharsrc;
+-
+-    for (i = 0; i < nspans; i++, ppt++, pwidths++)
+-    {
+-        sw = *pwidths;
+-        srcBytes = sw > 0 ? PixmapBytePad(sw, pDraw->depth) : 0;
+-        if (sw <= 0)
+-        {
+-            continue;
+-        }
+-
+-        psrc = (unsigned short *) psrcLine;
+-
+-        nbox = REGION_NUM_RECTS(clip);
+-        pbox = REGION_RECTS(clip);
+-
+-        while (nbox--)
+-        {
+-            if (pbox->y1 > ppt->y || pbox->y2 <= ppt->y)
+-            {
+-                pbox++;
+-                continue;
+-            }
+-
+-            cx1 = max(ppt->x,      pbox->x1);
+-            cx2 = min(ppt->x + sw, pbox->x2);
+-
+-            if (cx1 < cx2 && pGC->alu == GXcopy)
+-                copyRun(base + ppt->y * stride + cx1,
+-                        psrc + (cx1 - ppt->x), cx2 - cx1);
+-            else if (cx1 < cx2)
+-                ropRun(base + ppt->y * stride + cx1,
+-                       psrc + (cx1 - ppt->x), cx2 - cx1, pGC->alu);
+-            pbox++;
+-        }
+-        psrcLine += srcBytes;
+-    }
+-}
+ 
+ /* ---------------------------------------------------------------------- */
+ /* ZZ9000PutImage                                                          */
+@@ -850,13 +474,11 @@
+ }
+ 
+ /*
+-** ZZ9000PutImage - a 16-bit ZPixmap under GXcopy (every XPutImage of a
+-** picture, and MIT-SHM's: Mesa's back buffer), straight from the request
+-** or the shared segment into the drawable, one clip-box intersection at a
+-** time.  miPutImage built a span list and went through SetSpans, which
+-** rescanned the clip list per row: about 12 ms of a 43 ms 512x320 swap.
+-** Everything else (bitmaps, XYPixmap, other raster ops, a plane mask)
+-** stays with miPutImage.
++** ZZ9000PutImage - a 16-bit ZPixmap into a window under GXcopy, all planes
++** (every XPutImage of a picture), straight from the request into the
++** framebuffer, one clip-box intersection at a time, with 32-bit stores and
++** optionally move16.  zz9000screen.c installs it only for such GCs;
++** anything else that reaches it (bitmaps, XYPixmap) goes to cfb's PutImage.
+ */
+ void
+ ZZ9000PutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage)
+@@ -875,15 +497,15 @@
+     if (format != ZPixmap || depth != ZZ9000_DEPTH || pGC->alu != GXcopy ||
+         (pGC->planemask & 0xffff) != 0xffff || w <= 0 || h <= 0)
+     {
+-        miPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage);
++        cfbPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage);
+         return;
+     }
+     pRTG   = GetRTGScreen(pDraw->pScreen);
+     base   = drawBase(pDraw, pRTG);
+     stride = drawStride(pDraw);
+-    clip   = rtgGCClip(pGC);
++    clip   = cfbGetCompositeClip(pGC);
+     srcPix = PixmapBytePad(w, depth) / 2;
+-    if (pGC->miTranslate)               /* as miPutImage: the clip's frame */
++    if (pGC->miTranslate)               /* the composite clip's frame */
+     {
+         x += pDraw->x;
+         y += pDraw->y;
+@@ -907,287 +529,9 @@
+     }
+ }
+ 
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000GetSpans                                                          */
+ 
+ /*
+-** ZZ9000GetSpans - read pixel data from the drawable into pdstStart.
+-**
+-** No clipping: DIX clips before calling GetSpans.  Every returned scanline
+-** is padded independently according to PixmapBytePad().
+-*/
+-void
+-ZZ9000GetSpans(pDraw, wMax, ppt, pwidth, nspans, pdstStart)
+-DrawablePtr    pDraw;
+-int            wMax;
+-DDXPointPtr    ppt;
+-int           *pwidth;
+-int            nspans;
+-unsigned long *pdstStart;
+-{
+-    rtgScreenPtr    pRTG;
+-    unsigned short *base;
+-    int             stride;
+-    char           *dst;
+-    int             i, w, dstBytes;
+-
+-    if (pDraw->depth == 1)
+-    {
+-        mfbGetSpans(pDraw, wMax, ppt, pwidth, nspans, pdstStart);
+-        return;
+-    }
+-
+-    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    base   = drawBase(pDraw, pRTG);
+-    stride = drawStride(pDraw);
+-    dst    = (char *) pdstStart;
+-
+-    for (i = 0; i < nspans; i++, ppt++, pwidth++)
+-    {
+-        w = min(*pwidth, wMax);
+-        if (w <= 0)
+-            continue;
+-        dstBytes = PixmapBytePad(w, pDraw->depth);
+-        memset(dst, 0, (size_t)dstBytes);
+-        copyRun((unsigned short *)dst, base + ppt->y * stride + ppt->x, w);
+-        dst += dstBytes;
+-    }
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000SolidRect                                                         */
+-
+-/*
+-** ZZ9000SolidRect - PolyFillRect with FillSolid.
+-**
+-** prects coordinates are drawable-relative; we add pDraw->x/y to get
+-** absolute screen coordinates before clipping against the GC clip.
+-**
+-** Window drawables: direct framebuffer fill.
+-** Pixmap drawables: CPU fill (blitter addresses VRAM, not host memory).
+-**
+-** Only GXcopy is filled here; the loops below write fgPixel and cannot
+-** apply a raster op.  Any other alu goes through miPolyFillRect, which
+-** calls this GC's FillSpans (ZZ9000FillSpans implements all sixteen), so
+-** a GXxor rubber band drawn twice erases itself instead of staying on
+-** screen.
+-*/
+-extern void miPolyFillRect();
+-
+-void
+-ZZ9000SolidRect(pDraw, pGC, nrects, prects)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-int         nrects;
+-xRectangle *prects;
+-{
+-    rtgScreenPtr    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    unsigned short  pixel  = (unsigned short) pGC->fgPixel;
+-    unsigned short *base   = drawBase(pDraw, pRTG);
+-    int             stride = drawStride(pDraw);
+-    RegionPtr       clip   = rtgGCClip(pGC);
+-    int             useHW  = (pDraw->type == DRAWABLE_WINDOW &&
+-                              pGC->alu == GXcopy);
+-    BoxPtr          pbox;
+-    int             nbox;
+-    int             xorg   = pDraw->x;
+-    int             yorg   = pDraw->y;
+-    int             rx1, ry1, rx2, ry2;
+-    int             cx1, cy1, cx2, cy2;
+-    int             y, w, h;
+-
+-    if (pGC->alu != GXcopy)
+-    {
+-        miPolyFillRect(pDraw, pGC, nrects, prects);
+-        return;
+-    }
+-
+-    while (nrects--)
+-    {
+-        rx1 = xorg + (int) prects->x;
+-        ry1 = yorg + (int) prects->y;
+-        rx2 = rx1  + (int) prects->width;
+-        ry2 = ry1  + (int) prects->height;
+-        prects++;
+-
+-        nbox = REGION_NUM_RECTS(clip);
+-        pbox = REGION_RECTS(clip);
+-
+-        while (nbox--)
+-        {
+-            cx1 = max(rx1, pbox->x1);
+-            cy1 = max(ry1, pbox->y1);
+-            cx2 = min(rx2, pbox->x2);
+-            cy2 = min(ry2, pbox->y2);
+-
+-            if (cx1 < cx2 && cy1 < cy2)
+-            {
+-                if (useHW && BLIT_WANT(cx2 - cx1, cy2 - cy1))
+-                {
+-                    blitFill(pRTG,
+-                             (unsigned short) cx1,
+-                             (unsigned short) cy1,
+-                             (unsigned short)(cx2 - 1),
+-                             (unsigned short)(cy2 - 1),
+-                             pixel);
+-                }
+-                else
+-                {
+-                    w = cx2 - cx1;
+-                    h = cy2 - cy1;
+-                    BLIT_FLUSH();
+-                    for (y = cy1; y < cy1 + h; y++)
+-                        fillRun(base + y * stride + cx1, pixel, w);
+-                }
+-            }
+-            pbox++;
+-        }
+-    }
+-    BLIT_FLUSH();
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000PaintWindow                                                       */
+-
+-/*
+-** tileBoxes - fill the boxes from a 16-bit tile, the tile's origin at
+-** (xorg, yorg) as X requires (a window background's origin is the window's).
+-** Row by row through the CPU mapping: one copyRun per tile-wide stretch.
+-** Queued blits are flushed first so they cannot land on top of these writes.
+-*/
+-static void
+-tileBoxes(pRTG, pbox, nbox, pTile, xorg, yorg)
+-rtgScreenPtr pRTG;
+-BoxPtr       pbox;
+-int          nbox;
+-PixmapPtr    pTile;
+-int          xorg, yorg;
+-{
+-    unsigned short *fb = pRTG->fbBase;
+-    int             stride = ZZ9000_STRIDE(pRTG);
+-    unsigned short *tbase = (unsigned short *) pTile->devPrivate.ptr;
+-    int             tstride = (int) pTile->devKind / 2;
+-    int             tw = pTile->drawable.width, th = pTile->drawable.height;
+-    int             x, y, tx, ty, w, n;
+-    unsigned short *dst, *trow;
+-
+-    BLIT_FLUSH();
+-    for (; nbox-- > 0; pbox++)
+-    {
+-        if (pbox->x1 >= pbox->x2 || pbox->y1 >= pbox->y2)
+-            continue;
+-        ty = (pbox->y1 - yorg) % th;
+-        if (ty < 0)
+-            ty += th;
+-        for (y = pbox->y1; y < pbox->y2; y++)
+-        {
+-            trow = tbase + (long) ty * tstride;
+-            dst = fb + (unsigned long) y * stride + pbox->x1;
+-            tx = (pbox->x1 - xorg) % tw;
+-            if (tx < 0)
+-                tx += tw;
+-            for (w = pbox->x2 - pbox->x1; w > 0; w -= n, dst += n, tx = 0)
+-            {
+-                n = tw - tx;
+-                if (n > w)
+-                    n = w;
+-                copyRun(dst, trow + tx, n);
+-            }
+-            if (++ty == th)
+-                ty = 0;
+-        }
+-    }
+-}
+-
+-/*
+-** ZZ9000PaintWindow - paint window background (PW_BACKGROUND) or border
+-** (PW_BORDER).
+-**
+-** A solid pixel is a VRAM fill; a pixmap background or border is tiled from
+-** the window's origin (tileBoxes).  ParentRelative takes the nearest
+-** ancestor's background, with that ancestor's origin.  This used to fill
+-** pixmap backgrounds with the tile's first pixel, which made every CDE
+-** backdrop (a full-screen window with a background tile) a plain colour.
+-*/
+-void
+-ZZ9000PaintWindow(pWin, prgn, what)
+-WindowPtr pWin;
+-RegionPtr prgn;
+-int       what;
+-{
+-    rtgScreenPtr    pRTG   = GetRTGScreen(pWin->drawable.pScreen);
+-    unsigned short  pixel;
+-    PixmapPtr       pTile = NullPixmap;
+-    WindowPtr       pOrg = pWin;        /* whose origin the tile starts at */
+-    BoxPtr          pbox;
+-    int             nbox;
+-
+-    if (what == PW_BACKGROUND)
+-    {
+-        WindowPtr p = pWin;
+-
+-        while (p && p->backgroundState == ParentRelative)
+-            p = p->parent;
+-        if (!p)
+-            p = pWin;
+-        switch (p->backgroundState)
+-        {
+-        case None:
+-            if (p == pWin)
+-                return;
+-            pixel = (unsigned short) pWin->drawable.pScreen->blackPixel;
+-            break;
+-        case BackgroundPixel:
+-            pixel = (unsigned short) p->background.pixel;
+-            break;
+-        case BackgroundPixmap:
+-            pTile = p->background.pixmap;
+-            pOrg = p;
+-            break;
+-        default:
+-            pixel = (unsigned short) pWin->drawable.pScreen->blackPixel;
+-            break;
+-        }
+-    }
+-    else /* PW_BORDER */
+-    {
+-        if (pWin->borderIsPixel)
+-            pixel = (unsigned short) pWin->border.pixel;
+-        else
+-            pTile = pWin->border.pixmap;
+-    }
+-
+-    nbox = REGION_NUM_RECTS(prgn);
+-    pbox = REGION_RECTS(prgn);
+-
+-    if (pTile)
+-    {
+-        if (pTile->drawable.depth == ZZ9000_DEPTH && pTile->devPrivate.ptr &&
+-            pTile->drawable.width > 0 && pTile->drawable.height > 0)
+-        {
+-            tileBoxes(pRTG, pbox, nbox, pTile,
+-                      (int) pOrg->drawable.x, (int) pOrg->drawable.y);
+-            return;
+-        }
+-        pixel = (unsigned short) pWin->drawable.pScreen->blackPixel;
+-    }
+-
+-    while (nbox--)
+-    {
+-        if (pbox->x1 < pbox->x2 && pbox->y1 < pbox->y2)
+-            blitFill(pRTG,
+-                     (unsigned short) pbox->x1,
+-                     (unsigned short) pbox->y1,
+-                     (unsigned short)(pbox->x2 - 1),
+-                     (unsigned short)(pbox->y2 - 1),
+-                     pixel);
+-        pbox++;
+-    }
+-    BLIT_FLUSH();
+-}
+-
+-/*
+-** copyBoxesOrdered - copy the boxes of a YX-banded region, each from (box + dx,dy),
++** ZZ9000CopyBoxes - copy the boxes of a YX-banded region, each from (box + dx,dy),
+ ** in an order that never overwrites a source pixel before it is read: bands
+ ** bottom-up when the copy moves down (dy < 0: the source lies above), boxes
+ ** within a band right-to-left when it moves right (dx < 0) -- as cfb does and
+@@ -1196,8 +540,8 @@
+ ** old - new the wrong way round, which smeared a partly covered window's
+ ** contents into itself on every move.)
+ */
+-static void
+-copyBoxesOrdered(pRTG, pbox, nbox, dx, dy)
++void
++ZZ9000CopyBoxes(pRTG, pbox, nbox, dx, dy)
+ rtgScreenPtr pRTG;
+ BoxPtr       pbox;
+ int          nbox, dx, dy;
+@@ -1234,242 +578,45 @@
+ }
+ 
+ /* ---------------------------------------------------------------------- */
+-/* ZZ9000CopyWindow                                                        */
++/* Entry points for zz9000screen.c                                         */
+ 
+-/*
+-** ZZ9000CopyWindow - move window contents after the window is repositioned.
+-**
+-** Modelled on cfbCopyWindow:
+-**   1. Compute the destination region by intersecting prgnSrc (translated
+-**      to the new position) with pWin->borderClip.
+-**   2. Build a pptSrc[] array: source origin for each destination box.
+-**   3. Copy boxes in direction-aware order (bottom-to-top for downward
+-**      moves, reverse for rightward moves) to handle VRAM overlap.
+-*/
++/* Fill the screen box [x1,x2) x [y1,y2): the blitter from -blitmin pixels,
++** else the CPU (queued records are flushed first). */
+ void
+-ZZ9000CopyWindow(pWin, ptOldOrg, prgnSrc)
+-WindowPtr   pWin;
+-DDXPointRec ptOldOrg;
+-RegionPtr   prgnSrc;
++ZZ9000FillBox(pRTG, x1, y1, x2, y2, color)
++rtgScreenPtr   pRTG;
++int            x1, y1, x2, y2;
++unsigned short color;
+ {
+-    rtgScreenPtr  pRTG = GetRTGScreen(pWin->drawable.pScreen);
+-    ScreenPtr     pScreen = pWin->drawable.pScreen;
+-    RegionPtr     prgnDst;
+-    int           nbox;
+-    int           dx, dy;
+-
+-    dx = ptOldOrg.x - pWin->drawable.x;
+-    dy = ptOldOrg.y - pWin->drawable.y;
+-
+-    prgnDst = (*pScreen->RegionCreate)(NULL, 1);
+-
+-    (*pScreen->TranslateRegion)(prgnSrc, -dx, -dy);
+-    (*pScreen->Intersect)(prgnDst, &pWin->borderClip, prgnSrc);
+-
+-    nbox = REGION_NUM_RECTS(prgnDst);
+-    if (nbox == 0)
+-    {
+-        (*pScreen->RegionDestroy)(prgnDst);
+-        return;
+-    }
+-
+-    copyBoxesOrdered(pRTG, REGION_RECTS(prgnDst), nbox, dx, dy);
++    blitFill(pRTG, x1, y1, x2 - 1, y2 - 1, color);
++}
+ 
++/* Send what is queued; the card has finished when this returns. */
++void
++ZZ9000BlitFlush()
++{
+     BLIT_FLUSH();
+-    (*pScreen->RegionDestroy)(prgnDst);
+ }
+ 
+-/* ---------------------------------------------------------------------- */
+-/* ZZ9000CopyArea                                                          */
+-
+ /*
+-** ZZ9000CopyArea - copy a rectangular region between drawables.
+-**
+-** Fast path: both drawables are windows on the same screen -> direct VRAM
+-** copy.  Modelled on cfbBitBlt: the source rectangle is first clipped to
+-** what of the source window is actually visible (its clipList, or the
+-** area not clipped by children for IncludeInferiors), translated to the
+-** destination and clipped to the GC composite clip.  Only that region is
+-** copied -- the framebuffer under an obscured part of the source holds
+-** some other window's pixels, not the source's.  miHandleExposures then
+-** paints the destination background over the parts that could not be
+-** copied and, with graphics exposures on, returns the region the client
+-** must redraw (the GraphicsExpose events).
+-**
+-** All other cases (pixmap source or destination, or any raster op but
+-** GXcopy -- copyVRAMBox can only copy) fall back to miCopyArea, which uses
+-** GetSpans/SetSpans (correct but slower; SetSpans applies the alu).
++** The doBitBlt of cfb's BitBlt for a window-to-window CopyArea: every box
++** of prgnDst from its point in pptSrc, which for a copy within the screen is
++** the box moved by one offset.  GXcopy, all planes (zz9000screen.c checks).
+ */
+-RegionPtr
+-ZZ9000CopyArea(pSrcDraw, pDstDraw, pGC, srcx, srcy, width, height, dstx, dsty)
+-DrawablePtr pSrcDraw;
+-DrawablePtr pDstDraw;
+-GCPtr       pGC;
+-int         srcx, srcy;
+-int         width, height;
+-int         dstx, dsty;
++void
++ZZ9000DoBitbltBlit(pSrc, pDst, alu, prgnDst, pptSrc, planemask)
++DrawablePtr   pSrc, pDst;
++int           alu;
++RegionPtr     prgnDst;
++DDXPointPtr   pptSrc;
++unsigned long planemask;
+ {
+-    ScreenPtr       pScreen;
+-    rtgScreenPtr    pRTG;
+-    RegionPtr       prgnSrcClip;
+-    RegionPtr       prgnExposed;
+-    RegionRec       rgnDst;
+-    BoxRec          box;
+-    BoxPtr          pbox, pboxBand, pboxNext, pboxEnd;
+-    int             freeSrcClip = FALSE;
+-    int             nbox, i;
+-    int             dx, dy;
+-    int             bandsUp, boxesLeft;
+-
+-    /* Only a GXcopy window-to-window same-screen copy gets the fast VRAM blit */
+-    if (pSrcDraw->type != DRAWABLE_WINDOW ||
+-        pDstDraw->type != DRAWABLE_WINDOW ||
+-        pSrcDraw->pScreen != pDstDraw->pScreen ||
+-        pGC->alu != GXcopy)
+-    {
+-        return miCopyArea(pSrcDraw, pDstDraw, pGC,
+-                          srcx, srcy, width, height, dstx, dsty);
+-    }
+-
+-    pScreen = pDstDraw->pScreen;
+-    pRTG    = GetRTGScreen(pScreen);
+-
+-    if (!((WindowPtr) pDstDraw)->realized)
+-        return (RegionPtr) NULL;
+-
+-    /*
+-    ** Fast path: the common scroll/copy of an unobscured window.
+-    ** When the source is clipped by its clipList (not IncludeInferiors), that
+-    ** clipList and the destination's composite clip are one box each, and
+-    ** the source rectangle lies wholly inside the source box, no part of the
+-    ** source is obscured: nothing to expose, one box to copy.  Returning
+-    ** NULL is protocol-correct -- ProcCopyArea hands it to SendGraphicsExpose,
+-    ** which sends the NoExpose a client with graphics exposures expects.
+-    ** Anything else takes the full region path below.
+-    */
+-    if (pGC->subWindowMode != IncludeInferiors &&
+-        REGION_NUM_RECTS(&((WindowPtr) pSrcDraw)->clipList) == 1 &&
+-        REGION_NUM_RECTS(rtgGCClip(pGC)) == 1)
+-    {
+-        BoxPtr sb = REGION_RECTS(&((WindowPtr) pSrcDraw)->clipList);
+-        BoxPtr db = REGION_RECTS(rtgGCClip(pGC));
+-        int    sx = pSrcDraw->x + srcx, sy = pSrcDraw->y + srcy;
+-        int    tx = pDstDraw->x + dstx, ty = pDstDraw->y + dsty;
+-        int    x1, y1, x2, y2;
+-
+-        if (width > 0 && height > 0 &&
+-            sx >= sb->x1 && sy >= sb->y1 &&
+-            sx + width <= sb->x2 && sy + height <= sb->y2)
+-        {
+-            x1 = max(tx, db->x1);
+-            y1 = max(ty, db->y1);
+-            x2 = min(tx + width, db->x2);
+-            y2 = min(ty + height, db->y2);
+-            if (x1 < x2 && y1 < y2)
+-                copyVRAMBox(pRTG,
+-                            x1 + (sx - tx), y1 + (sy - ty),
+-                            x2 - x1, y2 - y1, x1, y1);
+-            BLIT_FLUSH();
+-            return (RegionPtr) NULL;
+-        }
+-    }
+-
+-    /* What of the source is visible */
+-    if (pGC->subWindowMode == IncludeInferiors)
+-    {
+-        prgnSrcClip = NotClippedByChildren((WindowPtr) pSrcDraw);
+-        freeSrcClip = TRUE;
+-    }
+-    else
+-        prgnSrcClip = &((WindowPtr) pSrcDraw)->clipList;
+-
+-    box.x1 = pSrcDraw->x + srcx;
+-    box.y1 = pSrcDraw->y + srcy;
+-    box.x2 = box.x1 + width;
+-    box.y2 = box.y1 + height;
+-    REGION_INIT(pScreen, &rgnDst, &box, 1);
+-    REGION_INTERSECT(pScreen, &rgnDst, &rgnDst, prgnSrcClip);
+-
+-    /* Source -> destination offset; move the region, clip to the GC */
+-    dx = (pSrcDraw->x + srcx) - (pDstDraw->x + dstx);
+-    dy = (pSrcDraw->y + srcy) - (pDstDraw->y + dsty);
+-    REGION_TRANSLATE(pScreen, &rgnDst, -dx, -dy);
+-    REGION_INTERSECT(pScreen, &rgnDst, &rgnDst, rtgGCClip(pGC));
+-
+-    /*
+-    ** Copy the boxes in an order that never overwrites a source box
+-    ** before it is read: bands bottom-up when the copy moves down
+-    ** (dy < 0: the source lies above), boxes within a band right-to-left
+-    ** when it moves right (dx < 0).  copyVRAMBox orders rows and columns
+-    ** inside one box the same way.
+-    */
+-    nbox    = REGION_NUM_RECTS(&rgnDst);
+-    pbox    = REGION_RECTS(&rgnDst);
+-    pboxEnd = pbox + nbox;
+-    bandsUp   = (dy < 0);
+-    boxesLeft = (dx < 0);
+-
+-    if (nbox && width > 0 && height > 0)
+-    {
+-        if (!bandsUp && !boxesLeft)
+-        {
+-            for (i = 0; i < nbox; i++, pbox++)
+-                copyVRAMBox(pRTG,
+-                            pbox->x1 + dx, pbox->y1 + dy,
+-                            pbox->x2 - pbox->x1, pbox->y2 - pbox->y1,
+-                            pbox->x1, pbox->y1);
+-        }
+-        else
+-        {
+-            /* Walk the bands in the chosen order, each band's boxes in theirs */
+-            pboxBand = bandsUp ? pboxEnd : pbox;
+-            while (bandsUp ? (pboxBand > pbox) : (pboxBand < pboxEnd))
+-            {
+-                BoxPtr first, last, b;
+-
+-                if (bandsUp)
+-                {
+-                    last  = pboxBand - 1;
+-                    first = last;
+-                    while (first > pbox && (first - 1)->y1 == last->y1)
+-                        first--;
+-                    pboxNext = first;
+-                }
+-                else
+-                {
+-                    first = pboxBand;
+-                    last  = first;
+-                    while (last + 1 < pboxEnd && (last + 1)->y1 == first->y1)
+-                        last++;
+-                    pboxNext = last + 1;
+-                }
+-
+-                for (b = boxesLeft ? last : first;
+-                     boxesLeft ? (b >= first) : (b <= last);
+-                     b += boxesLeft ? -1 : 1)
+-                    copyVRAMBox(pRTG,
+-                                b->x1 + dx, b->y1 + dy,
+-                                b->x2 - b->x1, b->y2 - b->y1,
+-                                b->x1, b->y1);
+-
+-                pboxBand = pboxNext;
+-            }
+-        }
+-    }
++    BoxPtr pbox = REGION_RECTS(prgnDst);
++    int    nbox = REGION_NUM_RECTS(prgnDst);
+ 
++    if (nbox == 0)
++        return;
++    ZZ9000CopyBoxes(GetRTGScreen(pDst->pScreen), pbox, nbox,
++                    pptSrc->x - pbox->x1, pptSrc->y - pbox->y1);
+     BLIT_FLUSH();
+-
+-    /*
+-    ** Always called (see mi/miexpose.c): it paints the destination
+-    ** background where the source was obscured, and returns the exposed
+-    ** region only when the GC has graphics exposures on.
+-    */
+-    prgnExposed = miHandleExposures(pSrcDraw, pDstDraw, pGC,
+-                                    srcx, srcy, width, height,
+-                                    dstx, dsty, 0L);
+-
+-    REGION_UNINIT(pScreen, &rgnDst);
+-    if (freeSrcClip)
+-        REGION_DESTROY(pScreen, prgnSrcClip);
+-    return prgnExposed;
+ }
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000win.c
++++ /dev/null
+@@ -1,59 +0,0 @@
+-/*
+-** ZZ9000win.c - Window lifecycle hooks for ZZ9000 RTG driver.
+-**
+-** The ZZ9000 is a plain framebuffer with no hardware window support.
+-** All ScreenRec window hooks are no-ops that return TRUE.
+-**
+-** PaintWindowBackground / PaintWindowBorder are in ZZ9000draw.c.
+-** CopyWindow is in ZZ9000draw.c.
+-*/
+-
+-#include "X.h"
+-#include "windowstr.h"
+-#include "../../amix.h"
+-#include "../rtg.h"
+-#include "zz9000.h"
+-
+-Bool
+-ZZ9000CreateWindow(pWin)
+-WindowPtr pWin;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000DestroyWindow(pWin)
+-WindowPtr pWin;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000PositionWindow(pWin, x, y)
+-WindowPtr pWin;
+-int       x, y;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000ChangeWindowAttributes(pWin, mask)
+-WindowPtr     pWin;
+-unsigned long mask;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000RealizeWindow(pWin)
+-WindowPtr pWin;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000UnrealizeWindow(pWin)
+-WindowPtr pWin;
+-{
+-    return TRUE;
+-}
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cmap.c
++++ /dev/null
+@@ -1,214 +0,0 @@
+-/*
+-** ZZ9000cmap.c - Colormap management for ZZ9000 RTG (TrueColor, no CLUT).
+-**
+-** The ZZ9000 is a direct-colour framebuffer: pixel values are RGB565 words
+-** written directly to VRAM.  There is no hardware colour-lookup table, so:
+-**
+-**   InstallColormap   - bookkeeping only; WalkTree for TellLost/GainedMap.
+-**   UninstallColormap - reinstall the default colormap if needed.
+-**   ListInstalledColormaps - always returns 1 (exactly one map installed).
+-**   StoreColors       - no-op (no CLUT to update).
+-**   CreateColormap    - no-op (no CLUT entries to allocate).
+-**   DestroyColormap   - no-op.
+-**   ResolveColor      - round X11 16-bit RGB values to RGB565 precision.
+-**   CreateDefColormap - create default TrueColor map; AllocColor black/white.
+-*/
+-
+-#include "X.h"
+-#include "Xproto.h"
+-#include "scrnintstr.h"
+-#include "colormapst.h"
+-#include "resource.h"
+-#include "../../amix.h"
+-#include "../rtg.h"
+-#include "zz9000.h"
+-
+-/* ------------------------------------------------------------------ */
+-
+-Bool
+-ZZ9000CreateColormap(pMap)
+-ColormapPtr pMap;
+-{
+-    VisualPtr pVisual = pMap->pVisual;
+-    int       i, n;
+-
+-    if (pVisual->class != TrueColor && pVisual->class != DirectColor)
+-        return TRUE;
+-
+-    n = (pVisual->redMask   >> pVisual->offsetRed)   + 1;
+-    for (i = 0; i < n; i++)
+-        pMap->red[i].co.local.red     = (i * 65535) / (n - 1);
+-
+-    n = (pVisual->greenMask >> pVisual->offsetGreen) + 1;
+-    for (i = 0; i < n; i++)
+-        pMap->green[i].co.local.green = (i * 65535) / (n - 1);
+-
+-    n = (pVisual->blueMask  >> pVisual->offsetBlue)  + 1;
+-    for (i = 0; i < n; i++)
+-        pMap->blue[i].co.local.blue   = (i * 65535) / (n - 1);
+-
+-    return TRUE;
+-}
+-
+-void
+-ZZ9000DestroyColormap(pMap)
+-ColormapPtr pMap;
+-{
+-}
+-
+-/* ------------------------------------------------------------------ */
+-
+-/*
+-** ZZ9000InstallColormap - make pMap the current colormap.
+-**
+-** Notifies all clients via WalkTree(TellLostMap / TellGainedMap).
+-** No hardware CLUT writes are needed for TrueColor.
+-*/
+-void
+-ZZ9000InstallColormap(pMap)
+-ColormapPtr pMap;
+-{
+-    rtgScreenPtr pRTG = GetRTGScreen(pMap->pScreen);
+-    ColormapPtr  old  = pRTG->installedMap;
+-
+-    if (pMap == old)
+-        return;
+-
+-    if (old)
+-        WalkTree(pMap->pScreen, TellLostMap, (char *) &old->mid);
+-
+-    pRTG->installedMap = pMap;
+-    WalkTree(pMap->pScreen, TellGainedMap, (char *) &pMap->mid);
+-}
+-
+-/*
+-** ZZ9000UninstallColormap - uninstall pMap.
+-**
+-** If pMap is the currently installed map and it is not the default
+-** colormap, reinstall the default.
+-*/
+-void
+-ZZ9000UninstallColormap(pMap)
+-ColormapPtr pMap;
+-{
+-    rtgScreenPtr pRTG = GetRTGScreen(pMap->pScreen);
+-
+-    if (pMap != pRTG->installedMap)
+-        return;
+-
+-    if (pMap->mid != pMap->pScreen->defColormap)
+-    {
+-        ColormapPtr def = (ColormapPtr)
+-            LookupIDByType(pMap->pScreen->defColormap, RT_COLORMAP);
+-        (*pMap->pScreen->InstallColormap)(def);
+-    }
+-}
+-
+-/*
+-** ZZ9000ListInstalledColormaps - return the ID of the installed map.
+-**
+-** X protocol guarantees exactly one colormap is installed at all times.
+-*/
+-int
+-ZZ9000ListInstalledColormaps(pScreen, pMaps)
+-ScreenPtr pScreen;
+-Colormap *pMaps;
+-{
+-    rtgScreenPtr pRTG = GetRTGScreen(pScreen);
+-
+-    *pMaps = pRTG->installedMap->mid;
+-    return 1;
+-}
+-
+-/*
+-** ZZ9000StoreColors - no-op for TrueColor.
+-**
+-** TrueColor pixels encode colour directly; there is no CLUT to update.
+-*/
+-void
+-ZZ9000StoreColors(pMap, ndef, pdefs)
+-ColormapPtr pMap;
+-int         ndef;
+-xColorItem *pdefs;
+-{
+-}
+-
+-/* ------------------------------------------------------------------ */
+-
+-/*
+-** ZZ9000ResolveColor - round X11 RGB values to RGB565 hardware precision.
+-**
+-** X stores colour components as 16-bit values (0-65535).  We quantise
+-** each component to the number of bits available in the hardware field
+-** (5 for red and blue, 6 for green) then expand back to 16 bits so that
+-** the DIX pixel value reflects exactly what the hardware will display.
+-**
+-** Two-step: find the hardware index (0..lim), then reconstruct the
+-** exact 16-bit value that index maps to in the colour table.  This
+-** avoids the unsigned-short overflow that plagued the earlier formula.
+-*/
+-void
+-ZZ9000ResolveColor(pRed, pGreen, pBlue, pVisual)
+-unsigned short *pRed, *pGreen, *pBlue;
+-VisualPtr       pVisual;
+-{
+-    unsigned int limr, limg, limb, idx;
+-
+-    limr = pVisual->redMask   >> pVisual->offsetRed;
+-    limg = pVisual->greenMask >> pVisual->offsetGreen;
+-    limb = pVisual->blueMask  >> pVisual->offsetBlue;
+-
+-    idx    = ((unsigned int)*pRed   * (limr + 1)) >> 16;
+-    *pRed  = (unsigned short)((idx * 65535) / limr);
+-
+-    idx    = ((unsigned int)*pGreen * (limg + 1)) >> 16;
+-    *pGreen = (unsigned short)((idx * 65535) / limg);
+-
+-    idx    = ((unsigned int)*pBlue  * (limb + 1)) >> 16;
+-    *pBlue  = (unsigned short)((idx * 65535) / limb);
+-}
+-
+-/* ------------------------------------------------------------------ */
+-
+-/*
+-** ZZ9000CreateDefColormap - create the default TrueColor colormap.
+-**
+-** Follows the cfbCreateDefColormap pattern:
+-**   1. Locate the visual that matches pScreen->rootVisual.
+-**   2. CreateColormap with AllocNone (TrueColor: client allocates cells).
+-**   3. AllocColor for white (all ones) and black (all zeros).
+-**   4. Install the new colormap.
+-**
+-** On success pScreen->whitePixel and pScreen->blackPixel are set by
+-** AllocColor to the nearest RGB565 representations of white and black.
+-*/
+-Bool
+-ZZ9000CreateDefColormap(pScreen)
+-ScreenPtr pScreen;
+-{
+-    unsigned short  zero = 0, ones = 0xFFFF;
+-    VisualPtr       pVisual;
+-    ColormapPtr     cmap;
+-    Pixel           whitePix, blackPix;
+-
+-    for (pVisual = pScreen->visuals;
+-         pVisual->vid != pScreen->rootVisual;
+-         pVisual++)
+-        ;
+-
+-    if (CreateColormap(pScreen->defColormap, pScreen, pVisual, &cmap,
+-                       AllocNone, 0) != Success)
+-        return FALSE;
+-
+-    if (AllocColor(cmap, &ones, &ones, &ones, &whitePix, 0) != Success)
+-        return FALSE;
+-
+-    if (AllocColor(cmap, &zero, &zero, &zero, &blackPix, 0) != Success)
+-        return FALSE;
+-
+-    pScreen->whitePixel = whitePix;
+-    pScreen->blackPixel = blackPix;
+-
+-    (*pScreen->InstallColormap)(cmap);
+-    return TRUE;
+-}
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000pix.c
++++ /dev/null
+@@ -1,132 +0,0 @@
+-/*
+-** ZZ9000pix.c - Pixmap and font operations for ZZ9000 RTG.
+-**
+-** Off-screen pixmaps live entirely in host memory (not in VRAM).
+-** Native 16-bit pixmaps use the X11R6 AllocatePixmap() layout.  Depth-1
+-** bitmap pixmaps use the VA2000/XRTG layout (PixmapRec followed directly
+-** by pixels) because these are the glyph/cursor masks consumed by mfb.
+-**
+-** Supported depths: 16 (native TrueColor) and 1 (bitmaps for fonts).
+-**
+-** RealizeFont / UnrealizeFont are no-ops; the ZZ9000 has no hardware
+-** font cache and font rendering is handled entirely by the mi layer.
+-*/
+-
+-#include "X.h"
+-#include "scrnintstr.h"
+-#include "pixmap.h"
+-#include "pixmapstr.h"
+-#include "servermd.h"
+-#include "dixfont.h"
+-#include "../../amix.h"
+-#include "../rtg.h"
+-#include "zz9000.h"
+-
+-/*
+-** ZZ9000CreatePixmap - allocate a host-memory pixmap.
+-**
+-** PixmapRec, pixmap-private records, and pixel data are allocated in one
+-** block.  With PIXPRIV, pixel data starts at pScreen->totalPixmapSize;
+-** otherwise it starts immediately after PixmapRec.  devKind is the
+-** scanline size in bytes, padded to BITMAP_SCANLINE_PAD bits.
+-**
+-** Returns NullPixmap on unsupported depth or allocation failure.
+-*/
+-PixmapPtr
+-ZZ9000CreatePixmap(pScreen, width, height, depth)
+-ScreenPtr pScreen;
+-int       width;
+-int       height;
+-int       depth;
+-{
+-    PixmapPtr pPixmap;
+-    int       size;
+-    int       datasize;
+-
+-    if (depth != ZZ9000_DEPTH && depth != 1)
+-        return NullPixmap;
+-
+-    /* signed 16-bit sizes only, and a byte size that fits an int with room
+-     * for the PixmapRec and its privates (ProcCreatePixmap bounds clients,
+-     * this bounds the server's own callers) */
+-    if (width < 0 || height < 0 || width > 32767 || height > 32767)
+-        return NullPixmap;
+-    size = PixmapBytePad(width, depth);
+-    if (height != 0 && size > (0x7fffffff - 65536) / height)
+-        return NullPixmap;
+-    datasize = height * size;
+-
+-    if (depth == 1)
+-        pPixmap = (PixmapPtr) xalloc(sizeof(PixmapRec) + datasize);
+-    else
+-        pPixmap = AllocatePixmap(pScreen, datasize);
+-
+-    if (!pPixmap)
+-        return NullPixmap;
+-
+-    pPixmap->drawable.type         = DRAWABLE_PIXMAP;
+-    pPixmap->drawable.class        = 0;
+-    pPixmap->drawable.pScreen      = pScreen;
+-    pPixmap->drawable.depth        = depth;
+-    pPixmap->drawable.bitsPerPixel = depth;
+-    pPixmap->drawable.id           = 0;
+-    pPixmap->drawable.serialNumber = NEXT_SERIAL_NUMBER;
+-    pPixmap->drawable.x            = 0;
+-    pPixmap->drawable.y            = 0;
+-    pPixmap->drawable.width        = width;
+-    pPixmap->drawable.height       = height;
+-    pPixmap->devKind               = size;
+-    pPixmap->refcnt                = 1;
+-    if (depth == 1)
+-        pPixmap->devPrivate.ptr = (pointer)(pPixmap + 1);
+-    else
+-    {
+-#ifdef PIXPRIV
+-        pPixmap->devPrivate.ptr = datasize ?
+-            (pointer)((char *)pPixmap + pScreen->totalPixmapSize) : NULL;
+-#else
+-        pPixmap->devPrivate.ptr = (pointer)(pPixmap + 1);
+-#endif
+-    }
+-
+-    return pPixmap;
+-}
+-
+-/*
+-** ZZ9000DestroyPixmap - release a host-memory pixmap.
+-**
+-** Decrements the reference count; frees only when it reaches zero.
+-** Because the header and data share one allocation, a single xfree
+-** releases both.
+-*/
+-Bool
+-ZZ9000DestroyPixmap(pPixmap)
+-PixmapPtr pPixmap;
+-{
+-    if (--pPixmap->refcnt)
+-        return TRUE;
+-    xfree((pointer) pPixmap);
+-    return TRUE;
+-}
+-
+-/*
+-** ZZ9000RealizeFont - no hardware font cache; always succeeds.
+-*/
+-Bool
+-ZZ9000RealizeFont(pScreen, pFont)
+-ScreenPtr pScreen;
+-FontPtr   pFont;
+-{
+-    return TRUE;
+-}
+-
+-/*
+-** ZZ9000UnrealizeFont - no hardware font cache; always succeeds.
+-*/
+-Bool
+-ZZ9000UnrealizeFont(pScreen, pFont)
+-ScreenPtr pScreen;
+-FontPtr   pFont;
+-{
+-    return TRUE;
+-}
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000cursor.c
++++ /dev/null
+@@ -1,114 +0,0 @@
+-/*
+-** ZZ9000cursor.c - Software cursor for ZZ9000 RTG via mi layer.
+-**
+-** The ZZ9000 has no hardware sprite.  ZZ9000CursorInitialize() delegates
+-** to miDCInitialize(), which installs the miSprite/miDC software cursor
+-** machinery and overrides all ScreenRec cursor entries.
+-**
+-** The remaining functions are stubs installed as initial placeholders in
+-** the ScreenRec before miDCInitialize() is called.  In practice they are
+-** never reached; miDCInitialize() overwrites every ScreenRec slot.
+-*/
+-
+-#include "X.h"
+-#include "Xmd.h"
+-#include "cursorstr.h"
+-#include "scrnintstr.h"
+-#include "mipointer.h"
+-#include "../../amix.h"
+-#include "../rtg.h"
+-#include "zz9000.h"
+-
+-extern miPointerScreenFuncRec amixPointerScreenFuncs;
+-extern void miRecolorCursor();
+-
+-/* ------------------------------------------------------------------ */
+-/* Stubs - overridden by miDCInitialize before any cursor is drawn     */
+-
+-Bool
+-ZZ9000RealizeCursor(pScreen, pCursor)
+-ScreenPtr pScreen;
+-CursorPtr pCursor;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000UnrealizeCursor(pScreen, pCursor)
+-ScreenPtr pScreen;
+-CursorPtr pCursor;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000DisplayCursor(pScreen, pCursor)
+-ScreenPtr pScreen;
+-CursorPtr pCursor;
+-{
+-    return TRUE;
+-}
+-
+-Bool
+-ZZ9000SetCursorPosition(pScreen, newx, newy, genEvent)
+-ScreenPtr    pScreen;
+-unsigned int newx, newy;
+-Bool         genEvent;
+-{
+-    return TRUE;
+-}
+-
+-void
+-ZZ9000CursorLimits(pScreen, pCursor, pHotBox, pTopLeftBox)
+-ScreenPtr pScreen;
+-CursorPtr pCursor;
+-BoxPtr    pHotBox;
+-BoxPtr    pTopLeftBox;
+-{
+-    pTopLeftBox->x1 = max(pHotBox->x1, 0);
+-    pTopLeftBox->y1 = max(pHotBox->y1, 0);
+-    pTopLeftBox->x2 = min(pHotBox->x2, (int) pScreen->width);
+-    pTopLeftBox->y2 = min(pHotBox->y2, (int) pScreen->height);
+-}
+-
+-void
+-ZZ9000PointerNonInterestBox(pScreen, pBox)
+-ScreenPtr pScreen;
+-BoxPtr    pBox;
+-{
+-}
+-
+-void
+-ZZ9000ConstrainCursor(pScreen, pBox)
+-ScreenPtr pScreen;
+-BoxPtr    pBox;
+-{
+-}
+-
+-/* ------------------------------------------------------------------ */
+-
+-/*
+-** ZZ9000CursorInitialize - install the mi software cursor.
+-**
+-** Calls miDCInitialize() to wire the miSprite/miDC sprite layer into the
+-** ScreenRec.  After this returns, RealizeCursor ... ConstrainCursor all
+-** point to mi functions and the stubs above are unreachable.
+-**
+-** Also installs the remaining cursor entries so the ScreenRec is fully
+-** populated before miDCInitialize() performs its own override.
+-*/
+-void
+-ZZ9000CursorInitialize(pScreen)
+-ScreenPtr pScreen;
+-{
+-    pScreen->RealizeCursor         = ZZ9000RealizeCursor;
+-    pScreen->UnrealizeCursor       = ZZ9000UnrealizeCursor;
+-    pScreen->DisplayCursor         = ZZ9000DisplayCursor;
+-    pScreen->SetCursorPosition     = ZZ9000SetCursorPosition;
+-    pScreen->CursorLimits          = ZZ9000CursorLimits;
+-    pScreen->PointerNonInterestBox = ZZ9000PointerNonInterestBox;
+-    pScreen->ConstrainCursor       = ZZ9000ConstrainCursor;
+-    pScreen->RecolorCursor         = miRecolorCursor;
+-
+-    miDCInitialize(pScreen, &amixPointerScreenFuncs);
+-}

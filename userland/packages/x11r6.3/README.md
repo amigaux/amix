@@ -45,6 +45,17 @@ directory that holds both; the default is the sysroot's `usr`.
 | `12-rstart-prefix.patch` | Ours: `rstartd` goes to the package's `bin` rather than `/usr/bin`, and the `rstart` client calls it by that path on the `rsh` command line. |
 | `13-bdf-defaultch.patch` | Ours: a BDF without a `DEFAULT_CHAR` property gets no default character (`NO_SUCH_CHAR`) rather than whatever the caller's font record held; `bdftopcf`'s is on its stack, so such fonts differed from build to build. |
 | `14-bdftopcf-clean-fontrec.patch` | Ours: `bdftopcf` starts from a zeroed font record. The BDF reader does not set every field (`info.inkMetrics` among them), and the record is on `bdftopcf`'s stack, so a PCF gained or lost its ink bounds from one build host to another. |
+| `15-zz9000-composite-clip.patch` | Ours: the ZZ9000 GC's composite clip is rebuilt from scratch on every relevant validate, by one function for windows and pixmaps (as `miComputeCompositeClip`). A pixmap's clip is bounded by the pixmap, so a large client clip can no longer make fills write past a small pixmap's buffer; a window keeps its client clip when only the window or the subwindow mode changes; the `NotClippedByChildren` region is freed; CreateGC fails cleanly without its clip region. |
+| `16-pixmap-size-bounds.patch` | Ours: dix `ProcCreatePixmap` refuses a width or height over 32767 (BadAlloc), and `ZZ9000CreatePixmap` refuses the same and any byte size that would wrap an int. Before, 65535 × 32769 at depth 16 allocated 131072 bytes for a drawable claiming the full size. |
+| `17-amix-keycodes-from-8.patch` | Ours: keycodes are the raw code plus 8 (8..135), the protocol's range. The keysym table's KeySymsRec claimed 1..0xE8 against a 128-row table, so 232 rows were copied and sent to clients; the modifier map moves with the keycodes and loses its unused release-code row. |
+| `18-amix-switch-key-filter.patch` | Ours: the filter for the system's screen-switch keys swallows the press of Alt-Esc and Alt-F1..F10 and exactly that press's release. It decided per event, so a key released with Alt down lost its release and stayed down in X; and its range ran to Print Screen, eating the keypad's `( ) / *` with Alt. |
+| `19-amix-key-repeat.patch` | Ours: key repeat comes from one place, XKB when it is on, the DDX only with `-kb`. The DDX repeat now only shortens the server's select timeout (it replaced it), computes the time normalised (an unnormalised `tv_usec` of 1000000, or `-ar1` of 1000 or more, gave an EINVAL select that spun the server), honours per-key `xset r`, and passes `-ar1`/`-ar2` on to XKB; the system's own repeat events are dropped. |
+| `20-amix-bell-gated.patch` | Ours: the Paula bell is off unless the server runs with `-audiobell` (the stock audio driver's open waits for Paula at level 4 with no timeout, so a missing interrupt froze the box); the bell's process closes every descriptor before opening `/dev/audio`; one bell at a time. |
+| `21-zz9000-blits-partial.patch` | Ours: blitFlush follows the driver's BLITS count: the rest is sent until every record has run, EINVAL draws that one record on the CPU, any other error draws the records not yet run and turns the blitter off. Before, an error redrew the whole batch, applying a copy that had run twice. One record per operation: the driver bands; `-blitmax` is accepted and ignored. |
+| `22-zz9000-map-framebuffer.patch` | Ours: the server maps the visible framebuffer only (not the whole board with its register window), and checks GETFBINFO against the mode it set (size, depth 16, RGB565, stride, inside the board) before drawing. |
+| `23-zz9000-no-soft3d.patch` | Ours: the ZZ9K-SOFT3D extension goes, and with it the probe of ioctl 18 at every start, a call our card driver leaves unassigned. |
+| `24-amix-no-mitshm.patch` | Ours: MIT-SHM is not built. ShmAttach attached any segment a client named with the server's root rights, and R6.3 cannot check a client's uid against the segment. |
+| `25-zz9000-screen-on-cfb16.patch` | Ours: the ZZ9000/Z3660 screen is X's own 16-bit framebuffer code, `cfb16ScreenInit`, instead of the hand-built screen, GC and drawing layer: cfb owns validation, all drawing (planemask, dashed and wide lines, pixmaps, depth-1 pixmaps through mfb), windows, colormaps and text. TrueColor only, the visual set to the card's RGB565 (cfb's depth-16 default is 6-5-5 red-low). The card's blitter comes in at four points: window-to-window CopyArea (cfb's own BitBlt with a blitter doBitBlt), CopyWindow, solid GXcopy PolyFillRect and solid PaintWindow, each flushing before it returns; a 16-bit PutImage into a window keeps the direct path. `zz9000win.c`, `zz9000cmap.c`, `zz9000pix.c` and `zz9000cursor.c` go. Xzz9000's text grows by 115 KB (cfb16's line, glyph and fill code instead of mi's generic paths). `cfb/cfbglblt8.c` joins the `-fno-jump-tables` files. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
@@ -61,7 +72,7 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   (the C library headers the 1990s sources often omit) and `amix-decls.h`. It logs each line for
   the strict gates.
 - **amix.cf** (patch 01) says what Amix is and what the package builds: static libraries, MIT-SHM
-  on, colours from `rgb.txt`, man sections 1/3/4/5, xdm's greeter linked in. It turns off what is
+  off, colours from `rgb.txt`, man sections 1/3/4/5, xdm's greeter linked in. It turns off what is
   not shipped: PEX, XIE, LBX, the print server and Xnest. **host.def** (`host.def.in`) holds only
   the cross build: the compiler and tools, `ProjectRoot` `/opt/amix/X11R6`, the library paths and
   the install script.
@@ -94,12 +105,15 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   `/etc/profile.d/x11r63.sh` puts `/opt/amix/X11R6/bin` last on `PATH`, behind the stock X in
   `/usr/X/bin`.
 - **Man pages** go to sections 1/3/4/5 (not svr4.cf's `1x`/`3x`), then into
-  `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`.
+  `/opt/amix/man/<sect>/<name>` with `whatis.d/x11r63`. `Xzz9000(1)` is the package's own page
+  (`man/Xzz9000.1`); the DDX's `Xamix` page, the R5 Xsun page with the names swapped, is not shipped.
 - The XIE and PEX client libraries are not shipped: their extensions are off.
 - **rstart** runs `rsh host /opt/amix/X11R6/bin/rstartd`: Amix's `/usr/bin/rsh` is the remote
   shell, and the remote `rsh` PATH does not reach the package's `bin`. The contexts' `x` and
   `x11` aliases are absolute symlinks.
 - **UFS only.** rstart's `commands/ListGenericCommands` has a 19-byte name, so the roll marks the
   package UFS-only; new installs are UFS.
-- **MIT-SHM** is built in. The 68040/68060 kernel's shared-memory fixes make it safe; on a kernel
-  without them, clients must not use it.
+- **MIT-SHM** is not built. Its ShmAttach attaches whatever segment id a client names, with the
+  server's rights (root), and R6.3 has no way to learn a client's uid to check the segment's
+  permissions: any client, remote ones included, could read or write any shared-memory segment on
+  the box through the server. Clients fall back to ordinary image requests.

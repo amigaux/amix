@@ -2,7 +2,7 @@
 NAME=python3
 PKG=python3
 VERSION=3.11.18
-PKGREV=2   # -2: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=3   # -3: a CPU-time timer lets a computing thread hand over the GIL; the port adapters' MIT notice; the new pth
 SUMMARY="Python 3.11.18"
 DESC="CPython 3.11.18 for Amix, statically linked, threads through GNU Pth, with its standard library (no test suite, IDLE or Tk) under /opt/amix/lib/python3.11. /opt/amix/bin/python3 seeds hash randomisation with PYTHONHASHSEED=0 while /dev/urandom cannot be read; os.urandom and secrets need the random driver. Needs a UFS file system."
 CATEGORY=language

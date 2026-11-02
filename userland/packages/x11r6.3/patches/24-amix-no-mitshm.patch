@@ -1,0 +1,25 @@
+Ours.  MIT-SHM is not built (HasShm NO).
+
+ProcShmAttach attaches whatever segment id a client names, with the
+server's rights -- root, under xdm and xinit -- and R6.3 cannot learn a
+client's uid to check the segment's permissions (a TCP client has none).
+Any client, remote ones included, could have the server read a segment
+into a drawable (ShmPutImage, then GetImage) or write into one
+(ShmGetImage).  Clients that use MIT-SHM test for it (MITSHM) and fall
+back to ordinary image requests; libXext loses XShm.o.
+
+--- a/config/cf/amix.cf
++++ b/config/cf/amix.cf
+@@ -56,8 +56,10 @@
+ #define BuildLBX		NO
+ #define XprtServer		NO
+ #define XnestServer		NO
+-/* MIT-SHM: safe with the 68040/68060 kernel's shared-memory fixes (README) */
+-#define HasShm			YES
++/* MIT-SHM off: ShmAttach attaches any segment id a client names, with the
++ * server's rights (root), and R6.3 cannot learn a client's uid to check the
++ * segment's permissions (README) */
++#define HasShm			NO
+ /* colours from rgb.txt: the server's rgb reader is Amix's classic dbm, whose
+  * .dir/.pag format no build-host tool writes */
+ #define UseRgbTxt		YES

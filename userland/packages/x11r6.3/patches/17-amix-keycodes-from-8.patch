@@ -1,0 +1,113 @@
+Ours.  Keyboard keycodes are the raw code plus 8, so they start at the
+protocol's minimum keycode.
+
+- The keysym table has 128 rows (raw codes 0x00-0x7F), but its KeySymsRec
+  claimed keycodes 1..0xE8: InitKeyboardDeviceStruct copied 232 rows from
+  a 128-row array, and GetKeyboardMapping sent the over-read to clients.
+  It now claims 8..135, exactly the table;
+- keycodes 1-7 broke the protocol (minimum keycode 8), and XKB started on
+  an illegal range;
+- the modifier map moves with the keycodes (raw 0x60-0x67 are keycodes
+  0x68-0x6F), and its second row for release codes goes: a release has
+  the same keycode as its press;
+- the dead `#if 0` keycode-offset block goes.
+
+--- a/programs/Xserver/hw/amix/amix.h
++++ b/programs/Xserver/hw/amix/amix.h
+@@ -53,6 +53,10 @@
+  */
+ #define MAXEVENTS 	32
+ 
++/* X keycode = Amiga raw key code (0x00-0x7F) + AMIX_KEYCODE_OFFSET: the
++ * protocol's keycodes start at 8, so the keyboard sends 8..135 */
++#define AMIX_KEYCODE_OFFSET	8
++
+ /*
+  * MAXSCREENS is the maximum number of heads Zaphod is allowed to
+  * have.  These heads are currently restricted to native mode Amiga
+--- a/programs/Xserver/hw/amix/amixKeyMap.c
++++ b/programs/Xserver/hw/amix/amixKeyMap.c
+@@ -2,20 +2,13 @@
+ #include	"keysym.h"
+ 
+ /*
+-** MIN_AMIX_KEY
+-** Keycode of first key (tilde) pressed down.
+-**
+-** Keycodes 0x00 - 0x67 are codes of keys pressed.
++** MIN_AMIX_KEY, MAX_AMIX_KEY
++** The X keycodes of raw codes 0x00 (tilde) and 0x7F, the first and last
++** rows of AmixMap.  A release is the same raw code with bit 7 set and the
++** same keycode, so the table has one row per raw code, 128 in all.
+ */
+-#define MIN_AMIX_KEY        1
+-
+-/*
+-** MAX_AMIX_KEY
+-** Keycode of last key (Right AMIGA key) released.
+-**
+-** Keycodes 0x80 - 0xE7 are codes of keys released.
+-*/
+-#define MAX_AMIX_KEY        0xE8
++#define MIN_AMIX_KEY        (0x00 + AMIX_KEYCODE_OFFSET)
++#define MAX_AMIX_KEY        (0x7F + AMIX_KEYCODE_OFFSET)
+ 
+ #define AMIX_GLYPHS_PER_KEY 3
+ 
+@@ -164,6 +157,8 @@
+ #define	m1	(Mod1Mask)		/* Alt-Key */
+ #define	m2	(Mod2Mask)		/* Amiga-Keys */
+ 
++/* indexed by keycode: raw 0x60-0x67 (shifts, caps lock, control, alts,
++ * Amiga keys) are keycodes 0x68-0x6F */
+ CARD8 amixModMap[MAP_LENGTH] =
+ {
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 00-0f */
+@@ -172,7 +167,7 @@
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 30-3f */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 40-4f */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 50-5f */
+-    0, sH, sH, lK, cT, m1, m1, m2, m2,  0,  0,  0,  0,  0,  0,  0, /* 60-6f */
++    0,  0,  0,  0,  0,  0,  0,  0, sH, sH, lK, cT, m1, m1, m2, m2, /* 60-6f */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 70-7f */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 80-8f */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* 90-9f */
+@@ -180,7 +175,7 @@
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* b0-bf */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* c0-cf */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* d0-df */
+-    0, sH, sH, lK, cT, m1, m1, m2, m2,  0,  0,  0,  0,  0,  0,  0, /* e0-ef */
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* e0-ef */
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, /* f0-ff */
+ };
+ 
+--- a/programs/Xserver/hw/amix/amixKbd.c
++++ b/programs/Xserver/hw/amix/amixKbd.c
+@@ -145,18 +145,6 @@
+ 	    sysKbPriv.ctrl = &sysKbCtrl;
+ 	    autoRepeatKeyDown = 0;
+ 
+-#if 0
+-	    /*
+-	     * ensure that the keycodes on the wire are >= MIN_KEYCODE
+-	     */
+-	    if (amixKeySyms[sysKbPriv.type].minKeyCode < MIN_KEYCODE) {
+-		int offset = MIN_KEYCODE -amixKeySyms[sysKbPriv.type].minKeyCode;
+-
+-		amixKeySyms[sysKbPriv.type].minKeyCode += offset;
+-		amixKeySyms[sysKbPriv.type].maxKeyCode += offset;
+-		sysKbPriv.offset = offset;
+-	    }
+-#endif
+ 	    InitKeyboardDeviceStruct(
+ 		    pKeyboard,
+ 		    &amixKeySyms,
+@@ -371,7 +359,7 @@
+     CARD8		keyModifiers;
+     Bool		keydown;
+ 
+-    key = (fe->code & 0x7F) + 1;
++    key = (fe->code & 0x7F) + AMIX_KEYCODE_OFFSET;
+     keydown = (fe->code> 0x7F) ? FALSE : TRUE;
+ 
+     keyModifiers = ((DeviceIntPtr)pKeyboard)->key->modifierMap[key];

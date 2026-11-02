@@ -1,0 +1,231 @@
+Ours.  blitFlush follows the driver's BLITS contract: the call returns how
+many records ran, and an error means none of that call's records ran.
+
+- The flush sends the rest until every record has run; EINVAL (record 0
+  of that call is bad) draws that one record on the CPU and carries on;
+  any other error (ENXIO: no blitter on this board or in this mode)
+  draws the records not yet run on the CPU and turns blitting off;
+- before, any error redrew the whole batch on the CPU and turned the
+  blitter off for the server's life, so a copy that had already run was
+  applied twice;
+- one record per operation: the driver bands every operation itself, so
+  the server's -blitmax banding goes (the option is accepted and ignored).
+
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
+@@ -256,26 +256,23 @@
+ ** blits.  The default, 1024, is MG10's: it keeps the 100x100 gains (rect100
+ ** 585 -> 8140/s, scroll100 311 -> 2260) that 16384 gives up.
+ **
+-** -blitmax N: every record covers at most N pixels (whole rows; a downward
+-** copy's bands run bottom-up).  The CPU sits in the stalled register write
+-** for the whole of one card operation and takes no interrupt: MG10 measured
+-** ~20 ms for a full-screen op and lost 42-44 % of serial input at 9600 and
+-** 38400.  The driver runs a batch record by record at base priority, so
+-** interrupts are taken between bands.  The default, 8192, is ~0.16 ms at
+-** the measured ~50,000 px/ms -- under one character time at 38400 (0.26 ms;
+-** Paula has a one-byte receive buffer).  0 does not split.
++** One record per operation: the driver splits every operation into bands
++** itself (its maxarea, 8192 px by default), so interrupts are taken between
++** bands; the server's own -blitmax banding is gone (the option is accepted
++** and ignored).
+ **
+ ** Records are queued and sent in batches.  The queue keeps drawing order:
+ ** it is flushed before any CPU drawing in these paths and before each entry
+-** point returns, so no other code ever finds it non-empty.  If the driver
+-** refuses (no blitter on this board or in this mode: ENXIO; a kernel
+-** without the ioctl: EINVAL), blitting stays off for the life of the server
+-** and the refused records are drawn by the CPU.  The driver refuses a batch
+-** before running any of it, and records made from clip boxes always lie on
+-** the screen, so nothing is drawn twice.
++** point returns, so no other code ever finds it non-empty.  BLITS returns
++** how many records ran ([0, r)); a call ends early when its pixel budget is
++** spent or at a bad record, and an error means none of that call's records
++** ran.  So a flush sends the rest until all have run; EINVAL (record 0 of
++** that call is bad) draws that one record on the CPU and carries on; any
++** other error (ENXIO: no blitter on this board or in this mode) draws the
++** records not yet run on the CPU and turns blitting off for the life of
++** the server.  No record is ever drawn twice.
+ */
+ int zz9000BlitMin = 1024;
+-int zz9000BlitMax = 8192;
+ 
+ #define BLITQ   64
+ 
+@@ -293,39 +290,58 @@
+ #define BLIT_WANT(w, h) (zz9000BlitMin > 0 && (long)(w) * (h) >= zz9000BlitMin)
+ #define BLIT_FLUSH()    do { if (blitN) blitFlush(); } while (0)
+ 
++/* Draw one queued record on the CPU. */
++static void
++blitCpu(b)
++struct zz9k_blit *b;
++{
++    if (b->op == ZZ9K_BLIT_FILL)
++        cpuFill(blitRTG, b->x, b->y, b->x + b->width - 1,
++                b->y + b->height - 1, (unsigned short) b->color);
++    else
++        cpuCopy(blitRTG, b->src_x, b->src_y, b->width, b->height,
++                b->x, b->y);
++}
++
+ static void
+ blitFlush()
+ {
+     struct zz9k_blits bs;
+-    struct zz9k_blit *b;
+-    int               i, n;
++    int               i, n, r, fd;
+ 
+     if (blitN == 0)
+         return;
+-    bs.recs = blitQ;
+-    bs.n    = blitN;
+-    if (ioctl(GetZZ9000Screen(blitRTG)->fd, ZZ9KIOC_BLITS, &bs) >= 0)
+-    {
+-        if (!blitSaid)
+-            ErrorF("zz9000: card blitter in use from %d pixels\n", zz9000BlitMin);
+-        blitSaid = 1;
+-        blitN = 0;
+-        return;
+-    }
+-    ErrorF("zz9000: the driver refused the card blitter (errno %d); -blitmin %d off\n",
+-           errno, zz9000BlitMin);
+-    zz9000BlitMin = 0;
+     n = blitN;
+     blitN = 0;
+-    for (i = 0, b = blitQ; i < n; i++, b++)
++    fd = GetZZ9000Screen(blitRTG)->fd;
++    for (i = 0; i < n; )
+     {
+-        if (b->op == ZZ9K_BLIT_FILL)
+-            cpuFill(blitRTG, b->x, b->y, b->x + b->width - 1,
+-                    b->y + b->height - 1, (unsigned short) b->color);
+-        else
+-            cpuCopy(blitRTG, b->src_x, b->src_y, b->width, b->height,
+-                    b->x, b->y);
++        bs.recs = blitQ + i;
++        bs.n    = n - i;
++        r = ioctl(fd, ZZ9KIOC_BLITS, &bs);
++        if (r > 0)
++        {
++            i += r;                     /* [i, i + r) ran */
++            continue;
++        }
++        if (r < 0 && errno == EINVAL)
++        {
++            blitCpu(&blitQ[i]);         /* this one record */
++            i++;
++            continue;
++        }
++        /* ENXIO, or anything else (0 cannot happen: the first record of a
++         * call always runs): none of [i, n) ran */
++        ErrorF("zz9000: the driver refused the card blitter (errno %d); -blitmin %d off\n",
++               r < 0 ? errno : 0, zz9000BlitMin);
++        zz9000BlitMin = 0;
++        for (; i < n; i++)
++            blitCpu(&blitQ[i]);
++        return;
+     }
++    if (!blitSaid)
++        ErrorF("zz9000: card blitter in use from %d pixels\n", zz9000BlitMin);
++    blitSaid = 1;
+ }
+ 
+ /* Append one record (already sized) to the queue; FALSE = refused. */
+@@ -356,13 +372,10 @@
+ }
+ 
+ /*
+-** Queue one blitter operation when the area qualifies, in bands of at most
+-** -blitmax pixels; FALSE = draw it yourself.  A refusal comes from a flush
+-** (the first one of the server, which a full queue can trigger in the middle
+-** of a banded operation); that flush has already drawn every queued record,
+-** earlier bands included, on the CPU, so the rows not yet queued are drawn
+-** here on the CPU too -- redrawing the whole operation would move an
+-** overlapping copy twice.
++** Queue one blitter operation when the area qualifies; FALSE = draw it
++** yourself.  FALSE also when the flush that makes room is refused: that
++** flush has drawn the earlier records on the CPU, and this operation was
++** not queued.
+ */
+ static int
+ blitQueue(pRTG, op, x, y, w, h, sx, sy, color)
+@@ -370,41 +383,9 @@
+ int            op, x, y, w, h, sx, sy;
+ unsigned short color;
+ {
+-    int band, top, n;
+-
+     if (zz9000BlitMin <= 0 || (long) w * h < zz9000BlitMin)
+         return FALSE;
+-    band = h;
+-    if (zz9000BlitMax > 0 && (long) w * h > zz9000BlitMax) {
+-        band = zz9000BlitMax / w;
+-        if (band < 1)
+-            band = 1;
+-    }
+-    if (op == ZZ9K_BLIT_COPY && y > sy) {       /* moving down: bottom band first */
+-        for (top = h; top > 0; top -= n) {
+-            n = top < band ? top : band;
+-            if (!blitRecord(pRTG, op, x, y + top - n, w, n, sx, sy + top - n, color)) {
+-                if (top == h)
+-                    return FALSE;
+-                cpuCopy(pRTG, sx, sy, w, top, x, y);   /* rows [0, top) */
+-                return TRUE;
+-            }
+-        }
+-        return TRUE;
+-    }
+-    for (top = 0; top < h; top += n) {
+-        n = h - top < band ? h - top : band;
+-        if (!blitRecord(pRTG, op, x, y + top, w, n, sx, sy + top, color)) {
+-            if (top == 0)
+-                return FALSE;
+-            if (op == ZZ9K_BLIT_FILL)                   /* rows [top, h) */
+-                cpuFill(pRTG, x, y + top, x + w - 1, y + h - 1, color);
+-            else
+-                cpuCopy(pRTG, sx, sy + top, w, h - top, x, y + top);
+-            return TRUE;
+-        }
+-    }
+-    return TRUE;
++    return blitRecord(pRTG, op, x, y, w, h, sx, sy, color);
+ }
+ 
+ /* Fill the inclusive screen box (x1,y1)-(x2,y2): the blitter or the CPU. */
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
+@@ -47,7 +47,6 @@
+ };
+ 
+ extern int zz9000BlitMin;       /* -blitmin: pixels; 0 = never */
+-extern int zz9000BlitMax;       /* -blitmax: pixels per blitter op; 0 = no split */
+ 
+ struct _ZZ9000ModeRec {
+     char *name;
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -463,12 +463,8 @@
+ 	zz9000Move16 = 0;
+ 	return 1;
+     }
+-    if (!strcmp(argv[i], "-blitmax")) {	/* largest area per blitter op */
+-	extern int zz9000BlitMax;
++    if (!strcmp(argv[i], "-blitmax")) {	/* ignored: the driver bands */
+ 	if (++i >= argc) UseMsg ();
+-	zz9000BlitMax = atoi(argv[i]);
+-	if (zz9000BlitMax < 0)
+-	    zz9000BlitMax = 0;
+ 	return 2;
+     }
+     if (!strcmp(argv[i], "-mode")) {	/* RTG mode: WxH (e.g. 1024x768) */
+@@ -589,7 +585,7 @@
+     ErrorF("-depth int             screen depth in planes.\n");
+     ErrorF("-mode WxH              RTG video mode (e.g. 800x600, 1024x768)\n");
+     ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default 1024, 0 = never)\n");
+-    ErrorF("-blitmax int           RTG: split blitter ops into bands of at most this many pixels (default 8192, 0 = never)\n");
++    ErrorF("-blitmax int           ignored (the driver splits blitter operations itself)\n");
+     ErrorF("-move16                RTG: move16 line bursts in PutImage (68040/060 only; default off)\n");
+     ErrorF("-nomove16              RTG: no move16 line bursts in PutImage\n");
+     ErrorF("-group int		   screen group\n");

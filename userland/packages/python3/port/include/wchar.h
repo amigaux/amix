@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 #ifndef AMIX_PYTHON_WCHAR_H
 #define AMIX_PYTHON_WCHAR_H
 /* Private wide-string subset for the CPython port; AMIX defines wchar_t in

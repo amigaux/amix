@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 isoriano1968 (Ignacio Soriano); see LICENSE in this directory. */
 #ifndef AMIX_PYTHON_COMPAT_H
 #define AMIX_PYTHON_COMPAT_H
 /* Private compatibility declarations; never installed over vendor headers. */

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: PSF-2.0
+ * Ignacio Soriano (isoriano1968), from CPython; see LICENSE.PSF in this directory. */
 /* CPython compatibility fallbacks, under the Python Software Foundation
  * License Version 2; see LICENSE.PSF in this directory.
  * expm1/log1p derive from CPython v3.10.16 Modules/_math.c; log2's finite

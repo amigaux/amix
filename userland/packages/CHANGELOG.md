@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-02 — x11r6.3 6.3-4, pth 2.0.7-2, python3 3.11.18-3 (packages, ..eb26631)
+
+- x11r63 6.3-4: the ZZ9000 server's GC clip is bounded and keeps the client clip, pixmaps over 32767 are refused, keycodes start at 8, the switch-key filter keeps releases, key repeat has one source, the Paula bell needs -audiobell, blitter batches follow the driver's count, only the framebuffer is mapped, ZZ9K-SOFT3D and MIT-SHM are gone, the screen runs on cfb16 with the card blitter and installs its own TrueColor colormaps, Xzz9000(1) is new, and the package ships its copyright notices. Emulated 030 and 060 rows: scroll and copy about +61%, text 13-14x.
+- pth 2.0.7-2: pthread_once waits on a condition (EDEADLK on recursion); errno is kept across switches.
+- python3 3.11.18-3: a computing thread hands over the GIL on a CPU-time timer; the port adapters ship their MIT notice.
+
 ## 2026-11-02 — dropbear 2026.94-1 and heirloom-tar 070715-1 (e7eaf40..51ba153)
 
 - dropbear 2026.94-1: the SSH server and client (dbclient/ssh, scp, dropbearkey) as one 285 KB binary, the lightest secure algorithm set measured on the 030 and 060 (mlkem768x25519 and curve25519 key exchange, chacha20-poly1305, ed25519 host key made at first start), boot script on rc.subr. Two SVR4 fixes: TCP connect under O_NDELAY, and ptys from /dev/ptmx with the STREAMS modules pushed in the session's child (controlling tty, window size, terminal modes). md5 d87bc85e.

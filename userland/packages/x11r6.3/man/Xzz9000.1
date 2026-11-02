@@ -1,0 +1,127 @@
+.\" Xzz9000.1 -- userland/packages/x11r6.3.  MIT, see LICENSE in userland/packages.
+.TH XZZ9000 1 "2026-11-01" "x11r63" "X11R6.3 on Amix"
+.SH NAME
+Xzz9000, X \- X11R6.3 server for the ZZ9000 and Z3660 RTG cards
+.SH SYNOPSIS
+.B Xzz9000
+[
+.BI : display
+] [
+.I option
+\&...
+]
+.SH DESCRIPTION
+.B Xzz9000
+is the X server for the RTG output of the MNT ZZ9000 and the Z3660
+accelerator under Amix.  It draws one 16-bit TrueColor screen (RGB565)
+into the card's framebuffer through the card driver,
+.BR /dev/zz9000 ,
+and uses the card's blitter for large fills and copies.  Keyboard and
+mouse come from the Amix screen manager, as for the stock servers.
+.B X
+is the same program.
+.PP
+The server needs the card driver loaded and must run as root: the
+driver's node is readable and writable by root and group sys only.  Start it as root,
+from
+.BR xdm (1)
+or from
+.BR xinit (1)
+and
+.BR startx (1)
+run by root.  It switches the monitor to the RTG output while it runs
+and back to the Amiga video when it ends.
+.PP
+The keys Alt-Esc and Alt-F1 to Alt-F10 belong to the system, which uses
+them to switch screens; X does not see them.  X keycodes are the Amiga
+raw key codes plus 8 (8 to 135).
+.SH OPTIONS
+Besides the options every X server takes (see
+.BR Xserver (1)),
+.B Xzz9000
+takes these:
+.TP 8
+.BI \-mode " width" x height
+The screen mode: one of 640x480, 800x600, 1024x768, 1280x720, 1280x800,
+1280x1024, 1920x800 and 1920x1080, as far as the card offers it.  The
+default is 1920x800.
+.TP 8
+.B \-audiobell
+Ring the bell on
+.B /dev/audio
+(Paula).  The bell is off without this option: the stock audio driver's
+open waits for Paula with interrupts blocked and no timeout, so on a
+machine where Paula does not answer (an emulator with its sound output
+off, a faulty chip) the first bell would freeze the whole machine.
+.TP 8
+.BI \-blitmin " pixels"
+Fills and copies of at least this many pixels on the screen go to the
+card's blitter; smaller ones, other raster operations and everything in
+pixmaps are drawn by the CPU.  The default is 1024; 0 never uses the
+blitter.  The server also stops using the blitter, for the rest of its
+run, if the driver says the card or mode has none.
+.TP 8
+.BI \-blitmax " pixels"
+Accepted and ignored: the card driver splits every blitter operation
+into bands itself.
+.TP 8
+.B \-move16
+Copy images to the screen with the 68040/68060
+.B move16
+instruction.  Off by default; never on a 68030.
+.TP 8
+.B \-nomove16
+Do not use
+.BR move16 .
+.TP 8
+.BI \-ar1 " milliseconds"
+.PD 0
+.TP 8
+.BI \-ar2 " milliseconds"
+.PD
+The delay before a held key repeats, and the time between repeats
+(1 to 30000).  The X Keyboard Extension takes them; with
+.B \-kb
+(no X Keyboard Extension) the server repeats keys itself with these
+times.
+.B xset r
+turns repeat off and on, for all keys or one.
+.PP
+The options
+.BR \-mono ,
+.BR \-zaphod ,
+.BR \-heads ,
+.BR \-spread_heads ,
+.BR \-group ,
+.BR \-type ,
+.BR \-flags ,
+.BR \-width ,
+.BR \-height ,
+.B \-depth
+and
+.B \-debug
+belong to the Amix screen manager's native displays and are not for
+use with the RTG screen.
+.SH "EXTENSIONS"
+MIT-SHM is not built: it would let any client have the server, which
+runs as root, read or write any shared-memory segment on the machine.
+Clients fall back to ordinary image requests.
+.SH FILES
+.TP 20
+.B /dev/zz9000
+the card driver (the z3660rtg package)
+.TP 20
+.B /dev/audio
+the bell, with
+.B \-audiobell
+.TP 20
+.B /etc/display.d
+the server command line for each display type (the card's package
+installs the one for its card)
+.SH "SEE ALSO"
+.BR Xserver (1),
+.BR xdm (1),
+.BR xinit (1),
+.BR startx (1),
+.BR xset (1),
+.BR xmodmap (1)
