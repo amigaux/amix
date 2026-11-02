@@ -51,6 +51,12 @@ member whose sha256 differs is a problem.  Otherwise its .text is looked for
 in the program, its relocated bytes masked, and where it is found exactly,
 each listed symbol's range (to the member's next symbol) is data, like a
 sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied.
+A sized STT_OBJECT symbol inside an executable section is data the same way
+(values-Xa.o's _lib_version, in every program the period toolchain links),
+with a NOTE.  objdump runs with -D over each executable section, never -d:
+-d prints a data symbol's range as a hex dump up to the next symbol, which in
+a stripped program can be the rest of .text, and the dump's lines would be
+read as instructions.
 
 --explain HITFILE: read scan060.py's output and say, for every hit address it
 lists, whether it lies inside a table sized here (data, not code).  Exit 1 if
@@ -110,10 +116,11 @@ def exec_sections(data):
     return out
 
 
-def objdump(tool, path, lo=None, hi=None):
-    cmd = [tool, "-d"]
-    if lo is not None:
-        cmd += ["--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+def objdump(tool, path, lo, hi):
+    """-D over [lo, hi), one executable section's range at a time: every
+    word is decoded as code, whatever symbol type covers it (-d dumps a data
+    symbol's range as hex instead; data_objects)."""
+    cmd = [tool, "-D", "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
     r = subprocess.run(cmd + [path], capture_output=True, text=True, errors="replace")
     if r.returncode != 0:
         die("objdump failed on %s: %s" % (path, r.stderr.strip()[:200]))
@@ -134,22 +141,40 @@ def parse(listing):
     return insns, labels
 
 
-def func_symbols(data):
-    """(start, end) of every STT_FUNC symbol with a size, from .symtab and
-    .dynsym."""
+def sized_symbols(data, stt):
+    """{(start, end): name} of every symbol of type stt with a size, from
+    .symtab and .dynsym."""
     shoff = struct.unpack(">I", data[32:36])[0]
     shentsize, shnum = struct.unpack(">HH", data[46:50])
-    out = set()
-    for i in range(shnum):
-        sh = data[shoff + i * shentsize: shoff + (i + 1) * shentsize]
-        _n, typ, _f, _a, off, size, _l, _i, _al, ent = struct.unpack(">10I", sh[:40])
+    shdrs = [struct.unpack(">10I", data[shoff + i * shentsize: shoff + i * shentsize + 40])
+             for i in range(shnum)]
+    out = {}
+    for _n, typ, _f, _a, off, size, link, _i, _al, ent in shdrs:
         if typ not in (2, 11) or ent < 16:              # SHT_SYMTAB, SHT_DYNSYM
             continue
+        stroff = shdrs[link][4] if link < shnum else 0
         for k in range(size // ent):
-            _nm, val, sz, info = struct.unpack(">IIIB", data[off + k * ent: off + k * ent + 13])
-            if info & 0xf == 2 and sz:                  # STT_FUNC
-                out.add((val, val + sz))
+            nm, val, sz, info = struct.unpack(">IIIB", data[off + k * ent: off + k * ent + 13])
+            if info & 0xf == stt and sz:
+                end = data.find(b"\0", stroff + nm)
+                out[(val, val + sz)] = data[stroff + nm:end].decode("latin1") if stroff and end > 0 else "?"
     return out
+
+
+def func_symbols(data):
+    """(start, end) of every STT_FUNC symbol with a size."""
+    return set(sized_symbols(data, 2))
+
+
+def data_objects(data, secs):
+    """{(start, end): name} of every sized STT_OBJECT symbol inside an
+    executable section: data the linker placed in .text, such as
+    values-Xa.o's _lib_version, which libc.so.1 reads and so stays in a
+    stripped program's .dynsym.  objdump -d prints such a symbol's range as
+    a hex dump up to the next symbol, which in a stripped program can be
+    the rest of .text; its 8-word lines then pass for instructions."""
+    return {r: n for r, n in sized_symbols(data, 1).items()
+            if any(sa <= r[0] and r[1] <= sa + sz for sa, _o, sz in secs)}
 
 
 def ar_member(path, name):
@@ -676,15 +701,19 @@ def resync_listing(tool, path, secs, skip):
 def scan(tool, path):
     data = open(path, "rb").read()
     secs = exec_sections(data)
-    listing = objdump(tool, path)
+    listing = resync_listing(tool, path, secs, set())
     if "Disassembly of section" not in listing:
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
     pts = function_bounds(labels, secs, data)
     sysroot = os.environ.get("AMIX_SYSROOT", "")
     known, knotes, kproblems = known_data(data, secs, sysroot) if sysroot else ([], [], [])
+    objs = data_objects(data, secs)
+    known = set(known) | set(objs)
+    knotes += ["data object in .text at 0x%08x: %s, %d bytes" % (s, objs[(s, e)], e - s)
+               for s, e in sorted(objs)]
     skip, problems, notes = find_tables(insns, labels, data, secs, pts)
-    skip |= set(known)
+    skip |= known
     problems += kproblems
     for _round in range(6):
         if not skip:
@@ -726,7 +755,7 @@ def scan(tool, path):
     notes = [n for n in notes if int(re.match(r"^dispatch at 0x([0-9a-f]+)", n).group(1), 16) + 4 in sized]
     return dict(insns=len(insns), tables=sorted(skip), problems=problems,
                 desync=desync, hits=hits, total_long=total_long, notes=notes + knotes,
-                known=len(set(known)))
+                known=len(known))
 
 
 def explain(tables, hitfile):
