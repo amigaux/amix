@@ -89,6 +89,9 @@ def derive(kv, cards):
     """[(key, value)] for every value that moves under `cards`; [] for 2."""
     if cards == 2:
         return []
+    # a universal profile names no controller: the interview takes it from the machine
+    if kv.get("TARGET_HBA") == "auto":
+        return []
     boards = kv.get("SD_BOARDS", "").split()
     if not boards:
         die("a four-card install kernel, and the profile names no SD_BOARDS")
@@ -135,6 +138,7 @@ def self_test():
     k30 = {"SD_BOARDS": "a3000 a4091", "TARGET_HBA": "a3000", "CD_HBA": "a4091", "SOURCE_KIND": "cdfs",
            "TARGET_SCSI_ID": "6", "CD_SPEC": "1,3", "ROOTDEV": "0x00480016", "TARGET_ROOT_SLICE": "1"}
     t("two-card kernel: nothing moves", derive(k30, 2), [])
+    t("a universal profile (TARGET_HBA=auto, no boards): nothing moves", derive({"TARGET_HBA": "auto"}, 4), [])
     t("four-card kernel, WD + A4091: the WD is card 1 (ced0), the A4091 card 0 (CD 0,3), rootdev minor 0x1e",
       derive(k30, 4), [("TARGET_SCSI_ID", "e"), ("CD_SPEC", "0,3"), ("ROOTDEV", "0x0048001e")])
     k46 = {"SD_BOARDS": "z3660scsi", "TARGET_HBA": "z3660scsi", "CD_HBA": "z3660scsi", "SOURCE_KIND": "cdfs",
