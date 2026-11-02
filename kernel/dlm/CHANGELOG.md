@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — kbootset -35: controller numbers in hex (2607bbe, a51af48)
+
+`kbootset cards <disk>` reads the controller number of a cNdMsK name in hex, as the stock names write it; -34 refused ca–cf and gave card 1's key for c10–c17 (card 2's disks). The card list prints c8-cf, c10-c17, c18-c1f (C2-4 v22). kbootset -35 pkg 70683958.
+
 ## 2026-11-01 — ldramix -12 (238ff2f)
 
 A package-only revision of -11, which was minted earlier with other pkgmap timestamps (154238e9). Same loader, commit 565de49; b49b42b2.
