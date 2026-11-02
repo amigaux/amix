@@ -232,7 +232,7 @@ mkdir -p "$STAGING"
 # Resolve to an absolute path now that the dir exists.
 STAGING="$(cd "$STAGING" && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "${WORK:?}"' EXIT
 
 # build <name> <version> <subdir> [stagingdir] [epoch] — expects
 # $WORK/<name>/{pkginfo,prototype} prepared and produces
@@ -262,7 +262,7 @@ build_one() {
   # what stops that shipping again.
   python3 "$REPO/tools/repo/pkgmap-symlink-gate.py" "$spool/$name/pkgmap"
   out="$stg/$subdir/$name-$ver.pkg"
-  rm -f "$out"
+  rm -f "${out:?}"
   # shellcheck disable=SC2086
   env $roll_env "$PKGTRANS" -s "$spool" "$out" "$name"
   # verify the datastream carries newc (070701) members at offset 512
@@ -280,7 +280,7 @@ build_one() {
 gate_060() {
   if ! python3 "$REPO/tools/repo/scan060.py" "$1"; then
     echo "FATAL: $1 fails the 68060 gate (tools/repo/scan060.py)" >&2
-    rm -f "$1"
+    rm -f "${1:?}"
     exit 1
   fi
 }
@@ -847,7 +847,7 @@ EOF
   # the minted row must be the Cdev row, field for field (path/type/class too)
   if ! grep -aq "^1 f none /usr/ccs/bin/m4 $M4_ROW\$" "$out"; then
     echo "FATAL: $out pkgmap row for /usr/ccs/bin/m4 is not '$M4_ROW'" >&2
-    rm -f "$out"; exit 1
+    rm -f "${out:?}"; exit 1
   fi
   echo "m4 pkgmap row OK: 1 f none /usr/ccs/bin/m4 $M4_ROW"
 fi

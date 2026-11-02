@@ -75,7 +75,7 @@ mkpkg() {
     printf 'fake SVR4 datastream for %s\n' "$1" > "$WORK/repo/pkgs/$1"
     dd if=/dev/urandom of="$WORK/repo/pkgs/$1.pad" bs=256 count=1 2>/dev/null
     cat "$WORK/repo/pkgs/$1.pad" >> "$WORK/repo/pkgs/$1"
-    rm -f "${WORK:?}/repo/pkgs/$1.pad"
+    rm -f "${WORK:?}/repo/pkgs/${1:?}.pad"
 }
 for f in foo-1.0.pkg bar-2.0.pkg baz-1.1.pkg oldpkg-2.0.pkg \
          samepkg-1.0.pkg unver-1.5.pkg corrupt-1.0.pkg \
@@ -454,7 +454,7 @@ else
 fi
 # ... but a MISSING dependency is still installed under -f: the closure is
 # what makes install work at all.
-mv "$ROOT/var/sadm/pkg/FDEP" "$ROOT/var/sadm/pkg/FDEP.off"
+mv "${ROOT:?}/var/sadm/pkg/FDEP" "${ROOT:?}/var/sadm/pkg/FDEP.off"
 : > "$SHIMLOG"
 OUT=$("$APKG" -f install ftop 2>&1); rc=$?
 if [ $rc -eq 0 ] && grep -q "pkgadd .* FDEP" "$SHIMLOG" && \
@@ -463,7 +463,7 @@ if [ $rc -eq 0 ] && grep -q "pkgadd .* FDEP" "$SHIMLOG" && \
 else
     bad "-f missing-dep handling wrong (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
-mv "$ROOT/var/sadm/pkg/FDEP.off" "$ROOT/var/sadm/pkg/FDEP"
+mv "${ROOT:?}/var/sadm/pkg/FDEP.off" "${ROOT:?}/var/sadm/pkg/FDEP"
 
 # ------------------------------------------------ installed, catalog is NEWER
 # METAL 2026-09-16: `apkg install apkg` said "already installed" and skipped,
@@ -1985,7 +1985,7 @@ touch \$C
 awk -v i="\$I" '{ keep = 1
     for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
         sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
-    if (keep) print }' \$C > \$C.t && mv \$C.t \$C
+    if (keep) print }' \$C > \$C.t && mv \${C:?}.t \${C:?}
 # a pkgadd over another package's file is a conflict (why C2-2 v5 §2.1
 # removes the other kernel package of a line first)
 sed -n 's/^FILE //p' \$F | while read p c; do
@@ -2030,7 +2030,7 @@ C=\$R/var/sadm/install/contents
 awk -v i="\$I" '{ keep = 1
     for (k = 2; k <= NF; k++) { t = \$k; sub(/^[^A-Za-z0-9]+/, "", t)
         sub(/[\\\\:].*/, "", t); if (t == i) keep = 0 }
-    if (keep) print }' \$C > \$C.t && mv \$C.t \$C
+    if (keep) print }' \$C > \$C.t && mv \${C:?}.t \${C:?}
 rm -rf \${R:?}/var/sadm/pkg/\${I:?}
 exit 0
 EOF
@@ -3349,7 +3349,7 @@ else
         && ok "... the file is laid again and the record matches it" \
         || bad "real-engine -f reinstall" "$OUT"
     kreset
-    rm -f "$RT/var/apkg/kpkg/toyk"
+    rm -f "${RT:?}/var/apkg/kpkg/toyk"
     echo changed > "$RT/stand/k46/unix"
     run 0 "install over files a bare pkgadd laid, no record (real engine)" ra install toyk
     [ "$(cat "$RT/stand/k46/unix")" = "unix-1.0" ] && recok \

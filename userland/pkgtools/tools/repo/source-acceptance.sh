@@ -55,7 +55,7 @@ fail() { echo "ACCEPTANCE-FAIL: $1"; exit 1; }
 
 # --- seed a FRESH target root (altroot seed discipline) -------------
 echo "--- seed fresh root $ROOT ---"
-rm -rf "$ROOT"
+rm -rf "${ROOT:?}"
 mkdir -p "$ROOT/etc" "$ROOT/var/sadm/pkg" "$ROOT/var/sadm/install" "$ROOT/tmp"
 cp /etc/passwd "$ROOT/etc/passwd" || fail "seed passwd"
 cp /etc/group  "$ROOT/etc/group"  || fail "seed group"

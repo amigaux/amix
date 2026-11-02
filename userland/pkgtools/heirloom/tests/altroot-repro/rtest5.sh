@@ -11,12 +11,12 @@ CORE=var/sadm/install/core
 run() {   # $1=label  $2=env-assignment (empty for plain)
   i=1
   while [ $i -le 4 ]; do
-    R=/tmp/z_$i; rm -rf $R; mkdir -p $R
+    R=/tmp/z_$i; rm -rf "${R:?}"; mkdir -p $R
     env $2 $E -R $R -n -a $A -d $P APKG >/tmp/zo 2>&1
     rc=$?
     c=`ls -l $R/$CORE 2>/dev/null | awk '{print $5}'`
     echo "$1 run$i rc=$rc core=${c:-none}" >>$LOG
-    rm -rf $R
+    rm -rf "${R:?}"
     i=`expr $i + 1`
   done
 }

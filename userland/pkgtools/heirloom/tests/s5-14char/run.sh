@@ -51,7 +51,7 @@ for lib in libinst/libinst.a libpkg/libpkg.a libgendb/libgendb.a \
 	}
 done
 
-rm -rf "$OUT"; mkdir -p "$OUT"
+rm -rf "${OUT:?}"; mkdir -p "$OUT"
 S5="$OUT/s5"			# the simulated 14-character filesystem
 PLAIN="$OUT/plain"		# an ordinary (untruncated) directory
 LOG="$OUT/s5sim.log"
@@ -87,7 +87,7 @@ $CC $CFLAGS -DAMIX_NO_S5_TEMPLATE_CAP $INC "$D/test-cppath.c" \
 	echo "FAIL: could not build cppath-broken"; exit 2; }
 
 # ------------------------------------------------------------------ helpers --
-fresh_s5() { rm -rf "$S5"; mkdir -p "$S5"; : > "$LOG"; }
+fresh_s5() { rm -rf "${S5:?}"; mkdir -p "$S5"; : > "$LOG"; }
 
 # s5run <binary> <src> <dst> -- run under the simulated s5 filesystem
 s5run() {
@@ -190,7 +190,7 @@ want_content "C1 payload replaced" "$S5/data.txt" "$SRC/b"
 echo
 echo "D. ordinary (255-character) filesystem: no regression"
 
-rm -rf "$PLAIN"; mkdir -p "$PLAIN"
+rm -rf "${PLAIN:?}"; mkdir -p "$PLAIN"
 LONG="$PLAIN/a-thirty-character-basename.txt"
 "$OUT/cppath-fixed" "$SRC/a" "$LONG" >>"$OUT/log" 2>&1
 "$OUT/cppath-fixed" "$SRC/b" "$LONG" >>"$OUT/log" 2>&1; rc=$?

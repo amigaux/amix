@@ -30,7 +30,7 @@ OUT="${OUTDIR:-/tmp/guard-fires}"
 BADGRP="zznosuchg"
 GOODGRP="other"
 
-rm -rf "$OUT"; mkdir -p "$OUT/src/root/gtest" "$OUT/src/spool" "$OUT/src/out"
+rm -rf "${OUT:?}"; mkdir -p "$OUT/src/root/gtest" "$OUT/src/spool" "$OUT/src/out"
 echo "guard probe" > "$OUT/src/root/gtest/f"
 
 cat > "$OUT/src/pkginfo" <<'EOF'
@@ -43,7 +43,7 @@ EOF
 
 # The seeded target root only knows root/other - never $BADGRP.
 mk_seed() {
-	rm -rf "$1"; mkdir -p "$1/etc"
+	rm -rf "${1:?}"; mkdir -p "$1/etc"
 	printf 'root:x:0:1:0000:/:/sbin/sh\nother:x:1:1:/:\n' > "$1/etc/passwd"
 	printf 'root::0:root\nother::1:\n' > "$1/etc/group"
 }
@@ -63,7 +63,7 @@ basedir=default
 EOF
 
 build_pkg() {	# $1 = group for the f file
-	rm -rf "$OUT/src/spool"/* "$OUT/src/out"/* 2>/dev/null
+	rm -rf "${OUT:?}/src/spool"/* "${OUT:?}/src/out"/* 2>/dev/null
 	cat > "$OUT/src/prototype" <<EOF
 i pkginfo=$OUT/src/pkginfo
 d none /gtest 0755 root other

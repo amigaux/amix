@@ -10,7 +10,7 @@ usage() {
 }
 
 doit() {
-	rm -f -- "$2" || exit
+	rm -f -- "${2:?}" || exit
 	exec @LNS@ -- "$1" "$2" || exit
 }
 

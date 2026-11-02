@@ -28,5 +28,5 @@ PYEOF
 gcc -std=gnu89 -O -I"$D" "$D/pwgrtest.c" -o "$D/pwgrtest"
 PWFILE="$D/amix-passwd.txt" GRFILE="$D/amix-group.txt" "$D/pwgrtest"
 rc=$?
-rm -f "$D/pwgrtest" "$D/pwgr-shims.inc"
+rm -f "${D:?}/pwgrtest" "${D:?}/pwgr-shims.inc"
 exit $rc

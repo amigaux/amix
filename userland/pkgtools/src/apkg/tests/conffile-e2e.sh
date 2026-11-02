@@ -29,7 +29,7 @@ fi
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 
 WORK=$(mktemp -d)
-[ -n "${KEEP:-}" ] && echo "work: $WORK" || trap 'rm -rf "$WORK"' EXIT
+[ -n "${KEEP:-}" ] && echo "work: $WORK" || trap 'rm -rf "${WORK:?}"' EXIT
 pass=0; fail=0
 check() {
     local what="$1"; shift
@@ -63,7 +63,7 @@ done
 
 # publish <version>: the FILE repository serves that one version
 publish() {
-    rm -rf "$WORK/repo"; mkdir -p "$WORK/repo/pkgs"
+    rm -rf "${WORK:?}/repo"; mkdir -p "$WORK/repo/pkgs"
     cp "$WORK/pkgs/CONFT-$1.pkg" "$WORK/repo/pkgs/"
     python3 "$GEN" --packages-conf none -o "$WORK/repo" "$WORK/repo/pkgs" \
         >>"$WORK/gen.log" 2>&1
@@ -223,7 +223,7 @@ EOF
 ( cd "$d" && "$HB/pkgmk" -o -d "$WORK/spool-ess" -f prototype &&
   "$HB/pkgtrans" -s "$WORK/spool-ess" "$WORK/pkgs/ESSENT-1.pkg" ESSENT ) \
     >>"$WORK/mk.log" 2>&1 || { echo "FAIL: building ESSENT"; cat "$WORK/mk.log"; exit 1; }
-rm -rf "$WORK/repo"; mkdir -p "$WORK/repo/pkgs"
+rm -rf "${WORK:?}/repo"; mkdir -p "$WORK/repo/pkgs"
 cp "$WORK/pkgs/ESSENT-1.pkg" "$WORK/repo/pkgs/"
 python3 "$GEN" --packages-conf none -o "$WORK/repo" "$WORK/repo/pkgs" >>"$WORK/gen.log" 2>&1
 ap update >/dev/null

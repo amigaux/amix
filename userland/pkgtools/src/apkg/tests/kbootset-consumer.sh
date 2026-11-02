@@ -43,7 +43,7 @@ fi
 DLM=$(cd "$DLM" && pwd)
 make -C "$SRC" host >/dev/null || { echo "host build failed"; exit 1; }
 APKG=$SRC/apkg
-rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/cache"
+rm -rf "${WORK:?}"; mkdir -p "$WORK/bin" "$WORK/cache"
 
 # kbootset is built by the dlm kit's own Makefile, so a source file it
 # gains is picked up here too.  B= points its build directory into
@@ -108,7 +108,7 @@ mkkernel "$WORK/k2" k46.1.0           # sidecar disagrees with the catalog
 mkds "$WORK/st/1.1.1/kernel/kernel-kd060a-1.1.1.pkg" KERNKD60 1.1.1 "$WORK/k2"
 mkkernel "$WORK/k3" static
 mkds "$WORK/st/1.1.2/kernel/kernel-kd060a-1.1.2.pkg" KERNKD60 1.1.2 "$WORK/k3"
-rm -rf "$WORK/repo"; mkdir -p "$WORK/repo"
+rm -rf "${WORK:?}/repo"; mkdir -p "$WORK/repo"
 mkcat() {      # mkcat <version>: gen-catalog's catalog for that staging root
     ln -sfn "$WORK/st/$1" "$WORK/repo/pkgs"
     python3 "$GEN" -o "$WORK/repo" "$WORK/st/$1" > "$WORK/gen.out" 2>&1
@@ -117,8 +117,8 @@ mkcat() {      # mkcat <version>: gen-catalog's catalog for that staging root
 # 2026-10-25 closes): kabi=static for a kernel whose sidecar says k46.1.0
 badcat() {
     f=kernel/kernel-kd060a-$1.pkg; ln -sfn "$WORK/st/$1" "$WORK/repo/pkgs"
-    rm -f "$WORK/repo/catalog.md5"
-    rm -f "$WORK/repo/catalog.md5"
+    rm -f "${WORK:?}/repo/catalog.md5"
+    rm -f "${WORK:?}/repo/catalog.md5"
     printf '#apkg-catalog 1\n#ext kpkg 1\n#kpkg kernel-kd060a %s role=kernel line=k46 kabi=static pin=%s size=%s sha256=%s file=%s pkginst=KERNKD60\n#end kpkg\n' \
         "$1" $PIN "$(size "$WORK/st/$1/$f")" "$(sha "$WORK/st/$1/$f")" "$f" > "$WORK/repo/catalog"
 }
@@ -133,7 +133,7 @@ while [ $# -gt 0 ]; do
     -n) shift ;; *) I=$1; shift ;; esac
 done
 C=$T/var/sadm/install/contents; touch $C
-grep -v " $I\$" $C > $C.t; mv $C.t $C
+grep -v " $I\$" $C > $C.t; mv "${C:?}.t" "${C:?}"
 mkdir -p $T/var/sadm/pkg/$I; echo "PKG=$I" > $T/var/sadm/pkg/$I/pkginfo
 echo "/stand d none 0755 root sys $I" >> $C
 echo "/stand/k46 d none 0755 root sys $I" >> $C

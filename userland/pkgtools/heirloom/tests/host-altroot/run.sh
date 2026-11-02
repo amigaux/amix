@@ -61,7 +61,7 @@ GR="$TOP/compat/tests/amix-group.txt"
 	exit 1
 }
 
-rm -rf "$OUT"; mkdir -p "$OUT"
+rm -rf "${OUT:?}"; mkdir -p "$OUT"
 
 # ------------------------------------------------------------------
 # 1. Build the compat pw/gr parsers as an LD_PRELOAD, extracted from
@@ -168,7 +168,7 @@ EOF
 bad=0
 for cfg in A B; do
 	root="$OUT/r$cfg"
-	rm -rf "$root"
+	rm -rf "${root:?}"
 	if [ "$cfg" = A ]; then
 		mkdir -p "$root"
 		what="empty root (clgrnam fopen fails -> getgrnam fallback)"

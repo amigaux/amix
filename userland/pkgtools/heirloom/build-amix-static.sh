@@ -154,7 +154,7 @@ BIN="$OUTDIR/bin"
 SADM="$OUTDIR/sadm-helpers"
 APKG_OBJ="$OUTDIR/obj-apkg"
 CFSCK_OBJ="$OUTDIR/obj-cfsck"
-rm -rf "$OUTDIR"
+rm -rf "${OUTDIR:?}"
 mkdir -p "$BIN" "$SADM" "$APKG_OBJ" "$CFSCK_OBJ"
 
 # fail flag is accumulated across the whole run (the apkg section below

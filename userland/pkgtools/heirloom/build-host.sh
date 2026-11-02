@@ -56,7 +56,7 @@ fi
 # ------------------------------------------------------------------
 # 1. Work area + external-command shim dir (compiled-in BINDIR)
 # ------------------------------------------------------------------
-rm -rf "$TOP/build-host"
+rm -rf "${TOP:?}/build-host"
 mkdir -p "$TOP/build-host/bin" "$TOP/build-host/bindir" \
 	 "$TOP/build-host/var/sadm" "$TOP/build-host/etc"
 
@@ -124,7 +124,7 @@ cp "$TOP/pkgcmds/pkgremove/pkgremove"   "$TOP/build-host/sadm/install/bin/"
 # ------------------------------------------------------------------
 echo "== smoke test =="
 SMOKE="$TOP/build-host/smoke"
-rm -rf "$SMOKE"
+rm -rf "${SMOKE:?}"
 mkdir -p "$SMOKE/root/usr/lib/jutoy" "$SMOKE/spool" "$SMOKE/out"
 
 echo "hello from jutoy" > "$SMOKE/root/usr/lib/jutoy/data.txt"

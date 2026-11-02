@@ -28,7 +28,7 @@ PUB="$HERE/../publish.sh"
 FIX="$HERE/fixtures"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/apkg-repo-tests.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "${WORK:?}"' EXIT
 
 PASS=0
 FAIL=0
@@ -185,7 +185,7 @@ printf ': 1 1\n1 i pkginfo 200 12345 1234567890\n' > "$S6/build/SYNpkg/pkgmap"
 ( cd "$S6/build" && printf 'SYNpkg/pkginfo\nSYNpkg/pkgmap\n' \
     | cpio -o -H odc --quiet > arch1 )
 cat "$S6/build/hdr" "$S6/build/arch1" > "$S6/SYNpkg.pkg"
-rm -rf "$S6/build"
+rm -rf "${S6:?}/build"
 python3 "$GEN" "$S6" >/dev/null 2>&1
 check "synthetic datastream parses" \
     test "$(field "$S6/catalog" synpkg 3)" = "SYNpkg"
@@ -451,7 +451,7 @@ EOF
     ( cd "$1/.build" && printf 'KERNMOCK/pkginfo\nKERNMOCK/pkgmap\n' \
         | cpio -o -H odc --quiet > arch1 )
     cat "$1/.build/hdr" "$1/.build/arch1" > "$dest/KERNMOCK.pkg"
-    rm -rf "$1/.build"
+    rm -rf "${1:?}/.build"
 }
 
 mk_stock_stand_pkg() { # mk_stock_stand_pkg <destdir> -> writes COREMOCK.pkg
@@ -473,7 +473,7 @@ EOF
     ( cd "$1/.build" && printf 'COREMOCK/pkginfo\nCOREMOCK/pkgmap\n' \
         | cpio -o -H odc --quiet > arch1 )
     cat "$1/.build/hdr" "$1/.build/arch1" > "$dest/COREMOCK.pkg"
-    rm -rf "$1/.build"
+    rm -rf "${1:?}/.build"
 }
 
 # T13a: gen-catalog NORMAL mode refuses a kernel-marker package (rc 3), no catalog
@@ -597,7 +597,7 @@ EOF
 ( cd "$S14/build" && printf 'SZpkg/pkginfo\nSZpkg/pkgmap\n' \
     | cpio -o -H odc --quiet > arch1 )
 cat "$S14/build/hdr" "$S14/build/arch1" > "$S14/SZpkg.pkg"
-rm -rf "$S14/build"
+rm -rf "${S14:?}/build"
 python3 "$GEN" --isize "$S14" >/dev/null 2>&1
 check "sized ftypes summed exactly (f+v+e+i, no d/s/l/c/b/p)" \
     grep -qx '#isize szpkg 3237' "$S14/catalog"
@@ -667,7 +667,7 @@ EOF
   head -c 512 /dev/zero; } | head -c 512 > "$S14c/build/hdr"
 ( cd "$S14c/build" && printf 'NOMAP/pkginfo\n' | cpio -o -H odc --quiet > a1 )
 cat "$S14c/build/hdr" "$S14c/build/a1" > "$S14c/NOMAP.pkg"
-rm -rf "$S14c/build"
+rm -rf "${S14c:?}/build"
 cp "$FIX/toy.pkg" "$S14c/"
 python3 "$GEN" --isize "$S14c" >/dev/null 2>"$WORK/t14c.err"
 check "pkgmap-less package still catalogs" \
@@ -969,7 +969,7 @@ check "equal values in both layers are no conflict" \
     test "$(field "$S21/catalog" toy 8)" = games
 # a conflict: same key, different values
 printf 'toy: x11\n' >> "$S21/cats.conf"
-rm -f "$S21/catalog" "$S21/catalog.md5"
+rm -f "${S21:?}/catalog" "${S21:?}/catalog.md5"
 python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21b.err"
 check "a conflicting value stops the catalog (rc 4)" test $? -eq 4
 check "... no catalog is written" test ! -e "$S21/catalog"
@@ -991,14 +991,14 @@ python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21d.err"
 check "a PKG mapped to different names is a conflict" test $? -eq 4
 check "... named as names.conf" \
     grep -q 'CONFLICT toy.pkg: names.conf' "$WORK/t21d.err"
-rm -f "$S21/names.conf"
+rm -f "${S21:?}/names.conf"
 # every conflicting package is named, not just the first
 printf 'TESTpkg: other\nJUTOY: other\n' > "$S21/names.conf"
 printf 'TESTpkg: testpkg\nJUTOY: toy\n' > "$P21/names.conf"
 python3 "$GEN" --packages-conf "$P21" "$S21" >/dev/null 2>"$WORK/t21e.err"
 check "every conflicting package is named" \
     test "$(grep -c '^gen-catalog: CONFLICT' "$WORK/t21e.err")" = 2
-rm -f "$S21/names.conf"
+rm -f "${S21:?}/names.conf"
 printf 'JUTOY: toy\n' > "$P21/names.conf"
 # the vocabulary is declared in the staging root only
 printf '@group games: games\n' > "$P21/cats.conf"
@@ -1380,7 +1380,7 @@ EOF
     ( cd "$_d/build" && printf '%s/pkginfo\n%s/pkgmap\n' "$_p" "$_p" \
         | cpio -o -H odc --quiet > arch1 )
     cat "$_d/build/hdr" "$_d/build/arch1" > "$_d/$_p.pkg"
-    rm -rf "$_d/build"
+    rm -rf "${_d:?}/build"
 }
 
 cat > "$WORK/t17-a.pkgmap" <<'EOF'
@@ -1635,7 +1635,7 @@ mkstock() {
     ( cd "$b" && printf '%s/pkginfo\n%s/pkgmap\n' "$p" "$p" \
         | cpio -o -H odc --quiet > arch1 )
     cat "$b/hdr" "$b/arch1" > "$d/$p-2.1.pkg"
-    rm -rf "$b"
+    rm -rf "${b:?}"
 }
 
 S21="$WORK/t21"
@@ -1667,11 +1667,11 @@ if [ -x "$HERE/../../../heirloom/build-host/bin/pkgmk" ]; then
     # ★ NON-VACUOUS: the same staging WITHOUT the staged file must fall back
     # to the factory category -- otherwise every check above could pass with
     # cats.conf doing nothing (e.g. a fixture that already said network).
-    mv "$S21/cats.conf" "$WORK/t21.cats"
+    mv "${S21:?}/cats.conf" "${WORK:?}/t21.cats"
     python3 "$GEN" "$S21" >/dev/null 2>&1
     check "without the staged cats.conf, stock net falls back to system" \
         test "$(field "$S21/catalog" net 8)" = system
-    mv "$WORK/t21.cats" "$S21/cats.conf"
+    mv "${WORK:?}/t21.cats" "${S21:?}/cats.conf"
 else
     echo "  skip- staged-catalog checks (host pkgmk missing: heirloom/build-host.sh)"
 fi
@@ -1794,7 +1794,7 @@ EOF
     check "an AMIX_PKGTRANS that is not there: rc 1, named" \
         bash -c "test $? -eq 1 && grep -q 'AMIX_PKGTRANS=$S22/no-such-pkgtrans is not an executable' '$WORK/t22.bad'"
     if [ -x "$HERE/../../../heirloom/build-host/bin/pkgtrans" ]; then
-        rm -f "$S22/pt.log"
+        rm -f "${S22:?}/pt.log"
         AMIX_PKGTRANS= python3 "$SCAN060" "$FIX/TESTpkg.pkg" >"$WORK/t22.def" 2>&1
         check "unset: the tree's pkgtrans unpacks it (no ELF in it: rc 2)" \
             bash -c "test $? -eq 2 && grep -q 'NOTHING INSPECTED' '$WORK/t22.def' && test ! -e '$S22/pt.log'"
@@ -1830,7 +1830,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     printf 'mail=\ninstance=overwrite\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' \
         > "$S23/admin"
     fr() { local fs="$S23/fakeroot.$CUR"; touch "$fs"; fakeroot -i "$fs" -s "$fs" "$@"; }
-    newroot() { CUR="$(basename "$1")"; rm -rf "$1"
+    newroot() { CUR="$(basename "$1")"; rm -rf "${1:?}"
         mkdir -p "$1/usr/bin" "$1/etc" "$1/var/sadm/install"
         printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$1/etc/passwd"
         printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$1/etc/group"; }
@@ -2089,7 +2089,7 @@ check "--raw gives the #kpkg line an offset= and packs the bytes there" \
 
 # refusals: a SKIP naming why, never a #kpkg line
 t25bad() {   # t25bad <desc> <stderr text> <directives...>  (mkds.py fixture)
-    local d="$S25/bad"; rm -rf "$d"; mkdir -p "$d"
+    local d="$S25/bad"; rm -rf "${d:?}"; mkdir -p "$d"
     desc=$1; want=$2; shift 2
     printf '%s\n' "$@" | python3 "$MKDS" "$d/KBAD-1.0.pkg" KBAD 1.0
     python3 "$GEN" "$d" >"$WORK/t25b.out" 2>"$WORK/t25b.err"
@@ -2195,7 +2195,7 @@ check "the module package is no ordinary entry" \
 
 # refusals: a SKIP naming why, never a #kpkg line
 t26bad() {   # t26bad <desc> <stderr text> <directives...>  (mkds.py fixture)
-    local d="$S26/bad"; rm -rf "$d"; mkdir -p "$d"
+    local d="$S26/bad"; rm -rf "${d:?}"; mkdir -p "$d"
     desc=$1; want=$2; shift 2
     printf '%s\n' "$@" | python3 "$MKDS" "$d/zbad46-1.0.pkg" zbad46 1.0
     python3 "$GEN" "$d" >"$WORK/t26b.out" 2>"$WORK/t26b.err"
@@ -2240,7 +2240,7 @@ t26bad "a module package that is not pure files is refused" "not pure files.*pos
 # /dev/dsk/, a p, s or l entry, a c node outside /dev/, a c or b line short
 # of its fields or in another class does not, and a kernel package takes none
 t26good() {  # t26good <desc> <directives...>  (mkds.py fixture)
-    local d="$S26/good"; rm -rf "$d"; mkdir -p "$d"
+    local d="$S26/good"; rm -rf "${d:?}"; mkdir -p "$d"
     desc=$1; shift
     printf '%s\n' "$@" | python3 "$MKDS" "$d/zbad46-1.0.pkg" zbad46 1.0
     python3 "$GEN" "$d" >"$WORK/t26g.out" 2>"$WORK/t26g.err"
@@ -2375,7 +2375,7 @@ if [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 &&
     printf 'mail=\ninstance=quit\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=quit\naction=nocheck\nbasedir=default\n' \
         > "$S27/strict"
     fr27() { local fs="$S27/fakeroot.$CUR"; touch "$fs"; fakeroot -i "$fs" -s "$fs" "$@"; }
-    newroot27() { CUR="$(basename "$1")"; rm -rf "$1"
+    newroot27() { CUR="$(basename "$1")"; rm -rf "${1:?}"
         mkdir -p "$1/etc" "$1/var/sadm/install"
         printf 'root:x:%s:%s::/:/bin/sh\nbin:x:%s:%s::/:\namiga:x:%s:%s::/:\n' \
             "$(id -u)" "$(id -g)" "$(id -u)" "$(id -g)" "$(id -u)" "$(id -g)" > "$1/etc/passwd"
@@ -2460,7 +2460,7 @@ mint28() {  # mint28 <PKG> <out> [pkginfo line]: a real datastream
         "$S28/pkginfo.$1" "$S28/src/opt/amix/bin/perl" \
         "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant.pm" \
         "$S28/src/opt/amix/lib/perl5/ExtUtils-Constant-Base.pm" > "$S28/prototype.$1"
-    rm -rf "$S28/spool.$1"; mkdir -p "$S28/spool.$1" "$(dirname "$2")"
+    rm -rf "${S28:?}/spool.${1:?}"; mkdir -p "$S28/spool.$1" "$(dirname "$2")"
     ( cd "$S28" && "$HB/pkgmk" -o -d "$S28/spool.$1" -f "prototype.$1" && \
       "$HB/pkgtrans" -s "$S28/spool.$1" "$2" "$1" ) >>"$WORK/t28.mk" 2>&1
 }
@@ -2595,7 +2595,7 @@ if [ -n "${P23:-}" ] && [ -f "$P23" ] && [ -x "$APKGH" ]; then
         grep -aqx 'APKG_ESSENTIAL=yes' "$P23"
     VS31="$(cd "$HB/.." && pwd)/var/sadm"
     R5="$S23/r5"; newroot "$R5"
-    rm -rf "$R5/var/sadm/install"; mkdir -p "$R5$VS31/pkg" "$R5$VS31/install"
+    rm -rf "${R5:?}/var/sadm/install"; mkdir -p "$R5$VS31/pkg" "$R5$VS31/install"
     ln -s "$R5$VS31/pkg" "$R5/var/sadm/pkg"; ln -s "$R5$VS31/install" "$R5/var/sadm/install"
     add "$R5" "$P23"
     check "the host engine installs it" test -f "$R5/var/sadm/pkg/APKG/pkginfo"
@@ -2644,7 +2644,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
           [ "$2" != - ] && echo "BASEDIR=$2"; } > "$S32/pkginfo.$1"
         printf 'i pkginfo=%s\nf none %s=%s 0644 root bin\n' "$S32/pkginfo.$1" "$3" "$S32/src/hello" \
             > "$S32/prototype.$1"
-        rm -rf "$S32/spool.$1"; mkdir -p "$S32/spool.$1"
+        rm -rf "${S32:?}/spool.${1:?}"; mkdir -p "$S32/spool.$1"
         ( cd "$S32" && "$HB/pkgmk" -o -d "$S32/spool.$1" -f "prototype.$1" && \
           "$HB/pkgtrans" -s "$S32/spool.$1" "$S32/stg/$1-1.0.pkg" "$1" ) >>"$WORK/t32.mk" 2>&1
     }
@@ -2745,7 +2745,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         printf 'i pkginfo=%s\nd none /opt 0755 root sys\nf none /opt/%s=%s 0644 root sys\n' \
             "$S34/pkginfo" "$1" "$S34/src/f" > "$S34/proto"
         [ -z "${5:-}" ] || printf 'f none /opt/%s.elf=%s 0755 root sys\n' "$1" "$5" >> "$S34/proto"
-        rm -rf "$S34/spool"; mkdir -p "$S34/spool"
+        rm -rf "${S34:?}/spool"; mkdir -p "$S34/spool"
         "$HB/pkgmk" -o -d "$S34/spool" -f "$S34/proto" >/dev/null 2>&1 &&
             "$HB/pkgtrans" -s "$S34/spool" "$3" "$1" >/dev/null 2>&1
     }
@@ -2832,7 +2832,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
 
     t34no() {   # t34no <rc> <description> <stderr text> [ar34 flags]: refused, nothing written
         local want="$1" desc="$2" text="$3"; shift 3
-        rm -rf "$S34/no"
+        rm -rf "${S34:?}/no"
         ar34 "$S34/no/1.1" "$@" >"$WORK/t34.no" 2>&1
         local rc=$?
         if [ "$rc" -eq "$want" ] && grep -q -- "$text" "$WORK/t34.no" && [ ! -e "$S34/no/1.1" ] && [ ! -e "$S34/no/1.1.tmp" ]; then
@@ -2857,7 +2857,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "one name in two inputs, another version: refused, naming both" \
         "name ktool is in two inputs: ktool 2.0 (userland) and ktool 1.0 (kspace)" --userland "$S34/ul2"
-    printf 'zlibt: nosuch\n' > "$S34/ul2/pkgs/deps.conf"; rm -f "$S34/ul2/pkgs/ktool-2.0.pkg"
+    printf 'zlibt: nosuch\n' > "$S34/ul2/pkgs/deps.conf"; rm -f "${S34:?}/ul2/pkgs/ktool-2.0.pkg"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a dependency no live row names: refused" "zlibt 1.0 (userland) depends on nosuch" --userland "$S34/ul2"
     SCAN_HIT=zlibt.elf t34no 1 "scan060.py finding a hit in a period ELF: refused" "scan060 refused the tree"
@@ -2877,13 +2877,13 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     cp "$S34/ks.cat" "$S34/ks/catalog"; cp "$S34/ks.md5" "$S34/ks/catalog.md5"
     t34no 3 "no release-check: [MISSING], rc 3" "\[MISSING\] assemble-release: release-check" --release-check "$S34/nosuch"
     t34no 3 "no private patterns: [MISSING], rc 3" "\[MISSING\] assemble-release: private patterns" --private-patterns "$S34/nosuch"
-    mv "$S34/st/core-2.1.pkg" "$S34/core.save"
+    mv "${S34:?}/st/core-2.1.pkg" "${S34:?}/core.save"
     t34no 3 "a stock file the lock names, not there: [MISSING], rc 3" "core-2.1.pkg is not in"
-    mv "$S34/core.save" "$S34/st/core-2.1.pkg"
+    mv "${S34:?}/core.save" "${S34:?}/st/core-2.1.pkg"
     t34no 3 "no --userland directory: [MISSING], rc 3" "\[MISSING\] assemble-release: --userland" --userland "$S34/nosuch"
 
     # the next release: the published tree is an input, and stays
-    rm -f "$S34/ap/APKG-0.3.6.pkg" "$S34/ap/APKG-0.3.6.pkg.md5"; toy34 APKG 0.3.10 "$S34/ap/APKG-0.3.10.pkg"
+    rm -f "${S34:?}/ap/APKG-0.3.6.pkg" "${S34:?}/ap/APKG-0.3.6.pkg.md5"; toy34 APKG 0.3.10 "$S34/ap/APKG-0.3.10.pkg"
     ar34 "$S34/out3/1.1" --previous "$S34/out/1.1" >"$WORK/t34.p" 2>&1
     check "with --previous and a newer APKG: rc 0" test $? -eq 0
     C3="$S34/out3/1.1/catalog"
@@ -2899,7 +2899,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     check "a third assembly over that tree keeps the older block: rc 0, same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C3' '$S34/out4/1.1/catalog'"
     # a newer UFS-only package: the published row moves with its #fstype line
-    mkdir -p "$S34/ul3/pkgs"; cp -r "$S34/ul/pkgs/." "$S34/ul3/pkgs/"; rm -f "$S34/ul3/pkgs/ufst-1.0.pkg"
+    mkdir -p "$S34/ul3/pkgs"; cp -r "$S34/ul/pkgs/." "$S34/ul3/pkgs/"; rm -f "${S34:?}/ul3/pkgs/ufst-1.0.pkg"
     toy34 ufst 2.0 "$S34/ul3/pkgs/ufst-2.0.pkg" "" "" "APKG_FSTYPE=ufs"
     python3 "$GEN" --packages-conf none -o "$S34/ul3" "$S34/ul3/pkgs" >/dev/null 2>&1
     ar34 "$S34/out5/1.1" --previous "$S34/out3/1.1" --userland "$S34/ul3" >"$WORK/t34.5" 2>&1
@@ -2909,11 +2909,11 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     ar34 "$S34/out6/1.1" --previous "$S34/out5/1.1" --userland "$S34/ul3" >/dev/null 2>&1
     check "  ... and an assembly over that tree reads the #old #fstype line back: same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C5' '$S34/out6/1.1/catalog'"
-    toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "$S34/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
+    toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "${S34:?}/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a published version with other bytes: refused" "is published with other bytes" \
         --previous "$S34/out/1.1" --userland "$S34/ul2"
-    rm -f "$S34/ap/APKG-0.3.10.pkg"; toy34 APKG 0.3.5 "$S34/ap/APKG-0.3.5.pkg"
+    rm -f "${S34:?}/ap/APKG-0.3.10.pkg"; toy34 APKG 0.3.5 "$S34/ap/APKG-0.3.5.pkg"
     t34no 1 "a version older than the published one: refused" "older than the published apkg 0.3.6" \
         --previous "$S34/out/1.1"
 else

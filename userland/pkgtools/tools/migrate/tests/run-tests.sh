@@ -26,7 +26,7 @@ else
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/apkg-migrate-tests.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "${WORK:?}"' EXIT
 
 PASS=0
 FAIL=0

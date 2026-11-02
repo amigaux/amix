@@ -26,7 +26,7 @@ if [ ! -x "$HB/pkgmk" ] || [ ! -x "$HB/pkgadd" ] ||
 fi
 
 WORK="$(mktemp -d)"
-[ -n "$KEEP" ] && echo "work: $WORK" || trap 'rm -rf "$WORK"' EXIT
+[ -n "$KEEP" ] && echo "work: $WORK" || trap 'rm -rf "${WORK:?}"' EXIT
 pass=0; fail=0
 check() {
     local what="$1"; shift
@@ -83,7 +83,7 @@ fr() { local fs="$WORK/fakeroot.$CUR"; touch "$fs"; fakeroot -i "$fs" -s "$fs" "
 # the host engine keeps its DB under its build tree (compiled-in VSADMDIR);
 # r.conffile reads the box path, so each root links that to the DB
 HBV="$(cd "$HB/.." && pwd)/var/sadm"
-newroot() { CUR="$(basename "$1")"; rm -rf "$1"
+newroot() { CUR="$(basename "$1")"; rm -rf "${1:?}"
     mkdir -p "$1/usr/bin" "$1/etc" "$1/var/sadm/install" "$1$HBV/install"
     ln -s "$1$HBV/install/contents" "$1/var/sadm/install/contents"
     printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$1/etc/passwd"
@@ -206,7 +206,7 @@ check "  ... and its PENDING line goes" test -z "$(pend "$R")"
 # script and fails on a missing one, so the default comes back, said aloud.
 # A pending .new from an earlier edit goes with it.
 printf 'v=mine\n' > "$R/etc/toy.conf"; add "$R" 3
-rm -f "$R/etc/toy.conf"
+rm -f "${R:?}/etc/toy.conf"
 add "$R" 4; check "user-deleted upgrade: pkgadd rc 0" test $? -eq 0
 check "user-deleted: the new default is back" is "$R/etc/toy.conf" 'v=4'
 check "  ... the message says so" said "/etc/toy.conf: you had removed it; the package's default is back"
@@ -283,7 +283,7 @@ check "  ... .new is the new default" is "$R2/etc/toy.conf.new" 'v=2'
 # baseline and .new go, and PENDING is emptied
 printf 'v=mine\n' > "$R/etc/toy.conf"; add "$R" 3
 check "(setup) an edit with a .new pending" test -e "$R/etc/toy.conf.new"
-rm -f "$R/etc/toy.conf"
+rm -f "${R:?}/etc/toy.conf"
 rmp "$R"; check "pkgrm, file already gone: rc 0" test $? -eq 0
 check "already gone: .new removed" test ! -e "$R/etc/toy.conf.new"
 check "  ... baseline removed" test ! -e "$(base "$R")/etc/toy.conf"
@@ -344,7 +344,7 @@ check "  ... every baseline goes" bash -c "test -z \"\$(ls '$S/var/sadm/conffile
 echo "installf -f re-registers a replaced conffile"
 R4="$WORK/r4"; newroot "$R4"
 add "$R4" 1; printf 'v=mine\n' > "$R4/etc/toy.conf"; add "$R4" 2
-mv "$R4/etc/toy.conf.new" "$R4/etc/toy.conf"      # what --conf-new does
+mv "${R4:?}/etc/toy.conf.new" "${R4:?}/etc/toy.conf"      # what --conf-new does
 chk "$R4"; check "after the replace, plain pkgchk flags the conffile" test $? -ne 0
 CUR=r4
 # without -c the entry falls back to class none -- the class must be named

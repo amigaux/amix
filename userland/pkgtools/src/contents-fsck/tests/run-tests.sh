@@ -20,7 +20,7 @@ if [ ! -x "$BIN" ]; then
     exit 2
 fi
 
-rm -rf "$OUT"
+rm -rf "${OUT:?}"
 mkdir -p "$OUT"
 
 pass=0

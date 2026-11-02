@@ -5,7 +5,7 @@
 LOG=/tmp/rtest4.log
 : > $LOG
 PKG=/tmp/APKG-0.1.pkg; ADM=/tmp/adm; E=/usr/apkg/bin/pkgadd
-mk() { rm -rf $1; mkdir -p $1/etc; cp /etc/passwd $1/etc/; cp /etc/group $1/etc/; }
+mk() { rm -rf "${1:?}"; mkdir -p $1/etc; cp /etc/passwd $1/etc/; cp /etc/group $1/etc/; }
 
 # Does DS_DEBUG=0 actually emit debug output? (presence-check vs value-check)
 mk /tmp/p1; DS_DEBUG=0 $E -R /tmp/p1 -n -a $ADM -d $PKG APKG > /tmp/p1o 2>&1

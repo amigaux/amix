@@ -51,7 +51,7 @@ for pkg in "$@"; do
 		rc=1
 	fi
 done
-rm -f "$tmp"
+rm -f "${tmp:?}"
 
 if [ "$rc" -eq 0 ]; then
 	echo "content-gate: all content verified"

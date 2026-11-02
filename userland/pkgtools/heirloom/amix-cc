@@ -61,7 +61,7 @@ fi
 [ -n "$out" ] || out="$(basename "${src%.c}").o"
 
 tmps="$(mktemp "${TMPDIR:-/tmp}/amix-cc.XXXXXX.s")"
-trap 'rm -f "$tmps"' EXIT INT TERM
+trap 'rm -f "${tmps:?}"' EXIT INT TERM
 
 # The wrapper passes -S straight to gcc.real with the sysroot -I
 # prepended, preserving the exact include-search order of a normal

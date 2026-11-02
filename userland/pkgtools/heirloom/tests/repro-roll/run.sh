@@ -23,7 +23,7 @@ W="$TOP/build-host/repro"
 E=1793404800
 PKG=ZREPRO
 
-rm -rf "$W"; mkdir -p "$W"
+rm -rf "${W:?}"; mkdir -p "$W"
 pass=0; fail=0
 check() {
 	local what="$1"; shift
@@ -65,7 +65,7 @@ lay() {	# lay <root> <umask> <order>: the payload, created in <order>
 }
 roll() {	# roll <work> <root> <spool> <out> [env...]: pkgmk + pkgtrans -s
 	local wk="$1" rt="$2" sp="$3" out="$4"; shift 4
-	rm -rf "$sp"; mkdir -p "$sp"
+	rm -rf "${sp:?}"; mkdir -p "$sp"
 	( cd "$wk" && env "$@" "$BIN/pkgmk" -o -d "$sp" -f prototype -r "$rt" ) \
 		> "$W/mk.log" 2>&1 &&
 	env "$@" "$BIN/pkgtrans" -s "$sp" "$out" "$PKG" > "$W/tr.log" 2>&1
@@ -139,7 +139,7 @@ check "pkgtrans refuses SOURCE_DATE_EPOCH=soon" \
 
 if [ "$fail" -eq 0 ]; then
 	echo "repro roll:        OK ($pass checks; SOURCE_DATE_EPOCH rolls are bytes of their input)"
-	rm -rf "$W"
+	rm -rf "${W:?}"
 	exit 0
 fi
 echo "repro roll: $fail of $((pass + fail)) checks failed (work: $W)"

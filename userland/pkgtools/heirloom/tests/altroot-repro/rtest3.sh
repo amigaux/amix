@@ -5,7 +5,7 @@
 LOG=/tmp/rtest3.log
 : > $LOG
 PKG=/tmp/APKG-0.1.pkg; ADM=/tmp/adm; E=/usr/apkg/bin/pkgadd
-mk() { rm -rf $1; mkdir -p $1/etc; cp /etc/passwd $1/etc/; cp /etc/group $1/etc/; }
+mk() { rm -rf "${1:?}"; mkdir -p $1/etc; cp /etc/passwd $1/etc/; cp /etc/group $1/etc/; }
 
 # 1: DS_DEBUG on, output DISCARDED -> is it the code path or the I/O?
 mk /tmp/q1; DS_DEBUG=1 $E -R /tmp/q1 -n -a $ADM -d $PKG APKG > /dev/null 2>&1

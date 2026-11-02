@@ -10,7 +10,7 @@ PKG=/tmp/APKG-0.1.pkg; ADM=/tmp/adm; E=/usr/apkg/bin/pkgadd
 n=1
 while [ $n -le 8 ]; do
   R=/tmp/rr$n
-  rm -rf $R; mkdir -p $R/etc
+  rm -rf "${R:?}"; mkdir -p $R/etc
   cp /etc/passwd $R/etc/passwd; cp /etc/group $R/etc/group
   case $n in
     1|3|5|7) MODE=plain;  $E -R $R -n -a $ADM -d $PKG APKG > /tmp/o$n 2>&1 ;;

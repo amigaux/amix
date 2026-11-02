@@ -19,10 +19,10 @@ C="$V/install/contents"
 PKG=RMFTEST
 U="$(id -un)"; G="$(id -gn)"
 
-rm -rf "$W" "$V/pkg/$PKG"
+rm -rf "${W:?}" "${V:?}/pkg/${PKG:?}"
 mkdir -p "$W/f" "$V/pkg/$PKG"
 cp "$C" "$W/contents.saved"
-trap 'cp "$W/contents.saved" "$C"; rm -rf "$V/pkg/$PKG"' EXIT
+trap 'cp "$W/contents.saved" "$C"; rm -rf "${V:?}/pkg/${PKG:?}"' EXIT
 printf 'PKG=%s\nNAME=removef stdin regression\nARCH=m68k\nVERSION=1.0\nCATEGORY=application\n' \
 	"$PKG" > "$V/pkg/$PKG/pkginfo"
 : > "$C"

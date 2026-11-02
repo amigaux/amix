@@ -31,7 +31,7 @@ for lib in libinst/libinst.a libpkg/libpkg.a libgendb/libgendb.a \
 	}
 done
 
-rm -rf "$OUT"; mkdir -p "$OUT"
+rm -rf "${OUT:?}"; mkdir -p "$OUT"
 fail=0
 
 # ------------------------------------------------------------------

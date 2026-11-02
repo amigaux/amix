@@ -52,7 +52,7 @@ make -C "$SRC" host >/dev/null || { echo "shared host build failed"; exit 1; }
 APKG=$SRC/apkg
 
 echo "== building nohttp apkg (-DAPKG_NO_HTTP, http.c excluded) =="
-rm -rf "$WORK"; mkdir -p "$WORK/bin" "$WORK/repo/pkgs" \
+rm -rf "${WORK:?}"; mkdir -p "$WORK/bin" "$WORK/repo/pkgs" \
     "$WORK/root/etc" "$WORK/root/var/apkg" "$WORK/root/var/sadm/pkg"
 APKGNH=$WORK/apkg-nohttp
 # The source set is SRCS-minus-http.c: exactly what build-amix-static.sh
@@ -171,7 +171,7 @@ FAILMSG="http: not available in the static/install build"
 echo "== running tests =="
 
 # ---------------------------------------------- (1) http:// FAILS CLOSED
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 1 "nohttp: http:// repo is refused (exit 1, fail closed)" \
     "$APKGNH" -c "$WORK/conf-http" update
 echo "$OUT" | grep -qF "$FAILMSG" \
@@ -194,14 +194,14 @@ run 2 "shared build accepts http:// (classifies as HTTP; exit 2 at dead net)" \
 # ---------------------------------------------- (2) FILE parity
 # file:// update + install, run through BOTH binaries; compare.
 run_file_scenario() {   # $1 = binary  $2 = shimlog  $3 = cache
-    : > "$2"; rm -rf "$3"; rm -f "$CATFILE"
+    : > "$2"; rm -rf "${3:?}"; rm -f "${CATFILE:?}"
     "$1" -c "$WORK/conf-file" update    >/dev/null 2>&1 || return 1
     "$1" -c "$WORK/conf-file" install foo >/dev/null 2>&1 || return 1
     return 0
 }
 SLOG_SH=$WORK/shim-shared.log; SLOG_NH=$WORK/shim-nohttp.log
 # shared build writes to $SHIMLOG via the shim; capture per-run by moving it
-: > "$SHIMLOG"; rm -rf "$CACHE"; rm -f "$CATFILE"
+: > "$SHIMLOG"; rm -rf "${CACHE:?}"; rm -f "${CATFILE:?}"
 run 0 "nohttp: file:// update"      "$APKGNH" -c "$WORK/conf-file" update
 cmp -s "$CATFILE" "$WORK/repo/catalog" \
     && ok "nohttp: file:// stored the catalog verbatim" \
@@ -213,7 +213,7 @@ grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $WORK/repo/pkgs/foo-1.0.pkg FOO" "
     && ok "nohttp: file:// plain .pkg handed to pkgadd IN PLACE (no cache copy)" \
     || bad "nohttp: file:// in-place staging wrong" "$(cat "$SLOG_NH")"
 # same scenario through the shared build
-: > "$SHIMLOG"; rm -rf "$CACHE"; rm -f "$CATFILE"
+: > "$SHIMLOG"; rm -rf "${CACHE:?}"; rm -f "${CATFILE:?}"
 "$APKG" -c "$WORK/conf-file" update >/dev/null 2>&1
 : > "$SHIMLOG"
 "$APKG" -c "$WORK/conf-file" install foo >/dev/null 2>&1
@@ -223,12 +223,12 @@ cmp -s "$SLOG_NH" "$SLOG_SH" \
     || bad "FILE parity: pkgadd argv differs" "nohttp:$(cat "$SLOG_NH") shared:$(cat "$SLOG_SH")"
 
 # bare absolute /path (what an installer passes) also works
-rm -f "$CATFILE"
+rm -f "${CATFILE:?}"
 run 0 "nohttp: bare /path source (installer /cdrom form)" \
     "$APKGNH" -c "$WORK/conf-fabs" update
 
 # ---------------------------------------------- (3) RAW parity
-: > "$SHIMLOG"; rm -rf "$CACHE"; rm -f "$CATFILE"
+: > "$SHIMLOG"; rm -rf "${CACHE:?}"; rm -f "${CATFILE:?}"
 run 0 "nohttp: raw: update reads the offset catalog at offset 0" \
     "$APKGNH" -c "$WORK/conf-raw" update
 : > "$SHIMLOG"
@@ -239,7 +239,7 @@ cmp -s "$CACHE/foo-1.0.pkg" "$P/foo-1.0.pkg" \
     || bad "nohttp: raw-extracted bytes differ"
 NH_RAW=$WORK/nh-raw-foo.pkg; cp "$CACHE/foo-1.0.pkg" "$NH_RAW" 2>/dev/null
 # same through the shared build, compare staged bytes
-: > "$SHIMLOG"; rm -rf "$CACHE"; rm -f "$CATFILE"
+: > "$SHIMLOG"; rm -rf "${CACHE:?}"; rm -f "${CATFILE:?}"
 "$APKG" -c "$WORK/conf-raw" update >/dev/null 2>&1
 : > "$SHIMLOG"
 "$APKG" -c "$WORK/conf-raw" install foo >/dev/null 2>&1

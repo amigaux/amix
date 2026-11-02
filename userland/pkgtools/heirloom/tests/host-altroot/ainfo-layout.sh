@@ -17,7 +17,7 @@
 #
 CROSS="${CROSS:-$HOME/opt/amix-cross/bin/m68k-cbm-sysv4-gcc}"
 W="$(mktemp -d)"
-trap 'rm -rf "$W"' 0
+trap 'rm -rf "${W:?}"' 0
 
 cat > "$W/probe.c" <<'EOF'
 #include <sys/types.h>

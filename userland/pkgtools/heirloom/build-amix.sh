@@ -68,7 +68,7 @@ REAL_SYSROOT="${AMIX_SYSROOT:-$HOME/opt/amix-cross/m68k-cbm-sysv4/sysroot}"
 # ------------------------------------------------------------------
 # 1. Fresh build-amix/ work area
 # ------------------------------------------------------------------
-rm -rf "$TOP/build-amix"
+rm -rf "${TOP:?}/build-amix"
 SHADOW="$TOP/build-amix/sysroot"
 mkdir -p "$TOP/build-amix/bin" "$TOP/build-amix/sadm-helpers" \
 	 "$TOP/build-amix/lib" "$SHADOW/usr/include/sys"
@@ -244,7 +244,7 @@ m68k-cbm-sysv4-strip "$BIN"/pkginfo "$BIN"/pkgparam "$BIN"/pkgtrans \
 echo "== building ds-repro =="
 "$TOP/amix-cc" -O -c 	-I"$TOP/sslstub" -I"$TOP/compat" -D_XOPEN_SOURCE 	-I"$TOP/hdrs" -I"$TOP/libpkg" -I"$TOP/libgendb" 	"$TOP/ds-repro.c" -o "$TOP/build-amix/ds-repro.o"
 m68k-cbm-sysv4-gcc "$TOP/build-amix/ds-repro.o" 	-L"$TOP/libinst" -linst -L"$TOP/libpkg" -lpkg 	-L"$TOP/libgendb" -lgendb -L"$TOP/libadm" -ladm 	-L"$TOP/build-amix/lib" -lamix -lc 	-o "$TOP/build-amix/ds-repro"
-rm -f "$TOP/build-amix/ds-repro.o"
+rm -f "${TOP:?}/build-amix/ds-repro.o"
 
 # ------------------------------------------------------------------
 # 5c. probe-early: on-box probe for the early pkgremove flow
@@ -254,7 +254,7 @@ rm -f "$TOP/build-amix/ds-repro.o"
 echo "== building probe-early =="
 "$TOP/amix-cc" -O -c 	-I"$TOP/sslstub" -I"$TOP/compat" -D_XOPEN_SOURCE 	-I"$TOP/hdrs" -I"$TOP/libpkg" -I"$TOP/libgendb" 	-I"$TOP/libspmizones" 	"$TOP/probe-early.c" -o "$TOP/build-amix/probe-early.o"
 m68k-cbm-sysv4-gcc "$TOP/build-amix/probe-early.o" 	-L"$TOP/libinst" -linst -L"$TOP/libpkg" -lpkg 	-L"$TOP/libgendb" -lgendb -L"$TOP/libadm" -ladm 	-L"$TOP/build-amix/lib" -lamix -lc 	-o "$TOP/build-amix/probe-early"
-rm -f "$TOP/build-amix/probe-early.o"
+rm -f "${TOP:?}/build-amix/probe-early.o"
 
 echo "== verification =="
 fail=0
