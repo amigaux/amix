@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the LLPRINTF gate reads only data sections (2647684)
+
+The LLPRINTF gate reads strings only from an ELF's .rodata* and .data* sections, one section at a time, and reads a file without section headers whole, so code bytes no longer count as format strings (the cfb16 Xzz9000 matched "%Lo" in .text). The gcc14 env exports OBJCOPY.
+
 ## 2026-11-01 — FORKPIN sources; @PKG@ and depend in module recipes (67b1827)
 
 pkgbuild builds from a fork a checkout pin names (package.sh FORKPIN: the git archive of its commit, fetched by hash into out/cache/forks/<name>). Module recipes take @PKG@ (the line's instance) in the prototype and KM_FILES, and a depend file as i depend.
