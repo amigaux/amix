@@ -215,17 +215,51 @@ def data_objects(data, secs):
     return out
 
 
+_HDR = re.compile(r"^\s*\d+ (.*?)\s+([0-9a-f]{8})\s+([0-9a-f]{8})\s+[0-9a-f]{8}"
+                  r"\s+[0-9a-f]{8}\s+2\*\*\d+\s*$")
+
+
+def bfd_section_names(objdump, path, secs, names):
+    """The name objdump (BFD) gives each of secs, matched by address and
+    size from `objdump -h`.  BFD can name a section otherwise than the
+    section header table does: a kernel whose null section 0 carries
+    ".text" too gets its code section printed with an empty name, and
+    `-j .text` then matches nothing."""
+    r = subprocess.run([objdump, "-h", path], capture_output=True, text=True,
+                       errors="replace")
+    if r.returncode != 0:
+        raise SystemExit("scan060: objdump -h failed on %s: %s"
+                         % (path, r.stderr.strip()[:160]))
+    seen = {}
+    for line in r.stdout.splitlines():
+        m = _HDR.match(line)
+        if m:
+            seen.setdefault((int(m.group(3), 16), int(m.group(2), 16)),
+                            m.group(1).strip())
+    return [seen.get((sa, sz), n) for (sa, _o, sz), n in zip(secs, names)]
+
+
 def run_objdump(objdump, path, sec, lo, hi):
     # -j: an address range alone also selects the non-alloc sections at
-    # address 0 (.debug_*), which -D would decode too
-    cmd = [objdump, "-D", "-m", "m68k:68020", "-j", sec,
-           "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+    # address 0 (.debug_*), which -D would decode too.  A section BFD names
+    # "" cannot be given to -j: the range is decoded whole, and only that
+    # section's block of the listing is kept.
+    cmd = [objdump, "-D", "-m", "m68k:68020"] + (["-j", sec] if sec else []) + \
+          ["--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
     r = subprocess.run(cmd + [path], capture_output=True, text=True,
                        errors="replace")
     if r.returncode != 0:
         raise SystemExit("scan060: objdump failed on %s: %s"
                          % (path, r.stderr.strip()[:160]))
-    return r.stdout
+    if sec:
+        return r.stdout
+    out, cur = [], None
+    for line in r.stdout.splitlines(True):
+        if line.startswith("Disassembly of section "):
+            cur = line[len("Disassembly of section "):].rstrip("\n").rstrip(":")
+        if cur == sec:
+            out.append(line)
+    return "".join(out)
 
 
 def scan_elf(path, objdump):
@@ -238,7 +272,7 @@ def scan_elf(path, objdump):
     with open(path, "rb") as fp:
         data = fp.read()
     secs = exec_sections(data)
-    names = exec_section_names(data)
+    names = bfd_section_names(objdump, path, secs, exec_section_names(data))
     listing = "".join(run_objdump(objdump, path, n, sa, sa + sz)
                       for (sa, _o, sz), n in zip(secs, names))
     objs = data_objects(data, secs)

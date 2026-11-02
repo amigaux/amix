@@ -1,5 +1,53 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — assemble-release.py: one tree per release, every version kept
+
+A box reads one repository per `repo=`, while make dist writes two catalogs (userland and
+kspace), and APKG/APKGENG and Commodore's stock datastreams sit outside both.
+`tools/repo/assemble-release.py` writes the release's single tree (design.md section 5.1); make
+dist's `release` step calls it.
+
+- **One live row per name.** apkg 0.3.6 cannot take several rows of one name:
+  - `catalog_find` returns the first row (install, info and dependencies use it);
+  - `upgrade` with no names walks every row, so two newer rows mean two pkgadds, possibly the
+    older one after the newer;
+  - `list` prints both;
+  - gen-catalog refuses a duplicate name.
+  So older published rows go verbatim into an `#ext older 1` block of `#old` lines. Every client
+  since 0.2.x skips them as comments, so every client picks the newest with no change. Installing
+  an older version on purpose would need apkg to read that block (a later `name=version`).
+- **Stock.** `stock-1.1.lock` pins 28 datastreams: the 27 of the 1.0 tree (byte-equal to its
+  stock/ rows) plus m4-2.1, as installng's pins staging has them. The source packages stay; the
+  full set installs them.
+- **Checks.** Input catalog.md5; size and md5 per row (sha256 per #kpkg); clashes between
+  inputs; published bytes; dependencies; scan060 over the live userland rows; amix's
+  tools/release-check; apkg's own `update` and `list` on the tree. On a make dist out/userland,
+  candidate-15f96d8d, APKG 0.3.6, APKGENG 1.12.6 and the stock pins: 65 live rows (29 kernel
+  space), scan060 clean over 19 ELFs, catalog md5 e3a735ba. The same bytes under umask 077 and
+  another TZ. `gen-catalog.py --scan-private` over it: OK, so publish.sh would take it.
+- T34: 30 checks with toy datastreams: a clean tree, reproducibility, each refusal, MISSING
+  inputs, and two follow-on releases over a published one.
+
+## 2026-11-02 — scan060: the section names objdump uses
+
+The `-j <section>` change failed on the k30 kernel (kern30m -68): `objdump failed ... section
+'.text' mentioned in a -j option, but not found`, exit 1. Its `.shstrtab` starts with `.text`
+(no leading NUL), and its code section's name offset is 0. readelf prints `.text`; BFD reads
+offset 0 as no name and prints "Disassembly of section :". The failure was closed (no
+verdict), but no package with that layout could be scanned.
+
+- Each executable section's name now comes from `objdump -h`, matched by address and size.
+  - A section BFD names "" is decoded over its range without `-j`, and only its own block of
+    the listing is kept, so `.rel.boot` and `.debug_*` stay out.
+- T22 gains a stripped program rewritten to that layout: the clean one passes, and one with the
+  trap is one hit.
+- Unchanged, byte for byte against the previous scanner: libamixrt.so.1 and amixrt, APKGENG
+  1.12.6, the 843de30 pkgadd, the older verdicts (928b9ae rolls, kbootset -35, modtools), and
+  kern46m -57, zeth46 and zscsi30.
+- The k30 kernel now scans: 254365 insns and 213 hits, as before the data-object change. It
+  is the 68030 line, which the 060 check does not apply to. kern46m's 19 hits sit in
+  `fpsp060_image`.
+
 ## 2026-11-02 — scan060: objdump names each code section (-j)
 
 The data-object change (`objdump -D` over each executable section's address range) had a

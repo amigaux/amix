@@ -336,6 +336,40 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   verifies, `--remove-root` removes the root's copy), and the web server answers the old root
   paths with a 301 into `/1.0/`, which the deployed 0.2.x clients follow (`redirects=1`).
 
+- **A release tree is assembled, and keeps every published version.**
+  `assemble-release.py --userland DIR --kspace DIR [--apkg DIR] [--stock DIR] [--previous DIR]
+  --release 1.1 --out OUT` writes one release's tree from four inputs:
+  - make dist's two catalogs (`out/userland`, `out/kspace`), whose rows it takes verbatim;
+  - APKG and APKGENG, into `pkgs/base/`;
+  - the Commodore datastreams `stock-<release>.lock` names (size, md5, sha256), into
+    `pkgs/stock/`. amix holds none of them, so the lock pins them;
+  - the published tree (`--previous`), which it keeps.
+
+  The live catalog has **one row per name**, the newest. Every apkg ever shipped takes the
+  first row of a name, and `upgrade` walks every row, so several live rows would be read
+  wrongly. A published version's row moves verbatim into a block that every apkg skips (lines
+  starting with `#` outside the kpkg block are comments to the client), and its file stays in
+  `pkgs/` byte for byte:
+
+  ```
+  #ext older 1
+  #old <row>                  or  #old #kpkg <name> <version> ...
+  #end older
+  ```
+
+  The tool refuses, and writes nothing, when:
+  - a catalog.md5, size or hash differs;
+  - a name, pkginst or filename is in two inputs (no newest-wins between inputs);
+  - a published version would change bytes, or a version would go backwards;
+  - a dependency names no live row;
+  - scan060 finds a hit in a live userland row (stock/ is vendor code; kernel-space files have
+    kernel space's own gates);
+  - amix's `tools/release-check` refuses the tree;
+  - apkg does not read the tree as one repository.
+
+  The same inputs give the same bytes. Exit: 0 written, 1 refused, 2 error, 3 an input or check
+  tool missing. make dist's `release` step runs it.
+
 - **Kernel space** (apkg 0.3, kernel/dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
   one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
   block after the entries, never as an ordinary entry, with `line=`, `kabi=` and `pin=` read from
