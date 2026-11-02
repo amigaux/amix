@@ -9027,8 +9027,10 @@ def audit_cd2_card1_target():
                 (ok if got == want else fail)("IDE card: %s -> %s%s" % (what, want, "" if got == want else " (got %r)" % got))
         finally:
             shutil.rmtree(stubdir, ignore_errors=True)
-    ia = re.search(r'(?ms)^\tif \[ -n "\$IDE_CARD" \]; then\n\t\techo "IDE_CARD=\$IDE_CARD"\n\t\techo "CD_SPEC=\$CD_SPEC"\n\t\techo "ROOTDEV=\$ROOTDEV"\n\tfi\n', setup)
-    (ok if ia else fail)("setup.sh: the answers carry IDE_CARD, CD_SPEC and ROOTDEV when the IDE card came from the kernel")
+    ia = re.search(r'(?ms)^\tif \[ -n "\$IDE_CARD" \]; then\n\t\techo "IDE_CARD=\$IDE_CARD"\n\t\techo "ROOTDEV=\$ROOTDEV"\n\tfi\n', setup)
+    ic = '{ [ -n "$CD_SPEC_EXACT" ] || [ -n "$IDE_CARD" ]; } && echo "CD_SPEC=$CD_SPEC"' in setup
+    (ok if ia and ic else fail)("setup.sh: the answers carry IDE_CARD and ROOTDEV when the IDE card came from the kernel, "
+                                "and CD_SPEC when the miniroot recorded it or the IDE card gave it")
     # D-2 (r6): every installable id is added to the scan (then filtered), so the
     # picker can offer unit 4 and card-1 ids the miniroot ships no node for.
     m = re.search(r'(?ms)^for _id in \$INSTALLABLE_IDS\ndo\n\tcase " \$SCAN_IDS ".*?^SCAN_IDS=`scan_safe_ids \$SCAN_IDS`$', setup)
@@ -10024,6 +10026,54 @@ def audit_boot_pri():
         (ok if v == ["20"] else fail)("%s: TARGET_BOOT_BOOTPRI=20 (got %r)" % (os.path.basename(t), v))
 
 
+def audit_cd_candidates():
+    head("CC. the miniroot's CD addresses come from the running kernel: `kbootset cards --probe` (the "
+         "units that answer as CD drives), else every unit of every card it registered, else the fixed list; "
+         "the address that answered goes to /tmp/cd.spec")
+    prof = os.path.join(REPO, "src", "miniroot", "profile")
+    src = open(prof, encoding="latin-1").read()
+    i = src.find("cd_candidates_from_cards()\n{")
+    if i < 0:
+        fail("src/miniroot/profile: no cd_candidates_from_cards")
+        return
+    f = src[i:]
+    f = f[:f.index("\n}\n") + 3]
+    (ok if 'echo "$s" > $CD_SPEC_FILE' in src and "CD_SPEC_FILE=/tmp/cd.spec" in src else fail)(
+        "the probe writes the address that answered to /tmp/cd.spec")
+    (ok if re.search(r'(?m)^_cds=`cd_candidates_from_cards`\n\[ -n "\$_cds" \] && CD_CANDIDATES=`echo \$_cds`$', src)
+     else fail)("CD_CANDIDATES is replaced only when the kernel's cards gave a list (the fixed list is the fallback)")
+    d = tempfile.mkdtemp(prefix="cdcand.")
+    try:
+        cards = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n"
+                 "card 2: c10-c17 mobo:gayle\\n")
+        full = " ".join("%d,%d" % (c, u) for c in (0, 1, 2) for u in (3, 5, 2, 4, 1, 0, 6))
+        cases = (
+            ("-36 --probe: only the units that answer as CD drives (an A4091 ZuluSCSI CD, the IDE slave)",
+             "card 0: c0-c7 zorro:144b:01 base 0x40000000\\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n"
+             "card 1: c8-cf zorro:0202:54 base 0x40800000\\n  unit 3: type 5 ZuluSCSI CDROM 2.0\\n"
+             "card 2: c10-c17 mobo:gayle\\n  unit 5: type 5 UAE-ATAPI CD-ROM 0.1\\n  unit 6: type 0 UAE IDE -\\n",
+             0, "/dev/null", "1,3 2,5"),
+            ("-36 --probe finds no CD drive: every unit of every card", "card 0: c0-c7 zorro:144b:01 base 0x40000000\\n"
+             "  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n", 0, "/dev/null", full),
+            ("kbootset -35 (no --probe, exit 2): every unit of every card", "", 2, "/dev/null", full),
+            ("no /dev/scsi node: --probe is not asked, every unit of every card", "", 0, "/nonexistent", full),
+        )
+        for what, probe, prc, dev, want in cases:
+            kb = os.path.join(d, "kb")
+            open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") printf "%%b" "%s"; exit %d;;\n'
+                                '"cards ") printf "%%b" "%s";;\nesac\n' % (probe, prc, cards))
+            os.chmod(kb, 0o755)
+            r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=%s\n%s\ncd_candidates_from_cards" % (kb, dev, f)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            got = " ".join(r.stdout.decode().split())
+            (ok if got == want else fail)("CD addresses: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s/none SCSIDEV=/dev/null\n%s\ncd_candidates_from_cards" % (d, f)],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        (ok if not r.stdout.strip() else fail)("CD addresses: no kbootset on the RAM disk gives no list (the fixed one stands)")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
          "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
@@ -10885,6 +10935,7 @@ def main():
     audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()
+    audit_cd_candidates()
     audit_boot_pri()
     audit_guarded_rm_mv()
     audit_ufs_rootcap()

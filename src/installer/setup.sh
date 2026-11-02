@@ -522,6 +522,17 @@ L11_STORE_MB=64
 # from kinfo alone (it opens no disk). The target is the IDE master, unit 6 of the card that
 # reports mobo:gayle, and the only installable id; a CD on the IDE (CD_HBA=gayle) is the
 # slave, unit 5. Without a kbootset or an IDE card the profile's own values stand.
+# The miniroot records the address that answered its CD probe (/tmp/cd.spec, the miniroot's
+# profile): the CD's unit is then known exactly, so it alone is kept out of the disk scan and no
+# other candidate unit has to be (a disk at id 5 is offered again)
+SETUP_CDSPEC="${SETUP_CDSPEC:-/tmp/cd.spec}"
+CD_SPEC_EXACT=
+if [ "$SOURCE_KIND" = cdfs ] && [ -s "$SETUP_CDSPEC" ]; then
+	_cs=`cat "$SETUP_CDSPEC"`
+	case "$_cs" in
+		[0-3],[0-7])	CD_SPEC="$_cs"; MINIROOT_CD_CANDIDATES="$_cs"; CD_SPEC_EXACT=y ;;
+	esac
+fi
 SETUP_KBOOTSET="${SETUP_KBOOTSET:-$INST/l11/bin/kbootset}"
 IDE_CARD=
 # ide_card -- the card number of the IDE port in the running kernel's sd card table, or ""
@@ -553,7 +564,7 @@ if [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && [ "$TARGET_HBA" = gayle ]; then
 		TARGET_SCSI_ID=`hexname \`expr $IDE_CARD \* 8 + 6\``
 		INSTALLABLE_IDS="$TARGET_SCSI_ID"
 		ROOTDEV=`rootdev_of $TARGET_SCSI_ID ${TARGET_ROOT_SLICE:-1}`
-		[ "$CD_HBA" = gayle ] && CD_SPEC="$IDE_CARD,5"
+		[ "$CD_HBA" = gayle ] && [ -z "$CD_SPEC_EXACT" ] && CD_SPEC="$IDE_CARD,5"
 		echo "$PROG: the IDE port is card $IDE_CARD: the master is SCSI id $TARGET_SCSI_ID${CD_SPEC:+, the install CD $CD_SPEC}"
 	else
 		echo "$PROG: the running kernel names no IDE card (kbootset cards): the profile's SCSI id $TARGET_SCSI_ID stands"
@@ -2213,9 +2224,10 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	# the IDE port's card came from the running kernel: its CD unit and root device go with it
 	if [ -n "$IDE_CARD" ]; then
 		echo "IDE_CARD=$IDE_CARD"
-		echo "CD_SPEC=$CD_SPEC"
 		echo "ROOTDEV=$ROOTDEV"
 	fi
+	# the CD's address when the miniroot recorded it, or the IDE card gave it
+	{ [ -n "$CD_SPEC_EXACT" ] || [ -n "$IDE_CARD" ]; } && echo "CD_SPEC=$CD_SPEC"
 	echo "TARGET_DISK_MB=$DISK_MB"
 	echo "TARGET_ROOT_MB=$ANS_ROOT"
 	echo "TARGET_SWAP_MB=$ANS_SWAP"

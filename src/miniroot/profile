@@ -145,6 +145,52 @@ do
 done
 [ -n "$_c1" ] && SCAN_IDS="8 9 a b c d e f"
 CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5 2,5 3,5"
+# With kbootset on the RAM disk the list comes from the running kernel instead (kbootset reads
+# kinfo; it opens no disk). With `kbootset cards --probe` (kbootset -36: one read-only INQUIRY
+# per unit through /dev/scsi) the list is the units that answer as CD drives (device type 5), so
+# no disk unit is ever mounted. Without it, or when it finds none, every unit of every card the
+# kernel registered, those a CD most often sits at first (3, the IDE slave 5, then 2 4 1 0 6).
+# The fixed list above is the fallback for a RAM disk without kbootset.
+KBOOTSET=/sbin/kbootset
+SCSIDEV=/dev/scsi
+cd_candidates_from_cards()
+{
+	[ -x $KBOOTSET ] || return 0
+	if [ -c $SCSIDEV ]
+	then
+		_p=`$KBOOTSET cards --probe 2>/dev/null | while read _a _b _t _n _r
+		do
+			if [ "$_a" = card ]
+			then
+				_cur=\`expr "$_b" : '\\([0-3]\\):$'\`
+			elif [ "$_a" = unit ]
+			then
+				_u=\`expr "$_b" : '\\([0-7]\\):$'\`
+				[ "$_t $_n" = "type 5" ] && [ -n "$_cur" ] && [ -n "$_u" ] && echo "$_cur,$_u"
+			fi
+		done`
+		if [ -n "$_p" ]
+		then
+			echo $_p
+			return 0
+		fi
+	fi
+	$KBOOTSET cards 2>/dev/null | while read _w _k _r
+	do
+		[ "$_w" = card ] || continue
+		_c=`expr "$_k" : '\([0-3]\):$'`
+		[ -n "$_c" ] || continue
+		for _u in 3 5 2 4 1 0 6
+		do
+			echo "$_c,$_u"
+		done
+	done
+}
+_cds=`cd_candidates_from_cards`
+[ -n "$_cds" ] && CD_CANDIDATES=`echo $_cds`
+# the address that answered, for the interview (setup.sh reads it: the CD's unit is excluded
+# exactly, and no other candidate unit needs to be)
+CD_SPEC_FILE=/tmp/cd.spec
 
 # ---------------------------------------------------------------------------
 # stock helpers, verbatim
@@ -804,12 +850,14 @@ find_source()
 	# 2. a CD. Only reachable by mounting, so one attempt each, in order.
 	if [ "$SRC_KIND" = "" ]
 	then
+		rm -f $CD_SPEC_FILE
 		for s in $CD_CANDIDATES
 		do
 			if probe_cdfs "$s"
 			then
 				SRC_KIND=cdfs
 				SRC_SPEC="$s"
+				echo "$s" > $CD_SPEC_FILE
 				break
 			fi
 			drop_source
