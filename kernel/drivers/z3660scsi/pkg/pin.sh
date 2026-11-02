@@ -21,22 +21,24 @@
 # 1.0.0-5 (2026-11-01): the module's 1.0.0-2 rebuilt on the kit of
 # gcc-cross-amix 33ebadc (toolchain.pin): the objects carry
 # cc=gcc-2.7.2.3-33ebadc, which kernels built with that pin require.
+# 1.0.0-6 (2026-11-02): the module's 1.0.0-3, the fixed window gated before
+# its first write (no access over a boot memory region; a read-only bprobe).
 
 KM_NAME=z3660scsi
 KM_SHORT=zscsi
 KM_REPO=kernel/drivers/z3660scsi
-KM_VERSION=1.0.0-2
-KM_PKG_VERSION=1.0.0-5
+KM_VERSION=1.0.0-3
+KM_PKG_VERSION=1.0.0-6
 
-KM_K30_SHA=3236e6c72d876dd78fb8241cad60c704841b3439638598e2da925646b5b2aa8b
-KM_K46_SHA=15f0769ad23f78efe74602d449734d8ea0df96a63ac749222cc7a0a58ecb30ea
+KM_K30_SHA=3ae98bb26d0cc7ea20c75baae8d7e89c5a6283181670d172f29f34b5f7ee52a9
+KM_K46_SHA=b53742ba049ae3177f4b3ff39c1475e5443bc213f6ea71a73ffe04ffa605bb07
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=3b53a8aad7c2bca344bfff064ef0b573b06a520f
+KM_KIT_COMMIT=1a3fa61a1d650996a28f0680167065cdd88705ab
 
 KM_LICENCES="\
 kernel/drivers/z3660scsi/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 kernel/drivers/z3660scsi/NOTICE 54f12c73d44fbb45c3e6da53006b58463633711add15f9ba4ea162d91c459cc2"
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
