@@ -55,9 +55,9 @@ on a 32-core machine, most of it GCC 14.
 
 Reproducibility: every path inside the image is fixed (`/opt/amix-cross`,
 `/opt/amix/...`), so no build folder, user name or host path of the machine
-that builds it reaches the toolchains; `SOURCE_DATE_EPOCH` (the date of the
-gcc14 pin's commit) sets the dates, and the members of every static archive
-are normalised to it. `/opt/amix/TOOLCHAIN.sha256` lists the sha256 of every
+that builds it reaches the toolchains; `SOURCE_DATE_EPOCH` (fixed in
+`Containerfile`, kept across pin changes) sets the dates, and the members of
+every static archive are normalised to it. `/opt/amix/TOOLCHAIN.sha256` lists the sha256 of every
 installed file, so two builds are compared by that one file:
 
 ```sh
@@ -203,5 +203,7 @@ not carry as such:
 ## Updating a pin
 
 Change the commit in the `.pin` file, rebuild the container, and compare
-`TOOLCHAIN.sha256` with the previous image's to see what moved. Bump
-`SOURCE_DATE_EPOCH` in `Containerfile` to the new gcc14 pin's commit date.
+`TOOLCHAIN.sha256` with the previous image's to see what moved. Leave
+`SOURCE_DATE_EPOCH` in `Containerfile` as it is: every static archive's
+members are normalised to it, so a new value would change both toolchains'
+archives, and what links them, even where the new pin changes nothing.
