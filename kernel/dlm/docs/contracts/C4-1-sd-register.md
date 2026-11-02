@@ -1,4 +1,4 @@
-# C4-1 — `sd_register` and the four-card contract, version 7
+# C4-1 — `sd_register` and the four-card contract, version 8
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the generic 060 target): an A3000 with a
@@ -14,7 +14,8 @@
   (2026-10-27, from the 040/060 port's work): a motherboard
   controller's record names it by its motherboard id (§5.2); version 7
   (2026-10-27, from amix-installng): what `pkgchk core` says
-  about the nodes is limited to `/dev` (§2.4).
+  about the nodes is limited to `/dev` (§2.4); version 8 (2026-11-02): the
+  A1200 IDE is motherboard id 2, `gayle`, as the A4000 IDE is (§5.2).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -363,6 +364,12 @@ cards apart by their motherboard id (C2-1 §2.1: 1 `a3000-wd`, 2
 such cards, so the root fell back to the built-in one:
 - an A4000 in 030 mode, with Gayle and the Z3660 window;
 - an A4000T, with its 53C710 and Gayle.
+
+From version 8 the A1200's Gayle IDE (task file at 0xDA0000), which the
+`gayle` module registers as `A1200 IDE`, is id 2 too (C2-1 version 4):
+one Gayle per box, so one code serves both machines, its root record
+is `sd id=00000002` and its key `mobo:gayle`. RTH1, boot2 and kbootset
+need no change for it; kinfo maps the name on both lines.
 
 So, from version 6:
 1. **The record.** A root or swap record on a motherboard controller is

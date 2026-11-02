@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 22
+# C3-5 — the module package and the per-module manifest record, version 23
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -34,7 +34,8 @@
   class of a module that loads only as a dependency (§1.1); version 22
   (2026-11-01): a module kernel's manifest carries the major table, one
   `major` record per registry row, which the core reads (core patch 0051;
-  §3).
+  §3); version 23 (2026-11-02): the gayle row serves the A1200 IDE too
+  (§1.1).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -93,7 +94,7 @@ per line**:
 | z3660scsi | `zscsi` | `zscsi30` / `zscsi46` |
 | a4091 | `a4091` | `a409130` / `a409146` |
 | ramdisk | `ramdisk` | `ramdisk30` / `ramdisk46` |
-| gayle | `gayle` | `gayle30` / `gayle46` |
+| gayle | `gayle` | `gayle30` / `gayle46`: one module and one package for the A4000/A4000T IDE and (version 23) the A1200 IDE; its gate tells the machines apart (C4-2 §8) |
 | cdfs | `cdfs` | `cdfs30` / `cdfs46` |
 | a4kt710 | `a4kt710` | `a4kt71030` / `a4kt71046` |
 | paula | `paula` | `paula30` / `paula46` |

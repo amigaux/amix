@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 7
+# C4-2 — what a root-class driver changes, version 8
 
 - **Status:** agreed 2026-10-26, version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -12,7 +12,7 @@
   dirty copyback line written back over the board's data; version 6
   (2026-10-27): the A4000T onboard 53C710's gate is the running
   Kickstart's `NCR scsi.device` resident (§8.1); version 7 (2026-11-02):
-  what the root-context confirmation covers, line by line (§2.1).
+  what the root-context confirmation covers, line by line (§2.1). Version 8 (2026-11-02): the Gayle IDE's gate takes the A1200 (§8).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -195,7 +195,7 @@ nothing for it, and `_load` cannot tell the difference.
 | z3660scsi | amix-z3660scsi | `zorro:144b:01,mobo:z3660-window` | `z3660` | none: the piscsi mailbox is synchronous, polled | mailbox idle | armed register access (C3-6 §1) |
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
-| Gayle IDE | amix-gayle-ide | `mobo:gayle` | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
+| Gayle IDE | amix-gayle-ide | `mobo:gayle` (gated in `_load`: AGA, then the machine by Kickstart identity before any local-I/O access; a `card.resource` RomTag means an A1200, task file at 0xDA0000, registered `A1200 IDE`; none means an A4000/A4000T, 0xDD2020, `A4000 IDE`; version 8) | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
 | ramdisk | amix `kernel/modules` | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
 
 ### 8.1 The A4000T onboard 53C710's gate (version 6)

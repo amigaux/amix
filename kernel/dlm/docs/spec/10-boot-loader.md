@@ -583,6 +583,7 @@ time than it costs to decode.
 | swap selector | `sd` (id, base, unit, slice) or `none` |
 | root filesystem type | from the manifest; the kernel sets `rootfstype` from it so `vfs_mountroot` tries only that type |
 | RAM-disk address and size | when present |
+| machine identity (planned, after 1.1) | the machine boot2 saw under AmigaOS (A600, A1200, A3000, A4000, A4000T…), from the Kickstart's identity and resources, so a module gate need not tell machines apart from local I/O. First user: Gayle on the A600, an ECS machine that the 1.1 gate (AGA, then `card.resource`) does not take. A new field at the record's tail with a version bump, which kinfo and the core read when present |
 
 A kernel without module support ignores it; a module kernel booted by the
 stock loader finds no record and boots the floor only (proof period only,
