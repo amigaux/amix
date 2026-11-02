@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-02 — 1.1 set from make dist; IDE and A4000T targets; test disks; swap in steps (81aabd8..496d7f6)
+
+The 1.1 set takes userland packages from make dist and kspace 055a4cd9 (dist f286c88), with cdfs in every 1.1 profile.
+Every rm and mv on a variable path is guarded with "${var:?}". New install targets: A4000 IDE (gayle) and the A4000T
+onboard 710, with profiles, rig configs and RAM-disk media; the miniroot looks for the install CD on the IDE slave too.
+The interview takes the target's controller from `kbootset cards`; an IDE target's card is the one reporting
+mobo:gayle (unit 6, CD unit 5), so one IDE medium serves card 0, 1 and 2 shapes. TARGET_BOOT_BOOTPRI sets the boot
+slice's priority (test disks 20). A4000D test disks (d060, d030, emulated x030) and the A4000T disk (t060). Images: swap
+added in steps (30 MiB on k30, "all 48 30" on k46), /home 1424 MiB, nbpi=8192 on slices over 512 MiB. Cells: IDE and
+A4000T installs, the card-2 IDE acceptance cell l11-ide-c2-k46 (Z3660 + A4091 + IDE), --boot-hdf boots from a Z3660 hdf.
+measure-image records an image's first-boot use with a pressure step sized to the box.
+
 ## 2026-10-31 — 1.1 is clean installs only; media rd1x / ni17 / fp-rd1x (dad1b57..dca90ae)
 
 P-36: the upgrade install is removed (setup.sh's offer, install.sh/l11.sh's capture/restore/put-in-place, S17upgrade,
