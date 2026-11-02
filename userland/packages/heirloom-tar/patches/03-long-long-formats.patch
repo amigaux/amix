@@ -1,0 +1,140 @@
+The system's printf family reads %lld and %llo as %ld and %lo: it takes
+one 32-bit word of the 64-bit argument (on the 68k the high one, zero
+for any size under 4 GB) and misreads every argument after it, and its
+sscanf stores 32 bits into a long long.  tar wrote the size field of
+every header with sprintf("%11.11llo"), so an archive made here would
+have recorded every file as empty.  Each such conversion now goes
+through snprintf or vsnprintf (libamixc99, which formats long long), and
+the device numbers are read with strtoll.
+
+--- a/tar/tar.c
++++ b/tar/tar.c
+@@ -68,6 +68,7 @@
+ #include <time.h>
+ #include <utime.h>
+ #include <stdio.h>
++#include <stdarg.h>
+ #include <dirent.h>
+ #include <signal.h>
+ #include "sigset.h"
+@@ -303,6 +304,7 @@
+ static void	tgetpax(struct stat *, long long *, long long *);
+ static enum paxrec	tgetrec(char **, char **, char **);
+ static void	tgetowner(struct stat *);
++static void	llerr(const char *, ...);
+ static long long	tgetval(const char *, int);
+ static void	passtape(struct stat *);
+ static void	putfile(const char *, const char *, int, int);
+@@ -853,9 +855,9 @@
+ 			done(2);
+ 	}
+ 	if ((paxrec & PR_SUN_DEVMAJOR) == 0)
+-		sscanf(dblock.dbuf.devmajor, "%llo", &lval1);
++		lval1 = strtoll(dblock.dbuf.devmajor, NULL, 8);
+ 	if ((paxrec & PR_SUN_DEVMINOR) == 0)
+-		sscanf(dblock.dbuf.devminor, "%llo", &lval2);
++		lval2 = strtoll(dblock.dbuf.devminor, NULL, 8);
+ 	sp->st_rdev = makedev(lval1, lval2);
+ 	if (tfile != NULL) {
+ 		if (strchr(hbuf.name, '\n') == NULL) {
+@@ -1464,17 +1466,17 @@
+ 			(sp->st_size + (TBLOCK-1)) / TBLOCK : 0;
+ 	if (vflag) {
+ 		if (nflag)
+-			fprintf(stderr, "seek = %lldK\t",
++			llerr("seek = %lldK\t",
+ 					(wrtotal+recno*2+1023)/1024);
+ 		fprintf(stderr, "a %s%s ", longname,
+ 				(sp->st_mode&S_IFMT) == S_IFDIR ? "/" : "");
+ 		if (symblink)
+ 			fprintf(stderr, "symbolic link to %s\n", symblink);
+ 		else if (nflag)
+-			fprintf(stderr, "%lldK\n",
++			llerr("%lldK\n",
+ 					blocks&01?blocks|02:blocks>>1);
+ 		else
+-			fprintf(stderr, "%lld tape blocks\n", blocks);
++			llerr("%lld tape blocks\n", blocks);
+ 	}
+ 	sprintf(dblock.dbuf.chksum, "%7.7o", checksum(0));
+ 	if (paxrec != PR_NONE && oldflag <= 0 && gnuflag <= 0)
+@@ -1541,7 +1543,7 @@
+ 	long	od, d, r;
+ 
+ 	if (sval == 0) {
+-		sprintf(xval, "%lld", lval);
++		snprintf(xval, sizeof xval, "%lld", lval);
+ 		sval = xval;
+ 	}
+ 	r = strlen(keyword) + strlen(sval) + 3;
+@@ -1765,11 +1767,13 @@
+ blocksof(const char *name, struct stat *sp, long long *blocks, long long *bytes)
+ {
+ 	*blocks = ((*bytes = sp->st_size) + TBLOCK-1)/TBLOCK;
+-	if (vflag)
+-		fprintf(stderr, "x %s, %lld bytes, ""%lld%s\n",
+-			name, *bytes,
++	if (vflag) {
++		fprintf(stderr, "x %s, ", name);
++		llerr("%lld bytes, ""%lld%s\n",
++			*bytes,
+ 			nflag ? (*blocks&01?*blocks|02:*blocks)>>1 : *blocks,
+ 			nflag ? "K" : " tape blocks");
++	}
+ }
+ 
+ static void
+@@ -1838,7 +1842,11 @@
+ 
+ 	pmode(st, linkflag);
+ 	printf("%3ld/%-3ld", (long)st->st_uid, (long)st->st_gid);
+-	printf(" %6lld", (long long)st->st_size);
++	{
++		char	nb[24];
++		snprintf(nb, sizeof nb, " %6lld", (long long)st->st_size);
++		fputs(nb, stdout);
++	}
+ 	tp = localtime(&st->st_mtime);
+ 	strftime(buf, sizeof buf, "%b %e %H:%M %Y", tp);
+ 	printf(" %17.17s ", buf);
+@@ -1958,7 +1966,8 @@
+ 				sp->st_uid : (paxrec |= PR_UID, 60001)));
+ 	sprintf(dblock.dbuf.gid, "%7.7lo", (long)(sp->st_gid <= 07777777 ?
+ 				sp->st_gid : (paxrec |= PR_GID, 60001)));
+-	sprintf(dblock.dbuf.size, "%11.11llo", (sp->st_mode&S_IFMT)==S_IFREG ?
++	snprintf(dblock.dbuf.size, sizeof dblock.dbuf.size, "%11.11llo",
++			(sp->st_mode&S_IFMT)==S_IFREG ?
+ 			(long long)sp->st_size&077777777777LL : 0LL);
+ 	sprintf(dblock.dbuf.mtime, "%11.11lo", (long)sp->st_mtime);
+ 	if (oldflag <= 0) {
+@@ -3155,13 +3164,29 @@
+ 	return ds;
+ }
+ 
++/*
++ * A message with long long conversions on stderr.  The system's printf
++ * family reads %lld as %ld; vsnprintf (libamixc99) formats them.
++ */
++static void
++llerr(const char *fmt, ...)
++{
++	char	buf[256];
++	va_list	ap;
++
++	va_start(ap, fmt);
++	vsnprintf(buf, sizeof buf, fmt, ap);
++	va_end(ap);
++	fputs(buf, stderr);
++}
++
+ static char *
+ sequence(void)
+ {
+ 	static char	buf[25];
+ 	static long long	d;
+ 
+-	sprintf(buf, "%10.10lld", ++d);
++	snprintf(buf, sizeof buf, "%10.10lld", ++d);
+ 	return buf;
+ }
+ 

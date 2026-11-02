@@ -1,0 +1,30 @@
+The client verifies an RSA host key in preference to an ed25519 one.  The
+client's order picks the host key, and on a 68k verifying rsa-sha2-256
+(e = 65537) costs about a tenth of ed25519's verify (README, the
+measurements); the server's own key, which it signs with, stays ed25519,
+since an RSA signature costs ten times an ed25519 one.  A server with only
+an ed25519 key is verified with it as before.
+
+diff -ru a/src/common-algo.c b/src/common-algo.c
+--- a/src/common-algo.c	2026-11-01 11:51:36.811018567 +0200
++++ b/src/common-algo.c	2026-11-01 11:51:36.822475595 +0200
+@@ -208,6 +208,9 @@
+ };
+ 
+ algo_type sigalgs[] = {
++#if DROPBEAR_RSA && DROPBEAR_RSA_SHA256
++	{"rsa-sha2-256", DROPBEAR_SIGNATURE_RSA_SHA256, NULL, 1, NULL},
++#endif
+ #if DROPBEAR_ED25519
+ 	{"ssh-ed25519", DROPBEAR_SIGNATURE_ED25519, NULL, 1, NULL},
+ #if DROPBEAR_SK_ED25519
+@@ -229,9 +232,6 @@
+ #endif
+ #endif
+ #if DROPBEAR_RSA
+-#if DROPBEAR_RSA_SHA256
+-	{"rsa-sha2-256", DROPBEAR_SIGNATURE_RSA_SHA256, NULL, 1, NULL},
+-#endif
+ #if DROPBEAR_RSA_SHA1
+ 	{"ssh-rsa", DROPBEAR_SIGNATURE_RSA_SHA1, NULL, 1, NULL},
+ #endif

@@ -1,0 +1,391 @@
+.\" dropbear(8) for Amix: Dropbear 2026.94 as this package builds it.
+.\" From upstream's page by Gerrit Pape and Matt Johnston (MIT, see
+.\" /opt/amix/doc/dropbear/LICENSE), rewritten in -man for the system's nroff.
+.TH DROPBEAR 8 "1 November 2026" "dropbear 2026.94"
+.SH NAME
+dropbear \- small SSH server
+.SH SYNOPSIS
+.B /opt/amix/sbin/dropbear
+[
+.B \-RFEmwsgjkiaz
+] [
+.B \-b
+.I banner
+] [
+.B \-r
+.I hostkey
+] ... [
+.B \-p
+[\fIaddress\fP:]\fIport\fP
+] ... [
+.B \-P
+.I pidfile
+] [
+.B \-W
+.I window
+] [
+.B \-K
+.I seconds
+] [
+.B \-I
+.I seconds
+] [
+.B \-T
+.I tries
+] [
+.B \-c
+.I command
+] [
+.B \-D
+.I directory
+]
+.SH DESCRIPTION
+.B dropbear
+is a small server for the SSH protocol, version 2.
+It is started at boot by
+.BR /etc/init.d/dropbear ,
+which makes the host key at the first start (see
+.B BOOT SCRIPT
+below).
+It forks into the background, listens on port 22 and starts one
+process for each connection.
+A user logs in with a password (checked against
+.BR /etc/shadow )
+or with a key listed in
+.BR ~/.ssh/authorized_keys .
+.PP
+.B dropbear
+and the client programs
+.BR dbclient (1),
+.BR scp (1)
+and
+.BR dropbearkey (1)
+are one program, installed under four names.
+.SH OPTIONS
+.TP
+.BI \-b " banner"
+Show the contents of the file
+.I banner
+before the user logs in.
+.TP
+.BI \-r " hostkey"
+Use the host key in the file
+.IR hostkey ,
+as made by
+.BR dropbearkey (1).
+May be given more than once, once for each key type.
+Without
+.BR \-r ,
+the keys are read from
+.B /etc/dropbear/host_ed25519
+and
+.BR /etc/dropbear/host_rsa ,
+those that exist.
+.TP
+.B \-R
+Make a missing host key at the first connection that needs it.
+.TP
+.B \-F
+Stay in the foreground.
+.TP
+.B \-E
+Log to standard error instead of
+.BR syslog (3).
+.TP
+.B \-m
+Do not show
+.B /etc/motd
+at login.
+.TP
+.B \-w
+Refuse logins as root.
+.TP
+.B \-s
+Refuse password logins (keys only).
+.TP
+.B \-g
+Refuse password logins as root.
+.TP
+.B \-t
+Require both a key and the password.
+.TP
+.B \-j
+Refuse local port forwarding.
+.TP
+.B \-k
+Refuse remote port forwarding.
+.TP
+\fB\-p\fP [\fIaddress\fP:]\fIport\fP
+Listen on
+.I port
+(default 22), on every address or on
+.I address
+only.
+Up to 10 may be given.
+.TP
+.B \-i
+Serve one connection on standard input and output, for
+.BR inetd (1M);
+.B \-F
+is implied and
+.B \-p
+is ignored.
+.TP
+.BI \-P " pidfile"
+Write the server's process number to
+.I pidfile
+(default
+.BR /etc/dropbear/dropbear.pid ).
+.TP
+.B \-a
+Let other hosts connect to remotely forwarded ports.
+.TP
+.BI \-W " window"
+The receive window of each channel, in bytes (default 24576).
+A larger window can speed up a transfer and costs as much memory per
+channel.
+.TP
+.BI \-K " seconds"
+Send a keepalive after
+.I seconds
+without traffic (0, the default, sends none); after three unanswered
+ones the connection is closed.
+.TP
+.BI \-I " seconds"
+Close a connection idle for
+.I seconds
+(0, the default, never).
+.TP
+.BI \-M " seconds"
+Close every session after
+.I seconds
+(0, the default, never).
+.TP
+.B \-z
+Do not mark the traffic with the AF21 class of service.
+.TP
+.BI \-T " tries"
+The authentication attempts allowed for one connection (default 10).
+.TP
+.BI \-c " command"
+Run
+.I command
+for every login, in place of what the user asked for, which is put in
+.BR SSH_ORIGINAL_COMMAND .
+.TP
+.BI \-D " directory"
+Where the
+.B authorized_keys
+files are (default
+.BR ~/.ssh ).
+.TP
+.BI \-Q " what"
+List the algorithms of one kind:
+.BR kex ,
+.BR sig ,
+.BR cipher ,
+.B mac
+or
+.BR compress .
+.TP
+.B \-V
+Print the version.
+.SH ALGORITHMS
+The program holds only these, in this order of preference; a client must
+share one of each kind.
+.TP 12
+key exchange
+mlkem768x25519-sha256, curve25519-sha256,
+curve25519-sha256@libssh.org
+.TP
+host keys
+ssh-ed25519, and rsa-sha2-256 with an RSA host key; the client,
+.BR dbclient (1),
+asks a server for rsa-sha2-256 first, which is ten times cheaper to verify
+here, and then ssh-ed25519
+.TP
+user keys
+ssh-ed25519, rsa-sha2-256
+.TP
+ciphers
+chacha20-poly1305@openssh.com, aes128-ctr
+.TP
+MACs
+hmac-sha2-256 (with aes128-ctr; chacha20-poly1305 has its own)
+.PP
+There is no finite-field Diffie-Hellman, no NIST curve, no DSA, no
+SHA-1, no CBC mode, no 3DES and no compression: on a 68k each is slower
+than what is offered, or weaker, or both.
+The measurements are in the README of the package's source,
+.B userland/packages/dropbear
+in the amix repository.
+.SH BOOT SCRIPT
+.B /etc/init.d/dropbear
+(also
+.BR /etc/rc2.d/S76dropbear ,
+and
+.B K40dropbear
+in
+.B /etc/rc0.d
+and
+.BR /etc/rc1.d )
+starts the server when the system enters run level 2 and stops it when
+the system leaves it.
+It reads these lines of
+.BR /etc/rc.conf ;
+see
+.BR rc.conf (4).
+.TP
+.BR dropbear= yes | no
+Whether the server starts (default
+.BR yes ).
+.TP
+.BI dropbear_port= port
+The port (default 22).
+.TP
+.BR dropbear_rsa= yes | no
+Also an RSA host key, for clients that know no ed25519 (default
+.BR no ).
+.TP
+.BI dropbear_flags= options
+More options for the server, such as
+.BR "\-s \-g" .
+.PP
+At its first start the script makes the ed25519 host key, and with
+.B dropbear_rsa=yes
+a 3072-bit RSA key, from
+.BR /dev/urandom ;
+making the RSA key takes minutes on a 68030.
+A host key never comes from the package, so no two machines share one,
+and neither an update nor
+.BR pkgrm (1M)
+touches it.
+Without
+.B /dev/urandom
+(the random module) the server is not started.
+What the script does is logged in
+.BR /var/adm/rc.log ;
+the server itself logs through
+.BR syslog (3),
+with the facility
+.BR auth .
+.PP
+To run the server from
+.BR inetd (1M)
+instead, so that it uses no memory between connections, set
+.B dropbear=no
+and add to
+.B /etc/inet/inetd.conf
+the line
+.PP
+.nf
+.ft CW
+ssh stream tcp nowait root /opt/amix/sbin/dropbear dropbear -i -r /etc/dropbear/host_ed25519
+.ft R
+.fi
+.PP
+(and
+.B ssh 22/tcp
+to
+.BR /etc/inet/services ,
+if it is not there).
+Each connection then pays the start of the program.
+.SH FILES
+.TP
+.B ~/.ssh/authorized_keys
+The keys a user may log in with, one per line:
+.RS
+.PP
+.nf
+.ft CW
+[\fIoptions\fP] ssh-ed25519 AAAAC3Nz... \fIcomment\fP
+.ft R
+.fi
+.PP
+The file and
+.B ~/.ssh
+must be writable by the user only, or the keys are ignored.
+The
+.I options
+are separated by commas:
+.TP
+.B no-port-forwarding
+No port forwarding.
+.TP
+.B no-pty
+No terminal.
+.TP
+.B restrict
+Both of the above (agent and X11 forwarding are not in this build).
+.TP
+.BI permitopen=\(dq host : port \(dq
+Local forwarding only to
+.IR host : port ;
+.B *
+as the port allows any port.
+.TP
+.BI permitlisten=\(dq port \(dq
+Remote forwarding only from
+.IR port .
+.TP
+.BI command=\(dq command \(dq
+Always run
+.IR command ,
+as
+.B \-c
+does.
+.RE
+.TP
+.B /etc/dropbear/host_ed25519
+.PD 0
+.TP
+.B /etc/dropbear/host_rsa
+.PD
+The host keys, readable by root only.
+.TP
+.B /etc/dropbear/dropbear.pid
+The server's process number.
+.TP
+.B /etc/motd
+Shown at login, unless
+.B \-m
+is given or the user has a
+.BR ~/.hushlogin .
+.SH ENVIRONMENT
+A session gets
+.BR USER ,
+.BR LOGNAME ,
+.BR HOME ,
+.BR SHELL ,
+.B PATH
+(\fB/opt/amix/bin:/usr/bin:/usr/ucb\fP, for root
+\fB/opt/amix/bin:/usr/sbin:/usr/bin:/sbin:/etc\fP),
+.B TERM
+when it has a terminal, and:
+.TP
+.B SSH_CONNECTION
+The client's address and port, then the server's.
+.TP
+.B SSH_TTY
+The terminal, when one was allocated.
+.TP
+.B SSH_ORIGINAL_COMMAND
+The command the client asked for, under a forced command.
+.SH SEE ALSO
+.BR dbclient (1),
+.BR dropbearkey (1),
+.BR scp (1),
+.BR rc.conf (4),
+.BR inetd (1M)
+.SH NOTES
+SFTP is not served: a modern OpenSSH
+.B scp
+uses it by default, so give it
+.B \-O
+to copy with the older protocol, which
+.BR scp (1)
+here speaks.
+.PP
+Each session switches to its user when it starts the user's shell or
+command, not right after the login: the 1992 system cannot keep a saved
+group for the login records the way the upstream server does.

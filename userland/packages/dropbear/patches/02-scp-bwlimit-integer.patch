@@ -1,0 +1,38 @@
+scp -l in whole Kbit/s, with integer arithmetic.  Upstream parses the
+limit with strtod and computes the wait in double, the only floating
+point in the program: on a 68LC040 or 68LC060 every FP instruction traps
+to the kernel's emulator.  A whole number of Kbit/s, 1 to 2000000, keeps
+the binary free of FPU instructions.
+
+diff -ru a/src/scp.c b/src/scp.c
+--- a/src/scp.c	2026-11-01 10:54:25.047602089 +0200
++++ b/src/scp.c	2026-11-01 10:54:25.058507269 +0200
+@@ -315,7 +315,7 @@
+ #endif
+ {
+ 	int ch, fflag, tflag, status;
+-	double speed;
++	unsigned long speed;
+ 	char *targ, *endp;
+ 	extern char *optarg;
+ 	extern int optind;
+@@ -351,8 +351,8 @@
+ 			fprintf(stderr, "Note: -B option is disabled in this version of scp");
+ 			break;
+ 		case 'l':
+-			speed = strtod(optarg, &endp);
+-			if (speed <= 0 || *endp != '\0')
++			speed = strtoul(optarg, &endp, 10);
++			if (speed == 0 || speed > 2000000 || *endp != '\0')
+ 				usage();
+ 			limit_rate = speed * 1024;
+ 			break;
+@@ -1064,7 +1064,7 @@
+ 		return;
+ 
+ 	lamt *= 8;
+-	waitlen = (double)1000000L * lamt / limit_rate;
++	waitlen = (uint64_t)1000000L * lamt / limit_rate;
+ 
+ 	bwstart.tv_sec = waitlen / 1000000L;
+ 	bwstart.tv_usec = waitlen % 1000000L;

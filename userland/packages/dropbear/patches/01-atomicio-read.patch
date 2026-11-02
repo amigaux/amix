@@ -1,0 +1,122 @@
+Amix declares read(2) as int read(int, void *, unsigned), and GCC 14's
+size_t is unsigned long: the same width, but a different type, so passing
+read where atomicio() wants ssize_t (*)(int, void *, size_t) is an error.
+amix_read (port/amix-compat.h) is read cast to that type.
+
+diff -ru a/src/cli-agentfwd.c b/src/cli-agentfwd.c
+--- a/src/cli-agentfwd.c	2026-11-01 10:52:09.416484125 +0200
++++ b/src/cli-agentfwd.c	2026-11-01 10:52:09.428439010 +0200
+@@ -142,7 +142,7 @@
+ 	TRACE(("Wrote out bytes for agent_request"))
+ 	/* Now we read the response */
+ 	inbuf = buf_new(4);
+-	ret = atomicio(read, fd, buf_getwriteptr(inbuf, 4), 4);
++	ret = atomicio(amix_read, fd, buf_getwriteptr(inbuf, 4), 4);
+ 	if (ret != 4) {
+ 		TRACE(("read of length failed for agent_request"))
+ 		goto out;
+@@ -158,7 +158,7 @@
+ 	
+ 	inbuf = buf_resize(inbuf, readlen);
+ 	buf_setpos(inbuf, 0);
+-	ret = atomicio(read, fd, buf_getwriteptr(inbuf, readlen), readlen);
++	ret = atomicio(amix_read, fd, buf_getwriteptr(inbuf, readlen), readlen);
+ 	if ((size_t)ret != readlen) {
+ 		TRACE(("read of data failed for agent_request"))
+ 		goto out;
+diff -ru a/src/cli-authpasswd.c b/src/cli-authpasswd.c
+--- a/src/cli-authpasswd.c	2026-11-01 10:52:09.413700101 +0200
++++ b/src/cli-authpasswd.c	2026-11-01 10:52:09.428779592 +0200
+@@ -89,7 +89,7 @@
+ 	}
+ 
+ 	close(p[1]);
+-	len = atomicio(read, p[0], buf, sizeof(buf)-1);
++	len = atomicio(amix_read, p[0], buf, sizeof(buf)-1);
+ 	close(p[0]);
+ 
+ 	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+diff -ru a/src/loginrec.c b/src/loginrec.c
+--- a/src/loginrec.c	2026-11-01 10:52:09.420709672 +0200
++++ b/src/loginrec.c	2026-11-01 10:52:09.428946821 +0200
+@@ -684,7 +684,7 @@
+ 		 * If the new ut_line is empty but the old one is not
+ 		 * and ut_line and ut_name match, preserve the old ut_line.
+ 		 */
+-		if (atomicio(read, fd, &old_ut, sizeof(old_ut)) == sizeof(old_ut) &&
++		if (atomicio(amix_read, fd, &old_ut, sizeof(old_ut)) == sizeof(old_ut) &&
+ 			(ut->ut_host[0] == '\0') && (old_ut.ut_host[0] != '\0') &&
+ 			(strncmp(old_ut.ut_line, ut->ut_line, sizeof(ut->ut_line)) == 0) &&
+ 			(strncmp(old_ut.ut_name, ut->ut_name, sizeof(ut->ut_name)) == 0)) {
+@@ -988,7 +988,7 @@
+ 	}
+ 
+ 	while (!found) {
+-		if (atomicio(read, fd, &ut, sizeof(ut)) != sizeof(ut)) {
++		if (atomicio(amix_read, fd, &ut, sizeof(ut)) != sizeof(ut)) {
+ 			dropbear_log(LOG_WARNING, "wtmp_get_entry: read of %s failed: %s",
+ 			    WTMP_FILE, strerror(errno));
+ 			close (fd);
+@@ -1144,7 +1144,7 @@
+ 	}
+ 
+ 	while (!found) {
+-		if (atomicio(read, fd, &utx, sizeof(utx)) != sizeof(utx)) {
++		if (atomicio(amix_read, fd, &utx, sizeof(utx)) != sizeof(utx)) {
+ 			dropbear_log(LOG_WARNING, "wtmpx_get_entry: read of %s failed: %s",
+ 			    WTMPX_FILE, strerror(errno));
+ 			close (fd);
+diff -ru a/src/scp.c b/src/scp.c
+--- a/src/scp.c	2026-11-01 10:52:09.410246691 +0200
++++ b/src/scp.c	2026-11-01 10:52:09.429333248 +0200
+@@ -952,7 +952,7 @@
+ 			if (i + amt > stb.st_size)
+ 				amt = stb.st_size - i;
+ 			if (!haderr) {
+-				result = atomicio(read, fd, bp->buf, amt);
++				result = atomicio(amix_read, fd, bp->buf, amt);
+ 				if (result != (size_t)amt)
+ 					haderr = errno;
+ 			}
+@@ -1145,12 +1145,12 @@
+ 	}
+ 	for (first = 1;; first = 0) {
+ 		cp = buf;
+-		if (atomicio(read, remin, cp, 1) != 1)
++		if (atomicio(amix_read, remin, cp, 1) != 1)
+ 			goto done;
+ 		if (*cp++ == '\n')
+ 			SCREWUP("unexpected <newline>");
+ 		do {
+-			if (atomicio(read, remin, &ch, sizeof(ch)) != sizeof(ch))
++			if (atomicio(amix_read, remin, &ch, sizeof(ch)) != sizeof(ch))
+ 				SCREWUP("lost connection");
+ 			*cp++ = ch;
+ 		} while (cp < &buf[sizeof(buf) - 1] && ch != '\n');
+@@ -1311,7 +1311,7 @@
+ 				amt = size - i;
+ 			count += amt;
+ 			do {
+-				j = atomicio(read, remin, cp, amt);
++				j = atomicio(amix_read, remin, cp, amt);
+ 				if (j == 0) {
+ 					run_err("%s", j ? strerror(errno) :
+ 					    "dropped connection");
+@@ -1417,7 +1417,7 @@
+ {
+ 	char ch, *cp, resp, rbuf[2048];
+ 
+-	if (atomicio(read, remin, &resp, sizeof(resp)) != sizeof(resp))
++	if (atomicio(amix_read, remin, &resp, sizeof(resp)) != sizeof(resp))
+ 		lostconn(0);
+ 
+ 	cp = rbuf;
+@@ -1430,7 +1430,7 @@
+ 	case 1:		/* error, followed by error msg */
+ 	case 2:		/* fatal error, "" */
+ 		do {
+-			if (atomicio(read, remin, &ch, sizeof(ch)) != sizeof(ch))
++			if (atomicio(amix_read, remin, &ch, sizeof(ch)) != sizeof(ch))
+ 				lostconn(0);
+ 			*cp++ = ch;
+ 		} while (cp < &rbuf[sizeof(rbuf) - 1] && ch != '\n');

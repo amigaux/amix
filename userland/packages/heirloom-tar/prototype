@@ -1,0 +1,34 @@
+#
+# prototype -- Heirloom tar (Heirloom Toolchest 070715).
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  This package takes over the stock core
+# package's /usr/sbin/tar and keeps the stock shape: the same path, type,
+# mode and owner, and /etc/tar as a symbolic link to it.  The path stays
+# claimed by core too (pkgadd reports the shared path); pkgrm would leave
+# our bytes there, so the package is essential and never removed.  The
+# stock /etc/default/tar is read as it is and is no object here.  Every
+# basename <= 14 bytes.
+#
+i pkginfo
+#
+f none /usr/sbin/tar 0555 bin bin
+s none /etc/tar=/usr/sbin/tar
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/heirloom-tar 0755 root sys
+f none /opt/amix/doc/heirloom-tar/LICENSE 0644 root bin
+f none /opt/amix/doc/heirloom-tar/LICENSES 0644 root bin
+f none /opt/amix/doc/heirloom-tar/LICENSE.amix 0644 root bin
+f none /opt/amix/doc/heirloom-tar/NOTES 0644 root bin
+#
+# heirloom-tar(1); replaces.d says it is the page of /usr/sbin/tar
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/heirloom-tar 0644 root bin
+d none /opt/amix/man/replaces.d 0755 root sys
+f none /opt/amix/man/replaces.d/heirtar 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/heirtar 0644 root bin
