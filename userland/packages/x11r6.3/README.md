@@ -37,7 +37,7 @@ MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with 
   (amix-userland, patch 00);
 - **the Z3660 work in patch 00** (the Z3660 modes, the raster-op and window copy fixes, fills
   and copies on the card's blitter, the monitor switch, the keyboard hand-back), from
-  amix-z3660rtg, and **patches 01–26**, among them `zz9000screen.c` on cfb16: ours, MIT.
+  amix-z3660rtg, and **patches 01–27**, among them `zz9000screen.c` on cfb16: ours, MIT.
 
 ## Source
 
@@ -75,6 +75,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `24-amix-no-mitshm.patch` | Ours: MIT-SHM is not built. ShmAttach attached any segment a client named with the server's root rights, and R6.3 cannot check a client's uid against the segment. |
 | `25-zz9000-screen-on-cfb16.patch` | Ours: the ZZ9000/Z3660 screen is X's own 16-bit framebuffer code, `cfb16ScreenInit`, instead of the hand-built screen, GC and drawing layer: cfb owns validation, all drawing (planemask, dashed and wide lines, pixmaps, depth-1 pixmaps through mfb), windows, colormaps and text. TrueColor only, the visual set to the card's RGB565 (cfb's depth-16 default is 6-5-5 red-low). The card's blitter comes in at four points: window-to-window CopyArea (cfb's own BitBlt with a blitter doBitBlt), CopyWindow, solid GXcopy PolyFillRect and solid PaintWindow, each flushing before it returns; a 16-bit PutImage into a window keeps the direct path. `zz9000win.c`, `zz9000cmap.c`, `zz9000pix.c` and `zz9000cursor.c` go. Xzz9000's text grows by 115 KB (cfb16's line, glyph and fill code instead of mi's generic paths). `cfb/cfbglblt8.c` joins the `-fno-jump-tables` files. |
 | `26-rtg-provenance-headers.patch` | Ours: a comment at the top of each `rtg/` source, which had none, saying what the file is and where it comes from (the rtg/ layer and the ZZ9000 driver based on Antti Sokero's xrtg-amix, the ZZ9000 version Ignacio Soriano's, the Z3660 and Amix changes ours; `zz9000screen.c` our own). Comments only: the compiled server is unchanged. |
+| `27-amix-fork-not-vfork.patch` | Ours: the build uses fork, not vfork (`HasVFork NO`; Imake gave YES to anything not SystemV). Amix's libc keeps `signal()`'s handlers in a table in the process's own data, which a vfork child shares with its parent: xinit's child set SIGUSR1 to SIG_IGN before exec'ing the server, and the server's "ready" SIGUSR1 then sent the parent to address 1 (Bus Error). xinit, xdmshell and xmh use fork. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);

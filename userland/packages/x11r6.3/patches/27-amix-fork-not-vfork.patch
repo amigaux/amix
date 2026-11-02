@@ -1,0 +1,23 @@
+Ours.  The build uses fork, not vfork (HasVFork NO).
+
+Imake gives HasVFork YES to every platform that is not SystemV, and
+amix.cf declares SystemV4, so xinit, xdmshell and xmh were built with
+-DHAS_VFORK.  Amix's libc keeps signal()'s handlers in a table in the
+process's own data (_siguhandler), which a vfork child shares with its
+parent: xinit's child set SIGUSR1 to SIG_IGN before exec'ing the server,
+the parent's entry became SIG_IGN too, and the server's "ready" SIGUSR1
+made the parent's signal trampoline call address 1 (Bus Error).
+
+--- a/config/cf/amix.cf
++++ b/config/cf/amix.cf
+@@ -42,6 +42,10 @@
+ #define HasStrcasecmp		YES
+ #define HasPutenv		YES
+ #define HasSecureRPC		NO
++/* fork, not vfork: libc's signal() keeps the handlers in a table in the
++ * process's own data, which a vfork child shares with its parent, so the
++ * child's signal() calls (xinit's SIGUSR1 to SIG_IGN) change the parent's */
++#define HasVFork		NO
+ 
+ /* no wchar.h/wctype.h: Xaw uses Xlib's own wide-character helpers */
+ #define XawI18nDefines		-DUSE_XWCHAR_STRING -DUSE_XMBTOWC
