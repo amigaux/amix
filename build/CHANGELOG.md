@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-02 — release-check; scan060-g14 section names; make dist apkg and release steps (30317c8, f5cbac3, c4349cb)
+
+- tools/release-check: the content check for published files, moved from the media build: disk images (ufs slices file by file, other slices raw, swap must be zero, no build-box traces), ISOs, and repository trees with each package datastream read member by member; the ROM register and private patterns are given by path.
+- scan060-g14 takes each code section's name from objdump -h, so a kernel whose .text has sh_name 0 decodes.
+- make dist apkg (APKG and APKGENG into out/apkg) and make dist release (pkgtools' assemble-release into out/release/1.1, checked by release-check); the lock records both.
+
 ## 2026-11-02 — scan060-g14 decodes only the executable sections (f07fdb0)
 
 scan060-g14 names each executable section for objdump (-j): with an address range alone, -D also decoded the .debug_* sections at address 0 of an unstripped shared library (libamixrt.so.1) and reported movep.
