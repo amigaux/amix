@@ -15,6 +15,7 @@ make -C module                 # build/k30/mod.d/z3660scsi, build/k46/mod.d/z366
 make -C module k30             # one line (or k46)
 make -C module static          # the static object compiled against each kit, and its sha256
 make -C module clean
+make -C module DIAG=1          # a diagnostic build (-DZ3660_DIAG): also the page-cross ring and the fault knob
 ```
 
 The kits are kernel/dlm's ABI kits (`DLM=…/kernel/dlm`, default this amix
@@ -25,7 +26,7 @@ later; 1.0.0-2 was built with KIT_REV 230a1e8, which stamps `k30.1.2` /
 `mod_miscops`, `printf`, `sd_register`, `sptalloc`) is a kabi 1.0 name. The
 pinned cross tools (`m68k-cbm-sysv4-*`) and `python3` must be on `PATH`.
 
-`make static`'s k30 sum is the static object's (`a3c7a9d3…`, module 1.0.0-4
+`make static`'s k30 sum is the static object's (`47e128e8…`, module 1.0.0-5
 on the 33ebadc kit). The 040/060 static object is built by the driver-line
 relink with its own flags and 4 KiB-page source rewrite, so the kit's k46
 compile is not that object; its pin (`b43e36e7…`) is checked by that relink.
@@ -40,7 +41,7 @@ compile is not that object; its pin (`b43e36e7…`) is checked by that relink.
 | `_halt` | touches no register: the mailbox is idle between transactions; records `z3660_halted` |
 | Interrupts | none: the piscsi mailbox is synchronous; `root_defer` is not called |
 | DMA | none through the module's memory: the firmware moves data to the caller's buffer as the static driver's requests do |
-| Version | `VERSION` (`1.0.0-4`: an unmapped unit answers INQUIRY as no device; `1.0.0-3`: the fixed window's gate; `1.0.0-2`: the cache arm), the package version |
+| Version | `VERSION` (`1.0.0-5`: the DI-1 diagnostics only with `-DZ3660_DIAG`, the empty units on one console line; `1.0.0-4`: an unmapped unit answers INQUIRY as no device; `1.0.0-3`: the fixed window's gate; `1.0.0-2`: the cache arm), the package version |
 
 ## What `_load` does in the root pass
 
@@ -60,7 +61,8 @@ clock stopped** (C4-2 §2). There it:
   error (`z3660_fixed_ram`, `z3660_fixed_berr` count the refusals);
 - maps the window: the identity map below `0x40000000` (the shipped
   config), `sptalloc()` for a board above it (autoconfig_rtg YES);
-- prints the unit sweep's console lines;
+- prints the unit sweep's console lines: the units with no drive mapped on
+  one line (`z3660: units 1-7: no drive mapped`), a bad geometry on its own;
 - calls `sd_register()` once: the Z3660 is the CPU card, one board at most,
   and the driver's state is single-instance (`c` = 0);
 - returns 0; `ENXIO` with no board, **silently** (ECS/OCS, or an AGA window

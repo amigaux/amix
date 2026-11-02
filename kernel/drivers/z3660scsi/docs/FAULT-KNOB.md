@@ -1,8 +1,10 @@
 # Fault knob: one driver-side WRITE fault for the DI-1 rig cells
 
-**Diagnostic cuts only — never in a shipping chain.** An object built from this source carries
-the knob, inert while `z3660_fault_lba` is 0. A shipping chain pins an object built without it,
-like the shipping KD060-Z object, or reverts the commit that added it before cutting a release.
+**Diagnostic cuts only — never in a shipping chain.** The knob is compiled only with
+`-DZ3660_DIAG` (module 1.0.0-5 and later; `make -C module DIAG=1`, and
+`make -C test/host check` runs its tests in the DIAG build). The default object has no knob
+and no test on the I/O path. Objects from module 1.0.0-4 and earlier carry it, inert while
+`z3660_fault_lba` is 0.
 
 ## Why
 

@@ -279,6 +279,8 @@ int main()
 
 	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);	/* AGA, the board */
 	CHECK( r == 0 && sr_calls == 1, "fixed-base board: _load 0, one sd_register");
+	CHECK( strcmp( cap, "z3660: units 1-7: no drive mapped\n") == 0,
+	       "fixed-base board: the empty units 1-7 named on one console line, nothing else");
 	CHECK( sr_fn == z3660queue && sr_c == 0 && sr_base == (char *)0x10000000UL
 	       && sr_name && strcmp( sr_name, "Z3660 SCSI") == 0 && sr_rank == 1,
 	       "sd_register(z3660queue, 0, 0x10000000, \"Z3660 SCSI\", 1 = rank z3660)");

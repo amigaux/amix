@@ -25,19 +25,21 @@
 # its first write (no access over a boot memory region; a read-only bprobe).
 # 1.0.0-7 (2026-11-02): the module's 1.0.0-4, an unmapped unit answers
 # INQUIRY as no device (peripheral qualifier 3, type 0x1F).
+# 1.0.0-8 (2026-11-02): the module's 1.0.0-5, the page-cross ring and the
+# fault knob only with -DZ3660_DIAG; the empty units on one console line.
 
 KM_NAME=z3660scsi
 KM_SHORT=zscsi
 KM_REPO=kernel/drivers/z3660scsi
-KM_VERSION=1.0.0-4
-KM_PKG_VERSION=1.0.0-7
+KM_VERSION=1.0.0-5
+KM_PKG_VERSION=1.0.0-8
 
-KM_K30_SHA=fffa4d6b06340b2bcc524e96023fd6a602161ada8c459e2f1fb76b1eedc556f8
-KM_K46_SHA=bdc7965c920cd668d78ed1c7e1585aed1067be178ca9631eded93ffb15017bab
+KM_K30_SHA=365782774127d58d43b20ff8c96ecaa665efed326852a42c6be018ddf066b798
+KM_K46_SHA=2e6f0e6befb42ac459328ed657ae30c2e266ea5c471a2d7cf0fdbb4c4f503d1c
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=b80abd62a1e2c927622eda735b2b91c94155289f
+KM_KIT_COMMIT=94f1f0449b03ac4ec3c94833313639cd6d11e358
 
 KM_LICENCES="\
 kernel/drivers/z3660scsi/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4

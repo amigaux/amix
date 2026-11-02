@@ -16,6 +16,10 @@ CWARN    := -Wall -Wno-unused-parameter -Wno-unused-variable
 CFLAGS   := $(CSTD) $(CWARN) -O0 -g
 BUILD    := build
 DRV      := ../../src/z3660.c
+# DIAG=1 also compiles the DI-1 diagnostics (-DZ3660_DIAG) and their tests;
+# `check` runs the default build, then the DIAG build in build-diag.
+DIAG     :=
+CFLAGS   += $(if $(DIAG),-DZ3660_DIAG)
 
 HOST_OBJS := $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_test.o
 OBJS      := $(BUILD)/z3660.o $(HOST_OBJS)
@@ -24,7 +28,7 @@ BIN       := $(BUILD)/z3660_test
 MOD_OBJS  := $(BUILD)/z3660_mod.o $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_modtest.o
 MOD_BIN   := $(BUILD)/z3660_modtest
 
-.PHONY: all check clean
+.PHONY: all check check-default check-diag clean
 all: $(BIN) $(MOD_BIN)
 
 # The driver: kernel include world + register seam + HOST_TEST.
@@ -51,9 +55,15 @@ $(BIN): $(OBJS)
 $(MOD_BIN): $(MOD_OBJS)
 	$(CC) $(CFLAGS) $(MOD_OBJS) -o $@
 
-check: $(BIN) $(MOD_BIN)
+check: check-default
+	$(MAKE) --no-print-directory BUILD=build-diag DIAG=1 check-default
+
+check-diag:
+	$(MAKE) --no-print-directory BUILD=build-diag DIAG=1 check-default
+
+check-default: $(BIN) $(MOD_BIN)
 	./$(BIN)
 	./$(MOD_BIN)
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf build build-diag

@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/types.h>			/* caddr_t (real system header) */
 
 #include "mock_piscsi.h"
@@ -183,8 +184,8 @@ static void test_direct_mapping()
 	       "attach: the mailbox answered the ZS-02 signature before the sweep");
 	CHECK( mock_div0 == 0,
 	       "attach never reads BLOCKS of a block-size-0 unit (stock fw would divide by 0)");
-	CHECK( z3660_skipmask == 0xBE && z3660_skip_msgs == 6,
-	       "attach names each of the 6 unmapped units once (skipmask 0xBE)");
+	CHECK( z3660_skipmask == 0xBE && z3660_skip_msgs == 1,
+	       "attach skips the 6 unmapped units (skipmask 0xBE), named on one line");
 }
 
 /* ====================================================================== */
@@ -1211,6 +1212,7 @@ static void test_f3_cache()
 }
 
 
+#ifdef	Z3660_DIAG
 /* ====================================================================== */
 /* GATING: the DI-1 page-cross ring records WHICH chunk crossed.          */
 /*                                                                         */
@@ -1483,6 +1485,44 @@ static void test_fault_knob()
 	z3660_fault_lba = 0; z3660_fault_mode = 0; z3660_fault_shift = 4;
 }
 
+#else	/* !Z3660_DIAG */
+
+/* ====================================================================== */
+/* GATING: the shipped object carries no DI-1 diagnostics.                 */
+/*                                                                         */
+/* Without -DZ3660_DIAG neither the page-cross ring nor the fault knob is  */
+/* compiled (weak references resolve to 0), and the census counter         */
+/* z3660_pagecross_n still counts a crossing without touching the transfer. */
+/* ====================================================================== */
+extern unsigned long	z3660_fault_lba __attribute__((weak));
+extern unsigned long	z3660_pagecross_ring_idx __attribute__((weak));
+extern char		z3660_pagecross_ring[] __attribute__((weak));
+
+static uchar	pcrbuf[2 * F3_NBPP];
+
+static void test_no_diag()
+{
+	uchar	cdb[10], *cross;
+
+	printf("\n=== GATE: default build -- no DI-1 diagnostics, census counter kept ===\n");
+	CHECK( &z3660_fault_lba == 0,
+	       "default build: no fault knob (z3660_fault_lba not defined)");
+	CHECK( (void *)z3660_pagecross_ring == 0 && &z3660_pagecross_ring_idx == 0,
+	       "default build: no page-cross ring (z3660_pagecross_ring not defined)");
+
+	z3660_cache = 0;
+	cross = pcrbuf + ((F3_NBPP - ((unsigned long)pcrbuf & (F3_NBPP - 1))) & (F3_NBPP - 1))
+	      + F3_NBPP - 64;			/* 64 bytes below a page end */
+	z3660_pagecross_n = 0;
+	memset( cdb, 0, sizeof cdb);
+	cdb[0] = 0x28; cdb[5] = 5; cdb[8] = 1;	/* READ(10) LBA 5, one block */
+	run_cmd( U_DISK, cdb, 10, cross, (unsigned)DK_BS);
+	CHECK( g_okay == TRUE && z3660_pagecross_n == 1 && be32( cross) == 5UL,
+	       "default build: a crossing READ is counted and still delivers LBA 5");
+	z3660_pagecross_n = 0;
+}
+#endif	/* Z3660_DIAG */
+
 
 /* ====================================================================== */
 /* GATING: ZS-02 detection -- a signature the open bus cannot fake.        */
@@ -1587,7 +1627,7 @@ static void test_zs02_detection()
 	       "ZS-02 real signature at the fixed base: attached on the direct arm");
 	CHECK( z3660_sig_ok == 1 && z3660_sig_rd[2] == 7UL && z3660_sig_rd[3] == 6UL && z3660_sig_rd[4] == 1UL,
 	       "ZS-02 real signature: K1/K2 read back, DRVNUM followed 7 then 6, DRVTYPE 1");
-	CHECK( z3660_skipmask == 0xBE && z3660_skip_msgs == 6 && mock_vposr_reads == 1,
+	CHECK( z3660_skipmask == 0xBE && z3660_skip_msgs == 1 && mock_vposr_reads == 1,
 	       "ZS-02 real signature: the unit sweep ran once, after the machine gate");
 
 	/* 7. machine gate: autocon misses on ECS -- the window is never touched */
@@ -1637,9 +1677,9 @@ static void test_zs02_detection()
 	run_cmd( U_CD, cdb, 10, buf, (unsigned)CD_BS);
 	CHECK( g_okay && g_status == 0 && be32( buf) == 3UL,
 	       "ZS-02 ConfigDev, answering: the same READ completes with block 3's data");
-	CHECK( z3660_sig_ok == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 6
+	CHECK( z3660_sig_ok == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 1
 	       && mock_sptalloc_calls == 2,
-	       "ZS-02 ConfigDev, answering: the deferred sweep ran once and named only the 6 empty units");
+	       "ZS-02 ConfigDev, answering: the deferred sweep ran once and named only the 6 empty units, one line");
 
 	/* 9. the fixed window's gate, before the signature's first write */
 	zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x18000000UL;	/* RAM across the window */
@@ -1683,6 +1723,105 @@ static void test_zs02_detection()
 
 #define U_LATE	3		/* reads bs 0 at attach, a drive afterwards */
 
+/*
+ * The units with no drive mapped are named on ONE console line after the
+ * attach sweep ("z3660: units 1-5,7: no drive mapped"); a bad geometry keeps
+ * its own line.  The driver's printf goes to stdout, captured here.
+ */
+static char	ncap[2048];
+static int	ncap_fd, ncap_saved;
+
+static void ncap_begin()
+{
+	char	tmpl[] = "/tmp/z3660ndXXXXXX";
+
+	fflush( stdout);
+	ncap_fd = mkstemp( tmpl);
+	unlink( tmpl);
+	ncap_saved = dup( 1);
+	dup2( ncap_fd, 1);
+}
+
+static void ncap_end()
+{
+	ssize_t	n;
+
+	fflush( stdout);
+	dup2( ncap_saved, 1);
+	close( ncap_saved);
+	lseek( ncap_fd, 0, SEEK_SET);
+	n = read( ncap_fd, ncap, sizeof ncap - 1);
+	ncap[n > 0 ? n : 0] = 0;
+	close( ncap_fd);
+}
+
+static int ncount( hay, needle)
+const char	*hay, *needle;
+{
+	int	n = 0;
+
+	while ((hay = strstr( hay, needle)) != 0) {
+		n++;
+		hay++;
+	}
+	return n;
+}
+
+struct nodrv_case { unsigned mapped; int badunit; const char *line; };
+
+static void test_nodrv_line()
+{
+	static const struct nodrv_case cases[] = {
+		{ 0x41, -1, "z3660: units 1-5,7: no drive mapped\n" },
+		{ 0xF7, -1, "z3660: unit 3: no drive mapped\n" },
+		{ 0xDB, -1, "z3660: units 2,5: no drive mapped\n" },
+		{ 0xC4, -1, "z3660: units 0,1,3-5: no drive mapped\n" },
+		{ 0x00, -1, "z3660: units 0-7: no drive mapped\n" },
+		{ 0xFF, -1, 0 },
+		{ 0x41,  2, "z3660: units 1,3-5,7: no drive mapped\n" },
+	};
+	char	msg[200];
+	int	k, u, r;
+
+	printf("\n=== GATE: unmapped units named on one console line ===\n");
+	for (k = 0; k < (int)(sizeof cases / sizeof cases[0]); k++) {
+		const struct nodrv_case *c = &cases[k];
+
+		mock_reset();
+		for (u = 0; u < 8; u++)
+			if (c->mapped & (1u << u))
+				mock_add_drive( u, 0x00, DK_BS, DK_NBLK, 64UL * DK_BS);
+		if (c->badunit >= 0) {
+			mock_add_drive( c->badunit, 0x00, DK_BS, DK_NBLK, 64UL * DK_BS);
+			mock_set_geom( c->badunit, 0x00, 1000UL, 100UL);
+		}
+		z3660_test_unmap();
+		z3660_cache = 0;
+		g_probe_base = 0;
+		ncap_begin();
+		r = z3660present( &g_probe_base);
+		ncap_end();
+		printf("       mapped 0x%02X: %s", c->mapped, ncap[0] ? ncap : "(nothing)\n");
+		if (c->line) {
+			sprintf( msg, "mapped 0x%02X: exactly one line '%.*s'", c->mapped,
+				 (int)strlen( c->line) - 1, c->line);
+			CHECK( r == 1 && strstr( ncap, c->line) != 0
+			       && ncount( ncap, "no drive mapped") == 1
+			       && ncount( ncap, ", skipped") == (c->badunit >= 0), msg);
+		} else {
+			sprintf( msg, "mapped 0x%02X: all units mapped, no line", c->mapped);
+			CHECK( r == 1 && ncount( ncap, "no drive mapped") == 0
+			       && z3660_skip_msgs == 0, msg);
+		}
+		if (c->badunit >= 0) {
+			sprintf( msg, "mapped 0x%02X: the bad-geometry unit %d keeps its own line",
+				 c->mapped, c->badunit);
+			CHECK( strstr( ncap, "z3660: unit 2: bad geometry (blocksize 0x3e8, blocks 0x0), skipped\n") != 0
+			       && z3660_skip_msgs == 2, msg);
+		}
+	}
+}
+
 static void test_console_truthful()
 {
 	uchar		cdb[10], buf[512];
@@ -1702,8 +1841,8 @@ static void test_console_truthful()
 	r = z3660present( &g_probe_base);
 	printf("       attach    present=%d skipmask=0x%02lX skip_msgs=%lu recovered=%lu\n",
 	       r, z3660_skipmask, z3660_skip_msgs, z3660_skip_recovered);
-	CHECK( r == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 6 && z3660_skip_recovered == 0,
-	       "A1: attach names unit 3 (bs 0) among the 6 skipped units");
+	CHECK( r == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 1 && z3660_skip_recovered == 0,
+	       "A1: attach names unit 3 (bs 0) among the 6 skipped units, one line");
 
 	mock_set_geom( U_LATE, 0x00, DK_BS, 64UL);		/* the drive answers now */
 	msgs = z3660_skip_msgs;
@@ -1891,8 +2030,12 @@ int main()
 	test_completion_trampoline();
 
 	test_f3_cache();
+#ifdef	Z3660_DIAG
 	test_pagecross_ring();
 	test_fault_knob();
+#else
+	test_no_diag();
+#endif
 
 	stretch_cd_parity();
 
@@ -1905,6 +2048,7 @@ int main()
 
 	/* ZS-02 cells reset the mock (and so mock_div0): run them last */
 	test_zs02_detection();
+	test_nodrv_line();
 	test_console_truthful();
 	test_zs05_capture();		/* last: gate 1 covers every scenario above */
 
