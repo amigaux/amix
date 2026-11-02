@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — README: SOURCE_DATE_EPOCH stays fixed across pin changes (a7a6ad1)
+
+The build image's SOURCE_DATE_EPOCH is fixed in the Containerfile and kept across toolchain pin changes, so every static archive stays byte-identical where a pin changes nothing.
+
 ## 2026-11-01 — gcc-cross-amix pinned at 33ebadc (c9c2cc0)
 
 The as wrapper keeps option values (--defsym, -I, …) with their options, and the image runs the fork's make check after test-hello; gcc is built as i686 host code (gcc-i686-linux-gnu, libc6-dev-i386-cross). Kernel, kit and module bytes are unchanged but for the pin tag gcc-2.7.2.3-33ebadc.
