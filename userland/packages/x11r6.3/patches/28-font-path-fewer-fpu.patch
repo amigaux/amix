@@ -1,0 +1,89 @@
+Ours.  Fewer floating-point instructions when the server sets up its font
+path, with the same results.
+
+Each XLFD bitmap font in fonts.dir goes through FontFileCompleteXLFD, which
+rounds eight matrix values with xlfd_round_double (sprintf "%.3lg", then
+atof), and asks GetClientResolutions for the screen's 75 or 100 dpi.  On a
+68060 without an FPU every floating-point instruction is emulated: about
+160,000 for misc, 75dpi and 100dpi at each start and each reset.
+xlfd_round_double keeps its results, keyed on the argument's bits, so the
+values that repeat (each point size at each resolution) are worked out
+once, and GetClientResolutions makes its 88 dpi test in integers (25.4 as
+a double is a little under 25.4, so exactly 88 dpi counted as under: <=).
+On an A4000D with a 68LC060 the server is ready in about 24 s instead of
+44 s (160,618 emulated instructions down to 79,259), and a reset halves
+the same way; the font list and the font properties are unchanged.
+
+--- a/programs/Xserver/dix/dixfonts.c
++++ b/programs/Xserver/dix/dixfonts.c
+@@ -1895,17 +1895,20 @@
+ 	ScreenPtr   pScreen;
+ 
+ 	pScreen = screenInfo.screens[0];
+-	res.x_resolution = (pScreen->width * 25.4) / pScreen->mmWidth;
+ 	/*
+ 	 * XXX - we'll want this as long as bitmap instances are prevalent 
+ 	 so that we can match them from scalable fonts
++	 *
++	 * The same test as (width * 25.4) / mmWidth < 88 in floating point
++	 * (25.4 as a double is a little under 25.4, so exactly 88 dpi counted
++	 * as under), in integers: font path set-up asks once per font, and an
++	 * FPU-less 68060 emulates every floating-point instruction.
+ 	 */
+-	if (res.x_resolution < 88)
++	if ((long)pScreen->width * 254 <= (long)pScreen->mmWidth * 880)
+ 	    res.x_resolution = 75;
+ 	else
+ 	    res.x_resolution = 100;
+-	res.y_resolution = (pScreen->height * 25.4) / pScreen->mmHeight;
+-	if (res.y_resolution < 88)
++	if ((long)pScreen->height * 254 <= (long)pScreen->mmHeight * 880)
+ 	    res.y_resolution = 75;
+ 	else
+ 	    res.y_resolution = 100;
+--- a/lib/font/util/fontxlfd.c
++++ b/lib/font/util/fontxlfd.c
+@@ -210,6 +210,14 @@
+     return buffer - space_required;
+ }
+ 
++/* The values met at start-up repeat (each point size at each resolution,
++   for every family), and every sprintf and atof below is dozens of FPU
++   instructions, each emulated on a 68060 without an FPU: remember the
++   results, keyed on the argument's bits, so the comparison needs no FPU. */
++#define XLFD_ROUND_CACHE 64
++static struct { unsigned long w[2]; double r; } xlfd_round_cache[XLFD_ROUND_CACHE];
++static int xlfd_round_cached;
++
+ double
+ xlfd_round_double(x)
+ double x;
+@@ -218,10 +226,27 @@
+        significant digits.  How do you round to n significant digits on
+        a binary machine?  Let printf() do it for you.  */
+     char formatbuf[40], buffer[40];
++    union { double d; unsigned long w[2]; } u;
++    double r;
++    int i;
++
++    u.d = x;
++    for (i = 0; i < xlfd_round_cached; i++)
++	if (xlfd_round_cache[i].w[0] == u.w[0] &&
++	    xlfd_round_cache[i].w[1] == u.w[1])
++	    return xlfd_round_cache[i].r;
+ 
+     sprintf(formatbuf, "%%.%dlg", XLFD_NDIGITS);
+     sprintf(buffer, formatbuf, x);
+-    return atof(buffer);
++    r = atof(buffer);
++    if (xlfd_round_cached < XLFD_ROUND_CACHE)
++    {
++	xlfd_round_cache[xlfd_round_cached].w[0] = u.w[0];
++	xlfd_round_cache[xlfd_round_cached].w[1] = u.w[1];
++	xlfd_round_cache[xlfd_round_cached].r = r;
++	xlfd_round_cached++;
++    }
++    return r;
+ }
+ 
+ static char *
