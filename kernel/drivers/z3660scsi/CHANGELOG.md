@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-02 — module 1.0.0-3/-4, packages 1.0.0-6/-7: the fixed window is gated; unmapped units answer as no device (1a3fa61, 1486bba, b80abd6, d6bc7ba, 8db19ff)
+
+- The fixed window 0x10000000 is gated before its first write: no access when it overlaps a boot memory region, and a read-only bprobe of 0x10002024 refuses a bus error (z3660_fixed_ram, z3660_fixed_berr).
+- A unit with no drive mapped answers INQUIRY as no device (peripheral qualifier 3, type 0x1F) instead of a type 0 disk; mapped disks stay type 0, mapped CDs type 5. Objects k30 fffa4d6b, k46 bdc7965c; zscsi30 c2ee0c07, zscsi46 7ea6357e.
+- Docs: the gate's limits on both CPUs. An empty Zorro III read faults after about 290 ms on the Z3660's 68060 (the gate refuses) and reads 0xFF on its emulated 68030 (the signature refuses). Module test for the all-ones window. Host 247/0, module 45/0.
+
 ## 2026-11-01 — zscsi30/46 1.0.0-5 on the 33ebadc kit (b632b40)
 
 The module's 1.0.0-2 rebuilt with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc), the compiler the new kernels require: k30 3236e6c7, k46 15f0769a.
