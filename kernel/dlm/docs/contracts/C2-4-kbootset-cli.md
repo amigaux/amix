@@ -587,18 +587,21 @@ read-only, before anything opens it.
 - **One at a time.** `gsioctl` keeps its command and its buffer in
   static storage, so two processes must not use `/dev/scsi` at once.
 - **Known limit: the A3000 onboard WD (`mobo:a3000-wd`, the stock static
-  `a3091` driver; version 24).** Do not send it an INQUIRY, or any other
-  command, unless it has already been used in this boot. The stock driver
-  sets the WD33C93 up on its first command: it resets the chip with
-  interrupts on, and its interrupt handler can take the reset's status
-  (0x01, reset with advanced features) while it is idle. It prints
+  `a3091` driver; version 24).** Do not send it an INQUIRY through
+  `/dev/scsi` unless it has already been used in this boot. The stock
+  driver sets the WD33C93 up on its first command: it resets the chip and
+  polls for the reset's interrupt. `gsioctl` queues its command at level
+  0, so the driver's interrupt handler can take the reset's status (0x01,
+  reset with advanced features) while it is idle. It prints
   `a3091: 0x1 0 0x0` and stops for the rest of the boot, so the queued
-  command never completes and `gsioctl` sleeps for ever. A block read
-  through `dd` as the first command ends the same way. A box that boots
-  from the WD has used it during the boot and is not affected. kbootset
-  -36 does not guard against this: an installer runs `cards` (which sends
-  nothing) and leaves a `mobo:a3000-wd` card out of `inquiry` and
-  `--probe`. A later kbootset refuses that card before `gsioctl`.
+  command never completes and `gsioctl` sleeps for ever. The block path
+  (`dd`, the partition reads) queues at `sdspl()`, level 2, so a block
+  read as the first command is safe, and so is a box that boots from the
+  WD. With kbootset -36 an installer runs `cards` (which sends nothing),
+  leaves a `mobo:a3000-wd` card out of `inquiry` and `--probe`, and scans
+  its units through the block path. Kernels whose `sdqueue` raises to
+  level 2 itself (the k30 sd template's, from k30 -70 and k46 -60) are
+  not affected; the limit is lifted for them once their rows confirm it.
 - **The host test** is `tests/host/kinq.sh`: `KBOOTSET_SCSIDIR` names a
   directory whose file `<card>.<unit>` is the answer (no file, no unit), in
   place of `/dev/scsi`.
