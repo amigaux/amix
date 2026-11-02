@@ -24,6 +24,8 @@
 #     %fp; GCC 14 -O2 uses it as a general register) and one bound-checked
 #     against a memory operand, instead of reading them as code, and still
 #     reports a real movep after either;
+#   - scan060-g14.py takes a data object in .text as data and catches a real
+#     64-bit mulsl after it, where objdump -d's hex dump would hide it;
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in;
 #   - the toolchain pin refuses a prefix that is not the pinned one, and the
 #     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
@@ -506,6 +508,46 @@ if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-att-movep"); then
 fi
 echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the AT&T movep probe: $out"
 ok "scan060-g14.py sizes the stock AT&T compiler's cmpa-bounded switch table, still catches a movep"
+
+# A sized data object in .text (values-Xa.o's _lib_version, which the period
+# toolchain links): objdump -d dumps it as hex up to the next symbol, and the
+# dump's lines pass for instructions.  The object's own words read as a 64-bit
+# mulu; the code after it holds a real 64-bit mulsl or nothing.
+obj_probe() {	# obj_probe <name> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l 4(%sp),%d0\n\tbra.s 1f\n"'
+		printf '%s\n' '	"\t.globl lvx\n\t.type lvx,@object\nlvx:\t.word 0x4c00,0x0400\n\t.size lvx,4\n"'
+		printf '%s\n' '	"1:\tnop\n"'
+		[ -z "$2" ] || printf '\t%s\n' "$2"
+		printf '%s\n' '	"\t.fill 0x40,2,0x4e71\n\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the data object probe $1 did not build"
+}
+obj_probe obj ''
+obj_probe obj-mul '"\t.word 0x4c01,0x0c02\n"'
+lvx=$("$NM" "$T/obj-mul" | awk '$3 == "lvx" { print $1 }')
+mul=$(printf '0x%08x' $((0x$lvx + 6)))
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/obj") || fail "scan060-g14.py on the data object probe: $out"
+echo "$out" | grep 'NOTE data object in .text at 0x[0-9a-f]*: lvx, 4 bytes' >/dev/null ||
+	fail "scan060-g14.py gave no data object NOTE: $out"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/obj-mul"); then
+	fail "scan060-g14.py passed a real 64-bit mulsl after a data object: $out"
+fi
+echo "$out" | grep "HITS 1 " >/dev/null && echo "$out" | grep "^    $mul mulsl" >/dev/null ||
+	fail "scan060-g14.py on the data object mulsl probe, not one hit at $mul: $out"
+# the control: the same scanner with objdump -d and no data objects reads the
+# object's hex dump as code
+sed 's/^    cmd = \[tool, "-D", /    cmd = [tool, "-d", /; s/^    objs = data_objects(data, secs)$/    objs = {}/' \
+	"$G14S" > "$T/scan060-g14-d.py"
+[ "$(diff "$G14S" "$T/scan060-g14-d.py" | grep -c '^>')" = 2 ] ||
+	fail "control: the -d copy of scan060-g14.py is not two lines changed"
+if out=$(python3 "$T/scan060-g14-d.py" --objdump "$OBJDUMP" "$T/obj"); then
+	fail "control: the -d scanner passed the data object probe: it tests nothing: $out"
+fi
+ok "scan060-g14.py decodes a data object in .text as data (a NOTE), catches a real 64-bit mulsl after it; the -d scanner reads the object's hex dump as code"
 
 # Three more shapes from perl 5.8.9 (2026-10-30), each dispatched the GCC 14
 # way (`addl %d1,%d1; movew %pc@(T,%d1:l),%d1; jmp %pc@(T,%d1:w)'):
