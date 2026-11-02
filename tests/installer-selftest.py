@@ -9943,6 +9943,50 @@ def audit_ufs_density():
                           "nbpi=8192%s" % ((": %r" % bad) if bad else ""))
 
 
+def audit_syspass_confirm():
+    head("SP. the system-accounts question: y runs passwdall; a no is confirmed once (default n), "
+         "n or RETURN asks stock's question again, y keeps the accounts without a password")
+    fb = open(os.path.join(REPO, "payload", "firstboot", "firstboot.sh"), encoding="latin-1").read()
+    fn = lambda name: (re.search(r"\n(%s\(\)\n\{\n.*?\n\})\n" % name, fb, re.S) or [None, None])[1]
+    ra, ap = fn("readask"), fn("ask_passwords")
+    if not ra or not ap or 'readask "anyone may log in to them.  Are you sure? [n] "' not in ap \
+            or 'echo "\\nThe system accounts will have no password;"' not in ap:
+        fail("firstboot.sh: no ask_passwords with the confirmation lines")
+        return
+    d = tempfile.mkdtemp(prefix="syspass_")
+    try:
+        pw = os.path.join(d, "passwd")
+        with open(pw, "w") as f:
+            f.write("root::0:0::/:/sbin/sh\n")
+        ap = ap.replace("/usr/amiga/bin/passwdall", "passwdall").replace("/etc/passwd", pw)
+        stubs = ('passwdall() { echo PASSWDALL; return 0; }\nset_root_password() { echo SETROOT; PW_DONE=y; }\n'
+                 'passwd() { echo "PASSWD $1"; }\n')
+        def run(answers):
+            body = "%s%s\n%s\nask_passwords\necho \"END SYSPASS=$SYSPASS\"\n" % (stubs, ra, ap)
+            r = subprocess.run(["/usr/bin/dash", "-c", body], input="".join(a + "\n" for a in answers),
+                               capture_output=True, text=True, timeout=10)
+            return r.stdout
+        cases = [
+            ("y", ["y", "y"], ["PASSWDALL", "END SYSPASS=y"], ["Are you sure?", "SETROOT"], 0),
+            ("RETURN", ["", "y"], ["PASSWDALL", "END SYSPASS=y"], ["Are you sure?"], 0),
+            ("n then n", ["n", "n", "y", "y"], ["PASSWDALL", "END SYSPASS=y"], ["SETROOT"], 1),
+            ("n then RETURN", ["n", "", "y", "y"], ["PASSWDALL", "END SYSPASS=y"], ["SETROOT"], 1),
+            ("n then y", ["n", "y", "y"], ["SETROOT", "END SYSPASS=n"], ["PASSWDALL"], 1),
+        ]
+        bad = []
+        for name, ans, want, never, nconf in cases:
+            out = run(ans)
+            asks = out.count("system accounts? [y] ")
+            if any(w not in out for w in want) or any(n in out for n in never) \
+                    or out.count("Are you sure? [n] ") != nconf or asks != (2 if name.startswith("n then n") or name == "n then RETURN" else 1):
+                bad.append((name, out[-200:]))
+        (fail if bad else ok)("system accounts EXECUTED: y and RETURN run passwdall; n then n / RETURN asks the "
+                              "question again; n then y keeps them empty and still sets root%s"
+                              % ((": %r" % bad) if bad else ""))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_gayle_slave():
     head("GS. the installed system attaches the IDE slave (gayle param slave=2) only when the install CD "
          "answered there: CD_SPEC is the gayle card's unit 5")
@@ -11163,6 +11207,7 @@ def main():
     audit_ufs_density()
     audit_modreg_local()
     audit_gayle_slave()
+    audit_syspass_confirm()
     audit_kbootset_cards()
     audit_swap_stepdown()
     audit_root_lock()

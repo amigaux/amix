@@ -766,10 +766,27 @@ ask_passwords()
 	# resulting hash to the ~20 SECURELIST system accounts with one `ed` pass,
 	# replacing ONLY the hash field -- so the aging fields those lines carry are
 	# untouched (empty stays empty; the RTC trap discipline).
-	echo "\nWould you like to assign a password to all of the"
-	readask "system accounts? [y] "
-	case $ask in
-		[nN]* )
+	#
+	# A no is confirmed once (default n, the period's terse style): n or RETURN
+	# goes back to stock's question, y keeps the system accounts without a password.
+	PWQ=
+	while [ "$PWQ" = "" ]
+	do
+		echo "\nWould you like to assign a password to all of the"
+		readask "system accounts? [y] "
+		case $ask in
+			[nN]* )
+				echo "\nThe system accounts will have no password;"
+				readask "anyone may log in to them.  Are you sure? [n] "
+				case $ask in
+					[yY]* )	PWQ=n ;;
+				esac
+				;;
+			* )	PWQ=y ;;
+		esac
+	done
+	case $PWQ in
+		n )
 			SYSPASS="n"
 			# The root password is NOT optional here, and this is the one place
 			# this dialog deviates from stock out loud: stock let the operator
