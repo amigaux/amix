@@ -78,11 +78,16 @@ n=\`basename "\$1"\`
 [ -f $T/st/mac.\$n ] || exit 1
 cat $T/st/mac.\$n
 EOF
-# dhcpc -b <secs> <if>: status from st/dhcpc.rc; on 0 it calls the hook
+# dhcpc -b <secs> <if>: status from st/dhcpc.rc; on 0 it calls the hook.
+# dhcpc -q <if>: 0 when st/held exists (a lease held)
 cat > "$B/dhcpc" <<EOF
 #!/bin/sh
 echo "dhcpc \$*" >> $T/st/calls
 r=\`cat $T/st/dhcpc.rc 2>/dev/null || echo 2\`
+if [ "\$1" = -q ]; then
+	[ -f $T/st/held ]
+	exit
+fi
 if [ "\$1" = -x ]; then
 	rm -f ${T:?}/var/dhcpc/\${2:?}.pid
 	DHCP_ROUTER=192.0.2.1 $SH $here/dhcpc-hook \$2 RELEASE
@@ -103,7 +108,8 @@ case "\$1" in
 esac
 EOF
 printf '#!/bin/sh\necho "mknod $*" >> %s/st/calls\n: > "$1"\n' "$T" > "$B/mknod"
-printf '#!/bin/sh\n:\n' > "$B/domainname"
+# domainname: no argument prints the kernel's domain (st/kdomain), one sets it
+printf '#!/bin/sh\nif [ $# -eq 0 ]; then cat %s/st/kdomain 2>/dev/null; else printf "%%s" "$1" > %s/st/kdomain; fi\n' "$T" "$T" > "$B/domainname"
 chmod +x "$B/"*
 
 printf 'aen\t%s/dev/aen\t0\t18\ttrue\n' "$T" > "$T/link.d/aen"
@@ -116,6 +122,7 @@ echo "example.com" > "$T/domain"
 
 reset() {
 	rm -f "${T:?}/st/"if.* "${T:?}/st/"linked.* "${T:?}/st/route" "${T:?}/st/calls" "${T:?}/st/dhcpc.rc" "${T:?}/st/slinkfail" \
+	    "${T:?}/st/held" "${T:?}/st/kdomain" \
 	    "${T:?}/primary" "${T:?}/var/ifup.primary" "${T:?}/var/dhcpc/"*
 	echo "oldname" > "$T/st/nodename"
 	printf '# hosts\n127.0.0.1\tlocalhost\n192.0.2.99\toldname oldname.example.com\n192.0.2.5\tother\n' > "$T/hosts"
@@ -143,6 +150,7 @@ dns     192.0.2.14 192.0.2.23
 domain  example.com
 EOF
 reset
+printf example.com > "$T/st/kdomain"
 o=$(run ifup -a); r=$?
 same "ifup -a status" 0 "$r"
 expect "aen0 up" "ifup: aen0: 192.0.2.38 netmask 255.255.255.0 up" "$o"
@@ -163,6 +171,8 @@ nameserver 192.0.2.23" "$(cat "$T/resolv.conf")"
 same "libsocket is libsockdns" "$(ls -i "$T/lib/libsockdns.so" | awk '{print $1}')" "$(ls -i "$T/lib/libsocket.so" | awk '{print $1}')"
 same "netconfig" "tcp DNS" "$(cat "$T/netconfig")"
 same "domain emptied" "" "$(cat "$T/domain")"
+expect "kernel domain cleared: said" "dns: the kernel's domain cleared" "$o"
+same "kernel domain cleared" "" "$(cat "$T/st/kdomain")"
 expect "logged" "ifup: aen0: 192.0.2.38 netmask 255.255.255.0 up" "$(cat "$T/rc.log")"
 
 # --- the same again changes nothing
@@ -172,6 +182,14 @@ expect "rerun: already up" "aen0: 192.0.2.38 netmask 255.255.255.0 already up" "
 refuse "rerun: no slink" "slink addaen" "$(cat "$T/st/calls")"
 refuse "rerun: no address set" "ifconfig aen0 192.0.2.38" "$(cat "$T/st/calls")"
 refuse "rerun: dns untouched" "dns:" "$o"
+
+# --- a boot with /etc/domain already empty: sysinit left the kernel's default
+reset
+printf rpcdomain > "$T/st/kdomain"
+o=$(run ifup -a)
+refuse "boot: empty domain file left" "emptied" "$o"
+expect "boot: kernel domain cleared" "dns: the kernel's domain cleared" "$o"
+same "boot: kernel domain empty" "" "$(cat "$T/st/kdomain")"
 
 # --- -n says, does nothing
 reset
@@ -222,6 +240,13 @@ expect "no lease: fallback" "aen0: static fallback 192.0.2.40" "$o"
 expect "fallback applied" "aen0: 192.0.2.40 netmask 255.255.255.0 up" "$o"
 expect "no fallback: down" "aen1: no static fallback; left down" "$o"
 same "status with one down" 1 "$r"
+reset
+echo 2 > "$T/st/dhcpc.rc"; : > "$T/st/held"
+o=$(run ifup aen0); r=$?
+expect "bound, hook still running: said" "aen0: DHCP lease held; dhcpc's hook is applying it" "$o"
+refuse "bound, hook still running: no fallback" "static fallback" "$o"
+refuse "bound, hook still running: no address set" "ifconfig aen0 192.0.2.40" "$(cat "$T/st/calls")"
+same "bound, hook still running: status" 0 "$r"
 reset
 o=$(DHCPC_PATH="$T/nodhcpc" run ifup aen0)
 expect "no dhcpc" "aen0: dhcp, but $T/nodhcpc is not installed" "$o"

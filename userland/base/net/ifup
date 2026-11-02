@@ -8,7 +8,8 @@
 # For each interface: its station address (dlpi-mac), its row (the MAC row,
 # then the name row, then "*"; none = off), slink once, then the row's mode:
 # static applies the address; dhcp runs dhcpc, and if no lease comes within
-# rc.conf's ifup_dhcpwait seconds (default 20) or there is no dhcpc, the
+# rc.conf's ifup_dhcpwait seconds (default 20; a lease that came, its hook
+# still applying it, counts) or there is no dhcpc, the
 # row's own address if it has one, else the interface stays down while dhcpc
 # keeps trying. Static and DHCP addresses go through the same apply step
 # (ifup.subr), which also sets the default route, the host name, this host's
@@ -69,6 +70,14 @@ up() {
 				return 0
 				;;
 			2)
+				# bound within the wait, its hook still applying the
+				# lease (slow on a 68030): the lease is held, so no
+				# fallback over it
+				if "$DHCPC" -q "$1" > /dev/null 2>&1
+				then
+					_if_say "$1: DHCP lease held; dhcpc's hook is applying it"
+					return 0
+				fi
 				_if_say "$1: no DHCP lease yet; dhcpc keeps trying"
 				;;
 			*)
