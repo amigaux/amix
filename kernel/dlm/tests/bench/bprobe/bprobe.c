@@ -5,8 +5,9 @@
  *
  *   bproot  class root: _load runs in marc_root, level 7, the clock
  *           stopped (contract C4-2 section 2);
- *   bpboot  class boot: _load runs in marc_post (modadmin -B), first at
- *           the pass's own level, then again inside spl7().
+ *   bpboot  class boot: _load runs in marc_post (modadmin -B): at the
+ *           pass's own level, inside spl7() (level 4 in these kernels:
+ *           docs/abi/ddi.md), and with the status register at 0x2700.
  *
  * Each pass probes, reading one byte with bprobe(addr, -1):
  *   1. the custom chips (0xdff004, VPOSR): decoded on every Amiga, so 0;
@@ -230,6 +231,7 @@ bprobe_load(params)
 	unsigned long t0, t1;
 	long l0;
 	volatile int spin;
+	unsigned short sr7;
 #endif
 
 	ntsc = (v >> 8 & 0x10) != 0;	/* Agnus id bit 4: NTSC */
@@ -250,9 +252,15 @@ bprobe_load(params)
 	printf("%s: TOD check: %d us by the TOD, %d lbolt ticks (HZ %d) over a spin\n", TAG,
 	    (int)usec(t1 - t0), (int)(lbolt - l0), HZ);
 	pass("boot pass", params);
-	s = spl7();
-	pass("boot pass at spl7", params);
+	s = spl7();		/* level 4 in these kernels (ddi.md: no spl masks level 6) */
+	pass("boot pass at spl7 (level 4)", params);
 	splx(s);
+	/* level 7 itself, as the root pass runs and as a driver that writes the
+	 * status register gets it: the clock stops until it is restored */
+	__asm__ __volatile__("movew %%sr,%0" : "=d" (sr7));
+	__asm__ __volatile__("movew %0,%%sr" : : "d" ((unsigned short)0x2700));
+	pass("boot pass at level 7", params);
+	__asm__ __volatile__("movew %0,%%sr" : : "d" (sr7));
 #endif
 	return ENXIO;		/* never linked */
 }

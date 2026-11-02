@@ -30,7 +30,7 @@ ABI kit:
 | Module | Directory | Class | Runs in |
 |---|---|---|---|
 | `bproot` | `root/` | root, `match=always`, in no safe set | `marc_root`: level 7, the clock stopped |
-| `bpboot` | `boot/` | boot, `match=always` | `marc_post` (`modadmin -B`): once at the pass's own level, then again inside `spl7()` |
+| `bpboot` | `boot/` | boot, `match=always` | `marc_post` (`modadmin -B`): at the pass's own level, inside `spl7()` (level 4: `ddi.md`, no spl masks level 6), and with the status register at `0x2700` (level 7, the clock stopped) |
 
 Each pass reads one byte with `bprobe(addr, -1)` at:
 
@@ -126,10 +126,12 @@ bproot: root pass: bprobe empty Zorro III (20000000, read) -> 1 (bus error caugh
 bproot: root pass: RESULT good=ok empty=caught z3660=ok level=ok
 ```
 
-The boot pass prints the TOD check, then the same probes twice, at its
-own level and at `spl7`, each with its `RESULT` line. `modadmin -L` shows
-only the last 2000 bytes of kernel messages, so the root pass's lines
-are kept from the console.
+The boot pass prints the TOD check, then the same probes three times
+(`boot pass`, `boot pass at spl7 (level 4)`, `boot pass at level 7`),
+each with its `RESULT` line. Every line goes to the console: on the 1.1
+boxes kernel messages reach the message buffer only after `modadmin -K`
+(`prt_where` 0x2 at boot), and the buffer keeps 2000 bytes. Keep the
+console (serial, or the frames).
 
 **Reading the result.**
 
@@ -163,6 +165,6 @@ behaviour, which is what 1.1 gets on that configuration.
 | Object | File bytes | SHA-256 |
 |---|---|---|
 | `root/build/k30/mod.d/bproot` | 5151 | `48bd9c8d59b00df1a991e3bb5fa288ea732ad0fdeb9d9965df5d69dec437b9a4` |
-| `boot/build/k30/mod.d/bpboot` | 5285 | `300801a75f4d53cd7c927d60f4397c9e084ad500634da2ec7dcff3ca61c8f951` |
+| `boot/build/k30/mod.d/bpboot` | 5345 | `90f984b5be2f9d750502552397e66b9c059c8bd23b451ec135c1dfacde3fd530` |
 | `root/build/k46/mod.d/bproot` | 5123 | `7da900f1dc486a982c4245e73b053390b82639dd025137a4c0e9f71ec7bd3ab2` |
-| `boot/build/k46/mod.d/bpboot` | 5257 | `86bc90e1655b9af9cad6d622e0505db633acbc33f45b51e095eb03a264f07db2` |
+| `boot/build/k46/mod.d/bpboot` | 5317 | `d0c22b0d66a966399a9c95e3526e88d49c02aa5c7ef304ef8833520efabcb5f0` |
