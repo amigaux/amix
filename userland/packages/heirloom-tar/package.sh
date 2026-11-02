@@ -17,6 +17,7 @@ STYLE=hooks
 TOOLCHAIN=gcc14
 PREFIX=/opt/amix
 SYSTEM_PATHS="/usr/sbin/tar"
+MAN_REPLACES="/usr/sbin/tar 1 heirloom-tar"
 ESSENTIAL=yes
 DEPENDS=""
 BUILD_DEPENDS=""
