@@ -417,12 +417,17 @@ scsi_label() {
 # are there: the scan then opens only the units that answer as disks (device type 0), so a CD
 # drive behind an A4091/A4092 never gets a dd-layer read.
 CARDS_F=/tmp/setup.cards
+SETUP_PROBE="${SETUP_PROBE:-/tmp/cards.probe}"
 CARDS_PROBED=
 read_cards()
 {
 	cp /dev/null "$CARDS_F"
 	[ -x "$SETUP_KBOOTSET" ] || return 1
-	if "$SETUP_KBOOTSET" cards --probe > "$CARDS_F" 2>/dev/null && [ -s "$CARDS_F" ]; then
+	# the units' types come only from the miniroot's CD probe, which asked every unit once and was
+	# bounded in time (its /tmp/cards.probe): this script never runs an INQUIRY round itself -- gsioctl
+	# has no timeout, and an unbounded probe could hang the interview. No probe file: the card list.
+	if [ -s "$SETUP_PROBE" ]; then
+		cp "$SETUP_PROBE" "$CARDS_F"
 		# (a redirected loop runs in a subshell on this shell: its answer comes back as output)
 		_pu=`while read _a _rest; do [ "$_a" = unit ] && { echo y; break; }; done < "$CARDS_F"`
 		[ -n "$_pu" ] && CARDS_PROBED=y

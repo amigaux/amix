@@ -169,6 +169,7 @@ import subprocess
 import sys
 import struct
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, os.pardir))
@@ -6132,6 +6133,7 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
           "/dev/rdsk/": root + "/dev/rdsk/",
           "/tmp/setup.": root + "/tmp/setup.",
           "/tmp/cd.spec": root + "/tmp/cd.spec",
+          "/tmp/cards.probe": root + "/tmp/cards.probe",
           "/tmp/answers.profile": root + "/tmp/answers.profile",
           "/matrix.": root + "/matrix."}
     # ONE pass, longest literal first: no substituted text can be re-matched.
@@ -10071,11 +10073,15 @@ def audit_cd_candidates():
     prof = os.path.join(REPO, "src", "miniroot", "profile")
     src = open(prof, encoding="latin-1").read()
     i = src.find("cd_candidates_from_cards()\n{")
-    if i < 0:
-        fail("src/miniroot/profile: no cd_candidates_from_cards")
+    k = src.find("cards_probe_bounded()\n{")
+    if i < 0 or k < 0:
+        fail("src/miniroot/profile: no cd_candidates_from_cards / cards_probe_bounded")
         return
     f = src[i:]
     f = f[:f.index("\n}\n") + 3]
+    g = src[k:]
+    g = g[:g.index("\n}\n") + 3]
+    f = g + "\n" + f
     (ok if 'echo "$s" > $CD_SPEC_FILE' in src and "CD_SPEC_FILE=/tmp/cd.spec" in src else fail)(
         "the probe writes the address that answered to /tmp/cd.spec")
     (ok if re.search(r'(?m)^_cds=`cd_candidates_from_cards`\n\[ -n "\$_cds" \] && CD_CANDIDATES=`echo \$_cds`$', src)
@@ -10101,11 +10107,23 @@ def audit_cd_candidates():
             open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") printf "%%b" "%s"; exit %d;;\n'
                                 '"cards ") printf "%%b" "%s";;\nesac\n' % (probe, prc, cards))
             os.chmod(kb, 0o755)
-            r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=%s\n%s\ncd_candidates_from_cards" % (kb, dev, f)],
+            r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=%s CARDS_PROBE=%s/cards.probe PROBE_SECS=20\n%s\ncd_candidates_from_cards" % (kb, dev, d, f)],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
             got = " ".join(r.stdout.decode().split())
             (ok if got == want else fail)("CD addresses: %s%s" % (what, "" if got == want else " -- got %r" % got))
-        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s/none SCSIDEV=/dev/null\n%s\ncd_candidates_from_cards" % (d, f)],
+        # a probe that never returns (an empty unit's selection timeout, no timeout in gsioctl): abandoned
+        # at PROBE_SECS, and the full list is used
+        kb = os.path.join(d, "kb")
+        open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") exec /bin/sleep 30 ;;\n"cards ") printf "%%b" "%s";;\nesac\n' % cards)
+        os.chmod(kb, 0o755)
+        t0 = time.time()
+        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe PROBE_SECS=3\n%s\ncd_candidates_from_cards >%s/out.txt" % (kb, d, f, d)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        took = time.time() - t0
+        got = " ".join(open(os.path.join(d, "out.txt")).read().split())
+        (ok if got == full and took < 20 else fail)("CD addresses: a probe that hangs is abandoned at its bound (%.0f s), the full list used%s"
+                                                     % (took, "" if got == full else " -- got %r" % got))
+        r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s/none SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe\n%s\ncd_candidates_from_cards" % (d, d, f)],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         (ok if not r.stdout.strip() else fail)("CD addresses: no kbootset on the RAM disk gives no list (the fixed one stands)")
     finally:
@@ -10114,7 +10132,8 @@ def audit_cd_candidates():
 
 def audit_universal_cards():
     head("UC. a universal medium (TARGET_HBA=auto) scans every card the kernel registered: with "
-         "`kbootset cards --probe` only the units that answer as disks, else units 0-6 of each card; "
+         "the miniroot's bounded `kbootset cards --probe` (/tmp/cards.probe) only the units that answer as disks, "
+         "else units 0-6 of each card; "
          "each disk is named by its controller")
     setup = open(SETUP, encoding="latin-1").read()
     def fn(name):
@@ -10144,8 +10163,14 @@ def audit_universal_cards():
             open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") [ %d = 0 ] && printf "%%b" "%s"; exit %d;;\n'
                                 '"cards ") printf "%%b" "%s";;\nesac\n' % (prc, probe, prc, cards))
             os.chmod(kb, 0o755)
-            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=%s CARDS_F=%s/cards CARDS_PROBED=\n%s\n%s"
-                                % (kb, d, body, script)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            # the units' types come from the miniroot's bounded probe file only
+            pf = os.path.join(d, "cards.probe")
+            if prc == 0:
+                open(pf, "w").write(probe.replace("\\n", "\n"))
+            elif os.path.exists(pf):
+                os.remove(pf)
+            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=%s CARDS_F=%s/cards SETUP_PROBE=%s CARDS_PROBED=\n%s\n%s"
+                                % (kb, d, pf, body, script)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
             return " ".join(r.stdout.decode().split())
         for prc, script, want, what in (
                 (0, 'read_cards; echo "P=$CARDS_PROBED"; card_units', "P=y 0 6 16",

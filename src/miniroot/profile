@@ -153,12 +153,38 @@ CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5 2,5 3,5"
 # The fixed list above is the fallback for a RAM disk without kbootset.
 KBOOTSET=/sbin/kbootset
 SCSIDEV=/dev/scsi
+# the probe's output, for the interview too (setup.sh reads it instead of probing again)
+CARDS_PROBE=/tmp/cards.probe
+PROBE_SECS=60
+# cards_probe_bounded -- `kbootset cards --probe` into $CARDS_PROBE, given at most PROBE_SECS:
+# gsioctl has no timeout of its own, so an empty unit takes as long as its controller's selection
+# timeout. Past the bound the probe is abandoned and its file stays empty (the full list is used).
+cards_probe_bounded()
+{
+	cp /dev/null $CARDS_PROBE
+	rm -f $CARDS_PROBE.new $CARDS_PROBE.done
+	[ -x /bin/sleep ] || return 1
+	# the probe runs in the background and marks its end; the miniroot has no kill, so a probe
+	# past the bound is abandoned, not stopped (its INQUIRY ends with the selection timeout)
+	( $KBOOTSET cards --probe > $CARDS_PROBE.new 2>/dev/null
+	  cp /dev/null $CARDS_PROBE.done ) &
+	_ps=0
+	while [ ! -f $CARDS_PROBE.done ]
+	do
+		[ $_ps -lt $PROBE_SECS ] || return 1
+		/bin/sleep 1
+		_ps=`expr $_ps + 1`
+	done
+	[ -s $CARDS_PROBE.new ] && mv $CARDS_PROBE.new $CARDS_PROBE
+	return 0
+}
 cd_candidates_from_cards()
 {
 	[ -x $KBOOTSET ] || return 0
 	if [ -c $SCSIDEV ]
 	then
-		_p=`$KBOOTSET cards --probe 2>/dev/null | while read _a _b _t _n _r
+		cards_probe_bounded
+		_p=`while read _a _b _t _n _r
 		do
 			if [ "$_a" = card ]
 			then
@@ -168,7 +194,7 @@ cd_candidates_from_cards()
 				_u=\`expr "$_b" : '\\([0-7]\\):$'\`
 				[ "$_t $_n" = "type 5" ] && [ -n "$_cur" ] && [ -n "$_u" ] && echo "$_cur,$_u"
 			fi
-		done`
+		done < $CARDS_PROBE`
 		if [ -n "$_p" ]
 		then
 			echo $_p
