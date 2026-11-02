@@ -50,6 +50,7 @@ so each fact about a package is written in one place.
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
 | `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
+| `MAN_REPLACES=""` | the stock binaries the package replaces and the page shown for each, `<binary path> <sect> <page name>` triples (`/usr/sbin/tar 1 heirloom-tar`). Each binary is an object of the prototype, each page `/opt/amix/man/<sect>/<page>` is in it, and so is `/opt/amix/man/replaces.d/<PKG>`, which the stage hook writes with `amix_man_replaces` (`userland/packages/tools/manpages.sh`) for amix-base's `man` (`userland/base/docs/man.md`). `check` counts such a binary as documented by its page |
 | `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `PREBUILT=""` | payload paths of ELFs the package ships ready-made from the pinned GCC 14 prefix (libamixrt.so.1); each must have the sha256 of a file `common/gcc14-pin.sh` pins and is not stripped. A build that then compiles nothing skips the flags gate, and any other ELF in its payload is refused |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
@@ -99,7 +100,11 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   `…/man<sect>/<name>.<sect>`. A config file is also documented by the page
   of a directory it is in (`link.d(4)` covers `/etc/inet/link.d/aen`), and a
   `STOCK_ETC` file by the stock page of its name (`inittab(4)`), listed in
-  `stock-pages`.
+  `stock-pages`, and a binary in `MAN_REPLACES` by the page named there. It
+  refuses a `MAN_REPLACES` entry that is not a triple, whose binary is not an
+  absolute path in the prototype or is listed twice, whose section is not a
+  man section, or whose page the prototype lacks, and a `MAN_REPLACES`
+  without `/opt/amix/man/replaces.d/<PKG>` in the prototype.
 - `check` and `dirs` refuse a shared directory that is not `d … 0755 root
   sys`: `/opt`, `/opt/amix`, `/opt/amix/doc`, `/opt/amix/man`, its sections
   (`/opt/amix/man/1`, `1m`, …), `whatis.d` and `replaces.d`. Many packages

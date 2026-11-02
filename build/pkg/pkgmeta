@@ -71,7 +71,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
-            ("PREBUILT", ""), ("FORKPIN", ""))
+            ("PREBUILT", ""), ("FORKPIN", ""), ("MAN_REPLACES", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -320,6 +320,46 @@ def layout_problems(m, objs):
     return out
 
 
+def man_replaces(m):
+    """MAN_REPLACES as (binary path, sect, page) triples; a short tail is
+    returned as a shorter tuple for the check to refuse."""
+    w = words(m["MAN_REPLACES"])
+    return [tuple(w[i:i + 3]) for i in range(0, len(w), 3)]
+
+
+def replaces_problems(m, objs):
+    """MAN_REPLACES against the prototype: each binary an object of it, each
+    page a file of the man tree, and replaces.d/<PKG> shipped."""
+    out = []
+    paths = set(path for _, _, path, _ in objs)
+    table = "/opt/amix/man/replaces.d/%s" % m["PKG"]
+    seen = []
+    for t in man_replaces(m):
+        if len(t) != 3:
+            out.append("MAN_REPLACES: '%s' is not <binary path> <sect> <page name>"
+                       % " ".join(t))
+            continue
+        b, sect, page = t
+        if not b.startswith("/") or os.path.normpath(b) != b:
+            out.append("MAN_REPLACES: %s is not a normalised absolute path" % b)
+        elif b not in paths:
+            out.append("MAN_REPLACES: %s is not in the prototype" % b)
+        if b in seen:
+            out.append("MAN_REPLACES lists %s twice" % b)
+        seen.append(b)
+        if not re.match(r"^\d\w*$", sect):
+            out.append("MAN_REPLACES: %s: section '%s' is not a man section" % (b, sect))
+        elif "/" in page or len(page) > 14:
+            out.append("MAN_REPLACES: %s: page name '%s' is not a name of at "
+                       "most 14 bytes" % (b, page))
+        elif "/opt/amix/man/%s/%s" % (sect, page) not in paths:
+            out.append("MAN_REPLACES: %s: the prototype has no page "
+                       "/opt/amix/man/%s/%s" % (b, sect, page))
+    if seen and table not in paths:
+        out.append("MAN_REPLACES is set, but the prototype has no %s" % table)
+    return out
+
+
 def prototype_problems(recipe, m):
     """The CONFFILES and run-level link checks against the prototype."""
     out = []
@@ -337,6 +377,9 @@ def prototype_problems(recipe, m):
             out.append("CONFFILES: %s is not under /etc or /var" % c)
     if objs is not None:
         out += shared_dir_problems(os.path.join(recipe, "prototype"))
+    if m["MAN_REPLACES"] and objs is None:
+        out.append("MAN_REPLACES is set, but there is no prototype to check it against")
+    out += replaces_problems(m, objs or ())
     out += layout_problems(m, objs or ())
     out += stock_problems(m, objs or ())
     for ftype, _, path, _ in objs or ():
@@ -425,7 +468,8 @@ def man_warnings(recipe, m):
     .../man<sect>/<name>.<sect>[.gz]; a page's name is its command's. A
     config file is also documented by the page of a directory it is in
     (link.d(4) for /etc/inet/link.d/aen), and a STOCK_ETC file by the stock
-    page of its name (inittab(4))."""
+    page of its name (inittab(4)); a stock binary the package replaces by the
+    page MAN_REPLACES names (/usr/sbin/tar by heirloom-tar(1))."""
     objs = prototype_objects(recipe) or []
     pages = set()
     for ftype, _, path, _ in objs:
@@ -440,9 +484,13 @@ def man_warnings(recipe, m):
             # the classic one: man<sect>/<name>.<sect>[.gz]
             page = re.sub(r"\.(gz|Z|z)$", "", d[-1])
             pages.add(page.rsplit(".", 1)[0] if "." in page else page)
+    # a stock binary the package replaces: its MAN_REPLACES page
+    replaced = set(t[0] for t in man_replaces(m) if len(t) == 3 and t[2] in pages)
     missing = []
     for ftype, _, path, target in objs:
         d = path.split("/")
+        if path in replaced:
+            continue
         if ftype in "fls" and len(d) > 2 and d[-2] in ("bin", "sbin"):
             # a link is documented by its target's page (bunzip2 by bzip2.1)
             if (d[-1] not in pages and MAN_ALIASES.get(d[-1]) not in pages

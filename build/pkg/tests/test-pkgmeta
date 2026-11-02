@@ -518,6 +518,38 @@ try:
     refused("index --check refuses a missing INDEX.md", ("index", gen, "--check"),
             "INDEX.md is out of date")
 
+    # --- MAN_REPLACES: the page of a stock binary the package replaces -------------------
+    REPL = (PROTO + "f none /usr/sbin/tar 0555 bin bin\n"
+            "f none /opt/amix/man/1/heirloom-tar 0644 root bin\n"
+            "f none /opt/amix/man/replaces.d/heirtar 0644 root bin\n")
+
+    def repl(name, proto=REPL, **over):
+        over.setdefault("SYSTEM_PATHS", '"/usr/sbin/tar"')
+        over.setdefault("PKG", "heirtar")
+        r = recipe(os.path.join(tmp, "repl"), name, **over)
+        write(os.path.join(r, "prototype"), proto)
+        return r
+
+    rc, out, err = run("check", repl("rnone"))
+    check("MAN_REPLACES unset: the replaced binary has no man page (control)",
+          rc == 0 and "no man page for /usr/sbin/tar" in err, err)
+    rc, out, err = run("check", repl("rgood", MAN_REPLACES='"/usr/sbin/tar 1 heirloom-tar"'))
+    check("MAN_REPLACES: the replaced binary is documented by its page",
+          rc == 0 and "warning" not in err, err)
+    for name, proto, value, needle in (
+            ("rshort", REPL, "/usr/sbin/tar 1", "'/usr/sbin/tar 1' is not <binary path> <sect> <page name>"),
+            ("rnotin", REPL, "/usr/sbin/cpio 1 heirloom-tar", "/usr/sbin/cpio is not in the prototype"),
+            ("rrel", REPL, "usr/sbin/tar 1 heirloom-tar", "usr/sbin/tar is not a normalised absolute path"),
+            ("rtwice", REPL, "/usr/sbin/tar 1 heirloom-tar /usr/sbin/tar 1 heirloom-tar",
+             "MAN_REPLACES lists /usr/sbin/tar twice"),
+            ("rsect", REPL, "/usr/sbin/tar one heirloom-tar", "section 'one' is not a man section"),
+            ("rpage", REPL, "/usr/sbin/tar 1 tar", "the prototype has no page /opt/amix/man/1/tar"),
+            ("rtable", REPL.replace("f none /opt/amix/man/replaces.d/heirtar 0644 root bin\n", ""),
+             "/usr/sbin/tar 1 heirloom-tar",
+             "MAN_REPLACES is set, but the prototype has no /opt/amix/man/replaces.d/heirtar")):
+        refused("check refuses MAN_REPLACES: %s" % needle,
+                ("check", repl(name, proto, MAN_REPLACES='"%s"' % value)), needle)
+
     # --- shared directories: 0755 root sys in every package -----------------------------
     SHARED = ("d none /opt 0755 root sys\n"
               "d none /opt/amix 0755 root sys\n"

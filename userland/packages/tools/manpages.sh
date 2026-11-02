@@ -12,7 +12,8 @@
 #                                    then "names - description"
 #   /opt/amix/man/replaces.d/<PKG>   the stock binaries the package replaces,
 #                                    "<binary path> <sect> <page name>" a line
-#                                    (userland/base/docs/man.md); a table, not
+#                                    (userland/base/docs/man.md), written from
+#                                    package.sh's MAN_REPLACES; a table, not
 #                                    pages: amix_man_whatis skips it
 # An alias is a one-line page, ".so /opt/amix/man/<sect>/<target>".
 #
@@ -23,6 +24,8 @@
 #                                           ($PREFIX/man/manN/x.N) into the layout
 #     amix_man_whatis                       write whatis.d/<PKG> from the NAME
 #                                           section of every page staged (last)
+#     amix_man_replaces                     write replaces.d/<PKG> from
+#                                           MAN_REPLACES (after the pages)
 
 AMIX_MANDIR=/opt/amix/man
 
@@ -113,4 +116,25 @@ amix_man_relayout() {
 		# under PREFIX=/opt/amix the upstream man dir is the new tree itself
 		[ "$_r_old" = "$DEST$AMIX_MANDIR" ] || rmdir "$_r_old"
 	fi
+}
+
+# amix_man_replaces -- replaces.d/<PKG>, the table amix-base's man(1) reads
+# to show a replacing package's page for a stock binary, from package.sh's
+# MAN_REPLACES: "<binary path> <sect> <page name>" triples, one line each,
+# under a comment line.  Each page must be staged already (amix_man first).
+amix_man_replaces() {
+	[ -n "${MAN_REPLACES:-}" ] || { echo "[FAIL] amix_man_replaces: package.sh sets no MAN_REPLACES" >&2; exit 1; }
+	set -- $MAN_REPLACES
+	[ $(($# % 3)) -eq 0 ] || { echo "[FAIL] MAN_REPLACES is not <binary path> <sect> <page name> triples" >&2; exit 1; }
+	mkdir -p "$DEST$AMIX_MANDIR/replaces.d"
+	{
+		echo "# binary section page: the page man(1) shows for the binary"
+		while [ $# -gt 0 ]; do
+			[ -f "$DEST$AMIX_MANDIR/$2/$3" ] || { echo "[FAIL] MAN_REPLACES $1: no page $2/$3 staged" >&2; exit 1; }
+			echo "$1 $2 $3"
+			shift 3
+		done
+	} > "$DEST$AMIX_MANDIR/replaces.d/$PKG"
+	chmod 0644 "$DEST$AMIX_MANDIR/replaces.d/$PKG"
+	echo "  MAN ok    replaces.d/$PKG: $(grep -vc '^#' "$DEST$AMIX_MANDIR/replaces.d/$PKG") binary(ies)"
 }

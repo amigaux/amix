@@ -9,7 +9,8 @@
 # front-end shows a replacing package's page for a stock binary). The
 # fragment must list the page and the alias and nothing from whatis.d or
 # replaces.d; a copy of manpages.sh that does not skip replaces.d is refused
-# on the table (no NAME line), which shows the test sees the skip. Prints
+# on the table (no NAME line), which shows the test sees the skip.
+# amix_man_replaces writes the table from MAN_REPLACES. Prints
 # "N/N passed"; exits non-zero on any failure.
 
 import os
@@ -58,9 +59,9 @@ try:
         write(os.path.join(man, "replaces.d", "hltar"), "/usr/bin/tar 1 tar\n")
         return man
 
-    def run(script, dest):
-        p = subprocess.run(["/bin/sh", "-c", '. "$1"; amix_man_whatis', "sh", script],
-                           env=dict(os.environ, DEST=dest, PKG="hltar"),
+    def run(script, dest, fn="amix_man_whatis", **env):
+        p = subprocess.run(["/bin/sh", "-c", '. "$1"; ' + fn, "sh", script],
+                           env=dict(os.environ, DEST=dest, PKG="hltar", **env),
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         return p.returncode, p.stdout.decode("utf-8", "replace")
 
@@ -88,6 +89,29 @@ try:
     rc, out = run(noskip, dest2)
     check("control: a manpages.sh without the skip is refused on replaces.d",
           rc != 0 and "replaces.d/hltar: no \"names - description\" NAME line" in out, out)
+
+    # amix_man_replaces: replaces.d/<PKG> from MAN_REPLACES; one triple gives
+    # the same bytes heirloom-tar's stage hook wrote by hand
+    dest3 = os.path.join(tmp, "dest3")
+    man3 = os.path.join(dest3, "opt", "amix", "man")
+    write(os.path.join(man3, "1", "heirloom-tar"), PAGE)
+    table = os.path.join(man3, "replaces.d", "hltar")
+    head = "# binary section page: the page man(1) shows for the binary\n"
+    rc, out = run(MANPAGES, dest3, "amix_man_replaces", MAN_REPLACES="/usr/sbin/tar 1 heirloom-tar")
+    check("amix_man_replaces writes one triple as heirloom-tar's table",
+          rc == 0 and open(table).read() == head + "/usr/sbin/tar 1 heirloom-tar\n", out)
+    check("the table is 0644", rc == 0 and os.stat(table).st_mode & 0o777 == 0o644)
+    rc, out = run(MANPAGES, dest3, "amix_man_replaces",
+                  MAN_REPLACES="/usr/sbin/tar 1 heirloom-tar /etc/tar 1 heirloom-tar")
+    check("amix_man_replaces writes a line per triple",
+          rc == 0 and open(table).read() == head + "/usr/sbin/tar 1 heirloom-tar\n"
+          "/etc/tar 1 heirloom-tar\n", out)
+    for what, value, needle in (
+            ("a page not staged", "/usr/sbin/tar 1 tar", "no page 1/tar staged"),
+            ("no triples", "/usr/sbin/tar 1", "not <binary path> <sect> <page name> triples"),
+            ("MAN_REPLACES unset", "", "package.sh sets no MAN_REPLACES")):
+        rc, out = run(MANPAGES, dest3, "amix_man_replaces", MAN_REPLACES=value)
+        check("amix_man_replaces refuses %s" % what, rc != 0 and needle in out, out)
 finally:
     shutil.rmtree(tmp)
 
