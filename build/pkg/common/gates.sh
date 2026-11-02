@@ -579,6 +579,25 @@ amix_gate_g14_needed() {
 	return $_gn_bad
 }
 
+# amix_gate_datastrings <elf> -- the printable strings of an ELF's .rodata*
+# and .data* sections, each section read on its own (objcopy -O binary of
+# several would fill the gap between them); a file without section headers
+# is read whole.
+amix_gate_datastrings() {
+	_gd_secs=$("$READELF" -SW "$1" 2>/dev/null | sed 's/^ *\[ *[0-9]*\] *//' |
+		awk '$1 ~ /^\.(rodata|data)/ && $2 != "NOBITS" { print $1 }')
+	if [ -z "$_gd_secs" ]; then
+		LC_ALL=C strings -a "$1"
+	else
+		_gd_t=$(mktemp)
+		for _gd_s in $_gd_secs; do
+			"$OBJCOPY" -O binary --only-section="$_gd_s" "$1" "$_gd_t" && LC_ALL=C strings -a "$_gd_t"
+		done
+		rm -f -- "${_gd_t:?}"
+	fi
+	unset _gd_secs _gd_t _gd_s
+}
+
 # amix_gate_g14_llprintf <elf> -- the 64-bit printf caveat.  AMIX libc's
 # printf family reads ll as l; only libamixc99's snprintf/vsnprintf are right.
 # A binary that imports printf/fprintf/vprintf/vfprintf/vsprintf/_doprnt AND
@@ -588,15 +607,17 @@ amix_gate_g14_needed() {
 # to format single conversions it has already split off (never an ll one), so
 # its presence proves nothing; with ll strings present it is reported for a
 # human to check that no ll conversion reaches libc sprintf directly.
+# Only the data sections are read (amix_gate_datastrings): code bytes read as
+# text can spell a conversion ("%Lo" from an address operand and an opcode).
 amix_gate_g14_llprintf() {
 	_gl_f="$1"
 	_gl_all=$( { "$NM" -D -u "$_gl_f" 2>/dev/null; "$NM" -u "$_gl_f" 2>/dev/null; } | awk '{print $NF}' | sort -u)
 	_gl_imp=$(echo "$_gl_all" | grep -xE '_?(printf|fprintf|vprintf|vfprintf|vsprintf|_doprnt)' | tr '\n' ' ')
 	_gl_spr=$(echo "$_gl_all" | grep -xE '_?sprintf' | tr '\n' ' ')
-	_gl_fmt=$(LC_ALL=C strings -a "$_gl_f" | grep -E "%[-+ #0'0-9.*]*(ll|j|q|L)[diouxX]" | sort -u)
+	_gl_fmt=$(amix_gate_datastrings "$_gl_f" | grep -E "%[-+ #0'0-9.*]*(ll|j|q|L)[diouxX]" | sort -u)
 	_gl_rc=0
 	if [ -z "$_gl_fmt" ]; then
-		echo "  LLPRINTF ok  $(basename "$_gl_f"): no ll/j/q/L integer conversion in its strings"
+		echo "  LLPRINTF ok  $(basename "$_gl_f"): no ll/j/q/L integer conversion in its data sections"
 	elif [ -n "$_gl_imp" ] && [ -z "$AMIX_LL_PRINTF_REVIEWED" ]; then
 		echo "  LLPRINTF FAIL $_gl_f -- imports $_gl_imp and carries 64-bit conversions:" >&2
 		echo "$_gl_fmt" | sed 's/^/          /' >&2

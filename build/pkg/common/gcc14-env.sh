@@ -199,6 +199,7 @@ export NM="$_g14_bin/$TARGET-nm"
 export OBJDUMP="$_g14_bin/$TARGET-objdump"
 export STRIP="$_g14_bin/$TARGET-strip"
 export READELF="$_g14_bin/$TARGET-readelf"
+export OBJCOPY="$_g14_bin/$TARGET-objcopy"
 export AMIX_TARGET="$TARGET"
 export AMIX_SYSROOT AMIX_CHECK060 AMIX_PREDEFS AMIX_GCC14_CC AMIX_GCC14_ROOT AMIX_GCC14_COMMIT
 # autoconf's CPP: the compiler itself preprocesses correctly here, with the
