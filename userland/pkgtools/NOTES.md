@@ -1,5 +1,47 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — APKG 0.3.6 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container from `a687496`, `VER_APKG="0.3.6"`, `EPOCH_APKG=1793577600`;
+`make repro-check` there: the checkout's roll and a `git archive` copy's (another path, umask 077,
+`SOURCE_DATE_EPOCH=1`) are the same bytes:
+
+- **md5 `f87c02e0a15ad7265251bd2745b326b9`**, **sha256
+  `1b36887112590d981cf168d2771248895ad453422d44d83ccbb70cd07df3b03f`**, **254464 B**.
+- `apkg.amix`: sha256 `90c32326fb484c0af9c000b45e114983dcf60b941e36f186e5bb755ef53f6c7e`, 132754 B,
+  `sum -r` 47381. scan060 clean, link gate OK.
+- Against 0.3.5 (`3d2f8737…`) only `usr/apkg/bin/apkg`, `usr/apkg/man/man1/apkg.1`, `pkginfo`
+  (VERSION, PSTAMP) and `pkgmap` differ; every other payload file is byte-equal.
+- The container image is `928b9ae`, the toolchain of the 0.3.5 mint: APKGENG 1.12.5 rolls
+  `a49452d8…` again in the same `make dist`. The image now tagged `amix-toolchain:dist`
+  (`843de30`) has a newer gcc wrapper that links `values-Xa.o`; there the engine's binaries
+  change and fail scan060, so `make dist` stops before the APKG copy.
+
+## 2026-11-02 — a reinstall passes instance=overwrite (apkg 0.3.6)
+
+**Why.** A kernel-module package installed with the stock `pkgrm` then `pkgadd` leaves apkg's
+record under `/var/apkg/kpkg` stale, so kbootset's gate 1 refuses ("differs from what package X
+installed"). That is the contract: the record is apkg's, and a kernel-space package carries no
+script that could write it. The way back is to lay the package again through apkg, and that did
+not work: `apkg -f install` at the installed version handed pkgadd the plain admin file, and under
+`instance=quit` the engine (`pkginstall/getinst.c`) quits on any installed instance before it
+reaches its same-version path: "Current administration does not allow ... existing instances to
+be overwritten", exit 4, nothing changed. The suite's pkgadd shims succeed whatever the admin file
+says, so they hid it.
+
+**Fix.**
+- `-f` on a named, installed package always passes `admin.overwrite`.
+- A kernel-space install with no record over an engine instance of the datastream's pkginst
+  (files a bare pkgadd laid) passes it too.
+- Tests:
+  - the shim test asserts `admin.overwrite` on a same-version `-f`;
+  - a new block runs the real host engine under `-R` with a toy kernel package: install, change
+    the file, `-f install` lays it again and the record matches; then with the record removed, a
+    plain `install` does the same.
+  - Against 0.3.5's `install.c` the block fails (exit 4 on the `-f`).
+- apkg.1 says kernel-space packages install only through apkg, and why, and names
+  `apkg -f install` as the remedy from 0.3.6.
+
 ## 2026-11-01 — APKG 0.3.5 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container (`amix-toolchain:dist`) from master, `VER_APKG="0.3.5"`,

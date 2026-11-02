@@ -422,6 +422,12 @@ if [ $rc -eq 0 ] && grep -q "pkgadd .* SAMEPKG" "$SHIMLOG"; then
 else
     bad "-f reinstall broken (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
+# under instance=quit the engine quits on any installed instance before its
+# same-version path, so a reinstall needs the overwrite admin file (0.3.6;
+# the real engine's half is the "-f against the real engine" block)
+grep -q "pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d .* SAMEPKG" "$SHIMLOG" \
+    && ok "-f on the same version passes admin.overwrite" \
+    || bad "-f same-version admin file" "$(cat $SHIMLOG)"
 
 # ------------------------------------------------ dry run
 : > "$SHIMLOG"
@@ -3291,6 +3297,66 @@ echo "$OUT" | grep -q "Refused:     only a kernel entry may carry kbootset= (C2-
 run 0 "info on the kernel row with kbootset=" xa -c "$XS/confB" info kset-k
 echo "$OUT" | grep -q "Refused" && bad "a kernel row with kbootset= refused" "$OUT" \
     || ok "a kernel row with kbootset= is accepted"
+
+# --- -f against the real engine (apkg 0.3.6) ----------------------------
+# The shims above log argv and succeed whatever the admin file says, so
+# they hid that a same-version `-f install` handed pkgadd instance=quit,
+# on which the engine quits before its same-version path ("Current
+# administration does not allow ... existing instances to be
+# overwritten", exit 4).  Here the host heirloom engine installs a toy
+# kernel package under -R; a file of it is changed, and apkg must lay it
+# again and write a record that matches it: once with -f over a record
+# of the same version, once with no record at all (files a bare pkgadd
+# laid).  The engine keeps its database under its own build-host var
+# path relocated under -R, so <target>/var/sadm links to it.
+HB=$SRC/../../heirloom/build-host/bin
+if [ ! -x "$HB/pkgadd" ] || [ ! -x "$HB/pkgmk" ] || [ ! -x "$HB/pkgtrans" ]; then
+    bad "the real-engine block needs the host engine: cd heirloom && ./build-host.sh"
+else
+    RE=$WORK/reng; RT=$RE/tgt; RV="$(cd "$HB/.." && pwd -P)/var/sadm"
+    mkdir -p "$RE/src" "$RE/spool" "$RE/repo/pkgs/kernel" "$RE/cache/c" \
+        "$RT$RV/pkg" "$RT$RV/install" "$RT/var/sadm" "$RT/var/apkg"
+    ln -s "$RT$RV/pkg" "$RT/var/sadm/pkg"; ln -s "$RT$RV/install" "$RT/var/sadm/install"
+    echo "unix-1.0" > "$RE/src/unix"
+    printf 'PKG=TOYK\nNAME=toy kernel\nARCH=m68k\nVERSION=1.0\nCATEGORY=system\n' > "$RE/pkginfo"
+    RU=$(id -un); RG=$(id -gn)
+    printf 'i pkginfo=%s\nd none /stand 0755 %s %s\nd none /stand/k46 0755 %s %s\nf none /stand/k46/unix=%s 0644 %s %s\n' \
+        "$RE/pkginfo" "$RU" "$RG" "$RU" "$RG" "$RE/src/unix" "$RU" "$RG" > "$RE/prototype"
+    RF=$RE/repo/pkgs/kernel/toyk-1.0.pkg
+    "$HB/pkgmk" -o -d "$RE/spool" -f "$RE/prototype" > "$RE/pkgmk.out" 2>&1
+    "$HB/pkgtrans" -s "$RE/spool" "$RF" TOYK > "$RE/pkgtrans.out" 2>&1
+    printf '#apkg-catalog 1\n#ext kpkg 1\n#kpkg toyk 1.0 role=kernel line=k46 kabi=k46.1.0 pin=%s size=%s sha256=%s file=kernel/toyk-1.0.pkg\n#end kpkg\n' \
+        "$PIN" "$(sizeof "$RF")" "$(sha "$RF")" > "$RE/repo/catalog"
+    printf 'repo=file://%s\ncachedir=%s\npkgadd=%s\npkgrm=%s\nadmin=%s\nkbootset=%s\n' \
+        "$RE/repo" "$RE/cache/c" "$HB/pkgadd" "$HB/pkgrm" "$RE/admin" \
+        "$WORK/bin/kbootset-mock" > "$RE/conf"
+    ra() { env -u APKG_ROOT "$APKG" -c "$RE/conf" -R "$RT" "$@"; }
+    recok() {   # the record's file line is the file on disk
+        grep -qx "file /stand/k46/unix $(sizeof "$RT/stand/k46/unix") $(sha "$RT/stand/k46/unix")" \
+            "$RT/var/apkg/kpkg/toyk" 2>/dev/null
+    }
+    kreset
+    ra update > /dev/null 2>&1
+    run 0 "the real engine installs the toy kernel package" ra install toyk
+    [ "$(cat "$RT/stand/k46/unix" 2>/dev/null)" = "unix-1.0" ] && recok \
+        && ok "... its record names the installed file" \
+        || bad "real-engine install" "$OUT"
+    kreset
+    echo changed > "$RT/stand/k46/unix"
+    run 0 "-f install over a changed file of the same version (real engine)" ra -f install toyk
+    [ "$(cat "$RT/stand/k46/unix")" = "unix-1.0" ] && recok \
+        && ! echo "$OUT" | grep -q "does not allow" \
+        && ok "... the file is laid again and the record matches it" \
+        || bad "real-engine -f reinstall" "$OUT"
+    kreset
+    rm -f "$RT/var/apkg/kpkg/toyk"
+    echo changed > "$RT/stand/k46/unix"
+    run 0 "install over files a bare pkgadd laid, no record (real engine)" ra install toyk
+    [ "$(cat "$RT/stand/k46/unix")" = "unix-1.0" ] && recok \
+        && ok "... the file is laid again and a record written" \
+        || bad "real-engine install with no record" "$OUT"
+    kreset
+fi
 
 # ------------------------------------------------ exit-code sanity extras
 run 1 "unknown verb fails with exit 1" "$APKG" frobnicate
