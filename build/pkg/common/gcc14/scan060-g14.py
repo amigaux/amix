@@ -53,7 +53,8 @@ each listed symbol's range (to the member's next symbol) is data, like a
 sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied.
 A sized STT_OBJECT symbol inside an executable section is data the same way
 (values-Xa.o's _lib_version, in every program the period toolchain links),
-with a NOTE.  objdump runs with -D over each executable section, never -d:
+with a NOTE.  objdump runs with -D on each executable section by name (-j),
+never -d, and never over .debug_* or another section that is not code:
 -d prints a data symbol's range as a hex dump up to the next symbol, which in
 a stripped program can be the rest of .text, and the dump's lines would be
 read as instructions.
@@ -116,11 +117,27 @@ def exec_sections(data):
     return out
 
 
-def objdump(tool, path, lo, hi):
-    """-D over [lo, hi), one executable section's range at a time: every
-    word is decoded as code, whatever symbol type covers it (-d dumps a data
-    symbol's range as hex instead; data_objects)."""
-    cmd = [tool, "-D", "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+def exec_section_names(data):
+    """The names of exec_sections(data)'s sections, in the same order."""
+    shoff = struct.unpack(">I", data[32:36])[0]
+    shentsize, shnum, shstrndx = struct.unpack(">HHH", data[46:52])
+    shdrs = [struct.unpack(">IIIIII", data[shoff + i * shentsize: shoff + i * shentsize + 24])
+             for i in range(shnum)]
+    stroff = shdrs[shstrndx][4] if shstrndx < shnum else 0
+    names = []
+    for nm, typ, flags, _a, _o, size in shdrs:
+        if typ == 1 and flags & 0x4 and size:
+            names.append(data[stroff + nm:data.index(b"\0", stroff + nm)].decode("latin1"))
+    return names
+
+
+def objdump(tool, path, sec, lo, hi):
+    """-D of section sec over [lo, hi): every word is decoded as code,
+    whatever symbol type covers it (-d dumps a data symbol's range as hex
+    instead; data_objects).  -j names the section: an address range alone
+    also selects the non-alloc sections at address 0 (.debug_*), which
+    -D would decode too."""
+    cmd = [tool, "-D", "-j", sec, "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
     r = subprocess.run(cmd + [path], capture_output=True, text=True, errors="replace")
     if r.returncode != 0:
         die("objdump failed on %s: %s" % (path, r.stderr.strip()[:200]))
@@ -685,23 +702,24 @@ def dispatch_of(problem):
     return int(m.group(1), 16) if m else None
 
 
-def resync_listing(tool, path, secs, skip):
+def resync_listing(tool, path, secs, names, skip):
     out = ""
-    for sa, _so, sz in secs:
+    for (sa, _so, sz), sec in zip(secs, names):
         lo, hi = sa, sa + sz
         for s, e in sorted(r for r in skip if sa <= r[0] < hi):
             if s > lo:
-                out += objdump(tool, path, lo, s)
+                out += objdump(tool, path, sec, lo, s)
             lo = max(lo, e)
         if lo < hi:
-            out += objdump(tool, path, lo, hi)
+            out += objdump(tool, path, sec, lo, hi)
     return out
 
 
 def scan(tool, path):
     data = open(path, "rb").read()
     secs = exec_sections(data)
-    listing = resync_listing(tool, path, secs, set())
+    names = exec_section_names(data)
+    listing = resync_listing(tool, path, secs, names, set())
     if "Disassembly of section" not in listing:
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
@@ -718,7 +736,7 @@ def scan(tool, path):
     for _round in range(6):
         if not skip:
             break
-        listing = resync_listing(tool, path, secs, skip)
+        listing = resync_listing(tool, path, secs, names, skip)
         insns, _l = parse(listing)
         new, more, more_notes = find_tables(insns, labels, data, secs, pts)
         problems = sorted(set(problems) | set(more))
