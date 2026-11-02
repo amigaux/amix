@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — core/kbootset-min 1.1.0.261102-35 (e62f9a9)
+
+A kernel cut from now on carries kbootset-min=1.1.0.261102-35 (the hex cards fix); recorded cuts keep their sidecars.
+
 ## 2026-11-02 — kbootset -35: controller numbers in hex (2607bbe, a51af48)
 
 `kbootset cards <disk>` reads the controller number of a cNdMsK name in hex, as the stock names write it; -34 refused ca–cf and gave card 1's key for c10–c17 (card 2's disks). The card list prints c8-cf, c10-c17, c18-c1f (C2-4 v22). kbootset -35 pkg 70683958.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — kbootset floor 1.1.0.261102-35 (3cc63c4)
+
+The kbootset floor of kernel-k30-m -68 and kernel-k46-m -56 and -57 is 1.1.0.261102-35: -34 gives card 1's controller key for card 2's disks (c10–c17), and installing to an IDE disk on card 2 needs the fix. The packages are unchanged; only the catalog's kbootset= key moves.
+
 ## 2026-11-01 — kbootset.conf (690f468, 609ad20)
 
 The kbootset floor 1.1.0.261101-34 for kernel-k30-m -68 and kernel-k46-m -56 and -57, whose sidecars predate kbootset-min=.
