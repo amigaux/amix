@@ -69,7 +69,8 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # and kbootset, kbootset first and the kernel last, the pre-flight over
 # every installed module, a kernel row's kbootset= floor (C2-2 v6), and
 # what to fix after a gate refusal.  0.3.4 (c19cb40f...) stays what it is.
-# 0.3.6 (2026-11-02, not minted yet): `-f install` of an installed package
+# 0.3.6 (2026-11-02; minted 2026-11-02, md5 f87c02e0...): `-f install` of
+# an installed package
 # passes instance=overwrite at the same version too (under instance=quit
 # the engine quits on any installed instance), and a kernel-space install
 # over an engine instance with no record (files a bare pkgadd laid) does
@@ -556,7 +557,7 @@ EOF
   # Version 0.3.5 (2026-11-01; minted 2026-11-01).  The apkg binary and apkg.1
   # change (a kernel cut upgrades as one set); every other payload byte is
   # 0.3.4's.
-  # Version 0.3.6 (2026-11-02, not minted).  The apkg binary and apkg.1
+  # Version 0.3.6 (2026-11-02; minted 2026-11-02).  The apkg binary and apkg.1
   # change (a reinstall passes instance=overwrite); every other payload
   # byte is 0.3.5's.
   cat > "$A/prototype" <<EOF
