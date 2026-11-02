@@ -95,7 +95,7 @@ cmp -s $T/want $T/got || { echo "kinq: probe:" >&2; diff $T/want $T/got >&2; exi
 $B/kbootset cards | cmp -s - $T/want && { echo "kinq: cards without --probe listed units" >&2; exit 1; }
 [ "$($B/kbootset cards | wc -l)" -eq 3 ]
 # a card whose units all fail still lists, and the status is 0
-rm -f $T/scsi/*
+rm -f "${T:?}"/scsi/*
 python3 $T/kinfo.py $T/kinfo 3,0x02025400,0x00e90000,0
 expect 0 'card 3: c18-c1f zorro:0202:54 base 0x00e90000' '' cards --probe
 expect 2 '' 'usage' cards --probe c0d0s1

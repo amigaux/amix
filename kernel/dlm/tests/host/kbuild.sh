@@ -25,7 +25,7 @@ flip() {
 	printf "\\$(printf %03o $((255 - v)))" | dd of="$1" bs=1 seek="$2" conv=notrunc 2>/dev/null
 	[ "$(cmp -l "$1.orig" "$1" | wc -l)" -eq 1 ] ||
 		{ echo "kbuild: $1 not changed at $2" >&2; exit 1; }
-	rm -f "$1.orig"
+	rm -f "${1:?}.orig"
 }
 
 head -c 700000 /dev/urandom > $R/stand/k46/unix
@@ -159,19 +159,19 @@ refused 1 $KB build $FACTS
 grep -q "gate 1 (hash): /stand/k46/unix differs from what package kernel-kd060a installed: changed by hand or by a bare pkgadd; reinstall it with apkg (apkg -f install kernel-kd060a)\$" $T/out
 sidecar; record
 # no record at all: placed by hand or by a bare pkgadd
-mv $R/var/apkg/kpkg/kernel-kd060a $T/rec
+mv "${R:?}"/var/apkg/kpkg/kernel-kd060a "${T:?}"/rec
 refused 1 $KB build $FACTS
-mv $T/rec $R/var/apkg/kpkg/kernel-kd060a
+mv "${T:?}"/rec "${R:?}"/var/apkg/kpkg/kernel-kd060a
 # a <name>.new left by an interrupted apkg write is not a record
 sed 's/^file \/stand\/k46\/unix .*/file \/stand\/k46\/unix 1 0000/' \
 	$R/var/apkg/kpkg/kernel-kd060a > $R/var/apkg/kpkg/kernel-kd060a.new
 $KB build $FACTS > $T/out && grep -q "built" $T/out
-rm -f $R/var/apkg/kpkg/kernel-kd060a.new
+rm -f "${R:?}"/var/apkg/kpkg/kernel-kd060a.new
 # two records naming one file: ambiguous, refused
 cp $R/var/apkg/kpkg/kernel-kd060a $R/var/apkg/kpkg/kernel-other
 refused 1 $KB build $FACTS
 grep -q "named by two apkg records" $T/out
-rm -f $R/var/apkg/kpkg/kernel-other
+rm -f "${R:?}"/var/apkg/kpkg/kernel-other
 # the record's kabi differs from the sidecar's
 sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 refused 2 $KB build $FACTS
@@ -230,7 +230,7 @@ sidecar; record
 # 700 000 + 1 048 576 bytes need about 3.5 MB: 3 MB is too little
 refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 3000000
 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54 --rootfs ufs --mem 3600000 | grep -q "built"
-rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+rm -rf "${R:?}/stand/gen/$(ls "${R:?}"/stand/gen | sort -n | tail -1)"
 cp $T/unix.keep $R/stand/k46/unix; sidecar; record
 echo "kbuild: ET_REL bss (gate 6) ok"
 
@@ -379,7 +379,7 @@ cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
 flip $R/stand/gen/$id/mod/monsw 4
 ! $KB check > $T/out
 grep -q "module monsw: /stand/gen/$id/mod/monsw SHA-256 BAD" $T/out
-rm $R/stand/gen/$id/mod/monsw
+rm "${R:?}/stand/gen/${id:?}/mod/monsw"
 ! $KB check > $T/out
 grep -q "module monsw: /stand/gen/$id/mod/monsw missing" $T/out
 cp $T/monsw.keep $R/stand/gen/$id/mod/monsw
@@ -479,7 +479,7 @@ refused 3 $KB build $FACTS			# a boot module on a demand module
 grep -q "module z3660eth: its depend= closure has a cycle or a demand-class dependency" $T/out
 three; modpkg monsw class=root match=always
 $KB build $FACTS | grep -q "built"		# root class on a module kernel (stage 4)
-rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+rm -rf "${R:?}/stand/gen/$(ls "${R:?}"/stand/gen | sort -n | tail -1)"
 three; flip $MD/monsw 4
 refused 1 $KB build $FACTS			# changed after apkg installed it
 # a copy changed between build and commit
@@ -545,7 +545,7 @@ refused 3 $KB build $RFACTS
 grep -q "a block major needs a root-class module" $T/out
 rootset; modpkg ramdisk class=root match=always majors=b:20
 $KB build $RFACTS | grep -q "built"
-rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+rm -rf "${R:?}/stand/gen/$(ls "${R:?}"/stand/gen | sort -n | tail -1)"
 # safe mode keeps the card numbers (spec 70 section 4): every
 # controller module ranked at or before the root's class joins the safe
 # set; on an A4091 root the Z3660's, on a built-in WD root the Z3660's
@@ -726,7 +726,7 @@ sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 $KB build $RFACTS | grep -q "built"
 refused 4 $KB commit
 grep -q "the manifest copy and the root set need" $T/out
-rm -rf "${R:?}/stand/gen/$(ls $R/stand/gen | sort -n | tail -1)"
+rm -rf "${R:?}/stand/gen/$(ls "${R:?}"/stand/gen | sort -n | tail -1)"
 rm -f "${MD:?}"/* "${R:?}"/var/apkg/kpkg/mod-*
 for g in $(ls $R/stand/gen); do
 	case "$pregens" in *" $g "*) ;; *) rm -rf "${R:?}/stand/gen/${g:?}" ;; esac
@@ -787,7 +787,7 @@ $MB media --disk $T/media2.img --offset 65536 --size 8388608 --boot1 $B/rt/boot1
 	--boot2 $B/rt/boot2.bin $RO --bootdev zorro:dead:01 --root "$ROOTREC" > $T/out 2>&1; rc=$?
 set -e
 [ $rc -eq 4 ] && grep -q "no driver for the boot disk's controller zorro:dead:01" $T/out
-rm -f $T/media2.img
+rm -f "${T:?}"/media2.img
 # a refused gate writes no medium
 set +e
 $MB media --floppy $T/x1.adf $T/x2.adf --boot1 $B/rt/boot1.img --boot2 $B/rt/boot2.bin \

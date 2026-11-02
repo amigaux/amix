@@ -14,7 +14,7 @@ SOURCE_DATE_EPOCH=1761400000
 export SOURCE_DATE_EPOCH
 KB=${KB:-./kbootset}
 J=kb.journal
-rm -f kb.img $J smoke.log
+rm -f kb.img "${J:?}" smoke.log
 run() {
 	echo "> $*" >> smoke.log
 	"$@" >> smoke.log 2>&1

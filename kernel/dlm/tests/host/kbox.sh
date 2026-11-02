@@ -101,9 +101,9 @@ grep -q "^store-id=" $R/etc/default/bootset
 # status prints the set id that bootset records
 [ "$(sed -n 's/^store-id: //p' $T/out)" = "$(sed -n 's/^store-id=//p' $R/etc/default/bootset)" ]
 # 2. the next run takes bootset's store= (the whole-disk node is not read)
-mv $T/dev/c6d0s0 $T/c6d0s0.away
+mv "${T:?}"/dev/c6d0s0 "${T:?}"/c6d0s0.away
 $B/kbootset -R $R status > /dev/null
-mv $T/c6d0s0.away $T/dev/c6d0s0
+mv "${T:?}"/c6d0s0.away "${T:?}"/dev/c6d0s0
 # a different store under the same name is noticed: found again
 cp $T/dev/c6d0s3 $T/s3.keep
 $B/kbootset --dev $T/dev/c6d0s3 create $((700 * 32 * 512)) $B/rt/boot1.img --force >/dev/null
@@ -183,7 +183,7 @@ set -e
 # 5. the controller missing from the card table (the A3000 case): the
 # loader record maps to no card, so every disk is scanned
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,0 ""
-rm -f $R/etc/default/bootset
+rm -f "${R:?}"/etc/default/bootset
 $B/kbootset -R $R status > $T/out
 grep -q "^store=$T/dev/c6d0s3$" $R/etc/default/bootset
 
@@ -193,14 +193,14 @@ grep -q "^store=$T/dev/c6d0s3$" $R/etc/default/bootset
 # controller is the card of the disk it is on
 Z3660=0x144b0100
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0,0,$Z3660 0,$Z3660,0x40000000,0
-rm -f $R/etc/default/bootset
+rm -f "${R:?}"/etc/default/bootset
 $B/kbootset -R $R status > $T/out
 grep -q "facts: line k46, boot zorro:144b:01, root zorro:144b:01, rootfs ufs" $T/out
 
 # 6. gate 9: a second UNI\0 slice on the boot disk
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 python3 -I $T/disk.py rdb $T/dev/c6d0s0 $UNI1,10,99 $RESV,100,149 $UNI0,150,849 $UNI0,850,900
-rm -f $R/etc/default/bootset
+rm -f "${R:?}"/etc/default/bootset
 set +e
 $B/kbootset -R $R status > $T/out; rc=$?
 set -e
@@ -278,7 +278,7 @@ grep -qx "  nodes: 512 of the four-card set missing or wrong, 0 d1 nodes left: r
 p0=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out)
 p1=$(sed -n 's/^kbootset: check: \([0-9]*\) problem.*/\1/p' $T/out2)
 [ $((p1 - p0)) -eq 1 ] || { echo "kbox: check counted the nodes as $((p1 - p0)) problems"; exit 1; }
-rm -f $R/stand/k30/kabi
+rm -f "${R:?}"/stand/k30/kabi
 
 # 6d. the Z3660 as one controller (C4-1 §5.1).  An A4000 in 030
 # mode: the window (id 4) and Gayle (id 2), both motherboard cards, and
@@ -300,7 +300,7 @@ python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0,0,$(crc scsi.device) $WIN
 $B/kbootset -R $R status > $T/out
 grep -q "^facts: line k46, boot mobo:gayle," $T/out ||
 	{ echo "kbox: scsi.device did not pick Gayle" >&2; grep facts $T/out >&2; exit 1; }
-rm -f $T/dev/ced0s0
+rm -f "${T:?}"/dev/ced0s0
 # the canonical Z3660 (id 144b0100, base 0, boot2's form of its boot
 # vehicle) finds the AutoConfig'd card at its own base
 python3 -I $T/disk.py kinfo $T/kinfo $g,0,6,$START,0,0x144b0100,0x144b0100 0,0x144b0100,0x10000000,0

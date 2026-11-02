@@ -69,7 +69,7 @@ spec "$ID" good "" > "$OUT/l5-g1.spec"
 spec "$TR" trial "$LAST" > "$OUT/l5-g2.spec"
 grep -q "^module $LAST root .* bss=$((CAP))\( \|$\)" "$OUT/l5-g2.spec" ||
 	{ echo "l5.sh: the raised bss= is not in generation $TR's spec" >&2; exit 1; }
-rm -f "$OUT/l5.img"
+rm -f "${OUT:?}/l5.img"
 "$R/build/mkstore" -o "$OUT/l5.img" -s "$SSIZE" -1 "$R/build/boot1.img" -2 "$R/build/boot2.bin" \
 	-d "$ID" "$OUT/l5-g1.spec" "$OUT/l5-g2.spec" > "$OUT/mkstore.log"
 "$R/build/lsstore" "$OUT/l5.img" 0 > "$OUT/lsstore.txt"

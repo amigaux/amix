@@ -13,7 +13,7 @@ flip() {
 	printf "\\$(printf %03o $((255 - v)))" | dd of="$1" bs=1 seek="$2" conv=notrunc 2>/dev/null
 	[ "$(cmp -l "$1.orig" "$1" | wc -l)" -eq 1 ] ||
 		{ echo "store-roundtrip: $1 not changed at $2" >&2; exit 1; }
-	rm -f "$1.orig"
+	rm -f "${1:?}.orig"
 }
 rm -rf "${T:?}" && mkdir -p $T
 head -c 1267397 /dev/urandom > $T/unix
