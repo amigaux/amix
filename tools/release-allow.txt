@@ -9,3 +9,17 @@
 # Vim's OpenVMS notes: example addresses in its DECnet and X display
 # instructions.
 1 **/opt/amix/share/vim/vim*/doc/os_vms.txt ^192\.168\.(10\.202|5\.159)$
+
+# Commodore's AMIX 2.1 stock sources (pubsrc-2.1): the NNTP authors' example
+# host addresses, in nntpxmit's documentation and a comment of its connect
+# code.
+1 **/pubsrc-2.1.pkg/root/usr/src/pub/news/nntp/doc/nntpxmit.dst ^10\.[02]\.0\.78$
+1 **/pubsrc-2.1.pkg/root/usr/src/pub/news/nntp/xmit/get_tcp_conn.c ^10\.0\.0\.78$
+
+# Commodore's AMIX 2.1 stock X sources (Xsource-2.1, X11r5src-2.1): three
+# files whose 1991 text holds a word that the private patterns also list. A
+# value here would print the word, so these member paths are exempt from
+# class 1 whole; the stock lock pins each datastream byte for byte.
+1 **/Xsource-2.1.pkg/root/usr/src/X/contrib/clients/xpostit/xpostit.h
+1 **/Xsource-2.1.pkg/root/usr/src/X/contrib/clients/xpostit/note.c
+1 **/X11r5src-2.1.pkg/root/usr/x11r5/demos/gpc/objects/map.bif

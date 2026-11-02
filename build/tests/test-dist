@@ -430,7 +430,13 @@ clean:
     argrel = os.path.join(tmp, "assemble.args")
     write(os.path.join(pt, "tools", "repo", "assemble-release.py"),
           "import os, sys\nopen(os.environ['ASSEMBLE_ARGS'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+          "open(os.environ['ASSEMBLE_ARGS'] + '.sysroot', 'w').write(os.environ.get('AMIX_SYSROOT', ''))\n"
           "sys.exit(int(os.environ.get('ASSEMBLE_RC', '0')))\n")
+    # a GCC 14 stand-in whose -print-sysroot names a sysroot
+    g14 = os.path.join(tmp, "g14")
+    g14root = os.path.join(g14, "sysroot")
+    os.makedirs(os.path.join(g14root, "usr", "lib"))
+    write(os.path.join(g14, "prefix", "bin", "m68k-elf-gcc"), "#!/bin/sh\necho %s\n" % g14root, 0o755)
     o = os.path.realpath(os.path.join(top, "out"))
     rc, out = run("apkg")
     apkgs = sorted(os.listdir(os.path.join(o, "apkg"))) if os.path.isdir(os.path.join(o, "apkg")) else []
@@ -438,14 +444,14 @@ clean:
           rc == 0 and apkgs == ["APKG-0.3.6.pkg", "APKGENG-1.12.6.pkg"], out + " ".join(apkgs))
     for d in ("userland", "kspace"):
         shutil.rmtree(os.path.join(o, d), ignore_errors=True)
-    rc, out = run("release", ASSEMBLE_ARGS=argrel)
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel)
     check("release: no catalogs yet, exit 3, the input named",
           rc == 3 and "[MISSING] release: out/userland/catalog" in out and not os.path.exists(argrel), out)
     for d in ("userland", "kspace"):
         write(os.path.join(o, d, "catalog"), "#apkg-catalog 1\n")
     stock = os.path.join(tmp, "stock")
     os.makedirs(stock)
-    rc, out = run("release", ASSEMBLE_ARGS=argrel, STOCK=stock, ASSEMBLE_RC="0")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, STOCK=stock, ASSEMBLE_RC="0")
     a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
     want = ["--userland", o + "/userland", "--kspace", o + "/kspace", "--apkg", o + "/apkg",
             "--stock", stock, "--release", "1.1", "--out", o + "/release/1.1",
@@ -453,13 +459,15 @@ clean:
             "--apkg-bin", os.path.realpath(top) + "/userland/pkgtools/src/apkg/apkg"]
     check("release: assemble-release.py over out/{userland,kspace,apkg} and STOCK, into out/release/1.1",
           rc == 0 and a == want, out + "\n" + " ".join(a))
+    sr = open(argrel + ".sysroot").read() if os.path.exists(argrel + ".sysroot") else ""
+    check("release: AMIX_SYSROOT is GCC 14's sysroot, for scan060-g14's known stock data", sr == g14root, sr)
     check("release: the host apkg is built for it",
           os.path.isfile(os.path.join(pt, "src", "apkg", "apkg")), out)
-    rc, out = run("release", ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="3")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="3")
     a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
     check("release: no STOCK, no --stock, and the tool's exit 3 is the step's",
           rc == 3 and "--stock" not in a and "--previous" not in a, out + " ".join(a))
-    rc, out = run("release", ASSEMBLE_ARGS=argrel, RELEASE_PREVIOUS=stock, ASSEMBLE_RC="1")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, RELEASE_PREVIOUS=stock, ASSEMBLE_RC="1")
     a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
     check("release: RELEASE_PREVIOUS is --previous, and a refusal (exit 1) is the step's",
           rc == 1 and a[a.index("--previous") + 1] == stock if "--previous" in a else False, out + " ".join(a))
