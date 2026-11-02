@@ -61,11 +61,21 @@ EOF
 run)
 	B=root@$AMIX_HOST
 	K="-i $H/client -o PasswordAuthentication=no -o BatchMode=yes"
-	# key login; who shows the session (utmpx written for it)
-	out=$($SSH $K $B 'echo key-ok; who' 2>&1)
+	# key login on a pty; who shows the session (utmpx written for it).
+	# stdin stays open: at the client's EOF the server closes the pty
+	# (upstream), which hangs the command up
+	out=$($SSH -tt $K $B 'echo key-ok; tty; who; exec < /dev/tty && echo ctty-ok' 2>&1 < <(sleep 120) | tr -d '\r')
 	echo "$out" | sed 's/^/== /'
 	echo "$out" | grep -q key-ok && echo "RES ok   OpenSSH key login" || echo "RES FAIL OpenSSH key login"
+	echo "$out" | grep -q "^/dev/pts/" && echo "RES ok   the session has a pty" || echo "RES FAIL no pty for the session"
 	echo "$out" | grep -q "^root .*pts" && echo "RES ok   who shows the ssh session" || echo "RES FAIL who: no pts session"
+	echo "$out" | grep -q "^ctty-ok" && echo "RES ok   the pty is the controlling tty" || echo "RES FAIL no controlling tty"
+	# the client's terminal: script(1) gives ssh a pty of 33x99 whose
+	# modes (intr ^C, erase DEL) the server must set on the session's
+	out=$(script -qec "stty rows 33 cols 99; $SSH -tt $K $B 'stty -a'" /dev/null 2>&1 < <(sleep 120) | tr -d '\r')
+	echo "$out" | sed 's/^/== /'
+	echo "$out" | grep -q "rows = 33; columns = 99" && echo "RES ok   window size taken" || echo "RES FAIL window size"
+	echo "$out" | grep -q "intr = ^c" && echo "RES ok   terminal modes taken" || echo "RES FAIL terminal modes"
 	# password login
 	out=$(sshpass -p "$AMIX_PASS" $SSH -o PubkeyAuthentication=no -o PreferredAuthentications=password $B 'echo pw-ok' 2>&1)
 	echo "$out" | grep -q pw-ok && echo "RES ok   OpenSSH password login" || echo "RES FAIL OpenSSH password login: $out"
@@ -88,10 +98,10 @@ run)
 		done
 	done
 	$SSH $K $B 'rm -f /usr/tmp/mib' > /dev/null 2>&1
-	# what is not offered is refused
+	# what is not offered is refused (a MAC only with a cipher that needs one)
 	for o in "-o KexAlgorithms=diffie-hellman-group14-sha256" "-o KexAlgorithms=ecdh-sha2-nistp256" \
 	         "-o Ciphers=aes256-ctr" "-o Ciphers=aes128-gcm@openssh.com" "-o Ciphers=aes128-cbc" \
-	         "-o MACs=hmac-sha1" "-o HostKeyAlgorithms=ecdsa-sha2-nistp256"; do
+	         "-o Ciphers=aes128-ctr -o MACs=hmac-sha1" "-o HostKeyAlgorithms=ecdsa-sha2-nistp256"; do
 		if $SSH $K $o $B true > /dev/null 2>&1; then echo "RES FAIL accepted: $o"; else echo "RES ok   refused: $o"; fi
 	done
 	# OpenSSH's scp, the original protocol (-O): no SFTP on the box

@@ -1,0 +1,50 @@
+A TCP connect is started under O_NDELAY instead of O_NONBLOCK.  On SVR4
+a connect() under O_NONBLOCK fails with EAGAIN, which Dropbear takes for
+a failure ("Connect failed: No more processes"), and the socket is
+writable with SO_ERROR 0 at once even when the connection is refused;
+under O_NDELAY it is EINPROGRESS, then writable once connected.  The
+socket goes to O_NONBLOCK once connected.  SVR4 fails the SO_ERROR
+getsockopt with EPIPE for a refused connection: that error is now the
+message, not "unexpected failure".  Elsewhere O_NDELAY is O_NONBLOCK.
+
+--- a/src/netio.c	2026-11-02 02:18:04.599852789 +0200
++++ b/src/netio.c	2026-11-02 02:18:21.940218898 +0200
+@@ -124,7 +124,16 @@
+ 		ses.maxfd = MAX(ses.maxfd, c->sock);
+ 		set_sock_nodelay(c->sock);
+ 		set_sock_priority(c->sock, c->prio);
+-		setnonblocking(c->sock);
++		/* On SVR4 a TCP connect() under O_NONBLOCK fails with EAGAIN,
++		 * and the socket is writable and SO_ERROR 0 at once, even for a
++		 * refused one; under O_NDELAY it is EINPROGRESS, then writable
++		 * once it is connected.  O_NONBLOCK again when it is
++		 * (handle_connect_fds).  Elsewhere O_NDELAY is O_NONBLOCK. */
++		if (r->ai_family == AF_UNIX) {
++			setnonblocking(c->sock);
++		} else {
++			fcntl(c->sock, F_SETFL, (fcntl(c->sock, F_GETFL, 0) & ~O_NONBLOCK) | O_NDELAY);
++		}
+ 
+ #if DROPBEAR_CLIENT_TCP_FAST_OPEN
+ 		fastopen = (c->writequeue != NULL && r->ai_family != AF_UNIX);
+@@ -335,7 +344,10 @@
+ 
+ 		if (getsockopt(c->sock, SOL_SOCKET, SO_ERROR, &val, &vallen) != 0) {
+ 			TRACE(("handle_connect_fds getsockopt(%d) SO_ERROR failed: %s", c->sock, strerror(errno)))
+-			/* This isn't expected to happen - Unix has surprises though, continue gracefully. */
++			/* This isn't expected to happen - Unix has surprises though, continue gracefully.
++			 * (SVR4 fails it with EPIPE for a refused connection.) */
++			m_free(c->errstring);
++			c->errstring = m_strdup(strerror(errno));
+ 			m_close(c->sock);
+ 			c->sock = -1;
+ 		} else if (val != 0) {
+@@ -348,6 +360,8 @@
+ 			c->errstring = m_strdup(strerror(val));
+ 		} else {
+ 			/* New connection has been established */
++			fcntl(c->sock, F_SETFL, fcntl(c->sock, F_GETFL, 0) & ~O_NDELAY);
++			setnonblocking(c->sock);
+ 			c->cb(DROPBEAR_SUCCESS, c->sock, c->cb_data, NULL);
+ 			remove_connect(c, iter);
+ 			TRACE(("leave handle_connect_fds - success"))

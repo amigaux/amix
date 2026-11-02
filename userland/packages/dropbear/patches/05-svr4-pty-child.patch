@@ -1,0 +1,227 @@
+The server pushes ptem, ldterm and ttcompat in the session's child after
+setsid() instead of in pty_allocate().  On SVR4 pushing ldterm makes the
+stream the controlling tty of a session leader that has none, and the
+connection process is one: the child could never have the pty as its
+controlling tty ("open /dev/tty failed"), so no job control, no ^C to
+the foreground job, and no EOF on the master when the shell exited.
+The master has no line discipline there, so the pty request's window
+size and terminal modes are kept and set on the slave by the child once
+the modules are pushed (before, SVR4 sessions kept ldterm's defaults:
+intr DEL, erase ^h).  Elsewhere the child sets them a second time.
+
+diff -ru a/src/chansession.h b/src/chansession.h
+--- a/src/chansession.h	2026-11-02 04:24:09.353806925 +0200
++++ b/src/chansession.h	2026-11-02 04:24:09.366103472 +0200
+@@ -50,6 +50,11 @@
+ 	int slave;
+ 	char * tty;
+ 	char * term;
++	/* the pty request's window size, and its terminal modes when the
++	 * master cannot take them: on SVR4 the child sets both on the slave
++	 * once it has pushed the modules (ptycommand) */
++	int termc, termr, termw, termh;
++	buffer * termmodes;
+ 
+ 	/* exit details */
+ 	struct exitinfo exit;
+diff -ru a/src/sshpty.c b/src/sshpty.c
+--- a/src/sshpty.c	2026-11-02 04:24:09.349265835 +0200
++++ b/src/sshpty.c	2026-11-02 04:24:09.366269092 +0200
+@@ -133,26 +133,7 @@
+ 		close(*ptyfd);
+ 		return 0;
+ 	}
+-#if !defined(HAVE_CYGWIN) && defined(I_PUSH)
+-	/*
+-	 * Push the appropriate streams modules, as described in Solaris pts(7).
+-	 * HP-UX pts(7) doesn't have ttcompat module.
+-	 */
+-	if (ioctl(*ttyfd, I_PUSH, "ptem") < 0) {
+-		dropbear_log(LOG_WARNING,
+-				"ioctl I_PUSH ptem: %.100s", strerror(errno));
+-	}
+-	if (ioctl(*ttyfd, I_PUSH, "ldterm") < 0) {
+-		dropbear_log(LOG_WARNING,
+-			"ioctl I_PUSH ldterm: %.100s", strerror(errno));
+-	}
+-#ifndef __hpux
+-	if (ioctl(*ttyfd, I_PUSH, "ttcompat") < 0) {
+-		dropbear_log(LOG_WARNING,
+-			"ioctl I_PUSH ttcompat: %.100s", strerror(errno));
+-	}
+-#endif
+-#endif
++	/* the streams modules are pushed by the child (pty_make_controlling_tty) */
+ 	return 1;
+ #else /* USE_DEV_PTMX */
+ #ifdef HAVE_DEV_PTS_AND_PTC
+@@ -296,6 +277,30 @@
+ 				"Failed to disconnect from controlling tty.\n");
+ 		close(fd);
+ 	}
++#if defined(USE_DEV_PTMX) && !defined(HAVE_CYGWIN) && defined(I_PUSH)
++	/*
++	 * Push the appropriate streams modules, as described in Solaris pts(7).
++	 * HP-UX pts(7) doesn't have ttcompat module.
++	 * Here, in the new session's leader: on SVR4 pushing ldterm makes the
++	 * stream the controlling tty of a session leader that has none, and
++	 * the server's connection process is one, so pushed there (as in
++	 * pty_allocate before) the child could never have it.
++	 */
++	if (ioctl(*ttyfd, I_PUSH, "ptem") < 0) {
++		dropbear_log(LOG_WARNING,
++				"ioctl I_PUSH ptem: %.100s", strerror(errno));
++	}
++	if (ioctl(*ttyfd, I_PUSH, "ldterm") < 0) {
++		dropbear_log(LOG_WARNING,
++			"ioctl I_PUSH ldterm: %.100s", strerror(errno));
++	}
++#ifndef __hpux
++	if (ioctl(*ttyfd, I_PUSH, "ttcompat") < 0) {
++		dropbear_log(LOG_WARNING,
++			"ioctl I_PUSH ttcompat: %.100s", strerror(errno));
++	}
++#endif
++#endif
+ 	/* Make it our controlling tty. */
+ #ifdef TIOCSCTTY
+ 	if (ioctl(*ttyfd, TIOCSCTTY, NULL) < 0) {
+diff -ru a/src/svr-chansession.c b/src/svr-chansession.c
+--- a/src/svr-chansession.c	2026-11-02 04:24:09.351670194 +0200
++++ b/src/svr-chansession.c	2026-11-02 04:24:09.366571891 +0200
+@@ -46,7 +46,7 @@
+ static int sessionsignal(const struct ChanSess *chansess);
+ static int noptycommand(struct Channel *channel, struct ChanSess *chansess);
+ static int ptycommand(struct Channel *channel, struct ChanSess *chansess);
+-static int sessionwinchange(const struct ChanSess *chansess);
++static int sessionwinchange(struct ChanSess *chansess);
+ static void execchild(const void *user_data_chansess);
+ static void addchildpid(struct ChanSess *chansess, pid_t pid);
+ static void sesssigchild_handler(int val);
+@@ -61,7 +61,8 @@
+ 		const struct ChanSess * chansess);
+ static void send_msg_chansess_exitsignal(const struct Channel * channel,
+ 		const struct ChanSess * chansess);
+-static void get_termmodes(const struct ChanSess *chansess);
++static void get_termmodes(struct ChanSess *chansess);
++static void set_termmodes(int fd, buffer *buf);
+ 
+ const struct ChanType svrchansess = {
+ 	"session", /* name */
+@@ -253,6 +254,7 @@
+ 	chansess->master = -1;
+ 	chansess->slave = -1;
+ 	chansess->tty = NULL;
++	chansess->termmodes = NULL;
+ 	chansess->term = NULL;
+ 
+ 	chansess->exit.exitpid = -1;
+@@ -322,6 +324,10 @@
+ 	m_free(chansess->cmd);
+ 	m_free(chansess->term);
+ 	m_free(chansess->original_command);
++	if (chansess->termmodes) {
++		buf_free(chansess->termmodes);
++		chansess->termmodes = NULL;
++	}
+ 
+ 	if (chansess->tty) {
+ 		/* write the utmp/wtmp login record */
+@@ -475,7 +481,7 @@
+ 
+ /* Let the process know that the window size has changed, as notified from the
+  * client. Returns DROPBEAR_SUCCESS or DROPBEAR_FAILURE */
+-static int sessionwinchange(const struct ChanSess *chansess) {
++static int sessionwinchange(struct ChanSess *chansess) {
+ 
+ 	int termc, termr, termw, termh;
+ 
+@@ -488,13 +494,31 @@
+ 	termr = buf_getint(ses.payload);
+ 	termw = buf_getint(ses.payload);
+ 	termh = buf_getint(ses.payload);
++	chansess->termc = termc;
++	chansess->termr = termr;
++	chansess->termw = termw;
++	chansess->termh = termh;
+ 	
+ 	pty_change_window_size(chansess->master, termr, termc, termw, termh);
+ 
+ 	return DROPBEAR_SUCCESS;
+ }
+ 
+-static void get_termmodes(const struct ChanSess *chansess) {
++static void get_termmodes(struct ChanSess *chansess) {
++
++	struct termios termio;
++
++	if (tcgetattr(chansess->master, &termio) == -1) {
++		/* SVR4: the master has no line discipline; the child sets
++		 * the modes on the slave once it has pushed ldterm */
++		chansess->termmodes = buf_getptrcopy(ses.payload,
++				ses.payload->len - ses.payload->pos);
++		return;
++	}
++	set_termmodes(chansess->master, ses.payload);
++}
++
++static void set_termmodes(int fd, buffer *buf) {
+ 
+ 	struct termios termio;
+ 	unsigned char opcode;
+@@ -507,14 +531,14 @@
+ 	/* Term modes */
+ 	/* We'll ignore errors and continue if we can't set modes.
+ 	 * We're ignoring baud rates since they seem evil */
+-	if (tcgetattr(chansess->master, &termio) == -1) {
++	if (tcgetattr(fd, &termio) == -1) {
+ 		return;
+ 	}
+ 
+-	len = buf_getint(ses.payload);
++	len = buf_getint(buf);
+ 	TRACE(("term mode str %d p->l %d p->p %d", 
+-				len, ses.payload->len , ses.payload->pos));
+-	if (len != ses.payload->len - ses.payload->pos) {
++				len, buf->len , buf->pos));
++	if (len != buf->len - buf->pos) {
+ 		dropbear_exit("Bad term mode string");
+ 	}
+ 
+@@ -523,11 +547,11 @@
+ 		return;
+ 	}
+ 
+-	while (((opcode = buf_getbyte(ses.payload)) != 0x00) && opcode <= 159) {
++	while (((opcode = buf_getbyte(buf)) != 0x00) && opcode <= 159) {
+ 
+ 		/* must be before checking type, so that value is consumed even if
+ 		 * we don't use it */
+-		value = buf_getint(ses.payload);
++		value = buf_getint(buf);
+ 
+ 		/* handle types of code */
+ 		if (opcode > MAX_TERMCODE) {
+@@ -579,7 +603,7 @@
+ 				
+ 		}
+ 	}
+-	if (tcsetattr(chansess->master, TCSANOW, &termio) < 0) {
++	if (tcsetattr(fd, TCSANOW, &termio) < 0) {
+ 		dropbear_log(LOG_INFO, "Error setting terminal attributes");
+ 	}
+ 	TRACE(("leave get_termmodes"))
+@@ -850,6 +874,13 @@
+ 		close(chansess->master);
+ 
+ 		pty_make_controlling_tty(&chansess->slave, chansess->tty);
++
++		/* the request's size and modes, now that the modules are pushed */
++		pty_change_window_size(chansess->slave, chansess->termr,
++				chansess->termc, chansess->termw, chansess->termh);
++		if (chansess->termmodes) {
++			set_termmodes(chansess->slave, chansess->termmodes);
++		}
+ 		
+ 		if ((dup2(chansess->slave, STDIN_FILENO) < 0) ||
+ 			(dup2(chansess->slave, STDOUT_FILENO) < 0)) {

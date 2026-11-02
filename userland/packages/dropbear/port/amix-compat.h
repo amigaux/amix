@@ -38,4 +38,9 @@ int utimes(const char *, const struct timeval *);
 int nanosleep(const struct timespec *, struct timespec *);
 int vasprintf(char **, const char *, va_list);
 
+/* the SVR4 pty calls (libc has them; no header declares them) */
+int grantpt(int);
+int unlockpt(int);
+char *ptsname(int);
+
 #endif

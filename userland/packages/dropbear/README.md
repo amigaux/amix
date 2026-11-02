@@ -200,10 +200,17 @@ otherwise.
     reads `/etc/hosts` only;
   - `fnmatch` uses libgen's `gmatch(3G)` (`port/include/fnmatch.h`; scp passes
     no flags);
+  - `grantpt`, `unlockpt` and `ptsname` are declared (libc has them, no
+    header declares them);
   - `SHUT_RD/WR/RDWR` are 0/1/2, and `IOV_MAX` is 16;
   - `O_NOFOLLOW` is 0. Dropbear passes it only next to `O_CREAT|O_EXCL`,
     which already refuses any existing name, symbolic links included
     (`tests/smoke.sh` checks this on the box).
+- **`USE_DEV_PTMX`.** configure looks for `/dev/ptmx` only when it is not
+  cross-compiling, so `build.sh` defines it after configure. The server
+  takes a session's pty from `/dev/ptmx`, and the session's child pushes
+  `ptem`, `ldterm` and `ttcompat` (`patches/05`). Without it, it tries BSD
+  `/dev/ptyXX` names and no session gets a pty.
 - **pwgr:** `build/pkg/common/amix-pwgr.c` is linked in, so the binary
   defines `getpwnam/getpwuid/getgrnam/getgrgid` itself. This avoids the
   stock shared libc's first-call `getpwnam` crash. `getspnam` is libc's static member (`/etc/shadow`), and `crypt` is the
@@ -220,6 +227,9 @@ otherwise.
 |---|---|
 | `01-atomicio-read.patch` | Amix declares `read(int, void *, unsigned)`, and GCC 14's `size_t` is `unsigned long`: the same width but a different type, so `atomicio(read, …)` is an error. `amix_read` (`port/amix-compat.h`) is `read` cast to the type `atomicio` takes. |
 | `02-scp-bwlimit-integer.patch` | `scp -l` parsed with `strtod` and computed in `double`, the only floating point in the program. On a 68LC040/68LC060 every FP instruction traps to the kernel's emulator. The limit is now a whole number of Kbit/s, computed in integers, and the binary carries no FPU instruction at all (checked with objdump). |
+| `03-client-prefers-rsa-hostkey.patch` | The client asks for an RSA host key before an ed25519 one: verifying rsa-sha2-256 costs about a tenth of an ed25519 verify here (the measurements). |
+| `04-connect-ndelay.patch` | On this system a TCP `connect()` under `O_NONBLOCK` fails with `EAGAIN`, and the socket is writable with `SO_ERROR` 0 at once, even when the connection is refused. Dropbear took the `EAGAIN` for a failure, so `dbclient` reached no other machine ("Connect failed: No more processes"). Under `O_NDELAY` the connect is `EINPROGRESS`, then writable once connected, so the patch connects under `O_NDELAY` and goes to `O_NONBLOCK` once connected. A refused connection fails the `SO_ERROR` query with `EPIPE`, which is now the message instead of "unexpected failure". |
+| `05-svr4-pty-child.patch` | Upstream pushes `ptem`, `ldterm` and `ttcompat` in the connection process, which is a session leader with no controlling tty. On SVR4, pushing `ldterm` there makes the pty that process's controlling tty, so the session's child, after its own `setsid()`, could never get it: `/dev/tty` failed with `ENXIO`, so there was no job control and ^C didn't reach the foreground job. The child now pushes the modules after `setsid()`, as SVR4's `telnetd` does. The master has no line discipline, so `tcgetattr` on it fails: the pty request's window size and the client's terminal modes are kept and set on the slave by the child once the modules are pushed. Before, every session had `ldterm`'s defaults, where `intr` is DEL, the key a modern terminal's Backspace sends. |
 
 ### 68LC060 and 68030: the 64-bit arithmetic
 
@@ -271,4 +281,49 @@ includes ML-KEM, sntrup761, RSA, ECDH and DH, which covers the big-endian and
 
 ## Acceptance
 
-@ACCEPT@
+**Emulator, 2026-11-02: PASS.** `tests/smoke.sh` on the box with
+`tests/host.sh` on the host (OpenSSH 10.2 client and server), on two emulated
+A4000s with a Z3660 (Amiberry; the emulator's timings are not the
+hardware's, and only compare with each other):
+
+| System | Kernel | Box checks | Host checks |
+|---|---|---|---|
+| 1.1 A4000D disk, 68060, after first boot | kern46m 68060-261101-57, random module | 21 ok | 22 ok |
+| 1.1 A4000D disk, 68030, after first boot | kern30m 68030-261101-68, random-k30 | 21 ok | 22 ok |
+
+- **Package:** `dropbear-2026.94-1.pkg`, 401408 bytes, md5
+  `d87bc85eaae9159b5ae7c295e5e30c6a`, sha256 `321cbeda…5637`. Two rolls in
+  the build container (gcc14 43825b2) are identical, and every gate passes.
+  The binary is 285524 bytes.
+- **Install:** apkg's pkgadd rc 0 and `pkgchk dropbear` rc 0 on both. On
+  the 68030 disk the stock `pkgadd -n` stops with "files already installed
+  … used by another package", an empty list, and changes nothing, whatever
+  the admin file says. Of this package's paths, `pkgchk -l` shows one
+  difference there: `/opt/amix/man/1` is registered `root bin` (amix-base),
+  where this package, like the others, says `root sys`.
+- **Boot script:** with no host key, it made the ed25519 key (mode 0600,
+  83 bytes) and started the server in 2 s on both, logging both to
+  `rc.log`; `stop` ended it and removed the pid file.
+- **Algorithms:** the server offers only the kex, ciphers, MAC and host
+  keys in the table above. OpenSSH can't get DH group14, ECDH P-256,
+  aes256-ctr, AES-GCM, CBC, hmac-sha1 or an ECDSA host key from it.
+- **The server, from OpenSSH:** key and password logins, a wrong password
+  refused. A pty session has `/dev/pts/N` as its controlling tty, `who`
+  shows it, and the client's window size (33×99) and modes (`intr ^C`,
+  `erase DEL`) are the session's. `scp -O` both ways. Each kex and cipher
+  pair: three handshakes and 1 MiB each way, byte for byte.
+- **The client, `dbclient`:** key login to OpenSSH's sshd on the host with
+  both ciphers, a password login to this server, and to a closed port
+  "Connect failed: Broken pipe" at once. `scp` box → host → box and
+  host → box, `sum -r` matching.
+- **`dropbearkey`** won't write through a symbolic link.
+- **Removal:** `pkgrm` rc 0, and the contents file has no dropbear line left.
+- **Timings from the host**, OpenSSH, key login, per handshake and per MiB
+  (emulated s, the mean of the two systems, which were within 5% of each other):
+
+| Kex + cipher | handshake | 1 MiB up | 1 MiB down |
+|---|---:|---:|---:|
+| mlkem768x25519 + chacha20-poly1305 | 7.8 | 11.1 | 11.2 |
+| mlkem768x25519 + aes128-ctr | 7.8 | 11.5 | 11.6 |
+| curve25519 + chacha20-poly1305 | 7.6 | 10.9 | 11.2 |
+| curve25519 + aes128-ctr | 7.6 | 11.0 | 11.8 |

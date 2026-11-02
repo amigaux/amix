@@ -28,6 +28,10 @@ post_configure() {
 	# the one multi-call binary; make takes both from the environment
 	# (Makefile.in: ifndef PROGRAMS), since make_args is split on spaces
 	export PROGRAMS MULTI=1
+	# configure looks for /dev/ptmx only when it is not cross-compiling;
+	# this system has the SVR4 pair (/dev/ptmx, /dev/pts/N), and without it
+	# the server tries BSD /dev/ptyXX names and no session gets a pty
+	echo '#define USE_DEV_PTMX 1' >> config.h
 	# two switches the 68060 gate's table scanner cannot size (a constant
 	# index from clrl in cli_getopts, a byte-table two-level dispatch in
 	# chansessionrequest): those files without jump tables, so every

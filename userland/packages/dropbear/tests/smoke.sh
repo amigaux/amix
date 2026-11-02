@@ -105,6 +105,14 @@ for c in chacha20-poly1305@openssh.com aes128-ctr; do
 	$B/dbclient -p $PORT -i $T/id_box -c $c $U 'echo dbc-c-ok' > $T/c.out 2>&1
 	has $T/c.out 'dbc-c-ok' && ok "dbclient cipher $c" || bad "dbclient cipher $c: `tr '\012' ' ' < $T/c.out`"
 done
+# a refused connection fails at once and says why (patches/04)
+NP=`expr $PORT + 100`
+$B/dbclient -y -p $NP -i $T/id_box $U true > $T/c.out 2>&1
+if has $T/c.out 'Connect failed: Broken [Pp]ipe' || has $T/c.out 'Connect failed: Connection refused'; then
+	ok "dbclient to a closed port: `tr '\012' ' ' < $T/c.out`"
+else
+	bad "dbclient to a closed port: `tr '\012' ' ' < $T/c.out`"
+fi
 dd if=/dev/zero bs=1024 count=256 2> /dev/null | tr '\000' 'x' > $T/blob
 echo tail >> $T/blob
 $B/scp -P $PORT -i $T/id_box $T/blob $U:$HDIR/from-box > $T/s.out 2>&1
