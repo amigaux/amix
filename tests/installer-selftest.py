@@ -5162,7 +5162,7 @@ def _audit_w1_lostfound(code):
          "fires on the first loop iteration), fail-closed"),
         (r'\[\s+-f\s+"\$LOSTFOUND/99"\s+\]\s+\|\|\s+die',
          "ASSERTS a LAST-iteration slot exists (catches a create that lies)"),
-        (r'rm -f "\$\{LOSTFOUND:\?\}/\$i\$j"\s+\|\|\s+die', "removes them again (an s5 directory keeps the space)"),
+        (r'rm -f "\$\{LOSTFOUND:\?\}/\$\{i:\?\}\$\{j:\?\}"\s+\|\|\s+die', "removes them again (an s5 directory keeps the space)"),
         (r'\[\s+-d\s+"\$LOSTFOUND"\s+\]', "only mkdir's the directory when it is absent"),
     ]
     for pat, desc in checks:
@@ -9435,7 +9435,7 @@ def audit_firstboot_perms():
                (r'chmod 644 /etc/tz\.index', "tz.index 0644")]
     zen = open(os.path.join(REPO, "payload", "S99zen"), encoding="utf-8").read()
     miss2 = [d for rx, d in fb_need if not re.search(rx, fb)]
-    if "mv $HOSTS.zn$$ $HOSTS && chmod 444 $HOSTS" not in zen:
+    if 'mv "${HOSTS:?}.zn$$" "${HOSTS:?}" && chmod 444 $HOSTS' not in zen:
         miss2.append("S99zen hosts 0444 after its own-row rewrite")
     if miss2:
         fail("boot-time rewrites leave world-writable files (init's umask is 0): %s" % miss2)
@@ -10836,18 +10836,26 @@ def audit_swap_stepdown():
 
 
 def audit_guarded_rm_mv():
-    head("RG. every rm and mv on a variable path names it \"${var:?}\" (an empty variable stops the "
-         "script instead of widening the path)")
-    import glob
-    rx_cmd = re.compile(r'(?<![\w-])(rm|mv)(?=\s)')
-    rx_var = re.compile(r'"\$(\{[A-Za-z_][A-Za-z_0-9]*\}|[A-Za-z_][A-Za-z_0-9]*)')
-    rx_end = re.compile(r';|&&|\|\||\||\bthen\b|\bdo\b')
+    head("RG. every rm and mv on a variable path names it \"${var:?}\" -- the root and every part after it, "
+         "quoted or not, escaped in a generated script or not -- so an empty variable stops the script "
+         "instead of widening the path")
+    rx_cmd = re.compile(r'(?<![\w./-])(rm|mv)(?=\s)')
+    # any variable reference that is not ${name:?}: $name, ${name}, \$name (a generated script), $1
+    rx_var = re.compile(r'\\?\$(\{[A-Za-z_][A-Za-z_0-9]*\}|[A-Za-z_][A-Za-z_0-9]*|[0-9])')
+    rx_end = re.compile(r';|&&|\|\||\||\bthen\b|\bdo\b|\)\s*$')
+    files = []
+    tracked = subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True, text=True).stdout.split()
+    for f in tracked:
+        pth = os.path.join(REPO, f)
+        if not os.path.isfile(pth):
+            continue
+        with open(pth, "rb") as fh:
+            first = fh.read(64)
+        if f.endswith(".sh") or f == "src/miniroot/profile" or re.match(rb"#!\s*/bin/(ba)?sh|#!/usr/bin/env bash", first):
+            files.append(f)
     bad = []
-    files = sorted(glob.glob(os.path.join(REPO, "tools", "*.sh")) + glob.glob(os.path.join(REPO, "tools", "lib", "*.sh"))
-                   + glob.glob(os.path.join(REPO, "src", "installer", "*.sh")) + glob.glob(os.path.join(REPO, "payload", "*.sh"))
-                   + glob.glob(os.path.join(REPO, "payload", "firstboot", "*.sh")))
     for f in files:
-        for n, l in enumerate(open(f, encoding="utf-8", errors="replace"), 1):
+        for n, l in enumerate(open(os.path.join(REPO, f), encoding="latin-1"), 1):
             if l.lstrip().startswith("#"):
                 continue
             for m in rx_cmd.finditer(l):
@@ -10855,9 +10863,22 @@ def audit_guarded_rm_mv():
                     break
                 e = rx_end.search(l, m.end())
                 if rx_var.search(l[m.end():e.start() if e else len(l)]):
-                    bad.append("%s:%d" % (os.path.relpath(f, REPO), n))
-    (fail if bad else ok)("rm/mv variable paths guarded in %d scripts%s"
-                          % (len(files), (": " + " ".join(bad[:8])) if bad else ""))
+                    bad.append("%s:%d" % (f, n))
+                    break
+    (fail if bad or len(files) < 40 else ok)("rm/mv variable paths guarded in %d tracked shell scripts (the miniroot "
+                                              "profile and payload/ included)%s"
+                                              % (len(files), (": " + " ".join(bad[:10])) if bad else ""))
+    # the guard itself: an empty variable stops the shell before the rm runs
+    d = tempfile.mkdtemp(prefix="guard.")
+    try:
+        keep = os.path.join(d, "keep")
+        open(keep, "w").close()
+        r = subprocess.run(["/usr/bin/dash", "-c", 'D=%s; X=; rm -f "${D:?}/${X:?}keep"; echo AFTER' % d],
+                           capture_output=True, text=True, timeout=10)
+        (ok if r.returncode != 0 and "AFTER" not in r.stdout and os.path.exists(keep) else fail)(
+            "guard EXECUTED: an empty variable in \"${D:?}/${X:?}keep\" stops the shell, nothing is removed")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def audit_ufs_rootcap():
@@ -11041,7 +11062,7 @@ def audit_l11():
             ("l11_base takes base/order, then the chosen set's base/o.<set>, and drops each datastream after its pkgadd",
              '_ord=`cat "$L11/base/order"`' in lb
              and '[ -f "$L11/base/o.$INSTALL_SET" ] && _ord="$_ord `cat "$L11/base/o.$INSTALL_SET"`"' in lb
-             and 'run rm -f "${_bd:?}/$_f"' in lb),
+             and 'run rm -f "${_bd:?}/${_f:?}"' in lb),
             ("l11_base transfers amix-base's conffiles from core (removef core, removef -f core)",
              '/usr/apkg/bin/removef core `cat "$L11/base/amxbase.cf"`' in lb
              and '/usr/apkg/bin/removef -f core' in lb),

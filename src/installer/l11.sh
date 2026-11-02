@@ -446,7 +446,7 @@ l11_base()
 			|| die "base packages: pkgadd $_p failed (rc=$?) -- refusing to arm"
 		[ -d "$TARGET/var/sadm/pkg/$_p" ] || die "base packages: pkgadd $_p returned 0 but $_p is not installed"
 		# one datastream at a time on the target (x11r63's is 34 MB)
-		run rm -f "${_bd:?}/$_f"
+		run rm -f "${_bd:?}/${_f:?}"
 		_n=`expr $_n + 1`
 	done
 	[ "$_n" -gt 0 ] || die "base packages: $L11/base/order names none"

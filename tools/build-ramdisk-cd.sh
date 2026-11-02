@@ -55,7 +55,7 @@ rd_init "$WD"
 compose() {   # compose LINE IMAGE
   local l=$1 img=$2
   rd_stage "$l"
-  rm -rf "${W:?}/gen-$l" "${W:?}/gen-$l.spec"
+  rm -rf "${W:?}/gen-${l:?}" "${W:?}/gen-${l:?}.spec"
   ( cd "$W" && "$B/kbootset" -R "stage-$l" media --cd "gen-$l" --version 3 --line "${l#k}" \
       --rootdev always --rootfs "$FS" --mem "$MEM" --ramdisk "$img" ) > "$W/media-$l.log" 2>&1 \
     || { tail -5 "$W/media-$l.log" >&2; die "$l: kbootset media refused the generation"; }

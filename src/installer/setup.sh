@@ -2140,7 +2140,7 @@ custom_toggle()
 		return 0
 	fi
 	if [ -f "$SELP$tcn" ]; then
-		rm -f "${SELP:?}$tcn"
+		rm -f "${SELP:?}${tcn:?}"
 		close_deselect
 	else
 		echo 1 > "$SELP$tcn"
@@ -2203,7 +2203,7 @@ close_deselect()
 				if [ -f "$SELP$cxd1" ]; then
 					:
 				else
-					rm -f "${SELP:?}$pcn"
+					rm -f "${SELP:?}${pcn:?}"
 				fi
 			done
 		done < "$PKG_F"

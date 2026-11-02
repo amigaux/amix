@@ -1118,7 +1118,7 @@ if [ -d "$STAGE/l11/base" ] && [ -f "$L11_IN/base/sets" ] && awk 'NF > 1 { f = 1
         "$_pt" "$L11_IN/base/$_bf" "$_bw" "$_bi" >/dev/null 2>&1 \
           || { echo "STOP: pkgtrans could not unpack $_bf" >&2; exit 1; }
         awk '$2 == "e" && $3 == "conffile" { print $4 }' "$_bw/$_bi/pkgmap" > "$STAGE/l11/base/$_bi.cf"
-        rm -rf "${_bw:?}/$_bi"
+        rm -rf "${_bw:?}/${_bi:?}"
       fi
       grep -qx "$_bi" "$STAGE/l11/base/o.$_s" 2>/dev/null || echo "$_bi" >> "$STAGE/l11/base/o.$_s"
       echo "build-install-iso: l11/base/o.$_s: $_bn $_bv ($_bi)"

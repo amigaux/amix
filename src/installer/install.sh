@@ -302,7 +302,7 @@ dm_stamp()
 	[ "`dd if=$_sf bs=4 count=1 2>/dev/null`" = PART ] || return 1
 	_ch=`dm_u16 $_sf 8` && _cl=`dm_u16 $_sf 10` && _mh=`dm_u16 $_sf 184` && _ml=`dm_u16 $_sf 186` || return 1
 	if [ "$_mh" -eq "$3" ] && [ "$_ml" -eq "$4" ]; then
-		rm -f $_sf
+		rm -f "${_sf:?}"
 		return 0
 	fi
 	_s=`expr "$_cl" + "$_ml" + 65536 - "$4"`
@@ -326,7 +326,7 @@ dm_stamp()
 	rm -f /tmp/.dmn.$$
 	dd if="$1" of=$_sf bs=512 skip="$2" count=1 2>/dev/null || return 1
 	_rh=`dm_u16 $_sf 184` && _rl=`dm_u16 $_sf 186` && _qh=`dm_u16 $_sf 8` && _ql=`dm_u16 $_sf 10` || return 1
-	rm -f $_sf
+	rm -f "${_sf:?}"
 	[ "$_rh" -eq "$3" ] && [ "$_rl" -eq "$4" ] && [ "$_qh" -eq "$_ch" ] && [ "$_ql" -eq "$_cl" ]
 }
 # dm_target_mask RAWDEV HBA -- every partition of RAWDEV gets HBA's Mask (the medium's table)
@@ -681,9 +681,9 @@ emit_zen_hook() {
 		echo '	if [ -f $HOSTS ]; then'
 		echo '		zen_hosts $HOSTS "$ADDR" "$NEW" "$OLD" "$DOMAIN" > $HOSTS.zn$$'
 		echo '		if cmp -s $HOSTS $HOSTS.zn$$; then'
-		echo '			rm -f $HOSTS.zn$$'
+		echo '			rm -f "${HOSTS:?}.zn$$"'
 		echo '		else'
-		echo '			mv $HOSTS.zn$$ $HOSTS && chmod 444 $HOSTS && echo "S99zen: $HOSTS own row -> $ADDR $NEW"'
+		echo '			mv "${HOSTS:?}.zn$$" "${HOSTS:?}" && chmod 444 $HOSTS && echo "S99zen: $HOSTS own row -> $ADDR $NEW"'
 		echo '		fi'
 		echo '	fi'
 		echo 'fi'
@@ -3514,7 +3514,7 @@ done
 # anything else that might be in there safe and keeps the echo short).
 for i in 0 1 2 3 4 5 6 7 8 9; do
 	for j in 0 1 2 3 4 5 6 7 8 9; do
-		rm -f "${LOSTFOUND:?}/$i$j" || die "cannot clear the $LOSTFOUND preseed"
+		rm -f "${LOSTFOUND:?}/${i:?}${j:?}" || die "cannot clear the $LOSTFOUND preseed"
 	done
 done
 msg "lost+found preseeded (100 slots created + removed; the directory keeps the space)"

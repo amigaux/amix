@@ -65,7 +65,7 @@ rel "$ISO"
 # 2. the floppy pairs
 for L in k46 k30; do
 	img="$R46"; [ $L = k30 ] && img="$R30"
-	rm -rf "${W:?}/fp-$L"; mkdir -p "$W/fp-$L"
+	rm -rf "${W:?}/fp-${L:?}"; mkdir -p "$W/fp-$L"
 	bash "$here/build-ramdisk-floppy.sh" --line $L --image "$img" --out "$W/fp-$L" --work "$W/fpw-$L" > "$W/floppy-$L.log" 2>&1 \
 		|| { tail -5 "$W/floppy-$L.log" >&2; die "build-ramdisk-floppy.sh $L failed"; }
 	for v in 1 2; do

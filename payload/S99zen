@@ -171,9 +171,9 @@ if [ -f $CONF ]; then
 	if [ -f $HOSTS ]; then
 		zen_hosts $HOSTS "$ADDR" "$NEW" "$OLD" "$DOMAIN" > $HOSTS.zn$$
 		if cmp -s $HOSTS $HOSTS.zn$$; then
-			rm -f $HOSTS.zn$$
+			rm -f "${HOSTS:?}.zn$$"
 		else
-			mv $HOSTS.zn$$ $HOSTS && chmod 444 $HOSTS && echo "S99zen: $HOSTS own row -> $ADDR $NEW"
+			mv "${HOSTS:?}.zn$$" "${HOSTS:?}" && chmod 444 $HOSTS && echo "S99zen: $HOSTS own row -> $ADDR $NEW"
 		fi
 	fi
 fi

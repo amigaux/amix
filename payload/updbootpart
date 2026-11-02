@@ -88,11 +88,11 @@ BOOT2_SUMR_040=27860            # good_040  -- 68040/68060 line
 FRAME=/tmp/updbootpart.frame.$$
 BACK=/tmp/updbootpart.back.$$
 DDLOG=/tmp/updbootpart.dd.$$
-trap 'rm -f "$FRAME" "$BACK" "$DDLOG" 2>/dev/null' 0 1 2 3 15
+trap 'rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null' 0 1 2 3 15
 
 msg()  { echo "$PROG: $*"; }
 warn() { echo "$PROG: WARNING: $*" >&2; }
-die()  { echo "$PROG: STOP: $*" >&2; rm -f "$FRAME" "$BACK" "$DDLOG" 2>/dev/null; exit 1; }
+die()  { echo "$PROG: STOP: $*" >&2; rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null; exit 1; }
 
 # dumplog -- echo the captured dd log to stderr (best-effort), for a failed write.
 dumplog() { [ -f "$DDLOG" ] && cat "$DDLOG" >&2; return 0; }
@@ -376,5 +376,5 @@ msg "   frame  sum -r      : $framesum"
 msg "   disk   sum -r      : $backsum   (readback via $BOOT_RAW, cmp byte-clean)"
 msg "   next: cold boot c${CN}d0 -- the running kernel becomes sum -r $kunix"
 msg "=============================================================="
-rm -f "$FRAME" "$BACK" "$DDLOG" 2>/dev/null
+rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null
 exit 0

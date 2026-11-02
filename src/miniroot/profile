@@ -168,7 +168,7 @@ UNIT_SECS=20
 # every writer of its pipe); the miniroot has no kill, so one past the bound is abandoned.
 inquiry_bounded()
 {
-	rm -f $CARDS_PROBE.u $CARDS_PROBE.ud
+	rm -f "${CARDS_PROBE:?}.u" "${CARDS_PROBE:?}.ud"
 	( $KBOOTSET inquiry $1 $2 > $CARDS_PROBE.u 2>/dev/null
 	  echo $? > $CARDS_PROBE.ud ) < /dev/null > /dev/null 2>&1 &
 	_is=0
@@ -189,7 +189,7 @@ inquiry_bounded()
 cards_probe_bounded()
 {
 	cp /dev/null $CARDS_PROBE
-	rm -f $CARDS_PROBE.new $CARDS_PROBE.suspect
+	rm -f "${CARDS_PROBE:?}.new" "${CARDS_PROBE:?}.suspect"
 	[ -x /bin/sleep ] || return 1
 	$KBOOTSET cards > $CARDS_PROBE.cards 2>/dev/null || return 1
 	cp /dev/null $CARDS_PROBE.new
@@ -214,7 +214,7 @@ cards_probe_bounded()
 			esac
 		done
 	done
-	mv $CARDS_PROBE.new $CARDS_PROBE
+	mv "${CARDS_PROBE:?}.new" "${CARDS_PROBE:?}"
 	return 0
 }
 cd_candidates_from_cards()
@@ -508,7 +508,7 @@ scan_ids()
 			echo "$i" >> $HITS
 		fi
 	done
-	rm -f $BLK0
+	rm -f "${BLK0:?}"
 	[ -s $HITS ]
 }
 
@@ -624,10 +624,10 @@ disk_present()
 	dd if="$1" of=$BLK0 bs=512 count=1 2>/dev/null
 	if [ "$?" = 0 ] && [ -s $BLK0 ]
 	then
-		rm -f $BLK0
+		rm -f "${BLK0:?}"
 		return 0
 	fi
-	rm -f $BLK0
+	rm -f "${BLK0:?}"
 	return 1
 }
 
@@ -670,7 +670,7 @@ unattended_check()
 			then
 				UPROF=
 				read UPROF < $CDROM/install/profiles/BASE
-				rm -f $UNATT_OK
+				rm -f "${UNATT_OK:?}"
 				if [ -n "$UPROF" ] && [ -f "$CDROM/install/profiles/$UPROF.profile" ]
 				then
 					while read kline
@@ -682,10 +682,10 @@ unattended_check()
 				fi
 				if [ -f $UNATT_OK ]
 				then
-					rm -f $UNATT_OK
+					rm -f "${UNATT_OK:?}"
 					unattended_run "$UPROF" "$d"
 				fi
-				rm -f $UNATT_OK
+				rm -f "${UNATT_OK:?}"
 			fi
 			drop_source
 			return
@@ -940,7 +940,7 @@ find_source()
 	# 2. a CD. Only reachable by mounting, so one attempt each, in order.
 	if [ "$SRC_KIND" = "" ]
 	then
-		rm -f $CD_SPEC_FILE
+		rm -f "${CD_SPEC_FILE:?}"
 		for s in $CD_CANDIDATES
 		do
 			if probe_cdfs "$s"
